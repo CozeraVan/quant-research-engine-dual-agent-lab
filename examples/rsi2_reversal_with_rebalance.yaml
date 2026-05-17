@@ -1,0 +1,41 @@
+experiment:
+  name: rsi2_reversal_with_rebalance_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    rsi_2: factors.stock_daily_momentum_close.rsi_2
+
+signal:
+  type: expression
+  entry: rsi_2 < 10
+
+holding:
+  max_holding_days: 5
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.12
+  trailing_stop_pct: 0.10
+
+portfolio:
+  weight_model: score_weight
+  score_column: rsi_2
+  volatility_column: null
+  rebalance_interval_days: 5
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]

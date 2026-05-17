@@ -1,0 +1,27 @@
+market_profile:
+  name: ashare_daily_default
+  timezone: Asia/Shanghai
+  frequency: daily
+  signal_lag:
+    signal_date: t
+    earliest_execution: t_plus_1
+  settlement:
+    stock_t_plus_one: true
+  lot_size:
+    buy_lot: 100
+    allow_odd_lot_sell: true
+  price_limit:
+    main_board: 0.10
+    chinext: 0.20
+    star_market: 0.20
+    beijing: 0.30
+    st: 0.05
+  costs:
+    commission_rate: 0.0003
+    min_commission: 5.0
+    stamp_tax_sell: 0.0005
+    transfer_fee_rate: 0.00001
+  slippage:
+    model: percent
+    buy_rate: 0.0005
+    sell_rate: 0.0005
