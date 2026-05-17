@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-REPORT-FILES-REQUIRE-MATCH-001
+QRE-REPORT-AUDIT-JSON-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-REVIEW_TO_USER
+PLAN_TO_CLAUDE
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Review passed for `QRE-REPORT-FILES-REQUIRE-MATCH-001`. Codex will commit locally and prepare the next Claude Code task. No push.
+Add opt-in JSON output to `qre report-audit` for script-friendly audit summaries. Preserve existing text output and exit-code behavior.
 
 ## Must Read
 
@@ -28,18 +28,19 @@ Review passed for `QRE-REPORT-FILES-REQUIRE-MATCH-001`. Codex will commit locall
 
 ## Must Do
 
-1. Implement only `QRE-REPORT-FILES-REQUIRE-MATCH-001`.
-2. Add the optional `--require-match` flag to `report-files`.
-3. Return exit code `2` and stderr `no manifest entries matched filters` when the flag is set and filters match zero entries.
-4. Preserve existing default zero-match behavior.
-5. Add focused CLI tests and run the validation commands in the brief.
-6. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
+1. Implement only `QRE-REPORT-AUDIT-JSON-001`.
+2. Add optional `--json` to `report-audit`.
+3. Emit one valid JSON object on stdout in JSON mode.
+4. Include summary counts, status, and issue details in the JSON payload.
+5. Preserve existing default text output and existing exit codes.
+6. Add focused CLI tests and run the validation commands in the brief.
+7. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
 
 ## Must Not Do
 
 1. Do not change report artifact generation.
 2. Do not change manifest JSON shape.
-3. Do not change `report-audit` behavior.
+3. Do not change `report-files` behavior.
 4. Do not modify `pyproject.toml` or `uv.lock`.
 5. Do not commit or push.
 

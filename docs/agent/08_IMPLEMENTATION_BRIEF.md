@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-FILES-REQUIRE-MATCH-001
+QRE-REPORT-AUDIT-JSON-001
 
 ## Created By
 
@@ -14,17 +14,18 @@ CLAUDE_CODE
 
 ## Background
 
-`qre report-audit` already supports `--require-match`, which makes filtered manifest checks fail when no entries match. `qre report-files` currently allows zero matches by default and has no equivalent strict mode.
+`qre report-audit` currently prints a concise text summary and issue lines. This is useful for humans, but scripts need stable machine-readable output to gate larger research workflows.
 
-Adding `--require-match` to `report-files` is a small reporting workflow improvement that helps scripts fail fast when a caller expects a specific role, symbol, window, or group output to exist.
+The next low-risk reporting task is to add an opt-in JSON output mode for `report-audit` without changing the existing default text behavior.
 
 ## Goal
 
-Add a `--require-match` option to `qre report-files` that returns a non-zero exit code when the selected filters match no manifest entries.
+Add a JSON output option to `qre report-audit` that emits the audit summary and validation details in a machine-readable object.
 
 ## Non-Goals
 
-- Do not change `report-audit` behavior.
+- Do not change default `report-audit` text output.
+- Do not change `report-files` behavior.
 - Do not change manifest JSON shape.
 - Do not change report artifact generation.
 - Do not change portfolio simulation behavior.
@@ -68,25 +69,35 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve existing default `report-files` behavior when `--require-match` is not provided.
-- Preserve existing `report-audit --require-match` behavior.
+- Preserve default `report-audit` behavior when JSON mode is not requested.
+- Preserve `report-audit --require-match` semantics and exit codes.
 - Preserve manifest discovery and filtering semantics.
 - No database writes or credential handling.
 
 ## Implementation Steps
 
-1. Inspect current `report-files` and `report-audit` CLI handling.
-2. Add `--require-match` to the `report-files` parser.
-3. In the `report-files` command branch, if `--require-match` is set and filtered entries are empty:
-   - print `no manifest entries matched filters` to stderr;
-   - return exit code `2`;
-   - print no stdout.
-4. Preserve existing behavior when `--require-match` is absent.
-5. Add CLI tests:
-   - zero matches without `--require-match` still exits `0` with empty stdout/stderr;
-   - zero matches with `--require-match` exits `2`, writes the clear stderr message, and emits no stdout;
-   - matching entries with `--require-match` still print paths or keys normally.
-6. Update handoff/progress/state/board docs after implementation.
+1. Inspect current `report-audit` CLI handling and tests.
+2. Add an opt-in JSON flag to `report-audit`. Prefer:
+   - `--json`
+3. When `--json` is set, print one JSON object to stdout with at least:
+   - `manifest_kind`
+   - `matched_files`
+   - `missing_files`
+   - `validation_issues`
+   - `status`
+   - `issues`
+4. `issues` should be a list of objects with at least:
+   - `key`
+   - `code`
+   - `path`
+   - `message`
+5. In JSON mode, keep stderr behavior for fatal parse/load errors. For normal audit failures, prefer JSON on stdout and no stderr unless `--require-match` has zero matches; if preserving the existing stderr message for zero-match is simpler, document it in handoff and tests.
+6. Preserve existing text output exactly enough that current tests still pass.
+7. Add CLI tests:
+   - valid manifest JSON output exits `0` and includes expected fields;
+   - malformed/missing report artifact JSON output exits `2` and includes issue objects;
+   - `--json --require-match` zero-match behavior is covered.
+8. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
@@ -97,13 +108,13 @@ None.
 Allowed:
 
 - Add optional CLI flag:
-  - `qre report-files MANIFEST --require-match`
+  - `qre report-audit MANIFEST --json`
 
 Avoid:
 
-- Changing existing positional arguments.
-- Changing existing output format for successful matches.
-- Changing default zero-match behavior.
+- Changing default text output.
+- Changing existing flags or positional arguments.
+- Changing manifest JSON shape.
 
 ## Validation Plan
 
@@ -128,18 +139,17 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `qre report-files` supports `--require-match`.
-- [ ] Default zero-match behavior remains exit `0`.
-- [ ] `--require-match` zero-match behavior exits `2` with a clear stderr message.
-- [ ] Successful matches with `--require-match` still print expected paths/keys.
-- [ ] Existing report-audit behavior is unchanged.
+- [ ] `qre report-audit --json` emits valid JSON on stdout.
+- [ ] JSON output includes summary counts, status, and issue details.
+- [ ] Default text output remains compatible with existing tests.
+- [ ] Existing `--require-match` semantics and exit codes are preserved.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- `report-files` is used by scripts; default behavior must remain unchanged.
-- Error output should match `report-audit --require-match` wording for consistency.
+- JSON output should be stable enough for scripts, so avoid informal string-only payloads.
+- Do not mix human text into stdout in JSON mode.
 
 ## Instructions for Claude Code
 

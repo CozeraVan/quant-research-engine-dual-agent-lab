@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-FILES-REQUIRE-MATCH-001
+QRE-REPORT-AUDIT-JSON-001
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
@@ -35,23 +35,23 @@ Allowed values:
 
 Current:
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-REPORT-FILES-REQUIRE-MATCH-001` on 2026-05-18. Review passed and all 169 tests pass.
+Codex created local checkpoint `e568823 feat: add strict report-files matching` and prepared the next implementation brief for `report-audit --json`.
 
 ## Next Required Step
 
-Codex should create a local commit for the accepted implementation, then prepare and commit the next implementation brief for Claude Code. Do not push.
+Claude Code should implement `QRE-REPORT-AUDIT-JSON-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
-User request from 2026-05-17:
+User request from 2026-05-18:
 
-- run Review-Finalize-Next,
-- if review passes, commit locally without push,
-- prepare the next Claude Code implementation handoff.
+- run One-Shot Review-Finalize-Next,
+- if review passes, validate and commit locally without push,
+- prepare and commit the next Claude Code implementation handoff.
 
 ## Active Implementation Brief
 
@@ -77,9 +77,11 @@ User request from 2026-05-17:
 - Last workflow commit: `77fec02 chore: initialize dual-agent workflow`
 - Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
 - Last accepted implementation commit: `28e6f25 feat: add failed-order diagnostics to portfolio reports`
-- Last local implementation commit: `001177f test: validate failed-order report artifacts`
+- Last local implementation commits:
+  - `001177f test: validate failed-order report artifacts`
+  - `e568823 feat: add strict report-files matching`
 - Last pushed commit: no remote configured
-- Current planning docs for `QRE-REPORT-FILES-REQUIRE-MATCH-001` are uncommitted.
+- Current planning docs for `QRE-REPORT-AUDIT-JSON-001` are uncommitted.
 
 ## Standing Approval
 
