@@ -1,5 +1,10 @@
 # Progress
 
+> Archived Note:
+> This document was created before the dual-agent workflow migration.
+> Current authoritative planning, progress, handoff, and review documents live in docs/agent/.
+> Keep this file for historical reference only.
+
 ## 2026-05-17
 
 - Reoriented the active work from `indicators_tushare` repair to `quant-research-engine` planning.

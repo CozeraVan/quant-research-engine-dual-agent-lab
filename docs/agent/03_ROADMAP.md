@@ -1,34 +1,71 @@
 # Roadmap
 
-## Milestone 1: Project Workflow Foundation
+## Milestone 1: Project Skeleton And Core Interfaces
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| T1.1 | Initialize agent workflow docs | DONE | USER/SCRIPT | Baseline files created | Fill project-specific details |
-| T1.2 | Analyze project structure | TODO | CODEX | - | Ask Codex to inspect repo |
-| T1.3 | Define locked requirements | TODO | CODEX + USER | - | Clarify project-specific hard boundaries |
-| T1.4 | Create first Implementation Brief | TODO | CODEX | - | Turn first idea into task brief |
+| M1.1 | Python package skeleton | DONE | HISTORICAL | `src/quant_research_engine`, `pyproject.toml`, tests | Preserve |
+| M1.2 | Core models and A-share market profile | DONE | HISTORICAL | `core/models.py`, `markets/ashare.py`, profile config | Preserve |
+| M1.3 | CLI smoke foundation | DONE | HISTORICAL | `qre` CLI | Preserve |
 
-## Milestone 2: First Dual-Agent Development Loop
-
-| ID | Task | Status | Owner | Evidence | Next Step |
-|---|---|---|---|---|---|
-| T2.1 | Codex creates Implementation Brief | TODO | CODEX | - | Write `08_IMPLEMENTATION_BRIEF.md` |
-| T2.2 | Claude Code implements the brief | TODO | CLAUDE_CODE | - | Write code and update `09_CODING_HANDOFF.md` |
-| T2.3 | Codex reviews implementation | TODO | CODEX | - | Write `10_REVIEW_REPORT.md` |
-| T2.4 | Claude Code fixes Required Fixes | TODO | CLAUDE_CODE | - | Fix only required issues |
-| T2.5 | Codex finalizes git commit/push | TODO | CODEX | - | Run final checks, commit, push |
-
-## Future Milestones
+## Milestone 2: Data Layer And Preflight
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| T3.1 | TODO | FUTURE | TBD | - | TBD |
+| M2.1 | Read daily market bars | DONE | HISTORICAL | `PostgresDataStore.load_daily_bars` | Preserve |
+| M2.2 | Read factor columns from `factors.*` | DONE | HISTORICAL | factor catalog and assembler | Preserve |
+| M2.3 | Metadata fallback and board inference | DONE | HISTORICAL | `load_security_metadata`, `derive_board` | Replace fallback with real metadata when available |
+| M2.4 | Read-only broad-run preflight | DONE | HISTORICAL | `qre preflight` | Integrate into larger run acceptance workflow |
+| M2.5 | Real status/industry/membership adapters | TODO | CLAUDE_CODE | Gap in docs and code | Needs data-source confirmation |
+
+## Milestone 3: Evaluation Engine
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M3.1 | Safe expression signals | DONE | HISTORICAL | `evaluation/signals.py` tests | Preserve |
+| M3.2 | Event study and forward returns | DONE | HISTORICAL | `evaluation/engine.py` tests | Preserve |
+| M3.3 | IC, Rank IC, quantile return | DONE | HISTORICAL | legacy progress records, tests | Preserve |
+| M3.4 | Rough friction-adjusted screening | DONE | HISTORICAL | `round_trip_cost_rate`, market-profile estimate | Preserve |
+| M3.5 | Regime and metadata group summaries | TODO | CLAUDE_CODE | documented gap | Requires metadata/grouping design |
+| M3.6 | Benchmark/random-baseline comparison for evaluation | TODO | CLAUDE_CODE | documented gap | Defer until benchmark data source is confirmed |
+
+## Milestone 4: Portfolio Engine
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M4.1 | Single-symbol long-only backtest | DONE | HISTORICAL | `portfolio/single_symbol.py` | Preserve |
+| M4.2 | Independent batch backtest | DONE | HISTORICAL | `portfolio/batch.py` | Preserve |
+| M4.3 | Shared-cash multi-symbol backtest | DONE | HISTORICAL | `portfolio/shared.py` | Preserve |
+| M4.4 | Costs, slippage, lot sizing, price-limit checks | DONE | HISTORICAL | A-share market profile and tests | Preserve |
+| M4.5 | Risk exits, weights, rebalance | DONE | HISTORICAL | risk/weights/rebalance docs and tests | Preserve |
+| M4.6 | FIFO lot accounting and T+1 sellable inventory | DONE | HISTORICAL | legacy progress: `156 passed` | Preserve |
+| M4.7 | Stronger failed-order diagnostics | READY | CODEX | selected next self-contained task | Await user approval of `08_IMPLEMENTATION_BRIEF.md` |
+| M4.8 | Real index benchmark wiring | BLOCKED | USER/CODEX | table/schema not confirmed | Confirm available index table and columns |
+| M4.9 | Real suspension/ST/risk-warning metadata | TODO | CLAUDE_CODE | fallback currently static unless data provided | Confirm source tables |
+
+## Milestone 5: Reporting And Reproducibility
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M5.1 | CSV/JSON/Markdown report outputs | DONE | HISTORICAL | portfolio IO docs | Preserve |
+| M5.2 | Report manifests | DONE | HISTORICAL | `report_manifest.json` | Preserve |
+| M5.3 | Report discovery and audit CLI | DONE | HISTORICAL | `qre report-files`, `qre report-audit` | Use in acceptance checks |
+| M5.4 | Strict zero-match report audit | DONE | HISTORICAL | `--require-match` | Preserve |
+| M5.5 | Larger research-run reproducibility workflow | TODO | CLAUDE_CODE | not fully standardized | Define after next portfolio diagnostics task |
+
+## Milestone 6: Dual-Agent Workflow
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M6.1 | Initialize dual-agent docs | DONE | USER/SCRIPT | commit `77fec02` | Preserve |
+| M6.2 | Migrate legacy project knowledge into `docs/agent` | DONE | CODEX | current doc migration | User review |
+| M6.3 | First post-migration implementation brief | WAITING_USER_APPROVAL | USER | `08_IMPLEMENTATION_BRIEF.md` | Approve or revise |
 
 ## Status Meaning
 
 - TODO: Not started
+- READY: scoped and suitable for the next implementer
 - IN_PROGRESS: Started but not complete
-- DONE: Completed and verified
-- BLOCKED: Blocked
-- FUTURE: Future milestone
+- DONE: Completed and verified or preserved from legacy records
+- BLOCKED: Blocked by missing decision, data, or approval
+- WAITING_USER_APPROVAL: Codex prepared a brief; user must approve before Claude Code implements

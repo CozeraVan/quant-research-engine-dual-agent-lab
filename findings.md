@@ -1,5 +1,10 @@
 # Findings
 
+> Archived Note:
+> This document was created before the dual-agent workflow migration.
+> Current authoritative planning, progress, handoff, and review documents live in docs/agent/.
+> Keep this file for historical reference only.
+
 ## 2026-05-17 Status Correction
 
 - `quant-research-engine` is not a git repository, but it has a complete Python package layout under `src/quant_research_engine`, tests under `tests`, examples, configs, docs, and output smoke artifacts.

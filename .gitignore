@@ -1,12 +1,35 @@
-.venv/
+# Python
 __pycache__/
-*.py[cod]
+*.pyc
 .pytest_cache/
+.mypy_cache/
 .ruff_cache/
-outputs/
-reports/
-.agent-backups/
+.venv/
+venv/
+
+# Environment
 .env
 .env.*
-node_modules/
+!.env.example
+
+# Outputs / logs
+outputs/
+logs/
+*.log
+
+# Data files
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+*.parquet
+*.feather
+*.pkl
+
+# OS / IDE
 .DS_Store
+.idea/
+.vscode/
+
+# Agent temporary files
+.agent-backups/

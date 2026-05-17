@@ -1,5 +1,10 @@
 # MVP Plan
 
+> Archived Note:
+> This document was created before the dual-agent workflow migration.
+> Current authoritative planning, progress, handoff, and review documents live in docs/agent/.
+> Keep this file for historical reference only.
+
 ## Status Corrected On 2026-05-17
 
 The original MVP plan below was written before the current engine implementation matured. As of the latest inspection:

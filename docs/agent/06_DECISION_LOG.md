@@ -21,3 +21,42 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Alternatives: Single-agent coding; manual-only workflow.
 - Impact: All tasks should pass through `08_IMPLEMENTATION_BRIEF.md`, `09_CODING_HANDOFF.md`, `10_REVIEW_REPORT.md`, and `11_AGENT_STATE.md`.
 - Owner: USER
+
+### 2026-05-17: Scope project memory to quant-research-engine
+
+- Decision: The authoritative `docs/agent` system describes only the current `quant-research-engine` directory and not the larger `quant-workspace` program.
+- Reason: The user explicitly corrected the focus to this independent backtesting-engine experiment.
+- Alternatives: Preserve broader workspace status in QRE docs.
+- Impact: Upstream projects such as `quant_ts` and `indicators_tushare` are referenced only as data producers.
+- Owner: USER/CODEX
+
+### 2026-05-17: Treat QRE as read-only consumer of upstream data
+
+- Decision: QRE should read market, factor, metadata, benchmark, and reference data. It should not write upstream database state during standard evaluation/backtest flows.
+- Reason: Existing docs and code position QRE above `quant_ts` and `indicators_tushare`; indicators are produced upstream.
+- Alternatives: Let QRE repair or recompute data.
+- Impact: Future QRE tasks should avoid database writes unless explicitly authorized in a brief.
+- Owner: CODEX
+
+### 2026-05-17: Do not compute indicators inside QRE
+
+- Decision: Evaluation and portfolio engines must consume declared factor columns from `factors.*` tables instead of recomputing technical indicators.
+- Reason: Old docs repeatedly state that `indicators_tushare` owns technical factor generation.
+- Alternatives: Add engine-local indicator implementations.
+- Impact: New strategies must declare factor inputs; data layer loads them from configured tables.
+- Owner: CODEX
+
+### 2026-05-17: Select failed-order diagnostics as next Claude task
+
+- Decision: The next recommended Claude Code task is richer shared-cash failed-order diagnostics, not real index benchmark wiring.
+- Reason: Benchmark/index wiring depends on confirming real index table availability and schema. Failed-order diagnostics is self-contained and directly improves portfolio realism.
+- Alternatives: Start real index wiring immediately; start evaluation grouping/regime work.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` is prepared for failed-order diagnostics. Real index wiring is marked blocked pending data-source confirmation.
+- Owner: CODEX, pending USER approval
+
+## Open / To Confirm
+
+- Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.
+- Which source table should provide time-varying suspension, ST, and risk-warning metadata.
+- Whether legacy root-level progress docs should be archived after the user reviews the migrated `docs/agent` files.
+- Whether larger research-run reproducibility should be a separate milestone after failed-order diagnostics.

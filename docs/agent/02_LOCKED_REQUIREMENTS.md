@@ -52,6 +52,54 @@ Do not delete the agent workflow files unless explicitly requested:
 - `AGENTS.md`
 - `docs/agent/*`
 
+## R-QRE-001: Project scope is current quant-research-engine only
+
+Status: LOCKED
+
+Do not expand planning or implementation into the larger `quant-workspace` program unless the user explicitly asks. Treat `quant_ts` and `indicators_tushare` as upstream data producers.
+
+## R-QRE-002: Engine must not compute technical indicators internally
+
+Status: LOCKED
+
+Backtests and evaluations consume factor columns declared by strategy specs and loaded from `factors.*` tables. Do not add hidden indicator recomputation inside data, evaluation, or portfolio engines.
+
+## R-QRE-003: No future-function leakage or lookahead bias
+
+Status: LOCKED
+
+Signals must use data available at the signal date. A-share daily execution defaults to signal on `t` and earliest execution on `t+1`. Portfolio simulation must not use future bars to decide current orders, exits, weights, or risk controls.
+
+## R-QRE-004: Keep market rules in market profiles
+
+Status: LOCKED
+
+A-share costs, slippage, lot sizing, price limits, T+1 sellability, board rules, and future market-specific behavior must stay in market/profile/rule layers rather than strategy logic.
+
+## R-QRE-005: Data access must be read-only unless explicitly approved
+
+Status: LOCKED
+
+QRE reads market, factor, metadata, benchmark, and reference data. It must not write to upstream databases during evaluation, preflight, or backtest work unless a future brief explicitly authorizes it.
+
+## R-QRE-006: Do not hardcode credentials
+
+Status: LOCKED
+
+Use environment variables such as `QRE_MARKET_DB_URL` and compatible `SR_*` fallbacks. Do not add passwords or local secrets to code or docs.
+
+## R-QRE-007: Preserve report artifacts and manifest contracts
+
+Status: LOCKED
+
+Batch and shared-cash report outputs must remain discoverable through `report_manifest.json`. Do not break `qre report-files` or `qre report-audit` behavior without an explicit migration plan.
+
+## R-QRE-008: Smoke outputs are not research conclusions
+
+Status: LOCKED
+
+Small-window examples and DB smokes validate plumbing only. Do not document them as evidence that a factor or strategy is effective.
+
 ## R-DUAL-001: Codex owns planning and review
 
 Status: LOCKED

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-TBD
+QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001
 
 ## Written By
 
@@ -14,15 +14,17 @@ CODEX
 
 ## Implemented
 
-TODO
+Not started.
 
 ## Modified Files
 
-- TBD
+- None yet.
 
 ## Not Implemented
 
-TODO
+- Shared-cash failed-order diagnostic summary fields.
+- Shared-cash Markdown failed-order diagnostics.
+- Any related tests.
 
 ## Deviations from Brief
 
@@ -30,39 +32,30 @@ None yet.
 
 ## Validation Commands Run
 
-Examples:
-
-```bash
-npm test
-npm run lint
-npm run typecheck
-pytest
-```
+Not run. Implementation has not started.
 
 ## Validation Results
 
-TODO
+Not applicable.
 
 ## Known Risks
 
-TODO
+- The brief is waiting for user approval.
+- Real index benchmark wiring is deliberately out of scope for this task.
 
 ## Questions for Reviewer
 
-TODO
+- None yet.
 
 ## Git Status at Handoff
 
-TODO: paste or summarize `git status`.
+Implementation has not started. Claude Code should record `git status --short` here after implementation.
 
 ## Next Suggested Step
 
-Codex should review:
+After user approval, Claude Code should implement strictly from:
 
-- `git diff`
-- this file
-- `08_IMPLEMENTATION_BRIEF.md`
-- locked requirements
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 
 ## Next Agent State After Implementation
 

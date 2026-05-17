@@ -1,5 +1,10 @@
 # Quant Research Engine Task Plan
 
+> Archived Note:
+> This document was created before the dual-agent workflow migration.
+> Current authoritative planning, progress, handoff, and review documents live in docs/agent/.
+> Keep this file for historical reference only.
+
 ## Goal
 
 Move the active project focus from factor repair to `quant-research-engine`, and keep the next work gated on planning before any new engine coding.

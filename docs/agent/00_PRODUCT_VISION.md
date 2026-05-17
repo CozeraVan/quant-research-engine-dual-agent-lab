@@ -1,22 +1,35 @@
 # Product Vision
 
-Project name: quant-research-engine-dual-agent-lab
+Project name: quant-research-engine
 
 ## Long-Term Vision
 
-TODO: Describe the long-term goal of this project.
+`quant-research-engine` is a small, independent experimental research and backtesting engine. It screens factor and strategy ideas on top of existing local data producers, then validates promising candidates with realistic portfolio simulation.
+
+The long-term direction is a reusable engine with market profiles. A-share daily technical-factor research is the first concrete target, but the core should not hardcode A-share-only or daily-only assumptions.
 
 ## What This Project Is
 
-TODO: Describe the system/product/research project.
+- A Python research and backtesting framework.
+- A full-market evaluation engine for fast factor and strategy screening.
+- A detailed portfolio engine for account-level validation.
+- A read-only consumer of upstream market and factor databases.
+- A dual-agent development lab where Codex plans/reviews/finalizes and Claude Code implements approved briefs.
 
 ## What This Project Is Not
 
-TODO: Describe boundaries and non-goals.
+- It is not the whole `quant-workspace` program.
+- It is not responsible for downloading market data.
+- It is not responsible for computing or repairing technical indicators.
+- It is not a production trading system.
+- It is not allowed to treat smoke-test strategy outputs as research conclusions.
 
 ## Target Users / Operators
 
-TODO: Describe who will use or maintain this project.
+- The project owner, acting as research lead and final approver.
+- Codex, acting as planner, reviewer, and git finalizer.
+- Claude Code, acting as implementer from written briefs.
+- Future research scripts that need stable CLI, report, and manifest outputs.
 
 ## Core Principles
 
@@ -26,12 +39,15 @@ TODO: Describe who will use or maintain this project.
 - Make important decisions explicit.
 - Keep implementation and review separated when using dual agents.
 - Do not rely on chat history as the only source of truth.
+- Prevent future-function leakage and lookahead bias.
+- Keep market-specific rules in market profiles, not strategy logic.
+- Keep technical indicators as upstream inputs, not engine-computed internals.
 
-## Dual-Agent Development Philosophy
+## Engine Model
 
-This project uses Codex and Claude Code together:
+- Evaluation engine: fast full-market screening for factors, expressions, IC/Rank IC, quantile returns, and rough friction-adjusted summaries.
+- Portfolio engine: realistic validation with orders, fills, failed orders, costs, slippage, cash, positions, sellable inventory, equity curve, risk metrics, and reports.
 
-- Codex converts ideas into structured implementation briefs.
-- Claude Code implements the brief.
-- Codex reviews the implementation and performs final git operations after approval.
-- User remains the final product owner and acceptance authority.
+## First Market Profile
+
+The first market profile is A-share daily: signal on `t`, earliest execution on `t+1`, T+1 sellability, price limits, suspensions when data is available, ST/risk-warning handling when data is available, board-specific limits, lot-size rules, commission, stamp tax, transfer fee, and percent slippage.

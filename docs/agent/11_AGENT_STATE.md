@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-NONE
+QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-IDEA_INTAKE
+WAITING_USER_APPROVAL
 
 ## Current Owner
 
@@ -39,15 +39,20 @@ USER
 
 ## Last Completed Step
 
-Project workflow initialized.
+Codex migrated legacy project documentation into the new `docs/agent` dual-agent document system and prepared the next implementation brief.
 
 ## Next Required Step
 
-User should discuss project goals and architecture with Codex.
+User should review `docs/agent/08_IMPLEMENTATION_BRIEF.md` and either approve it for Claude Code or ask Codex to revise it.
 
 ## Active Change Request
 
-None
+Implicit user request from 2026-05-17:
+
+- migrate old project documentation into `docs/agent`
+- do not modify business code or config
+- make `docs/agent` the authoritative future entry point
+- identify the next best Claude Code task
 
 ## Active Implementation Brief
 
@@ -63,12 +68,13 @@ None
 
 ## Git State
 
-- Current branch: TODO
-- Remote: TODO
-- Last checkpoint commit: TODO
-- Last implementation commit: TODO
-- Last review commit: TODO
-- Last pushed commit: TODO
+- Current branch: `master`
+- Remote: none shown by `git remote -v`
+- Last checkpoint commit: `7657cd1 checkpoint: original quant-research-engine before dual-agent pilot`
+- Last workflow commit: `77fec02 chore: initialize dual-agent workflow`
+- Last implementation commit: none after dual-agent migration
+- Last review commit: none
+- Last pushed commit: no remote configured
 
 ## Standing Approval
 
