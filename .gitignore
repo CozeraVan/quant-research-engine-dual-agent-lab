@@ -5,3 +5,8 @@ __pycache__/
 .ruff_cache/
 outputs/
 reports/
+.agent-backups/
+.env
+.env.*
+node_modules/
+.DS_Store
