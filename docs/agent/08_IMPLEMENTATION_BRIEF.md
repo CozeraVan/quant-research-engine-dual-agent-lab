@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001
+QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
 
 ## Created By
 
@@ -14,52 +14,61 @@ CLAUDE_CODE
 
 ## Background
 
-`quant-research-engine` already has an advanced portfolio MVP: single-symbol, batch, and shared-cash backtests; A-share market profile validation; costs, slippage, lot sizing, price-limit checks; risk exits, rebalance, FIFO lot accounting, and T+1 sellable inventory; failed order output and some failed rebalance summary fields.
+`QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001` added richer failed-order diagnostics to shared-cash portfolio summaries and reports. The next low-risk reporting robustness task is to make `failed_orders.csv` output structurally reliable and auditable.
 
-The next self-contained improvement is to make failed-order diagnostics more useful for research acceptance and debugging without changing simulation semantics.
+Current report content validation checks required CSV columns for several roles, but `failed_orders` has no required columns. Empty failed-order outputs can therefore be hard to inspect or audit consistently.
 
 ## Goal
 
-Enhance shared-cash failed-order diagnostics and summary/report output so users can quickly see why orders failed, how often each reason occurred, and whether failures came from entry, exit, risk-control, or rebalance paths.
+Standardize failed-order report CSV schema and strengthen manifest content validation so `qre report-audit` can catch malformed `failed_orders.csv` artifacts.
 
 ## Non-Goals
 
-- Do not change order execution semantics.
-- Do not add real index benchmark wiring.
-- Do not add real metadata adapters for suspension/ST/risk-warning.
-- Do not alter indicator computation or factor loading behavior.
-- Do not rewrite portfolio architecture.
-- Do not modify old Markdown docs outside `docs/agent` unless explicitly asked.
+- Do not change portfolio execution semantics.
+- Do not change order validation rules.
+- Do not add database access or upstream data writes.
+- Do not add benchmark wiring.
+- Do not add real suspension/ST/risk-warning metadata adapters.
+- Do not rewrite report manifest architecture.
+- Do not change CLI command names.
+- Do not modify old root progress docs.
 
 ## Affected Modules
 
 Expected:
 
-- `src/quant_research_engine/portfolio/shared.py`
 - `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/apps/cli.py` only if output display needs small additions
-- portfolio tests related to shared-cash and report output
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_io.py`
+- `tests/test_cli.py`
 
 Maybe:
 
-- `src/quant_research_engine/portfolio/analytics.py` if diagnostics are best implemented as reusable summary helpers
-- `src/quant_research_engine/portfolio/report_manifest.py` only if new output files are added
+- `src/quant_research_engine/portfolio/single_symbol.py`
+- `src/quant_research_engine/portfolio/shared.py`
+- `tests/test_portfolio_shared.py`
+
+Only touch engine modules if needed to produce stable empty-result schemas. Prefer IO-layer normalization if that preserves runtime result objects more cleanly.
 
 ## Files Likely to Change
 
-- `src/quant_research_engine/portfolio/shared.py`
 - `src/quant_research_engine/portfolio/io.py`
-- `tests/test_portfolio_shared.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
 - `tests/test_portfolio_io.py`
 - `tests/test_cli.py`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
 ## Forbidden Files
 
 - `uv.lock`
-- `pyproject.toml` unless dependency-free implementation becomes impossible
-- upstream data producer projects
+- `pyproject.toml`
 - database credentials or `.env*`
-- old root progress docs unless the user separately requests archival or synchronization
+- upstream data producer projects
+- old root progress docs unless separately requested
 
 ## Locked Requirements
 
@@ -69,95 +78,92 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve simulation behavior unless a test demonstrates the current behavior is a diagnostics bug rather than execution semantics.
+- Preserve simulation behavior.
 - No lookahead bias.
 - No hidden indicator recomputation.
 - No upstream database writes.
-- Keep A-share market constraints in market/profile validation paths, not strategy rules.
-- Preserve existing report manifest behavior.
+- Preserve existing report manifest discovery behavior.
+- Keep changes narrowly scoped to report output/schema validation.
 
 ## Implementation Steps
 
-1. Inspect current failed order model/output in shared-cash backtests.
-2. Write failing tests for the desired diagnostics before implementation.
-3. Add or extend summary fields, such as:
-   - total failed order count
-   - failed order count by `reason`
-   - failed order count by `failure_reason`
-   - failed order attempted notional by `reason`
-   - failed order attempted notional by `failure_reason`
-   - separate rebalance failed counts must remain compatible with existing fields
-4. Ensure `failed_orders.csv` continues to include enough fields for row-level debugging.
-5. Include the new diagnostics in `summary.json`.
-6. Include readable diagnostics in shared-cash `summary.md`.
-7. If new files are added, include them in `report_manifest.json`; otherwise preserve manifest schema.
-8. Update `09_CODING_HANDOFF.md`, `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, and `11_AGENT_STATE.md` after implementation.
+1. Inspect current failed-order row shapes for single-symbol and shared-cash results.
+2. Define a stable failed-order CSV column set. Expected baseline:
+   - `symbol`
+   - `trade_date`
+   - `side`
+   - `quantity`
+   - `price`
+   - `notional`
+   - `reason`
+3. If shared-cash uses `failure_reason`, preserve it as an additional column. Do not remove existing `reason` or `failure_reason` fields from outputs.
+4. Ensure `write_single_symbol_result()` and `write_shared_cash_result()` write `failed_orders.csv` with stable headers even when there are zero failed orders.
+5. Update report manifest content validation so role `failed_orders` requires the stable baseline columns.
+6. Add tests that:
+   - single-symbol output with no failed orders still writes `failed_orders.csv` with stable headers;
+   - shared-cash output with no failed orders still writes `failed_orders.csv` with stable headers;
+   - `qre report-audit` passes for a valid `failed_orders.csv`;
+   - `qre report-audit` fails with `missing_columns` when `failed_orders.csv` is malformed.
+7. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and `docs/agent/12_AGENT_BOARD.md` after implementation.
 
 ## Data / Schema Changes
 
-No database schema changes. No upstream data writes.
+No database schema changes.
+
+Report artifact schema change:
+
+- `failed_orders.csv` should consistently include stable headers.
+- Existing row-level fields must not be removed.
 
 ## API / Interface Changes
 
 Allowed:
 
-- Add new keys to shared-cash summary output.
-- Add new human-readable sections to shared-cash Markdown summary.
+- Strengthen report content validation for `failed_orders.csv`.
+- Add helper functions in `portfolio/io.py` for stable CSV output.
 
 Avoid:
 
-- Renaming existing summary keys.
-- Removing existing columns from output files.
 - Changing CLI command names or required arguments.
+- Changing manifest JSON shape.
+- Renaming existing failed-order columns.
 
 ## Validation Plan
 
-Run focused tests first:
+Run focused tests:
 
 ```bash
-uv run pytest tests/test_portfolio_shared.py tests/test_portfolio_io.py -q
+uv run pytest tests/test_portfolio_io.py tests/test_cli.py -q
 ```
 
-Run related CLI/report tests:
-
-```bash
-uv run pytest tests/test_portfolio_shared.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q
-```
-
-Run full test suite before handoff if practical:
+Run the full suite:
 
 ```bash
 uv run pytest -q
 ```
 
-Optional smoke after tests, if local DB access is available:
+Run workflow checks:
 
 ```bash
-QRE_MARKET_DB_URL='postgresql+psycopg:///tushare_data' uv run qre backtest-shared \
-  examples/rsi2_reversal_with_rebalance.yaml \
-  --start 2026-05-11 \
-  --end 2026-05-15 \
-  --codes 000001.SZ 000002.SZ 600000.SH \
-  --initial-cash 100000 \
-  --max-positions 2 \
-  --market-profile configs/market_profiles/ashare_daily_default.yaml \
-  --output-dir outputs/smoke_shared_failed_order_diagnostics
+scripts/check-progress-docs.sh
+git diff --check
 ```
 
 ## Acceptance Criteria
 
-- [ ] Failed-order diagnostics are available in machine-readable `summary.json`.
-- [ ] Shared-cash Markdown summary shows readable failed-order diagnostics.
-- [ ] Existing failed rebalance summary fields are preserved.
-- [ ] Existing report manifest behavior remains valid.
-- [ ] Focused and related tests pass, or any unavailable checks are documented.
-- [ ] `09_CODING_HANDOFF.md` clearly lists changed files, validation, risks, and git status.
+- [ ] `failed_orders.csv` has stable headers when no failed orders exist.
+- [ ] Existing failed-order row fields remain available.
+- [ ] `qre report-audit` detects missing required failed-order CSV columns.
+- [ ] Valid report manifests with valid failed-order files still pass audit.
+- [ ] No portfolio simulation behavior changes.
+- [ ] Focused and full tests pass, or unavailable checks are documented.
+- [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Overloading `reason` and `failure_reason` could create ambiguous summaries. Prefer explicit naming in new summary keys.
-- Some failed order paths may not have attempted notional populated consistently. If so, record zero or `None` consistently and document the choice.
-- Markdown output should remain concise; avoid turning reports into raw debug dumps.
+- Tightening validation may expose previously weak report artifacts. Keep the required baseline minimal to avoid unnecessary breakage.
+- Single-symbol and shared-cash failed-order rows are not identical. Preserve both shapes while enforcing only shared baseline columns.
+- Empty DataFrames can produce CSV files with no headers unless explicitly normalized.
 
 ## Instructions for Claude Code
 
@@ -173,10 +179,11 @@ Claude Code must:
    - `docs/agent/04_TASK_HANDOFF.md`
    - `docs/agent/05_PROGRESS.md`
    - `docs/agent/11_AGENT_STATE.md`
+   - `docs/agent/12_AGENT_BOARD.md`
 7. If architecture changes, also update:
    - `docs/agent/06_DECISION_LOG.md`
 
-## Next Agent State After Brief Is Approved
+## Next Agent State
 
 - Phase: `CLAUDE_IMPLEMENTING`
 - Owner: `CLAUDE_CODE`

@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001
+QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
@@ -35,24 +35,23 @@ Allowed values:
 
 Current:
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex completed second review for `QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001` on 2026-05-17. Required Fixes are resolved and all 162 tests pass.
+Codex created local checkpoint `28e6f25 feat: add failed-order diagnostics to portfolio reports` and prepared the next implementation brief for failed-order report schema and audit validation.
 
 ## Next Required Step
 
-User should review `docs/agent/10_REVIEW_REPORT.md` and decide whether to approve git finalization.
+Claude Code should implement `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
-Implicit user request from 2026-05-17:
+User request from 2026-05-17:
 
-- migrate old project documentation into `docs/agent`
-- do not modify business code or config
-- make `docs/agent` the authoritative future entry point
-- identify the next best Claude Code task
+- finalize the accepted failed-order diagnostics task locally without push,
+- choose the next small, low-risk, testable task from roadmap/progress,
+- prepare the next Claude Code implementation handoff.
 
 ## Active Implementation Brief
 
@@ -66,15 +65,20 @@ Implicit user request from 2026-05-17:
 
 `docs/agent/10_REVIEW_REPORT.md`
 
+## Active Agent Board
+
+`docs/agent/12_AGENT_BOARD.md`
+
 ## Git State
 
 - Current branch: `master`
-- Remote: none shown by `git remote -v`
+- Remote: none shown by prior `git remote -v`
 - Last checkpoint commit: `7657cd1 checkpoint: original quant-research-engine before dual-agent pilot`
 - Last workflow commit: `77fec02 chore: initialize dual-agent workflow`
-- Last implementation commit: none after dual-agent migration
-- Last review commit: none
+- Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
+- Last accepted implementation commit: `28e6f25 feat: add failed-order diagnostics to portfolio reports`
 - Last pushed commit: no remote configured
+- Current planning docs for `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001` are uncommitted.
 
 ## Standing Approval
 
@@ -100,6 +104,7 @@ If unsure where to continue:
    - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
    - `docs/agent/09_CODING_HANDOFF.md`
    - `docs/agent/10_REVIEW_REPORT.md`
+   - `docs/agent/12_AGENT_BOARD.md`
 3. Run:
    ```bash
    git status
