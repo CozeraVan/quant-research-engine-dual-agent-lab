@@ -1308,3 +1308,74 @@ def test_cli_backtest_single_accepts_market_profile_argument(capsys, monkeypatch
 
     assert exit_code == 2
     assert "QRE_MARKET_DB_URL" in captured.err
+
+
+def test_cli_report_audit_passes_for_valid_failed_orders_csv(capsys, tmp_path):
+    output_path = tmp_path / "failed_orders.csv"
+    output_path.write_text(
+        "symbol,trade_date,side,quantity,price,notional,reason\n"
+        "000001.SZ,2026-01-06,buy,100,10.0,1000.0,\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "failed_orders",
+                        "path": "failed_orders.csv",
+                        "filename": "failed_orders.csv",
+                        "role": "failed_orders",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path), "--role", "failed_orders"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "validation_issues=0" in captured.out
+    assert "status=ok" in captured.out
+    assert captured.err == ""
+
+
+def test_cli_report_audit_fails_for_malformed_failed_orders_csv(capsys, tmp_path):
+    output_path = tmp_path / "failed_orders.csv"
+    output_path.write_text(
+        "symbol,side\n000001.SZ,buy\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "failed_orders",
+                        "path": "failed_orders.csv",
+                        "filename": "failed_orders.csv",
+                        "role": "failed_orders",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path), "--role", "failed_orders"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "validation_issues=1" in captured.out
+    assert "status=failed" in captured.out
+    assert "failed_orders" in captured.err
+    assert "missing_columns" in captured.err
+    assert str(output_path) in captured.err

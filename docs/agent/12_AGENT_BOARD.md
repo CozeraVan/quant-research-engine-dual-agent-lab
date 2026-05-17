@@ -6,11 +6,11 @@ QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+USER
 
 ## Message Type
 
-PLAN_TO_CLAUDE
+REVIEW_TO_USER
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Implement the approved brief to standardize failed-order CSV headers and strengthen report-audit validation. Keep the change narrow and do not alter portfolio simulation behavior.
+Review passed for `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001`. Codex will commit locally and prepare the next Claude Code task. No push.
 
 ## Must Read
 

@@ -19,6 +19,28 @@ from quant_research_engine.portfolio.risk import summarize_equity_curve_by_windo
 from quant_research_engine.portfolio.shared import SharedCashBacktestResult
 from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestResult
 
+import pandas as pd
+
+_FAILED_ORDERS_BASELINE_COLUMNS = [
+    "symbol",
+    "trade_date",
+    "side",
+    "quantity",
+    "price",
+    "notional",
+    "reason",
+]
+
+
+def _write_failed_orders_csv(frame: pd.DataFrame, path: Path) -> None:
+    if frame.empty and frame.columns.empty:
+        path.write_text(",".join(_FAILED_ORDERS_BASELINE_COLUMNS) + "\n", encoding="utf-8")
+        return
+    columns = [col for col in _FAILED_ORDERS_BASELINE_COLUMNS if col in frame.columns]
+    extra = [col for col in frame.columns if col not in _FAILED_ORDERS_BASELINE_COLUMNS]
+    ordered = columns + extra
+    frame.to_csv(path, columns=ordered, index=False)
+
 
 _SUMMARY_LABELS = {
     "initial_cash": "Initial cash",
@@ -78,7 +100,7 @@ def write_single_symbol_result(
     }
     result.orders.to_csv(paths["orders"], index=False)
     result.trades.to_csv(paths["trades"], index=False)
-    result.failed_orders.to_csv(paths["failed_orders"], index=False)
+    _write_failed_orders_csv(result.failed_orders, paths["failed_orders"])
     result.equity_curve.to_csv(paths["equity_curve"], index=False)
     paths["summary"].write_text(
         json.dumps(_json_ready_summary(result.summary), ensure_ascii=False, indent=2, sort_keys=True),
@@ -109,7 +131,7 @@ def write_shared_cash_result(
     }
     result.orders.to_csv(paths["orders"], index=False)
     result.trades.to_csv(paths["trades"], index=False)
-    result.failed_orders.to_csv(paths["failed_orders"], index=False)
+    _write_failed_orders_csv(result.failed_orders, paths["failed_orders"])
     result.equity_curve.to_csv(paths["equity_curve"], index=False)
     for window in ("M", "Q", "Y"):
         summarize_equity_curve_by_window(result.equity_curve, window=window).to_csv(

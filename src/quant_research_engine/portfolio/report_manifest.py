@@ -15,7 +15,7 @@ _SUPPORTED_MANIFEST_KINDS = {
 _REQUIRED_COLUMNS_BY_ROLE = {
     "orders": {"symbol", "trade_date"},
     "trades": {"symbol"},
-    "failed_orders": set(),
+    "failed_orders": {"symbol", "trade_date", "side", "quantity", "price", "notional", "reason"},
     "equity_curve": {"trade_date"},
     "window_metrics": {"window", "total_return"},
     "rolling_metrics": {"window_size", "end_date", "total_return"},

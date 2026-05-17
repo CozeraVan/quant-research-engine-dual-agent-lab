@@ -10,11 +10,11 @@ QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
 
 ## Current Status
 
-Approved for Claude Code implementation by user request after local checkpoint `28e6f25`.
+Reviewed by Codex. Accepted for local commit.
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Completed
 
@@ -29,13 +29,15 @@ CLAUDE_CODE
 
 ## In Progress
 
-Claude Code should implement:
+Codex reviewed:
 
 - `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001`
 
-Implementation source of truth:
+Review evidence:
 
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/10_REVIEW_REPORT.md`
 
 ## Modified Files For Next Planning Step
 
@@ -64,4 +66,4 @@ Next task validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 
 ## Next Suggested Step
 
-Claude Code implements strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then updates `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and `docs/agent/12_AGENT_BOARD.md` before handing back to Codex review.
+Codex creates a local commit for the accepted implementation, then prepares the next implementation brief and board for Claude Code. Do not push.

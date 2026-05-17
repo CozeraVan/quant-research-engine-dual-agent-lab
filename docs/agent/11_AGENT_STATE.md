@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex created local checkpoint `28e6f25 feat: add failed-order diagnostics to portfolio reports` and prepared the next implementation brief for failed-order report schema and audit validation.
+Codex reviewed `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001` on 2026-05-17. Review passed and all 166 tests pass.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Codex should create a local commit for the accepted implementation, then prepare the next implementation brief for Claude Code. Do not push.
 
 ## Active Change Request
 

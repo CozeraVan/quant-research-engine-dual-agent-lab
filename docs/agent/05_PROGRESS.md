@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -17,7 +17,7 @@ CLAUDE_IMPLEMENTING
 | QRE-M4 | Portfolio MVP | DONE | HISTORICAL | single, batch, shared-cash, risk, rebalance, FIFO lots, T+1 inventory | Preserve |
 | QRE-M4.7 | Failed-order diagnostics implementation | DONE | CODEX/CLAUDE_CODE | commit `28e6f25`; 162 tests passed before checkpoint | Preserve |
 | QRE-M5 | Reporting and manifest audit | DONE | HISTORICAL | report manifests, `report-files`, `report-audit` | Standardize larger run workflow later |
-| QRE-NEXT-2 | Failed-order report schema and audit validation | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` | Implement from approved brief |
+| QRE-NEXT-2 | Failed-order report schema and audit validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; 166 tests pass; stable CSV headers; report-audit validation for failed_orders | Local commit, then next plan |
 
 ## Latest Verified State
 

@@ -463,3 +463,61 @@ def test_shared_cash_summary_markdown_no_failed_orders_when_zero(tmp_path):
     markdown = paths["summary_markdown"].read_text(encoding="utf-8")
     assert "## Failed Orders" not in markdown
     assert "failed_order_" not in markdown
+
+
+def test_single_symbol_empty_failed_orders_writes_stable_headers(tmp_path):
+    from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestResult
+
+    result = SingleSymbolBacktestResult(
+        orders=pd.DataFrame(),
+        trades=pd.DataFrame(),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 0},
+    )
+
+    paths = write_single_symbol_result(result, tmp_path)
+    path = paths["failed_orders"]
+    content = path.read_text(encoding="utf-8")
+    header = content.strip().split("\n")[0] if content.strip() else ""
+
+    assert "symbol" in header
+    assert "trade_date" in header
+    assert "side" in header
+    assert "quantity" in header
+    assert "price" in header
+    assert "notional" in header
+    assert "reason" in header
+
+
+def test_shared_cash_empty_failed_orders_writes_stable_headers(tmp_path):
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame(),
+        trades=pd.DataFrame(),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(),
+        summary={
+            "initial_cash": 10000.0,
+            "final_equity": 10000.0,
+            "trade_count": 0,
+            "max_drawdown": 0.0,
+            "failed_order_count": 0,
+            "failed_order_count_by_reason": {},
+            "failed_order_count_by_failure_reason": {},
+            "failed_order_notional_by_reason": {},
+            "failed_order_notional_by_failure_reason": {},
+        },
+    )
+
+    paths = write_shared_cash_result(result, tmp_path)
+    path = paths["failed_orders"]
+    content = path.read_text(encoding="utf-8")
+    header = content.strip().split("\n")[0] if content.strip() else ""
+
+    assert "symbol" in header
+    assert "trade_date" in header
+    assert "side" in header
+    assert "quantity" in header
+    assert "price" in header
+    assert "notional" in header
+    assert "reason" in header
