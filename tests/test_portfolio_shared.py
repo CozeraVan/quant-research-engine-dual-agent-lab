@@ -387,3 +387,112 @@ def test_shared_cash_backtest_exits_by_trailing_stop_before_holding_period():
 
     assert result.trades.iloc[0]["exit_date"] == pd.Timestamp("2026-01-08")
     assert result.trades.iloc[0]["exit_reason"] == "trailing_stop"
+
+
+def test_shared_cash_backtest_reports_failed_order_diagnostics_total():
+    frame = make_shared_frame()
+    frame.loc[
+        (frame["ts_code"] == "000001.SZ") & (frame["trade_date"] == pd.Timestamp("2026-01-06")),
+        "open",
+    ] = 9999.0
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+    )
+
+    result = engine.run(frame, request)
+
+    assert "failed_order_count" in result.summary
+    assert result.summary["failed_order_count"] == len(result.failed_orders)
+
+
+def test_shared_cash_backtest_reports_failed_order_diagnostics_by_failure_reason():
+    frame = make_shared_frame()
+    frame.loc[
+        (frame["ts_code"] == "000001.SZ") & (frame["trade_date"] == pd.Timestamp("2026-01-06")),
+        "open",
+    ] = 9999.0
+    frame.loc[
+        (frame["ts_code"] == "000002.SZ") & (frame["trade_date"] == pd.Timestamp("2026-01-06")),
+        "limit_up",
+    ] = True
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+    )
+
+    result = engine.run(frame, request)
+
+    by_failure_reason = result.summary["failed_order_count_by_failure_reason"]
+    assert by_failure_reason["limit_up_buy_blocked"] == 1
+    assert "failed_order_notional_by_failure_reason" in result.summary
+    assert result.summary["failed_order_notional_by_failure_reason"]["limit_up_buy_blocked"] > 0
+
+
+def test_shared_cash_backtest_reports_failed_order_diagnostics_by_reason():
+    frame = make_shared_frame()
+    frame["open"] = [10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 20.0, 20.0, 20.0, 20.0]
+    frame["close"] = frame["open"]
+    frame["limit_down"] = False
+    frame.loc[
+        (frame["ts_code"] == "000002.SZ") & (frame["trade_date"] == pd.Timestamp("2026-01-07")),
+        "limit_down",
+    ] = True
+    frame["signal_score"] = [1.0, 1.0, 3.0, 3.0, 3.0, 3.0, 3.0, 1.0, 1.0, 1.0]
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=120000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=4,
+        max_positions=2,
+        weight_model="score_weight",
+        score_column="signal_score",
+        rebalance_interval_days=2,
+    )
+
+    result = engine.run(frame, request)
+
+    by_reason = result.summary["failed_order_count_by_reason"]
+    assert "rebalance" in by_reason
+    assert by_reason["rebalance"] >= 1
+    assert "failed_order_notional_by_reason" in result.summary
+    assert result.summary["failed_order_notional_by_reason"]["rebalance"] > 0
+
+
+def test_shared_cash_backtest_diagnostics_preserves_failed_rebalance_fields():
+    frame = make_shared_frame()
+    frame["open"] = [10.0, 10.0, 10.0, 10.0, 10.0, 20.0, 20.0, 20.0, 20.0, 20.0]
+    frame["close"] = frame["open"]
+    frame["limit_down"] = False
+    frame.loc[
+        (frame["ts_code"] == "000002.SZ") & (frame["trade_date"] == pd.Timestamp("2026-01-07")),
+        "limit_down",
+    ] = True
+    frame["signal_score"] = [1.0, 1.0, 3.0, 3.0, 3.0, 3.0, 3.0, 1.0, 1.0, 1.0]
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=120000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=4,
+        max_positions=2,
+        weight_model="score_weight",
+        score_column="signal_score",
+        rebalance_interval_days=2,
+    )
+
+    result = engine.run(frame, request)
+
+    assert "failed_rebalance_order_count" in result.summary
+    assert "failed_rebalance_notional" in result.summary
+    assert result.summary["failed_rebalance_order_count"] >= 0
+    assert result.summary["failed_rebalance_notional"] >= 0

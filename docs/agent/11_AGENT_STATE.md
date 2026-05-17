@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-WAITING_USER_APPROVAL
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -39,11 +39,11 @@ USER
 
 ## Last Completed Step
 
-Codex migrated legacy project documentation into the new `docs/agent` dual-agent document system and prepared the next implementation brief.
+Codex completed second review for `QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001` on 2026-05-17. Required Fixes are resolved and all 162 tests pass.
 
 ## Next Required Step
 
-User should review `docs/agent/08_IMPLEMENTATION_BRIEF.md` and either approve it for Claude Code or ask Codex to revise it.
+User should review `docs/agent/10_REVIEW_REPORT.md` and decide whether to approve git finalization.
 
 ## Active Change Request
 

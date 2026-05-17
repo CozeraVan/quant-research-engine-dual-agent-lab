@@ -715,6 +715,7 @@ class SharedCashBacktestEngine:
         win_rate = None if trades.empty else float((trades["net_pnl"] > 0).mean())
         rebalance_metrics = self._rebalance_summary_metrics(orders, equity_curve)
         failed_rebalance_metrics = self._failed_rebalance_summary_metrics(failed_orders)
+        failed_diagnostics = self._failed_order_diagnostics(failed_orders)
         return {
             "initial_cash": request.initial_cash,
             "final_equity": final_equity,
@@ -724,6 +725,7 @@ class SharedCashBacktestEngine:
             "total_cost": total_cost,
             **rebalance_metrics,
             **failed_rebalance_metrics,
+            **failed_diagnostics,
             **summarize_equity_curve(equity_curve),
         }
 
@@ -769,6 +771,28 @@ class SharedCashBacktestEngine:
             ),
         }
 
+    def _failed_order_diagnostics(self, failed_orders: pd.DataFrame) -> dict[str, object]:
+        if failed_orders.empty:
+            return {
+                "failed_order_count": 0,
+                "failed_order_count_by_reason": {},
+                "failed_order_count_by_failure_reason": {},
+                "failed_order_notional_by_reason": {},
+                "failed_order_notional_by_failure_reason": {},
+            }
+        reason_column = failed_orders["reason"].fillna("entry_exit")
+        count_by_reason = reason_column.value_counts().to_dict()
+        count_by_failure_reason = failed_orders["failure_reason"].value_counts().to_dict()
+        notional_by_reason = failed_orders.groupby(reason_column)["notional"].sum().to_dict()
+        notional_by_failure_reason = failed_orders.groupby("failure_reason")["notional"].sum().to_dict()
+        return {
+            "failed_order_count": int(len(failed_orders)),
+            "failed_order_count_by_reason": {str(k): int(v) for k, v in count_by_reason.items()},
+            "failed_order_count_by_failure_reason": {str(k): int(v) for k, v in count_by_failure_reason.items()},
+            "failed_order_notional_by_reason": {str(k): float(v) for k, v in notional_by_reason.items()},
+            "failed_order_notional_by_failure_reason": {str(k): float(v) for k, v in notional_by_failure_reason.items()},
+        }
+
     def _empty_result(self, request: SharedCashBacktestRequest) -> SharedCashBacktestResult:
         return SharedCashBacktestResult(
             orders=pd.DataFrame(),
@@ -788,6 +812,11 @@ class SharedCashBacktestEngine:
                 "rebalance_turnover": 0.0,
                 "failed_rebalance_order_count": 0,
                 "failed_rebalance_notional": 0.0,
+                "failed_order_count": 0,
+                "failed_order_count_by_reason": {},
+                "failed_order_count_by_failure_reason": {},
+                "failed_order_notional_by_reason": {},
+                "failed_order_notional_by_failure_reason": {},
             },
         )
 

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-WAITING_USER_APPROVAL
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -16,7 +16,7 @@ WAITING_USER_APPROVAL
 | QRE-M3 | Evaluation MVP | DONE | HISTORICAL | forward returns, IC, Rank IC, quantile, friction summaries | Add grouping/regime later |
 | QRE-M4 | Portfolio MVP | DONE | HISTORICAL | single, batch, shared-cash, risk, rebalance, FIFO lots, T+1 inventory | Improve diagnostics |
 | QRE-M5 | Reporting and manifest audit | DONE | HISTORICAL | report manifests, `report-files`, `report-audit` | Standardize larger run workflow later |
-| QRE-NEXT-1 | Failed-order diagnostics brief | WAITING_USER_APPROVAL | USER | `08_IMPLEMENTATION_BRIEF.md` | Approve for Claude Code |
+| QRE-NEXT-1 | Failed-order diagnostics implementation | USER_ACCEPTANCE | USER | Codex second review passed; 162 tests pass; Required Fixes resolved | User acceptance / finalization approval |
 
 ## Latest Verified Legacy State
 

@@ -396,3 +396,70 @@ def test_write_shared_cash_result_creates_standard_output_files(tmp_path):
     assert "| Rolling metrics 20 | rolling_metrics_20.csv |" in markdown
     assert "| Report manifest | report_manifest.json |" in markdown
     assert "benchmark_benchmark_total_return" not in markdown
+
+
+def test_shared_cash_summary_markdown_includes_failed_orders_section(tmp_path):
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame(),
+        trades=pd.DataFrame(),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(
+            {
+                "symbol": ["000001.SZ", "000002.SZ"],
+                "trade_date": pd.to_datetime(["2026-01-06", "2026-01-06"]),
+                "side": ["buy", "buy"],
+                "quantity": [100, 100],
+                "price": [10.0, 20.0],
+                "notional": [1000.0, 2000.0],
+                "reason": [None, "rebalance"],
+                "failure_reason": ["limit_up_buy_blocked", "limit_down_sell_blocked"],
+            }
+        ),
+        summary={
+            "initial_cash": 10000.0,
+            "final_equity": 10000.0,
+            "trade_count": 0,
+            "max_drawdown": 0.0,
+            "failed_order_count": 2,
+            "failed_order_count_by_reason": {"entry_exit": 1, "rebalance": 1},
+            "failed_order_count_by_failure_reason": {"limit_up_buy_blocked": 1, "limit_down_sell_blocked": 1},
+            "failed_order_notional_by_reason": {"entry_exit": 1000.0, "rebalance": 2000.0},
+            "failed_order_notional_by_failure_reason": {"limit_up_buy_blocked": 1000.0, "limit_down_sell_blocked": 2000.0},
+        },
+    )
+
+    paths = write_shared_cash_result(result, tmp_path)
+    markdown = paths["summary_markdown"].read_text(encoding="utf-8")
+    assert "## Failed Orders" in markdown
+    assert "| Failed order count | 2 |" in markdown
+    assert "Failed: limit up buy blocked" in markdown
+    assert "Failed: limit down sell blocked" in markdown
+    assert "| Failed by entry/exit count | 1 |" in markdown
+    assert "| Failed by rebalance count | 1 |" in markdown
+    assert "{'entry_exit'" not in markdown
+    assert "failed_order_count_by_reason" not in markdown
+
+
+def test_shared_cash_summary_markdown_no_failed_orders_when_zero(tmp_path):
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame(),
+        trades=pd.DataFrame(),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(),
+        summary={
+            "initial_cash": 10000.0,
+            "final_equity": 10000.0,
+            "trade_count": 0,
+            "max_drawdown": 0.0,
+            "failed_order_count": 0,
+            "failed_order_count_by_reason": {},
+            "failed_order_count_by_failure_reason": {},
+            "failed_order_notional_by_reason": {},
+            "failed_order_notional_by_failure_reason": {},
+        },
+    )
+
+    paths = write_shared_cash_result(result, tmp_path)
+    markdown = paths["summary_markdown"].read_text(encoding="utf-8")
+    assert "## Failed Orders" not in markdown
+    assert "failed_order_" not in markdown

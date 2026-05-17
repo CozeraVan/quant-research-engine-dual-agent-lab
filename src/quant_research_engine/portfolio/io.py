@@ -58,6 +58,7 @@ _SUMMARY_LABELS = {
     "return_std": "Return standard deviation",
     "total_trades": "Total trades",
     "total_failed_orders": "Total failed orders",
+    "failed_order_count": "Failed order count",
 }
 
 
@@ -234,6 +235,7 @@ def shared_summary_markdown(summary: dict[str, Any], paths: dict[str, Path] | No
     sections = [
         ("Portfolio", _portfolio_summary_items(summary)),
         ("Rebalance", _prefixed_summary_items(summary, ("rebalance_", "failed_rebalance_"))),
+        ("Failed Orders", _failed_order_summary_items(summary)),
         ("Benchmark", _prefixed_summary_items(summary, ("benchmark_",))),
     ]
     lines = ["# Shared Cash Backtest Summary", ""]
@@ -524,6 +526,7 @@ def _portfolio_summary_items(summary: dict[str, Any]) -> list[tuple[str, Any]]:
         for key, value in summary.items()
         if not key.startswith("rebalance_")
         and not key.startswith("failed_rebalance_")
+        and not key.startswith("failed_order_")
         and not key.startswith("benchmark_")
         and key != "benchmark_code"
     ]
@@ -535,6 +538,24 @@ def _prefixed_summary_items(summary: dict[str, Any], prefixes: tuple[str, ...]) 
         for key, value in summary.items()
         if key.startswith(prefixes) or (key == "benchmark_code" and "benchmark_" in prefixes)
     ]
+
+
+def _failed_order_summary_items(summary: dict[str, Any]) -> list[tuple[str, Any]]:
+    if summary.get("failed_order_count", 0) == 0:
+        return []
+    items: list[tuple[str, Any]] = [("failed_order_count", summary["failed_order_count"])]
+    for label, key in [
+        ("Failed by entry/exit", ("failed_order_count_by_reason", "entry_exit")),
+        ("Failed by rebalance", ("failed_order_count_by_reason", "rebalance")),
+    ]:
+        d = summary.get(key[0])
+        if isinstance(d, dict) and key[1] in d and d[key[1]] > 0:
+            items.append((label + " count", d[key[1]]))
+    for reason_key in sorted((summary.get("failed_order_count_by_failure_reason") or {}).keys()):
+        count = summary["failed_order_count_by_failure_reason"][reason_key]
+        notional = (summary.get("failed_order_notional_by_failure_reason") or {}).get(reason_key, 0.0)
+        items.append((f"Failed: {reason_key}", f"{count} orders, ¥{notional:,.2f} notional"))
+    return items
 
 
 def _format_markdown_value(value: Any) -> str:

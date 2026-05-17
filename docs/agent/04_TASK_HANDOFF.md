@@ -2,15 +2,15 @@
 
 ## Current Task
 
-Migrate legacy project documentation into the dual-agent `docs/agent` system and prepare the next Claude Code task.
+Implement shared-cash failed-order diagnostics from the approved implementation brief.
 
 ## Task ID
 
-DOC-MIGRATION-2026-05-17
+QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001
 
 ## Current Status
 
-Done. New `docs/agent` files are now the preferred entry point for future Codex and Claude Code work.
+Second Codex review passed. Waiting for user acceptance.
 
 ## Current Owner
 
@@ -25,6 +25,11 @@ USER
 - Added Archived Note banners to legacy planning/progress Markdown files without deleting them.
 - Did not modify business code, tests, configs, examples, `pyproject.toml`, or `uv.lock`.
 - Selected a self-contained next Claude Code task: shared-cash failed-order diagnostics.
+- User approved `docs/agent/08_IMPLEMENTATION_BRIEF.md` for Claude Code implementation on 2026-05-17.
+- Claude Code implemented failed-order diagnostics: `_failed_order_diagnostics()` in `shared.py`, "Failed Orders" section in Markdown, 5 new tests. All 161 tests pass.
+- Codex review found required Markdown report cleanup: avoid raw `failed_order_*` dict rows in the generic Portfolio section.
+- Claude Code fixed: `_portfolio_summary_items()` now excludes `failed_order_*` keys, 2 new/strengthened io tests. 162 tests pass.
+- Codex second review passed. Required Fixes are resolved.
 
 ## Information Migrated From
 
@@ -49,11 +54,14 @@ USER
 
 ## In Progress
 
-No coding is in progress.
-
-The next implementation task is waiting for user approval:
+User should review:
 
 - `QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001`
+
+Review source of truth:
+
+- `docs/agent/10_REVIEW_REPORT.md`
+- `docs/agent/09_CODING_HANDOFF.md`
 
 ## Modified Files
 
@@ -66,6 +74,14 @@ The next implementation task is waiting for user approval:
 - Agent docs updated:
   - `docs/agent/04_TASK_HANDOFF.md`
   - `docs/agent/05_PROGRESS.md`
+  - `docs/agent/09_CODING_HANDOFF.md`
+  - `docs/agent/11_AGENT_STATE.md`
+- Implementation:
+  - `src/quant_research_engine/portfolio/shared.py`
+  - `src/quant_research_engine/portfolio/io.py`
+- Tests:
+  - `tests/test_portfolio_shared.py`
+  - `tests/test_portfolio_io.py`
 
 ## Validation
 
@@ -108,4 +124,4 @@ Keep as reference or consolidate carefully:
 
 ## Next Suggested Step
 
-User reviews the migrated docs and either approves `08_IMPLEMENTATION_BRIEF.md` for Claude Code, or asks Codex to revise the brief or roadmap.
+User reviews the passed review report and either approves git finalization or asks for further changes.
