@@ -55,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Return an error if any matched manifest file has structural validation issues.",
     )
+    report_files_parser.add_argument(
+        "--require-match",
+        action="store_true",
+        help="Return an error if the selected filters match no manifest entries.",
+    )
 
     report_audit_parser = subparsers.add_parser("report-audit", help="Audit files from a report manifest")
     report_audit_parser.add_argument("manifest", type=Path)
@@ -294,6 +299,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                             file=__import__("sys").stderr,
                         )
                     return 2
+            if args.require_match and not entries:
+                print("no manifest entries matched filters", file=__import__("sys").stderr)
+                return 2
             if args.keys:
                 for entry in entries:
                     print(entry.key)

@@ -16,18 +16,18 @@ USER_ACCEPTANCE
 | QRE-M3 | Evaluation MVP | DONE | HISTORICAL | forward returns, IC, Rank IC, quantile, friction summaries | Add grouping/regime later |
 | QRE-M4 | Portfolio MVP | DONE | HISTORICAL | single, batch, shared-cash, risk, rebalance, FIFO lots, T+1 inventory | Preserve |
 | QRE-M4.7 | Failed-order diagnostics implementation | DONE | CODEX/CLAUDE_CODE | commit `28e6f25`; 162 tests passed before checkpoint | Preserve |
-| QRE-M5 | Reporting and manifest audit | DONE | HISTORICAL | report manifests, `report-files`, `report-audit` | Standardize larger run workflow later |
-| QRE-NEXT-2 | Failed-order report schema and audit validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; 166 tests pass; stable CSV headers; report-audit validation for failed_orders | Local commit, then next plan |
+| QRE-M5.6 | Failed-order report schema and audit validation | DONE | CODEX/CLAUDE_CODE | commit `001177f`; 166 tests passed before checkpoint | Preserve |
+| QRE-NEXT-3 | `report-files --require-match` | DONE | CODEX/CLAUDE_CODE | Codex review passed; 169 tests pass; --require-match flag with exit-code-2 zero-match behavior | Local commit, then next plan |
 
 ## Latest Verified State
 
-Recorded on 2026-05-17 before local checkpoint `28e6f25`:
+Recorded on 2026-05-17 before local checkpoint `001177f`:
 
-- `uv run pytest -q` -> `162 passed in 2.29s`
+- `uv run pytest -q` -> `166 passed in 1.46s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - Local commit created:
-  - `28e6f25 feat: add failed-order diagnostics to portfolio reports`
+  - `001177f test: validate failed-order report artifacts`
 - No push performed.
 
 ## Completed Module Summary
@@ -35,11 +35,11 @@ Recorded on 2026-05-17 before local checkpoint `28e6f25`:
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit option.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit option, failed-order artifact schema validation.
 
 ## Pending Work Summary
 
-- Stable failed-order CSV schema and audit validation.
+- `report-files --require-match` strict zero-match mode.
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, board, market-cap, liquidity, membership, and regime grouping.

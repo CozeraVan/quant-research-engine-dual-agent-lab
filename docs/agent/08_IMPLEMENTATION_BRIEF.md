@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
+QRE-REPORT-FILES-REQUIRE-MATCH-001
 
 ## Created By
 
@@ -14,53 +14,43 @@ CLAUDE_CODE
 
 ## Background
 
-`QRE-PORTFOLIO-FAILED-ORDER-DIAGNOSTICS-001` added richer failed-order diagnostics to shared-cash portfolio summaries and reports. The next low-risk reporting robustness task is to make `failed_orders.csv` output structurally reliable and auditable.
+`qre report-audit` already supports `--require-match`, which makes filtered manifest checks fail when no entries match. `qre report-files` currently allows zero matches by default and has no equivalent strict mode.
 
-Current report content validation checks required CSV columns for several roles, but `failed_orders` has no required columns. Empty failed-order outputs can therefore be hard to inspect or audit consistently.
+Adding `--require-match` to `report-files` is a small reporting workflow improvement that helps scripts fail fast when a caller expects a specific role, symbol, window, or group output to exist.
 
 ## Goal
 
-Standardize failed-order report CSV schema and strengthen manifest content validation so `qre report-audit` can catch malformed `failed_orders.csv` artifacts.
+Add a `--require-match` option to `qre report-files` that returns a non-zero exit code when the selected filters match no manifest entries.
 
 ## Non-Goals
 
-- Do not change portfolio execution semantics.
-- Do not change order validation rules.
-- Do not add database access or upstream data writes.
-- Do not add benchmark wiring.
-- Do not add real suspension/ST/risk-warning metadata adapters.
-- Do not rewrite report manifest architecture.
-- Do not change CLI command names.
+- Do not change `report-audit` behavior.
+- Do not change manifest JSON shape.
+- Do not change report artifact generation.
+- Do not change portfolio simulation behavior.
+- Do not add database access.
 - Do not modify old root progress docs.
 
 ## Affected Modules
 
 Expected:
 
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_io.py`
+- `src/quant_research_engine/apps/cli.py`
 - `tests/test_cli.py`
 
-Maybe:
+Docs/handoff:
 
-- `src/quant_research_engine/portfolio/single_symbol.py`
-- `src/quant_research_engine/portfolio/shared.py`
-- `tests/test_portfolio_shared.py`
-
-Only touch engine modules if needed to produce stable empty-result schemas. Prefer IO-layer normalization if that preserves runtime result objects more cleanly.
-
-## Files Likely to Change
-
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_io.py`
-- `tests/test_cli.py`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
+
+## Files Likely to Change
+
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_cli.py`
+- agent handoff docs listed above
 
 ## Forbidden Files
 
@@ -78,65 +68,52 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve simulation behavior.
-- No lookahead bias.
-- No hidden indicator recomputation.
-- No upstream database writes.
-- Preserve existing report manifest discovery behavior.
-- Keep changes narrowly scoped to report output/schema validation.
+- Preserve existing default `report-files` behavior when `--require-match` is not provided.
+- Preserve existing `report-audit --require-match` behavior.
+- Preserve manifest discovery and filtering semantics.
+- No database writes or credential handling.
 
 ## Implementation Steps
 
-1. Inspect current failed-order row shapes for single-symbol and shared-cash results.
-2. Define a stable failed-order CSV column set. Expected baseline:
-   - `symbol`
-   - `trade_date`
-   - `side`
-   - `quantity`
-   - `price`
-   - `notional`
-   - `reason`
-3. If shared-cash uses `failure_reason`, preserve it as an additional column. Do not remove existing `reason` or `failure_reason` fields from outputs.
-4. Ensure `write_single_symbol_result()` and `write_shared_cash_result()` write `failed_orders.csv` with stable headers even when there are zero failed orders.
-5. Update report manifest content validation so role `failed_orders` requires the stable baseline columns.
-6. Add tests that:
-   - single-symbol output with no failed orders still writes `failed_orders.csv` with stable headers;
-   - shared-cash output with no failed orders still writes `failed_orders.csv` with stable headers;
-   - `qre report-audit` passes for a valid `failed_orders.csv`;
-   - `qre report-audit` fails with `missing_columns` when `failed_orders.csv` is malformed.
-7. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and `docs/agent/12_AGENT_BOARD.md` after implementation.
+1. Inspect current `report-files` and `report-audit` CLI handling.
+2. Add `--require-match` to the `report-files` parser.
+3. In the `report-files` command branch, if `--require-match` is set and filtered entries are empty:
+   - print `no manifest entries matched filters` to stderr;
+   - return exit code `2`;
+   - print no stdout.
+4. Preserve existing behavior when `--require-match` is absent.
+5. Add CLI tests:
+   - zero matches without `--require-match` still exits `0` with empty stdout/stderr;
+   - zero matches with `--require-match` exits `2`, writes the clear stderr message, and emits no stdout;
+   - matching entries with `--require-match` still print paths or keys normally.
+6. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
-No database schema changes.
-
-Report artifact schema change:
-
-- `failed_orders.csv` should consistently include stable headers.
-- Existing row-level fields must not be removed.
+None.
 
 ## API / Interface Changes
 
 Allowed:
 
-- Strengthen report content validation for `failed_orders.csv`.
-- Add helper functions in `portfolio/io.py` for stable CSV output.
+- Add optional CLI flag:
+  - `qre report-files MANIFEST --require-match`
 
 Avoid:
 
-- Changing CLI command names or required arguments.
-- Changing manifest JSON shape.
-- Renaming existing failed-order columns.
+- Changing existing positional arguments.
+- Changing existing output format for successful matches.
+- Changing default zero-match behavior.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_portfolio_io.py tests/test_cli.py -q
+uv run pytest tests/test_cli.py -q
 ```
 
-Run the full suite:
+Run full tests:
 
 ```bash
 uv run pytest -q
@@ -151,19 +128,18 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `failed_orders.csv` has stable headers when no failed orders exist.
-- [ ] Existing failed-order row fields remain available.
-- [ ] `qre report-audit` detects missing required failed-order CSV columns.
-- [ ] Valid report manifests with valid failed-order files still pass audit.
-- [ ] No portfolio simulation behavior changes.
+- [ ] `qre report-files` supports `--require-match`.
+- [ ] Default zero-match behavior remains exit `0`.
+- [ ] `--require-match` zero-match behavior exits `2` with a clear stderr message.
+- [ ] Successful matches with `--require-match` still print expected paths/keys.
+- [ ] Existing report-audit behavior is unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Tightening validation may expose previously weak report artifacts. Keep the required baseline minimal to avoid unnecessary breakage.
-- Single-symbol and shared-cash failed-order rows are not identical. Preserve both shapes while enforcing only shared baseline columns.
-- Empty DataFrames can produce CSV files with no headers unless explicitly normalized.
+- `report-files` is used by scripts; default behavior must remain unchanged.
+- Error output should match `report-audit --require-match` wording for consistency.
 
 ## Instructions for Claude Code
 
@@ -180,8 +156,6 @@ Claude Code must:
    - `docs/agent/05_PROGRESS.md`
    - `docs/agent/11_AGENT_STATE.md`
    - `docs/agent/12_AGENT_BOARD.md`
-7. If architecture changes, also update:
-   - `docs/agent/06_DECISION_LOG.md`
 
 ## Next Agent State
 

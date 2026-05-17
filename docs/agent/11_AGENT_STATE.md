@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
+QRE-REPORT-FILES-REQUIRE-MATCH-001
 
 ## Current Phase
 
@@ -39,18 +39,18 @@ USER
 
 ## Last Completed Step
 
-Codex reviewed `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001` on 2026-05-17. Review passed and all 166 tests pass.
+Codex reviewed `QRE-REPORT-FILES-REQUIRE-MATCH-001` on 2026-05-18. Review passed and all 169 tests pass.
 
 ## Next Required Step
 
-Codex should create a local commit for the accepted implementation, then prepare the next implementation brief for Claude Code. Do not push.
+Codex should create a local commit for the accepted implementation, then prepare and commit the next implementation brief for Claude Code. Do not push.
 
 ## Active Change Request
 
 User request from 2026-05-17:
 
-- finalize the accepted failed-order diagnostics task locally without push,
-- choose the next small, low-risk, testable task from roadmap/progress,
+- run Review-Finalize-Next,
+- if review passes, commit locally without push,
 - prepare the next Claude Code implementation handoff.
 
 ## Active Implementation Brief
@@ -77,8 +77,9 @@ User request from 2026-05-17:
 - Last workflow commit: `77fec02 chore: initialize dual-agent workflow`
 - Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
 - Last accepted implementation commit: `28e6f25 feat: add failed-order diagnostics to portfolio reports`
+- Last local implementation commit: `001177f test: validate failed-order report artifacts`
 - Last pushed commit: no remote configured
-- Current planning docs for `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001` are uncommitted.
+- Current planning docs for `QRE-REPORT-FILES-REQUIRE-MATCH-001` are uncommitted.
 
 ## Standing Approval
 

@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
+QRE-REPORT-FILES-REQUIRE-MATCH-001
 
 ## Current Recipient
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Review passed for `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001`. Codex will commit locally and prepare the next Claude Code task. No push.
+Review passed for `QRE-REPORT-FILES-REQUIRE-MATCH-001`. Codex will commit locally and prepare the next Claude Code task. No push.
 
 ## Must Read
 
@@ -28,29 +28,25 @@ Review passed for `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001`. Codex will commit
 
 ## Must Do
 
-1. Implement only `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001`.
-2. Ensure empty `failed_orders.csv` files still have stable headers.
-3. Add failed-order CSV column validation to report manifest content audit.
-4. Add focused IO/CLI tests and run the validation commands in the brief.
-5. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
+1. Implement only `QRE-REPORT-FILES-REQUIRE-MATCH-001`.
+2. Add the optional `--require-match` flag to `report-files`.
+3. Return exit code `2` and stderr `no manifest entries matched filters` when the flag is set and filters match zero entries.
+4. Preserve existing default zero-match behavior.
+5. Add focused CLI tests and run the validation commands in the brief.
+6. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
 
 ## Must Not Do
 
-1. Do not change portfolio execution semantics.
-2. Do not change order validation rules.
-3. Do not add database writes or read credentials.
+1. Do not change report artifact generation.
+2. Do not change manifest JSON shape.
+3. Do not change `report-audit` behavior.
 4. Do not modify `pyproject.toml` or `uv.lock`.
 5. Do not commit or push.
 
 ## Allowed Files
 
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `src/quant_research_engine/portfolio/single_symbol.py` only if stable empty schemas cannot be handled cleanly in IO
-- `src/quant_research_engine/portfolio/shared.py` only if stable empty schemas cannot be handled cleanly in IO
-- `tests/test_portfolio_io.py`
+- `src/quant_research_engine/apps/cli.py`
 - `tests/test_cli.py`
-- `tests/test_portfolio_shared.py` only if needed
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
@@ -69,7 +65,7 @@ Review passed for `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001`. Codex will commit
 ## Required Validation
 
 ```bash
-uv run pytest tests/test_portfolio_io.py tests/test_cli.py -q
+uv run pytest tests/test_cli.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check

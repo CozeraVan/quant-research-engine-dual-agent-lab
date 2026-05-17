@@ -2,11 +2,11 @@
 
 ## Current Task
 
-Standardize failed-order report CSV schema and audit validation.
+Add strict zero-match mode to `qre report-files`.
 
 ## Task ID
 
-QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
+QRE-REPORT-FILES-REQUIRE-MATCH-001
 
 ## Current Status
 
@@ -18,10 +18,10 @@ USER
 
 ## Completed
 
-- Finalized previous accepted task locally:
-  - `28e6f25 feat: add failed-order diagnostics to portfolio reports`
+- Reviewed and locally committed previous task:
+  - `001177f test: validate failed-order report artifacts`
 - Did not push.
-- Selected next low-risk reporting robustness task from roadmap/progress context.
+- Selected next small reporting workflow task.
 - Wrote new implementation brief:
   - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - Prepared Claude Code handoff board:
@@ -31,7 +31,7 @@ USER
 
 Codex reviewed:
 
-- `QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001`
+- `QRE-REPORT-FILES-REQUIRE-MATCH-001`
 
 Review evidence:
 
@@ -50,9 +50,9 @@ Review evidence:
 
 ## Validation
 
-Pre-checkpoint validation for previous accepted task:
+Previous accepted task validation:
 
-- `uv run pytest -q` -> `162 passed in 2.29s`
+- `uv run pytest -q` -> `166 passed in 1.46s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 
@@ -60,10 +60,9 @@ Next task validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 
 ## Known Risks
 
-- Do not broaden the task into report manifest redesign.
-- Do not change portfolio execution semantics.
-- Keep failed-order CSV required columns minimal so older report artifacts are not broken unnecessarily.
+- Keep default `report-files` zero-match behavior unchanged unless `--require-match` is passed.
+- Do not touch report generation or manifest schema.
 
 ## Next Suggested Step
 
-Codex creates a local commit for the accepted implementation, then prepares the next implementation brief and board for Claude Code. Do not push.
+Codex creates a local commit for the accepted implementation, then prepares and commits the next implementation brief and board for Claude Code. Do not push.

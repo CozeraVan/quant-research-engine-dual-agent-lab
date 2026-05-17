@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-AUDIT-FAILED-ORDERS-SCHEMA-001
+QRE-REPORT-FILES-REQUIRE-MATCH-001
 
 ## Written By
 
@@ -14,17 +14,14 @@ CODEX
 
 ## Implemented
 
-- Added `_FAILED_ORDERS_BASELINE_COLUMNS` constant and `_write_failed_orders_csv()` helper in `io.py` that ensures stable headers even for empty DataFrames.
-- Updated `write_single_symbol_result()` and `write_shared_cash_result()` to use the helper.
-- Updated `_REQUIRED_COLUMNS_BY_ROLE` in `report_manifest.py`: `failed_orders` role now requires `symbol`, `trade_date`, `side`, `quantity`, `price`, `notional`, `reason`.
-- Added 2 IO tests: empty single-symbol and empty shared-cash write stable CSV headers.
-- Added 2 CLI tests: `qre report-audit` passes for valid `failed_orders.csv`, fails with `missing_columns` for malformed CSV.
+- Added `--require-match` flag to `qre report-files` parser.
+- When `--require-match` is set and no manifest entries match filters: prints `no manifest entries matched filters` to stderr, exits 2.
+- Default behavior unchanged (zero matches without `--require-match` exits 0, no output).
+- Added 3 CLI tests: zero-match default exit 0, zero-match with flag exit 2, matching with flag prints paths.
 
 ## Modified Files
 
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_io.py`
+- `src/quant_research_engine/apps/cli.py`
 - `tests/test_cli.py`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/04_TASK_HANDOFF.md`
@@ -43,14 +40,14 @@ CODEX
 ## Validation Commands Run
 
 ```bash
-uv run pytest tests/test_portfolio_io.py tests/test_cli.py -q
-# 49 passed in 0.94s
+uv run pytest tests/test_cli.py -q
+# 44 passed in 0.62s
 
 uv run pytest -q
-# 166 passed in 1.46s
+# 169 passed in 1.58s
 
 scripts/check-progress-docs.sh
-# passed (after doc update)
+# passed
 
 git diff --check
 # passed
@@ -58,13 +55,11 @@ git diff --check
 
 ## Validation Results
 
-All 166 tests pass (162 existing + 4 new). No regression.
+All 169 tests pass (166 existing + 3 new). No regression.
 
 ## Known Risks
 
-- Empty failed-orders DataFrames with zero columns now write a header-only CSV. This is a new artifact behavior; older reports without this file may need regeneration to pass updated audit.
-- The baseline column set is minimal. Shared-cash reports also include `failure_reason` which is not required but is preserved when present.
-- Single-symbol `_failed_order_row` does not emit `failure_reason`; the baseline validates correctly with only `reason`.
+- None. The change is purely CLI-level, no report generation or manifest semantics affected.
 
 ## Questions for Reviewer
 
@@ -78,10 +73,8 @@ M docs/agent/05_PROGRESS.md
 M docs/agent/09_CODING_HANDOFF.md
 M docs/agent/11_AGENT_STATE.md
 M docs/agent/12_AGENT_BOARD.md
-M src/quant_research_engine/portfolio/io.py
-M src/quant_research_engine/portfolio/report_manifest.py
+M src/quant_research_engine/apps/cli.py
 M tests/test_cli.py
-M tests/test_portfolio_io.py
 ```
 
 No new files. No forbidden files modified.

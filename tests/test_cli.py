@@ -1379,3 +1379,79 @@ def test_cli_report_audit_fails_for_malformed_failed_orders_csv(capsys, tmp_path
     assert "failed_orders" in captured.err
     assert "missing_columns" in captured.err
     assert str(output_path) in captured.err
+
+
+def test_cli_report_files_require_match_returns_zero_when_absent(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--role", "orders"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_cli_report_files_require_match_errors_when_no_entries_match(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["report-files", str(manifest_path), "--role", "orders", "--require-match"]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "no manifest entries matched filters" in captured.err
+
+
+def test_cli_report_files_require_match_prints_paths_when_entries_match(capsys, tmp_path):
+    output_path = tmp_path / "orders.csv"
+    output_path.write_text("symbol,trade_date\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "orders",
+                        "path": "orders.csv",
+                        "filename": "orders.csv",
+                        "role": "orders",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["report-files", str(manifest_path), "--role", "orders", "--require-match"]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert str(output_path) in captured.out
+    assert captured.err == ""
