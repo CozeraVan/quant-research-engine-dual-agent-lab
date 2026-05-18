@@ -2,48 +2,47 @@
 
 ## Current Task
 
-Harden report manifest root payload shape validation.
+Normalize invalid manifest JSON parse failures.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001
+QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001
 
 ## Current Status
 
-Reviewed by Codex and accepted. Ready for local checkpoint only; do not push.
+Brief prepared by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Completed
 
-- Added explicit root payload validation in `ReportManifest.from_path()`.
-- Non-object JSON roots now raise `ValueError` instead of raw `AttributeError`.
-- Added focused regression tests covering list root and scalar-or-null root payloads.
-- Codex review passed with no Required Fixes.
+- Codex reviewed and accepted `QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001`.
+- Local checkpoint created: `950c814 feat: validate manifest root payload shape`.
+- Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
 
 ## In Progress
 
-- Local checkpoint by Codex, followed by next-task planning.
+Claude Code should implement `QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
-## Modified Files
+## Expected Files
 
 - `src/quant_research_engine/portfolio/report_manifest.py`
 - `tests/test_portfolio_report_manifest.py`
-- `docs/agent/10_REVIEW_REPORT.md`
 
-## Validation
+## Validation Baseline
 
-- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `16 passed in 0.04s`
-- `uv run pytest -q` -> `193 passed in 1.78s`
+- Last accepted focused validation: `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `16 passed in 0.04s`
+- Last accepted full validation: `uv run pytest -q` -> `193 passed in 1.78s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 
 ## Known Risks
 
-- None. Valid manifests are preserved and malformed-root handling is now clearer.
+- Keep the implementation scoped to JSON parse failure normalization only.
+- Preserve root-shape, `files`-shape, and valid-manifest behavior.
 
 ## Next Suggested Step
 
-Codex should create a local checkpoint commit for `QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001`, then prepare the next low-risk manifest-loader validation brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the validation, run the required checks, and hand back for Codex review.

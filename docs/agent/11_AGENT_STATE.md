@@ -4,23 +4,23 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001
+QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001` and accepted it with no Required Fixes. The task adds explicit manifest root payload validation in `ReportManifest.from_path()` and focused regression tests for malformed root payloads. Validation passed: `16` focused tests, `193` full tests, progress-doc checks, and diff checks.
+Codex reviewed and accepted `QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001`, then created local checkpoint `950c814 feat: validate manifest root payload shape`. Codex also prepared the next brief for invalid manifest JSON normalization.
 
 ## Next Required Step
 
-Codex should create a local checkpoint commit for the accepted implementation, then prepare the next low-risk implementation brief and handoff for Claude Code. Do not push.
+Claude Code should implement `QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, run the required validations, and return the work for Codex review.
 
 ## Active Change Request
 
@@ -29,8 +29,8 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `6d7d596 feat: validate manifest files payload shape`
-- Current implementation is accepted by review and awaiting local checkpoint only.
+- Last accepted implementation commit: `950c814 feat: validate manifest root payload shape`
+- Current task is a Codex-authored handoff awaiting Claude Code implementation.
 - Standing approval: NONE
 
 ## Short Prompt Commands
