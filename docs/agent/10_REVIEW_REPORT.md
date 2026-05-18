@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-TOPLEVEL-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001
 
 ## Written By
 
@@ -29,16 +29,16 @@ Changed files reviewed:
 
 Review passed.
 
-`report-files` and `report-audit` now both have CLI regression coverage for the loader-side errors raised when a manifest provides a non-string top-level `kind` or a non-list top-level `files`. The implementation stays test-only and preserves the existing command behavior.
+`report-files` and `report-audit` now both have CLI regression coverage for the loader-side errors raised when a manifest contains invalid JSON or has a non-object root. The implementation stays test-only and preserves the existing command behavior.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `report-files` now locks non-string top-level `kind` with exit code `2`.
-- `report-files` now locks non-list top-level `files` with exit code `2`.
-- `report-audit` now locks non-string top-level `kind` with exit code `2`.
-- `report-audit` now locks non-list top-level `files` with exit code `2`.
+- `report-files` now locks invalid JSON with exit code `2`.
+- `report-files` now locks non-object manifest roots with exit code `2`.
+- `report-audit` now locks invalid JSON with exit code `2`.
+- `report-audit` now locks non-object manifest roots with exit code `2`.
 - Valid-manifest CLI behavior is unchanged.
 - No CLI or loader code changes were introduced.
 
@@ -57,7 +57,7 @@ No locked-requirement violation found.
 
 ## Code Quality Review
 
-The coverage is added adjacent to the existing missing-top-level-field CLI tests in `tests/test_cli.py`, which keeps the regression surface easy to audit and preserves the established command-boundary assertion style. The task stayed narrowly scoped to new tests because the existing CLI and loader logic already behaved correctly.
+The coverage is added adjacent to the existing malformed-manifest CLI tests in `tests/test_cli.py`, which keeps the regression surface easy to audit and preserves the established command-boundary assertion style. The task stayed narrowly scoped to new tests because the existing CLI and loader logic already behaved correctly.
 
 ## Test Review
 
@@ -73,17 +73,17 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_cli.py -q`: `65 passed in 1.14s`
-- `uv run pytest -q`: `209 passed in 2.12s`
+- `uv run pytest tests/test_cli.py -q`: `69 passed in 0.97s`
+- `uv run pytest -q`: `213 passed in 2.06s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate:
 
-- non-string top-level `kind` is now covered at the command boundary for both CLI entry points;
-- non-list top-level `files` is now covered at the command boundary for both CLI entry points;
-- existing missing top-level field, unsupported `kind`, unsupported `schema_version`, and missing file-entry field CLI regressions remain covered by nearby tests;
+- invalid JSON is now covered at the command boundary for both CLI entry points;
+- non-object manifest roots are now covered at the command boundary for both CLI entry points;
+- existing missing top-level field, top-level type, unsupported `kind`, unsupported `schema_version`, and missing file-entry field CLI regressions remain covered by nearby tests;
 - valid manifest flows continue to pass in the full suite.
 
 ## Required Fixes
@@ -92,11 +92,11 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: add CLI regression coverage for invalid JSON and non-object manifest roots so `report-files` and `report-audit` lock those loader errors at the command boundary.
+Next low-risk hardening step: add CLI regression coverage for file-entry object/type errors so `report-files` and `report-audit` lock the remaining loader-side entry validation errors at the command boundary.
 
 ## Follow-up Tasks
 
-- Prepare the next brief around CLI regression coverage for invalid JSON and non-object manifest roots.
+- Prepare the next brief around CLI regression coverage for file-entry object/type errors.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation

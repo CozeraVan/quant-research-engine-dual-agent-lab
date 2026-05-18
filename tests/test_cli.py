@@ -2014,3 +2014,51 @@ def test_cli_report_audit_reports_non_list_files(capsys, tmp_path):
 
     assert exit_code == 2
     assert "manifest 'files' must be a list" in captured.err
+
+
+def test_cli_report_files_reports_invalid_json_text(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text("not-json", encoding="utf-8")
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest contains invalid JSON" in captured.err
+
+
+def test_cli_report_files_reports_non_object_root(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text("[]", encoding="utf-8")
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest root must be an object" in captured.err
+
+
+def test_cli_report_audit_reports_invalid_json_text(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text("not-json", encoding="utf-8")
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest contains invalid JSON" in captured.err
+
+
+def test_cli_report_audit_reports_non_object_root(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text("[]", encoding="utf-8")
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest root must be an object" in captured.err

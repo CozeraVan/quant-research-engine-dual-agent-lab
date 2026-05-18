@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -35,26 +35,26 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-18 | Manifest top-level `files` presence validation | DONE | CODEX/CLAUDE_CODE | commit `53f9aba`; missing `files` now raises manifest-specific `ValueError`; 201 tests passed | Preserve |
 | QRE-NEXT-19 | CLI regression coverage for missing top-level manifest fields | DONE | CODEX/CLAUDE_CODE | commit `5aa584b`; 4 CLI regression tests lock missing `kind`/`files` at the command boundary; 205 tests passed | Preserve |
 | QRE-NEXT-20 | CLI regression coverage for top-level manifest type errors | DONE | CODEX/CLAUDE_CODE | commit `75b42bc`; 4 CLI regression tests lock non-string `kind` and non-list `files` at the command boundary; 209 tests passed | Preserve |
-| QRE-NEXT-21 | CLI regression coverage for malformed manifest roots | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001` prepared by Codex | Claude Code implement |
+| QRE-NEXT-21 | CLI regression coverage for malformed manifest roots | DONE | CODEX/CLAUDE_CODE | Codex review passed; 4 CLI regression tests lock invalid JSON/non-object roots at the command boundary; 213 tests passed | Create local checkpoint and select next regression-coverage task |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after local checkpoint `75b42bc` and next-brief planning:
+Recorded on 2026-05-18 after Codex review:
 
-- `uv run pytest tests/test_cli.py -q` -> `65 passed in 1.14s`
-- `uv run pytest -q` -> `209 passed in 2.12s`
+- `uv run pytest tests/test_cli.py -q` -> `69 passed in 0.97s`
+- `uv run pytest -q` -> `213 passed in 2.06s`
 - `scripts/check-progress-docs.sh` -> passed (after doc updates)
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Accepted task: `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-TYPE-REGRESSION-001`
-- Next step: Claude Code implements `QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001`
+- Accepted task: `QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001`
+- Next step: local checkpoint commit and next brief
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage.
 
 ## Pending Work Summary
 
@@ -63,7 +63,7 @@ Recorded on 2026-05-18 after local checkpoint `75b42bc` and next-brief planning:
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
-- Report-manifest CLI regression coverage for malformed manifest roots.
+- Report-manifest CLI regression coverage for file-entry object/type errors.
 
 ## Status Meaning
 
