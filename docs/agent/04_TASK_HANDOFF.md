@@ -2,33 +2,30 @@
 
 ## Current Task
 
-Validate manifest file-entry field types explicitly.
+Validate top-level manifest `files` presence explicitly.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001
+QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
-- Codex reviewed and accepted `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`.
-- Local checkpoint created: `3d8a01e Keep malformed manifest kind errors explicit and deterministic`.
+- Codex reviewed and accepted `QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001`.
+- Local checkpoint created: `d3eb1d0 Keep malformed manifest entry values from becoming bogus strings`.
 - Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
-- Next task selected: explicit manifest file-entry field type validation.
-- Claude Code implemented type validation for required and optional file-entry fields in `ReportFile.from_mapping()`.
-- Focused tests added for non-string required and optional entry field values.
-- Codex review passed with no Required Fixes.
+- Next task selected: explicit top-level manifest `files` presence validation.
 
 ## In Progress
 
-Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001`.
+Claude Code should implement `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001`.
 
 ## Expected Files
 
@@ -46,10 +43,10 @@ Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-ENTRY-T
 
 ## Known Risks
 
-- Keep the implementation scoped to file-entry field types only.
-- Preserve missing-field behavior and valid-manifest behavior.
-- Preserve optional metadata semantics for `symbol`, `window`, and `group_by`.
+- Keep the implementation scoped to top-level `files` presence only.
+- Preserve valid-manifest behavior when `files` is present and a list.
+- Preserve the existing `files` list-shape validation path.
 
 ## Next Suggested Step
 
-Codex should commit the accepted implementation locally, then prepare the next manifest-loader hardening brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the validation, run the required checks, and hand back for Codex review.

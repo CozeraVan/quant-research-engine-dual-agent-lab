@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001
+QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
 
 ## Created By
 
@@ -14,11 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest loader validation now covers invalid JSON text, root payload shape, top-level `files` shape, required file entry presence, supported `schema_version`, and top-level `kind`. One nearby hardening gap remains inside `ReportFile.from_mapping(...)`: malformed entry field values are still silently coerced with `str(...)`, so numeric, boolean, or container values can pass through as bogus strings instead of failing with a clear manifest-specific validation error.
+Manifest loader validation now covers invalid JSON text, root payload shape, top-level `files` shape, required file entry presence, supported `schema_version`, top-level `kind`, and file-entry field types. One nearby hardening gap remains in `ReportManifest.from_path(...)`: missing top-level `files` currently falls through `payload.get("files", [])` and is treated like an empty manifest instead of failing with a clear manifest-specific validation error.
 
 ## Goal
 
-Make manifest file-entry field type validation explicit for required and optional string fields while preserving current behavior for valid manifests.
+Make top-level manifest `files` presence validation explicit while preserving current behavior for valid manifests that already provide `files`.
 
 ## Non-Goals
 
@@ -73,16 +73,16 @@ Task-specific locked requirements:
 
 ## Implementation Steps
 
-1. Inspect `ReportFile.from_mapping(...)`, `_optional_string(...)`, and nearby manifest-loader tests.
-2. Add explicit validation that required file-entry fields `key`, `path`, `filename`, and `role` are strings.
-3. Add explicit validation that optional file-entry fields `symbol`, `window`, and `group_by` are either strings or `null`/absent.
-4. Preserve the existing missing-required-field `ValueError` behavior.
+1. Inspect `ReportManifest.from_path(...)` around `raw_files = payload.get("files", [])` and nearby manifest-loader tests.
+2. Add explicit validation for a missing top-level `files` field.
+3. Preserve the existing validation path for present-but-non-list `files` values.
+4. Preserve current behavior when `files` is present as an empty list.
 5. Add focused tests in `tests/test_portfolio_report_manifest.py` for at least:
-   - non-string required field values;
-   - non-string optional metadata values;
-   - a valid manifest with string metadata still loading unchanged.
+   - missing top-level `files`;
+   - present empty-list `files`;
+   - present non-list `files`, to confirm existing behavior is preserved.
 6. Add CLI regression coverage in `tests/test_cli.py` only if it is needed to lock down command-boundary propagation of the loader error.
-7. Keep the task helper-focused; do not modify report writer code.
+7. Keep the task helper-focused; do not modify report writer code or file-entry validation logic unless strictly necessary.
 8. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
@@ -93,7 +93,7 @@ None. This task tightens loader validation only.
 
 Valid manifests should remain unchanged.
 
-Malformed manifests with non-string file-entry field values should now raise clear `ValueError` messages instead of being silently coerced into strings.
+Malformed manifests with a missing top-level `files` field should now raise a clear `ValueError` instead of being silently treated as empty manifests.
 
 ## Validation Plan
 
@@ -118,19 +118,19 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] Non-string required file-entry field values are rejected with clear `ValueError`.
-- [ ] Non-string optional metadata values are rejected with clear `ValueError`.
-- [ ] Existing missing-required-field validation remains intact.
+- [ ] Missing top-level `files` is rejected with clear `ValueError`.
+- [ ] Present empty-list `files` still loads unchanged.
+- [ ] Existing present-but-non-list `files` validation remains intact.
 - [ ] Valid manifests still load unchanged.
-- [ ] Existing invalid-JSON, root, `files`, `kind`, schema-version, and file-entry presence validation behavior is preserved.
+- [ ] Existing invalid-JSON, root, `kind`, schema-version, file-entry presence, and file-entry type validation behavior is preserved.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Keep the new validation narrowly scoped to file-entry field types.
-- Do not weaken the existing missing-field validation or valid-manifest behavior.
-- Do not let the new checks disturb the recently added invalid-JSON, root, `files`, `kind`, or schema-version validation.
+- Keep the new validation narrowly scoped to top-level `files` presence.
+- Do not reject present empty-list `files` manifests if they are currently supported.
+- Do not let the new check disturb the recently added invalid-JSON, root, `kind`, file-entry, or schema-version validation.
 
 ## Instructions for Claude Code
 

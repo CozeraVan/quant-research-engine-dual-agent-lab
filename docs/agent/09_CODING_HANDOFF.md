@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001
+QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
 
 ## Written By
 
-CLAUDE_CODE
+CODEX
 
 ## Intended Reviewer
 
@@ -14,37 +14,43 @@ CODEX
 
 ## Status
 
-Implemented. Ready for Codex review.
+Awaiting Claude Code implementation.
 
 ## Scope Summary
 
-- Add explicit validation for non-string file-entry fields in `ReportFile.from_mapping()`.
-- Preserve existing missing-field errors and valid-manifest behavior.
-- Add focused tests for non-string required and optional entry field values.
+- Add explicit validation for a missing top-level `files` field in `ReportManifest.from_path()`.
+- Preserve current behavior when `files` is present as an empty list.
+- Preserve existing present-but-non-list `files` validation behavior.
 
-## Files Changed
+## Expected Files
 
-- `src/quant_research_engine/portfolio/report_manifest.py` — added `isinstance(value, str)` checks for required fields (`key`, `path`, `filename`, `role`) and optional fields (`symbol`, `window`, `group_by`) in `ReportFile.from_mapping()`
-- `tests/test_portfolio_report_manifest.py` — added `test_report_manifest_rejects_non_string_required_entry_field` and `test_report_manifest_rejects_non_string_optional_entry_field`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py` only if needed for CLI-boundary regression coverage
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
-## Validation Results
+## Validation To Run
 
 ```bash
-uv run pytest tests/test_portfolio_report_manifest.py -q  # 23 passed in 0.05s
-uv run pytest -q                                           # 200 passed in 2.04s
-scripts/check-progress-docs.sh                             # passed
-git diff --check                                           # passed
+uv run pytest tests/test_portfolio_report_manifest.py -q
+uv run pytest -q
+scripts/check-progress-docs.sh
+git diff --check
 ```
 
 ## Constraints
 
-- Do not change valid-manifest behavior. ✅ preserved
-- Do not modify CLI code unless strictly necessary. ✅ no CLI changes
-- Do not modify forbidden files from the brief. ✅ compliant
-- Do not push. ✅ not pushed
+- Do not change valid-manifest behavior.
+- Do not modify CLI code unless strictly necessary.
+- Do not modify forbidden files from the brief.
+- Do not push.
 
-## Git State
+## Starting Baseline
 
-- Branch: `master`
-- Uncommitted changes: 2 source files + docs
-- Last commit: `3d8a01e Keep malformed manifest kind errors explicit and deterministic`
+- Accepted implementation checkpoint: `d3eb1d0 Keep malformed manifest entry values from becoming bogus strings`
+- Current branch: `master`
+- Push is not approved.

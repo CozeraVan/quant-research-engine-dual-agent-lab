@@ -2,40 +2,40 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001
+QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CLAUDE_TO_CODEX
+CODEX_TO_CLAUDE
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Implemented explicit file-entry field type validation in `ReportFile.from_mapping()`. Required fields (`key`, `path`, `filename`, `role`) are now validated as strings. Optional fields (`symbol`, `window`, `group_by`) are now validated as strings or null. Non-string values that were previously silently coerced now raise clear `ValueError`. 2 new tests added. All 200 tests pass. Ready for Codex review.
+Harden `ReportManifest.from_path()` so a missing top-level `files` field fails clearly instead of silently becoming an empty manifest. Present empty-list `files` should keep their current behavior, and present non-list `files` should keep the existing rejection path.
 
 ## Implementation Summary
 
-1. Added `isinstance(entry_key, str)` check for the `key` field.
-2. Added `isinstance(value, str)` checks for `path`, `filename`, `role` required fields.
-3. Added `isinstance(value, str)` checks for optional `symbol`, `window`, `group_by` fields (only when not None/absent).
-4. Existing missing-field validation preserved.
-5. Added `test_report_manifest_rejects_non_string_required_entry_field` and `test_report_manifest_rejects_non_string_optional_entry_field`.
-6. Updated `04`, `05`, `09`, `11`, and `12`.
+1. Inspect `ReportManifest.from_path(...)` around `raw_files = payload.get("files", [])`.
+2. Add explicit validation for a missing top-level `files` field.
+3. Preserve the current validation path for present-but-non-list `files`.
+4. Preserve current behavior when `files` is present as an empty list.
+5. Add focused tests in `tests/test_portfolio_report_manifest.py`; add CLI regression only if needed.
+6. Update `04`, `05`, `09`, `11`, and `12`.
 
 ## Constraints Check
 
-- No CLI/reporting behavior changes for valid manifests. ✅
-- Scoped only to file-entry field type validation. ✅
-- Preserved existing missing-field and valid-manifest behavior. ✅
-- No forbidden files modified. ✅
-- Not pushed. ✅
+- No CLI/reporting behavior changes for valid manifests.
+- Scoped only to top-level `files` presence validation.
+- Preserve present empty-list behavior and existing non-list rejection.
+- No forbidden files modified.
+- Not pushed.
 
 ## Expected Files
 

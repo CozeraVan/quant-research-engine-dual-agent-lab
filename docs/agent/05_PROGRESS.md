@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -31,11 +31,12 @@ USER_ACCEPTANCE
 | QRE-NEXT-14 | Manifest root payload shape validation | DONE | CODEX/CLAUDE_CODE | commit `950c814`; 193 tests passed | Preserve |
 | QRE-NEXT-15 | Manifest invalid JSON normalization | DONE | CODEX/CLAUDE_CODE | commit `333f46d`; malformed JSON now raises manifest-specific `ValueError`; 195 tests passed | Preserve |
 | QRE-NEXT-16 | Manifest top-level `kind` validation | DONE | CODEX/CLAUDE_CODE | commit `3d8a01e`; missing/non-string `kind` now raises manifest-specific `ValueError`; 198 tests passed | Preserve |
-| QRE-NEXT-17 | Manifest file-entry field type validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; non-string entry fields now raise manifest-specific `ValueError`; 200 tests passed | Create local checkpoint and select next loader-hardening task |
+| QRE-NEXT-17 | Manifest file-entry field type validation | DONE | CODEX/CLAUDE_CODE | commit `d3eb1d0`; non-string entry fields now raise manifest-specific `ValueError`; 200 tests passed | Preserve |
+| QRE-NEXT-18 | Manifest top-level `files` presence validation | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001` prepared by Codex | Claude Code implement |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review:
+Recorded on 2026-05-18 after local checkpoint `d3eb1d0` and next-brief planning:
 
 - `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `23 passed in 0.05s`
 - `uv run pytest -q` -> `200 passed in 2.21s`
@@ -43,7 +44,7 @@ Recorded on 2026-05-18 after Codex review:
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - Accepted task: `QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001`
-- Next step: local checkpoint commit and next brief
+- Next step: Claude Code implements `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001`
 
 ## Completed Module Summary
 
@@ -59,7 +60,7 @@ Recorded on 2026-05-18 after Codex review:
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
-- Report-manifest loader hardening beyond manifest file-entry field type validation.
+- Report-manifest loader hardening for top-level `files` presence validation.
 
 ## Status Meaning
 
