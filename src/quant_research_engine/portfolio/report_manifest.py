@@ -77,7 +77,12 @@ class ReportManifest:
     @classmethod
     def from_path(cls, path: str | Path) -> ReportManifest:
         manifest_path = Path(path)
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"manifest contains invalid JSON: {exc}"
+            ) from exc
         if not isinstance(payload, dict):
             raise ValueError(
                 f"manifest root must be an object, got {type(payload).__name__}"

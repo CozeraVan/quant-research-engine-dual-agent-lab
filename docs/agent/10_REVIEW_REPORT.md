@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001
+QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001
 
 ## Written By
 
@@ -30,17 +30,17 @@ Changed files reviewed:
 
 Review passed.
 
-The loader now rejects non-object manifest roots with deterministic manifest-specific `ValueError` messages instead of leaking raw `AttributeError`. Valid manifests remain unchanged, and the implementation stays tightly scoped to `ReportManifest.from_path(...)`.
+`ReportManifest.from_path(...)` now catches manifest JSON parse failures at the `json.loads()` boundary and re-raises them as manifest-specific `ValueError`. The change is tightly scoped, keeps valid-manifest behavior unchanged, and closes the last nearby malformed-text gap in the current manifest-loader hardening track.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- Non-object manifest root payloads are rejected clearly.
-- Focused tests cover a list root and a scalar-or-null root case.
-- Existing schema-version, file-entry, and `files` shape validation is preserved.
-- Valid-manifest loading and filtering behavior is unchanged.
-- The task remained helper-focused; no CLI changes were needed.
+- Invalid manifest JSON text is rejected with clear `ValueError`.
+- Focused tests cover two malformed text cases: an incomplete object and non-JSON scalar text.
+- Valid-manifest loading behavior is unchanged.
+- Existing root-shape, `files`-shape, file-entry, and schema-version validation remains intact.
+- No CLI changes or unrelated refactors were introduced.
 
 ## Locked Requirements Check
 
@@ -57,7 +57,7 @@ No locked-requirement violation found.
 
 ## Code Quality Review
 
-The validation is in the correct place, immediately after `json.loads()`, so malformed roots are rejected before any `.get()` access. The message format is clear and stable, and the change does not disturb the recent `files`-shape hardening.
+The exception wrapping is in the correct place and is narrowly scoped to `JSONDecodeError`. It does not swallow file read failures or later validation errors. The message format is clear enough for debugging while remaining stable enough for regression tests.
 
 ## Test Review
 
@@ -68,20 +68,22 @@ uv run pytest tests/test_portfolio_report_manifest.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
+scripts/git-finalize-check.sh
 ```
 
 Results:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `16 passed in 0.04s`
-- `uv run pytest -q`: `193 passed in 1.78s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `18 passed in 0.04s`
+- `uv run pytest -q`: `195 passed in 1.85s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
+- `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate for this brief:
 
-- list roots are rejected with clear `ValueError`;
-- null/scalar roots are rejected with clear `ValueError`;
-- existing valid-manifest and prior malformed-manifest checks still pass.
+- malformed JSON text no longer leaks raw `JSONDecodeError`;
+- valid manifests still load normally;
+- prior schema-version, root, `files`, and file-entry validation continues to pass.
 
 ## Required Fixes
 
@@ -89,11 +91,11 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: normalize invalid JSON parse errors from `json.loads()` into manifest-specific `ValueError` messages, so malformed text like `"{"` or `"not-json"` no longer leaks raw `JSONDecodeError`.
+Next low-risk hardening step: make top-level manifest `kind` validation more explicit so missing or non-string `kind` values fail with clear manifest-specific `ValueError` messages, while keeping unsupported string values rejected as they are today.
 
 ## Follow-up Tasks
 
-- Prepare the next manifest-loader hardening brief around invalid JSON text normalization.
+- Prepare the next manifest-loader hardening brief around top-level `kind` validation.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation

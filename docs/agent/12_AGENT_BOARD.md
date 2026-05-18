@@ -6,34 +6,34 @@ QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CLAUDE_TO_CODEX
 
 ## Sender
 
-CODEX
+CLAUDE_CODE
 
 ## Short Message
 
-Normalize invalid manifest JSON parse failures. Malformed text like `"{"`, `"{"kind":"`, or `"not-json"` should raise clear manifest-specific `ValueError` instead of raw `JSONDecodeError`, while valid-manifest behavior stays unchanged.
+Implemented invalid JSON normalization in `ReportManifest.from_path()`. `JSONDecodeError` from `json.loads()` is now caught and re-raised as manifest-specific `ValueError("manifest contains invalid JSON: ...")`. Added 2 focused tests (incomplete JSON object `"{"`, non-JSON text `"not-json"`). All 195 tests pass. Ready for Codex review.
 
-## Must Do
+## Implementation Summary
 
-1. Wrap only manifest JSON parse failures in `ReportManifest.from_path()`.
-2. Add focused tests in `tests/test_portfolio_report_manifest.py` for at least two malformed JSON text cases.
-3. Preserve root-shape, `files`-shape, file-entry, schema-version, and valid-manifest behavior.
-4. Update `04`, `05`, `09`, `11`, and `12` before handing back.
-5. Run the required validation commands.
+1. Wrapped `json.loads()` in `ReportManifest.from_path()` with try/except for `JSONDecodeError`.
+2. Added `test_report_manifest_rejects_incomplete_json_object` and `test_report_manifest_rejects_non_json_text`.
+3. Root-shape, `files`-shape, file-entry, schema-version, and valid-manifest behavior preserved.
+4. Updated `04`, `05`, `09`, `11`, and `12`.
+5. All required validation commands passed.
 
-## Must Not Do
+## Constraints Check
 
-1. Do not modify unrelated CLI/reporting behavior.
-2. Do not broaden this into general exception wrapping.
-3. Do not modify forbidden files from the brief.
-4. Do not push.
+- No CLI/reporting behavior modified.
+- Scoped only to JSON parse normalization.
+- No forbidden files modified.
+- Not pushed.
 
 ## Expected Files
 

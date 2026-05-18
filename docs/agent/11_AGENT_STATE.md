@@ -8,19 +8,19 @@ QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001`, then created local checkpoint `950c814 feat: validate manifest root payload shape`. Codex also prepared the next brief for invalid manifest JSON normalization.
+Codex reviewed and accepted `QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001`. `ReportManifest.from_path()` now normalizes malformed manifest JSON text into manifest-specific `ValueError`, and focused malformed-JSON tests passed together with the full suite.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, run the required validations, and return the work for Codex review.
+Codex should create the local checkpoint commit for the accepted implementation and then prepare the next small follow-up brief.
 
 ## Active Change Request
 
@@ -30,7 +30,7 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 
 - Current branch: `master`
 - Last accepted implementation commit: `950c814 feat: validate manifest root payload shape`
-- Current task is a Codex-authored handoff awaiting Claude Code implementation.
+- Current task passed review and is ready for a local checkpoint commit.
 - Standing approval: NONE
 
 ## Short Prompt Commands

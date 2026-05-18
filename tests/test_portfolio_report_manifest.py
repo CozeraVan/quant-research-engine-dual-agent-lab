@@ -366,3 +366,19 @@ def test_report_manifest_rejects_scalar_root(tmp_path):
 
     with pytest.raises(ValueError, match="manifest root must be an object"):
         ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_incomplete_json_object(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text('{"', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="manifest contains invalid JSON"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_non_json_text(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text("not-json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="manifest contains invalid JSON"):
+        ReportManifest.from_path(manifest_path)
