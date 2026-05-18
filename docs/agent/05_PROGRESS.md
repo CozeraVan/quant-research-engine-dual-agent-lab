@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -26,19 +26,20 @@ USER_ACCEPTANCE
 | QRE-NEXT-9 | Manifest schema version docs | DONE | CODEX/CLAUDE_CODE | commit `19d9ae4`; 179 tests passed | Preserve |
 | QRE-NEXT-10 | Manifest schema version validation | DONE | CODEX/CLAUDE_CODE | commit `0fca02a`; 182 tests passed | Preserve |
 | QRE-NEXT-11 | Manifest file entry validation | DONE | CODEX/CLAUDE_CODE | commit `feab301`; 184 tests passed | Preserve |
-| QRE-NEXT-12 | CLI malformed-manifest regression coverage | DONE | CODEX/CLAUDE_CODE | Codex review passed; `189 passed`; 5 new CLI regression tests | Preserve |
+| QRE-NEXT-12 | CLI malformed-manifest regression coverage | DONE | CODEX/CLAUDE_CODE | commit `56253a5`; 189 tests passed | Preserve |
+| QRE-NEXT-13 | Manifest top-level `files` shape validation | READY | CLAUDE_CODE | brief prepared after commit `56253a5` | Implement and validate |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review of `QRE-REPORT-CLI-INVALID-MANIFEST-001`:
+Recorded on 2026-05-18 after local checkpoint `56253a5`:
 
 - `uv run pytest tests/test_cli.py -q` -> `57 passed in 0.91s`
 - `uv run pytest -q` -> `189 passed in 1.88s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Added 5 CLI regression tests: unsupported `schema_version` and missing file entry field for both `report-files` and `report-audit`, plus invalid `kind` for `report-audit`.
-- Review passed with no Required Fixes. Local checkpoint only; no push.
+- Accepted task: `QRE-REPORT-CLI-INVALID-MANIFEST-001`
+- Next planned task: `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001`
 
 ## Completed Module Summary
 
@@ -54,10 +55,12 @@ Recorded on 2026-05-18 after Codex review of `QRE-REPORT-CLI-INVALID-MANIFEST-00
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
+- Report-manifest loader hardening for malformed top-level `files` payload shape.
 
 ## Status Meaning
 
 - TODO: Not started
+- READY: Scoped and ready for the implementer
 - WAITING_USER_APPROVAL: User approval required before the next agent proceeds
 - IN_PROGRESS: Started but not complete
 - IMPLEMENTED: Implemented by Claude Code, awaiting Codex review

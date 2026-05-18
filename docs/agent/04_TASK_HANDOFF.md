@@ -2,49 +2,47 @@
 
 ## Current Task
 
-Add CLI malformed-manifest regression coverage.
+Harden top-level report manifest `files` shape validation.
 
 ## Task ID
 
-QRE-REPORT-CLI-INVALID-MANIFEST-001
+QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001
 
 ## Current Status
 
-Reviewed by Codex and accepted. Ready for local checkpoint only; do not push.
+Brief prepared by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Completed
 
-- Added 5 CLI regression tests for malformed manifests: unsupported `schema_version` and missing required file entry field, across both `report-files` and `report-audit`.
-- Added a parallel `report-audit` invalid `kind` test for symmetry with existing `report-files` coverage.
-- All tests verify exit code `2` and clear stderr content.
-- No CLI source code changes were needed.
-- Codex review passed with no Required Fixes.
+- Codex reviewed and accepted `QRE-REPORT-CLI-INVALID-MANIFEST-001`.
+- Local checkpoint created: `56253a5 test: add malformed manifest cli regression coverage`.
+- Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
 
 ## In Progress
 
-- Local checkpoint by Codex, followed by next-task planning.
+Claude Code should implement `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
-## Modified Files
+## Expected Files
 
-- `tests/test_cli.py`
-- `docs/agent/10_REVIEW_REPORT.md`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
 
-## Validation
+## Validation Baseline
 
-- `uv run pytest tests/test_cli.py -q` -> `57 passed in 0.91s`
-- `uv run pytest -q` -> `189 passed in 1.88s`
+- Last accepted focused CLI validation: `uv run pytest tests/test_cli.py -q` -> `57 passed in 0.91s`
+- Last accepted full validation: `uv run pytest -q` -> `189 passed in 1.88s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
 
 ## Known Risks
 
-- None. This is a tests-only change locking in existing CLI malformed-manifest behavior.
+- Preserve current absent-field compatibility if it is not necessary to tighten it for this task.
+- Keep the implementation scoped to loader validation rather than broader manifest or CLI refactors.
 
 ## Next Suggested Step
 
-Codex should create a local checkpoint commit for `QRE-REPORT-CLI-INVALID-MANIFEST-001`, then prepare the next low-risk manifest-validation brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the validation, run the required checks, and hand back for Codex review.

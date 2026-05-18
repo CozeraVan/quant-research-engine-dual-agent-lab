@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-CLI-INVALID-MANIFEST-001
+QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-REPORT-CLI-INVALID-MANIFEST-001` and accepted it with no Required Fixes. The task adds 5 CLI regression tests for malformed manifests across `report-files` and `report-audit`. Validation passed: `57` focused CLI tests, `189` full tests, progress-doc checks, diff checks, and git-finalize check. No CLI source changes were needed.
+Codex reviewed and accepted `QRE-REPORT-CLI-INVALID-MANIFEST-001`, then created local checkpoint `56253a5 test: add malformed manifest cli regression coverage`. Codex also prepared the next brief for manifest top-level `files` shape validation.
 
 ## Next Required Step
 
-Codex should create a local checkpoint commit for the accepted implementation, then prepare the next low-risk implementation brief and handoff for Claude Code. Do not push.
+Claude Code should implement `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, run the required validations, and return the work for Codex review.
 
 ## Active Change Request
 
@@ -76,15 +76,9 @@ User request from 2026-05-18:
 - Last checkpoint commit: `7657cd1 checkpoint: original quant-research-engine before dual-agent pilot`
 - Last workflow commit: `77fec02 chore: initialize dual-agent workflow`
 - Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
-- Last accepted implementation commit: `feab301 feat: validate report manifest file entries`
-- Last planning checkpoint commit: `0d5f186 plan: prepare cli invalid manifest task`
-- Last local implementation commits:
-  - `d34a694 feat: expose manifest schema version in json output`
-  - `19d9ae4 docs: document report manifest schema version`
-  - `0fca02a feat: validate report manifest schema version`
-  - `feab301 feat: validate report manifest file entries`
+- Last accepted implementation commit: `56253a5 test: add malformed manifest cli regression coverage`
 - Last pushed commit: no remote configured
-- Current implementation for `QRE-REPORT-CLI-INVALID-MANIFEST-001` is accepted by review and awaiting local checkpoint only. No push approved.
+- Current task `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001` is a Codex-authored handoff awaiting Claude Code implementation.
 
 ## Standing Approval
 
