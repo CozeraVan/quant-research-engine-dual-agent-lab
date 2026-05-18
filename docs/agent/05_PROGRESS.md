@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -30,19 +30,19 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-13 | Manifest `files` payload shape validation | DONE | CODEX/CLAUDE_CODE | commit `6d7d596`; 191 tests passed | Preserve |
 | QRE-NEXT-14 | Manifest root payload shape validation | DONE | CODEX/CLAUDE_CODE | commit `950c814`; 193 tests passed | Preserve |
 | QRE-NEXT-15 | Manifest invalid JSON normalization | DONE | CODEX/CLAUDE_CODE | commit `333f46d`; malformed JSON now raises manifest-specific `ValueError`; 195 tests passed | Preserve |
-| QRE-NEXT-16 | Manifest top-level `kind` validation | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-KIND-VALIDATION-001` prepared by Codex | Claude Code implement |
+| QRE-NEXT-16 | Manifest top-level `kind` validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; missing/non-string `kind` now raises manifest-specific `ValueError`; 198 tests passed | Create local checkpoint and select next loader-hardening task |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after local checkpoint `333f46d` and next-brief planning:
+Recorded on 2026-05-18 after Codex review:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `18 passed in 0.05s`
-- `uv run pytest -q` -> `195 passed in 1.77s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `21 passed in 0.06s`
+- `uv run pytest -q` -> `198 passed in 2.59s`
 - `scripts/check-progress-docs.sh` -> passed (after doc updates)
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Accepted task: `QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001`
-- Next step: Claude Code implements `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`
+- Accepted task: `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`
+- Next step: local checkpoint commit and next brief
 
 ## Completed Module Summary
 
@@ -58,7 +58,7 @@ Recorded on 2026-05-18 after local checkpoint `333f46d` and next-brief planning:
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
-- Report-manifest loader hardening for top-level `kind` validation.
+- Report-manifest loader hardening beyond top-level `kind` validation.
 
 ## Status Meaning
 

@@ -382,3 +382,36 @@ def test_report_manifest_rejects_non_json_text(tmp_path):
 
     with pytest.raises(ValueError, match="manifest contains invalid JSON"):
         ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_missing_kind(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"files": []}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest missing top-level 'kind' field"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_non_string_kind(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": 123, "files": []}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest 'kind' must be a string"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_null_kind(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": None, "files": []}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest 'kind' must be a string"):
+        ReportManifest.from_path(manifest_path)

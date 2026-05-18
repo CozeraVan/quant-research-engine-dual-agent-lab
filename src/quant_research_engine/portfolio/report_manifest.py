@@ -87,7 +87,13 @@ class ReportManifest:
             raise ValueError(
                 f"manifest root must be an object, got {type(payload).__name__}"
             )
-        kind = payload.get("kind")
+        if "kind" not in payload:
+            raise ValueError("manifest missing top-level 'kind' field")
+        kind = payload["kind"]
+        if not isinstance(kind, str):
+            raise ValueError(
+                f"manifest 'kind' must be a string, got {type(kind).__name__}"
+            )
         if kind not in _SUPPORTED_MANIFEST_KINDS:
             supported = ", ".join(sorted(_SUPPORTED_MANIFEST_KINDS))
             raise ValueError(f"manifest kind must be one of: {supported}")

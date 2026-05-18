@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001
+QRE-REPORT-MANIFEST-KIND-VALIDATION-001
 
 ## Written By
 
@@ -30,14 +30,16 @@ Changed files reviewed:
 
 Review passed.
 
-`ReportManifest.from_path(...)` now catches manifest JSON parse failures at the `json.loads()` boundary and re-raises them as manifest-specific `ValueError`. The change is tightly scoped, keeps valid-manifest behavior unchanged, and closes the last nearby malformed-text gap in the current manifest-loader hardening track.
+`ReportManifest.from_path(...)` now validates top-level `kind` explicitly before checking membership in the supported-kind set. Missing `kind` raises a manifest-specific `ValueError`, non-string `kind` values are rejected clearly, and unsupported string kinds still follow the existing rejection path.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
 - Invalid manifest JSON text is rejected with clear `ValueError`.
-- Focused tests cover two malformed text cases: an incomplete object and non-JSON scalar text.
+- Missing top-level `kind` is rejected with clear `ValueError`.
+- Non-string top-level `kind` values are rejected with clear `ValueError`.
+- Unsupported string kinds still use the existing rejection path.
 - Valid-manifest loading behavior is unchanged.
 - Existing root-shape, `files`-shape, file-entry, and schema-version validation remains intact.
 - No CLI changes or unrelated refactors were introduced.
@@ -57,7 +59,7 @@ No locked-requirement violation found.
 
 ## Code Quality Review
 
-The exception wrapping is in the correct place and is narrowly scoped to `JSONDecodeError`. It does not swallow file read failures or later validation errors. The message format is clear enough for debugging while remaining stable enough for regression tests.
+The new checks are in the correct place: they run after root-payload validation and before the supported-kind membership check. That keeps the error surface deterministic without disturbing valid manifests or the existing unsupported-kind behavior.
 
 ## Test Review
 
@@ -73,17 +75,18 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `18 passed in 0.04s`
-- `uv run pytest -q`: `195 passed in 1.85s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `21 passed in 0.06s`
+- `uv run pytest -q`: `198 passed in 2.59s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate for this brief:
 
-- malformed JSON text no longer leaks raw `JSONDecodeError`;
+- missing top-level `kind` now fails clearly;
+- numeric and `null` `kind` values no longer fall through the supported-kind check;
 - valid manifests still load normally;
-- prior schema-version, root, `files`, and file-entry validation continues to pass.
+- prior invalid-JSON, root, `files`, schema-version, and file-entry validation continues to pass.
 
 ## Required Fixes
 
@@ -91,11 +94,11 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: make top-level manifest `kind` validation more explicit so missing or non-string `kind` values fail with clear manifest-specific `ValueError` messages, while keeping unsupported string values rejected as they are today.
+Next low-risk hardening step: validate manifest file-entry field types explicitly instead of silently coercing malformed values with `str(...)`.
 
 ## Follow-up Tasks
 
-- Prepare the next manifest-loader hardening brief around top-level `kind` validation.
+- Prepare the next manifest-loader hardening brief around explicit file-entry field type validation.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation

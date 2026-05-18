@@ -10,11 +10,11 @@ QRE-REPORT-MANIFEST-KIND-VALIDATION-001
 
 ## Current Status
 
-Planned by Codex. Ready for Claude Code implementation.
+Review passed. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -22,10 +22,13 @@ CLAUDE_CODE
 - Local checkpoint created: `333f46d feat: normalize invalid report manifest json errors`.
 - Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
 - Next task selected: explicit top-level manifest `kind` validation.
+- Claude Code implemented explicit `kind` validation: missing and non-string `kind` now raise manifest-specific `ValueError`.
+- Focused tests added for missing `kind`, numeric `kind`, and `null` `kind`.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`.
+Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`.
 
 ## Expected Files
 
@@ -34,8 +37,8 @@ Claude Code should implement `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`.
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `18 passed in 0.04s`
-- Last accepted full validation: `uv run pytest -q` -> `195 passed in 1.85s`
+- Last accepted focused validation: `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `21 passed in 0.06s`
+- Last accepted full validation: `uv run pytest -q` -> `198 passed in 2.59s`
 - `scripts/check-progress-docs.sh` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - `git diff --check` -> passed
@@ -48,4 +51,4 @@ Claude Code should implement `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`.
 
 ## Next Suggested Step
 
-Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the validation, run the required checks, and hand back for Codex review.
+Codex should commit the accepted implementation locally, then prepare the next manifest-loader hardening brief for Claude Code.
