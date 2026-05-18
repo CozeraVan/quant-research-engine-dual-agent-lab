@@ -48,11 +48,28 @@ class ReportFile:
                 raise ValueError(
                     f"manifest file entry missing required field {field!r} (entry key: {entry_key!r})"
                 )
+        entry_key = mapping["key"]
+        if not isinstance(entry_key, str):
+            raise ValueError(
+                f"manifest file entry field 'key' must be a string, got {type(entry_key).__name__}"
+            )
+        for field in ("path", "filename", "role"):
+            value = mapping[field]
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"manifest file entry field {field!r} must be a string, got {type(value).__name__} (entry key: {entry_key!r})"
+                )
+        for field in ("symbol", "window", "group_by"):
+            value = mapping.get(field)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(
+                    f"manifest file entry field {field!r} must be a string or null, got {type(value).__name__} (entry key: {entry_key!r})"
+                )
         return cls(
-            key=str(mapping["key"]),
-            path=str(mapping["path"]),
-            filename=str(mapping["filename"]),
-            role=str(mapping["role"]),
+            key=entry_key,
+            path=mapping["path"],
+            filename=mapping["filename"],
+            role=mapping["role"],
             symbol=_optional_string(mapping.get("symbol")),
             window=_optional_string(mapping.get("window")),
             group_by=_optional_string(mapping.get("group_by")),

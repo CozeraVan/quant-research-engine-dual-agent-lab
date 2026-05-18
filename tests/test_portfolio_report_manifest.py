@@ -415,3 +415,50 @@ def test_report_manifest_rejects_null_kind(tmp_path):
 
     with pytest.raises(ValueError, match="manifest 'kind' must be a string"):
         ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_non_string_required_entry_field(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": 123,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest file entry field 'role' must be a string"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_non_string_optional_entry_field(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                        "symbol": 456,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest file entry field 'symbol' must be a string or null"):
+        ReportManifest.from_path(manifest_path)

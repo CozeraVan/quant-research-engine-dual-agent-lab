@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-KIND-VALIDATION-001
+QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001
 
 ## Written By
 
@@ -30,18 +30,17 @@ Changed files reviewed:
 
 Review passed.
 
-`ReportManifest.from_path(...)` now validates top-level `kind` explicitly before checking membership in the supported-kind set. Missing `kind` raises a manifest-specific `ValueError`, non-string `kind` values are rejected clearly, and unsupported string kinds still follow the existing rejection path.
+`ReportFile.from_mapping(...)` now validates required and optional file-entry field types explicitly instead of silently coercing malformed values with `str(...)`. Valid manifests keep their current behavior, missing-field errors are preserved, and malformed entry values now fail clearly.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- Invalid manifest JSON text is rejected with clear `ValueError`.
-- Missing top-level `kind` is rejected with clear `ValueError`.
-- Non-string top-level `kind` values are rejected with clear `ValueError`.
-- Unsupported string kinds still use the existing rejection path.
+- Non-string required file-entry field values are rejected with clear `ValueError`.
+- Non-string optional file-entry metadata values are rejected with clear `ValueError`.
+- Existing missing-required-field behavior is preserved.
 - Valid-manifest loading behavior is unchanged.
-- Existing root-shape, `files`-shape, file-entry, and schema-version validation remains intact.
+- Existing invalid-JSON, root-shape, `files`-shape, `kind`, file-entry presence, and schema-version validation remains intact.
 - No CLI changes or unrelated refactors were introduced.
 
 ## Locked Requirements Check
@@ -59,7 +58,7 @@ No locked-requirement violation found.
 
 ## Code Quality Review
 
-The new checks are in the correct place: they run after root-payload validation and before the supported-kind membership check. That keeps the error surface deterministic without disturbing valid manifests or the existing unsupported-kind behavior.
+The validation is in the right layer: `ReportFile.from_mapping(...)`, where manifest entries are decoded. That keeps the behavior narrowly scoped, avoids touching report writing or CLI surfaces, and stops malformed values before they become bogus strings in downstream filtering and path resolution.
 
 ## Test Review
 
@@ -75,18 +74,19 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `21 passed in 0.06s`
-- `uv run pytest -q`: `198 passed in 2.59s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `23 passed in 0.05s`
+- `uv run pytest -q`: `200 passed in 2.21s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
-Coverage is adequate for this brief:
+Coverage is adequate:
 
-- missing top-level `kind` now fails clearly;
-- numeric and `null` `kind` values no longer fall through the supported-kind check;
+- malformed required entry values now fail clearly;
+- malformed optional entry metadata values now fail clearly;
+- existing missing-field errors remain intact;
 - valid manifests still load normally;
-- prior invalid-JSON, root, `files`, schema-version, and file-entry validation continues to pass.
+- prior invalid-JSON, root, `files`, `kind`, schema-version, and file-entry validation continues to pass.
 
 ## Required Fixes
 
@@ -94,11 +94,11 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: validate manifest file-entry field types explicitly instead of silently coercing malformed values with `str(...)`.
+Next low-risk hardening step: reject manifests that omit the top-level `files` field instead of silently treating them as empty manifests.
 
 ## Follow-up Tasks
 
-- Prepare the next manifest-loader hardening brief around explicit file-entry field type validation.
+- Prepare the next manifest-loader hardening brief around explicit top-level `files` presence validation.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation
