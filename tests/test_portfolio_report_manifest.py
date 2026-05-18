@@ -350,3 +350,19 @@ def test_report_manifest_rejects_non_object_file_entry(tmp_path):
 
     with pytest.raises(ValueError, match="manifest file entry 0 must be an object"):
         ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_list_root(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(json.dumps([]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="manifest root must be an object"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_scalar_root(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text("null", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="manifest root must be an object"):
+        ReportManifest.from_path(manifest_path)

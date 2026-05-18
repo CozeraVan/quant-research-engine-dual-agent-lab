@@ -78,6 +78,10 @@ class ReportManifest:
     def from_path(cls, path: str | Path) -> ReportManifest:
         manifest_path = Path(path)
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"manifest root must be an object, got {type(payload).__name__}"
+            )
         kind = payload.get("kind")
         if kind not in _SUPPORTED_MANIFEST_KINDS:
             supported = ", ".join(sorted(_SUPPORTED_MANIFEST_KINDS))

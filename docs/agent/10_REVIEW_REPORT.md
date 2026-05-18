@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001
+QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001
 
 ## Written By
 
@@ -30,15 +30,15 @@ Changed files reviewed:
 
 Review passed.
 
-The loader now rejects malformed top-level `files` payloads with deterministic manifest-specific `ValueError` messages instead of leaking raw Python `AttributeError` or `TypeError`. Valid manifests remain unchanged, and the implementation stays tightly scoped to `ReportManifest.from_path(...)`.
+The loader now rejects non-object manifest roots with deterministic manifest-specific `ValueError` messages instead of leaking raw `AttributeError`. Valid manifests remain unchanged, and the implementation stays tightly scoped to `ReportManifest.from_path(...)`.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- Non-list top-level `files` payloads are rejected clearly.
-- Non-object entries inside `files` are rejected clearly.
-- Existing kind, schema-version, and required-file-entry validation is preserved.
+- Non-object manifest root payloads are rejected clearly.
+- Focused tests cover a list root and a scalar-or-null root case.
+- Existing schema-version, file-entry, and `files` shape validation is preserved.
 - Valid-manifest loading and filtering behavior is unchanged.
 - The task remained helper-focused; no CLI changes were needed.
 
@@ -57,7 +57,7 @@ No locked-requirement violation found.
 
 ## Code Quality Review
 
-The validation sits in the correct layer and handles the two malformed-shape cases before entry decoding. Error text is explicit without depending on Python internal exception wording. Reusing `raw_files` for both validation and construction keeps the change small and readable.
+The validation is in the correct place, immediately after `json.loads()`, so malformed roots are rejected before any `.get()` access. The message format is clear and stable, and the change does not disturb the recent `files`-shape hardening.
 
 ## Test Review
 
@@ -72,15 +72,15 @@ git diff --check
 
 Results:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `14 passed in 0.04s`
-- `uv run pytest -q`: `191 passed in 1.84s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `16 passed in 0.04s`
+- `uv run pytest -q`: `193 passed in 1.78s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 
 Coverage is adequate for this brief:
 
-- non-list `files` is rejected with clear `ValueError`;
-- non-object `files` entry is rejected with clear `ValueError`;
+- list roots are rejected with clear `ValueError`;
+- null/scalar roots are rejected with clear `ValueError`;
 - existing valid-manifest and prior malformed-manifest checks still pass.
 
 ## Required Fixes
@@ -89,11 +89,11 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: validate that the top-level manifest JSON payload itself is an object, so malformed roots like `[]`, `1`, `null`, or `"x"` raise clear `ValueError` instead of raw `AttributeError`.
+Next low-risk hardening step: normalize invalid JSON parse errors from `json.loads()` into manifest-specific `ValueError` messages, so malformed text like `"{"` or `"not-json"` no longer leaks raw `JSONDecodeError`.
 
 ## Follow-up Tasks
 
-- Prepare the next manifest-loader hardening brief around root payload shape validation.
+- Prepare the next manifest-loader hardening brief around invalid JSON text normalization.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation

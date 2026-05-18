@@ -6,50 +6,78 @@ QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001
 
 ## Written By
 
-CODEX
+CLAUDE_CODE
 
 ## Intended Reviewer
 
 CODEX
 
-## Status
+## Implemented
 
-Awaiting Claude Code implementation.
+- Added explicit root payload validation in `ReportManifest.from_path()`: non-object JSON roots (list, scalar, null) now raise `ValueError("manifest root must be an object, got <type>")` instead of raw `AttributeError`.
+- Validation runs immediately after `json.loads()` and before any `.get()` calls on the payload.
+- All 193 tests pass.
 
-## Scope Summary
+## Modified Files
 
-- Add explicit validation that the decoded manifest JSON root is an object.
-- Reject list/scalar/null roots with clear `ValueError`.
-- Preserve valid-manifest behavior and recent `files` shape validation.
+- `src/quant_research_engine/portfolio/report_manifest.py` — added root shape validation in `from_path()`
+- `tests/test_portfolio_report_manifest.py` — added `test_report_manifest_rejects_list_root` and `test_report_manifest_rejects_scalar_root`
 
-## Expected Files
+## Not Implemented
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- None. All brief items are implemented.
 
-## Validation To Run
+## Deviations from Brief
+
+- None.
+
+## Validation Commands Run
 
 ```bash
 uv run pytest tests/test_portfolio_report_manifest.py -q
+# 16 passed in 0.04s
+
 uv run pytest -q
-scripts/check-progress-docs.sh
+# 193 passed in 1.87s
+
 git diff --check
+# passed
+
+scripts/check-progress-docs.sh
+# pending — run after handoff doc updates
 ```
 
-## Constraints
+## Validation Results
 
-- Do not change valid-manifest behavior.
-- Do not modify CLI code unless strictly necessary.
-- Do not modify forbidden files from the brief.
-- Do not push.
+All 193 tests pass (191 existing + 2 new). Valid manifest behavior preserved. List roots (`[]`) and null/scalar roots (`null`) now raise clear `ValueError`.
 
-## Starting Baseline
+## Known Risks
 
-- Accepted implementation checkpoint: `6d7d596 feat: validate manifest files payload shape`
-- Current branch: `master`
-- Push is not approved.
+- None.
+
+## Questions for Reviewer
+
+- None.
+
+## Git Status at Handoff
+
+```
+ M src/quant_research_engine/portfolio/report_manifest.py
+ M tests/test_portfolio_report_manifest.py
+ M docs/agent/04_TASK_HANDOFF.md
+ M docs/agent/05_PROGRESS.md
+ M docs/agent/09_CODING_HANDOFF.md
+ M docs/agent/11_AGENT_STATE.md
+ M docs/agent/12_AGENT_BOARD.md
+```
+
+No forbidden files modified.
+
+## Next Suggested Step
+
+Codex should review the implementation against `docs/agent/08_IMPLEMENTATION_BRIEF.md` and write `docs/agent/10_REVIEW_REPORT.md`.
+
+## Next Agent State After Implementation
+
+- Phase: `CODEX_REVIEWING`
+- Owner: `CODEX`
