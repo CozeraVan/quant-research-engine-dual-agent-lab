@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001
+QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
 
 ## Created By
 
@@ -14,20 +14,26 @@ CLAUDE_CODE
 
 ## Background
 
-Report manifests now include a deterministic top-level `schema_version: 1`, and JSON report tooling exposes the field. The loader currently preserves old manifests without the field. A small next step is to make unsupported future versions fail clearly instead of being silently accepted.
+Report manifests are now a stable discovery and audit entry point. The loader validates manifest kind and schema version, but malformed file entries can still fail with raw mapping access errors. A small next step is to make missing required file-entry fields fail with a clear `ValueError`.
 
 ## Goal
 
-Add explicit manifest schema-version validation in `ReportManifest.from_path(...)`: accept missing `schema_version` and version `1`, reject unsupported present values with a clear error.
+Add clear validation for required manifest file entry fields in `ReportFile.from_mapping(...)` or nearby loader code.
+
+Required file entry fields:
+
+- `key`
+- `path`
+- `filename`
+- `role`
 
 ## Non-Goals
 
 - Do not change generated manifest contents.
-- Do not change manifest file entry shape.
+- Do not change manifest file entry shape for valid manifests.
 - Do not change `qre report-files` or `qre report-audit` CLI flags.
 - Do not change text or JSON output for valid manifests.
 - Do not change portfolio simulation behavior.
-- Do not add timestamps, command lines, git SHAs, hostnames, usernames, or other environment-dependent metadata.
 - Do not add database access.
 - Do not modify old root progress docs.
 
@@ -63,41 +69,38 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve report artifact and manifest discovery contracts for supported manifests.
+- Preserve report artifact and manifest discovery contracts for valid manifests.
 - Preserve old manifest readability.
 - Keep error behavior deterministic and clear.
 - No database writes or credential handling.
 
 ## Implementation Steps
 
-1. Inspect `ReportManifest.from_path(...)`.
-2. Add a small helper or inline check that validates top-level `schema_version`.
-3. Accept:
-   - missing `schema_version`;
-   - `schema_version == 1`.
-4. Reject unsupported present values, including values other than integer `1`, with a clear `ValueError`.
-5. Preserve existing manifest kind validation and file-entry loading behavior.
-6. Do not modify report writing code; generated manifests already use `schema_version: 1`.
+1. Inspect `ReportFile.from_mapping(...)` and `ReportManifest.from_path(...)`.
+2. Add explicit validation for required file entry fields: `key`, `path`, `filename`, `role`.
+3. Raise `ValueError` with a clear message identifying the missing field and manifest entry context.
+4. Preserve optional metadata handling for `symbol`, `window`, and `group_by`.
+5. Preserve existing kind and schema-version validation behavior.
+6. Do not modify report writing code.
 7. Add focused tests:
-   - missing `schema_version` still loads;
-   - `schema_version: 1` still loads;
-   - unsupported numeric version, for example `2`, raises a clear error;
-   - non-integer version, for example `"1"`, raises a clear error.
-8. Add a CLI test only if existing CLI error coverage does not already exercise `ReportManifest.from_path(...)` exceptions clearly enough.
+   - a valid manifest still loads;
+   - a file entry missing `path` raises clear `ValueError`;
+   - a file entry missing `role` raises clear `ValueError`.
+8. Add a CLI test only if existing CLI invalid-manifest coverage does not sufficiently exercise exception propagation.
 9. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
-None. This task validates the existing optional manifest schema marker.
+None. This task validates existing required file entry fields.
 
 ## API / Interface Changes
 
 For invalid manifests only:
 
-- `ReportManifest.from_path(...)` raises `ValueError` for unsupported present `schema_version`.
+- `ReportManifest.from_path(...)` raises `ValueError` instead of an uncaught `KeyError` when a file entry lacks a required field.
 - Existing CLI exception handling should continue returning exit code `2` and printing the error to stderr.
 
-No behavior change for old manifests without `schema_version` or current manifests with `schema_version: 1`.
+No behavior change for valid manifests.
 
 ## Validation Plan
 
@@ -122,9 +125,10 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] Missing `schema_version` remains readable.
-- [ ] `schema_version: 1` remains readable.
-- [ ] Unsupported present schema version raises a clear `ValueError`.
+- [ ] Valid manifest file entries still load unchanged.
+- [ ] Missing required file entry field raises clear `ValueError`.
+- [ ] Error message identifies the missing field.
+- [ ] Optional metadata fields remain optional.
 - [ ] Existing report filtering, path resolution, validation, and CLI output behavior is preserved for valid manifests.
 - [ ] No report writer or portfolio simulation behavior is modified.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
@@ -132,9 +136,9 @@ git diff --check
 
 ## Risks
 
-- Avoid rejecting legacy manifests that lack the field.
-- Avoid weakening current manifest discovery or audit behavior.
-- Keep unsupported-version errors clear for script operators.
+- Avoid changing valid manifest behavior.
+- Avoid making optional metadata required.
+- Keep malformed-manifest errors clear for script operators.
 
 ## Instructions for Claude Code
 

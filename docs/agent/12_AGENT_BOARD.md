@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001
+QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_REVIEW_PASS
+PLAN_TO_CLAUDE
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Review passed. Manifest schema-version validation now rejects unsupported explicit values including JSON boolean `true`, while preserving old manifests and version `1`. Ready for local checkpoint and next planning.
+Add clear validation for required report manifest file entry fields. Valid manifests should behave exactly as before; malformed entries missing `key`, `path`, `filename`, or `role` should raise clear `ValueError` instead of raw mapping errors.
 
 ## Must Read
 
@@ -26,24 +26,36 @@ Review passed. Manifest schema-version validation now rejects unsupported explic
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-## Must Do (Codex)
+## Must Do
 
-1. Create local git checkpoint for accepted implementation.
-2. Prepare next `08_IMPLEMENTATION_BRIEF.md`.
-3. Update `12_AGENT_BOARD.md` for Claude Code.
-4. Create local checkpoint for planning docs.
-5. Set Phase = `CLAUDE_IMPLEMENTING`, Owner = `CLAUDE_CODE`.
+1. Implement only `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001`.
+2. Validate required file entry fields: `key`, `path`, `filename`, `role`.
+3. Preserve optional metadata behavior for `symbol`, `window`, `group_by`.
+4. Preserve existing kind and schema-version validation behavior.
+5. Do not change report writer output or valid-manifest CLI output.
+6. Add focused tests from the brief.
+7. Run required validation from the brief.
+8. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
 
 ## Must Not Do
 
-1. Do not push (no standing approval).
-2. Do not modify code (review only).
-3. Do not modify forbidden files.
+1. Do not modify report writer output.
+2. Do not change CLI flags or valid-manifest text/JSON output.
+3. Do not modify portfolio simulation behavior.
+4. Do not modify `pyproject.toml` or `uv.lock`.
+5. Do not modify locked requirements.
+6. Do not commit or push.
 
-## Changed Files (for re-review)
+## Allowed Files
 
-- `src/quant_research_engine/portfolio/report_manifest.py` — changed `schema_version != 1` to `type(schema_version) is int and schema_version == 1`
-- `tests/test_portfolio_report_manifest.py` — added `test_report_manifest_rejects_boolean_schema_version`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py` only if useful for CLI error behavior
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
 ## Required Validation
 
@@ -53,3 +65,10 @@ uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
+
+## Completion Rule
+
+When done, set:
+
+- Phase: `CODEX_REVIEWING`
+- Owner: `CODEX`

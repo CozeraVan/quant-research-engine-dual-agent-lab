@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -24,18 +24,20 @@ USER_ACCEPTANCE
 | QRE-NEXT-7 | Report manifest schema version | DONE | CODEX/CLAUDE_CODE | commit `72533bb`; 176 tests passed | Preserve |
 | QRE-NEXT-8 | Manifest schema version in JSON tooling | DONE | CODEX/CLAUDE_CODE | commit `d34a694`; 179 tests passed | Preserve |
 | QRE-NEXT-9 | Manifest schema version docs | DONE | CODEX/CLAUDE_CODE | commit `19d9ae4`; 179 tests passed | Preserve |
-| QRE-NEXT-10 | Manifest schema version validation | DONE | CODEX/CLAUDE_CODE | Codex re-review passed; 182 tests passed; unsupported versions rejected | Preserve |
+| QRE-NEXT-10 | Manifest schema version validation | DONE | CODEX/CLAUDE_CODE | commit `0fca02a`; 182 tests passed | Preserve |
+| QRE-NEXT-11 | Manifest file entry validation | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001` prepared | Claude Code implements |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex re-review of `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001`:
+Recorded on 2026-05-18 after local checkpoint for `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001` and next planning:
 
 - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `62 passed in 0.60s`
 - `uv run pytest -q` -> `182 passed in 1.53s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - Fix: `type(schema_version) is int and schema_version == 1` rejects boolean `true`, floats, strings.
-- Review passed with no Required Fixes. Awaiting local checkpoint.
+- Accepted implementation committed locally as `0fca02a feat: validate report manifest schema version`.
+- Next implementation brief prepared: `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001`.
 
 ## Completed Module Summary
 

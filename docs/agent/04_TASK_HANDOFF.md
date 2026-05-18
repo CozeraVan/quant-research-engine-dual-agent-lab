@@ -2,57 +2,57 @@
 
 ## Current Task
 
-Validate report manifest schema version.
+Validate report manifest file entry fields.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001
+QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
 
 ## Current Status
 
-Reviewed by Codex. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
-- Added explicit `schema_version` validation in `ReportManifest.from_path()`: accepts `None` and integer `1`, rejects unsupported values with clear `ValueError`.
-- Validation uses explicit type check (`type(schema_version) is int`) to reject JSON boolean `true`, `false`, floats, strings, and other non-integer types.
-- Added tests for unsupported numeric version (`2`), non-integer version (`"1"`), and boolean version (`true`).
-- Existing valid-manifest tests continue to pass (missing version, version 1).
-- All 182 tests pass.
-- Codex re-review passed with no Required Fixes.
+- Previous task `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001` was reviewed and committed locally as `0fca02a feat: validate report manifest schema version`.
+- New brief prepared for clear manifest file-entry required-field validation.
 
 ## In Progress
 
-Codex should create the accepted local checkpoint, then prepare the next Claude Code handoff.
+Claude Code should implement:
+
+- `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001`
+
+Implementation source of truth:
+
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 
 ## Modified Files For Review
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
+None yet. Expected files are listed in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Validation
 
-Fix validation:
+Required validation for the next implementation:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `62 passed in 0.60s`
-- `uv run pytest -q` -> `182 passed in 1.39s`
-- `git diff --check` -> passed
-- `scripts/check-progress-docs.sh` -> pending after doc updates
-- Codex re-review validation:
-  - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `62 passed in 0.60s`
-  - `uv run pytest -q` -> `182 passed in 1.53s`
-  - `scripts/check-progress-docs.sh` -> passed
-  - `git diff --check` -> passed
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q`
+- `uv run pytest -q`
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
 
 ## Known Risks
 
-- Old manifests and `schema_version: 1` manifests continue to load correctly.
-- Unsupported versions (boolean, string, float, other integers) produce clear errors.
+- Do not change valid manifest behavior.
+- Do not make optional metadata required.
+- Keep this focused on manifest file-entry validation.
 
 ## Next Suggested Step
 
-Codex creates the accepted implementation checkpoint and prepares the next implementation brief.
+Claude Code implements the brief, updates `09/04/05/11/12`, and hands back with:
+
+- Phase: `CODEX_REVIEWING`
+- Owner: `CODEX`

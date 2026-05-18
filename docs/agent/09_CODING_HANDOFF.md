@@ -2,87 +2,63 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001
+QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
 
 ## Written By
 
-CLAUDE_CODE
+CODEX
 
 ## Intended Reviewer
 
 CODEX
 
-## Implemented (includes Required Fix)
+## Implemented
 
-- Added explicit `schema_version` validation in `ReportManifest.from_path()`: accepts missing version (`None`) and integer `1`, rejects everything else with a clear `ValueError`.
-- Validation uses `type(schema_version) is int and schema_version == 1` to reject JSON boolean `true` (Python `True`), `False`, floats, strings, and other non-integer types.
-- Validation runs after kind validation and before object construction.
-- Preserved existing kind validation, file-entry loading, filtering, path resolution, and valid-manifest CLI behavior.
-- Report writer code unchanged — generated manifests already emit `schema_version: 1`.
+Not started.
 
 ## Modified Files
 
-- `src/quant_research_engine/portfolio/report_manifest.py` — added version validation in `from_path()` with explicit type check
-- `tests/test_portfolio_report_manifest.py` — added `test_report_manifest_rejects_unsupported_schema_version_number`, `test_report_manifest_rejects_non_integer_schema_version`, `test_report_manifest_rejects_boolean_schema_version`
+None yet.
 
 ## Not Implemented
 
-- None. All brief items and Required Fixes are implemented.
+- Validate required report manifest file entry fields.
+- Preserve optional metadata behavior.
+- Add focused malformed-entry tests.
 
 ## Deviations from Brief
 
-- None.
+None yet.
 
 ## Validation Commands Run
 
-```bash
-uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q
-# 62 passed in 0.60s
-
-uv run pytest -q
-# 182 passed in 1.39s
-
-git diff --check
-# passed
-
-scripts/check-progress-docs.sh
-# pending — run after handoff doc updates
-```
+Not run. Implementation has not started.
 
 ## Validation Results
 
-All 182 tests pass (179 existing + 3 new). Existing valid-manifest behavior preserved. Boolean `true`, string `"1"`, and integer `2` are all rejected.
+Not applicable.
 
 ## Known Risks
 
-- Old manifests without `schema_version` still load (verified by existing tests).
-- `schema_version: 1` still loads (verified by existing tests).
-- Unsupported versions raise clear errors (verified by new tests).
-- No CLI, API, or simulation behavior changed for valid manifests.
+- Do not change valid manifest behavior.
+- Do not make optional metadata fields required.
+- Keep malformed-manifest errors clear.
 
 ## Questions for Reviewer
 
-- None.
+None yet.
 
 ## Git Status at Handoff
 
-```
- M src/quant_research_engine/portfolio/report_manifest.py
- M tests/test_portfolio_report_manifest.py
- M docs/agent/04_TASK_HANDOFF.md
- M docs/agent/05_PROGRESS.md
- M docs/agent/09_CODING_HANDOFF.md
- M docs/agent/11_AGENT_STATE.md
- M docs/agent/12_AGENT_BOARD.md
-```
-
-No forbidden files modified.
+Implementation has not started. Claude Code should record `git status --short` here after implementation.
 
 ## Next Suggested Step
 
-Codex should re-review the fix against `docs/agent/10_REVIEW_REPORT.md` Required Fixes and run One-Shot Review-Finalize-Next.
+Claude Code should implement strictly from:
 
-## Next Agent State After Fix
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+
+## Next Agent State After Implementation
 
 - Phase: `CODEX_REVIEWING`
 - Owner: `CODEX`
