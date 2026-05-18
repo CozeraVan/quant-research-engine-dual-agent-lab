@@ -2,36 +2,38 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001
+QRE-REPORT-MANIFEST-KIND-VALIDATION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CLAUDE_TO_CODEX
+CODEX_TO_CLAUDE
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Implemented invalid JSON normalization in `ReportManifest.from_path()`. `JSONDecodeError` from `json.loads()` is now caught and re-raised as manifest-specific `ValueError("manifest contains invalid JSON: ...")`. Added 2 focused tests (incomplete JSON object `"{"`, non-JSON text `"not-json"`). All 195 tests pass. Ready for Codex review.
+Harden `ReportManifest.from_path()` around the top-level `kind` field. Missing or non-string `kind` values should raise clear manifest-specific `ValueError`, while unsupported string kinds and valid manifests should keep their current behavior.
 
 ## Implementation Summary
 
-1. Wrapped `json.loads()` in `ReportManifest.from_path()` with try/except for `JSONDecodeError`.
-2. Added `test_report_manifest_rejects_incomplete_json_object` and `test_report_manifest_rejects_non_json_text`.
-3. Root-shape, `files`-shape, file-entry, schema-version, and valid-manifest behavior preserved.
-4. Updated `04`, `05`, `09`, `11`, and `12`.
-5. All required validation commands passed.
+1. Inspect the current `kind = payload.get("kind")` path and the supported-kind membership check.
+2. Add explicit validation for missing top-level `kind`.
+3. Add explicit validation for non-string `kind` values such as `null`, numbers, or lists.
+4. Preserve the current rejection path for unsupported string kinds and keep valid manifests unchanged.
+5. Add focused tests in `tests/test_portfolio_report_manifest.py`.
+6. Update `04`, `05`, `09`, `11`, and `12` after implementation.
 
 ## Constraints Check
 
-- No CLI/reporting behavior modified.
-- Scoped only to JSON parse normalization.
+- No CLI/reporting behavior changes for valid manifests.
+- Scoped only to top-level `kind` validation.
+- Preserve the existing supported-kind list.
 - No forbidden files modified.
 - Not pushed.
 
