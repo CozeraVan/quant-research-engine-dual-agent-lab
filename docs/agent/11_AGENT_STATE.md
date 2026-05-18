@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed and locally committed `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001` as `feab301 feat: validate report manifest file entries`, then prepared the next implementation brief for CLI malformed-manifest regression coverage.
+Codex reviewed `QRE-REPORT-CLI-INVALID-MANIFEST-001` and accepted it with no Required Fixes. The task adds 5 CLI regression tests for malformed manifests across `report-files` and `report-audit`. Validation passed: `57` focused CLI tests, `189` full tests, progress-doc checks, diff checks, and git-finalize check. No CLI source changes were needed.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-CLI-INVALID-MANIFEST-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Codex should create a local checkpoint commit for the accepted implementation, then prepare the next low-risk implementation brief and handoff for Claude Code. Do not push.
 
 ## Active Change Request
 
@@ -77,14 +77,14 @@ User request from 2026-05-18:
 - Last workflow commit: `77fec02 chore: initialize dual-agent workflow`
 - Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
 - Last accepted implementation commit: `feab301 feat: validate report manifest file entries`
+- Last planning checkpoint commit: `0d5f186 plan: prepare cli invalid manifest task`
 - Last local implementation commits:
-  - `72533bb feat: add report manifest schema version`
   - `d34a694 feat: expose manifest schema version in json output`
   - `19d9ae4 docs: document report manifest schema version`
   - `0fca02a feat: validate report manifest schema version`
   - `feab301 feat: validate report manifest file entries`
 - Last pushed commit: no remote configured
-- Current planning docs for `QRE-REPORT-CLI-INVALID-MANIFEST-001` are prepared in the latest planning checkpoint.
+- Current implementation for `QRE-REPORT-CLI-INVALID-MANIFEST-001` is accepted by review and awaiting local checkpoint only. No push approved.
 
 ## Standing Approval
 

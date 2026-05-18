@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -26,26 +26,26 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-9 | Manifest schema version docs | DONE | CODEX/CLAUDE_CODE | commit `19d9ae4`; 179 tests passed | Preserve |
 | QRE-NEXT-10 | Manifest schema version validation | DONE | CODEX/CLAUDE_CODE | commit `0fca02a`; 182 tests passed | Preserve |
 | QRE-NEXT-11 | Manifest file entry validation | DONE | CODEX/CLAUDE_CODE | commit `feab301`; 184 tests passed | Preserve |
-| QRE-NEXT-12 | CLI malformed-manifest regression coverage | READY | CLAUDE_CODE | brief `QRE-REPORT-CLI-INVALID-MANIFEST-001` prepared | Claude Code implements |
+| QRE-NEXT-12 | CLI malformed-manifest regression coverage | DONE | CODEX/CLAUDE_CODE | Codex review passed; `189 passed`; 5 new CLI regression tests | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after local checkpoint for `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001` and next planning:
+Recorded on 2026-05-18 after Codex review of `QRE-REPORT-CLI-INVALID-MANIFEST-001`:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `64 passed in 0.60s`
-- `uv run pytest -q` -> `184 passed in 1.40s`
+- `uv run pytest tests/test_cli.py -q` -> `57 passed in 0.91s`
+- `uv run pytest -q` -> `189 passed in 1.88s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Required-field validation added to `ReportFile.from_mapping()` for `key`, `path`, `filename`, `role`.
-- Accepted implementation committed locally as `feab301 feat: validate report manifest file entries`.
-- Next implementation brief prepared: `QRE-REPORT-CLI-INVALID-MANIFEST-001`.
+- `scripts/git-finalize-check.sh` -> passed
+- Added 5 CLI regression tests: unsupported `schema_version` and missing file entry field for both `report-files` and `report-audit`, plus invalid `kind` for `report-audit`.
+- Review passed with no Required Fixes. Local checkpoint only; no push.
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage.
 
 ## Pending Work Summary
 

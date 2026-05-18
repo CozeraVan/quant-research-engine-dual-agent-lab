@@ -895,6 +895,126 @@ def test_cli_report_files_reports_invalid_manifest(capsys, tmp_path):
     assert "batch_backtest_report_manifest" in captured.err
 
 
+def test_cli_report_files_reports_unsupported_schema_version(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "unsupported manifest schema_version" in captured.err
+
+
+def test_cli_report_files_reports_missing_file_entry_field(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "missing required field" in captured.err
+
+
+def test_cli_report_audit_reports_invalid_manifest(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(json.dumps({"kind": "other", "files": []}), encoding="utf-8")
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "batch_backtest_report_manifest" in captured.err
+
+
+def test_cli_report_audit_reports_unsupported_schema_version(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "unsupported manifest schema_version" in captured.err
+
+
+def test_cli_report_audit_reports_missing_file_entry_field(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "missing required field" in captured.err
+
+
 def test_cli_report_files_check_exists_passes_when_files_exist(capsys, tmp_path):
     output_path = tmp_path / "summary.csv"
     output_path.write_text("symbol,total_return\n000001.SZ,0.1\n", encoding="utf-8")
