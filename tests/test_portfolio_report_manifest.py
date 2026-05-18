@@ -462,3 +462,14 @@ def test_report_manifest_rejects_non_string_optional_entry_field(tmp_path):
 
     with pytest.raises(ValueError, match="manifest file entry field 'symbol' must be a string or null"):
         ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_missing_files(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": "batch_backtest_report_manifest"}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest missing top-level 'files' field"):
+        ReportManifest.from_path(manifest_path)

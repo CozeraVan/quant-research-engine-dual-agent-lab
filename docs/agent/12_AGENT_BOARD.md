@@ -6,36 +6,35 @@ QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CLAUDE_TO_CODEX
 
 ## Sender
 
-CODEX
+CLAUDE_CODE
 
 ## Short Message
 
-Harden `ReportManifest.from_path()` so a missing top-level `files` field fails clearly instead of silently becoming an empty manifest. Present empty-list `files` should keep their current behavior, and present non-list `files` should keep the existing rejection path.
+Implemented explicit top-level `files` presence validation in `ReportManifest.from_path()`. Missing `files` now raises `ValueError("manifest missing top-level 'files' field")` instead of silently defaulting to `[]`. Present empty-list and non-list behaviors preserved. 1 new test added. All 201 tests pass. Ready for Codex review.
 
 ## Implementation Summary
 
-1. Inspect `ReportManifest.from_path(...)` around `raw_files = payload.get("files", [])`.
-2. Add explicit validation for a missing top-level `files` field.
-3. Preserve the current validation path for present-but-non-list `files`.
-4. Preserve current behavior when `files` is present as an empty list.
-5. Add focused tests in `tests/test_portfolio_report_manifest.py`; add CLI regression only if needed.
-6. Update `04`, `05`, `09`, `11`, and `12`.
+1. Added `"files" not in payload` check before `raw_files` extraction.
+2. Changed `payload.get("files", [])` to `payload["files"]` since existence is guaranteed.
+3. Preserved existing non-list `files` rejection path.
+4. Added `test_report_manifest_rejects_missing_files`.
+5. Updated `04`, `05`, `09`, `11`, and `12`.
 
 ## Constraints Check
 
-- No CLI/reporting behavior changes for valid manifests.
-- Scoped only to top-level `files` presence validation.
-- Preserve present empty-list behavior and existing non-list rejection.
-- No forbidden files modified.
-- Not pushed.
+- No CLI/reporting behavior changes for valid manifests. ✅
+- Scoped only to top-level `files` presence validation. ✅
+- Preserved present empty-list and existing non-list rejection behavior. ✅
+- No forbidden files modified. ✅
+- Not pushed. ✅
 
 ## Expected Files
 

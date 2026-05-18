@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001
+QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
 
 ## Written By
 
@@ -30,17 +30,17 @@ Changed files reviewed:
 
 Review passed.
 
-`ReportFile.from_mapping(...)` now validates required and optional file-entry field types explicitly instead of silently coercing malformed values with `str(...)`. Valid manifests keep their current behavior, missing-field errors are preserved, and malformed entry values now fail clearly.
+`ReportManifest.from_path(...)` now distinguishes a missing top-level `files` field from a present empty list. Missing `files` raises a manifest-specific `ValueError`, while present empty-list and present non-list behaviors remain intact.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- Non-string required file-entry field values are rejected with clear `ValueError`.
-- Non-string optional file-entry metadata values are rejected with clear `ValueError`.
-- Existing missing-required-field behavior is preserved.
+- Missing top-level `files` is rejected with clear `ValueError`.
+- Present empty-list `files` behavior is preserved.
+- Existing present-but-non-list `files` rejection behavior is preserved.
 - Valid-manifest loading behavior is unchanged.
-- Existing invalid-JSON, root-shape, `files`-shape, `kind`, file-entry presence, and schema-version validation remains intact.
+- Existing invalid-JSON, root-shape, `kind`, file-entry presence, file-entry type, and schema-version validation remains intact.
 - No CLI changes or unrelated refactors were introduced.
 
 ## Locked Requirements Check
@@ -58,7 +58,7 @@ No locked-requirement violation found.
 
 ## Code Quality Review
 
-The validation is in the right layer: `ReportFile.from_mapping(...)`, where manifest entries are decoded. That keeps the behavior narrowly scoped, avoids touching report writing or CLI surfaces, and stops malformed values before they become bogus strings in downstream filtering and path resolution.
+The new check is in the correct place: immediately before `raw_files` extraction in `ReportManifest.from_path(...)`. That keeps the change tightly scoped, preserves existing list-shape validation, and makes the missing-field error deterministic instead of silently defaulting to an empty manifest.
 
 ## Test Review
 
@@ -74,19 +74,19 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `23 passed in 0.05s`
-- `uv run pytest -q`: `200 passed in 2.21s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `24 passed in 0.06s`
+- `uv run pytest -q`: `201 passed in 1.99s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate:
 
-- malformed required entry values now fail clearly;
-- malformed optional entry metadata values now fail clearly;
-- existing missing-field errors remain intact;
+- missing top-level `files` now fails clearly at the loader boundary;
+- present non-list `files` remains covered by existing unit tests;
+- present empty-list `files` remains covered by existing CLI tests that exercise zero-match report flows;
 - valid manifests still load normally;
-- prior invalid-JSON, root, `files`, `kind`, schema-version, and file-entry validation continues to pass.
+- prior invalid-JSON, root, `kind`, schema-version, and file-entry validation continues to pass.
 
 ## Required Fixes
 
@@ -94,11 +94,11 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: reject manifests that omit the top-level `files` field instead of silently treating them as empty manifests.
+Next low-risk hardening step: add CLI regression coverage for the newer loader-side manifest errors so `report-files` and `report-audit` lock the same behavior at the command boundary.
 
 ## Follow-up Tasks
 
-- Prepare the next manifest-loader hardening brief around explicit top-level `files` presence validation.
+- Prepare the next brief around CLI regression coverage for missing top-level manifest fields.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation

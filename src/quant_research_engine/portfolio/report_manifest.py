@@ -119,7 +119,9 @@ class ReportManifest:
             raise ValueError(
                 f"unsupported manifest schema_version: {schema_version!r} (expected 1 or absent)"
             )
-        raw_files = payload.get("files", [])
+        if "files" not in payload:
+            raise ValueError("manifest missing top-level 'files' field")
+        raw_files = payload["files"]
         if not isinstance(raw_files, list):
             raise ValueError(
                 f"manifest 'files' must be a list, got {type(raw_files).__name__}"

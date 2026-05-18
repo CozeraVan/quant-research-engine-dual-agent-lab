@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -32,19 +32,19 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-15 | Manifest invalid JSON normalization | DONE | CODEX/CLAUDE_CODE | commit `333f46d`; malformed JSON now raises manifest-specific `ValueError`; 195 tests passed | Preserve |
 | QRE-NEXT-16 | Manifest top-level `kind` validation | DONE | CODEX/CLAUDE_CODE | commit `3d8a01e`; missing/non-string `kind` now raises manifest-specific `ValueError`; 198 tests passed | Preserve |
 | QRE-NEXT-17 | Manifest file-entry field type validation | DONE | CODEX/CLAUDE_CODE | commit `d3eb1d0`; non-string entry fields now raise manifest-specific `ValueError`; 200 tests passed | Preserve |
-| QRE-NEXT-18 | Manifest top-level `files` presence validation | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001` prepared by Codex | Claude Code implement |
+| QRE-NEXT-18 | Manifest top-level `files` presence validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; missing `files` now raises manifest-specific `ValueError`; 201 tests passed | Create local checkpoint and select next regression-coverage task |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after local checkpoint `d3eb1d0` and next-brief planning:
+Recorded on 2026-05-18 after Codex review:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `23 passed in 0.05s`
-- `uv run pytest -q` -> `200 passed in 2.21s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `24 passed in 0.06s`
+- `uv run pytest -q` -> `201 passed in 1.99s`
 - `scripts/check-progress-docs.sh` -> passed (after doc updates)
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Accepted task: `QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001`
-- Next step: Claude Code implements `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001`
+- Accepted task: `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001`
+- Next step: local checkpoint commit and next brief
 
 ## Completed Module Summary
 
@@ -60,7 +60,7 @@ Recorded on 2026-05-18 after local checkpoint `d3eb1d0` and next-brief planning:
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
-- Report-manifest loader hardening for top-level `files` presence validation.
+- Report-manifest robustness beyond top-level `files` presence validation.
 
 ## Status Meaning
 
