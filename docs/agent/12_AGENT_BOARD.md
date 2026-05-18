@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-REPORT-AUDIT-JSON-001
+QRE-REPORT-FILES-JSON-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-REVIEW_TO_USER
+PLAN_TO_CLAUDE
 
 ## Sender
 
@@ -18,44 +18,63 @@ CODEX
 
 ## Short Message
 
-Review passed for `QRE-REPORT-AUDIT-JSON-001`. Codex will commit locally and prepare the next Claude Code task. No push.
+Add opt-in JSON output to `qre report-files` for script-friendly manifest file selection. Preserve existing text output and exit-code behavior.
 
 ## Must Read
 
-- `docs/agent/10_REVIEW_REPORT.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-## Must Do (Codex)
+## Must Do
 
-1. Re-review the implementation diff (AGENTS.md and 02_LOCKED_REQUIREMENTS.md are now clean).
-2. Update `docs/agent/10_REVIEW_REPORT.md` with new review outcome.
-3. If review passes and user has requested One-Shot Review-Finalize-Next:
-   - Create local git checkpoint for accepted implementation.
-   - Prepare next `08_IMPLEMENTATION_BRIEF.md`.
-   - Update `12_AGENT_BOARD.md` for Claude Code.
-   - Create local checkpoint for planning docs.
-   - Set Phase = `CLAUDE_IMPLEMENTING`, Owner = `CLAUDE_CODE`.
-4. If review fails, write Required Fixes and hand back to Claude Code.
+1. Implement only `QRE-REPORT-FILES-JSON-001`.
+2. Add optional `--json` to `report-files`.
+3. Emit one valid JSON object on stdout in JSON mode.
+4. Include matched count and file entry details in the JSON payload.
+5. Preserve existing default text output and existing exit codes.
+6. Add focused CLI tests and run the validation commands in the brief.
+7. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
 
 ## Must Not Do
 
-1. Do not push (no standing approval).
-2. Do not modify code (review only).
-3. Do not modify forbidden files.
+1. Do not change report artifact generation.
+2. Do not change manifest JSON shape.
+3. Do not change `report-audit` behavior.
+4. Do not modify `pyproject.toml` or `uv.lock`.
+5. Do not commit or push.
 
-## Changed Files (for review)
+## Allowed Files
 
-- `src/quant_research_engine/apps/cli.py` — added `--json` flag and JSON output logic
-- `tests/test_cli.py` — added 3 JSON mode tests
-- Agent handoff docs: `04`, `05`, `09`, `11`, `12`
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_cli.py`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+
+## Forbidden Files
+
+- `uv.lock`
+- `pyproject.toml`
+- `.env`
+- `.env.*`
+- upstream data producer projects
+- old root progress docs
 
 ## Required Validation
 
 ```bash
+uv run pytest tests/test_cli.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
+
+## Completion Rule
+
+When done, set:
+
+- Phase: `CODEX_REVIEWING`
+- Owner: `CODEX`

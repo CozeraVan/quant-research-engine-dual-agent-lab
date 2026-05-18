@@ -2,42 +2,44 @@
 
 ## Current Task
 
-Add JSON output mode to `qre report-audit`.
+Add JSON output mode to `qre report-files`.
 
 ## Task ID
 
-QRE-REPORT-AUDIT-JSON-001
+QRE-REPORT-FILES-JSON-001
 
 ## Current Status
 
-Reviewed by Codex. Accepted for local commit.
+Approved for Claude Code implementation after local checkpoint `3f7d623`.
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Completed
 
-- Claude Code implemented `--json` flag for `report-audit`.
-- Added 3 CLI tests: valid JSON output, JSON with issues, JSON with `--require-match` zero-matches.
-- All 171 tests pass.
+- Reviewed and locally committed previous task:
+  - `3f7d623 feat: add report audit json output`
+- Did not push.
+- Selected next small reporting workflow task.
+- Wrote new implementation brief:
+  - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- Prepared Claude Code handoff board:
+  - `docs/agent/12_AGENT_BOARD.md`
 
 ## In Progress
 
-Codex reviewed:
+Claude Code should implement:
 
-- `QRE-REPORT-AUDIT-JSON-001`
+- `QRE-REPORT-FILES-JSON-001`
 
-Review evidence:
+Implementation source of truth:
 
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/10_REVIEW_REPORT.md`
 
-## Modified Files For Review
+## Modified Files For Next Planning Step
 
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_cli.py`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
@@ -46,19 +48,19 @@ Review evidence:
 
 ## Validation
 
-Pre-handoff validation:
+Previous accepted task validation:
 
-- `uv run pytest -q` -> `171 passed in 1.35s`
+- `uv run pytest -q` -> `171 passed in 1.39s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 
-Review validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Next task validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Known Risks
 
-- JSON output on stdout in JSON mode; scripts should not mix `--json` with human-readable stdout parsing.
-- `no_matches` appears in both JSON issues list and stderr to preserve existing behavior.
+- Keep default `report-files` text behavior unchanged.
+- Do not touch report generation or manifest schema.
 
 ## Next Suggested Step
 
-Codex creates a local commit for the accepted implementation, then prepares and commits the next implementation brief and board for Claude Code. Do not push.
+Claude Code implements strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then updates `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and `docs/agent/12_AGENT_BOARD.md` before handing back to Codex review.

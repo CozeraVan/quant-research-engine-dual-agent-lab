@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-AUDIT-JSON-001
+QRE-REPORT-FILES-JSON-001
 
 ## Created By
 
@@ -14,18 +14,16 @@ CLAUDE_CODE
 
 ## Background
 
-`qre report-audit` currently prints a concise text summary and issue lines. This is useful for humans, but scripts need stable machine-readable output to gate larger research workflows.
-
-The next low-risk reporting task is to add an opt-in JSON output mode for `report-audit` without changing the existing default text behavior.
+`qre report-audit --json` now provides machine-readable audit output. `qre report-files` still prints paths or keys as plain text only. Adding JSON output to `report-files` completes the small reporting CLI machine-readability pair without changing default behavior.
 
 ## Goal
 
-Add a JSON output option to `qre report-audit` that emits the audit summary and validation details in a machine-readable object.
+Add an opt-in JSON output mode to `qre report-files` that emits matched manifest entries and resolved paths in a machine-readable object.
 
 ## Non-Goals
 
-- Do not change default `report-audit` text output.
-- Do not change `report-files` behavior.
+- Do not change default `report-files` text output.
+- Do not change `report-audit` behavior.
 - Do not change manifest JSON shape.
 - Do not change report artifact generation.
 - Do not change portfolio simulation behavior.
@@ -69,34 +67,32 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve default `report-audit` behavior when JSON mode is not requested.
-- Preserve `report-audit --require-match` semantics and exit codes.
+- Preserve default `report-files` behavior when JSON mode is not requested.
+- Preserve `report-files --require-match` semantics and exit codes.
 - Preserve manifest discovery and filtering semantics.
 - No database writes or credential handling.
 
 ## Implementation Steps
 
-1. Inspect current `report-audit` CLI handling and tests.
-2. Add an opt-in JSON flag to `report-audit`. Prefer:
+1. Inspect current `report-files` CLI handling and tests.
+2. Add an opt-in JSON flag to `report-files`. Prefer:
    - `--json`
 3. When `--json` is set, print one JSON object to stdout with at least:
    - `manifest_kind`
    - `matched_files`
-   - `missing_files`
-   - `validation_issues`
-   - `status`
-   - `issues`
-4. `issues` should be a list of objects with at least:
+   - `files`
+4. Each item in `files` should include at least:
    - `key`
-   - `code`
    - `path`
-   - `message`
-5. In JSON mode, keep stderr behavior for fatal parse/load errors. For normal audit failures, prefer JSON on stdout and no stderr unless `--require-match` has zero matches; if preserving the existing stderr message for zero-match is simpler, document it in handoff and tests.
-6. Preserve existing text output exactly enough that current tests still pass.
+   - `filename`
+   - `role`
+   - optional manifest metadata when present, such as `symbol`, `window`, and `group_by`
+5. Preserve `--keys` behavior in non-JSON mode. In JSON mode, prefer the full `files` object output even if `--keys` is passed, or reject the combination clearly; document the chosen behavior in tests and handoff.
+6. Preserve existing `--check-exists`, `--validate-contents`, and `--require-match` semantics and exit codes.
 7. Add CLI tests:
-   - valid manifest JSON output exits `0` and includes expected fields;
-   - malformed/missing report artifact JSON output exits `2` and includes issue objects;
-   - `--json --require-match` zero-match behavior is covered.
+   - JSON output for matched entries includes expected fields and resolved path;
+   - JSON output for zero matches without `--require-match` exits `0` with `matched_files = 0`;
+   - `--json --require-match` zero-match exits `2` and emits a JSON object suitable for scripts, or preserves existing stderr behavior if that is simpler and documented.
 8. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
@@ -108,7 +104,7 @@ None.
 Allowed:
 
 - Add optional CLI flag:
-  - `qre report-audit MANIFEST --json`
+  - `qre report-files MANIFEST --json`
 
 Avoid:
 
@@ -139,17 +135,17 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `qre report-audit --json` emits valid JSON on stdout.
-- [ ] JSON output includes summary counts, status, and issue details.
+- [ ] `qre report-files --json` emits valid JSON on stdout.
+- [ ] JSON output includes matched count and file entries.
 - [ ] Default text output remains compatible with existing tests.
-- [ ] Existing `--require-match` semantics and exit codes are preserved.
+- [ ] Existing `--require-match`, `--check-exists`, and `--validate-contents` semantics are preserved.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- JSON output should be stable enough for scripts, so avoid informal string-only payloads.
-- Do not mix human text into stdout in JSON mode.
+- Avoid mixing human text into stdout in JSON mode.
+- Be explicit about `--keys` interaction with `--json`.
 
 ## Instructions for Claude Code
 

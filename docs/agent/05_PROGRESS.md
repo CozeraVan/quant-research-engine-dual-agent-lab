@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -18,15 +18,18 @@ USER_ACCEPTANCE
 | QRE-M4.7 | Failed-order diagnostics implementation | DONE | CODEX/CLAUDE_CODE | commit `28e6f25`; 162 tests passed before checkpoint | Preserve |
 | QRE-M5.6 | Failed-order report schema and audit validation | DONE | CODEX/CLAUDE_CODE | commit `001177f`; 166 tests passed before checkpoint | Preserve |
 | QRE-M5.7 | `report-files --require-match` | DONE | CODEX/CLAUDE_CODE | commit `e568823`; 169 tests passed before checkpoint | Preserve |
-| QRE-NEXT-4 | `report-audit --json` | DONE | CODEX/CLAUDE_CODE | Codex review passed; 171 tests pass; `--json` flag with 3 new tests | Local commit, then next plan |
+| QRE-M5.8 | `report-audit --json` | DONE | CODEX/CLAUDE_CODE | commit `3f7d623`; 171 tests passed before checkpoint | Preserve |
+| QRE-NEXT-5 | `report-files --json` | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` | Implement from approved brief |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review of `report-audit --json`:
+Recorded on 2026-05-18 before local checkpoint `3f7d623`:
 
 - `uv run pytest -q` -> `171 passed in 1.39s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
+- Local commit created:
+  - `3f7d623 feat: add report audit json output`
 - No push performed.
 
 ## Completed Module Summary
@@ -38,6 +41,7 @@ Recorded on 2026-05-18 after Codex review of `report-audit --json`:
 
 ## Pending Work Summary
 
+- `report-files --json` machine-readable file selection output.
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
