@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-DOCS-JSON-CLI-001
+QRE-REPORT-MANIFEST-SCHEMA-VERSION-001
 
 ## Created By
 
@@ -14,32 +14,29 @@ CLAUDE_CODE
 
 ## Background
 
-Recent reporting CLI work added:
-
-- `qre report-audit --json`
-- `qre report-files --require-match`
-- `qre report-files --json`
-
-The README Report Artifact Checks section still documents only the older text-mode examples and `report-audit --require-match`. The next small task is to document the new script-friendly report CLI options.
+Report manifests are now the stable entry point for report discovery, audit, strict matching, and JSON CLI output. `docs/modules/module_boundaries.md` says reports should include enough metadata to reproduce an experiment. A small first step is to add a stable manifest schema marker to newly generated manifests without changing file discovery behavior.
 
 ## Goal
 
-Update user-facing report artifact documentation so operators can discover and use strict matching and JSON output modes for report workflows.
+Add a top-level `schema_version` field to newly generated batch and shared-cash `report_manifest.json` files, while keeping existing manifests without this field readable.
 
 ## Non-Goals
 
-- Do not change CLI behavior.
-- Do not change tests unless a doc check already exists and must be updated.
-- Do not change report artifact generation.
-- Do not change manifest JSON shape.
+- Do not add timestamps, command lines, git SHAs, hostnames, usernames, or other environment-dependent metadata.
+- Do not change manifest file entry shape.
+- Do not change `qre report-files` or `qre report-audit` output semantics beyond continuing to read the manifest.
+- Do not change portfolio simulation behavior.
+- Do not add database access.
 - Do not modify old root progress docs.
-- Do not alter locked requirements.
 
-## Affected Files
+## Affected Modules
 
 Expected:
 
-- `README.md`
+- `src/quant_research_engine/portfolio/io.py`
+- `src/quant_research_engine/portfolio/report_manifest.py` only if needed for explicit version handling
+- `tests/test_portfolio_io.py`
+- `tests/test_portfolio_report_manifest.py` or `tests/test_cli.py` only if needed
 
 Docs/handoff:
 
@@ -51,8 +48,6 @@ Docs/handoff:
 
 ## Forbidden Files
 
-- `src/**`
-- `tests/**` unless a doc validation test requires update
 - `uv.lock`
 - `pyproject.toml`
 - database credentials or `.env*`
@@ -67,64 +62,91 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve existing README guidance.
-- Do not present smoke outputs as research conclusions.
-- Do not document credentials or local secrets.
-- Keep examples script-friendly and local.
+- Preserve report artifact and manifest discovery contracts.
+- Preserve old manifest readability.
+- Keep the change additive and deterministic.
+- No database writes or credential handling.
 
 ## Implementation Steps
 
-1. Inspect the current README Report Artifact Checks section.
-2. Add concise examples for:
-   - `qre report-files --require-match`
-   - `qre report-files --json`
-   - `qre report-audit --json`
-3. State that JSON modes are intended for scripts and emit machine-readable stdout.
-4. Preserve existing text-mode examples.
-5. Keep wording concise; do not add broad architecture explanation.
-6. Update handoff/progress/state/board docs after implementation.
+1. Inspect current manifest generation in `portfolio/io.py`.
+2. Add top-level `schema_version: 1` to:
+   - batch manifest payloads;
+   - shared-cash manifest payloads.
+3. Keep existing `kind` and `files` keys unchanged.
+4. Ensure `ReportManifest.from_path(...)` continues to load manifests that do not include `schema_version`.
+5. If explicit version validation is added, accept only missing version or `1`; keep error messages clear. If no validation is needed, document that the helper treats the field as optional metadata.
+6. Add/update focused tests:
+   - generated batch manifest includes `schema_version == 1`;
+   - generated shared-cash manifest includes `schema_version == 1`;
+   - old manifest JSON without `schema_version` still loads and filters.
+7. Update handoff/progress/state/board docs after implementation.
+
+## Data / Schema Changes
+
+Additive report artifact schema change:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "...",
+  "files": []
+}
+```
+
+Existing manifests without `schema_version` must remain readable.
+
+## API / Interface Changes
+
+No CLI flag changes.
+
+No changes to generated CSV/Markdown/summary fields.
 
 ## Validation Plan
 
-Run:
+Run focused tests:
+
+```bash
+uv run pytest tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
+```
+
+Run full tests:
+
+```bash
+uv run pytest -q
+```
+
+Run workflow checks:
 
 ```bash
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-If tests are not run because this is docs-only, document that in `09_CODING_HANDOFF.md`.
-
-Optional if practical:
-
-```bash
-uv run pytest -q
-```
-
 ## Acceptance Criteria
 
-- [ ] README documents strict matching for `report-files`.
-- [ ] README documents JSON output for `report-files`.
-- [ ] README documents JSON output for `report-audit`.
-- [ ] Existing examples remain valid and understandable.
-- [ ] No business code changes.
-- [ ] Progress docs check and whitespace check pass.
+- [ ] New batch `report_manifest.json` includes top-level `schema_version: 1`.
+- [ ] New shared-cash `report_manifest.json` includes top-level `schema_version: 1`.
+- [ ] Existing manifest fixtures without `schema_version` still load through `ReportManifest.from_path(...)`.
+- [ ] Existing manifest filtering and path resolution behavior is preserved.
+- [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Documentation should not imply smoke reports are research conclusions.
-- JSON examples should avoid requiring local DB access.
+- Avoid making old manifests invalid.
+- Avoid introducing nondeterministic metadata into report artifacts.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Avoid unrelated docs rewrites.
+2. Avoid unrelated refactors.
 3. Avoid modifying forbidden files.
-4. Run validation commands where possible.
-5. Update:
+4. Stop and ask if the brief conflicts with existing code.
+5. Run validation commands where possible.
+6. Update:
    - `docs/agent/09_CODING_HANDOFF.md`
    - `docs/agent/04_TASK_HANDOFF.md`
    - `docs/agent/05_PROGRESS.md`

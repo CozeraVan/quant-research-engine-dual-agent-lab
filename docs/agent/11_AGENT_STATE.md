@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-DOCS-JSON-CLI-001
+QRE-REPORT-MANIFEST-SCHEMA-VERSION-001
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CODEX_REVIEWING
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CODEX
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Claude Code updated README Report Artifact Checks with docs for `report-files --require-match`, `report-files --json`, and `report-audit --json`. No src/ or tests/ changes. All 175 tests pass.
+Codex created local checkpoint `e1eb4a5 docs: document report cli json modes` and prepared the next implementation brief for report manifest schema versioning.
 
 ## Next Required Step
 
-Codex should review the doc update against `docs/agent/08_IMPLEMENTATION_BRIEF.md` and write `docs/agent/10_REVIEW_REPORT.md`.
+Claude Code should implement `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
@@ -82,8 +82,9 @@ User request from 2026-05-18:
   - `e568823 feat: add strict report-files matching`
   - `3f7d623 feat: add report audit json output`
   - `faa95e2 feat: add report files json output`
+  - `e1eb4a5 docs: document report cli json modes`
 - Last pushed commit: no remote configured
-- Current doc update for `QRE-REPORT-DOCS-JSON-CLI-001` is uncommitted.
+- Current planning docs for `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` are uncommitted.
 
 ## Standing Approval
 

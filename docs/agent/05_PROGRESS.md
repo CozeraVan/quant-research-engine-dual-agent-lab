@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_REVIEWING
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -20,16 +20,19 @@ CODEX_REVIEWING
 | QRE-M5.7 | `report-files --require-match` | DONE | CODEX/CLAUDE_CODE | commit `e568823` | Preserve |
 | QRE-M5.8 | `report-audit --json` | DONE | CODEX/CLAUDE_CODE | commit `3f7d623` | Preserve |
 | QRE-M5.9 | `report-files --json` | DONE | CODEX/CLAUDE_CODE | commit `faa95e2` | Preserve |
-| QRE-NEXT-6 | README report CLI JSON/strict docs | IMPLEMENTED | CLAUDE_CODE | 175 tests pass; README updated with JSON and strict-matching examples | Codex review |
+| QRE-M5.10 | README report CLI JSON/strict docs | DONE | CODEX/CLAUDE_CODE | commit `e1eb4a5`; 175 tests passed before checkpoint | Preserve |
+| QRE-NEXT-7 | Report manifest schema version | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` | Implement from approved brief |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after README report CLI doc update:
+Recorded on 2026-05-18 before local checkpoint `e1eb4a5`:
 
+- `uv run pytest -q` -> `175 passed in 1.45s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- `uv run pytest -q` -> `175 passed in 1.40s`
-- No src/ or tests/ changes.
+- Local commit created:
+  - `e1eb4a5 docs: document report cli json modes`
+- No push performed.
 
 ## Completed Module Summary
 
@@ -40,6 +43,7 @@ Recorded on 2026-05-18 after README report CLI doc update:
 
 ## Pending Work Summary
 
+- Report manifest schema versioning for reproducibility.
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, board, market-cap, liquidity, membership, and regime grouping.

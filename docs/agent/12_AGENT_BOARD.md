@@ -2,57 +2,72 @@
 
 ## Current Task ID
 
-QRE-REPORT-DOCS-JSON-CLI-001
+QRE-REPORT-MANIFEST-SCHEMA-VERSION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CLAUDE_TO_CODEX
+PLAN_TO_CLAUDE
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Docs-only implementation complete. README now documents `report-files --require-match`, `report-files --json`, and `report-audit --json` with concise examples. No src/ or tests/ changes. All 175 tests pass. Ready for Codex review.
+Add a deterministic top-level `schema_version: 1` to newly generated batch and shared-cash `report_manifest.json` files. Keep old manifests without this field readable. This is a small reporting/reproducibility task.
 
 ## Must Read
 
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-## Must Do (Codex)
+## Must Do
 
-1. Review the README changes against `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
-2. Write `docs/agent/10_REVIEW_REPORT.md`.
-3. If review passes and user has requested One-Shot Review-Finalize-Next:
-   - Create local git checkpoint for accepted implementation.
-   - Prepare next `08_IMPLEMENTATION_BRIEF.md`.
-   - Update `12_AGENT_BOARD.md` for Claude Code.
-   - Create local checkpoint for planning docs.
-   - Set Phase = `CLAUDE_IMPLEMENTING`, Owner = `CLAUDE_CODE`.
-4. If review fails, write Required Fixes and hand back to Claude Code.
+1. Implement only `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001`.
+2. Add top-level `schema_version: 1` to generated batch and shared-cash report manifests.
+3. Preserve existing `kind` and `files` behavior.
+4. Keep older manifests without `schema_version` readable.
+5. Add/update focused tests from the brief.
+6. Run required validation from the brief.
+7. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
 
 ## Must Not Do
 
-1. Do not push (no standing approval).
-2. Do not modify code (review only).
-3. Do not modify forbidden files.
+1. Do not add timestamps, command lines, git SHAs, hostnames, usernames, or environment-dependent metadata.
+2. Do not change CLI flags or output semantics.
+3. Do not modify `pyproject.toml` or `uv.lock`.
+4. Do not modify locked requirements.
+5. Do not commit or push.
 
-## Changed Files (for review)
+## Allowed Files
 
-- `README.md` — added JSON and strict-matching documentation
+- `src/quant_research_engine/portfolio/io.py`
+- `src/quant_research_engine/portfolio/report_manifest.py` if needed
+- `tests/test_portfolio_io.py`
+- `tests/test_portfolio_report_manifest.py` or `tests/test_cli.py` if needed
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
 ## Required Validation
 
 ```bash
+uv run pytest tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
+uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
-uv run pytest -q
 ```
+
+## Completion Rule
+
+When done, set:
+
+- Phase: `CODEX_REVIEWING`
+- Owner: `CODEX`

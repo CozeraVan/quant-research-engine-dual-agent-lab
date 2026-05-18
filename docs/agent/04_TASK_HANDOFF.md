@@ -2,41 +2,44 @@
 
 ## Current Task
 
-Document report CLI JSON and strict matching modes in README.
+Add deterministic report manifest schema version.
 
 ## Task ID
 
-QRE-REPORT-DOCS-JSON-CLI-001
+QRE-REPORT-MANIFEST-SCHEMA-VERSION-001
 
 ## Current Status
 
-Implemented by Claude Code. Ready for Codex review.
+Approved for Claude Code implementation after local checkpoint `e1eb4a5`.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
-- Updated README Report Artifact Checks with `report-files --require-match`, `report-files --json`, and `report-audit --json` examples.
-- Added JSON Output subsection describing shapes and combined `--json --require-match` gating.
-- Preserved all existing examples.
-- No src/ or tests/ changes.
+- Reviewed and locally committed previous task:
+  - `e1eb4a5 docs: document report cli json modes`
+- Did not push.
+- Selected next small reporting/reproducibility task.
+- Wrote new implementation brief:
+  - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- Prepared Claude Code handoff board:
+  - `docs/agent/12_AGENT_BOARD.md`
 
 ## In Progress
 
-Codex should review:
+Claude Code should implement:
 
-- `QRE-REPORT-DOCS-JSON-CLI-001`
+- `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001`
 
-Review source of truth:
+Implementation source of truth:
 
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/09_CODING_HANDOFF.md`
 
-## Modified Files For Review
+## Modified Files For Next Planning Step
 
-- `README.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
@@ -45,16 +48,18 @@ Review source of truth:
 
 ## Validation
 
-Pre-handoff validation:
+Previous accepted task validation:
 
+- `uv run pytest -q` -> `175 passed in 1.45s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- `uv run pytest -q` -> `175 passed in 1.40s`
+
+Next task validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Known Risks
 
-- JSON examples reference paths under `outputs/`; users need local output dirs to run them verbatim, matching existing README style.
+- This task changes report artifact metadata; keep the change additive and old manifests readable.
 
 ## Next Suggested Step
 
-Codex reviews the doc update against `docs/agent/08_IMPLEMENTATION_BRIEF.md`, writes `docs/agent/10_REVIEW_REPORT.md`, and runs One-Shot Review-Finalize-Next.
+Claude Code implements strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then updates `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and `docs/agent/12_AGENT_BOARD.md` before handing back to Codex review.
