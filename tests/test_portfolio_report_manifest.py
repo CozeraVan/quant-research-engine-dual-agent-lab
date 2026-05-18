@@ -274,3 +274,47 @@ def test_report_manifest_rejects_boolean_schema_version(tmp_path):
 
     with pytest.raises(ValueError, match="unsupported manifest schema_version"):
         ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_file_entry_missing_path(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing required field 'path'"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_file_entry_missing_role(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing required field 'role'"):
+        ReportManifest.from_path(manifest_path)

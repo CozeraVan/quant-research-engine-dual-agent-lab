@@ -6,7 +6,7 @@ QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
 
 ## Written By
 
-CODEX
+CLAUDE_CODE
 
 ## Intended Reviewer
 
@@ -14,49 +14,73 @@ CODEX
 
 ## Implemented
 
-Not started.
+- Added `_REQUIRED_FIELDS` class attribute to `ReportFile` and explicit validation in `from_mapping()`: checks for `key`, `path`, `filename`, `role` before construction.
+- Missing required fields raise `ValueError` with message identifying the missing field and the entry key (or `<missing key>` if key itself is absent).
+- Optional fields `symbol`, `window`, `group_by` remain optional.
+- Existing kind and schema-version validation unchanged.
+- Report writer code unchanged.
+- All 184 tests pass.
 
 ## Modified Files
 
-None yet.
+- `src/quant_research_engine/portfolio/report_manifest.py` — added required-field validation in `ReportFile.from_mapping()`
+- `tests/test_portfolio_report_manifest.py` — added `test_report_manifest_rejects_file_entry_missing_path` and `test_report_manifest_rejects_file_entry_missing_role`
 
 ## Not Implemented
 
-- Validate required report manifest file entry fields.
-- Preserve optional metadata behavior.
-- Add focused malformed-entry tests.
+- None. All brief items are implemented.
 
 ## Deviations from Brief
 
-None yet.
+- None.
 
 ## Validation Commands Run
 
-Not run. Implementation has not started.
+```bash
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q
+# 64 passed in 0.56s
+
+uv run pytest -q
+# 184 passed in 1.40s
+
+git diff --check
+# passed
+
+scripts/check-progress-docs.sh
+# pending — run after handoff doc updates
+```
 
 ## Validation Results
 
-Not applicable.
+All 184 tests pass (182 existing + 2 new). Valid manifest behavior preserved. Missing `path` and missing `role` both raise clear `ValueError`.
 
 ## Known Risks
 
-- Do not change valid manifest behavior.
-- Do not make optional metadata fields required.
-- Keep malformed-manifest errors clear.
+- Valid manifests unchanged (verified by all existing tests passing).
+- Optional metadata fields remain optional.
+- Error messages clearly identify which field is missing and which entry is affected.
 
 ## Questions for Reviewer
 
-None yet.
+- None.
 
 ## Git Status at Handoff
 
-Implementation has not started. Claude Code should record `git status --short` here after implementation.
+```
+ M src/quant_research_engine/portfolio/report_manifest.py
+ M tests/test_portfolio_report_manifest.py
+ M docs/agent/04_TASK_HANDOFF.md
+ M docs/agent/05_PROGRESS.md
+ M docs/agent/09_CODING_HANDOFF.md
+ M docs/agent/11_AGENT_STATE.md
+ M docs/agent/12_AGENT_BOARD.md
+```
+
+No forbidden files modified.
 
 ## Next Suggested Step
 
-Claude Code should implement strictly from:
-
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+Codex should review the implementation against `docs/agent/08_IMPLEMENTATION_BRIEF.md` and write `docs/agent/10_REVIEW_REPORT.md`.
 
 ## Next Agent State After Implementation
 

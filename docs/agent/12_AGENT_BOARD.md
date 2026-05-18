@@ -6,11 +6,11 @@ QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-PLAN_TO_CLAUDE
+CODEX_REVIEW_PASS
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Add clear validation for required report manifest file entry fields. Valid manifests should behave exactly as before; malformed entries missing `key`, `path`, `filename`, or `role` should raise clear `ValueError` instead of raw mapping errors.
+Review passed. Manifest file entry validation now raises clear `ValueError` for missing required fields while preserving valid-manifest behavior and optional metadata handling. Ready for local checkpoint and next planning.
 
 ## Must Read
 
@@ -26,36 +26,24 @@ Add clear validation for required report manifest file entry fields. Valid manif
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-## Must Do
+## Must Do (Codex)
 
-1. Implement only `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001`.
-2. Validate required file entry fields: `key`, `path`, `filename`, `role`.
-3. Preserve optional metadata behavior for `symbol`, `window`, `group_by`.
-4. Preserve existing kind and schema-version validation behavior.
-5. Do not change report writer output or valid-manifest CLI output.
-6. Add focused tests from the brief.
-7. Run required validation from the brief.
-8. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
+1. Create local git checkpoint for accepted implementation.
+2. Prepare next `08_IMPLEMENTATION_BRIEF.md`.
+3. Update `12_AGENT_BOARD.md` for Claude Code.
+4. Create local checkpoint for planning docs.
+5. Set Phase = `CLAUDE_IMPLEMENTING`, Owner = `CLAUDE_CODE`.
 
 ## Must Not Do
 
-1. Do not modify report writer output.
-2. Do not change CLI flags or valid-manifest text/JSON output.
-3. Do not modify portfolio simulation behavior.
-4. Do not modify `pyproject.toml` or `uv.lock`.
-5. Do not modify locked requirements.
-6. Do not commit or push.
+1. Do not push (no standing approval).
+2. Do not modify code (review only).
+3. Do not modify forbidden files.
 
-## Allowed Files
+## Changed Files (for review)
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py` only if useful for CLI error behavior
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- `src/quant_research_engine/portfolio/report_manifest.py` — added `_REQUIRED_FIELDS` and explicit validation in `ReportFile.from_mapping()`
+- `tests/test_portfolio_report_manifest.py` — added `test_report_manifest_rejects_file_entry_missing_path` and `test_report_manifest_rejects_file_entry_missing_role`
 
 ## Required Validation
 
@@ -65,10 +53,3 @@ uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
-
-## Completion Rule
-
-When done, set:
-
-- Phase: `CODEX_REVIEWING`
-- Owner: `CODEX`

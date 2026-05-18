@@ -38,8 +38,16 @@ class ReportFile:
     window: str | None = None
     group_by: str | None = None
 
+    _REQUIRED_FIELDS = ("key", "path", "filename", "role")
+
     @classmethod
     def from_mapping(cls, mapping: dict[str, Any]) -> ReportFile:
+        for field in cls._REQUIRED_FIELDS:
+            if field not in mapping:
+                entry_key = mapping.get("key", "<missing key>")
+                raise ValueError(
+                    f"manifest file entry missing required field {field!r} (entry key: {entry_key!r})"
+                )
         return cls(
             key=str(mapping["key"]),
             path=str(mapping["path"]),

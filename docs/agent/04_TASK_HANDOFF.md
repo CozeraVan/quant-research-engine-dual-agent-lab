@@ -10,49 +10,50 @@ QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
 
 ## Current Status
 
-Planned by Codex. Ready for Claude Code implementation.
+Reviewed by Codex. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
-- Previous task `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001` was reviewed and committed locally as `0fca02a feat: validate report manifest schema version`.
-- New brief prepared for clear manifest file-entry required-field validation.
+- Added explicit validation for required file entry fields (`key`, `path`, `filename`, `role`) in `ReportFile.from_mapping()`.
+- Missing required fields raise `ValueError` identifying the missing field and entry context.
+- Optional metadata fields (`symbol`, `window`, `group_by`) remain optional.
+- Existing kind and schema-version validation unchanged.
+- All 184 tests pass.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement:
-
-- `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001`
-
-Implementation source of truth:
-
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+Codex should create the accepted local checkpoint, then prepare the next Claude Code handoff.
 
 ## Modified Files For Review
 
-None yet. Expected files are listed in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
 
 ## Validation
 
-Required validation for the next implementation:
+Pre-handoff validation:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q`
-- `uv run pytest -q`
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `64 passed in 0.56s`
+- `uv run pytest -q` -> `184 passed in 1.40s`
+- `git diff --check` -> passed
+- `scripts/check-progress-docs.sh` -> pending after doc updates
+- Codex review validation:
+  - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `64 passed in 0.60s`
+  - `uv run pytest -q` -> `184 passed in 1.40s`
+  - `scripts/check-progress-docs.sh` -> passed
+  - `git diff --check` -> passed
 
 ## Known Risks
 
-- Do not change valid manifest behavior.
-- Do not make optional metadata required.
-- Keep this focused on manifest file-entry validation.
+- Valid manifest file entries continue to load correctly.
+- Optional metadata fields remain optional.
+- Error messages clearly identify which required field is missing.
 
 ## Next Suggested Step
 
-Claude Code implements the brief, updates `09/04/05/11/12`, and hands back with:
-
-- Phase: `CODEX_REVIEWING`
-- Owner: `CODEX`
+Codex creates the accepted implementation checkpoint and prepares the next implementation brief.
