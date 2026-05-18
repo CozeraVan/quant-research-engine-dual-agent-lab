@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001
 
 ## Written By
 
-CLAUDE_CODE
+CODEX
 
 ## Intended Reviewer
 
@@ -14,38 +14,41 @@ CODEX
 
 ## Status
 
-Implemented. Ready for Codex review.
+Awaiting Claude Code implementation.
 
 ## Scope Summary
 
-- Add CLI regression coverage so `report-files` and `report-audit` both surface invalid JSON and non-object manifest roots with exit code 2 and clear stderr.
+- Add CLI regression coverage so `report-files` and `report-audit` both surface non-object file entries and non-string required file-entry fields with exit code 2 and clear stderr.
+- Preserve existing CLI exit-code and stderr behavior for valid and previously-tested invalid manifests.
 
-## Files Changed
+## Expected Files
 
-- `tests/test_cli.py` — added 4 regression tests:
-  - `test_cli_report_files_reports_invalid_json_text`
-  - `test_cli_report_files_reports_non_object_root`
-  - `test_cli_report_audit_reports_invalid_json_text`
-  - `test_cli_report_audit_reports_non_object_root`
+- `tests/test_cli.py`
+- `src/**` only if a tiny bugfix is strictly necessary
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
-## Validation Results
+## Validation To Run
 
 ```bash
-uv run pytest tests/test_cli.py -q  # 69 passed in 1.02s
-uv run pytest -q                     # 213 passed in 1.96s
-scripts/check-progress-docs.sh       # passed
-git diff --check                     # passed
+uv run pytest tests/test_cli.py -q
+uv run pytest -q
+scripts/check-progress-docs.sh
+git diff --check
 ```
 
 ## Constraints
 
-- Do not change valid-manifest behavior. ✅ preserved
-- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
-- Do not modify forbidden files from the brief. ✅ compliant
-- Do not push. ✅ not pushed
+- Do not change valid-manifest behavior.
+- Do not modify CLI code unless strictly necessary.
+- Do not modify forbidden files from the brief.
+- Do not push.
 
-## Git State
+## Starting Baseline
 
-- Branch: `master`
-- Uncommitted changes: 1 test file + docs
-- Last commit: `75b42bc Lock manifest type failures at the CLI boundary`
+- Accepted implementation checkpoint: `be62461 Lock malformed manifest roots at the CLI boundary`
+- Current branch: `master`
+- Push is not approved.

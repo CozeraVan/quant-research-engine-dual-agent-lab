@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001
 
 ## Created By
 
@@ -14,11 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest loader validation rejects invalid JSON and non-object manifest roots, but the CLI regression suite does not yet lock those loader errors at the command boundary. `report-files` and `report-audit` should keep surfacing these malformed-manifest failures with exit code `2` and clear stderr output.
+Manifest loader validation rejects malformed `files` entries such as non-object entries and non-string required entry fields, but the CLI regression suite does not yet lock representative entry-shape/type errors at the command boundary. `report-files` and `report-audit` should keep surfacing these malformed-manifest failures with exit code `2` and clear stderr output.
 
 ## Goal
 
-Add CLI regression coverage for malformed manifest roots while preserving existing valid-manifest CLI behavior.
+Add CLI regression coverage for malformed manifest file entries while preserving existing valid-manifest CLI behavior.
 
 ## Non-Goals
 
@@ -74,10 +74,10 @@ Task-specific locked requirements:
 ## Implementation Steps
 
 1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
-2. Add coverage for `report-files` when the manifest contains invalid JSON.
-3. Add coverage for `report-files` when the manifest root is not an object.
-4. Add coverage for `report-audit` when the manifest contains invalid JSON.
-5. Add coverage for `report-audit` when the manifest root is not an object.
+2. Add coverage for `report-files` when a `files` entry is not an object.
+3. Add coverage for `report-files` when a required file-entry field has the wrong type.
+4. Add coverage for `report-audit` when a `files` entry is not an object.
+5. Add coverage for `report-audit` when a required file-entry field has the wrong type.
 6. Assert current command-boundary behavior: exit code `2` and clear stderr containing the loader error.
 7. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
 8. Update handoff/progress/state/board docs after implementation.
@@ -90,7 +90,7 @@ None. This task adds regression coverage only unless a tiny bugfix is required.
 
 Valid CLI behavior should remain unchanged.
 
-Malformed manifests with invalid JSON or non-object roots should continue surfacing a clear loader error through CLI stderr with exit code `2`.
+Malformed manifests with non-object file entries or non-string required entry fields should continue surfacing a clear loader error through CLI stderr with exit code `2`.
 
 ## Validation Plan
 
@@ -115,12 +115,12 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `report-files` surfaces invalid JSON with exit code `2`.
-- [ ] `report-files` surfaces non-object manifest root with exit code `2`.
-- [ ] `report-audit` surfaces invalid JSON with exit code `2`.
-- [ ] `report-audit` surfaces non-object manifest root with exit code `2`.
+- [ ] `report-files` surfaces a non-object file entry with exit code `2`.
+- [ ] `report-files` surfaces a non-string required file-entry field with exit code `2`.
+- [ ] `report-audit` surfaces a non-object file entry with exit code `2`.
+- [ ] `report-audit` surfaces a non-string required file-entry field with exit code `2`.
 - [ ] Existing valid-manifest CLI behavior remains unchanged.
-- [ ] Existing malformed-manifest CLI behavior for unsupported `kind`, unsupported `schema_version`, missing top-level fields, top-level type errors, and missing file-entry fields remains unchanged.
+- [ ] Existing malformed-manifest CLI behavior for malformed roots, unsupported `kind`, unsupported `schema_version`, missing top-level fields, top-level type errors, and missing file-entry fields remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 

@@ -2,19 +2,19 @@
 
 ## Current Task
 
-Add CLI regression coverage for malformed manifest roots.
+Add CLI regression coverage for malformed manifest file entries.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
@@ -23,10 +23,12 @@ CODEX
 - Next task selected: CLI regression coverage for invalid JSON and non-object manifest roots.
 - Claude Code added 4 CLI regression tests: invalid JSON and non-object root across `report-files` and `report-audit`.
 - Codex review passed with no Required Fixes.
+- Local checkpoint created: `be62461 Lock malformed manifest roots at the CLI boundary`.
+- Next task selected: CLI regression coverage for malformed manifest file entries.
 
 ## In Progress
 
-Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001`.
+Claude Code should implement `QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001`.
 
 ## Expected Files
 
@@ -49,4 +51,4 @@ Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-MAL
 
 ## Next Suggested Step
 
-Codex should commit the accepted implementation locally, then prepare the next manifest CLI file-entry validation regression brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.

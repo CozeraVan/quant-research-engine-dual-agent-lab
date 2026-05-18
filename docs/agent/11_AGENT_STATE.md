@@ -4,23 +4,23 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001`. `report-files` and `report-audit` now have regression coverage for invalid JSON and non-object manifest roots, and focused/full tests passed.
+Codex reviewed and accepted `QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001`, created local checkpoint `be62461 Lock malformed manifest roots at the CLI boundary`, and prepared the next brief for CLI regression coverage of malformed manifest file entries.
 
 ## Next Required Step
 
-Codex should create the local checkpoint commit for the accepted implementation and then prepare the next small follow-up brief.
+Claude Code should implement `QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, run the required checks, and hand back for Codex review.
 
 ## Active Change Request
 
@@ -29,8 +29,8 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `75b42bc Lock manifest type failures at the CLI boundary`
-- Current task passed review and is ready for a local checkpoint commit.
+- Last accepted implementation commit: `be62461 Lock malformed manifest roots at the CLI boundary`
+- Current task is planned by Codex and awaiting Claude Code implementation.
 - Standing approval: NONE
 
 ## Short Prompt Commands
