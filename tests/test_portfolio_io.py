@@ -135,6 +135,7 @@ def test_write_batch_result_creates_summary_and_per_symbol_files(tmp_path):
     assert rolling_summary["symbol_count"].tolist() == [1, 1]
     assert json.loads(paths["000001.SZ_summary"].read_text(encoding="utf-8"))["trade_count"] == 1
     manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 1
     assert manifest["kind"] == "batch_backtest_report_manifest"
     manifest_by_key = {item["key"]: item for item in manifest["files"]}
     assert manifest_by_key["summary"] == {
@@ -244,6 +245,7 @@ def test_write_batch_result_can_write_grouped_metrics(tmp_path):
     assert main_feb["rank_type"].tolist() == ["top", "top", "bottom", "bottom"]
     assert main_feb["symbol"].tolist() == ["000001.SZ", "600000.SH", "000002.SZ", "600000.SH"]
     manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 1
     manifest_by_key = {item["key"]: item for item in manifest["files"]}
     assert manifest_by_key["window_summary_M_by_board"] == {
         "key": "window_summary_M_by_board",
@@ -374,6 +376,7 @@ def test_write_shared_cash_result_creates_standard_output_files(tmp_path):
     assert rolling["start_date"].tolist() == ["2026-01-30", "2026-02-02"]
     assert rolling["end_date"].tolist() == ["2026-02-26", "2026-02-27"]
     manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 1
     assert manifest["kind"] == "shared_cash_backtest_report_manifest"
     manifest_by_key = {item["key"]: item for item in manifest["files"]}
     assert manifest_by_key["orders"]["role"] == "orders"

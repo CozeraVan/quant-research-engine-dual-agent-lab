@@ -10,56 +10,47 @@ QRE-REPORT-MANIFEST-SCHEMA-VERSION-001
 
 ## Current Status
 
-Approved for Claude Code implementation after local checkpoint `e1eb4a5`.
+Reviewed by Codex. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
-- Reviewed and locally committed previous task:
-  - `e1eb4a5 docs: document report cli json modes`
-- Did not push.
-- Selected next small reporting/reproducibility task.
-- Wrote new implementation brief:
-  - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- Prepared Claude Code handoff board:
-  - `docs/agent/12_AGENT_BOARD.md`
+- Added `schema_version: 1` to batch and shared-cash report manifest payloads in `portfolio/io.py`.
+- Old manifests without `schema_version` remain readable through `ReportManifest.from_path()`.
+- Added focused tests: schema_version in batch, schema_version in shared-cash, old manifest loads without schema_version.
+- All 176 tests pass.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement:
+Codex should create the accepted local checkpoint, then prepare the next Claude Code handoff.
 
-- `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001`
+## Modified Files For Review
 
-Implementation source of truth:
-
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-
-## Modified Files For Next Planning Step
-
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- `src/quant_research_engine/portfolio/io.py`
+- `tests/test_portfolio_io.py`
+- `tests/test_portfolio_report_manifest.py`
 
 ## Validation
 
-Previous accepted task validation:
+Pre-handoff validation:
 
-- `uv run pytest -q` -> `175 passed in 1.45s`
-- `scripts/check-progress-docs.sh` -> passed
+- `uv run pytest tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q` -> `14 passed in 0.60s`
+- `uv run pytest -q` -> `176 passed in 1.39s`
 - `git diff --check` -> passed
-
-Next task validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+- Codex review validation:
+  - `uv run pytest tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q` -> `14 passed in 0.59s`
+  - `uv run pytest -q` -> `176 passed in 1.47s`
+  - `scripts/check-progress-docs.sh` -> passed
+  - `git diff --check` -> passed
 
 ## Known Risks
 
-- This task changes report artifact metadata; keep the change additive and old manifests readable.
+- Minimal risk. Change is additive and deterministic. Old manifests remain readable.
 
 ## Next Suggested Step
 
-Claude Code implements strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then updates `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and `docs/agent/12_AGENT_BOARD.md` before handing back to Codex review.
+Codex creates the accepted implementation checkpoint and prepares the next implementation brief.

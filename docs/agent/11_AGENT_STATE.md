@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex created local checkpoint `e1eb4a5 docs: document report cli json modes` and prepared the next implementation brief for report manifest schema versioning.
+Codex reviewed `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` and found no Required Fixes. Focused tests, full tests, progress-doc check, and diff whitespace check passed.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the accepted local checkpoint, then prepare and commit the next Claude Code implementation handoff.
 
 ## Active Change Request
 
@@ -84,7 +84,7 @@ User request from 2026-05-18:
   - `faa95e2 feat: add report files json output`
   - `e1eb4a5 docs: document report cli json modes`
 - Last pushed commit: no remote configured
-- Current planning docs for `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` are uncommitted.
+- Current implementation for `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` is reviewed and uncommitted. Awaiting local checkpoint.
 
 ## Standing Approval
 

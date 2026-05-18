@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -21,29 +21,27 @@ CLAUDE_IMPLEMENTING
 | QRE-M5.8 | `report-audit --json` | DONE | CODEX/CLAUDE_CODE | commit `3f7d623` | Preserve |
 | QRE-M5.9 | `report-files --json` | DONE | CODEX/CLAUDE_CODE | commit `faa95e2` | Preserve |
 | QRE-M5.10 | README report CLI JSON/strict docs | DONE | CODEX/CLAUDE_CODE | commit `e1eb4a5`; 175 tests passed before checkpoint | Preserve |
-| QRE-NEXT-7 | Report manifest schema version | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` | Implement from approved brief |
+| QRE-NEXT-7 | Report manifest schema version | DONE | CODEX/CLAUDE_CODE | Codex review passed; 176 tests passed; `schema_version: 1` in batch and shared-cash manifests | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 before local checkpoint `e1eb4a5`:
+Recorded on 2026-05-18 after Codex review of `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001`:
 
-- `uv run pytest -q` -> `175 passed in 1.45s`
+- `uv run pytest tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q` -> `14 passed in 0.59s`
+- `uv run pytest -q` -> `176 passed in 1.47s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Local commit created:
-  - `e1eb4a5 docs: document report cli json modes`
-- No push performed.
+- Review passed with no Required Fixes. Awaiting local checkpoint.
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README documentation.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README documentation, manifest schema versioning.
 
 ## Pending Work Summary
 
-- Report manifest schema versioning for reproducibility.
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, board, market-cap, liquidity, membership, and regime grouping.

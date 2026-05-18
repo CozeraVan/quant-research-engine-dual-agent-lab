@@ -294,6 +294,7 @@ def _shared_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
 
 def _shared_report_manifest(paths: dict[str, Path], output_dir: Path) -> dict[str, Any]:
     return {
+        "schema_version": 1,
         "kind": "shared_cash_backtest_report_manifest",
         "files": [_shared_manifest_entry(key, path, output_dir) for key, path in paths.items()],
     }
@@ -439,6 +440,7 @@ def _batch_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
 
 def _batch_report_manifest(paths: dict[str, Path], output_dir: Path) -> dict[str, Any]:
     return {
+        "schema_version": 1,
         "kind": "batch_backtest_report_manifest",
         "files": [_batch_manifest_entry(key, path, output_dir) for key, path in paths.items()],
     }

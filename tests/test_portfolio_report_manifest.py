@@ -146,3 +146,30 @@ def test_report_manifest_validate_contents_reports_missing_columns(tmp_path):
     assert issues[0].key == "orders"
     assert issues[0].code == "missing_columns"
     assert "trade_date" in issues[0].message
+
+
+def test_report_manifest_loads_without_schema_version(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = ReportManifest.from_path(manifest_path)
+
+    assert manifest.kind == "batch_backtest_report_manifest"
+    assert len(manifest.files()) == 1
+    assert manifest.files()[0].key == "summary"
+    assert manifest.paths() == [tmp_path / "summary.csv"]
