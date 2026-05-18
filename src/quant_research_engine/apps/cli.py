@@ -324,6 +324,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     file_list.append(item)
                 payload: dict[str, object] = {
                     "manifest_kind": manifest.kind,
+                    "schema_version": manifest.schema_version,
                     "matched_files": len(entries),
                     "files": file_list,
                 }
@@ -412,6 +413,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     })
                 payload = {
                     "manifest_kind": manifest.kind,
+                    "schema_version": manifest.schema_version,
                     "matched_files": len(entries),
                     "missing_files": len(missing_paths),
                     "validation_issues": len(issues),

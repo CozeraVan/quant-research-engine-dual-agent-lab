@@ -170,6 +170,35 @@ def test_report_manifest_loads_without_schema_version(tmp_path):
     manifest = ReportManifest.from_path(manifest_path)
 
     assert manifest.kind == "batch_backtest_report_manifest"
+    assert manifest.schema_version is None
     assert len(manifest.files()) == 1
     assert manifest.files()[0].key == "summary"
     assert manifest.paths() == [tmp_path / "summary.csv"]
+
+
+def test_report_manifest_exposes_schema_version_when_present(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "window_metrics_M",
+                        "path": "window_metrics_M.csv",
+                        "filename": "window_metrics_M.csv",
+                        "role": "window_metrics",
+                        "window": "M",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = ReportManifest.from_path(manifest_path)
+
+    assert manifest.schema_version == 1
+    assert manifest.kind == "shared_cash_backtest_report_manifest"
+    assert manifest.paths(role="window_metrics", window="M") == [tmp_path / "window_metrics_M.csv"]

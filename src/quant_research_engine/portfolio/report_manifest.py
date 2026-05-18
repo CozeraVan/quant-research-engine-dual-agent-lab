@@ -64,6 +64,7 @@ class ReportManifest:
     kind: str
     files_: tuple[ReportFile, ...]
     base_dir: Path
+    schema_version: int | None = None
 
     @classmethod
     def from_path(cls, path: str | Path) -> ReportManifest:
@@ -77,6 +78,7 @@ class ReportManifest:
             kind=kind,
             files_=tuple(ReportFile.from_mapping(item) for item in payload.get("files", [])),
             base_dir=manifest_path.parent,
+            schema_version=payload.get("schema_version"),
         )
 
     def files(

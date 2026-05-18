@@ -10,49 +10,50 @@ QRE-REPORT-MANIFEST-SCHEMA-JSON-001
 
 ## Current Status
 
-Planned by Codex. Ready for Claude Code implementation.
+Reviewed by Codex. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
-- Previous task `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` was reviewed and committed locally as `72533bb feat: add report manifest schema version`.
-- New brief prepared for exposing optional manifest schema version through helper and JSON CLI output.
+- Added optional `schema_version` field to `ReportManifest` dataclass, loaded from manifest payload in `from_path()`.
+- Included `"schema_version"` in `qre report-files --json` and `qre report-audit --json` output.
+- Old manifests without `schema_version` expose `None` (JSON `null`).
+- Text-mode output unchanged. Filtering, validation, exit-code behavior preserved.
+- Added 3 new tests (1 report_manifest + 2 CLI JSON), updated 6 existing tests with assertions.
+- All 179 tests pass.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement:
-
-- `QRE-REPORT-MANIFEST-SCHEMA-JSON-001`
-
-Implementation source of truth:
-
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+Codex should create the accepted local checkpoint, then prepare the next Claude Code handoff.
 
 ## Modified Files For Review
 
-None yet. Expected files are listed in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py`
 
 ## Validation
 
-Required validation for the next implementation:
+Pre-handoff validation:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q`
-- `uv run pytest -q`
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `59 passed in 0.60s`
+- `uv run pytest -q` -> `179 passed in 1.41s`
+- `git diff --check` -> passed
+- Codex review validation:
+  - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `59 passed in 0.67s`
+  - `uv run pytest -q` -> `179 passed in 1.49s`
+  - `scripts/check-progress-docs.sh` -> passed
+  - `git diff --check` -> passed
 
 ## Known Risks
 
-- Do not make old manifests without `schema_version` invalid.
-- Do not change text-mode CLI output.
-- Keep JSON field addition additive and deterministic.
+- Minimal risk. Additive JSON field only. Old manifests and text-mode output unchanged.
 
 ## Next Suggested Step
 
-Claude Code implements the brief, updates `09/04/05/11/12`, and hands back with:
-
-- Phase: `CODEX_REVIEWING`
-- Owner: `CODEX`
+Codex creates the accepted implementation checkpoint and prepares the next implementation brief.
