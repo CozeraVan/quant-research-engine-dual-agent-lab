@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -22,16 +22,18 @@ USER_ACCEPTANCE
 | QRE-M5.9 | `report-files --json` | DONE | CODEX/CLAUDE_CODE | commit `faa95e2` | Preserve |
 | QRE-M5.10 | README report CLI JSON/strict docs | DONE | CODEX/CLAUDE_CODE | commit `e1eb4a5`; 175 tests passed before checkpoint | Preserve |
 | QRE-NEXT-7 | Report manifest schema version | DONE | CODEX/CLAUDE_CODE | Codex review passed; 176 tests passed; `schema_version: 1` in batch and shared-cash manifests | Preserve |
+| QRE-NEXT-8 | Manifest schema version in JSON tooling | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-SCHEMA-JSON-001` prepared | Claude Code implements |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review of `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001`:
+Recorded on 2026-05-18 after local checkpoint for `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` and next planning:
 
 - `uv run pytest tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q` -> `14 passed in 0.59s`
 - `uv run pytest -q` -> `176 passed in 1.47s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Review passed with no Required Fixes. Awaiting local checkpoint.
+- Accepted implementation committed locally as `72533bb feat: add report manifest schema version`.
+- Next implementation brief prepared: `QRE-REPORT-MANIFEST-SCHEMA-JSON-001`.
 
 ## Completed Module Summary
 

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-SCHEMA-VERSION-001
+QRE-REPORT-MANIFEST-SCHEMA-JSON-001
 
 ## Created By
 
@@ -14,18 +14,19 @@ CLAUDE_CODE
 
 ## Background
 
-Report manifests are now the stable entry point for report discovery, audit, strict matching, and JSON CLI output. `docs/modules/module_boundaries.md` says reports should include enough metadata to reproduce an experiment. A small first step is to add a stable manifest schema marker to newly generated manifests without changing file discovery behavior.
+Newly generated batch and shared-cash report manifests now include top-level `schema_version: 1`. The manifest helper and JSON CLI outputs are used by scripts for report discovery and audit checks. Exposing the manifest schema version through those structured paths gives downstream automation a stable way to inspect versioned manifests without parsing raw JSON separately.
 
 ## Goal
 
-Add a top-level `schema_version` field to newly generated batch and shared-cash `report_manifest.json` files, while keeping existing manifests without this field readable.
+Expose the optional manifest `schema_version` through `ReportManifest` and include it in `qre report-files --json` and `qre report-audit --json` output.
 
 ## Non-Goals
 
-- Do not add timestamps, command lines, git SHAs, hostnames, usernames, or other environment-dependent metadata.
-- Do not change manifest file entry shape.
-- Do not change `qre report-files` or `qre report-audit` output semantics beyond continuing to read the manifest.
+- Do not change text output for `qre report-files` or `qre report-audit`.
+- Do not change report file selection, filtering, path resolution, or validation behavior.
+- Do not change generated manifest file entry shape.
 - Do not change portfolio simulation behavior.
+- Do not add timestamps, command lines, git SHAs, hostnames, usernames, or other environment-dependent metadata.
 - Do not add database access.
 - Do not modify old root progress docs.
 
@@ -33,10 +34,10 @@ Add a top-level `schema_version` field to newly generated batch and shared-cash 
 
 Expected:
 
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/report_manifest.py` only if needed for explicit version handling
-- `tests/test_portfolio_io.py`
-- `tests/test_portfolio_report_manifest.py` or `tests/test_cli.py` only if needed
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py`
 
 Docs/handoff:
 
@@ -69,45 +70,61 @@ Task-specific locked requirements:
 
 ## Implementation Steps
 
-1. Inspect current manifest generation in `portfolio/io.py`.
-2. Add top-level `schema_version: 1` to:
-   - batch manifest payloads;
-   - shared-cash manifest payloads.
-3. Keep existing `kind` and `files` keys unchanged.
-4. Ensure `ReportManifest.from_path(...)` continues to load manifests that do not include `schema_version`.
-5. If explicit version validation is added, accept only missing version or `1`; keep error messages clear. If no validation is needed, document that the helper treats the field as optional metadata.
-6. Add/update focused tests:
-   - generated batch manifest includes `schema_version == 1`;
-   - generated shared-cash manifest includes `schema_version == 1`;
-   - old manifest JSON without `schema_version` still loads and filters.
-7. Update handoff/progress/state/board docs after implementation.
+1. Inspect `ReportManifest.from_path(...)` and the `report-files` / `report-audit` JSON branches in `apps/cli.py`.
+2. Add an optional `schema_version` attribute to `ReportManifest`.
+3. Load top-level `schema_version` from the manifest payload when present.
+4. Preserve old manifest compatibility by setting `schema_version` to `None` when the field is missing.
+5. Add `"schema_version": manifest.schema_version` to:
+   - `qre report-files --json`;
+   - `qre report-audit --json`.
+6. Do not add the field to text-mode output.
+7. Add/update focused tests:
+   - `ReportManifest.from_path(...)` exposes `schema_version == 1` when present;
+   - old manifest JSON without `schema_version` exposes `schema_version is None`;
+   - `report-files --json` includes `"schema_version": 1`;
+   - `report-audit --json` includes `"schema_version": 1`;
+   - one JSON CLI path with an old manifest includes `"schema_version": null`.
+8. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
-Additive report artifact schema change:
+No generated report file schema change is required by this task. This task only exposes an already-generated optional manifest field through helper and CLI JSON output.
+
+Structured CLI JSON output should become additive:
 
 ```json
 {
-  "schema_version": 1,
-  "kind": "...",
-  "files": []
+  "manifest_kind": "...",
+  "schema_version": 1
 }
 ```
 
-Existing manifests without `schema_version` must remain readable.
+For old manifests without the field:
+
+```json
+{
+  "schema_version": null
+}
+```
 
 ## API / Interface Changes
 
-No CLI flag changes.
+Additive Python helper field:
 
-No changes to generated CSV/Markdown/summary fields.
+- `ReportManifest.schema_version: int | None`
+
+Additive CLI JSON field:
+
+- `schema_version`
+
+No text CLI output changes.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q
 ```
 
 Run full tests:
@@ -125,17 +142,20 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] New batch `report_manifest.json` includes top-level `schema_version: 1`.
-- [ ] New shared-cash `report_manifest.json` includes top-level `schema_version: 1`.
-- [ ] Existing manifest fixtures without `schema_version` still load through `ReportManifest.from_path(...)`.
-- [ ] Existing manifest filtering and path resolution behavior is preserved.
+- [ ] `ReportManifest.from_path(...)` exposes `schema_version == 1` for versioned manifests.
+- [ ] `ReportManifest.from_path(...)` exposes `schema_version is None` for old manifests without the field.
+- [ ] `qre report-files --json` includes top-level `"schema_version"`.
+- [ ] `qre report-audit --json` includes top-level `"schema_version"`.
+- [ ] Text-mode `report-files` and `report-audit` output is unchanged.
+- [ ] Existing filtering, path resolution, validation, and exit-code behavior is preserved.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Avoid making old manifests invalid.
-- Avoid introducing nondeterministic metadata into report artifacts.
+- Avoid treating old manifests as invalid.
+- Avoid changing text output used by existing shell workflows.
+- Avoid renaming existing JSON keys.
 
 ## Instructions for Claude Code
 

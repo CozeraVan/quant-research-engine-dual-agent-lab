@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-SCHEMA-VERSION-001
+QRE-REPORT-MANIFEST-SCHEMA-JSON-001
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` and found no Required Fixes. Focused tests, full tests, progress-doc check, and diff whitespace check passed.
+Codex reviewed and locally committed `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` as `72533bb feat: add report manifest schema version`, then prepared the next implementation brief for exposing manifest schema version in JSON tooling.
 
 ## Next Required Step
 
-Codex should create the accepted local checkpoint, then prepare and commit the next Claude Code implementation handoff.
+Claude Code should implement `QRE-REPORT-MANIFEST-SCHEMA-JSON-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
@@ -76,15 +76,16 @@ User request from 2026-05-18:
 - Last checkpoint commit: `7657cd1 checkpoint: original quant-research-engine before dual-agent pilot`
 - Last workflow commit: `77fec02 chore: initialize dual-agent workflow`
 - Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
-- Last accepted implementation commit: `28e6f25 feat: add failed-order diagnostics to portfolio reports`
+- Last accepted implementation commit: `72533bb feat: add report manifest schema version`
 - Last local implementation commits:
   - `001177f test: validate failed-order report artifacts`
   - `e568823 feat: add strict report-files matching`
   - `3f7d623 feat: add report audit json output`
   - `faa95e2 feat: add report files json output`
   - `e1eb4a5 docs: document report cli json modes`
+  - `72533bb feat: add report manifest schema version`
 - Last pushed commit: no remote configured
-- Current implementation for `QRE-REPORT-MANIFEST-SCHEMA-VERSION-001` is reviewed and uncommitted. Awaiting local checkpoint.
+- Current planning docs for `QRE-REPORT-MANIFEST-SCHEMA-JSON-001` are committed in the latest planning checkpoint: `plan: prepare manifest schema json task`.
 
 ## Standing Approval
 
