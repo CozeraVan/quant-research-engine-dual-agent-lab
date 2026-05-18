@@ -2,32 +2,33 @@
 
 ## Current Task
 
-Add CLI regression coverage for missing top-level manifest fields.
+Add CLI regression coverage for top-level manifest field type errors.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-TOPLEVEL-TYPE-REGRESSION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
 - Codex reviewed and accepted `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001`.
 - Local checkpoint created: `53f9aba Keep missing manifest files distinct from empty manifests`.
 - Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
-- Next task selected: CLI regression coverage for missing top-level manifest fields.
 - Claude Code added 4 CLI regression tests: `report-files`/`report-audit` with missing `kind` and missing `files`.
 - Codex review passed with no Required Fixes.
+- Local checkpoint created: `5aa584b Lock manifest top-level field failures at the CLI boundary`.
+- Next task selected: CLI regression coverage for top-level manifest field type errors.
 
 ## In Progress
 
-Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001`.
+Claude Code should implement `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-TYPE-REGRESSION-001`.
 
 ## Expected Files
 
@@ -50,4 +51,4 @@ Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-TOP
 
 ## Next Suggested Step
 
-Codex should commit the accepted implementation locally, then prepare the next manifest CLI type-error regression brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.

@@ -2,40 +2,41 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-TOPLEVEL-TYPE-REGRESSION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CLAUDE_TO_CODEX
+CODEX_TO_CLAUDE
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Added 4 CLI regression tests: `report-files` and `report-audit` both now have coverage for missing top-level `kind` and missing top-level `files`, both surfacing with exit code 2 and clear stderr. No CLI/loader code changes needed. All 205 tests pass. Ready for Codex review.
+Add CLI regression coverage so `report-files` and `report-audit` both surface non-string top-level `kind` and non-list top-level `files` with exit code `2` and clear stderr, without changing valid-manifest behavior.
 
 ## Implementation Summary
 
-1. Added `test_cli_report_files_reports_missing_kind`.
-2. Added `test_cli_report_files_reports_missing_files`.
-3. Added `test_cli_report_audit_reports_missing_kind`.
-4. Added `test_cli_report_audit_reports_missing_files`.
-5. No CLI or loader code changes were needed.
-6. Updated `04`, `05`, `09`, `11`, and `12`.
+1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
+2. Add `report-files` coverage for non-string top-level `kind`.
+3. Add `report-files` coverage for non-list top-level `files`.
+4. Add `report-audit` coverage for non-string top-level `kind`.
+5. Add `report-audit` coverage for non-list top-level `files`.
+6. Keep the task test-focused and touch CLI or loader code only if a real bug is exposed.
+7. Update `04`, `05`, `09`, `11`, and `12`.
 
 ## Constraints Check
 
-- No CLI/reporting behavior changes for valid manifests. ✅
-- Scoped only to CLI regression coverage for missing top-level fields. ✅
-- Preserved existing malformed-manifest exit-code and stderr behavior. ✅
-- No forbidden files modified. ✅
-- Not pushed. ✅
+- No CLI/reporting behavior changes for valid manifests.
+- Scoped only to CLI regression coverage for top-level type errors.
+- Preserve existing malformed-manifest exit-code and stderr behavior.
+- No forbidden files modified.
+- Not pushed.
 
 ## Expected Files
 

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-TOPLEVEL-TYPE-REGRESSION-001
 
 ## Created By
 
@@ -14,11 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest loader validation now explicitly rejects missing top-level `kind` and missing top-level `files`, but the CLI regression suite does not yet lock those newer loader errors at the command boundary. `report-files` and `report-audit` should keep surfacing these malformed-manifest failures with exit code `2` and clear stderr output.
+Manifest loader validation rejects non-string top-level `kind` and non-list top-level `files`, but the CLI regression suite does not yet lock those loader errors at the command boundary. `report-files` and `report-audit` should keep surfacing these malformed-manifest failures with exit code `2` and clear stderr output.
 
 ## Goal
 
-Add CLI regression coverage for missing top-level manifest `kind` and `files` fields while preserving existing valid-manifest CLI behavior.
+Add CLI regression coverage for top-level manifest field type errors while preserving existing valid-manifest CLI behavior.
 
 ## Non-Goals
 
@@ -74,10 +74,10 @@ Task-specific locked requirements:
 ## Implementation Steps
 
 1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
-2. Add coverage for `report-files` when the manifest is missing top-level `kind`.
-3. Add coverage for `report-files` when the manifest is missing top-level `files`.
-4. Add coverage for `report-audit` when the manifest is missing top-level `kind`.
-5. Add coverage for `report-audit` when the manifest is missing top-level `files`.
+2. Add coverage for `report-files` when the manifest has a non-string top-level `kind`.
+3. Add coverage for `report-files` when the manifest has a non-list top-level `files`.
+4. Add coverage for `report-audit` when the manifest has a non-string top-level `kind`.
+5. Add coverage for `report-audit` when the manifest has a non-list top-level `files`.
 6. Assert current command-boundary behavior: exit code `2` and clear stderr containing the loader error.
 7. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
 8. Update handoff/progress/state/board docs after implementation.
@@ -90,7 +90,7 @@ None. This task adds regression coverage only unless a tiny bugfix is required.
 
 Valid CLI behavior should remain unchanged.
 
-Malformed manifests missing top-level `kind` or `files` should continue surfacing a clear loader error through CLI stderr with exit code `2`.
+Malformed manifests with non-string top-level `kind` or non-list top-level `files` should continue surfacing a clear loader error through CLI stderr with exit code `2`.
 
 ## Validation Plan
 
@@ -115,12 +115,12 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `report-files` surfaces missing top-level `kind` with exit code `2`.
-- [ ] `report-files` surfaces missing top-level `files` with exit code `2`.
-- [ ] `report-audit` surfaces missing top-level `kind` with exit code `2`.
-- [ ] `report-audit` surfaces missing top-level `files` with exit code `2`.
+- [ ] `report-files` surfaces non-string top-level `kind` with exit code `2`.
+- [ ] `report-files` surfaces non-list top-level `files` with exit code `2`.
+- [ ] `report-audit` surfaces non-string top-level `kind` with exit code `2`.
+- [ ] `report-audit` surfaces non-list top-level `files` with exit code `2`.
 - [ ] Existing valid-manifest CLI behavior remains unchanged.
-- [ ] Existing malformed-manifest CLI behavior for unsupported `kind`, unsupported `schema_version`, and missing file-entry fields remains unchanged.
+- [ ] Existing malformed-manifest CLI behavior for unsupported `kind`, unsupported `schema_version`, missing top-level fields, and missing file-entry fields remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
