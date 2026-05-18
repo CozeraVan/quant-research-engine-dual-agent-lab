@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -25,18 +25,20 @@ USER_ACCEPTANCE
 | QRE-NEXT-8 | Manifest schema version in JSON tooling | DONE | CODEX/CLAUDE_CODE | commit `d34a694`; 179 tests passed | Preserve |
 | QRE-NEXT-9 | Manifest schema version docs | DONE | CODEX/CLAUDE_CODE | commit `19d9ae4`; 179 tests passed | Preserve |
 | QRE-NEXT-10 | Manifest schema version validation | DONE | CODEX/CLAUDE_CODE | commit `0fca02a`; 182 tests passed | Preserve |
-| QRE-NEXT-11 | Manifest file entry validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; 184 tests passed; required fields validated with clear `ValueError` | Preserve |
+| QRE-NEXT-11 | Manifest file entry validation | DONE | CODEX/CLAUDE_CODE | commit `feab301`; 184 tests passed | Preserve |
+| QRE-NEXT-12 | CLI malformed-manifest regression coverage | READY | CLAUDE_CODE | brief `QRE-REPORT-CLI-INVALID-MANIFEST-001` prepared | Claude Code implements |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review of `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001`:
+Recorded on 2026-05-18 after local checkpoint for `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001` and next planning:
 
 - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `64 passed in 0.60s`
 - `uv run pytest -q` -> `184 passed in 1.40s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - Required-field validation added to `ReportFile.from_mapping()` for `key`, `path`, `filename`, `role`.
-- Review passed with no Required Fixes. Awaiting local checkpoint.
+- Accepted implementation committed locally as `feab301 feat: validate report manifest file entries`.
+- Next implementation brief prepared: `QRE-REPORT-CLI-INVALID-MANIFEST-001`.
 
 ## Completed Module Summary
 

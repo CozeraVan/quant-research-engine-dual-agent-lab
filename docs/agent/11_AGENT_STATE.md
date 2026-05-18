@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
+QRE-REPORT-CLI-INVALID-MANIFEST-001
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001` and found no Required Fixes. Focused tests, full tests, progress-doc check, and diff whitespace check passed.
+Codex reviewed and locally committed `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001` as `feab301 feat: validate report manifest file entries`, then prepared the next implementation brief for CLI malformed-manifest regression coverage.
 
 ## Next Required Step
 
-Codex should create the accepted local checkpoint, then prepare and commit the next Claude Code implementation handoff.
+Claude Code should implement `QRE-REPORT-CLI-INVALID-MANIFEST-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
@@ -76,17 +76,15 @@ User request from 2026-05-18:
 - Last checkpoint commit: `7657cd1 checkpoint: original quant-research-engine before dual-agent pilot`
 - Last workflow commit: `77fec02 chore: initialize dual-agent workflow`
 - Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
-- Last accepted implementation commit: `0fca02a feat: validate report manifest schema version`
-- Last planning checkpoint commit: `a25793c plan: prepare manifest entry validation task`
+- Last accepted implementation commit: `feab301 feat: validate report manifest file entries`
 - Last local implementation commits:
-  - `e1eb4a5 docs: document report cli json modes`
   - `72533bb feat: add report manifest schema version`
   - `d34a694 feat: expose manifest schema version in json output`
   - `19d9ae4 docs: document report manifest schema version`
   - `0fca02a feat: validate report manifest schema version`
-  - `a25793c plan: prepare manifest entry validation task`
+  - `feab301 feat: validate report manifest file entries`
 - Last pushed commit: no remote configured
-- Current implementation for `QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001` is reviewed and uncommitted. Awaiting local checkpoint.
+- Current planning docs for `QRE-REPORT-CLI-INVALID-MANIFEST-001` are prepared in the latest planning checkpoint.
 
 ## Standing Approval
 

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-ENTRY-VALIDATION-001
+QRE-REPORT-CLI-INVALID-MANIFEST-001
 
 ## Created By
 
@@ -14,25 +14,17 @@ CLAUDE_CODE
 
 ## Background
 
-Report manifests are now a stable discovery and audit entry point. The loader validates manifest kind and schema version, but malformed file entries can still fail with raw mapping access errors. A small next step is to make missing required file-entry fields fail with a clear `ValueError`.
+Manifest loader validation has been tightened for schema version and required file entry fields. The CLI commands `qre report-files` and `qre report-audit` already catch loader exceptions and print errors, but that command-level behavior is not yet explicitly covered for malformed manifests.
 
 ## Goal
 
-Add clear validation for required manifest file entry fields in `ReportFile.from_mapping(...)` or nearby loader code.
-
-Required file entry fields:
-
-- `key`
-- `path`
-- `filename`
-- `role`
+Add focused CLI regression tests for malformed manifests so command-boundary behavior is locked in.
 
 ## Non-Goals
 
-- Do not change generated manifest contents.
-- Do not change manifest file entry shape for valid manifests.
-- Do not change `qre report-files` or `qre report-audit` CLI flags.
-- Do not change text or JSON output for valid manifests.
+- Do not change valid-manifest behavior.
+- Do not change CLI flags.
+- Do not change report writer output.
 - Do not change portfolio simulation behavior.
 - Do not add database access.
 - Do not modify old root progress docs.
@@ -41,9 +33,8 @@ Required file entry fields:
 
 Expected:
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py` only if useful for CLI error behavior
+- `tests/test_cli.py`
+- `src/quant_research_engine/apps/cli.py` only if a tiny error-path adjustment is needed
 
 Docs/handoff:
 
@@ -55,6 +46,7 @@ Docs/handoff:
 
 ## Forbidden Files
 
+- `src/**` unless a tiny error-path adjustment is strictly needed
 - `uv.lock`
 - `pyproject.toml`
 - database credentials or `.env*`
@@ -70,44 +62,40 @@ Read:
 Task-specific locked requirements:
 
 - Preserve report artifact and manifest discovery contracts for valid manifests.
-- Preserve old manifest readability.
-- Keep error behavior deterministic and clear.
+- Keep malformed-manifest CLI errors deterministic and clear.
 - No database writes or credential handling.
 
 ## Implementation Steps
 
-1. Inspect `ReportFile.from_mapping(...)` and `ReportManifest.from_path(...)`.
-2. Add explicit validation for required file entry fields: `key`, `path`, `filename`, `role`.
-3. Raise `ValueError` with a clear message identifying the missing field and manifest entry context.
-4. Preserve optional metadata handling for `symbol`, `window`, and `group_by`.
-5. Preserve existing kind and schema-version validation behavior.
-6. Do not modify report writing code.
-7. Add focused tests:
-   - a valid manifest still loads;
-   - a file entry missing `path` raises clear `ValueError`;
-   - a file entry missing `role` raises clear `ValueError`.
-8. Add a CLI test only if existing CLI invalid-manifest coverage does not sufficiently exercise exception propagation.
-9. Update handoff/progress/state/board docs after implementation.
+1. Inspect existing invalid-manifest CLI tests in `tests/test_cli.py`.
+2. Add focused CLI tests that verify malformed-manifest loader errors propagate cleanly through:
+   - `report-files`;
+   - `report-audit`.
+3. Cover at least:
+   - unsupported `schema_version`;
+   - missing required file entry field such as `path`.
+4. Expected command behavior:
+   - exit code `2`;
+   - no traceback assertions needed;
+   - stderr contains the clear loader error text.
+5. If current CLI behavior already satisfies this without code changes, keep the task test-only.
+6. If a tiny CLI error-path adjustment is required to make messages clear and deterministic, keep it narrowly scoped.
+7. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
-None. This task validates existing required file entry fields.
+None. This task only adds CLI regression coverage.
 
 ## API / Interface Changes
 
-For invalid manifests only:
-
-- `ReportManifest.from_path(...)` raises `ValueError` instead of an uncaught `KeyError` when a file entry lacks a required field.
-- Existing CLI exception handling should continue returning exit code `2` and printing the error to stderr.
-
-No behavior change for valid manifests.
+None intended. This task verifies existing CLI behavior for malformed manifests.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q
+uv run pytest tests/test_cli.py -q
 ```
 
 Run full tests:
@@ -125,20 +113,18 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] Valid manifest file entries still load unchanged.
-- [ ] Missing required file entry field raises clear `ValueError`.
-- [ ] Error message identifies the missing field.
-- [ ] Optional metadata fields remain optional.
-- [ ] Existing report filtering, path resolution, validation, and CLI output behavior is preserved for valid manifests.
-- [ ] No report writer or portfolio simulation behavior is modified.
+- [ ] `report-files` malformed-manifest tests verify exit code `2` and clear stderr.
+- [ ] `report-audit` malformed-manifest tests verify exit code `2` and clear stderr.
+- [ ] Unsupported `schema_version` is covered at the CLI boundary.
+- [ ] Missing required file entry field is covered at the CLI boundary.
+- [ ] No valid-manifest CLI behavior changes.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Avoid changing valid manifest behavior.
-- Avoid making optional metadata required.
-- Keep malformed-manifest errors clear for script operators.
+- Avoid changing current CLI behavior for valid manifests.
+- Keep CLI malformed-manifest assertions resilient to formatting, but specific enough to catch regressions.
 
 ## Instructions for Claude Code
 
