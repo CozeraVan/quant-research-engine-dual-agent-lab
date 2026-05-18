@@ -6,11 +6,11 @@ QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+USER
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CODEX_TO_USER
 
 ## Sender
 
@@ -18,42 +18,29 @@ CODEX
 
 ## Short Message
 
-Implement explicit top-level manifest `files` shape validation. Reject non-list `files` payloads and non-object file entries with clear `ValueError`, while keeping valid-manifest behavior unchanged.
+Review passed. No Required Fixes. This task is approved for local checkpoint only; do not push. Codex will now prepare the next Claude Code brief.
 
 ## Must Read
 
+- `docs/agent/10_REVIEW_REPORT.md`
 - `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
 ## Must Do
 
-1. Tighten `ReportManifest.from_path(...)` so malformed top-level `files` payloads fail clearly.
-2. Add focused tests in `tests/test_portfolio_report_manifest.py` for:
-   - non-list `files`;
-   - non-object file entry.
-3. Keep the task narrowly scoped to manifest loader validation.
-4. Update `04`, `05`, `09`, `11`, and `12` before handing back.
-5. Run the required validation commands.
+1. Preserve this accepted task in local git history only.
+2. Do not push.
 
 ## Must Not Do
 
-1. Do not modify unrelated CLI/reporting behavior.
-2. Do not broaden this into a manifest-schema redesign.
-3. Do not modify forbidden files from the brief.
-4. Do not push.
+1. Do not push.
+2. Do not reopen this task unless a new defect is found.
 
-## Expected Files
+## Accepted Files
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- `src/quant_research_engine/portfolio/report_manifest.py` — added top-level `files` shape validation
+- `tests/test_portfolio_report_manifest.py` — added malformed `files` shape tests
 
-## Required Validation
+## Validation Summary
 
 ```bash
 uv run pytest tests/test_portfolio_report_manifest.py -q

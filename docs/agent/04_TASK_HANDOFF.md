@@ -10,39 +10,41 @@ QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001
 
 ## Current Status
 
-Brief prepared by Codex. Ready for Claude Code implementation.
+Reviewed by Codex and accepted. Ready for local checkpoint only; do not push.
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Completed
 
-- Codex reviewed and accepted `QRE-REPORT-CLI-INVALID-MANIFEST-001`.
-- Local checkpoint created: `56253a5 test: add malformed manifest cli regression coverage`.
-- Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
+- Added explicit top-level `files` shape validation in `ReportManifest.from_path()`.
+- Non-list `files` payloads now raise `ValueError` instead of raw `AttributeError`.
+- Non-object file entries now raise `ValueError` instead of raw `TypeError`/`AttributeError`.
+- Added focused regression tests covering both malformed payload shapes.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+- Local checkpoint by Codex, followed by next-task planning.
 
-## Expected Files
+## Modified Files
 
 - `src/quant_research_engine/portfolio/report_manifest.py`
 - `tests/test_portfolio_report_manifest.py`
+- `docs/agent/10_REVIEW_REPORT.md`
 
-## Validation Baseline
+## Validation
 
-- Last accepted focused CLI validation: `uv run pytest tests/test_cli.py -q` -> `57 passed in 0.91s`
-- Last accepted full validation: `uv run pytest -q` -> `189 passed in 1.88s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `14 passed in 0.04s`
+- `uv run pytest -q` -> `191 passed in 1.84s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 
 ## Known Risks
 
-- Preserve current absent-field compatibility if it is not necessary to tighten it for this task.
-- Keep the implementation scoped to loader validation rather than broader manifest or CLI refactors.
+- None. Valid manifests are preserved and malformed-payload handling is now clearer.
 
 ## Next Suggested Step
 
-Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the validation, run the required checks, and hand back for Codex review.
+Codex should create a local checkpoint commit for `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001`, then prepare the next low-risk manifest-loader validation brief for Claude Code.

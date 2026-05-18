@@ -6,51 +6,80 @@ QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001
 
 ## Written By
 
-CODEX
+CLAUDE_CODE
 
 ## Intended Reviewer
 
 CODEX
 
-## Status
+## Implemented
 
-Awaiting Claude Code implementation.
+- Added explicit top-level `files` shape validation in `ReportManifest.from_path()`:
+  - Rejects non-list `files` payloads (e.g., `{}`) with `ValueError("manifest 'files' must be a list, got dict")`.
+  - Rejects non-object file entries (e.g., `[1]`) with `ValueError("manifest file entry 0 must be an object, got int")`.
+- Existing kind, schema-version, and required-field validation all preserved.
+- All 191 tests pass.
 
-## Scope Summary
+## Modified Files
 
-- Add explicit loader validation for malformed top-level manifest `files` payloads.
-- Reject non-list `files` values with clear `ValueError`.
-- Reject non-object items inside `files` with clear `ValueError`.
-- Preserve valid-manifest behavior.
+- `src/quant_research_engine/portfolio/report_manifest.py` — added `files` shape validation in `from_path()`
+- `tests/test_portfolio_report_manifest.py` — added `test_report_manifest_rejects_non_list_files` and `test_report_manifest_rejects_non_object_file_entry`
 
-## Expected Files
+## Not Implemented
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- None. All brief items are implemented.
 
-## Validation To Run
+## Deviations from Brief
+
+- None.
+
+## Validation Commands Run
 
 ```bash
 uv run pytest tests/test_portfolio_report_manifest.py -q
+# 14 passed in 0.04s
+
 uv run pytest -q
-scripts/check-progress-docs.sh
+# 191 passed in 1.86s
+
 git diff --check
+# passed
+
+scripts/check-progress-docs.sh
+# pending — run after handoff doc updates
 ```
 
-## Constraints
+## Validation Results
 
-- Do not change valid-manifest behavior.
-- Do not modify CLI code unless strictly necessary.
-- Do not require new manifest fields beyond the current contract.
-- Do not modify forbidden files from the brief.
+All 191 tests pass (189 existing + 2 new). Valid manifest behavior preserved. Non-list `files` and non-object entries both raise clear `ValueError`.
 
-## Starting Baseline
+## Known Risks
 
-- Accepted implementation checkpoint: `56253a5 test: add malformed manifest cli regression coverage`
-- Current branch: `master`
-- Push is not approved.
+- None. Valid manifests unchanged. Malformed payloads now fail with deterministic messages.
+
+## Questions for Reviewer
+
+- None.
+
+## Git Status at Handoff
+
+```
+ M src/quant_research_engine/portfolio/report_manifest.py
+ M tests/test_portfolio_report_manifest.py
+ M docs/agent/04_TASK_HANDOFF.md
+ M docs/agent/05_PROGRESS.md
+ M docs/agent/09_CODING_HANDOFF.md
+ M docs/agent/11_AGENT_STATE.md
+ M docs/agent/12_AGENT_BOARD.md
+```
+
+No forbidden files modified.
+
+## Next Suggested Step
+
+Codex should review the implementation against `docs/agent/08_IMPLEMENTATION_BRIEF.md` and write `docs/agent/10_REVIEW_REPORT.md`.
+
+## Next Agent State After Implementation
+
+- Phase: `CODEX_REVIEWING`
+- Owner: `CODEX`

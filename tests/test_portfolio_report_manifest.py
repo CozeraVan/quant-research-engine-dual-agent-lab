@@ -318,3 +318,35 @@ def test_report_manifest_rejects_file_entry_missing_role(tmp_path):
 
     with pytest.raises(ValueError, match="missing required field 'role'"):
         ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_non_list_files(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": {"key": "summary", "path": "summary.csv", "filename": "summary.csv", "role": "summary"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest 'files' must be a list"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_non_object_file_entry(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [1],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="manifest file entry 0 must be an object"):
+        ReportManifest.from_path(manifest_path)

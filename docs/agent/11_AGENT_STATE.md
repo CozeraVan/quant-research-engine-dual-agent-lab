@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-CLI-INVALID-MANIFEST-001`, then created local checkpoint `56253a5 test: add malformed manifest cli regression coverage`. Codex also prepared the next brief for manifest top-level `files` shape validation.
+Codex reviewed `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001` and accepted it with no Required Fixes. The task adds explicit top-level `files` shape validation in `ReportManifest.from_path()` and focused regression tests for malformed `files` payloads. Validation passed: `14` focused tests, `191` full tests, progress-doc checks, and diff checks.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, run the required validations, and return the work for Codex review.
+Codex should create a local checkpoint commit for the accepted implementation, then prepare the next low-risk implementation brief and handoff for Claude Code. Do not push.
 
 ## Active Change Request
 
@@ -78,7 +78,7 @@ User request from 2026-05-18:
 - Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
 - Last accepted implementation commit: `56253a5 test: add malformed manifest cli regression coverage`
 - Last pushed commit: no remote configured
-- Current task `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001` is a Codex-authored handoff awaiting Claude Code implementation.
+- Current implementation for `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001` is accepted by review and awaiting local checkpoint only. No push approved.
 
 ## Standing Approval
 

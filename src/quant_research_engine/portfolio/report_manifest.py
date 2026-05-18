@@ -87,9 +87,19 @@ class ReportManifest:
             raise ValueError(
                 f"unsupported manifest schema_version: {schema_version!r} (expected 1 or absent)"
             )
+        raw_files = payload.get("files", [])
+        if not isinstance(raw_files, list):
+            raise ValueError(
+                f"manifest 'files' must be a list, got {type(raw_files).__name__}"
+            )
+        for idx, item in enumerate(raw_files):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"manifest file entry {idx} must be an object, got {type(item).__name__}"
+                )
         return cls(
             kind=kind,
-            files_=tuple(ReportFile.from_mapping(item) for item in payload.get("files", [])),
+            files_=tuple(ReportFile.from_mapping(item) for item in raw_files),
             base_dir=manifest_path.parent,
             schema_version=schema_version,
         )
