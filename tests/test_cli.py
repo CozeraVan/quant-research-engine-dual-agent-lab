@@ -1894,3 +1894,63 @@ def test_cli_report_audit_json_includes_schema_version_when_present(capsys, tmp_
     assert payload["manifest_kind"] == "shared_cash_backtest_report_manifest"
     assert payload["matched_files"] == 1
     assert payload["status"] == "ok"
+
+
+def test_cli_report_files_reports_missing_kind(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"files": []}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest missing top-level 'kind' field" in captured.err
+
+
+def test_cli_report_files_reports_missing_files(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": "batch_backtest_report_manifest"}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest missing top-level 'files' field" in captured.err
+
+
+def test_cli_report_audit_reports_missing_kind(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"files": []}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest missing top-level 'kind' field" in captured.err
+
+
+def test_cli_report_audit_reports_missing_files(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": "batch_backtest_report_manifest"}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest missing top-level 'files' field" in captured.err

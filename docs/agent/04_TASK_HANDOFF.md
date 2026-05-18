@@ -10,11 +10,11 @@ QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001
 
 ## Current Status
 
-Planned by Codex. Ready for Claude Code implementation.
+Review passed. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -22,10 +22,12 @@ CLAUDE_CODE
 - Local checkpoint created: `53f9aba Keep missing manifest files distinct from empty manifests`.
 - Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
 - Next task selected: CLI regression coverage for missing top-level manifest fields.
+- Claude Code added 4 CLI regression tests: `report-files`/`report-audit` with missing `kind` and missing `files`.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001`.
+Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001`.
 
 ## Expected Files
 
@@ -34,8 +36,8 @@ Claude Code should implement `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `24 passed in 0.06s`
-- Last accepted full validation: `uv run pytest -q` -> `201 passed in 1.99s`
+- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `61 passed in 1.07s`
+- Last accepted full validation: `uv run pytest -q` -> `205 passed in 1.98s`
 - `scripts/check-progress-docs.sh` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - `git diff --check` -> passed
@@ -48,4 +50,4 @@ Claude Code should implement `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION
 
 ## Next Suggested Step
 
-Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.
+Codex should commit the accepted implementation locally, then prepare the next manifest CLI type-error regression brief for Claude Code.

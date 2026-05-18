@@ -6,7 +6,7 @@ QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001
 
 ## Written By
 
-CODEX
+CLAUDE_CODE
 
 ## Intended Reviewer
 
@@ -14,42 +14,39 @@ CODEX
 
 ## Status
 
-Awaiting Claude Code implementation.
+Implemented. Ready for Codex review.
 
 ## Scope Summary
 
-- Add CLI regression coverage for missing top-level manifest `kind` and `files`.
-- Preserve existing CLI exit-code and stderr behavior for invalid manifests.
-- Preserve valid-manifest CLI behavior.
+- Add CLI regression coverage so `report-files` and `report-audit` both surface missing top-level `kind` and `files` with exit code 2 and clear stderr.
+- Preserve existing CLI exit-code and stderr behavior for valid and previously-tested invalid manifests.
 
-## Expected Files
+## Files Changed
 
-- `tests/test_cli.py`
-- `src/**` only if a tiny bugfix is strictly necessary
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- `tests/test_cli.py` — added 4 regression tests:
+  - `test_cli_report_files_reports_missing_kind`
+  - `test_cli_report_files_reports_missing_files`
+  - `test_cli_report_audit_reports_missing_kind`
+  - `test_cli_report_audit_reports_missing_files`
 
-## Validation To Run
+## Validation Results
 
 ```bash
-uv run pytest tests/test_cli.py -q
-uv run pytest -q
-scripts/check-progress-docs.sh
-git diff --check
+uv run pytest tests/test_cli.py -q  # 61 passed in 1.07s
+uv run pytest -q                     # 205 passed in 1.98s
+scripts/check-progress-docs.sh       # passed
+git diff --check                     # passed
 ```
 
 ## Constraints
 
-- Do not change valid-manifest behavior.
-- Do not modify CLI code unless strictly necessary.
-- Do not modify forbidden files from the brief.
-- Do not push.
+- Do not change valid-manifest behavior. ✅ preserved
+- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
+- Do not modify forbidden files from the brief. ✅ compliant
+- Do not push. ✅ not pushed
 
-## Starting Baseline
+## Git State
 
-- Accepted implementation checkpoint: `53f9aba Keep missing manifest files distinct from empty manifests`
-- Current branch: `master`
-- Push is not approved.
+- Branch: `master`
+- Uncommitted changes: 1 test file + docs
+- Last commit: `53f9aba Keep missing manifest files distinct from empty manifests`
