@@ -1954,3 +1954,63 @@ def test_cli_report_audit_reports_missing_files(capsys, tmp_path):
 
     assert exit_code == 2
     assert "manifest missing top-level 'files' field" in captured.err
+
+
+def test_cli_report_files_reports_non_string_kind(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": 123, "files": []}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest 'kind' must be a string" in captured.err
+
+
+def test_cli_report_files_reports_non_list_files(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": "batch_backtest_report_manifest", "files": "not-a-list"}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest 'files' must be a list" in captured.err
+
+
+def test_cli_report_audit_reports_non_string_kind(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": 123, "files": []}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest 'kind' must be a string" in captured.err
+
+
+def test_cli_report_audit_reports_non_list_files(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"kind": "batch_backtest_report_manifest", "files": "not-a-list"}),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest 'files' must be a list" in captured.err
