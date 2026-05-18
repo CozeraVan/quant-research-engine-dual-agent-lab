@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -30,11 +30,12 @@ USER_ACCEPTANCE
 | QRE-NEXT-13 | Manifest `files` payload shape validation | DONE | CODEX/CLAUDE_CODE | commit `6d7d596`; 191 tests passed | Preserve |
 | QRE-NEXT-14 | Manifest root payload shape validation | DONE | CODEX/CLAUDE_CODE | commit `950c814`; 193 tests passed | Preserve |
 | QRE-NEXT-15 | Manifest invalid JSON normalization | DONE | CODEX/CLAUDE_CODE | commit `333f46d`; malformed JSON now raises manifest-specific `ValueError`; 195 tests passed | Preserve |
-| QRE-NEXT-16 | Manifest top-level `kind` validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; missing/non-string `kind` now raises manifest-specific `ValueError`; 198 tests passed | Create local checkpoint and select next loader-hardening task |
+| QRE-NEXT-16 | Manifest top-level `kind` validation | DONE | CODEX/CLAUDE_CODE | commit `3d8a01e`; missing/non-string `kind` now raises manifest-specific `ValueError`; 198 tests passed | Preserve |
+| QRE-NEXT-17 | Manifest file-entry field type validation | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001` prepared by Codex | Claude Code implement |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review:
+Recorded on 2026-05-18 after local checkpoint `3d8a01e` and next-brief planning:
 
 - `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `21 passed in 0.06s`
 - `uv run pytest -q` -> `198 passed in 2.59s`
@@ -42,7 +43,7 @@ Recorded on 2026-05-18 after Codex review:
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - Accepted task: `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`
-- Next step: local checkpoint commit and next brief
+- Next step: Claude Code implements `QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001`
 
 ## Completed Module Summary
 
@@ -58,7 +59,7 @@ Recorded on 2026-05-18 after Codex review:
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
-- Report-manifest loader hardening beyond top-level `kind` validation.
+- Report-manifest loader hardening for manifest file-entry field type validation.
 
 ## Status Meaning
 

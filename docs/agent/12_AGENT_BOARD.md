@@ -2,44 +2,46 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-KIND-VALIDATION-001
+QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CLAUDE_TO_CODEX
+CODEX_TO_CLAUDE
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Implemented explicit top-level `kind` validation in `ReportManifest.from_path()`. Missing `kind` now raises `ValueError("manifest missing top-level 'kind' field")`. Non-string `kind` (null, numbers, lists) now raises `ValueError("manifest 'kind' must be a string, got ...")`. Unsupported string kinds keep their existing rejection. 3 new tests added. All 198 tests pass. Ready for Codex review.
+Harden `ReportFile.from_mapping()` so malformed file-entry field values fail clearly instead of being silently coerced with `str(...)`. Required fields must be strings, optional metadata must be string-or-null, and valid manifests should keep their current behavior.
 
 ## Implementation Summary
 
-1. Added `"kind" not in payload` check before the supported-kind membership test.
-2. Added `isinstance(kind, str)` check for non-string `kind` values.
-3. Existing supported-kind rejection path preserved.
-4. Added `test_report_manifest_rejects_missing_kind`, `test_report_manifest_rejects_non_string_kind`, `test_report_manifest_rejects_null_kind`.
-5. Updated `04`, `05`, `09`, `11`, and `12`.
+1. Inspect `ReportFile.from_mapping(...)` and `_optional_string(...)`.
+2. Add explicit validation that required file-entry fields `key`, `path`, `filename`, and `role` are strings.
+3. Add explicit validation that optional file-entry fields `symbol`, `window`, and `group_by` are either strings or absent/`null`.
+4. Preserve the current missing-required-field errors and valid-manifest behavior.
+5. Add focused tests in `tests/test_portfolio_report_manifest.py`; add CLI regression only if needed.
+6. Update `04`, `05`, `09`, `11`, and `12`.
 
 ## Constraints Check
 
-- No CLI/reporting behavior changes for valid manifests. ✅
-- Scoped only to top-level `kind` validation. ✅
-- Preserved the existing supported-kind list. ✅
-- No forbidden files modified. ✅
-- Not pushed. ✅
+- No CLI/reporting behavior changes for valid manifests.
+- Scoped only to file-entry field type validation.
+- Preserve existing missing-field and valid-manifest behavior.
+- No forbidden files modified.
+- Not pushed.
 
 ## Expected Files
 
 - `src/quant_research_engine/portfolio/report_manifest.py`
 - `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py` only if needed for CLI-boundary regression coverage
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`

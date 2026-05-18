@@ -2,38 +2,36 @@
 
 ## Current Task
 
-Make top-level manifest `kind` validation explicit.
+Validate manifest file-entry field types explicitly.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-KIND-VALIDATION-001
+QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
-- Codex reviewed and accepted `QRE-REPORT-MANIFEST-INVALID-JSON-VALIDATION-001`.
-- Local checkpoint created: `333f46d feat: normalize invalid report manifest json errors`.
+- Codex reviewed and accepted `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`.
+- Local checkpoint created: `3d8a01e Keep malformed manifest kind errors explicit and deterministic`.
 - Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
-- Next task selected: explicit top-level manifest `kind` validation.
-- Claude Code implemented explicit `kind` validation: missing and non-string `kind` now raise manifest-specific `ValueError`.
-- Focused tests added for missing `kind`, numeric `kind`, and `null` `kind`.
-- Codex review passed with no Required Fixes.
+- Next task selected: explicit manifest file-entry field type validation.
 
 ## In Progress
 
-Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-KIND-VALIDATION-001`.
+Claude Code should implement `QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001`.
 
 ## Expected Files
 
 - `src/quant_research_engine/portfolio/report_manifest.py`
 - `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py` only if needed for command-boundary regression coverage
 
 ## Validation Baseline
 
@@ -45,10 +43,10 @@ Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-KIND-VA
 
 ## Known Risks
 
-- Keep the implementation scoped to top-level `kind` validation only.
-- Preserve supported-kind handling for unsupported strings.
-- Preserve invalid-JSON, root-shape, `files`-shape, and valid-manifest behavior.
+- Keep the implementation scoped to file-entry field types only.
+- Preserve missing-field behavior and valid-manifest behavior.
+- Preserve optional metadata semantics for `symbol`, `window`, and `group_by`.
 
 ## Next Suggested Step
 
-Codex should commit the accepted implementation locally, then prepare the next manifest-loader hardening brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the validation, run the required checks, and hand back for Codex review.
