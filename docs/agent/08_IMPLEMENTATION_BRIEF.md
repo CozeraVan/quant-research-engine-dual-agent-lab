@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001
+QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001
 
 ## Created By
 
@@ -14,13 +14,13 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest validation now covers supported `schema_version` values and required file entry fields. One malformed-manifest gap remains nearby: top-level payloads such as `"files": {}` or `files: [1]` still fail with raw `AttributeError` or `TypeError` instead of clear manifest-specific `ValueError` messages.
+Manifest loader validation now covers supported `schema_version`, required file entry fields, and top-level `files` shape. One nearby malformed-manifest gap remains: when the JSON root itself is not an object, `ReportManifest.from_path()` still fails with raw `AttributeError` because it assumes `payload.get(...)` exists.
 
-This is a small, low-risk follow-up in the same report-manifest robustness area from Milestone 5. It should stay tightly scoped to manifest loader shape validation.
+Observed current malformed roots such as `[]`, `1`, `null`, and `"x"` still produce Python internal errors rather than manifest-specific `ValueError`.
 
 ## Goal
 
-Add explicit validation for the top-level manifest `files` collection shape so malformed payloads fail with clear `ValueError` messages.
+Add explicit validation that the top-level manifest JSON payload is an object so malformed roots fail with clear `ValueError` messages.
 
 ## Non-Goals
 
@@ -30,7 +30,7 @@ Add explicit validation for the top-level manifest `files` collection shape so m
 - Do not change portfolio simulation behavior.
 - Do not add database access.
 - Do not broaden this into general manifest-schema redesign.
-- Do not newly require the top-level `files` key if current absent-field behavior can be preserved safely.
+- Do not modify CLI code unless a tiny adjustment is strictly necessary.
 
 ## Affected Modules
 
@@ -75,14 +75,14 @@ Task-specific locked requirements:
 
 ## Implementation Steps
 
-1. Inspect `ReportManifest.from_path(...)` and identify where raw exceptions still escape for malformed top-level `files` payloads.
-2. Add explicit validation that the top-level `files` payload is a list when present.
-3. Add explicit validation that each item in `files` is a mapping/object before calling `ReportFile.from_mapping(...)`.
-4. Raise clear `ValueError` messages that identify the malformed shape without relying on Python internal exception text.
-5. Add focused tests in `tests/test_portfolio_report_manifest.py` for at least:
-   - non-list `files`;
-   - non-object entry inside `files`.
-6. Only add CLI-level regression coverage if a tiny extra assertion is needed; keep the task as helper-focused if existing CLI behavior naturally benefits from the clearer loader errors.
+1. Inspect `ReportManifest.from_path(...)` and identify where non-object root payloads still leak raw Python exceptions.
+2. Add explicit validation that the decoded JSON root is an object/mapping before reading `kind`, `schema_version`, or `files`.
+3. Raise a clear `ValueError` that identifies the malformed root shape without relying on Python internal exception text.
+4. Add focused tests in `tests/test_portfolio_report_manifest.py` for at least:
+   - list root payload;
+   - scalar or null root payload.
+5. Preserve current valid-manifest behavior and the recently added `files` shape validation.
+6. Only add CLI-level regression coverage if a tiny extra assertion is needed; keep the task helper-focused if existing CLI behavior naturally benefits.
 7. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
@@ -93,7 +93,7 @@ None. This task tightens loader validation only.
 
 Valid manifests should remain unchanged.
 
-Malformed manifests with incorrect top-level `files` shape should now raise clear `ValueError` messages instead of raw `AttributeError` or `TypeError`.
+Malformed manifests with a non-object JSON root should now raise clear `ValueError` messages instead of raw `AttributeError`.
 
 ## Validation Plan
 
@@ -118,16 +118,17 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] Non-list top-level `files` payload is rejected with clear `ValueError`.
-- [ ] Non-object `files` entry is rejected with clear `ValueError`.
+- [ ] Non-object manifest root payload is rejected with clear `ValueError`.
+- [ ] Focused tests cover at least one list root and one scalar-or-null root case.
 - [ ] Valid manifests still load unchanged.
-- [ ] Existing schema-version and required-field validation behavior is preserved.
+- [ ] Existing schema-version, file-entry, and `files` shape validation behavior is preserved.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Avoid turning absent or legacy-compatible fields into new hard requirements unless the brief explicitly needs that behavior change.
+- Keep the new validation narrowly scoped to the manifest root shape.
+- Avoid adding requirements beyond “JSON root must be an object”.
 - Keep error messages specific enough for debugging but not coupled to Python internal exception wording.
 
 ## Instructions for Claude Code

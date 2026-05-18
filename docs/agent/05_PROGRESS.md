@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -27,18 +27,19 @@ USER_ACCEPTANCE
 | QRE-NEXT-10 | Manifest schema version validation | DONE | CODEX/CLAUDE_CODE | commit `0fca02a`; 182 tests passed | Preserve |
 | QRE-NEXT-11 | Manifest file entry validation | DONE | CODEX/CLAUDE_CODE | commit `feab301`; 184 tests passed | Preserve |
 | QRE-NEXT-12 | CLI malformed-manifest regression coverage | DONE | CODEX/CLAUDE_CODE | commit `56253a5`; 189 tests passed | Preserve |
-| QRE-NEXT-13 | Manifest top-level `files` shape validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; `191 passed`; malformed `files` payloads rejected clearly | Preserve |
+| QRE-NEXT-13 | Manifest top-level `files` shape validation | DONE | CODEX/CLAUDE_CODE | commit `6d7d596`; 191 tests passed | Preserve |
+| QRE-NEXT-14 | Manifest root payload shape validation | READY | CLAUDE_CODE | brief prepared after commit `6d7d596` | Implement and validate |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review of `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001`:
+Recorded on 2026-05-18 after local checkpoint `6d7d596`:
 
 - `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `14 passed in 0.04s`
 - `uv run pytest -q` -> `191 passed in 1.84s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Added `files` shape validation: non-list payloads and non-object entries raise clear `ValueError`.
-- Review passed with no Required Fixes. Local checkpoint only; no push.
+- Accepted task: `QRE-REPORT-MANIFEST-FILES-SHAPE-VALIDATION-001`
+- Next planned task: `QRE-REPORT-MANIFEST-ROOT-SHAPE-VALIDATION-001`
 
 ## Completed Module Summary
 
@@ -54,6 +55,7 @@ Recorded on 2026-05-18 after Codex review of `QRE-REPORT-MANIFEST-FILES-SHAPE-VA
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
+- Report-manifest loader hardening for malformed root payload shape.
 
 ## Status Meaning
 
