@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed and locally committed `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001` as `19d9ae4 docs: document report manifest schema version`, then prepared the next implementation brief for explicit manifest schema-version validation.
+Codex re-reviewed `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001` and found no Required Fixes. Focused tests, full tests, progress-doc check, and diff whitespace check passed.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the accepted local checkpoint, then prepare and commit the next Claude Code implementation handoff.
 
 ## Active Change Request
 
@@ -78,14 +78,13 @@ User request from 2026-05-18:
 - Last docs migration commit: `2565e13 checkpoint: dual-agent docs migrated and legacy docs archived`
 - Last accepted implementation commit: `19d9ae4 docs: document report manifest schema version`
 - Last local implementation commits:
-  - `3f7d623 feat: add report audit json output`
   - `faa95e2 feat: add report files json output`
   - `e1eb4a5 docs: document report cli json modes`
   - `72533bb feat: add report manifest schema version`
   - `d34a694 feat: expose manifest schema version in json output`
   - `19d9ae4 docs: document report manifest schema version`
 - Last pushed commit: no remote configured
-- Current planning docs for `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001` are prepared in the latest planning checkpoint.
+- Current implementation for `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001` is reviewed and uncommitted. Awaiting local checkpoint.
 
 ## Standing Approval
 

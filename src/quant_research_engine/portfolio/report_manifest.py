@@ -74,11 +74,16 @@ class ReportManifest:
         if kind not in _SUPPORTED_MANIFEST_KINDS:
             supported = ", ".join(sorted(_SUPPORTED_MANIFEST_KINDS))
             raise ValueError(f"manifest kind must be one of: {supported}")
+        schema_version = payload.get("schema_version")
+        if schema_version is not None and not (type(schema_version) is int and schema_version == 1):
+            raise ValueError(
+                f"unsupported manifest schema_version: {schema_version!r} (expected 1 or absent)"
+            )
         return cls(
             kind=kind,
             files_=tuple(ReportFile.from_mapping(item) for item in payload.get("files", [])),
             base_dir=manifest_path.parent,
-            schema_version=payload.get("schema_version"),
+            schema_version=schema_version,
         )
 
     def files(

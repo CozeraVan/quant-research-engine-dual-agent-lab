@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -24,25 +24,25 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-7 | Report manifest schema version | DONE | CODEX/CLAUDE_CODE | commit `72533bb`; 176 tests passed | Preserve |
 | QRE-NEXT-8 | Manifest schema version in JSON tooling | DONE | CODEX/CLAUDE_CODE | commit `d34a694`; 179 tests passed | Preserve |
 | QRE-NEXT-9 | Manifest schema version docs | DONE | CODEX/CLAUDE_CODE | commit `19d9ae4`; 179 tests passed | Preserve |
-| QRE-NEXT-10 | Manifest schema version validation | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001` prepared | Claude Code implements |
+| QRE-NEXT-10 | Manifest schema version validation | DONE | CODEX/CLAUDE_CODE | Codex re-review passed; 182 tests passed; unsupported versions rejected | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after local checkpoint for `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001` and next planning:
+Recorded on 2026-05-18 after Codex re-review of `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001`:
 
-- `rg -n "schema_version" README.md docs/modules/portfolio_workflow.md` -> 7 references
-- `uv run pytest -q` -> `179 passed in 1.44s`
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `62 passed in 0.60s`
+- `uv run pytest -q` -> `182 passed in 1.53s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Accepted documentation update committed locally as `19d9ae4 docs: document report manifest schema version`.
-- Next implementation brief prepared: `QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001`.
+- Fix: `type(schema_version) is int and schema_version == 1` rejects boolean `true`, floats, strings.
+- Review passed with no Required Fixes. Awaiting local checkpoint.
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning, schema version exposed in JSON tooling and ReportManifest helper.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper.
 
 ## Pending Work Summary
 

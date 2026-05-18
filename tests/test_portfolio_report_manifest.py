@@ -202,3 +202,75 @@ def test_report_manifest_exposes_schema_version_when_present(tmp_path):
     assert manifest.schema_version == 1
     assert manifest.kind == "shared_cash_backtest_report_manifest"
     assert manifest.paths(role="window_metrics", window="M") == [tmp_path / "window_metrics_M.csv"]
+
+
+def test_report_manifest_rejects_unsupported_schema_version_number(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unsupported manifest schema_version"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_non_integer_schema_version(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "1",
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unsupported manifest schema_version"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_manifest_rejects_boolean_schema_version(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": True,
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="unsupported manifest schema_version"):
+        ReportManifest.from_path(manifest_path)
