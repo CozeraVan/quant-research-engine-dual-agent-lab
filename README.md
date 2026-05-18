@@ -83,3 +83,44 @@ uv run qre report-audit outputs/smoke_batch_rsi2_rolling_audit/report_manifest.j
   --group-by board \
   --require-match
 ```
+
+`report-files` also supports `--require-match` to fail when no manifest entries match the selected filters:
+
+```bash
+uv run qre report-files outputs/smoke_shared_manifest/report_manifest.json \
+  --role orders \
+  --require-match
+```
+
+### JSON Output
+
+Both `report-files` and `report-audit` support opt-in `--json` for script-friendly machine-readable output. When `--json` is set, stdout is a single JSON object; stderr behavior and exit codes are preserved.
+
+```bash
+# Machine-readable manifest file selection
+uv run qre report-files outputs/smoke_shared_manifest/report_manifest.json \
+  --role window_metrics \
+  --json
+
+# Machine-readable audit summary with issue details
+uv run qre report-audit outputs/smoke_shared_manifest/report_manifest.json \
+  --role window_metrics \
+  --json
+```
+
+`report-files --json` emits `manifest_kind`, `matched_files`, and a `files` array with `key`, `path`, `filename`, `role`, and optional metadata (`symbol`, `window`, `group_by`). `report-audit --json` emits `manifest_kind`, `matched_files`, `missing_files`, `validation_issues`, `status`, and an `issues` array.
+
+JSON mode can be combined with `--require-match` for strict script gating:
+
+```bash
+uv run qre report-files outputs/smoke_shared_manifest/report_manifest.json \
+  --role orders \
+  --require-match \
+  --json
+
+uv run qre report-audit outputs/smoke_batch_rsi2_rolling_audit/report_manifest.json \
+  --role rolling_ranked_symbols \
+  --group-by board \
+  --require-match \
+  --json
+```

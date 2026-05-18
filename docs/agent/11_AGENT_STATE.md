@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CLAUDE_IMPLEMENTING
+CODEX_REVIEWING
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex created local checkpoint `faa95e2 feat: add report files json output` and prepared the next implementation brief for README report CLI JSON documentation.
+Claude Code updated README Report Artifact Checks with docs for `report-files --require-match`, `report-files --json`, and `report-audit --json`. No src/ or tests/ changes. All 175 tests pass.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-DOCS-JSON-CLI-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Codex should review the doc update against `docs/agent/08_IMPLEMENTATION_BRIEF.md` and write `docs/agent/10_REVIEW_REPORT.md`.
 
 ## Active Change Request
 
@@ -83,7 +83,7 @@ User request from 2026-05-18:
   - `3f7d623 feat: add report audit json output`
   - `faa95e2 feat: add report files json output`
 - Last pushed commit: no remote configured
-- Current planning docs for `QRE-REPORT-DOCS-JSON-CLI-001` are uncommitted.
+- Current doc update for `QRE-REPORT-DOCS-JSON-CLI-001` is uncommitted.
 
 ## Standing Approval
 
@@ -132,40 +132,3 @@ If unsure where to continue:
 ```text
 请读取 11 和 12，执行 One-Shot Review-Finalize-Next。
 ```
-
-## One-Shot Review Routing State Transitions
-
-Use this compressed routing when:
-
-- Current Phase = `CODEX_REVIEWING`
-- Current Owner = `CODEX`
-- the user asks Codex to execute One-Shot Review-Finalize-Next
-
-### Fail Path
-
-If Codex review fails:
-
-- Codex must update `10_REVIEW_REPORT.md` with `Review Outcome = FAIL`.
-- Codex must write Required Fixes.
-- Codex must update `12_AGENT_BOARD.md` with a concise fix request for Claude Code.
-- Codex must not commit.
-- Codex must not push.
-- Next Phase: `CLAUDE_FIXING`
-- Next Owner: `CLAUDE_CODE`
-
-### Pass Path
-
-If Codex review passes:
-
-- Codex must update `10_REVIEW_REPORT.md` with `Review Outcome = PASS`.
-- Codex must run required validation.
-- Codex must update progress and handoff docs.
-- Codex must create a local git commit for the accepted implementation.
-- Codex must not push unless explicit approval or standing approval exists.
-- Codex must prepare the next small, low-risk, testable task.
-- Codex must update `08_IMPLEMENTATION_BRIEF.md`.
-- Codex must reset or update `09_CODING_HANDOFF.md`.
-- Codex must update `12_AGENT_BOARD.md` for Claude Code.
-- Codex should create a second local git commit for the next planning and handoff docs whenever possible.
-- Next Phase: `CLAUDE_IMPLEMENTING`
-- Next Owner: `CLAUDE_CODE`

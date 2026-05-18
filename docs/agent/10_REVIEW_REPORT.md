@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-FILES-JSON-001
+QRE-REPORT-DOCS-JSON-CLI-001
 
 ## Written By
 
@@ -18,8 +18,7 @@ Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_cli.py`
+- `README.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -30,37 +29,34 @@ Changed files reviewed:
 
 Review passed.
 
-`qre report-files --json` emits machine-readable file selection output while preserving existing text output and exit-code behavior. The implementation is scoped to CLI/reporting and tests.
+The README now documents strict `report-files` matching and JSON output for both `report-files` and `report-audit`. The change is docs-only and preserves existing examples.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `qre report-files --json` emits valid JSON on stdout.
-- JSON output includes `manifest_kind`, `matched_files`, and `files`.
-- File entries include baseline manifest fields and optional metadata.
-- Default text output remains compatible with existing tests.
-- `--require-match`, `--check-exists`, and `--validate-contents` semantics are preserved.
-- `--keys` interaction is documented: JSON mode takes precedence and emits full file objects.
+- README documents `qre report-files --require-match`.
+- README documents `qre report-files --json`.
+- README documents `qre report-audit --json`.
+- JSON output is described as script-friendly machine-readable stdout.
+- Existing text-mode examples remain intact.
+- No business code, tests, config, lockfile, or locked requirements were modified.
 
 ## Locked Requirements Check
 
 No locked-requirement violation found.
 
-- R-CORE-001: Existing behavior appears preserved; full tests pass.
+- R-CORE-001: Existing documented workflows are preserved.
 - R-CORE-002: No unrelated rewrite observed.
 - R-CORE-003: Validation path exists and passed.
 - R-CORE-004 / R-QRE-006: No secrets or credentials added.
-- R-QRE-003: No lookahead risk; this is CLI/report manifest output only.
-- R-QRE-005: No database writes added.
-- R-QRE-007: Report manifest discovery behavior is preserved; JSON output is opt-in.
-- R-DUAL-002: Implementation stayed within the approved brief.
+- R-QRE-007: Report artifact and manifest CLI behavior is documented without changing contracts.
+- R-QRE-008: Smoke output examples remain plumbing/report-artifact checks, not research conclusions.
+- R-DUAL-002: Claude Code implemented within the approved brief.
 
 ## Code Quality Review
 
-The JSON branch is straightforward and keeps legacy text output separate. Returning JSON before stderr errors in JSON mode is documented in the handoff and keeps stdout script-readable.
-
-The implementation uses resolved paths consistently with existing text output.
+The README additions are concise and placed in the existing Report Artifact Checks section. The examples are consistent with the existing `uv run qre ...` style and do not introduce architecture discussion or operational assumptions beyond local report artifacts.
 
 ## Test Review
 
@@ -74,16 +70,11 @@ git diff --check
 
 Results:
 
-- `uv run pytest -q`: `175 passed in 1.40s`
+- `uv run pytest -q`: `175 passed in 1.45s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 
-Coverage added:
-
-- matched entries JSON output
-- optional metadata fields
-- zero matches without `--require-match`
-- zero matches with `--require-match`
+No new tests were required because this was a README-only documentation update.
 
 ## Required Fixes
 
@@ -91,13 +82,12 @@ None.
 
 ## Recommended Improvements
 
-- Consider adding a future `--json` issue payload for `report-files --check-exists` / `--validate-contents` if scripts need structured error details, but this was not required by the brief.
+None for this task.
 
 ## Follow-up Tasks
 
-- Real index benchmark wiring after table/schema confirmation.
-- Real suspension/ST/risk-warning metadata wiring after source confirmation.
-- Larger research-run reproducibility workflow.
+- Choose the next small, low-risk, testable roadmap task for Claude Code.
+- Continue preserving report artifact and manifest contracts in future reporting work.
 
 ## Final Recommendation
 

@@ -6,67 +6,53 @@ QRE-REPORT-DOCS-JSON-CLI-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-PLAN_TO_CLAUDE
+CLAUDE_TO_CODEX
 
 ## Sender
 
-CODEX
+CLAUDE_CODE
 
 ## Short Message
 
-Update README Report Artifact Checks so users can discover `report-files --require-match`, `report-files --json`, and `report-audit --json`. This is docs-only; do not modify business code.
+Docs-only implementation complete. README now documents `report-files --require-match`, `report-files --json`, and `report-audit --json` with concise examples. No src/ or tests/ changes. All 175 tests pass. Ready for Codex review.
 
 ## Must Read
 
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-## Must Do
+## Must Do (Codex)
 
-1. Implement only `QRE-REPORT-DOCS-JSON-CLI-001`.
-2. Update README Report Artifact Checks with concise examples for strict matching and JSON output.
-3. Preserve existing examples.
-4. Run required validation from the brief.
-5. Update `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and this board before handing back to Codex.
+1. Review the README changes against `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+2. Write `docs/agent/10_REVIEW_REPORT.md`.
+3. If review passes and user has requested One-Shot Review-Finalize-Next:
+   - Create local git checkpoint for accepted implementation.
+   - Prepare next `08_IMPLEMENTATION_BRIEF.md`.
+   - Update `12_AGENT_BOARD.md` for Claude Code.
+   - Create local checkpoint for planning docs.
+   - Set Phase = `CLAUDE_IMPLEMENTING`, Owner = `CLAUDE_CODE`.
+4. If review fails, write Required Fixes and hand back to Claude Code.
 
 ## Must Not Do
 
-1. Do not modify `src/**`.
-2. Do not modify `tests/**` unless a doc validation test requires it.
-3. Do not modify `pyproject.toml` or `uv.lock`.
-4. Do not modify locked requirements.
-5. Do not commit or push.
+1. Do not push (no standing approval).
+2. Do not modify code (review only).
+3. Do not modify forbidden files.
 
-## Allowed Files
+## Changed Files (for review)
 
-- `README.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- `README.md` — added JSON and strict-matching documentation
 
 ## Required Validation
 
 ```bash
 scripts/check-progress-docs.sh
 git diff --check
-```
-
-Optional:
-
-```bash
 uv run pytest -q
 ```
-
-## Completion Rule
-
-When done, set:
-
-- Phase: `CODEX_REVIEWING`
-- Owner: `CODEX`

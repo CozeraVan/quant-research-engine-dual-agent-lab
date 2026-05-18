@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_REVIEWING
 
 ## Progress Table
 
@@ -15,34 +15,31 @@ CLAUDE_IMPLEMENTING
 | QRE-M2 | Data layer and preflight | DONE | HISTORICAL | `qre db-smoke`, `factor-smoke`, `metadata-smoke`, `preflight` | Add real metadata adapters later |
 | QRE-M3 | Evaluation MVP | DONE | HISTORICAL | forward returns, IC, Rank IC, quantile, friction summaries | Add grouping/regime later |
 | QRE-M4 | Portfolio MVP | DONE | HISTORICAL | single, batch, shared-cash, risk, rebalance, FIFO lots, T+1 inventory | Preserve |
-| QRE-M4.7 | Failed-order diagnostics implementation | DONE | CODEX/CLAUDE_CODE | commit `28e6f25`; 162 tests passed before checkpoint | Preserve |
-| QRE-M5.6 | Failed-order report schema and audit validation | DONE | CODEX/CLAUDE_CODE | commit `001177f`; 166 tests passed before checkpoint | Preserve |
-| QRE-M5.7 | `report-files --require-match` | DONE | CODEX/CLAUDE_CODE | commit `e568823`; 169 tests passed before checkpoint | Preserve |
-| QRE-M5.8 | `report-audit --json` | DONE | CODEX/CLAUDE_CODE | commit `3f7d623`; 171 tests passed before checkpoint | Preserve |
-| QRE-M5.9 | `report-files --json` | DONE | CODEX/CLAUDE_CODE | commit `faa95e2`; 175 tests passed before checkpoint | Preserve |
-| QRE-NEXT-6 | README report CLI JSON docs | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` | Implement from approved brief |
+| QRE-M4.7 | Failed-order diagnostics implementation | DONE | CODEX/CLAUDE_CODE | commit `28e6f25` | Preserve |
+| QRE-M5.6 | Failed-order report schema and audit validation | DONE | CODEX/CLAUDE_CODE | commit `001177f` | Preserve |
+| QRE-M5.7 | `report-files --require-match` | DONE | CODEX/CLAUDE_CODE | commit `e568823` | Preserve |
+| QRE-M5.8 | `report-audit --json` | DONE | CODEX/CLAUDE_CODE | commit `3f7d623` | Preserve |
+| QRE-M5.9 | `report-files --json` | DONE | CODEX/CLAUDE_CODE | commit `faa95e2` | Preserve |
+| QRE-NEXT-6 | README report CLI JSON/strict docs | IMPLEMENTED | CLAUDE_CODE | 175 tests pass; README updated with JSON and strict-matching examples | Codex review |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 before local checkpoint `faa95e2`:
+Recorded on 2026-05-18 after README report CLI doc update:
 
-- `uv run pytest -q` -> `175 passed in 1.40s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Local commit created:
-  - `faa95e2 feat: add report files json output`
-- No push performed.
+- `uv run pytest -q` -> `175 passed in 1.40s`
+- No src/ or tests/ changes.
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit output, JSON file selection output.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README documentation.
 
 ## Pending Work Summary
 
-- README docs for report CLI JSON/strict matching modes.
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
