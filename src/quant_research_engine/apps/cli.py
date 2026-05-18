@@ -72,6 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Return an error if the selected filters match no manifest entries.",
     )
+    report_audit_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable JSON audit object on stdout.",
+    )
 
     db_parser = subparsers.add_parser("db-smoke", help="Run a small read-only market data smoke check")
     db_parser.add_argument("--db-url", help="Database URL. Defaults to QRE_MARKET_DB_URL or SR_MARKET_DB_URL.")
@@ -337,6 +342,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             no_matches = args.require_match and not entries
             status = "failed" if missing_paths or issues or no_matches else "ok"
+
+            if args.json:
+                issue_list: list[dict[str, str]] = []
+                for issue in issues:
+                    issue_list.append({
+                        "key": issue.key,
+                        "code": issue.code,
+                        "path": str(issue.path),
+                        "message": issue.message,
+                    })
+                if no_matches:
+                    issue_list.append({
+                        "key": "manifest",
+                        "code": "no_matches",
+                        "path": str(args.manifest),
+                        "message": "no manifest entries matched filters",
+                    })
+                payload = {
+                    "manifest_kind": manifest.kind,
+                    "matched_files": len(entries),
+                    "missing_files": len(missing_paths),
+                    "validation_issues": len(issues),
+                    "status": status,
+                    "issues": issue_list,
+                }
+                print(json.dumps(payload, ensure_ascii=False))
+                if no_matches:
+                    print("no manifest entries matched filters", file=__import__("sys").stderr)
+                return 2 if status == "failed" else 0
+
             print(f"manifest_kind={manifest.kind}")
             print(f"matched_files={len(entries)}")
             print(f"missing_files={len(missing_paths)}")

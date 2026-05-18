@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex created local checkpoint `e568823 feat: add strict report-files matching` and prepared the next implementation brief for `report-audit --json`.
+Codex re-reviewed `QRE-REPORT-AUDIT-JSON-001` on 2026-05-18. Review passed and all 171 tests pass.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-AUDIT-JSON-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Codex should create a local commit for the accepted implementation, then prepare and commit the next implementation brief for Claude Code. Do not push.
 
 ## Active Change Request
 
@@ -81,14 +81,14 @@ User request from 2026-05-18:
   - `001177f test: validate failed-order report artifacts`
   - `e568823 feat: add strict report-files matching`
 - Last pushed commit: no remote configured
-- Current planning docs for `QRE-REPORT-AUDIT-JSON-001` are uncommitted.
+- Current implementation for `QRE-REPORT-AUDIT-JSON-001` is uncommitted.
 
 ## Standing Approval
 
 Default:
 
-- Codex may prepare commit and push plan.
-- Codex must ask user before `git push`.
+- Codex may create local git checkpoints after review passes.
+- Codex must not push unless explicit user approval or standing approval exists.
 
 To allow Codex to push automatically for this project, user must explicitly write a standing approval here.
 
@@ -116,6 +116,57 @@ If unsure where to continue:
    ```
 4. Determine current phase before modifying code.
 5. If current owner is not the active agent, do not proceed.
+
+## Short Prompt Commands
+
+### For Claude Code
+
+```text
+请读取 11 和 12，执行当前 Claude Code 任务。
+```
+
+### For Codex
+
+```text
+请读取 11 和 12，执行 One-Shot Review-Finalize-Next。
+```
+
+## One-Shot Review Routing State Transitions
+
+Use this compressed routing when:
+
+- Current Phase = `CODEX_REVIEWING`
+- Current Owner = `CODEX`
+- the user asks Codex to execute One-Shot Review-Finalize-Next
+
+### Fail Path
+
+If Codex review fails:
+
+- Codex must update `10_REVIEW_REPORT.md` with `Review Outcome = FAIL`.
+- Codex must write Required Fixes.
+- Codex must update `12_AGENT_BOARD.md` with a concise fix request for Claude Code.
+- Codex must not commit.
+- Codex must not push.
+- Next Phase: `CLAUDE_FIXING`
+- Next Owner: `CLAUDE_CODE`
+
+### Pass Path
+
+If Codex review passes:
+
+- Codex must update `10_REVIEW_REPORT.md` with `Review Outcome = PASS`.
+- Codex must run required validation.
+- Codex must update progress and handoff docs.
+- Codex must create a local git commit for the accepted implementation.
+- Codex must not push unless explicit approval or standing approval exists.
+- Codex must prepare the next small, low-risk, testable task.
+- Codex must update `08_IMPLEMENTATION_BRIEF.md`.
+- Codex must reset or update `09_CODING_HANDOFF.md`.
+- Codex must update `12_AGENT_BOARD.md` for Claude Code.
+- Codex should create a second local git commit for the next planning and handoff docs whenever possible.
+- Next Phase: `CLAUDE_IMPLEMENTING`
+- Next Owner: `CLAUDE_CODE`
 
 ## Manual Phase Transition Rules
 
@@ -154,9 +205,20 @@ If Required Fixes exist:
 - Phase: `CLAUDE_FIXING`
 - Owner: `CLAUDE_CODE`
 
+### Codex Review -> One-Shot Pass
+
+If review passes and Codex is asked to continue the compressed workflow:
+
+- Codex creates a local git checkpoint for the accepted implementation.
+- Codex prepares the next `08_IMPLEMENTATION_BRIEF.md`.
+- Codex updates `12_AGENT_BOARD.md`.
+- Codex creates a local checkpoint for planning docs whenever possible.
+- Phase: `CLAUDE_IMPLEMENTING`
+- Owner: `CLAUDE_CODE`
+
 ### Codex Review -> User Acceptance
 
-If review passes:
+If review passes but the user wants to stop before next planning:
 
 - Phase: `USER_ACCEPTANCE`
 - Owner: `USER`
@@ -170,7 +232,7 @@ If user approves commit/push:
 
 ### Codex Git Finalizing -> Done
 
-After successful commit/push:
+After successful local commit and optional approved push:
 
 - Phase: `DONE`
 - Owner: `USER`

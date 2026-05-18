@@ -1159,7 +1159,129 @@ def test_cli_report_audit_require_match_fails_zero_matches(capsys, tmp_path):
     assert "no manifest entries matched filters" in captured.err
 
 
-def test_resolve_risk_controls_uses_yaml_when_cli_is_absent():
+def test_cli_report_audit_json_outputs_valid_object(capsys, tmp_path):
+    output_path = tmp_path / "orders.csv"
+    output_path.write_text("symbol,trade_date,side\n000001.SZ,2026-01-05,buy\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "orders",
+                        "path": "orders.csv",
+                        "filename": "orders.csv",
+                        "role": "orders",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path), "--role", "orders", "--json"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["manifest_kind"] == "shared_cash_backtest_report_manifest"
+    assert payload["matched_files"] == 1
+    assert payload["missing_files"] == 0
+    assert payload["validation_issues"] == 0
+    assert payload["status"] == "ok"
+    assert payload["issues"] == []
+
+
+def test_cli_report_audit_json_includes_issues_for_failures(capsys, tmp_path):
+    output_path = tmp_path / "orders.csv"
+    output_path.write_text("symbol,side\n000001.SZ,buy\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "orders",
+                        "path": "orders.csv",
+                        "filename": "orders.csv",
+                        "role": "orders",
+                    },
+                    {
+                        "key": "trades",
+                        "path": "trades.csv",
+                        "filename": "trades.csv",
+                        "role": "trades",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path), "--json"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 2
+    assert payload["missing_files"] == 1
+    assert payload["status"] == "failed"
+    assert len(payload["issues"]) >= 1
+    codes = {issue["code"] for issue in payload["issues"]}
+    assert "missing_columns" in codes
+    assert "missing_file" in codes
+
+
+def test_cli_report_audit_json_require_match_zero_matches(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "report-audit",
+            str(manifest_path),
+            "--role",
+            "rolling_ranked_symbols",
+            "--json",
+            "--require-match",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "no manifest entries matched filters" in captured.err
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 0
+    assert payload["status"] == "failed"
+    assert payload["issues"] == [
+        {
+            "key": "manifest",
+            "code": "no_matches",
+            "path": str(manifest_path),
+            "message": "no manifest entries matched filters",
+        }
+    ]
     spec = StrategySpec.from_yaml("examples/rsi2_reversal_with_risk.yaml")
     args = Namespace(stop_loss_pct=None, take_profit_pct=None, trailing_stop_pct=None)
 
