@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -22,17 +22,19 @@ USER_ACCEPTANCE
 | QRE-M5.9 | `report-files --json` | DONE | CODEX/CLAUDE_CODE | commit `faa95e2` | Preserve |
 | QRE-M5.10 | README report CLI JSON/strict docs | DONE | CODEX/CLAUDE_CODE | commit `e1eb4a5`; 175 tests passed before checkpoint | Preserve |
 | QRE-NEXT-7 | Report manifest schema version | DONE | CODEX/CLAUDE_CODE | commit `72533bb`; 176 tests passed | Preserve |
-| QRE-NEXT-8 | Manifest schema version in JSON tooling | DONE | CODEX/CLAUDE_CODE | Codex review passed; 179 tests passed; `schema_version` in JSON output and ReportManifest | Preserve |
+| QRE-NEXT-8 | Manifest schema version in JSON tooling | DONE | CODEX/CLAUDE_CODE | commit `d34a694`; 179 tests passed | Preserve |
+| QRE-NEXT-9 | Manifest schema version docs | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001` prepared | Claude Code implements |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review of `QRE-REPORT-MANIFEST-SCHEMA-JSON-001`:
+Recorded on 2026-05-18 after local checkpoint for `QRE-REPORT-MANIFEST-SCHEMA-JSON-001` and next planning:
 
 - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `59 passed in 0.67s`
 - `uv run pytest -q` -> `179 passed in 1.49s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Review passed with no Required Fixes. Awaiting local checkpoint.
+- Accepted implementation committed locally as `d34a694 feat: expose manifest schema version in json output`.
+- Next implementation brief prepared: `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001`.
 
 ## Completed Module Summary
 

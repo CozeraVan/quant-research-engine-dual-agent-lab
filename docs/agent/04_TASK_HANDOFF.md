@@ -2,58 +2,57 @@
 
 ## Current Task
 
-Expose report manifest schema version in JSON tooling.
+Document report manifest schema version behavior.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-SCHEMA-JSON-001
+QRE-REPORT-MANIFEST-SCHEMA-DOCS-001
 
 ## Current Status
 
-Reviewed by Codex. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
-- Added optional `schema_version` field to `ReportManifest` dataclass, loaded from manifest payload in `from_path()`.
-- Included `"schema_version"` in `qre report-files --json` and `qre report-audit --json` output.
-- Old manifests without `schema_version` expose `None` (JSON `null`).
-- Text-mode output unchanged. Filtering, validation, exit-code behavior preserved.
-- Added 3 new tests (1 report_manifest + 2 CLI JSON), updated 6 existing tests with assertions.
-- All 179 tests pass.
-- Codex review passed with no Required Fixes.
+- Previous task `QRE-REPORT-MANIFEST-SCHEMA-JSON-001` was reviewed and committed locally as `d34a694 feat: expose manifest schema version in json output`.
+- New brief prepared for documenting manifest schema version behavior in README and portfolio workflow docs.
 
 ## In Progress
 
-Codex should create the accepted local checkpoint, then prepare the next Claude Code handoff.
+Claude Code should implement:
+
+- `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001`
+
+Implementation source of truth:
+
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 
 ## Modified Files For Review
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py`
+None yet. Expected files are listed in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Validation
 
-Pre-handoff validation:
+Required validation for the next implementation:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `59 passed in 0.60s`
-- `uv run pytest -q` -> `179 passed in 1.41s`
-- `git diff --check` -> passed
-- Codex review validation:
-  - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `59 passed in 0.67s`
-  - `uv run pytest -q` -> `179 passed in 1.49s`
-  - `scripts/check-progress-docs.sh` -> passed
-  - `git diff --check` -> passed
+- `rg -n "schema_version" README.md docs/modules/portfolio_workflow.md`
+- `uv run pytest -q`
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
 
 ## Known Risks
 
-- Minimal risk. Additive JSON field only. Old manifests and text-mode output unchanged.
+- Keep this docs-only.
+- Do not overstate reproducibility guarantees.
+- Do not change CLI behavior or examples beyond documenting existing fields.
 
 ## Next Suggested Step
 
-Codex creates the accepted implementation checkpoint and prepares the next implementation brief.
+Claude Code implements the brief, updates `09/04/05/11/12`, and hands back with:
+
+- Phase: `CODEX_REVIEWING`
+- Owner: `CODEX`
