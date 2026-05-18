@@ -57,6 +57,8 @@ The first milestone focuses on A-share daily technical factors:
 
 Batch and shared-cash backtests write `report_manifest.json` in their output directory. Use it as the stable entry point for downstream scripts instead of parsing Markdown reports.
 
+Newly generated manifests include top-level `"schema_version": 1`. Old manifests without this field remain readable through `qre report-files` and `qre report-audit`.
+
 List selected report files:
 
 ```bash
@@ -108,7 +110,7 @@ uv run qre report-audit outputs/smoke_shared_manifest/report_manifest.json \
   --json
 ```
 
-`report-files --json` emits `manifest_kind`, `matched_files`, and a `files` array with `key`, `path`, `filename`, `role`, and optional metadata (`symbol`, `window`, `group_by`). `report-audit --json` emits `manifest_kind`, `matched_files`, `missing_files`, `validation_issues`, `status`, and an `issues` array.
+`report-files --json` emits top-level `schema_version`, `manifest_kind`, `matched_files`, and a `files` array with `key`, `path`, `filename`, `role`, and optional metadata (`symbol`, `window`, `group_by`). `report-audit --json` emits top-level `schema_version`, `manifest_kind`, `matched_files`, `missing_files`, `validation_issues`, `status`, and an `issues` array. `schema_version` is the integer `1` for new manifests and `null` for older manifests that were generated before the field was introduced.
 
 JSON mode can be combined with `--require-match` for strict script gating:
 

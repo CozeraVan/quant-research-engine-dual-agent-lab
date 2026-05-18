@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed and locally committed `QRE-REPORT-MANIFEST-SCHEMA-JSON-001` as `d34a694 feat: expose manifest schema version in json output`, then prepared the next implementation brief for documenting manifest schema version behavior.
+Codex reviewed `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001` and found no Required Fixes. Documentation grep, full tests, progress-doc check, and diff whitespace check passed.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the accepted local checkpoint, then prepare and commit the next Claude Code implementation handoff.
 
 ## Active Change Request
 
@@ -85,7 +85,7 @@ User request from 2026-05-18:
   - `72533bb feat: add report manifest schema version`
   - `d34a694 feat: expose manifest schema version in json output`
 - Last pushed commit: no remote configured
-- Current planning docs for `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001` are prepared in the latest planning checkpoint.
+- Current doc update for `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001` is reviewed and uncommitted. Awaiting local checkpoint.
 
 ## Standing Approval
 

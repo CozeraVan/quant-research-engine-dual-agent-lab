@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -23,25 +23,24 @@ CLAUDE_IMPLEMENTING
 | QRE-M5.10 | README report CLI JSON/strict docs | DONE | CODEX/CLAUDE_CODE | commit `e1eb4a5`; 175 tests passed before checkpoint | Preserve |
 | QRE-NEXT-7 | Report manifest schema version | DONE | CODEX/CLAUDE_CODE | commit `72533bb`; 176 tests passed | Preserve |
 | QRE-NEXT-8 | Manifest schema version in JSON tooling | DONE | CODEX/CLAUDE_CODE | commit `d34a694`; 179 tests passed | Preserve |
-| QRE-NEXT-9 | Manifest schema version docs | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001` prepared | Claude Code implements |
+| QRE-NEXT-9 | Manifest schema version docs | DONE | CODEX/CLAUDE_CODE | Codex review passed; 179 tests passed; schema_version documented in README and portfolio_workflow.md | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after local checkpoint for `QRE-REPORT-MANIFEST-SCHEMA-JSON-001` and next planning:
+Recorded on 2026-05-18 after Codex review of `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001`:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `59 passed in 0.67s`
-- `uv run pytest -q` -> `179 passed in 1.49s`
+- `rg -n "schema_version" README.md docs/modules/portfolio_workflow.md` -> 7 references
+- `uv run pytest -q` -> `179 passed in 1.44s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Accepted implementation committed locally as `d34a694 feat: expose manifest schema version in json output`.
-- Next implementation brief prepared: `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001`.
+- Review passed with no Required Fixes. Awaiting local checkpoint.
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README documentation, manifest schema versioning, schema version exposed in JSON tooling and ReportManifest helper.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning, schema version exposed in JSON tooling and ReportManifest helper.
 
 ## Pending Work Summary
 

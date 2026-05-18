@@ -321,6 +321,7 @@ Implemented batch report manifest:
 
 - `write_batch_result` writes `report_manifest.json`.
 - Manifest top-level fields:
+  - `schema_version`
   - `kind`
   - `files`
 - Each file entry includes:
@@ -459,6 +460,15 @@ Implemented strict report-audit matching:
 - `qre report-audit --require-match` fails zero-match audits with exit code `2`.
 - Default `report-audit` behavior is unchanged when `--require-match` is absent.
 - Intended use: expected report artifact smoke checks, especially rolling files.
+
+Implemented manifest schema versioning:
+
+- Newly generated batch and shared-cash `report_manifest.json` include top-level `schema_version: 1`.
+- `ReportManifest` exposes `schema_version: int | None` through its dataclass field.
+- `ReportManifest.from_path()` loads the field when present; old manifests without the field set it to `None`.
+- `qre report-files --json` and `qre report-audit --json` emit top-level `"schema_version"` as an integer for new manifests and `null` for older manifests.
+- Manifest filtering, path resolution, validation, text-mode output, and exit codes are unchanged.
+- `schema_version` is a stable schema marker; it does not capture environment, command line, git state, timestamps, or other runtime metadata.
 
 Next implementation:
 

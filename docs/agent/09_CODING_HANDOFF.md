@@ -6,7 +6,7 @@ QRE-REPORT-MANIFEST-SCHEMA-DOCS-001
 
 ## Written By
 
-CODEX
+CLAUDE_CODE
 
 ## Intended Reviewer
 
@@ -14,49 +14,70 @@ CODEX
 
 ## Implemented
 
-Not started.
+- README: documented that new manifests include `"schema_version": 1` and old manifests remain readable.
+- README: added `schema_version` to JSON field descriptions for `report-files --json` and `report-audit --json`.
+- README: documented that `schema_version` appears as `null` for older manifests.
+- `docs/modules/portfolio_workflow.md`: added `schema_version` to batch manifest top-level field list.
+- `docs/modules/portfolio_workflow.md`: added "Implemented manifest schema versioning" section documenting the field, helper exposure, JSON CLI output, and null-for-old behavior.
 
 ## Modified Files
 
-None yet.
+- `README.md` — added schema_version mention and updated JSON field lists
+- `docs/modules/portfolio_workflow.md` — added schema_version to manifest field docs and new implemented section
 
 ## Not Implemented
 
-- Document manifest `schema_version` in README.
-- Document old-manifest JSON `null` behavior.
-- Document schema versioning in `docs/modules/portfolio_workflow.md`.
+- None. All brief items are implemented.
 
 ## Deviations from Brief
 
-None yet.
+- None. Docs-only change; no business code, tests, or CLI behavior modified.
 
 ## Validation Commands Run
 
-Not run. Implementation has not started.
+```bash
+rg -n "schema_version" README.md docs/modules/portfolio_workflow.md
+# 7 references across both files
+
+uv run pytest -q
+# 179 passed in 1.40s
+
+git diff --check
+# passed
+
+scripts/check-progress-docs.sh
+# pending — run after handoff doc updates
+```
 
 ## Validation Results
 
-Not applicable.
+All 179 tests pass (docs-only, no test changes). No regressions. No business code modified.
 
 ## Known Risks
 
-- Keep documentation factual and concise.
-- Do not imply full experiment reproducibility from `schema_version` alone.
-- Do not change business code.
+- None. Docs-only change. No operational claims added.
 
 ## Questions for Reviewer
 
-None yet.
+- None.
 
 ## Git Status at Handoff
 
-Implementation has not started. Claude Code should record `git status --short` here after implementation.
+```
+ M README.md
+ M docs/modules/portfolio_workflow.md
+ M docs/agent/04_TASK_HANDOFF.md
+ M docs/agent/05_PROGRESS.md
+ M docs/agent/09_CODING_HANDOFF.md
+ M docs/agent/11_AGENT_STATE.md
+ M docs/agent/12_AGENT_BOARD.md
+```
+
+No business code or test files modified. No forbidden files modified.
 
 ## Next Suggested Step
 
-Claude Code should implement strictly from:
-
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+Codex should review the doc update against `docs/agent/08_IMPLEMENTATION_BRIEF.md` and write `docs/agent/10_REVIEW_REPORT.md`.
 
 ## Next Agent State After Implementation
 

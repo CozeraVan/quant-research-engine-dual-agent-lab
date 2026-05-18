@@ -10,49 +10,45 @@ QRE-REPORT-MANIFEST-SCHEMA-DOCS-001
 
 ## Current Status
 
-Planned by Codex. Ready for Claude Code implementation.
+Reviewed by Codex. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
-- Previous task `QRE-REPORT-MANIFEST-SCHEMA-JSON-001` was reviewed and committed locally as `d34a694 feat: expose manifest schema version in json output`.
-- New brief prepared for documenting manifest schema version behavior in README and portfolio workflow docs.
+- README: added `schema_version: 1` mention, JSON field descriptions, and null-for-old-manifests behavior.
+- `docs/modules/portfolio_workflow.md`: updated batch manifest field list and added implemented schema versioning section.
+- All 179 tests pass. Docs-only — no business code or tests modified.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement:
-
-- `QRE-REPORT-MANIFEST-SCHEMA-DOCS-001`
-
-Implementation source of truth:
-
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+Codex should create the accepted local checkpoint, then prepare the next Claude Code handoff.
 
 ## Modified Files For Review
 
-None yet. Expected files are listed in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+- `README.md`
+- `docs/modules/portfolio_workflow.md`
 
 ## Validation
 
-Required validation for the next implementation:
+Pre-handoff validation:
 
-- `rg -n "schema_version" README.md docs/modules/portfolio_workflow.md`
-- `uv run pytest -q`
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
+- `rg -n "schema_version" README.md docs/modules/portfolio_workflow.md` -> 7 references
+- `uv run pytest -q` -> `179 passed in 1.40s`
+- `git diff --check` -> passed
+- Codex review validation:
+  - `rg -n "schema_version" README.md docs/modules/portfolio_workflow.md` -> 7 references
+  - `uv run pytest -q` -> `179 passed in 1.44s`
+  - `scripts/check-progress-docs.sh` -> passed
+  - `git diff --check` -> passed
 
 ## Known Risks
 
-- Keep this docs-only.
-- Do not overstate reproducibility guarantees.
-- Do not change CLI behavior or examples beyond documenting existing fields.
+- None. Docs-only change. No operational claims added.
 
 ## Next Suggested Step
 
-Claude Code implements the brief, updates `09/04/05/11/12`, and hands back with:
-
-- Phase: `CODEX_REVIEWING`
-- Owner: `CODEX`
+Codex creates the accepted implementation checkpoint and prepares the next implementation brief.
