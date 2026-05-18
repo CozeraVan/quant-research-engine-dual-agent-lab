@@ -60,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Return an error if the selected filters match no manifest entries.",
     )
+    report_files_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit a machine-readable JSON file selection object on stdout.",
+    )
 
     report_audit_parser = subparsers.add_parser("report-audit", help="Audit files from a report manifest")
     report_audit_parser.add_argument("manifest", type=Path)
@@ -284,27 +289,73 @@ def main(argv: Sequence[str] | None = None) -> int:
                 window=args.window,
                 group_by=args.group_by,
             )
+
+            missing_paths: list[Path] = []
             if args.check_exists:
                 missing_paths = [path for path in paths if not path.exists()]
-                if missing_paths:
-                    for path in missing_paths:
-                        print(path, file=__import__("sys").stderr)
-                    return 2
+
+            content_issues: list = []
             if args.validate_contents:
-                issues = manifest.validate_contents(
+                content_issues = manifest.validate_contents(
                     role=args.role,
                     symbol=args.symbol,
                     window=args.window,
                     group_by=args.group_by,
                 )
-                if issues:
-                    for issue in issues:
+
+            no_matches = args.require_match and not entries
+
+            if args.json:
+                file_list: list[dict[str, str | None]] = []
+                for entry in entries:
+                    resolved_path = str(manifest.base_dir / entry.path)
+                    item: dict[str, str | None] = {
+                        "key": entry.key,
+                        "path": resolved_path,
+                        "filename": entry.filename,
+                        "role": entry.role,
+                    }
+                    if entry.symbol is not None:
+                        item["symbol"] = entry.symbol
+                    if entry.window is not None:
+                        item["window"] = entry.window
+                    if entry.group_by is not None:
+                        item["group_by"] = entry.group_by
+                    file_list.append(item)
+                payload: dict[str, object] = {
+                    "manifest_kind": manifest.kind,
+                    "matched_files": len(entries),
+                    "files": file_list,
+                }
+                print(json.dumps(payload, ensure_ascii=False))
+                if missing_paths:
+                    for path in missing_paths:
+                        print(path, file=__import__("sys").stderr)
+                    return 2
+                if content_issues:
+                    for issue in content_issues:
                         print(
                             f"{issue.key}\t{issue.code}\t{issue.path}\t{issue.message}",
                             file=__import__("sys").stderr,
                         )
                     return 2
-            if args.require_match and not entries:
+                if no_matches:
+                    print("no manifest entries matched filters", file=__import__("sys").stderr)
+                    return 2
+                return 0
+
+            if missing_paths:
+                for path in missing_paths:
+                    print(path, file=__import__("sys").stderr)
+                return 2
+            if content_issues:
+                for issue in content_issues:
+                    print(
+                        f"{issue.key}\t{issue.code}\t{issue.path}\t{issue.message}",
+                        file=__import__("sys").stderr,
+                    )
+                return 2
+            if no_matches:
                 print("no manifest entries matched filters", file=__import__("sys").stderr)
                 return 2
             if args.keys:

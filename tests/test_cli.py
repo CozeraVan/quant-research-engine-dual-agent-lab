@@ -1577,3 +1577,124 @@ def test_cli_report_files_require_match_prints_paths_when_entries_match(capsys, 
     assert exit_code == 0
     assert str(output_path) in captured.out
     assert captured.err == ""
+
+
+def test_cli_report_files_json_outputs_matched_entries(capsys, tmp_path):
+    output_path = tmp_path / "orders.csv"
+    output_path.write_text("symbol,trade_date\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "orders",
+                        "path": "orders.csv",
+                        "filename": "orders.csv",
+                        "role": "orders",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--role", "orders", "--json"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["manifest_kind"] == "shared_cash_backtest_report_manifest"
+    assert payload["matched_files"] == 1
+    assert len(payload["files"]) == 1
+    entry = payload["files"][0]
+    assert entry["key"] == "orders"
+    assert entry["path"] == str(output_path)
+    assert entry["filename"] == "orders.csv"
+    assert entry["role"] == "orders"
+
+
+def test_cli_report_files_json_includes_optional_metadata(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "window_summary_M_by_board_ranked_symbols",
+                        "path": "window_summary_M_by_board_ranked_symbols.csv",
+                        "filename": "window_summary_M_by_board_ranked_symbols.csv",
+                        "role": "window_ranked_symbols",
+                        "window": "M",
+                        "group_by": "board",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--json"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    entry = payload["files"][0]
+    assert entry["window"] == "M"
+    assert entry["group_by"] == "board"
+    assert "symbol" not in entry
+
+
+def test_cli_report_files_json_zero_matches_exits_zero(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--role", "orders", "--json"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 0
+    assert payload["files"] == []
+
+
+def test_cli_report_files_json_require_match_errors_on_zero_matches(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["report-files", str(manifest_path), "--role", "orders", "--json", "--require-match"]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "no manifest entries matched filters" in captured.err
+    payload = json.loads(captured.out)
+    assert payload["manifest_kind"] == "shared_cash_backtest_report_manifest"
+    assert payload["matched_files"] == 0
+    assert payload["files"] == []

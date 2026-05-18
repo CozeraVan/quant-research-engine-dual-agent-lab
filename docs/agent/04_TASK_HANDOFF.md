@@ -10,36 +10,34 @@ QRE-REPORT-FILES-JSON-001
 
 ## Current Status
 
-Approved for Claude Code implementation after local checkpoint `3f7d623`.
+Reviewed by Codex. Accepted for local commit.
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Completed
 
-- Reviewed and locally committed previous task:
-  - `3f7d623 feat: add report audit json output`
-- Did not push.
-- Selected next small reporting workflow task.
-- Wrote new implementation brief:
-  - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- Prepared Claude Code handoff board:
-  - `docs/agent/12_AGENT_BOARD.md`
+- Claude Code implemented `--json` flag for `report-files`.
+- Added 4 CLI tests: matched entries, optional metadata, zero matches, `--require-match` zero matches.
+- All 175 tests pass.
 
 ## In Progress
 
-Claude Code should implement:
+Codex reviewed:
 
 - `QRE-REPORT-FILES-JSON-001`
 
-Implementation source of truth:
+Review evidence:
 
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/10_REVIEW_REPORT.md`
 
-## Modified Files For Next Planning Step
+## Modified Files For Review
 
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_cli.py`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
@@ -48,19 +46,19 @@ Implementation source of truth:
 
 ## Validation
 
-Previous accepted task validation:
+Pre-handoff validation:
 
-- `uv run pytest -q` -> `171 passed in 1.39s`
+- `uv run pytest -q` -> `175 passed in 1.38s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 
-Next task validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Review validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Known Risks
 
-- Keep default `report-files` text behavior unchanged.
-- Do not touch report generation or manifest schema.
+- JSON output on stdout in JSON mode; scripts should not mix `--json` with human-readable stdout parsing.
+- `--json` takes precedence over `--keys`; both flags together still emit full JSON.
 
 ## Next Suggested Step
 
-Claude Code implements strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then updates `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and `docs/agent/12_AGENT_BOARD.md` before handing back to Codex review.
+Codex creates a local commit for the accepted implementation, then prepares and commits the next implementation brief and board for Claude Code. Do not push.
