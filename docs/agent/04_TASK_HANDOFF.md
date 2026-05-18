@@ -2,42 +2,44 @@
 
 ## Current Task
 
-Add JSON output mode to `qre report-files`.
+Document report CLI JSON and strict matching modes.
 
 ## Task ID
 
-QRE-REPORT-FILES-JSON-001
+QRE-REPORT-DOCS-JSON-CLI-001
 
 ## Current Status
 
-Reviewed by Codex. Accepted for local commit.
+Approved for Claude Code implementation after local checkpoint `faa95e2`.
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Completed
 
-- Claude Code implemented `--json` flag for `report-files`.
-- Added 4 CLI tests: matched entries, optional metadata, zero matches, `--require-match` zero matches.
-- All 175 tests pass.
+- Reviewed and locally committed previous task:
+  - `faa95e2 feat: add report files json output`
+- Did not push.
+- Selected next small documentation task.
+- Wrote new implementation brief:
+  - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- Prepared Claude Code handoff board:
+  - `docs/agent/12_AGENT_BOARD.md`
 
 ## In Progress
 
-Codex reviewed:
+Claude Code should implement:
 
-- `QRE-REPORT-FILES-JSON-001`
+- `QRE-REPORT-DOCS-JSON-CLI-001`
 
-Review evidence:
+Implementation source of truth:
 
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/10_REVIEW_REPORT.md`
 
-## Modified Files For Review
+## Modified Files For Next Planning Step
 
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_cli.py`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
@@ -46,19 +48,18 @@ Review evidence:
 
 ## Validation
 
-Pre-handoff validation:
+Previous accepted task validation:
 
-- `uv run pytest -q` -> `175 passed in 1.38s`
+- `uv run pytest -q` -> `175 passed in 1.40s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 
-Review validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Next task validation requirements are in `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Known Risks
 
-- JSON output on stdout in JSON mode; scripts should not mix `--json` with human-readable stdout parsing.
-- `--json` takes precedence over `--keys`; both flags together still emit full JSON.
+- This is a docs-only task; do not modify business code.
 
 ## Next Suggested Step
 
-Codex creates a local commit for the accepted implementation, then prepares and commits the next implementation brief and board for Claude Code. Do not push.
+Claude Code implements strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then updates `docs/agent/09_CODING_HANDOFF.md`, `docs/agent/04_TASK_HANDOFF.md`, `docs/agent/05_PROGRESS.md`, `docs/agent/11_AGENT_STATE.md`, and `docs/agent/12_AGENT_BOARD.md` before handing back to Codex review.

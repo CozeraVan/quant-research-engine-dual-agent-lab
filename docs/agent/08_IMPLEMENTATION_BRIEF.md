@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-FILES-JSON-001
+QRE-REPORT-DOCS-JSON-CLI-001
 
 ## Created By
 
@@ -14,28 +14,32 @@ CLAUDE_CODE
 
 ## Background
 
-`qre report-audit --json` now provides machine-readable audit output. `qre report-files` still prints paths or keys as plain text only. Adding JSON output to `report-files` completes the small reporting CLI machine-readability pair without changing default behavior.
+Recent reporting CLI work added:
+
+- `qre report-audit --json`
+- `qre report-files --require-match`
+- `qre report-files --json`
+
+The README Report Artifact Checks section still documents only the older text-mode examples and `report-audit --require-match`. The next small task is to document the new script-friendly report CLI options.
 
 ## Goal
 
-Add an opt-in JSON output mode to `qre report-files` that emits matched manifest entries and resolved paths in a machine-readable object.
+Update user-facing report artifact documentation so operators can discover and use strict matching and JSON output modes for report workflows.
 
 ## Non-Goals
 
-- Do not change default `report-files` text output.
-- Do not change `report-audit` behavior.
-- Do not change manifest JSON shape.
+- Do not change CLI behavior.
+- Do not change tests unless a doc check already exists and must be updated.
 - Do not change report artifact generation.
-- Do not change portfolio simulation behavior.
-- Do not add database access.
+- Do not change manifest JSON shape.
 - Do not modify old root progress docs.
+- Do not alter locked requirements.
 
-## Affected Modules
+## Affected Files
 
 Expected:
 
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_cli.py`
+- `README.md`
 
 Docs/handoff:
 
@@ -45,18 +49,14 @@ Docs/handoff:
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
 
-## Files Likely to Change
-
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_cli.py`
-- agent handoff docs listed above
-
 ## Forbidden Files
 
+- `src/**`
+- `tests/**` unless a doc validation test requires update
 - `uv.lock`
 - `pyproject.toml`
 - database credentials or `.env*`
-- upstream data producer projects
+- `docs/agent/02_LOCKED_REQUIREMENTS.md`
 - old root progress docs unless separately requested
 
 ## Locked Requirements
@@ -67,96 +67,64 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve default `report-files` behavior when JSON mode is not requested.
-- Preserve `report-files --require-match` semantics and exit codes.
-- Preserve manifest discovery and filtering semantics.
-- No database writes or credential handling.
+- Preserve existing README guidance.
+- Do not present smoke outputs as research conclusions.
+- Do not document credentials or local secrets.
+- Keep examples script-friendly and local.
 
 ## Implementation Steps
 
-1. Inspect current `report-files` CLI handling and tests.
-2. Add an opt-in JSON flag to `report-files`. Prefer:
-   - `--json`
-3. When `--json` is set, print one JSON object to stdout with at least:
-   - `manifest_kind`
-   - `matched_files`
-   - `files`
-4. Each item in `files` should include at least:
-   - `key`
-   - `path`
-   - `filename`
-   - `role`
-   - optional manifest metadata when present, such as `symbol`, `window`, and `group_by`
-5. Preserve `--keys` behavior in non-JSON mode. In JSON mode, prefer the full `files` object output even if `--keys` is passed, or reject the combination clearly; document the chosen behavior in tests and handoff.
-6. Preserve existing `--check-exists`, `--validate-contents`, and `--require-match` semantics and exit codes.
-7. Add CLI tests:
-   - JSON output for matched entries includes expected fields and resolved path;
-   - JSON output for zero matches without `--require-match` exits `0` with `matched_files = 0`;
-   - `--json --require-match` zero-match exits `2` and emits a JSON object suitable for scripts, or preserves existing stderr behavior if that is simpler and documented.
-8. Update handoff/progress/state/board docs after implementation.
-
-## Data / Schema Changes
-
-None.
-
-## API / Interface Changes
-
-Allowed:
-
-- Add optional CLI flag:
-  - `qre report-files MANIFEST --json`
-
-Avoid:
-
-- Changing default text output.
-- Changing existing flags or positional arguments.
-- Changing manifest JSON shape.
+1. Inspect the current README Report Artifact Checks section.
+2. Add concise examples for:
+   - `qre report-files --require-match`
+   - `qre report-files --json`
+   - `qre report-audit --json`
+3. State that JSON modes are intended for scripts and emit machine-readable stdout.
+4. Preserve existing text-mode examples.
+5. Keep wording concise; do not add broad architecture explanation.
+6. Update handoff/progress/state/board docs after implementation.
 
 ## Validation Plan
 
-Run focused tests:
-
-```bash
-uv run pytest tests/test_cli.py -q
-```
-
-Run full tests:
-
-```bash
-uv run pytest -q
-```
-
-Run workflow checks:
+Run:
 
 ```bash
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
+If tests are not run because this is docs-only, document that in `09_CODING_HANDOFF.md`.
+
+Optional if practical:
+
+```bash
+uv run pytest -q
+```
+
 ## Acceptance Criteria
 
-- [ ] `qre report-files --json` emits valid JSON on stdout.
-- [ ] JSON output includes matched count and file entries.
-- [ ] Default text output remains compatible with existing tests.
-- [ ] Existing `--require-match`, `--check-exists`, and `--validate-contents` semantics are preserved.
-- [ ] Focused and full tests pass, or unavailable checks are documented.
+- [ ] README documents strict matching for `report-files`.
+- [ ] README documents JSON output for `report-files`.
+- [ ] README documents JSON output for `report-audit`.
+- [ ] Existing examples remain valid and understandable.
+- [ ] No business code changes.
+- [ ] Progress docs check and whitespace check pass.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Avoid mixing human text into stdout in JSON mode.
-- Be explicit about `--keys` interaction with `--json`.
+- Documentation should not imply smoke reports are research conclusions.
+- JSON examples should avoid requiring local DB access.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Avoid unrelated refactors.
+2. Avoid unrelated docs rewrites.
 3. Avoid modifying forbidden files.
-4. Stop and ask if the brief conflicts with existing code.
-5. Run validation commands where possible.
-6. Update:
+4. Run validation commands where possible.
+5. Update:
    - `docs/agent/09_CODING_HANDOFF.md`
    - `docs/agent/04_TASK_HANDOFF.md`
    - `docs/agent/05_PROGRESS.md`

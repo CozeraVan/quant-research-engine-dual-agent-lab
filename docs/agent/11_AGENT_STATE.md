@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-FILES-JSON-001
+QRE-REPORT-DOCS-JSON-CLI-001
 
 ## Current Phase
 
@@ -23,7 +23,7 @@ Allowed values:
 
 Current:
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
@@ -35,15 +35,15 @@ Allowed values:
 
 Current:
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-REPORT-FILES-JSON-001` on 2026-05-18. Review passed and all 175 tests pass.
+Codex created local checkpoint `faa95e2 feat: add report files json output` and prepared the next implementation brief for README report CLI JSON documentation.
 
 ## Next Required Step
 
-Codex should create a local commit for the accepted implementation, then prepare and commit the next implementation brief for Claude Code. Do not push.
+Claude Code should implement `QRE-REPORT-DOCS-JSON-CLI-001` strictly from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
@@ -81,8 +81,9 @@ User request from 2026-05-18:
   - `001177f test: validate failed-order report artifacts`
   - `e568823 feat: add strict report-files matching`
   - `3f7d623 feat: add report audit json output`
+  - `faa95e2 feat: add report files json output`
 - Last pushed commit: no remote configured
-- Current implementation for `QRE-REPORT-FILES-JSON-001` is uncommitted.
+- Current planning docs for `QRE-REPORT-DOCS-JSON-CLI-001` are uncommitted.
 
 ## Standing Approval
 
@@ -168,72 +169,3 @@ If Codex review passes:
 - Codex should create a second local git commit for the next planning and handoff docs whenever possible.
 - Next Phase: `CLAUDE_IMPLEMENTING`
 - Next Owner: `CLAUDE_CODE`
-
-## Manual Phase Transition Rules
-
-### User -> Codex Planning
-
-When the user gives a new idea:
-
-- Phase: `CODEX_PLANNING`
-- Owner: `CODEX`
-
-### Codex Planning -> User Approval
-
-After Codex writes Implementation Brief:
-
-- Phase: `WAITING_USER_APPROVAL`
-- Owner: `USER`
-
-### User Approval -> Claude Implementation
-
-After user approves the brief:
-
-- Phase: `CLAUDE_IMPLEMENTING`
-- Owner: `CLAUDE_CODE`
-
-### Claude Implementation -> Codex Review
-
-After Claude Code finishes implementation:
-
-- Phase: `CODEX_REVIEWING`
-- Owner: `CODEX`
-
-### Codex Review -> Claude Fixing
-
-If Required Fixes exist:
-
-- Phase: `CLAUDE_FIXING`
-- Owner: `CLAUDE_CODE`
-
-### Codex Review -> One-Shot Pass
-
-If review passes and Codex is asked to continue the compressed workflow:
-
-- Codex creates a local git checkpoint for the accepted implementation.
-- Codex prepares the next `08_IMPLEMENTATION_BRIEF.md`.
-- Codex updates `12_AGENT_BOARD.md`.
-- Codex creates a local checkpoint for planning docs whenever possible.
-- Phase: `CLAUDE_IMPLEMENTING`
-- Owner: `CLAUDE_CODE`
-
-### Codex Review -> User Acceptance
-
-If review passes but the user wants to stop before next planning:
-
-- Phase: `USER_ACCEPTANCE`
-- Owner: `USER`
-
-### User Acceptance -> Codex Git Finalizing
-
-If user approves commit/push:
-
-- Phase: `CODEX_GIT_FINALIZING`
-- Owner: `CODEX`
-
-### Codex Git Finalizing -> Done
-
-After successful local commit and optional approved push:
-
-- Phase: `DONE`
-- Owner: `USER`

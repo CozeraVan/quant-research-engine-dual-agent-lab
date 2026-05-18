@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -19,15 +19,18 @@ USER_ACCEPTANCE
 | QRE-M5.6 | Failed-order report schema and audit validation | DONE | CODEX/CLAUDE_CODE | commit `001177f`; 166 tests passed before checkpoint | Preserve |
 | QRE-M5.7 | `report-files --require-match` | DONE | CODEX/CLAUDE_CODE | commit `e568823`; 169 tests passed before checkpoint | Preserve |
 | QRE-M5.8 | `report-audit --json` | DONE | CODEX/CLAUDE_CODE | commit `3f7d623`; 171 tests passed before checkpoint | Preserve |
-| QRE-NEXT-5 | `report-files --json` | DONE | CODEX/CLAUDE_CODE | Codex review passed; 175 tests pass; `--json` flag with 4 new tests | Local commit, then next plan |
+| QRE-M5.9 | `report-files --json` | DONE | CODEX/CLAUDE_CODE | commit `faa95e2`; 175 tests passed before checkpoint | Preserve |
+| QRE-NEXT-6 | README report CLI JSON docs | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` | Implement from approved brief |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review of `report-files --json`:
+Recorded on 2026-05-18 before local checkpoint `faa95e2`:
 
-- `uv run pytest -q` -> `175 passed in 1.38s`
+- `uv run pytest -q` -> `175 passed in 1.40s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
+- Local commit created:
+  - `faa95e2 feat: add report files json output`
 - No push performed.
 
 ## Completed Module Summary
@@ -39,7 +42,7 @@ Recorded on 2026-05-18 after Codex review of `report-files --json`:
 
 ## Pending Work Summary
 
-- Real index benchmark wiring after table/schema confirmation.
+- README docs for report CLI JSON/strict matching modes.
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
