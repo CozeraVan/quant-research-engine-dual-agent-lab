@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-SCHEMA-DOCS-001
+QRE-REPORT-MANIFEST-SCHEMA-VALIDATION-001
 
 ## Created By
 
@@ -14,19 +14,20 @@ CLAUDE_CODE
 
 ## Background
 
-Report manifests now include deterministic `schema_version: 1`, and JSON report tooling exposes the optional schema version as `schema_version` with `null` for older manifests. The README and portfolio workflow docs should document this stable field so downstream users know how to consume it.
+Report manifests now include a deterministic top-level `schema_version: 1`, and JSON report tooling exposes the field. The loader currently preserves old manifests without the field. A small next step is to make unsupported future versions fail clearly instead of being silently accepted.
 
 ## Goal
 
-Document report manifest `schema_version` behavior in user-facing and workflow documentation.
+Add explicit manifest schema-version validation in `ReportManifest.from_path(...)`: accept missing `schema_version` and version `1`, reject unsupported present values with a clear error.
 
 ## Non-Goals
 
-- Do not change business code.
-- Do not change tests unless a documentation example requires a small fixture adjustment.
-- Do not change CLI flags, CLI behavior, or generated artifacts.
-- Do not change manifest schema beyond documentation.
-- Do not add timestamps, command lines, git SHAs, hostnames, usernames, or environment-dependent metadata.
+- Do not change generated manifest contents.
+- Do not change manifest file entry shape.
+- Do not change `qre report-files` or `qre report-audit` CLI flags.
+- Do not change text or JSON output for valid manifests.
+- Do not change portfolio simulation behavior.
+- Do not add timestamps, command lines, git SHAs, hostnames, usernames, or other environment-dependent metadata.
 - Do not add database access.
 - Do not modify old root progress docs.
 
@@ -34,8 +35,9 @@ Document report manifest `schema_version` behavior in user-facing and workflow d
 
 Expected:
 
-- `README.md`
-- `docs/modules/portfolio_workflow.md`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py` only if useful for CLI error behavior
 
 Docs/handoff:
 
@@ -47,8 +49,6 @@ Docs/handoff:
 
 ## Forbidden Files
 
-- `src/**`
-- `tests/**` unless a documentation example requires a minimal matching adjustment
 - `uv.lock`
 - `pyproject.toml`
 - database credentials or `.env*`
@@ -63,35 +63,48 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve report artifact and manifest discovery contracts.
+- Preserve report artifact and manifest discovery contracts for supported manifests.
 - Preserve old manifest readability.
-- Keep documentation factual and deterministic.
-- Do not present smoke outputs as research conclusions.
+- Keep error behavior deterministic and clear.
+- No database writes or credential handling.
 
 ## Implementation Steps
 
-1. Inspect the existing report artifact sections in `README.md`.
-2. Add concise documentation that newly generated batch and shared-cash manifests include top-level `"schema_version": 1`.
-3. Document that old manifests without the field remain readable and appear as `null` in JSON CLI output.
-4. Update the JSON CLI description so `report-files --json` and `report-audit --json` list `schema_version` among top-level fields.
-5. Update `docs/modules/portfolio_workflow.md` to record the implemented manifest schema version and JSON exposure behavior.
-6. Keep examples short; do not add new operational claims, performance claims, or data-source assumptions.
-7. Update handoff/progress/state/board docs after implementation.
+1. Inspect `ReportManifest.from_path(...)`.
+2. Add a small helper or inline check that validates top-level `schema_version`.
+3. Accept:
+   - missing `schema_version`;
+   - `schema_version == 1`.
+4. Reject unsupported present values, including values other than integer `1`, with a clear `ValueError`.
+5. Preserve existing manifest kind validation and file-entry loading behavior.
+6. Do not modify report writing code; generated manifests already use `schema_version: 1`.
+7. Add focused tests:
+   - missing `schema_version` still loads;
+   - `schema_version: 1` still loads;
+   - unsupported numeric version, for example `2`, raises a clear error;
+   - non-integer version, for example `"1"`, raises a clear error.
+8. Add a CLI test only if existing CLI error coverage does not already exercise `ReportManifest.from_path(...)` exceptions clearly enough.
+9. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
-None. This is a documentation-only task.
+None. This task validates the existing optional manifest schema marker.
 
 ## API / Interface Changes
 
-None. This task documents existing behavior.
+For invalid manifests only:
+
+- `ReportManifest.from_path(...)` raises `ValueError` for unsupported present `schema_version`.
+- Existing CLI exception handling should continue returning exit code `2` and printing the error to stderr.
+
+No behavior change for old manifests without `schema_version` or current manifests with `schema_version: 1`.
 
 ## Validation Plan
 
-Run documentation checks:
+Run focused tests:
 
 ```bash
-rg -n "schema_version" README.md docs/modules/portfolio_workflow.md
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q
 ```
 
 Run full tests:
@@ -109,27 +122,28 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] README documents top-level `schema_version: 1` in new manifests.
-- [ ] README documents that old manifests without the field remain readable and expose JSON `null`.
-- [ ] README JSON CLI field lists include `schema_version`.
-- [ ] `docs/modules/portfolio_workflow.md` records manifest schema versioning and JSON exposure.
-- [ ] No business code is modified.
-- [ ] Full tests pass, or unavailable checks are documented.
+- [ ] Missing `schema_version` remains readable.
+- [ ] `schema_version: 1` remains readable.
+- [ ] Unsupported present schema version raises a clear `ValueError`.
+- [ ] Existing report filtering, path resolution, validation, and CLI output behavior is preserved for valid manifests.
+- [ ] No report writer or portfolio simulation behavior is modified.
+- [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Avoid overstating reproducibility guarantees. `schema_version` is a schema marker, not a full experiment archive.
-- Avoid changing examples in a way that implies new CLI flags or behavior.
+- Avoid rejecting legacy manifests that lack the field.
+- Avoid weakening current manifest discovery or audit behavior.
+- Keep unsupported-version errors clear for script operators.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Avoid unrelated documentation rewrites.
+2. Avoid unrelated refactors.
 3. Avoid modifying forbidden files.
-4. Stop and ask if the brief conflicts with existing docs.
+4. Stop and ask if the brief conflicts with existing code.
 5. Run validation commands where possible.
 6. Update:
    - `docs/agent/09_CODING_HANDOFF.md`
