@@ -2,41 +2,41 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-CLI-TOPLEVEL-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CLAUDE_TO_CODEX
+CODEX_TO_CLAUDE
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Codex review passed for the 4 CLI regression tests covering non-string top-level `kind` and non-list top-level `files` across `report-files` and `report-audit`. Ready for local checkpoint and next brief.
+Add CLI regression coverage so `report-files` and `report-audit` both surface invalid JSON and non-object manifest roots with exit code `2` and clear stderr, without changing valid-manifest behavior.
 
 ## Implementation Summary
 
-1. Added `test_cli_report_files_reports_non_string_kind`.
-2. Added `test_cli_report_files_reports_non_list_files`.
-3. Added `test_cli_report_audit_reports_non_string_kind`.
-4. Added `test_cli_report_audit_reports_non_list_files`.
-5. No CLI or loader code changes were needed.
-6. Codex validation passed with 209 tests.
-7. Updated `04`, `05`, `09`, `10`, `11`, and `12`.
+1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
+2. Add `report-files` coverage for invalid JSON.
+3. Add `report-files` coverage for a non-object manifest root.
+4. Add `report-audit` coverage for invalid JSON.
+5. Add `report-audit` coverage for a non-object manifest root.
+6. Keep the task test-focused and touch CLI or loader code only if a real bug is exposed.
+7. Update `04`, `05`, `09`, `11`, and `12`.
 
 ## Constraints Check
 
-- No CLI/reporting behavior changes for valid manifests. ✅
-- Scoped only to CLI regression coverage for top-level type errors. ✅
-- Preserved existing malformed-manifest exit-code and stderr behavior. ✅
-- No forbidden files modified. ✅
-- Not pushed. ✅
+- No CLI/reporting behavior changes for valid manifests.
+- Scoped only to CLI regression coverage for malformed roots.
+- Preserve existing malformed-manifest exit-code and stderr behavior.
+- No forbidden files modified.
+- Not pushed.
 
 ## Expected Files
 
