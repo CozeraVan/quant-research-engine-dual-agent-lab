@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
+QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001
 
 ## Created By
 
@@ -14,11 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest loader validation now covers invalid JSON text, root payload shape, top-level `files` shape, required file entry presence, supported `schema_version`, top-level `kind`, and file-entry field types. One nearby hardening gap remains in `ReportManifest.from_path(...)`: missing top-level `files` currently falls through `payload.get("files", [])` and is treated like an empty manifest instead of failing with a clear manifest-specific validation error.
+Manifest loader validation now explicitly rejects missing top-level `kind` and missing top-level `files`, but the CLI regression suite does not yet lock those newer loader errors at the command boundary. `report-files` and `report-audit` should keep surfacing these malformed-manifest failures with exit code `2` and clear stderr output.
 
 ## Goal
 
-Make top-level manifest `files` presence validation explicit while preserving current behavior for valid manifests that already provide `files`.
+Add CLI regression coverage for missing top-level manifest `kind` and `files` fields while preserving existing valid-manifest CLI behavior.
 
 ## Non-Goals
 
@@ -34,12 +34,12 @@ Make top-level manifest `files` presence validation explicit while preserving cu
 
 Expected:
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py`
 
 Optional only if strictly needed:
 
-- `tests/test_cli.py`
+- `src/quant_research_engine/apps/cli.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
 
 Docs/handoff:
 
@@ -73,34 +73,31 @@ Task-specific locked requirements:
 
 ## Implementation Steps
 
-1. Inspect `ReportManifest.from_path(...)` around `raw_files = payload.get("files", [])` and nearby manifest-loader tests.
-2. Add explicit validation for a missing top-level `files` field.
-3. Preserve the existing validation path for present-but-non-list `files` values.
-4. Preserve current behavior when `files` is present as an empty list.
-5. Add focused tests in `tests/test_portfolio_report_manifest.py` for at least:
-   - missing top-level `files`;
-   - present empty-list `files`;
-   - present non-list `files`, to confirm existing behavior is preserved.
-6. Add CLI regression coverage in `tests/test_cli.py` only if it is needed to lock down command-boundary propagation of the loader error.
-7. Keep the task helper-focused; do not modify report writer code or file-entry validation logic unless strictly necessary.
+1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
+2. Add coverage for `report-files` when the manifest is missing top-level `kind`.
+3. Add coverage for `report-files` when the manifest is missing top-level `files`.
+4. Add coverage for `report-audit` when the manifest is missing top-level `kind`.
+5. Add coverage for `report-audit` when the manifest is missing top-level `files`.
+6. Assert current command-boundary behavior: exit code `2` and clear stderr containing the loader error.
+7. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
 8. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
-None. This task tightens loader validation only.
+None. This task adds regression coverage only unless a tiny bugfix is required.
 
 ## API / Interface Changes
 
-Valid manifests should remain unchanged.
+Valid CLI behavior should remain unchanged.
 
-Malformed manifests with a missing top-level `files` field should now raise a clear `ValueError` instead of being silently treated as empty manifests.
+Malformed manifests missing top-level `kind` or `files` should continue surfacing a clear loader error through CLI stderr with exit code `2`.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_cli.py -q
 ```
 
 Run full tests:
@@ -118,19 +115,20 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] Missing top-level `files` is rejected with clear `ValueError`.
-- [ ] Present empty-list `files` still loads unchanged.
-- [ ] Existing present-but-non-list `files` validation remains intact.
-- [ ] Valid manifests still load unchanged.
-- [ ] Existing invalid-JSON, root, `kind`, schema-version, file-entry presence, and file-entry type validation behavior is preserved.
+- [ ] `report-files` surfaces missing top-level `kind` with exit code `2`.
+- [ ] `report-files` surfaces missing top-level `files` with exit code `2`.
+- [ ] `report-audit` surfaces missing top-level `kind` with exit code `2`.
+- [ ] `report-audit` surfaces missing top-level `files` with exit code `2`.
+- [ ] Existing valid-manifest CLI behavior remains unchanged.
+- [ ] Existing malformed-manifest CLI behavior for unsupported `kind`, unsupported `schema_version`, and missing file-entry fields remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Keep the new validation narrowly scoped to top-level `files` presence.
-- Do not reject present empty-list `files` manifests if they are currently supported.
-- Do not let the new check disturb the recently added invalid-JSON, root, `kind`, file-entry, or schema-version validation.
+- Keep the new work scoped to CLI regression coverage.
+- Avoid weakening existing malformed-manifest stderr expectations.
+- Do not introduce CLI behavior changes for valid manifests.
 
 ## Instructions for Claude Code
 

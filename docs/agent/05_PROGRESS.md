@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -32,11 +32,12 @@ USER_ACCEPTANCE
 | QRE-NEXT-15 | Manifest invalid JSON normalization | DONE | CODEX/CLAUDE_CODE | commit `333f46d`; malformed JSON now raises manifest-specific `ValueError`; 195 tests passed | Preserve |
 | QRE-NEXT-16 | Manifest top-level `kind` validation | DONE | CODEX/CLAUDE_CODE | commit `3d8a01e`; missing/non-string `kind` now raises manifest-specific `ValueError`; 198 tests passed | Preserve |
 | QRE-NEXT-17 | Manifest file-entry field type validation | DONE | CODEX/CLAUDE_CODE | commit `d3eb1d0`; non-string entry fields now raise manifest-specific `ValueError`; 200 tests passed | Preserve |
-| QRE-NEXT-18 | Manifest top-level `files` presence validation | DONE | CODEX/CLAUDE_CODE | Codex review passed; missing `files` now raises manifest-specific `ValueError`; 201 tests passed | Create local checkpoint and select next regression-coverage task |
+| QRE-NEXT-18 | Manifest top-level `files` presence validation | DONE | CODEX/CLAUDE_CODE | commit `53f9aba`; missing `files` now raises manifest-specific `ValueError`; 201 tests passed | Preserve |
+| QRE-NEXT-19 | CLI regression coverage for missing top-level manifest fields | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001` prepared by Codex | Claude Code implement |
 
 ## Latest Verified State
 
-Recorded on 2026-05-18 after Codex review:
+Recorded on 2026-05-18 after local checkpoint `53f9aba` and next-brief planning:
 
 - `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `24 passed in 0.06s`
 - `uv run pytest -q` -> `201 passed in 1.99s`
@@ -44,7 +45,7 @@ Recorded on 2026-05-18 after Codex review:
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - Accepted task: `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001`
-- Next step: local checkpoint commit and next brief
+- Next step: Claude Code implements `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001`
 
 ## Completed Module Summary
 
@@ -60,7 +61,7 @@ Recorded on 2026-05-18 after Codex review:
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
-- Report-manifest robustness beyond top-level `files` presence validation.
+- Report-manifest CLI regression coverage for missing top-level fields.
 
 ## Status Meaning
 

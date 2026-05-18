@@ -2,45 +2,46 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
+QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CLAUDE_TO_CODEX
+CODEX_TO_CLAUDE
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Implemented explicit top-level `files` presence validation in `ReportManifest.from_path()`. Missing `files` now raises `ValueError("manifest missing top-level 'files' field")` instead of silently defaulting to `[]`. Present empty-list and non-list behaviors preserved. 1 new test added. All 201 tests pass. Ready for Codex review.
+Add CLI regression coverage so `report-files` and `report-audit` both surface missing top-level `kind` and missing top-level `files` with exit code `2` and clear stderr, without changing valid-manifest behavior.
 
 ## Implementation Summary
 
-1. Added `"files" not in payload` check before `raw_files` extraction.
-2. Changed `payload.get("files", [])` to `payload["files"]` since existence is guaranteed.
-3. Preserved existing non-list `files` rejection path.
-4. Added `test_report_manifest_rejects_missing_files`.
-5. Updated `04`, `05`, `09`, `11`, and `12`.
+1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
+2. Add `report-files` coverage for missing top-level `kind`.
+3. Add `report-files` coverage for missing top-level `files`.
+4. Add `report-audit` coverage for missing top-level `kind`.
+5. Add `report-audit` coverage for missing top-level `files`.
+6. Keep the task test-focused and touch CLI or loader code only if a real bug is exposed.
+7. Update `04`, `05`, `09`, `11`, and `12`.
 
 ## Constraints Check
 
-- No CLI/reporting behavior changes for valid manifests. ✅
-- Scoped only to top-level `files` presence validation. ✅
-- Preserved present empty-list and existing non-list rejection behavior. ✅
-- No forbidden files modified. ✅
-- Not pushed. ✅
+- No CLI/reporting behavior changes for valid manifests.
+- Scoped only to CLI regression coverage for missing top-level fields.
+- Preserve existing malformed-manifest exit-code and stderr behavior.
+- No forbidden files modified.
+- Not pushed.
 
 ## Expected Files
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py` only if needed for CLI-boundary regression coverage
+- `tests/test_cli.py`
+- `src/**` only if a tiny bugfix is strictly necessary
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -50,7 +51,7 @@ Implemented explicit top-level `files` presence validation in `ReportManifest.fr
 ## Required Validation
 
 ```bash
-uv run pytest tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_cli.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check

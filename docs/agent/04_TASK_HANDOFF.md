@@ -2,39 +2,35 @@
 
 ## Current Task
 
-Validate top-level manifest `files` presence explicitly.
+Add CLI regression coverage for missing top-level manifest fields.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001
+QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
-- Codex reviewed and accepted `QRE-REPORT-MANIFEST-ENTRY-TYPE-VALIDATION-001`.
-- Local checkpoint created: `d3eb1d0 Keep malformed manifest entry values from becoming bogus strings`.
+- Codex reviewed and accepted `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001`.
+- Local checkpoint created: `53f9aba Keep missing manifest files distinct from empty manifests`.
 - Next low-risk follow-up task selected from the ongoing report-manifest robustness track.
-- Next task selected: explicit top-level manifest `files` presence validation.
-- Claude Code implemented missing `files` presence check in `ReportManifest.from_path()`.
-- Focused test added for missing `files` key.
-- Codex review passed with no Required Fixes.
+- Next task selected: CLI regression coverage for missing top-level manifest fields.
 
 ## In Progress
 
-Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-FILES-PRESENCE-VALIDATION-001`.
+Claude Code should implement `QRE-REPORT-MANIFEST-CLI-TOPLEVEL-FIELDS-REGRESSION-001`.
 
 ## Expected Files
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py` only if needed for command-boundary regression coverage
+- `tests/test_cli.py`
+- `src/**` only if a tiny bugfix is strictly necessary
 
 ## Validation Baseline
 
@@ -46,10 +42,10 @@ Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-FILES-P
 
 ## Known Risks
 
-- Keep the implementation scoped to top-level `files` presence only.
-- Preserve valid-manifest behavior when `files` is present and a list.
-- Preserve the existing `files` list-shape validation path.
+- Keep the implementation scoped to CLI regression coverage only.
+- Preserve current CLI exit codes and stderr behavior for invalid manifests.
+- Avoid reopening loader logic unless a tiny command-boundary fix is strictly necessary.
 
 ## Next Suggested Step
 
-Codex should commit the accepted implementation locally, then prepare the next manifest regression-coverage brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.
