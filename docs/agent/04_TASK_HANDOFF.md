@@ -2,19 +2,19 @@
 
 ## Current Task
 
-Add CLI regression coverage for explicit `null` top-level `schema_version`.
+Add CLI regression coverage for `report-files --json --check-exists`.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
+QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
@@ -47,10 +47,12 @@ CODEX
 - Next task selected: CLI regression coverage for explicit `null` top-level `schema_version`.
 - Claude Code added 2 CLI regression tests: explicit `schema_version: null` via `report-files --json` and `report-audit --json`.
 - Codex review passed with no Required Fixes.
+- Local checkpoint created: `eac50d3 Lock null schema version at the CLI boundary`.
+- Next task selected: CLI regression coverage for `report-files --json --check-exists`.
 
 ## In Progress
 
-Codex should create the local checkpoint for `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001`, then prepare the next brief.
+Claude Code should implement `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Expected Files
 
@@ -64,6 +66,7 @@ Codex should create the local checkpoint for `QRE-REPORT-MANIFEST-CLI-SCHEMA-VER
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
+- Last accepted checkpoint: `eac50d3`
 
 ## Known Risks
 
@@ -73,4 +76,4 @@ Codex should create the local checkpoint for `QRE-REPORT-MANIFEST-CLI-SCHEMA-VER
 
 ## Next Suggested Step
 
-Codex should commit locally, then prepare the next `report-files --json --check-exists` missing-path regression brief.
+Claude Code should add CLI regression coverage for `report-files --json --check-exists`, run validation, and hand back to Codex for review.

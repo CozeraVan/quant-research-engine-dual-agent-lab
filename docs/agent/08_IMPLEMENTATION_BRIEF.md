@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
+QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
 
 ## Created By
 
@@ -14,13 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest loader validation accepts a missing `schema_version`, supported integer `schema_version: 1`, and explicit JSON `null` because `schema_version` is optional. Existing CLI regression coverage locks schema-version type errors and JSON output for absent or integer schema versions, but explicit `schema_version: null` is not directly locked at the command boundary.
-
-`report-files --json` and `report-audit --json` should continue accepting explicit `schema_version: null` and reporting JSON `schema_version` as `null`.
+`qre report-files --check-exists` already has non-JSON CLI coverage for existing and missing matched files. JSON mode also supports `--check-exists`: it emits the normal JSON payload to stdout, then returns exit code `2` and writes missing paths to stderr when matched files are absent. That JSON-mode behavior is useful for script consumers but is not directly locked by regression tests.
 
 ## Goal
 
-Add CLI regression coverage for explicit `null` top-level `schema_version` while preserving existing CLI output behavior.
+Add CLI regression coverage for `report-files --json --check-exists` while preserving existing JSON output and missing-path behavior.
 
 ## Non-Goals
 
@@ -29,7 +27,7 @@ Add CLI regression coverage for explicit `null` top-level `schema_version` while
 - Do not change report writer output.
 - Do not change portfolio simulation behavior.
 - Do not add database access.
-- Do not broaden this into general manifest schema redesign.
+- Do not broaden this into report-files redesign.
 - Do not modify CLI or loader code unless a tiny adjustment is strictly necessary.
 
 ## Affected Modules
@@ -53,7 +51,7 @@ Docs/handoff:
 
 ## Forbidden Files
 
-- `src/**` outside `portfolio/report_manifest.py`
+- `src/**` outside `apps/cli.py` and `portfolio/report_manifest.py`
 - `uv.lock`
 - `pyproject.toml`
 - database credentials or `.env*`
@@ -68,19 +66,18 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve valid-manifest loading, filtering, and JSON output behavior.
-- Keep malformed-manifest errors deterministic and clear.
+- Preserve report-files path resolution and JSON output behavior.
+- Preserve missing-path stderr and exit-code behavior.
 - No database writes or credential handling.
 - No unrelated CLI or reporting refactors.
 
 ## Implementation Steps
 
-1. Inspect existing schema-version CLI JSON tests and schema-version type-error tests in `tests/test_cli.py`.
-2. Add coverage for `report-files --json` when the manifest explicitly sets top-level `schema_version` to `null`.
-3. Add coverage for `report-audit --json` when the manifest explicitly sets top-level `schema_version` to `null`; create the referenced file so the audit can pass.
-4. Assert current valid command-boundary behavior: exit code `0`, no stderr, matched file count is correct, and JSON payload reports `schema_version` as `null`.
-5. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
-6. Update handoff/progress/state/board docs after implementation.
+1. Inspect existing `report-files --check-exists` and `report-files --json` tests in `tests/test_cli.py`.
+2. Add coverage for `report-files --json --check-exists` when matched files exist: exit code `0`, no stderr, JSON payload includes matched file metadata.
+3. Add coverage for `report-files --json --check-exists` when a matched file is missing: exit code `2`, stdout remains the normal JSON payload, and stderr contains the missing path.
+4. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
+5. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
@@ -90,7 +87,7 @@ None. This task adds regression coverage only unless a tiny bugfix is required.
 
 Valid CLI behavior should remain unchanged.
 
-Manifests with explicit `schema_version: null` should continue loading successfully through `report-files` and `report-audit`.
+`report-files --json --check-exists` should continue emitting JSON stdout before returning non-zero for missing files.
 
 ## Validation Plan
 
@@ -115,18 +112,18 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `report-files --json` accepts explicit `schema_version: null` with exit code `0`.
-- [ ] `report-audit --json` accepts explicit `schema_version: null` with exit code `0` when referenced files exist.
-- [ ] Both JSON payloads report `schema_version` as `null`.
-- [ ] Existing valid-manifest CLI behavior remains unchanged.
-- [ ] Existing malformed-manifest CLI behavior for schema-version type errors remains unchanged.
+- [ ] `report-files --json --check-exists` exits `0` with no stderr when matched files exist.
+- [ ] `report-files --json --check-exists` exits `2` and writes the missing path to stderr when a matched file is absent.
+- [ ] Missing-file JSON mode still emits the normal stdout payload with `matched_files` and `files`.
+- [ ] Existing non-JSON `--check-exists` behavior remains unchanged.
+- [ ] Existing JSON `--require-match` behavior remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
 - Keep the new work scoped to CLI regression coverage.
-- Avoid changing schema-version validation semantics.
+- Avoid changing stdout/stderr ordering in JSON mode.
 - Do not introduce CLI behavior changes for valid manifests.
 
 ## Instructions for Claude Code

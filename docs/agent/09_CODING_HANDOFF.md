@@ -2,48 +2,59 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
+QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
 
 ## Written By
 
-CLAUDE_CODE
-
-## Intended Reviewer
-
 CODEX
+
+## Intended Implementer
+
+CLAUDE_CODE
 
 ## Status
 
-Implemented. Ready for Codex review.
+Ready for Claude Code implementation.
 
 ## Scope Summary
 
-- Add CLI regression coverage so `report-files --json` and `report-audit --json` both accept explicit `schema_version: null` and report it as JSON `null`.
+Add CLI regression coverage for `report-files --json --check-exists` when matched files exist and when matched files are missing.
 
-## Files Changed
+## Files To Change
 
-- `tests/test_cli.py` — added 2 regression tests:
-  - `test_cli_report_files_json_accepts_null_schema_version`
-  - `test_cli_report_audit_json_accepts_null_schema_version`
+Expected:
 
-## Validation Results
+- `tests/test_cli.py`
+
+Update after implementation:
+
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+
+Do not change production code unless the new tests expose a real command-boundary bug.
+
+## Validation Required
 
 ```bash
-uv run pytest tests/test_cli.py -q  # 87 passed in 1.21s
-uv run pytest -q                     # 231 passed in 2.19s
-git diff --check                     # passed
+uv run pytest tests/test_cli.py -q
+uv run pytest -q
+scripts/check-progress-docs.sh
+git diff --check
 ```
 
-## Constraints
+## Handoff Notes
 
-- Do not change valid-manifest behavior. ✅ preserved
-- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
-- Do not modify forbidden files. ✅ compliant
-- Preserve schema-version validation semantics. ✅ preserved
-- Do not push. ✅ not pushed
+- Use existing non-JSON `--check-exists` tests and JSON report-files tests as local patterns.
+- For the missing-file case, assert stdout still contains JSON with `matched_files == 1` and one file entry.
+- Assert stderr contains the resolved missing path and exit code is `2`.
+- Keep the task test-only if existing CLI behavior already passes.
 
 ## Git State
 
 - Branch: `master`
-- Uncommitted changes: 1 test file + docs
-- Last commit: `cce750d Lock optional null manifest metadata at the CLI boundary`
+- Last accepted implementation commit: `eac50d3 Lock null schema version at the CLI boundary`
+- Current task is ready for Claude Code.
+- Do not push.

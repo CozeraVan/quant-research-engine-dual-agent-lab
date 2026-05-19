@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -41,11 +41,12 @@ USER_ACCEPTANCE
 | QRE-NEXT-24 | CLI regression coverage for optional file-entry metadata type errors | DONE | CODEX/CLAUDE_CODE | commit `a4693ab`; 4 CLI regression tests lock non-string optional `symbol` and `window` at the command boundary; 225 tests passed | Preserve |
 | QRE-NEXT-25 | CLI regression coverage for optional `group_by` file-entry metadata type errors | DONE | CODEX/CLAUDE_CODE | commit `0083c82`; 2 CLI regression tests lock non-string optional `group_by` at the command boundary; 227 tests passed | Preserve |
 | QRE-NEXT-26 | CLI regression coverage for valid explicit `null` optional file-entry metadata | DONE | CODEX/CLAUDE_CODE | commit `cce750d`; 2 CLI regression tests lock explicit `null` optional metadata via `--json`; 229 tests passed | Preserve |
-| QRE-NEXT-27 | CLI regression coverage for explicit `null` top-level `schema_version` | DONE | CODEX/CLAUDE_CODE | Codex review passed; 2 CLI regression tests lock explicit `schema_version: null` via `--json`; 231 tests passed | Local checkpoint |
+| QRE-NEXT-27 | CLI regression coverage for explicit `null` top-level `schema_version` | DONE | CODEX/CLAUDE_CODE | commit `eac50d3`; 2 CLI regression tests lock explicit `schema_version: null` via `--json`; 231 tests passed | Preserve |
+| QRE-NEXT-28 | CLI regression coverage for `report-files --json --check-exists` | READY | CLAUDE_CODE | implementation brief `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001` | Claude implementation |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after Codex review of `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001`:
+Recorded on 2026-05-19 after local checkpoint `eac50d3` and next-brief planning:
 
 - `uv run pytest tests/test_cli.py -q` -> `87 passed in 1.12s`
 - `uv run pytest -q` -> `231 passed in 2.14s`
@@ -53,7 +54,8 @@ Recorded on 2026-05-19 after Codex review of `QRE-REPORT-MANIFEST-CLI-SCHEMA-VER
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - Accepted task: `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001`
-- Next step: local checkpoint, then next brief
+- Current task: `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`
+- Next step: Claude Code implementation
 
 ## Completed Module Summary
 
@@ -69,7 +71,6 @@ Recorded on 2026-05-19 after Codex review of `QRE-REPORT-MANIFEST-CLI-SCHEMA-VER
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
-- CLI regression coverage for `report-files --json --check-exists` missing-path behavior.
 
 ## Status Meaning
 
