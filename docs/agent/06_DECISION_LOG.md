@@ -70,9 +70,17 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `EvaluationRequest.group_by`, `EvaluationResult.group_summary`, and `qre eval-config --group-by ...`.
 - Owner: CODEX
 
+### 2026-05-19: Select eval-config output artifacts as next Claude task
+
+- Decision: The next Claude Code task is durable output artifacts and manifests for `qre eval-config`.
+- Reason: Evaluation grouping is complete, but evaluation runs still only print to stdout. Output artifacts are a self-contained reproducibility step and reuse existing report-manifest patterns.
+- Alternatives: Start real index benchmark wiring; start real suspension/ST/risk-warning metadata.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `eval-config --output-dir`, `evaluation_report_manifest`, and `evaluation_run_manifest`.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.
 - Which source table should provide time-varying suspension, ST, and risk-warning metadata.
 - Whether legacy root-level progress docs should be archived after the user reviews the migrated `docs/agent` files.
-- Whether larger research-run reproducibility should be a separate milestone after evaluation grouping.
+- Whether larger multi-stage research-run bundles should link preflight, evaluation, and backtest artifacts under one run identifier.

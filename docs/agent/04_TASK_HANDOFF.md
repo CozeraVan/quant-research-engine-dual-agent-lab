@@ -2,63 +2,58 @@
 
 ## Current Task
 
-Add optional metadata group summaries to evaluation results.
+Add output artifacts and manifests for `qre eval-config`.
 
 ## Task ID
 
-QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001
+QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
 
 ## Current Status
 
-Reviewed and accepted locally.
+Ready for Claude Code implementation.
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Completed
 
-- Added `group_by` optional field to `EvaluationRequest` in `models.py`.
-- Added `group_summary` field to `EvaluationResult` in `models.py`.
-- Extended `_validate_frame()` to check `group_by` columns exist in the research frame.
-- Modified `evaluate()` to include group columns in signal events and build group summary.
-- Added `_build_group_summary()` method with per-group per-horizon statistics and optional adjusted metrics.
-- Added `--group-by` CLI argument to `eval-config` subcommand.
-- Wired `include_metadata=True` into `ResearchFrameAssembler.build()` when `--group-by` is used.
-- Added 6 engine regression tests in `test_evaluation_forward_returns.py`.
-- Added 2 CLI regression tests in `test_cli.py`.
-- All 14 engine tests pass; all 93 CLI tests pass; full suite 255 passed in 2.41s.
-- Codex reviewed and accepted the implementation. Required fixes: none.
-- Wording cleanup: replaced one agent-doc phrase that triggered the local finalize scan; no code behavior changed.
+- Codex reviewed and accepted `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001`.
+- Codex created local checkpoint `b25cbd7` for the completed metadata group-summary task.
+- Codex selected the next self-contained follow-up: durable `eval-config` output artifacts.
+- Codex wrote the new implementation brief in `08_IMPLEMENTATION_BRIEF.md`.
 
 ## In Progress
 
-None.
+- Claude Code should implement `QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Expected Files
 
-- `src/quant_research_engine/evaluation/models.py` (modified)
-- `src/quant_research_engine/evaluation/engine.py` (modified)
-- `src/quant_research_engine/apps/cli.py` (modified)
-- `tests/test_evaluation_forward_returns.py` (6 new tests)
-- `tests/test_cli.py` (2 new tests)
+- `src/quant_research_engine/apps/cli.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- optional evaluation IO helper module
+- `tests/test_cli.py`
+- `tests/test_portfolio_report_manifest.py` or a new focused manifest test file
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
 ## Validation Baseline
 
-- `uv run pytest tests/test_evaluation_forward_returns.py -q` -> `14 passed in 0.39s`
-- `uv run pytest tests/test_cli.py -q` -> `93 passed in 1.30s`
-- `uv run pytest -q` -> `255 passed in 2.45s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
+- Previous accepted focused: `uv run pytest tests/test_evaluation_forward_returns.py -q` -> `14 passed in 0.39s`
+- Previous accepted CLI: `uv run pytest tests/test_cli.py -q` -> `93 passed in 1.30s`
+- Previous accepted full: `uv run pytest -q` -> `255 passed in 2.45s`
+- Previous checks: `scripts/check-progress-docs.sh`, `git diff --check`, and `scripts/git-finalize-check.sh` passed before local checkpoint `b25cbd7`.
 
 ## Known Risks
 
-- Group summary is additive; existing evaluation behavior unchanged when `group_by` is omitted.
-- Group columns must already exist in the research frame (via metadata join or otherwise).
-- No new database schema, data adapter, or benchmark wiring.
-- Sensitive connection values are omitted.
+- Output-dir behavior must be additive and optional.
+- Existing portfolio report-manifest parsing must remain compatible.
+- Run manifests must omit sensitive connection values.
+- No evaluation math should change.
 
 ## Next Suggested Step
 
-Codex should create the local checkpoint and prepare the next implementation brief.
+Claude Code should read `08`, `11`, and `12`, then implement the current Claude Code task.

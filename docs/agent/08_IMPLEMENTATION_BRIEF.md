@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001
+QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
 
 ## Created By
 
@@ -14,37 +14,33 @@ CLAUDE_CODE
 
 ## Background
 
-The evaluation engine already computes signal events, forward-return summaries, IC/Rank IC, quantile returns, and rough friction-adjusted event metrics. The roadmap still marks regime and metadata group summaries as a gap.
+`qre eval-config` now prints summary, IC, quantile, and optional metadata group-summary tables to stdout. Portfolio backtests already support output directories, report manifests, and run manifests, but evaluation runs still lack durable artifacts.
 
-The next self-contained step is to add metadata grouping to evaluation results using columns that already exist in the research frame, such as `board` or `industry`. This should not require new upstream data-source wiring. The feature should summarize event forward returns by group so broad factor screens can identify whether a signal is concentrated in or dependent on a metadata bucket.
+The next self-contained step is to add an optional output directory for `eval-config` so evaluation results can be saved, discovered, and audited like portfolio outputs. This advances research-run reproducibility without new data-source wiring.
 
 ## Goal
 
-Add optional evaluation group summaries keyed by existing research-frame columns, and expose them through the evaluation CLI path.
+Add `qre eval-config --output-dir` support that writes evaluation result artifacts plus report/run manifests.
 
 ## Non-Goals
 
-- Do not add new database tables or new upstream data adapters.
-- Do not implement benchmark or random-baseline comparison.
-- Do not implement factor decay analysis.
-- Do not infer missing metadata or compute technical indicators inside QRE.
-- Do not change existing summary, IC, or quantile semantics.
-- Do not add report-manifest or portfolio-output changes in this task.
+- Do not change evaluation calculations.
+- Do not add new database tables or upstream data adapters.
+- Do not implement benchmark/random-baseline comparison.
+- Do not implement factor decay or real regime classification.
+- Do not add output-dir support to `eval-smoke`.
+- Do not store sensitive connection values in the run manifest.
 
 ## Affected Modules
 
 Expected:
 
-- `src/quant_research_engine/evaluation/models.py`
-- `src/quant_research_engine/evaluation/engine.py`
 - `src/quant_research_engine/apps/cli.py`
-- `tests/test_evaluation_forward_returns.py`
+- `src/quant_research_engine/evaluation/models.py` if helper typing requires it
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- new or existing evaluation IO helper module if that keeps CLI small
 - `tests/test_cli.py`
-
-Possible if needed:
-
-- `src/quant_research_engine/strategies/spec.py`
-- `tests/test_strategy_spec.py`
+- `tests/test_portfolio_report_manifest.py` or a new evaluation-report-manifest test file
 
 Docs/handoff:
 
@@ -56,7 +52,6 @@ Docs/handoff:
 
 ## Forbidden Files
 
-- `src/**` outside the modules listed above unless Claude Code records a concrete reason in `09_CODING_HANDOFF.md`
 - `uv.lock`
 - `pyproject.toml`
 - `.env*`
@@ -71,65 +66,66 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve existing evaluation behavior when grouping is not requested.
-- Use only columns already present in the research frame.
+- Preserve existing stdout behavior for `eval-config`.
+- Keep the output-dir feature additive and optional.
+- Keep report-manifest compatibility with existing portfolio manifests.
 - Keep data access read-only.
-- Do not compute technical indicators inside the evaluation engine.
-- Avoid lookahead behavior: group labels must come from the current event row, not future rows.
-- Keep CLI output stable except for new optional `group_summary` output when requested.
+- Do not compute technical indicators inside QRE.
+- Do not record sensitive connection values.
 
 ## Implementation Steps
 
-1. Inspect the current `EvaluationRequest`, `EvaluationResult`, and `EvaluationEngine.evaluate()` flow.
-2. Add an optional grouping input, suggested name `group_by: list[str] | None`, to `EvaluationRequest`.
-3. Add a `group_summary: pd.DataFrame` field to `EvaluationResult`.
-4. Preserve requested group columns in `result.events` so each emitted signal event carries its group labels.
-5. Build grouped event summaries from signal events:
-   - one row per `group_by` column, group value, and horizon;
-   - include `group_by`, `group_value`, `horizon`, `event_count`, `mean_forward_return`, `median_forward_return`, and `win_rate`;
-   - if `round_trip_cost_rate` is set, include the same adjusted metrics used by the overall event summary.
-6. Validate requested group columns exist in the input frame. Missing group columns should raise a clear `ValueError`.
-7. Add CLI support for `eval-config --group-by ...`.
-   - When group columns are requested, the research-frame assembler should include metadata so columns like `board` can be available.
-   - Print a `group_summary` section only when it is non-empty.
-8. Add focused engine and CLI regression tests.
-9. Update handoff and progress docs.
+1. Inspect current `eval-config` CLI flow and existing portfolio output/manifest helpers.
+2. Add `--output-dir` to `qre eval-config`.
+3. When `--output-dir` is provided, create the directory and write:
+   - `events.csv`
+   - `summary.csv` when non-empty
+   - `ic_summary.csv` when non-empty
+   - `quantile_summary.csv` when non-empty
+   - `group_summary.csv` when non-empty
+   - `run_manifest.json`
+   - `report_manifest.json`
+4. Extend report-manifest support to accept an evaluation manifest kind, suggested `evaluation_report_manifest`.
+5. Add required-column validation for evaluation artifact roles:
+   - `events`: `ts_code`, `trade_date`
+   - `evaluation_summary`: `horizon`, `event_count`
+   - `ic_summary`: `factor`, `horizon`, `observation_dates`
+   - `quantile_summary`: `factor`, `horizon`, `quantile`, `row_count`
+   - `evaluation_group_summary`: `group_by`, `group_value`, `horizon`, `event_count`
+6. Make `run_manifest.json` record safe run inputs:
+   - schema version and kind;
+   - command name;
+   - strategy path;
+   - start/end dates;
+   - requested codes;
+   - round-trip cost value or market-profile path if provided;
+   - requested group columns;
+   - emitted artifact keys.
+7. Ensure report manifests include `run_manifest` with role `run_manifest`.
+8. Preserve stdout output exactly apart from any existing deterministic text already printed by the command.
+9. Add CLI and manifest validation regression tests.
+10. Update handoff and progress docs.
 
 ## Data / Schema Changes
 
 - No database schema changes.
-- No new files are required.
-- In-memory `EvaluationResult` gains a new `group_summary` DataFrame.
-
-Suggested `group_summary` columns:
-
-- `group_by`
-- `group_value`
-- `horizon`
-- `event_count`
-- `mean_forward_return`
-- `median_forward_return`
-- `win_rate`
-- optional adjusted fields when costs are configured:
-  - `round_trip_cost_rate`
-  - `mean_adjusted_forward_return`
-  - `median_adjusted_forward_return`
-  - `adjusted_win_rate`
+- New optional output directory files for `eval-config`.
+- New report-manifest kind: `evaluation_report_manifest`.
+- Suggested run-manifest kind: `evaluation_run_manifest`.
 
 ## API / Interface Changes
 
-- `EvaluationRequest` accepts optional `group_by`.
-- `EvaluationResult` includes `group_summary`.
-- `qre eval-config` accepts `--group-by` with one or more column names.
-- Existing callers that do not pass grouping should keep working.
+- `qre eval-config` accepts `--output-dir PATH`.
+- `ReportManifest.from_path()` accepts `evaluation_report_manifest`.
+- `ReportManifest.validate_contents()` validates evaluation artifact roles.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_evaluation_forward_returns.py -q
 uv run pytest tests/test_cli.py -q
+uv run pytest tests/test_portfolio_report_manifest.py -q
 ```
 
 Run full checks:
@@ -142,28 +138,28 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `EvaluationRequest(group_by=[...])` validates group columns and preserves them in `result.events`.
-- [ ] `EvaluationResult.group_summary` contains grouped event statistics by column, value, and horizon.
-- [ ] Group summaries include adjusted-return metrics when `round_trip_cost_rate` is configured.
-- [ ] Existing evaluation outputs remain unchanged when `group_by` is omitted.
-- [ ] `qre eval-config --group-by board` loads metadata through the assembler and prints a `group_summary` table.
-- [ ] Missing group columns raise a clear error.
+- [ ] `qre eval-config --output-dir <dir>` writes durable evaluation artifacts.
+- [ ] Artifacts include only non-empty result tables except `events.csv`, `run_manifest.json`, and `report_manifest.json`, which should always be present for successful output-dir runs.
+- [ ] Existing stdout behavior remains compatible.
+- [ ] `report_manifest.json` uses kind `evaluation_report_manifest` and can be loaded by `ReportManifest.from_path()`.
+- [ ] `ReportManifest.validate_contents()` validates emitted evaluation artifacts.
+- [ ] `run_manifest.json` records safe run inputs and emitted artifact keys while omitting sensitive connection values.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Keep grouping additive and avoid changing existing result table schemas except for preserving requested group columns in `events`.
-- Do not silently synthesize metadata groups if the research frame lacks the requested column.
-- Avoid future leakage by using event-row group labels only.
-- Keep CLI behavior deterministic and easy to parse.
+- Avoid mixing portfolio-specific artifact role semantics with evaluation roles.
+- Keep the manifest extension backward-compatible for existing portfolio report manifests.
+- Do not write empty optional CSVs unless that matches an existing local pattern and is covered by tests.
+- Keep CLI output deterministic for downstream scripts.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Reuse the existing evaluation summary style before adding helpers.
+2. Reuse existing manifest patterns where they fit, but do not force portfolio role names onto evaluation outputs.
 3. Keep the implementation small and regression-tested.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
 5. Stop and write a blocker only if this brief conflicts with current code.
