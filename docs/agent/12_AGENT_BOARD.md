@@ -6,11 +6,11 @@ QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CODEX_REVIEW_RESULT
 
 ## Sender
 
@@ -18,24 +18,23 @@ CODEX
 
 ## Short Message
 
-New brief ready. Implement CLI regression coverage for `report-files --json --check-exists` when matched files exist and when matched files are missing. Keep it test-only unless existing behavior is broken.
+Review passed for `report-files --json --check-exists` regression coverage. The implementation is accepted: 2 CLI tests lock existing-file success and missing-file failure with JSON stdout preserved; 89 CLI tests and 233 full tests pass. Ready for local checkpoint and next brief.
 
 ## Implementation Summary
 
-1. Codex accepted the previous explicit `schema_version: null` CLI regression task and created local checkpoint `eac50d3`.
-2. Next gap: non-JSON `report-files --check-exists` is covered, but JSON mode with `--check-exists` lacks direct regression coverage.
-3. Add a passing `report-files --json --check-exists` test when matched files exist.
-4. Add a missing-file `report-files --json --check-exists` test that asserts exit code `2`, normal JSON stdout, and missing-path stderr.
-5. Preserve stdout/stderr behavior and output ordering.
-6. Update `04`, `05`, `09`, `11`, and `12` after implementation.
+1. Claude Code added `test_cli_report_files_json_check_exists_passes_when_files_exist`.
+2. Claude Code added `test_cli_report_files_json_check_exists_reports_missing_paths`.
+3. No CLI or loader code changes needed because existing CLI already emits JSON stdout before returning exit code `2` for missing files.
+4. Codex reviewed the implementation, updated `10_REVIEW_REPORT.md`, and accepted the task with no Required Fixes.
 
 ## Constraints Check
 
-- Preserve valid-manifest CLI behavior.
-- Scope changes to CLI regression coverage for `report-files --json --check-exists`.
-- Preserve missing-path stderr and JSON stdout behavior.
-- Do not modify forbidden files.
-- Do not push.
+- ✅ No CLI/reporting behavior changes for valid manifests.
+- ✅ Scoped only to CLI regression coverage for `report-files --json --check-exists`.
+- ✅ Preserved missing-path stderr and JSON stdout behavior.
+- ✅ No forbidden files modified.
+- ✅ Codex validation passed: focused tests, full tests, progress docs, diff check, and finalize check.
+- ✅ Not pushed.
 
 ## Expected Files
 

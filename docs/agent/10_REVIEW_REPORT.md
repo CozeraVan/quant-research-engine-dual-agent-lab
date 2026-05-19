@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
+QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
 
 ## Written By
 
@@ -29,17 +29,17 @@ Changed files reviewed:
 
 Review passed.
 
-`report-files --json` and `report-audit --json` now both have CLI regression coverage for explicit top-level `schema_version: null`. The implementation stays test-only and preserves current schema-version validation and JSON output behavior.
+`report-files --json --check-exists` now has CLI regression coverage for both existing matched files and missing matched files. The implementation stays test-only and preserves the current JSON stdout plus missing-path stderr behavior.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `report-files --json` now locks explicit `schema_version: null` with exit code `0`.
-- `report-audit --json` now locks explicit `schema_version: null` with exit code `0` when the referenced file exists.
-- Both JSON payloads report `schema_version` as `null`.
-- Existing valid-manifest CLI behavior is unchanged.
-- Existing malformed schema-version type-error coverage remains intact.
+- JSON `--check-exists` exits `0` with no stderr when matched files exist.
+- JSON `--check-exists` exits `2` and writes the missing path to stderr when a matched file is absent.
+- Missing-file JSON mode still emits the normal stdout payload with `matched_files` and `files`.
+- Existing non-JSON `--check-exists` behavior remains unchanged.
+- Existing JSON `--require-match` behavior remains unchanged.
 - No CLI or loader code changes were introduced.
 
 ## Locked Requirements Check
@@ -52,12 +52,12 @@ No locked-requirement violation found.
 - R-CORE-004 / R-QRE-006: No credentials or sensitive values added.
 - R-QRE-003: No signal, execution, or portfolio decision logic changed.
 - R-QRE-005: No database access or writes added.
-- R-QRE-007: Report-manifest CLI contracts remain intact and the explicit-null schema-version path is now covered at the CLI boundary.
+- R-QRE-007: Report-manifest CLI contracts remain intact and JSON-mode existence checks are now covered at the command boundary.
 - R-DUAL-002: Claude Code implemented within the approved brief.
 
 ## Code Quality Review
 
-The coverage is added next to the existing schema-version JSON and malformed schema-version tests in `tests/test_cli.py`, which keeps the regression surface easy to audit. The tests assert successful command completion and the JSON `null` serialization invariant for both report CLI entry points.
+The coverage is added next to existing report-files JSON and non-JSON `--check-exists` tests in `tests/test_cli.py`, which keeps the behavior matrix easy to audit. The missing-file test asserts both the machine-readable stdout payload and the human-readable missing path on stderr.
 
 ## Test Review
 
@@ -73,17 +73,18 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_cli.py -q`: `87 passed in 1.12s`
-- `uv run pytest -q`: `231 passed in 2.14s`
+- `uv run pytest tests/test_cli.py -q`: `89 passed in 1.13s`
+- `uv run pytest -q`: `233 passed in 2.21s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate:
 
-- explicit `schema_version: null` is covered through `report-files --json`;
-- explicit `schema_version: null` is covered through `report-audit --json`;
-- existing unsupported, string, and boolean schema-version CLI regressions remain covered;
+- `report-files --json --check-exists` existing-file success is covered;
+- `report-files --json --check-exists` missing-file failure is covered;
+- existing non-JSON `--check-exists` regressions remain covered;
+- existing JSON `--require-match` behavior remains covered;
 - valid manifest flows continue to pass in the full suite.
 
 ## Required Fixes
@@ -92,12 +93,12 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: add CLI regression coverage for `report-files --json --check-exists` so JSON mode preserves the payload while returning exit code `2` and missing-path stderr when matched files are absent.
+Next low-risk hardening step: add CLI regression coverage for `report-files --json --validate-contents` so JSON mode preserves the payload while returning exit code `2` and structured issue stderr when content validation fails.
 
 ## Follow-up Tasks
 
 - Create the local checkpoint for this accepted implementation.
-- Prepare the next brief around `report-files --json --check-exists` missing-path behavior.
+- Prepare the next brief around `report-files --json --validate-contents` behavior.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation

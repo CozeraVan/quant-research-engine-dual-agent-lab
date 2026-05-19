@@ -8,19 +8,19 @@ QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001`, created local checkpoint `eac50d3`, and prepared the next brief for `report-files --json --check-exists` regression coverage.
+Codex reviewed and accepted `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`: 2 CLI regression tests lock `report-files --json --check-exists` for existing and missing matched files. Validation passed (89 CLI tests, 233 full tests, progress-docs check, diff check, finalize check).
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the local checkpoint and prepare the next brief for `report-files --json --validate-contents` regression coverage.
 
 ## Active Change Request
 
@@ -30,7 +30,7 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 
 - Current branch: `master`
 - Last accepted implementation commit: `eac50d3 Lock null schema version at the CLI boundary`
-- Current task is planned and ready for Claude Code implementation.
+- Current task passed Codex review and is ready for local checkpoint.
 - Standing approval: NONE
 
 ## Short Prompt Commands

@@ -10,11 +10,11 @@ QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
 
 ## Current Status
 
-Ready for Claude Code implementation.
+Review passed. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -49,10 +49,12 @@ CLAUDE_CODE
 - Codex review passed with no Required Fixes.
 - Local checkpoint created: `eac50d3 Lock null schema version at the CLI boundary`.
 - Next task selected: CLI regression coverage for `report-files --json --check-exists`.
+- Claude Code added 2 CLI regression tests: `report-files --json --check-exists` when files exist and when files are missing.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the local checkpoint for `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`, then prepare the next brief.
 
 ## Expected Files
 
@@ -61,12 +63,11 @@ Claude Code should implement `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `87 passed in 1.12s`
-- Last accepted full validation: `uv run pytest -q` -> `231 passed in 2.14s`
+- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `89 passed in 1.13s`
+- Last accepted full validation: `uv run pytest -q` -> `233 passed in 2.21s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Last accepted checkpoint: `eac50d3`
 
 ## Known Risks
 
@@ -76,4 +77,4 @@ Claude Code should implement `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`
 
 ## Next Suggested Step
 
-Claude Code should add CLI regression coverage for `report-files --json --check-exists`, run validation, and hand back to Codex for review.
+Codex should commit locally, then prepare the next `report-files --json --validate-contents` regression brief.

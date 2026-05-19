@@ -2575,3 +2575,69 @@ def test_cli_report_audit_json_accepts_null_schema_version(capsys, tmp_path):
     payload = json.loads(captured.out)
     assert payload["schema_version"] is None
     assert payload["status"] == "ok"
+
+
+def test_cli_report_files_json_check_exists_passes_when_files_exist(capsys, tmp_path):
+    output_path = tmp_path / "summary.csv"
+    output_path.write_text("symbol,total_return\n000001.SZ,0.1\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--json", "--check-exists"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert len(payload["files"]) == 1
+    assert payload["files"][0]["key"] == "summary"
+    assert payload["files"][0]["path"] == str(output_path)
+
+
+def test_cli_report_files_json_check_exists_reports_missing_paths(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    missing_path = tmp_path / "summary.csv"
+
+    exit_code = main(["report-files", str(manifest_path), "--json", "--check-exists"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert len(payload["files"]) == 1
+    assert payload["files"][0]["key"] == "summary"
+    assert str(missing_path) in captured.err

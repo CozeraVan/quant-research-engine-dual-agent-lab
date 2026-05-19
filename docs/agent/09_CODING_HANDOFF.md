@@ -6,55 +6,45 @@ QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
 
 ## Written By
 
-CODEX
-
-## Intended Implementer
-
 CLAUDE_CODE
+
+## Intended Reviewer
+
+CODEX
 
 ## Status
 
-Ready for Claude Code implementation.
+Implemented. Ready for Codex review.
 
 ## Scope Summary
 
-Add CLI regression coverage for `report-files --json --check-exists` when matched files exist and when matched files are missing.
+- Add CLI regression coverage for `report-files --json --check-exists` when matched files exist (exit 0) and when matched files are missing (exit 2, JSON stdout preserved, missing-path stderr).
 
-## Files To Change
+## Files Changed
 
-Expected:
+- `tests/test_cli.py` — added 2 regression tests:
+  - `test_cli_report_files_json_check_exists_passes_when_files_exist`
+  - `test_cli_report_files_json_check_exists_reports_missing_paths`
 
-- `tests/test_cli.py`
-
-Update after implementation:
-
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
-
-Do not change production code unless the new tests expose a real command-boundary bug.
-
-## Validation Required
+## Validation Results
 
 ```bash
-uv run pytest tests/test_cli.py -q
-uv run pytest -q
-scripts/check-progress-docs.sh
-git diff --check
+uv run pytest tests/test_cli.py -q  # 89 passed in 1.22s
+uv run pytest -q                     # 233 passed in 2.18s
+scripts/check-progress-docs.sh       # passed
+git diff --check                     # passed
 ```
 
-## Handoff Notes
+## Constraints
 
-- Use existing non-JSON `--check-exists` tests and JSON report-files tests as local patterns.
-- For the missing-file case, assert stdout still contains JSON with `matched_files == 1` and one file entry.
-- Assert stderr contains the resolved missing path and exit code is `2`.
-- Keep the task test-only if existing CLI behavior already passes.
+- Do not change valid-manifest behavior. ✅ preserved
+- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
+- Do not modify forbidden files. ✅ compliant
+- Preserve missing-path stderr and JSON stdout behavior. ✅ preserved
+- Do not push. ✅ not pushed
 
 ## Git State
 
 - Branch: `master`
-- Last accepted implementation commit: `eac50d3 Lock null schema version at the CLI boundary`
-- Current task is ready for Claude Code.
-- Do not push.
+- Uncommitted changes: 1 test file + docs
+- Last commit: `eac50d3 Lock null schema version at the CLI boundary`
