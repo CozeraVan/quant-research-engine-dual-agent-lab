@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
+QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
 
 ## Created By
 
@@ -14,11 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-`qre report-files --check-exists` already has non-JSON CLI coverage for existing and missing matched files. JSON mode also supports `--check-exists`: it emits the normal JSON payload to stdout, then returns exit code `2` and writes missing paths to stderr when matched files are absent. That JSON-mode behavior is useful for script consumers but is not directly locked by regression tests.
+`qre report-files --validate-contents` already has non-JSON CLI coverage for valid report files and structural content issues. JSON mode also supports `--validate-contents`: it emits the normal JSON payload to stdout, then returns exit code `2` and writes validation issues to stderr when matched files have structural problems. That JSON-mode behavior is useful for script consumers but is not directly locked by regression tests.
 
 ## Goal
 
-Add CLI regression coverage for `report-files --json --check-exists` while preserving existing JSON output and missing-path behavior.
+Add CLI regression coverage for `report-files --json --validate-contents` while preserving existing JSON output and validation-issue stderr behavior.
 
 ## Non-Goals
 
@@ -67,15 +67,15 @@ Read:
 Task-specific locked requirements:
 
 - Preserve report-files path resolution and JSON output behavior.
-- Preserve missing-path stderr and exit-code behavior.
+- Preserve validation-issue stderr and exit-code behavior.
 - No database writes or credential handling.
 - No unrelated CLI or reporting refactors.
 
 ## Implementation Steps
 
-1. Inspect existing `report-files --check-exists` and `report-files --json` tests in `tests/test_cli.py`.
-2. Add coverage for `report-files --json --check-exists` when matched files exist: exit code `0`, no stderr, JSON payload includes matched file metadata.
-3. Add coverage for `report-files --json --check-exists` when a matched file is missing: exit code `2`, stdout remains the normal JSON payload, and stderr contains the missing path.
+1. Inspect existing `report-files --validate-contents` and `report-files --json` tests in `tests/test_cli.py`.
+2. Add coverage for `report-files --json --validate-contents` when matched report files are structurally valid: exit code `0`, no stderr, JSON payload includes matched file metadata.
+3. Add coverage for `report-files --json --validate-contents` when a matched report file has a structural issue: exit code `2`, stdout remains the normal JSON payload, and stderr contains the validation issue fields.
 4. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
 5. Update handoff/progress/state/board docs after implementation.
 
@@ -87,7 +87,7 @@ None. This task adds regression coverage only unless a tiny bugfix is required.
 
 Valid CLI behavior should remain unchanged.
 
-`report-files --json --check-exists` should continue emitting JSON stdout before returning non-zero for missing files.
+`report-files --json --validate-contents` should continue emitting JSON stdout before returning non-zero for validation issues.
 
 ## Validation Plan
 
@@ -112,11 +112,11 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `report-files --json --check-exists` exits `0` with no stderr when matched files exist.
-- [ ] `report-files --json --check-exists` exits `2` and writes the missing path to stderr when a matched file is absent.
-- [ ] Missing-file JSON mode still emits the normal stdout payload with `matched_files` and `files`.
-- [ ] Existing non-JSON `--check-exists` behavior remains unchanged.
-- [ ] Existing JSON `--require-match` behavior remains unchanged.
+- [ ] `report-files --json --validate-contents` exits `0` with no stderr when matched report files are valid.
+- [ ] `report-files --json --validate-contents` exits `2` and writes validation issue fields to stderr when a matched report file has structural issues.
+- [ ] Validation-failure JSON mode still emits the normal stdout payload with `matched_files` and `files`.
+- [ ] Existing non-JSON `--validate-contents` behavior remains unchanged.
+- [ ] Existing JSON `--check-exists` and `--require-match` behavior remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 

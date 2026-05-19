@@ -2,19 +2,19 @@
 
 ## Current Task
 
-Add CLI regression coverage for `report-files --json --check-exists`.
+Add CLI regression coverage for `report-files --json --validate-contents`.
 
 ## Task ID
 
-QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
+QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
@@ -51,10 +51,12 @@ CODEX
 - Next task selected: CLI regression coverage for `report-files --json --check-exists`.
 - Claude Code added 2 CLI regression tests: `report-files --json --check-exists` when files exist and when files are missing.
 - Codex review passed with no Required Fixes.
+- Local checkpoint created: `ff3732e Lock report-files JSON check-exists behavior`.
+- Next task selected: CLI regression coverage for `report-files --json --validate-contents`.
 
 ## In Progress
 
-Codex should create the local checkpoint for `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`, then prepare the next brief.
+Claude Code should implement `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Expected Files
 
@@ -68,6 +70,7 @@ Codex should create the local checkpoint for `QRE-REPORT-FILES-JSON-CHECK-EXISTS
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
+- Last accepted checkpoint: `ff3732e`
 
 ## Known Risks
 
@@ -77,4 +80,4 @@ Codex should create the local checkpoint for `QRE-REPORT-FILES-JSON-CHECK-EXISTS
 
 ## Next Suggested Step
 
-Codex should commit locally, then prepare the next `report-files --json --validate-contents` regression brief.
+Claude Code should add CLI regression coverage for `report-files --json --validate-contents`, run validation, and hand back to Codex for review.

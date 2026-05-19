@@ -4,23 +4,23 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001
+QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`: 2 CLI regression tests lock `report-files --json --check-exists` for existing and missing matched files. Validation passed (89 CLI tests, 233 full tests, progress-docs check, diff check, finalize check).
+Codex reviewed and accepted `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`, created local checkpoint `ff3732e`, and prepared the next brief for `report-files --json --validate-contents` regression coverage.
 
 ## Next Required Step
 
-Codex should create the local checkpoint and prepare the next brief for `report-files --json --validate-contents` regression coverage.
+Claude Code should implement `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
@@ -29,8 +29,8 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `eac50d3 Lock null schema version at the CLI boundary`
-- Current task passed Codex review and is ready for local checkpoint.
+- Last accepted implementation commit: `ff3732e Lock report-files JSON check-exists behavior`
+- Current task is planned and ready for Claude Code implementation.
 - Standing approval: NONE
 
 ## Short Prompt Commands
