@@ -10,11 +10,11 @@ QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001
 
 ## Current Status
 
-Planned by Codex. Ready for Claude Code implementation.
+Review passed. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -25,10 +25,12 @@ CLAUDE_CODE
 - Codex review passed with no Required Fixes.
 - Local checkpoint created: `be62461 Lock malformed manifest roots at the CLI boundary`.
 - Next task selected: CLI regression coverage for malformed manifest file entries.
+- Claude Code added 4 CLI regression tests: non-object file entry and non-string required file-entry field across `report-files` and `report-audit`.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001`.
+Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001`.
 
 ## Expected Files
 
@@ -37,8 +39,8 @@ Claude Code should implement `QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSIO
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `69 passed in 0.97s`
-- Last accepted full validation: `uv run pytest -q` -> `213 passed in 2.06s`
+- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `73 passed in 0.98s`
+- Last accepted full validation: `uv run pytest -q` -> `217 passed in 2.12s`
 - `scripts/check-progress-docs.sh` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - `git diff --check` -> passed
@@ -51,4 +53,4 @@ Claude Code should implement `QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSIO
 
 ## Next Suggested Step
 
-Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.
+Codex should commit the accepted implementation locally, then prepare the next manifest CLI schema-version type regression brief for Claude Code.

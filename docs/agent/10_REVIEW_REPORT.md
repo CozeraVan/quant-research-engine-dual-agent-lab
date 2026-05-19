@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-MALFORMED-ROOT-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001
 
 ## Written By
 
@@ -29,16 +29,16 @@ Changed files reviewed:
 
 Review passed.
 
-`report-files` and `report-audit` now both have CLI regression coverage for the loader-side errors raised when a manifest contains invalid JSON or has a non-object root. The implementation stays test-only and preserves the existing command behavior.
+`report-files` and `report-audit` now both have CLI regression coverage for the loader-side errors raised when a manifest contains a non-object file entry or a non-string required file-entry field. The implementation stays test-only and preserves the existing command behavior.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `report-files` now locks invalid JSON with exit code `2`.
-- `report-files` now locks non-object manifest roots with exit code `2`.
-- `report-audit` now locks invalid JSON with exit code `2`.
-- `report-audit` now locks non-object manifest roots with exit code `2`.
+- `report-files` now locks non-object file entries with exit code `2`.
+- `report-files` now locks non-string required file-entry fields with exit code `2`.
+- `report-audit` now locks non-object file entries with exit code `2`.
+- `report-audit` now locks non-string required file-entry fields with exit code `2`.
 - Valid-manifest CLI behavior is unchanged.
 - No CLI or loader code changes were introduced.
 
@@ -73,17 +73,17 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_cli.py -q`: `69 passed in 0.97s`
-- `uv run pytest -q`: `213 passed in 2.06s`
+- `uv run pytest tests/test_cli.py -q`: `73 passed in 0.98s`
+- `uv run pytest -q`: `217 passed in 2.12s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate:
 
-- invalid JSON is now covered at the command boundary for both CLI entry points;
-- non-object manifest roots are now covered at the command boundary for both CLI entry points;
-- existing missing top-level field, top-level type, unsupported `kind`, unsupported `schema_version`, and missing file-entry field CLI regressions remain covered by nearby tests;
+- non-object file entries are now covered at the command boundary for both CLI entry points;
+- non-string required file-entry fields are now covered at the command boundary for both CLI entry points;
+- existing malformed root, missing top-level field, top-level type, unsupported `kind`, unsupported `schema_version`, and missing file-entry field CLI regressions remain covered by nearby tests;
 - valid manifest flows continue to pass in the full suite.
 
 ## Required Fixes
@@ -92,11 +92,11 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: add CLI regression coverage for file-entry object/type errors so `report-files` and `report-audit` lock the remaining loader-side entry validation errors at the command boundary.
+Next low-risk hardening step: add CLI regression coverage for non-integer and boolean `schema_version` values so `report-files` and `report-audit` lock those loader-side version validation errors at the command boundary.
 
 ## Follow-up Tasks
 
-- Prepare the next brief around CLI regression coverage for file-entry object/type errors.
+- Prepare the next brief around CLI regression coverage for schema-version type errors.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation

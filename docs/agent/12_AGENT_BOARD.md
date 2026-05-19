@@ -6,37 +6,38 @@ QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CLAUDE_TO_CODEX
 
 ## Sender
 
-CODEX
+CLAUDE_CODE
 
 ## Short Message
 
-Add CLI regression coverage so `report-files` and `report-audit` both surface non-object file entries and non-string required file-entry fields with exit code `2` and clear stderr, without changing valid-manifest behavior.
+Codex review passed for the 4 CLI regression tests covering non-object file entries and non-string required file-entry fields across `report-files` and `report-audit`. Ready for local checkpoint and next brief.
 
 ## Implementation Summary
 
-1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
-2. Add `report-files` coverage for a non-object file entry.
-3. Add `report-files` coverage for a non-string required file-entry field.
-4. Add `report-audit` coverage for a non-object file entry.
-5. Add `report-audit` coverage for a non-string required file-entry field.
-6. Keep the task test-focused and touch CLI or loader code only if a real bug is exposed.
-7. Update `04`, `05`, `09`, `11`, and `12`.
+1. Inspected existing malformed-manifest CLI tests in `tests/test_cli.py`.
+2. Added `test_cli_report_files_reports_non_object_file_entry`.
+3. Added `test_cli_report_files_reports_non_string_file_entry_field`.
+4. Added `test_cli_report_audit_reports_non_object_file_entry`.
+5. Added `test_cli_report_audit_reports_non_string_file_entry_field`.
+6. No CLI or loader code changes were needed.
+7. Codex validation passed with 217 tests.
+8. Updated `04`, `05`, `09`, `10`, `11`, and `12`.
 
 ## Constraints Check
 
-- No CLI/reporting behavior changes for valid manifests.
-- Scoped only to CLI regression coverage for file-entry shape/type errors.
-- Preserve existing malformed-manifest exit-code and stderr behavior.
-- No forbidden files modified.
-- Not pushed.
+- ✅ No CLI/reporting behavior changes for valid manifests.
+- ✅ Scoped only to CLI regression coverage for file-entry shape/type errors.
+- ✅ Preserved existing malformed-manifest exit-code and stderr behavior.
+- ✅ No forbidden files modified.
+- ✅ Not pushed.
 
 ## Expected Files
 
