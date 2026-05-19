@@ -31,7 +31,7 @@ User request from 2026-05-19: review Claude Code work, inspect the agent files, 
 - Current branch: `master`
 - Last accepted implementation commit: `f592d4a Persist eval-config output artifacts with provenance`
 - Local finalize commit: `8c7b7f5 Record finalized acceptance state`
-- Working tree will include handoff updates until the next finalize.
+- Working tree clean.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands
