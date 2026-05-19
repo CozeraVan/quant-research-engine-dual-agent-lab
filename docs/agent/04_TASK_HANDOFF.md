@@ -2,19 +2,19 @@
 
 ## Current Task
 
-Add CLI regression coverage for malformed manifest file entries.
+Add CLI regression coverage for schema-version type errors.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
@@ -27,10 +27,12 @@ CODEX
 - Next task selected: CLI regression coverage for malformed manifest file entries.
 - Claude Code added 4 CLI regression tests: non-object file entry and non-string required file-entry field across `report-files` and `report-audit`.
 - Codex review passed with no Required Fixes.
+- Local checkpoint created: `ac234d8 Lock manifest file-entry shape failures at the CLI boundary`.
+- Next task selected: CLI regression coverage for schema-version type errors.
 
 ## In Progress
 
-Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001`.
+Claude Code should implement `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001`.
 
 ## Expected Files
 
@@ -53,4 +55,4 @@ Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-FIL
 
 ## Next Suggested Step
 
-Codex should commit the accepted implementation locally, then prepare the next manifest CLI schema-version type regression brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.

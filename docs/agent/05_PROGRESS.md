@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -36,11 +36,12 @@ USER_ACCEPTANCE
 | QRE-NEXT-19 | CLI regression coverage for missing top-level manifest fields | DONE | CODEX/CLAUDE_CODE | commit `5aa584b`; 4 CLI regression tests lock missing `kind`/`files` at the command boundary; 205 tests passed | Preserve |
 | QRE-NEXT-20 | CLI regression coverage for top-level manifest type errors | DONE | CODEX/CLAUDE_CODE | commit `75b42bc`; 4 CLI regression tests lock non-string `kind` and non-list `files` at the command boundary; 209 tests passed | Preserve |
 | QRE-NEXT-21 | CLI regression coverage for malformed manifest roots | DONE | CODEX/CLAUDE_CODE | commit `be62461`; 4 CLI regression tests lock invalid JSON/non-object roots at the command boundary; 213 tests passed | Preserve |
-| QRE-NEXT-22 | CLI regression coverage for malformed manifest file entries | DONE | CODEX/CLAUDE_CODE | Codex review passed; 4 CLI regression tests lock non-object file entries and non-string required file-entry fields at the command boundary; 217 tests passed | Create local checkpoint and select next regression-coverage task |
+| QRE-NEXT-22 | CLI regression coverage for malformed manifest file entries | DONE | CODEX/CLAUDE_CODE | commit `ac234d8`; 4 CLI regression tests lock non-object file entries and non-string required file-entry fields at the command boundary; 217 tests passed | Preserve |
+| QRE-NEXT-23 | CLI regression coverage for schema-version type errors | READY | CLAUDE_CODE | brief `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001` prepared by Codex | Claude Code implement |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after Codex review:
+Recorded on 2026-05-19 after local checkpoint `ac234d8` and next-brief planning:
 
 - `uv run pytest tests/test_cli.py -q` -> `73 passed in 0.98s`
 - `uv run pytest -q` -> `217 passed in 2.12s`
@@ -48,7 +49,7 @@ Recorded on 2026-05-19 after Codex review:
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - Accepted task: `QRE-REPORT-MANIFEST-CLI-FILE-ENTRY-SHAPE-REGRESSION-001`
-- Next step: local checkpoint commit and next brief
+- Next step: Claude Code implements `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001`
 
 ## Completed Module Summary
 
