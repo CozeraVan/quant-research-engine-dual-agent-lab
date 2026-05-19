@@ -29,8 +29,9 @@ User request from 2026-05-19: review Claude Code work, inspect the agent files, 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `b25cbd7 Segment evaluation outcomes by research-frame metadata`
-- New implementation uncommitted; all changes in working tree.
+- Last accepted implementation commit: `f592d4a Persist eval-config output artifacts with provenance`
+- Local finalize commit: `8c7b7f5 Record finalized acceptance state`
+- Working tree clean.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands
