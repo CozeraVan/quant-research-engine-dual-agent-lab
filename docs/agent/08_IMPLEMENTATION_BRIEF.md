@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
 
 ## Created By
 
@@ -14,13 +14,13 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest loader validation accepts optional file-entry metadata fields `symbol`, `window`, and `group_by` when they are strings or explicit JSON `null`. Recent CLI regression coverage locks non-string errors for all three fields, but the valid explicit-`null` path is not directly locked at the command boundary.
+Manifest loader validation accepts a missing `schema_version`, supported integer `schema_version: 1`, and explicit JSON `null` because `schema_version` is optional. Existing CLI regression coverage locks schema-version type errors and JSON output for absent or integer schema versions, but explicit `schema_version: null` is not directly locked at the command boundary.
 
-`report-files` and `report-audit` should continue accepting manifest entries where optional metadata fields are present with `null` values.
+`report-files --json` and `report-audit --json` should continue accepting explicit `schema_version: null` and reporting JSON `schema_version` as `null`.
 
 ## Goal
 
-Add CLI regression coverage for valid explicit `null` optional file-entry metadata while preserving existing CLI output behavior.
+Add CLI regression coverage for explicit `null` top-level `schema_version` while preserving existing CLI output behavior.
 
 ## Non-Goals
 
@@ -75,10 +75,10 @@ Task-specific locked requirements:
 
 ## Implementation Steps
 
-1. Inspect existing `report-files --json`, `report-audit --json`, and optional metadata malformed-manifest tests in `tests/test_cli.py`.
-2. Add coverage for `report-files --json` when a file entry explicitly sets optional `symbol`, `window`, and `group_by` to `null`.
-3. Add coverage for `report-audit --json` when a file entry explicitly sets optional `symbol`, `window`, and `group_by` to `null`; create the referenced file so the audit can pass.
-4. Assert current valid command-boundary behavior: exit code `0`, no stderr, matched file count is correct, and existing JSON serialization behavior for `null` optional metadata is preserved.
+1. Inspect existing schema-version CLI JSON tests and schema-version type-error tests in `tests/test_cli.py`.
+2. Add coverage for `report-files --json` when the manifest explicitly sets top-level `schema_version` to `null`.
+3. Add coverage for `report-audit --json` when the manifest explicitly sets top-level `schema_version` to `null`; create the referenced file so the audit can pass.
+4. Assert current valid command-boundary behavior: exit code `0`, no stderr, matched file count is correct, and JSON payload reports `schema_version` as `null`.
 5. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
 6. Update handoff/progress/state/board docs after implementation.
 
@@ -90,7 +90,7 @@ None. This task adds regression coverage only unless a tiny bugfix is required.
 
 Valid CLI behavior should remain unchanged.
 
-Manifests with explicit `null` optional file-entry metadata should continue loading successfully through `report-files` and `report-audit`.
+Manifests with explicit `schema_version: null` should continue loading successfully through `report-files` and `report-audit`.
 
 ## Validation Plan
 
@@ -115,18 +115,18 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `report-files --json` accepts explicit `null` optional `symbol`, `window`, and `group_by` metadata with exit code `0`.
-- [ ] `report-audit --json` accepts explicit `null` optional `symbol`, `window`, and `group_by` metadata with exit code `0` when referenced files exist.
-- [ ] Existing JSON serialization behavior for `null` optional metadata is preserved.
+- [ ] `report-files --json` accepts explicit `schema_version: null` with exit code `0`.
+- [ ] `report-audit --json` accepts explicit `schema_version: null` with exit code `0` when referenced files exist.
+- [ ] Both JSON payloads report `schema_version` as `null`.
 - [ ] Existing valid-manifest CLI behavior remains unchanged.
-- [ ] Existing malformed-manifest CLI behavior for optional metadata type errors remains unchanged.
+- [ ] Existing malformed-manifest CLI behavior for schema-version type errors remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
 - Keep the new work scoped to CLI regression coverage.
-- Avoid changing whether JSON output omits or includes optional metadata keys whose value is `None`.
+- Avoid changing schema-version validation semantics.
 - Do not introduce CLI behavior changes for valid manifests.
 
 ## Instructions for Claude Code

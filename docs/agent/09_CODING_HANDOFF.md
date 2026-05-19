@@ -2,48 +2,59 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
 
 ## Written By
 
-CLAUDE_CODE
-
-## Intended Reviewer
-
 CODEX
+
+## Intended Implementer
+
+CLAUDE_CODE
 
 ## Status
 
-Implemented. Ready for Codex review.
+Ready for Claude Code implementation.
 
 ## Scope Summary
 
-- Add CLI regression coverage so `report-files --json` and `report-audit --json` both accept explicit `null` optional file-entry metadata (`symbol`, `window`, `group_by`) with exit code 0.
+Add CLI regression coverage so `report-files --json` and `report-audit --json` both accept explicit top-level `schema_version: null` and report `schema_version` as JSON `null`.
 
-## Files Changed
+## Files To Change
 
-- `tests/test_cli.py` — added 2 regression tests:
-  - `test_cli_report_files_json_accepts_null_optional_metadata`
-  - `test_cli_report_audit_json_accepts_null_optional_metadata`
+Expected:
 
-## Validation Results
+- `tests/test_cli.py`
+
+Update after implementation:
+
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+
+Do not change production code unless the new tests expose a real command-boundary bug.
+
+## Validation Required
 
 ```bash
-uv run pytest tests/test_cli.py -q  # 85 passed in 1.17s
-uv run pytest -q                     # 229 passed in 2.08s
-git diff --check                     # passed
+uv run pytest tests/test_cli.py -q
+uv run pytest -q
+scripts/check-progress-docs.sh
+git diff --check
 ```
 
-## Constraints
+## Handoff Notes
 
-- Do not change valid-manifest behavior. ✅ preserved
-- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
-- Do not modify forbidden files. ✅ compliant
-- Do not change JSON serialization for null metadata. ✅ preserved (keys omitted when None)
-- Do not push. ✅ not pushed
+- Use the existing `report-files --json` and `report-audit --json` schema-version tests as local patterns.
+- For `report-audit --json`, create the referenced file so the audit can return `status: ok`.
+- Preserve current schema-version validation semantics.
+- Keep the task test-only if existing loader/CLI behavior already passes.
 
 ## Git State
 
 - Branch: `master`
-- Uncommitted changes: 1 test file + docs
-- Last commit: `0083c82 Lock optional group-by manifest type failures at the CLI boundary`
+- Last accepted implementation commit: `cce750d Lock optional null manifest metadata at the CLI boundary`
+- Current task is ready for Claude Code.
+- Do not push.

@@ -4,23 +4,23 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001`: 2 CLI regression tests lock explicit `null` optional file-entry metadata (`symbol`, `window`, `group_by`) via `report-files --json` and `report-audit --json`. Validation passed (85 CLI tests, 229 full tests, progress-docs check, diff check, finalize check).
+Codex reviewed and accepted `QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001`, created local checkpoint `cce750d`, and prepared the next brief for explicit `null` top-level `schema_version` regression coverage.
 
 ## Next Required Step
 
-Codex should create the local checkpoint and prepare the next brief for explicit `null` top-level `schema_version` regression coverage.
+Claude Code should implement `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
@@ -29,8 +29,8 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `0083c82 Lock optional group-by manifest type failures at the CLI boundary`
-- Current task passed Codex review and is ready for local checkpoint.
+- Last accepted implementation commit: `cce750d Lock optional null manifest metadata at the CLI boundary`
+- Current task is planned and ready for Claude Code implementation.
 - Standing approval: NONE
 
 ## Short Prompt Commands
