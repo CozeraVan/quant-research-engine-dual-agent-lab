@@ -10,11 +10,11 @@ QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001
 
 ## Current Status
 
-Planned by Codex. Ready for Claude Code implementation.
+Review passed. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -29,10 +29,12 @@ CLAUDE_CODE
 - Codex review passed with no Required Fixes.
 - Local checkpoint created: `ac234d8 Lock manifest file-entry shape failures at the CLI boundary`.
 - Next task selected: CLI regression coverage for schema-version type errors.
+- Claude Code added 4 CLI regression tests: string and boolean `schema_version` across `report-files` and `report-audit`.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001`.
+Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001`.
 
 ## Expected Files
 
@@ -41,8 +43,8 @@ Claude Code should implement `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRES
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `73 passed in 0.98s`
-- Last accepted full validation: `uv run pytest -q` -> `217 passed in 2.12s`
+- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `77 passed in 1.00s`
+- Last accepted full validation: `uv run pytest -q` -> `221 passed in 1.97s`
 - `scripts/check-progress-docs.sh` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - `git diff --check` -> passed
@@ -55,4 +57,4 @@ Claude Code should implement `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRES
 
 ## Next Suggested Step
 
-Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.
+Codex should commit the accepted implementation locally, then prepare the next manifest CLI optional-entry metadata type regression brief for Claude Code.

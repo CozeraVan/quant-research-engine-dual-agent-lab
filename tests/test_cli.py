@@ -923,6 +923,62 @@ def test_cli_report_files_reports_unsupported_schema_version(capsys, tmp_path):
     assert "unsupported manifest schema_version" in captured.err
 
 
+def test_cli_report_files_reports_string_schema_version(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "v1",
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "unsupported manifest schema_version" in captured.err
+
+
+def test_cli_report_files_reports_boolean_schema_version(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": True,
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "unsupported manifest schema_version" in captured.err
+
+
 def test_cli_report_files_reports_missing_file_entry_field(capsys, tmp_path):
     manifest_path = tmp_path / "report_manifest.json"
     manifest_path.write_text(
@@ -967,6 +1023,62 @@ def test_cli_report_audit_reports_unsupported_schema_version(capsys, tmp_path):
         json.dumps(
             {
                 "schema_version": 2,
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "unsupported manifest schema_version" in captured.err
+
+
+def test_cli_report_audit_reports_string_schema_version(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "v1",
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "unsupported manifest schema_version" in captured.err
+
+
+def test_cli_report_audit_reports_boolean_schema_version(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": True,
                 "kind": "batch_backtest_report_manifest",
                 "files": [
                     {
