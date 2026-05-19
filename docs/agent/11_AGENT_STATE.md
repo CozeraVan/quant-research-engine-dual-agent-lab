@@ -4,15 +4,15 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
+QRE-EVAL-RANDOM-BASELINE-COMPARISON-001
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
@@ -20,7 +20,7 @@ Codex reviewed, repaired, validated, and committed eval-config output artifacts:
 
 ## Next Required Step
 
-None.
+Claude Code should implement `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Active Change Request
 
@@ -31,7 +31,7 @@ User request from 2026-05-19: review Claude Code work, inspect the agent files, 
 - Current branch: `master`
 - Last accepted implementation commit: `f592d4a Persist eval-config output artifacts with provenance`
 - Local finalize commit: `8c7b7f5 Record finalized acceptance state`
-- Working tree clean.
+- Working tree will include handoff updates until the next finalize.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

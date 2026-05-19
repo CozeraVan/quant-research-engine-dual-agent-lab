@@ -27,7 +27,7 @@
 | M3.3 | IC, Rank IC, quantile return | DONE | HISTORICAL | legacy progress records, tests | Preserve |
 | M3.4 | Rough friction-adjusted screening | DONE | HISTORICAL | `round_trip_cost_rate`, market-profile estimate | Preserve |
 | M3.5 | Regime and metadata group summaries | DONE | CODEX/CLAUDE_CODE | commit `b25cbd7`; 255 tests passed; evaluation metadata group summaries implemented | Preserve; real regime classification can follow later |
-| M3.6 | Benchmark/random-baseline comparison for evaluation | TODO | CLAUDE_CODE | documented gap | Defer until benchmark data source is confirmed |
+| M3.6 | Benchmark/random-baseline comparison for evaluation | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` for `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` | Implement deterministic random-baseline comparison; benchmark wiring remains blocked until table/schema confirmation |
 
 ## Milestone 4: Portfolio Engine
 
@@ -51,7 +51,7 @@
 | M5.2 | Report manifests | DONE | HISTORICAL | `report_manifest.json` | Preserve |
 | M5.3 | Report discovery and audit CLI | DONE | HISTORICAL | `qre report-files`, `qre report-audit` | Use in acceptance checks |
 | M5.4 | Strict zero-match report audit | DONE | HISTORICAL | `--require-match` | Preserve |
-| M5.5 | Larger research-run reproducibility workflow | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` for eval-config output artifacts | Claude Code implement evaluation output artifacts |
+| M5.5 | Larger research-run reproducibility workflow | DONE | CODEX/CLAUDE_CODE | commit `f592d4a`; `eval-config --output-dir` artifacts and manifests | Preserve |
 
 ## Milestone 6: Dual-Agent Workflow
 

@@ -78,6 +78,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `eval-config --output-dir`, `evaluation_report_manifest`, and `evaluation_run_manifest`.
 - Owner: CODEX
 
+### 2026-05-19: Select evaluation random-baseline comparison as next Claude task
+
+- Decision: The next Claude Code task is deterministic random-baseline comparison for evaluation output quality.
+- Reason: It advances evaluation realism without waiting on a confirmed benchmark table/schema, and it can be scoped without upstream data-source changes.
+- Alternatives: Start real index benchmark wiring immediately; start real suspension/ST/risk-warning metadata.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` and keeps real index benchmark wiring marked blocked.
+- Owner: CODEX, pending USER approval
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

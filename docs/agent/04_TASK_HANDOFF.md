@@ -2,19 +2,19 @@
 
 ## Current Task
 
-Add output artifacts and manifests for `qre eval-config`.
+Add deterministic random-baseline comparison for `qre eval-config`.
 
 ## Task ID
 
-QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
+QRE-EVAL-RANDOM-BASELINE-COMPARISON-001
 
 ## Current Status
 
-Accepted locally. Ready for user acceptance.
+Ready for Claude Code implementation.
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Completed
 
@@ -31,30 +31,37 @@ USER
 
 ## In Progress
 
-None. Ready for Codex review.
+- Random-baseline comparison brief approved and handed to Claude Code for implementation.
 
 ## Expected Files
 
-- `src/quant_research_engine/portfolio/report_manifest.py` (modified)
+- `src/quant_research_engine/evaluation/models.py` (modified)
+- `src/quant_research_engine/evaluation/engine.py` (modified)
 - `src/quant_research_engine/apps/cli.py` (modified)
-- `tests/test_cli.py` (2 new tests)
-- `tests/test_portfolio_report_manifest.py` (8 new tests)
+- `tests/test_evaluation_forward_returns.py` (new or expanded tests)
+- `tests/test_cli.py` (new or expanded tests)
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
 ## Validation Baseline
 
 - `uv run pytest tests/test_cli.py -q` -> `95 passed in 1.57s`
 - `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `34 passed`
 - `uv run pytest -q` -> `265 passed in 2.83s`
-- `scripts/check-progress-docs.sh` -> passed (after doc update)
+- `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
+- `scripts/git-finalize-check.sh` -> passed
 
 ## Known Risks
 
-- Output-dir is additive and optional; existing stdout behavior unchanged.
-- Existing portfolio report-manifest parsing remains compatible.
-- Run manifests omit sensitive connection values.
-- No evaluation math changed.
+- Random-baseline comparison must stay deterministic for regression stability.
+- Existing stdout behavior remains unchanged; any new comparison output must be opt-in or additive.
+- The real index benchmark wiring path remains blocked until the index table/schema is confirmed.
+- No evaluation math should change outside the new comparison summary.
 
 ## Next Suggested Step
 
-Codex should review and run One-Shot Review-Finalize-Next.
+Claude Code should implement `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` from `08_IMPLEMENTATION_BRIEF.md`.

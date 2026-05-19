@@ -6,11 +6,11 @@ QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_TO_USER
+CODEX_TO_CLAUDE_CODE
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Review complete. Eval-config output artifacts and manifests are accepted locally, and the run manifest now records `market_profile` provenance when used.
+Implementation handoff ready. Please implement deterministic random-baseline comparison for evaluation from `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
 ## Implementation Summary
 
@@ -30,6 +30,7 @@ Claude Code has completed the implementation:
 4. Run manifest records: schema_version, kind, command, strategy_path, start/end dates, codes, round_trip_cost_rate, `market_profile` when provided, group_by, artifacts — no sensitive connection values.
 5. `ReportManifest.from_path()` accepts `evaluation_report_manifest`; `validate_contents()` validates all evaluation artifact roles.
 6. Added 2 CLI regression tests (artifact writing, group_by+market_profile) and 8 manifest validation tests.
+7. Next stage brief approved and handed off for `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001`.
 
 ## Validation
 

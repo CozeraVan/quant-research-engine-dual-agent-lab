@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_REVIEWING
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -49,18 +49,19 @@ CODEX_REVIEWING
 | QRE-NEXT-32 | Portfolio backtest run manifest reproducibility | DONE | CODEX/CLAUDE_CODE | commit `dea224a`; 246 tests passed; run_manifest.json for single, batch, shared; explicit role mapping; emitted manifests validate run manifests | Preserve |
 | QRE-NEXT-33 | Evaluation metadata group summaries | DONE | CODEX/CLAUDE_CODE | commit `b25cbd7`; 255 passed in 2.45s; 6 engine tests + 2 CLI tests; group_summary in EvaluationResult; `eval-config --group-by` CLI support; Codex review passed | Preserve |
 | QRE-NEXT-34 | Eval-config output artifacts and manifests | DONE | CODEX/CLAUDE_CODE | 265 passed in 2.83s; 2 CLI tests + 8 manifest tests; `--output-dir` writes events/summary/ic/quantile/group CSVs + run_manifest.json + report_manifest.json; evaluation_report_manifest kind; ReportManifest validates evaluation artifact roles; run_manifest records `market_profile` provenance when used | Codex review and local finalize |
+| QRE-NEXT-35 | Evaluation random-baseline comparison | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` for `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` | Implement deterministic baseline comparison |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after implementing QRE-NEXT-34:
+Recorded on 2026-05-19 after handoff to QRE-NEXT-35 implementation:
 
 - `uv run pytest tests/test_cli.py -q` -> `95 passed in 1.57s`
 - `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `34 passed`
 - `uv run pytest -q` -> `265 passed in 2.83s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Current task: `QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001`
-- Next step: Local finalize and record acceptance
+- Current task: `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001`
+- Next step: Claude Code implement brief
 
 ## Completed Module Summary
 
