@@ -132,6 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_config_parser.add_argument("--codes", nargs="*", default=None)
     eval_config_parser.add_argument("--round-trip-cost-rate", type=float, default=None)
     eval_config_parser.add_argument("--market-profile", type=Path, help="Optional market profile YAML for rough friction estimate.")
+    eval_config_parser.add_argument("--group-by", nargs="*", default=None, help="Optional grouping columns for event forward-return summaries, e.g. board industry")
 
     preflight_parser = subparsers.add_parser("preflight", help="Run read-only data and factor checks before broad runs")
     preflight_parser.add_argument("strategy", type=Path)
@@ -610,6 +611,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 end=args.end,
                 market_fields=spec.market_fields,
                 factor_fields=spec.factor_fields,
+                include_metadata=bool(args.group_by),
             )
             result = EvaluationEngine().evaluate(
                 frame,
@@ -619,6 +621,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     factor_columns=[factor.logical_name for factor in spec.factor_fields],
                     quantiles=spec.quantiles,
                     round_trip_cost_rate=resolve_round_trip_cost_rate(args),
+                    group_by=args.group_by,
                 ),
             )
         except Exception as exc:
@@ -636,6 +639,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not result.quantile_summary.empty:
             print("quantile_summary")
             print(result.quantile_summary.to_csv(index=False).strip())
+        if not result.group_summary.empty:
+            print("group_summary")
+            print(result.group_summary.to_csv(index=False).strip())
         return 0
 
     if args.command == "preflight":

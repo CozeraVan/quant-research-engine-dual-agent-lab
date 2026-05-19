@@ -396,6 +396,144 @@ def test_cli_eval_config_can_estimate_round_trip_cost_from_market_profile(capsys
     assert "0.00212" in captured.out
 
 
+def test_cli_eval_config_group_by_prints_group_summary(capsys, monkeypatch):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06", "2026-01-07"]
+                    ),
+                    "open": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "high": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "low": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "close": [10.0, 11.0, 20.0, 18.0, 19.8],
+                    "pre_close": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "vol": [1.0, 1.0, 1.0, 1.0, 1.0],
+                    "amount": [100.0, 100.0, 100.0, 100.0, 100.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06", "2026-01-07"]
+                    ),
+                    "rsi_2": [5.0, 15.0, 12.0, 6.0, 8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000002.SZ"],
+                    "board": ["main_board", "star_market"],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--group-by",
+            "board",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "group_summary" in captured.out
+    assert "board" in captured.out
+    assert "main_board" in captured.out
+    assert "star_market" in captured.out
+
+
+def test_cli_eval_config_group_by_missing_column_raises_error(capsys, monkeypatch):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "open": [10.0, 10.0],
+                    "high": [10.0, 10.0],
+                    "low": [10.0, 10.0],
+                    "close": [10.0, 11.0],
+                    "pre_close": [10.0, 10.0],
+                    "vol": [1.0, 1.0],
+                    "amount": [100.0, 100.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "rsi_2": [5.0, 15.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "board": ["main_board"],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--group-by",
+            "missing_column",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "missing requested group columns" in captured.err
+
+
 def test_cli_preflight_prints_read_only_report(capsys, monkeypatch):
     class FakeStore:
         def __init__(self, settings):

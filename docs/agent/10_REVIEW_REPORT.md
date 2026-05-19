@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001
+QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001
 
 ## Written By
 
@@ -18,11 +18,11 @@ Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
+- `src/quant_research_engine/evaluation/models.py`
+- `src/quant_research_engine/evaluation/engine.py`
 - `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_io.py`
-- `tests/test_portfolio_report_manifest.py`
+- `tests/test_evaluation_forward_returns.py`
+- `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -33,66 +33,68 @@ Changed files reviewed:
 
 Review passed.
 
-Portfolio backtest output directories now support a safe `run_manifest.json` artifact for single-symbol, batch, and shared-cash runs. The run manifest records command, strategy path, request metadata, and emitted artifact keys while omitting sensitive connection values. Batch and shared report manifests now expose the artifact with role `run_manifest`, and content validation covers emitted run manifests as JSON objects.
+The evaluation engine now supports optional metadata grouping. `EvaluationRequest.group_by` validates existing research-frame columns, signal events preserve requested group labels, and `EvaluationResult.group_summary` reports event forward-return statistics by group column, group value, and horizon. The `eval-config` CLI now accepts `--group-by`, loads metadata when grouping is requested, and prints a `group_summary` section when available.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `run_manifest.json` is written for portfolio output-dir code paths.
-- The run manifest records command, strategy path, request inputs, and artifact list.
-- Execution-affecting inputs are captured, including market profile selection, batch grouping controls, and shared benchmark controls.
-- Existing result files and report manifests remain intact.
-- `report-files` and `report-audit` continue to work.
-- Emitted batch/shared report manifests expose `run_manifest` with role `run_manifest`.
-- `ReportManifest.validate_contents(role="run_manifest")` validates emitted run manifests as JSON objects.
+- `EvaluationRequest(group_by=[...])` validates requested group columns.
+- `result.events` preserves requested group labels.
+- `EvaluationResult.group_summary` contains grouped event statistics by group column, group value, and horizon.
+- Group summaries include adjusted-return metrics when `round_trip_cost_rate` is configured.
+- Default evaluation behavior remains unchanged when grouping is omitted.
+- `qre eval-config --group-by board` loads metadata through the assembler and prints `group_summary`.
+- Missing group columns raise a clear `ValueError`.
 
 ## Locked Requirements Check
 
 No locked-requirement violation found.
 
-- R-CORE-001: Existing behavior is preserved.
+- R-CORE-001: Existing evaluation behavior is preserved.
 - R-CORE-002: No unrelated rewrite observed.
 - R-CORE-003: Focused and full validation passed.
-- R-CORE-004 / R-QRE-006: No sensitive values added.
-- R-QRE-003: No signal, execution, or portfolio decision logic changed.
-- R-QRE-005: No database access or writes added.
-- R-QRE-007: Report artifacts and manifest contracts remain compatible.
-- R-DUAL-002: Claude Code implemented within the approved brief and review fixes.
+- R-CORE-004 / R-QRE-006: No sensitive connection values added.
+- R-QRE-002: No indicator computation added.
+- R-QRE-003: Group labels come from current event rows.
+- R-QRE-005: Data access remains read-only.
+- R-DUAL-002: Claude Code implemented within the approved brief.
 
 ## Code Quality Review
 
-The change is additive and follows existing writer/manifest patterns. The dedicated `run_manifest` role keeps validation explicit, and the request payload stays serializable and limited to safe run metadata.
+The change is additive and small. The grouped summary mirrors the existing event-summary metric shape, keeps missing group columns explicit, and avoids adding new data-source assumptions. CLI behavior remains opt-in.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
-uv run pytest tests/test_portfolio_io.py -q
-uv run pytest tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_evaluation_forward_returns.py -q
 uv run pytest tests/test_cli.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
+scripts/git-finalize-check.sh
 ```
 
 Results:
 
-- `uv run pytest tests/test_portfolio_io.py -q`: `14 passed`
-- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `26 passed`
-- `uv run pytest tests/test_cli.py -q`: `91 passed`
-- `uv run pytest -q`: `246 passed in 2.37s`
+- `uv run pytest tests/test_evaluation_forward_returns.py -q`: `14 passed in 0.39s`
+- `uv run pytest tests/test_cli.py -q`: `93 passed in 1.30s`
+- `uv run pytest -q`: `255 passed in 2.45s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
+- `scripts/git-finalize-check.sh`: passed after wording cleanup in agent docs
 
 Coverage is adequate:
 
-- single, batch, and shared writers emit `run_manifest.json`;
-- optional no-manifest writer behavior remains covered;
-- batch/shared report manifests expose `run_manifest` with role `run_manifest`;
-- emitted batch/shared report manifests validate their generated run manifest through `ReportManifest.validate_contents(role="run_manifest")`;
-- malformed/non-object run manifests still report validation issues.
+- default empty `group_summary`;
+- event group-label preservation;
+- single and multiple grouping columns;
+- multiple horizons;
+- adjusted metrics with cost;
+- missing group-column error;
+- CLI `group_summary` output and CLI error handling.
 
 ## Required Fixes
 
@@ -100,12 +102,12 @@ None.
 
 ## Recommended Improvements
 
-Future work can add a higher-level research-run bundle that connects preflight, evaluation, and backtest outputs under one run identifier. Not required for this task.
+Future work can persist evaluation outputs to an output directory with a report manifest and run manifest, so evaluation runs have the same reproducibility surface as portfolio backtests. Not required for this task.
 
 ## Follow-up Tasks
 
 - Create the local checkpoint for this accepted implementation.
-- Prepare the next brief only when a new self-contained task is selected.
+- Prepare the next implementation brief for evaluation output artifacts.
 
 ## Final Recommendation
 

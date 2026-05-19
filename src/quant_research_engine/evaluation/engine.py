@@ -32,7 +32,8 @@ class EvaluationEngine:
             if request.round_trip_cost_rate is not None
             else []
         )
-        events = working.loc[working["signal"], ["ts_code", "trade_date", *forward_columns, *adjusted_columns]].copy()
+        group_columns = request.group_by or []
+        events = working.loc[working["signal"], ["ts_code", "trade_date", *forward_columns, *adjusted_columns, *group_columns]].copy()
         events = events.dropna(subset=forward_columns, how="all").reset_index(drop=True)
         summary = self._build_summary(events, request.forward_horizons, request.round_trip_cost_rate)
         factor_columns = request.factor_columns or []
@@ -43,11 +44,15 @@ class EvaluationEngine:
             request.forward_horizons,
             request.quantiles,
         )
+        group_summary = self._build_group_summary(
+            events, request.forward_horizons, group_columns, request.round_trip_cost_rate
+        )
         return EvaluationResult(
             events=events,
             summary=summary,
             ic_summary=ic_summary,
             quantile_summary=quantile_summary,
+            group_summary=group_summary,
         )
 
     def _validate_frame(self, frame: pd.DataFrame, request: EvaluationRequest) -> None:
@@ -55,6 +60,10 @@ class EvaluationEngine:
         missing = sorted(required_columns.difference(frame.columns))
         if missing:
             raise ValueError(f"research frame missing required columns: {missing}")
+        if request.group_by:
+            missing_group = sorted(set(request.group_by).difference(frame.columns))
+            if missing_group:
+                raise ValueError(f"research frame missing requested group columns: {missing_group}")
 
     def _build_summary(
         self,
@@ -84,6 +93,49 @@ class EvaluationEngine:
                     }
                 )
             rows.append(row)
+        return pd.DataFrame(rows)
+
+    def _build_group_summary(
+        self,
+        events: pd.DataFrame,
+        horizons: list[int],
+        group_columns: list[str],
+        round_trip_cost_rate: float | None = None,
+    ) -> pd.DataFrame:
+        if not group_columns:
+            return pd.DataFrame()
+        rows = []
+        for group_column in group_columns:
+            for group_value, group_events in events.groupby(group_column, sort=False):
+                for horizon in horizons:
+                    column = f"forward_return_{horizon}"
+                    series = group_events[column].dropna()
+                    row: dict[str, object] = {
+                        "group_by": group_column,
+                        "group_value": group_value,
+                        "horizon": horizon,
+                        "event_count": int(series.shape[0]),
+                        "mean_forward_return": None if series.empty else float(series.mean()),
+                        "median_forward_return": None if series.empty else float(series.median()),
+                        "win_rate": None if series.empty else float((series > 0).mean()),
+                    }
+                    if round_trip_cost_rate is not None:
+                        adjusted = group_events[f"adjusted_forward_return_{horizon}"].dropna()
+                        row.update(
+                            {
+                                "round_trip_cost_rate": round_trip_cost_rate,
+                                "mean_adjusted_forward_return": (
+                                    None if adjusted.empty else float(adjusted.mean())
+                                ),
+                                "median_adjusted_forward_return": (
+                                    None if adjusted.empty else float(adjusted.median())
+                                ),
+                                "adjusted_win_rate": (
+                                    None if adjusted.empty else float((adjusted > 0).mean())
+                                ),
+                            }
+                        )
+                    rows.append(row)
         return pd.DataFrame(rows)
 
     def _build_ic_summary(self, frame: pd.DataFrame, factor_columns: list[str], horizons: list[int]) -> pd.DataFrame:

@@ -8,19 +8,19 @@ QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex finalized `QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001` locally as commit `dea224a`, selected the next self-contained roadmap item, and wrote a new implementation brief.
+Codex reviewed and accepted `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001`.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04`, `05`, `09`, `11`, and `12` with coding handoff evidence.
+Codex should create the local checkpoint and prepare the next implementation brief.
 
 ## Active Change Request
 
@@ -30,7 +30,7 @@ User request from 2026-05-19: generate the next implementation brief and transfe
 
 - Current branch: `master`
 - Last accepted implementation commit: `dea224a Preserve portfolio backtest provenance in output directories`
-- New planning handoff checkpoint created locally; see latest git log entry.
+- Current task is accepted locally; checkpoint pending.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands
@@ -38,7 +38,7 @@ User request from 2026-05-19: generate the next implementation brief and transfe
 ### For Claude Code
 
 ```text
-请读取 08，11 和 12，执行当前 Claude Code 任务。
+请读取 11 和 12，执行当前 Claude Code 任务。
 ```
 
 ### For Codex

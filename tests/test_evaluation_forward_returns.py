@@ -141,6 +141,123 @@ def test_evaluation_engine_computes_quantile_forward_returns():
     assert records[1]["mean_forward_return"] == pytest.approx(0.15)
 
 
+def test_evaluation_engine_group_summary_is_empty_when_group_by_not_requested():
+    engine = EvaluationEngine()
+    request = EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1])
+
+    result = engine.evaluate(make_research_frame(), request)
+
+    assert result.group_summary.empty
+
+
+def test_evaluation_engine_preserves_group_columns_in_events():
+    frame = make_research_frame()
+    frame["board"] = ["main_board", "main_board", "main_board", "star_market", "star_market", "star_market"]
+    engine = EvaluationEngine()
+    request = EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1], group_by=["board"])
+
+    result = engine.evaluate(frame, request)
+
+    assert "board" in result.events.columns
+    assert result.events.iloc[0]["board"] == "main_board"
+    assert result.events.iloc[1]["board"] == "star_market"
+
+
+def test_evaluation_engine_builds_group_summary_for_single_column():
+    frame = make_research_frame()
+    frame["board"] = ["main_board", "main_board", "main_board", "star_market", "star_market", "star_market"]
+    engine = EvaluationEngine()
+    request = EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1], group_by=["board"])
+
+    result = engine.evaluate(frame, request)
+
+    assert not result.group_summary.empty
+    assert list(result.group_summary.columns) == [
+        "group_by", "group_value", "horizon", "event_count",
+        "mean_forward_return", "median_forward_return", "win_rate",
+    ]
+    # One event per group: 000001.SZ on 2026-01-05 for main_board, 000002.SZ on 2026-01-06 for star_market
+    main_row = result.group_summary[result.group_summary["group_value"] == "main_board"].iloc[0]
+    assert main_row["group_by"] == "board"
+    assert main_row["horizon"] == 1
+    assert main_row["event_count"] == 1
+    assert main_row["mean_forward_return"] == pytest.approx(0.1)
+    assert main_row["win_rate"] == 1.0
+    star_row = result.group_summary[result.group_summary["group_value"] == "star_market"].iloc[0]
+    assert star_row["event_count"] == 1
+    assert star_row["mean_forward_return"] == pytest.approx(0.1)
+
+
+def test_evaluation_engine_builds_group_summary_for_multiple_columns():
+    frame = make_research_frame()
+    frame["board"] = ["main_board", "main_board", "main_board", "star_market", "star_market", "star_market"]
+    frame["industry"] = ["bank", "bank", "bank", "tech", "tech", "tech"]
+    engine = EvaluationEngine()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 10",
+        forward_horizons=[1],
+        group_by=["board", "industry"],
+    )
+
+    result = engine.evaluate(frame, request)
+
+    board_values = set(result.group_summary[result.group_summary["group_by"] == "board"]["group_value"])
+    industry_values = set(result.group_summary[result.group_summary["group_by"] == "industry"]["group_value"])
+    assert board_values == {"main_board", "star_market"}
+    assert industry_values == {"bank", "tech"}
+
+
+def test_evaluation_engine_builds_group_summary_for_multiple_horizons():
+    frame = make_research_frame()
+    frame["board"] = ["main_board", "main_board", "main_board", "star_market", "star_market", "star_market"]
+    engine = EvaluationEngine()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 10",
+        forward_horizons=[1, 2],
+        group_by=["board"],
+    )
+
+    result = engine.evaluate(frame, request)
+
+    horizons = set(result.group_summary["horizon"])
+    assert horizons == {1, 2}
+
+
+def test_evaluation_engine_group_summary_includes_adjusted_metrics_when_cost_is_set():
+    frame = make_research_frame()
+    frame["board"] = ["main_board", "main_board", "main_board", "star_market", "star_market", "star_market"]
+    engine = EvaluationEngine()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 10",
+        forward_horizons=[1],
+        group_by=["board"],
+        round_trip_cost_rate=0.02,
+    )
+
+    result = engine.evaluate(frame, request)
+
+    assert "round_trip_cost_rate" in result.group_summary.columns
+    assert "mean_adjusted_forward_return" in result.group_summary.columns
+    assert "median_adjusted_forward_return" in result.group_summary.columns
+    assert "adjusted_win_rate" in result.group_summary.columns
+    main_row = result.group_summary[result.group_summary["group_value"] == "main_board"].iloc[0]
+    assert main_row["round_trip_cost_rate"] == pytest.approx(0.02)
+    assert main_row["mean_adjusted_forward_return"] == pytest.approx(0.08)
+    assert main_row["adjusted_win_rate"] == 1.0
+
+
+def test_evaluation_engine_raises_on_missing_group_column():
+    engine = EvaluationEngine()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 10",
+        forward_horizons=[1],
+        group_by=["board"],
+    )
+
+    with pytest.raises(ValueError, match="missing requested group columns"):
+        engine.evaluate(make_research_frame(), request)
+
+
 def test_evaluation_engine_computes_friction_adjusted_event_summary():
     result = EvaluationEngine().evaluate(
         make_research_frame(),

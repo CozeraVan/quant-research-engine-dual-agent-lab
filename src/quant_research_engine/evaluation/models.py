@@ -13,6 +13,7 @@ class EvaluationRequest:
     factor_columns: list[str] | None = None
     quantiles: int | None = None
     round_trip_cost_rate: float | None = None
+    group_by: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -21,3 +22,4 @@ class EvaluationResult:
     summary: pd.DataFrame
     ic_summary: pd.DataFrame
     quantile_summary: pd.DataFrame
+    group_summary: pd.DataFrame

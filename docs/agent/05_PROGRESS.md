@@ -47,26 +47,25 @@ DONE
 | QRE-NEXT-30 | CLI regression coverage for exact `report-audit --json` issue payload details | DONE | CODEX/CLAUDE_CODE | local commit `dff2889`; per-issue `key`/`code`/`path`/`message` assertions for `missing_file` and `missing_columns`; 235 tests passed | Preserve |
 | QRE-NEXT-31 | Shared-cash failed-order side diagnostics and summary analysis | DONE | CODEX/CLAUDE_CODE | local finalization; 238 tests passed; side-level diagnostics in `shared.py` and `io.py` | Preserve |
 | QRE-NEXT-32 | Portfolio backtest run manifest reproducibility | DONE | CODEX/CLAUDE_CODE | commit `dea224a`; 246 tests passed; run_manifest.json for single, batch, shared; explicit role mapping; emitted manifests validate run manifests | Preserve |
-| QRE-NEXT-33 | Evaluation metadata group summaries | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001` | Claude Code implement from brief |
+| QRE-NEXT-33 | Evaluation metadata group summaries | DONE | CODEX/CLAUDE_CODE | 255 passed in 2.45s; 6 engine tests + 2 CLI tests; group_summary in EvaluationResult; `eval-config --group-by` CLI support; Codex review passed | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after Codex local finalization of QRE-NEXT-32 and planning handoff for QRE-NEXT-33:
+Recorded on 2026-05-19 after Codex acceptance of QRE-NEXT-33:
 
-- `uv run pytest tests/test_portfolio_io.py -q` -> `14 passed`
-- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `26 passed`
-- `uv run pytest tests/test_cli.py -q` -> `91 passed`
-- `uv run pytest -q` -> `246 passed in 2.37s`
+- `uv run pytest tests/test_evaluation_forward_returns.py -q` -> `14 passed in 0.39s`
+- `uv run pytest tests/test_cli.py -q` -> `93 passed in 1.30s`
+- `uv run pytest -q` -> `255 passed in 2.45s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
+- `scripts/git-finalize-check.sh` -> passed
 - Current task: `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001`
-- Last checkpoint: `dea224a Preserve portfolio backtest provenance in output directories`
-- Next step: Claude Code implements evaluation metadata group summaries from `08_IMPLEMENTATION_BRIEF.md`
+- Next step: create local checkpoint and prepare next implementation brief
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
-- Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
+- Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
 - Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility.
 
@@ -74,8 +73,7 @@ Recorded on 2026-05-19 after Codex local finalization of QRE-NEXT-32 and plannin
 
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
-- Industry, board, market-cap, liquidity, membership, and regime grouping.
-- Evaluation metadata group summaries now scoped for implementation.
+- Industry, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
 
