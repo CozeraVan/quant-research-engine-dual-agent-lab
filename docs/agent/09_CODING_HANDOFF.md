@@ -14,7 +14,7 @@ CODEX
 
 ## Status
 
-Accepted locally. Ready for Codex finalization.
+Accepted locally and committed.
 
 ## Implementation Summary
 
@@ -55,5 +55,5 @@ scripts/git-finalize-check.sh                               # passed
 ## Git State
 
 - Branch: `master`
-- All code and doc changes uncommitted.
-- Ready for Codex finalize/commit.
+- Commit: `f592d4a Persist eval-config output artifacts with provenance`
+- Working tree clean after local finalize.

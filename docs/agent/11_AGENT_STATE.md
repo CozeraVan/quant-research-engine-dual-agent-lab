@@ -8,19 +8,19 @@ QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+DONE
 
 ## Current Owner
 
-CODEX
+USER
 
 ## Last Completed Step
 
-Codex reviewed and repaired eval-config output artifacts: `evaluation_report_manifest` kind, evaluation artifact role column validation, `--output-dir` on `eval-config`, CSV artifact writing, `run_manifest.json` with safe run metadata including `market_profile` provenance, `report_manifest.json` with role mapping. Full suite: 265 passed in 2.83s.
+Codex reviewed, repaired, validated, and committed eval-config output artifacts: `evaluation_report_manifest` kind, evaluation artifact role column validation, `--output-dir` on `eval-config`, CSV artifact writing, `run_manifest.json` with safe run metadata including `market_profile` provenance, and `report_manifest.json` with role mapping. Commit `f592d4a`. Full suite: 265 passed in 2.83s.
 
 ## Next Required Step
 
-Codex should complete local finalization and record the accepted state.
+None.
 
 ## Active Change Request
 

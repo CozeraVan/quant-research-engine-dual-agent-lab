@@ -10,11 +10,11 @@ QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
 
 ## Current Status
 
-Implemented. Ready for Codex review.
+Accepted locally. Ready for user acceptance.
 
 ## Current Owner
 
-CODEX
+USER
 
 ## Completed
 
