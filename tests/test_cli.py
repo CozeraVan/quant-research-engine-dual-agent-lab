@@ -2268,3 +2268,115 @@ def test_cli_report_audit_reports_non_string_file_entry_field(capsys, tmp_path):
 
     assert exit_code == 2
     assert "manifest file entry field 'path' must be a string" in captured.err
+
+
+def test_cli_report_files_reports_non_string_optional_symbol(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                        "symbol": 123,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest file entry field 'symbol' must be a string or null" in captured.err
+
+
+def test_cli_report_files_reports_non_string_optional_window(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                        "window": 456,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest file entry field 'window' must be a string or null" in captured.err
+
+
+def test_cli_report_audit_reports_non_string_optional_symbol(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                        "symbol": 123,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest file entry field 'symbol' must be a string or null" in captured.err
+
+
+def test_cli_report_audit_reports_non_string_optional_window(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                        "window": 456,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "manifest file entry field 'window' must be a string or null" in captured.err

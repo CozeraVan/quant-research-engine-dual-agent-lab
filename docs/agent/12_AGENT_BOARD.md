@@ -6,11 +6,11 @@ QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CODEX_REVIEW_RESULT
 
 ## Sender
 
@@ -18,25 +18,26 @@ CODEX
 
 ## Short Message
 
-Add CLI regression coverage so `report-files` and `report-audit` both surface non-string optional file-entry metadata fields with exit code `2` and clear stderr, without changing valid-manifest behavior.
+Review passed for optional file-entry metadata type regression coverage. The implementation is accepted: 4 CLI tests lock non-string optional `symbol` and `window` across `report-files` and `report-audit`; 81 CLI tests and 225 full tests pass. Ready for local checkpoint and next brief.
 
 ## Implementation Summary
 
-1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
-2. Add `report-files` coverage for non-string optional `symbol`.
-3. Add `report-files` coverage for non-string optional `window`.
-4. Add `report-audit` coverage for non-string optional `symbol`.
-5. Add `report-audit` coverage for non-string optional `window`.
-6. Keep the task test-focused and touch CLI or loader code only if a real bug is exposed.
-7. Update `04`, `05`, `09`, `11`, and `12`.
+1. Claude Code inspected existing malformed-manifest CLI tests in `tests/test_cli.py`.
+2. Claude Code added `test_cli_report_files_reports_non_string_optional_symbol`.
+3. Claude Code added `test_cli_report_files_reports_non_string_optional_window`.
+4. Claude Code added `test_cli_report_audit_reports_non_string_optional_symbol`.
+5. Claude Code added `test_cli_report_audit_reports_non_string_optional_window`.
+6. No CLI or loader code changes needed because existing `ReportFile.from_mapping()` optional-field validation already handled these cases.
+7. Codex reviewed the implementation, updated `10_REVIEW_REPORT.md`, and accepted the task with no Required Fixes.
 
 ## Constraints Check
 
-- No CLI/reporting behavior changes for valid manifests.
-- Scoped only to CLI regression coverage for optional file-entry metadata type errors.
-- Preserve existing malformed-manifest exit-code and stderr behavior.
-- No forbidden files modified.
-- Not pushed.
+- ✅ No CLI/reporting behavior changes for valid manifests.
+- ✅ Scoped only to CLI regression coverage for optional file-entry metadata type errors.
+- ✅ Preserved existing malformed-manifest exit-code and stderr behavior.
+- ✅ No forbidden files modified.
+- ✅ Codex validation passed: focused tests, full tests, progress docs, diff check, and finalize check.
+- ✅ Not pushed.
 
 ## Expected Files
 

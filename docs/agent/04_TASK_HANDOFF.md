@@ -10,11 +10,11 @@ QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001
 
 ## Current Status
 
-Planned by Codex. Ready for Claude Code implementation.
+Review passed. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -33,10 +33,12 @@ CLAUDE_CODE
 - Codex review passed with no Required Fixes.
 - Local checkpoint created: `bdce0fa Lock schema-version type failures at the CLI boundary`.
 - Next task selected: CLI regression coverage for optional file-entry metadata type errors.
+- Claude Code added 4 CLI regression tests: non-string optional `symbol` and `window` across `report-files` and `report-audit`.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001`.
+Codex should create the local checkpoint for `QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001`, then prepare the next brief.
 
 ## Expected Files
 
@@ -45,11 +47,11 @@ Claude Code should implement `QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRES
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `77 passed in 1.00s`
-- Last accepted full validation: `uv run pytest -q` -> `221 passed in 1.97s`
+- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `81 passed in 1.09s`
+- Last accepted full validation: `uv run pytest -q` -> `225 passed in 2.19s`
 - `scripts/check-progress-docs.sh` -> passed
-- `scripts/git-finalize-check.sh` -> passed
 - `git diff --check` -> passed
+- `scripts/git-finalize-check.sh` -> passed
 
 ## Known Risks
 
@@ -59,4 +61,4 @@ Claude Code should implement `QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRES
 
 ## Next Suggested Step
 
-Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.
+Codex should commit locally, then prepare the next manifest CLI optional `group_by` type regression brief.
