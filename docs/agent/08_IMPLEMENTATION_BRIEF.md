@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
+QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001
 
 ## Created By
 
@@ -14,32 +14,29 @@ CLAUDE_CODE
 
 ## Background
 
-`qre report-audit --json` already has coverage for valid audits, zero-match failures, and mixed failure cases. The mixed failure coverage currently checks aggregate counts and issue codes, but it does not directly lock the full issue object payload shape that script consumers rely on: `key`, `code`, `path`, and `message`.
+Shared-cash backtests already emit failed-order rows and summary counts by reason and failure_reason. The current summary does not surface side-level breakdowns, so users cannot quickly see whether failed orders cluster on buys or sells. `docs/agent/01_CURRENT_STATUS.md` calls out richer reason categorization and summary analysis as the next self-contained implementation task.
 
 ## Goal
 
-Add CLI regression coverage for exact `report-audit --json` issue payload details while preserving existing audit JSON behavior.
+Add richer shared-cash failed-order diagnostics and summary analysis, with side-level aggregate metrics surfaced in summary JSON and Markdown, while preserving existing failed-order behavior.
 
 ## Non-Goals
 
-- Do not change valid-manifest behavior.
-- Do not change CLI flags or normal CLI output for valid manifests.
-- Do not change report writer output.
-- Do not change portfolio simulation behavior.
-- Do not add database access.
-- Do not broaden this into report-audit redesign.
-- Do not modify CLI or loader code unless a tiny adjustment is strictly necessary.
+- Do not change order-generation, fill, or blocking logic.
+- Do not change single-symbol or batch backtests.
+- Do not change benchmark or data-source wiring.
+- Do not add database writes.
+- Do not broaden this into a new reporting framework.
+- Do not modify CLI flags or output formats outside the existing summary artifacts.
 
 ## Affected Modules
 
 Expected:
 
-- `tests/test_cli.py`
-
-Optional only if strictly needed:
-
-- `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
+- `src/quant_research_engine/portfolio/shared.py`
+- `src/quant_research_engine/portfolio/io.py`
+- `tests/test_portfolio_shared.py`
+- `tests/test_portfolio_io.py`
 
 Docs/handoff:
 
@@ -51,7 +48,7 @@ Docs/handoff:
 
 ## Forbidden Files
 
-- `src/**` outside `apps/cli.py` and `portfolio/report_manifest.py`
+- `src/**` outside `shared.py` and `io.py`
 - `uv.lock`
 - `pyproject.toml`
 - database credentials or `.env*`
@@ -66,66 +63,66 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve report-audit JSON output behavior.
-- Preserve issue object fields and issue counts for missing-file and missing-column failures.
+- Preserve shared-cash execution behavior.
+- Preserve existing failed-order reason and failure_reason breakdowns.
+- Keep output persistence and Markdown formatting compatible with current report artifacts.
 - No database writes or credential handling.
-- No unrelated CLI or reporting refactors.
+- No unrelated portfolio refactors.
 
 ## Implementation Steps
 
-1. Inspect existing `report-audit --json` failure tests in `tests/test_cli.py`.
-2. Add or strengthen coverage for a missing-file issue object with exact `key`, `code`, `path`, and message content.
-3. Add or strengthen coverage for a missing-columns issue object with exact `key`, `code`, `path`, and message content.
-4. Assert current command-boundary behavior: exit code `2`, JSON `status: failed`, issue counts remain correct, and issue payload fields are stable.
-5. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
-6. Update handoff/progress/state/board docs after implementation.
+1. Inspect existing failed-order aggregation and Markdown rendering.
+2. Add side-level failed-order diagnostics to shared-cash summary, including counts and notional by `side`.
+3. Keep existing `reason` and `failure_reason` aggregates unchanged.
+4. Surface the new side breakdown in Markdown summary output when failed orders exist.
+5. Keep empty-result summaries stable with zero counts and empty mappings.
+6. Add regression tests for non-empty and empty failed-order summary cases.
+7. Update handoff and progress docs.
 
 ## Data / Schema Changes
 
-None. This task adds regression coverage only unless a tiny bugfix is required.
+None.
 
 ## API / Interface Changes
 
-Valid CLI behavior should remain unchanged.
+Shared-cash summary JSON should continue exposing existing failed-order keys and additionally include side-level diagnostics, likely:
 
-`report-audit --json` issue objects should continue exposing stable `key`, `code`, `path`, and `message` fields.
+- `failed_order_count_by_side`
+- `failed_order_notional_by_side`
+
+Markdown summary should render the side breakdown in a human-readable way.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_cli.py -q
+uv run pytest tests/test_portfolio_shared.py -q
+uv run pytest tests/test_portfolio_io.py -q
 ```
 
-Run full tests:
+Run full tests and workflow checks:
 
 ```bash
 uv run pytest -q
-```
-
-Run workflow checks:
-
-```bash
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
 ## Acceptance Criteria
 
-- [ ] `report-audit --json` missing-file issue objects expose stable `key`, `code`, `path`, and `message`.
-- [ ] `report-audit --json` missing-columns issue objects expose stable `key`, `code`, `path`, and `message`.
-- [ ] JSON `status`, `missing_files`, `validation_issues`, and issue counts remain correct.
-- [ ] Existing valid `report-audit --json` behavior remains unchanged.
-- [ ] Existing zero-match `report-audit --json --require-match` behavior remains unchanged.
+- [ ] Shared-cash summary JSON includes side-level failed-order count and notional breakdowns.
+- [ ] Markdown summary surfaces the side breakdown when failed orders exist.
+- [ ] Existing failed-order reason and failure_reason summaries remain unchanged.
+- [ ] Empty-result summaries still expose stable zero / empty failed-order diagnostics.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
-- Keep the new work scoped to CLI regression coverage.
-- Avoid changing issue object field names or message wording unless a real bug is exposed.
-- Do not introduce CLI behavior changes for valid manifests.
+- Keep new diagnostics additive only.
+- Avoid altering failed-order row generation or the meanings of existing reason strings.
+- Do not introduce CLI changes beyond the summary artifacts already written by the portfolio layer.
 
 ## Instructions for Claude Code
 
@@ -136,12 +133,7 @@ Claude Code must:
 3. Avoid modifying forbidden files.
 4. Stop and ask if the brief conflicts with existing code.
 5. Run validation commands where possible.
-6. Update:
-   - `docs/agent/04_TASK_HANDOFF.md`
-   - `docs/agent/05_PROGRESS.md`
-   - `docs/agent/09_CODING_HANDOFF.md`
-   - `docs/agent/11_AGENT_STATE.md`
-   - `docs/agent/12_AGENT_BOARD.md`
+6. Update `04`, `05`, `09`, `11`, and `12`.
 
 ## Next Agent State
 

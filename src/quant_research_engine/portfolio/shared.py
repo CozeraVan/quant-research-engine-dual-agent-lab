@@ -779,18 +779,24 @@ class SharedCashBacktestEngine:
                 "failed_order_count_by_failure_reason": {},
                 "failed_order_notional_by_reason": {},
                 "failed_order_notional_by_failure_reason": {},
+                "failed_order_count_by_side": {},
+                "failed_order_notional_by_side": {},
             }
         reason_column = failed_orders["reason"].fillna("entry_exit")
         count_by_reason = reason_column.value_counts().to_dict()
         count_by_failure_reason = failed_orders["failure_reason"].value_counts().to_dict()
         notional_by_reason = failed_orders.groupby(reason_column)["notional"].sum().to_dict()
         notional_by_failure_reason = failed_orders.groupby("failure_reason")["notional"].sum().to_dict()
+        count_by_side = failed_orders["side"].value_counts().to_dict()
+        notional_by_side = failed_orders.groupby("side")["notional"].sum().to_dict()
         return {
             "failed_order_count": int(len(failed_orders)),
             "failed_order_count_by_reason": {str(k): int(v) for k, v in count_by_reason.items()},
             "failed_order_count_by_failure_reason": {str(k): int(v) for k, v in count_by_failure_reason.items()},
             "failed_order_notional_by_reason": {str(k): float(v) for k, v in notional_by_reason.items()},
             "failed_order_notional_by_failure_reason": {str(k): float(v) for k, v in notional_by_failure_reason.items()},
+            "failed_order_count_by_side": {str(k): int(v) for k, v in count_by_side.items()},
+            "failed_order_notional_by_side": {str(k): float(v) for k, v in notional_by_side.items()},
         }
 
     def _empty_result(self, request: SharedCashBacktestRequest) -> SharedCashBacktestResult:
@@ -817,6 +823,8 @@ class SharedCashBacktestEngine:
                 "failed_order_count_by_failure_reason": {},
                 "failed_order_notional_by_reason": {},
                 "failed_order_notional_by_failure_reason": {},
+                "failed_order_count_by_side": {},
+                "failed_order_notional_by_side": {},
             },
         )
 

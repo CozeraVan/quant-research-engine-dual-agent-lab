@@ -575,6 +575,10 @@ def _failed_order_summary_items(summary: dict[str, Any]) -> list[tuple[str, Any]
         d = summary.get(key[0])
         if isinstance(d, dict) and key[1] in d and d[key[1]] > 0:
             items.append((label + " count", d[key[1]]))
+    for side_key in sorted((summary.get("failed_order_count_by_side") or {}).keys()):
+        count = summary["failed_order_count_by_side"][side_key]
+        notional = (summary.get("failed_order_notional_by_side") or {}).get(side_key, 0.0)
+        items.append((f"Failed {side_key}", f"{count} orders, ¥{notional:,.2f} notional"))
     for reason_key in sorted((summary.get("failed_order_count_by_failure_reason") or {}).keys()):
         count = summary["failed_order_count_by_failure_reason"][reason_key]
         notional = (summary.get("failed_order_notional_by_failure_reason") or {}).get(reason_key, 0.0)

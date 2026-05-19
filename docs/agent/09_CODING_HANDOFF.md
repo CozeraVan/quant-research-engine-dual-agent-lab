@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
+QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001
 
 ## Written By
 
@@ -14,36 +14,40 @@ CODEX
 
 ## Status
 
-Locally finalized.
+Reviewed and accepted locally.
 
 ## Scope Summary
 
-- Strengthened `test_cli_report_audit_json_includes_issues_for_failures` with per-issue object field assertions (`key`, `code`, `path`, `message`) for `missing_file` and `missing_columns` issue payloads.
+- Added side-level failed-order diagnostics (`failed_order_count_by_side`, `failed_order_notional_by_side`) to `SharedCashBacktestEngine._failed_order_diagnostics` in `shared.py`.
+- Added side breakdown rendering to `_failed_order_summary_items` in `io.py`.
+- Added 3 tests in `test_portfolio_shared.py`: side diagnostics with triggered failed orders, empty-dict fallback when no failed orders, and empty-result side diagnostics.
+- Updated 2 existing tests in `test_portfolio_io.py` to assert new side-level Markdown rows and empty-dict keys.
 
 ## Files Changed
 
-- `tests/test_cli.py` — strengthened existing test:
-  - `test_cli_report_audit_json_includes_issues_for_failures` — now asserts all 4 fields per issue object: `key`, `code`, `path`, `message`
+- `src/quant_research_engine/portfolio/shared.py` — 6 lines added
+- `src/quant_research_engine/portfolio/io.py` — 4 lines added
+- `tests/test_portfolio_shared.py` — 59 lines added (3 new tests)
+- `tests/test_portfolio_io.py` — 5 lines added (2 updated tests)
 
 ## Validation Results
 
 ```bash
-uv run pytest tests/test_cli.py -q  # 91 passed in 1.23s
-uv run pytest -q                     # 235 passed in 2.17s
-scripts/check-progress-docs.sh       # passed
-git diff --check                     # passed
+uv run pytest tests/test_portfolio_shared.py -q  # 20 passed
+uv run pytest tests/test_portfolio_io.py -q      # 8 passed
+uv run pytest -q                                 # 238 passed in 2.22s
+scripts/check-progress-docs.sh      # passed
+git diff --check                    # passed
 ```
 
 ## Constraints
 
 - Do not change valid-manifest behavior. ✅ preserved
-- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
 - Do not modify forbidden files. ✅ compliant
-- Preserve issue object fields and issue counts. ✅ `code` asserted per-issue
+- Preserve shared-cash execution behavior. ✅ additive diagnostics only
 - Do not push. ✅ not pushed
 
 ## Git State
 
 - Branch: `master`
-- Last local commit: `dff2889 Lock report-audit JSON issue payload fields at the CLI boundary`
-- No pending finalization for this task.
+- Local checkpoint pending commit.

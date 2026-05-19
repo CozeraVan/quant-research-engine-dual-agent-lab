@@ -20,6 +20,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 ## In Progress
 
 - Phase 4 portfolio realism and validation workflow improvements.
+- Shared-cash failed-order diagnostics and summary analysis completed.
 - Migration from legacy project docs into `docs/agent` as the authoritative dual-agent entry point.
 
 ## Known Gaps
@@ -28,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Real suspension, ST, and risk-warning state still need reliable time-varying metadata sources.
 - Industry, benchmark membership, market-cap, liquidity bucket, and regime grouping are not fully wired.
 - Evaluation layer does not yet implement regime split, industry/board/market-cap grouping, benchmark comparison, random baseline, or factor decay.
-- Failed-order diagnostics exist, but richer reason categorization and summary analysis are a good next self-contained implementation task.
+- Failed-order diagnostics now include side-level summary analysis and Markdown surfacing; additional grouping can wait for a future brief.
 
 ## Current Technical Stack
 
@@ -70,6 +71,6 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Ask the user to approve the next implementation brief for Claude Code: enhance shared-cash failed-order diagnostics and summaries.
+Select the next implementation brief for Claude Code when a new portfolio subtask is ready.
 
 Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

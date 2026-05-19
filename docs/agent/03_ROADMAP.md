@@ -39,7 +39,7 @@
 | M4.4 | Costs, slippage, lot sizing, price-limit checks | DONE | HISTORICAL | A-share market profile and tests | Preserve |
 | M4.5 | Risk exits, weights, rebalance | DONE | HISTORICAL | risk/weights/rebalance docs and tests | Preserve |
 | M4.6 | FIFO lot accounting and T+1 sellable inventory | DONE | HISTORICAL | legacy progress: `156 passed` | Preserve |
-| M4.7 | Stronger failed-order diagnostics | READY | CODEX | selected next self-contained task | Await user approval of `08_IMPLEMENTATION_BRIEF.md` |
+| M4.7 | Stronger failed-order diagnostics | DONE | CODEX/CLAUDE_CODE | local review passed; 238 tests passed; side-level failed-order summary diagnostics added | Preserve |
 | M4.8 | Real index benchmark wiring | BLOCKED | USER/CODEX | table/schema not confirmed | Confirm available index table and columns |
 | M4.9 | Real suspension/ST/risk-warning metadata | TODO | CLAUDE_CODE | fallback currently static unless data provided | Confirm source tables |
 

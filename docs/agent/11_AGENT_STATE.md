@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
+QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001
 
 ## Current Phase
 
@@ -16,7 +16,7 @@ USER
 
 ## Last Completed Step
 
-Codex completed local version management for `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`.
+Codex reviewed `QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001`, confirmed the side-level diagnostics implementation, and finalized it locally.
 
 ## Next Required Step
 

@@ -2,15 +2,15 @@
 
 ## Current Task
 
-Add CLI regression coverage for exact `report-audit --json` issue payload details.
+Add richer shared-cash failed-order diagnostics and summary analysis.
 
 ## Task ID
 
-QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
+QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001
 
 ## Current Status
 
-Locally finalized.
+Reviewed and accepted locally.
 
 ## Current Owner
 
@@ -57,6 +57,9 @@ USER
 - Codex review passed with no Required Fixes.
 - Claude Code strengthened `test_cli_report_audit_json_includes_issues_for_failures` with per-issue object field assertions for `missing_file` and `missing_columns`.
 - Claude Code added per-issue `code` assertions: `missing_file_issue["code"] == "missing_file"` and `missing_columns_issue["code"] == "missing_columns"`.
+- Codex prepared the next implementation brief for shared-cash failed-order diagnostics and summary analysis.
+- Claude Code implemented `QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001`: added `failed_order_count_by_side` and `failed_order_notional_by_side` to `_failed_order_diagnostics` in `shared.py`, added side-level breakdown to `_failed_order_summary_items` in `io.py`, and added 3 tests across `test_portfolio_shared.py` and 2 updated tests in `test_portfolio_io.py`.
+- Codex reviewed and accepted `QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001`.
 
 ## In Progress
 
@@ -64,22 +67,24 @@ None.
 
 ## Expected Files
 
-- `tests/test_cli.py`
-- `src/**` only if a tiny bugfix is strictly necessary
+- `src/quant_research_engine/portfolio/shared.py` (modified)
+- `src/quant_research_engine/portfolio/io.py` (modified)
+- `tests/test_portfolio_shared.py` (2 new tests)
+- `tests/test_portfolio_io.py` (2 updated tests)
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `91 passed in 1.23s`
-- Last accepted full validation: `uv run pytest -q` -> `235 passed in 2.17s`
+- Last accepted focused validation: `uv run pytest tests/test_portfolio_shared.py -q` -> `20 passed`
+- Last accepted focused validation: `uv run pytest tests/test_portfolio_io.py -q` -> `8 passed`
+- Last accepted full validation: `uv run pytest -q` -> `238 passed in 2.22s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 
 ## Known Risks
 
-- Keep the implementation scoped to CLI regression coverage only.
-- Preserve current CLI exit codes and stderr behavior.
-- Avoid changing issue object field names or message wording.
+- Side-level diagnostics are additive; existing failed-order behavior is preserved.
+- Empty failed-orders path returns empty dicts for side keys.
 
 ## Next Suggested Step
 
-Claude Code should take the next task after reading the updated workflow state.
+User can review the local finalization or request the next task.

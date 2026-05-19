@@ -428,6 +428,8 @@ def test_shared_cash_summary_markdown_includes_failed_orders_section(tmp_path):
             "failed_order_count_by_failure_reason": {"limit_up_buy_blocked": 1, "limit_down_sell_blocked": 1},
             "failed_order_notional_by_reason": {"entry_exit": 1000.0, "rebalance": 2000.0},
             "failed_order_notional_by_failure_reason": {"limit_up_buy_blocked": 1000.0, "limit_down_sell_blocked": 2000.0},
+            "failed_order_count_by_side": {"buy": 2},
+            "failed_order_notional_by_side": {"buy": 3000.0},
         },
     )
 
@@ -439,6 +441,7 @@ def test_shared_cash_summary_markdown_includes_failed_orders_section(tmp_path):
     assert "Failed: limit down sell blocked" in markdown
     assert "| Failed by entry/exit count | 1 |" in markdown
     assert "| Failed by rebalance count | 1 |" in markdown
+    assert "| Failed buy | 2 orders, ¥3,000.00 notional |" in markdown
     assert "{'entry_exit'" not in markdown
     assert "failed_order_count_by_reason" not in markdown
 
@@ -459,6 +462,8 @@ def test_shared_cash_summary_markdown_no_failed_orders_when_zero(tmp_path):
             "failed_order_count_by_failure_reason": {},
             "failed_order_notional_by_reason": {},
             "failed_order_notional_by_failure_reason": {},
+            "failed_order_count_by_side": {},
+            "failed_order_notional_by_side": {},
         },
     )
 

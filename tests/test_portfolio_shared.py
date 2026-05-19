@@ -496,3 +496,69 @@ def test_shared_cash_backtest_diagnostics_preserves_failed_rebalance_fields():
     assert "failed_rebalance_notional" in result.summary
     assert result.summary["failed_rebalance_order_count"] >= 0
     assert result.summary["failed_rebalance_notional"] >= 0
+
+
+def test_shared_cash_backtest_reports_failed_order_side_diagnostics():
+    frame = make_shared_frame()
+    frame.loc[
+        (frame["ts_code"] == "000001.SZ") & (frame["trade_date"] == pd.Timestamp("2026-01-06")),
+        "open",
+    ] = 9999.0
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+    )
+
+    result = engine.run(frame, request)
+
+    assert "failed_order_count_by_side" in result.summary
+    assert "failed_order_notional_by_side" in result.summary
+    by_side = result.summary["failed_order_count_by_side"]
+    notional_by_side = result.summary["failed_order_notional_by_side"]
+    assert isinstance(by_side, dict)
+    assert isinstance(notional_by_side, dict)
+    assert sum(by_side.values()) == result.summary["failed_order_count"]
+    for side_key in by_side:
+        assert side_key in notional_by_side
+        assert notional_by_side[side_key] > 0
+
+
+def test_shared_cash_backtest_failed_order_side_diagnostics_empty():
+    frame = make_shared_frame()
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+    )
+
+    result = engine.run(frame, request)
+
+    assert "failed_order_count_by_side" in result.summary
+    assert "failed_order_notional_by_side" in result.summary
+    if result.summary["failed_order_count"] == 0:
+        assert result.summary["failed_order_count_by_side"] == {}
+        assert result.summary["failed_order_notional_by_side"] == {}
+
+
+def test_shared_cash_backtest_empty_result_includes_side_diagnostics():
+    frame = make_shared_frame().iloc[0:0].copy()
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+    )
+
+    result = engine.run(frame, request)
+
+    assert result.summary["failed_order_count_by_side"] == {}
+    assert result.summary["failed_order_notional_by_side"] == {}
