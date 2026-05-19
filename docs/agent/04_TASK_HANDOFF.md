@@ -2,19 +2,19 @@
 
 ## Current Task
 
-Add CLI regression coverage for schema-version type errors.
+Add CLI regression coverage for optional file-entry metadata type errors.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Planned by Codex. Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
@@ -31,10 +31,12 @@ CODEX
 - Next task selected: CLI regression coverage for schema-version type errors.
 - Claude Code added 4 CLI regression tests: string and boolean `schema_version` across `report-files` and `report-audit`.
 - Codex review passed with no Required Fixes.
+- Local checkpoint created: `bdce0fa Lock schema-version type failures at the CLI boundary`.
+- Next task selected: CLI regression coverage for optional file-entry metadata type errors.
 
 ## In Progress
 
-Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001`.
+Claude Code should implement `QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001`.
 
 ## Expected Files
 
@@ -57,4 +59,4 @@ Codex should create the local checkpoint commit for `QRE-REPORT-MANIFEST-CLI-SCH
 
 ## Next Suggested Step
 
-Codex should commit the accepted implementation locally, then prepare the next manifest CLI optional-entry metadata type regression brief for Claude Code.
+Claude Code should read `docs/agent/08_IMPLEMENTATION_BRIEF.md` and `docs/agent/12_AGENT_BOARD.md`, implement the tests, run the required checks, and hand back for Codex review.

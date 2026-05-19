@@ -2,42 +2,41 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CLAUDE_TO_CODEX
+CODEX_TO_CLAUDE
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Codex review passed for the 4 CLI regression tests covering string and boolean `schema_version` across `report-files` and `report-audit`. Ready for local checkpoint and next brief.
+Add CLI regression coverage so `report-files` and `report-audit` both surface non-string optional file-entry metadata fields with exit code `2` and clear stderr, without changing valid-manifest behavior.
 
 ## Implementation Summary
 
-1. Inspected existing malformed-manifest CLI tests in `tests/test_cli.py`.
-2. Added `test_cli_report_files_reports_string_schema_version`.
-3. Added `test_cli_report_files_reports_boolean_schema_version`.
-4. Added `test_cli_report_audit_reports_string_schema_version`.
-5. Added `test_cli_report_audit_reports_boolean_schema_version`.
-6. No CLI or loader code changes were needed.
-7. Codex validation passed with 221 tests.
-8. Updated `04`, `05`, `09`, `10`, `11`, and `12`.
+1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
+2. Add `report-files` coverage for non-string optional `symbol`.
+3. Add `report-files` coverage for non-string optional `window`.
+4. Add `report-audit` coverage for non-string optional `symbol`.
+5. Add `report-audit` coverage for non-string optional `window`.
+6. Keep the task test-focused and touch CLI or loader code only if a real bug is exposed.
+7. Update `04`, `05`, `09`, `11`, and `12`.
 
 ## Constraints Check
 
-- ✅ No CLI/reporting behavior changes for valid manifests.
-- ✅ Scoped only to CLI regression coverage for schema-version type errors.
-- ✅ Preserved existing malformed-manifest exit-code and stderr behavior.
-- ✅ No forbidden files modified.
-- ✅ Not pushed.
+- No CLI/reporting behavior changes for valid manifests.
+- Scoped only to CLI regression coverage for optional file-entry metadata type errors.
+- Preserve existing malformed-manifest exit-code and stderr behavior.
+- No forbidden files modified.
+- Not pushed.
 
 ## Expected Files
 
