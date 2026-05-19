@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_REVIEWING
 
 ## Progress Table
 
@@ -48,28 +48,26 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-31 | Shared-cash failed-order side diagnostics and summary analysis | DONE | CODEX/CLAUDE_CODE | local finalization; 238 tests passed; side-level diagnostics in `shared.py` and `io.py` | Preserve |
 | QRE-NEXT-32 | Portfolio backtest run manifest reproducibility | DONE | CODEX/CLAUDE_CODE | commit `dea224a`; 246 tests passed; run_manifest.json for single, batch, shared; explicit role mapping; emitted manifests validate run manifests | Preserve |
 | QRE-NEXT-33 | Evaluation metadata group summaries | DONE | CODEX/CLAUDE_CODE | commit `b25cbd7`; 255 passed in 2.45s; 6 engine tests + 2 CLI tests; group_summary in EvaluationResult; `eval-config --group-by` CLI support; Codex review passed | Preserve |
-| QRE-NEXT-34 | Eval-config output artifacts and manifests | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for `QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001` | Claude Code implement from brief |
+| QRE-NEXT-34 | Eval-config output artifacts and manifests | DONE | CODEX/CLAUDE_CODE | 265 passed in 2.83s; 2 CLI tests + 8 manifest tests; `--output-dir` writes events/summary/ic/quantile/group CSVs + run_manifest.json + report_manifest.json; evaluation_report_manifest kind; ReportManifest validates evaluation artifact roles; run_manifest records `market_profile` provenance when used | Codex review and local finalize |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after Codex local finalization of QRE-NEXT-33 and planning handoff for QRE-NEXT-34:
+Recorded on 2026-05-19 after implementing QRE-NEXT-34:
 
-- `uv run pytest tests/test_evaluation_forward_returns.py -q` -> `14 passed in 0.39s`
-- `uv run pytest tests/test_cli.py -q` -> `93 passed in 1.30s`
-- `uv run pytest -q` -> `255 passed in 2.45s`
+- `uv run pytest tests/test_cli.py -q` -> `95 passed in 1.57s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `34 passed`
+- `uv run pytest -q` -> `265 passed in 2.83s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
 - Current task: `QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001`
-- Last checkpoint: `b25cbd7 Segment evaluation outcomes by research-frame metadata`
-- Next step: Claude Code implements eval-config output artifacts from `08_IMPLEMENTATION_BRIEF.md`
+- Next step: Local finalize and record acceptance
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
-- Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries.
+- Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries, durable output artifacts with manifests.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility, evaluation metadata group summaries, eval-config output artifacts and manifests.
 
 ## Pending Work Summary
 
@@ -77,8 +75,7 @@ Recorded on 2026-05-19 after Codex local finalization of QRE-NEXT-33 and plannin
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
-- Eval-config durable output artifacts now scoped for implementation.
-- Larger multi-stage research-run reproducibility workflow.
+- Larger research-run reproducibility workflow.
 
 ## Status Meaning
 

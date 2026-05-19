@@ -515,3 +515,214 @@ def test_validate_contents_reports_non_object_run_manifest(tmp_path):
     assert len(issues) == 1
     assert issues[0].key == "run_manifest"
     assert issues[0].code == "invalid_json_object"
+
+
+# --- evaluation_report_manifest ---
+
+
+def test_report_manifest_loads_evaluation_kind(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {
+                        "key": "events",
+                        "path": "events.csv",
+                        "filename": "events.csv",
+                        "role": "events",
+                    },
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "evaluation_summary",
+                    },
+                    {
+                        "key": "run_manifest",
+                        "path": "run_manifest.json",
+                        "filename": "run_manifest.json",
+                        "role": "run_manifest",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.kind == "evaluation_report_manifest"
+    assert len(manifest.files()) == 3
+    events_entries = manifest.files(role="events")
+    assert len(events_entries) == 1
+    assert events_entries[0].key == "events"
+
+
+def test_report_manifest_validates_evaluation_events_columns(tmp_path):
+    events_csv = tmp_path / "events.csv"
+    events_csv.write_text("other,col\n1,2\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "events", "path": "events.csv", "filename": "events.csv", "role": "events"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "ts_code" in issues[0].message
+    assert "trade_date" in issues[0].message
+
+
+def test_report_manifest_validates_evaluation_summary_columns(tmp_path):
+    summary_csv = tmp_path / "summary.csv"
+    summary_csv.write_text("other,col\n1,2\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "summary", "path": "summary.csv", "filename": "summary.csv", "role": "evaluation_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "horizon" in issues[0].message
+    assert "event_count" in issues[0].message
+
+
+def test_report_manifest_validates_evaluation_ic_summary_columns(tmp_path):
+    ic_csv = tmp_path / "ic_summary.csv"
+    ic_csv.write_text("other\n1\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "ic_summary", "path": "ic_summary.csv", "filename": "ic_summary.csv", "role": "ic_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "factor" in issues[0].message
+    assert "horizon" in issues[0].message
+    assert "observation_dates" in issues[0].message
+
+
+def test_report_manifest_validates_evaluation_quantile_summary_columns(tmp_path):
+    q_csv = tmp_path / "quantile_summary.csv"
+    q_csv.write_text("other\n1\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "quantile_summary", "path": "quantile_summary.csv", "filename": "quantile_summary.csv", "role": "quantile_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "factor" in issues[0].message
+    assert "horizon" in issues[0].message
+    assert "quantile" in issues[0].message
+    assert "row_count" in issues[0].message
+
+
+def test_report_manifest_validates_evaluation_group_summary_columns(tmp_path):
+    g_csv = tmp_path / "group_summary.csv"
+    g_csv.write_text("other\n1\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary", "path": "group_summary.csv", "filename": "group_summary.csv", "role": "evaluation_group_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "group_by" in issues[0].message
+    assert "group_value" in issues[0].message
+    assert "horizon" in issues[0].message
+    assert "event_count" in issues[0].message
+
+
+def test_report_manifest_validates_evaluation_artifacts_with_full_columns(tmp_path):
+    (tmp_path / "events.csv").write_text("ts_code,trade_date,forward_return_1\n000001.SZ,2026-01-05,0.1\n", encoding="utf-8")
+    (tmp_path / "summary.csv").write_text("horizon,event_count,mean_forward_return\n1,1,0.1\n", encoding="utf-8")
+    (tmp_path / "ic_summary.csv").write_text("factor,horizon,observation_dates,mean_ic\nrsi_2,1,1,1.0\n", encoding="utf-8")
+    (tmp_path / "quantile_summary.csv").write_text("factor,horizon,quantile,row_count,mean_forward_return\nrsi_2,1,1,1,0.1\n", encoding="utf-8")
+    (tmp_path / "group_summary.csv").write_text("group_by,group_value,horizon,event_count\nboard,main,1,1\n", encoding="utf-8")
+    (tmp_path / "run_manifest.json").write_text(json.dumps({"key": "value"}), encoding="utf-8")
+
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "events", "path": "events.csv", "filename": "events.csv", "role": "events"},
+                    {"key": "summary", "path": "summary.csv", "filename": "summary.csv", "role": "evaluation_summary"},
+                    {"key": "ic_summary", "path": "ic_summary.csv", "filename": "ic_summary.csv", "role": "ic_summary"},
+                    {"key": "quantile_summary", "path": "quantile_summary.csv", "filename": "quantile_summary.csv", "role": "quantile_summary"},
+                    {"key": "group_summary", "path": "group_summary.csv", "filename": "group_summary.csv", "role": "evaluation_group_summary"},
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 0
+
+
+def test_report_manifest_rejects_evaluation_missing_file(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "events", "path": "events.csv", "filename": "events.csv", "role": "events"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_file"

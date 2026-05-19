@@ -8,19 +8,19 @@ QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex finalized `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001` locally as commit `b25cbd7`, selected the next self-contained evaluation reproducibility task, and wrote a new implementation brief.
+Codex reviewed and repaired eval-config output artifacts: `evaluation_report_manifest` kind, evaluation artifact role column validation, `--output-dir` on `eval-config`, CSV artifact writing, `run_manifest.json` with safe run metadata including `market_profile` provenance, `report_manifest.json` with role mapping. Full suite: 265 passed in 2.83s.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04`, `05`, `09`, `11`, and `12` with coding handoff evidence.
+Codex should complete local finalization and record the accepted state.
 
 ## Active Change Request
 
@@ -30,7 +30,7 @@ User request from 2026-05-19: review Claude Code work, inspect the agent files, 
 
 - Current branch: `master`
 - Last accepted implementation commit: `b25cbd7 Segment evaluation outcomes by research-frame metadata`
-- New planning handoff checkpoint created locally; see latest git log entry.
+- New implementation uncommitted; all changes in working tree.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands
@@ -38,7 +38,7 @@ User request from 2026-05-19: review Claude Code work, inspect the agent files, 
 ### For Claude Code
 
 ```text
-请读取 08，11 和 12，执行当前 Claude Code 任务。
+请读取 11 和 12，执行当前 Claude Code 任务。
 ```
 
 ### For Codex

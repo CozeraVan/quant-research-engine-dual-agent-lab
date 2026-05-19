@@ -534,6 +534,225 @@ def test_cli_eval_config_group_by_missing_column_raises_error(capsys, monkeypatc
     assert "missing requested group columns" in captured.err
 
 
+def test_cli_eval_config_output_dir_writes_artifacts(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["a", "b", "c", "d", "a", "b", "c", "d"],
+                    "trade_date": pd.to_datetime(
+                        [
+                            "2026-01-05",
+                            "2026-01-05",
+                            "2026-01-05",
+                            "2026-01-05",
+                            "2026-01-06",
+                            "2026-01-06",
+                            "2026-01-06",
+                            "2026-01-06",
+                        ]
+                    ),
+                    "open": [10.0] * 8,
+                    "high": [10.0] * 8,
+                    "low": [10.0] * 8,
+                    "close": [10.0, 10.0, 10.0, 10.0, 9.0, 10.0, 11.0, 12.0],
+                    "pre_close": [10.0] * 8,
+                    "vol": [1.0] * 8,
+                    "amount": [100.0] * 8,
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["a", "b", "c", "d", "a", "b", "c", "d"],
+                    "trade_date": pd.to_datetime(
+                        [
+                            "2026-01-05",
+                            "2026-01-05",
+                            "2026-01-05",
+                            "2026-01-05",
+                            "2026-01-06",
+                            "2026-01-06",
+                            "2026-01-06",
+                            "2026-01-06",
+                        ]
+                    ),
+                    "rsi_2": [1.0, 2.0, 3.0, 4.0, 1.0, 1.0, 1.0, 1.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "a",
+            "b",
+            "c",
+            "d",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    # Core artifacts always present
+    assert (output_dir / "events.csv").is_file()
+    assert (output_dir / "run_manifest.json").is_file()
+    assert (output_dir / "report_manifest.json").is_file()
+
+    # Non-empty result tables
+    assert (output_dir / "summary.csv").is_file()
+    assert (output_dir / "ic_summary.csv").is_file()
+    assert (output_dir / "quantile_summary.csv").is_file()
+
+    # group_summary.csv not written when --group-by is omitted
+    assert not (output_dir / "group_summary.csv").is_file()
+
+    # stdout preserved
+    assert "ic_summary" in captured.out
+    assert "quantile_summary" in captured.out
+
+    # run_manifest.json structure
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["schema_version"] == 1
+    assert run_manifest["kind"] == "evaluation_run_manifest"
+    assert run_manifest["command"] == "eval-config"
+    assert run_manifest["start"] == "2026-01-05"
+    assert run_manifest["end"] == "2026-01-06"
+    assert run_manifest["codes"] == ["a", "b", "c", "d"]
+    assert run_manifest["market_profile"] is None
+    assert "events" in run_manifest["artifacts"]
+    assert "run_manifest" not in run_manifest["artifacts"]  # run_manifest not in itself
+
+    # report_manifest.json loads via ReportManifest
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    manifest = ReportManifest.from_path(output_dir / "report_manifest.json")
+    assert manifest.kind == "evaluation_report_manifest"
+    assert len(manifest.files()) > 0
+
+    # validate_contents passes
+    issues = manifest.validate_contents()
+    assert len(issues) == 0
+
+
+def test_cli_eval_config_output_dir_with_group_by_and_market_profile(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06", "2026-01-07"]
+                    ),
+                    "open": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "high": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "low": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "close": [10.0, 11.0, 20.0, 18.0, 19.8],
+                    "pre_close": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "vol": [1.0, 1.0, 1.0, 1.0, 1.0],
+                    "amount": [100.0, 100.0, 100.0, 100.0, 100.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06", "2026-01-07"]
+                    ),
+                    "rsi_2": [5.0, 15.0, 12.0, 6.0, 8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000002.SZ"],
+                    "board": ["main_board", "star_market"],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-07",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--group-by",
+            "board",
+            "--market-profile",
+            "configs/market_profiles/ashare_daily_default.yaml",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+
+    assert (output_dir / "events.csv").is_file()
+    assert (output_dir / "group_summary.csv").is_file()
+    assert (output_dir / "run_manifest.json").is_file()
+    assert (output_dir / "report_manifest.json").is_file()
+
+    # run_manifest records group_by and market_profile provenance
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["group_by"] == ["board"]
+    assert run_manifest["round_trip_cost_rate"] is None
+    assert run_manifest["market_profile"] == "configs/market_profiles/ashare_daily_default.yaml"
+    assert "group_summary" in run_manifest["artifacts"]
+
+    # report manifest validates with no issues
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    manifest = ReportManifest.from_path(output_dir / "report_manifest.json")
+    assert manifest.kind == "evaluation_report_manifest"
+    issues = manifest.validate_contents()
+    assert len(issues) == 0
+
+    # events.csv has expected columns
+    events = pd.read_csv(output_dir / "events.csv")
+    assert "ts_code" in events.columns
+    assert "trade_date" in events.columns
+    assert "board" in events.columns  # preserved from group_by
+
+
 def test_cli_preflight_prints_read_only_report(capsys, monkeypatch):
     class FakeStore:
         def __init__(self, settings):

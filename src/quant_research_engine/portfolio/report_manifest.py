@@ -10,6 +10,7 @@ from typing import Any
 _SUPPORTED_MANIFEST_KINDS = {
     "batch_backtest_report_manifest",
     "shared_cash_backtest_report_manifest",
+    "evaluation_report_manifest",
 }
 
 _REQUIRED_COLUMNS_BY_ROLE = {
@@ -25,6 +26,11 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "window_ranked_symbols": {"window", "rank_type", "rank", "symbol", "total_return"},
     "group_ranked_symbols": {"rank_type", "rank", "symbol", "total_return"},
     "rolling_ranked_symbols": {"window_size", "end_date", "rank_type", "rank", "symbol", "total_return"},
+    "events": {"ts_code", "trade_date"},
+    "evaluation_summary": {"horizon", "event_count"},
+    "ic_summary": {"factor", "horizon", "observation_dates"},
+    "quantile_summary": {"factor", "horizon", "quantile", "row_count"},
+    "evaluation_group_summary": {"group_by", "group_value", "horizon", "event_count"},
 }
 
 

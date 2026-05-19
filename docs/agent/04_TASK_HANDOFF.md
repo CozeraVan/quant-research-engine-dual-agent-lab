@@ -10,50 +10,51 @@ QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
 
 ## Current Status
 
-Ready for Claude Code implementation.
+Implemented. Ready for Codex review.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
-- Codex reviewed and accepted `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001`.
-- Codex created local checkpoint `b25cbd7` for the completed metadata group-summary task.
-- Codex selected the next self-contained follow-up: durable `eval-config` output artifacts.
-- Codex wrote the new implementation brief in `08_IMPLEMENTATION_BRIEF.md`.
+- Added `evaluation_report_manifest` kind to `_SUPPORTED_MANIFEST_KINDS` in `report_manifest.py`.
+- Added evaluation artifact role column requirements (`events`, `evaluation_summary`, `ic_summary`, `quantile_summary`, `evaluation_group_summary`) to `_REQUIRED_COLUMNS_BY_ROLE`.
+- Added `--output-dir` CLI argument to `eval-config` subcommand.
+- Implemented `_write_evaluation_output()` and `_eval_manifest_role()` helpers in `cli.py`.
+- When `--output-dir` is provided, writes: `events.csv` (always), `summary.csv` (non-empty), `ic_summary.csv` (non-empty), `quantile_summary.csv` (non-empty), `group_summary.csv` (non-empty), `run_manifest.json`, and `report_manifest.json`.
+- `run_manifest.json` records safe run inputs (command, strategy_path, dates, codes, cost rate or market-profile path, group columns, artifacts) without sensitive connection values.
+- `report_manifest.json` uses kind `evaluation_report_manifest` and can be loaded/validated by `ReportManifest`.
+- Added 2 CLI regression tests and 8 manifest validation tests.
+- Existing stdout behavior preserved; output-dir is additive and optional.
+- Run-manifest provenance now includes `market_profile` when that path is the source of the effective cost rate.
 
 ## In Progress
 
-- Claude Code should implement `QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
+None. Ready for Codex review.
 
 ## Expected Files
 
-- `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- optional evaluation IO helper module
-- `tests/test_cli.py`
-- `tests/test_portfolio_report_manifest.py` or a new focused manifest test file
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- `src/quant_research_engine/portfolio/report_manifest.py` (modified)
+- `src/quant_research_engine/apps/cli.py` (modified)
+- `tests/test_cli.py` (2 new tests)
+- `tests/test_portfolio_report_manifest.py` (8 new tests)
 
 ## Validation Baseline
 
-- Previous accepted focused: `uv run pytest tests/test_evaluation_forward_returns.py -q` -> `14 passed in 0.39s`
-- Previous accepted CLI: `uv run pytest tests/test_cli.py -q` -> `93 passed in 1.30s`
-- Previous accepted full: `uv run pytest -q` -> `255 passed in 2.45s`
-- Previous checks: `scripts/check-progress-docs.sh`, `git diff --check`, and `scripts/git-finalize-check.sh` passed before local checkpoint `b25cbd7`.
+- `uv run pytest tests/test_cli.py -q` -> `95 passed in 1.57s`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `34 passed`
+- `uv run pytest -q` -> `265 passed in 2.83s`
+- `scripts/check-progress-docs.sh` -> passed (after doc update)
+- `git diff --check` -> passed
 
 ## Known Risks
 
-- Output-dir behavior must be additive and optional.
-- Existing portfolio report-manifest parsing must remain compatible.
-- Run manifests must omit sensitive connection values.
-- No evaluation math should change.
+- Output-dir is additive and optional; existing stdout behavior unchanged.
+- Existing portfolio report-manifest parsing remains compatible.
+- Run manifests omit sensitive connection values.
+- No evaluation math changed.
 
 ## Next Suggested Step
 
-Claude Code should read `08`, `11`, and `12`, then implement the current Claude Code task.
+Codex should review and run One-Shot Review-Finalize-Next.

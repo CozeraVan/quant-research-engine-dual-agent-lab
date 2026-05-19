@@ -12,7 +12,7 @@ from quant_research_engine.data.assembler import ResearchFrameAssembler
 from quant_research_engine.data.postgres import PostgresDataStore
 from quant_research_engine.data.settings import DatabaseSettings
 from quant_research_engine.evaluation.engine import EvaluationEngine
-from quant_research_engine.evaluation.models import EvaluationRequest
+from quant_research_engine.evaluation.models import EvaluationRequest, EvaluationResult
 from quant_research_engine.markets.ashare import AShareMarketProfile
 from quant_research_engine.portfolio.analytics import summarize_batch_by
 from quant_research_engine.portfolio.benchmark import summarize_benchmark_relative_performance
@@ -133,6 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_config_parser.add_argument("--round-trip-cost-rate", type=float, default=None)
     eval_config_parser.add_argument("--market-profile", type=Path, help="Optional market profile YAML for rough friction estimate.")
     eval_config_parser.add_argument("--group-by", nargs="*", default=None, help="Optional grouping columns for event forward-return summaries, e.g. board industry")
+    eval_config_parser.add_argument("--output-dir", type=Path, help="Optional output directory for durable evaluation artifacts.")
 
     preflight_parser = subparsers.add_parser("preflight", help="Run read-only data and factor checks before broad runs")
     preflight_parser.add_argument("strategy", type=Path)
@@ -262,6 +263,96 @@ def resolve_round_trip_cost_rate(args: argparse.Namespace) -> float | None:
     buy_rate = profile.commission_rate + profile.transfer_fee_rate + profile.slippage_buy_rate
     sell_rate = profile.commission_rate + profile.transfer_fee_rate + profile.stamp_tax_sell + profile.slippage_sell_rate
     return buy_rate + sell_rate
+
+
+def _eval_manifest_role(key: str) -> str:
+    if key == "summary":
+        return "evaluation_summary"
+    if key == "group_summary":
+        return "evaluation_group_summary"
+    if key == "run_manifest":
+        return "run_manifest"
+    return key
+
+
+def _write_evaluation_output(
+    *,
+    result: EvaluationResult,
+    output_dir: Path,
+    args: argparse.Namespace,
+    strategy_path: str,
+) -> None:
+    directory = Path(output_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+
+    artifact_paths: dict[str, Path] = {}
+
+    events_path = directory / "events.csv"
+    result.events.to_csv(events_path, index=False)
+    artifact_paths["events"] = events_path
+
+    if not result.summary.empty:
+        p = directory / "summary.csv"
+        result.summary.to_csv(p, index=False)
+        artifact_paths["summary"] = p
+
+    if not result.ic_summary.empty:
+        p = directory / "ic_summary.csv"
+        result.ic_summary.to_csv(p, index=False)
+        artifact_paths["ic_summary"] = p
+
+    if not result.quantile_summary.empty:
+        p = directory / "quantile_summary.csv"
+        result.quantile_summary.to_csv(p, index=False)
+        artifact_paths["quantile_summary"] = p
+
+    if not result.group_summary.empty:
+        p = directory / "group_summary.csv"
+        result.group_summary.to_csv(p, index=False)
+        artifact_paths["group_summary"] = p
+
+    run_manifest_payload: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "evaluation_run_manifest",
+        "command": "eval-config",
+        "strategy_path": strategy_path,
+        "start": str(args.start),
+        "end": str(args.end),
+        "codes": args.codes,
+        "round_trip_cost_rate": args.round_trip_cost_rate,
+        "market_profile": str(args.market_profile) if args.market_profile else None,
+        "group_by": args.group_by,
+        "artifacts": sorted(artifact_paths.keys()),
+    }
+    run_manifest_path = directory / "run_manifest.json"
+    run_manifest_path.write_text(
+        json.dumps(run_manifest_payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    artifact_paths["run_manifest"] = run_manifest_path
+
+    files = sorted(
+        (
+            {
+                "key": key,
+                "path": path.relative_to(directory).as_posix(),
+                "filename": path.name,
+                "role": _eval_manifest_role(key),
+            }
+            for key, path in artifact_paths.items()
+        ),
+        key=lambda f: f["key"],
+    )
+    report_manifest_payload: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "evaluation_report_manifest",
+        "files": files,
+    }
+    report_manifest_path = directory / "report_manifest.json"
+    report_manifest_path.write_text(
+        json.dumps(report_manifest_payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -642,6 +733,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not result.group_summary.empty:
             print("group_summary")
             print(result.group_summary.to_csv(index=False).strip())
+        if args.output_dir:
+            _write_evaluation_output(
+                result=result,
+                output_dir=args.output_dir,
+                args=args,
+                strategy_path=str(args.strategy),
+            )
         return 0
 
     if args.command == "preflight":
