@@ -6,11 +6,11 @@ QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CODEX_REVIEW_RESULT
 
 ## Sender
 
@@ -18,24 +18,23 @@ CODEX
 
 ## Short Message
 
-New brief ready. Implement CLI regression coverage for non-string optional `group_by` file-entry metadata across `report-files` and `report-audit`. Keep it test-only unless existing behavior is broken.
+Review passed for optional `group_by` type regression coverage. The implementation is accepted: 2 CLI tests lock non-string optional `group_by` across `report-files` and `report-audit`; 83 CLI tests and 227 full tests pass. Ready for local checkpoint and next brief.
 
 ## Implementation Summary
 
-1. Codex accepted the previous optional `symbol`/`window` CLI regression task and created local checkpoint `a4693ab`.
-2. Next gap: optional `group_by` uses the same loader validation path but lacks direct CLI command-boundary regression coverage.
-3. Add a `report-files` test for non-string optional `group_by`.
-4. Add a `report-audit` test for non-string optional `group_by`.
-5. Assert exit code `2` and stderr containing `manifest file entry field 'group_by' must be a string or null`.
-6. Update `04`, `05`, `09`, `11`, and `12` after implementation.
+1. Claude Code added `test_cli_report_files_reports_non_string_optional_group_by`.
+2. Claude Code added `test_cli_report_audit_reports_non_string_optional_group_by`.
+3. No CLI or loader code changes needed because `ReportFile.from_mapping()` optional-field validation already rejected non-string `group_by`.
+4. Codex reviewed the implementation, updated `10_REVIEW_REPORT.md`, and accepted the task with no Required Fixes.
 
 ## Constraints Check
 
-- Preserve valid-manifest CLI behavior.
-- Scope changes to CLI regression coverage for optional `group_by` type errors.
-- Preserve malformed-manifest exit code `2` and stderr behavior.
-- Do not modify forbidden files.
-- Do not push.
+- ✅ No CLI/reporting behavior changes for valid manifests.
+- ✅ Scoped only to CLI regression coverage for optional `group_by` type errors.
+- ✅ Preserved existing malformed-manifest exit-code and stderr behavior.
+- ✅ No forbidden files modified.
+- ✅ Codex validation passed: focused tests, full tests, progress docs, diff check, and finalize check.
+- ✅ Not pushed.
 
 ## Expected Files
 

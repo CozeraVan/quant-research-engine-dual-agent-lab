@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001
 
 ## Written By
 
@@ -29,16 +29,14 @@ Changed files reviewed:
 
 Review passed.
 
-`report-files` and `report-audit` now both have CLI regression coverage for loader-side errors raised when a manifest file entry provides non-string optional `symbol` or `window` metadata. The implementation stays test-only and preserves the existing command behavior.
+`report-files` and `report-audit` now both have CLI regression coverage for loader-side errors raised when a manifest file entry provides non-string optional `group_by` metadata. The implementation stays test-only and preserves the existing command behavior.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `report-files` now locks non-string optional file-entry `symbol` with exit code `2`.
-- `report-files` now locks non-string optional file-entry `window` with exit code `2`.
-- `report-audit` now locks non-string optional file-entry `symbol` with exit code `2`.
-- `report-audit` now locks non-string optional file-entry `window` with exit code `2`.
+- `report-files` now locks non-string optional file-entry `group_by` with exit code `2`.
+- `report-audit` now locks non-string optional file-entry `group_by` with exit code `2`.
 - Valid-manifest CLI behavior is unchanged.
 - Existing malformed-manifest CLI coverage remains intact.
 - No CLI or loader code changes were introduced.
@@ -53,12 +51,12 @@ No locked-requirement violation found.
 - R-CORE-004 / R-QRE-006: No credentials or sensitive values added.
 - R-QRE-003: No signal, execution, or portfolio decision logic changed.
 - R-QRE-005: No database access or writes added.
-- R-QRE-007: Report-manifest CLI contracts remain intact for valid manifests and clearer malformed-manifest coverage was added.
+- R-QRE-007: Report-manifest CLI contracts remain intact for valid manifests and malformed-manifest command-boundary coverage was completed for optional metadata type errors.
 - R-DUAL-002: Claude Code implemented within the approved brief.
 
 ## Code Quality Review
 
-The coverage is added adjacent to the existing malformed-manifest CLI tests in `tests/test_cli.py`, which keeps the regression surface easy to audit and preserves the established command-boundary assertion style. The task stayed narrowly scoped to new tests because the existing CLI and loader logic already behaved correctly.
+The coverage is added adjacent to the existing optional metadata malformed-manifest CLI tests in `tests/test_cli.py`, which keeps the regression surface easy to audit and preserves the established command-boundary assertion style. The task stayed narrowly scoped to new tests because the existing CLI and loader logic already behaved correctly.
 
 ## Test Review
 
@@ -74,17 +72,17 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_cli.py -q`: `81 passed in 1.09s`
-- `uv run pytest -q`: `225 passed in 2.19s`
+- `uv run pytest tests/test_cli.py -q`: `83 passed in 1.06s`
+- `uv run pytest -q`: `227 passed in 2.17s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate:
 
-- non-string optional `symbol` is now covered at the command boundary for both CLI entry points;
-- non-string optional `window` is now covered at the command boundary for both CLI entry points;
-- existing malformed root, missing top-level field, top-level type, unsupported `kind`, schema-version type, and required file-entry error CLI regressions remain covered by nearby tests;
+- non-string optional `group_by` is now covered at the command boundary for both CLI entry points;
+- existing optional `symbol` and `window` type-error CLI regressions remain covered by nearby tests;
+- existing malformed root, missing top-level field, top-level type, unsupported `kind`, schema-version type, and required file-entry error CLI regressions remain covered;
 - valid manifest flows continue to pass in the full suite.
 
 ## Required Fixes
@@ -93,12 +91,12 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: add CLI regression coverage for optional file-entry `group_by` type errors so `report-files` and `report-audit` lock the remaining optional metadata validation path at the command boundary.
+Next low-risk hardening step: add CLI regression coverage for valid `null` optional file-entry metadata so the documented `string or null` contract is locked for `symbol`, `window`, and `group_by` at the command boundary.
 
 ## Follow-up Tasks
 
 - Create the local checkpoint for this accepted implementation.
-- Prepare the next brief around CLI regression coverage for optional `group_by` file-entry metadata type errors.
+- Prepare the next brief around CLI regression coverage for nullable optional file-entry metadata.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation
