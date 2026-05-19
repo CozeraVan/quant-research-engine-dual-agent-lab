@@ -46,11 +46,12 @@ DONE
 | QRE-NEXT-29 | CLI regression coverage for `report-files --json --validate-contents` | DONE | CODEX/CLAUDE_CODE | commit `43a17b7`; 2 CLI regression tests lock JSON `--validate-contents` valid + structural-issue paths; 235 tests passed | Preserve |
 | QRE-NEXT-30 | CLI regression coverage for exact `report-audit --json` issue payload details | DONE | CODEX/CLAUDE_CODE | local commit `dff2889`; per-issue `key`/`code`/`path`/`message` assertions for `missing_file` and `missing_columns`; 235 tests passed | Preserve |
 | QRE-NEXT-31 | Shared-cash failed-order side diagnostics and summary analysis | DONE | CODEX/CLAUDE_CODE | local finalization; 238 tests passed; side-level diagnostics in `shared.py` and `io.py` | Preserve |
-| QRE-NEXT-32 | Portfolio backtest run manifest reproducibility | DONE | CODEX/CLAUDE_CODE | 246 tests passed; run_manifest.json for single, batch, shared; explicit role mapping; emitted manifests validate run manifests | Preserve |
+| QRE-NEXT-32 | Portfolio backtest run manifest reproducibility | DONE | CODEX/CLAUDE_CODE | commit `dea224a`; 246 tests passed; run_manifest.json for single, batch, shared; explicit role mapping; emitted manifests validate run manifests | Preserve |
+| QRE-NEXT-33 | Evaluation metadata group summaries | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001` | Claude Code implement from brief |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after Codex acceptance of QRE-NEXT-32:
+Recorded on 2026-05-19 after Codex local finalization of QRE-NEXT-32 and planning handoff for QRE-NEXT-33:
 
 - `uv run pytest tests/test_portfolio_io.py -q` -> `14 passed`
 - `uv run pytest tests/test_portfolio_report_manifest.py -q` -> `26 passed`
@@ -58,8 +59,9 @@ Recorded on 2026-05-19 after Codex acceptance of QRE-NEXT-32:
 - `uv run pytest -q` -> `246 passed in 2.37s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Current task: `QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001`
-- Next step: create local checkpoint and select next task
+- Current task: `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001`
+- Last checkpoint: `dea224a Preserve portfolio backtest provenance in output directories`
+- Next step: Claude Code implements evaluation metadata group summaries from `08_IMPLEMENTATION_BRIEF.md`
 
 ## Completed Module Summary
 
@@ -73,6 +75,7 @@ Recorded on 2026-05-19 after Codex acceptance of QRE-NEXT-32:
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
+- Evaluation metadata group summaries now scoped for implementation.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
 

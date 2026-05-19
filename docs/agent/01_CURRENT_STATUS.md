@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio realism and run reproducibility.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is evaluation segmentation, portfolio realism, and run reproducibility.
 
 ## Completed
 
@@ -21,6 +21,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
+- Evaluation metadata group summaries are scoped for Claude Code implementation.
 - Phase 4 portfolio realism and validation workflow improvements.
 - Shared-cash failed-order diagnostics and summary analysis completed.
 - Portfolio backtest run-manifest reproducibility completed.
@@ -30,7 +31,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
 - Real suspension, ST, and risk-warning state still need reliable time-varying metadata sources.
-- Industry, benchmark membership, market-cap, liquidity bucket, and regime grouping are not fully wired.
+- Industry, benchmark membership, market-cap, liquidity bucket, and regime grouping are not fully wired; metadata group summaries are the next scoped step.
 - Evaluation layer does not yet implement regime split, industry/board/market-cap grouping, benchmark comparison, random baseline, or factor decay.
 - Larger research-run bundles across preflight, evaluation, and backtest outputs are not yet standardized.
 
@@ -74,6 +75,6 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Select the next implementation brief for Claude Code when a new portfolio subtask is ready.
+Claude Code should implement `QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001
+QRE-EVAL-METADATA-GROUP-SUMMARY-REGRESSION-001
 
 ## Created By
 
@@ -14,33 +14,37 @@ CLAUDE_CODE
 
 ## Background
 
-The portfolio backtest outputs already include result files, summary files, and report manifests, but they do not yet record the run inputs that produced them. That makes it hard to reconstruct an old research run without recovering CLI arguments from chat or shell history.
+The evaluation engine already computes signal events, forward-return summaries, IC/Rank IC, quantile returns, and rough friction-adjusted event metrics. The roadmap still marks regime and metadata group summaries as a gap.
 
-The next self-contained step is to write a run manifest alongside portfolio backtest output directories so single-symbol, batch, and shared-cash runs carry a reproducible metadata record without changing simulation behavior.
+The next self-contained step is to add metadata grouping to evaluation results using columns that already exist in the research frame, such as `board` or `industry`. This should not require new upstream data-source wiring. The feature should summarize event forward returns by group so broad factor screens can identify whether a signal is concentrated in or dependent on a metadata bucket.
 
 ## Goal
 
-Add a safe portfolio backtest run manifest to output directories so each run records its command, strategy path, resolved request parameters, and emitted artifacts.
+Add optional evaluation group summaries keyed by existing research-frame columns, and expose them through the evaluation CLI path.
 
 ## Non-Goals
 
-- Do not change single-symbol, batch, or shared-cash simulation logic.
-- Do not change order generation, fills, risk controls, or benchmark math.
-- Do not add database writes or new data-source wiring.
-- Do not store sensitive connection values in the manifest.
-- Do not rework the existing report-manifest schema beyond adding a run-manifest artifact if needed.
-- Do not add new CLI commands or flags unless the current backtest entry points need them to pass run metadata into the writer layer.
+- Do not add new database tables or new upstream data adapters.
+- Do not implement benchmark or random-baseline comparison.
+- Do not implement factor decay analysis.
+- Do not infer missing metadata or compute technical indicators inside QRE.
+- Do not change existing summary, IC, or quantile semantics.
+- Do not add report-manifest or portfolio-output changes in this task.
 
 ## Affected Modules
 
 Expected:
 
+- `src/quant_research_engine/evaluation/models.py`
+- `src/quant_research_engine/evaluation/engine.py`
 - `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_io.py`
-- `tests/test_portfolio_report_manifest.py`
+- `tests/test_evaluation_forward_returns.py`
 - `tests/test_cli.py`
+
+Possible if needed:
+
+- `src/quant_research_engine/strategies/spec.py`
+- `tests/test_strategy_spec.py`
 
 Docs/handoff:
 
@@ -52,7 +56,7 @@ Docs/handoff:
 
 ## Forbidden Files
 
-- `src/**` outside the modules listed above
+- `src/**` outside the modules listed above unless Claude Code records a concrete reason in `09_CODING_HANDOFF.md`
 - `uv.lock`
 - `pyproject.toml`
 - `.env*`
@@ -67,48 +71,70 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve portfolio execution behavior.
-- Preserve existing report-manifest behavior and file discovery.
-- Keep payloads additive and serializable.
-- Do not record sensitive connection values.
-- Keep the new manifest compatible with current output directories.
+- Preserve existing evaluation behavior when grouping is not requested.
+- Use only columns already present in the research frame.
+- Keep data access read-only.
+- Do not compute technical indicators inside the evaluation engine.
+- Avoid lookahead behavior: group labels must come from the current event row, not future rows.
+- Keep CLI output stable except for new optional `group_summary` output when requested.
 
 ## Implementation Steps
 
-1. Inspect the current backtest output writers and report-manifest roles.
-2. Add a run-manifest payload and writer for single-symbol, batch, and shared-cash outputs.
-3. Capture safe request metadata: command name, strategy path, and serializable request fields.
-4. Include the run manifest among emitted artifacts and, where applicable, in the report manifest and output-file summary.
-5. Treat run-manifest JSON as a valid JSON object in content validation.
-6. Add regression tests for single, batch, and shared output dirs plus validation/discovery coverage if needed.
-7. Update handoff and progress docs.
+1. Inspect the current `EvaluationRequest`, `EvaluationResult`, and `EvaluationEngine.evaluate()` flow.
+2. Add an optional grouping input, suggested name `group_by: list[str] | None`, to `EvaluationRequest`.
+3. Add a `group_summary: pd.DataFrame` field to `EvaluationResult`.
+4. Preserve requested group columns in `result.events` so each emitted signal event carries its group labels.
+5. Build grouped event summaries from signal events:
+   - one row per `group_by` column, group value, and horizon;
+   - include `group_by`, `group_value`, `horizon`, `event_count`, `mean_forward_return`, `median_forward_return`, and `win_rate`;
+   - if `round_trip_cost_rate` is set, include the same adjusted metrics used by the overall event summary.
+6. Validate requested group columns exist in the input frame. Missing group columns should raise a clear `ValueError`.
+7. Add CLI support for `eval-config --group-by ...`.
+   - When group columns are requested, the research-frame assembler should include metadata so columns like `board` can be available.
+   - Print a `group_summary` section only when it is non-empty.
+8. Add focused engine and CLI regression tests.
+9. Update handoff and progress docs.
 
 ## Data / Schema Changes
 
-- New `run_manifest.json` beside backtest outputs.
-- Suggested schema fields: `schema_version`, `kind`, `command`, `strategy_path`, `request`, `artifacts`.
-- Suggested `kind`: `portfolio_backtest_run_manifest`.
-- Batch/shared report manifests should include the run-manifest artifact when output directories are written.
+- No database schema changes.
+- No new files are required.
+- In-memory `EvaluationResult` gains a new `group_summary` DataFrame.
+
+Suggested `group_summary` columns:
+
+- `group_by`
+- `group_value`
+- `horizon`
+- `event_count`
+- `mean_forward_return`
+- `median_forward_return`
+- `win_rate`
+- optional adjusted fields when costs are configured:
+  - `round_trip_cost_rate`
+  - `mean_adjusted_forward_return`
+  - `median_adjusted_forward_return`
+  - `adjusted_win_rate`
 
 ## API / Interface Changes
 
-- `write_single_symbol_result`, `write_batch_result`, and `write_shared_cash_result` should accept or build safe run metadata.
-- Output directories should include `run_manifest.json`.
-- `report-files` and `report-audit` should continue to work for the existing report manifest, and `run_manifest.json` should validate as a JSON object where it is surfaced through report manifests.
+- `EvaluationRequest` accepts optional `group_by`.
+- `EvaluationResult` includes `group_summary`.
+- `qre eval-config` accepts `--group-by` with one or more column names.
+- Existing callers that do not pass grouping should keep working.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_portfolio_io.py -q
-uv run pytest tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_evaluation_forward_returns.py -q
+uv run pytest tests/test_cli.py -q
 ```
 
-Run CLI and full checks:
+Run full checks:
 
 ```bash
-uv run pytest tests/test_cli.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
@@ -116,29 +142,31 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `run_manifest.json` is written for portfolio backtest output-dir code paths.
-- [ ] The run manifest records command, strategy path, request inputs, and artifact list.
-- [ ] Existing result files and report manifests remain intact.
-- [ ] `report-files` and `report-audit` continue to work, and the new manifest is accepted where it appears through report manifests.
+- [ ] `EvaluationRequest(group_by=[...])` validates group columns and preserves them in `result.events`.
+- [ ] `EvaluationResult.group_summary` contains grouped event statistics by column, value, and horizon.
+- [ ] Group summaries include adjusted-return metrics when `round_trip_cost_rate` is configured.
+- [ ] Existing evaluation outputs remain unchanged when `group_by` is omitted.
+- [ ] `qre eval-config --group-by board` loads metadata through the assembler and prints a `group_summary` table.
+- [ ] Missing group columns raise a clear error.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Keep the new manifest additive only.
-- Avoid duplicating logic across single, batch, and shared writers unless it removes real complexity.
-- Do not include sensitive connection values in the manifest.
-- Preserve report-manifest validation behavior except for the new run-manifest JSON object path.
+- Keep grouping additive and avoid changing existing result table schemas except for preserving requested group columns in `events`.
+- Do not silently synthesize metadata groups if the research frame lacks the requested column.
+- Avoid future leakage by using event-row group labels only.
+- Keep CLI behavior deterministic and easy to parse.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Reuse existing output-writer patterns.
-3. Keep payloads serializable and limited to safe run metadata.
+2. Reuse the existing evaluation summary style before adding helpers.
+3. Keep the implementation small and regression-tested.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
-5. Stop and ask only if the brief conflicts with current code.
+5. Stop and write a blocker only if this brief conflicts with current code.
 
 ## Next Agent State
 

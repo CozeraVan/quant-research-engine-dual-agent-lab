@@ -62,9 +62,17 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes a run-manifest workflow for single, batch, and shared backtests. `M5.5` is marked ready for Claude Code.
 - Owner: CODEX
 
+### 2026-05-19: Select evaluation metadata group summaries as next Claude task
+
+- Decision: The next Claude Code task is grouped evaluation summaries over existing research-frame metadata columns.
+- Reason: This advances roadmap M3.5 without requiring new upstream data-source confirmation, benchmark wiring, or database schema changes.
+- Alternatives: Start real index benchmark wiring immediately; start real suspension/ST/risk-warning metadata.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `EvaluationRequest.group_by`, `EvaluationResult.group_summary`, and `qre eval-config --group-by ...`.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.
 - Which source table should provide time-varying suspension, ST, and risk-warning metadata.
 - Whether legacy root-level progress docs should be archived after the user reviews the migrated `docs/agent` files.
-- Whether larger research-run reproducibility should be a separate milestone after failed-order diagnostics.
+- Whether larger research-run reproducibility should be a separate milestone after evaluation grouping.

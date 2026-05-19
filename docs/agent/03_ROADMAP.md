@@ -26,7 +26,7 @@
 | M3.2 | Event study and forward returns | DONE | HISTORICAL | `evaluation/engine.py` tests | Preserve |
 | M3.3 | IC, Rank IC, quantile return | DONE | HISTORICAL | legacy progress records, tests | Preserve |
 | M3.4 | Rough friction-adjusted screening | DONE | HISTORICAL | `round_trip_cost_rate`, market-profile estimate | Preserve |
-| M3.5 | Regime and metadata group summaries | TODO | CLAUDE_CODE | documented gap | Requires metadata/grouping design |
+| M3.5 | Regime and metadata group summaries | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` for evaluation metadata group summaries | Claude Code implement grouped event summaries |
 | M3.6 | Benchmark/random-baseline comparison for evaluation | TODO | CLAUDE_CODE | documented gap | Defer until benchmark data source is confirmed |
 
 ## Milestone 4: Portfolio Engine
