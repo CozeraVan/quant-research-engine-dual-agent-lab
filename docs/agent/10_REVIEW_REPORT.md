@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
 
 ## Written By
 
@@ -29,17 +29,17 @@ Changed files reviewed:
 
 Review passed.
 
-`report-files --json` and `report-audit --json` now both have CLI regression coverage for manifest entries that explicitly set optional `symbol`, `window`, and `group_by` metadata to `null`. The implementation stays test-only and preserves current JSON serialization behavior: optional metadata keys whose value resolves to `None` are omitted from entry payloads.
+`report-files --json` and `report-audit --json` now both have CLI regression coverage for explicit top-level `schema_version: null`. The implementation stays test-only and preserves current schema-version validation and JSON output behavior.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `report-files --json` now locks explicit `null` optional file-entry metadata with exit code `0`.
-- `report-audit --json` now locks explicit `null` optional file-entry metadata with exit code `0` when the referenced file exists.
-- Current JSON serialization behavior for `None` optional metadata is preserved.
+- `report-files --json` now locks explicit `schema_version: null` with exit code `0`.
+- `report-audit --json` now locks explicit `schema_version: null` with exit code `0` when the referenced file exists.
+- Both JSON payloads report `schema_version` as `null`.
 - Existing valid-manifest CLI behavior is unchanged.
-- Existing malformed optional metadata type-error coverage remains intact.
+- Existing malformed schema-version type-error coverage remains intact.
 - No CLI or loader code changes were introduced.
 
 ## Locked Requirements Check
@@ -52,12 +52,12 @@ No locked-requirement violation found.
 - R-CORE-004 / R-QRE-006: No credentials or sensitive values added.
 - R-QRE-003: No signal, execution, or portfolio decision logic changed.
 - R-QRE-005: No database access or writes added.
-- R-QRE-007: Report-manifest CLI contracts remain intact and the valid side of the optional metadata contract is now covered at the CLI boundary.
+- R-QRE-007: Report-manifest CLI contracts remain intact and the explicit-null schema-version path is now covered at the CLI boundary.
 - R-DUAL-002: Claude Code implemented within the approved brief.
 
 ## Code Quality Review
 
-The coverage is added next to the existing malformed optional metadata tests in `tests/test_cli.py`, which keeps the regression surface easy to audit. The tests assert both successful command completion and the important serialization invariant for `None` optional fields.
+The coverage is added next to the existing schema-version JSON and malformed schema-version tests in `tests/test_cli.py`, which keeps the regression surface easy to audit. The tests assert successful command completion and the JSON `null` serialization invariant for both report CLI entry points.
 
 ## Test Review
 
@@ -73,17 +73,17 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_cli.py -q`: `85 passed in 1.07s`
-- `uv run pytest -q`: `229 passed in 2.14s`
+- `uv run pytest tests/test_cli.py -q`: `87 passed in 1.12s`
+- `uv run pytest -q`: `231 passed in 2.14s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate:
 
-- explicit `null` optional `symbol`, `window`, and `group_by` metadata is covered through `report-files --json`;
-- explicit `null` optional `symbol`, `window`, and `group_by` metadata is covered through `report-audit --json`;
-- existing non-string optional metadata type-error CLI regressions remain covered;
+- explicit `schema_version: null` is covered through `report-files --json`;
+- explicit `schema_version: null` is covered through `report-audit --json`;
+- existing unsupported, string, and boolean schema-version CLI regressions remain covered;
 - valid manifest flows continue to pass in the full suite.
 
 ## Required Fixes
@@ -92,12 +92,12 @@ None.
 
 ## Recommended Improvements
 
-Next low-risk hardening step: add CLI regression coverage for explicit `null` top-level `schema_version` so the accepted optional schema-version path is locked at the same command boundary as existing schema-version type-error coverage.
+Next low-risk hardening step: add CLI regression coverage for `report-files --json --check-exists` so JSON mode preserves the payload while returning exit code `2` and missing-path stderr when matched files are absent.
 
 ## Follow-up Tasks
 
 - Create the local checkpoint for this accepted implementation.
-- Prepare the next brief around CLI regression coverage for explicit `null` `schema_version`.
+- Prepare the next brief around `report-files --json --check-exists` missing-path behavior.
 - Keep the next task narrowly scoped and test-first.
 
 ## Final Recommendation

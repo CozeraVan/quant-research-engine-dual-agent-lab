@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Progress Table
 
@@ -41,27 +41,26 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-24 | CLI regression coverage for optional file-entry metadata type errors | DONE | CODEX/CLAUDE_CODE | commit `a4693ab`; 4 CLI regression tests lock non-string optional `symbol` and `window` at the command boundary; 225 tests passed | Preserve |
 | QRE-NEXT-25 | CLI regression coverage for optional `group_by` file-entry metadata type errors | DONE | CODEX/CLAUDE_CODE | commit `0083c82`; 2 CLI regression tests lock non-string optional `group_by` at the command boundary; 227 tests passed | Preserve |
 | QRE-NEXT-26 | CLI regression coverage for valid explicit `null` optional file-entry metadata | DONE | CODEX/CLAUDE_CODE | commit `cce750d`; 2 CLI regression tests lock explicit `null` optional metadata via `--json`; 229 tests passed | Preserve |
-| QRE-NEXT-27 | CLI regression coverage for explicit `null` top-level `schema_version` | READY | CLAUDE_CODE | implementation brief `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001` | Claude implementation |
+| QRE-NEXT-27 | CLI regression coverage for explicit `null` top-level `schema_version` | DONE | CODEX/CLAUDE_CODE | Codex review passed; 2 CLI regression tests lock explicit `schema_version: null` via `--json`; 231 tests passed | Local checkpoint |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after local checkpoint `cce750d` and next-brief planning:
+Recorded on 2026-05-19 after Codex review of `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001`:
 
-- `uv run pytest tests/test_cli.py -q` -> `85 passed in 1.07s`
-- `uv run pytest -q` -> `229 passed in 2.14s`
+- `uv run pytest tests/test_cli.py -q` -> `87 passed in 1.12s`
+- `uv run pytest -q` -> `231 passed in 2.14s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Accepted task: `QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001`
-- Current task: `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001`
-- Next step: Claude Code implementation
+- Accepted task: `QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001`
+- Next step: local checkpoint, then next brief
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage.
 
 ## Pending Work Summary
 
@@ -70,6 +69,7 @@ Recorded on 2026-05-19 after local checkpoint `cce750d` and next-brief planning:
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
+- CLI regression coverage for `report-files --json --check-exists` missing-path behavior.
 
 ## Status Meaning
 

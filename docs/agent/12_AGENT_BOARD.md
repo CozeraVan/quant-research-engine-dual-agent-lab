@@ -6,11 +6,11 @@ QRE-REPORT-MANIFEST-CLI-SCHEMA-VERSION-NULL-REGRESSION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CODEX_REVIEW_RESULT
 
 ## Sender
 
@@ -18,24 +18,23 @@ CODEX
 
 ## Short Message
 
-New brief ready. Implement CLI regression coverage for explicit top-level `schema_version: null` across `report-files --json` and `report-audit --json`. Keep it test-only unless existing behavior is broken.
+Review passed for explicit `schema_version: null` regression coverage. The implementation is accepted: 2 CLI tests lock explicit `schema_version: null` via `report-files --json` and `report-audit --json`; 87 CLI tests and 231 full tests pass. Ready for local checkpoint and next brief.
 
 ## Implementation Summary
 
-1. Codex accepted the previous explicit `null` optional metadata CLI regression task and created local checkpoint `cce750d`.
-2. Next gap: explicit top-level `schema_version: null` is accepted by current loader semantics but lacks direct CLI regression coverage.
-3. Add a `report-files --json` test for explicit `schema_version: null`.
-4. Add a `report-audit --json` test for explicit `schema_version: null`; create the referenced file so audit status is `ok`.
-5. Assert both JSON payloads report `schema_version` as `null`.
-6. Update `04`, `05`, `09`, `11`, and `12` after implementation.
+1. Claude Code added `test_cli_report_files_json_accepts_null_schema_version`.
+2. Claude Code added `test_cli_report_audit_json_accepts_null_schema_version`.
+3. No CLI or loader code changes needed because existing `from_path()` correctly accepts `None` for optional `schema_version`.
+4. Codex reviewed the implementation, updated `10_REVIEW_REPORT.md`, and accepted the task with no Required Fixes.
 
 ## Constraints Check
 
-- Preserve valid-manifest CLI behavior.
-- Scope changes to CLI regression coverage for explicit `schema_version: null`.
-- Preserve current schema-version validation semantics.
-- Do not modify forbidden files.
-- Do not push.
+- ✅ No CLI/reporting behavior changes for valid manifests.
+- ✅ Scoped only to CLI regression coverage for `schema_version: null`.
+- ✅ Preserved schema-version validation semantics.
+- ✅ No forbidden files modified.
+- ✅ Codex validation passed: focused tests, full tests, progress docs, diff check, and finalize check.
+- ✅ Not pushed.
 
 ## Expected Files
 
