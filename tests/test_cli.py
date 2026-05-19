@@ -1464,11 +1464,25 @@ def test_cli_report_audit_json_includes_issues_for_failures(capsys, tmp_path):
     assert payload["matched_files"] == 2
     assert payload["schema_version"] is None
     assert payload["missing_files"] == 1
+    assert payload["validation_issues"] == 2
     assert payload["status"] == "failed"
-    assert len(payload["issues"]) >= 1
+    assert len(payload["issues"]) == 2
     codes = {issue["code"] for issue in payload["issues"]}
     assert "missing_columns" in codes
     assert "missing_file" in codes
+
+    missing_file_issue = next(i for i in payload["issues"] if i["code"] == "missing_file")
+    assert missing_file_issue["code"] == "missing_file"
+    assert missing_file_issue["key"] == "trades"
+    assert missing_file_issue["path"] == str(tmp_path / "trades.csv")
+    assert missing_file_issue["message"] == f"missing file: {tmp_path / 'trades.csv'}"
+
+    missing_columns_issue = next(i for i in payload["issues"] if i["code"] == "missing_columns")
+    assert missing_columns_issue["code"] == "missing_columns"
+    assert missing_columns_issue["key"] == "orders"
+    assert missing_columns_issue["path"] == str(output_path)
+    assert "missing column" in missing_columns_issue["message"]
+    assert "trade_date" in missing_columns_issue["message"]
 
 
 def test_cli_report_audit_json_require_match_zero_matches(capsys, tmp_path):

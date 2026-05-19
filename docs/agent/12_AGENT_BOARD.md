@@ -6,11 +6,11 @@ QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+USER
 
 ## Message Type
 
-CODEX_TO_CLAUDE
+CODEX_TO_USER
 
 ## Sender
 
@@ -18,24 +18,22 @@ CODEX
 
 ## Short Message
 
-New brief ready. Implement CLI regression coverage for exact `report-audit --json` issue payload details for missing-file and missing-columns failures. Keep it test-only unless existing behavior is broken.
+Codex re-reviewed and accepted `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`. The test now asserts per-issue `key`, `code`, `path`, and `message` fields for both `missing_file` and `missing_columns`. Validation passed: 91 CLI tests, 235 full tests. Awaiting user acceptance before finalization.
 
 ## Implementation Summary
 
-1. Codex accepted the previous `report-files --json --validate-contents` CLI regression task and created local checkpoint `43a17b7`.
-2. Next gap: `report-audit --json` has aggregate issue coverage but does not lock exact issue object payload fields for script consumers.
-3. Add or strengthen coverage for a missing-file issue object with stable `key`, `code`, `path`, and `message`.
-4. Add or strengthen coverage for a missing-columns issue object with stable `key`, `code`, `path`, and `message`.
-5. Preserve `report-audit --json` output behavior.
-6. Update `04`, `05`, `09`, `11`, and `12` after implementation.
+1. Added `assert missing_file_issue["code"] == "missing_file"` to the per-issue block.
+2. Added `assert missing_columns_issue["code"] == "missing_columns"` to the per-issue block.
+3. Each issue object now has all 4 stable fields asserted: `key`, `code`, `path`, `message`.
+4. Updated `04`, `05`, `09`, `11`, and `12`.
 
 ## Constraints Check
 
-- Preserve valid-manifest CLI behavior.
-- Scope changes to CLI regression coverage for `report-audit --json` issue payload details.
-- Preserve issue object fields and issue counts.
-- Do not modify forbidden files.
-- Do not push.
+- ✅ No CLI/reporting behavior changes for valid manifests.
+- ✅ Scoped only to CLI regression coverage for `report-audit --json` issue payload details.
+- ✅ All 4 issue object fields (`key`, `code`, `path`, `message`) asserted per-issue.
+- ✅ No forbidden files modified.
+- ✅ Not pushed.
 
 ## Expected Files
 

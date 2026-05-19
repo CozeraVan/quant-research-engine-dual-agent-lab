@@ -8,19 +8,19 @@ QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001`, created local checkpoint `43a17b7`, and prepared the next brief for exact `report-audit --json` issue payload details.
+User approved finalization after Codex re-reviewed `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001` and accepted the implementation.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the local checkpoint, commit, and push.
 
 ## Active Change Request
 
@@ -30,7 +30,7 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 
 - Current branch: `master`
 - Last accepted implementation commit: `43a17b7 Lock report-files JSON validate-contents behavior`
-- Current task is planned and ready for Claude Code implementation.
+- Current task is reviewed and ready for git finalization.
 - Standing approval: NONE
 
 ## Short Prompt Commands

@@ -10,11 +10,11 @@ QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Current Status
 
-Ready for Claude Code implementation.
+Reviewed and accepted locally. Ready for git finalization.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -55,12 +55,12 @@ CLAUDE_CODE
 - Next task selected: CLI regression coverage for `report-files --json --validate-contents`.
 - Claude Code added 2 CLI regression tests: `report-files --json --validate-contents` when files are valid and when files have structural issues.
 - Codex review passed with no Required Fixes.
-- Local checkpoint created: `43a17b7 Lock report-files JSON validate-contents behavior`.
-- Next task selected: CLI regression coverage for exact `report-audit --json` issue payload details.
+- Claude Code strengthened `test_cli_report_audit_json_includes_issues_for_failures` with per-issue object field assertions for `missing_file` and `missing_columns`.
+- Claude Code added per-issue `code` assertions: `missing_file_issue["code"] == "missing_file"` and `missing_columns_issue["code"] == "missing_columns"`.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
+Codex git finalization for `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`.
 
 ## Expected Files
 
@@ -69,19 +69,17 @@ Claude Code should implement `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `91 passed in 1.13s`
-- Last accepted full validation: `uv run pytest -q` -> `235 passed in 2.18s`
+- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `91 passed in 1.23s`
+- Last accepted full validation: `uv run pytest -q` -> `235 passed in 2.17s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
-- Last accepted checkpoint: `43a17b7`
 
 ## Known Risks
 
 - Keep the implementation scoped to CLI regression coverage only.
 - Preserve current CLI exit codes and stderr behavior.
-- Avoid changing JSON serialization behavior.
+- Avoid changing issue object field names or message wording.
 
 ## Next Suggested Step
 
-Claude Code should add CLI regression coverage for exact `report-audit --json` issue payload details, run validation, and hand back to Codex for review.
+Codex should commit and push, then update the workflow docs to `DONE`.

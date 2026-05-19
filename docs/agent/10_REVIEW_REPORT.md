@@ -103,11 +103,9 @@ Next low-risk hardening step: add CLI regression coverage for the exact `report-
 
 ## Final Recommendation
 
-Accept and commit locally. Do not push.
+Accept locally. Do not push.
 
 ## Next Agent State
 
-After local checkpoint and next planning:
-
-- Phase: `CLAUDE_IMPLEMENTING`
-- Owner: `CLAUDE_CODE`
+- Phase: `USER_ACCEPTANCE`
+- Owner: `USER`
