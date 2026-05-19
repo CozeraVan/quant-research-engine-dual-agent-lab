@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -43,11 +43,12 @@ USER_ACCEPTANCE
 | QRE-NEXT-26 | CLI regression coverage for valid explicit `null` optional file-entry metadata | DONE | CODEX/CLAUDE_CODE | commit `cce750d`; 2 CLI regression tests lock explicit `null` optional metadata via `--json`; 229 tests passed | Preserve |
 | QRE-NEXT-27 | CLI regression coverage for explicit `null` top-level `schema_version` | DONE | CODEX/CLAUDE_CODE | commit `eac50d3`; 2 CLI regression tests lock explicit `schema_version: null` via `--json`; 231 tests passed | Preserve |
 | QRE-NEXT-28 | CLI regression coverage for `report-files --json --check-exists` | DONE | CODEX/CLAUDE_CODE | commit `ff3732e`; 2 CLI regression tests lock JSON `--check-exists` existing + missing-file paths; 233 tests passed | Preserve |
-| QRE-NEXT-29 | CLI regression coverage for `report-files --json --validate-contents` | DONE | CODEX/CLAUDE_CODE | Codex review passed; 2 CLI regression tests lock JSON `--validate-contents` valid + structural-issue paths; 235 tests passed | Local checkpoint |
+| QRE-NEXT-29 | CLI regression coverage for `report-files --json --validate-contents` | DONE | CODEX/CLAUDE_CODE | commit `43a17b7`; 2 CLI regression tests lock JSON `--validate-contents` valid + structural-issue paths; 235 tests passed | Preserve |
+| QRE-NEXT-30 | CLI regression coverage for exact `report-audit --json` issue payload details | READY | CLAUDE_CODE | implementation brief `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001` | Claude implementation |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after Codex review of `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001`:
+Recorded on 2026-05-19 after local checkpoint `43a17b7` and next-brief planning:
 
 - `uv run pytest tests/test_cli.py -q` -> `91 passed in 1.13s`
 - `uv run pytest -q` -> `235 passed in 2.18s`
@@ -55,7 +56,8 @@ Recorded on 2026-05-19 after Codex review of `QRE-REPORT-FILES-JSON-VALIDATE-CON
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - Accepted task: `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001`
-- Next step: local checkpoint, then next brief
+- Current task: `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`
+- Next step: Claude Code implementation
 
 ## Completed Module Summary
 
@@ -71,7 +73,6 @@ Recorded on 2026-05-19 after Codex review of `QRE-REPORT-FILES-JSON-VALIDATE-CON
 - Industry, board, market-cap, liquidity, membership, and regime grouping.
 - Evaluation benchmark/random-baseline comparison.
 - Larger research-run reproducibility workflow.
-- CLI regression coverage for exact `report-audit --json` issue payload details.
 
 ## Status Meaning
 

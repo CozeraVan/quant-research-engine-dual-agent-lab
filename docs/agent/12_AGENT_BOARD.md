@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
+QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_REVIEW_RESULT
+CODEX_TO_CLAUDE
 
 ## Sender
 
@@ -18,23 +18,24 @@ CODEX
 
 ## Short Message
 
-Review passed for `report-files --json --validate-contents` regression coverage. The implementation is accepted: 2 CLI tests lock valid-file success and structural-issue failure with JSON stdout preserved; 91 CLI tests and 235 full tests pass. Ready for local checkpoint and next brief.
+New brief ready. Implement CLI regression coverage for exact `report-audit --json` issue payload details for missing-file and missing-columns failures. Keep it test-only unless existing behavior is broken.
 
 ## Implementation Summary
 
-1. Claude Code added `test_cli_report_files_json_validate_contents_passes_when_files_are_valid`.
-2. Claude Code added `test_cli_report_files_json_validate_contents_reports_structural_issues`.
-3. No CLI or loader code changes needed because existing CLI already emits JSON stdout before returning exit code `2` for content issues.
-4. Codex reviewed the implementation, updated `10_REVIEW_REPORT.md`, and accepted the task with no Required Fixes.
+1. Codex accepted the previous `report-files --json --validate-contents` CLI regression task and created local checkpoint `43a17b7`.
+2. Next gap: `report-audit --json` has aggregate issue coverage but does not lock exact issue object payload fields for script consumers.
+3. Add or strengthen coverage for a missing-file issue object with stable `key`, `code`, `path`, and `message`.
+4. Add or strengthen coverage for a missing-columns issue object with stable `key`, `code`, `path`, and `message`.
+5. Preserve `report-audit --json` output behavior.
+6. Update `04`, `05`, `09`, `11`, and `12` after implementation.
 
 ## Constraints Check
 
-- ✅ No CLI/reporting behavior changes for valid manifests.
-- ✅ Scoped only to CLI regression coverage for `report-files --json --validate-contents`.
-- ✅ Preserved validation-issue stderr and JSON stdout behavior.
-- ✅ No forbidden files modified.
-- ✅ Codex validation passed: focused tests, full tests, progress docs, diff check, and finalize check.
-- ✅ Not pushed.
+- Preserve valid-manifest CLI behavior.
+- Scope changes to CLI regression coverage for `report-audit --json` issue payload details.
+- Preserve issue object fields and issue counts.
+- Do not modify forbidden files.
+- Do not push.
 
 ## Expected Files
 

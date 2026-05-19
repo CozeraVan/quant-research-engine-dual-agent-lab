@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
+QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Created By
 
@@ -14,11 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-`qre report-files --validate-contents` already has non-JSON CLI coverage for valid report files and structural content issues. JSON mode also supports `--validate-contents`: it emits the normal JSON payload to stdout, then returns exit code `2` and writes validation issues to stderr when matched files have structural problems. That JSON-mode behavior is useful for script consumers but is not directly locked by regression tests.
+`qre report-audit --json` already has coverage for valid audits, zero-match failures, and mixed failure cases. The mixed failure coverage currently checks aggregate counts and issue codes, but it does not directly lock the full issue object payload shape that script consumers rely on: `key`, `code`, `path`, and `message`.
 
 ## Goal
 
-Add CLI regression coverage for `report-files --json --validate-contents` while preserving existing JSON output and validation-issue stderr behavior.
+Add CLI regression coverage for exact `report-audit --json` issue payload details while preserving existing audit JSON behavior.
 
 ## Non-Goals
 
@@ -27,7 +27,7 @@ Add CLI regression coverage for `report-files --json --validate-contents` while 
 - Do not change report writer output.
 - Do not change portfolio simulation behavior.
 - Do not add database access.
-- Do not broaden this into report-files redesign.
+- Do not broaden this into report-audit redesign.
 - Do not modify CLI or loader code unless a tiny adjustment is strictly necessary.
 
 ## Affected Modules
@@ -66,18 +66,19 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve report-files path resolution and JSON output behavior.
-- Preserve validation-issue stderr and exit-code behavior.
+- Preserve report-audit JSON output behavior.
+- Preserve issue object fields and issue counts for missing-file and missing-column failures.
 - No database writes or credential handling.
 - No unrelated CLI or reporting refactors.
 
 ## Implementation Steps
 
-1. Inspect existing `report-files --validate-contents` and `report-files --json` tests in `tests/test_cli.py`.
-2. Add coverage for `report-files --json --validate-contents` when matched report files are structurally valid: exit code `0`, no stderr, JSON payload includes matched file metadata.
-3. Add coverage for `report-files --json --validate-contents` when a matched report file has a structural issue: exit code `2`, stdout remains the normal JSON payload, and stderr contains the validation issue fields.
-4. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
-5. Update handoff/progress/state/board docs after implementation.
+1. Inspect existing `report-audit --json` failure tests in `tests/test_cli.py`.
+2. Add or strengthen coverage for a missing-file issue object with exact `key`, `code`, `path`, and message content.
+3. Add or strengthen coverage for a missing-columns issue object with exact `key`, `code`, `path`, and message content.
+4. Assert current command-boundary behavior: exit code `2`, JSON `status: failed`, issue counts remain correct, and issue payload fields are stable.
+5. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
+6. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
@@ -87,7 +88,7 @@ None. This task adds regression coverage only unless a tiny bugfix is required.
 
 Valid CLI behavior should remain unchanged.
 
-`report-files --json --validate-contents` should continue emitting JSON stdout before returning non-zero for validation issues.
+`report-audit --json` issue objects should continue exposing stable `key`, `code`, `path`, and `message` fields.
 
 ## Validation Plan
 
@@ -112,18 +113,18 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `report-files --json --validate-contents` exits `0` with no stderr when matched report files are valid.
-- [ ] `report-files --json --validate-contents` exits `2` and writes validation issue fields to stderr when a matched report file has structural issues.
-- [ ] Validation-failure JSON mode still emits the normal stdout payload with `matched_files` and `files`.
-- [ ] Existing non-JSON `--validate-contents` behavior remains unchanged.
-- [ ] Existing JSON `--check-exists` and `--require-match` behavior remains unchanged.
+- [ ] `report-audit --json` missing-file issue objects expose stable `key`, `code`, `path`, and `message`.
+- [ ] `report-audit --json` missing-columns issue objects expose stable `key`, `code`, `path`, and `message`.
+- [ ] JSON `status`, `missing_files`, `validation_issues`, and issue counts remain correct.
+- [ ] Existing valid `report-audit --json` behavior remains unchanged.
+- [ ] Existing zero-match `report-audit --json --require-match` behavior remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
 - Keep the new work scoped to CLI regression coverage.
-- Avoid changing stdout/stderr ordering in JSON mode.
+- Avoid changing issue object field names or message wording unless a real bug is exposed.
 - Do not introduce CLI behavior changes for valid manifests.
 
 ## Instructions for Claude Code

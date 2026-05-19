@@ -2,49 +2,59 @@
 
 ## Task ID
 
-QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
+QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Written By
 
-CLAUDE_CODE
-
-## Intended Reviewer
-
 CODEX
+
+## Intended Implementer
+
+CLAUDE_CODE
 
 ## Status
 
-Implemented. Ready for Codex review.
+Ready for Claude Code implementation.
 
 ## Scope Summary
 
-- Add CLI regression coverage for `report-files --json --validate-contents` when matched files are valid (exit 0) and when matched files have structural validation issues (exit 2, JSON stdout preserved, validation-issue stderr).
+Add CLI regression coverage for exact `report-audit --json` issue object payload details for missing-file and missing-columns failures.
 
-## Files Changed
+## Files To Change
 
-- `tests/test_cli.py` — added 2 regression tests:
-  - `test_cli_report_files_json_validate_contents_passes_when_files_are_valid`
-  - `test_cli_report_files_json_validate_contents_reports_structural_issues`
+Expected:
 
-## Validation Results
+- `tests/test_cli.py`
+
+Update after implementation:
+
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+
+Do not change production code unless the new tests expose a real command-boundary bug.
+
+## Validation Required
 
 ```bash
-uv run pytest tests/test_cli.py -q  # 91 passed in 1.21s
-uv run pytest -q                     # 235 passed in 2.13s
-scripts/check-progress-docs.sh       # passed
-git diff --check                     # passed
+uv run pytest tests/test_cli.py -q
+uv run pytest -q
+scripts/check-progress-docs.sh
+git diff --check
 ```
 
-## Constraints
+## Handoff Notes
 
-- Do not change valid-manifest behavior. ✅ preserved
-- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
-- Do not modify forbidden files. ✅ compliant
-- Preserve validation-issue stderr and JSON stdout behavior. ✅ preserved
-- Do not push. ✅ not pushed
+- Use existing `test_cli_report_audit_json_includes_issues_for_failures` as the local anchor.
+- It is acceptable to strengthen that existing test or add focused adjacent tests.
+- Assert issue object fields: `key`, `code`, `path`, and `message`.
+- Keep the task test-only if existing CLI behavior already passes.
 
 ## Git State
 
 - Branch: `master`
-- Uncommitted changes: 1 test file + docs
-- Last commit: `ff3732e Lock report-files JSON check-exists behavior`
+- Last accepted implementation commit: `43a17b7 Lock report-files JSON validate-contents behavior`
+- Current task is ready for Claude Code.
+- Do not push.
