@@ -6,55 +6,45 @@ QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
 
 ## Written By
 
-CODEX
-
-## Intended Implementer
-
 CLAUDE_CODE
+
+## Intended Reviewer
+
+CODEX
 
 ## Status
 
-Ready for Claude Code implementation.
+Implemented. Ready for Codex review.
 
 ## Scope Summary
 
-Add CLI regression coverage for `report-files --json --validate-contents` when matched files are valid and when matched files have structural validation issues.
+- Add CLI regression coverage for `report-files --json --validate-contents` when matched files are valid (exit 0) and when matched files have structural validation issues (exit 2, JSON stdout preserved, validation-issue stderr).
 
-## Files To Change
+## Files Changed
 
-Expected:
+- `tests/test_cli.py` — added 2 regression tests:
+  - `test_cli_report_files_json_validate_contents_passes_when_files_are_valid`
+  - `test_cli_report_files_json_validate_contents_reports_structural_issues`
 
-- `tests/test_cli.py`
-
-Update after implementation:
-
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
-
-Do not change production code unless the new tests expose a real command-boundary bug.
-
-## Validation Required
+## Validation Results
 
 ```bash
-uv run pytest tests/test_cli.py -q
-uv run pytest -q
-scripts/check-progress-docs.sh
-git diff --check
+uv run pytest tests/test_cli.py -q  # 91 passed in 1.21s
+uv run pytest -q                     # 235 passed in 2.13s
+scripts/check-progress-docs.sh       # passed
+git diff --check                     # passed
 ```
 
-## Handoff Notes
+## Constraints
 
-- Use existing non-JSON `--validate-contents` tests and JSON report-files tests as local patterns.
-- For the validation-failure case, assert stdout still contains JSON with `matched_files == 1` and one file entry.
-- Assert stderr contains the report key, `missing_columns`, the resolved path, and the missing column name.
-- Keep the task test-only if existing CLI behavior already passes.
+- Do not change valid-manifest behavior. ✅ preserved
+- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
+- Do not modify forbidden files. ✅ compliant
+- Preserve validation-issue stderr and JSON stdout behavior. ✅ preserved
+- Do not push. ✅ not pushed
 
 ## Git State
 
 - Branch: `master`
-- Last accepted implementation commit: `ff3732e Lock report-files JSON check-exists behavior`
-- Current task is ready for Claude Code.
-- Do not push.
+- Uncommitted changes: 1 test file + docs
+- Last commit: `ff3732e Lock report-files JSON check-exists behavior`

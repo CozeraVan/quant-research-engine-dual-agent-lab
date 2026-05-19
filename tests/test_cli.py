@@ -2641,3 +2641,73 @@ def test_cli_report_files_json_check_exists_reports_missing_paths(capsys, tmp_pa
     assert len(payload["files"]) == 1
     assert payload["files"][0]["key"] == "summary"
     assert str(missing_path) in captured.err
+
+
+def test_cli_report_files_json_validate_contents_passes_when_files_are_valid(capsys, tmp_path):
+    output_path = tmp_path / "orders.csv"
+    output_path.write_text("symbol,trade_date,side\n000001.SZ,2026-01-05,buy\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "orders",
+                        "path": "orders.csv",
+                        "filename": "orders.csv",
+                        "role": "orders",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--role", "orders", "--json", "--validate-contents"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert len(payload["files"]) == 1
+    assert payload["files"][0]["key"] == "orders"
+    assert payload["files"][0]["path"] == str(output_path)
+
+
+def test_cli_report_files_json_validate_contents_reports_structural_issues(capsys, tmp_path):
+    output_path = tmp_path / "orders.csv"
+    output_path.write_text("symbol,side\n000001.SZ,buy\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "orders",
+                        "path": "orders.csv",
+                        "filename": "orders.csv",
+                        "role": "orders",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--role", "orders", "--json", "--validate-contents"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert len(payload["files"]) == 1
+    assert payload["files"][0]["key"] == "orders"
+    assert "orders" in captured.err
+    assert "missing_columns" in captured.err
+    assert str(output_path) in captured.err
+    assert "trade_date" in captured.err

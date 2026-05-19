@@ -10,11 +10,11 @@ QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
 
 ## Current Status
 
-Ready for Claude Code implementation.
+Review passed. Ready for local checkpoint.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -53,10 +53,12 @@ CLAUDE_CODE
 - Codex review passed with no Required Fixes.
 - Local checkpoint created: `ff3732e Lock report-files JSON check-exists behavior`.
 - Next task selected: CLI regression coverage for `report-files --json --validate-contents`.
+- Claude Code added 2 CLI regression tests: `report-files --json --validate-contents` when files are valid and when files have structural issues.
+- Codex review passed with no Required Fixes.
 
 ## In Progress
 
-Claude Code should implement `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the local checkpoint for `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001`, then prepare the next brief.
 
 ## Expected Files
 
@@ -65,12 +67,11 @@ Claude Code should implement `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION
 
 ## Validation Baseline
 
-- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `89 passed in 1.13s`
-- Last accepted full validation: `uv run pytest -q` -> `233 passed in 2.21s`
+- Last accepted focused validation: `uv run pytest tests/test_cli.py -q` -> `91 passed in 1.13s`
+- Last accepted full validation: `uv run pytest -q` -> `235 passed in 2.18s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Last accepted checkpoint: `ff3732e`
 
 ## Known Risks
 
@@ -80,4 +81,4 @@ Claude Code should implement `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION
 
 ## Next Suggested Step
 
-Claude Code should add CLI regression coverage for `report-files --json --validate-contents`, run validation, and hand back to Codex for review.
+Codex should commit locally, then prepare the next `report-audit --json` issue payload regression brief.

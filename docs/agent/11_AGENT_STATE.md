@@ -8,19 +8,19 @@ QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-FILES-JSON-CHECK-EXISTS-REGRESSION-001`, created local checkpoint `ff3732e`, and prepared the next brief for `report-files --json --validate-contents` regression coverage.
+Codex reviewed and accepted `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001`: 2 CLI regression tests lock `report-files --json --validate-contents` for structurally valid files and structural content issues. Validation passed (91 CLI tests, 235 full tests, progress-docs check, diff check, finalize check).
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-FILES-JSON-VALIDATE-CONTENTS-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the local checkpoint and prepare the next brief for `report-audit --json` issue payload regression coverage.
 
 ## Active Change Request
 
@@ -30,7 +30,7 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 
 - Current branch: `master`
 - Last accepted implementation commit: `ff3732e Lock report-files JSON check-exists behavior`
-- Current task is planned and ready for Claude Code implementation.
+- Current task passed Codex review and is ready for local checkpoint.
 - Standing approval: NONE
 
 ## Short Prompt Commands
