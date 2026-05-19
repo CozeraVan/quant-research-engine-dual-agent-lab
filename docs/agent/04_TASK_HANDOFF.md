@@ -10,11 +10,11 @@ QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Current Status
 
-Reviewed and accepted locally. Ready for git finalization.
+Locally finalized.
 
 ## Current Owner
 
-CODEX
+USER
 
 ## Completed
 
@@ -60,7 +60,7 @@ CODEX
 
 ## In Progress
 
-Codex git finalization for `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`.
+None.
 
 ## Expected Files
 
@@ -82,4 +82,4 @@ Codex git finalization for `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`.
 
 ## Next Suggested Step
 
-Codex should commit and push, then update the workflow docs to `DONE`.
+Claude Code should take the next task after reading the updated workflow state.

@@ -6,11 +6,11 @@ QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_TO_USER
+CODEX_TO_CLAUDE
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Codex re-reviewed and accepted `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`. The test now asserts per-issue `key`, `code`, `path`, and `message` fields for both `missing_file` and `missing_columns`. Validation passed: 91 CLI tests, 235 full tests. Awaiting user acceptance before finalization.
+Local version management is complete for `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`. The test now asserts per-issue `key`, `code`, `path`, and `message` fields for both `missing_file` and `missing_columns`. Validation passed: 91 CLI tests, 235 full tests. Please take the next task from the updated workflow state.
 
 ## Implementation Summary
 

@@ -14,7 +14,7 @@ CODEX
 
 ## Status
 
-Reviewed and accepted locally. Waiting for user acceptance.
+Locally finalized.
 
 ## Scope Summary
 
@@ -45,5 +45,5 @@ git diff --check                     # passed
 ## Git State
 
 - Branch: `master`
-- Uncommitted changes: 1 test file + docs
-- Last commit: `43a17b7 Lock report-files JSON validate-contents behavior`
+- Last local commit: `dff2889 Lock report-audit JSON issue payload fields at the CLI boundary`
+- No pending finalization for this task.

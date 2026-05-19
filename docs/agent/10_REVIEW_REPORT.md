@@ -107,5 +107,5 @@ Accept locally. Do not push.
 
 ## Next Agent State
 
-- Phase: `USER_ACCEPTANCE`
+- Phase: `DONE`
 - Owner: `USER`

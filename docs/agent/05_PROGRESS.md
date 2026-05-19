@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+DONE
 
 ## Progress Table
 
@@ -44,18 +44,18 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-27 | CLI regression coverage for explicit `null` top-level `schema_version` | DONE | CODEX/CLAUDE_CODE | commit `eac50d3`; 2 CLI regression tests lock explicit `schema_version: null` via `--json`; 231 tests passed | Preserve |
 | QRE-NEXT-28 | CLI regression coverage for `report-files --json --check-exists` | DONE | CODEX/CLAUDE_CODE | commit `ff3732e`; 2 CLI regression tests lock JSON `--check-exists` existing + missing-file paths; 233 tests passed | Preserve |
 | QRE-NEXT-29 | CLI regression coverage for `report-files --json --validate-contents` | DONE | CODEX/CLAUDE_CODE | commit `43a17b7`; 2 CLI regression tests lock JSON `--validate-contents` valid + structural-issue paths; 235 tests passed | Preserve |
-| QRE-NEXT-30 | CLI regression coverage for exact `report-audit --json` issue payload details | REVIEWED | CODEX/CLAUDE_CODE | per-issue `key`/`code`/`path`/`message` assertions for `missing_file` and `missing_columns`; 235 tests passed | Git finalize |
+| QRE-NEXT-30 | CLI regression coverage for exact `report-audit --json` issue payload details | DONE | CODEX/CLAUDE_CODE | local commit `dff2889`; per-issue `key`/`code`/`path`/`message` assertions for `missing_file` and `missing_columns`; 235 tests passed | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-19 after user approval for QRE-NEXT-30:
+Recorded on 2026-05-19 after local finalization of QRE-NEXT-30:
 
 - `uv run pytest tests/test_cli.py -q` -> `91 passed in 1.23s`
 - `uv run pytest -q` -> `235 passed in 2.17s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - Current task: `QRE-REPORT-AUDIT-JSON-ISSUE-PAYLOAD-REGRESSION-001`
-- Next step: git finalize
+- Next step: preserve and hand off the next task to Claude Code
 
 ## Completed Module Summary
 
