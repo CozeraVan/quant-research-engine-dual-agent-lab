@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001
 
 ## Created By
 
@@ -14,11 +14,13 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest loader validation rejects non-string optional file-entry metadata fields such as `symbol`, `window`, and `group_by`, but the CLI regression suite does not yet lock representative optional-entry type errors at the command boundary. `report-files` and `report-audit` should keep surfacing these malformed-manifest failures with exit code `2` and clear stderr output.
+Manifest loader validation rejects non-string optional file-entry metadata fields `symbol`, `window`, and `group_by`. CLI regression coverage now locks `symbol` and `window` type errors at the command boundary, but `group_by` still lacks the same direct CLI regression coverage.
+
+`report-files` and `report-audit` should keep surfacing non-string optional `group_by` failures with exit code `2` and clear stderr output.
 
 ## Goal
 
-Add CLI regression coverage for optional file-entry metadata type errors while preserving existing valid-manifest CLI behavior.
+Add CLI regression coverage for optional file-entry `group_by` type errors while preserving existing valid-manifest CLI behavior.
 
 ## Non-Goals
 
@@ -28,7 +30,7 @@ Add CLI regression coverage for optional file-entry metadata type errors while p
 - Do not change portfolio simulation behavior.
 - Do not add database access.
 - Do not broaden this into general manifest schema redesign.
-- Do not modify CLI code unless a tiny adjustment is strictly necessary.
+- Do not modify CLI or loader code unless a tiny adjustment is strictly necessary.
 
 ## Affected Modules
 
@@ -73,14 +75,12 @@ Task-specific locked requirements:
 
 ## Implementation Steps
 
-1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`.
-2. Add coverage for `report-files` when optional file-entry `symbol` has the wrong type.
-3. Add coverage for `report-files` when optional file-entry `window` has the wrong type.
-4. Add coverage for `report-audit` when optional file-entry `symbol` has the wrong type.
-5. Add coverage for `report-audit` when optional file-entry `window` has the wrong type.
-6. Assert current command-boundary behavior: exit code `2` and clear stderr containing the loader error.
-7. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
-8. Update handoff/progress/state/board docs after implementation.
+1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`, especially the optional `symbol` and `window` tests.
+2. Add coverage for `report-files` when optional file-entry `group_by` has the wrong type.
+3. Add coverage for `report-audit` when optional file-entry `group_by` has the wrong type.
+4. Assert current command-boundary behavior: exit code `2` and clear stderr containing the loader error.
+5. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
+6. Update handoff/progress/state/board docs after implementation.
 
 ## Data / Schema Changes
 
@@ -90,7 +90,7 @@ None. This task adds regression coverage only unless a tiny bugfix is required.
 
 Valid CLI behavior should remain unchanged.
 
-Malformed manifests with non-string optional file-entry metadata fields should continue surfacing a clear loader error through CLI stderr with exit code `2`.
+Malformed manifests with non-string optional `group_by` file-entry metadata should continue surfacing a clear loader error through CLI stderr with exit code `2`.
 
 ## Validation Plan
 
@@ -115,12 +115,10 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `report-files` surfaces non-string optional file-entry `symbol` with exit code `2`.
-- [ ] `report-files` surfaces non-string optional file-entry `window` with exit code `2`.
-- [ ] `report-audit` surfaces non-string optional file-entry `symbol` with exit code `2`.
-- [ ] `report-audit` surfaces non-string optional file-entry `window` with exit code `2`.
+- [ ] `report-files` surfaces non-string optional file-entry `group_by` with exit code `2`.
+- [ ] `report-audit` surfaces non-string optional file-entry `group_by` with exit code `2`.
 - [ ] Existing valid-manifest CLI behavior remains unchanged.
-- [ ] Existing malformed-manifest CLI behavior for malformed roots, unsupported `kind`, schema-version errors, missing top-level fields, top-level type errors, and required file-entry errors remains unchanged.
+- [ ] Existing malformed-manifest CLI behavior for malformed roots, unsupported `kind`, schema-version errors, missing top-level fields, top-level type errors, required file-entry errors, and optional `symbol`/`window` errors remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 

@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_REVIEW_RESULT
+CODEX_TO_CLAUDE
 
 ## Sender
 
@@ -18,26 +18,24 @@ CODEX
 
 ## Short Message
 
-Review passed for optional file-entry metadata type regression coverage. The implementation is accepted: 4 CLI tests lock non-string optional `symbol` and `window` across `report-files` and `report-audit`; 81 CLI tests and 225 full tests pass. Ready for local checkpoint and next brief.
+New brief ready. Implement CLI regression coverage for non-string optional `group_by` file-entry metadata across `report-files` and `report-audit`. Keep it test-only unless existing behavior is broken.
 
 ## Implementation Summary
 
-1. Claude Code inspected existing malformed-manifest CLI tests in `tests/test_cli.py`.
-2. Claude Code added `test_cli_report_files_reports_non_string_optional_symbol`.
-3. Claude Code added `test_cli_report_files_reports_non_string_optional_window`.
-4. Claude Code added `test_cli_report_audit_reports_non_string_optional_symbol`.
-5. Claude Code added `test_cli_report_audit_reports_non_string_optional_window`.
-6. No CLI or loader code changes needed because existing `ReportFile.from_mapping()` optional-field validation already handled these cases.
-7. Codex reviewed the implementation, updated `10_REVIEW_REPORT.md`, and accepted the task with no Required Fixes.
+1. Codex accepted the previous optional `symbol`/`window` CLI regression task and created local checkpoint `a4693ab`.
+2. Next gap: optional `group_by` uses the same loader validation path but lacks direct CLI command-boundary regression coverage.
+3. Add a `report-files` test for non-string optional `group_by`.
+4. Add a `report-audit` test for non-string optional `group_by`.
+5. Assert exit code `2` and stderr containing `manifest file entry field 'group_by' must be a string or null`.
+6. Update `04`, `05`, `09`, `11`, and `12` after implementation.
 
 ## Constraints Check
 
-- ✅ No CLI/reporting behavior changes for valid manifests.
-- ✅ Scoped only to CLI regression coverage for optional file-entry metadata type errors.
-- ✅ Preserved existing malformed-manifest exit-code and stderr behavior.
-- ✅ No forbidden files modified.
-- ✅ Codex validation passed: focused tests, full tests, progress docs, diff check, and finalize check.
-- ✅ Not pushed.
+- Preserve valid-manifest CLI behavior.
+- Scope changes to CLI regression coverage for optional `group_by` type errors.
+- Preserve malformed-manifest exit code `2` and stderr behavior.
+- Do not modify forbidden files.
+- Do not push.
 
 ## Expected Files
 

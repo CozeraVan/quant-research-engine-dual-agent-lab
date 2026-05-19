@@ -2,49 +2,59 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-ENTRY-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001
 
 ## Written By
 
-CLAUDE_CODE
-
-## Intended Reviewer
-
 CODEX
+
+## Intended Implementer
+
+CLAUDE_CODE
 
 ## Status
 
-Implemented. Ready for Codex review.
+Ready for Claude Code implementation.
 
 ## Scope Summary
 
-- Add CLI regression coverage so `report-files` and `report-audit` both surface non-string optional file-entry metadata fields (`symbol`, `window`) with exit code 2 and clear stderr.
+Add CLI regression coverage so `report-files` and `report-audit` both surface non-string optional file-entry `group_by` metadata with exit code `2` and clear stderr.
 
-## Files Changed
+## Files To Change
 
-- `tests/test_cli.py` — added 4 regression tests:
-  - `test_cli_report_files_reports_non_string_optional_symbol`
-  - `test_cli_report_files_reports_non_string_optional_window`
-  - `test_cli_report_audit_reports_non_string_optional_symbol`
-  - `test_cli_report_audit_reports_non_string_optional_window`
+Expected:
 
-## Validation Results
+- `tests/test_cli.py`
+
+Update after implementation:
+
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+
+Do not change production code unless the new tests expose a real command-boundary bug.
+
+## Validation Required
 
 ```bash
-uv run pytest tests/test_cli.py -q  # 81 passed in 1.10s
-uv run pytest -q                     # 225 passed in 2.03s
-git diff --check                     # passed
+uv run pytest tests/test_cli.py -q
+uv run pytest -q
+scripts/check-progress-docs.sh
+git diff --check
 ```
 
-## Constraints
+## Handoff Notes
 
-- Do not change valid-manifest behavior. ✅ preserved
-- Do not modify CLI code unless strictly necessary. ✅ no CLI changes needed
-- Do not modify forbidden files from the brief. ✅ compliant
-- Do not push. ✅ not pushed
+- Use the existing optional `symbol` and `window` malformed-manifest CLI tests as the local pattern.
+- Expected stderr substring: `manifest file entry field 'group_by' must be a string or null`.
+- Preserve exit code `2` for malformed manifests.
+- Keep the task test-only if existing loader/CLI behavior already passes.
 
 ## Git State
 
 - Branch: `master`
-- Uncommitted changes: 1 test file + docs
-- Last commit: `bdce0fa Lock schema-version type failures at the CLI boundary`
+- Last accepted implementation commit: `a4693ab Lock optional manifest entry type failures at the CLI boundary`
+- Current task is ready for Claude Code.
+- Do not push.
