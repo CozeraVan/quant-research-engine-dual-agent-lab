@@ -2436,3 +2436,78 @@ def test_cli_report_audit_reports_non_string_optional_group_by(capsys, tmp_path)
 
     assert exit_code == 2
     assert "manifest file entry field 'group_by' must be a string or null" in captured.err
+
+
+def test_cli_report_files_json_accepts_null_optional_metadata(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                        "symbol": None,
+                        "window": None,
+                        "group_by": None,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--json"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    entry = payload["files"][0]
+    assert entry["key"] == "summary"
+    assert entry["role"] == "summary"
+    assert "symbol" not in entry
+    assert "window" not in entry
+    assert "group_by" not in entry
+
+
+def test_cli_report_audit_json_accepts_null_optional_metadata(capsys, tmp_path):
+    output_path = tmp_path / "summary.csv"
+    output_path.write_text("symbol,total_return\n000001.SZ,0.1\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                        "symbol": None,
+                        "window": None,
+                        "group_by": None,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path), "--json"])
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["status"] == "ok"
+    assert payload["matched_files"] == 1
+    assert payload["missing_files"] == 0
+    assert payload["validation_issues"] == 0

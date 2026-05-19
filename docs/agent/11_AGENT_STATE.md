@@ -8,19 +8,19 @@ QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001`, created local checkpoint `0083c82`, and prepared the next brief for valid explicit `null` optional file-entry metadata regression coverage.
+Codex reviewed and accepted `QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001`: 2 CLI regression tests lock explicit `null` optional file-entry metadata (`symbol`, `window`, `group_by`) via `report-files --json` and `report-audit --json`. Validation passed (85 CLI tests, 229 full tests, progress-docs check, diff check, finalize check).
 
 ## Next Required Step
 
-Claude Code should implement `QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
+Codex should create the local checkpoint and prepare the next brief for explicit `null` top-level `schema_version` regression coverage.
 
 ## Active Change Request
 
@@ -30,7 +30,7 @@ User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
 
 - Current branch: `master`
 - Last accepted implementation commit: `0083c82 Lock optional group-by manifest type failures at the CLI boundary`
-- Current task is planned and ready for Claude Code implementation.
+- Current task passed Codex review and is ready for local checkpoint.
 - Standing approval: NONE
 
 ## Short Prompt Commands
