@@ -2,19 +2,19 @@
 
 ## Current Task
 
-Add CLI regression coverage for optional `group_by` file-entry metadata type errors.
+Add CLI regression coverage for valid explicit `null` optional file-entry metadata.
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001
 
 ## Current Status
 
-Review passed. Ready for local checkpoint.
+Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
@@ -39,10 +39,12 @@ CODEX
 - Next task selected: CLI regression coverage for optional `group_by` file-entry metadata type errors.
 - Claude Code added 2 CLI regression tests: non-string optional `group_by` across `report-files` and `report-audit`.
 - Codex review passed with no Required Fixes.
+- Local checkpoint created: `0083c82 Lock optional group-by manifest type failures at the CLI boundary`.
+- Next task selected: CLI regression coverage for valid explicit `null` optional file-entry metadata.
 
 ## In Progress
 
-Codex should create the local checkpoint for `QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001`, then prepare the next brief.
+Claude Code should implement `QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Expected Files
 
@@ -56,6 +58,7 @@ Codex should create the local checkpoint for `QRE-REPORT-MANIFEST-CLI-OPTIONAL-G
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
+- Last accepted checkpoint: `0083c82`
 
 ## Known Risks
 
@@ -65,4 +68,4 @@ Codex should create the local checkpoint for `QRE-REPORT-MANIFEST-CLI-OPTIONAL-G
 
 ## Next Suggested Step
 
-Codex should commit locally, then prepare the next manifest CLI optional-null metadata regression brief.
+Claude Code should add CLI regression coverage for explicit `null` optional metadata in `report-files --json` and `report-audit --json`, run validation, and hand back to Codex for review.

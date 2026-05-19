@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001
 
 ## Created By
 
@@ -14,13 +14,13 @@ CLAUDE_CODE
 
 ## Background
 
-Manifest loader validation rejects non-string optional file-entry metadata fields `symbol`, `window`, and `group_by`. CLI regression coverage now locks `symbol` and `window` type errors at the command boundary, but `group_by` still lacks the same direct CLI regression coverage.
+Manifest loader validation accepts optional file-entry metadata fields `symbol`, `window`, and `group_by` when they are strings or explicit JSON `null`. Recent CLI regression coverage locks non-string errors for all three fields, but the valid explicit-`null` path is not directly locked at the command boundary.
 
-`report-files` and `report-audit` should keep surfacing non-string optional `group_by` failures with exit code `2` and clear stderr output.
+`report-files` and `report-audit` should continue accepting manifest entries where optional metadata fields are present with `null` values.
 
 ## Goal
 
-Add CLI regression coverage for optional file-entry `group_by` type errors while preserving existing valid-manifest CLI behavior.
+Add CLI regression coverage for valid explicit `null` optional file-entry metadata while preserving existing CLI output behavior.
 
 ## Non-Goals
 
@@ -68,17 +68,17 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve valid-manifest loading and filtering behavior.
+- Preserve valid-manifest loading, filtering, and JSON output behavior.
 - Keep malformed-manifest errors deterministic and clear.
 - No database writes or credential handling.
 - No unrelated CLI or reporting refactors.
 
 ## Implementation Steps
 
-1. Inspect existing malformed-manifest CLI tests in `tests/test_cli.py`, especially the optional `symbol` and `window` tests.
-2. Add coverage for `report-files` when optional file-entry `group_by` has the wrong type.
-3. Add coverage for `report-audit` when optional file-entry `group_by` has the wrong type.
-4. Assert current command-boundary behavior: exit code `2` and clear stderr containing the loader error.
+1. Inspect existing `report-files --json`, `report-audit --json`, and optional metadata malformed-manifest tests in `tests/test_cli.py`.
+2. Add coverage for `report-files --json` when a file entry explicitly sets optional `symbol`, `window`, and `group_by` to `null`.
+3. Add coverage for `report-audit --json` when a file entry explicitly sets optional `symbol`, `window`, and `group_by` to `null`; create the referenced file so the audit can pass.
+4. Assert current valid command-boundary behavior: exit code `0`, no stderr, matched file count is correct, and existing JSON serialization behavior for `null` optional metadata is preserved.
 5. Do not modify CLI or loader code unless the tests expose a real bug that must be fixed.
 6. Update handoff/progress/state/board docs after implementation.
 
@@ -90,7 +90,7 @@ None. This task adds regression coverage only unless a tiny bugfix is required.
 
 Valid CLI behavior should remain unchanged.
 
-Malformed manifests with non-string optional `group_by` file-entry metadata should continue surfacing a clear loader error through CLI stderr with exit code `2`.
+Manifests with explicit `null` optional file-entry metadata should continue loading successfully through `report-files` and `report-audit`.
 
 ## Validation Plan
 
@@ -115,17 +115,18 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `report-files` surfaces non-string optional file-entry `group_by` with exit code `2`.
-- [ ] `report-audit` surfaces non-string optional file-entry `group_by` with exit code `2`.
+- [ ] `report-files --json` accepts explicit `null` optional `symbol`, `window`, and `group_by` metadata with exit code `0`.
+- [ ] `report-audit --json` accepts explicit `null` optional `symbol`, `window`, and `group_by` metadata with exit code `0` when referenced files exist.
+- [ ] Existing JSON serialization behavior for `null` optional metadata is preserved.
 - [ ] Existing valid-manifest CLI behavior remains unchanged.
-- [ ] Existing malformed-manifest CLI behavior for malformed roots, unsupported `kind`, schema-version errors, missing top-level fields, top-level type errors, required file-entry errors, and optional `symbol`/`window` errors remains unchanged.
+- [ ] Existing malformed-manifest CLI behavior for optional metadata type errors remains unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
 
 ## Risks
 
 - Keep the new work scoped to CLI regression coverage.
-- Avoid weakening existing malformed-manifest stderr expectations.
+- Avoid changing whether JSON output omits or includes optional metadata keys whose value is `None`.
 - Do not introduce CLI behavior changes for valid manifests.
 
 ## Instructions for Claude Code

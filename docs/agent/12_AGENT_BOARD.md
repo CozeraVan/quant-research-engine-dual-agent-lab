@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-REPORT-MANIFEST-CLI-OPTIONAL-GROUP-BY-TYPE-REGRESSION-001
+QRE-REPORT-MANIFEST-CLI-OPTIONAL-NULL-METADATA-REGRESSION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_REVIEW_RESULT
+CODEX_TO_CLAUDE
 
 ## Sender
 
@@ -18,23 +18,24 @@ CODEX
 
 ## Short Message
 
-Review passed for optional `group_by` type regression coverage. The implementation is accepted: 2 CLI tests lock non-string optional `group_by` across `report-files` and `report-audit`; 83 CLI tests and 227 full tests pass. Ready for local checkpoint and next brief.
+New brief ready. Implement CLI regression coverage for explicit `null` optional metadata across `report-files --json` and `report-audit --json`. Keep it test-only unless existing behavior is broken.
 
 ## Implementation Summary
 
-1. Claude Code added `test_cli_report_files_reports_non_string_optional_group_by`.
-2. Claude Code added `test_cli_report_audit_reports_non_string_optional_group_by`.
-3. No CLI or loader code changes needed because `ReportFile.from_mapping()` optional-field validation already rejected non-string `group_by`.
-4. Codex reviewed the implementation, updated `10_REVIEW_REPORT.md`, and accepted the task with no Required Fixes.
+1. Codex accepted the previous optional `group_by` CLI regression task and created local checkpoint `0083c82`.
+2. Next gap: the loader accepts optional `symbol`, `window`, and `group_by` when explicitly set to JSON `null`, but that valid command-boundary path lacks direct CLI regression coverage.
+3. Add a `report-files --json` test for explicit `null` optional `symbol`, `window`, and `group_by`.
+4. Add a `report-audit --json` test for explicit `null` optional `symbol`, `window`, and `group_by`; create the referenced file so audit status is `ok`.
+5. Preserve current JSON serialization behavior for optional metadata whose value resolves to `None`.
+6. Update `04`, `05`, `09`, `11`, and `12` after implementation.
 
 ## Constraints Check
 
-- ✅ No CLI/reporting behavior changes for valid manifests.
-- ✅ Scoped only to CLI regression coverage for optional `group_by` type errors.
-- ✅ Preserved existing malformed-manifest exit-code and stderr behavior.
-- ✅ No forbidden files modified.
-- ✅ Codex validation passed: focused tests, full tests, progress docs, diff check, and finalize check.
-- ✅ Not pushed.
+- Preserve valid-manifest CLI behavior.
+- Scope changes to CLI regression coverage for explicit `null` optional metadata.
+- Preserve current JSON serialization behavior for optional metadata whose value is `None`.
+- Do not modify forbidden files.
+- Do not push.
 
 ## Expected Files
 
