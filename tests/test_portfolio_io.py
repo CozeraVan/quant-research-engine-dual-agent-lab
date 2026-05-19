@@ -529,3 +529,189 @@ def test_shared_cash_empty_failed_orders_writes_stable_headers(tmp_path):
     assert "price" in header
     assert "notional" in header
     assert "reason" in header
+
+
+def test_write_single_symbol_result_writes_run_manifest(tmp_path):
+    result = SingleSymbolBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 1},
+    )
+    run_request = {
+        "command": "backtest-single",
+        "strategy_path": "/tmp/strategy.yaml",
+        "request": {
+            "symbol": "000001.SZ",
+            "initial_cash": 10000.0,
+            "holding_days": 2,
+            "market_profile": "/tmp/market_profile.yaml",
+        },
+    }
+    paths = write_single_symbol_result(result, tmp_path, run_request=run_request)
+
+    assert "run_manifest" in paths
+    assert paths["run_manifest"].name == "run_manifest.json"
+    manifest = json.loads(paths["run_manifest"].read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == 1
+    assert manifest["kind"] == "portfolio_backtest_run_manifest"
+    assert manifest["command"] == "backtest-single"
+    assert manifest["strategy_path"] == "/tmp/strategy.yaml"
+    assert manifest["request"]["symbol"] == "000001.SZ"
+    assert manifest["request"]["market_profile"] == "/tmp/market_profile.yaml"
+    assert "equity_curve" in manifest["artifacts"]
+    assert "orders" in manifest["artifacts"]
+    assert "summary" in manifest["artifacts"]
+
+
+def test_write_single_symbol_result_no_run_manifest_when_not_requested(tmp_path):
+    result = SingleSymbolBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 1},
+    )
+    paths = write_single_symbol_result(result, tmp_path)
+    assert "run_manifest" not in paths
+
+
+def test_write_shared_cash_result_writes_run_manifest(tmp_path):
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame(
+            {"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [10000.0] * 21}
+        ),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 0, "max_drawdown": 0.0},
+    )
+    run_request = {
+        "command": "backtest-shared",
+        "strategy_path": "/tmp/strategy.yaml",
+        "request": {
+            "symbols": ["000001.SZ"],
+            "max_positions": 5,
+            "holding_days": 2,
+            "market_profile": "/tmp/market_profile.yaml",
+            "benchmark_table": "public.index_daily",
+            "benchmark_code": "000300.SH",
+            "benchmark_value_column": "close",
+        },
+    }
+    paths = write_shared_cash_result(result, tmp_path, run_request=run_request)
+
+    assert "run_manifest" in paths
+    run_manifest = json.loads(paths["run_manifest"].read_text(encoding="utf-8"))
+    assert run_manifest["kind"] == "portfolio_backtest_run_manifest"
+    assert run_manifest["command"] == "backtest-shared"
+    assert run_manifest["request"]["max_positions"] == 5
+    assert run_manifest["request"]["market_profile"] == "/tmp/market_profile.yaml"
+    assert run_manifest["request"]["benchmark_table"] == "public.index_daily"
+    assert run_manifest["request"]["benchmark_code"] == "000300.SH"
+    assert run_manifest["request"]["benchmark_value_column"] == "close"
+    report_manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    manifest_keys = {item["key"] for item in report_manifest["files"]}
+    assert "run_manifest" in manifest_keys
+    run_manifest_entry = next(item for item in report_manifest["files"] if item["key"] == "run_manifest")
+    assert run_manifest_entry["role"] == "run_manifest"
+    markdown = paths["summary_markdown"].read_text(encoding="utf-8")
+    assert "| Run manifest | run_manifest.json |" in markdown
+
+
+def test_write_batch_result_writes_run_manifest(tmp_path):
+    single_result = SingleSymbolBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame(
+            {"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [10000.0] * 21}
+        ),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 1, "max_drawdown": 0.0},
+    )
+    result = BatchBacktestResult(
+        symbols=["000001.SZ"],
+        results={"000001.SZ": single_result},
+        summary=pd.DataFrame({"symbol": ["000001.SZ"], "trade_count": [1], "win_rate": [1.0], "total_return": [0.05], "total_cost": [10.0]}),
+        summary_metrics={"symbol_count": 1, "mean_total_return": 0.05, "total_trades": 1},
+    )
+    run_request = {
+        "command": "backtest-batch",
+        "strategy_path": "/tmp/strategy.yaml",
+        "request": {
+            "symbols": ["000001.SZ"],
+            "initial_cash_per_symbol": 50000.0,
+            "holding_days": 2,
+            "market_profile": "/tmp/market_profile.yaml",
+            "group_by": ["board"],
+            "group_rank_top_n": 3,
+        },
+    }
+    paths = write_batch_result(result, tmp_path, run_request=run_request)
+
+    assert "run_manifest" in paths
+    run_manifest = json.loads(paths["run_manifest"].read_text(encoding="utf-8"))
+    assert run_manifest["kind"] == "portfolio_backtest_run_manifest"
+    assert run_manifest["command"] == "backtest-batch"
+    assert run_manifest["request"]["initial_cash_per_symbol"] == 50000.0
+    assert run_manifest["request"]["market_profile"] == "/tmp/market_profile.yaml"
+    assert run_manifest["request"]["group_by"] == ["board"]
+    assert run_manifest["request"]["group_rank_top_n"] == 3
+    report_manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    manifest_keys = {item["key"] for item in report_manifest["files"]}
+    assert "run_manifest" in manifest_keys
+    run_manifest_entry = next(item for item in report_manifest["files"] if item["key"] == "run_manifest")
+    assert run_manifest_entry["role"] == "run_manifest"
+    markdown = paths["summary_markdown"].read_text(encoding="utf-8")
+    assert "| Run manifest | run_manifest.json |" in markdown
+
+
+def test_batch_emitted_report_manifest_validates_run_manifest(tmp_path):
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    single_result = SingleSymbolBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame(
+            {"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [10000.0] * 21}
+        ),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 1, "max_drawdown": 0.0},
+    )
+    result = BatchBacktestResult(
+        symbols=["000001.SZ"],
+        results={"000001.SZ": single_result},
+        summary=pd.DataFrame({"symbol": ["000001.SZ"], "trade_count": [1], "win_rate": [1.0], "total_return": [0.05], "total_cost": [10.0]}),
+        summary_metrics={"symbol_count": 1, "mean_total_return": 0.05, "total_trades": 1},
+    )
+    run_request = {
+        "command": "backtest-batch",
+        "strategy_path": "/tmp/strategy.yaml",
+        "request": {"symbols": ["000001.SZ"], "holding_days": 2},
+    }
+    paths = write_batch_result(result, tmp_path, run_request=run_request)
+    manifest = ReportManifest.from_path(paths["report_manifest"])
+    assert manifest.validate_contents(role="run_manifest") == []
+
+
+def test_shared_emitted_report_manifest_validates_run_manifest(tmp_path):
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame(
+            {"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [10000.0] * 21}
+        ),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 0, "max_drawdown": 0.0},
+    )
+    run_request = {
+        "command": "backtest-shared",
+        "strategy_path": "/tmp/strategy.yaml",
+        "request": {"symbols": ["000001.SZ"], "max_positions": 5, "holding_days": 2},
+    }
+    paths = write_shared_cash_result(result, tmp_path, run_request=run_request)
+    manifest = ReportManifest.from_path(paths["report_manifest"])
+    assert manifest.validate_contents(role="run_manifest") == []

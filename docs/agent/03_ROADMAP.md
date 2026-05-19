@@ -51,7 +51,7 @@
 | M5.2 | Report manifests | DONE | HISTORICAL | `report_manifest.json` | Preserve |
 | M5.3 | Report discovery and audit CLI | DONE | HISTORICAL | `qre report-files`, `qre report-audit` | Use in acceptance checks |
 | M5.4 | Strict zero-match report audit | DONE | HISTORICAL | `--require-match` | Preserve |
-| M5.5 | Larger research-run reproducibility workflow | TODO | CLAUDE_CODE | not fully standardized | Define after next portfolio diagnostics task |
+| M5.5 | Larger research-run reproducibility workflow | DONE | CODEX/CLAUDE_CODE | 246 tests passed; portfolio backtest run manifests added and validated | Preserve; larger multi-stage run bundles can follow later |
 
 ## Milestone 6: Dual-Agent Workflow
 

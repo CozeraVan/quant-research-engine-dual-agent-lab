@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001
+QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001
 
 ## Created By
 
@@ -14,29 +14,33 @@ CLAUDE_CODE
 
 ## Background
 
-Shared-cash backtests already emit failed-order rows and summary counts by reason and failure_reason. The current summary does not surface side-level breakdowns, so users cannot quickly see whether failed orders cluster on buys or sells. `docs/agent/01_CURRENT_STATUS.md` calls out richer reason categorization and summary analysis as the next self-contained implementation task.
+The portfolio backtest outputs already include result files, summary files, and report manifests, but they do not yet record the run inputs that produced them. That makes it hard to reconstruct an old research run without recovering CLI arguments from chat or shell history.
+
+The next self-contained step is to write a run manifest alongside portfolio backtest output directories so single-symbol, batch, and shared-cash runs carry a reproducible metadata record without changing simulation behavior.
 
 ## Goal
 
-Add richer shared-cash failed-order diagnostics and summary analysis, with side-level aggregate metrics surfaced in summary JSON and Markdown, while preserving existing failed-order behavior.
+Add a safe portfolio backtest run manifest to output directories so each run records its command, strategy path, resolved request parameters, and emitted artifacts.
 
 ## Non-Goals
 
-- Do not change order-generation, fill, or blocking logic.
-- Do not change single-symbol or batch backtests.
-- Do not change benchmark or data-source wiring.
-- Do not add database writes.
-- Do not broaden this into a new reporting framework.
-- Do not modify CLI flags or output formats outside the existing summary artifacts.
+- Do not change single-symbol, batch, or shared-cash simulation logic.
+- Do not change order generation, fills, risk controls, or benchmark math.
+- Do not add database writes or new data-source wiring.
+- Do not store sensitive connection values in the manifest.
+- Do not rework the existing report-manifest schema beyond adding a run-manifest artifact if needed.
+- Do not add new CLI commands or flags unless the current backtest entry points need them to pass run metadata into the writer layer.
 
 ## Affected Modules
 
 Expected:
 
-- `src/quant_research_engine/portfolio/shared.py`
+- `src/quant_research_engine/apps/cli.py`
 - `src/quant_research_engine/portfolio/io.py`
-- `tests/test_portfolio_shared.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
 - `tests/test_portfolio_io.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py`
 
 Docs/handoff:
 
@@ -48,10 +52,10 @@ Docs/handoff:
 
 ## Forbidden Files
 
-- `src/**` outside `shared.py` and `io.py`
+- `src/**` outside the modules listed above
 - `uv.lock`
 - `pyproject.toml`
-- database credentials or `.env*`
+- `.env*`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
 - old root progress docs unless separately requested
 
@@ -63,47 +67,48 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve shared-cash execution behavior.
-- Preserve existing failed-order reason and failure_reason breakdowns.
-- Keep output persistence and Markdown formatting compatible with current report artifacts.
-- No database writes or credential handling.
-- No unrelated portfolio refactors.
+- Preserve portfolio execution behavior.
+- Preserve existing report-manifest behavior and file discovery.
+- Keep payloads additive and serializable.
+- Do not record sensitive connection values.
+- Keep the new manifest compatible with current output directories.
 
 ## Implementation Steps
 
-1. Inspect existing failed-order aggregation and Markdown rendering.
-2. Add side-level failed-order diagnostics to shared-cash summary, including counts and notional by `side`.
-3. Keep existing `reason` and `failure_reason` aggregates unchanged.
-4. Surface the new side breakdown in Markdown summary output when failed orders exist.
-5. Keep empty-result summaries stable with zero counts and empty mappings.
-6. Add regression tests for non-empty and empty failed-order summary cases.
+1. Inspect the current backtest output writers and report-manifest roles.
+2. Add a run-manifest payload and writer for single-symbol, batch, and shared-cash outputs.
+3. Capture safe request metadata: command name, strategy path, and serializable request fields.
+4. Include the run manifest among emitted artifacts and, where applicable, in the report manifest and output-file summary.
+5. Treat run-manifest JSON as a valid JSON object in content validation.
+6. Add regression tests for single, batch, and shared output dirs plus validation/discovery coverage if needed.
 7. Update handoff and progress docs.
 
 ## Data / Schema Changes
 
-None.
+- New `run_manifest.json` beside backtest outputs.
+- Suggested schema fields: `schema_version`, `kind`, `command`, `strategy_path`, `request`, `artifacts`.
+- Suggested `kind`: `portfolio_backtest_run_manifest`.
+- Batch/shared report manifests should include the run-manifest artifact when output directories are written.
 
 ## API / Interface Changes
 
-Shared-cash summary JSON should continue exposing existing failed-order keys and additionally include side-level diagnostics, likely:
-
-- `failed_order_count_by_side`
-- `failed_order_notional_by_side`
-
-Markdown summary should render the side breakdown in a human-readable way.
+- `write_single_symbol_result`, `write_batch_result`, and `write_shared_cash_result` should accept or build safe run metadata.
+- Output directories should include `run_manifest.json`.
+- `report-files` and `report-audit` should continue to work for the existing report manifest, and `run_manifest.json` should validate as a JSON object where it is surfaced through report manifests.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_portfolio_shared.py -q
 uv run pytest tests/test_portfolio_io.py -q
+uv run pytest tests/test_portfolio_report_manifest.py -q
 ```
 
-Run full tests and workflow checks:
+Run CLI and full checks:
 
 ```bash
+uv run pytest tests/test_cli.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
@@ -111,29 +116,29 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] Shared-cash summary JSON includes side-level failed-order count and notional breakdowns.
-- [ ] Markdown summary surfaces the side breakdown when failed orders exist.
-- [ ] Existing failed-order reason and failure_reason summaries remain unchanged.
-- [ ] Empty-result summaries still expose stable zero / empty failed-order diagnostics.
+- [ ] `run_manifest.json` is written for portfolio backtest output-dir code paths.
+- [ ] The run manifest records command, strategy path, request inputs, and artifact list.
+- [ ] Existing result files and report manifests remain intact.
+- [ ] `report-files` and `report-audit` continue to work, and the new manifest is accepted where it appears through report manifests.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
-- [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git status.
+- [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Keep new diagnostics additive only.
-- Avoid altering failed-order row generation or the meanings of existing reason strings.
-- Do not introduce CLI changes beyond the summary artifacts already written by the portfolio layer.
+- Keep the new manifest additive only.
+- Avoid duplicating logic across single, batch, and shared writers unless it removes real complexity.
+- Do not include sensitive connection values in the manifest.
+- Preserve report-manifest validation behavior except for the new run-manifest JSON object path.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Avoid unrelated refactors.
-3. Avoid modifying forbidden files.
-4. Stop and ask if the brief conflicts with existing code.
-5. Run validation commands where possible.
-6. Update `04`, `05`, `09`, `11`, and `12`.
+2. Reuse existing output-writer patterns.
+3. Keep payloads serializable and limited to safe run metadata.
+4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
+5. Stop and ask only if the brief conflicts with current code.
 
 ## Next Agent State
 

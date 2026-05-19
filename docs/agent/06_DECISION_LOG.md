@@ -54,6 +54,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` is prepared for failed-order diagnostics. Real index wiring is marked blocked pending data-source confirmation.
 - Owner: CODEX, pending USER approval
 
+### 2026-05-19: Select portfolio run-manifest reproducibility as next Claude task
+
+- Decision: The next Claude Code task is a portfolio backtest run manifest for reproducible research runs.
+- Reason: Run-level reproducibility is self-contained, does not require new data-source confirmation, and builds directly on the completed report-manifest and audit work.
+- Alternatives: Start real index benchmark wiring immediately; start evaluation grouping/regime work.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes a run-manifest workflow for single, batch, and shared backtests. `M5.5` is marked ready for Claude Code.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

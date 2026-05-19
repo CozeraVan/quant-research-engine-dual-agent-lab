@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001
+QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001
 
 ## Current Phase
 
@@ -16,21 +16,21 @@ USER
 
 ## Last Completed Step
 
-Codex reviewed `QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001`, confirmed the side-level diagnostics implementation, and finalized it locally.
+Codex reviewed and accepted `QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001`.
 
 ## Next Required Step
 
-No further action required for this task. Claude Code should take the next task from the updated workflow state.
+Codex should create the local checkpoint and prepare the next implementation brief when a new self-contained task is selected.
 
 ## Active Change Request
 
-User request from 2026-05-18: run One-Shot Review-Finalize-Next cycle.
+User request from 2026-05-19: review the run-manifest implementation and finalize if acceptable.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `43a17b7 Lock report-files JSON validate-contents behavior`
-- Current task is locally finalized and ready for the next Claude Code handoff.
+- Last accepted implementation commit: `454b0db Surface side-level failed-order diagnostics in shared-cash summaries`
+- Current task is accepted locally; checkpoint pending.
 - Standing approval: NONE
 
 ## Short Prompt Commands

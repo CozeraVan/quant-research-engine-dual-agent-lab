@@ -183,7 +183,7 @@ class ReportManifest:
                     )
                 )
                 continue
-            if entry.role == "summary" and path.suffix == ".json":
+            if path.suffix == ".json" and entry.role in ("summary", "run_manifest"):
                 issues.extend(_validate_json_object(entry, path))
                 continue
             required_columns = _REQUIRED_COLUMNS_BY_ROLE.get(entry.role)

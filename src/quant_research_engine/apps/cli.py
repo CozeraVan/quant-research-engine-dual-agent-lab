@@ -733,7 +733,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         for key, value in result.summary.items():
             print(f"{key}={value}")
         if args.output_dir:
-            paths = write_single_symbol_result(result, args.output_dir)
+            run_request = {
+                "command": "backtest-single",
+                "strategy_path": str(args.strategy),
+                "request": {
+                    "symbol": args.symbol,
+                    "initial_cash": args.initial_cash,
+                    "entry_signal": spec.signal_expression,
+                    "holding_days": spec.holding_days,
+                    "start": str(args.start),
+                    "end": str(args.end),
+                    "market_profile": str(args.market_profile) if args.market_profile else "built-in",
+                },
+            }
+            paths = write_single_symbol_result(result, args.output_dir, run_request=run_request)
             for key, path in paths.items():
                 print(f"{key}_path={path}")
         return 0
@@ -802,11 +815,27 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
             print(batch_summary_markdown(result.summary_metrics, report_paths, result.summary).strip())
         if args.output_dir:
+            run_request = {
+                "command": "backtest-batch",
+                "strategy_path": str(args.strategy),
+                "request": {
+                    "symbols": args.codes,
+                    "initial_cash_per_symbol": args.initial_cash,
+                    "entry_signal": spec.signal_expression,
+                    "holding_days": spec.holding_days,
+                    "start": str(args.start),
+                    "end": str(args.end),
+                    "market_profile": str(args.market_profile) if args.market_profile else "built-in",
+                    "group_by": args.group_by,
+                    "group_rank_top_n": args.group_rank_top_n,
+                },
+            }
             paths = write_batch_result(
                 result,
                 args.output_dir,
                 group_by=args.group_by,
                 group_rank_top_n=args.group_rank_top_n,
+                run_request=run_request,
             )
             for key, path in paths.items():
                 print(f"{key}_path={path}")
@@ -878,7 +907,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.print_summary_md:
             print(shared_summary_markdown(result.summary).strip())
         if args.output_dir:
-            paths = write_shared_cash_result(result, args.output_dir)
+            run_request = {
+                "command": "backtest-shared",
+                "strategy_path": str(args.strategy),
+                "request": {
+                    "symbols": args.codes,
+                    "initial_cash": args.initial_cash,
+                    "entry_signal": spec.signal_expression,
+                    "holding_days": spec.holding_days,
+                    "max_positions": args.max_positions,
+                    "weight_model": weight_controls["weight_model"],
+                    "score_column": weight_controls["score_column"],
+                    "volatility_column": weight_controls["volatility_column"],
+                    "stop_loss_pct": risk_controls["stop_loss_pct"],
+                    "take_profit_pct": risk_controls["take_profit_pct"],
+                    "trailing_stop_pct": risk_controls["trailing_stop_pct"],
+                    "rebalance_interval_days": rebalance_controls["rebalance_interval_days"],
+                    "start": str(args.start),
+                    "end": str(args.end),
+                    "market_profile": str(args.market_profile) if args.market_profile else "built-in",
+                    "benchmark_table": args.benchmark_table,
+                    "benchmark_code": args.benchmark_code,
+                    "benchmark_value_column": args.benchmark_value_column,
+                },
+            }
+            paths = write_shared_cash_result(result, args.output_dir, run_request=run_request)
             for key, path in paths.items():
                 print(f"{key}_path={path}")
         return 0

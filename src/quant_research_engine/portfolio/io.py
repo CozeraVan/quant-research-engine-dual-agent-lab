@@ -84,9 +84,31 @@ _SUMMARY_LABELS = {
 }
 
 
+def _write_run_manifest(
+    output_dir: Path,
+    run_request: dict[str, Any],
+    artifact_paths: dict[str, Path],
+) -> Path:
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "kind": "portfolio_backtest_run_manifest",
+        "command": run_request["command"],
+        "strategy_path": run_request["strategy_path"],
+        "request": run_request["request"],
+        "artifacts": sorted(artifact_paths.keys()),
+    }
+    path = output_dir / "run_manifest.json"
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return path
+
+
 def write_single_symbol_result(
     result: SingleSymbolBacktestResult,
     output_dir: str | Path,
+    run_request: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -106,12 +128,15 @@ def write_single_symbol_result(
         json.dumps(_json_ready_summary(result.summary), ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    if run_request is not None:
+        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths)
     return paths
 
 
 def write_shared_cash_result(
     result: SharedCashBacktestResult,
     output_dir: str | Path,
+    run_request: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -146,6 +171,8 @@ def write_shared_cash_result(
         json.dumps(_json_ready_summary(result.summary), ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    if run_request is not None:
+        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths)
     paths["summary_markdown"].write_text(shared_summary_markdown(result.summary, paths), encoding="utf-8")
     paths["report_manifest"].write_text(
         json.dumps(_shared_report_manifest(paths, directory), ensure_ascii=False, indent=2, sort_keys=True),
@@ -159,6 +186,7 @@ def write_batch_result(
     output_dir: str | Path,
     group_by: list[str] | None = None,
     group_rank_top_n: int = 1,
+    run_request: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -232,6 +260,8 @@ def write_batch_result(
         single_paths = write_single_symbol_result(single_result, symbol_dir)
         for name, path in single_paths.items():
             paths[f"{symbol}_{name}"] = path
+    if run_request is not None:
+        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths)
     paths["summary_markdown"].write_text(
         batch_summary_markdown(result.summary_metrics, paths, result.summary),
         encoding="utf-8",
@@ -288,6 +318,7 @@ def _shared_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
         "summary": "Summary JSON",
         "summary_markdown": "Summary Markdown",
         "report_manifest": "Report manifest",
+        "run_manifest": "Run manifest",
     }
     return [(labels[key], paths[key]) for key in labels if key in paths]
 
@@ -325,6 +356,8 @@ def _shared_manifest_role(key: str) -> str:
         return "summary_markdown"
     if key == "report_manifest":
         return "report_manifest"
+    if key == "run_manifest":
+        return "run_manifest"
     return key
 
 
@@ -418,6 +451,8 @@ def _batch_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
         report_paths.append(("Summary Markdown", paths["summary_markdown"]))
     if "report_manifest" in paths:
         report_paths.append(("Report manifest", paths["report_manifest"]))
+    if "run_manifest" in paths:
+        report_paths.append(("Run manifest", paths["run_manifest"]))
     if "window_summary_M" in paths:
         report_paths.append(("Monthly window summary", paths["window_summary_M"]))
     if "window_summary_Q" in paths:
@@ -477,6 +512,8 @@ def _batch_manifest_role(key: str) -> str:
         return "summary_markdown"
     if key == "report_manifest":
         return "report_manifest"
+    if key == "run_manifest":
+        return "run_manifest"
     if key.startswith("window_summary_") and key.endswith("_ranked_symbols"):
         return "window_ranked_symbols"
     if key.startswith("window_summary_"):

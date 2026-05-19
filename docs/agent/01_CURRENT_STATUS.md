@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio realism and report/research-run robustness.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio realism and run reproducibility.
 
 ## Completed
 
@@ -16,11 +16,14 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Single-symbol, independent batch, and shared-cash portfolio backtests.
 - A-share costs, lot sizing, price-limit validation, percent slippage, risk exits, rebalance, FIFO lot accounting, and T+1 sellable inventory in shared-cash simulation.
 - Portfolio analytics, benchmark-relative analytics interface, Markdown/CSV/JSON outputs, report manifests, report discovery, and report audit.
+- Shared-cash failed-order diagnostics and summary analysis.
+- Portfolio backtest run manifests for reproducible output directories.
 
 ## In Progress
 
 - Phase 4 portfolio realism and validation workflow improvements.
 - Shared-cash failed-order diagnostics and summary analysis completed.
+- Portfolio backtest run-manifest reproducibility completed.
 - Migration from legacy project docs into `docs/agent` as the authoritative dual-agent entry point.
 
 ## Known Gaps
@@ -29,7 +32,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Real suspension, ST, and risk-warning state still need reliable time-varying metadata sources.
 - Industry, benchmark membership, market-cap, liquidity bucket, and regime grouping are not fully wired.
 - Evaluation layer does not yet implement regime split, industry/board/market-cap grouping, benchmark comparison, random baseline, or factor decay.
-- Failed-order diagnostics now include side-level summary analysis and Markdown surfacing; additional grouping can wait for a future brief.
+- Larger research-run bundles across preflight, evaluation, and backtest outputs are not yet standardized.
 
 ## Current Technical Stack
 

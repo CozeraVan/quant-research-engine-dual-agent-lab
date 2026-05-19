@@ -473,3 +473,45 @@ def test_report_manifest_rejects_missing_files(tmp_path):
 
     with pytest.raises(ValueError, match="manifest missing top-level 'files' field"):
         ReportManifest.from_path(manifest_path)
+
+
+def test_validate_contents_accepts_run_manifest_as_json_object(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "command": "backtest-single", "strategy_path": "strategy.yaml", "request": {}, "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_validate_contents_reports_non_object_run_manifest(tmp_path):
+    (tmp_path / "run_manifest.json").write_text("[1, 2, 3]", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].key == "run_manifest"
+    assert issues[0].code == "invalid_json_object"

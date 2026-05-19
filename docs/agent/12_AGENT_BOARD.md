@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001
+QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001
 
 ## Current Recipient
 
@@ -18,40 +18,49 @@ CODEX
 
 ## Short Message
 
-Implementation passed review for `QRE-SHARED-FAILED-ORDER-SIDE-SUMMARY-REGRESSION-001`. Side-level failed-order diagnostics and summary analysis are now present in shared-cash summaries. All 238 tests pass. Local finalization is complete.
+Implementation passed review for `QRE-PORTFOLIO-BACKTEST-RUN-MANIFEST-REGRESSION-001`. Portfolio backtest output directories now include safe run manifests, and emitted report manifests validate them as JSON objects. Local checkpoint is pending.
 
 ## Implementation Summary
 
-1. Added `failed_order_count_by_side` and `failed_order_notional_by_side` to `_failed_order_diagnostics()` in `shared.py`. Uses `value_counts()` and `groupby().sum()` on the `side` column. Empty-failed-orders and empty-result paths return empty dicts.
-2. Added side-level breakdown rendering between reason breakdown and failure_reason breakdown in `_failed_order_summary_items()` in `io.py`.
-3. Added 3 tests in `test_portfolio_shared.py`: side diagnostics with triggered failed orders, empty-dict fallback when no failed orders, and empty-result side diagnostics.
-4. Updated 2 existing tests in `test_portfolio_io.py` to include side-level keys in the summary dict and assert the new Markdown row.
-5. Updated `01`, `03`, `04`, `05`, `08`, `09`, `10`, `11`, and `12` for finalization.
+1. Added `run_manifest.json` output support for single-symbol, batch, and shared-cash backtest writers.
+2. Wired CLI output-dir paths to pass safe run metadata while omitting sensitive connection values.
+3. Captured execution-affecting inputs including market profile selection, batch grouping controls, and shared benchmark controls.
+4. Added explicit `run_manifest` role mapping in batch/shared report manifests.
+5. Extended content validation so `run_manifest` JSON artifacts must be JSON objects.
+6. Added focused writer and report-manifest regression coverage, including emitted-manifest validation.
 
 ## Constraints Check
 
-- ✅ Scope limited to side-level failed-order diagnostics and summary analysis.
-- ✅ No unrelated benchmark/data-source changes.
-- ✅ No forbidden files modified.
-- ✅ All existing behavior preserved (additive only).
+- ✅ Scope localized to portfolio output writers, CLI metadata plumbing, and manifest validation.
+- ✅ Existing simulation behavior unchanged.
+- ✅ Sensitive connection values are omitted.
+- ✅ Existing report discovery and audit behavior preserved.
 - ✅ Not pushed.
 
 ## Changed Files
 
-- `src/quant_research_engine/portfolio/shared.py`
+- `src/quant_research_engine/apps/cli.py`
 - `src/quant_research_engine/portfolio/io.py`
-- `tests/test_portfolio_shared.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
 - `tests/test_portfolio_io.py`
+- `tests/test_portfolio_report_manifest.py`
+- `docs/agent/01_CURRENT_STATUS.md`
+- `docs/agent/03_ROADMAP.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/10_REVIEW_REPORT.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
 
 ## Required Validation
 
 ```bash
-uv run pytest -q                  # 237 passed in 2.23s
-scripts/check-progress-docs.sh    # passed
-git diff --check                  # passed
+uv run pytest tests/test_portfolio_io.py -q              # 14 passed
+uv run pytest tests/test_portfolio_report_manifest.py -q # 26 passed
+uv run pytest tests/test_cli.py -q                       # 91 passed
+uv run pytest -q                                         # 246 passed
+scripts/check-progress-docs.sh                           # passed
+git diff --check                                         # passed
 ```
