@@ -8,19 +8,19 @@ QRE-EVAL-RANDOM-BASELINE-COMPARISON-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex reviewed, repaired, validated, and committed eval-config output artifacts: `evaluation_report_manifest` kind, evaluation artifact role column validation, `--output-dir` on `eval-config`, CSV artifact writing, `run_manifest.json` with safe run metadata including `market_profile` provenance, and `report_manifest.json` with role mapping. Commit `f592d4a`. Full suite: 265 passed in 2.83s.
+Codex reviewed, validated, and finalized deterministic random-baseline comparison: `EvaluationRequest.random_baseline_seed`, `EvaluationResult.random_baseline_summary`, `_build_random_baseline_summary()` engine method using seeded numpy RNG, `--random-baseline-seed` CLI flag, stdout printing, CSV persistence, run manifest seed recording, and report manifest role validation. Full suite: 274 passed in 3.19s.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` from `08_IMPLEMENTATION_BRIEF.md`.
+None.
 
 ## Active Change Request
 
@@ -30,7 +30,6 @@ User request from 2026-05-19: review Claude Code work, inspect the agent files, 
 
 - Current branch: `master`
 - Last accepted implementation commit: `f592d4a Persist eval-config output artifacts with provenance`
-- Local finalize commit: `8c7b7f5 Record finalized acceptance state`
 - Working tree clean.
 - Standing approval: local commits approved by user; no remote push requested.
 

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
+QRE-EVAL-RANDOM-BASELINE-COMPARISON-001
 
 ## Written By
 
@@ -14,12 +14,15 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code implementation in the current working tree, plus the follow-up fix for run-manifest provenance.
+Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
+- `src/quant_research_engine/evaluation/models.py`
+- `src/quant_research_engine/evaluation/engine.py`
 - `src/quant_research_engine/apps/cli.py`
 - `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_evaluation_forward_returns.py`
 - `tests/test_cli.py`
 - `tests/test_portfolio_report_manifest.py`
 - `docs/agent/04_TASK_HANDOFF.md`
@@ -32,17 +35,17 @@ Changed files reviewed:
 
 Review passed.
 
-The evaluation CLI now supports durable output artifacts. `eval-config --output-dir` writes the evaluation CSVs plus `run_manifest.json` and `report_manifest.json`, `ReportManifest` accepts the new `evaluation_report_manifest` kind, and the run manifest records `market_profile` provenance when that path is used to derive the effective cost rate.
+The evaluation CLI now supports deterministic random-baseline comparison. `eval-config --random-baseline-seed` prints a `random_baseline_summary` section, `EvaluationEngine` computes a seeded baseline over the current research-frame event population, and output-dir persistence writes `random_baseline_summary.csv` plus a manifest entry when the summary is present.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `eval-config --output-dir` writes `events.csv`, non-empty summary tables, `run_manifest.json`, and `report_manifest.json`.
-- `ReportManifest.from_path()` accepts `evaluation_report_manifest`.
-- `ReportManifest.validate_contents()` validates the evaluation artifact roles.
-- The run manifest records `market_profile` provenance when that source is used.
-- Default `eval-config` stdout behavior remains unchanged.
+- `eval-config --random-baseline-seed` prints a deterministic comparison section.
+- The comparison is reproducible under a fixed seed.
+- Existing evaluation summaries remain unchanged unless the feature is enabled.
+- `random_baseline_summary.csv` is written when output-dir is used and validates via `ReportManifest`.
+- Default `eval-config` stdout behavior remains unchanged when no seed is provided.
 
 ## Locked Requirements Check
 
@@ -53,17 +56,20 @@ No locked-requirement violation found.
 - R-CORE-003: Focused and full validation passed.
 - R-CORE-004 / R-QRE-006: No sensitive connection values added.
 - R-QRE-005: Data access remains read-only.
+- R-QRE-002: No indicator computation added.
+- R-QRE-003: Comparison uses current research-frame rows only.
 - R-DUAL-002: Claude Code implemented within the approved brief.
 
 ## Code Quality Review
 
-The change is additive and small. The output-directory path mirrors the existing portfolio manifest pattern, keeps the evaluation CSVs discoverable, and avoids adding new data-source assumptions. CLI behavior remains opt-in.
+The change is additive and small. The seeded comparison reuses the existing evaluation event population, keeps output optional, and avoids introducing any benchmark-table assumptions.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
+uv run pytest tests/test_evaluation_forward_returns.py -q
 uv run pytest tests/test_cli.py -q
 uv run pytest tests/test_portfolio_report_manifest.py -q
 uv run pytest -q
@@ -74,21 +80,22 @@ scripts/git-finalize-check.sh
 
 Results:
 
-- `uv run pytest tests/test_cli.py -q`: `95 passed in 1.57s`
-- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `34 passed`
-- `uv run pytest -q`: `265 passed in 2.83s`
+- `uv run pytest tests/test_evaluation_forward_returns.py -q`: `20 passed`
+- `uv run pytest tests/test_cli.py -q`: `97 passed`
+- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `35 passed`
+- `uv run pytest -q`: `274 passed in 3.19s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate:
 
-- output directory writes all expected files;
-- run manifest omits sensitive connection values;
-- run manifest keeps `market_profile` provenance when used;
-- evaluation report manifests load and validate;
-- missing-column validation for evaluation artifact roles;
-- full-suite regression coverage for the new CLI and manifest paths.
+- seed default leaves baseline disabled;
+- fixed seed yields deterministic random-baseline output;
+- different seeds diverge;
+- multiple horizons and empty-event paths behave as expected;
+- CLI prints the seeded comparison section;
+- report manifest validates the persisted baseline CSV.
 
 ## Required Fixes
 

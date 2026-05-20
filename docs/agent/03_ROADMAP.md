@@ -27,7 +27,7 @@
 | M3.3 | IC, Rank IC, quantile return | DONE | HISTORICAL | legacy progress records, tests | Preserve |
 | M3.4 | Rough friction-adjusted screening | DONE | HISTORICAL | `round_trip_cost_rate`, market-profile estimate | Preserve |
 | M3.5 | Regime and metadata group summaries | DONE | CODEX/CLAUDE_CODE | commit `b25cbd7`; 255 tests passed; evaluation metadata group summaries implemented | Preserve; real regime classification can follow later |
-| M3.6 | Benchmark/random-baseline comparison for evaluation | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` for `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` | Implement deterministic random-baseline comparison; benchmark wiring remains blocked until table/schema confirmation |
+| M3.6 | Benchmark/random-baseline comparison for evaluation | DONE | CODEX/CLAUDE_CODE | commit `495185b`; 274 tests passed; deterministic random-baseline comparison implemented with seed-controlled CLI output and report-manifest validation | Preserve; benchmark wiring remains blocked until table/schema confirmation |
 
 ## Milestone 4: Portfolio Engine
 

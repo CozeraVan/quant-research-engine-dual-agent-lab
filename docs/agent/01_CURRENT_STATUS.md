@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is evaluation comparison quality, portfolio realism, and broader research-run reproducibility.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio realism and broader research-run reproducibility.
 
 ## Completed
 
@@ -12,7 +12,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Read-only PostgreSQL data access for daily bars, factors, metadata fallback, calendar, and benchmark-bar skeleton.
 - Research-frame assembly from market bars plus declared factor fields.
 - Read-only preflight checks for market/factor/join/metadata/universe/liquidity/benchmark availability.
-- Safe expression evaluation, forward returns, event summaries, IC, Rank IC, quantile returns, rough friction-adjusted screening, and metadata group summaries.
+- Safe expression evaluation, forward returns, event summaries, IC, Rank IC, quantile returns, rough friction-adjusted screening, metadata group summaries, and deterministic random-baseline comparison.
 - Single-symbol, independent batch, and shared-cash portfolio backtests.
 - A-share costs, lot sizing, price-limit validation, percent slippage, risk exits, rebalance, FIFO lot accounting, and T+1 sellable inventory in shared-cash simulation.
 - Portfolio analytics, benchmark-relative analytics interface, Markdown/CSV/JSON outputs, report manifests, report discovery, and report audit.
@@ -21,7 +21,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-- Evaluation random-baseline comparison is the next scoped Claude Code task.
+- Evaluation random-baseline comparison has been implemented and reviewed locally.
 - Phase 4 portfolio realism and validation workflow improvements.
 - Shared-cash failed-order diagnostics and summary analysis completed.
 - Portfolio backtest run-manifest reproducibility completed.
@@ -74,7 +74,5 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - `qre report-audit`
 
 ## Next Recommended Step
-
-Claude Code should implement `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

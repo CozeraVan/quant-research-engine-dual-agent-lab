@@ -31,6 +31,7 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "ic_summary": {"factor", "horizon", "observation_dates"},
     "quantile_summary": {"factor", "horizon", "quantile", "row_count"},
     "evaluation_group_summary": {"group_by", "group_value", "horizon", "event_count"},
+    "random_baseline_summary": {"horizon", "event_count"},
 }
 
 

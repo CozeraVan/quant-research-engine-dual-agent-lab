@@ -134,6 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_config_parser.add_argument("--market-profile", type=Path, help="Optional market profile YAML for rough friction estimate.")
     eval_config_parser.add_argument("--group-by", nargs="*", default=None, help="Optional grouping columns for event forward-return summaries, e.g. board industry")
     eval_config_parser.add_argument("--output-dir", type=Path, help="Optional output directory for durable evaluation artifacts.")
+    eval_config_parser.add_argument("--random-baseline-seed", type=int, default=None, help="Optional seed for deterministic random-baseline comparison.")
 
     preflight_parser = subparsers.add_parser("preflight", help="Run read-only data and factor checks before broad runs")
     preflight_parser.add_argument("strategy", type=Path)
@@ -270,6 +271,8 @@ def _eval_manifest_role(key: str) -> str:
         return "evaluation_summary"
     if key == "group_summary":
         return "evaluation_group_summary"
+    if key == "random_baseline_summary":
+        return "random_baseline_summary"
     if key == "run_manifest":
         return "run_manifest"
     return key
@@ -311,6 +314,11 @@ def _write_evaluation_output(
         result.group_summary.to_csv(p, index=False)
         artifact_paths["group_summary"] = p
 
+    if not result.random_baseline_summary.empty:
+        p = directory / "random_baseline_summary.csv"
+        result.random_baseline_summary.to_csv(p, index=False)
+        artifact_paths["random_baseline_summary"] = p
+
     run_manifest_payload: dict[str, object] = {
         "schema_version": 1,
         "kind": "evaluation_run_manifest",
@@ -322,6 +330,7 @@ def _write_evaluation_output(
         "round_trip_cost_rate": args.round_trip_cost_rate,
         "market_profile": str(args.market_profile) if args.market_profile else None,
         "group_by": args.group_by,
+        "random_baseline_seed": args.random_baseline_seed,
         "artifacts": sorted(artifact_paths.keys()),
     }
     run_manifest_path = directory / "run_manifest.json"
@@ -713,6 +722,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     quantiles=spec.quantiles,
                     round_trip_cost_rate=resolve_round_trip_cost_rate(args),
                     group_by=args.group_by,
+                    random_baseline_seed=args.random_baseline_seed,
                 ),
             )
         except Exception as exc:
@@ -733,6 +743,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not result.group_summary.empty:
             print("group_summary")
             print(result.group_summary.to_csv(index=False).strip())
+        if not result.random_baseline_summary.empty:
+            print("random_baseline_summary")
+            print(result.random_baseline_summary.to_csv(index=False).strip())
         if args.output_dir:
             _write_evaluation_output(
                 result=result,

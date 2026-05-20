@@ -753,6 +753,143 @@ def test_cli_eval_config_output_dir_with_group_by_and_market_profile(capsys, mon
     assert "board" in events.columns  # preserved from group_by
 
 
+def test_cli_eval_config_random_baseline_prints_summary(capsys, monkeypatch):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06"]
+                    ),
+                    "open": [10.0, 10.0, 20.0, 20.0],
+                    "high": [10.0, 10.0, 20.0, 20.0],
+                    "low": [10.0, 10.0, 20.0, 20.0],
+                    "close": [10.0, 11.0, 20.0, 18.0],
+                    "pre_close": [10.0, 10.0, 20.0, 20.0],
+                    "vol": [1.0, 1.0, 1.0, 1.0],
+                    "amount": [100.0, 100.0, 100.0, 100.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06"]
+                    ),
+                    "rsi_2": [5.0, 15.0, 12.0, 6.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--random-baseline-seed",
+            "42",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "random_baseline_summary" in captured.out
+    assert "horizon,event_count,mean_forward_return" in captured.out
+
+
+def test_cli_eval_config_random_baseline_persists_to_output_dir(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06"]
+                    ),
+                    "open": [10.0, 10.0, 20.0, 20.0],
+                    "high": [10.0, 10.0, 20.0, 20.0],
+                    "low": [10.0, 10.0, 20.0, 20.0],
+                    "close": [10.0, 11.0, 20.0, 18.0],
+                    "pre_close": [10.0, 10.0, 20.0, 20.0],
+                    "vol": [1.0, 1.0, 1.0, 1.0],
+                    "amount": [100.0, 100.0, 100.0, 100.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06"]
+                    ),
+                    "rsi_2": [5.0, 15.0, 12.0, 6.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_out"
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--random-baseline-seed",
+            "42",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    assert (output_dir / "random_baseline_summary.csv").is_file()
+
+    # manifest validates
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    manifest = ReportManifest.from_path(output_dir / "report_manifest.json")
+    issues = manifest.validate_contents()
+    assert len(issues) == 0
+
+    # run manifest records seed
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["random_baseline_seed"] == 42
+    assert "random_baseline_summary" in run_manifest["artifacts"]
+
+
 def test_cli_preflight_prints_read_only_report(capsys, monkeypatch):
     class FakeStore:
         def __init__(self, settings):

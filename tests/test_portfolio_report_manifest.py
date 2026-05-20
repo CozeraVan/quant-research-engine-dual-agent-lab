@@ -726,3 +726,26 @@ def test_report_manifest_rejects_evaluation_missing_file(tmp_path):
     issues = manifest.validate_contents()
     assert len(issues) == 1
     assert issues[0].code == "missing_file"
+
+
+def test_report_manifest_validates_random_baseline_summary_columns(tmp_path):
+    rb_csv = tmp_path / "random_baseline_summary.csv"
+    rb_csv.write_text("other\n1\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "random_baseline_summary", "path": "random_baseline_summary.csv", "filename": "random_baseline_summary.csv", "role": "random_baseline_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "horizon" in issues[0].message
+    assert "event_count" in issues[0].message

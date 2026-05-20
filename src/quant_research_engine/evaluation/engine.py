@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from quant_research_engine.evaluation.models import EvaluationRequest, EvaluationResult
@@ -47,12 +48,16 @@ class EvaluationEngine:
         group_summary = self._build_group_summary(
             events, request.forward_horizons, group_columns, request.round_trip_cost_rate
         )
+        random_baseline_summary = self._build_random_baseline_summary(
+            working, request.forward_horizons, request.random_baseline_seed
+        )
         return EvaluationResult(
             events=events,
             summary=summary,
             ic_summary=ic_summary,
             quantile_summary=quantile_summary,
             group_summary=group_summary,
+            random_baseline_summary=random_baseline_summary,
         )
 
     def _validate_frame(self, frame: pd.DataFrame, request: EvaluationRequest) -> None:
@@ -224,6 +229,46 @@ class EvaluationEngine:
                             "mean_forward_return": None if series.empty else float(series.mean()),
                         }
                     )
+        return pd.DataFrame(rows)
+
+    def _build_random_baseline_summary(
+        self,
+        working: pd.DataFrame,
+        horizons: list[int],
+        seed: int | None,
+    ) -> pd.DataFrame:
+        if seed is None:
+            return pd.DataFrame(
+                columns=["horizon", "event_count", "mean_forward_return", "median_forward_return", "win_rate"]
+            )
+        rng = np.random.default_rng(seed)
+        rows = []
+        for horizon in horizons:
+            forward_col = f"forward_return_{horizon}"
+            n_events = int((working["signal"] & working[forward_col].notna()).sum())
+            valid_pool = working[working[forward_col].notna()]
+            if n_events == 0 or len(valid_pool) < n_events:
+                rows.append(
+                    {
+                        "horizon": horizon,
+                        "event_count": n_events,
+                        "mean_forward_return": None,
+                        "median_forward_return": None,
+                        "win_rate": None,
+                    }
+                )
+                continue
+            sampled_indices = rng.choice(len(valid_pool), size=n_events, replace=False)
+            series = valid_pool.iloc[sampled_indices][forward_col]
+            rows.append(
+                {
+                    "horizon": horizon,
+                    "event_count": n_events,
+                    "mean_forward_return": float(series.mean()),
+                    "median_forward_return": float(series.median()),
+                    "win_rate": float((series > 0).mean()),
+                }
+            )
         return pd.DataFrame(rows)
 
     @staticmethod

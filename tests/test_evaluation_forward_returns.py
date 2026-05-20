@@ -276,3 +276,80 @@ def test_evaluation_engine_computes_friction_adjusted_event_summary():
     assert record["round_trip_cost_rate"] == pytest.approx(0.02)
     assert record["mean_adjusted_forward_return"] == pytest.approx(0.08)
     assert record["adjusted_win_rate"] == 1.0
+
+
+def test_random_baseline_empty_when_seed_is_none():
+    result = EvaluationEngine().evaluate(
+        make_research_frame(),
+        EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1]),
+    )
+    assert result.random_baseline_summary.empty
+
+
+def test_random_baseline_deterministic_with_fixed_seed():
+    engine = EvaluationEngine()
+    request = EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1], random_baseline_seed=42)
+
+    result1 = engine.evaluate(make_research_frame(), request)
+    result2 = engine.evaluate(make_research_frame(), request)
+
+    assert not result1.random_baseline_summary.empty
+    assert result1.random_baseline_summary.equals(result2.random_baseline_summary)
+
+
+def test_random_baseline_different_seeds_produce_different_baselines():
+    engine = EvaluationEngine()
+    result_a = engine.evaluate(
+        make_research_frame(),
+        EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1], random_baseline_seed=42),
+    )
+    result_b = engine.evaluate(
+        make_research_frame(),
+        EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1], random_baseline_seed=99),
+    )
+    assert not result_a.random_baseline_summary.empty
+    assert not result_b.random_baseline_summary.empty
+    assert not result_a.random_baseline_summary.equals(result_b.random_baseline_summary)
+
+
+def test_random_baseline_has_correct_shape():
+    result = EvaluationEngine().evaluate(
+        make_research_frame(),
+        EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1], random_baseline_seed=42),
+    )
+    df = result.random_baseline_summary
+    assert list(df.columns) == [
+        "horizon", "event_count", "mean_forward_return", "median_forward_return", "win_rate",
+    ]
+    assert len(df) == 1
+    assert df.iloc[0]["horizon"] == 1
+    assert df.iloc[0]["event_count"] == 2
+
+
+def test_random_baseline_handles_multiple_horizons():
+    result = EvaluationEngine().evaluate(
+        make_research_frame(),
+        EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1, 2], random_baseline_seed=42),
+    )
+    df = result.random_baseline_summary
+    assert len(df) == 2
+    assert set(df["horizon"]) == {1, 2}
+
+
+def test_random_baseline_returns_null_when_no_events():
+    frame = pd.DataFrame(
+        {
+            "ts_code": ["000001.SZ", "000001.SZ"],
+            "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+            "close": [10.0, 11.0],
+            "rsi_2": [20.0, 25.0],  # no signal triggered
+        }
+    )
+    result = EvaluationEngine().evaluate(
+        frame,
+        EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1], random_baseline_seed=42),
+    )
+    df = result.random_baseline_summary
+    assert len(df) == 1
+    assert df.iloc[0]["event_count"] == 0
+    assert df.iloc[0]["mean_forward_return"] is None

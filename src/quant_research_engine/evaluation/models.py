@@ -14,6 +14,7 @@ class EvaluationRequest:
     quantiles: int | None = None
     round_trip_cost_rate: float | None = None
     group_by: list[str] | None = None
+    random_baseline_seed: int | None = None
 
 
 @dataclass(frozen=True)
@@ -23,3 +24,4 @@ class EvaluationResult:
     ic_summary: pd.DataFrame
     quantile_summary: pd.DataFrame
     group_summary: pd.DataFrame
+    random_baseline_summary: pd.DataFrame

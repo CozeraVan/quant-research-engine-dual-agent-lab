@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-EVAL-CONFIG-OUTPUT-ARTIFACTS-REGRESSION-001
+QRE-EVAL-RANDOM-BASELINE-COMPARISON-001
 
 ## Written By
 
@@ -18,42 +18,43 @@ Accepted locally and committed.
 
 ## Implementation Summary
 
-- Added `evaluation_report_manifest` to `_SUPPORTED_MANIFEST_KINDS` in `report_manifest.py`.
-- Added evaluation artifact role column requirements to `_REQUIRED_COLUMNS_BY_ROLE`: `events` (`ts_code`, `trade_date`), `evaluation_summary` (`horizon`, `event_count`), `ic_summary` (`factor`, `horizon`, `observation_dates`), `quantile_summary` (`factor`, `horizon`, `quantile`, `row_count`), `evaluation_group_summary` (`group_by`, `group_value`, `horizon`, `event_count`).
-- Added `--output-dir` CLI argument to `eval-config` subcommand.
-- Implemented `_write_evaluation_output()` and `_eval_manifest_role()` in `cli.py`.
-- When `--output-dir` is provided: writes `events.csv` (always), `summary.csv`/`ic_summary.csv`/`quantile_summary.csv`/`group_summary.csv` (when non-empty), `run_manifest.json` (safe run metadata, no sensitive connection values), and `report_manifest.json` (kind `evaluation_report_manifest`).
-- Run manifest records: schema_version, kind, command, strategy_path, start/end dates, codes, round_trip_cost_rate, market_profile when provided, group_by, and emitted artifact keys.
+- Added `random_baseline_seed: int | None = None` to `EvaluationRequest` and `random_baseline_summary: pd.DataFrame` to `EvaluationResult`.
+- Added `_build_random_baseline_summary()` method in `EvaluationEngine` that uses a seeded `numpy.random.default_rng(seed)` to pick the same number of random entry-points as actual signal events, then computes mean/median forward return and win rate per horizon.
+- When seed is None, returns an empty DataFrame — preserving default behavior.
+- Random sampling is from the valid pool of research-frame rows with non-NaN forward returns for each horizon.
+- Added `--random-baseline-seed` CLI argument; printed `random_baseline_summary` section in stdout; persisted `random_baseline_summary.csv` in output-dir; recorded seed in `run_manifest.json`.
+- Added `random_baseline_summary` role to `_eval_manifest_role()` and column requirements to `_REQUIRED_COLUMNS_BY_ROLE` (`horizon`, `event_count`).
 
 ## Files Changed
 
-- `src/quant_research_engine/portfolio/report_manifest.py` — `_SUPPORTED_MANIFEST_KINDS` and `_REQUIRED_COLUMNS_BY_ROLE`
-- `src/quant_research_engine/apps/cli.py` — `--output-dir` argument; `_write_evaluation_output()` and `_eval_manifest_role()` helpers; `EvaluationResult` import
-- `tests/test_cli.py` — 2 new tests (output-dir writes artifacts; output-dir with group_by and cost rate)
-- `tests/test_portfolio_report_manifest.py` — 8 new tests (loads evaluation kind; validates events/summary/ic/quantile/group columns; validates full artifacts; missing file)
+- `src/quant_research_engine/evaluation/models.py` — `EvaluationRequest.random_baseline_seed`, `EvaluationResult.random_baseline_summary`
+- `src/quant_research_engine/evaluation/engine.py` — `import numpy`, `_build_random_baseline_summary()`, wired into `evaluate()`
+- `src/quant_research_engine/apps/cli.py` — `--random-baseline-seed` argument; stdout printing; CSV persistence; run manifest seed; `_eval_manifest_role` update
+- `src/quant_research_engine/portfolio/report_manifest.py` — `random_baseline_summary` role column requirements
+- `tests/test_evaluation_forward_returns.py` — 6 new tests
+- `tests/test_cli.py` — 2 new tests
+- `tests/test_portfolio_report_manifest.py` — 1 new test
 
 ## Validation Results
 
 ```bash
-uv run pytest tests/test_cli.py -q                          # 95 passed in 1.57s
-uv run pytest tests/test_portfolio_report_manifest.py -q    # 34 passed
-uv run pytest -q                                            # 265 passed in 2.83s
+uv run pytest tests/test_evaluation_forward_returns.py -q  # 20 passed
+uv run pytest tests/test_cli.py -q                          # 97 passed
+uv run pytest tests/test_portfolio_report_manifest.py -q    # 35 passed
+uv run pytest -q                                            # 274 passed in 3.19s
 scripts/check-progress-docs.sh                              # passed
 git diff --check                                            # passed
-scripts/git-finalize-check.sh                               # passed
 ```
 
 ## Constraints
 
-- Preserve evaluation calculations. ✅ no changes to engine.
-- Preserve existing `eval-config` stdout behavior. ✅ stdout unchanged; output-dir additive.
+- Preserve existing stdout behavior unless seed is provided. ✅ seed defaults to None.
+- Deterministic under fixed seed. ✅ uses `np.random.default_rng(seed)`.
 - Keep data access read-only. ✅ no writes to upstream databases.
-- Do not record sensitive connection values. ✅ run_manifest omits db-url.
-- Preserve `market_profile` provenance when used to derive the effective cost rate. ✅
+- Avoid benchmark table guesses. ✅ random baseline works on research-frame data only.
 - Do not push. ✅ not pushed.
 
 ## Git State
 
 - Branch: `master`
-- Commit: `f592d4a Persist eval-config output artifacts with provenance`
-- Working tree clean after local finalize.
+- Working tree clean.
