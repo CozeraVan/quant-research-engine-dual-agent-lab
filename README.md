@@ -187,3 +187,59 @@ Supported run-manifest kinds:
 Missing fields produce audit issues with code `missing_run_manifest_field`. Type errors and present-null non-nullable fields produce `invalid_run_manifest_field`. Run-manifest validation exit codes follow the same `0`/`2` convention as other audit roles.
 
 This audit validates artifact structure only. It does not assess factor effectiveness, strategy quality, or benchmark-relative performance.
+
+### Evaluation Artifacts and Diagnostics
+
+`qre eval-config --output-dir <dir>` writes durable CSV artifacts, a run manifest, and a report manifest. The report manifest is the stable entry point for downstream scripts — use `qre report-files` and `qre report-audit` with evaluation artifact roles to discover and audit outputs.
+
+Emitted files:
+
+| File | Role | Description |
+|---|---|---|
+| `events.csv` | `events` | Per-event evaluation rows |
+| `summary.csv` | `evaluation_summary` | Per-factor summary metrics |
+| `ic_summary.csv` | `ic_summary` | IC / Rank IC by factor and horizon |
+| `quantile_summary.csv` | `quantile_summary` | Quantile return by factor and horizon |
+| `group_summary.csv` | `evaluation_group_summary` | Grouped metadata summaries (when `--group-by` is used) |
+| `random_baseline_summary.csv` | `random_baseline_summary` | Deterministic random-baseline comparison (when `--random-baseline-seed` is used) |
+| `factor_decay_summary.csv` | `factor_decay_summary` | Factor decay derived from IC / Rank IC by horizon |
+| `run_manifest.json` | `run_manifest` | Run metadata (command, schema version, artifacts list) |
+| `report_manifest.json` | — | Report manifest listing all emitted artifacts |
+
+Factor decay is derived from existing IC and Rank IC summaries per factor and horizon using the smallest horizon per factor as the base. Random-baseline comparison uses a deterministic RNG when a seed is provided via `--random-baseline-seed`.
+
+```bash
+# Basic evaluation with durable output
+QRE_MARKET_DB_URL='<local-db-url>' \
+uv run qre eval-config strategy.yaml \
+  --start 2026-01-05 \
+  --end 2026-03-31 \
+  --codes 000001.SZ 000002.SZ 600000.SH \
+  --output-dir outputs/eval-rsi2
+
+# With metadata grouping and random baseline
+QRE_MARKET_DB_URL='<local-db-url>' \
+uv run qre eval-config strategy.yaml \
+  --start 2026-01-05 \
+  --end 2026-03-31 \
+  --codes 000001.SZ 000002.SZ 600000.SH \
+  --output-dir outputs/eval-rsi2-grouped \
+  --group-by board \
+  --random-baseline-seed 42
+```
+
+Discover and audit evaluation artifacts through the report manifest:
+
+```bash
+# List factor decay file path
+uv run qre report-files outputs/eval-rsi2/report_manifest.json --role factor_decay_summary
+
+# Audit evaluation summary artifact existence and CSV structure
+uv run qre report-audit outputs/eval-rsi2/report_manifest.json --role evaluation_summary
+
+# Audit all evaluation artifacts with strict matching
+uv run qre report-audit outputs/eval-rsi2/report_manifest.json \
+  --role factor_decay_summary --require-match
+```
+
+These diagnostics evaluate artifact structure only. They do not prove factor effectiveness, strategy quality, or benchmark-relative performance.

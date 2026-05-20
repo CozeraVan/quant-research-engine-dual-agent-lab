@@ -14,30 +14,38 @@ CODEX
 
 ## Status
 
-Not started.
+Fix applied. Ready for Codex re-review.
 
-## Implementation Summary
+## Fix Applied
 
-Pending Claude Code implementation.
+Codex review (`10_REVIEW_REPORT.md`) found that two module docs described factor decay as "decay ratios." The implementation computes signed differences from the smallest horizon base, not ratios. Replaced inaccurate wording in both files with explicit "signed difference, not a ratio" language.
 
 ## Files Changed
 
-Pending.
+- `docs/modules/data_layer.md` — changed "base for decay ratios" to "base and reports each horizon's IC / Rank IC difference from that base (signed difference, not a ratio)"
+- `docs/modules/portfolio_workflow.md` — changed "base for decay ratios" to "base; each horizon reports the signed IC / Rank IC difference from that base (not a ratio)"
 
 ## Validation Results
 
-Pending.
+```bash
+scripts/check-progress-docs.sh  # passed
+git diff --check                # passed
+```
+
+No runtime code changes; pytest not required.
 
 ## Constraints
 
-- Implement from `08_IMPLEMENTATION_BRIEF.md`.
-- Keep this documentation-only unless a blocker requires otherwise.
-- Do not edit `docs/legacy/**`.
-- Keep examples credential-free.
-- Do not imply evaluation diagnostics prove factor or strategy effectiveness.
+- Documentation-only. ✅
+- No `docs/legacy/**` changes. ✅
+- Factor decay now correctly described as signed difference, not ratio. ✅
 
 ## Git State
 
 - Branch: `master`
-- Last finalized implementation commit: `ccb80e8`, `Document run manifest audit usage`
-- Planning docs for this task are uncommitted until Codex handoff finalization.
+- All doc changes uncommitted.
+- Ready for Codex re-review.
+
+## Next Suggested Step
+
+Codex should re-review the fix and produce updated `10_REVIEW_REPORT.md`.

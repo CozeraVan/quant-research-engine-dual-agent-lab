@@ -496,6 +496,23 @@ Implemented run-manifest content validation in report audit:
 - Run-manifest validation exit codes follow the same `0`/`2` convention as other audit roles.
 - This audit validates artifact structure only. It does not assess factor effectiveness, strategy quality, or benchmark-relative performance.
 
+Implemented evaluation output artifacts and diagnostics:
+
+- `qre eval-config --output-dir <dir>` writes durable CSV artifacts, `run_manifest.json`, and `report_manifest.json`.
+- Emitted files and their report-manifest roles:
+  - `events.csv` -> `events`
+  - `summary.csv` -> `evaluation_summary`
+  - `ic_summary.csv` -> `ic_summary`
+  - `quantile_summary.csv` -> `quantile_summary`
+  - `group_summary.csv` -> `evaluation_group_summary` (when `--group-by` is used)
+  - `random_baseline_summary.csv` -> `random_baseline_summary` (when `--random-baseline-seed` is used)
+  - `factor_decay_summary.csv` -> `factor_decay_summary`
+  - `run_manifest.json` -> `run_manifest`
+- Factor decay is derived from existing IC and Rank IC summaries per factor and horizon. The smallest horizon per factor is used as the base; each horizon reports the signed IC / Rank IC difference from that base (not a ratio).
+- Random-baseline comparison is deterministic when a seed is provided via `--random-baseline-seed`.
+- Evaluation artifacts are discoverable through `qre report-files` and auditable through `qre report-audit` using the same role-based filtering as portfolio artifacts.
+- These diagnostics evaluate artifact structure only; they do not prove factor effectiveness, strategy quality, or benchmark-relative performance.
+
 Next implementation:
 
 - Continue portfolio analytics/reporting improvements.

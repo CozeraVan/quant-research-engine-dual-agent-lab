@@ -29,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Claude Code is assigned to document evaluation artifacts and diagnostics usage in README/module docs.
+Codex is locally finalizing evaluation artifact and diagnostic usage docs after review PASS. The next likely step is another documentation pass for metadata-aware grouping usage across evaluation and portfolio outputs.
 
 ## Known Gaps
 

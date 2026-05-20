@@ -106,6 +106,54 @@ uv run qre eval-config \
   --codes 000001.SZ 000002.SZ 600000.SH
 ```
 
+### Evaluation Output Artifacts
+
+`qre eval-config --output-dir <dir>` writes durable CSV artifacts, a run manifest, and a report manifest. The report manifest is the stable entry point for `qre report-files` and `qre report-audit`.
+
+Emitted files and their report-manifest roles:
+
+| File | Role |
+|---|---|
+| `events.csv` | `events` |
+| `summary.csv` | `evaluation_summary` |
+| `ic_summary.csv` | `ic_summary` |
+| `quantile_summary.csv` | `quantile_summary` |
+| `group_summary.csv` | `evaluation_group_summary` (when `--group-by` is used) |
+| `random_baseline_summary.csv` | `random_baseline_summary` (when `--random-baseline-seed` is used) |
+| `factor_decay_summary.csv` | `factor_decay_summary` |
+| `run_manifest.json` | `run_manifest` |
+
+```bash
+# Evaluation with durable output and diagnostics
+QRE_MARKET_DB_URL='<local-db-url>' \
+uv run qre eval-config \
+  examples/rsi2_reversal_research.yaml \
+  --start 2026-01-05 \
+  --end 2026-03-31 \
+  --codes 000001.SZ 000002.SZ 600000.SH \
+  --output-dir outputs/eval-rsi2 \
+  --group-by board \
+  --random-baseline-seed 42
+```
+
+Factor decay is derived from existing IC and Rank IC summaries per factor and horizon. It uses the smallest horizon per factor as the base and reports each horizon's IC / Rank IC difference from that base (signed difference, not a ratio). Random-baseline comparison uses a deterministic RNG when a seed is provided.
+
+Discover and audit evaluation artifacts:
+
+```bash
+# List all evaluation artifact paths
+uv run qre report-files outputs/eval-rsi2/report_manifest.json
+
+# Audit the evaluation summary artifact
+uv run qre report-audit outputs/eval-rsi2/report_manifest.json --role evaluation_summary
+
+# Audit factor decay with strict matching
+uv run qre report-audit outputs/eval-rsi2/report_manifest.json \
+  --role factor_decay_summary --require-match
+```
+
+These diagnostics evaluate artifact structure only. They do not prove factor effectiveness or strategy quality.
+
 Broad-run preflight:
 
 ```bash

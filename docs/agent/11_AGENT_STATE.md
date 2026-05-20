@@ -8,25 +8,25 @@ QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex finalized `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001` locally with commit `ccb80e8`, `Document run manifest audit usage`. Codex then prepared `08_IMPLEMENTATION_BRIEF.md` for user-facing documentation of evaluation artifacts and diagnostics.
+Codex re-reviewed the Claude Code fix and marked `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001` as PASS in `10_REVIEW_REPORT.md`. The docs now describe factor decay as signed IC / Rank IC differences from the smallest horizon base, not ratios. Validation: `scripts/check-progress-docs.sh` passed; `git diff --check` passed.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`.
+Codex should run final git checks and create the local completion commit for `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`.
 
 ## Git State
 
 - Current branch: `master`
 - Last accepted implementation commit: `ccb80e8`, `Document run manifest audit usage`
-- Working tree contains Codex planning/handoff docs for `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`.
+- Working tree contains accepted documentation changes plus finalization-state doc updates for the current task.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

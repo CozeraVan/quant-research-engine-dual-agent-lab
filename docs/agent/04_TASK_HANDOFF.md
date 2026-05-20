@@ -10,11 +10,11 @@ QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
 
 ## Current Status
 
-Ready for Claude Code implementation.
+Accepted locally by Codex review. Ready for local git finalization.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -22,6 +22,10 @@ CLAUDE_CODE
 - Local commit created: `ccb80e8`, `Document run manifest audit usage`.
 - Codex selected the next unblocked documentation task: evaluation artifacts and diagnostics usage.
 - Codex prepared `08_IMPLEMENTATION_BRIEF.md` for `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`.
+- Claude Code updated README.md, docs/modules/data_layer.md, and docs/modules/portfolio_workflow.md with evaluation artifact roles, output-dir examples, factor decay derivation, and random baseline determinism.
+- Codex review found a required documentation accuracy fix: two module docs describe factor decay as "decay ratios", but the implemented metric is a signed difference from the base horizon, not a ratio.
+- Claude Code replaced inaccurate "decay ratios" wording with "signed difference from base" in both files.
+- Codex re-reviewed the fix and marked `10_REVIEW_REPORT.md` as PASS.
 
 ## Expected Files
 
@@ -58,4 +62,4 @@ Required validation for this documentation task:
 
 ## Next Suggested Step
 
-Claude Code should read `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`, and `08_IMPLEMENTATION_BRIEF.md`, then implement `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`.
+Codex should run final git checks and create the local completion commit for `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`.

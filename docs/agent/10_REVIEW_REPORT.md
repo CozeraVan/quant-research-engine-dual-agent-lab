@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
+QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
 
 ## Written By
 
@@ -14,13 +14,13 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code documentation changes in the current working tree.
+Claude Code documentation changes in the current working tree, including the follow-up factor-decay wording fix.
 
 Changed files reviewed:
 
 - `README.md`
+- `docs/modules/data_layer.md`
 - `docs/modules/portfolio_workflow.md`
-- `docs/modules/portfolio_layer.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -29,32 +29,26 @@ Changed files reviewed:
 
 ## Review Summary
 
-Review passed.
+The implementation now satisfies the brief.
 
-The docs now describe optional `--run-id` linkage across durable preflight, evaluation, and portfolio outputs, where `run_id` is persisted, null-on-omit behavior, run-manifest audit usage, validated fields, supported run-manifest kinds, and structured audit issue codes.
+The docs describe `eval-config --output-dir` artifacts, evaluation report roles, metadata grouping, deterministic random baseline output, factor decay output, and report discovery/audit usage. They also state that these diagnostics are structural research aids and do not prove factor or strategy effectiveness.
+
+The required fix from the prior review is closed. Both module docs now describe factor decay as signed IC / Rank IC differences from the smallest horizon base, not as ratios.
+
+## Required Fixes
+
+None.
 
 ## Compliance with Implementation Brief
 
-Compliant.
+Compliant:
 
-- README describes `--run-id` on the five requested durable commands.
-- README describes preflight JSON, evaluation `run_manifest.json`, and portfolio `run_manifest.json` persistence.
-- README documents `run_id: null` when omitted.
-- README documents `qre report-audit --role run_manifest` and `--json`.
-- Module docs describe run-ID linkage and run-manifest content validation.
-- Docs state audit validates artifact structure only, not factor/strategy effectiveness.
+- README documents `eval-config --output-dir` artifacts and evaluation report roles.
+- Module docs cover metadata grouping, random baseline, and factor decay.
+- Docs include report discovery/audit examples for evaluation artifacts.
+- Docs state diagnostics do not prove factor or strategy effectiveness.
 - No `docs/legacy/**` files were changed.
 - No runtime code was changed.
-
-## Locked Requirements Check
-
-No locked-requirement violation found.
-
-- R-CORE-001: Existing behavior is preserved; docs-only change.
-- R-CORE-002: Change is scoped to user-facing docs and handoff docs.
-- R-CORE-003: Documentation checks passed.
-- R-CORE-004 / R-QRE-006: No private access values added.
-- R-QRE-008: Docs do not present smoke/audit output as research conclusions.
 
 ## Test Review
 
@@ -72,17 +66,17 @@ Results:
 - `git diff --check`: passed
 - Legacy-doc check: no `docs/legacy/**` changes
 
-No pytest run was required because this task changed documentation only and did not alter executable examples or runtime code.
+No pytest run was required because this task changed documentation only and did not alter runtime code or executable examples.
 
-## Required Fixes
+## Locked Requirements Check
 
-None.
+No locked-requirement violation found.
 
 ## Final Recommendation
 
-Accept locally. Do not push.
+Accept locally and proceed to git finalization. Do not push remotely because no remote push was requested.
 
 ## Next Agent State
 
-- Phase: `DONE`
-- Owner: `USER`
+- Phase: `CODEX_GIT_FINALIZING`
+- Owner: `CODEX`
