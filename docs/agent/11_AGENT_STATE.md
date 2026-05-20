@@ -8,29 +8,25 @@ QRE-EVAL-FACTOR-DECAY-SUMMARY-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex finalized shared-cash metadata group summaries and selected the next unblocked evaluation module: factor decay summaries derived from existing IC/Rank IC outputs. Codex prepared `08_IMPLEMENTATION_BRIEF.md`, updated the handoff docs, and assigned implementation to Claude Code.
+Codex reviewed `QRE-EVAL-FACTOR-DECAY-SUMMARY-001` and wrote `10_REVIEW_REPORT.md` with outcome PASS. Validation passed: focused suite `164 passed, 2 warnings in 1.76s`; full suite `324 passed, 2 warnings in 3.05s`; `scripts/check-progress-docs.sh` passed; `git diff --check` passed.
 
 ## Next Required Step
 
-Claude Code implements `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`, runs the required validation, and writes `09_CODING_HANDOFF.md`.
-
-## Active Change Request
-
-User request from 2026-05-20: run One-Shot Review-Finalize-Next. Codex finalized the previous implementation and arranged the next Claude Code task.
+Codex should run finalization checks and commit the accepted implementation locally. No remote push is requested.
 
 ## Git State
 
 - Current branch: `master`
 - Last accepted implementation commit: `5853e0f`, `Group shared-cash reports by row metadata`
-- Working tree clean after Codex handoff-doc commit.
+- Working tree contains accepted `QRE-EVAL-FACTOR-DECAY-SUMMARY-001` changes awaiting local commit.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

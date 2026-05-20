@@ -10,21 +10,29 @@ QRE-EVAL-FACTOR-DECAY-SUMMARY-001
 
 ## Current Status
 
-Ready for Claude Code implementation.
+Accepted locally by Codex review. Ready for local git finalization.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
 - Codex finalized `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`.
 - Codex selected the next unblocked evaluation task: factor decay summaries over existing forward horizons.
 - Codex prepared `08_IMPLEMENTATION_BRIEF.md`.
+- Claude Code added `factor_decay_summary` to `EvaluationResult`.
+- Claude Code implemented `_build_factor_decay_summary()` in `EvaluationEngine` deriving decay from existing `ic_summary`.
+- Claude Code wired `factor_decay_summary` into `qre eval-config` stdout and `--output-dir` persistence.
+- Claude Code added `factor_decay_summary` manifest validation role with required columns `factor`, `horizon`, `base_horizon`.
+- Claude Code added 9 tests (6 engine + 1 CLI + 2 manifest) and wrote `09_CODING_HANDOFF.md`.
+- Codex reviewed the implementation and wrote `10_REVIEW_REPORT.md` with outcome PASS.
+- Codex validation passed:
+  - `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> `164 passed, 2 warnings in 1.76s`
+  - `uv run pytest -q` -> `324 passed, 2 warnings in 3.05s`
+  - `scripts/check-progress-docs.sh` -> passed
+  - `git diff --check` -> passed
 
-## In Progress
-
-- Claude Code should implement the brief and write `09_CODING_HANDOFF.md`.
 
 ## Expected Files
 
@@ -43,20 +51,12 @@ CLAUDE_CODE
 
 ## Validation Baseline
 
-Last finalized implementation baseline:
+Accepted implementation validation:
 
-- `uv run pytest tests/test_portfolio_analytics.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `179 passed in 2.31s`
-- `uv run pytest -q` -> `315 passed in 3.00s`
+- `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> `164 passed, 2 warnings in 1.76s`
+- `uv run pytest -q` -> `324 passed, 2 warnings in 3.05s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
-
-Required validation for this task:
-
-- `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q`
-- `uv run pytest -q`
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
 
 ## Known Risks
 
@@ -67,4 +67,4 @@ Required validation for this task:
 
 ## Next Suggested Step
 
-Claude Code should read `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`, and `08_IMPLEMENTATION_BRIEF.md`, then implement `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`.
+Codex should finalize the accepted implementation with a local commit, then prepare the next Claude Code implementation brief.

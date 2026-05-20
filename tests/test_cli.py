@@ -890,6 +890,93 @@ def test_cli_eval_config_random_baseline_persists_to_output_dir(capsys, monkeypa
     assert "random_baseline_summary" in run_manifest["artifacts"]
 
 
+def test_cli_eval_config_factor_decay_printed_and_persisted(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["a", "b", "c", "a", "b", "c"] * 3,
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-05", "2026-01-05",
+                         "2026-01-06", "2026-01-06", "2026-01-06"] * 3
+                    ),
+                    "open": [10.0] * 18,
+                    "high": [10.0] * 18,
+                    "low": [10.0] * 18,
+                    "close": [10.0] * 18,
+                    "pre_close": [10.0] * 18,
+                    "vol": [1.0] * 18,
+                    "amount": [100.0] * 18,
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["a", "b", "c", "a", "b", "c"] * 3,
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-05", "2026-01-05",
+                         "2026-01-06", "2026-01-06", "2026-01-06"] * 3
+                    ),
+                    "rsi_2": [1.0, 2.0, 3.0, 1.0, 2.0, 3.0] * 3,
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_decay"
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-07",
+            "--codes",
+            "a",
+            "b",
+            "c",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    # Printed to stdout
+    assert "factor_decay_summary" in captured.out
+
+    # Persisted
+    assert (output_dir / "factor_decay_summary.csv").is_file()
+    decay = pd.read_csv(output_dir / "factor_decay_summary.csv")
+    assert "factor" in decay.columns
+    assert "horizon" in decay.columns
+    assert "base_horizon" in decay.columns
+    assert "ic_decay_from_base" in decay.columns
+    assert "rank_ic_decay_from_base" in decay.columns
+
+    # run_manifest records artifact
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert "factor_decay_summary" in run_manifest["artifacts"]
+
+    # report_manifest validates
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    manifest = ReportManifest.from_path(output_dir / "report_manifest.json")
+    issues = manifest.validate_contents()
+    assert len(issues) == 0
+
+
 def test_cli_preflight_prints_read_only_report(capsys, monkeypatch):
     class FakeStore:
         def __init__(self, settings):

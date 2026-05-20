@@ -32,6 +32,7 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "quantile_summary": {"factor", "horizon", "quantile", "row_count"},
     "evaluation_group_summary": {"group_by", "group_value", "horizon", "event_count"},
     "random_baseline_summary": {"horizon", "event_count"},
+    "factor_decay_summary": {"factor", "horizon", "base_horizon"},
     "shared_orders_group_summary": {"group_by", "group_value", "order_count"},
     "shared_trades_group_summary": {"group_by", "group_value", "trade_count"},
     "shared_failed_orders_group_summary": {"group_by", "group_value", "failed_order_count"},

@@ -353,3 +353,124 @@ def test_random_baseline_returns_null_when_no_events():
     assert len(df) == 1
     assert df.iloc[0]["event_count"] == 0
     assert df.iloc[0]["mean_forward_return"] is None
+
+
+# --- factor decay summary ---
+
+
+def test_factor_decay_summary_is_empty_when_no_factor_columns():
+    engine = EvaluationEngine()
+    request = EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1, 3, 5])
+
+    result = engine.evaluate(make_research_frame(), request)
+
+    assert result.factor_decay_summary.empty
+    assert list(result.factor_decay_summary.columns) == [
+        "factor", "horizon", "base_horizon", "observation_dates",
+        "mean_ic", "mean_rank_ic", "ic_decay_from_base", "rank_ic_decay_from_base",
+    ]
+
+
+def test_factor_decay_summary_computes_decay_from_shortest_horizon():
+    frame = pd.DataFrame(
+        {
+            "ts_code": ["a", "b", "c"] * 6,
+            "trade_date": pd.to_datetime(
+                ["2026-01-05", "2026-01-05", "2026-01-05"] * 6
+            ),
+            "close": [10.0, 10.0, 10.0, 11.0, 12.0, 13.0] * 3,
+            "factor": [1.0, 2.0, 3.0] * 6,
+        }
+    )
+
+    result = EvaluationEngine().evaluate(
+        frame,
+        EvaluationRequest(
+            signal_expression="factor > 0",
+            forward_horizons=[1, 3, 5],
+            factor_columns=["factor"],
+        ),
+    )
+
+    decay = result.factor_decay_summary
+    assert len(decay) == 3  # one row per horizon
+    assert set(decay["horizon"]) == {1, 3, 5}
+    assert (decay["base_horizon"] == 1).all()
+    assert list(decay.columns) == [
+        "factor", "horizon", "base_horizon", "observation_dates",
+        "mean_ic", "mean_rank_ic", "ic_decay_from_base", "rank_ic_decay_from_base",
+    ]
+    base_row = decay[decay["horizon"] == 1].iloc[0]
+    assert base_row["ic_decay_from_base"] == 0.0
+
+
+def test_factor_decay_summary_handles_zero_base_ic():
+    ic_summary = pd.DataFrame(
+        {
+            "factor": ["momentum", "momentum", "momentum"],
+            "horizon": [1, 3, 5],
+            "observation_dates": [10, 8, 6],
+            "mean_ic": [0.0, 0.05, 0.03],
+            "mean_rank_ic": [0.0, 0.04, 0.02],
+        }
+    )
+    engine = EvaluationEngine()
+    result = engine._build_factor_decay_summary(ic_summary)
+
+    assert len(result) == 3
+    for _, row in result.iterrows():
+        assert row["ic_decay_from_base"] is None
+        assert row["rank_ic_decay_from_base"] is None
+
+
+def test_factor_decay_summary_handles_none_base_ic():
+    ic_summary = pd.DataFrame(
+        {
+            "factor": ["momentum", "momentum"],
+            "horizon": [1, 3],
+            "observation_dates": [0, 5],
+            "mean_ic": [None, 0.05],
+            "mean_rank_ic": [None, 0.04],
+        }
+    )
+    engine = EvaluationEngine()
+    result = engine._build_factor_decay_summary(ic_summary)
+
+    assert len(result) == 2
+    for _, row in result.iterrows():
+        assert row["ic_decay_from_base"] is None
+        assert row["rank_ic_decay_from_base"] is None
+
+
+def test_factor_decay_summary_handles_empty_ic_summary():
+    engine = EvaluationEngine()
+    result = engine._build_factor_decay_summary(pd.DataFrame())
+
+    assert len(result) == 0
+    assert list(result.columns) == [
+        "factor", "horizon", "base_horizon", "observation_dates",
+        "mean_ic", "mean_rank_ic", "ic_decay_from_base", "rank_ic_decay_from_base",
+    ]
+
+
+def test_factor_decay_summary_computes_per_factor_bases():
+    ic_summary = pd.DataFrame(
+        {
+            "factor": ["f1", "f1", "f2", "f2"],
+            "horizon": [2, 5, 3, 7],
+            "observation_dates": [10, 8, 12, 9],
+            "mean_ic": [0.10, 0.06, 0.08, 0.04],
+            "mean_rank_ic": [0.09, 0.05, 0.07, 0.03],
+        }
+    )
+    engine = EvaluationEngine()
+    result = engine._build_factor_decay_summary(ic_summary)
+
+    f1_rows = result[result["factor"] == "f1"]
+    assert (f1_rows["base_horizon"] == 2).all()
+    assert f1_rows[f1_rows["horizon"] == 2].iloc[0]["ic_decay_from_base"] == 0.0
+    assert f1_rows[f1_rows["horizon"] == 5].iloc[0]["ic_decay_from_base"] == pytest.approx(0.06 - 0.10)
+
+    f2_rows = result[result["factor"] == "f2"]
+    assert (f2_rows["base_horizon"] == 3).all()
+    assert f2_rows[f2_rows["horizon"] == 7].iloc[0]["ic_decay_from_base"] == pytest.approx(0.04 - 0.08)

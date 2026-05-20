@@ -749,3 +749,50 @@ def test_report_manifest_validates_random_baseline_summary_columns(tmp_path):
     assert issues[0].code == "missing_columns"
     assert "horizon" in issues[0].message
     assert "event_count" in issues[0].message
+
+
+def test_report_manifest_validates_factor_decay_summary_columns(tmp_path):
+    decay_csv = tmp_path / "factor_decay_summary.csv"
+    decay_csv.write_text("other\n1\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "factor_decay_summary", "path": "factor_decay_summary.csv", "filename": "factor_decay_summary.csv", "role": "factor_decay_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "factor" in issues[0].message
+    assert "horizon" in issues[0].message
+    assert "base_horizon" in issues[0].message
+
+
+def test_report_manifest_accepts_valid_factor_decay_summary(tmp_path):
+    decay_csv = tmp_path / "factor_decay_summary.csv"
+    decay_csv.write_text(
+        "factor,horizon,base_horizon,observation_dates,mean_ic,mean_rank_ic,ic_decay_from_base,rank_ic_decay_from_base\nmomentum,1,1,10,0.10,0.09,0.0,0.0\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "factor_decay_summary", "path": "factor_decay_summary.csv", "filename": "factor_decay_summary.csv", "role": "factor_decay_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 0

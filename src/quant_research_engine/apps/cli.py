@@ -326,6 +326,11 @@ def _write_evaluation_output(
         result.random_baseline_summary.to_csv(p, index=False)
         artifact_paths["random_baseline_summary"] = p
 
+    if not result.factor_decay_summary.empty:
+        p = directory / "factor_decay_summary.csv"
+        result.factor_decay_summary.to_csv(p, index=False)
+        artifact_paths["factor_decay_summary"] = p
+
     run_manifest_payload: dict[str, object] = {
         "schema_version": 1,
         "kind": "evaluation_run_manifest",
@@ -753,6 +758,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not result.random_baseline_summary.empty:
             print("random_baseline_summary")
             print(result.random_baseline_summary.to_csv(index=False).strip())
+        if not result.factor_decay_summary.empty:
+            print("factor_decay_summary")
+            print(result.factor_decay_summary.to_csv(index=False).strip())
         if args.output_dir:
             _write_evaluation_output(
                 result=result,

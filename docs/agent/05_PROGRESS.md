@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-IN_PROGRESS
+CODEX_GIT_FINALIZING
 
 ## Progress Table
 
@@ -54,25 +54,27 @@ IN_PROGRESS
 | QRE-NEXT-37 | Batch metadata group-by passthrough | DONE | CODEX/CLAUDE_CODE | 283 passed in 2.67s; `summary_metadata_columns` in `BatchBacktestRequest`; CLI `backtest-batch --group-by` passes columns to engine; 5 new tests; Codex review passed | Preserve |
 | QRE-NEXT-38 | Shared-cash metadata output passthrough | DONE | CODEX/CLAUDE_CODE | 293 passed in 2.80s; shared-cash `metadata_columns`; output rows carry requested metadata; collision guards prevent overwriting canonical fields; 10 new tests including CLI and collision coverage | Preserve |
 | QRE-NEXT-39 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 passed in 3.00s; row-based grouped order/trade/failed-order summaries; `backtest-shared --group-by`; grouped CSV artifacts; manifest roles; empty no-column outputs handled | Preserve |
-| QRE-NEXT-40 | Evaluation factor decay summary | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for factor/horizon IC and Rank IC decay output | Claude Code implements and writes `09_CODING_HANDOFF.md` |
+| QRE-NEXT-40 | Evaluation factor decay summary | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `factor_decay_summary` in `EvaluationResult`; derived from `ic_summary` per factor/horizon; stdout + CSV artifact + manifest validation; 9 tests added; 324 passed | Local finalize |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-EVAL-FACTOR-DECAY-SUMMARY-001 planning handoff:
+Recorded on 2026-05-20 after QRE-EVAL-FACTOR-DECAY-SUMMARY-001 Codex review:
 
-- Last finalized implementation: QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001 (commit `5853e0f`)
+- Current task: `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`
+- Last finalized: QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001 (commit `5853e0f`)
 - Last validation:
-  - `uv run pytest tests/test_portfolio_analytics.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `179 passed in 2.31s`
-  - `uv run pytest -q` -> `315 passed in 3.00s`
+  - `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> `164 passed, 2 warnings in 1.76s`
+  - `uv run pytest -q` -> `324 passed, 2 warnings in 3.05s`
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
-- Current task: `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`
-- Next step: Claude Code implementation
+- Implementation: 9 new tests (6 engine + 1 CLI + 2 manifest); `factor_decay_summary` field, builder, stdout, artifact, manifest validation
+- Review: `10_REVIEW_REPORT.md` PASS
+- Next step: local git finalization
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight, real metadata passthrough adapters.
-- Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries, durable output artifacts with manifests, random-baseline comparison.
+- Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries, durable output artifacts with manifests, random-baseline comparison, factor decay summaries.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics, batch metadata group-by passthrough, shared-cash metadata output passthrough, shared-cash row-level metadata group summaries.
 - Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility, evaluation metadata group summaries, eval-config output artifacts and manifests, evaluation random-baseline comparison.
 
@@ -80,7 +82,6 @@ Recorded on 2026-05-20 after QRE-EVAL-FACTOR-DECAY-SUMMARY-001 planning handoff:
 
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
-- Evaluation factor decay summary.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Larger research-run reproducibility workflow.
 

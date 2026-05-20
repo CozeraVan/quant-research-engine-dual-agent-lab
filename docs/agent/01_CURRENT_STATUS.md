@@ -12,7 +12,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Read-only PostgreSQL data access for daily bars, factors, metadata fallback, calendar, and benchmark-bar skeleton.
 - Research-frame assembly from market bars plus declared factor fields.
 - Read-only preflight checks for market/factor/join/metadata/universe/liquidity/benchmark availability.
-- Safe expression evaluation, forward returns, event summaries, IC, Rank IC, quantile returns, rough friction-adjusted screening, metadata group summaries, and deterministic random-baseline comparison.
+- Safe expression evaluation, forward returns, event summaries, IC, Rank IC, quantile returns, rough friction-adjusted screening, metadata group summaries, deterministic random-baseline comparison, and factor decay summaries.
 - Single-symbol, independent batch, and shared-cash portfolio backtests.
 - A-share costs, lot sizing, price-limit validation, percent slippage, risk exits, rebalance, FIFO lot accounting, and T+1 sellable inventory in shared-cash simulation.
 - Portfolio analytics, benchmark-relative analytics interface, Markdown/CSV/JSON outputs, report manifests, report discovery, and report audit.
@@ -23,17 +23,18 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Batch backtest metadata group-by passthrough for optional upstream columns.
 - Shared-cash metadata output passthrough for requested static metadata columns.
 - Shared-cash row-level metadata group summaries for orders, trades, and failed orders.
+- Evaluation factor decay summaries from existing IC and Rank IC outputs, including eval-config stdout, CSV artifact, and report-manifest validation.
 
 ## In Progress
 
-Claude Code is assigned to add evaluation factor decay summaries from existing IC/Rank IC outputs.
+Codex is finalizing the accepted evaluation factor decay summary implementation and preparing the next Claude Code task.
 
 ## Known Gaps
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
 - Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables.
 - Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
-- Evaluation layer does not yet implement benchmark comparison or real regime classification.
+- Evaluation layer does not yet implement real index benchmark comparison or real regime classification.
 - Larger research-run bundles across preflight, evaluation, and backtest outputs are not yet standardized.
 
 ## Current Technical Stack
@@ -76,4 +77,4 @@ Claude Code is assigned to add evaluation factor decay summaries from existing I
 
 ## Next Recommended Step
 
-Claude Code should implement `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Codex should finalize `QRE-EVAL-FACTOR-DECAY-SUMMARY-001` locally, then prepare the next unblocked Claude Code task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

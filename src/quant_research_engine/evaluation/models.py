@@ -25,3 +25,4 @@ class EvaluationResult:
     quantile_summary: pd.DataFrame
     group_summary: pd.DataFrame
     random_baseline_summary: pd.DataFrame
+    factor_decay_summary: pd.DataFrame

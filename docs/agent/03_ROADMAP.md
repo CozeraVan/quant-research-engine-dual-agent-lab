@@ -28,7 +28,7 @@
 | M3.4 | Rough friction-adjusted screening | DONE | HISTORICAL | `round_trip_cost_rate`, market-profile estimate | Preserve |
 | M3.5 | Regime and metadata group summaries | DONE | CODEX/CLAUDE_CODE | commit `b25cbd7`; 255 tests passed; evaluation metadata group summaries implemented | Preserve; real regime classification can follow later |
 | M3.6 | Benchmark/random-baseline comparison for evaluation | DONE | CODEX/CLAUDE_CODE | commit `495185b`; 274 tests passed; deterministic random-baseline comparison implemented with seed-controlled CLI output and report-manifest validation | Preserve; benchmark wiring remains blocked until table/schema confirmation |
-| M3.7 | Factor decay summary | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for horizon-by-horizon IC/Rank IC decay summaries | Implement and report in `09_CODING_HANDOFF.md` |
+| M3.7 | Factor decay summary | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 324 tests passed; `factor_decay_summary` generated from IC/Rank IC horizons and emitted through eval-config artifacts/manifests | Preserve |
 
 ## Milestone 4: Portfolio Engine
 

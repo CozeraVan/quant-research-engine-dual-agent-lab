@@ -39,6 +39,7 @@ class EvaluationEngine:
         summary = self._build_summary(events, request.forward_horizons, request.round_trip_cost_rate)
         factor_columns = request.factor_columns or []
         ic_summary = self._build_ic_summary(working, factor_columns, request.forward_horizons)
+        factor_decay_summary = self._build_factor_decay_summary(ic_summary)
         quantile_summary = self._build_quantile_summary(
             working,
             factor_columns,
@@ -58,6 +59,7 @@ class EvaluationEngine:
             quantile_summary=quantile_summary,
             group_summary=group_summary,
             random_baseline_summary=random_baseline_summary,
+            factor_decay_summary=factor_decay_summary,
         )
 
     def _validate_frame(self, frame: pd.DataFrame, request: EvaluationRequest) -> None:
@@ -178,6 +180,49 @@ class EvaluationEngine:
                     }
                 )
         return pd.DataFrame(rows)
+
+    def _build_factor_decay_summary(self, ic_summary: pd.DataFrame) -> pd.DataFrame:
+        columns = [
+            "factor",
+            "horizon",
+            "base_horizon",
+            "observation_dates",
+            "mean_ic",
+            "mean_rank_ic",
+            "ic_decay_from_base",
+            "rank_ic_decay_from_base",
+        ]
+        if ic_summary.empty:
+            return pd.DataFrame(columns=columns)
+        rows = []
+        for factor in ic_summary["factor"].unique():
+            factor_rows = ic_summary[ic_summary["factor"] == factor]
+            base_idx = factor_rows["horizon"].idxmin()
+            base_row = factor_rows.loc[base_idx]
+            base_horizon = int(base_row["horizon"])
+            base_mean_ic = base_row["mean_ic"]
+            base_mean_rank_ic = base_row["mean_rank_ic"]
+            for _, row in factor_rows.iterrows():
+                horizon = int(row["horizon"])
+                ic_decay: float | None = None
+                rank_ic_decay: float | None = None
+                if pd.notna(base_mean_ic) and base_mean_ic != 0 and pd.notna(row["mean_ic"]):
+                    ic_decay = row["mean_ic"] - base_mean_ic
+                if pd.notna(base_mean_rank_ic) and base_mean_rank_ic != 0 and pd.notna(row["mean_rank_ic"]):
+                    rank_ic_decay = row["mean_rank_ic"] - base_mean_rank_ic
+                rows.append(
+                    {
+                        "factor": factor,
+                        "horizon": horizon,
+                        "base_horizon": base_horizon,
+                        "observation_dates": int(row["observation_dates"]),
+                        "mean_ic": row["mean_ic"],
+                        "mean_rank_ic": row["mean_rank_ic"],
+                        "ic_decay_from_base": ic_decay,
+                        "rank_ic_decay_from_base": rank_ic_decay,
+                    }
+                )
+        return pd.DataFrame(rows, columns=columns)
 
     def _build_quantile_summary(
         self,
