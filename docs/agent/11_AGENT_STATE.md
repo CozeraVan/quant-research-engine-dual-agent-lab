@@ -4,11 +4,11 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001
+QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001
 
 ## Current Phase
 
-CODEX_REVIEWING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
@@ -16,17 +16,17 @@ CODEX
 
 ## Last Completed Step
 
-Claude Code updated README, data_layer.md, and portfolio_workflow.md with evaluation group-by manifest parity usage docs. Documentation now covers combined `group_summary.csv` plus per-column `group_summary_by_<col>.csv`, manifest `group_by` metadata distinction, and `report-files` / `report-audit --group-by` discovery/audit examples. Validation: `scripts/check-progress-docs.sh` passed; `git diff --check` passed.
+Codex re-reviewed `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001` and marked `10_REVIEW_REPORT.md` as PASS. `ReportManifest.validate_contents()` now gates grouped `group_by` mismatch checks on successful required-column validation, and the malformed grouped-file reproduction now returns only `missing_columns`. Validation: 175 tests pass; `scripts/check-progress-docs.sh` passes; `git diff --check` passes.
 
 ## Next Required Step
 
-Codex should review and produce `10_REVIEW_REPORT.md`.
+Codex should run final git checks and create the local completion commit for `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001`.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `745103e`, `Align evaluation grouped artifact filtering`
-- Working tree contains documentation changes for `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001` plus agent doc updates.
+- Last accepted implementation commit: `5fc7605`, `Clarify evaluation grouped artifact usage`
+- Working tree contains Claude Code fix for `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001`.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

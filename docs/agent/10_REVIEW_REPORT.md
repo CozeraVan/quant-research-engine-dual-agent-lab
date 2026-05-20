@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001
+QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001
 
 ## Written By
 
@@ -14,13 +14,13 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code documentation changes in the current working tree.
+Claude Code implementation changes in the current working tree.
 
 Changed files reviewed:
 
-- `README.md`
-- `docs/modules/data_layer.md`
-- `docs/modules/portfolio_workflow.md`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -31,9 +31,7 @@ Changed files reviewed:
 
 The implementation satisfies the brief.
 
-The updated docs now explain that `qre eval-config --group-by <cols>` writes both the combined `group_summary.csv` and per-column files such as `group_summary_by_board.csv`. They also distinguish manifest behavior correctly: the combined file keeps role `evaluation_group_summary` without manifest `group_by`, while per-column files use the same role plus `group_by=<col>` metadata for `report-files` and `report-audit --group-by` filtering.
-
-The examples stay credential-free, do not touch legacy archived docs, and keep the existing limitation clear: grouped outputs are structural inspection aids, not proof of factor or strategy quality.
+`ReportManifest.validate_contents()` now gates `_validate_csv_group_by_consistency()` on successful required-column validation, so malformed grouped files no longer emit both `missing_columns` and `group_by_mismatch` for the same defect. The new regression test covers the original reproduction path, while the existing mismatch tests for valid-structure grouped files still pass.
 
 ## Required Fixes
 
@@ -43,17 +41,18 @@ None.
 
 Compliant:
 
-- README explains combined plus per-column evaluation grouped artifacts.
-- Module docs explain evaluation `report-files` / `report-audit --group-by` parity.
-- The docs state that per-column files supplement, not replace, `group_summary.csv`.
-- Grouped diagnostics are described as structural inspection aids rather than proof of effectiveness.
-- No runtime code or legacy archived docs were changed.
+- Added `group_by_mismatch` validation behavior for grouped evaluation/shared roles with manifest `group_by` metadata.
+- Runs consistency checks only after required-column validation passes.
+- Preserved manifest schema version and combined evaluation `group_summary.csv` semantics.
+- Added focused regression coverage for the malformed grouped-file case.
+- Kept the change scoped to report-manifest validation and targeted tests.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
+uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
 scripts/check-progress-docs.sh
 git diff --check
 git diff --name-only HEAD | rg '^docs/legacy/' || true
@@ -61,11 +60,19 @@ git diff --name-only HEAD | rg '^docs/legacy/' || true
 
 Results:
 
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`: `175 passed, 2 warnings in 1.84s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - Legacy-doc check: no `docs/legacy/**` changes
 
-Pytest was not required because this task changed documentation only and did not add executable examples or runtime behavior.
+Reproduction check rerun by Codex:
+
+- A grouped evaluation file with header `group_by,group_value,horizon`, manifest `group_by="board"`, and CSV row `sector,Tech,1` now returns only `missing_columns: event_count`.
+
+Warnings observed:
+
+- Existing numpy runtime warnings in `test_cli_eval_config_factor_decay_printed_and_persisted`
+- No new warning category introduced by this task
 
 ## Locked Requirements Check
 

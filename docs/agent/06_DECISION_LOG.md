@@ -182,6 +182,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
 - Owner: CODEX
 
+### 2026-05-21: Select grouped-artifact group_by audit consistency as next Claude task
+
+- Decision: The next Claude Code task is audit hardening for manifest `group_by` metadata versus grouped CSV contents.
+- Reason: Evaluation and shared grouped artifacts now support per-column manifest filtering, but `ReportManifest.validate_contents()` still checks only required columns. A file can claim manifest `group_by=board` while containing mismatched grouped rows and still pass audit.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; jump to larger run-bundle orchestration.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001`. The task should stay inside report-manifest validation and targeted CLI/tests without changing manifest schema version.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

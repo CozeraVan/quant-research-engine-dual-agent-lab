@@ -2,15 +2,15 @@
 
 ## Current Task
 
-Document evaluation group-by manifest parity usage.
+Harden grouped-artifact `group_by` audit consistency.
 
 ## Task ID
 
-QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001
+QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001
 
 ## Current Status
 
-Claude Code implementation complete. Ready for Codex review.
+Accepted locally by Codex review. Ready for local git finalization.
 
 ## Current Owner
 
@@ -18,17 +18,21 @@ CODEX
 
 ## Completed
 
-- Codex finalized `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001` locally.
-- Local commit created: `745103e`, `Align evaluation grouped artifact filtering`.
-- Codex selected the next unblocked documentation task: evaluation group-by manifest parity usage.
-- Codex prepared `08_IMPLEMENTATION_BRIEF.md` for `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001`.
-- Claude Code updated README, data_layer.md, and portfolio_workflow.md with per-column evaluation grouped artifact docs, manifest `group_by` metadata behavior, and `--group-by` discovery/audit examples.
+- Claude Code implemented `_validate_csv_group_by_consistency()` in `ReportManifest.validate_contents()`.
+- After required-column validation, entries with manifest `group_by` metadata are checked so every non-empty CSV `group_by` cell must match the manifest value.
+- Mismatches produce a `group_by_mismatch` validation issue with both the expected and observed values.
+- Entries without manifest `group_by` metadata (including combined `group_summary.csv`) are not checked.
+- 11 new tests added (9 manifest + 2 CLI). All 175 tests pass.
+- `scripts/check-progress-docs.sh` and `git diff --check` pass.
+- Claude Code applied the required fix from Codex review: `group_by` consistency checks now run only when `_validate_csv_columns()` returned no issues for that file.
+- Codex reran the malformed grouped-file reproduction and confirmed it now emits only `missing_columns`.
+- Codex review now marks `10_REVIEW_REPORT.md` as PASS.
 
 ## Expected Files
 
-- `README.md`
-- `docs/modules/data_layer.md`
-- `docs/modules/portfolio_workflow.md`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -37,22 +41,18 @@ CODEX
 
 ## Validation Baseline
 
-Last finalized implementation validation:
-
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 164 passed
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
-- Local commit: `745103e`
-- Pytest not required for the next task unless executable examples or runtime code are changed.
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 175 passed in 1.84s
+- `scripts/check-progress-docs.sh` → passed
+- `git diff --check` → passed
 
 ## Known Risks
 
-- Keep examples credential-free.
-- Do not edit `docs/legacy/**`.
-- Do not imply grouped diagnostics prove factor or strategy effectiveness.
-- Do not describe per-column grouped files as replacing the combined `group_summary.csv`.
+- Preserved existing `report-files` / `report-audit` filtering semantics.
+- Combined evaluation `group_summary.csv` unchanged.
+- No manifest schema-version bump.
+- Batch grouped output validation unaffected.
+- Batch grouped outputs still do not have manifest/content consistency checks for their group column headers; this remains outside the current task scope.
 
 ## Next Suggested Step
 
-Claude Code should read `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`, and `08_IMPLEMENTATION_BRIEF.md`, then implement `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001`.
+Codex should run finalization checks and create the local completion commit for `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001`.

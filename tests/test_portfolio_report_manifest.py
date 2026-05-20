@@ -1221,3 +1221,247 @@ def test_validate_contents_accepts_null_run_id(tmp_path):
     )
     manifest = ReportManifest.from_path(manifest_path)
     assert manifest.validate_contents() == []
+
+
+# --- group_by content consistency ---
+
+
+def test_validate_contents_reports_group_by_mismatch_evaluation(tmp_path):
+    (tmp_path / "group_summary_by_board.csv").write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nsector,Tech,1,40\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].key == "group_summary_by_board"
+    assert issues[0].code == "group_by_mismatch"
+    assert "board" in issues[0].message
+    assert "sector" in issues[0].message
+
+
+def test_validate_contents_reports_group_by_mismatch_shared_orders(tmp_path):
+    (tmp_path / "shared_orders_group_summary_by_board.csv").write_text(
+        "group_by,group_value,order_count\nboard,main,10\nsector,Tech,5\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "shared_orders_group_summary_by_board",
+                     "path": "shared_orders_group_summary_by_board.csv",
+                     "filename": "shared_orders_group_summary_by_board.csv",
+                     "role": "shared_orders_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "group_by_mismatch"
+    assert "board" in issues[0].message
+    assert "sector" in issues[0].message
+
+
+def test_validate_contents_reports_group_by_mismatch_shared_trades(tmp_path):
+    (tmp_path / "shared_trades_group_summary_by_board.csv").write_text(
+        "group_by,group_value,trade_count\nboard,main,8\nindustry,Tech,3\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "shared_trades_group_summary_by_board",
+                     "path": "shared_trades_group_summary_by_board.csv",
+                     "filename": "shared_trades_group_summary_by_board.csv",
+                     "role": "shared_trades_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "group_by_mismatch"
+
+
+def test_validate_contents_reports_group_by_mismatch_shared_failed_orders(tmp_path):
+    (tmp_path / "shared_failed_orders_group_summary_by_board.csv").write_text(
+        "group_by,group_value,failed_order_count\nboard,main,2\nsector,Tech,1\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "shared_failed_orders_group_summary_by_board",
+                     "path": "shared_failed_orders_group_summary_by_board.csv",
+                     "filename": "shared_failed_orders_group_summary_by_board.csv",
+                     "role": "shared_failed_orders_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "group_by_mismatch"
+
+
+def test_validate_contents_accepts_matching_group_by_evaluation(tmp_path):
+    (tmp_path / "group_summary_by_board.csv").write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nboard,chinext,1,30\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_validate_contents_accepts_matching_group_by_shared_orders(tmp_path):
+    (tmp_path / "shared_orders_group_summary_by_board.csv").write_text(
+        "group_by,group_value,order_count\nboard,main,10\nboard,chinext,5\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "shared_orders_group_summary_by_board",
+                     "path": "shared_orders_group_summary_by_board.csv",
+                     "filename": "shared_orders_group_summary_by_board.csv",
+                     "role": "shared_orders_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_validate_contents_no_group_by_check_without_manifest_metadata(tmp_path):
+    """Combined group_summary.csv with no manifest group_by must not be checked for consistency."""
+    (tmp_path / "group_summary.csv").write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nsector,Tech,1,40\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary", "path": "group_summary.csv",
+                     "filename": "group_summary.csv", "role": "evaluation_group_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_validate_contents_group_by_mismatch_checks_all_non_empty_cells(tmp_path):
+    (tmp_path / "group_summary_by_board.csv").write_text(
+        "group_by,group_value,horizon,event_count\n"
+        "sector,Tech,1,40\n"
+        "industry,Manufacturing,1,30\n"
+        "board,main,1,50\n"
+        "sector,Finance,1,20\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "group_by_mismatch"
+    assert "sector" in issues[0].message
+    assert "industry" in issues[0].message
+    assert "'board'" in issues[0].message
+
+
+def test_validate_contents_skips_group_by_check_when_columns_missing(tmp_path):
+    """Only emit missing_columns when required-column validation fails, even if group_by mismatches."""
+    (tmp_path / "group_summary_by_board.csv").write_text(
+        "group_by,group_value,horizon\nsector,main,1\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "event_count" in issues[0].message

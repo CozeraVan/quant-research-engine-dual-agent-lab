@@ -207,7 +207,10 @@ class ReportManifest:
                 continue
             required_columns = _REQUIRED_COLUMNS_BY_ROLE.get(entry.role)
             if required_columns is not None and path.suffix == ".csv":
-                issues.extend(_validate_csv_columns(entry, path, required_columns))
+                column_issues = _validate_csv_columns(entry, path, required_columns)
+                issues.extend(column_issues)
+                if not column_issues and entry.group_by is not None:
+                    issues.extend(_validate_csv_group_by_consistency(entry, path))
         return issues
 
 
@@ -454,6 +457,39 @@ def _validate_csv_columns(entry: ReportFile, path: Path, required_columns: set[s
                 path=path,
                 code="missing_columns",
                 message=f"missing columns: {', '.join(missing)}",
+            )
+        ]
+    return []
+
+
+def _validate_csv_group_by_consistency(entry: ReportFile, path: Path) -> list[ReportValidationIssue]:
+    mismatched_values: set[str] = set()
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, [])
+            if "group_by" not in header:
+                return []
+            group_by_idx = header.index("group_by")
+            for row in reader:
+                if len(row) <= group_by_idx:
+                    continue
+                cell = row[group_by_idx].strip()
+                if cell and cell != entry.group_by:
+                    mismatched_values.add(cell)
+    except Exception:
+        return []
+
+    if mismatched_values:
+        return [
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="group_by_mismatch",
+                message=(
+                    f"manifest group_by={entry.group_by!r} but CSV contains "
+                    f"group_by value(s): {', '.join(sorted(mismatched_values))}"
+                ),
             )
         ]
     return []

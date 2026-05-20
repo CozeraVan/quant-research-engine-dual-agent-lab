@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001
+QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001
 
 ## Created By
 
@@ -14,27 +14,27 @@ CLAUDE_CODE
 
 ## Background
 
-Evaluation outputs now emit both the combined `group_summary.csv` and per-column grouped files such as `group_summary_by_board.csv`. The manifest also carries `group_by=<col>` metadata so `qre report-files` and `qre report-audit` can filter grouped evaluation artifacts with `--group-by`. Current docs still describe only the combined evaluation grouped artifact and do not explain the new per-column discovery/audit workflow.
+Grouped evaluation and shared-cash artifacts now use manifest `group_by=<col>` metadata so `qre report-files` and `qre report-audit --group-by` can target per-column files. Current audit validation checks required columns only. That means a file can claim `group_by=board` in the manifest while its CSV rows contain another grouping column and still pass `validate_contents()`.
 
 ## Goal
 
-Update user-facing documentation for evaluation group-by manifest parity and per-column grouped-artifact usage.
+Harden report-manifest content validation so grouped artifact files with manifest `group_by` metadata must agree with their CSV contents.
 
 ## Non-Goals
 
-- Do not change runtime code.
-- Do not change tests unless a doc example is executable and current test conventions require coverage.
+- Do not change report-manifest schema version.
+- Do not change grouped artifact filenames, roles, or CLI flags.
+- Do not force combined grouped files without manifest `group_by` metadata to contain a single grouping column.
+- Do not broaden the task into batch grouped files that use the actual group column name instead of a literal `group_by` CSV column.
 - Do not edit legacy archived docs under `docs/legacy`.
-- Do not imply per-column grouped evaluation artifacts replace the combined `group_summary.csv`.
-- Do not present grouped evaluation outputs as attribution, causal explanation, or proof of strategy quality.
 
 ## Affected Modules
 
-Expected:
+Expected runtime/tests:
 
-- `README.md`
-- `docs/modules/data_layer.md`
-- `docs/modules/portfolio_workflow.md`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
+- `tests/test_cli.py`
 
 Docs/handoff:
 
@@ -51,7 +51,7 @@ Docs/handoff:
 - `pyproject.toml`
 - `.env*`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
-- runtime code files unless a documentation reference reveals an actual typo in generated command names
+- evaluation or portfolio engine math/output-generation modules unless a narrow validation helper change is genuinely required
 
 ## Locked Requirements
 
@@ -61,84 +61,83 @@ Read:
 
 Task-specific locked requirements:
 
-- Keep examples credential-free and avoid real database URLs.
-- Preserve the documented existence of the combined `group_summary.csv`.
-- Document per-column files as an additional grouped-artifact surface, not a replacement.
-- Keep docs clear that grouped diagnostics are structural research aids, not proof of strategy quality.
+- Preserve existing `report-files` / `report-audit` role and `group_by` filter behavior.
+- Preserve combined evaluation `group_summary.csv` compatibility.
+- Keep manifest schema version unchanged.
 - Preserve archived legacy docs.
+- Keep the task narrowly scoped to audit/content validation rather than output-generation changes.
 
 ## Implementation Steps
 
-1. Inspect current evaluation artifact and metadata-grouping sections in:
-   - `README.md`
-   - `docs/modules/data_layer.md`
-   - `docs/modules/portfolio_workflow.md`
-2. Update evaluation-grouping docs to explain that `qre eval-config --group-by <cols>` now writes:
-   - combined `group_summary.csv`
-   - per-column files such as `group_summary_by_board.csv`
-3. Document manifest/discovery behavior:
-   - combined file uses role `evaluation_group_summary` without manifest `group_by` metadata
-   - per-column files use the same role plus manifest `group_by=<col>`
-4. Include concise examples for:
-   - `qre report-files <manifest> --role evaluation_group_summary`
-   - `qre report-files <manifest> --role evaluation_group_summary --group-by board`
-   - `qre report-audit <manifest> --role evaluation_group_summary --group-by board --require-match`
-5. Keep wording precise:
-   - combined and per-column files can coexist
-   - grouped outputs support segmentation and structural inspection only
-   - these outputs do not prove factor effectiveness or strategy quality
+1. Inspect current `ReportManifest.validate_contents()` flow and grouped artifact roles that already write a literal `group_by` column in CSV contents:
+   - `evaluation_group_summary`
+   - `shared_orders_group_summary`
+   - `shared_trades_group_summary`
+   - `shared_failed_orders_group_summary`
+2. After required-column validation passes for those grouped roles, add a consistency check for manifest entries with `group_by=<col>` metadata:
+   - read the CSV rows
+   - ignore fully empty files that already pass structural validation
+   - verify every non-empty `group_by` cell equals the manifest entry's `group_by`
+3. Emit a stable validation issue when content mismatches manifest metadata:
+   - use one clear code for this failure mode
+   - include the manifest value and observed mismatched CSV values in the message
+4. Do not apply this check to entries without manifest `group_by` metadata, including the combined evaluation `group_summary.csv`.
+5. Add focused coverage in:
+   - `tests/test_portfolio_report_manifest.py` for direct `validate_contents()` behavior
+   - `tests/test_cli.py` for `qre report-audit` surface behavior
 6. Update handoff/progress docs.
 
 ## Data / Schema Changes
 
 - No data or schema changes.
-- Documentation should describe the existing grouped-artifact and manifest behavior only.
+- Manifest schema version must remain unchanged.
 
 ## API / Interface Changes
 
-- No new API changes in this task.
-- Documentation should reflect the existing evaluation grouped-artifact filenames and manifest filtering behavior.
+- No new commands or flags.
+- `report-audit` may surface a new issue code/message when grouped CSV content disagrees with manifest `group_by` metadata.
 
 ## Validation Plan
 
-Run documentation checks:
+Run focused tests:
+
+```bash
+uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
+```
+
+Run documentation/diff checks:
 
 ```bash
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-Run focused tests only if code or executable examples are changed:
-
-```bash
-uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
-```
-
 ## Acceptance Criteria
 
-- [ ] README explains combined plus per-column evaluation grouped artifacts.
-- [ ] Module docs explain evaluation `report-files` / `report-audit --group-by` parity for grouped artifacts.
-- [ ] Docs clearly state per-column files supplement, not replace, `group_summary.csv`.
-- [ ] Docs clearly state grouped diagnostics do not prove factor/strategy effectiveness.
+- [ ] A grouped evaluation file with manifest `group_by=board` fails audit if CSV rows contain another `group_by` value.
+- [ ] A grouped shared-cash file with manifest `group_by=board` fails audit if CSV rows contain another `group_by` value.
+- [ ] Matching grouped evaluation/shared files still pass audit.
+- [ ] Combined evaluation `group_summary.csv` without manifest `group_by` metadata still passes unchanged.
+- [ ] `qre report-audit` surfaces the mismatch through existing validation output.
 - [ ] Legacy archived docs are untouched.
-- [ ] `scripts/check-progress-docs.sh` and `git diff --check` pass.
+- [ ] `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`, `scripts/check-progress-docs.sh`, and `git diff --check` pass.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Avoid over-claiming grouped evaluation diagnostics.
-- Avoid describing the combined grouped file as filterable by manifest `group_by` when the per-column files are the filter-targeted artifacts.
-- Keep filenames and role names aligned with the implemented CLI behavior.
+- Avoid false positives on combined evaluation grouped files that intentionally have no manifest `group_by`.
+- Avoid applying the check to batch grouped outputs that use the actual grouping column name rather than a literal `group_by` column.
+- Keep the new validation issue readable in both direct `validate_contents()` and CLI audit output.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Keep this as a documentation-only task unless a blocker requires otherwise.
+2. Keep this scoped to report-manifest validation plus targeted tests unless a blocker requires otherwise.
 3. Avoid editing `docs/legacy/**`.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
-5. Stop and write a blocker only if the brief conflicts with the current docs.
+5. Stop and write a blocker only if the current grouped artifact shapes make this validation rule ambiguous.
 
 ## Next Agent State
 

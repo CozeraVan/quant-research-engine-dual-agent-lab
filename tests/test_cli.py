@@ -1035,6 +1035,87 @@ def test_cli_report_audit_eval_group_by_missing_file(capsys, tmp_path):
     assert audit_payload["missing_files"] == 1
 
 
+def test_cli_report_audit_group_by_mismatch(capsys, tmp_path):
+    """report-audit catches group_by mismatch when CSV content disagrees with manifest."""
+    output_dir = tmp_path / "eval_output"
+    output_dir.mkdir(parents=True)
+
+    # CSV has 'sector' rows but manifest claims group_by=board
+    (output_dir / "group_summary_by_board.csv").write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nsector,Tech,1,40\n",
+        encoding="utf-8",
+    )
+    manifest_path = output_dir / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # report-audit exits 2 on mismatch
+    exit_code = main([
+        "report-audit", str(manifest_path),
+        "--role", "evaluation_group_summary",
+        "--group-by", "board",
+        "--require-match",
+    ])
+    assert exit_code == 2
+
+    captured = capsys.readouterr()
+    assert "group_by_mismatch" in captured.err
+    assert "sector" in captured.err
+
+
+def test_cli_report_audit_group_by_mismatch_json(capsys, tmp_path):
+    """report-audit --json surfaces group_by_mismatch with correct issue payload."""
+    output_dir = tmp_path / "eval_output"
+    output_dir.mkdir(parents=True)
+
+    (output_dir / "group_summary_by_board.csv").write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nsector,Tech,1,40\n",
+        encoding="utf-8",
+    )
+    manifest_path = output_dir / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main([
+        "report-audit", str(manifest_path),
+        "--role", "evaluation_group_summary",
+        "--group-by", "board",
+        "--json",
+    ])
+    assert exit_code == 2
+    audit_payload = json.loads(capsys.readouterr().out.strip())
+    assert audit_payload["status"] == "failed"
+    assert audit_payload["validation_issues"] == 1
+    issue = audit_payload["issues"][0]
+    assert issue["code"] == "group_by_mismatch"
+    assert issue["key"] == "group_summary_by_board"
+    assert "board" in issue["message"]
+    assert "sector" in issue["message"]
+
 
 def test_cli_eval_config_random_baseline_prints_summary(capsys, monkeypatch):
     class FakeStore:
