@@ -18,20 +18,18 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Portfolio analytics, benchmark-relative analytics interface, Markdown/CSV/JSON outputs, report manifests, report discovery, and report audit.
 - Shared-cash failed-order diagnostics and summary analysis.
 - Portfolio backtest run manifests for reproducible output directories.
+- Deterministic random-baseline comparison for evaluation output quality.
+- Real security metadata passthrough adapters for optional upstream status, industry, and membership-style columns.
 
 ## In Progress
 
-- Evaluation random-baseline comparison has been implemented and reviewed locally.
-- Phase 4 portfolio realism and validation workflow improvements.
-- Shared-cash failed-order diagnostics and summary analysis completed.
-- Portfolio backtest run-manifest reproducibility completed.
-- Migration from legacy project docs into `docs/agent` as the authoritative dual-agent entry point.
+None.
 
 ## Known Gaps
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
-- Real suspension, ST, and risk-warning state still need reliable time-varying metadata sources.
-- Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully wired.
+- Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables.
+- Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized.
 - Evaluation layer does not yet implement benchmark comparison, factor decay, or real regime classification.
 - Larger research-run bundles across preflight, evaluation, and backtest outputs are not yet standardized.
 

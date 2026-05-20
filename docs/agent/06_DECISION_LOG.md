@@ -86,6 +86,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-EVAL-RANDOM-BASELINE-COMPARISON-001` and keeps real index benchmark wiring marked blocked.
 - Owner: CODEX, pending USER approval
 
+### 2026-05-20: Select real metadata adapters as next Claude task
+
+- Decision: The next Claude Code task is real status/industry/membership metadata adapters for security metadata loading.
+- Reason: This advances data realism without needing benchmark table confirmation and uses the existing read-only metadata merge path.
+- Alternatives: Jump straight to real index benchmark wiring; start regime grouping before the metadata source is clarified.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DATA-REAL-METADATA-ADAPTERS-001`. Real index benchmark wiring remains blocked until table/schema confirmation.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

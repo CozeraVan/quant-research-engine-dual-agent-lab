@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-EVAL-RANDOM-BASELINE-COMPARISON-001
+QRE-DATA-REAL-METADATA-ADAPTERS-001
 
 ## Current Phase
 
@@ -16,7 +16,7 @@ USER
 
 ## Last Completed Step
 
-Codex reviewed, validated, and finalized deterministic random-baseline comparison: `EvaluationRequest.random_baseline_seed`, `EvaluationResult.random_baseline_summary`, `_build_random_baseline_summary()` engine method using seeded numpy RNG, `--random-baseline-seed` CLI flag, stdout printing, CSV persistence, run manifest seed recording, and report manifest role validation. Full suite: 274 passed in 3.19s.
+Codex reviewed, validated, and finalized real metadata passthrough adapters: `_load_security_metadata_table()` now selects passthrough columns beyond the 6 expected fixed columns; `_normalize_security_metadata()` keeps all columns while preserving fixed-column fallback normalization; `_derive_security_metadata_from_daily()` remains unchanged. Full suite: 278 passed in 2.58s.
 
 ## Next Required Step
 
@@ -24,13 +24,13 @@ None.
 
 ## Active Change Request
 
-User request from 2026-05-19: review Claude Code work, inspect the agent files, and produce the next step.
+User request from 2026-05-20: continue the dual-agent workflow and assign the next task to Claude Code.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `f592d4a Persist eval-config output artifacts with provenance`
-- Working tree clean.
+- Last accepted implementation commit: current `HEAD`, `Preserve real metadata columns from configured sources`
+- Working tree clean after local finalization.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

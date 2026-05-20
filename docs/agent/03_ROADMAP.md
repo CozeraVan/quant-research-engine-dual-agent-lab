@@ -16,7 +16,7 @@
 | M2.2 | Read factor columns from `factors.*` | DONE | HISTORICAL | factor catalog and assembler | Preserve |
 | M2.3 | Metadata fallback and board inference | DONE | HISTORICAL | `load_security_metadata`, `derive_board` | Replace fallback with real metadata when available |
 | M2.4 | Read-only broad-run preflight | DONE | HISTORICAL | `qre preflight` | Integrate into larger run acceptance workflow |
-| M2.5 | Real status/industry/membership adapters | TODO | CLAUDE_CODE | Gap in docs and code | Needs data-source confirmation |
+| M2.5 | Real status/industry/membership adapters | DONE | CODEX/CLAUDE_CODE | local finalization commit; 278 tests passed; metadata source-table passthrough columns preserved with fixed-column fallback normalization | Preserve; time-varying status tables remain future work |
 
 ## Milestone 3: Evaluation Engine
 

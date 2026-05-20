@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-EVAL-RANDOM-BASELINE-COMPARISON-001
+QRE-DATA-REAL-METADATA-ADAPTERS-001
 
 ## Created By
 
@@ -14,20 +14,19 @@ CLAUDE_CODE
 
 ## Background
 
-`qre eval-config` now has durable output artifacts and report manifests. The next useful step is to add a deterministic random-baseline comparison so evaluation runs can answer a simple quality question: does the signal beat a fixed random selection of the same shape?
+`PostgresDataStore.load_security_metadata()` already exposes a read-only metadata path with fallback `list_date` and `board` derivation. The loader still normalizes a fixed subset of columns, which means real upstream status, industry, or membership-style metadata may be dropped if the source table already provides it.
 
-Real index benchmark wiring remains blocked until the index table/schema are confirmed, so this brief scopes the unblocked part first.
+The next useful step is to turn that loader into a real adapter: preserve optional upstream metadata columns when they exist, keep the current fallback behavior when they do not, and keep the assembler/preflight merge path unchanged.
 
 ## Goal
 
-Add deterministic random-baseline comparison to evaluation results and `qre eval-config`, with seed-controlled behavior and regression tests.
+Add real status/industry/membership metadata adapters to the data layer, with fallback-preserving behavior and regression tests.
 
 ## Non-Goals
 
-- Do not wire a real index benchmark table in this brief.
-- Do not add new upstream data adapters or database writes.
-- Do not change existing forward-return or IC math.
-- Do not change `eval-smoke`.
+- Do not add new upstream writes.
+- Do not guess new table names or invent schema that is not already available in the configured metadata source.
+- Do not change existing evaluation math, portfolio math, or benchmark wiring.
 - Do not compute technical indicators inside QRE.
 - Do not record sensitive connection values.
 
@@ -35,11 +34,11 @@ Add deterministic random-baseline comparison to evaluation results and `qre eval
 
 Expected:
 
-- `src/quant_research_engine/evaluation/models.py`
-- `src/quant_research_engine/evaluation/engine.py`
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_evaluation_forward_returns.py`
-- `tests/test_cli.py`
+- `src/quant_research_engine/data/postgres.py`
+- `src/quant_research_engine/data/assembler.py`
+- `tests/test_postgres_store.py`
+- `tests/test_data_assembler.py`
+- `tests/test_preflight.py`
 
 Docs/handoff:
 
@@ -68,41 +67,37 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve existing stdout behavior for `eval-config` unless the new random-baseline section is enabled.
-- Keep the new comparison additive and optional.
+- Preserve existing metadata fallback behavior when optional source columns are missing.
+- Keep the adapter additive and optional.
 - Keep data access read-only.
 - Avoid benchmark table guesses while the real source remains unconfirmed.
-- Keep the comparison deterministic under a fixed seed.
+- Keep the implementation deterministic in behavior where the source data is deterministic.
 
 ## Implementation Steps
 
-1. Inspect the current evaluation result model and engine summary builders.
-2. Add a random-baseline comparison summary to the evaluation result model.
-3. Compute a deterministic baseline using a configurable seed and the current event population.
-4. Surface the comparison in `qre eval-config` stdout without removing existing sections.
-5. If `--output-dir` is present, persist the random-baseline summary alongside the other evaluation artifacts and register it in the report manifest if needed.
-6. Add regression tests for deterministic output, empty-input behavior, and CLI printing.
-7. Update handoff and progress docs.
+1. Inspect the current metadata loader normalization path and confirm which optional columns the configured source table already exposes.
+2. Extend `load_security_metadata()` so optional upstream columns are preserved instead of being discarded, while the existing fallback fields remain stable.
+3. Keep `ResearchFrameAssembler` and `PreflightRunner` consuming the returned frame without special-case logic.
+4. Add regression tests for source-table passthrough, fallback-only operation, and downstream merge behavior.
+5. Update handoff and progress docs.
 
 ## Data / Schema Changes
 
 - No database schema changes.
 - No new upstream tables.
-- Optional new report-manifest role only if the baseline summary is persisted to disk.
+- Optional passthrough columns only; no guessed schema additions.
 
 ## API / Interface Changes
 
-- `EvaluationRequest` gains an optional random-baseline seed or toggle.
-- `EvaluationResult` gains a random-baseline summary frame if persisted in results.
-- `qre eval-config` may accept a seed flag for reproducible comparison.
+- `load_security_metadata()` may return additional metadata columns when the configured source table provides them.
+- Downstream consumers should continue to merge the returned frame by `ts_code` without new branches.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_evaluation_forward_returns.py -q
-uv run pytest tests/test_cli.py -q
+uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q
 ```
 
 Run full checks:
@@ -115,17 +110,16 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `qre eval-config` can print a deterministic random-baseline comparison section.
-- [ ] The comparison is reproducible under a fixed seed.
-- [ ] Existing evaluation summaries remain unchanged unless the new feature is enabled.
-- [ ] If the baseline summary is written to disk, it is included in the report manifest and validates correctly.
+- [ ] `load_security_metadata()` preserves optional upstream metadata columns when the configured source table provides them.
+- [ ] The existing fallback `list_date` / `board` / status behavior remains unchanged when optional columns are absent.
+- [ ] `ResearchFrameAssembler` and `PreflightRunner` continue to merge metadata without special-case code.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Randomness must be seed-controlled so the comparison does not drift across runs.
-- Keep the implementation additive; do not disturb existing stdout summaries.
+- Source tables may vary by environment, so the adapter must tolerate missing optional columns.
+- Keep the implementation additive; do not disturb existing metadata fallback behavior.
 - Do not overreach into real benchmark wiring before the index schema is confirmed.
 
 ## Instructions for Claude Code
@@ -133,10 +127,10 @@ git diff --check
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Keep the comparison deterministic and small.
-3. Reuse existing evaluation patterns rather than adding a new framework.
+2. Keep the adapter small and additive.
+3. Reuse the existing metadata merge path rather than introducing a new framework.
 4. Update `01`, `03`, `04`, `05`, `06`, `11`, and `12` after implementation.
-5. Stop and write a blocker only if this brief conflicts with current code.
+5. Stop and write a blocker only if this brief conflicts with current code or source columns.
 
 ## Next Agent State
 

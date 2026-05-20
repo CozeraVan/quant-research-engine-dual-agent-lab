@@ -106,3 +106,86 @@ def test_load_benchmark_bars_rejects_unsafe_table_name():
 )
 def test_derive_board_from_ts_code(ts_code, expected_board):
     assert PostgresDataStore.derive_board(ts_code) == expected_board
+
+
+class TestLoadSecurityMetadataPassthrough:
+    def test_preserves_passthrough_columns_from_source_table(self, monkeypatch):
+        store = make_store()
+
+        def fake_get_table_columns(table_name, *, engine=None):
+            return [
+                "ts_code",
+                "list_date",
+                "board",
+                "is_st",
+                "is_risk_warning",
+                "is_suspended",
+                "industry",
+                "sector",
+            ]
+
+        def fake_read_sql_query(*, sql, con, params):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000002.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03", "2026-01-01"]),
+                    "board": ["main_board", "main_board"],
+                    "is_st": [False, True],
+                    "is_risk_warning": [False, False],
+                    "is_suspended": [False, True],
+                    "industry": ["Banking", "Tech"],
+                    "sector": ["Finance", "IT"],
+                }
+            )
+
+        monkeypatch.setattr(store, "get_table_columns", fake_get_table_columns)
+        monkeypatch.setattr(pd, "read_sql_query", fake_read_sql_query)
+
+        frame = store.load_security_metadata()
+
+        assert "industry" in frame.columns
+        assert "sector" in frame.columns
+        assert list(frame["industry"]) == ["Banking", "Tech"]
+        assert list(frame["sector"]) == ["Finance", "IT"]
+        # Fixed columns still present and normalized
+        assert "ts_code" in frame.columns
+        assert "list_date" in frame.columns
+        assert "board" in frame.columns
+        assert "is_st" in frame.columns
+
+    def test_fallback_normalization_when_no_passthrough_columns(self, monkeypatch):
+        store = make_store()
+
+        def fake_get_table_columns(table_name, *, engine=None):
+            return ["ts_code", "list_date", "board"]
+
+        def fake_read_sql_query(*, sql, con, params):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": [None],
+                }
+            )
+
+        monkeypatch.setattr(store, "get_table_columns", fake_get_table_columns)
+        monkeypatch.setattr(pd, "read_sql_query", fake_read_sql_query)
+
+        frame = store.load_security_metadata()
+
+        # Fixed columns are normalized: missing status columns are filled
+        assert "is_st" in frame.columns
+        assert "is_risk_warning" in frame.columns
+        assert "is_suspended" in frame.columns
+        assert frame["is_st"].iloc[0] == False
+        # board fallback from derive_board
+        assert frame["board"].iloc[0] == "main_board"
+        # No passthrough columns beyond the fixed set
+        assert set(frame.columns) == {
+            "ts_code",
+            "list_date",
+            "board",
+            "is_st",
+            "is_risk_warning",
+            "is_suspended",
+        }

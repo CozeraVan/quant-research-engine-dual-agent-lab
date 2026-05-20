@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-EVAL-RANDOM-BASELINE-COMPARISON-001
+QRE-DATA-REAL-METADATA-ADAPTERS-001
 
 ## Written By
 
@@ -18,13 +18,10 @@ Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
-- `src/quant_research_engine/evaluation/models.py`
-- `src/quant_research_engine/evaluation/engine.py`
-- `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_evaluation_forward_returns.py`
-- `tests/test_cli.py`
-- `tests/test_portfolio_report_manifest.py`
+- `src/quant_research_engine/data/postgres.py`
+- `tests/test_postgres_store.py`
+- `tests/test_data_assembler.py`
+- `tests/test_preflight.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -35,67 +32,57 @@ Changed files reviewed:
 
 Review passed.
 
-The evaluation CLI now supports deterministic random-baseline comparison. `eval-config --random-baseline-seed` prints a `random_baseline_summary` section, `EvaluationEngine` computes a seeded baseline over the current research-frame event population, and output-dir persistence writes `random_baseline_summary.csv` plus a manifest entry when the summary is present.
+The data adapter now preserves optional upstream security metadata columns from the configured metadata table while keeping the fixed normalized columns stable. The fallback path that derives metadata from daily bars remains limited to the original fixed column set.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `eval-config --random-baseline-seed` prints a deterministic comparison section.
-- The comparison is reproducible under a fixed seed.
-- Existing evaluation summaries remain unchanged unless the feature is enabled.
-- `random_baseline_summary.csv` is written when output-dir is used and validates via `ReportManifest`.
-- Default `eval-config` stdout behavior remains unchanged when no seed is provided.
+- `load_security_metadata()` preserves optional source-table columns.
+- Existing fixed-column normalization still fills missing `list_date`, `board`, `is_st`, `is_risk_warning`, and `is_suspended`.
+- `ResearchFrameAssembler` and `PreflightRunner` continue to consume the returned metadata frame without new special-case branches.
+- No benchmark table assumptions or database writes were added.
 
 ## Locked Requirements Check
 
 No locked-requirement violation found.
 
-- R-CORE-001: Existing evaluation behavior is preserved.
-- R-CORE-002: No unrelated rewrite observed.
+- R-CORE-001: Existing fallback behavior is preserved.
+- R-CORE-002: Change is scoped to metadata loading and focused tests.
 - R-CORE-003: Focused and full validation passed.
-- R-CORE-004 / R-QRE-006: No sensitive connection values added.
+- R-CORE-004 / R-QRE-006: No sensitive values added.
 - R-QRE-005: Data access remains read-only.
 - R-QRE-002: No indicator computation added.
-- R-QRE-003: Comparison uses current research-frame rows only.
 - R-DUAL-002: Claude Code implemented within the approved brief.
 
 ## Code Quality Review
 
-The change is additive and small. The seeded comparison reuses the existing evaluation event population, keeps output optional, and avoids introducing any benchmark-table assumptions.
+The implementation is small and additive. `PostgresDataStore` now selects validated passthrough columns from the configured source table and keeps deterministic output ordering by placing fixed columns first and sorting passthrough columns.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
-uv run pytest tests/test_evaluation_forward_returns.py -q
-uv run pytest tests/test_cli.py -q
-uv run pytest tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
-scripts/git-finalize-check.sh
 ```
 
 Results:
 
-- `uv run pytest tests/test_evaluation_forward_returns.py -q`: `20 passed`
-- `uv run pytest tests/test_cli.py -q`: `97 passed`
-- `uv run pytest tests/test_portfolio_report_manifest.py -q`: `35 passed`
-- `uv run pytest -q`: `274 passed in 3.19s`
+- `uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q`: `23 passed`
+- `uv run pytest -q`: `278 passed in 2.58s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
-- `scripts/git-finalize-check.sh`: passed
 
 Coverage is adequate:
 
-- seed default leaves baseline disabled;
-- fixed seed yields deterministic random-baseline output;
-- different seeds diverge;
-- multiple horizons and empty-event paths behave as expected;
-- CLI prints the seeded comparison section;
-- report manifest validates the persisted baseline CSV.
+- source-table passthrough columns are preserved;
+- fallback normalization still fills missing fixed columns;
+- assembler metadata merge carries extra columns;
+- preflight universe diagnostics tolerate extra metadata columns.
 
 ## Required Fixes
 
@@ -103,11 +90,11 @@ None.
 
 ## Recommended Improvements
 
-Future work can broaden evaluation provenance with additional run metadata if new CLI inputs are added. Not required for this task.
+Future work should define explicit schemas for time-varying suspension/ST/risk-warning metadata once the upstream source table is confirmed. Not required for this task.
 
 ## Follow-up Tasks
 
-- Create the local checkpoint for this accepted implementation.
+- Finalize the accepted implementation locally.
 
 ## Final Recommendation
 

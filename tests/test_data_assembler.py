@@ -100,3 +100,56 @@ def test_research_frame_assembler_can_merge_security_metadata():
             "is_suspended": False,
         }
     ]
+
+
+def test_research_frame_assembler_preserves_passthrough_metadata_columns():
+    class FakeStoreWithPassthrough:
+        daily_fields = None
+        factor_requests = None
+        loaded_metadata = False
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            self.daily_fields = fields
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(columns=["ts_code", "trade_date"])
+
+        def load_security_metadata(self, ts_codes=None):
+            self.loaded_metadata = True
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                    "industry": ["Banking"],
+                    "market_cap": [1_000_000],
+                }
+            )
+
+    store = FakeStoreWithPassthrough()
+    assembler = ResearchFrameAssembler(store)
+
+    frame = assembler.build(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 5),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[],
+        include_metadata=True,
+    )
+
+    assert "industry" in frame.columns
+    assert "market_cap" in frame.columns
+    assert frame["industry"].iloc[0] == "Banking"
+    assert frame["market_cap"].iloc[0] == 1_000_000

@@ -206,6 +206,8 @@ class PostgresDataStore:
         ]
         available_columns = set(self.get_table_columns(table_name, engine=self.reference_engine))
         selected_columns = [column for column in expected_columns if column in available_columns]
+        passthrough_columns = sorted(available_columns - set(expected_columns))
+        selected_columns.extend(passthrough_columns)
         if "ts_code" not in selected_columns:
             raise ValueError(f"{table_name} must include ts_code")
 
@@ -257,7 +259,7 @@ class PostgresDataStore:
         return frame
 
     def _normalize_security_metadata(self, frame: pd.DataFrame) -> pd.DataFrame:
-        columns = [
+        fixed_columns = [
             "ts_code",
             "list_date",
             "board",
@@ -265,7 +267,7 @@ class PostgresDataStore:
             "is_risk_warning",
             "is_suspended",
         ]
-        for column in columns:
+        for column in fixed_columns:
             if column not in frame.columns:
                 frame[column] = pd.NA
         if "list_date" in frame.columns:
@@ -274,7 +276,8 @@ class PostgresDataStore:
             frame["board"] = frame["board"].fillna(frame["ts_code"].map(self.derive_board))
         for column in ["is_st", "is_risk_warning", "is_suspended"]:
             frame[column] = frame[column].fillna(False).astype(bool)
-        return frame[columns].sort_values("ts_code").reset_index(drop=True)
+        passthrough = sorted(c for c in frame.columns if c not in set(fixed_columns))
+        return frame[fixed_columns + passthrough].sort_values("ts_code").reset_index(drop=True)
 
     def _load_table_frame(
         self,
