@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio realism and broader research-run reproducibility.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio realism, metadata-aware outputs, and broader research-run reproducibility.
 
 ## Completed
 
@@ -24,7 +24,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-None.
+Claude Code is assigned to add request-driven metadata passthrough columns to shared-cash order, trade, and failed-order outputs.
 
 ## Known Gaps
 
@@ -74,4 +74,4 @@ None.
 
 ## Next Recommended Step
 
-Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-SHARED-CASH-METADATA-OUTPUTS-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

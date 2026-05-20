@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
+QRE-SHARED-CASH-METADATA-OUTPUTS-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_TO_USER
+CODEX_TO_CLAUDE_CODE
 
 ## Sender
 
@@ -18,45 +18,47 @@ CODEX
 
 ## Short Message
 
-Review complete. Batch metadata group-by passthrough for optional upstream columns is accepted locally.
+Implement request-driven metadata passthrough for shared-cash row-level output artifacts.
 
-## Implementation Summary
+## Implementation Request
 
-Claude Code completed the implementation and Codex accepted it:
+Claude Code should implement `08_IMPLEMENTATION_BRIEF.md` exactly:
 
-1. Added `summary_metadata_columns: list[str] | None = None` to `BatchBacktestRequest`.
-2. Updated `BatchBacktestEngine.run()` to thread extra metadata columns through `_summary_row()` → `_metadata_row()`.
-3. Updated `_metadata_row()` to merge requested extra columns with fixed `SUMMARY_METADATA_COLUMNS` (no duplicates), copying values from the first frame row per symbol.
-4. CLI `backtest-batch` passes `--group-by` columns as `summary_metadata_columns` to `BatchBacktestRequest`.
-5. Added 4 engine tests + 1 CLI test.
-
-## Validation
-
-- `uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q` -> `105 passed`
-- `uv run pytest -q` -> `283 passed in 2.67s`
-- `scripts/check-progress-docs.sh` -> passed (after doc update)
-- `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
+1. Add optional requested metadata columns to shared-cash request handling.
+2. Build a symbol-keyed metadata lookup from the prepared research frame using requested columns only.
+3. Append available requested metadata columns to `orders`, `trades`, and `failed_orders` rows.
+4. Add CLI support for `backtest-shared --metadata-columns ...`.
+5. Record requested metadata columns in `run_manifest.json` when `--output-dir` is used.
+6. Preserve default shared-cash output behavior when no metadata columns are requested.
+7. Write `09_CODING_HANDOFF.md` with changed files, validation, risks, and git state.
 
 ## Constraints Check
 
-- Preserve existing batch summary metadata columns. ✅ fixed SUMMARY_METADATA_COLUMNS unchanged.
-- Keep data access read-only. ✅ no upstream writes.
-- Avoid benchmark/time-varying-status table guesses. ✅ not touched.
-- Do not change portfolio math. ✅ not touched.
-- Do not push. ✅
+- Do not add shared-cash group-by reports in this task.
+- Do not alter shared-cash simulation math, order selection, cash accounting, risk exits, rebalancing, or market validation.
+- Do not guess upstream schemas or table names.
+- Do not implement time-varying status semantics.
+- Keep metadata propagation request-driven and additive.
+- Do not push.
 
-## Changed Files
+## Required Validation
 
-- `src/quant_research_engine/portfolio/batch.py`
+- `uv run pytest tests/test_portfolio_shared.py tests/test_cli.py tests/test_portfolio_io.py -q`
+- `uv run pytest -q`
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
+
+## Expected Changed Files
+
+- `src/quant_research_engine/portfolio/shared.py`
 - `src/quant_research_engine/apps/cli.py`
-- `tests/test_portfolio_batch.py`
+- `tests/test_portfolio_shared.py`
 - `tests/test_cli.py`
+- `tests/test_portfolio_io.py` if direct output-file assertions are useful
 - `docs/agent/01_CURRENT_STATUS.md`
 - `docs/agent/03_ROADMAP.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/10_REVIEW_REPORT.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
