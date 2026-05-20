@@ -158,6 +158,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
 - Owner: CODEX
 
+### 2026-05-20: Select metadata grouping usage docs as next Claude task
+
+- Decision: The next Claude Code task is user-facing documentation for metadata grouping and passthrough usage across evaluation, batch backtest, and shared-cash outputs.
+- Reason: Metadata-aware grouping features are implemented, but current docs do not yet show how `--group-by`, `--metadata-columns`, and report-manifest role filters fit together across the CLI surfaces.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; build a larger research-run orchestrator.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-METADATA-GROUPING-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

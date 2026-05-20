@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
+QRE-DOCS-METADATA-GROUPING-USAGE-001
 
 ## Current Recipient
 
@@ -22,9 +22,10 @@ Review passed. Current docs task is accepted locally and ready for final git che
 
 ## Accepted Scope
 
-- `README.md`: eval-config artifact inventory, report roles, output-dir examples, and audit/discovery commands
-- `docs/modules/data_layer.md`: evaluation artifact roles, group-by usage, deterministic random baseline, and corrected factor-decay wording
-- `docs/modules/portfolio_workflow.md`: implemented evaluation artifact/diagnostic summary with corrected factor-decay wording
+- `README.md`: metadata-aware grouping and passthrough usage across eval, batch, and shared-cash workflows
+- `docs/modules/data_layer.md`: metadata-aware grouping subsection with evaluation and batch examples
+- `docs/modules/portfolio_layer.md`: implemented metadata grouping and passthrough capabilities/roles
+- `docs/modules/portfolio_workflow.md`: implemented eval, batch, and shared-cash grouping/passthrough workflow notes
 
 ## Validation
 

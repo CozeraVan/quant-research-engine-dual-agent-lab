@@ -29,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is locally finalizing evaluation artifact and diagnostic usage docs after review PASS. The next likely step is another documentation pass for metadata-aware grouping usage across evaluation and portfolio outputs.
+Codex is locally finalizing metadata-aware grouping and passthrough usage docs after review PASS.
 
 ## Known Gaps
 
@@ -79,4 +79,4 @@ Codex is locally finalizing evaluation artifact and diagnostic usage docs after 
 
 ## Next Recommended Step
 
-Claude Code should implement `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-DOCS-METADATA-GROUPING-USAGE-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

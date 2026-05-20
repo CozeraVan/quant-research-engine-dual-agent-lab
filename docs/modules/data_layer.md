@@ -213,6 +213,44 @@ Board inference currently maps:
   - `300001.SZ`: `chinext`
   - `688001.SH`: `star_market`
 
+### Metadata-Aware Grouping
+
+Evaluation and portfolio backtest commands accept `--group-by` on available research-frame metadata columns. Grouping works over any columns present after metadata assembly, including static fallback columns such as `board` and passthrough columns from real metadata tables.
+
+Evaluation grouping:
+
+```bash
+QRE_MARKET_DB_URL='<local-db-url>' \
+uv run qre eval-config \
+  examples/rsi2_reversal_research.yaml \
+  --start 2026-01-05 \
+  --end 2026-03-31 \
+  --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ \
+  --output-dir outputs/eval-grouped \
+  --group-by board
+```
+
+Batch grouping produces grouped cross-sectional summaries such as `group_by_board.csv`. The report-manifest role is `group_summary` with metadata `group_by=<col>`:
+
+```bash
+QRE_MARKET_DB_URL='<local-db-url>' \
+uv run qre backtest-batch \
+  examples/rsi2_reversal_research.yaml \
+  --start 2026-01-05 \
+  --end 2026-03-31 \
+  --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ \
+  --output-dir outputs/batch-grouped \
+  --group-by board
+
+# Audit grouped batch output
+uv run qre report-audit outputs/batch-grouped/report_manifest.json \
+  --role group_summary --group-by board --require-match
+```
+
+Shared-cash backtests support `--metadata-columns` to write selected static metadata into order, trade, and failed-order rows, and `--group-by` to produce per-group row summaries. Grouping works on the same metadata columns available in the assembled research frame.
+
+Grouped outputs support segmentation and structural inspection only. They do not provide exposure attribution, causal explanation, or proof of strategy quality.
+
 ## Next Step
 
 Next data-layer tasks:

@@ -243,3 +243,77 @@ uv run qre report-audit outputs/eval-rsi2/report_manifest.json \
 ```
 
 These diagnostics evaluate artifact structure only. They do not prove factor effectiveness, strategy quality, or benchmark-relative performance.
+
+### Metadata Grouping and Passthrough
+
+Evaluation and portfolio backtest commands support `--group-by` on available research-frame metadata columns (such as `board`, `sector`, or `industry`). Shared-cash backtests also support `--metadata-columns` to write selected static metadata into row-level outputs. Grouped outputs support segmentation and structural inspection only — they do not provide exposure attribution, causal explanation, or proof of strategy quality.
+
+#### Evaluation Grouping
+
+`qre eval-config --group-by <cols>` writes `group_summary.csv` with per-group evaluation metrics. The report-manifest role is `evaluation_group_summary`.
+
+```bash
+QRE_MARKET_DB_URL='<local-db-url>' \
+uv run qre eval-config strategy.yaml \
+  --start 2026-01-05 \
+  --end 2026-03-31 \
+  --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ \
+  --output-dir outputs/eval-grouped \
+  --group-by board
+
+# Discover grouped artifact
+uv run qre report-files outputs/eval-grouped/report_manifest.json --role evaluation_group_summary
+
+# Audit only the grouped summary
+uv run qre report-audit outputs/eval-grouped/report_manifest.json \
+  --role evaluation_group_summary --require-match
+```
+
+#### Batch Grouping
+
+`qre backtest-batch --group-by <cols>` writes grouped cross-sectional summaries such as `group_by_board.csv`. Grouping works over any available research-frame metadata columns.
+
+```bash
+QRE_MARKET_DB_URL='<local-db-url>' \
+uv run qre backtest-batch strategy.yaml \
+  --start 2026-01-05 \
+  --end 2026-03-31 \
+  --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ \
+  --output-dir outputs/batch-grouped \
+  --group-by board
+
+# List grouped batch artifacts
+uv run qre report-files outputs/batch-grouped/report_manifest.json --group-by board
+
+# Audit a specific grouped summary
+uv run qre report-audit outputs/batch-grouped/report_manifest.json \
+  --role group_summary --group-by board --require-match
+```
+
+#### Shared-Cash Metadata Passthrough and Grouped Summaries
+
+`qre backtest-shared --metadata-columns <cols>` appends requested static metadata to order, trade, and failed-order output rows without overwriting canonical fields.
+
+`qre backtest-shared --group-by <cols>` writes per-group row summaries: `orders_by_<col>.csv`, `trades_by_<col>.csv`, and `failed_orders_by_<col>.csv`. Report roles are `shared_orders_group_summary`, `shared_trades_group_summary`, and `shared_failed_orders_group_summary`.
+
+```bash
+QRE_MARKET_DB_URL='<local-db-url>' \
+uv run qre backtest-shared strategy.yaml \
+  --start 2026-01-05 \
+  --end 2026-03-31 \
+  --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ 688001.SH \
+  --initial-cash 100000 \
+  --max-positions 3 \
+  --output-dir outputs/shared-grouped \
+  --metadata-columns board sector \
+  --group-by board
+
+# List grouped shared-cash artifacts
+uv run qre report-files outputs/shared-grouped/report_manifest.json --group-by board
+
+# Audit grouped order summaries
+uv run qre report-audit outputs/shared-grouped/report_manifest.json \
+  --role shared_orders_group_summary --group-by board --require-match
+```
+
+Grouped outputs support segmentation and structural inspection only. They do not provide exposure decomposition, per-group portfolio return attribution, or proof of strategy quality.

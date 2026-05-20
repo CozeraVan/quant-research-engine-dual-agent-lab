@@ -513,6 +513,32 @@ Implemented evaluation output artifacts and diagnostics:
 - Evaluation artifacts are discoverable through `qre report-files` and auditable through `qre report-audit` using the same role-based filtering as portfolio artifacts.
 - These diagnostics evaluate artifact structure only; they do not prove factor effectiveness, strategy quality, or benchmark-relative performance.
 
+Implemented evaluation metadata group summaries:
+
+- `qre eval-config --group-by <cols>` writes `group_summary.csv` with per-group evaluation metrics.
+- Report-manifest role: `evaluation_group_summary`.
+- Grouping works on available research-frame metadata columns such as `board`, `sector`, or `industry`.
+- Grouped summaries are discoverable and auditable through `qre report-files` / `qre report-audit` with `--role evaluation_group_summary`.
+
+Implemented batch metadata group-by passthrough:
+
+- `qre backtest-batch --group-by <cols>` passes metadata columns through to batch summaries and writes grouped cross-sectional outputs such as `group_by_board.csv`.
+- Report-manifest role: `group_summary` with metadata `group_by=<col>`.
+- Grouping works over any available metadata columns in the assembled research frame.
+- Grouped outputs are filterable in `report-files` / `report-audit` with `--group-by`.
+
+Implemented shared-cash metadata passthrough and grouped summaries:
+
+- `qre backtest-shared --metadata-columns <cols>` appends selected static metadata to order, trade, and failed-order output rows. Collision guards prevent overwriting canonical fields.
+- `qre backtest-shared --group-by <cols>` writes per-group row summaries:
+  - `orders_by_<col>.csv` with role `shared_orders_group_summary`
+  - `trades_by_<col>.csv` with role `shared_trades_group_summary`
+  - `failed_orders_by_<col>.csv` with role `shared_failed_orders_group_summary`
+- Grouped shared-cash artifacts are discoverable and auditable through `qre report-files` / `qre report-audit` with `--group-by`.
+- Empty no-column grouped outputs are handled without error.
+
+Grouped outputs support segmentation and structural inspection only. They do not provide exposure attribution, per-group portfolio return attribution, or proof of strategy quality.
+
 Next implementation:
 
 - Continue portfolio analytics/reporting improvements.

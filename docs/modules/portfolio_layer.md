@@ -103,6 +103,24 @@ Implemented:
   - Supported kinds: `evaluation_run_manifest`, `portfolio_backtest_run_manifest`
   - Structured issues for missing/invalid fields with codes `missing_run_manifest_field` and `invalid_run_manifest_field`
   - Only `run_id` accepts `null`; all other validated fields reject present-null
+- Batch metadata group-by passthrough:
+  - `qre backtest-batch --group-by <cols>` passes metadata columns through to batch summaries
+  - Grouped outputs such as `group_by_board.csv` are written when `--group-by` is used
+  - Report-manifest role `group_summary` with metadata `group_by=<col>`
+- Shared-cash metadata output passthrough:
+  - `qre backtest-shared --metadata-columns <cols>` appends requested static metadata to order, trade, and failed-order output rows
+  - Collision guards prevent metadata columns from overwriting canonical fields
+- Shared-cash metadata group summaries:
+  - `qre backtest-shared --group-by <cols>` writes per-group row summaries
+  - Artifacts: `orders_by_<col>.csv`, `trades_by_<col>.csv`, `failed_orders_by_<col>.csv`
+  - Report roles: `shared_orders_group_summary`, `shared_trades_group_summary`, `shared_failed_orders_group_summary`
+  - Empty no-column outputs are handled without error
+- Evaluation metadata group summaries:
+  - `qre eval-config --group-by <cols>` writes `group_summary.csv`
+  - Report role: `evaluation_group_summary`
+  - Grouping works on available research-frame metadata columns
+
+Grouped outputs support segmentation and structural inspection only. They do not provide exposure attribution, per-group portfolio return attribution, or proof of strategy quality.
 
 Not implemented yet:
 

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
+QRE-DOCS-METADATA-GROUPING-USAGE-001
 
 ## Written By
 
@@ -14,16 +14,18 @@ CODEX
 
 ## Status
 
-Fix applied. Ready for Codex re-review.
+Implemented. Ready for Codex review.
 
-## Fix Applied
+## Implementation Summary
 
-Codex review (`10_REVIEW_REPORT.md`) found that two module docs described factor decay as "decay ratios." The implementation computes signed differences from the smallest horizon base, not ratios. Replaced inaccurate wording in both files with explicit "signed difference, not a ratio" language.
+Updated user-facing documentation for metadata-aware grouping and passthrough usage. Added sections to README, data layer docs, portfolio layer docs, and portfolio workflow docs covering evaluation `--group-by`, batch `--group-by`, shared-cash `--metadata-columns` and `--group-by`, grouped artifact discovery/audit with `--group-by` filters, and report-manifest roles for all grouped artifacts.
 
 ## Files Changed
 
-- `docs/modules/data_layer.md` — changed "base for decay ratios" to "base and reports each horizon's IC / Rank IC difference from that base (signed difference, not a ratio)"
-- `docs/modules/portfolio_workflow.md` — changed "base for decay ratios" to "base; each horizon reports the signed IC / Rank IC difference from that base (not a ratio)"
+- `README.md` — added "Metadata Grouping and Passthrough" section with sub-sections for evaluation grouping, batch grouping, and shared-cash metadata passthrough/group summaries; each sub-section includes command examples and report-files/report-audit discovery/audit examples
+- `docs/modules/data_layer.md` — added "Metadata-Aware Grouping" subsection with evaluation and batch grouping examples, shared-cash passthrough/group summary references, and the structural-inspection-only disclaimer
+- `docs/modules/portfolio_layer.md` — added batch metadata group-by passthrough, shared-cash metadata output passthrough, shared-cash metadata group summaries, and evaluation metadata group summaries to the "Implemented" list with CLI flags, artifact names, and report-manifest roles
+- `docs/modules/portfolio_workflow.md` — added three "Implemented" sections for evaluation metadata group summaries, batch metadata group-by passthrough, and shared-cash metadata passthrough/grouped summaries with artifact paths, roles, and the structural-inspection-only disclaimer
 
 ## Validation Results
 
@@ -32,20 +34,22 @@ scripts/check-progress-docs.sh  # passed
 git diff --check                # passed
 ```
 
-No runtime code changes; pytest not required.
+No runtime code or executable examples were changed; pytest not required.
 
 ## Constraints
 
 - Documentation-only. ✅
-- No `docs/legacy/**` changes. ✅
-- Factor decay now correctly described as signed difference, not ratio. ✅
+- Do not edit `docs/legacy/**`. ✅
+- Keep examples credential-free. ✅
+- Grouped outputs described as segmentation/structural inspection, not attribution. ✅
+- No benchmark or regime claims beyond implemented behavior. ✅
 
 ## Git State
 
 - Branch: `master`
 - All doc changes uncommitted.
-- Ready for Codex re-review.
+- Ready for Codex review.
 
 ## Next Suggested Step
 
-Codex should re-review the fix and produce updated `10_REVIEW_REPORT.md`.
+Codex should review and produce `10_REVIEW_REPORT.md`.

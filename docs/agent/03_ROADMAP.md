@@ -59,6 +59,7 @@
 | M5.6 | Run manifest content validation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 346 tests passed; `run_manifest` content validation catches missing/invalid fields and present-null non-nullable fields | Preserve |
 | M5.7 | Run manifest usage documentation | DONE | CODEX/CLAUDE_CODE | commit `ccb80e8`; README/module docs cover `--run-id` and run-manifest audit usage | Preserve |
 | M5.8 | Evaluation artifact usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README, data-layer docs, and workflow docs cover eval-config artifacts, report roles, audit usage, deterministic random baseline, and factor decay wording | Preserve |
+| M5.9 | Metadata grouping usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README plus module docs cover eval/batch/shared metadata grouping, shared-cash passthrough, grouped roles, and discovery/audit patterns | Preserve |
 
 ## Milestone 6: Dual-Agent Workflow
 

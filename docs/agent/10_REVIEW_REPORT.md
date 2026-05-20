@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
+QRE-DOCS-METADATA-GROUPING-USAGE-001
 
 ## Written By
 
@@ -14,12 +14,13 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code documentation changes in the current working tree, including the follow-up factor-decay wording fix.
+Claude Code documentation changes in the current working tree.
 
 Changed files reviewed:
 
 - `README.md`
 - `docs/modules/data_layer.md`
+- `docs/modules/portfolio_layer.md`
 - `docs/modules/portfolio_workflow.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
@@ -29,11 +30,11 @@ Changed files reviewed:
 
 ## Review Summary
 
-The implementation now satisfies the brief.
+The implementation satisfies the brief.
 
-The docs describe `eval-config --output-dir` artifacts, evaluation report roles, metadata grouping, deterministic random baseline output, factor decay output, and report discovery/audit usage. They also state that these diagnostics are structural research aids and do not prove factor or strategy effectiveness.
+The docs now explain metadata-aware grouping across evaluation, batch backtest, and shared-cash workflows. They cover `eval-config --group-by`, `backtest-batch --group-by`, `backtest-shared --metadata-columns`, `backtest-shared --group-by`, grouped artifact discovery/audit patterns, and the relevant report-manifest roles.
 
-The required fix from the prior review is closed. Both module docs now describe factor decay as signed IC / Rank IC differences from the smallest horizon base, not as ratios.
+The wording also stays within the required boundary: grouped outputs are described as structural segmentation aids, not as attribution, causal explanation, or proof of strategy quality.
 
 ## Required Fixes
 
@@ -43,10 +44,10 @@ None.
 
 Compliant:
 
-- README documents `eval-config --output-dir` artifacts and evaluation report roles.
-- Module docs cover metadata grouping, random baseline, and factor decay.
-- Docs include report discovery/audit examples for evaluation artifacts.
-- Docs state diagnostics do not prove factor or strategy effectiveness.
+- README documents metadata-aware grouping usage across evaluation, batch, and shared-cash workflows.
+- Module docs describe evaluation grouping, batch grouping, and shared-cash metadata passthrough/group summaries.
+- Docs include grouped artifact discovery/audit examples, including `--group-by` filtering where the manifest supports it.
+- Docs clearly state grouped diagnostics do not provide attribution or prove factor/strategy effectiveness.
 - No `docs/legacy/**` files were changed.
 - No runtime code was changed.
 
