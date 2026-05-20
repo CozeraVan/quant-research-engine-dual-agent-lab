@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Progress Table
 
@@ -56,28 +56,29 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-39 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 passed in 3.00s; row-based grouped order/trade/failed-order summaries; `backtest-shared --group-by`; grouped CSV artifacts; manifest roles; empty no-column outputs handled | Preserve |
 | QRE-NEXT-40 | Evaluation factor decay summary | DONE | CODEX/CLAUDE_CODE | commit `8b0e924`; `10_REVIEW_REPORT.md` PASS; `factor_decay_summary` in `EvaluationResult`; derived from `ic_summary` per factor/horizon; stdout + CSV artifact + manifest validation; 324 passed | Preserve |
 | QRE-NEXT-41 | Run ID manifest linkage | DONE | CODEX/CLAUDE_CODE | commit `1618657`; `10_REVIEW_REPORT.md` PASS; 330 tests passed; optional `--run-id` on 5 commands; persisted in eval run_manifest, preflight JSON, and portfolio run_manifest | Preserve |
-| QRE-NEXT-42 | Run manifest content validation | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for stricter `run_manifest` validation in report audit | Implement and report in `09_CODING_HANDOFF.md` |
+| QRE-NEXT-42 | Run manifest content validation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; present-null fix accepted; 346 tests passed; Codex reproduction case now returns 4 issues (was 0) | Local finalize |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-RUN-ID-MANIFEST-LINKAGE-001 local finalization and next-task planning:
+Recorded on 2026-05-20 after QRE-RUN-MANIFEST-CONTENT-VALIDATION-001 Codex review:
 
 - Current task: `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`
 - Last finalized: QRE-RUN-ID-MANIFEST-LINKAGE-001 (commit `1618657`)
 - Last validation:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q` -> `127 passed, 2 warnings in 2.25s`
-  - `uv run pytest -q` -> `330 passed, 2 warnings in 3.18s`
+  - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `158 passed, 2 warnings in 1.78s`
+  - `uv run pytest -q` -> `346 passed, 2 warnings in 3.30s`
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
-- Finalization: local commit `1618657`; `scripts/git-finalize-check.sh` passed before commit; no push
-- Next step: Claude Code implements stricter run-manifest content validation from `08_IMPLEMENTATION_BRIEF.md`
+- Fix: present-null values for `schema_version`, `kind`, `command`, `strategy_path`, `artifacts` now produce `invalid_run_manifest_field`. Codex reproduction case now returns 4 issues (was 0).
+- Review: `10_REVIEW_REPORT.md` PASS
+- Next step: local git finalization
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight, real metadata passthrough adapters.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries, durable output artifacts with manifests, random-baseline comparison, factor decay summaries.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics, batch metadata group-by passthrough, shared-cash metadata output passthrough, shared-cash row-level metadata group summaries.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility, evaluation metadata group summaries, eval-config output artifacts and manifests, evaluation random-baseline comparison, run-ID linkage across durable outputs.
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility, evaluation metadata group summaries, eval-config output artifacts and manifests, evaluation random-baseline comparison, run-ID linkage across durable outputs, run-manifest content validation.
 
 ## Pending Work Summary
 

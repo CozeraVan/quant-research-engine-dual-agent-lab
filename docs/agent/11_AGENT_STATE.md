@@ -8,25 +8,25 @@ QRE-RUN-MANIFEST-CONTENT-VALIDATION-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex finalized `QRE-RUN-ID-MANIFEST-LINKAGE-001` locally with commit `1618657`, `Link durable outputs by run id`. Codex then prepared `08_IMPLEMENTATION_BRIEF.md` for stricter `run_manifest` content validation through existing report audit tooling.
+Codex re-reviewed `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` after Claude Code's present-null fix and wrote `10_REVIEW_REPORT.md` with outcome PASS. Validation passed: focused suite `158 passed, 2 warnings in 1.78s`; full suite `346 passed, 2 warnings in 3.30s`; `scripts/check-progress-docs.sh` passed; `git diff --check` passed. Codex reproduction case now returns 4 `invalid_run_manifest_field` issues instead of 0.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`.
+Codex should run finalization checks and commit the accepted implementation locally. No remote push is requested.
 
 ## Git State
 
 - Current branch: `master`
 - Last accepted implementation commit: `1618657`, `Link durable outputs by run id`
-- Working tree contains Codex planning/handoff docs for `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`.
+- Working tree contains accepted `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` changes awaiting local commit.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

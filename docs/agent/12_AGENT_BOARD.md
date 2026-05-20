@@ -6,11 +6,11 @@ QRE-RUN-MANIFEST-CONTENT-VALIDATION-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE_CODE
+CODEX_FINALIZING
 
 ## Sender
 
@@ -18,34 +18,29 @@ CODEX
 
 ## Short Message
 
-Implement stricter `run_manifest` content validation for report audit.
+Run-manifest content validation review passed. Ready for Codex local finalization.
 
-## Implementation Brief
+## Review Summary
 
-Read `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+1. `_validate_run_manifest()` validates required top-level fields. ✅
+2. `schema_version`, `kind`, `command`, `strategy_path`, and `artifacts` reject present-null values. ✅
+3. `run_id: null` remains valid. ✅
+4. Missing fields produce `missing_run_manifest_field`. ✅
+5. Invalid fields produce `invalid_run_manifest_field`. ✅
+6. CLI audit issue shape is preserved. ✅
+7. `10_REVIEW_REPORT.md` outcome PASS. ✅
 
-Core requirements:
+## Validation
 
-1. Add role-specific content validation for `role == "run_manifest"`. ✅ target
-2. Validate required top-level fields: `schema_version`, `kind`, `run_id`, `command`, `strategy_path`, `artifacts`. ✅ target
-3. Allow `run_id` to be string or null. ✅ constraint
-4. Validate `artifacts` is a list of strings. ✅ target
-5. Permit `portfolio_backtest_run_manifest` and `evaluation_run_manifest` kinds. ✅ target
-6. Preserve generic JSON object validation for summary JSON. ✅ constraint
-7. Preserve report manifest file-entry schema and CLI audit issue shape. ✅ constraint
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `158 passed, 2 warnings in 1.78s`
+- `uv run pytest -q` -> `346 passed, 2 warnings in 3.30s`
+- `scripts/check-progress-docs.sh` -> passed
+- `git diff --check` -> passed
 
-## Required Validation
-
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q`
-- `uv run pytest -q`
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
-
-## Expected Changed Files
+## Changed Files
 
 - `src/quant_research_engine/portfolio/report_manifest.py`
 - `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -54,4 +49,4 @@ Core requirements:
 
 ## Next Step
 
-Claude Code should implement the brief and write `09_CODING_HANDOFF.md` for Codex review.
+Codex should run finalization checks, commit locally, and then prepare the next Claude Code implementation brief.

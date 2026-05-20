@@ -25,10 +25,11 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Shared-cash row-level metadata group summaries for orders, trades, and failed orders.
 - Evaluation factor decay summaries from existing IC and Rank IC outputs, including eval-config stdout, CSV artifact, and report-manifest validation.
 - Optional run-level identifiers across preflight JSON, evaluation run manifests, and portfolio run manifests.
+- Run manifest content validation in report audit, including required-field, kind, type, artifacts, and present-null checks.
 
 ## In Progress
 
-Claude Code is assigned to strengthen `run_manifest` content validation for report audit.
+Codex is finalizing the accepted `run_manifest` content validation implementation and preparing the next Claude Code task.
 
 ## Known Gaps
 
@@ -37,7 +38,6 @@ Claude Code is assigned to strengthen `run_manifest` content validation for repo
 - Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
 - Evaluation layer does not yet implement real index benchmark comparison or real regime classification.
 - Larger research-run bundles beyond run-level identifier linkage are not yet standardized.
-- Run manifest content validation is currently scoped for stricter audit coverage.
 
 ## Current Technical Stack
 
@@ -79,4 +79,4 @@ Claude Code is assigned to strengthen `run_manifest` content validation for repo
 
 ## Next Recommended Step
 
-Claude Code should implement `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Codex should finalize `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` locally, then prepare the next unblocked Claude Code task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

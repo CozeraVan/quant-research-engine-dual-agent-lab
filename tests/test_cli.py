@@ -3827,3 +3827,59 @@ def test_cli_preflight_run_id_omitted_is_null(capsys, monkeypatch, tmp_path):
     assert exit_code == 0
     payload = json.loads(output_json_path.read_text(encoding="utf-8"))
     assert payload["run_id"] is None
+
+
+def test_cli_report_audit_validate_contents_reports_malformed_run_manifest(capsys, tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"kind": "portfolio_backtest_run_manifest"}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path), "--role", "run_manifest", "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["status"] == "failed"
+    assert payload["validation_issues"] > 0
+    issue_codes = {issue["code"] for issue in payload["issues"]}
+    assert "missing_run_manifest_field" in issue_codes
+
+
+def test_cli_report_audit_validate_contents_accepts_valid_run_manifest(capsys, tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path), "--role", "run_manifest", "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["status"] == "ok"
+    assert payload["validation_issues"] == 0

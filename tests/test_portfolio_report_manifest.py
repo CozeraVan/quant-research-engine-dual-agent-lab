@@ -477,7 +477,7 @@ def test_report_manifest_rejects_missing_files(tmp_path):
 
 def test_validate_contents_accepts_run_manifest_as_json_object(tmp_path):
     (tmp_path / "run_manifest.json").write_text(
-        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "command": "backtest-single", "strategy_path": "strategy.yaml", "request": {}, "artifacts": []}),
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "request": {}, "artifacts": []}),
         encoding="utf-8",
     )
     manifest_path = tmp_path / "report_manifest.json"
@@ -685,7 +685,10 @@ def test_report_manifest_validates_evaluation_artifacts_with_full_columns(tmp_pa
     (tmp_path / "ic_summary.csv").write_text("factor,horizon,observation_dates,mean_ic\nrsi_2,1,1,1.0\n", encoding="utf-8")
     (tmp_path / "quantile_summary.csv").write_text("factor,horizon,quantile,row_count,mean_forward_return\nrsi_2,1,1,1,0.1\n", encoding="utf-8")
     (tmp_path / "group_summary.csv").write_text("group_by,group_value,horizon,event_count\nboard,main,1,1\n", encoding="utf-8")
-    (tmp_path / "run_manifest.json").write_text(json.dumps({"key": "value"}), encoding="utf-8")
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "evaluation_run_manifest", "run_id": None, "command": "eval-config", "strategy_path": "strategy.yaml", "artifacts": ["events", "summary"]}),
+        encoding="utf-8",
+    )
 
     manifest_path = tmp_path / "report_manifest.json"
     manifest_path.write_text(
@@ -796,3 +799,341 @@ def test_report_manifest_accepts_valid_factor_decay_summary(tmp_path):
     manifest = ReportManifest.from_path(manifest_path)
     issues = manifest.validate_contents()
     assert len(issues) == 0
+
+
+def test_validate_contents_accepts_valid_run_manifest_with_run_id_string(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": "research-run-42", "command": "backtest-single", "strategy_path": "strategy.yaml", "request": {}, "artifacts": ["orders", "trades"]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_validate_contents_accepts_valid_evaluation_run_manifest(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "evaluation_run_manifest", "run_id": None, "command": "eval-config", "strategy_path": "strategy.yaml", "artifacts": ["events", "summary"]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_validate_contents_reports_missing_run_manifest_field(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single"}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 2
+    codes = {issue.code for issue in issues}
+    assert "missing_run_manifest_field" in codes
+    messages = " ".join(issue.message for issue in issues)
+    assert "strategy_path" in messages
+    assert "artifacts" in messages
+
+
+def test_validate_contents_reports_invalid_run_id_type(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": 123, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "run_id" in issues[0].message
+    assert "int" in issues[0].message
+
+
+def test_validate_contents_reports_artifacts_not_list(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": "not_a_list"}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "artifacts" in issues[0].message
+    assert "list" in issues[0].message
+
+
+def test_validate_contents_reports_artifacts_entry_not_string(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": ["valid", 42]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "artifacts[1]" in issues[0].message
+
+
+def test_validate_contents_reports_unsupported_run_manifest_kind(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "unsupported_kind", "run_id": None, "command": "cmd", "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "unsupported run manifest kind" in issues[0].message
+    assert "unsupported_kind" in issues[0].message
+
+
+def test_validate_contents_reports_invalid_schema_version(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 2, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "schema_version" in issues[0].message
+
+
+def test_validate_contents_reports_null_schema_version(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": None, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "schema_version" in issues[0].message
+    assert "null" in issues[0].message
+
+
+def test_validate_contents_reports_null_kind(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": None, "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "kind" in issues[0].message
+    assert "null" in issues[0].message
+
+
+def test_validate_contents_reports_null_command(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": None, "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "command" in issues[0].message
+    assert "null" in issues[0].message
+
+
+def test_validate_contents_reports_null_strategy_path(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": None, "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "strategy_path" in issues[0].message
+    assert "null" in issues[0].message
+
+
+def test_validate_contents_reports_null_artifacts(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": None}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_run_manifest_field"
+    assert "artifacts" in issues[0].message
+    assert "null" in issues[0].message
+
+
+def test_validate_contents_accepts_null_run_id(tmp_path):
+    (tmp_path / "run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "portfolio_backtest_run_manifest", "run_id": None, "command": "backtest-single", "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "run_manifest", "path": "run_manifest.json", "filename": "run_manifest.json", "role": "run_manifest"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []

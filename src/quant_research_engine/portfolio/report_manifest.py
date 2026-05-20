@@ -13,6 +13,11 @@ _SUPPORTED_MANIFEST_KINDS = {
     "evaluation_report_manifest",
 }
 
+_RUN_MANIFEST_KINDS = {
+    "portfolio_backtest_run_manifest",
+    "evaluation_run_manifest",
+}
+
 _REQUIRED_COLUMNS_BY_ROLE = {
     "orders": {"symbol", "trade_date"},
     "trades": {"symbol"},
@@ -194,8 +199,11 @@ class ReportManifest:
                     )
                 )
                 continue
-            if path.suffix == ".json" and entry.role in ("summary", "run_manifest"):
+            if path.suffix == ".json" and entry.role == "summary":
                 issues.extend(_validate_json_object(entry, path))
+                continue
+            if path.suffix == ".json" and entry.role == "run_manifest":
+                issues.extend(_validate_run_manifest(entry, path))
                 continue
             required_columns = _REQUIRED_COLUMNS_BY_ROLE.get(entry.role)
             if required_columns is not None and path.suffix == ".csv":
@@ -233,6 +241,195 @@ def _validate_json_object(entry: ReportFile, path: Path) -> list[ReportValidatio
             )
         ]
     return []
+
+
+def _validate_run_manifest(entry: ReportFile, path: Path) -> list[ReportValidationIssue]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="invalid_json",
+                message=f"invalid JSON: {exc}",
+            )
+        ]
+    if not isinstance(payload, dict):
+        return [
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="invalid_json_object",
+                message="run manifest must be an object",
+            )
+        ]
+
+    issues: list[ReportValidationIssue] = []
+
+    required_fields = {
+        "schema_version": "schema_version",
+        "kind": "kind",
+        "run_id": "run_id",
+        "command": "command",
+        "strategy_path": "strategy_path",
+        "artifacts": "artifacts",
+    }
+    for field_key, field_label in required_fields.items():
+        if field_key not in payload:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="missing_run_manifest_field",
+                    message=f"run manifest missing required field {field_label!r}",
+                )
+            )
+
+    # Validate schema_version (must be integer 1, not null)
+    if "schema_version" in payload:
+        schema_version = payload["schema_version"]
+        if schema_version is None:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message="run manifest schema_version must be 1, got null",
+                )
+            )
+        elif type(schema_version) is not int or schema_version != 1:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message=f"run manifest schema_version must be 1, got {schema_version!r}",
+                )
+            )
+
+    # Validate kind (must be a string and one of the supported run-manifest kinds, not null)
+    if "kind" in payload:
+        kind = payload["kind"]
+        if kind is None:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message="run manifest kind must be a string, got null",
+                )
+            )
+        elif not isinstance(kind, str):
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message=f"run manifest kind must be a string, got {type(kind).__name__}",
+                )
+            )
+        elif kind not in _RUN_MANIFEST_KINDS:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message=f"unsupported run manifest kind: {kind!r}",
+                )
+            )
+
+    # Validate run_id (must be string or null)
+    if "run_id" in payload:
+        run_id = payload["run_id"]
+        if run_id is not None and not isinstance(run_id, str):
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message=f"run manifest run_id must be a string or null, got {type(run_id).__name__}",
+                )
+            )
+
+    # Validate command (must be string, not null)
+    if "command" in payload:
+        command = payload["command"]
+        if command is None:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message="run manifest command must be a string, got null",
+                )
+            )
+        elif not isinstance(command, str):
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message=f"run manifest command must be a string, got {type(command).__name__}",
+                )
+            )
+
+    # Validate strategy_path (must be string, not null)
+    if "strategy_path" in payload:
+        strategy_path = payload["strategy_path"]
+        if strategy_path is None:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message="run manifest strategy_path must be a string, got null",
+                )
+            )
+        elif not isinstance(strategy_path, str):
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message=f"run manifest strategy_path must be a string, got {type(strategy_path).__name__}",
+                )
+            )
+
+    # Validate artifacts (must be a list of strings, not null)
+    if "artifacts" in payload:
+        artifacts = payload["artifacts"]
+        if artifacts is None:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message="run manifest artifacts must be a list, got null",
+                )
+            )
+        elif not isinstance(artifacts, list):
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_run_manifest_field",
+                    message=f"run manifest artifacts must be a list, got {type(artifacts).__name__}",
+                )
+            )
+        else:
+            for idx, item in enumerate(artifacts):
+                if not isinstance(item, str):
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="invalid_run_manifest_field",
+                            message=f"run manifest artifacts[{idx}] must be a string, got {type(item).__name__}",
+                        )
+                    )
+
+    return issues
 
 
 def _validate_csv_columns(entry: ReportFile, path: Path, required_columns: set[str]) -> list[ReportValidationIssue]:
