@@ -56,6 +56,7 @@
 | M5.3 | Report discovery and audit CLI | DONE | HISTORICAL | `qre report-files`, `qre report-audit` | Use in acceptance checks |
 | M5.4 | Strict zero-match report audit | DONE | HISTORICAL | `--require-match` | Preserve |
 | M5.5 | Larger research-run reproducibility workflow | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 330 tests passed; optional `--run-id` links preflight/eval/backtest durable JSON outputs | Preserve; larger orchestration can follow later |
+| M5.6 | Run manifest content validation | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for stricter `run_manifest` JSON validation in report audit | Implement `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` |
 
 ## Milestone 6: Dual-Agent Workflow
 

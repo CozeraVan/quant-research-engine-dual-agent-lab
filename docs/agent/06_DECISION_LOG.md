@@ -134,6 +134,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-RUN-ID-MANIFEST-LINKAGE-001`. Larger orchestration remains future work, while benchmark and real regime work remain blocked by source confirmation.
 - Owner: CODEX
 
+### 2026-05-20: Select run-manifest content validation as next Claude task
+
+- Decision: The next Claude Code task is stricter `run_manifest` JSON validation through existing report audit tooling.
+- Reason: Durable outputs now expose run-level IDs, but `run_manifest` content validation still only checks that the file is a JSON object. A focused validation step improves reproducibility checks without new data dependencies.
+- Alternatives: Build a full research-run orchestrator; start real benchmark wiring; implement real regime classification.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`. Report manifest file-entry schema should remain unchanged.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

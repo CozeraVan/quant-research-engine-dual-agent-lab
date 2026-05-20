@@ -4,29 +4,29 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-RUN-ID-MANIFEST-LINKAGE-001
+QRE-RUN-MANIFEST-CONTENT-VALIDATION-001
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-RUN-ID-MANIFEST-LINKAGE-001` and wrote `10_REVIEW_REPORT.md` with outcome PASS. Validation passed: focused suite `127 passed, 2 warnings in 2.25s`; full suite `330 passed, 2 warnings in 3.18s`; `scripts/check-progress-docs.sh` passed; `git diff --check` passed.
+Codex finalized `QRE-RUN-ID-MANIFEST-LINKAGE-001` locally with commit `1618657`, `Link durable outputs by run id`. Codex then prepared `08_IMPLEMENTATION_BRIEF.md` for stricter `run_manifest` content validation through existing report audit tooling.
 
 ## Next Required Step
 
-Codex should run finalization checks and commit the accepted implementation locally. No remote push is requested.
+Claude Code should implement `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `8b0e924`, `Summarize evaluation factor decay`
-- Working tree contains accepted `QRE-RUN-ID-MANIFEST-LINKAGE-001` changes awaiting local commit.
+- Last accepted implementation commit: `1618657`, `Link durable outputs by run id`
+- Working tree contains Codex planning/handoff docs for `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

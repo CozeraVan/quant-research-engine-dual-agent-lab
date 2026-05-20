@@ -28,7 +28,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is finalizing the accepted optional run-level identifier implementation and preparing the next Claude Code task.
+Claude Code is assigned to strengthen `run_manifest` content validation for report audit.
 
 ## Known Gaps
 
@@ -37,6 +37,7 @@ Codex is finalizing the accepted optional run-level identifier implementation an
 - Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
 - Evaluation layer does not yet implement real index benchmark comparison or real regime classification.
 - Larger research-run bundles beyond run-level identifier linkage are not yet standardized.
+- Run manifest content validation is currently scoped for stricter audit coverage.
 
 ## Current Technical Stack
 
@@ -78,4 +79,4 @@ Codex is finalizing the accepted optional run-level identifier implementation an
 
 ## Next Recommended Step
 
-Codex should finalize `QRE-RUN-ID-MANIFEST-LINKAGE-001` locally, then prepare the next unblocked Claude Code task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

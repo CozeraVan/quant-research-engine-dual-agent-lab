@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-RUN-ID-MANIFEST-LINKAGE-001
+QRE-RUN-MANIFEST-CONTENT-VALIDATION-001
 
 ## Created By
 
@@ -14,29 +14,27 @@ CLAUDE_CODE
 
 ## Background
 
-Evaluation and portfolio output directories now write durable artifacts and run manifests. Preflight can write JSON output. The remaining reproducibility gap is linking a preflight, evaluation, and backtest run under one operator-supplied research-run identifier without inventing a larger orchestration framework.
+Report manifests can discover and audit emitted artifacts. CSV roles already have required-column validation, and JSON summary/run-manifest entries are currently checked only for being JSON objects. After adding optional `run_id` linkage to durable outputs, run manifests should have a small content-level validation contract so `report-audit --validate-contents --role run_manifest` can catch malformed or incomplete run metadata.
 
 ## Goal
 
-Add an optional `--run-id` CLI argument to the durable run surfaces and persist that identifier in their machine-readable outputs.
+Strengthen `run_manifest` content validation in `ReportManifest.validate_contents()` while preserving existing report discovery and audit behavior.
 
 ## Non-Goals
 
-- Do not add a new pipeline/orchestrator command.
-- Do not create a database table or write upstream database state.
-- Do not change report artifact filenames.
-- Do not require `--run-id`; existing commands must work unchanged.
-- Do not change evaluation or portfolio math.
-- Do not wire real index benchmark tables or real regime classification.
+- Do not change run-manifest filenames or report-manifest file-entry schema.
+- Do not change preflight, evaluation, or portfolio math.
+- Do not require a non-null `run_id`; explicit null remains valid.
+- Do not add a new orchestrator command or database writes.
+- Do not wire real benchmark tables or real regime classification.
 
 ## Affected Modules
 
 Expected:
 
-- `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/io.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
 - `tests/test_cli.py`
-- `tests/test_portfolio_io.py`
 
 Docs/handoff:
 
@@ -64,55 +62,57 @@ Read:
 
 Task-specific locked requirements:
 
-- Keep data access read-only.
-- Preserve existing CLI behavior when `--run-id` is omitted.
-- Keep report manifests compatible with `report-files` and `report-audit`.
-- Do not expose credentials or environment values in run IDs or manifests.
+- Preserve `report-files` and `report-audit` command semantics.
+- Keep `run_id` optional and allow explicit null.
+- Keep validation errors structured through existing `ReportValidationIssue`.
+- Do not expose secrets or environment values.
 
 ## Implementation Steps
 
-1. Inspect current CLI parser and output writers for:
-   - `qre preflight --output-json`
-   - `qre eval-config --output-dir`
-   - `qre backtest-single --output-dir`
-   - `qre backtest-batch --output-dir`
-   - `qre backtest-shared --output-dir`
-2. Add optional `--run-id` to those commands.
-3. For `preflight --output-json`, include top-level `"run_id": <value or null>` in the written JSON payload. Stdout does not need a new line unless local style clearly expects it.
-4. For `eval-config --output-dir`, include top-level `"run_id": <value or null>` in `run_manifest.json`.
-5. For portfolio output writers, include top-level `"run_id": <value or null>` in `portfolio_backtest_run_manifest`.
-6. Pass `args.run_id` from `backtest-single`, `backtest-batch`, and `backtest-shared` into the existing run-request structure without duplicating it inside the nested `"request"` object.
-7. Preserve the current `"artifacts"` list behavior and report-manifest entries.
-8. Add tests proving:
-   - `eval-config --run-id ... --output-dir ...` writes the run ID to `run_manifest.json`.
-   - `preflight --run-id ... --output-json ...` writes the run ID to the JSON payload.
-   - At least one portfolio writer or CLI path writes the run ID to `portfolio_backtest_run_manifest`.
-   - Omitting `--run-id` preserves successful output and writes `null`/`None` or omits only where existing helper style strongly prefers omission. Prefer a stable explicit `null`.
-9. Update handoff and progress docs.
+1. Inspect `ReportManifest.validate_contents()`, `_validate_json_object()`, and existing run-manifest tests.
+2. Add role-specific validation for JSON entries with `role == "run_manifest"`.
+3. Preserve generic JSON-object validation for `role == "summary"`.
+4. For run manifests, validate at least these top-level fields:
+   - `schema_version`
+   - `kind`
+   - `run_id`
+   - `command`
+   - `strategy_path`
+   - `artifacts`
+5. Required field type expectations:
+   - `schema_version`: integer `1`
+   - `kind`: string
+   - `run_id`: string or null
+   - `command`: string
+   - `strategy_path`: string
+   - `artifacts`: list of strings
+6. Permit portfolio and evaluation run-manifest kinds:
+   - `portfolio_backtest_run_manifest`
+   - `evaluation_run_manifest`
+7. Report missing fields and type errors as `ReportValidationIssue` entries with stable codes. Suggested codes:
+   - `missing_run_manifest_field`
+   - `invalid_run_manifest_field`
+8. Add focused tests in `tests/test_portfolio_report_manifest.py` covering valid run manifest, missing field, invalid `run_id`, invalid artifacts shape, and unsupported run-manifest kind.
+9. Add or update a CLI regression test proving `report-audit --validate-contents --role run_manifest` returns failure and includes the structured issue when a run manifest is malformed.
+10. Update handoff and progress docs.
 
 ## Data / Schema Changes
 
 - No database schema changes.
-- JSON output schemas gain optional/stable `run_id` fields.
-- Report manifest file-entry schemas should remain unchanged.
+- Report manifest file-entry schema remains unchanged.
+- Run-manifest validation contract becomes stricter for audit operations.
 
 ## API / Interface Changes
 
-- New optional CLI argument:
-  - `qre preflight --run-id <id>`
-  - `qre eval-config --run-id <id>`
-  - `qre backtest-single --run-id <id>`
-  - `qre backtest-batch --run-id <id>`
-  - `qre backtest-shared --run-id <id>`
-- Run manifest JSON payloads include top-level `run_id`.
-- Preflight JSON payload includes top-level `run_id`.
+- `ReportManifest.validate_contents(role="run_manifest")` returns structured issues for malformed run manifests instead of only checking JSON object shape.
+- `qre report-audit --validate-contents --role run_manifest` can now fail on missing/invalid run-manifest fields.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q
 ```
 
 Run full checks:
@@ -125,27 +125,29 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `preflight --output-json --run-id` writes the supplied run ID in the output JSON.
-- [ ] `eval-config --output-dir --run-id` writes the supplied run ID in evaluation `run_manifest.json`.
-- [ ] Portfolio output manifests for single, batch, and shared can carry the supplied run ID.
-- [ ] Existing command behavior remains compatible when `--run-id` is omitted.
-- [ ] Report manifest discovery/audit behavior is unchanged.
+- [ ] Valid evaluation and portfolio run manifests pass `validate_contents(role="run_manifest")`.
+- [ ] Missing required run-manifest fields produce structured issues.
+- [ ] Invalid `run_id` type produces a structured issue while null remains valid.
+- [ ] Invalid `artifacts` payloads produce structured issues.
+- [ ] Unsupported run-manifest `kind` produces a structured issue.
+- [ ] Summary JSON validation remains unchanged.
+- [ ] `report-audit --validate-contents --role run_manifest` reports malformed run manifests through existing CLI issue output.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Avoid putting `run_id` into manifest file entries; it belongs to run-level JSON payloads.
-- Avoid making `run_id` a required field for existing workflows.
-- Do not turn this into a broad workflow orchestrator; this is only linkage metadata.
+- Avoid rejecting existing valid manifests with `run_id: null`.
+- Keep the validation contract minimal and run-level; do not validate nested strategy semantics.
+- Preserve existing issue payload shape used by JSON audit output.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Keep the implementation small and metadata-only.
-3. Preserve existing evaluation, preflight, and portfolio behavior.
+2. Keep the implementation focused on validation.
+3. Preserve existing report discovery/audit behavior except for the new malformed-run-manifest issues.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
 5. Stop and write a blocker only if this brief conflicts with current code.
 

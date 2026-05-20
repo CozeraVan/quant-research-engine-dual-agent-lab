@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-RUN-ID-MANIFEST-LINKAGE-001
+QRE-RUN-MANIFEST-CONTENT-VALIDATION-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_FINALIZING
+CODEX_TO_CLAUDE_CODE
 
 ## Sender
 
@@ -18,39 +18,34 @@ CODEX
 
 ## Short Message
 
-Run-ID manifest linkage review passed. Ready for Codex local finalization.
+Implement stricter `run_manifest` content validation for report audit.
 
-## Review Summary
+## Implementation Brief
 
-1. Optional `--run-id` added to `preflight`, `eval-config`, `backtest-single`, `backtest-batch`, and `backtest-shared`. ✅
-2. Preflight `--output-json` writes top-level `run_id`. ✅
-3. Evaluation `run_manifest.json` writes top-level `run_id`. ✅
-4. Portfolio `portfolio_backtest_run_manifest` writes top-level `run_id`. ✅
-5. Omitted `--run-id` writes stable explicit null. ✅
-6. No report-manifest file-entry schema change. ✅
-7. No orchestrator, database writes, benchmark/regime wiring, or math changes. ✅
-8. `10_REVIEW_REPORT.md` outcome PASS. ✅
+Read `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+
+Core requirements:
+
+1. Add role-specific content validation for `role == "run_manifest"`. ✅ target
+2. Validate required top-level fields: `schema_version`, `kind`, `run_id`, `command`, `strategy_path`, `artifacts`. ✅ target
+3. Allow `run_id` to be string or null. ✅ constraint
+4. Validate `artifacts` is a list of strings. ✅ target
+5. Permit `portfolio_backtest_run_manifest` and `evaluation_run_manifest` kinds. ✅ target
+6. Preserve generic JSON object validation for summary JSON. ✅ constraint
+7. Preserve report manifest file-entry schema and CLI audit issue shape. ✅ constraint
 
 ## Required Validation
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q`
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q`
 - `uv run pytest -q`
 - `scripts/check-progress-docs.sh`
 - `git diff --check`
 
-## Validation Results
-
-- `uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q` -> `127 passed, 2 warnings in 2.25s`
-- `uv run pytest -q` -> `330 passed, 2 warnings in 3.18s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-
 ## Expected Changed Files
 
-- `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/io.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_portfolio_report_manifest.py`
 - `tests/test_cli.py`
-- `tests/test_portfolio_io.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -59,4 +54,4 @@ Run-ID manifest linkage review passed. Ready for Codex local finalization.
 
 ## Next Step
 
-Codex should run finalization checks, commit locally, and then prepare the next Claude Code implementation brief.
+Claude Code should implement the brief and write `09_CODING_HANDOFF.md` for Codex review.

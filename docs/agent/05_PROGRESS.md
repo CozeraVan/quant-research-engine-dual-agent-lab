@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -55,22 +55,22 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-38 | Shared-cash metadata output passthrough | DONE | CODEX/CLAUDE_CODE | 293 passed in 2.80s; shared-cash `metadata_columns`; output rows carry requested metadata; collision guards prevent overwriting canonical fields; 10 new tests including CLI and collision coverage | Preserve |
 | QRE-NEXT-39 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 passed in 3.00s; row-based grouped order/trade/failed-order summaries; `backtest-shared --group-by`; grouped CSV artifacts; manifest roles; empty no-column outputs handled | Preserve |
 | QRE-NEXT-40 | Evaluation factor decay summary | DONE | CODEX/CLAUDE_CODE | commit `8b0e924`; `10_REVIEW_REPORT.md` PASS; `factor_decay_summary` in `EvaluationResult`; derived from `ic_summary` per factor/horizon; stdout + CSV artifact + manifest validation; 324 passed | Preserve |
-| QRE-NEXT-41 | Run ID manifest linkage | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 330 tests passed; optional `--run-id` on 5 commands; persisted in eval run_manifest, preflight JSON, and portfolio run_manifest | Local finalize |
+| QRE-NEXT-41 | Run ID manifest linkage | DONE | CODEX/CLAUDE_CODE | commit `1618657`; `10_REVIEW_REPORT.md` PASS; 330 tests passed; optional `--run-id` on 5 commands; persisted in eval run_manifest, preflight JSON, and portfolio run_manifest | Preserve |
+| QRE-NEXT-42 | Run manifest content validation | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for stricter `run_manifest` validation in report audit | Implement and report in `09_CODING_HANDOFF.md` |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-RUN-ID-MANIFEST-LINKAGE-001 Codex review:
+Recorded on 2026-05-20 after QRE-RUN-ID-MANIFEST-LINKAGE-001 local finalization and next-task planning:
 
-- Current task: `QRE-RUN-ID-MANIFEST-LINKAGE-001`
-- Last finalized: QRE-EVAL-FACTOR-DECAY-SUMMARY-001 (commit `8b0e924`)
-- This implementation: optional `--run-id` on preflight, eval-config, backtest-single, backtest-batch, backtest-shared
+- Current task: `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`
+- Last finalized: QRE-RUN-ID-MANIFEST-LINKAGE-001 (commit `1618657`)
 - Last validation:
   - `uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q` -> `127 passed, 2 warnings in 2.25s`
   - `uv run pytest -q` -> `330 passed, 2 warnings in 3.18s`
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
-- Review: `10_REVIEW_REPORT.md` PASS
-- Next step: local git finalization
+- Finalization: local commit `1618657`; `scripts/git-finalize-check.sh` passed before commit; no push
+- Next step: Claude Code implements stricter run-manifest content validation from `08_IMPLEMENTATION_BRIEF.md`
 
 ## Completed Module Summary
 
