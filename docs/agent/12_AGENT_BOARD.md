@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-DOCS-METADATA-GROUPING-USAGE-001
+QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001
 
 ## Current Recipient
 
@@ -18,21 +18,21 @@ CODEX
 
 ## Short Message
 
-Review passed. Current docs task is accepted locally and ready for final git checks plus a local completion commit.
+Review passed. Current implementation task is accepted locally and ready for final git checks plus a local completion commit.
 
 ## Accepted Scope
 
-- `README.md`: metadata-aware grouping and passthrough usage across eval, batch, and shared-cash workflows
-- `docs/modules/data_layer.md`: metadata-aware grouping subsection with evaluation and batch examples
-- `docs/modules/portfolio_layer.md`: implemented metadata grouping and passthrough capabilities/roles
-- `docs/modules/portfolio_workflow.md`: implemented eval, batch, and shared-cash grouping/passthrough workflow notes
+- `src/quant_research_engine/apps/cli.py`: per-column evaluation grouped artifacts plus manifest `group_by` metadata
+- `tests/test_cli.py`: coverage for per-column file emission and evaluation `report-files` / `report-audit --group-by`
+- `tests/test_portfolio_report_manifest.py`: validation coverage for per-column evaluation grouped files
+- Agent docs: review/finalization state updates for the current task
 
 ## Validation
 
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 164 passed
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `10_REVIEW_REPORT.md` -> PASS
-- No runtime code changes; pytest not required
 
 ## Next Step
 

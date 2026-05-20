@@ -281,13 +281,32 @@ def resolve_round_trip_cost_rate(args: argparse.Namespace) -> float | None:
 def _eval_manifest_role(key: str) -> str:
     if key == "summary":
         return "evaluation_summary"
-    if key == "group_summary":
+    if key == "group_summary" or key.startswith("group_summary_by_"):
         return "evaluation_group_summary"
     if key == "random_baseline_summary":
         return "random_baseline_summary"
     if key == "run_manifest":
         return "run_manifest"
     return key
+
+
+def _eval_manifest_group_by(key: str) -> str | None:
+    if key.startswith("group_summary_by_"):
+        return key.removeprefix("group_summary_by_")
+    return None
+
+
+def _eval_manifest_entry(key: str, path: Path, output_dir: Path) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "key": key,
+        "path": path.relative_to(output_dir).as_posix(),
+        "filename": path.name,
+        "role": _eval_manifest_role(key),
+    }
+    group_by_col = _eval_manifest_group_by(key)
+    if group_by_col is not None:
+        entry["group_by"] = group_by_col
+    return entry
 
 
 def _write_evaluation_output(
@@ -325,6 +344,11 @@ def _write_evaluation_output(
         p = directory / "group_summary.csv"
         result.group_summary.to_csv(p, index=False)
         artifact_paths["group_summary"] = p
+        for group_column in sorted(result.group_summary["group_by"].dropna().unique()):
+            per_col = result.group_summary[result.group_summary["group_by"] == group_column]
+            p_col = directory / f"group_summary_by_{group_column}.csv"
+            per_col.to_csv(p_col, index=False)
+            artifact_paths[f"group_summary_by_{group_column}"] = p_col
 
     if not result.random_baseline_summary.empty:
         p = directory / "random_baseline_summary.csv"
@@ -360,12 +384,7 @@ def _write_evaluation_output(
 
     files = sorted(
         (
-            {
-                "key": key,
-                "path": path.relative_to(directory).as_posix(),
-                "filename": path.name,
-                "role": _eval_manifest_role(key),
-            }
+            _eval_manifest_entry(key, path, directory)
             for key, path in artifact_paths.items()
         ),
         key=lambda f: f["key"],

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-METADATA-GROUPING-USAGE-001
+QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001
 
 ## Written By
 
@@ -18,36 +18,42 @@ Implemented. Ready for Codex review.
 
 ## Implementation Summary
 
-Updated user-facing documentation for metadata-aware grouping and passthrough usage. Added sections to README, data layer docs, portfolio layer docs, and portfolio workflow docs covering evaluation `--group-by`, batch `--group-by`, shared-cash `--metadata-columns` and `--group-by`, grouped artifact discovery/audit with `--group-by` filters, and report-manifest roles for all grouped artifacts.
+Added per-column evaluation grouped artifacts and manifest metadata so evaluation grouped outputs can be discovered and audited with `--group-by`, matching batch/shared-cash parity.
+
+Key changes:
+
+- `_eval_manifest_role`: extended to handle `group_summary_by_*` keys, returning `evaluation_group_summary`.
+- `_eval_manifest_group_by`: new helper that extracts the group column name from per-column artifact keys.
+- `_eval_manifest_entry`: new helper that builds manifest file entries with `group_by` metadata when present.
+- `_write_evaluation_output`: now emits one `group_summary_by_<col>.csv` per unique `group_by` value in the combined group summary, alongside the existing combined `group_summary.csv`. Each per-column file contains only rows for that `group_by` value.
+- Manifest entries for per-column files carry role `evaluation_group_summary` and metadata `group_by=<col>`, enabling `report-files` / `report-audit --group-by` filtering.
 
 ## Files Changed
 
-- `README.md` — added "Metadata Grouping and Passthrough" section with sub-sections for evaluation grouping, batch grouping, and shared-cash metadata passthrough/group summaries; each sub-section includes command examples and report-files/report-audit discovery/audit examples
-- `docs/modules/data_layer.md` — added "Metadata-Aware Grouping" subsection with evaluation and batch grouping examples, shared-cash passthrough/group summary references, and the structural-inspection-only disclaimer
-- `docs/modules/portfolio_layer.md` — added batch metadata group-by passthrough, shared-cash metadata output passthrough, shared-cash metadata group summaries, and evaluation metadata group summaries to the "Implemented" list with CLI flags, artifact names, and report-manifest roles
-- `docs/modules/portfolio_workflow.md` — added three "Implemented" sections for evaluation metadata group summaries, batch metadata group-by passthrough, and shared-cash metadata passthrough/grouped summaries with artifact paths, roles, and the structural-inspection-only disclaimer
+- `src/quant_research_engine/apps/cli.py` — added `_eval_manifest_group_by`, `_eval_manifest_entry` helpers; extended `_eval_manifest_role`; updated `_write_evaluation_output` to emit per-column grouped CSVs and use `_eval_manifest_entry` for manifest construction.
+- `tests/test_cli.py` — updated `test_cli_eval_config_output_dir_with_group_by_and_market_profile` to verify per-column files and manifest metadata; added `test_cli_eval_config_output_dir_multi_group_by_writes_per_column_files`, `test_cli_report_files_eval_group_by_filter`, `test_cli_report_audit_eval_group_by_filter`, `test_cli_report_audit_eval_group_by_missing_file`.
+- `tests/test_portfolio_report_manifest.py` — added `test_report_manifest_validates_evaluation_group_by_per_column` and `test_report_manifest_validates_evaluation_per_column_missing_columns`.
 
 ## Validation Results
 
 ```bash
-scripts/check-progress-docs.sh  # passed
-git diff --check                # passed
+uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q  # 164 passed
+scripts/check-progress-docs.sh                                               # passed
+git diff --check                                                             # passed
 ```
-
-No runtime code or executable examples were changed; pytest not required.
 
 ## Constraints
 
-- Documentation-only. ✅
-- Do not edit `docs/legacy/**`. ✅
-- Keep examples credential-free. ✅
-- Grouped outputs described as segmentation/structural inspection, not attribution. ✅
-- No benchmark or regime claims beyond implemented behavior. ✅
+- Preserved existing combined `group_summary.csv`. ✅
+- No manifest schema-version change. ✅
+- No batch/shared filtering behavior weakened. ✅
+- No `docs/legacy/**` changes. ✅
+- No new external data dependencies. ✅
 
 ## Git State
 
 - Branch: `master`
-- All doc changes uncommitted.
+- All changes uncommitted.
 - Ready for Codex review.
 
 ## Next Suggested Step

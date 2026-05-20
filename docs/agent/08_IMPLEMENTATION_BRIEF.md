@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-METADATA-GROUPING-USAGE-001
+QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001
 
 ## Created By
 
@@ -14,28 +14,32 @@ CLAUDE_CODE
 
 ## Background
 
-Recent work added evaluation metadata group summaries, batch metadata passthrough grouping, shared-cash metadata passthrough columns, and shared-cash grouped order/trade/failed-order artifacts. Those capabilities are implemented, but current user-facing docs describe them only partially and do not show how `--group-by`, `--metadata-columns`, and report-manifest role filters fit together.
+Evaluation outputs already support `--group-by` and emit a combined `group_summary.csv` with a `group_by` column in file contents. Batch and shared-cash outputs go one step further: they also expose per-group-column artifacts and manifest metadata that work cleanly with `qre report-files` and `qre report-audit --group-by`. Evaluation outputs do not yet have that parity.
 
 ## Goal
 
-Update user-facing documentation for metadata-aware grouping and passthrough usage.
+Add per-column evaluation grouped artifacts and manifest metadata so evaluation grouped outputs can be discovered and audited with `--group-by` the same way batch and shared-cash grouped outputs can.
 
 ## Non-Goals
 
-- Do not change runtime code.
-- Do not change tests unless a doc example is executable and current test conventions require coverage.
+- Do not change evaluation math or group-summary calculations.
+- Do not remove or rename the existing combined `group_summary.csv`.
+- Do not change report-manifest schema version.
+- Do not add new external data dependencies.
 - Do not edit legacy archived docs under `docs/legacy`.
-- Do not present grouped outputs as exposure attribution, causal explanation, or proof of factor or strategy effectiveness.
-- Do not add benchmark or regime claims beyond current implemented behavior.
 
 ## Affected Modules
 
-Expected:
+Expected runtime/tests:
+
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_cli.py`
+- `tests/test_portfolio_report_manifest.py`
+
+Possible docs:
 
 - `README.md`
 - `docs/modules/data_layer.md`
-- `docs/modules/portfolio_layer.md`
-- `docs/modules/portfolio_workflow.md`
 
 Docs/handoff:
 
@@ -45,8 +49,6 @@ Docs/handoff:
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
 
-Update only additional non-legacy docs if the current documentation layout clearly requires it.
-
 ## Forbidden Files
 
 - `docs/legacy/**`
@@ -54,7 +56,6 @@ Update only additional non-legacy docs if the current documentation layout clear
 - `pyproject.toml`
 - `.env*`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
-- runtime code files unless a documentation reference reveals an actual typo in generated command names
 
 ## Locked Requirements
 
@@ -64,93 +65,81 @@ Read:
 
 Task-specific locked requirements:
 
-- Do not expose credentials or real database URLs.
-- Use placeholder output paths and metadata columns such as `board`, `sector`, or `industry`.
-- Keep docs clear that grouped diagnostics are structural research aids, not proof of strategy quality.
-- Do not claim per-group portfolio return attribution where the implementation only emits row/group summaries.
-- Preserve archived legacy docs.
+- Preserve existing `group_summary.csv` output and current CLI compatibility.
+- Keep `report_manifest.json` schema compatible with existing readers; use the existing optional `group_by` string metadata field where appropriate.
+- Do not weaken batch/shared report-manifest filtering behavior while extending evaluation parity.
+- Keep docs and examples credential-free if documentation is updated.
 
 ## Implementation Steps
 
-1. Inspect current README and relevant `docs/modules` sections for:
-   - `eval-config --group-by`
-   - `backtest-batch --group-by`
-   - `backtest-shared --metadata-columns`
-   - `backtest-shared --group-by`
-   - `report-files` / `report-audit --group-by`
-2. Document evaluation grouping usage:
-   - `qre eval-config --group-by <cols>`
+1. Inspect current evaluation output writing in `src/quant_research_engine/apps/cli.py` and current manifest/filter behavior in `ReportManifest` plus CLI tests.
+2. Preserve the existing combined evaluation grouped artifact:
    - `group_summary.csv`
    - report role `evaluation_group_summary`
-   - grouping works on available research-frame metadata columns
-3. Document batch grouping usage:
-   - `qre backtest-batch --group-by <cols>`
-   - grouped outputs such as `group_by_board.csv`
-   - grouping can use passthrough metadata columns when present in the assembled frame
-   - report-manifest filtering with `--role group_summary --group-by <col>`
-4. Document shared-cash metadata passthrough and grouped summary usage:
-   - `qre backtest-shared --metadata-columns <cols>` copies requested metadata into row outputs
-   - `qre backtest-shared --group-by <cols>` writes grouped CSV artifacts such as `orders_by_board.csv`, `trades_by_board.csv`, and `failed_orders_by_board.csv`
-   - report roles `shared_orders_group_summary`, `shared_trades_group_summary`, and `shared_failed_orders_group_summary`
-5. Include concise examples for:
-   - evaluation group-by
-   - batch group-by on a passthrough metadata column
-   - shared-cash metadata passthrough plus group-by
-   - `report-files` / `report-audit` with `--group-by`
-6. State that grouped outputs support segmentation and structural inspection only. They do not provide exposure decomposition, causal attribution, or proof of strategy quality.
-7. Keep examples credential-free and avoid real database URLs.
+3. When `result.group_summary` is non-empty and contains one or more `group_by` values, also emit one CSV per group column:
+   - `group_summary_by_<col>.csv`
+   - each file contains only rows for that `group_by` value
+4. Add matching report-manifest entries for those per-column files:
+   - role `evaluation_group_summary`
+   - metadata `group_by=<col>`
+   - stable key names such as `group_summary_by_board`
+5. Ensure `qre report-files ... --role evaluation_group_summary --group-by board` and `qre report-audit ... --role evaluation_group_summary --group-by board` match the per-column evaluation file.
+6. Keep `ReportManifest.validate_contents()` compatibility for both the combined evaluation grouped file and the new per-column grouped files.
+7. Update minimal user-facing docs if needed so the new per-column files and `--group-by` filtering behavior are discoverable.
 8. Update handoff/progress docs.
 
 ## Data / Schema Changes
 
-- No data or schema changes.
-- Documentation should describe existing grouping and passthrough behavior only.
+- No database or upstream schema changes.
+- No report-manifest schema-version change.
+- This task may add additional evaluation artifact entries and file names within the existing schema.
 
 ## API / Interface Changes
 
-- No new API changes in this task.
-- Documentation should reflect existing CLI arguments, grouped artifact names, and report-manifest roles.
+- No new top-level CLI commands.
+- Existing `eval-config --group-by` behavior stays intact.
+- `report-files` / `report-audit` should gain practical `--group-by` parity for evaluation grouped artifacts through new manifest entries.
 
 ## Validation Plan
 
-Run documentation checks:
+Run focused tests:
+
+```bash
+uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
+```
+
+Run documentation/diff checks:
 
 ```bash
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-Run focused tests only if code or executable examples are changed:
-
-```bash
-uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
-```
-
 ## Acceptance Criteria
 
-- [ ] README documents metadata-aware grouping usage across evaluation, batch, and shared-cash workflows.
-- [ ] Module docs describe evaluation grouping, batch grouping, and shared-cash metadata passthrough/group summaries.
-- [ ] Docs include report discovery/audit examples using `--group-by`.
-- [ ] Docs clearly state grouped diagnostics do not provide attribution or prove factor/strategy effectiveness.
-- [ ] Legacy archived docs are untouched.
-- [ ] `scripts/check-progress-docs.sh` and `git diff --check` pass.
-- [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
+- [ ] `eval-config --group-by board industry --output-dir <dir>` keeps writing the combined `group_summary.csv`.
+- [ ] The same run also writes per-column files such as `group_summary_by_board.csv` and `group_summary_by_industry.csv`.
+- [ ] Per-column evaluation grouped files are listed in `report_manifest.json` with role `evaluation_group_summary` and `group_by` metadata.
+- [ ] `qre report-files <manifest> --role evaluation_group_summary --group-by board` matches the board-specific file.
+- [ ] `qre report-audit <manifest> --role evaluation_group_summary --group-by board --require-match` validates the board-specific file.
+- [ ] Existing manifest validation still passes for the combined evaluation grouped file.
+- [ ] `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`, `scripts/check-progress-docs.sh`, and `git diff --check` pass.
 
 ## Risks
 
-- Avoid over-documenting future real benchmark or regime features.
-- Keep examples generic and credential-free.
-- Do not imply grouped outputs are investment conclusions or per-group portfolio attribution.
+- Avoid breaking existing scripts that expect `group_summary.csv`.
+- Avoid introducing manifest key/role ambiguity between the combined grouped file and the per-column grouped files.
+- Keep evaluation artifact naming aligned with current batch/shared grouping conventions where possible.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Keep this as a documentation-only task unless a blocker requires otherwise.
-3. Avoid editing `docs/legacy/**`.
+2. Keep the change scoped to evaluation output artifact emission, manifest entries, targeted docs, and tests.
+3. Preserve backward compatibility for the existing combined evaluation grouped CSV.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
-5. Stop and write a blocker only if the brief conflicts with the current docs.
+5. Stop and write a blocker only if the manifest/filter contract cannot be extended without a schema decision.
 
 ## Next Agent State
 

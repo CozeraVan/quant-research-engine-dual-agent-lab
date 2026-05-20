@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-DOCS-METADATA-GROUPING-USAGE-001
+QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001
 
 ## Current Phase
 
@@ -16,17 +16,17 @@ CODEX
 
 ## Last Completed Step
 
-Codex reviewed `QRE-DOCS-METADATA-GROUPING-USAGE-001` and marked `10_REVIEW_REPORT.md` as PASS. The docs now cover evaluation, batch, and shared-cash metadata grouping/passthrough usage with structural-inspection-only disclaimers. Validation: `scripts/check-progress-docs.sh` passed; `git diff --check` passed.
+Codex reviewed `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001` and marked `10_REVIEW_REPORT.md` as PASS. The evaluation output writer now emits per-column grouped artifacts with manifest `group_by` metadata while preserving the combined `group_summary.csv`. Validation: 164 tests pass; `scripts/check-progress-docs.sh` passes; `git diff --check` passes.
 
 ## Next Required Step
 
-Codex should run final git checks and create the local completion commit for `QRE-DOCS-METADATA-GROUPING-USAGE-001`.
+Codex should run final git checks and create the local completion commit for `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001`.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `974543e`, `Document evaluation artifacts`
-- Working tree contains documentation changes for `QRE-DOCS-METADATA-GROUPING-USAGE-001` plus agent doc updates.
+- Last accepted implementation commit: `a59c1a4`, `Clarify metadata grouping workflows`
+- Working tree contains implementation changes for `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001` plus agent doc updates.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

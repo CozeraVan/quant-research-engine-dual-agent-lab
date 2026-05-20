@@ -712,6 +712,90 @@ def test_report_manifest_validates_evaluation_artifacts_with_full_columns(tmp_pa
     assert len(issues) == 0
 
 
+def test_report_manifest_validates_evaluation_group_by_per_column(tmp_path):
+    """validate_contents handles per-column evaluation grouped files with group_by metadata."""
+    # Valid per-column grouped CSV
+    (tmp_path / "group_summary_by_board.csv").write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nboard,chinext,1,30\n",
+        encoding="utf-8",
+    )
+    # Valid combined grouped CSV
+    (tmp_path / "group_summary.csv").write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nboard,chinext,1,30\nsector,Tech,1,40\n",
+        encoding="utf-8",
+    )
+
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary", "path": "group_summary.csv", "filename": "group_summary.csv",
+                     "role": "evaluation_group_summary"},
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+
+    # All files valid
+    issues = manifest.validate_contents()
+    assert len(issues) == 0
+
+    # validate_contents filtered to specific group_by only checks that file
+    board_issues = manifest.validate_contents(role="evaluation_group_summary", group_by="board")
+    assert len(board_issues) == 0
+
+    # Missing per-column file is reported
+    (tmp_path / "group_summary_by_board.csv").unlink()
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_file"
+    assert "group_summary_by_board.csv" in str(issues[0].path)
+
+    # validate_contents with group_by filter finds only the missing file
+    board_issues2 = manifest.validate_contents(role="evaluation_group_summary", group_by="board")
+    assert len(board_issues2) == 1
+    assert board_issues2[0].code == "missing_file"
+
+
+def test_report_manifest_validates_evaluation_per_column_missing_columns(tmp_path):
+    """validate_contents catches missing columns in a per-column grouped evaluation file."""
+    (tmp_path / "group_summary_by_industry.csv").write_text(
+        "wrong_col\n1\n",
+        encoding="utf-8",
+    )
+
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "evaluation_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_industry", "path": "group_summary_by_industry.csv",
+                     "filename": "group_summary_by_industry.csv", "role": "evaluation_group_summary",
+                     "group_by": "industry"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+
+    # Filtered to the specific group_by
+    industry_issues = manifest.validate_contents(role="evaluation_group_summary", group_by="industry")
+    assert len(industry_issues) == 1
+    assert industry_issues[0].code == "missing_columns"
+
+
 def test_report_manifest_rejects_evaluation_missing_file(tmp_path):
     manifest_path = tmp_path / "report_manifest.json"
     manifest_path.write_text(

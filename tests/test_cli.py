@@ -728,6 +728,7 @@ def test_cli_eval_config_output_dir_with_group_by_and_market_profile(capsys, mon
 
     assert (output_dir / "events.csv").is_file()
     assert (output_dir / "group_summary.csv").is_file()
+    assert (output_dir / "group_summary_by_board.csv").is_file()
     assert (output_dir / "run_manifest.json").is_file()
     assert (output_dir / "report_manifest.json").is_file()
 
@@ -737,6 +738,7 @@ def test_cli_eval_config_output_dir_with_group_by_and_market_profile(capsys, mon
     assert run_manifest["round_trip_cost_rate"] is None
     assert run_manifest["market_profile"] == "configs/market_profiles/ashare_daily_default.yaml"
     assert "group_summary" in run_manifest["artifacts"]
+    assert "group_summary_by_board" in run_manifest["artifacts"]
 
     # report manifest validates with no issues
     from quant_research_engine.portfolio.report_manifest import ReportManifest
@@ -746,11 +748,292 @@ def test_cli_eval_config_output_dir_with_group_by_and_market_profile(capsys, mon
     issues = manifest.validate_contents()
     assert len(issues) == 0
 
+    # per-column grouped file has expected manifest entry with group_by metadata
+    by_key = {e.key: {"role": e.role, "group_by": e.group_by} for e in manifest.files_}
+    assert by_key["group_summary"]["role"] == "evaluation_group_summary"
+    assert by_key["group_summary"]["group_by"] is None  # combined file has no group_by metadata
+    assert by_key["group_summary_by_board"]["role"] == "evaluation_group_summary"
+    assert by_key["group_summary_by_board"]["group_by"] == "board"
+
+    # per-column file is discoverable and auditable via --group-by
+    matches = manifest.files(role="evaluation_group_summary", group_by="board")
+    assert len(matches) == 1
+    assert matches[0].key == "group_summary_by_board"
+
+    # report-audit --require-match works on the per-column file
+    audit_issues = manifest.validate_contents(role="evaluation_group_summary", group_by="board")
+    assert len(audit_issues) == 0
+
     # events.csv has expected columns
     events = pd.read_csv(output_dir / "events.csv")
     assert "ts_code" in events.columns
     assert "trade_date" in events.columns
     assert "board" in events.columns  # preserved from group_by
+
+
+def test_cli_eval_config_output_dir_multi_group_by_writes_per_column_files(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06", "2026-01-07"]
+                    ),
+                    "open": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "high": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "low": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "close": [10.0, 11.0, 20.0, 18.0, 19.8],
+                    "pre_close": [10.0, 10.0, 20.0, 20.0, 20.0],
+                    "vol": [1.0, 1.0, 1.0, 1.0, 1.0],
+                    "amount": [100.0, 100.0, 100.0, 100.0, 100.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(
+                        ["2026-01-05", "2026-01-06", "2026-01-05", "2026-01-06", "2026-01-07"]
+                    ),
+                    "rsi_2": [5.0, 15.0, 12.0, 6.0, 8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000002.SZ"],
+                    "board": ["main_board", "star_market"],
+                    "sector": ["Finance", "Technology"],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-07",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--group-by",
+            "board",
+            "sector",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+
+    # Combined file still written
+    assert (output_dir / "group_summary.csv").is_file()
+
+    # Per-column files for both group-by columns
+    assert (output_dir / "group_summary_by_board.csv").is_file()
+    board_group = pd.read_csv(output_dir / "group_summary_by_board.csv")
+    assert (board_group["group_by"] == "board").all()
+
+    assert (output_dir / "group_summary_by_sector.csv").is_file()
+    sector_group = pd.read_csv(output_dir / "group_summary_by_sector.csv")
+    assert (sector_group["group_by"] == "sector").all()
+
+    # report manifest entries have correct group_by metadata
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    manifest = ReportManifest.from_path(output_dir / "report_manifest.json")
+    by_key = {e.key: e.group_by for e in manifest.files_}
+    assert by_key["group_summary"] is None
+    assert by_key["group_summary_by_board"] == "board"
+    assert by_key["group_summary_by_sector"] == "sector"
+
+    # Filtering by group_by matches only the per-column file
+    board_matches = manifest.files(role="evaluation_group_summary", group_by="board")
+    assert len(board_matches) == 1
+    assert board_matches[0].key == "group_summary_by_board"
+
+    sector_matches = manifest.files(role="evaluation_group_summary", group_by="sector")
+    assert len(sector_matches) == 1
+    assert sector_matches[0].key == "group_summary_by_sector"
+
+
+def test_cli_report_files_eval_group_by_filter(capsys, monkeypatch, tmp_path):
+    """report-files --role evaluation_group_summary --group-by <col> matches per-column file."""
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    output_dir = tmp_path / "eval_output"
+    output_dir.mkdir(parents=True)
+
+    # Write a minimal combined group_summary.csv
+    group_csv = output_dir / "group_summary.csv"
+    group_csv.write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nboard,chinext,1,30\nsector,Tech,1,40\n",
+        encoding="utf-8",
+    )
+    # Write per-column files
+    by_board = output_dir / "group_summary_by_board.csv"
+    by_board.write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nboard,chinext,1,30\n",
+        encoding="utf-8",
+    )
+    by_sector = output_dir / "group_summary_by_sector.csv"
+    by_sector.write_text(
+        "group_by,group_value,horizon,event_count\nsector,Tech,1,40\n",
+        encoding="utf-8",
+    )
+
+    # Write manifest
+    manifest_path = output_dir / "report_manifest.json"
+    manifest_payload = {
+        "schema_version": 1,
+        "kind": "evaluation_report_manifest",
+        "files": [
+            {"key": "group_summary", "path": "group_summary.csv", "filename": "group_summary.csv",
+             "role": "evaluation_group_summary"},
+            {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+             "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+             "group_by": "board"},
+            {"key": "group_summary_by_sector", "path": "group_summary_by_sector.csv",
+             "filename": "group_summary_by_sector.csv", "role": "evaluation_group_summary",
+             "group_by": "sector"},
+        ],
+    }
+    manifest_path.write_text(json.dumps(manifest_payload), encoding="utf-8")
+
+    exit_code = main([
+        "report-files", str(manifest_path),
+        "--role", "evaluation_group_summary",
+        "--group-by", "board",
+    ])
+    assert exit_code == 0
+    output_lines = [l for l in capsys.readouterr().out.strip().split("\n") if l]
+    assert len(output_lines) == 1
+    assert output_lines[0].endswith("group_summary_by_board.csv")
+
+    # Without group_by filter: all 3 files matched
+    exit_code2 = main([
+        "report-files", str(manifest_path),
+        "--role", "evaluation_group_summary",
+    ])
+    assert exit_code2 == 0
+    all_lines = [l for l in capsys.readouterr().out.strip().split("\n") if l]
+    assert len(all_lines) == 3
+    filenames = [l.rsplit("/", 1)[-1] for l in all_lines]
+    assert "group_summary.csv" in filenames
+    assert "group_summary_by_board.csv" in filenames
+    assert "group_summary_by_sector.csv" in filenames
+
+
+def test_cli_report_audit_eval_group_by_filter(capsys, monkeypatch, tmp_path):
+    """report-audit --role evaluation_group_summary --group-by <col> audits per-column file."""
+    output_dir = tmp_path / "eval_output"
+    output_dir.mkdir(parents=True)
+
+    # Write valid per-column grouped CSV
+    by_board = output_dir / "group_summary_by_board.csv"
+    by_board.write_text(
+        "group_by,group_value,horizon,event_count\nboard,main,1,50\nboard,chinext,1,30\n",
+        encoding="utf-8",
+    )
+    by_sector = output_dir / "group_summary_by_sector.csv"
+    by_sector.write_text(
+        "group_by,group_value,horizon,event_count\nsector,Tech,1,40\n",
+        encoding="utf-8",
+    )
+
+    manifest_path = output_dir / "report_manifest.json"
+    manifest_payload = {
+        "schema_version": 1,
+        "kind": "evaluation_report_manifest",
+        "files": [
+            {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+             "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+             "group_by": "board"},
+            {"key": "group_summary_by_sector", "path": "group_summary_by_sector.csv",
+             "filename": "group_summary_by_sector.csv", "role": "evaluation_group_summary",
+             "group_by": "sector"},
+        ],
+    }
+    manifest_path.write_text(json.dumps(manifest_payload), encoding="utf-8")
+
+    # report-audit --group-by board --require-match exits 0 (all matched files valid)
+    exit_code = main([
+        "report-audit", str(manifest_path),
+        "--role", "evaluation_group_summary",
+        "--group-by", "board",
+        "--require-match",
+    ])
+    assert exit_code == 0
+
+    # report-audit --json --group-by board only audits the board file
+    capsys.readouterr()  # consume previous output
+    exit_code2 = main([
+        "report-audit", str(manifest_path),
+        "--role", "evaluation_group_summary",
+        "--group-by", "board",
+        "--json",
+    ])
+    assert exit_code2 == 0
+    audit_payload = json.loads(capsys.readouterr().out.strip())
+    assert audit_payload["matched_files"] == 1
+    assert audit_payload["validation_issues"] == 0
+    assert audit_payload["status"] == "ok"
+
+
+def test_cli_report_audit_eval_group_by_missing_file(capsys, tmp_path):
+    """report-audit on a missing per-column grouped file reports the issue."""
+    output_dir = tmp_path / "eval_output"
+    output_dir.mkdir(parents=True)
+
+    manifest_path = output_dir / "report_manifest.json"
+    manifest_payload = {
+        "schema_version": 1,
+        "kind": "evaluation_report_manifest",
+        "files": [
+            {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+             "filename": "group_summary_by_board.csv", "role": "evaluation_group_summary",
+             "group_by": "board"},
+        ],
+    }
+    manifest_path.write_text(json.dumps(manifest_payload), encoding="utf-8")
+    # File not written
+
+    exit_code = main([
+        "report-audit", str(manifest_path),
+        "--role", "evaluation_group_summary",
+        "--group-by", "board",
+        "--require-match",
+    ])
+    assert exit_code == 2
+
+    capsys.readouterr()  # consume previous output
+    exit_code2 = main([
+        "report-audit", str(manifest_path),
+        "--role", "evaluation_group_summary",
+        "--group-by", "board",
+        "--json",
+    ])
+    assert exit_code2 == 2
+    audit_payload = json.loads(capsys.readouterr().out.strip())
+    assert audit_payload["status"] == "failed"
+    assert audit_payload["missing_files"] == 1
+
 
 
 def test_cli_eval_config_random_baseline_prints_summary(capsys, monkeypatch):
