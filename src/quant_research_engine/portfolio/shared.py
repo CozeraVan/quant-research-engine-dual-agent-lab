@@ -28,6 +28,7 @@ class SharedCashBacktestRequest:
     take_profit_pct: float | None = None
     trailing_stop_pct: float | None = None
     rebalance_interval_days: int | None = None
+    metadata_columns: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,8 @@ class SharedCashBacktestEngine:
         working = self._prepare_frame(frame, request)
         if working.empty:
             return self._empty_result(request)
+
+        symbol_metadata = self._build_metadata_lookup(working, request.metadata_columns or [])
 
         dates = working["trade_date"].drop_duplicates().sort_values().tolist()
         symbol_bar_indices = self._symbol_bar_indices(working)
@@ -74,6 +77,7 @@ class SharedCashBacktestEngine:
                 orders=orders,
                 trades=trades,
                 failed_orders=failed_orders,
+                symbol_metadata=symbol_metadata,
             )
             cash = self._execute_pending_buys(
                 request=request,
@@ -85,6 +89,7 @@ class SharedCashBacktestEngine:
                 symbols=pending_buys.pop(trade_date, []),
                 orders=orders,
                 failed_orders=failed_orders,
+                symbol_metadata=symbol_metadata,
             )
             if self._should_rebalance(date_index, request):
                 cash = self._execute_rebalance(
@@ -92,10 +97,11 @@ class SharedCashBacktestEngine:
                     trade_date=trade_date,
                     day_frame=day_frame,
                     cash=cash,
-                positions=positions,
+                    positions=positions,
                 orders=orders,
                 trades=trades,
                 failed_orders=failed_orders,
+                symbol_metadata=symbol_metadata,
             )
 
             if date_index + 1 < len(dates):
@@ -143,6 +149,27 @@ class SharedCashBacktestEngine:
             parts.append(chunk)
         return pd.concat(parts, ignore_index=True).sort_values(["trade_date", "ts_code"]).reset_index(drop=True)
 
+    def _build_metadata_lookup(
+        self,
+        frame: pd.DataFrame,
+        requested_columns: list[str],
+    ) -> dict[str, dict[str, object]]:
+        if not requested_columns:
+            return {}
+        available = [col for col in requested_columns if col in frame.columns]
+        if not available:
+            return {}
+        lookup: dict[str, dict[str, object]] = {}
+        for ts_code, group in frame.groupby("ts_code", sort=False):
+            metadata: dict[str, object] = {}
+            for col in available:
+                values = group[col].dropna()
+                if not values.empty:
+                    metadata[col] = values.iloc[0]
+            if metadata:
+                lookup[str(ts_code)] = metadata
+        return lookup
+
     def _symbol_bar_indices(self, frame: pd.DataFrame) -> dict[tuple[str, pd.Timestamp], int]:
         return {
             (str(row["ts_code"]), row["trade_date"]): int(row["symbol_bar_index"])
@@ -161,6 +188,7 @@ class SharedCashBacktestEngine:
         orders: list[dict[str, object]],
         trades: list[dict[str, object]],
         failed_orders: list[dict[str, object]],
+        symbol_metadata: dict[str, dict[str, object]],
     ) -> float:
         for symbol in sorted(list(positions)):
             if symbol not in day_frame.index:
@@ -204,11 +232,11 @@ class SharedCashBacktestEngine:
                 limit_down=self._row_flag(row, "limit_down"),
             )
             if not validation.allowed:
-                failed_orders.append(self._failed_order_row(order, validation.reason))
+                failed_orders.append(self._failed_order_row(order, validation.reason, symbol_metadata=symbol_metadata))
                 continue
             cost = self.market_profile.calculate_cost(OrderSide.SELL, order.notional)
             cash += order.notional - cost
-            orders.append(self._order_row(order, cost))
+            orders.append(self._order_row(order, cost, symbol_metadata=symbol_metadata))
             trades.append(
                 self._trade_row(
                     symbol=symbol,
@@ -218,6 +246,7 @@ class SharedCashBacktestEngine:
                     position=position,
                     exit_cost=cost,
                     exit_reason=exit_reason,
+                    symbol_metadata=symbol_metadata,
                 )
             )
             self._refresh_position_from_lots(position)
@@ -235,12 +264,13 @@ class SharedCashBacktestEngine:
         position: dict[str, object],
         exit_cost: float,
         exit_reason: str,
+        symbol_metadata: dict[str, dict[str, object]] | None = None,
     ) -> dict[str, object]:
         consumed = self._consume_lots(position, quantity)
         entry_price = float(consumed["entry_notional"]) / quantity if quantity > 0 else float(position["entry_price"])
         gross_pnl = (exit_price * quantity) - float(consumed["entry_notional"])
         cost = float(consumed["entry_cost"]) + exit_cost
-        return {
+        row = {
             "symbol": symbol,
             "entry_date": consumed["entry_date"],
             "exit_date": exit_date,
@@ -252,6 +282,11 @@ class SharedCashBacktestEngine:
             "net_pnl": gross_pnl - cost,
             "exit_reason": exit_reason,
         }
+        if symbol_metadata and symbol in symbol_metadata:
+            for key, value in symbol_metadata[symbol].items():
+                if key not in row:
+                    row[key] = value
+        return row
 
     def _consume_lots(self, position: dict[str, object], quantity: int) -> dict[str, object]:
         lots = list(position.get("lots", []))
@@ -344,6 +379,7 @@ class SharedCashBacktestEngine:
         symbols: list[str],
         orders: list[dict[str, object]],
         failed_orders: list[dict[str, object]],
+        symbol_metadata: dict[str, dict[str, object]],
     ) -> float:
         executable_symbols = [
             symbol
@@ -376,14 +412,14 @@ class SharedCashBacktestEngine:
                 limit_down=self._row_flag(row, "limit_down"),
             )
             if not validation.allowed:
-                failed_orders.append(self._failed_order_row(order, validation.reason))
+                failed_orders.append(self._failed_order_row(order, validation.reason, symbol_metadata=symbol_metadata))
                 continue
             cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
             total_cash_needed = order.notional + cost
             if total_cash_needed > cash:
                 continue
             cash -= total_cash_needed
-            orders.append(self._order_row(order, cost))
+            orders.append(self._order_row(order, cost, symbol_metadata=symbol_metadata))
             positions[symbol] = {
                 "quantity": quantity,
                 "entry_price": price,
@@ -421,6 +457,7 @@ class SharedCashBacktestEngine:
         orders: list[dict[str, object]],
         trades: list[dict[str, object]],
         failed_orders: list[dict[str, object]],
+        symbol_metadata: dict[str, dict[str, object]],
     ) -> float:
         symbols = sorted(symbol for symbol in positions if symbol in day_frame.index)
         if not symbols:
@@ -446,6 +483,7 @@ class SharedCashBacktestEngine:
                 orders=orders,
                 trades=trades,
                 failed_orders=failed_orders,
+                symbol_metadata=symbol_metadata,
             )
         for symbol in list(positions):
             if int(positions[symbol]["quantity"]) <= 0:
@@ -464,6 +502,7 @@ class SharedCashBacktestEngine:
                 current_value=current_values[symbol],
                 orders=orders,
                 failed_orders=failed_orders,
+                symbol_metadata=symbol_metadata,
             )
         return cash
 
@@ -480,6 +519,7 @@ class SharedCashBacktestEngine:
         orders: list[dict[str, object]],
         trades: list[dict[str, object]],
         failed_orders: list[dict[str, object]],
+        symbol_metadata: dict[str, dict[str, object]],
     ) -> float:
         excess_value = current_value - target_value
         if excess_value <= 0:
@@ -507,11 +547,11 @@ class SharedCashBacktestEngine:
             limit_down=self._row_flag(row, "limit_down"),
         )
         if not validation.allowed:
-            failed_orders.append(self._failed_order_row(order, validation.reason, reason="rebalance"))
+            failed_orders.append(self._failed_order_row(order, validation.reason, reason="rebalance", symbol_metadata=symbol_metadata))
             return cash
         cost = self.market_profile.calculate_cost(OrderSide.SELL, order.notional)
         cash += order.notional - cost
-        orders.append(self._order_row(order, cost, reason="rebalance"))
+        orders.append(self._order_row(order, cost, reason="rebalance", symbol_metadata=symbol_metadata))
         trades.append(
             self._trade_row(
                 symbol=order.symbol,
@@ -521,6 +561,7 @@ class SharedCashBacktestEngine:
                 position=position,
                 exit_cost=cost,
                 exit_reason="rebalance",
+                symbol_metadata=symbol_metadata,
             )
         )
         self._refresh_position_from_lots(position)
@@ -538,6 +579,7 @@ class SharedCashBacktestEngine:
         current_value: float,
         orders: list[dict[str, object]],
         failed_orders: list[dict[str, object]],
+        symbol_metadata: dict[str, dict[str, object]],
     ) -> float:
         shortfall_value = target_value - current_value
         if shortfall_value <= 0:
@@ -566,14 +608,14 @@ class SharedCashBacktestEngine:
             limit_down=self._row_flag(row, "limit_down"),
         )
         if not validation.allowed:
-            failed_orders.append(self._failed_order_row(order, validation.reason, reason="rebalance"))
+            failed_orders.append(self._failed_order_row(order, validation.reason, reason="rebalance", symbol_metadata=symbol_metadata))
             return cash
         cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
         total_cash_needed = order.notional + cost
         if total_cash_needed > cash:
             return cash
         cash -= total_cash_needed
-        orders.append(self._order_row(order, cost, reason="rebalance"))
+        orders.append(self._order_row(order, cost, reason="rebalance", symbol_metadata=symbol_metadata))
         self._append_lot(
             position,
             quantity=quantity,
@@ -677,8 +719,11 @@ class SharedCashBacktestEngine:
             return None
         return float(row[column])
 
-    def _order_row(self, order: Order, cost: float, *, reason: str | None = None) -> dict[str, object]:
-        return {
+    def _order_row(
+        self, order: Order, cost: float, *, reason: str | None = None,
+        symbol_metadata: dict[str, dict[str, object]] | None = None,
+    ) -> dict[str, object]:
+        row: dict[str, object] = {
             "symbol": order.symbol,
             "trade_date": pd.Timestamp(order.trade_date),
             "side": order.side.value,
@@ -688,9 +733,17 @@ class SharedCashBacktestEngine:
             "cost": cost,
             "reason": reason,
         }
+        if symbol_metadata and order.symbol in symbol_metadata:
+            for key, value in symbol_metadata[order.symbol].items():
+                if key not in row:
+                    row[key] = value
+        return row
 
-    def _failed_order_row(self, order: Order, failure_reason: str, *, reason: str | None = None) -> dict[str, object]:
-        return {
+    def _failed_order_row(
+        self, order: Order, failure_reason: str, *, reason: str | None = None,
+        symbol_metadata: dict[str, dict[str, object]] | None = None,
+    ) -> dict[str, object]:
+        row: dict[str, object] = {
             "symbol": order.symbol,
             "trade_date": pd.Timestamp(order.trade_date),
             "side": order.side.value,
@@ -700,6 +753,11 @@ class SharedCashBacktestEngine:
             "reason": reason,
             "failure_reason": failure_reason,
         }
+        if symbol_metadata and order.symbol in symbol_metadata:
+            for key, value in symbol_metadata[order.symbol].items():
+                if key not in row:
+                    row[key] = value
+        return row
 
     def _build_summary(
         self,

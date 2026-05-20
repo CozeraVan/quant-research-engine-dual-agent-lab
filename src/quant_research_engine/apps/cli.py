@@ -215,6 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
     shared_parser.add_argument("--benchmark-table", help="Optional benchmark table, e.g. public.stock_daily or public.index_daily.")
     shared_parser.add_argument("--benchmark-code", help="Optional benchmark ts_code, e.g. 000300.SH or 000002.SZ.")
     shared_parser.add_argument("--benchmark-value-column", default="close")
+    shared_parser.add_argument("--metadata-columns", nargs="*", default=None, help="Optional metadata columns to attach to shared-cash order, trade, and failed-order output rows.")
     shared_parser.add_argument("--print-summary-md", action="store_true", help="Print a human-readable Markdown summary to stdout.")
     shared_parser.add_argument("--output-dir", type=Path, help="Optional directory for portfolio result files.")
 
@@ -992,6 +993,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     **weight_controls,
                     **risk_controls,
                     **rebalance_controls,
+                    metadata_columns=args.metadata_columns,
                 ),
             )
             if args.benchmark_table or args.benchmark_code:
@@ -1047,6 +1049,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "benchmark_table": args.benchmark_table,
                     "benchmark_code": args.benchmark_code,
                     "benchmark_value_column": args.benchmark_value_column,
+                    "metadata_columns": args.metadata_columns,
                 },
             }
             paths = write_shared_cash_result(result, args.output_dir, run_request=run_request)

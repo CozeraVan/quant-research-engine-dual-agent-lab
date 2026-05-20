@@ -1219,6 +1219,80 @@ def test_cli_backtest_shared_can_print_markdown_summary(capsys, monkeypatch):
     assert "| Benchmark total return | 0.03 |" in captured.out
 
 
+def test_cli_backtest_shared_metadata_columns_persisted_to_output_dir(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            return pd.DataFrame({
+                "trade_date": pd.to_datetime(["2026-01-05"]),
+                "ts_code": ["000001.SZ"],
+                "open": [10.0],
+                "close": [10.1],
+                "sector": ["Finance"],
+            })
+
+    class FakeSharedEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return SharedCashBacktestResult(
+                orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"], "sector": ["Finance"]}),
+                trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0], "sector": ["Finance"]}),
+                failed_orders=pd.DataFrame(),
+                equity_curve=pd.DataFrame(
+                    {"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [100.0]}
+                ),
+                summary={"initial_cash": 100.0, "final_equity": 105.0, "total_return": 0.05},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "SharedCashBacktestEngine", FakeSharedEngine)
+
+    output_dir = tmp_path / "output"
+    exit_code = main(
+        [
+            "backtest-shared",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--codes",
+            "000001.SZ",
+            "--max-positions",
+            "1",
+            "--metadata-columns",
+            "sector",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "orders_path=" in captured.out
+    orders_csv = pd.read_csv(output_dir / "orders.csv")
+    assert "sector" in orders_csv.columns
+    trades_csv = pd.read_csv(output_dir / "trades.csv")
+    assert "sector" in trades_csv.columns
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["request"]["metadata_columns"] == ["sector"]
+
+
 def test_cli_backtest_batch_can_print_markdown_summary(capsys, monkeypatch):
     class FakeStore:
         def __init__(self, settings):

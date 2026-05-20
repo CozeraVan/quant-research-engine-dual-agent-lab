@@ -562,3 +562,187 @@ def test_shared_cash_backtest_empty_result_includes_side_diagnostics():
 
     assert result.summary["failed_order_count_by_side"] == {}
     assert result.summary["failed_order_notional_by_side"] == {}
+
+
+def test_shared_cash_metadata_columns_in_orders_when_requested():
+    frame = make_shared_frame().copy()
+    frame["sector"] = ["Finance"] * 5 + ["RealEstate"] * 5
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+        metadata_columns=["sector"],
+    )
+
+    result = engine.run(frame, request)
+
+    assert "sector" in result.orders.columns
+    assert result.orders.loc[result.orders["symbol"] == "000001.SZ", "sector"].iloc[0] == "Finance"
+    assert result.orders.loc[result.orders["symbol"] == "000002.SZ", "sector"].iloc[0] == "RealEstate"
+
+
+def test_shared_cash_metadata_columns_in_trades_when_requested():
+    frame = make_shared_frame().copy()
+    frame["industry"] = ["Bank"] * 5 + ["Property"] * 5
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+        metadata_columns=["industry"],
+    )
+
+    result = engine.run(frame, request)
+
+    assert "industry" in result.trades.columns
+    assert result.trades.loc[result.trades["symbol"] == "000001.SZ", "industry"].iloc[0] == "Bank"
+    assert result.trades.loc[result.trades["symbol"] == "000002.SZ", "industry"].iloc[0] == "Property"
+
+
+def test_shared_cash_metadata_columns_in_failed_orders_when_requested():
+    frame = make_shared_frame().copy()
+    frame["sector"] = ["Finance"] * 5 + ["RealEstate"] * 5
+    frame.loc[
+        (frame["ts_code"] == "000001.SZ") & (frame["trade_date"] == pd.Timestamp("2026-01-06")),
+        "limit_up",
+    ] = True
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+        metadata_columns=["sector"],
+    )
+
+    result = engine.run(frame, request)
+
+    assert len(result.failed_orders) > 0
+    assert "sector" in result.failed_orders.columns
+    assert result.failed_orders.loc[result.failed_orders["symbol"] == "000001.SZ", "sector"].iloc[0] == "Finance"
+
+
+def test_shared_cash_metadata_skips_missing_requested_columns():
+    frame = make_shared_frame()
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+        metadata_columns=["nonexistent_column"],
+    )
+
+    result = engine.run(frame, request)
+
+    assert "nonexistent_column" not in result.orders.columns
+    assert "nonexistent_column" not in result.trades.columns
+
+
+def test_shared_cash_default_output_unchanged_when_no_metadata_requested():
+    frame = make_shared_frame()
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+    )
+
+    result = engine.run(frame, request)
+
+    orders_default_cols = {"symbol", "trade_date", "side", "quantity", "price", "notional", "cost", "reason"}
+    trades_default_cols = {"symbol", "entry_date", "exit_date", "quantity", "entry_price", "exit_price", "gross_pnl", "cost", "net_pnl", "exit_reason"}
+    assert set(result.orders.columns) == orders_default_cols
+    assert set(result.trades.columns) == trades_default_cols
+
+
+def test_shared_cash_empty_metadata_columns_list_is_noop():
+    frame = make_shared_frame()
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+        metadata_columns=[],
+    )
+
+    result = engine.run(frame, request)
+
+    orders_default_cols = {"symbol", "trade_date", "side", "quantity", "price", "notional", "cost", "reason"}
+    assert set(result.orders.columns) == orders_default_cols
+
+
+def test_shared_cash_metadata_collision_does_not_overwrite_order_trade_date():
+    frame = make_shared_frame().copy()
+    frame["trade_date"] = frame["trade_date"]  # col name collides with row field
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+        metadata_columns=["trade_date"],
+    )
+
+    result = engine.run(frame, request)
+
+    sell_orders = result.orders.loc[result.orders["side"] == "sell"]
+    assert not sell_orders.empty
+    for _, order in sell_orders.iterrows():
+        assert order["trade_date"] != pd.Timestamp("2026-01-05")
+
+
+def test_shared_cash_metadata_collision_does_not_overwrite_trade_exit_reason():
+    frame = make_shared_frame().copy()
+    frame["exit_reason"] = ["misc"] * 5 + ["misc"] * 5
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+        metadata_columns=["exit_reason"],
+    )
+
+    result = engine.run(frame, request)
+
+    assert not result.trades.empty
+    for _, trade in result.trades.iterrows():
+        assert trade["exit_reason"] == "holding_period"
+
+
+def test_shared_cash_metadata_collision_does_not_overwrite_failed_order_failure_reason():
+    frame = make_shared_frame().copy()
+    frame["failure_reason"] = ["custom"] * 5 + ["custom"] * 5
+    frame.loc[
+        (frame["ts_code"] == "000001.SZ") & (frame["trade_date"] == pd.Timestamp("2026-01-06")),
+        "limit_up",
+    ] = True
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+        metadata_columns=["failure_reason"],
+    )
+
+    result = engine.run(frame, request)
+
+    assert not result.failed_orders.empty
+    for _, fo in result.failed_orders.iterrows():
+        assert fo["failure_reason"] == "limit_up_buy_blocked"

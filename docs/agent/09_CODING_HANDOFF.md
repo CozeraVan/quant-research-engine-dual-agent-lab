@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
+QRE-SHARED-CASH-METADATA-OUTPUTS-001
 
 ## Written By
 
@@ -14,42 +14,53 @@ CODEX
 
 ## Status
 
-Accepted locally.
+Fixed. Codex review found metadata collision issue; now resolved.
 
 ## Implementation Summary
 
-- Added `summary_metadata_columns: list[str] | None = None` to `BatchBacktestRequest`.
-- Updated `BatchBacktestEngine.run()` to thread extra metadata columns through `_summary_row()` → `_metadata_row()`.
-- Updated `_metadata_row()` to merge requested extra columns with the fixed `SUMMARY_METADATA_COLUMNS` (avoiding duplicates), then copy values from the first frame row for each symbol.
-- Updated CLI `backtest-batch` to pass `--group-by` columns as `summary_metadata_columns` to `BatchBacktestRequest`, so grouped stdout and output-dir reports can use the passthrough metadata columns.
-- `ResearchFrameAssembler`, `write_batch_result()`, and `summarize_batch_by()` require no changes — the existing group-by report paths work as long as the column is present in the summary.
+- Added `metadata_columns: list[str] | None = None` to `SharedCashBacktestRequest`.
+- Added `_build_metadata_lookup()` method to `SharedCashBacktestEngine` — builds a symbol-keyed dict from the prepared working frame using only requested metadata columns, taking the first non-null value per symbol per column, silently skipping absent columns.
+- Threaded `symbol_metadata` through all execution methods (`_execute_due_sells`, `_execute_pending_buys`, `_execute_rebalance`, `_rebalance_sell`, `_rebalance_buy`) and row builder methods (`_order_row`, `_trade_row`, `_failed_order_row`). Metadata columns are appended after existing row fields using per-key `key not in row` check to prevent collision with canonical fields.
+- Added `--metadata-columns` CLI argument to `backtest-shared` (zero or more column names via `nargs="*"`).
+- Passed `metadata_columns=args.metadata_columns` to `SharedCashBacktestRequest` in CLI handler.
+- Recorded `metadata_columns` in `run_manifest.json` request payload when `--output-dir` is used.
+
+## Codex Review Fix
+
+Codex identified that `row.update(...)` could overwrite canonical output fields when a requested metadata column shared a name with an existing row field (e.g., `metadata_columns=["trade_date"]` overwrote sell order dates with the symbol's first research-frame date).
+
+Fix: replaced `row.update(symbol_metadata[symbol])` with per-key `key not in row` guards in all three row builders (`_order_row`, `_trade_row`, `_failed_order_row`).
+
+Regression coverage added for `trade_date` collision in orders, `exit_reason` collision in trades, and `failure_reason` collision in failed_orders.
 
 ## Files Changed
 
-- `src/quant_research_engine/portfolio/batch.py` — added `summary_metadata_columns` to `BatchBacktestRequest`; threaded extra columns through `run()` → `_summary_row()` → `_metadata_row()`
-- `src/quant_research_engine/apps/cli.py` — pass `args.group_by` as `summary_metadata_columns` to `BatchBacktestRequest`
-- `tests/test_portfolio_batch.py` — 4 new tests: default columns preserved, extra columns in summary, absent column skipped, no duplicate columns
-- `tests/test_cli.py` — 1 new test: `backtest-batch --group-by sector` prints grouped output
+- `src/quant_research_engine/portfolio/shared.py` — `SharedCashBacktestRequest.metadata_columns`, `_build_metadata_lookup()`, threaded `symbol_metadata` with collision-safe merge
+- `src/quant_research_engine/apps/cli.py` — `--metadata-columns` flag, passed to request, recorded in `run_manifest.json`
+- `tests/test_portfolio_shared.py` — 9 new tests: metadata in orders/trades/failed_orders; missing columns skipped; default unchanged; empty list noop; collision protection for trade_date/exit_reason/failure_reason
+- `tests/test_cli.py` — 1 new test: metadata persisted to output CSVs and run_manifest
 
 ## Validation Results
 
 ```bash
-uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q  # 105 passed
-uv run pytest -q                                                    # 283 passed in 2.67s
-scripts/check-progress-docs.sh                                      # passed (after doc update)
-git diff --check                                                    # passed
+uv run pytest tests/test_portfolio_shared.py tests/test_cli.py tests/test_portfolio_io.py -q  # 142 passed
+uv run pytest -q                                                                              # 293 passed in 2.73s
+scripts/check-progress-docs.sh                                                                # passed (after doc update)
+git diff --check                                                                              # passed
 ```
 
 ## Constraints
 
-- Preserve existing batch summary metadata columns by default. ✅ fixed SUMMARY_METADATA_COLUMNS unchanged.
-- Keep the change additive and scoped. ✅ only new optional field; existing paths unchanged.
-- Keep data access read-only. ✅ no upstream writes.
-- Avoid benchmark and time-varying-status table guesses. ✅ not touched.
-- Do not change portfolio simulation math. ✅ not touched.
+- Preserve default shared-cash output behavior when no metadata columns are requested. ✅
+- Keep metadata propagation request-driven and additive. ✅
+- Do not alter shared-cash simulation math, order selection, cash accounting, risk exits, rebalancing, or market validation. ✅
+- Missing requested columns are skipped without schema guessing. ✅
+- Requested metadata must not overwrite canonical output row fields. ✅ collision-safe merge.
+- Do not add shared-cash group-by reports. ✅
+- Do not push. ✅
 
 ## Git State
 
 - Branch: `master`
-- Codex review passed.
-- Local finalization in progress.
+- All code and doc changes uncommitted.
+- Ready for Codex re-review.

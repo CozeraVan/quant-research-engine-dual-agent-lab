@@ -8,29 +8,29 @@ QRE-SHARED-CASH-METADATA-OUTPUTS-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex selected and scoped the next unblocked module: request-driven metadata passthrough for shared-cash order, trade, and failed-order output rows. Codex prepared `08_IMPLEMENTATION_BRIEF.md`, updated the handoff docs, and assigned implementation to Claude Code.
+Codex re-reviewed and accepted the shared-cash metadata output implementation. Requested metadata columns now flow to shared-cash orders, trades, and failed orders without overwriting canonical row fields. Collision reproduction passed; focused tests: 142 passed; full suite: 293 passed.
 
 ## Next Required Step
 
-Claude Code implements `QRE-SHARED-CASH-METADATA-OUTPUTS-001`, runs the required validation, and writes `09_CODING_HANDOFF.md`.
+None.
 
 ## Active Change Request
 
-User approved Codex's recommendation on 2026-05-20 and asked Codex to arrange the next task for Claude Code.
+User request from 2026-05-20: run One-Shot Review-Finalize-Next. Codex review accepted the fixed implementation.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: current `HEAD`, `Let batch reports group by requested metadata`
-- Working tree clean after Codex handoff-doc commit.
+- Last accepted implementation commit: current `HEAD` after shared-cash metadata output finalization
+- Working tree clean after Codex finalization commit.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands
