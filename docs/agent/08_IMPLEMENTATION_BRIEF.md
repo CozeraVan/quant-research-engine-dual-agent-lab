@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DATA-REAL-METADATA-ADAPTERS-001
+QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
 
 ## Created By
 
@@ -14,19 +14,20 @@ CLAUDE_CODE
 
 ## Background
 
-`PostgresDataStore.load_security_metadata()` already exposes a read-only metadata path with fallback `list_date` and `board` derivation. The loader still normalizes a fixed subset of columns, which means real upstream status, industry, or membership-style metadata may be dropped if the source table already provides it.
+The data layer now preserves optional upstream metadata columns from the configured security metadata table. `backtest-batch` already assembles research frames with metadata and supports `--group-by`, but `BatchBacktestEngine` only copies a fixed metadata whitelist into `BatchBacktestResult.summary`.
 
-The next useful step is to turn that loader into a real adapter: preserve optional upstream metadata columns when they exist, keep the current fallback behavior when they do not, and keep the assembler/preflight merge path unchanged.
+That means newly preserved metadata columns can exist in the research frame but still be unavailable to existing batch grouped reports.
 
 ## Goal
 
-Add real status/industry/membership metadata adapters to the data layer, with fallback-preserving behavior and regression tests.
+Let batch backtests carry requested metadata `group_by` columns into the batch summary, so existing stdout and output-dir grouped report paths work for optional upstream metadata columns.
 
 ## Non-Goals
 
-- Do not add new upstream writes.
-- Do not guess new table names or invent schema that is not already available in the configured metadata source.
-- Do not change existing evaluation math, portfolio math, or benchmark wiring.
+- Do not add new upstream tables or database writes.
+- Do not guess specific metadata schemas, table names, or column meanings.
+- Do not change portfolio execution, order, risk, cost, or return math.
+- Do not change shared-cash or single-symbol behavior unless required by imports or tests.
 - Do not compute technical indicators inside QRE.
 - Do not record sensitive connection values.
 
@@ -34,11 +35,10 @@ Add real status/industry/membership metadata adapters to the data layer, with fa
 
 Expected:
 
-- `src/quant_research_engine/data/postgres.py`
-- `src/quant_research_engine/data/assembler.py`
-- `tests/test_postgres_store.py`
-- `tests/test_data_assembler.py`
-- `tests/test_preflight.py`
+- `src/quant_research_engine/portfolio/batch.py`
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_portfolio_batch.py`
+- `tests/test_cli.py`
 
 Docs/handoff:
 
@@ -67,37 +67,39 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve existing metadata fallback behavior when optional source columns are missing.
-- Keep the adapter additive and optional.
+- Preserve existing batch summary metadata columns by default.
+- Keep the change additive and scoped to metadata propagation/report grouping.
 - Keep data access read-only.
-- Avoid benchmark table guesses while the real source remains unconfirmed.
-- Keep the implementation deterministic in behavior where the source data is deterministic.
+- Avoid benchmark and time-varying-status table guesses.
+- Do not change portfolio simulation math.
 
 ## Implementation Steps
 
-1. Inspect the current metadata loader normalization path and confirm which optional columns the configured source table already exposes.
-2. Extend `load_security_metadata()` so optional upstream columns are preserved instead of being discarded, while the existing fallback fields remain stable.
-3. Keep `ResearchFrameAssembler` and `PreflightRunner` consuming the returned frame without special-case logic.
-4. Add regression tests for source-table passthrough, fallback-only operation, and downstream merge behavior.
-5. Update handoff and progress docs.
+1. Inspect `BatchBacktestRequest`, `BatchBacktestEngine._metadata_row()`, CLI `backtest-batch`, and existing group-by report writers.
+2. Add a small mechanism for batch requests to ask the engine to include extra metadata columns in `summary`. A conservative shape is `summary_metadata_columns: list[str] | None = None`, with the current fixed `SUMMARY_METADATA_COLUMNS` preserved as defaults.
+3. In CLI `backtest-batch`, pass the requested `--group-by` columns as extra summary metadata columns so existing `summarize_batch_by()` and `write_batch_result(..., group_by=...)` can use them.
+4. Preserve existing behavior when `--group-by` is omitted.
+5. Keep missing-column behavior explicit. If a requested group-by column is absent from the assembled frame, returning the current `summary must include <column>` error from grouped summary code is acceptable.
+6. Add regression tests for engine-level metadata propagation and CLI batch grouping by a passthrough column.
+7. Update handoff and progress docs.
 
 ## Data / Schema Changes
 
 - No database schema changes.
 - No new upstream tables.
-- Optional passthrough columns only; no guessed schema additions.
+- No hardcoded new metadata schema. Columns are request-driven.
 
 ## API / Interface Changes
 
-- `load_security_metadata()` may return additional metadata columns when the configured source table provides them.
-- Downstream consumers should continue to merge the returned frame by `ts_code` without new branches.
+- `BatchBacktestRequest` may gain an optional `summary_metadata_columns` list.
+- CLI `backtest-batch --group-by <column>` should make that column available in `BatchBacktestResult.summary` when it exists in the research frame.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q
+uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q
 ```
 
 Run full checks:
@@ -110,27 +112,28 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `load_security_metadata()` preserves optional upstream metadata columns when the configured source table provides them.
-- [ ] The existing fallback `list_date` / `board` / status behavior remains unchanged when optional columns are absent.
-- [ ] `ResearchFrameAssembler` and `PreflightRunner` continue to merge metadata without special-case code.
+- [ ] Existing batch summary metadata columns still appear as before.
+- [ ] A requested passthrough metadata group-by column can appear in `BatchBacktestResult.summary`.
+- [ ] `qre backtest-batch --group-by <passthrough_column>` can print and persist grouped reports when that column exists in the assembled frame.
+- [ ] Missing requested group-by columns still fail clearly.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Source tables may vary by environment, so the adapter must tolerate missing optional columns.
-- Keep the implementation additive; do not disturb existing metadata fallback behavior.
-- Do not overreach into real benchmark wiring before the index schema is confirmed.
+- Copying too many frame columns into summary could leak factor columns into report metadata. Keep propagation request-driven.
+- Keep the implementation small; do not create a new metadata registry for this task.
+- Do not overreach into real benchmark wiring or time-varying status metadata before source schemas are confirmed.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Keep the adapter small and additive.
-3. Reuse the existing metadata merge path rather than introducing a new framework.
+2. Keep the metadata propagation explicit and request-driven.
+3. Reuse existing group-by report paths rather than adding new report types.
 4. Update `01`, `03`, `04`, `05`, `06`, `11`, and `12` after implementation.
-5. Stop and write a blocker only if this brief conflicts with current code or source columns.
+5. Stop and write a blocker only if this brief conflicts with current code.
 
 ## Next Agent State
 

@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio realism and broader research-run reproducibility.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio metadata grouping and broader research-run reproducibility.
 
 ## Completed
 
@@ -23,13 +23,13 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-None.
+- Batch backtest metadata group-by passthrough for optional upstream columns.
 
 ## Known Gaps
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
 - Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables.
-- Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized.
+- Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across portfolio reports.
 - Evaluation layer does not yet implement benchmark comparison, factor decay, or real regime classification.
 - Larger research-run bundles across preflight, evaluation, and backtest outputs are not yet standardized.
 
@@ -73,4 +73,4 @@ None.
 
 ## Next Recommended Step
 
-Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Wire batch backtest `group_by` metadata passthrough so optional upstream metadata columns can be used in portfolio report grouping without hardcoding new schemas.

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-DONE
+IN_PROGRESS
 
 ## Progress Table
 
@@ -51,6 +51,7 @@ DONE
 | QRE-NEXT-34 | Eval-config output artifacts and manifests | DONE | CODEX/CLAUDE_CODE | 265 passed in 2.83s; 2 CLI tests + 8 manifest tests; `--output-dir` writes events/summary/ic/quantile/group CSVs + run_manifest.json + report_manifest.json; evaluation_report_manifest kind; ReportManifest validates evaluation artifact roles; run_manifest records `market_profile` provenance when used | Codex review and local finalize |
 | QRE-NEXT-35 | Evaluation random-baseline comparison | DONE | CODEX/CLAUDE_CODE | commit `495185b`; 274 passed in 3.19s; random baseline summary with deterministic RNG; CLI flag, stdout, CSV, manifest | Preserve |
 | QRE-NEXT-36 | Real metadata adapters for optional upstream columns | DONE | CODEX/CLAUDE_CODE | local finalization commit; 278 passed in 2.58s; passthrough columns preserved in `_load_security_metadata_table`; `_normalize_security_metadata` keeps all columns; 4 new tests; Codex review passed | Preserve |
+| QRE-NEXT-37 | Batch metadata passthrough group-by | IN_PROGRESS | CLAUDE_CODE | brief prepared; connect requested group-by metadata columns to batch summary/reporting | Implement from `08_IMPLEMENTATION_BRIEF.md` |
 
 ## Latest Verified State
 
@@ -61,8 +62,9 @@ Recorded on 2026-05-20 after QRE-DATA-REAL-METADATA-ADAPTERS-001 finalization:
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Current task: `QRE-DATA-REAL-METADATA-ADAPTERS-001`
-- Next step: Preserve
+- Previous finalized task: `QRE-DATA-REAL-METADATA-ADAPTERS-001`
+- Current task: `QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001`
+- Next step: Claude Code implementation
 
 ## Completed Module Summary
 
@@ -75,7 +77,7 @@ Recorded on 2026-05-20 after QRE-DATA-REAL-METADATA-ADAPTERS-001 finalization:
 
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
-- Standardized market-cap, liquidity, membership, and regime grouping.
+- Standardized market-cap, liquidity, membership, and regime grouping across portfolio and evaluation outputs.
 - Larger research-run reproducibility workflow.
 
 ## Status Meaning

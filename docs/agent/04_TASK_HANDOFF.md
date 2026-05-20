@@ -2,55 +2,52 @@
 
 ## Current Task
 
-Extend security metadata adapters to preserve optional upstream status/industry/membership columns.
+Wire batch backtest `group_by` metadata passthrough for optional upstream columns.
 
 ## Task ID
 
-QRE-DATA-REAL-METADATA-ADAPTERS-001
+QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
 
 ## Current Status
 
-Accepted locally.
+Brief prepared and handed off to Claude Code after user approval.
 
 ## Current Owner
 
-USER
-
-## Completed
-
-- Extended `_load_security_metadata_table()` to select passthrough columns beyond the 6 expected fixed columns (`ts_code`, `list_date`, `board`, `is_st`, `is_risk_warning`, `is_suspended`). Any additional columns the configured source table exposes are now preserved.
-- Updated `_normalize_security_metadata()` to keep all columns instead of truncating to the fixed set. Fixed columns receive their existing normalization; passthrough columns pass through untouched in sorted order.
-- `_derive_security_metadata_from_daily()` unchanged — fallback path produces only the 6 fixed columns.
-- `ResearchFrameAssembler` and `PreflightRunner` unchanged — left-merge and column-access patterns handle extra columns naturally.
-- Added 2 postgres store tests (passthrough preservation + fallback without extra columns).
-- Added 1 assembler test (passthrough columns flow through merge).
-- Added 1 preflight test (universe diagnostics work with extra metadata columns).
+CLAUDE_CODE
 
 ## In Progress
 
-None.
+None yet in code. The next implementation should let requested batch `group_by` metadata columns flow from the research frame into `BatchBacktestResult.summary`, so existing grouped report outputs can use columns preserved by the metadata adapter.
 
 ## Expected Files
 
-- `src/quant_research_engine/data/postgres.py` (modified)
-- `tests/test_postgres_store.py` (2 new tests)
-- `tests/test_data_assembler.py` (1 new test)
-- `tests/test_preflight.py` (1 new test)
+- `src/quant_research_engine/portfolio/batch.py`
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_portfolio_batch.py`
+- `tests/test_cli.py`
+- `docs/agent/01_CURRENT_STATUS.md`
+- `docs/agent/03_ROADMAP.md`
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/06_DECISION_LOG.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
 ## Validation Baseline
 
-- `uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q` -> `23 passed`
-- `uv run pytest -q` -> `278 passed in 2.58s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
+- `uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q`
+- `uv run pytest -q`
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
 
 ## Known Risks
 
-- Passthrough columns come from the configured source table schema; different environments may have different columns.
-- No schema guesses — only columns actually present in the source table are included.
-- Fallback normalization remains identical when source columns are absent.
+- Group-by columns may be absent from the assembled frame; keep existing error behavior clear and deterministic.
+- Do not start guessing upstream metadata schemas or table names.
+- Preserve existing batch summary metadata columns by default.
 
 ## Next Suggested Step
 
-None. Await user acceptance or next request.
+Claude Code should implement the batch metadata group-by passthrough brief and return a coding handoff with changed files and validation results.

@@ -4,23 +4,23 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-DATA-REAL-METADATA-ADAPTERS-001
+QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed, validated, and finalized real metadata passthrough adapters: `_load_security_metadata_table()` now selects passthrough columns beyond the 6 expected fixed columns; `_normalize_security_metadata()` keeps all columns while preserving fixed-column fallback normalization; `_derive_security_metadata_from_daily()` remains unchanged. Full suite: 278 passed in 2.58s.
+Codex prepared and handed off the next portfolio reporting task: let batch backtest requested `group_by` metadata columns flow into `BatchBacktestResult.summary`, so optional upstream metadata columns preserved by the data adapter can be used by existing grouped batch report outputs.
 
 ## Next Required Step
 
-None.
+Claude Code should implement the batch metadata group-by passthrough brief and return a coding handoff with changed files and validation results.
 
 ## Active Change Request
 
@@ -29,8 +29,8 @@ User request from 2026-05-20: continue the dual-agent workflow and assign the ne
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: current `HEAD`, `Preserve real metadata columns from configured sources`
-- Working tree clean after local finalization.
+- Last accepted implementation commit before this handoff: `Preserve real metadata columns from configured sources`
+- Working tree clean after local handoff commit.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands
