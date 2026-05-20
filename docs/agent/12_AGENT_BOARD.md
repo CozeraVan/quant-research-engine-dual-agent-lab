@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-SHARED-CASH-METADATA-OUTPUTS-001
+QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_TO_USER
+CODEX_TO_CLAUDE_CODE
 
 ## Sender
 
@@ -18,51 +18,55 @@ CODEX
 
 ## Short Message
 
-Review complete. Shared-cash metadata output passthrough is accepted locally.
+Implement row-based shared-cash metadata group summaries for orders, trades, and failed orders.
 
-## Implementation Summary
+## Implementation Request
 
-Claude Code implemented the brief and fixed Codex's required collision issue:
+Claude Code should implement `08_IMPLEMENTATION_BRIEF.md` exactly:
 
-1. Added `metadata_columns: list[str] | None = None` to `SharedCashBacktestRequest`.
-2. Added `_build_metadata_lookup()` for request-driven, symbol-keyed static metadata passthrough.
-3. Threaded metadata through shared-cash order, trade, and failed-order row builders.
-4. Protected canonical row fields with per-key guards, so metadata cannot overwrite fields such as `trade_date`, `exit_reason`, or `failure_reason`.
-5. Added `backtest-shared --metadata-columns ...`.
-6. Recorded requested `metadata_columns` in `run_manifest.json`.
-7. Added engine, CLI, and collision regression coverage.
-
-## Validation
-
-- Collision reproduction: order dates preserved after requesting `metadata_columns=["trade_date"]`
-- `uv run pytest tests/test_portfolio_shared.py tests/test_cli.py tests/test_portfolio_io.py -q` -> `142 passed in 2.18s`
-- `uv run pytest -q` -> `293 passed in 2.80s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
+1. Add analytics helpers for shared-cash order, trade, and failed-order grouped summaries.
+2. Add `backtest-shared --group-by ...`; requested group columns must be available in row outputs.
+3. Write grouped CSV artifacts under `--output-dir`:
+   - `orders_by_<column>.csv`
+   - `trades_by_<column>.csv`
+   - `failed_orders_by_<column>.csv`
+4. Add report manifest entries and validation roles for the grouped artifacts.
+5. Preserve default outputs when `--group-by` is omitted.
+6. Keep summaries row-based and diagnostic; do not implement return attribution or group equity curves.
+7. Write `09_CODING_HANDOFF.md` with changed files, validation, risks, and git state.
 
 ## Constraints Check
 
-- No shared-cash group-by reports added.
-- No shared-cash simulation math, order selection, cash accounting, risk exits, rebalancing, or market validation changed.
-- No upstream schema or table name guesses.
-- No time-varying status semantics.
-- Metadata propagation is request-driven and additive.
-- Metadata cannot overwrite canonical output row fields.
-- Not pushed.
+- Do not add shared-cash group return attribution or holdings exposure.
+- Do not alter shared-cash simulation math, order selection, cash accounting, risk exits, rebalancing, or market validation.
+- Do not guess upstream schemas or table names.
+- Do not implement time-varying status semantics.
+- Keep report manifests compatible with `report-files` and `report-audit`.
+- Do not push.
 
-## Changed Files
+## Required Validation
 
-- `src/quant_research_engine/portfolio/shared.py`
+- `uv run pytest tests/test_portfolio_analytics.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q`
+- `uv run pytest -q`
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
+
+## Expected Changed Files
+
+- `src/quant_research_engine/portfolio/analytics.py`
+- `src/quant_research_engine/portfolio/io.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
 - `src/quant_research_engine/apps/cli.py`
-- `tests/test_portfolio_shared.py`
+- `tests/test_portfolio_analytics.py`
+- `tests/test_portfolio_io.py`
+- `tests/test_portfolio_report_manifest.py`
 - `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/10_REVIEW_REPORT.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
 
 ## Next Step
 
-Codex should select the next unblocked task after finalization.
+Claude Code should implement the current task from `08_IMPLEMENTATION_BRIEF.md`.

@@ -4,33 +4,33 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-SHARED-CASH-METADATA-OUTPUTS-001
+QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex re-reviewed and accepted the shared-cash metadata output implementation. Requested metadata columns now flow to shared-cash orders, trades, and failed orders without overwriting canonical row fields. Collision reproduction passed; focused tests: 142 passed; full suite: 293 passed.
+Codex finalized shared-cash metadata output passthrough and selected the next unblocked module: row-based shared-cash metadata group summaries for orders, trades, and failed orders. Codex prepared `08_IMPLEMENTATION_BRIEF.md`, updated the handoff docs, and assigned implementation to Claude Code.
 
 ## Next Required Step
 
-None.
+Claude Code implements `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`, runs the required validation, and writes `09_CODING_HANDOFF.md`.
 
 ## Active Change Request
 
-User request from 2026-05-20: run One-Shot Review-Finalize-Next. Codex review accepted the fixed implementation.
+User request from 2026-05-20: run One-Shot Review-Finalize-Next. Codex finalized the previous implementation and arranged the next Claude Code task.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: current `HEAD` after shared-cash metadata output finalization
-- Working tree clean after Codex finalization commit.
+- Last accepted implementation commit: `038ef6e`, `Preserve row context for shared-cash metadata outputs`
+- Working tree clean after Codex handoff-doc commit.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

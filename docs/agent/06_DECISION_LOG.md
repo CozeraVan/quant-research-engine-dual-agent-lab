@@ -110,6 +110,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-SHARED-CASH-METADATA-OUTPUTS-001`. Shared-cash group attribution remains future work, while real benchmark and time-varying status tasks remain blocked by source confirmation.
 - Owner: CODEX
 
+### 2026-05-20: Select shared-cash metadata group summaries as next Claude task
+
+- Decision: The next Claude Code task is grouped shared-cash order, trade, and failed-order summaries over requested metadata columns.
+- Reason: Shared-cash row outputs now carry requested metadata safely, so grouped diagnostics can be built without new data-source assumptions or portfolio-math changes.
+- Alternatives: Start real index benchmark wiring; implement time-varying suspension/ST/risk-warning metadata; attempt shared-cash return attribution by metadata group.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`. Return attribution and exposure-level group performance remain future work.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

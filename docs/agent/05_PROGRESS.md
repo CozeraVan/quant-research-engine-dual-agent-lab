@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-DONE
+IN_PROGRESS
 
 ## Progress Table
 
@@ -53,18 +53,18 @@ DONE
 | QRE-NEXT-36 | Real metadata adapters for optional upstream columns | DONE | CODEX/CLAUDE_CODE | local commit; 278 passed in 2.59s; passthrough columns preserved in `_load_security_metadata_table`; `_normalize_security_metadata` keeps all columns | Preserve |
 | QRE-NEXT-37 | Batch metadata group-by passthrough | DONE | CODEX/CLAUDE_CODE | 283 passed in 2.67s; `summary_metadata_columns` in `BatchBacktestRequest`; CLI `backtest-batch --group-by` passes columns to engine; 5 new tests; Codex review passed | Preserve |
 | QRE-NEXT-38 | Shared-cash metadata output passthrough | DONE | CODEX/CLAUDE_CODE | 293 passed in 2.80s; shared-cash `metadata_columns`; output rows carry requested metadata; collision guards prevent overwriting canonical fields; 10 new tests including CLI and collision coverage | Preserve |
+| QRE-NEXT-39 | Shared-cash metadata group summaries | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for grouped order/trade/failed-order CSV summaries and manifest entries | Claude Code implements and writes `09_CODING_HANDOFF.md` |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-SHARED-CASH-METADATA-OUTPUTS-001 final review:
+Recorded on 2026-05-20 after QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001 planning handoff:
 
-- Collision reproduction now preserves order dates: buys on `2026-01-06`, sells on `2026-01-08`
-- `uv run pytest tests/test_portfolio_shared.py tests/test_cli.py tests/test_portfolio_io.py -q` -> `142 passed in 2.18s`
-- `uv run pytest -q` -> `293 passed in 2.80s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-- Current task: `QRE-SHARED-CASH-METADATA-OUTPUTS-001`
-- Next step: Preserve
+- Last finalized implementation remains QRE-SHARED-CASH-METADATA-OUTPUTS-001:
+  - Collision reproduction preserves order dates: buys on `2026-01-06`, sells on `2026-01-08`
+  - `uv run pytest tests/test_portfolio_shared.py tests/test_cli.py tests/test_portfolio_io.py -q` -> `142 passed in 2.18s`
+  - `uv run pytest -q` -> `293 passed in 2.80s`
+- Current task: `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`
+- Next step: Claude Code implementation
 
 ## Completed Module Summary
 
@@ -77,6 +77,7 @@ Recorded on 2026-05-20 after QRE-SHARED-CASH-METADATA-OUTPUTS-001 final review:
 
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
+- Shared-cash metadata group summaries for row-level order/trade/failure diagnostics.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Larger research-run reproducibility workflow.
 

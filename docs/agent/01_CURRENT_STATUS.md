@@ -25,7 +25,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-None.
+Claude Code is assigned to add shared-cash metadata group summary reports for orders, trades, and failed orders.
 
 ## Known Gaps
 
@@ -75,4 +75,4 @@ None.
 
 ## Next Recommended Step
 
-Choose the next unblocked metadata-aware reporting task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
