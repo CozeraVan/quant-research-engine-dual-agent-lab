@@ -430,6 +430,101 @@ def _batch_window_summary_columns() -> list[str]:
     ]
 
 
+def summarize_shared_orders_by(orders: pd.DataFrame, group_column: str) -> pd.DataFrame:
+    columns = [
+        "group_by",
+        "group_value",
+        "order_count",
+        "buy_order_count",
+        "sell_order_count",
+        "total_notional",
+        "buy_notional",
+        "sell_notional",
+        "total_cost",
+    ]
+    if orders.empty:
+        return pd.DataFrame(columns=columns)
+    if group_column not in orders.columns:
+        raise ValueError(f"shared-cash orders must include {group_column}")
+    rows: list[dict[str, Any]] = []
+    grouped = orders.dropna(subset=[group_column]).groupby(group_column, sort=True, dropna=True)
+    for group_value, group_frame in grouped:
+        total_count = len(group_frame)
+        buys = group_frame[group_frame["side"] == "buy"]
+        sells = group_frame[group_frame["side"] == "sell"]
+        buy_count = len(buys)
+        sell_count = len(sells)
+        buy_notional = float(buys["notional"].sum()) if buy_count > 0 else 0.0
+        sell_notional = float(sells["notional"].sum()) if sell_count > 0 else 0.0
+        rows.append({
+            "group_by": group_column,
+            "group_value": group_value,
+            "order_count": total_count,
+            "buy_order_count": buy_count,
+            "sell_order_count": sell_count,
+            "total_notional": buy_notional + sell_notional,
+            "buy_notional": buy_notional,
+            "sell_notional": sell_notional,
+            "total_cost": float(group_frame["cost"].sum()) if "cost" in group_frame.columns else 0.0,
+        })
+    return pd.DataFrame(rows, columns=columns)
+
+
+def summarize_shared_trades_by(trades: pd.DataFrame, group_column: str) -> pd.DataFrame:
+    columns = [
+        "group_by",
+        "group_value",
+        "trade_count",
+        "win_rate",
+        "gross_pnl",
+        "net_pnl",
+        "total_cost",
+    ]
+    if trades.empty:
+        return pd.DataFrame(columns=columns)
+    if group_column not in trades.columns:
+        raise ValueError(f"shared-cash trades must include {group_column}")
+    rows: list[dict[str, Any]] = []
+    grouped = trades.dropna(subset=[group_column]).groupby(group_column, sort=True, dropna=True)
+    for group_value, group_frame in grouped:
+        trade_count = len(group_frame)
+        wins = int((group_frame["net_pnl"] > 0).sum()) if trade_count > 0 else 0
+        rows.append({
+            "group_by": group_column,
+            "group_value": group_value,
+            "trade_count": trade_count,
+            "win_rate": wins / trade_count if trade_count > 0 else None,
+            "gross_pnl": float(group_frame["gross_pnl"].sum()) if trade_count > 0 else 0.0,
+            "net_pnl": float(group_frame["net_pnl"].sum()) if trade_count > 0 else 0.0,
+            "total_cost": float(group_frame["cost"].sum()) if trade_count > 0 else 0.0,
+        })
+    return pd.DataFrame(rows, columns=columns)
+
+
+def summarize_shared_failed_orders_by(failed_orders: pd.DataFrame, group_column: str) -> pd.DataFrame:
+    columns = [
+        "group_by",
+        "group_value",
+        "failed_order_count",
+        "failed_notional",
+    ]
+    if failed_orders.empty:
+        return pd.DataFrame(columns=columns)
+    if group_column not in failed_orders.columns:
+        raise ValueError(f"shared-cash failed orders must include {group_column}")
+    rows: list[dict[str, Any]] = []
+    grouped = failed_orders.dropna(subset=[group_column]).groupby(group_column, sort=True, dropna=True)
+    for group_value, group_frame in grouped:
+        count = len(group_frame)
+        rows.append({
+            "group_by": group_column,
+            "group_value": group_value,
+            "failed_order_count": count,
+            "failed_notional": float(group_frame["notional"].sum()) if count > 0 else 0.0,
+        })
+    return pd.DataFrame(rows, columns=columns)
+
+
 def _batch_rolling_summary_columns() -> list[str]:
     return [
         "window_size",

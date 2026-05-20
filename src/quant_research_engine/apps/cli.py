@@ -14,7 +14,12 @@ from quant_research_engine.data.settings import DatabaseSettings
 from quant_research_engine.evaluation.engine import EvaluationEngine
 from quant_research_engine.evaluation.models import EvaluationRequest, EvaluationResult
 from quant_research_engine.markets.ashare import AShareMarketProfile
-from quant_research_engine.portfolio.analytics import summarize_batch_by
+from quant_research_engine.portfolio.analytics import (
+    summarize_batch_by,
+    summarize_shared_orders_by,
+    summarize_shared_trades_by,
+    summarize_shared_failed_orders_by,
+)
 from quant_research_engine.portfolio.benchmark import summarize_benchmark_relative_performance
 from quant_research_engine.portfolio.batch import BatchBacktestEngine, BatchBacktestRequest
 from quant_research_engine.portfolio.io import (
@@ -216,6 +221,7 @@ def build_parser() -> argparse.ArgumentParser:
     shared_parser.add_argument("--benchmark-code", help="Optional benchmark ts_code, e.g. 000300.SH or 000002.SZ.")
     shared_parser.add_argument("--benchmark-value-column", default="close")
     shared_parser.add_argument("--metadata-columns", nargs="*", default=None, help="Optional metadata columns to attach to shared-cash order, trade, and failed-order output rows.")
+    shared_parser.add_argument("--group-by", nargs="*", default=None, help="Optional grouping columns for shared-cash order, trade, and failed-order summaries.")
     shared_parser.add_argument("--print-summary-md", action="store_true", help="Print a human-readable Markdown summary to stdout.")
     shared_parser.add_argument("--output-dir", type=Path, help="Optional directory for portfolio result files.")
 
@@ -982,6 +988,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             risk_controls = resolve_risk_controls(args, spec)
             weight_controls = resolve_weight_controls(args, spec)
             rebalance_controls = resolve_rebalance_controls(args, spec)
+            metadata_columns = args.metadata_columns
+            if args.group_by:
+                extra = [col for col in args.group_by if col not in (metadata_columns or [])]
+                metadata_columns = (metadata_columns or []) + extra
             result = SharedCashBacktestEngine(market_profile).run(
                 frame,
                 SharedCashBacktestRequest(
@@ -993,7 +1003,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     **weight_controls,
                     **risk_controls,
                     **rebalance_controls,
-                    metadata_columns=args.metadata_columns,
+                    metadata_columns=metadata_columns if metadata_columns else None,
                 ),
             )
             if args.benchmark_table or args.benchmark_code:
@@ -1024,6 +1034,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"trades={len(result.trades)}")
         for key, value in result.summary.items():
             print(f"{key}={value}")
+        for group_column in args.group_by or []:
+            print(f"orders_by_{group_column}")
+            print(summarize_shared_orders_by(result.orders, group_column).to_csv(index=False).strip())
+            print(f"trades_by_{group_column}")
+            print(summarize_shared_trades_by(result.trades, group_column).to_csv(index=False).strip())
+            print(f"failed_orders_by_{group_column}")
+            print(summarize_shared_failed_orders_by(result.failed_orders, group_column).to_csv(index=False).strip())
         if args.print_summary_md:
             print(shared_summary_markdown(result.summary).strip())
         if args.output_dir:
@@ -1050,9 +1067,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "benchmark_code": args.benchmark_code,
                     "benchmark_value_column": args.benchmark_value_column,
                     "metadata_columns": args.metadata_columns,
+                    "group_by": args.group_by,
                 },
             }
-            paths = write_shared_cash_result(result, args.output_dir, run_request=run_request)
+            paths = write_shared_cash_result(result, args.output_dir, run_request=run_request, group_by=args.group_by)
             for key, path in paths.items():
                 print(f"{key}_path={path}")
         return 0

@@ -715,3 +715,262 @@ def test_shared_emitted_report_manifest_validates_run_manifest(tmp_path):
     paths = write_shared_cash_result(result, tmp_path, run_request=run_request)
     manifest = ReportManifest.from_path(paths["report_manifest"])
     assert manifest.validate_contents(role="run_manifest") == []
+
+
+def test_write_shared_cash_result_writes_grouped_artifacts(tmp_path):
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame(
+            {
+                "symbol": ["000001.SZ", "000002.SZ", "600000.SH"],
+                "trade_date": pd.to_datetime(["2026-01-06", "2026-01-07", "2026-01-08"]),
+                "side": ["buy", "buy", "sell"],
+                "quantity": [100, 200, 50],
+                "price": [10.0, 20.0, 15.0],
+                "notional": [1000.0, 4000.0, 750.0],
+                "cost": [5.0, 20.0, 3.75],
+                "reason": ["entry"] * 3,
+                "board": ["main_board", "main_board", "star_market"],
+            }
+        ),
+        trades=pd.DataFrame(
+            {
+                "symbol": ["000001.SZ", "000002.SZ"],
+                "entry_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+                "exit_date": pd.to_datetime(["2026-01-09", "2026-01-10"]),
+                "quantity": [100, 50],
+                "entry_price": [10.0, 20.0],
+                "exit_price": [11.0, 25.0],
+                "gross_pnl": [100.0, 250.0],
+                "cost": [10.0, 5.0],
+                "net_pnl": [90.0, 245.0],
+                "exit_reason": ["holding_days"] * 2,
+                "board": ["main_board", "star_market"],
+            }
+        ),
+        equity_curve=pd.DataFrame(
+            {"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [10000.0] * 21}
+        ),
+        failed_orders=pd.DataFrame(
+            {
+                "symbol": ["688001.SH"],
+                "trade_date": pd.to_datetime(["2026-01-08"]),
+                "side": ["buy"],
+                "quantity": [100],
+                "price": [30.0],
+                "notional": [3000.0],
+                "reason": [None],
+                "failure_reason": ["limit_up_buy_blocked"],
+                "board": ["star_market"],
+            }
+        ),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 2, "max_drawdown": 0.0},
+    )
+
+    paths = write_shared_cash_result(result, tmp_path, group_by=["board"])
+
+    assert paths["orders_by_board"].name == "orders_by_board.csv"
+    assert paths["trades_by_board"].name == "trades_by_board.csv"
+    assert paths["failed_orders_by_board"].name == "failed_orders_by_board.csv"
+
+    orders_grouped = pd.read_csv(paths["orders_by_board"])
+    assert orders_grouped["group_by"].tolist() == ["board", "board"]
+    assert orders_grouped["order_count"].tolist() == [2, 1]
+
+    trades_grouped = pd.read_csv(paths["trades_by_board"])
+    assert trades_grouped["trade_count"].tolist() == [1, 1]
+
+    failed_grouped = pd.read_csv(paths["failed_orders_by_board"])
+    assert failed_grouped["failed_order_count"].tolist() == [1]
+
+    manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    manifest_by_key = {item["key"]: item for item in manifest["files"]}
+    assert manifest_by_key["orders_by_board"] == {
+        "key": "orders_by_board",
+        "path": "orders_by_board.csv",
+        "filename": "orders_by_board.csv",
+        "role": "shared_orders_group_summary",
+        "group_by": "board",
+    }
+    assert manifest_by_key["trades_by_board"] == {
+        "key": "trades_by_board",
+        "path": "trades_by_board.csv",
+        "filename": "trades_by_board.csv",
+        "role": "shared_trades_group_summary",
+        "group_by": "board",
+    }
+    assert manifest_by_key["failed_orders_by_board"] == {
+        "key": "failed_orders_by_board",
+        "path": "failed_orders_by_board.csv",
+        "filename": "failed_orders_by_board.csv",
+        "role": "shared_failed_orders_group_summary",
+        "group_by": "board",
+    }
+
+    markdown = paths["summary_markdown"].read_text(encoding="utf-8")
+    assert "| Orders by board | orders_by_board.csv |" in markdown
+    assert "| Trades by board | trades_by_board.csv |" in markdown
+    assert "| Failed orders by board | failed_orders_by_board.csv |" in markdown
+
+
+def test_write_shared_cash_result_grouped_empty_frames_write_stable_headers(tmp_path):
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame(columns=["symbol", "trade_date", "side", "quantity", "price", "notional", "cost", "reason", "industry"]),
+        trades=pd.DataFrame(columns=["symbol", "entry_date", "exit_date", "quantity", "entry_price", "exit_price", "gross_pnl", "cost", "net_pnl", "exit_reason", "industry"]),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(columns=["symbol", "trade_date", "side", "quantity", "price", "notional", "reason", "failure_reason", "industry"]),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 0, "max_drawdown": 0.0},
+    )
+
+    paths = write_shared_cash_result(result, tmp_path, group_by=["industry"])
+
+    orders_grouped = pd.read_csv(paths["orders_by_industry"])
+    assert len(orders_grouped) == 0
+    assert "group_by" in orders_grouped.columns
+
+    trades_grouped = pd.read_csv(paths["trades_by_industry"])
+    assert len(trades_grouped) == 0
+
+    failed_grouped = pd.read_csv(paths["failed_orders_by_industry"])
+    assert len(failed_grouped) == 0
+
+    manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    manifest_by_key = {item["key"]: item for item in manifest["files"]}
+    assert "orders_by_industry" in manifest_by_key
+    assert manifest_by_key["orders_by_industry"]["role"] == "shared_orders_group_summary"
+
+
+def test_shared_cash_grouped_report_manifest_validates_contents(tmp_path):
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    (tmp_path / "orders_by_board.csv").write_text(
+        "group_by,group_value,order_count,buy_order_count,sell_order_count,total_notional,buy_notional,sell_notional,total_cost\nboard,main_board,2,1,1,2000.0,1000.0,1000.0,10.0\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "trades_by_board.csv").write_text(
+        "group_by,group_value,trade_count,win_rate,gross_pnl,net_pnl,total_cost\nboard,main_board,1,1.0,100.0,90.0,10.0\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "failed_orders_by_board.csv").write_text(
+        "group_by,group_value,failed_order_count,failed_notional\nboard,main_board,1,1000.0\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "orders_by_board", "path": "orders_by_board.csv", "filename": "orders_by_board.csv", "role": "shared_orders_group_summary", "group_by": "board"},
+                    {"key": "trades_by_board", "path": "trades_by_board.csv", "filename": "trades_by_board.csv", "role": "shared_trades_group_summary", "group_by": "board"},
+                    {"key": "failed_orders_by_board", "path": "failed_orders_by_board.csv", "filename": "failed_orders_by_board.csv", "role": "shared_failed_orders_group_summary", "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+    assert manifest.validate_contents(role="shared_orders_group_summary", group_by="board") == []
+
+
+def test_shared_cash_grouped_report_manifest_reports_missing_columns(tmp_path):
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    (tmp_path / "orders_by_board.csv").write_text("other,col\n1,2\n", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "shared_cash_backtest_report_manifest",
+                "files": [
+                    {"key": "orders_by_board", "path": "orders_by_board.csv", "filename": "orders_by_board.csv", "role": "shared_orders_group_summary", "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "order_count" in issues[0].message
+
+
+def test_write_shared_cash_result_unchanged_when_group_by_omitted(tmp_path):
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame(
+            {"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [10000.0] * 21}
+        ),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 0, "max_drawdown": 0.0},
+    )
+
+    paths = write_shared_cash_result(result, tmp_path)
+
+    assert "orders_by_" not in str(list(paths.keys()))
+    manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    roles = {item["role"] for item in manifest["files"]}
+    assert "shared_orders_group_summary" not in roles
+    assert "shared_trades_group_summary" not in roles
+    assert "shared_failed_orders_group_summary" not in roles
+
+
+def test_write_shared_cash_result_grouped_with_no_column_empty_failed_orders(tmp_path):
+    """Real shared-cash runs produce pd.DataFrame() for empty failed_orders (no columns)."""
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame(
+            {
+                "symbol": ["000001.SZ", "000002.SZ"],
+                "trade_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+                "side": ["buy", "sell"],
+                "quantity": [100, 50],
+                "price": [10.0, 15.0],
+                "notional": [1000.0, 750.0],
+                "cost": [5.0, 3.75],
+                "reason": ["entry"] * 2,
+                "board": ["main_board", "star_market"],
+            }
+        ),
+        trades=pd.DataFrame(
+            {
+                "symbol": ["000001.SZ", "000002.SZ"],
+                "entry_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+                "exit_date": pd.to_datetime(["2026-01-09", "2026-01-10"]),
+                "quantity": [100, 50],
+                "entry_price": [10.0, 15.0],
+                "exit_price": [11.0, 16.0],
+                "gross_pnl": [100.0, 50.0],
+                "cost": [10.0, 5.0],
+                "net_pnl": [90.0, 45.0],
+                "exit_reason": ["holding_days"] * 2,
+                "board": ["main_board", "star_market"],
+            }
+        ),
+        equity_curve=pd.DataFrame(
+            {"trade_date": pd.date_range("2026-01-05", periods=5, freq="B"), "total_equity": [10000.0] * 5}
+        ),
+        failed_orders=pd.DataFrame(),  # real engine produces no-column empty
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 2, "max_drawdown": 0.0},
+    )
+
+    paths = write_shared_cash_result(result, tmp_path, group_by=["board"])
+
+    # Grouped orders and trades should be written normally.
+    orders_grouped = pd.read_csv(paths["orders_by_board"])
+    assert len(orders_grouped) == 2
+    assert "group_by" in orders_grouped.columns
+
+    trades_grouped = pd.read_csv(paths["trades_by_board"])
+    assert len(trades_grouped) == 2
+
+    # The key fix: no-column empty failed_orders should produce a stable empty grouped CSV.
+    failed_grouped = pd.read_csv(paths["failed_orders_by_board"])
+    assert len(failed_grouped) == 0
+    assert list(failed_grouped.columns) == ["group_by", "group_value", "failed_order_count", "failed_notional"]
+
+    manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    manifest_by_key = {item["key"]: item for item in manifest["files"]}
+    assert "failed_orders_by_board" in manifest_by_key
+    assert manifest_by_key["failed_orders_by_board"]["role"] == "shared_failed_orders_group_summary"

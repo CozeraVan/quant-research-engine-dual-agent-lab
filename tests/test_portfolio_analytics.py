@@ -10,6 +10,9 @@ from quant_research_engine.portfolio.analytics import (
     summarize_batch_rolling_summary,
     summarize_batch_window_summary_by,
     summarize_batch_window_summary,
+    summarize_shared_orders_by,
+    summarize_shared_trades_by,
+    summarize_shared_failed_orders_by,
 )
 
 
@@ -314,3 +317,230 @@ def test_summarize_batch_ranked_window_symbols_by_lists_top_and_bottom_per_group
     star_feb = ranked[(ranked["board"] == "star_market") & (ranked["window"] == "2026-02")]
     assert star_feb["symbol"].tolist() == ["688001.SH", "688001.SH"]
     assert star_feb["rank_type"].tolist() == ["top", "bottom"]
+
+
+# --- shared-cash order group summaries ---
+
+
+def test_summarize_shared_orders_by_computes_grouped_metrics():
+    orders = pd.DataFrame(
+        {
+            "symbol": ["000001.SZ", "000002.SZ", "600000.SH", "688001.SH"],
+            "trade_date": pd.to_datetime(["2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"]),
+            "side": ["buy", "buy", "sell", "sell"],
+            "quantity": [100, 200, 50, 100],
+            "price": [10.0, 20.0, 15.0, 30.0],
+            "notional": [1000.0, 4000.0, 750.0, 3000.0],
+            "cost": [5.0, 20.0, 3.75, 15.0],
+            "reason": ["entry"] * 4,
+            "board": ["main_board", "main_board", "star_market", "star_market"],
+        }
+    )
+
+    grouped = summarize_shared_orders_by(orders, "board")
+
+    assert grouped["group_by"].tolist() == ["board", "board"]
+    assert grouped["group_value"].tolist() == ["main_board", "star_market"]
+    assert grouped["order_count"].tolist() == [2, 2]
+    assert grouped["buy_order_count"].tolist() == [2, 0]
+    assert grouped["sell_order_count"].tolist() == [0, 2]
+    assert grouped["total_notional"].tolist() == pytest.approx([5000.0, 3750.0])
+    assert grouped["buy_notional"].tolist() == pytest.approx([5000.0, 0.0])
+    assert grouped["sell_notional"].tolist() == pytest.approx([0.0, 3750.0])
+    assert grouped["total_cost"].tolist() == pytest.approx([25.0, 18.75])
+
+
+def test_summarize_shared_orders_by_raises_on_missing_column():
+    orders = pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]})
+    with pytest.raises(ValueError, match="shared-cash orders must include board"):
+        summarize_shared_orders_by(orders, "board")
+
+
+def test_summarize_shared_orders_by_returns_empty_frame_when_input_empty():
+    orders = pd.DataFrame(columns=["symbol", "side", "board"])
+    grouped = summarize_shared_orders_by(orders, "board")
+    assert len(grouped) == 0
+    assert "group_by" in grouped.columns
+    assert "group_value" in grouped.columns
+    assert "order_count" in grouped.columns
+
+
+def test_summarize_shared_orders_by_handles_no_column_empty_frame():
+    grouped = summarize_shared_orders_by(pd.DataFrame(), "board")
+    assert len(grouped) == 0
+    assert "group_by" in grouped.columns
+    assert "group_value" in grouped.columns
+    assert "order_count" in grouped.columns
+    assert "buy_order_count" in grouped.columns
+    assert "sell_order_count" in grouped.columns
+    assert "total_notional" in grouped.columns
+
+
+def test_summarize_shared_orders_by_skips_nan_group_values():
+    orders = pd.DataFrame(
+        {
+            "symbol": ["000001.SZ", "000002.SZ"],
+            "side": ["buy", "sell"],
+            "quantity": [100, 50],
+            "price": [10.0, 15.0],
+            "notional": [1000.0, 750.0],
+            "cost": [5.0, 3.75],
+            "board": ["main_board", None],
+        }
+    )
+
+    grouped = summarize_shared_orders_by(orders, "board")
+
+    assert len(grouped) == 1
+    assert grouped["group_value"].tolist() == ["main_board"]
+    assert grouped["order_count"].tolist() == [1]
+
+
+# --- shared-cash trade group summaries ---
+
+
+def test_summarize_shared_trades_by_computes_grouped_metrics():
+    trades = pd.DataFrame(
+        {
+            "symbol": ["000001.SZ", "000001.SZ", "000002.SZ"],
+            "entry_date": pd.to_datetime(["2026-01-06", "2026-01-08", "2026-01-07"]),
+            "exit_date": pd.to_datetime(["2026-01-09", "2026-01-12", "2026-01-10"]),
+            "quantity": [100, 100, 50],
+            "entry_price": [10.0, 12.0, 20.0],
+            "exit_price": [11.0, 10.0, 25.0],
+            "gross_pnl": [100.0, -200.0, 250.0],
+            "cost": [10.0, 10.0, 5.0],
+            "net_pnl": [90.0, -210.0, 245.0],
+            "exit_reason": ["holding_days"] * 3,
+            "board": ["main_board", "main_board", "star_market"],
+        }
+    )
+
+    grouped = summarize_shared_trades_by(trades, "board")
+
+    assert grouped["group_by"].tolist() == ["board", "board"]
+    assert grouped["group_value"].tolist() == ["main_board", "star_market"]
+    assert grouped["trade_count"].tolist() == [2, 1]
+    assert grouped["win_rate"].tolist() == pytest.approx([0.5, 1.0])
+    assert grouped["gross_pnl"].tolist() == pytest.approx([-100.0, 250.0])
+    assert grouped["net_pnl"].tolist() == pytest.approx([-120.0, 245.0])
+    assert grouped["total_cost"].tolist() == pytest.approx([20.0, 5.0])
+
+
+def test_summarize_shared_trades_by_raises_on_missing_column():
+    trades = pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]})
+    with pytest.raises(ValueError, match="shared-cash trades must include board"):
+        summarize_shared_trades_by(trades, "board")
+
+
+def test_summarize_shared_trades_by_returns_empty_frame_when_input_empty():
+    trades = pd.DataFrame(columns=["symbol", "net_pnl", "board"])
+    grouped = summarize_shared_trades_by(trades, "board")
+    assert len(grouped) == 0
+    assert "trade_count" in grouped.columns
+    assert "win_rate" in grouped.columns
+    assert "gross_pnl" in grouped.columns
+
+
+def test_summarize_shared_trades_by_handles_no_column_empty_frame():
+    grouped = summarize_shared_trades_by(pd.DataFrame(), "board")
+    assert len(grouped) == 0
+    assert "group_by" in grouped.columns
+    assert "group_value" in grouped.columns
+    assert "trade_count" in grouped.columns
+    assert "win_rate" in grouped.columns
+    assert "gross_pnl" in grouped.columns
+    assert "net_pnl" in grouped.columns
+
+
+def test_summarize_shared_trades_by_skips_nan_group_values():
+    trades = pd.DataFrame(
+        {
+            "symbol": ["000001.SZ", "000002.SZ"],
+            "entry_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+            "exit_date": pd.to_datetime(["2026-01-09", "2026-01-10"]),
+            "quantity": [100, 50],
+            "entry_price": [10.0, 20.0],
+            "exit_price": [11.0, 25.0],
+            "gross_pnl": [100.0, 250.0],
+            "cost": [10.0, 5.0],
+            "net_pnl": [90.0, 245.0],
+            "exit_reason": ["holding_days"] * 2,
+            "board": ["main_board", None],
+        }
+    )
+
+    grouped = summarize_shared_trades_by(trades, "board")
+
+    assert len(grouped) == 1
+    assert grouped["group_value"].tolist() == ["main_board"]
+
+
+# --- shared-cash failed-order group summaries ---
+
+
+def test_summarize_shared_failed_orders_by_computes_grouped_metrics():
+    failed_orders = pd.DataFrame(
+        {
+            "symbol": ["000001.SZ", "000002.SZ", "600000.SH"],
+            "trade_date": pd.to_datetime(["2026-01-06", "2026-01-07", "2026-01-08"]),
+            "side": ["buy", "buy", "sell"],
+            "quantity": [100, 200, 50],
+            "price": [10.0, 20.0, 15.0],
+            "notional": [1000.0, 4000.0, 750.0],
+            "reason": [None, "entry_exit", "rebalance"],
+            "failure_reason": ["limit_up_buy_blocked", "limit_up_buy_blocked", "limit_down_sell_blocked"],
+            "board": ["main_board", "main_board", "star_market"],
+        }
+    )
+
+    grouped = summarize_shared_failed_orders_by(failed_orders, "board")
+
+    assert grouped["group_by"].tolist() == ["board", "board"]
+    assert grouped["group_value"].tolist() == ["main_board", "star_market"]
+    assert grouped["failed_order_count"].tolist() == [2, 1]
+    assert grouped["failed_notional"].tolist() == pytest.approx([5000.0, 750.0])
+
+
+def test_summarize_shared_failed_orders_by_raises_on_missing_column():
+    failed_orders = pd.DataFrame({"symbol": ["000001.SZ"], "failure_reason": ["blocked"]})
+    with pytest.raises(ValueError, match="shared-cash failed orders must include board"):
+        summarize_shared_failed_orders_by(failed_orders, "board")
+
+
+def test_summarize_shared_failed_orders_by_returns_empty_frame_when_input_empty():
+    failed_orders = pd.DataFrame(columns=["symbol", "failure_reason", "board"])
+    grouped = summarize_shared_failed_orders_by(failed_orders, "board")
+    assert len(grouped) == 0
+    assert "failed_order_count" in grouped.columns
+    assert "failed_notional" in grouped.columns
+
+
+def test_summarize_shared_failed_orders_by_handles_no_column_empty_frame():
+    grouped = summarize_shared_failed_orders_by(pd.DataFrame(), "board")
+    assert len(grouped) == 0
+    assert "group_by" in grouped.columns
+    assert "group_value" in grouped.columns
+    assert "failed_order_count" in grouped.columns
+    assert "failed_notional" in grouped.columns
+
+
+def test_summarize_shared_failed_orders_by_skips_nan_group_values():
+    failed_orders = pd.DataFrame(
+        {
+            "symbol": ["000001.SZ", "000002.SZ"],
+            "trade_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+            "side": ["buy", "sell"],
+            "quantity": [100, 50],
+            "price": [10.0, 15.0],
+            "notional": [1000.0, 750.0],
+            "reason": [None, "rebalance"],
+            "failure_reason": ["blocked", "blocked"],
+            "board": ["main_board", None],
+        }
+    )
+
+    grouped = summarize_shared_failed_orders_by(failed_orders, "board")
+
+    assert len(grouped) == 1
+    assert grouped["group_value"].tolist() == ["main_board"]

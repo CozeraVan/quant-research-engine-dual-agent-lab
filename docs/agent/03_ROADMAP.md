@@ -44,7 +44,7 @@
 | M4.9 | Real suspension/ST/risk-warning metadata | TODO | CLAUDE_CODE | fallback currently static unless data provided | Confirm source tables |
 | M4.10 | Batch metadata passthrough group-by | DONE | CODEX/CLAUDE_CODE | 283 tests passed; `summary_metadata_columns` added to batch requests; CLI `--group-by` columns flow into batch summaries | Preserve |
 | M4.11 | Shared-cash metadata output passthrough | DONE | CODEX/CLAUDE_CODE | 293 tests passed; `metadata_columns` added to shared-cash requests; output rows carry requested metadata without overwriting canonical fields | Preserve |
-| M4.12 | Shared-cash metadata group summaries | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for grouped order/trade/failed-order summaries from requested row metadata | Implement and report in `09_CODING_HANDOFF.md` |
+| M4.12 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 tests passed; `backtest-shared --group-by` writes row-based grouped order/trade/failed-order CSVs with manifest validation | Preserve |
 
 ## Milestone 5: Reporting And Reproducibility
 

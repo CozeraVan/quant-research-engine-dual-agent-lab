@@ -14,6 +14,9 @@ from quant_research_engine.portfolio.analytics import (
     summarize_batch_rolling_summary_by,
     summarize_batch_window_summary_by,
     summarize_batch_window_summary,
+    summarize_shared_orders_by,
+    summarize_shared_trades_by,
+    summarize_shared_failed_orders_by,
 )
 from quant_research_engine.portfolio.risk import summarize_equity_curve_by_window, summarize_equity_curve_rolling
 from quant_research_engine.portfolio.shared import SharedCashBacktestResult
@@ -137,6 +140,7 @@ def write_shared_cash_result(
     result: SharedCashBacktestResult,
     output_dir: str | Path,
     run_request: dict[str, Any] | None = None,
+    group_by: list[str] | None = None,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -167,6 +171,16 @@ def write_shared_cash_result(
         paths["rolling_metrics_20"],
         index=False,
     )
+    for group_column in group_by or []:
+        for prefix, frame, summarizer in [
+            ("orders", result.orders, summarize_shared_orders_by),
+            ("trades", result.trades, summarize_shared_trades_by),
+            ("failed_orders", result.failed_orders, summarize_shared_failed_orders_by),
+        ]:
+            key = f"{prefix}_by_{group_column}"
+            path = directory / f"{prefix}_by_{group_column}.csv"
+            summarizer(frame, group_column).to_csv(path, index=False)
+            paths[key] = path
     paths["summary"].write_text(
         json.dumps(_json_ready_summary(result.summary), ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
@@ -320,7 +334,21 @@ def _shared_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
         "report_manifest": "Report manifest",
         "run_manifest": "Run manifest",
     }
-    return [(labels[key], paths[key]) for key in labels if key in paths]
+    result: list[tuple[str, Path]] = []
+    for key in labels:
+        if key in paths:
+            result.append((labels[key], paths[key]))
+    for key, path in paths.items():
+        if key.startswith("orders_by_"):
+            column = key.removeprefix("orders_by_")
+            result.append((f"Orders by {column.replace('_', ' ')}", path))
+        elif key.startswith("trades_by_"):
+            column = key.removeprefix("trades_by_")
+            result.append((f"Trades by {column.replace('_', ' ')}", path))
+        elif key.startswith("failed_orders_by_"):
+            column = key.removeprefix("failed_orders_by_")
+            result.append((f"Failed orders by {column.replace('_', ' ')}", path))
+    return result
 
 
 def _shared_report_manifest(paths: dict[str, Path], output_dir: Path) -> dict[str, Any]:
@@ -344,6 +372,9 @@ def _shared_manifest_entry(key: str, path: Path, output_dir: Path) -> dict[str, 
     window_size = _shared_manifest_window_size(key)
     if window_size is not None:
         entry["window_size"] = window_size
+    group_column = _shared_manifest_group_by(key)
+    if group_column is not None:
+        entry["group_by"] = group_column
     return entry
 
 
@@ -352,6 +383,12 @@ def _shared_manifest_role(key: str) -> str:
         return "window_metrics"
     if key.startswith("rolling_metrics_"):
         return "rolling_metrics"
+    if key.startswith("orders_by_"):
+        return "shared_orders_group_summary"
+    if key.startswith("trades_by_"):
+        return "shared_trades_group_summary"
+    if key.startswith("failed_orders_by_"):
+        return "shared_failed_orders_group_summary"
     if key == "summary_markdown":
         return "summary_markdown"
     if key == "report_manifest":
@@ -371,6 +408,13 @@ def _shared_manifest_window_size(key: str) -> int | None:
     if not key.startswith("rolling_metrics_"):
         return None
     return int(key.removeprefix("rolling_metrics_"))
+
+
+def _shared_manifest_group_by(key: str) -> str | None:
+    for prefix in ("orders_by_", "trades_by_", "failed_orders_by_"):
+        if key.startswith(prefix):
+            return key.removeprefix(prefix)
+    return None
 
 
 def batch_summary_markdown(

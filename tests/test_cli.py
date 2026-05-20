@@ -1293,6 +1293,125 @@ def test_cli_backtest_shared_metadata_columns_persisted_to_output_dir(capsys, mo
     assert run_manifest["request"]["metadata_columns"] == ["sector"]
 
 
+def test_cli_backtest_shared_group_by_writes_grouped_artifacts(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            return pd.DataFrame({
+                "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "open": [10.0, 20.0],
+                "close": [10.1, 20.2],
+                "board": ["main_board", "star_market"],
+            })
+
+    class FakeSharedEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return SharedCashBacktestResult(
+                orders=pd.DataFrame({
+                    "symbol": ["000001.SZ", "000002.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+                    "side": ["buy", "sell"],
+                    "quantity": [100, 50],
+                    "price": [10.0, 20.0],
+                    "notional": [1000.0, 1000.0],
+                    "cost": [5.0, 5.0],
+                    "reason": ["entry", "exit"],
+                    "board": ["main_board", "star_market"],
+                }),
+                trades=pd.DataFrame({
+                    "symbol": ["000001.SZ", "000002.SZ"],
+                    "entry_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+                    "exit_date": pd.to_datetime(["2026-01-09", "2026-01-10"]),
+                    "quantity": [100, 50],
+                    "entry_price": [10.0, 20.0],
+                    "exit_price": [11.0, 25.0],
+                    "gross_pnl": [100.0, 250.0],
+                    "cost": [10.0, 5.0],
+                    "net_pnl": [90.0, 245.0],
+                    "exit_reason": ["holding_days", "holding_days"],
+                    "board": ["main_board", "star_market"],
+                }),
+                failed_orders=pd.DataFrame({
+                    "symbol": ["000002.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-07"]),
+                    "side": ["buy"],
+                    "quantity": [100],
+                    "price": [30.0],
+                    "notional": [3000.0],
+                    "reason": [None],
+                    "failure_reason": ["limit_up_buy_blocked"],
+                    "board": ["star_market"],
+                }),
+                equity_curve=pd.DataFrame(
+                    {"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [100.0] * 21}
+                ),
+                summary={"initial_cash": 100.0, "final_equity": 105.0, "total_return": 0.05},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "SharedCashBacktestEngine", FakeSharedEngine)
+
+    output_dir = tmp_path / "output"
+    exit_code = main(
+        [
+            "backtest-shared",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--max-positions",
+            "2",
+            "--group-by",
+            "board",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "orders_by_board" in captured.out
+    assert "trades_by_board" in captured.out
+    assert "failed_orders_by_board" in captured.out
+
+    assert (output_dir / "orders_by_board.csv").exists()
+    assert (output_dir / "trades_by_board.csv").exists()
+    assert (output_dir / "failed_orders_by_board.csv").exists()
+
+    orders_grouped = pd.read_csv(output_dir / "orders_by_board.csv")
+    assert orders_grouped["group_value"].tolist() == ["main_board", "star_market"]
+    assert orders_grouped["order_count"].tolist() == [1, 1]
+
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["request"]["group_by"] == ["board"]
+
+    report_manifest = json.loads((output_dir / "report_manifest.json").read_text(encoding="utf-8"))
+    manifest_by_key = {item["key"]: item for item in report_manifest["files"]}
+    assert manifest_by_key["orders_by_board"]["group_by"] == "board"
+    assert manifest_by_key["orders_by_board"]["role"] == "shared_orders_group_summary"
+
+
 def test_cli_backtest_batch_can_print_markdown_summary(capsys, monkeypatch):
     class FakeStore:
         def __init__(self, settings):

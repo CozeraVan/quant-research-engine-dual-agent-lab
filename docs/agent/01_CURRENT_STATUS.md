@@ -22,10 +22,11 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Real security metadata passthrough adapters for optional upstream status, industry, and membership-style columns.
 - Batch backtest metadata group-by passthrough for optional upstream columns.
 - Shared-cash metadata output passthrough for requested static metadata columns.
+- Shared-cash row-level metadata group summaries for orders, trades, and failed orders.
 
 ## In Progress
 
-Claude Code is assigned to add shared-cash metadata group summary reports for orders, trades, and failed orders.
+None.
 
 ## Known Gaps
 
@@ -75,4 +76,4 @@ Claude Code is assigned to add shared-cash metadata group summary reports for or
 
 ## Next Recommended Step
 
-Claude Code should implement `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Choose the next unblocked evaluation or reporting task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

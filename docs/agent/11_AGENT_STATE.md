@@ -8,29 +8,29 @@ QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex finalized shared-cash metadata output passthrough and selected the next unblocked module: row-based shared-cash metadata group summaries for orders, trades, and failed orders. Codex prepared `08_IMPLEMENTATION_BRIEF.md`, updated the handoff docs, and assigned implementation to Claude Code.
+Codex re-reviewed and accepted shared-cash metadata group summaries. Empty no-column shared row artifacts now produce stable grouped CSV headers; non-empty frames missing the requested group column still raise clearly. Focused tests: 179 passed; full suite: 315 passed.
 
 ## Next Required Step
 
-Claude Code implements `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`, runs the required validation, and writes `09_CODING_HANDOFF.md`.
+None.
 
 ## Active Change Request
 
-User request from 2026-05-20: run One-Shot Review-Finalize-Next. Codex finalized the previous implementation and arranged the next Claude Code task.
+User request from 2026-05-20: run One-Shot Review-Finalize-Next. Codex review accepted the fixed implementation.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `038ef6e`, `Preserve row context for shared-cash metadata outputs`
-- Working tree clean after Codex handoff-doc commit.
+- Last accepted implementation commit: current `HEAD` after shared-cash metadata group summary finalization
+- Working tree clean after Codex finalization commit.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

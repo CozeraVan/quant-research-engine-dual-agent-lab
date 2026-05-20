@@ -10,21 +10,27 @@ QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001
 
 ## Current Status
 
-Ready for Claude Code implementation.
+Accepted locally.
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Completed
 
 - Codex finalized `QRE-SHARED-CASH-METADATA-OUTPUTS-001`.
 - Codex selected the next unblocked follow-up: grouped shared-cash diagnostics over requested row metadata.
 - Codex prepared `08_IMPLEMENTATION_BRIEF.md`.
-
-## In Progress
-
-- Claude Code should implement the brief and write `09_CODING_HANDOFF.md`.
+- Claude Code implemented shared-cash group summary analytics helpers.
+- Claude Code added `--group-by` CLI support to `backtest-shared`.
+- Claude Code updated `write_shared_cash_result()` to write grouped CSV artifacts.
+- Claude Code added manifest roles and validation for shared-cash grouped artifacts.
+- Claude Code wrote `09_CODING_HANDOFF.md`.
+- Codex review found that grouped output fails when a real shared-cash run has no failed orders and `failed_orders` is an empty no-column DataFrame.
+- Claude Code fixed empty no-column grouped output handling: moved `empty` check before column membership check in all three summarizer functions. Empty no-column DataFrames now return stable empty grouped CSVs with headers. Non-empty frames missing the group column still raise `ValueError`.
+- Claude Code added 4 regression tests (3 analytics unit tests + 1 integration test with realistic `pd.DataFrame()` failed_orders).
+- Claude Code updated `09_CODING_HANDOFF.md` and agent docs.
+- Codex re-reviewed and accepted the implementation.
 
 ## Expected Files
 
@@ -50,14 +56,13 @@ Last finalized implementation baseline:
 - `uv run pytest -q` -> `293 passed in 2.80s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
 
-Required validation for this task:
+Final implementation validation:
 
-- `uv run pytest tests/test_portfolio_analytics.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q`
-- `uv run pytest -q`
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
+- `uv run pytest tests/test_portfolio_analytics.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `179 passed in 2.31s`
+- `uv run pytest -q` -> `315 passed in 3.00s`
+- `scripts/check-progress-docs.sh` -> passed
+- `git diff --check` -> passed
 
 ## Known Risks
 
@@ -69,4 +74,4 @@ Required validation for this task:
 
 ## Next Suggested Step
 
-Claude Code should read `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`, and `08_IMPLEMENTATION_BRIEF.md`, then implement `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`.
+None. Await next task selection.
