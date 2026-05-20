@@ -3567,3 +3567,263 @@ def test_cli_report_files_json_validate_contents_reports_structural_issues(capsy
     assert "missing_columns" in captured.err
     assert str(output_path) in captured.err
     assert "trade_date" in captured.err
+
+
+def test_cli_eval_config_run_id_in_run_manifest(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["a", "b", "a", "b"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-05", "2026-01-06", "2026-01-06"]),
+                    "open": [10.0] * 4,
+                    "high": [10.0] * 4,
+                    "low": [10.0] * 4,
+                    "close": [10.0, 10.0, 11.0, 12.0],
+                    "pre_close": [10.0] * 4,
+                    "vol": [1.0] * 4,
+                    "amount": [100.0] * 4,
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["a", "b", "a", "b"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-05", "2026-01-06", "2026-01-06"]),
+                    "rsi_2": [1.0, 2.0, 1.0, 1.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "a",
+            "b",
+            "--output-dir",
+            str(output_dir),
+            "--run-id",
+            "research-run-42",
+        ]
+    )
+
+    assert exit_code == 0
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["run_id"] == "research-run-42"
+
+
+def test_cli_eval_config_run_id_omitted_is_null(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["a", "b", "a", "b"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-05", "2026-01-06", "2026-01-06"]),
+                    "open": [10.0] * 4,
+                    "high": [10.0] * 4,
+                    "low": [10.0] * 4,
+                    "close": [10.0, 10.0, 11.0, 12.0],
+                    "pre_close": [10.0] * 4,
+                    "vol": [1.0] * 4,
+                    "amount": [100.0] * 4,
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["a", "b", "a", "b"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-05", "2026-01-06", "2026-01-06"]),
+                    "rsi_2": [1.0, 2.0, 1.0, 1.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "a",
+            "b",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["run_id"] is None
+
+
+def test_cli_preflight_run_id_in_output_json(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def table_exists(self, table_name, *, engine=None):
+            return table_name == "factors.stock_daily_momentum_close"
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "rsi_2"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_json_path = tmp_path / "preflight_output.json"
+
+    exit_code = main(
+        [
+            "preflight",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--codes",
+            "000001.SZ",
+            "--output-json",
+            str(output_json_path),
+            "--run-id",
+            "research-run-42",
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_json_path.read_text(encoding="utf-8"))
+    assert payload["run_id"] == "research-run-42"
+
+
+def test_cli_preflight_run_id_omitted_is_null(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def table_exists(self, table_name, *, engine=None):
+            return table_name == "factors.stock_daily_momentum_close"
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "rsi_2"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_json_path = tmp_path / "preflight_output.json"
+
+    exit_code = main(
+        [
+            "preflight",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--codes",
+            "000001.SZ",
+            "--output-json",
+            str(output_json_path),
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_json_path.read_text(encoding="utf-8"))
+    assert payload["run_id"] is None

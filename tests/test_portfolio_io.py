@@ -974,3 +974,41 @@ def test_write_shared_cash_result_grouped_with_no_column_empty_failed_orders(tmp
     manifest_by_key = {item["key"]: item for item in manifest["files"]}
     assert "failed_orders_by_board" in manifest_by_key
     assert manifest_by_key["failed_orders_by_board"]["role"] == "shared_failed_orders_group_summary"
+
+
+def test_write_single_symbol_result_includes_run_id(tmp_path):
+    result = SingleSymbolBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 1},
+    )
+    run_request = {
+        "command": "backtest-single",
+        "strategy_path": "/tmp/strategy.yaml",
+        "request": {"symbol": "000001.SZ", "initial_cash": 10000.0, "holding_days": 2},
+    }
+    paths = write_single_symbol_result(result, tmp_path, run_request=run_request, run_id="research-run-42")
+
+    manifest = json.loads(paths["run_manifest"].read_text(encoding="utf-8"))
+    assert manifest["run_id"] == "research-run-42"
+
+
+def test_write_single_symbol_result_run_id_null_when_omitted(tmp_path):
+    result = SingleSymbolBacktestResult(
+        orders=pd.DataFrame({"symbol": ["000001.SZ"], "side": ["buy"]}),
+        trades=pd.DataFrame({"symbol": ["000001.SZ"], "net_pnl": [90.0]}),
+        equity_curve=pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-05"]), "total_equity": [10000.0]}),
+        failed_orders=pd.DataFrame(),
+        summary={"initial_cash": 10000.0, "final_equity": 10000.0, "trade_count": 1},
+    )
+    run_request = {
+        "command": "backtest-single",
+        "strategy_path": "/tmp/strategy.yaml",
+        "request": {"symbol": "000001.SZ", "initial_cash": 10000.0, "holding_days": 2},
+    }
+    paths = write_single_symbol_result(result, tmp_path, run_request=run_request)
+
+    manifest = json.loads(paths["run_manifest"].read_text(encoding="utf-8"))
+    assert manifest["run_id"] is None

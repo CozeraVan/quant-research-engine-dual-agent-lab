@@ -8,25 +8,25 @@ QRE-RUN-ID-MANIFEST-LINKAGE-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex finalized `QRE-EVAL-FACTOR-DECAY-SUMMARY-001` locally with commit `8b0e924`, `Summarize evaluation factor decay`. Codex then prepared `08_IMPLEMENTATION_BRIEF.md` for optional run-level identifier linkage across preflight, evaluation, and portfolio durable outputs.
+Codex reviewed `QRE-RUN-ID-MANIFEST-LINKAGE-001` and wrote `10_REVIEW_REPORT.md` with outcome PASS. Validation passed: focused suite `127 passed, 2 warnings in 2.25s`; full suite `330 passed, 2 warnings in 3.18s`; `scripts/check-progress-docs.sh` passed; `git diff --check` passed.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-RUN-ID-MANIFEST-LINKAGE-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`.
+Codex should run finalization checks and commit the accepted implementation locally. No remote push is requested.
 
 ## Git State
 
 - Current branch: `master`
 - Last accepted implementation commit: `8b0e924`, `Summarize evaluation factor decay`
-- Working tree contains Codex planning/handoff docs for `QRE-RUN-ID-MANIFEST-LINKAGE-001`.
+- Working tree contains accepted `QRE-RUN-ID-MANIFEST-LINKAGE-001` changes awaiting local commit.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

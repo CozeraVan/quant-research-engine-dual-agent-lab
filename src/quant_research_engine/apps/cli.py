@@ -140,6 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_config_parser.add_argument("--group-by", nargs="*", default=None, help="Optional grouping columns for event forward-return summaries, e.g. board industry")
     eval_config_parser.add_argument("--output-dir", type=Path, help="Optional output directory for durable evaluation artifacts.")
     eval_config_parser.add_argument("--random-baseline-seed", type=int, default=None, help="Optional seed for deterministic random-baseline comparison.")
+    eval_config_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
 
     preflight_parser = subparsers.add_parser("preflight", help="Run read-only data and factor checks before broad runs")
     preflight_parser.add_argument("strategy", type=Path)
@@ -152,6 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--benchmark-code")
     preflight_parser.add_argument("--benchmark-value-column", default="close")
     preflight_parser.add_argument("--output-json", type=Path)
+    preflight_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
 
     backtest_parser = subparsers.add_parser("backtest-single", help="Run a single-symbol portfolio backtest from YAML")
     backtest_parser.add_argument("strategy", type=Path)
@@ -166,6 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional market profile YAML. Defaults to built-in zero-slippage A-share profile.",
     )
     backtest_parser.add_argument("--output-dir", type=Path, help="Optional directory for orders/trades/equity/summary files.")
+    backtest_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
 
     batch_parser = subparsers.add_parser("backtest-batch", help="Run independent per-symbol portfolio backtests from YAML")
     batch_parser.add_argument("strategy", type=Path)
@@ -188,6 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     batch_parser.add_argument("--print-summary-md", action="store_true", help="Print a human-readable Markdown summary to stdout.")
     batch_parser.add_argument("--output-dir", type=Path, help="Optional directory for batch summary and per-symbol files.")
+    batch_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
 
     shared_parser = subparsers.add_parser("backtest-shared", help="Run a shared-cash multi-symbol portfolio backtest from YAML")
     shared_parser.add_argument("strategy", type=Path)
@@ -224,6 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     shared_parser.add_argument("--group-by", nargs="*", default=None, help="Optional grouping columns for shared-cash order, trade, and failed-order summaries.")
     shared_parser.add_argument("--print-summary-md", action="store_true", help="Print a human-readable Markdown summary to stdout.")
     shared_parser.add_argument("--output-dir", type=Path, help="Optional directory for portfolio result files.")
+    shared_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
 
     return parser
 
@@ -334,6 +339,7 @@ def _write_evaluation_output(
     run_manifest_payload: dict[str, object] = {
         "schema_version": 1,
         "kind": "evaluation_run_manifest",
+        "run_id": args.run_id,
         "command": "eval-config",
         "strategy_path": strategy_path,
         "start": str(args.start),
@@ -800,7 +806,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             if args.output_json:
                 args.output_json.parent.mkdir(parents=True, exist_ok=True)
-                args.output_json.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+                payload = report.to_dict()
+                payload["run_id"] = args.run_id
+                args.output_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception as exc:
             print(str(exc), file=__import__("sys").stderr)
             return 2
@@ -878,7 +886,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "market_profile": str(args.market_profile) if args.market_profile else "built-in",
                 },
             }
-            paths = write_single_symbol_result(result, args.output_dir, run_request=run_request)
+            paths = write_single_symbol_result(result, args.output_dir, run_request=run_request, run_id=args.run_id)
             for key, path in paths.items():
                 print(f"{key}_path={path}")
         return 0
@@ -969,6 +977,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 group_by=args.group_by,
                 group_rank_top_n=args.group_rank_top_n,
                 run_request=run_request,
+                run_id=args.run_id,
             )
             for key, path in paths.items():
                 print(f"{key}_path={path}")
@@ -1078,7 +1087,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "group_by": args.group_by,
                 },
             }
-            paths = write_shared_cash_result(result, args.output_dir, run_request=run_request, group_by=args.group_by)
+            paths = write_shared_cash_result(result, args.output_dir, run_request=run_request, group_by=args.group_by, run_id=args.run_id)
             for key, path in paths.items():
                 print(f"{key}_path={path}")
         return 0

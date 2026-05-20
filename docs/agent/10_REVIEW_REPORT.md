@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-EVAL-FACTOR-DECAY-SUMMARY-001
+QRE-RUN-ID-MANIFEST-LINKAGE-001
 
 ## Written By
 
@@ -18,13 +18,10 @@ Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
-- `src/quant_research_engine/evaluation/models.py`
-- `src/quant_research_engine/evaluation/engine.py`
 - `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_evaluation_forward_returns.py`
+- `src/quant_research_engine/portfolio/io.py`
 - `tests/test_cli.py`
-- `tests/test_portfolio_report_manifest.py`
+- `tests/test_portfolio_io.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -35,33 +32,30 @@ Changed files reviewed:
 
 Review passed.
 
-Evaluation results now include `factor_decay_summary`, derived from existing IC and Rank IC summaries by factor and forward horizon. The implementation uses each factor's smallest horizon as the base, writes null decay values when the corresponding base IC/Rank IC is missing or zero, prints the summary in `qre eval-config`, persists `factor_decay_summary.csv` under `--output-dir`, and exposes the artifact through report-manifest validation.
+The implementation adds optional `--run-id` support to `preflight`, `eval-config`, `backtest-single`, `backtest-batch`, and `backtest-shared`. The identifier is persisted as a top-level `run_id` field in preflight JSON output, evaluation `run_manifest.json`, and portfolio `portfolio_backtest_run_manifest`. When omitted, the field is written as explicit JSON `null`.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `EvaluationResult.factor_decay_summary` was added.
-- `EvaluationEngine._build_factor_decay_summary()` derives rows from existing `ic_summary`; it does not recompute factors or indicators.
-- Empty IC output returns an empty DataFrame with stable columns.
-- `qre eval-config` prints the factor decay section only when non-empty.
-- `eval-config --output-dir` writes `factor_decay_summary.csv` when available.
-- Evaluation `run_manifest.json` records the new artifact through the existing artifact list.
-- `report_manifest.json` records the artifact with role `factor_decay_summary`.
-- `ReportManifest.validate_contents()` validates required factor decay columns.
-- Focused engine, CLI, and manifest tests were added.
+- `--run-id` is optional on all five requested CLI commands.
+- `preflight --output-json` writes top-level `run_id`.
+- `eval-config --output-dir` writes top-level `run_id` in `run_manifest.json`.
+- Portfolio run manifests can carry top-level `run_id`.
+- `run_id` is not duplicated inside nested request payloads.
+- Report-manifest file-entry schema and artifact filenames are unchanged.
+- No evaluation, preflight, or portfolio math changed.
+- No database writes, orchestrator command, benchmark wiring, or regime wiring were added.
 
 ## Locked Requirements Check
 
 No locked-requirement violation found.
 
-- R-CORE-001: Existing evaluation summaries and artifacts are preserved.
-- R-CORE-002: The change is scoped to evaluation, CLI output, report-manifest validation, and tests.
+- R-CORE-001: Existing command behavior is preserved when `--run-id` is omitted.
+- R-CORE-002: Change is scoped to CLI metadata, run-manifest output, tests, and handoff docs.
 - R-CORE-003: Focused and full validation passed.
-- R-QRE-002: No technical indicators are computed inside QRE.
 - R-QRE-005: Data access remains read-only.
-- R-QRE-007: Report artifact and manifest contracts are preserved.
-- R-QRE-008: Factor decay remains a diagnostic; it is not documented as strategy proof.
+- R-QRE-007: Report manifest discovery and audit contracts are preserved.
 - R-GIT-002: No push performed.
 
 ## Test Review
@@ -69,7 +63,7 @@ No locked-requirement violation found.
 Validation commands run by Codex:
 
 ```bash
-uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
@@ -77,12 +71,12 @@ git diff --check
 
 Results:
 
-- `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q`: `164 passed, 2 warnings in 1.76s`
-- `uv run pytest -q`: `324 passed, 2 warnings in 3.05s`
+- `uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q`: `127 passed, 2 warnings in 2.25s`
+- `uv run pytest -q`: `330 passed, 2 warnings in 3.18s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 
-Warnings were NumPy correlation divide warnings in the new CLI factor-decay test data; they do not fail validation and reflect constant-input correlation handling.
+The warnings are the existing NumPy correlation divide warnings in the factor-decay CLI test data and are unrelated to run-ID linkage.
 
 ## Required Fixes
 

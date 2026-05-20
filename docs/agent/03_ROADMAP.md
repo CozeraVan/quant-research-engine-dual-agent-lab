@@ -55,7 +55,7 @@
 | M5.2 | Report manifests | DONE | HISTORICAL | `report_manifest.json` | Preserve |
 | M5.3 | Report discovery and audit CLI | DONE | HISTORICAL | `qre report-files`, `qre report-audit` | Use in acceptance checks |
 | M5.4 | Strict zero-match report audit | DONE | HISTORICAL | `--require-match` | Preserve |
-| M5.5 | Larger research-run reproducibility workflow | IN_PROGRESS | CODEX/CLAUDE_CODE | `eval-config --output-dir` artifacts and manifests exist; `08_IMPLEMENTATION_BRIEF.md` now scopes optional run-ID linkage across preflight/eval/backtest durable outputs | Implement `QRE-RUN-ID-MANIFEST-LINKAGE-001` |
+| M5.5 | Larger research-run reproducibility workflow | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 330 tests passed; optional `--run-id` links preflight/eval/backtest durable JSON outputs | Preserve; larger orchestration can follow later |
 
 ## Milestone 6: Dual-Agent Workflow
 

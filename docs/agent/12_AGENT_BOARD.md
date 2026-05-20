@@ -6,11 +6,11 @@ QRE-RUN-ID-MANIFEST-LINKAGE-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE_CODE
+CODEX_FINALIZING
 
 ## Sender
 
@@ -18,21 +18,18 @@ CODEX
 
 ## Short Message
 
-Implement optional `--run-id` linkage for preflight, eval-config, and portfolio durable outputs.
+Run-ID manifest linkage review passed. Ready for Codex local finalization.
 
-## Implementation Brief
+## Review Summary
 
-Read `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
-
-Core requirements:
-
-1. Add optional `--run-id` to `preflight`, `eval-config`, `backtest-single`, `backtest-batch`, and `backtest-shared`. ✅ target
-2. Persist top-level `run_id` in preflight `--output-json`. ✅ target
-3. Persist top-level `run_id` in evaluation `run_manifest.json`. ✅ target
-4. Persist top-level `run_id` in portfolio `portfolio_backtest_run_manifest`. ✅ target
-5. Keep `run_id` optional and metadata-only. ✅ constraint
-6. Preserve existing command behavior when omitted. ✅ constraint
-7. Do not add an orchestrator command, database writes, or benchmark/regime wiring. ✅ constraint
+1. Optional `--run-id` added to `preflight`, `eval-config`, `backtest-single`, `backtest-batch`, and `backtest-shared`. ✅
+2. Preflight `--output-json` writes top-level `run_id`. ✅
+3. Evaluation `run_manifest.json` writes top-level `run_id`. ✅
+4. Portfolio `portfolio_backtest_run_manifest` writes top-level `run_id`. ✅
+5. Omitted `--run-id` writes stable explicit null. ✅
+6. No report-manifest file-entry schema change. ✅
+7. No orchestrator, database writes, benchmark/regime wiring, or math changes. ✅
+8. `10_REVIEW_REPORT.md` outcome PASS. ✅
 
 ## Required Validation
 
@@ -40,6 +37,13 @@ Core requirements:
 - `uv run pytest -q`
 - `scripts/check-progress-docs.sh`
 - `git diff --check`
+
+## Validation Results
+
+- `uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q` -> `127 passed, 2 warnings in 2.25s`
+- `uv run pytest -q` -> `330 passed, 2 warnings in 3.18s`
+- `scripts/check-progress-docs.sh` -> passed
+- `git diff --check` -> passed
 
 ## Expected Changed Files
 
@@ -55,4 +59,4 @@ Core requirements:
 
 ## Next Step
 
-Claude Code should implement the brief and write `09_CODING_HANDOFF.md` for Codex review.
+Codex should run finalization checks, commit locally, and then prepare the next Claude Code implementation brief.

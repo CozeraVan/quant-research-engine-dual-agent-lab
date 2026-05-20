@@ -24,10 +24,11 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Shared-cash metadata output passthrough for requested static metadata columns.
 - Shared-cash row-level metadata group summaries for orders, trades, and failed orders.
 - Evaluation factor decay summaries from existing IC and Rank IC outputs, including eval-config stdout, CSV artifact, and report-manifest validation.
+- Optional run-level identifiers across preflight JSON, evaluation run manifests, and portfolio run manifests.
 
 ## In Progress
 
-Claude Code is assigned to add optional run-level identifiers to preflight, evaluation, and portfolio durable outputs.
+Codex is finalizing the accepted optional run-level identifier implementation and preparing the next Claude Code task.
 
 ## Known Gaps
 
@@ -77,4 +78,4 @@ Claude Code is assigned to add optional run-level identifiers to preflight, eval
 
 ## Next Recommended Step
 
-Claude Code should implement `QRE-RUN-ID-MANIFEST-LINKAGE-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Codex should finalize `QRE-RUN-ID-MANIFEST-LINKAGE-001` locally, then prepare the next unblocked Claude Code task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

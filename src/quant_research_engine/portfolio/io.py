@@ -91,10 +91,12 @@ def _write_run_manifest(
     output_dir: Path,
     run_request: dict[str, Any],
     artifact_paths: dict[str, Path],
+    run_id: str | None = None,
 ) -> Path:
     payload: dict[str, Any] = {
         "schema_version": 1,
         "kind": "portfolio_backtest_run_manifest",
+        "run_id": run_id,
         "command": run_request["command"],
         "strategy_path": run_request["strategy_path"],
         "request": run_request["request"],
@@ -112,6 +114,7 @@ def write_single_symbol_result(
     result: SingleSymbolBacktestResult,
     output_dir: str | Path,
     run_request: dict[str, Any] | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -132,7 +135,7 @@ def write_single_symbol_result(
         encoding="utf-8",
     )
     if run_request is not None:
-        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths)
+        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths, run_id=run_id)
     return paths
 
 
@@ -141,6 +144,7 @@ def write_shared_cash_result(
     output_dir: str | Path,
     run_request: dict[str, Any] | None = None,
     group_by: list[str] | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -186,7 +190,7 @@ def write_shared_cash_result(
         encoding="utf-8",
     )
     if run_request is not None:
-        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths)
+        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths, run_id=run_id)
     paths["summary_markdown"].write_text(shared_summary_markdown(result.summary, paths), encoding="utf-8")
     paths["report_manifest"].write_text(
         json.dumps(_shared_report_manifest(paths, directory), ensure_ascii=False, indent=2, sort_keys=True),
@@ -201,6 +205,7 @@ def write_batch_result(
     group_by: list[str] | None = None,
     group_rank_top_n: int = 1,
     run_request: dict[str, Any] | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -275,7 +280,7 @@ def write_batch_result(
         for name, path in single_paths.items():
             paths[f"{symbol}_{name}"] = path
     if run_request is not None:
-        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths)
+        paths["run_manifest"] = _write_run_manifest(directory, run_request, paths, run_id=run_id)
     paths["summary_markdown"].write_text(
         batch_summary_markdown(result.summary_metrics, paths, result.summary),
         encoding="utf-8",
