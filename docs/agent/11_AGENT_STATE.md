@@ -4,29 +4,29 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-EVAL-FACTOR-DECAY-SUMMARY-001
+QRE-RUN-ID-MANIFEST-LINKAGE-001
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-EVAL-FACTOR-DECAY-SUMMARY-001` and wrote `10_REVIEW_REPORT.md` with outcome PASS. Validation passed: focused suite `164 passed, 2 warnings in 1.76s`; full suite `324 passed, 2 warnings in 3.05s`; `scripts/check-progress-docs.sh` passed; `git diff --check` passed.
+Codex finalized `QRE-EVAL-FACTOR-DECAY-SUMMARY-001` locally with commit `8b0e924`, `Summarize evaluation factor decay`. Codex then prepared `08_IMPLEMENTATION_BRIEF.md` for optional run-level identifier linkage across preflight, evaluation, and portfolio durable outputs.
 
 ## Next Required Step
 
-Codex should run finalization checks and commit the accepted implementation locally. No remote push is requested.
+Claude Code should implement `QRE-RUN-ID-MANIFEST-LINKAGE-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `5853e0f`, `Group shared-cash reports by row metadata`
-- Working tree contains accepted `QRE-EVAL-FACTOR-DECAY-SUMMARY-001` changes awaiting local commit.
+- Last accepted implementation commit: `8b0e924`, `Summarize evaluation factor decay`
+- Working tree contains Codex planning/handoff docs for `QRE-RUN-ID-MANIFEST-LINKAGE-001`.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

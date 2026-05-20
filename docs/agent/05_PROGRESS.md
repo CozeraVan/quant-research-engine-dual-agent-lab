@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -54,22 +54,22 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-37 | Batch metadata group-by passthrough | DONE | CODEX/CLAUDE_CODE | 283 passed in 2.67s; `summary_metadata_columns` in `BatchBacktestRequest`; CLI `backtest-batch --group-by` passes columns to engine; 5 new tests; Codex review passed | Preserve |
 | QRE-NEXT-38 | Shared-cash metadata output passthrough | DONE | CODEX/CLAUDE_CODE | 293 passed in 2.80s; shared-cash `metadata_columns`; output rows carry requested metadata; collision guards prevent overwriting canonical fields; 10 new tests including CLI and collision coverage | Preserve |
 | QRE-NEXT-39 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 passed in 3.00s; row-based grouped order/trade/failed-order summaries; `backtest-shared --group-by`; grouped CSV artifacts; manifest roles; empty no-column outputs handled | Preserve |
-| QRE-NEXT-40 | Evaluation factor decay summary | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `factor_decay_summary` in `EvaluationResult`; derived from `ic_summary` per factor/horizon; stdout + CSV artifact + manifest validation; 9 tests added; 324 passed | Local finalize |
+| QRE-NEXT-40 | Evaluation factor decay summary | DONE | CODEX/CLAUDE_CODE | commit `8b0e924`; `10_REVIEW_REPORT.md` PASS; `factor_decay_summary` in `EvaluationResult`; derived from `ic_summary` per factor/horizon; stdout + CSV artifact + manifest validation; 324 passed | Preserve |
+| QRE-NEXT-41 | Run ID manifest linkage | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for optional `--run-id` on preflight/eval/backtest durable outputs | Implement and report in `09_CODING_HANDOFF.md` |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-EVAL-FACTOR-DECAY-SUMMARY-001 Codex review:
+Recorded on 2026-05-20 after QRE-EVAL-FACTOR-DECAY-SUMMARY-001 local finalization and next-task planning:
 
-- Current task: `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`
-- Last finalized: QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001 (commit `5853e0f`)
+- Current task: `QRE-RUN-ID-MANIFEST-LINKAGE-001`
+- Last finalized: QRE-EVAL-FACTOR-DECAY-SUMMARY-001 (commit `8b0e924`)
 - Last validation:
   - `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> `164 passed, 2 warnings in 1.76s`
   - `uv run pytest -q` -> `324 passed, 2 warnings in 3.05s`
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
-- Implementation: 9 new tests (6 engine + 1 CLI + 2 manifest); `factor_decay_summary` field, builder, stdout, artifact, manifest validation
-- Review: `10_REVIEW_REPORT.md` PASS
-- Next step: local git finalization
+- Finalization: local commit `8b0e924`; `scripts/git-finalize-check.sh` passed before commit; no push
+- Next step: Claude Code implements optional `--run-id` manifest linkage from `08_IMPLEMENTATION_BRIEF.md`
 
 ## Completed Module Summary
 
@@ -83,7 +83,7 @@ Recorded on 2026-05-20 after QRE-EVAL-FACTOR-DECAY-SUMMARY-001 Codex review:
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
-- Larger research-run reproducibility workflow.
+- Larger research-run reproducibility workflow beyond run-ID linkage.
 
 ## Status Meaning
 

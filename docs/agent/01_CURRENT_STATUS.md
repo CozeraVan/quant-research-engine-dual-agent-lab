@@ -27,7 +27,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is finalizing the accepted evaluation factor decay summary implementation and preparing the next Claude Code task.
+Claude Code is assigned to add optional run-level identifiers to preflight, evaluation, and portfolio durable outputs.
 
 ## Known Gaps
 
@@ -35,7 +35,7 @@ Codex is finalizing the accepted evaluation factor decay summary implementation 
 - Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables.
 - Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
 - Evaluation layer does not yet implement real index benchmark comparison or real regime classification.
-- Larger research-run bundles across preflight, evaluation, and backtest outputs are not yet standardized.
+- Larger research-run bundles beyond run-level identifier linkage are not yet standardized.
 
 ## Current Technical Stack
 
@@ -77,4 +77,4 @@ Codex is finalizing the accepted evaluation factor decay summary implementation 
 
 ## Next Recommended Step
 
-Codex should finalize `QRE-EVAL-FACTOR-DECAY-SUMMARY-001` locally, then prepare the next unblocked Claude Code task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-RUN-ID-MANIFEST-LINKAGE-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-EVAL-FACTOR-DECAY-SUMMARY-001
+QRE-RUN-ID-MANIFEST-LINKAGE-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_FINALIZING
+CODEX_TO_CLAUDE_CODE
 
 ## Sender
 
@@ -18,51 +18,35 @@ CODEX
 
 ## Short Message
 
-Evaluation factor decay summary review passed. Ready for Codex local finalization.
+Implement optional `--run-id` linkage for preflight, eval-config, and portfolio durable outputs.
 
-## Review Summary
+## Implementation Brief
 
-1. `factor_decay_summary` added to `EvaluationResult`. ✅
-2. `_build_factor_decay_summary()` derives decay rows from existing `ic_summary`. ✅
-3. Smallest horizon per factor used as base; decay = horizon IC - base IC. ✅
-4. `qre eval-config` prints `factor_decay_summary` when non-empty. ✅
-5. `factor_decay_summary.csv` persisted under `eval-config --output-dir`. ✅
-6. Report manifest role `factor_decay_summary` with required columns `factor`, `horizon`, `base_horizon`. ✅
-7. Existing evaluation behavior and artifacts preserved. ✅
-8. `09_CODING_HANDOFF.md` written with all required details. ✅
-9. `10_REVIEW_REPORT.md` outcome PASS. ✅
+Read `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
-## Constraints Check
+Core requirements:
 
-- Do not add benchmark wiring, regime classification, or new data sources.
-- Do not compute technical indicators internally.
-- Do not change existing IC, Rank IC, quantile, group, or random-baseline semantics.
-- Keep output manifests compatible with `report-files` and `report-audit`.
-- Do not push.
+1. Add optional `--run-id` to `preflight`, `eval-config`, `backtest-single`, `backtest-batch`, and `backtest-shared`. ✅ target
+2. Persist top-level `run_id` in preflight `--output-json`. ✅ target
+3. Persist top-level `run_id` in evaluation `run_manifest.json`. ✅ target
+4. Persist top-level `run_id` in portfolio `portfolio_backtest_run_manifest`. ✅ target
+5. Keep `run_id` optional and metadata-only. ✅ constraint
+6. Preserve existing command behavior when omitted. ✅ constraint
+7. Do not add an orchestrator command, database writes, or benchmark/regime wiring. ✅ constraint
 
 ## Required Validation
 
-- `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q`
+- `uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q`
 - `uv run pytest -q`
 - `scripts/check-progress-docs.sh`
 - `git diff --check`
 
-## Validation Results
-
-- `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> `164 passed, 2 warnings in 1.76s`
-- `uv run pytest -q` -> `324 passed, 2 warnings in 3.05s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-
 ## Expected Changed Files
 
-- `src/quant_research_engine/evaluation/models.py`
-- `src/quant_research_engine/evaluation/engine.py`
 - `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_evaluation_forward_returns.py`
+- `src/quant_research_engine/portfolio/io.py`
 - `tests/test_cli.py`
-- `tests/test_portfolio_report_manifest.py`
+- `tests/test_portfolio_io.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -71,4 +55,4 @@ Evaluation factor decay summary review passed. Ready for Codex local finalizatio
 
 ## Next Step
 
-Codex should run finalization checks, commit locally, and then prepare the next Claude Code implementation brief.
+Claude Code should implement the brief and write `09_CODING_HANDOFF.md` for Codex review.

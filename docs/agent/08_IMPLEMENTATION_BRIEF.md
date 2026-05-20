@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-EVAL-FACTOR-DECAY-SUMMARY-001
+QRE-RUN-ID-MANIFEST-LINKAGE-001
 
 ## Created By
 
@@ -14,31 +14,29 @@ CLAUDE_CODE
 
 ## Background
 
-The evaluation engine already computes IC and Rank IC summaries for each factor and forward horizon. The project status still lists factor decay as a gap. This can be addressed without new data sources by deriving a horizon-by-horizon decay table from existing IC/Rank IC outputs.
+Evaluation and portfolio output directories now write durable artifacts and run manifests. Preflight can write JSON output. The remaining reproducibility gap is linking a preflight, evaluation, and backtest run under one operator-supplied research-run identifier without inventing a larger orchestration framework.
 
 ## Goal
 
-Add a factor decay summary to evaluation results, CLI output, and eval-config output artifacts.
+Add an optional `--run-id` CLI argument to the durable run surfaces and persist that identifier in their machine-readable outputs.
 
 ## Non-Goals
 
-- Do not add real benchmark data wiring.
-- Do not add real regime classification.
-- Do not add new upstream tables or database writes.
-- Do not recompute technical indicators inside QRE.
-- Do not change existing IC, Rank IC, quantile, group, or random-baseline semantics.
+- Do not add a new pipeline/orchestrator command.
+- Do not create a database table or write upstream database state.
+- Do not change report artifact filenames.
+- Do not require `--run-id`; existing commands must work unchanged.
+- Do not change evaluation or portfolio math.
+- Do not wire real index benchmark tables or real regime classification.
 
 ## Affected Modules
 
 Expected:
 
-- `src/quant_research_engine/evaluation/models.py`
-- `src/quant_research_engine/evaluation/engine.py`
 - `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_evaluation_forward_returns.py`
+- `src/quant_research_engine/portfolio/io.py`
 - `tests/test_cli.py`
-- `tests/test_portfolio_report_manifest.py`
+- `tests/test_portfolio_io.py`
 
 Docs/handoff:
 
@@ -47,6 +45,8 @@ Docs/handoff:
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
+
+Update only additional files if the current code shape clearly requires it.
 
 ## Forbidden Files
 
@@ -65,49 +65,54 @@ Read:
 Task-specific locked requirements:
 
 - Keep data access read-only.
-- Do not compute indicators internally.
-- Do not change existing evaluation summary semantics.
-- Keep output artifacts discoverable and auditable through report manifests.
+- Preserve existing CLI behavior when `--run-id` is omitted.
+- Keep report manifests compatible with `report-files` and `report-audit`.
+- Do not expose credentials or environment values in run IDs or manifests.
 
 ## Implementation Steps
 
-1. Inspect `EvaluationResult`, `EvaluationEngine._build_ic_summary()`, CLI eval-config stdout/output-dir behavior, and report manifest validation roles.
-2. Add `factor_decay_summary: pd.DataFrame` to `EvaluationResult`.
-3. Add a small factor decay builder derived from `ic_summary`. Recommended output columns:
-   - `factor`
-   - `horizon`
-   - `base_horizon`
-   - `observation_dates`
-   - `mean_ic`
-   - `mean_rank_ic`
-   - `ic_decay_from_base`
-   - `rank_ic_decay_from_base`
-4. Use the smallest configured horizon per factor as `base_horizon`. If base mean IC or Rank IC is missing or zero, leave the corresponding decay value null.
-5. Preserve empty behavior: when no factor columns are requested or IC summary is empty, return an empty DataFrame with stable columns.
-6. Print `factor_decay_summary` in `qre eval-config` stdout when non-empty.
-7. Persist `factor_decay_summary.csv` under `eval-config --output-dir` when non-empty.
-8. Add a manifest role, e.g. `factor_decay_summary`, with required columns in `report_manifest.py`.
-9. Include the artifact in evaluation `run_manifest.json` artifact list through existing output-dir artifact handling.
-10. Add focused engine tests, CLI stdout/output-dir tests, and manifest validation tests.
-11. Update handoff and progress docs.
+1. Inspect current CLI parser and output writers for:
+   - `qre preflight --output-json`
+   - `qre eval-config --output-dir`
+   - `qre backtest-single --output-dir`
+   - `qre backtest-batch --output-dir`
+   - `qre backtest-shared --output-dir`
+2. Add optional `--run-id` to those commands.
+3. For `preflight --output-json`, include top-level `"run_id": <value or null>` in the written JSON payload. Stdout does not need a new line unless local style clearly expects it.
+4. For `eval-config --output-dir`, include top-level `"run_id": <value or null>` in `run_manifest.json`.
+5. For portfolio output writers, include top-level `"run_id": <value or null>` in `portfolio_backtest_run_manifest`.
+6. Pass `args.run_id` from `backtest-single`, `backtest-batch`, and `backtest-shared` into the existing run-request structure without duplicating it inside the nested `"request"` object.
+7. Preserve the current `"artifacts"` list behavior and report-manifest entries.
+8. Add tests proving:
+   - `eval-config --run-id ... --output-dir ...` writes the run ID to `run_manifest.json`.
+   - `preflight --run-id ... --output-json ...` writes the run ID to the JSON payload.
+   - At least one portfolio writer or CLI path writes the run ID to `portfolio_backtest_run_manifest`.
+   - Omitting `--run-id` preserves successful output and writes `null`/`None` or omits only where existing helper style strongly prefers omission. Prefer a stable explicit `null`.
+9. Update handoff and progress docs.
 
 ## Data / Schema Changes
 
 - No database schema changes.
-- No new upstream tables.
+- JSON output schemas gain optional/stable `run_id` fields.
+- Report manifest file-entry schemas should remain unchanged.
 
 ## API / Interface Changes
 
-- `EvaluationResult` gains `factor_decay_summary`.
-- `eval-config --output-dir` may emit `factor_decay_summary.csv`.
-- Report manifests may gain `factor_decay_summary` role validation.
+- New optional CLI argument:
+  - `qre preflight --run-id <id>`
+  - `qre eval-config --run-id <id>`
+  - `qre backtest-single --run-id <id>`
+  - `qre backtest-batch --run-id <id>`
+  - `qre backtest-shared --run-id <id>`
+- Run manifest JSON payloads include top-level `run_id`.
+- Preflight JSON payload includes top-level `run_id`.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
-uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_cli.py tests/test_portfolio_io.py -q
 ```
 
 Run full checks:
@@ -120,28 +125,27 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] Factor decay summary is produced for factor columns across multiple horizons when IC summary exists.
-- [ ] Decay values compare each horizon against the smallest horizon for the same factor.
-- [ ] Missing or zero base IC/Rank IC produces null decay instead of division errors.
-- [ ] Existing evaluation outputs are unchanged except for the new optional summary/artifact.
-- [ ] `qre eval-config` prints `factor_decay_summary` when available.
-- [ ] `eval-config --output-dir` writes `factor_decay_summary.csv` and records it in `report_manifest.json` and `run_manifest.json`.
-- [ ] Report manifest validation covers the new artifact role.
+- [ ] `preflight --output-json --run-id` writes the supplied run ID in the output JSON.
+- [ ] `eval-config --output-dir --run-id` writes the supplied run ID in evaluation `run_manifest.json`.
+- [ ] Portfolio output manifests for single, batch, and shared can carry the supplied run ID.
+- [ ] Existing command behavior remains compatible when `--run-id` is omitted.
+- [ ] Report manifest discovery/audit behavior is unchanged.
 - [ ] Focused and full tests pass, or unavailable checks are documented.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- IC can be negative. Use signed ratios only if tests make the behavior explicit; otherwise prefer null on zero/missing base and document signed behavior.
-- Do not overstate factor decay as strategy effectiveness; it is an evaluation diagnostic.
+- Avoid putting `run_id` into manifest file entries; it belongs to run-level JSON payloads.
+- Avoid making `run_id` a required field for existing workflows.
+- Do not turn this into a broad workflow orchestrator; this is only linkage metadata.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Keep factor decay derived from existing IC/Rank IC summaries.
-3. Preserve existing evaluation behavior and output artifacts.
+2. Keep the implementation small and metadata-only.
+3. Preserve existing evaluation, preflight, and portfolio behavior.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
 5. Stop and write a blocker only if this brief conflicts with current code.
 

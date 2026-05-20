@@ -126,6 +126,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`. Benchmark and real regime work remain blocked by source confirmation.
 - Owner: CODEX
 
+### 2026-05-20: Select run-ID manifest linkage as next Claude task
+
+- Decision: The next Claude Code task is optional `--run-id` metadata for preflight, evaluation, and portfolio durable outputs.
+- Reason: This advances multi-stage research-run reproducibility without adding a new orchestrator, data source, or database write path.
+- Alternatives: Start real index benchmark wiring; build a full research-run pipeline command; implement real regime classification.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-RUN-ID-MANIFEST-LINKAGE-001`. Larger orchestration remains future work, while benchmark and real regime work remain blocked by source confirmation.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.
