@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -57,22 +57,23 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-40 | Evaluation factor decay summary | DONE | CODEX/CLAUDE_CODE | commit `8b0e924`; `10_REVIEW_REPORT.md` PASS; `factor_decay_summary` in `EvaluationResult`; derived from `ic_summary` per factor/horizon; stdout + CSV artifact + manifest validation; 324 passed | Preserve |
 | QRE-NEXT-41 | Run ID manifest linkage | DONE | CODEX/CLAUDE_CODE | commit `1618657`; `10_REVIEW_REPORT.md` PASS; 330 tests passed; optional `--run-id` on 5 commands; persisted in eval run_manifest, preflight JSON, and portfolio run_manifest | Preserve |
 | QRE-NEXT-42 | Run manifest content validation | DONE | CODEX/CLAUDE_CODE | commit `983ca1b`; `10_REVIEW_REPORT.md` PASS; present-null fix accepted; 346 tests passed; Codex reproduction case now returns 4 issues (was 0) | Preserve |
-| QRE-NEXT-43 | Run-ID and run-manifest audit usage docs | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README, portfolio_workflow.md, and portfolio_layer.md updated with `--run-id` and run-manifest audit documentation | Local finalize |
+| QRE-NEXT-43 | Run-ID and run-manifest audit usage docs | DONE | CODEX/CLAUDE_CODE | commit `ccb80e8`; `10_REVIEW_REPORT.md` PASS; README, portfolio_workflow.md, and portfolio_layer.md updated with `--run-id` and run-manifest audit documentation | Preserve |
+| QRE-NEXT-44 | Evaluation artifacts usage docs | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for eval-config artifact, group, random-baseline, and factor-decay docs | Implement and report in `09_CODING_HANDOFF.md` |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001 Codex review:
+Recorded on 2026-05-20 after QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001 local finalization and next-task planning:
 
-- Current task: `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`
-- Last finalized: QRE-RUN-MANIFEST-CONTENT-VALIDATION-001 (commit `983ca1b`)
+- Current task: `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`
+- Last finalized: QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001 (commit `ccb80e8`)
 - Last validation:
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
   - legacy-doc check -> no `docs/legacy/**` changes
 - Documentation updated: README.md (run-ID linkage + run-manifest audit sections), docs/modules/portfolio_workflow.md (run-ID + run-manifest validation sections), docs/modules/portfolio_layer.md (run-ID + run-manifest audit in "Implemented" list)
 - No runtime code or executable examples changed; pytest not required
-- Review: `10_REVIEW_REPORT.md` PASS
-- Next step: local git finalization
+- Finalization: local commit `ccb80e8`; `scripts/git-finalize-check.sh` passed before commit; no push
+- Next step: Claude Code documents eval-config artifacts, report roles, metadata grouping, random baseline, and factor decay usage from `08_IMPLEMENTATION_BRIEF.md`
 
 ## Completed Module Summary
 

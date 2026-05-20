@@ -150,6 +150,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
 - Owner: CODEX
 
+### 2026-05-20: Select evaluation artifact usage docs as next Claude task
+
+- Decision: The next Claude Code task is user-facing documentation for evaluation artifacts and diagnostics.
+- Reason: Evaluation artifacts, metadata grouping, random baselines, and factor decay are implemented, but README/module docs do not yet clearly explain the current artifact set and report roles.
+- Alternatives: Start another reporting validation feature; start real benchmark wiring; build a broader research-run orchestrator.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

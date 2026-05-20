@@ -29,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Claude Code is assigned to document `--run-id` linkage and run-manifest audit usage in README/module docs.
+Claude Code is assigned to document evaluation artifacts and diagnostics usage in README/module docs.
 
 ## Known Gaps
 
@@ -79,4 +79,4 @@ Claude Code is assigned to document `--run-id` linkage and run-manifest audit us
 
 ## Next Recommended Step
 
-Claude Code should implement `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

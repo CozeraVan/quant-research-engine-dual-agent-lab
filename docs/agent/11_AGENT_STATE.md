@@ -4,29 +4,29 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
+QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001` and wrote `10_REVIEW_REPORT.md` with outcome PASS. Validation passed: `scripts/check-progress-docs.sh`; `git diff --check`; legacy-doc check confirmed no `docs/legacy/**` changes. No runtime code or executable examples changed, so pytest was not required.
+Codex finalized `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001` locally with commit `ccb80e8`, `Document run manifest audit usage`. Codex then prepared `08_IMPLEMENTATION_BRIEF.md` for user-facing documentation of evaluation artifacts and diagnostics.
 
 ## Next Required Step
 
-Codex should run finalization checks and commit the accepted documentation locally. No remote push is requested.
+Claude Code should implement `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `983ca1b`, `Validate run manifests in report audit`
-- Working tree contains Codex planning/handoff docs for `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`.
+- Last accepted implementation commit: `ccb80e8`, `Document run manifest audit usage`
+- Working tree contains Codex planning/handoff docs for `QRE-DOCS-EVAL-ARTIFACTS-USAGE-001`.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

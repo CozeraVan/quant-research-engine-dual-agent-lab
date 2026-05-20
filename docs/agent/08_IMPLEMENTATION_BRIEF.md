@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
+QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
 
 ## Created By
 
@@ -14,11 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-The CLI now supports optional `--run-id` linkage across preflight, evaluation, and portfolio durable outputs. Report audit also validates `run_manifest` content for required fields, supported kinds, null handling, and artifact list shape. The user-facing README and module docs still describe older report manifest behavior and do not explain the current run-ID and run-manifest audit workflow.
+Recent evaluation work added durable `eval-config --output-dir` artifacts, metadata group summaries, deterministic random-baseline comparison, and factor decay summaries. User-facing docs still focus more heavily on report-manifest mechanics and portfolio workflows. The evaluation CLI surface needs concise usage documentation so users know which artifacts are emitted and how to audit/discover them.
 
 ## Goal
 
-Update user-facing documentation for `--run-id`, run manifests, and `report-audit --role run_manifest` content validation.
+Update user-facing documentation for evaluation output artifacts and diagnostics.
 
 ## Non-Goals
 
@@ -26,15 +26,15 @@ Update user-facing documentation for `--run-id`, run manifests, and `report-audi
 - Do not change tests unless a doc example is executable and current test conventions require coverage.
 - Do not edit legacy archived docs under `docs/legacy`.
 - Do not document smoke outputs as factor or strategy effectiveness.
-- Do not add new workflow promises beyond the current CLI behavior.
+- Do not add benchmark or regime claims beyond current implemented behavior.
 
 ## Affected Modules
 
 Expected:
 
 - `README.md`
+- `docs/modules/data_layer.md`
 - `docs/modules/portfolio_workflow.md`
-- `docs/modules/portfolio_layer.md`
 
 Docs/handoff:
 
@@ -65,46 +65,50 @@ Task-specific locked requirements:
 
 - Do not expose credentials or real database URLs.
 - Use placeholder output paths and run IDs.
-- Keep docs clear that audit validates artifact structure, not research quality.
+- Keep docs clear that evaluation diagnostics are structural/research aids, not proof of strategy quality.
 - Preserve archived legacy docs.
 
 ## Implementation Steps
 
-1. Inspect current README report-manifest/report-audit section and relevant `docs/modules` pages.
-2. Document that durable commands can accept `--run-id`:
-   - `qre preflight --output-json ... --run-id <id>`
-   - `qre eval-config --output-dir ... --run-id <id>`
-   - `qre backtest-single --output-dir ... --run-id <id>`
-   - `qre backtest-batch --output-dir ... --run-id <id>`
-   - `qre backtest-shared --output-dir ... --run-id <id>`
-3. Document where `run_id` is written:
-   - preflight JSON output
-   - evaluation `run_manifest.json`
-   - portfolio `run_manifest.json`
-4. Document that `run_id` may be `null` when omitted.
-5. Document `report-audit --role run_manifest` and, where appropriate, `--json`.
-6. Document the run-manifest fields currently validated:
-   - `schema_version`
-   - `kind`
-   - `run_id`
-   - `command`
-   - `strategy_path`
-   - `artifacts`
-7. Mention valid run-manifest kinds:
-   - `evaluation_run_manifest`
-   - `portfolio_backtest_run_manifest`
-8. Keep command examples concise and avoid requiring real database credentials.
-9. Update handoff/progress docs.
+1. Inspect current README and relevant `docs/modules` evaluation/reporting sections.
+2. Document `qre eval-config --output-dir <dir>` emitted files:
+   - `events.csv`
+   - `summary.csv`
+   - `ic_summary.csv`
+   - `quantile_summary.csv`
+   - `group_summary.csv` when `--group-by` is used
+   - `random_baseline_summary.csv` when `--random-baseline-seed` is used
+   - `factor_decay_summary.csv` when IC summaries are available
+   - `run_manifest.json`
+   - `report_manifest.json`
+3. Document evaluation artifact roles that can be used with `report-files` / `report-audit`:
+   - `events`
+   - `evaluation_summary`
+   - `ic_summary`
+   - `quantile_summary`
+   - `evaluation_group_summary`
+   - `random_baseline_summary`
+   - `factor_decay_summary`
+   - `run_manifest`
+4. Include concise examples for:
+   - `eval-config --output-dir`
+   - `eval-config --group-by`
+   - `eval-config --random-baseline-seed`
+   - discovering or auditing `factor_decay_summary`
+5. Mention factor decay is derived from existing IC/Rank IC horizons and uses the smallest horizon per factor as base.
+6. Mention random-baseline comparison is deterministic when a seed is provided.
+7. Keep examples credential-free and avoid real database URLs.
+8. Update handoff/progress docs.
 
 ## Data / Schema Changes
 
 - No data or schema changes.
-- Documentation should describe existing JSON payload fields only.
+- Documentation should describe existing artifacts only.
 
 ## API / Interface Changes
 
 - No new API changes in this task.
-- Documentation should reflect existing CLI arguments and audit behavior.
+- Documentation should reflect existing CLI arguments and report-manifest roles.
 
 ## Validation Plan
 
@@ -123,19 +127,19 @@ uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
 
 ## Acceptance Criteria
 
-- [ ] README describes `--run-id` linkage and run-manifest audit usage.
-- [ ] `docs/modules/portfolio_workflow.md` describes run-manifest content validation.
-- [ ] `docs/modules/portfolio_layer.md` references run-ID capable durable outputs or points to the workflow docs.
-- [ ] Docs clearly state audit validates artifact structure, not factor/strategy effectiveness.
+- [ ] README documents `eval-config --output-dir` artifacts and evaluation report roles.
+- [ ] Module docs describe metadata grouping, random baseline, and factor decay as evaluation diagnostics.
+- [ ] Docs include report discovery/audit examples for at least one evaluation artifact role.
+- [ ] Docs clearly state diagnostics do not prove factor/strategy effectiveness.
 - [ ] Legacy archived docs are untouched.
 - [ ] `scripts/check-progress-docs.sh` and `git diff --check` pass.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Avoid over-documenting future orchestration that does not exist yet.
+- Avoid over-documenting future real benchmark or regime features.
 - Keep examples generic and credential-free.
-- Do not imply `run_id` makes separate commands transactional; it is linkage metadata only.
+- Do not imply evaluation diagnostics are investment conclusions.
 
 ## Instructions for Claude Code
 

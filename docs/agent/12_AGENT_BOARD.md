@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
+QRE-DOCS-EVAL-ARTIFACTS-USAGE-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_FINALIZING
+CODEX_TO_CLAUDE_CODE
 
 ## Sender
 
@@ -18,35 +18,41 @@ CODEX
 
 ## Short Message
 
-Run-manifest documentation review passed. Ready for Codex local finalization.
+Update README and module docs for evaluation artifacts and diagnostics.
 
-## Review Summary
+## Implementation Brief
 
-1. README documents `--run-id` linkage. ✅
-2. README documents run-manifest audit usage. ✅
-3. Module docs cover run-ID linkage and run-manifest validation. ✅
-4. Docs state audit validates structure, not research quality. ✅
-5. No `docs/legacy/**` files changed. ✅
-6. `10_REVIEW_REPORT.md` outcome PASS. ✅
+Read `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
-## Changed Files
+Core requirements:
 
-- `README.md` — added "Run Identity Linkage" and "Run Manifest Audit" sections
-- `docs/modules/portfolio_workflow.md` — added run-ID linkage and run-manifest content validation sections
-- `docs/modules/portfolio_layer.md` — added run-ID and run-manifest audit to "Implemented" list
+1. Document `qre eval-config --output-dir` artifacts. ✅ target
+2. Document evaluation report roles for `report-files` / `report-audit`. ✅ target
+3. Include concise examples for output-dir, group-by, random baseline, and factor decay discovery/audit. ✅ target
+4. Explain factor decay is derived from existing IC/Rank IC horizons. ✅ target
+5. Explain random baseline is deterministic when a seed is provided. ✅ target
+6. State diagnostics do not prove factor or strategy effectiveness. ✅ constraint
+7. Keep examples credential-free. ✅ constraint
+8. Do not edit `docs/legacy/**`. ✅ constraint
+9. Keep this documentation-only unless blocked. ✅ constraint
+
+## Required Validation
+
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` only if code or executable examples are changed
+
+## Expected Changed Files
+
+- `README.md`
+- `docs/modules/data_layer.md`
+- `docs/modules/portfolio_workflow.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
 
-## Validation
-
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-- legacy-doc check -> no `docs/legacy/**` changes
-- No runtime code or executable examples changed; pytest not required
-
 ## Next Step
 
-Codex should run finalization checks, commit locally, and then prepare the next Claude Code implementation brief.
+Claude Code should implement the brief and write `09_CODING_HANDOFF.md` for Codex review.
