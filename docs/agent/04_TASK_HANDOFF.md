@@ -2,41 +2,32 @@
 
 ## Current Task
 
-Strengthen `run_manifest` content validation for report audit.
+Document run-ID linkage and run-manifest audit usage.
 
 ## Task ID
 
-QRE-RUN-MANIFEST-CONTENT-VALIDATION-001
+QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
 
 ## Current Status
 
-Accepted locally by Codex review. Ready for local git finalization.
+Ready for Claude Code implementation.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Completed
 
-- Claude Code added `_validate_run_manifest()` in `ReportManifest` with field-level validation for `schema_version`, `kind`, `run_id`, `command`, `strategy_path`, and `artifacts`.
-- `run_id` accepts string or null; `kind` restricted to `portfolio_backtest_run_manifest` and `evaluation_run_manifest`.
-- Missing fields produce `missing_run_manifest_field` issues; type errors produce `invalid_run_manifest_field` issues.
-- Present-but-null values for `schema_version`, `kind`, `command`, `strategy_path`, and `artifacts` now produce `invalid_run_manifest_field` issues. `run_id: null` remains valid.
-- Summary JSON validation is unchanged.
-- CLI `report-audit --role run_manifest --json` reports malformed run manifests through existing structured issue output.
-- Codex reproduction case (4 null non-nullable fields) now returns 4 issues (was 0).
-- Codex updated `10_REVIEW_REPORT.md` with outcome PASS.
-- Codex validation passed:
-  - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `158 passed, 2 warnings in 1.78s`
-  - `uv run pytest -q` -> `346 passed, 2 warnings in 3.30s`
-  - `scripts/check-progress-docs.sh` -> passed
-  - `git diff --check` -> passed
+- Codex reviewed and finalized `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`.
+- Local commit created: `983ca1b`, `Validate run manifests in report audit`.
+- Codex selected the next unblocked documentation task: update README/module docs for `--run-id` and run-manifest audit usage.
+- Codex prepared `08_IMPLEMENTATION_BRIEF.md` for `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`.
 
 ## Expected Files
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py`
+- `README.md`
+- `docs/modules/portfolio_workflow.md`
+- `docs/modules/portfolio_layer.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -45,24 +36,27 @@ CODEX
 
 ## Validation Baseline
 
-Accepted fix validation:
+Last finalized implementation validation:
 
 - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `158 passed, 2 warnings in 1.78s`
 - `uv run pytest -q` -> `346 passed, 2 warnings in 3.30s`
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
+- `scripts/git-finalize-check.sh` -> passed
 
-Codex reproduction re-run:
+Required validation for this documentation task:
 
-- A run manifest with `schema_version: null`, `command: null`, `strategy_path: null`, and `artifacts: null` now returns 4 `invalid_run_manifest_field` issues.
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` only if code or executable examples are changed
 
 ## Known Risks
 
-- Keep `run_id` optional and allow explicit null. ✅
-- Do not alter report manifest file-entry schema. ✅
-- Preserve existing report-files/report-audit semantics except for the new malformed-run-manifest content issues. ✅
-- Do not validate nested strategy semantics or add orchestration behavior. ✅
+- Keep examples credential-free.
+- Do not edit `docs/legacy/**`.
+- Do not imply run-ID linkage is a full orchestrator or transactional workflow.
+- Do not describe audit as proving factor or strategy effectiveness.
 
 ## Next Suggested Step
 
-Codex should finalize the accepted implementation with a local commit, then prepare the next Claude Code implementation brief.
+Claude Code should read `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`, and `08_IMPLEMENTATION_BRIEF.md`, then implement `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`.

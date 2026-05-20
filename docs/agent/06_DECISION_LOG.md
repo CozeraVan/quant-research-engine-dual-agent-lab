@@ -142,6 +142,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`. Report manifest file-entry schema should remain unchanged.
 - Owner: CODEX
 
+### 2026-05-20: Select run-manifest audit usage docs as next Claude task
+
+- Decision: The next Claude Code task is user-facing documentation for optional `--run-id` linkage and run-manifest audit usage.
+- Reason: The CLI and audit validation now support run IDs and stricter run-manifest checks, but README/module docs do not yet explain the current workflow.
+- Alternatives: Start another validation feature; build a full research-run orchestrator; start real benchmark wiring.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CLAUDE_IMPLEMENTING
 
 ## Progress Table
 
@@ -56,22 +56,23 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-39 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 passed in 3.00s; row-based grouped order/trade/failed-order summaries; `backtest-shared --group-by`; grouped CSV artifacts; manifest roles; empty no-column outputs handled | Preserve |
 | QRE-NEXT-40 | Evaluation factor decay summary | DONE | CODEX/CLAUDE_CODE | commit `8b0e924`; `10_REVIEW_REPORT.md` PASS; `factor_decay_summary` in `EvaluationResult`; derived from `ic_summary` per factor/horizon; stdout + CSV artifact + manifest validation; 324 passed | Preserve |
 | QRE-NEXT-41 | Run ID manifest linkage | DONE | CODEX/CLAUDE_CODE | commit `1618657`; `10_REVIEW_REPORT.md` PASS; 330 tests passed; optional `--run-id` on 5 commands; persisted in eval run_manifest, preflight JSON, and portfolio run_manifest | Preserve |
-| QRE-NEXT-42 | Run manifest content validation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; present-null fix accepted; 346 tests passed; Codex reproduction case now returns 4 issues (was 0) | Local finalize |
+| QRE-NEXT-42 | Run manifest content validation | DONE | CODEX/CLAUDE_CODE | commit `983ca1b`; `10_REVIEW_REPORT.md` PASS; present-null fix accepted; 346 tests passed; Codex reproduction case now returns 4 issues (was 0) | Preserve |
+| QRE-NEXT-43 | Run-ID and run-manifest audit usage docs | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for README/module documentation of `--run-id` and `report-audit --role run_manifest` | Implement and report in `09_CODING_HANDOFF.md` |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-RUN-MANIFEST-CONTENT-VALIDATION-001 Codex review:
+Recorded on 2026-05-20 after QRE-RUN-MANIFEST-CONTENT-VALIDATION-001 local finalization and next-task planning:
 
-- Current task: `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001`
-- Last finalized: QRE-RUN-ID-MANIFEST-LINKAGE-001 (commit `1618657`)
+- Current task: `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`
+- Last finalized: QRE-RUN-MANIFEST-CONTENT-VALIDATION-001 (commit `983ca1b`)
 - Last validation:
   - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `158 passed, 2 warnings in 1.78s`
   - `uv run pytest -q` -> `346 passed, 2 warnings in 3.30s`
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
 - Fix: present-null values for `schema_version`, `kind`, `command`, `strategy_path`, `artifacts` now produce `invalid_run_manifest_field`. Codex reproduction case now returns 4 issues (was 0).
-- Review: `10_REVIEW_REPORT.md` PASS
-- Next step: local git finalization
+- Finalization: local commit `983ca1b`; `scripts/git-finalize-check.sh` passed before commit; no push
+- Next step: Claude Code documents `--run-id` and run-manifest audit usage from `08_IMPLEMENTATION_BRIEF.md`
 
 ## Completed Module Summary
 

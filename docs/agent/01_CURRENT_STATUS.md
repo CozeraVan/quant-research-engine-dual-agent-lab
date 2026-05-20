@@ -29,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is finalizing the accepted `run_manifest` content validation implementation and preparing the next Claude Code task.
+Claude Code is assigned to document `--run-id` linkage and run-manifest audit usage in README/module docs.
 
 ## Known Gaps
 
@@ -79,4 +79,4 @@ Codex is finalizing the accepted `run_manifest` content validation implementatio
 
 ## Next Recommended Step
 
-Codex should finalize `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` locally, then prepare the next unblocked Claude Code task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

@@ -4,29 +4,29 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-RUN-MANIFEST-CONTENT-VALIDATION-001
+QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex re-reviewed `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` after Claude Code's present-null fix and wrote `10_REVIEW_REPORT.md` with outcome PASS. Validation passed: focused suite `158 passed, 2 warnings in 1.78s`; full suite `346 passed, 2 warnings in 3.30s`; `scripts/check-progress-docs.sh` passed; `git diff --check` passed. Codex reproduction case now returns 4 `invalid_run_manifest_field` issues instead of 0.
+Codex finalized `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` locally with commit `983ca1b`, `Validate run manifests in report audit`. Codex then prepared `08_IMPLEMENTATION_BRIEF.md` for user-facing documentation of optional `--run-id` linkage and run-manifest audit usage.
 
 ## Next Required Step
 
-Codex should run finalization checks and commit the accepted implementation locally. No remote push is requested.
+Claude Code should implement `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `1618657`, `Link durable outputs by run id`
-- Working tree contains accepted `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` changes awaiting local commit.
+- Last accepted implementation commit: `983ca1b`, `Validate run manifests in report audit`
+- Working tree contains Codex planning/handoff docs for `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

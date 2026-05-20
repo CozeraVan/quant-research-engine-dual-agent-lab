@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-RUN-MANIFEST-CONTENT-VALIDATION-001
+QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_FINALIZING
+CODEX_TO_CLAUDE_CODE
 
 ## Sender
 
@@ -18,29 +18,34 @@ CODEX
 
 ## Short Message
 
-Run-manifest content validation review passed. Ready for Codex local finalization.
+Update README and module docs for optional `--run-id` linkage and run-manifest audit usage.
 
-## Review Summary
+## Implementation Brief
 
-1. `_validate_run_manifest()` validates required top-level fields. ✅
-2. `schema_version`, `kind`, `command`, `strategy_path`, and `artifacts` reject present-null values. ✅
-3. `run_id: null` remains valid. ✅
-4. Missing fields produce `missing_run_manifest_field`. ✅
-5. Invalid fields produce `invalid_run_manifest_field`. ✅
-6. CLI audit issue shape is preserved. ✅
-7. `10_REVIEW_REPORT.md` outcome PASS. ✅
+Read `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
 
-## Validation
+Core requirements:
 
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `158 passed, 2 warnings in 1.78s`
-- `uv run pytest -q` -> `346 passed, 2 warnings in 3.30s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
+1. Document `--run-id` on durable preflight/eval/backtest commands. ✅ target
+2. Document where `run_id` is written. ✅ target
+3. Document that omitted `run_id` is stored as null. ✅ target
+4. Document `report-audit --role run_manifest` and JSON audit output. ✅ target
+5. Document validated run-manifest fields and supported run-manifest kinds. ✅ target
+6. Keep examples credential-free. ✅ constraint
+7. Do not edit `docs/legacy/**`. ✅ constraint
+8. Keep this documentation-only unless blocked. ✅ constraint
 
-## Changed Files
+## Required Validation
 
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_report_manifest.py`
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` only if code or executable examples are changed
+
+## Expected Changed Files
+
+- `README.md`
+- `docs/modules/portfolio_workflow.md`
+- `docs/modules/portfolio_layer.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -49,4 +54,4 @@ Run-manifest content validation review passed. Ready for Codex local finalizatio
 
 ## Next Step
 
-Codex should run finalization checks, commit locally, and then prepare the next Claude Code implementation brief.
+Claude Code should implement the brief and write `09_CODING_HANDOFF.md` for Codex review.
