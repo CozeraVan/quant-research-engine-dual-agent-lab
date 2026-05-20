@@ -515,10 +515,11 @@ Implemented evaluation output artifacts and diagnostics:
 
 Implemented evaluation metadata group summaries:
 
-- `qre eval-config --group-by <cols>` writes `group_summary.csv` with per-group evaluation metrics.
-- Report-manifest role: `evaluation_group_summary`.
+- `qre eval-config --group-by <cols>` writes a combined `group_summary.csv` and per-column files such as `group_summary_by_board.csv`.
+- Report-manifest role: `evaluation_group_summary`. The combined file uses the role without manifest `group_by`; per-column files use the same role with `group_by=<col>` metadata.
 - Grouping works on available research-frame metadata columns such as `board`, `sector`, or `industry`.
-- Grouped summaries are discoverable and auditable through `qre report-files` / `qre report-audit` with `--role evaluation_group_summary`.
+- All grouped artifacts are discoverable through `qre report-files --role evaluation_group_summary`. Per-column files are individually filterable with `--group-by <col>`, and auditable with `qre report-audit --role evaluation_group_summary --group-by <col> --require-match`.
+- Per-column files supplement, not replace, the combined `group_summary.csv`.
 
 Implemented batch metadata group-by passthrough:
 

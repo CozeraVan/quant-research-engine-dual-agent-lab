@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+CODEX_REVIEWING
 
 ## Progress Table
 
@@ -60,20 +60,23 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-43 | Run-ID and run-manifest audit usage docs | DONE | CODEX/CLAUDE_CODE | commit `ccb80e8`; `10_REVIEW_REPORT.md` PASS; README, portfolio_workflow.md, and portfolio_layer.md updated with `--run-id` and run-manifest audit documentation | Preserve |
 | QRE-NEXT-44 | Evaluation artifacts usage docs | DONE | CODEX/CLAUDE_CODE | commit `974543e`; `10_REVIEW_REPORT.md` PASS; README plus module docs cover eval-config artifacts, report roles, random baseline, factor decay, and audit usage; finalize checks passed | Preserve |
 | QRE-NEXT-45 | Metadata grouping and passthrough usage docs | DONE | CODEX/CLAUDE_CODE | commit `a59c1a4`; `10_REVIEW_REPORT.md` PASS; README plus 3 module docs cover eval/batch/shared metadata grouping, shared-cash passthrough, grouped roles, and structural-inspection disclaimer | Preserve |
-| QRE-NEXT-46 | Evaluation group-by manifest parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; per-column `group_summary_by_<col>.csv` files with manifest metadata `group_by=<col>`; `report-files`/`report-audit --group-by` parity; 6 new tests; 164 tests pass | Preserve |
+| QRE-NEXT-46 | Evaluation group-by manifest parity | DONE | CODEX/CLAUDE_CODE | commit `745103e`; `10_REVIEW_REPORT.md` PASS; per-column `group_summary_by_<col>.csv` files with manifest metadata `group_by=<col>`; `report-files`/`report-audit --group-by` parity; 6 new tests; 164 tests pass | Preserve |
+| QRE-NEXT-47 | Evaluation group-by parity docs | IMPLEMENTED | CLAUDE_CODE | `09_CODING_HANDOFF.md` updated; README, data_layer.md, portfolio_workflow.md cover per-column evaluation grouped artifacts and `--group-by` discovery/audit parity | Codex review |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after Codex accepted `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001` for local finalization:
+Recorded on 2026-05-20 after local finalization of `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001` and next-task planning:
 
-- Current task: `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001`
-- Last finalized: QRE-DOCS-METADATA-GROUPING-USAGE-001 (commit `a59c1a4`)
+- Current task: `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001`
+- Last finalized: QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001 (commit `745103e`)
 - Last validation:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 164 passed
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
-- Review: `10_REVIEW_REPORT.md` is now PASS
-- Next step: Codex local finalization commit
+- Next step: Codex review
+  - `git diff --check` -> passed
+  - `scripts/git-finalize-check.sh` -> passed
+- Finalization: local commit `745103e`; no push
+- Next step: Claude Code documents evaluation group-by manifest parity usage from `08_IMPLEMENTATION_BRIEF.md`
 
 ## Completed Module Summary
 

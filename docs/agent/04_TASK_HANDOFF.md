@@ -2,15 +2,15 @@
 
 ## Current Task
 
-Add evaluation group-by manifest parity.
+Document evaluation group-by manifest parity usage.
 
 ## Task ID
 
-QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001
+QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001
 
 ## Current Status
 
-Accepted locally by Codex review. Ready for local git finalization.
+Claude Code implementation complete. Ready for Codex review.
 
 ## Current Owner
 
@@ -18,24 +18,17 @@ CODEX
 
 ## Completed
 
-- Codex finalized `QRE-DOCS-METADATA-GROUPING-USAGE-001` locally.
-- Local commit created: `a59c1a4`, `Clarify metadata grouping workflows`.
-- Codex selected the next unblocked implementation task: evaluation group-by manifest parity.
-- Codex prepared `08_IMPLEMENTATION_BRIEF.md` for `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001`.
-- Claude Code implemented per-column evaluation grouped artifacts and manifest metadata:
-  - `_write_evaluation_output` now emits `group_summary_by_<col>.csv` files alongside the combined `group_summary.csv`.
-  - Per-column files have manifest entries with role `evaluation_group_summary` and metadata `group_by=<col>`.
-  - `_eval_manifest_role` and `_eval_manifest_entry` helpers handle per-column keys.
-  - `report-files` / `report-audit --role evaluation_group_summary --group-by <col>` match per-column files.
-  - 6 new tests added across `test_cli.py` and `test_portfolio_report_manifest.py`.
-  - 164 tests pass; `scripts/check-progress-docs.sh` passes; `git diff --check` passes.
-- Codex reviewed the implementation and marked `10_REVIEW_REPORT.md` as PASS.
+- Codex finalized `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001` locally.
+- Local commit created: `745103e`, `Align evaluation grouped artifact filtering`.
+- Codex selected the next unblocked documentation task: evaluation group-by manifest parity usage.
+- Codex prepared `08_IMPLEMENTATION_BRIEF.md` for `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001`.
+- Claude Code updated README, data_layer.md, and portfolio_workflow.md with per-column evaluation grouped artifact docs, manifest `group_by` metadata behavior, and `--group-by` discovery/audit examples.
 
 ## Expected Files
 
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_cli.py`
-- `tests/test_portfolio_report_manifest.py`
+- `README.md`
+- `docs/modules/data_layer.md`
+- `docs/modules/portfolio_workflow.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -44,19 +37,22 @@ CODEX
 
 ## Validation Baseline
 
-Last implementation validation:
+Last finalized implementation validation:
 
 - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 164 passed
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- Last finalized commit: `a59c1a4`
+- `scripts/git-finalize-check.sh` -> passed
+- Local commit: `745103e`
+- Pytest not required for the next task unless executable examples or runtime code are changed.
 
 ## Known Risks
 
-- Preserve existing `group_summary.csv` compatibility for evaluation outputs. ✅
-- Do not break existing `report_manifest.json` schema or `report-files` / `report-audit` filters for batch/shared outputs. ✅
-- Do not edit `docs/legacy/**`. ✅
+- Keep examples credential-free.
+- Do not edit `docs/legacy/**`.
+- Do not imply grouped diagnostics prove factor or strategy effectiveness.
+- Do not describe per-column grouped files as replacing the combined `group_summary.csv`.
 
 ## Next Suggested Step
 
-Codex should run final git checks and create the local completion commit for `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001`.
+Claude Code should read `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`, and `08_IMPLEMENTATION_BRIEF.md`, then implement `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001`.

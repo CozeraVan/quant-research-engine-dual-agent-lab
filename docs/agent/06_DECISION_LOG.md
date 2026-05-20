@@ -174,6 +174,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001`. Existing `group_summary.csv` compatibility should be preserved while adding per-column grouped artifact entries.
 - Owner: CODEX
 
+### 2026-05-20: Select evaluation group-by parity docs as next Claude task
+
+- Decision: The next Claude Code task is user-facing documentation for evaluation per-column grouped artifacts and `--group-by` discovery/audit parity.
+- Reason: The code now emits `group_summary_by_<col>.csv` files and supports evaluation `report-files` / `report-audit --group-by`, but current docs still describe only the combined evaluation grouped artifact.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; jump to a larger research-run orchestration feature.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

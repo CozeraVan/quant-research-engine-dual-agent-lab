@@ -217,7 +217,7 @@ Board inference currently maps:
 
 Evaluation and portfolio backtest commands accept `--group-by` on available research-frame metadata columns. Grouping works over any columns present after metadata assembly, including static fallback columns such as `board` and passthrough columns from real metadata tables.
 
-Evaluation grouping:
+Evaluation grouping writes a combined `group_summary.csv` (role `evaluation_group_summary`) and per-column files such as `group_summary_by_board.csv` (same role with manifest metadata `group_by=<col>`). The combined file contains all `group_by` values in one CSV; per-column files contain only rows for a single `group_by` column value so they can be filtered individually with `report-files` / `report-audit --group-by`.
 
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
@@ -228,6 +228,17 @@ uv run qre eval-config \
   --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ \
   --output-dir outputs/eval-grouped \
   --group-by board
+
+# List all grouped artifacts (combined + per-column)
+uv run qre report-files outputs/eval-grouped/report_manifest.json --role evaluation_group_summary
+
+# Filter to the board-specific per-column file
+uv run qre report-files outputs/eval-grouped/report_manifest.json \
+  --role evaluation_group_summary --group-by board
+
+# Audit the board-specific per-column file
+uv run qre report-audit outputs/eval-grouped/report_manifest.json \
+  --role evaluation_group_summary --group-by board --require-match
 ```
 
 Batch grouping produces grouped cross-sectional summaries such as `group_by_board.csv`. The report-manifest role is `group_summary` with metadata `group_by=<col>`:

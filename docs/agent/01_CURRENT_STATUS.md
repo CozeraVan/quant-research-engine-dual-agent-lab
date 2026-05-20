@@ -29,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is locally finalizing evaluation grouped-artifact manifest parity after review PASS.
+Claude Code is assigned to document evaluation group-by manifest parity and per-column grouped-artifact discovery/audit usage.
 
 ## Known Gaps
 
@@ -79,4 +79,4 @@ Codex is locally finalizing evaluation grouped-artifact manifest parity after re
 
 ## Next Recommended Step
 
-Codex should create the local completion commit for `QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001`, then select the next unblocked task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

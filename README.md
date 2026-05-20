@@ -250,7 +250,7 @@ Evaluation and portfolio backtest commands support `--group-by` on available res
 
 #### Evaluation Grouping
 
-`qre eval-config --group-by <cols>` writes `group_summary.csv` with per-group evaluation metrics. The report-manifest role is `evaluation_group_summary`.
+`qre eval-config --group-by <cols>` writes a combined `group_summary.csv` and per-column files such as `group_summary_by_board.csv`. The report-manifest role is `evaluation_group_summary`. The combined file uses the role without manifest `group_by` metadata, while per-column files carry both the role and `group_by=<col>` metadata so they can be filtered individually.
 
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
@@ -261,13 +261,19 @@ uv run qre eval-config strategy.yaml \
   --output-dir outputs/eval-grouped \
   --group-by board
 
-# Discover grouped artifact
+# List all grouped artifacts (combined + per-column)
 uv run qre report-files outputs/eval-grouped/report_manifest.json --role evaluation_group_summary
 
-# Audit only the grouped summary
+# List only the board-specific per-column file
+uv run qre report-files outputs/eval-grouped/report_manifest.json \
+  --role evaluation_group_summary --group-by board
+
+# Audit only the board-specific per-column file
 uv run qre report-audit outputs/eval-grouped/report_manifest.json \
-  --role evaluation_group_summary --require-match
+  --role evaluation_group_summary --group-by board --require-match
 ```
+
+Per-column files supplement, not replace, the combined `group_summary.csv`.
 
 #### Batch Grouping
 

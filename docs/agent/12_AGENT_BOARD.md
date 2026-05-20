@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-EVAL-GROUP-BY-MANIFEST-PARITY-001
+QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001
 
 ## Current Recipient
 
@@ -10,30 +10,28 @@ CODEX
 
 ## Message Type
 
-CODEX_FINALIZING
+CLAUDE_CODE_TO_CODEX
 
 ## Sender
 
-CODEX
+CLAUDE_CODE
 
 ## Short Message
 
-Review passed. Current implementation task is accepted locally and ready for final git checks plus a local completion commit.
+Docs updated for evaluation per-column grouped artifacts and --group-by parity. Ready for review.
 
-## Accepted Scope
+## Changes Summary
 
-- `src/quant_research_engine/apps/cli.py`: per-column evaluation grouped artifacts plus manifest `group_by` metadata
-- `tests/test_cli.py`: coverage for per-column file emission and evaluation `report-files` / `report-audit --group-by`
-- `tests/test_portfolio_report_manifest.py`: validation coverage for per-column evaluation grouped files
-- Agent docs: review/finalization state updates for the current task
+- `README.md` — updated "Evaluation Grouping" with per-column files, manifest `group_by` metadata, and `--group-by` discovery/audit examples
+- `docs/modules/data_layer.md` — updated "Metadata-Aware Grouping" evaluation section with per-column artifact explanation
+- `docs/modules/portfolio_workflow.md` — updated eval group summary section with per-column file behavior
+- Agent docs — 04/05/09/11/12 updated
 
 ## Validation
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 164 passed
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> passed
-- `10_REVIEW_REPORT.md` -> PASS
 
 ## Next Step
 
-Codex should run finalization checks and create the local completion commit.
+Codex should review and produce `10_REVIEW_REPORT.md`.

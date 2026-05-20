@@ -61,6 +61,7 @@
 | M5.8 | Evaluation artifact usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README, data-layer docs, and workflow docs cover eval-config artifacts, report roles, audit usage, deterministic random baseline, and factor decay wording | Preserve |
 | M5.9 | Metadata grouping usage documentation | DONE | CODEX/CLAUDE_CODE | commit `a59c1a4`; `10_REVIEW_REPORT.md` PASS; README plus module docs cover eval/batch/shared metadata grouping, shared-cash passthrough, grouped roles, and discovery/audit patterns | Preserve |
 | M5.10 | Evaluation group-by manifest parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; per-column `group_summary_by_<col>.csv` files plus evaluation manifest `group_by` metadata; 164 targeted tests passed | Preserve |
+| M5.11 | Evaluation group-by parity documentation | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for per-column grouped evaluation artifact docs and `--group-by` discovery/audit usage | Implement `QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001` |
 
 ## Milestone 6: Dual-Agent Workflow
 
