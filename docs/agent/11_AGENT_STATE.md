@@ -8,19 +8,19 @@ QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex finalized `QRE-RUN-MANIFEST-CONTENT-VALIDATION-001` locally with commit `983ca1b`, `Validate run manifests in report audit`. Codex then prepared `08_IMPLEMENTATION_BRIEF.md` for user-facing documentation of optional `--run-id` linkage and run-manifest audit usage.
+Codex reviewed `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001` and wrote `10_REVIEW_REPORT.md` with outcome PASS. Validation passed: `scripts/check-progress-docs.sh`; `git diff --check`; legacy-doc check confirmed no `docs/legacy/**` changes. No runtime code or executable examples changed, so pytest was not required.
 
 ## Next Required Step
 
-Claude Code should implement `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001` from `08_IMPLEMENTATION_BRIEF.md`, then update `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`.
+Codex should run finalization checks and commit the accepted documentation locally. No remote push is requested.
 
 ## Git State
 

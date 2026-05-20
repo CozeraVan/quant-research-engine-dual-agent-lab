@@ -10,11 +10,11 @@ QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
 
 ## Current Status
 
-Ready for Claude Code implementation.
+Accepted locally by Codex review. Ready for local git finalization.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Completed
 
@@ -22,6 +22,8 @@ CLAUDE_CODE
 - Local commit created: `983ca1b`, `Validate run manifests in report audit`.
 - Codex selected the next unblocked documentation task: update README/module docs for `--run-id` and run-manifest audit usage.
 - Codex prepared `08_IMPLEMENTATION_BRIEF.md` for `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`.
+- Claude Code updated README.md, docs/modules/portfolio_workflow.md, and docs/modules/portfolio_layer.md with run-ID linkage and run-manifest audit documentation.
+- Codex reviewed the documentation and wrote `10_REVIEW_REPORT.md` with outcome PASS.
 
 ## Expected Files
 
@@ -46,9 +48,10 @@ Last finalized implementation validation:
 
 Required validation for this documentation task:
 
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` only if code or executable examples are changed
+- `scripts/check-progress-docs.sh` -> passed
+- `git diff --check` -> passed
+- Legacy-doc check -> no `docs/legacy/**` changes
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` not required; no runtime code or executable examples changed
 
 ## Known Risks
 
@@ -59,4 +62,4 @@ Required validation for this documentation task:
 
 ## Next Suggested Step
 
-Claude Code should read `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`, and `08_IMPLEMENTATION_BRIEF.md`, then implement `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`.
+Codex should finalize the accepted documentation with a local commit, then prepare the next Claude Code implementation brief.

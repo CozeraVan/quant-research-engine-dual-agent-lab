@@ -126,3 +126,64 @@ uv run qre report-audit outputs/smoke_batch_rsi2_rolling_audit/report_manifest.j
   --require-match \
   --json
 ```
+
+### Run Identity Linkage
+
+Durable output commands accept an optional `--run-id` to link artifacts across preflight, evaluation, and portfolio runs. The identifier is stored as a string (or `null`) in JSON outputs and run manifests. It does not enable cross-command orchestration; it is metadata that helps scripts and audits correlate files later.
+
+Supported commands:
+
+```bash
+# Preflight with run identity
+uv run qre preflight strategy.yaml --output-json result.json --run-id research-run-42
+
+# Evaluation with run identity
+uv run qre eval-config strategy.yaml --output-dir outputs/eval --run-id research-run-42
+
+# Portfolio backtests with run identity
+uv run qre backtest-single strategy.yaml --output-dir outputs/single --run-id research-run-42
+uv run qre backtest-batch strategy.yaml --output-dir outputs/batch --run-id research-run-42
+uv run qre backtest-shared strategy.yaml --output-dir outputs/shared --run-id research-run-42
+```
+
+Where `run_id` is written:
+
+| Command | Output |
+|---|---|
+| `qre preflight --output-json` | top-level `"run_id"` in the JSON file |
+| `qre eval-config --output-dir` | `"run_id"` in `run_manifest.json` |
+| `qre backtest-* --output-dir` | `"run_id"` in `run_manifest.json` |
+
+When `--run-id` is omitted, `run_id` is stored as `null`. No run ID defaults to a timestamp, environment value, or generated string.
+
+### Run Manifest Audit
+
+`qre report-audit` can validate `run_manifest.json` content through `--role run_manifest`. This checks required fields, types, and supported kinds beyond basic JSON parseability.
+
+```bash
+# Audit a specific run manifest
+uv run qre report-audit outputs/eval/report_manifest.json --role run_manifest
+
+# Machine-readable run-manifest audit
+uv run qre report-audit outputs/eval/report_manifest.json --role run_manifest --json
+```
+
+Validated run-manifest fields:
+
+| Field | Required type | Nullable |
+|---|---|---|
+| `schema_version` | integer `1` | no |
+| `kind` | string | no |
+| `run_id` | string | yes |
+| `command` | string | no |
+| `strategy_path` | string | no |
+| `artifacts` | list of strings | no |
+
+Supported run-manifest kinds:
+
+- `evaluation_run_manifest`
+- `portfolio_backtest_run_manifest`
+
+Missing fields produce audit issues with code `missing_run_manifest_field`. Type errors and present-null non-nullable fields produce `invalid_run_manifest_field`. Run-manifest validation exit codes follow the same `0`/`2` convention as other audit roles.
+
+This audit validates artifact structure only. It does not assess factor effectiveness, strategy quality, or benchmark-relative performance.

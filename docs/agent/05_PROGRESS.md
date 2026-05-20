@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Progress Table
 
@@ -57,22 +57,22 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-40 | Evaluation factor decay summary | DONE | CODEX/CLAUDE_CODE | commit `8b0e924`; `10_REVIEW_REPORT.md` PASS; `factor_decay_summary` in `EvaluationResult`; derived from `ic_summary` per factor/horizon; stdout + CSV artifact + manifest validation; 324 passed | Preserve |
 | QRE-NEXT-41 | Run ID manifest linkage | DONE | CODEX/CLAUDE_CODE | commit `1618657`; `10_REVIEW_REPORT.md` PASS; 330 tests passed; optional `--run-id` on 5 commands; persisted in eval run_manifest, preflight JSON, and portfolio run_manifest | Preserve |
 | QRE-NEXT-42 | Run manifest content validation | DONE | CODEX/CLAUDE_CODE | commit `983ca1b`; `10_REVIEW_REPORT.md` PASS; present-null fix accepted; 346 tests passed; Codex reproduction case now returns 4 issues (was 0) | Preserve |
-| QRE-NEXT-43 | Run-ID and run-manifest audit usage docs | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for README/module documentation of `--run-id` and `report-audit --role run_manifest` | Implement and report in `09_CODING_HANDOFF.md` |
+| QRE-NEXT-43 | Run-ID and run-manifest audit usage docs | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README, portfolio_workflow.md, and portfolio_layer.md updated with `--run-id` and run-manifest audit documentation | Local finalize |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-RUN-MANIFEST-CONTENT-VALIDATION-001 local finalization and next-task planning:
+Recorded on 2026-05-20 after QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001 Codex review:
 
 - Current task: `QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001`
 - Last finalized: QRE-RUN-MANIFEST-CONTENT-VALIDATION-001 (commit `983ca1b`)
 - Last validation:
-  - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `158 passed, 2 warnings in 1.78s`
-  - `uv run pytest -q` -> `346 passed, 2 warnings in 3.30s`
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
-- Fix: present-null values for `schema_version`, `kind`, `command`, `strategy_path`, `artifacts` now produce `invalid_run_manifest_field`. Codex reproduction case now returns 4 issues (was 0).
-- Finalization: local commit `983ca1b`; `scripts/git-finalize-check.sh` passed before commit; no push
-- Next step: Claude Code documents `--run-id` and run-manifest audit usage from `08_IMPLEMENTATION_BRIEF.md`
+  - legacy-doc check -> no `docs/legacy/**` changes
+- Documentation updated: README.md (run-ID linkage + run-manifest audit sections), docs/modules/portfolio_workflow.md (run-ID + run-manifest validation sections), docs/modules/portfolio_layer.md (run-ID + run-manifest audit in "Implemented" list)
+- No runtime code or executable examples changed; pytest not required
+- Review: `10_REVIEW_REPORT.md` PASS
+- Next step: local git finalization
 
 ## Completed Module Summary
 

@@ -6,11 +6,11 @@ QRE-DOCS-RUN-MANIFEST-AUDIT-USAGE-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-CODEX_TO_CLAUDE_CODE
+CODEX_FINALIZING
 
 ## Sender
 
@@ -18,40 +18,35 @@ CODEX
 
 ## Short Message
 
-Update README and module docs for optional `--run-id` linkage and run-manifest audit usage.
+Run-manifest documentation review passed. Ready for Codex local finalization.
 
-## Implementation Brief
+## Review Summary
 
-Read `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+1. README documents `--run-id` linkage. ✅
+2. README documents run-manifest audit usage. ✅
+3. Module docs cover run-ID linkage and run-manifest validation. ✅
+4. Docs state audit validates structure, not research quality. ✅
+5. No `docs/legacy/**` files changed. ✅
+6. `10_REVIEW_REPORT.md` outcome PASS. ✅
 
-Core requirements:
+## Changed Files
 
-1. Document `--run-id` on durable preflight/eval/backtest commands. ✅ target
-2. Document where `run_id` is written. ✅ target
-3. Document that omitted `run_id` is stored as null. ✅ target
-4. Document `report-audit --role run_manifest` and JSON audit output. ✅ target
-5. Document validated run-manifest fields and supported run-manifest kinds. ✅ target
-6. Keep examples credential-free. ✅ constraint
-7. Do not edit `docs/legacy/**`. ✅ constraint
-8. Keep this documentation-only unless blocked. ✅ constraint
-
-## Required Validation
-
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` only if code or executable examples are changed
-
-## Expected Changed Files
-
-- `README.md`
-- `docs/modules/portfolio_workflow.md`
-- `docs/modules/portfolio_layer.md`
+- `README.md` — added "Run Identity Linkage" and "Run Manifest Audit" sections
+- `docs/modules/portfolio_workflow.md` — added run-ID linkage and run-manifest content validation sections
+- `docs/modules/portfolio_layer.md` — added run-ID and run-manifest audit to "Implemented" list
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
 
+## Validation
+
+- `scripts/check-progress-docs.sh` -> passed
+- `git diff --check` -> passed
+- legacy-doc check -> no `docs/legacy/**` changes
+- No runtime code or executable examples changed; pytest not required
+
 ## Next Step
 
-Claude Code should implement the brief and write `09_CODING_HANDOFF.md` for Codex review.
+Codex should run finalization checks, commit locally, and then prepare the next Claude Code implementation brief.

@@ -470,6 +470,32 @@ Implemented manifest schema versioning:
 - Manifest filtering, path resolution, validation, text-mode output, and exit codes are unchanged.
 - `schema_version` is a stable schema marker; it does not capture environment, command line, git state, timestamps, or other runtime metadata.
 
+Implemented run-ID linkage across durable outputs:
+
+- Optional `--run-id` accepted by five commands:
+  - `qre preflight --output-json ... --run-id <id>`
+  - `qre eval-config --output-dir ... --run-id <id>`
+  - `qre backtest-single --output-dir ... --run-id <id>`
+  - `qre backtest-batch --output-dir ... --run-id <id>`
+  - `qre backtest-shared --output-dir ... --run-id <id>`
+- `run_id` is persisted in:
+  - preflight JSON output (top-level `"run_id"`)
+  - evaluation `run_manifest.json` (`"run_id"`)
+  - portfolio `run_manifest.json` (`"run_id"`)
+- When `--run-id` is omitted, `run_id` is stored as `null`.
+- Run-ID is metadata linkage only; it does not imply cross-command orchestration, transactional workflow, or result ordering.
+
+Implemented run-manifest content validation in report audit:
+
+- `qre report-audit --role run_manifest` validates `run_manifest.json` beyond basic JSON parseability.
+- Validated fields: `schema_version` (integer 1), `kind` (string), `run_id` (string or null), `command` (string), `strategy_path` (string), `artifacts` (list of strings).
+- Supported run-manifest kinds: `evaluation_run_manifest`, `portfolio_backtest_run_manifest`.
+- Missing required fields produce audit issues with code `missing_run_manifest_field`.
+- Type errors and present-null non-nullable fields produce `invalid_run_manifest_field`.
+- Only `run_id` may be `null`; all other required fields reject present-null values.
+- Run-manifest validation exit codes follow the same `0`/`2` convention as other audit roles.
+- This audit validates artifact structure only. It does not assess factor effectiveness, strategy quality, or benchmark-relative performance.
+
 Next implementation:
 
 - Continue portfolio analytics/reporting improvements.

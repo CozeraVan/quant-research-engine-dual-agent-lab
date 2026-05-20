@@ -94,6 +94,15 @@ Implemented:
   - `limit_down`
 - Automatic `limit_up` / `limit_down` inference from `pre_close`, execution price, and A-share board profile when those columns are absent.
 - Sell retry after a blocked sell order.
+- Optional `--run-id` on durable output commands:
+  - `qre preflight --output-json`, `qre eval-config --output-dir`, `qre backtest-single --output-dir`, `qre backtest-batch --output-dir`, `qre backtest-shared --output-dir`
+  - Persisted as `"run_id"` in preflight JSON, evaluation `run_manifest.json`, and portfolio `run_manifest.json`
+  - Stored as `null` when omitted; linkage metadata only (not transactional)
+- Run-manifest content validation through `qre report-audit --role run_manifest`:
+  - Validated fields: `schema_version` (integer 1), `kind` (string), `run_id` (string or null), `command` (string), `strategy_path` (string), `artifacts` (list of strings)
+  - Supported kinds: `evaluation_run_manifest`, `portfolio_backtest_run_manifest`
+  - Structured issues for missing/invalid fields with codes `missing_run_manifest_field` and `invalid_run_manifest_field`
+  - Only `run_id` accepts `null`; all other validated fields reject present-null
 
 Not implemented yet:
 
