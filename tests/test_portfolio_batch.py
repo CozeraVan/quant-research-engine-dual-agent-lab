@@ -76,3 +76,77 @@ def test_batch_backtest_rejects_invalid_initial_cash():
 
     with pytest.raises(ValueError, match="initial_cash_per_symbol must be positive"):
         engine.run(make_batch_frame(), request)
+
+
+def test_batch_backtest_includes_default_metadata_columns_in_summary():
+    engine = BatchBacktestEngine(AShareMarketProfile())
+    request = BatchBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash_per_symbol=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+    )
+
+    result = engine.run(make_batch_frame(), request)
+
+    assert "board" in result.summary.columns
+    assert "is_st" in result.summary.columns
+
+
+def test_batch_backtest_includes_extra_metadata_columns_when_requested():
+    frame = make_batch_frame()
+    frame["sector"] = ["Finance"] * 6 + ["Tech"] * 6
+
+    engine = BatchBacktestEngine(AShareMarketProfile())
+    request = BatchBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash_per_symbol=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+        summary_metadata_columns=["sector"],
+    )
+
+    result = engine.run(frame, request)
+
+    assert "sector" in result.summary.columns
+    assert result.summary.loc[0, "sector"] == "Finance"
+    assert result.summary.loc[1, "sector"] == "Tech"
+    # Default fixed metadata columns still present
+    assert "board" in result.summary.columns
+
+
+def test_batch_backtest_extra_metadata_column_absent_from_frame_is_skipped():
+    frame = make_batch_frame()
+
+    engine = BatchBacktestEngine(AShareMarketProfile())
+    request = BatchBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash_per_symbol=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+        summary_metadata_columns=["sector"],
+    )
+
+    result = engine.run(frame, request)
+
+    # sector is not in the frame, so it should not appear in summary
+    assert "sector" not in result.summary.columns
+
+
+def test_batch_backtest_default_metadata_columns_not_duplicated():
+    frame = make_batch_frame()
+    # board is already in SUMMARY_METADATA_COLUMNS
+    frame["board"] = ["main_board"] * 6 + ["chinext"] * 6
+
+    engine = BatchBacktestEngine(AShareMarketProfile())
+    request = BatchBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash_per_symbol=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+        summary_metadata_columns=["board"],
+    )
+
+    result = engine.run(frame, request)
+
+    assert "board" in result.summary.columns

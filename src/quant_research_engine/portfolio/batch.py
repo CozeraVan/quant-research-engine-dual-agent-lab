@@ -25,6 +25,7 @@ class BatchBacktestRequest:
     holding_days: int
     entry_price_column: str = "open"
     mark_price_column: str = "close"
+    summary_metadata_columns: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class BatchBacktestEngine:
         symbols = request.symbols or self._infer_symbols(frame)
         results: dict[str, SingleSymbolBacktestResult] = {}
         summary_rows: list[dict[str, object]] = []
+        extra_metadata_columns = request.summary_metadata_columns or []
 
         for symbol in symbols:
             single_result = self.single_symbol_engine.run(
@@ -59,7 +61,7 @@ class BatchBacktestEngine:
                 ),
             )
             results[symbol] = single_result
-            summary_rows.append(self._summary_row(symbol, single_result, frame))
+            summary_rows.append(self._summary_row(symbol, single_result, frame, extra_metadata_columns))
 
         summary = pd.DataFrame(summary_rows)
         return BatchBacktestResult(
@@ -80,17 +82,26 @@ class BatchBacktestEngine:
             raise ValueError("frame must include ts_code when symbols is None")
         return sorted(frame["ts_code"].dropna().astype(str).unique().tolist())
 
-    def _summary_row(self, symbol: str, result: SingleSymbolBacktestResult, frame: pd.DataFrame) -> dict[str, object]:
+    def _summary_row(
+        self, symbol: str, result: SingleSymbolBacktestResult, frame: pd.DataFrame,
+        extra_metadata_columns: list[str] | None = None,
+    ) -> dict[str, object]:
         row: dict[str, object] = {"symbol": symbol}
         row.update(result.summary)
-        row.update(self._metadata_row(symbol, frame))
+        row.update(self._metadata_row(symbol, frame, extra_metadata_columns))
         row["order_count"] = len(result.orders)
         row["failed_order_count"] = len(result.failed_orders)
         return row
 
-    def _metadata_row(self, symbol: str, frame: pd.DataFrame) -> dict[str, object]:
+    def _metadata_row(
+        self, symbol: str, frame: pd.DataFrame, extra_columns: list[str] | None = None,
+    ) -> dict[str, object]:
         symbol_frame = frame.loc[frame["ts_code"] == symbol]
         if symbol_frame.empty:
             return {}
+        columns = list(SUMMARY_METADATA_COLUMNS)
+        for col in extra_columns or []:
+            if col not in columns:
+                columns.append(col)
         first_row = symbol_frame.iloc[0]
-        return {column: first_row[column] for column in SUMMARY_METADATA_COLUMNS if column in first_row.index}
+        return {column: first_row[column] for column in columns if column in first_row.index}

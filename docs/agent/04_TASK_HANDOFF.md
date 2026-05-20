@@ -10,44 +10,46 @@ QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
 
 ## Current Status
 
-Brief prepared and handed off to Claude Code after user approval.
+Accepted locally.
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
+
+## Completed
+
+- Added `summary_metadata_columns: list[str] | None = None` to `BatchBacktestRequest`.
+- Updated `BatchBacktestEngine.run()` to thread extra metadata columns through `_summary_row()` → `_metadata_row()`.
+- Updated `_metadata_row()` to merge requested extra columns with the fixed `SUMMARY_METADATA_COLUMNS` list, avoiding duplicates.
+- Updated CLI `backtest-batch` to pass `--group-by` columns as `summary_metadata_columns` to `BatchBacktestRequest`.
+- Added 4 engine tests: default columns preserved, extra columns flow into summary, absent columns skipped, no duplicate columns.
+- Added 1 CLI test: `backtest-batch --group-by sector` prints grouped output for passthrough column.
 
 ## In Progress
 
-None yet in code. The next implementation should let requested batch `group_by` metadata columns flow from the research frame into `BatchBacktestResult.summary`, so existing grouped report outputs can use columns preserved by the metadata adapter.
+None.
 
 ## Expected Files
 
-- `src/quant_research_engine/portfolio/batch.py`
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_portfolio_batch.py`
-- `tests/test_cli.py`
-- `docs/agent/01_CURRENT_STATUS.md`
-- `docs/agent/03_ROADMAP.md`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/06_DECISION_LOG.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+- `src/quant_research_engine/portfolio/batch.py` (modified)
+- `src/quant_research_engine/apps/cli.py` (modified)
+- `tests/test_portfolio_batch.py` (4 new tests)
+- `tests/test_cli.py` (1 new test)
 
 ## Validation Baseline
 
-- `uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q`
-- `uv run pytest -q`
-- `scripts/check-progress-docs.sh`
-- `git diff --check`
+- `uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q` -> `105 passed`
+- `uv run pytest -q` -> `283 passed in 2.67s`
+- `scripts/check-progress-docs.sh` -> passed (after doc update)
+- `git diff --check` -> passed
+- `scripts/git-finalize-check.sh` -> passed
 
 ## Known Risks
 
-- Group-by columns may be absent from the assembled frame; keep existing error behavior clear and deterministic.
-- Do not start guessing upstream metadata schemas or table names.
-- Preserve existing batch summary metadata columns by default.
+- Missing group-by columns in the frame are silently skipped in `_metadata_row()`. Downstream `summarize_batch_by()` will raise a clear `ValueError` when the column is absent from the summary.
+- No schema guesses — columns are request-driven only.
+- Default batch summary behavior unchanged when `summary_metadata_columns` is omitted.
 
 ## Next Suggested Step
 
-Claude Code should implement the batch metadata group-by passthrough brief and return a coding handoff with changed files and validation results.
+None. Await user acceptance or next request.

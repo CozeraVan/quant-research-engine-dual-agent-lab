@@ -42,7 +42,7 @@
 | M4.7 | Stronger failed-order diagnostics | DONE | CODEX/CLAUDE_CODE | local review passed; 238 tests passed; side-level failed-order summary diagnostics added | Preserve |
 | M4.8 | Real index benchmark wiring | BLOCKED | USER/CODEX | table/schema not confirmed | Confirm available index table and columns |
 | M4.9 | Real suspension/ST/risk-warning metadata | TODO | CLAUDE_CODE | fallback currently static unless data provided | Confirm source tables |
-| M4.10 | Batch metadata passthrough group-by | IN_PROGRESS | CLAUDE_CODE | metadata passthrough exists in data layer, but batch summary still uses a fixed metadata whitelist | Add requested group-by metadata columns to batch summary and reports |
+| M4.10 | Batch metadata passthrough group-by | DONE | CODEX/CLAUDE_CODE | 283 tests passed; `summary_metadata_columns` added to batch requests; CLI `--group-by` columns flow into batch summaries | Preserve |
 
 ## Milestone 5: Reporting And Reproducibility
 

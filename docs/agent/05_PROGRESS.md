@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-IN_PROGRESS
+DONE
 
 ## Progress Table
 
@@ -50,34 +50,33 @@ IN_PROGRESS
 | QRE-NEXT-33 | Evaluation metadata group summaries | DONE | CODEX/CLAUDE_CODE | commit `b25cbd7`; 255 passed in 2.45s; 6 engine tests + 2 CLI tests; group_summary in EvaluationResult; `eval-config --group-by` CLI support; Codex review passed | Preserve |
 | QRE-NEXT-34 | Eval-config output artifacts and manifests | DONE | CODEX/CLAUDE_CODE | 265 passed in 2.83s; 2 CLI tests + 8 manifest tests; `--output-dir` writes events/summary/ic/quantile/group CSVs + run_manifest.json + report_manifest.json; evaluation_report_manifest kind; ReportManifest validates evaluation artifact roles; run_manifest records `market_profile` provenance when used | Codex review and local finalize |
 | QRE-NEXT-35 | Evaluation random-baseline comparison | DONE | CODEX/CLAUDE_CODE | commit `495185b`; 274 passed in 3.19s; random baseline summary with deterministic RNG; CLI flag, stdout, CSV, manifest | Preserve |
-| QRE-NEXT-36 | Real metadata adapters for optional upstream columns | DONE | CODEX/CLAUDE_CODE | local finalization commit; 278 passed in 2.58s; passthrough columns preserved in `_load_security_metadata_table`; `_normalize_security_metadata` keeps all columns; 4 new tests; Codex review passed | Preserve |
-| QRE-NEXT-37 | Batch metadata passthrough group-by | IN_PROGRESS | CLAUDE_CODE | brief prepared; connect requested group-by metadata columns to batch summary/reporting | Implement from `08_IMPLEMENTATION_BRIEF.md` |
+| QRE-NEXT-36 | Real metadata adapters for optional upstream columns | DONE | CODEX/CLAUDE_CODE | local commit; 278 passed in 2.59s; passthrough columns preserved in `_load_security_metadata_table`; `_normalize_security_metadata` keeps all columns | Preserve |
+| QRE-NEXT-37 | Batch metadata group-by passthrough | DONE | CODEX/CLAUDE_CODE | 283 passed in 2.67s; `summary_metadata_columns` in `BatchBacktestRequest`; CLI `backtest-batch --group-by` passes columns to engine; 5 new tests; Codex review passed | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-DATA-REAL-METADATA-ADAPTERS-001 finalization:
+Recorded on 2026-05-20 after QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001 finalization:
 
-- `uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q` -> `23 passed`
-- `uv run pytest -q` -> `278 passed in 2.58s`
-- `scripts/check-progress-docs.sh` -> passed
+- `uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q` -> `105 passed`
+- `uv run pytest -q` -> `283 passed in 2.67s`
+- `scripts/check-progress-docs.sh` -> passed (after doc update)
 - `git diff --check` -> passed
 - `scripts/git-finalize-check.sh` -> passed
-- Previous finalized task: `QRE-DATA-REAL-METADATA-ADAPTERS-001`
 - Current task: `QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001`
-- Next step: Claude Code implementation
+- Next step: Preserve
 
 ## Completed Module Summary
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight, real metadata passthrough adapters.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries, durable output artifacts with manifests, random-baseline comparison.
-- Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics.
+- Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics, batch metadata group-by passthrough.
 - Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility, evaluation metadata group summaries, eval-config output artifacts and manifests, evaluation random-baseline comparison.
 
 ## Pending Work Summary
 
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
-- Standardized market-cap, liquidity, membership, and regime grouping across portfolio and evaluation outputs.
+- Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Larger research-run reproducibility workflow.
 
 ## Status Meaning

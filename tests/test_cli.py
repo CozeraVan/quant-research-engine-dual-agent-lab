@@ -1302,6 +1302,74 @@ def test_cli_backtest_batch_can_print_markdown_summary(capsys, monkeypatch):
     assert "| Window summary Y by board ranked symbols | window_summary_Y_by_board_ranked_symbols.csv |" in captured.out
 
 
+def test_cli_backtest_batch_group_by_passthrough_column(capsys, monkeypatch):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
+
+    class FakeBatchEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return BatchBacktestResult(
+                symbols=["000001.SZ", "000002.SZ"],
+                results={},
+                summary=pd.DataFrame(
+                    {
+                        "symbol": ["000001.SZ", "000002.SZ"],
+                        "trade_count": [2, 1],
+                        "board": ["main_board", "chinext"],
+                        "sector": ["Finance", "Tech"],
+                        "total_return": [0.05, 0.03],
+                        "win_rate": [1.0, 0.5],
+                        "total_cost": [10.0, 5.0],
+                        "failed_order_count": [0, 0],
+                    }
+                ),
+                summary_metrics={"symbol_count": 2, "mean_total_return": 0.04, "total_trades": 3},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "BatchBacktestEngine", FakeBatchEngine)
+
+    exit_code = main(
+        [
+            "backtest-batch",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--group-by",
+            "sector",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "group_by=sector" in captured.out
+    assert "Finance" in captured.out
+    assert "Tech" in captured.out
+
+
 def test_cli_report_files_filters_manifest_paths(capsys, tmp_path):
     manifest_path = tmp_path / "report_manifest.json"
     manifest_path.write_text(

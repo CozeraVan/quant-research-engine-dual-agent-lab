@@ -894,6 +894,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     initial_cash_per_symbol=args.initial_cash,
                     entry_signal=spec.signal_expression,
                     holding_days=spec.holding_days,
+                    summary_metadata_columns=args.group_by,
                 ),
             )
         except Exception as exc:

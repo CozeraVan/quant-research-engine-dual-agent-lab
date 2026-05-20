@@ -8,19 +8,19 @@ QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Codex prepared and handed off the next portfolio reporting task: let batch backtest requested `group_by` metadata columns flow into `BatchBacktestResult.summary`, so optional upstream metadata columns preserved by the data adapter can be used by existing grouped batch report outputs.
+Codex reviewed, validated, and finalized batch metadata group-by passthrough: `summary_metadata_columns` is available on `BatchBacktestRequest`; extra metadata columns flow through `run()` → `_summary_row()` → `_metadata_row()`; CLI `backtest-batch --group-by` passes requested columns to the engine. Full suite: 283 passed in 2.67s.
 
 ## Next Required Step
 
-Claude Code should implement the batch metadata group-by passthrough brief and return a coding handoff with changed files and validation results.
+None.
 
 ## Active Change Request
 
@@ -29,8 +29,8 @@ User request from 2026-05-20: continue the dual-agent workflow and assign the ne
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit before this handoff: `Preserve real metadata columns from configured sources`
-- Working tree clean after local handoff commit.
+- Last accepted implementation commit: current `HEAD`, `Let batch reports group by requested metadata`
+- Working tree clean after local finalization.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

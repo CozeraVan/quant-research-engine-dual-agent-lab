@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DATA-REAL-METADATA-ADAPTERS-001
+QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
 
 ## Written By
 
@@ -18,34 +18,35 @@ Accepted locally.
 
 ## Implementation Summary
 
-- Extended `_load_security_metadata_table()` to select passthrough columns beyond the 6 expected fixed columns (`ts_code`, `list_date`, `board`, `is_st`, `is_risk_warning`, `is_suspended`). Any additional columns the configured source table exposes are now preserved in the SELECT query.
-- Updated `_normalize_security_metadata()` to keep all columns instead of truncating to only the 6 fixed ones. Fixed columns still receive their existing normalization (list_date → datetime, board → derive_board fallback, status flags → bool). Passthrough columns pass through untouched in sorted order after the fixed columns.
-- `_derive_security_metadata_from_daily()` is unchanged — when no metadata table is configured, only the 6 fixed columns are produced.
-- `ResearchFrameAssembler` and `PreflightRunner` require no changes; their left-merge and column-access patterns handle extra columns naturally.
+- Added `summary_metadata_columns: list[str] | None = None` to `BatchBacktestRequest`.
+- Updated `BatchBacktestEngine.run()` to thread extra metadata columns through `_summary_row()` → `_metadata_row()`.
+- Updated `_metadata_row()` to merge requested extra columns with the fixed `SUMMARY_METADATA_COLUMNS` (avoiding duplicates), then copy values from the first frame row for each symbol.
+- Updated CLI `backtest-batch` to pass `--group-by` columns as `summary_metadata_columns` to `BatchBacktestRequest`, so grouped stdout and output-dir reports can use the passthrough metadata columns.
+- `ResearchFrameAssembler`, `write_batch_result()`, and `summarize_batch_by()` require no changes — the existing group-by report paths work as long as the column is present in the summary.
 
 ## Files Changed
 
-- `src/quant_research_engine/data/postgres.py` — extended `_load_security_metadata_table()` with passthrough column selection; updated `_normalize_security_metadata()` to preserve all columns
-- `tests/test_postgres_store.py` — 2 new tests: passthrough columns preserved, fallback normalization when no extra columns
-- `tests/test_data_assembler.py` — 1 new test: assembler merge includes passthrough metadata columns
-- `tests/test_preflight.py` — 1 new test: universe diagnostics work with extra metadata columns
+- `src/quant_research_engine/portfolio/batch.py` — added `summary_metadata_columns` to `BatchBacktestRequest`; threaded extra columns through `run()` → `_summary_row()` → `_metadata_row()`
+- `src/quant_research_engine/apps/cli.py` — pass `args.group_by` as `summary_metadata_columns` to `BatchBacktestRequest`
+- `tests/test_portfolio_batch.py` — 4 new tests: default columns preserved, extra columns in summary, absent column skipped, no duplicate columns
+- `tests/test_cli.py` — 1 new test: `backtest-batch --group-by sector` prints grouped output
 
 ## Validation Results
 
 ```bash
-uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q  # 23 passed
-uv run pytest -q                                                                                       # 278 passed in 2.59s
-scripts/check-progress-docs.sh                                                                         # passed
-git diff --check                                                                                       # passed
+uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q  # 105 passed
+uv run pytest -q                                                    # 283 passed in 2.67s
+scripts/check-progress-docs.sh                                      # passed (after doc update)
+git diff --check                                                    # passed
 ```
 
 ## Constraints
 
-- Preserve existing metadata fallback behavior when optional source columns are missing. ✅
-- Keep the adapter additive and optional. ✅ passthrough only; no new logic.
-- Keep data access read-only. ✅ no writes to upstream databases.
-- Avoid benchmark table guesses. ✅ not touched.
-- Keep the implementation deterministic. ✅ passthrough order is sorted, fixed columns stable.
+- Preserve existing batch summary metadata columns by default. ✅ fixed SUMMARY_METADATA_COLUMNS unchanged.
+- Keep the change additive and scoped. ✅ only new optional field; existing paths unchanged.
+- Keep data access read-only. ✅ no upstream writes.
+- Avoid benchmark and time-varying-status table guesses. ✅ not touched.
+- Do not change portfolio simulation math. ✅ not touched.
 
 ## Git State
 

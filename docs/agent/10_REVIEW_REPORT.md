@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DATA-REAL-METADATA-ADAPTERS-001
+QRE-PORTFOLIO-BATCH-METADATA-GROUPBY-001
 
 ## Written By
 
@@ -18,10 +18,10 @@ Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
-- `src/quant_research_engine/data/postgres.py`
-- `tests/test_postgres_store.py`
-- `tests/test_data_assembler.py`
-- `tests/test_preflight.py`
+- `src/quant_research_engine/portfolio/batch.py`
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_portfolio_batch.py`
+- `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -32,39 +32,40 @@ Changed files reviewed:
 
 Review passed.
 
-The data adapter now preserves optional upstream security metadata columns from the configured metadata table while keeping the fixed normalized columns stable. The fallback path that derives metadata from daily bars remains limited to the original fixed column set.
+Batch backtests can now request additional metadata columns for `BatchBacktestResult.summary`. CLI `backtest-batch --group-by ...` passes those requested group columns to the engine, so existing grouped stdout and report writers can use optional metadata columns preserved by the data layer.
 
 ## Compliance with Implementation Brief
 
 Compliant.
 
-- `load_security_metadata()` preserves optional source-table columns.
-- Existing fixed-column normalization still fills missing `list_date`, `board`, `is_st`, `is_risk_warning`, and `is_suspended`.
-- `ResearchFrameAssembler` and `PreflightRunner` continue to consume the returned metadata frame without new special-case branches.
-- No benchmark table assumptions or database writes were added.
+- Existing default batch summary metadata columns are preserved.
+- Requested passthrough metadata columns can appear in `BatchBacktestResult.summary`.
+- `backtest-batch --group-by <column>` passes requested columns into the engine.
+- Missing requested columns remain absent from summary and downstream grouped summary code raises the existing clear `ValueError`.
+- No portfolio simulation math, benchmark wiring, or data access behavior changed.
 
 ## Locked Requirements Check
 
 No locked-requirement violation found.
 
-- R-CORE-001: Existing fallback behavior is preserved.
-- R-CORE-002: Change is scoped to metadata loading and focused tests.
+- R-CORE-001: Existing batch behavior is preserved when no extra metadata is requested.
+- R-CORE-002: Change is scoped to batch metadata propagation and focused tests.
 - R-CORE-003: Focused and full validation passed.
 - R-CORE-004 / R-QRE-006: No sensitive values added.
 - R-QRE-005: Data access remains read-only.
 - R-QRE-002: No indicator computation added.
-- R-DUAL-002: Claude Code implemented within the approved brief.
+- R-GIT-002: No push performed.
 
 ## Code Quality Review
 
-The implementation is small and additive. `PostgresDataStore` now selects validated passthrough columns from the configured source table and keeps deterministic output ordering by placing fixed columns first and sorting passthrough columns.
+The implementation is small and request-driven. `summary_metadata_columns` avoids copying arbitrary frame/factor columns into summaries by default, and duplicate requested metadata columns are ignored.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
-uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q
+uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
@@ -72,17 +73,18 @@ git diff --check
 
 Results:
 
-- `uv run pytest tests/test_postgres_store.py tests/test_data_assembler.py tests/test_preflight.py -q`: `23 passed`
-- `uv run pytest -q`: `278 passed in 2.58s`
+- `uv run pytest tests/test_portfolio_batch.py tests/test_cli.py -q`: `105 passed`
+- `uv run pytest -q`: `283 passed in 2.67s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 
 Coverage is adequate:
 
-- source-table passthrough columns are preserved;
-- fallback normalization still fills missing fixed columns;
-- assembler metadata merge carries extra columns;
-- preflight universe diagnostics tolerate extra metadata columns.
+- default summary metadata columns are still present;
+- requested extra metadata columns flow into summary;
+- absent requested columns are skipped;
+- duplicate default metadata requests do not duplicate output columns;
+- CLI grouped output works with a passthrough metadata column.
 
 ## Required Fixes
 
@@ -90,7 +92,7 @@ None.
 
 ## Recommended Improvements
 
-Future work should define explicit schemas for time-varying suspension/ST/risk-warning metadata once the upstream source table is confirmed. Not required for this task.
+Future work can add output-dir regression coverage for passthrough group-by artifacts if grouped report schemas expand further. Not required for this task.
 
 ## Follow-up Tasks
 
