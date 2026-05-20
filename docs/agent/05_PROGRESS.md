@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-DONE
+IN_PROGRESS
 
 ## Progress Table
 
@@ -54,19 +54,20 @@ DONE
 | QRE-NEXT-37 | Batch metadata group-by passthrough | DONE | CODEX/CLAUDE_CODE | 283 passed in 2.67s; `summary_metadata_columns` in `BatchBacktestRequest`; CLI `backtest-batch --group-by` passes columns to engine; 5 new tests; Codex review passed | Preserve |
 | QRE-NEXT-38 | Shared-cash metadata output passthrough | DONE | CODEX/CLAUDE_CODE | 293 passed in 2.80s; shared-cash `metadata_columns`; output rows carry requested metadata; collision guards prevent overwriting canonical fields; 10 new tests including CLI and collision coverage | Preserve |
 | QRE-NEXT-39 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 passed in 3.00s; row-based grouped order/trade/failed-order summaries; `backtest-shared --group-by`; grouped CSV artifacts; manifest roles; empty no-column outputs handled | Preserve |
+| QRE-NEXT-40 | Evaluation factor decay summary | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared for factor/horizon IC and Rank IC decay output | Claude Code implements and writes `09_CODING_HANDOFF.md` |
 
 ## Latest Verified State
 
-Recorded on 2026-05-20 after QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001 final review:
+Recorded on 2026-05-20 after QRE-EVAL-FACTOR-DECAY-SUMMARY-001 planning handoff:
 
-- Current task: `QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001`
-- Empty no-column failed orders now write stable `failed_orders_by_<column>.csv` headers.
-- `uv run pytest tests/test_portfolio_analytics.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `179 passed in 2.31s`
-- `uv run pytest -q` -> `315 passed in 3.00s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-- Last finalized implementation: QRE-SHARED-CASH-METADATA-OUTPUTS-001 (commit `038ef6e`)
-- Next step: Preserve
+- Last finalized implementation: QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001 (commit `5853e0f`)
+- Last validation:
+  - `uv run pytest tests/test_portfolio_analytics.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `179 passed in 2.31s`
+  - `uv run pytest -q` -> `315 passed in 3.00s`
+  - `scripts/check-progress-docs.sh` -> passed
+  - `git diff --check` -> passed
+- Current task: `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`
+- Next step: Claude Code implementation
 
 ## Completed Module Summary
 
@@ -79,6 +80,7 @@ Recorded on 2026-05-20 after QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001 final re
 
 - Real index benchmark wiring after table/schema confirmation.
 - Real suspension/ST/risk-warning time-varying metadata.
+- Evaluation factor decay summary.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Larger research-run reproducibility workflow.
 

@@ -26,14 +26,14 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-None.
+Claude Code is assigned to add evaluation factor decay summaries from existing IC/Rank IC outputs.
 
 ## Known Gaps
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
 - Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables.
 - Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
-- Evaluation layer does not yet implement benchmark comparison, factor decay, or real regime classification.
+- Evaluation layer does not yet implement benchmark comparison or real regime classification.
 - Larger research-run bundles across preflight, evaluation, and backtest outputs are not yet standardized.
 
 ## Current Technical Stack
@@ -76,4 +76,4 @@ None.
 
 ## Next Recommended Step
 
-Choose the next unblocked evaluation or reporting task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Claude Code should implement `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

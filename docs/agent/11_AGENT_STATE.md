@@ -4,33 +4,33 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001
+QRE-EVAL-FACTOR-DECAY-SUMMARY-001
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex re-reviewed and accepted shared-cash metadata group summaries. Empty no-column shared row artifacts now produce stable grouped CSV headers; non-empty frames missing the requested group column still raise clearly. Focused tests: 179 passed; full suite: 315 passed.
+Codex finalized shared-cash metadata group summaries and selected the next unblocked evaluation module: factor decay summaries derived from existing IC/Rank IC outputs. Codex prepared `08_IMPLEMENTATION_BRIEF.md`, updated the handoff docs, and assigned implementation to Claude Code.
 
 ## Next Required Step
 
-None.
+Claude Code implements `QRE-EVAL-FACTOR-DECAY-SUMMARY-001`, runs the required validation, and writes `09_CODING_HANDOFF.md`.
 
 ## Active Change Request
 
-User request from 2026-05-20: run One-Shot Review-Finalize-Next. Codex review accepted the fixed implementation.
+User request from 2026-05-20: run One-Shot Review-Finalize-Next. Codex finalized the previous implementation and arranged the next Claude Code task.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: current `HEAD` after shared-cash metadata group summary finalization
-- Working tree clean after Codex finalization commit.
+- Last accepted implementation commit: `5853e0f`, `Group shared-cash reports by row metadata`
+- Working tree clean after Codex handoff-doc commit.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

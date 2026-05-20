@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-SHARED-CASH-METADATA-GROUP-SUMMARY-001
+QRE-EVAL-FACTOR-DECAY-SUMMARY-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-CODEX_TO_USER
+CODEX_TO_CLAUDE_CODE
 
 ## Sender
 
@@ -18,35 +18,51 @@ CODEX
 
 ## Short Message
 
-Review complete. Shared-cash metadata group summaries are accepted locally.
+Implement evaluation factor decay summaries from existing IC and Rank IC outputs.
 
-## Implementation Summary
+## Implementation Request
 
-Claude Code implemented the brief and fixed Codex's required empty-output issue:
+Claude Code should implement `08_IMPLEMENTATION_BRIEF.md` exactly:
 
-1. Added row-based shared-cash group summary helpers for orders, trades, and failed orders.
-2. Added `backtest-shared --group-by ...`.
-3. Wrote grouped CSV artifacts under `--output-dir`.
-4. Added report manifest roles and `group_by` metadata for grouped artifacts.
-5. Preserved default shared-cash output behavior when `group_by` is omitted.
-6. Fixed empty no-column shared row artifacts so grouped output writes stable empty CSV headers instead of crashing.
-
-## Validation
-
-- Empty no-column failed orders write `failed_orders_by_<column>.csv` with stable headers.
-- `uv run pytest tests/test_portfolio_analytics.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` -> `179 passed in 2.31s`
-- `uv run pytest -q` -> `315 passed in 3.00s`
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
+1. Add `factor_decay_summary` to `EvaluationResult`.
+2. Derive factor decay rows from existing `ic_summary`.
+3. Compare each factor/horizon against that factor's smallest horizon.
+4. Print `factor_decay_summary` from `qre eval-config` when available.
+5. Persist `factor_decay_summary.csv` under `eval-config --output-dir`.
+6. Add report manifest validation for the new artifact role.
+7. Preserve existing evaluation behavior and artifacts.
+8. Write `09_CODING_HANDOFF.md` with changed files, validation, risks, and git state.
 
 ## Constraints Check
 
-- No shared-cash group return attribution or holdings exposure added.
-- No shared-cash simulation math, order selection, cash accounting, risk exits, rebalancing, or market validation changed.
-- No upstream schema or table name guesses.
-- Report manifests remain compatible with `report-files` and `report-audit`.
-- Not pushed.
+- Do not add benchmark wiring, regime classification, or new data sources.
+- Do not compute technical indicators internally.
+- Do not change existing IC, Rank IC, quantile, group, or random-baseline semantics.
+- Keep output manifests compatible with `report-files` and `report-audit`.
+- Do not push.
+
+## Required Validation
+
+- `uv run pytest tests/test_evaluation_forward_returns.py tests/test_cli.py tests/test_portfolio_report_manifest.py -q`
+- `uv run pytest -q`
+- `scripts/check-progress-docs.sh`
+- `git diff --check`
+
+## Expected Changed Files
+
+- `src/quant_research_engine/evaluation/models.py`
+- `src/quant_research_engine/evaluation/engine.py`
+- `src/quant_research_engine/apps/cli.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_evaluation_forward_returns.py`
+- `tests/test_cli.py`
+- `tests/test_portfolio_report_manifest.py`
+- `docs/agent/04_TASK_HANDOFF.md`
+- `docs/agent/05_PROGRESS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
 
 ## Next Step
 
-Codex should select the next unblocked task after finalization.
+Claude Code should implement the current task from `08_IMPLEMENTATION_BRIEF.md`.
