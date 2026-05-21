@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001
+QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001
 
 ## Written By
 
@@ -31,7 +31,12 @@ Changed files reviewed:
 
 The implementation satisfies the brief.
 
-`ReportManifest.validate_contents()` now gates `_validate_csv_group_by_consistency()` on successful required-column validation, so malformed grouped files no longer emit both `missing_columns` and `group_by_mismatch` for the same defect. The new regression test covers the original reproduction path, while the existing mismatch tests for valid-structure grouped files still pass.
+`ReportManifest.validate_contents()` now distinguishes the two grouped-artifact families correctly:
+
+- batch grouped roles with manifest `group_by=<col>` metadata must expose `<col>` in the CSV header
+- evaluation/shared grouped roles keep using literal `group_by` cell-value consistency checks
+
+The new batch header check is gated behind successful required-column validation, so malformed batch files still report `missing_columns` first rather than stacking an additional header-mismatch issue.
 
 ## Required Fixes
 
@@ -41,11 +46,11 @@ None.
 
 Compliant:
 
-- Added `group_by_mismatch` validation behavior for grouped evaluation/shared roles with manifest `group_by` metadata.
-- Runs consistency checks only after required-column validation passes.
-- Preserved manifest schema version and combined evaluation `group_summary.csv` semantics.
-- Added focused regression coverage for the malformed grouped-file case.
-- Kept the change scoped to report-manifest validation and targeted tests.
+- Added batch grouped header consistency validation for manifest `group_by` metadata.
+- Covers batch grouped summary, ranked, window, and rolling artifact families.
+- Leaves evaluation/shared grouped consistency rules unchanged.
+- Preserved manifest schema version, filenames, roles, and CLI flags.
+- Added focused manifest and CLI regression coverage.
 
 ## Test Review
 
@@ -60,14 +65,14 @@ git diff --name-only HEAD | rg '^docs/legacy/' || true
 
 Results:
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`: `175 passed, 2 warnings in 1.84s`
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`: `183 passed, 2 warnings in 1.94s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - Legacy-doc check: no `docs/legacy/**` changes
 
 Reproduction check rerun by Codex:
 
-- A grouped evaluation file with header `group_by,group_value,horizon`, manifest `group_by="board"`, and CSV row `sector,Tech,1` now returns only `missing_columns: event_count`.
+- A batch grouped file with manifest `group_by="board"` and CSV header `symbol_count,sector` now returns only `group_by_header_mismatch`.
 
 Warnings observed:
 

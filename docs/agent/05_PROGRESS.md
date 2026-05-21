@@ -62,16 +62,17 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-45 | Metadata grouping and passthrough usage docs | DONE | CODEX/CLAUDE_CODE | commit `a59c1a4`; `10_REVIEW_REPORT.md` PASS; README plus 3 module docs cover eval/batch/shared metadata grouping, shared-cash passthrough, grouped roles, and structural-inspection disclaimer | Preserve |
 | QRE-NEXT-46 | Evaluation group-by manifest parity | DONE | CODEX/CLAUDE_CODE | commit `745103e`; `10_REVIEW_REPORT.md` PASS; per-column `group_summary_by_<col>.csv` files with manifest metadata `group_by=<col>`; `report-files`/`report-audit --group-by` parity; 6 new tests; 164 tests pass | Preserve |
 | QRE-NEXT-47 | Evaluation group-by parity docs | DONE | CODEX/CLAUDE_CODE | commit `5fc7605`; `10_REVIEW_REPORT.md` PASS; README, data_layer.md, and portfolio_workflow.md cover combined/per-column evaluation grouped artifacts and `--group-by` discovery/audit parity | Preserve |
-| QRE-NEXT-48 | Grouped artifact `group_by` audit consistency | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; grouped eval/shared `group_by` mismatch checks now run only after required-column validation passes; malformed grouped-file regression added; 175 tests passed | Preserve |
+| QRE-NEXT-48 | Grouped artifact `group_by` audit consistency | DONE | CODEX/CLAUDE_CODE | commit `a3768fb`; `10_REVIEW_REPORT.md` PASS; grouped eval/shared `group_by` mismatch checks now run only after required-column validation passes; malformed grouped-file regression added; 175 tests passed | Preserve |
+| QRE-NEXT-49 | Batch grouped-artifact `group_by` header consistency | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; batch grouped manifest `group_by` metadata now requires matching CSV header columns; 8 new tests; 183 tests passed | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-21 after Codex accepted `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001` for local finalization:
+Recorded on 2026-05-21 after Codex accepted `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001` for local finalization:
 
-- Current task: `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001`
-- Last finalized: QRE-DOCS-EVAL-GROUP-BY-MANIFEST-PARITY-USAGE-001 (commit `5fc7605`)
+- Current task: `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001`
+- Last finalized: QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001 (commit `a3768fb`)
 - Current verification:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 175 passed in 1.84s
+  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 183 passed in 1.94s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
 - Review: `10_REVIEW_REPORT.md` is now PASS

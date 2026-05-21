@@ -1465,3 +1465,158 @@ def test_validate_contents_skips_group_by_check_when_columns_missing(tmp_path):
     assert len(issues) == 1
     assert issues[0].code == "missing_columns"
     assert "event_count" in issues[0].message
+
+
+# --- batch group_by header consistency ---
+
+
+def test_validate_contents_reports_batch_header_mismatch_group_summary(tmp_path):
+    (tmp_path / "group_summary_by_board.csv").write_text(
+        "symbol_count,sector\n10,Technology\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "group_by_header_mismatch"
+    assert "'board'" in issues[0].message
+    assert "sector" in issues[0].message
+
+
+def test_validate_contents_reports_batch_header_mismatch_window_summary(tmp_path):
+    (tmp_path / "window_summary_M_by_board.csv").write_text(
+        "window,symbol_count,sector\nM,50,Tech\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {"key": "window_summary_M_by_board", "path": "window_summary_M_by_board.csv",
+                     "filename": "window_summary_M_by_board.csv", "role": "window_summary",
+                     "window": "M", "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "group_by_header_mismatch"
+
+
+def test_validate_contents_reports_batch_header_mismatch_window_ranked_symbols(tmp_path):
+    (tmp_path / "window_summary_M_by_board_ranked.csv").write_text(
+        "window,rank_type,rank,symbol,total_return,industry\nM,return,1,000001.SZ,0.15,Technology\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {"key": "window_summary_M_by_board_ranked",
+                     "path": "window_summary_M_by_board_ranked.csv",
+                     "filename": "window_summary_M_by_board_ranked.csv",
+                     "role": "window_ranked_symbols",
+                     "window": "M", "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "group_by_header_mismatch"
+
+
+def test_validate_contents_accepts_matching_batch_header(tmp_path):
+    (tmp_path / "group_summary_by_board.csv").write_text(
+        "symbol_count,board\n10,main_board\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_validate_contents_batch_header_mismatch_skipped_when_columns_missing(tmp_path):
+    """Only emit missing_columns when required-column validation fails, even if group_by header mismatches."""
+    (tmp_path / "group_summary_by_board.csv").write_text(
+        "other\n1\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {"key": "group_summary_by_board", "path": "group_summary_by_board.csv",
+                     "filename": "group_summary_by_board.csv", "role": "group_summary",
+                     "group_by": "board"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_columns"
+    assert "symbol_count" in issues[0].message
+
+
+def test_validate_contents_batch_header_without_group_by_is_not_checked(tmp_path):
+    """Batch entry without manifest group_by metadata is not checked for header consistency."""
+    (tmp_path / "group_summary.csv").write_text(
+        "symbol_count,board,sector\n10,main,Tech\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {"key": "group_summary", "path": "group_summary.csv",
+                     "filename": "group_summary.csv", "role": "group_summary"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001
+QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001
 
 ## Created By
 
@@ -14,18 +14,18 @@ CLAUDE_CODE
 
 ## Background
 
-Grouped evaluation and shared-cash artifacts now use manifest `group_by=<col>` metadata so `qre report-files` and `qre report-audit --group-by` can target per-column files. Current audit validation checks required columns only. That means a file can claim `group_by=board` in the manifest while its CSV rows contain another grouping column and still pass `validate_contents()`.
+Batch grouped artifacts already carry manifest `group_by=<col>` metadata for `group_by_<col>.csv`, `group_by_<col>_ranked_symbols.csv`, `window_summary_<window>_by_<col>.csv`, and `rolling_summary_<n>_by_<col>.csv`. Current audit validation still checks only the generic required summary/ranking columns. That means a manifest entry can claim `group_by=board` while the batch CSV header actually uses another grouping column such as `sector`, and `validate_contents()` still passes.
 
 ## Goal
 
-Harden report-manifest content validation so grouped artifact files with manifest `group_by` metadata must agree with their CSV contents.
+Harden report-manifest content validation so batch grouped artifact files with manifest `group_by` metadata must expose the same group column name in their CSV headers.
 
 ## Non-Goals
 
 - Do not change report-manifest schema version.
 - Do not change grouped artifact filenames, roles, or CLI flags.
-- Do not force combined grouped files without manifest `group_by` metadata to contain a single grouping column.
-- Do not broaden the task into batch grouped files that use the actual group column name instead of a literal `group_by` CSV column.
+- Do not change evaluation/shared grouped consistency rules added in `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001`.
+- Do not validate batch row values against manifest `group_by`; this task is header-level consistency only.
 - Do not edit legacy archived docs under `docs/legacy`.
 
 ## Affected Modules
@@ -62,26 +62,27 @@ Read:
 Task-specific locked requirements:
 
 - Preserve existing `report-files` / `report-audit` role and `group_by` filter behavior.
-- Preserve combined evaluation `group_summary.csv` compatibility.
+- Preserve batch grouped artifact filenames and existing role mapping.
 - Keep manifest schema version unchanged.
 - Preserve archived legacy docs.
 - Keep the task narrowly scoped to audit/content validation rather than output-generation changes.
 
 ## Implementation Steps
 
-1. Inspect current `ReportManifest.validate_contents()` flow and grouped artifact roles that already write a literal `group_by` column in CSV contents:
-   - `evaluation_group_summary`
-   - `shared_orders_group_summary`
-   - `shared_trades_group_summary`
-   - `shared_failed_orders_group_summary`
-2. After required-column validation passes for those grouped roles, add a consistency check for manifest entries with `group_by=<col>` metadata:
-   - read the CSV rows
-   - ignore fully empty files that already pass structural validation
-   - verify every non-empty `group_by` cell equals the manifest entry's `group_by`
-3. Emit a stable validation issue when content mismatches manifest metadata:
+1. Inspect current `ReportManifest.validate_contents()` flow and the batch grouped artifact families that carry manifest `group_by` metadata:
+   - `group_summary`
+   - `group_ranked_symbols`
+   - `window_summary`
+   - `window_ranked_symbols`
+   - `rolling_summary`
+   - `rolling_ranked_symbols`
+2. After required-column validation passes for batch grouped entries with manifest `group_by=<col>` metadata, add a header-level consistency check:
+   - read the CSV header
+   - verify the header contains a column named exactly the manifest entry's `group_by`
+3. Emit a stable validation issue when header and manifest metadata disagree:
    - use one clear code for this failure mode
-   - include the manifest value and observed mismatched CSV values in the message
-4. Do not apply this check to entries without manifest `group_by` metadata, including the combined evaluation `group_summary.csv`.
+   - include the manifest `group_by` value and the observed header columns in the message
+4. Do not apply this new check to evaluation/shared grouped roles, which already use literal `group_by` CSV columns and are covered by the previous task.
 5. Add focused coverage in:
    - `tests/test_portfolio_report_manifest.py` for direct `validate_contents()` behavior
    - `tests/test_cli.py` for `qre report-audit` surface behavior
@@ -95,7 +96,7 @@ Task-specific locked requirements:
 ## API / Interface Changes
 
 - No new commands or flags.
-- `report-audit` may surface a new issue code/message when grouped CSV content disagrees with manifest `group_by` metadata.
+- `report-audit` may surface a new issue code/message when a batch grouped CSV header disagrees with manifest `group_by` metadata.
 
 ## Validation Plan
 
@@ -114,19 +115,19 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] A grouped evaluation file with manifest `group_by=board` fails audit if CSV rows contain another `group_by` value.
-- [ ] A grouped shared-cash file with manifest `group_by=board` fails audit if CSV rows contain another `group_by` value.
-- [ ] Matching grouped evaluation/shared files still pass audit.
-- [ ] Combined evaluation `group_summary.csv` without manifest `group_by` metadata still passes unchanged.
-- [ ] `qre report-audit` surfaces the mismatch through existing validation output.
+- [ ] A batch `group_summary` file with manifest `group_by=board` fails audit if the CSV header uses another group column such as `sector`.
+- [ ] A batch grouped window/rolling/ranked file with manifest `group_by=board` fails audit if the CSV header lacks `board`.
+- [ ] Matching batch grouped files still pass audit.
+- [ ] Evaluation/shared grouped consistency checks remain unchanged.
+- [ ] `qre report-audit` surfaces the batch header mismatch through existing validation output.
 - [ ] Legacy archived docs are untouched.
 - [ ] `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`, `scripts/check-progress-docs.sh`, and `git diff --check` pass.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Avoid false positives on combined evaluation grouped files that intentionally have no manifest `group_by`.
-- Avoid applying the check to batch grouped outputs that use the actual grouping column name rather than a literal `group_by` column.
+- Avoid false positives on non-batch grouped roles that also carry manifest `group_by` metadata.
+- Avoid interpreting batch group values as if they were literal `group_by` CSV cells; this task should stay at header validation.
 - Keep the new validation issue readable in both direct `validate_contents()` and CLI audit output.
 
 ## Instructions for Claude Code
@@ -137,7 +138,7 @@ Claude Code must:
 2. Keep this scoped to report-manifest validation plus targeted tests unless a blocker requires otherwise.
 3. Avoid editing `docs/legacy/**`.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
-5. Stop and write a blocker only if the current grouped artifact shapes make this validation rule ambiguous.
+5. Stop and write a blocker only if the current batch grouped artifact header shapes make this validation rule ambiguous.
 
 ## Next Agent State
 

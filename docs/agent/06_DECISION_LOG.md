@@ -190,6 +190,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001`. The task should stay inside report-manifest validation and targeted CLI/tests without changing manifest schema version.
 - Owner: CODEX
 
+### 2026-05-21: Select batch grouped-artifact group_by header consistency as next Claude task
+
+- Decision: The next Claude Code task is audit hardening for batch grouped-artifact manifest `group_by` metadata versus batch CSV header columns.
+- Reason: Batch grouped artifacts still pass audit when manifest `group_by=board` points at a CSV whose header uses another column such as `sector`, because current validation checks only required summary/ranking columns. This is now the remaining obvious manifest/content consistency gap on the reporting path.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; jump to a larger run-bundle orchestration feature.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001`. The task should stay inside report-manifest validation and targeted CLI/tests without changing manifest schema version.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

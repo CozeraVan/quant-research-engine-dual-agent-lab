@@ -29,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is locally finalizing grouped-artifact `group_by` audit consistency after review PASS.
+Codex is locally finalizing batch grouped-artifact `group_by` header consistency after review PASS.
 
 ## Known Gaps
 
@@ -79,4 +79,4 @@ Codex is locally finalizing grouped-artifact `group_by` audit consistency after 
 
 ## Next Recommended Step
 
-Codex should create the local completion commit for `QRE-REPORT-GROUP-BY-CONTENT-CONSISTENCY-001`, then select the next unblocked task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Codex should create the local completion commit for `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001`, then select the next unblocked task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

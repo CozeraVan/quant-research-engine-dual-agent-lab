@@ -18,6 +18,15 @@ _RUN_MANIFEST_KINDS = {
     "evaluation_run_manifest",
 }
 
+_BATCH_GROUPED_ROLES = {
+    "group_summary",
+    "group_ranked_symbols",
+    "window_summary",
+    "window_ranked_symbols",
+    "rolling_summary",
+    "rolling_ranked_symbols",
+}
+
 _REQUIRED_COLUMNS_BY_ROLE = {
     "orders": {"symbol", "trade_date"},
     "trades": {"symbol"},
@@ -210,7 +219,10 @@ class ReportManifest:
                 column_issues = _validate_csv_columns(entry, path, required_columns)
                 issues.extend(column_issues)
                 if not column_issues and entry.group_by is not None:
-                    issues.extend(_validate_csv_group_by_consistency(entry, path))
+                    if entry.role in _BATCH_GROUPED_ROLES:
+                        issues.extend(_validate_csv_batch_group_by_header(entry, path))
+                    else:
+                        issues.extend(_validate_csv_group_by_consistency(entry, path))
         return issues
 
 
@@ -493,3 +505,28 @@ def _validate_csv_group_by_consistency(entry: ReportFile, path: Path) -> list[Re
             )
         ]
     return []
+
+
+def _validate_csv_batch_group_by_header(entry: ReportFile, path: Path) -> list[ReportValidationIssue]:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, [])
+    except Exception:
+        return []
+
+    if entry.group_by in header:
+        return []
+
+    return [
+        ReportValidationIssue(
+            key=entry.key,
+            path=path,
+            code="group_by_header_mismatch",
+            message=(
+                f"manifest group_by={entry.group_by!r} but CSV header "
+                f"does not contain column {entry.group_by!r} "
+                f"(columns: {', '.join(header) if header else '<empty>'})"
+            ),
+        )
+    ]
