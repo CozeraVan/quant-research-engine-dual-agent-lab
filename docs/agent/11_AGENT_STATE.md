@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-MT5-TV-FULL-MARKET-001
+QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
 
 ## Current Phase
 
@@ -16,17 +16,11 @@ CODEX
 
 ## Last Completed Step
 
-Codex re-reviewed `QRE-REPORT-MT5-TV-FULL-MARKET-001` and marked `PASS` in `docs/agent/10_REVIEW_REPORT.md`.
-
-Verified:
-
-- `realized_pnl` semantic defect is fixed in `build_trades_ledger()`.
-- Regression test `test_sell_rows_have_null_realized_pnl` is present.
-- Validation passes: `254 passed` with 2 pre-existing warnings.
+Codex reviewed and accepted `QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001` in `docs/agent/10_REVIEW_REPORT.md`, then finalized locally.
 
 ## Next Required Step
 
-No required work remains for this task. Start the next queued task from roadmap/progress.
+No required work remains for this task. Recommended next slice: `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` to operationalize missing-factor request output and workflow linkage.
 
 ## Git State
 

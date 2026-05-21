@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MT5-TV-FULL-MARKET-001
+QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
 
 ## Written By
 
@@ -14,26 +14,28 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code implementation in the current working tree.
+Claude Code documentation implementation in the current working tree.
 
 Changed files reviewed:
 
-- `src/quant_research_engine/portfolio/full_market_report.py`
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_full_market_report.py`
-- `pyproject.toml`
+- `docs/strategy_entry/README.md`
+- `docs/strategy_entry/strategy_card.md`
+- `docs/strategy_entry/factor_requirements.md`
+- `docs/strategy_entry/missing_factor_request.md`
+- `docs/strategy_entry/experiment_plan.md`
+- `docs/strategy_entry/examples.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 
 ## Review Summary
 
-The blocking semantic defect identified in the previous review cycle is fixed:
+The documentation set satisfies the implementation brief and aligns with the approved strategy-IO design boundaries:
 
-- `build_trades_ledger()` no longer writes sell-row `realized_pnl` from order `cost`.
-- Sell-row `realized_pnl` is now null when per-order realized P&L is unavailable.
-- Regression assertions were added in `tests/test_full_market_report.py` (`test_sell_rows_have_null_realized_pnl`) to prevent reintroduction.
-
-Full-market report bundle structure, workbook sheet contract, manifest role wiring, and report validation paths remain intact.
+- Scope is explicitly daily A-share v1 and avoids overreaching into runtime compiler work.
+- Clear separation of ownership between QRE, `indicators_tushare`, and external strategy repositories.
+- Strategy authoring contract is modularized into strategy card, factor requirements, missing-factor request, and experiment plan.
+- Missing-factor request schema is machine-readable and actionable for upstream processing.
+- Three strategy families are provided with concrete examples and mapping notes to current low-level `StrategySpec`.
+- Examples are correctly labeled as plumbing validation, not alpha claims.
 
 ## Required Fixes
 
@@ -43,24 +45,22 @@ None.
 
 Compliant:
 
-- Required additive artifacts are emitted for batch reports.
-- `backtest_report.xlsx` 10-sheet structure is covered.
-- Manifest roles and report-audit/report-files compatibility are preserved.
-- Residual limitations are documented without faking unavailable data fields.
+- `docs/strategy_entry/` contains all required files.
+- Three strategy-family examples are included.
+- Missing-factor request fields and workflow are explicit.
+- No runtime engine code or external repo modifications were introduced.
 
-## Test Review
+## Validation
 
-Validation commands run by Codex:
+Commands run by Codex:
 
 ```bash
-uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
 Results:
 
-- `254 passed, 2 warnings` (pre-existing numpy warning path in CLI decay test)
 - `scripts/check-progress-docs.sh` passed
 - `git diff --check` passed
 
@@ -70,9 +70,9 @@ No locked-requirement violation found.
 
 ## Final Recommendation
 
-Accept implementation and proceed to finalization workflow.
+Accept and proceed to finalization.
 
 ## Next Agent State
 
-- Phase: `USER_ACCEPTANCE`
-- Owner: `USER`
+- Phase: `DONE`
+- Owner: `CODEX`

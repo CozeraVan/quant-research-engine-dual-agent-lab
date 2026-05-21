@@ -1,0 +1,106 @@
+# QRE Strategy Entry Standard
+
+## Purpose
+
+The QRE strategy entry standard defines how to author a strategy so it can be validated, compiled, backtested, and reported by the quant-research-engine (QRE).
+
+This standard is for humans, Codex, Claude Code, and external strategy projects. It separates *what the strategy means* from *where the data lives*. The author describes trading logic in terms of indicator aliases and rules — the QRE compiler resolves those aliases to database columns.
+
+## Scope
+
+Version 1 covers daily A-share technical-indicator strategies running against `public.stock_daily` and `factors.*`.
+
+Out of scope for v1: minute bars, tick data, live trading, fundamental strategies, ML model training, clustering-driven discovery, QRE-side indicator calculation.
+
+## End-to-End Flow
+
+```
+1. Write strategy entry file (strategy_card + factor_requirements + experiment_plan)
+2. QRE validates the entry against the factor catalog
+3. If factors are missing, QRE emits a missing-factor request for indicators_tushare
+4. When factors are available, QRE compiles the entry into executable backtest tasks
+5. QRE runs the backtest and emits standard full-market reports
+```
+
+## Project Boundaries
+
+| Layer | Owns |
+|---|---|
+| QRE | Strategy input standard, factor availability checks, missing-factor requests, compilation, backtest execution, report output |
+| indicators_tushare | Technical indicator calculation, period expansion, backfill, persistence into `factors.*` |
+| research-notes / strategy-research | Strategy knowledge, natural-language descriptions, strategy libraries |
+
+QRE does not rewrite external strategy repositories or compute indicators internally.
+
+## Quick Start
+
+Minimal long-only mean-reversion strategy:
+
+```yaml
+strategy:
+  id: rsi2_oversold_reversal
+  name: RSI2 Oversold Reversal
+  family: mean_reversion
+  description: Buy when 2-period RSI drops below 10, exit when it rises above 70.
+
+rules:
+  entry:
+    all:
+      - indicator: rsi
+        alias: rsi_fast
+        operator: "<"
+        value: 10
+  exit:
+    any:
+      - indicator: rsi
+        alias: rsi_fast
+        operator: ">"
+        value: 70
+
+factor_requirements:
+  - alias: rsi_fast
+    indicator: rsi
+    source: close
+    period: 2
+    required: true
+    reason: entry and exit threshold signal
+
+experiment:
+  id: rsi2_smoke
+  frequency: daily
+  market: ashare
+  start: 2024-01-01
+  end: 2024-12-31
+  universe:
+    include: all_a
+    exclude_st: true
+    exclude_suspended: true
+    exclude_risk_warning: true
+    min_listing_days: 120
+  execution:
+    signal_date: t
+    entry_execution: t_plus_1_open
+    exit_execution: t_plus_1_open
+    market_profile: ashare_daily_default
+  risk:
+    max_holding_days: 5
+    stop_loss_pct: 0.08
+  capital:
+    initial_cash: 1000000
+    max_positions: 20
+    position_weight: equal
+```
+
+## File Organisation
+
+A complete strategy entry is one YAML file with three sections:
+
+| Section | Purpose | Reference |
+|---|---|---|
+| `strategy` / `rules` | Identity and trading logic | [strategy_card.md](strategy_card.md) |
+| `factor_requirements` | Data dependencies | [factor_requirements.md](factor_requirements.md) |
+| `experiment` | Run configuration | [experiment_plan.md](experiment_plan.md) |
+
+The missing-factor request format that QRE emits to `indicators_tushare` is defined in [missing_factor_request.md](missing_factor_request.md).
+
+Concrete examples across three strategy families are in [examples.md](examples.md).

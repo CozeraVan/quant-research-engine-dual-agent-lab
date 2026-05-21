@@ -2,15 +2,15 @@
 
 ## Current Task
 
-Implement the QRE full-market backtest report bundle. The immediate goal is code implementation by Claude Code: combine the MT5 workbook baseline and TradingView strategy tester metrics into additive QRE report artifacts for all-market A-share backtests.
+Implement the QRE strategy-entry contract documentation set. The immediate goal is documentation implementation by Claude Code: create clear authoring standards and examples so strategy writing and factor handoff become modular and scalable.
 
 ## Task ID
 
-QRE-REPORT-MT5-TV-FULL-MARKET-001
+QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
 
 ## Current Status
 
-DONE. Task finalized locally by Codex.
+DONE. Documentation implementation passed Codex review and was finalized locally.
 
 ## Current Owner
 
@@ -112,4 +112,4 @@ Current results: 254 passed, 2 warnings (pre-existing numpy) in 3.20s; all check
 
 ## Next Suggested Step
 
-Proceed to the next roadmap item. Recommended next implementation slice: strategy-entry contract implementation and compiler/preflight preparation.
+Proceed to the next strategy-IO slice: factor-missing handoff operational standard and workflow linkage.

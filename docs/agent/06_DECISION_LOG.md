@@ -365,3 +365,19 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Alternatives: Start the strategy-entry compiler first; continue only documenting strategy-entry rules; implement GUI form controls first. These remain future work because a stable report output contract is needed for GUI display and downstream research comparison.
 - Impact: `08_IMPLEMENTATION_BRIEF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md` now route implementation to Claude Code. Codex will review after Claude writes `09_CODING_HANDOFF.md`.
 - Owner: CODEX
+
+### 2026-05-21: Start strategy-entry contract docs implementation as the next slice
+
+- Decision: The next active task is `QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001`, assigned to Claude Code.
+- Reason: Full-market report output has been finalized locally. The next bottleneck identified by the user is strategy authoring complexity and non-standard entry structure. Documentation-first standardization is the fastest low-risk step before runtime compiler work.
+- Alternatives: Start compiler/preflight runtime changes immediately; start GUI parameter expansion first. These were deferred because authoring contract docs must be stable first.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now defines a docs-focused deliverable under `docs/strategy_entry/` with examples and missing-factor request schema; `11_AGENT_STATE.md` and `12_AGENT_BOARD.md` route execution to Claude Code.
+- Owner: CODEX
+
+### 2026-05-21: Finalize strategy-entry contract docs before compiler work
+
+- Decision: Accept and finalize `QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001` as complete after review pass.
+- Reason: The delivered docs provide the required authoring contract modules and three strategy-family examples while preserving project boundaries. This reduces strategy writing/debug churn before runtime compiler changes.
+- Alternatives: Keep docs task open and mix in compiler implementation immediately. Rejected to avoid coupling documentation baseline with runtime behavior changes.
+- Impact: `docs/strategy_entry/` becomes the baseline contract for follow-up tasks, and next slice should focus on operational missing-factor handoff and compiler/preflight linkage.
+- Owner: CODEX

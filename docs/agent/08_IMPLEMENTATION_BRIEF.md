@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MT5-TV-FULL-MARKET-001
+QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
 
 ## Created By
 
@@ -14,169 +14,135 @@ CLAUDE_CODE
 
 ## Current Brief Type
 
-Implementation brief. Implement code, tests, and required documentation updates.
+Implementation brief. Documentation-focused implementation with light schema/validation examples if needed.
 
 ## Background
 
-The user wants QRE to become the stable backtest/reporting engine for future A-share factor and strategy research. The current outputs are useful engineering artifacts, but the research-facing report is still too thin.
+`QRE-REPORT-MT5-TV-FULL-MARKET-001` is finalized. The next highest-priority gap is still strategy entry standardization.
 
-Codex reviewed two source templates:
+User has repeatedly clarified:
 
-- MT5 workbook: `/mnt/hgfs/Ubuntu互传/research-notes/ReportHistory-60001281.xlsx`
-- TradingView strategy tester screenshots: `/mnt/hgfs/Ubuntu互传/pics/1.png` through `/mnt/hgfs/Ubuntu互传/pics/5.png`
+- QRE should not rewrite `research-notes` / `strategy-research`.
+- QRE should define a standard, understandable strategy entry contract.
+- `indicators_tushare` remains the factor-calculation/upstream project.
+- Goal workflow should be simplified to:
+  - write strategy
+  - check factor library
+  - run backtest
+  - request missing factors upstream when needed
 
-The implementation should combine both templates into QRE's full-market report output. QRE backtests normally cover thousands of A-share symbols, so reports must be full-market artifacts with `symbol` columns, not one workbook per stock.
+Current low-level `StrategySpec` YAML is usable but hard to scale across many factors, many periods, and many strategy families.
 
-## Canonical Design Source
-
-- `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`
-
-Related but separate strategy-entry design:
+## Canonical Design Sources
 
 - `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`
+- `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`
 
-Do not implement the strategy-entry compiler in this task.
+This task implements the strategy-entry authoring standard docs from the design, not the compiler itself.
 
 ## Goal
 
-Add an additive full-market report bundle to QRE backtest outputs, at minimum for independent batch backtests, and share the writer with shared-cash outputs where practical.
+Create a clear, modular, user-facing strategy entry contract document set under QRE docs so humans, Codex, Claude Code, and external strategy projects can author entries consistently and quickly.
 
-Required bundle:
+Deliverables:
 
-- `backtest_report.xlsx`
-- `trades_ledger.csv`
-- `round_trips.csv`
-- `symbol_performance.csv`
-- `strategy_performance.json`
-- `equity_curve.csv`
-- `drawdown_curve.csv`
-- `trade_analysis.json`
-- `capital_usage.json`
-- `report_manifest.json`
+- strategy entry standard document
+- factor requirements document
+- missing-factor request document
+- experiment plan and run metadata document
+- at least 3 concrete strategy-entry examples (different strategy families) using the new standard format
 
-Existing report outputs must remain intact and compatible.
+## Required Output Documents
 
-## Required Workbook Sheets
+Target location: `docs/strategy_entry/` (create if absent).
 
-`backtest_report.xlsx` must contain these sheets in order:
+Required files:
 
-1. `Overview`
-2. `Performance`
-3. `TradesLedger`
-4. `RoundTrips`
-5. `SymbolPerformance`
-6. `EquityCurve`
-7. `DrawdownCurve`
-8. `TradeAnalysis`
-9. `CapitalUsage`
-10. `Artifacts`
+1. `README.md`
+2. `strategy_card.md`
+3. `factor_requirements.md`
+4. `missing_factor_request.md`
+5. `experiment_plan.md`
+6. `examples.md`
 
-Charts are optional in this first implementation. Stable data tables are required.
+## Content Requirements
 
-## Required Artifact Shape
+`README.md` must include:
 
-Follow the required columns and fields in `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`.
+- purpose and scope
+- relation to QRE engine and upstream projects
+- end-to-end authoring flow
+- minimal “quick start” example
 
-Important roles for manifest entries:
+`strategy_card.md` must include:
 
-- `full_market_report_workbook`
-- `trades_ledger`
-- `round_trips`
-- `symbol_performance`
-- `strategy_performance`
-- `full_market_equity_curve`
-- `drawdown_curve`
-- `trade_analysis`
-- `capital_usage`
+- required fields and optional fields
+- entry/exit/risk/position sizing sections
+- period/frequency semantics for daily data
+- naming/versioning conventions
 
-If an existing role such as `equity_curve` is still needed for compatibility, keep it. Do not remove existing roles.
+`factor_requirements.md` must include:
 
-## Suggested Implementation Surface
+- factor identifier format
+- source table/column expectations
+- period handling and parameterization rules
+- factor dependency declaration examples
 
-Likely files to inspect and update:
+`missing_factor_request.md` must include:
 
-- `src/quant_research_engine/portfolio/io.py`
-- `src/quant_research_engine/portfolio/analytics.py`
-- `src/quant_research_engine/portfolio/risk.py`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `tests/test_portfolio_io.py`
-- `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py`
-- `pyproject.toml` only if an explicit Excel writer dependency is required
+- request payload schema for upstream `indicators_tushare`
+- required vs optional fields
+- examples for missing indicator and missing period
 
-Use the existing portfolio result objects and output patterns before adding new abstractions.
+`experiment_plan.md` must include:
 
-## Implementation Guidance
+- run metadata standard (`run_id`, strategy version, universe, date range)
+- backtest mode options
+- acceptance checklist for “entry is runnable”
 
-- Batch mode:
-  - Build a root-level full-market report bundle from `BatchBacktestResult`.
-  - Synthesize full-market equity by summing per-symbol equity curves when no true shared-cash account exists.
-  - Preserve all per-symbol output directories and existing root summary outputs.
+`examples.md` must include at least 3 strategy families:
 
-- Shared-cash mode:
-  - Reuse the same report writer if practical.
-  - If a complete shared-cash bundle is too broad, document the limitation in `09_CODING_HANDOFF.md` and keep batch fully implemented.
+- trend-following sample
+- mean-reversion sample
+- breakout or momentum sample
 
-- Transaction ledger:
-  - Include both buy and sell executions in one table.
-  - `symbol` is mandatory.
-  - If current order/trade data cannot split `commission`, `stamp_tax`, `transfer_fee`, or `slippage_amount`, include the columns and populate known values conservatively with a documented null/zero convention.
+Each example should provide:
 
-- Round trips:
-  - Prefer existing realized trade records where they represent completed entry-to-exit cycles.
-  - Keep `symbol`, entry/exit timestamps, quantity, prices, gross/net P&L, returns, cost, and exit reason columns stable.
-
-- Symbol performance:
-  - Produce one row per stock.
-  - Include buy-and-hold comparison over the same available date window where possible.
-  - Include board/industry when available; otherwise use nulls.
-
-- Strategy performance:
-  - Aggregate all-market totals, profitability metrics, Sharpe/Sortino/IR when computable, drawdown, cost, best/worst symbols, and win/loss metrics.
-
-- Drawdown/trade/capital analysis:
-  - Compute fields that are available from daily equity/trade data.
-  - Keep margin fields present and null/zero for current cash-only A-share flows.
+- human-readable strategy summary
+- standardized entry fields
+- mapped low-level fields for current QRE usage
 
 ## Non-Goals
 
-- Do not implement the standard strategy-entry compiler in this task.
-- Do not rewrite `research-notes`, `strategy-research`, or `indicators_tushare`.
-- Do not compute missing technical indicators inside QRE.
-- Do not add database writes.
-- Do not remove or rename existing report files unless required by a failing compatibility test.
-- Do not present small-scope smoke output as alpha or strategy-quality evidence.
+- Do not implement strategy compiler/preflight runtime code in this task.
+- Do not modify external repositories.
+- Do not compute indicators inside QRE.
+- Do not rewrite portfolio/evaluation engines.
+- Do not treat sample examples as alpha conclusions.
 
 ## Acceptance Criteria
 
-- [ ] Batch backtest output writes the required full-market report files.
-- [ ] `backtest_report.xlsx` is created with all required sheets.
-- [ ] Required CSV and JSON columns/fields exist.
-- [ ] New artifacts are recorded in `report_manifest.json` with stable roles.
-- [ ] `qre report-files` can discover the new roles.
-- [ ] `qre report-audit --validate-contents` passes for a generated report.
-- [ ] Existing portfolio report files and existing manifest/audit tests remain compatible.
-- [ ] Any unavailable MT5/TradingView fields are still represented with documented null/zero conventions.
-- [ ] `docs/agent/09_CODING_HANDOFF.md` records changed files, validation evidence, and residual limitations.
+- [ ] `docs/strategy_entry/` exists with all required files.
+- [ ] Documents are consistent with approved design boundaries.
+- [ ] Three strategy-family examples are included and readable.
+- [ ] Missing-factor request schema is explicit and actionable for upstream projects.
+- [ ] Existing docs and progress/state files are updated to point to this task.
+- [ ] `docs/agent/09_CODING_HANDOFF.md` records changed files and validation evidence.
 
 ## Validation Commands
 
-Run at minimum:
-
 ```bash
-uv run pytest tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-If a new Excel dependency is added, also run the smallest test that proves the workbook can be opened and sheet names can be inspected.
+If markdown lint or doc build tooling exists locally, run the smallest relevant subset and record it in `09_CODING_HANDOFF.md`.
 
 ## Risks
 
-- The environment may not already include an Excel writer/reader dependency. Add the lightest explicit dependency only if needed.
-- Batch mode does not represent a true shared-cash portfolio. The synthesized full-market equity curve must be documented as an aggregate of per-symbol curves.
-- Current engine cost records may not decompose every fee component. Do not fake unavailable splits; keep columns stable and document conventions.
-- Some TradingView chart-style fields may be table-only in v1. That is acceptable if the data is present.
+- Over-designing entry schema beyond current daily-data scope.
+- Mixing “authoring standard” and “runtime compiler” concerns.
+- Leaving ambiguous factor identifiers that upstream automation cannot interpret.
 
 ## Next Agent State
 

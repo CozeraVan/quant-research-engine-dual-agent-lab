@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-REPORT-MT5-TV-FULL-MARKET-001
+QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
 
 ## Current Recipient
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Finalization complete. Local commit created for `QRE-REPORT-MT5-TV-FULL-MARKET-001`; no remote push performed.
+Strategy-entry contract docs task is finalized locally. Review passed and documentation set is accepted.
 
 ## Accepted Direction
 
@@ -40,7 +40,7 @@ Finalization complete. Local commit created for `QRE-REPORT-MT5-TV-FULL-MARKET-0
 
 ## Implementation Artifacts
 
-- `src/quant_research_engine/portfolio/full_market_report.py` — new (needs targeted fix in `build_trades_ledger()`)
+- `src/quant_research_engine/portfolio/full_market_report.py` — new
 - `src/quant_research_engine/portfolio/io.py` — wired into `write_batch_result()`
 - `src/quant_research_engine/portfolio/report_manifest.py` — 9 new roles
 - `tests/test_full_market_report.py` — 23 new tests
@@ -58,4 +58,4 @@ Results: 254 passed, 2 warnings (pre-existing numpy) in 3.11s; quality gate bloc
 
 ## Next Step
 
-Move to the next task (recommended: strategy entry contract implementation slice).
+Move to the next task slice: factor-missing handoff operational standard and linkage workflow.

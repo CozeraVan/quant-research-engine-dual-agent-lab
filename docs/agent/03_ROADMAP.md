@@ -94,10 +94,10 @@
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
 | M8.1 | Strategy IO contract design | DESIGN_RECORDED | CODEX | `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md` | User review and approval |
-| M8.2 | Strategy entry writing standard | READY_FOR_BRIEF | CODEX | brainstorm accepted: entry strategy work is MD/spec-first, not code-first | Write authoring docs for Strategy Card, Factor Requirements, and Experiment Plan |
+| M8.2 | Strategy entry writing standard | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001` completed; `docs/strategy_entry/` added with strategy card, factor requirements, missing-factor request, experiment plan, and examples; `10_REVIEW_REPORT.md` PASS | Preserve; use as contract baseline for compiler/preflight tasks |
 | M8.3 | Factor availability and missing-factor handoff standard | READY_FOR_BRIEF | CODEX | design spec defines QRE -> `indicators_tushare` missing-factor request fields | Scope compiler/preflight support after spec approval |
 | M8.4 | Three-strategy entry validation sample | READY_FOR_BRIEF | CODEX/CLAUDE_CODE | user requested 3 existing strategy families converted to standard entry and smoke-tested | Include in implementation acceptance criteria |
-| M8.5 | MT5 + TradingView full-market report contract | IN_PROGRESS | CLAUDE_CODE | MT5 workbook and 5 TradingView strategy tester screenshots inspected; report contract recorded in `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`; implementation brief ready | Implement additive full-market report bundle and manifest/audit support |
+| M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | FUTURE | CLAUDE_CODE | GUI is visualization only; standard contract must come first | Add form controls after entry/report contracts are stable |
 
 ## Status Meaning

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-MT5-TV-FULL-MARKET-001
+QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
 
 ## Written By
 
@@ -14,74 +14,54 @@ CODEX
 
 ## Status
 
-FIXED. Codex review found one blocking semantic issue in `realized_pnl` — fixed and resubmitted for re-review.
+IMPLEMENTED. The strategy-entry documentation set is complete and ready for Codex review.
 
 ## Implementation Summary
 
-Implemented the additive full-market report bundle from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, combining the MT5 workbook baseline and TradingView strategy tester metrics into QRE batch backtest outputs:
+Created the QRE strategy entry documentation set under `docs/strategy_entry/` from the design spec at `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`:
 
-- **new module `full_market_report.py`** (`src/quant_research_engine/portfolio/full_market_report.py`, ~350 lines): build functions for every report artifact plus the main `write_full_market_report()` entry point. The module keeps report-building logic separate from the 685-line `io.py`.
-  - `build_trades_ledger()` — combines per-symbol `orders` DataFrames into a unified ledger with MT5 columns (`lot_count`, `commission`, `stamp_tax`, `transfer_fee`, `slippage_amount`, `realized_pnl`, `cash_after`, `position_after`, `order_reason`, `status`), filling unavailable cost-split columns with `NaN`/null.
-  - `build_round_trips()` — combines per-symbol `trades` DataFrames, derives `holding_days`, `entry_notional`, `exit_notional`, `gross_return`, `net_return` from price×quantity and P&L.
-  - `build_symbol_performance()` — enriches the batch `summary` DataFrame with per-symbol Sharpe and max drawdown via `summarize_equity_curve()`.
-  - `build_full_market_equity_curve()` — aligns dates across all symbols and sums `total_equity` directly; computes `daily_return`, `cumulative_return`, `position_count`.
-  - `build_drawdown_curve()` — derives `running_peak`, `drawdown`, `drawdown_pct`, `drawdown_duration_days` from the full-market equity curve.
-  - `build_strategy_performance()` — aggregates win/loss counts, `win_rate`, `profit_factor`, `expectancy`, Sharpe, Sortino, max consecutive wins/losses, best/worst symbols into a JSON-ready dict.
-  - `build_trade_analysis()` — P&L distribution bins via numpy histogram, win/loss breakdown, outlier detection (3-sigma), per-pair summary.
-  - `build_capital_usage()` — CAGR from equity curve growth, margin fields null for cash-only simulation.
-  - `write_full_market_excel()` — writes `backtest_report.xlsx` with 10 sheets (Overview, Performance, TradesLedger, RoundTrips, SymbolPerformance, EquityCurve, DrawdownCurve, TradeAnalysis, CapitalUsage, Artifacts) using openpyxl with bold headers.
-  - `write_full_market_report()` — main entry point: calls all builders, writes 9 artifact files, returns a paths dict.
+- **`README.md`** — purpose, scope, end-to-end flow, project boundaries, quick-start example, file organisation
+- **`strategy_card.md`** — required/optional fields for strategy identity and trading logic; rule expression format with logical combinators (`all`/`any`), condition operators (including `crosses_above`/`crosses_below`), built-in aliases, risk controls, holding rules, position sizing, execution assumptions, naming conventions
+- **`factor_requirements.md`** — requirement format with field table; single-output and multi-output indicator examples; optional factor handling; period semantics; factor catalog resolution contract
+- **`missing_factor_request.md`** — JSON request schema with field table; request output format; upstream expectations for `indicators_tushare`; optional vs required handling; batch request notes
+- **`experiment_plan.md`** — `experiment`, `universe`, `execution`, `capital`, `risk`, `cost_model`, `output` field tables; backtest modes reference; grouping reference; acceptance checklist; minimal example
+- **`examples.md`** — three complete strategy entries in standard format:
+  1. RSI2 Oversold Reversal (mean-reversion)
+  2. EMA200 + Bollinger Band Reversal (trend-filtered mean-reversion)
+  3. MACD Zero-Cross Momentum (momentum)
+  Each includes the standard three-section format, a "what this validates" explanation, and mapping notes to the current low-level `StrategySpec` format.
 
-- **Wired into `write_batch_result()`** (`src/quant_research_engine/portfolio/io.py`): the `write_full_market_report()` call happens after per-symbol directory writing but before manifest generation. New artifact paths are merged into the existing paths dict. Updated `_batch_manifest_role()` to map report keys to stable manifest roles, and `_batch_report_paths()` to list all new artifacts.
-
-- **Manifest roles added** (`src/quant_research_engine/portfolio/report_manifest.py`): 9 new entries in `_REQUIRED_COLUMNS_BY_ROLE` — `trades_ledger`, `round_trips`, `symbol_performance`, `full_market_equity_curve`, `drawdown_curve`, `full_market_report_workbook`, `strategy_performance`, `trade_analysis`, `capital_usage`.
-
-- **Tests** (`tests/test_full_market_report.py`, new, 23 tests): 12 test classes covering every builder function, Excel workbook creation (sheet names and structure verified), integration with `write_batch_result()`, manifest role registration, manifest validation, and empty-result edge cases.
+No code changes. This is a documentation-only implementation consistent with the approved design boundaries.
 
 ## Files Changed
 
-- `pyproject.toml` — added `openpyxl>=3.1.0` dependency
-- `src/quant_research_engine/portfolio/full_market_report.py` — new
-- `src/quant_research_engine/portfolio/io.py` — wired full-market report into `write_batch_result()`
-- `src/quant_research_engine/portfolio/report_manifest.py` — added 9 new required-column rules
-- `tests/test_full_market_report.py` — new (23 tests)
-- `docs/agent/04_TASK_HANDOFF.md` — updated status/owner/phase
-- `docs/agent/05_PROGRESS.md` — updated phase/task entry/verified state
-- `docs/agent/09_CODING_HANDOFF.md` — this file
-- `docs/agent/11_AGENT_STATE.md` — phase to CODEX_REVIEWING, owner to CODEX
-- `docs/agent/12_AGENT_BOARD.md` — message/recipient/next step updated
+- `docs/strategy_entry/README.md` — new
+- `docs/strategy_entry/strategy_card.md` — new
+- `docs/strategy_entry/factor_requirements.md` — new
+- `docs/strategy_entry/missing_factor_request.md` — new
+- `docs/strategy_entry/experiment_plan.md` — new
+- `docs/strategy_entry/examples.md` — new
 
 ## Validation Results
 
-- `uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` → 254 passed, 2 warnings (pre-existing numpy) in 3.14s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
-
-## Residual Limitations
-
-- **Unavailable cost splits**: the current engine does not track per-order `commission`, `stamp_tax`, `transfer_fee`, or `slippage` separately. Those MT5 columns exist in `trades_ledger` as `None`/`NaN` with stable column names.
-- **Margin fields**: `average_margin_used`, `max_margin_used`, `min_margin_used` are `None` because the current simulation is cash-only (no leverage).
-- **Intratrade path**: `max_favorable_return`, `max_adverse_return`, and bars-in-trade statistics are `None` because the current A-share daily engine does not track intra-trade bar-level paths.
-- **Charts**: the Excel workbook contains data sheets only; no rendered charts in this first implementation.
-- **Batch-first**: only batch mode writes full-market reports. Shared-cash reuse is noted as future work.
+- All 6 required files present under `docs/strategy_entry/`
 
 ## Constraints
 
-- No existing report outputs renamed or removed.
-- No changes to engine contracts, market profiles, single-symbol, batch, or shared-cash logic.
-- `docs/legacy/**` untouched.
-- Read-only data access preserved.
-
-## Fixes Applied (Re-review Cycle)
-
-1. **realized_pnl semantics** — `build_trades_ledger()` line 81: changed `"realized_pnl": None if side == "buy" else _safe_float(record.get("cost"))` to `"realized_pnl": None`. The `cost` field is a transaction fee, not realized P&L. Sell rows now have `None` for `realized_pnl` (same as buy rows), since the current engine does not track realized P&L at the individual order level. Added assertion in `test_sell_rows_have_null_realized_pnl` that sell-row `realized_pnl` is `NaN` and not equal to `total_cost`.
+- No code changes — documentation only.
+- No modifications to external repositories or upstream projects.
+- Examples are plumbing demonstrations, not alpha claims.
+- Factor requirement format uses aliases, not low-level table paths.
+- Missing-factor request schema is explicit and machine-readable.
 
 ## Git State
 
 - Branch: `master`
-- Last accepted implementation commit: `766dc98`, `Make backtest iteration directly usable in a local browser console`
-- Working tree contains all full-market report implementation files, tests, and agent doc updates.
+- Last finalized commit: `27828b8` (QRE-REPORT-MT5-TV-FULL-MARKET-001)
+- Working tree: new `docs/strategy_entry/` directory plus agent doc updates.
 
 ## Next Suggested Step
 
-Codex reviews the implementation, runs validation, and writes `docs/agent/10_REVIEW_REPORT.md`.
+Codex reviews the documentation set against the design spec, checks for consistency, and writes `docs/agent/10_REVIEW_REPORT.md`.
