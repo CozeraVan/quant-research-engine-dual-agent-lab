@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001
+QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001
 
 ## Written By
 
@@ -18,40 +18,42 @@ Implemented. Ready for Codex review.
 
 ## Implementation Summary
 
-Added optional `window_size` metadata parsing, filtering, and CLI surface parity across the report-manifest stack:
+Documentation-only task. Updated README and portfolio module docs to explain rolling-artifact `window_size` report filtering:
 
-- **`ReportFile`**: Added `window_size: int | None = None` field. `from_mapping()` parses `window_size` from manifest JSON entries — absent or explicit `null` yields `None`; non-integer types (string, boolean) raise a manifest-specific `ValueError`.
-- **`ReportManifest.files()` / `paths()` / `validate_contents()`**: Added `window_size: int | None = None` parameter. Uses `_matches_int()` helper to filter entries whose `window_size` matches the requested value.
-- **CLI**: Added `--window-size <int>` to `qre report-files` and `qre report-audit`. Threaded through all manifest method calls. `report-files --json` surfaces `window_size` on matched file entries when present.
-- **Tests**: 9 manifest tests (parsing, absent/null acceptance, string/boolean rejection, `files()`/`paths()`/`validate_contents()` filtering) + 5 CLI tests (`--window-size` filter, JSON inclusion/omission/null). Total: 197 passed in 2.32s.
+- **README.md**: Added "Rolling-Artifact Window Size Filtering" section between `--require-match` examples and JSON Output section. Includes concrete `--window-size 20` examples for `report-files` and `report-audit` with `--require-match`. Explicitly explains the difference between `--window` (string calendar-window like `M`, `Q`, `Y`) and `--window-size` (integer trailing rolling window like `20`). Added `window_size` to the JSON metadata field list.
+- **portfolio_workflow.md**: Added `window_size` to three locations: manifest file-entry optional metadata, `files()` filter parameters, and both `report-files`/`report-audit` CLI filter lists.
+- **portfolio_layer.md**: Added `--window-size` to the report discovery/audit CLI capability listing in "Current Scope".
 
 ## Files Changed
 
-- `src/quant_research_engine/portfolio/report_manifest.py` — Added `window_size` field to `ReportFile`, parsing in `from_mapping()`, `_matches_int` helper, `window_size` parameter on `files()`/`paths()`/`validate_contents()`.
-- `src/quant_research_engine/apps/cli.py` — Added `--window-size` argument to `report-files` and `report-audit` parsers; threaded `window_size` through all manifest calls; added `window_size` to `report-files --json` output.
-- `tests/test_portfolio_report_manifest.py` — 9 new tests for parsing, type rejection, and filtering behavior.
-- `tests/test_cli.py` — 5 new tests for CLI filtering and JSON output.
+- `README.md` — Added rolling-artifact `--window-size` section and JSON metadata wording.
+- `docs/modules/portfolio_workflow.md` — Added `window_size` to manifest metadata, `files()` filters, and CLI filters.
+- `docs/modules/portfolio_layer.md` — Added `--window-size` to report discovery/audit capabilities.
+- `docs/agent/04_TASK_HANDOFF.md` — Updated for task completion.
+- `docs/agent/05_PROGRESS.md` — Updated progress table and verification state.
+- `docs/agent/09_CODING_HANDOFF.md` — This file.
+- `docs/agent/11_AGENT_STATE.md` — Updated phase and owner.
+- `docs/agent/12_AGENT_BOARD.md` — Updated recipient and message.
 
 ## Validation Results
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 197 passed in 2.32s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
+- No code or test changes; existing tests remain at 197 passed.
 
 ## Constraints
 
-- Manifest schema version unchanged.
-- Existing `role`, `symbol`, `window`, `group_by` filters preserved.
-- Numeric `window_size` filtering independent of string `window` filtering.
-- No changes to `docs/legacy/**`.
-- No changes to rolling artifact filenames, roles, or output-generation logic.
+- Documentation-only; no code, schema, or behavior changes.
+- `docs/legacy/**` untouched.
+- Existing CLI examples and command descriptions preserved.
+- `--window` vs `--window-size` distinction clearly explained.
 
 ## Git State
 
 - Branch: `master`
-- Last finalized implementation commit: `de37afd`, `Close batch grouped manifest header audit gap`
-- Current changes are uncommitted (awaiting Codex review).
+- Last finalized implementation commit: `da7b38c`, `Expose rolling manifest window sizes to report selectors`
+- Current changes are uncommitted (documentation only; awaiting Codex review).
 
 ## Next Suggested Step
 
-Codex should review the implementation, run validation, and write `10_REVIEW_REPORT.md`.
+Codex should review the documentation changes, run validation, and finalize.

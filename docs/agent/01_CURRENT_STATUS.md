@@ -29,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is locally finalizing rolling-artifact `window_size` manifest-filter parity after review PASS.
+Codex is locally finalizing rolling-artifact `window_size` usage documentation after review PASS.
 
 ## Known Gaps
 
@@ -55,7 +55,7 @@ Codex is locally finalizing rolling-artifact `window_size` manifest-filter parit
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `de37afd`, `a3768fb`
+- Recent commits: `da7b38c`, `de37afd`
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
@@ -79,4 +79,4 @@ Codex is locally finalizing rolling-artifact `window_size` manifest-filter parit
 
 ## Next Recommended Step
 
-Codex should create the local completion commit for `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001`, then select the next unblocked documentation or report-tooling task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Codex should create the local completion commit for `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001`, then select the next unblocked documentation or report-tooling task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.

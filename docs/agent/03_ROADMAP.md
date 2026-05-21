@@ -65,6 +65,7 @@
 | M5.12 | Grouped artifact `group_by` audit consistency | DONE | CODEX/CLAUDE_CODE | commit `a3768fb`; `10_REVIEW_REPORT.md` PASS; grouped eval/shared `group_by` mismatch checks now run only after required-column validation passes; 175 targeted tests passed | Preserve |
 | M5.13 | Batch grouped-artifact `group_by` header consistency | DONE | CODEX/CLAUDE_CODE | commit `de37afd`; `10_REVIEW_REPORT.md` PASS; batch grouped manifest `group_by` metadata now requires matching CSV header columns; 183 targeted tests passed | Preserve |
 | M5.14 | Rolling-artifact `window_size` filter parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; batch/shared rolling manifest metadata `window_size` now filters through report discovery/audit and surfaces in `report-files --json`; 197 targeted tests passed | Preserve |
+| M5.15 | Rolling-artifact `window_size` usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README and portfolio module docs now cover `--window-size` discovery/audit usage, `--window` vs `--window-size`, and additive JSON metadata wording | Preserve |
 
 ## Milestone 6: Dual-Agent Workflow
 

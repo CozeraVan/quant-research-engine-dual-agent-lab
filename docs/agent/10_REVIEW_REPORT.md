@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001
+QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001
 
 ## Written By
 
@@ -14,19 +14,15 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code implementation changes in the current working tree.
+Claude Code documentation changes in the current working tree.
 
 Changed files reviewed:
 
-- `docs/agent/01_CURRENT_STATUS.md`
-- `docs/agent/03_ROADMAP.md`
-- `src/quant_research_engine/portfolio/report_manifest.py`
-- `src/quant_research_engine/apps/cli.py`
-- `tests/test_portfolio_report_manifest.py`
-- `tests/test_cli.py`
+- `README.md`
+- `docs/modules/portfolio_workflow.md`
+- `docs/modules/portfolio_layer.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
@@ -35,15 +31,14 @@ Changed files reviewed:
 
 The implementation satisfies the brief.
 
-`ReportFile` now parses optional numeric `window_size` metadata from manifest entries, rejects invalid string and boolean values with a manifest-specific `ValueError`, and threads that metadata through `ReportManifest.files()`, `paths()`, and `validate_contents()`.
+README now documents rolling-artifact `--window-size` usage with concrete `report-files` and `report-audit` examples, explicitly distinguishes string `--window` calendar-window filters from integer `--window-size` rolling filters, and updates the JSON-output wording to include optional `window_size` metadata.
 
-The CLI surface matches the helper changes:
+The portfolio module docs are consistent with the shipped CLI/report-manifest surface:
 
-- `qre report-files --window-size <int>` filters rolling entries by manifest `window_size`
-- `qre report-audit --window-size <int>` audits only the filtered rolling entries
-- `qre report-files --json` now includes numeric `window_size` metadata when present
+- `portfolio_workflow.md` lists `window_size` as optional manifest metadata and as a `ReportManifest.files()` / `report-files` / `report-audit` filter
+- `portfolio_layer.md` includes `qre report-files --window-size <int>` and `qre report-audit --window-size <int>` in the current capability summary
 
-Existing `role`, `symbol`, `window`, and `group_by` filters remain unchanged, and the task stays scoped to manifest parsing/filtering rather than rolling output generation.
+No implementation code, tests, schema version, or report-manifest behavior changed.
 
 ## Required Fixes
 
@@ -53,19 +48,17 @@ None.
 
 Compliant:
 
-- Added optional manifest `window_size` parsing with strict integer-or-null validation.
-- Added `window_size` filter parity across `ReportManifest` helper methods.
-- Added CLI `--window-size` to `report-files` and `report-audit`.
-- Surfaced `window_size` in `report-files --json`.
-- Preserved manifest schema version, rolling filenames/roles, and existing `window` / `group_by` semantics.
-- Added focused manifest and CLI regression coverage.
+- README documents `report-files` / `report-audit --window-size` with concrete rolling examples.
+- README JSON-output wording includes optional `window_size` metadata.
+- Portfolio docs explain `--window-size` versus `--window`.
+- Rolling batch/shared artifact sections already mention manifest `window_size`, and the report-manifest sections now match the shipped CLI surface.
+- The task stayed documentation-only and avoided legacy archived docs.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
-uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
 scripts/check-progress-docs.sh
 git diff --check
 git diff --name-only HEAD | rg '^docs/legacy/' || true
@@ -73,20 +66,14 @@ git diff --name-only HEAD | rg '^docs/legacy/' || true
 
 Results:
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`: `197 passed, 2 warnings in 1.86s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - Legacy-doc check: no `docs/legacy/**` changes
 
-Reproduction checks rerun by Codex:
+Notes:
 
-- `report-files --window-size 20` matches only the `window_size=20` rolling entry.
-- `report-audit --window-size 20` reports `matched_files=1` on the targeted rolling manifest subset.
-
-Warnings observed:
-
-- Existing numpy runtime warnings in `test_cli_eval_config_factor_decay_printed_and_persisted`
-- No new warning category introduced by this task
+- No code or test files changed in this task.
+- The last finalized implementation baseline remains `197 passed in 1.86s` from commit `da7b38c`.
 
 ## Locked Requirements Check
 

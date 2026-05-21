@@ -206,6 +206,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001`. The task should stay inside report-manifest parsing/filtering, CLI plumbing, and targeted tests without changing manifest schema version or output-generation logic.
 - Owner: CODEX
 
+### 2026-05-21: Select rolling window_size usage docs as next Claude task
+
+- Decision: The next Claude Code task is user-facing documentation for rolling-artifact `window_size` report filtering.
+- Reason: The CLI and manifest helpers now support `--window-size` and additive `window_size` JSON metadata, but README and portfolio docs still describe report-file optional metadata as only `symbol`, `window`, and `group_by`, and they do not explain when to use `--window-size` instead of `--window`.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; jump to a larger run-bundle orchestration feature.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

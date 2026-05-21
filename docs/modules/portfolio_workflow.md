@@ -332,6 +332,7 @@ Implemented batch report manifest:
   - optional `window`
   - optional `group_by`
   - optional `symbol`
+  - optional `window_size` (integer, for rolling artifacts)
 - Paths are relative to the output directory for portability.
 - Batch Markdown Output Files and CLI `--print-summary-md` list `Report manifest | report_manifest.json`.
 
@@ -344,6 +345,7 @@ Implemented report discovery helper:
   - `symbol`
   - `window`
   - `group_by`
+  - `window_size`
 - `paths(...)` returns resolved `Path` values relative to the manifest directory.
 - The helper is independent from pandas and database access.
 
@@ -355,6 +357,7 @@ Implemented report-files CLI:
   - `--symbol`
   - `--window`
   - `--group-by`
+  - `--window-size` (integer, for rolling artifacts)
 - Default output is resolved file paths, one per line.
 - `--keys` outputs matching manifest keys, one per line.
 - The command uses `ReportManifest` and does not access the database.
@@ -401,6 +404,7 @@ Implemented report-audit CLI:
   - `--symbol`
   - `--window`
   - `--group-by`
+  - `--window-size` (integer, for rolling artifacts)
 - Output is compact key/value lines:
   - `manifest_kind`
   - `matched_files`

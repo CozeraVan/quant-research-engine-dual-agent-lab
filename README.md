@@ -94,6 +94,28 @@ uv run qre report-files outputs/smoke_shared_manifest/report_manifest.json \
   --require-match
 ```
 
+### Rolling-Artifact Window Size Filtering
+
+Batch and shared-cash rolling artifacts (such as `rolling_summary_20.csv`, `rolling_metrics_20.csv`, `rolling_summary_20_by_board.csv`) carry manifest metadata `"window_size": 20` in `report_manifest.json`. Use `--window-size` to filter rolling artifacts by their trailing window size:
+
+```bash
+# List only the 20-day rolling summary
+uv run qre report-files outputs/smoke_batch_rsi2_rolling_audit/report_manifest.json \
+  --role rolling_summary \
+  --window-size 20
+
+# Audit only the 20-day grouped rolling ranked-symbol file
+uv run qre report-audit outputs/smoke_batch_rsi2_rolling_audit/report_manifest.json \
+  --role rolling_ranked_symbols \
+  --group-by board \
+  --window-size 20 \
+  --require-match
+```
+
+`--window-size` is an integer filter for trailing rolling artifacts. `--window` is a string filter for calendar-window summaries (`M`, `Q`, `Y`). They are independent and can be combined when a manifest entry carries both kinds of metadata.
+
+When `report-files --json` emits a file entry whose manifest `window_size` is present, the JSON object includes the numeric `"window_size"` field. Entries without `window_size` omit the field.
+
 ### JSON Output
 
 Both `report-files` and `report-audit` support opt-in `--json` for script-friendly machine-readable output. When `--json` is set, stdout is a single JSON object; stderr behavior and exit codes are preserved.
@@ -110,7 +132,7 @@ uv run qre report-audit outputs/smoke_shared_manifest/report_manifest.json \
   --json
 ```
 
-`report-files --json` emits top-level `schema_version`, `manifest_kind`, `matched_files`, and a `files` array with `key`, `path`, `filename`, `role`, and optional metadata (`symbol`, `window`, `group_by`). `report-audit --json` emits top-level `schema_version`, `manifest_kind`, `matched_files`, `missing_files`, `validation_issues`, `status`, and an `issues` array. `schema_version` is the integer `1` for new manifests and `null` for older manifests that were generated before the field was introduced.
+`report-files --json` emits top-level `schema_version`, `manifest_kind`, `matched_files`, and a `files` array with `key`, `path`, `filename`, `role`, and optional metadata (`symbol`, `window`, `group_by`, `window_size`). `report-audit --json` emits top-level `schema_version`, `manifest_kind`, `matched_files`, `missing_files`, `validation_issues`, `status`, and an `issues` array. `schema_version` is the integer `1` for new manifests and `null` for older manifests that were generated before the field was introduced.
 
 JSON mode can be combined with `--require-match` for strict script gating:
 

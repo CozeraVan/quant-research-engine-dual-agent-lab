@@ -65,19 +65,20 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-48 | Grouped artifact `group_by` audit consistency | DONE | CODEX/CLAUDE_CODE | commit `a3768fb`; `10_REVIEW_REPORT.md` PASS; grouped eval/shared `group_by` mismatch checks now run only after required-column validation passes; malformed grouped-file regression added; 175 tests passed | Preserve |
 | QRE-NEXT-49 | Batch grouped-artifact `group_by` header consistency | DONE | CODEX/CLAUDE_CODE | commit `de37afd`; `10_REVIEW_REPORT.md` PASS; batch grouped manifest `group_by` metadata now requires matching CSV header columns; 8 new tests; 183 tests passed | Preserve |
 | QRE-NEXT-50 | Rolling-artifact `window_size` filter parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `window_size` parsed from manifest entries and surfaced through `files()`/`paths()`/`validate_contents()`, `--window-size` CLI flag, and `report-files --json`; 9 manifest + 5 CLI tests; 197 tests passed | Preserve |
+| QRE-NEXT-51 | Rolling-artifact `window_size` usage docs | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README plus portfolio module docs updated with `--window-size` examples, `--window` vs `--window-size` distinction, and additive JSON metadata wording; doc checks passed | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-21 after Codex accepted `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001` for local finalization:
+Recorded on 2026-05-21 after Codex accepted `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001` for local finalization:
 
-- Current task: `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001`
-- Last finalized: `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001` (commit `de37afd`)
+- Current task: `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001`
+- Last finalized: `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001` (commit `da7b38c`)
 - Current verification:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 197 passed in 1.86s
+  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 197 passed in 1.86s (unchanged; docs-only task)
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
 - Review: `10_REVIEW_REPORT.md` is now PASS
-- Implementation: `window_size` parsed from manifest entries, filtered through `files()`/`paths()`/`validate_contents()`, threaded through CLI `--window-size`, surfaced in `report-files --json`
+- Last implementation: documentation-only — README, portfolio_workflow.md, and portfolio_layer.md updated with `--window-size` rolling-artifact examples, `--window` vs `--window-size` distinction, and `window_size` JSON metadata wording
 - Next step: Codex local finalization commit
 
 ## Completed Module Summary

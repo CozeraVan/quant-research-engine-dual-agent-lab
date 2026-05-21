@@ -80,6 +80,8 @@ Implemented:
   - `qre report-files`
   - `qre report-audit`
   - `qre report-audit --require-match`
+  - `qre report-files --window-size <int>`
+  - `qre report-audit --window-size <int>`
 - Shared-cash rolling risk output:
   - `rolling_metrics_20.csv`
 - Batch rolling cross-sectional risk output:
