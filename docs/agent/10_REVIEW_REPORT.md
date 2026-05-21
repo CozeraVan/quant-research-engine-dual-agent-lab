@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001
+QRE-DATA-TUSHARE-SECURITY-SNAPSHOT-CONTRACT-001
 
 ## Written By
 
@@ -14,13 +14,19 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code test changes in the current working tree.
+Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
-- `tests/test_cli.py`
+- `src/quant_research_engine/data/tushare_security.py`
+- `tests/test_tushare_security.py`
+- `scripts/tushare_security_smoke.py`
+- `docs/agent/01_CURRENT_STATUS.md`
+- `docs/agent/03_ROADMAP.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
+- `docs/agent/06_DECISION_LOG.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
@@ -29,14 +35,16 @@ Changed files reviewed:
 
 The implementation satisfies the brief.
 
-`tests/test_cli.py` now locks `--window-size` + `--group-by` selector parity with `--json --require-match`:
+`src/quant_research_engine/data/tushare_security.py` now provides the reusable Tushare security source boundary:
 
-- `report-files` with `--window-size 20 --group-by board --json --require-match` returns the matched entry and keeps `window_size: 20` plus `group_by: board` in JSON
-- `report-files` with `--window-size 20 --group-by board --json --require-match` and no matches returns exit code `2` plus the existing zero-match JSON shape
-- `report-audit` with `--window-size 20 --group-by board --json --require-match` returns `status=ok`, `matched_files=1`, and `validation_issues=0`
-- `report-audit` with `--window-size 20 --group-by board --json --require-match` and no matches returns exit code `2` plus the existing `no_matches` JSON issue payload
+- `SNAPSHOT_FIXED_COLUMNS` defines the canonical normalized snapshot columns.
+- `SecuritySnapshot` provides a typed single-row contract with passthrough support.
+- `derive_board()` matches the existing board inference logic.
+- `normalize_snapshot_frame()` converts Tushare probe output into a canonical frame, preserves passthrough columns, derives board, and keeps the read-only smoke path intact.
 
-No runtime, parser, schema, or behavior changes were introduced.
+The smoke harness remains a thin CLI wrapper over the shared source adapter, and the targeted tests cover both the reusable contract and the probe behavior.
+
+No database writes, schema changes, or unrelated runtime changes were introduced.
 
 ## Required Fixes
 
@@ -46,32 +54,29 @@ None.
 
 Compliant:
 
-- Added CLI regression coverage for `report-files --window-size ... --group-by ... --json --require-match` with matched and zero-match cases.
-- Added CLI regression coverage for `report-audit --window-size ... --group-by ... --json --require-match` with matched and zero-match cases.
-- Preserved the existing zero-match JSON payload and avoided runtime changes.
+- Added a canonical security-snapshot contract on top of the reusable Tushare source adapter.
+- Preserved the read-only smoke harness.
+- Added focused tests for board inference, snapshot defaults, passthrough preservation, boolean endpoint probing, and empty-source handling.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
-uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q
 scripts/check-progress-docs.sh
 git diff --check
-scripts/git-finalize-check.sh
 ```
 
 Results:
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`: `209 passed, 2 warnings in 2.02s`
+- `uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q`: `34 passed in 0.52s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
-- `scripts/git-finalize-check.sh`: passed
 
 Warnings observed:
 
-- Existing numpy runtime warnings in `test_cli_eval_config_factor_decay_printed_and_persisted`
-- No new warning category introduced by this task
+- None new in this task.
 
 ## Locked Requirements Check
 

@@ -29,12 +29,14 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is locally finalizing `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001` after review PASS.
+`QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability. The reusable Tushare security source scaffold and canonical snapshot contract are complete and ready for future bulk ingestion work.
 
 ## Known Gaps
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
-- Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables.
+- Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables. Tushare `suspend_d` is available for smoke validation, but `stock_st` and `stk_alert` remain permission-gated.
+- The reusable Tushare security source adapter exists, but the authoritative upstream security-status table is still missing.
+- The canonical security-snapshot contract is complete on top of the reusable source scaffold.
 - Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
 - Evaluation layer does not yet implement real index benchmark comparison or real regime classification.
 - Larger research-run bundles beyond run-level identifier linkage are not yet standardized.
@@ -55,7 +57,7 @@ Codex is locally finalizing `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001` after revi
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `06d2b4b`, `22fd3d1`
+- Recent commits: `2da15bb`, `ec7a1d0`
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
@@ -79,4 +81,4 @@ Codex is locally finalizing `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001` after revi
 
 ## Next Recommended Step
 
-Codex should create the local completion commit for `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001`, then select the next unblocked data-layer task. Real suspension/ST/risk-warning metadata should be the next Claude brief, pending source-table confirmation.
+Keep `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` blocked until the upstream security metadata source table/schema is confirmed. The completed source scaffold can be reused when that data becomes available.

@@ -238,6 +238,62 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001`. The task should stay test-focused and avoid runtime changes unless a concrete selector bug appears.
 - Owner: CODEX
 
+### 2026-05-21: Select real suspension/ST/risk-warning metadata as next Claude task
+
+- Decision: The next Claude Code task is real suspension/ST/risk-warning metadata for the security metadata loader.
+- Reason: `load_security_metadata()` still falls back to static `False` flags when no confirmed upstream table is available. Preflight and portfolio realism already consume these flags, so this is the next data-layer realism gap after the CLI reporting work.
+- Alternatives: Jump to benchmark/index wiring; expand into broader regime grouping; invent a schema without confirming the source table.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001`. Claude should confirm the upstream table/schema first and write a blocker if no confirmed table exists.
+- Owner: CODEX
+
+### 2026-05-21: Use Tushare suspend_d as the first available security-status smoke source
+
+- Decision: The first concrete security-status smoke path should use Tushare `suspend_d`, while `stock_st` and `stk_alert` remain future tasks gated by account permissions.
+- Reason: The configured Tushare credential can fetch `stock_basic` and `suspend_d`, but not `stock_st` or `stk_alert`. That lets us validate the downloader shape now without pretending the full metadata set is available.
+- Alternatives: Wait for higher permissions on `stock_st`/`stk_alert`; postpone all smoke work until the full upstream table exists.
+- Impact: A small read-only smoke utility can be used to validate `suspend_d` samples now. ST and risk-warning remain explicit TODO items, not implicit fallbacks.
+- Owner: CODEX
+
+### 2026-05-21: Add a Tushare security-status smoke harness
+
+- Decision: Add a local read-only smoke utility for `stock_basic`, `suspend_d`, `stock_st`, and `stk_alert` so the team can probe source availability before bulk ingestion work.
+- Reason: The available Tushare credential can validate `stock_basic` and `suspend_d`, while `stock_st` and `stk_alert` remain permission-blocked. That makes a manual smoke harness the right near-term step.
+- Alternatives: Wait for full permissions; start a bulk ingester without source verification; keep the blocker as prose only.
+- Impact: `scripts/tushare_security_smoke.py` now exists as a repeatable source-shape probe. It should stay read-only and avoid mutating PostgreSQL.
+- Owner: CODEX
+
+### 2026-05-21: Real suspension/ST/risk-warning metadata blocked — no source table
+
+- Decision: Claude Code confirmed no security-status metadata table exists in the local `tushare_data` database. The data layer adapter code is already complete, so this is purely a data-availability blocker.
+- Reason: Investigation found only `stock_daily` (market data without status flags) and `stock_holder_number` in the public schema. No `QRE_SECURITY_METADATA_TABLE` env var is configured. The existing adapter code (`_load_security_metadata_table`, `_normalize_security_metadata`) already handles all needed columns and passthrough fields.
+- Alternatives: Invent a synthetic status table (rejected — violates "do not invent schemas" constraint); implement time-varying status from `stock_daily` patterns (rejected — no status data exists in that table); mark as blocked and wait for upstream.
+- Impact: Task `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` and roadmap item `M4.9` are blocked. To unblock, provide a table name via `QRE_SECURITY_METADATA_TABLE` with columns: `ts_code` (required), plus any of `list_date`, `board`, `is_st`, `is_risk_warning`, `is_suspended`.
+- Owner: CLAUDE_CODE (investigation), CODEX (review and next steps)
+
+### 2026-05-21: Canonical Tushare security snapshot contract completed
+
+- Decision: Accept the reusable Tushare security snapshot contract implementation in `src/quant_research_engine/data/tushare_security.py` and finalize it locally.
+- Reason: The source scaffold now provides a canonical snapshot shape, deterministic board inference, passthrough preservation, and read-only probe behavior that aligns with the existing PostgreSQL metadata normalization contract. Validation passed, and no locked requirements were violated.
+- Alternatives: Request more changes to the contract helper; merge the snapshot contract into the blocked real-metadata task; leave the work in review despite green validation.
+- Impact: `QRE-DATA-TUSHARE-SECURITY-SNAPSHOT-CONTRACT-001` is complete. The next active state returns to the still-blocked real metadata task `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001`.
+- Owner: CODEX
+
+### 2026-05-21: Extract a reusable Tushare security source adapter
+
+- Decision: Move Tushare security probing into `src/quant_research_engine/data/tushare_security.py` and keep the smoke script as a thin wrapper.
+- Reason: The same read-only Tushare probes will be reused for future bulk ingestion, source-shape checks, and endpoint-specific debugging. Centralizing the calls avoids duplicating endpoint names, fields, and formatting logic across scripts or future loaders.
+- Alternatives: Leave the logic only in `scripts/tushare_security_smoke.py`; wire the code directly into the blocked data-layer task; introduce a broader ingestion framework before the source boundary is settled.
+- Impact: The smoke path stays read-only, but the source boundary is now reusable for later bulk loading. The blocker on real security-status metadata remains unchanged.
+- Owner: CODEX
+
+### 2026-05-21: Keep the Tushare smoke harness as a thin CLI shell
+
+- Decision: The smoke harness should only parse arguments, read the configured Tushare credential from the environment, and print results. It should not own endpoint definitions or frame formatting.
+- Reason: The CLI shell is easier to keep stable if all Tushare-specific behavior lives in one importable data module. That also makes the smoke path easier to test without network access.
+- Alternatives: Keep endpoint logic inside the script; add a separate command layer before the source adapter exists.
+- Impact: `scripts/tushare_security_smoke.py` now delegates to the shared source adapter and remains safe to run in read-only environments.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

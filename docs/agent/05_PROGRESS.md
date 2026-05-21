@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+BLOCKED
 
 ## Progress Table
 
@@ -69,21 +69,30 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-52 | CLI regression coverage for invalid `window_size` manifest metadata | DONE | CODEX/CLAUDE_CODE | commit `06d2b4b`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; 201 passed in 1.90s | Preserve |
 | QRE-NEXT-53 | CLI strict/JSON parity for `window_size` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; 205 passed in 1.94s | Preserve |
 | QRE-NEXT-54 | CLI strict/JSON parity for `window_size` + `group_by` filters | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` + `--group-by` combined selector parity with `--json --require-match`; 209 passed in 2.02s | Preserve |
+| QRE-NEXT-55 | Real suspension/ST/risk-warning metadata | BLOCKED | CODEX | Data layer adapter ready; no upstream security-status table in `tushare_data`; `stock_daily` has no suspension/ST/risk-warning columns; set `QRE_SECURITY_METADATA_TABLE` to unblock | Await user-provided source table or upstream data producer plan |
+| QRE-NEXT-56 | Tushare security-status smoke harness | DONE | CODEX | `scripts/tushare_security_smoke.py`; `stock_basic` and `suspend_d` smoke validation succeed, `stock_st` / `stk_alert` remain permission-blocked | Preserve; use as a read-only source-shape probe before bulk ingestion |
+| QRE-NEXT-57 | Tushare security source adapter scaffold | DONE | CODEX | `src/quant_research_engine/data/tushare_security.py`; smoke script now delegates to a reusable wrapper; targeted unit tests passed | Preserve; use as the reusable source boundary for later bulk ingestion |
+| QRE-NEXT-58 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`; 17 targeted tests pass; smoke harness preserved | Preserve; reuse as the source boundary for later bulk ingestion |
 
 ## Latest Verified State
 
-Recorded on 2026-05-21 after Codex accepted `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001` for local finalization:
+Recorded on 2026-05-21 after Codex reviewed and finalized the canonical security-snapshot contract for `QRE-DATA-TUSHARE-SECURITY-SNAPSHOT-CONTRACT-001`:
 
-- Current task: `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001`
-- Last finalized: `QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001` (commit `ec7a1d0`)
-- Current verification:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 209 passed in 2.02s
+- Current task: `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` — BLOCKED
+- Last finalized: `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001` (commit `2da15bb`)
+- Implementation:
+  - `SNAPSHOT_FIXED_COLUMNS` — canonical column list matching `_normalize_security_metadata`
+  - `SecuritySnapshot` — normalized metadata dataclass with passthrough support
+  - `derive_board()` — standalone board inference (main_board, chinext, star_market, beijing)
+  - `normalize_snapshot_frame()` — canonical DataFrame builder from Tushare source probes
+  - `_probe_bool_endpoint()` — safe boolean endpoint probe with permission-block fallback
+  - 17 targeted tests (up from 3) with 3 FakeTusharePro variants
+- Validation:
+  - `uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q` → 34 passed in 0.52s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
-  - `scripts/git-finalize-check.sh` → passed (from `ec7a1d0`)
-- Review: `10_REVIEW_REPORT.md` is PASS
-- Last implementation: test-only — 4 CLI regression tests lock `--window-size` + `--group-by` combined selector with `--json --require-match` for matched/zero-match AND-intersection cases across `report-files` and `report-audit`; runtime unchanged
-- Next step: Codex local finalization commit
+- Blocker note: `QRE-NEXT-55` (real suspension/ST/risk-warning metadata) remains blocked separately until upstream table exists
+- Next step: Codex keeps the real-metadata task blocked until an upstream table is confirmed
 
 ## Completed Module Summary
 
@@ -95,7 +104,9 @@ Recorded on 2026-05-21 after Codex accepted `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY
 ## Pending Work Summary
 
 - Real index benchmark wiring after table/schema confirmation.
-- Real suspension/ST/risk-warning time-varying metadata.
+- Real suspension/ST/risk-warning time-varying metadata, pending a confirmed upstream table or higher Tushare permissions for `stock_st` / `stk_alert`.
+- Canonical security-snapshot contract is complete; later bulk ingestion can reuse the Tushare source scaffold.
+- Bulk ingestion / durable loading for the Tushare security source scaffold once the upstream source contract is settled.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Larger research-run reproducibility workflow beyond run-ID linkage.
 

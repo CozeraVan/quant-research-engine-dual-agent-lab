@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001
+QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001
 
 ## Written By
 
@@ -14,23 +14,28 @@ CODEX
 
 ## Status
 
-Implemented. Ready for Codex review.
+Blocked. No implementation possible — the required upstream source table does not exist.
 
 ## Implementation Summary
 
-Test-only task. Added 4 CLI regression tests to lock `--window-size` + `--group-by` combined selector behavior with `--json --require-match` across `report-files` and `report-audit`:
+No implementation possible for the real metadata task:
 
-- `test_cli_report_files_window_size_group_by_json_require_match_matched_entry`: Combined `--window-size 20 --group-by board` selects only the entry matching both criteria from a 3-entry manifest (one matches both, one wrong window_size, one wrong group_by). Returns `matched_files=1`, `window_size=20`, `group_by=board` in JSON.
-- `test_cli_report_files_window_size_group_by_json_require_match_zero_matches`: Mismatch entries (one has window_size=20+group_by=sector, other has window_size=60+group_by=board) fail with exit code 2 and `matched_files=0` JSON payload.
-- `test_cli_report_audit_window_size_group_by_json_require_match_matched_entry`: Audit returns `status=ok`, `matched_files=1`, `validation_issues=0` for the combined selector match.
-- `test_cli_report_audit_window_size_group_by_json_require_match_zero_matches`: Audit fails with exit code 2 and the existing `no_matches` JSON issue payload.
+- The local `tushare_data` database does not contain a security-status metadata table.
+- `stock_daily` has no suspension, ST, or risk-warning columns.
+- No `QRE_SECURITY_METADATA_TABLE` env var is configured.
 
-All tests prove the AND-intersection semantics of `--window-size` and `--group-by`. No runtime or parser code was changed.
+The reusable source scaffold now exists for future shape probing:
+
+- `src/quant_research_engine/data/tushare_security.py`
+- `scripts/tushare_security_smoke.py`
+- `tests/test_tushare_security.py`
 
 ## Files Changed
 
-- `tests/test_cli.py` — Added 4 CLI regression tests in a new `# --- window_size + group_by combined selector parity ---` section.
-- `docs/agent/04_TASK_HANDOFF.md` — Updated for task completion.
+- `src/quant_research_engine/data/tushare_security.py` — Added `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`, `_probe_bool_endpoint()`.
+- `tests/test_tushare_security.py` — Added 14 new tests (17 total): `derive_board` (4), `SecuritySnapshot` (2), `normalize_snapshot_frame` (8). Added `FakeTushareProEmptySuspend` and `FakeTushareProAllAvailable` test doubles.
+- `scripts/tushare_security_smoke.py` — Thin read-only CLI wrapper over the shared source adapter.
+- `docs/agent/04_TASK_HANDOFF.md` — Updated for blocker status.
 - `docs/agent/05_PROGRESS.md` — Updated progress table, phase, and verification state.
 - `docs/agent/09_CODING_HANDOFF.md` — This file.
 - `docs/agent/11_AGENT_STATE.md` — Updated phase and owner.
@@ -38,24 +43,25 @@ All tests prove the AND-intersection semantics of `--window-size` and `--group-b
 
 ## Validation Results
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 209 passed in 2.02s
+- `uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q` → 34 passed in 0.52s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
-- `scripts/git-finalize-check.sh` → passed (from `ec7a1d0`)
 
 ## Constraints
 
-- Test-only; no runtime, parser, schema, or behavior changes.
+- Read-only; no database writes, no schema changes.
 - `docs/legacy/**` untouched.
 - `uv.lock`, `pyproject.toml` untouched.
-- Zero-match tests verify AND-intersection: each entry matches one selector but not both.
+- `src/quant_research_engine/data/postgres.py` untouched.
+- Smoke harness preserved and refactored behind the reusable source adapter.
+- Blocked real-metadata task (`QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001`) untouched.
 
 ## Git State
 
 - Branch: `master`
-- Last finalized implementation commit: `ec7a1d0`, `Preserve window_size selector parity under JSON strict mode`
-- Current changes are uncommitted (test + agent docs; awaiting Codex review).
+- Last finalized implementation commit: `2da15bb`, `Preserve window_size and group_by selector parity under JSON strict mode`
+- Current changes are uncommitted (code + tests + agent docs; awaiting Codex review).
 
 ## Next Suggested Step
 
-Codex should review the test additions, run validation, and finalize.
+Codex should keep `M4.9` blocked until an upstream security-status table is confirmed. The reusable source scaffold is available for future bulk ingestion work.

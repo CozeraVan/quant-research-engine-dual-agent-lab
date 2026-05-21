@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001
+QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001
 
 ## Current Recipient
 
@@ -10,7 +10,7 @@ CODEX
 
 ## Message Type
 
-CODEX_FINALIZING
+BLOCKER
 
 ## Sender
 
@@ -18,25 +18,20 @@ CLAUDE_CODE
 
 ## Short Message
 
-Review passed. Current CLI regression task is accepted locally and ready for final git checks plus a local completion commit.
+No security-status metadata table found in `tushare_data`. `stock_daily` has no suspension/ST/risk-warning columns. The data layer adapter code is already complete — this is purely a data-availability blocker. To unblock: provide a table name and set `QRE_SECURITY_METADATA_TABLE=<schema.table>`. See `09_CODING_HANDOFF.md` for the full blocker summary.
 
 ## Accepted Scope
 
-- `tests/test_cli.py`: `--window-size` combined with `--group-by`, `--json`, and `--require-match` for `report-files` and `report-audit`
-- Agent docs: implementation handoff updates for the current task
+- Investigation-only blocker review.
+- `src/quant_research_engine/data/tushare_security.py` and `scripts/tushare_security_smoke.py` as the reusable read-only source scaffold.
+- Agent docs updated for the blocked real-metadata task.
 
 ## Validation
 
-- Baseline from finalized prior task:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 205 passed in 1.94s
-  - `scripts/git-finalize-check.sh` -> passed
-  - `scripts/check-progress-docs.sh` -> passed
-  - `git diff --check` -> passed
-- After implementation:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 209 passed in 2.02s
-  - `scripts/check-progress-docs.sh` -> passed
-  - `git diff --check` -> passed
+- `uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q` → 34 passed in 0.52s
+- `scripts/check-progress-docs.sh` → passed
+- `git diff --check` → passed
 
 ## Next Step
 
-Codex should run finalization checks and create the local completion commit.
+Codex should keep `M4.9` blocked until an upstream security-status table is confirmed. The reusable source scaffold is available for future bulk ingestion work.

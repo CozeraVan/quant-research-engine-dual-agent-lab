@@ -17,6 +17,9 @@
 | M2.3 | Metadata fallback and board inference | DONE | HISTORICAL | `load_security_metadata`, `derive_board` | Replace fallback with real metadata when available |
 | M2.4 | Read-only broad-run preflight | DONE | HISTORICAL | `qre preflight` | Integrate into larger run acceptance workflow |
 | M2.5 | Real status/industry/membership adapters | DONE | CODEX/CLAUDE_CODE | local finalization commit; 278 tests passed; metadata source-table passthrough columns preserved with fixed-column fallback normalization | Preserve; time-varying status tables remain future work |
+| M2.6 | Tushare security-status smoke harness | DONE | CODEX | `scripts/tushare_security_smoke.py`; `stock_basic` and `suspend_d` smoke validation succeed, `stock_st` / `stk_alert` remain permission-blocked | Preserve; use as a read-only source-shape probe before bulk ingestion |
+| M2.7 | Tushare security source adapter scaffold | DONE | CODEX | `src/quant_research_engine/data/tushare_security.py`; smoke script now reuses a shared source wrapper; targeted unit tests passed | Preserve; reuse for future bulk ingestion and endpoint-specific probes |
+| M2.8 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `src/quant_research_engine/data/tushare_security.py`; canonical snapshot contract, normalized frame helper, and targeted tests landed; 34 tests passed | Preserve; reuse as the source boundary for later bulk ingestion |
 
 ## Milestone 3: Evaluation Engine
 
@@ -42,7 +45,7 @@
 | M4.6 | FIFO lot accounting and T+1 sellable inventory | DONE | HISTORICAL | legacy progress: `156 passed` | Preserve |
 | M4.7 | Stronger failed-order diagnostics | DONE | CODEX/CLAUDE_CODE | local review passed; 238 tests passed; side-level failed-order summary diagnostics added | Preserve |
 | M4.8 | Real index benchmark wiring | BLOCKED | USER/CODEX | table/schema not confirmed | Confirm available index table and columns |
-| M4.9 | Real suspension/ST/risk-warning metadata | TODO | CLAUDE_CODE | fallback currently static unless data provided | Confirm source tables |
+| M4.9 | Real suspension/ST/risk-warning metadata | BLOCKED | CLAUDE_CODE | fallback currently static unless data provided; source table confirmation pending | Confirm source table/schema and wire real metadata adapter if available |
 | M4.10 | Batch metadata passthrough group-by | DONE | CODEX/CLAUDE_CODE | 283 tests passed; `summary_metadata_columns` added to batch requests; CLI `--group-by` columns flow into batch summaries | Preserve |
 | M4.11 | Shared-cash metadata output passthrough | DONE | CODEX/CLAUDE_CODE | 293 tests passed; `metadata_columns` added to shared-cash requests; output rows carry requested metadata without overwriting canonical fields | Preserve |
 | M4.12 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 tests passed; `backtest-shared --group-by` writes row-based grouped order/trade/failed-order CSVs with manifest validation | Preserve |
