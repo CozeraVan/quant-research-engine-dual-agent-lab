@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-DONE
+USER_ACCEPTANCE
 
 ## Current Active Work
 
-`QRE-GUI-LOCAL-BACKTEST-CONSOLE-001` is complete and finalized locally in commit `766dc98`.
+`QRE-REPORT-MT5-TV-FULL-MARKET-001` has passed Codex re-review and is waiting for user acceptance/finalization decision.
 
 ## Progress Table
 
@@ -16,6 +16,8 @@ DONE
 | DOC-2 | Migrate legacy docs into `docs/agent` | DONE | CODEX | commit `2565e13` | Preserve |
 | DOC-3 | Add archive notes to legacy planning docs | DONE | CODEX | commit `2565e13` | Preserve; do not delete |
 | QRE-GUI-LOCAL-BACKTEST-CONSOLE-001 | Local browser backtest console shell and YAML editor | DONE | CLAUDE_CODE | 179 GUI/CLI tests passed; rerun, artifact viewer, and summary.json coverage verified | Preserve |
+| QRE-STRATEGY-IO-CONTRACT-DESIGN-001 | Strategy IO contract design | DESIGN_RECORDED | CODEX | `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`; user clarified QRE should write the strategy-entry standard, not rewrite external strategy projects | Preserve as the entry-contract source for later implementation |
+| QRE-REPORT-MT5-TV-FULL-MARKET-001 | MT5 + TradingView full-market report bundle | IMPLEMENTED | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS after re-review; `realized_pnl` semantic fix landed with regression test; 254 tests pass | User acceptance and finalize decision |
 | QRE-M1 | Project skeleton and core market profile | DONE | HISTORICAL | package layout, tests, skeleton plan | Preserve |
 | QRE-M2 | Data layer and preflight | DONE | HISTORICAL | `qre db-smoke`, `factor-smoke`, `metadata-smoke`, `preflight` | Add real metadata adapters later |
 | QRE-M3 | Evaluation MVP | DONE | HISTORICAL | forward returns, IC, Rank IC, quantile, friction summaries | Add grouping/regime later |
@@ -81,23 +83,27 @@ DONE
 
 ## Latest Verified State
 
-Recorded on 2026-05-21 after Codex reviewed and finalized the canonical security-snapshot contract for `QRE-DATA-TUSHARE-SECURITY-SNAPSHOT-CONTRACT-001`:
+Recorded on 2026-05-21 after Claude Code implemented the full-market backtest report bundle for `QRE-REPORT-MT5-TV-FULL-MARKET-001`:
 
-- Current task: `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` — BLOCKED
-- Last finalized: `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001` (commit `2da15bb`)
+- Current task: `QRE-REPORT-MT5-TV-FULL-MARKET-001` — IMPLEMENTED
+- Last finalized: `QRE-GUI-LOCAL-BACKTEST-CONSOLE-001` (commit `766dc98`)
 - Implementation:
-  - `SNAPSHOT_FIXED_COLUMNS` — canonical column list matching `_normalize_security_metadata`
-  - `SecuritySnapshot` — normalized metadata dataclass with passthrough support
-  - `derive_board()` — standalone board inference (main_board, chinext, star_market, beijing)
-  - `normalize_snapshot_frame()` — canonical DataFrame builder from Tushare source probes
-  - `_probe_bool_endpoint()` — safe boolean endpoint probe with permission-block fallback
-  - 17 targeted tests (up from 3) with 3 FakeTusharePro variants
+  - `src/quant_research_engine/portfolio/full_market_report.py` — ~350 lines with 11 report-building functions plus main entry point
+  - `src/quant_research_engine/portfolio/io.py` — wired `write_full_market_report()` into `write_batch_result()`; updated role mapping and path listing
+  - `src/quant_research_engine/portfolio/report_manifest.py` — 9 new required-column rules for new roles
+  - `pyproject.toml` — added `openpyxl>=3.1.0`
+  - `tests/test_full_market_report.py` — 23 tests across 12 test classes
+  - `backtest_report.xlsx` — 10 sheets with bold headers
 - Validation:
-  - `uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q` → 34 passed in 0.52s
+  - `uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` → 254 passed, 2 warnings in 3.20s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
-- Blocker note: `QRE-NEXT-55` (real suspension/ST/risk-warning metadata) remains blocked separately until upstream table exists
-- Next step: Codex keeps the real-metadata task blocked until an upstream table is confirmed
+- Residual limitations:
+  - Commission splits (commission, stamp_tax, transfer_fee, slippage) are null — current engine has single cost field
+  - Margin fields null — cash-only simulation
+  - Intratrade path fields null — A-share daily engine does not track intra-trade bar-level paths
+  - Batch-only for first release; shared-cash reuse is future work
+- Next step: Codex reviews the implementation, runs validation, and writes `docs/agent/10_REVIEW_REPORT.md`
 
 Current GUI direction approved on 2026-05-21:
 
@@ -106,6 +112,25 @@ Current GUI direction approved on 2026-05-21:
 - Run history stays on the local filesystem in v1.
 - The console should show summary, orders, trades, equity, and manifest artifacts.
 - Direct module execution is the default; CLI fallback remains available.
+
+Current strategy IO direction approved for design on 2026-05-21:
+
+- QRE is the strategy IO contract, validation, backtest, and reporting engine.
+- QRE should not rewrite `research-notes` or `strategy-research`.
+- Strategy entry standardization is documentation-first: write MD guidance for how others should author QRE strategy entry files.
+- External strategy projects can convert natural-language strategy descriptions into the QRE-standard entry format.
+- `indicators_tushare` remains responsible for computing missing technical indicators or periods and writing them into `factors.*`.
+- QRE should emit missing-factor requests rather than computing indicators internally.
+- Report output should follow the MT5 report baseline while producing a single full-market report set with `symbol` columns, not per-stock report files.
+- A future validation step must convert three existing strategy families into the standard entry format and run small-scope smoke tests with exit code `0`.
+
+Current report-output direction approved on 2026-05-21:
+
+- QRE should combine the MT5 report workbook baseline and TradingView strategy tester screenshots into one full-market report contract.
+- Reports are full-market A-share artifacts with `symbol` columns, not one workbook per stock.
+- Required additive files: `backtest_report.xlsx` (10 sheets), `trades_ledger.csv`, `round_trips.csv`, `symbol_performance.csv`, `strategy_performance.json`, `equity_curve.csv`, `drawdown_curve.csv`, `trade_analysis.json`, `capital_usage.json`, and `report_manifest.json`.
+- First implementation omits rendered charts, but emits workbook sheets, CSV/JSON files, manifest roles, and audit/discovery behavior.
+- Existing engineering artifacts and report-manifest behavior remain compatible.
 
 User-requested strategy work in 2026-05-21:
 
@@ -128,8 +153,8 @@ User-requested strategy work in 2026-05-21:
 
 - Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight, real metadata passthrough adapters.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries, durable output artifacts with manifests, random-baseline comparison, factor decay summaries.
-- Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics, batch metadata group-by passthrough, shared-cash metadata output passthrough, shared-cash row-level metadata group summaries.
-- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility, evaluation metadata group summaries, eval-config output artifacts and manifests, evaluation random-baseline comparison, evaluation artifact usage docs, metadata grouping and passthrough usage docs, evaluation group-by manifest parity, grouped artifact `group_by` content consistency validation, batch grouped-artifact `group_by` header consistency validation, rolling-artifact `window_size` manifest filter parity.
+- Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics, batch metadata group-by passthrough, shared-cash metadata output passthrough, shared-cash row-level metadata group summaries, full-market backtest report bundle (trades ledger, round trips, symbol/strategy performance, equity/drawdown curves, trade analysis, capital usage, Excel workbook).
+- Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility, evaluation metadata group summaries, eval-config output artifacts and manifests, evaluation random-baseline comparison, evaluation artifact usage docs, metadata grouping and passthrough usage docs, evaluation group-by manifest parity, grouped artifact `group_by` content consistency validation, batch grouped-artifact `group_by` header consistency validation, rolling-artifact `window_size` manifest filter parity, full-market report Excel workbook.
 
 ## Pending Work Summary
 
@@ -139,6 +164,10 @@ User-requested strategy work in 2026-05-21:
 - Bulk ingestion / durable loading for the Tushare security source scaffold once the upstream source contract is settled.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Larger research-run reproducibility workflow beyond run-ID linkage.
+- Strategy IO contract implementation after design approval.
+- Full-market report shared-cash support (currently batch-only).
+- Full-market report charts.
+- GUI parameter controls over the future standard strategy entry contract.
 
 ## Status Meaning
 
@@ -147,6 +176,8 @@ User-requested strategy work in 2026-05-21:
 - WAITING_USER_APPROVAL: User approval required before the next agent proceeds
 - IN_PROGRESS: Started but not complete
 - IMPLEMENTED: Implemented by Claude Code, awaiting Codex review
+- DESIGN_RECORDED: Design artifact exists and awaits review/approval
+- READY_FOR_BRIEF: Direction is agreed but implementation brief is not yet written
 - DONE: Completed and verified or preserved from legacy evidence
 - BLOCKED: Blocked
 - FUTURE: Future milestone

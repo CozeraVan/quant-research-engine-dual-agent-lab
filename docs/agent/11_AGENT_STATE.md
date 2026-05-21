@@ -4,11 +4,11 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
+QRE-REPORT-MT5-TV-FULL-MARKET-001
 
 ## Current Phase
 
-DONE
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -16,18 +16,24 @@ USER
 
 ## Last Completed Step
 
-Codex reviewed the GUI implementation, finalized it locally in commit `766dc98`, and accepted the console for user use. Rerun restoration, artifact rendering, and single-symbol summary coverage are all in place.
+Codex re-reviewed `QRE-REPORT-MT5-TV-FULL-MARKET-001` and marked `PASS` in `docs/agent/10_REVIEW_REPORT.md`.
+
+Verified:
+
+- `realized_pnl` semantic defect is fixed in `build_trades_ledger()`.
+- Regression test `test_sell_rows_have_null_realized_pnl` is present.
+- Validation passes: `254 passed` with 2 pre-existing warnings.
 
 ## Next Required Step
 
-None.
+User confirms whether to run finalization (local commit flow) for this task.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `766dc98`, `Make backtest iteration directly usable in a local browser console`
-- Working tree is clean after local finalization.
+- Last accepted GUI implementation commit: `766dc98`, `Make backtest iteration directly usable in a local browser console`
 - Standing approval: local commits approved by user; no remote push requested.
+- Existing uncommitted GUI-related changes must be preserved and are outside this design task.
 
 ## Short Prompt Commands
 

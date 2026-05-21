@@ -89,10 +89,23 @@
 | M7.2 | Local filesystem run history and rerun support | READY | CLAUDE_CODE | approved local-history-first design; `docs/agent/change_requests/CR-0001-local-backtest-console.md` | Persist run records under `outputs/gui-console/` |
 | M7.3 | Result viewer for summary, orders, trades, equity, and manifests | READY | CLAUDE_CODE | approved full-artifact viewer scope | Render report artifacts from completed runs |
 
+## Milestone 8: Strategy IO Contract And Research Reports
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M8.1 | Strategy IO contract design | DESIGN_RECORDED | CODEX | `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md` | User review and approval |
+| M8.2 | Strategy entry writing standard | READY_FOR_BRIEF | CODEX | brainstorm accepted: entry strategy work is MD/spec-first, not code-first | Write authoring docs for Strategy Card, Factor Requirements, and Experiment Plan |
+| M8.3 | Factor availability and missing-factor handoff standard | READY_FOR_BRIEF | CODEX | design spec defines QRE -> `indicators_tushare` missing-factor request fields | Scope compiler/preflight support after spec approval |
+| M8.4 | Three-strategy entry validation sample | READY_FOR_BRIEF | CODEX/CLAUDE_CODE | user requested 3 existing strategy families converted to standard entry and smoke-tested | Include in implementation acceptance criteria |
+| M8.5 | MT5 + TradingView full-market report contract | IN_PROGRESS | CLAUDE_CODE | MT5 workbook and 5 TradingView strategy tester screenshots inspected; report contract recorded in `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`; implementation brief ready | Implement additive full-market report bundle and manifest/audit support |
+| M8.6 | GUI parameter surface for standard strategy IO | FUTURE | CLAUDE_CODE | GUI is visualization only; standard contract must come first | Add form controls after entry/report contracts are stable |
+
 ## Status Meaning
 
 - TODO: Not started
 - READY: scoped and suitable for the next implementer
+- DESIGN_RECORDED: design artifact exists and awaits review/approval
+- READY_FOR_BRIEF: agreed direction exists but no implementation brief has been written
 - IN_PROGRESS: Started but not complete
 - DONE: Completed and verified or preserved from legacy records
 - BLOCKED: Blocked by missing decision, data, or approval

@@ -50,6 +50,15 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "shared_orders_group_summary": {"group_by", "group_value", "order_count"},
     "shared_trades_group_summary": {"group_by", "group_value", "trade_count"},
     "shared_failed_orders_group_summary": {"group_by", "group_value", "failed_order_count"},
+    "trades_ledger": {"symbol", "trade_date", "side"},
+    "round_trips": {"symbol", "entry_date", "exit_date"},
+    "symbol_performance": {"symbol", "trade_count"},
+    "full_market_equity_curve": {"trade_date", "total_equity"},
+    "drawdown_curve": {"trade_date", "total_equity"},
+    "full_market_report_workbook": set(),
+    "strategy_performance": set(),
+    "trade_analysis": set(),
+    "capital_usage": set(),
 }
 
 

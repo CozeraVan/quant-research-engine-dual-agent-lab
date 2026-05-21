@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
+QRE-REPORT-MT5-TV-FULL-MARKET-001
 
 ## Written By
 
@@ -18,45 +18,22 @@ Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
-- `src/quant_research_engine/gui/app.py`
-- `src/quant_research_engine/gui/engine.py`
-- `src/quant_research_engine/gui/templates/base.html`
-- `src/quant_research_engine/gui/templates/index.html`
-- `src/quant_research_engine/gui/templates/runs.html`
-- `src/quant_research_engine/gui/templates/run_detail.html`
-- `src/quant_research_engine/gui/static/style.css`
-- `src/quant_research_engine/apps/cli.py`
-- `src/quant_research_engine/portfolio/single_symbol.py`
-- `src/quant_research_engine/portfolio/batch.py`
-- `src/quant_research_engine/portfolio/shared.py`
-- `src/quant_research_engine/strategies/spec.py`
-- `tests/test_gui_app.py`
-- `tests/test_gui_engine.py`
-- `tests/test_strategy_spec.py`
-- `tests/test_portfolio_single_symbol.py`
-- `tests/test_portfolio_shared.py`
-- `docs/agent/03_ROADMAP.md`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/06_DECISION_LOG.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `src/quant_research_engine/portfolio/full_market_report.py`
+- `src/quant_research_engine/portfolio/io.py`
+- `src/quant_research_engine/portfolio/report_manifest.py`
+- `tests/test_full_market_report.py`
+- `pyproject.toml`
 - `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
 
 ## Review Summary
 
-The implementation satisfies the approved local browser-console scope:
+The blocking semantic defect identified in the previous review cycle is fixed:
 
-- local browser console shell
-- YAML-first strategy editing
-- direct module execution with CLI fallback
-- local filesystem run history
-- rerun restoration back into the editor
-- result viewer for CSV, JSON, and text artifacts
-- single-symbol summary rendering via `summary.json`
+- `build_trades_ledger()` no longer writes sell-row `realized_pnl` from order `cost`.
+- Sell-row `realized_pnl` is now null when per-order realized P&L is unavailable.
+- Regression assertions were added in `tests/test_full_market_report.py` (`test_sell_rows_have_null_realized_pnl`) to prevent reintroduction.
 
-The result viewer now covers the priority artifact set needed for the first release, including the single-symbol summary path that was previously missing.
+Full-market report bundle structure, workbook sheet contract, manifest role wiring, and report validation paths remain intact.
 
 ## Required Fixes
 
@@ -66,32 +43,26 @@ None.
 
 Compliant:
 
-- Implemented a local browser console shell.
-- Implemented YAML editing, validation, template save/load, and run submission.
-- Implemented local history storage.
-- Implemented direct module execution and CLI fallback.
-- Implemented rerun restoration on the editor page.
-- Implemented artifact rendering for summary/orders/trades/equity/manifest outputs.
+- Required additive artifacts are emitted for batch reports.
+- `backtest_report.xlsx` 10-sheet structure is covered.
+- Manifest roles and report-audit/report-files compatibility are preserved.
+- Residual limitations are documented without faking unavailable data fields.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
-uv run pytest tests/test_gui_app.py tests/test_gui_engine.py tests/test_cli.py -q
+uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
 Results:
 
-- `uv run pytest tests/test_gui_app.py tests/test_gui_engine.py tests/test_cli.py -q`: `179 passed, 2 warnings`
-- `scripts/check-progress-docs.sh`: passed
-- `git diff --check`: passed
-
-Warnings observed:
-
-- `numpy` runtime warnings during one CLI evaluation test, unchanged from prior behavior.
+- `254 passed, 2 warnings` (pre-existing numpy warning path in CLI decay test)
+- `scripts/check-progress-docs.sh` passed
+- `git diff --check` passed
 
 ## Locked Requirements Check
 
@@ -99,7 +70,7 @@ No locked-requirement violation found.
 
 ## Final Recommendation
 
-Accept locally and proceed to git finalization. No remote push requested.
+Accept implementation and proceed to finalization workflow.
 
 ## Next Agent State
 

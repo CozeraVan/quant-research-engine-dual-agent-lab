@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, and audit CLI are implemented. Current development focus is portfolio realism, metadata-aware outputs, and broader research-run reproducibility.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, and local browser console are implemented. Current active implementation focus is the full-market backtest report contract: combine the MT5 report baseline and TradingView strategy tester metrics into QRE report artifacts.
 
 ## Completed
 
@@ -31,6 +31,8 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability. The reusable Tushare security source scaffold and canonical snapshot contract are complete and ready for future bulk ingestion work.
 
+`QRE-REPORT-MT5-TV-FULL-MARKET-001` is ready for Claude Code implementation. The report contract is documented in `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`.
+
 ## Known Gaps
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
@@ -40,6 +42,8 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
 - Evaluation layer does not yet implement real index benchmark comparison or real regime classification.
 - Larger research-run bundles beyond run-level identifier linkage are not yet standardized.
+- Strategy entry is not yet standardized beyond the current low-level YAML `StrategySpec`.
+- Full-market MT5/TradingView-style report bundles are not yet implemented; current report files are useful engineering artifacts but not the final research-facing report contract.
 
 ## Current Technical Stack
 
@@ -49,7 +53,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - CLI: argparse-based `qre`
 - Config: YAML
 - Test tools: pytest
-- Frontend: none
+- Frontend: local Flask browser console
 - Deployment: local CLI/research workflows
 
 ## Current Repository Condition
@@ -81,4 +85,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Keep `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` blocked until the upstream security metadata source table/schema is confirmed. The completed source scaffold can be reused when that data becomes available.
+Claude Code implements `QRE-REPORT-MT5-TV-FULL-MARKET-001` from `08_IMPLEMENTATION_BRIEF.md`. Keep `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` blocked until the upstream security metadata source table/schema is confirmed.

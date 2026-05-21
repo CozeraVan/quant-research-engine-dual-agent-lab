@@ -341,3 +341,27 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Which source table should provide time-varying suspension, ST, and risk-warning metadata.
 - Whether legacy root-level progress docs should be archived after the user reviews the migrated `docs/agent` files.
 - Whether larger multi-stage research-run bundles should link preflight, evaluation, and backtest artifacts under one run identifier.
+
+### 2026-05-21: Define QRE as the strategy IO contract and reporting engine
+
+- Decision: QRE should standardize strategy entry, factor availability validation, backtest execution, and full-market report outputs. It should not rewrite external strategy repositories or compute indicators internally.
+- Reason: The long-term workflow spans multiple projects. `research-notes` / `strategy-research` own strategy knowledge, `indicators_tushare` owns technical indicator calculation and period expansion, and QRE owns the executable contract between strategy ideas, factor availability, backtests, and reports.
+- Alternatives: Put all classic strategy definitions directly into QRE; make the GUI own strategy semantics; let users continue hand-writing low-level `factors.table.column` YAML. These were rejected because they would make strategy expansion slower and keep the current YAML/debug bottleneck.
+- Impact: `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md` defines the first strategy IO contract. Entry strategy work is documentation-first, and future implementation should compile that standard into current QRE backtest tasks.
+- Owner: USER/CODEX
+
+### 2026-05-21: Use MT5 plus TradingView as the full-market QRE report baseline
+
+- Decision: QRE report output should combine the provided MT5 workbook and TradingView strategy tester screenshots, then add A-share research fields. Reports should be full-market artifacts with `symbol` columns, not one report per stock.
+- Reason: QRE normally backtests thousands of A-share symbols in one run. MT5 contributes detailed transaction/result-accounting structure, while TradingView contributes benchmark comparison, risk-adjusted metrics, trade analysis, capital usage, run-up, and drawdown sections. A unified transaction ledger, round-trip table, symbol performance table, strategy summary, equity curve, and manifest are better suited to later GUI display, ranking, clustering, and group analysis.
+- Alternatives: Keep only current engineering artifacts; generate one report per symbol; build visual reports before stabilizing the file contract. These were rejected because they do not support broad research comparison cleanly.
+- Impact: Task `QRE-REPORT-MT5-TV-FULL-MARKET-001` should produce `backtest_report.xlsx`, `trades_ledger.csv`, `round_trips.csv`, `symbol_performance.csv`, `strategy_performance.json`, `equity_curve.csv`, `drawdown_curve.csv`, `trade_analysis.json`, `capital_usage.json`, and manifest roles for report discovery/audit.
+- Owner: USER/CODEX
+
+### 2026-05-21: Send full-market report bundle implementation to Claude Code
+
+- Decision: The next Claude Code implementation task is `QRE-REPORT-MT5-TV-FULL-MARKET-001`.
+- Reason: The user approved moving from brainstorm/design into normal dual-agent workflow for the report-output contract. This is the highest-value QRE engine improvement before returning to strategy-entry standardization because it defines the final research-facing output of a backtest.
+- Alternatives: Start the strategy-entry compiler first; continue only documenting strategy-entry rules; implement GUI form controls first. These remain future work because a stable report output contract is needed for GUI display and downstream research comparison.
+- Impact: `08_IMPLEMENTATION_BRIEF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md` now route implementation to Claude Code. Codex will review after Claude writes `09_CODING_HANDOFF.md`.
+- Owner: CODEX

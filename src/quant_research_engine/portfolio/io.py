@@ -18,6 +18,7 @@ from quant_research_engine.portfolio.analytics import (
     summarize_shared_trades_by,
     summarize_shared_failed_orders_by,
 )
+from quant_research_engine.portfolio.full_market_report import write_full_market_report
 from quant_research_engine.portfolio.risk import summarize_equity_curve_by_window, summarize_equity_curve_rolling
 from quant_research_engine.portfolio.shared import SharedCashBacktestResult
 from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestResult
@@ -279,6 +280,10 @@ def write_batch_result(
         single_paths = write_single_symbol_result(single_result, symbol_dir)
         for name, path in single_paths.items():
             paths[f"{symbol}_{name}"] = path
+
+    full_market_paths = write_full_market_report(result, directory, run_request=run_request, run_id=run_id)
+    paths.update(full_market_paths)
+
     if run_request is not None:
         paths["run_manifest"] = _write_run_manifest(directory, run_request, paths, run_id=run_id)
     paths["summary_markdown"].write_text(
@@ -519,6 +524,20 @@ def _batch_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
     for key, path in paths.items():
         if key.startswith("group_by_"):
             report_paths.append((_summary_label(key), path))
+    # Full-market report artifacts
+    for key, label in [
+        ("backtest_report", "Full-market report workbook"),
+        ("trades_ledger", "Trades ledger"),
+        ("round_trips", "Round trips"),
+        ("symbol_performance", "Symbol performance"),
+        ("strategy_performance", "Strategy performance"),
+        ("equity_curve", "Full-market equity curve"),
+        ("drawdown_curve", "Drawdown curve"),
+        ("trade_analysis", "Trade analysis"),
+        ("capital_usage", "Capital usage"),
+    ]:
+        if key in paths:
+            report_paths.append((label, paths[key]))
     return report_paths
 
 
@@ -563,6 +582,24 @@ def _batch_manifest_role(key: str) -> str:
         return "report_manifest"
     if key == "run_manifest":
         return "run_manifest"
+    if key == "trades_ledger":
+        return "trades_ledger"
+    if key == "round_trips":
+        return "round_trips"
+    if key == "symbol_performance":
+        return "symbol_performance"
+    if key == "strategy_performance":
+        return "strategy_performance"
+    if key == "equity_curve":
+        return "full_market_equity_curve"
+    if key == "drawdown_curve":
+        return "drawdown_curve"
+    if key == "trade_analysis":
+        return "trade_analysis"
+    if key == "capital_usage":
+        return "capital_usage"
+    if key == "backtest_report":
+        return "full_market_report_workbook"
     if key.startswith("window_summary_") and key.endswith("_ranked_symbols"):
         return "window_ranked_symbols"
     if key.startswith("window_summary_"):

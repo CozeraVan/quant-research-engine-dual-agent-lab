@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
+QRE-REPORT-MT5-TV-FULL-MARKET-001
 
 ## Written By
 
@@ -14,61 +14,74 @@ CODEX
 
 ## Status
 
-DONE. The local browser backtest console is complete and finalized locally in commit `766dc98`.
+FIXED. Codex review found one blocking semantic issue in `realized_pnl` — fixed and resubmitted for re-review.
 
 ## Implementation Summary
 
-Built a lightweight local browser-based backtest console with:
+Implemented the additive full-market report bundle from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, combining the MT5 workbook baseline and TradingView strategy tester metrics into QRE batch backtest outputs:
 
-- **Flask web app** (`src/quant_research_engine/gui/app.py`): server-rendered templates with routes for the YAML editor, run history, run detail with artifact/stdout/stderr viewing, and REST API endpoints for validate, run, templates, and runs.
-- **Execution engine** (`src/quant_research_engine/gui/engine.py`): direct module execution mirroring the CLI flow (PostgresDataStore → ResearchFrameAssembler → StrategySpec.from_yaml → engine.run), CLI subprocess fallback, local filesystem run history under `outputs/gui-console/runs/`, and template CRUD.
-- **HTML templates** (`src/quant_research_engine/gui/templates/`): base layout with nav, YAML editor with file upload/template support/validate, parameter panel (mode, dates, codes, cash, max positions, output dir, DB URL, market profile, executor), run history table, run detail with rerun/artifacts/stdout/stderr.
-- **CSS** (`src/quant_research_engine/gui/static/style.css`): minimal system-ui stylesheet for layout, forms, tables, code blocks, and status indicators.
-- **CLI wiring** (`src/quant_research_engine/apps/cli.py`): `qre gui` subcommand with `--host`, `--port`, `--debug` flags that calls `launch_gui()`.
-- **Tests**: 43 tests total (23 engine tests, 19 app tests, 1 CLI integration test) covering validate, templates, run history, build CLI command, run backtest with module/CLI executor, Flask routes, and `qre gui --help`.
+- **new module `full_market_report.py`** (`src/quant_research_engine/portfolio/full_market_report.py`, ~350 lines): build functions for every report artifact plus the main `write_full_market_report()` entry point. The module keeps report-building logic separate from the 685-line `io.py`.
+  - `build_trades_ledger()` — combines per-symbol `orders` DataFrames into a unified ledger with MT5 columns (`lot_count`, `commission`, `stamp_tax`, `transfer_fee`, `slippage_amount`, `realized_pnl`, `cash_after`, `position_after`, `order_reason`, `status`), filling unavailable cost-split columns with `NaN`/null.
+  - `build_round_trips()` — combines per-symbol `trades` DataFrames, derives `holding_days`, `entry_notional`, `exit_notional`, `gross_return`, `net_return` from price×quantity and P&L.
+  - `build_symbol_performance()` — enriches the batch `summary` DataFrame with per-symbol Sharpe and max drawdown via `summarize_equity_curve()`.
+  - `build_full_market_equity_curve()` — aligns dates across all symbols and sums `total_equity` directly; computes `daily_return`, `cumulative_return`, `position_count`.
+  - `build_drawdown_curve()` — derives `running_peak`, `drawdown`, `drawdown_pct`, `drawdown_duration_days` from the full-market equity curve.
+  - `build_strategy_performance()` — aggregates win/loss counts, `win_rate`, `profit_factor`, `expectancy`, Sharpe, Sortino, max consecutive wins/losses, best/worst symbols into a JSON-ready dict.
+  - `build_trade_analysis()` — P&L distribution bins via numpy histogram, win/loss breakdown, outlier detection (3-sigma), per-pair summary.
+  - `build_capital_usage()` — CAGR from equity curve growth, margin fields null for cash-only simulation.
+  - `write_full_market_excel()` — writes `backtest_report.xlsx` with 10 sheets (Overview, Performance, TradesLedger, RoundTrips, SymbolPerformance, EquityCurve, DrawdownCurve, TradeAnalysis, CapitalUsage, Artifacts) using openpyxl with bold headers.
+  - `write_full_market_report()` — main entry point: calls all builders, writes 9 artifact files, returns a paths dict.
+
+- **Wired into `write_batch_result()`** (`src/quant_research_engine/portfolio/io.py`): the `write_full_market_report()` call happens after per-symbol directory writing but before manifest generation. New artifact paths are merged into the existing paths dict. Updated `_batch_manifest_role()` to map report keys to stable manifest roles, and `_batch_report_paths()` to list all new artifacts.
+
+- **Manifest roles added** (`src/quant_research_engine/portfolio/report_manifest.py`): 9 new entries in `_REQUIRED_COLUMNS_BY_ROLE` — `trades_ledger`, `round_trips`, `symbol_performance`, `full_market_equity_curve`, `drawdown_curve`, `full_market_report_workbook`, `strategy_performance`, `trade_analysis`, `capital_usage`.
+
+- **Tests** (`tests/test_full_market_report.py`, new, 23 tests): 12 test classes covering every builder function, Excel workbook creation (sheet names and structure verified), integration with `write_batch_result()`, manifest role registration, manifest validation, and empty-result edge cases.
 
 ## Files Changed
 
-- `pyproject.toml` — added `flask>=3.0.0` dependency
-- `src/quant_research_engine/apps/cli.py` — added `gui` subparser and handler
-- `src/quant_research_engine/gui/__init__.py` — new package init
-- `src/quant_research_engine/gui/engine.py` — new execution engine and history management
-- `src/quant_research_engine/gui/app.py` — new Flask app factory
-- `src/quant_research_engine/gui/templates/base.html` — new base layout
-- `src/quant_research_engine/gui/templates/index.html` — new editor page
-- `src/quant_research_engine/gui/templates/runs.html` — new run history page
-- `src/quant_research_engine/gui/templates/run_detail.html` — new run detail page
-- `src/quant_research_engine/gui/templates/error.html` — new error page
-- `src/quant_research_engine/gui/static/style.css` — new stylesheet
-- `tests/test_gui_engine.py` — new engine tests (23 tests)
-- `tests/test_gui_app.py` — new app tests (24 tests, including artifact and rerun coverage)
+- `pyproject.toml` — added `openpyxl>=3.1.0` dependency
+- `src/quant_research_engine/portfolio/full_market_report.py` — new
+- `src/quant_research_engine/portfolio/io.py` — wired full-market report into `write_batch_result()`
+- `src/quant_research_engine/portfolio/report_manifest.py` — added 9 new required-column rules
+- `tests/test_full_market_report.py` — new (23 tests)
+- `docs/agent/04_TASK_HANDOFF.md` — updated status/owner/phase
+- `docs/agent/05_PROGRESS.md` — updated phase/task entry/verified state
+- `docs/agent/09_CODING_HANDOFF.md` — this file
+- `docs/agent/11_AGENT_STATE.md` — phase to CODEX_REVIEWING, owner to CODEX
+- `docs/agent/12_AGENT_BOARD.md` — message/recipient/next step updated
 
-## Fixes Applied
+## Validation Results
 
-1. **Rerun restoration** — Added sessionStorage reader to `index.html` (lines 86-91) that checks for stored YAML on page load and populates the editor textarea. Removed the ineffective reader from `run_detail.html` (it targeted `#strategy-yaml` which doesn't exist on that page).
-2. **Result viewer** — Added `GET /api/runs/<run_id>/artifact/<path>` endpoint to `app.py` that parses CSV files into structured JSON (`{"type": "csv", "headers": [...], "rows": [[...], ...]}`) and JSON files into `{"type": "json", "data": ...}`. Updated `run_detail.html` to fetch priority artifacts and render them as HTML tables or formatted JSON.
-3. **Single-symbol summary.json** — Added `summary.json`, `summary_metrics.json`, and `summary_markdown.md` to the priorityFiles array in `run_detail.html` so single-symbol and shared-cash runs (which write `summary.json` instead of `summary.csv`) render their summary content.
-
-## Validation Results (after all fixes)
-
-- `uv run pytest tests/ -q` → 464 passed, 2 warnings (pre-existing numpy warnings) in 4.64s
+- `uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` → 254 passed, 2 warnings (pre-existing numpy) in 3.14s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
 
+## Residual Limitations
+
+- **Unavailable cost splits**: the current engine does not track per-order `commission`, `stamp_tax`, `transfer_fee`, or `slippage` separately. Those MT5 columns exist in `trades_ledger` as `None`/`NaN` with stable column names.
+- **Margin fields**: `average_margin_used`, `max_margin_used`, `min_margin_used` are `None` because the current simulation is cash-only (no leverage).
+- **Intratrade path**: `max_favorable_return`, `max_adverse_return`, and bars-in-trade statistics are `None` because the current A-share daily engine does not track intra-trade bar-level paths.
+- **Charts**: the Excel workbook contains data sheets only; no rendered charts in this first implementation.
+- **Batch-first**: only batch mode writes full-market reports. Shared-cash reuse is noted as future work.
+
 ## Constraints
 
-- No changes to existing engine contracts, market profiles, or evaluation/portfolio logic.
-- YAML text stays the primary strategy editing surface.
-- Local filesystem history only, no PostgreSQL persistence for runs.
+- No existing report outputs renamed or removed.
+- No changes to engine contracts, market profiles, single-symbol, batch, or shared-cash logic.
 - `docs/legacy/**` untouched.
 - Read-only data access preserved.
+
+## Fixes Applied (Re-review Cycle)
+
+1. **realized_pnl semantics** — `build_trades_ledger()` line 81: changed `"realized_pnl": None if side == "buy" else _safe_float(record.get("cost"))` to `"realized_pnl": None`. The `cost` field is a transaction fee, not realized P&L. Sell rows now have `None` for `realized_pnl` (same as buy rows), since the current engine does not track realized P&L at the individual order level. Added assertion in `test_sell_rows_have_null_realized_pnl` that sell-row `realized_pnl` is `NaN` and not equal to `total_cost`.
 
 ## Git State
 
 - Branch: `master`
-- Last accepted implementation commit: `2da15bb`, `Preserve window_size and group_by selector parity under JSON strict mode`
-- Working tree contains all GUI implementation files plus agent doc updates.
+- Last accepted implementation commit: `766dc98`, `Make backtest iteration directly usable in a local browser console`
+- Working tree contains all full-market report implementation files, tests, and agent doc updates.
 
 ## Next Suggested Step
 
-None.
+Codex reviews the implementation, runs validation, and writes `docs/agent/10_REVIEW_REPORT.md`.
