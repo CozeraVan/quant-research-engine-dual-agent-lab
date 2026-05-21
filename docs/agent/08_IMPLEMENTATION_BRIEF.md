@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001
+QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001
 
 ## Created By
 
@@ -14,11 +14,11 @@ CLAUDE_CODE
 
 ## Background
 
-Rolling batch and shared artifacts now support manifest-level `window_size` filtering. `tests/test_cli.py` already covers the basic `report-files` / `report-audit --window-size` selector path, `report-files --json` exposure of `window_size`, and malformed string/boolean `window_size` manifest metadata at both CLI command boundaries. Generic strict/JSON selector coverage also exists for other filters. What is still missing is focused parity coverage when the active selector is `--window-size` and the commands are asked to enforce `--require-match` or return JSON payloads.
+Rolling batch and shared artifacts now support manifest-level `window_size` filtering. `tests/test_cli.py` already covers the basic `report-files` / `report-audit --window-size` selector path, `report-files --json` exposure of `window_size`, malformed string/boolean `window_size` manifest metadata, and strict/JSON parity for `--window-size` alone. What is still missing is focused parity coverage when the active selectors are `--window-size` and `--group-by` together.
 
 ## Goal
 
-Add focused `report-files` / `report-audit` CLI regression coverage for `--window-size` combined with strict no-match and JSON output modes.
+Add focused `report-files` / `report-audit` CLI regression coverage for `--window-size` combined with `--group-by`, `--json`, and `--require-match`.
 
 ## Non-Goals
 
@@ -60,18 +60,18 @@ Read:
 
 Task-specific locked requirements:
 
-- Preserve the currently shipped CLI and manifest semantics exactly as implemented in `06d2b4b`.
-- Keep the task narrowly scoped to `--window-size` selector parity with `--require-match` and `--json`.
+- Preserve the currently shipped CLI and manifest semantics exactly as implemented in `ec7a1d0`.
+- Keep the task narrowly scoped to `--window-size` and `--group-by` selector parity with `--require-match` and `--json`.
 - Preserve archived legacy docs.
 - Keep the task narrowly scoped to tests unless a tiny runtime fix is required to make the CLI surface deterministic.
 
 ## Implementation Steps
 
-1. Inspect the existing generic `--json --require-match` CLI coverage and the current `--window-size` filter tests in `tests/test_cli.py`.
-2. Add focused `tests/test_cli.py` coverage for `report-files` with `--window-size` combined with `--json --require-match`:
+1. Inspect the existing `--window-size` filter tests and `--group-by` strict/JSON selector coverage in `tests/test_cli.py`.
+2. Add focused `tests/test_cli.py` coverage for `report-files` with `--window-size` combined with `--group-by`, `--json`, and `--require-match`:
    - one matched-entry case
    - one zero-match failure case
-3. Add focused `tests/test_cli.py` coverage for `report-audit` with `--window-size` combined with `--json --require-match`:
+3. Add focused `tests/test_cli.py` coverage for `report-audit` with `--window-size` combined with `--group-by`, `--json`, and `--require-match`:
    - one matched-entry case
    - one zero-match failure case that preserves the existing `no_matches` JSON issue payload
 4. Update handoff/progress docs.
@@ -97,10 +97,10 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] `tests/test_cli.py` covers `report-files --window-size ... --json --require-match` with one matched entry.
-- [ ] `tests/test_cli.py` covers `report-files --window-size ... --json --require-match` zero-match failure behavior.
-- [ ] `tests/test_cli.py` covers `report-audit --window-size ... --json --require-match` with one matched entry.
-- [ ] `tests/test_cli.py` covers `report-audit --window-size ... --json --require-match` zero-match failure behavior and the existing `no_matches` JSON issue payload.
+- [ ] `tests/test_cli.py` covers `report-files --window-size ... --group-by ... --json --require-match` with one matched entry.
+- [ ] `tests/test_cli.py` covers `report-files --window-size ... --group-by ... --json --require-match` zero-match failure behavior.
+- [ ] `tests/test_cli.py` covers `report-audit --window-size ... --group-by ... --json --require-match` with one matched entry.
+- [ ] `tests/test_cli.py` covers `report-audit --window-size ... --group-by ... --json --require-match` zero-match failure behavior and the existing `no_matches` JSON issue payload.
 - [ ] Legacy archived docs are untouched.
 - [ ] `uv run pytest tests/test_cli.py -q`, `scripts/check-progress-docs.sh`, and `git diff --check` pass.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
@@ -108,8 +108,8 @@ git diff --check
 ## Risks
 
 - Avoid changing runtime behavior when the current selector plumbing already works and only coverage is missing.
-- Keep JSON payload assertions specific enough to lock `window_size` selector semantics without overfitting unrelated fields.
-- Avoid duplicating generic no-match tests without anchoring them to `--window-size`.
+- Keep JSON payload assertions specific enough to lock `window_size` + `group_by` selector semantics without overfitting unrelated fields.
+- Avoid duplicating generic no-match tests without anchoring them to both selectors.
 
 ## Instructions for Claude Code
 
@@ -119,7 +119,7 @@ Claude Code must:
 2. Keep this test-focused unless a tiny runtime fix is required to preserve deterministic selector behavior.
 3. Avoid editing `docs/legacy/**`.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
-5. Stop and write a blocker only if `--window-size` behaves inconsistently with the already-shipped generic strict/JSON CLI patterns.
+5. Stop and write a blocker only if `--window-size` and `--group-by` behave inconsistently with the already-shipped selector patterns.
 
 ## Next Agent State
 

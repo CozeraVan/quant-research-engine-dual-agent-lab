@@ -67,7 +67,8 @@
 | M5.14 | Rolling-artifact `window_size` filter parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; batch/shared rolling manifest metadata `window_size` now filters through report discovery/audit and surfaces in `report-files --json`; 197 targeted tests passed | Preserve |
 | M5.15 | Rolling-artifact `window_size` usage documentation | DONE | CODEX/CLAUDE_CODE | commit `22fd3d1`; `10_REVIEW_REPORT.md` PASS; README and portfolio module docs now cover `--window-size` discovery/audit usage, `--window` vs `--window-size`, and additive JSON metadata wording | Preserve |
 | M5.16 | CLI regression coverage for invalid `window_size` manifest metadata | DONE | CODEX/CLAUDE_CODE | commit `06d2b4b`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; 201 targeted tests passed | Preserve |
-| M5.17 | CLI strict/JSON parity for `window_size` filters | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; 205 tests passed | Preserve |
+| M5.17 | CLI strict/JSON parity for `window_size` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; 205 tests passed | Preserve |
+| M5.18 | CLI strict/JSON parity for `window_size` + `group_by` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` + `--group-by` combined selector parity with `--json --require-match`; 209 tests passed | Preserve |
 
 ## Milestone 6: Dual-Agent Workflow
 

@@ -230,6 +230,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001`. The task should stay test-focused and avoid runtime changes unless a narrow command-surface bug is exposed.
 - Owner: CODEX
 
+### 2026-05-21: Select CLI strict/JSON parity for window_size plus group_by as next Claude task
+
+- Decision: The next Claude Code task is focused CLI regression coverage for `--window-size` when combined with `--group-by`, `--json`, and `--require-match`.
+- Reason: Independent `--window-size` and `--group-by` selector coverage already exists, but their intersection is still untested. Locking the combined selector behavior extends the reporting parity without touching runtime code.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; widen the task into parser or manifest refactoring.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001`. The task should stay test-focused and avoid runtime changes unless a concrete selector bug appears.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

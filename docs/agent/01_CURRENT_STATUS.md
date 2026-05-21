@@ -29,7 +29,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-Codex is locally finalizing `QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001` after review PASS.
+Codex is locally finalizing `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001` after review PASS.
 
 ## Known Gaps
 
@@ -79,4 +79,4 @@ Codex is locally finalizing `QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001` after r
 
 ## Next Recommended Step
 
-Codex should create the local completion commit for `QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001`, then select the next unblocked report-CLI parity task. Real index benchmark wiring should remain a follow-up after the available index table, schema, code column, and value column are confirmed.
+Codex should create the local completion commit for `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001`, then select the next unblocked data-layer task. Real suspension/ST/risk-warning metadata should be the next Claude brief, pending source-table confirmation.

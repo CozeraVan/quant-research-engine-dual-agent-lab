@@ -2,11 +2,11 @@
 
 ## Current Task
 
-Add strict/JSON CLI regression coverage for rolling-artifact `window_size` filters.
+Add strict/JSON CLI regression coverage for rolling-artifact `window_size` + `group_by` combined filters.
 
 ## Task ID
 
-QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001
+QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001
 
 ## Current Status
 
@@ -18,12 +18,13 @@ CODEX
 
 ## Completed
 
-- Claude Code added 4 CLI regression tests in `tests/test_cli.py`:
-  - `test_cli_report_files_window_size_json_require_match_matched_entry`: `--window-size 20 --json --require-match` finds the correct entry and returns `window_size: 20` in JSON.
-  - `test_cli_report_files_window_size_json_require_match_zero_matches`: `--window-size 20 --json --require-match` fails with exit code 2, stderr message, and `matched_files=0` JSON payload when no entries match.
-  - `test_cli_report_audit_window_size_json_require_match_matched_entry`: `--window-size 20 --json --require-match` audit returns `status=ok` with `matched_files=1` and `validation_issues=0` for the matched entry.
-  - `test_cli_report_audit_window_size_json_require_match_zero_matches`: `--window-size 20 --json --require-match` audit fails with exit code 2 and the existing `no_matches` JSON issue payload.
-- No runtime or parser code changes; the existing selector plumbing already works correctly.
+- Claude Code added 4 CLI regression tests in `tests/test_cli.py` for combined `--window-size` + `--group-by` selector parity:
+- Claude Code added 4 CLI regression tests in `tests/test_cli.py` for combined `--window-size` + `--group-by` selector parity:
+  - `test_cli_report_files_window_size_group_by_json_require_match_matched_entry`: `--window-size 20 --group-by board --json --require-match` selects the sole matching entry (window_size=20, group_by=board) from a 3-entry manifest.
+  - `test_cli_report_files_window_size_group_by_json_require_match_zero_matches`: mismatch entries (one wrong window_size, one wrong group_by) fail with exit code 2 + `matched_files=0` JSON payload.
+  - `test_cli_report_audit_window_size_group_by_json_require_match_matched_entry`: audit returns `status=ok`, `matched_files=1`, `validation_issues=0` for the combined selector match.
+  - `test_cli_report_audit_window_size_group_by_json_require_match_zero_matches`: audit fails with exit code 2 and the existing `no_matches` JSON issue payload.
+- No runtime or parser code changes; the existing selector intersection plumbing already works.
 
 ## Expected Files
 
@@ -36,17 +37,17 @@ CODEX
 
 ## Validation Baseline
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 205 passed in 1.94s
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 209 passed in 2.02s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
-- `scripts/git-finalize-check.sh` → passed (from `06d2b4b`)
+- `scripts/git-finalize-check.sh` → passed (from `ec7a1d0`)
 
 ## Known Risks
 
 - Test-only; no runtime or parser behavior changed.
-- JSON payload assertions use existing manifest fields (`matched_files`, `status`, `issues`, `no_matches` code) — stable unless the CLI reporting layer changes its JSON shape.
+- Zero-match tests use orthogonal non-matching combinations (one entry with wrong window_size, one with wrong group_by) to verify the AND-intersection.
 - Legacy archived docs untouched.
 
 ## Next Suggested Step
 
-Codex should review the test additions, run validation, and finalize.
+Codex should run final git checks and create the local completion commit.

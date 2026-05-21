@@ -4783,3 +4783,234 @@ def test_cli_report_audit_window_size_json_require_match_zero_matches(capsys, tm
             "message": "no manifest entries matched filters",
         }
     ]
+
+
+# --- window_size + group_by combined selector parity ---
+
+
+def test_cli_report_files_window_size_group_by_json_require_match_matched_entry(capsys, tmp_path):
+    (tmp_path / "rolling_summary_20_by_board.csv").write_text(
+        "window_size,end_date,symbol_count,board\n20,2026-01-05,50,main\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20_by_board",
+                        "path": "rolling_summary_20_by_board.csv",
+                        "filename": "rolling_summary_20_by_board.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                        "group_by": "board",
+                    },
+                    {
+                        "key": "rolling_summary_60_by_board",
+                        "path": "rolling_summary_60_by_board.csv",
+                        "filename": "rolling_summary_60_by_board.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                        "group_by": "board",
+                    },
+                    {
+                        "key": "rolling_summary_20_by_sector",
+                        "path": "rolling_summary_20_by_sector.csv",
+                        "filename": "rolling_summary_20_by_sector.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                        "group_by": "sector",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "report-files",
+            str(manifest_path),
+            "--window-size", "20",
+            "--group-by", "board",
+            "--json",
+            "--require-match",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    entry = payload["files"][0]
+    assert entry["window_size"] == 20
+    assert entry["group_by"] == "board"
+    assert entry["key"] == "rolling_summary_20_by_board"
+
+
+def test_cli_report_files_window_size_group_by_json_require_match_zero_matches(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20_by_sector",
+                        "path": "rolling_summary_20_by_sector.csv",
+                        "filename": "rolling_summary_20_by_sector.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                        "group_by": "sector",
+                    },
+                    {
+                        "key": "rolling_summary_60_by_board",
+                        "path": "rolling_summary_60_by_board.csv",
+                        "filename": "rolling_summary_60_by_board.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                        "group_by": "board",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "report-files",
+            str(manifest_path),
+            "--window-size", "20",
+            "--group-by", "board",
+            "--json",
+            "--require-match",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "no manifest entries matched filters" in captured.err
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 0
+    assert payload["files"] == []
+
+
+def test_cli_report_audit_window_size_group_by_json_require_match_matched_entry(capsys, tmp_path):
+    (tmp_path / "rolling_summary_20_by_board.csv").write_text(
+        "window_size,end_date,symbol_count,board\n20,2026-01-05,50,main\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20_by_board",
+                        "path": "rolling_summary_20_by_board.csv",
+                        "filename": "rolling_summary_20_by_board.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                        "group_by": "board",
+                    },
+                    {
+                        "key": "rolling_summary_60_by_board",
+                        "path": "rolling_summary_60_by_board.csv",
+                        "filename": "rolling_summary_60_by_board.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                        "group_by": "board",
+                    },
+                    {
+                        "key": "rolling_summary_20_by_sector",
+                        "path": "rolling_summary_20_by_sector.csv",
+                        "filename": "rolling_summary_20_by_sector.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                        "group_by": "sector",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "report-audit",
+            str(manifest_path),
+            "--window-size", "20",
+            "--group-by", "board",
+            "--json",
+            "--require-match",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert payload["status"] == "ok"
+    assert payload["validation_issues"] == 0
+
+
+def test_cli_report_audit_window_size_group_by_json_require_match_zero_matches(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20_by_sector",
+                        "path": "rolling_summary_20_by_sector.csv",
+                        "filename": "rolling_summary_20_by_sector.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                        "group_by": "sector",
+                    },
+                    {
+                        "key": "rolling_summary_60_by_board",
+                        "path": "rolling_summary_60_by_board.csv",
+                        "filename": "rolling_summary_60_by_board.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                        "group_by": "board",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        [
+            "report-audit",
+            str(manifest_path),
+            "--window-size", "20",
+            "--group-by", "board",
+            "--json",
+            "--require-match",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "no manifest entries matched filters" in captured.err
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 0
+    assert payload["status"] == "failed"
+    assert payload["issues"] == [
+        {
+            "key": "manifest",
+            "code": "no_matches",
+            "path": str(manifest_path),
+            "message": "no manifest entries matched filters",
+        }
+    ]
