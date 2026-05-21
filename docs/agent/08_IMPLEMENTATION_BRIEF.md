@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
+QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001
 
 ## Created By
 
@@ -14,115 +14,112 @@ CLAUDE_CODE
 
 ## Current Brief Type
 
-Implementation brief. Documentation-first plus minimal read-only tooling surface for missing-factor handoff.
+Implementation brief. Build minimal linkage from high-level strategy entry format to current preflight/runtime-compatible `StrategySpec`.
 
 ## Background
 
-`QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001` is finalized. The strategy entry standard now exists under `docs/strategy_entry/`.
+Completed baselines:
 
-The next bottleneck is operational handoff: missing factors are specified in docs but not yet standardized as a durable workflow artifact that can be consumed by upstream `indicators_tushare`.
+- Full-market report contract implemented and finalized.
+- Strategy-entry authoring docs implemented under `docs/strategy_entry/`.
+- Missing-factor handoff operationalized via `missing_factor_requests.json`.
 
-We need a practical, minimal, and non-invasive slice that closes the loop:
+Current gap:
 
-- write strategy
-- validate factors
-- emit missing-factor request file
-- upstream computes/backfills
-- re-run validation/backtest
+- High-level strategy entry format is documented, but not yet linked to executable preflight/runtime flow.
 
-## Canonical Design Sources
+## Canonical Sources
 
+- `docs/strategy_entry/README.md`
+- `docs/strategy_entry/strategy_card.md`
+- `docs/strategy_entry/factor_requirements.md`
+- `docs/strategy_entry/experiment_plan.md`
+- `docs/strategy_entry/examples.md`
 - `docs/strategy_entry/missing_factor_request.md`
-- `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`
 
 ## Goal
 
-Operationalize missing-factor handoff with a stable output contract and minimal CLI/tool support in QRE.
+Implement a minimal compiler/preflight linkage layer that can:
 
-Deliverables:
-
-1. Standardized output file contract:
-   - `missing_factor_requests.json`
-2. Stable write location conventions.
-3. Minimal read-only CLI/tool command to emit request artifacts from a strategy entry validation flow.
-4. Tests for schema shape and edge cases.
-5. Documentation updates describing lifecycle states and retry workflow.
+1. Parse high-level strategy entry YAML.
+2. Resolve declared factor requirements into current low-level `StrategySpec.factor_fields` targets where possible.
+3. Produce preflight-compatible input and actionable errors for unresolved aliases/fields.
+4. Keep runtime engine behavior unchanged.
 
 ## Scope
 
 In scope:
 
-- Strategy validation path and artifact writing logic.
-- Missing-factor request schema enforcement at QRE boundary.
-- Documentation and examples for pending/fulfilled/blocked flow.
-- CLI surface update (new or extended command) that does not mutate database data.
+- New linkage module(s) for high-level entry parsing and conversion.
+- CLI entry point (new command or extension) for validation/compile-to-low-level preview.
+- Integration with existing preflight path.
+- Tests for valid/invalid mapping scenarios.
 
 Out of scope:
 
-- Running `indicators_tushare` from QRE.
-- Writing factors into PostgreSQL from QRE.
-- Runtime strategy compiler for full high-level entry format.
+- Automatic indicator computation.
+- Database writes.
+- External project invocation.
 - GUI integration.
+- Full strategy runtime compiler for every advanced rule operator.
 
-## Required Implementation Items
+## Required Deliverables
 
-1. Artifact emission
+1. High-level entry parser
 
-- Emit `missing_factor_requests.json` when required factors are absent.
-- When nothing is missing, emit either:
-  - empty array file `[]`, or
-  - no file but explicit status output.
-  Choose one behavior and document it clearly.
+- Supports sections:
+  - `strategy` / `rules`
+  - `factor_requirements`
+  - `experiment`
+- Validates required fields and basic types.
 
-2. Output path convention
+2. Factor linkage
 
-- Define deterministic output path relative to `--output-dir` or run folder.
-- Keep path consistent across repeated runs.
+- Convert requirement alias definitions to low-level factor targets where deterministic mapping exists.
+- If mapping is unavailable, return structured validation issues and keep missing-factor flow usable.
 
-3. Schema guarantees
+3. Preflight linkage command
 
-- Required keys must match `docs/strategy_entry/missing_factor_request.md`.
-- Include `required` flag and reason fields.
-- Include date range context from experiment input when available.
+- Provide a CLI surface to:
+  - load high-level entry
+  - compile/link to low-level preflight input
+  - run existing preflight checks
+  - emit missing-factor artifact through current standard flow
 
-4. Status semantics
+4. Artifact/preview output
 
-- Document lifecycle states:
-  - `pending` (request emitted, waiting upstream)
-  - `fulfilled` (validation passes after data availability)
-  - `blocked` (upstream unavailable/permission/data contract mismatch)
+- Optional output file: compiled low-level preview (YAML or JSON) for debugging.
+- Must not replace current strategy file behavior.
 
 5. Tests
 
-- Missing-factor request file is written for missing-required factors.
-- Optional factors behavior is covered.
-- Multi-factor and multi-strategy aggregation/serialization behavior is deterministic.
-- Empty-request behavior is covered.
+- Valid high-level example compiles and preflights.
+- Missing required fields fail with clear message.
+- Alias mismatch fails with clear message.
+- Unresolved factor mapping fails deterministically and still supports missing-factor artifact path where applicable.
 
 ## Suggested File Surface
 
-Adjust based on actual code layout:
-
-- `src/quant_research_engine/...` validation/strategy entry module(s)
-- `src/quant_research_engine/apps/cli.py` (or nearest CLI command wiring)
-- `tests/...` for strategy validation and CLI regression
-- `docs/strategy_entry/missing_factor_request.md` (small clarifications only)
-- `docs/strategy_entry/README.md` and/or workflow docs for lifecycle
+- `src/quant_research_engine/strategies/...` (new linkage/parser module)
+- `src/quant_research_engine/apps/cli.py` (CLI wiring)
+- `tests/test_*.py` for linkage + CLI
+- `docs/strategy_entry/*.md` (small clarifications if behavior constraints require)
 
 ## Non-Goals
 
-- Do not add DB writes.
-- Do not invoke external projects directly.
-- Do not alter completed full-market report behavior.
-- Do not refactor unrelated engine modules.
+- Do not modify existing portfolio/evaluation engine logic.
+- Do not alter full-market report outputs.
+- Do not remove low-level `StrategySpec` support.
+- Do not broaden to minute-bar or ML workflows.
 
 ## Acceptance Criteria
 
-- [ ] Missing-factor request artifact is emitted with stable schema.
-- [ ] CLI/tool output clearly indicates missing-factor status.
-- [ ] Tests cover required, optional, empty, and multi-item cases.
-- [ ] Documentation explains lifecycle and rerun flow.
-- [ ] `docs/agent/09_CODING_HANDOFF.md` updated with evidence.
+- [ ] High-level strategy entry can be validated and linked to preflight flow.
+- [ ] Failure modes are explicit and actionable.
+- [ ] Missing-factor workflow remains compatible with current JSON contract.
+- [ ] Existing low-level strategy workflow remains unaffected.
+- [ ] Tests cover success and failure paths.
+- [ ] `docs/agent/09_CODING_HANDOFF.md` updated with changed files and validation evidence.
 
 ## Validation Commands
 
@@ -134,13 +131,13 @@ scripts/check-progress-docs.sh
 git diff --check
 ```
 
-If full test suite is too broad, run a targeted subset and record exact commands in `09_CODING_HANDOFF.md`.
+If full suite is too broad, run focused subset and record exact commands in `09_CODING_HANDOFF.md`.
 
 ## Risks
 
-- Scope creep into strategy compiler/runtime.
-- Ambiguous behavior when no missing factors are present.
-- Inconsistent schema fields between docs and emitted JSON.
+- Over-coupling doc format and runtime format too early.
+- Ambiguous alias-to-column mapping rules.
+- Introducing compatibility regressions in existing low-level strategy path.
 
 ## Next Agent State
 

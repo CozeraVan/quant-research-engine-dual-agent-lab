@@ -2,15 +2,15 @@
 
 ## Current Task
 
-Implement the QRE operational missing-factor handoff standard. The immediate goal is to make missing-factor requests durable, machine-readable, and workflow-ready for upstream `indicators_tushare`.
+Implement high-level strategy entry compiler/preflight linkage so documented strategy entries can flow into existing executable preflight/runtime-compatible low-level spec.
 
 ## Task ID
 
-QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
+QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001
 
 ## Current Status
 
-DONE. Implementation passed Codex review and is finalized locally.
+DONE. Compiler/preflight linkage passed Codex re-review and is finalized locally.
 
 ## Current Owner
 
@@ -18,7 +18,21 @@ CODEX
 
 ## Completed
 
-- Product boundary clarified:
+- High-level strategy entry compiler/linkage module: `src/quant_research_engine/strategies/compiler.py` (~410 lines)
+  - `_INDICATOR_CATALOG` with 13 indicators (rsi, ema, sma, wma, macd, bollinger, atr, adx, cci, mfi, obv, stochastic, williams_r)
+  - Column name builders: `_col_simple`, `_col_macd`, `_col_bollinger`
+  - `parse_high_level_entry`, `compile_entry`, `compile_to_strategy_spec_dict`
+  - Expression compiler with `all`/`any` combinators, comparison and crossover operators
+  - Built-in alias shadow detection (close, open, high, low, pre_close, vol, amount)
+  - Factor alias → `factors.table.column` resolution via catalog
+- CLI `qre compile` command with `--output-dir`, `--preflight`, and preflight date flags
+  - Stdout compilation summary (strategy_id, name, family, factor_targets, expressions, issues)
+  - `compiled_strategy_spec.json` output for debugging
+  - Optional preflight integration with missing-factor extraction
+- Tests: 29 compiler tests + 4 CLI compile tests
+- 300 tests pass, no regressions
+
+## Scope Notes
   - QRE owns strategy input standards, factor availability validation, backtest execution, and report output contracts.
   - QRE does not own rewriting `research-notes` / `strategy-research` or computing indicators internally.
   - `indicators_tushare` remains the upstream technical-indicator calculator and `factors.*` producer.
@@ -76,15 +90,13 @@ The local browser backtest console is complete and finalized locally in commit `
 
 ## Validation Baseline
 
-Documentation and implementation validation:
-
 ```bash
-uv run pytest tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py -q
+uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-Current results: 168 passed, 2 warnings (pre-existing numpy) in 2.01s; all checks pass.
+Current results: 300 passed, 2 warnings (pre-existing numpy) in 2.96s; all checks pass.
 
 ## Known Risks
 
@@ -98,4 +110,4 @@ Current results: 168 passed, 2 warnings (pre-existing numpy) in 2.01s; all check
 
 ## Next Suggested Step
 
-Proceed to next strategy-IO slice: compiler/preflight linkage from high-level strategy entry format to executable current `StrategySpec`.
+Codex reviews the implementation, runs validation, and writes `docs/agent/10_REVIEW_REPORT.md`.

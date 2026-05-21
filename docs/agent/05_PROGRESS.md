@@ -6,7 +6,7 @@ DONE
 
 ## Current Active Work
 
-`QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` has passed Codex review and is finalized locally.
+`QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001` has passed Codex re-review and is finalized locally.
 
 ## Progress Table
 
@@ -19,6 +19,7 @@ DONE
 | QRE-STRATEGY-IO-CONTRACT-DESIGN-001 | Strategy IO contract design | DESIGN_RECORDED | CODEX | `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`; user clarified QRE should write the strategy-entry standard, not rewrite external strategy projects | Preserve as the entry-contract source for later implementation |
 | QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001 | Strategy entry authoring standard docs | DONE | CODEX/CLAUDE_CODE | `docs/strategy_entry/` includes 6 docs; `10_REVIEW_REPORT.md` PASS; local finalization complete | Start next task |
 | QRE-FACTOR-MISSING-HANDOFF-STANDARD-001 | Operational missing-factor handoff standard | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `missing_factor_requests.json` emission + CLI status + lifecycle docs + 28 targeted tests; 168 tests passed | Start next task |
+| QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001 | High-level entry compiler/preflight linkage | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS after fix cycle; expression emission now alias-based; 2 end-to-end runtime tests added; 302 tests pass | Start next task |
 | QRE-REPORT-MT5-TV-FULL-MARKET-001 | MT5 + TradingView full-market report bundle | DONE | CODEX/CLAUDE_CODE | commit `27828b8`; `10_REVIEW_REPORT.md` PASS; `realized_pnl` semantic fix landed with regression test; 254 tests pass | Start next task |
 | QRE-M1 | Project skeleton and core market profile | DONE | HISTORICAL | package layout, tests, skeleton plan | Preserve |
 | QRE-M2 | Data layer and preflight | DONE | HISTORICAL | `qre db-smoke`, `factor-smoke`, `metadata-smoke`, `preflight` | Add real metadata adapters later |

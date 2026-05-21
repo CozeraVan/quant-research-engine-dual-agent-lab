@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
+QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001
 
 ## Current Phase
 
@@ -16,17 +16,17 @@ CODEX
 
 ## Last Completed Step
 
-Codex reviewed `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` and marked `PASS` in `docs/agent/10_REVIEW_REPORT.md`.
+Codex re-reviewed `QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001`, confirmed the runtime compatibility fix, and marked `PASS` in `docs/agent/10_REVIEW_REPORT.md`.
 
 Verified:
 
-- `missing_factor_requests.json` emission from preflight with stable schema.
-- Deterministic empty-list behavior (`[]`) when no missing factors.
-- CLI status reporting and targeted test coverage (`168 passed`).
+- Alias-based expression emission in compiler.
+- End-to-end runtime compatibility tests for compiled strategies.
+- Validation pass: 302 tests.
 
 ## Next Required Step
 
-No required work remains for this task. Recommended next slice: compiler/preflight linkage for high-level strategy entry format.
+No required work remains for this task. Start the next queued slice.
 
 ## Git State
 

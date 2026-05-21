@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
+QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001
 
 ## Current Recipient
 
@@ -14,11 +14,11 @@ FINALIZED
 
 ## Sender
 
-CLAUDE_CODE
+CODEX
 
 ## Short Message
 
-Operational missing-factor handoff standard finalized locally: review passed, request artifact flow is ready for use.
+Finalization complete. Compiler/preflight linkage task passed re-review and is finalized locally.
 
 ## Accepted Direction
 
@@ -35,27 +35,26 @@ Operational missing-factor handoff standard finalized locally: review passed, re
 ## Design Artifact
 
 - `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`
-- `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/strategy_entry/missing_factor_request.md`
+- `docs/strategy_entry/` (strategy card, factor requirements, experiment plan, examples, missing_factor_request)
 
 ## Implementation Artifacts
 
-- `src/quant_research_engine/strategies/missing_factor.py` — new (~260 lines)
-- `src/quant_research_engine/apps/cli.py` — `--output-dir` flag and extraction/emission in preflight handler
-- `tests/test_missing_factor.py` — 25 new tests
-- `tests/test_cli.py` — 3 new tests
+- `src/quant_research_engine/strategies/compiler.py` — new (~410 lines)
+- `src/quant_research_engine/apps/cli.py` — `qre compile` command with `--output-dir`, `--preflight` flags
+- `tests/test_compiler.py` — 31 tests (29 compiler + 2 end-to-end runtime compatibility)
+- `tests/test_cli.py` — 4 new CLI compile tests
 
 ## Validation
 
 ```bash
-uv run pytest tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py -q
+uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-Results: 168 passed, 2 warnings (pre-existing numpy) in 2.01s; all quality checks pass.
+Results: 302 passed, 2 warnings (pre-existing numpy) in 3.01s; all quality checks pass.
 
 ## Next Step
 
-Move to the next task slice: high-level strategy entry compiler/preflight linkage.
+Move to next task slice.

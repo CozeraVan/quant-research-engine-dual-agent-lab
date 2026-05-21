@@ -33,6 +33,11 @@ from quant_research_engine.portfolio.report_manifest import ReportManifest
 from quant_research_engine.portfolio.shared import SharedCashBacktestEngine, SharedCashBacktestRequest
 from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestEngine, SingleSymbolBacktestRequest
 from quant_research_engine.preflight import PreflightRequest, PreflightRunner
+from quant_research_engine.strategies.compiler import (
+    compile_entry,
+    compile_to_strategy_spec_dict,
+    parse_high_level_entry,
+)
 from quant_research_engine.strategies.missing_factor import (
     emit_missing_factor_requests,
     extract_missing_factors,
@@ -236,6 +241,17 @@ def build_parser() -> argparse.ArgumentParser:
     shared_parser.add_argument("--print-summary-md", action="store_true", help="Print a human-readable Markdown summary to stdout.")
     shared_parser.add_argument("--output-dir", type=Path, help="Optional directory for portfolio result files.")
     shared_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
+
+    compile_parser = subparsers.add_parser("compile", help="Compile a high-level strategy entry and optionally run preflight")
+    compile_parser.add_argument("strategy", type=Path, help="Path to high-level strategy entry YAML.")
+    compile_parser.add_argument("--output-dir", type=Path, help="Optional directory for compiled low-level spec and preflight artifacts.")
+    compile_parser.add_argument("--preflight", action="store_true", help="Run preflight checks against the compiled low-level spec.")
+    compile_parser.add_argument("--db-url", help="Database URL. Defaults to QRE_MARKET_DB_URL or SR_MARKET_DB_URL.")
+    compile_parser.add_argument("--start", type=date.fromisoformat, help="Preflight start date (required with --preflight).")
+    compile_parser.add_argument("--end", type=date.fromisoformat, help="Preflight end date (required with --preflight).")
+    compile_parser.add_argument("--codes", nargs="*", default=None)
+    compile_parser.add_argument("--min-factor-coverage", type=float, default=0.8)
+    compile_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
 
     gui_parser = subparsers.add_parser("gui", help="Launch the local browser backtest console")
     gui_parser.add_argument("--host", default="127.0.0.1", help="Host to bind the console server to.")
@@ -813,6 +829,96 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args=args,
                 strategy_path=str(args.strategy),
             )
+        return 0
+
+    if args.command == "compile":
+        try:
+            raw = parse_high_level_entry(args.strategy)
+            entry = compile_entry(raw)
+        except Exception as exc:
+            print(str(exc), file=__import__("sys").stderr)
+            return 2
+
+        # Print compilation summary
+        print(f"strategy_id={entry.strategy_id}")
+        print(f"name={entry.name}")
+        print(f"family={entry.family}")
+        print(f"direction={entry.direction}")
+        if entry.version:
+            print(f"version={entry.version}")
+        print(f"compile_status={'ok' if entry.ok else 'error'}")
+        print(f"factor_target_count={len(entry.factor_targets)}")
+        for alias, target in entry.factor_targets.items():
+            print(f"factor_target_{alias}={target}")
+        if entry.signal_expression:
+            print(f"signal_expression={entry.signal_expression}")
+        if entry.exit_signal_expression:
+            print(f"exit_signal_expression={entry.exit_signal_expression}")
+        for issue in entry.issues:
+            print(f"compile_issue_{issue.level}={issue.message}")
+
+        # Write compiled low-level spec if output-dir provided
+        if args.output_dir:
+            args.output_dir.mkdir(parents=True, exist_ok=True)
+            spec_dict = compile_to_strategy_spec_dict(entry)
+            compiled_path = args.output_dir / "compiled_strategy_spec.json"
+            compiled_path.write_text(
+                json.dumps(spec_dict, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
+            print(f"compiled_spec={compiled_path}")
+
+        # Optionally run preflight
+        if args.preflight:
+            if not args.start or not args.end:
+                print("--start and --end are required with --preflight", file=__import__("sys").stderr)
+                return 2
+            spec_dict = compile_to_strategy_spec_dict(entry)
+            spec = StrategySpec.from_mapping(spec_dict)
+            try:
+                settings = (
+                    DatabaseSettings(market_db_url=args.db_url)
+                    if args.db_url
+                    else DatabaseSettings.from_env()
+                )
+                store = PostgresDataStore(settings)
+                store.ping()
+            except Exception as exc:
+                print(str(exc), file=__import__("sys").stderr)
+                return 2
+            preflight_req = PreflightRequest(
+                ts_codes=args.codes,
+                start=args.start,
+                end=args.end,
+                market_fields=spec.market_fields,
+                factor_fields=spec.factor_fields,
+                min_factor_coverage=args.min_factor_coverage,
+                exclude_st=spec.exclude_st,
+                exclude_suspended=spec.exclude_suspended,
+                exclude_risk_warning=spec.exclude_risk_warning,
+                min_listing_days=spec.min_listing_days,
+                min_amount=spec.min_amount,
+            )
+            report = PreflightRunner(store).run(preflight_req)
+            print(f"preflight_status={report.status}")
+            print(f"market_rows={report.market_rows}")
+            print(f"loaded_symbols={len(report.loaded_symbols)}")
+            for check in report.checks:
+                print(f"check_{check.name}={check.status}")
+            missing_factors = extract_missing_factors(report, spec, preflight_req)
+            missing_count = len(missing_factors)
+            print(f"missing_factor_count={missing_count}")
+            if missing_count == 0:
+                print("missing_factor_status=ok")
+            else:
+                print("missing_factor_status=pending")
+                for mf in missing_factors:
+                    print(f"missing_factor={mf.alias} required_table={mf.expected_table} required_column={mf.expected_column}")
+            if args.output_dir:
+                emit_missing_factor_requests(missing_factors, args.output_dir)
+
+        if not entry.ok:
+            return 2
         return 0
 
     if args.command == "preflight":

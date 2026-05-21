@@ -5239,3 +5239,104 @@ def test_cli_preflight_no_output_dir_prints_status_but_no_file(capsys, monkeypat
     assert exit_code == 0
     assert "missing_factor_count=0" in captured.out
     assert "missing_factor_status=ok" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# compile command
+# ---------------------------------------------------------------------------
+
+RSI2_HIGH_LEVEL_YAML = """\
+strategy:
+  id: rsi2_oversold_reversal
+  name: RSI2 Oversold Reversal
+  family: mean_reversion
+  direction: long_only
+  version: "1.0.0"
+
+factor_requirements:
+  - alias: rsi_fast
+    indicator: rsi
+    source: close
+    period: 2
+    required: true
+    reason: entry and exit threshold signal
+
+rules:
+  entry:
+    all:
+      - alias: rsi_fast
+        operator: "<"
+        value: 10
+  exit:
+    any:
+      - alias: rsi_fast
+        operator: ">"
+        value: 70
+  risk:
+    stop_loss_pct: 0.08
+    max_holding_days: 5
+
+experiment:
+  id: rsi2_smoke
+  frequency: daily
+  market: ashare
+  start: 2024-01-01
+  end: 2024-02-01
+  universe:
+    include: all_a
+    exclude_st: true
+  execution:
+    signal_date: t
+    entry_execution: t_plus_1_open
+    exit_execution: t_plus_1_open
+    market_profile: ashare_daily_default
+  capital:
+    initial_cash: 1000000
+  output:
+    dir: outputs/rsi2_smoke/
+"""
+
+
+def test_cli_compile_rsi2_success(capsys, tmp_path):
+    path = tmp_path / "rsi2.yaml"
+    path.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    exit_code = main(["compile", str(path)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "compile_status=ok" in captured.out
+    assert "strategy_id=rsi2_oversold_reversal" in captured.out
+    assert "factor_target_count=1" in captured.out
+    assert "factor_target_rsi_fast=factors.stock_daily_momentum_close.rsi_2" in captured.out
+    assert "signal_expression=" in captured.out
+
+
+def test_cli_compile_invalid_yaml_returns_2(capsys, tmp_path):
+    path = tmp_path / "bad.yaml"
+    path.write_text("strategy:\n  id: 42\n", encoding="utf-8")
+    exit_code = main(["compile", str(path)])
+    assert exit_code == 2
+
+
+def test_cli_compile_with_output_dir_writes_spec(capsys, tmp_path):
+    path = tmp_path / "rsi2.yaml"
+    path.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    out_dir = tmp_path / "compile_output"
+    exit_code = main(["compile", str(path), "--output-dir", str(out_dir)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "compiled_spec=" in captured.out
+    compiled_path = out_dir / "compiled_strategy_spec.json"
+    assert compiled_path.exists()
+    spec_data = json.loads(compiled_path.read_text(encoding="utf-8"))
+    assert spec_data["experiment"]["name"] == "rsi2_oversold_reversal"
+    assert "rsi_fast" in spec_data["data"]["factor_fields"]
+    assert spec_data["signal"]["entry"] is not None
+
+
+def test_cli_compile_preflight_without_dates_returns_2(capsys, tmp_path):
+    path = tmp_path / "rsi2.yaml"
+    path.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    exit_code = main(["compile", str(path), "--preflight"])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--start" in captured.err

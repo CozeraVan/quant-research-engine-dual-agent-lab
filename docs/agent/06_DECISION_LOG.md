@@ -397,3 +397,19 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Alternatives: Start compiler linkage in the same slice. Rejected to keep the handoff contract stable and independently verifiable first.
 - Impact: `missing_factor_requests.json` output is now operational baseline; next slice should focus on compiler/preflight linkage from high-level strategy entry format to current executable spec.
 - Owner: CODEX
+
+### 2026-05-21: Start high-level strategy entry compiler/preflight linkage
+
+- Decision: Activate `QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001` as the next implementation slice.
+- Reason: Strategy-entry docs and missing-factor handoff are now both stable; the next bottleneck is executable linkage from high-level entry format into current preflight/runtime-compatible low-level spec.
+- Alternatives: Expand GUI parameters first; jump to advanced runtime compiler. Deferred to keep the linkage layer small, testable, and backward-compatible.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now scopes parser/linkage/CLI/test work while preserving existing low-level workflow and report behavior.
+- Owner: CODEX
+
+### 2026-05-22: Finalize high-level entry compiler/preflight linkage after runtime fix
+
+- Decision: Accept and finalize `QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001` after the alias-expression runtime compatibility fix.
+- Reason: The blocking incompatibility between compiler-emitted expressions and the existing signal evaluator was resolved, and end-to-end compatibility tests now validate the compile-to-runtime path.
+- Alternatives: Keep task open for additional crossover/runtime enhancements. Deferred to keep this slice focused on baseline linkage correctness.
+- Impact: High-level strategy entries now have a runnable bridge into current preflight/runtime-compatible low-level `StrategySpec` flow via `qre compile`.
+- Owner: CODEX
