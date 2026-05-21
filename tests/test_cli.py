@@ -4505,3 +4505,118 @@ def test_cli_report_files_json_includes_window_size_null(capsys, tmp_path):
     payload = json.loads(captured.out)
     entry = payload["files"][0]
     assert "window_size" not in entry
+
+
+# --- window_size CLI malformed-manifest regression ---
+
+
+def test_cli_report_files_reports_string_window_size(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                        "window_size": "20",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "must be an integer or null" in captured.err
+    assert "window_size" in captured.err
+
+
+def test_cli_report_files_reports_boolean_window_size(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                        "window_size": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "must be an integer or null" in captured.err
+    assert "window_size" in captured.err
+
+
+def test_cli_report_audit_reports_string_window_size(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                        "window_size": "20",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "must be an integer or null" in captured.err
+    assert "window_size" in captured.err
+
+
+def test_cli_report_audit_reports_boolean_window_size(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                        "window_size": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "must be an integer or null" in captured.err
+    assert "window_size" in captured.err

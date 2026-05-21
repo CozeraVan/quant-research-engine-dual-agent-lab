@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001
+QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001
 
 ## Written By
 
@@ -18,42 +18,45 @@ Implemented. Ready for Codex review.
 
 ## Implementation Summary
 
-Documentation-only task. Updated README and portfolio module docs to explain rolling-artifact `window_size` report filtering:
+Test-only task. Added 4 CLI regression tests to lock malformed `window_size` manifest metadata behavior at the `report-files` and `report-audit` command boundaries:
 
-- **README.md**: Added "Rolling-Artifact Window Size Filtering" section between `--require-match` examples and JSON Output section. Includes concrete `--window-size 20` examples for `report-files` and `report-audit` with `--require-match`. Explicitly explains the difference between `--window` (string calendar-window like `M`, `Q`, `Y`) and `--window-size` (integer trailing rolling window like `20`). Added `window_size` to the JSON metadata field list.
-- **portfolio_workflow.md**: Added `window_size` to three locations: manifest file-entry optional metadata, `files()` filter parameters, and both `report-files`/`report-audit` CLI filter lists.
-- **portfolio_layer.md**: Added `--window-size` to the report discovery/audit CLI capability listing in "Current Scope".
+- `test_cli_report_files_reports_string_window_size`: `window_size: "20"` → exit code 2, `"must be an integer or null"` on stderr.
+- `test_cli_report_files_reports_boolean_window_size`: `window_size: true` → exit code 2, `"must be an integer or null"` on stderr.
+- `test_cli_report_audit_reports_string_window_size`: `window_size: "20"` → exit code 2, `"must be an integer or null"` on stderr.
+- `test_cli_report_audit_reports_boolean_window_size`: `window_size: true` → exit code 2, `"must be an integer or null"` on stderr.
+
+All tests reuse the existing manifest-specific error message from `ReportManifest.from_path()`: `"manifest file entry field 'window_size' must be an integer or null, got <type> (entry key: <key>)"`. No runtime or parser code was changed.
 
 ## Files Changed
 
-- `README.md` — Added rolling-artifact `--window-size` section and JSON metadata wording.
-- `docs/modules/portfolio_workflow.md` — Added `window_size` to manifest metadata, `files()` filters, and CLI filters.
-- `docs/modules/portfolio_layer.md` — Added `--window-size` to report discovery/audit capabilities.
+- `tests/test_cli.py` — Added 4 CLI regression tests in a new `# --- window_size CLI malformed-manifest regression ---` section.
 - `docs/agent/04_TASK_HANDOFF.md` — Updated for task completion.
-- `docs/agent/05_PROGRESS.md` — Updated progress table and verification state.
+- `docs/agent/05_PROGRESS.md` — Updated progress table, phase, and verification state.
 - `docs/agent/09_CODING_HANDOFF.md` — This file.
 - `docs/agent/11_AGENT_STATE.md` — Updated phase and owner.
 - `docs/agent/12_AGENT_BOARD.md` — Updated recipient and message.
 
 ## Validation Results
 
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 201 passed in 2.00s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
-- No code or test changes; existing tests remain at 197 passed.
+- Scripts/git-finalize-check.sh → passed (from `22fd3d1`)
 
 ## Constraints
 
-- Documentation-only; no code, schema, or behavior changes.
+- Test-only; no runtime, parser, schema, or behavior changes.
 - `docs/legacy/**` untouched.
-- Existing CLI examples and command descriptions preserved.
-- `--window` vs `--window-size` distinction clearly explained.
+- `uv.lock`, `pyproject.toml` untouched.
+- Existing manifest error wording reused — no new message shape invented.
+- Stderr assertions use substring `"must be an integer or null"` from the existing `report_manifest.py` error.
 
 ## Git State
 
 - Branch: `master`
-- Last finalized implementation commit: `da7b38c`, `Expose rolling manifest window sizes to report selectors`
-- Current changes are uncommitted (documentation only; awaiting Codex review).
+- Last finalized implementation commit: `22fd3d1`, `Document rolling window-size report filters`
+- Current changes are uncommitted (test + agent docs; awaiting Codex review).
 
 ## Next Suggested Step
 
-Codex should review the documentation changes, run validation, and finalize.
+Codex should review the test additions, run validation, and finalize.

@@ -2,11 +2,11 @@
 
 ## Current Task
 
-Document rolling-artifact `window_size` report-filter usage.
+Add CLI regression coverage for invalid rolling-artifact `window_size` manifest metadata.
 
 ## Task ID
 
-QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001
+QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001
 
 ## Current Status
 
@@ -18,19 +18,19 @@ CODEX
 
 ## Completed
 
-- Codex finalized `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001` as local commit `da7b38c`, `Expose rolling manifest window sizes to report selectors`.
-- Claude Code updated documentation:
-  - **README.md**: Added "Rolling-Artifact Window Size Filtering" section with `--window-size` examples for `report-files` and `report-audit`, explanation of `--window` vs `--window-size` distinction, and `window_size` in JSON metadata wording.
-  - **portfolio_workflow.md**: Added `window_size` to manifest file-entry metadata list, `files()` filter parameters, `report-files` CLI filters, and `report-audit` CLI filters.
-  - **portfolio_layer.md**: Added `--window-size` to report discovery/audit CLI capability listing.
-- No code changes; documentation-only task.
-- Codex re-ran validation and marked `10_REVIEW_REPORT.md` as PASS. The documentation satisfies the brief and remains consistent with the shipped CLI/report-manifest behavior in `da7b38c`.
+- Codex finalized `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001` as local commit `22fd3d1`, `Document rolling window-size report filters`.
+- Claude Code added 4 CLI regression tests in `tests/test_cli.py`:
+  - `test_cli_report_files_reports_string_window_size`: `window_size: "20"` at the `report-files` boundary → exit code 2 + manifest-specific error on stderr.
+  - `test_cli_report_files_reports_boolean_window_size`: `window_size: true` at the `report-files` boundary → exit code 2 + manifest-specific error on stderr.
+  - `test_cli_report_audit_reports_string_window_size`: `window_size: "20"` at the `report-audit` boundary → exit code 2 + manifest-specific error on stderr.
+  - `test_cli_report_audit_reports_boolean_window_size`: `window_size: true` at the `report-audit` boundary → exit code 2 + manifest-specific error on stderr.
+- No runtime or parser code changes; the existing manifest `from_path()` rejection path already works correctly.
+- All 4 new tests reuse the existing manifest-specific error wording: `"manifest file entry field 'window_size' must be an integer or null, got <type> (entry key: <key>)"`.
+- Codex re-ran validation and marked `10_REVIEW_REPORT.md` as PASS. The implementation satisfies the brief without changing parser or CLI behavior.
 
 ## Expected Files
 
-- `README.md`
-- `docs/modules/portfolio_workflow.md`
-- `docs/modules/portfolio_layer.md`
+- `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -39,16 +39,17 @@ CODEX
 
 ## Validation Baseline
 
-- Finalized baseline from `da7b38c`: `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 197 passed in 1.86s
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 201 passed in 1.96s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
+- `scripts/git-finalize-check.sh` → passed (from `22fd3d1`)
 
 ## Known Risks
 
-- Docs are additive; no existing behavior, commands, or examples were changed.
+- Test-only; no runtime or parser behavior changed.
+- Stderr assertions use `"must be an integer or null"` substring from the existing manifest error message — stable unless `report_manifest.py` changes its wording.
 - Legacy archived docs untouched.
-- No code or test changes were made.
 
 ## Next Suggested Step
 
-Codex should run finalization checks and create the local completion commit for `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001`.
+Codex should run finalization checks and create the local completion commit for `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001`.

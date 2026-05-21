@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001
+QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001
 
 ## Current Phase
 
@@ -16,17 +16,17 @@ CODEX
 
 ## Last Completed Step
 
-Codex reviewed `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001` and marked `10_REVIEW_REPORT.md` as PASS. README now has a "Rolling-Artifact Window Size Filtering" section with `--window-size` examples and `--window` vs `--window-size` distinction. Portfolio module docs (`portfolio_workflow.md`, `portfolio_layer.md`) now list `window_size` as optional manifest metadata and `--window-size` as a CLI filter for `report-files` / `report-audit`. Validation: `scripts/check-progress-docs.sh` passes; `git diff --check` passes. No code or test changes.
+Codex reviewed `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001` and marked `10_REVIEW_REPORT.md` as PASS. `tests/test_cli.py` now locks malformed string and boolean `window_size` metadata at both `report-files` and `report-audit` command boundaries with exit code 2 and the existing manifest-specific invalid-field message. Validation: `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 201 passed in 1.96s; `scripts/check-progress-docs.sh` passed; `git diff --check` passed. No runtime or parser code changed.
 
 ## Next Required Step
 
-Codex should run final git checks and create the local completion commit for `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001`.
+Codex should run final git checks and create the local completion commit for `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001`.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `da7b38c`, `Expose rolling manifest window sizes to report selectors`
-- Working tree contains documentation-only changes plus handoff document updates for `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001`.
+- Last accepted implementation commit: `22fd3d1`, `Document rolling window-size report filters`
+- Working tree contains test additions in `tests/test_cli.py` plus handoff document updates for `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001`.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

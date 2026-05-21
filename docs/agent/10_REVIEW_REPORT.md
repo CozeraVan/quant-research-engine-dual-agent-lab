@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001
+QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001
 
 ## Written By
 
@@ -14,13 +14,11 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code documentation changes in the current working tree.
+Claude Code test changes in the current working tree.
 
 Changed files reviewed:
 
-- `README.md`
-- `docs/modules/portfolio_workflow.md`
-- `docs/modules/portfolio_layer.md`
+- `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
 - `docs/agent/09_CODING_HANDOFF.md`
@@ -31,14 +29,14 @@ Changed files reviewed:
 
 The implementation satisfies the brief.
 
-README now documents rolling-artifact `--window-size` usage with concrete `report-files` and `report-audit` examples, explicitly distinguishes string `--window` calendar-window filters from integer `--window-size` rolling filters, and updates the JSON-output wording to include optional `window_size` metadata.
+`tests/test_cli.py` now locks malformed `window_size` manifest metadata at both command boundaries:
 
-The portfolio module docs are consistent with the shipped CLI/report-manifest surface:
+- `report-files` rejects `window_size: "20"` with exit code `2`
+- `report-files` rejects `window_size: true` with exit code `2`
+- `report-audit` rejects `window_size: "20"` with exit code `2`
+- `report-audit` rejects `window_size: true` with exit code `2`
 
-- `portfolio_workflow.md` lists `window_size` as optional manifest metadata and as a `ReportManifest.files()` / `report-files` / `report-audit` filter
-- `portfolio_layer.md` includes `qre report-files --window-size <int>` and `qre report-audit --window-size <int>` in the current capability summary
-
-No implementation code, tests, schema version, or report-manifest behavior changed.
+Each test reuses the shipped manifest-specific invalid-field wording via a stable stderr substring check: `"must be an integer or null"`. No runtime, parser, schema, or behavior changes were introduced.
 
 ## Required Fixes
 
@@ -48,17 +46,18 @@ None.
 
 Compliant:
 
-- README documents `report-files` / `report-audit --window-size` with concrete rolling examples.
-- README JSON-output wording includes optional `window_size` metadata.
-- Portfolio docs explain `--window-size` versus `--window`.
-- Rolling batch/shared artifact sections already mention manifest `window_size`, and the report-manifest sections now match the shipped CLI surface.
-- The task stayed documentation-only and avoided legacy archived docs.
+- Added CLI regression coverage for malformed string `window_size` at the `report-files` boundary.
+- Added CLI regression coverage for malformed boolean `window_size` at the `report-files` boundary.
+- Added CLI regression coverage for malformed string `window_size` at the `report-audit` boundary.
+- Added CLI regression coverage for malformed boolean `window_size` at the `report-audit` boundary.
+- Preserved the existing manifest-specific error wording and avoided runtime changes.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
+uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q
 scripts/check-progress-docs.sh
 git diff --check
 git diff --name-only HEAD | rg '^docs/legacy/' || true
@@ -66,14 +65,15 @@ git diff --name-only HEAD | rg '^docs/legacy/' || true
 
 Results:
 
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q`: `201 passed, 2 warnings in 1.96s`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 - Legacy-doc check: no `docs/legacy/**` changes
 
-Notes:
+Warnings observed:
 
-- No code or test files changed in this task.
-- The last finalized implementation baseline remains `197 passed in 1.86s` from commit `da7b38c`.
+- Existing numpy runtime warnings in `test_cli_eval_config_factor_decay_printed_and_persisted`
+- No new warning category introduced by this task
 
 ## Locked Requirements Check
 

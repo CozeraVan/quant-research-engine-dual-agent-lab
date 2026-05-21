@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001
+QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001
 
 ## Created By
 
@@ -14,26 +14,24 @@ CLAUDE_CODE
 
 ## Background
 
-Rolling batch and shared artifacts now support manifest-level `window_size` filtering through `qre report-files --window-size`, `qre report-audit --window-size`, and additive `window_size` metadata in `report-files --json`. Current docs still describe optional report-file metadata as only `symbol`, `window`, and `group_by`, and they do not explain the difference between string `--window` calendar-window summaries and numeric `--window-size` rolling artifacts.
+Rolling batch and shared artifacts now support manifest-level `window_size` filtering, and `ReportManifest.from_path()` already rejects malformed manifest file entries whose `window_size` is neither an integer nor `null`. Direct parser tests exist in `tests/test_portfolio_report_manifest.py`, but `tests/test_cli.py` still lacks command-boundary regression coverage for malformed manifests that use string or boolean `window_size`.
 
 ## Goal
 
-Update README and portfolio module docs so users can discover and correctly use rolling-artifact `window_size` report filtering and JSON metadata.
+Add focused `report-files` / `report-audit` CLI regression coverage for invalid manifest `window_size` metadata types.
 
 ## Non-Goals
 
-- Do not change CLI behavior, manifest schema version, filenames, or roles.
-- Do not change tests or implementation code unless a narrow doc-example fix requires it.
-- Do not rewrite unrelated report-manifest documentation.
+- Do not change parser behavior, manifest schema version, filenames, or roles unless a tiny CLI error-surface fix is genuinely required.
+- Do not broaden this into new filtering behavior or documentation work.
+- Do not edit parser tests that already cover direct `ReportManifest.from_path()` rejection unless a narrow fixture reuse is useful.
 - Do not edit legacy archived docs under `docs/legacy`.
 
 ## Affected Modules
 
-Expected docs:
+Expected runtime/tests:
 
-- `README.md`
-- `docs/modules/portfolio_workflow.md`
-- `docs/modules/portfolio_layer.md`
+- `tests/test_cli.py`
 
 Docs/handoff:
 
@@ -50,8 +48,9 @@ Docs/handoff:
 - `pyproject.toml`
 - `.env*`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
-- `src/quant_research_engine/**`
-- `tests/**`
+- `README.md`
+- `docs/modules/**`
+- `src/quant_research_engine/**` unless a tiny CLI error-surface normalization fix is genuinely required
 
 ## Locked Requirements
 
@@ -62,69 +61,68 @@ Read:
 Task-specific locked requirements:
 
 - Preserve the currently shipped CLI and manifest semantics exactly as implemented in `da7b38c`.
-- Explain `--window-size` as additive to existing filters rather than a replacement for `--window`.
-- Keep wording consistent with existing report-manifest role terminology.
+- Reuse the existing manifest-specific invalid-field error wording for malformed `window_size` values.
+- Keep the task narrowly scoped to CLI regression coverage for string and boolean `window_size`.
 - Preserve archived legacy docs.
-- Keep the task narrowly scoped to documentation.
+- Keep the task narrowly scoped to tests unless a tiny runtime fix is required to make the CLI surface deterministic.
 
 ## Implementation Steps
 
-1. Update README report-artifact sections so they mention:
-   - `qre report-files --window-size <int>`
-   - `qre report-audit --window-size <int>`
-   - additive `window_size` metadata in `report-files --json`
-2. Add at least one concrete rolling-artifact example for:
-   - shared `rolling_metrics`
-   - batch `rolling_summary` or `rolling_ranked_symbols`
-3. Explicitly explain the difference between:
-   - `--window` for calendar-window summaries such as `M`, `Q`, `Y`
-   - `--window-size` for trailing rolling artifacts such as `20`
-4. Update portfolio module docs so rolling artifact sections and report-manifest sections are consistent with the shipped CLI behavior.
+1. Inspect the existing direct parser coverage for invalid `window_size` types in `tests/test_portfolio_report_manifest.py`.
+2. Add focused `tests/test_cli.py` coverage for malformed manifest file entries with:
+   - `window_size: "20"`
+   - `window_size: true`
+3. Exercise both command boundaries:
+   - `qre report-files <manifest>`
+   - `qre report-audit <manifest>`
+4. Assert the commands fail with exit code `2` and surface the manifest-specific `window_size` error message on stderr.
 5. Update handoff/progress docs.
 
 ## Data / Schema Changes
 
 - No data or schema changes.
-- No schema/version wording changes beyond documenting current behavior.
+- No schema/version changes.
 
 ## API / Interface Changes
 
-- No API changes. This task documents the current CLI/report-manifest surface.
+- No API changes. This task adds regression coverage only.
 
 ## Validation Plan
 
 Run focused tests:
 
 ```bash
+uv run pytest tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
 ## Acceptance Criteria
 
-- [ ] README documents `report-files` / `report-audit --window-size` with at least one concrete rolling example.
-- [ ] README JSON-output wording includes optional `window_size` metadata.
-- [ ] Portfolio docs explain when to use `--window-size` instead of `--window`.
-- [ ] Rolling batch/shared artifact sections mention that rolling manifest entries carry `window_size`.
+- [ ] `tests/test_cli.py` covers malformed string `window_size` at the `report-files` command boundary.
+- [ ] `tests/test_cli.py` covers malformed boolean `window_size` at the `report-files` command boundary.
+- [ ] `tests/test_cli.py` covers malformed string `window_size` at the `report-audit` command boundary.
+- [ ] `tests/test_cli.py` covers malformed boolean `window_size` at the `report-audit` command boundary.
+- [ ] The CLI continues surfacing the existing manifest-specific invalid-field message for `window_size`.
 - [ ] Legacy archived docs are untouched.
-- [ ] `scripts/check-progress-docs.sh` and `git diff --check` pass.
+- [ ] `uv run pytest tests/test_cli.py -q`, `scripts/check-progress-docs.sh`, and `git diff --check` pass.
 - [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state.
 
 ## Risks
 
-- Avoid ambiguous wording that suggests `--window` and `--window-size` are interchangeable.
-- Avoid drifting into implementation or test edits.
-- Keep examples consistent with current role names and manifest metadata semantics.
+- Avoid changing runtime behavior when the current parser/CLI path already rejects malformed `window_size`.
+- Keep stderr assertions stable without overfitting unrelated text.
+- Avoid duplicating direct parser coverage instead of covering the CLI boundary.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
 1. Follow this brief strictly.
-2. Keep this documentation-only unless a concrete doc inconsistency requires a tiny non-behavioral fix.
+2. Keep this test-focused unless a tiny runtime fix is required to preserve deterministic CLI error behavior.
 3. Avoid editing `docs/legacy/**`.
 4. Update `04`, `05`, `09`, `11`, and `12` after implementation.
-5. Stop and write a blocker only if current docs and current shipped CLI behavior materially disagree in a way that cannot be documented cleanly.
+5. Stop and write a blocker only if the current CLI error surface for malformed `window_size` is inconsistent in a way that cannot be locked down cleanly.
 
 ## Next Agent State
 

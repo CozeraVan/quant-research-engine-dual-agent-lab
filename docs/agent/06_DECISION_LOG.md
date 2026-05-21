@@ -214,6 +214,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001`. This is documentation-only and should avoid legacy archived docs.
 - Owner: CODEX
 
+### 2026-05-21: Select CLI regression coverage for invalid window_size metadata as next Claude task
+
+- Decision: The next Claude Code task is CLI regression coverage for malformed manifest file entries that use invalid `window_size` types.
+- Reason: `ReportManifest.from_path()` already rejects string and boolean `window_size` values, but the `report-files` / `report-audit` command boundary is not yet covered in `tests/test_cli.py`. This is the remaining narrow regression gap after the feature and docs landed.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; jump to a larger run-bundle orchestration feature.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001`. The task should stay test-focused and avoid runtime changes unless the current CLI error surface is inconsistent.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.
