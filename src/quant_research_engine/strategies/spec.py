@@ -13,6 +13,7 @@ from quant_research_engine.data.catalog import FactorFieldRequest
 class StrategySpec:
     name: str
     signal_expression: str
+    exit_signal_expression: str | None
     market_fields: list[str]
     factor_fields: list[FactorFieldRequest]
     forward_horizons: list[int]
@@ -77,6 +78,7 @@ class StrategySpec:
         return cls(
             name=str(experiment.get("name", "unnamed_experiment")),
             signal_expression=str(signal["entry"]),
+            exit_signal_expression=_optional_str(signal, "exit"),
             market_fields=market_fields,
             factor_fields=[
                 FactorFieldRequest.from_target(str(logical_name), str(target))

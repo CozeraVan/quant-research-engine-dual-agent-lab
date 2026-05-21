@@ -15,6 +15,7 @@ class SingleSymbolBacktestRequest:
     initial_cash: float
     entry_signal: str
     holding_days: int
+    exit_signal: str | None = None
     entry_price_column: str = "open"
     mark_price_column: str = "close"
 
@@ -40,6 +41,8 @@ class SingleSymbolBacktestEngine:
         working["trade_date"] = pd.to_datetime(working["trade_date"])
         working = working.sort_values("trade_date").reset_index(drop=True)
         working["entry_signal"] = evaluate_expression_signal(working, request.entry_signal)
+        if request.exit_signal is not None:
+            working["exit_signal"] = evaluate_expression_signal(working, request.exit_signal)
 
         cash = request.initial_cash
         quantity = 0
@@ -54,7 +57,8 @@ class SingleSymbolBacktestEngine:
         failed_orders: list[dict[str, object]] = []
 
         pending_buy_index: int | None = None
-        pending_sell = False
+        pending_sell_index: int | None = None
+        pending_sell_reason: str | None = None
 
         for index, row in working.iterrows():
             trade_date = row["trade_date"]
@@ -94,48 +98,63 @@ class SingleSymbolBacktestEngine:
                             orders.append(self._order_row(order, cost))
                             pending_buy_index = None
 
-            if quantity > 0 and entry_index is not None and (index == entry_index + request.holding_days or pending_sell):
-                price = self.market_profile.apply_slippage(OrderSide.SELL, float(row[request.entry_price_column]))
-                order = Order(
-                    symbol=request.symbol,
-                    trade_date=trade_date.date(),
-                    side=OrderSide.SELL,
-                    order_type=OrderType.MARKET,
-                    quantity=quantity,
-                    price=price,
-                )
-                validation = self.market_profile.validate_order(
-                    order,
-                    is_suspended=self._row_flag(row, "is_suspended"),
-                    limit_up=self._row_flag(row, "limit_up"),
-                    limit_down=self._row_flag(row, "limit_down"),
-                )
-                if not validation.allowed:
-                    failed_orders.append(self._failed_order_row(order, validation.reason))
-                    pending_sell = True
-                else:
-                    cost = self.market_profile.calculate_cost(OrderSide.SELL, order.notional)
-                    cash += order.notional - cost
-                    orders.append(self._order_row(order, cost))
-                    trades.append(
-                        {
-                            "symbol": request.symbol,
-                            "entry_date": entry_date,
-                            "exit_date": trade_date,
-                            "quantity": quantity,
-                            "entry_price": entry_price,
-                            "exit_price": price,
-                            "gross_pnl": (price - float(entry_price)) * quantity,
-                            "cost": entry_cost + cost,
-                            "net_pnl": (price - float(entry_price)) * quantity - entry_cost - cost,
-                        }
+            if quantity > 0 and entry_index is not None:
+                sell_reason: str | None = None
+                if pending_sell_index is not None and index == pending_sell_index:
+                    sell_reason = pending_sell_reason or "exit_signal"
+                elif index == entry_index + request.holding_days:
+                    sell_reason = "holding_period"
+                elif request.exit_signal is not None and bool(row.get("exit_signal", False)) and index + 1 < len(working):
+                    next_index = index + 1
+                    if pending_sell_index is None or next_index < pending_sell_index:
+                        pending_sell_index = next_index
+                        pending_sell_reason = "exit_signal"
+
+                if sell_reason is not None:
+                    price = self.market_profile.apply_slippage(OrderSide.SELL, float(row[request.entry_price_column]))
+                    order = Order(
+                        symbol=request.symbol,
+                        trade_date=trade_date.date(),
+                        side=OrderSide.SELL,
+                        order_type=OrderType.MARKET,
+                        quantity=quantity,
+                        price=price,
                     )
-                    quantity = 0
-                    entry_index = None
-                    entry_price = None
-                    entry_date = None
-                    entry_cost = 0.0
-                    pending_sell = False
+                    validation = self.market_profile.validate_order(
+                        order,
+                        is_suspended=self._row_flag(row, "is_suspended"),
+                        limit_up=self._row_flag(row, "limit_up"),
+                        limit_down=self._row_flag(row, "limit_down"),
+                    )
+                    if not validation.allowed:
+                        failed_orders.append(self._failed_order_row(order, validation.reason))
+                        pending_sell_index = index + 1
+                        pending_sell_reason = sell_reason
+                    else:
+                        cost = self.market_profile.calculate_cost(OrderSide.SELL, order.notional)
+                        cash += order.notional - cost
+                        orders.append(self._order_row(order, cost))
+                        trades.append(
+                            {
+                                "symbol": request.symbol,
+                                "entry_date": entry_date,
+                                "exit_date": trade_date,
+                                "quantity": quantity,
+                                "entry_price": entry_price,
+                                "exit_price": price,
+                                "gross_pnl": (price - float(entry_price)) * quantity,
+                                "cost": entry_cost + cost,
+                                "net_pnl": (price - float(entry_price)) * quantity - entry_cost - cost,
+                                "exit_reason": sell_reason,
+                            }
+                        )
+                        quantity = 0
+                        entry_index = None
+                        entry_price = None
+                        entry_date = None
+                        entry_cost = 0.0
+                        pending_sell_index = None
+                        pending_sell_reason = None
 
             if quantity == 0 and pending_buy_index is None and bool(row["entry_signal"]) and index + 1 < len(working):
                 pending_buy_index = index + 1

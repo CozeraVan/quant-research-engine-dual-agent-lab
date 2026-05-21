@@ -4,29 +4,29 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001
+QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
 
 ## Current Phase
 
-BLOCKED
+USER_ACCEPTANCE
 
 ## Current Owner
 
-CODEX
+USER
 
 ## Last Completed Step
 
-Claude Code investigated the upstream data environment for `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` and confirmed that no security-status metadata table exists in the local `tushare_data` database. The reusable Tushare source scaffold and canonical snapshot contract now exist in `src/quant_research_engine/data/tushare_security.py`, but the real metadata task remains blocked on source availability.
+Codex reviewed the GUI implementation and approved it for user acceptance. The console now supports rerun restoration, artifact rendering, and single-symbol summary coverage.
 
 ## Next Required Step
 
-Codex should keep `M4.9` blocked until an upstream security-status table is confirmed. The reusable source scaffold is available for future bulk ingestion work.
+User acceptance and any requested git finalization.
 
 ## Git State
 
 - Current branch: `master`
 - Last accepted implementation commit: `2da15bb`, `Preserve window_size and group_by selector parity under JSON strict mode`
-- Working tree contains code + tests + agent doc updates for the blocked real-metadata task and the reusable Tushare source scaffold.
+- Working tree contains all GUI implementation files plus agent doc updates.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

@@ -5,6 +5,7 @@ description = "Reusable multi-market research and backtesting framework, first i
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "flask>=3.0.0",
   "pandas>=2.3.0",
   "psycopg[binary]>=3.2.0",
   "pyyaml>=6.0.0",

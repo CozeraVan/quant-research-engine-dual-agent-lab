@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Run History</h1>
+
+{% if runs %}
+<table>
+<thead>
+<tr>
+  <th>Run ID</th>
+  <th>Mode</th>
+  <th>Start</th>
+  <th>End</th>
+  <th>Status</th>
+  <th>Created</th>
+</tr>
+</thead>
+<tbody>
+{% for run in runs %}
+<tr>
+  <td><a href="/runs/{{ run.run_id }}">{{ run.run_id }}</a></td>
+  <td>{{ run.mode }}</td>
+  <td>{{ run.start }}</td>
+  <td>{{ run.end }}</td>
+  <td class="{{ 'ok' if run.status == 'completed' else 'err' if run.status == 'failed' else '' }}">{{ run.status }}</td>
+  <td>{{ run.created_at }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<p>No runs recorded yet. <a href="/">Run a backtest</a> to start.</p>
+{% endif %}
+{% endblock %}

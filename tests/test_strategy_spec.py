@@ -51,3 +51,24 @@ def test_strategy_spec_loads_rebalance_interval_from_portfolio_yaml():
     )
 
     assert spec.rebalance_interval_days == 5
+
+
+def test_strategy_spec_loads_exit_signal_from_yaml_mapping():
+    spec = StrategySpec.from_mapping(
+        {
+            "experiment": {"name": "ema200_bollinger_reversal"},
+            "data": {
+                "factor_fields": {
+                    "ema200": "factors.stock_daily_overlap_typical_price.ema_200",
+                    "bb_upper": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+                    "bb_lower": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+                }
+            },
+            "signal": {"entry": "close > ema200 and close <= bb_lower", "exit": "close >= bb_upper"},
+            "evaluation": {"forward_return_horizons": [1, 3]},
+            "holding": {"max_holding_days": 9999},
+        }
+    )
+
+    assert spec.signal_expression == "close > ema200 and close <= bb_lower"
+    assert spec.exit_signal_expression == "close >= bb_upper"

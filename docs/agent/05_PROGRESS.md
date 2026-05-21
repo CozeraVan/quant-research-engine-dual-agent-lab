@@ -2,7 +2,11 @@
 
 ## Current Phase
 
-BLOCKED
+USER_ACCEPTANCE
+
+## Current Active Work
+
+`QRE-GUI-LOCAL-BACKTEST-CONSOLE-001` has passed Codex review. The console is ready for user acceptance.
 
 ## Progress Table
 
@@ -11,6 +15,7 @@ BLOCKED
 | DOC-1 | Initialize dual-agent workflow docs | DONE | USER/SCRIPT | commit `77fec02` | Preserve |
 | DOC-2 | Migrate legacy docs into `docs/agent` | DONE | CODEX | commit `2565e13` | Preserve |
 | DOC-3 | Add archive notes to legacy planning docs | DONE | CODEX | commit `2565e13` | Preserve; do not delete |
+| QRE-GUI-LOCAL-BACKTEST-CONSOLE-001 | Local browser backtest console shell and YAML editor | DONE | CLAUDE_CODE | 179 GUI/CLI tests passed; rerun, artifact viewer, and summary.json coverage verified | User acceptance |
 | QRE-M1 | Project skeleton and core market profile | DONE | HISTORICAL | package layout, tests, skeleton plan | Preserve |
 | QRE-M2 | Data layer and preflight | DONE | HISTORICAL | `qre db-smoke`, `factor-smoke`, `metadata-smoke`, `preflight` | Add real metadata adapters later |
 | QRE-M3 | Evaluation MVP | DONE | HISTORICAL | forward returns, IC, Rank IC, quantile, friction summaries | Add grouping/regime later |
@@ -93,6 +98,31 @@ Recorded on 2026-05-21 after Codex reviewed and finalized the canonical security
   - `git diff --check` → passed
 - Blocker note: `QRE-NEXT-55` (real suspension/ST/risk-warning metadata) remains blocked separately until upstream table exists
 - Next step: Codex keeps the real-metadata task blocked until an upstream table is confirmed
+
+Current GUI direction approved on 2026-05-21:
+
+- Local browser console is the first GUI form.
+- Strategy input is YAML text first, not drag-and-drop composition.
+- Run history stays on the local filesystem in v1.
+- The console should show summary, orders, trades, equity, and manifest artifacts.
+- Direct module execution is the default; CLI fallback remains available.
+
+User-requested strategy work in 2026-05-21:
+
+- Added optional `signal.exit` support to the strategy spec and threaded it through single-symbol, batch, and shared-cash backtest requests so a strategy can schedule next-bar exits without lookahead.
+- Verified with `uv run pytest tests/test_strategy_spec.py tests/test_portfolio_single_symbol.py tests/test_portfolio_shared.py -q` → 46 passed in 1.01s.
+- Ran a full-market chunked backtest for the EMA200 + Bollinger strategy against `tushare_data` using `public.stock_daily` and `factors.*`.
+  - Full-history chunked run: `2010-01-04` to `2026-05-20`
+  - Universe: 5,522 symbols
+  - Traded symbols: 4,957
+  - Total trades: 17,233
+  - Mean total return: 13.8446%
+  - Median total return: 6.0678%
+  - Positive-return symbol rate: 61.93%
+  - Best symbol: `002706.SZ` at `+464.08%`
+  - Worst symbol: `000576.SZ` at `-74.90%`
+  - Total cost: `2,174,348.80`
+  - Failed orders: `23`
 
 ## Completed Module Summary
 

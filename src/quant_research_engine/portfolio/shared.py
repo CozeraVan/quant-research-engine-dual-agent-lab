@@ -19,6 +19,7 @@ class SharedCashBacktestRequest:
     entry_signal: str
     holding_days: int
     max_positions: int
+    exit_signal: str | None = None
     entry_price_column: str = "open"
     mark_price_column: str = "close"
     weight_model: str = "equal_weight"
@@ -145,6 +146,8 @@ class SharedCashBacktestEngine:
         for _, symbol_frame in working.sort_values(["ts_code", "trade_date"]).groupby("ts_code", sort=True):
             chunk = symbol_frame.copy()
             chunk["entry_signal"] = evaluate_expression_signal(chunk, request.entry_signal)
+            if request.exit_signal is not None:
+                chunk["exit_signal"] = evaluate_expression_signal(chunk, request.exit_signal)
             chunk["symbol_bar_index"] = range(len(chunk))
             parts.append(chunk)
         return pd.concat(parts, ignore_index=True).sort_values(["trade_date", "ts_code"]).reset_index(drop=True)
@@ -196,6 +199,7 @@ class SharedCashBacktestEngine:
             row = day_frame.loc[symbol]
             current_bar_index = symbol_bar_indices[(symbol, trade_date)]
             position = positions[symbol]
+            pending_exit_bar_index = position.get("pending_exit_bar_index")
             exit_decision = evaluate_long_exit(
                 entry_price=float(position["entry_price"]),
                 row=row,
@@ -206,13 +210,28 @@ class SharedCashBacktestEngine:
                 ),
                 trailing_anchor=self._updated_trailing_anchor(position, row),
             )
-            exit_reason = exit_decision.reason
-            if not exit_decision.should_exit and current_bar_index < int(position["entry_bar_index"]) + request.holding_days:
+            exit_reason = None
+            if exit_decision.should_exit:
+                exit_reason = exit_decision.reason
+            elif pending_exit_bar_index is not None and current_bar_index >= int(pending_exit_bar_index):
+                exit_reason = str(position.get("pending_exit_reason") or "exit_signal")
+            elif current_bar_index < int(position["entry_bar_index"]) + request.holding_days:
+                if request.exit_signal is not None and bool(row.get("exit_signal", False)):
+                    next_bar_index = current_bar_index + 1
+                    if pending_exit_bar_index is None or next_bar_index < int(pending_exit_bar_index):
+                        position["pending_exit_bar_index"] = next_bar_index
+                        position["pending_exit_reason"] = "exit_signal"
                 continue
-            if exit_reason is None:
+            else:
                 exit_reason = "holding_period"
+
             sellable_quantity = self._sellable_quantity(position, current_bar_index)
             if sellable_quantity <= 0:
+                if request.exit_signal is not None and bool(row.get("exit_signal", False)):
+                    next_bar_index = current_bar_index + 1
+                    if pending_exit_bar_index is None or next_bar_index < int(pending_exit_bar_index):
+                        position["pending_exit_bar_index"] = next_bar_index
+                        position["pending_exit_reason"] = "exit_signal"
                 continue
 
             raw_exit_price = exit_decision.price if exit_decision.price is not None else float(row[request.entry_price_column])
@@ -252,6 +271,10 @@ class SharedCashBacktestEngine:
             self._refresh_position_from_lots(position)
             if int(position["quantity"]) <= 0:
                 del positions[symbol]
+            else:
+                if exit_reason == "exit_signal" and pending_exit_bar_index is None:
+                    position["pending_exit_bar_index"] = current_bar_index + 1
+                    position["pending_exit_reason"] = "exit_signal"
         return cash
 
     def _trade_row(

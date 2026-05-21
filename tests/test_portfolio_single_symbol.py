@@ -203,3 +203,25 @@ def test_single_symbol_backtest_uses_market_profile_slippage_prices():
 
     assert result.orders.iloc[0]["price"] == pytest.approx(10.2102)
     assert result.orders.iloc[1]["price"] == pytest.approx(10.978)
+
+
+def test_single_symbol_backtest_sells_on_exit_signal_next_bar():
+    frame = make_frame().copy()
+    frame["entry_flag"] = [True, False, False, False, False, False]
+    frame["exit_flag"] = [False, False, True, False, False, False]
+    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
+    request = SingleSymbolBacktestRequest(
+        symbol="000001.SZ",
+        initial_cash=100000.0,
+        entry_signal="entry_flag",
+        holding_days=20,
+        exit_signal="exit_flag",
+    )
+
+    result = engine.run(frame, request)
+
+    assert result.orders[["trade_date", "side"]].to_dict("records") == [
+        {"trade_date": pd.Timestamp("2026-01-06"), "side": "buy"},
+        {"trade_date": pd.Timestamp("2026-01-08"), "side": "sell"},
+    ]
+    assert result.trades.iloc[0]["exit_reason"] == "exit_signal"

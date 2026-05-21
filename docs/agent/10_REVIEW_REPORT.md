@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DATA-TUSHARE-SECURITY-SNAPSHOT-CONTRACT-001
+QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
 
 ## Written By
 
@@ -18,10 +18,23 @@ Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
-- `src/quant_research_engine/data/tushare_security.py`
-- `tests/test_tushare_security.py`
-- `scripts/tushare_security_smoke.py`
-- `docs/agent/01_CURRENT_STATUS.md`
+- `src/quant_research_engine/gui/app.py`
+- `src/quant_research_engine/gui/engine.py`
+- `src/quant_research_engine/gui/templates/base.html`
+- `src/quant_research_engine/gui/templates/index.html`
+- `src/quant_research_engine/gui/templates/runs.html`
+- `src/quant_research_engine/gui/templates/run_detail.html`
+- `src/quant_research_engine/gui/static/style.css`
+- `src/quant_research_engine/apps/cli.py`
+- `src/quant_research_engine/portfolio/single_symbol.py`
+- `src/quant_research_engine/portfolio/batch.py`
+- `src/quant_research_engine/portfolio/shared.py`
+- `src/quant_research_engine/strategies/spec.py`
+- `tests/test_gui_app.py`
+- `tests/test_gui_engine.py`
+- `tests/test_strategy_spec.py`
+- `tests/test_portfolio_single_symbol.py`
+- `tests/test_portfolio_shared.py`
 - `docs/agent/03_ROADMAP.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
@@ -33,18 +46,17 @@ Changed files reviewed:
 
 ## Review Summary
 
-The implementation satisfies the brief.
+The implementation satisfies the approved local browser-console scope:
 
-`src/quant_research_engine/data/tushare_security.py` now provides the reusable Tushare security source boundary:
+- local browser console shell
+- YAML-first strategy editing
+- direct module execution with CLI fallback
+- local filesystem run history
+- rerun restoration back into the editor
+- result viewer for CSV, JSON, and text artifacts
+- single-symbol summary rendering via `summary.json`
 
-- `SNAPSHOT_FIXED_COLUMNS` defines the canonical normalized snapshot columns.
-- `SecuritySnapshot` provides a typed single-row contract with passthrough support.
-- `derive_board()` matches the existing board inference logic.
-- `normalize_snapshot_frame()` converts Tushare probe output into a canonical frame, preserves passthrough columns, derives board, and keeps the read-only smoke path intact.
-
-The smoke harness remains a thin CLI wrapper over the shared source adapter, and the targeted tests cover both the reusable contract and the probe behavior.
-
-No database writes, schema changes, or unrelated runtime changes were introduced.
+The result viewer now covers the priority artifact set needed for the first release, including the single-symbol summary path that was previously missing.
 
 ## Required Fixes
 
@@ -54,29 +66,32 @@ None.
 
 Compliant:
 
-- Added a canonical security-snapshot contract on top of the reusable Tushare source adapter.
-- Preserved the read-only smoke harness.
-- Added focused tests for board inference, snapshot defaults, passthrough preservation, boolean endpoint probing, and empty-source handling.
+- Implemented a local browser console shell.
+- Implemented YAML editing, validation, template save/load, and run submission.
+- Implemented local history storage.
+- Implemented direct module execution and CLI fallback.
+- Implemented rerun restoration on the editor page.
+- Implemented artifact rendering for summary/orders/trades/equity/manifest outputs.
 
 ## Test Review
 
 Validation commands run by Codex:
 
 ```bash
-uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q
+uv run pytest tests/test_gui_app.py tests/test_gui_engine.py tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
 Results:
 
-- `uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q`: `34 passed in 0.52s`
+- `uv run pytest tests/test_gui_app.py tests/test_gui_engine.py tests/test_cli.py -q`: `179 passed, 2 warnings`
 - `scripts/check-progress-docs.sh`: passed
 - `git diff --check`: passed
 
 Warnings observed:
 
-- None new in this task.
+- `numpy` runtime warnings during one CLI evaluation test, unchanged from prior behavior.
 
 ## Locked Requirements Check
 
@@ -84,9 +99,9 @@ No locked-requirement violation found.
 
 ## Final Recommendation
 
-Accept locally and proceed to git finalization. Do not push remotely because no remote push was requested.
+Accept locally and proceed to git finalization. No remote push requested.
 
 ## Next Agent State
 
-- Phase: `CODEX_GIT_FINALIZING`
-- Owner: `CODEX`
+- Phase: `USER_ACCEPTANCE`
+- Owner: `USER`

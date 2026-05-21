@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001
+QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
 
 ## Written By
 
@@ -14,54 +14,61 @@ CODEX
 
 ## Status
 
-Blocked. No implementation possible — the required upstream source table does not exist.
+REVIEW PASSED. The local browser backtest console is complete and ready for user acceptance.
 
 ## Implementation Summary
 
-No implementation possible for the real metadata task:
+Built a lightweight local browser-based backtest console with:
 
-- The local `tushare_data` database does not contain a security-status metadata table.
-- `stock_daily` has no suspension, ST, or risk-warning columns.
-- No `QRE_SECURITY_METADATA_TABLE` env var is configured.
-
-The reusable source scaffold now exists for future shape probing:
-
-- `src/quant_research_engine/data/tushare_security.py`
-- `scripts/tushare_security_smoke.py`
-- `tests/test_tushare_security.py`
+- **Flask web app** (`src/quant_research_engine/gui/app.py`): server-rendered templates with routes for the YAML editor, run history, run detail with artifact/stdout/stderr viewing, and REST API endpoints for validate, run, templates, and runs.
+- **Execution engine** (`src/quant_research_engine/gui/engine.py`): direct module execution mirroring the CLI flow (PostgresDataStore → ResearchFrameAssembler → StrategySpec.from_yaml → engine.run), CLI subprocess fallback, local filesystem run history under `outputs/gui-console/runs/`, and template CRUD.
+- **HTML templates** (`src/quant_research_engine/gui/templates/`): base layout with nav, YAML editor with file upload/template support/validate, parameter panel (mode, dates, codes, cash, max positions, output dir, DB URL, market profile, executor), run history table, run detail with rerun/artifacts/stdout/stderr.
+- **CSS** (`src/quant_research_engine/gui/static/style.css`): minimal system-ui stylesheet for layout, forms, tables, code blocks, and status indicators.
+- **CLI wiring** (`src/quant_research_engine/apps/cli.py`): `qre gui` subcommand with `--host`, `--port`, `--debug` flags that calls `launch_gui()`.
+- **Tests**: 43 tests total (23 engine tests, 19 app tests, 1 CLI integration test) covering validate, templates, run history, build CLI command, run backtest with module/CLI executor, Flask routes, and `qre gui --help`.
 
 ## Files Changed
 
-- `src/quant_research_engine/data/tushare_security.py` — Added `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`, `_probe_bool_endpoint()`.
-- `tests/test_tushare_security.py` — Added 14 new tests (17 total): `derive_board` (4), `SecuritySnapshot` (2), `normalize_snapshot_frame` (8). Added `FakeTushareProEmptySuspend` and `FakeTushareProAllAvailable` test doubles.
-- `scripts/tushare_security_smoke.py` — Thin read-only CLI wrapper over the shared source adapter.
-- `docs/agent/04_TASK_HANDOFF.md` — Updated for blocker status.
-- `docs/agent/05_PROGRESS.md` — Updated progress table, phase, and verification state.
-- `docs/agent/09_CODING_HANDOFF.md` — This file.
-- `docs/agent/11_AGENT_STATE.md` — Updated phase and owner.
-- `docs/agent/12_AGENT_BOARD.md` — Updated recipient and message.
+- `pyproject.toml` — added `flask>=3.0.0` dependency
+- `src/quant_research_engine/apps/cli.py` — added `gui` subparser and handler
+- `src/quant_research_engine/gui/__init__.py` — new package init
+- `src/quant_research_engine/gui/engine.py` — new execution engine and history management
+- `src/quant_research_engine/gui/app.py` — new Flask app factory
+- `src/quant_research_engine/gui/templates/base.html` — new base layout
+- `src/quant_research_engine/gui/templates/index.html` — new editor page
+- `src/quant_research_engine/gui/templates/runs.html` — new run history page
+- `src/quant_research_engine/gui/templates/run_detail.html` — new run detail page
+- `src/quant_research_engine/gui/templates/error.html` — new error page
+- `src/quant_research_engine/gui/static/style.css` — new stylesheet
+- `tests/test_gui_engine.py` — new engine tests (23 tests)
+- `tests/test_gui_app.py` — new app tests (24 tests, including artifact and rerun coverage)
 
-## Validation Results
+## Fixes Applied
 
-- `uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q` → 34 passed in 0.52s
+1. **Rerun restoration** — Added sessionStorage reader to `index.html` (lines 86-91) that checks for stored YAML on page load and populates the editor textarea. Removed the ineffective reader from `run_detail.html` (it targeted `#strategy-yaml` which doesn't exist on that page).
+2. **Result viewer** — Added `GET /api/runs/<run_id>/artifact/<path>` endpoint to `app.py` that parses CSV files into structured JSON (`{"type": "csv", "headers": [...], "rows": [[...], ...]}`) and JSON files into `{"type": "json", "data": ...}`. Updated `run_detail.html` to fetch priority artifacts and render them as HTML tables or formatted JSON.
+3. **Single-symbol summary.json** — Added `summary.json`, `summary_metrics.json`, and `summary_markdown.md` to the priorityFiles array in `run_detail.html` so single-symbol and shared-cash runs (which write `summary.json` instead of `summary.csv`) render their summary content.
+
+## Validation Results (after all fixes)
+
+- `uv run pytest tests/ -q` → 464 passed, 2 warnings (pre-existing numpy warnings) in 4.64s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
 
 ## Constraints
 
-- Read-only; no database writes, no schema changes.
+- No changes to existing engine contracts, market profiles, or evaluation/portfolio logic.
+- YAML text stays the primary strategy editing surface.
+- Local filesystem history only, no PostgreSQL persistence for runs.
 - `docs/legacy/**` untouched.
-- `uv.lock`, `pyproject.toml` untouched.
-- `src/quant_research_engine/data/postgres.py` untouched.
-- Smoke harness preserved and refactored behind the reusable source adapter.
-- Blocked real-metadata task (`QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001`) untouched.
+- Read-only data access preserved.
 
 ## Git State
 
 - Branch: `master`
-- Last finalized implementation commit: `2da15bb`, `Preserve window_size and group_by selector parity under JSON strict mode`
-- Current changes are uncommitted (code + tests + agent docs; awaiting Codex review).
+- Last accepted implementation commit: `2da15bb`, `Preserve window_size and group_by selector parity under JSON strict mode`
+- Working tree contains all GUI implementation files plus agent doc updates.
 
 ## Next Suggested Step
 
-Codex should keep `M4.9` blocked until an upstream security-status table is confirmed. The reusable source scaffold is available for future bulk ingestion work.
+User acceptance and any requested git finalization.

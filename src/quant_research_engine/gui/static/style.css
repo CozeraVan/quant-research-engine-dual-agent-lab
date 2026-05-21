@@ -1,0 +1,44 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto; padding: 1rem; background: #f8f8f8; color: #222; }
+
+nav { margin-bottom: 1.5rem; padding-bottom: 0.5rem; border-bottom: 2px solid #ccc; }
+nav a { margin-right: 1.5rem; text-decoration: none; color: #336; font-weight: 600; }
+nav a:hover { text-decoration: underline; }
+
+h1 { margin-bottom: 1rem; }
+h2 { margin-bottom: 0.5rem; font-size: 1.1rem; }
+
+.layout { display: flex; gap: 1.5rem; margin-bottom: 1rem; }
+.panel { flex: 1; background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 1rem; }
+.editor-panel { flex: 2; }
+
+textarea { width: 100%; font-family: monospace; font-size: 0.9rem; padding: 0.5rem; border: 1px solid #ccc; border-radius: 3px; resize: vertical; }
+
+.form-grid { display: grid; grid-template-columns: 140px 1fr; gap: 0.5rem; align-items: center; }
+.form-grid label { font-weight: 500; font-size: 0.9rem; }
+.form-grid input, .form-grid select { padding: 0.3rem 0.4rem; border: 1px solid #ccc; border-radius: 3px; font-size: 0.9rem; }
+
+button, .file-label { display: inline-block; padding: 0.4rem 1rem; border: 1px solid #558; border-radius: 3px; background: #447; color: #fff; font-size: 0.85rem; cursor: pointer; margin: 0.2rem; }
+button:hover, .file-label:hover { background: #336; }
+.file-label { background: #666; }
+
+.editor-actions, .run-actions { margin-top: 0.8rem; display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.editor-actions select, .editor-actions input[type=text] { padding: 0.3rem; border: 1px solid #ccc; border-radius: 3px; font-size: 0.85rem; }
+
+.result-box { margin-top: 1rem; padding: 0.8rem; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+.hidden { display: none; }
+
+.ok { color: #060; }
+.err { color: #c00; }
+.err-log { background: #fff0f0; border: 1px solid #fcc; }
+
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; background: #fff; }
+th, td { padding: 0.5rem; border: 1px solid #ddd; text-align: left; font-size: 0.9rem; }
+th { background: #eee; font-weight: 600; }
+
+pre { background: #f4f4f4; border: 1px solid #ddd; border-radius: 3px; padding: 0.8rem; overflow-x: auto; font-size: 0.85rem; max-height: 600px; overflow-y: auto; }
+code.log { white-space: pre-wrap; word-break: break-all; }
+
+.run-meta { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; }
+.run-meta p { margin: 0.2rem 0; }
+.actions { margin: 0.5rem 0 1rem; }

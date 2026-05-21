@@ -81,6 +81,14 @@
 | M6.2 | Migrate legacy project knowledge into `docs/agent` | DONE | CODEX | current doc migration | User review |
 | M6.3 | First post-migration implementation brief | WAITING_USER_APPROVAL | USER | `08_IMPLEMENTATION_BRIEF.md` | Approve or revise |
 
+## Milestone 7: Local Backtest Console
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M7.1 | Local browser console shell and YAML strategy editor | READY | CLAUDE_CODE | user-approved brainstorm; `docs/superpowers/specs/2026-05-21-local-backtest-console-design.md` | Implement `qre gui` shell, YAML editor, and run controls |
+| M7.2 | Local filesystem run history and rerun support | READY | CLAUDE_CODE | approved local-history-first design; `docs/agent/change_requests/CR-0001-local-backtest-console.md` | Persist run records under `outputs/gui-console/` |
+| M7.3 | Result viewer for summary, orders, trades, equity, and manifests | READY | CLAUDE_CODE | approved full-artifact viewer scope | Render report artifacts from completed runs |
+
 ## Status Meaning
 
 - TODO: Not started

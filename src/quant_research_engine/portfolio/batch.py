@@ -23,6 +23,7 @@ class BatchBacktestRequest:
     initial_cash_per_symbol: float
     entry_signal: str
     holding_days: int
+    exit_signal: str | None = None
     entry_price_column: str = "open"
     mark_price_column: str = "close"
     summary_metadata_columns: list[str] | None = None
@@ -55,6 +56,7 @@ class BatchBacktestEngine:
                     symbol=symbol,
                     initial_cash=request.initial_cash_per_symbol,
                     entry_signal=request.entry_signal,
+                    exit_signal=request.exit_signal,
                     holding_days=request.holding_days,
                     entry_price_column=request.entry_price_column,
                     mark_price_column=request.mark_price_column,

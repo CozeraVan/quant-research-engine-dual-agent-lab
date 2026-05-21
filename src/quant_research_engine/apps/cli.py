@@ -232,6 +232,11 @@ def build_parser() -> argparse.ArgumentParser:
     shared_parser.add_argument("--output-dir", type=Path, help="Optional directory for portfolio result files.")
     shared_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
 
+    gui_parser = subparsers.add_parser("gui", help="Launch the local browser backtest console")
+    gui_parser.add_argument("--host", default="127.0.0.1", help="Host to bind the console server to.")
+    gui_parser.add_argument("--port", type=int, default=8080, help="Port to bind the console server to.")
+    gui_parser.add_argument("--debug", action="store_true", help="Run Flask in debug mode (not recommended for production).")
+
     return parser
 
 
@@ -888,6 +893,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     symbol=args.symbol,
                     initial_cash=args.initial_cash,
                     entry_signal=spec.signal_expression,
+                    exit_signal=spec.exit_signal_expression,
                     holding_days=spec.holding_days,
                 ),
             )
@@ -909,6 +915,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "symbol": args.symbol,
                     "initial_cash": args.initial_cash,
                     "entry_signal": spec.signal_expression,
+                    "exit_signal": spec.exit_signal_expression,
                     "holding_days": spec.holding_days,
                     "start": str(args.start),
                     "end": str(args.end),
@@ -945,6 +952,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     symbols=args.codes,
                     initial_cash_per_symbol=args.initial_cash,
                     entry_signal=spec.signal_expression,
+                    exit_signal=spec.exit_signal_expression,
                     holding_days=spec.holding_days,
                     summary_metadata_columns=args.group_by,
                 ),
@@ -992,6 +1000,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "symbols": args.codes,
                     "initial_cash_per_symbol": args.initial_cash,
                     "entry_signal": spec.signal_expression,
+                    "exit_signal": spec.exit_signal_expression,
                     "holding_days": spec.holding_days,
                     "start": str(args.start),
                     "end": str(args.end),
@@ -1044,6 +1053,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     symbols=args.codes,
                     initial_cash=args.initial_cash,
                     entry_signal=spec.signal_expression,
+                    exit_signal=spec.exit_signal_expression,
                     holding_days=spec.holding_days,
                     max_positions=args.max_positions,
                     **weight_controls,
@@ -1097,6 +1107,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "symbols": args.codes,
                     "initial_cash": args.initial_cash,
                     "entry_signal": spec.signal_expression,
+                    "exit_signal": spec.exit_signal_expression,
                     "holding_days": spec.holding_days,
                     "max_positions": args.max_positions,
                     "weight_model": weight_controls["weight_model"],
@@ -1119,6 +1130,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             paths = write_shared_cash_result(result, args.output_dir, run_request=run_request, group_by=args.group_by, run_id=args.run_id)
             for key, path in paths.items():
                 print(f"{key}_path={path}")
+        return 0
+
+    if args.command == "gui":
+        from quant_research_engine.gui.app import launch_gui
+
+        launch_gui(host=args.host, port=args.port, debug=args.debug)
         return 0
 
     parser.error(f"Unsupported command: {args.command}")

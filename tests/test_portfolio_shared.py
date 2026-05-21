@@ -52,6 +52,27 @@ def test_shared_cash_backtest_buys_multiple_signals_with_one_cash_pool():
     assert result.orders.loc[result.orders["side"] == "buy", "notional"].sum() > 90000
 
 
+def test_shared_cash_backtest_sells_on_exit_signal_next_bar():
+    frame = make_shared_frame().copy()
+    frame["entry_flag"] = [True, False, False, False, False] * 2
+    frame["exit_flag"] = [False, False, True, False, False] * 2
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="entry_flag",
+        holding_days=20,
+        max_positions=2,
+        exit_signal="exit_flag",
+    )
+
+    result = engine.run(frame, request)
+    trade = result.trades.loc[result.trades["symbol"] == "000001.SZ"].iloc[0]
+
+    assert result.orders.loc[result.orders["symbol"] == "000001.SZ", "side"].tolist() == ["buy", "sell"]
+    assert trade["exit_reason"] == "exit_signal"
+
+
 def test_shared_cash_backtest_respects_max_positions():
     frame = make_shared_frame()
     engine = SharedCashBacktestEngine(AShareMarketProfile())

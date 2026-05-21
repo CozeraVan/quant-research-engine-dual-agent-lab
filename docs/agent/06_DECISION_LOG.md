@@ -238,6 +238,38 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-CLI-WINDOW-SIZE-GROUP-BY-PARITY-001`. The task should stay test-focused and avoid runtime changes unless a concrete selector bug appears.
 - Owner: CODEX
 
+### 2026-05-21: Choose a local browser console as the first GUI form
+
+- Decision: The first GUI release will be a local browser-based console launched by `qre gui`.
+- Reason: The existing engine already runs in Python, and a local web console is the simplest cross-platform way to expose strategy editing, run controls, and artifact inspection without building a desktop app.
+- Alternatives: Native desktop packaging; a remote web app; keep the workflow CLI-only.
+- Impact: The GUI task should use server-rendered pages or similarly lightweight browser UI, and it should stay focused on the existing engine contract rather than adding heavy front-end machinery.
+- Owner: USER/CODEX
+
+### 2026-05-21: Make YAML text the first-class strategy editing surface
+
+- Decision: The GUI will treat strategy YAML as the primary input, with inline text editing and file upload/save support.
+- Reason: The engine already accepts YAML strategy specs. A form-only builder would duplicate the strategy contract and slow the first release.
+- Alternatives: Drag-and-drop strategy composition; form-generated strategies; code editor as the only input.
+- Impact: Claude Code should implement validation and save/reopen flows around YAML text, not a separate visual strategy language.
+- Owner: USER/CODEX
+
+### 2026-05-21: Keep run history local on disk for v1
+
+- Decision: Version 1 of the GUI will store run history in the local filesystem, not PostgreSQL.
+- Reason: The engine already writes durable output directories and report manifests. Keeping history local first reduces implementation risk and keeps the first release cross-platform.
+- Alternatives: Write history directly to PostgreSQL; add distributed job storage; keep history ephemeral only.
+- Impact: The GUI should persist run requests, strategy snapshots, status, logs, and artifact pointers under the repository outputs directory, with PostgreSQL migration deferred.
+- Owner: USER/CODEX
+
+### 2026-05-21: Prefer direct module execution with CLI fallback in the GUI
+
+- Decision: The GUI will call the existing Python backtest modules directly by default and keep the `qre` CLI as a fallback execution path.
+- Reason: Direct module execution is faster and easier to inspect during local development, while the CLI fallback preserves a stable escape hatch if the module boundary needs debugging.
+- Alternatives: CLI-only orchestration; subprocess-only execution; build a separate job queue first.
+- Impact: Claude Code should wire the GUI around the existing engine APIs, but keep a CLI fallback option in the run controls and error handling.
+- Owner: USER/CODEX
+
 ### 2026-05-21: Select real suspension/ST/risk-warning metadata as next Claude task
 
 - Decision: The next Claude Code task is real suspension/ST/risk-warning metadata for the security metadata loader.
@@ -292,6 +324,15 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Reason: The CLI shell is easier to keep stable if all Tushare-specific behavior lives in one importable data module. That also makes the smoke path easier to test without network access.
 - Alternatives: Keep endpoint logic inside the script; add a separate command layer before the source adapter exists.
 - Impact: `scripts/tushare_security_smoke.py` now delegates to the shared source adapter and remains safe to run in read-only environments.
+- Owner: CODEX
+
+### 2026-05-21: Allow strategy-level exit expressions for daily-bar backtests
+
+- Decision: Strategy YAML may now carry `signal.exit`, and the portfolio engines interpret it as a next-bar exit trigger so strategies can model explicit sell rules without lookahead.
+- Reason: The EMA200 + Bollinger strategy needs a true upper-band exit rule in addition to risk controls. The existing engines already supported entry expressions and stop controls, but not a strategy-scoped exit signal.
+- Alternatives: Encode upper-band exits as a fixed-holding workaround; add an ad hoc CLI-only override; leave exits to stop controls alone.
+- Impact: `StrategySpec`, single-symbol backtests, batch backtests, and shared-cash backtests all accept the exit expression; the user-requested EMA200 + Bollinger backtest now runs end-to-end on the existing data model.
+- Validation: `uv run pytest tests/test_strategy_spec.py tests/test_portfolio_single_symbol.py tests/test_portfolio_shared.py -q` → 46 passed in 1.01s; chunked full-market backtest over `2010-01-04` to `2026-05-20` completed across 5,522 symbols.
 - Owner: CODEX
 
 ## Open / To Confirm

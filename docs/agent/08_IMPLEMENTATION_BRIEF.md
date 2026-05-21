@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001
+QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
 
 ## Created By
 
@@ -14,121 +14,112 @@ CLAUDE_CODE
 
 ## Background
 
-`PostgresDataStore.load_security_metadata()` currently supports two modes:
+The backtest engine already supports YAML strategy specs, single-symbol / batch / shared-cash runs, durable report artifacts, and read-only PostgreSQL market data. The missing piece is the operator experience: strategy editing, parameter entry, run orchestration, local history, and result inspection still happen mostly through CLI and Codex-driven verification.
 
-1. A configured security metadata table via `QRE_SECURITY_METADATA_TABLE` / `SR_SECURITY_METADATA_TABLE`.
-2. A fallback derived from `public.stock_daily`, which synthesizes `list_date`, infers `board`, and sets `is_st`, `is_risk_warning`, and `is_suspended` to `False`.
+The user approved a first-release GUI that is:
 
-That fallback is good enough for smoke coverage, but it leaves the portfolio/preflight path without real suspension and ST/risk-warning behavior. The repository also does not yet confirm which upstream table should be used as the authoritative source for time-varying security-status metadata. The reusable Tushare source scaffold now exists for future source-shape probing.
+- a local browser console, not a desktop app
+- YAML text first for strategy editing
+- direct module execution by default, with CLI fallback retained
+- local filesystem history first, PostgreSQL later
+- focused on clarity rather than polish
+- cross-platform, with Ubuntu as the first target environment
 
 ## Goal
 
-Confirm the upstream security-status metadata source table/schema and wire real suspension/ST/risk-warning metadata through the read-only data layer if the table exists.
+Build a local browser-based console that lets a user load, edit, validate, and save YAML strategies; configure backtest parameters; run single-symbol / batch / shared-cash simulations; inspect full output artifacts; and reopen or rerun prior runs from local history.
 
 ## Non-Goals
 
-- Do not write to upstream databases.
-- Do not change `PostgresDataStore.load_security_metadata()` unless the confirmed source table can safely replace the fallback.
-- Do not hardcode credentials or invent status semantics.
-- Do not change market-profile rules, evaluation logic, or unrelated portfolio behavior.
-- Do not edit legacy archived docs under `docs/legacy`.
-- Do not expand into benchmark wiring, regime classification, or broad metadata refactors unless they are required to support the confirmed source table.
+- Do not turn the GUI into a native desktop app.
+- Do not implement authentication or multi-user workflows.
+- Do not store run history in PostgreSQL in v1.
+- Do not build a drag-and-drop strategy composer.
+- Do not rewrite the backtest engine to fit the GUI.
+- Do not add distributed execution or queue infrastructure in v1.
+- Do not edit `docs/legacy/**`.
 
 ## Affected Modules
 
-Expected runtime/tests:
+Expected implementation surfaces:
 
-- `src/quant_research_engine/data/postgres.py`
-- `tests/test_postgres_store.py`
-- `tests/test_preflight.py`
+- `src/quant_research_engine/apps/cli.py`
+- `src/quant_research_engine/gui/**`
+- `tests/test_gui_*.py`
+- `tests/test_cli.py` if GUI launch or orchestration touches the CLI contract
 
 Docs/handoff:
 
+- `docs/agent/03_ROADMAP.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
+- `docs/agent/06_DECISION_LOG.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
 
-## Forbidden Files
+## Implementation Shape
 
-- `docs/legacy/**`
-- `uv.lock`
-- `pyproject.toml`
-- `.env*`
-- `docs/agent/02_LOCKED_REQUIREMENTS.md`
-- `README.md`
-- `docs/modules/**`
-- `src/quant_research_engine/**` unless the data-layer metadata adapter is the confirmed implementation surface
+Use the lightest Python web stack that keeps the UI local, simple, and cross-platform. Prefer server-rendered pages or similarly lightweight browser UI. The console should expose:
 
-## Locked Requirements
+- YAML strategy editor
+- backtest parameter panel
+- execution mode selector for single/batch/shared-cash
+- run controls
+- local history list
+- rerun action from history
+- result viewer for summary, orders, trades, equity, report manifest, and artifact pointers
 
-Read:
+The GUI should keep the engine contract intact and adapt to the existing CLI/module surfaces rather than inventing a parallel strategy language.
 
-- `docs/agent/02_LOCKED_REQUIREMENTS.md`
+## Local Storage Contract
 
-Task-specific locked requirements:
+Version 1 should persist run records under a repository-local outputs directory, with enough data to reopen and rerun a prior configuration:
 
-- Preserve read-only data access.
-- Keep the existing fallback behavior unless the confirmed source table can safely replace it.
-- Do not invent status semantics or table schemas.
-- If no confirmed upstream table/schema can be identified, stop and write a blocker with the exact missing information.
-
-## Implementation Steps
-
-1. Inspect `PostgresDataStore.load_security_metadata()`, `_load_security_metadata_table()`, `_derive_security_metadata_from_daily()`, and `_normalize_security_metadata()` in `src/quant_research_engine/data/postgres.py`.
-2. Confirm the authoritative upstream security metadata table/schema from local repo config, docs, or database metadata access.
-3. If the source table exists, implement the read-only adapter so real suspension/ST/risk-warning values flow through `load_security_metadata()` and remain consumable by `preflight.py` and downstream portfolio code.
-4. Add or adjust targeted tests in `tests/test_postgres_store.py` and `tests/test_preflight.py` to lock the chosen behavior.
-5. If no confirmed table/schema exists, stop with a blocker that names the missing table and columns.
-6. Update handoff/progress docs.
-
-## Data / Schema Changes
-
-- No schema migration.
-- Read-only metadata loading only.
-- Any new source-table assumptions must be documented explicitly in the blocker or final handoff.
-
-## API / Interface Changes
-
-- No public API changes are expected outside the Tushare security source helper and tests.
-- No public API changes are expected unless the confirmed source table requires a small loader extension.
+- strategy YAML snapshot
+- resolved parameters
+- run mode
+- timestamps and status
+- stdout/stderr or equivalent execution log
+- output directory path
+- artifact pointers and summary metadata
 
 ## Validation Plan
 
-Run focused tests:
+Use focused tests for the new GUI surfaces and keep the existing engine contract intact:
 
 ```bash
-uv run pytest tests/test_postgres_store.py tests/test_preflight.py -q
+uv run pytest tests/test_gui_*.py tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
 ## Acceptance Criteria
 
-- [ ] The confirmed upstream security metadata source table/schema is identified, or a blocker records the missing information exactly.
-- [ ] If a confirmed table exists, `load_security_metadata()` loads real suspension/ST/risk-warning metadata without breaking the existing fallback path.
-- [ ] `preflight.py` continues to consume metadata correctly for exclusion checks.
-- [ ] Targeted tests in `tests/test_postgres_store.py` and/or `tests/test_preflight.py` lock the implemented behavior.
-- [ ] Legacy archived docs are untouched.
-- [ ] `uv run pytest tests/test_postgres_store.py tests/test_preflight.py -q`, `scripts/check-progress-docs.sh`, and `git diff --check` pass, or the blocker explains why they cannot.
-- [ ] `09_CODING_HANDOFF.md` records changed files, validation, risks, and git state if code changes were made.
+- [ ] The user can open a local browser console and edit a YAML strategy.
+- [ ] The user can upload, save, reopen, and rerun strategy YAML files.
+- [ ] The GUI can launch single-symbol, batch, and shared-cash backtests.
+- [ ] The GUI can use direct module execution and CLI fallback.
+- [ ] The GUI stores run history locally on disk.
+- [ ] The GUI shows summary, orders, trades, equity, manifest, and artifact pointers.
+- [ ] The implementation remains cross-platform and avoids Ubuntu-only assumptions.
+- [ ] The engine contract remains the source of trading logic.
 
 ## Risks
 
-- The source table may not exist or may have a date-granular schema that needs explicit confirmation before implementation.
-- Avoid replacing the current fallback with an incorrect partial schema.
-- Preserve read-only access and do not invent hidden writes or refresh jobs.
+- Long-running backtests need background execution or progress tracking so the browser page does not appear frozen.
+- A form-driven strategy builder would duplicate the existing YAML strategy contract and slow delivery.
+- A heavy frontend framework would make the first release harder to keep simple and portable.
 
 ## Instructions for Claude Code
 
 Claude Code must:
 
-1. Follow this brief strictly.
-2. Start by confirming the security metadata source table/schema.
-3. Avoid editing `docs/legacy/**`.
-4. Update `04`, `05`, `09`, `11`, and `12` after implementation or blocker discovery.
-5. Stop and write a blocker if the source table/schema cannot be confirmed.
+1. Implement `QRE-GUI-LOCAL-BACKTEST-CONSOLE-001` as a local browser console.
+2. Keep YAML text as the primary strategy input.
+3. Preserve the existing engine contract and CLI fallback.
+4. Store run history locally on disk in v1.
+5. Update `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md` when implementation is ready for review.
 
 ## Next Agent State
 

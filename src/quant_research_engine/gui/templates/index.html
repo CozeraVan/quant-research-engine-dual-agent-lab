@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Backtest Console</h1>
+
+<div class="layout">
+  <div class="panel editor-panel">
+    <h2>Strategy (YAML)</h2>
+    <textarea id="strategy-yaml" rows="24" cols="80" placeholder="Paste or load a strategy YAML file..."></textarea>
+    <div class="editor-actions">
+      <button id="btn-validate">Validate</button>
+      <label class="file-label">
+        Load file
+        <input type="file" id="file-input" accept=".yaml,.yml" hidden>
+      </label>
+      <select id="template-select">
+        <option value="">-- templates --</option>
+        {% for name in templates %}
+        <option value="{{ name }}">{{ name }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" id="template-name" placeholder="template name" size="16">
+      <button id="btn-save-template">Save Template</button>
+    </div>
+    <div id="validate-result" class="result-box hidden"></div>
+  </div>
+
+  <div class="panel param-panel">
+    <h2>Parameters</h2>
+    <div class="form-grid">
+      <label>Mode</label>
+      <select id="param-mode">
+        <option value="single">Single-symbol</option>
+        <option value="batch">Batch</option>
+        <option value="shared">Shared-cash</option>
+      </select>
+
+      <label>Start</label>
+      <input type="text" id="param-start" value="2026-01-05" placeholder="YYYY-MM-DD">
+
+      <label>End</label>
+      <input type="text" id="param-end" value="2026-03-31" placeholder="YYYY-MM-DD">
+
+      <label>Codes</label>
+      <input type="text" id="param-codes" value="000001.SZ,000002.SZ" placeholder="ts_code,...">
+
+      <label>Initial Cash</label>
+      <input type="text" id="param-cash" value="100000" placeholder="100000">
+
+      <label>Max Positions</label>
+      <input type="text" id="param-maxpos" value="10" placeholder="10">
+
+      <label>Output Dir</label>
+      <input type="text" id="param-output" value="outputs/gui-run" placeholder="outputs/gui-run">
+
+      <label>DB URL</label>
+      <input type="text" id="param-dburl" placeholder="postgresql+psycopg:///tushare_data">
+
+      <label>Market Profile</label>
+      <input type="text" id="param-profile" placeholder="configs/market_profiles/ashare_daily_default.yaml">
+
+      <label>Executor</label>
+      <select id="param-executor">
+        <option value="module">Module (direct)</option>
+        <option value="cli">CLI (subprocess)</option>
+      </select>
+    </div>
+    <div class="run-actions">
+      <button id="btn-run">Run Backtest</button>
+      <span id="run-status" class="hidden"></span>
+    </div>
+  </div>
+</div>
+
+<div id="run-result" class="result-box hidden"></div>
+
+<script>
+(function() {
+  var yamlEl = document.getElementById("strategy-yaml");
+  var resultBox = document.getElementById("validate-result");
+  var runStatus = document.getElementById("run-status");
+  var runResult = document.getElementById("run-result");
+
+  function show(el) { el.classList.remove("hidden"); }
+  function hide(el) { el.classList.add("hidden"); }
+
+  // Restore rerun YAML from sessionStorage on page load
+  (function() {
+    var yaml = sessionStorage.getItem("rerun_yaml");
+    if (yaml) {
+      sessionStorage.removeItem("rerun_yaml");
+      yamlEl.value = yaml;
+    }
+  })();
+
+  // File load
+  document.getElementById("file-input").addEventListener("change", function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) { yamlEl.value = ev.target.result; };
+    reader.readAsText(file);
+  });
+
+  // Template load
+  document.getElementById("template-select").addEventListener("change", function(e) {
+    var name = e.target.value;
+    if (!name) return;
+    fetch("/api/templates/" + name)
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (d.yaml) yamlEl.value = d.yaml; });
+  });
+
+  // Validate
+  document.getElementById("btn-validate").addEventListener("click", function() {
+    fetch("/api/validate", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({yaml: yamlEl.value})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      show(resultBox);
+      if (d.valid) {
+        resultBox.innerHTML = '<span class="ok">YAML is valid</span>';
+      } else {
+        resultBox.innerHTML = '<span class="err">' + d.error + '</span>';
+      }
+    });
+  });
+
+  // Save template
+  document.getElementById("btn-save-template").addEventListener("click", function() {
+    var name = document.getElementById("template-name").value.trim();
+    if (!name) { alert("Enter a template name"); return; }
+    fetch("/api/templates", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name: name, yaml: yamlEl.value})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { alert(d.error); }
+      else { alert("Saved: " + d.saved); location.reload(); }
+    });
+  });
+
+  // Run
+  document.getElementById("btn-run").addEventListener("click", function() {
+    var payload = {
+      yaml: yamlEl.value,
+      mode: document.getElementById("param-mode").value,
+      start: document.getElementById("param-start").value,
+      end: document.getElementById("param-end").value,
+      codes: document.getElementById("param-codes").value,
+      initial_cash: document.getElementById("param-cash").value,
+      max_positions: document.getElementById("param-maxpos").value,
+      output_dir: document.getElementById("param-output").value,
+      db_url: document.getElementById("param-dburl").value,
+      market_profile: document.getElementById("param-profile").value,
+      executor: document.getElementById("param-executor").value
+    };
+
+    show(runStatus);
+    runStatus.textContent = "Running...";
+    runStatus.className = "";
+
+    fetch("/api/run", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      show(runResult);
+      if (d.status === "completed") {
+        runStatus.textContent = "Done";
+        runStatus.className = "ok";
+        runResult.innerHTML =
+          '<p><strong>Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>' +
+          '<p><strong>Mode:</strong> ' + d.mode + '</p>' +
+          '<p><strong>Status:</strong> ' + d.status + '</p>' +
+          '<p><a href="/runs/' + d.run_id + '">View Results</a></p>';
+      } else {
+        runStatus.textContent = "Failed";
+        runStatus.className = "err";
+        runResult.innerHTML = '<p class="err">Error: ' + (d.error || "Unknown error") + '</p>';
+      }
+    })
+    .catch(function(err) {
+      runStatus.textContent = "Error";
+      runStatus.className = "err";
+      runResult.innerHTML = '<p class="err">' + err + '</p>';
+    });
+  });
+})();
+</script>
+{% endblock %}
