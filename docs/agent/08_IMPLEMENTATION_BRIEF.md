@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
+QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
 
 ## Created By
 
@@ -14,135 +14,133 @@ CLAUDE_CODE
 
 ## Current Brief Type
 
-Implementation brief. Documentation-focused implementation with light schema/validation examples if needed.
+Implementation brief. Documentation-first plus minimal read-only tooling surface for missing-factor handoff.
 
 ## Background
 
-`QRE-REPORT-MT5-TV-FULL-MARKET-001` is finalized. The next highest-priority gap is still strategy entry standardization.
+`QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001` is finalized. The strategy entry standard now exists under `docs/strategy_entry/`.
 
-User has repeatedly clarified:
+The next bottleneck is operational handoff: missing factors are specified in docs but not yet standardized as a durable workflow artifact that can be consumed by upstream `indicators_tushare`.
 
-- QRE should not rewrite `research-notes` / `strategy-research`.
-- QRE should define a standard, understandable strategy entry contract.
-- `indicators_tushare` remains the factor-calculation/upstream project.
-- Goal workflow should be simplified to:
-  - write strategy
-  - check factor library
-  - run backtest
-  - request missing factors upstream when needed
+We need a practical, minimal, and non-invasive slice that closes the loop:
 
-Current low-level `StrategySpec` YAML is usable but hard to scale across many factors, many periods, and many strategy families.
+- write strategy
+- validate factors
+- emit missing-factor request file
+- upstream computes/backfills
+- re-run validation/backtest
 
 ## Canonical Design Sources
 
+- `docs/strategy_entry/missing_factor_request.md`
 - `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`
-- `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`
-
-This task implements the strategy-entry authoring standard docs from the design, not the compiler itself.
 
 ## Goal
 
-Create a clear, modular, user-facing strategy entry contract document set under QRE docs so humans, Codex, Claude Code, and external strategy projects can author entries consistently and quickly.
+Operationalize missing-factor handoff with a stable output contract and minimal CLI/tool support in QRE.
 
 Deliverables:
 
-- strategy entry standard document
-- factor requirements document
-- missing-factor request document
-- experiment plan and run metadata document
-- at least 3 concrete strategy-entry examples (different strategy families) using the new standard format
+1. Standardized output file contract:
+   - `missing_factor_requests.json`
+2. Stable write location conventions.
+3. Minimal read-only CLI/tool command to emit request artifacts from a strategy entry validation flow.
+4. Tests for schema shape and edge cases.
+5. Documentation updates describing lifecycle states and retry workflow.
 
-## Required Output Documents
+## Scope
 
-Target location: `docs/strategy_entry/` (create if absent).
+In scope:
 
-Required files:
+- Strategy validation path and artifact writing logic.
+- Missing-factor request schema enforcement at QRE boundary.
+- Documentation and examples for pending/fulfilled/blocked flow.
+- CLI surface update (new or extended command) that does not mutate database data.
 
-1. `README.md`
-2. `strategy_card.md`
-3. `factor_requirements.md`
-4. `missing_factor_request.md`
-5. `experiment_plan.md`
-6. `examples.md`
+Out of scope:
 
-## Content Requirements
+- Running `indicators_tushare` from QRE.
+- Writing factors into PostgreSQL from QRE.
+- Runtime strategy compiler for full high-level entry format.
+- GUI integration.
 
-`README.md` must include:
+## Required Implementation Items
 
-- purpose and scope
-- relation to QRE engine and upstream projects
-- end-to-end authoring flow
-- minimal “quick start” example
+1. Artifact emission
 
-`strategy_card.md` must include:
+- Emit `missing_factor_requests.json` when required factors are absent.
+- When nothing is missing, emit either:
+  - empty array file `[]`, or
+  - no file but explicit status output.
+  Choose one behavior and document it clearly.
 
-- required fields and optional fields
-- entry/exit/risk/position sizing sections
-- period/frequency semantics for daily data
-- naming/versioning conventions
+2. Output path convention
 
-`factor_requirements.md` must include:
+- Define deterministic output path relative to `--output-dir` or run folder.
+- Keep path consistent across repeated runs.
 
-- factor identifier format
-- source table/column expectations
-- period handling and parameterization rules
-- factor dependency declaration examples
+3. Schema guarantees
 
-`missing_factor_request.md` must include:
+- Required keys must match `docs/strategy_entry/missing_factor_request.md`.
+- Include `required` flag and reason fields.
+- Include date range context from experiment input when available.
 
-- request payload schema for upstream `indicators_tushare`
-- required vs optional fields
-- examples for missing indicator and missing period
+4. Status semantics
 
-`experiment_plan.md` must include:
+- Document lifecycle states:
+  - `pending` (request emitted, waiting upstream)
+  - `fulfilled` (validation passes after data availability)
+  - `blocked` (upstream unavailable/permission/data contract mismatch)
 
-- run metadata standard (`run_id`, strategy version, universe, date range)
-- backtest mode options
-- acceptance checklist for “entry is runnable”
+5. Tests
 
-`examples.md` must include at least 3 strategy families:
+- Missing-factor request file is written for missing-required factors.
+- Optional factors behavior is covered.
+- Multi-factor and multi-strategy aggregation/serialization behavior is deterministic.
+- Empty-request behavior is covered.
 
-- trend-following sample
-- mean-reversion sample
-- breakout or momentum sample
+## Suggested File Surface
 
-Each example should provide:
+Adjust based on actual code layout:
 
-- human-readable strategy summary
-- standardized entry fields
-- mapped low-level fields for current QRE usage
+- `src/quant_research_engine/...` validation/strategy entry module(s)
+- `src/quant_research_engine/apps/cli.py` (or nearest CLI command wiring)
+- `tests/...` for strategy validation and CLI regression
+- `docs/strategy_entry/missing_factor_request.md` (small clarifications only)
+- `docs/strategy_entry/README.md` and/or workflow docs for lifecycle
 
 ## Non-Goals
 
-- Do not implement strategy compiler/preflight runtime code in this task.
-- Do not modify external repositories.
-- Do not compute indicators inside QRE.
-- Do not rewrite portfolio/evaluation engines.
-- Do not treat sample examples as alpha conclusions.
+- Do not add DB writes.
+- Do not invoke external projects directly.
+- Do not alter completed full-market report behavior.
+- Do not refactor unrelated engine modules.
 
 ## Acceptance Criteria
 
-- [ ] `docs/strategy_entry/` exists with all required files.
-- [ ] Documents are consistent with approved design boundaries.
-- [ ] Three strategy-family examples are included and readable.
-- [ ] Missing-factor request schema is explicit and actionable for upstream projects.
-- [ ] Existing docs and progress/state files are updated to point to this task.
-- [ ] `docs/agent/09_CODING_HANDOFF.md` records changed files and validation evidence.
+- [ ] Missing-factor request artifact is emitted with stable schema.
+- [ ] CLI/tool output clearly indicates missing-factor status.
+- [ ] Tests cover required, optional, empty, and multi-item cases.
+- [ ] Documentation explains lifecycle and rerun flow.
+- [ ] `docs/agent/09_CODING_HANDOFF.md` updated with evidence.
 
 ## Validation Commands
 
+At minimum:
+
 ```bash
+uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-If markdown lint or doc build tooling exists locally, run the smallest relevant subset and record it in `09_CODING_HANDOFF.md`.
+If full test suite is too broad, run a targeted subset and record exact commands in `09_CODING_HANDOFF.md`.
 
 ## Risks
 
-- Over-designing entry schema beyond current daily-data scope.
-- Mixing “authoring standard” and “runtime compiler” concerns.
-- Leaving ambiguous factor identifiers that upstream automation cannot interpret.
+- Scope creep into strategy compiler/runtime.
+- Ambiguous behavior when no missing factors are present.
+- Inconsistent schema fields between docs and emitted JSON.
 
 ## Next Agent State
 

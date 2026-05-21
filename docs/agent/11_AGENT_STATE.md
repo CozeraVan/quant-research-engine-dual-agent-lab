@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
+QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
 
 ## Current Phase
 
@@ -16,17 +16,22 @@ CODEX
 
 ## Last Completed Step
 
-Codex reviewed and accepted `QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001` in `docs/agent/10_REVIEW_REPORT.md`, then finalized locally.
+Codex reviewed `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` and marked `PASS` in `docs/agent/10_REVIEW_REPORT.md`.
+
+Verified:
+
+- `missing_factor_requests.json` emission from preflight with stable schema.
+- Deterministic empty-list behavior (`[]`) when no missing factors.
+- CLI status reporting and targeted test coverage (`168 passed`).
 
 ## Next Required Step
 
-No required work remains for this task. Recommended next slice: `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` to operationalize missing-factor request output and workflow linkage.
+No required work remains for this task. Recommended next slice: compiler/preflight linkage for high-level strategy entry format.
 
 ## Git State
 
 - Current branch: `master`
-- Finalization commit: `27828b8`
-- Last accepted GUI implementation commit: `766dc98`, `Make backtest iteration directly usable in a local browser console`
+- Last finalized commit: `146acd2` (Codex finalized `QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001`)
 - Standing approval: local commits approved by user; no remote push requested.
 - Existing uncommitted GUI-related changes must be preserved and are outside this design task.
 

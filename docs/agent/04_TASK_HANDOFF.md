@@ -2,15 +2,15 @@
 
 ## Current Task
 
-Implement the QRE strategy-entry contract documentation set. The immediate goal is documentation implementation by Claude Code: create clear authoring standards and examples so strategy writing and factor handoff become modular and scalable.
+Implement the QRE operational missing-factor handoff standard. The immediate goal is to make missing-factor requests durable, machine-readable, and workflow-ready for upstream `indicators_tushare`.
 
 ## Task ID
 
-QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
+QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
 
 ## Current Status
 
-DONE. Documentation implementation passed Codex review and was finalized locally.
+DONE. Implementation passed Codex review and is finalized locally.
 
 ## Current Owner
 
@@ -26,57 +26,40 @@ CODEX
   - Entry strategy work is documentation-first.
   - QRE should write the MD contract that tells humans, Codex, Claude Code, and external strategy projects how a strategy entry file should be authored.
   - External strategy projects can convert natural-language strategy descriptions into QRE-standard strategy files.
-- Report-output direction clarified:
-  - The MT5 report sample is the baseline.
-  - QRE reports should be full-market outputs, not per-stock report files.
-  - Unified transaction tables must include `symbol`.
-- Design captured:
-  - `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`
-- Full-market report design captured:
-  - `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`
-- TradingView strategy tester screenshots reviewed:
-  - performance summary
-  - benchmark comparison
-  - risk-adjusted metrics
-  - trade analysis
-  - capital/margin/run-up/drawdown sections
-- Implementation completed:
-  - `src/quant_research_engine/portfolio/full_market_report.py` — full-market report builders and entry point (~350 lines)
-  - `src/quant_research_engine/portfolio/io.py` — wired `write_full_market_report()` into `write_batch_result()`
-  - `src/quant_research_engine/portfolio/report_manifest.py` — 9 new required-column rules
-  - `tests/test_full_market_report.py` — 23 tests across 12 test classes
-  - `openpyxl>=3.1.0` added to `pyproject.toml`
+- Strategy entry standard docs completed: `docs/strategy_entry/` with 6 documentation files.
+- Full-market report design and implementation completed:
+  - MT5 workbook baseline + TradingView strategy tester metrics unified into QRE batch backtest outputs.
+  - `src/quant_research_engine/portfolio/full_market_report.py`, wired into `io.py`, 9 manifest roles, 23 tests.
+  - `realized_pnl` semantic fix applied and regression-tested.
+- Missing-factor handoff implementation completed:
+  - `src/quant_research_engine/strategies/missing_factor.py` — `MissingFactorRequest` model, extraction from `PreflightReport`, JSON emission.
+  - `src/quant_research_engine/apps/cli.py` — `qre preflight --output-dir` writes `missing_factor_requests.json`.
+  - `tests/test_missing_factor.py` — 25 tests (model, parsing, extraction, emission).
+  - `tests/test_cli.py` — 3 CLI tests (output-dir empty, output-dir with missing, no-output-dir stdout).
+  - `docs/strategy_entry/missing_factor_request.md` — lifecycle states added.
 
 ## Scope Notes
 
-The strategy-entry MD contract is future work and should explain:
+The strategy-entry MD contract is complete under `docs/strategy_entry/`:
 
-- Strategy Card fields.
-- Factor Requirements fields.
-- Experiment Plan fields.
-- Missing-factor request fields for `indicators_tushare`.
-- Compiler expectations from standard entry to existing QRE `StrategySpec` / backtest tasks.
-- Three-strategy validation requirement:
-  - randomly or deliberately select three existing project strategy families,
-  - convert them into the standard entry format,
-  - keep them clear and readable,
-  - compile them into executable current QRE inputs,
-  - run a small-scope smoke test with exit code `0`.
+- Strategy Card fields (`strategy_card.md`).
+- Factor Requirements fields (`factor_requirements.md`).
+- Experiment Plan fields (`experiment_plan.md`).
+- Missing-factor request fields for `indicators_tushare` (`missing_factor_request.md`).
+- Three complete examples: RSI2, EMA200+Bollinger, MACD (`examples.md`).
+- README with end-to-end flow and project boundaries (`README.md`).
 
 The current report-output implementation produces:
 
 - `backtest_report.xlsx` (10 sheets: Overview, Performance, TradesLedger, RoundTrips, SymbolPerformance, EquityCurve, DrawdownCurve, TradeAnalysis, CapitalUsage, Artifacts)
-- `trades_ledger.csv`
-- `round_trips.csv`
-- `symbol_performance.csv`
-- `strategy_performance.json`
-- `equity_curve.csv`
-- `drawdown_curve.csv`
-- `trade_analysis.json`
-- `capital_usage.json`
+- `trades_ledger.csv`, `round_trips.csv`, `symbol_performance.csv`, `strategy_performance.json`, `equity_curve.csv`, `drawdown_curve.csv`, `trade_analysis.json`, `capital_usage.json`
 - `report_manifest.json` (updated with new stable roles)
 
-Charts are optional in the first implementation. The required acceptance target is stable tables, files, manifest entries, and audit/discovery behavior.
+The current missing-factor implementation produces:
+
+- `missing_factor_requests.json` — stable JSON array matching `docs/strategy_entry/missing_factor_request.md` schema.
+- Stdout summary: `missing_factor_count`, `missing_factor_status` (ok/pending), per-missing-factor lines.
+- Empty `[]` when no factors are missing.
 
 ## Residual Limitations
 
@@ -84,6 +67,8 @@ Charts are optional in the first implementation. The required acceptance target 
 - Margin fields (`average_margin_used`, `max_margin_used`, `min_margin_used`) are null because the current simulation is cash-only.
 - Intratrade path fields (`max_favorable_return`, `max_adverse_return`, bars-in-trade stats) are null because the A-share daily engine does not track intra-trade bar-level paths.
 - Batch-only for the first release; shared-cash reuse is future work.
+- Column name parsing is heuristic; `expected_table` and `expected_column` are the authoritative fields.
+- All factors treated as `required: true` — current `StrategySpec` has no optional-factor concept.
 
 ## Prior Completed Context
 
@@ -94,12 +79,12 @@ The local browser backtest console is complete and finalized locally in commit `
 Documentation and implementation validation:
 
 ```bash
-uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q
+uv run pytest tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-Current results: 254 passed, 2 warnings (pre-existing numpy) in 3.20s; all checks pass.
+Current results: 168 passed, 2 warnings (pre-existing numpy) in 2.01s; all checks pass.
 
 ## Known Risks
 
@@ -108,8 +93,9 @@ Current results: 254 passed, 2 warnings (pre-existing numpy) in 3.20s; all check
 - Current engine does not split every cost component (`commission`, `stamp_tax`, `transfer_fee`, `slippage_amount`); MT5 columns exist with null/zero conventions where source data is unavailable.
 - Independent batch mode has no single shared cash account; full-market equity is synthesized by summing per-symbol equity curves.
 - QRE must not compute missing indicators internally; it should emit missing-factor requests for `indicators_tushare`.
+- Column name parsing from `factor_fields` targets is heuristic and documented as best-effort.
 - Existing uncommitted GUI changes are outside this planning task and must be preserved.
 
 ## Next Suggested Step
 
-Proceed to the next strategy-IO slice: factor-missing handoff operational standard and workflow linkage.
+Proceed to next strategy-IO slice: compiler/preflight linkage from high-level strategy entry format to executable current `StrategySpec`.

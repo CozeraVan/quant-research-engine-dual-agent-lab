@@ -5014,3 +5014,228 @@ def test_cli_report_audit_window_size_group_by_json_require_match_zero_matches(c
             "message": "no manifest entries matched filters",
         }
     ]
+
+
+# ---------------------------------------------------------------------------
+# preflight --output-dir: missing-factor request emission
+# ---------------------------------------------------------------------------
+
+
+def test_cli_preflight_output_dir_emits_empty_when_no_missing_factors(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def table_exists(self, table_name, *, engine=None):
+            return table_name == "factors.stock_daily_momentum_close"
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "rsi_2"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    out_dir = tmp_path / "mf_output"
+
+    exit_code = main(
+        [
+            "preflight",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--codes",
+            "000001.SZ",
+            "--output-dir",
+            str(out_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "missing_factor_count=0" in captured.out
+    assert "missing_factor_status=ok" in captured.out
+
+    mf_path = out_dir / "missing_factor_requests.json"
+    assert mf_path.exists()
+    data = json.loads(mf_path.read_text(encoding="utf-8"))
+    assert data == []
+
+
+def test_cli_preflight_output_dir_emits_requests_when_table_missing(capsys, monkeypatch, tmp_path):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def table_exists(self, table_name, *, engine=None):
+            return False
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return []
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(columns=["ts_code", "trade_date"])
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    out_dir = tmp_path / "mf_output"
+
+    exit_code = main(
+        [
+            "preflight",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--codes",
+            "000001.SZ",
+            "--output-dir",
+            str(out_dir),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert "missing_factor_status=pending" in captured.out
+    assert "missing_factor_count=1" in captured.out
+    assert "missing_factor=rsi_2" in captured.out
+
+    mf_path = out_dir / "missing_factor_requests.json"
+    assert mf_path.exists()
+    data = json.loads(mf_path.read_text(encoding="utf-8"))
+    assert len(data) == 1
+    assert data[0]["alias"] == "rsi_2"
+    assert data[0]["strategy_id"] == "rsi2_reversal_research_mvp"
+    assert data[0]["expected_table"] == "factors.stock_daily_momentum_close"
+    assert data[0]["expected_column"] == "rsi_2"
+    assert data[0]["required"] is True
+    assert data[0]["date_range"] == {"start": "2026-01-05", "end": "2026-01-05"}
+
+
+def test_cli_preflight_no_output_dir_prints_status_but_no_file(capsys, monkeypatch):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def table_exists(self, table_name, *, engine=None):
+            return table_name == "factors.stock_daily_momentum_close"
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "rsi_2"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "preflight",
+            "examples/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--codes",
+            "000001.SZ",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "missing_factor_count=0" in captured.out
+    assert "missing_factor_status=ok" in captured.out

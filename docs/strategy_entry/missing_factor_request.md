@@ -104,6 +104,50 @@ Example output file:
 - `required: true` — the strategy cannot run without this factor. QRE stops validation with an error.
 - `required: false` — the strategy can run with reduced logic. QRE emits a warning but proceeds.
 
+## Lifecycle States
+
+Each missing-factor request transitions through three states:
+
+### `pending`
+
+A request has been emitted in `missing_factor_requests.json` but the upstream has not yet fulfilled it.
+
+Indicators:
+
+- `missing_factor_requests.json` exists with one or more entries.
+- `qre preflight` stdout shows `missing_factor_status=pending`.
+- Factor schema checks in the preflight report have `status=error`.
+
+### `fulfilled`
+
+The upstream `indicators_tushare` has computed and written the requested factor data. QRE re-validation confirms the factor is now available.
+
+Indicators:
+
+- `missing_factor_requests.json` is `[]` (empty array).
+- `qre preflight` stdout shows `missing_factor_status=ok`.
+- Factor schema checks all pass (`status=ok`).
+
+To reach this state:
+
+1. Run `indicators_tushare` to consume `missing_factor_requests.json` and backfill the data.
+2. Re-run `qre preflight --output-dir <dir>` to re-validate.
+3. If all factors are now available, the file will be `[]` and backtest execution can proceed.
+
+### `blocked`
+
+The upstream cannot fulfill the request due to:
+
+- Missing source data (e.g., the price source or date range is not available).
+- Permission or access restrictions on the upstream data provider.
+- Data contract mismatch (e.g., the expected table/column naming convention is incompatible).
+
+Indicators:
+
+- `missing_factor_requests.json` still has entries after an upstream attempt.
+- The upstream should document the reason in its own output or log.
+- QRE does not automatically detect `blocked` — a human or upstream process must flag it.
+
 ## Batch Requests
 
 Multiple strategies can share factor requirements. QRE may emit a merged request file for a strategy family or research batch. The `strategy_id` field preserves traceability back to each strategy.

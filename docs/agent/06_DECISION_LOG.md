@@ -381,3 +381,19 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Alternatives: Keep docs task open and mix in compiler implementation immediately. Rejected to avoid coupling documentation baseline with runtime behavior changes.
 - Impact: `docs/strategy_entry/` becomes the baseline contract for follow-up tasks, and next slice should focus on operational missing-factor handoff and compiler/preflight linkage.
 - Owner: CODEX
+
+### 2026-05-21: Start operational missing-factor handoff standardization
+
+- Decision: Activate `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` as the next implementation slice.
+- Reason: Strategy-entry docs are complete; the next practical bottleneck is converting missing-factor definitions into stable, durable, machine-readable handoff artifacts and lifecycle steps.
+- Alternatives: Jump directly to compiler runtime work; start GUI controls first. Deferred to avoid coupling multiple moving parts before request workflow is stable.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now scopes artifact emission (`missing_factor_requests.json`), lifecycle semantics (`pending/fulfilled/blocked`), and targeted tests; execution routed to Claude Code.
+- Owner: CODEX
+
+### 2026-05-21: Finalize missing-factor handoff standard before compiler linkage
+
+- Decision: Accept and finalize `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` after review pass.
+- Reason: The implementation delivers durable missing-factor request output, deterministic empty-case behavior, CLI status reporting, and regression coverage without widening into compiler/runtime scope.
+- Alternatives: Start compiler linkage in the same slice. Rejected to keep the handoff contract stable and independently verifiable first.
+- Impact: `missing_factor_requests.json` output is now operational baseline; next slice should focus on compiler/preflight linkage from high-level strategy entry format to current executable spec.
+- Owner: CODEX

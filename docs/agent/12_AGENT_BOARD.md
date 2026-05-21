@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
+QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
 
 ## Current Recipient
 
@@ -14,11 +14,11 @@ FINALIZED
 
 ## Sender
 
-CODEX
+CLAUDE_CODE
 
 ## Short Message
 
-Strategy-entry contract docs task is finalized locally. Review passed and documentation set is accepted.
+Operational missing-factor handoff standard finalized locally: review passed, request artifact flow is ready for use.
 
 ## Accepted Direction
 
@@ -37,25 +37,25 @@ Strategy-entry contract docs task is finalized locally. Review passed and docume
 - `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`
 - `docs/superpowers/specs/2026-05-21-full-market-backtest-report-design.md`
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/strategy_entry/missing_factor_request.md`
 
 ## Implementation Artifacts
 
-- `src/quant_research_engine/portfolio/full_market_report.py` — new
-- `src/quant_research_engine/portfolio/io.py` — wired into `write_batch_result()`
-- `src/quant_research_engine/portfolio/report_manifest.py` — 9 new roles
-- `tests/test_full_market_report.py` — 23 new tests
-- `pyproject.toml` — `openpyxl>=3.1.0`
+- `src/quant_research_engine/strategies/missing_factor.py` — new (~260 lines)
+- `src/quant_research_engine/apps/cli.py` — `--output-dir` flag and extraction/emission in preflight handler
+- `tests/test_missing_factor.py` — 25 new tests
+- `tests/test_cli.py` — 3 new tests
 
 ## Validation
 
 ```bash
-uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q
+uv run pytest tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-Results: 254 passed, 2 warnings (pre-existing numpy) in 3.11s; quality gate blocked by semantic issue in review report.
+Results: 168 passed, 2 warnings (pre-existing numpy) in 2.01s; all quality checks pass.
 
 ## Next Step
 
-Move to the next task slice: factor-missing handoff operational standard and linkage workflow.
+Move to the next task slice: high-level strategy entry compiler/preflight linkage.

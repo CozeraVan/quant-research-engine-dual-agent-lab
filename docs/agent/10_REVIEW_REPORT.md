@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001
+QRE-FACTOR-MISSING-HANDOFF-STANDARD-001
 
 ## Written By
 
@@ -14,28 +14,27 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code documentation implementation in the current working tree.
+Claude Code implementation in the current working tree.
 
 Changed files reviewed:
 
-- `docs/strategy_entry/README.md`
-- `docs/strategy_entry/strategy_card.md`
-- `docs/strategy_entry/factor_requirements.md`
+- `src/quant_research_engine/strategies/missing_factor.py`
+- `src/quant_research_engine/apps/cli.py`
+- `tests/test_missing_factor.py`
+- `tests/test_cli.py`
 - `docs/strategy_entry/missing_factor_request.md`
-- `docs/strategy_entry/experiment_plan.md`
-- `docs/strategy_entry/examples.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 
 ## Review Summary
 
-The documentation set satisfies the implementation brief and aligns with the approved strategy-IO design boundaries:
+Implementation satisfies the brief with a minimal, read-only operational handoff:
 
-- Scope is explicitly daily A-share v1 and avoids overreaching into runtime compiler work.
-- Clear separation of ownership between QRE, `indicators_tushare`, and external strategy repositories.
-- Strategy authoring contract is modularized into strategy card, factor requirements, missing-factor request, and experiment plan.
-- Missing-factor request schema is machine-readable and actionable for upstream processing.
-- Three strategy families are provided with concrete examples and mapping notes to current low-level `StrategySpec`.
-- Examples are correctly labeled as plumbing validation, not alpha claims.
+- Missing-factor requests are extracted from preflight schema errors.
+- `missing_factor_requests.json` is emitted to `--output-dir` with stable schema.
+- Empty-missing case writes deterministic `[]` artifact.
+- CLI preflight always reports missing-factor status/count on stdout.
+- Lifecycle semantics were documented in strategy-entry docs.
+- No DB writes or external project invocation introduced.
 
 ## Required Fixes
 
@@ -45,22 +44,23 @@ None.
 
 Compliant:
 
-- `docs/strategy_entry/` contains all required files.
-- Three strategy-family examples are included.
-- Missing-factor request fields and workflow are explicit.
-- No runtime engine code or external repo modifications were introduced.
+- Durable request artifact path and schema are implemented.
+- Targeted tests cover required/empty/multi behavior and CLI integration.
+- Scope remains documentation + minimal tooling, without compiler/runtime expansion.
 
 ## Validation
 
 Commands run by Codex:
 
 ```bash
+uv run pytest tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
 Results:
 
+- `168 passed, 2 warnings` (pre-existing numpy warning path)
 - `scripts/check-progress-docs.sh` passed
 - `git diff --check` passed
 

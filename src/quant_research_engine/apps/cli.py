@@ -33,6 +33,10 @@ from quant_research_engine.portfolio.report_manifest import ReportManifest
 from quant_research_engine.portfolio.shared import SharedCashBacktestEngine, SharedCashBacktestRequest
 from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestEngine, SingleSymbolBacktestRequest
 from quant_research_engine.preflight import PreflightRequest, PreflightRunner
+from quant_research_engine.strategies.missing_factor import (
+    emit_missing_factor_requests,
+    extract_missing_factors,
+)
 from quant_research_engine.strategies.spec import StrategySpec
 
 
@@ -155,6 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--benchmark-code")
     preflight_parser.add_argument("--benchmark-value-column", default="close")
     preflight_parser.add_argument("--output-json", type=Path)
+    preflight_parser.add_argument("--output-dir", type=Path, help="Output directory for missing-factor request artifacts.")
     preflight_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
 
     backtest_parser = subparsers.add_parser("backtest-single", help="Run a single-symbol portfolio backtest from YAML")
@@ -820,29 +825,33 @@ def main(argv: Sequence[str] | None = None) -> int:
             store = PostgresDataStore(settings)
             store.ping()
             spec = StrategySpec.from_yaml(args.strategy)
-            report = PreflightRunner(store).run(
-                PreflightRequest(
-                    ts_codes=args.codes,
-                    start=args.start,
-                    end=args.end,
-                    market_fields=spec.market_fields,
-                    factor_fields=spec.factor_fields,
-                    min_factor_coverage=args.min_factor_coverage,
-                    exclude_st=spec.exclude_st,
-                    exclude_suspended=spec.exclude_suspended,
-                    exclude_risk_warning=spec.exclude_risk_warning,
-                    min_listing_days=spec.min_listing_days,
-                    min_amount=spec.min_amount,
-                    benchmark_table=args.benchmark_table,
-                    benchmark_code=args.benchmark_code,
-                    benchmark_value_column=args.benchmark_value_column,
-                )
+            preflight_req = PreflightRequest(
+                ts_codes=args.codes,
+                start=args.start,
+                end=args.end,
+                market_fields=spec.market_fields,
+                factor_fields=spec.factor_fields,
+                min_factor_coverage=args.min_factor_coverage,
+                exclude_st=spec.exclude_st,
+                exclude_suspended=spec.exclude_suspended,
+                exclude_risk_warning=spec.exclude_risk_warning,
+                min_listing_days=spec.min_listing_days,
+                min_amount=spec.min_amount,
+                benchmark_table=args.benchmark_table,
+                benchmark_code=args.benchmark_code,
+                benchmark_value_column=args.benchmark_value_column,
             )
+            report = PreflightRunner(store).run(preflight_req)
             if args.output_json:
                 args.output_json.parent.mkdir(parents=True, exist_ok=True)
                 payload = report.to_dict()
                 payload["run_id"] = args.run_id
                 args.output_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            missing_factors = extract_missing_factors(report, spec, preflight_req)
+            if args.output_dir:
+                request_path = emit_missing_factor_requests(missing_factors, args.output_dir)
+                print(f"missing_factor_requests={request_path}")
         except Exception as exc:
             print(str(exc), file=__import__("sys").stderr)
             return 2
@@ -867,6 +876,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"benchmark_non_null_rows={report.benchmark_non_null_rows}")
         for check in report.checks:
             print(f"check_{check.name}={check.status}")
+        missing_count = len(missing_factors)
+        print(f"missing_factor_count={missing_count}")
+        if missing_count == 0:
+            print("missing_factor_status=ok")
+        else:
+            print("missing_factor_status=pending")
+            for mf in missing_factors:
+                print(f"missing_factor={mf.alias} required_table={mf.expected_table} required_column={mf.expected_column}")
         return 2 if report.status == "error" else 0
 
     if args.command == "backtest-single":
