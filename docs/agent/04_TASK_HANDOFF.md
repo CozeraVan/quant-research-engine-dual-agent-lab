@@ -10,7 +10,7 @@ QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
 
 ## Current Status
 
-REVIEW PASSED. The local browser console meets the approved first-release scope and is ready for user acceptance.
+DONE. The local browser console meets the approved first-release scope and was finalized locally in commit `766dc98`.
 
 ## Current Owner
 
@@ -86,4 +86,4 @@ Fixes validated and passing:
 
 ## Next Suggested Step
 
-User acceptance and any requested git finalization.
+None.

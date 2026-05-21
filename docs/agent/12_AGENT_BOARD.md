@@ -10,7 +10,7 @@ USER
 
 ## Message Type
 
-APPROVAL
+COMPLETE
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-The local browser backtest console is approved for user acceptance. Rerun restoration, artifact rendering, and single-symbol summary coverage are all in place.
+The local browser backtest console is complete. Rerun restoration, artifact rendering, and single-symbol summary coverage are all in place, and the work is finalized locally in commit `766dc98`.
 
 ## Accepted Scope
 
@@ -37,4 +37,4 @@ The local browser backtest console is approved for user acceptance. Rerun restor
 
 ## Next Step
 
-User acceptance and any requested git finalization.
+None.

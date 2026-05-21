@@ -8,7 +8,7 @@ QRE-GUI-LOCAL-BACKTEST-CONSOLE-001
 
 ## Current Phase
 
-USER_ACCEPTANCE
+DONE
 
 ## Current Owner
 
@@ -16,17 +16,17 @@ USER
 
 ## Last Completed Step
 
-Codex reviewed the GUI implementation and approved it for user acceptance. The console now supports rerun restoration, artifact rendering, and single-symbol summary coverage.
+Codex reviewed the GUI implementation, finalized it locally in commit `766dc98`, and accepted the console for user use. Rerun restoration, artifact rendering, and single-symbol summary coverage are all in place.
 
 ## Next Required Step
 
-User acceptance and any requested git finalization.
+None.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `2da15bb`, `Preserve window_size and group_by selector parity under JSON strict mode`
-- Working tree contains all GUI implementation files plus agent doc updates.
+- Last accepted implementation commit: `766dc98`, `Make backtest iteration directly usable in a local browser console`
+- Working tree is clean after local finalization.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

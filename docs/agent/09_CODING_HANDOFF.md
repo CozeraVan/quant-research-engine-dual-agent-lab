@@ -14,7 +14,7 @@ CODEX
 
 ## Status
 
-REVIEW PASSED. The local browser backtest console is complete and ready for user acceptance.
+DONE. The local browser backtest console is complete and finalized locally in commit `766dc98`.
 
 ## Implementation Summary
 
@@ -71,4 +71,4 @@ Built a lightweight local browser-based backtest console with:
 
 ## Next Suggested Step
 
-User acceptance and any requested git finalization.
+None.
