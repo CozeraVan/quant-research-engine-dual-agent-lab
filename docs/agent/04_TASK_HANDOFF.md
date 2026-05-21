@@ -2,11 +2,11 @@
 
 ## Current Task
 
-Add CLI regression coverage for invalid rolling-artifact `window_size` manifest metadata.
+Add strict/JSON CLI regression coverage for rolling-artifact `window_size` filters.
 
 ## Task ID
 
-QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001
+QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001
 
 ## Current Status
 
@@ -18,15 +18,12 @@ CODEX
 
 ## Completed
 
-- Codex finalized `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001` as local commit `22fd3d1`, `Document rolling window-size report filters`.
 - Claude Code added 4 CLI regression tests in `tests/test_cli.py`:
-  - `test_cli_report_files_reports_string_window_size`: `window_size: "20"` at the `report-files` boundary → exit code 2 + manifest-specific error on stderr.
-  - `test_cli_report_files_reports_boolean_window_size`: `window_size: true` at the `report-files` boundary → exit code 2 + manifest-specific error on stderr.
-  - `test_cli_report_audit_reports_string_window_size`: `window_size: "20"` at the `report-audit` boundary → exit code 2 + manifest-specific error on stderr.
-  - `test_cli_report_audit_reports_boolean_window_size`: `window_size: true` at the `report-audit` boundary → exit code 2 + manifest-specific error on stderr.
-- No runtime or parser code changes; the existing manifest `from_path()` rejection path already works correctly.
-- All 4 new tests reuse the existing manifest-specific error wording: `"manifest file entry field 'window_size' must be an integer or null, got <type> (entry key: <key>)"`.
-- Codex re-ran validation and marked `10_REVIEW_REPORT.md` as PASS. The implementation satisfies the brief without changing parser or CLI behavior.
+  - `test_cli_report_files_window_size_json_require_match_matched_entry`: `--window-size 20 --json --require-match` finds the correct entry and returns `window_size: 20` in JSON.
+  - `test_cli_report_files_window_size_json_require_match_zero_matches`: `--window-size 20 --json --require-match` fails with exit code 2, stderr message, and `matched_files=0` JSON payload when no entries match.
+  - `test_cli_report_audit_window_size_json_require_match_matched_entry`: `--window-size 20 --json --require-match` audit returns `status=ok` with `matched_files=1` and `validation_issues=0` for the matched entry.
+  - `test_cli_report_audit_window_size_json_require_match_zero_matches`: `--window-size 20 --json --require-match` audit fails with exit code 2 and the existing `no_matches` JSON issue payload.
+- No runtime or parser code changes; the existing selector plumbing already works correctly.
 
 ## Expected Files
 
@@ -39,17 +36,17 @@ CODEX
 
 ## Validation Baseline
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 201 passed in 1.96s
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 205 passed in 1.94s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
-- `scripts/git-finalize-check.sh` → passed (from `22fd3d1`)
+- `scripts/git-finalize-check.sh` → passed (from `06d2b4b`)
 
 ## Known Risks
 
 - Test-only; no runtime or parser behavior changed.
-- Stderr assertions use `"must be an integer or null"` substring from the existing manifest error message — stable unless `report_manifest.py` changes its wording.
+- JSON payload assertions use existing manifest fields (`matched_files`, `status`, `issues`, `no_matches` code) — stable unless the CLI reporting layer changes its JSON shape.
 - Legacy archived docs untouched.
 
 ## Next Suggested Step
 
-Codex should run finalization checks and create the local completion commit for `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001`.
+Codex should review the test additions, run validation, and finalize.

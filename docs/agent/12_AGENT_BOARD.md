@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001
+QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001
 
 ## Current Recipient
 
@@ -14,7 +14,7 @@ CODEX_FINALIZING
 
 ## Sender
 
-CODEX
+CLAUDE_CODE
 
 ## Short Message
 
@@ -22,21 +22,20 @@ Review passed. Current CLI regression task is accepted locally and ready for fin
 
 ## Accepted Scope
 
-- `tests/test_cli.py`: malformed `window_size` manifest-entry regression coverage for `report-files` and `report-audit`
+- `tests/test_cli.py`: `--window-size` combined with `--json` and `--require-match` for `report-files` and `report-audit`
 - Agent docs: implementation handoff updates for the current task
 
 ## Validation
 
 - Baseline from finalized prior task:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 197 passed in 1.86s
+  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 201 passed in 1.90s
   - `scripts/git-finalize-check.sh` -> passed
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
 - After implementation:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 201 passed in 1.96s
+  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` -> 205 passed in 1.94s
   - `scripts/check-progress-docs.sh` -> passed
   - `git diff --check` -> passed
-  - `10_REVIEW_REPORT.md` -> PASS
 
 ## Next Step
 

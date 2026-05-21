@@ -222,6 +222,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001`. The task should stay test-focused and avoid runtime changes unless the current CLI error surface is inconsistent.
 - Owner: CODEX
 
+### 2026-05-21: Select CLI strict/JSON parity for window_size filters as next Claude task
+
+- Decision: The next Claude Code task is focused CLI regression coverage for `--window-size` when combined with `--require-match` and `--json`.
+- Reason: Basic `--window-size` filter coverage and malformed-metadata boundary coverage already exist, and generic strict/json selector coverage exists for other filters, but the `window_size` selector itself still lacks locked no-match and JSON-path parity at both `report-files` and `report-audit` boundaries.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; widen the task into runtime CLI refactoring.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001`. The task should stay test-focused and avoid runtime changes unless a narrow command-surface bug is exposed.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

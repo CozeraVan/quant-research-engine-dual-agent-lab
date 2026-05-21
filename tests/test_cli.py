@@ -4620,3 +4620,166 @@ def test_cli_report_audit_reports_boolean_window_size(capsys, tmp_path):
     assert exit_code == 2
     assert "must be an integer or null" in captured.err
     assert "window_size" in captured.err
+
+
+# --- window_size --json --require-match parity ---
+
+
+def test_cli_report_files_window_size_json_require_match_matched_entry(capsys, tmp_path):
+    (tmp_path / "rolling_summary_20.csv").write_text(
+        "window_size,end_date,symbol_count\n20,2026-01-05,50\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    },
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["report-files", str(manifest_path), "--window-size", "20", "--json", "--require-match"]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert payload["files"][0]["window_size"] == 20
+    assert payload["files"][0]["key"] == "rolling_summary_20"
+
+
+def test_cli_report_files_window_size_json_require_match_zero_matches(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["report-files", str(manifest_path), "--window-size", "20", "--json", "--require-match"]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "no manifest entries matched filters" in captured.err
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 0
+    assert payload["files"] == []
+
+
+def test_cli_report_audit_window_size_json_require_match_matched_entry(capsys, tmp_path):
+    (tmp_path / "rolling_summary_20.csv").write_text(
+        "window_size,end_date,symbol_count\n20,2026-01-05,50\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    },
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["report-audit", str(manifest_path), "--window-size", "20", "--json", "--require-match"]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert payload["status"] == "ok"
+    assert payload["validation_issues"] == 0
+
+
+def test_cli_report_audit_window_size_json_require_match_zero_matches(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        ["report-audit", str(manifest_path), "--window-size", "20", "--json", "--require-match"]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "no manifest entries matched filters" in captured.err
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 0
+    assert payload["status"] == "failed"
+    assert payload["issues"] == [
+        {
+            "key": "manifest",
+            "code": "no_matches",
+            "path": str(manifest_path),
+            "message": "no manifest entries matched filters",
+        }
+    ]

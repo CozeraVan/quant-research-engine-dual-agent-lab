@@ -66,21 +66,22 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-49 | Batch grouped-artifact `group_by` header consistency | DONE | CODEX/CLAUDE_CODE | commit `de37afd`; `10_REVIEW_REPORT.md` PASS; batch grouped manifest `group_by` metadata now requires matching CSV header columns; 8 new tests; 183 tests passed | Preserve |
 | QRE-NEXT-50 | Rolling-artifact `window_size` filter parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `window_size` parsed from manifest entries and surfaced through `files()`/`paths()`/`validate_contents()`, `--window-size` CLI flag, and `report-files --json`; 9 manifest + 5 CLI tests; 197 tests passed | Preserve |
 | QRE-NEXT-51 | Rolling-artifact `window_size` usage docs | DONE | CODEX/CLAUDE_CODE | commit `22fd3d1`; `10_REVIEW_REPORT.md` PASS; README plus portfolio module docs updated with `--window-size` examples, `--window` vs `--window-size` distinction, and additive JSON metadata wording; doc checks passed | Preserve |
-| QRE-NEXT-52 | CLI regression coverage for invalid `window_size` manifest metadata | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; 201 passed in 1.96s | Preserve |
+| QRE-NEXT-52 | CLI regression coverage for invalid `window_size` manifest metadata | DONE | CODEX/CLAUDE_CODE | commit `06d2b4b`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; 201 passed in 1.90s | Preserve |
+| QRE-NEXT-53 | CLI strict/JSON parity for `window_size` filters | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; 205 passed in 1.94s | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-21 after Codex accepted `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001` for local finalization:
+Recorded on 2026-05-21 after Codex accepted `QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001` for local finalization:
 
-- Current task: `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001`
-- Last finalized: `QRE-DOCS-ROLLING-WINDOW-SIZE-FILTER-USAGE-001` (commit `22fd3d1`)
+- Current task: `QRE-CLI-WINDOW-SIZE-STRICT-JSON-PARITY-001`
+- Last finalized: `QRE-CLI-WINDOW-SIZE-METADATA-TYPE-REGRESSION-001` (commit `06d2b4b`)
 - Current verification:
-  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 201 passed in 1.96s
+  - `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 205 passed in 1.94s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
-  - `scripts/git-finalize-check.sh` → passed (from `22fd3d1`)
-- Review: `10_REVIEW_REPORT.md` is now PASS
-- Last implementation: test-only — 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; runtime unchanged
+  - `scripts/git-finalize-check.sh` → passed
+- Review: `10_REVIEW_REPORT.md` is PASS
+- Last implementation: test-only — 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; runtime unchanged
 - Next step: Codex local finalization commit
 
 ## Completed Module Summary
