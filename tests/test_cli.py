@@ -4329,3 +4329,179 @@ def test_cli_report_audit_validate_contents_accepts_valid_run_manifest(capsys, t
     payload = json.loads(captured.out)
     assert payload["status"] == "ok"
     assert payload["validation_issues"] == 0
+
+
+# --- window_size CLI filtering ---
+
+
+def test_cli_report_files_window_size_filter(capsys, tmp_path):
+    (tmp_path / "rolling_summary_20.csv").write_text(
+        "window_size,end_date,symbol_count\n20,2026-01-05,50\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "rolling_summary_60.csv").write_text(
+        "window_size,end_date,symbol_count\n60,2026-01-05,30\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    },
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--window-size", "20"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    lines = captured.out.strip().split("\n")
+    assert len(lines) == 1
+    assert "rolling_summary_20" in lines[0]
+
+
+def test_cli_report_audit_window_size_filter(capsys, tmp_path):
+    (tmp_path / "rolling_summary_20.csv").write_text(
+        "window_size,end_date,symbol_count\n20,2026-01-05,50\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "rolling_summary_60.csv").write_text(
+        "window_size,end_date,symbol_count\n60,2026-01-05,30\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    },
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-audit", str(manifest_path), "--window-size", "20"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "matched_files=1" in captured.out
+
+
+def test_cli_report_files_json_includes_window_size(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    entry = payload["files"][0]
+    assert entry["window_size"] == 20
+
+
+def test_cli_report_files_json_omits_window_size_when_absent(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "summary",
+                        "path": "summary.csv",
+                        "filename": "summary.csv",
+                        "role": "summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    entry = payload["files"][0]
+    assert "window_size" not in entry
+
+
+def test_cli_report_files_json_includes_window_size_null(capsys, tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                        "window_size": None,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["report-files", str(manifest_path), "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    entry = payload["files"][0]
+    assert "window_size" not in entry

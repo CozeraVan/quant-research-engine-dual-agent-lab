@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001
+QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001
 
 ## Current Phase
 
@@ -16,17 +16,17 @@ CODEX
 
 ## Last Completed Step
 
-Codex re-reviewed `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001` and marked `10_REVIEW_REPORT.md` as PASS. `ReportManifest.validate_contents()` now enforces batch grouped manifest `group_by` header consistency without affecting evaluation/shared grouped checks. Validation: 183 tests pass; `scripts/check-progress-docs.sh` passes; `git diff --check` passes.
+Codex reviewed `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001` and marked `10_REVIEW_REPORT.md` as PASS. `ReportFile` now parses optional numeric `window_size`, `ReportManifest` filters on it, and `qre report-files` / `qre report-audit` now accept `--window-size`. Validation: `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 197 passed in 1.86s; `scripts/check-progress-docs.sh` passes; `git diff --check` passes.
 
 ## Next Required Step
 
-Codex should run final git checks and create the local completion commit for `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001`.
+Codex should run final git checks and create the local completion commit for `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001`.
 
 ## Git State
 
 - Current branch: `master`
-- Last accepted implementation commit: `a3768fb`, `Tighten grouped artifact audit consistency`
-- Working tree contains Claude Code implementation for `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001`.
+- Last accepted implementation commit: `de37afd`, `Close batch grouped manifest header audit gap`
+- Working tree contains Claude Code implementation plus handoff document updates for `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001`.
 - Standing approval: local commits approved by user; no remote push requested.
 
 ## Short Prompt Commands

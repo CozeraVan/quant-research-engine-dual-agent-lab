@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     report_files_parser.add_argument("--symbol")
     report_files_parser.add_argument("--window")
     report_files_parser.add_argument("--group-by")
+    report_files_parser.add_argument("--window-size", type=int, default=None)
     report_files_parser.add_argument("--keys", action="store_true", help="Print manifest keys instead of paths.")
     report_files_parser.add_argument(
         "--check-exists",
@@ -77,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     report_audit_parser.add_argument("--symbol")
     report_audit_parser.add_argument("--window")
     report_audit_parser.add_argument("--group-by")
+    report_audit_parser.add_argument("--window-size", type=int, default=None)
     report_audit_parser.add_argument(
         "--require-match",
         action="store_true",
@@ -420,12 +422,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 symbol=args.symbol,
                 window=args.window,
                 group_by=args.group_by,
+                window_size=args.window_size,
             )
             paths = manifest.paths(
                 role=args.role,
                 symbol=args.symbol,
                 window=args.window,
                 group_by=args.group_by,
+                window_size=args.window_size,
             )
 
             missing_paths: list[Path] = []
@@ -439,6 +443,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     symbol=args.symbol,
                     window=args.window,
                     group_by=args.group_by,
+                    window_size=args.window_size,
                 )
 
             no_matches = args.require_match and not entries
@@ -459,6 +464,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                         item["window"] = entry.window
                     if entry.group_by is not None:
                         item["group_by"] = entry.group_by
+                    if entry.window_size is not None:
+                        item["window_size"] = entry.window_size
                     file_list.append(item)
                 payload: dict[str, object] = {
                     "manifest_kind": manifest.kind,
@@ -516,12 +523,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 symbol=args.symbol,
                 window=args.window,
                 group_by=args.group_by,
+                window_size=args.window_size,
             )
             paths = manifest.paths(
                 role=args.role,
                 symbol=args.symbol,
                 window=args.window,
                 group_by=args.group_by,
+                window_size=args.window_size,
             )
             missing_paths = [path for path in paths if not path.exists()]
             issues = manifest.validate_contents(
@@ -529,6 +538,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 symbol=args.symbol,
                 window=args.window,
                 group_by=args.group_by,
+                window_size=args.window_size,
             )
             no_matches = args.require_match and not entries
             status = "failed" if missing_paths or issues or no_matches else "ok"

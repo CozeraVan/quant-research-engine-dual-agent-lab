@@ -1620,3 +1620,264 @@ def test_validate_contents_batch_header_without_group_by_is_not_checked(tmp_path
     )
     manifest = ReportManifest.from_path(manifest_path)
     assert manifest.validate_contents() == []
+
+
+# --- window_size parsing and filtering ---
+
+
+def test_report_file_parses_window_size(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    entry = manifest.files()[0]
+    assert entry.window_size == 20
+
+
+def test_report_file_window_size_defaults_to_none(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    entry = manifest.files()[0]
+    assert entry.window_size is None
+
+
+def test_report_file_window_size_accepts_null(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                        "window_size": None,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    entry = manifest.files()[0]
+    assert entry.window_size is None
+
+
+def test_report_file_rejects_string_window_size(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                        "window_size": "20",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="window_size"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_report_file_rejects_boolean_window_size(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary",
+                        "path": "rolling_summary.csv",
+                        "filename": "rolling_summary.csv",
+                        "role": "rolling_summary",
+                        "window_size": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="window_size"):
+        ReportManifest.from_path(manifest_path)
+
+
+def test_files_filters_by_window_size(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    },
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    entries = manifest.files(window_size=20)
+    assert len(entries) == 1
+    assert entries[0].key == "rolling_summary_20"
+
+
+def test_paths_filters_by_window_size(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    },
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    paths = manifest.paths(window_size=60)
+    assert len(paths) == 1
+    assert paths[0] == tmp_path / "rolling_summary_60.csv"
+
+
+def test_validate_contents_filters_by_window_size(tmp_path):
+    (tmp_path / "rolling_summary_20.csv").write_text(
+        "window_size,end_date,symbol_count\n20,2026-01-05,50\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "rolling_summary_60.csv").write_text(
+        "window_size,end_date,symbol_count\n60,2026-01-05,30\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    },
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents(window_size=20)
+    assert len(issues) == 0
+
+
+def test_validate_contents_window_size_filters_missing_file(tmp_path):
+    # Only create rolling_summary_60, not rolling_summary_20
+    (tmp_path / "rolling_summary_60.csv").write_text(
+        "window_size,end_date,symbol_count\n60,2026-01-05,30\n",
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "rolling_summary_20",
+                        "path": "rolling_summary_20.csv",
+                        "filename": "rolling_summary_20.csv",
+                        "role": "rolling_summary",
+                        "window_size": 20,
+                    },
+                    {
+                        "key": "rolling_summary_60",
+                        "path": "rolling_summary_60.csv",
+                        "filename": "rolling_summary_60.csv",
+                        "role": "rolling_summary",
+                        "window_size": 60,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents(window_size=20)
+    assert len(issues) == 1
+    assert issues[0].code == "missing_file"
+    assert "rolling_summary_20" in str(issues[0].path)

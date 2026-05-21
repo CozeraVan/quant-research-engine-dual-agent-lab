@@ -198,6 +198,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001`. The task should stay inside report-manifest validation and targeted CLI/tests without changing manifest schema version.
 - Owner: CODEX
 
+### 2026-05-21: Select rolling window_size filter parity as next Claude task
+
+- Decision: The next Claude Code task is report-manifest and CLI parity for rolling-artifact `window_size` metadata.
+- Reason: Batch and shared manifest writers already emit `window_size` on rolling entries, but `ReportFile`, `ReportManifest`, `qre report-files`, and `qre report-audit` still cannot filter or surface that metadata. The gap is self-contained and stays on the reporting/reproducibility path.
+- Alternatives: Start real benchmark wiring; start time-varying suspension/ST metadata; jump to a larger run-bundle orchestration feature.
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now describes `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001`. The task should stay inside report-manifest parsing/filtering, CLI plumbing, and targeted tests without changing manifest schema version or output-generation logic.
+- Owner: CODEX
+
 ## Open / To Confirm
 
 - Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.

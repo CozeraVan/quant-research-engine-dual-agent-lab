@@ -63,7 +63,8 @@
 | M5.10 | Evaluation group-by manifest parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; per-column `group_summary_by_<col>.csv` files plus evaluation manifest `group_by` metadata; 164 targeted tests passed | Preserve |
 | M5.11 | Evaluation group-by parity documentation | DONE | CODEX/CLAUDE_CODE | commit `5fc7605`; `10_REVIEW_REPORT.md` PASS; README plus module docs cover combined/per-column evaluation grouped artifacts and `--group-by` discovery/audit usage | Preserve |
 | M5.12 | Grouped artifact `group_by` audit consistency | DONE | CODEX/CLAUDE_CODE | commit `a3768fb`; `10_REVIEW_REPORT.md` PASS; grouped eval/shared `group_by` mismatch checks now run only after required-column validation passes; 175 targeted tests passed | Preserve |
-| M5.13 | Batch grouped-artifact `group_by` header consistency | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; batch grouped manifest `group_by` metadata now requires matching CSV header columns; 183 targeted tests passed | Preserve |
+| M5.13 | Batch grouped-artifact `group_by` header consistency | DONE | CODEX/CLAUDE_CODE | commit `de37afd`; `10_REVIEW_REPORT.md` PASS; batch grouped manifest `group_by` metadata now requires matching CSV header columns; 183 targeted tests passed | Preserve |
+| M5.14 | Rolling-artifact `window_size` filter parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; batch/shared rolling manifest metadata `window_size` now filters through report discovery/audit and surfaces in `report-files --json`; 197 targeted tests passed | Preserve |
 
 ## Milestone 6: Dual-Agent Workflow
 

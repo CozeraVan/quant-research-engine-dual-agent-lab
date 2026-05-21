@@ -62,6 +62,7 @@ class ReportFile:
     symbol: str | None = None
     window: str | None = None
     group_by: str | None = None
+    window_size: int | None = None
 
     _REQUIRED_FIELDS = ("key", "path", "filename", "role")
 
@@ -90,6 +91,12 @@ class ReportFile:
                 raise ValueError(
                     f"manifest file entry field {field!r} must be a string or null, got {type(value).__name__} (entry key: {entry_key!r})"
                 )
+        window_size_value = mapping.get("window_size")
+        if window_size_value is not None and type(window_size_value) is not int:
+            raise ValueError(
+                f"manifest file entry field 'window_size' must be an integer or null, "
+                f"got {type(window_size_value).__name__} (entry key: {entry_key!r})"
+            )
         return cls(
             key=entry_key,
             path=mapping["path"],
@@ -98,6 +105,7 @@ class ReportFile:
             symbol=_optional_string(mapping.get("symbol")),
             window=_optional_string(mapping.get("window")),
             group_by=_optional_string(mapping.get("group_by")),
+            window_size=window_size_value,
         )
 
 
@@ -169,6 +177,7 @@ class ReportManifest:
         symbol: str | None = None,
         window: str | None = None,
         group_by: str | None = None,
+        window_size: int | None = None,
     ) -> list[ReportFile]:
         return [
             entry
@@ -177,6 +186,7 @@ class ReportManifest:
             and _matches(entry.symbol, symbol)
             and _matches(entry.window, window)
             and _matches(entry.group_by, group_by)
+            and _matches_int(entry.window_size, window_size)
         ]
 
     def paths(
@@ -185,8 +195,9 @@ class ReportManifest:
         symbol: str | None = None,
         window: str | None = None,
         group_by: str | None = None,
+        window_size: int | None = None,
     ) -> list[Path]:
-        return [self.base_dir / entry.path for entry in self.files(role, symbol, window, group_by)]
+        return [self.base_dir / entry.path for entry in self.files(role, symbol, window, group_by, window_size=window_size)]
 
     def validate_contents(
         self,
@@ -194,9 +205,10 @@ class ReportManifest:
         symbol: str | None = None,
         window: str | None = None,
         group_by: str | None = None,
+        window_size: int | None = None,
     ) -> list[ReportValidationIssue]:
         issues: list[ReportValidationIssue] = []
-        for entry in self.files(role=role, symbol=symbol, window=window, group_by=group_by):
+        for entry in self.files(role=role, symbol=symbol, window=window, group_by=group_by, window_size=window_size):
             path = self.base_dir / entry.path
             if not path.exists():
                 issues.append(
@@ -231,6 +243,10 @@ def _optional_string(value: Any) -> str | None:
 
 
 def _matches(value: str | None, expected: str | None) -> bool:
+    return expected is None or value == expected
+
+
+def _matches_int(value: int | None, expected: int | None) -> bool:
     return expected is None or value == expected
 
 

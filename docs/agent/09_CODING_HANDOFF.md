@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001
+QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001
 
 ## Written By
 
@@ -18,33 +18,38 @@ Implemented. Ready for Codex review.
 
 ## Implementation Summary
 
-Added `_validate_csv_batch_group_by_header()` to `ReportManifest.validate_contents()`. After required-column validation passes for batch grouped artifact entries with manifest `group_by` metadata, the new check reads the CSV header and verifies it contains a column named exactly the manifest entry's `group_by` value. Missing columns produce a `group_by_header_mismatch` validation issue including the expected manifest value and the observed CSV header columns.
+Added optional `window_size` metadata parsing, filtering, and CLI surface parity across the report-manifest stack:
 
-The check is scoped to batch grouped roles (`_BATCH_GROUPED_ROLES`): `group_summary`, `group_ranked_symbols`, `window_summary`, `window_ranked_symbols`, `rolling_summary`, `rolling_ranked_symbols`. Evaluation/shared grouped roles continue to use `_validate_csv_group_by_consistency()` for literal `group_by` column values. Entries without manifest `group_by` metadata are not checked by either path.
+- **`ReportFile`**: Added `window_size: int | None = None` field. `from_mapping()` parses `window_size` from manifest JSON entries — absent or explicit `null` yields `None`; non-integer types (string, boolean) raise a manifest-specific `ValueError`.
+- **`ReportManifest.files()` / `paths()` / `validate_contents()`**: Added `window_size: int | None = None` parameter. Uses `_matches_int()` helper to filter entries whose `window_size` matches the requested value.
+- **CLI**: Added `--window-size <int>` to `qre report-files` and `qre report-audit`. Threaded through all manifest method calls. `report-files --json` surfaces `window_size` on matched file entries when present.
+- **Tests**: 9 manifest tests (parsing, absent/null acceptance, string/boolean rejection, `files()`/`paths()`/`validate_contents()` filtering) + 5 CLI tests (`--window-size` filter, JSON inclusion/omission/null). Total: 197 passed in 2.32s.
 
 ## Files Changed
 
-- `src/quant_research_engine/portfolio/report_manifest.py` — Added `_BATCH_GROUPED_ROLES` set; added `_validate_csv_batch_group_by_header()` function; wired call in `validate_contents()` after `_validate_csv_columns()` only for batch grouped roles.
-- `tests/test_portfolio_report_manifest.py` — Added 6 tests: mismatch detection for `group_summary`, `window_summary`, `window_ranked_symbols`; matching acceptance; missing-columns-skips-header-check regression; no-check-without-manifest-group-by.
-- `tests/test_cli.py` — Added 2 CLI tests: `test_cli_report_audit_batch_header_mismatch` for stderr surface, `test_cli_report_audit_batch_header_mismatch_json` for JSON issue payload.
+- `src/quant_research_engine/portfolio/report_manifest.py` — Added `window_size` field to `ReportFile`, parsing in `from_mapping()`, `_matches_int` helper, `window_size` parameter on `files()`/`paths()`/`validate_contents()`.
+- `src/quant_research_engine/apps/cli.py` — Added `--window-size` argument to `report-files` and `report-audit` parsers; threaded `window_size` through all manifest calls; added `window_size` to `report-files --json` output.
+- `tests/test_portfolio_report_manifest.py` — 9 new tests for parsing, type rejection, and filtering behavior.
+- `tests/test_cli.py` — 5 new tests for CLI filtering and JSON output.
 
 ## Validation Results
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 183 passed in 1.91s
+- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 197 passed in 2.32s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
 
 ## Constraints
 
 - Manifest schema version unchanged.
-- Evaluation/shared grouped consistency checks from `a3768fb` preserved.
-- Batch grouped entries without manifest `group_by` metadata not checked.
+- Existing `role`, `symbol`, `window`, `group_by` filters preserved.
+- Numeric `window_size` filtering independent of string `window` filtering.
 - No changes to `docs/legacy/**`.
+- No changes to rolling artifact filenames, roles, or output-generation logic.
 
 ## Git State
 
 - Branch: `master`
-- Last finalized implementation commit: `a3768fb`, `Tighten grouped artifact audit consistency`
+- Last finalized implementation commit: `de37afd`, `Close batch grouped manifest header audit gap`
 - Current changes are uncommitted (awaiting Codex review).
 
 ## Next Suggested Step

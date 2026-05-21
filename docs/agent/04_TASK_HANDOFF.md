@@ -2,11 +2,11 @@
 
 ## Current Task
 
-Harden batch grouped-artifact `group_by` header consistency.
+Add rolling-artifact `window_size` filter parity to report discovery and audit.
 
 ## Task ID
 
-QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001
+QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001
 
 ## Current Status
 
@@ -18,19 +18,20 @@ CODEX
 
 ## Completed
 
-- Claude Code added `_BATCH_GROUPED_ROLES` set and `_validate_csv_batch_group_by_header()` function.
-- For batch grouped roles (`group_summary`, `group_ranked_symbols`, `window_summary`, `window_ranked_symbols`, `rolling_summary`, `rolling_ranked_symbols`) with manifest `group_by` metadata, the CSV header must contain the column named by the manifest `group_by` value.
-- Mismatches produce a `group_by_header_mismatch` validation issue with the manifest value and observed header columns.
-- Entries without manifest `group_by` metadata are not checked.
-- Evaluation/shared grouped consistency checks from `a3768fb` remain unchanged.
-- 8 new tests added (6 manifest + 2 CLI). All 183 tests pass.
-- `scripts/check-progress-docs.sh` and `git diff --check` pass.
-- Codex reran the batch grouped-file reproduction and confirmed that manifest `group_by='board'` with CSV header `symbol_count,sector` now returns `group_by_header_mismatch`.
-- Codex review now marks `10_REVIEW_REPORT.md` as PASS.
+- Codex finalized `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001` as local commit `de37afd`, `Close batch grouped manifest header audit gap`.
+- Claude Code implemented rolling-artifact `window_size` filter parity:
+  - `ReportFile` now parses optional numeric `window_size` from manifest entries (absent/null allowed; non-integer types rejected with `ValueError`).
+  - `ReportManifest.files()`, `paths()`, and `validate_contents()` accept optional `window_size: int | None` filter parameter via `_matches_int` helper.
+  - `qre report-files` and `qre report-audit` accept `--window-size <int>`.
+  - `report-files --json` includes numeric `window_size` on matched file entries when present.
+  - 9 new manifest tests (parsing, type validation, filtering, validation-contents integration) and 5 new CLI tests (filter, JSON inclusion/omission/null).
+  - 197 tests pass; `scripts/check-progress-docs.sh` passes; `git diff --check` passes.
+- Codex re-ran validation and marked `10_REVIEW_REPORT.md` as PASS. The implementation satisfies the brief without changing manifest schema version, existing `window`/`group_by` filter semantics, or rolling output generation.
 
 ## Expected Files
 
 - `src/quant_research_engine/portfolio/report_manifest.py`
+- `src/quant_research_engine/apps/cli.py`
 - `tests/test_portfolio_report_manifest.py`
 - `tests/test_cli.py`
 - `docs/agent/04_TASK_HANDOFF.md`
@@ -41,17 +42,17 @@ CODEX
 
 ## Validation Baseline
 
-- `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 183 passed in 1.94s
+- Implementation baseline: `uv run pytest tests/test_cli.py tests/test_portfolio_report_manifest.py -q` → 197 passed in 1.86s
 - `scripts/check-progress-docs.sh` → passed
 - `git diff --check` → passed
 
 ## Known Risks
 
-- Preserved existing batch `report-files` / `report-audit` filtering semantics.
-- No manifest schema-version bump.
-- Evaluation/shared grouped consistency checks from `a3768fb` unchanged.
-- Batch `group_by` header check only applies to entries with manifest `group_by` metadata.
+- Preserved existing `report-files` / `report-audit` filters for `role`, `symbol`, `window`, and `group_by`.
+- Numeric `window_size` filtering is independent of string `window` filtering.
+- No manifest schema-version bump and no filename/output-generation changes.
+- `window_size` parsing rejects string and boolean values with a manifest-specific `ValueError`.
 
 ## Next Suggested Step
 
-Codex should run finalization checks and create the local completion commit for `QRE-REPORT-BATCH-GROUP-BY-HEADER-CONSISTENCY-001`.
+Codex should run finalization checks and create the local completion commit for `QRE-REPORT-ROLLING-WINDOW-SIZE-FILTER-PARITY-001`.
