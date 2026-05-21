@@ -8,11 +8,11 @@ QRE-REPORT-MT5-TV-FULL-MARKET-001
 
 ## Current Phase
 
-USER_ACCEPTANCE
+DONE
 
 ## Current Owner
 
-USER
+CODEX
 
 ## Last Completed Step
 
@@ -26,11 +26,12 @@ Verified:
 
 ## Next Required Step
 
-User confirms whether to run finalization (local commit flow) for this task.
+No required work remains for this task. Start the next queued task from roadmap/progress.
 
 ## Git State
 
 - Current branch: `master`
+- Finalization commit: `27828b8`
 - Last accepted GUI implementation commit: `766dc98`, `Make backtest iteration directly usable in a local browser console`
 - Standing approval: local commits approved by user; no remote push requested.
 - Existing uncommitted GUI-related changes must be preserved and are outside this design task.

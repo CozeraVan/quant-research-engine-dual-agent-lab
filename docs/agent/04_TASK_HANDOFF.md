@@ -10,11 +10,11 @@ QRE-REPORT-MT5-TV-FULL-MARKET-001
 
 ## Current Status
 
-REVIEW_PASS. Codex re-review passed after targeted fix.
+DONE. Task finalized locally by Codex.
 
 ## Current Owner
 
-USER
+CODEX
 
 ## Completed
 
@@ -112,4 +112,4 @@ Current results: 254 passed, 2 warnings (pre-existing numpy) in 3.20s; all check
 
 ## Next Suggested Step
 
-User decides whether to trigger Codex finalization for this task (local commit flow, no remote push).
+Proceed to the next roadmap item. Recommended next implementation slice: strategy-entry contract implementation and compiler/preflight preparation.

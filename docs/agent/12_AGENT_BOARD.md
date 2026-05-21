@@ -10,7 +10,7 @@ USER
 
 ## Message Type
 
-REVIEW_PASS
+FINALIZED
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Re-review passed. The `realized_pnl` semantic defect is fixed and regression-guarded. Ready for user acceptance and finalization decision.
+Finalization complete. Local commit created for `QRE-REPORT-MT5-TV-FULL-MARKET-001`; no remote push performed.
 
 ## Accepted Direction
 
@@ -58,4 +58,4 @@ Results: 254 passed, 2 warnings (pre-existing numpy) in 3.11s; quality gate bloc
 
 ## Next Step
 
-User decides whether Codex should execute finalization (local commit flow, no remote push).
+Move to the next task (recommended: strategy entry contract implementation slice).

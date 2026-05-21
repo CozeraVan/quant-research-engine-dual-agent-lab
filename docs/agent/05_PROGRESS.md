@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+DONE
 
 ## Current Active Work
 
-`QRE-REPORT-MT5-TV-FULL-MARKET-001` has passed Codex re-review and is waiting for user acceptance/finalization decision.
+`QRE-REPORT-MT5-TV-FULL-MARKET-001` has been finalized locally (commit `27828b8`).
 
 ## Progress Table
 
@@ -17,7 +17,7 @@ USER_ACCEPTANCE
 | DOC-3 | Add archive notes to legacy planning docs | DONE | CODEX | commit `2565e13` | Preserve; do not delete |
 | QRE-GUI-LOCAL-BACKTEST-CONSOLE-001 | Local browser backtest console shell and YAML editor | DONE | CLAUDE_CODE | 179 GUI/CLI tests passed; rerun, artifact viewer, and summary.json coverage verified | Preserve |
 | QRE-STRATEGY-IO-CONTRACT-DESIGN-001 | Strategy IO contract design | DESIGN_RECORDED | CODEX | `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`; user clarified QRE should write the strategy-entry standard, not rewrite external strategy projects | Preserve as the entry-contract source for later implementation |
-| QRE-REPORT-MT5-TV-FULL-MARKET-001 | MT5 + TradingView full-market report bundle | IMPLEMENTED | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS after re-review; `realized_pnl` semantic fix landed with regression test; 254 tests pass | User acceptance and finalize decision |
+| QRE-REPORT-MT5-TV-FULL-MARKET-001 | MT5 + TradingView full-market report bundle | DONE | CODEX/CLAUDE_CODE | commit `27828b8`; `10_REVIEW_REPORT.md` PASS; `realized_pnl` semantic fix landed with regression test; 254 tests pass | Start next task |
 | QRE-M1 | Project skeleton and core market profile | DONE | HISTORICAL | package layout, tests, skeleton plan | Preserve |
 | QRE-M2 | Data layer and preflight | DONE | HISTORICAL | `qre db-smoke`, `factor-smoke`, `metadata-smoke`, `preflight` | Add real metadata adapters later |
 | QRE-M3 | Evaluation MVP | DONE | HISTORICAL | forward returns, IC, Rank IC, quantile, friction summaries | Add grouping/regime later |
