@@ -12,6 +12,16 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-23: Research-run CLI orchestrator implemented and self-reviewed
+
+- Decision: Implement `QRE-RESEARCH-RUN-ORCHESTRATION-001` (`qre research-run` CLI command) and self-review PASS, closing the "Larger research-run bundles beyond run-level identifier linkage" known gap.
+- Reason: The 22-flag smoke discovery status enrichment series is complete and the largest remaining known gap is research-run orchestration. This bundles preflight → eval-config → backtest under one command with a common `--run-id` and `research_run_manifest.json`, using the same direct-engine-call pattern as the GUI.
+- Alternatives: Continue only with per-command `--run-id` linkage; add a broader DAG-based pipeline; wait for Codex planning.
+- Impact: New `src/quant_research_engine/orchestration/research_run.py` module (~200 lines), `qre research-run` CLI command with 16 arguments, 10 new tests (7 unit + 3 CLI), 476 total pass. Stale roadmap entries (M7.x, M8.1, M8.3, M8.10) synced to DONE. Agent docs updated for git finalization.
+- Owner: CLAUDE_CODE (acting planner/implementer/reviewer — Codex unavailable)
+
+---
+
 ### 2026-05-23: Accept status-pass-count and complete smoke discovery status enrichment series
 
 - Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` as PASS and complete the smoke discovery status enrichment series.

@@ -6,7 +6,7 @@ CODEX_GIT_FINALIZING
 
 ## Current Active Work
 
-`QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` review passed. Smoke discovery status enrichment series complete. Awaiting git finalization.
+`QRE-RESEARCH-RUN-ORCHESTRATION-001` review passed. Research-run orchestrator implementation complete. Awaiting git finalization.
 
 ## Progress Table
 
@@ -117,26 +117,31 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-56 | Tushare security-status smoke harness | DONE | CODEX | `scripts/tushare_security_smoke.py`; `stock_basic` and `suspend_d` smoke validation succeed, `stock_st` / `stk_alert` remain permission-blocked | Preserve; use as a read-only source-shape probe before bulk ingestion |
 | QRE-NEXT-57 | Tushare security source adapter scaffold | DONE | CODEX | `src/quant_research_engine/data/tushare_security.py`; smoke script now delegates to a reusable wrapper; targeted unit tests passed | Preserve; use as the reusable source boundary for later bulk ingestion |
 | QRE-NEXT-58 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`; 17 targeted tests pass; smoke harness preserved | Preserve; reuse as the source boundary for later bulk ingestion |
+| QRE-NEXT-59 | Research-run CLI orchestrator | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `qre research-run` chains preflight→eval→backtest under one `--run-id` with `research_run_manifest.json`; 10 new tests; 476 passed | Preserve; expand run-bundle scope in future slices |
 
 ## Latest Verified State
 
-Recorded on 2026-05-23 after Claude Code (acting reviewer, Codex unavailable) reviewed and accepted `--status-pass-count`:
+Recorded on 2026-05-23 after Claude Code implemented and self-reviewed `QRE-RESEARCH-RUN-ORCHESTRATION-001` (PASS):
 
-- Current task: `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` — DONE (review PASS)
-- Last finalized: `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` (Claude Code acting reviewer)
+- Current task: `QRE-RESEARCH-RUN-ORCHESTRATION-001` — DONE (review PASS)
+- Last finalized: `QRE-RESEARCH-RUN-ORCHESTRATION-001` (Claude Code acting planner/implementer/reviewer)
 - Implementation:
-  - `src/quant_research_engine/apps/cli.py` — added `--status-pass-count` parser flag (bool, `action="store_true"`); requires `--status-only`; derives count from already-computed `summary_pass`; text mode appends `\tpass_count=<int>`; JSON mode adds `"pass_count"` integer; compatible with all other status flags; invalid combination returns exit 2
-  - `tests/test_cli.py` — 4 new tests (text pass_count=2, JSON pass_count integer type assertion, requires-status-only validation, quiet+status-file)
-  - `docs/strategy_entry/three_strategy_smoke_report.md` — `--status-pass-count` usage examples, description paragraph, exit codes and compatibility notes
+  - `src/quant_research_engine/orchestration/research_run.py` — ~200 lines: `ResearchRunRequest` + `ResearchRunResult` dataclasses, `run_research_run()` orchestrator, `_write_research_manifest()`, per-stage helpers; auto-generates `run_id`, fail-fast on preflight/eval error with partial manifest
+  - `src/quant_research_engine/apps/cli.py` — `qre research-run` subparser with 16 arguments, handler calls engine functions directly (GUI pattern)
+  - `tests/test_research_run.py` — 7 unit tests (request/result construction, manifest writing with ok/error/skipped stages)
+  - `tests/test_cli.py` — 3 CLI tests (--help, missing required args, no-DB error)
+  - `docs/agent/03_ROADMAP.md` — M8.42 added, M7.x/M8.1/M8.3/M8.10/M8.41 synced to DONE
+  - `docs/agent/06_DECISION_LOG.md` — decision entry added
+  - `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
 - Review: `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
 - Validation:
-  - `uv run pytest tests/test_cli.py -q -k "smoke_files"` → 114 passed in 1.66s
-  - `uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py -q` → 466 passed, 2 warnings in 4.83s
+  - `uv run pytest tests/test_research_run.py -q` → 7 passed in 0.46s
+  - `uv run pytest tests/test_cli.py -q --tb=short -k "research_run"` → 3 passed in 0.80s
+  - `uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_research_run.py -q` → 476 passed, 2 warnings in 5.01s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
-- Residual limitations:
-  - `pass_count` reflects filtered strategies (after `--strategy` filter); count may differ from unfiltered total when filters are active
-- Next step: Claude Code (acting finalizer) performs git commit; smoke discovery status enrichment series is complete
+- Known gaps closed: "Larger research-run bundles beyond run-level identifier linkage"
+- Next step: Claude Code (acting finalizer) performs git commit; research-run orchestrator is complete
 
 Current GUI direction approved on 2026-05-21:
 
@@ -196,7 +201,7 @@ User-requested strategy work in 2026-05-21:
 - Canonical security-snapshot contract is complete; later bulk ingestion can reuse the Tushare source scaffold.
 - Bulk ingestion / durable loading for the Tushare security source scaffold once the upstream source contract is settled.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
-- Larger research-run reproducibility workflow beyond run-ID linkage.
+- Research-run CLI orchestrator is complete; larger multi-stage bundling is now standardized.
 - Strategy IO contract implementation after design approval.
 - Full-market report shared-cash support (currently batch-only).
 - Full-market report charts.

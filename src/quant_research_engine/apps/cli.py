@@ -44,6 +44,7 @@ from quant_research_engine.strategies.missing_factor import (
 )
 from quant_research_engine.strategies.smoke_runner import run_strategy_smoke
 from quant_research_engine.strategies.spec import StrategySpec
+from quant_research_engine.orchestration.research_run import ResearchRunRequest, run_research_run
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -321,6 +322,26 @@ def build_parser() -> argparse.ArgumentParser:
                                     help="Include passed-strategy count in status-only output (requires --status-only).")
     smoke_files_parser.add_argument("--status-file", type=Path, default=None,
                                     help="Persist status output to file for CI (always written regardless of --quiet).")
+
+    research_run_parser = subparsers.add_parser("research-run", help="Run preflight + eval + backtest as one orchestrated research run")
+    research_run_parser.add_argument("strategy", type=Path, help="Path to strategy spec YAML or high-level entry YAML.")
+    research_run_parser.add_argument("--start", required=True, type=date.fromisoformat, help="Start date (YYYY-MM-DD).")
+    research_run_parser.add_argument("--end", required=True, type=date.fromisoformat, help="End date (YYYY-MM-DD).")
+    research_run_parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for all stage artifacts.")
+    research_run_parser.add_argument("--db-url", help="Database URL. Defaults to QRE_MARKET_DB_URL or SR_MARKET_DB_URL.")
+    research_run_parser.add_argument("--codes", nargs="*", default=None)
+    research_run_parser.add_argument("--market-profile", type=Path, help="Optional market profile YAML.")
+    research_run_parser.add_argument("--skip-preflight", action="store_true", help="Skip preflight stage.")
+    research_run_parser.add_argument("--skip-eval", action="store_true", help="Skip evaluation stage.")
+    research_run_parser.add_argument("--backtest-mode", choices=["batch", "shared"], default="batch", help="Backtest mode (default: batch).")
+    research_run_parser.add_argument("--initial-cash", type=float, default=1_000_000, help="Initial cash for backtest (default: 1000000).")
+    research_run_parser.add_argument("--min-factor-coverage", type=float, default=0.8)
+    research_run_parser.add_argument("--group-by", nargs="*", default=None, help="Optional grouping columns for evaluation summaries.")
+    research_run_parser.add_argument("--random-baseline-seed", type=int, default=None, help="Optional seed for deterministic random-baseline comparison.")
+    research_run_parser.add_argument("--round-trip-cost-rate", type=float, default=None, help="Optional round-trip cost rate override.")
+    research_run_parser.add_argument("--metadata-columns", nargs="*", default=None, help="Optional metadata columns for backtest outputs.")
+    research_run_parser.add_argument("--window-size", type=int, default=None, help="Optional rolling window size for backtest.")
+    research_run_parser.add_argument("--run-id", default=None, help="Optional run-level identifier (auto-generated if omitted).")
 
     gui_parser = subparsers.add_parser("gui", help="Launch the local browser backtest console")
     gui_parser.add_argument("--host", default="127.0.0.1", help="Host to bind the console server to.")
@@ -1841,6 +1862,48 @@ def main(argv: Sequence[str] | None = None) -> int:
         if require_match_fail:
             return 2
         return 2 if summary["overall_status"] == "fail" else 0
+
+    if args.command == "research-run":
+        try:
+            request = ResearchRunRequest(
+                strategy_path=args.strategy,
+                start=args.start,
+                end=args.end,
+                output_dir=args.output_dir,
+                run_id=args.run_id,
+                db_url=args.db_url,
+                codes=args.codes,
+                market_profile_path=args.market_profile,
+                skip_preflight=args.skip_preflight,
+                skip_eval=args.skip_eval,
+                backtest_mode=args.backtest_mode,
+                initial_cash=args.initial_cash,
+                min_factor_coverage=args.min_factor_coverage,
+                group_by=args.group_by,
+                random_baseline_seed=args.random_baseline_seed,
+                round_trip_cost_rate=args.round_trip_cost_rate,
+                metadata_columns=args.metadata_columns,
+                window_size=args.window_size,
+            )
+            result = run_research_run(request)
+        except Exception as exc:
+            print(str(exc), file=__import__("sys").stderr)
+            return 2
+
+        print(f"run_id={result.run_id}")
+        print(f"preflight_status={result.preflight_status}")
+        print(f"eval_status={result.eval_status}")
+        print(f"backtest_status={result.backtest_status}")
+        if result.manifest_path:
+            print(f"research_manifest={result.manifest_path}")
+        if result.error_message:
+            print(f"error={result.error_message}", file=__import__("sys").stderr)
+            return 2
+        if result.backtest_status == "error":
+            return 2
+        for key, path in result.backtest_paths.items():
+            print(f"{key}_path={path}")
+        return 0
 
     if args.command == "gui":
         from quant_research_engine.gui.app import launch_gui

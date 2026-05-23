@@ -2,19 +2,19 @@
 
 ## Current Task
 
-Add `smoke-files --status-pass-count` for passed-strategy-count visibility in status-only outputs.
+Add `qre research-run` command that chains preflight → eval-config → backtest under a common `--run-id` with a research-run manifest.
 
 ## Task ID
 
-QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001
+QRE-RESEARCH-RUN-ORCHESTRATION-001
 
 ## Current Status
 
-DONE. Review PASS (Claude Code acting reviewer — Codex unavailable). Ready for git finalization.
+IMPLEMENTED. Claude Code has completed implementation; awaiting self-review (Codex unavailable).
 
 ## Current Owner
 
-CLAUDE_CODE (acting finalizer — Codex unavailable)
+CLAUDE_CODE
 
 ## Completed
 

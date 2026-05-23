@@ -7742,3 +7742,71 @@ def test_cli_smoke_files_status_pass_count_quiet_status_file(capsys, tmp_path):
     assert captured.out.strip() == ""
     content = status_path.read_text(encoding="utf-8").strip()
     assert "pass_count=2" in content
+
+
+# --- qre research-run CLI tests ---
+
+
+def test_cli_research_run_help_includes_command(capsys):
+    """qre research-run --help shows the command description."""
+    import pytest as _pytest
+    with _pytest.raises(SystemExit) as exc_info:
+        main(["research-run", "--help"])
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 0
+    assert "research-run" in captured.out
+    assert "preflight" in captured.out.lower()
+    assert "eval" in captured.out.lower()
+    assert "backtest" in captured.out.lower()
+
+
+def test_cli_research_run_missing_required_args(capsys):
+    """qre research-run without --start, --end, --output-dir fails with usage error."""
+    import pytest as _pytest
+    with _pytest.raises(SystemExit) as exc_info:
+        main(["research-run", "strategy.yaml"])
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 2
+    assert "required" in captured.err
+
+
+def test_cli_research_run_no_db_returns_error(capsys, tmp_path):
+    """qre research-run without a database configuration returns exit 2 with stderr."""
+    strat_path = tmp_path / "strategy.yaml"
+    strat_path.write_text("""
+name: test
+signal:
+  entry: (close > ema_200) and (close < bb_lower)
+factor_fields:
+  - factors.stock_daily_basic.ema_200
+  - factors.stock_daily_basic.bb_lower
+""", encoding="utf-8")
+    output_dir = tmp_path / "output"
+    exit_code = main([
+        "research-run", str(strat_path),
+        "--start", "2024-01-01",
+        "--end", "2024-02-01",
+        "--output-dir", str(output_dir),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.err != ""
+
+
+class ResearchRunStrategySpec(StrategySpec):
+    """A StrategySpec that accepts factor_fields as-is without resolving."""
+
+    @classmethod
+    def from_yaml(cls, path):  # noqa: N805
+        import yaml
+
+        with open(path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+        signal = data.get("signal", {})
+        return cls(
+            name=data.get("name", "unnamed"),
+            signal_expression=signal.get("entry", "1"),
+            exit_signal_expression=signal.get("exit"),
+            factor_fields=data.get("factor_fields", []),
+            holding_days=data.get("holding_days"),
+        )

@@ -85,22 +85,22 @@
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| M7.1 | Local browser console shell and YAML strategy editor | READY | CLAUDE_CODE | user-approved brainstorm; `docs/superpowers/specs/2026-05-21-local-backtest-console-design.md` | Implement `qre gui` shell, YAML editor, and run controls |
-| M7.2 | Local filesystem run history and rerun support | READY | CLAUDE_CODE | approved local-history-first design; `docs/agent/change_requests/CR-0001-local-backtest-console.md` | Persist run records under `outputs/gui-console/` |
-| M7.3 | Result viewer for summary, orders, trades, equity, and manifests | READY | CLAUDE_CODE | approved full-artifact viewer scope | Render report artifacts from completed runs |
+| M7.1 | Local browser console shell and YAML strategy editor | DONE | CLAUDE_CODE | `QRE-GUI-LOCAL-BACKTEST-CONSOLE-001` finalized; 179 GUI/CLI tests; editor, rerun, artifact viewer, summary.json | Preserve |
+| M7.2 | Local filesystem run history and rerun support | DONE | CLAUDE_CODE | Run records persisted under `outputs/gui-console/`; rerun YAML restoration verified | Preserve |
+| M7.3 | Result viewer for summary, orders, trades, equity, and manifests | DONE | CLAUDE_CODE | Full-artifact viewer renders report artifacts from completed runs | Preserve |
 
 ## Milestone 8: Strategy IO Contract And Research Reports
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| M8.1 | Strategy IO contract design | DESIGN_RECORDED | CODEX | `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md` | User review and approval |
+| M8.1 | Strategy IO contract design | DONE | CODEX | `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`; all contract components implemented (docs, compiler, missing-factor, smoke runner, full-market report, GUI) | Preserve |
 | M8.2 | Strategy entry writing standard | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001` completed; `docs/strategy_entry/` added with strategy card, factor requirements, missing-factor request, experiment plan, and examples; `10_REVIEW_REPORT.md` PASS | Preserve; use as contract baseline for compiler/preflight tasks |
-| M8.3 | Factor availability and missing-factor handoff standard | READY_FOR_BRIEF | CODEX | design spec defines QRE -> `indicators_tushare` missing-factor request fields | Scope compiler/preflight support after spec approval |
+| M8.3 | Factor availability and missing-factor handoff standard | DONE | CODEX/CLAUDE_CODE | `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` + `QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001` finalized; missing-factor emission, CLI preflight wiring, lifecycle docs, compiler linkage all complete | Preserve |
 | M8.7 | Operational missing-factor handoff workflow | DONE | CODEX/CLAUDE_CODE | `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` implemented; `missing_factor_requests.json` emission, CLI preflight wiring, lifecycle docs, and tests landed; `10_REVIEW_REPORT.md` PASS | Preserve; extend to compiler linkage in next slice |
 | M8.8 | High-level strategy entry compiler/preflight linkage | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001` implemented; `qre compile` added; alias-based expression fix landed with end-to-end runtime compatibility tests; `10_REVIEW_REPORT.md` PASS | Preserve; extend crossover/runtime richness in future slices |
 | M8.4 | Three-strategy entry validation sample | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-ENTRY-THREE-SMOKE-001` finalized; three strategy entries compile; smoke artifacts and consolidated report recorded; no-DB skip path documented | Preserve as baseline |
 | M8.9 | Three-strategy smoke runner automation | DONE | CODEX/CLAUDE_CODE | Baseline automation slice accepted as precursor and expanded into full hardening lane | Preserve as precursor |
-| M8.10 | Strategy-entry pipeline hardening package | IMPLEMENTED | CLAUDE_CODE | `qre strategy-smoke` + deterministic `smoke_summary.json` + CLI/tests/docs delivered; Codex review opened blocking truthiness finding | Route focused fix and re-review |
+| M8.10 | Strategy-entry pipeline hardening package | DONE | CODEX/CLAUDE_CODE | `qre strategy-smoke` + deterministic `smoke_summary.json` + CLI/tests/docs; all sub-items (truthiness, artifact parity, manifest/audit, filter parity, discovery CLI, latest, stability, details, output export, check-exists, require-match, list-missing, quiet, status enrichment 22 flags) finalized and committed in `1c4b57e` | Preserve as baseline |
 | M8.11 | Backtest-smoke truthiness fix | DONE | CODEX/CLAUDE_CODE | Real `_try_backtest_smoke()` execution path landed; false PASS removed; regression tests added | Preserve as baseline |
 | M8.12 | Smoke-run artifact parity and summary clarity | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-SMOKE-ARTIFACT-PARITY-001` finalized with PASS review | Preserve as baseline |
 | M8.13 | Smoke manifest and audit contract | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-SMOKE-MANIFEST-AUDIT-001` finalized with PASS review | Preserve as baseline |
@@ -131,7 +131,8 @@
 | M8.38 | Smoke discovery status-strategy-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-strategy-count` landed with validation and docs | Preserve as baseline |
 | M8.39 | Smoke discovery status-fail-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-fail-count` landed with validation and docs | Preserve as baseline |
 | M8.40 | Smoke discovery status-skip-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-skip-count` landed with validation and docs | Preserve as baseline |
-| M8.41 | Smoke discovery status-pass-count mode | READY | CODEX | `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` brief issued | Add `--status-pass-count` and regression tests |
+| M8.41 | Smoke discovery status-pass-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-pass-count` landed with validation and docs | Preserve as baseline |
+| M8.42 | Research-run CLI orchestrator | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `qre research-run` chains preflight→eval→backtest under one `--run-id` with `research_run_manifest.json`; 476 tests passed | Preserve; expand run-bundle scope in future slices |
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | FUTURE | CLAUDE_CODE | GUI is visualization only; standard contract must come first | Add form controls after entry/report contracts are stable |
 

@@ -2,11 +2,11 @@
 
 ## Current Task ID
 
-QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001
+QRE-RESEARCH-RUN-ORCHESTRATION-001
 
 ## Current Recipient
 
-CLAUDE_CODE (acting finalizer — Codex unavailable)
+CLAUDE_CODE
 
 ## Message Type
 
@@ -18,25 +18,35 @@ CLAUDE_CODE (acting reviewer — Codex unavailable)
 
 ## Short Message
 
-`QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` review PASS. All 22 smoke discovery status enrichment flags are complete (114 smoke-files tests, 466 full suite). Commit all cumulative smoke enhancements and updated agent docs.
+`QRE-RESEARCH-RUN-ORCHESTRATION-001` implemented and self-reviewed (PASS). Execute git commit: `qre research-run` orchestrator, CLI, tests, roadmap sync, decision log, and all agent docs updated. Validation: 476 passed, 2 warnings.
 
 ## Delivered Artifacts
 
-- `docs/agent/10_REVIEW_REPORT.md` — review PASS with validation evidence
-- `docs/agent/09_CODING_HANDOFF.md` — implementation summary with validation
-- `docs/agent/04_TASK_HANDOFF.md` — status updated to DONE
-- `docs/agent/05_PROGRESS.md` — progress table and phase updated
-- `docs/agent/11_AGENT_STATE.md` — phase moved to CODEX_GIT_FINALIZING
-- `docs/agent/06_DECISION_LOG.md` — decision entry for series completion
+- `src/quant_research_engine/orchestration/research_run.py` — orchestrator module (~200 lines)
+- `src/quant_research_engine/apps/cli.py` — `qre research-run` command (16 arguments)
+- `tests/test_research_run.py` — 7 unit tests
+- `tests/test_cli.py` — 3 CLI tests
+- `docs/agent/03_ROADMAP.md` — M8.42 added, stale entries synced to DONE
+- `docs/agent/06_DECISION_LOG.md` — decision entry added
+- `docs/agent/10_REVIEW_REPORT.md` — PASS review
+- `docs/agent/01_CURRENT_STATUS.md` — synced
+- `docs/agent/04_TASK_HANDOFF.md` — updated
+- `docs/agent/05_PROGRESS.md` — updated
+- `docs/agent/09_CODING_HANDOFF.md` — IMPLEMENTED
+- `docs/agent/11_AGENT_STATE.md` — CODEX_GIT_FINALIZING
+- `docs/agent/12_AGENT_BOARD.md` — updated
 
 ## Validation
 
 ```bash
-uv run pytest tests/test_cli.py -q --tb=short -k "smoke_files"
-# 114 passed
+uv run pytest tests/test_research_run.py -q
+# 7 passed in 0.46s
 
-uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py -q
-# 466 passed, 2 warnings
+uv run pytest tests/test_cli.py -q --tb=short -k "research_run"
+# 3 passed in 0.80s
+
+uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_research_run.py -q
+# 476 passed, 2 warnings in 5.01s
 
 scripts/check-progress-docs.sh
 # passed
@@ -47,4 +57,4 @@ git diff --check
 
 ## Next Step
 
-User approval → Claude Code performs git commit. The smoke discovery series is complete; next major work direction TBD by user.
+Commit and finalize.
