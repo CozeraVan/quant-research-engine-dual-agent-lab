@@ -2,6 +2,274 @@
 {% block content %}
 <h1>Backtest Console</h1>
 
+<div class="tabs">
+  <button class="tab active" data-tab="builder">Strategy Builder</button>
+  <button class="tab" data-tab="editor">YAML Editor</button>
+</div>
+
+<!-- ============================================================ -->
+<!-- BUILDER TAB                                                    -->
+<!-- ============================================================ -->
+<div id="tab-builder" class="tab-content active">
+<div class="builder-layout">
+  <div class="builder-main">
+
+    <!-- Section 1: Strategy Identity -->
+    <div class="section">
+      <button class="section-toggle" data-section="identity">Strategy Identity &#9660;</button>
+      <div id="sec-identity" class="section-body">
+        <div class="form-grid">
+          <label>ID <span class="req">*</span></label>
+          <input type="text" id="b-id" placeholder="rsi2_oversold_reversal" data-required="true">
+
+          <label>Name <span class="req">*</span></label>
+          <input type="text" id="b-name" placeholder="RSI2 Oversold Reversal" data-required="true">
+
+          <label>Family <span class="req">*</span></label>
+          <select id="b-family" data-required="true">
+            <option value="mean_reversion">Mean Reversion</option>
+            <option value="trend_following">Trend Following</option>
+            <option value="breakout">Breakout</option>
+            <option value="momentum">Momentum</option>
+            <option value="carry">Carry</option>
+            <option value="arbitrage">Arbitrage</option>
+            <option value="custom">Custom</option>
+          </select>
+
+          <label>Direction <span class="req">*</span></label>
+          <select id="b-direction" data-required="true">
+            <option value="long_only">Long Only</option>
+            <option value="short_only">Short Only</option>
+            <option value="long_short">Long/Short</option>
+          </select>
+
+          <label>Description <span class="req">*</span></label>
+          <textarea id="b-description" rows="2" placeholder="Brief strategy description..." data-required="true"></textarea>
+
+          <label>Version</label>
+          <input type="text" id="b-version" placeholder="1.0.0">
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Entry/Exit Rules -->
+    <div class="section">
+      <button class="section-toggle" data-section="rules">Entry / Exit Rules &#9660;</button>
+      <div id="sec-rules" class="section-body">
+
+        <h4>Entry Conditions</h4>
+        <div class="rule-row">
+          <label class="label-sm">Combinator</label>
+          <select id="b-entry-combinator">
+            <option value="all">ALL (AND)</option>
+            <option value="any">ANY (OR)</option>
+          </select>
+        </div>
+        <div id="entry-conditions" class="condition-list">
+          <div class="condition-item">
+            <select class="cond-alias-type">
+              <option value="alias">Alias</option>
+              <option value="builtin">Built-in</option>
+            </select>
+            <input type="text" class="cond-alias" placeholder="alias" size="12">
+            <select class="cond-op">
+              <option value="<">&lt;</option>
+              <option value=">">&gt;</option>
+              <option value="<=">&lt;=</option>
+              <option value=">=">&gt;=</option>
+              <option value="==">==</option>
+              <option value="!=">!=</option>
+              <option value="crosses_above">cross &gt;</option>
+              <option value="crosses_below">cross &lt;</option>
+            </select>
+            <input type="text" class="cond-value" placeholder="value or alias" size="12">
+            <button class="btn-sm btn-remove-cond" title="Remove">x</button>
+          </div>
+        </div>
+        <button class="btn-sm" onclick="addCondition('entry-conditions')">+ Condition</button>
+
+        <h4 style="margin-top:12px;">Exit Conditions <span class="opt">(optional)</span></h4>
+        <div id="exit-enabled-wrap" class="rule-row">
+          <label class="label-sm">Enable</label>
+          <input type="checkbox" id="b-exit-enabled" onchange="toggleExitSection()">
+        </div>
+        <div id="exit-section" style="display:none;">
+          <div class="rule-row">
+            <label class="label-sm">Combinator</label>
+            <select id="b-exit-combinator">
+              <option value="all">ALL (AND)</option>
+              <option value="any">ANY (OR)</option>
+            </select>
+          </div>
+          <div id="exit-conditions" class="condition-list">
+            <div class="condition-item">
+              <select class="cond-alias-type">
+                <option value="alias">Alias</option>
+                <option value="builtin">Built-in</option>
+              </select>
+              <input type="text" class="cond-alias" placeholder="alias" size="12">
+              <select class="cond-op">
+                <option value="<">&lt;</option>
+                <option value=">">&gt;</option>
+                <option value="<=">&lt;=</option>
+                <option value=">=">&gt;=</option>
+                <option value="==">==</option>
+                <option value="!=">!=</option>
+                <option value="crosses_above">cross &gt;</option>
+                <option value="crosses_below">cross &lt;</option>
+              </select>
+              <input type="text" class="cond-value" placeholder="value or alias" size="12">
+              <button class="btn-sm btn-remove-cond" title="Remove">x</button>
+            </div>
+          </div>
+          <button class="btn-sm" onclick="addCondition('exit-conditions')">+ Condition</button>
+        </div>
+
+        <h4 style="margin-top:12px;">Risk Controls <span class="opt">(optional)</span></h4>
+        <div class="form-grid form-grid-3">
+          <label>Stop Loss %</label>
+          <input type="number" id="b-stop-loss" step="0.01" placeholder="e.g. 0.05">
+
+          <label>Take Profit %</label>
+          <input type="number" id="b-take-profit" step="0.01" placeholder="e.g. 0.10">
+
+          <label>Max Hold Days</label>
+          <input type="number" id="b-max-hold" placeholder="e.g. 20">
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Factor Requirements -->
+    <div class="section">
+      <button class="section-toggle" data-section="factors">Factor Requirements &#9660;</button>
+      <div id="sec-factors" class="section-body">
+        <div id="factor-rows">
+          <div class="factor-item">
+            <input type="text" class="f-alias" placeholder="alias" size="10">
+            <select class="f-indicator">
+              <option value="">--indicator--</option>
+              <option value="rsi">rsi</option>
+              <option value="ema">ema</option>
+              <option value="sma">sma</option>
+              <option value="wma">wma</option>
+              <option value="macd">macd</option>
+              <option value="bollinger">bollinger</option>
+              <option value="atr">atr</option>
+              <option value="adx">adx</option>
+              <option value="cci">cci</option>
+              <option value="mfi">mfi</option>
+              <option value="obv">obv</option>
+              <option value="stochastic">stochastic</option>
+              <option value="williams_r">williams_r</option>
+            </select>
+            <select class="f-source">
+              <option value="close">close</option>
+              <option value="open">open</option>
+              <option value="high">high</option>
+              <option value="low">low</option>
+              <option value="typical">typical</option>
+              <option value="hlc3">hlc3</option>
+              <option value="ohlc4">ohlc4</option>
+            </select>
+            <input type="number" class="f-period" placeholder="period" size="6" min="1">
+            <input type="text" class="f-params" placeholder="params" size="10">
+            <input type="text" class="f-output" placeholder="output" size="8">
+            <label class="label-inline"><input type="checkbox" class="f-required" checked> req</label>
+            <button class="btn-sm btn-remove-factor" title="Remove">x</button>
+          </div>
+        </div>
+        <button class="btn-sm" onclick="addFactor()">+ Factor</button>
+      </div>
+    </div>
+
+    <!-- Section 4: Experiment Config -->
+    <div class="section">
+      <button class="section-toggle" data-section="experiment">Experiment Configuration &#9660;</button>
+      <div id="sec-experiment" class="section-body">
+        <div class="form-grid">
+          <label>Experiment ID</label>
+          <input type="text" id="b-exp-id" placeholder="auto-from-strategy-id">
+
+          <label>Frequency</label>
+          <select id="b-frequency">
+            <option value="daily">daily</option>
+          </select>
+
+          <label>Market</label>
+          <select id="b-market">
+            <option value="ashare">ashare</option>
+          </select>
+
+          <label>Start <span class="req">*</span></label>
+          <input type="date" id="b-start" value="2025-01-02" data-required="true">
+
+          <label>End <span class="req">*</span></label>
+          <input type="date" id="b-end" value="2026-05-23" data-required="true">
+
+          <label>Universe</label>
+          <select id="b-universe">
+            <option value="all_a">All A-shares</option>
+          </select>
+
+          <label>Exclude ST</label>
+          <input type="checkbox" id="b-exclude-st" checked>
+
+          <label>Exclude Suspended</label>
+          <input type="checkbox" id="b-exclude-suspended" checked>
+
+          <label>Exclude Risk Warning</label>
+          <input type="checkbox" id="b-exclude-risk" checked>
+
+          <label>Min Listing Days</label>
+          <input type="number" id="b-min-listing" value="120" min="1">
+
+          <label>Initial Cash</label>
+          <input type="number" id="b-cash" value="100000" min="1">
+
+          <label>Max Positions</label>
+          <input type="number" id="b-maxpos" value="10" min="1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="builder-actions">
+      <button id="btn-compile">Compile</button>
+      <span class="opt">Run params:</span>
+      <select id="b-mode">
+        <option value="batch">Batch</option>
+        <option value="shared">Shared-cash</option>
+        <option value="single">Single-symbol</option>
+      </select>
+      <input type="text" id="b-codes" value="000001.SZ,000002.SZ" placeholder="codes" size="20">
+      <button id="btn-run-builder">Run</button>
+      <span id="builder-run-status" class="hidden"></span>
+    </div>
+
+    <div id="compile-result" class="result-box hidden"></div>
+    <div id="builder-run-result" class="result-box hidden"></div>
+  </div>
+
+  <div class="builder-side">
+    <div class="info-box">
+      <strong>Tips</strong>
+      <ul>
+        <li>Fill all required fields (<span class="req">*</span>)</li>
+        <li>Each condition needs an alias matching a factor requirement</li>
+        <li>Built-in aliases: <code>close open high low pre_close vol amount</code></li>
+        <li>Click <strong>Compile</strong> to generate the low-level YAML</li>
+        <li>Click <strong>Run</strong> to compile and backtest</li>
+        <li>Switch to <strong>YAML Editor</strong> for raw YAML control</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- EDITOR TAB (existing YAML editor)                              -->
+<!-- ============================================================ -->
+<div id="tab-editor" class="tab-content">
 <div class="layout">
   <div class="panel editor-panel">
     <h2>Strategy (YAML)</h2>
@@ -75,23 +343,348 @@
 </div>
 
 <div id="run-result" class="result-box hidden"></div>
+</div>
 
 <script>
 (function() {
+  // ============================================================
+  // TAB SWITCHING
+  // ============================================================
+  var tabs = document.querySelectorAll('.tab');
+  var contents = document.querySelectorAll('.tab-content');
+  tabs.forEach(function(t) {
+    t.addEventListener('click', function() {
+      tabs.forEach(function(x) { x.classList.remove('active'); });
+      contents.forEach(function(x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ============================================================
+  // SECTION TOGGLE
+  // ============================================================
+  document.querySelectorAll('.section-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var sec = document.getElementById('sec-' + btn.dataset.section);
+      sec.classList.toggle('collapsed');
+      btn.classList.toggle('collapsed');
+    });
+  });
+
+  // ============================================================
+  // BUILDER HELPERS
+  // ============================================================
+  window.toggleExitSection = function() {
+    var chk = document.getElementById('b-exit-enabled');
+    var sec = document.getElementById('exit-section');
+    sec.style.display = chk.checked ? '' : 'none';
+  };
+
+  window.addCondition = function(containerId) {
+    var container = document.getElementById(containerId);
+    var div = document.createElement('div');
+    div.className = 'condition-item';
+    div.innerHTML = '<select class="cond-alias-type"><option value="alias">Alias</option><option value="builtin">Built-in</option></select> '
+      + '<input type="text" class="cond-alias" placeholder="alias" size="12"> '
+      + '<select class="cond-op"><option value="<">&lt;</option><option value=">">&gt;</option><option value="<=">&lt;=</option><option value=">=">&gt;=</option><option value="==">==</option><option value="!=">!=</option><option value="crosses_above">cross &gt;</option><option value="crosses_below">cross &lt;</option></select> '
+      + '<input type="text" class="cond-value" placeholder="value or alias" size="12"> '
+      + '<button class="btn-sm btn-remove-cond" title="Remove">x</button>';
+    container.appendChild(div);
+    div.querySelector('.btn-remove-cond').addEventListener('click', function() { div.remove(); });
+  };
+
+  document.querySelectorAll('.btn-remove-cond').forEach(function(b) {
+    b.addEventListener('click', function() { b.closest('.condition-item').remove(); });
+  });
+
+  window.addFactor = function() {
+    var container = document.getElementById('factor-rows');
+    var div = document.createElement('div');
+    div.className = 'factor-item';
+    div.innerHTML = '<input type="text" class="f-alias" placeholder="alias" size="10"> '
+      + '<select class="f-indicator"><option value="">--indicator--</option><option value="rsi">rsi</option><option value="ema">ema</option><option value="sma">sma</option><option value="wma">wma</option><option value="macd">macd</option><option value="bollinger">bollinger</option><option value="atr">atr</option><option value="adx">adx</option><option value="cci">cci</option><option value="mfi">mfi</option><option value="obv">obv</option><option value="stochastic">stochastic</option><option value="williams_r">williams_r</option></select> '
+      + '<select class="f-source"><option value="close">close</option><option value="open">open</option><option value="high">high</option><option value="low">low</option><option value="typical">typical</option><option value="hlc3">hlc3</option><option value="ohlc4">ohlc4</option></select> '
+      + '<input type="number" class="f-period" placeholder="period" size="6" min="1"> '
+      + '<input type="text" class="f-params" placeholder="params" size="10"> '
+      + '<input type="text" class="f-output" placeholder="output" size="8"> '
+      + '<label class="label-inline"><input type="checkbox" class="f-required" checked> req</label> '
+      + '<button class="btn-sm btn-remove-factor" title="Remove">x</button>';
+    container.appendChild(div);
+    div.querySelector('.btn-remove-factor').addEventListener('click', function() { div.remove(); });
+  };
+
+  document.querySelectorAll('.btn-remove-factor').forEach(function(b) {
+    b.addEventListener('click', function() { b.closest('.factor-item').remove(); });
+  });
+
+  // ============================================================
+  // SERIALIZE BUILDER FORM -> HIGH-LEVEL ENTRY
+  // ============================================================
+  function readConditions(containerId) {
+    var items = document.getElementById(containerId).querySelectorAll('.condition-item');
+    var conds = [];
+    items.forEach(function(item) {
+      var alias = item.querySelector('.cond-alias').value.trim();
+      if (!alias) return;
+      var entry = {
+        alias: alias,
+        operator: item.querySelector('.cond-op').value
+      };
+      var val = item.querySelector('.cond-value').value.trim();
+      if (val) {
+        var num = parseFloat(val);
+        entry.value = isNaN(num) ? val : num;
+      }
+      conds.push(entry);
+    });
+    return conds;
+  }
+
+  function serializeForm() {
+    var data = {};
+
+    // strategy
+    data.strategy = {
+      id: document.getElementById('b-id').value.trim(),
+      name: document.getElementById('b-name').value.trim(),
+      family: document.getElementById('b-family').value,
+      direction: document.getElementById('b-direction').value,
+      description: document.getElementById('b-description').value.trim()
+    };
+    var ver = document.getElementById('b-version').value.trim();
+    if (ver) data.strategy.version = ver;
+
+    // rules
+    var entryConds = readConditions('entry-conditions');
+    var rules = {};
+    rules.entry = {};
+    rules.entry[document.getElementById('b-entry-combinator').value] = entryConds;
+
+    if (document.getElementById('b-exit-enabled').checked) {
+      var exitConds = readConditions('exit-conditions');
+      if (exitConds.length > 0) {
+        rules.exit = {};
+        rules.exit[document.getElementById('b-exit-combinator').value] = exitConds;
+      }
+    }
+
+    var risk = {};
+    var sl = document.getElementById('b-stop-loss').value;
+    var tp = document.getElementById('b-take-profit').value;
+    var mh = document.getElementById('b-max-hold').value;
+    if (sl) risk.stop_loss_pct = parseFloat(sl);
+    if (tp) risk.take_profit_pct = parseFloat(tp);
+    if (mh) risk.max_holding_days = parseInt(mh);
+    if (Object.keys(risk).length > 0) rules.risk = risk;
+
+    data.rules = rules;
+
+    // factor_requirements
+    var factors = [];
+    document.getElementById('factor-rows').querySelectorAll('.factor-item').forEach(function(item) {
+      var alias = item.querySelector('.f-alias').value.trim();
+      var indicator = item.querySelector('.f-indicator').value;
+      if (!alias || !indicator) return;
+      var req = {
+        alias: alias,
+        indicator: indicator,
+        source: item.querySelector('.f-source').value,
+        period: parseInt(item.querySelector('.f-period').value) || undefined,
+        reason: 'GUI builder entry'
+      };
+      var params = item.querySelector('.f-params').value.trim();
+      var output = item.querySelector('.f-output').value.trim();
+      var required = item.querySelector('.f-required').checked;
+      if (params) req.params = params;
+      if (output) req.output = output;
+      if (!required) req.required = false;
+      factors.push(req);
+    });
+    data.factor_requirements = factors;
+
+    // experiment
+    var expId = document.getElementById('b-exp-id').value.trim();
+    var strategyId = data.strategy.id;
+    data.experiment = {
+      id: expId || strategyId || 'gui-build',
+      frequency: document.getElementById('b-frequency').value,
+      market: document.getElementById('b-market').value,
+      start: document.getElementById('b-start').value,
+      end: document.getElementById('b-end').value,
+      universe: {
+        include: document.getElementById('b-universe').value,
+        exclude_st: document.getElementById('b-exclude-st').checked,
+        exclude_suspended: document.getElementById('b-exclude-suspended').checked,
+        exclude_risk_warning: document.getElementById('b-exclude-risk').checked,
+        min_listing_days: parseInt(document.getElementById('b-min-listing').value) || 120
+      },
+      execution: {
+        market_profile: 'ashare_daily_default'
+      },
+      capital: {
+        initial_cash: parseFloat(document.getElementById('b-cash').value) || 100000,
+        max_positions: parseInt(document.getElementById('b-maxpos').value) || 10
+      }
+    };
+    return data;
+  }
+
+  // ============================================================
+  // COMPILE
+  // ============================================================
+  document.getElementById('btn-compile').addEventListener('click', function() {
+    var data = serializeForm();
+    var resultBox = document.getElementById('compile-result');
+    resultBox.classList.remove('hidden');
+    resultBox.innerHTML = '<span>Compiling...</span>';
+
+    fetch('/api/builder/compile', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        resultBox.innerHTML = '<div class="ok">Compilation successful</div>'
+          + '<pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
+        // Store for run
+        resultBox._compiledYaml = d.yaml;
+      } else {
+        var issues = (d.issues || []).map(function(i) {
+          return '<li class="' + i.level + '">[' + i.level + '] ' + escHtml(i.message) + '</li>';
+        }).join('');
+        resultBox.innerHTML = '<div class="err">Compilation failed:</div><ul>' + issues + '</ul>';
+        resultBox._compiledYaml = null;
+      }
+    })
+    .catch(function(err) {
+      resultBox.innerHTML = '<span class="err">Error: ' + err + '</span>';
+    });
+  });
+
+  // ============================================================
+  // RUN (builder)
+  // ============================================================
+  document.getElementById('btn-run-builder').addEventListener('click', function() {
+    var compileResult = document.getElementById('compile-result');
+    var statusEl = document.getElementById('builder-run-status');
+    var resultBox = document.getElementById('builder-run-result');
+
+    // If we already compiled, reuse it; otherwise compile first
+    function doRun(yamlText) {
+      var payload = {
+        yaml: yamlText,
+        mode: document.getElementById('b-mode').value,
+        start: document.getElementById('b-start').value,
+        end: document.getElementById('b-end').value,
+        codes: document.getElementById('b-codes').value,
+        initial_cash: document.getElementById('b-cash').value,
+        max_positions: document.getElementById('b-maxpos').value,
+        output_dir: 'outputs/gui-run',
+        executor: 'module'
+      };
+
+      statusEl.classList.remove('hidden');
+      statusEl.textContent = 'Running...';
+      statusEl.className = '';
+
+      fetch('/api/run', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        resultBox.classList.remove('hidden');
+        if (d.status === 'completed') {
+          statusEl.textContent = 'Done';
+          statusEl.className = 'ok';
+          resultBox.innerHTML =
+            '<p><strong>Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>'
+            + '<p><strong>Mode:</strong> ' + d.mode + '</p>'
+            + '<p><a href="/runs/' + d.run_id + '">View Results</a></p>';
+        } else {
+          statusEl.textContent = 'Failed';
+          statusEl.className = 'err';
+          resultBox.innerHTML = '<p class="err">Error: ' + (d.error || 'Unknown error') + '</p>';
+        }
+      })
+      .catch(function(err) {
+        statusEl.textContent = 'Error';
+        statusEl.className = 'err';
+        resultBox.innerHTML = '<p class="err">' + err + '</p>';
+      });
+    }
+
+    if (compileResult._compiledYaml) {
+      doRun(compileResult._compiledYaml);
+      return;
+    }
+
+    // Compile then run
+    var data = serializeForm();
+    statusEl.classList.remove('hidden');
+    statusEl.textContent = 'Compiling...';
+    statusEl.className = '';
+
+    fetch('/api/builder/compile', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        compileResult._compiledYaml = d.yaml;
+        compileResult.classList.remove('hidden');
+        compileResult.innerHTML = '<div class="ok">Compilation successful</div>'
+          + '<pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
+        doRun(d.yaml);
+      } else {
+        var issues = (d.issues || []).map(function(i) {
+          return '<li class="' + i.level + '">[' + i.level + '] ' + escHtml(i.message) + '</li>';
+        }).join('');
+        compileResult.classList.remove('hidden');
+        compileResult.innerHTML = '<div class="err">Compilation failed:</div><ul>' + issues + '</ul>';
+        statusEl.textContent = 'Compile failed';
+        statusEl.className = 'err';
+      }
+    })
+    .catch(function(err) {
+      statusEl.textContent = 'Error';
+      statusEl.className = 'err';
+      resultBox.innerHTML = '<p class="err">' + err + '</p>';
+    });
+  });
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ============================================================
+  // EDITOR TAB (existing logic, unchanged)
+  // ============================================================
   var yamlEl = document.getElementById("strategy-yaml");
-  var resultBox = document.getElementById("validate-result");
+  var validateBox = document.getElementById("validate-result");
   var runStatus = document.getElementById("run-status");
   var runResult = document.getElementById("run-result");
 
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
 
-  // Restore rerun YAML from sessionStorage on page load
   (function() {
     var yaml = sessionStorage.getItem("rerun_yaml");
     if (yaml) {
       sessionStorage.removeItem("rerun_yaml");
       yamlEl.value = yaml;
+      // Switch to editor tab
+      document.querySelectorAll('.tab-content').forEach(function(x) { x.classList.remove('active'); });
+      document.getElementById('tab-editor').classList.add('active');
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      var edTab = document.querySelector('.tab[data-tab="editor"]');
+      if (edTab) edTab.classList.add('active');
     }
   })();
 
@@ -122,11 +715,11 @@
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      show(resultBox);
+      show(validateBox);
       if (d.valid) {
-        resultBox.innerHTML = '<span class="ok">YAML is valid</span>';
+        validateBox.innerHTML = '<span class="ok">YAML is valid</span>';
       } else {
-        resultBox.innerHTML = '<span class="err">' + d.error + '</span>';
+        validateBox.innerHTML = '<span class="err">' + d.error + '</span>';
       }
     });
   });

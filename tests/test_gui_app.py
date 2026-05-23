@@ -339,3 +339,154 @@ def test_gui_subcommand_help():
     assert result.returncode == 0
     assert "--host" in result.stdout
     assert "--port" in result.stdout
+
+
+# --- Builder API: compile ---
+
+BUILDER_ENTRY = {
+    "strategy": {
+        "id": "rsi2_test",
+        "name": "RSI2 Test",
+        "family": "mean_reversion",
+        "direction": "long_only",
+        "description": "Test strategy.",
+    },
+    "rules": {
+        "entry": {
+            "all": [
+                {"alias": "rsi_fast", "operator": "<", "value": 10}
+            ]
+        }
+    },
+    "factor_requirements": [
+        {
+            "alias": "rsi_fast",
+            "indicator": "rsi",
+            "source": "close",
+            "period": 2,
+            "reason": "Signal",
+        }
+    ],
+    "experiment": {
+        "id": "rsi2-test",
+        "frequency": "daily",
+        "market": "ashare",
+        "start": "2026-01-01",
+        "end": "2026-03-31",
+        "universe": {
+            "include": "all_a",
+            "exclude_st": True,
+            "exclude_suspended": True,
+            "exclude_risk_warning": True,
+            "min_listing_days": 120,
+        },
+        "execution": {"market_profile": "ashare_daily_default"},
+        "capital": {"initial_cash": 100000, "max_positions": 10},
+    },
+}
+
+
+def test_builder_compile_valid(app_client):
+    resp = app_client.post(
+        "/api/builder/compile",
+        data=json.dumps(BUILDER_ENTRY),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data["ok"] is True
+    assert "yaml" in data
+    assert "rsi_fast" in data["yaml"]
+
+
+def test_builder_compile_invalid(app_client):
+    resp = app_client.post(
+        "/api/builder/compile",
+        data=json.dumps({"strategy": {}, "rules": {}, "factor_requirements": [], "experiment": {}}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 422
+    data = json.loads(resp.data)
+    assert data["ok"] is False
+    assert len(data["issues"]) > 0
+
+
+def test_builder_compile_with_exit_rules(app_client):
+    entry = dict(BUILDER_ENTRY)
+    entry["rules"]["exit"] = {"any": [{"alias": "rsi_fast", "operator": ">", "value": 70}]}
+    resp = app_client.post(
+        "/api/builder/compile",
+        data=json.dumps(entry),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data["ok"] is True
+    assert "exit" in data["yaml"].lower()
+
+
+def test_builder_compile_with_risk(app_client):
+    entry = dict(BUILDER_ENTRY)
+    entry["rules"]["risk"] = {"stop_loss_pct": 0.05, "max_holding_days": 20}
+    resp = app_client.post(
+        "/api/builder/compile",
+        data=json.dumps(entry),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data["ok"] is True
+    assert "stop_loss" in data["yaml"]
+
+
+# --- Builder API: indicator-catalog ---
+
+
+def test_builder_indicator_catalog(app_client):
+    resp = app_client.get("/api/builder/indicator-catalog")
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert "indicators" in data
+    assert "sources" in data
+    assert "rsi" in data["indicators"]
+    assert data["indicators"]["rsi"]["category"] == "momentum"
+    assert "macd" in data["indicators"]
+    assert "bollinger" in data["indicators"]
+    assert "close" in data["sources"]
+
+
+# --- Builder API: validate ---
+
+
+def test_builder_validate_valid(app_client):
+    resp = app_client.post(
+        "/api/builder/validate",
+        data=json.dumps(BUILDER_ENTRY),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data["valid"] is True
+
+
+def test_builder_validate_invalid(app_client):
+    resp = app_client.post(
+        "/api/builder/validate",
+        data=json.dumps({"strategy": {}, "rules": {}, "factor_requirements": [], "experiment": {}}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data["valid"] is False
+    assert len(data["issues"]) > 0
+
+
+# --- Builder: index page includes builder tab ---
+
+
+def test_index_includes_builder_tab(app_client):
+    resp = app_client.get("/")
+    assert resp.status_code == 200
+    assert b"Strategy Builder" in resp.data
+    assert b"YAML Editor" in resp.data
+    assert b"builder-layout" in resp.data

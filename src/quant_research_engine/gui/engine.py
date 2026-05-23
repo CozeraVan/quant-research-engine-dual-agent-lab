@@ -47,6 +47,41 @@ def validate_yaml(yaml_text: str) -> dict[str, Any]:
     return {"valid": True}
 
 
+def compile_high_level_entry(data: dict[str, Any]) -> dict[str, Any]:
+    """Compile a high-level strategy entry to a low-level StrategySpec YAML.
+
+    Accepts the high-level entry format with sections:
+      strategy, rules, factor_requirements, experiment
+
+    Returns:
+        {"ok": True, "yaml": "<low-level spec YAML>"}
+        or
+        {"ok": False, "issues": [{"level": ..., "message": ..., "key": ...}, ...]}
+    """
+    from quant_research_engine.strategies.compiler import (
+        compile_entry,
+        compile_to_strategy_spec_dict,
+    )
+
+    try:
+        entry = compile_entry(data)
+    except Exception as exc:
+        return {"ok": False, "issues": [{"level": "error", "message": str(exc)}]}
+
+    if not entry.ok:
+        issues = [{"level": i.level, "message": i.message} for i in entry.issues]
+        return {"ok": False, "issues": issues}
+
+    try:
+        import yaml as _yaml
+
+        spec_dict = compile_to_strategy_spec_dict(entry)
+        yaml_text = _yaml.safe_dump(spec_dict, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        return {"ok": True, "yaml": yaml_text, "compiled": spec_dict}
+    except Exception as exc:
+        return {"ok": False, "issues": [{"level": "error", "message": f"Failed to generate spec: {exc}"}]}
+
+
 def run_backtest(
     *,
     yaml_text: str,

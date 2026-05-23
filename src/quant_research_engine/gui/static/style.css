@@ -42,3 +42,75 @@ code.log { white-space: pre-wrap; word-break: break-all; }
 .run-meta { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; }
 .run-meta p { margin: 0.2rem 0; }
 .actions { margin: 0.5rem 0 1rem; }
+
+/* --- Tabs --- */
+.tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid #ddd; }
+.tab { padding: 0.5rem 1.5rem; border: none; border-radius: 4px 4px 0 0; background: #eee; color: #555; font-size: 0.95rem; cursor: pointer; font-weight: 500; margin: 0 0.1rem 0 0; }
+.tab:hover { background: #ddd; }
+.tab.active { background: #447; color: #fff; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* --- Builder Layout --- */
+.builder-layout { display: flex; gap: 1.5rem; }
+.builder-main { flex: 3; }
+.builder-side { flex: 1; }
+
+/* --- Collapsible Sections --- */
+.section { background: #fff; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 0.8rem; overflow: hidden; }
+.section-toggle { width: 100%; text-align: left; padding: 0.6rem 1rem; border: none; background: #f0f0f0; color: #333; font-size: 0.95rem; font-weight: 600; cursor: pointer; border-radius: 0; margin: 0; }
+.section-toggle:hover { background: #e4e4e4; }
+.section-toggle.collapsed { border-bottom: none; }
+.section-body { padding: 1rem; }
+.section-body.collapsed { display: none; }
+
+.section-body h4 { font-size: 0.9rem; margin: 0.5rem 0 0.3rem; color: #555; }
+
+/* --- Builder Form --- */
+.builder-main .form-grid { display: grid; grid-template-columns: 140px 1fr; gap: 0.5rem; align-items: center; }
+.builder-main .form-grid-3 { display: grid; grid-template-columns: 120px 1fr; gap: 0.4rem; align-items: center; }
+.builder-main .form-grid input, .builder-main .form-grid select, .builder-main .form-grid textarea {
+  padding: 0.3rem 0.4rem; border: 1px solid #ccc; border-radius: 3px; font-size: 0.9rem;
+}
+.builder-main .form-grid textarea { font-family: system-ui, sans-serif; resize: vertical; }
+.req { color: #c00; font-weight: bold; }
+.opt { color: #999; font-size: 0.85rem; font-weight: normal; }
+
+/* --- Condition Rows --- */
+.condition-list { margin: 0.3rem 0 0.5rem; }
+.condition-item { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.3rem; }
+.condition-item select, .condition-item input { padding: 0.25rem 0.35rem; border: 1px solid #ccc; border-radius: 3px; font-size: 0.85rem; }
+
+/* --- Factor Rows --- */
+#factor-rows { margin: 0.3rem 0 0.5rem; }
+.factor-item { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.3rem; flex-wrap: wrap; }
+.factor-item select, .factor-item input { padding: 0.25rem 0.35rem; border: 1px solid #ccc; border-radius: 3px; font-size: 0.85rem; }
+.factor-item input[type=number] { width: 70px; }
+.label-inline { font-size: 0.8rem; display: flex; align-items: center; gap: 0.15rem; white-space: nowrap; }
+
+/* --- Small buttons --- */
+.btn-sm { padding: 0.2rem 0.5rem; font-size: 0.75rem; border: 1px solid #999; border-radius: 3px; background: #ddd; color: #333; cursor: pointer; margin: 0; }
+.btn-sm:hover { background: #bbb; }
+.btn-remove-cond, .btn-remove-factor { color: #c00; border-color: #c99; background: #fee; }
+.btn-remove-cond:hover, .btn-remove-factor:hover { background: #fcc; }
+
+/* --- Builder Actions --- */
+.builder-actions { display: flex; gap: 0.5rem; align-items: center; padding: 0.8rem 0; flex-wrap: wrap; }
+.builder-actions select, .builder-actions input { padding: 0.3rem; border: 1px solid #ccc; border-radius: 3px; font-size: 0.85rem; }
+
+/* --- Compiled output --- */
+.compiled-yaml { max-height: 400px; overflow-y: auto; margin-top: 0.5rem; background: #f9f9f9; font-size: 0.8rem; }
+
+/* --- Rule row --- */
+.rule-row { display: flex; gap: 0.5rem; align-items: center; margin: 0.3rem 0 0.5rem; }
+.label-sm { font-size: 0.85rem; font-weight: 500; color: #555; }
+
+/* --- Info box --- */
+.info-box { background: #f0f4f8; border: 1px solid #ccd; border-radius: 4px; padding: 1rem; font-size: 0.85rem; }
+.info-box ul { padding-left: 1.2rem; margin-top: 0.5rem; }
+.info-box li { margin-bottom: 0.3rem; }
+.info-box code { background: #e0e4e8; padding: 0.1rem 0.3rem; border-radius: 2px; font-size: 0.8rem; }
+
+/* --- Compile result issue levels --- */
+.result-box .error { color: #c00; }
+.result-box .warning { color: #960; }

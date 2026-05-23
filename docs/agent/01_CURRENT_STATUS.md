@@ -39,10 +39,11 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Research-run manifest integration: `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`, discoverable through `qre report-files` and `qre report-audit`.
 - Shared-cash full-market report: `engine_mode` parameter on all 6 builders and entry point in `full_market_report.py`; wired into `write_shared_cash_result()` with updated manifest helpers; 19 new tests (6 test classes + 2 integration tests).
 - Full-market report charts: equity curve and drawdown chart PNGs generated via matplotlib Agg backend; embedded as new Excel sheets via openpyxl; both batch and shared_cash modes produce charts; 10 new tests.
+- GUI Strategy Builder (M8.6): form-based high-level strategy entry builder with compile-to-spec endpoint, indicator catalog, and run flow integration; 16 new tests.
 
 ## In Progress
 
-No active implementation work. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability. The reusable Tushare security source scaffold and canonical snapshot contract are complete and ready for future bulk ingestion work.
+No active implementation work. GUI Strategy Builder (M8.6) implemented, review PASS, awaiting git finalization. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 

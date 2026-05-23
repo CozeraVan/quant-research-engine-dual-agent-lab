@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-FULL-MARKET-CHARTS-001
+QRE-GUI-STRATEGY-BUILDER-001
 
 ## Current Recipient
 
@@ -18,25 +18,28 @@ CLAUDE_CODE (acting git finalizer — Codex unavailable)
 
 ## Short Message
 
-QRE-FULL-MARKET-CHARTS-001 finalized in commit `a86018d`: full-market report equity curve and drawdown chart PNGs generated via matplotlib Agg backend and embedded in the Excel workbook as new sheets via openpyxl. Both batch and shared_cash engine modes produce charts. 16 files, 880 insertions, 381 deletions. Review PASS. 529 tests, 0 regressions. Working tree clean. Phase WAITING_USER_DIRECTION.
+QRE-GUI-STRATEGY-BUILDER-001 implemented and self-reviewed (PASS): Strategy Builder tab with 4 collapsible form sections; compile-to-spec endpoint wraps existing compiler; indicator catalog endpoint; dynamic condition/factor row management; run integration feeds compiled YAML into existing flow. 16 new tests (9 engine + 7 app). 770 tests pass, 0 regressions. Review PASS.
 
 ## Delivered Artifacts
 
-- `pyproject.toml` — added `matplotlib>=3.7.0` dependency
-- `src/quant_research_engine/portfolio/full_market_report.py` — `generate_equity_curve_chart()` + `generate_drawdown_chart()` functions; modified `write_full_market_excel()` signature with keyword-only chart parameters; embedded chart sheets; both engine_mode branches generate charts
-- `src/quant_research_engine/portfolio/io.py` — `equity_curve_chart` + `drawdown_curve_chart` roles in `_shared_manifest_role()`, `_batch_manifest_role()`, `_shared_report_paths()`, `_batch_report_paths()`
-- `src/quant_research_engine/portfolio/report_manifest.py` — chart roles added to `_REQUIRED_COLUMNS_BY_ROLE` with empty `set()`
-- `tests/test_full_market_report.py` — 10 new tests: `TestGenerateEquityCurveChart` (3), `TestGenerateDrawdownChart` (3), `TestWriteFullMarketExcel` chart methods (2), `TestWriteFullMarketReport.test_generates_chart_artifacts` (1), `TestWriteFullMarketReportSharedCash.test_generates_chart_artifacts` (1)
+- `src/quant_research_engine/gui/engine.py` — `compile_high_level_entry()` wrapping compiler
+- `src/quant_research_engine/gui/app.py` — 3 builder API routes: compile (POST), indicator-catalog (GET), validate (POST)
+- `src/quant_research_engine/gui/templates/index.html` — Builder tab with 4 collapsible sections, dynamic condition/factor rows, Compile + Run buttons, tab switching
+- `src/quant_research_engine/gui/static/style.css` — tab, form, section, condition, factor, action styles
+- `tests/test_gui_engine.py` — 9 new tests
+- `tests/test_gui_app.py` — 7 new tests
 
 ## Validation
 
 ```bash
-uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q
-uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_full_market_report.py tests/test_research_run.py -q
+uv run pytest tests/test_gui_app.py tests/test_gui_engine.py -q
+uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
+Result: 770 passed, 2 warnings in 11.11s.
+
 ## Next Step
 
-User decides next direction. All known actionable gaps are either blocked on external data or marked future.
+Git finalize: commit implementation + all agent doc updates, then WAITING_USER_DIRECTION.

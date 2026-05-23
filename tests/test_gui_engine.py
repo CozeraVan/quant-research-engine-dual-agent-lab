@@ -11,6 +11,7 @@ from quant_research_engine.gui.engine import (
     _build_cli_command,
     _ensure_dirs,
     _run_id,
+    compile_high_level_entry,
     get_run,
     get_run_artifacts,
     get_run_stderr,
@@ -335,3 +336,124 @@ def test_run_backtest_module_executor_single(monkeypatch, tmp_path):
     )
     assert result["status"] == "completed"
     assert result["mode"] == "single"
+
+
+# --- compile_high_level_entry ---
+
+
+VALID_HIGH_LEVEL_ENTRY = {
+    "strategy": {
+        "id": "rsi2_oversold_reversal",
+        "name": "RSI2 Oversold Reversal",
+        "family": "mean_reversion",
+        "direction": "long_only",
+        "description": "Buy when 2-period RSI is oversold.",
+    },
+    "rules": {
+        "entry": {
+            "all": [
+                {"alias": "rsi_fast", "operator": "<", "value": 10}
+            ]
+        }
+    },
+    "factor_requirements": [
+        {
+            "alias": "rsi_fast",
+            "indicator": "rsi",
+            "source": "close",
+            "period": 2,
+            "reason": "Oversold entry signal",
+        }
+    ],
+    "experiment": {
+        "id": "rsi2-test",
+        "frequency": "daily",
+        "market": "ashare",
+        "start": "2026-01-01",
+        "end": "2026-03-31",
+        "universe": {
+            "include": "all_a",
+            "exclude_st": True,
+            "exclude_suspended": True,
+            "exclude_risk_warning": True,
+            "min_listing_days": 120,
+        },
+        "execution": {"market_profile": "ashare_daily_default"},
+        "capital": {"initial_cash": 100000, "max_positions": 10},
+    },
+}
+
+
+def test_compile_valid_high_level_entry():
+    result = compile_high_level_entry(VALID_HIGH_LEVEL_ENTRY)
+    assert result["ok"] is True
+    assert "yaml" in result
+    assert "compiled" in result
+    assert "signal_expression" in result["yaml"] or "entry" in result["yaml"].lower()
+    assert "rsi_fast" in result["yaml"]
+
+
+def test_compile_missing_strategy_section():
+    result = compile_high_level_entry({"rules": {}, "factor_requirements": [], "experiment": {}})
+    assert result["ok"] is False
+    assert len(result["issues"]) > 0
+    assert any("strategy" in i["message"].lower() or "id" in i["message"].lower() for i in result["issues"])
+
+
+def test_compile_unknown_indicator():
+    data = dict(VALID_HIGH_LEVEL_ENTRY)
+    data["factor_requirements"] = [{
+        "alias": "bad_factor",
+        "indicator": "nonexistent_indicator_xyz",
+        "source": "close",
+        "period": 10,
+        "reason": "test",
+    }]
+    result = compile_high_level_entry(data)
+    assert result["ok"] is False
+    assert any("nonexistent" in i["message"] for i in result["issues"])
+
+
+def test_compile_duplicate_alias():
+    data = dict(VALID_HIGH_LEVEL_ENTRY)
+    data["factor_requirements"] = [
+        {"alias": "dup", "indicator": "rsi", "source": "close", "period": 2, "reason": "a"},
+        {"alias": "dup", "indicator": "ema", "source": "close", "period": 20, "reason": "b"},
+    ]
+    result = compile_high_level_entry(data)
+    assert result["ok"] is False
+    assert any("dup" in i["message"] and "duplicate" in i["message"].lower() for i in result["issues"])
+
+
+def test_compile_with_exit_rules():
+    data = dict(VALID_HIGH_LEVEL_ENTRY)
+    data["rules"]["exit"] = {"any": [{"alias": "rsi_fast", "operator": ">", "value": 70}]}
+    result = compile_high_level_entry(data)
+    assert result["ok"] is True
+    assert "exit" in result["yaml"].lower()
+
+
+def test_compile_with_risk_controls():
+    data = dict(VALID_HIGH_LEVEL_ENTRY)
+    data["rules"]["risk"] = {"stop_loss_pct": 0.05, "take_profit_pct": 0.10, "max_holding_days": 20}
+    result = compile_high_level_entry(data)
+    assert result["ok"] is True
+    assert "stop_loss" in result["yaml"]
+
+
+def test_compile_missing_factor_requirements():
+    data = dict(VALID_HIGH_LEVEL_ENTRY)
+    data["factor_requirements"] = []
+    data["rules"]["entry"]["all"] = [{"alias": "close", "operator": ">", "value": 10}]
+    result = compile_high_level_entry(data)
+    assert result["ok"] is True  # built-in aliases don't need factors
+
+
+def test_compile_builtin_alias_shadow_warning():
+    data = dict(VALID_HIGH_LEVEL_ENTRY)
+    data["factor_requirements"] = [
+        {"alias": "close", "indicator": "ema", "source": "close", "period": 10, "reason": "test"},
+    ]
+    result = compile_high_level_entry(data)
+    assert result["ok"] is False
+    assert any("close" in i["message"] and "shadow" in i["message"].lower() for i in result["issues"])

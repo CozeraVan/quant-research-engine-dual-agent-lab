@@ -137,7 +137,7 @@
 | M8.44 | Shared-cash full-market report support | DONE | CLAUDE_CODE | `engine_mode` parameter on all 6 builders and entry point in `full_market_report.py`; wired into `write_shared_cash_result()`; updated `_shared_manifest_role()` and `_shared_report_paths()` for 9 full-market roles; 19 new tests (17 unit + 2 integration); 519 tests passed | Preserve |
 | M8.45 | Full-market report charts | DONE | CLAUDE_CODE | `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel via openpyxl; manifest roles registered; 10 new tests; 529 tests passed | Preserve |
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
-| M8.6 | GUI parameter surface for standard strategy IO | FUTURE | CLAUDE_CODE | GUI is visualization only; standard contract must come first | Add form controls after entry/report contracts are stable |
+| M8.6 | GUI parameter surface for standard strategy IO | DONE | CLAUDE_CODE | Builder tab with high-level entry forms; compile endpoint; indicator catalog endpoint; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 
 ## Status Meaning
 

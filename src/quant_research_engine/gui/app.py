@@ -8,6 +8,7 @@ from typing import Any
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from quant_research_engine.gui.engine import (
+    compile_high_level_entry,
     get_run,
     get_run_artifacts,
     get_run_stderr,
@@ -192,6 +193,34 @@ def create_app() -> Flask:
             return jsonify({"saved": name})
         except Exception as exc:
             return jsonify({"error": str(exc)}), 400
+
+    # --- Builder API routes ---
+
+    @app.route("/api/builder/compile", methods=["POST"])
+    def api_builder_compile() -> Any:
+        data = request.get_json(silent=True) or {}
+        result = compile_high_level_entry(data)
+        if result.get("ok"):
+            return jsonify(result)
+        return jsonify(result), 422
+
+    @app.route("/api/builder/indicator-catalog", methods=["GET"])
+    def api_builder_indicator_catalog() -> Any:
+        from quant_research_engine.strategies.compiler import _INDICATOR_CATALOG
+
+        sources = ["close", "open", "high", "low", "typical", "hlc3", "ohlc4"]
+        indicators = {}
+        for name, (category, _) in sorted(_INDICATOR_CATALOG.items()):
+            indicators[name] = {"category": category, "sources": sources}
+        return jsonify({"indicators": indicators, "sources": sources})
+
+    @app.route("/api/builder/validate", methods=["POST"])
+    def api_builder_validate() -> Any:
+        data = request.get_json(silent=True) or {}
+        result = compile_high_level_entry(data)
+        if result.get("ok"):
+            return jsonify({"valid": True})
+        return jsonify({"valid": False, "issues": result.get("issues", [])})
 
     return app
 
