@@ -98,7 +98,40 @@
 | M8.3 | Factor availability and missing-factor handoff standard | READY_FOR_BRIEF | CODEX | design spec defines QRE -> `indicators_tushare` missing-factor request fields | Scope compiler/preflight support after spec approval |
 | M8.7 | Operational missing-factor handoff workflow | DONE | CODEX/CLAUDE_CODE | `QRE-FACTOR-MISSING-HANDOFF-STANDARD-001` implemented; `missing_factor_requests.json` emission, CLI preflight wiring, lifecycle docs, and tests landed; `10_REVIEW_REPORT.md` PASS | Preserve; extend to compiler linkage in next slice |
 | M8.8 | High-level strategy entry compiler/preflight linkage | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001` implemented; `qre compile` added; alias-based expression fix landed with end-to-end runtime compatibility tests; `10_REVIEW_REPORT.md` PASS | Preserve; extend crossover/runtime richness in future slices |
-| M8.4 | Three-strategy entry validation sample | READY_FOR_BRIEF | CODEX/CLAUDE_CODE | user requested 3 existing strategy families converted to standard entry and smoke-tested | Include in implementation acceptance criteria |
+| M8.4 | Three-strategy entry validation sample | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-ENTRY-THREE-SMOKE-001` finalized; three strategy entries compile; smoke artifacts and consolidated report recorded; no-DB skip path documented | Preserve as baseline |
+| M8.9 | Three-strategy smoke runner automation | DONE | CODEX/CLAUDE_CODE | Baseline automation slice accepted as precursor and expanded into full hardening lane | Preserve as precursor |
+| M8.10 | Strategy-entry pipeline hardening package | IMPLEMENTED | CLAUDE_CODE | `qre strategy-smoke` + deterministic `smoke_summary.json` + CLI/tests/docs delivered; Codex review opened blocking truthiness finding | Route focused fix and re-review |
+| M8.11 | Backtest-smoke truthiness fix | DONE | CODEX/CLAUDE_CODE | Real `_try_backtest_smoke()` execution path landed; false PASS removed; regression tests added | Preserve as baseline |
+| M8.12 | Smoke-run artifact parity and summary clarity | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-SMOKE-ARTIFACT-PARITY-001` finalized with PASS review | Preserve as baseline |
+| M8.13 | Smoke manifest and audit contract | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-SMOKE-MANIFEST-AUDIT-001` finalized with PASS review | Preserve as baseline |
+| M8.14 | Smoke manifest filter parity regression coverage | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-SMOKE-MANIFEST-FILTER-PARITY-001` finalized with PASS review | Preserve as baseline |
+| M8.15 | Smoke discovery CLI ergonomics | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-SMOKE-DISCOVERY-CLI-001` finalized with PASS review | Preserve as baseline |
+| M8.16 | Smoke discovery latest-run ergonomics | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-SMOKE-DISCOVERY-LATEST-001` finalized with PASS review | Preserve as baseline |
+| M8.17 | Smoke discovery output stability hardening | DONE | CODEX/CLAUDE_CODE | `QRE-STRATEGY-SMOKE-DISCOVERY-STABILITY-001` finalized with PASS review | Preserve as baseline |
+| M8.18 | Smoke discovery details view ergonomics | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--details` detailed per-strategy output mode and tests finalized | Preserve as baseline |
+| M8.19 | Smoke discovery output export | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--output-file` text/json export with parent-dir auto-create and write-failure exit handling | Preserve as baseline |
+| M8.20 | Smoke discovery artifact existence audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--check-exists` plus missing-artifact diagnostics and regression tests finalized | Preserve as baseline |
+| M8.21 | Smoke discovery strict selector require-match | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; strict selector no-match behavior finalized | Preserve as baseline |
+| M8.22 | Smoke discovery list-missing output | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; script-friendly missing path listing finalized | Preserve as baseline |
+| M8.23 | Smoke discovery quiet mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; quiet mode finalized | Preserve as baseline |
+| M8.24 | Smoke discovery status-only mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; status-only compact output finalized | Preserve as baseline |
+| M8.25 | Smoke discovery status-file mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; status-file persistence finalized | Preserve as baseline |
+| M8.26 | Smoke discovery status-format mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; status-format mode finalized | Preserve as baseline |
+| M8.27 | Smoke discovery status-reason mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; status-reason mode finalized | Preserve as baseline |
+| M8.28 | Smoke discovery status-code mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; status-code mode finalized | Preserve as baseline |
+| M8.29 | Smoke discovery status-meta mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-meta` landed with validation and docs | Preserve as baseline |
+| M8.30 | Smoke discovery status-summary mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-summary` landed with validation and docs | Preserve as baseline |
+| M8.31 | Smoke discovery status-fail-key mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-fail-key` landed with validation and docs | Preserve as baseline |
+| M8.32 | Smoke discovery status-fail-stage mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-fail-stage` landed with validation and docs | Preserve as baseline |
+| M8.33 | Smoke discovery status-timestamp mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-timestamp` landed with validation and docs | Preserve as baseline |
+| M8.34 | Smoke discovery status-output-dir mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-output-dir` landed with validation and docs | Preserve as baseline |
+| M8.35 | Smoke discovery status-manifest-path mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-manifest-path` landed with validation and docs | Preserve as baseline |
+| M8.36 | Smoke discovery status-manifest-exists mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-manifest-exists` landed with validation and docs | Preserve as baseline |
+| M8.37 | Smoke discovery status-artifact-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-artifact-count` landed with validation and docs | Preserve as baseline |
+| M8.38 | Smoke discovery status-strategy-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-strategy-count` landed with validation and docs | Preserve as baseline |
+| M8.39 | Smoke discovery status-fail-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-fail-count` landed with validation and docs | Preserve as baseline |
+| M8.40 | Smoke discovery status-skip-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-skip-count` landed with validation and docs | Preserve as baseline |
+| M8.41 | Smoke discovery status-pass-count mode | READY | CODEX | `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` brief issued | Add `--status-pass-count` and regression tests |
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | FUTURE | CLAUDE_CODE | GUI is visualization only; standard contract must come first | Add form controls after entry/report contracts are stable |
 

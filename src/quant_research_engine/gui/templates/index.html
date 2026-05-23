@@ -5,7 +5,7 @@
 <div class="layout">
   <div class="panel editor-panel">
     <h2>Strategy (YAML)</h2>
-    <textarea id="strategy-yaml" rows="24" cols="80" placeholder="Paste or load a strategy YAML file..."></textarea>
+    <textarea id="strategy-yaml" rows="24" cols="80" placeholder="Paste or load a strategy YAML file...">{{ default_strategy_yaml }}</textarea>
     <div class="editor-actions">
       <button id="btn-validate">Validate</button>
       <label class="file-label">
@@ -14,8 +14,11 @@
       </label>
       <select id="template-select">
         <option value="">-- templates --</option>
+        <option value="{{ default_strategy_name }}" selected>{{ default_strategy_name }} (default)</option>
         {% for name in templates %}
+        {% if name != default_strategy_name %}
         <option value="{{ name }}">{{ name }}</option>
+        {% endif %}
         {% endfor %}
       </select>
       <input type="text" id="template-name" placeholder="template name" size="16">

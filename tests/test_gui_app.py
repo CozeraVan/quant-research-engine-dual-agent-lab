@@ -37,6 +37,9 @@ def test_index_returns_200(app_client):
     resp = app_client.get("/")
     assert resp.status_code == 200
     assert b"Backtest Console" in resp.data
+    assert b"ema200_bollinger_reversal_mvp" in resp.data
+    assert b"bb_upper" in resp.data
+    assert b"bb_lower" in resp.data
 
 
 def test_runs_page_returns_200(app_client):

@@ -1,0 +1,61 @@
+strategy:
+  id: rsi2_oversold_reversal
+  name: RSI2 Oversold Reversal
+  family: mean_reversion
+  description: >
+    Buy when 2-period RSI drops below 10 (short-term oversold extreme).
+    Exit when RSI recovers above 70 or a risk stop triggers.
+    Designed for A-share daily T+1 execution.
+  direction: long_only
+  version: "1.0.0"
+
+rules:
+  entry:
+    all:
+      - alias: rsi_fast
+        operator: "<"
+        value: 10
+  exit:
+    any:
+      - alias: rsi_fast
+        operator: ">"
+        value: 70
+  risk:
+    stop_loss_pct: 0.08
+    take_profit_pct: 0.12
+    trailing_stop_pct: null
+    max_holding_days: 5
+  position_sizing:
+    weight_model: equal
+
+factor_requirements:
+  - alias: rsi_fast
+    indicator: rsi
+    source: close
+    period: 2
+    required: true
+    reason: entry and exit threshold signal — detects short-term oversold and recovery
+
+experiment:
+  id: rsi2_oversold_reversal_smoke
+  frequency: daily
+  market: ashare
+  start: 2024-01-01
+  end: 2024-02-01
+  universe:
+    include: all_a
+    exclude_st: true
+    exclude_suspended: true
+    exclude_risk_warning: true
+    min_listing_days: 120
+  execution:
+    signal_date: t
+    entry_execution: t_plus_1_open
+    exit_execution: t_plus_1_open
+    market_profile: ashare_daily_default
+  capital:
+    initial_cash: 1000000
+    max_positions: 10
+    position_weight: equal
+  output:
+    dir: outputs/rsi2_oversold_reversal_smoke/

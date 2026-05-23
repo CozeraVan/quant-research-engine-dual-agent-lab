@@ -2,59 +2,49 @@
 
 ## Current Task ID
 
-QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001
+QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE (acting finalizer — Codex unavailable)
 
 ## Message Type
 
-FINALIZED
+GIT_FINALIZATION_REQUEST
 
 ## Sender
 
-CODEX
+CLAUDE_CODE (acting reviewer — Codex unavailable)
 
 ## Short Message
 
-Finalization complete. Compiler/preflight linkage task passed re-review and is finalized locally.
+`QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` review PASS. All 22 smoke discovery status enrichment flags are complete (114 smoke-files tests, 466 full suite). Commit all cumulative smoke enhancements and updated agent docs.
 
-## Accepted Direction
+## Delivered Artifacts
 
-- QRE should standardize strategy entry, factor availability checks, backtest execution, and report output.
-- QRE should not rewrite `research-notes` / `strategy-research`.
-- QRE should not compute technical indicators internally.
-- External strategy projects should author QRE-standard strategy entry files from their strategy libraries.
-- `indicators_tushare` should receive missing-factor requests and calculate/backfill required indicators or periods.
-- Full-market report output should use the MT5 report as a baseline and keep all stock trades in unified tables with `symbol`.
-- The future acceptance plan must include three existing strategy families converted into the standard entry format and smoke-tested with exit code `0`.
-- TradingView screenshots add benchmark comparison, Sharpe/Sortino, trade analysis, P&L distribution, capital usage, margin placeholders, run-up, and drawdown fields.
-- The first implementation may omit charts, but must emit stable workbook sheets, CSV/JSON tables, manifest roles, and audit/discovery behavior.
-
-## Design Artifact
-
-- `docs/superpowers/specs/2026-05-21-strategy-io-contract-design.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/strategy_entry/` (strategy card, factor requirements, experiment plan, examples, missing_factor_request)
-
-## Implementation Artifacts
-
-- `src/quant_research_engine/strategies/compiler.py` — new (~410 lines)
-- `src/quant_research_engine/apps/cli.py` — `qre compile` command with `--output-dir`, `--preflight` flags
-- `tests/test_compiler.py` — 31 tests (29 compiler + 2 end-to-end runtime compatibility)
-- `tests/test_cli.py` — 4 new CLI compile tests
+- `docs/agent/10_REVIEW_REPORT.md` — review PASS with validation evidence
+- `docs/agent/09_CODING_HANDOFF.md` — implementation summary with validation
+- `docs/agent/04_TASK_HANDOFF.md` — status updated to DONE
+- `docs/agent/05_PROGRESS.md` — progress table and phase updated
+- `docs/agent/11_AGENT_STATE.md` — phase moved to CODEX_GIT_FINALIZING
+- `docs/agent/06_DECISION_LOG.md` — decision entry for series completion
 
 ## Validation
 
 ```bash
-uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
-scripts/check-progress-docs.sh
-git diff --check
-```
+uv run pytest tests/test_cli.py -q --tb=short -k "smoke_files"
+# 114 passed
 
-Results: 302 passed, 2 warnings (pre-existing numpy) in 3.01s; all quality checks pass.
+uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py -q
+# 466 passed, 2 warnings
+
+scripts/check-progress-docs.sh
+# passed
+
+git diff --check
+# passed
+```
 
 ## Next Step
 
-Move to next task slice.
+User approval → Claude Code performs git commit. The smoke discovery series is complete; next major work direction TBD by user.

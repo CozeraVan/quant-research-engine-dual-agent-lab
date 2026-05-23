@@ -24,6 +24,36 @@ from quant_research_engine.gui.engine import (
 GUI_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = GUI_DIR / "templates"
 STATIC_DIR = GUI_DIR / "static"
+DEFAULT_STRATEGY_TEMPLATE = Path(__file__).resolve().parents[3] / "examples" / "ema200_bollinger_reversal.yaml"
+
+
+def _load_default_strategy_yaml() -> str:
+    if DEFAULT_STRATEGY_TEMPLATE.exists():
+        return DEFAULT_STRATEGY_TEMPLATE.read_text(encoding="utf-8")
+    return (
+        "experiment:\n"
+        "  name: ema200_bollinger_reversal_mvp\n"
+        "data:\n"
+        "  market_fields:\n"
+        "    - open\n"
+        "    - high\n"
+        "    - low\n"
+        "    - close\n"
+        "    - pre_close\n"
+        "    - vol\n"
+        "    - amount\n"
+        "  factor_fields:\n"
+        "    ema200: factors.stock_daily_overlap_typical_price.ema_200\n"
+        "    bb_upper: factors.stock_daily_volatility_close.bbu_20_2_0_2_0\n"
+        "    bb_lower: factors.stock_daily_volatility_close.bbl_20_2_0_2_0\n"
+        "signal:\n"
+        "  entry: close > ema200 and close <= bb_lower\n"
+        "  exit: close >= bb_upper\n"
+        "evaluation:\n"
+        "  forward_return_horizons: [1, 3, 5, 10, 20]\n"
+        "holding:\n"
+        "  max_holding_days: 9999\n"
+    )
 
 
 def create_app() -> Flask:
@@ -35,7 +65,12 @@ def create_app() -> Flask:
     @app.route("/")
     def index() -> str:
         templates = list_templates()
-        return render_template("index.html", templates=templates)
+        return render_template(
+            "index.html",
+            templates=templates,
+            default_strategy_yaml=_load_default_strategy_yaml(),
+            default_strategy_name="ema200_bollinger_reversal_mvp",
+        )
 
     @app.route("/runs")
     def runs_page() -> str:

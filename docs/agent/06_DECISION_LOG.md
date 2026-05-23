@@ -12,6 +12,235 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-23: Accept status-pass-count and complete smoke discovery status enrichment series
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` as PASS and complete the smoke discovery status enrichment series.
+- Reason: Claude Code (acting reviewer, Codex unavailable) validated implementation end-to-end (114 smoke-files, 466 full suite). All 22 status enrichment flags are now complete: quiet, status-only, status-file, status-format, status-reason, status-code, status-meta, status-summary, status-fail-key, status-fail-stage, status-timestamp, status-output-dir, status-manifest-path, status-manifest-exists, status-artifact-count, status-strategy-count, status-fail-count, status-skip-count, status-pass-count, check-exists, list-missing, require-match, details, output-file, latest.
+- Alternatives: Keep series open for additional status fields.
+- Impact: `10/04/05/11/12/06` updated for review PASS and git finalization. Next major work direction TBD by user.
+- Owner: CLAUDE_CODE (acting reviewer — Codex unavailable)
+
+---
+
+### 2026-05-22: Accept status-skip-count and select smoke-files status-pass-count as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-SKIP-COUNT-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` next.
+- Reason: skip-count sanity check is complete; next status-only automation gap is direct passed-strategy count.
+- Alternatives: infer pass count downstream from total/fail/skip fields.
+- Impact: `08/09/11/12/04/05/03` switched to status-pass-count implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-fail-count and select smoke-files status-skip-count as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-COUNT-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-SKIP-COUNT-001` next.
+- Reason: fail-count sanity check is complete; next status-only automation gap is direct skipped-strategy count.
+- Alternatives: infer skipped counts downstream from detailed stage outputs.
+- Impact: `08/09/11/12/04/05/03` switched to status-skip-count implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-strategy-count and select smoke-files status-fail-count as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-STRATEGY-COUNT-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-COUNT-001` next.
+- Reason: strategy-count sanity check is complete; next status-only automation gap is direct failing-strategy count.
+- Alternatives: infer failing-strategy count downstream from detailed strategy statuses.
+- Impact: `08/09/11/12/04/05/03` switched to status-fail-count implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-artifact-count and select smoke-files status-strategy-count as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-ARTIFACT-COUNT-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-STRATEGY-COUNT-001` next.
+- Reason: artifact-count sanity check is complete; next status-only automation gap is direct strategy total count.
+- Alternatives: infer strategy total downstream from full JSON output instead of compact status payload.
+- Impact: `08/09/11/12/04/05/03` switched to status-strategy-count implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-manifest-exists and select smoke-files status-artifact-count as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-MANIFEST-EXISTS-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-ARTIFACT-COUNT-001` next.
+- Reason: manifest existence branching is complete; next CI sanity-check gap is direct artifact total count in status-only outputs.
+- Alternatives: keep separate status fields only and recompute artifact totals downstream.
+- Impact: `08/09/11/12/04/05/03` switched to status-artifact-count implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-manifest-path and select smoke-files status-manifest-exists as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-MANIFEST-PATH-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-MANIFEST-EXISTS-001` next.
+- Reason: manifest-path traceability is complete; next automation gap is a direct manifest existence boolean for CI branch logic.
+- Alternatives: keep manifest-path only and force downstream existence checks.
+- Impact: `08/09/11/12/04/05/03` switched to status-manifest-exists implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-output-dir and select smoke-files status-manifest-path as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-OUTPUT-DIR-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-MANIFEST-PATH-001` next.
+- Reason: output-dir traceability is complete; next CI/audit gap is direct manifest-file path visibility in status-only outputs.
+- Alternatives: keep output-dir only and require manifest path reconstruction downstream.
+- Impact: `08/09/11/12/04/05/03` switched to status-manifest-path implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-timestamp and select smoke-files status-output-dir as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-TIMESTAMP-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-OUTPUT-DIR-001` next.
+- Reason: timestamp traceability is complete; next CI audit gap is direct resolved output-dir visibility in status-only outputs.
+- Alternatives: keep status outputs time-aware only and require separate path discovery commands.
+- Impact: `08/09/11/12/04/05/03` switched to status-output-dir implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-fail-stage and select smoke-files status-timestamp as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-STAGE-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-TIMESTAMP-001` next.
+- Reason: fail-stage localization is complete; the next CI traceability gap is stable run timestamp in status-only outputs.
+- Alternatives: stop at fail diagnostics only and rely on external logs for timing.
+- Impact: `08/09/11/12/04/05/03` switched to status-timestamp implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-fail-key and select smoke-files status-fail-stage as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-KEY-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-STAGE-001` next.
+- Reason: fail-key localization is complete; the next CI diagnosis gap is immediate failing stage visibility.
+- Alternatives: stop at failing strategy-id only, without stage-level key.
+- Impact: `08/09/11/12/04/05/03` switched to status-fail-stage implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-summary and select smoke-files status-fail-key as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-SUMMARY-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-KEY-001` next.
+- Reason: status summary counts are complete; next CI parsing gap is immediate failing strategy-id localization.
+- Alternatives: stop at counts-only payload or jump to unrelated larger feature slices.
+- Impact: `08/09/11/12/04/05/03` switched to status-fail-key implementation lane.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Accept status-meta and select smoke-files status-summary as next Claude task
+
+- Decision: Mark `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-META-001` as PASS and assign `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-SUMMARY-001` next.
+- Reason: metadata enrichment is complete; the next CI automation gap is compact strategy counts in status-only outputs.
+- Alternatives: stop at metadata-only status payload; jump to unrelated larger feature slices.
+- Impact: `08/09/11/12/04/05/03` switched to status-summary implementation lane.
+- Owner: CODEX
+
+---
+
+
+### 2026-05-22: Select smoke-files status-meta mode as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-META-001` (`qre smoke-files --status-meta`).
+- Reason: status-code mode is complete; next automation gap is compact metadata fields in status-only outputs for downstream parsers.
+- Alternatives: move to larger orchestration features before finalizing smoke-files status ergonomics.
+- Impact: `08/09/11/12/04/05` switched to status-meta task; scope remains CLI + tests + docs.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Select smoke-files status-code mode as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-CODE-001` (`qre smoke-files --status-code`).
+- Reason: status-reason mode is complete; next automation gap is stable numeric status payloads for CI gates.
+- Alternatives: move to larger orchestration features before finalizing smoke-files status ergonomics.
+- Impact: `08/09/11/12/04/05` switched to status-code task; scope remains CLI + tests + docs.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Select smoke-files status-reason mode as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-REASON-001` (`qre smoke-files --status-reason`).
+- Reason: status-format mode is complete; next automation gap is optional compact failure reason in status-only payloads.
+- Alternatives: move to larger orchestration features before finalizing smoke-files status payload ergonomics.
+- Impact: `08/09/11/12/04/05` switched to status-reason task; scope remains CLI + tests + docs.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Select smoke-files status-format mode as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FORMAT-001` (`qre smoke-files --status-format`).
+- Reason: status-file mode is complete; next automation gap is explicit status payload format selection for status-only workflows.
+- Alternatives: move to larger orchestration features before finishing smoke-files status contract ergonomics.
+- Impact: `08/09/11/12/04/05` switched to status-format task; scope remains CLI + tests + docs.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Select smoke-files status-file mode as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FILE-001` (`qre smoke-files --status-file`).
+- Reason: status-only mode is complete; next automation gap is persisted status payload for CI and workflow handoff.
+- Alternatives: move to larger orchestration features before finishing smoke-files output contract ergonomics.
+- Impact: `08/09/11/12/04/05` switched to status-file task; scope remains CLI + tests + docs.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Select smoke-files status-only mode as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-ONLY-001` (`qre smoke-files --status-only`).
+- Reason: Quiet mode is complete; next automation gap is compact status-only payloads for lightweight orchestration.
+- Alternatives: move to larger orchestration features before finishing smoke-files output contract ergonomics.
+- Impact: `08/09/11/12/04/05` switched to status-only task; scope remains CLI + tests + docs.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Select smoke-files quiet mode as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-QUIET-001` (`qre smoke-files --quiet`).
+- Reason: list-missing is complete; next automation gap is a no-stdout mode that keeps exit-code contracts.
+- Alternatives: move to larger orchestration features before tightening CLI automation ergonomics.
+- Impact: `08/09/11/12/04/05` switched to quiet-mode task; scope remains CLI + tests + docs.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Select smoke-files require-match strict mode as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-REQUIRE-MATCH-001` (`qre smoke-files --require-match`).
+- Reason: Check-exists is complete; next workflow gap is strict failure signaling for selector no-match cases.
+- Alternatives: Move to larger orchestration features before tightening smoke-files selector semantics.
+- Impact: `08/09/11/12/04/05` switched to the new strict-filter task; scope remains CLI + tests + docs.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Select smoke-files artifact existence audit as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-SMOKE-DISCOVERY-CHECK-EXISTS-001` (`qre smoke-files --check-exists`).
+- Reason: Output export is complete; next practical gap is fast artifact existence validation directly on smoke discovery output.
+- Alternatives: Move immediately to broader run orchestration or unrelated strategy features.
+- Impact: `08/09/11/12/04/05` switched to the new task. Scope remains CLI + tests + docs with no strategy semantics changes.
+- Owner: CODEX
+
+---
+
+### 2026-05-22: Re-queue smoke-files output export task
+
+- Decision: Keep `QRE-STRATEGY-SMOKE-DISCOVERY-OUTPUT-EXPORT-001` active and re-assign to Claude Code.
+- Reason: Codex review confirmed active requirement (`--output-file`) is not in CLI yet; previous handoff accidentally reflected older details task.
+- Alternatives: Start a new downstream task before fixing export gap.
+- Impact: `08/09/10/11/12` were synchronized to one active task; Claude must complete output export before new feature slices.
+- Owner: CODEX
+
 ---
 
 ### Initial: Use dual-agent workflow
@@ -412,4 +641,99 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Reason: The blocking incompatibility between compiler-emitted expressions and the existing signal evaluator was resolved, and end-to-end compatibility tests now validate the compile-to-runtime path.
 - Alternatives: Keep task open for additional crossover/runtime enhancements. Deferred to keep this slice focused on baseline linkage correctness.
 - Impact: High-level strategy entries now have a runnable bridge into current preflight/runtime-compatible low-level `StrategySpec` flow via `qre compile`.
+- Owner: CODEX
+
+### 2026-05-22: Start three-strategy standardized entry smoke validation
+
+- Decision: Start `QRE-STRATEGY-ENTRY-THREE-SMOKE-001` as the next Claude Code implementation task.
+- Reason: The strategy-entry docs, missing-factor handoff, and compiler linkage are complete; the immediate next value is reproducible end-to-end evidence across three canonical strategy families.
+- Alternatives: Expand compiler/runtime features first; start GUI parameterization first. Deferred until validation evidence is produced.
+- Impact: Claude Code now owns smoke validation for RSI2, EMA200+Bollinger, and MACD workflows with output artifacts under `outputs/strategy-entry-smoke/` and a consolidated report at `docs/strategy_entry/three_strategy_smoke_report.md`.
+- Owner: CODEX
+
+### 2026-05-22: Finalize three-strategy smoke baseline and start runner automation
+
+- Decision: Finalize `QRE-STRATEGY-ENTRY-THREE-SMOKE-001` and launch `QRE-STRATEGY-ENTRY-SMOKE-RUNNER-AUTOMATION-001` as the next Claude task.
+- Reason: Baseline smoke evidence is complete and review passes; the next bottleneck is repeatability and operator friction from multi-command manual execution.
+- Alternatives: Start DB-dependent deeper smoke immediately; expand compiler/runtime crossover semantics first.
+- Impact: New implementation focuses on one-command smoke execution and deterministic `smoke_summary.json` output while preserving no-DB skip semantics.
+- Owner: CODEX
+
+### 2026-05-22: Escalate to overnight strategy-entry pipeline hardening package
+
+- Decision: Upgrade next lane to `QRE-STRATEGY-ENTRY-PIPELINE-HARDENING-001` for long-running overnight implementation.
+- Reason: User requested a heavier background task window; packaging orchestration, summary schema, CLI integration, and targeted tests/docs in one slice maximizes unattended progress.
+- Alternatives: Keep only narrow runner automation; pause for next-day manual sequencing.
+- Impact: `08_IMPLEMENTATION_BRIEF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md` now point to the heavy A→D delivery package for Claude Code.
+- Owner: CODEX
+
+### 2026-05-22: Route blocking truthiness fix after hardening review
+
+- Decision: Mark `QRE-STRATEGY-ENTRY-PIPELINE-HARDENING-001` as `REQUEST_CHANGES` and open focused fix task `QRE-STRATEGY-ENTRY-BACKTEST-SMOKE-TRUTHINESS-001`.
+- Reason: `backtest_smoke` can currently be marked `pass` without executing real backtest work when DB is available.
+- Alternatives: Finalize as-is and defer semantics fix. Rejected due to misleading evidence risk in summary outputs.
+- Impact: New brief requires real execution-backed backtest status, with tests and handoff updates before re-review.
+- Owner: CODEX
+
+
+### 2026-05-22: Finalize backtest-smoke truthiness and open artifact-parity slice
+
+- Decision: Accept `QRE-STRATEGY-ENTRY-BACKTEST-SMOKE-TRUTHINESS-001` and start `QRE-STRATEGY-SMOKE-ARTIFACT-PARITY-001`.
+- Reason: Backtest-smoke status is now execution-backed; next bottleneck is richer reusable artifacts and clearer summary/CLI visibility for DB-enabled smoke runs.
+- Alternatives: Stop after truthiness fix and defer all enhancements. Deferred to keep overnight progress momentum.
+- Impact: New brief targets additive artifact/summary improvements while preserving no-DB and truthiness semantics.
+- Owner: CODEX
+
+
+### 2026-05-22: Finalize smoke artifact parity and open manifest/audit slice
+
+- Decision: Accept `QRE-STRATEGY-SMOKE-ARTIFACT-PARITY-001` and start `QRE-STRATEGY-SMOKE-MANIFEST-AUDIT-001`.
+- Reason: Smoke artifacts and stage timing visibility are now stable; next bottleneck is manifest-level discoverability and audit parity for smoke outputs.
+- Alternatives: Pause after parity improvements. Deferred to keep reproducibility workflow convergent with existing report-manifest patterns.
+- Impact: New brief adds deterministic `smoke_report_manifest.json` generation, CLI visibility, and targeted tests/docs.
+- Owner: CODEX
+
+
+### 2026-05-22: Finalize smoke manifest/audit and open filter-parity regression slice
+
+- Decision: Accept `QRE-STRATEGY-SMOKE-MANIFEST-AUDIT-001` and start `QRE-STRATEGY-SMOKE-MANIFEST-FILTER-PARITY-001`.
+- Reason: Manifest emission is complete; next reliability gap is selector-behavior regression locking for `report-files`/`report-audit` on smoke roles/symbol filters.
+- Alternatives: Pause after manifest emission and defer regression hardening. Deferred to keep CLI behavior stable under future changes.
+- Impact: New brief focuses on targeted tests first, with runtime changes only if tests reveal a defect.
+- Owner: CODEX
+
+
+### 2026-05-22: Finalize smoke manifest filter parity and open discovery CLI slice
+
+- Decision: Accept `QRE-STRATEGY-SMOKE-MANIFEST-FILTER-PARITY-001` and start `QRE-STRATEGY-SMOKE-DISCOVERY-CLI-001`.
+- Reason: Filter parity is now regression-locked; next operator pain is fast discovery of latest smoke outputs without chaining multiple commands.
+- Alternatives: Stop after regression locks and defer UX improvements. Deferred to reduce manual inspection overhead in ongoing strategy research cycles.
+- Impact: New brief adds a read-only smoke discovery command with optional JSON and role/strategy selectors.
+- Owner: CODEX
+
+
+### 2026-05-22: Finalize smoke discovery baseline and open latest-run ergonomics slice
+
+- Decision: Accept `QRE-STRATEGY-SMOKE-DISCOVERY-CLI-001` and start `QRE-STRATEGY-SMOKE-DISCOVERY-LATEST-001`.
+- Reason: Discovery CLI baseline is stable; the remaining UX gap is automatic latest-run resolution when users omit `--output-dir`.
+- Alternatives: Keep manual output-dir-only flow. Deferred to reduce operational friction in repetitive smoke inspections.
+- Impact: New brief adds latest-run resolution, explicit `--latest`, and resolved-directory visibility with targeted CLI tests.
+- Owner: CODEX
+
+
+### 2026-05-22: Finalize latest-run discovery and open stability-hardening slice
+
+- Decision: Accept `QRE-STRATEGY-SMOKE-DISCOVERY-LATEST-001` and start `QRE-STRATEGY-SMOKE-DISCOVERY-STABILITY-001`.
+- Reason: Latest discovery works; remaining UX risk is nondeterministic listing/count presentation across manifest and fallback paths.
+- Alternatives: Stop after latest discovery and defer stability locks. Deferred to keep smoke-file outputs predictable for automation and review tooling.
+- Impact: New brief adds deterministic ordering, `source_mode` exposure, and parity regression tests.
+- Owner: CODEX
+
+
+### 2026-05-22: Finalize discovery stability and open details-view slice
+
+- Decision: Accept `QRE-STRATEGY-SMOKE-DISCOVERY-STABILITY-001` and start `QRE-STRATEGY-SMOKE-DISCOVERY-DETAILS-001`.
+- Reason: Discovery outputs are now stable and deterministic; next UX gap is explicit per-strategy details rendering without requiring manual JSON parsing.
+- Alternatives: Stop after stability hardening. Deferred to improve operator throughput during repeated smoke triage.
+- Impact: New brief adds `--details` mode with selector-safe behavior and targeted CLI regression coverage.
 - Owner: CODEX

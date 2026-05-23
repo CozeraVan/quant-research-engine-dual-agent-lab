@@ -1,0 +1,80 @@
+strategy:
+  id: ema200_bollinger_reversal
+  name: EMA200 Bollinger Band Reversal
+  family: mean_reversion
+  description: >
+    Buy when price is above EMA200 (uptrend filter) and closes at or below
+    the lower Bollinger Band (2 stddev). Exit when price closes at or above
+    the upper Bollinger Band. Long-only, daily A-share.
+  direction: long_only
+  version: "1.0.0"
+
+rules:
+  entry:
+    all:
+      - alias: close
+        operator: ">"
+        alias_b: ema_200
+      - alias: close
+        operator: "<="
+        alias_b: bb_lower
+  exit:
+    any:
+      - alias: close
+        operator: ">="
+        alias_b: bb_upper
+  risk:
+    stop_loss_pct: 0.10
+    max_holding_days: 20
+
+factor_requirements:
+  - alias: ema_200
+    indicator: ema
+    source: typical
+    period: 200
+    required: true
+    reason: long-term trend direction filter
+
+  - alias: bb_upper
+    indicator: bollinger
+    source: close
+    period: 20
+    params:
+      stddev: 2.0
+    output: upper
+    required: true
+    reason: exit threshold — price crossing above upper band
+
+  - alias: bb_lower
+    indicator: bollinger
+    source: close
+    period: 20
+    params:
+      stddev: 2.0
+    output: lower
+    required: true
+    reason: entry threshold — price at or below lower band
+
+experiment:
+  id: ema200_bollinger_reversal_smoke
+  frequency: daily
+  market: ashare
+  start: 2024-01-01
+  end: 2024-02-01
+  universe:
+    include: all_a
+    exclude_st: true
+    exclude_suspended: true
+    exclude_risk_warning: true
+    min_listing_days: 250
+  execution:
+    signal_date: t
+    entry_execution: t_plus_1_open
+    exit_execution: t_plus_1_open
+    market_profile: ashare_daily_default
+  capital:
+    initial_cash: 1000000
+    max_positions: 10
+    position_weight: equal
+  output:
+    dir: outputs/ema200_bollinger_reversal_smoke/

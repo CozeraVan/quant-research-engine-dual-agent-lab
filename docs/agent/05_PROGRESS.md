@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-DONE
+CODEX_GIT_FINALIZING
 
 ## Current Active Work
 
-`QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001` has passed Codex re-review and is finalized locally.
+`QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` review passed. Smoke discovery status enrichment series complete. Awaiting git finalization.
 
 ## Progress Table
 
@@ -20,6 +20,40 @@ DONE
 | QRE-STRATEGY-ENTRY-CONTRACT-DOCS-001 | Strategy entry authoring standard docs | DONE | CODEX/CLAUDE_CODE | `docs/strategy_entry/` includes 6 docs; `10_REVIEW_REPORT.md` PASS; local finalization complete | Start next task |
 | QRE-FACTOR-MISSING-HANDOFF-STANDARD-001 | Operational missing-factor handoff standard | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `missing_factor_requests.json` emission + CLI status + lifecycle docs + 28 targeted tests; 168 tests passed | Start next task |
 | QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001 | High-level entry compiler/preflight linkage | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS after fix cycle; expression emission now alias-based; 2 end-to-end runtime tests added; 302 tests pass | Start next task |
+| QRE-STRATEGY-ENTRY-THREE-SMOKE-001 | Three standardized strategy-entry smoke validation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; compile success for RSI2/EMA200+Bollinger/MACD; no-DB skips documented; smoke report and artifacts preserved | Preserve as baseline |
+| QRE-STRATEGY-ENTRY-SMOKE-RUNNER-AUTOMATION-001 | Three-strategy smoke one-command automation and summary artifact | DONE | CODEX/CLAUDE_CODE | Upgraded into broader hardening lane for overnight delivery | Preserve as precursor slice |
+| QRE-STRATEGY-ENTRY-PIPELINE-HARDENING-001 | Strategy-entry pipeline hardening (runner + schema + CLI + tests/docs) | IMPLEMENTED | CLAUDE_CODE | `qre strategy-smoke` one-command orchestration; deterministic `smoke_summary.json`; no-DB first-class skip; 18 new tests; 320 total pass; handoff in `09_CODING_HANDOFF.md` | Codex review and finalize |
+| QRE-STRATEGY-ENTRY-BACKTEST-SMOKE-TRUTHINESS-001 | Backtest-smoke pass-status truthiness fix | IMPLEMENTED | CLAUDE_CODE | `_try_backtest_smoke()` executes real `BatchBacktestEngine` run; 5 truthiness tests; 325 pass; handoff in `09_CODING_HANDOFF.md` | Codex re-review and finalize |
+| QRE-STRATEGY-SMOKE-ARTIFACT-PARITY-001 | Smoke-run artifact parity and summary clarity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; artifact parity and additive timings finalized | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-MANIFEST-AUDIT-001 | Smoke run manifest + audit-friendly artifact contract | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `strategy_smoke_report_manifest` kind registered; deterministic `smoke_report_manifest.json` with run-level + per-strategy entries; CLI manifest path visibility; 6 new tests; 337 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-MANIFEST-FILTER-PARITY-001 | Smoke manifest filter parity regression coverage | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 15 CLI regression tests for smoke manifest filtering across `report-files` (9) and `report-audit` (6) with role/symbol/strict/json selector combinations; no runtime changes needed; 352 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-CLI-001 | Smoke discovery CLI ergonomics | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `qre smoke-files` one-command artifact discovery with text/JSON modes and --strategy/--role selectors; 8 new CLI tests; 360 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-LATEST-001 | Smoke discovery latest-run auto-discovery | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; latest-run resolution and resolved path reporting finalized | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STABILITY-001 | Smoke discovery output stability hardening | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; deterministic ordering, source_mode, and parity regression coverage finalized | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-DETAILS-001 | Smoke discovery per-strategy details mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--details` flag for text/JSON per-strategy stage/artifact blocks; 4 new CLI tests; 371 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-OUTPUT-EXPORT-001 | Smoke discovery --output-file export | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--output-file` text/JSON export with parent dir auto-creation and write-failure handling; 4 new CLI tests; 375 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-CHECK-EXISTS-001 | Smoke discovery --check-exists artifact audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--check-exists` artifact presence validation with stderr diagnostics, JSON additive fields, exit code 2 on missing; 4 new CLI tests; 379 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-LIST-MISSING-001 | Smoke discovery --list-missing script-friendly output | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--list-missing` requires `--check-exists`, prints sorted missing paths for scripting; 4 new CLI tests; 387 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-QUIET-001 | Smoke discovery --quiet no-stdout mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; no-stdout automation mode finalized with preserved stderr/exit semantics; 4 new CLI tests; 391 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-ONLY-001 | Smoke discovery --status-only compact mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; compact text/JSON status mode finalized; 4 new CLI tests; 395 pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FILE-001 | Smoke discovery --status-file persisted output | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; status-file CI output with parent-dir auto-create, quiet-resilient writes, and 3-branch coverage finalized | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FORMAT-001 | Smoke discovery --status-format format selector | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; status-format forced text/JSON with early validation and branch selection finalized | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-REASON-001 | Smoke discovery --status-reason failure enrichment | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; status-reason failure enrichment with derived failure reason from first failing strategy stage finalized | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-CODE-001 | Smoke discovery --status-code numeric code output | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; numeric status code 0/1 in text and JSON status-only modes finalized | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-META-001 | Smoke discovery --status-meta metadata enrichment | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 64 smoke-files tests and 416 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-SUMMARY-001 | Smoke discovery --status-summary compact count enrichment | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 68 smoke-files tests and 420 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-KEY-001 | Smoke discovery --status-fail-key first failing strategy id | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 73 smoke-files tests and 425 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-STAGE-001 | Smoke discovery --status-fail-stage first failing stage name | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 78 smoke-files tests and 430 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-TIMESTAMP-001 | Smoke discovery --status-timestamp run-time metadata | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 82 smoke-files tests and 434 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-OUTPUT-DIR-001 | Smoke discovery --status-output-dir resolved run directory | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 86 smoke-files tests and 438 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-MANIFEST-PATH-001 | Smoke discovery --status-manifest-path resolved manifest path | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 90 smoke-files tests and 442 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-MANIFEST-EXISTS-001 | Smoke discovery --status-manifest-exists manifest-presence boolean | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 94 smoke-files tests and 446 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-ARTIFACT-COUNT-001 | Smoke discovery --status-artifact-count artifact total | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 98 smoke-files tests and 450 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-STRATEGY-COUNT-001 | Smoke discovery --status-strategy-count strategy total | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 102 smoke-files tests and 454 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-FAIL-COUNT-001 | Smoke discovery --status-fail-count failing strategy total | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 106 smoke-files tests and 458 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-SKIP-COUNT-001 | Smoke discovery --status-skip-count skipped strategy total | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; validated with 110 smoke-files tests and 462 full suite pass | Preserve as baseline |
+| QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001 | Smoke discovery --status-pass-count passed strategy total | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS (Claude Code acting reviewer); validated with 114 smoke-files tests and 466 full suite pass | Git finalize |
+| QRE-STRATEGY-SMOKE-DISCOVERY-REQUIRE-MATCH-001 | Smoke discovery --require-match strict selector mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--require-match` strict no-match behavior with exit code 2 and stderr diagnostics; 4 new CLI tests; 383 pass | Preserve as baseline |
 | QRE-REPORT-MT5-TV-FULL-MARKET-001 | MT5 + TradingView full-market report bundle | DONE | CODEX/CLAUDE_CODE | commit `27828b8`; `10_REVIEW_REPORT.md` PASS; `realized_pnl` semantic fix landed with regression test; 254 tests pass | Start next task |
 | QRE-M1 | Project skeleton and core market profile | DONE | HISTORICAL | package layout, tests, skeleton plan | Preserve |
 | QRE-M2 | Data layer and preflight | DONE | HISTORICAL | `qre db-smoke`, `factor-smoke`, `metadata-smoke`, `preflight` | Add real metadata adapters later |
@@ -86,27 +120,23 @@ DONE
 
 ## Latest Verified State
 
-Recorded on 2026-05-21 after Claude Code implemented the full-market backtest report bundle for `QRE-REPORT-MT5-TV-FULL-MARKET-001`:
+Recorded on 2026-05-23 after Claude Code (acting reviewer, Codex unavailable) reviewed and accepted `--status-pass-count`:
 
-- Current task: `QRE-REPORT-MT5-TV-FULL-MARKET-001` — IMPLEMENTED
-- Last finalized: `QRE-GUI-LOCAL-BACKTEST-CONSOLE-001` (commit `766dc98`)
+- Current task: `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` — DONE (review PASS)
+- Last finalized: `QRE-STRATEGY-SMOKE-DISCOVERY-STATUS-PASS-COUNT-001` (Claude Code acting reviewer)
 - Implementation:
-  - `src/quant_research_engine/portfolio/full_market_report.py` — ~350 lines with 11 report-building functions plus main entry point
-  - `src/quant_research_engine/portfolio/io.py` — wired `write_full_market_report()` into `write_batch_result()`; updated role mapping and path listing
-  - `src/quant_research_engine/portfolio/report_manifest.py` — 9 new required-column rules for new roles
-  - `pyproject.toml` — added `openpyxl>=3.1.0`
-  - `tests/test_full_market_report.py` — 23 tests across 12 test classes
-  - `backtest_report.xlsx` — 10 sheets with bold headers
+  - `src/quant_research_engine/apps/cli.py` — added `--status-pass-count` parser flag (bool, `action="store_true"`); requires `--status-only`; derives count from already-computed `summary_pass`; text mode appends `\tpass_count=<int>`; JSON mode adds `"pass_count"` integer; compatible with all other status flags; invalid combination returns exit 2
+  - `tests/test_cli.py` — 4 new tests (text pass_count=2, JSON pass_count integer type assertion, requires-status-only validation, quiet+status-file)
+  - `docs/strategy_entry/three_strategy_smoke_report.md` — `--status-pass-count` usage examples, description paragraph, exit codes and compatibility notes
+- Review: `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
 - Validation:
-  - `uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q` → 254 passed, 2 warnings in 3.20s
+  - `uv run pytest tests/test_cli.py -q -k "smoke_files"` → 114 passed in 1.66s
+  - `uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py -q` → 466 passed, 2 warnings in 4.83s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
 - Residual limitations:
-  - Commission splits (commission, stamp_tax, transfer_fee, slippage) are null — current engine has single cost field
-  - Margin fields null — cash-only simulation
-  - Intratrade path fields null — A-share daily engine does not track intra-trade bar-level paths
-  - Batch-only for first release; shared-cash reuse is future work
-- Next step: Codex reviews the implementation, runs validation, and writes `docs/agent/10_REVIEW_REPORT.md`
+  - `pass_count` reflects filtered strategies (after `--strategy` filter); count may differ from unfiltered total when filters are active
+- Next step: Claude Code (acting finalizer) performs git commit; smoke discovery status enrichment series is complete
 
 Current GUI direction approved on 2026-05-21:
 

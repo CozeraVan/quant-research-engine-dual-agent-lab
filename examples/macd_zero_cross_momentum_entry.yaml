@@ -1,0 +1,75 @@
+strategy:
+  id: macd_zero_cross_momentum
+  name: MACD Zero-Cross Momentum
+  family: momentum
+  description: >
+    Buy when MACD line crosses above signal line while both are below zero
+    (early momentum turn). Exit when MACD line crosses back below signal line.
+    Long-only, daily A-share.
+  direction: long_only
+  version: "1.0.0"
+
+rules:
+  entry:
+    all:
+      - alias: macd_line
+        operator: crosses_above
+        alias_b: macd_signal
+      - alias: macd_line
+        operator: "<"
+        value: 0
+  exit:
+    any:
+      - alias: macd_line
+        operator: crosses_below
+        alias_b: macd_signal
+  risk:
+    stop_loss_pct: 0.08
+    max_holding_days: 10
+
+factor_requirements:
+  - alias: macd_line
+    indicator: macd
+    source: close
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+    output: macd
+    required: true
+    reason: MACD line for zero-axis position and crossover detection
+
+  - alias: macd_signal
+    indicator: macd
+    source: close
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+    output: signal
+    required: true
+    reason: MACD signal line for crossover entry and exit
+
+experiment:
+  id: macd_zero_cross_momentum_smoke
+  frequency: daily
+  market: ashare
+  start: 2024-01-01
+  end: 2024-02-01
+  universe:
+    include: all_a
+    exclude_st: true
+    exclude_suspended: true
+    exclude_risk_warning: true
+    min_listing_days: 250
+  execution:
+    signal_date: t
+    entry_execution: t_plus_1_open
+    exit_execution: t_plus_1_open
+    market_profile: ashare_daily_default
+  capital:
+    initial_cash: 1000000
+    max_positions: 10
+    position_weight: equal
+  output:
+    dir: outputs/macd_zero_cross_momentum_smoke/

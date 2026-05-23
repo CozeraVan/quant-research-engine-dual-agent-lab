@@ -48,3 +48,9 @@ Before modifying code, read:
 - If phase is `CODEX_REVIEWING`, Claude Code should wait for Codex review.
 - If phase is `CLAUDE_FIXING`, Claude Code should only fix Required Fixes from `10_REVIEW_REPORT.md`.
 - If phase is `CODEX_GIT_FINALIZING`, Claude Code should not commit or push unless explicitly instructed.
+
+## gstack
+
+Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
+
+Available gstack skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/setup-gbrain`, `/retro`, `/investigate`, `/document-release`, `/document-generate`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`, `/devex-review`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`.

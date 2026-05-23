@@ -42,6 +42,7 @@ from quant_research_engine.strategies.missing_factor import (
     emit_missing_factor_requests,
     extract_missing_factors,
 )
+from quant_research_engine.strategies.smoke_runner import run_strategy_smoke
 from quant_research_engine.strategies.spec import StrategySpec
 
 
@@ -252,6 +253,74 @@ def build_parser() -> argparse.ArgumentParser:
     compile_parser.add_argument("--codes", nargs="*", default=None)
     compile_parser.add_argument("--min-factor-coverage", type=float, default=0.8)
     compile_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
+
+    smoke_parser = subparsers.add_parser("strategy-smoke", help="Run smoke validation for the three canonical strategy entries")
+    smoke_parser.add_argument("--output-dir", type=Path, default=Path("outputs/strategy-entry-smoke"), help="Output directory for smoke artifacts and summary.")
+    smoke_parser.add_argument("--strategies", nargs="*", default=None, help="Paths to strategy entry YAML files (defaults to the three canonical examples).")
+    smoke_parser.add_argument("--no-preflight", action="store_true", help="Skip preflight even if a database is available.")
+    smoke_parser.add_argument("--no-backtest", action="store_true", help="Skip backtest smoke even if preflight passes.")
+    smoke_parser.add_argument("--start", type=date.fromisoformat, default=None, help="Preflight/backtest start date (optional, default 2024-01-01).")
+    smoke_parser.add_argument("--end", type=date.fromisoformat, default=None, help="Preflight/backtest end date (optional, default 2024-02-01).")
+
+    smoke_files_parser = subparsers.add_parser("smoke-files", help="Summarize latest smoke run artifacts")
+    smoke_files_parser.add_argument("--output-dir", type=Path, default=None,
+                                    help="Smoke output directory (default: outputs/strategy-entry-smoke/).")
+    smoke_files_parser.add_argument("--json", action="store_true",
+                                    help="Emit machine-readable JSON on stdout.")
+    smoke_files_parser.add_argument("--strategy", type=str, default=None,
+                                    help="Filter to a single strategy_id.")
+    smoke_files_parser.add_argument("--role", type=str, default=None,
+                                    help="Filter artifact role counts to a single role.")
+    smoke_files_parser.add_argument("--latest", action="store_true",
+                                    help="Use the latest smoke run directory (default when --output-dir is omitted).")
+    smoke_files_parser.add_argument("--details", action="store_true",
+                                    help="Print per-strategy stage statuses and artifact keys.")
+    smoke_files_parser.add_argument("--output-file", type=Path, default=None,
+                                    help="Export output to file (creates parent directories as needed).")
+    smoke_files_parser.add_argument("--check-exists", action="store_true",
+                                    help="Validate that all referenced artifact files exist on disk.")
+    smoke_files_parser.add_argument("--require-match", action="store_true",
+                                    help="Return exit code 2 when --strategy or --role selector matches nothing.")
+    smoke_files_parser.add_argument("--list-missing", action="store_true",
+                                    help="Print sorted missing artifact paths to stdout (requires --check-exists).")
+    smoke_files_parser.add_argument("--quiet", action="store_true",
+                                    help="Suppress normal stdout; exit code and stderr diagnostics are preserved.")
+    smoke_files_parser.add_argument("--status-only", action="store_true",
+                                    help="Emit only overall status (text) or minimal JSON; for automation.")
+    smoke_files_parser.add_argument("--status-format", type=str, choices=["text", "json"], default=None,
+                                    help="Force status output format (requires --status-only).")
+    smoke_files_parser.add_argument("--status-reason", action="store_true",
+                                    help="Include failure reason in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-code", action="store_true",
+                                    help="Emit numeric status code (0/1) in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-meta", action="store_true",
+                                    help="Include run_id and source_mode metadata in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-summary", action="store_true",
+                                    help="Include strategy counts (total/pass/fail/skip) in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-fail-key", action="store_true",
+                                    help="Include first failing strategy-id in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-fail-stage", action="store_true",
+                                    help="Include first failing stage name in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-timestamp", action="store_true",
+                                    help="Include run generation timestamp in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-output-dir", action="store_true",
+                                    help="Include resolved run directory in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-manifest-path", action="store_true",
+                                    help="Include resolved manifest file path in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-manifest-exists", action="store_true",
+                                    help="Include manifest existence boolean in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-artifact-count", action="store_true",
+                                    help="Include artifact total count in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-strategy-count", action="store_true",
+                                    help="Include strategy total count in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-fail-count", action="store_true",
+                                    help="Include failing-strategy count in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-skip-count", action="store_true",
+                                    help="Include skipped-strategy count in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-pass-count", action="store_true",
+                                    help="Include passed-strategy count in status-only output (requires --status-only).")
+    smoke_files_parser.add_argument("--status-file", type=Path, default=None,
+                                    help="Persist status output to file for CI (always written regardless of --quiet).")
 
     gui_parser = subparsers.add_parser("gui", help="Launch the local browser backtest console")
     gui_parser.add_argument("--host", default="127.0.0.1", help="Host to bind the console server to.")
@@ -1254,6 +1323,524 @@ def main(argv: Sequence[str] | None = None) -> int:
             for key, path in paths.items():
                 print(f"{key}_path={path}")
         return 0
+
+    if args.command == "strategy-smoke":
+        import os
+
+        # Resolve strategy paths
+        if args.strategies:
+            strategy_paths = [Path(p) for p in args.strategies]
+        else:
+            # Default: three canonical strategy entries relative to repo root
+            repo_root = Path(__file__).resolve().parent.parent.parent.parent
+            examples_dir = repo_root / "examples"
+            strategy_paths = [
+                examples_dir / "rsi2_oversold_reversal_entry.yaml",
+                examples_dir / "ema200_bollinger_reversal_entry.yaml",
+                examples_dir / "macd_zero_cross_momentum_entry.yaml",
+            ]
+
+        # Convert start/end to strings for the runner
+        preflight_start = str(args.start) if args.start else None
+        preflight_end = str(args.end) if args.end else None
+
+        try:
+            summary = run_strategy_smoke(
+                strategy_paths=strategy_paths,
+                output_dir=args.output_dir,
+                run_preflight=not args.no_preflight,
+                run_backtest=not args.no_backtest,
+                preflight_start=preflight_start,
+                preflight_end=preflight_end,
+            )
+        except Exception as exc:
+            print(str(exc), file=__import__("sys").stderr)
+            return 2
+
+        # Print summary to stdout
+        db_status = "configured" if summary.environment.get("db_configured") else "not configured"
+        print(f"run_id={summary.run_id}")
+        print(f"db_environment={db_status}")
+        print(f"overall_status={summary.overall_status}")
+        for s in summary.strategies:
+            print(f"strategy={s.strategy_id} compile={s.compile} preflight={s.preflight} "
+                  f"missing_factor={s.missing_factor} backtest_smoke={s.backtest_smoke}")
+            if s.reason:
+                print(f"  reason: {s.reason}")
+            if s.artifacts:
+                print(f"  artifact_count={len(s.artifacts)}")
+                for key, path in sorted(s.artifacts.items()):
+                    print(f"  artifact.{key}={path}")
+            if s.durations_s:
+                dur_parts = [f"{k}={v:.3f}s" for k, v in sorted(s.durations_s.items())]
+                print(f"  durations: {', '.join(dur_parts)}")
+        summary_path = args.output_dir / "smoke_summary.json"
+        print(f"smoke_summary={summary_path}")
+        manifest_path = args.output_dir / "smoke_report_manifest.json"
+        print(f"smoke_report_manifest={manifest_path}")
+
+        return 2 if summary.overall_status == "fail" else 0
+
+    if args.command == "smoke-files":
+        import sys as _sys
+
+        repo_root = Path(__file__).resolve().parent.parent.parent.parent
+        default_root = repo_root / "outputs" / "strategy-entry-smoke"
+
+        if args.output_dir:
+            output_dir = args.output_dir
+        else:
+            candidates = sorted(
+                [p for p in default_root.glob("*/smoke_summary.json") if p.is_file()],
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if not candidates:
+                print(f"No smoke runs found under {default_root}", file=_sys.stderr)
+                return 2
+            output_dir = candidates[0].parent
+
+        summary_path = output_dir / "smoke_summary.json"
+        manifest_path = output_dir / "smoke_report_manifest.json"
+
+        if not summary_path.exists():
+            print(f"smoke_summary.json not found at {summary_path}", file=_sys.stderr)
+            return 2
+
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"Failed to read smoke_summary.json: {exc}", file=_sys.stderr)
+            return 2
+
+        # Build artifact role counts from manifest (preferred) or summary
+        artifact_roles: dict[str, int] = {}
+        source_mode = "artifacts_fallback"
+        if manifest_path.exists():
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                for f in manifest.get("files", []):
+                    role = f.get("role", "")
+                    if args.strategy and f.get("symbol") != args.strategy:
+                        continue
+                    if args.role and role != args.role:
+                        continue
+                    artifact_roles[role] = artifact_roles.get(role, 0) + 1
+                if artifact_roles:
+                    source_mode = "manifest"
+            except (json.JSONDecodeError, OSError):
+                pass  # manifest read failed; fall through to summary
+        if not artifact_roles:
+            for s in summary.get("strategies", []):
+                if args.strategy and s["strategy_id"] != args.strategy:
+                    continue
+                for role in sorted(s.get("artifacts", {})):
+                    if args.role and role != args.role:
+                        continue
+                    artifact_roles[role] = artifact_roles.get(role, 0) + 1
+
+        # Filter strategies (deterministic ordering by strategy_id)
+        strategies = sorted(
+            summary.get("strategies", []),
+            key=lambda s: s.get("strategy_id", ""),
+        )
+        if args.strategy:
+            strategies = [s for s in strategies if s["strategy_id"] == args.strategy]
+
+        # Strict selector no-match checks for --require-match
+        require_match_fail = False
+        if args.require_match:
+            if args.strategy and not strategies:
+                print(f"No matching strategy: {args.strategy}", file=_sys.stderr)
+                require_match_fail = True
+            if args.role and args.role not in artifact_roles:
+                print(f"No matching role: {args.role}", file=_sys.stderr)
+                require_match_fail = True
+
+        # Collect referenced artifact paths for --check-exists
+        missing_artifacts: list[str] = []
+        if args.check_exists:
+            artifact_paths: set[str] = set()
+            if manifest_path.exists():
+                try:
+                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    for f in manifest.get("files", []):
+                        if args.strategy and f.get("symbol") != args.strategy:
+                            continue
+                        if args.role and f.get("role") != args.role:
+                            continue
+                        path = f.get("path", "")
+                        if path:
+                            artifact_paths.add(path)
+                except (json.JSONDecodeError, OSError):
+                    pass
+            if not artifact_paths:
+                for s in strategies:
+                    for rel_path in s.get("artifacts", {}).values():
+                        artifact_paths.add(rel_path)
+            for rel_path in sorted(artifact_paths):
+                if not (output_dir / rel_path).is_file():
+                    missing_artifacts.append(rel_path)
+
+            if missing_artifacts and not args.json:
+                for rel_path in missing_artifacts:
+                    print(f"Missing artifact: {rel_path}", file=_sys.stderr)
+
+        # --list-missing requires --check-exists
+        if args.list_missing and not args.check_exists:
+            print("--list-missing requires --check-exists", file=_sys.stderr)
+            return 2
+
+        # --status-format requires --status-only
+        if args.status_format and not args.status_only:
+            print("--status-format requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-reason requires --status-only
+        if args.status_reason and not args.status_only:
+            print("--status-reason requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-code requires --status-only
+        if args.status_code and not args.status_only:
+            print("--status-code requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-meta requires --status-only
+        if args.status_meta and not args.status_only:
+            print("--status-meta requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-summary requires --status-only
+        if args.status_summary and not args.status_only:
+            print("--status-summary requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-fail-key requires --status-only
+        if args.status_fail_key and not args.status_only:
+            print("--status-fail-key requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-fail-stage requires --status-only
+        if args.status_fail_stage and not args.status_only:
+            print("--status-fail-stage requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-timestamp requires --status-only
+        if args.status_timestamp and not args.status_only:
+            print("--status-timestamp requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-output-dir requires --status-only
+        if args.status_output_dir and not args.status_only:
+            print("--status-output-dir requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-manifest-path requires --status-only
+        if args.status_manifest_path and not args.status_only:
+            print("--status-manifest-path requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-manifest-exists requires --status-only
+        if args.status_manifest_exists and not args.status_only:
+            print("--status-manifest-exists requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-artifact-count requires --status-only
+        if args.status_artifact_count and not args.status_only:
+            print("--status-artifact-count requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-strategy-count requires --status-only
+        if args.status_strategy_count and not args.status_only:
+            print("--status-strategy-count requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-fail-count requires --status-only
+        if args.status_fail_count and not args.status_only:
+            print("--status-fail-count requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-skip-count requires --status-only
+        if args.status_skip_count and not args.status_only:
+            print("--status-skip-count requires --status-only", file=_sys.stderr)
+            return 2
+
+        # --status-pass-count requires --status-only
+        if args.status_pass_count and not args.status_only:
+            print("--status-pass-count requires --status-only", file=_sys.stderr)
+            return 2
+
+        status_code = 0 if summary.get("overall_status") == "ok" else 1
+
+        # Compute strategy-count summary for --status-summary
+        summary_total = len(strategies)
+        summary_pass = 0
+        summary_fail = 0
+        summary_skip = 0
+        for s in strategies:
+            stages = [s.get(k, "unknown") for k in ("compile", "preflight", "missing_factor", "backtest_smoke")]
+            if any(v not in ("pass", "skip", "unknown") for v in stages):
+                summary_fail += 1
+            elif all(v == "skip" for v in stages):
+                summary_skip += 1
+            else:
+                summary_pass += 1
+
+        # Derive failure reason from first failing strategy stage
+        status_reason = ""
+        if args.status_reason and summary.get("overall_status") == "fail":
+            for s in summary.get("strategies", []):
+                for stage in ("compile", "preflight", "missing_factor", "backtest_smoke"):
+                    status_val = s.get(stage, "unknown")
+                    if status_val not in ("pass", "skip"):
+                        status_reason = f"{s['strategy_id']}: {stage}={status_val}"
+                        break
+                if status_reason:
+                    break
+
+        # Derive first failing strategy id for --status-fail-key
+        fail_key = None
+        if args.status_fail_key:
+            for s in summary.get("strategies", []):
+                stages = [s.get(k, "unknown") for k in ("compile", "preflight", "missing_factor", "backtest_smoke")]
+                if any(v not in ("pass", "skip") for v in stages):
+                    fail_key = s.get("strategy_id")
+                    break
+
+        # Derive first failing stage for --status-fail-stage
+        fail_stage = None
+        if args.status_fail_stage:
+            for s in summary.get("strategies", []):
+                for stage in ("compile", "preflight", "missing_factor", "backtest_smoke"):
+                    status_val = s.get(stage, "unknown")
+                    if status_val not in ("pass", "skip"):
+                        fail_stage = stage
+                        break
+                if fail_stage:
+                    break
+
+        # Derive run timestamp for --status-timestamp
+        timestamp = summary.get("generated_at") or ""
+
+        # Derive output_dir for --status-output-dir
+        output_dir_str = str(output_dir.resolve())
+
+        # Derive manifest_path for --status-manifest-path
+        manifest_path_str = str(manifest_path)
+
+        # Derive manifest_exists for --status-manifest-exists
+        manifest_exists = manifest_path.is_file()
+
+        # Derive artifact_total for --status-artifact-count
+        artifact_total = sum(artifact_roles.values())
+
+        if args.status_only and args.status_format == "json":
+            use_json = True
+        elif args.status_only and args.status_format == "text":
+            use_json = False
+        else:
+            use_json = args.json
+
+        if use_json:
+            if args.status_only:
+                payload = {
+                    "run_id": summary["run_id"],
+                    "overall_status": summary["overall_status"],
+                }
+                if args.status_reason:
+                    payload["reason"] = status_reason
+                if args.status_code:
+                    payload["status_code"] = status_code
+                if args.status_meta:
+                    payload["source_mode"] = source_mode
+                if args.status_summary:
+                    payload["strategy_total"] = summary_total
+                    payload["strategy_pass"] = summary_pass
+                    payload["strategy_fail"] = summary_fail
+                    payload["strategy_skip"] = summary_skip
+                if args.status_fail_key:
+                    payload["fail_key"] = fail_key
+                if args.status_fail_stage:
+                    payload["fail_stage"] = fail_stage
+                if args.status_timestamp:
+                    payload["timestamp"] = timestamp or None
+                if args.status_output_dir:
+                    payload["output_dir"] = output_dir_str
+                if args.status_manifest_path:
+                    payload["manifest_path"] = manifest_path_str
+                if args.status_manifest_exists:
+                    payload["manifest_exists"] = manifest_exists
+                if args.status_artifact_count:
+                    payload["artifact_count"] = artifact_total
+                if args.status_strategy_count:
+                    payload["strategy_count"] = len(strategies)
+                if args.status_fail_count:
+                    payload["fail_count"] = summary_fail
+                if args.status_skip_count:
+                    payload["skip_count"] = summary_skip
+                if args.status_pass_count:
+                    payload["pass_count"] = summary_pass
+            else:
+                payload = {
+                    "run_id": summary["run_id"],
+                    "overall_status": summary["overall_status"],
+                    "resolved_output_dir": str(output_dir.resolve()),
+                    "source_mode": source_mode,
+                    "strategy_count": len(strategies),
+                    "artifact_role_counts": artifact_roles,
+                }
+            if not args.status_only:
+                if args.details:
+                    payload["strategies"] = [
+                        {
+                            "strategy_id": s.get("strategy_id", ""),
+                            "compile": s.get("compile", "unknown"),
+                            "preflight": s.get("preflight", "unknown"),
+                            "missing_factor": s.get("missing_factor", "unknown"),
+                            "backtest_smoke": s.get("backtest_smoke", "unknown"),
+                            "artifacts": sorted(s.get("artifacts", {}).keys()),
+                        }
+                        for s in strategies
+                    ]
+                if args.strategy and strategies:
+                    s = strategies[0]
+                    payload["strategy"] = {
+                        "strategy_id": s["strategy_id"],
+                        "compile": s["compile"],
+                        "preflight": s["preflight"],
+                        "missing_factor": s["missing_factor"],
+                        "backtest_smoke": s["backtest_smoke"],
+                    }
+                if args.check_exists:
+                    payload["missing_artifact_count"] = len(missing_artifacts)
+                    payload["missing_artifacts"] = missing_artifacts
+            json_str = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+            if not args.quiet:
+                print(json_str)
+            if args.output_file:
+                try:
+                    args.output_file.parent.mkdir(parents=True, exist_ok=True)
+                    args.output_file.write_text(json_str + "\n", encoding="utf-8")
+                except OSError as exc:
+                    print(f"Failed to write output file {args.output_file}: {exc}", file=_sys.stderr)
+                    return 2
+            if args.status_file:
+                try:
+                    args.status_file.parent.mkdir(parents=True, exist_ok=True)
+                    args.status_file.write_text(json_str + "\n", encoding="utf-8")
+                except OSError as exc:
+                    print(f"Failed to write status file {args.status_file}: {exc}", file=_sys.stderr)
+                    return 2
+            if args.list_missing and missing_artifacts and not args.quiet:
+                for rel_path in missing_artifacts:
+                    print(rel_path)
+            if args.check_exists and missing_artifacts:
+                return 2
+            if require_match_fail:
+                return 2
+            return 2 if summary["overall_status"] == "fail" else 0
+
+        # Default text output
+        if args.status_only:
+            if args.status_code:
+                text_status = str(status_code)
+            else:
+                text_status = summary["overall_status"]
+            if args.status_reason:
+                text_status = f"{text_status}\t{status_reason}"
+            if args.status_meta:
+                text_status = f"{text_status}\trun_id={summary['run_id']}\tsource_mode={source_mode}"
+            if args.status_summary:
+                text_status = f"{text_status}\ttotal={summary_total}\tpass={summary_pass}\tfail={summary_fail}\tskip={summary_skip}"
+            if args.status_fail_key:
+                text_status = f"{text_status}\tfail_key={fail_key or ''}"
+            if args.status_fail_stage:
+                text_status = f"{text_status}\tfail_stage={fail_stage or ''}"
+            if args.status_timestamp:
+                text_status = f"{text_status}\ttimestamp={timestamp}"
+            if args.status_output_dir:
+                text_status = f"{text_status}\toutput_dir={output_dir_str}"
+            if args.status_manifest_path:
+                text_status = f"{text_status}\tmanifest_path={manifest_path_str}"
+            if args.status_manifest_exists:
+                text_status = f"{text_status}\tmanifest_exists={'true' if manifest_exists else 'false'}"
+            if args.status_artifact_count:
+                text_status = f"{text_status}\tartifact_count={artifact_total}"
+            if args.status_strategy_count:
+                text_status = f"{text_status}\tstrategy_count={len(strategies)}"
+            if args.status_fail_count:
+                text_status = f"{text_status}\tfail_count={summary_fail}"
+            if args.status_skip_count:
+                text_status = f"{text_status}\tskip_count={summary_skip}"
+            if args.status_pass_count:
+                text_status = f"{text_status}\tpass_count={summary_pass}"
+            if not args.quiet:
+                print(text_status)
+            if args.output_file:
+                try:
+                    args.output_file.parent.mkdir(parents=True, exist_ok=True)
+                    args.output_file.write_text(text_status + "\n", encoding="utf-8")
+                except OSError as exc:
+                    print(f"Failed to write output file {args.output_file}: {exc}", file=_sys.stderr)
+                    return 2
+            if args.status_file:
+                try:
+                    args.status_file.parent.mkdir(parents=True, exist_ok=True)
+                    args.status_file.write_text(text_status + "\n", encoding="utf-8")
+                except OSError as exc:
+                    print(f"Failed to write status file {args.status_file}: {exc}", file=_sys.stderr)
+                    return 2
+        else:
+            lines: list[str] = []
+            lines.append(f"run_id={summary['run_id']}")
+            lines.append(f"resolved_output_dir={output_dir.resolve()}")
+            lines.append(f"source_mode={source_mode}")
+            lines.append(f"overall_status={summary['overall_status']}")
+            lines.append(f"strategy_count={len(strategies)}")
+            for s in strategies:
+                lines.append(f"strategy={s['strategy_id']} compile={s['compile']} "
+                             f"preflight={s['preflight']} missing_factor={s['missing_factor']} "
+                             f"backtest_smoke={s['backtest_smoke']}")
+            if args.details:
+                for s in strategies:
+                    lines.append(f"  strategy_id={s['strategy_id']}")
+                    lines.append(f"    compile={s['compile']}")
+                    lines.append(f"    preflight={s['preflight']}")
+                    lines.append(f"    missing_factor={s['missing_factor']}")
+                    lines.append(f"    backtest_smoke={s['backtest_smoke']}")
+                    artifact_keys = sorted(s.get("artifacts", {}).keys())
+                    lines.append(f"    artifacts={artifact_keys}")
+            if artifact_roles:
+                lines.append("artifact_role_summary:")
+                for role, count in sorted(artifact_roles.items()):
+                    lines.append(f"  {role}: {count}")
+            text_out = "\n".join(lines)
+            if not args.quiet:
+                print(text_out)
+            if args.output_file:
+                try:
+                    args.output_file.parent.mkdir(parents=True, exist_ok=True)
+                    args.output_file.write_text(text_out + "\n", encoding="utf-8")
+                except OSError as exc:
+                    print(f"Failed to write output file {args.output_file}: {exc}", file=_sys.stderr)
+                    return 2
+            if args.status_file:
+                try:
+                    args.status_file.parent.mkdir(parents=True, exist_ok=True)
+                    args.status_file.write_text(text_out + "\n", encoding="utf-8")
+                except OSError as exc:
+                    print(f"Failed to write status file {args.status_file}: {exc}", file=_sys.stderr)
+                    return 2
+
+        if args.list_missing and missing_artifacts and not args.quiet:
+            for rel_path in missing_artifacts:
+                print(rel_path)
+        if args.check_exists and missing_artifacts:
+            return 2
+        if require_match_fail:
+            return 2
+        return 2 if summary["overall_status"] == "fail" else 0
 
     if args.command == "gui":
         from quant_research_engine.gui.app import launch_gui

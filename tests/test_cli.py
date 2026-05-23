@@ -1,5 +1,6 @@
 from argparse import Namespace
 import json
+from pathlib import Path
 
 import pandas as pd
 
@@ -5340,3 +5341,2404 @@ def test_cli_compile_preflight_without_dates_returns_2(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 2
     assert "--start" in captured.err
+
+
+# ---------------------------------------------------------------------------
+# strategy-smoke CLI tests
+# ---------------------------------------------------------------------------
+
+def test_cli_strategy_smoke_no_db_succeeds(capsys, tmp_path):
+    """In a no-DB environment, strategy-smoke exit code is 0 with explicit skips."""
+    rsi2 = tmp_path / "rsi2.yaml"
+    rsi2.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    ema200 = tmp_path / "ema200.yaml"
+    ema200.write_text("""\
+strategy:
+  id: ema200_bollinger_reversal
+  name: EMA200 BB
+  family: mean_reversion
+  direction: long_only
+rules:
+  entry:
+    all:
+      - alias: close
+        operator: ">"
+        alias_b: ema_200
+  risk:
+    stop_loss_pct: 0.10
+factor_requirements:
+  - alias: ema_200
+    indicator: ema
+    source: close
+    period: 200
+    required: true
+    reason: filter
+experiment:
+  id: smk
+  frequency: daily
+  market: ashare
+  start: 2024-01-01
+  end: 2024-02-01
+  universe:
+    include: all_a
+""")
+    macd = tmp_path / "macd.yaml"
+    macd.write_text("""\
+strategy:
+  id: macd_zero_cross_momentum
+  name: MACD
+  family: momentum
+  direction: long_only
+rules:
+  entry:
+    all:
+      - alias: macd_line
+        operator: ">"
+        alias_b: macd_signal
+  risk:
+    stop_loss_pct: 0.08
+factor_requirements:
+  - alias: macd_line
+    indicator: macd
+    source: close
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+    output: macd
+    required: true
+    reason: macd line
+  - alias: macd_signal
+    indicator: macd
+    source: close
+    params:
+      fast: 12
+      slow: 26
+      signal: 9
+    output: signal
+    required: true
+    reason: macd signal
+experiment:
+  id: smk
+  frequency: daily
+  market: ashare
+  start: 2024-01-01
+  end: 2024-02-01
+  universe:
+    include: all_a
+""")
+    out_dir = tmp_path / "smoke_out"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--strategies", str(rsi2), str(ema200), str(macd),
+        "--output-dir", str(out_dir),
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "overall_status=pass" in captured.out
+    assert "compile=pass" in captured.out
+    assert "preflight=skip" in captured.out
+    assert "backtest_smoke=skip" in captured.out
+    assert "database" in captured.out.lower() or "db" in captured.out.lower()
+
+    # smoke_summary.json must exist
+    summary_path = out_dir / "smoke_summary.json"
+    assert summary_path.exists()
+    data = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert data["overall_status"] == "pass"
+    assert len(data["strategies"]) == 3
+
+
+def test_cli_strategy_smoke_custom_output_dir(capsys, tmp_path):
+    """--output-dir places smoke_summary.json and per-strategy dirs there."""
+    rsi2 = tmp_path / "rsi2.yaml"
+    rsi2.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    out_dir = tmp_path / "custom-out"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--strategies", str(rsi2),
+        "--output-dir", str(out_dir),
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert (out_dir / "smoke_summary.json").exists()
+    assert (out_dir / "rsi2_oversold_reversal" / "compiled_strategy_spec.json").exists()
+
+
+def test_cli_strategy_smoke_compile_failure(capsys, tmp_path):
+    """A strategy YAML that can't compile sets overall_status=fail and exit code 2."""
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("strategy: [invalid yaml", encoding="utf-8")
+    out_dir = tmp_path / "fail_out"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--strategies", str(bad),
+        "--output-dir", str(out_dir),
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "overall_status=fail" in captured.out
+    assert "compile=fail" in captured.out
+
+
+def test_cli_strategy_smoke_no_preflight_flag(capsys, tmp_path):
+    """--no-preflight forces preflight skip even if DB were available."""
+    rsi2 = tmp_path / "rsi2.yaml"
+    rsi2.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    out_dir = tmp_path / "np_out"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--strategies", str(rsi2),
+        "--output-dir", str(out_dir),
+        "--no-preflight",
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "preflight=skip" in captured.out
+
+
+def test_cli_strategy_smoke_no_backtest_flag(capsys, tmp_path):
+    """--no-backtest forces backtest_smoke skip."""
+    rsi2 = tmp_path / "rsi2.yaml"
+    rsi2.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    out_dir = tmp_path / "nb_out"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--strategies", str(rsi2),
+        "--output-dir", str(out_dir),
+        "--no-backtest",
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "backtest_smoke=skip" in captured.out
+
+
+def test_cli_strategy_smoke_prints_smoke_summary_path(capsys, tmp_path):
+    """The smoke_summary.json file path is printed in stdout."""
+    rsi2 = tmp_path / "rsi2.yaml"
+    rsi2.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    out_dir = tmp_path / "smoke_out"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--strategies", str(rsi2),
+        "--output-dir", str(out_dir),
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "smoke_summary=" in captured.out
+    assert "smoke_summary.json" in captured.out
+
+
+def test_cli_strategy_smoke_prints_artifact_paths(capsys, tmp_path):
+    """Each strategy's artifact paths and counts appear in stdout."""
+    rsi2 = tmp_path / "rsi2.yaml"
+    rsi2.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    out_dir = tmp_path / "smoke_out"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--strategies", str(rsi2),
+        "--output-dir", str(out_dir),
+        "--no-preflight",
+        "--no-backtest",
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "artifact_count=" in captured.out
+    assert "artifact.compiled_strategy_spec=" in captured.out
+    assert "compiled_strategy_spec.json" in captured.out
+    assert "durations:" in captured.out
+    assert "compile=" in captured.out  # timing key
+
+
+def test_cli_strategy_smoke_prints_manifest_path(capsys, tmp_path):
+    """The smoke_report_manifest.json file path is printed in stdout."""
+    rsi2 = tmp_path / "rsi2.yaml"
+    rsi2.write_text(RSI2_HIGH_LEVEL_YAML, encoding="utf-8")
+    out_dir = tmp_path / "smoke_out"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--strategies", str(rsi2),
+        "--output-dir", str(out_dir),
+        "--no-preflight",
+        "--no-backtest",
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "smoke_report_manifest=" in captured.out
+    assert "smoke_report_manifest.json" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Smoke manifest filter parity — report-files
+# ---------------------------------------------------------------------------
+
+SMOKE_MANIFEST_JSON = json.dumps({
+    "schema_version": 1,
+    "kind": "strategy_smoke_report_manifest",
+    "files": [
+        {
+            "key": "smoke_summary",
+            "path": "smoke_summary.json",
+            "filename": "smoke_summary.json",
+            "role": "smoke_summary",
+        },
+        {
+            "key": "compiled_strategy_spec_rsi2_oversold_reversal",
+            "path": "rsi2_oversold_reversal/compiled_strategy_spec.json",
+            "filename": "compiled_strategy_spec.json",
+            "role": "compiled_strategy_spec",
+            "symbol": "rsi2_oversold_reversal",
+        },
+        {
+            "key": "compiled_strategy_spec_ema200_bollinger_reversal",
+            "path": "ema200_bollinger_reversal/compiled_strategy_spec.json",
+            "filename": "compiled_strategy_spec.json",
+            "role": "compiled_strategy_spec",
+            "symbol": "ema200_bollinger_reversal",
+        },
+        {
+            "key": "backtest_smoke_summary_rsi2_oversold_reversal",
+            "path": "rsi2_oversold_reversal/backtest_smoke_summary.csv",
+            "filename": "backtest_smoke_summary.csv",
+            "role": "backtest_smoke_summary",
+            "symbol": "rsi2_oversold_reversal",
+        },
+    ],
+})
+
+
+def _write_smoke_manifest(tmp_path: Path) -> Path:
+    p = tmp_path / "smoke_report_manifest.json"
+    p.write_text(SMOKE_MANIFEST_JSON, encoding="utf-8")
+    # Create the actual files so report-audit passes existence checks.
+    (tmp_path / "smoke_summary.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "rsi2_oversold_reversal").mkdir(exist_ok=True)
+    (tmp_path / "rsi2_oversold_reversal" / "compiled_strategy_spec.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "rsi2_oversold_reversal" / "backtest_smoke_summary.csv").write_text("symbol\n", encoding="utf-8")
+    (tmp_path / "ema200_bollinger_reversal").mkdir(exist_ok=True)
+    (tmp_path / "ema200_bollinger_reversal" / "compiled_strategy_spec.json").write_text("{}", encoding="utf-8")
+    return p
+
+
+# --- report-files ---
+
+def test_cli_report_files_smoke_manifest_role_smoke_summary(capsys, tmp_path):
+    """--role smoke_summary returns only the run-level smoke_summary path."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main(["report-files", str(mp), "--role", "smoke_summary"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == str(tmp_path / "smoke_summary.json")
+
+
+def test_cli_report_files_smoke_manifest_role_compiled_strategy_spec(capsys, tmp_path):
+    """--role compiled_strategy_spec returns all matching spec paths."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main(["report-files", str(mp), "--role", "compiled_strategy_spec"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    lines = captured.out.strip().split("\n")
+    assert len(lines) == 2
+    assert all("compiled_strategy_spec.json" in ln for ln in lines)
+
+
+def test_cli_report_files_smoke_manifest_symbol_filter(capsys, tmp_path):
+    """--symbol filters to only the given strategy_id."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main(["report-files", str(mp), "--symbol", "rsi2_oversold_reversal"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    lines = captured.out.strip().split("\n")
+    assert len(lines) == 2  # compiled_strategy_spec + backtest_smoke_summary
+    assert all("rsi2_oversold_reversal" in ln for ln in lines)
+
+
+def test_cli_report_files_smoke_manifest_role_symbol_combined(capsys, tmp_path):
+    """--role + --symbol narrows to exactly one entry."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-files", str(mp),
+        "--role", "compiled_strategy_spec",
+        "--symbol", "rsi2_oversold_reversal",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    lines = captured.out.strip().split("\n")
+    assert len(lines) == 1
+    assert "rsi2_oversold_reversal" in lines[0]
+    assert "compiled_strategy_spec.json" in lines[0]
+
+
+def test_cli_report_files_smoke_manifest_role_symbol_no_match(capsys, tmp_path):
+    """--role + --symbol that match nothing produces no output with exit 0."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-files", str(mp),
+        "--role", "backtest_smoke_summary",
+        "--symbol", "ema200_bollinger_reversal",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+
+
+def test_cli_report_files_smoke_manifest_json_output(capsys, tmp_path):
+    """--json outputs valid JSON with paths list."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main(["report-files", str(mp), "--role", "smoke_summary", "--json"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert payload["manifest_kind"] == "strategy_smoke_report_manifest"
+    assert isinstance(payload["files"], list)
+    assert len(payload["files"]) == 1
+
+
+def test_cli_report_files_smoke_manifest_require_match_success(capsys, tmp_path):
+    """--require-match exits 0 when entries match the filter."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-files", str(mp),
+        "--role", "compiled_strategy_spec",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    lines = captured.out.strip().split("\n")
+    assert len(lines) == 2
+
+
+def test_cli_report_files_smoke_manifest_require_match_zero(capsys, tmp_path):
+    """--require-match exits 2 when no entries match the filter."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-files", str(mp),
+        "--role", "missing_factor_requests",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "no manifest entries matched filters" in captured.err
+
+
+def test_cli_report_files_smoke_manifest_json_require_match_zero(capsys, tmp_path):
+    """--json --require-match exits 2 with structured error on zero matches."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-files", str(mp),
+        "--role", "missing_factor_requests",
+        "--json",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 0
+    assert payload["manifest_kind"] == "strategy_smoke_report_manifest"
+    assert len(payload["files"]) == 0
+
+
+# --- report-audit ---
+
+def test_cli_report_audit_smoke_manifest_role_filter(capsys, tmp_path):
+    """report-audit with --role filters smoke manifest entries."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main(["report-audit", str(mp), "--role", "smoke_summary"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "matched_files=1" in captured.out
+    assert "status=ok" in captured.out
+
+
+def test_cli_report_audit_smoke_manifest_role_symbol_combined(capsys, tmp_path):
+    """report-audit with --role + --symbol narrows to one entry."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-audit", str(mp),
+        "--role", "compiled_strategy_spec",
+        "--symbol", "rsi2_oversold_reversal",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "matched_files=1" in captured.out
+
+
+def test_cli_report_audit_smoke_manifest_require_match_success(capsys, tmp_path):
+    """report-audit --require-match exits 0 when filter matches entries."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-audit", str(mp),
+        "--role", "smoke_summary",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "matched_files=1" in captured.out
+    assert "status=ok" in captured.out
+
+
+def test_cli_report_audit_smoke_manifest_require_match_zero(capsys, tmp_path):
+    """report-audit --require-match exits 2 with matched_files=0 on no match."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-audit", str(mp),
+        "--role", "missing_factor_requests",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "matched_files=0" in captured.out
+    assert "status=failed" in captured.out
+    assert "no manifest entries matched filters" in captured.err
+
+
+def test_cli_report_audit_smoke_manifest_json_output(capsys, tmp_path):
+    """report-audit --json for smoke manifest returns structured payload."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main(["report-audit", str(mp), "--role", "smoke_summary", "--json"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert payload["manifest_kind"] == "strategy_smoke_report_manifest"
+
+
+def test_cli_report_audit_smoke_manifest_json_require_match_zero(capsys, tmp_path):
+    """report-audit --json --require-match exits 2 with structured error on zero matches."""
+    mp = _write_smoke_manifest(tmp_path)
+    exit_code = main([
+        "report-audit", str(mp),
+        "--role", "missing_factor_requests",
+        "--json",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 0
+    assert payload["manifest_kind"] == "strategy_smoke_report_manifest"
+
+
+# ---------------------------------------------------------------------------
+# Smoke discovery CLI — smoke-files
+# ---------------------------------------------------------------------------
+
+SMOKE_SUMMARY_JSON = json.dumps({
+    "run_id": "test-run-001",
+    "generated_at": "2026-05-22T00:00:00Z",
+    "environment": {"db_configured": False},
+    "strategies": [
+        {
+            "strategy_id": "rsi2_oversold_reversal",
+            "compile": "pass",
+            "preflight": "skip",
+            "missing_factor": "skip",
+            "backtest_smoke": "skip",
+            "reason": "No DB available",
+            "artifacts": {"compiled_strategy_spec": "rsi2/compiled_strategy_spec.json"},
+            "durations_s": {"compile": 0.042},
+        },
+        {
+            "strategy_id": "ema200_bollinger_reversal",
+            "compile": "pass",
+            "preflight": "skip",
+            "missing_factor": "skip",
+            "backtest_smoke": "skip",
+            "reason": "No DB available",
+            "artifacts": {"compiled_strategy_spec": "ema200/compiled_strategy_spec.json"},
+            "durations_s": {"compile": 0.051},
+        },
+    ],
+    "overall_status": "ok",
+})
+
+SMOKE_DISCOVERY_MANIFEST_JSON = json.dumps({
+    "schema_version": 1,
+    "kind": "strategy_smoke_report_manifest",
+    "files": [
+        {"key": "smoke_summary", "path": "smoke_summary.json", "filename": "smoke_summary.json", "role": "smoke_summary"},
+        {"key": "compiled_strategy_spec_rsi2", "path": "rsi2/compiled_strategy_spec.json", "filename": "compiled_strategy_spec.json", "role": "compiled_strategy_spec", "symbol": "rsi2_oversold_reversal"},
+        {"key": "compiled_strategy_spec_ema200", "path": "ema200/compiled_strategy_spec.json", "filename": "compiled_strategy_spec.json", "role": "compiled_strategy_spec", "symbol": "ema200_bollinger_reversal"},
+    ],
+})
+
+
+def _write_smoke_discovery_fixture(tmp_path: Path) -> Path:
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    (tmp_path / "smoke_report_manifest.json").write_text(SMOKE_DISCOVERY_MANIFEST_JSON, encoding="utf-8")
+    return tmp_path
+
+
+def test_cli_smoke_files_default_output(capsys, tmp_path):
+    """qre smoke-files prints run_id, overall_status, strategy_count, and artifact_role_summary."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "run_id=test-run-001" in captured.out
+    assert "resolved_output_dir=" in captured.out
+    assert "source_mode=manifest" in captured.out
+    assert "overall_status=ok" in captured.out
+    assert "strategy_count=2" in captured.out
+    assert "strategy=rsi2_oversold_reversal" in captured.out
+    assert "strategy=ema200_bollinger_reversal" in captured.out
+    assert "artifact_role_summary:" in captured.out
+    assert "compiled_strategy_spec: 2" in captured.out
+    assert "smoke_summary: 1" in captured.out
+
+
+def test_cli_smoke_files_json_output(capsys, tmp_path):
+    """qre smoke-files --json emits valid JSON payload."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir), "--json"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["run_id"] == "test-run-001"
+    assert payload["overall_status"] == "ok"
+    assert "resolved_output_dir" in payload
+    assert payload["source_mode"] == "manifest"
+    assert payload["strategy_count"] == 2
+    assert payload["artifact_role_counts"]["smoke_summary"] == 1
+    assert payload["artifact_role_counts"]["compiled_strategy_spec"] == 2
+
+
+def test_cli_smoke_files_strategy_filter(capsys, tmp_path):
+    """qre smoke-files --strategy filters to a single strategy."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir), "--strategy", "rsi2_oversold_reversal"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "strategy_count=1" in captured.out
+    assert "strategy=rsi2_oversold_reversal" in captured.out
+    assert "ema200_bollinger_reversal" not in captured.out
+
+
+def test_cli_smoke_files_strategy_json(capsys, tmp_path):
+    """qre smoke-files --json --strategy includes per-strategy detail."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir), "--json", "--strategy", "rsi2_oversold_reversal"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["strategy_count"] == 1
+    assert payload["strategy"]["strategy_id"] == "rsi2_oversold_reversal"
+    assert payload["strategy"]["compile"] == "pass"
+
+
+def test_cli_smoke_files_role_filter(capsys, tmp_path):
+    """qre smoke-files --role filters artifact_role_summary to a single role."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir), "--role", "compiled_strategy_spec"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "compiled_strategy_spec: 2" in captured.out
+    assert "smoke_summary" not in captured.out
+
+
+def test_cli_smoke_files_role_json(capsys, tmp_path):
+    """qre smoke-files --json --role returns only the matching role count."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir), "--json", "--role", "smoke_summary"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["artifact_role_counts"] == {"smoke_summary": 1}
+
+
+def test_cli_smoke_files_missing_summary_json(capsys, tmp_path):
+    """qre smoke-files exits 2 and prints error when smoke_summary.json is missing."""
+    exit_code = main(["smoke-files", "--output-dir", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "not found" in captured.err
+
+
+def test_cli_smoke_files_fail_status(capsys, tmp_path):
+    """qre smoke-files exits 2 when overall_status is fail."""
+    fail_summary = json.dumps({**json.loads(SMOKE_SUMMARY_JSON), "overall_status": "fail"})
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main(["smoke-files", "--output-dir", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "overall_status=fail" in captured.out
+
+
+def test_cli_smoke_files_latest_discovery_success(capsys, tmp_path, monkeypatch):
+    """qre smoke-files discovers the latest run when multiple run dirs exist."""
+    # Create a fake __file__ so that 4 parents up = tmp_path
+    fake_cli = tmp_path / "src" / "quant_research_engine" / "apps" / "cli.py"
+    fake_cli.parent.mkdir(parents=True)
+    fake_cli.write_text("")
+    monkeypatch.setattr("quant_research_engine.apps.cli.__file__", str(fake_cli))
+
+    root = tmp_path / "outputs" / "strategy-entry-smoke"
+    run_old = root / "run-old"
+    run_new = root / "run-new"
+    run_old.mkdir(parents=True)
+    run_new.mkdir(parents=True)
+    old_summary = json.dumps({**json.loads(SMOKE_SUMMARY_JSON), "run_id": "old-run"})
+    new_summary = json.dumps({**json.loads(SMOKE_SUMMARY_JSON), "run_id": "new-run"})
+    (run_old / "smoke_summary.json").write_text(old_summary)
+    (run_new / "smoke_summary.json").write_text(new_summary)
+    # Ensure run_new is more recent
+    (run_new / "smoke_summary.json").touch()
+
+    exit_code = main(["smoke-files"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "run_id=new-run" in captured.out
+    assert "resolved_output_dir=" in captured.out
+    assert str(run_new.resolve()) in captured.out
+
+
+def test_cli_smoke_files_latest_no_runs(capsys, tmp_path, monkeypatch):
+    """qre smoke-files exits 2 when no smoke run dirs exist under default root."""
+    fake_cli = tmp_path / "src" / "quant_research_engine" / "apps" / "cli.py"
+    fake_cli.parent.mkdir(parents=True)
+    fake_cli.write_text("")
+    monkeypatch.setattr("quant_research_engine.apps.cli.__file__", str(fake_cli))
+
+    root = tmp_path / "outputs" / "strategy-entry-smoke"
+    root.mkdir(parents=True)
+    # No subdirectories with smoke_summary.json
+
+    exit_code = main(["smoke-files"])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "No smoke runs found" in captured.err
+
+
+def test_cli_smoke_files_output_dir_precedence(capsys, tmp_path, monkeypatch):
+    """Explicit --output-dir takes precedence over --latest / auto-discovery."""
+    # Create a newer run that should be ignored when --output-dir is explicit
+    root = tmp_path / "outputs" / "strategy-entry-smoke"
+    run_auto = root / "run-auto"
+    run_auto.mkdir(parents=True)
+    auto_summary = json.dumps({**json.loads(SMOKE_SUMMARY_JSON), "run_id": "auto-run"})
+    (run_auto / "smoke_summary.json").write_text(auto_summary)
+
+    # Create explicit output_dir with a different run_id
+    explicit_dir = tmp_path / "explicit-output"
+    explicit_dir.mkdir(parents=True)
+    explicit_summary = json.dumps({**json.loads(SMOKE_SUMMARY_JSON), "run_id": "explicit-run"})
+    (explicit_dir / "smoke_summary.json").write_text(explicit_summary)
+
+    exit_code = main(["smoke-files", "--output-dir", str(explicit_dir)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "run_id=explicit-run" in captured.out
+    assert "auto-run" not in captured.out
+
+
+def test_cli_smoke_files_deterministic_strategy_order(capsys, tmp_path):
+    """qre smoke-files lists strategies in deterministic order by strategy_id."""
+    summary_reversed = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "strategies": [
+            {
+                "strategy_id": "ema200_bollinger_reversal",
+                "compile": "pass",
+                "preflight": "skip",
+                "missing_factor": "skip",
+                "backtest_smoke": "skip",
+                "reason": "No DB available",
+                "artifacts": {"compiled_strategy_spec": "ema200/compiled_strategy_spec.json"},
+                "durations_s": {"compile": 0.051},
+            },
+            {
+                "strategy_id": "rsi2_oversold_reversal",
+                "compile": "pass",
+                "preflight": "skip",
+                "missing_factor": "skip",
+                "backtest_smoke": "skip",
+                "reason": "No DB available",
+                "artifacts": {"compiled_strategy_spec": "rsi2/compiled_strategy_spec.json"},
+                "durations_s": {"compile": 0.042},
+            },
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(summary_reversed, encoding="utf-8")
+    exit_code = main(["smoke-files", "--output-dir", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    # After sorting by strategy_id, ema200 comes before rsi2
+    ema_idx = captured.out.index("strategy=ema200_bollinger_reversal")
+    rsi_idx = captured.out.index("strategy=rsi2_oversold_reversal")
+    assert ema_idx < rsi_idx, "strategies must be sorted by strategy_id"
+
+
+def test_cli_smoke_files_source_mode_manifest_text(capsys, tmp_path):
+    """qre smoke-files prints source_mode=manifest when manifest is present."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "source_mode=manifest" in captured.out
+
+
+def test_cli_smoke_files_source_mode_fallback_text(capsys, tmp_path):
+    """qre smoke-files prints source_mode=artifacts_fallback when manifest is missing."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    # No manifest file — fallback mode
+    exit_code = main(["smoke-files", "--output-dir", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "source_mode=artifacts_fallback" in captured.out
+
+
+def test_cli_smoke_files_manifest_fallback_count_parity(capsys, tmp_path):
+    """Artifact role counts are identical from manifest vs fallback when per-strategy data matches."""
+    # Build a manifest and a summary where per-strategy artifacts are aligned.
+    # The fallback counts only per-strategy artifacts, so the manifest must not include
+    # run-level artifacts (like smoke_summary) for the parity test to be valid.
+    aligned_summary = json.dumps({
+        "run_id": "test-parity",
+        "generated_at": "2026-05-22T00:00:00Z",
+        "environment": {"db_configured": False},
+        "strategies": [
+            {
+                "strategy_id": "alpha",
+                "compile": "pass",
+                "preflight": "skip",
+                "missing_factor": "skip",
+                "backtest_smoke": "skip",
+                "reason": "No DB",
+                "artifacts": {"compiled_strategy_spec": "alpha/c.json", "backtest_smoke_summary": "alpha/s.csv"},
+                "durations_s": {},
+            },
+            {
+                "strategy_id": "beta",
+                "compile": "pass",
+                "preflight": "skip",
+                "missing_factor": "skip",
+                "backtest_smoke": "skip",
+                "reason": "No DB",
+                "artifacts": {"compiled_strategy_spec": "beta/c.json", "backtest_smoke_summary": "beta/s.csv"},
+                "durations_s": {},
+            },
+        ],
+        "overall_status": "ok",
+    })
+    aligned_manifest = json.dumps({
+        "schema_version": 1,
+        "kind": "strategy_smoke_report_manifest",
+        "files": [
+            {"key": "a1", "path": "alpha/c.json", "filename": "c.json", "role": "compiled_strategy_spec", "symbol": "alpha"},
+            {"key": "a2", "path": "alpha/s.csv", "filename": "s.csv", "role": "backtest_smoke_summary", "symbol": "alpha"},
+            {"key": "b1", "path": "beta/c.json", "filename": "c.json", "role": "compiled_strategy_spec", "symbol": "beta"},
+            {"key": "b2", "path": "beta/s.csv", "filename": "s.csv", "role": "backtest_smoke_summary", "symbol": "beta"},
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(aligned_summary)
+    (tmp_path / "smoke_report_manifest.json").write_text(aligned_manifest)
+
+    # Get counts via manifest
+    exit_code = main(["smoke-files", "--output-dir", str(tmp_path), "--json"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    manifest_payload = json.loads(captured.out)
+    assert manifest_payload["source_mode"] == "manifest"
+
+    # Remove manifest and get counts via fallback
+    (tmp_path / "smoke_report_manifest.json").unlink()
+    exit_code = main(["smoke-files", "--output-dir", str(tmp_path), "--json"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    fallback_payload = json.loads(captured.out)
+    assert fallback_payload["source_mode"] == "artifacts_fallback"
+
+    # Counts must be identical when per-strategy artifacts match
+    assert manifest_payload["artifact_role_counts"] == fallback_payload["artifact_role_counts"]
+
+
+def test_cli_smoke_files_details_text(capsys, tmp_path):
+    """qre smoke-files --details prints per-strategy block with stage statuses and artifact keys."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir), "--details"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "run_id=test-run-001" in captured.out
+    assert "source_mode=manifest" in captured.out
+    # Per-strategy detail blocks
+    assert "  strategy_id=ema200_bollinger_reversal" in captured.out
+    assert "    compile=pass" in captured.out
+    assert "    preflight=skip" in captured.out
+    assert "    missing_factor=skip" in captured.out
+    assert "    backtest_smoke=skip" in captured.out
+    assert "    artifacts=['compiled_strategy_spec']" in captured.out
+    assert "  strategy_id=rsi2_oversold_reversal" in captured.out
+    # Summary still present
+    assert "artifact_role_summary:" in captured.out
+    assert "compiled_strategy_spec: 2" in captured.out
+
+
+def test_cli_smoke_files_details_json(capsys, tmp_path):
+    """qre smoke-files --json --details includes strategies array with per-strategy details."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main(["smoke-files", "--output-dir", str(out_dir), "--json", "--details"])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["strategies"] == [
+        {
+            "strategy_id": "ema200_bollinger_reversal",
+            "compile": "pass",
+            "preflight": "skip",
+            "missing_factor": "skip",
+            "backtest_smoke": "skip",
+            "artifacts": ["compiled_strategy_spec"],
+        },
+        {
+            "strategy_id": "rsi2_oversold_reversal",
+            "compile": "pass",
+            "preflight": "skip",
+            "missing_factor": "skip",
+            "backtest_smoke": "skip",
+            "artifacts": ["compiled_strategy_spec"],
+        },
+    ]
+    # Summary still present
+    assert payload["artifact_role_counts"]["compiled_strategy_spec"] == 2
+
+
+def test_cli_smoke_files_details_with_strategy_filter(capsys, tmp_path):
+    """qre smoke-files --details --strategy filters per-strategy details."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--details", "--strategy", "rsi2_oversold_reversal",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "strategy_count=1" in captured.out
+    assert "  strategy_id=rsi2_oversold_reversal" in captured.out
+    assert "  strategy_id=ema200_bollinger_reversal" not in captured.out
+
+
+def test_cli_smoke_files_details_role_still_filters_summary(capsys, tmp_path):
+    """qre smoke-files --details --role filters artifact_role_summary but still shows full details."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--details", "--role", "smoke_summary",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    # Role filter applies to summary
+    assert "smoke_summary: 1" in captured.out
+    assert "compiled_strategy_spec" not in captured.out or "compiled_strategy_spec:" not in captured.out.split("artifact_role_summary:")[-1]
+    # Details still show both strategies
+    assert "  strategy_id=ema200_bollinger_reversal" in captured.out
+    assert "  strategy_id=rsi2_oversold_reversal" in captured.out
+
+
+def test_cli_smoke_files_output_file_text_export(capsys, tmp_path):
+    """qre smoke-files --output-file <path> writes text output to file, stdout unchanged."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    output_file = tmp_path / "export.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--output-file", str(output_file),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    # Stdout unchanged
+    assert "run_id=test-run-001" in captured.out
+    assert "source_mode=manifest" in captured.out
+    # File written with matching content
+    assert output_file.exists()
+    file_content = output_file.read_text(encoding="utf-8")
+    assert file_content == captured.out
+
+
+def test_cli_smoke_files_output_file_json_export(capsys, tmp_path):
+    """qre smoke-files --json --output-file <path> writes JSON to file, stdout unchanged."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    output_file = tmp_path / "export.json"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--json", "--output-file", str(output_file),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    # Stdout contains JSON
+    stdout_data = json.loads(captured.out)
+    assert stdout_data["run_id"] == "test-run-001"
+    # File written with matching JSON
+    assert output_file.exists()
+    file_data = json.loads(output_file.read_text(encoding="utf-8"))
+    assert file_data == stdout_data
+
+
+def test_cli_smoke_files_output_file_parent_dir_auto_create(capsys, tmp_path):
+    """qre smoke-files --output-file <path> creates parent directories automatically."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    output_file = tmp_path / "nested" / "subdir" / "export.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--output-file", str(output_file),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    # File exists under nested path
+    assert output_file.exists()
+    assert "run_id=test-run-001" in output_file.read_text(encoding="utf-8")
+    # Stdout unchanged
+    assert "run_id=test-run-001" in captured.out
+
+
+def test_cli_smoke_files_output_file_write_failure(capsys, tmp_path):
+    """qre smoke-files --output-file returns 2 on write failure with stderr message."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    # Create a directory at the target path to force write failure
+    output_file = tmp_path / "is_a_directory"
+    output_file.mkdir()
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--output-file", str(output_file),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "Failed to write output file" in captured.err
+    # Stdout still produced (text output printed before file write attempt)
+    assert "run_id=test-run-001" in captured.out
+
+
+def test_cli_smoke_files_check_exists_success(capsys, tmp_path):
+    """qre smoke-files --check-exists exits 0 when all referenced artifacts exist."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    # Create the actual artifact files referenced in the manifest
+    (out_dir / "rsi2" / "compiled_strategy_spec.json").parent.mkdir(parents=True, exist_ok=True)
+    (out_dir / "rsi2" / "compiled_strategy_spec.json").write_text("{}", encoding="utf-8")
+    (out_dir / "ema200" / "compiled_strategy_spec.json").parent.mkdir(parents=True, exist_ok=True)
+    (out_dir / "ema200" / "compiled_strategy_spec.json").write_text("{}", encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--check-exists",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "run_id=test-run-001" in captured.out
+    assert "Missing artifact:" not in captured.err
+
+
+def test_cli_smoke_files_check_exists_missing_artifact(capsys, tmp_path):
+    """qre smoke-files --check-exists exits 2 and prints missing artifacts to stderr."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--check-exists",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    # Stderr reports missing artifact paths
+    assert "Missing artifact:" in captured.err
+    assert "compiled_strategy_spec.json" in captured.err
+    # Stdout still produced
+    assert "run_id=test-run-001" in captured.out
+
+
+def test_cli_smoke_files_check_exists_json(capsys, tmp_path):
+    """qre smoke-files --json --check-exists includes missing_artifact_count and missing_artifacts."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--json", "--check-exists",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["missing_artifact_count"] > 0
+    assert isinstance(payload["missing_artifacts"], list)
+    assert len(payload["missing_artifacts"]) == payload["missing_artifact_count"]
+    # Missing artifact paths are sorted
+    assert payload["missing_artifacts"] == sorted(payload["missing_artifacts"])
+
+
+def test_cli_smoke_files_check_exists_backward_compat(capsys, tmp_path):
+    """qre smoke-files without --check-exists does not include missing-artifact fields."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    # Text mode
+    exit_code_text = main([
+        "smoke-files", "--output-dir", str(out_dir),
+    ])
+    captured_text = capsys.readouterr()
+    assert exit_code_text == 0
+    assert "Missing artifact:" not in captured_text.err
+
+    # JSON mode
+    exit_code_json = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--json",
+    ])
+    captured_json = capsys.readouterr()
+    assert exit_code_json == 0
+    payload = json.loads(captured_json.out)
+    assert "missing_artifact_count" not in payload
+    assert "missing_artifacts" not in payload
+
+
+def test_cli_smoke_files_require_match_strategy_success(capsys, tmp_path):
+    """qre smoke-files --strategy <match> --require-match exits 0 when strategy matches."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--strategy", "rsi2_oversold_reversal",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "strategy=rsi2_oversold_reversal" in captured.out
+
+
+def test_cli_smoke_files_require_match_strategy_no_match(capsys, tmp_path):
+    """qre smoke-files --strategy <no-match> --require-match returns 2 with stderr."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--strategy", "nonexistent_strategy",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "No matching strategy: nonexistent_strategy" in captured.err
+    # Stdout still produced
+    assert "run_id=test-run-001" in captured.out
+    assert "strategy_count=0" in captured.out
+
+
+def test_cli_smoke_files_require_match_role_no_match(capsys, tmp_path):
+    """qre smoke-files --role <no-match> --require-match returns 2 with stderr."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--role", "nonexistent_role",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "No matching role: nonexistent_role" in captured.err
+    # Stdout still produced
+    assert "run_id=test-run-001" in captured.out
+
+
+def test_cli_smoke_files_require_match_backward_compat(capsys, tmp_path):
+    """qre smoke-files --strategy no-match without --require-match exits 0."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--strategy", "nonexistent_strategy",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "No matching strategy:" not in captured.err
+    assert "strategy_count=0" in captured.out
+
+
+def test_cli_smoke_files_list_missing_without_check_exists(capsys, tmp_path):
+    """qre smoke-files --list-missing without --check-exists exits 2 with stderr."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--list-missing",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--list-missing requires --check-exists" in captured.err
+    # Normal output should NOT be printed (early exit before output)
+    assert "run_id=" not in captured.out
+
+
+def test_cli_smoke_files_list_missing_with_missing_artifacts(capsys, tmp_path):
+    """qre smoke-files --check-exists --list-missing prints missing paths to stdout."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--check-exists", "--list-missing",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    # stderr has "Missing artifact:" lines
+    assert "Missing artifact:" in captured.err
+    # stdout has text output + missing paths (one per line)
+    assert "run_id=" in captured.out
+    assert "overall_status=" in captured.out
+    # Paths should appear in stdout after normal output
+    lines = captured.out.strip().split("\n")
+    # Last lines should be the artifact paths
+    assert len(lines) > 5  # normal output + path lines
+    path_lines = [l for l in lines if l.startswith("smoke_") or l.startswith("backtest_") or "compiled" in l]
+    assert len(path_lines) > 0
+
+
+def test_cli_smoke_files_list_missing_json_with_missing_artifacts(capsys, tmp_path):
+    """qre smoke-files --json --check-exists --list-missing emits JSON then paths."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--json", "--check-exists", "--list-missing",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    # JSON is multi-line with indent=2; paths follow after closing brace line
+    out_lines = captured.out.split("\n")
+    # Find the JSON block: lines from first "{" to the single "}" line
+    json_end = None
+    for i, line in enumerate(out_lines):
+        if line == "}":
+            json_end = i
+            break
+    assert json_end is not None, f"Could not find end of JSON in: {captured.out}"
+    json_str = "\n".join(out_lines[: json_end + 1])
+    payload = json.loads(json_str)
+    assert "missing_artifact_count" in payload
+    assert "missing_artifacts" in payload
+    assert payload["missing_artifact_count"] > 0
+    # Remaining non-empty lines are missing artifact relative paths
+    path_lines = [l for l in out_lines[json_end + 1 :] if l.strip()]
+    if payload["missing_artifact_count"] > 0:
+        assert len(path_lines) > 0
+        for path in path_lines:
+            assert path in payload["missing_artifacts"]
+
+
+def test_cli_smoke_files_list_missing_backward_compat(capsys, tmp_path):
+    """qre smoke-files without --list-missing does not print paths to stdout."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--check-exists",
+    ])
+    captured = capsys.readouterr()
+    # exit 2 because artifacts are missing (no files on disk)
+    assert exit_code == 2
+    assert "Missing artifact:" in captured.err
+    # Stdout should NOT contain raw artifact paths (list-missing not present).
+    # Path lines are unindented lines with .json/.csv extensions — not the
+    # indented summary lines like "  compiled_strategy_spec: 2".
+    out_lines = captured.out.strip().split("\n")
+    path_lines = [
+        l for l in out_lines
+        if not l.startswith(" ") and (l.endswith(".json") or l.endswith(".csv"))
+    ]
+    assert len(path_lines) == 0
+
+
+def test_cli_smoke_files_quiet_suppresses_stdout_text(capsys, tmp_path):
+    """qre smoke-files --quiet emits no stdout in text mode."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--quiet",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    # stderr should also be empty for a normal success case
+    assert captured.err.strip() == ""
+
+
+def test_cli_smoke_files_quiet_preserves_stderr_and_exit_code(capsys, tmp_path):
+    """qre smoke-files --quiet --check-exists keeps stderr diagnostics and exit 2."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--quiet", "--check-exists",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.out.strip() == ""
+    assert "Missing artifact:" in captured.err
+
+
+def test_cli_smoke_files_quiet_json_suppresses_stdout(capsys, tmp_path):
+    """qre smoke-files --json --quiet emits no stdout."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--json", "--quiet",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+
+
+def test_cli_smoke_files_quiet_backward_compat(capsys, tmp_path):
+    """qre smoke-files without --quiet still emits normal stdout."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "run_id=" in captured.out
+    assert "overall_status=" in captured.out
+
+
+def test_cli_smoke_files_status_only_text_output(capsys, tmp_path):
+    """qre smoke-files --status-only emits only overall_status in text mode."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-only",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "ok"
+    assert "run_id=" not in captured.out
+    assert "strategy_count=" not in captured.out
+
+
+def test_cli_smoke_files_status_only_json_output(capsys, tmp_path):
+    """qre smoke-files --json --status-only emits minimal JSON with overall_status + run_id."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--json", "--status-only",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out.strip())
+    assert set(payload.keys()) == {"overall_status", "run_id"}
+    assert payload["overall_status"] == "ok"
+    assert payload["run_id"] == "test-run-001"
+
+
+def test_cli_smoke_files_status_only_quiet_suppresses(capsys, tmp_path):
+    """qre smoke-files --status-only --quiet suppresses stdout."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-only", "--quiet",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+
+
+def test_cli_smoke_files_status_only_backward_compat(capsys, tmp_path):
+    """qre smoke-files without --status-only still emits full text output."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "run_id=" in captured.out
+    assert "overall_status=" in captured.out
+    assert "strategy_count=" in captured.out
+
+
+def test_cli_smoke_files_status_file_text(capsys, tmp_path):
+    """qre smoke-files --status-file writes full text output to file."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-file", str(status_path),
+    ])
+    assert exit_code == 0
+    content = status_path.read_text(encoding="utf-8")
+    assert "run_id=test-run-001" in content
+    assert "overall_status=ok" in content
+    assert "strategy_count=2" in content
+
+
+def test_cli_smoke_files_status_file_json(capsys, tmp_path):
+    """qre smoke-files --json --status-file writes full JSON to file."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    status_path = tmp_path / "status.json"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--json", "--status-file", str(status_path),
+    ])
+    assert exit_code == 0
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["overall_status"] == "ok"
+    assert payload["run_id"] == "test-run-001"
+    assert "strategy_count" in payload
+
+
+def test_cli_smoke_files_status_file_parent_dir_create(capsys, tmp_path):
+    """qre smoke-files --status-file auto-creates parent directories."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    status_path = tmp_path / "nested" / "subdir" / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-file", str(status_path),
+    ])
+    assert exit_code == 0
+    assert status_path.is_file()
+    content = status_path.read_text(encoding="utf-8")
+    assert "run_id=test-run-001" in content
+
+
+def test_cli_smoke_files_status_file_write_failure(capsys, tmp_path):
+    """qre smoke-files --status-file write failure returns exit 2 with stderr."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    # Create a regular file where a directory would need to be created
+    blocker = tmp_path / "blocker.txt"
+    blocker.write_text("block", encoding="utf-8")
+    status_path = tmp_path / "blocker.txt" / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "Failed to write status file" in captured.err
+
+
+def test_cli_smoke_files_status_file_with_quiet(capsys, tmp_path):
+    """qre smoke-files --quiet --status-file suppresses stdout but writes file."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--quiet", "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8")
+    assert "run_id=test-run-001" in content
+    assert "overall_status=ok" in content
+
+
+def test_cli_smoke_files_status_format_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-format text emits plain status line."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-only", "--status-format", "text",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "ok"
+    # Verify no JSON payload in output
+    assert "{" not in captured.out
+
+
+def test_cli_smoke_files_status_format_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-format json emits minimal JSON."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-only", "--status-format", "json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out.strip())
+    assert payload["overall_status"] == "ok"
+    assert payload["run_id"] == "test-run-001"
+    # Status-only JSON should not have full payload fields
+    assert "strategy_count" not in payload
+
+
+def test_cli_smoke_files_status_format_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-format without --status-only returns 2 with stderr."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-format", "text",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-format requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_format_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-format json --status-file writes file, suppresses stdout."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    status_path = tmp_path / "status.json"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--quiet", "--status-only", "--status-format", "json",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["overall_status"] == "ok"
+    assert payload["run_id"] == "test-run-001"
+
+
+def test_cli_smoke_files_status_reason_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-reason emits status<TAB>reason in text mode."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "compile": "fail", "reason": "compile error"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-reason",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2  # fail status returns 2
+    assert captured.out.strip() == "fail\trsi2_oversold_reversal: compile=fail"
+
+
+def test_cli_smoke_files_status_reason_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-reason --json includes reason key."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "backtest_smoke": "fail", "reason": "backtest error"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-reason", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out.strip())
+    assert payload["overall_status"] == "fail"
+    assert payload["run_id"] == "test-run-001"
+    assert payload["reason"] == "rsi2_oversold_reversal: backtest_smoke=fail"
+
+
+def test_cli_smoke_files_status_reason_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-reason without --status-only returns 2 with stderr."""
+    out_dir = _write_smoke_discovery_fixture(tmp_path)
+    exit_code = main([
+        "smoke-files", "--output-dir", str(out_dir),
+        "--status-reason",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-reason requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_reason_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-reason --status-file writes reason, suppresses stdout."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "compile": "fail", "reason": "compile failure"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-reason",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2  # fail status
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert content == "fail\trsi2_oversold_reversal: compile=fail"
+
+
+def test_cli_smoke_files_status_code_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-code emits numeric code (0) in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-code",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "0"
+
+
+def test_cli_smoke_files_status_code_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-code --json emits status_code in JSON payload."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "compile": "fail", "reason": "compile failure"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-code", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2  # fail status
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "fail"
+    assert payload["status_code"] == 1
+
+
+def test_cli_smoke_files_status_code_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-code without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-code",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-code requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_code_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-code --status-file writes code, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-code",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert content == "0"
+
+
+def test_cli_smoke_files_status_meta_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-meta emits status with metadata in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-meta",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    out = captured.out.strip()
+    assert out.startswith("ok\t")
+    assert "run_id=test-run-001" in out
+    assert "source_mode=artifacts_fallback" in out
+
+
+def test_cli_smoke_files_status_meta_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-meta --json includes source_mode in JSON payload."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-meta", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "ok"
+    assert payload["run_id"] == "test-run-001"
+    assert "source_mode" in payload
+
+
+def test_cli_smoke_files_status_meta_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-meta without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-meta",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-meta requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_meta_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-meta --status-file writes metadata, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-meta",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "run_id=test-run-001" in content
+    assert "source_mode=artifacts_fallback" in content
+
+
+def test_cli_smoke_files_status_summary_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-summary emits status with count fields in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-summary",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    out = captured.out.strip()
+    assert out.startswith("ok\t")
+    assert "total=2" in out
+    assert "pass=2" in out
+    assert "fail=0" in out
+    assert "skip=0" in out
+
+
+def test_cli_smoke_files_status_summary_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-summary --json includes count fields in JSON payload."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "compile": "fail", "reason": "compile failure"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-summary", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "fail"
+    assert payload["strategy_total"] == 2
+    assert payload["strategy_pass"] == 1
+    assert payload["strategy_fail"] == 1
+    assert payload["strategy_skip"] == 0
+
+
+def test_cli_smoke_files_status_summary_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-summary without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-summary",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-summary requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_summary_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-summary --status-file writes counts, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-summary",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "total=2" in content
+    assert "pass=2" in content
+    assert "fail=0" in content
+    assert "skip=0" in content
+
+
+def test_cli_smoke_files_status_fail_key_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-fail-key emits fail_key in text mode."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][0],
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][1], "compile": "fail", "reason": "compile failure"},
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-fail-key",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    out = captured.out.strip()
+    assert out.startswith("fail")
+    assert "fail_key=ema200_bollinger_reversal" in out
+
+
+def test_cli_smoke_files_status_fail_key_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-fail-key --json includes fail_key in JSON payload."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "compile": "fail", "reason": "compile failure"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-fail-key", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "fail"
+    assert payload["fail_key"] == "rsi2_oversold_reversal"
+
+
+def test_cli_smoke_files_status_fail_key_json_no_failure(capsys, tmp_path):
+    """qre smoke-files --status-only --status-fail-key --json returns null when no strategy fails."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-fail-key", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["fail_key"] is None
+
+
+def test_cli_smoke_files_status_fail_key_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-fail-key without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-fail-key",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-fail-key requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_fail_key_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-fail-key --status-file writes fail_key, suppresses stdout."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "compile": "fail", "reason": "compile failure"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-fail-key",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "fail_key=rsi2_oversold_reversal" in content
+
+
+def test_cli_smoke_files_status_fail_stage_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-fail-stage emits fail_stage in text mode."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "compile": "fail", "reason": "compile failure"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-fail-stage",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    out = captured.out.strip()
+    assert out.startswith("fail")
+    assert "fail_stage=compile" in out
+
+
+def test_cli_smoke_files_status_fail_stage_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-fail-stage --json includes fail_stage in JSON payload."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][0],
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][1], "backtest_smoke": "fail", "reason": "backtest failure"},
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-fail-stage", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "fail"
+    assert payload["fail_stage"] == "backtest_smoke"
+
+
+def test_cli_smoke_files_status_fail_stage_json_no_failure(capsys, tmp_path):
+    """qre smoke-files --status-only --status-fail-stage --json returns null when no stage fails."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-fail-stage", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["fail_stage"] is None
+
+
+def test_cli_smoke_files_status_fail_stage_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-fail-stage without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-fail-stage",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-fail-stage requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_fail_stage_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-fail-stage --status-file writes fail_stage, suppresses stdout."""
+    fail_summary = json.dumps({
+        **json.loads(SMOKE_SUMMARY_JSON),
+        "overall_status": "fail",
+        "strategies": [
+            {**json.loads(SMOKE_SUMMARY_JSON)["strategies"][0], "preflight": "fail", "reason": "preflight failure"},
+            json.loads(SMOKE_SUMMARY_JSON)["strategies"][1],
+        ],
+    })
+    (tmp_path / "smoke_summary.json").write_text(fail_summary, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-fail-stage",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "fail_stage=preflight" in content
+
+
+def test_cli_smoke_files_status_timestamp_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-timestamp emits timestamp in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-timestamp",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    out = captured.out.strip()
+    assert out.startswith("ok")
+    assert "timestamp=2026-05-22T00:00:00Z" in out
+
+
+def test_cli_smoke_files_status_timestamp_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-timestamp --json includes timestamp in JSON payload."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-timestamp", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "ok"
+    assert payload["timestamp"] == "2026-05-22T00:00:00Z"
+
+
+def test_cli_smoke_files_status_timestamp_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-timestamp without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-timestamp",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-timestamp requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_timestamp_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-timestamp --status-file writes timestamp, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-timestamp",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "timestamp=2026-05-22T00:00:00Z" in content
+
+
+def test_cli_smoke_files_status_output_dir_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-output-dir emits output_dir in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-output-dir",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    out = captured.out.strip()
+    assert out.startswith("ok")
+    assert f"output_dir={tmp_path.resolve()}" in out
+
+
+def test_cli_smoke_files_status_output_dir_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-output-dir --json includes output_dir in JSON payload."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-output-dir", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "ok"
+    assert payload["output_dir"] == str(tmp_path.resolve())
+
+
+def test_cli_smoke_files_status_output_dir_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-output-dir without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-output-dir",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-output-dir requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_output_dir_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-output-dir --status-file writes output_dir, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-output-dir",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert f"output_dir={tmp_path.resolve()}" in content
+
+
+def test_cli_smoke_files_status_manifest_path_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-manifest-path emits manifest_path in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-manifest-path",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    out = captured.out.strip()
+    assert out.startswith("ok")
+    expected_manifest = str(tmp_path / "smoke_report_manifest.json")
+    assert f"manifest_path={expected_manifest}" in out
+
+
+def test_cli_smoke_files_status_manifest_path_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-manifest-path --json emits manifest_path in JSON mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-manifest-path", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "ok"
+    assert payload["manifest_path"] == str(tmp_path / "smoke_report_manifest.json")
+
+
+def test_cli_smoke_files_status_manifest_path_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-manifest-path without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-manifest-path",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-manifest-path requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_manifest_path_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-manifest-path --status-file writes manifest_path, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-manifest-path",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    expected_manifest = str(tmp_path / "smoke_report_manifest.json")
+    assert f"manifest_path={expected_manifest}" in content
+
+
+def test_cli_smoke_files_status_manifest_exists_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-manifest-exists emits manifest_exists=true in text mode when manifest exists."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    (tmp_path / "smoke_report_manifest.json").write_text("{}", encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-manifest-exists",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    out = captured.out.strip()
+    assert out.startswith("ok")
+    assert "manifest_exists=true" in out
+
+
+def test_cli_smoke_files_status_manifest_exists_json(capsys, tmp_path):
+    """qre smoke-files --status-only --status-manifest-exists --json emits manifest_exists in JSON mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    (tmp_path / "smoke_report_manifest.json").write_text("{}", encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-manifest-exists", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["overall_status"] == "ok"
+    assert payload["manifest_exists"] is True
+
+
+def test_cli_smoke_files_status_manifest_exists_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-manifest-exists without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-manifest-exists",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-manifest-exists requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_manifest_exists_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-manifest-exists --status-file writes manifest_exists=false, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-manifest-exists",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "manifest_exists=false" in content
+
+
+def test_cli_smoke_files_status_artifact_count_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-artifact-count emits artifact_count in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-artifact-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "ok\tartifact_count=2"
+
+
+def test_cli_smoke_files_status_artifact_count_json(capsys, tmp_path):
+    """qre smoke-files --json --status-only --status-artifact-count adds artifact_count integer to JSON payload."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--json", "--status-only", "--status-artifact-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out.strip())
+    assert payload["overall_status"] == "ok"
+    assert payload["artifact_count"] == 2
+    assert isinstance(payload["artifact_count"], int)
+
+
+def test_cli_smoke_files_status_artifact_count_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-artifact-count without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-artifact-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-artifact-count requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_artifact_count_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-artifact-count --status-file writes artifact_count, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-artifact-count",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "artifact_count=2" in content
+
+
+def test_cli_smoke_files_status_strategy_count_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-strategy-count emits strategy_count in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-strategy-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "ok\tstrategy_count=2"
+
+
+def test_cli_smoke_files_status_strategy_count_json(capsys, tmp_path):
+    """qre smoke-files --json --status-only --status-strategy-count adds strategy_count integer to JSON payload."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--json", "--status-only", "--status-strategy-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out.strip())
+    assert payload["overall_status"] == "ok"
+    assert payload["strategy_count"] == 2
+    assert isinstance(payload["strategy_count"], int)
+
+
+def test_cli_smoke_files_status_strategy_count_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-strategy-count without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-strategy-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-strategy-count requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_strategy_count_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-strategy-count --status-file writes strategy_count, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-strategy-count",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "strategy_count=2" in content
+
+
+def test_cli_smoke_files_status_fail_count_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-fail-count emits fail_count in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-fail-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "ok\tfail_count=0"
+
+
+def test_cli_smoke_files_status_fail_count_json(capsys, tmp_path):
+    """qre smoke-files --json --status-only --status-fail-count adds fail_count integer to JSON payload."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--json", "--status-only", "--status-fail-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out.strip())
+    assert payload["overall_status"] == "ok"
+    assert payload["fail_count"] == 0
+    assert isinstance(payload["fail_count"], int)
+
+
+def test_cli_smoke_files_status_fail_count_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-fail-count without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-fail-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-fail-count requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_fail_count_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-fail-count --status-file writes fail_count, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-fail-count",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "fail_count=0" in content
+
+
+def test_cli_smoke_files_status_skip_count_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-skip-count emits skip_count in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-skip-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "ok\tskip_count=0"
+
+
+def test_cli_smoke_files_status_skip_count_json(capsys, tmp_path):
+    """qre smoke-files --json --status-only --status-skip-count adds skip_count integer to JSON payload."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--json", "--status-only", "--status-skip-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out.strip())
+    assert payload["overall_status"] == "ok"
+    assert payload["skip_count"] == 0
+    assert isinstance(payload["skip_count"], int)
+
+
+def test_cli_smoke_files_status_skip_count_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-skip-count without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-skip-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-skip-count requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_skip_count_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-skip-count --status-file writes skip_count, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-skip-count",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "skip_count=0" in content
+
+
+def test_cli_smoke_files_status_pass_count_text(capsys, tmp_path):
+    """qre smoke-files --status-only --status-pass-count emits pass_count in text mode."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-only", "--status-pass-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == "ok\tpass_count=2"
+
+
+def test_cli_smoke_files_status_pass_count_json(capsys, tmp_path):
+    """qre smoke-files --json --status-only --status-pass-count adds pass_count integer to JSON payload."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--json", "--status-only", "--status-pass-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out.strip())
+    assert payload["overall_status"] == "ok"
+    assert payload["pass_count"] == 2
+    assert isinstance(payload["pass_count"], int)
+
+
+def test_cli_smoke_files_status_pass_count_requires_status_only(capsys, tmp_path):
+    """qre smoke-files --status-pass-count without --status-only returns exit 2."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--status-pass-count",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--status-pass-count requires --status-only" in captured.err
+
+
+def test_cli_smoke_files_status_pass_count_quiet_status_file(capsys, tmp_path):
+    """qre smoke-files --quiet --status-only --status-pass-count --status-file writes pass_count, suppresses stdout."""
+    (tmp_path / "smoke_summary.json").write_text(SMOKE_SUMMARY_JSON, encoding="utf-8")
+    status_path = tmp_path / "status.txt"
+    exit_code = main([
+        "smoke-files", "--output-dir", str(tmp_path),
+        "--quiet", "--status-only", "--status-pass-count",
+        "--status-file", str(status_path),
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out.strip() == ""
+    content = status_path.read_text(encoding="utf-8").strip()
+    assert "pass_count=2" in content
