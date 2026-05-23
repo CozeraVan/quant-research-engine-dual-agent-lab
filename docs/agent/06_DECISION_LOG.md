@@ -12,6 +12,16 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-23: Research-run manifest integrated into report manifest system
+
+- Decision: Integrate `research_run_manifest.json` into the report manifest system by adding standard run_manifest fields to the orchestrator output, registering `research_run_manifest` in `_RUN_MANIFEST_KINDS`, and adding content validation parity test coverage.
+- Reason: The research-run orchestrator emitted a `research_run_manifest.json` but it was not discoverable through `qre report-files` or `qre report-audit` because the kind was not registered. This is the smallest possible fix that closes the gap without changing the manifest schema or audit tooling.
+- Alternatives: Leave the manifest undiscoverable; add a separate discovery command just for research-run manifests. Rejected because the existing report-manifest system already handles run_manifest validation and discovery for portfolio and evaluation manifests.
+- Impact: `_write_research_manifest()` now emits `schema_version`, `kind`, `command`, `strategy_path`, `artifacts`; `_RUN_MANIFEST_KINDS` includes `research_run_manifest`; 3 manifest tests updated, 1 new validation test added; 477 tests pass (up from 476).
+- Owner: CLAUDE_CODE (acting planner/implementer/reviewer — Codex unavailable)
+
+---
+
 ### 2026-05-23: Research-run CLI orchestrator implemented and self-reviewed
 
 - Decision: Implement `QRE-RESEARCH-RUN-ORCHESTRATION-001` (`qre research-run` CLI command) and self-review PASS, closing the "Larger research-run bundles beyond run-level identifier linkage" known gap.

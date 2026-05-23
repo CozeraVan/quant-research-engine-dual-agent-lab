@@ -1881,3 +1881,41 @@ def test_validate_contents_window_size_filters_missing_file(tmp_path):
     assert len(issues) == 1
     assert issues[0].code == "missing_file"
     assert "rolling_summary_20" in str(issues[0].path)
+
+
+def test_validate_contents_accepts_valid_research_run_manifest(tmp_path):
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "research_run_manifest",
+                "run_id": "research-abc123",
+                "command": "research-run",
+                "strategy_path": "/tmp/strategy.yaml",
+                "output_dir": "/tmp/run_output",
+                "stages": {"preflight": "ok", "eval": "ok", "backtest": "ok"},
+                "backtest_artifacts": {"summary_csv": "summary.csv"},
+                "artifacts": ["summary_csv"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "batch_backtest_report_manifest",
+                "files": [
+                    {
+                        "key": "run_manifest",
+                        "path": "research_run_manifest.json",
+                        "filename": "research_run_manifest.json",
+                        "role": "run_manifest",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-RESEARCH-RUN-ORCHESTRATION-001
+QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001
 
 ## Written By
 
@@ -18,26 +18,28 @@ IMPLEMENTED
 
 ## Objective
 
-Add `qre research-run` command that chains preflight → eval-config → backtest as a single orchestrated research run with a common `--run-id` and a research-run manifest.
+Integrate `research_run_manifest.json` into the report manifest system so it is discoverable through `qre report-files` and `qre report-audit`, matching the existing `portfolio_backtest_run_manifest` and `evaluation_run_manifest` pattern.
 
 ## Implementation Summary
 
-- `src/quant_research_engine/orchestration/__init__.py` — package init
-- `src/quant_research_engine/orchestration/research_run.py` — orchestrator module (~200 lines):
-  - `ResearchRunRequest` dataclass — all configuration for a research run
-  - `ResearchRunResult` dataclass — run outcome with per-stage status, paths, manifest path
-  - `run_research_run()` — main orchestrator: DB connect → preflight → eval → backtest → manifest
-  - `_write_research_manifest()` — writes `research_run_manifest.json` with run_id, stages, artifacts
-  - `_run_preflight()`, `_run_eval()`, `_run_backtest()` — per-stage execution helpers
-  - auto-generates `run_id` when not provided
-  - stops on preflight/eval error, writes partial manifest
-- `src/quant_research_engine/apps/cli.py`:
-  - `qre research-run` parser with strategy, --start, --end, --output-dir (required), plus --db-url, --codes, --market-profile, --skip-preflight, --skip-eval, --backtest-mode, --initial-cash, --min-factor-coverage, --group-by, --random-baseline-seed, --round-trip-cost-rate, --metadata-columns, --window-size, --run-id
-  - handler prints run_id, per-stage status, manifest path, backtest artifact paths; exits 2 on error
-- `tests/test_research_run.py` — 7 unit tests (ResearchRunRequest construction, ResearchRunResult construction, manifest writing with ok/error/skipped stages)
-- `tests/test_cli.py` — 3 CLI tests (--help, missing required args, no-DB error)
-- `docs/agent/03_ROADMAP.md` — M8.42 added, stale M7.x/M8.1/M8.3/M8.10 synced to DONE
-- `docs/agent/01_CURRENT_STATUS.md` — synced with current state, known gaps updated
+- `src/quant_research_engine/orchestration/research_run.py` — `_write_research_manifest()` updated:
+  - Now accepts `request: ResearchRunRequest` parameter
+  - Emits standard run_manifest fields: `schema_version: 1`, `kind: "research_run_manifest"`, `command: "research-run"`, `strategy_path` (from request), `artifacts` (sorted list of backtest artifact keys)
+  - Uses `sort_keys=True` for deterministic JSON output
+  - All three call sites in `run_research_run()` updated to pass `request`
+- `src/quant_research_engine/portfolio/report_manifest.py`:
+  - `_RUN_MANIFEST_KINDS` now includes `"research_run_manifest"`
+  - `_validate_run_manifest()` accepts the new kind; content validation passes
+- `tests/test_research_run.py` — 3 manifest tests updated:
+  - Added `_make_request()` helper for test request construction
+  - Tests verify `schema_version`, `kind`, `command`, `strategy_path`, `artifacts` in emitted manifest
+- `tests/test_portfolio_report_manifest.py` — 1 new test:
+  - `test_validate_contents_accepts_valid_research_run_manifest` — validates a correctly-formed research_run_manifest.json with role `run_manifest` passes `validate_contents()`
+- `docs/agent/03_ROADMAP.md` — M8.43 added
+- `docs/agent/01_CURRENT_STATUS.md` — test count updated, manifest integration added to completed
+- `docs/agent/06_DECISION_LOG.md` — decision entry added
+- `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
+- `docs/agent/04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `11_AGENT_STATE.md`, `12_AGENT_BOARD.md` — synced
 
 ## Validation
 
@@ -45,11 +47,11 @@ Add `qre research-run` command that chains preflight → eval-config → backtes
 uv run pytest tests/test_research_run.py -q
 # 7 passed in 0.46s
 
-uv run pytest tests/test_cli.py -q --tb=short -k "research_run"
-# 3 passed in 0.80s
+uv run pytest tests/test_portfolio_report_manifest.py -q
+# passed
 
 uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_research_run.py -q
-# 476 passed, 2 warnings in 4.98s
+# 477 passed, 2 warnings in 5.07s
 
 scripts/check-progress-docs.sh
 # passed

@@ -187,11 +187,15 @@ def _run_backtest(
     return "ok", paths
 
 
-def _write_research_manifest(result: ResearchRunResult) -> Path:
+def _write_research_manifest(result: ResearchRunResult, request: ResearchRunRequest) -> Path:
     """Write research_run_manifest.json and return its path."""
     manifest_path = result.output_dir / "research_run_manifest.json"
     payload: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "research_run_manifest",
         "run_id": result.run_id,
+        "command": "research-run",
+        "strategy_path": str(request.strategy_path),
         "output_dir": str(result.output_dir),
         "stages": {
             "preflight": result.preflight_status,
@@ -202,11 +206,12 @@ def _write_research_manifest(result: ResearchRunResult) -> Path:
             key: str(path.relative_to(result.output_dir))
             for key, path in result.backtest_paths.items()
         },
+        "artifacts": sorted(result.backtest_paths.keys()),
     }
     if result.error_message:
         payload["error"] = result.error_message
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     return manifest_path
 
 
@@ -229,7 +234,7 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
         result.preflight_status = status
         if status == "error":
             result.error_message = f"Preflight failed (status={status})"
-            result.manifest_path = _write_research_manifest(result)
+            result.manifest_path = _write_research_manifest(result, request)
             return result
     else:
         spec = StrategySpec.from_yaml(request.strategy_path)
@@ -240,7 +245,7 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
         result.eval_status = status
         if status == "error":
             result.error_message = "Evaluation failed"
-            result.manifest_path = _write_research_manifest(result)
+            result.manifest_path = _write_research_manifest(result, request)
             return result
 
     # Stage 3: Backtest
@@ -248,5 +253,5 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
     result.backtest_status = status
     result.backtest_paths = paths
 
-    result.manifest_path = _write_research_manifest(result)
+    result.manifest_path = _write_research_manifest(result, request)
     return result

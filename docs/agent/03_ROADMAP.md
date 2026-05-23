@@ -133,6 +133,7 @@
 | M8.40 | Smoke discovery status-skip-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-skip-count` landed with validation and docs | Preserve as baseline |
 | M8.41 | Smoke discovery status-pass-count mode | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `--status-pass-count` landed with validation and docs | Preserve as baseline |
 | M8.42 | Research-run CLI orchestrator | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `qre research-run` chains preflight→eval→backtest under one `--run-id` with `research_run_manifest.json`; 476 tests passed | Preserve; expand run-bundle scope in future slices |
+| M8.43 | Research-run manifest integration | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`; manifest emits standard run_manifest fields (schema_version, kind, command, strategy_path, artifacts); 1 new validation test; 477 tests passed | Preserve |
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | FUTURE | CLAUDE_CODE | GUI is visualization only; standard contract must come first | Add form controls after entry/report contracts are stable |
 

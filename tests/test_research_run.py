@@ -10,14 +10,20 @@ from quant_research_engine.orchestration.research_run import (
 )
 
 
+def _make_request(tmp_path, **overrides):
+    defaults = {
+        "strategy_path": tmp_path / "strategy.yaml",
+        "start": date(2024, 1, 1),
+        "end": date(2024, 2, 1),
+        "output_dir": tmp_path / "run_output",
+    }
+    defaults.update(overrides)
+    return ResearchRunRequest(**defaults)
+
+
 class TestResearchRunRequest:
     def test_minimal_construction(self, tmp_path):
-        req = ResearchRunRequest(
-            strategy_path=tmp_path / "strategy.yaml",
-            start=date(2024, 1, 1),
-            end=date(2024, 2, 1),
-            output_dir=tmp_path / "output",
-        )
+        req = _make_request(tmp_path)
         assert req.backtest_mode == "batch"
         assert req.initial_cash == 1_000_000
         assert req.min_factor_coverage == 0.8
@@ -89,6 +95,8 @@ class TestWriteResearchManifest:
     def test_writes_valid_json(self, tmp_path):
         output_dir = tmp_path / "run_output"
         output_dir.mkdir()
+        (output_dir / "summary.csv").write_text("")
+        request = _make_request(tmp_path, output_dir=output_dir, run_id="test-run-001")
         result = ResearchRunResult(
             run_id="test-run-001",
             output_dir=output_dir,
@@ -97,20 +105,24 @@ class TestWriteResearchManifest:
             backtest_status="ok",
             backtest_paths={"summary_csv": output_dir / "summary.csv"},
         )
-        # Create the dummy file so relative_to works
-        (output_dir / "summary.csv").write_text("")
-        manifest_path = _write_research_manifest(result)
+        manifest_path = _write_research_manifest(result, request)
         assert manifest_path.exists()
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert payload["schema_version"] == 1
+        assert payload["kind"] == "research_run_manifest"
+        assert payload["command"] == "research-run"
         assert payload["run_id"] == "test-run-001"
+        assert payload["strategy_path"] == str(request.strategy_path)
         assert payload["stages"]["preflight"] == "ok"
         assert payload["stages"]["eval"] == "ok"
         assert payload["stages"]["backtest"] == "ok"
         assert "summary_csv" in payload["backtest_artifacts"]
+        assert "summary_csv" in payload["artifacts"]
 
     def test_error_manifest_includes_error(self, tmp_path):
         output_dir = tmp_path / "run_output"
         output_dir.mkdir()
+        request = _make_request(tmp_path, output_dir=output_dir, run_id="test-run-002")
         result = ResearchRunResult(
             run_id="test-run-002",
             output_dir=output_dir,
@@ -119,15 +131,18 @@ class TestWriteResearchManifest:
             backtest_status="error",
             error_message="Preflight failed",
         )
-        manifest_path = _write_research_manifest(result)
+        manifest_path = _write_research_manifest(result, request)
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert payload["error"] == "Preflight failed"
+        assert payload["kind"] == "research_run_manifest"
         assert payload["stages"]["preflight"] == "error"
         assert payload["stages"]["eval"] == "skipped"
+        assert payload["artifacts"] == []
 
     def test_skipped_stages(self, tmp_path):
         output_dir = tmp_path / "run_output"
         output_dir.mkdir()
+        request = _make_request(tmp_path, output_dir=output_dir, run_id="test-run-003")
         result = ResearchRunResult(
             run_id="test-run-003",
             output_dir=output_dir,
@@ -135,7 +150,10 @@ class TestWriteResearchManifest:
             eval_status="skipped",
             backtest_status="ok",
         )
-        manifest_path = _write_research_manifest(result)
+        manifest_path = _write_research_manifest(result, request)
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert payload["schema_version"] == 1
+        assert payload["kind"] == "research_run_manifest"
+        assert payload["command"] == "research-run"
         assert payload["stages"]["preflight"] == "skipped"
         assert payload["stages"]["eval"] == "skipped"

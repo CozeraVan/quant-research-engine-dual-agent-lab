@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-RESEARCH-RUN-ORCHESTRATION-001
+QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001
 
 ## Written By
 
@@ -14,35 +14,27 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code implementation of `qre research-run` orchestrator: a single CLI command that chains preflight → eval-config → backtest under a common `--run-id` with a `research_run_manifest.json`.
+Claude Code integrated `research_run_manifest.json` into the report manifest system: the orchestrator now emits standard run_manifest fields (`schema_version`, `kind`, `command`, `strategy_path`, `artifacts`), `research_run_manifest` is registered in `_RUN_MANIFEST_KINDS`, and run-manifest content validation covers the new kind.
 
 ## Review Summary
 
-Implementation meets the active task target and closes the "Larger research-run bundles beyond run-level identifier linkage" known gap.
+Implementation closes the gap where `research_run_manifest.json` was emitted but not discoverable through `qre report-files` or `qre report-audit`. The fix is additive and follows the existing `portfolio_backtest_run_manifest` and `evaluation_run_manifest` pattern.
 
 Evidence:
 
-- `src/quant_research_engine/orchestration/research_run.py` — ~200 lines with `ResearchRunRequest` + `ResearchRunResult` dataclasses, `run_research_run()` orchestrator, `_write_research_manifest()`, and per-stage helpers.
-- `src/quant_research_engine/apps/cli.py` — `qre research-run` subparser with 16 flags, handler that builds `ResearchRunRequest`, calls `run_research_run()`, and prints results.
-- `tests/test_research_run.py` — 7 unit tests (request construction, result construction, manifest writing with ok/error/skipped stages).
-- `tests/test_cli.py` — 3 CLI tests (--help, missing required args, no-DB error).
-- `docs/agent/03_ROADMAP.md` — M8.42 added, stale M7.x/M8.1/M8.3/M8.10 synced to DONE.
-- `docs/agent/01_CURRENT_STATUS.md` — synced with current state, known gaps updated.
-
-Key design decisions:
-
-- Calls engine functions directly (same pattern as GUI), not via CLI subprocess.
-- Auto-generates `run_id` (uuid4 hex[:12]) when not user-provided.
-- Fail-fast: stops on preflight/eval error, writes partial manifest.
-- Backtest mode defaults to `batch`; shared-cash available via `--backtest-mode shared`.
+- `src/quant_research_engine/orchestration/research_run.py` — `_write_research_manifest()` now emits `schema_version: 1`, `kind: "research_run_manifest"`, `command: "research-run"`, `strategy_path`, `artifacts` (sorted list), and uses `sort_keys=True` for deterministic JSON output. Function signature updated to accept `request: ResearchRunRequest`.
+- `src/quant_research_engine/portfolio/report_manifest.py` — `_RUN_MANIFEST_KINDS` now includes `"research_run_manifest"`, so `_validate_run_manifest()` accepts the new kind and content validation passes.
+- `tests/test_research_run.py` — 3 manifest tests updated to pass `request` and verify `schema_version`, `kind`, `command`, `strategy_path`, `artifacts`.
+- `tests/test_portfolio_report_manifest.py` — 1 new test (`test_validate_contents_accepts_valid_research_run_manifest`) validates that a correctly-formed `research_run_manifest.json` with role `run_manifest` passes `validate_contents()`.
+- `docs/agent/04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `11_AGENT_STATE.md`, `12_AGENT_BOARD.md` — updated to manifest integration task.
 
 ## Required Fixes
 
 None.
 
-## Compliance with Implementation Brief
+## Compliance with Task Board
 
-Compliant with `docs/agent/08_IMPLEMENTATION_BRIEF.md` for `QRE-RESEARCH-RUN-ORCHESTRATION-001`.
+Compliant with `docs/agent/12_AGENT_BOARD.md` for `QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001`.
 
 ## Validation
 
@@ -50,7 +42,7 @@ Commands run:
 
 ```bash
 uv run pytest tests/test_research_run.py -q
-uv run pytest tests/test_cli.py -q --tb=short -k "research_run"
+uv run pytest tests/test_portfolio_report_manifest.py -q
 uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_research_run.py -q
 scripts/check-progress-docs.sh
 git diff --check
@@ -58,15 +50,12 @@ git diff --check
 
 Result:
 
-- research-run unit tests: `7 passed in 0.46s`
-- research-run CLI tests: `3 passed in 0.80s`
-- full validation: `476 passed, 2 warnings in 5.01s`
-- progress docs check passed
-- `git diff --check` passed
+- 477 passed, 2 warnings in 5.07s
+- No regressions
 
 ## Final Recommendation
 
-Accept and finalize. The research-run orchestrator addresses the last remaining known gap in `01_CURRENT_STATUS.md` ("Larger research-run bundles beyond run-level identifier linkage").
+Accept and finalize. The research-run manifest is now fully integrated into the report manifest system with discovery, audit, and content validation parity.
 
 ## Next Agent State
 

@@ -2,15 +2,15 @@
 
 ## Current Task
 
-Add `qre research-run` command that chains preflight → eval-config → backtest under a common `--run-id` with a research-run manifest.
+Integrate `research_run_manifest.json` into the report manifest system — add `kind` field, register in `_RUN_MANIFEST_KINDS`, and add content validation parity.
 
 ## Task ID
 
-QRE-RESEARCH-RUN-ORCHESTRATION-001
+QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001
 
 ## Current Status
 
-IMPLEMENTED. Claude Code has completed implementation; awaiting self-review (Codex unavailable).
+IMPLEMENTED. Claude Code has completed the manifest integration; `research_run_manifest` kind is registered, schema is compliant with run_manifest validation, and 1 new test added (477 total).
 
 ## Current Owner
 

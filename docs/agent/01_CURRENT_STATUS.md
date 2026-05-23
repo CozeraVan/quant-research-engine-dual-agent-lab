@@ -36,6 +36,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Smoke discovery CLI: `qre smoke-files` with text/JSON modes, selectors, and 22 status enrichment flags.
 - Full-market MT5/TradingView-aligned report bundle: `backtest_report.xlsx` (10 sheets), trades ledger, round trips, symbol/strategy performance, equity/drawdown curves, trade analysis, capital usage.
 - Research-run CLI orchestrator: `qre research-run` chains preflight → eval → backtest under one `--run-id` with `research_run_manifest.json`.
+- Research-run manifest integration: `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`, discoverable through `qre report-files` and `qre report-audit`.
 
 ## In Progress
 
@@ -65,11 +66,11 @@ No active implementation work. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADAT
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `1c4b57e` (smoke discovery series complete), `9fb8c25`, `e3ef305`
+- Recent commits: `92f216d` (research-run orchestrator), `1c4b57e` (smoke discovery series complete)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `476 passed, 2 warnings in 5.01s`
+- Last verified full test: `477 passed, 2 warnings in 5.07s`
 
 ## Current CLI Surface
 
@@ -94,4 +95,4 @@ No active implementation work. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADAT
 
 ## Next Recommended Step
 
-Commit the research-run orchestrator implementation and all synced agent docs. The next major work direction should be selected by the user — all known actionable gaps in `01_CURRENT_STATUS.md` are either blocked on external data or marked future.
+Commit the research-run manifest integration and all synced agent docs. All known actionable gaps in `01_CURRENT_STATUS.md` are either blocked on external data or marked future.

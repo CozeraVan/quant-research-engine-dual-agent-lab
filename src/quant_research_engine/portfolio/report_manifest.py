@@ -17,6 +17,7 @@ _SUPPORTED_MANIFEST_KINDS = {
 _RUN_MANIFEST_KINDS = {
     "portfolio_backtest_run_manifest",
     "evaluation_run_manifest",
+    "research_run_manifest",
 }
 
 _BATCH_GROUPED_ROLES = {

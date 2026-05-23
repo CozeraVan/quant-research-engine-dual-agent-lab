@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-RESEARCH-RUN-ORCHESTRATION-001
+QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001
 
 ## Current Phase
 
@@ -16,18 +16,18 @@ CLAUDE_CODE
 
 ## Last Completed Step
 
-Claude Code implemented and self-reviewed `QRE-RESEARCH-RUN-ORCHESTRATION-001` (`qre research-run`): orchestrator module, CLI command, 10 tests, roadmap sync (M8.42 added, M7.x/M8.1/M8.3/M8.10 → DONE), decision log, review report (PASS). Validation: 476 passed, 2 warnings in 5.01s.
+Claude Code integrated `research_run_manifest.json` into the report manifest system: updated `_write_research_manifest()` to emit standard run_manifest fields (`schema_version`, `kind`, `command`, `strategy_path`, `artifacts`); registered `research_run_manifest` in `_RUN_MANIFEST_KINDS`; added 1 new validation test. Self-review PASS. Validation: 477 passed, 2 warnings in 5.07s.
 
 ## Next Required Step
 
-Git finalization: commit research-run orchestrator + all doc updates.
+Git finalization: commit manifest integration + all doc updates.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `1c4b57e` (Claude Code finalized smoke discovery status-pass-count)
+- Last finalized commit: `92f216d` (research-run orchestrator)
 - Standing approval: local commits approved by user; no remote push requested.
-- Uncommitted changes: research-run orchestrator module + CLI + tests + roadmap sync + current-status sync + decision log + review report + agent docs.
+- Uncommitted changes: research-run manifest schema update + report_manifest kind registration + tests + agent docs + review report.
 
 ## Short Prompt Commands
 

@@ -6,7 +6,7 @@ CODEX_GIT_FINALIZING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-ORCHESTRATION-001` review passed. Research-run orchestrator implementation complete. Awaiting git finalization.
+`QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001` review passed. Research-run manifest integration complete. Awaiting git finalization.
 
 ## Progress Table
 
@@ -118,30 +118,31 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-57 | Tushare security source adapter scaffold | DONE | CODEX | `src/quant_research_engine/data/tushare_security.py`; smoke script now delegates to a reusable wrapper; targeted unit tests passed | Preserve; use as the reusable source boundary for later bulk ingestion |
 | QRE-NEXT-58 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`; 17 targeted tests pass; smoke harness preserved | Preserve; reuse as the source boundary for later bulk ingestion |
 | QRE-NEXT-59 | Research-run CLI orchestrator | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `qre research-run` chains preflight→eval→backtest under one `--run-id` with `research_run_manifest.json`; 10 new tests; 476 passed | Preserve; expand run-bundle scope in future slices |
+| QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001 | Research-run manifest report-system integration | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_write_research_manifest()` emits standard run_manifest fields; `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`; 1 new validation test; 477 passed | Git finalize |
 
 ## Latest Verified State
 
-Recorded on 2026-05-23 after Claude Code implemented and self-reviewed `QRE-RESEARCH-RUN-ORCHESTRATION-001` (PASS):
+Recorded on 2026-05-23 after Claude Code implemented and self-reviewed `QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001` (PASS):
 
-- Current task: `QRE-RESEARCH-RUN-ORCHESTRATION-001` — DONE (review PASS)
-- Last finalized: `QRE-RESEARCH-RUN-ORCHESTRATION-001` (Claude Code acting planner/implementer/reviewer)
+- Current task: `QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001` — DONE (review PASS)
+- Last finalized: `QRE-RESEARCH-RUN-ORCHESTRATION-001` (commit `92f216d`)
 - Implementation:
-  - `src/quant_research_engine/orchestration/research_run.py` — ~200 lines: `ResearchRunRequest` + `ResearchRunResult` dataclasses, `run_research_run()` orchestrator, `_write_research_manifest()`, per-stage helpers; auto-generates `run_id`, fail-fast on preflight/eval error with partial manifest
-  - `src/quant_research_engine/apps/cli.py` — `qre research-run` subparser with 16 arguments, handler calls engine functions directly (GUI pattern)
-  - `tests/test_research_run.py` — 7 unit tests (request/result construction, manifest writing with ok/error/skipped stages)
-  - `tests/test_cli.py` — 3 CLI tests (--help, missing required args, no-DB error)
-  - `docs/agent/03_ROADMAP.md` — M8.42 added, M7.x/M8.1/M8.3/M8.10/M8.41 synced to DONE
+  - `src/quant_research_engine/orchestration/research_run.py` — `_write_research_manifest()` updated to emit `schema_version: 1`, `kind: "research_run_manifest"`, `command: "research-run"`, `strategy_path`, `artifacts` (sorted); function now accepts `request` parameter
+  - `src/quant_research_engine/portfolio/report_manifest.py` — `_RUN_MANIFEST_KINDS` now includes `"research_run_manifest"`
+  - `tests/test_research_run.py` — 3 manifest tests updated to pass `request` and verify new fields
+  - `tests/test_portfolio_report_manifest.py` — 1 new validation test (`test_validate_contents_accepts_valid_research_run_manifest`)
+  - `docs/agent/03_ROADMAP.md` — M8.43 added
   - `docs/agent/06_DECISION_LOG.md` — decision entry added
   - `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
 - Review: `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
 - Validation:
   - `uv run pytest tests/test_research_run.py -q` → 7 passed in 0.46s
-  - `uv run pytest tests/test_cli.py -q --tb=short -k "research_run"` → 3 passed in 0.80s
-  - `uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_research_run.py -q` → 476 passed, 2 warnings in 5.01s
+  - `uv run pytest tests/test_portfolio_report_manifest.py -q` → passed
+  - `uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_research_run.py -q` → 477 passed, 2 warnings in 5.07s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
-- Known gaps closed: "Larger research-run bundles beyond run-level identifier linkage"
-- Next step: Claude Code (acting finalizer) performs git commit; research-run orchestrator is complete
+- Known gaps closed: research_run_manifest.json now discoverable through report manifest system
+- Next step: Claude Code (acting finalizer) performs git commit; manifest integration is complete
 
 Current GUI direction approved on 2026-05-21:
 
