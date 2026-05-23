@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+WAITING_USER_DIRECTION
 
 ## Current Active Work
 
-`QRE-FULL-MARKET-CHARTS-001` review PASS. Full-market report charts complete: `generate_equity_curve_chart()` and `generate_drawdown_chart()` using matplotlib Agg backend; embedded as new Excel sheets via openpyxl; both batch and shared_cash modes produce charts; manifest roles registered; 10 new tests. Awaiting git finalization.
+None. All active tasks finalized. `QRE-FULL-MARKET-CHARTS-001` committed in `a86018d`: full-market report equity curve and drawdown charts complete; review PASS; 529 tests pass. User decides next direction.
 
 ## Progress Table
 
@@ -120,27 +120,28 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-59 | Research-run CLI orchestrator | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `qre research-run` chains preflight→eval→backtest under one `--run-id` with `research_run_manifest.json`; 10 new tests; 476 passed | Preserve; expand run-bundle scope in future slices |
 | QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001 | Research-run manifest report-system integration | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_write_research_manifest()` emits standard run_manifest fields; `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`; 1 new validation test; 477 passed | Git finalize |
 | QRE-SHARED-CASH-FULL-MARKET-REPORT-001 | Shared-cash full-market report support | DONE | CLAUDE_CODE | `engine_mode` parameter on 6 builders; wired into `write_shared_cash_result()`; `_shared_manifest_role()` and `_shared_report_paths()` updated; 19 new tests; 519 passed; self-review PASS | Git finalize |
-| QRE-FULL-MARKET-CHARTS-001 | Full-market report equity curve and drawdown charts | DONE | CLAUDE_CODE | `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel; manifest roles registered; 10 new tests; 529 passed; self-review PASS | Git finalize |
+| QRE-FULL-MARKET-CHARTS-001 | Full-market report equity curve and drawdown charts | FINALIZED | CLAUDE_CODE | commit `a86018d`; `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel; manifest roles registered; 10 new tests; 529 passed; review PASS | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-23 after Claude Code implemented and self-reviewed `QRE-SHARED-CASH-FULL-MARKET-REPORT-001` (PASS):
+Recorded on 2026-05-23 after Claude Code finalized `QRE-FULL-MARKET-CHARTS-001` (commit `a86018d`):
 
-- Current task: `QRE-SHARED-CASH-FULL-MARKET-REPORT-001` — DONE (review PASS)
-- Last finalized: `QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001` (commit `0e4e148`)
+- Current task: `QRE-FULL-MARKET-CHARTS-001` — FINALIZED (commit `a86018d`)
+- Last finalized: `QRE-FULL-MARKET-CHARTS-001` (commit `a86018d`)
 - Implementation:
-  - `src/quant_research_engine/portfolio/full_market_report.py` — `engine_mode` parameter on `build_trades_ledger`, `build_round_trips`, `build_symbol_performance`, `build_full_market_equity_curve`, `build_strategy_performance`, `write_full_market_report`; shared-cash branches read flat DataFrames; `failed_orders` param for correct counting
-  - `src/quant_research_engine/portfolio/io.py` — `write_full_market_report()` call in `write_shared_cash_result()` with `engine_mode="shared_cash"`; `_shared_manifest_role()` and `_shared_report_paths()` updated for 9 full-market roles
-  - `tests/test_full_market_report.py` — 6 new test classes (17 tests)
-  - `tests/test_portfolio_io.py` — 2 new tests
+  - `pyproject.toml` — added `matplotlib>=3.7.0` dependency
+  - `src/quant_research_engine/portfolio/full_market_report.py` — `generate_equity_curve_chart()` + `generate_drawdown_chart()` functions; modified `write_full_market_excel()` with keyword-only chart parameters; embedded chart PNGs as Excel sheets; both engine_mode branches generate charts
+  - `src/quant_research_engine/portfolio/io.py` — `equity_curve_chart` + `drawdown_curve_chart` roles in manifest and report path helpers
+  - `src/quant_research_engine/portfolio/report_manifest.py` — chart roles in `_REQUIRED_COLUMNS_BY_ROLE`
+  - `tests/test_full_market_report.py` — 10 new tests (chart generation valid/empty/missing-columns, Excel embedding, batch + shared_cash integration)
+  - 16 files changed, 880 insertions, 381 deletions
 - Review: `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
 - Validation:
-  - `uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py -q` → 64 passed in 2.02s
-  - Full suite: 519 passed, 2 warnings in 5.91s
+  - Full suite: 529 passed, 2 warnings in 10.68s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
-- Known gaps closed: shared-cash backtests now produce full-market report bundle (trades_ledger, round_trips, symbol_performance, strategy_performance, full_market_equity_curve, drawdown_curve, trade_analysis, capital_usage, backtest_report.xlsx)
-- Next step: Git finalization (commit implementation + all agent docs)
+- Known gaps closed: full-market report now includes equity curve (dual-axis) and drawdown (filled area) PNG charts, embedded in Excel workbook and as standalone files
+- Next step: User decides next direction
 
 Current GUI direction approved on 2026-05-21:
 

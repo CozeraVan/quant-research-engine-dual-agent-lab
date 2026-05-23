@@ -8,26 +8,26 @@ QRE-FULL-MARKET-CHARTS-001
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+WAITING_USER_DIRECTION
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Claude Code implemented full-market report charts: added `matplotlib` dependency; added `generate_equity_curve_chart()` and `generate_drawdown_chart()` functions to `full_market_report.py`; embedded chart PNGs as new Excel sheets via openpyxl; chart generation in both batch and shared_cash branches; registered `equity_curve_chart` and `drawdown_curve_chart` manifest roles; added chart roles to `_REQUIRED_COLUMNS_BY_ROLE`; added 10 new tests. Self-review PASS. Validation: 529 passed, 2 warnings in 12.83s.
+QRE-FULL-MARKET-CHARTS-001 finalized in commit `a86018d`: full-market report equity curve and drawdown charts generated via matplotlib Agg backend and embedded in Excel workbook. 10 new tests. Review PASS. 529 tests, 0 regressions. Working tree clean.
 
 ## Next Required Step
 
-Git finalization: commit implementation + all agent doc updates.
+User decides next direction. All known actionable gaps are either blocked on external data or marked future.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `db38477` (shared-cash full-market report support)
+- Last finalized commit: `a86018d` (full-market report charts)
 - Standing approval: local commits approved by user; no remote push requested.
-- Uncommitted changes: full_market_report.py chart functions and wiring, io.py manifest roles, report_manifest.py required columns, pyproject.toml matplotlib dep, tests, agent docs.
+- Working tree: clean
 
 ## Short Prompt Commands
 

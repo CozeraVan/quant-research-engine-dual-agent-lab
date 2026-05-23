@@ -10,7 +10,7 @@ QRE-FULL-MARKET-CHARTS-001
 
 ## Current Status
 
-IMPLEMENTED. Claude Code has completed full-market report charts: `generate_equity_curve_chart()` and `generate_drawdown_chart()` functions added; chart PNGs embedded in Excel workbook as new sheets; both batch and shared_cash engine modes produce charts; manifest roles and required columns registered; 10 new tests pass (529 total).
+FINALIZED in commit `a86018d`. Claude Code has completed full-market report charts: `generate_equity_curve_chart()` and `generate_drawdown_chart()` functions added; chart PNGs embedded in Excel workbook as new sheets; both batch and shared_cash engine modes produce charts; manifest roles and required columns registered; 10 new tests pass (529 total).
 
 ## Current Owner
 

@@ -6,19 +6,19 @@ QRE-FULL-MARKET-CHARTS-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+USER
 
 ## Message Type
 
-IMPLEMENTATION_REQUEST
+FINALIZATION_NOTICE
 
 ## Sender
 
-CLAUDE_CODE (acting planner — Codex unavailable)
+CLAUDE_CODE (acting git finalizer — Codex unavailable)
 
 ## Short Message
 
-Add equity curve and drawdown chart visualizations to the full-market report Excel workbook and as standalone PNG files. Uses matplotlib Agg backend for chart generation and openpyxl image embedding for Excel integration. Both batch and shared_cash engine modes get identical chart logic.
+QRE-FULL-MARKET-CHARTS-001 finalized in commit `a86018d`: full-market report equity curve and drawdown chart PNGs generated via matplotlib Agg backend and embedded in the Excel workbook as new sheets via openpyxl. Both batch and shared_cash engine modes produce charts. 16 files, 880 insertions, 381 deletions. Review PASS. 529 tests, 0 regressions. Working tree clean. Phase WAITING_USER_DIRECTION.
 
 ## Delivered Artifacts
 
@@ -39,4 +39,4 @@ git diff --check
 
 ## Next Step
 
-Claude Code implements, self-reviews, updates agent docs, then hands off for git finalization.
+User decides next direction. All known actionable gaps are either blocked on external data or marked future.
