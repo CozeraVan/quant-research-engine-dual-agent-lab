@@ -96,4 +96,4 @@ No active implementation work. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADAT
 
 ## Next Recommended Step
 
-Commit the research-run manifest integration and all synced agent docs. All known actionable gaps in `01_CURRENT_STATUS.md` are either blocked on external data or marked future.
+All known actionable gaps are either blocked on external data or marked future. No critical next step — user decides next direction.

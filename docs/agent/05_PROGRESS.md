@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+WAITING_USER_DIRECTION
 
 ## Current Active Work
 
-`QRE-SHARED-CASH-FULL-MARKET-REPORT-001` review PASS. Shared-cash full-market report support complete: `engine_mode` parameter on all builders, wired into `write_shared_cash_result()`, 19 new tests, 519 total pass. Awaiting git finalization.
+No active tasks. `QRE-SHARED-CASH-FULL-MARKET-REPORT-001` finalized in commit `db38477`. All known actionable gaps are either blocked on external data or marked future.
 
 ## Progress Table
 

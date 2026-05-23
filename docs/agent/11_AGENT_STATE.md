@@ -8,26 +8,26 @@ QRE-SHARED-CASH-FULL-MARKET-REPORT-001
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+WAITING_USER_DIRECTION
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Claude Code implemented and self-reviewed shared-cash full-market report support: added `engine_mode` parameter to all 6 builders and entry point in `full_market_report.py`; wired `write_full_market_report()` call into `write_shared_cash_result()` in `io.py`; updated `_shared_manifest_role()` and `_shared_report_paths()` for full-market roles; added 19 new tests (6 test classes in test_full_market_report.py, 2 tests in test_portfolio_io.py). Self-review PASS. Validation: 519 passed, 2 warnings in 5.91s.
+Claude Code implemented, self-reviewed, and committed shared-cash full-market report support (commit `db38477`): added `engine_mode` parameter to all 6 builders and entry point in `full_market_report.py`; wired `write_full_market_report()` call into `write_shared_cash_result()` in `io.py`; updated `_shared_manifest_role()` and `_shared_report_paths()` for full-market roles; added 19 new tests (6 test classes in test_full_market_report.py, 2 tests in test_portfolio_io.py). Self-review PASS. Validation: 519 passed, 2 warnings in 5.91s.
 
 ## Next Required Step
 
-Git finalization: commit implementation + all agent doc updates.
+User reviews completed work and decides next task direction. All known actionable gaps are either blocked on external data or marked future.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `0e4e148` (research-run manifest integration)
+- Last finalized commit: `db38477` (shared-cash full-market report support)
 - Standing approval: local commits approved by user; no remote push requested.
-- Uncommitted changes: full_market_report.py engine_mode refactoring, io.py shared-cash wiring, tests, agent docs.
+- Working tree: clean
 
 ## Short Prompt Commands
 
