@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+WAITING_USER_DIRECTION
 
 ## Current Active Work
 
-`QRE-GUI-STRATEGY-BUILDER-001` (M8.6) implemented and self-reviewed. Builder tab with 4 form sections, compile endpoint, indicator catalog, run integration. 16 new tests, 770 pass. Review PASS. Awaiting git finalization.
+None. All active tasks finalized. `QRE-GUI-STRATEGY-BUILDER-001` committed in `72600eb`: GUI Strategy Builder tab complete; 16 new tests; 770 pass; review PASS. User decides next direction.
 
 ## Progress Table
 
@@ -121,7 +121,7 @@ CODEX_GIT_FINALIZING
 | QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001 | Research-run manifest report-system integration | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_write_research_manifest()` emits standard run_manifest fields; `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`; 1 new validation test; 477 passed | Git finalize |
 | QRE-SHARED-CASH-FULL-MARKET-REPORT-001 | Shared-cash full-market report support | DONE | CLAUDE_CODE | `engine_mode` parameter on 6 builders; wired into `write_shared_cash_result()`; `_shared_manifest_role()` and `_shared_report_paths()` updated; 19 new tests; 519 passed; self-review PASS | Git finalize |
 | QRE-FULL-MARKET-CHARTS-001 | Full-market report equity curve and drawdown charts | FINALIZED | CLAUDE_CODE | commit `a86018d`; `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel; manifest roles registered; 10 new tests; 529 passed; review PASS | Preserve |
-| QRE-GUI-STRATEGY-BUILDER-001 | GUI parameter surface for standard strategy IO (M8.6) | DONE | CLAUDE_CODE | Builder tab with 4 form sections; compile endpoint; indicator catalog; run integration; 16 new tests; 770 passed; review PASS | Git finalize |
+| QRE-GUI-STRATEGY-BUILDER-001 | GUI parameter surface for standard strategy IO (M8.6) | FINALIZED | CLAUDE_CODE | commit `72600eb`; Builder tab with 4 form sections; compile endpoint; indicator catalog; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 
 ## Latest Verified State
 

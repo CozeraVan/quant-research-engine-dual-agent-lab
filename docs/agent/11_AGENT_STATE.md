@@ -4,26 +4,26 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+WAITING_USER_DIRECTION
 
 ## Current Owner
 
-CLAUDE_CODE (acting git finalizer — Codex unavailable)
+USER
 
 ## Last Completed Step
 
-QRE-GUI-STRATEGY-BUILDER-001 implemented and self-reviewed: `compile_high_level_entry()` wrapping compiler; 3 builder API routes; Builder tab with 4 collapsible form sections; dynamic condition/factor row management; compile-to-spec and run integration; 16 new tests (9 engine + 7 app); 770 passed, 0 regressions. Review PASS. 09_CODING_HANDOFF.md and 10_REVIEW_REPORT.md written.
+QRE-GUI-STRATEGY-BUILDER-001 finalized in commit `72600eb`: GUI Strategy Builder tab with 4 collapsible form sections; compile-to-spec endpoint; indicator catalog endpoint; dynamic condition/factor row management; run integration. 16 new tests, 770 pass, 0 regressions. Review PASS. Working tree clean.
 
 ## Next Required Step
 
-Git finalization: commit implementation + all agent doc updates.
+User decides next direction. All known actionable gaps are either blocked on external data or marked future.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `dd0ac24` (QRE-FULL-MARKET-CHARTS-001 finalization)
+- Last finalized commit: `72600eb` (GUI Strategy Builder)
 - Standing approval: local commits approved by user; no remote push requested.
-- Uncommitted changes: engine.py compile function, app.py builder routes, index.html builder tab, style.css builder styles, test files, agent docs.
+- Working tree: clean
 
 ## Short Prompt Commands
 
