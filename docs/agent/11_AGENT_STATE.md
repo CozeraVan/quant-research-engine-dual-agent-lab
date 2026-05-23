@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Task ID
 
-QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001
+QRE-SHARED-CASH-FULL-MARKET-REPORT-001
 
 ## Current Phase
 
@@ -16,18 +16,18 @@ CLAUDE_CODE
 
 ## Last Completed Step
 
-Claude Code integrated `research_run_manifest.json` into the report manifest system: updated `_write_research_manifest()` to emit standard run_manifest fields (`schema_version`, `kind`, `command`, `strategy_path`, `artifacts`); registered `research_run_manifest` in `_RUN_MANIFEST_KINDS`; added 1 new validation test. Self-review PASS. Validation: 477 passed, 2 warnings in 5.07s.
+Claude Code implemented and self-reviewed shared-cash full-market report support: added `engine_mode` parameter to all 6 builders and entry point in `full_market_report.py`; wired `write_full_market_report()` call into `write_shared_cash_result()` in `io.py`; updated `_shared_manifest_role()` and `_shared_report_paths()` for full-market roles; added 19 new tests (6 test classes in test_full_market_report.py, 2 tests in test_portfolio_io.py). Self-review PASS. Validation: 519 passed, 2 warnings in 5.91s.
 
 ## Next Required Step
 
-Git finalization: commit manifest integration + all doc updates.
+Git finalization: commit implementation + all agent doc updates.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `92f216d` (research-run orchestrator)
+- Last finalized commit: `0e4e148` (research-run manifest integration)
 - Standing approval: local commits approved by user; no remote push requested.
-- Uncommitted changes: research-run manifest schema update + report_manifest kind registration + tests + agent docs + review report.
+- Uncommitted changes: full_market_report.py engine_mode refactoring, io.py shared-cash wiring, tests, agent docs.
 
 ## Short Prompt Commands
 

@@ -6,7 +6,7 @@ CODEX_GIT_FINALIZING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001` review passed. Research-run manifest integration complete. Awaiting git finalization.
+`QRE-SHARED-CASH-FULL-MARKET-REPORT-001` review PASS. Shared-cash full-market report support complete: `engine_mode` parameter on all builders, wired into `write_shared_cash_result()`, 19 new tests, 519 total pass. Awaiting git finalization.
 
 ## Progress Table
 
@@ -119,30 +119,27 @@ CODEX_GIT_FINALIZING
 | QRE-NEXT-58 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`; 17 targeted tests pass; smoke harness preserved | Preserve; reuse as the source boundary for later bulk ingestion |
 | QRE-NEXT-59 | Research-run CLI orchestrator | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `qre research-run` chains preflight→eval→backtest under one `--run-id` with `research_run_manifest.json`; 10 new tests; 476 passed | Preserve; expand run-bundle scope in future slices |
 | QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001 | Research-run manifest report-system integration | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_write_research_manifest()` emits standard run_manifest fields; `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`; 1 new validation test; 477 passed | Git finalize |
+| QRE-SHARED-CASH-FULL-MARKET-REPORT-001 | Shared-cash full-market report support | DONE | CLAUDE_CODE | `engine_mode` parameter on 6 builders; wired into `write_shared_cash_result()`; `_shared_manifest_role()` and `_shared_report_paths()` updated for 9 full-market roles; 19 new tests; 519 passed; self-review PASS | Git finalize |
 
 ## Latest Verified State
 
-Recorded on 2026-05-23 after Claude Code implemented and self-reviewed `QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001` (PASS):
+Recorded on 2026-05-23 after Claude Code implemented and self-reviewed `QRE-SHARED-CASH-FULL-MARKET-REPORT-001` (PASS):
 
-- Current task: `QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001` — DONE (review PASS)
-- Last finalized: `QRE-RESEARCH-RUN-ORCHESTRATION-001` (commit `92f216d`)
+- Current task: `QRE-SHARED-CASH-FULL-MARKET-REPORT-001` — DONE (review PASS)
+- Last finalized: `QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001` (commit `0e4e148`)
 - Implementation:
-  - `src/quant_research_engine/orchestration/research_run.py` — `_write_research_manifest()` updated to emit `schema_version: 1`, `kind: "research_run_manifest"`, `command: "research-run"`, `strategy_path`, `artifacts` (sorted); function now accepts `request` parameter
-  - `src/quant_research_engine/portfolio/report_manifest.py` — `_RUN_MANIFEST_KINDS` now includes `"research_run_manifest"`
-  - `tests/test_research_run.py` — 3 manifest tests updated to pass `request` and verify new fields
-  - `tests/test_portfolio_report_manifest.py` — 1 new validation test (`test_validate_contents_accepts_valid_research_run_manifest`)
-  - `docs/agent/03_ROADMAP.md` — M8.43 added
-  - `docs/agent/06_DECISION_LOG.md` — decision entry added
-  - `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
+  - `src/quant_research_engine/portfolio/full_market_report.py` — `engine_mode` parameter on `build_trades_ledger`, `build_round_trips`, `build_symbol_performance`, `build_full_market_equity_curve`, `build_strategy_performance`, `write_full_market_report`; shared-cash branches read flat DataFrames; `failed_orders` param for correct counting
+  - `src/quant_research_engine/portfolio/io.py` — `write_full_market_report()` call in `write_shared_cash_result()` with `engine_mode="shared_cash"`; `_shared_manifest_role()` and `_shared_report_paths()` updated for 9 full-market roles
+  - `tests/test_full_market_report.py` — 6 new test classes (17 tests)
+  - `tests/test_portfolio_io.py` — 2 new tests
 - Review: `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
 - Validation:
-  - `uv run pytest tests/test_research_run.py -q` → 7 passed in 0.46s
-  - `uv run pytest tests/test_portfolio_report_manifest.py -q` → passed
-  - `uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_research_run.py -q` → 477 passed, 2 warnings in 5.07s
+  - `uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py -q` → 64 passed in 2.02s
+  - Full suite: 519 passed, 2 warnings in 5.91s
   - `scripts/check-progress-docs.sh` → passed
   - `git diff --check` → passed
-- Known gaps closed: research_run_manifest.json now discoverable through report manifest system
-- Next step: Claude Code (acting finalizer) performs git commit; manifest integration is complete
+- Known gaps closed: shared-cash backtests now produce full-market report bundle (trades_ledger, round_trips, symbol_performance, strategy_performance, full_market_equity_curve, drawdown_curve, trade_analysis, capital_usage, backtest_report.xlsx)
+- Next step: Git finalization (commit implementation + all agent docs)
 
 Current GUI direction approved on 2026-05-21:
 
@@ -204,7 +201,6 @@ User-requested strategy work in 2026-05-21:
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Research-run CLI orchestrator is complete; larger multi-stage bundling is now standardized.
 - Strategy IO contract implementation after design approval.
-- Full-market report shared-cash support (currently batch-only).
 - Full-market report charts.
 - GUI parameter controls over the future standard strategy entry contract.
 

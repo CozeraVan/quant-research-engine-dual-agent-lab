@@ -2,21 +2,28 @@
 
 ## Current Task
 
-Integrate `research_run_manifest.json` into the report manifest system — add `kind` field, register in `_RUN_MANIFEST_KINDS`, and add content validation parity.
+Add shared-cash support for the full-market report bundle — add `engine_mode` parameter to all builders in `full_market_report.py`, wire into `write_shared_cash_result()`, and add 19 new tests.
 
 ## Task ID
 
-QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001
+QRE-SHARED-CASH-FULL-MARKET-REPORT-001
 
 ## Current Status
 
-IMPLEMENTED. Claude Code has completed the manifest integration; `research_run_manifest` kind is registered, schema is compliant with run_manifest validation, and 1 new test added (477 total).
+IMPLEMENTED. Claude Code has completed the shared-cash full-market report support: all 6 builders + entry point accept `engine_mode`, `write_shared_cash_result()` now calls `write_full_market_report()` with `engine_mode="shared_cash"`, 19 new tests pass (519 total).
 
 ## Current Owner
 
 CLAUDE_CODE
 
 ## Completed
+
+- Shared-cash full-market report support implemented:
+  - `src/quant_research_engine/portfolio/full_market_report.py` — `engine_mode` parameter added to `build_trades_ledger`, `build_round_trips`, `build_symbol_performance`, `build_full_market_equity_curve`, `build_strategy_performance`, and `write_full_market_report`. Shared-cash branches read flat DataFrames (orders, trades, equity_curve) instead of `dict[str, SingleSymbolBacktestResult]`. `failed_orders` parameter for correct failed order counting.
+  - `src/quant_research_engine/portfolio/io.py` — `write_full_market_report()` called from `write_shared_cash_result()` with `engine_mode="shared_cash"`. `_shared_manifest_role()` updated for 9 full-market artifact roles. `_shared_report_paths()` includes full-market labels.
+  - `tests/test_full_market_report.py` — 6 new test classes (17 tests): `TestBuildTradesLedgerSharedCash`, `TestBuildRoundTripsSharedCash`, `TestBuildSymbolPerformanceSharedCash`, `TestBuildFullMarketEquityCurveSharedCash`, `TestBuildStrategyPerformanceSharedCash`, `TestWriteFullMarketReportSharedCash`.
+  - `tests/test_portfolio_io.py` — 2 new tests: `test_write_shared_cash_result_includes_full_market_files`, `test_shared_cash_manifest_validates_full_market_roles`.
+  - 519 tests pass, no regressions.
 
 - Three high-level strategy entry YAML files created from `docs/strategy_entry/examples.md`:
   - `examples/rsi2_oversold_reversal_entry.yaml` — RSI2 mean-reversion (1 factor: rsi_fast)

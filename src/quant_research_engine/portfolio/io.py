@@ -192,6 +192,10 @@ def write_shared_cash_result(
     )
     if run_request is not None:
         paths["run_manifest"] = _write_run_manifest(directory, run_request, paths, run_id=run_id)
+    full_market_paths = write_full_market_report(
+        result, directory, run_request=run_request, run_id=run_id, engine_mode="shared_cash",
+    )
+    paths.update(full_market_paths)
     paths["summary_markdown"].write_text(shared_summary_markdown(result.summary, paths), encoding="utf-8")
     paths["report_manifest"].write_text(
         json.dumps(_shared_report_manifest(paths, directory), ensure_ascii=False, indent=2, sort_keys=True),
@@ -343,6 +347,15 @@ def _shared_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
         "summary_markdown": "Summary Markdown",
         "report_manifest": "Report manifest",
         "run_manifest": "Run manifest",
+        "trades_ledger": "Trades ledger",
+        "round_trips": "Round trips",
+        "symbol_performance": "Symbol performance",
+        "strategy_performance": "Strategy performance",
+        "full_market_equity_curve": "Full-market equity curve",
+        "drawdown_curve": "Drawdown curve",
+        "trade_analysis": "Trade analysis",
+        "capital_usage": "Capital usage",
+        "backtest_report": "Full-market report workbook",
     }
     result: list[tuple[str, Path]] = []
     for key in labels:
@@ -405,6 +418,25 @@ def _shared_manifest_role(key: str) -> str:
         return "report_manifest"
     if key == "run_manifest":
         return "run_manifest"
+    # Full-market report artifact roles
+    if key == "trades_ledger":
+        return "trades_ledger"
+    if key == "round_trips":
+        return "round_trips"
+    if key == "symbol_performance":
+        return "symbol_performance"
+    if key == "strategy_performance":
+        return "strategy_performance"
+    if key == "full_market_equity_curve":
+        return "full_market_equity_curve"
+    if key == "drawdown_curve":
+        return "drawdown_curve"
+    if key == "trade_analysis":
+        return "trade_analysis"
+    if key == "capital_usage":
+        return "capital_usage"
+    if key == "backtest_report":
+        return "full_market_report_workbook"
     return key
 
 

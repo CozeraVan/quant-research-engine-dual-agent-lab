@@ -17,6 +17,7 @@ from quant_research_engine.portfolio.full_market_report import (
     write_full_market_excel,
     write_full_market_report,
 )
+from quant_research_engine.portfolio.shared import SharedCashBacktestResult
 from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestResult
 
 
@@ -410,3 +411,227 @@ class TestManifestValidation:
         manifest = ReportManifest.from_path(paths["report_manifest"])
         issues = manifest.validate_contents()
         assert issues == []
+
+
+# ---- shared-cash helpers ----
+
+
+def _make_shared_result(symbols: list[str] | None = None) -> SharedCashBacktestResult:
+    if symbols is None:
+        symbols = ["000001.SZ", "000002.SZ"]
+    n_orders = len(symbols) * 3
+    dates = pd.date_range("2026-01-05", periods=n_orders, freq="B")
+    orders = pd.DataFrame({
+        "symbol": [s for s in symbols for _ in range(3)],
+        "trade_date": dates,
+        "side": ["buy"] * n_orders,
+        "quantity": [100] * n_orders,
+        "price": [10.0] * n_orders,
+        "notional": [1000.0] * n_orders,
+        "cost": [5.0] * n_orders,
+        "reason": ["entry"] * n_orders,
+    })
+    n_trades = len(symbols) * 2
+    trade_dates = pd.date_range("2026-01-05", periods=n_trades * 2, freq="B")
+    trades = pd.DataFrame({
+        "symbol": [s for s in symbols for _ in range(2)],
+        "entry_date": trade_dates[:n_trades],
+        "exit_date": trade_dates[n_trades:],
+        "quantity": [100] * n_trades,
+        "entry_price": [10.0] * n_trades,
+        "exit_price": [11.0] * n_trades,
+        "gross_pnl": [100.0] * n_trades,
+        "cost": [10.0] * n_trades,
+        "net_pnl": [90.0] * n_trades,
+        "exit_reason": ["signal"] * n_trades,
+    })
+    eq_dates = pd.date_range("2026-01-05", periods=21, freq="B")
+    equity_curve = pd.DataFrame({
+        "trade_date": eq_dates,
+        "cash": [9000.0] * 21,
+        "market_value": [1000.0] * 21,
+        "total_equity": np.linspace(10000.0, 11800.0, 21),
+        "position_count": [1] * 21,
+    })
+    return SharedCashBacktestResult(
+        orders=orders,
+        trades=trades,
+        equity_curve=equity_curve,
+        failed_orders=pd.DataFrame(),
+        summary={
+            "initial_cash": 10000.0, "final_equity": 11800.0,
+            "total_return": 0.18, "sharpe": 1.2, "max_drawdown": -0.05,
+            "max_drawdown_duration_days": 3, "total_cost": 40.0,
+            "symbol_count": len(symbols), "traded_symbol_count": len(symbols),
+            "trade_count": n_trades, "date_start": "2026-01-05", "date_end": "2026-01-30",
+        },
+    )
+
+
+class TestBuildTradesLedgerSharedCash:
+    def test_empty_orders(self):
+        df = build_trades_ledger(pd.DataFrame(), engine_mode="shared_cash")
+        assert df.empty
+        assert "symbol" in df.columns
+
+    def test_flat_orders_produce_ledger_rows(self):
+        result = _make_shared_result(["000001.SZ"])
+        df = build_trades_ledger(result.orders, engine_mode="shared_cash")
+        assert len(df) == 3
+        assert set(df["symbol"].unique()) == {"000001.SZ"}
+        assert (df["side"] == "buy").all()
+        assert (df["total_cost"] == 5.0).all()
+        assert (df["status"] == "filled").all()
+
+    def test_order_reason_preserved(self):
+        result = _make_shared_result(["000001.SZ"])
+        df = build_trades_ledger(result.orders, run_id="r1", strategy_id="s1", engine_mode="shared_cash")
+        assert df["order_reason"].iloc[0] == "entry"
+        assert df["run_id"].iloc[0] == "r1"
+
+
+class TestBuildRoundTripsSharedCash:
+    def test_empty_trades(self):
+        df = build_round_trips(pd.DataFrame(), engine_mode="shared_cash")
+        assert df.empty
+        assert "symbol" in df.columns
+
+    def test_flat_trades_produce_round_trip_rows(self):
+        result = _make_shared_result(["000001.SZ", "000002.SZ"])
+        df = build_round_trips(result.trades, engine_mode="shared_cash")
+        assert len(df) == 4
+        assert set(df["symbol"].unique()) == {"000001.SZ", "000002.SZ"}
+        assert (df["gross_return"] > 0).all()
+
+    def test_run_id_strategy_id_passthrough(self):
+        result = _make_shared_result(["000001.SZ"])
+        df = build_round_trips(result.trades, run_id="r99", strategy_id="s99", engine_mode="shared_cash")
+        assert df["run_id"].iloc[0] == "r99"
+        assert df["strategy_id"].iloc[0] == "s99"
+
+
+class TestBuildSymbolPerformanceSharedCash:
+    def test_empty_round_trips(self):
+        df = build_symbol_performance(engine_mode="shared_cash", round_trips=pd.DataFrame(), orders=pd.DataFrame())
+        assert df.empty
+
+    def test_per_symbol_aggregation(self):
+        result = _make_shared_result(["000001.SZ", "000002.SZ"])
+        df = build_symbol_performance(
+            engine_mode="shared_cash", round_trips=result.trades, orders=result.orders,
+        )
+        assert len(df) == 2
+        assert set(df["symbol"]) == {"000001.SZ", "000002.SZ"}
+        assert (df["trade_count"] == 2).all()
+        assert (df["win_count"] == 2).all()
+        assert (df["net_profit"] == 180.0).all()
+        assert (df["sharpe"].isna()).all()
+        assert (df["max_drawdown"].isna()).all()
+        assert (df["board"].isna()).all()
+        assert (df["industry"].isna()).all()
+
+    def test_failed_order_count_from_orders(self):
+        result = _make_shared_result(["000001.SZ"])
+        # Pass empty failed_orders — count should be 0
+        df = build_symbol_performance(
+            engine_mode="shared_cash", round_trips=result.trades,
+            orders=result.orders, failed_orders=pd.DataFrame(),
+        )
+        assert df["failed_order_count"].iloc[0] == 0
+
+
+class TestBuildFullMarketEquityCurveSharedCash:
+    def test_empty_equity_curve(self):
+        df = build_full_market_equity_curve(pd.DataFrame(), engine_mode="shared_cash")
+        assert df.empty
+
+    def test_enriches_with_daily_and_cumulative_return(self):
+        result = _make_shared_result(["000001.SZ"])
+        df = build_full_market_equity_curve(result.equity_curve, engine_mode="shared_cash")
+        assert len(df) == 21
+        assert "daily_return" in df.columns
+        assert "cumulative_return" in df.columns
+        assert "turnover" in df.columns
+        assert df["daily_return"].notna().sum() > 0
+        assert df["cumulative_return"].notna().all()
+        assert (df["turnover"].isna()).all()
+
+
+class TestBuildStrategyPerformanceSharedCash:
+    def test_maps_summary_dict_keys(self):
+        result = _make_shared_result(["000001.SZ", "000002.SZ"])
+        round_trips = build_round_trips(result.trades, engine_mode="shared_cash")
+        eq = build_full_market_equity_curve(result.equity_curve, engine_mode="shared_cash")
+        perf = build_strategy_performance(
+            result.summary, round_trips=round_trips, equity_curve=eq, engine_mode="shared_cash",
+        )
+        assert perf["sharpe"] == 1.2
+        assert perf["max_drawdown"] == -0.05
+        assert perf["total_cost"] == 40.0
+
+    def test_null_fields_for_unsupported_batch_metrics(self):
+        result = _make_shared_result(["000001.SZ"])
+        round_trips = build_round_trips(result.trades, engine_mode="shared_cash")
+        eq = build_full_market_equity_curve(result.equity_curve, engine_mode="shared_cash")
+        perf = build_strategy_performance(
+            result.summary, round_trips=round_trips, equity_curve=eq, engine_mode="shared_cash",
+        )
+        assert perf["buy_hold_return"] is None
+        assert perf["excess_return_vs_buy_hold"] is None
+        assert perf["positive_symbol_rate"] is None
+        assert perf["mean_symbol_return"] is None
+        assert perf["median_symbol_return"] is None
+
+    def test_best_worst_symbols_from_round_trips(self):
+        result = _make_shared_result(["000001.SZ", "000002.SZ", "000003.SZ"])
+        round_trips = build_round_trips(result.trades, engine_mode="shared_cash")
+        eq = build_full_market_equity_curve(result.equity_curve, engine_mode="shared_cash")
+        perf = build_strategy_performance(
+            result.summary, round_trips=round_trips, equity_curve=eq, engine_mode="shared_cash",
+        )
+        assert len(perf["best_symbols"]) <= 3
+        assert len(perf["worst_symbols"]) <= 3
+
+
+class TestWriteFullMarketReportSharedCash:
+    def test_end_to_end_writes_all_artifacts(self, tmp_path):
+        result = _make_shared_result(["000001.SZ", "000002.SZ"])
+        paths = write_full_market_report(result, tmp_path, engine_mode="shared_cash")
+
+        assert "trades_ledger" in paths
+        assert "round_trips" in paths
+        assert "symbol_performance" in paths
+        assert "strategy_performance" in paths
+        assert "full_market_equity_curve" in paths
+        assert "drawdown_curve" in paths
+        assert "trade_analysis" in paths
+        assert "capital_usage" in paths
+        assert "backtest_report" in paths
+
+        assert all(p.exists() for p in paths.values())
+        assert pd.read_csv(paths["trades_ledger"]).iloc[0]["symbol"] == "000001.SZ"
+        assert pd.read_csv(paths["round_trips"]).iloc[0]["symbol"] == "000001.SZ"
+        strat_perf = json.loads(paths["strategy_performance"].read_text(encoding="utf-8"))
+        assert strat_perf["total_trade_count"] == 4
+
+    def test_overview_engine_mode_shared_cash(self, tmp_path):
+        result = _make_shared_result(["000001.SZ"])
+        paths = write_full_market_report(result, tmp_path, engine_mode="shared_cash")
+        xlsx_path = paths["backtest_report"]
+        from openpyxl import load_workbook
+        wb = load_workbook(str(xlsx_path))
+        ws = wb["Overview"]
+        overview = {ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value for r in range(1, ws.max_row + 1) if ws.cell(row=r, column=1).value}
+        assert overview.get("engine_mode") == "shared_cash"
+        assert overview.get("initial_cash") == 10000.0
+
+    def test_handles_empty_shared_result(self, tmp_path):
+        result = SharedCashBacktestResult(
+            orders=pd.DataFrame(),
+            trades=pd.DataFrame(),
+            equity_curve=pd.DataFrame(),
+            failed_orders=pd.DataFrame(),
+            summary={},
+        )
+        paths = write_full_market_report(result, tmp_path, engine_mode="shared_cash")
+        assert all(p.exists() for p in paths.values())

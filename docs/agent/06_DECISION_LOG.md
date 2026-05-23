@@ -12,6 +12,16 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-23: Shared-cash full-market report engine_mode pattern
+
+- Decision: Add `engine_mode: str = "batch"` parameter to all 6 full-market report builders and the entry point, with shared-cash branches reading flat DataFrames instead of `dict[str, SingleSymbolBacktestResult]`.
+- Reason: `BatchBacktestResult` and `SharedCashBacktestResult` have fundamentally different internal structures (per-symbol dict vs flat DataFrames with `symbol` columns). An `engine_mode` parameter preserves all batch paths unchanged while adding parallel shared-cash paths. This is cleaner than coercing shared-cash results into batch-shaped containers or duplicating the entire module.
+- Alternatives: Duplicate `full_market_report.py` for shared-cash (rejected — too much code duplication); coerce `SharedCashBacktestResult` into a batch-shaped wrapper (rejected — adds indirection and risks subtle type mismatches); make shared-cash the only mode (rejected — breaks batch workflow).
+- Impact: `build_trades_ledger`, `build_round_trips`, `build_symbol_performance`, `build_full_market_equity_curve`, `build_strategy_performance`, and `write_full_market_report` all accept `engine_mode`. Key `full_market_equity_curve` used to avoid collision with shared-cash's existing `equity_curve` entry. `_shared_manifest_role()` and `_shared_report_paths()` updated for 9 full-market artifact roles. 19 new tests; 519 pass.
+- Owner: CLAUDE_CODE (acting planner/implementer — Codex unavailable)
+
+---
+
 ### 2026-05-23: Research-run manifest integrated into report manifest system
 
 - Decision: Integrate `research_run_manifest.json` into the report manifest system by adding standard run_manifest fields to the orchestrator output, registering `research_run_manifest` in `_RUN_MANIFEST_KINDS`, and adding content validation parity test coverage.

@@ -1012,3 +1012,131 @@ def test_write_single_symbol_result_run_id_null_when_omitted(tmp_path):
 
     manifest = json.loads(paths["run_manifest"].read_text(encoding="utf-8"))
     assert manifest["run_id"] is None
+
+
+# ---- shared-cash full-market report integration tests ----
+
+
+def test_write_shared_cash_result_includes_full_market_files(tmp_path):
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame({
+            "symbol": ["000001.SZ", "000002.SZ"],
+            "trade_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+            "side": ["buy", "buy"],
+            "quantity": [100, 200],
+            "price": [10.0, 20.0],
+            "notional": [1000.0, 4000.0],
+            "cost": [5.0, 20.0],
+            "reason": ["entry"] * 2,
+        }),
+        trades=pd.DataFrame({
+            "symbol": ["000001.SZ", "000002.SZ"],
+            "entry_date": pd.to_datetime(["2026-01-06", "2026-01-07"]),
+            "exit_date": pd.to_datetime(["2026-01-09", "2026-01-10"]),
+            "quantity": [100, 200],
+            "entry_price": [10.0, 20.0],
+            "exit_price": [11.0, 22.0],
+            "gross_pnl": [100.0, 400.0],
+            "cost": [10.0, 40.0],
+            "net_pnl": [90.0, 360.0],
+            "exit_reason": ["signal"] * 2,
+        }),
+        equity_curve=pd.DataFrame({
+            "trade_date": pd.date_range("2026-01-05", periods=5, freq="B"),
+            "cash": [9000.0] * 5,
+            "market_value": [1000.0] * 5,
+            "total_equity": [10000.0] * 5,
+            "position_count": [1] * 5,
+        }),
+        failed_orders=pd.DataFrame(),
+        summary={
+            "initial_cash": 10000.0, "final_equity": 10450.0,
+            "total_return": 0.045, "sharpe": 1.5, "max_drawdown": -0.02,
+            "max_drawdown_duration_days": 1, "total_cost": 75.0,
+            "symbol_count": 2, "traded_symbol_count": 2,
+            "trade_count": 2,
+        },
+    )
+
+    paths = write_shared_cash_result(result, tmp_path)
+
+    full_market_keys = [
+        "trades_ledger", "round_trips", "symbol_performance",
+        "strategy_performance", "full_market_equity_curve", "drawdown_curve",
+        "trade_analysis", "capital_usage", "backtest_report",
+    ]
+    for key in full_market_keys:
+        assert key in paths, f"Missing full-market key: {key}"
+        assert paths[key].exists(), f"File missing for key: {key}"
+
+    manifest = json.loads(paths["report_manifest"].read_text(encoding="utf-8"))
+    roles = {entry["role"] for entry in manifest["files"]}
+    assert "trades_ledger" in roles
+    assert "round_trips" in roles
+    assert "symbol_performance" in roles
+    assert "strategy_performance" in roles
+    assert "full_market_equity_curve" in roles
+    assert "drawdown_curve" in roles
+    assert "trade_analysis" in roles
+    assert "capital_usage" in roles
+    assert "full_market_report_workbook" in roles
+
+    # Shared-cash existing roles still present
+    assert "orders" in roles
+    assert "trades" in roles
+    assert "equity_curve" in roles
+    assert "summary" in roles
+
+    markdown = paths["summary_markdown"].read_text(encoding="utf-8")
+    assert "| Trades ledger |" in markdown
+    assert "| Round trips |" in markdown
+    assert "| Full-market equity curve |" in markdown
+    assert "| Full-market report workbook |" in markdown
+
+
+def test_shared_cash_manifest_validates_full_market_roles(tmp_path):
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    result = SharedCashBacktestResult(
+        orders=pd.DataFrame({
+            "symbol": ["000001.SZ"],
+            "trade_date": pd.to_datetime(["2026-01-06"]),
+            "side": ["buy"],
+            "quantity": [100],
+            "price": [10.0],
+            "notional": [1000.0],
+            "cost": [5.0],
+            "reason": ["entry"],
+        }),
+        trades=pd.DataFrame({
+            "symbol": ["000001.SZ"],
+            "entry_date": pd.to_datetime(["2026-01-06"]),
+            "exit_date": pd.to_datetime(["2026-01-09"]),
+            "quantity": [100],
+            "entry_price": [10.0],
+            "exit_price": [11.0],
+            "gross_pnl": [100.0],
+            "cost": [10.0],
+            "net_pnl": [90.0],
+            "exit_reason": ["signal"],
+        }),
+        equity_curve=pd.DataFrame({
+            "trade_date": pd.date_range("2026-01-05", periods=5, freq="B"),
+            "cash": [9000.0] * 5,
+            "market_value": [1000.0] * 5,
+            "total_equity": [10000.0, 10090.0, 10090.0, 10090.0, 10090.0],
+            "position_count": [1] * 5,
+        }),
+        failed_orders=pd.DataFrame(),
+        summary={
+            "initial_cash": 10000.0, "final_equity": 10090.0,
+            "total_return": 0.009, "sharpe": 1.0, "max_drawdown": 0.0,
+            "max_drawdown_duration_days": 0, "total_cost": 15.0,
+            "symbol_count": 1, "traded_symbol_count": 1, "trade_count": 1,
+        },
+    )
+
+    paths = write_shared_cash_result(result, tmp_path)
+    manifest = ReportManifest.from_path(paths["report_manifest"])
+    issues = manifest.validate_contents()
+    assert issues == []
