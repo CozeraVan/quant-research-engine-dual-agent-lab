@@ -706,6 +706,82 @@ def build_capital_usage(
     }
 
 
+def generate_equity_curve_chart(equity: pd.DataFrame, output_path: Path) -> Path | None:
+    if equity.empty or "trade_date" not in equity.columns or "total_equity" not in equity.columns:
+        return None
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    import matplotlib.ticker as mticker
+
+    dates = pd.to_datetime(equity["trade_date"])
+    total_eq = equity["total_equity"]
+    cum_return = equity.get("cumulative_return", pd.Series([0.0] * len(equity)))
+
+    fig, ax1 = plt.subplots(figsize=(11.69, 4.0))
+    ax1.plot(dates, total_eq, color="#1f77b4", linewidth=1.0, label="Total Equity")
+    ax1.set_ylabel("Total Equity", color="#1f77b4")
+    ax1.tick_params(axis="y", labelcolor="#1f77b4")
+    ax1.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+
+    ax2 = ax1.twinx()
+    ax2.plot(dates, cum_return, color="#ff7f0e", linewidth=1.0, label="Cumulative Return")
+    ax2.set_ylabel("Cumulative Return", color="#ff7f0e")
+    ax2.tick_params(axis="y", labelcolor="#ff7f0e")
+    ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:.1%}"))
+    ax2.axhline(y=0, color="#ff7f0e", linewidth=0.5, linestyle="--", alpha=0.5)
+
+    ax1.set_title("Full-Market Equity Curve")
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+    fig.autofmt_xdate(rotation=30)
+    ax1.grid(True, alpha=0.3)
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
+
+    fig.tight_layout()
+    fig.savefig(str(output_path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return output_path
+
+
+def generate_drawdown_chart(drawdown: pd.DataFrame, output_path: Path) -> Path | None:
+    if drawdown.empty or "trade_date" not in drawdown.columns or "drawdown_pct" not in drawdown.columns:
+        return None
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    import matplotlib.ticker as mticker
+
+    dates = pd.to_datetime(drawdown["trade_date"])
+    dd_pct = drawdown["drawdown_pct"]
+
+    fig, ax = plt.subplots(figsize=(11.69, 3.2))
+    ax.fill_between(dates, 0, dd_pct, color="#d62728", alpha=0.25, label="Drawdown")
+    ax.plot(dates, dd_pct, color="#d62728", linewidth=0.8)
+    ax.axhline(y=0, color="#333333", linewidth=0.5, linestyle="--")
+
+    ax.set_ylabel("Drawdown")
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:.1%}"))
+    ax.set_title("Drawdown Curve")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    fig.autofmt_xdate(rotation=30)
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="lower left")
+
+    fig.tight_layout()
+    fig.savefig(str(output_path), dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return output_path
+
+
 def write_full_market_excel(
     output_dir: Path,
     overview: dict[str, Any],
@@ -716,6 +792,9 @@ def write_full_market_excel(
     drawdown: pd.DataFrame,
     trade_analysis: dict[str, Any],
     capital_usage: dict[str, Any],
+    *,
+    equity_curve_chart: Path | None = None,
+    drawdown_curve_chart: Path | None = None,
 ) -> Path:
     from openpyxl import Workbook
     from openpyxl.styles import Font
@@ -773,6 +852,24 @@ def write_full_market_excel(
     ws_cu = wb.create_sheet("CapitalUsage")
     _write_kv_sheet(ws_cu, capital_usage)
 
+    # EquityCurveChart (embedded image)
+    if equity_curve_chart is not None and equity_curve_chart.exists():
+        from openpyxl.drawing.image import Image as XlImage
+        ws_chart = wb.create_sheet("EquityCurveChart")
+        img = XlImage(str(equity_curve_chart))
+        img.width = 820
+        img.height = 310
+        ws_chart.add_image(img, "A1")
+
+    # DrawdownCurveChart (embedded image)
+    if drawdown_curve_chart is not None and drawdown_curve_chart.exists():
+        from openpyxl.drawing.image import Image as XlImage
+        ws_chart = wb.create_sheet("DrawdownCurveChart")
+        img = XlImage(str(drawdown_curve_chart))
+        img.width = 820
+        img.height = 250
+        ws_chart.add_image(img, "A1")
+
     # Artifacts
     ws_art = wb.create_sheet("Artifacts")
     ws_art.append(["Artifact", "Description"])
@@ -788,6 +885,8 @@ def write_full_market_excel(
         ("drawdown_curve.csv", "Daily drawdown curve"),
         ("trade_analysis.json", "TradingView-style trade analysis"),
         ("capital_usage.json", "Capital and margin usage"),
+        ("equity_curve_chart.png", "Equity curve chart image"),
+        ("drawdown_curve_chart.png", "Drawdown curve chart image"),
     ]:
         ws_art.append([name, desc])
 
@@ -838,6 +937,9 @@ def write_full_market_report(
         trade_analysis = build_trade_analysis(round_trips)
         capital_usage = build_capital_usage(fm_equity_curve, strategy_perf)
 
+        equity_curve_chart_path = generate_equity_curve_chart(fm_equity_curve, directory / "equity_curve_chart.png")
+        drawdown_curve_chart_path = generate_drawdown_chart(drawdown_curve, directory / "drawdown_curve_chart.png")
+
         symbol_count = 0
         if not orders.empty and "symbol" in orders.columns:
             symbol_count = orders["symbol"].nunique()
@@ -876,11 +978,17 @@ def write_full_market_report(
             "drawdown_curve": directory / "drawdown_curve.csv",
             "trade_analysis": directory / "trade_analysis.json",
             "capital_usage": directory / "capital_usage.json",
-            "backtest_report": write_full_market_excel(
-                directory, overview, trades_ledger, round_trips, symbol_perf,
-                fm_equity_curve, drawdown_curve, trade_analysis, capital_usage,
-            ),
         }
+        if equity_curve_chart_path is not None:
+            paths["equity_curve_chart"] = equity_curve_chart_path
+        if drawdown_curve_chart_path is not None:
+            paths["drawdown_curve_chart"] = drawdown_curve_chart_path
+        paths["backtest_report"] = write_full_market_excel(
+            directory, overview, trades_ledger, round_trips, symbol_perf,
+            fm_equity_curve, drawdown_curve, trade_analysis, capital_usage,
+            equity_curve_chart=equity_curve_chart_path,
+            drawdown_curve_chart=drawdown_curve_chart_path,
+        )
 
         trades_ledger.to_csv(paths["trades_ledger"], index=False)
         round_trips.to_csv(paths["round_trips"], index=False)
@@ -920,6 +1028,9 @@ def write_full_market_report(
     trade_analysis = build_trade_analysis(round_trips)
     capital_usage = build_capital_usage(equity_curve, strategy_perf)
 
+    equity_curve_chart_path = generate_equity_curve_chart(equity_curve, directory / "equity_curve_chart.png")
+    drawdown_curve_chart_path = generate_drawdown_chart(drawdown_curve, directory / "drawdown_curve_chart.png")
+
     overview: dict[str, Any] = {
         "run_id": run_id,
         "strategy_id": strategy_id,
@@ -954,11 +1065,17 @@ def write_full_market_report(
         "drawdown_curve": directory / "drawdown_curve.csv",
         "trade_analysis": directory / "trade_analysis.json",
         "capital_usage": directory / "capital_usage.json",
-        "backtest_report": write_full_market_excel(
-            directory, overview, trades_ledger, round_trips, symbol_perf,
-            equity_curve, drawdown_curve, trade_analysis, capital_usage,
-        ),
     }
+    if equity_curve_chart_path is not None:
+        paths["equity_curve_chart"] = equity_curve_chart_path
+    if drawdown_curve_chart_path is not None:
+        paths["drawdown_curve_chart"] = drawdown_curve_chart_path
+    paths["backtest_report"] = write_full_market_excel(
+        directory, overview, trades_ledger, round_trips, symbol_perf,
+        equity_curve, drawdown_curve, trade_analysis, capital_usage,
+        equity_curve_chart=equity_curve_chart_path,
+        drawdown_curve_chart=drawdown_curve_chart_path,
+    )
 
     # Write CSV/JSON artifacts
     trades_ledger.to_csv(paths["trades_ledger"], index=False)

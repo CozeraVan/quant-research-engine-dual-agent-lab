@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-WAITING_USER_DIRECTION
+CODEX_GIT_FINALIZING
 
 ## Current Active Work
 
-No active tasks. `QRE-SHARED-CASH-FULL-MARKET-REPORT-001` finalized in commit `db38477`. All known actionable gaps are either blocked on external data or marked future.
+`QRE-FULL-MARKET-CHARTS-001` review PASS. Full-market report charts complete: `generate_equity_curve_chart()` and `generate_drawdown_chart()` using matplotlib Agg backend; embedded as new Excel sheets via openpyxl; both batch and shared_cash modes produce charts; manifest roles registered; 10 new tests. Awaiting git finalization.
 
 ## Progress Table
 
@@ -119,7 +119,8 @@ No active tasks. `QRE-SHARED-CASH-FULL-MARKET-REPORT-001` finalized in commit `d
 | QRE-NEXT-58 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`; 17 targeted tests pass; smoke harness preserved | Preserve; reuse as the source boundary for later bulk ingestion |
 | QRE-NEXT-59 | Research-run CLI orchestrator | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `qre research-run` chains preflight→eval→backtest under one `--run-id` with `research_run_manifest.json`; 10 new tests; 476 passed | Preserve; expand run-bundle scope in future slices |
 | QRE-RESEARCH-RUN-MANIFEST-INTEGRATION-001 | Research-run manifest report-system integration | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_write_research_manifest()` emits standard run_manifest fields; `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`; 1 new validation test; 477 passed | Git finalize |
-| QRE-SHARED-CASH-FULL-MARKET-REPORT-001 | Shared-cash full-market report support | DONE | CLAUDE_CODE | `engine_mode` parameter on 6 builders; wired into `write_shared_cash_result()`; `_shared_manifest_role()` and `_shared_report_paths()` updated for 9 full-market roles; 19 new tests; 519 passed; self-review PASS | Git finalize |
+| QRE-SHARED-CASH-FULL-MARKET-REPORT-001 | Shared-cash full-market report support | DONE | CLAUDE_CODE | `engine_mode` parameter on 6 builders; wired into `write_shared_cash_result()`; `_shared_manifest_role()` and `_shared_report_paths()` updated; 19 new tests; 519 passed; self-review PASS | Git finalize |
+| QRE-FULL-MARKET-CHARTS-001 | Full-market report equity curve and drawdown charts | DONE | CLAUDE_CODE | `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel; manifest roles registered; 10 new tests; 529 passed; self-review PASS | Git finalize |
 
 ## Latest Verified State
 
@@ -201,7 +202,6 @@ User-requested strategy work in 2026-05-21:
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Research-run CLI orchestrator is complete; larger multi-stage bundling is now standardized.
 - Strategy IO contract implementation after design approval.
-- Full-market report charts.
 - GUI parameter controls over the future standard strategy entry contract.
 
 ## Status Meaning

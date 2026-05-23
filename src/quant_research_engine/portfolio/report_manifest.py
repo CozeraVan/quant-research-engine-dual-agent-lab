@@ -61,6 +61,8 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "strategy_performance": set(),
     "trade_analysis": set(),
     "capital_usage": set(),
+    "equity_curve_chart": set(),
+    "drawdown_curve_chart": set(),
 }
 
 

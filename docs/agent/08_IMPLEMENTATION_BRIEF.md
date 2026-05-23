@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-SHARED-CASH-FULL-MARKET-REPORT-001
+QRE-FULL-MARKET-CHARTS-001
 
 ## Created By
 
@@ -14,18 +14,20 @@ CLAUDE_CODE
 
 ## Goal
 
-Add shared-cash support to `write_full_market_report()` and wire it into `write_shared_cash_result()` so that `qre research-run --backtest-mode shared` produces the same full-market report bundle as batch mode.
+Add equity curve and drawdown chart visualizations to the full-market report Excel workbook and as standalone PNG files. Both batch and shared_cash engine modes get identical chart logic.
 
 ## Approach
 
-Add `engine_mode: str = "batch"` parameter to all builders and the entry point. Shared-cash paths read flat DataFrames (orders, trades, equity_curve) instead of `dict[str, SingleSymbolBacktestResult]`. Use `full_market_equity_curve` key to avoid collision with shared-cash's existing `equity_curve` entry.
+Add `matplotlib` dependency. Create two chart generator functions that produce PNG files using the Agg backend. Embed PNGs as new Excel sheets via `openpyxl.drawing.image.Image` and save as standalone files. Both `engine_mode` branches get identical chart generation logic.
 
 ## Required Changes
 
-1. `src/quant_research_engine/portfolio/full_market_report.py` — add `engine_mode` parameter to 6 functions; shared-cash branches read flat DataFrames; `failed_orders` param for correct failed order counting
-2. `src/quant_research_engine/portfolio/io.py` — call `write_full_market_report()` with `engine_mode="shared_cash"` in `write_shared_cash_result()`; update `_shared_manifest_role()` and `_shared_report_paths()`
-3. Tests: 19 new tests (17 in test_full_market_report.py, 2 in test_portfolio_io.py)
-4. Agent docs: all 10 doc files synced
+1. `pyproject.toml` — add `matplotlib>=3.7.0` dependency
+2. `src/quant_research_engine/portfolio/full_market_report.py` — add `generate_equity_curve_chart()` and `generate_drawdown_chart()` functions; modify `write_full_market_excel()` signature with keyword-only chart parameters; embed chart sheets; generate charts in both engine_mode branches
+3. `src/quant_research_engine/portfolio/io.py` — register chart roles in manifest and report paths helpers
+4. `src/quant_research_engine/portfolio/report_manifest.py` — add chart roles to `_REQUIRED_COLUMNS_BY_ROLE`
+5. `tests/test_full_market_report.py` — 10 new tests
+6. Agent docs: all doc files synced
 
 ## Validation Commands
 

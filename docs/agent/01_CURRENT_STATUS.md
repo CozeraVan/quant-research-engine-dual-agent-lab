@@ -38,6 +38,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Research-run CLI orchestrator: `qre research-run` chains preflight → eval → backtest under one `--run-id` with `research_run_manifest.json`.
 - Research-run manifest integration: `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`, discoverable through `qre report-files` and `qre report-audit`.
 - Shared-cash full-market report: `engine_mode` parameter on all 6 builders and entry point in `full_market_report.py`; wired into `write_shared_cash_result()` with updated manifest helpers; 19 new tests (6 test classes + 2 integration tests).
+- Full-market report charts: equity curve and drawdown chart PNGs generated via matplotlib Agg backend; embedded as new Excel sheets via openpyxl; both batch and shared_cash modes produce charts; 10 new tests.
 
 ## In Progress
 

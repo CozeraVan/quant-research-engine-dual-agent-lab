@@ -12,6 +12,16 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-23: Full-market report charts with matplotlib Agg backend
+
+- Decision: Generate equity curve and drawdown charts as standalone PNGs using matplotlib Agg backend and embed them in the Excel workbook via openpyxl `Image`.
+- Reason: The full-market report had no visual chart outputs despite having equity and drawdown CSV data. matplotlib Agg works without a display server, and openpyxl image embedding keeps everything in one workbook.
+- Alternatives: Use plotly or altair (rejected — unnecessary new dependency); generate only standalone files (rejected — embedded workbook is more user-friendly); use interactive matplotlib backends (rejected — Agg is correct for headless/CI environments).
+- Impact: `generate_equity_curve_chart()` and `generate_drawdown_chart()` added to `full_market_report.py`; `write_full_market_excel()` signature extended with keyword-only chart parameters; both batch and shared_cash branches generate charts; `equity_curve_chart` and `drawdown_curve_chart` manifest roles registered; 10 new tests; 529 pass.
+- Owner: CLAUDE_CODE (acting planner/implementer/reviewer — Codex unavailable)
+
+---
+
 ### 2026-05-23: Shared-cash full-market report engine_mode pattern
 
 - Decision: Add `engine_mode: str = "batch"` parameter to all 6 full-market report builders and the entry point, with shared-cash branches reading flat DataFrames instead of `dict[str, SingleSymbolBacktestResult]`.

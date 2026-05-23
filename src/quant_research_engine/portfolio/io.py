@@ -356,6 +356,8 @@ def _shared_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
         "trade_analysis": "Trade analysis",
         "capital_usage": "Capital usage",
         "backtest_report": "Full-market report workbook",
+        "equity_curve_chart": "Equity curve chart",
+        "drawdown_curve_chart": "Drawdown curve chart",
     }
     result: list[tuple[str, Path]] = []
     for key in labels:
@@ -437,6 +439,10 @@ def _shared_manifest_role(key: str) -> str:
         return "capital_usage"
     if key == "backtest_report":
         return "full_market_report_workbook"
+    if key == "equity_curve_chart":
+        return "equity_curve_chart"
+    if key == "drawdown_curve_chart":
+        return "drawdown_curve_chart"
     return key
 
 
@@ -567,6 +573,8 @@ def _batch_report_paths(paths: dict[str, Path]) -> list[tuple[str, Path]]:
         ("drawdown_curve", "Drawdown curve"),
         ("trade_analysis", "Trade analysis"),
         ("capital_usage", "Capital usage"),
+        ("equity_curve_chart", "Equity curve chart"),
+        ("drawdown_curve_chart", "Drawdown curve chart"),
     ]:
         if key in paths:
             report_paths.append((label, paths[key]))
@@ -632,6 +640,10 @@ def _batch_manifest_role(key: str) -> str:
         return "capital_usage"
     if key == "backtest_report":
         return "full_market_report_workbook"
+    if key == "equity_curve_chart":
+        return "equity_curve_chart"
+    if key == "drawdown_curve_chart":
+        return "drawdown_curve_chart"
     if key.startswith("window_summary_") and key.endswith("_ranked_symbols"):
         return "window_ranked_symbols"
     if key.startswith("window_summary_"):

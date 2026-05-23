@@ -14,6 +14,8 @@ from quant_research_engine.portfolio.full_market_report import (
     build_drawdown_curve,
     build_trade_analysis,
     build_capital_usage,
+    generate_equity_curve_chart,
+    generate_drawdown_chart,
     write_full_market_excel,
     write_full_market_report,
 )
@@ -247,6 +249,51 @@ class TestBuildCapitalUsage:
         assert cu["margin_call_count"] == 0
 
 
+class TestGenerateEquityCurveChart:
+    def test_generates_png_for_valid_equity(self, tmp_path):
+        equity = pd.DataFrame({
+            "trade_date": pd.date_range("2026-01-05", periods=10, freq="B"),
+            "total_equity": np.linspace(10000.0, 15000.0, 10),
+            "cumulative_return": np.linspace(0.0, 0.5, 10),
+        })
+        path = generate_equity_curve_chart(equity, tmp_path / "eq.png")
+        assert path is not None
+        assert path.exists()
+        assert path.stat().st_size > 0
+        assert path.suffix == ".png"
+
+    def test_returns_none_for_empty_dataframe(self, tmp_path):
+        path = generate_equity_curve_chart(pd.DataFrame(), tmp_path / "eq.png")
+        assert path is None
+
+    def test_returns_none_for_missing_columns(self, tmp_path):
+        equity = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=5)})
+        path = generate_equity_curve_chart(equity, tmp_path / "eq.png")
+        assert path is None
+
+
+class TestGenerateDrawdownChart:
+    def test_generates_png_for_valid_drawdown(self, tmp_path):
+        drawdown = pd.DataFrame({
+            "trade_date": pd.date_range("2026-01-05", periods=10, freq="B"),
+            "drawdown_pct": [-0.01, -0.02, -0.015, 0.0, -0.005, -0.03, -0.025, -0.01, 0.0, -0.005],
+        })
+        path = generate_drawdown_chart(drawdown, tmp_path / "dd.png")
+        assert path is not None
+        assert path.exists()
+        assert path.stat().st_size > 0
+        assert path.suffix == ".png"
+
+    def test_returns_none_for_empty_dataframe(self, tmp_path):
+        path = generate_drawdown_chart(pd.DataFrame(), tmp_path / "dd.png")
+        assert path is None
+
+    def test_returns_none_for_missing_columns(self, tmp_path):
+        drawdown = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=5)})
+        path = generate_drawdown_chart(drawdown, tmp_path / "dd.png")
+        assert path is None
+
+
 class TestWriteFullMarketExcel:
     def test_creates_workbook_with_all_sheets(self, tmp_path):
         eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=2, freq="B"), "total_equity": [100.0, 110.0]})
@@ -271,6 +318,33 @@ class TestWriteFullMarketExcel:
         assert "TradeAnalysis" in sheet_names
         assert "CapitalUsage" in sheet_names
         assert "Artifacts" in sheet_names
+
+    def test_embeds_chart_images_when_provided(self, tmp_path):
+        eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=5, freq="B"), "total_equity": np.linspace(100.0, 120.0, 5)})
+        dd = build_drawdown_curve(eq)
+        chart_path = generate_equity_curve_chart(eq, tmp_path / "eq.png")
+        dd_path = generate_drawdown_chart(dd, tmp_path / "dd.png")
+        xl_path = write_full_market_excel(
+            tmp_path, {}, pd.DataFrame(), pd.DataFrame(),
+            pd.DataFrame(), eq, dd, {}, {},
+            equity_curve_chart=chart_path, drawdown_curve_chart=dd_path,
+        )
+        from openpyxl import load_workbook
+        wb = load_workbook(str(xl_path))
+        assert "EquityCurveChart" in wb.sheetnames
+        assert "DrawdownCurveChart" in wb.sheetnames
+
+    def test_skips_chart_sheets_when_not_provided(self, tmp_path):
+        eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=2, freq="B"), "total_equity": [100.0, 110.0]})
+        dd = build_drawdown_curve(eq)
+        xl_path = write_full_market_excel(
+            tmp_path, {}, pd.DataFrame(), pd.DataFrame(),
+            pd.DataFrame(), eq, dd, {}, {},
+        )
+        from openpyxl import load_workbook
+        wb = load_workbook(str(xl_path))
+        assert "EquityCurveChart" not in wb.sheetnames
+        assert "DrawdownCurveChart" not in wb.sheetnames
 
 
 class TestWriteFullMarketReport:
@@ -318,6 +392,28 @@ class TestWriteFullMarketReport:
         paths = write_full_market_report(result, tmp_path)
         assert all(p.exists() for p in paths.values())
         assert paths["trades_ledger"].stat().st_size > 0
+
+    def test_generates_chart_artifacts(self, tmp_path):
+        r1 = _make_single_result("000001.SZ")
+        r2 = _make_single_result("000002.SZ")
+        result = BatchBacktestResult(
+            symbols=["000001.SZ", "000002.SZ"],
+            results={"000001.SZ": r1, "000002.SZ": r2},
+            summary=pd.DataFrame([
+                {"symbol": "000001.SZ", "total_return": 0.18, "trade_count": 2, "win_rate": 1.0, "total_cost": 20.0},
+                {"symbol": "000002.SZ", "total_return": 0.12, "trade_count": 2, "win_rate": 0.5, "total_cost": 20.0},
+            ]),
+            summary_metrics={
+                "symbol_count": 2, "traded_symbol_count": 2,
+            },
+        )
+        paths = write_full_market_report(result, tmp_path)
+        assert "equity_curve_chart" in paths
+        assert "drawdown_curve_chart" in paths
+        assert paths["equity_curve_chart"].exists()
+        assert paths["drawdown_curve_chart"].exists()
+        assert paths["equity_curve_chart"].suffix == ".png"
+        assert paths["drawdown_curve_chart"].suffix == ".png"
 
 
 class TestBatchResultIntegration:
@@ -635,3 +731,13 @@ class TestWriteFullMarketReportSharedCash:
         )
         paths = write_full_market_report(result, tmp_path, engine_mode="shared_cash")
         assert all(p.exists() for p in paths.values())
+
+    def test_generates_chart_artifacts(self, tmp_path):
+        result = _make_shared_result(["000001.SZ", "000002.SZ"])
+        paths = write_full_market_report(result, tmp_path, engine_mode="shared_cash")
+        assert "equity_curve_chart" in paths
+        assert "drawdown_curve_chart" in paths
+        assert paths["equity_curve_chart"].exists()
+        assert paths["drawdown_curve_chart"].exists()
+        assert paths["equity_curve_chart"].suffix == ".png"
+        assert paths["drawdown_curve_chart"].suffix == ".png"

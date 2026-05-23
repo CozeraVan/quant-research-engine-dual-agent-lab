@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-SHARED-CASH-FULL-MARKET-REPORT-001
+QRE-FULL-MARKET-CHARTS-001
 
 ## Written By
 
@@ -18,44 +18,40 @@ IMPLEMENTED
 
 ## Objective
 
-Add shared-cash support to `write_full_market_report()` and wire it into `write_shared_cash_result()` so that `qre research-run --backtest-mode shared` produces the same full-market report bundle as batch mode.
+Add equity curve and drawdown chart visualizations to the full-market report Excel workbook and as standalone PNG files.
 
 ## Implementation Summary
 
-- `src/quant_research_engine/portfolio/full_market_report.py` — added `engine_mode: str = "batch"` parameter to all 6 builders and the entry point:
-  - `build_trades_ledger(results, engine_mode="batch")` — shared-cash branch iterates flat orders DataFrame via `to_dict("records")`.
-  - `build_round_trips(results, engine_mode="batch")` — shared-cash branch iterates flat trades DataFrame.
-  - `build_symbol_performance(summary=None, engine_mode="batch", round_trips=None, orders=None, failed_orders=None)` — shared-cash branch computes per-symbol stats from `round_trips.groupby("symbol")`; uses `failed_orders.groupby("symbol").size()` for failed_order_count; sets sharpe/max_drawdown/board/industry to None.
-  - `build_full_market_equity_curve(results, engine_mode="batch")` — shared-cash branch takes a single equity curve DataFrame and computes `daily_return` + `cumulative_return`.
-  - `build_strategy_performance(summary_metrics, summary=None, round_trips=None, engine_mode="batch")` — shared-cash branch maps summary dict keys directly; derives best/worst symbols from `round_trips.groupby("symbol")["net_pnl"].sum()`; nulls out buy_hold_return, excess_return, positive_symbol_rate, mean/median_symbol_return.
-  - `write_full_market_report(result, output_dir, engine_mode="batch")` — shared-cash branch extracts `result.orders`, `result.trades`, `result.equity_curve`, `result.summary`, `result.failed_orders`; uses `full_market_equity_curve` as key to avoid collision with shared-cash's existing `equity_curve` entry.
+- `pyproject.toml` — added `matplotlib>=3.7.0` to dependencies.
+- `src/quant_research_engine/portfolio/full_market_report.py`:
+  - `generate_equity_curve_chart(equity, output_path) -> Path | None` — dual-axis chart: total_equity (left, blue), cumulative_return (right, orange). A4 width, 4" height, dpi=150. Uses `matplotlib.use("Agg")`. Returns None if equity is empty or missing required columns.
+  - `generate_drawdown_chart(drawdown, output_path) -> Path | None` — filled area of drawdown_pct (red, alpha=0.25 fill, 0.8 line). A4 width, 3.2" height, dpi=150. Returns None if empty or missing columns.
+  - `write_full_market_excel()` — added keyword-only parameters `equity_curve_chart: Path | None = None` and `drawdown_curve_chart: Path | None = None`. When provided and file exists, creates `EquityCurveChart` and `DrawdownCurveChart` sheets with embedded PNG images (820×310px and 820×250px). Artifacts sheet includes chart entries.
+  - `write_full_market_report()` — both batch and shared_cash branches generate charts after capital_usage, conditionally add to paths dict, and pass to `write_full_market_excel()`.
 - `src/quant_research_engine/portfolio/io.py`:
-  - `write_shared_cash_result()` — added `write_full_market_report()` call with `engine_mode="shared_cash"` between run_manifest and summary_markdown writes; paths merged via `paths.update(full_market_paths)`.
-  - `_shared_manifest_role()` — added 9 entries for full-market artifact roles (trades_ledger, round_trips, symbol_performance, strategy_performance, full_market_equity_curve, drawdown_curve, trade_analysis, capital_usage, backtest_report).
-  - `_shared_report_paths()` — added labels dict entries for all 9 full-market artifacts.
-- `tests/test_full_market_report.py` — 6 new test classes (17 tests):
-  - `TestBuildTradesLedgerSharedCash` (3 tests): empty, flat orders, order_reason preserved.
-  - `TestBuildRoundTripsSharedCash` (2 tests): empty, flat trades with returns.
-  - `TestBuildSymbolPerformanceSharedCash` (3 tests): empty, per-symbol aggregation with null sharpe/max_drawdown/board/industry, failed_order_count=0.
-  - `TestBuildFullMarketEquityCurveSharedCash` (2 tests): empty, enriched with daily_return/cumulative_return.
-  - `TestBuildStrategyPerformanceSharedCash` (3 tests): summary dict key mappings, null fields, best/worst from round_trips.
-  - `TestWriteFullMarketReportSharedCash` (3 tests): all 9 artifacts written and exist, overview engine_mode, empty result handling.
-- `tests/test_portfolio_io.py` — 2 new integration tests:
-  - `test_write_shared_cash_result_includes_full_market_files` — verifies all 9 full-market keys in paths dict, files exist on disk, manifest roles include full-market roles, existing shared-cash roles preserved, markdown includes file references.
-  - `test_shared_cash_manifest_validates_full_market_roles` — validates ReportManifest contents pass with no issues.
+  - `_shared_manifest_role()` — maps `equity_curve_chart` → `"equity_curve_chart"`, `drawdown_curve_chart` → `"drawdown_curve_chart"`.
+  - `_batch_manifest_role()` — same mappings.
+  - `_shared_report_paths()` and `_batch_report_paths()` — include chart labels.
+- `src/quant_research_engine/portfolio/report_manifest.py` — `_REQUIRED_COLUMNS_BY_ROLE` includes `"equity_curve_chart": set()` and `"drawdown_curve_chart": set()` (no CSV column validation for PNG roles).
+- `tests/test_full_market_report.py` — 10 new tests:
+  - `TestGenerateEquityCurveChart` (3): valid generates PNG, empty returns None, missing columns returns None.
+  - `TestGenerateDrawdownChart` (3): valid generates PNG, empty returns None, missing columns returns None.
+  - `TestWriteFullMarketExcel` (+2): embeds chart sheets when provided, skips when None.
+  - `TestWriteFullMarketReport` (+1): chart artifacts in batch paths.
+  - `TestWriteFullMarketReportSharedCash` (+1): chart artifacts in shared_cash paths.
 
 ## Validation
 
 ```bash
-uv run pytest tests/test_full_market_report.py tests/test_portfolio_io.py -q
-# 19 new tests passed
+uv run pytest tests/test_full_market_report.py -q
+# 50 passed (was 40, +10 new)
 
 uv run pytest tests/test_compiler.py tests/test_missing_factor.py tests/test_preflight.py tests/test_strategy_spec.py tests/test_cli.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py tests/test_smoke_runner.py tests/test_full_market_report.py tests/test_research_run.py -q
-# 519 passed, 2 warnings in 5.91s
+# 529 passed, 2 warnings in 12.83s
 
 scripts/check-progress-docs.sh
-# passed
+# pending doc sync
 
 git diff --check
-# passed
+# pending
 ```
