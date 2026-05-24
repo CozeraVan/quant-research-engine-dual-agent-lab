@@ -22,8 +22,9 @@ Claude Code should implement `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` from `
 
 - Current branch: `master`
 - Last finalized commit: `d49d417` (strategy standardization fix cycle finalized)
+- Last handoff checkpoint: `ba85f79` (research-run parity implementation handoff)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: dirty with Codex planning/handoff updates for the next task.
+- Working tree: clean after Codex handoff checkpoint.
 - Remote push: not requested.
 
 ## Validation Evidence

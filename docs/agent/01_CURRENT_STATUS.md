@@ -72,7 +72,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `d49d417` (strategy standardization finalized), `4b2604a` (GUI Strategy Builder finalized)
+- Recent commits: `ba85f79` (research-run parity handoff), `d49d417` (strategy standardization finalized)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
