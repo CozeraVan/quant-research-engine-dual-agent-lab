@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` passed Codex review and local finalization is complete. No remote push was requested.
+`QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001` is briefed for Claude Code. Goal: recursively validate nested eval/backtest stage report manifests during top-level research-run report audit.
 
 ## Progress Table
 
@@ -125,22 +125,23 @@ DONE
 | QRE-STRATEGY-STANDARDIZATION-001 | Standardize backtest engine entry/exit structure | DONE | CODEX/CLAUDE_CODE | Codex re-review passed; default smoke/GUI paths updated, docs synced, EMA200 source mapping fixed, HTML report coverage added, runner generates aggregate_summary.json, README fixed; full suite 777 passed, 2 warnings; final checks passed | Preserve; user decides next direction |
 | QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001 | Research-run stage artifact parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; all 3 Required Fixes verified; fake-store `_run_eval()` reproduction ok; 791 tests pass; progress docs, git finalize, and diff checks pass | Preserve |
 | QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 | Research-run root report manifest | DONE | CODEX/CLAUDE_CODE | commit `0fb70f1`; `10_REVIEW_REPORT.md` PASS; `research_run_report_manifest` kind registered; top-level `report_manifest.json`; CLI discovery/audit probe exit 0; 803 passed, 2 warnings | Preserve |
+| QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001 | Research-run stage manifest recursive audit | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; top-level research-run validation does not yet recurse into eval/backtest stage report manifests | Claude Code implement |
 
 ## Latest Verified State
 
 Recorded on 2026-05-24 after Codex reviewed `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`:
 
-- Current task: `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` — DONE
-- Current phase: `DONE`
-- Current owner: `USER`
+- Current task: `QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001` — READY
+- Current phase: `CLAUDE_IMPLEMENTING`
+- Current owner: `CLAUDE_CODE`
 - Last finalized commit: `0fb70f1` (research-run root report manifest finalized)
-- Working tree: clean after local finalization commit
+- Working tree: planning docs modified for next handoff
 - Validation:
   - Full suite: `uv run pytest -q` → 803 passed, 2 warnings in 12.52s (+12 tests)
   - Research-run + CLI: `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"` → 31 passed, 277 deselected
   - Portfolio report manifest: `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` → 107 passed
   - CLI research-run report manifest probe: `report-files --check-exists --validate-contents` and `report-audit --role run_manifest --require-match` exited 0
-- Next step: Open next implementation brief for stage manifest audit recursion
+- Next step: Claude Code implements `08_IMPLEMENTATION_BRIEF.md`
   - Eval-config regression: `uv run pytest tests/test_cli.py -q -k "eval_config"` → 14 passed
   - Progress docs: `scripts/check-progress-docs.sh` → passed
   - Diff: `git diff --check` → clean

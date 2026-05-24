@@ -45,7 +45,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-`QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001` is briefed for Claude Code. It should recursively validate nested eval/backtest stage report manifests when auditing a top-level research-run `report_manifest.json`. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -71,11 +71,11 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `0fb70f1` (research-run root manifest finalized), `296aeb9` (research-run root manifest handoff)
+- Recent commits: `7d1e28d` (research-run root manifest finalization state), `0fb70f1` (research-run root manifest finalized)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `803 passed, 2 warnings in 12.93s`
+- Last verified full test: `803 passed, 2 warnings in 12.52s`
 
 ## Current CLI Surface
 

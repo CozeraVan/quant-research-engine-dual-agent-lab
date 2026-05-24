@@ -2,46 +2,38 @@
 
 ## Current Task
 
-QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001: Add a top-level report manifest entry point for completed `qre research-run` bundles.
+QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001: Recursively audit nested eval/backtest stage manifests from the top-level research-run report manifest.
 
 ## Task ID
 
-QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001
+QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001
 
 ## Current Status
 
-PASS. Codex reviewed Claude Code's implementation, wrote `10_REVIEW_REPORT.md`, and is finalizing locally. No remote push was requested.
+READY_FOR_CLAUDE. Codex prepared `08_IMPLEMENTATION_BRIEF.md` for the next implementation slice.
 
 ## Current Owner
 
-CODEX (git finalization)
+CLAUDE_CODE
 
 ## Problem Summary
 
-`qre research-run` now writes stage artifacts, but the whole run directory still lacked a top-level `report_manifest.json` that existing `qre report-files` / `qre report-audit` could consume. A direct probe against `research_run_manifest.json` exits `2` because it is a run manifest, not a report manifest. README examples also showed the stale root-level `preflight_report.json` path instead of `preflight/preflight_report.json`.
+The top-level `research_run_report_manifest` makes a research-run bundle discoverable, but content validation currently checks nested `eval/report_manifest.json` and `backtest/report_manifest.json` for existence only. A malformed nested stage manifest, or a valid nested manifest with broken listed artifacts, can escape a top-level research-run audit.
 
-## Handoff To Codex
+## Handoff To Claude Code
 
 Read:
 
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/10_REVIEW_REPORT.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-Finalize the accepted implementation locally. Do not push unless requested.
+Implement the brief exactly. Do not change research-run execution semantics or report manifest schema shape. Add recursive validation only for eval/backtest stage report manifests referenced by a top-level `research_run_report_manifest`.
 
-## Codex Probe Evidence (Resolved)
+## Codex Finding
 
 ```bash
-# Before: exit 2
-uv run qre report-files <tmp>/research_run_manifest.json
-
-# After: exit 0
 uv run qre report-files <tmp>/report_manifest.json --check-exists --validate-contents
-uv run qre report-audit <tmp>/report_manifest.json --role run_manifest --require-match
+# currently validates root entries and run_manifest, but not nested eval/backtest report manifest contents
 ```
-
-## Review Summary
-
-No blocking findings. Codex verified targeted tests, the original probe closure, the full suite, progress docs, and diff whitespace checks.

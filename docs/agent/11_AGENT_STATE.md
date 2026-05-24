@@ -4,26 +4,26 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex reviewed Claude Code's implementation of `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`, wrote `10_REVIEW_REPORT.md` with PASS, ran final checks, and completed local finalization in commit `0fb70f1`. No remote push was requested.
+Codex finalized `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` in commit `0fb70f1`, then opened the next implementation slice: `QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001`.
 
 The new task added a top-level `report_manifest.json` for `qre research-run` bundles with kind `research_run_report_manifest`. Stage entry points (preflight/eval/backtest) are included only when they exist. The `research_run_manifest.json` is referenced with role `run_manifest` so existing validation works. CLI prints `report_manifest=...`. README paths were synced. 12 new tests added; full suite at 803 passed.
 
-The task is complete. The next recommended implementation slice is research-run stage-manifest recursive audit, because the accepted top-level manifest checks stage manifest files for existence but does not recursively validate `eval/report_manifest.json` or `backtest/report_manifest.json` contents.
+The active task is to recursively validate nested `eval/report_manifest.json` and `backtest/report_manifest.json` contents when validating or auditing a top-level `research_run_report_manifest`. Claude Code should implement from `08_IMPLEMENTATION_BRIEF.md`, then write `09_CODING_HANDOFF.md` for Codex review.
 
 ## Git State
 
 - Current branch: `master`
 - Last finalized commit: `0fb70f1` (research-run root report manifest finalized)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: clean after local finalization commit.
+- Working tree: planning docs modified for next handoff.
 - Remote push: not requested.
 
 ## Latest Validation Evidence
@@ -41,11 +41,11 @@ The task is complete. The next recommended implementation slice is research-run 
 ### For Codex
 
 ```text
-请读取 11 和 12，完成 QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 的本地 git finalization。
+请读取 11 和 12，等待 Claude Code 实施完成后进行 Codex review。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，等待 Codex finalization 完成和下一轮 brief。
+请读取 11 和 12，并严格按照 08_IMPLEMENTATION_BRIEF.md 实施 QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001。完成后更新 09_CODING_HANDOFF.md。
 ```

@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001
+QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-FINALIZATION_COMPLETE
+IMPLEMENTATION_BRIEF_READY
 
 ## Sender
 
@@ -18,32 +18,27 @@ CODEX
 
 ## Short Message
 
-Codex review passed and local finalization is complete for `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`. No remote push was requested.
+Codex prepared the next implementation brief. Claude Code should add recursive validation for eval/backtest stage report manifests referenced by a top-level `research_run_report_manifest`.
 
 ## Required Outcome
 
 | Area | Required |
 |---|---|
-| Root manifest | `<run>/report_manifest.json` with kind `research_run_report_manifest` |
-| Run provenance | Include `<run>/research_run_manifest.json` as role `run_manifest` |
-| Stage entry points | Include existing preflight/eval/backtest stage manifests only when they exist |
-| CLI visibility | `qre research-run` prints `report_manifest=<path>` |
-| Docs | README path examples use `preflight/preflight_report.json` and point discovery to `<run>/report_manifest.json` |
+| Recursive validation | Root research-run audit validates nested eval/backtest report manifests |
+| Issue handling | Malformed nested manifest returns a structured validation issue, not a CLI crash |
+| Filtering | `--role run_manifest` does not trigger nested validation; `--role eval_report_manifest` does |
+| Compatibility | Existing non-research-run report manifest behavior remains unchanged |
+| Tests | CLI and helper regressions cover nested malformed/missing artifact cases |
 
 ## Review Status
 
-PASS
+PENDING_IMPLEMENTATION
 
 ## Evidence
 
-- Full suite: `uv run pytest -q` → 803 passed, 2 warnings in 12.52s
-- Research-run + CLI: `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"` → 31 passed, 277 deselected
-- Portfolio regression: `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` → 107 passed
-- CLI report-files on research_run_report_manifest: exit 0
-- CLI report-audit on research_run_report_manifest --role run_manifest --require-match: exit 0
-- Progress docs: `scripts/check-progress-docs.sh` → passed
-- Diff: `git diff --check` → passed
+- Previous finalized baseline: `0fb70f1` research-run root report manifest; full suite `803 passed, 2 warnings`.
+- Codex review risk: top-level validation currently checks nested stage manifest files for existence but does not recursively validate their contents.
 
 ## Next Step
 
-Codex opens the next implementation brief for stage-manifest recursive audit.
+Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.
