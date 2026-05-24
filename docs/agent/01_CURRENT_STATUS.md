@@ -71,7 +71,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `7d1e28d` (research-run root manifest finalization state), `0fb70f1` (research-run root manifest finalized)
+- Recent commits: `8854174` (research-run stage manifest audit handoff), `7d1e28d` (research-run root manifest finalization state)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
