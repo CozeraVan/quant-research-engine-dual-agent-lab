@@ -4,50 +4,48 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Claude Code implemented `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`, and Codex reviewed it with PASS.
+Codex reviewed and locally committed `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`.
 
-Changes:
-- README section 10 expanded with role-specific audit examples (run_manifest, preflight_report, eval_report_manifest, backtest_report_manifest)
-- portfolio_workflow.md: new research-run audit contract subsection
-- portfolio_layer.md: new report-manifest audit pointer section
-- No runtime/schema/test changes. Full suite unchanged at 836 passed.
+Commit `9e00f0a` documents role-specific research-run report-manifest audit usage in README and module docs. `10_REVIEW_REPORT.md` recorded PASS before the commit.
 
-Codex should finalize this reviewed documentation slice locally, then open the next narrow implementation brief.
+Codex opened the next implementation slice: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001`. The active task is to harden `preflight_report` content validation for accepted status values and `checks[]` item shape when auditing a top-level `research_run_report_manifest`.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `a027d69` (lock research-run audit role selector parity; next local commit pending for audit usage docs)
-- Last handoff checkpoint: `796b1ad` (research-run audit usage documentation brief)
+- Last finalized commit: `9e00f0a` (document research-run audit role usage)
+- Last handoff checkpoint: pending commit for preflight report shape audit brief
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: modified (documentation slice reviewed; local commit pending)
+- Working tree: modified (next implementation brief prepared)
 - Remote push: not requested.
 
 ## Latest Validation Evidence
 
+From the finalized documentation slice:
+
 - `uv run pytest -q` -> 836 passed, 2 warnings in 11.80s
 - `scripts/check-progress-docs.sh` -> passed
 - `git diff --check` -> clean
-- `rg` research-run role coverage: README 18 matches, portfolio_workflow.md 14 matches, portfolio_layer.md 1 match
+- `scripts/git-finalize-check.sh` -> passed
 
 ## Short Prompt Commands
 
 ### For Codex
 
 ```text
-请读取 11 和 12，提交已通过 review 的本轮文档同步，然后为 Claude Code 打开下一轮 implementation brief。
+请读取 11 和 12，等待 Claude Code 实施完成后进行 Codex review。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，等待 Codex 打开下一轮任务。
+请读取 11 和 12，并严格按照 08_IMPLEMENTATION_BRIEF.md 实施 QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001。完成后更新 09_CODING_HANDOFF.md。
 ```

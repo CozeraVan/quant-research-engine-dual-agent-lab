@@ -12,6 +12,16 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-24: Select preflight report shape audit as next Claude task
+
+- Decision: The next Claude Code task is `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001`.
+- Reason: Research-run preflight report auditing now checks root JSON shape, but it still accepts unsupported status values and malformed `checks[]` items. This is a narrow unblocked audit-hardening step that does not depend on external benchmark or security-status data.
+- Alternatives: Move to blocked benchmark/security metadata tasks (rejected — source tables remain unconfirmed); validate every preflight field in one slice (rejected — too broad and would risk breaking historical/minimal payloads).
+- Impact: `08/09/10/11/12/04/05/03/01` switched to preflight report shape audit implementation lane.
+- Owner: CODEX
+
+---
+
 ### 2026-05-24: Select research-run audit usage docs as next Claude task
 
 - Decision: The next Claude Code task is `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`.

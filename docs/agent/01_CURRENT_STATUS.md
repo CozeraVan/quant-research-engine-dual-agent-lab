@@ -50,6 +50,8 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` passed Codex review. README and module docs now include role-level audit examples for `run_manifest`, `preflight_report`, `eval_report_manifest`, and `backtest_report_manifest` with selector isolation documentation. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
+Next active implementation slice: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001`, which should harden `preflight_report` audit validation for accepted status values and `checks[]` item shape.
+
 ## Known Gaps
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
@@ -103,4 +105,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Open the next narrow, unblocked hardening task.
+Implement `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.

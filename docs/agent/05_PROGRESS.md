@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` passed Codex review. README and module docs now have role-level audit examples and selector isolation wording. Full suite unchanged at 836 passed.
+`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001` is briefed for Claude Code. Goal: harden top-level research-run preflight report auditing for accepted status values and `checks[]` item shape.
 
 ## Progress Table
 
@@ -129,22 +129,23 @@ USER_ACCEPTANCE
 | QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001 | Research-run preflight report content audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `validate_contents()` routes `preflight_report` through `_validate_preflight_report()`; 9 unit + 3 CLI tests; 826 passed (+12) | Preserve |
 | QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001 | Research-run audit role selector parity | DONE | CODEX/CLAUDE_CODE | commit `a027d69`; 10 CLI regression tests added; no runtime changes needed; Codex review PASS; 836 passed (+10) | Preserve |
 | QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001 | Research-run audit usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README section 10 expanded with role-specific audit examples; portfolio_workflow.md audit contract subsection added; portfolio_layer.md pointer added; 836 passed | Preserve |
+| QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001 | Research-run preflight report shape audit | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; preflight audit should reject unsupported statuses and malformed `checks[]` entries | Claude Code implement |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex reviewed `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`:
+Recorded on 2026-05-24 after Codex opened `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001`:
 
-- Current task: `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` — DONE
-- Current phase: `USER_ACCEPTANCE`
-- Current owner: `USER`
-- Last finalized commit: `a027d69` (lock research-run audit role selector parity)
-- Working tree: documentation + review docs ready for local commit
+- Current task: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001` — READY
+- Current phase: `CLAUDE_IMPLEMENTING`
+- Current owner: `CLAUDE_CODE`
+- Last finalized commit: `9e00f0a` (document research-run audit role usage)
+- Working tree: planning docs modified for next handoff
 - Validation:
   - Full suite: `uv run pytest -q` → 836 passed, 2 warnings in 11.80s
   - `scripts/check-progress-docs.sh`: passed
   - `git diff --check`: clean
   - `rg` role coverage: README 18 matches, portfolio_workflow.md 14 matches, portfolio_layer.md 1 match
-- Next step: Codex finalizes the reviewed documentation slice, then opens the next narrow task
+- Next step: Claude Code implements the preflight report shape audit brief
 
 Current GUI direction approved on 2026-05-21:
 

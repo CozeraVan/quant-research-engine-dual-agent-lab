@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001
+QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001
 
 ## Created By
 
@@ -14,76 +14,90 @@ CLAUDE_CODE
 
 ## Goal
 
-Sync user-facing and module documentation with the finalized research-run report-manifest audit contract.
+Harden top-level research-run preflight report content validation by checking the shape of `checks[]` entries and accepted status values.
 
-Recent slices completed the runtime/test contract for top-level `research_run_report_manifest` audits:
+The current `research_run_report_manifest` audit validates that `preflight_report` is JSON, the root is an object, `status` is a non-empty string, and optional `checks` / `missing_factor_requests` fields are lists. This still allows structurally useless preflight reports such as:
 
-- `run_manifest` content validation for `research_run_manifest.json`
-- recursive nested validation for `eval_report_manifest` and `backtest_report_manifest`
-- `preflight_report` JSON content validation
-- role selector parity across `report-files`, `report-audit`, JSON/text output, and `--require-match`
+```json
+{"status": "maybe", "checks": [123]}
+```
 
-The remaining gap is documentation: README examples still show only a basic top-level audit and a `run_manifest` role example. Users need the final role-level audit commands and clear expectations about what each role validates.
+The real `PreflightReport.to_dict()` emits `checks` as a list of objects with `name`, `status`, and `message` string fields. This task should add narrow shape validation for that already-emitted structure without requiring every historical preflight field.
 
 ## Required Behavior
 
-This is a documentation-only task unless Claude Code finds a directly conflicting doc test or link issue.
+1. Status validation
+   - `status` remains required.
+   - `status` must be a string and one of: `ok`, `warning`, `error`.
+   - Missing status should continue to return `missing_preflight_report_field`.
+   - Non-string or unsupported status should return `invalid_preflight_report_field`.
 
-1. README research-run section
-   - Update the `qre research-run` section to document the top-level `report_manifest.json` as the audit entry point for the whole run.
-   - Add role-specific examples for:
-     - `--role run_manifest`
-     - `--role preflight_report`
-     - `--role eval_report_manifest`
-     - `--role backtest_report_manifest`
-   - Show `--require-match` where appropriate.
-   - Mention that `report-files --validate-contents` and `report-audit` share the same selector semantics.
-   - Mention that `--role run_manifest` does not validate preflight or nested stage manifests; role selectors isolate validation to the selected role.
+2. `checks` item validation
+   - If `checks` is present, it must still be a list.
+   - Each `checks[]` item must be an object.
+   - Each check object must contain:
+     - `name`: non-empty string
+     - `status`: string in `ok`, `warning`, `error`
+     - `message`: string
+   - Invalid check items should return structured `ReportValidationIssue` entries with code `invalid_preflight_report_check`.
+   - Missing required check fields should return `missing_preflight_report_check_field`.
+   - Messages should include the field name and list index where useful.
 
-2. Module docs
-   - Update `docs/modules/portfolio_workflow.md` with a concise research-run report-manifest audit subsection.
-   - If `docs/modules/portfolio_layer.md` has a relevant report/audit section, add a short pointer there rather than duplicating large content.
-   - Do not modify archived legacy docs under `docs/legacy/`.
+3. `missing_factor_requests` remains list-only
+   - Keep current behavior: if present, it must be a list.
+   - Do not validate each missing-factor request item in this slice.
 
-3. Agent docs
-   - Update active agent status docs to reflect that `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is DONE and this docs sync is the active task.
-   - Keep blocked data-source tasks blocked; do not imply real benchmark or real ST/risk-warning metadata is complete.
-
-4. Tone and safety
-   - Do not describe small smoke or tmp-path tests as strategy performance evidence.
-   - Keep examples structural/audit-focused.
-   - Do not invent DB table names or credentials.
+4. Scope guards
+   - Validation still applies only when `self.kind == "research_run_report_manifest"` and `entry.role == "preflight_report"`.
+   - Non-research-run manifest kinds must remain unaffected.
+   - Role filtering semantics must remain unchanged.
 
 ## Non-Goals
 
-- Do not change runtime code.
-- Do not add new report-manifest roles.
-- Do not alter CLI exit codes or JSON schemas.
-- Do not update legacy archived docs.
-- Do not attempt real database-backed research-run execution.
+- Do not require every field from `PreflightReport.to_dict()`.
+- Do not validate `factor_coverages`, universe fields, benchmark fields, or fallback fake-report fields.
+- Do not validate `missing_factor_requests[]` item schema in this slice.
+- Do not change preflight execution, serialization, or research-run orchestration.
+- Do not add DB-backed tests.
 
 ## Suggested Implementation Notes
 
-- Prefer short examples over long prose.
-- Keep README examples copy-pasteable.
-- Use the existing role names exactly: `run_manifest`, `preflight_report`, `eval_report_manifest`, `backtest_report_manifest`.
-- If adding command examples, use the existing README path:
-  `outputs/research/bollinger_2024/report_manifest.json`.
+- Add helper functions near `_validate_preflight_report()` if that keeps the code readable.
+- Prefer stable, specific issue codes for check item errors:
+  - `invalid_preflight_report_check`
+  - `missing_preflight_report_check_field`
+- Existing `invalid_preflight_report_field` should remain for root-level field type/status errors.
+- Keep existing minimal valid payloads passing when appropriate:
+  - `{"status": "ok"}`
+  - `{"status": "warning", "checks": []}`
+
+## Tests Required
+
+Add or update tests for:
+
+1. `{"status": "ok"}` still passes.
+2. `{"status": "warning", "checks": []}` passes.
+3. Unsupported root status such as `"maybe"` returns `invalid_preflight_report_field`.
+4. `checks` item that is not an object returns `invalid_preflight_report_check`.
+5. Check item missing `name` returns `missing_preflight_report_check_field`.
+6. Check item with empty/non-string `name` returns `invalid_preflight_report_check`.
+7. Check item missing `status` returns `missing_preflight_report_check_field`.
+8. Check item with unsupported `status` returns `invalid_preflight_report_check`.
+9. Check item missing `message` returns `missing_preflight_report_check_field`.
+10. Check item with non-string `message` returns `invalid_preflight_report_check`.
+11. CLI `report-audit --json --role preflight_report` surfaces a check-item issue.
+12. Non-research-run manifest kinds with role `preflight_report` still do not trigger this validation.
 
 ## Validation Commands
 
 Run at least:
 
 ```bash
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "preflight_report or research_run_report_manifest or report_audit"
+uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"
+uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
-rg -n "research-run|research_run_report_manifest|preflight_report|eval_report_manifest|backtest_report_manifest" README.md docs/modules/portfolio_workflow.md docs/modules/portfolio_layer.md
 ```
 
-If only Markdown/docs changed, full `pytest` is optional. If any code or tests change, run:
-
-```bash
-uv run pytest -q
-```
-
-Document whether full pytest was skipped because the task was docs-only.
+Document that no DB-backed `qre research-run` smoke was run unless a suitable DB URL is already configured.
