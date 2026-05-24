@@ -1,38 +1,35 @@
 # Task Handoff
 
-## Current Task
-
-QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001: Validate research-run preflight report JSON content during top-level report audits.
-
 ## Task ID
 
-QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001
+QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001
 
 ## Current Status
 
-REVIEW_PASS. Claude Code completed the implementation and Codex reviewed it with no blocking findings.
+READY_FOR_CLAUDE. Codex reviewed and locally committed `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001`, then prepared the next implementation brief.
 
 ## Current Owner
 
-CODEX
+CLAUDE_CODE
 
 ## Problem Summary
 
-The top-level `research_run_report_manifest` now validates run manifests and recursively validates nested eval/backtest stage report manifests. The remaining root audit gap was `preflight/preflight_report.json`: it was still checked only for existence. A malformed or structurally useless preflight JSON could pass top-level audit.
+Research-run root report-manifest content validation now covers `run_manifest`, `preflight_report`, `eval_report_manifest`, and `backtest_report_manifest`. The remaining hardening gap is CLI selector parity: `report-files` and `report-audit` should behave consistently for these roles across JSON/text output, `--require-match`, and no-match cases.
 
-## Implementation Summary
+## Handoff To Claude Code
 
-- Added `_validate_preflight_report()` helper: validates `status` (non-empty string required), `checks` (list if present), `missing_factor_requests` (list if present).
-- Added validation gate in `validate_contents()` for `research_run_report_manifest` + `preflight_report` role.
-- 9 new unit tests + 3 new CLI tests. Full suite: 826 passed (+12).
+Read:
 
-## Review Result
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-Codex wrote `docs/agent/10_REVIEW_REPORT.md` with PASS. This slice is ready to become the baseline for the next research-run audit hardening task.
+Implement the brief exactly. Prefer regression tests first. If all required behavior already works, this task may be test-only plus handoff-doc updates.
 
 ## Codex Finding
 
 ```bash
-uv run qre report-files <tmp>/report_manifest.json --check-exists --validate-contents
-# now validates preflight_report JSON content alongside run_manifest and nested eval/backtest manifests
+uv run qre report-audit <run>/report_manifest.json --role <role> --require-match --json
+# selector behavior should be locked for run_manifest, preflight_report, eval_report_manifest, and backtest_report_manifest
 ```

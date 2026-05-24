@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001
+QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-REVIEW_PASS
+IMPLEMENTATION_BRIEF_READY
 
 ## Sender
 
@@ -18,32 +18,27 @@ CODEX
 
 ## Short Message
 
-Codex review passed. Preflight report JSON content validation is live and verified. Local finalization is pending before opening the next Claude Code task.
+Codex prepared the next implementation brief. Claude Code should lock CLI role selector parity for top-level `research_run_report_manifest` audits across `report-files`, `report-audit`, JSON/text output, and `--require-match`.
 
 ## Required Outcome
 
 | Area | Required |
 |---|---|
-| Preflight content validation | `status` non-empty string, `checks`/`missing_factor_requests` list if present |
-| Error codes | `invalid_preflight_report_json`, `invalid_preflight_report_object`, `missing_preflight_report_field`, `invalid_preflight_report_field` |
-| Filtering | `--role preflight_report` triggers; `--role run_manifest` skips |
-| Compatibility | Non-research-run manifests never trigger preflight validation |
-| Tests | 9 unit + 3 CLI tests covering all error codes and filtering |
+| Role selectors | `run_manifest`, `preflight_report`, `eval_report_manifest`, `backtest_report_manifest` select exact roles |
+| CLI parity | `report-files` and `report-audit` behave consistently for selected roles |
+| Validation triggers | Selected role validates only its own content path |
+| Require-match | matching selectors exit 0; no-match selectors exit 2 |
+| No side effects | no-match or sibling-role selectors do not validate unrelated malformed files |
 
 ## Review Status
 
-PASS
+PENDING_IMPLEMENTATION
 
 ## Evidence
 
-- Full suite: `uv run pytest -q` → 826 passed, 2 warnings in 13.29s
-- Targeted preflight: 73 passed, 317 deselected in 1.40s
-- Research-run + CLI: 31 passed, 284 deselected in 0.46s
-- Portfolio manifest + io: 123 passed in 5.72s
-- `scripts/check-progress-docs.sh`: passed
-- `git diff --check`: clean
-- `scripts/git-finalize-check.sh`: passed; no obvious secret-like text found; no remote configured
+- Previous finalized baseline: `eb3d8cd` research-run preflight report content audit; full suite `826 passed, 2 warnings`.
+- Codex review risk: selector behavior is not fully locked for every root research-run role across CLI surfaces and output modes.
 
 ## Next Step
 
-Codex commits the reviewed implementation locally, then opens the next narrow research-run audit role-selector parity task for Claude Code.
+Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.

@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+CLAUDE_IMPLEMENTING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` passed Codex review. Preflight report JSON content validation is live and can be used as the baseline for the next role-selector parity slice.
+`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is briefed for Claude Code. Goal: lock research-run root report-manifest role selector parity across `report-files`, `report-audit`, JSON/text output, and `--require-match`.
 
 ## Progress Table
 
@@ -127,16 +127,17 @@ USER_ACCEPTANCE
 | QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 | Research-run root report manifest | DONE | CODEX/CLAUDE_CODE | commit `0fb70f1`; `10_REVIEW_REPORT.md` PASS; `research_run_report_manifest` kind registered; top-level `report_manifest.json`; CLI discovery/audit probe exit 0; 803 passed, 2 warnings | Preserve |
 | QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001 | Research-run stage manifest recursive audit | DONE | CODEX/CLAUDE_CODE | commit `dcb4925`; Codex post-commit review PASS; `validate_contents()` routes `eval_report_manifest`/`backtest_report_manifest` through nested validation; 814 passed, 2 warnings | Preserve |
 | QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001 | Research-run preflight report content audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `validate_contents()` routes `preflight_report` through `_validate_preflight_report()`; 9 unit + 3 CLI tests; 826 passed (+12) | Preserve |
+| QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001 | Research-run audit role selector parity | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; selector parity needs locking for root research-run manifest roles across CLI surfaces and require-match modes | Claude Code implement |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex reviewed `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001`:
+Recorded on 2026-05-24 after Codex opened `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001`:
 
-- Current task: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` — DONE
-- Current phase: `USER_ACCEPTANCE`
-- Current owner: `USER`
-- Last finalized commit: `dcb4925` (research-run stage manifest recursive audit)
-- Working tree: implementation + review docs ready for local commit
+- Current task: `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` — READY
+- Current phase: `CLAUDE_IMPLEMENTING`
+- Current owner: `CLAUDE_CODE`
+- Last finalized commit: `eb3d8cd` (research-run preflight report content audit)
+- Working tree: planning docs modified for next handoff
 - Validation:
   - Full suite: `uv run pytest -q` → 826 passed, 2 warnings in 13.29s
   - Preflight targeted: 73 passed, 317 deselected

@@ -47,7 +47,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` passed Codex review and is ready to serve as the baseline for the next audit-hardening slice. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is briefed for Claude Code. It should lock CLI role selector parity for top-level research-run report manifests across `report-files`, `report-audit`, JSON/text output, and `--require-match`. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -102,4 +102,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Open the next narrow research-run audit hardening slice for role selector parity across `report-files` and `report-audit`.
+Implement `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.
