@@ -10,7 +10,7 @@ CODEX
 
 ## Message Type
 
-REVIEW_PASS_FINALIZING
+FINALIZATION_COMPLETE
 
 ## Sender
 
@@ -18,7 +18,7 @@ CODEX
 
 ## Short Message
 
-Codex review passed for the top-level `report_manifest.json` implementation. Codex is running local finalization. No remote push was requested.
+Codex review passed and local finalization is complete for `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`. No remote push was requested.
 
 ## Required Outcome
 
@@ -46,4 +46,4 @@ PASS
 
 ## Next Step
 
-Codex finalizes locally, then opens the next implementation brief.
+Codex opens the next implementation brief for stage-manifest recursive audit.

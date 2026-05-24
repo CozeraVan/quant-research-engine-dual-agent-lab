@@ -4,26 +4,26 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+DONE
 
 ## Current Owner
 
-CODEX
+USER
 
 ## Last Completed Step
 
-Codex reviewed Claude Code's implementation of `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` and wrote `10_REVIEW_REPORT.md` with PASS.
+Codex reviewed Claude Code's implementation of `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`, wrote `10_REVIEW_REPORT.md` with PASS, ran final checks, and completed local finalization in commit `0fb70f1`. No remote push was requested.
 
 The new task added a top-level `report_manifest.json` for `qre research-run` bundles with kind `research_run_report_manifest`. Stage entry points (preflight/eval/backtest) are included only when they exist. The `research_run_manifest.json` is referenced with role `run_manifest` so existing validation works. CLI prints `report_manifest=...`. README paths were synced. 12 new tests added; full suite at 803 passed.
 
-Codex should complete local git finalization. No remote push was requested.
+The task is complete. The next recommended implementation slice is research-run stage-manifest recursive audit, because the accepted top-level manifest checks stage manifest files for existence but does not recursively validate `eval/report_manifest.json` or `backtest/report_manifest.json` contents.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `310f966` (research-run stage artifact parity finalized)
+- Last finalized commit: `0fb70f1` (research-run root report manifest finalized)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: modified (review passed, awaiting local finalization).
+- Working tree: clean after local finalization commit.
 - Remote push: not requested.
 
 ## Latest Validation Evidence
