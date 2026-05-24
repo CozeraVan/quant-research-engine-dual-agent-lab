@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001
+QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-FINALIZED
+IMPLEMENTATION_BRIEF_READY
 
 ## Sender
 
@@ -18,22 +18,27 @@ CODEX
 
 ## Short Message
 
-`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is complete. Implemented by Claude Code (10 CLI tests, no runtime changes), reviewed PASS by Codex, and committed as `a027d69`. Full suite: 836 passed, 2 warnings.
+Codex prepared the next implementation brief. Claude Code should sync README/module docs with the finalized top-level research-run report-manifest audit contract.
 
-## Final Outcome
+## Required Outcome
 
-| Area | Required | Status |
-|---|---|---|
-| Role selectors | `run_manifest`, `preflight_report`, `eval_report_manifest`, `backtest_report_manifest` select exact roles | VERIFIED |
-| CLI parity | `report-files` and `report-audit` behave consistently for selected roles | VERIFIED |
-| Validation triggers | Selected role validates only its own content path | VERIFIED |
-| Require-match | matching selectors exit 0; no-match selectors exit 2 | VERIFIED |
-| No side effects | no-match or sibling-role selectors do not validate unrelated malformed files | VERIFIED |
+| Area | Required |
+|---|---|
+| README | research-run section documents top-level `report_manifest.json` audit entry point |
+| Role examples | commands for `run_manifest`, `preflight_report`, `eval_report_manifest`, `backtest_report_manifest` |
+| Selector semantics | docs explain role isolation and shared `report-files` / `report-audit` selectors |
+| Module docs | `docs/modules/portfolio_workflow.md` updated; `portfolio_layer.md` pointer if useful |
+| Safety | no runtime/schema changes, no legacy-doc edits, no strategy-quality claims |
 
-## Commits
+## Review Status
 
-- `a027d69`: feat: lock research-run audit role selector parity with 10 CLI regression tests
+PENDING_IMPLEMENTATION
+
+## Evidence
+
+- Previous finalized baseline: `a027d69` research-run audit role selector parity; full suite `836 passed, 2 warnings`.
+- Codex documentation gap: README examples show only basic top-level audit and `run_manifest`; final role-level audit contract is not fully documented.
 
 ## Next Step
 
-User acceptance and next direction.
+Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.

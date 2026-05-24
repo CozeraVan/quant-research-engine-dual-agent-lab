@@ -4,11 +4,11 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-WAITING_USER_DIRECTION
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
@@ -16,15 +16,20 @@ USER
 
 Task: 10 CLI regression tests locking role selector parity for top-level `research_run_report_manifest` audits. No runtime changes needed — all selector behavior was already correct.
 
+Codex opened the next implementation slice: `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`. The active task is documentation sync for the finalized research-run audit contract.
+
 ## Git State
 
 - Current branch: `master`
 - Last finalized commit: `a027d69` (lock research-run audit role selector parity)
+- Last handoff checkpoint: pending commit for research-run audit usage docs brief
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: clean
+- Working tree: modified (next implementation brief prepared)
 - Remote push: not requested.
 
 ## Latest Validation Evidence
+
+From the finalized selector-parity slice:
 
 - `uv run pytest -q` -> 836 passed, 2 warnings in 11.77s
 - `uv run pytest tests/test_cli.py -q -k "research_run_report_manifest or report_audit or report_files or require_match"` -> 128 passed, 173 deselected in 1.01s
@@ -38,11 +43,11 @@ Task: 10 CLI regression tests locking role selector parity for top-level `resear
 ### For Codex
 
 ```text
-请读取 11 和 12，等待用户下一步指示。
+请读取 11 和 12，等待 Claude Code 实施完成后进行 Codex review。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，等待用户下一步指示。
+请读取 11 和 12，并严格按照 08_IMPLEMENTATION_BRIEF.md 实施 QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001。完成后更新 09_CODING_HANDOFF.md。
 ```

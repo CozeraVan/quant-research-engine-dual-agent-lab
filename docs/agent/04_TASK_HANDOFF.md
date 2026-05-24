@@ -1,39 +1,35 @@
 # Task Handoff
 
-## Current Task
-
-QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001: Lock CLI role selector parity for top-level `research_run_report_manifest` audits across `report-files`, `report-audit`, JSON/text output, and `--require-match`.
-
 ## Task ID
 
-QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001
+QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001
 
 ## Current Status
 
-DONE. Implemented by Claude Code (10 CLI tests, no runtime changes). Reviewed PASS by Codex. Ready for git finalization.
+READY_FOR_CLAUDE. Codex accepted the finalized selector-parity task and prepared the next documentation-sync brief.
 
 ## Current Owner
 
-CODEX (git finalization)
+CLAUDE_CODE
 
 ## Problem Summary
 
-Research-run root report-manifest content validation now covers `run_manifest`, `preflight_report`, `eval_report_manifest`, and `backtest_report_manifest`. The remaining hardening gap was CLI selector parity: `report-files` and `report-audit` should behave consistently for these roles across JSON/text output, `--require-match`, and no-match cases.
+The runtime and test contract for top-level `research_run_report_manifest` audits is now complete, but README/module docs still present only a minimal audit example. Users need role-level examples and a concise explanation of selector isolation.
 
-## Implementation Summary
+## Handoff To Claude Code
 
-All 10 required CLI regression tests pass against the existing implementation without any runtime changes:
-- `backtest_report_manifest` selectors surface nested issues via both `report-audit` and `report-files`
-- Sibling role isolation confirmed: `eval_report_manifest` ignores malformed backtest, `preflight_report` ignores malformed nested stages, `run_manifest` ignores both
-- `--require-match` parity: matching roles exit 0, no-match roles exit 2 with JSON `matched_files=0` or text diagnostic
+Read:
 
-## Review Summary
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-Codex review PASS. `10_REVIEW_REPORT.md` confirms all 10 brief requirements covered, all locked requirements respected, no required fixes.
+Implement the brief exactly. This should be documentation-only unless a directly conflicting doc test or link issue appears.
 
 ## Codex Finding
 
 ```bash
-uv run qre report-audit <run>/report_manifest.json --role <role> --require-match --json
-# selector behavior is now locked for run_manifest, preflight_report, eval_report_manifest, and backtest_report_manifest
+rg -n "preflight_report|eval_report_manifest|backtest_report_manifest" README.md docs/modules/portfolio_workflow.md
+# current user-facing docs do not fully describe the finalized research-run audit role contract
 ```

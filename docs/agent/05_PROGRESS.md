@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-WAITING_USER_DIRECTION
+CLAUDE_IMPLEMENTING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is finalized. Commit `a027d69`. All 10 CLI regression tests pass. Full suite: 836 passed, 2 warnings.
+`QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` is briefed for Claude Code. Goal: sync README/module docs with the finalized research-run report-manifest audit contract.
 
 ## Progress Table
 
@@ -127,17 +127,18 @@ WAITING_USER_DIRECTION
 | QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 | Research-run root report manifest | DONE | CODEX/CLAUDE_CODE | commit `0fb70f1`; `10_REVIEW_REPORT.md` PASS; `research_run_report_manifest` kind registered; top-level `report_manifest.json`; CLI discovery/audit probe exit 0; 803 passed, 2 warnings | Preserve |
 | QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001 | Research-run stage manifest recursive audit | DONE | CODEX/CLAUDE_CODE | commit `dcb4925`; Codex post-commit review PASS; `validate_contents()` routes `eval_report_manifest`/`backtest_report_manifest` through nested validation; 814 passed, 2 warnings | Preserve |
 | QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001 | Research-run preflight report content audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `validate_contents()` routes `preflight_report` through `_validate_preflight_report()`; 9 unit + 3 CLI tests; 826 passed (+12) | Preserve |
-| QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001 | Research-run audit role selector parity | DONE | CODEX/CLAUDE_CODE | 10 CLI regression tests added; no runtime changes needed; Codex review PASS; 836 passed (+10) | Git finalize |
+| QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001 | Research-run audit role selector parity | DONE | CODEX/CLAUDE_CODE | commit `a027d69`; 10 CLI regression tests added; no runtime changes needed; Codex review PASS; 836 passed (+10) | Preserve |
+| QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001 | Research-run audit usage documentation | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; README/module docs need final role-level audit examples and selector isolation wording | Claude Code implement |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex finalized `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001`:
+Recorded on 2026-05-24 after Codex opened `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`:
 
-- Current task: `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` — DONE
-- Current phase: `WAITING_USER_DIRECTION`
-- Current owner: `USER`
+- Current task: `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` — READY
+- Current phase: `CLAUDE_IMPLEMENTING`
+- Current owner: `CLAUDE_CODE`
 - Last finalized commit: `a027d69` (lock research-run audit role selector parity)
-- Working tree: clean
+- Working tree: planning docs modified for next handoff
 - Validation:
   - Full suite: `uv run pytest -q` → 836 passed, 2 warnings in 11.77s (+10 tests)
   - CLI research_run + report_audit + report_files + require_match: 128 passed, 173 deselected in 1.01s
@@ -145,7 +146,7 @@ Recorded on 2026-05-24 after Codex finalized `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECT
   - `git diff --check`: clean
   - `scripts/check-progress-docs.sh`: passed
   - `scripts/git-finalize-check.sh`: passed
-- Next step: User acceptance and next direction
+- Next step: Claude Code implements the documentation-sync brief
 
 Current GUI direction approved on 2026-05-21:
 

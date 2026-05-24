@@ -12,6 +12,16 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-24: Select research-run audit usage docs as next Claude task
+
+- Decision: The next Claude Code task is `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`.
+- Reason: The research-run report-manifest audit contract is now implemented and regression-tested, but README/module docs still show only minimal top-level audit usage and do not fully document role-level audit commands or selector isolation.
+- Alternatives: Move directly to blocked real benchmark/security metadata work (rejected — source data remains unconfirmed); add more runtime audit hardening before documenting (rejected — current root research-run audit contract is already coherent and tested).
+- Impact: `08/09/10/11/12/04/05/03/01` switched to a documentation-only implementation lane for Claude Code.
+- Owner: CODEX
+
+---
+
 ### 2026-05-23: Full-market report charts with matplotlib Agg backend
 
 - Decision: Generate equity curve and drawdown charts as standalone PNGs using matplotlib Agg backend and embed them in the Excel workbook via openpyxl `Image`.

@@ -43,11 +43,12 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - HTML backtest report: self-contained HTML report with embedded base64 charts, metric cards, PnL distribution, trade analysis, symbol performance, trades ledger, and round trips; integrated into batch and shared_cash report pipeline with direct tests.
 - Research-run stage manifest recursive audit: `validate_contents()` on `research_run_report_manifest` now recursively validates nested eval/backtest stage report manifests via `_validate_nested_report_manifest()`; 7 unit + 4 CLI tests added; full suite at 814 passed.
 - Research-run preflight report content audit: `validate_contents()` on `research_run_report_manifest` now validates `preflight_report` JSON content via `_validate_preflight_report()`; checks `status` (non-empty string), `checks` and `missing_factor_requests` (lists if present); 9 unit + 3 CLI tests added; full suite at 826 passed.
+- Research-run audit role selector parity: 10 CLI regression tests lock `report-files` / `report-audit` role behavior for root research-run manifests across JSON/text output and `--require-match`; full suite at 836 passed.
 - Strategy entry/exit standardization: `strategies/high_level/` and `strategies/low_level/` directories; Bollinger Band mean reversion template strategy; default strategy-smoke and GUI template paths migrated from deleted `examples/`; EMA200 typical source maps to the upstream `typical_price` table; chunked full-market backtest runner now writes `aggregate_summary.json`; README and active docs synced.
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is briefed for Claude Code. It should lock CLI role selector parity for top-level research-run report manifests across `report-files`, `report-audit`, JSON/text output, and `--require-match`. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` is briefed for Claude Code. It should sync README/module docs with the finalized research-run report-manifest audit contract. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -73,11 +74,11 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `7c7e682` (research-run preflight audit handoff), `dcb4925` (research-run stage manifest recursive audit)
+- Recent commits: `a027d69` (research-run audit role selector parity), `00ac2f8` (selector parity handoff checkpoint)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `826 passed, 2 warnings in 13.29s`
+- Last verified full test: `836 passed, 2 warnings in 11.77s`
 
 ## Current CLI Surface
 
@@ -102,4 +103,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Implement `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.
+Implement `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.
