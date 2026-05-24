@@ -71,7 +71,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `310f966` (research-run parity finalized), `99e0840` (research-run parity handoff checkpoint)
+- Recent commits: `296aeb9` (research-run root manifest handoff), `310f966` (research-run parity finalized)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
