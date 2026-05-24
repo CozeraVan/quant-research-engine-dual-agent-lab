@@ -25,7 +25,7 @@ from quant_research_engine.gui.engine import (
 GUI_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = GUI_DIR / "templates"
 STATIC_DIR = GUI_DIR / "static"
-DEFAULT_STRATEGY_TEMPLATE = Path(__file__).resolve().parents[3] / "examples" / "ema200_bollinger_reversal.yaml"
+DEFAULT_STRATEGY_TEMPLATE = Path(__file__).resolve().parents[3] / "strategies" / "low_level" / "ema200_bollinger_reversal.yaml"
 
 
 def _load_default_strategy_yaml() -> str:

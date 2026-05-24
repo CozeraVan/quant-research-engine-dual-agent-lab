@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-GUI-STRATEGY-BUILDER-001
+QRE-STRATEGY-STANDARDIZATION-001-FIXES
 
 ## Written By
 
@@ -14,47 +14,86 @@ CODEX (or CLAUDE_CODE acting reviewer — Codex unavailable)
 
 ## Status
 
-IMPLEMENTED
+REVIEW_PASSED
 
 ## Objective
 
-Add a "Strategy Builder" tab to the local browser console GUI with form controls for all high-level strategy entry sections. The builder compiles to a low-level `StrategySpec` YAML and feeds into the existing run flow.
+Implement all Required Fixes from Codex review (`10_REVIEW_REPORT.md`) for `QRE-STRATEGY-STANDARDIZATION-001`. Codex re-review passed; local git finalization is next.
 
-## Implementation Summary
+## Fix Summary
 
-- `src/quant_research_engine/gui/engine.py` — `compile_high_level_entry(data)` wraps `compiler.compile_entry()` + `compiler.compile_to_strategy_spec_dict()`. On success returns `{"ok": True, "yaml": "...", "compiled": {...}}`. On failure returns `{"ok": False, "issues": [{"level": "...", "message": "..."}]}`. Catches both `compile_entry` validation failures and serialization exceptions.
-- `src/quant_research_engine/gui/app.py` — 3 builder API routes:
-  - `POST /api/builder/compile` (200 on ok, 422 on errors)
-  - `GET /api/builder/indicator-catalog` (returns 13 indicators with categories, 7 source options)
-  - `POST /api/builder/validate` (thin wrapper over compile, returns `{"valid": true/false}`)
-- `src/quant_research_engine/gui/templates/index.html` — added top-level tabs ("Strategy Builder" | "YAML Editor"). Builder tab has 4 collapsible form sections:
-  1. Strategy Identity (id, name, family select, direction select, description, version)
-  2. Entry/Exit Rules (combinator radio, dynamic condition rows with alias/operator/value, optional exit section, risk controls)
-  3. Factor Requirements (dynamic rows with alias, indicator select, source select, period, params, output, required checkbox)
-  4. Experiment Configuration (dates, universe, capital, codes)
-  - "Compile" button POSTs to `/api/builder/compile`, renders compiled YAML or error list
-  - "Run" button compiles then POSTs to existing `/api/run`
-  - JavaScript: `serializeForm()`, `addCondition()`, `addFactor()`, `removeCondition()`, `removeFactor()`, `toggleExitSection()`, tab switching
-  - YAML Editor tab content is preserved from before (zero changes to editor functionality)
-- `src/quant_research_engine/gui/static/style.css` — tabs, builder layout, collapsible sections, condition rows, factor rows, small buttons, compile result, info box, issue-level coloring
-- `tests/test_gui_engine.py` — 9 new tests: compile valid, missing strategy section, unknown indicator, duplicate alias, with exit rules, with risk controls, builtin-only factors, builtin alias shadow
-- `tests/test_gui_app.py` — 7 new tests: compile valid/invalid/exit/risk, indicator catalog (13 indicators + sources), validate valid/invalid, index includes builder tab
-- Agent docs synced: `01_CURRENT_STATUS.md`, `03_ROADMAP.md`, `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`
+### Fix 1: Default `qre strategy-smoke` paths → `strategies/high_level/`
+- `src/quant_research_engine/apps/cli.py`: Changed 3 default strategy paths from deleted `examples/` to `strategies/high_level/`.
+
+### Fix 2: GUI default YAML template path → `strategies/low_level/`
+- `src/quant_research_engine/gui/app.py`: `DEFAULT_STRATEGY_TEMPLATE` now points to `strategies/low_level/ema200_bollinger_reversal.yaml`.
+
+### Fix 3: Active docs `examples/` references → `strategies/`
+- `docs/modules/evaluation_layer.md`: `examples/rsi2_reversal_research.yaml` → `strategies/low_level/rsi2_reversal_research.yaml`
+- `docs/modules/portfolio_workflow.md`: `examples/rsi2_reversal_with_rebalance.yaml` → `strategies/low_level/rsi2_reversal_with_rebalance.yaml`
+- `docs/strategy_entry/three_strategy_smoke_report.md`: All 10 `examples/` references → `strategies/high_level/` (all are entry files)
+
+### Fix 4: Agent docs aligned through fix cycle
+- All agent docs (09/04/05/11/12) updated with fix summary and validation evidence.
+
+### Fix 5: EMA200 factor source mismatch (typical → typical_price)
+- `src/quant_research_engine/strategies/compiler.py`: Added `_SOURCE_TO_TABLE_SUFFIX` mapping: `{"typical": "typical_price"}` in `_build_table_name()`. The user-facing source name `typical` stays unchanged in the catalog; only the DB table suffix changes.
+- `tests/test_compiler.py`: Updated `test_compile_ema200_bb_factor_targets` to expect `stock_daily_overlap_typical_price.ema_200`.
+- `docs/strategy_entry/three_strategy_smoke_report.md`: Updated residual note to reflect the fix.
+
+### Fix 6: HTML report test coverage
+- `tests/test_full_market_report.py`: Added `TestGenerateHtmlReport` class with 5 tests:
+  - `test_generates_self_contained_html` — validates full HTML structure and all 8 sections
+  - `test_handles_empty_dataframes` — empty input produces valid HTML
+  - `test_embeds_chart_base64_when_provided` — chart PNGs embedded as base64 data URIs
+  - `test_no_chart_tags_when_charts_not_provided` — "No data" placeholders when charts absent
+  - `test_pnl_distribution_renders_bars` — PnL distribution bar chart rendering
+- Updated 4 existing integration tests to assert `html_report` in paths and manifest roles.
+
+### Fix 7: `run_bollinger_full.py` artifact reconciliation
+- Added `write_aggregate_summary()` function: computes aggregate metrics (return distribution, best/worst symbols, summary stats) from completed `summary.csv` and writes `aggregate_summary.json`.
+- Updated docstring to accurately list produced artifacts: `summary.csv`, `aggregate_summary.json`, `.progress`.
+
+### Fix 8: README fixes
+- Changed "10 个 sheet" → "多 sheet" (sheet count varies with chart sheets).
+- Fixed invalid preflight example: changed high-level entry path to low-level spec path with clarifying comment.
 
 ## Validation
 
 ```bash
-uv run pytest tests/test_gui_app.py tests/test_gui_engine.py -q
-# 63 passed (47 existing + 16 new)
-
+# Full test suite
 uv run pytest -q
-# 770 passed, 2 warnings in 11.11s
+# 775 passed, 2 warnings in 12.55s (770 → 775: +5 HTML tests)
+
+# Compiler tests (after source mapping fix)
+uv run pytest tests/test_compiler.py -q
+# 31 passed
+
+# HTML report tests
+uv run pytest tests/test_full_market_report.py -q -k "html"
+# 5 passed
 
 scripts/check-progress-docs.sh
-# passed
+# PASSED
 
 git diff --check
-# no issues
+# PASSED (no output — clean)
 ```
 
-Smoke test: GUI starts on `127.0.0.1:18081`, `GET /` returns 200 with Builder tab, `POST /api/builder/compile` returns `{"ok": true, "yaml": "..."}`, `GET /api/builder/indicator-catalog` returns 13 indicators + 7 sources.
+## Files Changed (this fix cycle)
+
+- `src/quant_research_engine/apps/cli.py` — Fix 1
+- `src/quant_research_engine/gui/app.py` — Fix 2
+- `docs/modules/evaluation_layer.md` — Fix 3
+- `docs/modules/portfolio_workflow.md` — Fix 3
+- `docs/strategy_entry/three_strategy_smoke_report.md` — Fixes 3, 5
+- `src/quant_research_engine/strategies/compiler.py` — Fix 5
+- `tests/test_compiler.py` — Fix 5
+- `tests/test_full_market_report.py` — Fix 6 (+5 tests, +4 assertion updates)
+- `strategies/run_bollinger_full.py` — Fix 7
+- `README.md` — Fix 8
+- `docs/agent/09_CODING_HANDOFF.md` — Fix 4 (this file)
+- `docs/agent/04_TASK_HANDOFF.md` — Fix 4
+- `docs/agent/05_PROGRESS.md` — Fix 4
+- `docs/agent/11_AGENT_STATE.md` — Fix 4
+- `docs/agent/12_AGENT_BOARD.md` — Fix 4

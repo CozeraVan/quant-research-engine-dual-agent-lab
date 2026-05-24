@@ -16,6 +16,7 @@ from quant_research_engine.portfolio.full_market_report import (
     build_capital_usage,
     generate_equity_curve_chart,
     generate_drawdown_chart,
+    generate_html_report,
     write_full_market_excel,
     write_full_market_report,
 )
@@ -294,6 +295,102 @@ class TestGenerateDrawdownChart:
         assert path is None
 
 
+class TestGenerateHtmlReport:
+    def test_generates_self_contained_html(self, tmp_path):
+        tl = pd.DataFrame({"symbol": ["000001.SZ"], "trade_date": ["2026-01-06"], "side": ["buy"], "quantity": [100]})
+        rt = pd.DataFrame({"symbol": ["000001.SZ"], "entry_date": ["2026-01-06"], "exit_date": ["2026-01-10"], "side": ["long"], "quantity": [100], "entry_price": [10.0], "exit_price": [11.0], "gross_pnl": [100.0], "net_pnl": [90.0], "return_pct": [10.0], "holding_days": [4]})
+        sp = pd.DataFrame({"symbol": ["000001.SZ"], "total_return": [0.10], "trade_count": [1], "win_rate": [1.0], "total_cost": [10.0]})
+        eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=2, freq="B"), "total_equity": [100000.0, 100100.0]})
+        dd = build_drawdown_curve(eq)
+        overview = {"run_id": "test-run", "strategy_name": "test", "engine_mode": "batch", "market": "ashare"}
+        strat_perf = {"strategy_total_return": 0.001, "win_rate": 1.0, "sharpe": 0.5, "max_drawdown": 0.0, "total_trade_count": 1, "profit_factor": 1.5}
+        ta = {"pnl_distribution_bins": [{"label": ">0%", "count": 1}]}
+        cu = {"max_capital_used": 10000.0}
+
+        html = generate_html_report(tmp_path, overview, strat_perf, tl, rt, sp, eq, dd, ta, cu)
+        assert "<!DOCTYPE html>" in html
+        assert '<html lang="en">' in html
+        assert "</html>" in html
+        assert "test-run" in html
+        assert "000001.SZ" in html
+        # Verify all 8 sections present
+        assert "Performance Summary" in html
+        assert "Charts" in html
+        assert "Trade Analysis" in html
+        assert "Symbol Performance" in html
+        assert "Capital Usage" in html
+        assert "Trades Ledger" in html
+        assert "Round Trips" in html
+        assert "Run Overview" in html
+
+    def test_handles_empty_dataframes(self, tmp_path):
+        overview = {"run_id": "test-empty"}
+        strat_perf = {}
+        ta = {}
+        cu = {}
+        html = generate_html_report(
+            tmp_path, overview, strat_perf,
+            pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
+            pd.DataFrame(), pd.DataFrame(), ta, cu,
+        )
+        assert "<!DOCTYPE html>" in html
+        assert "No data" in html
+
+    def test_embeds_chart_base64_when_provided(self, tmp_path):
+        from quant_research_engine.portfolio.full_market_report import generate_equity_curve_chart, generate_drawdown_chart
+        eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=5, freq="B"), "total_equity": [100000.0, 100100.0, 100050.0, 100200.0, 100300.0]})
+        dd = build_drawdown_curve(eq)
+        ec_path = generate_equity_curve_chart(eq, tmp_path / "ec.png")
+        dd_path = generate_drawdown_chart(dd, tmp_path / "dd.png")
+        overview = {"run_id": "test-charts"}
+        strat_perf = {}
+        ta = {}
+        cu = {}
+
+        html = generate_html_report(
+            tmp_path, overview, strat_perf,
+            pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
+            eq, dd, ta, cu,
+            equity_curve_chart=ec_path,
+            drawdown_curve_chart=dd_path,
+        )
+        assert "data:image/png;base64," in html
+        assert '<img src="data:image/png;base64,' in html
+
+    def test_no_chart_tags_when_charts_not_provided(self, tmp_path):
+        eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=2, freq="B"), "total_equity": [100000.0, 100100.0]})
+        dd = build_drawdown_curve(eq)
+        overview = {"run_id": "test-nochart"}
+        strat_perf = {}
+        ta = {}
+        cu = {}
+
+        html = generate_html_report(
+            tmp_path, overview, strat_perf,
+            pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
+            eq, dd, ta, cu,
+        )
+        assert "No equity data" in html
+        assert "No drawdown data" in html
+
+    def test_pnl_distribution_renders_bars(self, tmp_path):
+        overview = {"run_id": "test-pnl"}
+        strat_perf = {}
+        ta = {"pnl_distribution_bins": [
+            {"label": "<-10%", "count": 5},
+            {"label": "-10~0%", "count": 15},
+            {"label": "0~10%", "count": 10},
+        ]}
+        cu = {}
+        html = generate_html_report(
+            tmp_path, overview, strat_perf,
+            pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
+            pd.DataFrame(), pd.DataFrame(), ta, cu,
+        )
+        assert "pnl-bar-row" in html
+        assert "pnl-fill" in html
+
+
 class TestWriteFullMarketExcel:
     def test_creates_workbook_with_all_sheets(self, tmp_path):
         eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=2, freq="B"), "total_equity": [100.0, 110.0]})
@@ -375,6 +472,7 @@ class TestWriteFullMarketReport:
         assert paths["trade_analysis"].name == "trade_analysis.json"
         assert paths["capital_usage"].name == "capital_usage.json"
         assert paths["backtest_report"].name == "backtest_report.xlsx"
+        assert paths["html_report"].name == "backtest_report.html"
 
         assert pd.read_csv(paths["trades_ledger"]).iloc[0]["symbol"] == "000001.SZ"
         assert pd.read_csv(paths["round_trips"]).iloc[0]["symbol"] == "000001.SZ"
@@ -450,6 +548,7 @@ class TestBatchResultIntegration:
         assert "trade_analysis" in roles
         assert "capital_usage" in roles
         assert "full_market_report_workbook" in roles
+        assert "html_report" in roles
 
     def test_existing_roles_still_present(self, tmp_path):
         from quant_research_engine.portfolio.io import write_batch_result
@@ -488,6 +587,7 @@ class TestManifestValidation:
         assert "strategy_performance" in _REQUIRED_COLUMNS_BY_ROLE
         assert "trade_analysis" in _REQUIRED_COLUMNS_BY_ROLE
         assert "capital_usage" in _REQUIRED_COLUMNS_BY_ROLE
+        assert "html_report" in _REQUIRED_COLUMNS_BY_ROLE
 
     def test_manifest_validation_passes_for_generated_report(self, tmp_path):
         from quant_research_engine.portfolio.io import write_batch_result
@@ -703,6 +803,7 @@ class TestWriteFullMarketReportSharedCash:
         assert "trade_analysis" in paths
         assert "capital_usage" in paths
         assert "backtest_report" in paths
+        assert "html_report" in paths
 
         assert all(p.exists() for p in paths.values())
         assert pd.read_csv(paths["trades_ledger"]).iloc[0]["symbol"] == "000001.SZ"

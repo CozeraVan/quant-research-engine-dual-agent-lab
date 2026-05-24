@@ -42,6 +42,14 @@ def test_index_returns_200(app_client):
     assert b"bb_lower" in resp.data
 
 
+def test_default_strategy_template_uses_current_low_level_path():
+    from quant_research_engine.gui.app import DEFAULT_STRATEGY_TEMPLATE, _load_default_strategy_yaml
+
+    assert DEFAULT_STRATEGY_TEMPLATE.parts[-3:] == ("strategies", "low_level", "ema200_bollinger_reversal.yaml")
+    assert DEFAULT_STRATEGY_TEMPLATE.exists()
+    assert _load_default_strategy_yaml() == DEFAULT_STRATEGY_TEMPLATE.read_text(encoding="utf-8")
+
+
 def test_runs_page_returns_200(app_client):
     resp = app_client.get("/runs")
     assert resp.status_code == 200

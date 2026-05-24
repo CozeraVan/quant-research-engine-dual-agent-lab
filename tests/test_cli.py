@@ -184,7 +184,7 @@ def test_cli_eval_config_requires_db_url_or_environment(capsys, monkeypatch):
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--start",
             "2026-01-01",
             "--end",
@@ -257,7 +257,7 @@ def test_cli_eval_config_prints_ic_and_quantile_tables(capsys, monkeypatch):
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -318,7 +318,7 @@ def test_cli_eval_config_accepts_round_trip_cost_rate(capsys, monkeypatch):
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -376,7 +376,7 @@ def test_cli_eval_config_can_estimate_round_trip_cost_from_market_profile(capsys
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -446,7 +446,7 @@ def test_cli_eval_config_group_by_prints_group_summary(capsys, monkeypatch):
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -515,7 +515,7 @@ def test_cli_eval_config_group_by_missing_column_raises_error(capsys, monkeypatc
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -595,7 +595,7 @@ def test_cli_eval_config_output_dir_writes_artifacts(capsys, monkeypatch, tmp_pa
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -706,7 +706,7 @@ def test_cli_eval_config_output_dir_with_group_by_and_market_profile(capsys, mon
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -823,7 +823,7 @@ def test_cli_eval_config_output_dir_multi_group_by_writes_per_column_files(capsy
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1241,7 +1241,7 @@ def test_cli_eval_config_random_baseline_prints_summary(capsys, monkeypatch):
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1304,7 +1304,7 @@ def test_cli_eval_config_random_baseline_persists_to_output_dir(capsys, monkeypa
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1381,7 +1381,7 @@ def test_cli_eval_config_factor_decay_printed_and_persisted(capsys, monkeypatch,
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1474,7 +1474,7 @@ def test_cli_preflight_prints_read_only_report(capsys, monkeypatch):
     exit_code = main(
         [
             "preflight",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1503,7 +1503,7 @@ def test_cli_backtest_single_requires_db_url_or_environment(capsys, monkeypatch)
     exit_code = main(
         [
             "backtest-single",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--symbol",
             "000001.SZ",
             "--start",
@@ -1526,7 +1526,7 @@ def test_cli_backtest_batch_requires_db_url_or_environment(capsys, monkeypatch):
     exit_code = main(
         [
             "backtest-batch",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--start",
             "2026-01-01",
             "--end",
@@ -1552,7 +1552,7 @@ def test_cli_backtest_shared_requires_db_url_or_environment(capsys, monkeypatch)
     exit_code = main(
         [
             "backtest-shared",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--start",
             "2026-01-01",
             "--end",
@@ -1588,7 +1588,7 @@ def test_cli_backtest_shared_accepts_yaml_risk_controls(capsys, monkeypatch):
     exit_code = main(
         [
             "backtest-shared",
-            "examples/rsi2_reversal_with_risk.yaml",
+            "strategies/low_level/rsi2_reversal_with_risk.yaml",
             "--start",
             "2026-01-01",
             "--end",
@@ -1658,7 +1658,7 @@ def test_cli_backtest_shared_prints_benchmark_relative_summary(capsys, monkeypat
     exit_code = main(
         [
             "backtest-shared",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1730,7 +1730,7 @@ def test_cli_backtest_shared_can_print_markdown_summary(capsys, monkeypatch):
     exit_code = main(
         [
             "backtest-shared",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1797,7 +1797,7 @@ def test_cli_backtest_shared_metadata_columns_persisted_to_output_dir(capsys, mo
     exit_code = main(
         [
             "backtest-shared",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1903,7 +1903,7 @@ def test_cli_backtest_shared_group_by_writes_grouped_artifacts(capsys, monkeypat
     exit_code = main(
         [
             "backtest-shared",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -1990,7 +1990,7 @@ def test_cli_backtest_batch_can_print_markdown_summary(capsys, monkeypatch):
     exit_code = main(
         [
             "backtest-batch",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -2074,7 +2074,7 @@ def test_cli_backtest_batch_group_by_passthrough_column(capsys, monkeypatch):
     exit_code = main(
         [
             "backtest-batch",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -2820,7 +2820,7 @@ def test_cli_report_audit_json_require_match_zero_matches(capsys, tmp_path):
             "message": "no manifest entries matched filters",
         }
     ]
-    spec = StrategySpec.from_yaml("examples/rsi2_reversal_with_risk.yaml")
+    spec = StrategySpec.from_yaml("strategies/low_level/rsi2_reversal_with_risk.yaml")
     args = Namespace(stop_loss_pct=None, take_profit_pct=None, trailing_stop_pct=None)
 
     controls = resolve_risk_controls(args, spec)
@@ -2833,7 +2833,7 @@ def test_cli_report_audit_json_require_match_zero_matches(capsys, tmp_path):
 
 
 def test_resolve_risk_controls_prefers_cli_values_over_yaml():
-    spec = StrategySpec.from_yaml("examples/rsi2_reversal_with_risk.yaml")
+    spec = StrategySpec.from_yaml("strategies/low_level/rsi2_reversal_with_risk.yaml")
     args = Namespace(stop_loss_pct=0.05, take_profit_pct=None, trailing_stop_pct=0.07)
 
     controls = resolve_risk_controls(args, spec)
@@ -2846,7 +2846,7 @@ def test_resolve_risk_controls_prefers_cli_values_over_yaml():
 
 
 def test_resolve_weight_controls_uses_yaml_when_cli_is_absent():
-    spec = StrategySpec.from_yaml("examples/rsi2_reversal_with_risk_and_weight.yaml")
+    spec = StrategySpec.from_yaml("strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml")
     args = Namespace(weight_model=None, score_column=None, volatility_column=None)
 
     controls = resolve_weight_controls(args, spec)
@@ -2859,7 +2859,7 @@ def test_resolve_weight_controls_uses_yaml_when_cli_is_absent():
 
 
 def test_resolve_weight_controls_prefers_cli_values_over_yaml():
-    spec = StrategySpec.from_yaml("examples/rsi2_reversal_with_risk_and_weight.yaml")
+    spec = StrategySpec.from_yaml("strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml")
     args = Namespace(weight_model="inverse_volatility", score_column=None, volatility_column="vol_20")
 
     controls = resolve_weight_controls(args, spec)
@@ -2872,7 +2872,7 @@ def test_resolve_weight_controls_prefers_cli_values_over_yaml():
 
 
 def test_resolve_weight_controls_defaults_to_equal_weight_when_unspecified():
-    spec = StrategySpec.from_yaml("examples/rsi2_reversal_research.yaml")
+    spec = StrategySpec.from_yaml("strategies/low_level/rsi2_reversal_research.yaml")
     args = Namespace(weight_model=None, score_column=None, volatility_column=None)
 
     controls = resolve_weight_controls(args, spec)
@@ -2927,7 +2927,7 @@ def test_cli_backtest_single_accepts_output_dir_argument(capsys, monkeypatch, tm
     exit_code = main(
         [
             "backtest-single",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--symbol",
             "000001.SZ",
             "--start",
@@ -2952,7 +2952,7 @@ def test_cli_backtest_single_accepts_market_profile_argument(capsys, monkeypatch
     exit_code = main(
         [
             "backtest-single",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--symbol",
             "000001.SZ",
             "--start",
@@ -4054,7 +4054,7 @@ def test_cli_eval_config_run_id_in_run_manifest(capsys, monkeypatch, tmp_path):
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -4114,7 +4114,7 @@ def test_cli_eval_config_run_id_omitted_is_null(capsys, monkeypatch, tmp_path):
     exit_code = main(
         [
             "eval-config",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -4185,7 +4185,7 @@ def test_cli_preflight_run_id_in_output_json(capsys, monkeypatch, tmp_path):
     exit_code = main(
         [
             "preflight",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -4257,7 +4257,7 @@ def test_cli_preflight_run_id_omitted_is_null(capsys, monkeypatch, tmp_path):
     exit_code = main(
         [
             "preflight",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -5073,7 +5073,7 @@ def test_cli_preflight_output_dir_emits_empty_when_no_missing_factors(capsys, mo
     exit_code = main(
         [
             "preflight",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -5143,7 +5143,7 @@ def test_cli_preflight_output_dir_emits_requests_when_table_missing(capsys, monk
     exit_code = main(
         [
             "preflight",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -5224,7 +5224,7 @@ def test_cli_preflight_no_output_dir_prints_status_but_no_file(capsys, monkeypat
     exit_code = main(
         [
             "preflight",
-            "examples/rsi2_reversal_research.yaml",
+            "strategies/low_level/rsi2_reversal_research.yaml",
             "--db-url",
             "postgresql+psycopg://user:pass@localhost/db",
             "--start",
@@ -5449,6 +5449,29 @@ experiment:
     data = json.loads(summary_path.read_text(encoding="utf-8"))
     assert data["overall_status"] == "pass"
     assert len(data["strategies"]) == 3
+
+
+def test_cli_strategy_smoke_default_strategies_use_current_paths(capsys, tmp_path):
+    """Default strategy-smoke should use repo-local strategies/high_level entries."""
+    out_dir = tmp_path / "default-smoke"
+
+    exit_code = main([
+        "strategy-smoke",
+        "--no-preflight",
+        "--no-backtest",
+        "--output-dir", str(out_dir),
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "overall_status=pass" in captured.out
+    for strategy_id in (
+        "rsi2_oversold_reversal",
+        "ema200_bollinger_reversal",
+        "macd_zero_cross_momentum",
+    ):
+        assert f"strategy={strategy_id} compile=pass" in captured.out
+        assert (out_dir / strategy_id / "compiled_strategy_spec.json").exists()
 
 
 def test_cli_strategy_smoke_custom_output_dir(capsys, tmp_path):

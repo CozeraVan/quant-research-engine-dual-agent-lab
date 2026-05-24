@@ -6,6 +6,8 @@ Each example follows the three-section format: `strategy` + `rules`, `factor_req
 
 These examples are plumbing demonstrations. They validate the entry format and factor-resolution path, not strategy alpha.
 
+Entry files live in `strategies/high_level/` and `strategies/low_level/`.
+
 ---
 
 ## Example 1: RSI2 Oversold Reversal (Mean Reversion)
@@ -179,6 +181,109 @@ experiment:
 - Multi-output indicator (Bollinger Bands upper/lower)
 - Three factor requirements with matching params
 
+**Note**: The entry condition `close > ema_200 AND close <= bb_lower` is contradictory in practice — price above the 200-day EMA is almost never at the lower Bollinger Band (2 stddev below 20-period SMA). This strategy typically produces 0 trades. See Example 2b for a corrected Bollinger Band mean reversion strategy.
+
+---
+
+## Example 2b: Bollinger Band Mean Reversion (Pure Mean Reversion)
+
+Family: `mean_reversion`. A corrected Bollinger Band strategy that enters at the lower band and exits at the middle band — no contradictory EMA filter.
+
+```yaml
+strategy:
+  id: bollinger_mean_reversion
+  name: Bollinger Band Mean Reversion
+  family: mean_reversion
+  description: >
+    Buy when price closes at or below the lower Bollinger Band (20-period, 2 stddev),
+    indicating a short-term oversold extreme. Exit when price recovers to the middle
+    band (SMA 20), capturing the mean-reversion move. Long-only, daily A-share.
+  direction: long_only
+  version: "1.0.0"
+
+rules:
+  entry:
+    all:
+      - alias: close
+        operator: "<="
+        alias_b: bb_lower
+  exit:
+    any:
+      - alias: close
+        operator: ">="
+        alias_b: bb_middle
+  risk:
+    stop_loss_pct: 0.08
+    max_holding_days: 20
+
+factor_requirements:
+  - alias: bb_lower
+    indicator: bollinger
+    source: close
+    period: 20
+    params:
+      stddev: 2.0
+    output: lower
+    required: true
+    reason: entry threshold — price at or below lower band signals oversold extreme
+
+  - alias: bb_middle
+    indicator: bollinger
+    source: close
+    period: 20
+    params:
+      stddev: 2.0
+    output: middle
+    required: true
+    reason: exit threshold — price recovering to the 20-period SMA (mean reversion target)
+
+experiment:
+  id: bollinger_mean_reversion_full
+  frequency: daily
+  market: ashare
+  start: 2010-01-04
+  end: 2026-05-22
+  universe:
+    include: all_a
+    exclude_st: true
+    exclude_suspended: true
+    exclude_risk_warning: true
+    min_listing_days: 120
+  execution:
+    signal_date: t
+    entry_execution: t_plus_1_open
+    exit_execution: t_plus_1_open
+    market_profile: ashare_daily_default
+  capital:
+    initial_cash: 1000000
+    max_positions: 10
+    position_weight: equal
+  output:
+    dir: outputs/bollinger_mean_reversion_full/
+```
+
+### What This Validates
+
+- Pure mean-reversion strategy with simple entry/exit on Bollinger Band extremes
+- Multi-output indicator (Bollinger Bands lower/middle)
+- Exit to middle band instead of upper band (faster mean reversion)
+- Full-market full-period experiment configuration
+- Entry file: `strategies/high_level/bollinger_mean_reversion_entry.yaml`
+- Compiled spec: `strategies/low_level/bollinger_mean_reversion.yaml`
+
+### Current Format Mapping
+
+```yaml
+data:
+  factor_fields:
+    bb_lower: factors.stock_daily_volatility_close.bbl_20_2_0_2_0
+    bb_middle: factors.stock_daily_volatility_close.bbm_20_2_0_2_0
+signal:
+  type: expression
+  entry: (close <= bb_lower)
+  exit: (close >= bb_middle)
+```
+
 ---
 
 ## Example 3: MACD Zero-Cross Momentum (Momentum)
@@ -322,7 +427,7 @@ Note: the crossover operator (`crosses_above`/`crosses_below`) does not have a d
 Each example should pass a small-scope smoke test:
 
 ```bash
-qre backtest-batch examples/rsi2_oversold_reversal.yaml \
+qre backtest-batch strategies/low_level/rsi2_reversal_research.yaml \
   --start 2024-01-01 --end 2024-02-01 \
   --output-dir outputs/rsi2_smoke/
 ```

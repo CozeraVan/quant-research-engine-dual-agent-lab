@@ -74,11 +74,11 @@ Latest smoke families:
 - `backtest-shared --weight-model score_weight --score-column rsi_2`
 - `backtest-shared --weight-model score_weight --score-column rsi_2 --stop-loss-pct 0.08 --take-profit-pct 0.12`
 - `backtest-shared --weight-model score_weight --score-column rsi_2 --stop-loss-pct 0.08 --take-profit-pct 0.12 --trailing-stop-pct 0.10`
-- `backtest-shared examples/rsi2_reversal_with_risk.yaml --weight-model score_weight --score-column rsi_2`
-- `backtest-shared examples/rsi2_reversal_with_risk_and_weight.yaml`
-- `backtest-shared examples/rsi2_reversal_with_rebalance.yaml`
-- `backtest-batch examples/rsi2_reversal_research.yaml --group-by board`
-- `backtest-batch examples/rsi2_reversal_research.yaml --group-by board --print-summary-md`
+- `backtest-shared strategies/low_level/rsi2_reversal_with_risk.yaml --weight-model score_weight --score-column rsi_2`
+- `backtest-shared strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml`
+- `backtest-shared strategies/low_level/rsi2_reversal_with_rebalance.yaml`
+- `backtest-batch strategies/low_level/rsi2_reversal_research.yaml --group-by board`
+- `backtest-batch strategies/low_level/rsi2_reversal_research.yaml --group-by board --print-summary-md`
 
 ## Next Milestone
 

@@ -2,11 +2,11 @@
 
 ## Current Task ID
 
-QRE-GUI-STRATEGY-BUILDER-001
+QRE-STRATEGY-STANDARDIZATION-001-FIXES
 
 ## Current Recipient
 
-USER
+CODEX
 
 ## Message Type
 
@@ -14,32 +14,44 @@ FINALIZATION_NOTICE
 
 ## Sender
 
-CLAUDE_CODE (acting git finalizer — Codex unavailable)
+CODEX
 
 ## Short Message
 
-QRE-GUI-STRATEGY-BUILDER-001 implemented and self-reviewed (PASS): Strategy Builder tab with 4 collapsible form sections; compile-to-spec endpoint wraps existing compiler; indicator catalog endpoint; dynamic condition/factor row management; run integration feeds compiled YAML into existing flow. 16 new tests (9 engine + 7 app). 770 tests pass, 0 regressions. Review PASS.
+Codex re-review passed. The strategy-standardization fix cycle is accepted and locally finalized. No remote push was requested.
 
-## Delivered Artifacts
+## Review Status
 
-- `src/quant_research_engine/gui/engine.py` — `compile_high_level_entry()` wrapping compiler
-- `src/quant_research_engine/gui/app.py` — 3 builder API routes: compile (POST), indicator-catalog (GET), validate (POST)
-- `src/quant_research_engine/gui/templates/index.html` — Builder tab with 4 collapsible sections, dynamic condition/factor rows, Compile + Run buttons, tab switching
-- `src/quant_research_engine/gui/static/style.css` — tab, form, section, condition, factor, action styles
-- `tests/test_gui_engine.py` — 9 new tests
-- `tests/test_gui_app.py` — 7 new tests
+PASS
 
 ## Validation
 
 ```bash
-uv run pytest tests/test_gui_app.py tests/test_gui_engine.py -q
-uv run pytest -q
-scripts/check-progress-docs.sh
-git diff --check
-```
+uv run pytest tests/test_cli.py::test_cli_strategy_smoke_default_strategies_use_current_paths tests/test_gui_app.py::test_default_strategy_template_uses_current_low_level_path -q
+# 2 passed
 
-Result: 770 passed, 2 warnings in 11.11s.
+uv run qre strategy-smoke --no-preflight --no-backtest --output-dir /tmp/qre-default-smoke-final
+# overall_status=pass
+
+uv run qre strategy-smoke --strategies strategies/high_level/rsi2_oversold_reversal_entry.yaml strategies/high_level/ema200_bollinger_reversal_entry.yaml strategies/high_level/macd_zero_cross_momentum_entry.yaml --no-preflight --no-backtest --output-dir /tmp/qre-explicit-smoke-final
+# overall_status=pass
+
+uv run pytest tests/test_cli.py tests/test_gui_app.py tests/test_gui_engine.py tests/test_compiler.py tests/test_strategy_spec.py tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
+# 537 passed, 2 warnings
+
+uv run pytest -q
+# 777 passed, 2 warnings
+
+scripts/check-progress-docs.sh
+# PASSED
+
+scripts/git-finalize-check.sh
+# PASSED
+
+git diff --check
+# PASSED
+```
 
 ## Next Step
 
-Git finalize: commit implementation + all agent doc updates, then WAITING_USER_DIRECTION.
+User decides the next project direction.

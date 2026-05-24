@@ -254,7 +254,7 @@ def test_compile_ema200_bb_factor_targets():
     entry = compile_entry(raw)
     assert entry.ok
     assert len(entry.factor_targets) == 3
-    assert entry.factor_targets["ema_200"] == "factors.stock_daily_overlap_typical.ema_200"
+    assert entry.factor_targets["ema_200"] == "factors.stock_daily_overlap_typical_price.ema_200"
     assert entry.factor_targets["bb_upper"] == "factors.stock_daily_volatility_close.bbu_20_2_0_2_0"
     assert entry.factor_targets["bb_lower"] == "factors.stock_daily_volatility_close.bbl_20_2_0_2_0"
 

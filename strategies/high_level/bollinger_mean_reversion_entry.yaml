@@ -1,0 +1,70 @@
+strategy:
+  id: bollinger_mean_reversion
+  name: Bollinger Band Mean Reversion
+  family: mean_reversion
+  description: >
+    Buy when price closes at or below the lower Bollinger Band (20-period, 2 stddev),
+    indicating a short-term oversold extreme. Exit when price recovers to the middle
+    band (SMA 20), capturing the mean-reversion move. Long-only, daily A-share.
+  direction: long_only
+  version: "1.0.0"
+
+rules:
+  entry:
+    all:
+      - alias: close
+        operator: "<="
+        alias_b: bb_lower
+  exit:
+    any:
+      - alias: close
+        operator: ">="
+        alias_b: bb_middle
+  risk:
+    stop_loss_pct: 0.08
+    max_holding_days: 20
+
+factor_requirements:
+  - alias: bb_lower
+    indicator: bollinger
+    source: close
+    period: 20
+    params:
+      stddev: 2.0
+    output: lower
+    required: true
+    reason: entry threshold — price at or below lower band signals oversold extreme
+
+  - alias: bb_middle
+    indicator: bollinger
+    source: close
+    period: 20
+    params:
+      stddev: 2.0
+    output: middle
+    required: true
+    reason: exit threshold — price recovering to the 20-period SMA (mean reversion target)
+
+experiment:
+  id: bollinger_mean_reversion_full
+  frequency: daily
+  market: ashare
+  start: 2010-01-04
+  end: 2026-05-22
+  universe:
+    include: all_a
+    exclude_st: true
+    exclude_suspended: true
+    exclude_risk_warning: true
+    min_listing_days: 120
+  execution:
+    signal_date: t
+    entry_execution: t_plus_1_open
+    exit_execution: t_plus_1_open
+    market_profile: ashare_daily_default
+  capital:
+    initial_cash: 1000000
+    max_positions: 10
+    position_weight: equal
+  output:
+    dir: outputs/bollinger_mean_reversion_full/

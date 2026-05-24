@@ -100,7 +100,7 @@ Config-driven evaluation smoke:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre eval-config \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --start 2026-01-05 \
   --end 2026-01-30 \
   --codes 000001.SZ 000002.SZ 600000.SH
@@ -127,7 +127,7 @@ Emitted files and their report-manifest roles:
 # Evaluation with durable output and diagnostics
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre eval-config \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH \
@@ -159,7 +159,7 @@ Broad-run preflight:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre preflight \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --start 2026-05-11 \
   --end 2026-05-15 \
   --codes 000001.SZ 000002.SZ 600000.SH \
@@ -222,7 +222,7 @@ Evaluation grouping writes a combined `group_summary.csv` (role `evaluation_grou
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre eval-config \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ \
@@ -246,7 +246,7 @@ Batch grouping produces grouped cross-sectional summaries such as `group_by_boar
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre backtest-batch \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ \

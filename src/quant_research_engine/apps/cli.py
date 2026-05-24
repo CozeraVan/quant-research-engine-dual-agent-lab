@@ -1354,11 +1354,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             # Default: three canonical strategy entries relative to repo root
             repo_root = Path(__file__).resolve().parent.parent.parent.parent
-            examples_dir = repo_root / "examples"
+            entry_dir = repo_root / "strategies" / "high_level"
             strategy_paths = [
-                examples_dir / "rsi2_oversold_reversal_entry.yaml",
-                examples_dir / "ema200_bollinger_reversal_entry.yaml",
-                examples_dir / "macd_zero_cross_momentum_entry.yaml",
+                entry_dir / "rsi2_oversold_reversal_entry.yaml",
+                entry_dir / "ema200_bollinger_reversal_entry.yaml",
+                entry_dir / "macd_zero_cross_momentum_entry.yaml",
             ]
 
         # Convert start/end to strings for the runner

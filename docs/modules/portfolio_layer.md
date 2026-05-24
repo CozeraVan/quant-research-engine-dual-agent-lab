@@ -157,7 +157,7 @@ Not implemented yet:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre backtest-single \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --symbol 000001.SZ \
   --start 2026-01-05 \
   --end 2026-03-31 \
@@ -171,7 +171,7 @@ Batch smoke:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre backtest-batch \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH \
@@ -186,7 +186,7 @@ Shared-cash smoke:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre backtest-shared \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ 688001.SH \
@@ -210,7 +210,7 @@ Shared-cash score-weight smoke:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre backtest-shared \
-  examples/rsi2_reversal_research.yaml \
+  strategies/low_level/rsi2_reversal_research.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ 688001.SH \
@@ -230,7 +230,7 @@ Shared-cash YAML risk smoke:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre backtest-shared \
-  examples/rsi2_reversal_with_risk.yaml \
+  strategies/low_level/rsi2_reversal_with_risk.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ 688001.SH \
@@ -247,7 +247,7 @@ Shared-cash YAML risk and weight smoke:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre backtest-shared \
-  examples/rsi2_reversal_with_risk_and_weight.yaml \
+  strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ 688001.SH \
@@ -399,7 +399,7 @@ Shared-cash score-weight smoke with stop loss / take profit / trailing stop:
 
 Shared-cash YAML risk smoke:
 
-- strategy file: `examples/rsi2_reversal_with_risk.yaml`
+- strategy file: `strategies/low_level/rsi2_reversal_with_risk.yaml`
 - YAML fields:
   - `risk.stop_loss_pct=0.08`
   - `risk.take_profit_pct=0.12`
@@ -419,7 +419,7 @@ Shared-cash YAML risk smoke:
 
 Shared-cash YAML risk and weight smoke:
 
-- strategy file: `examples/rsi2_reversal_with_risk_and_weight.yaml`
+- strategy file: `strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml`
 - YAML fields:
   - `risk.stop_loss_pct=0.08`
   - `risk.take_profit_pct=0.12`
@@ -443,7 +443,7 @@ This is a smoke result only. It is not a conclusion about RSI(2) effectiveness.
 
 Shared-cash YAML risk, weight, and rebalance smoke:
 
-- strategy file: `examples/rsi2_reversal_with_rebalance.yaml`
+- strategy file: `strategies/low_level/rsi2_reversal_with_rebalance.yaml`
 - YAML fields:
   - `risk.stop_loss_pct=0.08`
   - `risk.take_profit_pct=0.12`

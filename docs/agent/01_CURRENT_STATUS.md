@@ -40,10 +40,12 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Shared-cash full-market report: `engine_mode` parameter on all 6 builders and entry point in `full_market_report.py`; wired into `write_shared_cash_result()` with updated manifest helpers; 19 new tests (6 test classes + 2 integration tests).
 - Full-market report charts: equity curve and drawdown chart PNGs generated via matplotlib Agg backend; embedded as new Excel sheets via openpyxl; both batch and shared_cash modes produce charts; 10 new tests.
 - GUI Strategy Builder (M8.6): form-based high-level strategy entry builder with compile-to-spec endpoint, indicator catalog, and run flow integration; 16 new tests.
+- HTML backtest report: self-contained HTML report with embedded base64 charts, metric cards, PnL distribution, trade analysis, symbol performance, trades ledger, and round trips; integrated into batch and shared_cash report pipeline with direct tests.
+- Strategy entry/exit standardization: `strategies/high_level/` and `strategies/low_level/` directories; Bollinger Band mean reversion template strategy; default strategy-smoke and GUI template paths migrated from deleted `examples/`; EMA200 typical source maps to the upstream `typical_price` table; chunked full-market backtest runner now writes `aggregate_summary.json`; README and active docs synced.
 
 ## In Progress
 
-No active implementation work. GUI Strategy Builder (M8.6) implemented, review PASS, awaiting git finalization. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+Full-market Bollinger Band mean reversion backtest completed (5,525 symbols, 2010-2026, 100-symbol chunks, 56 chunks, ~5 min runtime). Aggregate summary at `outputs/bollinger_mean_reversion_full/batch/aggregate_summary.json`. `QRE-STRATEGY-STANDARDIZATION-001-FIXES` passed Codex review and local finalization. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -69,11 +71,11 @@ No active implementation work. GUI Strategy Builder (M8.6) implemented, review P
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `92f216d` (research-run orchestrator), `1c4b57e` (smoke discovery series complete)
+- Recent commits: `4b2604a` (GUI Strategy Builder finalized), `72600eb` (GUI Strategy Builder implementation)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `519 passed, 2 warnings in 5.91s`
+- Last verified full test: `777 passed, 2 warnings in 12.34s`
 
 ## Current CLI Surface
 

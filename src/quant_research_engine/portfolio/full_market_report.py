@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from typing import Any
@@ -895,6 +896,224 @@ def write_full_market_excel(
     return path
 
 
+def generate_html_report(
+    output_dir: Path,
+    overview: dict[str, Any],
+    strategy_perf: dict[str, Any],
+    trades_ledger: pd.DataFrame,
+    round_trips: pd.DataFrame,
+    symbol_perf: pd.DataFrame,
+    equity: pd.DataFrame,
+    drawdown: pd.DataFrame,
+    trade_analysis: dict[str, Any],
+    capital_usage: dict[str, Any],
+    *,
+    equity_curve_chart: Path | None = None,
+    drawdown_curve_chart: Path | None = None,
+) -> str:
+    """Generate a self-contained HTML backtest report string.
+
+    Charts are embedded as base64 data URIs. The output is a single,
+    offline-browsable HTML document with inline CSS.
+    """
+    ec_b64 = _chart_base64(equity_curve_chart) if equity_curve_chart else ""
+    dd_b64 = _chart_base64(drawdown_curve_chart) if drawdown_curve_chart else ""
+
+    def _kv_table(data: dict[str, Any], columns: tuple[str, str] = ("Key", "Value")) -> str:
+        lines = ['<table class="kv">', f"<thead><tr><th>{columns[0]}</th><th>{columns[1]}</th></tr></thead><tbody>"]
+        for k, v in data.items():
+            lines.append(f"<tr><td>{_h(str(k))}</td><td>{_h(_fmt_val(v))}</td></tr>")
+        lines.append("</tbody></table>")
+        return "\n".join(lines)
+
+    def _df_table(df: pd.DataFrame, max_rows: int = 200) -> str:
+        if df.empty:
+            return '<p class="empty">No data</p>'
+        cols = [str(c) for c in df.columns]
+        lines = ['<div class="table-wrap"><table>', "<thead><tr>"]
+        lines.extend(f"<th>{_h(c)}</th>" for c in cols)
+        lines.append("</tr></thead><tbody>")
+        for i, (_, row) in enumerate(df.iterrows()):
+            if i >= max_rows:
+                lines.append(f'<tr><td colspan="{len(cols)}" class="truncated">... {len(df) - max_rows} more rows not shown</td></tr>')
+                break
+            lines.append("<tr>")
+            for c in cols:
+                lines.append(f"<td>{_h(_fmt_val(row[c]))}</td>")
+            lines.append("</tr>")
+        lines.append("</tbody></table></div>")
+        return "\n".join(lines)
+
+    def _metrics_cards(perf: dict[str, Any]) -> str:
+        cards = [
+            ("Total Return", _fmt_pct(perf.get("strategy_total_return"))),
+            ("Win Rate", _fmt_pct(perf.get("win_rate"))),
+            ("Sharpe", _fmt_num(perf.get("sharpe"), 3)),
+            ("Max Drawdown", _fmt_pct(perf.get("max_drawdown"))),
+            ("Total Trades", str(perf.get("total_trade_count") or "-")),
+            ("Profit Factor", _fmt_num(perf.get("profit_factor"), 2)),
+        ]
+        lines = ['<div class="metrics-grid">']
+        for label, value in cards:
+            lines.append(f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value">{value}</div></div>')
+        lines.append("</div>")
+        return "\n".join(lines)
+
+    def _pnl_distribution(ta: dict[str, Any]) -> str:
+        bins = ta.get("pnl_distribution_bins") or []
+        if not bins:
+            return ""
+        max_count = max(b["count"] for b in bins) if bins else 1
+        lines = ['<div class="pnl-bars">']
+        for b in bins:
+            w = int(b["count"] / max_count * 100) if max_count > 0 else 0
+            lines.append(
+                f'<div class="pnl-bar-row">'
+                f'<span class="pnl-label">{_h(b["label"])}</span>'
+                f'<span class="pnl-bar"><span class="pnl-fill" style="width:{w}%"></span></span>'
+                f'<span class="pnl-count">{b["count"]}</span>'
+                f'</div>'
+            )
+        lines.append("</div>")
+        return "\n".join(lines)
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backtest Report — {_h(str(overview.get('strategy_name') or overview.get('run_id') or ''))}</title>
+<style>
+  :root {{--bg:#fff;--fg:#1a1a1a;--muted:#666;--border:#e0e0e0;--accent:#1f77b4;--green:#2ca02c;--red:#d62728;--card-bg:#f8f9fa;--radius:6px}}
+  * {{box-sizing:border-box;margin:0;padding:0}}
+  body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--fg);background:var(--bg);line-height:1.5;padding:0}}
+  .container {{max-width:1200px;margin:0 auto;padding:24px}}
+  header {{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:32px 24px;text-align:center}}
+  header h1 {{font-size:1.6rem;font-weight:600;margin:0 0 8px}}
+  header .meta {{font-size:0.85rem;opacity:0.8}}
+  h2 {{font-size:1.2rem;font-weight:600;margin:32px 0 16px;padding-bottom:8px;border-bottom:2px solid var(--border);color:#1a1a2e}}
+  h3 {{font-size:1rem;font-weight:600;margin:20px 0 12px}}
+  table {{width:100%;border-collapse:collapse;font-size:0.875rem}}
+  th,td {{padding:8px 12px;text-align:left;border-bottom:1px solid var(--border)}}
+  th {{background:var(--card-bg);font-weight:600;white-space:nowrap;position:sticky;top:0}}
+  tr:hover td {{background:#f0f4ff}}
+  .table-wrap {{overflow-x:auto;max-height:500px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)}}
+  .kv {{max-width:800px}}
+  .kv td:first-child {{font-weight:500;color:var(--muted);width:240px}}
+  .metrics-grid {{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px}}
+  .metric-card {{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center}}
+  .metric-label {{font-size:0.78rem;color:var(--muted);margin-bottom:4px}}
+  .metric-value {{font-size:1.3rem;font-weight:700}}
+  .chart {{text-align:center;margin:16px 0}}
+  .chart img {{max-width:100%;border:1px solid var(--border);border-radius:var(--radius)}}
+  .pnl-bars {{margin:12px 0}}
+  .pnl-bar-row {{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:0.8rem}}
+  .pnl-label {{width:240px;text-align:right;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+  .pnl-bar {{flex:1;height:18px;background:#e8e8e8;border-radius:3px;overflow:hidden}}
+  .pnl-fill {{display:block;height:100%;background:var(--accent);border-radius:3px;min-width:1px}}
+  .pnl-count {{width:36px;text-align:left;font-weight:600}}
+  .section {{margin-bottom:16px}}
+  .positive {{color:var(--green)}}
+  .negative {{color:var(--red)}}
+  .empty {{color:var(--muted);font-style:italic;padding:12px}}
+  .truncated {{color:var(--muted);font-style:italic;text-align:center}}
+  footer {{text-align:center;color:var(--muted);font-size:0.8rem;padding:24px;border-top:1px solid var(--border);margin-top:32px}}
+  @media (max-width:768px) {{.container{{padding:12px}} .metrics-grid{{grid-template-columns:repeat(2,1fr)}} .kv td:first-child{{width:140px}}}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Backtest Report</h1>
+  <div class="meta">
+    {_h(str(overview.get('strategy_name') or ''))} &nbsp;|&nbsp;
+    Engine: {_h(str(overview.get('engine_mode', '')))} &nbsp;|&nbsp;
+    {_h(str(overview.get('market', '')))} &nbsp;|&nbsp;
+    Run: {_h(str(overview.get('run_id') or ''))}
+  </div>
+</header>
+<div class="container">
+
+<h2>1. Performance Summary</h2>
+{_metrics_cards(strategy_perf)}
+{_kv_table(strategy_perf)}
+
+<h2>2. Charts</h2>
+<div class="chart"><h3>Equity Curve</h3>{f'<img src="data:image/png;base64,{ec_b64}" alt="Equity Curve">' if ec_b64 else '<p class="empty">No equity data</p>'}</div>
+<div class="chart"><h3>Drawdown Curve</h3>{f'<img src="data:image/png;base64,{dd_b64}" alt="Drawdown Curve">' if dd_b64 else '<p class="empty">No drawdown data</p>'}</div>
+
+<h2>3. Trade Analysis</h2>
+<h3>PnL Distribution</h3>
+{_pnl_distribution(trade_analysis)}
+<div class="section">{_kv_table(trade_analysis)}</div>
+
+<h2>4. Symbol Performance</h2>
+{_df_table(symbol_perf, max_rows=100)}
+
+<h2>5. Capital Usage</h2>
+{_kv_table(capital_usage)}
+
+<h2>6. Trades Ledger</h2>
+{_df_table(trades_ledger, max_rows=200)}
+
+<h2>7. Round Trips</h2>
+{_df_table(round_trips, max_rows=200)}
+
+<h2>8. Run Overview</h2>
+{_kv_table(overview)}
+
+</div>
+<footer>Generated at {overview.get('generated_at', 'N/A')} &mdash; quant-research-engine</footer>
+</body>
+</html>"""
+    return html
+
+
+def _chart_base64(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def _h(text: str) -> str:
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def _fmt_val(value: Any) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    if isinstance(value, (np.integer,)):
+        return str(int(value))
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False)[:200]
+    return str(value)
+
+
+def _fmt_pct(value: Any) -> str:
+    if value is None:
+        return "-"
+    try:
+        f = float(value)
+        return f"{f:.2%}"
+    except (ValueError, TypeError):
+        return str(value)
+
+
+def _fmt_num(value: Any, decimals: int = 2) -> str:
+    if value is None:
+        return "-"
+    try:
+        f = float(value)
+        return f"{f:.{decimals}f}"
+    except (ValueError, TypeError):
+        return str(value)
+
+
 def write_full_market_report(
     result: Any,
     output_dir: str | Path,
@@ -1007,6 +1226,18 @@ def write_full_market_report(
             json.dumps(_json_ready(capital_usage), ensure_ascii=False, indent=2, sort_keys=True),
             encoding="utf-8",
         )
+        paths["html_report"] = directory / "backtest_report.html"
+        paths["html_report"].write_text(
+            generate_html_report(
+                directory, overview, strategy_perf,
+                trades_ledger, round_trips, symbol_perf,
+                fm_equity_curve, drawdown_curve,
+                trade_analysis, capital_usage,
+                equity_curve_chart=equity_curve_chart_path,
+                drawdown_curve_chart=drawdown_curve_chart_path,
+            ),
+            encoding="utf-8",
+        )
 
         return paths
 
@@ -1093,6 +1324,18 @@ def write_full_market_report(
     )
     paths["capital_usage"].write_text(
         json.dumps(_json_ready(capital_usage), ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    paths["html_report"] = directory / "backtest_report.html"
+    paths["html_report"].write_text(
+        generate_html_report(
+            directory, overview, strategy_perf,
+            trades_ledger, round_trips, symbol_perf,
+            equity_curve, drawdown_curve,
+            trade_analysis, capital_usage,
+            equity_curve_chart=equity_curve_chart_path,
+            drawdown_curve_chart=drawdown_curve_chart_path,
+        ),
         encoding="utf-8",
     )
 

@@ -104,3 +104,29 @@ A complete strategy entry is one YAML file with three sections:
 The missing-factor request format that QRE emits to `indicators_tushare` is defined in [missing_factor_request.md](missing_factor_request.md).
 
 Concrete examples across three strategy families are in [examples.md](examples.md).
+
+## Directory Structure
+
+Strategy files are organised in two directories:
+
+```
+strategies/
+├── high_level/          # High-level strategy entry files (standard format)
+│   ├── rsi2_oversold_reversal_entry.yaml
+│   ├── ema200_bollinger_reversal_entry.yaml
+│   ├── macd_zero_cross_momentum_entry.yaml
+│   └── bollinger_mean_reversion_entry.yaml
+├── low_level/           # Low-level StrategySpec files (compiled or hand-written)
+│   ├── rsi2_reversal_research.yaml
+│   ├── rsi2_reversal_with_risk.yaml
+│   ├── rsi2_reversal_with_risk_and_weight.yaml
+│   ├── rsi2_reversal_with_rebalance.yaml
+│   ├── ema200_bollinger_reversal.yaml
+│   └── bollinger_mean_reversion.yaml
+└── run_bollinger_full.py  # Chunked full-market backtest runner
+```
+
+- **High-level entries** are authored by humans and compiled with `qre compile`.
+- **Low-level specs** are compiled or hand-written for direct use with `qre backtest-*` commands.
+- The **GUI** lives at `src/quant_research_engine/gui/` and supports both formats.
+- **Output files** (reports, CSVs, JSONs) are written to `outputs/`.

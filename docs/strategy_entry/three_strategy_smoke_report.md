@@ -17,7 +17,7 @@ All three strategies compile successfully through the standardized entry path. P
 
 ### 1. RSI2 Oversold Reversal
 
-**Entry file:** `examples/rsi2_oversold_reversal_entry.yaml`
+**Entry file:** `strategies/high_level/rsi2_oversold_reversal_entry.yaml`
 
 **Compile output:**
 ```
@@ -48,7 +48,7 @@ exit_signal_expression=(rsi_fast > 70)
 
 ### 2. EMA200 + Bollinger Band Reversal
 
-**Entry file:** `examples/ema200_bollinger_reversal_entry.yaml`
+**Entry file:** `strategies/high_level/ema200_bollinger_reversal_entry.yaml`
 
 **Compile output:**
 ```
@@ -83,7 +83,7 @@ exit_signal_expression=(close >= bb_upper)
 
 ### 3. MACD Zero-Cross Momentum
 
-**Entry file:** `examples/macd_zero_cross_momentum_entry.yaml`
+**Entry file:** `strategies/high_level/macd_zero_cross_momentum_entry.yaml`
 
 **Compile output:**
 ```
@@ -125,7 +125,7 @@ compile_issue_warning=crossover operator 'crosses_below' has no direct low-level
 The `qre compile --preflight` command requires a PostgreSQL database connection configured via `QRE_MARKET_DB_URL` or `SR_MARKET_DB_URL`. Neither is set in the current environment. When a database becomes available, each strategy can be preflighted with:
 
 ```bash
-qre compile examples/rsi2_oversold_reversal_entry.yaml \
+qre compile strategies/high_level/rsi2_oversold_reversal_entry.yaml \
   --preflight --start 2024-01-01 --end 2024-02-01 \
   --output-dir outputs/strategy-entry-smoke/rsi2_oversold_reversal/
 ```
@@ -201,28 +201,28 @@ Exit codes: 0 for success (including no-DB skip), 2 for runner failure or compil
 ### Compile-only (no DB required, per-strategy)
 
 ```bash
-qre compile examples/rsi2_oversold_reversal_entry.yaml \
+qre compile strategies/high_level/rsi2_oversold_reversal_entry.yaml \
   --output-dir outputs/strategy-entry-smoke/rsi2_oversold_reversal/
 
-qre compile examples/ema200_bollinger_reversal_entry.yaml \
+qre compile strategies/high_level/ema200_bollinger_reversal_entry.yaml \
   --output-dir outputs/strategy-entry-smoke/ema200_bollinger_reversal/
 
-qre compile examples/macd_zero_cross_momentum_entry.yaml \
+qre compile strategies/high_level/macd_zero_cross_momentum_entry.yaml \
   --output-dir outputs/strategy-entry-smoke/macd_zero_cross_momentum/
 ```
 
 ### Compile + preflight + missing-factor (DB required)
 
 ```bash
-qre compile examples/rsi2_oversold_reversal_entry.yaml \
+qre compile strategies/high_level/rsi2_oversold_reversal_entry.yaml \
   --preflight --start 2024-01-01 --end 2024-02-01 \
   --output-dir outputs/strategy-entry-smoke/rsi2_oversold_reversal/
 
-qre compile examples/ema200_bollinger_reversal_entry.yaml \
+qre compile strategies/high_level/ema200_bollinger_reversal_entry.yaml \
   --preflight --start 2024-01-01 --end 2024-02-01 \
   --output-dir outputs/strategy-entry-smoke/ema200_bollinger_reversal/
 
-qre compile examples/macd_zero_cross_momentum_entry.yaml \
+qre compile strategies/high_level/macd_zero_cross_momentum_entry.yaml \
   --preflight --start 2024-01-01 --end 2024-02-01 \
   --output-dir outputs/strategy-entry-smoke/macd_zero_cross_momentum/
 ```
@@ -663,5 +663,5 @@ Exit codes: 0 for ok, 2 for fail status, missing summary, no available runs, wri
 
 - All compiled expressions use alias names (not full `factors.*.*` paths), matching the expression evaluator's `ast.Name` requirement.
 - Crossover operators are the only known gap between high-level rule semantics and low-level expression evaluation. They emit warnings and fall back to simple comparisons.
-- Table name for EMA with source=typical is `stock_daily_overlap_typical` (compiler-generated), which differs from the `stock_daily_overlap_typical_price` shown in `examples.md` "Mapping to Current QRE Internals" section. The compiler canonical name should be used. If the actual upstream `factors` table uses `typical_price`, the catalog source value in the entry YAML should be `typical_price` instead of `typical`.
+- Table name for EMA with source=typical is `stock_daily_overlap_typical_price` (compiler-generated via `_SOURCE_TO_TABLE_SUFFIX` mapping), matching the actual upstream `factors` table.
 - All three compiled specs are compatible with `StrategySpec.from_mapping()` and the existing `qre backtest-batch` / `qre backtest-shared` commands.

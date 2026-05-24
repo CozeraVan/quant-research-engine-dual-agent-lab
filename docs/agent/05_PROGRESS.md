@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-WAITING_USER_DIRECTION
+DONE
 
 ## Current Active Work
 
-None. All active tasks finalized. `QRE-GUI-STRATEGY-BUILDER-001` committed in `72600eb`: GUI Strategy Builder tab complete; 16 new tests; 770 pass; review PASS. User decides next direction.
+QRE-STRATEGY-STANDARDIZATION-001-FIXES passed Codex re-review and local git finalization. No remote push was requested.
 
 ## Progress Table
 
@@ -122,27 +122,29 @@ None. All active tasks finalized. `QRE-GUI-STRATEGY-BUILDER-001` committed in `7
 | QRE-SHARED-CASH-FULL-MARKET-REPORT-001 | Shared-cash full-market report support | DONE | CLAUDE_CODE | `engine_mode` parameter on 6 builders; wired into `write_shared_cash_result()`; `_shared_manifest_role()` and `_shared_report_paths()` updated; 19 new tests; 519 passed; self-review PASS | Git finalize |
 | QRE-FULL-MARKET-CHARTS-001 | Full-market report equity curve and drawdown charts | FINALIZED | CLAUDE_CODE | commit `a86018d`; `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel; manifest roles registered; 10 new tests; 529 passed; review PASS | Preserve |
 | QRE-GUI-STRATEGY-BUILDER-001 | GUI parameter surface for standard strategy IO (M8.6) | FINALIZED | CLAUDE_CODE | commit `72600eb`; Builder tab with 4 form sections; compile endpoint; indicator catalog; run integration; 16 new tests; 770 passed; review PASS | Preserve |
+| QRE-STRATEGY-STANDARDIZATION-001 | Standardize backtest engine entry/exit structure | DONE | CODEX/CLAUDE_CODE | Codex re-review passed; default smoke/GUI paths updated, docs synced, EMA200 source mapping fixed, HTML report coverage added, runner generates aggregate_summary.json, README fixed; full suite 777 passed, 2 warnings; final checks passed | Preserve; user decides next direction |
 
 ## Latest Verified State
 
-Recorded on 2026-05-23 after Claude Code finalized `QRE-FULL-MARKET-CHARTS-001` (commit `a86018d`):
+Recorded on 2026-05-24 after Codex re-reviewed `QRE-STRATEGY-STANDARDIZATION-001-FIXES`:
 
-- Current task: `QRE-FULL-MARKET-CHARTS-001` — FINALIZED (commit `a86018d`)
-- Last finalized: `QRE-FULL-MARKET-CHARTS-001` (commit `a86018d`)
-- Implementation:
-  - `pyproject.toml` — added `matplotlib>=3.7.0` dependency
-  - `src/quant_research_engine/portfolio/full_market_report.py` — `generate_equity_curve_chart()` + `generate_drawdown_chart()` functions; modified `write_full_market_excel()` with keyword-only chart parameters; embedded chart PNGs as Excel sheets; both engine_mode branches generate charts
-  - `src/quant_research_engine/portfolio/io.py` — `equity_curve_chart` + `drawdown_curve_chart` roles in manifest and report path helpers
-  - `src/quant_research_engine/portfolio/report_manifest.py` — chart roles in `_REQUIRED_COLUMNS_BY_ROLE`
-  - `tests/test_full_market_report.py` — 10 new tests (chart generation valid/empty/missing-columns, Excel embedding, batch + shared_cash integration)
-  - 16 files changed, 880 insertions, 381 deletions
-- Review: `docs/agent/10_REVIEW_REPORT.md` — PASS (no required fixes)
+- Current task: `QRE-STRATEGY-STANDARDIZATION-001-FIXES` — DONE
+- Current phase: `DONE`
+- Current owner: `USER`
+- Last finalized commit: `4b2604a` (docs mark GUI Strategy Builder finalized)
+- Working tree: clean after local finalization commit
 - Validation:
-  - Full suite: 529 passed, 2 warnings in 10.68s
+  - `uv run pytest tests/test_cli.py::test_cli_strategy_smoke_default_strategies_use_current_paths tests/test_gui_app.py::test_default_strategy_template_uses_current_low_level_path -q` → 2 passed
+  - default `qre strategy-smoke --no-preflight --no-backtest` → pass
+  - explicit new-path `qre strategy-smoke --strategies strategies/high_level/... --no-preflight --no-backtest` → pass
+  - high-level Bollinger and EMA200 compiles → pass
+  - low-level specs parse through `StrategySpec.from_yaml`
+  - targeted review suite → 537 passed, 2 warnings
+  - full suite → 777 passed, 2 warnings
   - `scripts/check-progress-docs.sh` → passed
+  - `scripts/git-finalize-check.sh` → passed
   - `git diff --check` → passed
-- Known gaps closed: full-market report now includes equity curve (dual-axis) and drawdown (filled area) PNG charts, embedded in Excel workbook and as standalone files
-- Next step: User decides next direction
+- Next step: User decides the next project direction.
 
 Current GUI direction approved on 2026-05-21:
 

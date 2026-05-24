@@ -67,8 +67,12 @@ _INDICATOR_CATALOG: dict[str, tuple[str, object]] = {
 }
 
 
+_SOURCE_TO_TABLE_SUFFIX: dict[str, str] = {"typical": "typical_price"}
+
+
 def _build_table_name(category: str, source: str) -> str:
-    return f"stock_daily_{category}_{source}"
+    suffix = _SOURCE_TO_TABLE_SUFFIX.get(source, source)
+    return f"stock_daily_{category}_{suffix}"
 
 
 # ---------------------------------------------------------------------------

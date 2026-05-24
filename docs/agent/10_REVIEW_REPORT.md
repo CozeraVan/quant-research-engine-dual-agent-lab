@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-GUI-STRATEGY-BUILDER-001
+QRE-STRATEGY-STANDARDIZATION-001-FIXES
 
 ## Written By
 
-CLAUDE_CODE (acting reviewer — Codex unavailable)
+CODEX
 
 ## Review Outcome
 
@@ -14,51 +14,66 @@ PASS
 
 ## Reviewed Implementation
 
-Claude Code added a "Strategy Builder" tab to the GUI: `compile_high_level_entry()` wrapping the existing compiler, 3 builder API routes, form-based high-level strategy entry editing with 4 collapsible sections, dynamic condition and factor row management, compile and run flows, 16 new tests.
+Claude Code implemented all Required Fixes for `QRE-STRATEGY-STANDARDIZATION-001`: default strategy-smoke paths, GUI default template path, active docs path migration, EMA200 source/table alignment, HTML report coverage, Bollinger full-market runner aggregate output, README behavior cleanup, and agent workflow doc alignment. Codex added two final regression tests during re-review to lock the default smoke path and GUI template source.
 
-## Review Summary
+## Findings
 
-Implementation adds a form-driven strategy authoring surface on top of the stable strategy IO contract. The builder does not replace the existing YAML editor — both coexist as tabs. The compile endpoint reuses `compiler.py` directly (no new compilation logic), and the run flow feeds compiled low-level YAML into the existing `/api/run` endpoint. All existing GUI behavior is preserved.
+No blocking findings.
 
-Evidence:
+## Fix Verification
 
-- `src/quant_research_engine/gui/engine.py` — `compile_high_level_entry()` at line 50: wraps `compile_entry()` + `compile_to_strategy_spec_dict()` with error serialization. Correctly handles `CompileIssue` (level + message, no key field). Returns YAML string via `yaml.safe_dump()`.
-- `src/quant_research_engine/gui/app.py` — 3 builder routes:
-  - `POST /api/builder/compile` — returns 200 on ok, 422 on errors (uses compile_high_level_entry result). Appropriate for API clients differentiating success/failure.
-  - `GET /api/builder/indicator-catalog` — reads `_INDICATOR_CATALOG` directly from compiler module, returns 13 indicators with categories and 7 sources. Good: no duplication of indicator definitions.
-  - `POST /api/builder/validate` — thin wrapper returning `{"valid": true/false}`. Returns 200 even for invalid (unlike compile which returns 422). Semantic choice: validation is not a request failure.
-- `src/quant_research_engine/gui/templates/index.html` — Builder tab with proper section structure. Dynamic condition/factor rows use DOM manipulation (add/remove), not innerHTML. `serializeForm()` correctly maps form fields to high-level entry dict structure. `escHtml()` prevents XSS in compiled YAML display. Rerun YAML from sessionStorage auto-switches to editor tab.
-- `src/quant_research_engine/gui/static/style.css` — tabs, collapsible sections, condition/factor row flex layouts, small button styles. Consistent with existing color scheme and spacing.
-- `tests/test_gui_engine.py` — 9 new tests covering valid compilation, structural errors (missing strategy, unknown indicator, duplicate alias), feature combinations (exit rules, risk controls), edge cases (builtin-only factors, builtin alias shadowing).
-- `tests/test_gui_app.py` — 7 new tests: compile endpoint with all status code and payload assertions, indicator catalog content validation, validate endpoint, index page includes builder tab.
-- Agent docs synced: `01_CURRENT_STATUS.md`, `03_ROADMAP.md`, `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`.
+- Default `qre strategy-smoke` now resolves the three canonical entries under `strategies/high_level/` and passes in no-DB mode with preflight/backtest skipped.
+- GUI default YAML template now resolves to `strategies/low_level/ema200_bollinger_reversal.yaml`.
+- Active non-legacy docs no longer contain stale `examples/` path references except historical review/brief text in agent docs.
+- High-level EMA200 compile target now emits `factors.stock_daily_overlap_typical_price.ema_200`, matching the preserved low-level spec and missing-factor expectations.
+- HTML report output now has direct unit/integration coverage and is included in generated manifest roles.
+- `strategies/run_bollinger_full.py` documents and writes `aggregate_summary.json` after chunk completion.
+- README preflight examples use low-level specs, and Excel sheet-count wording no longer hardcodes stale counts.
 
-## Required Fixes
-
-None.
-
-## Compliance with Task Board
-
-Compliant with `docs/agent/12_AGENT_BOARD.md` for `QRE-GUI-STRATEGY-BUILDER-001`.
-
-## Validation
-
-Commands run:
+## Validation Run By Codex
 
 ```bash
-uv run pytest tests/test_gui_app.py tests/test_gui_engine.py -q
-uv run pytest -q
-scripts/check-progress-docs.sh
-git diff --check
+uv run pytest tests/test_cli.py::test_cli_strategy_smoke_default_strategies_use_current_paths tests/test_gui_app.py::test_default_strategy_template_uses_current_low_level_path -q
+# 2 passed
+
+uv run qre strategy-smoke --no-preflight --no-backtest --output-dir /tmp/qre-default-smoke-final
+# overall_status=pass; three canonical strategies compile=pass
+
+uv run qre strategy-smoke --strategies strategies/high_level/rsi2_oversold_reversal_entry.yaml strategies/high_level/ema200_bollinger_reversal_entry.yaml strategies/high_level/macd_zero_cross_momentum_entry.yaml --no-preflight --no-backtest --output-dir /tmp/qre-explicit-smoke-final
+# overall_status=pass
+
+uv run qre compile strategies/high_level/bollinger_mean_reversion_entry.yaml
+# compile_status=ok
+
+uv run qre compile strategies/high_level/ema200_bollinger_reversal_entry.yaml
+# compile_status=ok; factor_target_ema_200=factors.stock_daily_overlap_typical_price.ema_200
+
+uv run python - <<'PY'
+from quant_research_engine.strategies.spec import StrategySpec
+for path in [
+    "strategies/low_level/bollinger_mean_reversion.yaml",
+    "strategies/low_level/ema200_bollinger_reversal.yaml",
+    "strategies/low_level/rsi2_reversal_research.yaml",
+]:
+    StrategySpec.from_yaml(path)
+print("low-level specs ok")
+PY
+# low-level specs ok
+
+uv run pytest tests/test_cli.py tests/test_gui_app.py tests/test_gui_engine.py tests/test_compiler.py tests/test_strategy_spec.py tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
+# 537 passed, 2 warnings
 ```
 
-Result: 770 passed, 2 warnings (pre-existing numpy divide-by-zero) in 11.11s. No regressions.
+## Remaining Risks
+
+- Database-backed preflight/backtest smoke was not run because no `QRE_MARKET_DB_URL` / `SR_MARKET_DB_URL` is configured in this environment.
+- `docs/legacy/` intentionally retains historical `examples/` references.
 
 ## Final Recommendation
 
-Accept and finalize. The GUI now has a form-based Strategy Builder tab that lets users author high-level strategy entries without knowing the internal low-level YAML format or database table paths.
+Accept. Local git finalization completed without remote push because no remote push was requested.
 
 ## Next Agent State
 
-- Phase: `CODEX_GIT_FINALIZING`
-- Owner: `CLAUDE_CODE` (acting git finalizer — Codex unavailable)
+- Phase: `DONE`
+- Owner: `USER`

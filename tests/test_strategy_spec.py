@@ -4,7 +4,7 @@ from quant_research_engine.strategies.spec import StrategySpec
 
 
 def test_strategy_spec_loads_factor_fields_from_yaml():
-    spec = StrategySpec.from_yaml(Path("examples/rsi2_reversal_research.yaml"))
+    spec = StrategySpec.from_yaml(Path("strategies/low_level/rsi2_reversal_research.yaml"))
 
     assert spec.name == "rsi2_reversal_research_mvp"
     assert spec.signal_expression == "rsi_2 < 10"
@@ -23,7 +23,7 @@ def test_strategy_spec_loads_factor_fields_from_yaml():
 
 
 def test_strategy_spec_loads_risk_controls_from_yaml():
-    spec = StrategySpec.from_yaml(Path("examples/rsi2_reversal_with_risk.yaml"))
+    spec = StrategySpec.from_yaml(Path("strategies/low_level/rsi2_reversal_with_risk.yaml"))
 
     assert spec.stop_loss_pct == 0.08
     assert spec.take_profit_pct == 0.12
@@ -31,7 +31,7 @@ def test_strategy_spec_loads_risk_controls_from_yaml():
 
 
 def test_strategy_spec_loads_portfolio_weighting_from_yaml():
-    spec = StrategySpec.from_yaml(Path("examples/rsi2_reversal_with_risk_and_weight.yaml"))
+    spec = StrategySpec.from_yaml(Path("strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml"))
 
     assert spec.weight_model == "score_weight"
     assert spec.score_column == "rsi_2"

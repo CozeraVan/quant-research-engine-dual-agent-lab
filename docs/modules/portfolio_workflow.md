@@ -562,7 +562,7 @@ For database smoke, keep scope small first:
 ```bash
 QRE_MARKET_DB_URL='<local-db-url>' \
 uv run qre backtest-shared \
-  examples/rsi2_reversal_with_rebalance.yaml \
+  strategies/low_level/rsi2_reversal_with_rebalance.yaml \
   --start 2026-01-05 \
   --end 2026-03-31 \
   --codes 000001.SZ 000002.SZ 600000.SH 300001.SZ 688001.SH \

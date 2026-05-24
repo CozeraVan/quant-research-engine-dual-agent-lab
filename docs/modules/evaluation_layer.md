@@ -102,7 +102,7 @@ Summary:
 
 These numbers are only a small-window smoke result and should not be interpreted as a strategy conclusion.
 
-Config-driven smoke from `examples/rsi2_reversal_research.yaml`:
+Config-driven smoke from `strategies/low_level/rsi2_reversal_research.yaml`:
 
 - `research_rows=60`
 - `event_rows=18`

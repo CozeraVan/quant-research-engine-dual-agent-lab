@@ -63,6 +63,7 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "capital_usage": set(),
     "equity_curve_chart": set(),
     "drawdown_curve_chart": set(),
+    "html_report": set(),
 }
 
 
