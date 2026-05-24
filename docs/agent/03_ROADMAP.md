@@ -138,7 +138,7 @@
 | M8.45 | Full-market report charts | DONE | CLAUDE_CODE | `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel via openpyxl; manifest roles registered; 10 new tests; 529 tests passed | Preserve |
 | M8.46 | Research-run stage artifact parity | DONE | CODEX/CLAUDE_CODE | commit `310f966`; `10_REVIEW_REPORT.md` PASS; preflight/eval/backtest stage artifacts persist and top-level artifacts are stage-qualified | Preserve |
 | M8.47 | Research-run root report manifest | DONE | CLAUDE_CODE | `report_manifest.json` with kind `research_run_report_manifest`; `qre report-files`/`qre report-audit` accept the new manifest; `run_manifest` role validates provenance; stage entry points only when present; CLI prints `report_manifest=`; README paths synced; 803 tests passed | Preserve |
-| M8.48 | Research-run stage manifest recursive audit | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared; root research-run manifest validates stage manifest existence but not nested stage artifact contents | Implement |
+| M8.48 | Research-run stage manifest recursive audit | DONE | CLAUDE_CODE | Review PASS; recursive validation for eval/backtest stage manifests live; 7 unit + 4 CLI tests; 814 passed (+11) | Preserve |
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | DONE | CLAUDE_CODE | Builder tab with high-level entry forms; compile endpoint; indicator catalog endpoint; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 

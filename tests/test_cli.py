@@ -8013,6 +8013,120 @@ def test_cli_report_audit_research_run_report_manifest_role_run_manifest(capsys,
     assert "status=ok" in captured.out
 
 
+def test_cli_report_audit_json_includes_nested_issue_details(capsys, tmp_path):
+    """report-audit --json surfaces recursive nested stage manifest issues."""
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "report_manifest.json").write_text("not valid json", encoding="utf-8")
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main(["report-audit", str(tmp_path / "report_manifest.json"), "--json"])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert payload["validation_issues"] >= 1
+    assert len(payload["issues"]) >= 1
+    codes = {i["code"] for i in payload["issues"]}
+    assert "invalid_nested_report_manifest" in codes
+    nested_issue = next(i for i in payload["issues"] if i["code"] == "invalid_nested_report_manifest")
+    assert nested_issue["key"] == "eval_report_manifest"
+    assert "eval_report_manifest" in nested_issue["message"]
+
+
+def test_cli_report_files_json_validate_contents_includes_nested_issue_details(capsys, tmp_path):
+    """report-files --validate-contents --json surfaces recursive nested stage manifest issues."""
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "report_manifest.json").write_text("not valid json", encoding="utf-8")
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-files", str(tmp_path / "report_manifest.json"),
+        "--validate-contents", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    assert len(payload["files"]) == 1
+    assert "invalid_nested_report_manifest" in captured.err
+
+
+def test_cli_report_audit_role_run_manifest_skips_nested_validation(capsys, tmp_path):
+    """--role run_manifest does not trigger recursive nested stage validation."""
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "report_manifest.json").write_text("not valid json", encoding="utf-8")
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                     "run_id": "r1", "command": "research-run",
+                     "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "research_run_manifest", "path": "research_run_manifest.json",
+                 "filename": "research_run_manifest.json", "role": "run_manifest"},
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-audit", str(tmp_path / "report_manifest.json"),
+        "--role", "run_manifest",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0, f"stderr: {captured.err}"
+    assert "status=ok" in captured.out
+
+
+def test_cli_report_audit_role_eval_report_manifest_triggers_nested_validation(capsys, tmp_path):
+    """--role eval_report_manifest triggers recursive validation of the nested eval manifest."""
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "report_manifest.json").write_text("not valid json", encoding="utf-8")
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-audit", str(tmp_path / "report_manifest.json"),
+        "--role", "eval_report_manifest",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2, f"stderr: {captured.err}"
+    assert "status=failed" in captured.out
+
+
 class _FakeStore:
     def __init__(self, settings=None):
         self.settings = settings

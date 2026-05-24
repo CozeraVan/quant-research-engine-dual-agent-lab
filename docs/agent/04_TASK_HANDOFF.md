@@ -10,30 +10,31 @@ QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001
 
 ## Current Status
 
-READY_FOR_CLAUDE. Codex prepared `08_IMPLEMENTATION_BRIEF.md` for the next implementation slice.
+REVIEW_PASS. Claude Code reviewed the implementation (acting reviewer, Codex unavailable). `10_REVIEW_REPORT.md` written with PASS verdict. Ready for git finalization.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Problem Summary
 
-The top-level `research_run_report_manifest` makes a research-run bundle discoverable, but content validation currently checks nested `eval/report_manifest.json` and `backtest/report_manifest.json` for existence only. A malformed nested stage manifest, or a valid nested manifest with broken listed artifacts, can escape a top-level research-run audit.
+The top-level `research_run_report_manifest` makes a research-run bundle discoverable, but content validation was checking nested `eval/report_manifest.json` and `backtest/report_manifest.json` for existence only. A malformed nested stage manifest, or a valid nested manifest with broken listed artifacts, could escape a top-level research-run audit.
 
-## Handoff To Claude Code
+## Implementation Summary
 
-Read:
+- Added recursive validation gate in `ReportManifest.validate_contents()` for `research_run_report_manifest` kind with `eval_report_manifest` / `backtest_report_manifest` roles.
+- Added `_validate_nested_report_manifest()` helper that loads nested manifests and wraps their issues.
+- Filtering: `--role run_manifest` skips nested validation; `--role eval_report_manifest` triggers it; unfiltered triggers both.
+- Non-research-run report manifests never trigger recursive validation.
+- 7 new unit tests + 4 new CLI tests + 1 fixed existing test. Full suite: 814 passed (+11).
 
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/02_LOCKED_REQUIREMENTS.md`
+## Handoff To Codex
 
-Implement the brief exactly. Do not change research-run execution semantics or report manifest schema shape. Add recursive validation only for eval/backtest stage report manifests referenced by a top-level `research_run_report_manifest`.
+Read `docs/agent/09_CODING_HANDOFF.md` for the full implementation handoff. Review the diff, run validation, and write `10_REVIEW_REPORT.md`.
 
 ## Codex Finding
 
 ```bash
 uv run qre report-files <tmp>/report_manifest.json --check-exists --validate-contents
-# currently validates root entries and run_manifest, but not nested eval/backtest report manifest contents
+# now validates nested eval/backtest report_manifest.json contents recursively
 ```

@@ -10,35 +10,32 @@ CLAUDE_CODE
 
 ## Message Type
 
-IMPLEMENTATION_BRIEF_READY
+GIT_FINALIZATION
 
 ## Sender
 
-CODEX
+CLAUDE_CODE (acting reviewer)
 
 ## Short Message
 
-Codex prepared the next implementation brief. Claude Code should add recursive validation for eval/backtest stage report manifests referenced by a top-level `research_run_report_manifest`.
+Review PASS. All 8 brief requirements satisfied, 11 new tests (+1 fixed) passing, 814 total. Ready for git finalization.
 
-## Required Outcome
+## Review Summary
 
-| Area | Required |
+| Area | Result |
 |---|---|
 | Recursive validation | Root research-run audit validates nested eval/backtest report manifests |
-| Issue handling | Malformed nested manifest returns a structured validation issue, not a CLI crash |
-| Filtering | `--role run_manifest` does not trigger nested validation; `--role eval_report_manifest` does |
-| Compatibility | Existing non-research-run report manifest behavior remains unchanged |
-| Tests | CLI and helper regressions cover nested malformed/missing artifact cases |
-
-## Review Status
-
-PENDING_IMPLEMENTATION
+| Issue handling | Malformed nested manifest returns `invalid_nested_report_manifest`, not crash |
+| Filtering | `--role run_manifest` skips, `--role eval_report_manifest` triggers |
+| Compatibility | Non-research-run manifests never recurse |
+| Tests | 7 unit + 4 CLI tests, all passing |
 
 ## Evidence
 
-- Previous finalized baseline: `0fb70f1` research-run root report manifest; full suite `803 passed, 2 warnings`.
-- Codex review risk: top-level validation currently checks nested stage manifest files for existence but does not recursively validate their contents.
+- Full suite: `uv run pytest -q` → 814 passed, 2 warnings in 14.35s
+- `scripts/check-progress-docs.sh`: passed
+- `git diff --check`: clean
 
 ## Next Step
 
-Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.
+Git finalization: stage, commit, verify.

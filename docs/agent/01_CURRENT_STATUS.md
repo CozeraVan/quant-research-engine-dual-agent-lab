@@ -41,11 +41,12 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Full-market report charts: equity curve and drawdown chart PNGs generated via matplotlib Agg backend; embedded as new Excel sheets via openpyxl; both batch and shared_cash modes produce charts; 10 new tests.
 - GUI Strategy Builder (M8.6): form-based high-level strategy entry builder with compile-to-spec endpoint, indicator catalog, and run flow integration; 16 new tests.
 - HTML backtest report: self-contained HTML report with embedded base64 charts, metric cards, PnL distribution, trade analysis, symbol performance, trades ledger, and round trips; integrated into batch and shared_cash report pipeline with direct tests.
+- Research-run stage manifest recursive audit: `validate_contents()` on `research_run_report_manifest` now recursively validates nested eval/backtest stage report manifests via `_validate_nested_report_manifest()`; 7 unit + 4 CLI tests added; full suite at 814 passed.
 - Strategy entry/exit standardization: `strategies/high_level/` and `strategies/low_level/` directories; Bollinger Band mean reversion template strategy; default strategy-smoke and GUI template paths migrated from deleted `examples/`; EMA200 typical source maps to the upstream `typical_price` table; chunked full-market backtest runner now writes `aggregate_summary.json`; README and active docs synced.
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001` is briefed for Claude Code. It should recursively validate nested eval/backtest stage report manifests when auditing a top-level research-run `report_manifest.json`. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001` review PASS, ready for git finalization. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -75,7 +76,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `803 passed, 2 warnings in 12.52s`
+- Last verified full test: `814 passed, 2 warnings in 13.82s`
 
 ## Current CLI Surface
 
@@ -100,4 +101,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Implement `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.
+Git finalize `QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001`. Review PASS written in `10_REVIEW_REPORT.md`. User decides next direction.

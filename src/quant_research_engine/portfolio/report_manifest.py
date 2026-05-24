@@ -235,6 +235,9 @@ class ReportManifest:
                     )
                 )
                 continue
+            if self.kind == "research_run_report_manifest" and entry.role in {"eval_report_manifest", "backtest_report_manifest"}:
+                issues.extend(_validate_nested_report_manifest(entry, path))
+                continue
             if path.suffix == ".json" and entry.role == "summary":
                 issues.extend(_validate_json_object(entry, path))
                 continue
@@ -560,4 +563,33 @@ def _validate_csv_batch_group_by_header(entry: ReportFile, path: Path) -> list[R
                 f"(columns: {', '.join(header) if header else '<empty>'})"
             ),
         )
+    ]
+
+
+def _validate_nested_report_manifest(entry: ReportFile, path: Path) -> list[ReportValidationIssue]:
+    """Recursively validate a nested stage report manifest referenced by a research-run root manifest.
+
+    Called when ``ReportManifest.kind == "research_run_report_manifest"`` and a root
+    entry has role ``eval_report_manifest`` or ``backtest_report_manifest``.
+    """
+    try:
+        nested = ReportManifest.from_path(path)
+    except (ValueError, json.JSONDecodeError) as exc:
+        return [
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="invalid_nested_report_manifest",
+                message=f"nested report manifest (key={entry.key!r}) could not be parsed: {exc}",
+            )
+        ]
+    nested_issues = nested.validate_contents()
+    return [
+        ReportValidationIssue(
+            key=entry.key,
+            path=issue.path,
+            code="nested_report_manifest_issue",
+            message=f"[{entry.key}] {issue.key}: [{issue.code}] {issue.message}",
+        )
+        for issue in nested_issues
     ]

@@ -2031,10 +2031,16 @@ def test_research_run_report_manifest_with_all_stage_entries(tmp_path):
     (preflight_dir / "preflight_report.json").write_text('{"status": "ok"}', encoding="utf-8")
     eval_dir = tmp_path / "eval"
     eval_dir.mkdir()
-    (eval_dir / "report_manifest.json").write_text("{}", encoding="utf-8")
+    (eval_dir / "report_manifest.json").write_text(
+        json.dumps({"kind": "evaluation_report_manifest", "files": []}),
+        encoding="utf-8",
+    )
     backtest_dir = tmp_path / "backtest"
     backtest_dir.mkdir()
-    (backtest_dir / "report_manifest.json").write_text("{}", encoding="utf-8")
+    (backtest_dir / "report_manifest.json").write_text(
+        json.dumps({"kind": "batch_backtest_report_manifest", "files": []}),
+        encoding="utf-8",
+    )
 
     manifest_path = tmp_path / "report_manifest.json"
     manifest_path.write_text(
@@ -2111,3 +2117,206 @@ def test_research_run_report_manifest_run_manifest_validation_reports_errors(tmp
     assert len(issues) == 2
     codes = {i.code for i in issues}
     assert codes == {"missing_run_manifest_field"}
+
+
+# --- recursive nested stage manifest validation ---
+
+
+def test_research_run_report_manifest_recursive_validates_nested_eval_manifest(tmp_path):
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "events.csv").write_text("ts_code,trade_date\n000001.SZ,2024-01-05\n", encoding="utf-8")
+    (eval_dir / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "evaluation_report_manifest",
+            "files": [
+                {"key": "events", "path": "events.csv", "filename": "events.csv", "role": "events"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_research_run_report_manifest_recursive_validates_nested_backtest_manifest(tmp_path):
+    bt_dir = tmp_path / "backtest"
+    bt_dir.mkdir()
+    summary_csv = bt_dir / "summary.csv"
+    summary_csv.write_text("symbol,trade_date\n000001.SZ,2024-01-05\n", encoding="utf-8")
+    (bt_dir / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "batch_backtest_report_manifest",
+            "files": [
+                {"key": "summary", "path": "summary.csv", "filename": "summary.csv", "role": "summary"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "backtest_report_manifest", "path": "backtest/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "backtest_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_research_run_report_manifest_reports_invalid_nested_manifest(tmp_path):
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "report_manifest.json").write_text("not valid json", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_nested_report_manifest"
+    assert "eval_report_manifest" in issues[0].message
+    assert issues[0].key == "eval_report_manifest"
+
+
+def test_research_run_report_manifest_reports_nested_missing_artifact(tmp_path):
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    # events.csv does not exist, so nested validation should report it
+    (eval_dir / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "evaluation_report_manifest",
+            "files": [
+                {"key": "events", "path": "events.csv", "filename": "events.csv", "role": "events"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "nested_report_manifest_issue"
+    assert "eval_report_manifest" in issues[0].message
+    assert "events" in issues[0].message
+    assert "missing_file" in issues[0].message
+
+
+def test_role_run_manifest_does_not_trigger_nested_validation(tmp_path):
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    # Nested eval manifest is malformed, but --role run_manifest skips it
+    (eval_dir / "report_manifest.json").write_text("not valid json", encoding="utf-8")
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                     "run_id": "r1", "command": "research-run",
+                     "strategy_path": "s.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "research_run_manifest", "path": "research_run_manifest.json",
+                 "filename": "research_run_manifest.json", "role": "run_manifest"},
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    # Unfiltered: should see the invalid nested manifest issue
+    all_issues = manifest.validate_contents()
+    assert any(i.code == "invalid_nested_report_manifest" for i in all_issues)
+    # Filtered to run_manifest: no nested validation
+    run_issues = manifest.validate_contents(role="run_manifest")
+    codes = {i.code for i in run_issues}
+    assert codes == set()
+    assert len(run_issues) == 0
+
+
+def test_role_eval_report_manifest_triggers_nested_validation(tmp_path):
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    # events.csv does not exist, nested validation should catch it
+    (eval_dir / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "evaluation_report_manifest",
+            "files": [
+                {"key": "events", "path": "events.csv", "filename": "events.csv", "role": "events"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents(role="eval_report_manifest")
+    assert len(issues) == 1
+    assert issues[0].code == "nested_report_manifest_issue"
+    assert "missing_file" in issues[0].message
+
+
+def test_non_research_run_manifest_no_recursive_validation(tmp_path):
+    """Non-research-run-report manifest with eval_report_manifest role does NOT recurse."""
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "report_manifest.json").write_text("not valid json", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "batch_backtest_report_manifest",
+            "files": [
+                {"key": "eval_report_manifest", "path": "eval/report_manifest.json",
+                 "filename": "report_manifest.json", "role": "eval_report_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    # No recursive validation for non-research-run kinds; file exists so no missing_file either
+    assert manifest.validate_contents() == []
