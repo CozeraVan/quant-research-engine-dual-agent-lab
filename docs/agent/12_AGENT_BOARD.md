@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-STRATEGY-STANDARDIZATION-001-FIXES
+QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001
 
 ## Current Recipient
 
-CODEX
+CLAUDE_CODE
 
 ## Message Type
 
-FINALIZATION_NOTICE
+IMPLEMENTATION_REQUEST
 
 ## Sender
 
@@ -18,40 +18,19 @@ CODEX
 
 ## Short Message
 
-Codex re-review passed. The strategy-standardization fix cycle is accepted and locally finalized. No remote push was requested.
+User approved implementation. Claude Code should implement `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Review Status
 
-PASS
+NOT_STARTED
 
-## Validation
+## Evidence
 
-```bash
-uv run pytest tests/test_cli.py::test_cli_strategy_smoke_default_strategies_use_current_paths tests/test_gui_app.py::test_default_strategy_template_uses_current_low_level_path -q
-# 2 passed
-
-uv run qre strategy-smoke --no-preflight --no-backtest --output-dir /tmp/qre-default-smoke-final
-# overall_status=pass
-
-uv run qre strategy-smoke --strategies strategies/high_level/rsi2_oversold_reversal_entry.yaml strategies/high_level/ema200_bollinger_reversal_entry.yaml strategies/high_level/macd_zero_cross_momentum_entry.yaml --no-preflight --no-backtest --output-dir /tmp/qre-explicit-smoke-final
-# overall_status=pass
-
-uv run pytest tests/test_cli.py tests/test_gui_app.py tests/test_gui_engine.py tests/test_compiler.py tests/test_strategy_spec.py tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
-# 537 passed, 2 warnings
-
-uv run pytest -q
-# 777 passed, 2 warnings
-
-scripts/check-progress-docs.sh
-# PASSED
-
-scripts/git-finalize-check.sh
-# PASSED
-
-git diff --check
-# PASSED
-```
+- README documents `outputs/research/<run>/eval/report_manifest.json` and `outputs/research/<run>/backtest/report_manifest.json`.
+- `src/quant_research_engine/orchestration/research_run.py::_run_eval()` runs evaluation but does not persist evaluation artifacts.
+- `_run_backtest()` writes artifacts directly into the research-run root instead of `<output_dir>/backtest/`.
+- `tests/test_cli.py` only covers `research-run` help/missing-DB paths and ends with an unused `ResearchRunStrategySpec` helper.
 
 ## Next Step
 
-User decides the next project direction.
+Claude Code implements the brief, updates `09_CODING_HANDOFF.md`, `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`, then returns to Codex for review.

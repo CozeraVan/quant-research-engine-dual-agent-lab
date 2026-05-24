@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Active Work
 
-QRE-STRATEGY-STANDARDIZATION-001-FIXES passed Codex re-review and local git finalization. No remote push was requested.
+User approved `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`; Claude Code is assigned to implement the `qre research-run` stage artifact parity brief.
 
 ## Progress Table
 
@@ -123,28 +123,23 @@ QRE-STRATEGY-STANDARDIZATION-001-FIXES passed Codex re-review and local git fina
 | QRE-FULL-MARKET-CHARTS-001 | Full-market report equity curve and drawdown charts | FINALIZED | CLAUDE_CODE | commit `a86018d`; `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel; manifest roles registered; 10 new tests; 529 passed; review PASS | Preserve |
 | QRE-GUI-STRATEGY-BUILDER-001 | GUI parameter surface for standard strategy IO (M8.6) | FINALIZED | CLAUDE_CODE | commit `72600eb`; Builder tab with 4 form sections; compile endpoint; indicator catalog; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 | QRE-STRATEGY-STANDARDIZATION-001 | Standardize backtest engine entry/exit structure | DONE | CODEX/CLAUDE_CODE | Codex re-review passed; default smoke/GUI paths updated, docs synced, EMA200 source mapping fixed, HTML report coverage added, runner generates aggregate_summary.json, README fixed; full suite 777 passed, 2 warnings; final checks passed | Preserve; user decides next direction |
+| QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001 | Research-run stage artifact parity | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` ready; user approved implementation; Codex probe found `_run_eval()` is in-memory only and `_run_backtest()` writes to the run root despite README documenting stage manifests | Claude implements |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex re-reviewed `QRE-STRATEGY-STANDARDIZATION-001-FIXES`:
+Recorded on 2026-05-24 after Codex prepared `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`:
 
-- Current task: `QRE-STRATEGY-STANDARDIZATION-001-FIXES` — DONE
-- Current phase: `DONE`
-- Current owner: `USER`
-- Last finalized commit: `4b2604a` (docs mark GUI Strategy Builder finalized)
-- Working tree: clean after local finalization commit
+- Current task: `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` — IN_PROGRESS
+- Current phase: `CLAUDE_IMPLEMENTING`
+- Current owner: `CLAUDE_CODE`
+- Last finalized commit: `d49d417` (strategy standardization fix cycle finalized)
+- Working tree: dirty with Codex planning-doc updates for the next task
 - Validation:
-  - `uv run pytest tests/test_cli.py::test_cli_strategy_smoke_default_strategies_use_current_paths tests/test_gui_app.py::test_default_strategy_template_uses_current_low_level_path -q` → 2 passed
-  - default `qre strategy-smoke --no-preflight --no-backtest` → pass
-  - explicit new-path `qre strategy-smoke --strategies strategies/high_level/... --no-preflight --no-backtest` → pass
-  - high-level Bollinger and EMA200 compiles → pass
-  - low-level specs parse through `StrategySpec.from_yaml`
-  - targeted review suite → 537 passed, 2 warnings
-  - full suite → 777 passed, 2 warnings
-  - `scripts/check-progress-docs.sh` → passed
-  - `scripts/git-finalize-check.sh` → passed
-  - `git diff --check` → passed
-- Next step: User decides the next project direction.
+  - Previous finalized task: full suite → 777 passed, 2 warnings
+  - Previous finalized task: `scripts/check-progress-docs.sh`, `scripts/git-finalize-check.sh`, and `git diff --check` passed
+  - Next-task probe: inspected `research_run.py`, README research-run output docs, and current tests
+  - Next-task probe finding: `research-run` does not persist eval artifacts or stage-scoped backtest artifacts as documented
+- Next step: Claude Code implements `08_IMPLEMENTATION_BRIEF.md` and returns to Codex for review.
 
 Current GUI direction approved on 2026-05-21:
 
@@ -204,7 +199,7 @@ User-requested strategy work in 2026-05-21:
 - Canonical security-snapshot contract is complete; later bulk ingestion can reuse the Tushare source scaffold.
 - Bulk ingestion / durable loading for the Tushare security source scaffold once the upstream source contract is settled.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
-- Research-run CLI orchestrator is complete; larger multi-stage bundling is now standardized.
+- Research-run CLI orchestrator exists, but stage artifact parity is planned: persist and link preflight/eval/backtest stage artifacts from `qre research-run`.
 - Strategy IO contract implementation after design approval.
 - GUI parameter controls over the future standard strategy entry contract.
 

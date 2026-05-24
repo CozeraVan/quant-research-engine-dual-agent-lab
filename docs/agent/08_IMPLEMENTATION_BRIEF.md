@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-STRATEGY-STANDARDIZATION-001-FIXES
+QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001
 
 ## Created By
 
@@ -14,89 +14,107 @@ CLAUDE_CODE
 
 ## Goal
 
-Fix the Codex review blockers found after Claude Code standardized strategy entry/exit structure, added `strategies/high_level/` and `strategies/low_level/`, added the Bollinger mean reversion template, and rewrote the project README.
+Make `qre research-run` persist the same stage artifacts that the README and report-system contract imply: preflight output, evaluation output, backtest output, and a top-level `research_run_manifest.json` that links those stage manifests.
 
-Do not expand scope beyond the required fixes below. Preserve the strategy-directory direction and the completed full-market Bollinger result.
+This is a contract-parity fix, not a new research feature. The current implementation runs preflight and evaluation in memory, then persists only backtest artifacts under the root output directory. README examples already document:
 
-## Required Fixes
+```text
+outputs/research/<run>/preflight_report.json
+outputs/research/<run>/eval/report_manifest.json
+outputs/research/<run>/backtest/report_manifest.json
+outputs/research/<run>/research_run_manifest.json
+```
 
-1. Default `qre strategy-smoke` path regression
-   - File: `src/quant_research_engine/apps/cli.py`
-   - Problem: default strategy paths still resolve under deleted `examples/`.
-   - Expected: default smoke run uses `strategies/high_level/rsi2_oversold_reversal_entry.yaml`, `strategies/high_level/ema200_bollinger_reversal_entry.yaml`, and `strategies/high_level/macd_zero_cross_momentum_entry.yaml`.
-   - Add regression coverage for the no-`--strategies` default path.
+The implementation should make that true or update docs only where the existing documented contract is deliberately narrowed. Prefer making the code match the documented contract.
 
-2. GUI default strategy template path regression
-   - File: `src/quant_research_engine/gui/app.py`
-   - Problem: `DEFAULT_STRATEGY_TEMPLATE` still points to deleted `examples/ema200_bollinger_reversal.yaml`.
-   - Expected: default YAML editor template comes from `strategies/low_level/ema200_bollinger_reversal.yaml` or another current low-level template.
-   - Add/adjust GUI test coverage so the default template source cannot silently fall back to stale inline YAML after the strategy move.
+## Evidence From Codex Probe
 
-3. Current docs still reference deleted `examples/` paths
-   - Files found by Codex review:
-     - `docs/modules/evaluation_layer.md`
-     - `docs/modules/portfolio_workflow.md`
-     - `docs/strategy_entry/three_strategy_smoke_report.md`
-   - Expected: current non-legacy docs use `strategies/high_level/` for high-level compile/smoke examples and `strategies/low_level/` for executable StrategySpec examples.
-   - Legacy docs under `docs/legacy/` may keep historical `examples/` references.
+- `src/quant_research_engine/orchestration/research_run.py::_run_eval()` returns an `EvaluationResult` but never calls the existing evaluation artifact writer.
+- `src/quant_research_engine/orchestration/research_run.py::_run_preflight()` returns a report object but `run_research_run()` does not write a preflight artifact.
+- `_run_backtest()` currently writes batch/shared artifacts directly into `request.output_dir`, not into a stage-scoped `backtest/` directory.
+- `_write_research_manifest()` records only `backtest_artifacts` and `artifacts`; it does not link `preflight_report`, `eval/report_manifest.json`, or `backtest/report_manifest.json`.
+- `tests/test_cli.py` has only help/missing-DB coverage for `research-run`; there is no successful orchestrated run regression. The file also ends with an unused `ResearchRunStrategySpec` helper, which suggests the success-path test was started but not finished.
 
-4. Agent workflow docs were stale
-   - Files: `docs/agent/08_IMPLEMENTATION_BRIEF.md`, `docs/agent/10_REVIEW_REPORT.md`, `docs/agent/12_AGENT_BOARD.md`
-   - Problem: these still described older chart/GUI tasks.
-   - Expected: keep them aligned to this fix cycle until Codex re-review passes.
+## Required Behavior
 
-5. High-level EMA200 factor source mismatch
-   - Files: `strategies/high_level/ema200_bollinger_reversal_entry.yaml`, compiler/catalog tests/docs as needed.
-   - Evidence: compiling the high-level EMA entry emits `factors.stock_daily_overlap_typical.ema_200`, while the preserved low-level spec and existing missing-factor tests use `factors.stock_daily_overlap_typical_price.ema_200`.
-   - Expected: choose the canonical upstream table/source contract and make high-level entry, compiler expectations, docs, and tests consistent. If the real upstream table is `typical_price`, use that consistently; if `typical` is canonical, update the low-level spec and docs accordingly.
+1. Stage-scoped output layout
+   - Preflight artifact: write a durable JSON artifact for the preflight stage when preflight is not skipped.
+   - Evaluation artifacts: write evaluation CSVs, `run_manifest.json`, and `report_manifest.json` under `<output_dir>/eval/` when eval is not skipped.
+   - Backtest artifacts: write batch/shared backtest artifacts under `<output_dir>/backtest/`.
+   - Top-level research manifest remains at `<output_dir>/research_run_manifest.json`.
+   - Skipped stages should be represented explicitly in the top-level manifest without requiring their directories to exist.
 
-6. HTML report scope lacks direct test coverage
-   - Files: `src/quant_research_engine/portfolio/full_market_report.py`, `src/quant_research_engine/portfolio/io.py`, `src/quant_research_engine/portfolio/report_manifest.py`, tests.
-   - Problem: `backtest_report.html` and `html_report` manifest role are now runtime behavior, but Codex found no tests that assert HTML report generation, manifest inclusion, or report-files/report-audit discoverability.
-   - Expected: add focused tests for batch and shared-cash report output or justify removal/deferment if HTML report was not meant to be part of this task.
+2. Reuse existing artifact contracts
+   - Reuse existing evaluation output logic instead of duplicating CSV/manifest writer behavior.
+   - If the existing evaluation writer is private to `cli.py`, move or wrap it cleanly so orchestration can use it without circular imports.
+   - Preserve existing `eval-config` output behavior and tests.
+   - Preserve existing `backtest-batch` and `backtest-shared` output behavior outside `research-run`.
 
-7. Full-market runner deliverable mismatch
-   - File: `strategies/run_bollinger_full.py`
-   - Problem: handoff says aggregate summary and standard HTML/Excel report outputs were generated, but the runner only appends `summary.csv` and progress state. The aggregate JSON exists in `outputs/`, but the script does not generate it.
-   - Expected: either update the runner to produce the documented aggregate summary/report artifacts, or update docs/handoff to accurately describe the manual artifact-generation step and script output contract.
+3. Research manifest linkage
+   - Extend `research_run_manifest.json` to include stage-level artifact links, at minimum:
+     - `preflight_artifacts` or equivalent for the preflight JSON.
+     - `eval_artifacts` including `eval/report_manifest.json` and `eval/run_manifest.json` when eval runs.
+     - `backtest_artifacts` with paths relative to the research run root.
+   - Keep required run-manifest fields intact: `schema_version`, `kind`, `run_id`, `command`, `strategy_path`, `artifacts`.
+   - The top-level `artifacts` list should remain deterministic and should not include non-existent skipped-stage files.
 
-8. README command and artifact wording cleanup
-   - File: `README.md`
-   - Problems:
-     - `qre preflight strategies/high_level/...` is documented, but `preflight` consumes low-level `StrategySpec`; `StrategySpec.from_yaml("strategies/high_level/bollinger_mean_reversion_entry.yaml")` raises `ValueError: data section is required`.
-     - Excel sheet count wording says 10 sheets while chart sheets are also listed.
-   - Expected: README examples match actual CLI behavior and avoid stale hardcoded counts.
+4. CLI visibility
+   - `qre research-run` stdout should print enough stage manifest paths for operators to immediately run `qre report-files` / `qre report-audit`.
+   - At minimum, print `research_manifest=...`.
+   - Prefer additive lines such as `eval_report_manifest=...` and `backtest_report_manifest=...` when those files exist.
+   - Preserve existing exit-code behavior: `0` on complete success, `2` on setup/stage error.
+
+5. Report discovery and audit parity
+   - Ensure `qre report-files <output_dir>/eval/report_manifest.json` works for evaluation artifacts emitted by `research-run`.
+   - Ensure `qre report-files <output_dir>/backtest/report_manifest.json` works for backtest artifacts emitted by `research-run`.
+   - Ensure `ReportManifest.validate_contents()` accepts the emitted evaluation/backtest run manifests.
+   - If top-level `research_run_manifest.json` is referenced from a report manifest in future, do not break existing `research_run_manifest` validation.
+
+6. Tests
+   - Add a successful unit-level `run_research_run()` test with monkeypatched store/spec/stage functions or small fake data so it does not require a real database.
+   - Add CLI regression coverage for a successful `qre research-run` path using monkeypatching; assert stdout includes stage manifest paths and files exist.
+   - Add manifest payload tests for skipped preflight/eval and for successful all-stage runs.
+   - Clean up or complete the dangling `ResearchRunStrategySpec` helper at the end of `tests/test_cli.py`.
+   - Add regression coverage that backtest artifacts are written under `backtest/`, not directly in the run root.
 
 ## Non-Goals
 
-- Do not rewrite portfolio architecture.
-- Do not recompute indicators inside QRE.
-- Do not delete or reinterpret the completed Bollinger full-market result.
-- Do not move legacy archive docs just to remove historical `examples/` references.
+- Do not add database writes.
+- Do not compute technical indicators inside QRE.
+- Do not change strategy semantics, signal timing, or portfolio execution rules.
+- Do not implement real benchmark wiring, real regime classification, or time-varying ST/risk-warning metadata.
+- Do not change report-manifest schema incompatibly.
+- Do not run or document smoke outputs as research conclusions.
+
+## Suggested Implementation Notes
+
+- Consider extracting `_write_evaluation_output()` and its helper functions from `apps/cli.py` into a reusable module, for example `evaluation/io.py`, while keeping `eval-config` behavior unchanged.
+- Use stage directories:
+  - `preflight_dir = output_dir / "preflight"` or a root `preflight_report.json`; README currently says root `preflight_report.json`. If choosing `preflight/preflight_report.json`, update README and docs consistently.
+  - `eval_dir = output_dir / "eval"`
+  - `backtest_dir = output_dir / "backtest"`
+- Backtest `run_request_payload` should keep `run_id` and strategy provenance as it does today.
+- Manifest relative paths should be relative to the top-level research run directory for the top-level manifest.
 
 ## Validation Commands
 
 Run at least:
 
 ```bash
-uv run qre strategy-smoke --no-preflight --no-backtest --output-dir /tmp/qre-default-smoke-fix
-uv run qre strategy-smoke --strategies strategies/high_level/rsi2_oversold_reversal_entry.yaml strategies/high_level/ema200_bollinger_reversal_entry.yaml strategies/high_level/macd_zero_cross_momentum_entry.yaml --no-preflight --no-backtest --output-dir /tmp/qre-explicit-smoke-fix
-uv run qre compile strategies/high_level/bollinger_mean_reversion_entry.yaml
-uv run qre compile strategies/high_level/ema200_bollinger_reversal_entry.yaml
-uv run python - <<'PY'
-from quant_research_engine.strategies.spec import StrategySpec
-for path in [
-    "strategies/low_level/bollinger_mean_reversion.yaml",
-    "strategies/low_level/ema200_bollinger_reversal.yaml",
-    "strategies/low_level/rsi2_reversal_research.yaml",
-]:
-    StrategySpec.from_yaml(path)
-print("low-level specs ok")
-PY
-uv run pytest tests/test_cli.py tests/test_gui_app.py tests/test_gui_engine.py tests/test_compiler.py tests/test_strategy_spec.py tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
+uv run pytest tests/test_research_run.py tests/test_cli.py -q
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
 ```
 
-If a database is available, also run a small preflight/backtest smoke with `QRE_MARKET_DB_URL` against the moved low-level specs.
+If a database is available, also run a small real `qre research-run` using `strategies/low_level/bollinger_mean_reversion.yaml` with a narrow date range and two symbols, then verify:
+
+```bash
+uv run qre report-files <run-dir>/eval/report_manifest.json --check-exists --validate-contents
+uv run qre report-files <run-dir>/backtest/report_manifest.json --check-exists --validate-contents
+uv run qre report-audit <run-dir>/eval/report_manifest.json --require-match
+uv run qre report-audit <run-dir>/backtest/report_manifest.json --require-match
+```
+
+If no database is configured, document that as a validation gap in `09_CODING_HANDOFF.md`.

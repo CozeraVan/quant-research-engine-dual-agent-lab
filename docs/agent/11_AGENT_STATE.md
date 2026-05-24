@@ -4,52 +4,55 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex re-reviewed `QRE-STRATEGY-STANDARDIZATION-001-FIXES`, marked the review PASS, ran final git checks, and prepared the accepted strategy-standardization work for local finalization. All Required Fixes are implemented and verified, including final regression coverage for default `qre strategy-smoke` paths and GUI default template source.
+User approved the next step after reading `11_AGENT_STATE.md` and `12_AGENT_BOARD.md`. Codex is handing `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` to Claude Code for implementation from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Next Required Step
 
-User acceptance and next direction. No remote push was requested.
+Claude Code should implement `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` from `08_IMPLEMENTATION_BRIEF.md`, update `09_CODING_HANDOFF.md`, `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`, then return to Codex for review.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit before this task: `4b2604a` (docs mark GUI Strategy Builder finalized)
+- Last finalized commit: `d49d417` (strategy standardization fix cycle finalized)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: will be clean after local finalization commit.
+- Working tree: dirty with Codex planning/handoff updates for the next task.
 - Remote push: not requested.
 
 ## Validation Evidence
 
-- `uv run pytest tests/test_cli.py::test_cli_strategy_smoke_default_strategies_use_current_paths tests/test_gui_app.py::test_default_strategy_template_uses_current_low_level_path -q` -> 2 passed
-- `uv run qre strategy-smoke --no-preflight --no-backtest --output-dir /tmp/qre-default-smoke-final` -> overall_status=pass
-- `uv run qre strategy-smoke --strategies strategies/high_level/rsi2_oversold_reversal_entry.yaml strategies/high_level/ema200_bollinger_reversal_entry.yaml strategies/high_level/macd_zero_cross_momentum_entry.yaml --no-preflight --no-backtest --output-dir /tmp/qre-explicit-smoke-final` -> overall_status=pass
-- `uv run qre compile strategies/high_level/bollinger_mean_reversion_entry.yaml` -> compile_status=ok
-- `uv run qre compile strategies/high_level/ema200_bollinger_reversal_entry.yaml` -> compile_status=ok, EMA target `factors.stock_daily_overlap_typical_price.ema_200`
-- Low-level specs parse through `StrategySpec.from_yaml`
-- `uv run pytest tests/test_cli.py tests/test_gui_app.py tests/test_gui_engine.py tests/test_compiler.py tests/test_strategy_spec.py tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q` -> 537 passed, 2 warnings
+For the previous finalized task:
+
 - `uv run pytest -q` -> 777 passed, 2 warnings
 - `scripts/check-progress-docs.sh` -> passed
 - `scripts/git-finalize-check.sh` -> passed
 - `git diff --check` -> passed
+
+For the next-task probe:
+
+- Read `11_AGENT_STATE.md`, `12_AGENT_BOARD.md`, `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `03_ROADMAP.md`, `02_LOCKED_REQUIREMENTS.md`, and `08_IMPLEMENTATION_BRIEF.md`.
+- Inspected `src/quant_research_engine/orchestration/research_run.py`.
+- Confirmed `_run_eval()` returns an in-memory result but does not persist evaluation artifacts.
+- Confirmed `_run_backtest()` writes into the run root instead of a stage-scoped `backtest/` directory.
+- Confirmed README documents `eval/report_manifest.json`, `backtest/report_manifest.json`, and `research_run_manifest.json` under one research-run output directory.
 
 ## Short Prompt Commands
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，等待用户下一步方向。
+请读取 11 和 12，然后按 08_IMPLEMENTATION_BRIEF.md 实现 QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001。完成后更新 09_CODING_HANDOFF.md、11_AGENT_STATE.md、12_AGENT_BOARD.md，并运行 brief 中的验证命令。
 ```
 
 ### For Codex
 
 ```text
-请读取 11 和 12，报告当前完成状态。
+请读取 11 和 12，等待 Claude Code 的实现交回后进行 review。
 ```

@@ -2,47 +2,41 @@
 
 ## Current Task
 
-QRE-STRATEGY-STANDARDIZATION-001-FIXES: Implement Codex-requested Required Fixes for strategy entry/exit standardization.
+QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001: Make `qre research-run` persist and link stage-scoped preflight, evaluation, and backtest artifacts.
 
 ## Task ID
 
-QRE-STRATEGY-STANDARDIZATION-001-FIXES
+QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001
 
 ## Current Status
 
-DONE. All 8 Required Fixes from Codex review are complete, Codex re-review passed, and local git finalization is complete. No remote push was requested.
+READY_FOR_IMPLEMENTATION. User approved the brief after reading `11_AGENT_STATE.md` and `12_AGENT_BOARD.md`; Claude Code should implement from `08_IMPLEMENTATION_BRIEF.md`.
 
 ## Current Owner
 
-CODEX (re-review after fix cycle)
+CLAUDE_CODE
 
-## Fix Summary
+## Problem Summary
 
-1. Default `qre strategy-smoke` paths → `strategies/high_level/` (`cli.py`)
-2. GUI default YAML template path → `strategies/low_level/` (`gui/app.py`)
-3. Active docs `examples/` references → `strategies/` (3 docs updated)
-4. Agent workflow docs aligned through fix cycle (5 docs updated)
-5. EMA200 factor source mismatch resolved: `_SOURCE_TO_TABLE_SUFFIX` mapping typical→typical_price in compiler (`compiler.py`, `test_compiler.py`)
-6. HTML report test coverage added: `TestGenerateHtmlReport` with 5 tests; 4 existing integration tests updated (`test_full_market_report.py`)
-7. `run_bollinger_full.py` now generates `aggregate_summary.json` after all chunks complete
-8. README: fixed invalid high-level preflight example, changed stale "10 sheets" to "多 sheet"
+`qre research-run` is documented as a complete preflight -> eval -> backtest bundle, but the current implementation does not persist evaluation artifacts from the orchestrator and writes backtest outputs directly into the run root. This weakens report discovery/audit parity and makes the documented `eval/report_manifest.json` and `backtest/report_manifest.json` layout inaccurate.
 
-## Validation
+## Handoff To Claude Code
 
-```bash
-uv run pytest -q
-# 775 passed, 2 warnings in 12.55s
+Read:
 
-uv run pytest tests/test_compiler.py -q
-# 31 passed
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-scripts/check-progress-docs.sh
-# PASSED
+Implement only the brief. Preserve locked requirements and avoid unrelated architecture rewrites.
 
-git diff --check
-# PASSED
-```
+## Expected Return To Codex
 
-## Handoff To Codex
+After implementation, update:
 
-User decides the next project direction.
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+
+Then set the state so Codex can review.
