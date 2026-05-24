@@ -22,9 +22,9 @@ Codex opened the next implementation slice: `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-0
 
 - Current branch: `master`
 - Last finalized commit: `a027d69` (lock research-run audit role selector parity)
-- Last handoff checkpoint: pending commit for research-run audit usage docs brief
+- Last handoff brief commit: `796b1ad` (research-run audit usage documentation sync)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: modified (next implementation brief prepared)
+- Working tree: clean after handoff checkpoint.
 - Remote push: not requested.
 
 ## Latest Validation Evidence
