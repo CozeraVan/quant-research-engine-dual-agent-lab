@@ -26,7 +26,7 @@ Codex re-review passed and local finalization is complete for `QRE-RESEARCH-RUN-
 |---|---|
 | Required 1 | `_run_eval()`: correct `EvaluationRequest` sig + `.evaluate()` + regression test |
 | Required 2 | `_write_preflight_artifact()`: uses `to_dict()` when available + regression test |
-| Required 3 | `evaluation/io.py`: confirmed present; Codex must `git add` |
+| Required 3 | `evaluation/io.py`: included in final commit `310f966` |
 | Recommended 1 | `market_profile` provenance passed to `write_evaluation_output()` |
 | Recommended 2 | Top-level `artifacts` stage-qualified (`preflight:`, `eval:`, `backtest:`) |
 

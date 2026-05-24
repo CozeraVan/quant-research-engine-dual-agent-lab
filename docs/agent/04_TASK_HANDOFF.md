@@ -37,6 +37,6 @@ The task is complete. Choose the next project direction.
 
 1. **Required Fix 1**: `_run_eval()` now uses correct `EvaluationRequest(signal_expression=..., forward_horizons=..., factor_columns=..., quantiles=...)` + `EvaluationEngine().evaluate(frame, eval_req)`. Added regression test with real `_run_eval()` via fake store — confirms `forward_return_1` appears in events.
 2. **Required Fix 2**: `_write_preflight_artifact()` uses `report.to_dict()` when available, preserving `market_rows`, `latest_market_date`, `factor_coverages`, `checks`, etc. Added regression test with real `PreflightReport`.
-3. **Required Fix 3**: `evaluation/io.py` confirmed present and importable. Untracked (Codex must `git add` during finalization per R-GIT-001).
+3. **Required Fix 3**: `evaluation/io.py` confirmed present, importable, and included in final commit `310f966`.
 4. **Recommended**: `market_profile` provenance passed to `write_evaluation_output()`.
 5. **Recommended**: Top-level `artifacts` now stage-qualified (`preflight:`, `eval:`, `backtest:`) to avoid ambiguous duplicates.

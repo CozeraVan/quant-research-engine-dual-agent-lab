@@ -132,8 +132,8 @@ Recorded on 2026-05-24 after Codex re-reviewed `QRE-RESEARCH-RUN-STAGE-ARTIFACT-
 - Current task: `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` — DONE
 - Current phase: `DONE`
 - Current owner: `USER`
-- Last finalized commit: `d49d417` (strategy standardization fix cycle finalized)
-- Last handoff checkpoint: `ba85f79` (research-run parity implementation handoff)
+- Last finalized commit: `310f966` (research-run stage artifact parity finalized)
+- Last handoff checkpoint: `99e0840` (research-run parity clean handoff checkpoint)
 - Working tree: clean after local finalization commit
 - Validation:
   - Full suite: `uv run pytest -q` → 791 passed, 2 warnings in 12.83s (+2 regression tests)
@@ -145,7 +145,7 @@ Recorded on 2026-05-24 after Codex re-reviewed `QRE-RESEARCH-RUN-STAGE-ARTIFACT-
   - Progress docs: `scripts/check-progress-docs.sh` → passed
   - Diff: `git diff --check` → clean
   - Codex fake-store `_run_eval()` reproduction → ok, events include `forward_return_1`
-  - Reminder: `evaluation/io.py` is untracked — Codex must `git add` during finalization
+  - Final artifact writer: `evaluation/io.py` is included in final commit `310f966`
 - Next step: User decides next direction. No remote push was requested.
 
 Current GUI direction approved on 2026-05-21:

@@ -18,7 +18,7 @@ All previous Required Fixes are verified:
 
 - Real `_run_eval()` now constructs a valid `EvaluationRequest` and calls `EvaluationEngine().evaluate(frame, eval_req)`.
 - `preflight/preflight_report.json` preserves real `PreflightReport.to_dict()` fields.
-- `src/quant_research_engine/evaluation/io.py` exists and will be included during finalization.
+- `src/quant_research_engine/evaluation/io.py` is included in final commit `310f966`.
 - Recommended fixes are also complete: evaluation `market_profile` provenance and stage-qualified top-level research artifacts.
 
 The task is complete. User decides the next project direction.
@@ -26,8 +26,8 @@ The task is complete. User decides the next project direction.
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `d49d417` (strategy standardization fix cycle finalized)
-- Last handoff checkpoint: `ba85f79` (research-run parity implementation handoff)
+- Last finalized commit: `310f966` (research-run stage artifact parity finalized)
+- Last handoff checkpoint: `99e0840` (research-run parity clean handoff checkpoint)
 - Standing approval: local commits approved by user; no remote push requested.
 - Working tree: clean after local finalization commit.
 - Remote push: not requested.

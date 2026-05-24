@@ -14,7 +14,7 @@ PASS
 
 ## Summary
 
-Claude Code fixed all Required Fixes from the previous review. `qre research-run` now persists stage-scoped preflight, evaluation, and backtest artifacts; the top-level research manifest links them with stage-qualified artifact keys; and the reusable evaluation writer is present for finalization.
+Claude Code fixed all Required Fixes from the previous review. `qre research-run` now persists stage-scoped preflight, evaluation, and backtest artifacts; the top-level research manifest links them with stage-qualified artifact keys; and the reusable evaluation writer is included in final commit `310f966`.
 
 ## Findings
 
@@ -26,7 +26,7 @@ No blocking findings.
 2. A no-DB fake-store reproduction of the real `_run_eval()` path now succeeds and returns events with `forward_return_1`.
 3. `_write_preflight_artifact()` uses `PreflightReport.to_dict()` when available, preserving real preflight fields.
 4. A regression test with a real `PreflightReport` verifies fields such as `market_rows`, `latest_market_date`, and factor coverage survive in JSON.
-5. `src/quant_research_engine/evaluation/io.py` exists and is required in the final git add.
+5. `src/quant_research_engine/evaluation/io.py` exists and is included in final commit `310f966`.
 6. Recommended fixes are also addressed: evaluation run manifest receives `market_profile` provenance and top-level research artifacts are stage-qualified.
 
 ## Validation Run By Codex
