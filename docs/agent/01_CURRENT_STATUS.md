@@ -46,7 +46,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001` review PASS, ready for git finalization. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` is briefed for Claude Code. It should validate `preflight/preflight_report.json` content when auditing a top-level research-run `report_manifest.json`. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -72,11 +72,11 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `8854174` (research-run stage manifest audit handoff), `7d1e28d` (research-run root manifest finalization state)
+- Recent commits: `dcb4925` (research-run stage manifest recursive audit), `5306a81` (recursive audit handoff checkpoint)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `814 passed, 2 warnings in 13.82s`
+- Last verified full test: `814 passed, 2 warnings in 17.38s`
 
 ## Current CLI Surface
 
@@ -101,4 +101,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Git finalize `QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001`. Review PASS written in `10_REVIEW_REPORT.md`. User decides next direction.
+Implement `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.

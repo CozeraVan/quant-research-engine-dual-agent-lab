@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001
+QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001
 
 ## Created By
 
@@ -14,59 +14,51 @@ CLAUDE_CODE
 
 ## Goal
 
-Make `qre report-files <research-run>/report_manifest.json --validate-contents` and `qre report-audit <research-run>/report_manifest.json` validate the nested stage report manifests, not only their existence.
+Make top-level research-run report audits validate the `preflight/preflight_report.json` payload instead of only checking that the file exists.
 
-The previous task added a top-level `research_run_report_manifest` so operators can discover the whole run directory. That closes the entry-point gap, but the current validation still treats `eval/report_manifest.json` and `backtest/report_manifest.json` as ordinary JSON files with unknown roles. As a result, a top-level audit can pass even if a nested stage manifest is malformed or if its listed artifacts are broken.
+The previous slice added recursive validation for nested eval/backtest stage report manifests. The remaining root research-run audit gap is the preflight stage entry: role `preflight_report` currently has no content validation. A malformed or structurally useless preflight JSON can still pass `qre report-audit <run>/report_manifest.json` as long as the file exists.
 
-This task should add recursive validation for stage report manifests referenced by a `research_run_report_manifest`, while preserving existing behavior for other report manifest kinds.
+This task should add narrow, schema-light validation for the `preflight_report` role when it appears in a `research_run_report_manifest`.
 
 ## Evidence From Codex Review
 
-Accepted behavior from `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`:
+Accepted behavior from `QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001`:
 
-```bash
-uv run qre report-files <run>/report_manifest.json --check-exists --validate-contents
-# exits 0 when root entries exist and research_run_manifest validates
-
-uv run qre report-audit <run>/report_manifest.json --role run_manifest --require-match
-# exits 0
-```
-
-Remaining gap:
-
-- Root manifest entries with role `eval_report_manifest` or `backtest_report_manifest` are checked for existence only.
-- `ReportManifest.validate_contents()` does not recursively parse those nested report manifests.
-- A malformed `eval/report_manifest.json` or a valid nested stage manifest with missing listed files can escape a top-level research-run audit.
+- `eval_report_manifest` and `backtest_report_manifest` recurse into nested stage report manifests.
+- `run_manifest` validates through existing run-manifest validation.
+- `preflight_report` still has no content validation beyond existence.
 
 ## Required Behavior
 
-1. Recursive stage-manifest validation
-   - When `self.kind == "research_run_report_manifest"`, `ReportManifest.validate_contents()` should recursively validate entries with roles:
-     - `eval_report_manifest`
-     - `backtest_report_manifest`
-   - For each matched nested stage manifest:
-     - Load it with `ReportManifest.from_path(path)`.
-     - Run its `validate_contents()` with no role/symbol/window/group_by/window_size filter unless a safer scoped behavior is clearly justified.
-     - Convert nested issues into top-level `ReportValidationIssue` entries.
-   - If the nested manifest itself cannot be parsed by `ReportManifest.from_path()`, return a top-level issue instead of raising to the CLI.
+1. Preflight report content validation
+   - When `self.kind == "research_run_report_manifest"` and `entry.role == "preflight_report"`, `ReportManifest.validate_contents()` should validate the JSON payload.
+   - Missing file behavior should remain the existing `missing_file` issue.
+   - Invalid JSON should return a structured validation issue instead of raising.
+   - Non-object JSON roots should return a structured validation issue.
+   - A valid preflight report must contain at least:
+     - `status`: string, non-empty.
+   - If `checks` exists, it must be a list.
+   - If `missing_factor_requests` exists, it must be a list.
+   - Do not require all fields from `PreflightReport.to_dict()`; older/fake preflight payloads may be minimal.
 
-2. Issue shape and diagnostics
-   - Preserve existing `ReportValidationIssue` dataclass.
+2. Issue shape
+   - Preserve `ReportValidationIssue`.
    - Use stable codes such as:
-     - `invalid_nested_report_manifest`
-     - `nested_report_manifest_issue`
-   - Include enough context in `message` to identify the parent entry key and nested issue key/code/message.
-   - `path` should point to the nested manifest or the nested problematic artifact path, whichever is more useful and consistent with existing diagnostics.
+     - `invalid_preflight_report_json`
+     - `invalid_preflight_report_object`
+     - `missing_preflight_report_field`
+     - `invalid_preflight_report_field`
+   - Messages should include the bad field name and the actual type where useful.
 
 3. Filtering semantics
-   - `report-audit <run>/report_manifest.json --role run_manifest` should continue to validate only the run manifest and should not recursively audit stage manifests.
-   - `report-audit <run>/report_manifest.json --role eval_report_manifest` should validate the eval nested manifest and its listed artifacts.
-   - Unfiltered `report-audit <run>/report_manifest.json` should validate all root entries and recursively validate eval/backtest stage manifests.
-   - `report-files <run>/report_manifest.json --validate-contents` should surface the same recursive validation issues as `report-audit`.
+   - `report-audit <run>/report_manifest.json --role preflight_report` should validate only the preflight report entry.
+   - `--role run_manifest` should not validate preflight.
+   - Unfiltered root research-run audit should validate run manifest, preflight report, and nested eval/backtest stage manifests.
 
 4. Compatibility
-   - Do not change existing validation behavior for `batch_backtest_report_manifest`, `shared_cash_backtest_report_manifest`, `evaluation_report_manifest`, or `strategy_smoke_report_manifest` except through shared helper refactors that preserve outputs.
-   - Do not recursively validate arbitrary report manifest files outside `research_run_report_manifest` in this slice.
+   - Only validate `preflight_report` content for `research_run_report_manifest` roots.
+   - Do not apply this validation to smoke-run per-strategy `preflight_report.json` artifacts unless they are listed under a research-run root manifest.
+   - Do not change preflight execution or serialization behavior.
    - Do not change report manifest schema shape.
 
 5. Documentation and state
@@ -76,39 +68,41 @@ Remaining gap:
 ## Non-Goals
 
 - Do not add database writes.
-- Do not change research-run execution, evaluation math, backtest semantics, or artifact layout.
-- Do not add a new CLI flag unless necessary; recursive validation should be the default content-validation behavior for research-run root manifests.
+- Do not change preflight checks, statuses, or report generation.
+- Do not require every historical preflight field in audits.
+- Do not validate nested stage manifests beyond the behavior already added in the prior slice.
 - Do not implement real benchmark wiring, regime classification, or time-varying suspension/ST/risk-warning metadata.
-- Do not expand recursive validation beyond eval/backtest stage report manifests unless needed to satisfy this brief.
 
 ## Suggested Implementation Notes
 
-- Add a small private helper in `portfolio/report_manifest.py`, for example `_validate_nested_report_manifest(parent_entry, path) -> list[ReportValidationIssue]`.
-- Call it inside `ReportManifest.validate_contents()` after the file existence check and before role-specific CSV/JSON validation, gated by `self.kind == "research_run_report_manifest"` and `entry.role in {"eval_report_manifest", "backtest_report_manifest"}`.
-- Avoid infinite recursion by only recursing for the root research-run kind and not for nested manifests.
-- Tests can build minimal nested evaluation/backtest manifests in temporary directories without running a database-backed research run.
+- Add a helper in `portfolio/report_manifest.py`, for example `_validate_preflight_report(entry, path) -> list[ReportValidationIssue]`.
+- Gate it inside `ReportManifest.validate_contents()` with `self.kind == "research_run_report_manifest" and entry.role == "preflight_report"` after existence check and before generic JSON handling.
+- Keep validation deliberately small: parse JSON object, require `status` string, optional list checks for known list fields.
 
 ## Tests Required
 
 Add or update tests for:
 
-1. Root research-run manifest with valid nested eval/backtest report manifests validates cleanly.
-2. Root research-run manifest with malformed nested eval report manifest returns `invalid_nested_report_manifest` through `ReportManifest.validate_contents()`.
-3. Root research-run manifest with valid nested eval manifest that points to a missing artifact returns a nested validation issue through the root manifest.
-4. `qre report-audit <run>/report_manifest.json --json` includes recursive nested issue details.
-5. `qre report-files <run>/report_manifest.json --validate-contents --json` includes recursive nested issue details.
-6. `--role run_manifest` does not trigger nested stage validation.
-7. `--role eval_report_manifest` does trigger validation of the eval nested manifest.
-8. Existing non-research-run manifest validation tests still pass.
+1. Valid minimal preflight report `{ "status": "ok" }` passes root research-run validation.
+2. Invalid preflight JSON returns `invalid_preflight_report_json`.
+3. Non-object preflight JSON returns `invalid_preflight_report_object`.
+4. Missing `status` returns `missing_preflight_report_field`.
+5. Non-string `status` returns `invalid_preflight_report_field`.
+6. Non-list `checks` returns `invalid_preflight_report_field`.
+7. Non-list `missing_factor_requests` returns `invalid_preflight_report_field`.
+8. `report-audit --role preflight_report --json` surfaces the structured issue.
+9. `report-files --validate-contents --json --role preflight_report` surfaces the structured issue.
+10. `--role run_manifest` does not validate a malformed preflight report.
+11. Non-research-run manifest kinds with role `preflight_report` do not trigger this validation.
 
 ## Validation Commands
 
 Run at least:
 
 ```bash
-uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "nested_report_manifest or research_run_report_manifest or report_audit"
-uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "preflight_report or research_run_report_manifest or report_audit"
 uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q
+uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
