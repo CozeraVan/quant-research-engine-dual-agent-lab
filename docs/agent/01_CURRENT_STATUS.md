@@ -36,7 +36,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Smoke discovery CLI: `qre smoke-files` with text/JSON modes, selectors, and 22 status enrichment flags.
 - Full-market MT5/TradingView-aligned report bundle: `backtest_report.xlsx` (10 sheets), trades ledger, round trips, symbol/strategy performance, equity/drawdown curves, trade analysis, capital usage.
 - Research-run CLI orchestrator: `qre research-run` chains preflight → eval → backtest under one `--run-id` with `research_run_manifest.json`.
-- Research-run manifest integration: `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`, discoverable through `qre report-files` and `qre report-audit`.
+- Research-run manifest integration: `research_run_manifest` registered in `_RUN_MANIFEST_KINDS` for run-manifest content validation when referenced from report manifests.
 - Shared-cash full-market report: `engine_mode` parameter on all 6 builders and entry point in `full_market_report.py`; wired into `write_shared_cash_result()` with updated manifest helpers; 19 new tests (6 test classes + 2 integration tests).
 - Full-market report charts: equity curve and drawdown chart PNGs generated via matplotlib Agg backend; embedded as new Excel sheets via openpyxl; both batch and shared_cash modes produce charts; 10 new tests.
 - GUI Strategy Builder (M8.6): form-based high-level strategy entry builder with compile-to-spec endpoint, indicator catalog, and run flow integration; 16 new tests.
@@ -45,7 +45,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` passed Codex review and local finalization is complete. `qre research-run` now persists and links stage-scoped preflight, evaluation, and backtest artifacts. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` is briefed for Claude Code. It should add a top-level `report_manifest.json` for completed `qre research-run` bundles so existing `report-files` / `report-audit` commands have a stable whole-run entry point. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -75,7 +75,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `777 passed, 2 warnings in 12.34s`
+- Last verified full test: `791 passed, 2 warnings in 12.83s`
 
 ## Current CLI Surface
 
@@ -100,4 +100,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-All known actionable gaps are either blocked on external data or marked future. No critical next step — user decides next direction.
+Implement `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.

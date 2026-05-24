@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` passed Codex re-review and local git finalization is complete. No remote push was requested.
+`QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` is briefed for Claude Code. Goal: add a top-level `report_manifest.json` for `qre research-run` bundles and sync stale README/report-discovery wording.
 
 ## Progress Table
 
@@ -124,14 +124,15 @@ DONE
 | QRE-GUI-STRATEGY-BUILDER-001 | GUI parameter surface for standard strategy IO (M8.6) | FINALIZED | CLAUDE_CODE | commit `72600eb`; Builder tab with 4 form sections; compile endpoint; indicator catalog; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 | QRE-STRATEGY-STANDARDIZATION-001 | Standardize backtest engine entry/exit structure | DONE | CODEX/CLAUDE_CODE | Codex re-review passed; default smoke/GUI paths updated, docs synced, EMA200 source mapping fixed, HTML report coverage added, runner generates aggregate_summary.json, README fixed; full suite 777 passed, 2 warnings; final checks passed | Preserve; user decides next direction |
 | QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001 | Research-run stage artifact parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; all 3 Required Fixes verified; fake-store `_run_eval()` reproduction ok; 791 tests pass; progress docs, git finalize, and diff checks pass | Preserve |
+| QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 | Research-run root report manifest | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; direct probe shows `research_run_manifest.json` is not itself a report manifest; README path examples need sync | Claude Code implement |
 
 ## Latest Verified State
 
 Recorded on 2026-05-24 after Codex re-reviewed `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`:
 
-- Current task: `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` — DONE
-- Current phase: `DONE`
-- Current owner: `USER`
+- Current task: `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` — READY
+- Current phase: `CLAUDE_IMPLEMENTING`
+- Current owner: `CLAUDE_CODE`
 - Last finalized commit: `310f966` (research-run stage artifact parity finalized)
 - Last handoff checkpoint: `99e0840` (research-run parity clean handoff checkpoint)
 - Working tree: clean after local finalization commit

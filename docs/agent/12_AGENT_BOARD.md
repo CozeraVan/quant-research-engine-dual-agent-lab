@@ -2,15 +2,15 @@
 
 ## Current Task ID
 
-QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001
+QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001
 
 ## Current Recipient
 
-USER
+CLAUDE_CODE
 
 ## Message Type
 
-FINALIZATION_COMPLETE
+IMPLEMENTATION_BRIEF_READY
 
 ## Sender
 
@@ -18,31 +18,27 @@ CODEX
 
 ## Short Message
 
-Codex re-review passed and local finalization is complete for `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`. No remote push was requested.
+Codex prepared the next implementation brief. Claude Code should add a top-level `report_manifest.json` for `qre research-run` bundles and sync stale research-run docs.
 
-## Fix Summary
+## Required Outcome
 
-| Fix | Change |
+| Area | Required |
 |---|---|
-| Required 1 | `_run_eval()`: correct `EvaluationRequest` sig + `.evaluate()` + regression test |
-| Required 2 | `_write_preflight_artifact()`: uses `to_dict()` when available + regression test |
-| Required 3 | `evaluation/io.py`: included in final commit `310f966` |
-| Recommended 1 | `market_profile` provenance passed to `write_evaluation_output()` |
-| Recommended 2 | Top-level `artifacts` stage-qualified (`preflight:`, `eval:`, `backtest:`) |
+| Root manifest | `<run>/report_manifest.json` with supported kind such as `research_run_report_manifest` |
+| Run provenance | Include `<run>/research_run_manifest.json` as role `run_manifest` |
+| Stage entry points | Include existing preflight/eval/backtest stage manifests only when they exist |
+| CLI visibility | `qre research-run` prints `report_manifest=<path>` |
+| Docs | README path examples use `preflight/preflight_report.json` and point discovery to `<run>/report_manifest.json` |
 
 ## Review Status
 
-PASS
+PENDING_IMPLEMENTATION
 
 ## Evidence
 
-- Full suite: `uv run pytest -q` → 791 passed, 2 warnings
-- Targeted: `tests/test_research_run.py tests/test_cli.py -k "research_run or eval_config"` → 38 passed
-- Portfolio regression: `tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py` → 102 passed
-- Progress docs: `scripts/check-progress-docs.sh` → passed
-- Diff: `git diff --check` → clean
-- Codex fake-store `_run_eval()` reproduction → ok, events include `forward_return_1`
+- Codex probe: `uv run qre report-files <tmp>/research_run_manifest.json` exits `2` because run manifests are not report manifests.
+- Existing finalized baseline: `310f966` research-run stage artifact parity; full suite previously `791 passed, 2 warnings`.
 
 ## Next Step
 
-User decides the next project direction. No remote push was requested.
+Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.

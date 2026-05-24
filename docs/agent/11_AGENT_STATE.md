@@ -4,35 +4,30 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-DONE
+CLAUDE_IMPLEMENTING
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Last Completed Step
 
-Codex re-reviewed Claude Code's fixes for `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`, updated `10_REVIEW_REPORT.md` to PASS, ran final git checks, and completed local finalization. No remote push was requested.
+Codex selected the next unblocked local slice after `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` finalization and prepared `08_IMPLEMENTATION_BRIEF.md` for `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`.
 
-All previous Required Fixes are verified:
+The new task is to add a top-level `report_manifest.json` for `qre research-run` bundles so existing `qre report-files` / `qre report-audit` workflows can inspect the whole run directory. Codex probe confirmed `research_run_manifest.json` itself is not a report manifest and exits `2` when passed directly to `report-files`.
 
-- Real `_run_eval()` now constructs a valid `EvaluationRequest` and calls `EvaluationEngine().evaluate(frame, eval_req)`.
-- `preflight/preflight_report.json` preserves real `PreflightReport.to_dict()` fields.
-- `src/quant_research_engine/evaluation/io.py` is included in final commit `310f966`.
-- Recommended fixes are also complete: evaluation `market_profile` provenance and stage-qualified top-level research artifacts.
-
-The task is complete. User decides the next project direction.
+Claude Code should implement from `08_IMPLEMENTATION_BRIEF.md`, then write `09_CODING_HANDOFF.md` for Codex review.
 
 ## Git State
 
 - Current branch: `master`
 - Last finalized commit: `310f966` (research-run stage artifact parity finalized)
-- Last handoff checkpoint: `99e0840` (research-run parity clean handoff checkpoint)
+- Last handoff checkpoint: pending for `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: clean after local finalization commit.
+- Working tree: planning docs modified for next handoff.
 - Remote push: not requested.
 
-## Validation Evidence
+## Latest Validation Evidence
 
 - `uv run pytest -q` -> 791 passed, 2 warnings in 12.83s (789 → 791: +2 regression tests)
 - `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or eval_config"` -> 38 passed, 2 warnings
@@ -52,11 +47,11 @@ The task is complete. User decides the next project direction.
 ### For Codex
 
 ```text
-请读取 11 和 12，报告当前完成状态。
+请读取 11 和 12，等待 Claude Code 实施完成后进行 Codex review。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，等待用户下一步方向。
+请读取 11 和 12，并严格按照 08_IMPLEMENTATION_BRIEF.md 实施 QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001。完成后更新 09_CODING_HANDOFF.md。
 ```

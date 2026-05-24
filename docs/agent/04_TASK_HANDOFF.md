@@ -2,41 +2,39 @@
 
 ## Current Task
 
-QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001: Make `qre research-run` persist and link stage-scoped preflight, evaluation, and backtest artifacts.
+QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001: Add a top-level report manifest entry point for completed `qre research-run` bundles.
 
 ## Task ID
 
-QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001
+QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001
 
 ## Current Status
 
-DONE. Codex re-reviewed all fixes, updated `10_REVIEW_REPORT.md` to PASS, and completed local git finalization. No remote push was requested.
+READY_FOR_CLAUDE. Codex prepared `08_IMPLEMENTATION_BRIEF.md` for the next implementation slice.
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Problem Summary
 
-`qre research-run` is documented as a complete preflight -> eval -> backtest bundle, but the current implementation does not persist evaluation artifacts from the orchestrator and writes backtest outputs directly into the run root. This weakens report discovery/audit parity and makes the documented `eval/report_manifest.json` and `backtest/report_manifest.json` layout inaccurate.
+`qre research-run` now writes stage artifacts, but the whole run directory still lacks a top-level `report_manifest.json` that existing `qre report-files` / `qre report-audit` can consume. A direct probe against `research_run_manifest.json` exits `2` because it is a run manifest, not a report manifest. README examples also still show the stale root-level `preflight_report.json` path instead of `preflight/preflight_report.json`.
 
-## Handoff To User
+## Handoff To Claude Code
 
 Read:
 
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/10_REVIEW_REPORT.md`
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-The task is complete. Choose the next project direction.
+Implement the brief exactly. Do not change research semantics or make `research_run_manifest.json` masquerade as a report manifest. Add a top-level research-run report manifest and tests proving the existing report discovery/audit commands work on it.
 
-## Fix Summary
+## Codex Probe Evidence
 
-1. **Required Fix 1**: `_run_eval()` now uses correct `EvaluationRequest(signal_expression=..., forward_horizons=..., factor_columns=..., quantiles=...)` + `EvaluationEngine().evaluate(frame, eval_req)`. Added regression test with real `_run_eval()` via fake store — confirms `forward_return_1` appears in events.
-2. **Required Fix 2**: `_write_preflight_artifact()` uses `report.to_dict()` when available, preserving `market_rows`, `latest_market_date`, `factor_coverages`, `checks`, etc. Added regression test with real `PreflightReport`.
-3. **Required Fix 3**: `evaluation/io.py` confirmed present, importable, and included in final commit `310f966`.
-4. **Recommended**: `market_profile` provenance passed to `write_evaluation_output()`.
-5. **Recommended**: Top-level `artifacts` now stage-qualified (`preflight:`, `eval:`, `backtest:`) to avoid ambiguous duplicates.
+```bash
+uv run qre report-files <tmp>/research_run_manifest.json
+# manifest kind must be one of: batch_backtest_report_manifest, evaluation_report_manifest, shared_cash_backtest_report_manifest, strategy_smoke_report_manifest
+# exit=2
+```
