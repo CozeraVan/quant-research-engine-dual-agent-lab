@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is briefed for Claude Code. Goal: lock research-run root report-manifest role selector parity across `report-files`, `report-audit`, JSON/text output, and `--require-match`.
+`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is reviewed PASS by Codex. All 10 CLI regression tests pass without runtime changes. Ready for git finalization.
 
 ## Progress Table
 
@@ -127,25 +127,24 @@ CLAUDE_IMPLEMENTING
 | QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 | Research-run root report manifest | DONE | CODEX/CLAUDE_CODE | commit `0fb70f1`; `10_REVIEW_REPORT.md` PASS; `research_run_report_manifest` kind registered; top-level `report_manifest.json`; CLI discovery/audit probe exit 0; 803 passed, 2 warnings | Preserve |
 | QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001 | Research-run stage manifest recursive audit | DONE | CODEX/CLAUDE_CODE | commit `dcb4925`; Codex post-commit review PASS; `validate_contents()` routes `eval_report_manifest`/`backtest_report_manifest` through nested validation; 814 passed, 2 warnings | Preserve |
 | QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001 | Research-run preflight report content audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `validate_contents()` routes `preflight_report` through `_validate_preflight_report()`; 9 unit + 3 CLI tests; 826 passed (+12) | Preserve |
-| QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001 | Research-run audit role selector parity | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; selector parity needs locking for root research-run manifest roles across CLI surfaces and require-match modes | Claude Code implement |
+| QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001 | Research-run audit role selector parity | DONE | CODEX/CLAUDE_CODE | 10 CLI regression tests added; no runtime changes needed; Codex review PASS; 836 passed (+10) | Git finalize |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex opened `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001`:
+Recorded on 2026-05-24 after Codex reviewed `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001`:
 
-- Current task: `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` — READY
-- Current phase: `CLAUDE_IMPLEMENTING`
-- Current owner: `CLAUDE_CODE`
-- Last finalized commit: `eb3d8cd` (research-run preflight report content audit)
-- Working tree: planning docs modified for next handoff
+- Current task: `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` — DONE
+- Current phase: `CODEX_GIT_FINALIZING`
+- Current owner: `CODEX`
+- Last finalized commit: `00ac2f8` (avoid stale handoff checkpoint sha in recovery state)
+- Working tree: implementation, review, and docs complete; ready for git finalization
 - Validation:
-  - Full suite: `uv run pytest -q` → 826 passed, 2 warnings in 13.29s
-  - Preflight targeted: 73 passed, 317 deselected
-  - Research-run + CLI: 31 passed, 281 deselected
-  - Portfolio report manifest + io: 114 passed
-  - `scripts/check-progress-docs.sh`: passed
+  - Full suite: `uv run pytest -q` → 836 passed, 2 warnings in 11.77s (+10 tests)
+  - CLI research_run + report_audit + report_files + require_match: 128 passed, 173 deselected in 1.01s
+  - Portfolio manifest + CLI: research_run_report_manifest + preflight + nested + require_match: 49 passed, 351 deselected in 0.50s
   - `git diff --check`: clean
-- Next step: Claude Code implements `08_IMPLEMENTATION_BRIEF.md`
+  - `scripts/check-progress-docs.sh`: passed
+- Next step: Codex performs git finalize (commit)
 
 Current GUI direction approved on 2026-05-21:
 

@@ -4,52 +4,44 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Last Completed Step
 
-Codex reviewed and locally committed `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001`.
+Codex reviewed `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` and recorded PASS. All 10 CLI regression tests pass without runtime changes — role selector parity was already correctly locked for research-run root report manifests.
 
-Commit `eb3d8cd` validates `preflight_report` JSON content for top-level `research_run_report_manifest` audits. `10_REVIEW_REPORT.md` recorded PASS before the commit.
-
-Codex opened the next implementation slice: `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001`. The active task is to lock CLI role selector parity for root research-run report manifests across `report-files`, `report-audit`, JSON/text output, and `--require-match`.
+`10_REVIEW_REPORT.md` written. No required fixes. Ready for git finalization.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `eb3d8cd` (research-run preflight report content audit)
-- Last handoff brief commit: `0149ce1` (research-run audit role selector parity brief)
-- Latest state checkpoint: current `HEAD` records this recovery pointer.
+- Last finalized commit: `00ac2f8` (avoid stale handoff checkpoint sha in recovery state)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: clean after handoff checkpoint.
+- Working tree: implementation + review complete, ready to commit
 - Remote push: not requested.
 
 ## Latest Validation Evidence
 
-From the finalized preflight audit slice:
-
-- `uv run pytest -q` -> 826 passed, 2 warnings in 13.29s
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "preflight_report or research_run_report_manifest or report_audit"` -> 73 passed, 317 deselected in 1.40s
-- `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"` -> 31 passed, 284 deselected in 0.46s
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` -> 123 passed in 5.72s
-- `scripts/check-progress-docs.sh` -> passed
+- `uv run pytest -q` -> 836 passed, 2 warnings in 11.77s
+- `uv run pytest tests/test_cli.py -q -k "research_run_report_manifest or report_audit or report_files or require_match"` -> 128 passed, 173 deselected in 1.01s
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "research_run_report_manifest or preflight_report or nested_report_manifest or require_match"` -> 49 passed, 351 deselected in 0.50s
 - `git diff --check` -> clean
-- `scripts/git-finalize-check.sh` -> passed; scan clean; no remote configured
+- `scripts/check-progress-docs.sh` -> passed
 
 ## Short Prompt Commands
 
 ### For Codex
 
 ```text
-请读取 11 和 12，等待 Claude Code 实施完成后进行 Codex review。
+请读取 11 和 12，进行 git finalize。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，并严格按照 08_IMPLEMENTATION_BRIEF.md 实施 QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001。完成后更新 09_CODING_HANDOFF.md。
+请读取 11 和 12，等待 Codex 完成 git finalize。
 ```
