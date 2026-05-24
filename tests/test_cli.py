@@ -8127,6 +8127,92 @@ def test_cli_report_audit_role_eval_report_manifest_triggers_nested_validation(c
     assert "status=failed" in captured.out
 
 
+def test_cli_report_audit_json_role_preflight_report_surfaces_issue(capsys, tmp_path):
+    """report-audit --json --role preflight_report surfaces preflight content issues."""
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text("not valid json", encoding="utf-8")
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-audit", str(tmp_path / "report_manifest.json"),
+        "--role", "preflight_report",
+        "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    codes = {i["code"] for i in payload["issues"]}
+    assert "invalid_preflight_report_json" in codes
+
+
+def test_cli_report_files_json_validate_contents_role_preflight_surfaces_issue(capsys, tmp_path):
+    """report-files --validate-contents --json --role preflight_report surfaces issue."""
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text("not valid json", encoding="utf-8")
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-files", str(tmp_path / "report_manifest.json"),
+        "--role", "preflight_report",
+        "--validate-contents", "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "invalid_preflight_report_json" in captured.err
+
+
+def test_cli_report_audit_role_run_manifest_skips_preflight_validation(capsys, tmp_path):
+    """--role run_manifest does not validate a malformed preflight report."""
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text("not valid json", encoding="utf-8")
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                     "run_id": "r1", "command": "research-run",
+                     "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "research_run_manifest", "path": "research_run_manifest.json",
+                 "filename": "research_run_manifest.json", "role": "run_manifest"},
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-audit", str(tmp_path / "report_manifest.json"),
+        "--role", "run_manifest",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0, f"stderr: {captured.err}"
+    assert "status=ok" in captured.out
+
+
 class _FakeStore:
     def __init__(self, settings=None):
         self.settings = settings

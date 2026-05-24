@@ -2320,3 +2320,210 @@ def test_non_research_run_manifest_no_recursive_validation(tmp_path):
     manifest = ReportManifest.from_path(manifest_path)
     # No recursive validation for non-research-run kinds; file exists so no missing_file either
     assert manifest.validate_contents() == []
+
+
+# --- preflight report content validation ---
+
+
+def test_research_run_report_manifest_valid_preflight_passes(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [], "missing_factor_requests": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_research_run_report_manifest_preflight_invalid_json(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text("not valid json", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_json"
+    assert issues[0].key == "preflight_report"
+
+
+def test_research_run_report_manifest_preflight_non_object(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text("[1, 2, 3]", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_object"
+
+
+def test_research_run_report_manifest_preflight_missing_status(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"checks": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_field"
+
+
+def test_research_run_report_manifest_preflight_non_string_status(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": 42}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_field"
+    assert "status" in issues[0].message
+
+
+def test_research_run_report_manifest_preflight_non_list_checks(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": "not_a_list"}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_field"
+    assert "checks" in issues[0].message
+
+
+def test_research_run_report_manifest_preflight_non_list_missing_factor_requests(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "missing_factor_requests": 123}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_field"
+    assert "missing_factor_requests" in issues[0].message
+
+
+def test_role_preflight_report_triggers_validation(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text("not valid json", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents(role="preflight_report")
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_json"
+
+
+def test_non_research_run_manifest_preflight_no_validation(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text("not valid json", encoding="utf-8")
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "batch_backtest_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []

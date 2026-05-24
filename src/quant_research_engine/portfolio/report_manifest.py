@@ -238,6 +238,9 @@ class ReportManifest:
             if self.kind == "research_run_report_manifest" and entry.role in {"eval_report_manifest", "backtest_report_manifest"}:
                 issues.extend(_validate_nested_report_manifest(entry, path))
                 continue
+            if self.kind == "research_run_report_manifest" and entry.role == "preflight_report":
+                issues.extend(_validate_preflight_report(entry, path))
+                continue
             if path.suffix == ".json" and entry.role == "summary":
                 issues.extend(_validate_json_object(entry, path))
                 continue
@@ -593,3 +596,71 @@ def _validate_nested_report_manifest(entry: ReportFile, path: Path) -> list[Repo
         )
         for issue in nested_issues
     ]
+
+
+def _validate_preflight_report(entry: ReportFile, path: Path) -> list[ReportValidationIssue]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="invalid_preflight_report_json",
+                message=f"invalid JSON: {exc}",
+            )
+        ]
+    if not isinstance(payload, dict):
+        return [
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="invalid_preflight_report_object",
+                message="preflight report must be an object",
+            )
+        ]
+
+    issues: list[ReportValidationIssue] = []
+
+    if "status" not in payload:
+        issues.append(
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="missing_preflight_report_field",
+                message="preflight report missing required field 'status'",
+            )
+        )
+    else:
+        status = payload["status"]
+        if not isinstance(status, str) or not status:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_preflight_report_field",
+                    message=f"preflight report 'status' must be a non-empty string, got {type(status).__name__}",
+                )
+            )
+
+    if "checks" in payload and not isinstance(payload["checks"], list):
+        issues.append(
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="invalid_preflight_report_field",
+                message=f"preflight report 'checks' must be a list, got {type(payload['checks']).__name__}",
+            )
+        )
+
+    if "missing_factor_requests" in payload and not isinstance(payload["missing_factor_requests"], list):
+        issues.append(
+            ReportValidationIssue(
+                key=entry.key,
+                path=path,
+                code="invalid_preflight_report_field",
+                message=f"preflight report 'missing_factor_requests' must be a list, got {type(payload['missing_factor_requests']).__name__}",
+            )
+        )
+
+    return issues

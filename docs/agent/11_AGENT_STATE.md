@@ -4,47 +4,51 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-Claude Code implemented and directly committed `QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001` in `dcb4925`. Codex reviewed that commit after the fact and wrote `10_REVIEW_REPORT.md` with PASS.
+Claude Code implemented `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` and Codex reviewed it with PASS.
 
-Codex opened the next implementation slice: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001`. The active task is to validate `preflight/preflight_report.json` JSON content when auditing a top-level `research_run_report_manifest`. Claude Code should implement from `08_IMPLEMENTATION_BRIEF.md`, then write `09_CODING_HANDOFF.md` for Codex review.
+The `validate_contents()` method now routes `preflight_report` entries through `_validate_preflight_report()` when `self.kind == "research_run_report_manifest"`. The helper validates: `status` (non-empty string), `checks` (list if present), `missing_factor_requests` (list if present).
+
+Filtering: `--role preflight_report` triggers validation; `--role run_manifest` skips it.
+
+Codex should finalize this reviewed slice locally, then open the next narrow implementation brief for Claude Code.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `dcb4925` (research-run stage manifest recursive audit committed by Claude Code; Codex reviewed post-commit)
-- Last handoff checkpoint: `7c7e682` (research-run preflight report content audit implementation handoff)
+- Last finalized commit: `dcb4925` (research-run stage manifest recursive audit; next local commit pending for preflight audit)
+- Last handoff checkpoint: `10574de` (research-run preflight report content audit handoff)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: clean after planning handoff checkpoint.
+- Working tree: modified (implementation reviewed; local commit pending)
 - Remote push: not requested.
 
 ## Latest Validation Evidence
 
-- `uv run pytest -q` -> 814 passed, 2 warnings in 17.38s
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "nested_report_manifest or research_run_report_manifest or report_audit"` -> 63 passed, 315 deselected
-- `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"` -> 31 passed, 281 deselected
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` -> 114 passed
+- `uv run pytest -q` -> 826 passed, 2 warnings in 13.29s
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "preflight_report or research_run_report_manifest or report_audit"` -> 73 passed, 317 deselected in 1.40s
+- `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"` -> 31 passed, 284 deselected in 0.46s
+- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` -> 123 passed in 5.72s
 - `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> passed
-- `scripts/git-finalize-check.sh` -> passed
+- `git diff --check` -> clean
+- `scripts/git-finalize-check.sh` -> passed; no obvious secret-like text found; no remote configured
 
 ## Short Prompt Commands
 
 ### For Codex
 
 ```text
-请读取 11 和 12，等待 Claude Code 实施完成后进行 Codex review。
+请读取 11 和 12，提交已通过 review 的本轮实现，然后为 Claude Code 打开下一轮 implementation brief。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，并严格按照 08_IMPLEMENTATION_BRIEF.md 实施 QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001。完成后更新 09_CODING_HANDOFF.md。
+请读取 11 和 12，等待 Codex 打开下一轮任务。
 ```

@@ -6,11 +6,11 @@ QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-IMPLEMENTATION_BRIEF_READY
+REVIEW_PASS
 
 ## Sender
 
@@ -18,27 +18,32 @@ CODEX
 
 ## Short Message
 
-Codex prepared the next implementation brief. Claude Code should add content validation for `preflight/preflight_report.json` entries referenced by a top-level `research_run_report_manifest`.
+Codex review passed. Preflight report JSON content validation is live and verified. Local finalization is pending before opening the next Claude Code task.
 
 ## Required Outcome
 
 | Area | Required |
 |---|---|
-| Preflight validation | Root research-run audit validates `preflight_report` JSON content |
-| Required field | `status` exists and is a non-empty string |
-| Optional lists | `checks` and `missing_factor_requests`, when present, are lists |
-| Filtering | `--role preflight_report` validates preflight; `--role run_manifest` does not |
-| Compatibility | Non-research-run manifests with `preflight_report` role do not trigger this validation |
+| Preflight content validation | `status` non-empty string, `checks`/`missing_factor_requests` list if present |
+| Error codes | `invalid_preflight_report_json`, `invalid_preflight_report_object`, `missing_preflight_report_field`, `invalid_preflight_report_field` |
+| Filtering | `--role preflight_report` triggers; `--role run_manifest` skips |
+| Compatibility | Non-research-run manifests never trigger preflight validation |
+| Tests | 9 unit + 3 CLI tests covering all error codes and filtering |
 
 ## Review Status
 
-PENDING_IMPLEMENTATION
+PASS
 
 ## Evidence
 
-- Previous finalized baseline: `dcb4925` research-run stage manifest recursive audit; full suite `814 passed, 2 warnings`.
-- Codex review risk: top-level validation currently checks `preflight/preflight_report.json` for existence but does not validate its JSON content.
+- Full suite: `uv run pytest -q` → 826 passed, 2 warnings in 13.29s
+- Targeted preflight: 73 passed, 317 deselected in 1.40s
+- Research-run + CLI: 31 passed, 284 deselected in 0.46s
+- Portfolio manifest + io: 123 passed in 5.72s
+- `scripts/check-progress-docs.sh`: passed
+- `git diff --check`: clean
+- `scripts/git-finalize-check.sh`: passed; no obvious secret-like text found; no remote configured
 
 ## Next Step
 
-Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.
+Codex commits the reviewed implementation locally, then opens the next narrow research-run audit role-selector parity task for Claude Code.

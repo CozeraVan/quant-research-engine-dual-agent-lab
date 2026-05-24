@@ -42,11 +42,12 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - GUI Strategy Builder (M8.6): form-based high-level strategy entry builder with compile-to-spec endpoint, indicator catalog, and run flow integration; 16 new tests.
 - HTML backtest report: self-contained HTML report with embedded base64 charts, metric cards, PnL distribution, trade analysis, symbol performance, trades ledger, and round trips; integrated into batch and shared_cash report pipeline with direct tests.
 - Research-run stage manifest recursive audit: `validate_contents()` on `research_run_report_manifest` now recursively validates nested eval/backtest stage report manifests via `_validate_nested_report_manifest()`; 7 unit + 4 CLI tests added; full suite at 814 passed.
+- Research-run preflight report content audit: `validate_contents()` on `research_run_report_manifest` now validates `preflight_report` JSON content via `_validate_preflight_report()`; checks `status` (non-empty string), `checks` and `missing_factor_requests` (lists if present); 9 unit + 3 CLI tests added; full suite at 826 passed.
 - Strategy entry/exit standardization: `strategies/high_level/` and `strategies/low_level/` directories; Bollinger Band mean reversion template strategy; default strategy-smoke and GUI template paths migrated from deleted `examples/`; EMA200 typical source maps to the upstream `typical_price` table; chunked full-market backtest runner now writes `aggregate_summary.json`; README and active docs synced.
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` is briefed for Claude Code. It should validate `preflight/preflight_report.json` content when auditing a top-level research-run `report_manifest.json`. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` passed Codex review and is ready to serve as the baseline for the next audit-hardening slice. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -76,7 +77,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `814 passed, 2 warnings in 17.38s`
+- Last verified full test: `826 passed, 2 warnings in 13.29s`
 
 ## Current CLI Surface
 
@@ -101,4 +102,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Implement `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.
+Open the next narrow research-run audit hardening slice for role selector parity across `report-files` and `report-audit`.

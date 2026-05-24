@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` is briefed for Claude Code. Goal: validate `preflight/preflight_report.json` content during top-level research-run report audit.
+`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` passed Codex review. Preflight report JSON content validation is live and can be used as the baseline for the next role-selector parity slice.
 
 ## Progress Table
 
@@ -126,20 +126,20 @@ CLAUDE_IMPLEMENTING
 | QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001 | Research-run stage artifact parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; all 3 Required Fixes verified; fake-store `_run_eval()` reproduction ok; 791 tests pass; progress docs, git finalize, and diff checks pass | Preserve |
 | QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 | Research-run root report manifest | DONE | CODEX/CLAUDE_CODE | commit `0fb70f1`; `10_REVIEW_REPORT.md` PASS; `research_run_report_manifest` kind registered; top-level `report_manifest.json`; CLI discovery/audit probe exit 0; 803 passed, 2 warnings | Preserve |
 | QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001 | Research-run stage manifest recursive audit | DONE | CODEX/CLAUDE_CODE | commit `dcb4925`; Codex post-commit review PASS; `validate_contents()` routes `eval_report_manifest`/`backtest_report_manifest` through nested validation; 814 passed, 2 warnings | Preserve |
-| QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001 | Research-run preflight report content audit | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; top-level research-run validation checks preflight report existence but not content | Claude Code implement |
+| QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001 | Research-run preflight report content audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `validate_contents()` routes `preflight_report` through `_validate_preflight_report()`; 9 unit + 3 CLI tests; 826 passed (+12) | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex post-commit review of `QRE-RESEARCH-RUN-STAGE-MANIFEST-AUDIT-001` and handoff for the next slice:
+Recorded on 2026-05-24 after Codex reviewed `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001`:
 
-- Current task: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` — READY
-- Current phase: `CLAUDE_IMPLEMENTING`
-- Current owner: `CLAUDE_CODE`
-- Last finalized commit: `dcb4925` (research-run stage manifest recursive audit committed by Claude Code; Codex reviewed post-commit)
-- Working tree: planning docs modified for next handoff
+- Current task: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001` — DONE
+- Current phase: `USER_ACCEPTANCE`
+- Current owner: `USER`
+- Last finalized commit: `dcb4925` (research-run stage manifest recursive audit)
+- Working tree: implementation + review docs ready for local commit
 - Validation:
-  - Full suite: `uv run pytest -q` → 814 passed, 2 warnings in 17.38s
-  - Recursive validation targeted: 63 passed, 315 deselected
+  - Full suite: `uv run pytest -q` → 826 passed, 2 warnings in 13.29s
+  - Preflight targeted: 73 passed, 317 deselected
   - Research-run + CLI: 31 passed, 281 deselected
   - Portfolio report manifest + io: 114 passed
   - `scripts/check-progress-docs.sh`: passed
