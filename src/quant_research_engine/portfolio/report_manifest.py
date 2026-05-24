@@ -12,6 +12,7 @@ _SUPPORTED_MANIFEST_KINDS = {
     "shared_cash_backtest_report_manifest",
     "evaluation_report_manifest",
     "strategy_smoke_report_manifest",
+    "research_run_report_manifest",
 }
 
 _RUN_MANIFEST_KINDS = {

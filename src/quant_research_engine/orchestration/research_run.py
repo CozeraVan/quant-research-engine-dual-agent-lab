@@ -53,6 +53,7 @@ class ResearchRunResult:
     eval_paths: dict[str, Path] = field(default_factory=dict)
     preflight_paths: dict[str, Path] = field(default_factory=dict)
     manifest_path: Path | None = None
+    report_manifest_path: Path | None = None
     error_message: str | None = None
 
 
@@ -294,6 +295,72 @@ def _write_research_manifest(result: ResearchRunResult, request: ResearchRunRequ
     return manifest_path
 
 
+def _write_research_report_manifest(result: ResearchRunResult, request: ResearchRunRequest) -> Path:
+    """Write a top-level report_manifest.json for the research-run bundle.
+
+    This manifest uses kind ``research_run_report_manifest`` so that
+    ``qre report-files`` and ``qre report-audit`` can discover and
+    validate the whole run directory.
+    """
+    manifest_path = result.output_dir / "report_manifest.json"
+    files: list[dict[str, str]] = []
+
+    # research_run_manifest.json (always present when this is called)
+    if result.manifest_path and result.manifest_path.exists():
+        files.append({
+            "key": "research_run_manifest",
+            "path": "research_run_manifest.json",
+            "filename": "research_run_manifest.json",
+            "role": "run_manifest",
+        })
+
+    # Preflight stage entry point
+    if "preflight_report" in result.preflight_paths:
+        p = result.preflight_paths["preflight_report"]
+        rel = str(p.relative_to(result.output_dir))
+        files.append({
+            "key": "preflight_report",
+            "path": rel,
+            "filename": p.name,
+            "role": "preflight_report",
+        })
+
+    # Evaluation stage entry point
+    if "report_manifest" in result.eval_paths:
+        p = result.eval_paths["report_manifest"]
+        rel = str(p.relative_to(result.output_dir))
+        files.append({
+            "key": "eval_report_manifest",
+            "path": rel,
+            "filename": p.name,
+            "role": "eval_report_manifest",
+        })
+
+    # Backtest stage entry point
+    if "report_manifest" in result.backtest_paths:
+        p = result.backtest_paths["report_manifest"]
+        rel = str(p.relative_to(result.output_dir))
+        files.append({
+            "key": "backtest_report_manifest",
+            "path": rel,
+            "filename": p.name,
+            "role": "backtest_report_manifest",
+        })
+
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "research_run_report_manifest",
+        "files": files,
+    }
+
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
 def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
     run_id = request.run_id or uuid.uuid4().hex[:12]
     result = ResearchRunResult(
@@ -316,6 +383,7 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
         if status == "error":
             result.error_message = f"Preflight failed (status={status})"
             result.manifest_path = _write_research_manifest(result, request)
+            result.report_manifest_path = _write_research_report_manifest(result, request)
             return result
     else:
         spec = StrategySpec.from_yaml(request.strategy_path)
@@ -329,6 +397,7 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
         if status == "error":
             result.error_message = "Evaluation failed"
             result.manifest_path = _write_research_manifest(result, request)
+            result.report_manifest_path = _write_research_report_manifest(result, request)
             return result
 
     # Stage 3: Backtest
@@ -337,4 +406,5 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
     result.backtest_paths = paths
 
     result.manifest_path = _write_research_manifest(result, request)
+    result.report_manifest_path = _write_research_report_manifest(result, request)
     return result

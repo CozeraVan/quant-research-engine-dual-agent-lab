@@ -10,31 +10,38 @@ QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001
 
 ## Current Status
 
-READY_FOR_CLAUDE. Codex prepared `08_IMPLEMENTATION_BRIEF.md` for the next implementation slice.
+PASS. Codex reviewed Claude Code's implementation, wrote `10_REVIEW_REPORT.md`, and is finalizing locally. No remote push was requested.
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX (git finalization)
 
 ## Problem Summary
 
-`qre research-run` now writes stage artifacts, but the whole run directory still lacks a top-level `report_manifest.json` that existing `qre report-files` / `qre report-audit` can consume. A direct probe against `research_run_manifest.json` exits `2` because it is a run manifest, not a report manifest. README examples also still show the stale root-level `preflight_report.json` path instead of `preflight/preflight_report.json`.
+`qre research-run` now writes stage artifacts, but the whole run directory still lacked a top-level `report_manifest.json` that existing `qre report-files` / `qre report-audit` could consume. A direct probe against `research_run_manifest.json` exits `2` because it is a run manifest, not a report manifest. README examples also showed the stale root-level `preflight_report.json` path instead of `preflight/preflight_report.json`.
 
-## Handoff To Claude Code
+## Handoff To Codex
 
 Read:
 
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/02_LOCKED_REQUIREMENTS.md`
+- `docs/agent/09_CODING_HANDOFF.md`
+- `docs/agent/10_REVIEW_REPORT.md`
 
-Implement the brief exactly. Do not change research semantics or make `research_run_manifest.json` masquerade as a report manifest. Add a top-level research-run report manifest and tests proving the existing report discovery/audit commands work on it.
+Finalize the accepted implementation locally. Do not push unless requested.
 
-## Codex Probe Evidence
+## Codex Probe Evidence (Resolved)
 
 ```bash
+# Before: exit 2
 uv run qre report-files <tmp>/research_run_manifest.json
-# manifest kind must be one of: batch_backtest_report_manifest, evaluation_report_manifest, shared_cash_backtest_report_manifest, strategy_smoke_report_manifest
-# exit=2
+
+# After: exit 0
+uv run qre report-files <tmp>/report_manifest.json --check-exists --validate-contents
+uv run qre report-audit <tmp>/report_manifest.json --role run_manifest --require-match
 ```
+
+## Review Summary
+
+No blocking findings. Codex verified targeted tests, the original probe closure, the full suite, progress docs, and diff whitespace checks.

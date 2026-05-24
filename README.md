@@ -688,10 +688,15 @@ uv run qre research-run strategies/low_level/bollinger_mean_reversion.yaml \
   --backtest-mode batch --initial-cash 1000000
 
 # 产物：
-# outputs/research/bollinger_2024/preflight_report.json
+# outputs/research/bollinger_2024/preflight/preflight_report.json
 # outputs/research/bollinger_2024/eval/report_manifest.json
 # outputs/research/bollinger_2024/backtest/report_manifest.json
 # outputs/research/bollinger_2024/research_run_manifest.json
+# outputs/research/bollinger_2024/report_manifest.json    # 顶层报告清单入口
+
+# 报告发现与审计：
+uv run qre report-files outputs/research/bollinger_2024/report_manifest.json --check-exists --validate-contents
+uv run qre report-audit outputs/research/bollinger_2024/report_manifest.json --role run_manifest --require-match
 ```
 
 ### 11. GUI 控制台

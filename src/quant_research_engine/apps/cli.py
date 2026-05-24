@@ -1781,6 +1781,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"backtest_status={result.backtest_status}")
         if result.manifest_path:
             print(f"research_manifest={result.manifest_path}")
+        if result.report_manifest_path:
+            print(f"report_manifest={result.report_manifest_path}")
         if result.error_message:
             print(f"error={result.error_message}", file=__import__("sys").stderr)
             return 2

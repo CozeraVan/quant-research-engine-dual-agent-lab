@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+CODEX_GIT_FINALIZING
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` is briefed for Claude Code. Goal: add a top-level `report_manifest.json` for `qre research-run` bundles and sync stale README/report-discovery wording.
+`QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` passed Codex review. Codex is running final git checks and local finalization. No remote push was requested.
 
 ## Progress Table
 
@@ -124,30 +124,26 @@ CLAUDE_IMPLEMENTING
 | QRE-GUI-STRATEGY-BUILDER-001 | GUI parameter surface for standard strategy IO (M8.6) | FINALIZED | CLAUDE_CODE | commit `72600eb`; Builder tab with 4 form sections; compile endpoint; indicator catalog; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 | QRE-STRATEGY-STANDARDIZATION-001 | Standardize backtest engine entry/exit structure | DONE | CODEX/CLAUDE_CODE | Codex re-review passed; default smoke/GUI paths updated, docs synced, EMA200 source mapping fixed, HTML report coverage added, runner generates aggregate_summary.json, README fixed; full suite 777 passed, 2 warnings; final checks passed | Preserve; user decides next direction |
 | QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001 | Research-run stage artifact parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; all 3 Required Fixes verified; fake-store `_run_eval()` reproduction ok; 791 tests pass; progress docs, git finalize, and diff checks pass | Preserve |
-| QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 | Research-run root report manifest | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; direct probe shows `research_run_manifest.json` is not itself a report manifest; README path examples need sync | Claude Code implement |
+| QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001 | Research-run root report manifest | PASS | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `research_run_report_manifest` kind registered; top-level `report_manifest.json`; CLI discovery/audit probe exit 0; 803 passed, 2 warnings | Codex local finalize |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex re-reviewed `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`:
+Recorded on 2026-05-24 after Codex reviewed `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001`:
 
-- Current task: `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` — READY
-- Current phase: `CLAUDE_IMPLEMENTING`
-- Current owner: `CLAUDE_CODE`
+- Current task: `QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001` — PASS
+- Current phase: `CODEX_GIT_FINALIZING`
+- Current owner: `CODEX`
 - Last finalized commit: `310f966` (research-run stage artifact parity finalized)
-- Last handoff checkpoint: `99e0840` (research-run parity clean handoff checkpoint)
-- Working tree: clean after local finalization commit
+- Working tree: modified (review passed, awaiting local finalization)
 - Validation:
-  - Full suite: `uv run pytest -q` → 791 passed, 2 warnings in 12.83s (+2 regression tests)
-  - Research-run tests: `uv run pytest tests/test_research_run.py -q` → 19 passed
-  - Targeted: `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or eval_config"` → 38 passed, 2 warnings
-  - Portfolio regression: `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` → 102 passed
-  - CLI research-run tests: `uv run pytest tests/test_cli.py -q -k "research_run"` → 5 passed
+  - Full suite: `uv run pytest -q` → 803 passed, 2 warnings in 12.52s (+12 tests)
+  - Research-run + CLI: `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"` → 31 passed, 277 deselected
+  - Portfolio report manifest: `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` → 107 passed
+  - CLI research-run report manifest probe: `report-files --check-exists --validate-contents` and `report-audit --role run_manifest --require-match` exited 0
+- Next step: Codex local finalization
   - Eval-config regression: `uv run pytest tests/test_cli.py -q -k "eval_config"` → 14 passed
   - Progress docs: `scripts/check-progress-docs.sh` → passed
   - Diff: `git diff --check` → clean
-  - Codex fake-store `_run_eval()` reproduction → ok, events include `forward_return_1`
-  - Final artifact writer: `evaluation/io.py` is included in final commit `310f966`
-- Next step: User decides next direction. No remote push was requested.
 
 Current GUI direction approved on 2026-05-21:
 

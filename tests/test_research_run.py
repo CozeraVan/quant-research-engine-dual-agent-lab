@@ -12,6 +12,7 @@ from quant_research_engine.orchestration.research_run import (
     ResearchRunRequest,
     ResearchRunResult,
     _write_research_manifest,
+    _write_research_report_manifest,
     _write_preflight_artifact,
     _write_eval_artifacts,
     _run_eval,
@@ -125,6 +126,7 @@ class TestResearchRunResult:
         assert result.backtest_paths == {}
         assert result.preflight_paths == {}
         assert result.eval_paths == {}
+        assert result.report_manifest_path is None
 
     def test_error_state(self, tmp_path):
         result = ResearchRunResult(
@@ -497,6 +499,8 @@ class TestRunResearchRunOrchestration:
         assert len(called_backtest) == 0
         assert result.manifest_path is not None
         assert result.manifest_path.exists()
+        assert result.report_manifest_path is not None
+        assert result.report_manifest_path.exists()
 
     def test_eval_error_short_circuits(self, tmp_path, monkeypatch):
         """Eval error should stop pipeline before backtest."""
@@ -543,6 +547,8 @@ class TestRunResearchRunOrchestration:
         assert result.backtest_status == "error"
         assert result.error_message == "Evaluation failed"
         assert len(called_backtest) == 0
+        assert result.report_manifest_path is not None
+        assert result.report_manifest_path.exists()
 
     def test_full_success_writes_all_stage_artifacts(self, tmp_path, monkeypatch):
         """Full successful run writes preflight, eval, backtest artifacts."""
@@ -629,6 +635,18 @@ class TestRunResearchRunOrchestration:
         assert "events" in payload["eval_artifacts"]
         assert "report_manifest" in payload["eval_artifacts"]
 
+        # report_manifest.json should exist and be loadable
+        assert result.report_manifest_path is not None
+        assert result.report_manifest_path.exists()
+        rm_payload = json.loads(result.report_manifest_path.read_text(encoding="utf-8"))
+        assert rm_payload["kind"] == "research_run_report_manifest"
+        assert rm_payload["schema_version"] == 1
+        file_keys = {f["key"] for f in rm_payload["files"]}
+        assert "research_run_manifest" in file_keys
+        assert "preflight_report" in file_keys
+        assert "eval_report_manifest" in file_keys
+        assert "backtest_report_manifest" in file_keys
+
     def test_skip_preflight_and_eval_still_runs_backtest(self, tmp_path, monkeypatch):
         """When preflight and eval are skipped, backtest still runs."""
         spec = _make_fake_spec()
@@ -674,6 +692,14 @@ class TestRunResearchRunOrchestration:
         assert len(called) == 1
         assert result.preflight_paths == {}
         assert result.eval_paths == {}
+        # report manifest should exist but not include preflight/eval entries
+        assert result.report_manifest_path is not None
+        assert result.report_manifest_path.exists()
+        rm_payload = json.loads(result.report_manifest_path.read_text(encoding="utf-8"))
+        rm_keys = {f["key"] for f in rm_payload["files"]}
+        assert "research_run_manifest" in rm_keys
+        assert "preflight_report" not in rm_keys
+        assert "eval_report_manifest" not in rm_keys
 
     def test_backtest_artifacts_in_subdirectory(self, tmp_path, monkeypatch):
         """Backtest artifacts are written under backtest/ not the run root."""
@@ -722,3 +748,133 @@ class TestRunResearchRunOrchestration:
         assert result.backtest_status == "ok"
         assert len(captured_backtest_dir) == 1
         assert captured_backtest_dir[0] == output_dir
+
+
+class TestWriteResearchReportManifest:
+    def test_writes_report_manifest_with_research_run_manifest(self, tmp_path):
+        output_dir = tmp_path / "run_output"
+        output_dir.mkdir()
+        (output_dir / "research_run_manifest.json").write_text(
+            json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                         "run_id": "r1", "command": "research-run",
+                         "strategy_path": "s.yaml", "artifacts": []}),
+            encoding="utf-8",
+        )
+        request = _make_request(tmp_path, output_dir=output_dir, run_id="r1")
+        result = ResearchRunResult(
+            run_id="r1", output_dir=output_dir,
+            preflight_status="ok", eval_status="ok", backtest_status="ok",
+            manifest_path=output_dir / "research_run_manifest.json",
+        )
+        path = _write_research_report_manifest(result, request)
+        assert path.name == "report_manifest.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload["kind"] == "research_run_report_manifest"
+        assert payload["schema_version"] == 1
+        file_keys = {f["key"] for f in payload["files"]}
+        assert "research_run_manifest" in file_keys
+        run_entry = next(f for f in payload["files"] if f["key"] == "research_run_manifest")
+        assert run_entry["role"] == "run_manifest"
+        assert run_entry["path"] == "research_run_manifest.json"
+
+    def test_includes_preflight_report_when_present(self, tmp_path):
+        output_dir = tmp_path / "run_output"
+        output_dir.mkdir()
+        (output_dir / "research_run_manifest.json").write_text(
+            json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                         "run_id": "r2", "command": "research-run",
+                         "strategy_path": "s.yaml", "artifacts": []}),
+            encoding="utf-8",
+        )
+        preflight_dir = output_dir / "preflight"
+        preflight_dir.mkdir()
+        preflight_path = preflight_dir / "preflight_report.json"
+        preflight_path.write_text("{}")
+        request = _make_request(tmp_path, output_dir=output_dir, run_id="r2")
+        result = ResearchRunResult(
+            run_id="r2", output_dir=output_dir,
+            preflight_status="ok", eval_status="skipped", backtest_status="ok",
+            manifest_path=output_dir / "research_run_manifest.json",
+            preflight_paths={"preflight_report": preflight_path},
+        )
+        path = _write_research_report_manifest(result, request)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        file_keys = {f["key"] for f in payload["files"]}
+        assert "preflight_report" in file_keys
+        pf_entry = next(f for f in payload["files"] if f["key"] == "preflight_report")
+        assert pf_entry["role"] == "preflight_report"
+        assert pf_entry["path"] == "preflight/preflight_report.json"
+
+    def test_includes_eval_report_manifest_when_present(self, tmp_path):
+        output_dir = tmp_path / "run_output"
+        output_dir.mkdir()
+        (output_dir / "research_run_manifest.json").write_text(
+            json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                         "run_id": "r3", "command": "research-run",
+                         "strategy_path": "s.yaml", "artifacts": []}),
+            encoding="utf-8",
+        )
+        eval_dir = output_dir / "eval"
+        eval_dir.mkdir()
+        eval_rm = eval_dir / "report_manifest.json"
+        eval_rm.write_text("{}")
+        request = _make_request(tmp_path, output_dir=output_dir, run_id="r3")
+        result = ResearchRunResult(
+            run_id="r3", output_dir=output_dir,
+            preflight_status="skipped", eval_status="ok", backtest_status="ok",
+            manifest_path=output_dir / "research_run_manifest.json",
+            eval_paths={"report_manifest": eval_rm},
+        )
+        path = _write_research_report_manifest(result, request)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        file_keys = {f["key"] for f in payload["files"]}
+        assert "eval_report_manifest" in file_keys
+
+    def test_includes_backtest_report_manifest_when_present(self, tmp_path):
+        output_dir = tmp_path / "run_output"
+        output_dir.mkdir()
+        (output_dir / "research_run_manifest.json").write_text(
+            json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                         "run_id": "r4", "command": "research-run",
+                         "strategy_path": "s.yaml", "artifacts": []}),
+            encoding="utf-8",
+        )
+        bt_dir = output_dir / "backtest"
+        bt_dir.mkdir()
+        bt_rm = bt_dir / "report_manifest.json"
+        bt_rm.write_text("{}")
+        request = _make_request(tmp_path, output_dir=output_dir, run_id="r4")
+        result = ResearchRunResult(
+            run_id="r4", output_dir=output_dir,
+            preflight_status="skipped", eval_status="skipped", backtest_status="ok",
+            manifest_path=output_dir / "research_run_manifest.json",
+            backtest_paths={"report_manifest": bt_rm},
+        )
+        path = _write_research_report_manifest(result, request)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        file_keys = {f["key"] for f in payload["files"]}
+        assert "backtest_report_manifest" in file_keys
+
+    def test_skipped_preflight_not_included(self, tmp_path):
+        output_dir = tmp_path / "run_output"
+        output_dir.mkdir()
+        (output_dir / "research_run_manifest.json").write_text(
+            json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                         "run_id": "r5", "command": "research-run",
+                         "strategy_path": "s.yaml", "artifacts": []}),
+            encoding="utf-8",
+        )
+        request = _make_request(tmp_path, output_dir=output_dir, run_id="r5")
+        result = ResearchRunResult(
+            run_id="r5", output_dir=output_dir,
+            preflight_status="skipped", eval_status="skipped", backtest_status="ok",
+            manifest_path=output_dir / "research_run_manifest.json",
+            preflight_paths={},
+            eval_paths={},
+        )
+        path = _write_research_report_manifest(result, request)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        file_keys = {f["key"] for f in payload["files"]}
+        assert "research_run_manifest" in file_keys
+        assert "preflight_report" not in file_keys
+        assert "eval_report_manifest" not in file_keys

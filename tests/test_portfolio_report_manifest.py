@@ -1919,3 +1919,195 @@ def test_validate_contents_accepts_valid_research_run_manifest(tmp_path):
     )
     manifest = ReportManifest.from_path(manifest_path)
     assert manifest.validate_contents() == []
+
+
+# --- research_run_report_manifest ---
+
+
+def test_report_manifest_accepts_research_run_report_manifest_kind(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "research_run_report_manifest",
+                "files": [
+                    {
+                        "key": "research_run_manifest",
+                        "path": "research_run_manifest.json",
+                        "filename": "research_run_manifest.json",
+                        "role": "run_manifest",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.kind == "research_run_report_manifest"
+
+
+def test_research_run_report_manifest_validates_run_manifest_role(tmp_path):
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "research_run_manifest",
+                "run_id": "test-123",
+                "command": "research-run",
+                "strategy_path": "strategy.yaml",
+                "artifacts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "research_run_report_manifest",
+                "files": [
+                    {
+                        "key": "research_run_manifest",
+                        "path": "research_run_manifest.json",
+                        "filename": "research_run_manifest.json",
+                        "role": "run_manifest",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents(role="run_manifest") == []
+
+
+def test_research_run_report_manifest_reports_missing_files(tmp_path):
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "research_run_report_manifest",
+                "files": [
+                    {
+                        "key": "research_run_manifest",
+                        "path": "research_run_manifest.json",
+                        "filename": "research_run_manifest.json",
+                        "role": "run_manifest",
+                    },
+                    {
+                        "key": "preflight_report",
+                        "path": "preflight/preflight_report.json",
+                        "filename": "preflight_report.json",
+                        "role": "preflight_report",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 2
+    codes = {i.code for i in issues}
+    assert codes == {"missing_file"}
+
+
+def test_research_run_report_manifest_with_all_stage_entries(tmp_path):
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "research_run_manifest",
+                "run_id": "r1",
+                "command": "research-run",
+                "strategy_path": "s.yaml",
+                "artifacts": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text('{"status": "ok"}', encoding="utf-8")
+    eval_dir = tmp_path / "eval"
+    eval_dir.mkdir()
+    (eval_dir / "report_manifest.json").write_text("{}", encoding="utf-8")
+    backtest_dir = tmp_path / "backtest"
+    backtest_dir.mkdir()
+    (backtest_dir / "report_manifest.json").write_text("{}", encoding="utf-8")
+
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "research_run_report_manifest",
+                "files": [
+                    {
+                        "key": "research_run_manifest",
+                        "path": "research_run_manifest.json",
+                        "filename": "research_run_manifest.json",
+                        "role": "run_manifest",
+                    },
+                    {
+                        "key": "preflight_report",
+                        "path": "preflight/preflight_report.json",
+                        "filename": "preflight_report.json",
+                        "role": "preflight_report",
+                    },
+                    {
+                        "key": "eval_report_manifest",
+                        "path": "eval/report_manifest.json",
+                        "filename": "report_manifest.json",
+                        "role": "eval_report_manifest",
+                    },
+                    {
+                        "key": "backtest_report_manifest",
+                        "path": "backtest/report_manifest.json",
+                        "filename": "report_manifest.json",
+                        "role": "backtest_report_manifest",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_research_run_report_manifest_run_manifest_validation_reports_errors(tmp_path):
+    """run_manifest role validation catches broken research_run_manifest payloads."""
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "research_run_manifest",
+                "run_id": "r1",
+                "command": "research-run",
+                # missing strategy_path and artifacts
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "kind": "research_run_report_manifest",
+                "files": [
+                    {
+                        "key": "research_run_manifest",
+                        "path": "research_run_manifest.json",
+                        "filename": "research_run_manifest.json",
+                        "role": "run_manifest",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 2
+    codes = {i.code for i in issues}
+    assert codes == {"missing_run_manifest_field"}

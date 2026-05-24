@@ -7902,6 +7902,7 @@ def test_cli_research_run_success_prints_stage_paths(capsys, monkeypatch, tmp_pa
     assert "eval_status=ok" in captured.out
     assert "backtest_status=ok" in captured.out
     assert "research_manifest=" in captured.out
+    assert "report_manifest=" in captured.out
     assert "preflight_preflight_report=" in captured.out
     assert "eval_report_manifest=" in captured.out
     assert "eval_run_manifest=" in captured.out
@@ -7954,6 +7955,62 @@ def test_cli_research_run_prints_preflight_error(capsys, monkeypatch, tmp_path):
     assert "preflight_status=error" in captured.out
     assert "error=" in captured.err
     assert "Preflight failed" in captured.err
+
+
+def test_cli_report_files_research_run_report_manifest(capsys, tmp_path):
+    """report-files on a research_run_report_manifest with --check-exists --validate-contents exits 0."""
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                     "run_id": "r1", "command": "research-run",
+                     "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "research_run_manifest", "path": "research_run_manifest.json",
+                 "filename": "research_run_manifest.json", "role": "run_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-files", str(tmp_path / "report_manifest.json"),
+        "--check-exists", "--validate-contents",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0, f"stderr: {captured.err}"
+    assert "research_run_manifest.json" in captured.out
+
+
+def test_cli_report_audit_research_run_report_manifest_role_run_manifest(capsys, tmp_path):
+    """report-audit on research_run_report_manifest --role run_manifest --require-match exits 0."""
+    (tmp_path / "research_run_manifest.json").write_text(
+        json.dumps({"schema_version": 1, "kind": "research_run_manifest",
+                     "run_id": "r1", "command": "research-run",
+                     "strategy_path": "strategy.yaml", "artifacts": []}),
+        encoding="utf-8",
+    )
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "research_run_manifest", "path": "research_run_manifest.json",
+                 "filename": "research_run_manifest.json", "role": "run_manifest"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-audit", str(tmp_path / "report_manifest.json"),
+        "--role", "run_manifest",
+        "--require-match",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 0, f"stderr: {captured.err}"
+    assert "matched_files=1" in captured.out
+    assert "status=ok" in captured.out
 
 
 class _FakeStore:

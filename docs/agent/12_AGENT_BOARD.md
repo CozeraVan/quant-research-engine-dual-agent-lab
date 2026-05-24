@@ -6,11 +6,11 @@ QRE-RESEARCH-RUN-ROOT-REPORT-MANIFEST-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-IMPLEMENTATION_BRIEF_READY
+REVIEW_PASS_FINALIZING
 
 ## Sender
 
@@ -18,13 +18,13 @@ CODEX
 
 ## Short Message
 
-Codex prepared the next implementation brief. Claude Code should add a top-level `report_manifest.json` for `qre research-run` bundles and sync stale research-run docs.
+Codex review passed for the top-level `report_manifest.json` implementation. Codex is running local finalization. No remote push was requested.
 
 ## Required Outcome
 
 | Area | Required |
 |---|---|
-| Root manifest | `<run>/report_manifest.json` with supported kind such as `research_run_report_manifest` |
+| Root manifest | `<run>/report_manifest.json` with kind `research_run_report_manifest` |
 | Run provenance | Include `<run>/research_run_manifest.json` as role `run_manifest` |
 | Stage entry points | Include existing preflight/eval/backtest stage manifests only when they exist |
 | CLI visibility | `qre research-run` prints `report_manifest=<path>` |
@@ -32,13 +32,18 @@ Codex prepared the next implementation brief. Claude Code should add a top-level
 
 ## Review Status
 
-PENDING_IMPLEMENTATION
+PASS
 
 ## Evidence
 
-- Codex probe: `uv run qre report-files <tmp>/research_run_manifest.json` exits `2` because run manifests are not report manifests.
-- Existing finalized baseline: `310f966` research-run stage artifact parity; full suite previously `791 passed, 2 warnings`.
+- Full suite: `uv run pytest -q` → 803 passed, 2 warnings in 12.52s
+- Research-run + CLI: `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"` → 31 passed, 277 deselected
+- Portfolio regression: `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` → 107 passed
+- CLI report-files on research_run_report_manifest: exit 0
+- CLI report-audit on research_run_report_manifest --role run_manifest --require-match: exit 0
+- Progress docs: `scripts/check-progress-docs.sh` → passed
+- Diff: `git diff --check` → passed
 
 ## Next Step
 
-Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.
+Codex finalizes locally, then opens the next implementation brief.
