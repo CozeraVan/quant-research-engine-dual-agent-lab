@@ -72,7 +72,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `dcb4925` (research-run stage manifest recursive audit), `5306a81` (recursive audit handoff checkpoint)
+- Recent commits: `7c7e682` (research-run preflight audit handoff), `dcb4925` (research-run stage manifest recursive audit)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
