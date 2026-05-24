@@ -11,6 +11,7 @@ from quant_research_engine.data.assembler import ResearchFrameAssembler
 from quant_research_engine.data.postgres import PostgresDataStore
 from quant_research_engine.data.settings import DatabaseSettings
 from quant_research_engine.evaluation.engine import EvaluationEngine
+from quant_research_engine.evaluation.io import write_evaluation_output
 from quant_research_engine.evaluation.models import EvaluationRequest
 from quant_research_engine.markets.ashare import AShareMarketProfile
 from quant_research_engine.portfolio.batch import BatchBacktestEngine, BatchBacktestRequest
@@ -49,6 +50,8 @@ class ResearchRunResult:
     eval_status: str  # "ok", "error", "skipped"
     backtest_status: str  # "ok", "error"
     backtest_paths: dict[str, Path] = field(default_factory=dict)
+    eval_paths: dict[str, Path] = field(default_factory=dict)
+    preflight_paths: dict[str, Path] = field(default_factory=dict)
     manifest_path: Path | None = None
     error_message: str | None = None
 
@@ -84,6 +87,40 @@ def _run_preflight(
     return status, report
 
 
+def _write_preflight_artifact(report, output_dir: Path) -> Path:
+    """Persist preflight report JSON. Returns the file path."""
+    directory = output_dir / "preflight"
+    directory.mkdir(parents=True, exist_ok=True)
+    report_path = directory / "preflight_report.json"
+
+    if hasattr(report, "to_dict"):
+        payload: dict[str, object] = report.to_dict()
+    else:
+        # Fallback for test fakes that don't implement to_dict()
+        payload = {"status": getattr(report, "status", "unknown")}
+        for attr in ("summary", "missing_factor_requests", "missing_factors",
+                      "details", "market_fields_available", "factor_fields_available",
+                      "universe_size", "factor_coverage", "calendar_range"):
+            val = getattr(report, attr, None)
+            if val is not None:
+                try:
+                    json.dumps(val)
+                    payload[attr] = val
+                except (TypeError, ValueError):
+                    payload[attr] = str(val)
+
+    report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, cls=_PreflightEncoder), encoding="utf-8")
+    return report_path
+
+
+class _PreflightEncoder(json.JSONEncoder):
+    def default(self, o):
+        try:
+            return super().default(o)
+        except TypeError:
+            return str(o)
+
+
 def _run_eval(
     store: PostgresDataStore,
     spec: StrategySpec,
@@ -99,16 +136,34 @@ def _run_eval(
         factor_fields=spec.factor_fields,
     )
     eval_req = EvaluationRequest(
-        frame=frame,
-        expression=spec.signal_expression,
-        start=request.start,
-        end=request.end,
-        group_by=request.group_by,
+        signal_expression=spec.signal_expression,
+        forward_horizons=spec.forward_horizons,
+        factor_columns=[f.logical_name for f in spec.factor_fields] if spec.factor_fields else None,
+        quantiles=spec.quantiles,
         round_trip_cost_rate=request.round_trip_cost_rate,
+        group_by=request.group_by,
         random_baseline_seed=request.random_baseline_seed,
     )
-    result = EvaluationEngine().run(eval_req)
+    result = EvaluationEngine().evaluate(frame, eval_req)
     return "ok", result
+
+
+def _write_eval_artifacts(result, request: ResearchRunRequest) -> dict[str, Path]:
+    """Persist evaluation artifacts under <output_dir>/eval/. Returns artifact paths dict."""
+    eval_dir = request.output_dir / "eval"
+    return write_evaluation_output(
+        result=result,
+        output_dir=eval_dir,
+        run_id=request.run_id,
+        strategy_path=str(request.strategy_path),
+        start=str(request.start),
+        end=str(request.end),
+        codes=request.codes,
+        round_trip_cost_rate=request.round_trip_cost_rate,
+        market_profile=str(request.market_profile_path) if request.market_profile_path else None,
+        group_by=request.group_by,
+        random_baseline_seed=request.random_baseline_seed,
+    )
 
 
 def _run_backtest(
@@ -133,6 +188,9 @@ def _run_backtest(
         else AShareMarketProfile()
     )
 
+    backtest_dir = request.output_dir / "backtest"
+    backtest_dir.mkdir(parents=True, exist_ok=True)
+
     if request.backtest_mode == "batch":
         batch_req = BatchBacktestRequest(
             initial_cash=request.initial_cash,
@@ -155,7 +213,7 @@ def _run_backtest(
                 "end": str(request.end),
             },
         }
-        paths = write_batch_result(result, request.output_dir, run_request=run_request_payload, run_id=request.run_id)
+        paths = write_batch_result(result, backtest_dir, run_request=run_request_payload, run_id=request.run_id)
         return "ok", paths
 
     # shared-cash mode
@@ -183,13 +241,25 @@ def _run_backtest(
             "end": str(request.end),
         },
     }
-    paths = write_shared_cash_result(shared_result, request.output_dir, run_request=run_request_payload, run_id=request.run_id)
+    paths = write_shared_cash_result(shared_result, backtest_dir, run_request=run_request_payload, run_id=request.run_id)
     return "ok", paths
 
 
 def _write_research_manifest(result: ResearchRunResult, request: ResearchRunRequest) -> Path:
     """Write research_run_manifest.json and return its path."""
     manifest_path = result.output_dir / "research_run_manifest.json"
+
+    def _rel_paths(paths: dict[str, Path], base: Path) -> dict[str, str]:
+        return {key: str(path.relative_to(base)) for key, path in paths.items()}
+
+    run_root = result.output_dir
+
+    stages: dict[str, object] = {
+        "preflight": result.preflight_status,
+        "eval": result.eval_status,
+        "backtest": result.backtest_status,
+    }
+
     payload: dict[str, object] = {
         "schema_version": 1,
         "kind": "research_run_manifest",
@@ -197,17 +267,26 @@ def _write_research_manifest(result: ResearchRunResult, request: ResearchRunRequ
         "command": "research-run",
         "strategy_path": str(request.strategy_path),
         "output_dir": str(result.output_dir),
-        "stages": {
-            "preflight": result.preflight_status,
-            "eval": result.eval_status,
-            "backtest": result.backtest_status,
-        },
-        "backtest_artifacts": {
-            key: str(path.relative_to(result.output_dir))
-            for key, path in result.backtest_paths.items()
-        },
-        "artifacts": sorted(result.backtest_paths.keys()),
+        "stages": stages,
     }
+
+    if result.preflight_paths:
+        payload["preflight_artifacts"] = _rel_paths(result.preflight_paths, run_root)
+    if result.eval_paths:
+        payload["eval_artifacts"] = _rel_paths(result.eval_paths, run_root)
+    if result.backtest_paths:
+        payload["backtest_artifacts"] = _rel_paths(result.backtest_paths, run_root)
+
+    # Top-level artifacts: stage-qualified keys to avoid duplicates across stages
+    all_keys: list[str] = []
+    if result.preflight_paths:
+        all_keys.extend(f"preflight:{k}" for k in result.preflight_paths.keys())
+    if result.eval_paths:
+        all_keys.extend(f"eval:{k}" for k in result.eval_paths.keys())
+    if result.backtest_paths:
+        all_keys.extend(f"backtest:{k}" for k in result.backtest_paths.keys())
+    payload["artifacts"] = sorted(all_keys)
+
     if result.error_message:
         payload["error"] = result.error_message
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -232,6 +311,8 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
         spec = StrategySpec.from_yaml(request.strategy_path)
         status, report = _run_preflight(store, spec, request)
         result.preflight_status = status
+        if status == "ok":
+            result.preflight_paths["preflight_report"] = _write_preflight_artifact(report, request.output_dir)
         if status == "error":
             result.error_message = f"Preflight failed (status={status})"
             result.manifest_path = _write_research_manifest(result, request)
@@ -243,6 +324,8 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
     if not request.skip_eval:
         status, eval_result = _run_eval(store, spec, request)
         result.eval_status = status
+        if status == "ok":
+            result.eval_paths = _write_eval_artifacts(eval_result, request)
         if status == "error":
             result.error_message = "Evaluation failed"
             result.manifest_path = _write_research_manifest(result, request)

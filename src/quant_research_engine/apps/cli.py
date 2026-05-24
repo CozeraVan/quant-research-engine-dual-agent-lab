@@ -44,6 +44,7 @@ from quant_research_engine.strategies.missing_factor import (
 )
 from quant_research_engine.strategies.smoke_runner import run_strategy_smoke
 from quant_research_engine.strategies.spec import StrategySpec
+from quant_research_engine.evaluation.io import write_evaluation_output
 from quant_research_engine.orchestration.research_run import ResearchRunRequest, run_research_run
 
 
@@ -394,129 +395,6 @@ def resolve_round_trip_cost_rate(args: argparse.Namespace) -> float | None:
     buy_rate = profile.commission_rate + profile.transfer_fee_rate + profile.slippage_buy_rate
     sell_rate = profile.commission_rate + profile.transfer_fee_rate + profile.stamp_tax_sell + profile.slippage_sell_rate
     return buy_rate + sell_rate
-
-
-def _eval_manifest_role(key: str) -> str:
-    if key == "summary":
-        return "evaluation_summary"
-    if key == "group_summary" or key.startswith("group_summary_by_"):
-        return "evaluation_group_summary"
-    if key == "random_baseline_summary":
-        return "random_baseline_summary"
-    if key == "run_manifest":
-        return "run_manifest"
-    return key
-
-
-def _eval_manifest_group_by(key: str) -> str | None:
-    if key.startswith("group_summary_by_"):
-        return key.removeprefix("group_summary_by_")
-    return None
-
-
-def _eval_manifest_entry(key: str, path: Path, output_dir: Path) -> dict[str, object]:
-    entry: dict[str, object] = {
-        "key": key,
-        "path": path.relative_to(output_dir).as_posix(),
-        "filename": path.name,
-        "role": _eval_manifest_role(key),
-    }
-    group_by_col = _eval_manifest_group_by(key)
-    if group_by_col is not None:
-        entry["group_by"] = group_by_col
-    return entry
-
-
-def _write_evaluation_output(
-    *,
-    result: EvaluationResult,
-    output_dir: Path,
-    args: argparse.Namespace,
-    strategy_path: str,
-) -> None:
-    directory = Path(output_dir)
-    directory.mkdir(parents=True, exist_ok=True)
-
-    artifact_paths: dict[str, Path] = {}
-
-    events_path = directory / "events.csv"
-    result.events.to_csv(events_path, index=False)
-    artifact_paths["events"] = events_path
-
-    if not result.summary.empty:
-        p = directory / "summary.csv"
-        result.summary.to_csv(p, index=False)
-        artifact_paths["summary"] = p
-
-    if not result.ic_summary.empty:
-        p = directory / "ic_summary.csv"
-        result.ic_summary.to_csv(p, index=False)
-        artifact_paths["ic_summary"] = p
-
-    if not result.quantile_summary.empty:
-        p = directory / "quantile_summary.csv"
-        result.quantile_summary.to_csv(p, index=False)
-        artifact_paths["quantile_summary"] = p
-
-    if not result.group_summary.empty:
-        p = directory / "group_summary.csv"
-        result.group_summary.to_csv(p, index=False)
-        artifact_paths["group_summary"] = p
-        for group_column in sorted(result.group_summary["group_by"].dropna().unique()):
-            per_col = result.group_summary[result.group_summary["group_by"] == group_column]
-            p_col = directory / f"group_summary_by_{group_column}.csv"
-            per_col.to_csv(p_col, index=False)
-            artifact_paths[f"group_summary_by_{group_column}"] = p_col
-
-    if not result.random_baseline_summary.empty:
-        p = directory / "random_baseline_summary.csv"
-        result.random_baseline_summary.to_csv(p, index=False)
-        artifact_paths["random_baseline_summary"] = p
-
-    if not result.factor_decay_summary.empty:
-        p = directory / "factor_decay_summary.csv"
-        result.factor_decay_summary.to_csv(p, index=False)
-        artifact_paths["factor_decay_summary"] = p
-
-    run_manifest_payload: dict[str, object] = {
-        "schema_version": 1,
-        "kind": "evaluation_run_manifest",
-        "run_id": args.run_id,
-        "command": "eval-config",
-        "strategy_path": strategy_path,
-        "start": str(args.start),
-        "end": str(args.end),
-        "codes": args.codes,
-        "round_trip_cost_rate": args.round_trip_cost_rate,
-        "market_profile": str(args.market_profile) if args.market_profile else None,
-        "group_by": args.group_by,
-        "random_baseline_seed": args.random_baseline_seed,
-        "artifacts": sorted(artifact_paths.keys()),
-    }
-    run_manifest_path = directory / "run_manifest.json"
-    run_manifest_path.write_text(
-        json.dumps(run_manifest_payload, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
-    artifact_paths["run_manifest"] = run_manifest_path
-
-    files = sorted(
-        (
-            _eval_manifest_entry(key, path, directory)
-            for key, path in artifact_paths.items()
-        ),
-        key=lambda f: f["key"],
-    )
-    report_manifest_payload: dict[str, object] = {
-        "schema_version": 1,
-        "kind": "evaluation_report_manifest",
-        "files": files,
-    }
-    report_manifest_path = directory / "report_manifest.json"
-    report_manifest_path.write_text(
-        json.dumps(report_manifest_payload, ensure_ascii=False, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -913,11 +791,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("factor_decay_summary")
             print(result.factor_decay_summary.to_csv(index=False).strip())
         if args.output_dir:
-            _write_evaluation_output(
+            write_evaluation_output(
                 result=result,
                 output_dir=args.output_dir,
-                args=args,
+                run_id=args.run_id,
                 strategy_path=str(args.strategy),
+                start=str(args.start),
+                end=str(args.end),
+                codes=args.codes,
+                round_trip_cost_rate=args.round_trip_cost_rate,
+                market_profile=str(args.market_profile) if args.market_profile else None,
+                group_by=args.group_by,
+                random_baseline_seed=args.random_baseline_seed,
             )
         return 0
 
@@ -1901,8 +1786,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         if result.backtest_status == "error":
             return 2
+        for key, path in result.preflight_paths.items():
+            print(f"preflight_{key}={path}")
+        for key, path in result.eval_paths.items():
+            print(f"eval_{key}={path}")
         for key, path in result.backtest_paths.items():
-            print(f"{key}_path={path}")
+            print(f"backtest_{key}={path}")
         return 0
 
     if args.command == "gui":

@@ -45,14 +45,13 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` is briefed for Claude Code. It should make `qre research-run` persist and link the stage artifacts documented for preflight, evaluation, and backtest. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` passed Codex review and local finalization is complete. `qre research-run` now persists and links stage-scoped preflight, evaluation, and backtest artifacts. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
 - Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
 - Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables. Tushare `suspend_d` is available for smoke validation, but `stock_st` and `stk_alert` remain permission-gated.
 - The reusable Tushare security source adapter exists, but the authoritative upstream security-status table is still missing.
-- `qre research-run` currently runs evaluation in memory and writes backtest outputs directly under the run root; stage-scoped `eval/report_manifest.json` and `backtest/report_manifest.json` parity is the next planned fix.
 - Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
 - Evaluation layer does not yet implement real index benchmark comparison or real regime classification.
 
@@ -72,7 +71,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `ba85f79` (research-run parity handoff), `d49d417` (strategy standardization finalized)
+- Recent commits: research-run parity finalization, `99e0840` (research-run parity handoff checkpoint)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`

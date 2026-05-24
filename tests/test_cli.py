@@ -7816,20 +7816,149 @@ factor_fields:
     assert captured.err != ""
 
 
-class ResearchRunStrategySpec(StrategySpec):
-    """A StrategySpec that accepts factor_fields as-is without resolving."""
+def test_cli_research_run_success_prints_stage_paths(capsys, monkeypatch, tmp_path):
+    """Successful research-run prints stage manifest paths to stdout."""
+    from quant_research_engine.orchestration import research_run as rr_module
 
-    @classmethod
-    def from_yaml(cls, path):  # noqa: N805
-        import yaml
+    strat_path = tmp_path / "strategy.yaml"
+    strat_path.write_text("name: test\nsignal:\n  entry: close > 0\n", encoding="utf-8")
+    output_dir = tmp_path / "run_output"
+    output_dir.mkdir()
 
-        with open(path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh)
-        signal = data.get("signal", {})
-        return cls(
-            name=data.get("name", "unnamed"),
-            signal_expression=signal.get("entry", "1"),
-            exit_signal_expression=signal.get("exit"),
-            factor_fields=data.get("factor_fields", []),
-            holding_days=data.get("holding_days"),
-        )
+    # Build fake spec
+    spec = StrategySpec(
+        name="test_strategy",
+        signal_expression="close > 0",
+        exit_signal_expression=None,
+        market_fields=["open", "high", "low", "close", "vol", "amount"],
+        factor_fields=[],
+        forward_horizons=[1, 3, 5],
+        holding_days=5,
+        quantiles=None,
+    )
+
+    monkeypatch.setattr(rr_module, "_build_db_store", lambda db_url=None: _FakeStore())
+    monkeypatch.setattr(
+        rr_module.StrategySpec,
+        "from_yaml",
+        staticmethod(lambda path: spec),
+    )
+
+    # Preflight mock
+    preflight_report = type("FakeReport", (), {
+        "status": "ok",
+        "summary": "All good",
+        "missing_factor_requests": None,
+        "missing_factors": None,
+        "details": None,
+        "market_fields_available": None,
+        "factor_fields_available": None,
+        "universe_size": None,
+        "factor_coverage": None,
+        "calendar_range": None,
+    })()
+    monkeypatch.setattr(rr_module, "_run_preflight", lambda *a, **kw: ("ok", preflight_report))
+
+    # Eval mock
+    eval_df = pd.DataFrame({"ts_code": ["000001.SZ"], "trade_date": [pd.Timestamp("2024-01-05")]})
+    empty_df = pd.DataFrame()
+    eval_result = type("FakeEvalResult", (), {
+        "events": eval_df,
+        "summary": empty_df,
+        "ic_summary": empty_df,
+        "quantile_summary": empty_df,
+        "group_summary": empty_df,
+        "random_baseline_summary": empty_df,
+        "factor_decay_summary": empty_df,
+    })()
+    monkeypatch.setattr(rr_module, "_run_eval", lambda *a, **kw: ("ok", eval_result))
+
+    # Backtest mock — write files under output_dir/backtest/
+    bt_dir = output_dir / "backtest"
+    bt_dir.mkdir(parents=True)
+    summary_csv = bt_dir / "summary.csv"
+    summary_csv.write_text("col1\n1")
+    bt_rm = bt_dir / "report_manifest.json"
+    bt_rm.write_text("{}")
+    monkeypatch.setattr(
+        rr_module,
+        "_run_backtest",
+        lambda *a, **kw: ("ok", {"summary_csv": summary_csv, "report_manifest": bt_rm}),
+    )
+
+    exit_code = main([
+        "research-run", str(strat_path),
+        "--start", "2024-01-01",
+        "--end", "2024-02-01",
+        "--output-dir", str(output_dir),
+        "--run-id", "cli-test-001",
+        "--db-url", "postgresql://localhost/test",
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "run_id=cli-test-001" in captured.out
+    assert "preflight_status=ok" in captured.out
+    assert "eval_status=ok" in captured.out
+    assert "backtest_status=ok" in captured.out
+    assert "research_manifest=" in captured.out
+    assert "preflight_preflight_report=" in captured.out
+    assert "eval_report_manifest=" in captured.out
+    assert "eval_run_manifest=" in captured.out
+    assert "backtest_summary_csv=" in captured.out
+    assert str(output_dir) in captured.out
+
+
+def test_cli_research_run_prints_preflight_error(capsys, monkeypatch, tmp_path):
+    """Research-run with preflight error prints error to stderr and exits 2."""
+    from quant_research_engine.orchestration import research_run as rr_module
+
+    strat_path = tmp_path / "strategy.yaml"
+    strat_path.write_text("name: test\nsignal:\n  entry: close > 0\n", encoding="utf-8")
+    output_dir = tmp_path / "run_output"
+    output_dir.mkdir()
+
+    spec = StrategySpec(
+        name="test_strategy",
+        signal_expression="close > 0",
+        exit_signal_expression=None,
+        market_fields=["open", "high", "low", "close", "vol", "amount"],
+        factor_fields=[],
+        forward_horizons=[1, 3, 5],
+        holding_days=5,
+        quantiles=None,
+    )
+
+    monkeypatch.setattr(rr_module, "_build_db_store", lambda db_url=None: _FakeStore())
+    monkeypatch.setattr(
+        rr_module.StrategySpec,
+        "from_yaml",
+        staticmethod(lambda path: spec),
+    )
+    monkeypatch.setattr(
+        rr_module,
+        "_run_preflight",
+        lambda *a, **kw: ("error", type("FakeReport", (), {"status": "error"})()),
+    )
+
+    exit_code = main([
+        "research-run", str(strat_path),
+        "--start", "2024-01-01",
+        "--end", "2024-02-01",
+        "--output-dir", str(output_dir),
+        "--db-url", "postgresql://localhost/test",
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "preflight_status=error" in captured.out
+    assert "error=" in captured.err
+    assert "Preflight failed" in captured.err
+
+
+class _FakeStore:
+    def __init__(self, settings=None):
+        self.settings = settings
+
+    def ping(self):
+        return True

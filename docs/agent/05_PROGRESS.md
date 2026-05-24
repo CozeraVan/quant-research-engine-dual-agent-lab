@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+DONE
 
 ## Current Active Work
 
-User approved `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`; Claude Code is assigned to implement the `qre research-run` stage artifact parity brief.
+`QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` passed Codex re-review and local git finalization is complete. No remote push was requested.
 
 ## Progress Table
 
@@ -123,24 +123,30 @@ User approved `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`; Claude Code is assig
 | QRE-FULL-MARKET-CHARTS-001 | Full-market report equity curve and drawdown charts | FINALIZED | CLAUDE_CODE | commit `a86018d`; `generate_equity_curve_chart()` + `generate_drawdown_chart()`; embedded in Excel; manifest roles registered; 10 new tests; 529 passed; review PASS | Preserve |
 | QRE-GUI-STRATEGY-BUILDER-001 | GUI parameter surface for standard strategy IO (M8.6) | FINALIZED | CLAUDE_CODE | commit `72600eb`; Builder tab with 4 form sections; compile endpoint; indicator catalog; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 | QRE-STRATEGY-STANDARDIZATION-001 | Standardize backtest engine entry/exit structure | DONE | CODEX/CLAUDE_CODE | Codex re-review passed; default smoke/GUI paths updated, docs synced, EMA200 source mapping fixed, HTML report coverage added, runner generates aggregate_summary.json, README fixed; full suite 777 passed, 2 warnings; final checks passed | Preserve; user decides next direction |
-| QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001 | Research-run stage artifact parity | IN_PROGRESS | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` ready; user approved implementation; Codex probe found `_run_eval()` is in-memory only and `_run_backtest()` writes to the run root despite README documenting stage manifests | Claude implements |
+| QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001 | Research-run stage artifact parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; all 3 Required Fixes verified; fake-store `_run_eval()` reproduction ok; 791 tests pass; progress docs, git finalize, and diff checks pass | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex prepared `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`:
+Recorded on 2026-05-24 after Codex re-reviewed `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`:
 
-- Current task: `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` — IN_PROGRESS
-- Current phase: `CLAUDE_IMPLEMENTING`
-- Current owner: `CLAUDE_CODE`
+- Current task: `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` — DONE
+- Current phase: `DONE`
+- Current owner: `USER`
 - Last finalized commit: `d49d417` (strategy standardization fix cycle finalized)
 - Last handoff checkpoint: `ba85f79` (research-run parity implementation handoff)
-- Working tree: clean after Codex handoff checkpoint
+- Working tree: clean after local finalization commit
 - Validation:
-  - Previous finalized task: full suite → 777 passed, 2 warnings
-  - Previous finalized task: `scripts/check-progress-docs.sh`, `scripts/git-finalize-check.sh`, and `git diff --check` passed
-  - Next-task probe: inspected `research_run.py`, README research-run output docs, and current tests
-  - Next-task probe finding: `research-run` does not persist eval artifacts or stage-scoped backtest artifacts as documented
-- Next step: Claude Code implements `08_IMPLEMENTATION_BRIEF.md` and returns to Codex for review.
+  - Full suite: `uv run pytest -q` → 791 passed, 2 warnings in 12.83s (+2 regression tests)
+  - Research-run tests: `uv run pytest tests/test_research_run.py -q` → 19 passed
+  - Targeted: `uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or eval_config"` → 38 passed, 2 warnings
+  - Portfolio regression: `uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q` → 102 passed
+  - CLI research-run tests: `uv run pytest tests/test_cli.py -q -k "research_run"` → 5 passed
+  - Eval-config regression: `uv run pytest tests/test_cli.py -q -k "eval_config"` → 14 passed
+  - Progress docs: `scripts/check-progress-docs.sh` → passed
+  - Diff: `git diff --check` → clean
+  - Codex fake-store `_run_eval()` reproduction → ok, events include `forward_return_1`
+  - Reminder: `evaluation/io.py` is untracked — Codex must `git add` during finalization
+- Next step: User decides next direction. No remote push was requested.
 
 Current GUI direction approved on 2026-05-21:
 
@@ -200,7 +206,7 @@ User-requested strategy work in 2026-05-21:
 - Canonical security-snapshot contract is complete; later bulk ingestion can reuse the Tushare source scaffold.
 - Bulk ingestion / durable loading for the Tushare security source scaffold once the upstream source contract is settled.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
-- Research-run CLI orchestrator exists, but stage artifact parity is planned: persist and link preflight/eval/backtest stage artifacts from `qre research-run`.
+- Research-run CLI orchestrator persists and links preflight/eval/backtest stage artifacts from `qre research-run`.
 - Strategy IO contract implementation after design approval.
 - GUI parameter controls over the future standard strategy entry contract.
 

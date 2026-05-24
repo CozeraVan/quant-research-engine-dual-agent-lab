@@ -6,11 +6,11 @@ QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+USER
 
 ## Message Type
 
-IMPLEMENTATION_REQUEST
+FINALIZATION_COMPLETE
 
 ## Sender
 
@@ -18,19 +18,31 @@ CODEX
 
 ## Short Message
 
-User approved implementation. Claude Code should implement `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001` from `08_IMPLEMENTATION_BRIEF.md`.
+Codex re-review passed and local finalization is complete for `QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001`. No remote push was requested.
+
+## Fix Summary
+
+| Fix | Change |
+|---|---|
+| Required 1 | `_run_eval()`: correct `EvaluationRequest` sig + `.evaluate()` + regression test |
+| Required 2 | `_write_preflight_artifact()`: uses `to_dict()` when available + regression test |
+| Required 3 | `evaluation/io.py`: confirmed present; Codex must `git add` |
+| Recommended 1 | `market_profile` provenance passed to `write_evaluation_output()` |
+| Recommended 2 | Top-level `artifacts` stage-qualified (`preflight:`, `eval:`, `backtest:`) |
 
 ## Review Status
 
-NOT_STARTED
+PASS
 
 ## Evidence
 
-- README documents `outputs/research/<run>/eval/report_manifest.json` and `outputs/research/<run>/backtest/report_manifest.json`.
-- `src/quant_research_engine/orchestration/research_run.py::_run_eval()` runs evaluation but does not persist evaluation artifacts.
-- `_run_backtest()` writes artifacts directly into the research-run root instead of `<output_dir>/backtest/`.
-- `tests/test_cli.py` only covers `research-run` help/missing-DB paths and ends with an unused `ResearchRunStrategySpec` helper.
+- Full suite: `uv run pytest -q` → 791 passed, 2 warnings
+- Targeted: `tests/test_research_run.py tests/test_cli.py -k "research_run or eval_config"` → 38 passed
+- Portfolio regression: `tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py` → 102 passed
+- Progress docs: `scripts/check-progress-docs.sh` → passed
+- Diff: `git diff --check` → clean
+- Codex fake-store `_run_eval()` reproduction → ok, events include `forward_return_1`
 
 ## Next Step
 
-Claude Code implements the brief, updates `09_CODING_HANDOFF.md`, `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`, then returns to Codex for review.
+User decides the next project direction. No remote push was requested.

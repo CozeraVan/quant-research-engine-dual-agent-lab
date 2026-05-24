@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-STRATEGY-STANDARDIZATION-001-FIXES
+QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001
 
 ## Written By
 
@@ -10,90 +10,82 @@ CLAUDE_CODE
 
 ## Intended Reviewer
 
-CODEX (or CLAUDE_CODE acting reviewer — Codex unavailable)
+CODEX
 
 ## Status
 
-REVIEW_PASSED
+FIXED
 
 ## Objective
 
-Implement all Required Fixes from Codex review (`10_REVIEW_REPORT.md`) for `QRE-STRATEGY-STANDARDIZATION-001`. Codex re-review passed; local git finalization is next.
+Address the 3 Required Fixes and 2 Recommended Fixes from `10_REVIEW_REPORT.md`.
 
-## Fix Summary
+## Fix 1: Real `_run_eval()` with correct `EvaluationRequest` signature
 
-### Fix 1: Default `qre strategy-smoke` paths → `strategies/high_level/`
-- `src/quant_research_engine/apps/cli.py`: Changed 3 default strategy paths from deleted `examples/` to `strategies/high_level/`.
+- Changed `_run_eval()` from invalid `EvaluationRequest(frame=..., expression=..., start=..., end=...)` + `EvaluationEngine().run()` to the correct `EvaluationRequest(signal_expression=..., forward_horizons=..., factor_columns=..., quantiles=..., round_trip_cost_rate=..., group_by=..., random_baseline_seed=...)` + `EvaluationEngine().evaluate(frame, eval_req)`. Matches the `eval-config` handler pattern exactly.
+- Added `TestRunEvalReal.test_run_eval_with_correct_evaluation_request_shape` that creates a real FakeStore with 5 days of market data and calls `_run_eval()` directly (no monkeypatch). Asserts `forward_return_1` column appears in the events, confirming the real evaluation engine ran.
 
-### Fix 2: GUI default YAML template path → `strategies/low_level/`
-- `src/quant_research_engine/gui/app.py`: `DEFAULT_STRATEGY_TEMPLATE` now points to `strategies/low_level/ema200_bollinger_reversal.yaml`.
+## Fix 2: Preserve real `PreflightReport.to_dict()` fields
 
-### Fix 3: Active docs `examples/` references → `strategies/`
-- `docs/modules/evaluation_layer.md`: `examples/rsi2_reversal_research.yaml` → `strategies/low_level/rsi2_reversal_research.yaml`
-- `docs/modules/portfolio_workflow.md`: `examples/rsi2_reversal_with_rebalance.yaml` → `strategies/low_level/rsi2_reversal_with_rebalance.yaml`
-- `docs/strategy_entry/three_strategy_smoke_report.md`: All 10 `examples/` references → `strategies/high_level/` (all are entry files)
+- `_write_preflight_artifact()` now checks `hasattr(report, "to_dict")` first and writes the full `to_dict()` payload. Falls back to manual attribute extraction for test fakes without `to_dict()`.
+- Added `TestWritePreflightArtifact.test_writes_preflight_json_with_to_dict` using a real `PreflightReport` instance with `FactorCoverage` data. Asserts `market_rows`, `latest_market_date`, `requested_symbols`, `loaded_symbols`, `missing_symbols`, `factor_coverages`, `joined_rows`, `join_coverage_ratio`, `metadata_rows`, `universe_total_symbols`, `benchmark_rows`, `benchmark_non_null_rows`, and `checks` all survive in the JSON.
+- Updated the fake fallback test to use a plain class (MagicMock auto-creates `to_dict` on attribute access, which would bypass the fallback).
 
-### Fix 4: Agent docs aligned through fix cycle
-- All agent docs (09/04/05/11/12) updated with fix summary and validation evidence.
+## Fix 3: Track `evaluation/io.py`
 
-### Fix 5: EMA200 factor source mismatch (typical → typical_price)
-- `src/quant_research_engine/strategies/compiler.py`: Added `_SOURCE_TO_TABLE_SUFFIX` mapping: `{"typical": "typical_price"}` in `_build_table_name()`. The user-facing source name `typical` stays unchanged in the catalog; only the DB table suffix changes.
-- `tests/test_compiler.py`: Updated `test_compile_ema200_bb_factor_targets` to expect `stock_daily_overlap_typical_price.ema_200`.
-- `docs/strategy_entry/three_strategy_smoke_report.md`: Updated residual note to reflect the fix.
+- `src/quant_research_engine/evaluation/io.py` is confirmed present and importable. The file is currently untracked (`git status` shows `??`). Per R-GIT-001, Claude Code does not stage or commit files — **Codex must `git add` this file during finalization.**
 
-### Fix 6: HTML report test coverage
-- `tests/test_full_market_report.py`: Added `TestGenerateHtmlReport` class with 5 tests:
-  - `test_generates_self_contained_html` — validates full HTML structure and all 8 sections
-  - `test_handles_empty_dataframes` — empty input produces valid HTML
-  - `test_embeds_chart_base64_when_provided` — chart PNGs embedded as base64 data URIs
-  - `test_no_chart_tags_when_charts_not_provided` — "No data" placeholders when charts absent
-  - `test_pnl_distribution_renders_bars` — PnL distribution bar chart rendering
-- Updated 4 existing integration tests to assert `html_report` in paths and manifest roles.
+## Recommended Fix 1: Pass `market_profile` to `write_evaluation_output()`
 
-### Fix 7: `run_bollinger_full.py` artifact reconciliation
-- Added `write_aggregate_summary()` function: computes aggregate metrics (return distribution, best/worst symbols, summary stats) from completed `summary.csv` and writes `aggregate_summary.json`.
-- Updated docstring to accurately list produced artifacts: `summary.csv`, `aggregate_summary.json`, `.progress`.
+- `_write_eval_artifacts()` now passes `market_profile=str(request.market_profile_path) if request.market_profile_path else None` to `write_evaluation_output()`, matching `eval-config` provenance behavior.
 
-### Fix 8: README fixes
-- Changed "10 个 sheet" → "多 sheet" (sheet count varies with chart sheets).
-- Fixed invalid preflight example: changed high-level entry path to low-level spec path with clarifying comment.
+## Recommended Fix 2: Stage-qualified top-level artifact keys
+
+- Top-level `research_run_manifest["artifacts"]` now uses stage-qualified keys: `preflight:<key>`, `eval:<key>`, `backtest:<key>`. This avoids ambiguous duplicates when eval and backtest both emit `report_manifest` or `run_manifest`.
+- Updated all 6 manifest tests to assert stage-qualified keys.
 
 ## Validation
 
 ```bash
-# Full test suite
+# Full suite
 uv run pytest -q
-# 775 passed, 2 warnings in 12.55s (770 → 775: +5 HTML tests)
+# 791 passed, 2 warnings (789 → 791: +2 tests for real-run-eval and preflight-to-dict)
 
-# Compiler tests (after source mapping fix)
-uv run pytest tests/test_compiler.py -q
-# 31 passed
+# Targeted
+uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or eval_config"
+# 38 passed, 2 warnings
 
-# HTML report tests
-uv run pytest tests/test_full_market_report.py -q -k "html"
+# Portfolio regression
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q
+# 102 passed
+
+# Research-run specific
+uv run pytest tests/test_research_run.py -q
+# 19 passed (17 → 19: +2 regression tests for Required Fixes 1 and 2)
+
+# CLI research-run
+uv run pytest tests/test_cli.py -q -k "research_run"
 # 5 passed
 
-scripts/check-progress-docs.sh
-# PASSED
+# Eval-config regression
+uv run pytest tests/test_cli.py -q -k "eval_config"
+# 14 passed
 
+# Progress docs
+scripts/check-progress-docs.sh
+# passed
+
+# Diff
 git diff --check
-# PASSED (no output — clean)
+# clean
 ```
 
-## Files Changed (this fix cycle)
+## Files Changed
 
-- `src/quant_research_engine/apps/cli.py` — Fix 1
-- `src/quant_research_engine/gui/app.py` — Fix 2
-- `docs/modules/evaluation_layer.md` — Fix 3
-- `docs/modules/portfolio_workflow.md` — Fix 3
-- `docs/strategy_entry/three_strategy_smoke_report.md` — Fixes 3, 5
-- `src/quant_research_engine/strategies/compiler.py` — Fix 5
-- `tests/test_compiler.py` — Fix 5
-- `tests/test_full_market_report.py` — Fix 6 (+5 tests, +4 assertion updates)
-- `strategies/run_bollinger_full.py` — Fix 7
-- `README.md` — Fix 8
-- `docs/agent/09_CODING_HANDOFF.md` — Fix 4 (this file)
-- `docs/agent/04_TASK_HANDOFF.md` — Fix 4
-- `docs/agent/05_PROGRESS.md` — Fix 4
-- `docs/agent/11_AGENT_STATE.md` — Fix 4
-- `docs/agent/12_AGENT_BOARD.md` — Fix 4
+- `src/quant_research_engine/orchestration/research_run.py` — Fixed `_run_eval()` (correct `EvaluationRequest` + `.evaluate()`), fixed `_write_preflight_artifact()` (use `to_dict()` when available), added `market_profile` pass-through, stage-qualified top-level artifacts
+- `tests/test_research_run.py` — 19 tests: added `test_writes_preflight_json_with_to_dict` (real `PreflightReport`), `test_writes_preflight_json_with_fake_fallback` (plain class), `test_run_eval_with_correct_evaluation_request_shape` (real `_run_eval()` with fake store)
+- `src/quant_research_engine/evaluation/io.py` — **UNTRACKED, must be git-add'ed by Codex during finalization**
+
+## Known Validation Gaps
+
+- No database available for end-to-end `qre research-run`. The monkeypatched tests cover all code paths; the new `test_run_eval_with_correct_evaluation_request_shape` exercises the real `_run_eval()` through the assembler → engine pipeline with a fake store. If a database is available, also run the real narrow `qre research-run` and report discovery/audit checks from `08_IMPLEMENTATION_BRIEF.md`.

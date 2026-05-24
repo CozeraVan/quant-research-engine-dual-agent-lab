@@ -2,78 +2,67 @@
 
 ## Task ID
 
-QRE-STRATEGY-STANDARDIZATION-001-FIXES
+QRE-RESEARCH-RUN-STAGE-ARTIFACT-PARITY-001
 
-## Written By
+## Reviewer
 
 CODEX
 
-## Review Outcome
+## Review Status
 
 PASS
 
-## Reviewed Implementation
+## Summary
 
-Claude Code implemented all Required Fixes for `QRE-STRATEGY-STANDARDIZATION-001`: default strategy-smoke paths, GUI default template path, active docs path migration, EMA200 source/table alignment, HTML report coverage, Bollinger full-market runner aggregate output, README behavior cleanup, and agent workflow doc alignment. Codex added two final regression tests during re-review to lock the default smoke path and GUI template source.
+Claude Code fixed all Required Fixes from the previous review. `qre research-run` now persists stage-scoped preflight, evaluation, and backtest artifacts; the top-level research manifest links them with stage-qualified artifact keys; and the reusable evaluation writer is present for finalization.
 
 ## Findings
 
 No blocking findings.
 
-## Fix Verification
+## Required Fix Verification
 
-- Default `qre strategy-smoke` now resolves the three canonical entries under `strategies/high_level/` and passes in no-DB mode with preflight/backtest skipped.
-- GUI default YAML template now resolves to `strategies/low_level/ema200_bollinger_reversal.yaml`.
-- Active non-legacy docs no longer contain stale `examples/` path references except historical review/brief text in agent docs.
-- High-level EMA200 compile target now emits `factors.stock_daily_overlap_typical_price.ema_200`, matching the preserved low-level spec and missing-factor expectations.
-- HTML report output now has direct unit/integration coverage and is included in generated manifest roles.
-- `strategies/run_bollinger_full.py` documents and writes `aggregate_summary.json` after chunk completion.
-- README preflight examples use low-level specs, and Excel sheet-count wording no longer hardcodes stale counts.
+1. `_run_eval()` now constructs a valid `EvaluationRequest` and calls `EvaluationEngine().evaluate(frame, eval_req)`.
+2. A no-DB fake-store reproduction of the real `_run_eval()` path now succeeds and returns events with `forward_return_1`.
+3. `_write_preflight_artifact()` uses `PreflightReport.to_dict()` when available, preserving real preflight fields.
+4. A regression test with a real `PreflightReport` verifies fields such as `market_rows`, `latest_market_date`, and factor coverage survive in JSON.
+5. `src/quant_research_engine/evaluation/io.py` exists and is required in the final git add.
+6. Recommended fixes are also addressed: evaluation run manifest receives `market_profile` provenance and top-level research artifacts are stage-qualified.
 
 ## Validation Run By Codex
 
 ```bash
-uv run pytest tests/test_cli.py::test_cli_strategy_smoke_default_strategies_use_current_paths tests/test_gui_app.py::test_default_strategy_template_uses_current_low_level_path -q
-# 2 passed
-
-uv run qre strategy-smoke --no-preflight --no-backtest --output-dir /tmp/qre-default-smoke-final
-# overall_status=pass; three canonical strategies compile=pass
-
-uv run qre strategy-smoke --strategies strategies/high_level/rsi2_oversold_reversal_entry.yaml strategies/high_level/ema200_bollinger_reversal_entry.yaml strategies/high_level/macd_zero_cross_momentum_entry.yaml --no-preflight --no-backtest --output-dir /tmp/qre-explicit-smoke-final
-# overall_status=pass
-
-uv run qre compile strategies/high_level/bollinger_mean_reversion_entry.yaml
-# compile_status=ok
-
-uv run qre compile strategies/high_level/ema200_bollinger_reversal_entry.yaml
-# compile_status=ok; factor_target_ema_200=factors.stock_daily_overlap_typical_price.ema_200
-
 uv run python - <<'PY'
-from quant_research_engine.strategies.spec import StrategySpec
-for path in [
-    "strategies/low_level/bollinger_mean_reversion.yaml",
-    "strategies/low_level/ema200_bollinger_reversal.yaml",
-    "strategies/low_level/rsi2_reversal_research.yaml",
-]:
-    StrategySpec.from_yaml(path)
-print("low-level specs ok")
+# fake-store _run_eval() reproduction
 PY
-# low-level specs ok
+# ok ['ts_code', 'trade_date', 'forward_return_1'] 4
 
-uv run pytest tests/test_cli.py tests/test_gui_app.py tests/test_gui_engine.py tests/test_compiler.py tests/test_strategy_spec.py tests/test_full_market_report.py tests/test_portfolio_io.py tests/test_portfolio_report_manifest.py -q
-# 537 passed, 2 warnings
+uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or eval_config"
+# 38 passed, 263 deselected, 2 warnings
+
+uv run pytest tests/test_portfolio_report_manifest.py tests/test_portfolio_io.py -q
+# 102 passed
+
+uv run pytest -q
+# 791 passed, 2 warnings
+
+scripts/check-progress-docs.sh
+# passed
+
+git diff --check
+# passed
 ```
 
 ## Remaining Risks
 
-- Database-backed preflight/backtest smoke was not run because no `QRE_MARKET_DB_URL` / `SR_MARKET_DB_URL` is configured in this environment.
-- `docs/legacy/` intentionally retains historical `examples/` references.
+- Database-backed `qre research-run` was not run because no database URL is configured in this environment.
+- Full-market research output quality remains outside this task; this review verifies artifact and manifest plumbing only.
 
 ## Final Recommendation
 
-Accept. Local git finalization completed without remote push because no remote push was requested.
+Accept and proceed to local git finalization. No remote push was requested.
 
 ## Next Agent State
 
-- Phase: `DONE`
-- Owner: `USER`
+- Phase: `CODEX_GIT_FINALIZING`
+- Owner: `CODEX`
