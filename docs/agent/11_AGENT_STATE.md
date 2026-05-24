@@ -4,24 +4,24 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+WAITING_USER_DIRECTION
 
 ## Current Owner
 
-CODEX
+USER
 
 ## Last Completed Step
 
-Codex reviewed `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` and recorded PASS. All 10 CLI regression tests pass without runtime changes — role selector parity was already correctly locked for research-run root report manifests.
+`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` finalized. Codex review PASS, commit `a027d69`.
 
-`10_REVIEW_REPORT.md` written. No required fixes. Ready for git finalization.
+Task: 10 CLI regression tests locking role selector parity for top-level `research_run_report_manifest` audits. No runtime changes needed — all selector behavior was already correct.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `00ac2f8` (avoid stale handoff checkpoint sha in recovery state)
+- Last finalized commit: `a027d69` (lock research-run audit role selector parity)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: implementation + review complete, ready to commit
+- Working tree: clean
 - Remote push: not requested.
 
 ## Latest Validation Evidence
@@ -31,17 +31,18 @@ Codex reviewed `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` and recorded PA
 - `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "research_run_report_manifest or preflight_report or nested_report_manifest or require_match"` -> 49 passed, 351 deselected in 0.50s
 - `git diff --check` -> clean
 - `scripts/check-progress-docs.sh` -> passed
+- `scripts/git-finalize-check.sh` -> passed
 
 ## Short Prompt Commands
 
 ### For Codex
 
 ```text
-请读取 11 和 12，进行 git finalize。
+请读取 11 和 12，等待用户下一步指示。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，等待 Codex 完成 git finalize。
+请读取 11 和 12，等待用户下一步指示。
 ```

@@ -6,21 +6,21 @@ QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001
 
 ## Current Recipient
 
-CODEX
+USER
 
 ## Message Type
 
-REVIEW_PASS_GIT_FINALIZE
+FINALIZED
 
 ## Sender
 
-CODEX (acting reviewer)
+CODEX
 
 ## Short Message
 
-Codex review is PASS. All 10 CLI regression tests pass without runtime changes. No required fixes. Proceed to git finalize.
+`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is complete. Implemented by Claude Code (10 CLI tests, no runtime changes), reviewed PASS by Codex, and committed as `a027d69`. Full suite: 836 passed, 2 warnings.
 
-## Required Outcome
+## Final Outcome
 
 | Area | Required | Status |
 |---|---|---|
@@ -30,19 +30,10 @@ Codex review is PASS. All 10 CLI regression tests pass without runtime changes. 
 | Require-match | matching selectors exit 0; no-match selectors exit 2 | VERIFIED |
 | No side effects | no-match or sibling-role selectors do not validate unrelated malformed files | VERIFIED |
 
-## Review Status
+## Commits
 
-PASS
-
-## Evidence
-
-- Full suite: 836 passed, 2 warnings in 11.77s (+10 from baseline 826)
-- CLI targeted: 128 passed, 173 deselected
-- Portfolio + CLI: 49 passed, 351 deselected
-- git diff --check: clean
-- progress docs check: passed
-- Review report: `10_REVIEW_REPORT.md` — PASS, no required fixes
+- `a027d69`: feat: lock research-run audit role selector parity with 10 CLI regression tests
 
 ## Next Step
 
-Codex performs git finalize: commit and (if user requests) push.
+User acceptance and next direction.

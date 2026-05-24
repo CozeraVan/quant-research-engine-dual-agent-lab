@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+WAITING_USER_DIRECTION
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is reviewed PASS by Codex. All 10 CLI regression tests pass without runtime changes. Ready for git finalization.
+`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` is finalized. Commit `a027d69`. All 10 CLI regression tests pass. Full suite: 836 passed, 2 warnings.
 
 ## Progress Table
 
@@ -131,20 +131,21 @@ CODEX_GIT_FINALIZING
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex reviewed `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001`:
+Recorded on 2026-05-24 after Codex finalized `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001`:
 
 - Current task: `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` — DONE
-- Current phase: `CODEX_GIT_FINALIZING`
-- Current owner: `CODEX`
-- Last finalized commit: `00ac2f8` (avoid stale handoff checkpoint sha in recovery state)
-- Working tree: implementation, review, and docs complete; ready for git finalization
+- Current phase: `WAITING_USER_DIRECTION`
+- Current owner: `USER`
+- Last finalized commit: `a027d69` (lock research-run audit role selector parity)
+- Working tree: clean
 - Validation:
   - Full suite: `uv run pytest -q` → 836 passed, 2 warnings in 11.77s (+10 tests)
   - CLI research_run + report_audit + report_files + require_match: 128 passed, 173 deselected in 1.01s
   - Portfolio manifest + CLI: research_run_report_manifest + preflight + nested + require_match: 49 passed, 351 deselected in 0.50s
   - `git diff --check`: clean
   - `scripts/check-progress-docs.sh`: passed
-- Next step: Codex performs git finalize (commit)
+  - `scripts/git-finalize-check.sh`: passed
+- Next step: User acceptance and next direction
 
 Current GUI direction approved on 2026-05-21:
 
