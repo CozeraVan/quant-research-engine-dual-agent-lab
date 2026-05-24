@@ -22,7 +22,8 @@ Codex opened the next implementation slice: `QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTO
 
 - Current branch: `master`
 - Last finalized commit: `eb3d8cd` (research-run preflight report content audit)
-- Last handoff checkpoint: `0149ce1` (research-run audit role selector parity brief)
+- Last handoff brief commit: `0149ce1` (research-run audit role selector parity brief)
+- Latest state checkpoint: current `HEAD` records this recovery pointer.
 - Standing approval: local commits approved by user; no remote push requested.
 - Working tree: clean after handoff checkpoint.
 - Remote push: not requested.
