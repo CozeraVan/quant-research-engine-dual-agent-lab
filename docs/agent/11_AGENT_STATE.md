@@ -4,50 +4,50 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+USER_ACCEPTANCE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Last Completed Step
 
-`QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001` finalized. Codex review PASS, commit `a027d69`.
+Claude Code implemented `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`, and Codex reviewed it with PASS.
 
-Task: 10 CLI regression tests locking role selector parity for top-level `research_run_report_manifest` audits. No runtime changes needed — all selector behavior was already correct.
+Changes:
+- README section 10 expanded with role-specific audit examples (run_manifest, preflight_report, eval_report_manifest, backtest_report_manifest)
+- portfolio_workflow.md: new research-run audit contract subsection
+- portfolio_layer.md: new report-manifest audit pointer section
+- No runtime/schema/test changes. Full suite unchanged at 836 passed.
 
-Codex opened the next implementation slice: `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`. The active task is documentation sync for the finalized research-run audit contract.
+Codex should finalize this reviewed documentation slice locally, then open the next narrow implementation brief.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `a027d69` (lock research-run audit role selector parity)
-- Last handoff brief commit: `796b1ad` (research-run audit usage documentation sync)
+- Last finalized commit: `a027d69` (lock research-run audit role selector parity; next local commit pending for audit usage docs)
+- Last handoff checkpoint: `796b1ad` (research-run audit usage documentation brief)
 - Standing approval: local commits approved by user; no remote push requested.
-- Working tree: clean after handoff checkpoint.
+- Working tree: modified (documentation slice reviewed; local commit pending)
 - Remote push: not requested.
 
 ## Latest Validation Evidence
 
-From the finalized selector-parity slice:
-
-- `uv run pytest -q` -> 836 passed, 2 warnings in 11.77s
-- `uv run pytest tests/test_cli.py -q -k "research_run_report_manifest or report_audit or report_files or require_match"` -> 128 passed, 173 deselected in 1.01s
-- `uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "research_run_report_manifest or preflight_report or nested_report_manifest or require_match"` -> 49 passed, 351 deselected in 0.50s
-- `git diff --check` -> clean
+- `uv run pytest -q` -> 836 passed, 2 warnings in 11.80s
 - `scripts/check-progress-docs.sh` -> passed
-- `scripts/git-finalize-check.sh` -> passed
+- `git diff --check` -> clean
+- `rg` research-run role coverage: README 18 matches, portfolio_workflow.md 14 matches, portfolio_layer.md 1 match
 
 ## Short Prompt Commands
 
 ### For Codex
 
 ```text
-请读取 11 和 12，等待 Claude Code 实施完成后进行 Codex review。
+请读取 11 和 12，提交已通过 review 的本轮文档同步，然后为 Claude Code 打开下一轮 implementation brief。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，并严格按照 08_IMPLEMENTATION_BRIEF.md 实施 QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001。完成后更新 09_CODING_HANDOFF.md。
+请读取 11 和 12，等待 Codex 打开下一轮任务。
 ```

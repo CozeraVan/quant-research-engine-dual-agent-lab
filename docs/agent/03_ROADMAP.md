@@ -141,7 +141,7 @@
 | M8.48 | Research-run stage manifest recursive audit | DONE | CLAUDE_CODE | commit `dcb4925`; Codex post-commit review PASS; recursive validation for eval/backtest stage manifests live; 7 unit + 4 CLI tests; 814 passed | Preserve |
 | M8.49 | Research-run preflight report content audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_validate_preflight_report()` validates `status`/`checks`/`missing_factor_requests`; 9 unit + 3 CLI tests; 826 passed (+12) | Preserve |
 | M8.50 | Research-run audit role selector parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 10 CLI regression tests lock `report-files`/`report-audit` role selector behavior for root research-run manifests; 836 passed (+10) | Preserve |
-| M8.51 | Research-run audit usage documentation | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared; README/module docs need final role-level audit examples and selector isolation wording | Implement |
+| M8.51 | Research-run audit usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README section 10 expanded with role-specific audit examples; portfolio_workflow.md audit contract subsection added; portfolio_layer.md pointer added; full suite unchanged at 836 passed | Preserve |
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | DONE | CLAUDE_CODE | Builder tab with high-level entry forms; compile endpoint; indicator catalog endpoint; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 

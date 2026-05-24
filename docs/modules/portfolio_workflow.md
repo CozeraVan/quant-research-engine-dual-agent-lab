@@ -544,6 +544,24 @@ Implemented shared-cash metadata passthrough and grouped summaries:
 
 Grouped outputs support segmentation and structural inspection only. They do not provide exposure attribution, per-group portfolio return attribution, or proof of strategy quality.
 
+Implemented research-run report-manifest audit contract:
+
+- `qre research-run` produces a top-level `report_manifest.json` with kind `research_run_report_manifest`.
+- The top-level manifest is the audit entry point for the entire run. It contains four role entries:
+  - `run_manifest` — validates the research-run manifest JSON payload (fields, types, present-null).
+  - `preflight_report` — validates `preflight_report.json` JSON content (status, checks, missing_factor_requests).
+  - `eval_report_manifest` — recursively validates the nested eval stage `report_manifest.json`.
+  - `backtest_report_manifest` — recursively validates the nested backtest stage `report_manifest.json`.
+- `report-files --validate-contents` and `report-audit` share the same `--role` selectors and semantics.
+- Role selectors isolate validation to the selected role:
+  - `--role run_manifest` does not validate preflight or nested stage manifests.
+  - `--role preflight_report` does not validate nested stage manifests.
+  - `--role eval_report_manifest` does not validate sibling backtest manifests.
+  - `--role backtest_report_manifest` does not validate sibling eval manifests.
+- `--require-match` semantics: matching roles exit 0; no-match roles exit 2 with `matched_files=0` in JSON mode or "no manifest entries matched filters" diagnostic in text mode.
+- All role-audit behavior above is specific to `research_run_report_manifest`. Non-research-run manifest kinds (e.g. `batch_backtest_report_manifest`) do not trigger nested or preflight validation even when the same role strings appear as entry keys.
+- For server-side backtest auditing workflows, see `docs/modules/portfolio_layer.md` for report-manifest contract details.
+
 Next implementation:
 
 - Continue portfolio analytics/reporting improvements.

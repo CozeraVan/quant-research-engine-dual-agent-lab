@@ -48,7 +48,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` is briefed for Claude Code. It should sync README/module docs with the finalized research-run report-manifest audit contract. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
+`QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` passed Codex review. README and module docs now include role-level audit examples for `run_manifest`, `preflight_report`, `eval_report_manifest`, and `backtest_report_manifest` with selector isolation documentation. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
 
 ## Known Gaps
 
@@ -103,4 +103,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-Implement `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.
+Open the next narrow, unblocked hardening task.

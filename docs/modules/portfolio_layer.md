@@ -491,3 +491,9 @@ Future execution realism:
 - derive ST/risk-warning state from metadata instead of requiring frame input
 - add industry, benchmark membership, and market regime metadata sources
 - replace temporary stock benchmark with real index benchmark once benchmark data is available
+
+## Report-Manifest Audit
+
+Portfolio outputs include a `report_manifest.json` that is discoverable and auditable through `qre report-files` and `qre report-audit`. The report-manifest contract (kinds, roles, filtering, content validation, and exit codes) is documented in `docs/modules/portfolio_workflow.md`.
+
+For `qre research-run`, the top-level `report_manifest.json` (kind=`research_run_report_manifest`) serves as a single audit entry point for the entire run. Role-specific commands (`run_manifest`, `preflight_report`, `eval_report_manifest`, `backtest_report_manifest`) are documented in `docs/modules/portfolio_workflow.md` and in the README research-run section.

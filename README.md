@@ -694,9 +694,52 @@ uv run qre research-run strategies/low_level/bollinger_mean_reversion.yaml \
 # outputs/research/bollinger_2024/research_run_manifest.json
 # outputs/research/bollinger_2024/report_manifest.json    # 顶层报告清单入口
 
-# 报告发现与审计：
+# 顶层清单（汇总审计）
 uv run qre report-files outputs/research/bollinger_2024/report_manifest.json --check-exists --validate-contents
-uv run qre report-audit outputs/research/bollinger_2024/report_manifest.json --role run_manifest --require-match
+uv run qre report-audit outputs/research/bollinger_2024/report_manifest.json --require-match
+```
+
+#### 按角色审计
+
+顶层 `report_manifest.json`（kind=`research_run_report_manifest`）包含四个角色，每条从入口文件均为独立校验单元。`report-files --validate-contents` 与 `report-audit` 共享同一选择器语义，`--role` 将校验隔离到所选角色。
+
+```bash
+# run_manifest — 校验 research_run_manifest.json 的字段完整性
+uv run qre report-audit outputs/research/bollinger_2024/report_manifest.json \
+  --role run_manifest --require-match
+
+# preflight_report — 校验 preflight_report.json JSON 内容（status / checks / missing_factor_requests）
+uv run qre report-audit outputs/research/bollinger_2024/report_manifest.json \
+  --role preflight_report --require-match
+
+# eval_report_manifest — 递归校验嵌套的 eval/report_manifest.json
+uv run qre report-audit outputs/research/bollinger_2024/report_manifest.json \
+  --role eval_report_manifest --require-match
+
+# backtest_report_manifest — 递归校验嵌套的 backtest/report_manifest.json
+uv run qre report-audit outputs/research/bollinger_2024/report_manifest.json \
+  --role backtest_report_manifest --require-match
+
+# 角色隔离：--role run_manifest 不会校验 preflight 或嵌套阶段清单
+# --role preflight_report 不会校验嵌套阶段清单
+# --role eval_report_manifest 不会校验兄弟 backtest_report_manifest
+```
+
+#### 严格匹配与批量发现
+
+```bash
+# --require-match：匹配的角色退出 0，无匹配角色退出 2
+uv run qre report-files outputs/research/bollinger_2024/report_manifest.json \
+  --role preflight_report --require-match --json
+# → {"matched_files": 1, ...} (exit 0)
+
+uv run qre report-files outputs/research/bollinger_2024/report_manifest.json \
+  --role missing_role --require-match --json
+# → {"matched_files": 0, ...} (exit 2)
+
+# report-files --validate-contents 产出的问题输出到 stderr
+uv run qre report-files outputs/research/bollinger_2024/report_manifest.json \
+  --role backtest_report_manifest --validate-contents --json
 ```
 
 ### 11. GUI 控制台

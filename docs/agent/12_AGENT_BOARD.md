@@ -6,11 +6,11 @@ QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001
 
 ## Current Recipient
 
-CLAUDE_CODE
+CODEX
 
 ## Message Type
 
-IMPLEMENTATION_BRIEF_READY
+REVIEW_PASS
 
 ## Sender
 
@@ -18,27 +18,29 @@ CODEX
 
 ## Short Message
 
-Codex prepared the next implementation brief. Claude Code should sync README/module docs with the finalized top-level research-run report-manifest audit contract.
+Codex review passed. README section 10 now has role-specific audit examples. portfolio_workflow.md has a research-run audit contract subsection. portfolio_layer.md has a report-manifest audit pointer. No runtime changes.
 
 ## Required Outcome
 
-| Area | Required |
-|---|---|
-| README | research-run section documents top-level `report_manifest.json` audit entry point |
-| Role examples | commands for `run_manifest`, `preflight_report`, `eval_report_manifest`, `backtest_report_manifest` |
-| Selector semantics | docs explain role isolation and shared `report-files` / `report-audit` selectors |
-| Module docs | `docs/modules/portfolio_workflow.md` updated; `portfolio_layer.md` pointer if useful |
-| Safety | no runtime/schema changes, no legacy-doc edits, no strategy-quality claims |
+| Area | Required | Status |
+|---|---|---|
+| README | research-run section documents top-level `report_manifest.json` audit entry point | VERIFIED |
+| Role examples | commands for `run_manifest`, `preflight_report`, `eval_report_manifest`, `backtest_report_manifest` | VERIFIED |
+| Selector semantics | docs explain role isolation and shared `report-files` / `report-audit` selectors | VERIFIED |
+| Module docs | `docs/modules/portfolio_workflow.md` updated; `portfolio_layer.md` pointer added | VERIFIED |
+| Safety | no runtime/schema changes, no legacy-doc edits, no strategy-quality claims | VERIFIED |
 
 ## Review Status
 
-PENDING_IMPLEMENTATION
+PASS
 
 ## Evidence
 
-- Previous finalized baseline: `a027d69` research-run audit role selector parity; full suite `836 passed, 2 warnings`.
-- Codex documentation gap: README examples show only basic top-level audit and `run_manifest`; final role-level audit contract is not fully documented.
+- Full suite: 836 passed, 2 warnings in 11.80s
+- `rg` research-run role coverage: README 18 matches (was 6), portfolio_workflow.md 14 (was 0), portfolio_layer.md 1 (was 0)
+- progress docs check: passed
+- git diff --check: clean
 
 ## Next Step
 
-Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.
+Codex commits the reviewed documentation slice locally, then opens the next narrow task for Claude Code.
