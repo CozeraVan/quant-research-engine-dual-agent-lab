@@ -23,9 +23,9 @@
 5. Benchmark-relative analytics interface and temporary stock benchmark wiring: done
 6. Report manifests, report discovery, content validation, and strict audit matching: done
 7. Next portfolio realism work:
-   - market-cap and liquidity metadata standardization
-   - benchmark membership and index grouping adapters
-8. Industry / index exposure constraints after metadata is available.
+   - benchmark membership and industry classification adapters
+   - industry / index exposure constraints after metadata is available
+8. Real regime grouping after metadata is available.
 
 ## Risk-Control Exit Rules
 
@@ -565,7 +565,7 @@ Implemented research-run report-manifest audit contract:
 Next implementation:
 
 - Continue portfolio analytics/reporting improvements.
-- Market-cap and liquidity metadata standardization is the next data-dependent step.
+- Benchmark membership and industry classification normalization is the next data-dependent step.
 
 ## Verification Checklist
 

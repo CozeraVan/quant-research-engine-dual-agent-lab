@@ -126,8 +126,8 @@ Grouped outputs support segmentation and structural inspection only. They do not
 
 Not implemented yet:
 
-- Market-cap and liquidity grouping metadata.
 - Benchmark membership grouping metadata.
+- Industry classification normalization for cross-sectional grouping.
 - Real regime grouping metadata.
 
 ## Current Files
@@ -489,7 +489,7 @@ Future execution realism:
 
 - connect real suspension metadata when available
 - derive ST/risk-warning state from metadata instead of requiring frame input
-- add industry, benchmark membership, and market regime metadata sources
+- add industry classification normalization, benchmark membership, and market regime metadata sources
 - replace temporary stock benchmark with real index benchmark once benchmark data is available
 
 ## Report-Manifest Audit

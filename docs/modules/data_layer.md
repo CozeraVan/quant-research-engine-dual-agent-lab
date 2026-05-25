@@ -172,7 +172,7 @@ The preflight command is read-only. It checks market row availability, latest ma
 
 Reference data production lives in sibling project `../quant_ts`. QRE only reads populated tables such as `reference.index_daily`, `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning`.
 
-Current implementation note: `reference.index_daily` benchmark reads are already routed through the configured benchmark/reference DB connection, and default metadata now composes from `reference.*` when no explicit `QRE_SECURITY_METADATA_TABLE` is configured. The next QRE read-side task is to standardize market-cap/liquidity metadata from `reference.daily_basic`.
+Current implementation note: `reference.index_daily` benchmark reads are already routed through the configured benchmark/reference DB connection, default metadata now composes from `reference.*` when no explicit `QRE_SECURITY_METADATA_TABLE` is configured, and the next QRE read-side task is to standardize benchmark membership plus industry grouping from `reference.index_weight` and the existing industry passthrough.
 
 ## Verified On 2026-05-11
 
@@ -200,7 +200,7 @@ Security metadata smoke:
 - Reads configured `QRE_SECURITY_METADATA_TABLE` / `SR_SECURITY_METADATA_TABLE` when present.
 - Current default: if no explicit metadata table is configured and `reference.stock_basic` exists, compose read-only metadata from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning`.
 - Current fallback remains deriving metadata from `public.stock_daily` when no explicit metadata table or reference stock-basic table is available.
-- Next planned enrichment: latest-available market-cap/liquidity metadata from `reference.daily_basic`.
+- Next planned enrichment: latest-available benchmark membership metadata from `reference.index_weight` plus stable industry grouping normalization.
 - Derived fallback fields:
   - `list_date`: first available daily bar date.
   - `board`: inferred from `ts_code`.
@@ -272,6 +272,5 @@ Grouped outputs support segmentation and structural inspection only. They do not
 
 Next data-layer tasks:
 
-1. Implement `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001`: latest-available `reference.daily_basic` enrichment and deterministic grouping buckets.
-2. Add benchmark membership and industry classification adapters for cross-sectional grouping.
-3. Add deeper as-of/time-varying metadata semantics only after the latest-available reference snapshot is stable.
+1. Implement `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`: latest-available `reference.index_weight` enrichment and stable industry grouping normalization.
+2. Add deeper as-of/time-varying metadata semantics only after the latest-available reference snapshot is stable.

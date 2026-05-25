@@ -2,67 +2,86 @@
 
 ## Task ID
 
-QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001
+QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001
 
 ## Written By
 
-CLAUDE_CODE
+CODEX
 
 ## Status
 
-IMPLEMENTED
+READY_FOR_IMPLEMENTATION
 
-## Summary
+## Current Owner
 
-Extended QRE's read-side metadata path with latest-available market-cap and liquidity metadata from `reference.daily_basic`. The composed `reference.*` metadata path and daily-derived fallback path now both receive daily_basic enrichment when the table is available.
+CLAUDE_CODE
 
-## Files Changed
+## Problem Summary
 
-- `src/quant_research_engine/data/postgres.py` — Added `_load_reference_daily_basic_snapshot()` to query latest `reference.daily_basic` per `ts_code`; added `_compute_market_cap_bucket()` and `_compute_liquidity_bucket()` static bucket helpers; modified `load_security_metadata()` to enrich both composed-reference and daily-derived paths with daily_basic columns before normalization.
-- `tests/test_postgres_store.py` — Added 7 new tests: 2 bucket mapping tests, 5 daily_basic enrichment tests.
+QRE now has benchmark/reference routing, `reference.daily_basic` enrichment, and read-only security metadata composition in place. The next non-deferred data-layer gap is to standardize benchmark membership and industry classification metadata so grouped evaluation and portfolio outputs can use stable cross-sectional columns.
 
-## Behavior Summary
+The upstream source for benchmark membership already exists in sibling `quant_ts` as `reference.index_weight`. QRE should consume that table read-only and keep all producer/ingest work out of this repository.
 
-### Daily Basic Enrichment
+## Overall Project Completion
 
-- `_load_reference_daily_basic_snapshot()` queries `reference.daily_basic` for the latest snapshot per `ts_code` using `MAX(trade_date)` subquery.
-- Exposes raw columns: `total_mv`, `circ_mv`, `turnover_rate`, `turnover_rate_f`, `volume_ratio` (where available).
-- `_compute_market_cap_bucket()` maps `total_mv` (万元) to `small`/`mid`/`large`:
-  - `small`: < 5,000,000 (50亿 RMB)
-  - `mid`: 5,000,000 - 50,000,000 (50-500亿 RMB)
-  - `large`: >= 50,000,000 (500亿+ RMB)
-- `_compute_liquidity_bucket()` maps `turnover_rate_f` (%) to `low`/`mid`/`high`:
-  - `low`: < 1.0%
-  - `mid`: 1.0% - 5.0%
-  - `high`: >= 5.0%
+QRE is still in advanced experimental MVP / user-acceptance state. Most core engine work is complete:
 
-### Enrichment Rules
+- Data layer and preflight: complete for the current MVP slice, with benchmark membership and industry grouping as the next read-side adapter task.
+- Evaluation engine: complete for the current MVP; real regime classification remains future work.
+- Portfolio engine: complete for the current MVP.
+- Reporting, manifests, audit, research-run, strategy IO, smoke tooling, and GUI: complete for the current MVP.
+- Upstream data production: intentionally out of QRE and owned by `../quant_ts`.
 
-- Explicit `QRE_SECURITY_METADATA_TABLE` path: NO daily_basic enrichment (preserves existing behavior).
-- Composed `reference.*` path: enriched with daily_basic when table exists.
-- Daily-derived fallback path: enriched with daily_basic when table exists.
-- Missing columns default gracefully — e.g., if `total_mv` is present but `turnover_rate_f` is missing, only `market_cap_bucket` is added.
-- Missing `reference.daily_basic` table: enrichment is skipped, all existing behavior preserved.
+Practical completion estimate: QRE remains roughly 90%+ complete for the current MVP scope. Larger items such as deeper benchmark membership history, real regime grouping, and full time-varying/as-of metadata are future enhancements rather than current blockers.
 
-## Validation Output
+## Implementation Assignment For Claude Code
 
-```
+Read and implement:
+
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_AGENT_BOARD.md`
+
+Primary code task:
+
+- add a read-only `reference.index_weight` adapter for benchmark membership;
+- normalize industry metadata into a stable grouping column without mutating the raw passthrough;
+- preserve explicit metadata-table priority and existing fallback behavior;
+- thread benchmark context through existing read-side paths only where it is already known;
+- add targeted tests and concise docs.
+
+## Suggested Step-by-Step Execution
+
+1. Extend the read-side metadata adapter to load the latest `reference.index_weight` snapshot for a benchmark code when benchmark context is present.
+2. Add benchmark membership columns for downstream grouping and diagnostics.
+3. Add a normalized `industry_group` column while preserving the raw `industry` passthrough.
+4. Keep explicit metadata tables first-priority and skip enrichment when the source table is missing.
+5. Add focused tests for latest-snapshot selection, fallback behavior, and normalization.
+6. Update the agent/doc state files so the next handoff is unambiguous.
+
+## Hard Constraints
+
+- Do not add Tushare download, token, sync, or ingestion code to QRE.
+- Do not modify `../quant_ts` for this task.
+- Do not change portfolio execution semantics.
+- Do not broaden into real regime classification or full time-varying/as-of metadata.
+- Keep QRE read-only against upstream databases.
+
+## Validation Expected From Claude Code
+
+```bash
 uv run pytest -q tests/test_postgres_store.py
-35 passed in 0.68s
-
 uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
-6 passed in 0.36s
-
-uv run pytest -q
-881 passed, 2 warnings in 19.13s
-
 scripts/check-progress-docs.sh
-Progress docs check passed.
-
 git diff --check
-(clean)
 ```
 
-## Handoff To Codex
+If time permits:
 
-Implementation is complete. Codex should review `git diff HEAD` against `08_IMPLEMENTATION_BRIEF.md`, write `10_REVIEW_REPORT.md`, and finalize or request fixes.
+```bash
+uv run pytest -q
+```
+
+## Handoff Back To Codex
+
+After implementation, Claude Code should update `09_CODING_HANDOFF.md` with files changed, behavior summary, and validation output, then return to Codex for review in `10_REVIEW_REPORT.md`.

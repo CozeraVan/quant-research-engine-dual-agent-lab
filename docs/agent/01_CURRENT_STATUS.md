@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring and cross-sectional market-cap/liquidity metadata standardization are now complete. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring and cross-sectional market-cap/liquidity metadata standardization are now complete. The next code slice is benchmark membership and industry classification normalization from `reference.index_weight` plus the existing industry passthrough. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
 
 ## Completed
 
@@ -55,7 +55,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Known Gaps
 
-- Benchmark membership and real regime grouping are not fully standardized across all research outputs.
+- Benchmark membership and industry classification are not fully standardized across all research outputs.
 - Full as-of time-varying history for cross-sectional metadata remains a future enhancement.
 - The reusable Tushare security source adapter remains as historical source-shape context only. Future download/ingest changes belong in `quant_ts`, not QRE.
 - Evaluation layer does not yet implement real regime classification.
@@ -76,7 +76,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `9e00f0a` (research-run audit usage docs), `a027d69` (research-run audit role selector parity)
+- Recent commits: `558fe83` (finalize latest daily_basic metadata standardization), `9e00f0a` (research-run audit usage docs)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
@@ -105,4 +105,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-No active implementation slice is queued. The current QRE slice is complete and reviewed. When the next task is defined, update `08/09/11/12` together before assigning it to Claude Code.
+The next implementation slice is `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`. Update `08/09/11/12` together before assigning it to Claude Code.

@@ -84,8 +84,7 @@ Latest smoke families:
 
 Continue portfolio engine development:
 
-- market-cap and liquidity metadata standardization
-- benchmark membership and index grouping adapters
+- benchmark membership and industry classification normalization
 
 Completed target:
 

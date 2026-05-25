@@ -2,15 +2,15 @@
 
 ## Task ID
 
-QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001
+QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001
 
 ## Current Status
 
-DONE
+READY_FOR_CLAUDE_CODE
 
 ## Current Owner
 
-USER
+CLAUDE_CODE
 
 ## Problem Summary
 
@@ -18,7 +18,8 @@ QRE has finished the read-side wiring needed to consume populated `reference.*` 
 
 - benchmark reads now use `benchmark_db_url -> reference_db_url -> market_db_url`;
 - security metadata now composes from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning`;
-- latest-available `reference.daily_basic` enrichment now standardizes market-cap and liquidity metadata for grouped evaluation and portfolio outputs.
+- latest-available `reference.daily_basic` enrichment is complete;
+- the next non-deferred read-side gap is benchmark membership plus industry grouping normalization from `reference.index_weight` and the existing industry passthrough.
 
 ## Overall Project Completion
 
@@ -30,25 +31,31 @@ QRE is in advanced experimental MVP / user-acceptance state. Most core engine wo
 - Reporting, manifests, audit, research-run, strategy IO, smoke tooling, and GUI: complete for the current MVP.
 - Upstream data production: intentionally out of QRE and owned by `../quant_ts`.
 
-Practical completion estimate: QRE is roughly 90%+ complete for the current MVP scope. Larger items such as benchmark membership, real regime grouping, and deeper as-of metadata are future enhancements rather than current blockers.
+Practical completion estimate: QRE is roughly 90%+ complete for the current MVP scope. Larger items such as real regime grouping and deeper as-of metadata are future enhancements rather than current blockers.
 
 ## Implementation Assignment For Claude Code
 
-No active implementation is assigned in this slice.
-
-If a new task is defined, read:
+Read and implement:
 
 - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
 
+Primary code task:
+
+- add a read-only `reference.index_weight` adapter for benchmark membership;
+- normalize industry metadata into a stable grouping column without mutating the raw passthrough;
+- preserve explicit metadata-table priority and existing fallback behavior;
+- thread benchmark context through existing read-side paths only where it is already known;
+- add targeted tests and concise docs.
+
 ## Hard Constraints
 
 - Do not add Tushare download, token, sync, or ingestion code to QRE.
 - Do not modify `../quant_ts` for this task.
 - Do not change portfolio execution semantics.
-- Do not broaden into benchmark membership, regime classification, or full time-varying/as-of metadata.
+- Do not broaden into real regime classification or full time-varying/as-of metadata.
 - Keep QRE read-only against upstream databases.
 
 ## Validation Expected From Claude Code
@@ -56,7 +63,6 @@ If a new task is defined, read:
 ```bash
 uv run pytest -q tests/test_postgres_store.py
 uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
-uv run pytest -q tests/test_cli.py -k "benchmark_smoke or metadata_smoke or backtest_shared_prints_benchmark"
 scripts/check-progress-docs.sh
 git diff --check
 ```

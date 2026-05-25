@@ -22,6 +22,7 @@
 | M2.8 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `src/quant_research_engine/data/tushare_security.py`; canonical snapshot contract, normalized frame helper, and targeted tests landed; 34 tests passed | Preserve; reuse as the source boundary for later bulk ingestion |
 | M2.9 | Reference-data ingestion ownership | DONE | CODEX | Tushare reference-data handler, sync CLI, smoke script, and docs moved to sibling `quant_ts`; QRE producer code removed | Run controlled sync from `quant_ts` after Tushare permissions are available |
 | M2.10 | Cross-sectional market-cap / liquidity metadata standardization | DONE | CLAUDE_CODE | `_load_reference_daily_basic_snapshot()` + bucket helpers; `total_mv`/`circ_mv`/`turnover_rate`/`turnover_rate_f`/`volume_ratio` exposed; `market_cap_bucket`/`liquidity_bucket` added; 7 enrichment tests | Preserve |
+| M2.11 | Benchmark membership and industry classification adapters | READY | CLAUDE_CODE | `reference.index_weight` exists in `quant_ts`; industry grouping already flows through the QRE security metadata path and now needs normalization / benchmark enrichment | Implement latest-available benchmark membership and industry grouping adapters |
 
 ## Milestone 3: Evaluation Engine
 

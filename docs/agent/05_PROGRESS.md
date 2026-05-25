@@ -2,16 +2,17 @@
 
 ## Current Phase
 
-DONE
+WAITING_CLAUDE_CODE
 
 ## Current Active Work
 
-No active work. `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001` is implemented, reviewed, and finalized.
+`QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`: ready for Claude Code implementation. Benchmark membership and industry normalization brief/handoff docs are in place.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
+| QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001 | QRE benchmark membership and industry grouping adapters | READY_FOR_CLAUDE_CODE | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md` updated for next slice | Implement latest-available `reference.index_weight` benchmark membership and stable industry grouping |
 | QRE-REFERENCE-READ-SIDE-WIRING-001 | QRE read-side benchmark/reference metadata wiring | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark engine routing + reference metadata composition landed; 874 tests passed (+11) | Preserve |
 | QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001 | QRE market-cap/liquidity metadata standardization | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; latest-available `reference.daily_basic` enrichment and deterministic bucket helpers implemented; targeted data-layer, preflight, CLI, and manifest tests passed; progress docs and diff checks passed | Preserve |
 | QRE-REFERENCE-DATA-MIGRATE-TO-QUANT-TS-001 | Move Tushare reference-data download/ingest from QRE to `quant_ts` | DONE | CODEX | `quant_ts` list/plan dry-runs pass; reference files compile; QRE `reference-data` command removed; QRE full suite `863 passed, 2 warnings` | Run controlled `quant_ts` smoke/sync after permissions |
@@ -137,23 +138,23 @@ No active work. `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001` is implemented
 
 ## Latest Verified State
 
-Recorded on 2026-05-25 after Codex reviewed `QRE-REFERENCE-READ-SIDE-WIRING-001` and queued the next read-side slice:
+Recorded on 2026-05-25 after Codex queued the next read-side slice:
 
-- Current task: `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001` — READY_FOR_CLAUDE_CODE
+- Current task: `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001` — READY_FOR_CLAUDE_CODE
 - Current phase: `WAITING_CLAUDE_CODE`
 - Current owner: `CLAUDE_CODE`
 - Last finalized commit: `9e00f0a` (document research-run audit role usage)
 - Working tree: existing QRE/quant_ts changes are unfinalized; do not revert unrelated dirty files.
 - Reference-data evidence:
-  - `reference.index_daily` populated through `2026-05-22` and QRE benchmark smoke against `000300.SH` passed.
-  - `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning` exist in `quant_ts` and are populated to source-available windows.
-  - Remaining `quant_ts` planned actions are current-day/current-month delayed-source retries, not QRE engineering blockers.
+  - `reference.index_weight` exists in `quant_ts` as the benchmark membership source.
+  - `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning` remain available for QRE read-side metadata composition.
+  - `reference.index_daily` benchmark reads are already routed through the configured benchmark/reference DB connection.
 - QRE validation evidence for the completed read-side wiring slice:
-  - `uv run pytest -q tests/test_postgres_store.py` → 28 passed.
+  - `uv run pytest -q tests/test_postgres_store.py` → 35 passed.
   - `uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py` → 6 passed.
-  - `uv run pytest -q tests/test_cli.py -k "benchmark_smoke or metadata_smoke or backtest_shared_prints_benchmark"` → 4 passed, 299 deselected.
+  - `uv run pytest -q tests/test_portfolio_report_manifest.py tests/test_cli.py` → 427 passed.
   - `scripts/check-progress-docs.sh` and `git diff --check` passed.
-- Next step: Claude Code implements `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001`, then Codex reviews.
+- Next step: Claude Code implements `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`, then Codex reviews.
 
 Current GUI direction approved on 2026-05-21:
 
@@ -208,13 +209,13 @@ User-requested strategy work in 2026-05-21:
 
 ## Pending Work Summary
 
-- Current non-deferred implementation: QRE market-cap/liquidity metadata standardization from populated `reference.daily_basic`.
+- Current non-deferred implementation: QRE benchmark membership and industry classification standardization from populated `reference.index_weight` and the existing industry passthrough.
 - Real reference-data sync belongs to sibling `quant_ts`; QRE should not own producer code.
 - Real index benchmark data is available in `reference.index_daily`; benchmark/reference routing is already wired.
 - Real suspension/ST/risk-warning source tables are available in `reference.*`; read-side composition is already wired.
 - Canonical security-snapshot contract is complete; later bulk ingestion can reuse the Tushare source scaffold.
 - Bulk ingestion / durable loading remains in `../quant_ts`.
-- Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
+- Industry, benchmark membership, and regime grouping across evaluation and shared-cash outputs.
 - Research-run CLI orchestrator persists and links preflight/eval/backtest stage artifacts from `qre research-run`.
 - Strategy IO contract implementation after design approval.
 - GUI parameter controls over the future standard strategy entry contract.

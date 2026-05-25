@@ -20,6 +20,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact: `08/09/10/11/12/04/05/03/01` switched to the QRE read-side integration lane. The task is intentionally narrow: benchmark/reference engine routing and composed `reference.*` metadata adapter only.
 - Owner: CLAUDE_CODE
 
+### 2026-05-25: Assign benchmark membership and industry adapters to Claude Code
+
+- Decision: The next QRE implementation task is `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`, assigned to Claude Code under the Codex planner/reviewer workflow.
+- Reason: The market-cap/liquidity slice is reviewed and complete. The next remaining non-deferred read-side gap is benchmark membership plus industry grouping normalization so grouped evaluation and portfolio outputs can use stable cross-sectional columns backed by `reference.index_weight` and the existing industry passthrough.
+- Alternatives: jump to real regime classification (rejected — broader and not grounded in the current benchmark/industry grouping foundation); continue expanding Tushare producer work in QRE (rejected — ownership stays in `quant_ts`).
+- Impact: `08/09/10/11/12/04/05/03/01` switched to the benchmark membership / industry adapter lane. The new slice stays read-only and remains strictly on the QRE consumer side.
+- Owner: CLAUDE_CODE
+
 ### 2026-05-25: Assign market-cap/liquidity metadata standardization to Claude Code
 
 - Decision: The next QRE implementation task is `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001`, assigned to Claude Code under the Codex planner/reviewer workflow.
