@@ -12,6 +12,54 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-25: Assign QRE reference read-side wiring to Claude Code
+
+- Decision: The next QRE implementation task is `QRE-REFERENCE-READ-SIDE-WIRING-001`, assigned to Claude Code under the Codex planner/reviewer workflow.
+- Reason: The Tushare permission/download blocker has been resolved in `quant_ts`; populated `reference.*` tables now unblock QRE read-side benchmark and security-status metadata wiring. QRE should integrate those tables as a read-only consumer rather than restoring producer code.
+- Alternatives: implement directly in Codex (rejected — user requested Codex remain planner/reviewer and Claude Code handle concrete coding); keep tasks blocked (rejected — source tables now exist); add a denormalized table requirement first (rejected — QRE can compose a latest-available snapshot read-side without expanding `quant_ts` scope).
+- Impact: `08/09/10/11/12/04/05/03/01` switched to the QRE read-side integration lane. The task is intentionally narrow: benchmark/reference engine routing and composed `reference.*` metadata adapter only.
+- Owner: CLAUDE_CODE
+
+### 2026-05-25: Assign market-cap/liquidity metadata standardization to Claude Code
+
+- Decision: The next QRE implementation task is `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001`, assigned to Claude Code under the Codex planner/reviewer workflow.
+- Reason: The benchmark/reference wiring slice is reviewed and complete. The next remaining non-deferred data-layer gap is standardizing market-cap and liquidity metadata from `reference.daily_basic` so grouped evaluation and portfolio outputs can use consistent cross-sectional columns.
+- Alternatives: jump to benchmark membership or regime classification (rejected — those are broader and depend on the same grouping foundation); continue expanding Tushare producer work in QRE (rejected — ownership stays in `quant_ts`).
+- Impact: `08/09/10/11/12/04/05/03/01` switched to the market-cap/liquidity metadata lane. The new slice stays read-only and remains strictly on the QRE consumer side.
+- Owner: CLAUDE_CODE
+
+### 2026-05-24: Select preflight missing-factor shape audit as next Claude task
+
+- Decision: The next Claude Code task is `QRE-RESEARCH-RUN-PREFLIGHT-MISSING-FACTOR-SHAPE-AUDIT-001`.
+- Reason: The preflight shape audit is now PASS, but `missing_factor_requests[]` entries are still only list-checked and can carry malformed handoff payloads. This is the last narrow audit gap in the research-run preflight contract.
+- Alternatives: move to blocked benchmark/security metadata work (rejected — source tables remain unconfirmed); widen the current preflight slice to unrelated fields (rejected — unnecessary risk and scope creep).
+- Impact: `01/03/04/05/08/09/11/12` switched to the missing-factor audit implementation lane.
+- Owner: CLAUDE_CODE
+
+### 2026-05-25: Add QRE-owned reference-data ingestion scaffold
+
+- Decision: Implement a small QRE-owned scaffold for benchmark/reference data planning and future Tushare sync, using explicit `reference.*` target schemas and env-only credentials.
+- Reason: QRE now needs real benchmark/index and security-status reference data for benchmark comparison, preflight filters, and metadata diagnostics. The user will resolve higher Tushare permissions tomorrow, so the safe current step is to standardize data requirements and entry points without performing real downloads.
+- Alternatives: Defer all work until permissions are available (rejected — schema and planning can be completed now); copy the neighboring `quant_ts` configuration directly (rejected — it contains hardcoded credentials and dynamic schema drift risks); hand off to Claude Code (rejected — scope stayed small enough for Codex to complete directly).
+- Impact: Added `qre reference-data list/schema/plan/sync`, `scripts/sync_reference_data.py`, `docs/modules/reference_data_ingestion.md`, and tests for catalog/schema/planning behavior. Real sync remains gated by `QRE_TUSHARE_TOKEN`/`TUSHARE_TOKEN` and `QRE_REFERENCE_DB_URL`/`QRE_MARKET_DB_URL`.
+- Owner: CODEX
+
+### 2026-05-25: Move reference-data ingestion ownership to quant_ts
+
+- Decision: Tushare reference-data download and PostgreSQL ingestion belong in sibling `quant_ts`, not QRE.
+- Reason: User clarified `quant_ts` is the Tushare database download/local-ingestion project, while QRE should remain the backtest engine.
+- Alternatives: Keep QRE-owned scaffold (rejected — violates project responsibility split); modify existing `quant_ts` daily scheduler directly (rejected — unnecessary risk to the stable daily task).
+- Impact: Added standalone reference-data handler, sync CLI, permission smoke, and docs under `../quant_ts`; removed QRE producer module/scripts/tests/CLI command; QRE docs now point to `quant_ts` for data production.
+- Owner: CODEX
+
+### 2026-05-24: Implement preflight missing-factor shape audit
+
+- Decision: Validated `missing_factor_requests[]` item object shape in `_validate_preflight_report()` with required fields `strategy_id`, `alias`, `indicator`, `expected_table`, `expected_column`, `date_range`, `reason`, `required`.
+- Reason: The preflight audit already checked `missing_factor_requests` is a list, but still accepted malformed items. The missing-factor handoff payload has a stable object shape that should be checked at the audit boundary.
+- Alternatives: skip item validation (rejected — audit would remain incomplete); validate every emitted field in `MissingFactorRequest.to_dict()` (rejected — brief explicitly scoped to core fields only).
+- Impact: New issue codes `invalid_preflight_report_missing_factor_request` and `missing_preflight_report_missing_factor_field`; 14 new tests; 863 total passed. Combined with the prior status/checks shape audit, the full preflight report content contract is now structurally validated.
+- Owner: CLAUDE_CODE
+
 ### 2026-05-24: Select preflight report shape audit as next Claude task
 
 - Decision: The next Claude Code task is `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001`.

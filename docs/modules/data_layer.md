@@ -57,7 +57,7 @@ The project must not hardcode database passwords in source files or docs.
 - `src/quant_research_engine/strategies/spec.py`
   - loads YAML strategy specs and converts factor declarations into database field requests.
 - `src/quant_research_engine/apps/cli.py`
-  - `db-smoke`, `factor-smoke`, `metadata-smoke`, `preflight`, and `eval-config` commands.
+  - `db-smoke`, `factor-smoke`, `metadata-smoke`, `benchmark-smoke`, `preflight`, and `eval-config` commands.
 - `src/quant_research_engine/preflight.py`
   - read-only broad-run checks before larger evaluation or backtest runs.
 
@@ -170,6 +170,10 @@ uv run qre preflight \
 
 The preflight command is read-only. It checks market row availability, latest market date, requested symbol coverage, factor schema, factor non-null coverage, factor join coverage, metadata availability, universe filters, liquidity, and optional benchmark availability.
 
+Reference data production lives in sibling project `../quant_ts`. QRE only reads populated tables such as `reference.index_daily`, `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning`.
+
+Current implementation note: `reference.index_daily` benchmark reads are already routed through the configured benchmark/reference DB connection, and default metadata now composes from `reference.*` when no explicit `QRE_SECURITY_METADATA_TABLE` is configured. The next QRE read-side task is to standardize market-cap/liquidity metadata from `reference.daily_basic`.
+
 ## Verified On 2026-05-11
 
 Market smoke:
@@ -194,7 +198,9 @@ Config-driven evaluation smoke:
 Security metadata smoke:
 
 - Reads configured `QRE_SECURITY_METADATA_TABLE` / `SR_SECURITY_METADATA_TABLE` when present.
-- Falls back to deriving metadata from `public.stock_daily` when no metadata table is configured.
+- Current default: if no explicit metadata table is configured and `reference.stock_basic` exists, compose read-only metadata from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning`.
+- Current fallback remains deriving metadata from `public.stock_daily` when no explicit metadata table or reference stock-basic table is available.
+- Next planned enrichment: latest-available market-cap/liquidity metadata from `reference.daily_basic`.
 - Derived fallback fields:
   - `list_date`: first available daily bar date.
   - `board`: inferred from `ts_code`.
@@ -266,6 +272,6 @@ Grouped outputs support segmentation and structural inspection only. They do not
 
 Next data-layer tasks:
 
-1. Replace static fallback `is_st` / `is_suspended` with real time-varying status data when a reliable local table is available.
+1. Implement `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001`: latest-available `reference.daily_basic` enrichment and deterministic grouping buckets.
 2. Add benchmark membership and industry classification adapters for cross-sectional grouping.
-3. Integrate preflight JSON reports into larger evaluation/backtest run scripts when those scripts are introduced.
+3. Add deeper as-of/time-varying metadata semantics only after the latest-available reference snapshot is stable.

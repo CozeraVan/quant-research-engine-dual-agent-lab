@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001
+QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001
 
 ## Reviewer
 
@@ -10,17 +10,41 @@ CODEX
 
 ## Review Status
 
-PENDING_IMPLEMENTATION
+PASS
 
-## Summary
+## Findings
 
-No implementation has been handed back yet. Claude Code should implement `08_IMPLEMENTATION_BRIEF.md` and update `09_CODING_HANDOFF.md`; Codex will then review the diff and validation evidence.
+No blocking findings.
 
-## Known Gap
+The implementation stays within QRE read-side scope, enriches metadata from the latest available `reference.daily_basic` snapshot, and preserves explicit-table priority plus the daily-derived fallback path without reintroducing Tushare producer logic.
 
-Research-run preflight report auditing validates the root JSON and list fields, but it does not yet reject unsupported `status` values or malformed `checks[]` entries.
+## Behavior Expected
 
-## Next Agent State
+- QRE remains read-only with respect to upstream data production.
+- `load_security_metadata()` enriches composed reference metadata and the daily-derived fallback with latest-available `reference.daily_basic` columns when available.
+- Explicit `QRE_SECURITY_METADATA_TABLE` behavior remains first priority and is not silently overridden.
+- Market-cap and liquidity buckets are deterministic and stable for downstream grouping.
+- Missing `reference.daily_basic` keeps the previous metadata behavior intact.
 
-- Phase: `CLAUDE_IMPLEMENTING`
-- Owner: `CLAUDE_CODE`
+## Validation Evidence
+
+```bash
+uv run pytest -q tests/test_postgres_store.py
+# 35 passed in 0.60s
+
+uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
+# 6 passed in 0.32s
+
+uv run pytest -q tests/test_portfolio_report_manifest.py tests/test_cli.py
+# 427 passed in 5.66s
+
+scripts/check-progress-docs.sh
+# Progress docs check passed.
+
+git diff --check
+# clean
+```
+
+## Residual Risks
+
+- The new reference metadata snapshot is latest-available rather than full as-of history. That is acceptable for this slice, but deeper time-varying semantics remain a later enhancement.

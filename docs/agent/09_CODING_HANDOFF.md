@@ -2,46 +2,67 @@
 
 ## Task ID
 
-QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001
+QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001
 
 ## Written By
 
-CODEX
-
-## Intended Reviewer
-
-CODEX
+CLAUDE_CODE
 
 ## Status
 
-PENDING_IMPLEMENTATION
+IMPLEMENTED
 
 ## Summary
 
-Claude Code should implement `docs/agent/08_IMPLEMENTATION_BRIEF.md`.
+Extended QRE's read-side metadata path with latest-available market-cap and liquidity metadata from `reference.daily_basic`. The composed `reference.*` metadata path and daily-derived fallback path now both receive daily_basic enrichment when the table is available.
 
-The active task is a narrow report-manifest audit hardening slice: validate accepted `preflight_report.status` values and validate the object shape of `checks[]` entries when auditing a top-level `research_run_report_manifest`.
+## Files Changed
 
-## Implementation Scope
+- `src/quant_research_engine/data/postgres.py` — Added `_load_reference_daily_basic_snapshot()` to query latest `reference.daily_basic` per `ts_code`; added `_compute_market_cap_bucket()` and `_compute_liquidity_bucket()` static bucket helpers; modified `load_security_metadata()` to enrich both composed-reference and daily-derived paths with daily_basic columns before normalization.
+- `tests/test_postgres_store.py` — Added 7 new tests: 2 bucket mapping tests, 5 daily_basic enrichment tests.
 
-- Update `src/quant_research_engine/portfolio/report_manifest.py`.
-- Add unit and CLI regression tests.
-- Do not change preflight execution or serialization.
-- Do not add DB-backed tests.
+## Behavior Summary
 
-## Required Validation
+### Daily Basic Enrichment
 
-Run and record:
+- `_load_reference_daily_basic_snapshot()` queries `reference.daily_basic` for the latest snapshot per `ts_code` using `MAX(trade_date)` subquery.
+- Exposes raw columns: `total_mv`, `circ_mv`, `turnover_rate`, `turnover_rate_f`, `volume_ratio` (where available).
+- `_compute_market_cap_bucket()` maps `total_mv` (万元) to `small`/`mid`/`large`:
+  - `small`: < 5,000,000 (50亿 RMB)
+  - `mid`: 5,000,000 - 50,000,000 (50-500亿 RMB)
+  - `large`: >= 50,000,000 (500亿+ RMB)
+- `_compute_liquidity_bucket()` maps `turnover_rate_f` (%) to `low`/`mid`/`high`:
+  - `low`: < 1.0%
+  - `mid`: 1.0% - 5.0%
+  - `high`: >= 5.0%
 
-```bash
-uv run pytest tests/test_portfolio_report_manifest.py tests/test_cli.py -q -k "preflight_report or research_run_report_manifest or report_audit"
-uv run pytest tests/test_research_run.py tests/test_cli.py -q -k "research_run or research_run_report_manifest"
+### Enrichment Rules
+
+- Explicit `QRE_SECURITY_METADATA_TABLE` path: NO daily_basic enrichment (preserves existing behavior).
+- Composed `reference.*` path: enriched with daily_basic when table exists.
+- Daily-derived fallback path: enriched with daily_basic when table exists.
+- Missing columns default gracefully — e.g., if `total_mv` is present but `turnover_rate_f` is missing, only `market_cap_bucket` is added.
+- Missing `reference.daily_basic` table: enrichment is skipped, all existing behavior preserved.
+
+## Validation Output
+
+```
+uv run pytest -q tests/test_postgres_store.py
+35 passed in 0.68s
+
+uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
+6 passed in 0.36s
+
 uv run pytest -q
+881 passed, 2 warnings in 19.13s
+
 scripts/check-progress-docs.sh
+Progress docs check passed.
+
 git diff --check
+(clean)
 ```
 
-## Next Agent State
+## Handoff To Codex
 
-- Phase: `CLAUDE_IMPLEMENTING`
-- Owner: `CLAUDE_CODE`
+Implementation is complete. Codex should review `git diff HEAD` against `08_IMPLEMENTATION_BRIEF.md`, write `10_REVIEW_REPORT.md`, and finalize or request fixes.

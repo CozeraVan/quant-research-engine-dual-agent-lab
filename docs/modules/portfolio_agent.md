@@ -84,7 +84,8 @@ Latest smoke families:
 
 Continue portfolio engine development:
 
-- real index benchmark wiring after index data is available
+- market-cap and liquidity metadata standardization
+- benchmark membership and index grouping adapters
 
 Completed target:
 

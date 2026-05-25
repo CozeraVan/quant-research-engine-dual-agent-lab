@@ -20,6 +20,8 @@
 | M2.6 | Tushare security-status smoke harness | DONE | CODEX | `scripts/tushare_security_smoke.py`; `stock_basic` and `suspend_d` smoke validation succeed, `stock_st` / `stk_alert` remain permission-blocked | Preserve; use as a read-only source-shape probe before bulk ingestion |
 | M2.7 | Tushare security source adapter scaffold | DONE | CODEX | `src/quant_research_engine/data/tushare_security.py`; smoke script now reuses a shared source wrapper; targeted unit tests passed | Preserve; reuse for future bulk ingestion and endpoint-specific probes |
 | M2.8 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `src/quant_research_engine/data/tushare_security.py`; canonical snapshot contract, normalized frame helper, and targeted tests landed; 34 tests passed | Preserve; reuse as the source boundary for later bulk ingestion |
+| M2.9 | Reference-data ingestion ownership | DONE | CODEX | Tushare reference-data handler, sync CLI, smoke script, and docs moved to sibling `quant_ts`; QRE producer code removed | Run controlled sync from `quant_ts` after Tushare permissions are available |
+| M2.10 | Cross-sectional market-cap / liquidity metadata standardization | DONE | CLAUDE_CODE | `_load_reference_daily_basic_snapshot()` + bucket helpers; `total_mv`/`circ_mv`/`turnover_rate`/`turnover_rate_f`/`volume_ratio` exposed; `market_cap_bucket`/`liquidity_bucket` added; 7 enrichment tests | Preserve |
 
 ## Milestone 3: Evaluation Engine
 
@@ -44,8 +46,8 @@
 | M4.5 | Risk exits, weights, rebalance | DONE | HISTORICAL | risk/weights/rebalance docs and tests | Preserve |
 | M4.6 | FIFO lot accounting and T+1 sellable inventory | DONE | HISTORICAL | legacy progress: `156 passed` | Preserve |
 | M4.7 | Stronger failed-order diagnostics | DONE | CODEX/CLAUDE_CODE | local review passed; 238 tests passed; side-level failed-order summary diagnostics added | Preserve |
-| M4.8 | Real index benchmark wiring | BLOCKED | USER/CODEX | table/schema not confirmed | Confirm available index table and columns |
-| M4.9 | Real suspension/ST/risk-warning metadata | BLOCKED | CLAUDE_CODE | fallback currently static unless data provided; source table confirmation pending | Confirm source table/schema and wire real metadata adapter if available |
+| M4.8 | Real index benchmark wiring | DONE | CLAUDE_CODE | `benchmark_engine` with `benchmark_db_url -> reference_db_url -> market_db_url` fallback; `load_benchmark_bars()` uses benchmark engine; 4 engine-routing tests | Preserve |
+| M4.9 | Real suspension/ST/risk-warning metadata | DONE | CLAUDE_CODE | `_load_reference_security_metadata()` composes from `reference.stock_basic` + status tables; `is_suspended`/`is_st`/`is_risk_warning` via `_query_status_ts_codes()`; 7 composition tests | Preserve |
 | M4.10 | Batch metadata passthrough group-by | DONE | CODEX/CLAUDE_CODE | 283 tests passed; `summary_metadata_columns` added to batch requests; CLI `--group-by` columns flow into batch summaries | Preserve |
 | M4.11 | Shared-cash metadata output passthrough | DONE | CODEX/CLAUDE_CODE | 293 tests passed; `metadata_columns` added to shared-cash requests; output rows carry requested metadata without overwriting canonical fields | Preserve |
 | M4.12 | Shared-cash metadata group summaries | DONE | CODEX/CLAUDE_CODE | 315 tests passed; `backtest-shared --group-by` writes row-based grouped order/trade/failed-order CSVs with manifest validation | Preserve |
@@ -79,7 +81,8 @@
 |---|---|---|---|---|---|
 | M6.1 | Initialize dual-agent docs | DONE | USER/SCRIPT | commit `77fec02` | Preserve |
 | M6.2 | Migrate legacy project knowledge into `docs/agent` | DONE | CODEX | current doc migration | User review |
-| M6.3 | First post-migration implementation brief | WAITING_USER_APPROVAL | USER | `08_IMPLEMENTATION_BRIEF.md` | Approve or revise |
+| M6.3 | First post-migration implementation brief | DONE | CODEX | `QRE-REFERENCE-DATA-MIGRATE-TO-QUANT-TS-001` implemented and reviewed; reference data ownership moved to `quant_ts` | Preserve |
+| M6.4 | QRE reference read-side wiring brief | DONE | CLAUDE_CODE | `09_CODING_HANDOFF.md` updated; benchmark routing + reference metadata composition; 874 tests passed (+11) | Codex review and git finalize |
 
 ## Milestone 7: Local Backtest Console
 
@@ -142,7 +145,8 @@
 | M8.49 | Research-run preflight report content audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_validate_preflight_report()` validates `status`/`checks`/`missing_factor_requests`; 9 unit + 3 CLI tests; 826 passed (+12) | Preserve |
 | M8.50 | Research-run audit role selector parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 10 CLI regression tests lock `report-files`/`report-audit` role selector behavior for root research-run manifests; 836 passed (+10) | Preserve |
 | M8.51 | Research-run audit usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README section 10 expanded with role-specific audit examples; portfolio_workflow.md audit contract subsection added; portfolio_layer.md pointer added; full suite unchanged at 836 passed | Preserve |
-| M8.52 | Research-run preflight report shape audit | READY | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md` prepared; preflight audit still accepts unsupported statuses and malformed `checks[]` items | Implement |
+| M8.52 | Research-run preflight report shape audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_validate_preflight_report()` hardened; status validated against `{ok, warning, error}`; checks[] items validated as `{name, status, message}` objects; new codes: `invalid_preflight_report_check`, `missing_preflight_report_check_field`; 13 new tests; 849 passed | Preserve |
+| M8.53 | Research-run preflight missing-factor shape audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; missing_factor_requests[] item validation added; 14 new tests; 863 passed | Preserve |
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | DONE | CLAUDE_CODE | Builder tab with high-level entry forms; compile endpoint; indicator catalog endpoint; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 
@@ -156,3 +160,4 @@
 - DONE: Completed and verified or preserved from legacy records
 - BLOCKED: Blocked by missing decision, data, or approval
 - WAITING_USER_APPROVAL: Codex prepared a brief; user must approve before Claude Code implements
+- WAITING_CLAUDE_CODE: Codex prepared a brief; Claude Code owns the next implementation step

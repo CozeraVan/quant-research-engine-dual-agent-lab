@@ -4,48 +4,62 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
+
+## Current Task
+
+`QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001`
 
 ## Last Completed Step
 
-Codex reviewed and locally committed `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`.
+Codex reviewed Claude Code's implementation and finalized the slice:
 
-Commit `9e00f0a` documents role-specific research-run report-manifest audit usage in README and module docs. `10_REVIEW_REPORT.md` recorded PASS before the commit.
-
-Codex opened the next implementation slice: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001`. The active task is to harden `preflight_report` content validation for accepted status values and `checks[]` item shape when auditing a top-level `research_run_report_manifest`.
+- `load_security_metadata()` enriches composed reference metadata and the daily-derived fallback with latest-available `reference.daily_basic` columns when available.
+- `_compute_market_cap_bucket()` and `_compute_liquidity_bucket()` provide deterministic grouping.
+- Explicit metadata table priority remains unchanged.
+- Validation passed for the targeted data-layer tests, CLI/report-manifest tests, progress docs, and diff checks.
+- `10_REVIEW_REPORT.md` now records the PASS review for this task.
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `9e00f0a` (document research-run audit role usage)
-- Last handoff brief commit: `a96d57f` (preflight report shape audit hardening)
-- Standing approval: local commits approved by user; no remote push requested.
-- Working tree: clean after handoff checkpoint.
+- Last finalized commit: `9e00f0a`
+- Working tree: modified across QRE plus sibling `quant_ts` files from the reference-data migration/backfill work.
 - Remote push: not requested.
+- Do not revert unrelated dirty files.
 
 ## Latest Validation Evidence
 
-From the finalized documentation slice:
+Current finalization evidence:
 
-- `uv run pytest -q` -> 836 passed, 2 warnings in 11.80s
-- `scripts/check-progress-docs.sh` -> passed
-- `git diff --check` -> clean
-- `scripts/git-finalize-check.sh` -> passed
+- `uv run pytest -q tests/test_postgres_store.py` -> `35 passed`.
+- `uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py` -> `6 passed`.
+- `uv run pytest -q tests/test_portfolio_report_manifest.py tests/test_cli.py` -> `427 passed`.
+- `scripts/check-progress-docs.sh` -> passed.
+- `git diff --check` -> clean.
+
+## Required Claude Code Task
+
+No active Claude Code task is queued for this slice. The completed work is preserved in the review and handoff docs for recovery. A new implementation brief can be prepared in the next planning cycle if another slice is identified.
+
+## Completion Estimate
+
+For the current MVP scope, QRE remains roughly 90%+ complete. Cross-sectional metadata standardization from `reference.daily_basic` is now complete for this slice. Future enhancements such as benchmark membership, regime grouping, and deeper as-of metadata should not be included in this slice.
 
 ## Short Prompt Commands
 
 ### For Codex
 
 ```text
-请读取 11 和 12，等待 Claude Code 实施完成后进行 Codex review。
+请读取 11 和 12。当前 slice 已完成并通过复审；如果要开启新任务，请先更新 08/09/11/12 再分配给 Claude Code。Codex 继续只做规划/复审/最终化，不恢复 Tushare 下载/入库代码。
 ```
 
 ### For Claude Code
 
 ```text
-请读取 11 和 12，并严格按照 08_IMPLEMENTATION_BRIEF.md 实施 QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001。完成后更新 09_CODING_HANDOFF.md。
+当前没有新的 Claude Code 任务。请等待下一轮 `08_IMPLEMENTATION_BRIEF.md` 和 `12_AGENT_BOARD.md` 更新后再开始。
 ```

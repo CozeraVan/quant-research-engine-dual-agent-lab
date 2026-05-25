@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001
+QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001
 
 ## Current Recipient
 
@@ -10,7 +10,7 @@ CLAUDE_CODE
 
 ## Message Type
 
-IMPLEMENTATION_BRIEF_READY
+COMPLETION_NOTICE
 
 ## Sender
 
@@ -18,28 +18,37 @@ CODEX
 
 ## Short Message
 
-Codex prepared the next implementation brief. Claude Code should harden top-level research-run `preflight_report` validation for accepted status values and `checks[]` item shape.
+The market-cap/liquidity metadata slice is complete and reviewed. No active Claude Code implementation task is queued for this slice; the next task should be assigned from the next planning cycle. QRE remains read-only and does not restore Tushare producer code.
 
 ## Required Outcome
 
-| Area | Required |
-|---|---|
-| Root status | `status` must be `ok`, `warning`, or `error` |
-| Checks list | `checks`, when present, remains list-only |
-| Check items | each check item must be an object with `name`, `status`, `message` |
-| Error codes | stable issue codes for invalid/missing check fields |
-| Scope guard | only `research_run_report_manifest` + `preflight_report` triggers this validation |
-| Tests | unit + CLI regressions for shape errors and compatibility |
+| Area | Required | Status |
+|---|---|---|
+| Daily basic enrichment | Latest-available `reference.daily_basic` columns are exposed through the read-side metadata path | DONE |
+| Bucket helpers | Deterministic market-cap and liquidity buckets are added | DONE |
+| Explicit metadata table | `QRE_SECURITY_METADATA_TABLE` priority remains unchanged | DONE |
+| Fallback compatibility | Daily-derived fallback still works if `reference.stock_basic` is absent | DONE |
+| QRE scope | No Tushare download/ingest code in QRE | DONE |
+| Tests | Targeted unit tests cover enrichment, bucket mapping, and fallback behavior | DONE |
 
 ## Review Status
 
-PENDING_IMPLEMENTATION
+PASS
 
-## Evidence
+## Evidence Available
 
-- Previous finalized baseline: `9e00f0a` research-run audit usage documentation; full suite `836 passed, 2 warnings`.
-- Codex audit gap: current preflight report validation accepts unsupported status values and malformed `checks[]` items.
+- `uv run pytest -q tests/test_postgres_store.py` -> `35 passed`.
+- `uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py` -> `6 passed`.
+- `uv run pytest -q tests/test_portfolio_report_manifest.py tests/test_cli.py` -> `427 passed`.
+- `scripts/check-progress-docs.sh` -> passed.
+- `git diff --check` -> clean.
+
+## Claude Code Instructions
+
+No implementation is queued for this slice.
+
+If a new task is assigned, read the fresh `08_IMPLEMENTATION_BRIEF.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md`, then implement only the scoped QRE code changes.
 
 ## Next Step
 
-Claude Code implements `08_IMPLEMENTATION_BRIEF.md`, then updates `09_CODING_HANDOFF.md` for Codex review.
+Codex will prepare the next planning brief when a new slice is identified.

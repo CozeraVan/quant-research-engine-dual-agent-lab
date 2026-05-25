@@ -8213,6 +8213,68 @@ def test_cli_report_audit_role_run_manifest_skips_preflight_validation(capsys, t
     assert "status=ok" in captured.out
 
 
+def test_cli_report_audit_json_role_preflight_surfaces_check_item_issue(capsys, tmp_path):
+    """report-audit --json --role preflight_report surfaces a check-item shape issue."""
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [123]}),
+        encoding="utf-8",
+    )
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-audit", str(tmp_path / "report_manifest.json"),
+        "--role", "preflight_report",
+        "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    codes = {i["code"] for i in payload["issues"]}
+    assert "invalid_preflight_report_check" in codes
+
+
+def test_cli_report_audit_json_role_preflight_surfaces_missing_factor_item_issue(capsys, tmp_path):
+    """report-audit --json --role preflight_report surfaces a missing-factor item shape issue."""
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "missing_factor_requests": [123]}),
+        encoding="utf-8",
+    )
+    (tmp_path / "report_manifest.json").write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    exit_code = main([
+        "report-audit", str(tmp_path / "report_manifest.json"),
+        "--role", "preflight_report",
+        "--json",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["matched_files"] == 1
+    codes = {i["code"] for i in payload["issues"]}
+    assert "invalid_preflight_report_missing_factor_request" in codes
+
+
 # --- research_run_report_manifest role selector parity ---
 
 

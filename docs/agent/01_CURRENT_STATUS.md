@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. The smoke discovery status enrichment series (22 flags) is complete.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring and cross-sectional market-cap/liquidity metadata standardization are now complete. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
 
 ## Completed
 
@@ -45,20 +45,20 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Research-run preflight report content audit: `validate_contents()` on `research_run_report_manifest` now validates `preflight_report` JSON content via `_validate_preflight_report()`; checks `status` (non-empty string), `checks` and `missing_factor_requests` (lists if present); 9 unit + 3 CLI tests added; full suite at 826 passed.
 - Research-run audit role selector parity: 10 CLI regression tests lock `report-files` / `report-audit` role behavior for root research-run manifests across JSON/text output and `--require-match`; full suite at 836 passed.
 - Strategy entry/exit standardization: `strategies/high_level/` and `strategies/low_level/` directories; Bollinger Band mean reversion template strategy; default strategy-smoke and GUI template paths migrated from deleted `examples/`; EMA200 typical source maps to the upstream `typical_price` table; chunked full-market backtest runner now writes `aggregate_summary.json`; README and active docs synced.
+- Research-run preflight report shape audit: `_validate_preflight_report()` hardened to validate `status` values (`ok`, `warning`, `error`) and `checks[]` item object shape (`name`, `status`, `message`); new issue codes `invalid_preflight_report_check` and `missing_preflight_report_check_field`; 13 new tests; review PASS.
+- Research-run preflight missing-factor shape audit: `_validate_preflight_report()` hardened to validate `missing_factor_requests[]` item object shape (`strategy_id`, `alias`, `indicator`, `expected_table`, `expected_column`, `date_range`, `reason`, `required`); new issue codes `invalid_preflight_report_missing_factor_request` and `missing_preflight_report_missing_factor_field`; 14 new tests; review PASS; full suite at 863 passed.
+- Reference-data ingestion ownership migrated to sibling `quant_ts`; QRE reads populated reference tables only.
 
 ## In Progress
 
-`QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001` passed Codex review. README and module docs now include role-level audit examples for `run_manifest`, `preflight_report`, `eval_report_manifest`, and `backtest_report_manifest` with selector isolation documentation. `QRE-DATA-REAL-SUSPENSION-ST-RISK-WARNING-METADATA-001` remains blocked on upstream data availability.
-
-Next active implementation slice: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001`, which should harden `preflight_report` audit validation for accepted status values and `checks[]` item shape.
+- (none)
 
 ## Known Gaps
 
-- Real index benchmark data-source wiring is not complete. Benchmark-relative code and data-loading skeleton exist, and temporary stock benchmark wiring exists.
-- Time-varying suspension/ST/risk-warning metadata still depends on confirmed upstream source tables. Tushare `suspend_d` is available for smoke validation, but `stock_st` and `stk_alert` remain permission-gated.
-- The reusable Tushare security source adapter exists, but the authoritative upstream security-status table is still missing.
-- Benchmark membership, market-cap, liquidity bucket, and real regime grouping are not fully standardized across all research outputs.
-- Evaluation layer does not yet implement real index benchmark comparison or real regime classification.
+- Benchmark membership and real regime grouping are not fully standardized across all research outputs.
+- Full as-of time-varying history for cross-sectional metadata remains a future enhancement.
+- The reusable Tushare security source adapter remains as historical source-shape context only. Future download/ingest changes belong in `quant_ts`, not QRE.
+- Evaluation layer does not yet implement real regime classification.
 
 ## Current Technical Stack
 
@@ -76,11 +76,11 @@ Next active implementation slice: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `a027d69` (research-run audit role selector parity), `00ac2f8` (selector parity handoff checkpoint)
+- Recent commits: `9e00f0a` (research-run audit usage docs), `a027d69` (research-run audit role selector parity)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test: `836 passed, 2 warnings in 11.77s`
+- Last verified targeted tests: `35 passed`, `6 passed`, and `427 passed` across the current finalize checks
 
 ## Current CLI Surface
 
@@ -105,4 +105,4 @@ Next active implementation slice: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT
 
 ## Next Recommended Step
 
-Implement `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001` from `docs/agent/08_IMPLEMENTATION_BRIEF.md`, then hand back to Codex for review.
+No active implementation slice is queued. The current QRE slice is complete and reviewed. When the next task is defined, update `08/09/11/12` together before assigning it to Claude Code.

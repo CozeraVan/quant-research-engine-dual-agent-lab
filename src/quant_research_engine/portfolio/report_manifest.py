@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 
+_VALID_PREFLIGHT_STATUSES = {"ok", "warning", "error"}
+
 _SUPPORTED_MANIFEST_KINDS = {
     "batch_backtest_report_manifest",
     "shared_cash_backtest_report_manifest",
@@ -622,6 +624,7 @@ def _validate_preflight_report(entry: ReportFile, path: Path) -> list[ReportVali
 
     issues: list[ReportValidationIssue] = []
 
+    # Root status: required, must be a non-empty string in the accepted set.
     if "status" not in payload:
         issues.append(
             ReportValidationIssue(
@@ -642,25 +645,314 @@ def _validate_preflight_report(entry: ReportFile, path: Path) -> list[ReportVali
                     message=f"preflight report 'status' must be a non-empty string, got {type(status).__name__}",
                 )
             )
-
-    if "checks" in payload and not isinstance(payload["checks"], list):
-        issues.append(
-            ReportValidationIssue(
-                key=entry.key,
-                path=path,
-                code="invalid_preflight_report_field",
-                message=f"preflight report 'checks' must be a list, got {type(payload['checks']).__name__}",
+        elif status not in _VALID_PREFLIGHT_STATUSES:
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_preflight_report_field",
+                    message=f"preflight report 'status' must be one of {sorted(_VALID_PREFLIGHT_STATUSES)}, got {status!r}",
+                )
             )
-        )
 
-    if "missing_factor_requests" in payload and not isinstance(payload["missing_factor_requests"], list):
-        issues.append(
-            ReportValidationIssue(
-                key=entry.key,
-                path=path,
-                code="invalid_preflight_report_field",
-                message=f"preflight report 'missing_factor_requests' must be a list, got {type(payload['missing_factor_requests']).__name__}",
+    # checks: optional list of well-shaped check objects.
+    if "checks" in payload:
+        checks = payload["checks"]
+        if not isinstance(checks, list):
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_preflight_report_field",
+                    message=f"preflight report 'checks' must be a list, got {type(checks).__name__}",
+                )
             )
-        )
+        else:
+            for idx, item in enumerate(checks):
+                if not isinstance(item, dict):
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="invalid_preflight_report_check",
+                            message=f"preflight report checks[{idx}] must be an object, got {type(item).__name__}",
+                        )
+                    )
+                    continue
+                # name: required, non-empty string
+                if "name" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_check_field",
+                            message=f"preflight report checks[{idx}] missing required field 'name'",
+                        )
+                    )
+                else:
+                    if not isinstance(item["name"], str) or not item["name"]:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_check",
+                                message=f"preflight report checks[{idx}] 'name' must be a non-empty string, got {type(item['name']).__name__}",
+                            )
+                        )
+                # status: required, must be ok/warning/error
+                if "status" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_check_field",
+                            message=f"preflight report checks[{idx}] missing required field 'status'",
+                        )
+                    )
+                else:
+                    check_status = item["status"]
+                    if not isinstance(check_status, str):
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_check",
+                                message=f"preflight report checks[{idx}] 'status' must be a string, got {type(check_status).__name__}",
+                            )
+                        )
+                    elif check_status not in _VALID_PREFLIGHT_STATUSES:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_check",
+                                message=f"preflight report checks[{idx}] 'status' must be one of {sorted(_VALID_PREFLIGHT_STATUSES)}, got {check_status!r}",
+                            )
+                        )
+                # message: required string
+                if "message" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_check_field",
+                            message=f"preflight report checks[{idx}] missing required field 'message'",
+                        )
+                    )
+                else:
+                    if not isinstance(item["message"], str):
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_check",
+                                message=f"preflight report checks[{idx}] 'message' must be a string, got {type(item['message']).__name__}",
+                            )
+                        )
+
+    # missing_factor_requests: optional list of well-shaped request objects.
+    if "missing_factor_requests" in payload:
+        requests = payload["missing_factor_requests"]
+        if not isinstance(requests, list):
+            issues.append(
+                ReportValidationIssue(
+                    key=entry.key,
+                    path=path,
+                    code="invalid_preflight_report_field",
+                    message=f"preflight report 'missing_factor_requests' must be a list, got {type(requests).__name__}",
+                )
+            )
+        else:
+            for idx, item in enumerate(requests):
+                if not isinstance(item, dict):
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="invalid_preflight_report_missing_factor_request",
+                            message=f"preflight report missing_factor_requests[{idx}] must be an object, got {type(item).__name__}",
+                        )
+                    )
+                    continue
+                # strategy_id: required, non-empty string
+                if "strategy_id" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_missing_factor_field",
+                            message=f"preflight report missing_factor_requests[{idx}] missing required field 'strategy_id'",
+                        )
+                    )
+                else:
+                    if not isinstance(item["strategy_id"], str) or not item["strategy_id"]:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_missing_factor_request",
+                                message=f"preflight report missing_factor_requests[{idx}] 'strategy_id' must be a non-empty string, got {type(item['strategy_id']).__name__}",
+                            )
+                        )
+                # alias: required, non-empty string
+                if "alias" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_missing_factor_field",
+                            message=f"preflight report missing_factor_requests[{idx}] missing required field 'alias'",
+                        )
+                    )
+                else:
+                    if not isinstance(item["alias"], str) or not item["alias"]:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_missing_factor_request",
+                                message=f"preflight report missing_factor_requests[{idx}] 'alias' must be a non-empty string, got {type(item['alias']).__name__}",
+                            )
+                        )
+                # indicator: required, non-empty string
+                if "indicator" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_missing_factor_field",
+                            message=f"preflight report missing_factor_requests[{idx}] missing required field 'indicator'",
+                        )
+                    )
+                else:
+                    if not isinstance(item["indicator"], str) or not item["indicator"]:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_missing_factor_request",
+                                message=f"preflight report missing_factor_requests[{idx}] 'indicator' must be a non-empty string, got {type(item['indicator']).__name__}",
+                            )
+                        )
+                # expected_table: required, non-empty string
+                if "expected_table" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_missing_factor_field",
+                            message=f"preflight report missing_factor_requests[{idx}] missing required field 'expected_table'",
+                        )
+                    )
+                else:
+                    if not isinstance(item["expected_table"], str) or not item["expected_table"]:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_missing_factor_request",
+                                message=f"preflight report missing_factor_requests[{idx}] 'expected_table' must be a non-empty string, got {type(item['expected_table']).__name__}",
+                            )
+                        )
+                # expected_column: required, non-empty string
+                if "expected_column" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_missing_factor_field",
+                            message=f"preflight report missing_factor_requests[{idx}] missing required field 'expected_column'",
+                        )
+                    )
+                else:
+                    if not isinstance(item["expected_column"], str) or not item["expected_column"]:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_missing_factor_request",
+                                message=f"preflight report missing_factor_requests[{idx}] 'expected_column' must be a non-empty string, got {type(item['expected_column']).__name__}",
+                            )
+                        )
+                # date_range: required object with start/end string fields
+                if "date_range" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_missing_factor_field",
+                            message=f"preflight report missing_factor_requests[{idx}] missing required field 'date_range'",
+                        )
+                    )
+                else:
+                    date_range = item["date_range"]
+                    if not isinstance(date_range, dict):
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_missing_factor_request",
+                                message=f"preflight report missing_factor_requests[{idx}] 'date_range' must be an object, got {type(date_range).__name__}",
+                            )
+                        )
+                    else:
+                        if "start" not in date_range or not isinstance(date_range.get("start"), str) or not date_range.get("start"):
+                            issues.append(
+                                ReportValidationIssue(
+                                    key=entry.key,
+                                    path=path,
+                                    code="invalid_preflight_report_missing_factor_request",
+                                    message=f"preflight report missing_factor_requests[{idx}] 'date_range' must contain a non-empty string 'start'",
+                                )
+                            )
+                        if "end" not in date_range or not isinstance(date_range.get("end"), str) or not date_range.get("end"):
+                            issues.append(
+                                ReportValidationIssue(
+                                    key=entry.key,
+                                    path=path,
+                                    code="invalid_preflight_report_missing_factor_request",
+                                    message=f"preflight report missing_factor_requests[{idx}] 'date_range' must contain a non-empty string 'end'",
+                                )
+                            )
+                # reason: required, non-empty string
+                if "reason" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_missing_factor_field",
+                            message=f"preflight report missing_factor_requests[{idx}] missing required field 'reason'",
+                        )
+                    )
+                else:
+                    if not isinstance(item["reason"], str) or not item["reason"]:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_missing_factor_request",
+                                message=f"preflight report missing_factor_requests[{idx}] 'reason' must be a non-empty string, got {type(item['reason']).__name__}",
+                            )
+                        )
+                # required: must be a boolean
+                if "required" not in item:
+                    issues.append(
+                        ReportValidationIssue(
+                            key=entry.key,
+                            path=path,
+                            code="missing_preflight_report_missing_factor_field",
+                            message=f"preflight report missing_factor_requests[{idx}] missing required field 'required'",
+                        )
+                    )
+                else:
+                    if type(item["required"]) is not bool:
+                        issues.append(
+                            ReportValidationIssue(
+                                key=entry.key,
+                                path=path,
+                                code="invalid_preflight_report_missing_factor_request",
+                                message=f"preflight report missing_factor_requests[{idx}] 'required' must be a boolean, got {type(item['required']).__name__}",
+                            )
+                        )
 
     return issues

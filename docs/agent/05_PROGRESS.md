@@ -2,16 +2,19 @@
 
 ## Current Phase
 
-CLAUDE_IMPLEMENTING
+DONE
 
 ## Current Active Work
 
-`QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001` is briefed for Claude Code. Goal: harden top-level research-run preflight report auditing for accepted status values and `checks[]` item shape.
+No active work. `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001` is implemented, reviewed, and finalized.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
+| QRE-REFERENCE-READ-SIDE-WIRING-001 | QRE read-side benchmark/reference metadata wiring | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark engine routing + reference metadata composition landed; 874 tests passed (+11) | Preserve |
+| QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001 | QRE market-cap/liquidity metadata standardization | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; latest-available `reference.daily_basic` enrichment and deterministic bucket helpers implemented; targeted data-layer, preflight, CLI, and manifest tests passed; progress docs and diff checks passed | Preserve |
+| QRE-REFERENCE-DATA-MIGRATE-TO-QUANT-TS-001 | Move Tushare reference-data download/ingest from QRE to `quant_ts` | DONE | CODEX | `quant_ts` list/plan dry-runs pass; reference files compile; QRE `reference-data` command removed; QRE full suite `863 passed, 2 warnings` | Run controlled `quant_ts` smoke/sync after permissions |
 | DOC-1 | Initialize dual-agent workflow docs | DONE | USER/SCRIPT | commit `77fec02` | Preserve |
 | DOC-2 | Migrate legacy docs into `docs/agent` | DONE | CODEX | commit `2565e13` | Preserve |
 | DOC-3 | Add archive notes to legacy planning docs | DONE | CODEX | commit `2565e13` | Preserve; do not delete |
@@ -113,7 +116,7 @@ CLAUDE_IMPLEMENTING
 | QRE-NEXT-52 | CLI regression coverage for invalid `window_size` manifest metadata | DONE | CODEX/CLAUDE_CODE | commit `06d2b4b`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; 201 passed in 1.90s | Preserve |
 | QRE-NEXT-53 | CLI strict/JSON parity for `window_size` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; 205 passed in 1.94s | Preserve |
 | QRE-NEXT-54 | CLI strict/JSON parity for `window_size` + `group_by` filters | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` + `--group-by` combined selector parity with `--json --require-match`; 209 passed in 2.02s | Preserve |
-| QRE-NEXT-55 | Real suspension/ST/risk-warning metadata | BLOCKED | CODEX | Data layer adapter ready; no upstream security-status table in `tushare_data`; `stock_daily` has no suspension/ST/risk-warning columns; set `QRE_SECURITY_METADATA_TABLE` to unblock | Await user-provided source table or upstream data producer plan |
+| QRE-NEXT-55 | Real suspension/ST/risk-warning metadata | IMPLEMENTED | CLAUDE_CODE | `reference.*` composition adapter in `postgres.py`; `load_security_metadata()` composes from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, `reference.stock_risk_warning` when no explicit metadata table configured | Preserve |
 | QRE-NEXT-56 | Tushare security-status smoke harness | DONE | CODEX | `scripts/tushare_security_smoke.py`; `stock_basic` and `suspend_d` smoke validation succeed, `stock_st` / `stk_alert` remain permission-blocked | Preserve; use as a read-only source-shape probe before bulk ingestion |
 | QRE-NEXT-57 | Tushare security source adapter scaffold | DONE | CODEX | `src/quant_research_engine/data/tushare_security.py`; smoke script now delegates to a reusable wrapper; targeted unit tests passed | Preserve; use as the reusable source boundary for later bulk ingestion |
 | QRE-NEXT-58 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`; 17 targeted tests pass; smoke harness preserved | Preserve; reuse as the source boundary for later bulk ingestion |
@@ -129,23 +132,28 @@ CLAUDE_IMPLEMENTING
 | QRE-RESEARCH-RUN-PREFLIGHT-REPORT-AUDIT-001 | Research-run preflight report content audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `validate_contents()` routes `preflight_report` through `_validate_preflight_report()`; 9 unit + 3 CLI tests; 826 passed (+12) | Preserve |
 | QRE-RESEARCH-RUN-AUDIT-ROLE-SELECTOR-PARITY-001 | Research-run audit role selector parity | DONE | CODEX/CLAUDE_CODE | commit `a027d69`; 10 CLI regression tests added; no runtime changes needed; Codex review PASS; 836 passed (+10) | Preserve |
 | QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001 | Research-run audit usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README section 10 expanded with role-specific audit examples; portfolio_workflow.md audit contract subsection added; portfolio_layer.md pointer added; 836 passed | Preserve |
-| QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001 | Research-run preflight report shape audit | READY | CODEX | `08_IMPLEMENTATION_BRIEF.md` prepared; preflight audit should reject unsupported statuses and malformed `checks[]` entries | Claude Code implement |
+| QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001 | Research-run preflight report shape audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_validate_preflight_report()` hardened; status validated against `{ok, warning, error}`; checks[] items validated as `{name, status, message}` objects; new codes: `invalid_preflight_report_check`, `missing_preflight_report_check_field`; 13 new tests; 849 passed | Preserve |
+| QRE-RESEARCH-RUN-PREFLIGHT-MISSING-FACTOR-SHAPE-AUDIT-001 | Research-run preflight missing-factor shape audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; missing_factor_requests[] item validation added; 14 new tests; 863 passed | Preserve |
 
 ## Latest Verified State
 
-Recorded on 2026-05-24 after Codex opened `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001`:
+Recorded on 2026-05-25 after Codex reviewed `QRE-REFERENCE-READ-SIDE-WIRING-001` and queued the next read-side slice:
 
-- Current task: `QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001` — READY
-- Current phase: `CLAUDE_IMPLEMENTING`
+- Current task: `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001` — READY_FOR_CLAUDE_CODE
+- Current phase: `WAITING_CLAUDE_CODE`
 - Current owner: `CLAUDE_CODE`
 - Last finalized commit: `9e00f0a` (document research-run audit role usage)
-- Working tree: planning docs modified for next handoff
-- Validation:
-  - Full suite: `uv run pytest -q` → 836 passed, 2 warnings in 11.80s
-  - `scripts/check-progress-docs.sh`: passed
-  - `git diff --check`: clean
-  - `rg` role coverage: README 18 matches, portfolio_workflow.md 14 matches, portfolio_layer.md 1 match
-- Next step: Claude Code implements the preflight report shape audit brief
+- Working tree: existing QRE/quant_ts changes are unfinalized; do not revert unrelated dirty files.
+- Reference-data evidence:
+  - `reference.index_daily` populated through `2026-05-22` and QRE benchmark smoke against `000300.SH` passed.
+  - `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning` exist in `quant_ts` and are populated to source-available windows.
+  - Remaining `quant_ts` planned actions are current-day/current-month delayed-source retries, not QRE engineering blockers.
+- QRE validation evidence for the completed read-side wiring slice:
+  - `uv run pytest -q tests/test_postgres_store.py` → 28 passed.
+  - `uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py` → 6 passed.
+  - `uv run pytest -q tests/test_cli.py -k "benchmark_smoke or metadata_smoke or backtest_shared_prints_benchmark"` → 4 passed, 299 deselected.
+  - `scripts/check-progress-docs.sh` and `git diff --check` passed.
+- Next step: Claude Code implements `QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001`, then Codex reviews.
 
 Current GUI direction approved on 2026-05-21:
 
@@ -200,10 +208,12 @@ User-requested strategy work in 2026-05-21:
 
 ## Pending Work Summary
 
-- Real index benchmark wiring after table/schema confirmation.
-- Real suspension/ST/risk-warning time-varying metadata, pending a confirmed upstream table or higher Tushare permissions for `stock_st` / `stk_alert`.
+- Current non-deferred implementation: QRE market-cap/liquidity metadata standardization from populated `reference.daily_basic`.
+- Real reference-data sync belongs to sibling `quant_ts`; QRE should not own producer code.
+- Real index benchmark data is available in `reference.index_daily`; benchmark/reference routing is already wired.
+- Real suspension/ST/risk-warning source tables are available in `reference.*`; read-side composition is already wired.
 - Canonical security-snapshot contract is complete; later bulk ingestion can reuse the Tushare source scaffold.
-- Bulk ingestion / durable loading for the Tushare security source scaffold once the upstream source contract is settled.
+- Bulk ingestion / durable loading remains in `../quant_ts`.
 - Industry, market-cap, liquidity, membership, and regime grouping across evaluation and shared-cash outputs.
 - Research-run CLI orchestrator persists and links preflight/eval/backtest stage artifacts from `qre research-run`.
 - Strategy IO contract implementation after design approval.
@@ -214,6 +224,7 @@ User-requested strategy work in 2026-05-21:
 - TODO: Not started
 - READY: Scoped and ready for the implementer
 - WAITING_USER_APPROVAL: User approval required before the next agent proceeds
+- WAITING_CLAUDE_CODE: Codex planning is complete and Claude Code owns implementation
 - IN_PROGRESS: Started but not complete
 - IMPLEMENTED: Implemented by Claude Code, awaiting Codex review
 - DESIGN_RECORDED: Design artifact exists and awaits review/approval

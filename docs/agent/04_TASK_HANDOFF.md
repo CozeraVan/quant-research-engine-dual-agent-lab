@@ -2,35 +2,71 @@
 
 ## Task ID
 
-QRE-RESEARCH-RUN-PREFLIGHT-REPORT-SHAPE-AUDIT-001
+QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001
 
 ## Current Status
 
-READY_FOR_CLAUDE. Codex reviewed and locally committed `QRE-RESEARCH-RUN-AUDIT-USAGE-DOCS-001`, then prepared the next implementation brief.
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE
+USER
 
 ## Problem Summary
 
-Top-level research-run preflight report auditing now validates that `preflight_report` is JSON, object-rooted, has a non-empty `status`, and has list-shaped optional fields. It still accepts unsupported status values and malformed `checks[]` items, even though real `PreflightReport.to_dict()` emits checks as `{name, status, message}` objects.
+QRE has finished the read-side wiring needed to consume populated `reference.*` tables:
 
-## Handoff To Claude Code
+- benchmark reads now use `benchmark_db_url -> reference_db_url -> market_db_url`;
+- security metadata now composes from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning`;
+- latest-available `reference.daily_basic` enrichment now standardizes market-cap and liquidity metadata for grouped evaluation and portfolio outputs.
 
-Read:
+## Overall Project Completion
 
+QRE is in advanced experimental MVP / user-acceptance state. Most core engine work is complete:
+
+- Data layer and preflight: complete for the current MVP slice.
+- Evaluation engine: complete for the current MVP; real regime classification remains future work.
+- Portfolio engine: complete for the current MVP.
+- Reporting, manifests, audit, research-run, strategy IO, smoke tooling, and GUI: complete for the current MVP.
+- Upstream data production: intentionally out of QRE and owned by `../quant_ts`.
+
+Practical completion estimate: QRE is roughly 90%+ complete for the current MVP scope. Larger items such as benchmark membership, real regime grouping, and deeper as-of metadata are future enhancements rather than current blockers.
+
+## Implementation Assignment For Claude Code
+
+No active implementation is assigned in this slice.
+
+If a new task is defined, read:
+
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+- `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_AGENT_BOARD.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/02_LOCKED_REQUIREMENTS.md`
 
-Implement the brief exactly. Keep the task focused on preflight report audit shape validation. Do not change preflight execution, serialization, or DB access.
+## Hard Constraints
 
-## Codex Finding
+- Do not add Tushare download, token, sync, or ingestion code to QRE.
+- Do not modify `../quant_ts` for this task.
+- Do not change portfolio execution semantics.
+- Do not broaden into benchmark membership, regime classification, or full time-varying/as-of metadata.
+- Keep QRE read-only against upstream databases.
 
-```json
-{"status": "maybe", "checks": [123]}
+## Validation Expected From Claude Code
+
+```bash
+uv run pytest -q tests/test_postgres_store.py
+uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
+uv run pytest -q tests/test_cli.py -k "benchmark_smoke or metadata_smoke or backtest_shared_prints_benchmark"
+scripts/check-progress-docs.sh
+git diff --check
 ```
 
-The payload above currently satisfies the root-level preflight audit shape but is not a structurally useful preflight report.
+If time permits:
+
+```bash
+uv run pytest -q
+```
+
+## Handoff Back To Codex
+
+If a new slice is assigned later, Claude Code should update `09_CODING_HANDOFF.md` with files changed, behavior summary, and validation output, then return to Codex for review in `10_REVIEW_REPORT.md`.

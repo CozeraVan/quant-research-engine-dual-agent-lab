@@ -20,6 +20,9 @@ class PostgresDataStore:
         self.market_engine = create_engine(settings.market_db_url)
         self.factor_engine = create_engine(settings.factor_db_url or settings.market_db_url)
         self.reference_engine = create_engine(settings.reference_db_url or settings.market_db_url)
+        self.benchmark_engine = create_engine(
+            settings.benchmark_db_url or settings.reference_db_url or settings.market_db_url
+        )
 
     def ping(self) -> bool:
         with self.market_engine.begin() as conn:
@@ -87,7 +90,7 @@ class PostgresDataStore:
         self._validate_date_range(start, end)
         fields = fields or ["close"]
         return self._load_table_frame(
-            engine=self.market_engine,
+            engine=self.benchmark_engine,
             table_name=table_name,
             source_columns=["ts_code", "trade_date", *fields],
             start=start,
@@ -155,8 +158,20 @@ class PostgresDataStore:
         table_name = self.settings.tables.security_metadata_table
         if table_name:
             frame = self._load_security_metadata_table(table_name, ts_codes)
+        elif self.table_exists("reference.stock_basic", engine=self.reference_engine):
+            frame = self._load_reference_security_metadata(ts_codes)
         else:
             frame = self._derive_security_metadata_from_daily(ts_codes)
+
+        if not table_name:
+            daily_basic = self._load_reference_daily_basic_snapshot(ts_codes)
+            if not daily_basic.empty:
+                frame = frame.merge(daily_basic, on="ts_code", how="left")
+                if "total_mv" in frame.columns:
+                    frame["market_cap_bucket"] = self._compute_market_cap_bucket(frame["total_mv"])
+                if "turnover_rate_f" in frame.columns:
+                    frame["liquidity_bucket"] = self._compute_liquidity_bucket(frame["turnover_rate_f"])
+
         return self._normalize_security_metadata(frame)
 
     @staticmethod
@@ -257,6 +272,136 @@ class PostgresDataStore:
         frame["is_risk_warning"] = False
         frame["is_suspended"] = False
         return frame
+
+    def _load_reference_security_metadata(self, ts_codes: list[str] | None) -> pd.DataFrame:
+        stock_basic_table = "reference.stock_basic"
+        available_columns = set(self.get_table_columns(stock_basic_table, engine=self.reference_engine))
+        if "ts_code" not in available_columns:
+            return self._derive_security_metadata_from_daily(ts_codes)
+
+        fixed_columns = ["ts_code", "list_date", "board"]
+        passthrough_candidates = ["name", "area", "industry", "market"]
+        selected = [c for c in fixed_columns if c in available_columns]
+        selected.extend(c for c in passthrough_candidates if c in available_columns)
+
+        query = f"""
+            SELECT {", ".join(self.validate_columns(selected))}
+            FROM {self.qualified_table(stock_basic_table)}
+        """
+        params: dict[str, object] = {}
+        if ts_codes:
+            placeholders = []
+            for index, ts_code in enumerate(ts_codes):
+                key = f"ts_code_{index}"
+                placeholders.append(f":{key}")
+                params[key] = ts_code
+            query += f" WHERE ts_code IN ({', '.join(placeholders)})"
+        query += " ORDER BY ts_code"
+        frame = pd.read_sql_query(sql=text(query), con=self.reference_engine, params=params)
+
+        frame_ts_codes = frame["ts_code"]
+        frame["is_suspended"] = frame_ts_codes.isin(
+            self._query_status_ts_codes("reference.stock_suspend", ts_codes, mode="latest_trade_date")
+        )
+        frame["is_st"] = frame_ts_codes.isin(
+            self._query_status_ts_codes("reference.stock_st", ts_codes, mode="latest_trade_date")
+        )
+        frame["is_risk_warning"] = frame_ts_codes.isin(
+            self._query_status_ts_codes("reference.stock_risk_warning", ts_codes, mode="active_range")
+        )
+        return frame
+
+    def _query_status_ts_codes(
+        self, table_name: str, ts_codes: list[str] | None, *, mode: str
+    ) -> set[str]:
+        if not self.table_exists(table_name, engine=self.reference_engine):
+            return set()
+        columns = set(self.get_table_columns(table_name, engine=self.reference_engine))
+        if "ts_code" not in columns:
+            return set()
+
+        if mode == "latest_trade_date":
+            if "trade_date" not in columns:
+                return set()
+            query = f"""
+                SELECT DISTINCT ts_code
+                FROM {self.qualified_table(table_name)}
+                WHERE trade_date = (SELECT MAX(trade_date) FROM {self.qualified_table(table_name)})
+            """
+        elif mode == "active_range":
+            if "start_date" not in columns:
+                return set()
+            where_parts = ["start_date <= CURRENT_DATE"]
+            if "end_date" in columns:
+                where_parts.append("(end_date IS NULL OR end_date >= CURRENT_DATE)")
+            query = f"""
+                SELECT DISTINCT ts_code
+                FROM {self.qualified_table(table_name)}
+                WHERE {' AND '.join(where_parts)}
+            """
+        else:
+            return set()
+
+        params: dict[str, object] = {}
+        if ts_codes:
+            placeholders = []
+            for index, ts_code in enumerate(ts_codes):
+                key = f"ts_code_{index}"
+                placeholders.append(f":{key}")
+                params[key] = ts_code
+            query += f" AND ts_code IN ({', '.join(placeholders)})"
+
+        result = pd.read_sql_query(sql=text(query), con=self.reference_engine, params=params)
+        return set(result["ts_code"].tolist())
+
+    def _load_reference_daily_basic_snapshot(self, ts_codes: list[str] | None) -> pd.DataFrame:
+        table_name = "reference.daily_basic"
+        if not self.table_exists(table_name, engine=self.reference_engine):
+            return pd.DataFrame()
+
+        available_columns = set(self.get_table_columns(table_name, engine=self.reference_engine))
+        candidates = ["total_mv", "circ_mv", "turnover_rate", "turnover_rate_f", "volume_ratio"]
+        selected = [c for c in candidates if c in available_columns]
+        if not selected:
+            return pd.DataFrame()
+
+        query = f"""
+            SELECT db.ts_code, {", ".join(f"db.{self.validate_identifier(c)}" for c in selected)}
+            FROM {self.qualified_table(table_name)} db
+            INNER JOIN (
+                SELECT ts_code, MAX(trade_date) AS max_date
+                FROM {self.qualified_table(table_name)}
+                GROUP BY ts_code
+            ) latest ON db.ts_code = latest.ts_code AND db.trade_date = latest.max_date
+        """
+        params: dict[str, object] = {}
+        if ts_codes:
+            placeholders = []
+            for index, ts_code in enumerate(ts_codes):
+                key = f"ts_code_{index}"
+                placeholders.append(f":{key}")
+                params[key] = ts_code
+            query += f" WHERE db.ts_code IN ({', '.join(placeholders)})"
+        query += " ORDER BY db.ts_code"
+        return pd.read_sql_query(sql=text(query), con=self.reference_engine, params=params)
+
+    @staticmethod
+    def _compute_market_cap_bucket(series: pd.Series) -> pd.Series:
+        """total_mv in 万元 (10k RMB): small < 50亿, mid 50-500亿, large >= 500亿."""
+        buckets = pd.Series("small", index=series.index)
+        buckets[series >= 5_000_000] = "mid"
+        buckets[series >= 50_000_000] = "large"
+        buckets[series.isna()] = pd.NA
+        return buckets
+
+    @staticmethod
+    def _compute_liquidity_bucket(series: pd.Series) -> pd.Series:
+        """turnover_rate_f in %: low < 1%, mid 1-5%, high >= 5%."""
+        buckets = pd.Series("low", index=series.index)
+        buckets[series >= 1.0] = "mid"
+        buckets[series >= 5.0] = "high"
+        buckets[series.isna()] = pd.NA
+        return buckets
 
     def _normalize_security_metadata(self, frame: pd.DataFrame) -> pd.DataFrame:
         fixed_columns = [

@@ -2527,3 +2527,712 @@ def test_non_research_run_manifest_preflight_no_validation(tmp_path):
     )
     manifest = ReportManifest.from_path(manifest_path)
     assert manifest.validate_contents() == []
+
+
+# --- research_run_report_manifest preflight report shape audit ---
+
+
+def test_preflight_status_ok_passes(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok"}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_preflight_status_warning_with_empty_checks_passes(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "warning", "checks": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_preflight_unsupported_root_status_maybe(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "maybe"}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_field"
+    assert "maybe" in issues[0].message
+
+
+def test_preflight_check_item_not_object(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [123]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_check"
+    assert "checks[0]" in issues[0].message
+
+
+def test_preflight_check_item_missing_name(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [{"status": "ok", "message": "x"}]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_check_field"
+    assert "name" in issues[0].message
+
+
+def test_preflight_check_item_non_string_name(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [{"name": 42, "status": "ok", "message": "x"}]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_check"
+    assert "name" in issues[0].message
+
+
+def test_preflight_check_item_empty_name(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [{"name": "", "status": "ok", "message": "x"}]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_check"
+    assert "name" in issues[0].message
+
+
+def test_preflight_check_item_missing_status(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [{"name": "a", "message": "x"}]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_check_field"
+    assert "status" in issues[0].message
+
+
+def test_preflight_check_item_unsupported_status(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [{"name": "a", "status": "pending", "message": "x"}]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_check"
+    assert "status" in issues[0].message
+
+
+def test_preflight_check_item_missing_message(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [{"name": "a", "status": "ok"}]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_check_field"
+    assert "message" in issues[0].message
+
+
+def test_preflight_check_item_non_string_message(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "checks": [{"name": "a", "status": "ok", "message": 123}]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_check"
+    assert "message" in issues[0].message
+
+
+def test_preflight_valid_check_item_passes(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "checks": [
+                {"name": "market_data", "status": "ok", "message": "market bars available"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+# --- research_run_report_manifest preflight missing_factor shape audit ---
+
+
+def test_preflight_missing_factor_requests_empty_passes(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "missing_factor_requests": []}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_preflight_missing_factor_request_valid_item_passes(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {
+                    "strategy_id": "ema200_bollinger",
+                    "alias": "EMA200+Bollinger",
+                    "indicator": "ema200",
+                    "expected_table": "factors.daily",
+                    "expected_column": "typical_price",
+                    "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                    "reason": "missing upstream indicator feed",
+                    "required": True,
+                },
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    assert manifest.validate_contents() == []
+
+
+def test_preflight_missing_factor_request_not_object(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({"status": "ok", "missing_factor_requests": [123]}),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_missing_factor_request"
+    assert "missing_factor_requests[0]" in issues[0].message
+
+
+def test_preflight_missing_factor_request_missing_strategy_id(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"alias": "x", "indicator": "ema", "expected_table": "t",
+                 "expected_column": "c", "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                 "reason": "r", "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_missing_factor_field"
+    assert "strategy_id" in issues[0].message
+
+
+def test_preflight_missing_factor_request_empty_strategy_id(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "", "alias": "x", "indicator": "ema", "expected_table": "t",
+                 "expected_column": "c", "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                 "reason": "r", "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_missing_factor_request"
+    assert "strategy_id" in issues[0].message
+
+
+def test_preflight_missing_factor_request_missing_alias(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "s1", "indicator": "ema", "expected_table": "t",
+                 "expected_column": "c", "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                 "reason": "r", "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_missing_factor_field"
+    assert "alias" in issues[0].message
+
+
+def test_preflight_missing_factor_request_missing_indicator(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "s1", "alias": "x", "expected_table": "t",
+                 "expected_column": "c", "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                 "reason": "r", "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_missing_factor_field"
+    assert "indicator" in issues[0].message
+
+
+def test_preflight_missing_factor_request_missing_expected_table(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "s1", "alias": "x", "indicator": "ema",
+                 "expected_column": "c", "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                 "reason": "r", "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_missing_factor_field"
+    assert "expected_table" in issues[0].message
+
+
+def test_preflight_missing_factor_request_missing_expected_column(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "s1", "alias": "x", "indicator": "ema",
+                 "expected_table": "t", "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                 "reason": "r", "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_missing_factor_field"
+    assert "expected_column" in issues[0].message
+
+
+def test_preflight_missing_factor_request_invalid_date_range_not_object(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "s1", "alias": "x", "indicator": "ema",
+                 "expected_table": "t", "expected_column": "c",
+                 "date_range": "not_an_object",
+                 "reason": "r", "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_missing_factor_request"
+    assert "date_range" in issues[0].message
+
+
+def test_preflight_missing_factor_request_date_range_missing_end(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "s1", "alias": "x", "indicator": "ema",
+                 "expected_table": "t", "expected_column": "c",
+                 "date_range": {"start": "2026-01-01"},
+                 "reason": "r", "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_missing_factor_request"
+    assert "end" in issues[0].message
+
+
+def test_preflight_missing_factor_request_missing_reason(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "s1", "alias": "x", "indicator": "ema",
+                 "expected_table": "t", "expected_column": "c",
+                 "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                 "required": True},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "missing_preflight_report_missing_factor_field"
+    assert "reason" in issues[0].message
+
+
+def test_preflight_missing_factor_request_non_bool_required(tmp_path):
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_report.json").write_text(
+        json.dumps({
+            "status": "ok",
+            "missing_factor_requests": [
+                {"strategy_id": "s1", "alias": "x", "indicator": "ema",
+                 "expected_table": "t", "expected_column": "c",
+                 "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                 "reason": "r", "required": "yes"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest_path = tmp_path / "report_manifest.json"
+    manifest_path.write_text(
+        json.dumps({
+            "kind": "research_run_report_manifest",
+            "files": [
+                {"key": "preflight_report", "path": "preflight/preflight_report.json",
+                 "filename": "preflight_report.json", "role": "preflight_report"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    manifest = ReportManifest.from_path(manifest_path)
+    issues = manifest.validate_contents()
+    assert len(issues) == 1
+    assert issues[0].code == "invalid_preflight_report_missing_factor_request"
+    assert "required" in issues[0].message

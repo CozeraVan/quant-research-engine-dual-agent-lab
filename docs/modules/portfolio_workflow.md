@@ -23,8 +23,8 @@
 5. Benchmark-relative analytics interface and temporary stock benchmark wiring: done
 6. Report manifests, report discovery, content validation, and strict audit matching: done
 7. Next portfolio realism work:
-   - real index benchmark wiring after index data is available
-   - real suspension and ST/risk-warning metadata
+   - market-cap and liquidity metadata standardization
+   - benchmark membership and index grouping adapters
 8. Industry / index exposure constraints after metadata is available.
 
 ## Risk-Control Exit Rules
@@ -565,7 +565,7 @@ Implemented research-run report-manifest audit contract:
 Next implementation:
 
 - Continue portfolio analytics/reporting improvements.
-- Real index benchmark data remains a later wiring step.
+- Market-cap and liquidity metadata standardization is the next data-dependent step.
 
 ## Verification Checklist
 

@@ -126,9 +126,9 @@ Grouped outputs support segmentation and structural inspection only. They do not
 
 Not implemented yet:
 
-- Suspensions from metadata.
-- Benchmark data-source wiring.
-- Real index benchmark data-source wiring.
+- Market-cap and liquidity grouping metadata.
+- Benchmark membership grouping metadata.
+- Real regime grouping metadata.
 
 ## Current Files
 
