@@ -563,7 +563,7 @@ def build_strategy_performance(
         }
 
     # batch mode
-    return {
+    result: dict[str, Any] = {
         "run_id": run_id,
         "strategy_id": strategy_id,
         "strategy_name": strategy_name,
@@ -612,6 +612,10 @@ def build_strategy_performance(
         "best_symbols": _best_symbols(summary, "total_return", 3) if summary is not None else [],
         "worst_symbols": _worst_symbols(summary, "total_return", 3) if summary is not None else [],
     }
+    for key, value in summary_metrics.items():
+        if key.startswith("benchmark_") and key not in result:
+            result[key] = value
+    return result
 
 
 def build_trade_analysis(round_trips: pd.DataFrame) -> dict[str, Any]:

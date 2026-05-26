@@ -75,7 +75,9 @@
 | M5.16 | CLI regression coverage for invalid `window_size` manifest metadata | DONE | CODEX/CLAUDE_CODE | commit `06d2b4b`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; 201 targeted tests passed | Preserve |
 | M5.17 | CLI strict/JSON parity for `window_size` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; 205 tests passed | Preserve |
 | M5.18 | CLI strict/JSON parity for `window_size` + `group_by` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` + `--group-by` combined selector parity with `--json --require-match`; 209 tests passed | Preserve |
-| M5.19 | Strategy baseline comparison outputs | READY | CLAUDE_CODE | `buy_hold_return` and benchmark-relative summary fields still need consistent wiring through single-symbol, batch, and full-market reports | Populate buy-and-hold comparison fields and optional benchmark comparison |
+| M5.19 | Strategy baseline comparison outputs | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; buy-hold fields and benchmark-relative batch summary metrics are wired through single-symbol, batch, and CLI reporting paths; 896 tests passed | Preserve |
+| M5.20 | Benchmark report-artifact propagation | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; benchmark-relative summary fields flow into `strategy_performance.json`; 898 tests passed | Preserve |
+| M5.21 | Full-market workbook performance-sheet parity | READY | CLAUDE_CODE | full-market workbook still leaves `Performance` empty; strategy performance payload is already assembled for JSON and HTML outputs | Populate `backtest_report.xlsx` Performance sheet from `strategy_perf` |
 
 ## Milestone 6: Dual-Agent Workflow
 

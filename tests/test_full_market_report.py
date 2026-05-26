@@ -222,6 +222,51 @@ class TestBuildStrategyPerformance:
         assert "best_symbols" in perf
         assert "worst_symbols" in perf
 
+    def test_benchmark_fields_passthrough(self):
+        r = _make_single_result("000001.SZ")
+        summary = pd.DataFrame([{
+            "symbol": "000001.SZ", "total_return": 0.18, "trade_count": 2,
+            "win_rate": 1.0, "total_cost": 20.0,
+        }])
+        rt = build_round_trips({"000001.SZ": r})
+        eq = build_full_market_equity_curve({"000001.SZ": r})
+        perf = build_strategy_performance(
+            {
+                "symbol_count": 1,
+                "traded_symbol_count": 1,
+                "benchmark_code": "000300.SH",
+                "benchmark_aligned_period_count": 3,
+                "benchmark_portfolio_total_return": 0.10,
+                "benchmark_benchmark_total_return": 0.08,
+                "benchmark_excess_total_return": 0.02,
+                "benchmark_information_ratio": 0.5,
+            },
+            summary, rt, eq,
+            run_id="test-run", strategy_id="strat-1",
+        )
+        assert perf["benchmark_code"] == "000300.SH"
+        assert perf["benchmark_aligned_period_count"] == 3
+        assert perf["benchmark_portfolio_total_return"] == 0.10
+        assert perf["benchmark_benchmark_total_return"] == 0.08
+        assert perf["benchmark_excess_total_return"] == 0.02
+        assert perf["benchmark_information_ratio"] == 0.5
+
+    def test_no_benchmark_fields_when_not_provided(self):
+        r = _make_single_result("000001.SZ")
+        summary = pd.DataFrame([{
+            "symbol": "000001.SZ", "total_return": 0.18, "trade_count": 2,
+            "win_rate": 1.0, "total_cost": 20.0,
+        }])
+        rt = build_round_trips({"000001.SZ": r})
+        eq = build_full_market_equity_curve({"000001.SZ": r})
+        perf = build_strategy_performance(
+            {"symbol_count": 1, "traded_symbol_count": 1},
+            summary, rt, eq,
+            run_id="test-run", strategy_id="strat-1",
+        )
+        benchmark_keys = [k for k in perf if k.startswith("benchmark_")]
+        assert len(benchmark_keys) == 0
+
 
 class TestBuildTradeAnalysis:
     def test_empty_round_trips(self):

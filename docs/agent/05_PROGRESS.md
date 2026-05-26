@@ -6,13 +6,14 @@ WAITING_CODEX_REVIEW
 
 ## Current Active Work
 
-`QRE-PORTFOLIO-BASELINE-COMPARISON-001`: implemented by Claude Code, awaiting Codex review. Buy-hold comparison fields populated in single-symbol, batch, and full-market reporting paths. industry_group added to batch metadata defaults. 895 tests pass.
+`QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001`: implemented by Claude Code, awaiting Codex review. Benchmark-relative fields now flow from `summary_metrics` into `build_strategy_performance()` batch mode and `strategy_performance.json`. 898 tests pass.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| QRE-PORTFOLIO-BASELINE-COMPARISON-001 | QRE portfolio baseline comparison outputs | IMPLEMENTED | CLAUDE_CODE | buy_hold_return and excess_return_vs_buy_hold populated in single-symbol/batch; industry_group in batch metadata defaults; 7 new tests; 895 passed | Codex review |
+| QRE-PORTFOLIO-BASELINE-COMPARISON-001 | QRE portfolio baseline comparison outputs | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; buy_hold_return and excess_return_vs_buy_hold populated in single-symbol/batch; industry_group in batch metadata defaults; 8 new tests; 896 passed | Preserve |
+| QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001 | QRE benchmark report-artifact propagation | IMPLEMENTED | CLAUDE_CODE | benchmark_* fields flow from summary_metrics into build_strategy_performance() batch mode → strategy_performance.json; 2 new tests; 898 passed | Codex review |
 | QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001 | QRE benchmark membership and industry grouping adapters | DONE | CLAUDE_CODE | Review passed after `con_code` alignment and preflight benchmark threading; 2 new preflight tests; 889 passed | Preserve |
 | QRE-REFERENCE-READ-SIDE-WIRING-001 | QRE read-side benchmark/reference metadata wiring | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark engine routing + reference metadata composition landed; 874 tests passed (+11) | Preserve |
 | QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001 | QRE market-cap/liquidity metadata standardization | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; latest-available `reference.daily_basic` enrichment and deterministic bucket helpers implemented; targeted data-layer, preflight, CLI, and manifest tests passed; progress docs and diff checks passed | Preserve |

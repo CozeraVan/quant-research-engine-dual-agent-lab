@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring and cross-sectional market-cap/liquidity metadata standardization are complete, and the benchmark membership slice is accepted after schema alignment and preflight benchmark-threading fixes. The next reporting slice is portfolio baseline comparison so strategy outputs can be contrasted against buy-and-hold and benchmark/industry baselines. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring, cross-sectional market-cap/liquidity metadata standardization, the portfolio baseline-comparison slice, and benchmark report-artifact propagation are complete. The next step is git finalization for the benchmark report-artifact slice. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
 
 ## Completed
 
@@ -39,6 +39,8 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Research-run manifest integration: `research_run_manifest` registered in `_RUN_MANIFEST_KINDS`, with a top-level `report_manifest.json` (kind `research_run_report_manifest`) for whole-run discovery and audit through `qre report-files` / `qre report-audit`.
 - Shared-cash full-market report: `engine_mode` parameter on all 6 builders and entry point in `full_market_report.py`; wired into `write_shared_cash_result()` with updated manifest helpers; 19 new tests (6 test classes + 2 integration tests).
 - Full-market report charts: equity curve and drawdown chart PNGs generated via matplotlib Agg backend; embedded as new Excel sheets via openpyxl; both batch and shared_cash modes produce charts; 10 new tests.
+- Portfolio baseline comparison outputs: single-symbol, batch, CLI, and full-market summary wiring expose buy-and-hold comparison metrics and optional benchmark-relative summary fields.
+- Benchmark report-artifact propagation: `strategy_performance.json` now carries the batch benchmark section through to the durable report payload.
 - GUI Strategy Builder (M8.6): form-based high-level strategy entry builder with compile-to-spec endpoint, indicator catalog, and run flow integration; 16 new tests.
 - HTML backtest report: self-contained HTML report with embedded base64 charts, metric cards, PnL distribution, trade analysis, symbol performance, trades ledger, and round trips; integrated into batch and shared_cash report pipeline with direct tests.
 - Research-run stage manifest recursive audit: `validate_contents()` on `research_run_report_manifest` now recursively validates nested eval/backtest stage report manifests via `_validate_nested_report_manifest()`; 7 unit + 4 CLI tests added; full suite at 814 passed.
@@ -56,7 +58,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 ## Known Gaps
 
 - Benchmark membership and industry classification are standardized for the current MVP slice and preserved for future time-varying enhancements.
-- Buy-and-hold and benchmark-relative comparison fields are not yet surfaced consistently across all portfolio report paths.
+- The Excel `Performance` sheet still needs to mirror the assembled strategy performance payload as a later follow-up.
 - Full as-of time-varying history for cross-sectional metadata remains a future enhancement.
 - The reusable Tushare security source adapter remains as historical source-shape context only. Future download/ingest changes belong in `quant_ts`, not QRE.
 - Evaluation layer does not yet implement real regime classification.
@@ -106,4 +108,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-`QRE-PORTFOLIO-BASELINE-COMPARISON-001` is the next implementation slice. Update `08/09/11/12` together before handing it to Claude Code.
+`QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001` is the current slice to finalize. Update `10/11/12` together before git finalization.

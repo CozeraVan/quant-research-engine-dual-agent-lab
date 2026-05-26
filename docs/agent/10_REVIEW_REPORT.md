@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-PORTFOLIO-BASELINE-COMPARISON-001
+QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001
 
 ## Reviewer
 
@@ -16,31 +16,30 @@ PASS
 
 No blocking findings.
 
-The implementation now wires buy-and-hold comparison fields end-to-end through the single-symbol and batch reporting paths, and the batch CLI can also attach benchmark-relative summary metrics when benchmark inputs are supplied.
+The implementation now carries all `benchmark_*` summary fields from batch `summary_metrics` into `build_strategy_performance()` batch mode, so `strategy_performance.json` exposes the benchmark section when benchmark inputs are supplied.
 
 ## Behavior Expected
 
 - QRE remains read-only with respect to upstream data production.
-- `buy_hold_return` and `excess_return_vs_buy_hold` are populated in single-symbol summaries.
-- `industry_group` is included in batch metadata defaults.
-- Batch CLI benchmark inputs populate benchmark-relative summary fields without changing execution semantics.
+- `benchmark_*` fields are passed through from `summary_metrics` into batch `strategy_performance.json`.
+- Buy-and-hold fields remain unchanged.
 - Shared-cash paths remain unchanged.
 - No Tushare/producer code was added.
 
 ## Validation Evidence
 
 ```bash
-uv run pytest -q tests/test_portfolio_single_symbol.py tests/test_portfolio_batch.py
-# 20 passed
-
-uv run pytest -q tests/test_portfolio_analytics.py
-# 26 passed
+uv run pytest -q tests/test_full_market_report.py
+# 57 passed
 
 uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py
-# 485 passed, 2 warnings
+# 363 passed, 2 warnings
+
+uv run pytest -q tests/test_portfolio_single_symbol.py tests/test_portfolio_batch.py tests/test_portfolio_analytics.py
+# 48 passed
 
 uv run pytest -q
-# 896 passed, 2 warnings
+# 898 passed, 2 warnings
 
 scripts/check-progress-docs.sh
 # Progress docs check passed.
@@ -51,4 +50,4 @@ git diff --check
 
 ## Residual Risks
 
-- Benchmark-relative metrics are currently surfaced through the batch CLI summary path; if future report artifact expansion needs a dedicated benchmark section in more outputs, that can be added as a follow-up slice.
+- The Excel workbook `Performance` sheet is still empty; if the next report artifact needs a visible benchmark/performance section there, that should be a follow-up slice.
