@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001
+QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001
 
 ## Reviewer
 
@@ -16,27 +16,28 @@ PASS
 
 No blocking findings.
 
-The implementation stays within QRE read-side scope, enriches metadata from the latest available `reference.daily_basic` snapshot, and preserves explicit-table priority plus the daily-derived fallback path without reintroducing Tushare producer logic.
+The fix pass aligns the benchmark membership loader with the real `quant_ts` `reference.index_weight.con_code` schema, threads `benchmark_code` through preflight metadata loading, and preserves the read-only QRE boundary with explicit-table precedence intact.
 
 ## Behavior Expected
 
 - QRE remains read-only with respect to upstream data production.
-- `load_security_metadata()` enriches composed reference metadata and the daily-derived fallback with latest-available `reference.daily_basic` columns when available.
+- `load_security_metadata()` enriches composed reference metadata with latest-available benchmark membership from `reference.index_weight` when benchmark context is available.
+- `PreflightRunner.run()` threads benchmark context through to `load_security_metadata()` when the request already includes a benchmark code.
+- `industry_group` is normalized from raw industry metadata while preserving the raw passthrough.
 - Explicit `QRE_SECURITY_METADATA_TABLE` behavior remains first priority and is not silently overridden.
-- Market-cap and liquidity buckets are deterministic and stable for downstream grouping.
-- Missing `reference.daily_basic` keeps the previous metadata behavior intact.
+- Missing `reference.index_weight` keeps the previous metadata behavior intact.
 
 ## Validation Evidence
 
 ```bash
 uv run pytest -q tests/test_postgres_store.py
-# 35 passed in 0.60s
+# 41 passed in 0.60s
 
 uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
-# 6 passed in 0.32s
+# 8 passed in 0.32s
 
-uv run pytest -q tests/test_portfolio_report_manifest.py tests/test_cli.py
-# 427 passed in 5.66s
+uv run pytest -q
+# 889 passed, 2 warnings
 
 scripts/check-progress-docs.sh
 # Progress docs check passed.
@@ -47,4 +48,4 @@ git diff --check
 
 ## Residual Risks
 
-- The new reference metadata snapshot is latest-available rather than full as-of history. That is acceptable for this slice, but deeper time-varying semantics remain a later enhancement.
+- The benchmark membership snapshot is still latest-available rather than full as-of history. That is acceptable for this slice, but deeper time-varying semantics remain a later enhancement.

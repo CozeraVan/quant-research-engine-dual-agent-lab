@@ -2,77 +2,55 @@
 
 ## Task ID
 
-QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001
+QRE-PORTFOLIO-BASELINE-COMPARISON-001
 
 ## Current Status
 
-READY_FOR_CLAUDE_CODE
+WAITING_CODEX_REVIEW
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Problem Summary
 
-QRE has finished the read-side wiring needed to consume populated `reference.*` tables:
+Portfolio reporting had a baseline-comparison gap:
 
-- benchmark reads now use `benchmark_db_url -> reference_db_url -> market_db_url`;
-- security metadata now composes from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning`;
-- latest-available `reference.daily_basic` enrichment is complete;
-- the next non-deferred read-side gap is benchmark membership plus industry grouping normalization from `reference.index_weight` and the existing industry passthrough.
+- single-symbol summaries did not consistently emit buy-and-hold comparison fields;
+- batch/full-market summary outputs reserved `buy_hold_return` and benchmark-relative fields, but the values were not wired through consistently;
+- same-industry comparison was available through existing `industry` passthrough but `industry_group` was not included in batch metadata defaults;
+- shared-cash benchmark-relative behavior already existed and remained unchanged.
 
-## Overall Project Completion
+The slice makes strategy comparison explicit at the reporting layer without changing execution semantics or adding any producer-side code.
 
-QRE is in advanced experimental MVP / user-acceptance state. Most core engine work is complete:
+## Implementation Completed By Claude Code
 
-- Data layer and preflight: complete for the current MVP slice.
-- Evaluation engine: complete for the current MVP; real regime classification remains future work.
-- Portfolio engine: complete for the current MVP.
-- Reporting, manifests, audit, research-run, strategy IO, smoke tooling, and GUI: complete for the current MVP.
-- Upstream data production: intentionally out of QRE and owned by `../quant_ts`.
-
-Practical completion estimate: QRE is roughly 90%+ complete for the current MVP scope. Larger items such as real regime grouping and deeper as-of metadata are future enhancements rather than current blockers.
-
-## Implementation Assignment For Claude Code
-
-Read and implement:
-
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
-
-Primary code task:
-
-- add a read-only `reference.index_weight` adapter for benchmark membership;
-- normalize industry metadata into a stable grouping column without mutating the raw passthrough;
-- preserve explicit metadata-table priority and existing fallback behavior;
-- thread benchmark context through existing read-side paths only where it is already known;
-- add targeted tests and concise docs.
+- `_build_summary()` in single_symbol.py now computes `buy_hold_return` from first entry price to last mark price and `excess_return_vs_buy_hold`.
+- `_empty_result()` includes `buy_hold_return: None` and `excess_return_vs_buy_hold: None`.
+- `run()` passes the working frame to `_build_summary()`.
+- `industry_group` added to `SUMMARY_METADATA_COLUMNS` in batch.py.
+- `summarize_batch_summary()` in analytics.py aggregates `buy_hold_return`, `mean_buy_hold_return`, `median_buy_hold_return`, `mean_excess_return_vs_buy_hold`, `median_excess_return_vs_buy_hold`.
+- 7 new tests added across single_symbol, batch, and analytics test files.
 
 ## Hard Constraints
 
-- Do not add Tushare download, token, sync, or ingestion code to QRE.
-- Do not modify `../quant_ts` for this task.
-- Do not change portfolio execution semantics.
-- Do not broaden into real regime classification or full time-varying/as-of metadata.
-- Keep QRE read-only against upstream databases.
+- No Tushare download, credential, sync, or ingestion code added to QRE.
+- `../quant_ts` not modified.
+- Portfolio execution semantics unchanged.
+- No real regime classification or full time-varying/as-of metadata added.
+- QRE remains read-only against upstream databases.
 
-## Validation Expected From Claude Code
-
-```bash
-uv run pytest -q tests/test_postgres_store.py
-uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
-scripts/check-progress-docs.sh
-git diff --check
-```
-
-If time permits:
+## Validation Evidence
 
 ```bash
-uv run pytest -q
+uv run pytest -q tests/test_portfolio_single_symbol.py tests/test_portfolio_batch.py → 20 passed
+uv run pytest -q tests/test_portfolio_analytics.py → 26 passed
+uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 484 passed, 2 warnings
+uv run pytest -q → 895 passed, 2 warnings
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
 ```
 
 ## Handoff Back To Codex
 
-If a new slice is assigned later, Claude Code should update `09_CODING_HANDOFF.md` with files changed, behavior summary, and validation output, then return to Codex for review in `10_REVIEW_REPORT.md`.
+Codex should review the implementation in `10_REVIEW_REPORT.md`, verify buy-hold fields are populated end-to-end, and handle git finalization after review passes.

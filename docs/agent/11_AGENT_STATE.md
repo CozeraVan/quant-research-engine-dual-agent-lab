@@ -4,67 +4,80 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-WAITING_CLAUDE_CODE
+WAITING_CODEX_REVIEW
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX
 
 ## Current Task
 
-`QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`
+`QRE-PORTFOLIO-BASELINE-COMPARISON-001`
 
 ## Last Completed Step
 
-Codex finalized the next brief and handed off the implementation slice:
+Claude Code implemented buy-and-hold baseline comparison wiring:
 
-- `reference.index_weight` is the intended source for benchmark membership enrichment.
-- Industry metadata should be normalized into a stable grouping column without mutating the raw passthrough.
-- `08_IMPLEMENTATION_BRIEF.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md` were updated for the new task.
-- `docs/modules/data_layer.md`, `docs/modules/portfolio_layer.md`, `docs/modules/portfolio_workflow.md`, and `docs/modules/portfolio_agent.md` are being aligned to the new slice.
+- `_build_summary()` in single_symbol.py computes `buy_hold_return` from first entry price to last mark price and `excess_return_vs_buy_hold`.
+- `_empty_result()` includes the new fields as `None`.
+- `industry_group` added to `SUMMARY_METADATA_COLUMNS` in batch.py.
+- `summarize_batch_summary()` aggregates `buy_hold_return`, `mean_buy_hold_return`, `median_buy_hold_return`, `mean_excess_return_vs_buy_hold`, `median_excess_return_vs_buy_hold`.
+- 7 new tests added; 895 tests pass; progress docs and git diff check clean.
+
+Codex should now review the implementation and handle git finalization.
 
 ## Git State
 
 - Current branch: `master`
 - Last finalized commit: `9e00f0a`
-- Working tree: modified across QRE plus sibling `quant_ts` files from the reference-data migration/backfill work.
+- Working tree: modified files:
+  - `docs/agent/01_CURRENT_STATUS.md`
+  - `docs/agent/03_ROADMAP.md`
+  - `docs/agent/04_TASK_HANDOFF.md`
+  - `docs/agent/05_PROGRESS.md`
+  - `docs/agent/06_DECISION_LOG.md`
+  - `docs/agent/08_IMPLEMENTATION_BRIEF.md`
+  - `docs/agent/09_CODING_HANDOFF.md`
+  - `docs/agent/10_REVIEW_REPORT.md`
+  - `docs/agent/11_AGENT_STATE.md`
+  - `docs/agent/12_AGENT_BOARD.md`
+  - `docs/modules/data_layer.md`
+  - `src/quant_research_engine/data/interfaces.py`
+  - `src/quant_research_engine/data/postgres.py`
+  - `src/quant_research_engine/portfolio/analytics.py`
+  - `src/quant_research_engine/portfolio/batch.py`
+  - `src/quant_research_engine/portfolio/single_symbol.py`
+  - `src/quant_research_engine/preflight.py`
+  - `tests/test_cli.py`
+  - `tests/test_portfolio_analytics.py`
+  - `tests/test_portfolio_batch.py`
+  - `tests/test_portfolio_single_symbol.py`
+  - `tests/test_postgres_store.py`
+  - `tests/test_preflight.py`
 - Remote push: not requested.
 - Do not revert unrelated dirty files.
 
 ## Latest Validation Evidence
 
-Current planning evidence:
+```
+uv run pytest -q tests/test_portfolio_single_symbol.py tests/test_portfolio_batch.py → 20 passed
+uv run pytest -q tests/test_portfolio_analytics.py → 26 passed
+uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 484 passed, 2 warnings
+uv run pytest -q → 895 passed, 2 warnings
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
-- `../quant_ts/REFERENCE_DATA.md` lists `reference.index_weight` as the benchmark membership source.
-- `../quant_ts/handlers/reference_data_handler.py` defines the `index_weight` reference dataset for read-only ingestion ownership in the sibling project.
-- `scripts/check-progress-docs.sh` will be rerun after the doc sync completes.
+## Required Codex Task
 
-## Required Claude Code Task
+Review the Claude Code implementation in `10_REVIEW_REPORT.md`:
 
-Implement `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001` exactly from `08_IMPLEMENTATION_BRIEF.md`.
-
-Minimum required behavior:
-
-- benchmark membership enrichment uses the latest available `reference.index_weight` snapshot when benchmark context is available;
-- `industry_group` is a stable normalized grouping column;
-- explicit `QRE_SECURITY_METADATA_TABLE` behavior remains first priority;
-- missing benchmark membership data keeps the previous metadata behavior intact;
-- QRE remains read-only and does not add Tushare producer code.
+- Verify `buy_hold_return` and `excess_return_vs_buy_hold` are populated end-to-end from single-symbol through batch/full-market reports.
+- Verify `industry_group` is included in batch metadata defaults.
+- Verify shared-cash paths remain unchanged.
+- Verify no Tushare/producer code was added.
+- Handle git finalization after review passes.
 
 ## Completion Estimate
 
-For the current MVP scope, QRE remains roughly 90%+ complete. The current non-deferred read-side gap is benchmark membership and industry classification standardization. Future enhancements such as real regime grouping and deeper as-of metadata should not be included in this slice.
-
-## Short Prompt Commands
-
-### For Codex
-
-```text
-请读取 11 和 12。当前新任务已准备好，请按 08/09/11/12 的内容推进 Claude Code。Codex 继续只做规划/复审/最终化，不恢复 Tushare 下载/入库代码。
-```
-
-### For Claude Code
-
-```text
-请读取 08、09、11、12，并实现 QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001。只做 QRE 读侧：接入 reference.index_weight 的最新 benchmark membership，并把 industry 标准化成稳定 grouping 列。不要修改 quant_ts，不要添加 Tushare 下载/入库逻辑。完成后更新 09 并等待 Codex 复审。
-```
+For the current MVP scope, QRE remains roughly 90%+ complete. The portfolio baseline comparison slice is implemented. Future enhancements such as benchmark-relative wiring through the batch/full-market reporting path (using the existing `summarize_benchmark_relative_performance()` helper) remain as potential follow-up work, as do real regime grouping and deeper as-of metadata.

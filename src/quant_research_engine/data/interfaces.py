@@ -35,5 +35,5 @@ class ReferenceDataStore(Protocol):
     def load_calendar(self, start: date, end: date) -> pd.DataFrame:
         ...
 
-    def load_security_metadata(self, ts_codes: list[str] | None = None) -> pd.DataFrame:
+    def load_security_metadata(self, ts_codes: list[str] | None = None, *, benchmark_code: str | None = None) -> pd.DataFrame:
         ...

@@ -39,7 +39,7 @@ class FakePreflightStore:
             }
         )
 
-    def load_security_metadata(self, ts_codes=None):
+    def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
         return pd.DataFrame(
             {
                 "ts_code": ["000001.SZ", "000002.SZ"],
@@ -126,7 +126,7 @@ def test_preflight_universe_diagnostics_with_passthrough_metadata_columns():
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ", "000002.SZ"],
@@ -186,3 +186,112 @@ def test_preflight_runner_reports_universe_filter_diagnostics():
     assert report.universe_excluded_symbols["suspended"] == ["000002.SZ"]
     assert report.universe_excluded_symbols["low_amount"] == ["000002.SZ"]
     assert any(check.name == "universe" and check.status == "warning" for check in report.checks)
+
+
+def test_preflight_threads_benchmark_code_to_load_security_metadata():
+    captured_benchmark_code = []
+
+    class FakeStoreWithBenchmarkCapture:
+        factor_engine = object()
+
+        def table_exists(self, table_name, *, engine=None):
+            return True
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "close"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-02", "2026-01-05"]),
+                    "open": [10.0, 10.5],
+                    "close": [10.5, 10.8],
+                    "amount": [500.0, 1000.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame()
+
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+            captured_benchmark_code.append(benchmark_code)
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+        def load_benchmark_bars(self, table_name, ts_codes, start, end, fields, limit=None):
+            return pd.DataFrame()
+
+    request = PreflightRequest(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[],
+        benchmark_code="000300.SH",
+    )
+
+    PreflightRunner(FakeStoreWithBenchmarkCapture()).run(request)
+    assert captured_benchmark_code == ["000300.SH"]
+
+
+def test_preflight_benchmark_code_none_when_not_provided():
+    captured_benchmark_code = []
+
+    class FakeStoreWithBenchmarkCapture:
+        factor_engine = object()
+
+        def table_exists(self, table_name, *, engine=None):
+            return True
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "close"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-02", "2026-01-05"]),
+                    "open": [10.0, 10.5],
+                    "close": [10.5, 10.8],
+                    "amount": [500.0, 1000.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame()
+
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+            captured_benchmark_code.append(benchmark_code)
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+        def load_benchmark_bars(self, table_name, ts_codes, start, end, fields, limit=None):
+            return pd.DataFrame()
+
+    request = PreflightRequest(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[],
+    )
+
+    PreflightRunner(FakeStoreWithBenchmarkCapture()).run(request)
+    assert captured_benchmark_code == [None]

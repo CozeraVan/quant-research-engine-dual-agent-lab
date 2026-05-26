@@ -2,86 +2,74 @@
 
 ## Task ID
 
-QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001
+QRE-PORTFOLIO-BASELINE-COMPARISON-001
 
 ## Written By
 
-CODEX
+CODEX (brief), CLAUDE_CODE (implementation)
 
 ## Status
 
-READY_FOR_IMPLEMENTATION
+IMPLEMENTED
 
 ## Current Owner
 
-CLAUDE_CODE
+CODEX (review)
 
-## Problem Summary
+## Implementation Summary
 
-QRE now has benchmark/reference routing, `reference.daily_basic` enrichment, and read-only security metadata composition in place. The next non-deferred data-layer gap is to standardize benchmark membership and industry classification metadata so grouped evaluation and portfolio outputs can use stable cross-sectional columns.
+Populated buy-and-hold baseline comparison fields across single-symbol, batch, and full-market reporting paths. Added industry_group to batch metadata passthrough. Extended batch summary metrics aggregation with buy-hold and excess return statistics.
 
-The upstream source for benchmark membership already exists in sibling `quant_ts` as `reference.index_weight`. QRE should consume that table read-only and keep all producer/ingest work out of this repository.
+## Files Changed
 
-## Overall Project Completion
+- `src/quant_research_engine/portfolio/single_symbol.py`:
+  - `_build_summary()` now accepts `frame: pd.DataFrame` parameter and computes `buy_hold_return` from first entry price to last mark price, plus `excess_return_vs_buy_hold`.
+  - `_empty_result()` includes `buy_hold_return: None` and `excess_return_vs_buy_hold: None`.
+  - `run()` passes `working` frame to `_build_summary()`.
 
-QRE is still in advanced experimental MVP / user-acceptance state. Most core engine work is complete:
+- `src/quant_research_engine/portfolio/batch.py`:
+  - Added `industry_group` to `SUMMARY_METADATA_COLUMNS`.
+  - Buy-and-hold fields flow through automatically via `_summary_row()` copying `result.summary`.
 
-- Data layer and preflight: complete for the current MVP slice, with benchmark membership and industry grouping as the next read-side adapter task.
-- Evaluation engine: complete for the current MVP; real regime classification remains future work.
-- Portfolio engine: complete for the current MVP.
-- Reporting, manifests, audit, research-run, strategy IO, smoke tooling, and GUI: complete for the current MVP.
-- Upstream data production: intentionally out of QRE and owned by `../quant_ts`.
+- `src/quant_research_engine/portfolio/analytics.py`:
+  - `summarize_batch_summary()` now aggregates `buy_hold_return`, `mean_buy_hold_return`, `median_buy_hold_return`, `mean_excess_return_vs_buy_hold`, `median_excess_return_vs_buy_hold`.
+  - Empty summary case includes new fields as `None`.
 
-Practical completion estimate: QRE remains roughly 90%+ complete for the current MVP scope. Larger items such as deeper benchmark membership history, real regime grouping, and full time-varying/as-of metadata are future enhancements rather than current blockers.
+- `tests/test_portfolio_single_symbol.py`:
+  - Added `test_single_symbol_backtest_summary_includes_buy_hold_return` — verifies buy_hold_return and excess_return_vs_buy_hold computed correctly.
+  - Added `test_single_symbol_backtest_buy_hold_return_is_none_for_empty_frame` — verifies None for empty symbol frame.
 
-## Implementation Assignment For Claude Code
+- `tests/test_portfolio_batch.py`:
+  - Added `test_batch_backtest_includes_industry_group_in_metadata` — verifies industry_group flows through.
+  - Added `test_batch_backtest_summary_includes_buy_hold_fields` — verifies buy_hold_return and excess_return_vs_buy_hold columns in batch summary.
+  - Added `test_batch_backtest_summary_metrics_includes_buy_hold_aggregates` — verifies aggregate buy-hold stats in summary_metrics.
 
-Read and implement:
+- `tests/test_portfolio_analytics.py`:
+  - Added `test_summarize_batch_summary_aggregates_buy_hold_metrics` — verifies mean/median buy-hold and excess return aggregation.
+  - Extended `test_summarize_batch_summary_handles_empty_summary` with new field assertions.
 
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_AGENT_BOARD.md`
+## Behavior Summary
 
-Primary code task:
+- Single-symbol `_build_summary()` computes `buy_hold_return` from the first bar's entry price (open) to the last bar's mark price (close). If the frame is empty or missing required columns, the field is `None`.
+- `excess_return_vs_buy_hold` = `total_return - buy_hold_return`.
+- Batch `_summary_row()` propagates buy-hold fields from single-symbol results automatically.
+- `summarize_batch_summary()` aggregates buy-hold returns (mean, median) and excess returns (mean, median) across all symbols.
+- `build_symbol_performance()` batch mode already reads `buy_hold_return` and `excess_return_vs_buy_hold` from the summary DataFrame — these now flow through fully.
+- `build_strategy_performance()` batch mode reads `buy_hold_return` and `excess_return_vs_buy_hold` from `summary_metrics`.
+- `industry_group` is now included in default batch metadata columns alongside `industry`.
+- Shared-cash paths remain unchanged.
 
-- add a read-only `reference.index_weight` adapter for benchmark membership;
-- normalize industry metadata into a stable grouping column without mutating the raw passthrough;
-- preserve explicit metadata-table priority and existing fallback behavior;
-- thread benchmark context through existing read-side paths only where it is already known;
-- add targeted tests and concise docs.
+## Validation Output
 
-## Suggested Step-by-Step Execution
-
-1. Extend the read-side metadata adapter to load the latest `reference.index_weight` snapshot for a benchmark code when benchmark context is present.
-2. Add benchmark membership columns for downstream grouping and diagnostics.
-3. Add a normalized `industry_group` column while preserving the raw `industry` passthrough.
-4. Keep explicit metadata tables first-priority and skip enrichment when the source table is missing.
-5. Add focused tests for latest-snapshot selection, fallback behavior, and normalization.
-6. Update the agent/doc state files so the next handoff is unambiguous.
-
-## Hard Constraints
-
-- Do not add Tushare download, token, sync, or ingestion code to QRE.
-- Do not modify `../quant_ts` for this task.
-- Do not change portfolio execution semantics.
-- Do not broaden into real regime classification or full time-varying/as-of metadata.
-- Keep QRE read-only against upstream databases.
-
-## Validation Expected From Claude Code
-
-```bash
-uv run pytest -q tests/test_postgres_store.py
-uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
-scripts/check-progress-docs.sh
-git diff --check
 ```
-
-If time permits:
-
-```bash
-uv run pytest -q
+uv run pytest -q tests/test_portfolio_single_symbol.py tests/test_portfolio_batch.py → 20 passed
+uv run pytest -q tests/test_portfolio_analytics.py → 26 passed
+uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 484 passed, 2 warnings
+uv run pytest -q → 895 passed, 2 warnings
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
 ```
 
 ## Handoff Back To Codex
 
-After implementation, Claude Code should update `09_CODING_HANDOFF.md` with files changed, behavior summary, and validation output, then return to Codex for review in `10_REVIEW_REPORT.md`.
+Implementation ready for Codex review. Buy-and-hold baseline, industry_group passthrough, and excess-return comparison are wired end-to-end from single-symbol through batch/full-market reporting.

@@ -205,6 +205,39 @@ def test_single_symbol_backtest_uses_market_profile_slippage_prices():
     assert result.orders.iloc[1]["price"] == pytest.approx(10.978)
 
 
+def test_single_symbol_backtest_summary_includes_buy_hold_return():
+    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
+    request = SingleSymbolBacktestRequest(
+        symbol="000001.SZ",
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+    )
+
+    result = engine.run(make_frame(), request)
+    summary = result.summary
+
+    # first open=10.0, last close=11.3 → buy_hold_return = 11.3/10.0 - 1 = 0.13
+    assert summary["buy_hold_return"] == pytest.approx(0.13)
+    # strategy total_return is ~0.0772, so excess is negative
+    assert summary["excess_return_vs_buy_hold"] == pytest.approx(0.077216944 - 0.13)
+
+
+def test_single_symbol_backtest_buy_hold_return_is_none_for_empty_frame():
+    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
+    request = SingleSymbolBacktestRequest(
+        symbol="NOT_FOUND",
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+    )
+
+    result = engine.run(make_frame(), request)
+
+    assert result.summary["buy_hold_return"] is None
+    assert result.summary["excess_return_vs_buy_hold"] is None
+
+
 def test_single_symbol_backtest_sells_on_exit_signal_next_bar():
     frame = make_frame().copy()
     frame["entry_flag"] = [True, False, False, False, False, False]

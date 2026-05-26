@@ -718,3 +718,188 @@ class TestDailyBasicEnrichment:
         assert frame["total_mv"].iloc[0] == 20_000_000
         assert "market_cap_bucket" in frame.columns
         assert "liquidity_bucket" in frame.columns
+
+
+class TestIndustryGroupNormalization:
+    def test_industry_group_normalized_from_raw_industry(self):
+        series = pd.Series(["  Banking  ", "Tech", "", None, "  Real Estate  "])
+        result = PostgresDataStore._compute_industry_group(series)
+
+        assert result.iloc[0] == "Banking"
+        assert result.iloc[1] == "Tech"
+        assert pd.isna(result.iloc[2])
+        assert pd.isna(result.iloc[3])
+        assert result.iloc[4] == "Real Estate"
+
+    def test_industry_group_preserves_raw_industry(self, monkeypatch):
+        store = PostgresDataStore(
+            DatabaseSettings(
+                market_db_url="postgresql+psycopg://user:pass@localhost/db",
+                tables=DatabaseTableConfig(security_metadata_table="public.my_metadata"),
+            )
+        )
+
+        def fake_get_table_columns(table_name, *, engine=None):
+            return ["ts_code", "list_date", "board", "industry"]
+
+        def fake_read_sql_query(*, sql, con, params):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "industry": ["  Finance  "],
+                }
+            )
+
+        monkeypatch.setattr(store, "get_table_columns", fake_get_table_columns)
+        monkeypatch.setattr(pd, "read_sql_query", fake_read_sql_query)
+
+        frame = store.load_security_metadata()
+
+        assert frame["industry"].iloc[0] == "  Finance  "
+        assert frame["industry_group"].iloc[0] == "Finance"
+
+
+class TestBenchmarkMembershipEnrichment:
+    def _make_store(self):
+        return PostgresDataStore(
+            DatabaseSettings(market_db_url="postgresql+psycopg://user:pass@localhost/db")
+        )
+
+    def test_benchmark_membership_enriched_when_benchmark_code_provided(self, monkeypatch):
+        store = self._make_store()
+
+        def fake_table_exists(table_name, *, engine=None):
+            if table_name == "reference.stock_basic":
+                return True
+            if table_name == "reference.index_weight":
+                return True
+            return False
+
+        def fake_get_table_columns(table_name, *, engine=None):
+            if table_name == "reference.stock_basic":
+                return ["ts_code", "list_date", "board"]
+            if table_name == "reference.index_weight":
+                return ["index_code", "con_code", "weight", "trade_date"]
+            return ["ts_code"]
+
+        def fake_read_sql_query(*, sql, con, params):
+            sql_str = str(sql)
+            if "reference.stock_basic" in sql_str:
+                return pd.DataFrame(
+                    {
+                        "ts_code": ["000001.SZ", "000002.SZ", "000003.SZ"],
+                        "list_date": pd.to_datetime(["1991-04-03", "1991-05-01", "1992-01-01"]),
+                        "board": ["main_board", "main_board", "main_board"],
+                    }
+                )
+            if "reference.index_weight" in sql_str:
+                return pd.DataFrame(
+                    {
+                        "ts_code": ["000001.SZ", "000003.SZ"],
+                        "benchmark_code": ["000300.SH", "000300.SH"],
+                        "benchmark_weight": [5.2, 2.1],
+                        "is_benchmark_member": [True, True],
+                    }
+                )
+            return pd.DataFrame({"ts_code": []})
+
+        monkeypatch.setattr(store, "table_exists", fake_table_exists)
+        monkeypatch.setattr(store, "get_table_columns", fake_get_table_columns)
+        monkeypatch.setattr(pd, "read_sql_query", fake_read_sql_query)
+
+        frame = store.load_security_metadata(benchmark_code="000300.SH")
+
+        assert "benchmark_code" in frame.columns
+        assert "benchmark_weight" in frame.columns
+        assert "is_benchmark_member" in frame.columns
+        assert frame["is_benchmark_member"].tolist() == [True, False, True]
+        weights = frame["benchmark_weight"].tolist()
+        assert weights[0] == 5.2
+        assert pd.isna(weights[1])
+        assert weights[2] == 2.1
+        assert frame["benchmark_code"].tolist() == ["000300.SH", "000300.SH", "000300.SH"]
+
+    def test_missing_index_weight_keeps_previous_behavior(self, monkeypatch):
+        store = self._make_store()
+
+        def fake_table_exists(table_name, *, engine=None):
+            return table_name == "reference.stock_basic"
+
+        def fake_get_table_columns(table_name, *, engine=None):
+            return ["ts_code", "list_date", "board"]
+
+        def fake_read_sql_query(*, sql, con, params):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                }
+            )
+
+        monkeypatch.setattr(store, "table_exists", fake_table_exists)
+        monkeypatch.setattr(store, "get_table_columns", fake_get_table_columns)
+        monkeypatch.setattr(pd, "read_sql_query", fake_read_sql_query)
+
+        frame = store.load_security_metadata(benchmark_code="000300.SH")
+
+        assert "ts_code" in frame.columns
+        assert "benchmark_code" not in frame.columns
+        assert "is_benchmark_member" not in frame.columns
+
+    def test_explicit_metadata_table_skips_benchmark_enrichment(self, monkeypatch):
+        store = PostgresDataStore(
+            DatabaseSettings(
+                market_db_url="postgresql+psycopg://user:pass@localhost/db",
+                tables=DatabaseTableConfig(security_metadata_table="public.my_metadata"),
+            )
+        )
+
+        def fake_get_table_columns(table_name, *, engine=None):
+            return ["ts_code", "list_date", "board"]
+
+        def fake_read_sql_query(*, sql, con, params):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                }
+            )
+
+        monkeypatch.setattr(store, "get_table_columns", fake_get_table_columns)
+        monkeypatch.setattr(pd, "read_sql_query", fake_read_sql_query)
+
+        frame = store.load_security_metadata(benchmark_code="000300.SH")
+
+        assert "benchmark_code" not in frame.columns
+        assert "is_benchmark_member" not in frame.columns
+
+    def test_no_benchmark_code_skips_enrichment(self, monkeypatch):
+        store = self._make_store()
+
+        def fake_table_exists(table_name, *, engine=None):
+            return table_name == "reference.stock_basic"
+
+        def fake_get_table_columns(table_name, *, engine=None):
+            return ["ts_code", "list_date", "board"]
+
+        def fake_read_sql_query(*, sql, con, params):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                }
+            )
+
+        monkeypatch.setattr(store, "table_exists", fake_table_exists)
+        monkeypatch.setattr(store, "get_table_columns", fake_get_table_columns)
+        monkeypatch.setattr(pd, "read_sql_query", fake_read_sql_query)
+
+        frame = store.load_security_metadata()
+
+        assert "benchmark_code" not in frame.columns
+        assert "is_benchmark_member" not in frame.columns

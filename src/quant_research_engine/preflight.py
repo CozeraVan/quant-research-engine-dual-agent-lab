@@ -201,7 +201,7 @@ class PreflightRunner:
         }
         metadata = pd.DataFrame()
         if request.include_metadata:
-            metadata = self.store.load_security_metadata(ts_codes=request.ts_codes)
+            metadata = self.store.load_security_metadata(ts_codes=request.ts_codes, benchmark_code=request.benchmark_code)
             metadata = self._normalize_frame(metadata)
             metadata_rows = int(len(metadata))
             checks.append(

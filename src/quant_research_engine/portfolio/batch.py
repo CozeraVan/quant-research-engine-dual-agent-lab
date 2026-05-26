@@ -11,6 +11,7 @@ from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestEn
 SUMMARY_METADATA_COLUMNS = [
     "board",
     "industry",
+    "industry_group",
     "benchmark",
     "is_st",
     "is_risk_warning",

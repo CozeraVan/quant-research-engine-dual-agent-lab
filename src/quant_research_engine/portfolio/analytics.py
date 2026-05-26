@@ -26,12 +26,20 @@ def summarize_batch_summary(summary: pd.DataFrame) -> dict[str, Any]:
             "mean_trade_count": None,
             "total_cost": 0.0,
             "total_failed_orders": 0,
+            "buy_hold_return": None,
+            "mean_buy_hold_return": None,
+            "median_buy_hold_return": None,
+            "mean_excess_return_vs_buy_hold": None,
+            "median_excess_return_vs_buy_hold": None,
         }
 
     returns = summary["total_return"].dropna()
     trade_counts = summary["trade_count"].fillna(0)
     best_index = returns.idxmax() if not returns.empty else None
     worst_index = returns.idxmin() if not returns.empty else None
+
+    buy_hold_returns = summary["buy_hold_return"].dropna() if "buy_hold_return" in summary.columns else pd.Series(dtype=float)
+    excess_returns = summary["excess_return_vs_buy_hold"].dropna() if "excess_return_vs_buy_hold" in summary.columns else pd.Series(dtype=float)
 
     return {
         "symbol_count": int(len(summary)),
@@ -52,6 +60,11 @@ def summarize_batch_summary(summary: pd.DataFrame) -> dict[str, Any]:
         "total_failed_orders": (
             int(summary["failed_order_count"].fillna(0).sum()) if "failed_order_count" in summary.columns else 0
         ),
+        "buy_hold_return": None if buy_hold_returns.empty else float(buy_hold_returns.mean()),
+        "mean_buy_hold_return": None if buy_hold_returns.empty else float(buy_hold_returns.mean()),
+        "median_buy_hold_return": None if buy_hold_returns.empty else float(buy_hold_returns.median()),
+        "mean_excess_return_vs_buy_hold": None if excess_returns.empty else float(excess_returns.mean()),
+        "median_excess_return_vs_buy_hold": None if excess_returns.empty else float(excess_returns.median()),
     }
 
 

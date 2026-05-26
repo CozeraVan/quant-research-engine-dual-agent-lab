@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring and cross-sectional market-cap/liquidity metadata standardization are now complete. The next code slice is benchmark membership and industry classification normalization from `reference.index_weight` plus the existing industry passthrough. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring and cross-sectional market-cap/liquidity metadata standardization are complete, and the benchmark membership slice is accepted after schema alignment and preflight benchmark-threading fixes. The next reporting slice is portfolio baseline comparison so strategy outputs can be contrasted against buy-and-hold and benchmark/industry baselines. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
 
 ## Completed
 
@@ -55,7 +55,8 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Known Gaps
 
-- Benchmark membership and industry classification are not fully standardized across all research outputs.
+- Benchmark membership and industry classification are standardized for the current MVP slice and preserved for future time-varying enhancements.
+- Buy-and-hold and benchmark-relative comparison fields are not yet surfaced consistently across all portfolio report paths.
 - Full as-of time-varying history for cross-sectional metadata remains a future enhancement.
 - The reusable Tushare security source adapter remains as historical source-shape context only. Future download/ingest changes belong in `quant_ts`, not QRE.
 - Evaluation layer does not yet implement real regime classification.
@@ -80,7 +81,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified targeted tests: `35 passed`, `6 passed`, and `427 passed` across the current finalize checks
+- Last verified targeted tests: `41 passed`, `8 passed`, and `889 passed` across the current finalize checks
 
 ## Current CLI Surface
 
@@ -105,4 +106,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-The next implementation slice is `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`. Update `08/09/11/12` together before assigning it to Claude Code.
+`QRE-PORTFOLIO-BASELINE-COMPARISON-001` is the next implementation slice. Update `08/09/11/12` together before handing it to Claude Code.

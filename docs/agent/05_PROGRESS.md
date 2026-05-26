@@ -2,17 +2,18 @@
 
 ## Current Phase
 
-WAITING_CLAUDE_CODE
+WAITING_CODEX_REVIEW
 
 ## Current Active Work
 
-`QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`: ready for Claude Code implementation. Benchmark membership and industry normalization brief/handoff docs are in place.
+`QRE-PORTFOLIO-BASELINE-COMPARISON-001`: implemented by Claude Code, awaiting Codex review. Buy-hold comparison fields populated in single-symbol, batch, and full-market reporting paths. industry_group added to batch metadata defaults. 895 tests pass.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001 | QRE benchmark membership and industry grouping adapters | READY_FOR_CLAUDE_CODE | CLAUDE_CODE | `08_IMPLEMENTATION_BRIEF.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md`, and `12_AGENT_BOARD.md` updated for next slice | Implement latest-available `reference.index_weight` benchmark membership and stable industry grouping |
+| QRE-PORTFOLIO-BASELINE-COMPARISON-001 | QRE portfolio baseline comparison outputs | IMPLEMENTED | CLAUDE_CODE | buy_hold_return and excess_return_vs_buy_hold populated in single-symbol/batch; industry_group in batch metadata defaults; 7 new tests; 895 passed | Codex review |
+| QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001 | QRE benchmark membership and industry grouping adapters | DONE | CLAUDE_CODE | Review passed after `con_code` alignment and preflight benchmark threading; 2 new preflight tests; 889 passed | Preserve |
 | QRE-REFERENCE-READ-SIDE-WIRING-001 | QRE read-side benchmark/reference metadata wiring | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark engine routing + reference metadata composition landed; 874 tests passed (+11) | Preserve |
 | QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001 | QRE market-cap/liquidity metadata standardization | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; latest-available `reference.daily_basic` enrichment and deterministic bucket helpers implemented; targeted data-layer, preflight, CLI, and manifest tests passed; progress docs and diff checks passed | Preserve |
 | QRE-REFERENCE-DATA-MIGRATE-TO-QUANT-TS-001 | Move Tushare reference-data download/ingest from QRE to `quant_ts` | DONE | CODEX | `quant_ts` list/plan dry-runs pass; reference files compile; QRE `reference-data` command removed; QRE full suite `863 passed, 2 warnings` | Run controlled `quant_ts` smoke/sync after permissions |
@@ -138,9 +139,9 @@ WAITING_CLAUDE_CODE
 
 ## Latest Verified State
 
-Recorded on 2026-05-25 after Codex queued the next read-side slice:
+Recorded on 2026-05-26 after Codex queued the portfolio baseline-comparison slice:
 
-- Current task: `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001` — READY_FOR_CLAUDE_CODE
+- Current task: `QRE-PORTFOLIO-BASELINE-COMPARISON-001` — READY_FOR_CLAUDE_CODE
 - Current phase: `WAITING_CLAUDE_CODE`
 - Current owner: `CLAUDE_CODE`
 - Last finalized commit: `9e00f0a` (document research-run audit role usage)
@@ -154,7 +155,7 @@ Recorded on 2026-05-25 after Codex queued the next read-side slice:
   - `uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py` → 6 passed.
   - `uv run pytest -q tests/test_portfolio_report_manifest.py tests/test_cli.py` → 427 passed.
   - `scripts/check-progress-docs.sh` and `git diff --check` passed.
-- Next step: Claude Code implements `QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001`, then Codex reviews.
+- Next step: Claude Code implements `QRE-PORTFOLIO-BASELINE-COMPARISON-001`, then Codex reviews.
 
 Current GUI direction approved on 2026-05-21:
 
@@ -202,20 +203,20 @@ User-requested strategy work in 2026-05-21:
 
 ## Completed Module Summary
 
-- Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight, real metadata passthrough adapters.
+- Data layer: read-only PostgreSQL adapter, factor catalog, research assembler, metadata fallback, benchmark-bar skeleton, preflight, real metadata passthrough adapters, benchmark engine routing, reference.* metadata composition, daily_basic market-cap/liquidity enrichment, benchmark membership from index_weight, industry_group normalization.
 - Evaluation layer: safe expression signals, forward returns, event summaries, IC, Rank IC, quantile summaries, rough friction adjustment, metadata group summaries, durable output artifacts with manifests, random-baseline comparison, factor decay summaries.
 - Portfolio layer: single-symbol, batch, shared-cash, costs, slippage, lot sizing, price-limit checks, risk exits, rebalance, FIFO lot accounting, T+1 sellability, failed-order diagnostics, analytics, batch metadata group-by passthrough, shared-cash metadata output passthrough, shared-cash row-level metadata group summaries, full-market backtest report bundle (trades ledger, round trips, symbol/strategy performance, equity/drawdown curves, trade analysis, capital usage, Excel workbook).
 - Reporting: CSV/JSON/Markdown outputs, report manifests, manifest filtering, existence/content validation, strict audit/report-files matching, failed-order artifact schema validation, JSON audit/file-selection output, README and workflow documentation, manifest schema versioning with validation, schema version exposed in JSON tooling and ReportManifest helper, manifest file entry validation, CLI malformed-manifest regression coverage, manifest `files` shape validation, manifest root shape validation, missing top-level manifest field CLI regression coverage, top-level manifest field type CLI regression coverage, malformed manifest root CLI regression coverage, malformed manifest file entry CLI regression coverage, schema-version type CLI regression coverage, optional file-entry metadata type CLI regression coverage, optional `group_by` file-entry metadata CLI regression coverage, null optional metadata CLI regression coverage, null schema-version CLI regression coverage, `report-files --json --check-exists` CLI regression coverage, `report-files --json --validate-contents` CLI regression coverage, `report-audit --json` issue payload field CLI regression coverage, shared-cash failed-order diagnostics and summary analysis, portfolio backtest run-manifest reproducibility, evaluation metadata group summaries, eval-config output artifacts and manifests, evaluation random-baseline comparison, evaluation artifact usage docs, metadata grouping and passthrough usage docs, evaluation group-by manifest parity, grouped artifact `group_by` content consistency validation, batch grouped-artifact `group_by` header consistency validation, rolling-artifact `window_size` manifest filter parity, full-market report Excel workbook.
 
 ## Pending Work Summary
 
-- Current non-deferred implementation: QRE benchmark membership and industry classification standardization from populated `reference.index_weight` and the existing industry passthrough.
+- Current non-deferred work: QRE read-side reference-data adapters are complete; portfolio baseline comparison is the next reporting slice.
 - Real reference-data sync belongs to sibling `quant_ts`; QRE should not own producer code.
 - Real index benchmark data is available in `reference.index_daily`; benchmark/reference routing is already wired.
 - Real suspension/ST/risk-warning source tables are available in `reference.*`; read-side composition is already wired.
 - Canonical security-snapshot contract is complete; later bulk ingestion can reuse the Tushare source scaffold.
 - Bulk ingestion / durable loading remains in `../quant_ts`.
-- Industry, benchmark membership, and regime grouping across evaluation and shared-cash outputs.
+- Buy-and-hold and benchmark-relative comparison across portfolio outputs.
 - Research-run CLI orchestrator persists and links preflight/eval/backtest stage artifacts from `qre research-run`.
 - Strategy IO contract implementation after design approval.
 - GUI parameter controls over the future standard strategy entry contract.

@@ -2,7 +2,7 @@
 
 ## Current Task ID
 
-QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001
+QRE-PORTFOLIO-BASELINE-COMPARISON-001
 
 ## Current Recipient
 
@@ -10,7 +10,7 @@ CLAUDE_CODE
 
 ## Message Type
 
-IMPLEMENTATION_REQUEST
+STATUS_UPDATE
 
 ## Sender
 
@@ -18,37 +18,36 @@ CODEX
 
 ## Short Message
 
-The next QRE slice is benchmark membership and industry classification standardization. Read `08/09/11/12`, then implement a read-only adapter that uses `reference.index_weight` for benchmark membership and normalizes industry into a stable grouping column. QRE must remain read-only and must not restore Tushare producer code.
+The next slice is portfolio baseline comparison. Populate buy-and-hold and benchmark-relative strategy comparison fields without changing execution semantics.
 
 ## Required Outcome
 
 | Area | Required | Status |
 |---|---|---|
-| Benchmark membership | Latest-available `reference.index_weight` rows are exposed through the read-side metadata path when benchmark context is available | READY_FOR_IMPLEMENTATION |
-| Industry grouping | `industry_group` is normalized from raw industry metadata without mutating the passthrough | READY_FOR_IMPLEMENTATION |
-| Explicit metadata table | `QRE_SECURITY_METADATA_TABLE` priority remains unchanged | REQUIRED |
-| Fallback compatibility | Daily-derived fallback still works if `reference.stock_basic` is absent | REQUIRED |
-| QRE scope | No Tushare download/ingest code in QRE | REQUIRED |
-| Tests | Targeted unit tests cover benchmark membership, industry normalization, and fallback behavior | REQUIRED |
+| Buy-and-hold fields | `buy_hold_return` and related fields are populated in single-symbol and batch summaries using the same available symbol window | READY |
+| Benchmark comparison | Optional benchmark inputs are wired through the batch/full-market reporting path and populate benchmark-relative summary fields | READY |
+| Industry metadata | `industry` / `industry_group` passthrough remains available for same-industry comparison | READY |
+| Shared-cash behavior | Existing shared-cash benchmark-relative comparison continues to work unchanged | READY |
+| QRE scope | No Tushare download/ingest code in QRE | READY |
+| Tests | Targeted unit tests cover buy-hold metrics, benchmark wiring, and metadata passthrough | READY |
 
 ## Review Status
 
-NOT_STARTED
+PENDING
 
 ## Evidence Available
 
-- `../quant_ts/REFERENCE_DATA.md` lists `reference.index_weight` as the benchmark membership source.
-- `../quant_ts/handlers/reference_data_handler.py` defines the `index_weight` reference dataset for read-only ingestion ownership in the sibling project.
-- `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning` are already available and wired into QRE read-side metadata composition.
+- `src/quant_research_engine/portfolio/full_market_report.py` already reserves buy-hold and benchmark fields in the reporting schema.
+- `src/quant_research_engine/portfolio/benchmark.py` already implements benchmark-relative summary math for shared-cash output.
+- `src/quant_research_engine/portfolio/batch.py` and `src/quant_research_engine/portfolio/single_symbol.py` are the most likely wiring points for buy-and-hold baseline metrics.
+- `industry` / `industry_group` columns already flow through existing metadata and grouped report paths.
 
 ## Claude Code Steps
 
-1. Extend the read-side metadata adapter to load the latest `reference.index_weight` snapshot for the requested benchmark code when benchmark context is present.
-2. Add benchmark membership columns for downstream grouping and diagnostics.
-3. Normalize industry metadata into a stable `industry_group` column while preserving the raw `industry` passthrough.
-4. Keep explicit metadata tables first-priority and skip enrichment when source tables are missing.
-5. Add focused tests for latest-snapshot selection, fallback behavior, and normalization.
-6. Update the agent/doc state files so the next handoff is unambiguous.
+1. Populate the buy-and-hold baseline fields first so the report schema stops emitting null comparison values.
+2. Thread benchmark-relative summary inputs through the batch/full-market path using the existing helper.
+3. Preserve industry metadata passthrough and grouped outputs.
+4. Return the changed files and validation output to Codex for review.
 
 ## Claude Code Instructions
 
@@ -63,4 +62,4 @@ Then implement only the scoped QRE code changes.
 
 ## Next Step
 
-Claude Code implements and updates `09_CODING_HANDOFF.md`. Codex then reviews and writes `10_REVIEW_REPORT.md`.
+Claude Code implementation, then Codex review.

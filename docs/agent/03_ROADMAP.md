@@ -22,7 +22,7 @@
 | M2.8 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `src/quant_research_engine/data/tushare_security.py`; canonical snapshot contract, normalized frame helper, and targeted tests landed; 34 tests passed | Preserve; reuse as the source boundary for later bulk ingestion |
 | M2.9 | Reference-data ingestion ownership | DONE | CODEX | Tushare reference-data handler, sync CLI, smoke script, and docs moved to sibling `quant_ts`; QRE producer code removed | Run controlled sync from `quant_ts` after Tushare permissions are available |
 | M2.10 | Cross-sectional market-cap / liquidity metadata standardization | DONE | CLAUDE_CODE | `_load_reference_daily_basic_snapshot()` + bucket helpers; `total_mv`/`circ_mv`/`turnover_rate`/`turnover_rate_f`/`volume_ratio` exposed; `market_cap_bucket`/`liquidity_bucket` added; 7 enrichment tests | Preserve |
-| M2.11 | Benchmark membership and industry classification adapters | READY | CLAUDE_CODE | `reference.index_weight` exists in `quant_ts`; industry grouping already flows through the QRE security metadata path and now needs normalization / benchmark enrichment | Implement latest-available benchmark membership and industry grouping adapters |
+| M2.11 | Benchmark membership and industry classification adapters | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `reference.index_weight` schema aligned to `con_code`, benchmark context threaded through preflight, and 889 tests passed | Preserve |
 
 ## Milestone 3: Evaluation Engine
 
@@ -75,6 +75,7 @@
 | M5.16 | CLI regression coverage for invalid `window_size` manifest metadata | DONE | CODEX/CLAUDE_CODE | commit `06d2b4b`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; 201 targeted tests passed | Preserve |
 | M5.17 | CLI strict/JSON parity for `window_size` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; 205 tests passed | Preserve |
 | M5.18 | CLI strict/JSON parity for `window_size` + `group_by` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` + `--group-by` combined selector parity with `--json --require-match`; 209 tests passed | Preserve |
+| M5.19 | Strategy baseline comparison outputs | READY | CLAUDE_CODE | `buy_hold_return` and benchmark-relative summary fields still need consistent wiring through single-symbol, batch, and full-market reports | Populate buy-and-hold comparison fields and optional benchmark comparison |
 
 ## Milestone 6: Dual-Agent Workflow
 

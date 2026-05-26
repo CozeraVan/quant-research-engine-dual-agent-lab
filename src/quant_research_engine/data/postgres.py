@@ -154,7 +154,9 @@ class PostgresDataStore:
         frame["trade_date"] = pd.to_datetime(frame["trade_date"])
         return frame
 
-    def load_security_metadata(self, ts_codes: list[str] | None = None) -> pd.DataFrame:
+    def load_security_metadata(
+        self, ts_codes: list[str] | None = None, *, benchmark_code: str | None = None
+    ) -> pd.DataFrame:
         table_name = self.settings.tables.security_metadata_table
         if table_name:
             frame = self._load_security_metadata_table(table_name, ts_codes)
@@ -171,6 +173,16 @@ class PostgresDataStore:
                     frame["market_cap_bucket"] = self._compute_market_cap_bucket(frame["total_mv"])
                 if "turnover_rate_f" in frame.columns:
                     frame["liquidity_bucket"] = self._compute_liquidity_bucket(frame["turnover_rate_f"])
+
+            if benchmark_code:
+                index_weight = self._load_reference_index_weight_snapshot(benchmark_code, ts_codes)
+                if not index_weight.empty:
+                    frame = frame.merge(index_weight, on="ts_code", how="left")
+                    frame["is_benchmark_member"] = frame["is_benchmark_member"].fillna(False).astype(bool)
+                    frame["benchmark_code"] = frame["benchmark_code"].fillna(benchmark_code)
+
+        if "industry" in frame.columns:
+            frame["industry_group"] = self._compute_industry_group(frame["industry"])
 
         return self._normalize_security_metadata(frame)
 
@@ -402,6 +414,57 @@ class PostgresDataStore:
         buckets[series >= 5.0] = "high"
         buckets[series.isna()] = pd.NA
         return buckets
+
+    @staticmethod
+    def _compute_industry_group(series: pd.Series) -> pd.Series:
+        """Normalize raw industry: trim whitespace, empty string -> NA."""
+        result = series.astype(str).str.strip()
+        result[result == ""] = pd.NA
+        result[series.isna()] = pd.NA
+        return result
+
+    def _load_reference_index_weight_snapshot(
+        self, index_code: str, ts_codes: list[str] | None
+    ) -> pd.DataFrame:
+        table_name = "reference.index_weight"
+        if not self.table_exists(table_name, engine=self.reference_engine):
+            return pd.DataFrame()
+
+        columns = set(self.get_table_columns(table_name, engine=self.reference_engine))
+        if "con_code" not in columns:
+            return pd.DataFrame()
+
+        weight_col = "weight" if "weight" in columns else None
+        if weight_col is None:
+            return pd.DataFrame()
+
+        self.validate_identifier(weight_col)
+        query = f"""
+            SELECT iw.con_code AS ts_code, :index_code AS benchmark_code,
+                   iw.{weight_col} AS benchmark_weight
+            FROM {self.qualified_table(table_name)} iw
+            INNER JOIN (
+                SELECT con_code, MAX(trade_date) AS max_date
+                FROM {self.qualified_table(table_name)}
+                WHERE index_code = :index_code
+                GROUP BY con_code
+            ) latest ON iw.con_code = latest.con_code AND iw.trade_date = latest.max_date
+            WHERE iw.index_code = :index_code
+        """
+        params: dict[str, object] = {"index_code": index_code}
+        if ts_codes:
+            placeholders = []
+            for i, ts_code in enumerate(ts_codes):
+                key = f"ts_code_{i}"
+                placeholders.append(f":{key}")
+                params[key] = ts_code
+            query += f" AND iw.con_code IN ({', '.join(placeholders)})"
+        query += " ORDER BY iw.con_code"
+
+        frame = pd.read_sql_query(sql=text(query), con=self.reference_engine, params=params)
+        frame["benchmark_code"] = frame["benchmark_code"].astype(str)
+        frame["is_benchmark_member"] = True
+        return frame[["ts_code", "benchmark_code", "benchmark_weight", "is_benchmark_member"]]
 
     def _normalize_security_metadata(self, frame: pd.DataFrame) -> pd.DataFrame:
         fixed_columns = [

@@ -433,7 +433,7 @@ def test_cli_eval_config_group_by_prints_group_summary(capsys, monkeypatch):
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ", "000002.SZ"],
@@ -502,7 +502,7 @@ def test_cli_eval_config_group_by_missing_column_raises_error(capsys, monkeypatc
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -692,7 +692,7 @@ def test_cli_eval_config_output_dir_with_group_by_and_market_profile(capsys, mon
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ", "000002.SZ"],
@@ -808,7 +808,7 @@ def test_cli_eval_config_output_dir_multi_group_by_writes_per_column_files(capsy
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ", "000002.SZ"],
@@ -1457,7 +1457,7 @@ def test_cli_preflight_prints_read_only_report(capsys, monkeypatch):
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -4167,7 +4167,7 @@ def test_cli_preflight_run_id_in_output_json(capsys, monkeypatch, tmp_path):
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -4239,7 +4239,7 @@ def test_cli_preflight_run_id_omitted_is_null(capsys, monkeypatch, tmp_path):
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -5055,7 +5055,7 @@ def test_cli_preflight_output_dir_emits_empty_when_no_missing_factors(capsys, mo
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -5125,7 +5125,7 @@ def test_cli_preflight_output_dir_emits_requests_when_table_missing(capsys, monk
         def load_factor_history(self, ts_codes, field_requests, start, end):
             return pd.DataFrame(columns=["ts_code", "trade_date"])
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -5207,7 +5207,7 @@ def test_cli_preflight_no_output_dir_prints_status_but_no_file(capsys, monkeypat
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],

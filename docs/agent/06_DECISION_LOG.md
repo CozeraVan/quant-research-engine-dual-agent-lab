@@ -12,6 +12,30 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Impact:
 - Owner:
 
+### 2026-05-26: Select portfolio baseline comparison as next Claude task
+
+- Decision: The next Claude Code task is `QRE-PORTFOLIO-BASELINE-COMPARISON-001`.
+- Reason: Strategy-report comparison fields still need to be wired consistently for buy-and-hold and benchmark-relative outputs, while the existing report schemas already reserve the required fields.
+- Alternatives: jump to real regime classification (rejected - the user explicitly asked for strategy comparison next); broaden into new producer work (rejected - ownership remains in `quant_ts`); redesign report schemas (rejected - unnecessary churn).
+- Impact: `01/03/04/05/08/09/11/12` now point to the portfolio baseline-comparison slice for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-25: Accept benchmark membership fix pass
+
+- Decision: Accept the benchmark membership and industry normalization slice after the fix pass and Codex re-review.
+- Reason: The real `reference.index_weight.con_code` schema is now handled correctly, `PreflightRunner` threads benchmark context, and the full test suite passes.
+- Alternatives: keep the slice in fix mode (rejected - verification passed and no blocking findings remain); defer acceptance until git finalization (rejected - acceptance can be recorded independently from finalization).
+- Impact: `01/03/04/05/09/10/11/12` now reflect `USER_ACCEPTANCE` / PASS status for the benchmark membership slice.
+- Owner: CODEX
+
+### 2026-05-25: Require benchmark schema alignment and preflight threading fix
+
+- Decision: The benchmark membership slice stays in `CLAUDE_FIXING` until Claude Code aligns the `reference.index_weight` loader with the real `con_code` schema and threads `benchmark_code` through preflight metadata loading.
+- Reason: Codex review found two production-path gaps that the current tests do not cover: the `quant_ts` source schema does not expose `ts_code`, and the preflight metadata path does not receive benchmark context.
+- Alternatives: accept the current implementation as-is (rejected - the benchmark path would remain broken in production); defer the fix to a later slice (rejected - the issue is directly within the current task scope).
+- Impact: `08/09/10/11/12/04/05/03/01` are updated to reflect `CLAUDE_FIXING`; Claude Code now owns the required fix pass.
+- Owner: CODEX
+
 ### 2026-05-25: Assign QRE reference read-side wiring to Claude Code
 
 - Decision: The next QRE implementation task is `QRE-REFERENCE-READ-SIDE-WIRING-001`, assigned to Claude Code under the Codex planner/reviewer workflow.

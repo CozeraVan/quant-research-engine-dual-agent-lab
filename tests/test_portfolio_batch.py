@@ -150,3 +150,74 @@ def test_batch_backtest_default_metadata_columns_not_duplicated():
     result = engine.run(frame, request)
 
     assert "board" in result.summary.columns
+
+
+def test_batch_backtest_includes_industry_group_in_metadata():
+    frame = make_batch_frame()
+    frame["industry"] = ["Finance"] * 6 + ["Tech"] * 6
+    frame["industry_group"] = ["finance"] * 6 + ["technology"] * 6
+
+    engine = BatchBacktestEngine(AShareMarketProfile())
+    request = BatchBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash_per_symbol=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+    )
+
+    result = engine.run(frame, request)
+
+    assert "industry" in result.summary.columns
+    assert "industry_group" in result.summary.columns
+    assert result.summary.loc[0, "industry"] == "Finance"
+    assert result.summary.loc[0, "industry_group"] == "finance"
+    assert result.summary.loc[1, "industry"] == "Tech"
+    assert result.summary.loc[1, "industry_group"] == "technology"
+
+
+def test_batch_backtest_summary_includes_buy_hold_fields():
+    frame = make_batch_frame()
+
+    engine = BatchBacktestEngine(AShareMarketProfile())
+    request = BatchBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash_per_symbol=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+    )
+
+    result = engine.run(frame, request)
+
+    # buy-and-hold fields flow through from single-symbol summary
+    assert "buy_hold_return" in result.summary.columns
+    assert "excess_return_vs_buy_hold" in result.summary.columns
+    # 000001.SZ: first open=10.0, last close=11.3 → 0.13
+    assert result.summary.loc[0, "buy_hold_return"] == pytest.approx(0.13)
+    # 000002.SZ: first open=20.0, last close=18.5 → -0.075
+    assert result.summary.loc[1, "buy_hold_return"] == pytest.approx(-0.075)
+
+
+def test_batch_backtest_summary_metrics_includes_buy_hold_aggregates():
+    frame = make_batch_frame()
+
+    engine = BatchBacktestEngine(AShareMarketProfile())
+    request = BatchBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash_per_symbol=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+    )
+
+    result = engine.run(frame, request)
+    metrics = result.summary_metrics
+
+    # buy-and-hold aggregates are present
+    assert "buy_hold_return" in metrics
+    assert "mean_buy_hold_return" in metrics
+    assert "median_buy_hold_return" in metrics
+    assert "mean_excess_return_vs_buy_hold" in metrics
+    assert "median_excess_return_vs_buy_hold" in metrics
+    # mean of (0.13, -0.075) = 0.0275
+    assert metrics["mean_buy_hold_return"] == pytest.approx(0.0275)
+    # median of (0.13, -0.075) = 0.0275
+    assert metrics["median_buy_hold_return"] == pytest.approx(0.0275)

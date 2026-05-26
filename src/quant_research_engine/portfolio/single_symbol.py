@@ -174,7 +174,7 @@ class SingleSymbolBacktestEngine:
         trades_frame = pd.DataFrame(trades)
         equity_frame = pd.DataFrame(equity_rows)
         failed_orders_frame = pd.DataFrame(failed_orders)
-        summary = self._build_summary(request, trades_frame, equity_frame)
+        summary = self._build_summary(request, trades_frame, equity_frame, working)
         return SingleSymbolBacktestResult(
             orders=orders_frame,
             trades=trades_frame,
@@ -202,6 +202,8 @@ class SingleSymbolBacktestEngine:
                 "trade_count": 0,
                 "win_rate": None,
                 "total_cost": 0.0,
+                "buy_hold_return": None,
+                "excess_return_vs_buy_hold": None,
             },
         )
 
@@ -256,16 +258,30 @@ class SingleSymbolBacktestEngine:
         request: SingleSymbolBacktestRequest,
         trades: pd.DataFrame,
         equity_curve: pd.DataFrame,
+        frame: pd.DataFrame,
     ) -> dict[str, float | int | None]:
         final_equity = request.initial_cash if equity_curve.empty else float(equity_curve.iloc[-1]["total_equity"])
         trade_count = int(len(trades))
         total_cost = 0.0 if trades.empty else float(trades["cost"].sum())
         win_rate = None if trades.empty else float((trades["net_pnl"] > 0).mean())
+        total_return = final_equity / request.initial_cash - 1
+
+        buy_hold_return = None
+        excess_return_vs_buy_hold = None
+        if not frame.empty and request.entry_price_column in frame.columns and request.mark_price_column in frame.columns:
+            first_entry_price = float(frame.iloc[0][request.entry_price_column])
+            last_mark_price = float(frame.iloc[-1][request.mark_price_column])
+            if first_entry_price > 0:
+                buy_hold_return = last_mark_price / first_entry_price - 1.0
+                excess_return_vs_buy_hold = total_return - buy_hold_return
+
         return {
             "initial_cash": request.initial_cash,
             "final_equity": final_equity,
-            "total_return": final_equity / request.initial_cash - 1,
+            "total_return": total_return,
             "trade_count": trade_count,
             "win_rate": win_rate,
             "total_cost": total_cost,
+            "buy_hold_return": buy_hold_return,
+            "excess_return_vs_buy_hold": excess_return_vs_buy_hold,
         }

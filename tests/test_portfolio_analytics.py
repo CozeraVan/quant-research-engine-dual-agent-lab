@@ -46,6 +46,33 @@ def test_summarize_batch_summary_handles_empty_summary():
     assert metrics["symbol_count"] == 0
     assert metrics["traded_symbol_count"] == 0
     assert metrics["positive_return_symbol_rate"] is None
+    assert metrics["buy_hold_return"] is None
+    assert metrics["mean_buy_hold_return"] is None
+    assert metrics["median_buy_hold_return"] is None
+    assert metrics["mean_excess_return_vs_buy_hold"] is None
+    assert metrics["median_excess_return_vs_buy_hold"] is None
+
+
+def test_summarize_batch_summary_aggregates_buy_hold_metrics():
+    summary = pd.DataFrame(
+        {
+            "symbol": ["000001.SZ", "000002.SZ", "600000.SH"],
+            "total_return": [0.10, -0.05, 0.02],
+            "buy_hold_return": [0.08, -0.02, 0.15],
+            "excess_return_vs_buy_hold": [0.02, -0.03, -0.13],
+            "trade_count": [2, 0, 1],
+            "total_cost": [100.0, 0.0, 80.0],
+            "failed_order_count": [0, 1, 0],
+        }
+    )
+
+    metrics = summarize_batch_summary(summary)
+
+    assert metrics["buy_hold_return"] == pytest.approx((0.08 - 0.02 + 0.15) / 3)
+    assert metrics["mean_buy_hold_return"] == pytest.approx((0.08 - 0.02 + 0.15) / 3)
+    assert metrics["median_buy_hold_return"] == pytest.approx(0.08)
+    assert metrics["mean_excess_return_vs_buy_hold"] == pytest.approx((0.02 - 0.03 - 0.13) / 3)
+    assert metrics["median_excess_return_vs_buy_hold"] == pytest.approx(-0.03)
 
 
 def test_summarize_batch_by_computes_metrics_per_group():
