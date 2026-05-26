@@ -2,18 +2,19 @@
 
 ## Current Phase
 
-WAITING_CODEX_REVIEW
+DONE
 
 ## Current Active Work
 
-`QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001`: implemented by Claude Code, awaiting Codex review. Benchmark-relative fields now flow from `summary_metrics` into `build_strategy_performance()` batch mode and `strategy_performance.json`. 898 tests pass.
+`QRE-FULL-MARKET-PERFORMANCE-SHEET-001`: reviewed by Codex and finalized. The `Performance` sheet in `backtest_report.xlsx` now mirrors `strategy_perf` from both batch and shared_cash modes.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
 | QRE-PORTFOLIO-BASELINE-COMPARISON-001 | QRE portfolio baseline comparison outputs | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; buy_hold_return and excess_return_vs_buy_hold populated in single-symbol/batch; industry_group in batch metadata defaults; 8 new tests; 896 passed | Preserve |
-| QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001 | QRE benchmark report-artifact propagation | IMPLEMENTED | CLAUDE_CODE | benchmark_* fields flow from summary_metrics into build_strategy_performance() batch mode → strategy_performance.json; 2 new tests; 898 passed | Codex review |
+| QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001 | QRE benchmark report-artifact propagation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark_* fields flow from summary_metrics into build_strategy_performance() batch mode → strategy_performance.json; 898 passed | Preserve |
+| QRE-FULL-MARKET-PERFORMANCE-SHEET-001 | QRE full-market workbook Performance sheet | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `Performance` sheet mirrors strategy_perf; 2 new tests; validation passed | Preserve |
 | QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001 | QRE benchmark membership and industry grouping adapters | DONE | CLAUDE_CODE | Review passed after `con_code` alignment and preflight benchmark threading; 2 new preflight tests; 889 passed | Preserve |
 | QRE-REFERENCE-READ-SIDE-WIRING-001 | QRE read-side benchmark/reference metadata wiring | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark engine routing + reference metadata composition landed; 874 tests passed (+11) | Preserve |
 | QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001 | QRE market-cap/liquidity metadata standardization | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; latest-available `reference.daily_basic` enrichment and deterministic bucket helpers implemented; targeted data-layer, preflight, CLI, and manifest tests passed; progress docs and diff checks passed | Preserve |

@@ -798,6 +798,7 @@ def write_full_market_excel(
     trade_analysis: dict[str, Any],
     capital_usage: dict[str, Any],
     *,
+    strategy_perf: dict[str, Any] | None = None,
     equity_curve_chart: Path | None = None,
     drawdown_curve_chart: Path | None = None,
 ) -> Path:
@@ -825,9 +826,9 @@ def write_full_market_excel(
     _write_kv_sheet(wb.active, overview)
     wb.active.title = "Overview"
 
-    # Performance (strategy_performance is embedded in Overview for now; separate view)
+    # Performance
     ws_perf = wb.create_sheet("Performance")
-    _write_kv_sheet(ws_perf, {})
+    _write_kv_sheet(ws_perf, strategy_perf or {})
 
     # TradesLedger
     ws_ledger = wb.create_sheet("TradesLedger")
@@ -1209,6 +1210,7 @@ def write_full_market_report(
         paths["backtest_report"] = write_full_market_excel(
             directory, overview, trades_ledger, round_trips, symbol_perf,
             fm_equity_curve, drawdown_curve, trade_analysis, capital_usage,
+            strategy_perf=strategy_perf,
             equity_curve_chart=equity_curve_chart_path,
             drawdown_curve_chart=drawdown_curve_chart_path,
         )
@@ -1308,6 +1310,7 @@ def write_full_market_report(
     paths["backtest_report"] = write_full_market_excel(
         directory, overview, trades_ledger, round_trips, symbol_perf,
         equity_curve, drawdown_curve, trade_analysis, capital_usage,
+        strategy_perf=strategy_perf,
         equity_curve_chart=equity_curve_chart_path,
         drawdown_curve_chart=drawdown_curve_chart_path,
     )

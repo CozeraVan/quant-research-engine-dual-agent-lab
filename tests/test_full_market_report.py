@@ -488,6 +488,54 @@ class TestWriteFullMarketExcel:
         assert "EquityCurveChart" not in wb.sheetnames
         assert "DrawdownCurveChart" not in wb.sheetnames
 
+    def test_performance_sheet_populated_from_strategy_perf(self, tmp_path):
+        eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=2, freq="B"), "total_equity": [100.0, 110.0]})
+        dd = build_drawdown_curve(eq)
+        tl = pd.DataFrame({"symbol": ["000001.SZ"], "trade_date": ["2026-01-06"], "side": ["buy"], "quantity": [100]})
+        sp = {
+            "run_id": "test-run",
+            "strategy_id": "strat-1",
+            "total_trade_count": 2,
+            "sharpe": 1.5,
+            "strategy_total_return": 0.15,
+            "buy_hold_return": 0.10,
+            "excess_return_vs_buy_hold": 0.05,
+            "benchmark_code": "000300.SH",
+            "benchmark_portfolio_total_return": 0.12,
+        }
+        path = write_full_market_excel(
+            tmp_path, {}, tl, pd.DataFrame(), pd.DataFrame(),
+            eq, dd, {}, {},
+            strategy_perf=sp,
+        )
+        from openpyxl import load_workbook
+        wb = load_workbook(str(path))
+        ws = wb["Performance"]
+        perf_data = {ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value for r in range(1, ws.max_row + 1) if ws.cell(row=r, column=1).value}
+        assert perf_data.get("run_id") == "test-run"
+        assert perf_data.get("total_trade_count") == 2
+        assert perf_data.get("sharpe") == 1.5
+        assert perf_data.get("strategy_total_return") == 0.15
+        assert perf_data.get("buy_hold_return") == 0.10
+        assert perf_data.get("excess_return_vs_buy_hold") == 0.05
+        assert perf_data.get("benchmark_code") == "000300.SH"
+        assert perf_data.get("benchmark_portfolio_total_return") == 0.12
+
+    def test_performance_sheet_empty_when_none_strategy_perf(self, tmp_path):
+        eq = pd.DataFrame({"trade_date": pd.date_range("2026-01-05", periods=2, freq="B"), "total_equity": [100.0, 110.0]})
+        dd = build_drawdown_curve(eq)
+        tl = pd.DataFrame({"symbol": ["000001.SZ"], "trade_date": ["2026-01-06"], "side": ["buy"], "quantity": [100]})
+        path = write_full_market_excel(
+            tmp_path, {}, tl, pd.DataFrame(), pd.DataFrame(),
+            eq, dd, {}, {},
+        )
+        from openpyxl import load_workbook
+        wb = load_workbook(str(path))
+        ws = wb["Performance"]
+        assert ws.max_row == 1
+        headers = {ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)}
+        assert headers == {"Key", "Value"}
+
 
 class TestWriteFullMarketReport:
     def test_writes_all_artifacts(self, tmp_path):
