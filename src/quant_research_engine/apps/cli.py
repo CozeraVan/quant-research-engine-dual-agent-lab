@@ -22,6 +22,7 @@ from quant_research_engine.portfolio.analytics import (
 )
 from quant_research_engine.portfolio.benchmark import summarize_benchmark_relative_performance
 from quant_research_engine.portfolio.batch import BatchBacktestEngine, BatchBacktestRequest
+from quant_research_engine.portfolio.full_market_report import build_full_market_equity_curve
 from quant_research_engine.portfolio.io import (
     batch_summary_markdown,
     shared_summary_markdown,
@@ -204,6 +205,9 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Optional market profile YAML. Defaults to built-in zero-slippage A-share profile.",
     )
+    batch_parser.add_argument("--benchmark-table", help="Optional benchmark table, e.g. public.stock_daily or public.index_daily.")
+    batch_parser.add_argument("--benchmark-code", help="Optional benchmark ts_code, e.g. 000300.SH or 000002.SZ.")
+    batch_parser.add_argument("--benchmark-value-column", default="close")
     batch_parser.add_argument("--print-summary-md", action="store_true", help="Print a human-readable Markdown summary to stdout.")
     batch_parser.add_argument("--output-dir", type=Path, help="Optional directory for batch summary and per-symbol files.")
     batch_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
@@ -1058,6 +1062,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         except Exception as exc:
             print(str(exc), file=__import__("sys").stderr)
             return 2
+
+        if args.benchmark_table or args.benchmark_code:
+            if not args.benchmark_table or not args.benchmark_code:
+                print("--benchmark-table and --benchmark-code must be provided together", file=__import__("sys").stderr)
+                return 2
+            benchmark_frame = store.load_benchmark_bars(
+                table_name=args.benchmark_table,
+                ts_codes=[args.benchmark_code],
+                start=args.start,
+                end=args.end,
+                fields=[args.benchmark_value_column],
+            )
+            full_market_eq = build_full_market_equity_curve(result.results, engine_mode="batch")
+            benchmark_summary = summarize_benchmark_relative_performance(
+                full_market_eq,
+                benchmark_frame,
+                benchmark_value_column=args.benchmark_value_column,
+            )
+            result.summary_metrics["benchmark_code"] = args.benchmark_code
+            for key, value in benchmark_summary.items():
+                result.summary_metrics[f"benchmark_{key}"] = value
 
         print(f"strategy={spec.name}")
         print(f"symbols={len(result.symbols)}")

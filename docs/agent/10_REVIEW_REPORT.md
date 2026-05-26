@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001
+QRE-PORTFOLIO-BASELINE-COMPARISON-001
 
 ## Reviewer
 
@@ -16,28 +16,31 @@ PASS
 
 No blocking findings.
 
-The fix pass aligns the benchmark membership loader with the real `quant_ts` `reference.index_weight.con_code` schema, threads `benchmark_code` through preflight metadata loading, and preserves the read-only QRE boundary with explicit-table precedence intact.
+The implementation now wires buy-and-hold comparison fields end-to-end through the single-symbol and batch reporting paths, and the batch CLI can also attach benchmark-relative summary metrics when benchmark inputs are supplied.
 
 ## Behavior Expected
 
 - QRE remains read-only with respect to upstream data production.
-- `load_security_metadata()` enriches composed reference metadata with latest-available benchmark membership from `reference.index_weight` when benchmark context is available.
-- `PreflightRunner.run()` threads benchmark context through to `load_security_metadata()` when the request already includes a benchmark code.
-- `industry_group` is normalized from raw industry metadata while preserving the raw passthrough.
-- Explicit `QRE_SECURITY_METADATA_TABLE` behavior remains first priority and is not silently overridden.
-- Missing `reference.index_weight` keeps the previous metadata behavior intact.
+- `buy_hold_return` and `excess_return_vs_buy_hold` are populated in single-symbol summaries.
+- `industry_group` is included in batch metadata defaults.
+- Batch CLI benchmark inputs populate benchmark-relative summary fields without changing execution semantics.
+- Shared-cash paths remain unchanged.
+- No Tushare/producer code was added.
 
 ## Validation Evidence
 
 ```bash
-uv run pytest -q tests/test_postgres_store.py
-# 41 passed in 0.60s
+uv run pytest -q tests/test_portfolio_single_symbol.py tests/test_portfolio_batch.py
+# 20 passed
 
-uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py
-# 8 passed in 0.32s
+uv run pytest -q tests/test_portfolio_analytics.py
+# 26 passed
+
+uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py
+# 485 passed, 2 warnings
 
 uv run pytest -q
-# 889 passed, 2 warnings
+# 896 passed, 2 warnings
 
 scripts/check-progress-docs.sh
 # Progress docs check passed.
@@ -48,4 +51,4 @@ git diff --check
 
 ## Residual Risks
 
-- The benchmark membership snapshot is still latest-available rather than full as-of history. That is acceptable for this slice, but deeper time-varying semantics remain a later enhancement.
+- Benchmark-relative metrics are currently surfaced through the batch CLI summary path; if future report artifact expansion needs a dedicated benchmark section in more outputs, that can be added as a follow-up slice.

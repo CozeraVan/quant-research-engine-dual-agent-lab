@@ -13,6 +13,7 @@ from quant_research_engine.apps.cli import (
 )
 from quant_research_engine.portfolio.batch import BatchBacktestResult
 from quant_research_engine.portfolio.shared import SharedCashBacktestResult
+from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestResult
 from quant_research_engine.strategies.spec import StrategySpec
 
 
@@ -2095,6 +2096,106 @@ def test_cli_backtest_batch_group_by_passthrough_column(capsys, monkeypatch):
     assert "group_by=sector" in captured.out
     assert "Finance" in captured.out
     assert "Tech" in captured.out
+
+
+def test_cli_backtest_batch_prints_benchmark_relative_summary(capsys, monkeypatch):
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_benchmark_bars(self, table_name, ts_codes, start, end, fields, limit=None):
+            assert table_name == "public.index_daily"
+            assert ts_codes == ["000300.SH"]
+            assert fields == ["close"]
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000300.SH", "000300.SH", "000300.SH"],
+                    "trade_date": pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-03"]),
+                    "close": [100.0, 105.0, 110.25],
+                }
+            )
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
+
+    class FakeBatchEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            r1 = SingleSymbolBacktestResult(
+                orders=pd.DataFrame(),
+                trades=pd.DataFrame(),
+                equity_curve=pd.DataFrame(
+                    {
+                        "trade_date": pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-03"]),
+                        "cash": [5000.0, 5000.0, 5000.0],
+                        "position_quantity": [0, 0, 0],
+                        "market_value": [5000.0, 5500.0, 6050.0],
+                        "total_equity": [10000.0, 10500.0, 11050.0],
+                    }
+                ),
+                failed_orders=pd.DataFrame(),
+                summary={"initial_cash": 10000.0, "final_equity": 11050.0, "total_return": 0.105, "trade_count": 1, "win_rate": 1.0, "total_cost": 10.0, "buy_hold_return": 0.05, "excess_return_vs_buy_hold": 0.055},
+            )
+            return BatchBacktestResult(
+                symbols=["000001.SZ"],
+                results={"000001.SZ": r1},
+                summary=pd.DataFrame(
+                    {
+                        "symbol": ["000001.SZ"],
+                        "trade_count": [1],
+                        "board": ["main_board"],
+                        "total_return": [0.105],
+                        "win_rate": [1.0],
+                        "total_cost": [10.0],
+                        "failed_order_count": [0],
+                        "buy_hold_return": [0.05],
+                        "excess_return_vs_buy_hold": [0.055],
+                    }
+                ),
+                summary_metrics={"symbol_count": 1, "mean_total_return": 0.105, "total_trades": 1},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "BatchBacktestEngine", FakeBatchEngine)
+
+    exit_code = main(
+        [
+            "backtest-batch",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--codes",
+            "000001.SZ",
+            "--benchmark-table",
+            "public.index_daily",
+            "--benchmark-code",
+            "000300.SH",
+            "--benchmark-value-column",
+            "close",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "benchmark_code=000300.SH" in captured.out
+    assert "benchmark_aligned_period_count=3" in captured.out
+    assert "benchmark_benchmark_total_return=0.1025" in captured.out
+    assert "benchmark_excess_total_return=" in captured.out
 
 
 def test_cli_report_files_filters_manifest_paths(capsys, tmp_path):

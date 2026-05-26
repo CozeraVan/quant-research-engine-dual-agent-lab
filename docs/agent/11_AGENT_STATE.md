@@ -4,7 +4,7 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-WAITING_CODEX_REVIEW
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
@@ -16,15 +16,12 @@ CODEX
 
 ## Last Completed Step
 
-Claude Code implemented buy-and-hold baseline comparison wiring:
+Codex reviewed the baseline-comparison slice and found no blocking issues:
 
-- `_build_summary()` in single_symbol.py computes `buy_hold_return` from first entry price to last mark price and `excess_return_vs_buy_hold`.
-- `_empty_result()` includes the new fields as `None`.
-- `industry_group` added to `SUMMARY_METADATA_COLUMNS` in batch.py.
-- `summarize_batch_summary()` aggregates `buy_hold_return`, `mean_buy_hold_return`, `median_buy_hold_return`, `mean_excess_return_vs_buy_hold`, `median_excess_return_vs_buy_hold`.
-- 7 new tests added; 895 tests pass; progress docs and git diff check clean.
-
-Codex should now review the implementation and handle git finalization.
+1. `buy_hold_return` and `excess_return_vs_buy_hold` are populated end-to-end in single-symbol and batch summaries.
+2. `industry_group` is included in batch metadata defaults.
+3. Batch CLI benchmark-relative summary metrics are wired through the reporting path when benchmark inputs are provided.
+4. Full validation passes with `896 passed, 2 warnings`.
 
 ## Git State
 
@@ -62,22 +59,16 @@ Codex should now review the implementation and handle git finalization.
 ```
 uv run pytest -q tests/test_portfolio_single_symbol.py tests/test_portfolio_batch.py → 20 passed
 uv run pytest -q tests/test_portfolio_analytics.py → 26 passed
-uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 484 passed, 2 warnings
-uv run pytest -q → 895 passed, 2 warnings
+uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 485 passed, 2 warnings
+uv run pytest -q → 896 passed, 2 warnings
 scripts/check-progress-docs.sh → passed
 git diff --check → clean
 ```
 
 ## Required Codex Task
 
-Review the Claude Code implementation in `10_REVIEW_REPORT.md`:
-
-- Verify `buy_hold_return` and `excess_return_vs_buy_hold` are populated end-to-end from single-symbol through batch/full-market reports.
-- Verify `industry_group` is included in batch metadata defaults.
-- Verify shared-cash paths remain unchanged.
-- Verify no Tushare/producer code was added.
-- Handle git finalization after review passes.
+Finish git finalization for the accepted baseline-comparison slice.
 
 ## Completion Estimate
 
-For the current MVP scope, QRE remains roughly 90%+ complete. The portfolio baseline comparison slice is implemented. Future enhancements such as benchmark-relative wiring through the batch/full-market reporting path (using the existing `summarize_benchmark_relative_performance()` helper) remain as potential follow-up work, as do real regime grouping and deeper as-of metadata.
+For the current MVP scope, QRE remains roughly 90%+ complete. The portfolio baseline comparison slice is implemented and reviewed. Future enhancements such as deeper benchmark artifact propagation, real regime grouping, and deeper as-of metadata remain follow-up work.

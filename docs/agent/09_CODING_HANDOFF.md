@@ -14,7 +14,7 @@ IMPLEMENTED
 
 ## Current Owner
 
-CODEX (review)
+CODEX (finalization)
 
 ## Implementation Summary
 
@@ -35,6 +35,11 @@ Populated buy-and-hold baseline comparison fields across single-symbol, batch, a
   - `summarize_batch_summary()` now aggregates `buy_hold_return`, `mean_buy_hold_return`, `median_buy_hold_return`, `mean_excess_return_vs_buy_hold`, `median_excess_return_vs_buy_hold`.
   - Empty summary case includes new fields as `None`.
 
+- `src/quant_research_engine/apps/cli.py`:
+  - Added `--benchmark-table`, `--benchmark-code`, `--benchmark-value-column` to `backtest-batch` parser.
+  - After batch engine run, loads benchmark bars, builds full-market equity curve, computes benchmark-relative performance via `summarize_benchmark_relative_performance()`, and merges `benchmark_*` fields into `summary_metrics`.
+  - Added `build_full_market_equity_curve` import.
+
 - `tests/test_portfolio_single_symbol.py`:
   - Added `test_single_symbol_backtest_summary_includes_buy_hold_return` — verifies buy_hold_return and excess_return_vs_buy_hold computed correctly.
   - Added `test_single_symbol_backtest_buy_hold_return_is_none_for_empty_frame` — verifies None for empty symbol frame.
@@ -47,6 +52,10 @@ Populated buy-and-hold baseline comparison fields across single-symbol, batch, a
 - `tests/test_portfolio_analytics.py`:
   - Added `test_summarize_batch_summary_aggregates_buy_hold_metrics` — verifies mean/median buy-hold and excess return aggregation.
   - Extended `test_summarize_batch_summary_handles_empty_summary` with new field assertions.
+
+- `tests/test_cli.py`:
+  - Added `test_cli_backtest_batch_prints_benchmark_relative_summary` — verifies benchmark-relative summary fields appear in batch CLI output when benchmark inputs are provided.
+  - Added `SingleSymbolBacktestResult` import.
 
 ## Behavior Summary
 
@@ -64,12 +73,12 @@ Populated buy-and-hold baseline comparison fields across single-symbol, batch, a
 ```
 uv run pytest -q tests/test_portfolio_single_symbol.py tests/test_portfolio_batch.py → 20 passed
 uv run pytest -q tests/test_portfolio_analytics.py → 26 passed
-uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 484 passed, 2 warnings
-uv run pytest -q → 895 passed, 2 warnings
+uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 485 passed, 2 warnings
+uv run pytest -q → 896 passed, 2 warnings
 scripts/check-progress-docs.sh → passed
 git diff --check → clean
 ```
 
 ## Handoff Back To Codex
 
-Implementation ready for Codex review. Buy-and-hold baseline, industry_group passthrough, and excess-return comparison are wired end-to-end from single-symbol through batch/full-market reporting.
+Review passed. Buy-and-hold baseline, industry_group passthrough, and excess-return comparison are wired end-to-end from single-symbol through batch/full-market reporting.
