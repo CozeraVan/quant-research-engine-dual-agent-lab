@@ -4,57 +4,59 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-DONE
+CODEX_GIT_FINALIZING
 
 ## Current Owner
 
-USER
+CODEX
 
 ## Current Task
 
-`QRE-FULL-MARKET-PERFORMANCE-SHEET-001`
+`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001`
 
 ## Last Completed Step
 
-Codex finalized the full-market workbook Performance sheet population:
+Claude Code completed three fix passes for the as-of metadata snapshot wiring:
 
-1. `write_full_market_excel()` now accepts a `strategy_perf` keyword-only parameter (default `None`).
-2. The `Performance` sheet now mirrors the full `strategy_perf` dict via `_write_kv_sheet()`.
-3. Both batch and shared_cash call sites pass their computed `strategy_perf` dict.
-4. Previous task `QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001` was reviewed by Codex (PASS).
-5. Codex review for `QRE-FULL-MARKET-PERFORMANCE-SHEET-001` passed.
-6. Git finalization completed.
+1. `stock_risk_warning` now uses the as-of date instead of `CURRENT_DATE` in `_query_status_ts_codes(mode="active_range")`.
+2. `_run_backtest()` now passes `metadata_as_of=request.metadata_as_of` to `ResearchFrameAssembler.build()`.
+3. `_write_research_manifest()` now records `metadata_as_of` in `research_run_manifest.json`.
+4. Direct `backtest-batch` / `backtest-shared` CLI paths now accept `--metadata-as-of`, thread it into `assembler.build()`, and record it in output `run_request` payloads.
+5. Direct `backtest-single` CLI path now accepts `--metadata-as-of`, threads it into `assembler.build()`, and records it in output `run_request` payloads.
+6. 6 new CLI tests added (2 for batch, 2 for shared, 2 for single).
 
 ## Git State
 
 - Current branch: `master`
-- Last finalized commit: `c49b15d`
-- Working tree: modified files:
-  - `docs/agent/04_TASK_HANDOFF.md`
-  - `docs/agent/05_PROGRESS.md`
-  - `docs/agent/09_CODING_HANDOFF.md`
-  - `docs/agent/10_REVIEW_REPORT.md`
-  - `docs/agent/11_AGENT_STATE.md`
-  - `docs/agent/12_AGENT_BOARD.md`
-  - `src/quant_research_engine/portfolio/full_market_report.py`
-  - `tests/test_full_market_report.py`
+- Last finalized commit: `81e8c14`
+- Working tree: modified files (implementation + docs):
+  - `src/quant_research_engine/data/postgres.py`
+  - `src/quant_research_engine/orchestration/research_run.py`
+  - `src/quant_research_engine/apps/cli.py`
+  - `tests/test_cli.py`
+  - Agent docs: `01`, `04`, `05`, `09`, `11`, `12`
+- Earlier implementation files (from initial implementation):
+  - `src/quant_research_engine/data/interfaces.py`
+  - `src/quant_research_engine/data/assembler.py`
+  - `src/quant_research_engine/preflight.py`
+  - `tests/test_data_assembler.py`
+  - `tests/test_preflight.py`
+  - `tests/test_research_run.py`
 - Remote push: not requested.
 - Do not revert unrelated dirty files.
 
 ## Latest Validation Evidence
 
 ```
-uv run pytest -q tests/test_full_market_report.py → 59 passed
-uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 365 passed, 2 warnings
-uv run pytest -q → 900 passed, 2 warnings
+uv run pytest -q tests/test_cli.py tests/test_research_run.py tests/test_preflight.py tests/test_data_assembler.py tests/test_postgres_store.py → 410 passed, 2 warnings
 scripts/check-progress-docs.sh → passed
-git diff --check → clean
+git diff --check → passed
 ```
 
 ## Required Codex Task
 
-None.
+Git finalization for the completed as-of metadata snapshot slice.
 
 ## Completion Estimate
 
-For the current MVP scope, QRE remains roughly 90%+ complete. The Performance sheet is now populated, reviewed, and finalized. Future enhancements such as real regime grouping and deeper as-of metadata remain later work.
+For the current MVP scope, QRE remains roughly 90%+ complete. The Performance sheet, regime classification, and as-of metadata snapshot selection are all implemented. Future enhancements such as deeper as-of metadata remain later work.

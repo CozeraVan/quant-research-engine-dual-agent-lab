@@ -52,6 +52,9 @@ class EvaluationEngine:
         random_baseline_summary = self._build_random_baseline_summary(
             working, request.forward_horizons, request.random_baseline_seed
         )
+        regime_summary = self._build_regime_summary(
+            working, events, request.forward_horizons, request.round_trip_cost_rate
+        )
         return EvaluationResult(
             events=events,
             summary=summary,
@@ -60,6 +63,7 @@ class EvaluationEngine:
             group_summary=group_summary,
             random_baseline_summary=random_baseline_summary,
             factor_decay_summary=factor_decay_summary,
+            regime_summary=regime_summary,
         )
 
     def _validate_frame(self, frame: pd.DataFrame, request: EvaluationRequest) -> None:
@@ -144,6 +148,83 @@ class EvaluationEngine:
                         )
                     rows.append(row)
         return pd.DataFrame(rows)
+
+    def _build_regime_summary(
+        self,
+        working: pd.DataFrame,
+        events: pd.DataFrame,
+        horizons: list[int],
+        round_trip_cost_rate: float | None = None,
+    ) -> pd.DataFrame:
+        columns = ["regime", "horizon", "event_count", "mean_forward_return", "median_forward_return", "win_rate"]
+        if round_trip_cost_rate is not None:
+            columns.extend(["round_trip_cost_rate", "mean_adjusted_forward_return", "median_adjusted_forward_return", "adjusted_win_rate"])
+        if events.empty:
+            return pd.DataFrame(columns=columns)
+
+        working = working.sort_values("trade_date").reset_index(drop=True)
+        regime_labels = self._derive_regime_labels(working)
+        if regime_labels.empty:
+            return pd.DataFrame(columns=columns)
+
+        events_with_regime = events.merge(
+            regime_labels[["trade_date", "regime"]],
+            on="trade_date",
+            how="left",
+        )
+
+        rows = []
+        for regime, group in events_with_regime.groupby("regime", sort=False):
+            for horizon in horizons:
+                column = f"forward_return_{horizon}"
+                series = group[column].dropna()
+                row: dict[str, object] = {
+                    "regime": regime,
+                    "horizon": horizon,
+                    "event_count": int(series.shape[0]),
+                    "mean_forward_return": None if series.empty else float(series.mean()),
+                    "median_forward_return": None if series.empty else float(series.median()),
+                    "win_rate": None if series.empty else float((series > 0).mean()),
+                }
+                if round_trip_cost_rate is not None:
+                    adjusted_col = f"adjusted_forward_return_{horizon}"
+                    adjusted = group[adjusted_col].dropna()
+                    row.update({
+                        "round_trip_cost_rate": round_trip_cost_rate,
+                        "mean_adjusted_forward_return": None if adjusted.empty else float(adjusted.mean()),
+                        "median_adjusted_forward_return": None if adjusted.empty else float(adjusted.median()),
+                        "adjusted_win_rate": None if adjusted.empty else float((adjusted > 0).mean()),
+                    })
+                rows.append(row)
+        return pd.DataFrame(rows, columns=columns)
+
+    def _derive_regime_labels(self, working: pd.DataFrame) -> pd.DataFrame:
+        """Derive deterministic regime labels, preferring explicit benchmark/market columns.
+
+        Column precedence:
+        1. ``benchmark_close`` — per-date benchmark/index close price.
+        2. ``benchmark_return`` — pre-computed per-date benchmark return.
+        3. Cross-sectional median ``close`` (fallback).
+
+        Returns a DataFrame with columns ['trade_date', 'regime'] where regime
+        is one of 'bull', 'bear', or 'neutral'.
+        """
+        daily = working.groupby("trade_date", sort=True)
+        if "benchmark_close" in working.columns:
+            benchmark_close = daily["benchmark_close"].first()
+            market_returns = benchmark_close.pct_change().dropna()
+        elif "benchmark_return" in working.columns:
+            market_returns = daily["benchmark_return"].first().dropna()
+        else:
+            market_returns = daily["close"].median().pct_change().dropna()
+
+        if len(market_returns) < 5:
+            return pd.DataFrame(columns=["trade_date", "regime"])
+        rolling = market_returns.rolling(window=min(20, len(market_returns)), min_periods=5).mean().dropna()
+        result = pd.DataFrame({"trade_date": rolling.index, "regime": "neutral"}, index=rolling.index)
+        result.loc[rolling > 0, "regime"] = "bull"
+        result.loc[rolling < 0, "regime"] = "bear"
+        return result.reset_index(drop=True)
 
     def _build_ic_summary(self, frame: pd.DataFrame, factor_columns: list[str], horizons: list[int]) -> pd.DataFrame:
         rows = []

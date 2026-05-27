@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring, cross-sectional market-cap/liquidity metadata standardization, the portfolio baseline-comparison slice, and benchmark report-artifact propagation are complete. The next step is git finalization for the benchmark report-artifact slice. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
+Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring, cross-sectional market-cap/liquidity metadata standardization, the portfolio baseline-comparison slice, benchmark report-artifact propagation, full-market workbook parity, deterministic regime classification, benchmark-aware regime source preference, and benchmark series wiring into evaluation frames are complete and accepted. The next proposed slice is as-of metadata snapshot wiring so read-side metadata aligns with the run date rather than latest-available state. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
 
 ## Completed
 
@@ -19,11 +19,14 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Shared-cash failed-order diagnostics and summary analysis.
 - Portfolio backtest run manifests for reproducible output directories.
 - Deterministic random-baseline comparison for evaluation output quality.
+- Full-market workbook `Performance` sheet parity with `strategy_perf`.
 - Real security metadata passthrough adapters for optional upstream status, industry, and membership-style columns.
 - Batch backtest metadata group-by passthrough for optional upstream columns.
 - Shared-cash metadata output passthrough for requested static metadata columns.
 - Shared-cash row-level metadata group summaries for orders, trades, and failed orders.
 - Evaluation factor decay summaries from existing IC and Rank IC outputs, including eval-config stdout, CSV artifact, and report-manifest validation.
+- Real regime classification and regime summary outputs.
+- Benchmark-aware regime source preference (`benchmark_close` / `benchmark_return` precedence when present in-frame).
 - Optional run-level identifiers across preflight JSON, evaluation run manifests, and portfolio run manifests.
 - Run manifest content validation in report audit, including required-field, kind, type, artifacts, and present-null checks.
 - Local browser backtest console (`qre gui`) with YAML strategy editor, run history, rerun support, and artifact viewer.
@@ -53,15 +56,15 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-- (none)
+- None. The as-of metadata snapshot slice is complete and awaiting user approval for finalization.
 
 ## Known Gaps
 
 - Benchmark membership and industry classification are standardized for the current MVP slice and preserved for future time-varying enhancements.
-- The Excel `Performance` sheet still needs to mirror the assembled strategy performance payload as a later follow-up.
 - Full as-of time-varying history for cross-sectional metadata remains a future enhancement.
 - The reusable Tushare security source adapter remains as historical source-shape context only. Future download/ingest changes belong in `quant_ts`, not QRE.
-- Evaluation layer does not yet implement real regime classification.
+- Benchmark series wiring is complete and accepted; manifests record benchmark parameters and CLI enforces paired-arg validation.
+- As-of metadata snapshot wiring is implemented and all three fix passes are complete; all backtest entry points (single, batch, shared) now accept and propagate `--metadata-as-of`; awaiting user approval for finalization.
 
 ## Current Technical Stack
 
@@ -108,4 +111,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-`QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001` is the current slice to finalize. Update `10/11/12` together before git finalization.
+`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001` is complete and awaiting user approval for finalization. After that, finalize git and then select the next task from the roadmap.

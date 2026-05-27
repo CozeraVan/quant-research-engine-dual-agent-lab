@@ -39,7 +39,7 @@ class FakePreflightStore:
             }
         )
 
-    def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+    def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
         return pd.DataFrame(
             {
                 "ts_code": ["000001.SZ", "000002.SZ"],
@@ -126,7 +126,7 @@ def test_preflight_universe_diagnostics_with_passthrough_metadata_columns():
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ", "000002.SZ"],
@@ -214,7 +214,7 @@ def test_preflight_threads_benchmark_code_to_load_security_metadata():
         def load_factor_history(self, ts_codes, field_requests, start, end):
             return pd.DataFrame()
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             captured_benchmark_code.append(benchmark_code)
             return pd.DataFrame(
                 {
@@ -269,7 +269,7 @@ def test_preflight_benchmark_code_none_when_not_provided():
         def load_factor_history(self, ts_codes, field_requests, start, end):
             return pd.DataFrame()
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             captured_benchmark_code.append(benchmark_code)
             return pd.DataFrame(
                 {
@@ -295,3 +295,106 @@ def test_preflight_benchmark_code_none_when_not_provided():
 
     PreflightRunner(FakeStoreWithBenchmarkCapture()).run(request)
     assert captured_benchmark_code == [None]
+
+
+def test_preflight_threads_metadata_as_of_to_load_security_metadata():
+    captured_as_of = []
+
+    class FakeStoreWithAsOfCapture:
+        factor_engine = object()
+
+        def table_exists(self, table_name, *, engine=None):
+            return True
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "close"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                    "amount": [500.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame()
+
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
+            captured_as_of.append(as_of)
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    request = PreflightRequest(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[],
+        metadata_as_of=date(2025, 12, 31),
+    )
+
+    PreflightRunner(FakeStoreWithAsOfCapture()).run(request)
+    assert captured_as_of == [date(2025, 12, 31)]
+
+
+def test_preflight_metadata_as_of_none_when_omitted():
+    captured_as_of = []
+
+    class FakeStoreWithAsOfCapture:
+        factor_engine = object()
+
+        def table_exists(self, table_name, *, engine=None):
+            return True
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "close"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                    "amount": [500.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame()
+
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
+            captured_as_of.append(as_of)
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    request = PreflightRequest(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[],
+    )
+
+    PreflightRunner(FakeStoreWithAsOfCapture()).run(request)
+    assert captured_as_of == [None]

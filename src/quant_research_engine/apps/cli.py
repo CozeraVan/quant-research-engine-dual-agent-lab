@@ -143,6 +143,9 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser.add_argument("--horizons", nargs="+", type=int, default=[1, 3, 5])
     eval_parser.add_argument("--round-trip-cost-rate", type=float, default=None)
     eval_parser.add_argument("--market-profile", type=Path, help="Optional market profile YAML for rough friction estimate.")
+    eval_parser.add_argument("--benchmark-table", help="Optional benchmark table, e.g. public.index_daily.")
+    eval_parser.add_argument("--benchmark-code", help="Optional benchmark ts_code, e.g. 000300.SH.")
+    eval_parser.add_argument("--benchmark-value-column", default="close")
 
     eval_config_parser = subparsers.add_parser("eval-config", help="Run evaluation from a strategy YAML file")
     eval_config_parser.add_argument("strategy", type=Path)
@@ -156,6 +159,10 @@ def build_parser() -> argparse.ArgumentParser:
     eval_config_parser.add_argument("--output-dir", type=Path, help="Optional output directory for durable evaluation artifacts.")
     eval_config_parser.add_argument("--random-baseline-seed", type=int, default=None, help="Optional seed for deterministic random-baseline comparison.")
     eval_config_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
+    eval_config_parser.add_argument("--metadata-as-of", type=date.fromisoformat, default=None, help="Optional as-of date for metadata snapshots (defaults to latest available).")
+    eval_config_parser.add_argument("--benchmark-table", help="Optional benchmark table, e.g. public.index_daily.")
+    eval_config_parser.add_argument("--benchmark-code", help="Optional benchmark ts_code, e.g. 000300.SH.")
+    eval_config_parser.add_argument("--benchmark-value-column", default="close")
 
     preflight_parser = subparsers.add_parser("preflight", help="Run read-only data and factor checks before broad runs")
     preflight_parser.add_argument("strategy", type=Path)
@@ -164,6 +171,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--end", required=True, type=date.fromisoformat)
     preflight_parser.add_argument("--codes", nargs="*", default=None)
     preflight_parser.add_argument("--min-factor-coverage", type=float, default=0.8)
+    preflight_parser.add_argument("--metadata-as-of", type=date.fromisoformat, default=None, help="Optional as-of date for metadata snapshots (defaults to latest available).")
     preflight_parser.add_argument("--benchmark-table")
     preflight_parser.add_argument("--benchmark-code")
     preflight_parser.add_argument("--benchmark-value-column", default="close")
@@ -185,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backtest_parser.add_argument("--output-dir", type=Path, help="Optional directory for orders/trades/equity/summary files.")
     backtest_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
+    backtest_parser.add_argument("--metadata-as-of", type=date.fromisoformat, default=None, help="Optional as-of date for metadata snapshots (defaults to latest available).")
 
     batch_parser = subparsers.add_parser("backtest-batch", help="Run independent per-symbol portfolio backtests from YAML")
     batch_parser.add_argument("strategy", type=Path)
@@ -211,6 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--print-summary-md", action="store_true", help="Print a human-readable Markdown summary to stdout.")
     batch_parser.add_argument("--output-dir", type=Path, help="Optional directory for batch summary and per-symbol files.")
     batch_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
+    batch_parser.add_argument("--metadata-as-of", type=date.fromisoformat, default=None, help="Optional as-of date for metadata snapshots (defaults to latest available).")
 
     shared_parser = subparsers.add_parser("backtest-shared", help="Run a shared-cash multi-symbol portfolio backtest from YAML")
     shared_parser.add_argument("strategy", type=Path)
@@ -248,6 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
     shared_parser.add_argument("--print-summary-md", action="store_true", help="Print a human-readable Markdown summary to stdout.")
     shared_parser.add_argument("--output-dir", type=Path, help="Optional directory for portfolio result files.")
     shared_parser.add_argument("--run-id", default=None, help="Optional run-level identifier for durable output linkage.")
+    shared_parser.add_argument("--metadata-as-of", type=date.fromisoformat, default=None, help="Optional as-of date for metadata snapshots (defaults to latest available).")
 
     compile_parser = subparsers.add_parser("compile", help="Compile a high-level strategy entry and optionally run preflight")
     compile_parser.add_argument("strategy", type=Path, help="Path to high-level strategy entry YAML.")
@@ -347,6 +358,10 @@ def build_parser() -> argparse.ArgumentParser:
     research_run_parser.add_argument("--metadata-columns", nargs="*", default=None, help="Optional metadata columns for backtest outputs.")
     research_run_parser.add_argument("--window-size", type=int, default=None, help="Optional rolling window size for backtest.")
     research_run_parser.add_argument("--run-id", default=None, help="Optional run-level identifier (auto-generated if omitted).")
+    research_run_parser.add_argument("--metadata-as-of", type=date.fromisoformat, default=None, help="Optional as-of date for metadata snapshots (defaults to latest available).")
+    research_run_parser.add_argument("--benchmark-table", help="Optional benchmark table for evaluation regime, e.g. public.index_daily.")
+    research_run_parser.add_argument("--benchmark-code", help="Optional benchmark ts_code for evaluation regime, e.g. 000300.SH.")
+    research_run_parser.add_argument("--benchmark-value-column", default="close")
 
     gui_parser = subparsers.add_parser("gui", help="Launch the local browser backtest console")
     gui_parser.add_argument("--host", default="127.0.0.1", help="Host to bind the console server to.")
@@ -718,6 +733,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                 end=args.end,
             )
             frame = bars.merge(factors, on=["ts_code", "trade_date"], how="inner")
+            if bool(getattr(args, "benchmark_table", None)) != bool(getattr(args, "benchmark_code", None)):
+                print("error: --benchmark-table and --benchmark-code must be provided together", file=__import__("sys").stderr)
+                return 2
+            if getattr(args, "benchmark_table", None) and getattr(args, "benchmark_code", None):
+                benchmark_bars = store.load_benchmark_bars(
+                    table_name=args.benchmark_table,
+                    ts_codes=[args.benchmark_code],
+                    start=args.start,
+                    end=args.end,
+                    fields=[args.benchmark_value_column],
+                )
+                benchmark_bars = benchmark_bars.rename(columns={args.benchmark_value_column: "benchmark_close"})
+                benchmark_bars["benchmark_return"] = (
+                    benchmark_bars.groupby("ts_code")["benchmark_close"].pct_change()
+                )
+                benchmark_cols = benchmark_bars[["trade_date", "benchmark_close", "benchmark_return"]].dropna(
+                    subset=["benchmark_close"]
+                )
+                frame = frame.merge(benchmark_cols, on="trade_date", how="left")
             result = EvaluationEngine().evaluate(
                 frame,
                 EvaluationRequest(
@@ -750,6 +784,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             store = PostgresDataStore(settings)
             store.ping()
             spec = StrategySpec.from_yaml(args.strategy)
+            if bool(getattr(args, "benchmark_table", None)) != bool(getattr(args, "benchmark_code", None)):
+                print("error: --benchmark-table and --benchmark-code must be provided together", file=__import__("sys").stderr)
+                return 2
             frame = ResearchFrameAssembler(store).build(
                 ts_codes=args.codes,
                 start=args.start,
@@ -757,6 +794,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 market_fields=spec.market_fields,
                 factor_fields=spec.factor_fields,
                 include_metadata=bool(args.group_by),
+                metadata_as_of=getattr(args, "metadata_as_of", None) or None,
+                benchmark_table=getattr(args, "benchmark_table", None) or None,
+                benchmark_code=getattr(args, "benchmark_code", None) or None,
+                benchmark_value_column=getattr(args, "benchmark_value_column", "close") or "close",
             )
             result = EvaluationEngine().evaluate(
                 frame,
@@ -794,6 +835,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not result.factor_decay_summary.empty:
             print("factor_decay_summary")
             print(result.factor_decay_summary.to_csv(index=False).strip())
+        if not result.regime_summary.empty:
+            print("regime_summary")
+            print(result.regime_summary.to_csv(index=False).strip())
         if args.output_dir:
             write_evaluation_output(
                 result=result,
@@ -807,6 +851,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 market_profile=str(args.market_profile) if args.market_profile else None,
                 group_by=args.group_by,
                 random_baseline_seed=args.random_baseline_seed,
+                benchmark_table=getattr(args, "benchmark_table", None) or None,
+                benchmark_code=getattr(args, "benchmark_code", None) or None,
+                benchmark_value_column=getattr(args, "benchmark_value_column", "close") or "close",
             )
         return 0
 
@@ -922,6 +969,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 exclude_risk_warning=spec.exclude_risk_warning,
                 min_listing_days=spec.min_listing_days,
                 min_amount=spec.min_amount,
+                metadata_as_of=args.metadata_as_of,
                 benchmark_table=args.benchmark_table,
                 benchmark_code=args.benchmark_code,
                 benchmark_value_column=args.benchmark_value_column,
@@ -987,6 +1035,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 end=args.end,
                 market_fields=spec.market_fields,
                 factor_fields=spec.factor_fields,
+                metadata_as_of=getattr(args, "metadata_as_of", None) or None,
             )
             market_profile = load_market_profile(args.market_profile) if args.market_profile else AShareMarketProfile()
             result = SingleSymbolBacktestEngine(market_profile).run(
@@ -1022,6 +1071,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "start": str(args.start),
                     "end": str(args.end),
                     "market_profile": str(args.market_profile) if args.market_profile else "built-in",
+                    "metadata_as_of": str(args.metadata_as_of) if getattr(args, "metadata_as_of", None) else None,
                 },
             }
             paths = write_single_symbol_result(result, args.output_dir, run_request=run_request, run_id=args.run_id)
@@ -1046,6 +1096,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 market_fields=spec.market_fields,
                 factor_fields=spec.factor_fields,
                 include_metadata=True,
+                metadata_as_of=getattr(args, "metadata_as_of", None) or None,
             )
             market_profile = load_market_profile(args.market_profile) if args.market_profile else AShareMarketProfile()
             result = BatchBacktestEngine(market_profile).run(
@@ -1130,6 +1181,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "market_profile": str(args.market_profile) if args.market_profile else "built-in",
                     "group_by": args.group_by,
                     "group_rank_top_n": args.group_rank_top_n,
+                    "metadata_as_of": str(args.metadata_as_of) if getattr(args, "metadata_as_of", None) else None,
                 },
             }
             paths = write_batch_result(
@@ -1161,6 +1213,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 market_fields=spec.market_fields,
                 factor_fields=spec.factor_fields,
                 include_metadata=True,
+                metadata_as_of=getattr(args, "metadata_as_of", None) or None,
             )
             market_profile = load_market_profile(args.market_profile) if args.market_profile else AShareMarketProfile()
             risk_controls = resolve_risk_controls(args, spec)
@@ -1248,6 +1301,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "benchmark_value_column": args.benchmark_value_column,
                     "metadata_columns": args.metadata_columns,
                     "group_by": args.group_by,
+                    "metadata_as_of": str(args.metadata_as_of) if getattr(args, "metadata_as_of", None) else None,
                 },
             }
             paths = write_shared_cash_result(result, args.output_dir, run_request=run_request, group_by=args.group_by, run_id=args.run_id)
@@ -1775,6 +1829,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "research-run":
         try:
+            if bool(getattr(args, "benchmark_table", None)) != bool(getattr(args, "benchmark_code", None)):
+                print("error: --benchmark-table and --benchmark-code must be provided together", file=__import__("sys").stderr)
+                return 2
             request = ResearchRunRequest(
                 strategy_path=args.strategy,
                 start=args.start,
@@ -1794,6 +1851,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 round_trip_cost_rate=args.round_trip_cost_rate,
                 metadata_columns=args.metadata_columns,
                 window_size=args.window_size,
+                metadata_as_of=getattr(args, "metadata_as_of", None) or None,
+                benchmark_table=getattr(args, "benchmark_table", None) or None,
+                benchmark_code=getattr(args, "benchmark_code", None) or None,
+                benchmark_value_column=getattr(args, "benchmark_value_column", "close") or "close",
             )
             result = run_research_run(request)
         except Exception as exc:

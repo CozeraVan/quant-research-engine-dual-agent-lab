@@ -57,6 +57,7 @@ def _make_fake_eval_result() -> EvaluationResult:
         group_summary=empty,
         random_baseline_summary=empty,
         factor_decay_summary=empty,
+        regime_summary=empty,
     )
 
 
@@ -399,9 +400,126 @@ class TestWriteResearchManifest:
         assert len(payload["artifacts"]) == len(set(payload["artifacts"]))
         assert len(payload["artifacts"]) == 4
 
+    def test_research_manifest_records_benchmark_inputs(self, tmp_path):
+        """_write_research_manifest records benchmark_table/code/value_column."""
+        output_dir = tmp_path / "run_output"
+        output_dir.mkdir()
+        request = _make_request(
+            tmp_path,
+            output_dir=output_dir,
+            run_id="test-run-benchmark",
+            benchmark_table="public.index_daily",
+            benchmark_code="000300.SH",
+            benchmark_value_column="close",
+        )
+        result = ResearchRunResult(
+            run_id="test-run-benchmark",
+            output_dir=output_dir,
+            preflight_status="skipped",
+            eval_status="ok",
+            backtest_status="ok",
+        )
+        manifest_path = _write_research_manifest(result, request)
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert payload["benchmark_table"] == "public.index_daily"
+        assert payload["benchmark_code"] == "000300.SH"
+        assert payload["benchmark_value_column"] == "close"
+
+    def test_research_manifest_benchmark_fields_null_when_omitted(self, tmp_path):
+        """_write_research_manifest writes null benchmark fields when not provided."""
+        output_dir = tmp_path / "run_output"
+        output_dir.mkdir()
+        request = _make_request(
+            tmp_path,
+            output_dir=output_dir,
+            run_id="test-run-no-benchmark",
+        )
+        result = ResearchRunResult(
+            run_id="test-run-no-benchmark",
+            output_dir=output_dir,
+            preflight_status="skipped",
+            eval_status="ok",
+            backtest_status="ok",
+        )
+        manifest_path = _write_research_manifest(result, request)
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert payload["benchmark_table"] is None
+        assert payload["benchmark_code"] is None
+        assert payload["benchmark_value_column"] == "close"
+
 
 class TestRunEvalReal:
     """Regression: tests that exercise the real _run_eval() without monkeypatching it."""
+
+    def test_run_eval_passes_benchmark_params_to_assembler(self, monkeypatch):
+        """_run_eval() passes benchmark params through to ResearchFrameAssembler.build()."""
+        spec = StrategySpec(
+            name="test",
+            signal_expression="close > 5",
+            exit_signal_expression=None,
+            market_fields=["close"],
+            factor_fields=[],
+            forward_horizons=[1, 3, 5],
+            holding_days=5,
+            quantiles=None,
+        )
+
+        dates = pd.to_datetime([
+            "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08",
+        ])
+        bars = pd.DataFrame({
+            "ts_code": ["000001.SZ"] * 5,
+            "trade_date": dates,
+            "close": [10.0, 10.5, 11.0, 10.8, 11.2],
+        })
+
+        assembler_build_calls: list[dict] = []
+
+        class RealFakeStore:
+            def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+                return bars
+
+            def load_factor_history(self, ts_codes, field_requests, start, end):
+                return pd.DataFrame(columns=["ts_code", "trade_date"])
+
+            def load_benchmark_bars(self, table_name, ts_codes, start, end, fields=None, limit=None):
+                assembler_build_calls.append(
+                    {
+                        "table_name": table_name,
+                        "ts_codes": ts_codes,
+                        "fields": fields,
+                    }
+                )
+                return pd.DataFrame(
+                    {
+                        "ts_code": [ts_codes[0], ts_codes[0]],
+                        "trade_date": pd.to_datetime(["2024-01-02", "2024-01-03"]),
+                        "close": [100.0, 101.0],
+                    }
+                )
+
+        store = RealFakeStore()
+        request = ResearchRunRequest(
+            strategy_path=Path("dummy.yaml"),
+            start=date(2024, 1, 1),
+            end=date(2024, 2, 1),
+            output_dir=Path("/tmp/dummy"),
+            benchmark_table="public.index_daily",
+            benchmark_code="000300.SH",
+            benchmark_value_column="close",
+        )
+
+        status, result = _run_eval(store, spec, request)
+        assert status == "ok"
+        assert result is not None
+        # Verify benchmark params were threaded to the assembler
+        assert len(assembler_build_calls) == 1
+        assert assembler_build_calls[0]["table_name"] == "public.index_daily"
+        assert assembler_build_calls[0]["ts_codes"] == ["000300.SH"]
+        assert assembler_build_calls[0]["fields"] == ["close"]
+        # Evaluation ran successfully and produced forward returns
+        assert not result.events.empty
+        assert "forward_return_1" in result.events.columns
 
     def test_run_eval_with_correct_evaluation_request_shape(self, monkeypatch):
         """_run_eval() constructs a valid EvaluationRequest and calls evaluate()."""
@@ -446,6 +564,66 @@ class TestRunEvalReal:
         assert not result.events.empty
         # Verify forward returns were computed
         assert "forward_return_1" in result.events.columns
+
+
+    def test_run_eval_passes_metadata_as_of_to_assembler(self, monkeypatch):
+        """_run_eval() passes metadata_as_of through to ResearchFrameAssembler.build()."""
+        from quant_research_engine.data.assembler import ResearchFrameAssembler
+
+        spec = StrategySpec(
+            name="test",
+            signal_expression="close > 5",
+            exit_signal_expression=None,
+            market_fields=["close"],
+            factor_fields=[],
+            forward_horizons=[1, 3, 5],
+            holding_days=5,
+            quantiles=None,
+        )
+
+        dates = pd.to_datetime([
+            "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08",
+        ])
+        bars = pd.DataFrame({
+            "ts_code": ["000001.SZ"] * 5,
+            "trade_date": dates,
+            "close": [10.0, 10.5, 11.0, 10.8, 11.2],
+        })
+
+        build_kwargs: list[dict] = []
+        original_build = ResearchFrameAssembler.build
+
+        def capture_build(self, **kwargs):
+            build_kwargs.append(kwargs)
+            return original_build(self, **kwargs)
+
+        monkeypatch.setattr(ResearchFrameAssembler, "build", capture_build)
+
+        class RealFakeStore:
+            def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+                return bars
+
+            def load_factor_history(self, ts_codes, field_requests, start, end):
+                return pd.DataFrame(columns=["ts_code", "trade_date"])
+
+            def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
+                return pd.DataFrame(columns=["ts_code"])
+
+        store = RealFakeStore()
+        as_of_date = date(2025, 12, 31)
+        request = ResearchRunRequest(
+            strategy_path=Path("dummy.yaml"),
+            start=date(2024, 1, 1),
+            end=date(2024, 2, 1),
+            output_dir=Path("/tmp/dummy"),
+            metadata_as_of=as_of_date,
+        )
+
+        status, result = _run_eval(store, spec, request)
+        assert status == "ok"
+        assert result is not None
+        assert len(build_kwargs) == 1
+        assert build_kwargs[0].get("metadata_as_of") == as_of_date
 
 
 class TestRunResearchRunOrchestration:

@@ -40,6 +40,10 @@ class ResearchRunRequest:
     round_trip_cost_rate: float | None = None
     metadata_columns: list[str] | None = None
     window_size: int | None = None
+    metadata_as_of: date | None = None
+    benchmark_table: str | None = None
+    benchmark_code: str | None = None
+    benchmark_value_column: str = "close"
 
 
 @dataclass
@@ -82,6 +86,7 @@ def _run_preflight(
         exclude_risk_warning=spec.exclude_risk_warning,
         min_listing_days=spec.min_listing_days,
         min_amount=spec.min_amount,
+        metadata_as_of=request.metadata_as_of,
     )
     report = PreflightRunner(store).run(preflight_req)
     status = report.status
@@ -135,6 +140,10 @@ def _run_eval(
         end=request.end,
         market_fields=spec.market_fields,
         factor_fields=spec.factor_fields,
+        metadata_as_of=request.metadata_as_of,
+        benchmark_table=request.benchmark_table,
+        benchmark_code=request.benchmark_code,
+        benchmark_value_column=request.benchmark_value_column,
     )
     eval_req = EvaluationRequest(
         signal_expression=spec.signal_expression,
@@ -164,6 +173,9 @@ def _write_eval_artifacts(result, request: ResearchRunRequest) -> dict[str, Path
         market_profile=str(request.market_profile_path) if request.market_profile_path else None,
         group_by=request.group_by,
         random_baseline_seed=request.random_baseline_seed,
+        benchmark_table=request.benchmark_table,
+        benchmark_code=request.benchmark_code,
+        benchmark_value_column=request.benchmark_value_column,
     )
 
 
@@ -180,6 +192,7 @@ def _run_backtest(
         end=request.end,
         market_fields=spec.market_fields,
         factor_fields=spec.factor_fields,
+        metadata_as_of=request.metadata_as_of,
     )
     market_profile = (
         __import__("quant_research_engine.config.loader", fromlist=["load_market_profile"]).load_market_profile(
@@ -269,6 +282,10 @@ def _write_research_manifest(result: ResearchRunResult, request: ResearchRunRequ
         "strategy_path": str(request.strategy_path),
         "output_dir": str(result.output_dir),
         "stages": stages,
+        "benchmark_table": request.benchmark_table,
+        "benchmark_code": request.benchmark_code,
+        "benchmark_value_column": request.benchmark_value_column,
+        "metadata_as_of": str(request.metadata_as_of) if request.metadata_as_of else None,
     }
 
     if result.preflight_paths:

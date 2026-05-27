@@ -23,6 +23,7 @@
 | M2.9 | Reference-data ingestion ownership | DONE | CODEX | Tushare reference-data handler, sync CLI, smoke script, and docs moved to sibling `quant_ts`; QRE producer code removed | Run controlled sync from `quant_ts` after Tushare permissions are available |
 | M2.10 | Cross-sectional market-cap / liquidity metadata standardization | DONE | CLAUDE_CODE | `_load_reference_daily_basic_snapshot()` + bucket helpers; `total_mv`/`circ_mv`/`turnover_rate`/`turnover_rate_f`/`volume_ratio` exposed; `market_cap_bucket`/`liquidity_bucket` added; 7 enrichment tests | Preserve |
 | M2.11 | Benchmark membership and industry classification adapters | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `reference.index_weight` schema aligned to `con_code`, benchmark context threaded through preflight, and 889 tests passed | Preserve |
+| M2.12 | As-of metadata snapshot selection | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; all backtest entry points wired; 947 passed (+6 CLI tests) | Preserve |
 
 ## Milestone 3: Evaluation Engine
 
@@ -32,9 +33,11 @@
 | M3.2 | Event study and forward returns | DONE | HISTORICAL | `evaluation/engine.py` tests | Preserve |
 | M3.3 | IC, Rank IC, quantile return | DONE | HISTORICAL | legacy progress records, tests | Preserve |
 | M3.4 | Rough friction-adjusted screening | DONE | HISTORICAL | `round_trip_cost_rate`, market-profile estimate | Preserve |
-| M3.5 | Regime and metadata group summaries | DONE | CODEX/CLAUDE_CODE | commit `b25cbd7`; 255 tests passed; evaluation metadata group summaries implemented | Preserve; real regime classification can follow later |
+| M3.5 | Regime and metadata group summaries | DONE | CODEX/CLAUDE_CODE | commit `b25cbd7`; 255 tests passed; evaluation metadata group summaries implemented; real regime classification is now implemented (see M8.54) | Preserve |
 | M3.6 | Benchmark/random-baseline comparison for evaluation | DONE | CODEX/CLAUDE_CODE | commit `495185b`; 274 tests passed; deterministic random-baseline comparison implemented with seed-controlled CLI output and report-manifest validation | Preserve; benchmark wiring remains blocked until table/schema confirmation |
 | M3.7 | Factor decay summary | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 324 tests passed; `factor_decay_summary` generated from IC/Rank IC horizons and emitted through eval-config artifacts/manifests | Preserve |
+| M3.8 | Benchmark-aware regime source preference | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_derive_regime_labels()` prefers `benchmark_close` → `benchmark_return` → cross-sectional fallback; 7 new tests; 914 passed | Preserve |
+| M3.9 | Benchmark series wiring into evaluation frames | DONE | CLAUDE_CODE | benchmark series now flow through standard eval/research-run frames; manifests record benchmark inputs; CLI rejects half-specified args; 932 passed | Preserve |
 
 ## Milestone 4: Portfolio Engine
 
@@ -77,7 +80,7 @@
 | M5.18 | CLI strict/JSON parity for `window_size` + `group_by` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` + `--group-by` combined selector parity with `--json --require-match`; 209 tests passed | Preserve |
 | M5.19 | Strategy baseline comparison outputs | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; buy-hold fields and benchmark-relative batch summary metrics are wired through single-symbol, batch, and CLI reporting paths; 896 tests passed | Preserve |
 | M5.20 | Benchmark report-artifact propagation | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; benchmark-relative summary fields flow into `strategy_performance.json`; 898 tests passed | Preserve |
-| M5.21 | Full-market workbook performance-sheet parity | READY | CLAUDE_CODE | full-market workbook still leaves `Performance` empty; strategy performance payload is already assembled for JSON and HTML outputs | Populate `backtest_report.xlsx` Performance sheet from `strategy_perf` |
+| M5.21 | Full-market workbook performance-sheet parity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `Performance` sheet mirrors `strategy_perf`; 2 new tests; validation passed | Preserve |
 
 ## Milestone 6: Dual-Agent Workflow
 
@@ -151,6 +154,7 @@
 | M8.51 | Research-run audit usage documentation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; README section 10 expanded with role-specific audit examples; portfolio_workflow.md audit contract subsection added; portfolio_layer.md pointer added; full suite unchanged at 836 passed | Preserve |
 | M8.52 | Research-run preflight report shape audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_validate_preflight_report()` hardened; status validated against `{ok, warning, error}`; checks[] items validated as `{name, status, message}` objects; new codes: `invalid_preflight_report_check`, `missing_preflight_report_check_field`; 13 new tests; 849 passed | Preserve |
 | M8.53 | Research-run preflight missing-factor shape audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; missing_factor_requests[] item validation added; 14 new tests; 863 passed | Preserve |
+| M8.54 | Real regime classification and regime summary outputs | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_derive_regime_labels()` + `_build_regime_summary()` in engine; `regime_summary` field in `EvaluationResult`; CSV artifact + manifest role + CLI stdout; 7 new tests; 907 passed | Preserve |
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | DONE | CLAUDE_CODE | Builder tab with high-level entry forms; compile endpoint; indicator catalog endpoint; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 

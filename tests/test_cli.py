@@ -1,4 +1,5 @@
 from argparse import Namespace
+from datetime import date
 import json
 from pathlib import Path
 
@@ -434,7 +435,7 @@ def test_cli_eval_config_group_by_prints_group_summary(capsys, monkeypatch):
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ", "000002.SZ"],
@@ -503,7 +504,7 @@ def test_cli_eval_config_group_by_missing_column_raises_error(capsys, monkeypatc
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -693,7 +694,7 @@ def test_cli_eval_config_output_dir_with_group_by_and_market_profile(capsys, mon
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ", "000002.SZ"],
@@ -809,7 +810,7 @@ def test_cli_eval_config_output_dir_multi_group_by_writes_per_column_files(capsy
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ", "000002.SZ"],
@@ -1425,6 +1426,529 @@ def test_cli_eval_config_factor_decay_printed_and_persisted(capsys, monkeypatch,
     assert len(issues) == 0
 
 
+def test_cli_eval_smoke_with_benchmark_args_loads_and_merges_benchmark_bars(capsys, monkeypatch):
+    """eval-smoke --benchmark-table --benchmark-code should load and merge benchmark bars."""
+    benchmark_loaded: list[dict] = []
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [3.0],
+                }
+            )
+
+        def load_benchmark_bars(self, table_name, ts_codes, start, end, fields=None, limit=None):
+            benchmark_loaded.append(
+                {
+                    "table_name": table_name,
+                    "ts_codes": ts_codes,
+                    "fields": fields,
+                }
+            )
+            return pd.DataFrame(
+                {
+                    "ts_code": [ts_codes[0]],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "close": [3200.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "eval-smoke",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--logical-name",
+            "rsi_2",
+            "--target",
+            "factors.stock_daily_momentum_close.rsi_2",
+            "--signal",
+            "rsi_2 < 10",
+            "--benchmark-table",
+            "public.index_daily",
+            "--benchmark-code",
+            "000300.SH",
+            "--benchmark-value-column",
+            "close",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert len(benchmark_loaded) == 1
+    assert benchmark_loaded[0]["table_name"] == "public.index_daily"
+    assert benchmark_loaded[0]["ts_codes"] == ["000300.SH"]
+    assert benchmark_loaded[0]["fields"] == ["close"]
+    # benchmark columns should be in frame (printed as research_rows >= 1)
+    assert "research_rows=1" in captured.out
+
+
+def test_cli_eval_smoke_benchmark_args_optional_noop_when_omitted(capsys, monkeypatch):
+    """eval-smoke without benchmark args should not load benchmark bars."""
+    benchmark_called = []
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [3.0],
+                }
+            )
+
+        def load_benchmark_bars(self, table_name, ts_codes, start, end, fields=None, limit=None):
+            benchmark_called.append(1)
+            return pd.DataFrame()
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "eval-smoke",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--logical-name",
+            "rsi_2",
+            "--target",
+            "factors.stock_daily_momentum_close.rsi_2",
+            "--signal",
+            "rsi_2 < 10",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert len(benchmark_called) == 0
+    assert "research_rows=1" in captured.out
+
+
+def test_cli_eval_config_with_benchmark_args_threads_to_assembler(capsys, monkeypatch, tmp_path):
+    """eval-config --benchmark-table --benchmark-code should thread benchmark params."""
+    assembler_calls: list[dict] = []
+
+    # Write a minimal strategy YAML so the test does not depend on file-system files.
+    strategy_yaml = tmp_path / "strategy.yaml"
+    strategy_yaml.write_text(
+        "experiment:\n"
+        "  name: test_bench\n"
+        "  market_profile: ashare_daily_default\n"
+        "  frequency: daily\n"
+        "  objective: screen_then_validate\n"
+        "data:\n"
+        "  market_table: public.stock_daily\n"
+        "  factor_schema: factors\n"
+        "  market_fields:\n"
+        "    - close\n"
+        "  factor_fields:\n"
+        "    rsi_2: factors.stock_daily_momentum_close.rsi_2\n"
+        "universe:\n"
+        "  market: ashare\n"
+        "signal:\n"
+        "  type: expression\n"
+        "  entry: close > 0\n"
+        "execution:\n"
+        "  signal_date: t\n"
+        "  entry_execution: t_plus_1_open\n"
+        "holding:\n"
+        "  max_holding_days: 5\n"
+        "  direction: long_only\n"
+        "evaluation:\n"
+        "  forward_return_horizons: [1, 3, 5]\n"
+        "  quantiles: 5\n"
+    )
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "close": [10.5, 11.2],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "rsi_2": [1.0, 2.0],
+                }
+            )
+
+        def load_benchmark_bars(self, table_name, ts_codes, start, end, fields=None, limit=None):
+            assembler_calls.append(
+                {
+                    "table_name": table_name,
+                    "ts_codes": ts_codes,
+                    "fields": fields,
+                }
+            )
+            return pd.DataFrame(
+                {
+                    "ts_code": [ts_codes[0], ts_codes[0]],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "close": [3200.0, 3210.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "eval-config",
+            str(strategy_yaml),
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--benchmark-table",
+            "public.index_daily",
+            "--benchmark-code",
+            "000300.SH",
+            "--benchmark-value-column",
+            "close",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    if exit_code != 0:
+        import sys as _sys
+
+        _sys.stderr.write(f"STDERR: {captured.err}\n")
+        _sys.stderr.write(f"STDOUT: {captured.out}\n")
+    assert exit_code == 0
+    assert len(assembler_calls) == 1
+    assert assembler_calls[0]["table_name"] == "public.index_daily"
+    assert assembler_calls[0]["ts_codes"] == ["000300.SH"]
+    assert assembler_calls[0]["fields"] == ["close"]
+    assert "research_rows=2" in captured.out
+
+
+def test_cli_eval_smoke_rejects_benchmark_table_without_code(capsys, monkeypatch):
+    """eval-smoke --benchmark-table without --benchmark-code should exit 2."""
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    exit_code = main(
+        [
+            "eval-smoke",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--logical-name",
+            "rsi_2",
+            "--target",
+            "factors.table.rsi_2",
+            "--signal",
+            "rsi_2 < 10",
+            "--benchmark-table",
+            "public.index_daily",
+        ]
+    )
+    assert exit_code == 2
+
+
+def test_cli_eval_smoke_rejects_benchmark_code_without_table(capsys, monkeypatch):
+    """eval-smoke --benchmark-code without --benchmark-table should exit 2."""
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    exit_code = main(
+        [
+            "eval-smoke",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--logical-name",
+            "rsi_2",
+            "--target",
+            "factors.table.rsi_2",
+            "--signal",
+            "rsi_2 < 10",
+            "--benchmark-code",
+            "000300.SH",
+        ]
+    )
+    assert exit_code == 2
+
+
+def test_cli_eval_config_rejects_benchmark_table_without_code(capsys, monkeypatch, tmp_path):
+    """eval-config --benchmark-table without --benchmark-code should exit 2."""
+    strategy_yaml = tmp_path / "strategy.yaml"
+    strategy_yaml.write_text(
+        "experiment:\n"
+        "  name: test_bench\n"
+        "  market_profile: ashare_daily_default\n"
+        "  frequency: daily\n"
+        "  objective: screen_then_validate\n"
+        "data:\n"
+        "  market_table: public.stock_daily\n"
+        "  factor_schema: factors\n"
+        "  market_fields:\n"
+        "    - close\n"
+        "  factor_fields:\n"
+        "    rsi_2: factors.stock_daily_momentum_close.rsi_2\n"
+        "universe:\n"
+        "  market: ashare\n"
+        "signal:\n"
+        "  type: expression\n"
+        "  entry: close > 0\n"
+        "execution:\n"
+        "  signal_date: t\n"
+        "  entry_execution: t_plus_1_open\n"
+        "holding:\n"
+        "  max_holding_days: 5\n"
+        "  direction: long_only\n"
+        "evaluation:\n"
+        "  forward_return_horizons: [1]\n"
+        "  quantiles: 5\n"
+    )
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "open": [10.0] * 2,
+                    "high": [10.0] * 2,
+                    "low": [10.0] * 2,
+                    "close": [10.0, 11.0],
+                    "pre_close": [10.0] * 2,
+                    "vol": [1.0] * 2,
+                    "amount": [100.0] * 2,
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    exit_code = main(
+        [
+            "eval-config",
+            str(strategy_yaml),
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--benchmark-table",
+            "public.index_daily",
+        ]
+    )
+    assert exit_code == 2
+
+
+def test_cli_eval_config_rejects_benchmark_code_without_table(capsys, monkeypatch, tmp_path):
+    """eval-config --benchmark-code without --benchmark-table should exit 2."""
+    strategy_yaml = tmp_path / "strategy.yaml"
+    strategy_yaml.write_text(
+        "experiment:\n"
+        "  name: test_bench\n"
+        "  market_profile: ashare_daily_default\n"
+        "  frequency: daily\n"
+        "  objective: screen_then_validate\n"
+        "data:\n"
+        "  market_table: public.stock_daily\n"
+        "  factor_schema: factors\n"
+        "  market_fields:\n"
+        "    - close\n"
+        "  factor_fields:\n"
+        "    rsi_2: factors.stock_daily_momentum_close.rsi_2\n"
+        "universe:\n"
+        "  market: ashare\n"
+        "signal:\n"
+        "  type: expression\n"
+        "  entry: close > 0\n"
+        "execution:\n"
+        "  signal_date: t\n"
+        "  entry_execution: t_plus_1_open\n"
+        "holding:\n"
+        "  max_holding_days: 5\n"
+        "  direction: long_only\n"
+        "evaluation:\n"
+        "  forward_return_horizons: [1]\n"
+        "  quantiles: 5\n"
+    )
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "open": [10.0] * 2,
+                    "high": [10.0] * 2,
+                    "low": [10.0] * 2,
+                    "close": [10.0, 11.0],
+                    "pre_close": [10.0] * 2,
+                    "vol": [1.0] * 2,
+                    "amount": [100.0] * 2,
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    exit_code = main(
+        [
+            "eval-config",
+            str(strategy_yaml),
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--benchmark-code",
+            "000300.SH",
+        ]
+    )
+    assert exit_code == 2
+
+
 def test_cli_preflight_prints_read_only_report(capsys, monkeypatch):
     class FakeStore:
         def __init__(self, settings):
@@ -1458,7 +1982,7 @@ def test_cli_preflight_prints_read_only_report(capsys, monkeypatch):
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -2196,6 +2720,356 @@ def test_cli_backtest_batch_prints_benchmark_relative_summary(capsys, monkeypatc
     assert "benchmark_aligned_period_count=3" in captured.out
     assert "benchmark_benchmark_total_return=0.1025" in captured.out
     assert "benchmark_excess_total_return=" in captured.out
+
+
+def test_cli_backtest_batch_metadata_as_of_threaded_to_assembler(capsys, monkeypatch):
+    """backtest-batch --metadata-as-of is passed to assembler.build()."""
+    captured_kwargs = {}
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
+
+    class FakeBatchEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return BatchBacktestResult(
+                symbols=["000001.SZ"],
+                results={},
+                summary=pd.DataFrame({"symbol": ["000001.SZ"], "trade_count": [1], "board": ["main_board"], "total_return": [0.05], "win_rate": [1.0], "total_cost": [10.0], "failed_order_count": [0]}),
+                summary_metrics={"symbol_count": 1, "mean_total_return": 0.05, "total_trades": 1},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "BatchBacktestEngine", FakeBatchEngine)
+
+    exit_code = main(
+        [
+            "backtest-batch",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--codes",
+            "000001.SZ",
+            "--metadata-as-of",
+            "2025-12-31",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_kwargs.get("metadata_as_of") == date(2025, 12, 31)
+
+
+def test_cli_backtest_batch_metadata_as_of_none_when_omitted(capsys, monkeypatch):
+    """backtest-batch without --metadata-as-of passes None to assembler.build()."""
+    captured_kwargs = {}
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
+
+    class FakeBatchEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return BatchBacktestResult(
+                symbols=["000001.SZ"],
+                results={},
+                summary=pd.DataFrame({"symbol": ["000001.SZ"], "trade_count": [1], "board": ["main_board"], "total_return": [0.05], "win_rate": [1.0], "total_cost": [10.0], "failed_order_count": [0]}),
+                summary_metrics={"symbol_count": 1, "mean_total_return": 0.05, "total_trades": 1},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "BatchBacktestEngine", FakeBatchEngine)
+
+    exit_code = main(
+        [
+            "backtest-batch",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--codes",
+            "000001.SZ",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_kwargs.get("metadata_as_of") is None
+
+
+def test_cli_backtest_shared_metadata_as_of_threaded_to_assembler(capsys, monkeypatch):
+    """backtest-shared --metadata-as-of is passed to assembler.build()."""
+    captured_kwargs = {}
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return pd.DataFrame({
+                "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "open": [10.0, 20.0],
+                "close": [10.1, 20.2],
+            })
+
+    class FakeSharedEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return SharedCashBacktestResult(
+                orders=pd.DataFrame(),
+                trades=pd.DataFrame(),
+                failed_orders=pd.DataFrame(),
+                equity_curve=pd.DataFrame({"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [100.0] * 21}),
+                summary={"initial_cash": 100.0, "final_equity": 105.0, "total_return": 0.05},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "SharedCashBacktestEngine", FakeSharedEngine)
+
+    exit_code = main(
+        [
+            "backtest-shared",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--max-positions",
+            "2",
+            "--metadata-as-of",
+            "2025-12-31",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_kwargs.get("metadata_as_of") == date(2025, 12, 31)
+
+
+def test_cli_backtest_shared_metadata_as_of_none_when_omitted(capsys, monkeypatch):
+    """backtest-shared without --metadata-as-of passes None to assembler.build()."""
+    captured_kwargs = {}
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return pd.DataFrame({
+                "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "open": [10.0, 20.0],
+                "close": [10.1, 20.2],
+            })
+
+    class FakeSharedEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return SharedCashBacktestResult(
+                orders=pd.DataFrame(),
+                trades=pd.DataFrame(),
+                failed_orders=pd.DataFrame(),
+                equity_curve=pd.DataFrame({"trade_date": pd.date_range("2026-01-30", periods=21, freq="B"), "total_equity": [100.0] * 21}),
+                summary={"initial_cash": 100.0, "final_equity": 105.0, "total_return": 0.05},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "SharedCashBacktestEngine", FakeSharedEngine)
+
+    exit_code = main(
+        [
+            "backtest-shared",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--codes",
+            "000001.SZ",
+            "000002.SZ",
+            "--max-positions",
+            "2",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_kwargs.get("metadata_as_of") is None
+
+
+def test_cli_backtest_single_metadata_as_of_threaded_to_assembler(capsys, monkeypatch):
+    """backtest-single --metadata-as-of is passed to assembler.build()."""
+    captured_kwargs = {}
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"]), "ts_code": ["000001.SZ"], "open": [10.0], "close": [10.1]})
+
+    class FakeSingleEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return SingleSymbolBacktestResult(
+                orders=pd.DataFrame(),
+                trades=pd.DataFrame(),
+                equity_curve=pd.DataFrame(),
+                failed_orders=pd.DataFrame(),
+                summary={"initial_cash": 100000.0, "final_equity": 101000.0, "total_return": 0.01},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "SingleSymbolBacktestEngine", FakeSingleEngine)
+
+    exit_code = main(
+        [
+            "backtest-single",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--symbol",
+            "000001.SZ",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+            "--metadata-as-of",
+            "2025-12-31",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_kwargs.get("metadata_as_of") == date(2025, 12, 31)
+
+
+def test_cli_backtest_single_metadata_as_of_none_when_omitted(capsys, monkeypatch):
+    """backtest-single without --metadata-as-of passes None to assembler.build()."""
+    captured_kwargs = {}
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+    class FakeAssembler:
+        def __init__(self, store):
+            self.store = store
+
+        def build(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"]), "ts_code": ["000001.SZ"], "open": [10.0], "close": [10.1]})
+
+    class FakeSingleEngine:
+        def __init__(self, market_profile):
+            self.market_profile = market_profile
+
+        def run(self, frame, request):
+            return SingleSymbolBacktestResult(
+                orders=pd.DataFrame(),
+                trades=pd.DataFrame(),
+                equity_curve=pd.DataFrame(),
+                failed_orders=pd.DataFrame(),
+                summary={"initial_cash": 100000.0, "final_equity": 101000.0, "total_return": 0.01},
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    monkeypatch.setattr(cli_module, "ResearchFrameAssembler", FakeAssembler)
+    monkeypatch.setattr(cli_module, "SingleSymbolBacktestEngine", FakeSingleEngine)
+
+    exit_code = main(
+        [
+            "backtest-single",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--symbol",
+            "000001.SZ",
+            "--start",
+            "2026-01-01",
+            "--end",
+            "2026-01-03",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_kwargs.get("metadata_as_of") is None
 
 
 def test_cli_report_files_filters_manifest_paths(capsys, tmp_path):
@@ -4235,6 +5109,393 @@ def test_cli_eval_config_run_id_omitted_is_null(capsys, monkeypatch, tmp_path):
     assert run_manifest["run_id"] is None
 
 
+def test_cli_eval_config_benchmark_fields_in_run_manifest(capsys, monkeypatch, tmp_path):
+    """eval-config --benchmark-table --benchmark-code write benchmark fields to run_manifest.json."""
+    strategy_yaml = tmp_path / "strategy.yaml"
+    strategy_yaml.write_text(
+        "experiment:\n"
+        "  name: test_bench\n"
+        "  market_profile: ashare_daily_default\n"
+        "  frequency: daily\n"
+        "  objective: screen_then_validate\n"
+        "data:\n"
+        "  market_table: public.stock_daily\n"
+        "  factor_schema: factors\n"
+        "  market_fields:\n"
+        "    - close\n"
+        "  factor_fields:\n"
+        "    rsi_2: factors.stock_daily_momentum_close.rsi_2\n"
+        "universe:\n"
+        "  market: ashare\n"
+        "signal:\n"
+        "  type: expression\n"
+        "  entry: close > 0\n"
+        "execution:\n"
+        "  signal_date: t\n"
+        "  entry_execution: t_plus_1_open\n"
+        "holding:\n"
+        "  max_holding_days: 5\n"
+        "  direction: long_only\n"
+        "evaluation:\n"
+        "  forward_return_horizons: [1]\n"
+        "  quantiles: 5\n"
+    )
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "open": [10.0] * 2,
+                    "high": [10.0] * 2,
+                    "low": [10.0] * 2,
+                    "close": [10.0, 11.0],
+                    "pre_close": [10.0] * 2,
+                    "vol": [1.0] * 2,
+                    "amount": [100.0] * 2,
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "rsi_2": [8.0, 9.0],
+                }
+            )
+
+        def load_benchmark_bars(self, table_name, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": [ts_codes[0], ts_codes[0]],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "close": [100.0, 101.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            str(strategy_yaml),
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--output-dir",
+            str(output_dir),
+            "--benchmark-table",
+            "public.index_daily",
+            "--benchmark-code",
+            "000300.SH",
+            "--benchmark-value-column",
+            "close",
+        ]
+    )
+
+    assert exit_code == 0
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["benchmark_table"] == "public.index_daily"
+    assert run_manifest["benchmark_code"] == "000300.SH"
+    assert run_manifest["benchmark_value_column"] == "close"
+
+
+def test_cli_eval_config_benchmark_fields_null_when_omitted(capsys, monkeypatch, tmp_path):
+    """eval-config without benchmark args writes null benchmark fields to run_manifest.json."""
+    strategy_yaml = tmp_path / "strategy.yaml"
+    strategy_yaml.write_text(
+        "experiment:\n"
+        "  name: test_bench\n"
+        "  market_profile: ashare_daily_default\n"
+        "  frequency: daily\n"
+        "  objective: screen_then_validate\n"
+        "data:\n"
+        "  market_table: public.stock_daily\n"
+        "  factor_schema: factors\n"
+        "  market_fields:\n"
+        "    - close\n"
+        "  factor_fields:\n"
+        "    rsi_2: factors.stock_daily_momentum_close.rsi_2\n"
+        "universe:\n"
+        "  market: ashare\n"
+        "signal:\n"
+        "  type: expression\n"
+        "  entry: close > 0\n"
+        "execution:\n"
+        "  signal_date: t\n"
+        "  entry_execution: t_plus_1_open\n"
+        "holding:\n"
+        "  max_holding_days: 5\n"
+        "  direction: long_only\n"
+        "evaluation:\n"
+        "  forward_return_horizons: [1]\n"
+        "  quantiles: 5\n"
+    )
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "close": [10.0, 11.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "rsi_2": [8.0, 9.0],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            str(strategy_yaml),
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    run_manifest = json.loads((output_dir / "run_manifest.json").read_text(encoding="utf-8"))
+    assert run_manifest["benchmark_table"] is None
+    assert run_manifest["benchmark_code"] is None
+    assert run_manifest["benchmark_value_column"] == "close"
+
+
+def test_cli_eval_config_metadata_as_of_threaded_to_assembler(capsys, monkeypatch, tmp_path):
+    """eval-config --metadata-as-of is passed to the assembler's load_security_metadata."""
+    strategy_yaml = tmp_path / "strategy.yaml"
+    strategy_yaml.write_text(
+        "experiment:\n"
+        "  name: test_asof\n"
+        "  market_profile: ashare_daily_default\n"
+        "  frequency: daily\n"
+        "  objective: screen_then_validate\n"
+        "data:\n"
+        "  market_table: public.stock_daily\n"
+        "  factor_schema: factors\n"
+        "  market_fields:\n"
+        "    - close\n"
+        "  factor_fields:\n"
+        "    rsi_2: factors.stock_daily_momentum_close.rsi_2\n"
+        "universe:\n"
+        "  market: ashare\n"
+        "signal:\n"
+        "  type: expression\n"
+        "  entry: close > 0\n"
+        "execution:\n"
+        "  signal_date: t\n"
+        "  entry_execution: t_plus_1_open\n"
+        "holding:\n"
+        "  max_holding_days: 5\n"
+        "  direction: long_only\n"
+        "evaluation:\n"
+        "  forward_return_horizons: [1]\n"
+        "  quantiles: 5\n"
+    )
+
+    captured_as_of = []
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "close": [10.0, 11.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "rsi_2": [8.0, 9.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
+            captured_as_of.append(as_of)
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            str(strategy_yaml),
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--output-dir",
+            str(output_dir),
+            "--group-by",
+            "board",
+            "--metadata-as-of",
+            "2025-12-31",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_as_of == [date(2025, 12, 31)]
+
+
+def test_cli_eval_config_metadata_as_of_none_when_omitted(capsys, monkeypatch, tmp_path):
+    """eval-config without --metadata-as-of passes None to load_security_metadata."""
+    strategy_yaml = tmp_path / "strategy.yaml"
+    strategy_yaml.write_text(
+        "experiment:\n"
+        "  name: test_asof\n"
+        "  market_profile: ashare_daily_default\n"
+        "  frequency: daily\n"
+        "  objective: screen_then_validate\n"
+        "data:\n"
+        "  market_table: public.stock_daily\n"
+        "  factor_schema: factors\n"
+        "  market_fields:\n"
+        "    - close\n"
+        "  factor_fields:\n"
+        "    rsi_2: factors.stock_daily_momentum_close.rsi_2\n"
+        "universe:\n"
+        "  market: ashare\n"
+        "signal:\n"
+        "  type: expression\n"
+        "  entry: close > 0\n"
+        "execution:\n"
+        "  signal_date: t\n"
+        "  entry_execution: t_plus_1_open\n"
+        "holding:\n"
+        "  max_holding_days: 5\n"
+        "  direction: long_only\n"
+        "evaluation:\n"
+        "  forward_return_horizons: [1]\n"
+        "  quantiles: 5\n"
+    )
+
+    captured_as_of = []
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "close": [10.0, 11.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"] * 2,
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "rsi_2": [8.0, 9.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
+            captured_as_of.append(as_of)
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+    output_dir = tmp_path / "eval_output"
+
+    exit_code = main(
+        [
+            "eval-config",
+            str(strategy_yaml),
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-06",
+            "--codes",
+            "000001.SZ",
+            "--output-dir",
+            str(output_dir),
+            "--group-by",
+            "board",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_as_of == [None]
+
+
 def test_cli_preflight_run_id_in_output_json(capsys, monkeypatch, tmp_path):
     class FakeStore:
         def __init__(self, settings):
@@ -4268,7 +5529,7 @@ def test_cli_preflight_run_id_in_output_json(capsys, monkeypatch, tmp_path):
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -4340,7 +5601,7 @@ def test_cli_preflight_run_id_omitted_is_null(capsys, monkeypatch, tmp_path):
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -5156,7 +6417,7 @@ def test_cli_preflight_output_dir_emits_empty_when_no_missing_factors(capsys, mo
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -5226,7 +6487,7 @@ def test_cli_preflight_output_dir_emits_requests_when_table_missing(capsys, monk
         def load_factor_history(self, ts_codes, field_requests, start, end):
             return pd.DataFrame(columns=["ts_code", "trade_date"])
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -5308,7 +6569,7 @@ def test_cli_preflight_no_output_dir_prints_status_but_no_file(capsys, monkeypat
                 }
             )
 
-        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None):
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
             return pd.DataFrame(
                 {
                     "ts_code": ["000001.SZ"],
@@ -5341,6 +6602,150 @@ def test_cli_preflight_no_output_dir_prints_status_but_no_file(capsys, monkeypat
     assert exit_code == 0
     assert "missing_factor_count=0" in captured.out
     assert "missing_factor_status=ok" in captured.out
+
+
+def test_cli_preflight_metadata_as_of_threaded(capsys, monkeypatch, tmp_path):
+    """preflight --metadata-as-of passes the as-of date to load_security_metadata."""
+    captured_as_of = []
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def table_exists(self, table_name, *, engine=None):
+            return table_name == "factors.stock_daily_momentum_close"
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "rsi_2"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                    "amount": [500.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
+            captured_as_of.append(as_of)
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "preflight",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--codes",
+            "000001.SZ",
+            "--metadata-as-of",
+            "2025-12-31",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_as_of == [date(2025, 12, 31)]
+
+
+def test_cli_preflight_metadata_as_of_none_when_omitted(capsys, monkeypatch, tmp_path):
+    """preflight without --metadata-as-of passes None to load_security_metadata."""
+    captured_as_of = []
+
+    class FakeStore:
+        def __init__(self, settings):
+            self.settings = settings
+
+        def ping(self):
+            return True
+
+        def table_exists(self, table_name, *, engine=None):
+            return table_name == "factors.stock_daily_momentum_close"
+
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "rsi_2"]
+
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "open": [10.0],
+                    "close": [10.5],
+                    "amount": [500.0],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+        def load_security_metadata(self, ts_codes=None, *, benchmark_code=None, as_of=None):
+            captured_as_of.append(as_of)
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "list_date": pd.to_datetime(["1991-04-03"]),
+                    "board": ["main_board"],
+                    "is_st": [False],
+                    "is_risk_warning": [False],
+                    "is_suspended": [False],
+                }
+            )
+
+    monkeypatch.setattr(cli_module, "PostgresDataStore", FakeStore)
+
+    exit_code = main(
+        [
+            "preflight",
+            "strategies/low_level/rsi2_reversal_research.yaml",
+            "--db-url",
+            "postgresql+psycopg://user:pass@localhost/db",
+            "--start",
+            "2026-01-05",
+            "--end",
+            "2026-01-05",
+            "--codes",
+            "000001.SZ",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured_as_of == [None]
 
 
 # ---------------------------------------------------------------------------
@@ -7917,6 +9322,50 @@ factor_fields:
     assert captured.err != ""
 
 
+def test_cli_research_run_rejects_benchmark_table_without_code(capsys, tmp_path):
+    """research-run --benchmark-table without --benchmark-code should exit 2."""
+    strat_path = tmp_path / "strategy.yaml"
+    strat_path.write_text(
+        "name: test\n"
+        "signal:\n"
+        "  entry: close > 0\n"
+        "factor_fields: []\n"
+    )
+    output_dir = tmp_path / "output"
+    exit_code = main([
+        "research-run", str(strat_path),
+        "--start", "2024-01-01",
+        "--end", "2024-02-01",
+        "--output-dir", str(output_dir),
+        "--benchmark-table", "public.index_daily",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "must be provided together" in captured.err
+
+
+def test_cli_research_run_rejects_benchmark_code_without_table(capsys, tmp_path):
+    """research-run --benchmark-code without --benchmark-table should exit 2."""
+    strat_path = tmp_path / "strategy.yaml"
+    strat_path.write_text(
+        "name: test\n"
+        "signal:\n"
+        "  entry: close > 0\n"
+        "factor_fields: []\n"
+    )
+    output_dir = tmp_path / "output"
+    exit_code = main([
+        "research-run", str(strat_path),
+        "--start", "2024-01-01",
+        "--end", "2024-02-01",
+        "--output-dir", str(output_dir),
+        "--benchmark-code", "000300.SH",
+    ])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "must be provided together" in captured.err
+
+
 def test_cli_research_run_success_prints_stage_paths(capsys, monkeypatch, tmp_path):
     """Successful research-run prints stage manifest paths to stdout."""
     from quant_research_engine.orchestration import research_run as rr_module
@@ -7971,6 +9420,7 @@ def test_cli_research_run_success_prints_stage_paths(capsys, monkeypatch, tmp_pa
         "group_summary": empty_df,
         "random_baseline_summary": empty_df,
         "factor_decay_summary": empty_df,
+        "regime_summary": empty_df,
     })()
     monkeypatch.setattr(rr_module, "_run_eval", lambda *a, **kw: ("ok", eval_result))
 

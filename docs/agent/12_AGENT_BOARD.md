@@ -2,43 +2,29 @@
 
 ## Current Task ID
 
-QRE-FULL-MARKET-PERFORMANCE-SHEET-001
+QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001
 
 ## Current Recipient
 
-USER
+CODEX
 
 ## Message Type
 
-STATUS_UPDATE
+USER_ACCEPTANCE
 
 ## Sender
 
-CODEX
+CLAUDE_CODE
 
-## Short Message
+## Summary
 
-The full-market workbook Performance sheet slice has been reviewed, finalized, and committed.
+Claude Code completed three fix passes for the as-of metadata snapshot wiring:
 
-## Required Outcome
+- Fix pass 1: `stock_risk_warning` now uses as-of date instead of `CURRENT_DATE`; `_run_backtest()` passes `metadata_as_of` to assembler; `_write_research_manifest()` records `metadata_as_of`.
+- Fix pass 2: Direct `backtest-batch` / `backtest-shared` CLI paths now accept `--metadata-as-of`, thread it into `assembler.build()`, and record it in output `run_request` payloads.
+- Fix pass 3: Direct `backtest-single` CLI path now accepts `--metadata-as-of`, threads it into `assembler.build()`, and records it in output `run_request` payloads.
+- 6 new CLI tests added across all three backtest entry points.
 
-| Area | Required | Status |
-|---|---|---|
-| Workbook performance sheet | `backtest_report.xlsx` Performance sheet mirrors `strategy_perf` | PASS |
-| JSON/HTML parity | JSON and HTML performance summaries remain unchanged | PASS |
-| Shared-cash behavior | Existing shared-cash report behavior continues to work unchanged | PASS |
-| QRE scope | No Tushare download/ingest code in QRE | PASS |
+## Required Action
 
-## Review Status
-
-PASS
-
-## Evidence Available
-
-- `src/quant_research_engine/portfolio/full_market_report.py` now writes `strategy_perf` into the workbook `Performance` sheet.
-- `strategy_performance.json` and HTML summary generation already use the same `strategy_perf` payload.
-- Shared-cash and batch report paths both pass the computed `strategy_perf` dict through unchanged.
-
-## Next Step
-
-None.
+Await user approval for git finalization.

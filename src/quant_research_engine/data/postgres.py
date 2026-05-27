@@ -155,18 +155,18 @@ class PostgresDataStore:
         return frame
 
     def load_security_metadata(
-        self, ts_codes: list[str] | None = None, *, benchmark_code: str | None = None
+        self, ts_codes: list[str] | None = None, *, benchmark_code: str | None = None, as_of: date | None = None
     ) -> pd.DataFrame:
         table_name = self.settings.tables.security_metadata_table
         if table_name:
             frame = self._load_security_metadata_table(table_name, ts_codes)
         elif self.table_exists("reference.stock_basic", engine=self.reference_engine):
-            frame = self._load_reference_security_metadata(ts_codes)
+            frame = self._load_reference_security_metadata(ts_codes, as_of=as_of)
         else:
             frame = self._derive_security_metadata_from_daily(ts_codes)
 
         if not table_name:
-            daily_basic = self._load_reference_daily_basic_snapshot(ts_codes)
+            daily_basic = self._load_reference_daily_basic_snapshot(ts_codes, as_of=as_of)
             if not daily_basic.empty:
                 frame = frame.merge(daily_basic, on="ts_code", how="left")
                 if "total_mv" in frame.columns:
@@ -175,7 +175,7 @@ class PostgresDataStore:
                     frame["liquidity_bucket"] = self._compute_liquidity_bucket(frame["turnover_rate_f"])
 
             if benchmark_code:
-                index_weight = self._load_reference_index_weight_snapshot(benchmark_code, ts_codes)
+                index_weight = self._load_reference_index_weight_snapshot(benchmark_code, ts_codes, as_of=as_of)
                 if not index_weight.empty:
                     frame = frame.merge(index_weight, on="ts_code", how="left")
                     frame["is_benchmark_member"] = frame["is_benchmark_member"].fillna(False).astype(bool)
@@ -285,7 +285,7 @@ class PostgresDataStore:
         frame["is_suspended"] = False
         return frame
 
-    def _load_reference_security_metadata(self, ts_codes: list[str] | None) -> pd.DataFrame:
+    def _load_reference_security_metadata(self, ts_codes: list[str] | None, *, as_of: date | None = None) -> pd.DataFrame:
         stock_basic_table = "reference.stock_basic"
         available_columns = set(self.get_table_columns(stock_basic_table, engine=self.reference_engine))
         if "ts_code" not in available_columns:
@@ -313,18 +313,18 @@ class PostgresDataStore:
 
         frame_ts_codes = frame["ts_code"]
         frame["is_suspended"] = frame_ts_codes.isin(
-            self._query_status_ts_codes("reference.stock_suspend", ts_codes, mode="latest_trade_date")
+            self._query_status_ts_codes("reference.stock_suspend", ts_codes, mode="latest_trade_date", as_of=as_of)
         )
         frame["is_st"] = frame_ts_codes.isin(
-            self._query_status_ts_codes("reference.stock_st", ts_codes, mode="latest_trade_date")
+            self._query_status_ts_codes("reference.stock_st", ts_codes, mode="latest_trade_date", as_of=as_of)
         )
         frame["is_risk_warning"] = frame_ts_codes.isin(
-            self._query_status_ts_codes("reference.stock_risk_warning", ts_codes, mode="active_range")
+            self._query_status_ts_codes("reference.stock_risk_warning", ts_codes, mode="active_range", as_of=as_of)
         )
         return frame
 
     def _query_status_ts_codes(
-        self, table_name: str, ts_codes: list[str] | None, *, mode: str
+        self, table_name: str, ts_codes: list[str] | None, *, mode: str, as_of: date | None = None
     ) -> set[str]:
         if not self.table_exists(table_name, engine=self.reference_engine):
             return set()
@@ -335,17 +335,21 @@ class PostgresDataStore:
         if mode == "latest_trade_date":
             if "trade_date" not in columns:
                 return set()
+            as_of_clause = ""
+            if as_of is not None:
+                as_of_clause = " AND trade_date <= :as_of_date"
             query = f"""
                 SELECT DISTINCT ts_code
                 FROM {self.qualified_table(table_name)}
-                WHERE trade_date = (SELECT MAX(trade_date) FROM {self.qualified_table(table_name)})
+                WHERE trade_date = (SELECT MAX(trade_date) FROM {self.qualified_table(table_name)} WHERE 1=1{as_of_clause})
             """
         elif mode == "active_range":
             if "start_date" not in columns:
                 return set()
-            where_parts = ["start_date <= CURRENT_DATE"]
+            date_expr = ":as_of_date" if as_of is not None else "CURRENT_DATE"
+            where_parts = [f"start_date <= {date_expr}"]
             if "end_date" in columns:
-                where_parts.append("(end_date IS NULL OR end_date >= CURRENT_DATE)")
+                where_parts.append(f"(end_date IS NULL OR end_date >= {date_expr})")
             query = f"""
                 SELECT DISTINCT ts_code
                 FROM {self.qualified_table(table_name)}
@@ -355,6 +359,8 @@ class PostgresDataStore:
             return set()
 
         params: dict[str, object] = {}
+        if as_of is not None:
+            params["as_of_date"] = as_of
         if ts_codes:
             placeholders = []
             for index, ts_code in enumerate(ts_codes):
@@ -366,7 +372,9 @@ class PostgresDataStore:
         result = pd.read_sql_query(sql=text(query), con=self.reference_engine, params=params)
         return set(result["ts_code"].tolist())
 
-    def _load_reference_daily_basic_snapshot(self, ts_codes: list[str] | None) -> pd.DataFrame:
+    def _load_reference_daily_basic_snapshot(
+        self, ts_codes: list[str] | None, *, as_of: date | None = None
+    ) -> pd.DataFrame:
         table_name = "reference.daily_basic"
         if not self.table_exists(table_name, engine=self.reference_engine):
             return pd.DataFrame()
@@ -377,16 +385,22 @@ class PostgresDataStore:
         if not selected:
             return pd.DataFrame()
 
+        as_of_clause = ""
+        params: dict[str, object] = {}
+        if as_of is not None:
+            as_of_clause = " AND trade_date <= :as_of_date"
+            params["as_of_date"] = as_of
+
         query = f"""
             SELECT db.ts_code, {", ".join(f"db.{self.validate_identifier(c)}" for c in selected)}
             FROM {self.qualified_table(table_name)} db
             INNER JOIN (
                 SELECT ts_code, MAX(trade_date) AS max_date
                 FROM {self.qualified_table(table_name)}
+                WHERE 1=1{as_of_clause}
                 GROUP BY ts_code
             ) latest ON db.ts_code = latest.ts_code AND db.trade_date = latest.max_date
         """
-        params: dict[str, object] = {}
         if ts_codes:
             placeholders = []
             for index, ts_code in enumerate(ts_codes):
@@ -424,7 +438,7 @@ class PostgresDataStore:
         return result
 
     def _load_reference_index_weight_snapshot(
-        self, index_code: str, ts_codes: list[str] | None
+        self, index_code: str, ts_codes: list[str] | None, *, as_of: date | None = None
     ) -> pd.DataFrame:
         table_name = "reference.index_weight"
         if not self.table_exists(table_name, engine=self.reference_engine):
@@ -439,6 +453,13 @@ class PostgresDataStore:
             return pd.DataFrame()
 
         self.validate_identifier(weight_col)
+
+        as_of_clause = ""
+        params: dict[str, object] = {"index_code": index_code}
+        if as_of is not None:
+            as_of_clause = " AND trade_date <= :as_of_date"
+            params["as_of_date"] = as_of
+
         query = f"""
             SELECT iw.con_code AS ts_code, :index_code AS benchmark_code,
                    iw.{weight_col} AS benchmark_weight
@@ -446,12 +467,11 @@ class PostgresDataStore:
             INNER JOIN (
                 SELECT con_code, MAX(trade_date) AS max_date
                 FROM {self.qualified_table(table_name)}
-                WHERE index_code = :index_code
+                WHERE index_code = :index_code{as_of_clause}
                 GROUP BY con_code
             ) latest ON iw.con_code = latest.con_code AND iw.trade_date = latest.max_date
             WHERE iw.index_code = :index_code
         """
-        params: dict[str, object] = {"index_code": index_code}
         if ts_codes:
             placeholders = []
             for i, ts_code in enumerate(ts_codes):

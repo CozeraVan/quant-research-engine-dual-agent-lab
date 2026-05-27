@@ -474,3 +474,296 @@ def test_factor_decay_summary_computes_per_factor_bases():
     f2_rows = result[result["factor"] == "f2"]
     assert (f2_rows["base_horizon"] == 3).all()
     assert f2_rows[f2_rows["horizon"] == 7].iloc[0]["ic_decay_from_base"] == pytest.approx(0.04 - 0.08)
+
+
+# --- regime summary ---
+
+
+def _make_multi_date_frame() -> pd.DataFrame:
+    """Frame with enough dates to produce regime labels (12 dates x 3 symbols = 36 rows)."""
+    import numpy as np
+
+    symbols = ["000001.SZ", "000002.SZ", "000003.SZ"]
+    dates = pd.date_range("2026-01-05", periods=12, freq="B")
+    rows = []
+    rng = np.random.default_rng(42)
+    for symbol in symbols:
+        price = 10.0
+        for date in dates:
+            price *= 1 + rng.normal(0, 0.02)
+            rows.append({
+                "ts_code": symbol,
+                "trade_date": date,
+                "close": price,
+                "rsi_2": rng.uniform(5, 25),
+            })
+    return pd.DataFrame(rows)
+
+
+def test_regime_summary_in_evaluation_result():
+    engine = EvaluationEngine()
+    frame = _make_multi_date_frame()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 20",
+        forward_horizons=[1],
+    )
+    result = engine.evaluate(frame, request)
+    assert not result.regime_summary.empty
+    assert "regime" in result.regime_summary.columns
+    assert "horizon" in result.regime_summary.columns
+    assert "event_count" in result.regime_summary.columns
+
+
+def test_regime_summary_empty_for_small_frame():
+    engine = EvaluationEngine()
+    result = engine.evaluate(
+        make_research_frame(),
+        EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1]),
+    )
+    assert result.regime_summary.empty
+    assert list(result.regime_summary.columns) == [
+        "regime", "horizon", "event_count", "mean_forward_return", "median_forward_return", "win_rate",
+    ]
+
+
+def test_regime_summary_columns():
+    engine = EvaluationEngine()
+    frame = _make_multi_date_frame()
+    result = engine.evaluate(
+        frame,
+        EvaluationRequest(signal_expression="rsi_2 < 20", forward_horizons=[1]),
+    )
+    assert not result.regime_summary.empty
+    assert list(result.regime_summary.columns) == [
+        "regime", "horizon", "event_count", "mean_forward_return", "median_forward_return", "win_rate",
+    ]
+
+
+def test_regime_summary_columns_with_cost():
+    engine = EvaluationEngine()
+    frame = _make_multi_date_frame()
+    result = engine.evaluate(
+        frame,
+        EvaluationRequest(
+            signal_expression="rsi_2 < 20",
+            forward_horizons=[1],
+            round_trip_cost_rate=0.001,
+        ),
+    )
+    assert not result.regime_summary.empty
+    assert "round_trip_cost_rate" in result.regime_summary.columns
+    assert "mean_adjusted_forward_return" in result.regime_summary.columns
+
+
+def test_regime_labels_are_deterministic():
+    frame = _make_multi_date_frame()
+    engine = EvaluationEngine()
+    request = EvaluationRequest(signal_expression="rsi_2 < 20", forward_horizons=[1])
+
+    result1 = engine.evaluate(frame, request)
+    result2 = engine.evaluate(frame, request)
+
+    pd.testing.assert_frame_equal(result1.regime_summary, result2.regime_summary)
+
+
+def test_regime_summary_handles_multiple_horizons():
+    engine = EvaluationEngine()
+    frame = _make_multi_date_frame()
+    result = engine.evaluate(
+        frame,
+        EvaluationRequest(signal_expression="rsi_2 < 20", forward_horizons=[1, 2]),
+    )
+    horizons = set(result.regime_summary["horizon"])
+    assert horizons == {1, 2}
+
+
+def test_regime_summary_existing_outputs_unchanged():
+    """Regime addition must not change existing summary outputs."""
+    engine = EvaluationEngine()
+    frame = make_research_frame()
+    request = EvaluationRequest(signal_expression="rsi_2 < 10", forward_horizons=[1])
+    result = engine.evaluate(frame, request)
+
+    assert len(result.summary) == 1
+    summary_row = result.summary.to_dict("records")[0]
+    assert summary_row["horizon"] == 1
+    assert summary_row["event_count"] == 2
+    assert summary_row["mean_forward_return"] == pytest.approx(0.1)
+    assert summary_row["win_rate"] == 1.0
+
+    assert len(result.events) == 2
+
+
+# --- benchmark-aware regime source preference ---
+
+
+def _make_frame_with_benchmark_close() -> pd.DataFrame:
+    """Frame with benchmark_close column that differs from cross-sectional median close."""
+    import numpy as np
+
+    symbols = ["000001.SZ", "000002.SZ", "000003.SZ"]
+    dates = pd.date_range("2026-01-05", periods=12, freq="B")
+    rows = []
+    rng = np.random.default_rng(42)
+    # benchmark follows a steady uptrend: +0.5% per day
+    benchmark = 100.0
+    for symbol in symbols:
+        price = 10.0
+        for date in dates:
+            price *= 1 + rng.normal(0, 0.02)
+            rows.append({
+                "ts_code": symbol,
+                "trade_date": date,
+                "close": price,
+                "benchmark_close": benchmark,
+                "rsi_2": rng.uniform(5, 25),
+            })
+        # advance benchmark once per date (outside inner symbol loop would be cleaner,
+        # but we write it per-row for simplicity)
+    # recompute benchmark_close so it's the same across all symbols per date
+    benchmark = 100.0
+    for i, row in enumerate(rows):
+        if i % len(symbols) == 0 and i > 0:
+            benchmark *= 1.005
+        row["benchmark_close"] = benchmark
+    return pd.DataFrame(rows)
+
+
+def _make_frame_with_benchmark_return() -> pd.DataFrame:
+    """Frame with benchmark_return column: steady +0.5% per date."""
+    import numpy as np
+
+    symbols = ["000001.SZ", "000002.SZ", "000003.SZ"]
+    dates = pd.date_range("2026-01-05", periods=12, freq="B")
+    rows = []
+    rng = np.random.default_rng(42)
+    benchmark_return = 0.005
+    for symbol in symbols:
+        price = 10.0
+        for i, date in enumerate(dates):
+            price *= 1 + rng.normal(0, 0.02)
+            rows.append({
+                "ts_code": symbol,
+                "trade_date": date,
+                "close": price,
+                "benchmark_return": benchmark_return,
+                "rsi_2": rng.uniform(5, 25),
+            })
+    return pd.DataFrame(rows)
+
+
+def test_regime_uses_benchmark_close_when_present():
+    """benchmark_close column should take precedence over cross-sectional median close."""
+    engine = EvaluationEngine()
+    frame = _make_frame_with_benchmark_close()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 20",
+        forward_horizons=[1],
+    )
+    result = engine.evaluate(frame, request)
+    assert not result.regime_summary.empty
+    assert "regime" in result.regime_summary.columns
+    # With benchmark_close steadily rising, regime should be "bull"
+    regimes = set(result.regime_summary["regime"])
+    assert "bull" in regimes
+
+
+def test_regime_uses_benchmark_return_when_present():
+    """benchmark_return column should take precedence over cross-sectional median close."""
+    engine = EvaluationEngine()
+    frame = _make_frame_with_benchmark_return()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 20",
+        forward_horizons=[1],
+    )
+    result = engine.evaluate(frame, request)
+    assert not result.regime_summary.empty
+    regimes = set(result.regime_summary["regime"])
+    # With benchmark_return always positive, regime should be "bull"
+    assert "bull" in regimes
+
+
+def test_regime_falls_back_when_no_benchmark_column():
+    """When no benchmark column present, cross-sectional median close is used."""
+    engine = EvaluationEngine()
+    frame = _make_multi_date_frame()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 20",
+        forward_horizons=[1],
+    )
+    result = engine.evaluate(frame, request)
+    assert not result.regime_summary.empty
+    # Fallback should still produce valid regime labels
+    assert set(result.regime_summary["regime"]).issubset({"bull", "bear", "neutral"})
+
+
+def test_regime_benchmark_close_deterministic():
+    """Same benchmark_close frame should produce identical regime_summary."""
+    engine = EvaluationEngine()
+    frame = _make_frame_with_benchmark_close()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 20",
+        forward_horizons=[1],
+    )
+    result1 = engine.evaluate(frame, request)
+    result2 = engine.evaluate(frame, request)
+    pd.testing.assert_frame_equal(result1.regime_summary, result2.regime_summary)
+
+
+def test_regime_benchmark_return_deterministic():
+    """Same benchmark_return frame should produce identical regime_summary."""
+    engine = EvaluationEngine()
+    frame = _make_frame_with_benchmark_return()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 20",
+        forward_horizons=[1],
+    )
+    result1 = engine.evaluate(frame, request)
+    result2 = engine.evaluate(frame, request)
+    pd.testing.assert_frame_equal(result1.regime_summary, result2.regime_summary)
+
+
+def test_regime_existing_outputs_unchanged_with_benchmark():
+    """Existing outputs (events, summary) unchanged even when benchmark_close is present."""
+    engine = EvaluationEngine()
+    frame = _make_frame_with_benchmark_close()
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 20",
+        forward_horizons=[1],
+    )
+    result = engine.evaluate(frame, request)
+    assert len(result.summary) > 0
+    assert len(result.events) > 0
+
+
+def test_regime_benchmark_close_preferred_over_cross_sectional():
+    """Prove benchmark_close produces different labels than cross-sectional fallback."""
+    engine = EvaluationEngine()
+    # Frame with benchmark_close in a downtrend but cross-sectional close rising
+    import numpy as np
+
+    symbols = ["000001.SZ", "000002.SZ"]
+    dates = pd.date_range("2026-01-05", periods=12, freq="B")
+    rows = []
+    rng = np.random.default_rng(99)
+    benchmark = 100.0
+    for date in dates:
+        benchmark *= 1 - 0.005  # -0.5% per day (bearish)
+        for symbol in symbols:
+            # cross-sectional close rises: +1% per day (bullish)
+            rows.append({
+                "ts_code": symbol,
+                "trade_date": date,
+                "close": 10.0 + 0.1 * (date - dates[0]).days,
+                "benchmark_close": benchmark,
+                "rsi_2": rng.uniform(5, 25),
+            })
+    frame = pd.DataFrame(rows)
+    request = EvaluationRequest(
+        signal_expression="rsi_2 < 20",
+        forward_horizons=[1],
+    )
+    result = engine.evaluate(frame, request)
+    assert not result.regime_summary.empty
+    # benchmark_close is falling, so regime should include "bear"
+    assert "bear" in set(result.regime_summary["regime"])

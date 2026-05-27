@@ -40,6 +40,7 @@ class PreflightRequest:
     exclude_risk_warning: bool = False
     min_listing_days: int | None = None
     min_amount: float | None = None
+    metadata_as_of: date | None = None
     benchmark_table: str | None = None
     benchmark_code: str | None = None
     benchmark_value_column: str = "close"
@@ -201,7 +202,7 @@ class PreflightRunner:
         }
         metadata = pd.DataFrame()
         if request.include_metadata:
-            metadata = self.store.load_security_metadata(ts_codes=request.ts_codes, benchmark_code=request.benchmark_code)
+            metadata = self.store.load_security_metadata(ts_codes=request.ts_codes, benchmark_code=request.benchmark_code, as_of=request.metadata_as_of)
             metadata = self._normalize_frame(metadata)
             metadata_rows = int(len(metadata))
             checks.append(

@@ -14,6 +14,8 @@ def _manifest_role(key: str) -> str:
         return "evaluation_group_summary"
     if key == "random_baseline_summary":
         return "random_baseline_summary"
+    if key == "regime_summary":
+        return "regime_summary"
     if key == "run_manifest":
         return "run_manifest"
     return key
@@ -51,6 +53,9 @@ def write_evaluation_output(
     market_profile: str | None = None,
     group_by: list[str] | None = None,
     random_baseline_seed: int | None = None,
+    benchmark_table: str | None = None,
+    benchmark_code: str | None = None,
+    benchmark_value_column: str = "close",
 ) -> dict[str, Path]:
     """Write evaluation CSVs, run_manifest.json, and report_manifest.json.
 
@@ -100,6 +105,11 @@ def write_evaluation_output(
         result.factor_decay_summary.to_csv(p, index=False)
         artifact_paths["factor_decay_summary"] = p
 
+    if not result.regime_summary.empty:
+        p = directory / "regime_summary.csv"
+        result.regime_summary.to_csv(p, index=False)
+        artifact_paths["regime_summary"] = p
+
     run_manifest_payload: dict[str, object] = {
         "schema_version": 1,
         "kind": "evaluation_run_manifest",
@@ -113,6 +123,9 @@ def write_evaluation_output(
         "market_profile": market_profile,
         "group_by": group_by,
         "random_baseline_seed": random_baseline_seed,
+        "benchmark_table": benchmark_table,
+        "benchmark_code": benchmark_code,
+        "benchmark_value_column": benchmark_value_column,
         "artifacts": sorted(artifact_paths.keys()),
     }
     run_manifest_path = directory / "run_manifest.json"

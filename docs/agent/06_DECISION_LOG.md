@@ -4,6 +4,78 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 
 ## Format
 
+### 2026-05-26: Wire benchmark series into standard eval frame assembly
+
+- Decision: Thread benchmark series loading into `ResearchFrameAssembler.build()`, eval-smoke, eval-config, and research-run CLI paths so `benchmark_close`/`benchmark_return` columns reach the evaluation frame through standard assembly rather than requiring caller-side manual injection.
+- Reason: The benchmark-aware regime precedence (002) relies on `benchmark_close`/`benchmark_return` being present in the evaluation frame, but these columns were only available when callers manually injected them. Wiring benchmark loading into the standard assembly path makes the regime precedence reachable through all normal eval entry points.
+- Alternatives: Leave benchmark injection as a caller responsibility (rejected — breaks the regime priority chain for standard CLI/research-run workflows); add a separate benchmark loading phase outside the assembler (rejected — duplicates logic and increases caller complexity).
+- Impact: `ResearchFrameAssembler.build()` now accepts `benchmark_table`, `benchmark_code`, `benchmark_value_column`; `ResearchRunRequest` carries benchmark fields; `qre eval-smoke`, `eval-config`, and `research-run` all accept `--benchmark-table`/`--benchmark-code`/`--benchmark-value-column`; 9 new tests; 922 total passed. Regime derivation logic unchanged.
+- Owner: CLAUDE_CODE
+
+### 2026-05-26: Implement deterministic regime classification from cross-sectional market data
+
+- Decision: Derive regime labels (bull/bear/neutral) from cross-sectional median daily return rolling mean rather than requiring an external benchmark series.
+- Reason: The evaluation frame already contains per-symbol daily close prices. Using the cross-sectional median return avoids external data dependencies while producing deterministic, reproducible labels. A rolling mean smooths daily noise. The brief explicitly allowed falling back to a market proxy derived from cross-sectional price movement when no benchmark column is present in-frame.
+- Alternatives: Require an explicit benchmark close column in the frame (rejected — would require upstream schema changes and data loading work); use a fixed market-cap-weighted index (rejected — adds external dependency); skip regime classification entirely (rejected — user explicitly requested it).
+- Impact: `EvaluationResult` now carries `regime_summary`; `write_evaluation_output()` exports `regime_summary.csv`; `report_manifest.py` registers the `regime_summary` role; 7 new tests; 907 total passed. Existing evaluation outputs unchanged.
+- Owner: CLAUDE_CODE
+
+### 2026-05-26: Implement benchmark-aware regime source preference
+
+- Decision: `_derive_regime_labels()` now checks for explicit benchmark/market columns before falling back to the cross-sectional median close. Column precedence: `benchmark_close` → `benchmark_return` → cross-sectional median close.
+- Reason: The evaluation frame may carry a `benchmark_close` or `benchmark_return` column when upstream assembly joins benchmark index data. When present, that explicit series is a stronger market-state signal than the cross-sectional proxy. When absent, the existing deterministic fallback preserves current behavior.
+- Alternatives: Always require explicit benchmark (rejected — would break existing frames without benchmark data); use a fixed column name convention (rejected — `benchmark_close`/`benchmark_return` are already the natural names in the existing data model); skip the enhancement (rejected — the brief explicitly requested it).
+- Impact: `_derive_regime_labels()` changed (3-branch precedence); `regime_summary` schema, CLI stdout, and manifest role unchanged; 7 new tests; 914 total passed. Cross-sectional fallback behavior preserved unchanged.
+- Owner: CLAUDE_CODE
+
+### 2026-05-26: Select benchmark-aware regime source preference as next Claude task
+
+- Decision: The next Claude Code task is `QRE-EVAL-BENCHMARK-AWARE-REGIME-SUMMARY-002`.
+- Reason: The current regime implementation is accepted, but the next low-risk improvement is to prefer explicit benchmark or market series columns when they are already present in the evaluation frame, with the existing cross-sectional fallback preserved.
+- Alternatives: leave the current fallback-only regime helper as-is (rejected - the brief already allows a stronger explicit-series preference when available); jump to unrelated portfolio/report work (rejected - the current evaluation slice is the nearest consumer-side refinement).
+- Impact: `01/03/04/05/08/09/11/12` now point to the benchmark-aware regime source-preference slice for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-26: Select benchmark series wiring into evaluation frames as next Claude task
+
+- Decision: The next Claude Code task is `QRE-EVAL-BENCHMARK-SERIES-WIRING-003`.
+- Reason: Benchmark-aware regime precedence is now accepted, but the standard eval/research-run entry points still do not thread benchmark bars into the evaluation frame. Wiring benchmark series through the normal path is the smallest remaining step that makes the new precedence reachable without changing the regime logic again.
+- Alternatives: change the regime helper again (rejected - the precedence logic is already correct and reviewed); jump to unrelated portfolio work (rejected - the evaluation path is the immediate consumer-side gap); require producer changes in `quant_ts` (rejected - the needed benchmark series already exist on the read side).
+- Impact: `01/03/04/05/08/09/11/12` now point to the benchmark-series wiring slice for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-26: Require benchmark manifest provenance and paired-argument validation for the wiring slice
+
+- Decision: The benchmark-series wiring slice must record `benchmark_table`, `benchmark_code`, and `benchmark_value_column` in the eval and research-run manifests, and must reject half-specified benchmark CLI inputs.
+- Reason: The benchmark frame wiring is correct, but the current implementation is not fully reproducible from saved artifacts and can silently accept invalid benchmark input combinations.
+- Alternatives: leave the manifest fields implicit (rejected - reproducibility gap); keep silent no-op behavior for half-specified benchmark args (rejected - misleading and inconsistent with the existing paired-arg pattern used by other benchmark-aware commands).
+- Impact: `01/03/04/05/08/09/11/12` now reflect the required fix pass for `QRE-EVAL-BENCHMARK-SERIES-WIRING-003`.
+- Owner: CODEX
+
+### 2026-05-26: Complete benchmark series wiring fix pass
+
+- Decision: Record benchmark params in eval and research-run manifests, and reject half-specified benchmark CLI args.
+- Reason: Codex review found that benchmark inputs were not persisted in run manifests and half-specified args were silently ignored. Both gaps compromise reproducibility and CLI usability.
+- Alternatives: defer manifest fields (rejected — reproducibility gap); keep silent no-op for half-specified args (rejected — misleading UX).
+- Impact: `write_evaluation_output()` now records `benchmark_table`/`benchmark_code`/`benchmark_value_column` in the eval `run_manifest.json`; `_write_research_manifest()` records them in `research_run_manifest.json`; eval-smoke, eval-config, and research-run handlers reject mismatched `--benchmark-table`/`--benchmark-code` with exit code 2; 10 new tests; 932 total passed. Regime logic unchanged.
+- Owner: CLAUDE_CODE
+
+### 2026-05-26: Select as-of metadata snapshot wiring as next Claude task
+
+- Decision: The next Claude Code task is `QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001`.
+- Reason: The remaining read-side gap is that metadata loaders still default to the latest available snapshot in some paths. Wiring an optional as-of date through metadata loading aligns metadata with the run date without changing producer ownership or benchmark/regime logic.
+- Alternatives: keep latest-snapshot behavior forever (rejected - leaves run-date lookahead risk); move the work into `quant_ts` (rejected - the task is consumer-side and read-only); widen the slice into unrelated portfolio logic (rejected - unnecessary scope).
+- Impact: `01/03/04/05/08/09/11/12` now point to the as-of metadata snapshot wiring slice for Claude Code. All direct backtest entry points are now wired and the slice is complete.
+- Owner: CLAUDE_CODE
+
+### 2026-05-26: Implement as-of metadata snapshot wiring
+
+- Decision: Thread an optional `as_of` date through all read-side metadata loaders so consumers can request snapshots aligned with a specific date. SQL `MAX(trade_date)` subqueries are capped at the as-of date via `AND trade_date <= :as_of_date`, preserving the latest-snapshot fallback when as-of is omitted.
+- Reason: Cross-sectional metadata (daily_basic market cap/liquidity, index_weight membership, security status flags) should reflect the state known at the run date rather than the latest available state, which can introduce lookahead when running historical evaluations.
+- Alternatives: keep latest-snapshot as the only mode (rejected — leaves run-date lookahead risk); push the work into `quant_ts` (rejected — this is a read-side consumer concern, not a producer change); add a new denormalized snapshot table (rejected — the SQL subquery pattern is simpler and avoids schema changes).
+- Impact: `ReferenceDataStore.load_security_metadata()` and all internal PostgreSQL loaders accept `as_of`; `ResearchFrameAssembler.build()`, `PreflightRequest`, and `ResearchRunRequest` carry `metadata_as_of`; `--metadata-as-of` CLI arg on eval-config, preflight, and research-run; 9 new tests; 941 total passed. Latest-snapshot behavior preserved unchanged when as-of is omitted.
+- Owner: CLAUDE_CODE
+
 ### YYYY-MM-DD: Decision title
 
 - Decision:

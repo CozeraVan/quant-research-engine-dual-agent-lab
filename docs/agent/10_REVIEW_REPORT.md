@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-FULL-MARKET-PERFORMANCE-SHEET-001
+QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001
 
 ## Reviewer
 
@@ -16,27 +16,20 @@ PASS
 
 No blocking findings.
 
-The implementation now carries the full `strategy_perf` dict into the Excel workbook `Performance` sheet, so `backtest_report.xlsx` matches the JSON/HTML performance summary surface without changing the underlying report math.
-
 ## Behavior Expected
 
 - QRE remains read-only with respect to upstream data production.
-- `backtest_report.xlsx` `Performance` sheet mirrors `strategy_perf`.
-- Buy-and-hold fields remain unchanged.
-- Shared-cash paths remain unchanged.
+- `metadata_as_of` controls every metadata snapshot used by eval/preflight/research-run, including the backtest stage of research-run.
+- Historical risk-warning membership is derived as of the requested snapshot date, not `CURRENT_DATE`.
+- Direct backtest artifacts and manifests also record `metadata_as_of` so the same snapshot can be reproduced across all entry points.
+- Existing evaluation outputs remain unchanged.
 - No Tushare/producer code was added.
 
 ## Validation Evidence
 
 ```bash
-uv run pytest -q tests/test_full_market_report.py
-# 59 passed
-
-uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py
-# 365 passed, 2 warnings
-
-uv run pytest -q
-# 900 passed, 2 warnings
+uv run pytest -q tests/test_cli.py tests/test_research_run.py tests/test_preflight.py tests/test_data_assembler.py tests/test_postgres_store.py
+# 410 passed, 2 warnings
 
 scripts/check-progress-docs.sh
 # Progress docs check passed.
@@ -47,4 +40,4 @@ git diff --check
 
 ## Residual Risks
 
-- No blocking implementation risk remains for this slice.
+- The run-manifest metadata_as_of behavior is implied by the shared manifest writer path; no separate manifest assertion test was added in this slice.

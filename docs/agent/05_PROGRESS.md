@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-DONE
+USER_ACCEPTANCE
 
 ## Current Active Work
 
-`QRE-FULL-MARKET-PERFORMANCE-SHEET-001`: reviewed by Codex and finalized. The `Performance` sheet in `backtest_report.xlsx` now mirrors `strategy_perf` from both batch and shared_cash modes.
+`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001`: All three fix passes complete. All CLI entry points (eval-config, preflight, research-run, backtest-single, backtest-batch, backtest-shared) now accept and propagate `--metadata-as-of`. Awaiting user approval for finalization.
 
 ## Progress Table
 
@@ -15,6 +15,10 @@ DONE
 | QRE-PORTFOLIO-BASELINE-COMPARISON-001 | QRE portfolio baseline comparison outputs | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; buy_hold_return and excess_return_vs_buy_hold populated in single-symbol/batch; industry_group in batch metadata defaults; 8 new tests; 896 passed | Preserve |
 | QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001 | QRE benchmark report-artifact propagation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark_* fields flow from summary_metrics into build_strategy_performance() batch mode → strategy_performance.json; 898 passed | Preserve |
 | QRE-FULL-MARKET-PERFORMANCE-SHEET-001 | QRE full-market workbook Performance sheet | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `Performance` sheet mirrors strategy_perf; 2 new tests; validation passed | Preserve |
+| QRE-EVAL-REAL-REGIME-SUMMARY-001 | QRE real regime classification and regime summary outputs | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_derive_regime_labels()` + `_build_regime_summary()` in engine; `regime_summary` field in `EvaluationResult`; CSV artifact + manifest role; CLI stdout; 7 new tests; 907 passed | Preserve |
+| QRE-EVAL-BENCHMARK-AWARE-REGIME-SUMMARY-002 | QRE benchmark-aware regime source preference | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_derive_regime_labels()` prefers `benchmark_close` → `benchmark_return` → cross-sectional fallback; 7 new tests; 914 passed | Preserve |
+| QRE-EVAL-BENCHMARK-SERIES-WIRING-003 | QRE benchmark series wiring into evaluation frames | DONE | CLAUDE_CODE | assembler, CLI eval-smoke/eval-config/research-run, and research_run.py wired; manifests record benchmark params; CLI rejects half-specified args; 932 passed (+10 new tests) | Preserve |
+| QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001 | QRE as-of metadata snapshot selection | USER_ACCEPTANCE | CLAUDE_CODE | All three fix passes complete; all backtest entry points wired; 947 passed (+2) | Await user approval |
 | QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001 | QRE benchmark membership and industry grouping adapters | DONE | CLAUDE_CODE | Review passed after `con_code` alignment and preflight benchmark threading; 2 new preflight tests; 889 passed | Preserve |
 | QRE-REFERENCE-READ-SIDE-WIRING-001 | QRE read-side benchmark/reference metadata wiring | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark engine routing + reference metadata composition landed; 874 tests passed (+11) | Preserve |
 | QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001 | QRE market-cap/liquidity metadata standardization | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; latest-available `reference.daily_basic` enrichment and deterministic bucket helpers implemented; targeted data-layer, preflight, CLI, and manifest tests passed; progress docs and diff checks passed | Preserve |
@@ -141,23 +145,17 @@ DONE
 
 ## Latest Verified State
 
-Recorded on 2026-05-26 after Codex queued the portfolio baseline-comparison slice:
+Recorded on 2026-05-27 after as-of metadata snapshot fix passes:
 
-- Current task: `QRE-PORTFOLIO-BASELINE-COMPARISON-001` — READY_FOR_CLAUDE_CODE
-- Current phase: `WAITING_CLAUDE_CODE`
-- Current owner: `CLAUDE_CODE`
-- Last finalized commit: `9e00f0a` (document research-run audit role usage)
-- Working tree: existing QRE/quant_ts changes are unfinalized; do not revert unrelated dirty files.
-- Reference-data evidence:
-  - `reference.index_weight` exists in `quant_ts` as the benchmark membership source.
-  - `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, and `reference.stock_risk_warning` remain available for QRE read-side metadata composition.
-  - `reference.index_daily` benchmark reads are already routed through the configured benchmark/reference DB connection.
-- QRE validation evidence for the completed read-side wiring slice:
-  - `uv run pytest -q tests/test_postgres_store.py` → 35 passed.
-  - `uv run pytest -q tests/test_preflight.py tests/test_data_assembler.py` → 6 passed.
-  - `uv run pytest -q tests/test_portfolio_report_manifest.py tests/test_cli.py` → 427 passed.
+- Current task: `QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001` — all three fix passes complete, awaiting user approval for finalization.
+- Current phase: `USER_ACCEPTANCE`
+- Current owner: `CODEX`
+- Last finalized commit: `81e8c14`
+- Working tree: modified with as-of metadata snapshot wiring (initial implementation + three fix passes), benchmark-series wiring, and docs updates.
+- QRE validation evidence:
+  - `uv run pytest -q` → 947 passed, 2 warnings (+6 from fix pass CLI tests).
   - `scripts/check-progress-docs.sh` and `git diff --check` passed.
-- Next step: Claude Code implements `QRE-PORTFOLIO-BASELINE-COMPARISON-001`, then Codex reviews.
+- Next step: user approval for git finalization.
 
 Current GUI direction approved on 2026-05-21:
 
@@ -212,7 +210,7 @@ User-requested strategy work in 2026-05-21:
 
 ## Pending Work Summary
 
-- Current non-deferred work: QRE read-side reference-data adapters are complete; portfolio baseline comparison is the next reporting slice.
+- Current non-deferred work: benchmark-aware regime source preference is the next evaluation slice.
 - Real reference-data sync belongs to sibling `quant_ts`; QRE should not own producer code.
 - Real index benchmark data is available in `reference.index_daily`; benchmark/reference routing is already wired.
 - Real suspension/ST/risk-warning source tables are available in `reference.*`; read-side composition is already wired.

@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-FULL-MARKET-PERFORMANCE-SHEET-001
+QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001
 
 ## Current Status
 
-FINALIZED
+USER_ACCEPTANCE
 
 ## Current Owner
 
@@ -14,39 +14,36 @@ CODEX
 
 ## Problem Summary
 
-`backtest_report.xlsx` had an empty `Performance` sheet while the same strategy performance data was already serialized to `strategy_performance.json` and rendered in the HTML report. The sheet should directly mirror `strategy_perf` so the Excel workbook provides a complete view of strategy performance metrics including buy-and-hold fields and benchmark passthrough.
+Cross-sectional metadata was loaded as the latest available snapshot in all read-side paths. An optional as-of date now threads through the shared metadata loading path so eval/preflight/research-run and all direct backtest consumers can consume metadata aligned with a specific date while preserving the existing latest-snapshot fallback.
 
-## Implementation Completed By Claude Code
+## Implementation Summary
 
-- `write_full_market_excel()` now accepts a `strategy_perf` keyword-only parameter and populates the `Performance` sheet from it.
-- Both batch and shared_cash call sites pass their computed `strategy_perf` dict.
-- 2 new tests lock the Performance sheet content path.
-
-## Codex Review Result
-
-PASS
-
-The workbook `Performance` sheet now mirrors `strategy_perf` in both batch and shared-cash modes. JSON, HTML, buy-and-hold, and benchmark passthrough behavior remain unchanged.
+- Added `as_of: date | None = None` to `ReferenceDataStore.load_security_metadata()` and all internal PostgreSQL loaders.
+- SQL `MAX(trade_date)` subqueries now accept an optional `AND trade_date <= :as_of_date` clause that caps the selection window.
+- `_query_status_ts_codes()` applies as-of date in both `latest_trade_date` and `active_range` modes (fixes `stock_risk_warning` CURRENT_DATE bug).
+- `ResearchFrameAssembler.build()`, `PreflightRequest`, and `ResearchRunRequest` carry `metadata_as_of`.
+- `_run_backtest()` passes `metadata_as_of` to `assembler.build()` and `_write_research_manifest()` records `metadata_as_of` in `research_run_manifest.json`.
+- All direct CLI entry points (backtest-single, backtest-batch, backtest-shared) now accept `--metadata-as-of`, thread it into `assembler.build()`, and record it in output `run_request` payloads.
+- `--metadata-as-of` CLI arg exposed on eval-config, preflight, research-run, backtest-single, backtest-batch, and backtest-shared.
+- 13 new tests across assembler, preflight, CLI, and research-run test files.
+- Latest-snapshot fallback preserved when as-of is omitted.
 
 ## Hard Constraints
 
 - No Tushare download, credential, sync, or ingestion code added to QRE.
 - `../quant_ts` not modified.
 - Portfolio execution semantics unchanged.
-- No new benchmark comparison math.
-- JSON, HTML, shared-cash, buy-and-hold, and benchmark passthrough behavior unchanged.
+- No new producer-side code.
 - QRE remains read-only against upstream databases.
 
 ## Validation Evidence
 
-```
-uv run pytest -q tests/test_full_market_report.py → 59 passed
-uv run pytest -q tests/test_full_market_report.py tests/test_cli.py tests/test_portfolio_benchmark.py → 365 passed, 2 warnings
-uv run pytest -q → 900 passed, 2 warnings
+```bash
+uv run pytest -q → 947 passed, 2 warnings
 scripts/check-progress-docs.sh → passed
-git diff --check → clean
+git diff --check → passed
 ```
 
-## Handoff Back To Codex
+## Handoff To Codex
 
-Review passed and finalization completed.
+All required fixes are complete. Await user approval for git finalization.
