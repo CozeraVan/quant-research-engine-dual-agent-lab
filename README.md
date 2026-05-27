@@ -442,6 +442,9 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | `--group-rank-top-n` | 每组排名前N/后N | 1 |
 | `--print-summary-md` | 打印 Markdown 摘要到 stdout | false |
 | `--metadata-as-of` | 元数据快照日期 | 无 |
+| `--benchmark-table` | 基准表名 | 无 |
+| `--benchmark-code` | 基准标的 | 无 |
+| `--benchmark-value-column` | 基准值列名 | close |
 
 ### 共享资金回测参数 (`qre backtest-shared`)
 
@@ -459,6 +462,7 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | `--metadata-as-of` | 元数据快照日期 | 无 |
 | `--benchmark-table` | 基准表名 | 无 |
 | `--benchmark-code` | 基准标的 | 无 |
+| `--benchmark-value-column` | 基准值列名 | close |
 | `--metadata-columns` | 输出附加元数据列 | 无 |
 
 ### 策略编译参数 (`qre compile`)
