@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-USER_ACCEPTANCE
+DONE
 
 ## Current Active Work
 
-`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001`: All three fix passes complete. All CLI entry points (eval-config, preflight, research-run, backtest-single, backtest-batch, backtest-shared) now accept and propagate `--metadata-as-of`. Awaiting user approval for finalization.
+`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001`: All three fix passes complete. All CLI entry points (eval-config, preflight, research-run, backtest-single, backtest-batch, backtest-shared) now accept and propagate `--metadata-as-of`. Finalized in commit `7c32b65`.
 
 ## Progress Table
 
@@ -18,7 +18,7 @@ USER_ACCEPTANCE
 | QRE-EVAL-REAL-REGIME-SUMMARY-001 | QRE real regime classification and regime summary outputs | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_derive_regime_labels()` + `_build_regime_summary()` in engine; `regime_summary` field in `EvaluationResult`; CSV artifact + manifest role; CLI stdout; 7 new tests; 907 passed | Preserve |
 | QRE-EVAL-BENCHMARK-AWARE-REGIME-SUMMARY-002 | QRE benchmark-aware regime source preference | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `_derive_regime_labels()` prefers `benchmark_close` → `benchmark_return` → cross-sectional fallback; 7 new tests; 914 passed | Preserve |
 | QRE-EVAL-BENCHMARK-SERIES-WIRING-003 | QRE benchmark series wiring into evaluation frames | DONE | CLAUDE_CODE | assembler, CLI eval-smoke/eval-config/research-run, and research_run.py wired; manifests record benchmark params; CLI rejects half-specified args; 932 passed (+10 new tests) | Preserve |
-| QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001 | QRE as-of metadata snapshot selection | USER_ACCEPTANCE | CLAUDE_CODE | All three fix passes complete; all backtest entry points wired; 947 passed (+2) | Await user approval |
+| QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001 | QRE as-of metadata snapshot selection | DONE | CLAUDE_CODE | Finalized in commit `7c32b65`; all backtest entry points wired; 410 targeted tests passed in final verification | Preserve |
 | QRE-BENCHMARK-MEMBERSHIP-INDUSTRY-ADAPTERS-001 | QRE benchmark membership and industry grouping adapters | DONE | CLAUDE_CODE | Review passed after `con_code` alignment and preflight benchmark threading; 2 new preflight tests; 889 passed | Preserve |
 | QRE-REFERENCE-READ-SIDE-WIRING-001 | QRE read-side benchmark/reference metadata wiring | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark engine routing + reference metadata composition landed; 874 tests passed (+11) | Preserve |
 | QRE-REFERENCE-MARKET-CAP-LIQUIDITY-METADATA-001 | QRE market-cap/liquidity metadata standardization | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; latest-available `reference.daily_basic` enrichment and deterministic bucket helpers implemented; targeted data-layer, preflight, CLI, and manifest tests passed; progress docs and diff checks passed | Preserve |
@@ -147,15 +147,15 @@ USER_ACCEPTANCE
 
 Recorded on 2026-05-27 after as-of metadata snapshot fix passes:
 
-- Current task: `QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001` — all three fix passes complete, awaiting user approval for finalization.
-- Current phase: `USER_ACCEPTANCE`
+- Current task: none.
+- Current phase: `DONE`
 - Current owner: `CODEX`
 - Last finalized commit: `81e8c14`
 - Working tree: modified with as-of metadata snapshot wiring (initial implementation + three fix passes), benchmark-series wiring, and docs updates.
 - QRE validation evidence:
   - `uv run pytest -q` → 947 passed, 2 warnings (+6 from fix pass CLI tests).
   - `scripts/check-progress-docs.sh` and `git diff --check` passed.
-- Next step: user approval for git finalization.
+- Next step: preserve.
 
 Current GUI direction approved on 2026-05-21:
 

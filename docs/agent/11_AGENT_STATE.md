@@ -4,11 +4,11 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-CODEX_GIT_FINALIZING
+DONE
 
 ## Current Owner
 
-CODEX
+USER
 
 ## Current Task
 
@@ -55,7 +55,7 @@ git diff --check → passed
 
 ## Required Codex Task
 
-Git finalization for the completed as-of metadata snapshot slice.
+None.
 
 ## Completion Estimate
 

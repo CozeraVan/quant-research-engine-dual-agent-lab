@@ -10,7 +10,7 @@ CODEX
 
 ## Message Type
 
-USER_ACCEPTANCE
+COMPLETE
 
 ## Sender
 
@@ -27,4 +27,4 @@ Claude Code completed three fix passes for the as-of metadata snapshot wiring:
 
 ## Required Action
 
-Await user approval for git finalization.
+None.

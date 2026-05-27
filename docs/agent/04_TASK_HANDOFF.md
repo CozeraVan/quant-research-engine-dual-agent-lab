@@ -6,7 +6,7 @@ QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001
 
 ## Current Status
 
-USER_ACCEPTANCE
+DONE
 
 ## Current Owner
 
@@ -46,4 +46,4 @@ git diff --check → passed
 
 ## Handoff To Codex
 
-All required fixes are complete. Await user approval for git finalization.
+All required fixes are complete and git finalization is done.

@@ -56,7 +56,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## In Progress
 
-- None. The as-of metadata snapshot slice is complete and awaiting user approval for finalization.
+- None.
 
 ## Known Gaps
 
@@ -64,7 +64,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Full as-of time-varying history for cross-sectional metadata remains a future enhancement.
 - The reusable Tushare security source adapter remains as historical source-shape context only. Future download/ingest changes belong in `quant_ts`, not QRE.
 - Benchmark series wiring is complete and accepted; manifests record benchmark parameters and CLI enforces paired-arg validation.
-- As-of metadata snapshot wiring is implemented and all three fix passes are complete; all backtest entry points (single, batch, shared) now accept and propagate `--metadata-as-of`; awaiting user approval for finalization.
+- As-of metadata snapshot wiring is implemented and all three fix passes are complete; all backtest entry points (single, batch, shared) now accept and propagate `--metadata-as-of`; finalized in commit `7c32b65`.
 
 ## Current Technical Stack
 
@@ -111,4 +111,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001` is complete and awaiting user approval for finalization. After that, finalize git and then select the next task from the roadmap.
+`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001` is complete and finalized in commit `7c32b65`. Select the next task from the roadmap if more work is desired.
