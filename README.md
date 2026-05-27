@@ -2,6 +2,12 @@
 
 `quant-research-engine` 是一个本地化、只读的量化研究与回测引擎，首个目标市场为中国 A 股（日线级别技术因子研究）。
 
+## 当前状态
+
+- 核心 MVP 已完成并进入收尾/维护模式。
+- 本仓库不再继续扩展新功能；后续实现工作由 MIMO 接手。
+- 本 README 只保留当前可用命令、产物、参数和验证方式，避免功能说明过期。
+
 ## 项目原理
 
 ### 双引擎架构
@@ -31,7 +37,7 @@
 - **CLI**：argparse (`qre` 命令)
 - **Web GUI**：Flask 本地浏览器控制台
 - **配置**：YAML
-- **测试**：pytest (770 个测试)
+- **测试**：pytest
 - **图表**：matplotlib (Agg 后端)
 - **Excel**：openpyxl
 
@@ -400,6 +406,7 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | `--codes` | 评估/回测/预检 | 指定标的列表 | 空 = 全部 |
 | `--run-id` | 大多数命令 | 运行标识符 | 自动生成 |
 | `--output-dir` | 大多数命令 | 产物输出目录 | 无 (不产生文件) |
+| `--metadata-as-of` | 预检/评估/回测/编排 | 元数据快照日期 | 无 |
 | `--market-profile` | 回测 | 市场配置 YAML 路径 | 内置 A 股零滑点配置 |
 
 ### 预检查参数 (`qre preflight`)
@@ -407,6 +414,7 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `--min-factor-coverage` | 最小因子覆盖率 | 0.8 |
+| `--metadata-as-of` | 元数据快照日期 | 无 |
 | `--benchmark-table` | 基准表名 | 无 |
 | `--benchmark-code` | 基准标的代码 | 无 |
 | `--benchmark-value-column` | 基准值列名 | close |
@@ -420,6 +428,10 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | `--group-by` | 分组列 (如 board, industry) | 无 |
 | `--random-baseline-seed` | 随机基线种子 | 无 |
 | `--horizons` | 前向收益窗口 (仅 eval-smoke) | 1 3 5 |
+| `--metadata-as-of` | 元数据快照日期 | 无 |
+| `--benchmark-table` | 基准表名 | 无 |
+| `--benchmark-code` | 基准标的代码 | 无 |
+| `--benchmark-value-column` | 基准值列名 | close |
 
 ### 回测参数 (`qre backtest-batch`)
 
@@ -429,6 +441,7 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | `--group-by` | 分组汇总列 | 无 |
 | `--group-rank-top-n` | 每组排名前N/后N | 1 |
 | `--print-summary-md` | 打印 Markdown 摘要到 stdout | false |
+| `--metadata-as-of` | 元数据快照日期 | 无 |
 
 ### 共享资金回测参数 (`qre backtest-shared`)
 
@@ -443,6 +456,7 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | `--take-profit-pct` | 止盈比例 (如 0.12) | 无 |
 | `--trailing-stop-pct` | 移动止损比例 (如 0.10) | 无 |
 | `--rebalance-interval-days` | 再平衡间隔 (交易日) | 无 |
+| `--metadata-as-of` | 元数据快照日期 | 无 |
 | `--benchmark-table` | 基准表名 | 无 |
 | `--benchmark-code` | 基准标的 | 无 |
 | `--metadata-columns` | 输出附加元数据列 | 无 |
@@ -472,6 +486,10 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | `--skip-preflight` | 跳过预检查阶段 | false |
 | `--skip-eval` | 跳过评估阶段 | false |
 | `--window-size` | 滚动窗口大小 | 无 |
+| `--metadata-as-of` | 元数据快照日期 | 无 |
+| `--benchmark-table` | 基准表名 | 无 |
+| `--benchmark-code` | 基准标的代码 | 无 |
+| `--benchmark-value-column` | 基准值列名 | close |
 
 ### 报告参数 (`qre report-files` / `qre report-audit`)
 
@@ -846,7 +864,6 @@ quant-research-engine/
 ```bash
 # 完整测试套件
 uv run pytest -q
-# 770 passed, 2 warnings
 
 # 进度文档一致性检查
 scripts/check-progress-docs.sh
