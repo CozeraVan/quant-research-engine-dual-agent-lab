@@ -91,6 +91,59 @@ experiment:
     position_weight: equal
 ```
 
+## Your First Strategy: Step-by-Step
+
+This walks you from creating a strategy file to seeing backtest results.
+
+### 1. Create the strategy file
+
+Save the Quick Start example above as `strategies/high_level/my_first_strategy_entry.yaml`.
+
+### 2. Compile it
+
+```bash
+uv run qre compile strategies/high_level/my_first_strategy_entry.yaml
+```
+
+The compiler resolves indicator aliases to database columns and emits a low-level spec. If factors are missing, the compiler tells you exactly which ones.
+
+### 3. Run a preflight check
+
+```bash
+uv run qre preflight strategies/high_level/my_first_strategy_entry.yaml \
+  --start 2024-01-01 --end 2024-03-31
+```
+
+Preflight confirms data availability and factor coverage before you invest time in a full backtest.
+
+### 4. Run a single-symbol backtest
+
+```bash
+uv run qre backtest-single strategies/high_level/my_first_strategy_entry.yaml \
+  --symbol 000001.SZ --start 2024-01-01 --end 2024-12-31 \
+  --initial-cash 1000000 --output-dir outputs/my-first/
+```
+
+### 5. Examine the results
+
+```bash
+ls outputs/my-first/
+uv run qre report-files outputs/my-first/report_manifest.json
+uv run qre report-audit outputs/my-first/report_manifest.json --require-match
+```
+
+### 6. Scale up to full-market
+
+Once the single-symbol test looks good, run the same strategy across all A-shares:
+
+```bash
+uv run qre backtest-batch strategies/high_level/my_first_strategy_entry.yaml \
+  --start 2024-01-01 --end 2024-12-31 \
+  --initial-cash 1000000 --output-dir outputs/my-first-full/
+```
+
+For large full-market runs, use the `qre research-run` orchestrator which chains preflight → evaluation → backtest under one `--run-id`.
+
 ## File Organisation
 
 A complete strategy entry is one YAML file with three sections:

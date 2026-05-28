@@ -10,6 +10,19 @@
 - 本 README 仅保留当前可用命令、产物文件、参数和验证方式，不含未来规划或愿望清单。
 - 历史开发过程记录于 `docs/agent/`（双智能体工作流：Codex 规划/审查，Claude Code 实现）。
 
+## Quick Start
+
+新用户请看这里：**[QUICKSTART.md](QUICKSTART.md)** — 从零到第一次回测的 10 分钟指南。
+
+三步快速启动：
+1. `cp .env.example .env` — 编辑数据库连接信息
+2. `uv sync` — 安装依赖
+3. `uv run qre strategy-smoke && uv run qre gui` — 运行冒烟测试并打开控制台
+
+完整 CLI 参考见下方。
+
+---
+
 ## 项目原理
 
 ### 双引擎架构
@@ -894,6 +907,7 @@ uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q
 
 ## 设计文档索引
 
+- [Quick Start 指南](QUICKSTART.md)
 - [产品愿景](docs/agent/00_PRODUCT_VISION.md)
 - [锁定需求](docs/agent/02_LOCKED_REQUIREMENTS.md)
 - [路线图](docs/agent/03_ROADMAP.md)
