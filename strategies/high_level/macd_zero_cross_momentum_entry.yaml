@@ -1,3 +1,15 @@
+# =============================================================================
+# MACD 零轴交叉动量策略 (MACD Zero-Cross Momentum)
+# =============================================================================
+# 策略类型: 动量 (momentum)
+# 难度: ★★★☆☆ (中阶)
+# 说明: MACD 线在零轴下方上穿信号线时买入（捕捉早期动量反转），
+#       MACD 线回落至信号线下方时卖出。
+#       使用 crosses_above / crosses_below 运算符实现交叉检测。
+# =============================================================================
+
+# --- 策略身份和交易规则 ---
+# 参考: docs/strategy_entry/strategy_card.md
 strategy:
   id: macd_zero_cross_momentum
   name: MACD Zero-Cross Momentum
@@ -10,32 +22,37 @@ strategy:
   version: "1.0.0"
 
 rules:
+  # 入场: MACD 线上穿信号线 AND MACD < 0 (零轴下方金叉)
   entry:
     all:
       - alias: macd_line
-        operator: crosses_above
+        operator: crosses_above    # 交叉运算符: 昨日 < signal, 今日 > signal
         alias_b: macd_signal
       - alias: macd_line
         operator: "<"
-        value: 0
+        value: 0                   # MACD 仍在零轴下方 (早期反转)
+  # 离场: MACD 线下穿信号线 (死叉)
   exit:
     any:
       - alias: macd_line
-        operator: crosses_below
+        operator: crosses_below    # 交叉运算符: 昨日 > signal, 今日 < signal
         alias_b: macd_signal
+  # 风控参数
   risk:
     stop_loss_pct: 0.08
     max_holding_days: 10
 
+# --- 因子需求 ---
+# 参考: docs/strategy_entry/factor_requirements.md
 factor_requirements:
   - alias: macd_line
     indicator: macd
     source: close
     params:
-      fast: 12
-      slow: 26
-      signal: 9
-    output: macd
+      fast: 12                 # 快线周期
+      slow: 26                 # 慢线周期
+      signal: 9                # 信号线周期
+    output: macd               # MACD 线 (DIF)
     required: true
     reason: MACD line for zero-axis position and crossover detection
 
@@ -46,10 +63,12 @@ factor_requirements:
       fast: 12
       slow: 26
       signal: 9
-    output: signal
+    output: signal              # 信号线 (DEA)
     required: true
     reason: MACD signal line for crossover entry and exit
 
+# --- 实验配置 ---
+# 参考: docs/strategy_entry/experiment_plan.md
 experiment:
   id: macd_zero_cross_momentum_smoke
   frequency: daily

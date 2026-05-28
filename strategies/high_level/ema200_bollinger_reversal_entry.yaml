@@ -1,3 +1,26 @@
+# =============================================================================
+# EMA200 + 布林带反转策略 (EMA200 Bollinger Band Reversal)
+# =============================================================================
+# 策略类型: 均值回归 (mean_reversion)
+# 难度: ★★★☆☆ (中阶)
+# 说明: 趋势过滤 + 布林带超卖入场。要求价格同时满足:
+#       1. 高于 EMA200 (上升趋势确认)
+#       2. 低于布林下轨 (短期超卖)
+#
+# ⚠️  重要提示: 这个策略的入场条件 (close > EMA200 AND close <= BB lower)
+#     极为严格。在实际 A 股市场中，价格同时处于长期均线上方和布林下轨
+#     下方的情况极少发生。全历史回测可能产生很少甚至零交易。
+#
+#     如果你想学习趋势+均值回归的组合思路，建议:
+#     - 将 AND 改为 OR 测试各自的独立信号频率
+#     - 或用 crosses_below bb_lower 替代 <= bb_lower 捕捉"触及下轨那一刻"
+#     - 纯布林带策略请参考 bollinger_mean_reversion_entry.yaml
+#
+#     本文件保留为策略 IO 标准的多条件组合验证样本。
+# =============================================================================
+
+# --- 策略身份和交易规则 ---
+# 参考: docs/strategy_entry/strategy_card.md
 strategy:
   id: ema200_bollinger_reversal
   name: EMA200 Bollinger Band Reversal
@@ -10,6 +33,8 @@ strategy:
   version: "1.0.0"
 
 rules:
+  # 入场: close > EMA200 (趋势向上) AND close <= 布林下轨 (超卖)
+  # ⚠️ 两个条件极难同时满足，参考上方说明
   entry:
     all:
       - alias: close
@@ -18,19 +43,23 @@ rules:
       - alias: close
         operator: "<="
         alias_b: bb_lower
+  # 离场: close >= 布林上轨
   exit:
     any:
       - alias: close
         operator: ">="
         alias_b: bb_upper
+  # 风控参数
   risk:
     stop_loss_pct: 0.10
     max_holding_days: 20
 
+# --- 因子需求 ---
+# 参考: docs/strategy_entry/factor_requirements.md
 factor_requirements:
   - alias: ema_200
     indicator: ema
-    source: typical
+    source: typical              # typical = (high+low+close)/3
     period: 200
     required: true
     reason: long-term trend direction filter
@@ -55,6 +84,8 @@ factor_requirements:
     required: true
     reason: entry threshold — price at or below lower band
 
+# --- 实验配置 ---
+# 参考: docs/strategy_entry/experiment_plan.md
 experiment:
   id: ema200_bollinger_reversal_smoke
   frequency: daily

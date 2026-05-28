@@ -1,3 +1,15 @@
+# =============================================================================
+# RSI2 超卖反转策略 (RSI2 Oversold Reversal)
+# =============================================================================
+# 策略类型: 均值回归 (mean_reversion)
+# 难度: ★☆☆☆☆ (入门)
+# 说明: 当 2 周期 RSI 跌至 10 以下时买入（短期超卖极值），
+#       RSI 回到 70 以上时卖出。附带止损和止盈。
+# 推荐作为第一个策略学习。
+# =============================================================================
+
+# --- 策略身份和交易规则 ---
+# 参考: docs/strategy_entry/strategy_card.md
 strategy:
   id: rsi2_oversold_reversal
   name: RSI2 Oversold Reversal
@@ -10,32 +22,42 @@ strategy:
   version: "1.0.0"
 
 rules:
+  # 入场条件: RSI < 10
   entry:
     all:
       - alias: rsi_fast
         operator: "<"
         value: 10
+  # 离场条件: RSI > 70 或触发风控
   exit:
     any:
       - alias: rsi_fast
         operator: ">"
         value: 70
+  # 风控参数
   risk:
-    stop_loss_pct: 0.08
-    take_profit_pct: 0.12
-    trailing_stop_pct: null
-    max_holding_days: 5
+    stop_loss_pct: 0.08       # 止损 -8%
+    take_profit_pct: 0.12     # 止盈 +12%
+    trailing_stop_pct: null   # 移动止损 (未启用)
+    max_holding_days: 5       # 最大持仓 5 个交易日
+  # 仓位模型
   position_sizing:
-    weight_model: equal
+    weight_model: equal       # 等权分配
 
+# --- 因子需求 ---
+# 声明策略依赖的技术指标，编译器自动解析为数据库列
+# 参考: docs/strategy_entry/factor_requirements.md
 factor_requirements:
   - alias: rsi_fast
-    indicator: rsi
-    source: close
-    period: 2
-    required: true
+    indicator: rsi            # 指标类型
+    source: close             # 价格源 (close=收盘价)
+    period: 2                 # 周期 (2 日)
+    required: true            # 必需因子
     reason: entry and exit threshold signal — detects short-term oversold and recovery
 
+# --- 实验配置 ---
+# 定义回测的时间范围、标的范围、执行规则和资金参数
+# 参考: docs/strategy_entry/experiment_plan.md
 experiment:
   id: rsi2_oversold_reversal_smoke
   frequency: daily
@@ -43,19 +65,19 @@ experiment:
   start: 2024-01-01
   end: 2024-02-01
   universe:
-    include: all_a
-    exclude_st: true
-    exclude_suspended: true
-    exclude_risk_warning: true
-    min_listing_days: 120
+    include: all_a            # 全 A 股
+    exclude_st: true          # 排除 ST
+    exclude_suspended: true   # 排除停牌
+    exclude_risk_warning: true # 排除风险警示
+    min_listing_days: 120     # 最少上市 120 天
   execution:
-    signal_date: t
-    entry_execution: t_plus_1_open
-    exit_execution: t_plus_1_open
+    signal_date: t            # 信号日 = t 日
+    entry_execution: t_plus_1_open  # t+1 开盘价入场 (A 股规则)
+    exit_execution: t_plus_1_open   # t+1 开盘价离场
     market_profile: ashare_daily_default
   capital:
-    initial_cash: 1000000
-    max_positions: 10
-    position_weight: equal
+    initial_cash: 1000000     # 初始资金 100 万
+    max_positions: 10         # 最大持仓 10 只
+    position_weight: equal    # 等权
   output:
     dir: outputs/rsi2_oversold_reversal_smoke/

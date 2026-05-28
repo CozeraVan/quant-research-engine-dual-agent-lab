@@ -1,3 +1,15 @@
+# =============================================================================
+# 布林带均值回归策略 (Bollinger Band Mean Reversion)
+# =============================================================================
+# 策略类型: 均值回归 (mean_reversion)
+# 难度: ★★☆☆☆ (进阶)
+# 说明: 价格触及下轨时买入（超卖），回到中轨时卖出（均值回归）。
+#       纯布林带策略，无额外趋势过滤，信号频率适中。
+#       已验证在全市场回测中产生有效交易 (5525 只标的, 2010-2026)。
+# =============================================================================
+
+# --- 策略身份和交易规则 ---
+# 参考: docs/strategy_entry/strategy_card.md
 strategy:
   id: bollinger_mean_reversion
   name: Bollinger Band Mean Reversion
@@ -10,20 +22,25 @@ strategy:
   version: "1.0.0"
 
 rules:
+  # 入场: 收盘价 <= 布林下轨
   entry:
     all:
       - alias: close
         operator: "<="
         alias_b: bb_lower
+  # 离场: 收盘价 >= 布林中轨 (20 SMA)
   exit:
     any:
       - alias: close
         operator: ">="
         alias_b: bb_middle
+  # 风控参数
   risk:
-    stop_loss_pct: 0.08
-    max_holding_days: 20
+    stop_loss_pct: 0.08       # 止损 -8%
+    max_holding_days: 20      # 最大持仓 20 个交易日
 
+# --- 因子需求 ---
+# 参考: docs/strategy_entry/factor_requirements.md
 factor_requirements:
   - alias: bb_lower
     indicator: bollinger
@@ -31,7 +48,7 @@ factor_requirements:
     period: 20
     params:
       stddev: 2.0
-    output: lower
+    output: lower             # 布林带下轨
     required: true
     reason: entry threshold — price at or below lower band signals oversold extreme
 
@@ -41,16 +58,18 @@ factor_requirements:
     period: 20
     params:
       stddev: 2.0
-    output: middle
+    output: middle            # 布林带中轨 (= 20 SMA)
     required: true
     reason: exit threshold — price recovering to the 20-period SMA (mean reversion target)
 
+# --- 实验配置 ---
+# 参考: docs/strategy_entry/experiment_plan.md
 experiment:
   id: bollinger_mean_reversion_full
   frequency: daily
   market: ashare
-  start: 2010-01-04
-  end: 2026-05-22
+  start: 2010-01-04             # 全历史回测起点
+  end: 2026-05-22               # 全历史回测终点
   universe:
     include: all_a
     exclude_st: true
