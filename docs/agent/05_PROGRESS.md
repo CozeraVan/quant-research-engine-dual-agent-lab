@@ -6,7 +6,7 @@ DONE
 
 ## Current Active Work
 
-`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001`: All three fix passes complete. All CLI entry points (eval-config, preflight, research-run, backtest-single, backtest-batch, backtest-shared) now accept and propagate `--metadata-as-of`. Finalized in commit `7c32b65`.
+No active work. QRE is in full maintenance-only closeout.
 
 ## Progress Table
 
@@ -33,8 +33,18 @@ DONE
 | QRE-STRATEGY-ENTRY-COMPILER-PREFLIGHT-LINKAGE-001 | High-level entry compiler/preflight linkage | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS after fix cycle; expression emission now alias-based; 2 end-to-end runtime tests added; 302 tests pass | Start next task |
 | QRE-STRATEGY-ENTRY-THREE-SMOKE-001 | Three standardized strategy-entry smoke validation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; compile success for RSI2/EMA200+Bollinger/MACD; no-DB skips documented; smoke report and artifacts preserved | Preserve as baseline |
 | QRE-STRATEGY-ENTRY-SMOKE-RUNNER-AUTOMATION-001 | Three-strategy smoke one-command automation and summary artifact | DONE | CODEX/CLAUDE_CODE | Upgraded into broader hardening lane for overnight delivery | Preserve as precursor slice |
-| QRE-STRATEGY-ENTRY-PIPELINE-HARDENING-001 | Strategy-entry pipeline hardening (runner + schema + CLI + tests/docs) | IMPLEMENTED | CLAUDE_CODE | `qre strategy-smoke` one-command orchestration; deterministic `smoke_summary.json`; no-DB first-class skip; 18 new tests; 320 total pass; handoff in `09_CODING_HANDOFF.md` | Codex review and finalize |
-| QRE-STRATEGY-ENTRY-BACKTEST-SMOKE-TRUTHINESS-001 | Backtest-smoke pass-status truthiness fix | IMPLEMENTED | CLAUDE_CODE | `_try_backtest_smoke()` executes real `BatchBacktestEngine` run; 5 truthiness tests; 325 pass; handoff in `09_CODING_HANDOFF.md` | Codex re-review and finalize |
+| QRE-DOCS-PUBLICATION-READINESS-001 | Final README and agent-doc publication-readiness audit | DONE | CLAUDE_CODE | README eval tree fixed (missing regime_summary.csv) and 04_TASK_HANDOFF owner alignment; 947 passed; review PASS | Preserve |
+| QRE-DOCS-README-CLOSEOUT-001 | README and closeout documentation cleanup | DONE | CLAUDE_CODE | README closeout and release-prep docs only; no runtime changes; review passed | Preserve |
+| QRE-STRATEGY-ENTRY-PIPELINE-HARDENING-001 | Strategy-entry pipeline hardening (runner + schema + CLI + tests/docs) | DONE | CLAUDE_CODE | `qre strategy-smoke` one-command orchestration; deterministic `smoke_summary.json`; no-DB first-class skip; 18 new tests; 320 total pass; review passed after status-code fix | Preserve |
+| QRE-STRATEGY-ENTRY-BACKTEST-SMOKE-TRUTHINESS-001 | Backtest-smoke pass-status truthiness reconciliation | DONE | CLAUDE_CODE | `_try_backtest_smoke()` executes real `BatchBacktestEngine` run; 5 truthiness tests; doc reconciliation complete; 947 passed | Preserve |
+| QRE-DOCS-CLOSEOUT-FINAL-ALIGNMENT-001 | Documentation closeout wording alignment | DONE | CLAUDE_CODE | Stale "next evaluation slice" wording removed from `01_CURRENT_STATUS.md` and `05_PROGRESS.md`; all agent docs aligned with maintenance-only closeout | Preserve |
+| QRE-DOCS-PUBLICATION-FREEZE-001 | Documentation publication freeze guard | DONE | CLAUDE_CODE | README and agent docs confirmed maintenance-only; CLI surface matches current `qre --help` (18 commands); no runtime changes | Preserve |
+| QRE-DOCS-README-EXAMPLE-ALIGNMENT-001 | Documentation README example alignment | DONE | CLAUDE_CODE | All README code blocks and examples confirmed synchronized with `qre --help`; all flags, paths, and commands verified valid; no runtime changes | Preserve |
+| QRE-DOCS-FINAL-MAINTENANCE-SANITY-001 | Final maintenance-mode sanity pass | DONE | CLAUDE_CODE | All agent docs and README confirmed internally consistent and maintenance-only; no stale feature-language found; `scripts/check-progress-docs.sh` and `git diff --check` passed | Preserve |
+| QRE-DOCS-MAINTENANCE-FREEZE-LOCK-001 | Final maintenance freeze-lock pass | DONE | CLAUDE_CODE | All agent docs and README re-verified internally consistent and maintenance-only; no stale feature-language; `scripts/check-progress-docs.sh` and `git diff --check` passed | Preserve |
+| QRE-DOCS-ARCHIVE-LABEL-CONSISTENCY-001 | Archive-label consistency pass | DONE | CLAUDE_CODE | Three historical Next Step labels normalized to "Preserve"; stale `04_TASK_HANDOFF.md` summaries corrected; all agent docs and README confirmed internally consistent; `scripts/check-progress-docs.sh` and `git diff --check` passed | Preserve |
+| QRE-DOCS-FINAL-STATUS-LABEL-SYNC-001 | Final status-label sync pass | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; terminal labels and current-task labels normalized across the closeout docs; `scripts/check-progress-docs.sh` and `git diff --check` passed | Preserve |
+| QRE-DOCS-FINAL-FREEZE-AUDIT-001 | Final freeze audit pass | DONE | CLAUDE_CODE | All agent docs and README re-verified internally consistent; one minor In Progress inconsistency fixed; terminal labels and preserve-mode wording confirmed normalized; `scripts/check-progress-docs.sh` and `git diff --check` passed | Preserve |
 | QRE-STRATEGY-SMOKE-ARTIFACT-PARITY-001 | Smoke-run artifact parity and summary clarity | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; artifact parity and additive timings finalized | Preserve as baseline |
 | QRE-STRATEGY-SMOKE-MANIFEST-AUDIT-001 | Smoke run manifest + audit-friendly artifact contract | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `strategy_smoke_report_manifest` kind registered; deterministic `smoke_report_manifest.json` with run-level + per-strategy entries; CLI manifest path visibility; 6 new tests; 337 pass | Preserve as baseline |
 | QRE-STRATEGY-SMOKE-MANIFEST-FILTER-PARITY-001 | Smoke manifest filter parity regression coverage | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 15 CLI regression tests for smoke manifest filtering across `report-files` (9) and `report-audit` (6) with role/symbol/strict/json selector combinations; no runtime changes needed; 352 pass | Preserve as baseline |
@@ -124,7 +134,7 @@ DONE
 | QRE-NEXT-52 | CLI regression coverage for invalid `window_size` manifest metadata | DONE | CODEX/CLAUDE_CODE | commit `06d2b4b`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock string and boolean `window_size` at `report-files` / `report-audit` command boundaries; 201 passed in 1.90s | Preserve |
 | QRE-NEXT-53 | CLI strict/JSON parity for `window_size` filters | DONE | CLAUDE_CODE | commit `ec7a1d0`; `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` with `--json --require-match` for matched/zero-match cases across `report-files` and `report-audit`; 205 passed in 1.94s | Preserve |
 | QRE-NEXT-54 | CLI strict/JSON parity for `window_size` + `group_by` filters | DONE | CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; 4 CLI regression tests lock `--window-size` + `--group-by` combined selector parity with `--json --require-match`; 209 passed in 2.02s | Preserve |
-| QRE-NEXT-55 | Real suspension/ST/risk-warning metadata | IMPLEMENTED | CLAUDE_CODE | `reference.*` composition adapter in `postgres.py`; `load_security_metadata()` composes from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, `reference.stock_risk_warning` when no explicit metadata table configured | Preserve |
+| QRE-NEXT-55 | Real suspension/ST/risk-warning metadata | DONE | CLAUDE_CODE | `reference.*` composition adapter in `postgres.py`; `load_security_metadata()` composes from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, `reference.stock_risk_warning` when no explicit metadata table configured; roadmap M4.9 already marked DONE; tracker reconciled | Preserve |
 | QRE-NEXT-56 | Tushare security-status smoke harness | DONE | CODEX | `scripts/tushare_security_smoke.py`; `stock_basic` and `suspend_d` smoke validation succeed, `stock_st` / `stk_alert` remain permission-blocked | Preserve; use as a read-only source-shape probe before bulk ingestion |
 | QRE-NEXT-57 | Tushare security source adapter scaffold | DONE | CODEX | `src/quant_research_engine/data/tushare_security.py`; smoke script now delegates to a reusable wrapper; targeted unit tests passed | Preserve; use as the reusable source boundary for later bulk ingestion |
 | QRE-NEXT-58 | Tushare security snapshot contract | DONE | CLAUDE_CODE | `SNAPSHOT_FIXED_COLUMNS`, `SecuritySnapshot`, `derive_board()`, `normalize_snapshot_frame()`; 17 targeted tests pass; smoke harness preserved | Preserve; reuse as the source boundary for later bulk ingestion |
@@ -145,17 +155,22 @@ DONE
 
 ## Latest Verified State
 
-Recorded on 2026-05-27 after as-of metadata snapshot fix passes:
+Recorded on 2026-05-28 after the final docs-only freeze audit pass:
 
-- Current task: none.
+- Current task: NONE (all tasks complete)
 - Current phase: `DONE`
-- Current owner: `CODEX`
-- Last finalized commit: `81e8c14`
-- Working tree: modified with as-of metadata snapshot wiring (initial implementation + three fix passes), benchmark-series wiring, and docs updates.
+- Current owner: NONE (all tasks complete)
+- Last finalized commit: `14ea3e6`
+- Working tree: modified with all closeout doc updates, status-code fix, tracker reconciliations, closeout wording alignment, publication freeze guard, README example alignment, maintenance sanity pass, freeze-lock pass, archive-label consistency pass, status-label sync pass, and final freeze audit pass.
 - QRE validation evidence:
-  - `uv run pytest -q` → 947 passed, 2 warnings (+6 from fix pass CLI tests).
+  - `uv run pytest -q` → 947 passed, 2 warnings.
   - `scripts/check-progress-docs.sh` and `git diff --check` passed.
-- Next step: preserve.
+  - CLI surface: 18 commands match across README tables, `01_CURRENT_STATUS.md`, and `qre --help`.
+  - README examples: all code blocks verified — every flag, path, and command reference matches actual CLI behavior.
+  - All agent docs (01-12) are internally consistent with the maintenance-only closeout state.
+  - Terminal labels normalized: all DONE-task next steps use "Preserve" consistently.
+  - No stale feature-language or contradictory status text found in any doc.
+- Final state: QRE is complete for the current MVP scope. All documentation closeout tasks are finished. The repo is fully frozen in maintenance-only closeout. No further work is planned.
 
 Current GUI direction approved on 2026-05-21:
 
@@ -210,16 +225,14 @@ User-requested strategy work in 2026-05-21:
 
 ## Pending Work Summary
 
-- Current non-deferred work: benchmark-aware regime source preference is the next evaluation slice.
+- No active non-deferred work. QRE is in full maintenance mode.
 - Real reference-data sync belongs to sibling `quant_ts`; QRE should not own producer code.
+- Bulk ingestion / durable loading remains in `../quant_ts`.
 - Real index benchmark data is available in `reference.index_daily`; benchmark/reference routing is already wired.
 - Real suspension/ST/risk-warning source tables are available in `reference.*`; read-side composition is already wired.
 - Canonical security-snapshot contract is complete; later bulk ingestion can reuse the Tushare source scaffold.
-- Bulk ingestion / durable loading remains in `../quant_ts`.
-- Buy-and-hold and benchmark-relative comparison across portfolio outputs.
-- Research-run CLI orchestrator persists and links preflight/eval/backtest stage artifacts from `qre research-run`.
-- Strategy IO contract implementation after design approval.
-- GUI parameter controls over the future standard strategy entry contract.
+- Strategy IO contract design is recorded (M8.1, DESIGN_RECORDED); future implementation would follow that specification.
+- All other previously listed pending items (portfolio baseline comparison, research-run CLI orchestrator, GUI parameter controls) are complete.
 
 ## Status Meaning
 

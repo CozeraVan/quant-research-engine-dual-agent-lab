@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring, cross-sectional market-cap/liquidity metadata standardization, the portfolio baseline-comparison slice, benchmark report-artifact propagation, full-market workbook parity, deterministic regime classification, benchmark-aware regime source preference, and benchmark series wiring into evaluation frames are complete and accepted. The next proposed slice is as-of metadata snapshot wiring so read-side metadata aligns with the run date rather than latest-available state. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
+Advanced experimental MVP in closeout mode. The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring, cross-sectional market-cap/liquidity metadata standardization, the portfolio baseline-comparison slice, benchmark report-artifact propagation, full-market workbook parity, deterministic regime classification, benchmark-aware regime source preference, and benchmark series wiring into evaluation frames are complete and accepted. As-of metadata snapshot wiring, benchmark membership/industry adapters, benchmark/reference read-side wiring, and strategy-entry pipeline hardening are complete. All tracker reconciliations are complete. The backtest-smoke truthiness entry is reconciled to DONE. The `QRE-NEXT-55` tracker entry for real suspension/ST/risk-warning metadata is reconciled to DONE, matching the already accepted roadmap M4.9 entry. All documentation closeout alignment is complete. The final README example alignment pass, docs-only maintenance sanity pass, maintenance freeze-lock pass, archive-label consistency pass, final status-label sync pass, and final freeze audit pass all confirm the frozen README and agent docs remain internally consistent with no stale feature-language. The repo is fully frozen in maintenance-only closeout. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE. No further QRE feature expansion is planned.
 
 ## Completed
 
@@ -53,16 +53,18 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Research-run preflight report shape audit: `_validate_preflight_report()` hardened to validate `status` values (`ok`, `warning`, `error`) and `checks[]` item object shape (`name`, `status`, `message`); new issue codes `invalid_preflight_report_check` and `missing_preflight_report_check_field`; 13 new tests; review PASS.
 - Research-run preflight missing-factor shape audit: `_validate_preflight_report()` hardened to validate `missing_factor_requests[]` item object shape (`strategy_id`, `alias`, `indicator`, `expected_table`, `expected_column`, `date_range`, `reason`, `required`); new issue codes `invalid_preflight_report_missing_factor_request` and `missing_preflight_report_missing_factor_field`; 14 new tests; review PASS; full suite at 863 passed.
 - Reference-data ingestion ownership migrated to sibling `quant_ts`; QRE reads populated reference tables only.
+- Backtest-smoke truthiness reconciliation: `_try_backtest_smoke()` executes real `BatchBacktestEngine` runs; tracker entry moved from IMPLEMENTED to DONE; all agent docs aligned.
+- `QRE-NEXT-55` tracker reconciliation: roadmap M4.9 was already DONE; progress row reconciled from IMPLEMENTED to DONE; all agent docs aligned.
 
 ## In Progress
 
-- None.
+No active work. QRE is in full maintenance-only closeout.
 
 ## Known Gaps
 
-- Benchmark membership and industry classification are standardized for the current MVP slice and preserved for future time-varying enhancements.
-- Full as-of time-varying history for cross-sectional metadata remains a future enhancement.
-- The reusable Tushare security source adapter remains as historical source-shape context only. Future download/ingest changes belong in `quant_ts`, not QRE.
+- Benchmark membership and industry classification are standardized for the current MVP slice using latest-available snapshots. Time-varying history is out of scope for the current closeout.
+- Full as-of time-varying history for cross-sectional metadata is out of scope for the current closeout.
+- The reusable Tushare security source adapter remains as historical source-shape context only. All download/ingest work belongs in `quant_ts`, not QRE.
 - Benchmark series wiring is complete and accepted; manifests record benchmark parameters and CLI enforces paired-arg validation.
 - As-of metadata snapshot wiring is implemented and all three fix passes are complete; all backtest entry points (single, batch, shared) now accept and propagate `--metadata-as-of`; finalized in commit `7c32b65`.
 
@@ -82,7 +84,7 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `558fe83` (finalize latest daily_basic metadata standardization), `9e00f0a` (research-run audit usage docs)
+- Recent commits: `14ea3e6` (document remaining benchmark CLI parameters for closeout), `0a6f397` (clarify final closeout state), `ac034f8` (record completion state for as-of metadata), `7c32b65` (finalize as-of metadata snapshot wiring)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
@@ -111,4 +113,4 @@ Advanced experimental MVP. The skeleton, data layer, evaluation MVP, portfolio M
 
 ## Next Recommended Step
 
-`QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001` is complete and finalized in commit `7c32b65`. Select the next task from the roadmap if more work is desired.
+All documentation closeout tasks are complete. QRE is fully frozen in maintenance-only closeout. No further work is planned.

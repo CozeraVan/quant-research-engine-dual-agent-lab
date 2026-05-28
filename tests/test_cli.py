@@ -7395,7 +7395,7 @@ SMOKE_SUMMARY_JSON = json.dumps({
             "durations_s": {"compile": 0.051},
         },
     ],
-    "overall_status": "ok",
+    "overall_status": "pass",
 })
 
 SMOKE_DISCOVERY_MANIFEST_JSON = json.dumps({
@@ -7424,7 +7424,7 @@ def test_cli_smoke_files_default_output(capsys, tmp_path):
     assert "run_id=test-run-001" in captured.out
     assert "resolved_output_dir=" in captured.out
     assert "source_mode=manifest" in captured.out
-    assert "overall_status=ok" in captured.out
+    assert "overall_status=pass" in captured.out
     assert "strategy_count=2" in captured.out
     assert "strategy=rsi2_oversold_reversal" in captured.out
     assert "strategy=ema200_bollinger_reversal" in captured.out
@@ -7441,7 +7441,7 @@ def test_cli_smoke_files_json_output(capsys, tmp_path):
     assert exit_code == 0
     payload = json.loads(captured.out)
     assert payload["run_id"] == "test-run-001"
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert "resolved_output_dir" in payload
     assert payload["source_mode"] == "manifest"
     assert payload["strategy_count"] == 2
@@ -7664,7 +7664,7 @@ def test_cli_smoke_files_manifest_fallback_count_parity(capsys, tmp_path):
                 "durations_s": {},
             },
         ],
-        "overall_status": "ok",
+        "overall_status": "pass",
     })
     aligned_manifest = json.dumps({
         "schema_version": 1,
@@ -8131,7 +8131,7 @@ def test_cli_smoke_files_status_only_text_output(capsys, tmp_path):
     ])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert captured.out.strip() == "ok"
+    assert captured.out.strip() == "pass"
     assert "run_id=" not in captured.out
     assert "strategy_count=" not in captured.out
 
@@ -8147,7 +8147,7 @@ def test_cli_smoke_files_status_only_json_output(capsys, tmp_path):
     assert exit_code == 0
     payload = json.loads(captured.out.strip())
     assert set(payload.keys()) == {"overall_status", "run_id"}
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["run_id"] == "test-run-001"
 
 
@@ -8187,7 +8187,7 @@ def test_cli_smoke_files_status_file_text(capsys, tmp_path):
     assert exit_code == 0
     content = status_path.read_text(encoding="utf-8")
     assert "run_id=test-run-001" in content
-    assert "overall_status=ok" in content
+    assert "overall_status=pass" in content
     assert "strategy_count=2" in content
 
 
@@ -8201,7 +8201,7 @@ def test_cli_smoke_files_status_file_json(capsys, tmp_path):
     ])
     assert exit_code == 0
     payload = json.loads(status_path.read_text(encoding="utf-8"))
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["run_id"] == "test-run-001"
     assert "strategy_count" in payload
 
@@ -8249,7 +8249,7 @@ def test_cli_smoke_files_status_file_with_quiet(capsys, tmp_path):
     assert captured.out.strip() == ""
     content = status_path.read_text(encoding="utf-8")
     assert "run_id=test-run-001" in content
-    assert "overall_status=ok" in content
+    assert "overall_status=pass" in content
 
 
 def test_cli_smoke_files_status_format_text(capsys, tmp_path):
@@ -8261,7 +8261,7 @@ def test_cli_smoke_files_status_format_text(capsys, tmp_path):
     ])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert captured.out.strip() == "ok"
+    assert captured.out.strip() == "pass"
     # Verify no JSON payload in output
     assert "{" not in captured.out
 
@@ -8276,7 +8276,7 @@ def test_cli_smoke_files_status_format_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out.strip())
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["run_id"] == "test-run-001"
     # Status-only JSON should not have full payload fields
     assert "strategy_count" not in payload
@@ -8307,7 +8307,7 @@ def test_cli_smoke_files_status_format_quiet_status_file(capsys, tmp_path):
     assert exit_code == 0
     assert captured.out.strip() == ""
     payload = json.loads(status_path.read_text(encoding="utf-8"))
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["run_id"] == "test-run-001"
 
 
@@ -8462,7 +8462,7 @@ def test_cli_smoke_files_status_meta_text(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     out = captured.out.strip()
-    assert out.startswith("ok\t")
+    assert out.startswith("pass\t")
     assert "run_id=test-run-001" in out
     assert "source_mode=artifacts_fallback" in out
 
@@ -8477,7 +8477,7 @@ def test_cli_smoke_files_status_meta_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out)
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["run_id"] == "test-run-001"
     assert "source_mode" in payload
 
@@ -8521,7 +8521,7 @@ def test_cli_smoke_files_status_summary_text(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     out = captured.out.strip()
-    assert out.startswith("ok\t")
+    assert out.startswith("pass\t")
     assert "total=2" in out
     assert "pass=2" in out
     assert "fail=0" in out
@@ -8780,7 +8780,7 @@ def test_cli_smoke_files_status_timestamp_text(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     out = captured.out.strip()
-    assert out.startswith("ok")
+    assert out.startswith("pass")
     assert "timestamp=2026-05-22T00:00:00Z" in out
 
 
@@ -8794,7 +8794,7 @@ def test_cli_smoke_files_status_timestamp_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out)
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["timestamp"] == "2026-05-22T00:00:00Z"
 
 
@@ -8836,7 +8836,7 @@ def test_cli_smoke_files_status_output_dir_text(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     out = captured.out.strip()
-    assert out.startswith("ok")
+    assert out.startswith("pass")
     assert f"output_dir={tmp_path.resolve()}" in out
 
 
@@ -8850,7 +8850,7 @@ def test_cli_smoke_files_status_output_dir_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out)
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["output_dir"] == str(tmp_path.resolve())
 
 
@@ -8892,7 +8892,7 @@ def test_cli_smoke_files_status_manifest_path_text(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     out = captured.out.strip()
-    assert out.startswith("ok")
+    assert out.startswith("pass")
     expected_manifest = str(tmp_path / "smoke_report_manifest.json")
     assert f"manifest_path={expected_manifest}" in out
 
@@ -8907,7 +8907,7 @@ def test_cli_smoke_files_status_manifest_path_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out)
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["manifest_path"] == str(tmp_path / "smoke_report_manifest.json")
 
 
@@ -8951,7 +8951,7 @@ def test_cli_smoke_files_status_manifest_exists_text(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     out = captured.out.strip()
-    assert out.startswith("ok")
+    assert out.startswith("pass")
     assert "manifest_exists=true" in out
 
 
@@ -8966,7 +8966,7 @@ def test_cli_smoke_files_status_manifest_exists_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out)
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["manifest_exists"] is True
 
 
@@ -9007,7 +9007,7 @@ def test_cli_smoke_files_status_artifact_count_text(capsys, tmp_path):
     ])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert captured.out.strip() == "ok\tartifact_count=2"
+    assert captured.out.strip() == "pass\tartifact_count=2"
 
 
 def test_cli_smoke_files_status_artifact_count_json(capsys, tmp_path):
@@ -9020,7 +9020,7 @@ def test_cli_smoke_files_status_artifact_count_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out.strip())
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["artifact_count"] == 2
     assert isinstance(payload["artifact_count"], int)
 
@@ -9062,7 +9062,7 @@ def test_cli_smoke_files_status_strategy_count_text(capsys, tmp_path):
     ])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert captured.out.strip() == "ok\tstrategy_count=2"
+    assert captured.out.strip() == "pass\tstrategy_count=2"
 
 
 def test_cli_smoke_files_status_strategy_count_json(capsys, tmp_path):
@@ -9075,7 +9075,7 @@ def test_cli_smoke_files_status_strategy_count_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out.strip())
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["strategy_count"] == 2
     assert isinstance(payload["strategy_count"], int)
 
@@ -9117,7 +9117,7 @@ def test_cli_smoke_files_status_fail_count_text(capsys, tmp_path):
     ])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert captured.out.strip() == "ok\tfail_count=0"
+    assert captured.out.strip() == "pass\tfail_count=0"
 
 
 def test_cli_smoke_files_status_fail_count_json(capsys, tmp_path):
@@ -9130,7 +9130,7 @@ def test_cli_smoke_files_status_fail_count_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out.strip())
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["fail_count"] == 0
     assert isinstance(payload["fail_count"], int)
 
@@ -9172,7 +9172,7 @@ def test_cli_smoke_files_status_skip_count_text(capsys, tmp_path):
     ])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert captured.out.strip() == "ok\tskip_count=0"
+    assert captured.out.strip() == "pass\tskip_count=0"
 
 
 def test_cli_smoke_files_status_skip_count_json(capsys, tmp_path):
@@ -9185,7 +9185,7 @@ def test_cli_smoke_files_status_skip_count_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out.strip())
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["skip_count"] == 0
     assert isinstance(payload["skip_count"], int)
 
@@ -9227,7 +9227,7 @@ def test_cli_smoke_files_status_pass_count_text(capsys, tmp_path):
     ])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert captured.out.strip() == "ok\tpass_count=2"
+    assert captured.out.strip() == "pass\tpass_count=2"
 
 
 def test_cli_smoke_files_status_pass_count_json(capsys, tmp_path):
@@ -9240,7 +9240,7 @@ def test_cli_smoke_files_status_pass_count_json(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     payload = json.loads(captured.out.strip())
-    assert payload["overall_status"] == "ok"
+    assert payload["overall_status"] == "pass"
     assert payload["pass_count"] == 2
     assert isinstance(payload["pass_count"], int)
 

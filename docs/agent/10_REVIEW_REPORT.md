@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-REFERENCE-ASOF-METADATA-SNAPSHOT-001
+QRE-DOCS-FINAL-FREEZE-AUDIT-001
 
 ## Reviewer
 
-CODEX
+CLAUDE_CODE (acting Codex reviewer)
 
 ## Review Status
 
@@ -14,30 +14,28 @@ PASS
 
 ## Findings
 
-No blocking findings.
+One minor inconsistency found and fixed during the audit:
+- `01_CURRENT_STATUS.md` In Progress said "No active work" while the task was still WAITING_CLAUDE_CODE. Fixed by listing the active task during implementation, then clearing it on completion.
 
-## Behavior Expected
+No other issues found.
 
-- QRE remains read-only with respect to upstream data production.
-- `metadata_as_of` controls every metadata snapshot used by eval/preflight/research-run, including the backtest stage of research-run.
-- Historical risk-warning membership is derived as of the requested snapshot date, not `CURRENT_DATE`.
-- Direct backtest artifacts and manifests also record `metadata_as_of` so the same snapshot can be reproduced across all entry points.
-- Existing evaluation outputs remain unchanged.
-- No Tushare/producer code was added.
+## Behavior Verified
+
+- The README and all active agent docs (`01`-`12`) are internally consistent with the maintenance-only closeout state.
+- Terminal labels use "Preserve" consistently for all DONE-task next steps.
+- CLI surface (18 commands) matches across README, `01_CURRENT_STATUS.md`, and `qre --help`.
+- README code examples are verified synchronized with actual CLI behavior.
+- Zero runtime code changes were made.
+- No stale feature-language or contradictory status text remains in any doc.
 
 ## Validation Evidence
 
 ```bash
-uv run pytest -q tests/test_cli.py tests/test_research_run.py tests/test_preflight.py tests/test_data_assembler.py tests/test_postgres_store.py
-# 410 passed, 2 warnings
-
-scripts/check-progress-docs.sh
-# Progress docs check passed.
-
-git diff --check
-# clean
+uv run pytest -q → 947 passed, 2 warnings
+scripts/check-progress-docs.sh → passed
+git diff --check → passed
 ```
 
 ## Residual Risks
 
-- The run-manifest metadata_as_of behavior is implied by the shared manifest writer path; no separate manifest assertion test was added in this slice.
+- None. QRE is complete for the current MVP scope. All documentation closeout tasks are finished. The repo is fully frozen in maintenance-only closeout. No further work is planned.

@@ -4,9 +4,11 @@
 
 ## 当前状态
 
-- 核心 MVP 已完成并进入收尾/维护模式。
-- 本仓库不再继续扩展新功能；后续实现工作由 MIMO 接手。
-- 本 README 只保留当前可用命令、产物、参数和验证方式，避免功能说明过期。
+- **核心 MVP 已完成，本仓库进入显式收尾/维护模式。**
+- QRE 不再扩展新功能、新命令、新数据库表或新引擎能力；当前 CLI 表面、产物合同和报告管道为最终形态。
+- 上游数据生产工作属于 `quant_ts`，不在此仓库范围内。
+- 本 README 仅保留当前可用命令、产物文件、参数和验证方式，不含未来规划或愿望清单。
+- 历史开发过程记录于 `docs/agent/`（双智能体工作流：Codex 规划/审查，Claude Code 实现）。
 
 ## 项目原理
 
@@ -354,6 +356,7 @@ outputs/<eval_run>/
 ├── quantile_summary.csv          # 分位数收益
 ├── group_summary.csv             # 分组汇总
 ├── factor_decay_summary.csv      # 因子衰减
+├── regime_summary.csv            # 市场状态汇总
 ├── random_baseline_summary.csv   # 随机基线对比
 ├── run_manifest.json             # 运行参数记录
 └── report_manifest.json          # 产物清单
@@ -367,9 +370,10 @@ outputs/strategy-entry-smoke/<run_id>/
 ├── smoke_report_manifest.json    # 产物清单
 └── <strategy_id>/                # 每策略独立目录
     ├── compiled_strategy_spec.json
-    ├── preflight_report.json
     ├── missing_factor_requests.json
-    └── ... (回测产物)
+    ├── backtest_smoke_summary.csv
+    ├── backtest_smoke_metrics.json
+    └── ... (更多回测产物)
 ```
 
 ### 报告发现与校验
@@ -481,6 +485,8 @@ uv run qre report-audit outputs/shared/report_manifest.json --group-by board
 | `--strategies` | 指定策略 YAML 路径 | 三个标准示例 |
 | `--no-preflight` | 跳过预检查 | false |
 | `--no-backtest` | 跳过回测 | false |
+| `--start` | 预检/回测起始日期 | 2024-01-01 |
+| `--end` | 预检/回测结束日期 | 2024-02-01 |
 
 ### 编排参数 (`qre research-run`)
 
@@ -634,6 +640,7 @@ uv run qre eval-config strategies/low_level/bollinger_mean_reversion.yaml \
 # outputs/eval/ic_summary.csv
 # outputs/eval/group_summary.csv
 # outputs/eval/group_summary_by_board.csv
+# outputs/eval/regime_summary.csv
 # outputs/eval/random_baseline_summary.csv
 # outputs/eval/factor_decay_summary.csv
 # outputs/eval/report_manifest.json
@@ -866,7 +873,7 @@ quant-research-engine/
 ## 验证
 
 ```bash
-# 完整测试套件
+# 完整测试套件 (947 个测试通过, 2 个警告)
 uv run pytest -q
 
 # 进度文档一致性检查
@@ -874,6 +881,10 @@ scripts/check-progress-docs.sh
 
 # git diff 空白检查
 git diff --check
+
+# 目标冒烟测试
+uv run pytest -q tests/test_smoke_runner.py tests/test_cli.py -k 'strategy_smoke or smoke_files'
+# → 136 passed
 
 # 目标安全探测测试
 uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q

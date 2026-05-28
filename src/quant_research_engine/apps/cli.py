@@ -1556,7 +1556,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("--status-pass-count requires --status-only", file=_sys.stderr)
             return 2
 
-        status_code = 0 if summary.get("overall_status") == "ok" else 1
+        status_code = 0 if summary.get("overall_status") == "pass" else 1
 
         # Compute strategy-count summary for --status-summary
         summary_total = len(strategies)

@@ -3,6 +3,159 @@
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or dual-agent workflow.
 
 ## Format
+### 2026-05-28: Complete final freeze audit — all closeout tasks finished
+
+- Decision: The final docs-only freeze audit pass (`QRE-DOCS-FINAL-FREEZE-AUDIT-001`) is complete. All active agent docs and the README were re-read and verified internally consistent after the status-label sync pass. One minor inconsistency was found and fixed: `01_CURRENT_STATUS.md` In Progress said "No active work" while the task was still WAITING_CLAUDE_CODE. Terminal labels use "Preserve" consistently, no stale feature-language remains, and zero runtime code changes were made.
+- Reason: This is the absolute last docs-only verification pass. The repo is now fully frozen with all documentation closeout tasks complete.
+- Alternatives: continue running more docs-only passes (rejected — no further passes are warranted; all docs are verified internally consistent); start new feature work (rejected — no further feature expansion is planned).
+- Impact: All agent workflow files (`01`-`12`) now reflect DONE phase. QRE is complete for the current MVP scope. No further work is planned.
+- Owner: CLAUDE_CODE
+
+### 2026-05-28: Select final freeze audit as next Claude task
+
+- Decision: The next Claude Code task is `QRE-DOCS-FINAL-FREEZE-AUDIT-001`.
+- Reason: The final status-label sync pass is complete, but the repo still benefits from one last docs-only freeze audit to re-verify the maintenance-only wording before the closeout state is left locked.
+- Alternatives: start a new runtime feature slice (rejected - no further feature expansion is planned); finalize immediately without a freeze audit (rejected - one last docs-only verification still adds value); reopen producer work in QRE (rejected - producer ownership remains in `quant_ts`).
+- Impact: `01/04/05/08/09/11/12` now point to the final freeze audit lane for Claude Code.
+- Owner: CLAUDE_CODE
+
+
+### 2026-05-28: Complete archive-label consistency pass
+
+- Decision: The final docs-only archive-label consistency pass (`QRE-DOCS-ARCHIVE-LABEL-CONSISTENCY-001`) is complete. Three historical Next Step labels in `05_PROGRESS.md` were normalized to "Preserve" for consistency with all other DONE tasks. Stale Problem/Implementation summaries in `04_TASK_HANDOFF.md` were corrected to describe the archive-label pass. All agent docs and the README remain internally consistent with the maintenance-only closeout state.
+- Reason: This is the absolute last docs-only normalization pass. The frozen docs were already internally consistent; the only changes needed were to the agent workflow metadata files themselves (normalizing labels, correcting stale summaries).
+- Alternatives: leave inconsistent labels in place (rejected — "Preserve" should be used consistently for all DONE-task next steps); skip the pass (rejected — one last normalization still adds value before final lock-down).
+- Impact: `01/04/05/09/11/12` now reflect CODEX_REVIEWING phase. All documentation closeout tasks are complete. No further docs-only passes are warranted.
+- Owner: CLAUDE_CODE
+
+### 2026-05-28: Select archive-label consistency pass as next Claude task
+
+- Decision: The next Claude Code task is `QRE-DOCS-ARCHIVE-LABEL-CONSISTENCY-001`.
+- Reason: The freeze-lock pass is complete, but the repo still benefits from one final docs-only cleanup to normalize terminal labels and preserve-mode wording across the closeout docs.
+- Alternatives: start a new runtime feature slice (rejected - no further feature expansion is planned); finalize immediately without a label-consistency pass (rejected - one last docs-only normalization still adds value); reopen producer work in QRE (rejected - producer ownership remains in `quant_ts`).
+- Impact: `01/04/05/08/09/11/12` now point to the archive-label consistency lane for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-28: Complete final maintenance freeze-lock pass
+
+- Decision: The final docs-only maintenance freeze-lock pass (`QRE-DOCS-MAINTENANCE-FREEZE-LOCK-001`) is complete. All active agent docs and the README are re-verified internally consistent with the maintenance-only closeout state. Zero stale feature-language or contradictory status text was found.
+- Reason: This is the final freeze-lock check. Every agent doc and the README were re-read and verified. The CLI surface, README examples, and workflow docs remain internally consistent. No further passes are needed.
+- Alternatives: skip the freeze-lock pass (rejected — one absolute final check is warranted); widen scope into runtime changes (rejected — no runtime changes allowed).
+- Impact: `01/04/05/09/11/12` now reflect CODEX_REVIEWING phase. All documentation closeout tasks are complete. The repo is permanently frozen in maintenance mode.
+- Owner: CLAUDE_CODE
+
+### 2026-05-28: Select final maintenance freeze-lock pass as next Claude task
+
+- Decision: The next Claude Code task is `QRE-DOCS-MAINTENANCE-FREEZE-LOCK-001`.
+- Reason: The final docs-only maintenance sanity pass is complete, but the repo still benefits from one last freeze-lock pass to keep the frozen maintenance state explicit and catch any stale closeout wording before final lock-down.
+- Alternatives: start a new runtime feature slice (rejected - no further feature expansion is planned); finalize immediately without a freeze-lock pass (rejected - one last docs-only check still adds value); reopen producer work in QRE (rejected - producer ownership remains in `quant_ts`).
+- Impact: `01/04/05/08/09/11/12` now point to the final maintenance freeze-lock lane for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-28: Complete final maintenance sanity pass
+
+- Decision: The final docs-only maintenance sanity pass (`QRE-DOCS-FINAL-MAINTENANCE-SANITY-001`) is complete. All active agent docs and the README are confirmed internally consistent with the maintenance-only closeout state. Zero stale feature-language or contradictory status text was found.
+- Reason: This was the last docs-only sanity check before the repo is fully frozen. Every agent doc (`01`-`12`) and the README were re-read and verified. The CLI surface (18 commands), README examples, and workflow docs are internally consistent.
+- Alternatives: skip the sanity pass (rejected — one last docs-only check adds value before final lock-down); widen scope into runtime changes (rejected — no runtime changes allowed).
+- Impact: `01/04/05/09/11/12` now reflect CODEX_REVIEWING phase. All documentation closeout tasks are complete. The repo is fully frozen in maintenance mode.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Select final maintenance sanity pass as next Claude task
+
+- Decision: The next Claude Code task is `QRE-DOCS-FINAL-MAINTENANCE-SANITY-001`.
+- Reason: The README example alignment pass is complete, but the repo still benefits from one final docs-only sanity pass to keep the frozen maintenance state explicit and catch any stale closeout wording before final lock-down.
+- Alternatives: start a new runtime feature slice (rejected - no further feature expansion is planned); finalize immediately without a final sanity pass (rejected - one last docs-only check still adds value); reopen producer work in QRE (rejected - producer ownership remains in `quant_ts`).
+- Impact: `01/04/05/08/09/11/12` now point to the final maintenance sanity lane for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Complete README example alignment pass
+
+- Decision: The final README example alignment pass (`QRE-DOCS-README-EXAMPLE-ALIGNMENT-001`) is complete. Every README code block and example was cross-checked against actual `qre --help` output for all 18 CLI subcommands. Zero discrepancies found.
+- Reason: This was the last documentation-only task before the repo is fully frozen. Every flag (`--preflight`, `--output-dir`, `--random-baseline-seed`, `--print-summary-md`, `--stop-loss-pct`, `--status-only`, `--status-code`, `--status-summary`, `--validate-contents`, `--check-exists`, `--require-match`, etc.) was verified against current CLI help. All referenced strategy files were confirmed to exist on disk.
+- Alternatives: skip the alignment pass (rejected — a final example cross-check still adds value before freeze); widen scope into runtime changes (rejected — no runtime changes allowed).
+- Impact: `01/04/05/09/11/12` now reflect CODEX_REVIEWING phase. QRE has no remaining active tasks. The repo reads as maintenance-only with all code blocks verified synchronized.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Select README example alignment as next Claude task
+
+- Decision: The next Claude Code task is `QRE-DOCS-README-EXAMPLE-ALIGNMENT-001`.
+- Reason: The CLI reference sync is already reviewed and accepted, but the repo still benefits from a final docs-only README example alignment pass to keep code blocks and examples synchronized with `qre --help`.
+- Alternatives: stop after the reference sync and do nothing further (rejected - the docs can still benefit from one more narrow alignment pass); widen scope into runtime changes (rejected - no runtime changes allowed); reopen producer work in QRE (rejected - producer ownership remains in `quant_ts`).
+- Impact: `01/04/05/06/08/09/11/12` now point to the README example alignment lane for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Complete publication freeze guard
+
+- Decision: The final publication freeze guard (`QRE-DOCS-PUBLICATION-FREEZE-001`) is complete. The README and agent docs remain maintenance-only, and the command surface matches the current CLI (18 commands).
+- Reason: This was the last docs-only task before the repo is fully frozen in maintenance mode. A final cross-check of the README command tables against `qre --help` confirmed alignment. The README explicitly states no further feature expansion is planned.
+- Alternatives: skip the freeze guard (rejected — a final docs-only confirmation still adds value before freeze); widen scope into runtime changes (rejected — no runtime changes allowed).
+- Impact: `01/04/05/06/09/11/12` now reflect CODEX_REVIEWING phase. QRE has no remaining active tasks. The repo reads as maintenance-only with no stale implementation language.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Select publication freeze guard as next Claude task
+
+- Decision: The next Claude Code task is `QRE-DOCS-PUBLICATION-FREEZE-001`.
+- Reason: The publication sanity pass is already reviewed and accepted, but the repo still benefits from one last docs-only freeze guard to ensure the README and agent docs remain maintenance-only and the visible command surface still matches the current CLI.
+- Alternatives: start a new runtime feature slice (rejected - no further feature expansion is planned); skip the freeze guard and finalize immediately (rejected - a final docs-only confirmation still adds value before freeze); reopen producer work in QRE (rejected - producer ownership remains in `quant_ts`).
+- Impact: `01/04/05/06/08/09/11/12` now point to the publication freeze lane for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Complete final closeout wording alignment
+
+- Decision: The final closeout wording alignment pass (`QRE-DOCS-CLOSEOUT-FINAL-ALIGNMENT-001`) is complete. Stale wording that implied benchmark-aware regime work was the next implementation slice has been removed from `01_CURRENT_STATUS.md` and `05_PROGRESS.md`.
+- Reason: The status docs previously described "next evaluation slice" work as the remaining active task, which was misleading given that all implementation work is finished. The alignment pass removed that stale language so the repo reads as maintenance-only.
+- Alternatives: leave the stale wording indefinitely (rejected — the status docs would remain misleading); expand scope beyond documentation (rejected — no runtime changes allowed).
+- Impact: `01/04/05/09/11/12` now reflect CODEX_REVIEWING phase. QRE has no remaining active tasks. Agent docs are aligned with maintenance-only closeout.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Select final closeout alignment as next Claude task
+
+- Decision: The next Claude Code task is `QRE-DOCS-CLOSEOUT-FINAL-ALIGNMENT-001`.
+- Reason: `QRE-NEXT-55` is already reviewed and marked PASS, but the active status docs still contain stale wording that implies benchmark-aware regime work is the next implementation slice. The remaining work is a documentation-only cleanup pass to remove that implication.
+- Alternatives: start a new runtime feature slice (rejected - no further feature expansion is planned); ignore the stale wording and finalize immediately (rejected - the status docs would remain misleading); reopen producer work in QRE (rejected - producer ownership remains in `quant_ts`).
+- Impact: `01/04/05/08/09/11/12` now point to the docs-only closeout alignment lane for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Complete QRE-NEXT-55 tracker reconciliation
+
+- Decision: The `QRE-NEXT-55` tracker row in `05_PROGRESS.md` is reconciled from `IMPLEMENTED` to `DONE` to match the already-accepted roadmap `M4.9` (real suspension/ST/risk-warning metadata). All agent docs (01/04/05/09/10/11/12) are aligned.
+- Reason: The roadmap `M4.9` was already marked DONE with accepted evidence, but the progress tracker row remained in a stale `IMPLEMENTED` state. The fix-back review correctly identified the mismatch. The reconciliation was re-done with thorough updates across all affected files.
+- Alternatives: leave the stale `IMPLEMENTED` entry indefinitely (rejected — tracker inconsistency); re-implement the metadata composition adapter (rejected — the code was already accepted and working).
+- Impact: `05_PROGRESS.md` row now DONE; agent docs (01/04/09/10/11/12) aligned on CODEX_REVIEWING. QRE has no remaining stale tracker entries or active tasks awaiting implementation.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Send QRE-NEXT-55 tracker reconciliation back for fix
+
+- Decision: The `QRE-NEXT-55` review did not pass because the progress row still reads `IMPLEMENTED` and the agent-state documents still describe the task as pending reconciliation.
+- Reason: The closeout workflow must not advance to a new task until the tracker row and state files are coherent.
+- Alternatives: mark the task complete anyway (rejected — evidence shows the mismatch remains); open a new task before fixing the current one (rejected — this would compound the state inconsistency).
+- Impact: `10_REVIEW_REPORT.md` now requests changes; `11_AGENT_STATE.md`, `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, and `12_AGENT_BOARD.md` now point Claude Code back at the tracker reconciliation fix.
+- Owner: CODEX
+
+
+### 2026-05-27: Complete backtest-smoke truthiness reconciliation
+
+- Decision: The backtest-smoke truthiness entry in the tracker is reconciled from IMPLEMENTED to DONE. The truthiness fix (`_try_backtest_smoke()` executing real `BatchBacktestEngine` runs) was already implemented and accepted in code long ago; the tracker entry was simply stale.
+- Reason: The lingering `IMPLEMENTED` status caused inconsistency with the rest of the tracker (all other tasks were DONE or properly classified). The reconciliation closes the last remaining tracker gap before finalization.
+- Alternatives: leave the entry in IMPLEMENTED indefinitely (rejected — tracker inconsistency); re-implement the truthiness fix (rejected — the fix was already accepted and working).
+- Impact: `05_PROGRESS.md` entry now DONE; agent docs (01/04/09/11/12) aligned. QRE has no remaining active tasks.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Select backtest-smoke truthiness reconciliation as next Claude task
+
+- Decision: The next Claude Code task is `QRE-STRATEGY-ENTRY-BACKTEST-SMOKE-TRUTHINESS-001`.
+- Reason: The publication-readiness audit is complete, and the remaining visible implementation-shaped gap in the tracker is the backtest-smoke truthiness entry, which should be reconciled against the current CLI and review state before the repo is finalized.
+- Alternatives: start a new runtime feature slice (rejected - no further feature expansion is planned); ignore the lingering IMPLEMENTED entry and finalize immediately (rejected - progress docs would remain inconsistent); reopen producer work in QRE (rejected - producer ownership remains with `quant_ts`).
+- Impact: `01/04/05/08/09/11/12` now point to the truthiness reconciliation lane for Claude Code.
+- Owner: CLAUDE_CODE
+
+### 2026-05-27: Select publication-readiness doc audit as next Claude task
+
+- Decision: The next Claude Code task is `QRE-DOCS-PUBLICATION-READINESS-001`.
+- Reason: The README closeout pass is complete, and the remaining safe work is a final documentation audit to ensure the README and agent docs are fully publication-ready and still match the finalized CLI and artifact surface.
+- Alternatives: start another runtime feature slice (rejected - no further feature expansion is planned); skip the final audit and finalize immediately (rejected - the docs should get one last consistency pass before publication); move producer work back into QRE (rejected - producer ownership remains with `quant_ts`).
+- Impact: `01/04/05/08/09/11/12` now point to the publication-readiness docs audit lane for Claude Code.
+- Owner: CLAUDE_CODE
 
 ### 2026-05-26: Wire benchmark series into standard eval frame assembly
 
@@ -702,6 +855,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 - Alternatives: Write history directly to PostgreSQL; add distributed job storage; keep history ephemeral only.
 - Impact: The GUI should persist run requests, strategy snapshots, status, logs, and artifact pointers under the repository outputs directory, with PostgreSQL migration deferred.
 - Owner: USER/CODEX
+
+### 2026-05-27: Select QRE-NEXT-55 tracker reconciliation as next Claude task
+
+- Decision: The next Claude Code task is to reconcile the stale `QRE-NEXT-55` progress entry for real suspension/ST/risk-warning metadata.
+- Reason: Roadmap item M4.9 is already marked DONE, but the progress tracker still shows the corresponding row as IMPLEMENTED. Closeout should remove the stale mismatch without re-opening runtime scope.
+- Alternatives: Leave the stale row in place (rejected - inconsistent tracker); reopen runtime work on status metadata (rejected - already accepted and no further feature expansion is planned).
+- Impact: `08_IMPLEMENTATION_BRIEF.md` now scopes documentation-only reconciliation for `QRE-NEXT-55`. Claude should update tracker and handoff docs only.
+- Owner: CODEX
 
 ### 2026-05-21: Prefer direct module execution with CLI fallback in the GUI
 
