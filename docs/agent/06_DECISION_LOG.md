@@ -939,10 +939,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 
 ## Open / To Confirm
 
-- Which real index table should replace temporary stock benchmark wiring: table name, code column values, value column, and available date range.
-- Which source table should provide time-varying suspension, ST, and risk-warning metadata.
-- Whether legacy root-level progress docs should be archived after the user reviews the migrated `docs/agent` files.
-- Whether larger multi-stage research-run bundles should link preflight, evaluation, and backtest artifacts under one run identifier.
+All previously open items have been resolved:
+
+- **Real index table for benchmark wiring** → Resolved by M4.8 (2026-05-25). Benchmark engine routes through `reference.index_daily` with `con_code` schema. CLI accepts `--benchmark-table`/`--benchmark-code`/`--benchmark-value-column` with paired-arg validation.
+- **Suspension/ST/risk-warning source table** → Resolved by M4.9 (2026-05-27). `load_security_metadata()` composes from `reference.stock_basic`, `reference.stock_suspend`, `reference.stock_st`, `reference.stock_risk_warning`.
+- **Legacy docs archiving** → Resolved by DOC-3 (2026-05-17). Legacy planning docs archived with notes; `docs/agent/` is the authoritative source.
+- **Multi-stage research-run bundles** → Resolved by M8.42 (2026-05-23). `qre research-run` chains preflight→eval→backtest under one `--run-id` with `research_run_manifest.json`.
+
+No open questions remain.
 
 ### 2026-05-21: Define QRE as the strategy IO contract and reporting engine
 
