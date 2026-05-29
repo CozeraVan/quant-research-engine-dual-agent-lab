@@ -1,9 +1,21 @@
+# =============================================================================
+# RSI2 超卖反转 — + 风控 + 权重
+# =============================================================================
+# 策略类型: 均值回归 (mean_reversion)
+# 难度: ★★☆☆☆ (进阶)
+# 说明: 在风控版基础上增加 score_weight 仓位模型。新增:
+#       - weight_model: score_weight (按评分分配资金)
+#       - score_column: rsi_2 (RSI 值越低 → 超卖越严重 → 仓位越大)
+#       这样在多个同时触发的信号中，资金会偏向超卖最严重的标的。
+# =============================================================================
+
 experiment:
   name: rsi2_reversal_with_risk_and_weight_mvp
   market_profile: ashare_daily_default
   frequency: daily
   objective: screen_then_validate
 
+# --- 数据源 ---
 data:
   market_table: public.stock_daily
   factor_schema: factors
@@ -18,23 +30,28 @@ data:
   factor_fields:
     rsi_2: factors.stock_daily_momentum_close.rsi_2
 
+# --- 交易信号 ---
 signal:
   type: expression
   entry: rsi_2 < 10
 
+# --- 持仓限制 ---
 holding:
   max_holding_days: 5
   direction: long_only
 
+# --- 风控参数 ---
 risk:
   stop_loss_pct: 0.08
   take_profit_pct: 0.12
   trailing_stop_pct: 0.10
 
+# --- 仓位模型 (本版本新增) ---
 portfolio:
-  weight_model: score_weight
-  score_column: rsi_2
-  volatility_column: null
+  weight_model: score_weight              # 按评分分配权重
+  score_column: rsi_2                     # 评分列: RSI 值 (越低越超卖)
+  volatility_column: null                 # 波动率调整 (未启用)
 
+# --- 评估配置 ---
 evaluation:
   forward_return_horizons: [1, 3, 5, 10, 20]

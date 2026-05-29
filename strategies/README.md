@@ -65,6 +65,33 @@ uv run qre smoke-files --details
 - **使用方式:** 直接 `backtest-*` 或 `research-run`
 - **注意:** 因子字段使用完整的 `factors.table.column` 路径
 
+**因子列名速查:**
+
+| 策略 | 因子别名 | 完整路径 |
+|------|---------|---------|
+| RSI2 系列 | `rsi_2` | `factors.stock_daily_momentum_close.rsi_2` |
+| 布林带 | `bb_lower` | `factors.stock_daily_volatility_close.bbl_20_2_0_2_0` |
+| 布林带 | `bb_middle` | `factors.stock_daily_volatility_close.bbm_20_2_0_2_0` |
+| EMA200+Bollinger | `ema200` | `factors.stock_daily_overlap_typical_price.ema_200` |
+| EMA200+Bollinger | `bb_upper` | `factors.stock_daily_volatility_close.bbu_20_2_0_2_0` |
+| EMA200+Bollinger | `bb_lower` | `factors.stock_daily_volatility_close.bbl_20_2_0_2_0` |
+
+> **列名解码示例:** `bbl_20_2_0_2_0` = Bollinger Band Lower, period=20, stddev=2.0
+> 格式: `<指标缩写>_<周期>_<参数...>` (具体编码取决于上游 `indicators_tushare` 生成规则)
+
+**编译后的低层文件可以直接使用:**
+
+```bash
+# 直接回测低层规格（跳过编译步骤）
+uv run qre backtest-single strategies/low_level/rsi2_reversal_research.yaml \
+  --symbol 000001.SZ --start 2024-01-01 --end 2024-12-31 \
+  --initial-cash 1000000 --output-dir outputs/rsi2-basic/
+
+# 全市场批量回测
+uv run qre backtest-batch strategies/low_level/bollinger_mean_reversion.yaml \
+  --start 2024-01-01 --end 2024-12-31 --output-dir outputs/bollinger-batch/
+```
+
 ### Python 脚本
 
 - **`run_bollinger_full.py`:** 示范如何使用 Python API 直接调用引擎，适合大数据量全市场运行（分块处理、断点续跑、增量统计）
@@ -73,9 +100,33 @@ uv run qre smoke-files --details
 
 RSI2 提供了 4 个由简到繁的低层规格，适合循序渐进学习:
 
-| 文件 | 新增功能 |
-|------|---------|
-| `rsi2_reversal_research.yaml` | 基础: entry/exit 信号, 基准对比, 评估配置 |
-| `rsi2_reversal_with_risk.yaml` | + 止损 8%, 止盈 12%, 移动止损 10% |
-| `rsi2_reversal_with_risk_and_weight.yaml` | + score_weight (RSI 值作为评分) |
-| `rsi2_reversal_with_rebalance.yaml` | + 每 5 日再平衡 |
+| 文件 | 新增功能 | 新增字段 |
+|------|---------|---------|
+| `rsi2_reversal_research.yaml` | 基础: entry/exit 信号, 基准对比, 评估配置 | — (基线) |
+| `rsi2_reversal_with_risk.yaml` | + 止损 8%, 止盈 12%, 移动止损 10% | `risk.stop_loss_pct`, `risk.take_profit_pct`, `risk.trailing_stop_pct` |
+| `rsi2_reversal_with_risk_and_weight.yaml` | + score_weight (RSI 值作为评分) | `portfolio.weight_model`, `portfolio.score_column` |
+| `rsi2_reversal_with_rebalance.yaml` | + 每 5 日再平衡 | `portfolio.rebalance_interval_days` |
+
+**学习路径建议:**
+
+```bash
+# 1. 先跑基础版，理解信号生成和执行
+uv run qre backtest-single strategies/low_level/rsi2_reversal_research.yaml \
+  --symbol 000001.SZ --start 2024-01-01 --end 2024-12-31 \
+  --initial-cash 1000000 --output-dir outputs/rsi2-1-basic/
+
+# 2. 加上风控，观察止损/止盈对结果的影响
+uv run qre backtest-single strategies/low_level/rsi2_reversal_with_risk.yaml \
+  --symbol 000001.SZ --start 2024-01-01 --end 2024-12-31 \
+  --initial-cash 1000000 --output-dir outputs/rsi2-2-risk/
+
+# 3. 在风控基础上加上权重评分
+uv run qre backtest-single strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml \
+  --symbol 000001.SZ --start 2024-01-01 --end 2024-12-31 \
+  --initial-cash 1000000 --output-dir outputs/rsi2-3-weight/
+
+# 4. 最后加上再平衡，体验完整组合管理
+uv run qre backtest-single strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml \
+  --symbol 000001.SZ --start 2024-01-01 --end 2024-12-31 \
+  --initial-cash 1000000 --output-dir outputs/rsi2-4-rebalance/
+```

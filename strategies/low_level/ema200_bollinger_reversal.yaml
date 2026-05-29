@@ -1,9 +1,31 @@
+# =============================================================================
+# EMA200 + 布林带反转
+# =============================================================================
+# 策略类型: 均值回归 (mean_reversion)
+# 难度: ★★★☆☆ (中阶)
+# 说明: 趋势过滤 + 布林带超卖入场。要求价格同时满足:
+#       1. close > EMA200 (上升趋势确认)
+#       2. close <= 布林下轨 (短期超卖)
+#       离场: close >= 布林上轨
+#
+# ⚠️  重要提示: 入场条件 (close > EMA200 AND close <= BB lower)
+#     极为严格。价格同时处于长期均线上方和布林下轨下方极少发生。
+#     全历史回测可能产生很少甚至零交易。建议学习用，实盘请用纯布林带策略。
+# 对应高层入口: strategies/high_level/ema200_bollinger_reversal_entry.yaml
+#
+# 因子路径说明:
+#   ema_200  = EMA(200) on typical price, 来源表 stock_daily_overlap_typical_price
+#   bbu_*    = Bollinger Band Upper, period=20, stddev=2.0
+#   bbl_*    = Bollinger Band Lower, period=20, stddev=2.0
+# =============================================================================
+
 experiment:
   name: ema200_bollinger_reversal_mvp
   market_profile: ashare_daily_default
   frequency: daily
   objective: screen_then_validate
 
+# --- 数据源 ---
 data:
   market_table: public.stock_daily
   factor_schema: factors
@@ -16,10 +38,11 @@ data:
     - vol
     - amount
   factor_fields:
-    ema200: factors.stock_daily_overlap_typical_price.ema_200
-    bb_upper: factors.stock_daily_volatility_close.bbu_20_2_0_2_0
-    bb_lower: factors.stock_daily_volatility_close.bbl_20_2_0_2_0
+    ema200: factors.stock_daily_overlap_typical_price.ema_200      # EMA(200) 趋势过滤器
+    bb_upper: factors.stock_daily_volatility_close.bbu_20_2_0_2_0  # 布林上轨 (离场阈值)
+    bb_lower: factors.stock_daily_volatility_close.bbl_20_2_0_2_0  # 布林下轨 (入场阈值)
 
+# --- 标的范围 ---
 universe:
   market: ashare
   exclude_st: true
@@ -28,20 +51,25 @@ universe:
   min_listing_days: 120
   min_amount: null
 
+# --- 交易信号 ---
+# ⚠️ entry 条件极为严格，详见文件头说明
 signal:
   type: expression
-  entry: close > ema200 and close <= bb_lower
-  exit: close >= bb_upper
+  entry: close > ema200 and close <= bb_lower   # 趋势向上 AND 超卖
+  exit: close >= bb_upper                        # 触及上轨离场
 
+# --- 执行规则 ---
 execution:
   signal_date: t
   entry_execution: t_plus_1_open
   exit_execution: t_plus_1_open
 
+# --- 持仓限制 ---
 holding:
-  max_holding_days: 9999
+  max_holding_days: 9999                   # 无固定持仓期限 (依赖信号离场)
   direction: long_only
 
+# --- 评估配置 ---
 evaluation:
   forward_return_horizons: [1, 3, 5, 10, 20]
   quantiles: 5

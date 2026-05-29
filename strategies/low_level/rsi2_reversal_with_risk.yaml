@@ -1,9 +1,22 @@
+# =============================================================================
+# RSI2 超卖反转 — + 风控
+# =============================================================================
+# 策略类型: 均值回归 (mean_reversion)
+# 难度: ★☆☆☆☆ (入门)
+# 说明: 在基础版上增加止损/止盈/移动止损。新增:
+#       - stop_loss_pct: 0.08  (亏损 8% 强制离场)
+#       - take_profit_pct: 0.12 (盈利 12% 止盈)
+#       - trailing_stop_pct: 0.10 (从最高点回撤 10% 移动止损)
+# 对应高层入口: strategies/high_level/rsi2_oversold_reversal_entry.yaml (编译时风控参数合并)
+# =============================================================================
+
 experiment:
   name: rsi2_reversal_with_risk_mvp
   market_profile: ashare_daily_default
   frequency: daily
   objective: screen_then_validate
 
+# --- 数据源 ---
 data:
   market_table: public.stock_daily
   factor_schema: factors
@@ -18,18 +31,22 @@ data:
   factor_fields:
     rsi_2: factors.stock_daily_momentum_close.rsi_2
 
+# --- 交易信号 ---
 signal:
   type: expression
   entry: rsi_2 < 10
 
+# --- 持仓限制 ---
 holding:
   max_holding_days: 5
   direction: long_only
 
+# --- 风控参数 (本版本新增) ---
 risk:
-  stop_loss_pct: 0.08
-  take_profit_pct: 0.12
-  trailing_stop_pct: 0.10
+  stop_loss_pct: 0.08                    # 止损: 亏损 8% 立即离场
+  take_profit_pct: 0.12                  # 止盈: 盈利 12% 锁定收益
+  trailing_stop_pct: 0.10                # 移动止损: 从最高点回撤 10% 触发
 
+# --- 评估配置 ---
 evaluation:
   forward_return_horizons: [1, 3, 5, 10, 20]
