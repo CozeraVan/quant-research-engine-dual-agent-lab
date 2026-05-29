@@ -2,16 +2,17 @@
 
 ## Current Phase
 
-DONE
+USER_DIRECTED
 
 ## Current Active Work
 
-No active work. QRE is in full maintenance-only closeout.
+QRE onboarding improvements — documentation, annotations, and UX polish for new users. No runtime code changes.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
+| QRE-ONBOARDING-IMPROVEMENTS-001 | Onboarding materials and strategy annotations for new users | IN_PROGRESS | CLAUDE_CODE | 3 commits (`5970e42`, `47934e7`, `c7353aa`); .env.example, QUICKSTART.md, Makefile, 10 strategy YAMLs annotated, strategies/README.md created, GUI default template fixed; 947 passed | Commit GUI template fix and agent doc sync |
 | QRE-PORTFOLIO-BASELINE-COMPARISON-001 | QRE portfolio baseline comparison outputs | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; buy_hold_return and excess_return_vs_buy_hold populated in single-symbol/batch; industry_group in batch metadata defaults; 8 new tests; 896 passed | Preserve |
 | QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001 | QRE benchmark report-artifact propagation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark_* fields flow from summary_metrics into build_strategy_performance() batch mode → strategy_performance.json; 898 passed | Preserve |
 | QRE-FULL-MARKET-PERFORMANCE-SHEET-001 | QRE full-market workbook Performance sheet | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `Performance` sheet mirrors strategy_perf; 2 new tests; validation passed | Preserve |
@@ -155,22 +156,17 @@ No active work. QRE is in full maintenance-only closeout.
 
 ## Latest Verified State
 
-Recorded on 2026-05-28 after the final docs-only freeze audit pass:
+Recorded on 2026-05-29:
 
-- Current task: NONE (all tasks complete)
-- Current phase: `DONE`
-- Current owner: NONE (all tasks complete)
-- Last finalized commit: `14ea3e6`
-- Working tree: modified with all closeout doc updates, status-code fix, tracker reconciliations, closeout wording alignment, publication freeze guard, README example alignment, maintenance sanity pass, freeze-lock pass, archive-label consistency pass, status-label sync pass, and final freeze audit pass.
+- Current task: QRE-ONBOARDING-IMPROVEMENTS-001
+- Current phase: `USER_DIRECTED`
+- Current owner: CLAUDE_CODE
+- Last finalized commit: `c7353aa`
+- Working tree: `src/quant_research_engine/gui/app.py`, `tests/test_gui_app.py`, and agent docs (`04`, `05`, `09`, `11`) modified
 - QRE validation evidence:
   - `uv run pytest -q` → 947 passed, 2 warnings.
-  - `scripts/check-progress-docs.sh` and `git diff --check` passed.
-  - CLI surface: 18 commands match across README tables, `01_CURRENT_STATUS.md`, and `qre --help`.
-  - README examples: all code blocks verified — every flag, path, and command reference matches actual CLI behavior.
-  - All agent docs (01-12) are internally consistent with the maintenance-only closeout state.
-  - Terminal labels normalized: all DONE-task next steps use "Preserve" consistently.
-  - No stale feature-language or contradictory status text found in any doc.
-- Final state: QRE is complete for the current MVP scope. All documentation closeout tasks are finished. The repo is fully frozen in maintenance-only closeout. No further work is planned.
+  - `uv run pytest -q tests/test_gui_app.py` → 30 passed.
+  - `git diff --check` passed.
 
 Current GUI direction approved on 2026-05-21:
 

@@ -37,15 +37,15 @@ def test_index_returns_200(app_client):
     resp = app_client.get("/")
     assert resp.status_code == 200
     assert b"Backtest Console" in resp.data
-    assert b"ema200_bollinger_reversal_mvp" in resp.data
-    assert b"bb_upper" in resp.data
+    assert b"bollinger_mean_reversion" in resp.data
+    assert b"bb_middle" in resp.data
     assert b"bb_lower" in resp.data
 
 
 def test_default_strategy_template_uses_current_low_level_path():
     from quant_research_engine.gui.app import DEFAULT_STRATEGY_TEMPLATE, _load_default_strategy_yaml
 
-    assert DEFAULT_STRATEGY_TEMPLATE.parts[-3:] == ("strategies", "low_level", "ema200_bollinger_reversal.yaml")
+    assert DEFAULT_STRATEGY_TEMPLATE.parts[-3:] == ("strategies", "low_level", "bollinger_mean_reversion.yaml")
     assert DEFAULT_STRATEGY_TEMPLATE.exists()
     assert _load_default_strategy_yaml() == DEFAULT_STRATEGY_TEMPLATE.read_text(encoding="utf-8")
 

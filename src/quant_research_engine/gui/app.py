@@ -25,7 +25,7 @@ from quant_research_engine.gui.engine import (
 GUI_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = GUI_DIR / "templates"
 STATIC_DIR = GUI_DIR / "static"
-DEFAULT_STRATEGY_TEMPLATE = Path(__file__).resolve().parents[3] / "strategies" / "low_level" / "ema200_bollinger_reversal.yaml"
+DEFAULT_STRATEGY_TEMPLATE = Path(__file__).resolve().parents[3] / "strategies" / "low_level" / "bollinger_mean_reversion.yaml"
 
 
 def _load_default_strategy_yaml() -> str:
@@ -33,7 +33,7 @@ def _load_default_strategy_yaml() -> str:
         return DEFAULT_STRATEGY_TEMPLATE.read_text(encoding="utf-8")
     return (
         "experiment:\n"
-        "  name: ema200_bollinger_reversal_mvp\n"
+        "  name: bollinger_mean_reversion\n"
         "data:\n"
         "  market_fields:\n"
         "    - open\n"
@@ -44,16 +44,17 @@ def _load_default_strategy_yaml() -> str:
         "    - vol\n"
         "    - amount\n"
         "  factor_fields:\n"
-        "    ema200: factors.stock_daily_overlap_typical_price.ema_200\n"
-        "    bb_upper: factors.stock_daily_volatility_close.bbu_20_2_0_2_0\n"
         "    bb_lower: factors.stock_daily_volatility_close.bbl_20_2_0_2_0\n"
+        "    bb_middle: factors.stock_daily_volatility_close.bbm_20_2_0_2_0\n"
         "signal:\n"
-        "  entry: close > ema200 and close <= bb_lower\n"
-        "  exit: close >= bb_upper\n"
+        "  entry: (close <= bb_lower)\n"
+        "  exit: (close >= bb_middle)\n"
         "evaluation:\n"
         "  forward_return_horizons: [1, 3, 5, 10, 20]\n"
         "holding:\n"
-        "  max_holding_days: 9999\n"
+        "  max_holding_days: 20\n"
+        "risk:\n"
+        "  stop_loss_pct: 0.08\n"
     )
 
 

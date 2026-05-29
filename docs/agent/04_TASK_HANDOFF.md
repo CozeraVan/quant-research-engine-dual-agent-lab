@@ -2,40 +2,50 @@
 
 ## Task ID
 
-QRE-DOCS-FINAL-FREEZE-AUDIT-001
+QRE-ONBOARDING-IMPROVEMENTS-001
 
 ## Current Status
 
-DONE
+IN_PROGRESS
 
 ## Current Owner
 
-NONE (all tasks complete)
+CLAUDE_CODE
 
 ## Problem Summary
 
-The repo was already frozen in maintenance mode. All prior closeout passes were complete. This was the final docs-only freeze audit to re-verify that the frozen README and agent docs remained internally consistent after the status-label sync pass.
+QRE was fully frozen in maintenance-only closeout but lacked onboarding materials for new users. The user requested improvements so new users can quickly and intuitively get started with the project.
 
 ## Implementation Summary
 
-Claude Code performed the final docs-only freeze audit pass:
-- Re-read all active agent docs (`01`-`12`) and the `README.md`.
-- Confirmed the final status-label sync changes did not leave any stale closeout wording behind.
-- Found one minor inconsistency: `01_CURRENT_STATUS.md` In Progress said "No active work" while the task was still WAITING_CLAUDE_CODE — fixed by listing the active task.
-- Verified terminal labels, preserve-mode phrasing, and current-task labels remain internally consistent.
-- Confirmed the visible CLI surface (18 commands), README examples, and workflow docs are unchanged and valid.
+**Committed (5970e42):**
+- `.env.example` — all env vars documented with fallback chain
+- `QUICKSTART.md` — 10-minute zero-to-first-backtest guide
+- `Makefile` — `help`, `install`, `test`, `smoke`, `gui`, `clean` targets
+- `README.md` — Quick Start section added near top
+- `docs/strategy_entry/README.md` — "Your First Strategy" 6-step walkthrough
+
+**Committed (47934e7):**
+- 4 high-level strategy YAMLs — Chinese annotations, difficulty ratings, usage notes
+- `strategies/README.md` — strategy navigation hub with comparison table and RSI2 progression
+
+**Committed (c7353aa):**
+- 6 low-level strategy YAMLs — Chinese annotations, factor column explanations, inline comments
+- `strategies/README.md` — factor column reference table, RSI2 progression field details, learning path
+
+**Pending commit:**
+- GUI default template changed from EMA200+Bollinger to Bollinger mean reversion
+- Test assertions updated for new default template
+- Agent docs synchronized with current state
 
 ## Hard Constraints
 
-All constraints observed: no runtime code changes, no producer-side code, `../quant_ts` not modified, no new database tables, QRE remains read-only.
+All constraints observed: no runtime code changes (GUI default template is a constant value change, not logic), no new CLI commands, no `quant_ts` modifications, QRE remains read-only.
 
 ## Validation Evidence
 
 ```bash
-scripts/check-progress-docs.sh → passed
+uv run pytest -q → 947 passed, 2 warnings
+uv run pytest -q tests/test_gui_app.py → 30 passed
 git diff --check → passed
 ```
-
-## Final State
-
-QRE is complete for the current MVP scope. All documentation closeout tasks are finished. The repo is fully frozen in maintenance-only closeout. No further work is planned.

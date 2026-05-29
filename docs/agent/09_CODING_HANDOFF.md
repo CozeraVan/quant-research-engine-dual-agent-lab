@@ -2,49 +2,67 @@
 
 ## Task ID
 
-QRE-DOCS-FINAL-FREEZE-AUDIT-001
+QRE-ONBOARDING-IMPROVEMENTS-001
 
 ## Written By
 
-CODEX (brief), CLAUDE_CODE (implementation)
+CLAUDE_CODE (user-directed, self-reviewing)
 
 ## Status
 
-DONE
+IN_PROGRESS
 
 ## Current Owner
 
-NONE (all tasks complete)
+CLAUDE_CODE
 
 ## Implementation Summary
 
-Claude Code performed the final docs-only freeze audit pass:
+**Round 1 — Onboarding materials (5970e42):**
+- Created `.env.example` with full env var documentation
+- Created `QUICKSTART.md` with 9-section guide (prerequisites → troubleshooting)
+- Created `Makefile` with 6 discoverable targets
+- Updated `README.md` with Quick Start section routing to QUICKSTART.md
+- Updated `docs/strategy_entry/README.md` with 6-step walkthrough
 
-- Re-read all active agent docs (`01`-`12`) and the `README.md`.
-- Confirmed the final status-label sync pass did not leave any stale closeout wording behind.
-- Found and fixed one minor inconsistency: `01_CURRENT_STATUS.md` In Progress said "No active work" while the task was WAITING_CLAUDE_CODE.
-- Verified terminal labels use "Preserve" consistently across all DONE tasks.
-- Confirmed CLI surface (18 commands) matches across README, `01_CURRENT_STATUS.md`, and `qre --help`.
-- Verified no stale feature-language or contradictory status text remains in any doc.
+**Round 2 — High-level strategy annotations (47934e7):**
+- Annotated all 4 high-level strategy YAML files with Chinese headers, difficulty ratings, inline section comments, and field explanations
+- Added prominent warning to EMA200+Bollinger about near-impossible entry condition
+- Created `strategies/README.md` with directory structure, comparison table, quick start, file type reference, and RSI2 progression series
+
+**Round 3 — Low-level strategy annotations and GUI default fix (c7353aa + pending):**
+- Annotated all 6 low-level strategy YAML files with Chinese header blocks, section labels, and field comments
+- Added factor column reference table to `strategies/README.md` with full `factors.table.column` paths
+- Enhanced RSI2 progression table with specific field additions per variant and step-by-step learning path
+- Changed GUI default strategy template from EMA200+Bollinger to Bollinger mean reversion (new users get real trades on first run)
+- Updated GUI fallback YAML string and 2 test assertions
 
 ## Files Changed
 
-- `docs/agent/01_CURRENT_STATUS.md`: Current Stage updated with freeze audit pass; In Progress cleared; Next Recommended Step finalized.
-- `docs/agent/04_TASK_HANDOFF.md`: Task marked DONE with final state summary.
-- `docs/agent/05_PROGRESS.md`: Phase, active work, progress table entry, and Latest Verified State updated to DONE.
-- `docs/agent/06_DECISION_LOG.md`: Completion entry added.
-- `docs/agent/09_CODING_HANDOFF.md`: This file — final completion write-up.
-- `docs/agent/10_REVIEW_REPORT.md`: Updated to PASS for QRE-DOCS-FINAL-FREEZE-AUDIT-001.
-- `docs/agent/11_AGENT_STATE.md`: Phase set to DONE; all tasks complete.
-- `docs/agent/12_AGENT_BOARD.md`: Final handoff recorded.
+- `.env.example` (new)
+- `QUICKSTART.md` (new)
+- `Makefile` (new)
+- `README.md` (modified)
+- `docs/strategy_entry/README.md` (modified)
+- `strategies/README.md` (new, then updated)
+- `strategies/high_level/rsi2_oversold_reversal_entry.yaml` (annotated)
+- `strategies/high_level/bollinger_mean_reversion_entry.yaml` (annotated)
+- `strategies/high_level/macd_zero_cross_momentum_entry.yaml` (annotated)
+- `strategies/high_level/ema200_bollinger_reversal_entry.yaml` (annotated + warning)
+- `strategies/low_level/rsi2_reversal_research.yaml` (annotated)
+- `strategies/low_level/rsi2_reversal_with_risk.yaml` (annotated)
+- `strategies/low_level/rsi2_reversal_with_risk_and_weight.yaml` (annotated)
+- `strategies/low_level/rsi2_reversal_with_rebalance.yaml` (annotated)
+- `strategies/low_level/bollinger_mean_reversion.yaml` (annotated)
+- `strategies/low_level/ema200_bollinger_reversal.yaml` (annotated + warning)
+- `src/quant_research_engine/gui/app.py` (default template + fallback YAML)
+- `tests/test_gui_app.py` (2 assertions updated)
+- Agent docs: `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md` (synced)
 
 ## Validation Output
 
 ```bash
-scripts/check-progress-docs.sh → passed
+uv run pytest -q → 947 passed, 2 warnings
+uv run pytest -q tests/test_gui_app.py → 30 passed
 git diff --check → passed
 ```
-
-## Final State
-
-QRE is complete for the current MVP scope. All documentation closeout tasks are finished. The repo is fully frozen in maintenance-only closeout. No further work is planned.
