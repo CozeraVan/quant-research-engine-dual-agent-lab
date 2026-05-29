@@ -4,15 +4,15 @@ This file is the source of truth for dual-agent workflow recovery.
 
 ## Current Phase
 
-USER_DIRECTED
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE (user acting as owner/reviewer; Codex role deprecated per user instruction)
+NONE (all tasks complete)
 
 ## Current Task
 
-QRE-ONBOARDING-IMPROVEMENTS-001
+NONE (all tasks complete)
 
 ## Last Completed Step
 
@@ -43,14 +43,12 @@ QRE-ONBOARDING-IMPROVEMENTS-001
 ## Git State
 
 - Current branch: `master`
-- Last finalized commits: `c7353aa`, `47934e7`, `5970e42`
-- Working tree: modified files (onboarding + strategy annotations + GUI default fix + GUI bilingual localization):
-  - `strategies/README.md` (new)
-  - `strategies/high_level/*.yaml` (4 files annotated)
-  - `strategies/low_level/*.yaml` (6 files annotated)
-  - `src/quant_research_engine/gui/app.py` (default template fix)
-  - `src/quant_research_engine/gui/templates/*.html` (5 templates bilingual-localized)
-  - `tests/test_gui_app.py` (5 assertions updated)
+- Last finalized commits: `0c4bbcf`, `abac8de`, `c7353aa`, `47934e7`, `5970e42`
+- Working tree: modified files (agent doc finalization only):
+  - `docs/agent/04_TASK_HANDOFF.md`
+  - `docs/agent/05_PROGRESS.md`
+  - `docs/agent/09_CODING_HANDOFF.md`
+  - `docs/agent/11_AGENT_STATE.md`
 - Remote push: not requested.
 
 ## Latest Validation Evidence

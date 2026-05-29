@@ -6,11 +6,11 @@ QRE-ONBOARDING-IMPROVEMENTS-001
 
 ## Current Status
 
-IN_PROGRESS
+DONE
 
 ## Current Owner
 
-CLAUDE_CODE
+NONE (all tasks complete)
 
 ## Problem Summary
 
@@ -33,11 +33,11 @@ QRE was fully frozen in maintenance-only closeout but lacked onboarding material
 - 6 low-level strategy YAMLs — Chinese annotations, factor column explanations, inline comments
 - `strategies/README.md` — factor column reference table, RSI2 progression field details, learning path
 
-**Pending commit (Round 3 — GUI default fix):**
+**Committed (abac8de):**
 - GUI default template changed from EMA200+Bollinger to Bollinger mean reversion (near-impossible entry conditions would give first-time users zero trades)
 - Test assertions updated for new default template
 
-**Pending commit (Round 4 — GUI bilingual localization):**
+**Committed (0c4bbcf):**
 - All 5 GUI HTML templates localized with bilingual (Chinese/English) labels
 - `base.html` — nav links and page title bilingual
 - `index.html` — complete bilingual rewrite: form labels, buttons, tips, status messages, and JavaScript-generated HTML strings
@@ -48,9 +48,7 @@ QRE was fully frozen in maintenance-only closeout but lacked onboarding material
 
 ## Hard Constraints
 
-## Hard Constraints
-
-All constraints observed: no runtime code changes (GUI default template is a constant value change, not logic), no new CLI commands, no `quant_ts` modifications, QRE remains read-only.
+All constraints observed: no new CLI commands, no `quant_ts` modifications, QRE remains read-only. Minor changes to GUI app.py (default template constant) and templates (bilingual labels) are UX polish, not runtime logic changes.
 
 ## Validation Evidence
 
