@@ -29,26 +29,36 @@ QRE-ONBOARDING-IMPROVEMENTS-001
 - 6 low-level strategy YAMLs annotated with Chinese header blocks, inline section comments, and factor column explanations
 - `strategies/README.md` updated with factor column reference table, RSI2 progression field details, and learning path
 - GUI default template changed from EMA200+Bollinger (near-impossible entry) to Bollinger mean reversion (validated to produce real trades)
-- GUI fallback YAML string and 2 test assertions updated to match new default
+- GUI fallback YAML string and 3 test assertions updated to match new default
+
+**Round 4** — GUI bilingual localization (pending commit):
+- All 5 GUI HTML templates localized with bilingual Chinese/English labels
+- `base.html`: nav links and title bilingual
+- `index.html`: complete bilingual rewrite — form labels, buttons, tips, status messages, JavaScript strings
+- `runs.html`: bilingual table headers and empty state
+- `run_detail.html`: bilingual metadata labels, section headers, buttons
+- `error.html`: bilingual error title and back link
+- 3 test assertions updated for bilingual text changes
 
 ## Git State
 
 - Current branch: `master`
 - Last finalized commits: `c7353aa`, `47934e7`, `5970e42`
-- Working tree: modified files (onboarding + strategy annotations + GUI default fix):
+- Working tree: modified files (onboarding + strategy annotations + GUI default fix + GUI bilingual localization):
   - `strategies/README.md` (new)
   - `strategies/high_level/*.yaml` (4 files annotated)
   - `strategies/low_level/*.yaml` (6 files annotated)
   - `src/quant_research_engine/gui/app.py` (default template fix)
-  - `tests/test_gui_app.py` (updated assertions)
+  - `src/quant_research_engine/gui/templates/*.html` (5 templates bilingual-localized)
+  - `tests/test_gui_app.py` (5 assertions updated)
 - Remote push: not requested.
 
 ## Latest Validation Evidence
 
 ```
 uv run pytest -q → 947 passed, 2 warnings
-All 30 GUI tests passed
-scripts/check-progress-docs.sh → pending update
+uv run pytest -q tests/test_gui_app.py → 30 passed
+scripts/check-progress-docs.sh → passed
 git diff --check → passed
 ```
 

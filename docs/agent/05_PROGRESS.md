@@ -12,7 +12,7 @@ QRE onboarding improvements — documentation, annotations, and UX polish for ne
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| QRE-ONBOARDING-IMPROVEMENTS-001 | Onboarding materials and strategy annotations for new users | IN_PROGRESS | CLAUDE_CODE | 3 commits (`5970e42`, `47934e7`, `c7353aa`); .env.example, QUICKSTART.md, Makefile, 10 strategy YAMLs annotated, strategies/README.md created, GUI default template fixed; 947 passed | Commit GUI template fix and agent doc sync |
+| QRE-ONBOARDING-IMPROVEMENTS-001 | Onboarding materials, strategy annotations, and GUI bilingual localization for new users | IN_PROGRESS | CLAUDE_CODE | 3 commits (`5970e42`, `47934e7`, `c7353aa`); .env.example, QUICKSTART.md, Makefile, 10 strategy YAMLs annotated, strategies/README.md created, GUI default template fixed; 5 GUI templates bilingual-localized; 947 passed | Commit remaining pending changes (GUI default fix + GUI bilingual localization) |
 | QRE-PORTFOLIO-BASELINE-COMPARISON-001 | QRE portfolio baseline comparison outputs | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; buy_hold_return and excess_return_vs_buy_hold populated in single-symbol/batch; industry_group in batch metadata defaults; 8 new tests; 896 passed | Preserve |
 | QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001 | QRE benchmark report-artifact propagation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark_* fields flow from summary_metrics into build_strategy_performance() batch mode → strategy_performance.json; 898 passed | Preserve |
 | QRE-FULL-MARKET-PERFORMANCE-SHEET-001 | QRE full-market workbook Performance sheet | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; `Performance` sheet mirrors strategy_perf; 2 new tests; validation passed | Preserve |
@@ -156,16 +156,17 @@ QRE onboarding improvements — documentation, annotations, and UX polish for ne
 
 ## Latest Verified State
 
-Recorded on 2026-05-29:
+Recorded on 2026-05-29 after Round 4 of onboarding improvements:
 
 - Current task: QRE-ONBOARDING-IMPROVEMENTS-001
 - Current phase: `USER_DIRECTED`
 - Current owner: CLAUDE_CODE
-- Last finalized commit: `c7353aa`
-- Working tree: `src/quant_research_engine/gui/app.py`, `tests/test_gui_app.py`, and agent docs (`04`, `05`, `09`, `11`) modified
+- Last finalized commits: `5970e42`, `47934e7`, `c7353aa`
+- Working tree: `src/quant_research_engine/gui/app.py`, `tests/test_gui_app.py`, 5 GUI HTML templates, and agent docs (`04`, `05`, `09`, `11`) modified
 - QRE validation evidence:
   - `uv run pytest -q` → 947 passed, 2 warnings.
   - `uv run pytest -q tests/test_gui_app.py` → 30 passed.
+  - `scripts/check-progress-docs.sh` passed.
   - `git diff --check` passed.
 
 Current GUI direction approved on 2026-05-21:

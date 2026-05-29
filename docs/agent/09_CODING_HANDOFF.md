@@ -35,7 +35,16 @@ CLAUDE_CODE
 - Added factor column reference table to `strategies/README.md` with full `factors.table.column` paths
 - Enhanced RSI2 progression table with specific field additions per variant and step-by-step learning path
 - Changed GUI default strategy template from EMA200+Bollinger to Bollinger mean reversion (new users get real trades on first run)
-- Updated GUI fallback YAML string and 2 test assertions
+- Updated GUI fallback YAML string and 3 test assertions
+
+**Round 4 — GUI bilingual localization (pending commit):**
+- Localized all 5 GUI HTML templates with bilingual Chinese/English labels
+- `base.html` — nav links (`编辑 Editor`, `历史 History`), page title (`QRE 回测控制台`)
+- `index.html` — complete bilingual rewrite of all labels, buttons, tips, status messages, and JavaScript-generated HTML strings
+- `runs.html` — bilingual table headers and empty state message
+- `run_detail.html` — bilingual metadata labels, section headers, and action buttons
+- `error.html` — bilingual error title and back navigation link
+- Updated 3 test assertions for new bilingual text
 
 ## Files Changed
 
@@ -58,11 +67,18 @@ CLAUDE_CODE
 - `src/quant_research_engine/gui/app.py` (default template + fallback YAML)
 - `tests/test_gui_app.py` (2 assertions updated)
 - Agent docs: `04_TASK_HANDOFF.md`, `05_PROGRESS.md`, `09_CODING_HANDOFF.md`, `11_AGENT_STATE.md` (synced)
+- `src/quant_research_engine/gui/templates/base.html` (bilingual nav/title)
+- `src/quant_research_engine/gui/templates/index.html` (full bilingual form/button/status rewrite)
+- `src/quant_research_engine/gui/templates/runs.html` (bilingual table/empty state)
+- `src/quant_research_engine/gui/templates/run_detail.html` (bilingual meta/sections/buttons)
+- `src/quant_research_engine/gui/templates/error.html` (bilingual title/back link)
+- `tests/test_gui_app.py` (3 assertions updated for bilingual text)
 
 ## Validation Output
 
 ```bash
 uv run pytest -q → 947 passed, 2 warnings
 uv run pytest -q tests/test_gui_app.py → 30 passed
+scripts/check-progress-docs.sh → passed
 git diff --check → passed
 ```

@@ -1,25 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Run {{ run.run_id }}</h1>
+<h1>运行详情 Run {{ run.run_id }}</h1>
 
 <div class="run-meta">
-  <p><strong>Mode:</strong> {{ run.mode }}</p>
-  <p><strong>Date:</strong> {{ run.start }} to {{ run.end }}</p>
-  <p><strong>Codes:</strong> {{ run.codes }}</p>
-  <p><strong>Status:</strong> <span class="{{ 'ok' if run.status == 'completed' else 'err' if run.status == 'failed' else '' }}">{{ run.status }}</span></p>
+  <p><strong>模式 Mode:</strong> {{ run.mode }}</p>
+  <p><strong>日期 Date:</strong> {{ run.start }} 至 {{ run.end }}</p>
+  <p><strong>股票代码 Codes:</strong> {{ run.codes }}</p>
+  <p><strong>状态 Status:</strong> <span class="{{ 'ok' if run.status == 'completed' else 'err' if run.status == 'failed' else '' }}">{{ run.status }}</span></p>
   {% if run.error %}
-  <p><strong>Error:</strong> <span class="err">{{ run.error }}</span></p>
+  <p><strong>错误 Error:</strong> <span class="err">{{ run.error }}</span></p>
   {% endif %}
 </div>
 
 <div class="actions">
-  <button id="btn-rerun">Rerun</button>
+  <button id="btn-rerun">重新运行 Rerun</button>
 </div>
 
 {% if artifacts %}
-<h2>Artifacts</h2>
+<h2>输出文件 Artifacts</h2>
 <table>
-<thead><tr><th>File</th><th>Path</th></tr></thead>
+<thead><tr><th>文件 File</th><th>路径 Path</th></tr></thead>
 <tbody>
 {% for name, path in artifacts.items() %}
 <tr><td>{{ name }}</td><td><code>{{ path }}</code></td></tr>
@@ -31,12 +31,12 @@
 <div id="artifact-views"></div>
 
 {% if stdout %}
-<h2>stdout</h2>
+<h2>标准输出 stdout</h2>
 <pre><code class="log">{{ stdout }}</code></pre>
 {% endif %}
 
 {% if stderr %}
-<h2>stderr</h2>
+<h2>标准错误 stderr</h2>
 <pre><code class="log err-log">{{ stderr }}</code></pre>
 {% endif %}
 
@@ -63,7 +63,7 @@ document.getElementById("btn-rerun").addEventListener("click", function() {
                        "report_manifest.json", "run_manifest.json"];
 
   function renderCsv(headers, rows) {
-    if (!headers.length) return "<p>Empty CSV</p>";
+    if (!headers.length) return "<p>空 CSV Empty</p>";
     var html = '<table><thead><tr>';
     headers.forEach(function(h) { html += '<th>' + h + '</th>'; });
     html += '</tr></thead><tbody>';

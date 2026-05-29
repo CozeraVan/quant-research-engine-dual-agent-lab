@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Backtest Console</h1>
+<h1>QRE 回测控制台</h1>
 
 <div class="tabs">
-  <button class="tab active" data-tab="builder">Strategy Builder</button>
-  <button class="tab" data-tab="editor">YAML Editor</button>
+  <button class="tab active" data-tab="builder">策略构建器 Builder</button>
+  <button class="tab" data-tab="editor">YAML 编辑器</button>
 </div>
 
 <!-- ============================================================ -->
-<!-- BUILDER TAB                                                    -->
+<!-- BUILDER TAB                                                     -->
 <!-- ============================================================ -->
 <div id="tab-builder" class="tab-content active">
 <div class="builder-layout">
@@ -16,37 +16,37 @@
 
     <!-- Section 1: Strategy Identity -->
     <div class="section">
-      <button class="section-toggle" data-section="identity">Strategy Identity &#9660;</button>
+      <button class="section-toggle" data-section="identity">策略基本信息 Strategy Identity &#9660;</button>
       <div id="sec-identity" class="section-body">
         <div class="form-grid">
           <label>ID <span class="req">*</span></label>
           <input type="text" id="b-id" placeholder="rsi2_oversold_reversal" data-required="true">
 
-          <label>Name <span class="req">*</span></label>
+          <label>名称 Name <span class="req">*</span></label>
           <input type="text" id="b-name" placeholder="RSI2 Oversold Reversal" data-required="true">
 
-          <label>Family <span class="req">*</span></label>
+          <label>策略族 Family <span class="req">*</span></label>
           <select id="b-family" data-required="true">
-            <option value="mean_reversion">Mean Reversion</option>
-            <option value="trend_following">Trend Following</option>
-            <option value="breakout">Breakout</option>
-            <option value="momentum">Momentum</option>
-            <option value="carry">Carry</option>
-            <option value="arbitrage">Arbitrage</option>
-            <option value="custom">Custom</option>
+            <option value="mean_reversion">均值回归 Mean Reversion</option>
+            <option value="trend_following">趋势跟踪 Trend Following</option>
+            <option value="breakout">突破 Breakout</option>
+            <option value="momentum">动量 Momentum</option>
+            <option value="carry">套利 Carry</option>
+            <option value="arbitrage">套利 Arbitrage</option>
+            <option value="custom">自定义 Custom</option>
           </select>
 
-          <label>Direction <span class="req">*</span></label>
+          <label>方向 Direction <span class="req">*</span></label>
           <select id="b-direction" data-required="true">
-            <option value="long_only">Long Only</option>
-            <option value="short_only">Short Only</option>
-            <option value="long_short">Long/Short</option>
+            <option value="long_only">仅做多 Long Only</option>
+            <option value="short_only">仅做空 Short Only</option>
+            <option value="long_short">多空 Long/Short</option>
           </select>
 
-          <label>Description <span class="req">*</span></label>
-          <textarea id="b-description" rows="2" placeholder="Brief strategy description..." data-required="true"></textarea>
+          <label>描述 Description <span class="req">*</span></label>
+          <textarea id="b-description" rows="2" placeholder="简要策略描述..." data-required="true"></textarea>
 
-          <label>Version</label>
+          <label>版本 Version</label>
           <input type="text" id="b-version" placeholder="1.0.0">
         </div>
       </div>
@@ -54,12 +54,12 @@
 
     <!-- Section 2: Entry/Exit Rules -->
     <div class="section">
-      <button class="section-toggle" data-section="rules">Entry / Exit Rules &#9660;</button>
+      <button class="section-toggle" data-section="rules">入场/离场规则 Entry / Exit Rules &#9660;</button>
       <div id="sec-rules" class="section-body">
 
-        <h4>Entry Conditions</h4>
+        <h4>入场条件 Entry Conditions</h4>
         <div class="rule-row">
-          <label class="label-sm">Combinator</label>
+          <label class="label-sm">组合逻辑 Combinator</label>
           <select id="b-entry-combinator">
             <option value="all">ALL (AND)</option>
             <option value="any">ANY (OR)</option>
@@ -68,8 +68,8 @@
         <div id="entry-conditions" class="condition-list">
           <div class="condition-item">
             <select class="cond-alias-type">
-              <option value="alias">Alias</option>
-              <option value="builtin">Built-in</option>
+              <option value="alias">别名 Alias</option>
+              <option value="builtin">内置 Built-in</option>
             </select>
             <input type="text" class="cond-alias" placeholder="alias" size="12">
             <select class="cond-op">
@@ -79,23 +79,23 @@
               <option value=">=">&gt;=</option>
               <option value="==">==</option>
               <option value="!=">!=</option>
-              <option value="crosses_above">cross &gt;</option>
-              <option value="crosses_below">cross &lt;</option>
+              <option value="crosses_above">上穿 cross &gt;</option>
+              <option value="crosses_below">下穿 cross &lt;</option>
             </select>
             <input type="text" class="cond-value" placeholder="value or alias" size="12">
-            <button class="btn-sm btn-remove-cond" title="Remove">x</button>
+            <button class="btn-sm btn-remove-cond" title="删除 Remove">x</button>
           </div>
         </div>
-        <button class="btn-sm" onclick="addCondition('entry-conditions')">+ Condition</button>
+        <button class="btn-sm" onclick="addCondition('entry-conditions')">+ 添加条件 Add Condition</button>
 
-        <h4 style="margin-top:12px;">Exit Conditions <span class="opt">(optional)</span></h4>
+        <h4 style="margin-top:12px;">离场条件 Exit Conditions <span class="opt">(可选 optional)</span></h4>
         <div id="exit-enabled-wrap" class="rule-row">
-          <label class="label-sm">Enable</label>
+          <label class="label-sm">启用 Enable</label>
           <input type="checkbox" id="b-exit-enabled" onchange="toggleExitSection()">
         </div>
         <div id="exit-section" style="display:none;">
           <div class="rule-row">
-            <label class="label-sm">Combinator</label>
+            <label class="label-sm">组合逻辑 Combinator</label>
             <select id="b-exit-combinator">
               <option value="all">ALL (AND)</option>
               <option value="any">ANY (OR)</option>
@@ -104,8 +104,8 @@
           <div id="exit-conditions" class="condition-list">
             <div class="condition-item">
               <select class="cond-alias-type">
-                <option value="alias">Alias</option>
-                <option value="builtin">Built-in</option>
+                <option value="alias">别名 Alias</option>
+                <option value="builtin">内置 Built-in</option>
               </select>
               <input type="text" class="cond-alias" placeholder="alias" size="12">
               <select class="cond-op">
@@ -115,25 +115,25 @@
                 <option value=">=">&gt;=</option>
                 <option value="==">==</option>
                 <option value="!=">!=</option>
-                <option value="crosses_above">cross &gt;</option>
-                <option value="crosses_below">cross &lt;</option>
+                <option value="crosses_above">上穿 cross &gt;</option>
+                <option value="crosses_below">下穿 cross &lt;</option>
               </select>
               <input type="text" class="cond-value" placeholder="value or alias" size="12">
-              <button class="btn-sm btn-remove-cond" title="Remove">x</button>
+              <button class="btn-sm btn-remove-cond" title="删除 Remove">x</button>
             </div>
           </div>
-          <button class="btn-sm" onclick="addCondition('exit-conditions')">+ Condition</button>
+          <button class="btn-sm" onclick="addCondition('exit-conditions')">+ 添加条件 Add Condition</button>
         </div>
 
-        <h4 style="margin-top:12px;">Risk Controls <span class="opt">(optional)</span></h4>
+        <h4 style="margin-top:12px;">风控参数 Risk Controls <span class="opt">(可选 optional)</span></h4>
         <div class="form-grid form-grid-3">
-          <label>Stop Loss %</label>
+          <label>止损 Stop Loss %</label>
           <input type="number" id="b-stop-loss" step="0.01" placeholder="e.g. 0.05">
 
-          <label>Take Profit %</label>
+          <label>止盈 Take Profit %</label>
           <input type="number" id="b-take-profit" step="0.01" placeholder="e.g. 0.10">
 
-          <label>Max Hold Days</label>
+          <label>最大持仓天数 Max Hold Days</label>
           <input type="number" id="b-max-hold" placeholder="e.g. 20">
         </div>
       </div>
@@ -141,13 +141,13 @@
 
     <!-- Section 3: Factor Requirements -->
     <div class="section">
-      <button class="section-toggle" data-section="factors">Factor Requirements &#9660;</button>
+      <button class="section-toggle" data-section="factors">因子需求 Factor Requirements &#9660;</button>
       <div id="sec-factors" class="section-body">
         <div id="factor-rows">
           <div class="factor-item">
             <input type="text" class="f-alias" placeholder="alias" size="10">
             <select class="f-indicator">
-              <option value="">--indicator--</option>
+              <option value="">--指标 indicator--</option>
               <option value="rsi">rsi</option>
               <option value="ema">ema</option>
               <option value="sma">sma</option>
@@ -174,59 +174,59 @@
             <input type="number" class="f-period" placeholder="period" size="6" min="1">
             <input type="text" class="f-params" placeholder="params" size="10">
             <input type="text" class="f-output" placeholder="output" size="8">
-            <label class="label-inline"><input type="checkbox" class="f-required" checked> req</label>
-            <button class="btn-sm btn-remove-factor" title="Remove">x</button>
+            <label class="label-inline"><input type="checkbox" class="f-required" checked> 必需 req</label>
+            <button class="btn-sm btn-remove-factor" title="删除 Remove">x</button>
           </div>
         </div>
-        <button class="btn-sm" onclick="addFactor()">+ Factor</button>
+        <button class="btn-sm" onclick="addFactor()">+ 添加因子 Add Factor</button>
       </div>
     </div>
 
     <!-- Section 4: Experiment Config -->
     <div class="section">
-      <button class="section-toggle" data-section="experiment">Experiment Configuration &#9660;</button>
+      <button class="section-toggle" data-section="experiment">实验配置 Experiment Configuration &#9660;</button>
       <div id="sec-experiment" class="section-body">
         <div class="form-grid">
-          <label>Experiment ID</label>
+          <label>实验 ID</label>
           <input type="text" id="b-exp-id" placeholder="auto-from-strategy-id">
 
-          <label>Frequency</label>
+          <label>频率 Frequency</label>
           <select id="b-frequency">
-            <option value="daily">daily</option>
+            <option value="daily">日线 daily</option>
           </select>
 
-          <label>Market</label>
+          <label>市场 Market</label>
           <select id="b-market">
-            <option value="ashare">ashare</option>
+            <option value="ashare">A股 ashare</option>
           </select>
 
-          <label>Start <span class="req">*</span></label>
+          <label>开始 Start <span class="req">*</span></label>
           <input type="date" id="b-start" value="2025-01-02" data-required="true">
 
-          <label>End <span class="req">*</span></label>
+          <label>结束 End <span class="req">*</span></label>
           <input type="date" id="b-end" value="2026-05-23" data-required="true">
 
-          <label>Universe</label>
+          <label>股票池 Universe</label>
           <select id="b-universe">
-            <option value="all_a">All A-shares</option>
+            <option value="all_a">全 A 股 All A-shares</option>
           </select>
 
-          <label>Exclude ST</label>
+          <label>排除 ST</label>
           <input type="checkbox" id="b-exclude-st" checked>
 
-          <label>Exclude Suspended</label>
+          <label>排除停牌</label>
           <input type="checkbox" id="b-exclude-suspended" checked>
 
-          <label>Exclude Risk Warning</label>
+          <label>排除风险警示</label>
           <input type="checkbox" id="b-exclude-risk" checked>
 
-          <label>Min Listing Days</label>
+          <label>最少上市天数</label>
           <input type="number" id="b-min-listing" value="120" min="1">
 
-          <label>Initial Cash</label>
+          <label>初始资金 Initial Cash</label>
           <input type="number" id="b-cash" value="100000" min="1">
 
-          <label>Max Positions</label>
+          <label>最大持仓数 Max Positions</label>
           <input type="number" id="b-maxpos" value="10" min="1">
         </div>
       </div>
@@ -234,15 +234,15 @@
 
     <!-- Action buttons -->
     <div class="builder-actions">
-      <button id="btn-compile">Compile</button>
-      <span class="opt">Run params:</span>
+      <button id="btn-compile">编译 Compile</button>
+      <span class="opt">运行参数 Run params:</span>
       <select id="b-mode">
-        <option value="batch">Batch</option>
-        <option value="shared">Shared-cash</option>
-        <option value="single">Single-symbol</option>
+        <option value="batch">批量 Batch</option>
+        <option value="shared">共享资金 Shared-cash</option>
+        <option value="single">单标的 Single-symbol</option>
       </select>
       <input type="text" id="b-codes" value="000001.SZ,000002.SZ" placeholder="codes" size="20">
-      <button id="btn-run-builder">Run</button>
+      <button id="btn-run-builder">运行 Run</button>
       <span id="builder-run-status" class="hidden"></span>
     </div>
 
@@ -252,14 +252,14 @@
 
   <div class="builder-side">
     <div class="info-box">
-      <strong>Tips</strong>
+      <strong>使用提示 Tips</strong>
       <ul>
-        <li>Fill all required fields (<span class="req">*</span>)</li>
-        <li>Each condition needs an alias matching a factor requirement</li>
-        <li>Built-in aliases: <code>close open high low pre_close vol amount</code></li>
-        <li>Click <strong>Compile</strong> to generate the low-level YAML</li>
-        <li>Click <strong>Run</strong> to compile and backtest</li>
-        <li>Switch to <strong>YAML Editor</strong> for raw YAML control</li>
+        <li>填写所有必填字段 (<span class="req">*</span>)</li>
+        <li>每个条件需要绑定一个因子别名</li>
+        <li>内置别名: <code>close open high low pre_close vol amount</code></li>
+        <li>点击 <strong>编译 Compile</strong> 生成低层 YAML 规格</li>
+        <li>点击 <strong>运行 Run</strong> 编译并执行回测</li>
+        <li>切换到 <strong>YAML 编辑器</strong> 可手动编写策略</li>
       </ul>
     </div>
   </div>
@@ -272,71 +272,71 @@
 <div id="tab-editor" class="tab-content">
 <div class="layout">
   <div class="panel editor-panel">
-    <h2>Strategy (YAML)</h2>
-    <textarea id="strategy-yaml" rows="24" cols="80" placeholder="Paste or load a strategy YAML file...">{{ default_strategy_yaml }}</textarea>
+    <h2>策略 YAML</h2>
+    <textarea id="strategy-yaml" rows="24" cols="80" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
     <div class="editor-actions">
-      <button id="btn-validate">Validate</button>
+      <button id="btn-validate">验证 Validate</button>
       <label class="file-label">
-        Load file
+        加载文件 Load file
         <input type="file" id="file-input" accept=".yaml,.yml" hidden>
       </label>
       <select id="template-select">
-        <option value="">-- templates --</option>
-        <option value="{{ default_strategy_name }}" selected>{{ default_strategy_name }} (default)</option>
+        <option value="">-- 模板 templates --</option>
+        <option value="{{ default_strategy_name }}" selected>{{ default_strategy_name }} (默认 default)</option>
         {% for name in templates %}
         {% if name != default_strategy_name %}
         <option value="{{ name }}">{{ name }}</option>
         {% endif %}
         {% endfor %}
       </select>
-      <input type="text" id="template-name" placeholder="template name" size="16">
-      <button id="btn-save-template">Save Template</button>
+      <input type="text" id="template-name" placeholder="模板名称 template name" size="16">
+      <button id="btn-save-template">保存模板 Save Template</button>
     </div>
     <div id="validate-result" class="result-box hidden"></div>
   </div>
 
   <div class="panel param-panel">
-    <h2>Parameters</h2>
+    <h2>回测参数 Parameters</h2>
     <div class="form-grid">
-      <label>Mode</label>
+      <label>模式 Mode</label>
       <select id="param-mode">
-        <option value="single">Single-symbol</option>
-        <option value="batch">Batch</option>
-        <option value="shared">Shared-cash</option>
+        <option value="single">单标的 Single-symbol</option>
+        <option value="batch">批量 Batch</option>
+        <option value="shared">共享资金 Shared-cash</option>
       </select>
 
-      <label>Start</label>
+      <label>开始 Start</label>
       <input type="text" id="param-start" value="2026-01-05" placeholder="YYYY-MM-DD">
 
-      <label>End</label>
+      <label>结束 End</label>
       <input type="text" id="param-end" value="2026-03-31" placeholder="YYYY-MM-DD">
 
-      <label>Codes</label>
+      <label>股票代码 Codes</label>
       <input type="text" id="param-codes" value="000001.SZ,000002.SZ" placeholder="ts_code,...">
 
-      <label>Initial Cash</label>
+      <label>初始资金 Initial Cash</label>
       <input type="text" id="param-cash" value="100000" placeholder="100000">
 
-      <label>Max Positions</label>
+      <label>最大持仓 Max Positions</label>
       <input type="text" id="param-maxpos" value="10" placeholder="10">
 
-      <label>Output Dir</label>
+      <label>输出目录 Output Dir</label>
       <input type="text" id="param-output" value="outputs/gui-run" placeholder="outputs/gui-run">
 
-      <label>DB URL</label>
+      <label>数据库 DB URL</label>
       <input type="text" id="param-dburl" placeholder="postgresql+psycopg:///tushare_data">
 
-      <label>Market Profile</label>
+      <label>市场规则 Market Profile</label>
       <input type="text" id="param-profile" placeholder="configs/market_profiles/ashare_daily_default.yaml">
 
-      <label>Executor</label>
+      <label>执行方式 Executor</label>
       <select id="param-executor">
-        <option value="module">Module (direct)</option>
-        <option value="cli">CLI (subprocess)</option>
+        <option value="module">模块直调 Module (direct)</option>
+        <option value="cli">CLI 子进程 (subprocess)</option>
       </select>
     </div>
     <div class="run-actions">
-      <button id="btn-run">Run Backtest</button>
+      <button id="btn-run">运行回测 Run Backtest</button>
       <span id="run-status" class="hidden"></span>
     </div>
   </div>
@@ -385,11 +385,11 @@
     var container = document.getElementById(containerId);
     var div = document.createElement('div');
     div.className = 'condition-item';
-    div.innerHTML = '<select class="cond-alias-type"><option value="alias">Alias</option><option value="builtin">Built-in</option></select> '
+    div.innerHTML = '<select class="cond-alias-type"><option value="alias">别名 Alias</option><option value="builtin">内置 Built-in</option></select> '
       + '<input type="text" class="cond-alias" placeholder="alias" size="12"> '
-      + '<select class="cond-op"><option value="<">&lt;</option><option value=">">&gt;</option><option value="<=">&lt;=</option><option value=">=">&gt;=</option><option value="==">==</option><option value="!=">!=</option><option value="crosses_above">cross &gt;</option><option value="crosses_below">cross &lt;</option></select> '
+      + '<select class="cond-op"><option value="<">&lt;</option><option value=">">&gt;</option><option value="<=">&lt;=</option><option value=">=">&gt;=</option><option value="==">==</option><option value="!=">!=</option><option value="crosses_above">上穿 cross &gt;</option><option value="crosses_below">下穿 cross &lt;</option></select> '
       + '<input type="text" class="cond-value" placeholder="value or alias" size="12"> '
-      + '<button class="btn-sm btn-remove-cond" title="Remove">x</button>';
+      + '<button class="btn-sm btn-remove-cond" title="删除 Remove">x</button>';
     container.appendChild(div);
     div.querySelector('.btn-remove-cond').addEventListener('click', function() { div.remove(); });
   };
@@ -403,13 +403,13 @@
     var div = document.createElement('div');
     div.className = 'factor-item';
     div.innerHTML = '<input type="text" class="f-alias" placeholder="alias" size="10"> '
-      + '<select class="f-indicator"><option value="">--indicator--</option><option value="rsi">rsi</option><option value="ema">ema</option><option value="sma">sma</option><option value="wma">wma</option><option value="macd">macd</option><option value="bollinger">bollinger</option><option value="atr">atr</option><option value="adx">adx</option><option value="cci">cci</option><option value="mfi">mfi</option><option value="obv">obv</option><option value="stochastic">stochastic</option><option value="williams_r">williams_r</option></select> '
+      + '<select class="f-indicator"><option value="">--指标 indicator--</option><option value="rsi">rsi</option><option value="ema">ema</option><option value="sma">sma</option><option value="wma">wma</option><option value="macd">macd</option><option value="bollinger">bollinger</option><option value="atr">atr</option><option value="adx">adx</option><option value="cci">cci</option><option value="mfi">mfi</option><option value="obv">obv</option><option value="stochastic">stochastic</option><option value="williams_r">williams_r</option></select> '
       + '<select class="f-source"><option value="close">close</option><option value="open">open</option><option value="high">high</option><option value="low">low</option><option value="typical">typical</option><option value="hlc3">hlc3</option><option value="ohlc4">ohlc4</option></select> '
       + '<input type="number" class="f-period" placeholder="period" size="6" min="1"> '
       + '<input type="text" class="f-params" placeholder="params" size="10"> '
       + '<input type="text" class="f-output" placeholder="output" size="8"> '
-      + '<label class="label-inline"><input type="checkbox" class="f-required" checked> req</label> '
-      + '<button class="btn-sm btn-remove-factor" title="Remove">x</button>';
+      + '<label class="label-inline"><input type="checkbox" class="f-required" checked> 必需 req</label> '
+      + '<button class="btn-sm btn-remove-factor" title="删除 Remove">x</button>';
     container.appendChild(div);
     div.querySelector('.btn-remove-factor').addEventListener('click', function() { div.remove(); });
   };
@@ -537,7 +537,7 @@
     var data = serializeForm();
     var resultBox = document.getElementById('compile-result');
     resultBox.classList.remove('hidden');
-    resultBox.innerHTML = '<span>Compiling...</span>';
+    resultBox.innerHTML = '<span>编译中 Compiling...</span>';
 
     fetch('/api/builder/compile', {
       method: 'POST',
@@ -547,7 +547,7 @@
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.ok) {
-        resultBox.innerHTML = '<div class="ok">Compilation successful</div>'
+        resultBox.innerHTML = '<div class="ok">编译成功 Compilation successful</div>'
           + '<pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
         // Store for run
         resultBox._compiledYaml = d.yaml;
@@ -555,12 +555,12 @@
         var issues = (d.issues || []).map(function(i) {
           return '<li class="' + i.level + '">[' + i.level + '] ' + escHtml(i.message) + '</li>';
         }).join('');
-        resultBox.innerHTML = '<div class="err">Compilation failed:</div><ul>' + issues + '</ul>';
+        resultBox.innerHTML = '<div class="err">编译失败 Compilation failed:</div><ul>' + issues + '</ul>';
         resultBox._compiledYaml = null;
       }
     })
     .catch(function(err) {
-      resultBox.innerHTML = '<span class="err">Error: ' + err + '</span>';
+      resultBox.innerHTML = '<span class="err">错误 Error: ' + err + '</span>';
     });
   });
 
@@ -587,7 +587,7 @@
       };
 
       statusEl.classList.remove('hidden');
-      statusEl.textContent = 'Running...';
+      statusEl.textContent = '运行中 Running...';
       statusEl.className = '';
 
       fetch('/api/run', {
@@ -599,20 +599,20 @@
       .then(function(d) {
         resultBox.classList.remove('hidden');
         if (d.status === 'completed') {
-          statusEl.textContent = 'Done';
+          statusEl.textContent = '完成 Done';
           statusEl.className = 'ok';
           resultBox.innerHTML =
-            '<p><strong>Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>'
-            + '<p><strong>Mode:</strong> ' + d.mode + '</p>'
-            + '<p><a href="/runs/' + d.run_id + '">View Results</a></p>';
+            '<p><strong>运行 ID Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>'
+            + '<p><strong>模式 Mode:</strong> ' + d.mode + '</p>'
+            + '<p><a href="/runs/' + d.run_id + '">查看结果 View Results</a></p>';
         } else {
-          statusEl.textContent = 'Failed';
+          statusEl.textContent = '失败 Failed';
           statusEl.className = 'err';
-          resultBox.innerHTML = '<p class="err">Error: ' + (d.error || 'Unknown error') + '</p>';
+          resultBox.innerHTML = '<p class="err">错误 Error: ' + (d.error || 'Unknown error') + '</p>';
         }
       })
       .catch(function(err) {
-        statusEl.textContent = 'Error';
+        statusEl.textContent = '错误 Error';
         statusEl.className = 'err';
         resultBox.innerHTML = '<p class="err">' + err + '</p>';
       });
@@ -626,7 +626,7 @@
     // Compile then run
     var data = serializeForm();
     statusEl.classList.remove('hidden');
-    statusEl.textContent = 'Compiling...';
+    statusEl.textContent = '编译中 Compiling...';
     statusEl.className = '';
 
     fetch('/api/builder/compile', {
@@ -639,7 +639,7 @@
       if (d.ok) {
         compileResult._compiledYaml = d.yaml;
         compileResult.classList.remove('hidden');
-        compileResult.innerHTML = '<div class="ok">Compilation successful</div>'
+        compileResult.innerHTML = '<div class="ok">编译成功 Compilation successful</div>'
           + '<pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
         doRun(d.yaml);
       } else {
@@ -647,13 +647,13 @@
           return '<li class="' + i.level + '">[' + i.level + '] ' + escHtml(i.message) + '</li>';
         }).join('');
         compileResult.classList.remove('hidden');
-        compileResult.innerHTML = '<div class="err">Compilation failed:</div><ul>' + issues + '</ul>';
-        statusEl.textContent = 'Compile failed';
+        compileResult.innerHTML = '<div class="err">编译失败 Compilation failed:</div><ul>' + issues + '</ul>';
+        statusEl.textContent = '编译失败 Compile failed';
         statusEl.className = 'err';
       }
     })
     .catch(function(err) {
-      statusEl.textContent = 'Error';
+      statusEl.textContent = '错误 Error';
       statusEl.className = 'err';
       resultBox.innerHTML = '<p class="err">' + err + '</p>';
     });
@@ -717,7 +717,7 @@
     .then(function(d) {
       show(validateBox);
       if (d.valid) {
-        validateBox.innerHTML = '<span class="ok">YAML is valid</span>';
+        validateBox.innerHTML = '<span class="ok">YAML 格式有效 Valid</span>';
       } else {
         validateBox.innerHTML = '<span class="err">' + d.error + '</span>';
       }
@@ -727,7 +727,7 @@
   // Save template
   document.getElementById("btn-save-template").addEventListener("click", function() {
     var name = document.getElementById("template-name").value.trim();
-    if (!name) { alert("Enter a template name"); return; }
+    if (!name) { alert("请输入模板名称 Enter a template name"); return; }
     fetch("/api/templates", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
@@ -736,7 +736,7 @@
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.error) { alert(d.error); }
-      else { alert("Saved: " + d.saved); location.reload(); }
+      else { alert("已保存 Saved: " + d.saved); location.reload(); }
     });
   });
 
@@ -757,7 +757,7 @@
     };
 
     show(runStatus);
-    runStatus.textContent = "Running...";
+    runStatus.textContent = "运行中 Running...";
     runStatus.className = "";
 
     fetch("/api/run", {
@@ -769,21 +769,21 @@
     .then(function(d) {
       show(runResult);
       if (d.status === "completed") {
-        runStatus.textContent = "Done";
+        runStatus.textContent = "完成 Done";
         runStatus.className = "ok";
         runResult.innerHTML =
-          '<p><strong>Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>' +
-          '<p><strong>Mode:</strong> ' + d.mode + '</p>' +
-          '<p><strong>Status:</strong> ' + d.status + '</p>' +
-          '<p><a href="/runs/' + d.run_id + '">View Results</a></p>';
+          '<p><strong>运行 ID Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>' +
+          '<p><strong>模式 Mode:</strong> ' + d.mode + '</p>' +
+          '<p><strong>状态 Status:</strong> ' + d.status + '</p>' +
+          '<p><a href="/runs/' + d.run_id + '">查看结果 View Results</a></p>';
       } else {
-        runStatus.textContent = "Failed";
+        runStatus.textContent = "失败 Failed";
         runStatus.className = "err";
-        runResult.innerHTML = '<p class="err">Error: ' + (d.error || "Unknown error") + '</p>';
+        runResult.innerHTML = '<p class="err">错误 Error: ' + (d.error || "Unknown error") + '</p>';
       }
     })
     .catch(function(err) {
-      runStatus.textContent = "Error";
+      runStatus.textContent = "错误 Error";
       runStatus.className = "err";
       runResult.innerHTML = '<p class="err">' + err + '</p>';
     });

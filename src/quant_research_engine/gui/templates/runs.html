@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Run History</h1>
+<h1>运行历史 Run History</h1>
 
 {% if runs %}
 <table>
 <thead>
 <tr>
-  <th>Run ID</th>
-  <th>Mode</th>
-  <th>Start</th>
-  <th>End</th>
-  <th>Status</th>
-  <th>Created</th>
+  <th>运行 ID</th>
+  <th>模式 Mode</th>
+  <th>开始 Start</th>
+  <th>结束 End</th>
+  <th>状态 Status</th>
+  <th>创建时间 Created</th>
 </tr>
 </thead>
 <tbody>
@@ -28,6 +28,6 @@
 </tbody>
 </table>
 {% else %}
-<p>No runs recorded yet. <a href="/">Run a backtest</a> to start.</p>
+<p>暂无运行记录。 <a href="/">运行一次回测</a> 开始使用。</p>
 {% endif %}
 {% endblock %}

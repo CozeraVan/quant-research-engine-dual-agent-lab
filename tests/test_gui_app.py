@@ -36,7 +36,7 @@ def app_client(monkeypatch, tmp_path):
 def test_index_returns_200(app_client):
     resp = app_client.get("/")
     assert resp.status_code == 200
-    assert b"Backtest Console" in resp.data
+    assert b"QRE \xe5\x9b\x9e\xe6\xb5\x8b\xe6\x8e\xa7\xe5\x88\xb6\xe5\x8f\xb0" in resp.data
     assert b"bollinger_mean_reversion" in resp.data
     assert b"bb_middle" in resp.data
     assert b"bb_lower" in resp.data
@@ -495,6 +495,6 @@ def test_builder_validate_invalid(app_client):
 def test_index_includes_builder_tab(app_client):
     resp = app_client.get("/")
     assert resp.status_code == 200
-    assert b"Strategy Builder" in resp.data
-    assert b"YAML Editor" in resp.data
+    assert b"Builder" in resp.data
+    assert b"YAML \xe7\xbc\x96\xe8\xbe\x91\xe5\x99\xa8" in resp.data
     assert b"builder-layout" in resp.data

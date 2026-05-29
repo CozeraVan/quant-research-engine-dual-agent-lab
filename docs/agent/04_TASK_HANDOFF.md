@@ -33,10 +33,20 @@ QRE was fully frozen in maintenance-only closeout but lacked onboarding material
 - 6 low-level strategy YAMLs — Chinese annotations, factor column explanations, inline comments
 - `strategies/README.md` — factor column reference table, RSI2 progression field details, learning path
 
-**Pending commit:**
-- GUI default template changed from EMA200+Bollinger to Bollinger mean reversion
+**Pending commit (Round 3 — GUI default fix):**
+- GUI default template changed from EMA200+Bollinger to Bollinger mean reversion (near-impossible entry conditions would give first-time users zero trades)
 - Test assertions updated for new default template
-- Agent docs synchronized with current state
+
+**Pending commit (Round 4 — GUI bilingual localization):**
+- All 5 GUI HTML templates localized with bilingual (Chinese/English) labels
+- `base.html` — nav links and page title bilingual
+- `index.html` — complete bilingual rewrite: form labels, buttons, tips, status messages, and JavaScript-generated HTML strings
+- `runs.html` — bilingual table headers and empty state
+- `run_detail.html` — bilingual metadata labels, section headers, and buttons
+- `error.html` — bilingual error title and back link
+- 3 test assertions updated for new bilingual text (`Backtest Console` → `QRE 回测控制台`, `YAML Editor` → `YAML 编辑器`, `Strategy Builder` → `Builder`)
+
+## Hard Constraints
 
 ## Hard Constraints
 
@@ -47,5 +57,6 @@ All constraints observed: no runtime code changes (GUI default template is a con
 ```bash
 uv run pytest -q → 947 passed, 2 warnings
 uv run pytest -q tests/test_gui_app.py → 30 passed
+scripts/check-progress-docs.sh → passed
 git diff --check → passed
 ```
