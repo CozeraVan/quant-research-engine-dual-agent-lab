@@ -1,0 +1,71 @@
+# =============================================================================
+# 突破 — Darvas Box 箱体突破
+# =============================================================================
+# 策略 ID:     bo04a_darvas_box_breakout
+# 策略名称:   Darvas 箱体突破
+# 难度:       ★★★☆☆ (3/5)
+# 说明:       价格突破前 20 日整理箱体顶部且放量入场，跌回箱体内出场。
+# 数据依赖:   SMA(20)
+# 入场规则:   (close > close.shift(1).rolling(20).max()) & (vol > vol.shift(1).rolling(20).mean())
+# 出场规则:   close < sma_20
+# 持仓天数:   10 天
+# 方向:       long_only
+
+# 生成工具:   scripts/generate_strategy_yamls.py
+# 校验状态:   待数据库因子验证
+# =============================================================================
+
+experiment:
+  name: bo04a_darvas_box_breakout_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    sma_20: factors.stock_daily_overlap_close.sma_20
+
+universe:
+  market: ashare
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+
+signal:
+  type: expression
+  entry: (close > close.shift(1).rolling(20).max()) & (vol > vol.shift(1).rolling(20).mean())
+  exit: close < sma_20
+
+execution:
+  signal_date: t
+  entry_execution: t_plus_1_open
+  exit_execution: t_plus_1_open
+
+holding:
+  max_holding_days: 10
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: null
+  trailing_stop_pct: null
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
+  benchmarks:
+    - full_a_equal_weight
+    - csi_300
+    - csi_500
+    - csi_1000

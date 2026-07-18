@@ -4,7 +4,7 @@
 
 The QRE strategy entry standard defines how to author a strategy so it can be validated, compiled, backtested, and reported by the quant-research-engine (QRE).
 
-This standard is for humans, Codex, Claude Code, and external strategy projects. It separates *what the strategy means* from *where the data lives*. The author describes trading logic in terms of indicator aliases and rules — the QRE compiler resolves those aliases to database columns.
+This standard is for humans, the project's single development agent (Kimi Code), and external strategy projects. It separates *what the strategy means* from *where the data lives*. The author describes trading logic in terms of indicator aliases and rules — the QRE compiler resolves those aliases to database columns.
 
 ## Scope
 

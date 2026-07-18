@@ -2,59 +2,41 @@
 
 ## Task ID
 
-QRE-ONBOARDING-IMPROVEMENTS-001
+QRE-SINGLE-AGENT-MIGRATION-001
 
 ## Current Status
 
-DONE
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
 
 ## Current Owner
 
-NONE (all tasks complete)
+KIMI_CODE (single agent; user-directed task)
 
 ## Problem Summary
 
-QRE was fully frozen in maintenance-only closeout but lacked onboarding materials for new users. The user requested improvements so new users can quickly and intuitively get started with the project.
+The development environment changed: the former dual-agent setup (Codex planning/review + Claude Code implementation) is retired, and the project now develops with a single agent (Kimi Code). The user directed that all future development flow must live in `docs/agent/` markdown files as long-term memory, not in CLI conversation. A full documentation audit preceded the migration and found stale state claims (notably the "fully frozen, no further work" closeout wording in `01_CURRENT_STATUS.md`, contradicted by the completed-but-uncommitted strategy catalog batch backtest).
 
 ## Implementation Summary
 
-**Committed (5970e42):**
-- `.env.example` — all env vars documented with fallback chain
-- `QUICKSTART.md` — 10-minute zero-to-first-backtest guide
-- `Makefile` — `help`, `install`, `test`, `smoke`, `gui`, `clean` targets
-- `README.md` — Quick Start section added near top
-- `docs/strategy_entry/README.md` — "Your First Strategy" 6-step walkthrough
-
-**Committed (47934e7):**
-- 4 high-level strategy YAMLs — Chinese annotations, difficulty ratings, usage notes
-- `strategies/README.md` — strategy navigation hub with comparison table and RSI2 progression
-
-**Committed (c7353aa):**
-- 6 low-level strategy YAMLs — Chinese annotations, factor column explanations, inline comments
-- `strategies/README.md` — factor column reference table, RSI2 progression field details, learning path
-
-**Committed (abac8de):**
-- GUI default template changed from EMA200+Bollinger to Bollinger mean reversion (near-impossible entry conditions would give first-time users zero trades)
-- Test assertions updated for new default template
-
-**Committed (0c4bbcf):**
-- All 5 GUI HTML templates localized with bilingual (Chinese/English) labels
-- `base.html` — nav links and page title bilingual
-- `index.html` — complete bilingual rewrite: form labels, buttons, tips, status messages, and JavaScript-generated HTML strings
-- `runs.html` — bilingual table headers and empty state
-- `run_detail.html` — bilingual metadata labels, section headers, and buttons
-- `error.html` — bilingual error title and back link
-- 3 test assertions updated for new bilingual text (`Backtest Console` → `QRE 回测控制台`, `YAML Editor` → `YAML 编辑器`, `Strategy Builder` → `Builder`)
+1. Audited all markdown documentation against actual repository state (git status, tests, outputs).
+2. Rewrote `AGENTS.md` as the single-agent instruction entry point; `CLAUDE.md` is now a redirect page.
+3. Updated workflow docs: `00` (vision wording), `01` (stale closeout corrected, real repo state recorded), `02` (R-AGENT-* replaces R-DUAL-*, R-GIT-* reassigned to single agent + user approval), `07` (single-agent recovery protocol), `11` (new phase vocabulary and state), `12` (deprecated).
+4. Preserved history: `03/05/06` bodies untouched except banner/append/prepend; archived root trackers and `docs/legacy/` untouched.
+5. Reset `08/09/10` to this migration task.
+6. Rewrote the seven skills (`.agents/skills/` and `.claude/skills/`, kept identical) without agent prefixes: `plan-brief`, `implement`, `self-review`, `git-finalize`, `intake-change`, `resume-task`, `update-progress`.
+7. Updated `README.md` and `docs/strategy_entry/README.md` workflow references; `CR-0000-template.md` state-transition wording.
 
 ## Hard Constraints
 
-All constraints observed: no new CLI commands, no `quant_ts` modifications, QRE remains read-only. Minor changes to GUI app.py (default template constant) and templates (bilingual labels) are UX polish, not runtime logic changes.
+- No runtime code, tests, strategy YAMLs, or outputs modified.
+- Historical log bodies preserved; no workflow document deleted.
+- No git commit without explicit user approval (R-GIT-001/002).
 
 ## Validation Evidence
 
 ```bash
-uv run pytest -q → 947 passed, 2 warnings
-uv run pytest -q tests/test_gui_app.py → 30 passed
+bash -n scripts/{agent-status,check-progress-docs,git-finalize-check}.sh .claude/hooks/progress-gate.sh → OK
 scripts/check-progress-docs.sh → passed
 git diff --check → passed
+grep scan for dual-agent vocabulary → only historical hits remain
 ```

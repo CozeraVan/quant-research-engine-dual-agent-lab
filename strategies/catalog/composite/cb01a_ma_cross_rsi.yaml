@@ -1,0 +1,74 @@
+# =============================================================================
+# 组合增强 — 多信号共振模板
+# =============================================================================
+# 策略 ID:     cb01a_ma_cross_rsi
+# 策略名称:   均线金叉 + RSI 确认
+# 难度:       ★★☆☆☆ (2/5)
+# 说明:       MA(5) 上穿 MA(20) 且 RSI(14) > 50 入场，RSI < 50 或跌破 MA(10) 出场。
+# 数据依赖:   SMA(5,10,20) + RSI(14)
+# 入场规则:   (sma_5 > sma_20) & (rsi_14 > 50)
+# 出场规则:   (rsi_14 < 50) | (close < sma_10)
+# 持仓天数:   5 天
+# 方向:       long_only
+
+# 生成工具:   scripts/generate_strategy_yamls.py
+# 校验状态:   待数据库因子验证
+# =============================================================================
+
+experiment:
+  name: cb01a_ma_cross_rsi_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    sma_5: factors.stock_daily_overlap_close.sma_5
+    sma_10: factors.stock_daily_overlap_close.sma_10
+    sma_20: factors.stock_daily_overlap_close.sma_20
+    rsi_14: factors.stock_daily_momentum_close.rsi_14
+
+universe:
+  market: ashare
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+
+signal:
+  type: expression
+  entry: (sma_5 > sma_20) & (rsi_14 > 50)
+  exit: (rsi_14 < 50) | (close < sma_10)
+
+execution:
+  signal_date: t
+  entry_execution: t_plus_1_open
+  exit_execution: t_plus_1_open
+
+holding:
+  max_holding_days: 5
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: null
+  trailing_stop_pct: null
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
+  benchmarks:
+    - full_a_equal_weight
+    - csi_300
+    - csi_500
+    - csi_1000

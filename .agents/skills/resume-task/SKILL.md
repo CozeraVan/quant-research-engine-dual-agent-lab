@@ -9,8 +9,7 @@ Do not modify code immediately.
 
 Read:
 
-- `CLAUDE.md` if available
-- `AGENTS.md` if available
+- `AGENTS.md`
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/04_TASK_HANDOFF.md`
 - `docs/agent/05_PROGRESS.md`
@@ -32,11 +31,10 @@ Output:
 
 1. Current project phase
 2. Current task ID
-3. Current owner
-4. Completed work
-5. In-progress work
-6. Uncommitted changes
-7. Half-finished files
-8. Next minimal safe step
+3. Completed work
+4. In-progress work
+5. Uncommitted changes
+6. Half-finished files
+7. Next minimal safe step
 
 Wait for user confirmation.

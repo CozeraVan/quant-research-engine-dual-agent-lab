@@ -1,18 +1,17 @@
 ---
 name: git-finalize
-description: Final git verification, commit, and push flow. Codex-owned by default.
+description: Final git verification, commit, and push flow. Executed by the single agent after user approval.
 ---
 
 # Git Finalize
 
-This flow is Codex-owned by default.
+Executed by Kimi Code (single agent).
 
 Use only when:
 
-- Phase is `CODEX_GIT_FINALIZING`
-- Owner is `CODEX`
-- Review has passed
-- User has approved finalization or standing approval exists
+- Phase is `AWAITING_GIT_APPROVAL`
+- Self-review has passed (`10_REVIEW_REPORT.md` has no Required Fixes)
+- The user has explicitly approved the commit (or standing approval exists in `11_AGENT_STATE.md`)
 
 Required checks:
 
@@ -25,14 +24,14 @@ scripts/git-finalize-check.sh
 
 Then:
 
-1. Propose commit message.
+1. Show the proposed commit message (usually already presented at self-review).
 2. Confirm no secrets are included.
 3. Commit:
    ```bash
    git add -A
    git commit -m "..."
    ```
-4. Push:
+4. Push only if a remote exists and the user asked for it:
    ```bash
    git push
    ```
@@ -44,4 +43,4 @@ Then:
 Final state:
 
 - Phase: `DONE`
-- Owner: `USER`
+- Owner: `KIMI_CODE` (user accepts next)

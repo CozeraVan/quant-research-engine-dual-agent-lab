@@ -50,5 +50,5 @@ TODO
 
 ## 11. Proposed Agent State Transition
 
-- Next Phase: `CODEX_PLANNING`
-- Next Owner: `CODEX`
+- Next Phase: `PLANNING`
+- Next Owner: `KIMI_CODE`

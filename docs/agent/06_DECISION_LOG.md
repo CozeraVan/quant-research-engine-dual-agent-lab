@@ -1,8 +1,17 @@
 # Decision Log
 
-Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or dual-agent workflow.
+Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.
 
 ## Format
+
+### 2026-07-18: Switch from dual-agent to single-agent development (Kimi Code)
+
+- Decision: The project workflow changed from the dual-agent setup (Codex = planner/reviewer/git finalizer, Claude Code = implementer) to a single-agent setup where Kimi Code owns the full development cycle — planning (`08_IMPLEMENTATION_BRIEF.md`), implementation, self-review (`10_REVIEW_REPORT.md`), and git finalization after user approval. Task ID: `QRE-SINGLE-AGENT-MIGRATION-001`. All workflow documents were rewritten in place: `AGENTS.md` (single-agent instructions), `CLAUDE.md` (redirect page), `00/01/02/07/11/12` (single-agent wording), `08/09/10` (reset to the migration task), skills under `.agents/skills/` and `.claude/skills/` (de-prefixed and rewritten: `plan-brief`, `implement`, `self-review`, `git-finalize`, `intake-change`, `resume-task`, `update-progress`). Historical logs (`03_ROADMAP.md`, `05_PROGRESS.md`, this file) keep their original Owner attributions as history. New locked requirements R-AGENT-001/002/003 replace R-DUAL-001/002/003; R-GIT-001/002 now assign git execution to Kimi Code gated on self-review pass + explicit user approval. New phase vocabulary: `PLANNING` → `IMPLEMENTING` → `SELF_REVIEW` → `AWAITING_GIT_APPROVAL` → `DONE` / `USER_DIRECTED`.
+- Reason: The development environment changed; only one agent (Kimi Code) is available. The user directed that future development flow must live in the `docs/agent/` markdown files as long-term memory rather than in CLI conversation history. A full documentation audit performed for this migration also found the 2026-05-28 closeout wording stale: `01_CURRENT_STATUS.md` claimed "fully frozen, no further work planned" while the strategy catalog batch backtest (106 OK / 5 missing-factor, completed 2026-05-30) was done afterwards and remains uncommitted; `08/10/12` still pointed at the old freeze-audit task. These inconsistencies were corrected in the same pass.
+- Alternatives: archive the whole `docs/agent/` tree and start a fresh document set (rejected — history stays attached to the live workflow docs and the diff remains reviewable); keep dual-agent docs unchanged and only add a note (rejected — instruction files describing a two-agent flow would contradict reality); delete `CLAUDE.md` and `.claude/` (rejected — R-CORE-005 spirit; redirect page and rewritten skills preserve continuity).
+- Impact: All future sessions start from `AGENTS.md` + `docs/agent/`; `CLAUDE.md` is a redirect page; `12_AGENT_BOARD.md` is deprecated; project directory name `quant-research-engine-dual-agent-lab` is now a known stale label left unchanged to avoid path breakage. Pending user decisions carried forward: (1) git-finalize the uncommitted batch backtest work products, (2) commission upstream factor computation for the 5 blocked strategies, (3) deeper validation batches (quick/full mode).
+- Owner: KIMI_CODE (user-directed)
+
 ### 2026-05-28: Complete final freeze audit — all closeout tasks finished
 
 - Decision: The final docs-only freeze audit pass (`QRE-DOCS-FINAL-FREEZE-AUDIT-001`) is complete. All active agent docs and the README were re-read and verified internally consistent after the status-label sync pass. One minor inconsistency was found and fixed: `01_CURRENT_STATUS.md` In Progress said "No active work" while the task was still WAITING_CLAUDE_CODE. Terminal labels use "Preserve" consistently, no stale feature-language remains, and zero runtime code changes were made.

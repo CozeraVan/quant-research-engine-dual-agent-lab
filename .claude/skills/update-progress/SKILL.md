@@ -20,3 +20,5 @@ Before finishing a task that changed code, tests, config, architecture, prompts,
 3. Update `docs/agent/06_DECISION_LOG.md` if architecture, data, safety, compliance, prompt/schema, backend, sync, deployment, or major design changed.
 4. Never mark a task DONE without evidence.
 5. Summarize changed task IDs, validations, git status, and next steps.
+
+Remember R-AGENT-002: the `docs/agent/` files are the only long-term memory. If it is not written there, it did not happen.

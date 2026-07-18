@@ -14,7 +14,7 @@ The long-term direction is a reusable engine with market profiles. A-share daily
 - A full-market evaluation engine for fast factor and strategy screening.
 - A detailed portfolio engine for account-level validation.
 - A read-only consumer of upstream market and factor databases.
-- A dual-agent development lab where Codex plans/reviews/finalizes and Claude Code implements approved briefs.
+- A single-agent development lab where Kimi Code plans, implements, self-reviews, and finalizes approved work, with `docs/agent/` markdown files as the project's long-term memory.
 
 ## What This Project Is Not
 
@@ -27,8 +27,7 @@ The long-term direction is a reusable engine with market profiles. A-share daily
 ## Target Users / Operators
 
 - The project owner, acting as research lead and final approver.
-- Codex, acting as planner, reviewer, and git finalizer.
-- Claude Code, acting as implementer from written briefs.
+- Kimi Code, acting as the single development agent: planner, implementer, self-reviewer, and git executor.
 - Future research scripts that need stable CLI, report, and manifest outputs.
 
 ## Core Principles
@@ -37,8 +36,7 @@ The long-term direction is a reusable engine with market profiles. A-share daily
 - Prefer incremental changes.
 - Keep architecture understandable.
 - Make important decisions explicit.
-- Keep implementation and review separated when using dual agents.
-- Do not rely on chat history as the only source of truth.
+- The `docs/agent/` markdown files are the only authoritative project memory; do not rely on chat history as a source of truth.
 - Prevent future-function leakage and lookahead bias.
 - Keep market-specific rules in market profiles, not strategy logic.
 - Keep technical indicators as upstream inputs, not engine-computed internals.

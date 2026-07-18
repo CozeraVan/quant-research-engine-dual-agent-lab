@@ -1,0 +1,73 @@
+# =============================================================================
+# 趋势跟踪 — Ichimoku 云图趋势确认
+# =============================================================================
+# 策略 ID:     tf05a_ichimoku_cloud_breakout
+# 策略名称:   Ichimoku 云图趋势确认
+# 难度:       ★★★★☆ (4/5)
+# 说明:       Tenkan > Kijun，价格在 Senkou A/B 云层之上入场，Tenkan < Kijun 出场。
+# 数据依赖:   SMA(9,26,52)
+# 入场规则:   (sma_9 > sma_26) & (close > sma_52) & (sma_9 > sma_9.shift(1))
+# 出场规则:   sma_9 < sma_26
+# 持仓天数:   20 天
+# 方向:       long_only
+# 备注:       Ichimoku 用 SMA 近似 Tenkan/Kijun/Senkou；完整实现需 Ichimoku 因子列。
+# 生成工具:   scripts/generate_strategy_yamls.py
+# 校验状态:   待数据库因子验证
+# =============================================================================
+
+experiment:
+  name: tf05a_ichimoku_cloud_breakout_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    sma_9: factors.stock_daily_overlap_close.sma_9
+    sma_26: factors.stock_daily_overlap_close.sma_26
+    sma_52: factors.stock_daily_overlap_close.sma_52
+
+universe:
+  market: ashare
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+
+signal:
+  type: expression
+  entry: (sma_9 > sma_26) & (close > sma_52) & (sma_9 > sma_9.shift(1))
+  exit: sma_9 < sma_26
+
+execution:
+  signal_date: t
+  entry_execution: t_plus_1_open
+  exit_execution: t_plus_1_open
+
+holding:
+  max_holding_days: 20
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: null
+  trailing_stop_pct: null
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
+  benchmarks:
+    - full_a_equal_weight
+    - csi_300
+    - csi_500
+    - csi_1000

@@ -207,12 +207,12 @@ def _run_backtest(
 
     if request.backtest_mode == "batch":
         batch_req = BatchBacktestRequest(
-            initial_cash=request.initial_cash,
+            symbols=request.codes,
+            initial_cash_per_symbol=request.initial_cash,
             entry_signal=spec.signal_expression,
             exit_signal=spec.exit_signal_expression,
             holding_days=spec.holding_days,
-            metadata_columns=request.metadata_columns,
-            window_size=request.window_size,
+            summary_metadata_columns=request.metadata_columns,
         )
         result = BatchBacktestEngine(market_profile).run(frame, batch_req)
         run_request_payload: dict[str, object] = {
@@ -235,12 +235,13 @@ def _run_backtest(
     from quant_research_engine.portfolio.shared import SharedCashBacktestEngine, SharedCashBacktestRequest
 
     shared_req = SharedCashBacktestRequest(
+        symbols=request.codes,
         initial_cash=request.initial_cash,
         entry_signal=spec.signal_expression,
         exit_signal=spec.exit_signal_expression,
         holding_days=spec.holding_days,
+        max_positions=50,
         metadata_columns=request.metadata_columns,
-        window_size=request.window_size,
     )
     shared_result = SharedCashBacktestEngine(market_profile).run(frame, shared_req)
     run_request_payload = {

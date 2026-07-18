@@ -5,10 +5,10 @@ Use this file when:
 - a session was interrupted,
 - terminal closed,
 - network failed,
-- user forgot which agent was working,
-- Claude Code completed several rounds before Codex review,
-- Codex review was delayed,
-- the dual-agent sequence was broken.
+- the user or the agent forgot the current task state,
+- several work rounds completed without a self-review,
+- git finalization was delayed,
+- the normal single-agent sequence was broken.
 
 ## Recovery Steps
 
@@ -30,24 +30,23 @@ Use this file when:
 4. Determine:
    - Current Task ID
    - Current Phase
-   - Current Owner
    - Whether code has unreviewed changes
-   - Whether review has Required Fixes
+   - Whether self-review has Required Fixes
    - Whether git finalization has happened
 5. Output a recovery summary.
-6. Wait for user confirmation before editing code or pushing.
+6. Wait for user confirmation before editing code or committing.
 
 ## Recovery Decision Table
 
-| Observed State | Next Owner | Next Action |
-|---|---|---|
-| No brief exists | CODEX | Create Implementation Brief |
-| Brief exists, no implementation | CLAUDE_CODE | Implement from brief |
-| Implementation exists, no review | CODEX | Review diff and write Review Report |
-| Review has Required Fixes | CLAUDE_CODE | Fix only Required Fixes |
-| Review passes, no commit/push | CODEX | Final git checks, commit, push after approval |
-| Git finalization complete | USER | Acceptance and next request |
+| Observed State | Next Action |
+|---|---|
+| No brief exists | Write `08_IMPLEMENTATION_BRIEF.md` (Phase: `PLANNING`) |
+| Brief exists, no implementation | Implement from brief (Phase: `IMPLEMENTING`) |
+| Implementation exists, no review | Inspect diff and write `10_REVIEW_REPORT.md` (Phase: `SELF_REVIEW`) |
+| Review has Required Fixes | Fix only Required Fixes (Phase: `IMPLEMENTING`) |
+| Review passes, no commit | Run final git checks, propose commit message, wait for user approval (Phase: `AWAITING_GIT_APPROVAL`) |
+| Git finalization complete | User acceptance and next request (Phase: `DONE`) |
 
 ## Rule
 
-If unsure, prefer returning control to Codex for planning/review rather than allowing Claude Code to continue implementation freely.
+If the state is unclear, prefer stopping after the recovery summary and asking the user, rather than continuing implementation on assumptions. The `docs/agent/` files — not chat history — decide what is true.

@@ -1,5 +1,7 @@
 # Roadmap
 
+> Workflow note (2026-07-18): Milestone 6's dual-agent workflow (Codex planning/review + Claude Code implementation) was superseded by single-agent development under Kimi Code; see `06_DECISION_LOG.md` and `AGENTS.md`. The tables below are preserved as historical records — Owner columns refer to the agents active at the time.
+
 ## Milestone 1: Project Skeleton And Core Interfaces
 
 | ID | Task | Status | Owner | Evidence | Next Step |

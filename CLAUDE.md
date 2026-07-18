@@ -1,56 +1,12 @@
-# Claude Code Project Instructions
+# CLAUDE.md — Redirect Notice
 
-This project uses a dual-agent workflow:
+This file is kept for compatibility only. It no longer carries project instructions.
 
-- Codex = Planner / Reviewer / Git Finalizer
-- Claude Code = Implementer
-- User = Product Owner / Final Approver
+As of 2026-07-18, this project is developed by a **single agent: Kimi Code** (planning, implementation, self-review, and git execution). The former dual-agent workflow (Codex + Claude Code) was retired; the migration decision is recorded in `docs/agent/06_DECISION_LOG.md`.
 
-Before modifying code, read:
+Authoritative project instructions:
 
-@docs/agent/00_PRODUCT_VISION.md
-@docs/agent/01_CURRENT_STATUS.md
-@docs/agent/02_LOCKED_REQUIREMENTS.md
-@docs/agent/03_ROADMAP.md
-@docs/agent/04_TASK_HANDOFF.md
-@docs/agent/05_PROGRESS.md
-@docs/agent/06_DECISION_LOG.md
-@docs/agent/07_RECOVERY_PROTOCOL.md
-@docs/agent/08_IMPLEMENTATION_BRIEF.md
-@docs/agent/09_CODING_HANDOFF.md
-@docs/agent/10_REVIEW_REPORT.md
-@docs/agent/11_AGENT_STATE.md
+- `AGENTS.md` — single-agent working rules and git ownership policy
+- `docs/agent/00_PRODUCT_VISION.md` … `docs/agent/12_AGENT_BOARD.md` — long-term project memory (status, roadmap, locked requirements, handoffs, decision log, recovery protocol)
 
-## Working Rules
-
-1. Do not modify code before reading the project docs listed above.
-2. Before doing work, read `docs/agent/11_AGENT_STATE.md` and determine whether the current owner is Claude Code.
-3. Claude Code is primarily the implementer. Do not invent architecture beyond the Implementation Brief.
-4. New ideas, feature changes, deletions, and refactors must first become a Change Request.
-5. Do not break LOCKED requirements.
-6. Do not rewrite unrelated architecture.
-7. Before editing, explain affected files, forbidden files, risks, and validation.
-8. After implementation, update:
-   - `docs/agent/09_CODING_HANDOFF.md`
-   - `docs/agent/04_TASK_HANDOFF.md`
-   - `docs/agent/05_PROGRESS.md`
-   - `docs/agent/11_AGENT_STATE.md`
-9. If architecture, data model, prompt/schema, safety, compliance, backend, sync, deployment, or major design changed, update:
-   - `docs/agent/06_DECISION_LOG.md`
-10. Claude Code should not perform final git commit/push unless the user explicitly overrides the dual-agent workflow.
-11. Final git commit and push are Codex-owned steps after review passes and the user approves.
-12. If the previous session was interrupted, follow `docs/agent/07_RECOVERY_PROTOCOL.md` first.
-
-## Dual-Agent Phase Rules
-
-- If phase is `CODEX_PLANNING`, Claude Code should not implement yet.
-- If phase is `CLAUDE_IMPLEMENTING`, Claude Code should implement strictly from `08_IMPLEMENTATION_BRIEF.md`.
-- If phase is `CODEX_REVIEWING`, Claude Code should wait for Codex review.
-- If phase is `CLAUDE_FIXING`, Claude Code should only fix Required Fixes from `10_REVIEW_REPORT.md`.
-- If phase is `CODEX_GIT_FINALIZING`, Claude Code should not commit or push unless explicitly instructed.
-
-## gstack
-
-Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
-
-Available gstack skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/setup-gbrain`, `/retro`, `/investigate`, `/document-release`, `/document-generate`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`, `/devex-review`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`.
+If you are a different AI assistant opening this repository: read `AGENTS.md` first and treat `docs/agent/` as the source of truth for project state.

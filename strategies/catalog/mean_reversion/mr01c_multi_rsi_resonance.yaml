@@ -1,0 +1,73 @@
+# =============================================================================
+# 均值回归 — RSI 反转家族
+# =============================================================================
+# 策略 ID:     mr01c_multi_rsi_resonance
+# 策略名称:   RSI 多周期共振 RSI(7/14/21)
+# 难度:       ★★★☆☆ (3/5)
+# 说明:       RSI(7)、RSI(14)、RSI(21) 同时低于 30 入场，任一高于 60 出场。
+# 数据依赖:   RSI(7,14,21)
+# 入场规则:   (rsi_7 < 30) & (rsi_14 < 30) & (rsi_21 < 30)
+# 出场规则:   (rsi_7 > 60) | (rsi_14 > 60) | (rsi_21 > 60)
+# 持仓天数:   5 天
+# 方向:       long_only
+
+# 生成工具:   scripts/generate_strategy_yamls.py
+# 校验状态:   待数据库因子验证
+# =============================================================================
+
+experiment:
+  name: mr01c_multi_rsi_resonance_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    rsi_7: factors.stock_daily_momentum_close.rsi_7
+    rsi_14: factors.stock_daily_momentum_close.rsi_14
+    rsi_21: factors.stock_daily_momentum_close.rsi_21
+
+universe:
+  market: ashare
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+
+signal:
+  type: expression
+  entry: (rsi_7 < 30) & (rsi_14 < 30) & (rsi_21 < 30)
+  exit: (rsi_7 > 60) | (rsi_14 > 60) | (rsi_21 > 60)
+
+execution:
+  signal_date: t
+  entry_execution: t_plus_1_open
+  exit_execution: t_plus_1_open
+
+holding:
+  max_holding_days: 5
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: null
+  trailing_stop_pct: null
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
+  benchmarks:
+    - full_a_equal_weight
+    - csi_300
+    - csi_500
+    - csi_1000

@@ -16,6 +16,14 @@ _COMPARE_OPS: dict[type[ast.cmpop], Callable[[object, object], object]] = {
     ast.NotEq: operator.ne,
 }
 
+_BIN_OPS: dict[type[ast.operator], Callable[[object, object], object]] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow,
+}
+
 
 def evaluate_expression_signal(frame: pd.DataFrame, expression: str) -> pd.Series:
     tree = ast.parse(expression, mode="eval")
@@ -40,6 +48,18 @@ def _eval_node(node: ast.AST, frame: pd.DataFrame) -> object:
             return result
         raise ValueError(f"Unsupported expression: {ast.dump(node)}")
 
+    if isinstance(node, ast.BinOp):
+        left = _eval_node(node.left, frame)
+        right = _eval_node(node.right, frame)
+        if isinstance(node.op, ast.BitAnd):
+            return _as_bool_series(left) & _as_bool_series(right)
+        if isinstance(node.op, ast.BitOr):
+            return _as_bool_series(left) | _as_bool_series(right)
+        op = _BIN_OPS.get(type(node.op))
+        if op is not None:
+            return op(left, right)
+        raise ValueError(f"Unsupported expression: {ast.dump(node)}")
+
     if isinstance(node, ast.Compare):
         left = _eval_node(node.left, frame)
         comparisons = []
@@ -56,6 +76,18 @@ def _eval_node(node: ast.AST, frame: pd.DataFrame) -> object:
             result = result & comparison
         return result
 
+    if isinstance(node, ast.Call):
+        # Only support method calls (e.g. close.shift(1)), not bare function calls
+        if not isinstance(node.func, ast.Attribute):
+            raise ValueError(f"Unsupported expression: {ast.dump(node)}")
+        func = _eval_node(node.func, frame)
+        args = [_eval_node(arg, frame) for arg in node.args]
+        return func(*args)
+
+    if isinstance(node, ast.Attribute):
+        value = _eval_node(node.value, frame)
+        return getattr(value, node.attr)
+
     if isinstance(node, ast.Name):
         if node.id not in frame.columns:
             raise ValueError(f"Unknown signal field: {node.id}")
@@ -64,9 +96,11 @@ def _eval_node(node: ast.AST, frame: pd.DataFrame) -> object:
     if isinstance(node, ast.Constant) and isinstance(node.value, int | float | bool):
         return node.value
 
-    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-        value = _eval_node(node.operand, frame)
-        return -value
+    if isinstance(node, ast.UnaryOp):
+        if isinstance(node.op, ast.USub):
+            return -_eval_node(node.operand, frame)
+        if isinstance(node.op, ast.UAdd):
+            return _eval_node(node.operand, frame)
 
     raise ValueError(f"Unsupported expression: {ast.dump(node)}")
 

@@ -2,16 +2,18 @@
 
 ## Current Phase
 
-DONE
+AWAITING_GIT_APPROVAL
 
 ## Current Active Work
 
-No active work. All onboarding improvements are complete (5 commits: `5970e42` through `0c4bbcf`).
+QRE-SINGLE-AGENT-MIGRATION-001: **IMPLEMENTATION DONE, REVIEW PASS.** Migration of workflow documentation from dual-agent (Codex + Claude Code) to single-agent (Kimi Code) development, with `docs/agent/` as the authoritative long-term memory. Included correction of the stale "fully frozen" closeout wording found in the pre-migration documentation audit. Awaiting user-approved git finalization.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
+| QRE-SINGLE-AGENT-MIGRATION-001 | Migrate workflow docs to single-agent (Kimi Code) mode; md files as long-term memory | IN_PROGRESS | KIMI_CODE | `AGENTS.md` rewritten; `CLAUDE.md` redirect; `00/01/02/07/11/12` updated; `08/09/10` reset; skills rewritten (`plan-brief`, `implement`, `self-review`, `git-finalize`, `intake-change`, `resume-task`, `update-progress`); `06_DECISION_LOG.md` entry 2026-07-18 | Self-review, then user-approved git finalization |
+| QRE-STRATEGY-CATALOG-BATCH-BACKTEST-001 | Strategy catalog generation + factor audit + batch backtest of 106 ready strategies | DONE | CLAUDE_CODE | 111 YAMLs across 7 categories; 106 OK, 5 error; batch 61e67b53b644 completed ~11.5h; mean return -0.79% (smoke mode); top cb01b +2.62%; cat rankings: kline_pattern > price_volume > breakout > cross_sectional > composite > trend_following > mean_reversion; 947 tests pass | Compute missing factor columns for atr_10/sma_7/sma_9/sma_26/sma_50/sma_52 then re-run 5 suspended strategies |
 | QRE-ONBOARDING-IMPROVEMENTS-001 | Onboarding materials, strategy annotations, and GUI bilingual localization for new users | DONE | CLAUDE_CODE | 5 commits (`5970e42`, `47934e7`, `c7353aa`, `abac8de`, `0c4bbcf`); .env.example, QUICKSTART.md, Makefile, 10 strategy YAMLs annotated, strategies/README.md, GUI default template fixed, 5 GUI templates bilingual-localized; 947 passed | Preserve |
 | QRE-PORTFOLIO-BASELINE-COMPARISON-001 | QRE portfolio baseline comparison outputs | DONE | CODEX/CLAUDE_CODE | commit `55a7b3a`; `10_REVIEW_REPORT.md` PASS; buy_hold_return and excess_return_vs_buy_hold populated in single-symbol/batch; industry_group in batch metadata defaults; 8 new tests; 896 passed | Preserve |
 | QRE-PORTFOLIO-BENCHMARK-REPORT-ARTIFACTS-001 | QRE benchmark report-artifact propagation | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; benchmark_* fields flow from summary_metrics into build_strategy_performance() batch mode → strategy_performance.json; 898 passed | Preserve |
@@ -156,18 +158,36 @@ No active work. All onboarding improvements are complete (5 commits: `5970e42` t
 
 ## Latest Verified State
 
-Recorded on 2026-05-29 after Round 4 of onboarding improvements:
+Recorded on 2026-07-18 during single-agent migration (`QRE-SINGLE-AGENT-MIGRATION-001`):
 
-- Current task: QRE-ONBOARDING-IMPROVEMENTS-001
+- Current task: QRE-SINGLE-AGENT-MIGRATION-001 (IN_PROGRESS)
+- Current phase: `IMPLEMENTING`
+- Current owner: KIMI_CODE (sole development agent since 2026-07-18)
+- Workflow: dual-agent (Codex + Claude Code) retired; single-agent rules in `AGENTS.md` + `docs/agent/`
+- Phase vocabulary: `PLANNING` → `IMPLEMENTING` → `SELF_REVIEW` → `AWAITING_GIT_APPROVAL` → `DONE` / `USER_DIRECTED`
+- Git: branch `master`, no remote; batch backtest work products still uncommitted (see `11_AGENT_STATE.md` Git State)
+- Pending user decisions: (1) finalize uncommitted batch work, (2) upstream factor computation for 5 blocked strategies, (3) quick/full validation batches
+- QRE validation evidence:
+  - `uv run pytest -q` → 947 passed, 2 warnings (2026-05-30).
+
+Recorded on 2026-05-30 after strategy catalog batch backtest completion:
+
+- Current task: QRE-STRATEGY-CATALOG-BATCH-BACKTEST-001 (DONE)
 - Current phase: `USER_DIRECTED`
-- Current owner: CLAUDE_CODE
-- Last finalized commits: `5970e42`, `47934e7`, `c7353aa`
-- Working tree: `src/quant_research_engine/gui/app.py`, `tests/test_gui_app.py`, 5 GUI HTML templates, and agent docs (`04`, `05`, `09`, `11`) modified
+- Current owner: CLAUDE_CODE (user-directed work complete)
+- 111 strategy YAMLs generated across 7 categories under `strategies/catalog/`
+- Factor audit: 106 ready, 5 missing (atr_10, sma_7, sma_9, sma_26, sma_50, sma_52)
+- Smoke-mode batch backtest of 106 strategies completed at 2026-05-30 02:33 (~11.5h)
+- Batch 61e67b53b644: 106 OK, 5 error; `batch_summary.json` written
+- Final results: mean return -0.79% (smoke mode 2024-01-01 to 2024-03-01)
+  - 30 positive (28.3%), 66 negative (62.3%), 10 zero-trade (9.4%)
+  - Top strategy: cb01b (MACD+Cross+Volume) = +2.62%, 2,391 trades, 40.7% positive
+  - Category: kline_pattern (-0.12%) > price_volume (-0.19%) > breakout (-0.25%) > cross_sectional (-0.39%) > composite (-0.48%) > trend_following (-1.46%) > mean_reversion (-1.51%)
+  - Best single-symbol: bo06a (ATR anomaly momentum) → 301306.SZ = +62.3%
+  - Total trades: 262,556; Total cost: ¥284M
+- Uncommitted changes: `Makefile`, `signals.py`, `research_run.py` modified; new scripts and catalog
 - QRE validation evidence:
   - `uv run pytest -q` → 947 passed, 2 warnings.
-  - `uv run pytest -q tests/test_gui_app.py` → 30 passed.
-  - `scripts/check-progress-docs.sh` passed.
-  - `git diff --check` passed.
 
 Current GUI direction approved on 2026-05-21:
 
@@ -222,7 +242,7 @@ User-requested strategy work in 2026-05-21:
 
 ## Pending Work Summary
 
-- No active non-deferred work. QRE is in full maintenance mode.
+- Active work: `QRE-SINGLE-AGENT-MIGRATION-001` (this migration). Beyond it, the engine itself is feature-complete and in maintenance mode.
 - Real reference-data sync belongs to sibling `quant_ts`; QRE should not own producer code.
 - Bulk ingestion / durable loading remains in `../quant_ts`.
 - Real index benchmark data is available in `reference.index_daily`; benchmark/reference routing is already wired.
@@ -232,6 +252,10 @@ User-requested strategy work in 2026-05-21:
 - All other previously listed pending items (portfolio baseline comparison, research-run CLI orchestrator, GUI parameter controls) are complete.
 
 ## Status Meaning
+
+Current task phases (single-agent, since 2026-07-18) are defined in `11_AGENT_STATE.md`: `PLANNING`, `IMPLEMENTING`, `SELF_REVIEW`, `AWAITING_GIT_APPROVAL`, `DONE`, `USER_DIRECTED`.
+
+Historical row statuses (pre-migration, kept for old table rows):
 
 - TODO: Not started
 - READY: Scoped and ready for the implementer
@@ -249,5 +273,5 @@ User-requested strategy work in 2026-05-21:
 
 - Mark DONE only with evidence.
 - If code changed, update `04_TASK_HANDOFF.md` and this file.
-- If a dual-agent phase changed, update `11_AGENT_STATE.md`.
+- If the workflow phase changed, update `11_AGENT_STATE.md`.
 - If architecture or major decisions changed, update `06_DECISION_LOG.md`.

@@ -100,28 +100,28 @@ Status: LOCKED
 
 Small-window examples and DB smokes validate plumbing only. Do not document them as evidence that a factor or strategy is effective.
 
-## R-DUAL-001: Codex owns planning and review
+## R-AGENT-001: Single agent owns the full development cycle
 
 Status: LOCKED
 
-Codex should produce:
+Kimi Code is the sole development agent and should produce:
 
-- `08_IMPLEMENTATION_BRIEF.md`
-- `10_REVIEW_REPORT.md`
+- `08_IMPLEMENTATION_BRIEF.md` (planning)
+- implementation per the brief
+- `10_REVIEW_REPORT.md` (self-review)
 
-Codex should not do large implementation work unless explicitly requested.
+The same agent plans and implements, so self-review must actively check the implementation against the brief and the LOCKED requirements rather than rubber-stamping it.
 
-## R-DUAL-002: Claude Code owns implementation
+## R-AGENT-002: Markdown docs are the only long-term memory
 
 Status: LOCKED
 
-Claude Code should implement from:
+The `docs/agent/` markdown files are the project's only authoritative long-term memory. Chat/CLI conversation history is not a source of truth.
 
-- `08_IMPLEMENTATION_BRIEF.md`
+- Every meaningful change must be recorded in the relevant `docs/agent/` files in the same work session.
+- A new session starts by reading `11_AGENT_STATE.md`, `04_TASK_HANDOFF.md`, and `05_PROGRESS.md`, not by asking what happened in chat.
 
-Claude Code should not invent architecture beyond the brief unless it first writes a question or blocker.
-
-## R-DUAL-003: Agent state is the source of truth
+## R-AGENT-003: Agent state docs are the source of truth
 
 Status: LOCKED
 
@@ -134,26 +134,26 @@ If chat history and docs disagree, prefer:
 5. `10_REVIEW_REPORT.md`
 6. `git status` / `git log`
 
-## R-GIT-001: Codex owns final git commit and push
+## R-GIT-001: Kimi Code executes git finalization after user approval
 
 Status: LOCKED
 
-By default, final commit and push should be performed by Codex after review passes.
+Kimi Code performs final commit (and push, if a remote exists and was requested) only after review passes and the user approves.
 
 Default policy:
 
-- Claude Code may implement code.
-- Codex reviews and proposes final commit message.
+- Kimi Code implements and self-reviews code.
+- Kimi Code proposes the final commit message.
 - User approves finalization.
-- Codex commits and pushes.
+- Kimi Code commits (and pushes if applicable).
 
 If the user wants full automation, they may add standing approval to `11_AGENT_STATE.md`.
 
-## R-GIT-002: No push before review passes
+## R-GIT-002: No commit before review passes
 
 Status: LOCKED
 
-Do not push code until:
+Do not commit code until:
 
 - implementation is complete,
 - required tests/checks have run or unavailable checks are documented,

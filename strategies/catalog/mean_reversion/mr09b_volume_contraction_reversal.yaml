@@ -1,0 +1,71 @@
+# =============================================================================
+# 均值回归 — 均线偏离与缩量止跌
+# =============================================================================
+# 策略 ID:     mr09b_volume_contraction_reversal
+# 策略名称:   缩量止跌反弹
+# 难度:       ★★★☆☆ (3/5)
+# 说明:       股价在 MA(60) 上方，连续 3 日缩量后收阳确认入场。
+# 数据依赖:   SMA(60)
+# 入场规则:   (close > sma_60) & (close > open) & (vol < vol.shift(1)) & (vol.shift(1) < vol.shift(2))
+# 出场规则:   close < sma_60
+# 持仓天数:   5 天
+# 方向:       long_only
+
+# 生成工具:   scripts/generate_strategy_yamls.py
+# 校验状态:   待数据库因子验证
+# =============================================================================
+
+experiment:
+  name: mr09b_volume_contraction_reversal_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    sma_60: factors.stock_daily_overlap_close.sma_60
+
+universe:
+  market: ashare
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+
+signal:
+  type: expression
+  entry: (close > sma_60) & (close > open) & (vol < vol.shift(1)) & (vol.shift(1) < vol.shift(2))
+  exit: close < sma_60
+
+execution:
+  signal_date: t
+  entry_execution: t_plus_1_open
+  exit_execution: t_plus_1_open
+
+holding:
+  max_holding_days: 5
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: null
+  trailing_stop_pct: null
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
+  benchmarks:
+    - full_a_equal_weight
+    - csi_300
+    - csi_500
+    - csi_1000

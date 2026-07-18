@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-- **核心 MVP 已完成，本仓库进入显式收尾/维护模式。**
-- QRE 不再扩展新功能、新命令、新数据库表或新引擎能力；当前 CLI 表面、产物合同和报告管道为最终形态。
+- **核心 MVP 已完成，本仓库处于维护模式。**
+- QRE 当前 CLI 表面、产物合同和报告管道为稳定形态；新需求通过 `docs/agent/change_requests/` 进入单 agent 开发流程。
 - 上游数据生产工作属于 `quant_ts`，不在此仓库范围内。
 - 本 README 仅保留当前可用命令、产物文件、参数和验证方式，不含未来规划或愿望清单。
-- 历史开发过程记录于 `docs/agent/`（双智能体工作流：Codex 规划/审查，Claude Code 实现）。
+- 本项目自 2026-07-18 起由 Kimi Code 单 agent 开发（规划/实现/自审查/git 执行），开发流程与项目状态长期记忆存放于 `docs/agent/`；早期的双智能体（Codex + Claude Code）工作流记录见 `docs/agent/06_DECISION_LOG.md`。
 
 ## Quick Start
 
@@ -843,15 +843,17 @@ quant-research-engine/
 ├── strategies/                      # 策略文件
 │   ├── high_level/                  # 高层入口 (4 个)
 │   ├── low_level/                   # 低层规格 (6 个)
+│   ├── catalog/                     # 策略目录 (7 大类 111 个变体, 未提交)
 │   └── run_bollinger_full.py        # 全市场运行脚本
 ├── tests/                           # 测试
 ├── docs/                            # 文档
-│   ├── agent/                       # 双智能体工作流
+│   ├── agent/                       # 单 agent 工作流与项目长期记忆
 │   ├── modules/                     # 模块文档
 │   └── strategy_entry/              # 策略入口标准
 ├── outputs/                         # 运行产物 (gitignore)
 ├── pyproject.toml                   # 项目配置
-├── CLAUDE.md                        # Claude Code 项目指令
+├── AGENTS.md                        # Kimi Code 单 agent 项目指令
+├── CLAUDE.md                        # 跳转页（指向 AGENTS.md）
 └── README.md                        # 本文件
 ```
 
@@ -919,4 +921,4 @@ uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q
 - [投资组合工作流](docs/modules/portfolio_workflow.md)
 - [策略入口标准](docs/strategy_entry/README.md)
 - [策略示例](docs/strategy_entry/examples.md)
-- [双智能体工作流](docs/agent/)
+- [单 agent 工作流与项目记忆](docs/agent/)

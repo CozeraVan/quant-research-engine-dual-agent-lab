@@ -1,25 +1,13 @@
-# Agent Board
+# Agent Board — Deprecated
 
-## Current Task ID
+This board was the message channel between the two agents of the former dual-agent workflow (Codex ↔ Claude Code).
 
-NONE (all tasks complete)
+As of 2026-07-18 the project uses a single development agent (Kimi Code), so there is no second agent to leave messages for. This file is kept for historical completeness only and will not be updated.
 
-## Current Recipient
+Current project state lives in:
 
-NONE (all tasks complete)
+- `docs/agent/11_AGENT_STATE.md` — current phase, task, git state, pending decisions
+- `docs/agent/04_TASK_HANDOFF.md` — current task handoff
+- `docs/agent/05_PROGRESS.md` — task tracker
 
-## Message Type
-
-FINAL
-
-## Sender
-
-CLAUDE_CODE
-
-## Summary
-
-The final docs-only freeze audit pass (`QRE-DOCS-FINAL-FREEZE-AUDIT-001`) is complete. All active agent docs and the README were re-read and verified internally consistent with the maintenance-only closeout state. One minor inconsistency was found and fixed. Terminal labels use "Preserve" consistently, no stale feature-language remains, and zero runtime code changes were made.
-
-## Final State
-
-All documentation closeout tasks are complete. QRE is fully frozen in maintenance-only closeout. No further work is planned.
+Final historical entry (2026-05-28, sender CLAUDE_CODE): the docs-only freeze audit (`QRE-DOCS-FINAL-FREEZE-AUDIT-001`) was complete and all agent docs read as maintenance-only closeout. That closeout state was later found stale (the strategy catalog batch backtest work followed) and was corrected on 2026-07-18; see `01_CURRENT_STATUS.md`.

@@ -1,10 +1,11 @@
-# Codex Project Instructions
+# Kimi Code Project Instructions
 
-This project uses a dual-agent workflow:
+This project uses a single-agent workflow:
 
-- Codex = Planner / Reviewer / Git Finalizer
-- Claude Code = Implementer
+- Kimi Code = sole development agent (Planner / Implementer / Self-Reviewer / Git Executor)
 - User = Product Owner / Final Approver
+
+The project was migrated from the former dual-agent workflow (Codex planning/review + Claude Code implementation) to single-agent development on 2026-07-18. The migration decision is recorded in `docs/agent/06_DECISION_LOG.md`.
 
 Before modifying code or producing plans, read:
 
@@ -21,39 +22,49 @@ Before modifying code or producing plans, read:
 - `docs/agent/10_REVIEW_REPORT.md`
 - `docs/agent/11_AGENT_STATE.md`
 
+## Long-Term Memory Rule
+
+The markdown files under `docs/agent/` are the project's only authoritative long-term memory. Chat/CLI conversation history is not a source of truth.
+
+- Every meaningful change (code, tests, config, architecture, workflow) must be recorded in the relevant `docs/agent/` files in the same work session.
+- If conversation and docs disagree, the docs win (see R-AGENT-003 in `02_LOCKED_REQUIREMENTS.md`).
+- A future session must be able to reconstruct the full project state from these files alone.
+
 ## Working Rules
 
-1. Do not start by editing code. First determine the current phase in `11_AGENT_STATE.md`.
-2. Codex is primarily the planner, reviewer, and git finalizer.
-3. Codex should create or update `08_IMPLEMENTATION_BRIEF.md` during planning.
-4. Codex should create or update `10_REVIEW_REPORT.md` during review.
-5. Codex should perform final git status / test verification / commit / push only after:
-   - Review passes,
-   - `10_REVIEW_REPORT.md` says the implementation is acceptable,
-   - The user explicitly approves finalization, unless the project owner has written a standing approval in `11_AGENT_STATE.md`.
-6. Codex should not perform large implementation work unless explicitly requested.
-7. Do not break LOCKED requirements.
-8. Do not rewrite unrelated architecture.
-9. Before switching agents, update:
-   - `docs/agent/11_AGENT_STATE.md`
+1. Do not start by editing code. First determine the current phase in `docs/agent/11_AGENT_STATE.md`.
+2. Kimi Code owns the full development cycle: planning (`08_IMPLEMENTATION_BRIEF.md`), implementation, self-review (`10_REVIEW_REPORT.md`), and git finalization.
+3. New ideas, feature changes, deletions, and refactors should first become a Change Request under `docs/agent/change_requests/` unless the user directs the work explicitly.
+4. Write or update `08_IMPLEMENTATION_BRIEF.md` before non-trivial implementation.
+5. Write or update `10_REVIEW_REPORT.md` after implementation, before git finalization.
+6. Do not break LOCKED requirements in `02_LOCKED_REQUIREMENTS.md`.
+7. Do not rewrite unrelated architecture.
+8. Keep changes minimal and verifiable; every change needs a validation path.
+9. When finishing an implementation slice, update:
+   - `docs/agent/09_CODING_HANDOFF.md`
    - `docs/agent/04_TASK_HANDOFF.md`
-   - the relevant file among `08_IMPLEMENTATION_BRIEF.md`, `09_CODING_HANDOFF.md`, `10_REVIEW_REPORT.md`
-10. Before final response, check:
-   - `git status`
-   - `git diff --name-only HEAD`
-   - `scripts/check-progress-docs.sh` if available.
+   - `docs/agent/05_PROGRESS.md`
+   - `docs/agent/11_AGENT_STATE.md`
+10. If architecture, data model, schema, safety, or major design changed, also update `docs/agent/06_DECISION_LOG.md`.
+11. Before final response, check:
+    - `git status`
+    - `git diff --name-only HEAD`
+    - `scripts/check-progress-docs.sh` if available.
 
 ## Git Ownership Rule
 
-Final git commit and push are Codex-owned by default.
+Kimi Code executes git finalization, but only after all of the following:
 
-Codex finalization sequence:
+1. `10_REVIEW_REPORT.md` says the implementation is acceptable (no Required Fixes).
+2. Validation commands from `08_IMPLEMENTATION_BRIEF.md` and `09_CODING_HANDOFF.md` have run.
+3. `scripts/git-finalize-check.sh` passes if available.
+4. The proposed commit message has been shown to the user.
+5. The user has explicitly approved the commit, unless standing approval is written in `11_AGENT_STATE.md`.
 
-1. Read `10_REVIEW_REPORT.md`.
-2. Confirm no Required Fixes remain.
-3. Run validation commands from `08_IMPLEMENTATION_BRIEF.md` and `09_CODING_HANDOFF.md`.
-4. Run `scripts/git-finalize-check.sh` if available.
-5. Show commit message proposal.
-6. Wait for explicit user approval before `git push`, unless standing approval is written in `11_AGENT_STATE.md`.
-7. Commit and push.
-8. Update `11_AGENT_STATE.md` to `DONE`.
+Finalization sequence:
+
+1. Run the checks above.
+2. Show commit message proposal.
+3. Wait for explicit user approval.
+4. Commit. Push only if a remote exists and the user asked for it.
+5. Update `11_AGENT_STATE.md` phase to `DONE`.

@@ -1,0 +1,71 @@
+# =============================================================================
+# 均值回归 — IBS 日内位置反弹
+# =============================================================================
+# 策略 ID:     mr04a_ibs_reversal
+# 策略名称:   IBS 日内收盘位置反弹
+# 难度:       ★★★☆☆ (3/5)
+# 说明:       IBS = (close - low) / (high - low) < 0.2 且 close > SMA(200) 入场。收盘接近日内低点。
+# 数据依赖:   SMA(200)
+# 入场规则:   ((close - low) / (high - low + 0.001) < 0.2) & (close > sma_200)
+# 出场规则:   (close - low) / (high - low + 0.001) > 0.5
+# 持仓天数:   3 天
+# 方向:       long_only
+
+# 生成工具:   scripts/generate_strategy_yamls.py
+# 校验状态:   待数据库因子验证
+# =============================================================================
+
+experiment:
+  name: mr04a_ibs_reversal_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    sma_200: factors.stock_daily_overlap_close.sma_200
+
+universe:
+  market: ashare
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+
+signal:
+  type: expression
+  entry: ((close - low) / (high - low + 0.001) < 0.2) & (close > sma_200)
+  exit: (close - low) / (high - low + 0.001) > 0.5
+
+execution:
+  signal_date: t
+  entry_execution: t_plus_1_open
+  exit_execution: t_plus_1_open
+
+holding:
+  max_holding_days: 3
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: null
+  trailing_stop_pct: null
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
+  benchmarks:
+    - full_a_equal_weight
+    - csi_300
+    - csi_500
+    - csi_1000

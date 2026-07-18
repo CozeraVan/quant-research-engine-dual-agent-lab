@@ -32,7 +32,7 @@ Include:
 
 After creating the file, update `docs/agent/11_AGENT_STATE.md` to:
 
-- Phase: `CODEX_PLANNING`
-- Owner: `CODEX`
+- Phase: `PLANNING`
+- Owner: `KIMI_CODE`
 
-Then summarize and wait for confirmation.
+Then summarize and wait for user confirmation before writing the Implementation Brief.
