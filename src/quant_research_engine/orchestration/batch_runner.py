@@ -91,6 +91,7 @@ class BatchRunConfig:
     catalog_dir: Path | None = None
     engine_impl: str = "simulator"
     position_sizing: str = "full_compound"
+    metadata_columns: list[str] | None = None
 
 
 def discover_strategies(
@@ -198,6 +199,7 @@ def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResu
             compact=config.compact,
             engine_impl=config.engine_impl,
             position_sizing=config.position_sizing,
+            metadata_columns=config.metadata_columns,
         )
 
         run_result = run_research_run(req)

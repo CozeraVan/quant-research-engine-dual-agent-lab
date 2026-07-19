@@ -25,10 +25,11 @@ Turn the QRE from a batch-capable engine into an operations-ready research tool:
 ### In Scope
 
 - **M10.1 Strategy-fit analysis & noise filtering (F3 phase 1)** (`QRE-STRATEGY-FIT-ANALYSIS-001`):
-  - Read per-symbol strategy results (`summary.csv`, compact batches) → select top symbols per strategy with noise filters: minimum trade count, liquidity floor, return sanity bounds.
-  - Enrichment analysis of winner stocks vs universe baseline across `board`, `industry_group`, `market_cap_bucket`, `liquidity_bucket`; hypergeometric significance (pure-Python, no new deps).
+  - Read per-symbol strategy results (`summary.csv`, compact batches) → select **significant winners** per strategy, not a broad top-N%: exact one-sided binomial test on per-symbol win rate (net-profitable trade fraction) vs p=0.5, confidence tiers 90%/99%/99.9% (user refinement 2026-07-19), plus magnitude gates (positive net return, positive excess vs buy-hold) and noise filters (minimum trade count, liquidity floor, return sanity bounds). **Free-rider accounting**: stocks profitable only via the stock's own natural rise (excess ≤ 0, e.g. natural +30% vs strategy +25%) are excluded but explicitly counted/reported; returns always decomposed as strategy vs natural vs excess (user refinement 2026-07-19).
+  - Strategy-level meta-test per tier: significant-stock count vs false-positive expectation (eligible × alpha) — no-edge strategies are correctly judged ineffective.
+  - Enrichment analysis of significant winners vs universe baseline across `board`, `industry_group`, `market_cap_bucket`, `liquidity_bucket`; hypergeometric significance (pure-Python, no new deps).
   - Stability check: does the enrichment repeat across M/Q window slices?
-  - Strategy-fit report: market-wide excess vs best-class excess, ranked both ways; winner-class feature description; multiple-testing adjustment across strategies and clusters (absorbs M9.2); manifest-registered and `qre report-audit`-discoverable (absorbs M9.3).
+  - Strategy-fit report: per-strategy significant stock pool, market-wide vs significant-pool excess, meta-tier rankings, class descriptions; multiple-testing adjustment across strategies and clusters (absorbs M9.2); manifest-registered and `qre report-audit`-discoverable (absorbs M9.3).
 - **M10.2 Unified runtime parameter overrides (F1a)** (`QRE-PARAM-OVERRIDE-001`):
   - Run-level overrides without editing YAMLs: cost rates (commission/stamp/transfer/slippage), stop-loss/take-profit for the batch path, date window, symbol universe.
   - Backtest-time universe filtering: apply `exclude_st` / `exclude_suspended` / `min_listing_days` / `min_amount` to the frame before the engine (currently preflight-only diagnostics).
@@ -60,7 +61,7 @@ Turn the QRE from a batch-capable engine into an operations-ready research tool:
 
 | Task ID | Task | Priority | Status |
 |---|---|---|---|
-| QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 winner-stock enrichment, noise filtering, strategy-fit report (F3 phase 1) | High | TODO (after M9.1b) |
+| QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 winner-stock enrichment, noise filtering, strategy-fit report (F3 phase 1) | High | PLANNING (brief written 2026-07-19) |
 | QRE-PARAM-OVERRIDE-001 | M10.2 runtime parameter overrides + backtest-time universe filter (F1a) | Medium | TODO |
 | QRE-CONTINUOUS-REFRESH-001 | M10.3 watermark detection + idempotent re-run + scheduler + delta report (F2) | Medium | TODO |
 | QRE-ML-CLUSTERING-001 | M10.4 optional ML clustering phase 2 (F3 phase 2) | Low | FUTURE (dependency approval needed) |

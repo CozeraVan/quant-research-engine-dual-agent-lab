@@ -12,11 +12,30 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-VECTORIZED-ENGINE-001 / M9.1b (implementation DONE, self-review PASS — awaiting user-approved git finalization)
+QRE-STRATEGY-FIT-ANALYSIS-001 / M10.1 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
+
+## Standing Instructions (user)
+
+- 2026-07-19: No full-scale backtest runs until the core engine work is mostly complete; after that, full-history (M9.4) runs start with small samples (R-QRE-009). Current slices (M10.1 analysis of existing artifacts) comply — zero backtest execution.
 
 Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-validation.md` (Milestone 9: Strategy Research Validation).
 
 ## Last Completed Step
+
+**QRE-STRATEGY-FIT-ANALYSIS-001 / M10.1 (DONE 2026-07-19, awaiting commit):**
+
+1. `analysis/strategy_fit.py`: exact binomial significance tiers (90/99/99.9%), magnitude gate (net + excess vs buy-hold), free-rider accounting, strategy meta-test vs false-positive expectation, hypergeometric enrichment, BH-FDR, deterministic outputs + manifest.
+2. `scripts/strategy_fit_report.py` + `strategy_fit_report_manifest` kind registered (report-audit passes); runner `--metadata-columns` passthrough.
+3. Metadata reality: `reference.stock_basic` EMPTY upstream — metadata composed from `daily_basic` snapshot + `derive_board`; `industry_group` = unknown (gap documented).
+4. Real batch (2024, 106 strategies): **all below 90% meta tier** (significant-stock counts below false-positive expectation — hand-verified true result); 25 stocks at 99% tier recorded as leads in `strategy_fit_stocks.csv`.
+5. 1045 tests green (11 new); R-QRE-008 screening-evidence caveat in report.
+
+**QRE-VECTORIZED-ENGINE-001 / M9.1b (DONE, finalized 2026-07-19, commit `c86441b`):**
+
+1. Vectorized trade-level single-symbol engine: event-level loop on candidate bars, one-pass groupby pre-split, vectorized equity reconstruction; `position_sizing` (`full_compound`/`fixed_cash`).
+2. Vectorized window/rolling analytics collectors (`risk.py` untouched, used as equality oracle); shared research frame between eval and backtest stages.
+3. Equality evidence: 61 synthetic + 40 randomized tests, 106/106 catalog × 50 symbols byte-identical, full-market artifacts identical to simulator baseline.
+4. Benchmark: backtest stage 1,718.9s → 40.2s (**42.8×**); quick batch estimate 11.1h → ~25-30 min. Runner `--engine-impl` defaults to `vectorized` (simulator kept as fallback); 1034 tests green.
 
 **QRE-BATCH-PERF-SLIM-001 / M9.1 (DONE, finalized 2026-07-19, commit `24699ce`):**
 
@@ -30,7 +49,7 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `24699ce` Add parallel compact batch runner and complete quick-mode catalog batch (20 files)
+- Last commit: `c86441b` Add vectorized trade-level engine with metric-identical results (42.8x) (22 files)
 - Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked) and uncommitted docs/infra updates (R-QRE-009, M9.1b brief, outputs externalization: `.gitignore`, Makefile, README, runner `QRE_OUTPUT_DIR`, `04/05/06/11`).
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.
@@ -38,19 +57,20 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Latest Validation Evidence
 
 ```
-uv run pytest -q → 967 passed, 2 warnings (2026-07-19, M9.1 final)
+uv run pytest -q → 1034 passed, 4 warnings (2026-07-19, M9.1b final)
 scripts/check-progress-docs.sh → passed
 git diff --check → clean
-qre report-audit on compact quick-batch manifests → status=ok, 0 issues
+equality ladder: 61 synthetic + 40 randomized + 106/106 catalog × 50 + full-market artifacts identical
+benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 ```
 
 ## Pending Decisions (user)
 
-1. ~~Approve or adjust CR-0002 / 08 brief~~ — APPROVED 2026-07-18; QRE-BATCH-PERF-SLIM-001 done.
-2. **Commit approval for QRE-BATCH-PERF-SLIM-001** — implementation DONE, review PASS, quick batch verified; commit message proposed 2026-07-19.
+1. ~~CR-0002 / 08 brief~~ — APPROVED 2026-07-18. ~~M9.1 commit~~ — `24699ce`. ~~M9.1b commit~~ — `c86441b`.
+2. **Go-ahead for M10.1 implementation** (brief written 2026-07-19).
 3. Whether to commission upstream factor computation (`atr_10`, `sma_7/9/20/26/50/52/65`) in `indicators_tushare` / `quant_ts` to unblock the 5 remaining catalog strategies (needed for M9.4).
-4. ~~Engine-loop optimization slice~~ — ADOPTED 2026-07-19 as M9.1b (`QRE-VECTORIZED-ENGINE-001`), next slice after the M9.1 commit.
-5. ~~F1/F2/F3 granularity~~ — ALIGNED 2026-07-19, recorded in CR-0003 and decision log: M9.1b → M10.1 (F3) → M10.2 (F1) → M10.3 (F2); enrichment analysis first, ML clustering (M10.4) needs separate dependency approval.
+4. ~~Engine-loop optimization~~ — DONE as M9.1b (`c86441b`). Follow-up micro-slices available: cross-symbol-concatenated analytics, groupby-aware signal evaluation (speed target 40.2s → ≤30s).
+5. ~~F1/F2/F3 granularity~~ — ALIGNED 2026-07-19 (CR-0003): M9.1b → M10.1 → M10.2 → M10.3; M10.4 ML clustering needs separate dependency approval.
 
 ## Quick Batch In Flight
 

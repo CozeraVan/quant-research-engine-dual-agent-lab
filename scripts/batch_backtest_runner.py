@@ -90,6 +90,8 @@ def main() -> int:
     parser.add_argument("--position-sizing", choices=["full_compound", "fixed_cash"],
                         default="full_compound",
                         help="Position sizing model (fixed_cash requires --engine-impl vectorized)")
+    parser.add_argument("--metadata-columns", nargs="*",
+                        help="Embed metadata columns (e.g. board industry_group market_cap_bucket liquidity_bucket) in summary.csv")
     parser.add_argument("--skip-preflight", action="store_true",
                         help="Skip preflight stage (useful if DB factors are known good)")
     parser.add_argument("--skip-eval", action="store_true",
@@ -182,6 +184,7 @@ def main() -> int:
         catalog_dir=CATALOG_DIR,
         engine_impl=args.engine_impl,
         position_sizing=args.position_sizing,
+        metadata_columns=args.metadata_columns,
     )
 
     results = execute_batch(yaml_paths, config, jobs=max(1, args.jobs))

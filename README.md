@@ -713,6 +713,21 @@ uv run python scripts/batch_backtest_runner.py --mode quick --jobs 4 --compact -
 # 产物: outputs/backtests/<batch_id>/batch_summary.json (含分阶段耗时 stage_durations_s)
 ```
 
+### 7c. 策略适配分析 (strategy fit)
+
+```bash
+# 对已完成的批次做显著性赢家分析 (零回测, 只读已有产物 + 元数据快照)
+# 每股二项检验置信档 90%/99%/99.9% + 量级门槛(净收益>0 且 超额>0)
+# + 策略级元检验(显著股票数 vs 假阳性期望) + 类别富集 + BH-FDR
+uv run python scripts/strategy_fit_report.py --batch-dir outputs/backtests/quick_batch_106/f365c8a07b33
+
+# 产物: outputs/strategy_fit/<batch_id>/
+#   strategy_fit_stocks.csv   显著股票池 (置信档/p值/策略收益/自然收益/超额)
+#   strategy_fit_summary.csv  策略级元检验档/池内与全市场超额/搭便车计数
+#   strategy_fit_classes.csv  类别富集 (board/市值/流动性 + q 值)
+#   strategy_fit_report.md    排名报告 (筛选证据, 非研究结论)
+```
+
 ### 8. 报告查看
 
 ```bash

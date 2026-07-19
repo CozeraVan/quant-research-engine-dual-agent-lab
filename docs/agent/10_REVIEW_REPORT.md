@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-VECTORIZED-ENGINE-001 (M9.1b)
+QRE-STRATEGY-FIT-ANALYSIS-001 (M10.1)
 
 ## Reviewer
 
@@ -10,29 +10,30 @@ KIMI_CODE (single agent self-review, per R-AGENT-001)
 
 ## Review Status
 
-PASS (with one acceptance line recorded as narrowly missed: speed target)
+PASS
 
 ## Findings
 
-- Equality gate (the hard requirement) is fully met with layered evidence: 61 synthetic equality tests (all documented edge semantics incl. dead-pending deadlock, rejection retry, exit-signal reschedule), 40 seeded randomized frames, 3×50 real-DB parity, **106/106 catalog strategies × 50 symbols byte-identical**, tf01a full-market artifacts byte-identical to the simulator baseline (`summary.csv`, metrics, window M/Q/Y, rolling 20).
-- Profiling corrected an earlier wrong assumption (recorded honestly): the wall-clock hog was never file IO — it was the per-window analytics computation (~850s of the 1,718.9s baseline); the vectorized engine alone is ~190× faster (0.52s/300 symbols). Analytics collectors were then vectorized with `risk.py` kept as the untouched oracle.
-- Speed acceptance line (backtest stage ≤30s): **MISSED at 40.2s** — decomposition recorded in `09`; remaining levers (cross-symbol-concatenated analytics, groupby-aware signals) deliberately deferred as follow-up micro-slices to avoid equality-risk churn past the point of diminishing returns. Effective outcome: 42.8× stage speedup, quick batch estimate 11.1h → ~25-30 min.
-- Shared research frame introduced post-brief (same-frame reuse between eval and backtest); 4 existing tests updated with the new monkeypatch seam — interface evolution, no behavior change.
-- Scope compliance: shared-cash engine untouched; no new dependencies; simulator preserved and selectable (`--engine-impl simulator`); library defaults conservative (runner CLI default flipped to `vectorized` only after the evidence above).
-- LOCKED requirements intact: R-QRE-001/002/003/005/007/009 all respected — notably R-QRE-009 was followed (synthetic → 3×50 → 106×50 → full-market benchmark ladder).
+- Scope matches `08_IMPLEMENTATION_BRIEF.md`: all 4 scope items implemented (analysis module, command, runner passthrough, tests). The top-N% design was replaced by the significance-tier framework per user refinement; free-rider accounting and return decomposition added per second user refinement.
+- Two issues found and fixed during review:
+  1. Meta-tier selection initially picked the wrong (loosest) passing tier — fixed to tightest-first; test data calibrated (18/20 wins for the 99.9% case).
+  2. Real-batch metadata query returned 0 rows — root-caused to upstream `reference.stock_basic` being EMPTY (table exists, no data). Script now composes metadata from populated sources (`daily_basic` snapshot + `derive_board`); `industry_group` reported as `unknown` with the gap documented. Verified 5,256 symbols load.
+- Real-batch results sanity-checked by hand: eligible counts, n_90 distribution, and one meta-p recomputation (mr04a 79 vs 122.3 → p=0.999995) all consistent; the "all strategies below 90% meta tier" outcome is a true property of the 2024 data, not a bug.
+- LOCKED requirements intact: zero backtest execution (user instruction honored); read-only DB (R-QRE-005); no new dependencies; R-QRE-008 caveat printed in the report; manifest/audit parity (R-QRE-007).
+- R-CORE-003: 11 new tests with exact statistical oracles; full suite 1045 green.
 
 ## Behavior Verified
 
-- `uv run pytest -q` → **1034 passed** (967 baseline + 67 new: 61 engine equality + 6 analytics equality), zero regressions.
-- R-QRE-009 ladder: STEP1 3×50 identical; STEP2 106×50 identical (106/106); STEP3 full-market artifacts identical, backtest stage 40.2s (42.8×).
-- Runner `--engine-impl vectorized` default; `--position-sizing fixed_cash` validated to require vectorized.
-- `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean (re-run before commit).
+- `uv run pytest -q` → 1045 passed.
+- Real batch: `strategy_fit_report.py` on `quick_batch_106/f365c8a07b33` → 106 analyzed / 5 skipped-with-reason; deterministic outputs.
+- `qre report-audit .../report_manifest.json --require-match` → `missing_files=0, validation_issues=0, status=ok`.
+- `ReportManifest.from_path(...).validate_contents()` → zero issues in tests.
 
 ## Residual Risks
 
-- Equality is proven for the catalog's expression shapes and the documented edge cases; exotic future expressions go through the same shared signal evaluator used by both engines, so divergence risk is minimal.
-- `fixed_cash` semantics (fixed notional = initial_cash, affordability still on current cash) is documented but new — user-facing docs updated.
-- The 5 missing-factor strategies remain blocked (upstream, M9.4).
+- `industry_group` dimension is `unknown` until upstream populates `reference.stock_basic` (pending user decision #3); enrichment currently meaningful on board/cap/liquidity only.
+- Binomial discreteness at low trade counts makes per-stock tests conservative (stated in report caveats); the meta-test false-positive expectation uses the continuous approximation n×alpha.
+- Strategy-fit conclusions are single-window (2024) screening evidence; time stability needs the v1.1 per-symbol monthly-returns artifact.
 
 ## Next Step
 
