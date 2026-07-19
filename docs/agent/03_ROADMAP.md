@@ -165,18 +165,18 @@
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
 | M9.1 | Batch runner performance & output slimming | DONE | KIMI_CODE | `QRE-BATCH-PERF-SLIM-001`; `--jobs`/`--compact`; batch `f365c8a07b33`: 106 OK/5 error, 11.1h, 2.8GB/2,013 files; 967 tests green | Awaiting commit |
-| M9.1b | Vectorized trade-level single-symbol engine | READY_FOR_BRIEF | KIMI_CODE | `QRE-VECTORIZED-ENGINE-001` in CR-0002; user-approved 2026-07-19; metric equality vs bar simulator required | Write brief, implement |
+| M9.1b | Vectorized trade-level single-symbol engine | DONE | KIMI_CODE | commits `c86441b` (engine, 42.8×) + `b72b9af` (analytics concat, 25.852s — ≤30s target MET); 106/106 catalog parity; baseline artifacts identical | Preserve |
 | M9.2 | Statistical validation (multiple-testing, walk-forward) | MERGED | KIMI_CODE | Folded into M10.1 noise filtering (2026-07-19 user decision) | See M10.1 |
 | M9.3 | Research-grade aggregate report | MERGED | KIMI_CODE | Folded into M10.1 strategy-fit report (2026-07-19 user decision) | See M10.1 |
-| M9.4 | Full-mode validation + blocked strategies | TODO | KIMI_CODE | Depends on M9.1b speed and upstream factors (`atr_10`, `sma_*`) | After M9.1b + upstream delivery |
+| M9.4 | Full-mode validation + blocked strategies | PILOT DONE | KIMI_CODE | pilot `806632904159` (5×50×2015-2025 OK, 4.3-9.0s); `feasibility.md` ~3h estimate; 7 factor requests queued (M9.4 handoff operationalized via factor queue) | User decisions: full-scale trigger; upstream factors |
 
 ## Milestone 10: Strategy Operations And Fit Analysis (CR-0003)
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| M10.1 | Strategy-fit clustering & noise filtering (F3 phase 1, enrichment analysis) | TODO | KIMI_CODE | `QRE-STRATEGY-FIT-ANALYSIS-001` in CR-0003; input data ready in `outputs/backtests/quick_batch_106/f365c8a07b33/` | After M9.1b |
-| M10.2 | Unified runtime parameter overrides + backtest-time universe filter (F1a) | TODO | KIMI_CODE | `QRE-PARAM-OVERRIDE-001` in CR-0003 | After M10.1 |
-| M10.3 | Continuous strategy refresh — idempotent re-run (F2) | TODO | KIMI_CODE | `QRE-CONTINUOUS-REFRESH-001` in CR-0003; needs M9.1b speed | After M10.2 |
+| M10.1 | Strategy-fit clustering & noise filtering (F3 phase 1, enrichment analysis) | DONE | KIMI_CODE | commits `d514c4c` (significance tiers + meta-test + enrichment + BH-FDR) + `ed2b304` (v1.1 monthly artifact + stability metric); real-batch finding recorded (no strategy passes 90% meta tier in 2024) | Preserve |
+| M10.2 | Unified runtime parameter overrides + backtest-time universe filter (F1a) | DONE | KIMI_CODE | commits `a16d6c5` (cost overrides + universe filter) + `24c284d` (stop_loss/take_profit) + `77b8897` (trailing stop); dual-engine equality throughout | Preserve |
+| M10.3 | Continuous strategy refresh — idempotent re-run (F2) | DONE | KIMI_CODE | commit `1345471`; watermark + state + delta report + systemd units (documented, not installed); small-sample e2e passed | Preserve; timer install is a user decision |
 | M10.4 | ML clustering phase 2 (F3 phase 2, optional) | FUTURE | KIMI_CODE | Requires scikit-learn dependency approval | Evaluate after M10.1 proves value |
 
 ## Status Meaning

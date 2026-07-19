@@ -2,13 +2,15 @@
 
 ## Current Stage
 
-Feature-complete engine in maintenance mode, under single-agent development since 2026-07-18.
+Research-validation (M9) and strategy-operations (M10) phases delivered, under single-agent development since 2026-07-18.
 
-The skeleton, data layer, evaluation MVP, portfolio MVP, reporting, manifests, audit CLI, local browser console, strategy entry compiler, smoke runner, smoke discovery CLI, full-market backtest report, strategy IO contract, and research-run CLI orchestrator are implemented. Benchmark/reference read-side wiring, cross-sectional market-cap/liquidity metadata standardization, the portfolio baseline-comparison slice, benchmark report-artifact propagation, full-market workbook parity, deterministic regime classification, benchmark-aware regime source preference, and benchmark series wiring into evaluation frames are complete and accepted. As-of metadata snapshot wiring, benchmark membership/industry adapters, benchmark/reference read-side wiring, and strategy-entry pipeline hardening are complete.
+The base engine was already feature-complete (see roadmap M1-M8). Since 2026-07-18 the following phases landed (details in `03_ROADMAP.md` and `06_DECISION_LOG.md`):
 
-On top of the frozen engine, a user-directed strategy catalog batch backtest (`QRE-STRATEGY-CATALOG-BATCH-BACKTEST-001`) was completed on 2026-05-30: 111 catalog strategies generated, 106 ran OK, 5 blocked on missing factor columns. That work is **not yet committed to git** (see `11_AGENT_STATE.md` Git State).
+- **M9 Strategy Research Validation**: parallel compact batch runner (`--jobs`/`--compact`); vectorized trade-level single-symbol engine with metric-identical results (backtest stage 1,718.9s → 25.852s, **66.5×**; `position_sizing` full_compound/fixed_cash); cross-symbol vectorized analytics; shared research frame; quick-mode batch of 106 catalog strategies (2024) completed; full-history pilot (2015-2025) with ~3h full-scale estimate.
+- **M10 Strategy Operations**: strategy-fit analysis with significance tiers (binomial 90/99/99.9%, meta-test vs false-positive expectation, enrichment, BH-FDR, free-rider accounting) + v1.1 time stability (`symbol_month_returns.csv` + stability metric); runtime parameter overrides (cost rates) + backtest-time universe filtering; stop_loss/take_profit/trailing_stop in batch engines (dual-engine equality, opt-in `--apply-stops`); continuous refresh machinery (watermark + idempotent re-run + delta report + documented systemd units).
+- **Missing-factor lifecycle**: preflight robustness (no crash on missing columns), durable request queue with pending→fulfilled recheck, batch shelve-and-continue semantics, `docs/handoff.md` upstream contract for `indicators_tushare` (7 pending requests).
 
-On 2026-07-18 the project switched from the dual-agent workflow (Codex + Claude Code) to single-agent development by Kimi Code (`QRE-SINGLE-AGENT-MIGRATION-001`); the earlier "fully frozen, no further work" closeout wording was stale and has been corrected. Tushare download/ingestion work is owned by sibling `quant_ts`, not QRE.
+Current delivery state: **1137 tests green**; git history finalized through commit `ed2b304`; run outputs externalized to `~/qre-outputs` (repo `outputs` symlink).
 
 ## Completed
 
@@ -69,14 +71,12 @@ On 2026-07-18 the project switched from the dual-agent workflow (Codex + Claude 
 
 ## Known Gaps
 
-- Benchmark membership and industry classification are standardized for the current MVP slice using latest-available snapshots. Time-varying history is out of scope for the current closeout.
-- Full as-of time-varying history for cross-sectional metadata is out of scope for the current closeout.
-- The reusable Tushare security source adapter remains as historical source-shape context only. All download/ingest work belongs in `quant_ts`, not QRE.
-- Benchmark series wiring is complete and accepted; manifests record benchmark parameters and CLI enforces paired-arg validation.
-- As-of metadata snapshot wiring is implemented and all three fix passes are complete; all backtest entry points (single, batch, shared) now accept and propagate `--metadata-as-of`; finalized in commit `7c32b65`.
-- The strategy catalog batch backtest used a 2-month smoke window (2024-01-01 to 2024-03-01); results validate plumbing only and are not research conclusions (R-QRE-008). Quick (1-year) and full (2015-2025) batch modes have not been run.
-- 5 catalog strategies are blocked on missing DB factor columns (`atr_10`, `sma_50`, `sma_9`, `sma_26`, `sma_52`, `sma_7`, `sma_20`, `sma_65`); factor computation belongs to upstream `indicators_tushare` / `quant_ts`.
-- The GUI console (`qre gui`) is implemented but has no real runs recorded yet (`outputs/gui-console/runs/` is empty).
+- `reference.stock_basic` is EMPTY upstream (0 rows): industry/industry_group metadata unavailable (`unknown` in fit analysis); board comes from ts_code derivation, cap/liquidity buckets from `daily_basic`. ST status only within `stock_st` coverage; `is_risk_warning` mapped to ST board (documented approximation).
+- 5 catalog strategies are shelved on missing factor columns (`atr_10` ×2, `sma_50`, `sma_9/26/52`, `sma_7`); requests queued at `outputs/handoff/missing_factor_requests.json` — upstream `indicators_tushare` computation is a user decision.
+- Full-scale full-history batch (106 strategies × full market × 2015-2025, ~3h estimate in `outputs/full_history_pilot/feasibility.md`) is ready but awaits an explicit user trigger.
+- 2024 catalog strategies show no strategy-level effectiveness at the 90% meta tier (M10.1 screening evidence); older batches lack `symbol_month_returns.csv` (blank stability until re-run/refresh).
+- The GUI console (`qre gui`) is implemented but unused (CLI-first decision); refresh systemd units are documented but not installed.
+- M10.4 (ML clustering) and GPU use (RTX 5070 Ti recorded) require separate dependency approvals.
 
 ## Current Technical Stack
 
@@ -96,12 +96,12 @@ On 2026-07-18 the project switched from the dual-agent workflow (Codex + Claude 
 - Git initialized: yes
 - Current branch: `master`
 - Remote configured: no remote shown by `git remote -v`
-- Recent commits: `33bb175` (resolve stale decision-log items), `9d41ce7` (finalize onboarding agent state), `0c4bbcf` (bilingual GUI templates), `abac8de` (fix GUI default template), `c7353aa` (Chinese annotations in low-level strategy YAMLs)
-- Uncommitted: `Makefile`, `evaluation/signals.py`, `orchestration/research_run.py` modified; `scripts/batch_backtest_runner.py`, `scripts/batch_preflight_check.py`, `scripts/generate_strategy_yamls.py`, `strategies/catalog/` untracked (batch backtest work products)
+- Recent commits: `ed2b304` (M10.1 v1.1 stability), `b72b9af` (analytics concat, 25.9s), `77b8897` (trailing stop), `5c60b8b` (factor queue), `6628631` (preflight robustness), `f90567c` (M9.4 pilot), `1345471` (M10.3 refresh), `24c284d` (M10.2b stops), `a16d6c5` (M10.2a params), `d514c4c` (M10.1 fit), `c86441b` (M9.1b vectorized engine), `24699ce` (M9.1 batch runner)
+- Uncommitted: none (working tree clean except intentionally untracked `.claude/scheduled_tasks.lock`)
 - Test command: `uv run pytest -q`
 - Progress-doc check: `scripts/check-progress-docs.sh`
 - Git finalization check: `scripts/git-finalize-check.sh`
-- Last verified full test run: `947 passed` (2026-05-30)
+- Last verified full test run: `1137 passed` (2026-07-19)
 
 ## Current CLI Surface
 
@@ -126,9 +126,9 @@ On 2026-07-18 the project switched from the dual-agent workflow (Codex + Claude 
 
 ## Next Recommended Step
 
-Roadmap position: Milestone 9 in flight (M9.1 done, M9.1b next), Milestone 10 planned (CR-0003).
+All roadmap slices through M10.1 v1.1 are delivered. Remaining items are user decisions:
 
-1. Approve the pending M9.1 commit (`QRE-BATCH-PERF-SLIM-001`: parallel compact batch runner + quick batch results).
-2. Implement M9.1b (`QRE-VECTORIZED-ENGINE-001`): vectorized trade-level single-symbol engine with metric-equality verification against the bar simulator — the speed foundation for full-history runs (M9.4) and continuous refresh (M10.3).
-3. Then M10.1 strategy-fit analysis (winner-stock clustering + noise filtering) on the existing quick-batch data.
-4. External dependency: commission upstream factor computation (`atr_10`, `sma_7/9/20/26/50/52/65`) in `indicators_tushare` / `quant_ts` to unblock the 5 remaining catalog strategies.
+1. **Trigger the full-scale full-history batch** (106 strategies × full market × 2015-2025, ~3h estimate, feasibility report in `outputs/full_history_pilot/feasibility.md`) — optionally with `--with-eval` for IC/quantile artifacts.
+2. **Commission upstream factor computation** (`indicators_tushare`): 7 queued requests (`atr_10`, `sma_50`, `sma_9/26/52`, `sma_7`); after ingestion, `factor_request_queue.py recheck` marks fulfillment and the 5 shelved strategies can re-run.
+3. **Decide on M10.4** (ML clustering phase 2; scikit-learn dependency approval; RTX 5070 Ti available) and on installing the refresh systemd timer.
+4. Optional follow-ups: re-run the 2024 quick batch to backfill `symbol_month_returns.csv` stability columns; runner-level cross-strategy frame caching; groupby-aware signal evaluation (further ~10-15s/strategy).
