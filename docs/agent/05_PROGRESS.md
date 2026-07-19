@@ -6,13 +6,14 @@ AWAITING_GIT_APPROVAL
 
 ## Current Active Work
 
-QRE-STRATEGY-FIT-ANALYSIS-001 (M10.1): **IMPLEMENTATION DONE, REVIEW PASS.** Significance-tier strategy-fit analysis (binomial 90/99/99.9% + magnitude gate + free-rider accounting + meta-test + enrichment + BH-FDR) delivered as `analysis/strategy_fit.py` + `scripts/strategy_fit_report.py`; manifest/audit parity. Real-batch result: all 106 catalog strategies below 90% meta tier for 2024 (significant-stock counts below false-positive expectation — true property of the data, hand-verified); 25 stocks reach 99% tier as recorded leads. Awaiting user-approved git finalization.
+QRE-PARAM-OVERRIDE-001 (M10.2a): **IMPLEMENTATION DONE, REVIEW PASS.** Runtime cost overrides + backtest-time universe filtering (spec `universe:` fields honored pre-engine, honest unavailable reporting) + universe_report.json artifact + manifest recording. Small-sample verified: overrides measurably change results; default runs unchanged. Awaiting user-approved git finalization.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 strategy-fit clustering & noise filtering (F3 phase 1) | DONE (awaiting commit) | KIMI_CODE | `analysis/strategy_fit.py` + script; binomial tiers 90/99/99.9% + meta-test + enrichment + BH-FDR; manifest kind registered; 1045 tests green (11 new); real batch 106 analyzed/5 skipped; report-audit ok; `10_REVIEW_REPORT.md` PASS | User-approved git finalization |
+| QRE-PARAM-OVERRIDE-001 | M10.2a runtime parameter overrides + backtest-time universe filter | DONE (awaiting commit) | KIMI_CODE | `portfolio/universe.py`; research_run/runner overrides + `--universe-filter`; universe_report.json artifact; 1059 tests green (14 new); small-sample verified; `10_REVIEW_REPORT.md` PASS | User-approved git finalization |
+| QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 strategy-fit clustering & noise filtering (F3 phase 1) | DONE | KIMI_CODE | commit `d514c4c`; `analysis/strategy_fit.py` + script; binomial tiers + meta-test + enrichment + BH-FDR; 1045 tests green (11 new); real batch 106 analyzed/5 skipped; report-audit ok | Preserve |
 | QRE-VECTORIZED-ENGINE-001 | M9.1b vectorized trade-level single-symbol engine | DONE | KIMI_CODE | commit `c86441b`; `single_symbol_vectorized.py`; `engine_impl`+`position_sizing` wired; vectorized analytics collectors; shared research frame; 1034 tests green (67 new); 106/106 catalog parity; benchmark 40.2s (42.8×), artifacts identical; `10_REVIEW_REPORT.md` PASS | Preserve |
 | QRE-OUTPUTS-EXTERNAL-001 | Externalize run outputs to `~/qre-outputs` with repo symlink | DONE | KIMI_CODE | 19GB/3.09M files moved; `outputs` symlink + `QRE_OUTPUT_DIR` runner override; `.gitignore`/`make clean`/README updated; 967 tests green; dry-run + report-files verified through symlink | Preserve |
 | QRE-BATCH-PERF-SLIM-001 | Batch runner performance & output slimming; quick-mode batch of 106 strategies | DONE | KIMI_CODE | commit `24699ce`; `--jobs`/`--compact`; stage timing; store `close()`; resume fixed; batch `f365c8a07b33`: 106 OK/5 error, 11.1h, 2.8GB/2,013 files; 967 tests green; `10_REVIEW_REPORT.md` PASS | Preserve |

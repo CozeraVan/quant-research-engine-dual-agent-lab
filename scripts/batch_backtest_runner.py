@@ -92,6 +92,15 @@ def main() -> int:
                         help="Position sizing model (fixed_cash requires --engine-impl vectorized)")
     parser.add_argument("--metadata-columns", nargs="*",
                         help="Embed metadata columns (e.g. board industry_group market_cap_bucket liquidity_bucket) in summary.csv")
+    parser.add_argument("--universe-filter", action="store_true",
+                        help="Apply the strategy spec's universe rules (exclude_st/exclude_suspended/"
+                             "exclude_risk_warning/min_listing_days/min_amount) before the engine")
+    parser.add_argument("--commission-rate", type=float, help="Override market profile commission rate")
+    parser.add_argument("--min-commission", type=float, help="Override market profile minimum commission")
+    parser.add_argument("--stamp-tax", type=float, help="Override market profile sell stamp tax rate")
+    parser.add_argument("--transfer-fee", type=float, help="Override market profile transfer fee rate")
+    parser.add_argument("--slippage-buy", type=float, help="Override market profile buy slippage rate")
+    parser.add_argument("--slippage-sell", type=float, help="Override market profile sell slippage rate")
     parser.add_argument("--skip-preflight", action="store_true",
                         help="Skip preflight stage (useful if DB factors are known good)")
     parser.add_argument("--skip-eval", action="store_true",
@@ -170,6 +179,19 @@ def main() -> int:
             print(f"  {yp.relative_to(CATALOG_DIR)}")
         return 0
 
+    profile_overrides = {
+        key: value
+        for key, value in (
+            ("commission_rate", args.commission_rate),
+            ("min_commission", args.min_commission),
+            ("stamp_tax_sell", args.stamp_tax),
+            ("transfer_fee_rate", args.transfer_fee),
+            ("slippage_buy_rate", args.slippage_buy),
+            ("slippage_sell_rate", args.slippage_sell),
+        )
+        if value is not None
+    }
+
     config = BatchRunConfig(
         output_base=output_base,
         start=start_date,
@@ -185,6 +207,8 @@ def main() -> int:
         engine_impl=args.engine_impl,
         position_sizing=args.position_sizing,
         metadata_columns=args.metadata_columns,
+        profile_overrides=profile_overrides or None,
+        universe_filter=args.universe_filter,
     )
 
     results = execute_batch(yaml_paths, config, jobs=max(1, args.jobs))
@@ -205,6 +229,8 @@ def main() -> int:
             "compact": args.compact,
             "engine_impl": args.engine_impl,
             "position_sizing": args.position_sizing,
+            "universe_filter": args.universe_filter,
+            "profile_overrides": profile_overrides or None,
         },
         results=results,
         summary=counts,

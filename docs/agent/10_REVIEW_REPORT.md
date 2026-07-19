@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-STRATEGY-FIT-ANALYSIS-001 (M10.1)
+QRE-PARAM-OVERRIDE-001 (M10.2a)
 
 ## Reviewer
 
@@ -14,26 +14,25 @@ PASS
 
 ## Findings
 
-- Scope matches `08_IMPLEMENTATION_BRIEF.md`: all 4 scope items implemented (analysis module, command, runner passthrough, tests). The top-N% design was replaced by the significance-tier framework per user refinement; free-rider accounting and return decomposition added per second user refinement.
-- Two issues found and fixed during review:
-  1. Meta-tier selection initially picked the wrong (loosest) passing tier — fixed to tightest-first; test data calibrated (18/20 wins for the 99.9% case).
-  2. Real-batch metadata query returned 0 rows — root-caused to upstream `reference.stock_basic` being EMPTY (table exists, no data). Script now composes metadata from populated sources (`daily_basic` snapshot + `derive_board`); `industry_group` reported as `unknown` with the gap documented. Verified 5,256 symbols load.
-- Real-batch results sanity-checked by hand: eligible counts, n_90 distribution, and one meta-p recomputation (mr04a 79 vs 122.3 → p=0.999995) all consistent; the "all strategies below 90% meta tier" outcome is a true property of the 2024 data, not a bug.
-- LOCKED requirements intact: zero backtest execution (user instruction honored); read-only DB (R-QRE-005); no new dependencies; R-QRE-008 caveat printed in the report; manifest/audit parity (R-QRE-007).
-- R-CORE-003: 11 new tests with exact statistical oracles; full suite 1045 green.
+- Scope matches `08_IMPLEMENTATION_BRIEF.md`: cost overrides, universe metadata loader, backtest-time universe filter, wiring + manifest recording, runner flags, tests — all implemented. Stops split to M10.2b as briefed (no engine behavior change in this slice).
+- Honest-degradation design verified on real data: `exclude_st`/`exclude_risk_warning` report `unavailable` (no `stock_st` records ≤ 2024-01-01 for the sampled symbols) while `exclude_suspended`/`min_listing_days` work from populated sources — rules are never silently skipped or silently applied.
+- Complete-accounting decision recorded: `dropped_by_rule` includes zero-count rules (every applied rule is visible); one test adjusted to lock this contract.
+- LOCKED requirements intact: R-CORE-001 (default runs bit-identical — filter is explicit opt-in), R-QRE-005 (read-only DB), R-QRE-007 (universe_report.json registered as backtest artifact; manifest additive fields), R-QRE-009 (small-sample check before any larger use), no new dependencies.
+- R-CORE-003: 14 new tests; full suite 1059 green.
 
 ## Behavior Verified
 
-- `uv run pytest -q` → 1045 passed.
-- Real batch: `strategy_fit_report.py` on `quick_batch_106/f365c8a07b33` → 106 analyzed / 5 skipped-with-reason; deterministic outputs.
-- `qre report-audit .../report_manifest.json --require-match` → `missing_files=0, validation_issues=0, status=ok`.
-- `ReportManifest.from_path(...).validate_contents()` → zero issues in tests.
+- `uv run pytest -q` → 1059 passed.
+- Small-sample real-DB: overrides measurably change summaries; universe report content correct; manifest records `profile_overrides`/`universe_filter`.
+- Default (no-flag) path unchanged: `load_universe_metadata` never called when `universe_filter=False` (test-locked).
+- `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean (re-run before commit).
 
 ## Residual Risks
 
-- `industry_group` dimension is `unknown` until upstream populates `reference.stock_basic` (pending user decision #3); enrichment currently meaningful on board/cap/liquidity only.
-- Binomial discreteness at low trade counts makes per-stock tests conservative (stated in report caveats); the meta-test false-positive expectation uses the continuous approximation n×alpha.
-- Strategy-fit conclusions are single-window (2024) screening evidence; time stability needs the v1.1 per-symbol monthly-returns artifact.
+- `is_st`/`is_risk_warning` availability depends on `reference.stock_st` coverage vs the run's as-of date; before 2026 it reports `unavailable` (honest, but users should know ST filtering currently only works for runs dated within stock_st coverage).
+- `is_risk_warning` is mapped to the ST board (documented approximation of A-share risk-warning practice).
+- `min_amount` uses window-mean daily amount from the frame (documented semantics; a dedicated liquidity snapshot would differ).
+- M10.2b (stop-loss/take-profit in single-symbol/batch engines) still pending — dual-engine equality work.
 
 ## Next Step
 

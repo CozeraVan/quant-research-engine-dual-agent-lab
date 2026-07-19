@@ -707,6 +707,10 @@ QRE_MARKET_DB_URL='postgresql+psycopg:///tushare_data' \
 # --position-sizing {full_compound,fixed_cash}  仓位模型
 #             (full_compound 全仓复利=现行为; fixed_cash 固定金额,
 #              需配合 --engine-impl vectorized)
+# --universe-filter   回测前应用策略 universe 规则 (ST/停牌/次新股/低成交额,
+#             逐规则剔除计数+不可用如实标注, 产出 universe_report.json)
+# --commission-rate/--min-commission/--stamp-tax/--transfer-fee/
+#   --slippage-buy/--slippage-sell   成本参数运行时覆盖 (不改 YAML)
 uv run python scripts/batch_backtest_runner.py --mode quick --jobs 4 --compact --skip-preflight --resume
 
 # 模式: smoke (2024-01~03) / quick (2024 全年) / full (2015-2025)

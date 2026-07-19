@@ -4,6 +4,14 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 
 ## Format
 
+### 2026-07-19: Record GPU availability (RTX 5070 Ti); defer GPU acceleration
+
+- Decision: The user noted the local PC has an NVIDIA RTX 5070 Ti available for vectorized computation. Recorded as an environment fact. GPU acceleration is deliberately NOT adopted for the current engine/roadmap.
+- Reason: Profiling shows the remaining hot paths are (a) per-symbol pandas signal evaluation (~10s/strategy, branchy AST walks on small arrays) and (b) window/rolling analytics (~28s/strategy, sliding-window ops on ~1.3M floats) and (c) a path-dependent event loop (inherently sequential). Small-array workloads are dominated by host↔device transfer overhead; GPU would add heavy dependencies (CuPy/PyTorch/CUDA toolkit) for marginal or negative gains. CPU vectorization + process-pool parallelism already delivers 40.2s/strategy and ~30 min catalog batches.
+- Alternatives: adopt CuPy/PyTorch now (rejected — dependency cost and transfer overhead outweigh gains at current data sizes; project avoids heavy deps without explicit approval); Numba/CUDA for the event loop (rejected — path-dependent state machine is not GPU-parallelizable).
+- Impact: No code change. GPU is a recorded option for future ML-scale work (e.g. M10.4 clustering phase 2, factor ML, large Monte Carlo) — adoption requires a dedicated dependency decision at that time.
+- Owner: KIMI_CODE (user-noted environment fact)
+
 ### 2026-07-19: Externalize run outputs to `~/qre-outputs` (QRE-OUTPUTS-EXTERNAL-001)
 
 - Decision: Run outputs (19GB / 3.09M files, ~99.9% of repo bloat) moved out of the project tree to `/home/van/qre-outputs/`; project keeps an `outputs` symlink for path compatibility. `QRE_OUTPUT_DIR` env var added to the batch runner as an override. `.gitignore` pattern changed `outputs/` → `outputs` to cover the symlink. `make clean` retargeted (resets the symlink, never deletes external data). `tests/` stays in the repo (3.8MB, standard pytest/packaging layout — user accepted the recommendation). All 19GB of historical outputs preserved per user decision (no cleanup).

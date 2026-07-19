@@ -81,6 +81,7 @@ On 2026-07-18 the project switched from the dual-agent workflow (Codex + Claude 
 ## Current Technical Stack
 
 - Language: Python 3.10+
+- Hardware: local PC with NVIDIA RTX 5070 Ti GPU available (2026-07-19 user note). GPU acceleration is NOT used by the current engine; see decision log entry of 2026-07-19 for the assessment (CPU vectorization + process pool suffices for the current roadmap; GPU becomes relevant for future ML-scale work such as M10.4).
 - Packaging: `pyproject.toml`, uv
 - Database: PostgreSQL through SQLAlchemy and pandas
 - CLI: argparse-based `qre`

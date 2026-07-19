@@ -48,6 +48,8 @@ class ResearchRunRequest:
     compact: bool = False
     engine_impl: str = "simulator"
     position_sizing: str = "full_compound"
+    profile_overrides: dict[str, float] | None = None
+    universe_filter: bool = False
 
 
 @dataclass
@@ -210,9 +212,44 @@ def _run_backtest(
         if request.market_profile_path
         else AShareMarketProfile()
     )
+    if request.profile_overrides:
+        from dataclasses import replace
+
+        from quant_research_engine.portfolio.universe import validate_profile_overrides
+
+        validate_profile_overrides(request.profile_overrides)
+        market_profile = replace(market_profile, **request.profile_overrides)
+
+    universe_report = None
+    if request.universe_filter:
+        from quant_research_engine.portfolio.universe import (
+            UniverseFilterSpec,
+            apply_universe_filter,
+            load_universe_metadata,
+        )
+
+        universe_spec = UniverseFilterSpec(
+            exclude_st=spec.exclude_st,
+            exclude_suspended=spec.exclude_suspended,
+            exclude_risk_warning=spec.exclude_risk_warning,
+            min_listing_days=spec.min_listing_days,
+            min_amount=spec.min_amount,
+        )
+        if universe_spec.any_enabled():
+            metadata = load_universe_metadata(store, request.codes, as_of=request.start)
+            frame, universe_report = apply_universe_filter(
+                frame, universe_spec, start=request.start, metadata=metadata
+            )
 
     backtest_dir = request.output_dir / "backtest"
     backtest_dir.mkdir(parents=True, exist_ok=True)
+
+    if universe_report is not None:
+        universe_path = backtest_dir / "universe_report.json"
+        universe_path.write_text(
+            json.dumps(universe_report.to_dict(), ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
 
     if request.backtest_mode == "batch":
         batch_req = BatchBacktestRequest(
@@ -239,6 +276,8 @@ def _run_backtest(
             },
         }
         paths = write_batch_result(result, backtest_dir, run_request=run_request_payload, run_id=request.run_id, compact=request.compact)
+        if universe_report is not None:
+            paths["universe_report"] = backtest_dir / "universe_report.json"
         return "ok", paths
 
     # shared-cash mode
@@ -268,6 +307,8 @@ def _run_backtest(
         },
     }
     paths = write_shared_cash_result(shared_result, backtest_dir, run_request=run_request_payload, run_id=request.run_id)
+    if universe_report is not None:
+        paths["universe_report"] = backtest_dir / "universe_report.json"
     return "ok", paths
 
 
@@ -299,6 +340,8 @@ def _write_research_manifest(result: ResearchRunResult, request: ResearchRunRequ
         "benchmark_value_column": request.benchmark_value_column,
         "metadata_as_of": str(request.metadata_as_of) if request.metadata_as_of else None,
         "stage_durations_s": result.stage_durations_s,
+        "profile_overrides": request.profile_overrides,
+        "universe_filter": request.universe_filter,
     }
 
     if result.preflight_paths:

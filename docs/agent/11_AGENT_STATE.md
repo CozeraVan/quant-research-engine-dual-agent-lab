@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-STRATEGY-FIT-ANALYSIS-001 / M10.1 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
+QRE-PARAM-OVERRIDE-001 / M10.2a (implementation DONE, self-review PASS — awaiting user-approved git finalization)
 
 ## Standing Instructions (user)
 
@@ -22,7 +22,15 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 
 ## Last Completed Step
 
-**QRE-STRATEGY-FIT-ANALYSIS-001 / M10.1 (DONE 2026-07-19, awaiting commit):**
+**QRE-PARAM-OVERRIDE-001 / M10.2a (DONE 2026-07-19, awaiting commit):**
+
+1. `portfolio/universe.py`: metadata loader (stock_suspend/stock_st as-of, daily-derived list_date) + `apply_universe_filter` with complete drop accounting and honest `unavailable_rules`; `validate_profile_overrides`.
+2. research_run: `profile_overrides` (dataclasses.replace + validation) and `universe_filter` (opt-in) wired for batch/shared modes; `universe_report.json` backtest artifact; manifest records overrides + flag.
+3. Runner flags: `--universe-filter`, `--commission-rate/--min-commission/--stamp-tax/--transfer-fee/--slippage-buy/--slippage-sell`.
+4. Small-sample verified: overrides measurably change results; unavailable rules honestly reported on real data; default runs unchanged.
+5. 1059 tests green (14 new). Stops split to M10.2b (engine exit logic, dual-engine equality).
+
+**QRE-STRATEGY-FIT-ANALYSIS-001 / M10.1 (DONE, finalized 2026-07-19, commit `d514c4c`):**
 
 1. `analysis/strategy_fit.py`: exact binomial significance tiers (90/99/99.9%), magnitude gate (net + excess vs buy-hold), free-rider accounting, strategy meta-test vs false-positive expectation, hypergeometric enrichment, BH-FDR, deterministic outputs + manifest.
 2. `scripts/strategy_fit_report.py` + `strategy_fit_report_manifest` kind registered (report-audit passes); runner `--metadata-columns` passthrough.
@@ -49,8 +57,8 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `c86441b` Add vectorized trade-level engine with metric-identical results (42.8x) (22 files)
-- Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked) and uncommitted docs/infra updates (R-QRE-009, M9.1b brief, outputs externalization: `.gitignore`, Makefile, README, runner `QRE_OUTPUT_DIR`, `04/05/06/11`).
+- Last commit: `d514c4c` Add strategy-fit analysis with significance tiers (M10.1) (15 files)
+- Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked).
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.
 
