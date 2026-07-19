@@ -6,7 +6,7 @@ IMPLEMENTING
 
 ## Current Active Work
 
-QRE-MISSING-FACTOR-QUEUE-001: **DONE (awaiting commit).** Missing-factor request queue operationalized (consolidated JSON queue with pending→fulfilled lifecycle + recheck CLI) and shelve-and-continue semantics in batch runs (`missing_factors` status, auto-queue after batch, `docs/handoff.md` upstream contract for indicators_tushare). Verified on real data (tf07e shelved + queued). 1129 tests green (8 new).
+QRE-TRAILING-STOP-BATCH-001: **DONE (awaiting commit).** Trailing stop added to single-symbol/batch path with dual-engine equality (anchor tracks daily high, close-breach trigger, next-open execution; precedence stop_loss > take_profit > trailing_stop > exit_signal). Stop family in the batch path is now complete. Verified: dual-engine identity + A/B effect + real trailing_stop exit. 1134 tests green (5 new).
 
 ## Progress Table
 
@@ -15,7 +15,8 @@ QRE-MISSING-FACTOR-QUEUE-001: **DONE (awaiting commit).** Missing-factor request
 | QRE-CONTINUOUS-REFRESH-001 | M10.3 continuous strategy refresh (watermark + idempotent rerun + delta report) | DONE | KIMI_CODE | commit `1345471`; `orchestration/refresh.py` + `scripts/refresh_batch.py` + systemd units; 1118 tests green (9 new); small-sample e2e passed | Preserve |
 | QRE-BATCH-FULL-VALIDATION-001 | M9.4 full-history validation + missing-factor handoff | PILOT DONE | KIMI_CODE | `outputs/handoff/missing_factor_requests.json` (7 requests, 5 strategies); pilot 5×50×2015-2025 all OK (4.3-9.0s/strategy); `feasibility.md`: ~3h full-scale estimate | User decision: trigger full-scale batch or wait for upstream factors |
 | QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001 | Preflight missing-factor crash fix (M8.3 contract) | DONE | KIMI_CODE | commit `6628631`; load only schema-valid factors; real-DB blocked strategies emit requests; 1121 green | Preserve |
-| QRE-MISSING-FACTOR-QUEUE-001 | Missing-factor request queue + shelve semantics | DONE (awaiting commit) | KIMI_CODE | `factor_request_queue.py` (store/recheck/builders) + runner `missing_factors` status + auto-queue + CLI + `docs/handoff.md`; 1129 green (8 new); real-DB verified | User-approved git finalization |
+| QRE-MISSING-FACTOR-QUEUE-001 | Missing-factor request queue + shelve semantics | DONE | KIMI_CODE | commit `5c60b8b`; queue store + runner `missing_factors` + auto-queue + CLI + `docs/handoff.md`; 1129 green (8 new); real-DB verified | Preserve |
+| QRE-TRAILING-STOP-BATCH-001 | Trailing stop in batch engines (dual-engine equality) | DONE (awaiting commit) | KIMI_CODE | anchor (daily high) + close-breach trigger in both engines; `apply_stops` gate + `--trailing-stop-pct`; 1134 green (5 new); real-DB verified | User-approved git finalization |
 | QRE-STOPS-BATCH-ENGINE-001 | M10.2b stop-loss/take-profit in batch engines (dual-engine equality) | DONE | KIMI_CODE | commit `24c284d`; stop branches in both engines; opt-in `--apply-stops`; 1109 tests green (50 new); real-DB dual identity + A/B effect verified | Preserve |
 | QRE-PARAM-OVERRIDE-001 | M10.2a runtime parameter overrides + backtest-time universe filter | DONE | KIMI_CODE | commit `a16d6c5`; `portfolio/universe.py`; research_run/runner overrides + `--universe-filter`; universe_report.json; 1059 tests green (14 new); small-sample verified | Preserve |
 | QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 strategy-fit clustering & noise filtering (F3 phase 1) | DONE | KIMI_CODE | commit `d514c4c`; `analysis/strategy_fit.py` + script; binomial tiers + meta-test + enrichment + BH-FDR; 1045 tests green (11 new); real batch 106 analyzed/5 skipped; report-audit ok | Preserve |

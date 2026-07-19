@@ -20,6 +20,7 @@ class SingleSymbolBacktestRequest:
     mark_price_column: str = "close"
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
+    trailing_stop_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +107,7 @@ class SingleSymbolBacktestEngine:
         entry_price: float | None = None
         entry_date: pd.Timestamp | None = None
         entry_cost = 0.0
+        trailing_anchor = 0.0
 
         orders: list[dict[str, object]] = []
         trades: list[dict[str, object]] = []
@@ -151,10 +153,16 @@ class SingleSymbolBacktestEngine:
                             entry_price = price
                             entry_date = trade_date
                             entry_cost = cost
+                            trailing_anchor = float(price)
                             orders.append(self._order_row(order, cost))
                             pending_buy_index = None
 
             if quantity > 0 and entry_index is not None:
+                if request.trailing_stop_pct is not None:
+                    anchor_value = self._optional_float(row, "high")
+                    if anchor_value is None:
+                        anchor_value = float(row[request.mark_price_column])
+                    trailing_anchor = max(trailing_anchor, anchor_value)
                 sell_reason: str | None = None
                 if pending_sell_index is not None and index == pending_sell_index:
                     sell_reason = pending_sell_reason or "exit_signal"
@@ -178,6 +186,15 @@ class SingleSymbolBacktestEngine:
                     if pending_sell_index is None or next_index < pending_sell_index:
                         pending_sell_index = next_index
                         pending_sell_reason = "take_profit"
+                elif (
+                    request.trailing_stop_pct is not None
+                    and float(row[request.mark_price_column]) <= trailing_anchor * (1 - request.trailing_stop_pct)
+                    and index + 1 < len(working)
+                ):
+                    next_index = index + 1
+                    if pending_sell_index is None or next_index < pending_sell_index:
+                        pending_sell_index = next_index
+                        pending_sell_reason = "trailing_stop"
                 elif request.exit_signal is not None and bool(row.get("exit_signal", False)) and index + 1 < len(working):
                     next_index = index + 1
                     if pending_sell_index is None or next_index < pending_sell_index:
@@ -227,6 +244,7 @@ class SingleSymbolBacktestEngine:
                         entry_price = None
                         entry_date = None
                         entry_cost = 0.0
+                        trailing_anchor = 0.0
                         pending_sell_index = None
                         pending_sell_reason = None
 

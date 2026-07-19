@@ -99,6 +99,7 @@ class BatchRunConfig:
     apply_stops: bool = False
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
+    trailing_stop_pct: float | None = None
     check_missing_factors: bool = True
 
 
@@ -255,6 +256,7 @@ def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResu
             apply_stops=config.apply_stops,
             stop_loss_pct=config.stop_loss_pct,
             take_profit_pct=config.take_profit_pct,
+            trailing_stop_pct=config.trailing_stop_pct,
         )
 
         run_result = run_research_run(req)

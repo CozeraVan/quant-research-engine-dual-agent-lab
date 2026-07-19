@@ -713,6 +713,7 @@ QRE_MARKET_DB_URL='postgresql+psycopg:///tushare_data' \
 #   --slippage-buy/--slippage-sell   成本参数运行时覆盖 (不改 YAML)
 # --apply-stops   启用策略 risk: 段的止盈止损 (收盘价评估, 次日开盘执行)
 # --stop-loss-pct/--take-profit-pct   覆盖策略声明的止损/止盈比例
+# --trailing-stop-pct   移动止损 (锚点跟踪日内最高价, 收盘跌破即次日开盘离场)
 uv run python scripts/batch_backtest_runner.py --mode quick --jobs 4 --compact --skip-preflight --resume
 
 # 模式: smoke (2024-01~03) / quick (2024 全年) / full (2015-2025)

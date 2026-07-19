@@ -53,6 +53,7 @@ class ResearchRunRequest:
     apply_stops: bool = False
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
+    trailing_stop_pct: float | None = None
 
 
 @dataclass
@@ -259,9 +260,11 @@ def _run_backtest(
     if request.apply_stops:
         stop_loss = request.stop_loss_pct if request.stop_loss_pct is not None else spec.stop_loss_pct
         take_profit = request.take_profit_pct if request.take_profit_pct is not None else spec.take_profit_pct
+        trailing_stop = request.trailing_stop_pct if request.trailing_stop_pct is not None else spec.trailing_stop_pct
     else:
         stop_loss = None
         take_profit = None
+        trailing_stop = None
 
     if request.backtest_mode == "batch":
         batch_req = BatchBacktestRequest(
@@ -275,6 +278,7 @@ def _run_backtest(
             position_sizing=request.position_sizing,
             stop_loss_pct=stop_loss,
             take_profit_pct=take_profit,
+            trailing_stop_pct=trailing_stop,
         )
         result = BatchBacktestEngine(market_profile).run(frame, batch_req)
         run_request_payload: dict[str, object] = {
@@ -308,7 +312,7 @@ def _run_backtest(
         metadata_columns=request.metadata_columns,
         stop_loss_pct=stop_loss,
         take_profit_pct=take_profit,
-        trailing_stop_pct=spec.trailing_stop_pct if request.apply_stops else None,
+        trailing_stop_pct=trailing_stop,
     )
     shared_result = SharedCashBacktestEngine(market_profile).run(frame, shared_req)
     run_request_payload = {

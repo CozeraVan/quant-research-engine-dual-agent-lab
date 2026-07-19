@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-MISSING-FACTOR-QUEUE-001
+QRE-TRAILING-STOP-BATCH-001 (M10.2b follow-up)
 
 ## Created By
 
-KIMI_CODE (single agent; user instructions 2026-07-19: queue missing-factor requests for upstream linkage; shelve-and-continue for blocked strategies)
+KIMI_CODE (single agent; user direction "请你继续推进下一步任务" 2026-07-19)
 
 ## Intended Implementer
 
@@ -14,53 +14,42 @@ KIMI_CODE
 
 ## Goal
 
-Operationalize the missing-factor lifecycle: (1) a durable, consolidated **request queue** for indicators/periods absent from the factor DB — the standard handoff that the `indicators_tushare` project will consume later (compute + ingest, or invoke its scripts); (2) **shelve semantics** for blocked strategies in batch runs — marked `missing_factors` (not `error`), the batch continues with the next strategy, and their requests are automatically consolidated into the queue after the batch.
+Add trailing stop to the single-symbol/batch backtest path, completing the stop family (stop_loss/take_profit landed in M10.2b, commit `24c284d`). `StrategySpec.risk.trailing_stop_pct` is already parsed and catalog strategies declare it; the batch path ignores it today. Both engines (simulator + vectorized) must honor it with metric-identical results.
 
-## User Instructions (2026-07-19)
+## Semantics (locked for both engines; batch-path model)
 
-1. Strategies needing indicators/periods absent from the factor DB: store the requests locally (DB mirror is a later option pending the user's target-DB confirmation — write access needs it per R-QRE-005).
-2. During the current testing phase, shelve such strategies and continue with the next strategy's backtest.
-3. Sync work state to the md docs (standard workflow).
+- Parameter: `trailing_stop_pct` on `SingleSymbolBacktestRequest` / `BatchBacktestRequest` (default None = disabled); validation: must be > 0.
+- Anchor: starts at the actual fill `entry_price`; updated at every bar while holding with the bar's `high` (fallback to `mark_price_column` when `high` is unavailable): `anchor = max(anchor, high)`.
+- Trigger: after the anchor update, if `close <= anchor × (1 - trailing_stop_pct)` → schedule sell at next bar's open, reason `trailing_stop` (same pending-sell machinery: slippage, validation, retry preserving reason, last-bar guard).
+- Precedence (locked): pending retry > holding expiry > stop_loss > take_profit > trailing_stop > exit_signal.
+- Deliberate model difference from the shared engine (documented): the shared engine evaluates intraday `low/high` touches and fills same-day at the stop price; the batch path stays close-based with next-open execution (no intraday ambiguity, no lookahead).
+- Activation: same `apply_stops` gate as fixed stops (spec `risk.trailing_stop_pct` used when enabled; request/runner `--trailing-stop-pct` overrides). Default runs unchanged.
+- Vectorized engine: dense candidate set when ANY stop type is enabled (fixed or trailing).
 
 ## Scope
 
-1. **Queue store** (`strategies/factor_request_queue.py`): consolidated JSON queue at `outputs/handoff/missing_factor_requests.json`.
-   - `load_queue()` / `save_queue()` / `upsert_requests()` — dedup by (strategy_id, alias); keeps `first_seen`, updates `last_seen`, merges metadata.
-   - Each entry carries `status: pending|fulfilled`; `recheck_fulfillment(store)` marks entries whose expected column now exists (read-only schema check) with `fulfilled_at` — so upstream progress is visible and shelved strategies can be re-enabled.
-2. **Batch runner shelve semantics** (`orchestration/batch_runner.py`):
-   - New result status `missing_factors` (shelved), distinct from generic `error`: detected when the strategy's exception is a DB missing-column/missing-table failure, or when a pre-batch schema check finds missing factor columns (reuses the read-only schema check from the M9.4 handoff).
-   - After the batch, missing-factor strategies' requests are automatically upserted into the queue (strategy_id, alias, expected_table, expected_column, date_range from the batch window, reason).
-   - `batch_summary.json` summary counts gain `missing_factors`; exit code treats shelved as non-failure (batch succeeds with shelved strategies; generic errors still fail).
-3. **CLI** `scripts/factor_request_queue.py`: `list` (pending/fulfilled table), `recheck` (schema re-check against DB, update statuses), `show --strategy <id>`.
-4. **Upstream contract doc** (`docs/handoff.md`): the queue file format, the pending→fulfilled lifecycle, how `indicators_tushare` should consume it (read queue → compute indicators → write `factors.*` → QRE `recheck` marks fulfilled → shelved strategies re-runnable via `--strategies`/`--resume`), and the future direct-invocation option.
-5. **Tests**: queue dedup/upsert/recheck with fake stores; runner classification (UndefinedColumn → missing_factors vs generic exception → error); auto-queue after batch; CLI list/recheck; full suite green.
+1. `SingleSymbolBacktestRequest` += `trailing_stop_pct`; simulator: anchor state + update + trigger branch at locked precedence.
+2. `single_symbol_vectorized.py`: identical anchor/branch; dense candidates when any stop enabled.
+3. `BatchBacktestRequest` += `trailing_stop_pct` + validation; both batch paths thread it.
+4. `ResearchRunRequest` += `trailing_stop_pct` (override; None = spec value when `apply_stops`); runner flag `--trailing-stop-pct`. (Shared-mode passthrough of spec trailing was already wired in M10.2b.)
+5. Tests: deterministic (anchor tracks high, close-breach trigger, anchor reset between trades, high-column fallback, precedence vs exit_signal/fixed stops, retry preserves reason), randomized seeds WITH trailing params (dual-engine equality), validation, threading.
+6. Real-DB small-sample: dual-engine identity with trailing enabled + A/B effect.
 
 ## Non-Goals
 
-- No DB-table queue mirror in v1 (needs the user's target-DB decision; file is the durable store).
-- No direct invocation of `indicators_tushare` scripts (future integration, interface TBD).
-- No indicator computation inside QRE (R-QRE-002).
-- No changes to upstream projects.
+- No shared-engine changes (already has trailing).
+- No intraday (low/high touch) stop model in the batch path.
+- No default-on activation.
 
 ## Expected Tests
 
 ```bash
-uv run pytest tests/test_factor_request_queue.py -q
+uv run pytest tests/test_single_symbol_vectorized.py -q
 uv run pytest -q
-```
-
-## Validation Commands
-
-```bash
-uv run pytest -q
-scripts/check-progress-docs.sh
-git diff --check
-# Real-DB small-sample: batch including one blocked strategy → status
-# missing_factors, batch continues, queue updated; factor_request_queue.py list/recheck
 ```
 
 ## Acceptance Criteria
 
-- A batch containing a blocked strategy finishes with that strategy marked `missing_factors` (shelved), the rest `ok`, and the queue file updated automatically with its requests (dedup-safe on re-runs).
-- `factor_request_queue.py recheck` marks requests fulfilled when columns appear (verified with a fake and, if available, a real temporarily-present column — otherwise documented).
-- `docs/handoff.md` documents the upstream consumption contract; full pytest suite green.
+- Dual-engine equality holds with trailing enabled (extended randomized suite + real-DB small-sample diff).
+- `--trailing-stop-pct` with `--apply-stops` measurably changes results for stop-declaring strategies; without the gate, results bit-identical to before.
+- Full pytest suite green.

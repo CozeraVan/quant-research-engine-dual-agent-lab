@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-MISSING-FACTOR-QUEUE-001 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
+QRE-TRAILING-STOP-BATCH-001 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
 
 ## Standing Instructions (user)
 
@@ -21,6 +21,8 @@ QRE-MISSING-FACTOR-QUEUE-001 (implementation DONE, self-review PASS — awaiting
 Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-validation.md` (Milestone 9: Strategy Research Validation).
 
 ## Last Completed Step
+
+**QRE-MISSING-FACTOR-QUEUE-001 (DONE, finalized 2026-07-19, commit `5c60b8b`):** queue store + shelve semantics + auto-queue + CLI + `docs/handoff.md`; 7 pending requests tracked.
 
 **QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001 (DONE, finalized 2026-07-19, commit `6628631`).**
 
@@ -76,7 +78,7 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `6628631` Fix preflight crash on missing factor columns (7 files)
+- Last commit: `5c60b8b` Add missing-factor request queue and shelve semantics (14 files)
 - Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked).
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.
@@ -97,7 +99,7 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 2. **Trigger full-scale full-history batch?** (~3h estimate, `outputs/full_history_pilot/feasibility.md`) — ready when you are.
 3. **Upstream factor computation** (`atr_10`, `sma_50`, `sma_9/26/52`, `sma_7` — queue at `outputs/handoff/missing_factor_requests.json`, contract in `docs/handoff.md`) in `indicators_tushare` / `quant_ts` to unblock the 5 shelved catalog strategies. QRE side is now fully operational (queue + recheck + re-run path).
 4. M10.4 ML clustering — needs separate dependency approval (5070 Ti noted).
-5. Follow-up micro-slices (optional): cross-symbol analytics, groupby-aware signals (40.2s → ≤30s); trailing stop in batch path. ~~Preflight UndefinedColumn robustness~~ — DONE (this task).
+5. Follow-up micro-slices (optional): cross-symbol analytics, groupby-aware signals (40.2s → ≤30s). ~~Preflight UndefinedColumn robustness~~ — DONE. ~~Trailing stop in batch path~~ — DONE (this task).
 
 ## Quick Batch In Flight
 

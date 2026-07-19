@@ -40,6 +40,7 @@ class BatchBacktestRequest:
     position_sizing: str = "full_compound"
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
+    trailing_stop_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,7 @@ class BatchBacktestEngine:
                     mark_price_column=request.mark_price_column,
                     stop_loss_pct=request.stop_loss_pct,
                     take_profit_pct=request.take_profit_pct,
+                    trailing_stop_pct=request.trailing_stop_pct,
                 ),
             )
             results[symbol] = single_result
@@ -122,6 +124,7 @@ class BatchBacktestEngine:
                 mark_price_column=request.mark_price_column,
                 stop_loss_pct=request.stop_loss_pct,
                 take_profit_pct=request.take_profit_pct,
+                trailing_stop_pct=request.trailing_stop_pct,
             )
             if sub is None:
                 single_result = empty_single_symbol_result(single_request)
@@ -159,6 +162,8 @@ class BatchBacktestEngine:
             raise ValueError("stop_loss_pct must be in (0, 1)")
         if request.take_profit_pct is not None and request.take_profit_pct <= 0:
             raise ValueError("take_profit_pct must be positive")
+        if request.trailing_stop_pct is not None and request.trailing_stop_pct <= 0:
+            raise ValueError("trailing_stop_pct must be positive")
 
     def _infer_symbols(self, frame: pd.DataFrame) -> list[str]:
         if "ts_code" not in frame.columns:

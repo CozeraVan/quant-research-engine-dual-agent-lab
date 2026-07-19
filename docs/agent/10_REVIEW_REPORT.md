@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-MISSING-FACTOR-QUEUE-001
+QRE-TRAILING-STOP-BATCH-001
 
 ## Reviewer
 
@@ -14,24 +14,23 @@ PASS
 
 ## Findings
 
-- Both user instructions implemented: durable local queue with fulfillment tracking (DB mirror documented as a later option pending target-DB decision per R-QRE-005), and shelve-and-continue semantics (`missing_factors` status distinct from `error`, batch proceeds, exit code treats shelved as non-failure).
-- Shelve check is a pre-execution read-only schema check (lazy per-process store, fork-safe for the process pool) — shelved strategies never execute; verified on real data (tf07e shelved, mr04a ran).
-- Queue hygiene: dedup by (strategy_id, alias) with first/last-seen preservation; the M9.4 consolidated file was merged into the queue format (7 pending entries) without loss.
-- One test-contract update: `summarize_results` counts gained `missing_factors` (existing expectation updated; complete accounting preserved).
-- Real end-to-end: batch auto-queue wrote the request; CLI list/show/recheck work; recheck correctly reports sma_7 still pending.
-- LOCKED requirements intact: R-QRE-002 (no indicator computation), R-QRE-005 (read-only DB), no new dependencies, full suite green.
+- Semantics locked in the brief and implemented identically in both engines; anchor update ordering (per-bar, before the trigger check), close-fallback when `high` is unavailable, precedence, and reason strings are test-locked.
+- One test-design issue caught and fixed during review: the first precedence test let `exit_signal` fire on every bar (preempting the trailing stop before the branch could be exercised) — data reconstructed so both conditions hold on the entry bar; the locked precedence is now genuinely covered.
+- Real-DB verification is complete per R-QRE-009: dual-engine identity with trailing enabled, A/B effect with a 1% trailing stop, and a real `trailing_stop` exit observed.
+- The batch-path model difference vs the shared engine (close-based + next-open vs intraday touch + same-day fill) is explicitly documented in the brief and handoff — a deliberate family distinction, not an oversight.
+- LOCKED requirements intact: opt-in via `apply_stops` (default runs bit-identical), no lookahead, no new dependencies, full suite green.
 
 ## Behavior Verified
 
-- `uv run pytest -q` → 1129 passed (8 new).
-- Real-DB: shelve icon/status in runner output, auto-queue write, queue CLI, recheck.
+- `uv run pytest -q` → 1134 passed (5 new deterministic; randomized equality suite now includes trailing params across 40 seeds).
+- Real-DB: `summary.csv` identical between engines with trailing; A/B effect; real exit reason observed.
 - `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean (re-run before commit).
 
 ## Residual Risks
 
-- The pre-execution schema check adds one cached schema read per factor table per worker process (negligible); workers create one extra DB store per process for schema checks (disposed by process exit).
-- Queue is file-based; concurrent writers (manual + batch) could race — acceptable at single-operator scale, noted in `docs/handoff.md`.
-- Direct `indicators_tushare` invocation and DB mirror remain user-decided future steps.
+- Anchor uses daily `high` (close fallback) — intraday spikes widen the anchor, which is the intended shared-engine concept but worth knowing for spiky names.
+- Dense candidate set applies whenever any stop type is enabled (speed trade-off documented in M10.2b review).
+- Stop family in the batch path is now complete (fixed + trailing); the remaining difference vs shared is the intraday execution model itself.
 
 ## Next Step
 

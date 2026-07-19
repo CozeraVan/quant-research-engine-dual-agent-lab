@@ -51,6 +51,7 @@ def make_frame(
     closes: list[float] | None = None,
     *,
     start: str = "2024-01-01",
+    highs: list[float] | None = None,
     pre_closes: list[float] | None = None,
     is_suspended: list | None = None,
     limit_up: list | None = None,
@@ -65,6 +66,8 @@ def make_frame(
         "open": opens,
         "close": closes,
     }
+    if highs is not None:
+        data["high"] = highs
     if pre_closes is not None:
         data["pre_close"] = pre_closes
     if is_suspended is not None:
@@ -350,6 +353,7 @@ def test_randomized_frames_with_stops_full_equality(seed):
     exit_expr = [None, "close > open", "close < close.shift(1)"][seed % 3]
     stop_loss = float(rng.uniform(0.02, 0.20)) if seed % 2 == 0 else None
     take_profit = float(rng.uniform(0.03, 0.30)) if seed % 3 != 1 else None
+    trailing = float(rng.uniform(0.05, 0.25)) if seed % 2 == 1 else None
     req = make_request(
         symbol,
         initial_cash=float(rng.choice([3_500.0, 50_000.0, 1_000_000.0])),
@@ -358,6 +362,7 @@ def test_randomized_frames_with_stops_full_equality(seed):
         holding_days=int(rng.integers(1, 10)),
         stop_loss_pct=stop_loss,
         take_profit_pct=take_profit,
+        trailing_stop_pct=trailing,
     )
     sim, vec = run_both(frame, req)
     assert_results_equal(sim, vec)
@@ -535,3 +540,66 @@ def test_batch_stop_validation():
         engine.run(frame, BatchBacktestRequest(stop_loss_pct=1.5, **base))
     with pytest.raises(ValueError, match="take_profit_pct"):
         engine.run(frame, BatchBacktestRequest(take_profit_pct=-0.1, **base))
+
+
+# ---------------------------------------------------------------------------
+# trailing stop (dual-engine equality)
+# ---------------------------------------------------------------------------
+
+
+def test_equal_trailing_stop_trigger():
+    opens = [10.0, 9.0, 9.2, 10.9, 10.0, 10.1]
+    highs = [10.5, 9.5, 12.0, 11.0, 10.2, 10.3]
+    closes = [9.5, 9.3, 11.0, 10.5, 9.9, 10.0]
+    frame = make_frame("000001.SZ", opens, closes, highs=highs)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=5, trailing_stop_pct=0.10)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert vec.trades.iloc[0]["exit_reason"] == "trailing_stop"
+    assert vec.trades.iloc[0]["exit_date"] == vec.trades.iloc[0]["entry_date"] + pd.Timedelta(days=3)
+
+
+def test_equal_trailing_anchor_reset_between_trades():
+    # two trades; the second trade's anchor must restart from its own entry
+    opens = [10.0, 9.0, 9.2, 10.9, 8.0, 9.0, 8.2, 8.1, 8.3, 8.2]
+    highs = [10.5, 9.5, 12.0, 11.0, 9.2, 9.5, 8.4, 8.3, 8.5, 8.4]
+    closes = [9.5, 9.3, 11.0, 8.0, 8.2, 9.2, 8.1, 8.2, 8.3, 8.25]
+    frame = make_frame("000001.SZ", opens, closes, highs=highs)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=3, trailing_stop_pct=0.50)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+
+
+def test_equal_trailing_without_high_column():
+    opens = [10.0, 9.0, 9.2, 10.9, 10.0, 10.1]
+    closes = [9.5, 9.3, 11.0, 10.5, 9.9, 10.0]
+    frame = make_frame("000001.SZ", opens, closes)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=5, trailing_stop_pct=0.10)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert vec.trades.iloc[0]["exit_reason"] == "trailing_stop"
+
+
+def test_equal_trailing_precedence_over_exit_signal():
+    # entry bar close breaches the trailing stop AND exit_signal is also true
+    # → trailing branch (earlier in the locked precedence) wins the reason
+    opens = [10.0, 9.0, 8.5, 8.6, 8.7]
+    highs = [10.5, 9.5, 8.6, 8.7, 8.8]
+    closes = [9.5, 8.4, 8.5, 8.6, 8.7]
+    frame = make_frame("000001.SZ", opens, closes, highs=highs)
+    req = make_request(
+        "000001.SZ", initial_cash=1_500_000.0,
+        entry_signal="close < open", exit_signal="close < 11",
+        holding_days=5, trailing_stop_pct=0.10,
+    )
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert vec.trades.iloc[0]["exit_reason"] == "trailing_stop"
+
+
+def test_batch_trailing_validation():
+    frame = _multi_symbol_frame()
+    engine = BatchBacktestEngine(PROFILE)
+    base = dict(symbols=["000001.SZ"], initial_cash_per_symbol=100_000.0, entry_signal="close < open", holding_days=3)
+    with pytest.raises(ValueError, match="trailing_stop_pct"):
+        engine.run(frame, BatchBacktestRequest(trailing_stop_pct=-0.05, **base))

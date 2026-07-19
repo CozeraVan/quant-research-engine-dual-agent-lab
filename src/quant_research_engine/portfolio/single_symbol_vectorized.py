@@ -103,6 +103,7 @@ class SingleSymbolVectorizedEngine:
             for column in ("is_suspended", "limit_up", "limit_down", "is_st", "pre_close")
             if column in working.columns
         }
+        high_prices = working["high"].to_numpy(dtype=float) if "high" in working.columns else None
 
         def flag(i: int, column: str) -> bool:
             # Mirrors simulator `_row_flag` exactly.
@@ -135,7 +136,11 @@ class SingleSymbolVectorizedEngine:
         # Static candidates: any bar where a signal could schedule something.
         # With stops enabled, any bar's close can cross a stop level while
         # holding — dense candidate set (sparse event-loop only without stops).
-        stops_enabled = request.stop_loss_pct is not None or request.take_profit_pct is not None
+        stops_enabled = (
+            request.stop_loss_pct is not None
+            or request.take_profit_pct is not None
+            or request.trailing_stop_pct is not None
+        )
         if stops_enabled:
             candidate_bars = np.arange(n)
         elif exit_signals is not None:
@@ -152,6 +157,7 @@ class SingleSymbolVectorizedEngine:
         pending_buy_index = _NO_INDEX
         pending_sell_index = _NO_INDEX
         pending_sell_reason: str | None = None
+        trailing_anchor = 0.0
 
         orders: list[dict[str, object]] = []
         trades: list[dict[str, object]] = []
@@ -218,6 +224,7 @@ class SingleSymbolVectorizedEngine:
                             entry_price = price
                             entry_date = pd.Timestamp(trade_dates[i])
                             entry_cost = cost
+                            trailing_anchor = float(price)
                             orders.append(self._order_row(order, cost))
                             pending_buy_index = _NO_INDEX
                             fills.append((i, cash, quantity))
@@ -230,6 +237,12 @@ class SingleSymbolVectorizedEngine:
 
             # --- sell logic (mirrors simulator lines 101-157) ---
             if quantity > 0 and entry_index != _NO_INDEX:
+                if request.trailing_stop_pct is not None:
+                    if high_prices is not None and not pd.isna(high_prices[i]):
+                        anchor_value = float(high_prices[i])
+                    else:
+                        anchor_value = float(mark_prices[i])
+                    trailing_anchor = max(trailing_anchor, anchor_value)
                 sell_reason: str | None = None
                 if pending_sell_index != _NO_INDEX and i == pending_sell_index:
                     sell_reason = pending_sell_reason or "exit_signal"
@@ -254,6 +267,16 @@ class SingleSymbolVectorizedEngine:
                     if pending_sell_index == _NO_INDEX or next_index < pending_sell_index:
                         pending_sell_index = next_index
                         pending_sell_reason = "take_profit"
+                        heapq.heappush(heap, next_index)
+                elif (
+                    request.trailing_stop_pct is not None
+                    and float(mark_prices[i]) <= trailing_anchor * (1 - request.trailing_stop_pct)
+                    and i + 1 < n
+                ):
+                    next_index = i + 1
+                    if pending_sell_index == _NO_INDEX or next_index < pending_sell_index:
+                        pending_sell_index = next_index
+                        pending_sell_reason = "trailing_stop"
                         heapq.heappush(heap, next_index)
                 elif (
                     exit_signals is not None
@@ -310,6 +333,7 @@ class SingleSymbolVectorizedEngine:
                         entry_price = 0.0
                         entry_date = None
                         entry_cost = 0.0
+                        trailing_anchor = 0.0
                         pending_sell_index = _NO_INDEX
                         pending_sell_reason = None
                         fills.append((i, cash, quantity))
