@@ -279,3 +279,45 @@ def test_meta_test_under_random_noise():
     result = analyze_strategy(data, metadata, FitConfig(pool_tier=0.01, min_trades=5, min_class_size=5))
     assert result.summary_row["meta_tier"] == ""
     assert result.summary_row["pool_size"] == 0
+
+
+
+def _monthly_rows(rows):
+    return pd.DataFrame(rows, columns=["window", "symbol", "total_return"])
+
+
+def test_stability_metric_with_monthly_artifact():
+    frame = _strong_strategy_frame()
+    symbols = frame["symbol"].tolist()
+    metadata = _metadata(symbols)
+    strong_symbols = [s for s in symbols if s.startswith("0000")]
+    monthly_rows = []
+    for s in symbols:
+        if s in strong_symbols:
+            monthly_rows += [
+                {"window": "2024-01", "symbol": s, "total_return": 0.10},
+                {"window": "2024-02", "symbol": s, "total_return": 0.08},
+            ]
+        else:
+            monthly_rows += [
+                {"window": "2024-01", "symbol": s, "total_return": 0.01},
+                {"window": "2024-02", "symbol": s, "total_return": 0.20},
+            ]
+    # pool (strong) beats universe in Jan (0.10 > ~0.01), loses in Feb (0.08 < ~0.20)
+    data = StrategyBatchData("test_stab", "test", frame, monthly=_monthly_rows(monthly_rows))
+    result = analyze_strategy(data, metadata, FitConfig(pool_tier=0.01, min_trades=5))
+    summary = result.summary_row
+    assert summary["pool_size"] == 10
+    assert summary["stability_months_covered"] == 2
+    assert summary["stability_ratio"] == pytest.approx(0.5)
+    assert summary["stability_pool_month_mean_min"] == pytest.approx(0.08)
+
+
+def test_stability_blank_without_artifact():
+    frame = _strong_strategy_frame()
+    metadata = _metadata(frame["symbol"].tolist())
+    data = StrategyBatchData("test_nostab", "test", frame)  # monthly=None
+    result = analyze_strategy(data, metadata, FitConfig(pool_tier=0.01, min_trades=5))
+    assert result.summary_row["stability_months_covered"] is None
+    assert result.summary_row["stability_ratio"] is None
+    assert result.summary_row["stability_pool_month_mean_min"] is None

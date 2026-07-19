@@ -111,6 +111,7 @@ class StrategyBatchData:
     strategy_id: str
     category: str
     frame: pd.DataFrame
+    monthly: pd.DataFrame | None = None
 
 
 def load_batch(batch_dir: Path) -> tuple[list[StrategyBatchData], list[dict[str, str]]]:
@@ -137,7 +138,11 @@ def load_batch(batch_dir: Path) -> tuple[list[StrategyBatchData], list[dict[str,
                             "reason": "summary.csv missing"})
             continue
         frame = pd.read_csv(csv_path)
-        loaded.append(StrategyBatchData(strategy_id=strategy_id, category=category, frame=frame))
+        monthly_path = Path(entry.get("output_dir", "")) / "backtest" / "symbol_month_returns.csv"
+        monthly = pd.read_csv(monthly_path) if monthly_path.exists() else None
+        loaded.append(
+            StrategyBatchData(strategy_id=strategy_id, category=category, frame=frame, monthly=monthly)
+        )
     return loaded, skipped
 
 
@@ -245,6 +250,25 @@ def analyze_strategy(
     pool_mean_total = float(pool["total_return"].mean()) if pool_size else None
     pool_mean_bh = float(pool["buy_hold_return"].mean()) if pool_size else None
 
+    stability_months_covered = None
+    stability_ratio = None
+    stability_pool_month_mean_min = None
+    if data.monthly is not None and not data.monthly.empty and pool_size:
+        monthly = data.monthly.dropna(subset=["total_return"])
+        universe_monthly = monthly.groupby("window")["total_return"].mean()
+        pool_symbols = set(pool["symbol"].astype(str))
+        pool_monthly = (
+            monthly.loc[monthly["symbol"].astype(str).isin(pool_symbols)]
+            .groupby("window")["total_return"]
+            .mean()
+            .dropna()
+        )
+        common = pool_monthly.index.intersection(universe_monthly.index)
+        if len(common):
+            stability_months_covered = int(len(common))
+            stability_ratio = float((pool_monthly.loc[common] > universe_monthly.loc[common]).mean())
+            stability_pool_month_mean_min = float(pool_monthly.loc[common].min())
+
     class_rows: list[dict[str, Any]] = []
     for dim in DIMENSIONS:
         universe_counts = eligible.groupby(eligible[dim]).size()
@@ -283,6 +307,9 @@ def analyze_strategy(
         "pool_mean_total_return": pool_mean_total,
         "pool_mean_buy_hold_return": pool_mean_bh,
         "meta_tier": meta_tier,
+        "stability_months_covered": stability_months_covered,
+        "stability_ratio": stability_ratio,
+        "stability_pool_month_mean_min": stability_pool_month_mean_min,
         "best_dimension": best["dimension"] if best else None,
         "best_class": best["class_value"] if best else None,
         "best_class_pool_count": best["pool_count"] if best else None,
@@ -395,16 +422,19 @@ def write_fit_outputs(
         "",
         "## Strategy ranking (by meta tier, then pool mean excess)",
         "",
-        "| rank | strategy | meta_tier | n_99 | pool_excess | market_excess | best class | class_edge |",
-        "|---|---|---|---|---|---|---|---|",
+        "| rank | strategy | meta_tier | n_99 | pool_excess | market_excess | stability | best class | class_edge |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for rank, row in enumerate(summary_df.head(30).itertuples(), start=1):
         best_class = (
             f"{row.best_dimension}={row.best_class}" if getattr(row, "best_dimension", None) else "-"
         )
+        stability = "-"
+        if getattr(row, "stability_ratio", None) is not None and not pd.isna(row.stability_ratio):
+            stability = f"{row.stability_ratio:.2f}/{int(row.stability_months_covered)}m"
         lines.append(
             f"| {rank} | {row.strategy_id} | {row.meta_tier or '-'} | {getattr(row, 'n_99', 0)} | "
-            f"{_fmt(row.pool_mean_excess)} | {_fmt(row.market_mean_excess)} | {best_class} | "
+            f"{_fmt(row.pool_mean_excess)} | {_fmt(row.market_mean_excess)} | {stability} | {best_class} | "
             f"{'YES' if row.class_edge else ''} |"
         )
     lines += [

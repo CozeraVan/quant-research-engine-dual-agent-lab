@@ -2,6 +2,38 @@
 
 ## Task ID
 
+QRE-STRATEGY-FIT-STABILITY-001 (M10.1 v1.1)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (implementation + pilot; awaiting self-review and user-approved commit)
+
+## Implementation Summary
+
+1. **Artifact** `symbol_month_returns.csv`: per-(symbol, calendar month) `total_return` (last/first equity − 1, NaN when first ≤ 0) via the concat window collector, written by `write_batch_result` in BOTH modes — scope adjusted from "compact only" to both modes to preserve the M9.1 contract that compact outputs are a strict subset of standard outputs (the committed parity test caught it). Manifest role `symbol_month_returns` with required columns `{window, symbol, total_return}`; passes `qre report-audit`.
+2. **Stability metric** (`analysis/strategy_fit.py`): `load_batch` picks up the artifact when present; per strategy at pool_tier — `stability_months_covered` (months with ≥1 pool stock reporting), `stability_ratio` (fraction of covered months where pool mean monthly return > universe mean), `stability_pool_month_mean_min`. Blank when the artifact is absent (older batches). Surfaced in `strategy_fit_summary.csv` and the markdown ranking table (`ratio/months` format). Informational only, no hard gate.
+3. **Tests** (3 new): artifact content vs hand-computed oracle + manifest entry + ReportManifest validation; stability computation (pool wins one of two months → ratio 0.5, covered=2, min locked); blanks without artifact. Existing compact-parity test updated via the both-modes decision.
+4. **Pilot**: 2 strategies × 3 codes × smoke — artifact written per strategy, audit clean, fit report shows stability columns.
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1137 passed, 4 warnings (1134 baseline + 3 new)
+pilot: artifact OK; qre report-audit → 0 issues; fit summary stability columns present
+```
+
+## Note for Existing Batches
+
+Older batches (incl. quick_batch_106) lack `symbol_month_returns.csv`; the fit report shows blank stability for them. Future batches and refresh runs include it automatically. If stability on the 2024 catalog is wanted before the next scheduled run, a `--resume`-compatible re-run is needed (user decision).
+
+# Coding Handoff (archive: QRE-ANALYTICS-CONCAT-001)
+
+## Task ID
+
 QRE-ANALYTICS-CONCAT-001 (M9.1b ≤30s target completion)
 
 ## Written By

@@ -718,6 +718,7 @@ uv run python scripts/batch_backtest_runner.py --mode quick --jobs 4 --compact -
 
 # 模式: smoke (2024-01~03) / quick (2024 全年) / full (2015-2025)
 # 产物: outputs/backtests/<batch_id>/batch_summary.json (含分阶段耗时 stage_durations_s)
+#   每策略 backtest/ 下新增 symbol_month_returns.csv (逐标的逐月收益, v1.1)
 ```
 
 ### 7b-2. 持续策略刷新 (continuous refresh)

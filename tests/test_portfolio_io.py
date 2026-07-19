@@ -1140,3 +1140,51 @@ def test_shared_cash_manifest_validates_full_market_roles(tmp_path):
     manifest = ReportManifest.from_path(paths["report_manifest"])
     issues = manifest.validate_contents()
     assert issues == []
+
+
+def test_write_batch_result_compact_writes_symbol_month_returns(tmp_path):
+    import json
+
+    from quant_research_engine.portfolio.report_manifest import ReportManifest
+
+    dates = list(pd.to_datetime(["2024-01-29", "2024-01-30", "2024-01-31", "2024-02-01", "2024-02-02", "2024-02-05"]))
+    equity_a = pd.DataFrame({
+        "trade_date": dates,
+        "total_equity": [100.0, 100.0, 100.0, 100.0, 105.0, 110.0],  # Jan flat, Feb +10%
+    })
+    equity_b = pd.DataFrame({
+        "trade_date": dates,
+        "total_equity": [100.0, 100.0, 100.0, 100.0, 95.0, 90.0],   # Jan flat, Feb -10%
+    })
+    singles = {}
+    for symbol, curve in (("000001.SZ", equity_a), ("000002.SZ", equity_b)):
+        singles[symbol] = SingleSymbolBacktestResult(
+            orders=pd.DataFrame({"symbol": [symbol], "side": ["buy"]}),
+            trades=pd.DataFrame({"symbol": [symbol], "net_pnl": [1.0]}),
+            equity_curve=curve.assign(cash=0.0, position_quantity=0, market_value=curve["total_equity"]),
+            failed_orders=pd.DataFrame(),
+            summary={"initial_cash": 100.0, "final_equity": float(curve["total_equity"].iloc[-1]), "trade_count": 1},
+        )
+    result = BatchBacktestResult(
+        symbols=["000001.SZ", "000002.SZ"],
+        results=singles,
+        summary=pd.DataFrame({"symbol": ["000001.SZ", "000002.SZ"], "trade_count": [1, 1], "total_return": [0.1, -0.1]}),
+        summary_metrics={"symbol_count": 2},
+    )
+
+    paths = write_batch_result(result, tmp_path, compact=True)
+
+    assert paths["symbol_month_returns"].exists()
+    df = pd.read_csv(paths["symbol_month_returns"])
+    assert set(df.columns) == {"window", "symbol", "total_return"}
+    # oracle: each symbol has exactly 2024-01 and 2024-02 rows
+    assert sorted(df["window"].unique()) == ["2024-01", "2024-02"]
+    feb_a = df.loc[(df["symbol"] == "000001.SZ") & (df["window"] == "2024-02"), "total_return"].iloc[0]
+    feb_b = df.loc[(df["symbol"] == "000002.SZ") & (df["window"] == "2024-02"), "total_return"].iloc[0]
+    assert feb_a == pytest.approx(110.0 / 100.0 - 1)
+    assert feb_b == pytest.approx(90.0 / 100.0 - 1)
+
+    manifest = json.loads((tmp_path / "report_manifest.json").read_text(encoding="utf-8"))
+    assert "symbol_month_returns" in {f["role"] for f in manifest["files"]}
+    rm = ReportManifest.from_path(tmp_path / "report_manifest.json")
+    assert rm.validate_contents() == []

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-ANALYTICS-CONCAT-001 (M9.1b ≤30s acceptance target completion)
+QRE-STRATEGY-FIT-STABILITY-001 (M10.1 v1.1, deferred follow-up recorded in CR-0003)
 
 ## Created By
 
@@ -14,35 +14,40 @@ KIMI_CODE
 
 ## Goal
 
-Close the last open acceptance line from M9.1b (backtest stage ≤ 30s, currently 40.2s): replace the per-symbol pandas loops in the window/rolling analytics collectors with cross-symbol concatenated computation, keeping outputs byte-identical (risk.py remains the untouched oracle).
+Deliver the deferred v1.1: persist per-symbol monthly returns as a compact-mode artifact, and add a time-stability metric to the strategy-fit report — so a strategy's pool edge can be judged not only by significance and magnitude but by whether it repeats across months.
 
 ## Background Evidence
 
-- Benchmark decomposition (measured 2026-07-19): backtest stage 40.2s = frame ~17s (shared per run, near-irreducible) + vectorized engine ~9s + window/rolling analytics + write ~14-28s. The analytics collectors still loop per symbol with pandas ops (`_collect_window_return_rows`, `_collect_rolling_return_rows` in `analytics.py`).
-- Equality machinery exists: `tests/test_analytics_vectorized.py` compares collectors against the old risk.py path exactly; baseline artifacts (`outputs/backtests/profile_baseline/a2db386713da/`) are byte-identical references.
+- M10.1 v1 explicitly deferred time stability: per-symbol monthly returns are not persisted in compact artifacts (recorded in CR-0003 and the M10.1 review).
+- The concat window collector (`_collect_window_return_rows`) already produces exactly the needed intermediate: `(window, symbol, total_return)` rows from equity curves — the artifact is a materialization of that row set.
+- Compact batches keep equity curves in memory at write time, so the artifact costs one vectorized pass, no re-run.
+
+## Semantics (locked)
+
+- Artifact `symbol_month_returns.csv` (compact mode): one row per (symbol, calendar month) with `total_return` = last/first equity − 1 within the month (identical computation to the window-summary collector; NaN when first equity ≤ 0). Manifest role `symbol_month_returns` with required columns `{window, symbol, total_return}`.
+- Stability metric (strategy_fit, per strategy): for the significant pool at pool_tier, per month compare pool mean monthly return vs universe mean monthly return; `stability_ratio` = fraction of covered months where pool > universe (months with ≥1 pool stock having a return that month). Report `stability_months_covered`, `stability_ratio`, `stability_pool_month_mean_min`. Informational (no hard gate in v1.1); strategies without the artifact report blank stability fields.
 
 ## Scope
 
-1. **Concat window collector**: build ONE big frame (symbol, trade_date, total_equity) across symbols (single sort by symbol+date, or trust engine date ordering with a safety sort), one `groupby(["window","symbol"])["total_equity"].agg(["first","last"])` pass, vectorized `total_return = last/first - 1` with the `first > 0` gate — replacing ~5,292 per-symbol pandas groupby calls.
-2. **Concat rolling collector**: one concatenated sort, per-symbol segments via group boundaries (`np.split` / cumcount) with cheap numpy sliding windows per segment — eliminating per-symbol pandas frame construction.
-3. **Equality verification (the gate)**: `tests/test_analytics_vectorized.py` must pass unchanged (oracle), plus real-DB artifact diff: re-run the tf01a full-market benchmark and diff `window_summary_M/Q/Y.csv` + `rolling_summary_20.csv` + `summary.csv` against the baseline (must stay byte-identical), and record the new stage duration.
-4. Docs: update `09_CODING_HANDOFF.md` with the final decomposition; note whether ≤30s is met.
+1. `write_batch_result` (compact path): write `symbol_month_returns.csv` from result equity curves via the concat collector (window="M"); register in the batch report manifest (paths + role); required-columns contract in `report_manifest.py`.
+2. `analysis/strategy_fit.py`: load the artifact per strategy when present; compute stability fields; add them to `strategy_fit_summary.csv` and the markdown report.
+3. Tests: artifact content vs hand-computed oracle, manifest registration/validation, stability computation with synthetic monthly data, absent-artifact blanks, full-suite green.
+4. Small-sample pilot (R-QRE-009): 2 strategies × 3 codes × smoke with compact → artifact present and manifest-audited; fit report shows stability columns.
 
 ## Non-Goals
 
-- No changes to `risk.py`, engine internals, or output contracts.
-- No frame-level cross-strategy caching (runner-level; separate consideration).
-- No new dependencies.
+- No re-run of existing batches (artifact applies to future batches/refreshes; existing quick_batch_106 lacks it until re-run).
+- No buy-hold monthly excess in v1.1 (stability uses within-strategy pool-vs-universe monthly returns — documented semantics).
+- No hard stability gate; informational only.
 
 ## Expected Tests
 
 ```bash
-uv run pytest tests/test_analytics_vectorized.py -q   # oracle, must pass unchanged
 uv run pytest -q
 ```
 
 ## Acceptance Criteria
 
-- Oracle equality suite passes; real-DB artifacts byte-identical to baseline.
-- tf01a quick-mode backtest stage duration recorded; target ≤ 30s (or the residual decomposition documented if not).
-- Full pytest suite green.
+- Compact batches write `symbol_month_returns.csv`, manifest-registered and passing `qre report-audit`.
+- Fit report exposes stability columns for strategies with the artifact; blank otherwise.
+- Full pytest suite green; pilot verified on real data.

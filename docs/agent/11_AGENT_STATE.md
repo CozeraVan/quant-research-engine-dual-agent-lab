@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-ANALYTICS-CONCAT-001 (implementation DONE — ≤30s target MET at 25.852s; self-review PASS — awaiting user-approved git finalization)
+QRE-STRATEGY-FIT-STABILITY-001 / M10.1 v1.1 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
 
 ## Standing Instructions (user)
 
@@ -21,6 +21,8 @@ QRE-ANALYTICS-CONCAT-001 (implementation DONE — ≤30s target MET at 25.852s; 
 Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-validation.md` (Milestone 9: Strategy Research Validation).
 
 ## Last Completed Step
+
+**QRE-ANALYTICS-CONCAT-001 (DONE, finalized 2026-07-19, commit `b72b9af`):** backtest stage 25.852s — M9.1b ≤30s target MET (66.5×).
 
 **QRE-TRAILING-STOP-BATCH-001 (DONE, finalized 2026-07-19, commit `77b8897`):** stop family complete in batch path.
 
@@ -80,7 +82,7 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `77b8897` Add trailing stop to batch engines with dual-engine equality (12 files)
+- Last commit: `b72b9af` Vectorize analytics cross-symbol; backtest stage 25.9s (target met) (6 files)
 - Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked).
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.

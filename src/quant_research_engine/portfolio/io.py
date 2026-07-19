@@ -238,6 +238,15 @@ def write_batch_result(
         paths["rolling_summary_20"],
         index=False,
     )
+    # Per-symbol monthly returns (M10.1 v1.1): same (window, symbol,
+    # total_return) computation as the window-summary collector; written in
+    # both modes so compact stays a strict subset of standard outputs.
+    from quant_research_engine.portfolio.analytics import _collect_window_return_rows
+
+    paths["symbol_month_returns"] = directory / "symbol_month_returns.csv"
+    _collect_window_return_rows(equity_curves, "M").to_csv(
+        paths["symbol_month_returns"], index=False
+    )
     for group_column in group_by or []:
         path = directory / f"group_by_{group_column}.csv"
         summarize_batch_by(result.summary, group_column).to_csv(path, index=False)
@@ -652,6 +661,8 @@ def _batch_manifest_role(key: str) -> str:
         return "drawdown_curve_chart"
     if key == "html_report":
         return "html_report"
+    if key == "symbol_month_returns":
+        return "symbol_month_returns"
     if key.startswith("window_summary_") and key.endswith("_ranked_symbols"):
         return "window_ranked_symbols"
     if key.startswith("window_summary_"):

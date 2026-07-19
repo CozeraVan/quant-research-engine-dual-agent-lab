@@ -43,6 +43,7 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "rolling_metrics": {"window_size", "end_date", "total_return"},
     "rolling_summary": {"window_size", "end_date", "symbol_count"},
     "window_summary": {"window", "symbol_count"},
+    "symbol_month_returns": {"window", "symbol", "total_return"},
     "group_summary": {"symbol_count"},
     "window_ranked_symbols": {"window", "rank_type", "rank", "symbol", "total_return"},
     "group_ranked_symbols": {"rank_type", "rank", "symbol", "total_return"},

@@ -2,6 +2,43 @@
 
 ## Task ID
 
+QRE-STRATEGY-FIT-STABILITY-001 (M10.1 v1.1)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- Both v1.1 deliverables implemented: `symbol_month_returns.csv` artifact (manifest-registered, audit-clean) and the three-field stability metric (covered months, pool>universe ratio, pool month min) with blank-when-absent behavior.
+- One contract issue caught by the existing parity test and deliberately resolved: writing the artifact only in compact mode broke the compact⊆standard subset contract from M9.1 — scope adjusted to both modes, documented in 09.
+- Test data for the artifact initially used a business-day boundary that split mid-January (not at the calendar month boundary) — corrected to explicit calendar-boundary dates; the oracle check is now exact.
+- Stability semantics documented as within-strategy pool-vs-universe monthly returns (no buy-hold monthly excess in v1.1), informational only.
+- LOCKED requirements intact: no backtest re-runs beyond small-sample pilot, no new dependencies, full suite green.
+
+## Behavior Verified
+
+- `uv run pytest -q` → 1137 passed (3 new).
+- Pilot: artifact + audit + fit stability columns on real data.
+- `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean (re-run before commit).
+
+## Residual Risks
+
+- Older batches show blank stability until re-run/refresh (noted in 09 and report).
+- Monthly returns use strategy equity only; the semantic is pool-relative-to-universe per month, not absolute alpha.
+
+## Next Step
+
+Phase → `AWAITING_GIT_APPROVAL`. Proposed commit message presented to the user; commit only after explicit approval.
+
+# Review Report (archive: QRE-ANALYTICS-CONCAT-001)
+
+## Task ID
+
 QRE-ANALYTICS-CONCAT-001
 
 ## Reviewer
