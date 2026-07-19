@@ -719,6 +719,31 @@ uv run python scripts/batch_backtest_runner.py --mode quick --jobs 4 --compact -
 # 产物: outputs/backtests/<batch_id>/batch_summary.json (含分阶段耗时 stage_durations_s)
 ```
 
+### 7b-2. 持续策略刷新 (continuous refresh)
+
+```bash
+# 检查数据水印与上次刷新状态 (不执行任何回测)
+uv run python scripts/refresh_batch.py --check-only
+
+# 有新数据时幂等重跑目录策略 (滚动 2 年窗口, vectorized, compact)
+uv run python scripts/refresh_batch.py --jobs 4
+
+# 强制执行 / 小样本
+uv run python scripts/refresh_batch.py --force --codes 000001.SZ 600000.SH
+```
+
+产物: `outputs/refresh/state.json` (刷新状态), `outputs/backtests/refresh/<id>/` (批次),
+`outputs/refresh/delta/<ts>_<batch_id>/` (与上一批次的逐策略差异报告, manifest 可审计)。
+
+定时调度 (systemd 用户单元, 默认不安装, 需要时手动启用):
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/qre-refresh.service deploy/qre-refresh.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now qre-refresh.timer   # 每天 18:30 检查并刷新
+```
+
 ### 7c. 策略适配分析 (strategy fit)
 
 ```bash

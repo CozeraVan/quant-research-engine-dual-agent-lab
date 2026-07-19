@@ -1,0 +1,8 @@
+[Unit]
+Description=QRE continuous strategy refresh (watermark-gated catalog re-run)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
+Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+ExecStart=/usr/bin/env uv run python scripts/refresh_batch.py --jobs 4

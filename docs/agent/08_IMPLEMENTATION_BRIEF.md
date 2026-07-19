@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-STOPS-BATCH-ENGINE-001 (M10.2b, CR-0003 F1a part 2)
+QRE-CONTINUOUS-REFRESH-001 (M10.3, CR-0003 F2)
 
 ## Created By
 
-KIMI_CODE (single agent; roadmap order user-approved, "请继续按计划推进" 2026-07-19)
+KIMI_CODE (single agent; roadmap order user-approved "请继续按计划推进" 2026-07-19)
 
 ## Intended Implementer
 
@@ -14,44 +14,38 @@ KIMI_CODE
 
 ## Goal
 
-Honor `stop_loss_pct` / `take_profit_pct` in the single-symbol and batch backtest path — declared in strategy YAMLs' `risk:` section since the catalog exists (e.g. tf01a `stop_loss_pct: 0.08`) but ignored by the batch path today. Both engine implementations (simulator AND vectorized) must honor them with **metric-identical results**, verified by the full equality ladder. Trailing stop is explicitly out of scope (anchor-tracking variant; shared engine already has it).
+Keep strategy results current as upstream data lands: detect new data via a database watermark, idempotently re-run the catalog on a rolling window using the vectorized runner, and emit a delta report against the previous batch. The machinery is built and small-sample verified only — **no full-scale execution** (standing user instruction 2026-07-19); the scheduler ships as documented unit files, not installed.
 
-## Semantics (locked for both engines)
+## Background Evidence
 
-- Parameters on `SingleSymbolBacktestRequest` / `BatchBacktestRequest`: `stop_loss_pct`, `take_profit_pct` (default None = disabled).
-- Evaluation: at every bar while holding (including the entry bar's close), compare the bar's `mark_price_column` (close) against the actual fill `entry_price`:
-  - `close <= entry_price × (1 - stop_loss_pct)` → schedule sell at next bar's open, reason `stop_loss`.
-  - `close >= entry_price × (1 + take_profit_pct)` → schedule sell at next bar's open, reason `take_profit`.
-- Execution reuses the existing pending-sell machinery: T+1 next-open execution, slippage, order validation, failed-order records, rejection retry with the ORIGINAL reason preserved.
-- Per-bar precedence (locked): pending retry > holding expiry (immediate at that bar's open) > `stop_loss` > `take_profit` > `exit_signal` (all three schedule next bar; first setter wins the reason).
-- Last-bar guard: no scheduling when `index + 1 >= len(working)` (same as exit_signal).
-- Validation: `stop_loss_pct` must be in (0, 1); `take_profit_pct` must be > 0.
-- Vectorized engine: with stops enabled it iterates every bar (dense candidate set, numpy) — sparse event-loop only when stops are disabled.
+- Vectorized engine + shared frame make full catalog re-runs cheap (~30 min for 106 strategies), so idempotent full re-run beats stateful incremental (decision log 2026-07-19).
+- Runner already supports `--jobs`, `--compact`, `--resume`, `--engine-impl`.
+- `quant_ts` uses systemd timers upstream; we mirror the pattern with user-level units.
 
 ## Scope
 
-1. `SingleSymbolBacktestRequest` += `stop_loss_pct`, `take_profit_pct`; simulator sell-block gains the two branches at the locked precedence.
-2. `single_symbol_vectorized.py`: identical branches + dense candidate set when stops enabled.
-3. `BatchBacktestRequest` += both fields + validation; both batch paths (simulator/vectorized) thread them into per-symbol requests.
-4. `ResearchRunRequest` += `apply_stops: bool = False`, `stop_loss_pct`, `take_profit_pct` (None = use spec). Opt-in only: when `apply_stops=False`, stops are NOT applied (no silent change to existing runs). When True: batch request gets request overrides or spec values. Shared mode: pass spec/override stops through to `SharedCashBacktestRequest` (fields already exist there).
-5. Runner: `--apply-stops`, `--stop-loss-pct`, `--take-profit-pct` threaded `BatchRunConfig` → `ResearchRunRequest`; echoed into batch_summary config.
-6. Tests (dual-engine equality is the acceptance gate):
-   - Deterministic: stop_loss trigger, take_profit trigger, stop evaluated on entry-bar close, precedence over exit_signal, stop + limit-down rejection retry preserving reason, both params unset (existing suite unchanged).
-   - Randomized property frames EXTENDED with random stop params (dual-engine equality across all seeds).
-   - Validation errors; research_run/runner threading; spec-vs-override precedence.
-7. Real-DB small-sample (R-QRE-009): stop-declaring strategies × 3-50 symbols — dual-engine `summary.csv` diff + apply-vs-not differ.
+1. **`orchestration/refresh.py`**:
+   - `data_watermark(store)`: read-only `SELECT MAX(trade_date)` on the market daily table.
+   - `RefreshState` (JSON at `outputs/refresh/state.json`): `last_data_date`, `last_run_at`, `last_batch_dir`, `window_years`, `codes`, `strategy_count`, `ok_count`, `config` (jobs/compact/engine_impl/apply_stops).
+   - `needs_refresh(data_date, state)`: true when no state or `data_date > state.last_data_date`.
+   - `compute_window(data_date, window_years)`: end = data_date; start = data_date minus window_years (calendar).
+   - `compute_delta(previous_batch_dir, new_batch_dir)`: per-strategy comparison from `batch_summary.json` results (status changes) and per-strategy `backtest/summary_metrics.json` (mean_total_return, total_trades, positive_return_symbol_rate) → delta rows incl. new/removed/error transitions.
+   - `write_delta_report(...)`: `delta_report.json` + `delta_report.md` + `report_manifest.json` (kind `strategy_refresh_delta_manifest` registered for report-audit).
+2. **`scripts/refresh_batch.py`**: `--check-only` (report watermark vs state, do nothing), `--force`, `--window-years` (default 2), `--jobs` (default 4), `--codes` (small-sample/testing), `--with-eval` (default skip eval for speed), `--apply-stops` passthrough. Flow: load state → watermark → skip when current (unless forced) → run catalog batch via `orchestration.batch_runner` core → delta report vs `state.last_batch_dir` → save state.
+3. **Scheduler units** `deploy/qre-refresh.service` + `deploy/qre-refresh.timer` (systemd user units, daily 18:30): documented in README with install commands; NOT installed by the agent.
+4. **Tests** `tests/test_refresh.py`: watermark/needs_refresh/window logic, state roundtrip, delta computation (metric changes, new/removed/error transitions), end-to-end with monkeypatched batch execution and fake store (state written, delta report emitted, second run no-ops), manifest audit parity.
 
 ## Non-Goals
 
-- No trailing stop (follow-up; needs anchor tracking).
-- No shared-cash engine changes (already supports stops; this slice only passes values through).
-- No default-on activation (explicit `--apply-stops` or request flag required).
-- No intraday stop evaluation (close-based only; no lookahead).
+- No full-scale execution during this slice (small-sample `--codes` verification only).
+- No systemd installation/enabling by the agent (user enables when ready).
+- No stateful incremental backtesting (idempotent re-run by design).
+- No GUI work.
 
 ## Expected Tests
 
 ```bash
-uv run pytest tests/test_single_symbol_vectorized.py tests/test_universe.py -q
+uv run pytest tests/test_refresh.py -q
 uv run pytest -q
 ```
 
@@ -61,12 +55,13 @@ uv run pytest -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
-# R-QRE-009: small-sample dual-engine check with stops enabled (3-50 symbols)
+# Small-sample (R-QRE-009): refresh_batch.py --codes 000001.SZ 000002.SZ 600000.SH --force
+# then --check-only (no-op path), then delta report inspection + report-audit
 ```
 
 ## Acceptance Criteria
 
-- Dual-engine equality holds with stops enabled: extended randomized suite + real-DB small-sample `summary.csv` identical.
-- `--apply-stops` measurably changes results for stop-declaring strategies; without it, results are bit-identical to before.
-- Precedence/reason contracts locked by tests (`stop_loss`/`take_profit` recorded in trades ledger exit_reason).
-- Full pytest suite green.
+- `--check-only` correctly reports current/stale watermark without running anything.
+- Forced small-sample refresh runs the batch, writes state, and emits a delta report that passes `qre report-audit`.
+- A second run with no new data no-ops; with a bumped watermark it refreshes and the delta report shows per-strategy changes.
+- Full pytest suite green; systemd unit files documented but not installed.

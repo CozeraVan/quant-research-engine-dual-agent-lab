@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-STOPS-BATCH-ENGINE-001 (M10.2b)
+QRE-CONTINUOUS-REFRESH-001 (M10.3)
 
 ## Reviewer
 
@@ -14,24 +14,24 @@ PASS
 
 ## Findings
 
-- Semantics locked in `08_IMPLEMENTATION_BRIEF.md` and implemented identically in both engines; precedence, reason strings, last-bar guard, and retry-reason preservation are test-locked.
-- One structural bug caught and fixed during implementation: effective stop levels were first computed inside the batch branch only (NameError for shared mode) — hoisted before the mode branch; shared mode gets stops + trailing passthrough.
-- Equality evidence is layered per R-QRE-009: 40 new randomized seeds with random stop params (dense candidate path exercised), 7 deterministic edge cases, real-DB dual-engine identity on two strategies (tf01a, mr04a), and a definitive A/B (1% stop measurably changes results; a real `stop_loss` exit observed).
-- One verification nuance honestly recorded: tf01a on 3 codes in the smoke window produces zero trades, so the first A/B was inconclusive — re-verified with mr04a and a 1% override stop until a real stop-triggered exit was observed.
-- LOCKED requirements intact: opt-in only (default runs bit-identical, test-locked), no lookahead (close-based evaluation), no new dependencies, full suite green.
+- Scope matches `08_IMPLEMENTATION_BRIEF.md`: refresh module, script, systemd units, manifest registration, tests — all delivered; no full-scale execution (small-sample only, per standing instruction).
+- Two defects caught and fixed during implementation: `BatchRunConfig` was briefly constructed with a non-existent `jobs` field (removed — jobs belongs to `execute_batch`), and delta directories collided at second-resolution timestamps on rapid successive runs (now `<timestamp>_<batch_id>`).
+- One test-hygiene fix: removed two leftover no-op assertion lines in the script e2e test.
+- Script behavior verified end-to-end on real data: first run executes (106 ok / 111 with the 5 known missing-factor errors), check-only is side-effect free, same-watermark run no-ops, watermark bump refreshes with delta vs previous batch.
+- LOCKED requirements intact: R-QRE-005 (read-only), R-QRE-007 (manifest/audit parity), R-QRE-008 (caveat in delta report), R-QRE-009 (small-sample verification only), no new dependencies, systemd not installed by agent.
+- R-CORE-003: 9 new tests incl. script-level e2e; full suite 1118 green.
 
 ## Behavior Verified
 
-- `uv run pytest -q` → 1109 passed (1059 baseline + 50 new).
-- Dual-engine `summary.csv` identical with stops enabled (two real strategies).
-- A/B effect confirmed; `stop_loss` exit reason present in real-data trades ledger.
+- `uv run pytest -q` → 1118 passed.
+- Real-data e2e: watermark 2026-07-17; state written with batch id, counts, config; delta manifest passes `qre report-audit` (0 issues).
 - `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean (re-run before commit).
 
 ## Residual Risks
 
-- Dense candidate set when stops are enabled costs speed (full-bar numpy loop during holds); strategies without stops keep the sparse fast path. Measured impact is acceptable at current scale but noted for stop-heavy catalogs.
-- Trailing stop remains unimplemented in the batch path (shared engine has it); listed as follow-up.
-- Stop semantics are close-based (no intraday triggers) — documented; users wanting intrabar (high/low) stops need a different model.
+- Refresh window ends at the data watermark; strategies whose factors lag the market table (upstream indicator refresh delay) would be evaluated against partially-stale factor columns — mitigated by preflight being skippable but not yet re-verified per refresh (a `--with-preflight` refresh policy is a possible follow-up).
+- The 5 missing-factor strategies will keep erroring on every refresh until upstream delivers the columns; the delta report surfaces this as persistent `error` transitions.
+- Timer runs as the user; DB URL comes from the unit's Environment line — secrets stay out of the repo (R-CORE-004).
 
 ## Next Step
 

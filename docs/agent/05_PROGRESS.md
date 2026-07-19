@@ -6,13 +6,14 @@ AWAITING_GIT_APPROVAL
 
 ## Current Active Work
 
-QRE-STOPS-BATCH-ENGINE-001 (M10.2b): **IMPLEMENTATION DONE, REVIEW PASS.** stop_loss_pct/take_profit_pct honored in both engines with identical results (50 new tests incl. 40 randomized-with-stops equality seeds); real-DB dual-engine identity + A/B effect + real stop_loss exit observed; opt-in only, default runs unchanged. Awaiting user-approved git finalization.
+QRE-CONTINUOUS-REFRESH-001 (M10.3): **IMPLEMENTATION DONE, REVIEW PASS.** Continuous refresh machinery delivered: watermark detection, idempotent rolling-window re-run, delta report with manifest/audit parity, systemd units documented (not installed). Small-sample e2e: first run 106 ok/111, check-only clean, same-watermark no-op, delta audit ok. Awaiting user-approved git finalization.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| QRE-STOPS-BATCH-ENGINE-001 | M10.2b stop-loss/take-profit in batch engines (dual-engine equality) | DONE (awaiting commit) | KIMI_CODE | stop branches in both engines + dense candidates; research_run/runner `--apply-stops` + overrides; 1109 tests green (50 new); real-DB dual identity + A/B effect verified; `10_REVIEW_REPORT.md` PASS | User-approved git finalization |
+| QRE-CONTINUOUS-REFRESH-001 | M10.3 continuous strategy refresh (watermark + idempotent rerun + delta report) | DONE (awaiting commit) | KIMI_CODE | `orchestration/refresh.py` + `scripts/refresh_batch.py` + systemd units; delta manifest kind; 1118 tests green (9 new); small-sample e2e passed; `10_REVIEW_REPORT.md` PASS | User-approved git finalization |
+| QRE-STOPS-BATCH-ENGINE-001 | M10.2b stop-loss/take-profit in batch engines (dual-engine equality) | DONE | KIMI_CODE | commit `24c284d`; stop branches in both engines; opt-in `--apply-stops`; 1109 tests green (50 new); real-DB dual identity + A/B effect verified | Preserve |
 | QRE-PARAM-OVERRIDE-001 | M10.2a runtime parameter overrides + backtest-time universe filter | DONE | KIMI_CODE | commit `a16d6c5`; `portfolio/universe.py`; research_run/runner overrides + `--universe-filter`; universe_report.json; 1059 tests green (14 new); small-sample verified | Preserve |
 | QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 strategy-fit clustering & noise filtering (F3 phase 1) | DONE | KIMI_CODE | commit `d514c4c`; `analysis/strategy_fit.py` + script; binomial tiers + meta-test + enrichment + BH-FDR; 1045 tests green (11 new); real batch 106 analyzed/5 skipped; report-audit ok | Preserve |
 | QRE-VECTORIZED-ENGINE-001 | M9.1b vectorized trade-level single-symbol engine | DONE | KIMI_CODE | commit `c86441b`; `single_symbol_vectorized.py`; `engine_impl`+`position_sizing` wired; vectorized analytics collectors; shared research frame; 1034 tests green (67 new); 106/106 catalog parity; benchmark 40.2s (42.8×), artifacts identical; `10_REVIEW_REPORT.md` PASS | Preserve |

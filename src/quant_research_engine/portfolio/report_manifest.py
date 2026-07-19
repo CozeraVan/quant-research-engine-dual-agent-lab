@@ -16,6 +16,7 @@ _SUPPORTED_MANIFEST_KINDS = {
     "strategy_smoke_report_manifest",
     "research_run_report_manifest",
     "strategy_fit_report_manifest",
+    "strategy_refresh_delta_manifest",
 }
 
 _RUN_MANIFEST_KINDS = {
@@ -73,6 +74,8 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "strategy_fit_stocks": {"strategy_id", "symbol", "tier", "binomial_p", "total_return", "buy_hold_return", "excess_return_vs_buy_hold"},
     "strategy_fit_classes": {"strategy_id", "dimension", "class_value", "p_value", "q_value"},
     "strategy_fit_report": set(),
+    "refresh_delta_report": set(),
+    "refresh_delta_markdown": set(),
 }
 
 

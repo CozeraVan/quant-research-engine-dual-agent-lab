@@ -64,7 +64,7 @@ Turn the QRE from a batch-capable engine into an operations-ready research tool:
 | QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 winner-stock enrichment, noise filtering, strategy-fit report (F3 phase 1) | High | PLANNING (brief written 2026-07-19) |
 | QRE-PARAM-OVERRIDE-001 | M10.2a runtime parameter overrides + backtest-time universe filter (F1a) | Medium | DONE (`a16d6c5`); stops split to M10.2b |
 | QRE-STOPS-BATCH-ENGINE-001 | M10.2b stop-loss/take-profit in batch engines (dual-engine equality) | High | DONE (awaiting commit); trailing stop deferred |
-| QRE-CONTINUOUS-REFRESH-001 | M10.3 watermark detection + idempotent re-run + scheduler + delta report (F2) | Medium | TODO |
+| QRE-CONTINUOUS-REFRESH-001 | M10.3 watermark detection + idempotent re-run + scheduler + delta report (F2) | Medium | DONE (awaiting commit; machinery verified small-sample, timer not installed) |
 | QRE-ML-CLUSTERING-001 | M10.4 optional ML clustering phase 2 (F3 phase 2) | Low | FUTURE (dependency approval needed) |
 
 ## 8. Acceptance Criteria

@@ -10,7 +10,7 @@ DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approv
 
 ## Task Note
 
-This handoff now covers QRE-STOPS-BATCH-ENGINE-001 (M10.2b). Summary: spec `risk:` stop_loss_pct/take_profit_pct honored in single-symbol/batch path with dual-engine equality (close-based stops, next-open execution, opt-in `--apply-stops`); 50 new tests; real-DB verification passed; trailing stop deferred to follow-up.
+This handoff now covers QRE-CONTINUOUS-REFRESH-001 (M10.3). Summary: watermark-gated continuous refresh — `orchestration/refresh.py` + `scripts/refresh_batch.py` (check-only/force/rolling window), per-strategy delta report with manifest/audit parity, systemd user units documented (not installed); small-sample e2e passed; no full-scale execution per standing instruction.
 
 ## Current Owner
 
