@@ -2,6 +2,36 @@
 
 ## Task ID
 
+QRE-ANALYTICS-CONCAT-001 (M9.1b ≤30s target completion)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE — **≤30s acceptance target MET** (backtest stage 25.9s)
+
+## Implementation Summary
+
+1. **Concat window collector** (`_collect_window_return_rows`): one concatenated frame across symbols (per-symbol stable sort preserved for contract equality), one datetime conversion, ONE `groupby([window, symbol], sort=False)` aggregation for first/last — replacing ~5,292 per-symbol pandas groupby objects. Row order contract (dict order, windows ascending) preserved via sort=False first-occurrence semantics.
+2. **Concat rolling collector** (`_collect_rolling_return_rows`): output assembled from concatenated numpy arrays into ONE final DataFrame — eliminating per-symbol DataFrame construction + the expensive 5,292-frame `pd.concat`.
+3. **Equality gate**: `tests/test_analytics_vectorized.py` (risk.py oracle) passes unchanged; real-DB benchmark diff vs baseline is byte-identical for all six artifacts.
+4. **Final benchmark (BENCH4)**: backtest stage **25.852s** (vs 40.172s before this slice, vs 1,718.9s original simulator baseline → **66.5×**); eval 18.4s. New decomposition: frame load ~17s (now dominant), engine ~6s, analytics ~2-3s. The M9.1b ≤30s acceptance line is now MET.
+
+## Validation Output
+
+```bash
+uv run pytest tests/test_analytics_vectorized.py -q → 6 passed (oracle unchanged)
+uv run pytest -q → 1134 passed
+BENCH4 stage_durations_s: {'backtest': 25.852, 'eval': 18.419}
+artifacts vs baseline: summary.csv/metrics/window M/Q/Y/rolling_20 ALL IDENTICAL
+```
+
+# Coding Handoff (archive: QRE-TRAILING-STOP-BATCH-001)
+
+## Task ID
+
 QRE-TRAILING-STOP-BATCH-001 (M10.2b follow-up)
 
 ## Written By
