@@ -6,7 +6,7 @@ IMPLEMENTING
 
 ## Current Active Work
 
-QRE-STRATEGY-FIT-STABILITY-001 (M10.1 v1.1): **DONE (awaiting commit).** `symbol_month_returns.csv` artifact (both modes, manifest-registered) + time-stability metric in the fit report (covered months / pool-vs-universe ratio / pool month min; blank for older batches). Pilot verified on real data. 1137 tests green (3 new).
+QRE-UPSTREAM-FACTOR-DELIVERY-001: **DONE.** indicators_tushare delivered all 7 columns full-history (processed 5,544 stocks, 0 failures; validate/plan/parity verified). Queue recheck: 7/7 fulfilled, 0 pending. All 5 shelved strategies re-ran OK on small sample — including a newly-surfaced tf07e signal-expression precedence bug, fixed with parens in YAML + generator. Daily timer (16:40) covers the new columns from tomorrow. Awaiting user-approved git finalization.
 
 ## Progress Table
 
@@ -18,7 +18,8 @@ QRE-STRATEGY-FIT-STABILITY-001 (M10.1 v1.1): **DONE (awaiting commit).** `symbol
 | QRE-MISSING-FACTOR-QUEUE-001 | Missing-factor request queue + shelve semantics | DONE | KIMI_CODE | commit `5c60b8b`; queue store + runner `missing_factors` + auto-queue + CLI + `docs/handoff.md`; 1129 green (8 new); real-DB verified | Preserve |
 | QRE-TRAILING-STOP-BATCH-001 | Trailing stop in batch engines (dual-engine equality) | DONE | KIMI_CODE | commit `77b8897`; anchor (daily high) + close-breach trigger in both engines; `apply_stops` gate + `--trailing-stop-pct`; 1134 green (5 new); real-DB verified | Preserve |
 | QRE-ANALYTICS-CONCAT-001 | Cross-symbol concatenated analytics (≤30s target) | DONE | KIMI_CODE | commit `b72b9af`; backtest stage 25.852s (66.5×); oracle + baseline artifacts identical; 1134 green | Preserve |
-| QRE-STRATEGY-FIT-STABILITY-001 | M10.1 v1.1 monthly returns artifact + stability metric | DONE (awaiting commit) | KIMI_CODE | `symbol_month_returns.csv` both modes + manifest role; stability fields in fit report; 1137 green (3 new); pilot verified | User-approved git finalization |
+| QRE-STRATEGY-FIT-STABILITY-001 | M10.1 v1.1 monthly returns artifact + stability metric | DONE | KIMI_CODE | commit `ed2b304`; `symbol_month_returns.csv` both modes + manifest role; stability fields in fit report; 1137 green (3 new) | Preserve |
+| QRE-UPSTREAM-FACTOR-DELIVERY-001 | Upstream computation of the 7 queued factor columns (Plan B) | DONE | KIMI_CODE | backfill 5,544 stocks/0 failed; queue 7/7 fulfilled; 5/5 strategies unblocked (tf07e expression precedence fixed in YAML + generator); 1137 green | User-approved git finalization |
 | QRE-STOPS-BATCH-ENGINE-001 | M10.2b stop-loss/take-profit in batch engines (dual-engine equality) | DONE | KIMI_CODE | commit `24c284d`; stop branches in both engines; opt-in `--apply-stops`; 1109 tests green (50 new); real-DB dual identity + A/B effect verified | Preserve |
 | QRE-PARAM-OVERRIDE-001 | M10.2a runtime parameter overrides + backtest-time universe filter | DONE | KIMI_CODE | commit `a16d6c5`; `portfolio/universe.py`; research_run/runner overrides + `--universe-filter`; universe_report.json; 1059 tests green (14 new); small-sample verified | Preserve |
 | QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 strategy-fit clustering & noise filtering (F3 phase 1) | DONE | KIMI_CODE | commit `d514c4c`; `analysis/strategy_fit.py` + script; binomial tiers + meta-test + enrichment + BH-FDR; 1045 tests green (11 new); real batch 106 analyzed/5 skipped; report-audit ok | Preserve |

@@ -84,6 +84,9 @@ def main() -> int:
                         help="Parallel worker processes (default: 1 = serial)")
     parser.add_argument("--compact", action="store_true",
                         help="Compact output: strategy-level aggregates only, no per-symbol trees")
+    parser.add_argument("--workbook", action="store_true",
+                        help="With --compact, also emit the full-market report bundle "
+                             "(backtest_report.xlsx + HTML + charts) without per-symbol trees")
     parser.add_argument("--engine-impl", choices=["simulator", "vectorized"], default="vectorized",
                         help="Backtest engine implementation (default: vectorized; "
                              "metric-identical to simulator, ~40x faster)")
@@ -107,6 +110,8 @@ def main() -> int:
                         help="Override spec stop_loss_pct (requires --apply-stops)")
     parser.add_argument("--take-profit-pct", type=float,
                         help="Override spec take_profit_pct (requires --apply-stops)")
+    parser.add_argument("--trailing-stop-pct", type=float,
+                        help="Override spec trailing_stop_pct (requires --apply-stops)")
     parser.add_argument("--skip-preflight", action="store_true",
                         help="Skip preflight stage (useful if DB factors are known good)")
     parser.add_argument("--skip-eval", action="store_true",
@@ -209,6 +214,7 @@ def main() -> int:
         min_factor_coverage=args.min_factor_coverage,
         codes=args.codes,
         compact=args.compact,
+        include_full_market=args.workbook,
         catalog_dir=CATALOG_DIR,
         engine_impl=args.engine_impl,
         position_sizing=args.position_sizing,
@@ -218,6 +224,7 @@ def main() -> int:
         apply_stops=args.apply_stops,
         stop_loss_pct=args.stop_loss_pct,
         take_profit_pct=args.take_profit_pct,
+        trailing_stop_pct=args.trailing_stop_pct,
     )
 
     results = execute_batch(yaml_paths, config, jobs=max(1, args.jobs))
@@ -236,6 +243,7 @@ def main() -> int:
             "min_factor_coverage": args.min_factor_coverage,
             "jobs": max(1, args.jobs),
             "compact": args.compact,
+            "workbook": args.workbook,
             "engine_impl": args.engine_impl,
             "position_sizing": args.position_sizing,
             "universe_filter": args.universe_filter,
@@ -243,6 +251,7 @@ def main() -> int:
             "apply_stops": args.apply_stops,
             "stop_loss_pct": args.stop_loss_pct,
             "take_profit_pct": args.take_profit_pct,
+            "trailing_stop_pct": args.trailing_stop_pct,
         },
         results=results,
         summary=counts,

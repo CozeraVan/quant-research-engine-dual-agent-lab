@@ -6,7 +6,7 @@
 # 难度:       ★★★☆☆ (3/5)
 # 说明:       RAVI > 3% 且价格在 MA(20) 之上入场。用 SMA(7) / SMA(65) 偏离近似。
 # 数据依赖:   SMA(7,20,65)
-# 入场规则:   (sma_7 / sma_65 - 1).abs() > 0.03 & (close > sma_20)
+# 入场规则:   ((sma_7 / sma_65 - 1).abs() > 0.03) & (close > sma_20)
 # 出场规则:   close < sma_20
 # 持仓天数:   10 天
 # 方向:       long_only
@@ -46,7 +46,7 @@ universe:
 
 signal:
   type: expression
-  entry: (sma_7 / sma_65 - 1).abs() > 0.03 & (close > sma_20)
+  entry: ((sma_7 / sma_65 - 1).abs() > 0.03) & (close > sma_20)
   exit: close < sma_20
 
 execution:

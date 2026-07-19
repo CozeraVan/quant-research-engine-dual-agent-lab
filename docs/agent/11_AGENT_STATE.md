@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-STRATEGY-FIT-STABILITY-001 / M10.1 v1.1 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
+QRE-UPSTREAM-FACTOR-DELIVERY-001 (DONE — backfill complete, queue 7/7 fulfilled, 5/5 strategies unblocked; awaiting user-approved git finalization)
+
+Progress:
+1. Verified canonical project `/home/van/quant-workspace/indicators_tushare` and systemd timers (quant-ts 16:30, indicators 16:40, both enabled; yaml-config factors auto-join daily updates).
+2. Edits made (indicators repo, no git action): `config/factors.yaml` sma periods += 7/9/26/50/52 + `atrraw` entry; `factors/volatility_factors.py` new `ATRRawFactor` class (raw `atr_{n}` naming; same values as existing `atrr_10`).
+3. Project flow: validate (success, 0 failures) → plan (all 7 target columns present; superset: other pending config columns in overlap/volatility categories also covered) → small-sample backfill of 000001.SZ → value parity vs hand-computed SMA/Wilder-ATR within storage rounding, 100% non-null.
+4. Full-history backfill (`backfill --categories overlap volatility --execute --max-workers 4`) RUNNING in background.
+
+Next when backfill completes: `factor_request_queue.py recheck` → fulfilled; small-sample re-run of the 5 shelved strategies (R-QRE-009); then user decides on full re-run.
 
 ## Standing Instructions (user)
 
@@ -101,7 +109,7 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 
 1. ~~CR-0002/0003 slices~~ — ALL DONE through M10.3 (commits `24699ce`/`c86441b`/`d514c4c`/`a16d6c5`/`24c284d`/`1345471`).
 2. **Trigger full-scale full-history batch?** (~3h estimate, `outputs/full_history_pilot/feasibility.md`) — ready when you are.
-3. **Upstream factor computation** (`atr_10`, `sma_50`, `sma_9/26/52`, `sma_7` — queue at `outputs/handoff/missing_factor_requests.json`, contract in `docs/handoff.md`) in `indicators_tushare` / `quant_ts` to unblock the 5 shelved catalog strategies. QRE side is now fully operational (queue + recheck + re-run path).
+3. ~~Upstream factor computation~~ — DONE (QRE-UPSTREAM-FACTOR-DELIVERY-001): backfill 5,544 stocks/0 failed; queue 7/7 fulfilled; 5/5 strategies unblocked; daily timer covers new columns from tomorrow. Full 111-strategy re-run (incl. formerly-shelved 5) is now a user decision alongside the full-history trigger.
 4. M10.4 ML clustering — needs separate dependency approval (5070 Ti noted).
 5. Follow-up micro-slices (optional): groupby-aware signal evaluation; runner-level cross-strategy frame caching (frame load ~17s is now the dominant cost). ~~Preflight UndefinedColumn robustness~~ — DONE. ~~Trailing stop~~ — DONE. ~~Cross-symbol analytics (≤30s)~~ — DONE, target MET at 25.852s.
 

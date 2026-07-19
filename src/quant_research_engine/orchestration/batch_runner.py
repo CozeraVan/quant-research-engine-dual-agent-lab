@@ -90,6 +90,7 @@ class BatchRunConfig:
     min_factor_coverage: float = 0.5
     codes: list[str] | None = None
     compact: bool = False
+    include_full_market: bool = False
     catalog_dir: Path | None = None
     engine_impl: str = "simulator"
     position_sizing: str = "full_compound"
@@ -248,6 +249,7 @@ def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResu
             min_factor_coverage=config.min_factor_coverage,
             codes=config.codes,
             compact=config.compact,
+            include_full_market=config.include_full_market,
             engine_impl=config.engine_impl,
             position_sizing=config.position_sizing,
             metadata_columns=config.metadata_columns,

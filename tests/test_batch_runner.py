@@ -449,3 +449,19 @@ def test_run_research_run_tolerates_store_without_close(tmp_path, monkeypatch):
         )
     )
     assert result.backtest_status == "ok"
+
+
+def test_write_batch_result_compact_with_workbook_flag(tmp_path):
+    result = _make_batch_result()
+    compact_dir = tmp_path / "compact_wb"
+
+    paths = write_batch_result(result, compact_dir, compact=True, include_full_market=True)
+
+    # workbook bundle present without per-symbol trees
+    assert (compact_dir / "backtest_report.xlsx").exists()
+    assert (compact_dir / "backtest_report.html").exists()
+    assert not (compact_dir / "000001.SZ").exists()
+    assert not (compact_dir / "000002.SZ").exists()
+    assert "backtest_report" in paths
+    # metric artifacts still present
+    assert (compact_dir / "summary.csv").exists()

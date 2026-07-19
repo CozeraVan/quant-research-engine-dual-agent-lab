@@ -923,7 +923,7 @@ TF07["tf07"] = {
             "difficulty": 3,
             "desc": "RAVI > 3% 且价格在 MA(20) 之上入场。用 SMA(7) / SMA(65) 偏离近似。",
             "data": {"sma": [7, 20, 65]},
-            "entry": "(sma_7 / sma_65 - 1).abs() > 0.03 & (close > sma_20)",
+            "entry": "((sma_7 / sma_65 - 1).abs() > 0.03) & (close > sma_20)",
             "exit": "close < sma_20",
             "holding": 10, "direction": "long_only",
         },

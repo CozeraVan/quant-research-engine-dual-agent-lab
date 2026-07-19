@@ -2,6 +2,46 @@
 
 ## Task ID
 
+QRE-UPSTREAM-FACTOR-DELIVERY-001
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (upstream delivery complete; 5/5 strategies unblocked)
+
+## Implementation Summary
+
+1. **Investigation**: canonical project `/home/van/quant-workspace/indicators_tushare` (git main; `/home/van/indicators_tushare` is a stray .venv). systemd timers confirmed: `quant-ts-daily` 16:30 (data sync) → `indicators-tushare-daily` 16:40 (factor update), both enabled — yaml-config factors auto-join the daily schedule with zero scheduler changes.
+2. **Edits (indicators repo, no git action)**: `config/factors.yaml` sma periods += 7/9/26/50/52 + `atrraw` entry; `factors/volatility_factors.py` new `ATRRawFactor` class (raw `atr_{n}` naming; identical formula to existing `atrr_10` — pandas_ta RMA/Wilder, discovered and documented).
+3. **Project flow**: validate (success/0 failures) → plan (7 target columns confirmed; superset = other pending config columns in overlap/volatility also covered per project config-parity behavior) → small-sample backfill (000001.SZ) → **value parity verified** vs hand-computed SMA/Wilder-ATR (storage-rounding diffs only, 100% non-null) → full-history backfill: **processed 5,544 stocks, failed_count 0**.
+4. **Final coverage**: sma_7 13.28M rows/5,541 stocks, sma_9 13.27M/5,539, sma_26 13.17M/5,531, sma_50 13.04M/5,416, sma_52 13.03M/5,415, atr_10 13.26M/5,539.
+5. **QRE side**: `factor_request_queue.py recheck` → **7 newly fulfilled, 0 pending**. Small-sample re-run of the 5 shelved strategies: 4 OK + tf07e failed with a NEW root cause — signal expression precedence bug `(sma_7 / sma_65 - 1).abs() > 0.03 & (close > sma_20)` (Python parses `> (0.03 & ...)`). Fixed with parens in BOTH the YAML and `scripts/generate_strategy_yamls.py`; tf07e now OK. **All 5/5 strategies unblocked.**
+6. Daily updates: from the next 16:40 trigger, `run_daily.py` covers the new columns automatically (yaml-driven).
+
+## Validation Output
+
+```bash
+indicators validate → success, failure_count 0
+small-sample parity: sma_7/9/26/50/52 + atr_10 within storage rounding, 100% non-null
+full backfill: processed 5544, failed_count 0
+queue recheck: 7 newly fulfilled, 0 pending
+unblock batch (5 strategies × 3 codes × smoke): 5/5 OK after tf07e expression fix
+uv run pytest -q → 1137 passed
+```
+
+## Notes
+
+- The full backfill also covered other pending config columns in the overlap/volatility categories (project config-parity behavior) — disclosed and accepted.
+- tf07e's precedence bug only surfaced now because the strategy was shelved before ever reaching expression evaluation; the paren fix is in the YAML and the generator (regeneration-safe).
+- indicators repo working tree left untouched (their pre-existing uncommitted changes not mine to resolve).
+
+# Coding Handoff (archive: QRE-STRATEGY-FIT-STABILITY-001)
+
+## Task ID
+
 QRE-STRATEGY-FIT-STABILITY-001 (M10.1 v1.1)
 
 ## Written By

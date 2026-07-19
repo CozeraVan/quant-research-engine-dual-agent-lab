@@ -212,6 +212,7 @@ def write_batch_result(
     run_request: dict[str, Any] | None = None,
     run_id: str | None = None,
     compact: bool = False,
+    include_full_market: bool = False,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -296,6 +297,10 @@ def write_batch_result(
             for name, path in single_paths.items():
                 paths[f"{symbol}_{name}"] = path
 
+    # Full-market workbook/HTML/charts are built from in-memory results and do
+    # not depend on per-symbol trees; emit them in standard mode always, and in
+    # compact mode when explicitly requested (--workbook).
+    if not compact or include_full_market:
         full_market_paths = write_full_market_report(result, directory, run_request=run_request, run_id=run_id)
         paths.update(full_market_paths)
 

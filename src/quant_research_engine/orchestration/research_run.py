@@ -46,6 +46,7 @@ class ResearchRunRequest:
     benchmark_code: str | None = None
     benchmark_value_column: str = "close"
     compact: bool = False
+    include_full_market: bool = False
     engine_impl: str = "simulator"
     position_sizing: str = "full_compound"
     profile_overrides: dict[str, float] | None = None
@@ -293,7 +294,14 @@ def _run_backtest(
                 "end": str(request.end),
             },
         }
-        paths = write_batch_result(result, backtest_dir, run_request=run_request_payload, run_id=request.run_id, compact=request.compact)
+        paths = write_batch_result(
+            result,
+            backtest_dir,
+            run_request=run_request_payload,
+            run_id=request.run_id,
+            compact=request.compact,
+            include_full_market=request.include_full_market,
+        )
         if universe_report is not None:
             paths["universe_report"] = backtest_dir / "universe_report.json"
         return "ok", paths
