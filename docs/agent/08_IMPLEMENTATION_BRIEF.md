@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-CONTINUOUS-REFRESH-001 (M10.3, CR-0003 F2)
+QRE-BATCH-FULL-VALIDATION-001 (M9.4, CR-0002)
 
 ## Created By
 
-KIMI_CODE (single agent; roadmap order user-approved "请继续按计划推进" 2026-07-19)
+KIMI_CODE (single agent; user direction "请你继续推进下一步任务" 2026-07-19; standing instruction satisfied — core engine work is complete, so full-history validation starts with SMALL SAMPLES only)
 
 ## Intended Implementer
 
@@ -14,39 +14,31 @@ KIMI_CODE
 
 ## Goal
 
-Keep strategy results current as upstream data lands: detect new data via a database watermark, idempotently re-run the catalog on a rolling window using the vectorized runner, and emit a delta report against the previous batch. The machinery is built and small-sample verified only — **no full-scale execution** (standing user instruction 2026-07-19); the scheduler ships as documented unit files, not installed.
+Prepare full-history (2015-2025) strategy validation: (1) hand the 5 blocked strategies' missing factors to upstream with a consolidated `missing_factor_requests.json`; (2) measure full-history feasibility with a small-sample run (representative strategies × ~50 symbols × 2015-2025) using the vectorized engine, producing both timing evidence for the full-scale decision and the first multi-regime results. **No full-scale execution** — full-market full-history remains a separate user decision.
 
 ## Background Evidence
 
-- Vectorized engine + shared frame make full catalog re-runs cheap (~30 min for 106 strategies), so idempotent full re-run beats stateful incremental (decision log 2026-07-19).
-- Runner already supports `--jobs`, `--compact`, `--resume`, `--engine-impl`.
-- `quant_ts` uses systemd timers upstream; we mirror the pattern with user-level units.
+- Core engine work is complete (M9.1b vectorized engine 42.8×, M10.1 fit analysis, M10.2a params, M10.2b stops, M10.3 refresh) — the user's precondition for full-history ("基本内核引擎任务大体完成") is met, with small samples mandated first ("再跑小样本全期回测").
+- 5 blocked strategies and their missing columns are known since May: `bo02`/`tf04` (atr_10), `mr02b` (sma_50), `tf05a` (sma_9/26/52), `tf07e` (sma_7/20/65).
+- Vectorized quick-mode (1y) backtest stage: ~40s/strategy full-market; scaling is near-linear in total bars, so small-sample 10y runs are minutes.
 
 ## Scope
 
-1. **`orchestration/refresh.py`**:
-   - `data_watermark(store)`: read-only `SELECT MAX(trade_date)` on the market daily table.
-   - `RefreshState` (JSON at `outputs/refresh/state.json`): `last_data_date`, `last_run_at`, `last_batch_dir`, `window_years`, `codes`, `strategy_count`, `ok_count`, `config` (jobs/compact/engine_impl/apply_stops).
-   - `needs_refresh(data_date, state)`: true when no state or `data_date > state.last_data_date`.
-   - `compute_window(data_date, window_years)`: end = data_date; start = data_date minus window_years (calendar).
-   - `compute_delta(previous_batch_dir, new_batch_dir)`: per-strategy comparison from `batch_summary.json` results (status changes) and per-strategy `backtest/summary_metrics.json` (mean_total_return, total_trades, positive_return_symbol_rate) → delta rows incl. new/removed/error transitions.
-   - `write_delta_report(...)`: `delta_report.json` + `delta_report.md` + `report_manifest.json` (kind `strategy_refresh_delta_manifest` registered for report-audit).
-2. **`scripts/refresh_batch.py`**: `--check-only` (report watermark vs state, do nothing), `--force`, `--window-years` (default 2), `--jobs` (default 4), `--codes` (small-sample/testing), `--with-eval` (default skip eval for speed), `--apply-stops` passthrough. Flow: load state → watermark → skip when current (unless forced) → run catalog batch via `orchestration.batch_runner` core → delta report vs `state.last_batch_dir` → save state.
-3. **Scheduler units** `deploy/qre-refresh.service` + `deploy/qre-refresh.timer` (systemd user units, daily 18:30): documented in README with install commands; NOT installed by the agent.
-4. **Tests** `tests/test_refresh.py`: watermark/needs_refresh/window logic, state roundtrip, delta computation (metric changes, new/removed/error transitions), end-to-end with monkeypatched batch execution and fake store (state written, delta report emitted, second run no-ops), manifest audit parity.
+1. **Missing-factor handoff**: run `qre preflight` on the 5 blocked strategy YAMLs (read-only), consolidate into `outputs/handoff/missing_factor_requests.json` via the existing `extract_missing_factors`/`emit_missing_factor_requests` mechanism, with a short README section noting the upstream owner (`indicators_tushare` computes into `factors.*`; QRE does not compute indicators, R-QRE-002).
+2. **Small-sample full-history run**: 5 representative strategies (mr04a_ibs_reversal, cs01a_pure_small_cap, bo06a_atr_anomaly_momentum, tf01a_ma_cross_20_120, cb01b_macd_cross_volume) × 50 symbols (same fixed set as earlier verification) × 2015-01-01→2025-12-31, `--engine-impl vectorized --compact --jobs 4 --skip-preflight --skip-eval`. Record per-strategy wall times and stage durations.
+3. **Feasibility report**: extrapolate full-scale cost (106 strategies × full market × 10y) from the measured numbers; write `outputs/full_history_pilot/feasibility.md` with timing evidence + per-strategy summary metrics (screening evidence, R-QRE-008 caveat).
+4. **Docs**: record results in `09_CODING_HANDOFF.md`; update CR-0002 M9.4 status.
 
 ## Non-Goals
 
-- No full-scale execution during this slice (small-sample `--codes` verification only).
-- No systemd installation/enabling by the agent (user enables when ready).
-- No stateful incremental backtesting (idempotent re-run by design).
-- No GUI work.
+- No full-market full-history batch (user decision after seeing feasibility numbers).
+- No indicator computation inside QRE; no upstream (`indicators_tushare`/`quant_ts`) modifications.
+- No new dependencies.
 
 ## Expected Tests
 
 ```bash
-uv run pytest tests/test_refresh.py -q
-uv run pytest -q
+uv run pytest -q   # no new runtime code expected; suite stays green
 ```
 
 ## Validation Commands
@@ -55,13 +47,11 @@ uv run pytest -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
-# Small-sample (R-QRE-009): refresh_batch.py --codes 000001.SZ 000002.SZ 600000.SH --force
-# then --check-only (no-op path), then delta report inspection + report-audit
+# pilot run: 5 strategies × 50 codes × 2015-2025 (this slice's only execution)
 ```
 
 ## Acceptance Criteria
 
-- `--check-only` correctly reports current/stale watermark without running anything.
-- Forced small-sample refresh runs the batch, writes state, and emits a delta report that passes `qre report-audit`.
-- A second run with no new data no-ops; with a bumped watermark it refreshes and the delta report shows per-strategy changes.
-- Full pytest suite green; systemd unit files documented but not installed.
+- `outputs/handoff/missing_factor_requests.json` consolidates all 5 blocked strategies' missing columns and is consistent with `qre preflight` output.
+- Pilot completes; per-strategy timings recorded; feasibility report includes a full-scale cost estimate with clear assumptions and the R-QRE-008 caveat.
+- No full-scale run performed; pytest suite green.

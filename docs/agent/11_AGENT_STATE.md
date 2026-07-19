@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-CONTINUOUS-REFRESH-001 / M10.3 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
+QRE-BATCH-FULL-VALIDATION-001 / M9.4 pilot (DONE — awaiting user-approved commit; full-scale trigger is a separate user decision)
 
 ## Standing Instructions (user)
 
@@ -22,7 +22,7 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 
 ## Last Completed Step
 
-**QRE-CONTINUOUS-REFRESH-001 / M10.3 (DONE 2026-07-19, awaiting commit):**
+**QRE-CONTINUOUS-REFRESH-001 / M10.3 (DONE, finalized 2026-07-19, commit `1345471`):**
 
 1. `orchestration/refresh.py`: watermark query, RefreshState, rolling window, per-strategy delta computation, delta report writer with manifest.
 2. `scripts/refresh_batch.py`: check-only/force/window/codes flags; idempotent vectorized re-run; state + delta persisted.
@@ -72,7 +72,7 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `24c284d` Honor stop-loss/take-profit in batch engines with dual-engine equality (M10.2b) (16 files)
+- Last commit: `1345471` Add continuous strategy refresh machinery (M10.3) (14 files)
 - Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked).
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.
@@ -89,11 +89,11 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 
 ## Pending Decisions (user)
 
-1. ~~CR-0002 / 08 brief~~ — APPROVED 2026-07-18. ~~M9.1 commit~~ — `24699ce`. ~~M9.1b commit~~ — `c86441b`.
-2. **Go-ahead for M10.1 implementation** (brief written 2026-07-19).
-3. Whether to commission upstream factor computation (`atr_10`, `sma_7/9/20/26/50/52/65`) in `indicators_tushare` / `quant_ts` to unblock the 5 remaining catalog strategies (needed for M9.4).
-4. ~~Engine-loop optimization~~ — DONE as M9.1b (`c86441b`). Follow-up micro-slices available: cross-symbol-concatenated analytics, groupby-aware signal evaluation (speed target 40.2s → ≤30s).
-5. ~~F1/F2/F3 granularity~~ — ALIGNED 2026-07-19 (CR-0003): M9.1b → M10.1 → M10.2 → M10.3; M10.4 ML clustering needs separate dependency approval.
+1. ~~CR-0002/0003 slices~~ — ALL DONE through M10.3 (commits `24699ce`/`c86441b`/`d514c4c`/`a16d6c5`/`24c284d`/`1345471`).
+2. **Trigger full-scale full-history batch?** (~3h estimate, `outputs/full_history_pilot/feasibility.md`) — ready when you are.
+3. **Upstream factor computation** (`atr_10`, `sma_50`, `sma_9/26/52`, `sma_7` — `outputs/handoff/missing_factor_requests.json`) in `indicators_tushare` / `quant_ts` to unblock the 5 remaining catalog strategies.
+4. M10.4 ML clustering — needs separate dependency approval (5070 Ti noted).
+5. Follow-up micro-slices (optional): cross-symbol analytics, groupby-aware signals (40.2s → ≤30s); preflight UndefinedColumn robustness; trailing stop in batch path.
 
 ## Quick Batch In Flight
 

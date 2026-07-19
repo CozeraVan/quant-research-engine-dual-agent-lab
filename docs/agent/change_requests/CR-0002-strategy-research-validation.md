@@ -48,7 +48,7 @@ The research lead wants to know which catalog strategy families (if any) show re
 | QRE-VECTORIZED-ENGINE-001 | **M9.1b** Vectorized trade-level single-symbol engine: full-frame signal eval, groupby pre-split, event-level trade loop, equity-curve reconstruction, `position_sizing` modes; metric equality vs bar simulator | High | READY_FOR_BRIEF (user-approved direction 2026-07-19) |
 | QRE-EVAL-STATISTICAL-VALIDATION-001 | Multiple-testing control + walk-forward splits + random-baseline tie-in | High | MERGED into CR-0003 M10.1 (2026-07-19) |
 | QRE-RESEARCH-REPORT-001 | Ranked adjustment-aware aggregate report with manifest/audit parity | Medium | MERGED into CR-0003 M10.1 (2026-07-19) |
-| QRE-BATCH-FULL-VALIDATION-001 | Full-mode batch for top candidates + missing-factor requests for 5 blocked strategies | Medium | TODO (depends on M9.1b, upstream factors) |
+| QRE-BATCH-FULL-VALIDATION-001 | Full-mode batch for top candidates + missing-factor requests for 5 blocked strategies | Medium | PILOT DONE (handoff emitted; small-sample pilot OK; ~3h full-scale estimate; full-scale + upstream factors are user decisions) |
 
 ## 8. Acceptance Criteria
 

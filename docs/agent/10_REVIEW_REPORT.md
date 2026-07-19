@@ -2,6 +2,41 @@
 
 ## Task ID
 
+QRE-BATCH-FULL-VALIDATION-001 (M9.4) — pilot slice
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- Standing instruction honored exactly: handoff + small-sample pilot only; no full-scale execution.
+- Handoff completeness verified: 7 requests match the known missing set across all 5 blocked strategies (sma_20/65 confirmed present — earlier notes over-listed).
+- Known issue recorded: `qre preflight` crashes with UndefinedColumn on strategies whose factor columns are absent (instead of emitting missing-factor requests) — robustness follow-up, documented in 09.
+- Feasibility estimate grounded in measured decompositions (1y full-market + 10y pilot), assumptions stated; R-QRE-008 caveat in the report.
+- No runtime code changed; suite stays 1118 green.
+
+## Behavior Verified
+
+- Pilot 5/5 OK; stage durations from manifests; feasibility.md written; handoff file consistent with spec factor_fields × DB schema.
+
+## Residual Risks
+
+- 10y full-market extrapolation carries DB-read uncertainty (stated in the report).
+- Eval stage excluded from pilot; full validation may want it (+~20-30s/strategy).
+
+## Next Step
+
+Full-scale full-history batch (106 strategies × full market × 2015-2025, ~3h) is ready to trigger on user approval; upstream factor delivery (`outputs/handoff/missing_factor_requests.json`) unblocks the remaining 5.
+
+# Review Report (archive: M10.3)
+
+## Task ID
+
 QRE-CONTINUOUS-REFRESH-001 (M10.3)
 
 ## Reviewer

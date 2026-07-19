@@ -2,6 +2,34 @@
 
 ## Task ID
 
+QRE-BATCH-FULL-VALIDATION-001 (M9.4, CR-0002) — pilot slice
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (handoff + small-sample pilot; full-scale execution is a separate user decision)
+
+## Implementation Summary
+
+1. **Missing-factor handoff**: consolidated `outputs/handoff/missing_factor_requests.json` — 7 requests covering all 5 blocked strategies (atr_10 ×2 [bo02, tf04], sma_50 [mr02b], sma_9/26/52 [tf05a], sma_7 [tf07e]), built from spec factor_fields vs read-only DB schema check (preflight crashes on UndefinedColumn for these — noted as a robustness follow-up). sma_20/sma_65 verified present in DB.
+2. **Small-sample full-history pilot** (standing instruction honored): 5 representative strategies × 50 fixed symbols × 2015-2025, vectorized + compact + jobs 4 — all OK, 4.3-9.0s per strategy.
+3. **Feasibility report** `outputs/full_history_pilot/feasibility.md`: full-market full-history estimate ≈ 360-400s/strategy → ~3h for 106 strategies with 4 workers (vs weeks pre-vectorization). First multi-regime results recorded (tf01a 10y mean +12.3% vs weak 2024 profile — regime effect documented).
+4. No new runtime code; pytest suite unchanged (1118 green).
+
+## Validation Output
+
+```bash
+pilot batch 806632904159: 5/5 OK, stage durations 4.3-9.0s recorded in manifests
+uv run pytest -q → 1118 passed
+```
+
+# Coding Handoff (archive: M10.3)
+
+## Task ID
+
 QRE-CONTINUOUS-REFRESH-001 (M10.3, CR-0003 F2)
 
 ## Written By
