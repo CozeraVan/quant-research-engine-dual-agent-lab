@@ -209,6 +209,16 @@ uv run qre research-run strategies/low_level/rsi2_reversal_research.yaml \
   --backtest-mode batch --initial-cash 1000000
 ```
 
+### 策略目录批量回测 (106+ 策略)
+
+```bash
+# 快速冒烟 (2 个月窗口, 串行)
+uv run python scripts/batch_backtest_runner.py --mode smoke --skip-preflight
+
+# 1 年窗口: 4 进程并行 + 精简产物 + 断点续跑
+uv run python scripts/batch_backtest_runner.py --mode quick --jobs 4 --compact --skip-preflight --resume
+```
+
 ### 报告校验
 
 ```bash

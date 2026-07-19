@@ -2,41 +2,38 @@
 
 ## Task ID
 
-QRE-SINGLE-AGENT-MIGRATION-001
+QRE-BATCH-PERF-SLIM-001
 
 ## Current Status
 
-DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+PLANNING (brief drafted in `08_IMPLEMENTATION_BRIEF.md`; parent CR-0002 drafted; both pending user approval)
 
 ## Current Owner
 
-KIMI_CODE (single agent; user-directed task)
+KIMI_CODE
 
 ## Problem Summary
 
-The development environment changed: the former dual-agent setup (Codex planning/review + Claude Code implementation) is retired, and the project now develops with a single agent (Kimi Code). The user directed that all future development flow must live in `docs/agent/` markdown files as long-term memory, not in CLI conversation. A full documentation audit preceded the migration and found stale state claims (notably the "fully frozen, no further work" closeout wording in `01_CURRENT_STATUS.md`, contradicted by the completed-but-uncommitted strategy catalog batch backtest).
+The 106-strategy smoke batch proved the pipeline works but took ~11.5h serial (~6.5 min/strategy) and wrote ~3M output files for a 2-month window. Quick (1-year) and full (2015-2025) validation batches are impractical until the runner is parallelized and outputs are slimmed. This slice is the enabler for the Strategy Research Validation phase (CR-0002 / Milestone 9).
 
 ## Implementation Summary
 
-1. Audited all markdown documentation against actual repository state (git status, tests, outputs).
-2. Rewrote `AGENTS.md` as the single-agent instruction entry point; `CLAUDE.md` is now a redirect page.
-3. Updated workflow docs: `00` (vision wording), `01` (stale closeout corrected, real repo state recorded), `02` (R-AGENT-* replaces R-DUAL-*, R-GIT-* reassigned to single agent + user approval), `07` (single-agent recovery protocol), `11` (new phase vocabulary and state), `12` (deprecated).
-4. Preserved history: `03/05/06` bodies untouched except banner/append/prepend; archived root trackers and `docs/legacy/` untouched.
-5. Reset `08/09/10` to this migration task.
-6. Rewrote the seven skills (`.agents/skills/` and `.claude/skills/`, kept identical) without agent prefixes: `plan-brief`, `implement`, `self-review`, `git-finalize`, `intake-change`, `resume-task`, `update-progress`.
-7. Updated `README.md` and `docs/strategy_entry/README.md` workflow references; `CR-0000-template.md` state-transition wording.
+Planning only so far:
+
+1. `docs/agent/change_requests/CR-0002-strategy-research-validation.md` — phase proposal (M9.1 performance/slimming, M9.2 statistical validation, M9.3 research report, M9.4 full-mode + blocked strategies).
+2. `docs/agent/08_IMPLEMENTATION_BRIEF.md` — first slice: profiling baseline, runner core into `src/quant_research_engine/orchestration/batch_runner.py`, `--jobs N` process-pool parallelism, `--compact` strategy-level output mode with manifest/audit parity, conditional data-load reuse, quick-mode batch of 106 strategies.
+3. Previous task `QRE-SINGLE-AGENT-MIGRATION-001` finalized in commit `12880e1` (includes the earlier uncommitted batch work products and the single-agent workflow docs).
 
 ## Hard Constraints
 
-- No runtime code, tests, strategy YAMLs, or outputs modified.
-- Historical log bodies preserved; no workflow document deleted.
-- No git commit without explicit user approval (R-GIT-001/002).
+- No engine trading-rule/cost/signal changes; no indicators inside QRE; read-only DB.
+- No new dependencies; CSV/JSON outputs only.
+- Compact mode must stay discoverable/auditable via `qre report-files` / `qre report-audit` (R-QRE-007).
+- Full pytest suite stays green; no behavior change in standard (non-compact) mode.
 
 ## Validation Evidence
 
 ```bash
-bash -n scripts/{agent-status,check-progress-docs,git-finalize-check}.sh .claude/hooks/progress-gate.sh → OK
-scripts/check-progress-docs.sh → passed
-git diff --check → passed
-grep scan for dual-agent vocabulary → only historical hits remain
+# Planning slice — docs only, no code changed yet
+scripts/check-progress-docs.sh → to be run before commit
 ```

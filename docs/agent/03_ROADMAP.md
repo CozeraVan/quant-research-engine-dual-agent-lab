@@ -160,6 +160,25 @@
 | M8.5 | MT5 + TradingView full-market report contract | DONE | CODEX/CLAUDE_CODE | commits `27828b8`, `febb73d`; `10_REVIEW_REPORT.md` PASS; full-market bundle and review/finalization complete | Preserve; expand shared-cash/charts in future slices |
 | M8.6 | GUI parameter surface for standard strategy IO | DONE | CLAUDE_CODE | Builder tab with high-level entry forms; compile endpoint; indicator catalog endpoint; run integration; 16 new tests; 770 passed; review PASS | Preserve |
 
+## Milestone 9: Strategy Research Validation (CR-0002)
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M9.1 | Batch runner performance & output slimming | DONE | KIMI_CODE | `QRE-BATCH-PERF-SLIM-001`; `--jobs`/`--compact`; batch `f365c8a07b33`: 106 OK/5 error, 11.1h, 2.8GB/2,013 files; 967 tests green | Awaiting commit |
+| M9.1b | Vectorized trade-level single-symbol engine | READY_FOR_BRIEF | KIMI_CODE | `QRE-VECTORIZED-ENGINE-001` in CR-0002; user-approved 2026-07-19; metric equality vs bar simulator required | Write brief, implement |
+| M9.2 | Statistical validation (multiple-testing, walk-forward) | MERGED | KIMI_CODE | Folded into M10.1 noise filtering (2026-07-19 user decision) | See M10.1 |
+| M9.3 | Research-grade aggregate report | MERGED | KIMI_CODE | Folded into M10.1 strategy-fit report (2026-07-19 user decision) | See M10.1 |
+| M9.4 | Full-mode validation + blocked strategies | TODO | KIMI_CODE | Depends on M9.1b speed and upstream factors (`atr_10`, `sma_*`) | After M9.1b + upstream delivery |
+
+## Milestone 10: Strategy Operations And Fit Analysis (CR-0003)
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M10.1 | Strategy-fit clustering & noise filtering (F3 phase 1, enrichment analysis) | TODO | KIMI_CODE | `QRE-STRATEGY-FIT-ANALYSIS-001` in CR-0003; input data ready in `outputs/backtests/quick_batch_106/f365c8a07b33/` | After M9.1b |
+| M10.2 | Unified runtime parameter overrides + backtest-time universe filter (F1a) | TODO | KIMI_CODE | `QRE-PARAM-OVERRIDE-001` in CR-0003 | After M10.1 |
+| M10.3 | Continuous strategy refresh — idempotent re-run (F2) | TODO | KIMI_CODE | `QRE-CONTINUOUS-REFRESH-001` in CR-0003; needs M9.1b speed | After M10.2 |
+| M10.4 | ML clustering phase 2 (F3 phase 2, optional) | FUTURE | KIMI_CODE | Requires scikit-learn dependency approval | Evaluate after M10.1 proves value |
+
 ## Status Meaning
 
 - TODO: Not started

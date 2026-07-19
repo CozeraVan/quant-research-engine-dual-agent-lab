@@ -125,9 +125,9 @@ On 2026-07-18 the project switched from the dual-agent workflow (Codex + Claude 
 
 ## Next Recommended Step
 
-Pending user decision among:
+Roadmap position: Milestone 9 in flight (M9.1 done, M9.1b next), Milestone 10 planned (CR-0003).
 
-1. Approve git finalization of the uncommitted strategy catalog batch backtest work products.
-2. Commission upstream factor computation (`atr_10`, `sma_7/9/20/26/50/52/65`) in `indicators_tushare` / `quant_ts` to unblock the 5 remaining catalog strategies.
-3. Run deeper validation batches (`--mode quick` 1-year / `--mode full` 2015-2025) once results are meant to inform research.
-4. Any new change request through the single-agent workflow.
+1. Approve the pending M9.1 commit (`QRE-BATCH-PERF-SLIM-001`: parallel compact batch runner + quick batch results).
+2. Implement M9.1b (`QRE-VECTORIZED-ENGINE-001`): vectorized trade-level single-symbol engine with metric-equality verification against the bar simulator — the speed foundation for full-history runs (M9.4) and continuous refresh (M10.3).
+3. Then M10.1 strategy-fit analysis (winner-stock clustering + noise filtering) on the existing quick-batch data.
+4. External dependency: commission upstream factor computation (`atr_10`, `sma_7/9/20/26/50/52/65`) in `indicators_tushare` / `quant_ts` to unblock the 5 remaining catalog strategies.

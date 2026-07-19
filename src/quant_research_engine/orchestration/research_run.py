@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
@@ -44,6 +45,7 @@ class ResearchRunRequest:
     benchmark_table: str | None = None
     benchmark_code: str | None = None
     benchmark_value_column: str = "close"
+    compact: bool = False
 
 
 @dataclass
@@ -59,6 +61,7 @@ class ResearchRunResult:
     manifest_path: Path | None = None
     report_manifest_path: Path | None = None
     error_message: str | None = None
+    stage_durations_s: dict[str, float] = field(default_factory=dict)
 
 
 def _build_db_store(db_url: str | None = None) -> PostgresDataStore:
@@ -227,7 +230,7 @@ def _run_backtest(
                 "end": str(request.end),
             },
         }
-        paths = write_batch_result(result, backtest_dir, run_request=run_request_payload, run_id=request.run_id)
+        paths = write_batch_result(result, backtest_dir, run_request=run_request_payload, run_id=request.run_id, compact=request.compact)
         return "ok", paths
 
     # shared-cash mode
@@ -287,6 +290,7 @@ def _write_research_manifest(result: ResearchRunResult, request: ResearchRunRequ
         "benchmark_code": request.benchmark_code,
         "benchmark_value_column": request.benchmark_value_column,
         "metadata_as_of": str(request.metadata_as_of) if request.metadata_as_of else None,
+        "stage_durations_s": result.stage_durations_s,
     }
 
     if result.preflight_paths:
@@ -390,39 +394,51 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
     )
 
     store = _build_db_store(request.db_url)
+    try:
+        # Stage 1: Preflight
+        if not request.skip_preflight:
+            spec = StrategySpec.from_yaml(request.strategy_path)
+            t0 = time.perf_counter()
+            status, report = _run_preflight(store, spec, request)
+            result.stage_durations_s["preflight"] = round(time.perf_counter() - t0, 3)
+            result.preflight_status = status
+            if status == "ok":
+                result.preflight_paths["preflight_report"] = _write_preflight_artifact(report, request.output_dir)
+            if status == "error":
+                result.error_message = f"Preflight failed (status={status})"
+                result.manifest_path = _write_research_manifest(result, request)
+                result.report_manifest_path = _write_research_report_manifest(result, request)
+                return result
+        else:
+            spec = StrategySpec.from_yaml(request.strategy_path)
 
-    # Stage 1: Preflight
-    if not request.skip_preflight:
-        spec = StrategySpec.from_yaml(request.strategy_path)
-        status, report = _run_preflight(store, spec, request)
-        result.preflight_status = status
-        if status == "ok":
-            result.preflight_paths["preflight_report"] = _write_preflight_artifact(report, request.output_dir)
-        if status == "error":
-            result.error_message = f"Preflight failed (status={status})"
-            result.manifest_path = _write_research_manifest(result, request)
-            result.report_manifest_path = _write_research_report_manifest(result, request)
-            return result
-    else:
-        spec = StrategySpec.from_yaml(request.strategy_path)
+        # Stage 2: Evaluation
+        if not request.skip_eval:
+            t0 = time.perf_counter()
+            status, eval_result = _run_eval(store, spec, request)
+            result.stage_durations_s["eval"] = round(time.perf_counter() - t0, 3)
+            result.eval_status = status
+            if status == "ok":
+                result.eval_paths = _write_eval_artifacts(eval_result, request)
+            if status == "error":
+                result.error_message = "Evaluation failed"
+                result.manifest_path = _write_research_manifest(result, request)
+                result.report_manifest_path = _write_research_report_manifest(result, request)
+                return result
 
-    # Stage 2: Evaluation
-    if not request.skip_eval:
-        status, eval_result = _run_eval(store, spec, request)
-        result.eval_status = status
-        if status == "ok":
-            result.eval_paths = _write_eval_artifacts(eval_result, request)
-        if status == "error":
-            result.error_message = "Evaluation failed"
-            result.manifest_path = _write_research_manifest(result, request)
-            result.report_manifest_path = _write_research_report_manifest(result, request)
-            return result
+        # Stage 3: Backtest
+        t0 = time.perf_counter()
+        status, paths = _run_backtest(store, spec, request)
+        result.stage_durations_s["backtest"] = round(time.perf_counter() - t0, 3)
+        result.backtest_status = status
+        result.backtest_paths = paths
 
-    # Stage 3: Backtest
-    status, paths = _run_backtest(store, spec, request)
-    result.backtest_status = status
-    result.backtest_paths = paths
-
-    result.manifest_path = _write_research_manifest(result, request)
-    result.report_manifest_path = _write_research_report_manifest(result, request)
-    return result
+        result.manifest_path = _write_research_manifest(result, request)
+        result.report_manifest_path = _write_research_report_manifest(result, request)
+        return result
+    finally:
+        # Dispose DB engines so batch runners do not leak connections;
+        # getattr guard keeps test fakes without close() working.
+        close = getattr(store, "close", None)
+        if callable(close):
+            close()

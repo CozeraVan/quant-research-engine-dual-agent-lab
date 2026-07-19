@@ -29,6 +29,15 @@ class PostgresDataStore:
             conn.execute(text("SELECT 1"))
         return True
 
+    def close(self) -> None:
+        """Dispose all DB engines, returning connections to the database."""
+        seen: set[int] = set()
+        for engine in (self.market_engine, self.factor_engine, self.reference_engine, self.benchmark_engine):
+            if id(engine) in seen:
+                continue
+            seen.add(id(engine))
+            engine.dispose()
+
     def table_exists(self, table_name: str, *, engine: Engine | None = None) -> bool:
         schema, table = self.split_table_name(table_name)
         query = text(

@@ -690,6 +690,23 @@ QRE_MARKET_DB_URL='postgresql+psycopg:///tushare_data' \
 # 产物：outputs/bollinger_mean_reversion_full/batch/summary.csv
 ```
 
+### 7b. 策略目录批量回测 (catalog batch runner)
+
+```bash
+# 对 strategies/catalog/ 全部策略跑研究流程 (预检+评估+回测)
+QRE_MARKET_DB_URL='postgresql+psycopg:///tushare_data' \
+  uv run python scripts/batch_backtest_runner.py --mode smoke --skip-preflight
+
+# 并行 + 精简产物 (推荐用于 quick/full 模式)
+# --jobs N    进程池并行 worker (默认 1 串行)
+# --compact   仅写策略级聚合产物 (summary.csv 等 ~9 个文件),
+#             跳过 per-symbol 目录树与全市场报告包; 指标与标准模式一致
+uv run python scripts/batch_backtest_runner.py --mode quick --jobs 4 --compact --skip-preflight --resume
+
+# 模式: smoke (2024-01~03) / quick (2024 全年) / full (2015-2025)
+# 产物: outputs/backtests/<batch_id>/batch_summary.json (含分阶段耗时 stage_durations_s)
+```
+
 ### 8. 报告查看
 
 ```bash

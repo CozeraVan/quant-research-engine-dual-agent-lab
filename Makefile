@@ -39,14 +39,16 @@ preflight-check-ready:  ## 仅显示通过预检的策略
 # Batch Backtest
 # ---------------------------------------------------------------------------
 
+JOBS ?= 4  ## 并行 worker 数 (可用 JOBS=8 覆盖)
+
 backtest-smoke:  ## 对所有策略运行快速冒烟回测 (2个月窗口)
 	uv run python scripts/batch_backtest_runner.py --mode smoke --skip-preflight
 
-backtest-quick:  ## 对所有策略运行1年回测
-	uv run python scripts/batch_backtest_runner.py --mode quick --skip-preflight
+backtest-quick:  ## 对所有策略运行1年回测 (并行+精简产物)
+	uv run python scripts/batch_backtest_runner.py --mode quick --jobs $(JOBS) --compact --skip-preflight --resume
 
-backtest-full:  ## 对所有策略运行全量回测 (2015-2025)
-	uv run python scripts/batch_backtest_runner.py --mode full --skip-preflight
+backtest-full:  ## 对所有策略运行全量回测 (2015-2025, 并行+精简产物)
+	uv run python scripts/batch_backtest_runner.py --mode full --jobs $(JOBS) --compact --skip-preflight --resume
 
 backtest-category:  ## 对指定类别运行回测 (使用 CATEGORY=trend_following)
 	uv run python scripts/batch_backtest_runner.py --category $(CATEGORY) --skip-preflight

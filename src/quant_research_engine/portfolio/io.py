@@ -211,6 +211,7 @@ def write_batch_result(
     group_rank_top_n: int = 1,
     run_request: dict[str, Any] | None = None,
     run_id: str | None = None,
+    compact: bool = False,
 ) -> dict[str, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -279,14 +280,15 @@ def write_batch_result(
             ).to_csv(ranked_window_group_path, index=False)
             paths[f"window_summary_{window}_by_{group_column}_ranked_symbols"] = ranked_window_group_path
 
-    for symbol, single_result in result.results.items():
-        symbol_dir = directory / symbol
-        single_paths = write_single_symbol_result(single_result, symbol_dir)
-        for name, path in single_paths.items():
-            paths[f"{symbol}_{name}"] = path
+    if not compact:
+        for symbol, single_result in result.results.items():
+            symbol_dir = directory / symbol
+            single_paths = write_single_symbol_result(single_result, symbol_dir)
+            for name, path in single_paths.items():
+                paths[f"{symbol}_{name}"] = path
 
-    full_market_paths = write_full_market_report(result, directory, run_request=run_request, run_id=run_id)
-    paths.update(full_market_paths)
+        full_market_paths = write_full_market_report(result, directory, run_request=run_request, run_id=run_id)
+        paths.update(full_market_paths)
 
     if run_request is not None:
         paths["run_manifest"] = _write_run_manifest(directory, run_request, paths, run_id=run_id)
