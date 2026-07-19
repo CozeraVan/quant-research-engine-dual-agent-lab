@@ -100,6 +100,12 @@ Status: LOCKED
 
 Small-window examples and DB smokes validate plumbing only. Do not document them as evidence that a factor or strategy is effective.
 
+## R-QRE-009: Small-sample validation before full-scale runs
+
+Status: LOCKED
+
+Before launching any full-market or full-history batch run that exercises new or changed engine/pipeline code, first validate correctness and measure efficiency on a small sample (a few symbols and a short window). Only after the small-sample run passes and its cost is measured may the full-scale run proceed. (User standing instruction, 2026-07-19.)
+
 ## R-AGENT-001: Single agent owns the full development cycle
 
 Status: LOCKED

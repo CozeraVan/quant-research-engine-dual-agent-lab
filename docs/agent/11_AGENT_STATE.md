@@ -12,34 +12,36 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-BATCH-PERF-SLIM-001 (implementation DONE, self-review PASS, quick batch COMPLETE — awaiting user-approved git finalization)
+QRE-VECTORIZED-ENGINE-001 / M9.1b (implementation DONE, self-review PASS — awaiting user-approved git finalization)
 
 Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-validation.md` (Milestone 9: Strategy Research Validation).
 
 ## Last Completed Step
 
-**QRE-SINGLE-AGENT-MIGRATION-001 (DONE, finalized 2026-07-18, commit `12880e1`):**
+**QRE-BATCH-PERF-SLIM-001 / M9.1 (DONE, finalized 2026-07-19, commit `24699ce`):**
 
-1. Audited all markdown docs against actual repo state; corrected stale "fully frozen" closeout wording.
-2. Rewrote workflow for single-agent mode: `AGENTS.md` (entry point), `CLAUDE.md` (redirect), `00/01/02/03/07/11/12`, `05` tracker, `06` decision entry 2026-07-18.
-3. Replaced R-DUAL-* with R-AGENT-001/002/003; R-GIT-* now: Kimi Code executes git after self-review PASS + explicit user approval.
-4. Renamed/rewrote skills in `.agents/skills/` and `.claude/skills/`: `plan-brief`, `implement`, `self-review`, `git-finalize`, `intake-change`, `resume-task`, `update-progress`.
-5. The same commit also finalized the previously uncommitted batch backtest work products (strategy catalog, batch scripts, `signals.py` parser extension, `research_run.py` fixes).
-6. Phase moved to `PLANNING` for the next slice after user requested next-phase goals.
+1. Batch runner core moved into `orchestration/batch_runner.py`; `--jobs N` process-pool parallelism; `--compact` output mode (9 files vs ~26k per strategy, metrics byte-identical).
+2. Per-stage timing in research-run manifests; `PostgresDataStore.close()` engine disposal; resume scan fixed (both directory levels).
+3. Profiling baseline: tf01a quick mode serial = 1742.5s (backtest stage 98.6%); data-load reuse ruled out by evidence.
+4. Quick batch `f365c8a07b33` (2026-07-19 06:32 +08): **106 OK / 5 error** (known missing-factor strategies), wall time **11.1h** with 4 jobs (vs ~51h serial), per-strategy mean 1459s (-16%), **2,013 files / 2.8GB** (~99.9% fewer files, ~89% fewer bytes); `qre report-audit` on compact manifests → ok.
+5. Milestone 10 planned (CR-0003): M10.1 strategy-fit clustering, M10.2 parameter overrides, M10.3 continuous refresh, M10.4 optional ML clustering; M9.2/M9.3 merged into M10.1.
+6. R-QRE-009 locked (user standing instruction): small-sample validation before any full-scale run.
 
 ## Git State
 
 - Current branch: `master`
-- Last commit: `12880e1` Add strategy catalog batch pipeline and migrate to single-agent workflow (154 files)
-- Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked) and the planning docs for the current task (`04/05/08/11`, CR-0002 — to be committed after user approval).
+- Last commit: `24699ce` Add parallel compact batch runner and complete quick-mode catalog batch (20 files)
+- Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked) and uncommitted docs/infra updates (R-QRE-009, M9.1b brief, outputs externalization: `.gitignore`, Makefile, README, runner `QRE_OUTPUT_DIR`, `04/05/06/11`).
+- **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.
 
 ## Latest Validation Evidence
 
 ```
-uv run pytest -q → 947 passed, 2 warnings (2026-05-30; no runtime code changed since)
-scripts/check-progress-docs.sh → passed (during migration task)
-git diff --check → clean (during migration task)
+uv run pytest -q → 967 passed, 2 warnings (2026-07-19, M9.1 final)
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+qre report-audit on compact quick-batch manifests → status=ok, 0 issues
 ```
 
 ## Pending Decisions (user)

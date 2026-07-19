@@ -13,7 +13,7 @@ venv/
 !.env.example
 
 # Outputs / logs
-outputs/
+outputs
 logs/
 *.log
 

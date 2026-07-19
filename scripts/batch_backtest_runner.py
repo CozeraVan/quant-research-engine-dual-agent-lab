@@ -35,6 +35,7 @@ Outputs:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -56,7 +57,9 @@ from quant_research_engine.orchestration.batch_runner import (
 )
 
 CATALOG_DIR = ROOT / "strategies" / "catalog"
-DEFAULT_OUTPUT = ROOT / "outputs" / "backtests"
+# Outputs live outside the repo (outputs/ is a symlink); QRE_OUTPUT_DIR overrides.
+OUTPUT_ROOT = Path(os.environ.get("QRE_OUTPUT_DIR", ROOT / "outputs"))
+DEFAULT_OUTPUT = OUTPUT_ROOT / "backtests"
 
 
 def main() -> int:
@@ -81,6 +84,12 @@ def main() -> int:
                         help="Parallel worker processes (default: 1 = serial)")
     parser.add_argument("--compact", action="store_true",
                         help="Compact output: strategy-level aggregates only, no per-symbol trees")
+    parser.add_argument("--engine-impl", choices=["simulator", "vectorized"], default="vectorized",
+                        help="Backtest engine implementation (default: vectorized; "
+                             "metric-identical to simulator, ~40x faster)")
+    parser.add_argument("--position-sizing", choices=["full_compound", "fixed_cash"],
+                        default="full_compound",
+                        help="Position sizing model (fixed_cash requires --engine-impl vectorized)")
     parser.add_argument("--skip-preflight", action="store_true",
                         help="Skip preflight stage (useful if DB factors are known good)")
     parser.add_argument("--skip-eval", action="store_true",
@@ -171,6 +180,8 @@ def main() -> int:
         codes=args.codes,
         compact=args.compact,
         catalog_dir=CATALOG_DIR,
+        engine_impl=args.engine_impl,
+        position_sizing=args.position_sizing,
     )
 
     results = execute_batch(yaml_paths, config, jobs=max(1, args.jobs))
@@ -189,6 +200,8 @@ def main() -> int:
             "min_factor_coverage": args.min_factor_coverage,
             "jobs": max(1, args.jobs),
             "compact": args.compact,
+            "engine_impl": args.engine_impl,
+            "position_sizing": args.position_sizing,
         },
         results=results,
         summary=counts,

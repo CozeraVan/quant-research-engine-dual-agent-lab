@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-BATCH-PERF-SLIM-001
+QRE-VECTORIZED-ENGINE-001 (M9.1b)
 
 ## Current Status
 
-PLANNING (brief drafted in `08_IMPLEMENTATION_BRIEF.md`; parent CR-0002 drafted; both pending user approval)
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
 
 ## Current Owner
 
@@ -14,22 +14,24 @@ KIMI_CODE
 
 ## Problem Summary
 
-The 106-strategy smoke batch proved the pipeline works but took ~11.5h serial (~6.5 min/strategy) and wrote ~3M output files for a 2-month window. Quick (1-year) and full (2015-2025) validation batches are impractical until the runner is parallelized and outputs are slimmed. This slice is the enabler for the Strategy Research Validation phase (CR-0002 / Milestone 9).
+The batch-path single-symbol engine simulates via per-symbol full-frame filtering plus a Python `iterrows` loop over every bar — ~98% of backtest runtime (measured: backtest stage 1,718.9s of 1,742.5s total for tf01a quick mode). Batch-path semantics (single position, all-in entries, no intra-hold decisions) allow an exactly equivalent trade-level implementation. The user additionally requested simple/compound position-sizing models and reaffirmed R-QRE-009: small-sample validation before any full-scale run.
 
 ## Implementation Summary
 
-Planning only so far:
+Planning only so far (direction user-approved 2026-07-19, recorded in `06_DECISION_LOG.md`):
 
-1. `docs/agent/change_requests/CR-0002-strategy-research-validation.md` — phase proposal (M9.1 performance/slimming, M9.2 statistical validation, M9.3 research report, M9.4 full-mode + blocked strategies).
-2. `docs/agent/08_IMPLEMENTATION_BRIEF.md` — first slice: profiling baseline, runner core into `src/quant_research_engine/orchestration/batch_runner.py`, `--jobs N` process-pool parallelism, `--compact` strategy-level output mode with manifest/audit parity, conditional data-load reuse, quick-mode batch of 106 strategies.
-3. Previous task `QRE-SINGLE-AGENT-MIGRATION-001` finalized in commit `12880e1` (includes the earlier uncommitted batch work products and the single-agent workflow docs).
+1. New `portfolio/single_symbol_vectorized.py`: one-pass groupby pre-split, per-subframe signal evaluation (no cross-symbol leakage), event-level simulation on numpy arrays (loop over candidate event bars only), identical execution rules (T+1, slippage, lot rounding, order validation, costs, failed orders, sell retry), vectorized equity-curve reconstruction, `position_sizing` (`full_compound` default = current behavior, `fixed_cash`).
+2. Wiring: `engine_impl` flag (`simulator` default during rollout) through `BatchBacktestRequest` → research_run → runner `--engine-impl`; default flips to `vectorized` only after recorded equality evidence.
+3. Verification ladder per R-QRE-009: synthetic equality suite (orders/trades/equity/failed/summary exact match, incl. rejection/retry/edge cases) → 3-10 strategies × ~50 symbols × 1y real-DB equality + timing → catalog-scale spot-check.
+4. Benchmark target: backtest stage ≤ 30s (from 1,718.9s) with identical outputs.
+
+Previous task `QRE-BATCH-PERF-SLIM-001` (M9.1) finalized in commit `24699ce`. Run outputs were externalized 2026-07-19 (`QRE-OUTPUTS-EXTERNAL-001`): `outputs` is now a symlink to `/home/van/qre-outputs/`; the batch runner honors `QRE_OUTPUT_DIR`; all documented output paths keep working through the symlink.
 
 ## Hard Constraints
 
-- No engine trading-rule/cost/signal changes; no indicators inside QRE; read-only DB.
-- No new dependencies; CSV/JSON outputs only.
-- Compact mode must stay discoverable/auditable via `qre report-files` / `qre report-audit` (R-QRE-007).
-- Full pytest suite stays green; no behavior change in standard (non-compact) mode.
+- Metric-identical results vs the bar simulator (equality is the acceptance gate, not approximation).
+- Shared-cash engine untouched; no new dependencies; no behavior change in default outputs until the evidence-backed default flip.
+- R-QRE-009: no catalog-scale run before the small-sample verification passes.
 
 ## Validation Evidence
 

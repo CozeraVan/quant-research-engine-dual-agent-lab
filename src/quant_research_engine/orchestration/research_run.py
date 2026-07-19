@@ -46,6 +46,8 @@ class ResearchRunRequest:
     benchmark_code: str | None = None
     benchmark_value_column: str = "close"
     compact: bool = False
+    engine_impl: str = "simulator"
+    position_sizing: str = "full_compound"
 
 
 @dataclass
@@ -134,20 +136,22 @@ def _run_eval(
     store: PostgresDataStore,
     spec: StrategySpec,
     request: ResearchRunRequest,
+    frame=None,
 ) -> tuple[str, object | None]:
     """Run evaluation. Returns (status, eval_result_or_None)."""
-    assembler = ResearchFrameAssembler(store)
-    frame = assembler.build(
-        ts_codes=request.codes,
-        start=request.start,
-        end=request.end,
-        market_fields=spec.market_fields,
-        factor_fields=spec.factor_fields,
-        metadata_as_of=request.metadata_as_of,
-        benchmark_table=request.benchmark_table,
-        benchmark_code=request.benchmark_code,
-        benchmark_value_column=request.benchmark_value_column,
-    )
+    if frame is None:
+        assembler = ResearchFrameAssembler(store)
+        frame = assembler.build(
+            ts_codes=request.codes,
+            start=request.start,
+            end=request.end,
+            market_fields=spec.market_fields,
+            factor_fields=spec.factor_fields,
+            metadata_as_of=request.metadata_as_of,
+            benchmark_table=request.benchmark_table,
+            benchmark_code=request.benchmark_code,
+            benchmark_value_column=request.benchmark_value_column,
+        )
     eval_req = EvaluationRequest(
         signal_expression=spec.signal_expression,
         forward_horizons=spec.forward_horizons,
@@ -186,17 +190,19 @@ def _run_backtest(
     store: PostgresDataStore,
     spec: StrategySpec,
     request: ResearchRunRequest,
+    frame=None,
 ) -> tuple[str, dict[str, Path]]:
     """Run backtest. Returns (status, paths_dict)."""
-    assembler = ResearchFrameAssembler(store)
-    frame = assembler.build(
-        ts_codes=request.codes,
-        start=request.start,
-        end=request.end,
-        market_fields=spec.market_fields,
-        factor_fields=spec.factor_fields,
-        metadata_as_of=request.metadata_as_of,
-    )
+    if frame is None:
+        assembler = ResearchFrameAssembler(store)
+        frame = assembler.build(
+            ts_codes=request.codes,
+            start=request.start,
+            end=request.end,
+            market_fields=spec.market_fields,
+            factor_fields=spec.factor_fields,
+            metadata_as_of=request.metadata_as_of,
+        )
     market_profile = (
         __import__("quant_research_engine.config.loader", fromlist=["load_market_profile"]).load_market_profile(
             request.market_profile_path
@@ -216,6 +222,8 @@ def _run_backtest(
             exit_signal=spec.exit_signal_expression,
             holding_days=spec.holding_days,
             summary_metadata_columns=request.metadata_columns,
+            engine_impl=request.engine_impl,
+            position_sizing=request.position_sizing,
         )
         result = BatchBacktestEngine(market_profile).run(frame, batch_req)
         run_request_payload: dict[str, object] = {
@@ -383,6 +391,20 @@ def _write_research_report_manifest(result: ResearchRunResult, request: Research
     return manifest_path
 
 
+def _build_research_frame(store: PostgresDataStore, spec: StrategySpec, request: ResearchRunRequest):
+    """Build the shared market+factor frame for a run (eval and backtest stages
+    use identical queries when no benchmark columns are requested)."""
+    assembler = ResearchFrameAssembler(store)
+    return assembler.build(
+        ts_codes=request.codes,
+        start=request.start,
+        end=request.end,
+        market_fields=spec.market_fields,
+        factor_fields=spec.factor_fields,
+        metadata_as_of=request.metadata_as_of,
+    )
+
+
 def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
     run_id = request.run_id or uuid.uuid4().hex[:12]
     result = ResearchRunResult(
@@ -395,6 +417,22 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
 
     store = _build_db_store(request.db_url)
     try:
+        # Shared frame: eval and backtest load the same market+factor frame
+        # when no benchmark columns are requested; build it once per run.
+        shared_frame = None
+
+        def _shared_frame():
+            nonlocal shared_frame
+            if shared_frame is None:
+                shared_frame = _build_research_frame(store, spec, request)
+            return shared_frame
+
+        shareable = (
+            request.benchmark_table is None
+            and request.benchmark_code is None
+            and not request.skip_eval
+        )
+
         # Stage 1: Preflight
         if not request.skip_preflight:
             spec = StrategySpec.from_yaml(request.strategy_path)
@@ -415,7 +453,10 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
         # Stage 2: Evaluation
         if not request.skip_eval:
             t0 = time.perf_counter()
-            status, eval_result = _run_eval(store, spec, request)
+            if shareable:
+                status, eval_result = _run_eval(store, spec, request, frame=_shared_frame())
+            else:
+                status, eval_result = _run_eval(store, spec, request)
             result.stage_durations_s["eval"] = round(time.perf_counter() - t0, 3)
             result.eval_status = status
             if status == "ok":
@@ -428,7 +469,10 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
 
         # Stage 3: Backtest
         t0 = time.perf_counter()
-        status, paths = _run_backtest(store, spec, request)
+        if shareable:
+            status, paths = _run_backtest(store, spec, request, frame=_shared_frame())
+        else:
+            status, paths = _run_backtest(store, spec, request)
         result.stage_durations_s["backtest"] = round(time.perf_counter() - t0, 3)
         result.backtest_status = status
         result.backtest_paths = paths

@@ -698,6 +698,10 @@ class TestRunResearchRunOrchestration:
 
         called_backtest = []
         monkeypatch.setattr(
+            "quant_research_engine.orchestration.research_run._build_research_frame",
+            lambda *a, **kw: "fake_frame",
+        )
+        monkeypatch.setattr(
             "quant_research_engine.orchestration.research_run._run_preflight",
             lambda *a, **kw: ("ok", MagicMock(status="ok")),
         )
@@ -758,6 +762,10 @@ class TestRunResearchRunOrchestration:
         )
 
         # Eval mock
+        monkeypatch.setattr(
+            "quant_research_engine.orchestration.research_run._build_research_frame",
+            lambda *a, **kw: "fake_frame",
+        )
         monkeypatch.setattr(
             "quant_research_engine.orchestration.research_run._run_eval",
             lambda *a, **kw: ("ok", _make_fake_eval_result()),

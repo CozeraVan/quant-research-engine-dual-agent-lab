@@ -701,6 +701,12 @@ QRE_MARKET_DB_URL='postgresql+psycopg:///tushare_data' \
 # --jobs N    进程池并行 worker (默认 1 串行)
 # --compact   仅写策略级聚合产物 (summary.csv 等 ~9 个文件),
 #             跳过 per-symbol 目录树与全市场报告包; 指标与标准模式一致
+# --engine-impl {simulator,vectorized}  回测引擎实现 (默认 vectorized:
+#             交易级向量化引擎, 与 simulator 结果完全一致, 实测约 43 倍提速;
+#             simulator 保留为回退选项)
+# --position-sizing {full_compound,fixed_cash}  仓位模型
+#             (full_compound 全仓复利=现行为; fixed_cash 固定金额,
+#              需配合 --engine-impl vectorized)
 uv run python scripts/batch_backtest_runner.py --mode quick --jobs 4 --compact --skip-preflight --resume
 
 # 模式: smoke (2024-01~03) / quick (2024 全年) / full (2015-2025)
@@ -867,7 +873,7 @@ quant-research-engine/
 │   ├── agent/                       # 单 agent 工作流与项目长期记忆
 │   ├── modules/                     # 模块文档
 │   └── strategy_entry/              # 策略入口标准
-├── outputs/                         # 运行产物 (gitignore)
+├── outputs/                         # 运行产物 → 符号链接到项目外 ~/qre-outputs (gitignore)
 ├── pyproject.toml                   # 项目配置
 ├── AGENTS.md                        # Kimi Code 单 agent 项目指令
 ├── CLAUDE.md                        # 跳转页（指向 AGENTS.md）

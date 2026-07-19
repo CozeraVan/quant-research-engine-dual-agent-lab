@@ -4,6 +4,22 @@ Use this file for decisions that affect architecture, data, safety, compliance, 
 
 ## Format
 
+### 2026-07-19: Externalize run outputs to `~/qre-outputs` (QRE-OUTPUTS-EXTERNAL-001)
+
+- Decision: Run outputs (19GB / 3.09M files, ~99.9% of repo bloat) moved out of the project tree to `/home/van/qre-outputs/`; project keeps an `outputs` symlink for path compatibility. `QRE_OUTPUT_DIR` env var added to the batch runner as an override. `.gitignore` pattern changed `outputs/` → `outputs` to cover the symlink. `make clean` retargeted (resets the symlink, never deletes external data). `tests/` stays in the repo (3.8MB, standard pytest/packaging layout — user accepted the recommendation). All 19GB of historical outputs preserved per user decision (no cleanup).
+- Reason: User asked to separate engine body, test files, and test result files into different spaces to avoid project bloat. Measurement showed outputs were essentially all of the bloat; tests were negligible.
+- Alternatives: move `tests/` out too (rejected — zero bloat benefit, breaks standard tooling); delete stale giant batches (rejected by user — everything preserved); change all CLI defaults to the external path (rejected — symlink + runner env var achieves separation with zero behavior change).
+- Impact: Repo working tree no longer carries run artifacts; existing docs/scripts/Makefile paths keep working through the symlink; `outputs/backtests/quick_batch_106/` remains the M10.1 input data at its documented path.
+- Owner: KIMI_CODE (user-directed)
+
+### 2026-07-19: Lock small-sample-before-full-scale run rule (R-QRE-009)
+
+- Decision: New locked requirement R-QRE-009: before any full-market or full-history batch run that exercises new or changed engine/pipeline code, validate correctness and measure efficiency on a small sample first; only then proceed to full-scale runs.
+- Reason: User standing instruction given together with the M9.1 commit approval. Efficiency surprises should surface on cheap runs, not after an 11-hour batch.
+- Alternatives: keep ad-hoc run sizing (rejected — user issued a standing rule).
+- Impact: `02_LOCKED_REQUIREMENTS.md` gains R-QRE-009; the M9.1b verification plan already follows it (sample-window equality checks before any catalog-scale run). Recorded as a docs-only follow-up to be committed with the M9.1b slice.
+- Owner: KIMI_CODE (user instruction)
+
 ### 2026-07-19: Adopt strategy operations roadmap (CR-0003) and vectorized engine slice (M9.1b)
 
 - Decision: Three user feature ideas were brainstormed, feasibility-checked, and adopted with aligned granularity. (1) **M9.1b** (`QRE-VECTORIZED-ENGINE-001`, added to CR-0002): a vectorized trade-level single-symbol engine — full-frame signal evaluation, groupby pre-split, event-level trade loop (loop over trades, not bars), vectorized equity-curve reconstruction, `position_sizing` modes (`full_compound` default = current all-in behavior, `fixed_cash`); must produce metric-identical results vs the existing bar simulator (per-symbol orders/trades/equity/summary parity tests). (2) **CR-0003** created with three slices: **M10.1** strategy-fit analysis & noise filtering (F3) — winner-stock enrichment across board/industry/cap/liquidity buckets with hypergeometric significance, min-trade-count and liquidity noise filters, M/Q-window stability checks, market-wide vs best-class excess ranking; absorbs M9.2 (statistical validation) and M9.3 (aggregate report) from CR-0002. **M10.2** unified runtime parameter overrides + backtest-time universe filtering (F1, CLI-first; GUI deferred). **M10.3** continuous refresh via watermark detection + idempotent full re-run (F2; stateful incremental rejected). **M10.4** optional ML clustering (F3 phase 2) is FUTURE and needs dependency approval. Execution order: M9.1b → M10.1 → M10.2 → M10.3.

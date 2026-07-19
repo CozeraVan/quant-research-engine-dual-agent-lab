@@ -89,6 +89,8 @@ class BatchRunConfig:
     codes: list[str] | None = None
     compact: bool = False
     catalog_dir: Path | None = None
+    engine_impl: str = "simulator"
+    position_sizing: str = "full_compound"
 
 
 def discover_strategies(
@@ -194,6 +196,8 @@ def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResu
             min_factor_coverage=config.min_factor_coverage,
             codes=config.codes,
             compact=config.compact,
+            engine_impl=config.engine_impl,
+            position_sizing=config.position_sizing,
         )
 
         run_result = run_research_run(req)

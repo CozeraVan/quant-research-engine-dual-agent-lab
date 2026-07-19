@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from quant_research_engine.portfolio.risk import summarize_equity_curve_by_window, summarize_equity_curve_rolling
@@ -119,49 +120,109 @@ def summarize_batch_ranked_symbols_by(summary: pd.DataFrame, group_column: str, 
 
 
 def summarize_batch_window_summary(equity_curves: dict[str, pd.DataFrame], window: str = "M") -> pd.DataFrame:
-    rows: list[dict[str, Any]] = []
-    for symbol, equity_curve in equity_curves.items():
-        symbol_windows = summarize_equity_curve_by_window(equity_curve, window=window)
-        if symbol_windows.empty:
-            continue
-        for record in symbol_windows.to_dict("records"):
-            rows.append(
-                {
-                    "window": record["window"],
-                    "symbol": symbol,
-                    "total_return": record["total_return"],
-                }
-            )
-    if not rows:
+    rows = _collect_window_return_rows(equity_curves, window)
+    if rows.empty:
         return pd.DataFrame(columns=_batch_window_summary_columns())
 
-    return _summarize_window_return_rows(pd.DataFrame(rows), group_columns=["window"])
+    return _summarize_window_return_rows(rows, group_columns=["window"])
+
+
+def _collect_window_return_rows(equity_curves: dict[str, pd.DataFrame], window: str) -> pd.DataFrame:
+    """Vectorized row collection for summarize_batch_window_summary.
+
+    Produces the same (window, symbol, total_return) row set as the previous
+    per-symbol/per-window loop, where total_return = last_equity/first_equity - 1
+    within each calendar window (NaN when the first equity is not positive).
+    """
+    parts: list[pd.DataFrame] = []
+    for symbol, equity_curve in equity_curves.items():
+        if equity_curve.empty:
+            continue
+        if not {"trade_date", "total_equity"}.issubset(equity_curve.columns):
+            raise ValueError("equity_curve must contain trade_date and total_equity")
+        frame = equity_curve.loc[:, ["trade_date", "total_equity"]].dropna(subset=["trade_date", "total_equity"])
+        if frame.empty:
+            continue
+        frame = frame.sort_values("trade_date")
+        dates = pd.to_datetime(frame["trade_date"])
+        equity = frame["total_equity"].astype(float)
+        labels = dates.dt.to_period(window).astype(str)
+        grouped = equity.groupby(labels.values, sort=True)
+        first = grouped.first()
+        last = grouped.last()
+        total_return = (last / first - 1).where(first > 0, np.nan)
+        parts.append(
+            pd.DataFrame(
+                {
+                    "window": np.asarray(first.index.astype(str)),
+                    "symbol": symbol,
+                    "total_return": total_return.to_numpy(),
+                }
+            )
+        )
+    if not parts:
+        return pd.DataFrame(columns=["window", "symbol", "total_return"])
+    return pd.concat(parts, ignore_index=True)
 
 
 def summarize_batch_rolling_summary(equity_curves: dict[str, pd.DataFrame], window_size: int = 20) -> pd.DataFrame:
-    rows: list[dict[str, Any]] = []
-    for symbol, equity_curve in equity_curves.items():
-        symbol_rolling = summarize_equity_curve_rolling(equity_curve, window_size=window_size)
-        if symbol_rolling.empty:
-            continue
-        for record in symbol_rolling.to_dict("records"):
-            rows.append(
-                {
-                    "window_size": record["window_size"],
-                    "end_date": record["end_date"],
-                    "symbol": symbol,
-                    "total_return": record["total_return"],
-                    "max_drawdown": record["max_drawdown"],
-                }
-            )
-    if not rows:
+    rows = _collect_rolling_return_rows(equity_curves, window_size)
+    if rows.empty:
         return pd.DataFrame(columns=_batch_rolling_summary_columns())
 
     return _summarize_window_return_rows(
-        pd.DataFrame(rows),
+        rows,
         group_columns=["window_size", "end_date"],
         output_columns=_batch_rolling_summary_columns(),
     )
+
+
+def _collect_rolling_return_rows(equity_curves: dict[str, pd.DataFrame], window_size: int) -> pd.DataFrame:
+    """Vectorized row collection for summarize_batch_rolling_summary.
+
+    Produces the same (window_size, end_date, symbol, total_return,
+    max_drawdown) row set as the previous per-symbol/per-window loop:
+    total_return = equity[end]/equity[start] - 1 (NaN when start <= 0),
+    max_drawdown = min(equity / cummax(equity) - 1) within each window.
+    """
+    parts: list[pd.DataFrame] = []
+    for symbol, equity_curve in equity_curves.items():
+        if equity_curve.empty:
+            continue
+        if not {"trade_date", "total_equity"}.issubset(equity_curve.columns):
+            raise ValueError("equity_curve must contain trade_date and total_equity")
+        frame = equity_curve.loc[:, ["trade_date", "total_equity"]].dropna(subset=["trade_date", "total_equity"])
+        if frame.empty:
+            continue
+        frame = frame.sort_values("trade_date").reset_index(drop=True)
+        equity = frame["total_equity"].to_numpy(dtype=float)
+        n = len(equity)
+        if n < window_size:
+            continue
+        starts = equity[: n - window_size + 1]
+        ends = equity[window_size - 1 :]
+        total_returns = np.full(len(ends), np.nan)
+        valid = starts > 0
+        total_returns[valid] = ends[valid] / starts[valid] - 1.0
+        windows = np.lib.stride_tricks.sliding_window_view(equity, window_size)
+        running_max = np.maximum.accumulate(windows, axis=1)
+        max_drawdowns = (windows / running_max - 1.0).min(axis=1)
+        parts.append(
+            pd.DataFrame(
+                {
+                    "window_size": window_size,
+                    "end_date": frame["trade_date"].to_numpy()[window_size - 1 :],
+                    "symbol": symbol,
+                    "total_return": total_returns,
+                    "max_drawdown": max_drawdowns,
+                }
+            )
+        )
+    if not parts:
+        return pd.DataFrame(
+            columns=["window_size", "end_date", "symbol", "total_return", "max_drawdown"]
+        )
+    return pd.concat(parts, ignore_index=True)
 
 
 def summarize_batch_rolling_summary_by(

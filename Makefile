@@ -59,11 +59,13 @@ backtest-resume:  ## 续跑未完成的策略
 backtest-dry:  ## 列出策略不执行
 	uv run python scripts/batch_backtest_runner.py --dry-run
 
-clean:  ## 清理输出和缓存文件
-	@echo "将删除 outputs/ 目录和 __pycache__ 文件"
+clean:  ## 清理输出和缓存文件 (outputs 是指向 ~/qre-outputs 的符号链接)
+	@echo "outputs 是指向 /home/van/qre-outputs 的符号链接; 将删除符号链接和 __pycache__, 不会删除外部产物"
+	@echo "如需清空外部产物, 请手动操作 /home/van/qre-outputs"
 	@read -p "确认? [y/N] " confirm; \
 	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
-		rm -rf outputs/; \
+		rm -f outputs; \
+		ln -s /home/van/qre-outputs outputs; \
 		find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; \
 		find . -type f -name '*.pyc' -delete; \
 		echo "已清理."; \

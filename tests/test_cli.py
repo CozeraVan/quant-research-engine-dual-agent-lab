@@ -9409,6 +9409,8 @@ def test_cli_research_run_success_prints_stage_paths(capsys, monkeypatch, tmp_pa
     })()
     monkeypatch.setattr(rr_module, "_run_preflight", lambda *a, **kw: ("ok", preflight_report))
 
+    monkeypatch.setattr(rr_module, "_build_research_frame", lambda *a, **kw: "fake_frame")
+
     # Eval mock
     eval_df = pd.DataFrame({"ts_code": ["000001.SZ"], "trade_date": [pd.Timestamp("2024-01-05")]})
     empty_df = pd.DataFrame()

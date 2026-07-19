@@ -6,7 +6,12 @@ import pandas as pd
 
 from quant_research_engine.markets.ashare import AShareMarketProfile
 from quant_research_engine.portfolio.analytics import summarize_batch_summary
-from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestEngine, SingleSymbolBacktestRequest, SingleSymbolBacktestResult
+from quant_research_engine.portfolio.single_symbol import (
+    SingleSymbolBacktestEngine,
+    SingleSymbolBacktestRequest,
+    SingleSymbolBacktestResult,
+    empty_single_symbol_result,
+)
 
 SUMMARY_METADATA_COLUMNS = [
     "board",
@@ -16,6 +21,9 @@ SUMMARY_METADATA_COLUMNS = [
     "is_st",
     "is_risk_warning",
 ]
+
+ENGINE_IMPLS = ("simulator", "vectorized")
+POSITION_SIZING_MODES = ("full_compound", "fixed_cash")
 
 
 @dataclass(frozen=True)
@@ -28,6 +36,8 @@ class BatchBacktestRequest:
     entry_price_column: str = "open"
     mark_price_column: str = "close"
     summary_metadata_columns: list[str] | None = None
+    engine_impl: str = "simulator"
+    position_sizing: str = "full_compound"
 
 
 @dataclass(frozen=True)
@@ -45,6 +55,10 @@ class BatchBacktestEngine:
 
     def run(self, frame: pd.DataFrame, request: BatchBacktestRequest) -> BatchBacktestResult:
         self._validate_request(request)
+        if request.engine_impl == "vectorized":
+            return self._run_vectorized(frame, request)
+        if request.position_sizing != "full_compound":
+            raise ValueError("position_sizing other than 'full_compound' requires engine_impl='vectorized'")
         symbols = request.symbols or self._infer_symbols(frame)
         results: dict[str, SingleSymbolBacktestResult] = {}
         summary_rows: list[dict[str, object]] = []
@@ -74,11 +88,67 @@ class BatchBacktestEngine:
             summary_metrics=summarize_batch_summary(summary),
         )
 
+    def _run_vectorized(self, frame: pd.DataFrame, request: BatchBacktestRequest) -> BatchBacktestResult:
+        """Vectorized fast path: one groupby pre-split, trade-level engine.
+
+        Produces the same BatchBacktestResult shape (and, for
+        ``position_sizing='full_compound'``, identical values) as the
+        simulator path.
+        """
+        from quant_research_engine.portfolio.single_symbol_vectorized import (
+            SingleSymbolVectorizedEngine,
+        )
+
+        vengine = SingleSymbolVectorizedEngine(self.market_profile)
+        symbols = request.symbols or self._infer_symbols(frame)
+        groups = dict(tuple(frame.groupby("ts_code", sort=False)))
+        results: dict[str, SingleSymbolBacktestResult] = {}
+        summary_rows: list[dict[str, object]] = []
+        extra_metadata_columns = request.summary_metadata_columns or []
+
+        for symbol in symbols:
+            sub = groups.get(symbol)
+            single_request = SingleSymbolBacktestRequest(
+                symbol=symbol,
+                initial_cash=request.initial_cash_per_symbol,
+                entry_signal=request.entry_signal,
+                exit_signal=request.exit_signal,
+                holding_days=request.holding_days,
+                entry_price_column=request.entry_price_column,
+                mark_price_column=request.mark_price_column,
+            )
+            if sub is None:
+                single_result = empty_single_symbol_result(single_request)
+            else:
+                single_result = vengine.run_working(
+                    sub, single_request, position_sizing=request.position_sizing
+                )
+            results[symbol] = single_result
+            # _summary_row only needs the per-symbol rows for metadata; the
+            # group subframe yields the same first row as a full-frame filter.
+            summary_rows.append(
+                self._summary_row(symbol, single_result, sub if sub is not None else frame, extra_metadata_columns)
+            )
+
+        summary = pd.DataFrame(summary_rows)
+        return BatchBacktestResult(
+            symbols=symbols,
+            results=results,
+            summary=summary,
+            summary_metrics=summarize_batch_summary(summary),
+        )
+
     def _validate_request(self, request: BatchBacktestRequest) -> None:
         if request.initial_cash_per_symbol <= 0:
             raise ValueError("initial_cash_per_symbol must be positive")
         if request.holding_days <= 0:
             raise ValueError("holding_days must be positive")
+        if request.engine_impl not in ENGINE_IMPLS:
+            raise ValueError(f"Unsupported engine_impl: {request.engine_impl!r} (expected one of {ENGINE_IMPLS})")
+        if request.position_sizing not in POSITION_SIZING_MODES:
+            raise ValueError(
+                f"Unsupported position_sizing: {request.position_sizing!r} (expected one of {POSITION_SIZING_MODES})"
+            )
 
     def _infer_symbols(self, frame: pd.DataFrame) -> list[str]:
         if "ts_code" not in frame.columns:

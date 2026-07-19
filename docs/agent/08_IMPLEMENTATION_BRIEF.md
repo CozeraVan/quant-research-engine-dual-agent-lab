@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-BATCH-PERF-SLIM-001
+QRE-VECTORIZED-ENGINE-001 (M9.1b)
 
 ## Created By
 
-KIMI_CODE (single agent; first slice of CR-0002, pending user approval)
+KIMI_CODE (single agent; direction user-approved 2026-07-19, granularity aligned in decision log entry of same date)
 
 ## Intended Implementer
 
@@ -14,40 +14,42 @@ KIMI_CODE
 
 ## Goal
 
-Make deeper-window catalog batch backtests practical: cut wall-clock time and output-file volume of `scripts/batch_backtest_runner.py`, then run the quick-mode (1-year) batch for the 106 ready catalog strategies. This is the enabling slice of Milestone 9 (Strategy Research Validation, `docs/agent/change_requests/CR-0002-strategy-research-validation.md`).
+Replace the per-bar `iterrows` simulation in the batch backtest path with a vectorized trade-level implementation that produces **metric-identical results** to the existing bar simulator, cutting the backtest stage from ~1,400s to ≤30s per strategy (quick-mode full-market). This is the speed foundation for full-history runs (M9.4) and continuous refresh (M10.3).
 
 ## Background Evidence
 
-- Smoke batch (2-month window, 106 strategies, serial single-process) took ~11.5h → ~6.5 min/strategy and produced ~3M output files (~5 files × ~5,292 symbols × 106 strategies).
-- Naive extrapolation: quick mode (1 year, 6× data) ≈ 35h+ serial; full mode (2015-2025) is impractical without this slice.
-- Current runner (`scripts/batch_backtest_runner.py`, 404 lines) is serial, lives outside `src/` (not unit-testable via pytest), and every strategy reloads the same market bars from Postgres and rewrites per-symbol output trees.
+- Profiling (batch `f365c8a07b33`, recorded in prior `09_CODING_HANDOFF.md`): backtest stage = 98.6% of runtime; eval stage 21s vs backtest 1,719s per strategy.
+- The cost is implementation-shaped, not semantics-shaped: per-symbol full-frame filtering (`single_symbol.py:38`, ~5,292 scans of a ~1.3M-row frame per strategy) plus a Python `iterrows` loop with per-bar dict allocations (`single_symbol.py:63`).
+- Batch-path semantics permit exact trade-level computation: single position at a time, all-in entries, no intra-hold decisions; only signal days, execution days, exit days, and rejection-retry days can change state.
 
 ## Scope
 
-1. **Profiling baseline**: add per-stage timing (preflight / eval / backtest / output-write) to the runner; measure 2-3 representative strategies in quick mode; record the split in `09_CODING_HANDOFF.md`. All later claims about bottlenecks must cite these numbers.
-2. **Move runner core into src**: new `src/quant_research_engine/orchestration/batch_runner.py` holding `BatchRunResult`/`BatchSummary`/discovery/resume/single-strategy logic; `scripts/batch_backtest_runner.py` becomes a thin argparse wrapper. Enables real unit tests (pytest `pythonpath=["src"]`).
-3. **Parallel execution**: `--jobs N` via `concurrent.futures.ProcessPoolExecutor`; each worker process runs `run_research_run` independently (own SQLAlchemy engines); deterministic per-strategy output dirs unchanged; progress lines printed as futures complete; `--resume` semantics preserved.
-4. **Compact output mode**: `--compact` flag threaded runner → `ResearchRunRequest` → batch backtest IO: per-symbol metrics aggregated into one strategy-level `symbol_metrics.csv` (CSV, no new dependencies); keep `summary.json`, `batch_summary.json`, and `report_manifest.json`; skip per-symbol output subdirectories in compact mode. Register the new artifact role so `qre report-files` / `qre report-audit` keep working. Verify metric equality between compact and standard modes on a small window.
-5. **Data-load reuse (conditional)**: only if profiling shows DB load is a top cost — preload shared market bars once per worker and reuse across strategies (e.g. store-level cache keyed by table/window). Factor loads stay per-strategy.
-6. **Quick-mode batch run**: execute the 106 ready strategies, quick mode (2024-01-01 → 2024-12-31), with `--jobs N --compact --skip-preflight --resume`; record batch id, wall time, per-strategy mean duration, and output size in `09_CODING_HANDOFF.md`.
-7. **Tests**: unit tests for discovery, resume, jobs scheduling, compact aggregation, manifest role registration; full suite stays green.
-8. **Docs**: README batch section + `docs/agent/` updates per R-AGENT-002.
+1. **New module** `src/quant_research_engine/portfolio/single_symbol_vectorized.py` implementing the same `SingleSymbolBacktestRequest`/`Result` contract:
+   - Frame pre-split by `ts_code` in one pass (no repeated full-frame scans) — shared across symbols at the batch-engine level.
+   - Signal evaluation per symbol subframe (identical semantics to today; `shift`/`rolling` must never leak across symbols — no full-frame signal evaluation).
+   - Event-level simulation on numpy arrays: candidate event bars are signal days, pending-execution days, holding-expiry days, exit-signal days, and rejection-retry days; all other bars are provably no-ops. Per-bar work uses array indexing, not `iterrows`/dict building.
+   - Identical execution rules: T+1 next-open execution, slippage, lot rounding, suspension/limit-up/limit-down validation via `market_profile.validate_order`, cost via `calculate_cost`, failed-order records, sell-rejection retry next bar.
+   - Vectorized equity-curve reconstruction between events (piecewise-constant quantity × close + cash), yielding the same daily equity curve as the simulator.
+   - `position_sizing` option: `full_compound` (default, current all-in behavior) and `fixed_cash` (fixed notional per trade) — per user request for simple/compound sizing models.
+2. **Wiring**: `BatchBacktestRequest.engine_impl: Literal["simulator", "vectorized"]` (default `"simulator"` during rollout) threaded through `batch.py` → per-symbol engine selection; `ResearchRunRequest` and batch runner gain the same flag (`--engine-impl`). Default flips to `"vectorized"` only after the equality evidence in step 4 is recorded.
+3. **Unit equality tests**: side-by-side comparison of both engines on synthetic frames — orders/trades/equity_curve/failed_orders/summary must match exactly. Cases: plain entry+holding expiry; exit-signal path; limit-up buy rejection; limit-down sell rejection with retry; suspended symbol; signal-every-day stress; empty frame; last-bar signal (no t+1); fixed_cash sizing; zero-trade symbols.
+4. **Small-sample real-DB verification (R-QRE-009)**: 3-10 representative catalog strategies × ~50 symbols × 1-year window — per-symbol metric equality plus wall-time measurement, recorded in `09_CODING_HANDOFF.md`. Only after this passes: catalog-scale equality spot-check (subset of symbols across all 106 strategies).
+5. **Benchmark**: same tf01a quick-mode measurement as the baseline (1,742.5s total / 1,718.9s backtest stage); target backtest stage ≤ 30s.
+6. **Docs**: README/QUICKSTART note on `--engine-impl` and `position_sizing`; module docstrings; `docs/agent/` updates.
 
 ## Non-Goals
 
-- No engine trading-rule, cost-model, or signal-semantics changes.
-- No statistical validation layer (walk-forward, multiple-testing) — that is M9.2.
-- No new indicator computation inside QRE (R-QRE-002); the 5 blocked strategies stay blocked until upstream delivers factors.
-- No parquet/new dependencies; CSV only.
-- No GUI work.
+- Shared-cash engine untouched (portfolio-level capital interleaving genuinely needs time-ordered simulation).
+- No result/behavior changes in the existing simulator or in default outputs (R-CORE-001); default flips only on recorded equality evidence.
+- No new dependencies (numpy comes with pandas).
+- No intraday data, no short selling, no ML.
 
 ## Expected Tests
 
 ```bash
-uv run pytest -q                                          # full suite green (947 + new)
-uv run pytest tests/test_batch_runner.py -q               # new unit tests
-uv run python scripts/batch_backtest_runner.py --dry-run  # discovery sanity
-# compact-vs-standard metric equality on 3 symbols / 2-month window
+uv run pytest tests/test_single_symbol_vectorized.py -q   # new equality suite
+uv run pytest -q                                           # full suite green (967+)
+uv run pytest tests/test_batch_runner.py tests/test_research_run.py -q
 ```
 
 ## Validation Commands
@@ -56,13 +58,12 @@ uv run python scripts/batch_backtest_runner.py --dry-run  # discovery sanity
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
-uv run python scripts/batch_backtest_runner.py --mode quick --compact --jobs 4 --skip-preflight --resume
+# R-QRE-009 sequence: synthetic equality → 50-symbol real-DB equality + timing → catalog-scale spot-check
 ```
 
 ## Acceptance Criteria
 
-- Quick-mode batch of the 106 ready strategies completes; batch id, wall time, and per-strategy mean duration recorded.
-- Output files per strategy ≤ ~20 (vs ~26k in smoke mode); aggregate batch output size drops by >80%.
-- Wall time for the quick batch ≤ 6h (vs ~35h serial extrapolation).
-- `qre report-files` / `qre report-audit` discover and validate compact-mode artifacts.
-- Full pytest suite green; no behavior change in standard (non-compact) mode.
+- Vectorized engine passes all equality tests (synthetic + real-DB sample), including rejection/retry and sizing modes.
+- tf01a quick-mode backtest stage ≤ 30s (from 1,718.9s) with identical outputs.
+- `--engine-impl simulator` preserves current behavior bit-for-bit; default flip documented with evidence.
+- Full pytest suite green; no API breakage in `SingleSymbolBacktestRequest`/`Result` consumers.
