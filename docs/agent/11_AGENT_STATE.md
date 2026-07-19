@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-PARAM-OVERRIDE-001 / M10.2a (implementation DONE, self-review PASS — awaiting user-approved git finalization)
+QRE-STOPS-BATCH-ENGINE-001 / M10.2b (implementation DONE, self-review PASS — awaiting user-approved git finalization)
 
 ## Standing Instructions (user)
 
@@ -22,7 +22,14 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 
 ## Last Completed Step
 
-**QRE-PARAM-OVERRIDE-001 / M10.2a (DONE 2026-07-19, awaiting commit):**
+**QRE-STOPS-BATCH-ENGINE-001 / M10.2b (DONE 2026-07-19, awaiting commit):**
+
+1. stop_loss_pct/take_profit_pct honored in both engines: close-based evaluation vs fill price, next-open execution, precedence pending retry > expiry > stop_loss > take_profit > exit_signal; dense candidates in vectorized engine when enabled.
+2. Opt-in wiring: `apply_stops` + request overrides (None = spec values); shared mode passthrough incl. trailing_stop_pct; runner `--apply-stops/--stop-loss-pct/--take-profit-pct`.
+3. Verification: 50 new tests (40 randomized-with-stops equality seeds); real-DB dual-engine identity (tf01a, mr04a); A/B effect + real stop_loss exit observed; default runs unchanged.
+4. 1109 tests green. Trailing stop remains follow-up (shared engine already has it).
+
+**QRE-PARAM-OVERRIDE-001 / M10.2a (DONE, finalized 2026-07-19, commit `a16d6c5`):**
 
 1. `portfolio/universe.py`: metadata loader (stock_suspend/stock_st as-of, daily-derived list_date) + `apply_universe_filter` with complete drop accounting and honest `unavailable_rules`; `validate_profile_overrides`.
 2. research_run: `profile_overrides` (dataclasses.replace + validation) and `universe_filter` (opt-in) wired for batch/shared modes; `universe_report.json` backtest artifact; manifest records overrides + flag.
@@ -57,7 +64,7 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `d514c4c` Add strategy-fit analysis with significance tiers (M10.1) (15 files)
+- Last commit: `a16d6c5` Add runtime parameter overrides and backtest-time universe filter (M10.2a) (14 files)
 - Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked).
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.

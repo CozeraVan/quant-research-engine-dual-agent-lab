@@ -38,6 +38,8 @@ class BatchBacktestRequest:
     summary_metadata_columns: list[str] | None = None
     engine_impl: str = "simulator"
     position_sizing: str = "full_compound"
+    stop_loss_pct: float | None = None
+    take_profit_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,8 @@ class BatchBacktestEngine:
                     holding_days=request.holding_days,
                     entry_price_column=request.entry_price_column,
                     mark_price_column=request.mark_price_column,
+                    stop_loss_pct=request.stop_loss_pct,
+                    take_profit_pct=request.take_profit_pct,
                 ),
             )
             results[symbol] = single_result
@@ -116,6 +120,8 @@ class BatchBacktestEngine:
                 holding_days=request.holding_days,
                 entry_price_column=request.entry_price_column,
                 mark_price_column=request.mark_price_column,
+                stop_loss_pct=request.stop_loss_pct,
+                take_profit_pct=request.take_profit_pct,
             )
             if sub is None:
                 single_result = empty_single_symbol_result(single_request)
@@ -149,6 +155,10 @@ class BatchBacktestEngine:
             raise ValueError(
                 f"Unsupported position_sizing: {request.position_sizing!r} (expected one of {POSITION_SIZING_MODES})"
             )
+        if request.stop_loss_pct is not None and not 0 < request.stop_loss_pct < 1:
+            raise ValueError("stop_loss_pct must be in (0, 1)")
+        if request.take_profit_pct is not None and request.take_profit_pct <= 0:
+            raise ValueError("take_profit_pct must be positive")
 
     def _infer_symbols(self, frame: pd.DataFrame) -> list[str]:
         if "ts_code" not in frame.columns:

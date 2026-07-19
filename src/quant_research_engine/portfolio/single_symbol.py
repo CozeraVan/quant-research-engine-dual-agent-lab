@@ -18,6 +18,8 @@ class SingleSymbolBacktestRequest:
     exit_signal: str | None = None
     entry_price_column: str = "open"
     mark_price_column: str = "close"
+    stop_loss_pct: float | None = None
+    take_profit_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +160,24 @@ class SingleSymbolBacktestEngine:
                     sell_reason = pending_sell_reason or "exit_signal"
                 elif index == entry_index + request.holding_days:
                     sell_reason = "holding_period"
+                elif (
+                    request.stop_loss_pct is not None
+                    and float(row[request.mark_price_column]) <= float(entry_price) * (1 - request.stop_loss_pct)
+                    and index + 1 < len(working)
+                ):
+                    next_index = index + 1
+                    if pending_sell_index is None or next_index < pending_sell_index:
+                        pending_sell_index = next_index
+                        pending_sell_reason = "stop_loss"
+                elif (
+                    request.take_profit_pct is not None
+                    and float(row[request.mark_price_column]) >= float(entry_price) * (1 + request.take_profit_pct)
+                    and index + 1 < len(working)
+                ):
+                    next_index = index + 1
+                    if pending_sell_index is None or next_index < pending_sell_index:
+                        pending_sell_index = next_index
+                        pending_sell_reason = "take_profit"
                 elif request.exit_signal is not None and bool(row.get("exit_signal", False)) and index + 1 < len(working):
                     next_index = index + 1
                     if pending_sell_index is None or next_index < pending_sell_index:

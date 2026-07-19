@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-PARAM-OVERRIDE-001 (M10.2a)
+QRE-STOPS-BATCH-ENGINE-001 (M10.2b)
 
 ## Reviewer
 
@@ -14,25 +14,24 @@ PASS
 
 ## Findings
 
-- Scope matches `08_IMPLEMENTATION_BRIEF.md`: cost overrides, universe metadata loader, backtest-time universe filter, wiring + manifest recording, runner flags, tests — all implemented. Stops split to M10.2b as briefed (no engine behavior change in this slice).
-- Honest-degradation design verified on real data: `exclude_st`/`exclude_risk_warning` report `unavailable` (no `stock_st` records ≤ 2024-01-01 for the sampled symbols) while `exclude_suspended`/`min_listing_days` work from populated sources — rules are never silently skipped or silently applied.
-- Complete-accounting decision recorded: `dropped_by_rule` includes zero-count rules (every applied rule is visible); one test adjusted to lock this contract.
-- LOCKED requirements intact: R-CORE-001 (default runs bit-identical — filter is explicit opt-in), R-QRE-005 (read-only DB), R-QRE-007 (universe_report.json registered as backtest artifact; manifest additive fields), R-QRE-009 (small-sample check before any larger use), no new dependencies.
-- R-CORE-003: 14 new tests; full suite 1059 green.
+- Semantics locked in `08_IMPLEMENTATION_BRIEF.md` and implemented identically in both engines; precedence, reason strings, last-bar guard, and retry-reason preservation are test-locked.
+- One structural bug caught and fixed during implementation: effective stop levels were first computed inside the batch branch only (NameError for shared mode) — hoisted before the mode branch; shared mode gets stops + trailing passthrough.
+- Equality evidence is layered per R-QRE-009: 40 new randomized seeds with random stop params (dense candidate path exercised), 7 deterministic edge cases, real-DB dual-engine identity on two strategies (tf01a, mr04a), and a definitive A/B (1% stop measurably changes results; a real `stop_loss` exit observed).
+- One verification nuance honestly recorded: tf01a on 3 codes in the smoke window produces zero trades, so the first A/B was inconclusive — re-verified with mr04a and a 1% override stop until a real stop-triggered exit was observed.
+- LOCKED requirements intact: opt-in only (default runs bit-identical, test-locked), no lookahead (close-based evaluation), no new dependencies, full suite green.
 
 ## Behavior Verified
 
-- `uv run pytest -q` → 1059 passed.
-- Small-sample real-DB: overrides measurably change summaries; universe report content correct; manifest records `profile_overrides`/`universe_filter`.
-- Default (no-flag) path unchanged: `load_universe_metadata` never called when `universe_filter=False` (test-locked).
+- `uv run pytest -q` → 1109 passed (1059 baseline + 50 new).
+- Dual-engine `summary.csv` identical with stops enabled (two real strategies).
+- A/B effect confirmed; `stop_loss` exit reason present in real-data trades ledger.
 - `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean (re-run before commit).
 
 ## Residual Risks
 
-- `is_st`/`is_risk_warning` availability depends on `reference.stock_st` coverage vs the run's as-of date; before 2026 it reports `unavailable` (honest, but users should know ST filtering currently only works for runs dated within stock_st coverage).
-- `is_risk_warning` is mapped to the ST board (documented approximation of A-share risk-warning practice).
-- `min_amount` uses window-mean daily amount from the frame (documented semantics; a dedicated liquidity snapshot would differ).
-- M10.2b (stop-loss/take-profit in single-symbol/batch engines) still pending — dual-engine equality work.
+- Dense candidate set when stops are enabled costs speed (full-bar numpy loop during holds); strategies without stops keep the sparse fast path. Measured impact is acceptable at current scale but noted for stop-heavy catalogs.
+- Trailing stop remains unimplemented in the batch path (shared engine has it); listed as follow-up.
+- Stop semantics are close-based (no intraday triggers) — documented; users wanting intrabar (high/low) stops need a different model.
 
 ## Next Step
 

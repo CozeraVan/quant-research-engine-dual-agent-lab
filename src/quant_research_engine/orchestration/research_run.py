@@ -50,6 +50,9 @@ class ResearchRunRequest:
     position_sizing: str = "full_compound"
     profile_overrides: dict[str, float] | None = None
     universe_filter: bool = False
+    apply_stops: bool = False
+    stop_loss_pct: float | None = None
+    take_profit_pct: float | None = None
 
 
 @dataclass
@@ -251,6 +254,15 @@ def _run_backtest(
             encoding="utf-8",
         )
 
+    # Effective stop levels: request overrides win over spec risk fields;
+    # applied only when apply_stops is explicitly enabled.
+    if request.apply_stops:
+        stop_loss = request.stop_loss_pct if request.stop_loss_pct is not None else spec.stop_loss_pct
+        take_profit = request.take_profit_pct if request.take_profit_pct is not None else spec.take_profit_pct
+    else:
+        stop_loss = None
+        take_profit = None
+
     if request.backtest_mode == "batch":
         batch_req = BatchBacktestRequest(
             symbols=request.codes,
@@ -261,6 +273,8 @@ def _run_backtest(
             summary_metadata_columns=request.metadata_columns,
             engine_impl=request.engine_impl,
             position_sizing=request.position_sizing,
+            stop_loss_pct=stop_loss,
+            take_profit_pct=take_profit,
         )
         result = BatchBacktestEngine(market_profile).run(frame, batch_req)
         run_request_payload: dict[str, object] = {
@@ -292,6 +306,9 @@ def _run_backtest(
         holding_days=spec.holding_days,
         max_positions=50,
         metadata_columns=request.metadata_columns,
+        stop_loss_pct=stop_loss,
+        take_profit_pct=take_profit,
+        trailing_stop_pct=spec.trailing_stop_pct if request.apply_stops else None,
     )
     shared_result = SharedCashBacktestEngine(market_profile).run(frame, shared_req)
     run_request_payload = {

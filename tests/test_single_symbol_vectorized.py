@@ -340,6 +340,29 @@ def test_randomized_frames_full_equality(seed):
     assert_results_equal(sim, vec)
 
 
+@pytest.mark.parametrize("seed", range(40, 80))
+def test_randomized_frames_with_stops_full_equality(seed):
+    rng = np.random.default_rng(seed)
+    symbols = ["000001.SZ", "300002.SZ", "688003.SH", "600004.SH"]
+    symbol = symbols[seed % len(symbols)]
+    frame = _random_symbol_frame(rng, symbol)
+    entry_expr = ["close > open", "close < open", "close > close.shift(1)"][seed % 3]
+    exit_expr = [None, "close > open", "close < close.shift(1)"][seed % 3]
+    stop_loss = float(rng.uniform(0.02, 0.20)) if seed % 2 == 0 else None
+    take_profit = float(rng.uniform(0.03, 0.30)) if seed % 3 != 1 else None
+    req = make_request(
+        symbol,
+        initial_cash=float(rng.choice([3_500.0, 50_000.0, 1_000_000.0])),
+        entry_signal=entry_expr,
+        exit_signal=exit_expr,
+        holding_days=int(rng.integers(1, 10)),
+        stop_loss_pct=stop_loss,
+        take_profit_pct=take_profit,
+    )
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+
+
 # ---------------------------------------------------------------------------
 # batch-level equality and routing
 # ---------------------------------------------------------------------------
@@ -426,3 +449,89 @@ def test_batch_invalid_engine_impl_rejected():
     )
     with pytest.raises(ValueError, match="engine_impl"):
         engine.run(frame, req)
+
+
+# ---------------------------------------------------------------------------
+# stop-loss / take-profit (dual-engine equality)
+# ---------------------------------------------------------------------------
+
+
+def test_equal_stop_loss_trigger():
+    # buy at 9.0 (bar 1), close at bar 2 = 8.0 <= 9*0.92=8.28 → stop sell at bar 3 open
+    opens = [10.0, 9.0, 9.2, 8.5, 8.6, 8.7, 8.8]
+    closes = [9.5, 9.3, 8.0, 8.4, 8.5, 8.6, 8.7]
+    frame = make_frame("000001.SZ", opens, closes)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=5, stop_loss_pct=0.08)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert vec.trades.iloc[0]["exit_reason"] == "stop_loss"
+
+
+def test_equal_take_profit_trigger():
+    opens = [10.0, 9.0, 9.2, 11.0, 11.5, 12.0, 12.5]
+    closes = [9.5, 9.3, 10.8, 11.2, 11.4, 11.9, 12.4]
+    frame = make_frame("000001.SZ", opens, closes)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=6, take_profit_pct=0.15)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert vec.trades.iloc[0]["exit_reason"] == "take_profit"
+
+
+def test_equal_stop_loss_on_entry_bar_close():
+    # entry at bar 1 open 9.0; same bar close 8.0 already below stop → sell bar 2
+    opens = [10.0, 9.0, 8.4, 8.5, 8.6]
+    closes = [9.5, 8.0, 8.3, 8.4, 8.5]
+    frame = make_frame("000001.SZ", opens, closes)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=4, stop_loss_pct=0.10)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert vec.trades.iloc[0]["exit_reason"] == "stop_loss"
+
+
+def test_equal_stop_loss_precedence_over_exit_signal():
+    # both stop and exit_signal true at bar 2 close → stop wins the reason
+    opens = [10.0, 9.0, 9.2, 8.5, 8.6, 8.7]
+    closes = [9.5, 9.3, 8.0, 8.4, 8.5, 8.6]
+    frame = make_frame("000001.SZ", opens, closes)
+    req = make_request(
+        "000001.SZ", initial_cash=1_500_000.0,
+        entry_signal="close < open", exit_signal="close < 8.5",
+        holding_days=6, stop_loss_pct=0.08,
+    )
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert vec.trades.iloc[0]["exit_reason"] == "stop_loss"
+
+
+def test_equal_stop_loss_with_limit_down_retry():
+    # stop triggers at bar 2 close → sell at bar 3 (limit_down, rejected) → retry bar 4
+    opens = [10.0, 9.0, 9.2, 8.0, 8.5, 8.6, 8.7]
+    closes = [9.5, 9.3, 8.0, 7.5, 8.4, 8.5, 8.6]
+    limit_down = [False, False, False, True, False, False, False]
+    frame = make_frame("000001.SZ", opens, closes, limit_down=limit_down)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=6, stop_loss_pct=0.08)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert "limit_down_sell_blocked" in set(vec.failed_orders["reason"])
+    assert vec.trades.iloc[0]["exit_reason"] == "stop_loss"
+
+
+def test_equal_holding_expiry_beats_stop_same_bar():
+    # expiry bar arrives before close-based stop evaluation → holding_period reason
+    opens = [10.0, 9.0, 9.2, 8.5, 8.6, 8.7]
+    closes = [9.5, 9.3, 8.9, 8.4, 8.5, 8.6]
+    frame = make_frame("000001.SZ", opens, closes)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=2, stop_loss_pct=0.50)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+    assert vec.trades.iloc[0]["exit_reason"] == "holding_period"
+
+
+def test_batch_stop_validation():
+    frame = _multi_symbol_frame()
+    engine = BatchBacktestEngine(PROFILE)
+    base = dict(symbols=["000001.SZ"], initial_cash_per_symbol=100_000.0, entry_signal="close < open", holding_days=3)
+    with pytest.raises(ValueError, match="stop_loss_pct"):
+        engine.run(frame, BatchBacktestRequest(stop_loss_pct=1.5, **base))
+    with pytest.raises(ValueError, match="take_profit_pct"):
+        engine.run(frame, BatchBacktestRequest(take_profit_pct=-0.1, **base))

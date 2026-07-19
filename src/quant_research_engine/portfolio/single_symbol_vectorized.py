@@ -133,7 +133,12 @@ class SingleSymbolVectorizedEngine:
             return float(arr[i])
 
         # Static candidates: any bar where a signal could schedule something.
-        if exit_signals is not None:
+        # With stops enabled, any bar's close can cross a stop level while
+        # holding — dense candidate set (sparse event-loop only without stops).
+        stops_enabled = request.stop_loss_pct is not None or request.take_profit_pct is not None
+        if stops_enabled:
+            candidate_bars = np.arange(n)
+        elif exit_signals is not None:
             candidate_bars = np.flatnonzero(entry_signals | exit_signals)
         else:
             candidate_bars = np.flatnonzero(entry_signals)
@@ -230,6 +235,26 @@ class SingleSymbolVectorizedEngine:
                     sell_reason = pending_sell_reason or "exit_signal"
                 elif i == entry_index + holding_days:
                     sell_reason = "holding_period"
+                elif (
+                    request.stop_loss_pct is not None
+                    and float(mark_prices[i]) <= float(entry_price) * (1 - request.stop_loss_pct)
+                    and i + 1 < n
+                ):
+                    next_index = i + 1
+                    if pending_sell_index == _NO_INDEX or next_index < pending_sell_index:
+                        pending_sell_index = next_index
+                        pending_sell_reason = "stop_loss"
+                        heapq.heappush(heap, next_index)
+                elif (
+                    request.take_profit_pct is not None
+                    and float(mark_prices[i]) >= float(entry_price) * (1 + request.take_profit_pct)
+                    and i + 1 < n
+                ):
+                    next_index = i + 1
+                    if pending_sell_index == _NO_INDEX or next_index < pending_sell_index:
+                        pending_sell_index = next_index
+                        pending_sell_reason = "take_profit"
+                        heapq.heappush(heap, next_index)
                 elif (
                     exit_signals is not None
                     and bool(exit_signals[i])

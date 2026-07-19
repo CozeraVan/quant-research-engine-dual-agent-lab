@@ -6,13 +6,14 @@ AWAITING_GIT_APPROVAL
 
 ## Current Active Work
 
-QRE-PARAM-OVERRIDE-001 (M10.2a): **IMPLEMENTATION DONE, REVIEW PASS.** Runtime cost overrides + backtest-time universe filtering (spec `universe:` fields honored pre-engine, honest unavailable reporting) + universe_report.json artifact + manifest recording. Small-sample verified: overrides measurably change results; default runs unchanged. Awaiting user-approved git finalization.
+QRE-STOPS-BATCH-ENGINE-001 (M10.2b): **IMPLEMENTATION DONE, REVIEW PASS.** stop_loss_pct/take_profit_pct honored in both engines with identical results (50 new tests incl. 40 randomized-with-stops equality seeds); real-DB dual-engine identity + A/B effect + real stop_loss exit observed; opt-in only, default runs unchanged. Awaiting user-approved git finalization.
 
 ## Progress Table
 
 | ID | Task | Status | Owner | Evidence | Next Step |
 |---|---|---|---|---|---|
-| QRE-PARAM-OVERRIDE-001 | M10.2a runtime parameter overrides + backtest-time universe filter | DONE (awaiting commit) | KIMI_CODE | `portfolio/universe.py`; research_run/runner overrides + `--universe-filter`; universe_report.json artifact; 1059 tests green (14 new); small-sample verified; `10_REVIEW_REPORT.md` PASS | User-approved git finalization |
+| QRE-STOPS-BATCH-ENGINE-001 | M10.2b stop-loss/take-profit in batch engines (dual-engine equality) | DONE (awaiting commit) | KIMI_CODE | stop branches in both engines + dense candidates; research_run/runner `--apply-stops` + overrides; 1109 tests green (50 new); real-DB dual identity + A/B effect verified; `10_REVIEW_REPORT.md` PASS | User-approved git finalization |
+| QRE-PARAM-OVERRIDE-001 | M10.2a runtime parameter overrides + backtest-time universe filter | DONE | KIMI_CODE | commit `a16d6c5`; `portfolio/universe.py`; research_run/runner overrides + `--universe-filter`; universe_report.json; 1059 tests green (14 new); small-sample verified | Preserve |
 | QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 strategy-fit clustering & noise filtering (F3 phase 1) | DONE | KIMI_CODE | commit `d514c4c`; `analysis/strategy_fit.py` + script; binomial tiers + meta-test + enrichment + BH-FDR; 1045 tests green (11 new); real batch 106 analyzed/5 skipped; report-audit ok | Preserve |
 | QRE-VECTORIZED-ENGINE-001 | M9.1b vectorized trade-level single-symbol engine | DONE | KIMI_CODE | commit `c86441b`; `single_symbol_vectorized.py`; `engine_impl`+`position_sizing` wired; vectorized analytics collectors; shared research frame; 1034 tests green (67 new); 106/106 catalog parity; benchmark 40.2s (42.8×), artifacts identical; `10_REVIEW_REPORT.md` PASS | Preserve |
 | QRE-OUTPUTS-EXTERNAL-001 | Externalize run outputs to `~/qre-outputs` with repo symlink | DONE | KIMI_CODE | 19GB/3.09M files moved; `outputs` symlink + `QRE_OUTPUT_DIR` runner override; `.gitignore`/`make clean`/README updated; 967 tests green; dry-run + report-files verified through symlink | Preserve |

@@ -94,6 +94,9 @@ class BatchRunConfig:
     metadata_columns: list[str] | None = None
     profile_overrides: dict[str, float] | None = None
     universe_filter: bool = False
+    apply_stops: bool = False
+    stop_loss_pct: float | None = None
+    take_profit_pct: float | None = None
 
 
 def discover_strategies(
@@ -204,6 +207,9 @@ def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResu
             metadata_columns=config.metadata_columns,
             profile_overrides=config.profile_overrides,
             universe_filter=config.universe_filter,
+            apply_stops=config.apply_stops,
+            stop_loss_pct=config.stop_loss_pct,
+            take_profit_pct=config.take_profit_pct,
         )
 
         run_result = run_research_run(req)

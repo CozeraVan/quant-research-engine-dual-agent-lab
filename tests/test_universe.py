@@ -316,3 +316,50 @@ def test_runner_threads_overrides_and_universe_flag(tmp_path, monkeypatch):
     request = captured["request"]
     assert request.universe_filter is True
     assert request.profile_overrides == {"slippage_sell_rate": 0.001}
+
+
+# ---------------------------------------------------------------------------
+# apply_stops threading (M10.2b)
+# ---------------------------------------------------------------------------
+
+
+def _spec_with_stops() -> StrategySpec:
+    return StrategySpec(
+        name="test",
+        signal_expression="close > 0",
+        exit_signal_expression=None,
+        market_fields=["open", "close"],
+        factor_fields=[],
+        forward_horizons=[1],
+        holding_days=5,
+        quantiles=None,
+        stop_loss_pct=0.08,
+        take_profit_pct=0.20,
+    )
+
+
+def test_apply_stops_off_passes_none(tmp_path, monkeypatch):
+    captured = _engine_capture(monkeypatch)
+    frame = pd.DataFrame({"ts_code": ["000001.SZ"], "trade_date": [pd.Timestamp("2024-01-02")], "open": [1.0], "close": [1.0]})
+    req = _backtest_request(tmp_path)  # apply_stops defaults False
+    rr._run_backtest(SimpleNamespace(), _spec_with_stops(), req, frame=frame)
+    assert captured["request"].stop_loss_pct is None
+    assert captured["request"].take_profit_pct is None
+
+
+def test_apply_stops_on_uses_spec_values(tmp_path, monkeypatch):
+    captured = _engine_capture(monkeypatch)
+    frame = pd.DataFrame({"ts_code": ["000001.SZ"], "trade_date": [pd.Timestamp("2024-01-02")], "open": [1.0], "close": [1.0]})
+    req = _backtest_request(tmp_path, apply_stops=True)
+    rr._run_backtest(SimpleNamespace(), _spec_with_stops(), req, frame=frame)
+    assert captured["request"].stop_loss_pct == 0.08
+    assert captured["request"].take_profit_pct == 0.20
+
+
+def test_apply_stops_request_override_wins(tmp_path, monkeypatch):
+    captured = _engine_capture(monkeypatch)
+    frame = pd.DataFrame({"ts_code": ["000001.SZ"], "trade_date": [pd.Timestamp("2024-01-02")], "open": [1.0], "close": [1.0]})
+    req = _backtest_request(tmp_path, apply_stops=True, stop_loss_pct=0.05)
+    rr._run_backtest(SimpleNamespace(), _spec_with_stops(), req, frame=frame)
+    assert captured["request"].stop_loss_pct == 0.05
+    assert captured["request"].take_profit_pct == 0.20  # from spec

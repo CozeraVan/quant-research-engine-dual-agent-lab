@@ -101,6 +101,12 @@ def main() -> int:
     parser.add_argument("--transfer-fee", type=float, help="Override market profile transfer fee rate")
     parser.add_argument("--slippage-buy", type=float, help="Override market profile buy slippage rate")
     parser.add_argument("--slippage-sell", type=float, help="Override market profile sell slippage rate")
+    parser.add_argument("--apply-stops", action="store_true",
+                        help="Honor stop_loss_pct/take_profit_pct from the strategy risk section")
+    parser.add_argument("--stop-loss-pct", type=float,
+                        help="Override spec stop_loss_pct (requires --apply-stops)")
+    parser.add_argument("--take-profit-pct", type=float,
+                        help="Override spec take_profit_pct (requires --apply-stops)")
     parser.add_argument("--skip-preflight", action="store_true",
                         help="Skip preflight stage (useful if DB factors are known good)")
     parser.add_argument("--skip-eval", action="store_true",
@@ -209,6 +215,9 @@ def main() -> int:
         metadata_columns=args.metadata_columns,
         profile_overrides=profile_overrides or None,
         universe_filter=args.universe_filter,
+        apply_stops=args.apply_stops,
+        stop_loss_pct=args.stop_loss_pct,
+        take_profit_pct=args.take_profit_pct,
     )
 
     results = execute_batch(yaml_paths, config, jobs=max(1, args.jobs))
@@ -231,6 +240,9 @@ def main() -> int:
             "position_sizing": args.position_sizing,
             "universe_filter": args.universe_filter,
             "profile_overrides": profile_overrides or None,
+            "apply_stops": args.apply_stops,
+            "stop_loss_pct": args.stop_loss_pct,
+            "take_profit_pct": args.take_profit_pct,
         },
         results=results,
         summary=counts,
