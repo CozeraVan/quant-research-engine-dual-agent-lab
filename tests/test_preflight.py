@@ -1,9 +1,11 @@
 from datetime import date
+from types import SimpleNamespace
 
 import pandas as pd
 
 from quant_research_engine.data.catalog import FactorFieldRequest
 from quant_research_engine.preflight import PreflightRequest, PreflightRunner
+from quant_research_engine.strategies.missing_factor import extract_missing_factors
 
 
 class FakePreflightStore:
@@ -398,3 +400,76 @@ def test_preflight_metadata_as_of_none_when_omitted():
 
     PreflightRunner(FakeStoreWithAsOfCapture()).run(request)
     assert captured_as_of == [None]
+
+
+
+class TrackingFakePreflightStore(FakePreflightStore):
+    def __init__(self):
+        self.loaded_field_requests: list = []
+
+    def load_factor_history(self, ts_codes, field_requests, start, end):
+        self.loaded_field_requests = list(field_requests)
+        return super().load_factor_history(ts_codes, field_requests, start, end)
+
+
+def test_preflight_missing_factor_column_completes_with_handoff():
+    store = TrackingFakePreflightStore()
+    request = PreflightRequest(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[
+            FactorFieldRequest.from_target("rsi_2", "factors.stock_daily_momentum_close.rsi_2"),
+            FactorFieldRequest.from_target("sma_99", "factors.stock_daily_momentum_close.sma_99"),
+        ],
+    )
+    report = PreflightRunner(store).run(request)
+
+    assert report.status == "error"
+    schema_errors = [c for c in report.checks if c.name == "factor_schema:sma_99"]
+    assert schema_errors and schema_errors[0].status == "error"
+    # only schema-valid factors are loaded (no UndefinedColumn crash)
+    assert [f.logical_name for f in store.loaded_field_requests] == ["rsi_2"]
+    # missing-factor handoff works end-to-end (M8.3 contract)
+    spec = SimpleNamespace(name="test_strategy", factor_fields=request.factor_fields)
+    missing = extract_missing_factors(report, spec, request)
+    assert [r.alias for r in missing] == ["sma_99"]
+    assert missing[0].expected_column == "sma_99"
+    assert missing[0].required is True
+
+
+def test_preflight_missing_factor_table_completes_with_handoff():
+    store = TrackingFakePreflightStore()
+    request = PreflightRequest(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[
+            FactorFieldRequest.from_target("atr_10", "factors.stock_daily_volatility_close.atr_10"),
+        ],
+    )
+    report = PreflightRunner(store).run(request)
+
+    assert report.status == "error"
+    assert store.loaded_field_requests == []
+    spec = SimpleNamespace(name="test_strategy", factor_fields=request.factor_fields)
+    missing = extract_missing_factors(report, spec, request)
+    assert [r.alias for r in missing] == ["atr_10"]
+    assert missing[0].expected_table == "factors.stock_daily_volatility_close"
+
+
+def test_preflight_available_factors_path_unchanged():
+    store = TrackingFakePreflightStore()
+    request = PreflightRequest(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[FactorFieldRequest.from_target("rsi_2", "factors.stock_daily_momentum_close.rsi_2")],
+    )
+    report = PreflightRunner(store).run(request)
+
+    assert [f.logical_name for f in store.loaded_field_requests] == ["rsi_2"]
+    assert report.factor_coverages["rsi_2"].non_null_rows == 2

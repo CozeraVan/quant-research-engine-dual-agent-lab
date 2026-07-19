@@ -6,7 +6,7 @@ IMPLEMENTING
 
 ## Current Active Work
 
-QRE-BATCH-FULL-VALIDATION-001 (M9.4): **PILOT DONE.** Missing-factor handoff emitted (7 requests / 5 strategies); small-sample full-history pilot completed (5 strategies × 50 symbols × 2015-2025, all OK, 4.3-9.0s each); feasibility report estimates ~3h for the full-scale 106-strategy batch. Awaiting user decision on full-scale trigger and upstream factor computation. First multi-regime results: tf01a 10y mean +12.3%, cb01b +9.3%, mr04a -1.2%.
+QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001: **DONE (awaiting commit).** Preflight no longer crashes on missing factor columns — loads only schema-valid fields; missing-factor handoff (M8.3 contract) restored end-to-end; verified on real blocked strategies. 1121 tests green (3 new).
 
 ## Progress Table
 
@@ -14,6 +14,7 @@ QRE-BATCH-FULL-VALIDATION-001 (M9.4): **PILOT DONE.** Missing-factor handoff emi
 |---|---|---|---|---|---|
 | QRE-CONTINUOUS-REFRESH-001 | M10.3 continuous strategy refresh (watermark + idempotent rerun + delta report) | DONE | KIMI_CODE | commit `1345471`; `orchestration/refresh.py` + `scripts/refresh_batch.py` + systemd units; 1118 tests green (9 new); small-sample e2e passed | Preserve |
 | QRE-BATCH-FULL-VALIDATION-001 | M9.4 full-history validation + missing-factor handoff | PILOT DONE | KIMI_CODE | `outputs/handoff/missing_factor_requests.json` (7 requests, 5 strategies); pilot 5×50×2015-2025 all OK (4.3-9.0s/strategy); `feasibility.md`: ~3h full-scale estimate | User decision: trigger full-scale batch or wait for upstream factors |
+| QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001 | Preflight missing-factor crash fix (M8.3 contract) | DONE (awaiting commit) | KIMI_CODE | load only schema-valid factors in `PreflightRunner.run()`; 3 new tests; real-DB bo02/mr02b/tf07e emit requests with status=error; 1121 green | User-approved git finalization |
 | QRE-STOPS-BATCH-ENGINE-001 | M10.2b stop-loss/take-profit in batch engines (dual-engine equality) | DONE | KIMI_CODE | commit `24c284d`; stop branches in both engines; opt-in `--apply-stops`; 1109 tests green (50 new); real-DB dual identity + A/B effect verified | Preserve |
 | QRE-PARAM-OVERRIDE-001 | M10.2a runtime parameter overrides + backtest-time universe filter | DONE | KIMI_CODE | commit `a16d6c5`; `portfolio/universe.py`; research_run/runner overrides + `--universe-filter`; universe_report.json; 1059 tests green (14 new); small-sample verified | Preserve |
 | QRE-STRATEGY-FIT-ANALYSIS-001 | M10.1 strategy-fit clustering & noise filtering (F3 phase 1) | DONE | KIMI_CODE | commit `d514c4c`; `analysis/strategy_fit.py` + script; binomial tiers + meta-test + enrichment + BH-FDR; 1045 tests green (11 new); real batch 106 analyzed/5 skipped; report-audit ok | Preserve |

@@ -140,14 +140,22 @@ class PreflightRunner:
         factor_coverages: dict[str, FactorCoverage] = {}
         factors = pd.DataFrame(columns=["ts_code", "trade_date"])
         if request.factor_fields:
+            loadable_fields = []
             for factor in request.factor_fields:
-                checks.extend(self._factor_schema_checks(factor))
-            factors = self.store.load_factor_history(
-                ts_codes=request.ts_codes,
-                field_requests=request.factor_fields,
-                start=request.start,
-                end=request.end,
-            )
+                schema_checks = self._factor_schema_checks(factor)
+                checks.extend(schema_checks)
+                if all(check.status != "error" for check in schema_checks):
+                    loadable_fields.append(factor)
+            # Load only schema-valid factors: requesting a missing column would
+            # raise UndefinedColumn and crash preflight before the report (and
+            # the missing-factor handoff) can complete.
+            if loadable_fields:
+                factors = self.store.load_factor_history(
+                    ts_codes=request.ts_codes,
+                    field_requests=loadable_fields,
+                    start=request.start,
+                    end=request.end,
+                )
             factors = self._normalize_frame(factors)
             for factor in request.factor_fields:
                 non_null_rows = (

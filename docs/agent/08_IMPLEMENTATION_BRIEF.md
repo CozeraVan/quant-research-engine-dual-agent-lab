@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-BATCH-FULL-VALIDATION-001 (M9.4, CR-0002)
+QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001
 
 ## Created By
 
-KIMI_CODE (single agent; user direction "请你继续推进下一步任务" 2026-07-19; standing instruction satisfied — core engine work is complete, so full-history validation starts with SMALL SAMPLES only)
+KIMI_CODE (single agent; user direction "请你继续推进下一步任务" 2026-07-19)
 
 ## Intended Implementer
 
@@ -14,31 +14,28 @@ KIMI_CODE
 
 ## Goal
 
-Prepare full-history (2015-2025) strategy validation: (1) hand the 5 blocked strategies' missing factors to upstream with a consolidated `missing_factor_requests.json`; (2) measure full-history feasibility with a small-sample run (representative strategies × ~50 symbols × 2015-2025) using the vectorized engine, producing both timing evidence for the full-scale decision and the first multi-regime results. **No full-scale execution** — full-market full-history remains a separate user decision.
+Fix a contract violation found during the M9.4 handoff: `qre preflight` **crashes** with a raw SQL `UndefinedColumn` error when a strategy's factor column is absent from the database, instead of completing with an error report and emitting `missing_factor_requests.json` — the documented operational handoff for upstream factor production (M8.3/M8.7).
 
-## Background Evidence
+## Root Cause (verified)
 
-- Core engine work is complete (M9.1b vectorized engine 42.8×, M10.1 fit analysis, M10.2a params, M10.2b stops, M10.3 refresh) — the user's precondition for full-history ("基本内核引擎任务大体完成") is met, with small samples mandated first ("再跑小样本全期回测").
-- 5 blocked strategies and their missing columns are known since May: `bo02`/`tf04` (atr_10), `mr02b` (sma_50), `tf05a` (sma_9/26/52), `tf07e` (sma_7/20/65).
-- Vectorized quick-mode (1y) backtest stage: ~40s/strategy full-market; scaling is near-linear in total bars, so small-sample 10y runs are minutes.
+`preflight.py::PreflightRunner.run()` first runs `_factor_schema_checks(factor)` (which correctly reports `factor_schema:<name>` error checks for missing tables/columns via schema introspection) but then unconditionally calls `store.load_factor_history(field_requests=request.factor_fields)` with ALL requested factors — including the missing column — and the database raises `UndefinedColumn` before the report (and the missing-factor extraction) can complete.
 
 ## Scope
 
-1. **Missing-factor handoff**: run `qre preflight` on the 5 blocked strategy YAMLs (read-only), consolidate into `outputs/handoff/missing_factor_requests.json` via the existing `extract_missing_factors`/`emit_missing_factor_requests` mechanism, with a short README section noting the upstream owner (`indicators_tushare` computes into `factors.*`; QRE does not compute indicators, R-QRE-002).
-2. **Small-sample full-history run**: 5 representative strategies (mr04a_ibs_reversal, cs01a_pure_small_cap, bo06a_atr_anomaly_momentum, tf01a_ma_cross_20_120, cb01b_macd_cross_volume) × 50 symbols (same fixed set as earlier verification) × 2015-01-01→2025-12-31, `--engine-impl vectorized --compact --jobs 4 --skip-preflight --skip-eval`. Record per-strategy wall times and stage durations.
-3. **Feasibility report**: extrapolate full-scale cost (106 strategies × full market × 10y) from the measured numbers; write `outputs/full_history_pilot/feasibility.md` with timing evidence + per-strategy summary metrics (screening evidence, R-QRE-008 caveat).
-4. **Docs**: record results in `09_CODING_HANDOFF.md`; update CR-0002 M9.4 status.
+1. In `PreflightRunner.run()`: after the schema checks, call `load_factor_history` only with **loadable** factor fields (table exists AND column exists). Missing factors keep their `factor_schema:<name>` error check and get zero-coverage factor coverage rows (status error) — no crash, report completes with overall error status, and `extract_missing_factors` works end-to-end again.
+2. Tests (`tests/test_preflight.py` additions): missing-column strategy completes with error report + extractable missing-factor request; mixed loadable+missing factors; all-missing factors; loadable path unchanged.
+3. Docs: record the fix in `09_CODING_HANDOFF.md` and mark the M9.4 noted follow-up resolved.
 
 ## Non-Goals
 
-- No full-market full-history batch (user decision after seeing feasibility numbers).
-- No indicator computation inside QRE; no upstream (`indicators_tushare`/`quant_ts`) modifications.
-- No new dependencies.
+- No changes to `load_factor_history` itself (callers must pass existing columns; the assembler path intentionally errors on truly missing factors during backtests, which the batch runner already captures as strategy errors).
+- No new missing-factor semantics, no upstream changes, no new dependencies.
 
 ## Expected Tests
 
 ```bash
-uv run pytest -q   # no new runtime code expected; suite stays green
+uv run pytest tests/test_preflight.py -q
+uv run pytest -q
 ```
 
 ## Validation Commands
@@ -47,11 +44,12 @@ uv run pytest -q   # no new runtime code expected; suite stays green
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
-# pilot run: 5 strategies × 50 codes × 2015-2025 (this slice's only execution)
+# Real-DB: qre preflight on bo02_keltner_breakout (missing atr_10) completes
+# with error report and emits missing_factor_requests.json
 ```
 
 ## Acceptance Criteria
 
-- `outputs/handoff/missing_factor_requests.json` consolidates all 5 blocked strategies' missing columns and is consistent with `qre preflight` output.
-- Pilot completes; per-strategy timings recorded; feasibility report includes a full-scale cost estimate with clear assumptions and the R-QRE-008 caveat.
-- No full-scale run performed; pytest suite green.
+- Preflight on a strategy with missing factor columns completes (does not raise), reports `factor_schema:*` error checks, and `qre preflight --output-dir` emits `missing_factor_requests.json`.
+- All 5 blocked strategies produce their requests through the standard `qre preflight` path (verified against the M9.4 consolidated file).
+- Full pytest suite green; existing preflight behavior for available factors unchanged.

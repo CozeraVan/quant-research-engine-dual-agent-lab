@@ -2,6 +2,37 @@
 
 ## Task ID
 
+QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (implementation + real-DB verification; awaiting self-review and user-approved commit)
+
+## Implementation Summary
+
+1. **Fix** (`preflight.py`): `PreflightRunner.run()` now loads only schema-valid factor fields via `load_factor_history` (table exists AND column exists, per `_factor_schema_checks`). Previously it passed ALL requested factors and crashed with raw `UndefinedColumn` before the report — and the M8.3 missing-factor handoff — could complete.
+2. **Contract restored**: strategies with missing factor columns now complete with `status=error`, `factor_schema:*` error checks, and a working `extract_missing_factors` → `missing_factor_requests.json` path.
+3. **Tests** (3 new in `test_preflight.py`): missing-column completes + request extracted + only loadable fields loaded; missing-table completes with zero loads; available-factor path unchanged.
+4. **Real-DB verification**: `qre preflight` on bo02/mr02b/tf07e now emits `missing_factor_requests.json` with `status=error` (previously crashed). The M9.4 consolidated handoff (`outputs/handoff/missing_factor_requests.json`) is now reproducible through the standard CLI path.
+
+## Validation Output
+
+```bash
+uv run pytest tests/test_preflight.py -q → 10 passed
+uv run pytest -q → 1121 passed, 4 warnings (1118 baseline + 3 new)
+qre preflight bo02_keltner_breakout ... → status=error, missing_factor_requests.json emitted
+qre preflight mr02b_stochastic_cross ... → status=error, missing_factor_requests.json emitted
+qre preflight tf07e_ravi_trend_strength ... → status=error, missing_factor_requests.json emitted
+```
+
+# Coding Handoff (archive: M9.4 pilot)
+
+## Task ID
+
 QRE-BATCH-FULL-VALIDATION-001 (M9.4, CR-0002) — pilot slice
 
 ## Written By

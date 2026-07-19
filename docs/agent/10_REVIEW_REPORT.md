@@ -2,6 +2,40 @@
 
 ## Task ID
 
+QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- Root cause matches the brief: unconditional `load_factor_history` with schema-invalid columns crashed preflight; the fix filters to loadable fields at the single call site, preserving all existing checks and coverage rows.
+- Contract restoration verified end-to-end on real data: blocked strategies now emit `missing_factor_requests.json` through the standard `qre preflight` path instead of crashing (M8.3/M8.7).
+- Behavior for available factors unchanged (test-locked); the assembler/backtest path intentionally still errors on truly missing factors (batch runner captures those as strategy errors — expected).
+- No new dependencies; 1121 tests green (3 new).
+
+## Behavior Verified
+
+- `uv run pytest -q` → 1121 passed.
+- Real-DB: bo02/mr02b/tf07e preflight → status=error + requests emitted.
+
+## Residual Risks
+
+- None material; the fix narrows a query to schema-valid columns only.
+
+## Next Step
+
+Phase → `AWAITING_GIT_APPROVAL`. Proposed commit message presented to the user; commit only after explicit approval.
+
+# Review Report (archive: M9.4 pilot)
+
+## Task ID
+
 QRE-BATCH-FULL-VALIDATION-001 (M9.4) — pilot slice
 
 ## Reviewer
