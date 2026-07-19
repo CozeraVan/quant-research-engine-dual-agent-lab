@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001
+QRE-MISSING-FACTOR-QUEUE-001
 
 ## Created By
 
-KIMI_CODE (single agent; user direction "请你继续推进下一步任务" 2026-07-19)
+KIMI_CODE (single agent; user instructions 2026-07-19: queue missing-factor requests for upstream linkage; shelve-and-continue for blocked strategies)
 
 ## Intended Implementer
 
@@ -14,27 +14,38 @@ KIMI_CODE
 
 ## Goal
 
-Fix a contract violation found during the M9.4 handoff: `qre preflight` **crashes** with a raw SQL `UndefinedColumn` error when a strategy's factor column is absent from the database, instead of completing with an error report and emitting `missing_factor_requests.json` — the documented operational handoff for upstream factor production (M8.3/M8.7).
+Operationalize the missing-factor lifecycle: (1) a durable, consolidated **request queue** for indicators/periods absent from the factor DB — the standard handoff that the `indicators_tushare` project will consume later (compute + ingest, or invoke its scripts); (2) **shelve semantics** for blocked strategies in batch runs — marked `missing_factors` (not `error`), the batch continues with the next strategy, and their requests are automatically consolidated into the queue after the batch.
 
-## Root Cause (verified)
+## User Instructions (2026-07-19)
 
-`preflight.py::PreflightRunner.run()` first runs `_factor_schema_checks(factor)` (which correctly reports `factor_schema:<name>` error checks for missing tables/columns via schema introspection) but then unconditionally calls `store.load_factor_history(field_requests=request.factor_fields)` with ALL requested factors — including the missing column — and the database raises `UndefinedColumn` before the report (and the missing-factor extraction) can complete.
+1. Strategies needing indicators/periods absent from the factor DB: store the requests locally (DB mirror is a later option pending the user's target-DB confirmation — write access needs it per R-QRE-005).
+2. During the current testing phase, shelve such strategies and continue with the next strategy's backtest.
+3. Sync work state to the md docs (standard workflow).
 
 ## Scope
 
-1. In `PreflightRunner.run()`: after the schema checks, call `load_factor_history` only with **loadable** factor fields (table exists AND column exists). Missing factors keep their `factor_schema:<name>` error check and get zero-coverage factor coverage rows (status error) — no crash, report completes with overall error status, and `extract_missing_factors` works end-to-end again.
-2. Tests (`tests/test_preflight.py` additions): missing-column strategy completes with error report + extractable missing-factor request; mixed loadable+missing factors; all-missing factors; loadable path unchanged.
-3. Docs: record the fix in `09_CODING_HANDOFF.md` and mark the M9.4 noted follow-up resolved.
+1. **Queue store** (`strategies/factor_request_queue.py`): consolidated JSON queue at `outputs/handoff/missing_factor_requests.json`.
+   - `load_queue()` / `save_queue()` / `upsert_requests()` — dedup by (strategy_id, alias); keeps `first_seen`, updates `last_seen`, merges metadata.
+   - Each entry carries `status: pending|fulfilled`; `recheck_fulfillment(store)` marks entries whose expected column now exists (read-only schema check) with `fulfilled_at` — so upstream progress is visible and shelved strategies can be re-enabled.
+2. **Batch runner shelve semantics** (`orchestration/batch_runner.py`):
+   - New result status `missing_factors` (shelved), distinct from generic `error`: detected when the strategy's exception is a DB missing-column/missing-table failure, or when a pre-batch schema check finds missing factor columns (reuses the read-only schema check from the M9.4 handoff).
+   - After the batch, missing-factor strategies' requests are automatically upserted into the queue (strategy_id, alias, expected_table, expected_column, date_range from the batch window, reason).
+   - `batch_summary.json` summary counts gain `missing_factors`; exit code treats shelved as non-failure (batch succeeds with shelved strategies; generic errors still fail).
+3. **CLI** `scripts/factor_request_queue.py`: `list` (pending/fulfilled table), `recheck` (schema re-check against DB, update statuses), `show --strategy <id>`.
+4. **Upstream contract doc** (`docs/handoff.md`): the queue file format, the pending→fulfilled lifecycle, how `indicators_tushare` should consume it (read queue → compute indicators → write `factors.*` → QRE `recheck` marks fulfilled → shelved strategies re-runnable via `--strategies`/`--resume`), and the future direct-invocation option.
+5. **Tests**: queue dedup/upsert/recheck with fake stores; runner classification (UndefinedColumn → missing_factors vs generic exception → error); auto-queue after batch; CLI list/recheck; full suite green.
 
 ## Non-Goals
 
-- No changes to `load_factor_history` itself (callers must pass existing columns; the assembler path intentionally errors on truly missing factors during backtests, which the batch runner already captures as strategy errors).
-- No new missing-factor semantics, no upstream changes, no new dependencies.
+- No DB-table queue mirror in v1 (needs the user's target-DB decision; file is the durable store).
+- No direct invocation of `indicators_tushare` scripts (future integration, interface TBD).
+- No indicator computation inside QRE (R-QRE-002).
+- No changes to upstream projects.
 
 ## Expected Tests
 
 ```bash
-uv run pytest tests/test_preflight.py -q
+uv run pytest tests/test_factor_request_queue.py -q
 uv run pytest -q
 ```
 
@@ -44,12 +55,12 @@ uv run pytest -q
 uv run pytest -q
 scripts/check-progress-docs.sh
 git diff --check
-# Real-DB: qre preflight on bo02_keltner_breakout (missing atr_10) completes
-# with error report and emits missing_factor_requests.json
+# Real-DB small-sample: batch including one blocked strategy → status
+# missing_factors, batch continues, queue updated; factor_request_queue.py list/recheck
 ```
 
 ## Acceptance Criteria
 
-- Preflight on a strategy with missing factor columns completes (does not raise), reports `factor_schema:*` error checks, and `qre preflight --output-dir` emits `missing_factor_requests.json`.
-- All 5 blocked strategies produce their requests through the standard `qre preflight` path (verified against the M9.4 consolidated file).
-- Full pytest suite green; existing preflight behavior for available factors unchanged.
+- A batch containing a blocked strategy finishes with that strategy marked `missing_factors` (shelved), the rest `ok`, and the queue file updated automatically with its requests (dedup-safe on re-runs).
+- `factor_request_queue.py recheck` marks requests fulfilled when columns appear (verified with a fake and, if available, a real temporarily-present column — otherwise documented).
+- `docs/handoff.md` documents the upstream consumption contract; full pytest suite green.

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001
+QRE-MISSING-FACTOR-QUEUE-001
 
 ## Written By
 
@@ -12,99 +12,37 @@ KIMI_CODE (single agent)
 
 DONE (implementation + real-DB verification; awaiting self-review and user-approved commit)
 
-## Implementation Summary
-
-1. **Fix** (`preflight.py`): `PreflightRunner.run()` now loads only schema-valid factor fields via `load_factor_history` (table exists AND column exists, per `_factor_schema_checks`). Previously it passed ALL requested factors and crashed with raw `UndefinedColumn` before the report — and the M8.3 missing-factor handoff — could complete.
-2. **Contract restored**: strategies with missing factor columns now complete with `status=error`, `factor_schema:*` error checks, and a working `extract_missing_factors` → `missing_factor_requests.json` path.
-3. **Tests** (3 new in `test_preflight.py`): missing-column completes + request extracted + only loadable fields loaded; missing-table completes with zero loads; available-factor path unchanged.
-4. **Real-DB verification**: `qre preflight` on bo02/mr02b/tf07e now emits `missing_factor_requests.json` with `status=error` (previously crashed). The M9.4 consolidated handoff (`outputs/handoff/missing_factor_requests.json`) is now reproducible through the standard CLI path.
-
-## Validation Output
-
-```bash
-uv run pytest tests/test_preflight.py -q → 10 passed
-uv run pytest -q → 1121 passed, 4 warnings (1118 baseline + 3 new)
-qre preflight bo02_keltner_breakout ... → status=error, missing_factor_requests.json emitted
-qre preflight mr02b_stochastic_cross ... → status=error, missing_factor_requests.json emitted
-qre preflight tf07e_ravi_trend_strength ... → status=error, missing_factor_requests.json emitted
-```
-
-# Coding Handoff (archive: M9.4 pilot)
-
-## Task ID
-
-QRE-BATCH-FULL-VALIDATION-001 (M9.4, CR-0002) — pilot slice
-
-## Written By
-
-KIMI_CODE (single agent)
-
-## Status
-
-DONE (handoff + small-sample pilot; full-scale execution is a separate user decision)
-
-## Implementation Summary
-
-1. **Missing-factor handoff**: consolidated `outputs/handoff/missing_factor_requests.json` — 7 requests covering all 5 blocked strategies (atr_10 ×2 [bo02, tf04], sma_50 [mr02b], sma_9/26/52 [tf05a], sma_7 [tf07e]), built from spec factor_fields vs read-only DB schema check (preflight crashes on UndefinedColumn for these — noted as a robustness follow-up). sma_20/sma_65 verified present in DB.
-2. **Small-sample full-history pilot** (standing instruction honored): 5 representative strategies × 50 fixed symbols × 2015-2025, vectorized + compact + jobs 4 — all OK, 4.3-9.0s per strategy.
-3. **Feasibility report** `outputs/full_history_pilot/feasibility.md`: full-market full-history estimate ≈ 360-400s/strategy → ~3h for 106 strategies with 4 workers (vs weeks pre-vectorization). First multi-regime results recorded (tf01a 10y mean +12.3% vs weak 2024 profile — regime effect documented).
-4. No new runtime code; pytest suite unchanged (1118 green).
-
-## Validation Output
-
-```bash
-pilot batch 806632904159: 5/5 OK, stage durations 4.3-9.0s recorded in manifests
-uv run pytest -q → 1118 passed
-```
-
-# Coding Handoff (archive: M10.3)
-
-## Task ID
-
-QRE-CONTINUOUS-REFRESH-001 (M10.3, CR-0003 F2)
-
-## Written By
-
-KIMI_CODE (single agent)
-
-## Status
-
-DONE (implementation + small-sample e2e; awaiting self-review and user-approved commit)
-
 ## Current Owner
 
 KIMI_CODE
 
 ## Implementation Summary
 
-1. **`orchestration/refresh.py`**: `data_watermark()` (read-only MAX(trade_date)), `RefreshState` JSON roundtrip (`outputs/refresh/state.json`), `needs_refresh()`, `compute_window()` (rolling calendar years, Feb-29 safe), `compute_delta()` (per-strategy transitions: new/removed/status-change/unchanged + metric deltas from batch_summary + summary_metrics), `write_delta_report()` (JSON + MD + `strategy_refresh_delta_manifest`).
-2. **`scripts/refresh_batch.py`**: `--check-only` / `--force` / `--window-years` (default 2) / `--jobs` / `--codes` / `--with-eval` / `--apply-stops` / `--universe-filter` / category+strategy limits. Idempotent re-run via the vectorized batch-runner core; state saved after each run; delta dirs named `<timestamp>_<batch_id>` (collision-free for rapid successive runs).
-3. **Scheduler**: `deploy/qre-refresh.service` + `deploy/qre-refresh.timer` (systemd user units, daily 18:30) with README install instructions — documented, NOT installed by the agent.
-4. **Manifest**: `strategy_refresh_delta_manifest` registered; `qre report-audit` passes on real delta output.
-5. **Tests** `tests/test_refresh.py` (9): state roundtrip, needs_refresh edges, window computation (incl. Feb-29), delta transitions (new/removed/status-change/metric deltas), first-run delta, manifest validation via ReportManifest, script-level e2e (first run executes → same watermark no-ops → bumped watermark refreshes; check-only writes nothing; force overrides).
+Per user instructions 2026-07-19 (queue missing-factor requests for upstream linkage; shelve-and-continue for blocked strategies):
+
+1. **Queue store** (`strategies/factor_request_queue.py`): consolidated JSON queue at `outputs/handoff/missing_factor_requests.json` with dedup by (strategy_id, alias), `first_seen`/`last_seen` timestamps, `pending|fulfilled` statuses, and `recheck_fulfillment` (read-only schema check) so upstream progress is visible and shelved strategies can be re-enabled. `make_schema_column_lookup` caches per-table schema reads. `find_missing_factor_columns` / `build_requests_for_strategy` formalize the M9.4 inline logic.
+2. **Shelve semantics** (`orchestration/batch_runner.py`): pre-execution read-only schema check per strategy (lazy per-process store, fork-safe); strategies with missing factor columns get status `missing_factors` (shelved, icon "M") WITHOUT executing — the batch continues. `missing_requests` attached to results and batch_summary entries; counts include `missing_factors`; exit code treats shelved as non-failure.
+3. **Auto-queue** (`scripts/batch_backtest_runner.py`): after every batch, shelved strategies' requests are upserted into the queue (dedup-safe) with a printed summary.
+4. **CLI** (`scripts/factor_request_queue.py`): `list [--pending|--fulfilled]`, `show --strategy`, `recheck` (updates statuses from DB schema).
+5. **Upstream contract** (`docs/handoff.md`): queue file format, pending→fulfilled lifecycle, consumption contract for `indicators_tushare` (compute → ingest → recheck → re-run shelved), DB-mirror and direct-invocation as later options.
+6. **Tests** (8 new): dedup/timestamps, save/load ordering, recheck + idempotence, schema lookup caching, spec-driven detection + request building, runner shelves without executing, runner executes when factors present, counts; one existing counts test updated for the new key.
 
 ## Files Changed
 
-- `src/quant_research_engine/orchestration/refresh.py` (new)
-- `src/quant_research_engine/portfolio/report_manifest.py` (kind + roles)
-- `scripts/refresh_batch.py` (new)
-- `deploy/qre-refresh.service`, `deploy/qre-refresh.timer` (new)
-- `tests/test_refresh.py` (new, 9 tests)
-- `README.md` (7b-2 section + systemd instructions)
+- `src/quant_research_engine/strategies/factor_request_queue.py` (new)
+- `src/quant_research_engine/orchestration/batch_runner.py` (shelve semantics)
+- `scripts/batch_backtest_runner.py` (auto-queue + exit code), `scripts/refresh_batch.py` (exit code)
+- `scripts/factor_request_queue.py` (new), `docs/handoff.md` (new)
+- `tests/test_factor_request_queue.py` (new, 8), `tests/test_batch_runner.py` (counts expectation)
 
 ## Validation Output
 
 ```bash
-uv run pytest -q → 1118 passed, 4 warnings (1109 baseline + 9 new)
+uv run pytest -q → 1129 passed, 4 warnings (1121 baseline + 8 new)
 
-# Small-sample e2e (R-QRE-009, 106 strategies × 3 symbols):
-#   first run: 106 ok / 111 total (5 expected missing-factor), batch + delta + state written
-#   --check-only: watermark 2026-07-17 == state → refresh needed: False
-#   second run: "No new data since last refresh — nothing to do." (no-op ✓)
-#   qre report-audit on delta manifest → missing_files=0, validation_issues=0, status=ok
+# Real-DB small batch (mr04a + tf07e × 3 codes):
+#   [1/2] + mr04a ok; [2/2] M tf07e missing_factors (shelved, not executed)
+#   auto-queue: +1 request → outputs/handoff/missing_factor_requests.json
+#   queue list: 1 pending; recheck: 0 newly fulfilled (sma_7 still absent)
+#   queue file then merged back to all 7 pending requests (atr_10×2, sma_50, sma_9/26/52, sma_7)
 ```
-
-## Compliance Notes
-
-- No full-scale execution during this slice (user standing instruction): verification used `--codes` with 3 symbols only.
-- Idempotent re-run by design (no incremental engine state); read-only DB access (R-QRE-005); no new dependencies; systemd units documented but not installed.

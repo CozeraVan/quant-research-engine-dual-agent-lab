@@ -166,7 +166,7 @@ def main() -> int:
     print(f"  state: {args.state_file}")
     if callable(close):
         close()
-    return 0 if counts["total"] - counts["ok"] - counts["skipped"] == 0 else 1
+    return 0 if counts["total"] - counts["ok"] - counts["skipped"] - counts.get("missing_factors", 0) == 0 else 1
 
 
 if __name__ == "__main__":

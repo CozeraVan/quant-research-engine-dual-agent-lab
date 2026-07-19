@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
+QRE-MISSING-FACTOR-QUEUE-001 (implementation DONE, self-review PASS — awaiting user-approved git finalization)
 
 ## Standing Instructions (user)
 
@@ -21,6 +21,8 @@ QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001 (implementation DONE, self-review PA
 Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-validation.md` (Milestone 9: Strategy Research Validation).
 
 ## Last Completed Step
+
+**QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001 (DONE, finalized 2026-07-19, commit `6628631`).**
 
 **QRE-BATCH-FULL-VALIDATION-001 / M9.4 pilot (DONE, finalized 2026-07-19, commit `f90567c`):** handoff emitted (7 requests); small-sample full-history pilot OK; ~3h full-scale estimate. Full-scale trigger + upstream factors remain user decisions.
 
@@ -74,7 +76,7 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `f90567c` Add M9.4 pilot: missing-factor handoff and full-history feasibility (6 files)
+- Last commit: `6628631` Fix preflight crash on missing factor columns (7 files)
 - Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked).
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.
@@ -93,7 +95,7 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 
 1. ~~CR-0002/0003 slices~~ — ALL DONE through M10.3 (commits `24699ce`/`c86441b`/`d514c4c`/`a16d6c5`/`24c284d`/`1345471`).
 2. **Trigger full-scale full-history batch?** (~3h estimate, `outputs/full_history_pilot/feasibility.md`) — ready when you are.
-3. **Upstream factor computation** (`atr_10`, `sma_50`, `sma_9/26/52`, `sma_7` — `outputs/handoff/missing_factor_requests.json`) in `indicators_tushare` / `quant_ts` to unblock the 5 remaining catalog strategies.
+3. **Upstream factor computation** (`atr_10`, `sma_50`, `sma_9/26/52`, `sma_7` — queue at `outputs/handoff/missing_factor_requests.json`, contract in `docs/handoff.md`) in `indicators_tushare` / `quant_ts` to unblock the 5 shelved catalog strategies. QRE side is now fully operational (queue + recheck + re-run path).
 4. M10.4 ML clustering — needs separate dependency approval (5070 Ti noted).
 5. Follow-up micro-slices (optional): cross-symbol analytics, groupby-aware signals (40.2s → ≤30s); trailing stop in batch path. ~~Preflight UndefinedColumn robustness~~ — DONE (this task).
 

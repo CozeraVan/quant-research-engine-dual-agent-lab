@@ -45,6 +45,7 @@ STATUS_ICONS = {
     "backtest_failed": "B",
     "error": "X",
     "skipped": "S",
+    "missing_factors": "M",
 }
 
 
@@ -53,7 +54,7 @@ class BatchRunResult:
     strategy_id: str
     category: str
     research_run_id: str
-    status: str  # ok | preflight_failed | eval_failed | backtest_failed | error | skipped
+    status: str  # ok | preflight_failed | eval_failed | backtest_failed | error | skipped | missing_factors
     preflight_status: str = ""
     eval_status: str = ""
     backtest_status: str = ""
@@ -61,6 +62,7 @@ class BatchRunResult:
     error_message: str = ""
     duration_s: float = 0.0
     stage_durations_s: dict[str, float] = field(default_factory=dict)
+    missing_requests: list = field(default_factory=list)
 
 
 @dataclass
@@ -97,6 +99,7 @@ class BatchRunConfig:
     apply_stops: bool = False
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
+    check_missing_factors: bool = True
 
 
 def discover_strategies(
@@ -170,6 +173,25 @@ def completed_strategies(output_dir: Path) -> set[str]:
     return completed
 
 
+_WORKER_STORE = None
+_WORKER_SCHEMA_LOOKUP = None
+
+
+def _worker_schema_lookup():
+    """Lazily created per-process read-only schema lookup (fork-safe)."""
+    global _WORKER_STORE, _WORKER_SCHEMA_LOOKUP
+    if _WORKER_SCHEMA_LOOKUP is None:
+        from quant_research_engine.data.postgres import PostgresDataStore
+        from quant_research_engine.data.settings import DatabaseSettings
+        from quant_research_engine.strategies.factor_request_queue import (
+            make_schema_column_lookup,
+        )
+
+        _WORKER_STORE = PostgresDataStore(DatabaseSettings.from_env())
+        _WORKER_SCHEMA_LOOKUP = make_schema_column_lookup(_WORKER_STORE)
+    return _WORKER_SCHEMA_LOOKUP
+
+
 def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResult:
     """Run one strategy through the research-run pipeline."""
     from quant_research_engine.orchestration.research_run import (
@@ -188,6 +210,29 @@ def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResu
         status="error",
         output_dir=str(output_dir),
     )
+
+    if config.check_missing_factors:
+        from quant_research_engine.strategies.factor_request_queue import (
+            build_requests_for_strategy,
+            find_missing_factor_columns,
+        )
+        from quant_research_engine.strategies.spec import StrategySpec
+
+        try:
+            spec = StrategySpec.from_yaml(yaml_path)
+            missing = find_missing_factor_columns(spec, _worker_schema_lookup())
+        except Exception:
+            missing = []
+        if missing:
+            result.status = "missing_factors"
+            result.error_message = "missing factor columns: " + ", ".join(
+                f"{f.qualified_table}.{f.source_column}" for f in missing
+            )
+            result.missing_requests = build_requests_for_strategy(
+                spec, missing, strategy_id=strategy_id, start=config.start, end=config.end
+            )
+            result.duration_s = time.perf_counter() - t0
+            return result
 
     try:
         req = ResearchRunRequest(
@@ -305,6 +350,7 @@ def summarize_results(results: list[BatchRunResult]) -> dict[str, int]:
         "backtest_failed": sum(1 for r in results if r.status == "backtest_failed"),
         "error": sum(1 for r in results if r.status == "error"),
         "skipped": sum(1 for r in results if r.status == "skipped"),
+        "missing_factors": sum(1 for r in results if r.status == "missing_factors"),
     }
 
 
@@ -323,6 +369,8 @@ def result_to_payload(result: BatchRunResult) -> dict[str, Any]:
     }
     if result.stage_durations_s:
         payload["stage_durations_s"] = result.stage_durations_s
+    if result.missing_requests:
+        payload["missing_requests"] = result.missing_requests
     return payload
 
 

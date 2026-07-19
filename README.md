@@ -744,6 +744,18 @@ systemctl --user daemon-reload
 systemctl --user enable --now qre-refresh.timer   # 每天 18:30 检查并刷新
 ```
 
+### 7b-3. 缺因子请求队列 (missing-factor handoff)
+
+```bash
+# 缺因子的策略在批跑中自动搁置 (missing_factors), 其请求自动写入队列
+# 查看队列 / 检查因子是否已入库
+uv run python scripts/factor_request_queue.py list --pending
+uv run python scripts/factor_request_queue.py recheck
+```
+
+队列文件: `outputs/handoff/missing_factor_requests.json`;
+上游消费契约 (indicators_tushare 计算入库 → recheck → 重跑搁置策略): `docs/handoff.md`。
+
 ### 7c. 策略适配分析 (strategy fit)
 
 ```bash

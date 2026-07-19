@@ -250,6 +250,24 @@ def main() -> int:
 
     summary_path = write_batch_summary(summary, output_base)
 
+    # Auto-queue shelved strategies' missing-factor requests (upstream handoff)
+    shelved = [r for r in results if r.status == "missing_factors"]
+    if shelved:
+        from quant_research_engine.strategies.factor_request_queue import (
+            load_queue,
+            save_queue,
+            upsert_requests,
+        )
+
+        queue_path = ROOT / "outputs" / "handoff" / "missing_factor_requests.json"
+        entries = load_queue(queue_path)
+        added = upsert_requests(
+            entries, [req for r in shelved for req in r.missing_requests]
+        )
+        save_queue(queue_path, entries)
+        print(f"Missing-factor queue: +{added} new request(s), "
+              f"{len(shelved)} strateg(y/ies) shelved → {queue_path}")
+
     # Final report
     print(f"\n{'='*70}")
     print(f"Batch Complete: {batch_id}")
@@ -258,10 +276,11 @@ def main() -> int:
     print(f"  Failed:  {counts['preflight_failed']} preflight, {counts['backtest_failed']} backtest, "
           f"{counts['error']} error")
     print(f"  Skipped: {counts['skipped']}")
+    print(f"  Shelved: {counts.get('missing_factors', 0)} (missing factors)")
     print(f"  Summary: {summary_path}")
     print(f"{'='*70}")
 
-    failures = counts["total"] - counts["ok"] - counts["skipped"]
+    failures = counts["total"] - counts["ok"] - counts["skipped"] - counts.get("missing_factors", 0)
     return 0 if failures == 0 else 1
 
 

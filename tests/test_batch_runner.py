@@ -293,7 +293,7 @@ def test_summarize_results_counts():
     counts = summarize_results(results)
     assert counts == {
         "total": 7, "ok": 2, "preflight_failed": 1, "eval_failed": 1,
-        "backtest_failed": 1, "error": 1, "skipped": 1,
+        "backtest_failed": 1, "error": 1, "skipped": 1, "missing_factors": 0,
     }
 
 

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-PREFLIGHT-MISSING-FACTOR-ROBUSTNESS-001
+QRE-MISSING-FACTOR-QUEUE-001
 
 ## Reviewer
 
@@ -14,93 +14,24 @@ PASS
 
 ## Findings
 
-- Root cause matches the brief: unconditional `load_factor_history` with schema-invalid columns crashed preflight; the fix filters to loadable fields at the single call site, preserving all existing checks and coverage rows.
-- Contract restoration verified end-to-end on real data: blocked strategies now emit `missing_factor_requests.json` through the standard `qre preflight` path instead of crashing (M8.3/M8.7).
-- Behavior for available factors unchanged (test-locked); the assembler/backtest path intentionally still errors on truly missing factors (batch runner captures those as strategy errors — expected).
-- No new dependencies; 1121 tests green (3 new).
+- Both user instructions implemented: durable local queue with fulfillment tracking (DB mirror documented as a later option pending target-DB decision per R-QRE-005), and shelve-and-continue semantics (`missing_factors` status distinct from `error`, batch proceeds, exit code treats shelved as non-failure).
+- Shelve check is a pre-execution read-only schema check (lazy per-process store, fork-safe for the process pool) — shelved strategies never execute; verified on real data (tf07e shelved, mr04a ran).
+- Queue hygiene: dedup by (strategy_id, alias) with first/last-seen preservation; the M9.4 consolidated file was merged into the queue format (7 pending entries) without loss.
+- One test-contract update: `summarize_results` counts gained `missing_factors` (existing expectation updated; complete accounting preserved).
+- Real end-to-end: batch auto-queue wrote the request; CLI list/show/recheck work; recheck correctly reports sma_7 still pending.
+- LOCKED requirements intact: R-QRE-002 (no indicator computation), R-QRE-005 (read-only DB), no new dependencies, full suite green.
 
 ## Behavior Verified
 
-- `uv run pytest -q` → 1121 passed.
-- Real-DB: bo02/mr02b/tf07e preflight → status=error + requests emitted.
-
-## Residual Risks
-
-- None material; the fix narrows a query to schema-valid columns only.
-
-## Next Step
-
-Phase → `AWAITING_GIT_APPROVAL`. Proposed commit message presented to the user; commit only after explicit approval.
-
-# Review Report (archive: M9.4 pilot)
-
-## Task ID
-
-QRE-BATCH-FULL-VALIDATION-001 (M9.4) — pilot slice
-
-## Reviewer
-
-KIMI_CODE (single agent self-review, per R-AGENT-001)
-
-## Review Status
-
-PASS
-
-## Findings
-
-- Standing instruction honored exactly: handoff + small-sample pilot only; no full-scale execution.
-- Handoff completeness verified: 7 requests match the known missing set across all 5 blocked strategies (sma_20/65 confirmed present — earlier notes over-listed).
-- Known issue recorded: `qre preflight` crashes with UndefinedColumn on strategies whose factor columns are absent (instead of emitting missing-factor requests) — robustness follow-up, documented in 09.
-- Feasibility estimate grounded in measured decompositions (1y full-market + 10y pilot), assumptions stated; R-QRE-008 caveat in the report.
-- No runtime code changed; suite stays 1118 green.
-
-## Behavior Verified
-
-- Pilot 5/5 OK; stage durations from manifests; feasibility.md written; handoff file consistent with spec factor_fields × DB schema.
-
-## Residual Risks
-
-- 10y full-market extrapolation carries DB-read uncertainty (stated in the report).
-- Eval stage excluded from pilot; full validation may want it (+~20-30s/strategy).
-
-## Next Step
-
-Full-scale full-history batch (106 strategies × full market × 2015-2025, ~3h) is ready to trigger on user approval; upstream factor delivery (`outputs/handoff/missing_factor_requests.json`) unblocks the remaining 5.
-
-# Review Report (archive: M10.3)
-
-## Task ID
-
-QRE-CONTINUOUS-REFRESH-001 (M10.3)
-
-## Reviewer
-
-KIMI_CODE (single agent self-review, per R-AGENT-001)
-
-## Review Status
-
-PASS
-
-## Findings
-
-- Scope matches `08_IMPLEMENTATION_BRIEF.md`: refresh module, script, systemd units, manifest registration, tests — all delivered; no full-scale execution (small-sample only, per standing instruction).
-- Two defects caught and fixed during implementation: `BatchRunConfig` was briefly constructed with a non-existent `jobs` field (removed — jobs belongs to `execute_batch`), and delta directories collided at second-resolution timestamps on rapid successive runs (now `<timestamp>_<batch_id>`).
-- One test-hygiene fix: removed two leftover no-op assertion lines in the script e2e test.
-- Script behavior verified end-to-end on real data: first run executes (106 ok / 111 with the 5 known missing-factor errors), check-only is side-effect free, same-watermark run no-ops, watermark bump refreshes with delta vs previous batch.
-- LOCKED requirements intact: R-QRE-005 (read-only), R-QRE-007 (manifest/audit parity), R-QRE-008 (caveat in delta report), R-QRE-009 (small-sample verification only), no new dependencies, systemd not installed by agent.
-- R-CORE-003: 9 new tests incl. script-level e2e; full suite 1118 green.
-
-## Behavior Verified
-
-- `uv run pytest -q` → 1118 passed.
-- Real-data e2e: watermark 2026-07-17; state written with batch id, counts, config; delta manifest passes `qre report-audit` (0 issues).
+- `uv run pytest -q` → 1129 passed (8 new).
+- Real-DB: shelve icon/status in runner output, auto-queue write, queue CLI, recheck.
 - `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean (re-run before commit).
 
 ## Residual Risks
 
-- Refresh window ends at the data watermark; strategies whose factors lag the market table (upstream indicator refresh delay) would be evaluated against partially-stale factor columns — mitigated by preflight being skippable but not yet re-verified per refresh (a `--with-preflight` refresh policy is a possible follow-up).
-- The 5 missing-factor strategies will keep erroring on every refresh until upstream delivers the columns; the delta report surfaces this as persistent `error` transitions.
-- Timer runs as the user; DB URL comes from the unit's Environment line — secrets stay out of the repo (R-CORE-004).
+- The pre-execution schema check adds one cached schema read per factor table per worker process (negligible); workers create one extra DB store per process for schema checks (disposed by process exit).
+- Queue is file-based; concurrent writers (manual + batch) could race — acceptable at single-operator scale, noted in `docs/handoff.md`.
+- Direct `indicators_tushare` invocation and DB mirror remain user-decided future steps.
 
 ## Next Step
 
