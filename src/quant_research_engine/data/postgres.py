@@ -29,6 +29,20 @@ class PostgresDataStore:
             conn.execute(text("SELECT 1"))
         return True
 
+    def list_symbols_with_bars(self, start: date, end: date) -> list[str]:
+        """Distinct ts_codes having daily bars in [start, end] (index scan)."""
+        query = text(
+            f"""
+            SELECT DISTINCT ts_code
+            FROM {self.qualified_table(self.settings.tables.market_daily_table)}
+            WHERE trade_date BETWEEN :start_date AND :end_date
+            ORDER BY ts_code
+            """
+        )
+        with self.market_engine.begin() as conn:
+            rows = conn.execute(query, {"start_date": start, "end_date": end}).fetchall()
+        return [str(row[0]) for row in rows]
+
     def close(self) -> None:
         """Dispose all DB engines, returning connections to the database."""
         seen: set[int] = set()

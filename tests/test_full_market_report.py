@@ -354,19 +354,19 @@ class TestGenerateHtmlReport:
 
         html = generate_html_report(tmp_path, overview, strat_perf, tl, rt, sp, eq, dd, ta, cu)
         assert "<!DOCTYPE html>" in html
-        assert '<html lang="en">' in html
+        assert '<html lang="zh-CN">' in html
         assert "</html>" in html
         assert "test-run" in html
         assert "000001.SZ" in html
-        # Verify all 8 sections present
-        assert "Performance Summary" in html
-        assert "Charts" in html
-        assert "Trade Analysis" in html
-        assert "Symbol Performance" in html
-        assert "Capital Usage" in html
-        assert "Trades Ledger" in html
-        assert "Round Trips" in html
-        assert "Run Overview" in html
+        # Verify all sections present (Chinese display labels)
+        assert "绩效汇总" in html
+        assert "图表" in html
+        assert "交易分析" in html
+        assert "个股表现" in html
+        assert "资金使用" in html
+        assert "成交流水" in html
+        assert "完整回合" in html
+        assert "运行概览" in html
 
     def test_handles_empty_dataframes(self, tmp_path):
         overview = {"run_id": "test-empty"}
@@ -379,7 +379,7 @@ class TestGenerateHtmlReport:
             pd.DataFrame(), pd.DataFrame(), ta, cu,
         )
         assert "<!DOCTYPE html>" in html
-        assert "No data" in html
+        assert "暂无数据" in html
 
     def test_embeds_chart_base64_when_provided(self, tmp_path):
         from quant_research_engine.portfolio.full_market_report import generate_equity_curve_chart, generate_drawdown_chart
@@ -415,8 +415,8 @@ class TestGenerateHtmlReport:
             pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
             eq, dd, ta, cu,
         )
-        assert "No equity data" in html
-        assert "No drawdown data" in html
+        assert "暂无净值数据" in html
+        assert "暂无回撤数据" in html
 
     def test_pnl_distribution_renders_bars(self, tmp_path):
         overview = {"run_id": "test-pnl"}
@@ -512,13 +512,14 @@ class TestWriteFullMarketExcel:
         wb = load_workbook(str(path))
         ws = wb["Performance"]
         perf_data = {ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value for r in range(1, ws.max_row + 1) if ws.cell(row=r, column=1).value}
-        assert perf_data.get("run_id") == "test-run"
-        assert perf_data.get("total_trade_count") == 2
-        assert perf_data.get("sharpe") == 1.5
-        assert perf_data.get("strategy_total_return") == 0.15
-        assert perf_data.get("buy_hold_return") == 0.10
-        assert perf_data.get("excess_return_vs_buy_hold") == 0.05
-        assert perf_data.get("benchmark_code") == "000300.SH"
+        assert perf_data.get("运行ID") == "test-run"
+        assert perf_data.get("策略ID") == "strat-1"
+        assert perf_data.get("交易笔数") == 2
+        assert perf_data.get("夏普比率") == 1.5
+        assert perf_data.get("策略总收益率") == 0.15
+        assert perf_data.get("买入持有收益率") == 0.10
+        assert perf_data.get("超额收益率") == 0.05
+        assert perf_data.get("基准代码") == "000300.SH"
         assert perf_data.get("benchmark_portfolio_total_return") == 0.12
 
     def test_performance_sheet_empty_when_none_strategy_perf(self, tmp_path):
@@ -534,7 +535,7 @@ class TestWriteFullMarketExcel:
         ws = wb["Performance"]
         assert ws.max_row == 1
         headers = {ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)}
-        assert headers == {"Key", "Value"}
+        assert headers == {"项目", "值"}
 
 
 class TestWriteFullMarketReport:
@@ -912,8 +913,8 @@ class TestWriteFullMarketReportSharedCash:
         wb = load_workbook(str(xlsx_path))
         ws = wb["Overview"]
         overview = {ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value for r in range(1, ws.max_row + 1) if ws.cell(row=r, column=1).value}
-        assert overview.get("engine_mode") == "shared_cash"
-        assert overview.get("initial_cash") == 10000.0
+        assert overview.get("引擎模式") == "shared_cash"
+        assert overview.get("初始资金") == 10000.0
 
     def test_handles_empty_shared_result(self, tmp_path):
         result = SharedCashBacktestResult(
@@ -935,3 +936,20 @@ class TestWriteFullMarketReportSharedCash:
         assert paths["drawdown_curve_chart"].exists()
         assert paths["equity_curve_chart"].suffix == ".png"
         assert paths["drawdown_curve_chart"].suffix == ".png"
+
+
+def test_symbol_performance_filters_zero_trade_symbols():
+    from quant_research_engine.portfolio.full_market_report import build_symbol_performance
+
+    summary = pd.DataFrame(
+        {
+            "symbol": ["A.SZ", "B.SZ", "C.SZ"],
+            "trade_count": [2, 0, 0],
+            "order_count": [2, 1, 0],
+            "total_return": [0.1, 0.0, 0.0],
+        }
+    )
+    result = build_symbol_performance(summary=summary, results={})
+    symbols = result["symbol"].tolist() if not result.empty else []
+    # A 有成交保留; B 有委托(持仓中)保留; C 无任何交易剔除
+    assert symbols == ["A.SZ", "B.SZ"]

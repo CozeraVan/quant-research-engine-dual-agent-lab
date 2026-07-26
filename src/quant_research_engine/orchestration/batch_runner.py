@@ -102,6 +102,7 @@ class BatchRunConfig:
     take_profit_pct: float | None = None
     trailing_stop_pct: float | None = None
     check_missing_factors: bool = True
+    symbol_chunk_size: int | None = None
 
 
 def discover_strategies(
@@ -259,6 +260,7 @@ def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResu
             stop_loss_pct=config.stop_loss_pct,
             take_profit_pct=config.take_profit_pct,
             trailing_stop_pct=config.trailing_stop_pct,
+            symbol_chunk_size=config.symbol_chunk_size,
         )
 
         run_result = run_research_run(req)

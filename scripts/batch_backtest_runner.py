@@ -112,6 +112,8 @@ def main() -> int:
                         help="Override spec take_profit_pct (requires --apply-stops)")
     parser.add_argument("--trailing-stop-pct", type=float,
                         help="Override spec trailing_stop_pct (requires --apply-stops)")
+    parser.add_argument("--symbol-chunk-size", type=int,
+                        help="Process symbols in chunks of N (memory-safe for long windows)")
     parser.add_argument("--skip-preflight", action="store_true",
                         help="Skip preflight stage (useful if DB factors are known good)")
     parser.add_argument("--skip-eval", action="store_true",
@@ -225,6 +227,7 @@ def main() -> int:
         stop_loss_pct=args.stop_loss_pct,
         take_profit_pct=args.take_profit_pct,
         trailing_stop_pct=args.trailing_stop_pct,
+        symbol_chunk_size=args.symbol_chunk_size,
     )
 
     results = execute_batch(yaml_paths, config, jobs=max(1, args.jobs))
@@ -252,6 +255,7 @@ def main() -> int:
             "stop_loss_pct": args.stop_loss_pct,
             "take_profit_pct": args.take_profit_pct,
             "trailing_stop_pct": args.trailing_stop_pct,
+            "symbol_chunk_size": args.symbol_chunk_size,
         },
         results=results,
         summary=counts,

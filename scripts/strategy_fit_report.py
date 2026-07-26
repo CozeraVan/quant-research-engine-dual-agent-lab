@@ -77,9 +77,9 @@ def main() -> int:
         import pandas as pd
         metadata = pd.DataFrame(columns=["ts_code"])
     else:
+        from quant_research_engine.data.metadata_compose import compose_symbol_metadata
         from quant_research_engine.data.postgres import PostgresDataStore
         from quant_research_engine.data.settings import DatabaseSettings
-        from quant_research_engine.data.tushare_security import derive_board
 
         symbols = sorted({
             symbol
@@ -87,23 +87,12 @@ def main() -> int:
             for symbol in data.frame["symbol"].astype(str)
         })
         store = PostgresDataStore(DatabaseSettings.from_env())
-        # stock_basic is not populated upstream yet; compose metadata from
-        # available sources: daily_basic snapshot (cap/liquidity buckets) +
-        # board derived from ts_code. industry_group stays 'unknown'.
-        metadata = store._load_reference_daily_basic_snapshot(symbols, as_of=metadata_as_of)
+        # stock_basic is not populated upstream yet; the shared composer
+        # builds metadata from daily_basic buckets + derive_board.
+        metadata = compose_symbol_metadata(store, symbols, as_of=metadata_as_of)
         close = getattr(store, "close", None)
         if callable(close):
             close()
-        import pandas as pd
-        if metadata.empty:
-            metadata = pd.DataFrame({"ts_code": symbols})
-        metadata["board"] = metadata["ts_code"].map(derive_board)
-        if "total_mv" in metadata.columns:
-            metadata["market_cap_bucket"] = PostgresDataStore._compute_market_cap_bucket(metadata["total_mv"])
-        if "turnover_rate_f" in metadata.columns:
-            metadata["liquidity_bucket"] = PostgresDataStore._compute_liquidity_bucket(metadata["turnover_rate_f"])
-        if "industry_group" not in metadata.columns:
-            metadata["industry_group"] = "unknown"
         print(f"metadata: {len(metadata)} symbols (as_of={metadata_as_of}, source=daily_basic+derive_board)")
 
     output_dir = args.output_dir or (DEFAULT_OUTPUT_ROOT / args.batch_dir.name)

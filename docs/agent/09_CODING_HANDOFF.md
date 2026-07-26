@@ -2,6 +2,110 @@
 
 ## Task ID
 
+QRE-COST-BREAKDOWN-001 (commission/stamp tax/transfer fee columns)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (implementation + real-data verification; awaiting docs sync and commit approval)
+
+## Root Cause (user question: "为什么佣金、印花税列仍然为空")
+
+The MT5-style schema columns (`commission`/`stamp_tax`/`transfer_fee`/`slippage_amount`) existed in the report builders but were **hardcoded to None** — the engine only tracked a combined `cost` (single number from `calculate_cost`), so the components were never computed per order.
+
+## Implementation Summary
+
+1. `AShareMarketProfile.calculate_cost_breakdown(side, notional)`: per-component breakdown (commission with ¥5 minimum, transfer fee, stamp tax on sells only); `total` matches `calculate_cost` exactly (test-locked).
+2. Both batch engines (simulator + vectorized, identical columns): order rows gain `price_raw` (pre-slippage), `commission`, `stamp_tax`, `transfer_fee`; trade rows gain `entry_commission/stamp_tax/transfer_fee` + `exit_*` counterparts.
+3. Report builders: `build_trades_ledger` now maps real components and computes `slippage_amount = |price_executed − price_raw| × quantity`; `build_round_trips` gains `commission`/`stamp_tax`/`transfer_fee` (entry+exit sums) — components sum exactly to the existing `total_cost`.
+4. Tests (2 new): breakdown math (¥5 minimum, sell-only stamp, zero notional, total==calculate_cost), orders/trades carry components with exact sums; the existing dual-engine randomized equality suite covers column identity automatically.
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1162 passed (1160 + 2 new)
+real sample (mr04a × 3 codes):
+  buy: commission 299.85 + transfer 10.00 = cost 309.85 ✓
+  sell: commission 289.91 + stamp 483.19 + transfer 9.66 = cost 782.76 ✓
+  round trip: commission 589.77 + stamp 483.19 + transfer 19.66 = total_cost 1092.61 ✓
+```
+
+# Coding Handoff (archive: QRE-REPORT-CN-001)
+
+## Task ID
+
+QRE-REPORT-CN-001 (report layer: localization, strategy intro, blank filling, 2dp)
+
+## Written By
+
+KIMI_CODE (single agent, with coder subagent for the mechanical layer)
+
+## Status
+
+DONE (implementation; full-market rerun with latest data in flight)
+
+## Implementation Summary (user's 4 requirements)
+
+1. **全面汉化** (display layer): `COLUMN_LABELS`/`KEY_LABELS` maps in `full_market_report.py`; xlsx column headers + Key sheets + Artifacts descriptions + full HTML (sections, metric cards, tables) in Chinese. Sheet names and file names stay English (manifest contracts); CSV headers and values untouched (machine contracts for downstream pandas analysis).
+2. **策略说明块**: `_build_strategy_intro()` renders strategy name/id/family, entry/exit conditions, holding days, stop params, universe rules, initial cash, execution mode at the top of the Overview sheet and HTML. Payload threading (`_strategy_identity` + `_run_request_payload` in research_run) now carries strategy_id/name/family/date_start/date_end — the fields the user reported blank.
+3. **填空白格**: new shared `data/metadata_compose.py::compose_symbol_metadata` (board via derive_board, industry_group unknown while stock_basic is empty, cap/liquidity buckets from daily_basic) + `merge_symbol_metadata` (fillna, no column duplication); merged into frames in `_run_backtest` and per chunk in `_run_batch_chunked` when metadata_columns requested; `scripts/strategy_fit_report.py` deduped to the shared helper. NaN/None render as `-`.
+4. **两位小数**: xlsx cell number_format — ratio columns (return/rate/pct/win/excess/drawdown tokens, count/duration excluded) `0.00%`, others `0.00`; HTML same policy (x.xx%); CSV keeps raw precision (documented decision).
+5. **Performance date fix** (self-review catch): date_start/date_end in the Performance sheet were still `-` (engine summary doesn't carry them); added run_request backfill in both batch and shared branches.
+6. **Latest data rerun**: watermark 2026-07-24 (daily timers healthy); same 2 strategies × full market × 2010-2026 in flight.
+
+## Files Changed
+
+- `src/quant_research_engine/data/metadata_compose.py` (new)
+- `src/quant_research_engine/orchestration/research_run.py` (payload + metadata merge)
+- `src/quant_research_engine/portfolio/full_market_report.py` (localization, intro, formatting, date backfill)
+- `scripts/strategy_fit_report.py` (shared helper)
+- `tests/test_report_cn_localization.py` (new, 19), `tests/test_full_market_report.py` (label updates)
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1160 passed (1141 baseline + 19 new)
+small-sample xlsx inspection: 汉化表头 ✓ 策略说明块 ✓ Overview 日期/名称 ✓ 元数据列 ✓ 0.00/0.00% 格式 ✓ NaN→'-' ✓
+data watermark: 2026-07-24 (fresh)
+full rerun: outputs/backtests/full_history_cn/ (in flight)
+```
+
+# Coding Handoff (archive: QRE-CHUNKED-BATCH-001)
+
+## Task ID
+
+QRE-CHUNKED-BATCH-001 (full-history OOM fix + universe list_date fix)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+IN_PROGRESS (chunked path + fixes verified; final 2-strategy validation run in flight)
+
+## Implementation Summary
+
+1. **OOM root cause (WSL2 ×3 crashes)**: a full-market 16-year research frame (~21M rows × ~15 cols incl. strings) is ~3-4GB per worker; two workers + pandas transient copies killed WSL2's memory ceiling.
+2. **Symbol-chunked backtest path** (`research_run._run_batch_chunked` + `--symbol-chunk-size N`): per-chunk frame slice load → engine → accumulate → gc; results are byte-identical to unchunked (batch engines are per-symbol independent; equality test `tests/test_chunked.py`). Progress lines per chunk. Universe filter applies per chunk with globally-loaded metadata and a merged `universe_report.json`.
+3. **Universe `min_listing_days` bug fix**: `load_universe_metadata` derived `list_date` from each symbol's first bar in `stock_daily`, which starts 2010-01-04 — so every pre-2010 stock had `list_date` ≥ 2010-01-04 and was dropped when the run start minus N days preceded the data history (observed: `min_listing_days` dropped ALL 5,544 symbols, 0 trades). Fix: symbols whose first bar equals the table's data start now get `list_date = NaT` (unknown → kept); only symbols with first bar AFTER the data start are treated as genuinely dated. Regression test added.
+4. **--workbook flag** (earlier slice, commit `ea05895`): compact mode can also emit `backtest_report.xlsx` + HTML + charts from in-memory results (no per-symbol trees).
+
+## Validation So Far
+
+```bash
+uv run pytest -q → 1141 passed (chunked equality + universe regression)
+run 1 (before list_date fix): universe dropped ALL 5544 symbols → caught by zero-trade metrics
+run 2 (after fix): in flight — verify trades > 0, charts present, metrics sane
+```
+
+# Coding Handoff (archive: QRE-UPSTREAM-FACTOR-DELIVERY-001)
+
+## Task ID
+
 QRE-UPSTREAM-FACTOR-DELIVERY-001
 
 ## Written By

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import time
+
+import pandas as pd
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
@@ -55,6 +57,7 @@ class ResearchRunRequest:
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
     trailing_stop_pct: float | None = None
+    symbol_chunk_size: int | None = None
 
 
 @dataclass
@@ -71,6 +74,87 @@ class ResearchRunResult:
     report_manifest_path: Path | None = None
     error_message: str | None = None
     stage_durations_s: dict[str, float] = field(default_factory=dict)
+
+
+def _strategy_identity(strategy_path: Path) -> tuple[str, str | None]:
+    """Return (strategy_id, strategy_family) for a strategy YAML path.
+
+    strategy_id is the YAML file stem; strategy_family is the catalog
+    subdirectory when the path looks like strategies/catalog/<family>/x.yaml.
+    """
+    path = Path(strategy_path)
+    family = None
+    parts = path.parts
+    if "catalog" in parts:
+        index = parts.index("catalog")
+        if len(parts) > index + 2:
+            family = parts[index + 1]
+    return path.stem, family
+
+
+def _merge_metadata_into_frame(
+    store: PostgresDataStore,
+    frame,
+    request: ResearchRunRequest,
+):
+    """Fill summary metadata columns (board/industry_group/cap & liquidity
+    buckets) when ``request.metadata_columns`` asks for them. Display-only:
+    the engines ignore extra frame columns."""
+    if not request.metadata_columns:
+        return frame
+    from quant_research_engine.data.metadata_compose import (
+        compose_symbol_metadata,
+        merge_symbol_metadata,
+    )
+
+    ts_codes = sorted(frame["ts_code"].dropna().astype(str).unique().tolist())
+    if not ts_codes:
+        return frame
+    metadata = compose_symbol_metadata(store, ts_codes, as_of=request.metadata_as_of or request.start)
+    return merge_symbol_metadata(frame, metadata)
+
+
+def _run_request_payload(
+    spec: StrategySpec,
+    request: ResearchRunRequest,
+    *,
+    command: str,
+    extra: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Build the run_request payload persisted next to backtest artifacts.
+
+    Carries strategy identity (id/name/family), run window and the fields the
+    report layer renders in the strategy-intro block. Display metadata only —
+    no engine semantics here.
+    """
+    strategy_id, strategy_family = _strategy_identity(request.strategy_path)
+    body: dict[str, object] = {
+        "strategy_id": strategy_id,
+        "strategy_name": spec.name,
+        "strategy_family": strategy_family,
+        "initial_cash": request.initial_cash,
+        "entry_signal": spec.signal_expression,
+        "exit_signal": spec.exit_signal_expression,
+        "holding_days": spec.holding_days,
+        "stop_loss_pct": spec.stop_loss_pct,
+        "take_profit_pct": spec.take_profit_pct,
+        "trailing_stop_pct": spec.trailing_stop_pct,
+        "exclude_st": spec.exclude_st,
+        "exclude_suspended": spec.exclude_suspended,
+        "min_listing_days": spec.min_listing_days,
+        "min_amount": spec.min_amount,
+        "start": str(request.start),
+        "end": str(request.end),
+        "date_start": str(request.start),
+        "date_end": str(request.end),
+    }
+    if extra:
+        body.update(extra)
+    return {
+        "command": command,
+        "strategy_path": str(request.strategy_path),
+        "request": body,
+    }
 
 
 def _build_db_store(db_url: str | None = None) -> PostgresDataStore:
@@ -193,6 +277,151 @@ def _write_eval_artifacts(result, request: ResearchRunRequest) -> dict[str, Path
     )
 
 
+def _run_batch_chunked(
+    store: PostgresDataStore,
+    spec: StrategySpec,
+    request: ResearchRunRequest,
+    market_profile,
+) -> tuple[str, dict[str, Path]]:
+    """Memory-safe symbol-chunked batch backtest (OOM guard for long windows).
+
+    Symbols are processed in chunks of ``request.symbol_chunk_size``; each chunk
+    loads only its own frame slice. Batch engines are per-symbol independent,
+    so results are identical to an unchunked run (verified by tests).
+    """
+    import gc
+
+    from quant_research_engine.portfolio.analytics import summarize_batch_summary
+    from quant_research_engine.portfolio.batch import (
+        BatchBacktestEngine,
+        BatchBacktestRequest,
+        BatchBacktestResult,
+    )
+
+    symbols = request.codes or store.list_symbols_with_bars(request.start, request.end)
+    if request.symbol_chunk_size <= 0:
+        raise ValueError("symbol_chunk_size must be positive")
+    chunk_size = request.symbol_chunk_size
+    n_chunks = (len(symbols) + chunk_size - 1) // chunk_size
+
+    # Effective stop levels (same rule as the unchunked path).
+    if request.apply_stops:
+        stop_loss = request.stop_loss_pct if request.stop_loss_pct is not None else spec.stop_loss_pct
+        take_profit = request.take_profit_pct if request.take_profit_pct is not None else spec.take_profit_pct
+        trailing_stop = request.trailing_stop_pct if request.trailing_stop_pct is not None else spec.trailing_stop_pct
+    else:
+        stop_loss = take_profit = trailing_stop = None
+
+    universe_spec = None
+    universe_metadata = None
+    universe_totals: dict[str, int] = {}
+    universe_unavailable: set[str] = set()
+    universe_in_rows = universe_out_rows = 0
+    if request.universe_filter:
+        from quant_research_engine.portfolio.universe import (
+            UniverseFilterSpec,
+            load_universe_metadata,
+        )
+
+        universe_spec = UniverseFilterSpec(
+            exclude_st=spec.exclude_st,
+            exclude_suspended=spec.exclude_suspended,
+            exclude_risk_warning=spec.exclude_risk_warning,
+            min_listing_days=spec.min_listing_days,
+            min_amount=spec.min_amount,
+        )
+        if universe_spec.any_enabled():
+            universe_metadata = load_universe_metadata(store, symbols, as_of=request.start)
+
+    engine = BatchBacktestEngine(market_profile)
+    assembler = ResearchFrameAssembler(store)
+    all_results: dict = {}
+    summary_rows: list[dict] = []
+
+    for index in range(0, len(symbols), chunk_size):
+        chunk = symbols[index : index + chunk_size]
+        frame_chunk = assembler.build(
+            ts_codes=chunk,
+            start=request.start,
+            end=request.end,
+            market_fields=spec.market_fields,
+            factor_fields=spec.factor_fields,
+            metadata_as_of=request.metadata_as_of,
+        )
+        if universe_metadata is not None:
+            from quant_research_engine.portfolio.universe import apply_universe_filter
+
+            frame_chunk, chunk_report = apply_universe_filter(
+                frame_chunk, universe_spec, start=request.start, metadata=universe_metadata
+            )
+            universe_in_rows += chunk_report.input_rows
+            universe_out_rows += chunk_report.output_rows
+            for rule, count in chunk_report.dropped_by_rule.items():
+                universe_totals[rule] = universe_totals.get(rule, 0) + count
+            universe_unavailable.update(chunk_report.unavailable_rules)
+        frame_chunk = _merge_metadata_into_frame(store, frame_chunk, request)
+        chunk_result = engine.run(
+            frame_chunk,
+            BatchBacktestRequest(
+                symbols=chunk,
+                initial_cash_per_symbol=request.initial_cash,
+                entry_signal=spec.signal_expression,
+                exit_signal=spec.exit_signal_expression,
+                holding_days=spec.holding_days,
+                summary_metadata_columns=request.metadata_columns,
+                engine_impl=request.engine_impl,
+                position_sizing=request.position_sizing,
+                stop_loss_pct=stop_loss,
+                take_profit_pct=take_profit,
+                trailing_stop_pct=trailing_stop,
+            ),
+        )
+        all_results.update(chunk_result.results)
+        summary_rows.extend(chunk_result.summary.to_dict("records"))
+        del frame_chunk, chunk_result
+        gc.collect()
+        print(f"    [chunk {index // chunk_size + 1}/{n_chunks}] done ({len(all_results)} symbols accumulated)")
+
+    summary = pd.DataFrame(summary_rows)
+    result = BatchBacktestResult(
+        symbols=symbols,
+        results=all_results,
+        summary=summary,
+        summary_metrics=summarize_batch_summary(summary),
+    )
+
+    backtest_dir = request.output_dir / "backtest"
+    backtest_dir.mkdir(parents=True, exist_ok=True)
+    run_request_payload = _run_request_payload(
+        spec, request, command="backtest-batch", extra={"symbol_chunk_size": chunk_size},
+    )
+    paths = write_batch_result(
+        result,
+        backtest_dir,
+        run_request=run_request_payload,
+        run_id=request.run_id,
+        compact=request.compact,
+        include_full_market=request.include_full_market,
+    )
+    if universe_metadata is not None:
+        universe_report_payload = {
+            "applied": True,
+            "input_rows": universe_in_rows,
+            "output_rows": universe_out_rows,
+            "input_symbols": len(symbols),
+            "output_symbols": int(summary["symbol"].nunique()) if not summary.empty else 0,
+            "dropped_by_rule": universe_totals,
+            "unavailable_rules": sorted(universe_unavailable),
+        }
+        universe_path = backtest_dir / "universe_report.json"
+        universe_path.write_text(
+            json.dumps(universe_report_payload, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        paths["universe_report"] = universe_path
+    return "ok", paths
+
+
 def _run_backtest(
     store: PostgresDataStore,
     spec: StrategySpec,
@@ -200,16 +429,6 @@ def _run_backtest(
     frame=None,
 ) -> tuple[str, dict[str, Path]]:
     """Run backtest. Returns (status, paths_dict)."""
-    if frame is None:
-        assembler = ResearchFrameAssembler(store)
-        frame = assembler.build(
-            ts_codes=request.codes,
-            start=request.start,
-            end=request.end,
-            market_fields=spec.market_fields,
-            factor_fields=spec.factor_fields,
-            metadata_as_of=request.metadata_as_of,
-        )
     market_profile = (
         __import__("quant_research_engine.config.loader", fromlist=["load_market_profile"]).load_market_profile(
             request.market_profile_path
@@ -224,6 +443,21 @@ def _run_backtest(
 
         validate_profile_overrides(request.profile_overrides)
         market_profile = replace(market_profile, **request.profile_overrides)
+
+    # Chunked mode: never build the full frame (memory guard for long windows).
+    if request.symbol_chunk_size is not None and request.backtest_mode == "batch":
+        return _run_batch_chunked(store, spec, request, market_profile)
+
+    if frame is None:
+        assembler = ResearchFrameAssembler(store)
+        frame = assembler.build(
+            ts_codes=request.codes,
+            start=request.start,
+            end=request.end,
+            market_fields=spec.market_fields,
+            factor_fields=spec.factor_fields,
+            metadata_as_of=request.metadata_as_of,
+        )
 
     universe_report = None
     if request.universe_filter:
@@ -245,6 +479,8 @@ def _run_backtest(
             frame, universe_report = apply_universe_filter(
                 frame, universe_spec, start=request.start, metadata=metadata
             )
+
+    frame = _merge_metadata_into_frame(store, frame, request)
 
     backtest_dir = request.output_dir / "backtest"
     backtest_dir.mkdir(parents=True, exist_ok=True)
@@ -282,18 +518,9 @@ def _run_backtest(
             trailing_stop_pct=trailing_stop,
         )
         result = BatchBacktestEngine(market_profile).run(frame, batch_req)
-        run_request_payload: dict[str, object] = {
-            "command": "backtest-batch",
-            "strategy_path": str(request.strategy_path),
-            "request": {
-                "initial_cash": request.initial_cash,
-                "entry_signal": spec.signal_expression,
-                "exit_signal": spec.exit_signal_expression,
-                "holding_days": spec.holding_days,
-                "start": str(request.start),
-                "end": str(request.end),
-            },
-        }
+        run_request_payload = _run_request_payload(
+            spec, request, command="backtest-batch",
+        )
         paths = write_batch_result(
             result,
             backtest_dir,
@@ -323,18 +550,9 @@ def _run_backtest(
         trailing_stop_pct=trailing_stop,
     )
     shared_result = SharedCashBacktestEngine(market_profile).run(frame, shared_req)
-    run_request_payload = {
-        "command": "backtest-shared",
-        "strategy_path": str(request.strategy_path),
-        "request": {
-            "initial_cash": request.initial_cash,
-            "entry_signal": spec.signal_expression,
-            "exit_signal": spec.exit_signal_expression,
-            "holding_days": spec.holding_days,
-            "start": str(request.start),
-            "end": str(request.end),
-        },
-    }
+    run_request_payload = _run_request_payload(
+        spec, request, command="backtest-shared",
+    )
     paths = write_shared_cash_result(shared_result, backtest_dir, run_request=run_request_payload, run_id=request.run_id)
     if universe_report is not None:
         paths["universe_report"] = backtest_dir / "universe_report.json"

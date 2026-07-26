@@ -603,3 +603,58 @@ def test_batch_trailing_validation():
     base = dict(symbols=["000001.SZ"], initial_cash_per_symbol=100_000.0, entry_signal="close < open", holding_days=3)
     with pytest.raises(ValueError, match="trailing_stop_pct"):
         engine.run(frame, BatchBacktestRequest(trailing_stop_pct=-0.05, **base))
+
+
+# ---------------------------------------------------------------------------
+# cost breakdown (QRE-COST-BREAKDOWN-001)
+# ---------------------------------------------------------------------------
+
+
+def test_cost_breakdown_math():
+    from quant_research_engine.core.models import OrderSide
+
+    p = AShareMarketProfile()
+    parts = p.calculate_cost_breakdown(OrderSide.BUY, 1_000_000.0)
+    assert parts["commission"] == max(1_000_000.0 * 0.0003, 5.0)
+    assert parts["transfer_fee"] == 1_000_000.0 * 0.00001
+    assert parts["stamp_tax"] == 0.0
+    assert parts["total"] == p.calculate_cost(OrderSide.BUY, 1_000_000.0)
+
+    parts = p.calculate_cost_breakdown(OrderSide.SELL, 1_000_000.0)
+    assert parts["stamp_tax"] == 1_000_000.0 * 0.0005
+    assert parts["total"] == p.calculate_cost(OrderSide.SELL, 1_000_000.0)
+
+    small = p.calculate_cost_breakdown(OrderSide.BUY, 1_000.0)
+    assert small["commission"] == 5.0  # 最低佣金
+    assert small["total"] == p.calculate_cost(OrderSide.BUY, 1_000.0)
+
+    assert p.calculate_cost_breakdown(OrderSide.BUY, 0.0) == {
+        "commission": 0.0, "transfer_fee": 0.0, "stamp_tax": 0.0, "total": 0.0
+    }
+
+
+def test_orders_and_trades_carry_cost_components():
+    opens = [10.0, 9.0, 9.5, 10.5, 11.0, 10.8, 10.2]
+    closes = [9.5, 9.2, 10.0, 10.8, 10.9, 10.5, 10.0]
+    frame = make_frame("000001.SZ", opens, closes)
+    req = make_request("000001.SZ", initial_cash=1_500_000.0, entry_signal="close < open", holding_days=2)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+
+    assert len(vec.orders) >= 2
+    buy = vec.orders.iloc[0]
+    sell = vec.orders.iloc[1]
+    for col in ("price_raw", "commission", "stamp_tax", "transfer_fee"):
+        assert col in vec.orders.columns
+    assert buy["commission"] >= 5.0
+    assert buy["stamp_tax"] == 0.0
+    assert sell["stamp_tax"] > 0.0
+    # components sum to the recorded cost exactly
+    assert abs(buy["commission"] + buy["transfer_fee"] + buy["stamp_tax"] - buy["cost"]) < 1e-9
+    assert abs(sell["commission"] + sell["transfer_fee"] + sell["stamp_tax"] - sell["cost"]) < 1e-9
+
+    trade = vec.trades.iloc[0]
+    assert trade["entry_commission"] == buy["commission"]
+    assert trade["exit_commission"] == sell["commission"]
+    assert trade["exit_stamp_tax"] == sell["stamp_tax"]
+    assert trade["entry_stamp_tax"] == 0.0

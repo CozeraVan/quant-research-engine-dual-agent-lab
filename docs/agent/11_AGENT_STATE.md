@@ -12,7 +12,16 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-UPSTREAM-FACTOR-DELIVERY-001 (DONE — backfill complete, queue 7/7 fulfilled, 5/5 strategies unblocked; awaiting user-approved git finalization)
+QRE-COST-BREAKDOWN-001 (implementation DONE — awaiting user-approved git finalization, bundled with QRE-CHUNKED-BATCH-001 and QRE-REPORT-CN-001)
+
+## Pending Decisions (user)
+
+1. **Commit approvals**: QRE-CHUNKED-BATCH-001 (OOM/universe fixes) + QRE-REPORT-CN-001 (report localization) — both presented.
+2. Report review feedback: user inspects `outputs/backtests/full_history_cn/133a95e11050/` and reports further output-layer tweaks.
+3. Chart-text localization (needs CJK font check); `industry_group` awaits upstream `reference.stock_basic` population.
+4. Next steps from earlier menu: full 111-strategy full-history batch; M10.4 ML clustering (dependency approval); refresh timer install.
+
+Then (user-directed): output-file optimization based on user inspection of `outputs/backtests/full_history_check2/ef8006cb8f4d/` (2 strategies × full market × 2010-2026).
 
 Progress:
 1. Verified canonical project `/home/van/quant-workspace/indicators_tushare` and systemd timers (quant-ts 16:30, indicators 16:40, both enabled; yaml-config factors auto-join daily updates).

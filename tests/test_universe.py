@@ -363,3 +363,20 @@ def test_apply_stops_request_override_wins(tmp_path, monkeypatch):
     rr._run_backtest(SimpleNamespace(), _spec_with_stops(), req, frame=frame)
     assert captured["request"].stop_loss_pct == 0.05
     assert captured["request"].take_profit_pct == 0.20  # from spec
+
+
+
+def test_min_listing_days_data_start_symbols_kept():
+    """Symbols whose first bar equals the table data start must NOT be dropped
+    (their true listing predates the data history — list_date is unknown)."""
+    # emulate loader output AFTER the data-start nulling: OLD.SZ has NaT
+    frame = _frame({"OLD.SZ": 2, "NEW.SZ": 2})
+    start = date(2010, 1, 4)
+    meta = _metadata([
+        {"ts_code": "OLD.SZ", "list_date": None},               # == data start → unknown → keep
+        {"ts_code": "NEW.SZ", "list_date": date(2010, 1, 1)},   # IPO 3 days before start → drop
+    ])
+    spec = UniverseFilterSpec(min_listing_days=120)
+    filtered, report = apply_universe_filter(frame, spec, start=start, metadata=meta)
+    assert set(filtered["ts_code"].unique()) == {"OLD.SZ"}
+    assert report.dropped_by_rule == {"min_listing_days": 1}

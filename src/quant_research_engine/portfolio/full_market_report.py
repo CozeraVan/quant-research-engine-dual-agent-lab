@@ -21,7 +21,8 @@ _ROUND_TRIPS_COLUMNS = [
     "run_id", "strategy_id", "symbol", "entry_date", "exit_date",
     "holding_days", "entry_price", "exit_price", "quantity",
     "entry_notional", "exit_notional", "gross_pnl", "net_pnl",
-    "gross_return", "net_return", "total_cost", "exit_reason",
+    "gross_return", "net_return", "commission", "stamp_tax", "transfer_fee",
+    "total_cost", "exit_reason",
     "max_favorable_return", "max_adverse_return",
 ]
 
@@ -49,6 +50,261 @@ _EXCEL_SHEET_NAMES = [
     "SymbolPerformance", "EquityCurve", "DrawdownCurve",
     "TradeAnalysis", "CapitalUsage", "Artifacts",
 ]
+
+# ---- display-layer localization (xlsx / html only; CSV headers stay English) ----
+
+COLUMN_LABELS: dict[str, str] = {
+    # trades ledger
+    "run_id": "运行ID",
+    "strategy_id": "策略ID",
+    "symbol": "代码",
+    "trade_date": "交易日期",
+    "side": "方向",
+    "quantity": "数量",
+    "lot_count": "手数",
+    "price_raw": "原始价格",
+    "price_executed": "成交价格",
+    "notional": "成交金额",
+    "commission": "佣金",
+    "stamp_tax": "印花税",
+    "transfer_fee": "过户费",
+    "slippage_amount": "滑点金额",
+    "total_cost": "总费用",
+    "realized_pnl": "已实现盈亏",
+    "cash_after": "剩余现金",
+    "position_after": "持仓数量",
+    "order_reason": "委托原因",
+    "status": "状态",
+    # round trips
+    "entry_date": "入场日期",
+    "exit_date": "出场日期",
+    "holding_days": "持仓天数",
+    "entry_price": "入场价格",
+    "exit_price": "出场价格",
+    "entry_notional": "入场金额",
+    "exit_notional": "出场金额",
+    "gross_pnl": "毛盈亏",
+    "net_pnl": "净盈亏",
+    "gross_return": "毛收益率",
+    "net_return": "净收益率",
+    "exit_reason": "出场原因",
+    "max_favorable_return": "最大浮盈",
+    "max_adverse_return": "最大浮亏",
+    # symbol performance
+    "board": "板块",
+    "industry": "行业",
+    "trade_count": "交易笔数",
+    "open_trade_count": "未平仓笔数",
+    "win_count": "盈利笔数",
+    "loss_count": "亏损笔数",
+    "win_rate": "胜率",
+    "gross_profit": "总盈利",
+    "gross_loss": "总亏损",
+    "net_profit": "净利润",
+    "profit_factor": "盈亏比",
+    "expectancy": "单笔期望",
+    "strategy_total_return": "策略总收益率",
+    "buy_hold_return": "买入持有收益率",
+    "excess_return_vs_buy_hold": "超额收益率",
+    "sharpe": "夏普比率",
+    "sortino": "索提诺比率",
+    "information_ratio_vs_buy_hold": "信息比率",
+    "max_drawdown": "最大回撤",
+    "turnover": "换手率",
+    "failed_order_count": "失败委托数",
+    # equity / drawdown curves
+    "cash": "现金",
+    "market_value": "持仓市值",
+    "total_equity": "总权益",
+    "daily_return": "日收益率",
+    "cumulative_return": "累计收益率",
+    "position_count": "持仓数量",
+    "running_peak": "历史峰值",
+    "drawdown": "回撤额",
+    "drawdown_pct": "回撤幅度",
+    "drawdown_duration_days": "回撤持续天数",
+}
+
+KEY_LABELS: dict[str, str] = {
+    # overview / strategy intro
+    "strategy_intro": "策略说明",
+    "run_id": "运行ID",
+    "holding_days": "持仓天数",
+    "strategy_name": "策略名称",
+    "strategy_family": "策略族",
+    "strategy_description": "策略描述",
+    "entry_condition": "入场条件",
+    "exit_condition": "出场条件",
+    "stop_loss_pct": "止损比例",
+    "take_profit_pct": "止盈比例",
+    "trailing_stop_pct": "移动止损比例",
+    "exclude_st": "剔除ST",
+    "exclude_suspended": "剔除停牌",
+    "min_listing_days": "最小上市天数",
+    "min_amount": "最小成交额",
+    "execution": "执行方式",
+    "engine_mode": "引擎模式",
+    "date_start": "开始日期",
+    "date_end": "结束日期",
+    "market": "市场",
+    "frequency": "频率",
+    "universe": "股票池",
+    "symbol_count": "股票数量",
+    "traded_symbol_count": "实际交易股票数",
+    "initial_cash": "初始资金",
+    "market_profile": "市场配置",
+    "entry_execution": "入场执行",
+    "exit_execution": "出场执行",
+    "cost_model": "成本模型",
+    "slippage_model": "滑点模型",
+    "factor_requirements": "因子需求",
+    "strategy_source_path": "策略文件路径",
+    "generated_at": "生成时间",
+    # performance
+    "total_trade_count": "交易笔数",
+    "winning_trade_count": "盈利笔数",
+    "losing_trade_count": "亏损笔数",
+    "profit_factor": "盈亏比",
+    "expectancy": "单笔期望",
+    "recovery_factor": "恢复因子",
+    "information_ratio": "信息比率",
+    "positive_symbol_rate": "盈利股票占比",
+    "mean_symbol_return": "平均个股收益率",
+    "median_symbol_return": "个股收益率中位数",
+    "max_drawdown_duration_days": "最大回撤持续天数",
+    "largest_winning_trade": "最大单笔盈利",
+    "largest_losing_trade": "最大单笔亏损",
+    "average_winning_trade": "平均盈利",
+    "average_losing_trade": "平均亏损",
+    "average_win_loss_ratio": "平均盈亏比",
+    "max_consecutive_wins": "最大连续盈利次数",
+    "max_consecutive_losses": "最大连续亏损次数",
+    "average_bars_in_trade": "平均持仓天数",
+    "average_bars_in_winning_trades": "盈利交易平均持仓天数",
+    "average_bars_in_losing_trades": "亏损交易平均持仓天数",
+    "best_symbols": "表现最好股票",
+    "worst_symbols": "表现最差股票",
+    "benchmark_code": "基准代码",
+    # trade analysis
+    "pnl_distribution_bins": "盈亏分布",
+    "win_loss_counts": "盈亏笔数",
+    "percent_profitable": "盈利占比",
+    "average_pnl": "平均盈亏",
+    "outlier_count": "异常交易数",
+    "outlier_pnl": "异常交易盈亏",
+    # capital usage
+    "cagr": "年化收益率",
+    "initial_capital_return": "初始资金收益率",
+    "required_account_size": "所需账户规模",
+    "account_size_return": "账户规模收益率",
+    "net_profit_as_pct_of_max_loss": "净利润/最大亏损",
+    "average_margin_used": "平均保证金占用",
+    "maximum_margin_used": "最大保证金占用",
+    "margin_efficiency": "保证金效率",
+    "margin_call_count": "追加保证金次数",
+}
+
+_ARTIFACT_DESCRIPTIONS: list[tuple[str, str]] = [
+    ("backtest_report.xlsx", "全市场回测报告工作簿"),
+    ("trades_ledger.csv", "成交流水（全部股票）"),
+    ("round_trips.csv", "完整进出场回合"),
+    ("symbol_performance.csv", "分股票绩效汇总"),
+    ("strategy_performance.json", "策略整体绩效"),
+    ("equity_curve.csv", "全市场净值曲线"),
+    ("drawdown_curve.csv", "每日回撤曲线"),
+    ("trade_analysis.json", "交易分析（TradingView 风格）"),
+    ("capital_usage.json", "资金与保证金占用"),
+    ("equity_curve_chart.png", "净值曲线图"),
+    ("drawdown_curve_chart.png", "回撤曲线图"),
+]
+
+_RATIO_NAME_TOKENS = (
+    "return", "rate", "pct", "dd", "win", "excess",
+    "drawdown", "sharpe", "volatility",
+)
+_RATIO_NAME_EXCLUDES = ("count", "day", "quantity", "duration")
+
+
+def is_ratio_column(name: str, series: pd.Series | None = None) -> bool:
+    """Decide whether a column holds a ratio (displayed as 0.00%).
+
+    Name-based: contains a ratio token (return/rate/pct/dd/win/excess/
+    drawdown/sharpe/volatility) unless it is clearly a count/duration.
+    Fallback: numeric values all within [-1, 1] with at least one
+    fractional value.
+    """
+    lower = str(name).lower()
+    if not any(token in lower for token in _RATIO_NAME_EXCLUDES):
+        if any(token in lower for token in _RATIO_NAME_TOKENS):
+            return True
+    if series is not None:
+        values = pd.to_numeric(series, errors="coerce").dropna()
+        if not values.empty:
+            if (values.abs() <= 1.0).all() and (values != values.round(0)).any():
+                return True
+    return False
+
+
+def _column_number_format(name: str, series: pd.Series | None = None) -> str:
+    return "0.00%" if is_ratio_column(name, series) else "0.00"
+
+
+def _fmt_display(value: Any, *, ratio: bool = False) -> str:
+    """Format one value for the HTML display layer. NaN/None -> '-'."""
+    if _is_na(value):
+        return "-"
+    if isinstance(value, bool):
+        return "是" if value else "否"
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        return f"{float(value):.2%}" if ratio else f"{float(value):.2f}"
+    if isinstance(value, dict):
+        return json.dumps(_json_ready(value), ensure_ascii=False)
+    if isinstance(value, list):
+        return json.dumps(_json_ready(value), ensure_ascii=False)[:200]
+    return str(value)
+
+
+def _is_na(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, (float, np.floating)) and pd.isna(value):
+        return True
+    if value is pd.NA or value is pd.NaT:
+        return True
+    return False
+
+
+def _key_label(key: Any) -> str:
+    text = str(key)
+    return KEY_LABELS.get(text) or COLUMN_LABELS.get(text, text)
+
+
+def _build_strategy_intro(run_request: dict[str, Any] | None) -> dict[str, Any]:
+    """Build the strategy-intro block (策略说明) from the run_request payload."""
+    if not run_request:
+        return {}
+    req = run_request.get("request", {}) or {}
+    holding_days = req.get("holding_days")
+    exit_condition = req.get("exit_signal") or (f"持仓 {holding_days} 日" if holding_days else None)
+    return {
+        "strategy_name": req.get("strategy_name"),
+        "strategy_id": req.get("strategy_id"),
+        "strategy_family": req.get("strategy_family"),
+        "entry_condition": req.get("entry_signal"),
+        "exit_condition": exit_condition,
+        "holding_days": holding_days,
+        "stop_loss_pct": req.get("stop_loss_pct"),
+        "take_profit_pct": req.get("take_profit_pct"),
+        "trailing_stop_pct": req.get("trailing_stop_pct"),
+        "exclude_st": req.get("exclude_st"),
+        "exclude_suspended": req.get("exclude_suspended"),
+        "min_listing_days": req.get("min_listing_days"),
+        "min_amount": req.get("min_amount"),
+        "initial_cash": req.get("initial_cash"),
+        "execution": "信号日 t，t+1 开盘成交",
+    }
 
 
 def build_trades_ledger(
@@ -93,21 +349,29 @@ def build_trades_ledger(
                 continue
             for record in orders.to_dict("records"):
                 side = str(record.get("side", ""))
+                price_raw = record.get("price_raw", record.get("price"))
+                price_executed = record.get("price")
+                quantity = record.get("quantity")
+                slippage_amount = (
+                    abs(_safe_float(price_executed) - _safe_float(price_raw)) * _safe_float(quantity)
+                    if price_raw is not None and price_executed is not None and quantity is not None
+                    else None
+                )
                 rows.append({
                     "run_id": run_id,
                     "strategy_id": strategy_id,
                     "symbol": record.get("symbol", symbol),
                     "trade_date": _to_date(record.get("trade_date")),
                     "side": side,
-                    "quantity": record.get("quantity"),
+                    "quantity": quantity,
                     "lot_count": None,
-                    "price_raw": record.get("price"),
-                    "price_executed": record.get("price"),
+                    "price_raw": price_raw,
+                    "price_executed": price_executed,
                     "notional": record.get("notional"),
-                    "commission": None,
-                    "stamp_tax": None,
-                    "transfer_fee": None,
-                    "slippage_amount": None,
+                    "commission": record.get("commission"),
+                    "stamp_tax": record.get("stamp_tax"),
+                    "transfer_fee": record.get("transfer_fee"),
+                    "slippage_amount": slippage_amount,
                     "total_cost": record.get("cost"),
                     "realized_pnl": None,
                     "cash_after": None,
@@ -193,6 +457,20 @@ def build_round_trips(
                 net_pnl = record.get("net_pnl")
                 gross_return = _safe_float(gross_pnl) / _safe_float(entry_notional) if entry_notional and gross_pnl is not None else None
                 net_return = _safe_float(net_pnl) / _safe_float(entry_notional) if entry_notional and net_pnl is not None else None
+                entry_commission = record.get("entry_commission")
+                exit_commission = record.get("exit_commission")
+                stamp_tax = record.get("exit_stamp_tax")
+                transfer_fee = (
+                    _safe_float(record.get("entry_transfer_fee") or 0.0)
+                    + _safe_float(record.get("exit_transfer_fee") or 0.0)
+                    if record.get("entry_transfer_fee") is not None or record.get("exit_transfer_fee") is not None
+                    else None
+                )
+                commission = (
+                    _safe_float(entry_commission or 0.0) + _safe_float(exit_commission or 0.0)
+                    if entry_commission is not None or exit_commission is not None
+                    else None
+                )
                 rows.append({
                     "run_id": run_id,
                     "strategy_id": strategy_id,
@@ -209,6 +487,9 @@ def build_round_trips(
                     "net_pnl": net_pnl,
                     "gross_return": gross_return,
                     "net_return": net_return,
+                    "commission": commission,
+                    "stamp_tax": stamp_tax,
+                    "transfer_fee": transfer_fee,
                     "total_cost": record.get("cost"),
                     "exit_reason": record.get("exit_reason"),
                     "max_favorable_return": None,
@@ -286,6 +567,9 @@ def build_symbol_performance(
             })
     else:
         for record in summary.to_dict("records"):  # type: ignore[union-attr]
+            # 只保留存在交易行为(成交或委托)的标的行，无交易标的从个股表现中剔除
+            if not (record.get("trade_count") or record.get("order_count")):
+                continue
             symbol = str(record.get("symbol", ""))
             single_result = results.get(symbol) if results is not None else None  # type: ignore[union-attr]
             equity_curve = getattr(single_result, "equity_curve", None) if single_result is not None else None
@@ -807,20 +1091,43 @@ def write_full_market_excel(
 
     wb = Workbook()
     header_font = Font(bold=True)
+    section_font = Font(bold=True)
 
     def _write_df_sheet(ws, df: pd.DataFrame) -> None:
-        ws.append(list(df.columns))
+        ws.append([COLUMN_LABELS.get(str(c), str(c)) for c in df.columns])
         for cell in ws[1]:
             cell.font = header_font
+        number_formats = [_column_number_format(str(c), df[c]) for c in df.columns]
         for _, row in df.iterrows():
             ws.append([_excel_value(v) for v in row])
+        for col_idx, fmt in enumerate(number_formats, start=1):
+            for row_idx in range(2, ws.max_row + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                if isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool):
+                    cell.number_format = fmt
 
     def _write_kv_sheet(ws, data: dict[str, Any]) -> None:
-        ws.append(["Key", "Value"])
+        ws.append(["项目", "值"])
         for cell in ws[1]:
             cell.font = header_font
+        row_formats: dict[int, str] = {}
         for key, value in data.items():
-            ws.append([key, _excel_value(value)])
+            label = _key_label(key)
+            if isinstance(value, dict):
+                # Nested block (e.g. 策略说明): section row then its items.
+                ws.append([label, ""])
+                ws.cell(row=ws.max_row, column=1).font = section_font
+                for sub_key, sub_value in value.items():
+                    sub_label = _key_label(sub_key)
+                    ws.append([sub_label, _excel_value(sub_value)])
+                    row_formats[ws.max_row] = _column_number_format(str(sub_key))
+                continue
+            ws.append([label, _excel_value(value)])
+            row_formats[ws.max_row] = _column_number_format(str(key))
+        for row_idx, fmt in row_formats.items():
+            cell = ws.cell(row=row_idx, column=2)
+            if isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool):
+                cell.number_format = fmt
 
     # Overview
     _write_kv_sheet(wb.active, overview)
@@ -878,22 +1185,10 @@ def write_full_market_excel(
 
     # Artifacts
     ws_art = wb.create_sheet("Artifacts")
-    ws_art.append(["Artifact", "Description"])
+    ws_art.append(["文件", "说明"])
     for cell in ws_art[1]:
         cell.font = header_font
-    for name, desc in [
-        ("backtest_report.xlsx", "Full-market backtest report workbook"),
-        ("trades_ledger.csv", "Transaction ledger, all symbols"),
-        ("round_trips.csv", "Completed entry-to-exit trade cycles"),
-        ("symbol_performance.csv", "Per-symbol performance summary"),
-        ("strategy_performance.json", "Aggregate strategy performance"),
-        ("equity_curve.csv", "Full-market equity curve"),
-        ("drawdown_curve.csv", "Daily drawdown curve"),
-        ("trade_analysis.json", "TradingView-style trade analysis"),
-        ("capital_usage.json", "Capital and margin usage"),
-        ("equity_curve_chart.png", "Equity curve chart image"),
-        ("drawdown_curve_chart.png", "Drawdown curve chart image"),
-    ]:
+    for name, desc in _ARTIFACT_DESCRIPTIONS:
         ws_art.append([name, desc])
 
     path = output_dir / "backtest_report.xlsx"
@@ -924,39 +1219,47 @@ def generate_html_report(
     ec_b64 = _chart_base64(equity_curve_chart) if equity_curve_chart else ""
     dd_b64 = _chart_base64(drawdown_curve_chart) if drawdown_curve_chart else ""
 
-    def _kv_table(data: dict[str, Any], columns: tuple[str, str] = ("Key", "Value")) -> str:
+    def _kv_table(data: dict[str, Any], columns: tuple[str, str] = ("项目", "值")) -> str:
         lines = ['<table class="kv">', f"<thead><tr><th>{columns[0]}</th><th>{columns[1]}</th></tr></thead><tbody>"]
         for k, v in data.items():
-            lines.append(f"<tr><td>{_h(str(k))}</td><td>{_h(_fmt_val(v))}</td></tr>")
+            label = _key_label(k)
+            if isinstance(v, dict):
+                lines.append(f'<tr><td colspan="2"><strong>{_h(label)}</strong></td></tr>')
+                for sk, sv in v.items():
+                    sub_label = _key_label(sk)
+                    lines.append(f"<tr><td>{_h(sub_label)}</td><td>{_h(_fmt_display(sv, ratio=is_ratio_column(str(sk))))}</td></tr>")
+                continue
+            lines.append(f"<tr><td>{_h(label)}</td><td>{_h(_fmt_display(v, ratio=is_ratio_column(str(k))))}</td></tr>")
         lines.append("</tbody></table>")
         return "\n".join(lines)
 
     def _df_table(df: pd.DataFrame, max_rows: int = 200) -> str:
         if df.empty:
-            return '<p class="empty">No data</p>'
+            return '<p class="empty">暂无数据</p>'
         cols = [str(c) for c in df.columns]
+        ratio_flags = {c: is_ratio_column(c, df[c]) for c in df.columns}
         lines = ['<div class="table-wrap"><table>', "<thead><tr>"]
-        lines.extend(f"<th>{_h(c)}</th>" for c in cols)
+        lines.extend(f"<th>{_h(COLUMN_LABELS.get(c, c))}</th>" for c in cols)
         lines.append("</tr></thead><tbody>")
         for i, (_, row) in enumerate(df.iterrows()):
             if i >= max_rows:
-                lines.append(f'<tr><td colspan="{len(cols)}" class="truncated">... {len(df) - max_rows} more rows not shown</td></tr>')
+                lines.append(f'<tr><td colspan="{len(cols)}" class="truncated">... 其余 {len(df) - max_rows} 行未显示</td></tr>')
                 break
             lines.append("<tr>")
             for c in cols:
-                lines.append(f"<td>{_h(_fmt_val(row[c]))}</td>")
+                lines.append(f"<td>{_h(_fmt_display(row[c], ratio=ratio_flags[c]))}</td>")
             lines.append("</tr>")
         lines.append("</tbody></table></div>")
         return "\n".join(lines)
 
     def _metrics_cards(perf: dict[str, Any]) -> str:
         cards = [
-            ("Total Return", _fmt_pct(perf.get("strategy_total_return"))),
-            ("Win Rate", _fmt_pct(perf.get("win_rate"))),
-            ("Sharpe", _fmt_num(perf.get("sharpe"), 3)),
-            ("Max Drawdown", _fmt_pct(perf.get("max_drawdown"))),
-            ("Total Trades", str(perf.get("total_trade_count") or "-")),
-            ("Profit Factor", _fmt_num(perf.get("profit_factor"), 2)),
+            ("总收益率", _fmt_pct(perf.get("strategy_total_return"))),
+            ("胜率", _fmt_pct(perf.get("win_rate"))),
+            ("夏普比率", _fmt_num(perf.get("sharpe"), 2)),
+            ("最大回撤", _fmt_pct(perf.get("max_drawdown"))),
+            ("交易笔数", str(perf.get("total_trade_count") or "-")),
+            ("盈亏比", _fmt_num(perf.get("profit_factor"), 2)),
         ]
         lines = ['<div class="metrics-grid">']
         for label, value in cards:
@@ -983,11 +1286,11 @@ def generate_html_report(
         return "\n".join(lines)
 
     html = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Backtest Report — {_h(str(overview.get('strategy_name') or overview.get('run_id') or ''))}</title>
+<title>回测报告 — {_h(str(overview.get('strategy_name') or overview.get('run_id') or ''))}</title>
 <style>
   :root {{--bg:#fff;--fg:#1a1a1a;--muted:#666;--border:#e0e0e0;--accent:#1f77b4;--green:#2ca02c;--red:#d62728;--card-bg:#f8f9fa;--radius:6px}}
   * {{box-sizing:border-box;margin:0;padding:0}}
@@ -1028,46 +1331,49 @@ def generate_html_report(
 </head>
 <body>
 <header>
-  <h1>Backtest Report</h1>
+  <h1>回测报告</h1>
   <div class="meta">
     {_h(str(overview.get('strategy_name') or ''))} &nbsp;|&nbsp;
-    Engine: {_h(str(overview.get('engine_mode', '')))} &nbsp;|&nbsp;
+    引擎: {_h(str(overview.get('engine_mode', '')))} &nbsp;|&nbsp;
     {_h(str(overview.get('market', '')))} &nbsp;|&nbsp;
-    Run: {_h(str(overview.get('run_id') or ''))}
+    运行: {_h(str(overview.get('run_id') or ''))}
   </div>
 </header>
 <div class="container">
 
-<h2>1. Performance Summary</h2>
+<h2>0. 策略说明</h2>
+{_kv_table({'strategy_intro': overview.get('strategy_intro') or {}})}
+
+<h2>1. 绩效汇总</h2>
 {_metrics_cards(strategy_perf)}
 {_kv_table(strategy_perf)}
 
-<h2>2. Charts</h2>
-<div class="chart"><h3>Equity Curve</h3>{f'<img src="data:image/png;base64,{ec_b64}" alt="Equity Curve">' if ec_b64 else '<p class="empty">No equity data</p>'}</div>
-<div class="chart"><h3>Drawdown Curve</h3>{f'<img src="data:image/png;base64,{dd_b64}" alt="Drawdown Curve">' if dd_b64 else '<p class="empty">No drawdown data</p>'}</div>
+<h2>2. 图表</h2>
+<div class="chart"><h3>净值曲线</h3>{f'<img src="data:image/png;base64,{ec_b64}" alt="净值曲线">' if ec_b64 else '<p class="empty">暂无净值数据</p>'}</div>
+<div class="chart"><h3>回撤曲线</h3>{f'<img src="data:image/png;base64,{dd_b64}" alt="回撤曲线">' if dd_b64 else '<p class="empty">暂无回撤数据</p>'}</div>
 
-<h2>3. Trade Analysis</h2>
-<h3>PnL Distribution</h3>
+<h2>3. 交易分析</h2>
+<h3>盈亏分布</h3>
 {_pnl_distribution(trade_analysis)}
 <div class="section">{_kv_table(trade_analysis)}</div>
 
-<h2>4. Symbol Performance</h2>
+<h2>4. 个股表现</h2>
 {_df_table(symbol_perf, max_rows=100)}
 
-<h2>5. Capital Usage</h2>
+<h2>5. 资金使用</h2>
 {_kv_table(capital_usage)}
 
-<h2>6. Trades Ledger</h2>
+<h2>6. 成交流水</h2>
 {_df_table(trades_ledger, max_rows=200)}
 
-<h2>7. Round Trips</h2>
+<h2>7. 完整回合</h2>
 {_df_table(round_trips, max_rows=200)}
 
-<h2>8. Run Overview</h2>
+<h2>8. 运行概览</h2>
 {_kv_table(overview)}
 
 </div>
-<footer>Generated at {overview.get('generated_at', 'N/A')} &mdash; quant-research-engine</footer>
+<footer>生成时间 {overview.get('generated_at', 'N/A')} &mdash; quant-research-engine</footer>
 </body>
 </html>"""
     return html
@@ -1083,24 +1389,8 @@ def _h(text: str) -> str:
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def _fmt_val(value: Any) -> str:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return ""
-    if isinstance(value, float):
-        return f"{value:.4f}"
-    if isinstance(value, (np.integer,)):
-        return str(int(value))
-    if isinstance(value, bool):
-        return str(value)
-    if isinstance(value, dict):
-        return json.dumps(value, ensure_ascii=False)
-    if isinstance(value, list):
-        return json.dumps(value, ensure_ascii=False)[:200]
-    return str(value)
-
-
 def _fmt_pct(value: Any) -> str:
-    if value is None:
+    if _is_na(value):
         return "-"
     try:
         f = float(value)
@@ -1110,7 +1400,7 @@ def _fmt_pct(value: Any) -> str:
 
 
 def _fmt_num(value: Any, decimals: int = 2) -> str:
-    if value is None:
+    if _is_na(value):
         return "-"
     try:
         f = float(value)
@@ -1132,11 +1422,13 @@ def write_full_market_report(
     strategy_id = None
     strategy_name = None
     strategy_family = None
+    req: dict[str, Any] = {}
     if run_request is not None:
-        req = run_request.get("request", {})
+        req = run_request.get("request", {}) or {}
         strategy_id = req.get("strategy_id")
         strategy_name = req.get("strategy_name")
         strategy_family = req.get("strategy_family")
+    strategy_intro = _build_strategy_intro(run_request)
 
     if engine_mode == "shared_cash":
         orders = getattr(result, "orders", pd.DataFrame())
@@ -1158,6 +1450,12 @@ def write_full_market_report(
             strategy_name=strategy_name, strategy_family=strategy_family,
             engine_mode="shared_cash",
         )
+        if run_request is not None:
+            _req = run_request.get("request", {})
+            if strategy_perf.get("date_start") is None:
+                strategy_perf["date_start"] = _req.get("date_start") or run_request.get("start")
+            if strategy_perf.get("date_end") is None:
+                strategy_perf["date_end"] = _req.get("date_end") or run_request.get("end")
         trade_analysis = build_trade_analysis(round_trips)
         capital_usage = build_capital_usage(fm_equity_curve, strategy_perf)
 
@@ -1174,9 +1472,10 @@ def write_full_market_report(
             "strategy_name": strategy_name,
             "strategy_family": strategy_family,
             "strategy_description": None,
+            "strategy_intro": strategy_intro,
             "engine_mode": "shared_cash",
-            "date_start": shared_summary.get("date_start"),
-            "date_end": shared_summary.get("date_end"),
+            "date_start": shared_summary.get("date_start") or req.get("date_start"),
+            "date_end": shared_summary.get("date_end") or req.get("date_end"),
             "market": "ashare",
             "frequency": "daily",
             "universe": "all_a",
@@ -1262,6 +1561,13 @@ def write_full_market_report(
         run_id=run_id, strategy_id=strategy_id,
         strategy_name=strategy_name, strategy_family=strategy_family,
     )
+    if run_request is not None:
+        # Backfill run-window fields the engine summary does not carry
+        _req = run_request.get("request", {})
+        if strategy_perf.get("date_start") is None:
+            strategy_perf["date_start"] = _req.get("date_start") or run_request.get("start")
+        if strategy_perf.get("date_end") is None:
+            strategy_perf["date_end"] = _req.get("date_end") or run_request.get("end")
     trade_analysis = build_trade_analysis(round_trips)
     capital_usage = build_capital_usage(equity_curve, strategy_perf)
 
@@ -1274,15 +1580,16 @@ def write_full_market_report(
         "strategy_name": strategy_name,
         "strategy_family": strategy_family,
         "strategy_description": None,
+        "strategy_intro": strategy_intro,
         "engine_mode": "batch",
-        "date_start": summary_metrics.get("date_start"),
-        "date_end": summary_metrics.get("date_end"),
+        "date_start": summary_metrics.get("date_start") or req.get("date_start"),
+        "date_end": summary_metrics.get("date_end") or req.get("date_end"),
         "market": "ashare",
         "frequency": "daily",
         "universe": "all_a",
         "symbol_count": summary_metrics.get("symbol_count"),
         "traded_symbol_count": summary_metrics.get("traded_symbol_count"),
-        "initial_cash": None,
+        "initial_cash": req.get("initial_cash"),
         "market_profile": summary_metrics.get("market_profile"),
         "entry_execution": "t_plus_1_open",
         "exit_execution": "t_plus_1_open",
@@ -1377,14 +1684,18 @@ def _safe_div(a: float | None, b: float) -> float | None:
 
 
 def _excel_value(value: Any) -> Any:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return ""
+    if _is_na(value):
+        return "-"
     if isinstance(value, (int, float, str, bool)):
         return value
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
     if isinstance(value, list):
-        return json.dumps(value, ensure_ascii=False)
+        return json.dumps(_json_ready(value), ensure_ascii=False)
     if isinstance(value, dict):
-        return json.dumps(value, ensure_ascii=False)
+        return json.dumps(_json_ready(value), ensure_ascii=False)
     return str(value)
 
 

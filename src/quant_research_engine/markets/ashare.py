@@ -48,6 +48,20 @@ class AShareMarketProfile:
         stamp_tax = notional * self.stamp_tax_sell if side is OrderSide.SELL else 0.0
         return round(commission + transfer_fee + stamp_tax, 10)
 
+    def calculate_cost_breakdown(self, side: OrderSide, notional: float) -> dict[str, float]:
+        """Per-component cost breakdown; ``total`` matches calculate_cost exactly."""
+        if notional <= 0:
+            return {"commission": 0.0, "transfer_fee": 0.0, "stamp_tax": 0.0, "total": 0.0}
+        commission = max(notional * self.commission_rate, self.min_commission)
+        transfer_fee = notional * self.transfer_fee_rate
+        stamp_tax = notional * self.stamp_tax_sell if side is OrderSide.SELL else 0.0
+        return {
+            "commission": commission,
+            "transfer_fee": transfer_fee,
+            "stamp_tax": stamp_tax,
+            "total": round(commission + transfer_fee + stamp_tax, 10),
+        }
+
     def apply_slippage(self, side: OrderSide, price: float) -> float:
         if self.slippage_model != "percent":
             raise ValueError(f"Unsupported slippage model: {self.slippage_model}")

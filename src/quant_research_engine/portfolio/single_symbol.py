@@ -107,6 +107,7 @@ class SingleSymbolBacktestEngine:
         entry_price: float | None = None
         entry_date: pd.Timestamp | None = None
         entry_cost = 0.0
+        entry_cost_parts: dict[str, float] = {"commission": 0.0, "transfer_fee": 0.0, "stamp_tax": 0.0, "total": 0.0}
         trailing_anchor = 0.0
 
         orders: list[dict[str, object]] = []
@@ -122,7 +123,8 @@ class SingleSymbolBacktestEngine:
             trade_date = row["trade_date"]
 
             if pending_buy_index == index and quantity == 0:
-                price = self.market_profile.apply_slippage(OrderSide.BUY, float(row[request.entry_price_column]))
+                price_raw = float(row[request.entry_price_column])
+                price = self.market_profile.apply_slippage(OrderSide.BUY, price_raw)
                 raw_quantity = int(cash // price)
                 buy_quantity = self.market_profile.round_order_quantity(OrderSide.BUY, raw_quantity)
                 if buy_quantity > 0:
@@ -147,14 +149,16 @@ class SingleSymbolBacktestEngine:
                         cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
                         total_cash_needed = order.notional + cost
                         if total_cash_needed <= cash:
+                            cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.BUY, order.notional)
                             cash -= total_cash_needed
                             quantity = buy_quantity
                             entry_index = index
                             entry_price = price
                             entry_date = trade_date
                             entry_cost = cost
+                            entry_cost_parts = cost_parts
                             trailing_anchor = float(price)
-                            orders.append(self._order_row(order, cost))
+                            orders.append(self._order_row(order, cost, price_raw=price_raw, cost_parts=cost_parts))
                             pending_buy_index = None
 
             if quantity > 0 and entry_index is not None:
@@ -202,7 +206,8 @@ class SingleSymbolBacktestEngine:
                         pending_sell_reason = "exit_signal"
 
                 if sell_reason is not None:
-                    price = self.market_profile.apply_slippage(OrderSide.SELL, float(row[request.entry_price_column]))
+                    price_raw = float(row[request.entry_price_column])
+                    price = self.market_profile.apply_slippage(OrderSide.SELL, price_raw)
                     order = Order(
                         symbol=request.symbol,
                         trade_date=trade_date.date(),
@@ -223,8 +228,9 @@ class SingleSymbolBacktestEngine:
                         pending_sell_reason = sell_reason
                     else:
                         cost = self.market_profile.calculate_cost(OrderSide.SELL, order.notional)
+                        exit_cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.SELL, order.notional)
                         cash += order.notional - cost
-                        orders.append(self._order_row(order, cost))
+                        orders.append(self._order_row(order, cost, price_raw=price_raw, cost_parts=exit_cost_parts))
                         trades.append(
                             {
                                 "symbol": request.symbol,
@@ -237,6 +243,12 @@ class SingleSymbolBacktestEngine:
                                 "cost": entry_cost + cost,
                                 "net_pnl": (price - float(entry_price)) * quantity - entry_cost - cost,
                                 "exit_reason": sell_reason,
+                                "entry_commission": entry_cost_parts["commission"],
+                                "entry_stamp_tax": entry_cost_parts["stamp_tax"],
+                                "entry_transfer_fee": entry_cost_parts["transfer_fee"],
+                                "exit_commission": exit_cost_parts["commission"],
+                                "exit_stamp_tax": exit_cost_parts["stamp_tax"],
+                                "exit_transfer_fee": exit_cost_parts["transfer_fee"],
                             }
                         )
                         quantity = 0
@@ -244,6 +256,7 @@ class SingleSymbolBacktestEngine:
                         entry_price = None
                         entry_date = None
                         entry_cost = 0.0
+                        entry_cost_parts = {"commission": 0.0, "transfer_fee": 0.0, "stamp_tax": 0.0, "total": 0.0}
                         trailing_anchor = 0.0
                         pending_sell_index = None
                         pending_sell_reason = None
@@ -284,8 +297,15 @@ class SingleSymbolBacktestEngine:
     def _empty_result(self, request: SingleSymbolBacktestRequest) -> SingleSymbolBacktestResult:
         return empty_single_symbol_result(request)
 
-    def _order_row(self, order: Order, cost: float) -> dict[str, object]:
-        return {
+    def _order_row(
+        self,
+        order: Order,
+        cost: float,
+        *,
+        price_raw: float | None = None,
+        cost_parts: dict[str, float] | None = None,
+    ) -> dict[str, object]:
+        row: dict[str, object] = {
             "symbol": order.symbol,
             "trade_date": pd.Timestamp(order.trade_date),
             "side": order.side.value,
@@ -294,6 +314,13 @@ class SingleSymbolBacktestEngine:
             "notional": order.notional,
             "cost": cost,
         }
+        if price_raw is not None:
+            row["price_raw"] = price_raw
+        if cost_parts is not None:
+            row["commission"] = cost_parts["commission"]
+            row["stamp_tax"] = cost_parts["stamp_tax"]
+            row["transfer_fee"] = cost_parts["transfer_fee"]
+        return row
 
     def _failed_order_row(self, order: Order, reason: str) -> dict[str, object]:
         return {

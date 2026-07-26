@@ -148,6 +148,14 @@ def load_universe_metadata(
         query += " GROUP BY ts_code"
         listing = pd.read_sql_query(text(query), con=store.market_engine, params=params)
         if not listing.empty:
+            # Symbols whose first bar IS the table's data start cannot be
+            # distinguished from stocks listed long before the data history
+            # begins (e.g. stock_basic is empty upstream). Treat their
+            # list_date as unknown instead of the data-start date — otherwise
+            # min_listing_days would wrongly drop every such symbol whenever
+            # the run start minus N days precedes the data history start.
+            data_start = listing["list_date"].min()
+            listing.loc[listing["list_date"] == data_start, "list_date"] = pd.NaT
             base = base.merge(listing, on="ts_code", how="outer")
 
     if "is_st" in base.columns:

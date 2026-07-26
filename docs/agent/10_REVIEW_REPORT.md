@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-UPSTREAM-FACTOR-DELIVERY-001
+QRE-REPORT-CN-001 (report layer: localization, strategy intro, blank filling, 2dp)
 
 ## Reviewer
 
@@ -14,24 +14,22 @@ PASS
 
 ## Findings
 
-- Plan B executed exactly as approved: yaml-driven factor registration + one small `ATRRawFactor` class; the project's own validate → plan → small-sample → full-backfill flow followed without shortcuts.
-- Value correctness verified by hand computation (SMA rolling means and Wilder RMA ATR) on the sample stock — storage-rounding-level diffs only, 100% non-null coverage.
-- Full backfill: 5,544 stocks processed, 0 failures; all 7 columns present with ~13M rows each across ~5,400+ stocks.
-- Queue lifecycle proven end-to-end: recheck marked 7/7 fulfilled; the 5 shelved strategies re-ran OK — including a newly-surfaced tf07e signal-expression precedence bug (`>` binding over `&`), fixed with parens in both the YAML and the generator (regeneration-safe), which only surfaced now because the strategy had never reached expression evaluation while shelved.
-- Cross-project discipline kept: no git action in the indicators repo (its pre-existing dirty state untouched); QRE side read-only except the queue file.
-- Scope disclosure: the category-level backfill also covered other pending config columns (project config-parity behavior) — disclosed to the user in the progress report.
-- 1137 tests green; no QRE runtime contract changes.
+- All four user requirements verified on the final full-market run (batch `133a95e11050`): Chinese labels throughout xlsx/HTML; strategy intro block at report top (entry/exit/holding/stops/universe/execution); previously-blank fields filled (strategy_name, strategy_id, strategy_family, 开始日期 2010-01-04, 结束日期 2026-07-24, 股票数量, 交易笔数); 0.00/0.00% cell formats; NaN→`-`.
+- Self-review catch fixed: Performance-sheet dates were still blank after the subagent pass (engine summary doesn't carry them) — added run_request backfill in both batch and shared branches, re-verified filled on the final run.
+- Contract discipline: sheet names, file names, CSV headers and CSV values unchanged (machine contracts); localization/formatting confined to xlsx cell layer and HTML strings. Full suite 1160 green (19 new localization tests).
+- Metadata composition is honest about gaps: `industry_group` stays `-`/unknown until upstream populates `reference.stock_basic`; board from ts_code derivation; cap/liquidity buckets from daily_basic.
+- matplotlib chart text stays English (no guaranteed CJK font in environment — documented limitation, charts are auxiliary).
+- `sharpe` is formatted as a ratio (0.00%) per the token list — flagged by the implementer; semantically not a percentage but display is consistent (0.00% of a Sharpe value still reads fine at 2dp; noted for user review).
 
 ## Behavior Verified
 
-- indicators validate success / plan lists all 7 / small-sample parity / full backfill 0 failures.
-- recheck 7 fulfilled; unblock batch 5/5 OK after tf07e fix.
-- `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean.
+- Final run: 2/2 OK (pt02b 1899s, cb01b 2067s), trades pt02b 1,835 / cb01b 2,027 (latest week included, watermark 2026-07-24); universe correctly drops 4,079 post-2009-09 IPOs + 35 suspended.
+- `qre report-audit` → 0 issues; `scripts/check-progress-docs.sh` → passed; `git diff --check` → clean (re-run before commit).
+- 1160 tests green.
 
 ## Residual Risks
 
-- The indicators repo carries its own uncommitted changes (pre-existing); my edits add to that uncommitted state — its owner should finalize its git state at their convenience.
-- Daily coverage of the new columns begins with the next 16:40 timer trigger (tomorrow); today's columns exist through the watermark 2026-07-17.
+- None material for the report layer. Follow-ups noted: chart-text localization needs a CJK font check; industry_group depends on upstream stock_basic population.
 
 ## Next Step
 

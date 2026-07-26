@@ -158,6 +158,7 @@ class SingleSymbolVectorizedEngine:
         pending_sell_index = _NO_INDEX
         pending_sell_reason: str | None = None
         trailing_anchor = 0.0
+        entry_cost_parts: dict[str, float] = {"commission": 0.0, "transfer_fee": 0.0, "stamp_tax": 0.0, "total": 0.0}
 
         orders: list[dict[str, object]] = []
         trades: list[dict[str, object]] = []
@@ -190,7 +191,8 @@ class SingleSymbolVectorizedEngine:
 
             # --- pending buy execution (mirrors simulator lines 66-99) ---
             if pending_buy_index == i and quantity == 0:
-                price = self.market_profile.apply_slippage(OrderSide.BUY, float(entry_prices[i]))
+                price_raw = float(entry_prices[i])
+                price = self.market_profile.apply_slippage(OrderSide.BUY, price_raw)
                 if position_sizing == "fixed_cash":
                     raw_quantity = int(float(request.initial_cash) // price)
                 else:
@@ -218,14 +220,16 @@ class SingleSymbolVectorizedEngine:
                         cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
                         total_cash_needed = order.notional + cost
                         if total_cash_needed <= cash:
+                            cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.BUY, order.notional)
                             cash -= total_cash_needed
                             quantity = buy_quantity
                             entry_index = i
                             entry_price = price
                             entry_date = pd.Timestamp(trade_dates[i])
                             entry_cost = cost
+                            entry_cost_parts = cost_parts
                             trailing_anchor = float(price)
-                            orders.append(self._order_row(order, cost))
+                            orders.append(self._order_row(order, cost, price_raw=price_raw, cost_parts=cost_parts))
                             pending_buy_index = _NO_INDEX
                             fills.append((i, cash, quantity))
                             expiry = i + holding_days
@@ -290,7 +294,8 @@ class SingleSymbolVectorizedEngine:
                         heapq.heappush(heap, next_index)
 
                 if sell_reason is not None:
-                    price = self.market_profile.apply_slippage(OrderSide.SELL, float(entry_prices[i]))
+                    price_raw = float(entry_prices[i])
+                    price = self.market_profile.apply_slippage(OrderSide.SELL, price_raw)
                     order = Order(
                         symbol=request.symbol,
                         trade_date=pd.Timestamp(trade_dates[i]).date(),
@@ -312,8 +317,9 @@ class SingleSymbolVectorizedEngine:
                         heapq.heappush(heap, i + 1)
                     else:
                         cost = self.market_profile.calculate_cost(OrderSide.SELL, order.notional)
+                        exit_cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.SELL, order.notional)
                         cash += order.notional - cost
-                        orders.append(self._order_row(order, cost))
+                        orders.append(self._order_row(order, cost, price_raw=price_raw, cost_parts=exit_cost_parts))
                         trades.append(
                             {
                                 "symbol": request.symbol,
@@ -326,6 +332,12 @@ class SingleSymbolVectorizedEngine:
                                 "cost": entry_cost + cost,
                                 "net_pnl": (price - float(entry_price)) * quantity - entry_cost - cost,
                                 "exit_reason": sell_reason,
+                                "entry_commission": entry_cost_parts["commission"],
+                                "entry_stamp_tax": entry_cost_parts["stamp_tax"],
+                                "entry_transfer_fee": entry_cost_parts["transfer_fee"],
+                                "exit_commission": exit_cost_parts["commission"],
+                                "exit_stamp_tax": exit_cost_parts["stamp_tax"],
+                                "exit_transfer_fee": exit_cost_parts["transfer_fee"],
                             }
                         )
                         quantity = 0
@@ -333,6 +345,7 @@ class SingleSymbolVectorizedEngine:
                         entry_price = 0.0
                         entry_date = None
                         entry_cost = 0.0
+                        entry_cost_parts = {"commission": 0.0, "transfer_fee": 0.0, "stamp_tax": 0.0, "total": 0.0}
                         trailing_anchor = 0.0
                         pending_sell_index = _NO_INDEX
                         pending_sell_reason = None
@@ -405,9 +418,16 @@ class SingleSymbolVectorizedEngine:
                 f"(expected one of {POSITION_SIZING_MODES})"
             )
 
-    def _order_row(self, order: Order, cost: float) -> dict[str, object]:
+    def _order_row(
+        self,
+        order: Order,
+        cost: float,
+        *,
+        price_raw: float | None = None,
+        cost_parts: dict[str, float] | None = None,
+    ) -> dict[str, object]:
         # Same shape/key order as the simulator's _order_row.
-        return {
+        row: dict[str, object] = {
             "symbol": order.symbol,
             "trade_date": pd.Timestamp(order.trade_date),
             "side": order.side.value,
@@ -416,6 +436,13 @@ class SingleSymbolVectorizedEngine:
             "notional": order.notional,
             "cost": cost,
         }
+        if price_raw is not None:
+            row["price_raw"] = price_raw
+        if cost_parts is not None:
+            row["commission"] = cost_parts["commission"]
+            row["stamp_tax"] = cost_parts["stamp_tax"]
+            row["transfer_fee"] = cost_parts["transfer_fee"]
+        return row
 
     def _failed_order_row(self, order: Order, reason: str) -> dict[str, object]:
         # Same shape/key order as the simulator's _failed_order_row.
