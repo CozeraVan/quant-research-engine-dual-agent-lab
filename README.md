@@ -746,6 +746,21 @@ systemctl --user daemon-reload
 systemctl --user enable --now qre-refresh.timer   # 每天 18:30 检查并刷新
 ```
 
+### 7b-4. 增量回测与日更 (incremental backtest)
+
+```bash
+# 首次全量建立检查点（同参数与全量回测逐字节一致）
+uv run python scripts/incremental_update.py --strategy mr04a_ibs_reversal --start 2010-01-04
+# 之后每日只算新增 K 线（秒级）; all 遍历全部目录策略
+uv run python scripts/incremental_update.py --strategy all
+# 只看将处理的窗口不执行
+uv run python scripts/incremental_update.py --strategy all --dry-run
+```
+
+状态与账本: `outputs/state/<strategy>/`（state.json 检查点 + orders/trades/failed_orders/equity_curve/summary.csv）。
+定时: `deploy/qre-incremental.timer` (每日 18:30, 交付未安装)。设计: `docs/design/incremental_backtest.md`。
+验收门槛: 增量续算 ≡ 全量重放（逐字节, 实库已验证）。
+
 ### 7b-3. 缺因子请求队列 (missing-factor handoff)
 
 ```bash

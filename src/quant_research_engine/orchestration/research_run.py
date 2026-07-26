@@ -282,6 +282,7 @@ def _run_batch_chunked(
     spec: StrategySpec,
     request: ResearchRunRequest,
     market_profile,
+    run_id: str | None = None,
 ) -> tuple[str, dict[str, Path]]:
     """Memory-safe symbol-chunked batch backtest (OOM guard for long windows).
 
@@ -389,6 +390,29 @@ def _run_batch_chunked(
         summary=summary,
         summary_metrics=summarize_batch_summary(summary),
     )
+    if request.benchmark_table and request.benchmark_code:
+        from quant_research_engine.portfolio.benchmark import (
+            summarize_benchmark_relative_performance,
+        )
+        from quant_research_engine.portfolio.full_market_report import (
+            build_full_market_equity_curve,
+        )
+
+        benchmark_frame = store.load_benchmark_bars(
+            table_name=request.benchmark_table,
+            ts_codes=[request.benchmark_code],
+            start=request.start,
+            end=request.end,
+            fields=[request.benchmark_value_column],
+        )
+        benchmark_summary = summarize_benchmark_relative_performance(
+            build_full_market_equity_curve(result.results, engine_mode="batch"),
+            benchmark_frame,
+            benchmark_value_column=request.benchmark_value_column,
+        )
+        result.summary_metrics["benchmark_code"] = request.benchmark_code
+        for key, value in benchmark_summary.items():
+            result.summary_metrics[f"benchmark_{key}"] = value
 
     backtest_dir = request.output_dir / "backtest"
     backtest_dir.mkdir(parents=True, exist_ok=True)
@@ -399,7 +423,7 @@ def _run_batch_chunked(
         result,
         backtest_dir,
         run_request=run_request_payload,
-        run_id=request.run_id,
+        run_id=run_id or request.run_id,
         compact=request.compact,
         include_full_market=request.include_full_market,
     )
@@ -427,8 +451,10 @@ def _run_backtest(
     spec: StrategySpec,
     request: ResearchRunRequest,
     frame=None,
+    run_id: str | None = None,
 ) -> tuple[str, dict[str, Path]]:
     """Run backtest. Returns (status, paths_dict)."""
+    effective_run_id = run_id or request.run_id
     market_profile = (
         __import__("quant_research_engine.config.loader", fromlist=["load_market_profile"]).load_market_profile(
             request.market_profile_path
@@ -446,7 +472,7 @@ def _run_backtest(
 
     # Chunked mode: never build the full frame (memory guard for long windows).
     if request.symbol_chunk_size is not None and request.backtest_mode == "batch":
-        return _run_batch_chunked(store, spec, request, market_profile)
+        return _run_batch_chunked(store, spec, request, market_profile, run_id=run_id)
 
     if frame is None:
         assembler = ResearchFrameAssembler(store)
@@ -518,6 +544,29 @@ def _run_backtest(
             trailing_stop_pct=trailing_stop,
         )
         result = BatchBacktestEngine(market_profile).run(frame, batch_req)
+        if request.benchmark_table and request.benchmark_code:
+            from quant_research_engine.portfolio.benchmark import (
+                summarize_benchmark_relative_performance,
+            )
+            from quant_research_engine.portfolio.full_market_report import (
+                build_full_market_equity_curve,
+            )
+
+            benchmark_frame = store.load_benchmark_bars(
+                table_name=request.benchmark_table,
+                ts_codes=[request.benchmark_code],
+                start=request.start,
+                end=request.end,
+                fields=[request.benchmark_value_column],
+            )
+            benchmark_summary = summarize_benchmark_relative_performance(
+                build_full_market_equity_curve(result.results, engine_mode="batch"),
+                benchmark_frame,
+                benchmark_value_column=request.benchmark_value_column,
+            )
+            result.summary_metrics["benchmark_code"] = request.benchmark_code
+            for key, value in benchmark_summary.items():
+                result.summary_metrics[f"benchmark_{key}"] = value
         run_request_payload = _run_request_payload(
             spec, request, command="backtest-batch",
         )
@@ -525,7 +574,7 @@ def _run_backtest(
             result,
             backtest_dir,
             run_request=run_request_payload,
-            run_id=request.run_id,
+            run_id=effective_run_id,
             compact=request.compact,
             include_full_market=request.include_full_market,
         )
@@ -553,7 +602,7 @@ def _run_backtest(
     run_request_payload = _run_request_payload(
         spec, request, command="backtest-shared",
     )
-    paths = write_shared_cash_result(shared_result, backtest_dir, run_request=run_request_payload, run_id=request.run_id)
+    paths = write_shared_cash_result(shared_result, backtest_dir, run_request=run_request_payload, run_id=effective_run_id)
     if universe_report is not None:
         paths["universe_report"] = backtest_dir / "universe_report.json"
     return "ok", paths
@@ -760,9 +809,9 @@ def run_research_run(request: ResearchRunRequest) -> ResearchRunResult:
         # Stage 3: Backtest
         t0 = time.perf_counter()
         if shareable:
-            status, paths = _run_backtest(store, spec, request, frame=_shared_frame())
+            status, paths = _run_backtest(store, spec, request, frame=_shared_frame(), run_id=run_id)
         else:
-            status, paths = _run_backtest(store, spec, request)
+            status, paths = _run_backtest(store, spec, request, run_id=run_id)
         result.stage_durations_s["backtest"] = round(time.perf_counter() - t0, 3)
         result.backtest_status = status
         result.backtest_paths = paths

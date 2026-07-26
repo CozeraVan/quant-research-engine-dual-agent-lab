@@ -910,7 +910,7 @@ class TestRunResearchRunOrchestration:
 
         captured_backtest_dir = []
 
-        def _fake_backtest(store, s, request):
+        def _fake_backtest(store, s, request, **kwargs):
             captured_backtest_dir.append(request.output_dir)
             return ("ok", {"summary_csv": summary_csv})
 

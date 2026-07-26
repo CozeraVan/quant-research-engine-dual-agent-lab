@@ -2,6 +2,78 @@
 
 ## Task ID
 
+QRE-REPORT-BENCHMARK-001 (report blank columns + benchmark data/wiring)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (implementation + verification; awaiting docs sync and commit approval)
+
+## Implementation Summary
+
+1. **Report blank columns (user policy: fill or delete)**:
+   - Filled from engine results: `open_trade_count` (position held at window end), `win_count/loss_count/gross_profit/gross_loss/profit_factor` (from trades), `sortino` (downside-deviation ratio), `information_ratio_vs_buy_hold` (active-return mean/std × √252, enabled by new `buy_hold_equity` column in both engines' equity curves), `turnover` (traded notional ÷ mean equity), MFE/MAE in round_trips (equity-segment excursions, None-safe guards), `run_id` (resolved run id threaded through research_run → both backtest paths).
+   - Deleted: `industry` column (100% blank, no source until upstream stock_basic; `industry_group` kept as placeholder). `board` now falls back to `derive_board(symbol)` when frame metadata is NaN.
+   - Incremental-mode buy-hold anchor fix: continuation windows re-anchor `buy_hold_equity` to the ORIGINAL window's first mark price (engine's frame-local anchor broke split-run equality — caught by `test_incremental.py`, fixed via summary_inputs `first_mark_price`).
+2. **Benchmark data (B1)**: root cause of `reference.index_daily` staleness found — TimescaleDB catalog lost all hypertable registrations while orphan `_hyper_79_*` chunks persisted under `reference.index_daily` (inheritance), making `create_hypertable` fail and silently killing the daily sync task. Fixed in `quant_ts/handlers/reference_data_handler.py`: hypertable activation moved to its own transaction with try/except WARN (plain table is fine; sync never blocked). Resynced all 5 indexes to 2026-07-24 (matches stock_daily watermark). 399006.SZ starts 2010-06-01 (source coverage, documented).
+3. **Benchmark wiring (B2)**: research_run batch paths (unchunked + chunked) compute benchmark-relative metrics when `benchmark_table`+`benchmark_code` are set (alpha/beta/IR/tracking error/up-down capture/excess, merged into summary_metrics as `benchmark_*`); runner `--benchmark-table/--benchmark-code/--benchmark-value-column` flags with paired-arg guard; verification: alpha −0.0003, beta 0.0092, IR −2.0884 vs 000300.SH on real data.
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1172 passed
+index_daily: all 5 indexes fresh to 2026-07-24 (4020/4020/4020/4020/3921 rows)
+symbol_performance: only board had 1 blank (now derive_board fallback)
+round_trips: run_id/MFE/MAE all filled
+benchmark summary_metrics: benchmark_alpha/beta/IR/tracking_error/up_capture/down_capture/excess present
+```
+
+# Coding Handoff (archive: QRE-INCREMENTAL-BACKTEST-001)
+
+## Task ID
+
+QRE-INCREMENTAL-BACKTEST-001 (P1 incremental backtest + daily update)
+
+## Written By
+
+KIMI_CODE (single agent, with coder subagent for implementation)
+
+## Status
+
+DONE (implementation + real-DB acceptance gate PASS; awaiting commit approval)
+
+## Implementation Summary (per approved design docs/design/incremental_backtest.md)
+
+1. **State store** (`orchestration/incremental_state.py`): `SymbolState` (cash/quantity/entry info/cost parts/trailing anchor/pending dates) + `StrategyCheckpoint` (schema_version, strategy_id, config_hash — spec YAML + engine impl + profile/stops/universe sha1[:12], last_processed_date, watermark). Hash mismatch or corruption → rebuild.
+2. **Incremental engine** (`orchestration/incremental.py`): watermark detection, no-op when W ≤ D, warmup-window frame load (chunked 400), per-symbol continuation via `run_working_incremental` (shared `_run_loop` with `run_working` — no logic fork), checkpoint-symbol exemption from universe re-filtering, cash reconstruction by replaying accumulated orders (bit-exact for full_compound).
+3. **Ledgers**: orders/trades/failed (read+concat+dedup keep-last) + equity_curve (append, dedup at summary time) + `summary.csv` recomputed from accumulated ledgers (aligned with batch `_summary_row`). Ledgers written before checkpoint.
+4. **CLI + timer**: `scripts/incremental_update.py --strategy <id|all>` (per-strategy try/except, summary table, --dry-run); `deploy/qre-incremental.{service,timer}` (daily 18:30, delivered not installed).
+5. **Engine refactor**: vectorized engine's event loop extracted to `_run_loop` shared by `run_working` and the new incremental entry (start_index + initial state + schedule-beyond-frame); public API unchanged (127 related tests green).
+
+## Acceptance Gate (design §5, non-negotiable)
+
+- Synthetic: bootstrap ≡ full batch; incremental(T1)+incremental(T2) ≡ full run byte-identical including rolling-expression warmup, cross-boundary pending orders, trailing anchors, new symbols, idempotent no-op.
+- **Real-DB gate: PASS** — mr04a × 50 codes: full [2024-01-01→06-30] vs bootstrap [→03-31] + incremental [→06-30]: orders 70 rows, trades 35, equity_curve 5,849, summary 50 — **all IDENTICAL**. Incremental update runtime **0.3-0.5s** (vs minutes for any replay).
+
+## Files Changed
+
+- New: `orchestration/incremental_state.py`, `orchestration/incremental.py`, `scripts/incremental_update.py`, `deploy/qre-incremental.{service,timer}`, `tests/test_incremental.py` (9)
+- Modified: `portfolio/single_symbol_vectorized.py` (shared `_run_loop` extraction)
+- `uv run pytest -q` → **1172 passed** (1163 + 9 new)
+
+## Known Limits (documented)
+
+- `summary.csv` does not yet include `metadata_columns` composition (board/cap/liquidity) — follow-up.
+- Watermark-day signals schedule pending into tomorrow (by design — matches next-day replay semantics).
+- fixed_cash checkpoint cash uses override semantics (tested only implicitly).
+
+# Coding Handoff (archive: QRE-COST-BREAKDOWN-001)
+
+## Task ID
+
 QRE-COST-BREAKDOWN-001 (commission/stamp tax/transfer fee columns)
 
 ## Written By

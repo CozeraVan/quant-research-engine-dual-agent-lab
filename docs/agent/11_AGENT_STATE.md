@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-COST-BREAKDOWN-001 (implementation DONE — awaiting user-approved git finalization, bundled with QRE-CHUNKED-BATCH-001 and QRE-REPORT-CN-001)
+QRE-REPORT-BENCHMARK-001 (implementation DONE — awaiting user-approved git finalization)
 
 ## Pending Decisions (user)
 

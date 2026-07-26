@@ -127,8 +127,11 @@ class TestBuildRoundTrips:
         assert df["holding_days"].notna().all()
         assert df["entry_notional"].notna().all()
         assert df["exit_notional"].notna().all()
-        assert df["max_favorable_return"].isna().all()
-        assert df["max_adverse_return"].isna().all()
+        # MFE/MAE are computed from the equity segment (entry 10000 -> exit 10180)
+        assert (df["max_favorable_return"] > 0).all()
+        assert (df["max_adverse_return"] <= 0).all()
+        assert df.loc[0, "max_favorable_return"] == pytest.approx(0.018)
+        assert df.loc[0, "max_adverse_return"] == pytest.approx(0.0)
 
     def test_gross_net_return_computed(self):
         r = _make_single_result("000001.SZ")
@@ -818,7 +821,6 @@ class TestBuildSymbolPerformanceSharedCash:
         assert (df["sharpe"].isna()).all()
         assert (df["max_drawdown"].isna()).all()
         assert (df["board"].isna()).all()
-        assert (df["industry"].isna()).all()
 
     def test_failed_order_count_from_orders(self):
         result = _make_shared_result(["000001.SZ"])

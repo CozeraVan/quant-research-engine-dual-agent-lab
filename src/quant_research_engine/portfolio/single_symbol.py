@@ -100,6 +100,7 @@ class SingleSymbolBacktestEngine:
         working["entry_signal"] = evaluate_expression_signal(working, request.entry_signal)
         if request.exit_signal is not None:
             working["exit_signal"] = evaluate_expression_signal(working, request.exit_signal)
+        first_mark_price = float(working.iloc[0][request.mark_price_column])
 
         cash = request.initial_cash
         quantity = 0
@@ -264,7 +265,8 @@ class SingleSymbolBacktestEngine:
             if quantity == 0 and pending_buy_index is None and bool(row["entry_signal"]) and index + 1 < len(working):
                 pending_buy_index = index + 1
 
-            market_value = quantity * float(row[request.mark_price_column])
+            mark_price = float(row[request.mark_price_column])
+            market_value = quantity * mark_price
             equity_rows.append(
                 {
                     "trade_date": trade_date,
@@ -272,6 +274,9 @@ class SingleSymbolBacktestEngine:
                     "position_quantity": quantity,
                     "market_value": market_value,
                     "total_equity": cash + market_value,
+                    "buy_hold_equity": request.initial_cash * mark_price / first_mark_price
+                    if first_mark_price > 0
+                    else None,
                 }
             )
 

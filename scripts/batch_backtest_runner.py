@@ -114,6 +114,12 @@ def main() -> int:
                         help="Override spec trailing_stop_pct (requires --apply-stops)")
     parser.add_argument("--symbol-chunk-size", type=int,
                         help="Process symbols in chunks of N (memory-safe for long windows)")
+    parser.add_argument("--benchmark-table",
+                        help="Benchmark table (e.g. reference.index_daily); requires --benchmark-code")
+    parser.add_argument("--benchmark-code",
+                        help="Benchmark ts_code (e.g. 000300.SH); requires --benchmark-table")
+    parser.add_argument("--benchmark-value-column", default="close",
+                        help="Benchmark value column (default: close)")
     parser.add_argument("--skip-preflight", action="store_true",
                         help="Skip preflight stage (useful if DB factors are known good)")
     parser.add_argument("--skip-eval", action="store_true",
@@ -160,6 +166,10 @@ def main() -> int:
         start_date = date.fromisoformat(mc["start"])
         end_date = date.fromisoformat(mc["end"])
         mode_label = mc["label"]
+
+    if (args.benchmark_table is None) != (args.benchmark_code is None):
+        print("ERROR: --benchmark-table and --benchmark-code must be provided together", file=sys.stderr)
+        return 1
 
     # Set up output
     batch_id = new_batch_id()
@@ -228,6 +238,9 @@ def main() -> int:
         take_profit_pct=args.take_profit_pct,
         trailing_stop_pct=args.trailing_stop_pct,
         symbol_chunk_size=args.symbol_chunk_size,
+        benchmark_table=args.benchmark_table,
+        benchmark_code=args.benchmark_code,
+        benchmark_value_column=args.benchmark_value_column,
     )
 
     results = execute_batch(yaml_paths, config, jobs=max(1, args.jobs))
@@ -256,6 +269,9 @@ def main() -> int:
             "take_profit_pct": args.take_profit_pct,
             "trailing_stop_pct": args.trailing_stop_pct,
             "symbol_chunk_size": args.symbol_chunk_size,
+            "benchmark_table": args.benchmark_table,
+            "benchmark_code": args.benchmark_code,
+            "benchmark_value_column": args.benchmark_value_column,
         },
         results=results,
         summary=counts,

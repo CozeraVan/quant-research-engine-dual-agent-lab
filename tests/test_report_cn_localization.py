@@ -339,7 +339,7 @@ class TestLocalizedReport:
         for key, first_cols in {
             "trades_ledger": ["run_id", "strategy_id", "symbol", "trade_date"],
             "round_trips": ["run_id", "strategy_id", "symbol", "entry_date"],
-            "symbol_performance": ["symbol", "board", "industry", "trade_count"],
+            "symbol_performance": ["symbol", "board", "trade_count"],
         }.items():
             header = paths[key].read_text(encoding="utf-8").splitlines()[0].split(",")
             assert header[: len(first_cols)] == first_cols

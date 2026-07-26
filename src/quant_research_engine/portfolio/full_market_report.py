@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from quant_research_engine.portfolio.risk import summarize_equity_curve
+from quant_research_engine.data.tushare_security import derive_board as _derive_board
 
 _TRADES_LEDGER_COLUMNS = [
     "run_id", "strategy_id", "symbol", "trade_date", "side", "quantity",
@@ -27,7 +28,7 @@ _ROUND_TRIPS_COLUMNS = [
 ]
 
 _SYMBOL_PERFORMANCE_COLUMNS = [
-    "symbol", "board", "industry", "trade_count", "open_trade_count",
+    "symbol", "board", "trade_count", "open_trade_count",
     "win_count", "loss_count", "win_rate", "gross_profit", "gross_loss",
     "net_profit", "profit_factor", "expectancy", "strategy_total_return",
     "buy_hold_return", "excess_return_vs_buy_hold", "sharpe", "sortino",
@@ -471,6 +472,8 @@ def build_round_trips(
                     if entry_commission is not None or exit_commission is not None
                     else None
                 )
+                equity_curve = getattr(single_result, "equity_curve", None) if single_result is not None else None
+                mfe, mae = _mfe_mae_from_equity(equity_curve, entry_date, exit_date)
                 rows.append({
                     "run_id": run_id,
                     "strategy_id": strategy_id,
@@ -492,12 +495,61 @@ def build_round_trips(
                     "transfer_fee": transfer_fee,
                     "total_cost": record.get("cost"),
                     "exit_reason": record.get("exit_reason"),
-                    "max_favorable_return": None,
-                    "max_adverse_return": None,
+                    "max_favorable_return": mfe,
+                    "max_adverse_return": mae,
                 })
     if not rows:
         return pd.DataFrame(columns=_ROUND_TRIPS_COLUMNS)
     return pd.DataFrame(rows, columns=_ROUND_TRIPS_COLUMNS)
+
+
+def _sortino_from_equity(equity_curve: pd.DataFrame, annualization: int = 252) -> float | None:
+    if equity_curve is None or equity_curve.empty or "total_equity" not in equity_curve.columns:
+        return None
+    returns = equity_curve["total_equity"].dropna().astype(float).pct_change().dropna()
+    if len(returns) < 2:
+        return None
+    downside = returns[returns < 0]
+    downside_std = float(downside.std()) if len(downside) > 1 else 0.0
+    if downside_std == 0.0:
+        return None
+    return float(returns.mean() / downside_std * (annualization ** 0.5))
+
+
+def _ir_vs_buy_hold(equity_curve: pd.DataFrame, annualization: int = 252) -> float | None:
+    if equity_curve is None or equity_curve.empty:
+        return None
+    if "total_equity" not in equity_curve.columns or "buy_hold_equity" not in equity_curve.columns:
+        return None
+    strat = equity_curve["total_equity"].astype(float).pct_change()
+    buy_hold = equity_curve["buy_hold_equity"].astype(float).pct_change()
+    active = (strat - buy_hold).dropna()
+    if len(active) < 2:
+        return None
+    std = float(active.std())
+    if std == 0.0:
+        return None
+    return float(active.mean() / std * (annualization ** 0.5))
+
+
+def _mfe_mae_from_equity(
+    equity_curve: pd.DataFrame, entry_date: Any, exit_date: Any
+) -> tuple[float | None, float | None]:
+    """Max favorable/adverse excursion relative to entry equity."""
+    if entry_date is None or exit_date is None or pd.isna(entry_date) or pd.isna(exit_date):
+        return None, None
+    if equity_curve is None or equity_curve.empty or "total_equity" not in equity_curve.columns:
+        return None, None
+    segment = equity_curve.loc[
+        (equity_curve["trade_date"] >= entry_date) & (equity_curve["trade_date"] <= exit_date),
+        "total_equity",
+    ]
+    if segment.empty:
+        return None, None
+    entry_equity = float(segment.iloc[0])
+    if entry_equity <= 0:
+        return None, None
+    return float(segment.max() / entry_equity - 1), float(segment.min() / entry_equity - 1)
 
 
 def build_symbol_performance(
@@ -577,17 +629,39 @@ def build_symbol_performance(
             if equity_curve is not None and not equity_curve.empty and "total_equity" in equity_curve.columns:
                 risk_metrics = summarize_equity_curve(equity_curve)
 
-            win_count = record.get("win_count")
-            loss_count = record.get("loss_count")
+            trades_df = getattr(single_result, "trades", None)
+            orders_df = getattr(single_result, "orders", None)
             trade_count = record.get("trade_count")
             win_rate = record.get("win_rate")
             net_profit = record.get("net_profit", record.get("total_return"))
 
-            profit_factor = None
-            gross_profit = record.get("gross_profit")
-            gross_loss = record.get("gross_loss")
-            if gross_profit is not None and gross_loss is not None and gross_loss != 0:
-                profit_factor = abs(_safe_float(gross_profit) / _safe_float(gross_loss))
+            win_count = loss_count = None
+            gross_profit = gross_loss = profit_factor = None
+            if trades_df is not None and not trades_df.empty and "net_pnl" in trades_df.columns:
+                net = trades_df["net_pnl"]
+                win_mask = net > 0
+                loss_mask = net < 0
+                win_count = int(win_mask.sum())
+                loss_count = int(loss_mask.sum())
+                gross_profit = float(net.loc[win_mask].sum())
+                gross_loss = float(net.loc[loss_mask].sum())
+                profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else None
+
+            open_trade_count = None
+            if equity_curve is not None and not equity_curve.empty and "position_quantity" in equity_curve.columns:
+                open_trade_count = int(bool(equity_curve["position_quantity"].iloc[-1] > 0))
+
+            turnover = None
+            if (
+                orders_df is not None
+                and not orders_df.empty
+                and "notional" in orders_df.columns
+                and equity_curve is not None
+                and not equity_curve.empty
+            ):
+                mean_equity = float(equity_curve["total_equity"].mean())
+                if mean_equity > 0:
+                    turnover = float(orders_df["notional"].sum() / mean_equity)
 
             expectancy = None
             if win_rate is not None and trade_count is not None and trade_count > 0:
@@ -598,10 +672,11 @@ def build_symbol_performance(
 
             rows.append({
                 "symbol": symbol,
-                "board": record.get("board"),
-                "industry": record.get("industry"),
+                "board": record.get("board")
+                if record.get("board") is not None and not pd.isna(record.get("board"))
+                else _derive_board(symbol),
                 "trade_count": trade_count,
-                "open_trade_count": record.get("open_trade_count"),
+                "open_trade_count": open_trade_count,
                 "win_count": win_count,
                 "loss_count": loss_count,
                 "win_rate": win_rate,
@@ -614,10 +689,10 @@ def build_symbol_performance(
                 "buy_hold_return": record.get("buy_hold_return"),
                 "excess_return_vs_buy_hold": record.get("excess_return_vs_buy_hold"),
                 "sharpe": risk_metrics.get("sharpe"),
-                "sortino": None,
-                "information_ratio_vs_buy_hold": record.get("information_ratio_vs_buy_hold"),
+                "sortino": _sortino_from_equity(equity_curve),
+                "information_ratio_vs_buy_hold": _ir_vs_buy_hold(equity_curve),
                 "max_drawdown": record.get("max_drawdown") or risk_metrics.get("max_drawdown"),
-                "turnover": record.get("turnover"),
+                "turnover": turnover,
                 "total_cost": record.get("total_cost"),
                 "failed_order_count": record.get("failed_order_count", 0),
             })

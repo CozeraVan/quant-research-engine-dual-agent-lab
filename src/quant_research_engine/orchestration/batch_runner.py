@@ -103,6 +103,9 @@ class BatchRunConfig:
     trailing_stop_pct: float | None = None
     check_missing_factors: bool = True
     symbol_chunk_size: int | None = None
+    benchmark_table: str | None = None
+    benchmark_code: str | None = None
+    benchmark_value_column: str = "close"
 
 
 def discover_strategies(
@@ -261,6 +264,9 @@ def run_single_strategy(yaml_path: Path, config: BatchRunConfig) -> BatchRunResu
             take_profit_pct=config.take_profit_pct,
             trailing_stop_pct=config.trailing_stop_pct,
             symbol_chunk_size=config.symbol_chunk_size,
+            benchmark_table=config.benchmark_table,
+            benchmark_code=config.benchmark_code,
+            benchmark_value_column=config.benchmark_value_column,
         )
 
         run_result = run_research_run(req)
