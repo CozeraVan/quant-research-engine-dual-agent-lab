@@ -177,6 +177,15 @@ QRE-REPORT-BENCHMARK-001: **DONE (awaiting commit).** (1) Report blank columns: 
 
 ## Latest Verified State
 
+Recorded on 2026-07-26 (overnight full-history prep + outputs cleanup + ML venv):
+
+- Overnight full-history backtest script ready for manual execution: `scripts/run_full_history_overnight.sh`
+  - Runs all 111 catalog strategies, `2010-01-04` → current day, vectorized engine, `--jobs 4 --symbol-chunk-size 400 --compact --workbook --apply-stops --universe-filter --resume`, benchmark `000300.SH` from `reference.index_daily`, output to `outputs/backtests/full_history_overnight`, log at `outputs/backtests/full_history_overnight_<ts>.log`.
+  - User runs it manually overnight: `bash scripts/run_full_history_overnight.sh` (or via `nohup`).
+- Outputs cleanup: `/home/van/qre-outputs/backtests/` reduced 19G → 2.9G. Deleted `full_batch_106` (15G smoke batch superseded by `quick_batch_106`), `profile_baseline`, `full_history_check2`, and 5 temp hash batch dirs. `full_batch_106` batch summary archived to `~/qre-outputs/_archive/full_batch_106_summaries/`. Kept: `quick_batch_106` (strategy_fit input), `full_history_cn` + `blank_check` (user-reviewed reports), `refresh`, plus `state/`, `strategy_fit/`, `handoff/` outside `backtests/`.
+- ML clustering venv created: `.venv-ml` (uv, CPython 3.13.14) with scikit-learn 1.9.0 / pandas 3.0.5 / numpy 2.5.1, kept out of project main deps per heavy-dependency approval rule; ignored via `.gitignore`. Prepares M10.4 clustering lane (5070 Ti noted as GPU option if needed).
+- QRE validation evidence: `uv run pytest -q` → 1172 passed (baseline unchanged; cleanup touched only outputs).
+
 Recorded on 2026-07-18 during single-agent migration (`QRE-SINGLE-AGENT-MIGRATION-001`):
 
 - Current task: QRE-SINGLE-AGENT-MIGRATION-001 (IN_PROGRESS)

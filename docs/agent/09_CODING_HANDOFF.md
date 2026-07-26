@@ -2,6 +2,34 @@
 
 ## Task ID
 
+QRE-OVERNIGHT-FULLHISTORY-PREP-001 (overnight script + outputs cleanup + ML venv)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting commit approval)
+
+## Implementation Summary
+
+1. `scripts/run_full_history_overnight.sh`: manual overnight full-history batch — all 111 catalog strategies, `2010-01-04` → run day, vectorized engine, `--jobs 4 --symbol-chunk-size 400 --compact --workbook --apply-stops --universe-filter --metadata-columns board industry_group market_cap_bucket liquidity_bucket --benchmark-table reference.index_daily --benchmark-code 000300.SH --skip-preflight --skip-eval --resume`, output `outputs/backtests/full_history_overnight`, tee log `outputs/backtests/full_history_overnight_<ts>.log`. Usage: `bash scripts/run_full_history_overnight.sh`.
+2. Outputs cleanup: `~/qre-outputs/backtests/` 19G → 2.9G. Deleted `full_batch_106` (15G, superseded by quick_batch_106), `profile_baseline`, `full_history_check2`, hash dirs `199494f22100 1de849b37935 47b7a9906d90 b87003a71839 dd5b0e5037d4`. Archived `full_batch_106/61e67b53b644/batch_summary.json` → `~/qre-outputs/_archive/full_batch_106_summaries/`. Kept: `quick_batch_106`, `full_history_cn`, `blank_check`, `refresh`.
+3. `.venv-ml` via `uv venv` (host lacks python3.12-venv/ensurepip) + scikit-learn/pandas/numpy; `.gitignore` += `.venv-ml/`; README Quick Start += overnight script line.
+
+## Validation Output
+
+```bash
+bash -n scripts/run_full_history_overnight.sh → OK
+du -sh ~/qre-outputs/backtests/ → 2.9G (was 19G)
+.venv-ml python -c "import sklearn" → (see 05_PROGRESS for recorded versions)
+```
+
+# Coding Handoff (archive: QRE-REPORT-BENCHMARK-001)
+
+## Task ID
+
 QRE-REPORT-BENCHMARK-001 (report blank columns + benchmark data/wiring)
 
 ## Written By

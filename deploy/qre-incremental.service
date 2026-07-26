@@ -1,0 +1,8 @@
+[Unit]
+Description=QRE daily incremental backtest update (checkpoint-resumed)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
+Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+ExecStart=/usr/bin/env uv run python scripts/incremental_update.py --strategy all

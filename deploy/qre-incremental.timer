@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily QRE incremental backtest update (after quant_ts 16:30 + indicators 16:40)
+
+[Timer]
+OnCalendar=*-*-* 18:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -21,6 +21,8 @@
 
 完整 CLI 参考见下方。
 
+过夜全量回测（手动执行，约数小时）：`bash scripts/run_full_history_overnight.sh` — 对全部 111 个 catalog 策略跑 2010-01-04 至当日全历史回测，结果写入 `outputs/backtests/full_history_overnight/`，日志在 `outputs/backtests/full_history_overnight_<时间戳>.log`。
+
 ---
 
 ## 项目原理
