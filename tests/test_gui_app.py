@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -180,8 +181,20 @@ def test_api_run_success(monkeypatch, app_client, tmp_path):
 
     assert resp.status_code == 200
     data = json.loads(resp.data)
-    assert data["status"] == "completed"
+    assert data["status"] == "running"
     assert data["mode"] == "single"
+
+    # background thread finishes the run; poll until done
+    from quant_research_engine.gui.engine import get_run
+
+    record = None
+    for _ in range(100):
+        record = get_run(data["run_id"])
+        if record and record["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert record is not None
+    assert record["status"] == "completed"
 
 
 # --- API: templates ---

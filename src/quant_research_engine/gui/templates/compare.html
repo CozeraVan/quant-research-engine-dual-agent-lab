@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Run 对比 Compare</h1>
+
+<div class="run-meta">
+  <p><strong>A:</strong> <a href="/runs/{{ run_a.run_id }}">{{ run_a.run_id }}</a>
+     （{{ run_a.mode }}，{{ run_a.start }} 至 {{ run_a.end }}{% if run_a.precheck %}，预检{% endif %}）</p>
+  <p><strong>B:</strong> <a href="/runs/{{ run_b.run_id }}">{{ run_b.run_id }}</a>
+     （{{ run_b.mode }}，{{ run_b.start }} 至 {{ run_b.end }}{% if run_b.precheck %}，预检{% endif %}）</p>
+  <p class="opt">差异列 = B - A；引擎输出，非投资建议。</p>
+</div>
+
+{% if rows %}
+<table class="compare-table">
+<thead>
+<tr><th>指标 Metric</th><th>A</th><th>B</th><th>差异 (B-A)</th></tr>
+</thead>
+<tbody>
+{% for row in rows %}
+<tr>
+  <td>{{ row.label }}</td>
+  <td>{{ row.a | fmtval(row.is_pct) }}</td>
+  <td>{{ row.b | fmtval(row.is_pct) }}</td>
+  <td class="{{ 'diff-pos' if row.diff is not none and row.diff > 0 else 'diff-neg' if row.diff is not none and row.diff < 0 else '' }}">
+    {% if row.diff is not none %}{{ row.diff | fmtval(row.is_pct) }}{% else %}—{% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<p>两个 run 都没有可对比的摘要指标（需要 strategy_performance.json 或 stdout 的 key=value 输出）。</p>
+{% endif %}
+
+<p><a href="/runs">返回运行历史 Back to History</a></p>
+{% endblock %}

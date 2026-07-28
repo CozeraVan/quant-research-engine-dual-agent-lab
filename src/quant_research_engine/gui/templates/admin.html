@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>管理台 Admin Console <span class="opt">（只读；写/删操作请走各项目官方脚本）</span></h1>
+
+<div class="tabs">
+  <button class="tab active" data-tab="overview">总览 Dashboard</button>
+  <button class="tab" data-tab="timers">日更状态</button>
+  <button class="tab" data-tab="query">数据查询</button>
+</div>
+
+<!-- Tab 1: 总览 -->
+<div id="tab-overview" class="tab-content active">
+  <p><button id="btn-ov-refresh">刷新 Refresh</button> <span id="ov-status" class="opt"></span></p>
+  <div id="ov-health"></div>
+  <div class="admin-cards">
+    <div class="admin-card" id="ov-daily"><h3>日线数据</h3><div class="card-body opt">加载中...</div></div>
+    <div class="admin-card" id="ov-factors"><h3>因子库</h3><div class="card-body opt">加载中...</div></div>
+    <div class="admin-card" id="ov-backtests"><h3>回测产物</h3><div class="card-body opt">加载中...</div></div>
+  </div>
+</div>
+
+<!-- Tab 2: 日更状态（只读） -->
+<div id="tab-timers" class="tab-content">
+  <p><button id="btn-timer-refresh">刷新 Refresh</button> <span class="opt">状态来自 systemctl show（只读，无需 root）</span></p>
+  <div id="timer-cards" class="admin-cards"></div>
+</div>
+
+<!-- Tab 3: 数据查询 -->
+<div id="tab-query" class="tab-content">
+  <div class="section">
+    <button class="section-toggle" data-section="q-daily">日线查询 public.stock_daily &#9660;</button>
+    <div id="sec-q-daily" class="section-body">
+      <div class="form-grid form-grid-3">
+        <label>股票代码</label><input type="text" id="qd-code" value="000001.SZ">
+        <label>开始</label><input type="text" id="qd-start" placeholder="YYYY-MM-DD">
+        <label>结束</label><input type="text" id="qd-end" placeholder="YYYY-MM-DD">
+        <label>每页条数</label><input type="number" id="qd-limit" value="50" min="1" max="1000">
+      </div>
+      <div class="builder-actions">
+        <button id="qd-run">查询</button>
+        <a id="qd-csv" href="#" class="opt">下载当前页 CSV</a>
+      </div>
+      <div id="qd-result"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <button class="section-toggle" data-section="q-factor">因子查询 factors.* &#9660;</button>
+    <div id="sec-q-factor" class="section-body">
+      <div class="form-grid form-grid-3">
+        <label>因子（库内现有列）</label><select id="qf-factor"></select>
+        <label>股票代码</label><input type="text" id="qf-code" value="000001.SZ">
+        <label>开始</label><input type="text" id="qf-start" placeholder="YYYY-MM-DD">
+        <label>结束</label><input type="text" id="qf-end" placeholder="YYYY-MM-DD">
+        <label>每页条数</label><input type="number" id="qf-limit" value="50" min="1" max="1000">
+      </div>
+      <div class="builder-actions">
+        <button id="qf-run">查询</button>
+        <a id="qf-csv" href="#" class="opt">下载当前页 CSV</a>
+      </div>
+      <div id="qf-result"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // tab switching
+  var tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function(t) {
+    t.addEventListener('click', function() {
+      tabs.forEach(function(x) { x.classList.remove('active'); });
+      document.querySelectorAll('.tab-content').forEach(function(x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    });
+  });
+  document.querySelectorAll('.section-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.getElementById('sec-' + btn.dataset.section).classList.toggle('collapsed');
+      btn.classList.toggle('collapsed');
+    });
+  });
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ---------- Tab 1: overview ----------
+  function loadOverview() {
+    document.getElementById('ov-status').textContent = '加载中...';
+    fetch('/api/admin/overview')
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var d = res.body;
+        if (!d.ok) {
+          document.getElementById('ov-status').innerHTML = '<span class="err">' + esc(d.error) + '</span>';
+          return;
+        }
+        document.getElementById('ov-status').textContent = '已更新 ' + new Date().toLocaleTimeString();
+
+        var h = d.health;
+        document.getElementById('ov-health').innerHTML =
+          '<p class="health-' + esc(h.level) + '">● 健康灯：' + esc(h.level.toUpperCase()) + ' — ' + esc(h.detail) + '</p>';
+
+        var daily = d.daily;
+        document.querySelector('#ov-daily .card-body').innerHTML =
+          '<p>估算行数：' + esc(daily.estimated_rows == null ? '—' : Number(daily.estimated_rows).toLocaleString()) + '</p>'
+          + '<p>最新交易日：<strong>' + esc(daily.watermark) + '</strong></p>'
+          + '<p>股票数：' + esc(daily.symbol_count == null ? '—' : Number(daily.symbol_count).toLocaleString()) + '</p>'
+          + '<p>最近交易日：</p><p class="opt">' + esc((daily.recent_trade_dates || []).join('，')) + '</p>';
+
+        var f = d.factors;
+        var rows = f.tables.map(function(t) {
+          var lag = f.lagging_tables.indexOf(t.table) >= 0 ? ' <span class="err">滞后</span>' : '';
+          return '<tr><td>' + esc(t.table) + '</td><td>' + esc(t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + '</td><td>' + esc(t.watermark) + lag + '</td></tr>';
+        }).join('');
+        var unmanaged = (f.unmanaged_tables || []).map(function(t) {
+          return esc(t.table) + '（约 ' + (t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + ' 行）';
+        }).join('，');
+        document.querySelector('#ov-factors .card-body').innerHTML =
+          '<p>日线 watermark：' + esc(f.daily_watermark) + '；纳管表 ' + f.tables.length + ' 张，滞后 ' + f.lagging_tables.length + ' 张</p>'
+          + '<table><thead><tr><th>表</th><th>估算行数</th><th>最新日期</th></tr></thead><tbody>' + rows + '</tbody></table>'
+          + (unmanaged ? '<p class="opt">未纳管表（不参与健康灯）：' + unmanaged + '</p>' : '');
+
+        var b = d.backtests;
+        var sizeGb = b.size_bytes == null ? '—' : (b.size_bytes / 1073741824).toFixed(2) + ' GB';
+        document.querySelector('#ov-backtests .card-body').innerHTML =
+          '<p>批次数：' + esc(b.batch_count) + '</p>'
+          + '<p>策略产物目录数：' + esc(b.strategy_dir_count) + '</p>'
+          + '<p>磁盘占用：' + sizeGb + '</p>'
+          + '<p>最近批次：' + esc(b.latest_batch || '—') + '</p>';
+      });
+  }
+  document.getElementById('btn-ov-refresh').addEventListener('click', loadOverview);
+
+  // ---------- Tab 2: timers ----------
+  function loadTimers() {
+    fetch('/api/admin/timers')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var container = document.getElementById('timer-cards');
+        container.innerHTML = '';
+        d.timers.forEach(function(t) {
+          var card = document.createElement('div');
+          card.className = 'admin-card';
+          var html = '<h3>' + esc(t.label) + '</h3><div class="card-body">';
+          if (t.status === 'not_installed') {
+            html += '<p class="err">未安装（' + esc(t.unit) + '）</p>';
+            if (t.install_hint) {
+              html += '<p>安装命令（请自行在终端执行）：</p><pre class="compiled-yaml">' + esc(t.install_hint) + '</pre>';
+            }
+          } else {
+            html += '<p>timer 状态：' + esc(t.active_state) + '（' + esc(t.unit_file_state) + '）</p>'
+              + '<p>下次触发：' + esc(t.next_elapse || '—') + '</p>'
+              + '<p>上次运行：' + esc(t.last_run || '—') + '</p>'
+              + '<p>上次结果：' + esc(t.last_result || '—') + '（exit=' + esc(t.last_exit_status || '—') + '）</p>';
+          }
+          html += '</div>';
+          card.innerHTML = html;
+          container.appendChild(card);
+        });
+      });
+  }
+  document.getElementById('btn-timer-refresh').addEventListener('click', loadTimers);
+
+  // ---------- Tab 3: queries ----------
+  function renderTable(el, data, prefix) {
+    if (!data.ok) { el.innerHTML = '<p class="err">' + esc(data.error) + '</p>'; return; }
+    if (!data.rows.length) { el.innerHTML = '<p class="opt">无数据（total=' + data.total + '）</p>'; return; }
+    var headers = Object.keys(data.rows[0]);
+    var html = '<p class="opt">共 ' + data.total + ' 行，当前 offset=' + data.offset + ' limit=' + data.limit + '</p>';
+    html += '<table><thead><tr>' + headers.map(function(h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    data.rows.forEach(function(row) {
+      html += '<tr>' + headers.map(function(h) { return '<td>' + esc(row[h]) + '</td>'; }).join('') + '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '<p><button class="btn-sm" id="' + prefix + '-prev">上一页</button> '
+      + '<button class="btn-sm" id="' + prefix + '-next">下一页</button></p>';
+    el.innerHTML = html;
+  }
+
+  var qdOffset = 0, qfOffset = 0;
+
+  function runDailyQuery() {
+    var params = new URLSearchParams({
+      ts_code: document.getElementById('qd-code').value,
+      start: document.getElementById('qd-start').value,
+      end: document.getElementById('qd-end').value,
+      limit: document.getElementById('qd-limit').value,
+      offset: String(qdOffset)
+    });
+    document.getElementById('qd-csv').href = '/api/admin/query/daily?' + params.toString() + '&format=csv';
+    fetch('/api/admin/query/daily?' + params.toString())
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        renderTable(document.getElementById('qd-result'), d, 'qd');
+        var prev = document.getElementById('qd-prev'), next = document.getElementById('qd-next');
+        if (prev) prev.onclick = function() { qdOffset = Math.max(0, qdOffset - d.limit); runDailyQuery(); };
+        if (next) next.onclick = function() { qdOffset = qdOffset + d.limit; runDailyQuery(); };
+      });
+  }
+  document.getElementById('qd-run').addEventListener('click', function() { qdOffset = 0; runDailyQuery(); });
+
+  function loadFactorSelect() {
+    fetch('/api/factors')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var sel = document.getElementById('qf-factor');
+        if (!d.ok) { sel.innerHTML = '<option value="">（因子库不可用）</option>'; return; }
+        d.groups.forEach(function(g) {
+          if (g.group === 'market') return;
+          var og = document.createElement('optgroup');
+          og.label = g.label;
+          g.items.forEach(function(item) {
+            var opt = document.createElement('option');
+            opt.value = item.table + '|' + item.column;
+            opt.textContent = item.label;
+            og.appendChild(opt);
+          });
+          sel.appendChild(og);
+        });
+      });
+  }
+
+  function runFactorQuery() {
+    var parts = document.getElementById('qf-factor').value.split('|');
+    if (parts.length !== 2) { document.getElementById('qf-result').innerHTML = '<p class="err">请先选择因子</p>'; return; }
+    var params = new URLSearchParams({
+      table: parts[0], column: parts[1],
+      ts_code: document.getElementById('qf-code').value,
+      start: document.getElementById('qf-start').value,
+      end: document.getElementById('qf-end').value,
+      limit: document.getElementById('qf-limit').value,
+      offset: String(qfOffset)
+    });
+    document.getElementById('qf-csv').href = '/api/admin/query/factor?' + params.toString() + '&format=csv';
+    fetch('/api/admin/query/factor?' + params.toString())
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        renderTable(document.getElementById('qf-result'), d, 'qf');
+        var prev = document.getElementById('qf-prev'), next = document.getElementById('qf-next');
+        if (prev) prev.onclick = function() { qfOffset = Math.max(0, qfOffset - d.limit); runFactorQuery(); };
+        if (next) next.onclick = function() { qfOffset = qfOffset + d.limit; runFactorQuery(); };
+      });
+  }
+  document.getElementById('qf-run').addEventListener('click', function() { qfOffset = 0; runFactorQuery(); });
+
+  // defaults: recent window
+  (function() {
+    var end = new Date(), start = new Date();
+    start.setMonth(start.getMonth() - 1);
+    ['qd-start', 'qf-start'].forEach(function(id) { document.getElementById(id).value = start.toISOString().slice(0, 10); });
+    ['qd-end', 'qf-end'].forEach(function(id) { document.getElementById(id).value = end.toISOString().slice(0, 10); });
+  })();
+
+  loadOverview();
+  loadTimers();
+  loadFactorSelect();
+})();
+</script>
+{% endblock %}

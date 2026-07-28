@@ -1,11 +1,21 @@
 {% extends "base.html" %}
+{% block head %}
+{% if runs | selectattr('status', 'equalto', 'running') | list %}
+<meta http-equiv="refresh" content="3">
+{% endif %}
+{% endblock %}
 {% block content %}
 <h1>运行历史 Run History</h1>
 
 {% if runs %}
+<p>
+  <button id="btn-compare" disabled>对比选中项 Compare (选 2 个)</button>
+  <span class="opt">勾选两个 run 后可并排对比摘要指标</span>
+</p>
 <table>
 <thead>
 <tr>
+  <th>对比</th>
   <th>运行 ID</th>
   <th>模式 Mode</th>
   <th>开始 Start</th>
@@ -17,7 +27,8 @@
 <tbody>
 {% for run in runs %}
 <tr>
-  <td><a href="/runs/{{ run.run_id }}">{{ run.run_id }}</a></td>
+  <td><input type="checkbox" class="compare-check" value="{{ run.run_id }}"></td>
+  <td><a href="/runs/{{ run.run_id }}">{{ run.run_id }}</a>{% if run.precheck %} <span class="opt">[预检]</span>{% endif %}</td>
   <td>{{ run.mode }}</td>
   <td>{{ run.start }}</td>
   <td>{{ run.end }}</td>
@@ -27,6 +38,29 @@
 {% endfor %}
 </tbody>
 </table>
+
+<script>
+(function() {
+  var btn = document.getElementById("btn-compare");
+  var boxes = document.querySelectorAll(".compare-check");
+  function update() {
+    var checked = Array.prototype.filter.call(boxes, function(b) { return b.checked; });
+    btn.disabled = checked.length !== 2;
+    if (checked.length > 2) {
+      // keep only the last two checked
+      checked.slice(0, checked.length - 2).forEach(function(b) { b.checked = false; });
+    }
+  }
+  boxes.forEach(function(b) { b.addEventListener("change", update); });
+  btn.addEventListener("click", function() {
+    var checked = Array.prototype.filter.call(boxes, function(b) { return b.checked; });
+    if (checked.length === 2) {
+      window.location.href = "/compare?a=" + encodeURIComponent(checked[0].value)
+        + "&b=" + encodeURIComponent(checked[1].value);
+    }
+  });
+})();
+</script>
 {% else %}
 <p>暂无运行记录。 <a href="/">运行一次回测</a> 开始使用。</p>
 {% endif %}

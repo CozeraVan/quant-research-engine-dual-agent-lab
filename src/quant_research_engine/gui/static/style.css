@@ -114,3 +114,32 @@ code.log { white-space: pre-wrap; word-break: break-all; }
 /* --- Compile result issue levels --- */
 .result-box .error { color: #c00; }
 .result-box .warning { color: #960; }
+
+/* --- Workbench P1: precheck banner / summary / compare --- */
+.precheck-banner { background: #fff8e1; border: 1px solid #e0c060; border-radius: 4px; padding: 0.6rem 1rem; margin-bottom: 1rem; font-size: 0.9rem; }
+.precheck-banner button { margin-left: 0.6rem; }
+.summary-table td:first-child, .compare-table td:first-child { font-weight: 500; color: #444; }
+.equity-chart { margin: 0.5rem 0 1rem; }
+.diff-pos { color: #c00; font-weight: 600; }
+.diff-neg { color: #080; font-weight: 600; }
+.compare-check { cursor: pointer; }
+
+/* --- Workbench P2: NL channel --- */
+.nl-panel { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 0.8rem 1rem; margin-bottom: 1rem; }
+.nl-panel h2 { margin-top: 0; }
+.nl-panel textarea { width: 100%; box-sizing: border-box; padding: 0.4rem; border: 1px solid #ccc; border-radius: 3px; font-size: 0.9rem; resize: vertical; }
+
+/* --- Factor wizard (P1.5) --- */
+.wz-factor-item { display: inline-block; min-width: 260px; font-size: 0.85rem; padding: 0.1rem 0.3rem; }
+#wz-factor-groups details { margin-bottom: 0.4rem; }
+#wz-factor-groups summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+.wz-disabled { opacity: 0.5; pointer-events: none; }
+
+/* --- Admin console (P3a) --- */
+.admin-cards { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-start; }
+.admin-card { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 0.8rem 1rem; flex: 1; min-width: 280px; }
+.admin-card h3 { margin-top: 0; font-size: 0.95rem; }
+.admin-card table { font-size: 0.8rem; }
+.health-green { color: #080; font-weight: 600; }
+.health-yellow { color: #a80; font-weight: 600; }
+.health-red { color: #c00; font-weight: 600; }

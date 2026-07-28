@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>QRE 回测控制台</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
 </head>
 <body>
 <nav>
   <a href="/">编辑 Editor</a>
   <a href="/runs">历史 History</a>
+  <a href="/admin">管理台 Admin</a>
 </nav>
 <main>
 {% block content %}{% endblock %}

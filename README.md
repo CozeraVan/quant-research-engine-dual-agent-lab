@@ -317,6 +317,50 @@ GUI 提供两个 Tab：
 - **Builder**：表单式策略构建（不需要写 YAML 和数据库路径）
 - **YAML Editor**：直接编辑 YAML 策略文件
 
+P1 新能力（回测工作台）：
+- **参数表单**：标的范围（全部 A 股 / 自定义代码）、回测区间（近1/2/5年、全期快捷键）、
+  资金与摩擦（佣金率/最低佣金/印花税/买卖滑点）、交易规则（止损/止盈/移动止损）、
+  引擎选项（single/batch/shared × simulator/vectorized）
+- **小样本预检**（默认勾选）：先跑前 20 只 × 近 6 个月；详情页可一键"放大到完整范围"
+- **异步执行 + 限流**：后台线程执行，页面每 3 秒自动刷新；全局最多 2 个并发回测（超出返回 409）
+- **出口强化**：run 详情页汉化摘要卡（总收益/买入持有/超额/回撤/胜率/盈亏比等）、
+  artifact 按类型分组、equity_curve.csv 的 inline SVG 权益曲线（离线可用）
+- **Run 对比**：历史页勾选两个 run → `/compare?a=<id>&b=<id>` 并排对比，差异列（B-A）正负着色
+
+P2 新能力（自然语言通道 C）：
+- **NL → YAML 编译器**：编辑器页顶部输入自然语言策略描述 → "编译为 YAML" →
+  结果经规格校验 + 因子存在性检查后填入 YAML 编辑器；**安全闸：绝不自动执行，需用户确认后手动提交**
+- LLM 配置完全走环境变量（OpenAI 兼容 chat completions，无新增依赖，stdlib urllib）：
+  ```bash
+  export QRE_NL_LLM_BASE_URL="http://your-llm/v1"
+  export QRE_NL_LLM_API_KEY="sk-..."
+  export QRE_NL_LLM_MODEL="your-model"
+  ```
+  未配置时通道 C 返回 503 + 中文提示，降级使用通道 A（模板）/ B（构建器）。
+- 缺因子策略自动写入现有补因子队列（`outputs/handoff/missing_factor_requests.json`）并提示"已搁置"。
+
+P1.5 新能力（因子前置三步向导，默认首屏）：
+- **Step 1 选因子**：`GET /api/factors` 实时枚举 `factors.*` 表列（只读 information_schema），
+  按类别中文分组（动量/均线/波动率/…）+ 行情字段组；DB 不可用 → 503 中文提示并禁用向导。
+- **Step 2 条件构建器**：四段式条件行（左操作数下拉 / 运算符 / 右类型切换[因子|数值] / 右操作数），
+  入/出场组内 AND/OR；附持仓天数与三项 stops；实时 YAML 预览，过 validate 后填入编辑器（安全闸不变）。
+- **Step 3 新因子申请**（联动 indicators_tushare，repo 路径 env `QRE_INDICATORS_REPO`，
+  默认 `../indicators_tushare`）：指标名/价格类型下拉来自其 `config/factors.yaml`；
+  提交后自动备份 yaml → 追加 entry → 后台跑 `validate → plan → sample 回填(--execute)`；
+  **全量回填必须人工点"确认全量回填"才执行**；任一失败自动回滚 yaml；全局单任务锁（409）；
+  任务状态与日志落盘 `outputs/gui-console/factor-admin/<job_id>/` 并 3 秒轮询。
+- NL 通道缺因子错误处新增"前往新因子申请"链接（自动预填指标名/周期猜测）。
+
+P3a 新能力（统一管理台 `/admin`，**只读**；写/删只走各项目官方脚本）：
+- **Tab 1 总览**：日线（估算行数 pg_class.reltuples、watermark、股票数、最近 15 个交易日）、
+  因子库（11 表估算行数 + 各自 watermark + 滞后表清单）、回测产物（批次数/策略目录数/du 占用，
+  60s 缓存）、三域 watermark 健康灯（绿/黄/红）。
+- **Tab 2 日更状态（只读）**：三条管线卡片（`systemctl show` 读取，无需 root）——
+  quant-ts-daily.timer（16:30）、indicators-tushare-daily.timer（16:40）、qre-refresh.timer；
+  qre-refresh 未安装时显示安装命令文本（仅展示，不提供按钮）。
+- **Tab 3 数据查询（只读）**：日线分页查询 + 因子查询（因子下拉复用 `/api/factors`，
+  表/列名白名单校验防注入，limit ≤ 1000）+ CSV 下载。
+
 ---
 
 ## 出口 (Outputs)

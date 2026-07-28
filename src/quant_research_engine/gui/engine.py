@@ -5,7 +5,8 @@ import os
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+import threading
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,15 @@ RUNS_DIR = GUI_BASE_DIR / "runs"
 
 RUN_MODES = frozenset({"single", "batch", "shared"})
 
+# --- async execution & concurrency limit ---
+MAX_CONCURRENT_RUNS = 2
+_run_slot_lock = threading.Lock()
+_running_count = 0
+
+# --- small-sample precheck defaults ---
+PRECHECK_MAX_CODES = 20
+PRECHECK_WINDOW_DAYS = 180
+
 
 def _ensure_dirs() -> None:
     TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
@@ -23,6 +33,67 @@ def _ensure_dirs() -> None:
 
 def _run_id() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+
+
+# --- concurrency slots ---
+
+def try_acquire_run_slot() -> bool:
+    """Try to acquire a run slot; returns False when the limit is reached."""
+    global _running_count
+    with _run_slot_lock:
+        if _running_count >= MAX_CONCURRENT_RUNS:
+            return False
+        _running_count += 1
+        return True
+
+
+def release_run_slot() -> None:
+    global _running_count
+    with _run_slot_lock:
+        _running_count = max(0, _running_count - 1)
+
+
+def running_count() -> int:
+    with _run_slot_lock:
+        return _running_count
+
+
+# --- precheck (小样本预检) ---
+
+def apply_precheck(
+    codes: list[str],
+    start: str,
+    end: str,
+    *,
+    max_codes: int = PRECHECK_MAX_CODES,
+    window_days: int = PRECHECK_WINDOW_DAYS,
+) -> tuple[list[str], str, str]:
+    """Truncate the universe to the first ``max_codes`` codes and the window
+    to roughly the last ``window_days`` days before ``end``."""
+    trimmed_codes = codes[:max_codes] if codes else codes
+    try:
+        end_date = date.fromisoformat(end)
+        start_date = date.fromisoformat(start)
+    except ValueError:
+        return trimmed_codes, start, end
+    min_start = end_date - timedelta(days=window_days)
+    if start_date < min_start:
+        start_date = min_start
+    return trimmed_codes, start_date.isoformat(), end
+
+
+def build_market_profile(overrides: dict[str, float] | None) -> Any:
+    """Build an AShareMarketProfile with optional field overrides."""
+    from dataclasses import replace
+
+    from quant_research_engine.markets.ashare import AShareMarketProfile
+
+    profile = AShareMarketProfile()
+    if overrides:
+        valid = {k: float(v) for k, v in overrides.items() if v is not None and hasattr(profile, k)}
+        if valid:
+            profile = replace(profile, **valid)
+    return profile
 
 
 def validate_yaml(yaml_text: str) -> dict[str, Any]:
@@ -95,8 +166,21 @@ def run_backtest(
     db_url: str | None = None,
     market_profile: str | None = None,
     executor: str = "module",
+    profile_overrides: dict[str, float] | None = None,
+    engine_impl: str = "simulator",
+    stop_loss_pct: float | None = None,
+    take_profit_pct: float | None = None,
+    trailing_stop_pct: float | None = None,
+    precheck: bool = False,
+    background: bool = False,
 ) -> dict[str, Any]:
-    """Run a backtest and return the run record."""
+    """Run a backtest and return the run record.
+
+    With ``background=True`` the execution runs in a daemon thread and the
+    record is returned immediately with ``status="running"``; status.json is
+    updated in place when the run finishes. The caller is responsible for
+    acquiring/releasing a concurrency slot (see api_run).
+    """
     _ensure_dirs()
     rid = _run_id()
     run_dir = RUNS_DIR / rid
@@ -106,6 +190,22 @@ def run_backtest(
     strategy_path.write_text(yaml_text, encoding="utf-8")
 
     codes_list = [c.strip() for c in codes.split(",") if c.strip()]
+
+    full_params: dict[str, Any] | None = None
+    if precheck:
+        full_params = {
+            "codes": codes,
+            "start": start,
+            "end": end,
+            "initial_cash": initial_cash,
+            "max_positions": max_positions,
+            "engine_impl": engine_impl,
+            "stop_loss_pct": stop_loss_pct,
+            "take_profit_pct": take_profit_pct,
+            "trailing_stop_pct": trailing_stop_pct,
+            "profile_overrides": profile_overrides,
+        }
+        codes_list, start, end = apply_precheck(codes_list, start, end)
 
     cli_cmd = _build_cli_command(
         mode=mode,
@@ -130,31 +230,75 @@ def run_backtest(
         "max_positions": max_positions,
         "output_dir": output_dir,
         "executor": executor,
+        "engine_impl": engine_impl,
         "cli_command": " ".join(cli_cmd),
         "created_at": datetime.now(tz=timezone.utc).isoformat(),
         "status": "running",
         "error": None,
     }
+    if profile_overrides:
+        record["profile_overrides"] = profile_overrides
+    if stop_loss_pct is not None:
+        record["stop_loss_pct"] = stop_loss_pct
+    if take_profit_pct is not None:
+        record["take_profit_pct"] = take_profit_pct
+    if trailing_stop_pct is not None:
+        record["trailing_stop_pct"] = trailing_stop_pct
+    if precheck:
+        record["precheck"] = True
+        record["full_params"] = full_params
     _write_json(run_dir / "request.json", record)
+    _write_json(run_dir / "status.json", record)
 
+    exec_kwargs: dict[str, Any] = {
+        "yaml_text": yaml_text,
+        "mode": mode,
+        "start": start,
+        "end": end,
+        "codes": codes_list,
+        "initial_cash": initial_cash,
+        "max_positions": max_positions,
+        "output_dir": output_dir,
+        "db_url": db_url,
+        "market_profile": market_profile,
+        "profile_overrides": profile_overrides,
+        "engine_impl": engine_impl,
+        "stop_loss_pct": stop_loss_pct,
+        "take_profit_pct": take_profit_pct,
+        "trailing_stop_pct": trailing_stop_pct,
+    }
+
+    if background:
+        thread = threading.Thread(
+            target=_execute_and_finalize,
+            args=(record, run_dir, cli_cmd, exec_kwargs),
+            kwargs={"release_slot": True},
+            daemon=True,
+        )
+        thread.start()
+        return record
+
+    _execute_and_finalize(record, run_dir, cli_cmd, exec_kwargs)
+    return record
+
+
+def _execute_and_finalize(
+    record: dict[str, Any],
+    run_dir: Path,
+    cli_cmd: list[str],
+    exec_kwargs: dict[str, Any],
+    *,
+    release_slot: bool = False,
+) -> None:
+    """Execute the backtest and update status.json + artifacts in place."""
     stdout_path = run_dir / "stdout.log"
     stderr_path = run_dir / "stderr.log"
-
     try:
-        if executor == "cli":
+        if record["executor"] == "cli":
             _run_via_cli(cli_cmd, stdout_path, stderr_path)
         else:
             _run_via_module(
-                yaml_text=yaml_text,
-                mode=mode,
-                start=start,
-                end=end,
-                codes=codes_list,
-                initial_cash=initial_cash,
-                max_positions=max_positions,
-                output_dir=output_dir,
-                db_url=db_url,
-                market_profile=market_profile,
+                **exec_kwargs,
                 stdout_path=stdout_path,
                 stderr_path=stderr_path,
             )
@@ -163,11 +307,15 @@ def run_backtest(
         record["status"] = "failed"
         record["error"] = str(exc)
         stderr_path.write_text(str(exc), encoding="utf-8")
+    finally:
+        if release_slot:
+            release_run_slot()
 
     record["finished_at"] = datetime.now(tz=timezone.utc).isoformat()
     _write_json(run_dir / "status.json", record)
 
     # Collect artifact pointers
+    output_dir = record.get("output_dir")
     if output_dir and Path(output_dir).exists():
         artifacts: dict[str, str] = {}
         for p in Path(output_dir).rglob("*"):
@@ -175,8 +323,7 @@ def run_backtest(
                 rel = str(p.relative_to(output_dir))
                 artifacts[rel] = str(p)
         record["artifacts"] = artifacts
-
-    return record
+        _write_json(run_dir / "status.json", record)
 
 
 def _run_via_module(
@@ -193,6 +340,11 @@ def _run_via_module(
     market_profile: str | None,
     stdout_path: Path,
     stderr_path: Path,
+    profile_overrides: dict[str, float] | None = None,
+    engine_impl: str = "simulator",
+    stop_loss_pct: float | None = None,
+    take_profit_pct: float | None = None,
+    trailing_stop_pct: float | None = None,
 ) -> None:
     """Execute backtest via direct Python module call (mirrors CLI flow)."""
     import io
@@ -208,7 +360,6 @@ def _run_via_module(
         from quant_research_engine.data.postgres import PostgresDataStore
         from quant_research_engine.data.assembler import ResearchFrameAssembler
         from quant_research_engine.config.loader import load_market_profile
-        from quant_research_engine.markets.ashare import AShareMarketProfile
 
         settings = (
             DatabaseSettings(market_db_url=db_url)
@@ -220,8 +371,11 @@ def _run_via_module(
 
         spec = StrategySpec.from_yaml(tmp_path)
 
+        # Empty code list = whole market (assembler/engine accept None).
+        ts_codes = codes or None
+
         frame = ResearchFrameAssembler(store).build(
-            ts_codes=codes,
+            ts_codes=ts_codes,
             start=start,
             end=end,
             market_fields=spec.market_fields,
@@ -231,8 +385,14 @@ def _run_via_module(
 
         if market_profile:
             mp = load_market_profile(market_profile)
+            if profile_overrides:
+                from dataclasses import replace
+
+                valid = {k: float(v) for k, v in profile_overrides.items() if v is not None and hasattr(mp, k)}
+                if valid:
+                    mp = replace(mp, **valid)
         else:
-            mp = AShareMarketProfile()
+            mp = build_market_profile(profile_overrides)
 
         buf_out = io.StringIO()
         buf_err = io.StringIO()
@@ -248,6 +408,10 @@ def _run_via_module(
                 initial_cash=initial_cash,
                 max_positions=max_positions,
                 output_dir=output_dir,
+                engine_impl=engine_impl,
+                stop_loss_pct=stop_loss_pct,
+                take_profit_pct=take_profit_pct,
+                trailing_stop_pct=trailing_stop_pct,
             )
 
         stdout_path.write_text(buf_out.getvalue(), encoding="utf-8")
@@ -268,6 +432,10 @@ def _execute_engine(
     initial_cash: str | None,
     max_positions: str | None,
     output_dir: str | None,
+    engine_impl: str = "simulator",
+    stop_loss_pct: float | None = None,
+    take_profit_pct: float | None = None,
+    trailing_stop_pct: float | None = None,
 ) -> None:
     from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestEngine, SingleSymbolBacktestRequest
     from quant_research_engine.portfolio.batch import BatchBacktestEngine, BatchBacktestRequest
@@ -306,11 +474,15 @@ def _execute_engine(
         result = BatchBacktestEngine(mp).run(
             frame,
             BatchBacktestRequest(
-                symbols=codes,
+                symbols=codes or None,
                 initial_cash_per_symbol=float(initial_cash) if initial_cash else 100_000.0,
                 entry_signal=spec.signal_expression,
                 exit_signal=spec.exit_signal_expression,
                 holding_days=spec.holding_days,
+                engine_impl=engine_impl,
+                stop_loss_pct=stop_loss_pct,
+                take_profit_pct=take_profit_pct,
+                trailing_stop_pct=trailing_stop_pct,
             ),
         )
         print(f"strategy={spec.name}")
@@ -327,12 +499,15 @@ def _execute_engine(
         result = SharedCashBacktestEngine(mp).run(
             frame,
             SharedCashBacktestRequest(
-                symbols=codes,
+                symbols=codes or None,
                 initial_cash=cash,
                 entry_signal=spec.signal_expression,
                 exit_signal=spec.exit_signal_expression,
                 holding_days=spec.holding_days,
                 max_positions=positions,
+                stop_loss_pct=stop_loss_pct,
+                take_profit_pct=take_profit_pct,
+                trailing_stop_pct=trailing_stop_pct,
             ),
         )
         print(f"strategy={spec.name}")
@@ -440,6 +615,177 @@ def get_run_artifacts(run_id: str) -> dict[str, str]:
     if record and "artifacts" in record:
         return record["artifacts"]
     return {}
+
+
+# --- summary extraction (出口摘要卡) ---
+
+# (key, 中文标签, 是否按百分比显示)
+SUMMARY_METRIC_FIELDS: list[tuple[str, str, bool]] = [
+    ("strategy_name", "策略名称", False),
+    ("date_start", "开始日期", False),
+    ("date_end", "结束日期", False),
+    ("traded_symbol_count", "触发交易股票数", False),
+    ("symbol_count", "总股票数", False),
+    ("total_trade_count", "总交易数", False),
+    ("win_rate", "胜率", True),
+    ("strategy_total_return", "总收益率", True),
+    ("buy_hold_return", "买入持有收益率", True),
+    ("excess_return_vs_buy_hold", "超额收益(对买入持有)", True),
+    ("max_drawdown", "最大回撤", True),
+    ("profit_factor", "盈亏比", False),
+]
+
+
+# stdout key=value 回退解析时的键名别名（对齐 strategy_performance.json 的键）
+_STDOUT_KEY_ALIASES = {
+    "total_return": "strategy_total_return",
+    "trades": "total_trade_count",
+    "symbols": "symbol_count",
+}
+
+
+def _find_output_file(record: dict[str, Any], filename: str) -> Path | None:
+    """Locate a named output file via the artifacts map, then rglob fallback."""
+    artifacts = record.get("artifacts") or {}
+    for rel, abs_path in artifacts.items():
+        if Path(rel).name == filename and Path(abs_path).exists():
+            return Path(abs_path)
+    output_dir = record.get("output_dir")
+    if output_dir and Path(output_dir).exists():
+        for p in sorted(Path(output_dir).rglob(filename)):
+            if p.is_file():
+                return p
+    return None
+
+
+def extract_run_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract display metrics for a run.
+
+    Prefers ``strategy_performance.json`` (batch/full-market artifact);
+    falls back to parsing ``key=value`` lines from stdout.log.
+    Returns {"source": "json"|"stdout", "metrics": {key: value}} or None.
+    """
+    json_path = _find_output_file(record, "strategy_performance.json")
+    if json_path is not None:
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            data = None
+        if isinstance(data, dict):
+            metrics = {key: data.get(key) for key, _, _ in SUMMARY_METRIC_FIELDS if data.get(key) is not None}
+            if metrics:
+                return {"source": "json", "metrics": metrics}
+
+    stdout = get_run_stdout(record.get("run_id", ""))
+    if not stdout:
+        return None
+    metrics: dict[str, Any] = {}
+    for line in stdout.splitlines():
+        line = line.strip()
+        if "=" not in line or line.startswith("#"):
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        if not key or not value:
+            continue
+        key = _STDOUT_KEY_ALIASES.get(key, key)
+        try:
+            metrics[key] = float(value)
+        except ValueError:
+            metrics[key] = value
+    if not metrics:
+        return None
+    return {"source": "stdout", "metrics": metrics}
+
+
+def compare_run_summaries(
+    record_a: dict[str, Any],
+    record_b: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Build per-metric comparison rows: {"key", "label", "a", "b", "diff", "is_pct"}.
+
+    ``diff`` is b - a for numeric values, else None.
+    """
+    summary_a = extract_run_summary(record_a) or {}
+    summary_b = extract_run_summary(record_b) or {}
+    metrics_a = summary_a.get("metrics", {})
+    metrics_b = summary_b.get("metrics", {})
+
+    keys: list[tuple[str, str, bool]] = list(SUMMARY_METRIC_FIELDS)
+    known = {k for k, _, _ in keys}
+    for extra in sorted((set(metrics_a) | set(metrics_b)) - known):
+        keys.append((extra, extra, False))
+
+    rows: list[dict[str, Any]] = []
+    for key, label, is_pct in keys:
+        va = metrics_a.get(key)
+        vb = metrics_b.get(key)
+        if va is None and vb is None:
+            continue
+        diff = None
+        if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+            diff = vb - va
+        rows.append({"key": key, "label": label, "a": va, "b": vb, "diff": diff, "is_pct": is_pct})
+    return rows
+
+
+def equity_curve_svg(record: dict[str, Any], *, width: int = 640, height: int = 180) -> str | None:
+    """Render an inline SVG polyline of equity_curve.csv (offline, no JS)."""
+    csv_path = _find_output_file(record, "equity_curve.csv")
+    if csv_path is None:
+        return None
+    try:
+        import csv
+
+        with open(csv_path, "r", encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            rows = list(reader)
+    except OSError:
+        return None
+    if not rows or reader.fieldnames is None:
+        return None
+
+    col = None
+    for candidate in ("total_equity", "equity", "total_value"):
+        if candidate in reader.fieldnames:
+            col = candidate
+            break
+    if col is None:
+        return None
+
+    values: list[float] = []
+    for row in rows:
+        try:
+            values.append(float(row[col]))
+        except (TypeError, ValueError):
+            continue
+    if len(values) < 2:
+        return None
+
+    # Downsample to at most ~300 points to keep the SVG small.
+    step = max(1, len(values) // 300)
+    values = values[::step]
+
+    lo, hi = min(values), max(values)
+    span = (hi - lo) or 1.0
+    pad = 4
+    n = len(values)
+    points = []
+    for i, v in enumerate(values):
+        x = pad + (width - 2 * pad) * i / (n - 1)
+        y = pad + (height - 2 * pad) * (1 - (v - lo) / span)
+        points.append(f"{x:.1f},{y:.1f}")
+    polyline = " ".join(points)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img" aria-label="权益曲线">'
+        f'<rect width="{width}" height="{height}" fill="#fafafa" stroke="#ddd"/>'
+        f'<polyline fill="none" stroke="#2563eb" stroke-width="1.5" points="{polyline}"/>'
+        f'<text x="{pad}" y="{pad + 10}" font-size="10" fill="#666">{hi:.2f}</text>'
+        f'<text x="{pad}" y="{height - pad}" font-size="10" fill="#666">{lo:.2f}</text>'
+        f"</svg>"
+    )
 
 
 # --- templates ---

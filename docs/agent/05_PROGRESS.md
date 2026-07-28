@@ -1,5 +1,17 @@
 # Progress Tracker
 
+## Latest Verified State
+
+2026-07-28 QRE-ADMIN-FACTOR-HEALTH-FIX-001 DONE：`uv run pytest -q` → **1264 passed**（1260 + 4 新增，全绿）。健康灯误报修复：`admin.managed_factor_tables()` 从 indicators_tushare factors.yaml 推导 10 张纳管表（repo 缺失回退硬编码），overview_factors 拆分纳管/未纳管段，滞后与健康灯只评估纳管表。真实冒烟：纳管 10 表全对齐、vortex 孤儿表进未纳管段、health=green「全部对齐 2026-07-27」。未提交，等用户审批。
+
+2026-07-28 QRE-ADMIN-CONSOLE-P3A-001 DONE：`uv run pytest -q` → **1260 passed**（1238 + 22 新增，全绿）。统一管理台 `/admin` 只读部分落地：`gui/admin.py`（三域总览 + 健康灯 + systemctl timer 状态 + 白名单查询/CSV）、三 tab 中文页面、导航入口。真实 DB 冒烟：日线 watermark 2026-07-27/5549 股、因子 11 表（vortex 滞后为空 → 健康灯红，真实状态）、回测产物 4.18GB、qre-refresh 未安装提示正常。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-07-28 QRE-GUI-FACTOR-WIZARD-001 DONE：`uv run pytest -q` → **1238 passed**（1210 + 28 新增，全绿）。因子前置三步向导落地：`gui/factor_wizard.py`（/api/factors 实时枚举 factors.* 分组 + 条件/YAML 纯函数）、`gui/factor_admin.py`（factors.yaml 备份/追加/回滚 + validate→plan→sample 任务链 + 人工确认全量 + 单任务锁）、向导成默认首屏（YAML/NL 保留高级区）、NL 缺因子一键跳转预填。真实环境只读冒烟：9 因子组 346 列、indicators 69 指标名。未跑真实 backfill、未写真实 factors.yaml。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-07-28 QRE-GUI-WORKBENCH-P2-001 DONE：`uv run pytest -q` → **1210 passed**（1194 + 16 新增，全绿）。自然语言→YAML 编译器（通道 C）落地：`gui/nl_compiler.py`（env 配置 OpenAI 兼容协议、stdlib urllib、DSL+因子目录 prompt、围栏剥离→validate_yaml→缺因子入队）、`/api/nl_compile` 路由、编辑器页通道 C UI（安全闸：仅填编辑器不自动执行）。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-07-28 QRE-GUI-WORKBENCH-P1-001 DONE：`uv run pytest -q` → **1194 passed**（基线 1172 + 22 新增，全绿）。GUI 回测工作台 P1 落地：参数表单（标的/区间/摩擦/规则/引擎 + 小样本预检）、后台线程异步执行 + 全局 2 并发限流（409 中文提示）、run 详情汉化摘要卡 + artifact 分组 + inline SVG 权益曲线 + 预检"放大到完整范围"、/compare 双 run 并排对比（差异列红绿）。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
 ## Current Phase
 
 IMPLEMENTING
@@ -176,6 +188,14 @@ QRE-REPORT-BENCHMARK-001: **DONE (awaiting commit).** (1) Report blank columns: 
 | QRE-RESEARCH-RUN-PREFLIGHT-MISSING-FACTOR-SHAPE-AUDIT-001 | Research-run preflight missing-factor shape audit | DONE | CODEX/CLAUDE_CODE | `10_REVIEW_REPORT.md` PASS; missing_factor_requests[] item validation added; 14 new tests; 863 passed | Preserve |
 
 ## Latest Verified State
+
+Recorded on 2026-07-27 (full-history 111-strategy batch COMPLETE + Timescale lock root cause):
+
+- Full-history overnight run finished: 111/111 strategies OK across two batches — `7a7091245d87` (22 ok, first attempt, 281min) + `0e875c6a10da` (89 ok, resume, 1381min). Range 2010-01-04 → 2026-07-27, 5,547 symbols, vectorized, jobs 4, apply-stops + universe-filter, benchmark 000300.SH. Products: `outputs/backtests/full_history_overnight/<batch>/<strategy>/backtest/*` + `aggregate_summary.csv`.
+- Infra root cause found and fixed: TimescaleDB catalog lost ALL hypertable registrations; orphan chunks persist under inheritance (public.stock_daily: 858 chunks; public 1552, factors 1470, reference 4233). Plan-time locking of the whole inheritance tree × jobs 4 exhausted the lock table (64×100). User applied `ALTER SYSTEM SET max_locks_per_transaction = 512` + postgres restart → zero lock errors in resume run. Full Timescale re-registration remains a separate, unscheduled project.
+- Headline results (full-market mean, 16y): mean strategy_total_return **-3.11%** vs buy-hold **+93.58%**; positive-return strategies 10/111; **0/111 beat buy-hold**; mean benchmark excess -36.31%; mean max DD -48.24%; mean win rate 43.52%; mean traded symbols 618/5547, mean trades ~1961/strategy. Best: tf01a_ma_cross_20_120 +2.17%. Worst: pt03a_double_bottom -51.37%.
+- Consequence: full-market mean confirms no catalog strategy beats buy-hold at universe level → M10.4 per-symbol clustering (find subsets where a strategy HAS significant excess) is the justified next lane; per-symbol `excess_return_vs_buy_hold` columns are present in all symbol_performance.csv files.
+- Note: results are engine outputs, not research conclusions (R-QRE-008).
 
 Recorded on 2026-07-26 (overnight full-history prep + outputs cleanup + ML venv):
 

@@ -2,7 +2,218 @@
 
 ## Task ID
 
-QRE-OVERNIGHT-FULLHISTORY-PREP-001 (overnight script + outputs cleanup + ML venv)
+QRE-ADMIN-FACTOR-HEALTH-FIX-001 (管理台因子健康灯误报修复：纳管表机制)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1264 tests green, 26 admin 例；awaiting commit approval)
+
+## Implementation Summary
+
+- 问题：`factors.stock_daily_vortex_close`（0 行孤儿表，历史 admin 遗留）被报滞后 → 健康灯红色误报。真实链路：indicators_tushare 只写 10 张规范类别表，vortex 数据在 trend_close 内且新鲜（13,460,834 行至 2026-07-27）。
+- `gui/admin.py`：新增 `managed_factor_tables()`（读 indicators_tushare config/factors.yaml 的 category+column 组合推导 `stock_daily_<category>_<column>`，已实测推出恰好 10 张表；repo 不可用回退 `MANAGED_FACTOR_TABLES_FALLBACK` 硬编码 10 表）；`overview_factors` 拆分为 `tables`（纳管，含 watermark/滞后判定；纳管但 schema 缺失的也如实列出 watermark=None）与 `unmanaged_tables`（孤儿表信息段：表名+估算行数，不参与健康灯）；`lagging_tables` 只含纳管表。
+- `templates/admin.html`：因子卡片增"纳管表 N 张"计数与"未纳管表（不参与健康灯）"信息行。
+- 测试：FakeStore 支持按表 watermark；新增 4 例（config 推导、repo 缺失回退、孤儿进未纳管段、孤儿不影响健康灯）；既有 overview/路由用例改为显式 monkeypatch 纳管清单（环境无关）。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1264 passed (基线 1260 + 4 新增)
+# 真实只读冒烟：managed=10，unmanaged=[stock_daily_vortex_close(-1 估算)]，
+# lagging=[]，health=green「全部对齐 2026-07-27」→ SMOKE OK
+```
+
+---
+
+# Coding Handoff (archive: QRE-ADMIN-CONSOLE-P3A-001)
+
+## Task ID
+
+QRE-ADMIN-CONSOLE-P3A-001 (统一管理台 P3a：只读总览 + 日更状态 + 数据查询)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1260 tests green, 22 new; awaiting commit approval)
+
+## Implementation Summary
+
+- 新模块 `gui/admin.py`（纯只读：SELECT + systemctl show + du）：
+  - `overview_daily`：pg_class.reltuples 估算行数、MAX(trade_date)、COUNT(DISTINCT ts_code)、最近 15 个 distinct trade_date（60s TTL 缓存）。
+  - `overview_factors`：11 表估算行数 + 各表 watermark + 相对日线 watermark 的滞后表清单（缓存）。
+  - `overview_backtests`：批次数、策略产物目录数、du -sb 占用（outputs 符号链接先 resolve——冒烟发现 du 只量链接本身 21B，已修为 4.18GB）。
+  - `parse_systemctl_show`/`timer_status`：逐管线查 timer+service（NextElapse/ActiveEnter/ExecMainStatus/Result/ActiveState/UnitFileState/LoadState）；unit 不存在 → not_installed，qre-refresh 附安装命令文本。
+  - `health_status`：全对齐 green、最小滞后 ≤3 天 yellow、否则/缺数据 red。
+  - `query_daily`/`query_factor`：参数化 SQL、limit 钳制 ≤1000；因子表名走 `parse_factor_table_name` 正则 + table_exists，列名走 get_table_columns 白名单（实时枚举防注入）；`rows_to_csv`。
+- `gui/app.py`：GET `/admin`、`/api/admin/overview`（三域+健康灯，DB 挂 503）、`/api/admin/timers`、`/api/admin/query/daily`、`/api/admin/query/factor`（JSON + ?format=csv 下载，400 校验）。
+- `templates/admin.html`（新）：三 tab 中文页面；总览三卡片+健康灯+刷新；日更三管线卡片（qre-refresh 显示未安装+安装命令文本，无按钮）；查询双表单（因子下拉 optgroup 复用 /api/factors）+ 分页 + CSV 链接。`base.html` 导航加"管理台"。`style.css` 追加卡片/健康灯样式。UI 无任何未实现的 P3b/P3c 按钮。
+- 测试 `tests/test_gui_admin.py` 22 个：白名单拒非法表/列名（含注入串）、limit 钳制、CSV 格式、参数化断言（值不进 SQL 文本）、systemctl 解析（正常/未安装）、health 三色、overview（fake store）、du 缓存命中、路由 200/400/503。不连真 DB。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1260 passed (P1.5 基线 1238 + 22 新增)
+# 真实 DB 只读冒烟（实际执行）：
+# daily: est_rows=13,296,204 watermark=2026-07-27 symbols=5,549 recent=[07-27,07-24,...]
+# factors: 11 tables, lagging=[factors.stock_daily_vortex_close]
+# backtests: batches=5 strategy_dirs=6 size=4.18GB latest=refresh
+# health: red（vortex 表无数据 — 真实状态）
+# timers: quant-ts installed(active, next 07-28 16:30, last exit=1 exit-code)；
+#         indicators installed(active, next 16:40, success)；qre-refresh not_installed + hint
+# query_daily/factor 000001.SZ 2026-07: total=19, 首行数值正确 → SMOKE OK
+```
+
+## Known Limitations (P3b/P3c)
+
+- 手动触发日更、接入中心（refresh 注册）、维护区（产物清理）未做，UI 无对应按钮。
+- quant-ts service 上次 exit=1（exit-code）为真实状态，仅展示不处理。
+- vortex 表空导致健康灯红 —— 真实数据状态，留待上游补齐。
+- COUNT(DISTINCT ts_code) 为精确 count（858 chunk，~2s 级），已加 60s 缓存兜底。
+- timer 日志 tail 未做（P3b 随手动触发一起）。
+
+---
+
+# Coding Handoff (archive: QRE-GUI-FACTOR-WIZARD-001)
+
+## Task ID
+
+QRE-GUI-FACTOR-WIZARD-001 (GUI 因子前置三步向导 + indicators_tushare 新因子申请联动)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1238 tests green, 28 new; awaiting commit approval)
+
+## Implementation Summary
+
+- 新模块 `gui/factor_wizard.py`：`parse_factor_table_name`（命名规律 `stock_daily_<category>_<price_col>` 已实库确认 11 表）+ `build_factor_groups`（类别中文分组 + 行情组，剔除 ts_code/trade_date）+ `load_factor_tables_columns`（只读 information_schema 实时枚举）+ 条件/YAML 纯函数 `build_condition`/`combine_conditions`/`build_strategy_yaml`（比较+布尔，生成后过 validate_yaml）。
+- 新模块 `gui/factor_admin.py`：`indicators_repo`（env `QRE_INDICATORS_REPO`，默认 `<workspace>/indicators_tushare`，已验证解析正确）；`read_indicators`/`parse_periods`（逗号正整数校验）；`append_factor_entry`（.bak-时间戳备份 + 文本追加，category 取自同名现有 entry）+ `rollback_config`；任务状态机 `start_factor_job`（单任务锁 → 备份追加 → 后台线程 validate → plan → sample backfill --execute → awaiting_execute_confirmation；失败即停并回滚 yaml）+ `confirm_execute`（人工确认 → 全量 backfill --execute）；状态/日志落盘 `outputs/gui-console/factor-admin/<job_id>/{status.json,steps.log}`；step_runner 可注入。
+- `gui/app.py`：GET `/api/factors`（DB 挂 503 中文）、GET `/api/factor-admin/indicators`（配置缺失 503）、POST `/api/factor-admin/request`（400 校验/409 锁）、GET `/api/factor-admin/jobs/<id>`、POST `/api/factor-admin/<id>/execute`（状态闸 409）。
+- `templates/index.html`：新首屏"因子向导" tab（YAML 编辑器改标"高级"）：Step1 分组 checkbox + factor_fields 预览；Step2 四段式条件行（左下拉/运算符/右类型切换/右操作数）+ 出入场组 AND/OR + 持仓/stops + 实时 YAML 预览 + "校验并填入编辑器"（安全闸不变）；Step3 指标/价格下拉 + 周期校验 + 任务卡片（3s 轮询、日志 tail、awaiting 时显示"确认全量回填"按钮）；NL 缺因子错误加"前往新因子申请"链接（预填指标名/周期猜测）。`style.css` 追加向导样式。
+- 测试 `tests/test_gui_factor_wizard.py` 28 个：表名解析、分组/标签/剔列、条件各运算符与右值类型、AND/OR、YAML 生成（出入场/stops/校验失败）、periods 校验、yaml 追加/备份/回滚（临时目录副本，未碰真实 repo）、任务状态机成功链+确认执行、失败回滚、锁冲突、错误状态确认、路由 200/400/404/409/503。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1238 passed (P2 基线 1210 + 28 新增)
+# 真实环境只读冒烟：load_factor_tables_columns() → 9 因子组 346 列 + 行情组 7；
+# read_indicators(真实 repo) → 69 指标名 / 3 价格列。SMOKE OK
+```
+
+## Known Limitations
+
+- 全量回填链路未真实执行（按任务要求 mock subprocess）；首次真实跑建议先小样本观察 steps.log。
+- factors.yaml 追加为文本块（不保注释往返，但不动既有内容；pyyaml 可正常解析，已验证）。
+- Step2 仅比较+布尔；算术组合（如 close/ma-1）留 P3。跨周期（上穿/下穿）同 P2 限制。
+- params 型指标（如 kama [10,2,30]）暂只支持 periods 输入；params 申请留待后续。
+- 向导 alias 冲突时前端加 `_2` 后缀；极长列名列表（346 列）在折叠 details 内渲染，未做搜索过滤。
+
+---
+
+# Coding Handoff (archive: QRE-GUI-WORKBENCH-P2-001)
+
+## Task ID
+
+QRE-GUI-WORKBENCH-P2-001 (GUI 回测工作台 P2：自然语言 → 策略 YAML 编译器，通道 C)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1210 tests green, 16 new; awaiting commit approval)
+
+## Implementation Summary
+
+- 新模块 `gui/nl_compiler.py`：配置全走 env（`QRE_NL_LLM_BASE_URL/API_KEY/MODEL`，OpenAI 兼容 chat completions，stdlib urllib，60s 超时，无新增依赖）；`build_system_prompt` 注入真实 DSL 说明（StrategySpec 字段 + 信号表达式安全子集，crosses_above 按 compiler 现状降级为当周期比较并如实告知模型）+ `_INDICATOR_CATALOG` 因子目录 + 2 个精简 few-shot（取自 catalog mr01a 与 GUI 默认 bollinger）；`strip_yaml_fence` 剥围栏 → 复用 `engine.validate_yaml` → 复用 `factor_request_queue`（`find_missing_factor_columns`/`build_requests_for_strategy`/`upsert_requests`）做因子存在性检查，缺因子写队列并返回中文"已搁置"；DB 不可用时跳过检查并带 warning。返回 `{"ok", "yaml"|"error"+code+草稿}`。安全闸：编译结果只填编辑器，前端无任何自动执行路径。
+- `gui/app.py`：POST `/api/nl_compile`（空描述 400，未配置 503，其余 200）。
+- `templates/index.html`：编辑器页顶部"自然语言描述策略"文本框 + "编译为 YAML"按钮 + 状态区；成功填入 YAML 编辑器并提示"请检查确认后再提交回测"，失败显示中文错误与可编辑草稿；`static/style.css` 追加 `.nl-panel`。
+- 测试 `tests/test_gui_nl_compiler.py` 16 个：配置缺失/完整、prompt 内容、围栏剥离、正常往返（含围栏）、LLM HTTP 异常、非法 YAML 回传草稿、非 YAML 输出、缺因子入队（校验队列文件内容）、DB 不可用跳过检查、路由 400/503/200（urlopen 全 mock）、首页含通道 C UI。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1210 passed (P1 基线 1194 + 16 新增)
+```
+
+## Known Limitations
+
+- 因子目录注入为指标目录（名称:类别）+ 命名约定，非全量列清单（控制 token）；模型可能生成不存在的列名 → 由因子存在性检查兜底（需 DB 可用）。
+- 无 DB 时跳过因子检查（带 warning），缺因子要待提交回测时才暴露。
+- "上穿/下穿"语义降级为当日比较（与现有 compiler 一致），非真正的穿越事件检测。
+- 未对真实 LLM 做端到端验证（无配置凭据）；提示词质量需真实环境调优。
+
+---
+
+# Coding Handoff (archive: QRE-GUI-WORKBENCH-P1-001)
+
+## Task ID
+
+QRE-GUI-WORKBENCH-P1-001 (GUI 回测工作台 P1：参数表单 + 异步限流 + 出口强化 + run 对比)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1194 tests green, 22 new; awaiting commit approval)
+
+## Implementation Summary
+
+- `gui/engine.py`：`run_backtest` 扩展签名（profile_overrides / engine_impl / stop_loss/take_profit/trailing_stop / precheck / background，全部带向后兼容默认值）；`background=True` 时 daemon 线程执行、立即返回 status=running，结束回写 status.json（含 artifacts）；模块级锁 + 计数实现全局 2 并发槽位（`try_acquire_run_slot`/`release_run_slot`）；`apply_precheck` 截断前 20 只 × 近 180 天；`build_market_profile` 用 dataclasses.replace 覆盖 AShareMarketProfile 成本字段；`_execute_engine` batch/shared 传入 stops 与 engine_impl；codes 为空 → ts_codes/symbols=None 走全市场。新增 `extract_run_summary`（rglob 找 strategy_performance.json，回退解析 stdout key=value，含键别名映射）、`compare_run_summaries`（diff=B-A）、`equity_curve_svg`（inline SVG 折线，无 JS 依赖）、`SUMMARY_METRIC_FIELDS`（中文标签+百分比标记）。
+- `gui/app.py`：`/api/run` 接收新表单字段；all_market 校验（single 模式拒绝）；非 cli 执行先取槽位，满了返回 409"已有 2 个回测在运行，请稍后再提交"；新增 `/compare?a=&b=` 页面路由；run_detail 传入摘要行 + 权益 SVG；注册 `fmtval` Jinja 过滤器（两位小数/百分比）。
+- 模板：`index.html` 参数面板中文化全表单（标的/区间快捷键/摩擦/规则/引擎/预检默认勾选），提交后跳转提示；`run_detail.html` 预检横幅 + "放大到完整范围"按钮（用 request.json 的 full_params 重提）、摘要卡、artifact 按 xlsx/csv/json/其他分组、权益 SVG、running 时 3 秒 meta refresh；`runs.html` 对比复选框（限选 2 个）+ running 自动刷新；新增 `compare.html`（并排表 + 差异列红绿着色）；`base.html` 加 head block；`style.css` 追加 P1 样式。
+- CLI executor 路径未动。
+- 测试：`tests/test_gui_workbench.py` 22 个新用例（成本覆盖、预检截断、槽位限流、409、预检 full_params 记录、参数透传、摘要提取两路、对比差值、SVG、页面路由）；`tests/test_gui_app.py::test_api_run_success` 适配异步语义（先 running 后轮询 completed）。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1194 passed (基线 1172 + 22 新增)
+```
+
+## Known Limitations (留给 P2/P3)
+
+- 预检仅截断代码清单与区间，全市场预检仍是全 universe 拉数据（区间截断控制体量）。
+- run 对比为摘要指标级；无曲线叠加图（P3）。
+- 无任务取消按钮；NL→YAML 编译器属 P2。
+- 全市场模式依赖 assembler ts_codes=None 全量加载，内存风险由 2 并发限流 + 预检缓解。
+
+---
+
+# Coding Handoff (archive: QRE-FULLHISTORY-BATCH-001)
+
+## Task ID
+
+QRE-FULLHISTORY-BATCH-001 (111-strategy full-history overnight batch)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (111/111 OK; docs synced; awaiting commit approval)
+
+## Implementation Summary
+
+- Ran `scripts/run_full_history_overnight.sh` twice (agent-launched): batch `7a7091245d87` 22 ok / 89 error (281min), then after DB fix resume batch `0e875c6a10da` 89/89 ok (1381min). Range 2010-01-04→2026-07-27, 5,547 symbols.
+- Root cause of 89 errors: TimescaleDB catalog empty (all hypertable registrations lost), orphan chunks under inheritance (stock_daily: 858). Plan-time locks × jobs 4 exhausted lock table (64×100). Fix: user ran `ALTER SYSTEM SET max_locks_per_transaction = 512` + postgres restart. Timescale re-registration still open.
+- Aggregated `outputs/backtests/full_history_overnight/aggregate_summary.csv` (111 rows). Headline: mean strategy_total_return -3.11% vs buy-hold +93.58%; 0/111 beat buy-hold; mean benchmark excess -36.31%; mean DD -48.24%; win rate 43.52%; best tf01a +2.17%, worst pt03a -51.37%. Per-symbol excess columns present for M10.4 clustering.
+
+# Coding Handoff (archive: QRE-OVERNIGHT-FULLHISTORY-PREP-001)
 
 ## Written By
 

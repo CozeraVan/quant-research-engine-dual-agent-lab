@@ -12,20 +12,18 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-OVERNIGHT-FULLHISTORY-PREP-001 (implementation DONE — awaiting user-approved git finalization)
+QRE-ADMIN-CONSOLE-P3A-001 + QRE-ADMIN-FACTOR-HEALTH-FIX-001 (DONE — 1264 tests green; committing)
 
-2026-07-26 user directive: leave a manual overnight full-history script, clean redundant test outputs, create ML clustering venv.
+2026-07-28: admin console read-only slice (dashboard/timers/query) + factor-health fix (managed-table whitelist from indicators config; vortex orphan table demoted to informational). quant_ts upstream fix: normalize_reference_frame numeric coercion (daily_basic text→NUMERIC staging conflict), daily rerun completed, watermark 2026-07-27. Health: green.
 
-1. `scripts/run_full_history_overnight.sh` (executable): all 111 catalog strategies, 2010-01-04 → run day, vectorized engine, `--jobs 4 --symbol-chunk-size 400 --compact --workbook --apply-stops --universe-filter --resume`, benchmark 000300.SH; output `outputs/backtests/full_history_overnight`, tee log. User runs manually overnight.
-2. Outputs cleanup: `~/qre-outputs/backtests/` 19G → 2.9G (deleted full_batch_106 15G + profile_baseline + full_history_check2 + 5 temp hash dirs; batch summary archived to `~/qre-outputs/_archive/full_batch_106_summaries/`). Kept: quick_batch_106, full_history_cn, blank_check, refresh.
-3. `.venv-ml` created via uv (python3-venv/ensurepip missing on host) with scikit-learn+pandas+numpy; `.gitignore` updated. For M10.4 clustering lane.
+Earlier 2026-07-27: GUI workbench P1 (params form/async/precheck/compare) + P1.5 (factor-first wizard + factor-admin panel) + P2 (NL→YAML compiler). Design docs: gui_backtest_workbench.md, gui_factor_first_wizard.md, gui_admin_console.md.
 
 ## Pending Decisions (user)
 
-1. **Commit approval**: overnight script + .gitignore + docs sync (this task).
-2. Overnight run: user manually executes `bash scripts/run_full_history_overnight.sh` tonight.
-3. Next lane after that: M10.4 clustering analysis prep (venv ready; scikit-learn approved by this directive).
-4. Chart-text localization (needs CJK font check); `industry_group` awaits upstream `reference.stock_basic` population.
+1. GUI acceptance on `http://localhost:8080` (+ `/admin`); NL channel needs QRE_NL_LLM_* env.
+2. Optional: drop orphan empty table `factors.stock_daily_vortex_close` (destructive, needs explicit OK).
+3. P3b: manual daily-trigger buttons + integration center (refresh registration) + timer log tail; P3c: maintenance tab. qre-refresh.timer install needs sudo (user runs command).
+4. TimescaleDB hypertable re-registration project — unscheduled.
 
 Then (user-directed): output-file optimization based on user inspection of `outputs/backtests/full_history_check2/ef8006cb8f4d/` (2 strategies × full market × 2010-2026).
 

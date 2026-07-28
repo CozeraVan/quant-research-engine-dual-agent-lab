@@ -1,12 +1,26 @@
 {% extends "base.html" %}
+{% block head %}
+{% if run.status == 'running' %}
+<meta http-equiv="refresh" content="3">
+{% endif %}
+{% endblock %}
 {% block content %}
 <h1>运行详情 Run {{ run.run_id }}</h1>
 
+{% if run.precheck %}
+<div class="precheck-banner">
+  <strong>这是小样本预检（前 20 只 × 近 6 个月）。</strong>
+  结果仅用于快速验证策略可跑通，不代表完整区间表现。
+  <button id="btn-full-run">放大到完整范围 Run Full Scope</button>
+  <span id="full-run-status"></span>
+</div>
+{% endif %}
+
 <div class="run-meta">
-  <p><strong>模式 Mode:</strong> {{ run.mode }}</p>
+  <p><strong>模式 Mode:</strong> {{ run.mode }}{% if run.engine_impl %} / {{ run.engine_impl }}{% endif %}</p>
   <p><strong>日期 Date:</strong> {{ run.start }} 至 {{ run.end }}</p>
-  <p><strong>股票代码 Codes:</strong> {{ run.codes }}</p>
-  <p><strong>状态 Status:</strong> <span class="{{ 'ok' if run.status == 'completed' else 'err' if run.status == 'failed' else '' }}">{{ run.status }}</span></p>
+  <p><strong>股票代码 Codes:</strong> {% if run.codes %}{{ run.codes }}{% else %}全部 A 股（全市场）{% endif %}</p>
+  <p><strong>状态 Status:</strong> <span class="{{ 'ok' if run.status == 'completed' else 'err' if run.status == 'failed' else '' }}">{{ run.status }}{% if run.status == 'running' %}（运行中，页面每 3 秒自动刷新）{% endif %}</span></p>
   {% if run.error %}
   <p><strong>错误 Error:</strong> <span class="err">{{ run.error }}</span></p>
   {% endif %}
@@ -16,16 +30,45 @@
   <button id="btn-rerun">重新运行 Rerun</button>
 </div>
 
-{% if artifacts %}
-<h2>输出文件 Artifacts</h2>
-<table>
-<thead><tr><th>文件 File</th><th>路径 Path</th></tr></thead>
+{% if summary_fields %}
+<h2>结果摘要 Summary <span class="opt">（来源: {{ 'strategy_performance.json' if summary.source == 'json' else 'stdout 日志' }}；引擎输出，非投资建议）</span></h2>
+<table class="summary-table">
+<thead><tr><th>指标 Metric</th><th>值 Value</th></tr></thead>
 <tbody>
-{% for name, path in artifacts.items() %}
-<tr><td>{{ name }}</td><td><code>{{ path }}</code></td></tr>
+{% for row in summary_fields %}
+<tr><td>{{ row.label }}</td><td>{{ row.value | fmtval(row.is_pct) }}</td></tr>
 {% endfor %}
 </tbody>
 </table>
+{% endif %}
+
+{% if equity_svg %}
+<h2>权益曲线 Equity Curve</h2>
+<div class="equity-chart">{{ equity_svg | safe }}</div>
+{% endif %}
+
+{% if artifacts %}
+<h2>输出文件 Artifacts</h2>
+{% set groups = [('Excel 工作簿', '.xlsx'), ('CSV 数据表', '.csv'), ('JSON 数据', '.json'), ('其他文件', None)] %}
+{% for group_title, ext in groups %}
+  {% set ns = namespace(found=[]) %}
+  {% for name, path in artifacts.items() %}
+    {% if (ext and name.endswith(ext)) or (ext is none and not (name.endswith('.xlsx') or name.endswith('.csv') or name.endswith('.json'))) %}
+      {% set ns.found = ns.found + [(name, path)] %}
+    {% endif %}
+  {% endfor %}
+  {% if ns.found %}
+  <h3>{{ group_title }}</h3>
+  <table>
+  <thead><tr><th>文件 File</th><th>路径 Path</th></tr></thead>
+  <tbody>
+  {% for name, path in ns.found %}
+  <tr><td>{{ name }}</td><td><code>{{ path }}</code></td></tr>
+  {% endfor %}
+  </tbody>
+  </table>
+  {% endif %}
+{% endfor %}
 {% endif %}
 
 <div id="artifact-views"></div>
@@ -42,6 +85,7 @@
 
 <script>
 var runId = "{{ run.run_id }}";
+var fullParams = {{ (run.full_params or None) | tojson | safe }};
 
 document.getElementById("btn-rerun").addEventListener("click", function() {
   fetch("/api/runs/" + runId + "/strategy")
@@ -54,12 +98,62 @@ document.getElementById("btn-rerun").addEventListener("click", function() {
     });
 });
 
+var btnFull = document.getElementById("btn-full-run");
+if (btnFull) {
+  btnFull.addEventListener("click", function() {
+    if (!fullParams) { alert("该记录没有保存完整参数 full_params"); return; }
+    btnFull.disabled = true;
+    fetch("/api/runs/" + runId + "/strategy")
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var payload = {
+          yaml: d.yaml,
+          mode: "{{ run.mode }}",
+          start: fullParams.start,
+          end: fullParams.end,
+          codes: fullParams.codes || "",
+          all_market: !fullParams.codes,
+          initial_cash: fullParams.initial_cash || "",
+          max_positions: fullParams.max_positions || "",
+          engine_impl: fullParams.engine_impl || "simulator",
+          stop_loss_pct: fullParams.stop_loss_pct,
+          take_profit_pct: fullParams.take_profit_pct,
+          trailing_stop_pct: fullParams.trailing_stop_pct,
+          precheck: false,
+          output_dir: "{{ run.output_dir or 'outputs/gui-run' }}",
+          executor: "module"
+        };
+        var po = fullParams.profile_overrides || {};
+        Object.keys(po).forEach(function(k) { payload[k] = po[k]; });
+        return fetch("/api/run", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+      })
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var el = document.getElementById("full-run-status");
+        if (res.status === 200 && res.body.run_id) {
+          el.innerHTML = ' <a href="/runs/' + res.body.run_id + '">已提交完整回测 ' + res.body.run_id + '</a>';
+        } else {
+          el.textContent = " 提交失败: " + (res.body.error || res.status);
+          btnFull.disabled = false;
+        }
+      })
+      .catch(function(err) {
+        document.getElementById("full-run-status").textContent = " 提交失败: " + err;
+        btnFull.disabled = false;
+      });
+  });
+}
+
 // Render artifact contents
 (function() {
   var artifacts = {{ artifacts | tojson | safe }};
   var viewEl = document.getElementById("artifact-views");
   var priorityFiles = ["summary.csv", "summary.json", "summary_metrics.json", "summary_markdown.md",
-                       "orders.csv", "trades.csv", "equity_curve.csv", "failed_orders.csv",
+                       "orders.csv", "trades.csv", "failed_orders.csv",
                        "report_manifest.json", "run_manifest.json"];
 
   function renderCsv(headers, rows) {
