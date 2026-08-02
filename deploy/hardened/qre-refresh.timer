@@ -1,12 +1,13 @@
 # Hardened variant of qre-refresh.timer (NOT installed automatically).
-# 与原版差异：随机延迟 5 分钟，避免与其它定时任务整点争抢 DB 锁。
+# 调度：周一至周五 20:30（因子日更 16:40 启动、约 19:20 实际结束 + 一小时余量，
+# 确保当日因子全量写完后再跑回测增量，避免信号缺失）。
 # 安装命令见 qre-refresh.service 头部注释。
 
 [Unit]
 Description=Daily QRE strategy refresh check (hardened)
 
 [Timer]
-OnCalendar=*-*-* 18:30:00
+OnCalendar=Mon..Fri *-*-* 20:30:00
 RandomizedDelaySec=300
 AccuracySec=60
 Persistent=true

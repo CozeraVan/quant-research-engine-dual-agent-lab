@@ -15,7 +15,7 @@ StartLimitBurst=3
 Type=oneshot
 WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
 Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
-ExecStart=/usr/bin/env uv run python scripts/refresh_batch.py --jobs 4
+ExecStart=/home/van/.local/bin/uv run python scripts/refresh_batch.py --jobs 4 --apply-stops --universe-filter
 # 自愈：脚本非零退出（部分策略失败也会返回 1）时 5 分钟后重试一次
 Restart=on-failure
 RestartSec=300
