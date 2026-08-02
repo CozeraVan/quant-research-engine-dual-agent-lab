@@ -1,14 +1,15 @@
-"""统一管理台只读层（QRE-ADMIN-CONSOLE-P3A-001）。
+"""统一管理台状态层（QRE-ADMIN-CONSOLE-P3A-001 / P3B-001 / STATUS-REFocus-001）。
 
-红线：GUI 对 DB 只读；本模块只发 SELECT / 只读 subprocess（systemctl show、du）。
-写/删操作一律走各项目官方脚本（P3b/P3c 才涉及）。
+定位：管理台只查询状态，不查询/修改/删除具体数据；增删改一律通过各项目
+官方脚本传递。本模块只发 SELECT（information_schema/watermark 级）/
+只读 subprocess（systemctl show、journalctl、du、indicators 列展开）。
 """
 
 from __future__ import annotations
 
-import csv
-import io
+import json
 import subprocess
+import threading
 import time
 from datetime import date
 from pathlib import Path
@@ -16,8 +17,7 @@ from typing import Any, Callable
 
 from quant_research_engine.gui.factor_wizard import parse_factor_table_name
 
-MAX_QUERY_LIMIT = 1000
-CACHE_TTL_SECONDS = 60
+CACHE_TTL_SECONDS = 300
 
 TIMER_UNITS = [
     {"unit": "quant-ts-daily.timer", "label": "日线数据 quant_ts", "service": "quant-ts-daily.service"},
@@ -30,8 +30,10 @@ QRE_REFRESH_INSTALL_HINT = (
     "sudo systemctl daemon-reload && sudo systemctl enable --now qre-refresh.timer"
 )
 
-# 简单 TTL 缓存：{key: (timestamp, value)}
+# 简单 TTL 缓存：{key: (timestamp, value)}；single-flight：同 key 并发共享一次计算
 _cache: dict[str, tuple[float, Any]] = {}
+_cache_locks: dict[str, threading.Lock] = {}
+_cache_guard = threading.Lock()
 
 
 def _cached(key: str, producer: Callable[[], Any], ttl: int = CACHE_TTL_SECONDS) -> Any:
@@ -40,9 +42,17 @@ def _cached(key: str, producer: Callable[[], Any], ttl: int = CACHE_TTL_SECONDS)
         ts, value = _cache[key]
         if now - ts < ttl:
             return value
-    value = producer()
-    _cache[key] = (now, value)
-    return value
+    with _cache_guard:
+        lock = _cache_locks.setdefault(key, threading.Lock())
+    with lock:
+        now = time.time()
+        if key in _cache:
+            ts, value = _cache[key]
+            if now - ts < ttl:
+                return value
+        value = producer()
+        _cache[key] = (time.time(), value)
+        return value
 
 
 # indicators_tushare 实际写入的规范类别表（repo 配置不可用时的回退清单）。
@@ -116,7 +126,8 @@ def _estimate_rows(conn, schema: str, table: str) -> int | None:
 
 
 def overview_daily(db_url: str | None = None) -> dict[str, Any]:
-    """日线域：估算行数、watermark、股票数、最近 15 个交易日。"""
+    """日线域：估算行数、watermark、估算股票数（pg_stats.n_distinct，毫秒级）、
+    最近 15 个交易日。COUNT(DISTINCT) 精确值在 858 chunk 上 ~10s，已弃用。"""
     from sqlalchemy import text
 
     def _produce() -> dict[str, Any]:
@@ -125,7 +136,20 @@ def overview_daily(db_url: str | None = None) -> dict[str, Any]:
             with store.market_engine.begin() as conn:
                 estimated_rows = _estimate_rows(conn, "public", "stock_daily")
                 watermark = conn.execute(text("SELECT MAX(trade_date) FROM public.stock_daily")).scalar()
-                symbol_count = conn.execute(text("SELECT COUNT(DISTINCT ts_code) FROM public.stock_daily")).scalar()
+                # pg_stats.n_distinct：正值=估算 distinct 数；负值=占比，乘 reltuples
+                n_distinct = conn.execute(
+                    text(
+                        "SELECT n_distinct FROM pg_stats "
+                        "WHERE schemaname = 'public' AND tablename = 'stock_daily' AND attname = 'ts_code'"
+                    )
+                ).scalar()
+                symbol_count: int | None = None
+                if n_distinct is not None:
+                    n_distinct = float(n_distinct)
+                    if n_distinct >= 0:
+                        symbol_count = int(n_distinct)
+                    elif estimated_rows:
+                        symbol_count = int(abs(n_distinct) * estimated_rows)
                 recent = [
                     str(row[0])
                     for row in conn.execute(
@@ -135,7 +159,7 @@ def overview_daily(db_url: str | None = None) -> dict[str, Any]:
             return {
                 "estimated_rows": estimated_rows,
                 "watermark": str(watermark) if watermark else None,
-                "symbol_count": int(symbol_count) if symbol_count is not None else None,
+                "estimated_symbol_count": symbol_count,
                 "recent_trade_dates": recent,
             }
         finally:
@@ -331,122 +355,173 @@ def timer_status(
 
 
 # ---------------------------------------------------------------------------
-# Tab 3 数据查询（只读，参数化 + 白名单）
+# 因子状态（三方对账：库中列 × 日更配置应展开列 × watermark）
 # ---------------------------------------------------------------------------
 
-
-def _clamp_limit(limit: Any) -> int:
+# 在 indicators_tushare 的 uv 环境中做"配置 → 输出列"的纯展开：
+# 用该项目自己的 factor 类 preview_columns（权威命名），全程不触 DB。
+# 实测 ~1.4s 展开 10 表 206 列。
+EXPECTED_COLUMNS_SCRIPT = r"""
+import json
+from core.factor_config import load_factor_specs
+from core.factor_registry import FactorRegistry
+from core.factor_base import build_factor_instance
+registry = FactorRegistry()
+registry.discover()
+resolved = registry.resolve_specs(load_factor_specs("config/factors.yaml"))
+out = {}
+for spec, definition in resolved:
+    table = f"stock_daily_{spec.category}_{spec.price_type}"
+    entry = out.setdefault(table, {"columns": set(), "tasks": []})
     try:
-        value = int(limit)
-    except (TypeError, ValueError):
-        value = 200
-    return max(1, min(value, MAX_QUERY_LIMIT))
+        inst = build_factor_instance(definition.module, definition.class_name, spec.price_type)
+        entry["columns"].update(inst.preview_columns(spec.params or [None]))
+        ok = True
+    except Exception:
+        ok = False
+    entry["tasks"].append({
+        "name": spec.factor_name,
+        "params": [str(p) for p in (spec.params or [None])],
+        "expanded": ok,
+    })
+print(json.dumps({
+    table: {"columns": sorted(v["columns"]), "tasks": v["tasks"]}
+    for table, v in out.items()
+}))
+"""
+
+EXPECTED_COLUMNS_TTL = 300
 
 
-def query_daily(
+def expected_factor_columns(
+    repo: Path | None = None,
     *,
-    ts_code: str,
-    start: str,
-    end: str,
-    limit: Any = 200,
-    offset: Any = 0,
+    runner: Callable[..., subprocess.CompletedProcess] | None = None,
+) -> dict[str, Any] | None:
+    """日更配置展开为"应存在的列"。失败（repo/环境/脚本异常）返回 None → 降级。"""
+    from quant_research_engine.gui.daily_jobs import INDICATORS_DIR, UV_BIN
+
+    repo = repo or INDICATORS_DIR
+    run = runner or subprocess.run
+
+    def _produce() -> dict[str, Any] | None:
+        try:
+            proc = run(
+                [UV_BIN, "run", "python", "-c", EXPECTED_COLUMNS_SCRIPT],
+                cwd=str(repo),
+                capture_output=True,
+                text=True,
+                timeout=240,
+            )
+            if proc.returncode != 0 or not proc.stdout.strip():
+                return None
+            payload = json.loads(proc.stdout)
+            if not isinstance(payload, dict) or not payload:
+                return None
+            return payload
+        except Exception:
+            return None
+
+    return _cached(f"expected_factor_columns:{repo}", _produce, ttl=EXPECTED_COLUMNS_TTL)
+
+
+def factor_status(
     db_url: str | None = None,
-    store: Any = None,
-) -> dict[str, Any]:
-    """public.stock_daily 分页查询（参数化 SQL，limit ≤ 1000）。"""
-    from sqlalchemy import text
-
-    if not ts_code or not ts_code.strip():
-        raise ValueError("股票代码不能为空")
-    limit = _clamp_limit(limit)
-    offset = max(0, int(offset or 0))
-    own_store = store is None
-    store = store or _store(db_url)
-    try:
-        with store.market_engine.begin() as conn:
-            total = conn.execute(
-                text(
-                    "SELECT COUNT(*) FROM public.stock_daily "
-                    "WHERE ts_code = :ts_code AND trade_date BETWEEN :start AND :end"
-                ),
-                {"ts_code": ts_code.strip(), "start": start, "end": end},
-            ).scalar()
-            rows = conn.execute(
-                text(
-                    "SELECT trade_date, ts_code, open, high, low, close, pre_close, vol, amount "
-                    "FROM public.stock_daily "
-                    "WHERE ts_code = :ts_code AND trade_date BETWEEN :start AND :end "
-                    "ORDER BY trade_date LIMIT :limit OFFSET :offset"
-                ),
-                {"ts_code": ts_code.strip(), "start": start, "end": end, "limit": limit, "offset": offset},
-            ).mappings().fetchall()
-        records = [{k: (str(v) if v is not None else None) for k, v in row.items()} for row in rows]
-        return {"total": int(total or 0), "limit": limit, "offset": offset, "rows": records}
-    finally:
-        if own_store:
-            store.close()
-
-
-def query_factor(
     *,
-    table: str,
-    column: str,
-    ts_code: str,
-    start: str,
-    end: str,
-    limit: Any = 200,
-    offset: Any = 0,
-    db_url: str | None = None,
-    store: Any = None,
+    repo: Path | None = None,
+    runner: Callable[..., subprocess.CompletedProcess] | None = None,
 ) -> dict[str, Any]:
-    """factors.* 单因子分页查询。table/column 走白名单（实时 information_schema）防注入。"""
-    from sqlalchemy import text
+    """三方对账（状态，不含任何数据行）：
 
-    if not ts_code or not ts_code.strip():
-        raise ValueError("股票代码不能为空")
-    bare_table = table.split(".")[-1]
-    if parse_factor_table_name(bare_table) is None:
-        raise ValueError(f"非法因子表名: {table}")
-    limit = _clamp_limit(limit)
-    offset = max(0, int(offset or 0))
-    own_store = store is None
-    store = store or _store(db_url)
+    - green 在库且在日更配置；
+    - yellow 在库但不在日更配置（停滞风险）；
+    - red 在日更配置但库中缺列（缺因子）。
+    配置展开失败时降级为"配置级"展示（expected_available=False，不打列级状态）。
+    """
+    factors = overview_factors(db_url)
+    expected = expected_factor_columns(repo, runner=runner)
+
+    store = _store(db_url)
     try:
-        # 白名单校验：表必须存在、列必须是真实列
-        if not store.table_exists(f"factors.{bare_table}"):
-            raise ValueError(f"因子表不存在: factors.{bare_table}")
-        valid_columns = set(store.get_table_columns(f"factors.{bare_table}"))
-        if column not in valid_columns - {"ts_code", "trade_date"}:
-            raise ValueError(f"非法因子列名: {column}")
-        with store.market_engine.begin() as conn:
-            total = conn.execute(
-                text(
-                    f'SELECT COUNT(*) FROM factors."{bare_table}" '
-                    "WHERE ts_code = :ts_code AND trade_date BETWEEN :start AND :end"
-                ),
-                {"ts_code": ts_code.strip(), "start": start, "end": end},
-            ).scalar()
-            rows = conn.execute(
-                text(
-                    f'SELECT trade_date, ts_code, "{column}" FROM factors."{bare_table}" '
-                    "WHERE ts_code = :ts_code AND trade_date BETWEEN :start AND :end "
-                    "ORDER BY trade_date LIMIT :limit OFFSET :offset"
-                ),
-                {"ts_code": ts_code.strip(), "start": start, "end": end, "limit": limit, "offset": offset},
-            ).mappings().fetchall()
-        records = [{k: (str(v) if v is not None else None) for k, v in row.items()} for row in rows]
-        return {"total": int(total or 0), "limit": limit, "offset": offset, "rows": records}
+        db_columns: dict[str, set[str]] = {}
+        for info in factors["tables"]:
+            bare = info["table"].split(".")[-1]
+            db_columns[bare] = set(store.get_table_columns(info["table"])) - {"ts_code", "trade_date"}
     finally:
-        if own_store:
-            store.close()
+        store.close()
+
+    tables: list[dict[str, Any]] = []
+    for info in factors["tables"]:
+        bare = info["table"].split(".")[-1]
+        actual = db_columns.get(bare, set())
+        entry: dict[str, Any] = {
+            "table": info["table"],
+            "watermark": info["watermark"],
+            "estimated_rows": info["estimated_rows"],
+            "db_column_count": len(actual),
+        }
+        if expected is not None and bare in expected:
+            want = set(expected[bare]["columns"])
+            entry["expected_available"] = True
+            entry["green"] = sorted(actual & want)
+            entry["yellow"] = sorted(actual - want)
+            entry["red"] = sorted(want - actual)
+            entry["tasks"] = expected[bare]["tasks"]
+        elif expected is not None:
+            # 配置展开成功但该表不在配置中（不应发生在纳管表，防御）
+            entry["expected_available"] = True
+            entry["green"] = []
+            entry["yellow"] = sorted(actual)
+            entry["red"] = []
+            entry["tasks"] = []
+        else:
+            entry["expected_available"] = False
+        tables.append(entry)
+
+    # 配置展开失败时的配置级降级视图（指标名+参数，无列级状态）
+    config_level: list[dict[str, Any]] | None = None
+    if expected is None:
+        config_level = _config_level_tasks(repo)
+
+    red_total = sum(len(t.get("red", [])) for t in tables)
+    yellow_total = sum(len(t.get("yellow", [])) for t in tables)
+    return {
+        "expected_available": expected is not None,
+        "daily_watermark": factors["daily_watermark"],
+        "tables": tables,
+        "unmanaged_tables": factors["unmanaged_tables"],
+        "config_level": config_level,
+        "summary": {
+            "green": sum(len(t.get("green", [])) for t in tables),
+            "yellow": yellow_total,
+            "red": red_total,
+        },
+    }
 
 
-def rows_to_csv(rows: list[dict[str, Any]]) -> str:
-    """查询结果行 → CSV 文本（含表头）。"""
-    if not rows:
-        return ""
-    buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()))
-    writer.writeheader()
-    writer.writerows(rows)
-    return buffer.getvalue()
+def _config_level_tasks(repo: Path | None = None) -> list[dict[str, Any]]:
+    """降级：直接解析 factors.yaml 为 指标名+类别+价格列+参数 列表（配置级）。"""
+    try:
+        import yaml
+
+        from quant_research_engine.gui.factor_admin import config_path_for, indicators_repo
+
+        config_path = config_path_for(repo or indicators_repo())
+        data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        tasks = []
+        for entry in (data or {}).get("factors") or []:
+            params = entry.get("periods") or entry.get("params") or []
+            if not isinstance(params, list):
+                params = [params]
+            tasks.append(
+                {
+                    "name": str(entry.get("name")),
+                    "category": str(entry.get("category")),
+                    "column": str(entry.get("column")),
+                    "params": [str(p) for p in params],
+                }
+            )
+        return tasks
+    except Exception:
+        return []
+

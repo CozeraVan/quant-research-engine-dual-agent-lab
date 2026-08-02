@@ -2,6 +2,20 @@
 
 ## Latest Verified State
 
+2026-07-28 QRE-REFRESH-INCREMENTAL-001 DONE：`uv run pytest -q` → **1319 passed**（1312 + 7 新增，全绿）。refresh 默认改增量合并（复用 7 月增量引擎 checkpoint/持仓延续/台账去重/聚合重算；>45 自然日或 config 变更自动全窗 bootstrap；--full-window 保留兜底）。真实等价性 PASS：tf01a 354 vs 354 trades（mean_return diff 3.5e-18，equity diff 4.7e-10）、mr01a 332 vs 332（diff 0.0），临时目录未动真实 outputs（state.json 已备份）。设计 docs/design/refresh_incremental.md。未提交，等用户审批。
+
+2026-07-28 QRE-ADMIN-STRAT-TAB-001 DONE：`uv run pytest -q` → **1312 passed**（1299 + 13 新增，全绿）。策略状态 tab 四项修改：策略名链接详情页（/admin/strategy/<sid>：简介+指标卡+产物下载双白名单）、四列精简（latest_strategy_result 取 mtime 最新 strategy_performance.json + benchmark 兜底 + 300s 缓存）、registry v2（include/stopped，兼容旧格式，绿/灰开关只改文件提示下次生效，refresh_batch 过滤 stopped）、删除连动产物（backtests/*/<sid> 白名单删除+清单）。真实冒烟：mr01a 详情页 200、下载 200、线上旧格式 registry 读取正常。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-07-28 QRE-ADMIN-MANAGE-001 DONE：`uv run pytest -q` → **1299 passed**（1284 + 15 新增，全绿）。Tab4/Tab5 落地：策略删除（输入 id 二次确认 + 注册表联动 + 产物保留提示）、因子补全按钮（官方 backfill --execute，与日更共锁 409）、因子删列（indicators 新官方脚本 drop_factor_columns.py：dry-run 默认 + 纳管白名单 + 配置列 --force 闸 + 黄列 chip ×）、维护区批次清理（路径白名单 + refresh/incremental 保护 + DELETE 输入确认）。drop 脚本真实冒烟全路径通过（零写入）。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-07-28 QRE-HAZARD-FIX-001 DONE：`uv run pytest -q` → **1284 passed**（1282 + 2 新增，全绿）。三隐患修复：①策略状态 tab 注册表模式横幅（refresh_overview 加 mode 字段）；②overview_daily 的 COUNT(DISTINCT)（858 chunk 10.34s）改 pg_stats.n_distinct 估算（0.003s），冷载首载实测 9.98s→2.19s、二载 0.0015s；③scripts/install_timers_hardened.sh（bash -n OK，未执行）。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-07-28 QRE-ADMIN-DASH-QUERY-001 DONE：`uv run pytest -q` → **1281 passed**（1278 + 3 新增，全绿）。dashboard 查询台化：前端四卡片独立异步 + AbortController 30s + per-card 中文错误重试（按钮不等数据）；后端缓存 TTL 300s + single-flight；新建因子/新策略/注册 UI 隐藏（.p3c-hidden + TODO-P3c-restore，代码保留）；因子/策略 tab 加客户端搜索框。实测：/admin 骨架 0.004s，overview 首载 9.98s → 二载 0.0009s。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-07-28 QRE-ADMIN-STATUS-REFocus-001 DONE：`uv run pytest -q` → **1278 passed**（1282 − 11 查询用例 + 7 新用例，全绿）。管理台定位修正为"只查询状态"：撤 Tab3 数据查询（路由/query_daily/query_factor/rows_to_csv 全删）；新 Tab 因子状态三方对账（库中列 × indicators 纯展开应存在列 × watermark，绿206/黄138/红0 真实冒烟）；Tab4 重组策略状态。日更列展开走 indicators 自身 factor 类 preview_columns 纯展开（不触 DB，避开 plan/collect_expected_columns 的 meta 写入）。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-07-28 QRE-ADMIN-CONSOLE-P3B-001 DONE：`uv run pytest -q` → **1282 passed**（1264 + 18 新增，全绿）。日更中心手动触发（三管线官方脚本、管线独立锁、后台任务+日志落盘轮询、journalctl 只读带回退）+ 接入中心（refresh state/delta 展示 + catalog 注册表加入/移出）。refresh 注册机制：`outputs/refresh/registry.json` 存在且非空时 refresh_batch 自动过滤（--strategies 优先），缺省全量与现状一致，不改 systemd。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
 2026-07-28 QRE-ADMIN-FACTOR-HEALTH-FIX-001 DONE：`uv run pytest -q` → **1264 passed**（1260 + 4 新增，全绿）。健康灯误报修复：`admin.managed_factor_tables()` 从 indicators_tushare factors.yaml 推导 10 张纳管表（repo 缺失回退硬编码），overview_factors 拆分纳管/未纳管段，滞后与健康灯只评估纳管表。真实冒烟：纳管 10 表全对齐、vortex 孤儿表进未纳管段、health=green「全部对齐 2026-07-27」。未提交，等用户审批。
 
 2026-07-28 QRE-ADMIN-CONSOLE-P3A-001 DONE：`uv run pytest -q` → **1260 passed**（1238 + 22 新增，全绿）。统一管理台 `/admin` 只读部分落地：`gui/admin.py`（三域总览 + 健康灯 + systemctl timer 状态 + 白名单查询/CSV）、三 tab 中文页面、导航入口。真实 DB 冒烟：日线 watermark 2026-07-27/5549 股、因子 11 表（vortex 滞后为空 → 健康灯红，真实状态）、回测产物 4.18GB、qre-refresh 未安装提示正常。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。

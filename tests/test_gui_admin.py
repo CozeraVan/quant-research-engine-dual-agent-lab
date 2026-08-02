@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,14 +9,11 @@ import pytest
 
 from quant_research_engine.gui import admin
 from quant_research_engine.gui.admin import (
-    MAX_QUERY_LIMIT,
-    _clamp_limit,
+    expected_factor_columns,
+    factor_status,
     health_status,
     overview_backtests,
     parse_systemctl_show,
-    query_daily,
-    query_factor,
-    rows_to_csv,
     timer_status,
 )
 
@@ -64,8 +62,8 @@ class _FakeConn:
         self.store.queries.append((sql, params))
         if "pg_class" in sql:
             return _FakeResult(rows=[(123456,)])
-        if "COUNT(DISTINCT ts_code)" in sql:
-            return _FakeResult(scalar=5547)
+        if "pg_stats" in sql:
+            return _FakeResult(scalar=5209.0)
         if "COUNT(*)" in sql:
             return _FakeResult(scalar=3)
         if "MAX(trade_date)" in sql and "factors" in sql:
@@ -118,75 +116,104 @@ class FakeStore:
         return list(self._columns)
 
 
-# --- query_daily / query_factor ---
+# --- 因子状态对账（REFocus） ---
 
 
-def test_query_daily_basic():
-    store = FakeStore()
-    result = query_daily(ts_code="000001.SZ", start="2026-07-01", end="2026-07-27", store=store)
-    assert result["total"] == 3
-    assert result["limit"] == 200
-    assert len(result["rows"]) == 2
-    # 参数化：ts_code 不拼接进 SQL
-    sql_text = " ".join(q for q, _ in store.queries)
-    assert "000001.SZ" not in sql_text
-    assert any(p.get("ts_code") == "000001.SZ" for _, p in store.queries)
+def _expected_payload():
+    return {
+        "stock_daily_momentum_close": {
+            "columns": ["rsi_14", "rsi_6", "macd_12_26_9"],
+            "tasks": [{"name": "rsi", "params": ["6", "14"], "expanded": True}],
+        },
+        "stock_daily_overlap_close": {
+            "columns": ["sma_20", "sma_60"],
+            "tasks": [{"name": "sma", "params": ["20", "60"], "expanded": True}],
+        },
+    }
 
 
-def test_query_daily_empty_code():
-    with pytest.raises(ValueError, match="股票代码不能为空"):
-        query_daily(ts_code=" ", start="a", end="b", store=FakeStore())
+def test_expected_factor_columns_ok(monkeypatch):
+    admin._cache.clear()
+    payload = json.dumps(_expected_payload())
+
+    def runner(cmd, **kw):
+        assert cmd[:3] == ["/home/van/.local/bin/uv", "run", "python"]
+        return _Proc(stdout=payload)
+
+    result = expected_factor_columns(runner=runner)
+    assert result is not None
+    assert result["stock_daily_momentum_close"]["columns"] == ["rsi_14", "rsi_6", "macd_12_26_9"]
+    admin._cache.clear()
 
 
-def test_clamp_limit():
-    assert _clamp_limit(10) == 10
-    assert _clamp_limit(99999) == MAX_QUERY_LIMIT
-    assert _clamp_limit(0) == 1
-    assert _clamp_limit("abc") == 200
+def test_expected_factor_columns_failure_returns_none(monkeypatch):
+    admin._cache.clear()
+    assert expected_factor_columns(runner=lambda cmd, **kw: _Proc("boom", 1)) is None
+    assert expected_factor_columns(runner=lambda cmd, **kw: _Proc("")) is None
+    assert expected_factor_columns(runner=lambda cmd, **kw: _Proc("not json")) is None
+    admin._cache.clear()
 
 
-def test_query_factor_ok():
-    store = FakeStore()
-    result = query_factor(
-        table="factors.stock_daily_momentum_close",
-        column="rsi_14",
-        ts_code="000001.SZ",
-        start="2026-07-01",
-        end="2026-07-27",
-        store=store,
+def _setup_factor_status(monkeypatch, columns_map, expected):
+    """columns_map: {bare_table: [columns...]}；expected: payload 或 None。"""
+    admin._cache.clear()
+
+    class _ColumnStore(FakeStore):
+        def get_table_columns(self, table_name, *, engine=None):
+            bare = table_name.split(".")[-1]
+            return columns_map.get(bare, ["ts_code", "trade_date"])
+
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: _ColumnStore())
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.managed_factor_tables",
+        lambda repo=None: {"stock_daily_momentum_close", "stock_daily_overlap_close"},
     )
-    assert result["total"] == 3
-    assert len(result["rows"]) == 2
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.expected_factor_columns",
+        lambda repo=None, runner=None: expected,
+    )
 
 
-def test_query_factor_rejects_bad_table():
-    with pytest.raises(ValueError, match="非法因子表名"):
-        query_factor(table="public.stock_daily; DROP TABLE x", column="rsi_14",
-                     ts_code="000001.SZ", start="a", end="b", store=FakeStore())
-    with pytest.raises(ValueError, match="因子表不存在"):
-        query_factor(table="factors.stock_daily_momentum_typical_price", column="rsi_14",
-                     ts_code="000001.SZ", start="a", end="b", store=FakeStore())
+def test_factor_status_three_way(monkeypatch):
+    _setup_factor_status(
+        monkeypatch,
+        {
+            # rsi_14 在库且在配置(绿)；rsi_99 在库不在配置(黄)；缺 macd_12_26_9/rsi_6(红)
+            "stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14", "rsi_99"],
+            "stock_daily_overlap_close": ["ts_code", "trade_date", "sma_20", "sma_60"],
+        },
+        _expected_payload(),
+    )
+    status = factor_status()
+    assert status["expected_available"] is True
+    by_table = {t["table"]: t for t in status["tables"]}
+    mom = by_table["factors.stock_daily_momentum_close"]
+    assert mom["green"] == ["rsi_14"]
+    assert mom["yellow"] == ["rsi_99"]
+    assert mom["red"] == ["macd_12_26_9", "rsi_6"]
+    ovl = by_table["factors.stock_daily_overlap_close"]
+    assert ovl["green"] == ["sma_20", "sma_60"]
+    assert ovl["yellow"] == [] and ovl["red"] == []
+    assert status["summary"] == {"green": 3, "yellow": 1, "red": 2}
+    admin._cache.clear()
 
 
-def test_query_factor_rejects_bad_column():
-    store = FakeStore(columns=["ts_code", "trade_date", "rsi_14"])
-    with pytest.raises(ValueError, match="非法因子列名"):
-        query_factor(table="factors.stock_daily_momentum_close", column="rsi_14; DROP",
-                     ts_code="000001.SZ", start="a", end="b", store=store)
-    with pytest.raises(ValueError, match="非法因子列名"):
-        query_factor(table="factors.stock_daily_momentum_close", column="ts_code",
-                     ts_code="000001.SZ", start="a", end="b", store=store)
-
-
-def test_rows_to_csv():
-    csv_text = rows_to_csv([
-        {"trade_date": "2026-07-27", "close": "10.5"},
-        {"trade_date": "2026-07-24", "close": "10.3"},
-    ])
-    lines = csv_text.strip().splitlines()
-    assert lines[0] == "trade_date,close"
-    assert lines[1] == "2026-07-27,10.5"
-    assert rows_to_csv([]) == ""
+def test_factor_status_degrades_to_config_level(monkeypatch):
+    _setup_factor_status(
+        monkeypatch,
+        {"stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14"]},
+        None,  # 展开失败
+    )
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin._config_level_tasks",
+        lambda repo=None: [{"name": "rsi", "category": "momentum", "column": "close", "params": ["14"]}],
+    )
+    status = factor_status()
+    assert status["expected_available"] is False
+    assert status["config_level"][0]["name"] == "rsi"
+    for t in status["tables"]:
+        assert "green" not in t  # 无列级状态
+    admin._cache.clear()
 
 
 # --- systemctl 解析 ---
@@ -291,7 +318,8 @@ def test_overview_daily_and_factors(monkeypatch):
     daily = admin.overview_daily()
     assert daily["estimated_rows"] == 123456
     assert daily["watermark"] == "2026-07-27"
-    assert daily["symbol_count"] == 5547
+    assert daily["estimated_symbol_count"] == 5209  # pg_stats.n_distinct 估算
+    assert "symbol_count" not in daily
     assert daily["recent_trade_dates"] == ["2026-07-27", "2026-07-24"]
 
     factors = admin.overview_factors()
@@ -410,7 +438,8 @@ def test_admin_page_200(app_client):
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
     assert "管理台" in html
-    assert "总览" in html and "日更状态" in html and "数据查询" in html
+    assert "总览" in html and "日更中心" in html and "因子状态" in html and "策略状态" in html
+    assert "数据查询" not in html  # REFocus：查询 tab 已撤
 
 
 def test_api_admin_overview_ok(app_client, monkeypatch):
@@ -438,36 +467,39 @@ def test_api_admin_overview_db_down(app_client, monkeypatch):
     assert "数据库不可用" in resp.get_json()["error"]
 
 
-def test_api_admin_query_daily_ok(app_client, monkeypatch):
-    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: FakeStore())
-    resp = app_client.get("/api/admin/query/daily?ts_code=000001.SZ&start=2026-07-01&end=2026-07-27")
+def test_api_admin_query_routes_removed(app_client):
+    # REFocus：数据查询路由已撤
+    assert app_client.get("/api/admin/query/daily").status_code == 404
+    assert app_client.get("/api/admin/query/factor").status_code == 404
+
+
+def test_api_admin_factor_status_ok(app_client, monkeypatch):
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.factor_status",
+        lambda db_url=None: {
+            "expected_available": True,
+            "daily_watermark": "2026-07-27",
+            "tables": [],
+            "unmanaged_tables": [],
+            "config_level": None,
+            "summary": {"green": 3, "yellow": 1, "red": 0},
+        },
+    )
+    resp = app_client.get("/api/admin/factor-status")
     assert resp.status_code == 200
     data = resp.get_json()
     assert data["ok"] is True
-    assert data["total"] == 3
+    assert data["summary"]["green"] == 3
 
 
-def test_api_admin_query_daily_400(app_client, monkeypatch):
-    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: FakeStore())
-    resp = app_client.get("/api/admin/query/daily?ts_code=&start=a&end=b")
-    assert resp.status_code == 400
+def test_api_admin_factor_status_503(app_client, monkeypatch):
+    def boom(db_url=None):
+        raise ConnectionError("refused")
 
-
-def test_api_admin_query_daily_csv(app_client, monkeypatch):
-    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: FakeStore())
-    resp = app_client.get("/api/admin/query/daily?ts_code=000001.SZ&start=a&end=b&format=csv")
-    assert resp.status_code == 200
-    assert resp.mimetype == "text/csv"
-    text = resp.data.decode("utf-8")
-    assert "trade_date" in text.splitlines()[0]
-    assert "attachment" in resp.headers.get("Content-Disposition", "")
-
-
-def test_api_admin_query_factor_injection_rejected(app_client, monkeypatch):
-    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: FakeStore())
-    resp = app_client.get("/api/admin/query/factor?table=factors.stock_daily_momentum_close&column=rsi_14%3BDROP&ts_code=000001.SZ&start=a&end=b")
-    assert resp.status_code == 400
-    assert "非法因子列名" in resp.get_json()["error"]
+    monkeypatch.setattr("quant_research_engine.gui.admin.factor_status", boom)
+    resp = app_client.get("/api/admin/factor-status")
+    assert resp.status_code == 503
+    assert "因子状态获取失败" in resp.get_json()["error"]
 
 
 def test_api_admin_timers(app_client, monkeypatch):
@@ -480,3 +512,80 @@ def test_api_admin_timers(app_client, monkeypatch):
     data = resp.get_json()
     assert data["ok"] is True
     assert data["timers"][0]["status"] == "not_installed"
+
+
+# --- Dashboard 查询台模式（QRE-ADMIN-DASH-QUERY-001） ---
+
+
+def test_cache_ttl_is_300():
+    assert admin.CACHE_TTL_SECONDS == 300
+
+
+def test_cached_single_flight():
+    """并发同 key 请求共享同一次计算。"""
+    import threading
+
+    admin._cache.clear()
+    admin._cache_locks.clear()
+    calls = {"n": 0}
+
+    def producer():
+        calls["n"] += 1
+        time.sleep(0.2)
+        return "value"
+
+    results = []
+
+    def worker():
+        results.append(admin._cached("sf-test", producer, ttl=300))
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert calls["n"] == 1
+    assert results == ["value"] * 4
+    admin._cache.clear()
+    admin._cache_locks.clear()
+
+
+def test_admin_page_query_only_mode(app_client):
+    resp = app_client.get("/admin")
+    assert resp.status_code == 200
+    html = resp.data.decode("utf-8")
+    # 搜索框
+    assert 'id="fs-search"' in html
+    assert 'id="ob-search"' in html
+    # MANAGE：注册/新建入口已恢复；维护区 tab 存在
+    assert "维护区" in html
+    assert "data-del" in html
+    assert "data-backfill" in html
+
+
+def test_admin_template_script_parses_with_node():
+    """回归：admin.html 内联 JS 必须通过 node --check（语法错误会使整页事件失效）。"""
+    import re
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    node = shutil.which("node") or (
+        "/home/van/codex-local/node-v22/bin/node"
+        if Path("/home/van/codex-local/node-v22/bin/node").exists()
+        else None
+    )
+    if not node:
+        import pytest
+
+        pytest.skip("node 不可用")
+    tpl = (
+        Path(__file__).resolve().parents[1]
+        / "src/quant_research_engine/gui/templates/admin.html"
+    ).read_text(encoding="utf-8")
+    scripts = re.findall(r"<script>(.*?)</script>", tpl, re.S)
+    assert scripts, "admin.html 应包含内联 script"
+    js_path = Path("/tmp/qre_admin_template_check.js")
+    js_path.write_text("\n".join(scripts), encoding="utf-8")
+    result = subprocess.run([node, "--check", str(js_path)], capture_output=True, text=True)
+    assert result.returncode == 0, f"admin.html 内联 JS 语法错误: {result.stderr[:500]}"

@@ -1,0 +1,28 @@
+# Hardened variant of qre-refresh.service (NOT installed automatically).
+# 与原版差异：失败自愈（on-failure 重启 + 频率限制）、资源护栏、超时。
+# 安装（需 sudo，由用户手动执行）：
+#   sudo cp deploy/hardened/qre-refresh.service deploy/hardened/qre-refresh.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qre-refresh.timer
+
+[Unit]
+Description=QRE continuous strategy refresh (watermark-gated catalog re-run, hardened)
+# 失败后由 [Service] Restart=on-failure 重试；10 分钟内最多 3 次，超出进入 failed 态
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
+Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+ExecStart=/usr/bin/env uv run python scripts/refresh_batch.py --jobs 4
+# 自愈：脚本非零退出（部分策略失败也会返回 1）时 5 分钟后重试一次
+Restart=on-failure
+RestartSec=300
+# 护栏：全市场 111 策略重跑可能数十分钟；内存机器共 23G，限 18G 防 OOM 蔓延
+TimeoutStartSec=7200
+MemoryMax=18G
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+SyslogIdentifier=qre-refresh

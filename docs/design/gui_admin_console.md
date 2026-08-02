@@ -1,7 +1,21 @@
 # 统一管理台设计（QRE Admin Console）
 
-日期：2026-07-27 ｜ 状态：P3a DONE（2026-07-28，QRE-ADMIN-CONSOLE-P3A-001，1260 tests green；P3b/P3c 待启动）｜ 作者：KIMI_CODE
+日期：2026-07-27 ｜ 状态：P3a/P3b/REFocus/DASH/HAZARD/MANAGE DONE（2026-07-28，QRE-ADMIN-MANAGE-001，Tab 4/Tab 5 DONE，1299 tests green）｜ 作者：KIMI_CODE
 关联：gui_backtest_workbench.md（P1/P2）、gui_factor_first_wizard.md（P1.5）。
+
+## 定位（状态台哲学，2026-07-28 用户拍板）
+
+管理台**只查询状态，不查询/修改/删除具体数据**；**查询优先，新建/入库暂缓**
+（新建因子/新策略/注册操作 UI 隐藏、代码保留，标记 TODO-P3c-restore）；
+写入只允许"触发已完善的项目脚本"（日更中心的立即运行按钮保留）。
+
+- 因子管理 = 显示"数据库里存在哪些具体因子 × 是否在技术指标日更列表中"；
+  新增因子 = 加入 indicators_tushare 的脚本配置（P1.5 已实现）。
+- 策略管理 = catalog 清单 × 是否在 refresh 日更注册表；新策略走因子向导。
+- 所有增删改通过已存在的官方脚本传递；GUI 不做数据行级查询（原 Tab 3 数据查询已撤）。
+
+## 用户意图（原始）
+
 用户意图：把 ubuntu 内多个项目（日线数据 quant_ts、因子库 indicators_tushare、
 回测引擎与产物 QRE）的数据查询、日更管理、新因子/新策略接入集中到同一 GUI，
 类比"管理台"。
@@ -33,19 +47,29 @@
   systemctl），单任务锁 + 中文确认闸 + 日志轮询（复用 factor-admin 任务基建）。
 - qre-refresh：显示"未安装"与安装命令（sudo cp ... 由用户手动执行）；
   同时提供"手动增量刷新"按钮（直接调 refresh_batch.py，无需 sudo）。
+- refresh 执行结构（QRE-REFRESH-INCREMENTAL-001）：默认 mode=incremental——
+  watermark 小差（≤45 自然日≈30 交易日）只跑新增交易日并**合并**进既有结果
+  （复用 7 月增量引擎 checkpoint/持仓延续/台账去重/聚合重算，分段≡全跑）；
+  大差/首次自动 bootstrap 全窗；`--full-window` 保留全窗重跑兜底。
+  设计细节见 docs/design/refresh_incremental.md。
 
-### Tab 3 数据查询（只读）
+### Tab 3 因子状态（REFocus 后，替代原"数据查询"）
 
-- 日线查询：代码 + 区间 → 分页表格 + CSV 下载。
-- 因子查询：代码 + 因子下拉（复用 /api/factors）+ 区间。
-- 回测产物浏览：批次 → 策略 → 摘要指标 + 文件下载（复用现有 artifact 体系）。
+- 三方对账（仅状态，无数据行）：库中存在的因子列（information_schema，
+  剔除 ts_code/trade_date）× 日更配置展开列（indicators_tushare 自身
+  factor 类 preview_columns 推导，subprocess 调其 uv 环境纯展开不触 DB）
+  × 每表 watermark。
+- 状态标注：在库且在日更（绿）/ 在库不在日更（黄，停滞风险）/
+  配置有但库缺（红，链向新因子申请）。配置展开失败降级为配置级（指标名+参数）。
+- 未纳管孤儿表保持信息段（不参与对账）。
 
-### Tab 4 接入中心
+### Tab 4 策略状态（STRAT-TAB 版）
 
-- 新因子申请（P1.5 面板迁入，含 validate→plan→sample→确认 execute 链）。
-- 新策略（因子向导/NL 通道入口）+ 创建后"加入持续更新"：注册进 refresh
-  策略集合（写 QRE 自己的 refresh state，不碰上游）。
-- 持续更新状态：每个已注册策略的 watermark、最近 delta、下次刷新时间。
+- 策略名链接详情页（/admin/strategy/<id>：catalog 简介 + 最近结果指标卡 + 产物下载）。
+- 状态表四列：回测起止、回测股票数量、策略超额收益、最大回撤（取该策略 mtime 最新的
+  strategy_performance.json，无结果显示"—"）。
+- 持续更新开关：绿=开启/灰=停止（registry v2 {"include","stopped"}，只改文件下次 refresh 生效；
+  include 空=全量模式默认全开）；注册/移出、删除策略（连动删除本地回测产物，白名单校验）。
 
 ### Tab 5 维护（危险区，二次确认）
 

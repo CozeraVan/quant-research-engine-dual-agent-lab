@@ -4,8 +4,10 @@
 
 <div class="tabs">
   <button class="tab active" data-tab="overview">总览 Dashboard</button>
-  <button class="tab" data-tab="timers">日更状态</button>
-  <button class="tab" data-tab="query">数据查询</button>
+  <button class="tab" data-tab="timers">日更中心</button>
+  <button class="tab" data-tab="factors">因子状态</button>
+  <button class="tab" data-tab="onboard">策略状态</button>
+  <button class="tab" data-tab="maint">维护区</button>
 </div>
 
 <!-- Tab 1: 总览 -->
@@ -19,47 +21,54 @@
   </div>
 </div>
 
-<!-- Tab 2: 日更状态（只读） -->
+<!-- Tab 2: 日更中心（手动触发 + 只读状态/日志） -->
 <div id="tab-timers" class="tab-content">
-  <p><button id="btn-timer-refresh">刷新 Refresh</button> <span class="opt">状态来自 systemctl show（只读，无需 root）</span></p>
+  <p><button id="btn-timer-refresh">刷新 Refresh</button>
+    <span class="opt">状态来自 systemctl show（只读）；手动触发只调各项目官方脚本，不经 sudo/systemd</span></p>
   <div id="timer-cards" class="admin-cards"></div>
+  <h3>最近日志 <span class="opt">journalctl（只读）</span></h3>
+  <div id="daily-log-view" class="result-box hidden"></div>
 </div>
 
-<!-- Tab 3: 数据查询 -->
-<div id="tab-query" class="tab-content">
+<!-- Tab 4: 策略状态（catalog × refresh 注册表 × 最近 delta） -->
+<div id="tab-onboard" class="tab-content">
   <div class="section">
-    <button class="section-toggle" data-section="q-daily">日线查询 public.stock_daily &#9660;</button>
-    <div id="sec-q-daily" class="section-body">
-      <div class="form-grid form-grid-3">
-        <label>股票代码</label><input type="text" id="qd-code" value="000001.SZ">
-        <label>开始</label><input type="text" id="qd-start" placeholder="YYYY-MM-DD">
-        <label>结束</label><input type="text" id="qd-end" placeholder="YYYY-MM-DD">
-        <label>每页条数</label><input type="number" id="qd-limit" value="50" min="1" max="1000">
-      </div>
-      <div class="builder-actions">
-        <button id="qd-run">查询</button>
-        <a id="qd-csv" href="#" class="opt">下载当前页 CSV</a>
-      </div>
-      <div id="qd-result"></div>
+    <button class="section-toggle" data-section="ob-refresh">持续更新（QRE refresh）状态 &#9660;</button>
+    <div id="sec-ob-refresh" class="section-body">
+      <p><button id="btn-ob-refresh">刷新 Refresh</button>
+        <a href="/" class="opt" style="margin-left:1rem;">→ 新建策略（因子向导）</a></p>
+      <div id="ob-state"></div>
+      <div id="ob-delta"></div>
     </div>
   </div>
-
   <div class="section">
-    <button class="section-toggle" data-section="q-factor">因子查询 factors.* &#9660;</button>
-    <div id="sec-q-factor" class="section-body">
-      <div class="form-grid form-grid-3">
-        <label>因子（库内现有列）</label><select id="qf-factor"></select>
-        <label>股票代码</label><input type="text" id="qf-code" value="000001.SZ">
-        <label>开始</label><input type="text" id="qf-start" placeholder="YYYY-MM-DD">
-        <label>结束</label><input type="text" id="qf-end" placeholder="YYYY-MM-DD">
-        <label>每页条数</label><input type="number" id="qf-limit" value="50" min="1" max="1000">
-      </div>
-      <div class="builder-actions">
-        <button id="qf-run">查询</button>
-        <a id="qf-csv" href="#" class="opt">下载当前页 CSV</a>
-      </div>
-      <div id="qf-result"></div>
+    <button class="section-toggle" data-section="ob-registry">策略注册表（加入持续更新）&#9660;</button>
+    <div id="sec-ob-registry" class="section-body">
+      <p class="opt">注册表文件 outputs/refresh/registry.json；存在且非空时 refresh 只跑已注册策略，缺省为全量 catalog。</p>
+      <div id="ob-registry-table"></div>
     </div>
+  </div>
+</div>
+
+<!-- Tab 3: 因子状态（三方对账：库 × 日更配置 × watermark，仅状态无数据行） -->
+<div id="tab-factors" class="tab-content">
+  <p><button id="btn-fs-refresh">刷新 Refresh</button>
+    <span class="opt">对账口径：库中列（information_schema）× 日更配置展开列（indicators_tushare 自身 factor 类推导）× watermark</span></p>
+  <div id="fs-summary"></div>
+  <div id="fs-job" class="result-box hidden"></div>
+  <div id="fs-tables"></div>
+  <div id="fs-unmanaged"></div>
+</div>
+
+<!-- Tab 5: 维护区（outputs 产物清理，危险操作二次确认） -->
+<div id="tab-maint" class="tab-content">
+  <p><button id="btn-mt-refresh">刷新 Refresh</button>
+    <span class="opt">仅可删除 outputs/backtests 下的批次目录；refresh/incremental 等系统目录受保护。</span></p>
+  <div id="mt-summary"></div>
+  <div id="mt-table"></div>
+  <div class="builder-actions">
+    <button id="mt-delete">删除所选批次</button>
+    <span id="mt-status" class="opt"></span>
   </div>
 </div>
 
@@ -83,15 +92,31 @@
   });
   function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  // 各卡片独立异步加载：30s AbortController 超时，单卡片失败只影响自身（中文错误+重试），
+  // 页面骨架与所有按钮不等待任何请求。
+  function fetchWithTimeout(url, ms) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function() { ctrl.abort(); }, ms || 30000);
+    return fetch(url, {signal: ctrl.signal}).finally(function() { clearTimeout(timer); });
+  }
+
+  function cardError(el, message, retryFn) {
+    el.innerHTML = '<span class="err">' + esc(message) + '</span> '
+      + '<button class="btn-sm">重试</button>';
+    el.querySelector('button').addEventListener('click', retryFn);
+  }
+
+  function isAbort(err) { return err && err.name === 'AbortError'; }
+
   // ---------- Tab 1: overview ----------
   function loadOverview() {
     document.getElementById('ov-status').textContent = '加载中...';
-    fetch('/api/admin/overview')
+    fetchWithTimeout('/api/admin/overview')
       .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
       .then(function(res) {
         var d = res.body;
         if (!d.ok) {
-          document.getElementById('ov-status').innerHTML = '<span class="err">' + esc(d.error) + '</span>';
+          cardError(document.getElementById('ov-status'), d.error || '总览加载失败', loadOverview);
           return;
         }
         document.getElementById('ov-status').textContent = '已更新 ' + new Date().toLocaleTimeString();
@@ -104,7 +129,7 @@
         document.querySelector('#ov-daily .card-body').innerHTML =
           '<p>估算行数：' + esc(daily.estimated_rows == null ? '—' : Number(daily.estimated_rows).toLocaleString()) + '</p>'
           + '<p>最新交易日：<strong>' + esc(daily.watermark) + '</strong></p>'
-          + '<p>股票数：' + esc(daily.symbol_count == null ? '—' : Number(daily.symbol_count).toLocaleString()) + '</p>'
+          + '<p>估算股票数：' + esc(daily.estimated_symbol_count == null ? '—' : Number(daily.estimated_symbol_count).toLocaleString()) + '</p>'
           + '<p>最近交易日：</p><p class="opt">' + esc((daily.recent_trade_dates || []).join('，')) + '</p>';
 
         var f = d.factors;
@@ -127,18 +152,33 @@
           + '<p>策略产物目录数：' + esc(b.strategy_dir_count) + '</p>'
           + '<p>磁盘占用：' + sizeGb + '</p>'
           + '<p>最近批次：' + esc(b.latest_batch || '—') + '</p>';
+      })
+      .catch(function(err) {
+        cardError(
+          document.getElementById('ov-status'),
+          isAbort(err) ? '总览加载超时（30s），请重试' : ('总览加载失败：' + err),
+          loadOverview
+        );
       });
   }
   document.getElementById('btn-ov-refresh').addEventListener('click', loadOverview);
 
   // ---------- Tab 2: timers ----------
+  var UNIT_TO_PIPELINE = {
+    'quant-ts-daily.timer': 'quant-ts',
+    'indicators-tushare-daily.timer': 'indicators',
+    'qre-refresh.timer': 'qre-refresh'
+  };
+  var jobPollTimer = null;
+
   function loadTimers() {
-    fetch('/api/admin/timers')
+    fetchWithTimeout('/api/admin/timers')
       .then(function(r) { return r.json(); })
       .then(function(d) {
         var container = document.getElementById('timer-cards');
         container.innerHTML = '';
         d.timers.forEach(function(t) {
+          var pipeline = UNIT_TO_PIPELINE[t.unit];
           var card = document.createElement('div');
           card.className = 'admin-card';
           var html = '<h3>' + esc(t.label) + '</h3><div class="card-body">';
@@ -153,107 +193,406 @@
               + '<p>上次运行：' + esc(t.last_run || '—') + '</p>'
               + '<p>上次结果：' + esc(t.last_result || '—') + '（exit=' + esc(t.last_exit_status || '—') + '）</p>';
           }
+          html += '<p>'
+            + '<button class="btn-sm" data-run="' + pipeline + '">立即运行</button> '
+            + '<button class="btn-sm" data-logs="' + pipeline + '">最近日志</button>'
+            + '</p><div class="job-area opt" id="job-' + pipeline + '"></div>';
           html += '</div>';
           card.innerHTML = html;
           container.appendChild(card);
         });
+        container.querySelectorAll('[data-run]').forEach(function(btn) {
+          btn.addEventListener('click', function() { startDailyJob(btn.dataset.run); });
+        });
+        container.querySelectorAll('[data-logs]').forEach(function(btn) {
+          btn.addEventListener('click', function() { loadDailyLogs(btn.dataset.logs); });
+        });
+      })
+      .catch(function(err) {
+        cardError(
+          document.getElementById('timer-cards'),
+          isAbort(err) ? '管线状态加载超时（30s），请重试' : ('管线状态加载失败：' + err),
+          loadTimers
+        );
+      });
+  }
+
+  function startDailyJob(pipeline) {
+    if (!confirm('确认立即运行该管线的官方脚本？（后台执行，日志可见）')) return;
+    fetch('/api/admin/daily-jobs/' + pipeline, {method: 'POST'})
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var area = document.getElementById('job-' + pipeline);
+        if (!res.body.ok) {
+          area.innerHTML = '<span class="err">' + esc(res.body.error || '触发失败') + '</span>';
+          return;
+        }
+        pollDailyJob(res.body.job_id, pipeline);
+      });
+  }
+
+  function pollDailyJob(jobId, pipeline) {
+    fetch('/api/admin/daily-jobs/' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        var area = document.getElementById('job-' + pipeline);
+        var label = {running: '运行中', completed: '已完成', failed: '失败'}[d.status] || d.status;
+        var html = '<p>任务 ' + esc(d.job_id) + '：<strong>' + label + '</strong></p>';
+        if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
+        if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
+        area.innerHTML = html;
+        if (d.status === 'running') {
+          setTimeout(function() { pollDailyJob(jobId, pipeline); }, 3000);
+        }
+      });
+  }
+
+  function loadDailyLogs(pipeline) {
+    var box = document.getElementById('daily-log-view');
+    box.classList.remove('hidden');
+    box.textContent = '加载中...';
+    fetch('/api/admin/daily-logs/' + pipeline)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        box.innerHTML = '<p class="opt">来源: ' + esc(d.source) + '</p><pre class="compiled-yaml">' + esc(d.text || '(无日志)') + '</pre>';
       });
   }
   document.getElementById('btn-timer-refresh').addEventListener('click', loadTimers);
 
-  // ---------- Tab 3: queries ----------
-  function renderTable(el, data, prefix) {
-    if (!data.ok) { el.innerHTML = '<p class="err">' + esc(data.error) + '</p>'; return; }
-    if (!data.rows.length) { el.innerHTML = '<p class="opt">无数据（total=' + data.total + '）</p>'; return; }
-    var headers = Object.keys(data.rows[0]);
-    var html = '<p class="opt">共 ' + data.total + ' 行，当前 offset=' + data.offset + ' limit=' + data.limit + '</p>';
-    html += '<table><thead><tr>' + headers.map(function(h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
-    data.rows.forEach(function(row) {
-      html += '<tr>' + headers.map(function(h) { return '<td>' + esc(row[h]) + '</td>'; }).join('') + '</tr>';
-    });
-    html += '</tbody></table>';
-    html += '<p><button class="btn-sm" id="' + prefix + '-prev">上一页</button> '
-      + '<button class="btn-sm" id="' + prefix + '-next">下一页</button></p>';
-    el.innerHTML = html;
-  }
+  // ---------- Tab 4: 策略状态 ----------
+  function fmtPct(v) { return (v == null) ? '—' : (v * 100).toFixed(2) + '%'; }
 
-  var qdOffset = 0, qfOffset = 0;
-
-  function runDailyQuery() {
-    var params = new URLSearchParams({
-      ts_code: document.getElementById('qd-code').value,
-      start: document.getElementById('qd-start').value,
-      end: document.getElementById('qd-end').value,
-      limit: document.getElementById('qd-limit').value,
-      offset: String(qdOffset)
-    });
-    document.getElementById('qd-csv').href = '/api/admin/query/daily?' + params.toString() + '&format=csv';
-    fetch('/api/admin/query/daily?' + params.toString())
+  function loadOnboard() {
+    fetchWithTimeout('/api/admin/refresh')
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        renderTable(document.getElementById('qd-result'), d, 'qd');
-        var prev = document.getElementById('qd-prev'), next = document.getElementById('qd-next');
-        if (prev) prev.onclick = function() { qdOffset = Math.max(0, qdOffset - d.limit); runDailyQuery(); };
-        if (next) next.onclick = function() { qdOffset = qdOffset + d.limit; runDailyQuery(); };
-      });
-  }
-  document.getElementById('qd-run').addEventListener('click', function() { qdOffset = 0; runDailyQuery(); });
+        if (!d.ok) return;
+        var stateHtml;
+        if (d.state) {
+          stateHtml = '<p>数据 watermark：<strong>' + esc(d.state.last_data_date) + '</strong>'
+            + '；上次运行：' + esc(d.state.last_run_at || '—')
+            + '；策略 ' + esc(d.state.ok_count) + '/' + esc(d.state.strategy_count) + ' ok'
+            + '；窗口 ' + esc(d.state.window_years) + ' 年</p>';
+        } else {
+          stateHtml = '<p class="opt">尚无 refresh 状态（从未运行过）。</p>';
+        }
+        if (d.latest_delta) {
+          stateHtml += '<p>最近 delta：' + esc(d.latest_delta.dir)
+            + '（数据日 ' + esc(d.latest_delta.data_date) + '，'
+            + esc(d.latest_delta.strategy_count) + ' 策略中 ' + esc(d.latest_delta.changed) + ' 个有变化）</p>';
+        }
+        document.getElementById('ob-state').innerHTML = stateHtml;
 
-  function loadFactorSelect() {
-    fetch('/api/factors')
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        var sel = document.getElementById('qf-factor');
-        if (!d.ok) { sel.innerHTML = '<option value="">（因子库不可用）</option>'; return; }
-        d.groups.forEach(function(g) {
-          if (g.group === 'market') return;
-          var og = document.createElement('optgroup');
-          og.label = g.label;
-          g.items.forEach(function(item) {
-            var opt = document.createElement('option');
-            opt.value = item.table + '|' + item.column;
-            opt.textContent = item.label;
-            og.appendChild(opt);
+        var rows = d.strategies.map(function(s) {
+          // 持续更新开关：绿色=开启，灰色=停止
+          var toggle = s.enabled
+            ? '<button class="btn-sm toggle-on" data-toggle="' + esc(s.strategy_id) + '" data-stopped="0" title="点击停止持续更新">● 开启</button>'
+            : '<button class="btn-sm toggle-off" data-toggle="' + esc(s.strategy_id) + '" data-stopped="1" title="点击开启持续更新">○ 停止</button>';
+          var action = toggle
+            + ' <button class="btn-sm btn-remove-cond" data-del="' + esc(s.strategy_id) + '">删除</button>';
+          var range = (s.date_start && s.date_end) ? esc(s.date_start) + ' ~ ' + esc(s.date_end) : '—';
+          var symbols = (s.traded_symbol_count != null && s.symbol_count != null)
+            ? esc(s.traded_symbol_count) + ' / ' + esc(s.symbol_count) : '—';
+          return '<tr class="ob-row" data-sid="' + esc(s.strategy_id) + '">'
+            + '<td><a href="/admin/strategy/' + encodeURIComponent(s.strategy_id) + '" target="_blank">'
+            + esc(s.strategy_id) + '</a></td>'
+            + '<td>' + range + '</td>'
+            + '<td>' + symbols + '</td>'
+            + '<td>' + fmtPct(s.excess_return) + '</td>'
+            + '<td>' + fmtPct(s.max_drawdown) + '</td>'
+            + '<td>' + action + '</td></tr>';
+        }).join('');
+        document.getElementById('ob-registry-table').innerHTML =
+          (d.mode === 'full_catalog'
+            ? '<p class="mode-banner">⚠ 当前为<strong>全量模式</strong>（默认全部开启，refresh 跑全部 '
+              + d.catalog_total + ' 个 catalog 策略，停止中的除外）；注册任意策略后将切换为<strong>仅注册策略模式</strong>。</p>'
+            : '<p class="mode-banner mode-banner-registry">当前为<strong>仅注册策略模式</strong>（refresh 只跑已注册且未停止的 '
+              + d.registered.length + ' 个）；注册表清空后恢复全量模式。</p>')
+          + (d.stopped && d.stopped.length
+            ? '<p class="opt">停止中：' + d.stopped.map(esc).join('，') + '（将于下次 refresh 跳过）</p>' : '')
+          + '<p>已注册 ' + d.registered.length + ' / catalog ' + d.catalog_total + ' 个策略'
+          + ' <input type="text" id="ob-search" placeholder="搜索策略 id..." size="20"></p>'
+          + '<table><thead><tr><th>策略</th><th>回测起止</th><th>股票数量</th><th>超额收益</th><th>最大回撤</th><th>操作</th></tr></thead>'
+          + '<tbody>' + rows + '</tbody></table>';
+
+        document.getElementById('ob-search').addEventListener('input', function(e) {
+          var kw = e.target.value.trim().toLowerCase();
+          document.querySelectorAll('.ob-row').forEach(function(row) {
+            row.style.display = (!kw || row.dataset.sid.toLowerCase().indexOf(kw) >= 0) ? '' : 'none';
           });
-          sel.appendChild(og);
         });
+
+        // 持续更新开关：只改注册表，不触发运行
+        document.querySelectorAll('[data-toggle]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var sid = btn.dataset.toggle;
+            var toStopped = btn.dataset.stopped === '0';
+            fetch('/api/admin/strategies/toggle', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({strategy_id: sid, stopped: toStopped})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (!d.ok) { alert(d.error || '切换失败'); return; }
+              alert((toStopped ? '已停止：' : '已开启：') + sid + '\n' + d.message);
+              loadOnboard();
+            });
+          });
+        });
+        // 删除策略：输入策略 id 二次确认（连动删除本地回测产物）
+        document.querySelectorAll('[data-del]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var sid = btn.dataset.del;
+            var typed = prompt('危险操作：将删除 catalog 策略文件 ' + sid + '.yaml、注册表条目及本地回测产物目录（不可恢复）。\n请输入策略 id 确认：');
+            if (typed === null) return;
+            if (typed.trim() !== sid) { alert('输入不匹配，已取消'); return; }
+            fetch('/api/admin/strategies/delete', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({strategy_id: sid})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d.ok) {
+                var msg = d.note || '已删除';
+                if (d.deleted_dirs && d.deleted_dirs.length) msg += '\n产物目录：' + d.deleted_dirs.join('\n');
+                if (d.errors && d.errors.length) msg += '\n警告：' + d.errors.join('；');
+                alert(msg);
+              } else {
+                alert('删除失败：' + d.error);
+              }
+              loadOnboard();
+            });
+          });
+        });
+      })
+      .catch(function(err) {
+        cardError(
+          document.getElementById('ob-state'),
+          isAbort(err) ? '策略状态加载超时（30s），请重试' : ('策略状态加载失败：' + err),
+          loadOnboard
+        );
       });
   }
 
-  function runFactorQuery() {
-    var parts = document.getElementById('qf-factor').value.split('|');
-    if (parts.length !== 2) { document.getElementById('qf-result').innerHTML = '<p class="err">请先选择因子</p>'; return; }
-    var params = new URLSearchParams({
-      table: parts[0], column: parts[1],
-      ts_code: document.getElementById('qf-code').value,
-      start: document.getElementById('qf-start').value,
-      end: document.getElementById('qf-end').value,
-      limit: document.getElementById('qf-limit').value,
-      offset: String(qfOffset)
+  function setRegistration(strategyId, register) {
+    fetch('/api/admin/refresh/' + (register ? 'register' : 'unregister'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({strategy_id: strategyId})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.error || '操作失败'); }
+      loadOnboard();
     });
-    document.getElementById('qf-csv').href = '/api/admin/query/factor?' + params.toString() + '&format=csv';
-    fetch('/api/admin/query/factor?' + params.toString())
+  }
+  document.getElementById('btn-ob-refresh').addEventListener('click', loadOnboard);
+
+  // ---------- Tab 3: 因子状态（三方对账，仅状态） ----------
+  function colChips(cols, cls, table) {
+    if (!cols || !cols.length) return '';
+    return '<div class="fs-cols">' + cols.map(function(c) {
+      var del = (cls === 'yellow' && table)
+        ? ' <a href="#" class="fs-del" data-table="' + esc(table) + '" data-col="' + esc(c) + '" title="删除此列">×</a>'
+        : '';
+      return '<span class="fs-chip fs-' + cls + '">' + esc(c) + del + '</span>';
+    }).join('') + '</div>';
+  }
+
+  // 因子任务（补全/删除列）状态轮询
+  function pollFsJob(jobId) {
+    var box = document.getElementById('fs-job');
+    box.classList.remove('hidden');
+    fetch('/api/admin/daily-jobs/' + jobId)
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        renderTable(document.getElementById('qf-result'), d, 'qf');
-        var prev = document.getElementById('qf-prev'), next = document.getElementById('qf-next');
-        if (prev) prev.onclick = function() { qfOffset = Math.max(0, qfOffset - d.limit); runFactorQuery(); };
-        if (next) next.onclick = function() { qfOffset = qfOffset + d.limit; runFactorQuery(); };
+        if (!d.ok) return;
+        var label = {running: '运行中', completed: '已完成', failed: '失败'}[d.status] || d.status;
+        var html = '<p>任务 ' + esc(d.job_id) + '（' + esc(d.label || '') + '）：<strong>' + label + '</strong></p>';
+        if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
+        if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
+        box.innerHTML = html;
+        if (d.status === 'running') {
+          setTimeout(function() { pollFsJob(jobId); }, 3000);
+        } else {
+          loadFactorStatus();  // 任务结束后刷新对账
+        }
       });
   }
-  document.getElementById('qf-run').addEventListener('click', function() { qfOffset = 0; runFactorQuery(); });
 
-  // defaults: recent window
-  (function() {
-    var end = new Date(), start = new Date();
-    start.setMonth(start.getMonth() - 1);
-    ['qd-start', 'qf-start'].forEach(function(id) { document.getElementById(id).value = start.toISOString().slice(0, 10); });
-    ['qd-end', 'qf-end'].forEach(function(id) { document.getElementById(id).value = end.toISOString().slice(0, 10); });
-  })();
+  function loadFactorStatus() {
+    document.getElementById('fs-summary').innerHTML = '<span class="opt">对账中（首次约几秒）...</span>';
+    fetchWithTimeout('/api/admin/factor-status')
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var d = res.body;
+        if (!d.ok) {
+          cardError(document.getElementById('fs-summary'), d.error || '因子状态加载失败', loadFactorStatus);
+          return;
+        }
+        var s = d.summary;
+        var summaryHtml = '<p>日线 watermark：' + esc(d.daily_watermark)
+          + '；<span class="ok">在库且在日更 ' + s.green + '</span>'
+          + ' / <span style="color:#a80;font-weight:600;">在库不在日更 ' + s.yellow + '</span>'
+          + ' / <span class="err">配置有但库缺 ' + s.red + '</span>'
+          + ' <input type="text" id="fs-search" placeholder="搜索因子列/表名..." size="20"></p>';
+        if (!d.expected_available) {
+          summaryHtml += '<p class="err">配置列展开失败，降级为配置级展示（指标名+参数，无列级对账）。</p>';
+        }
+        document.getElementById('fs-summary').innerHTML = summaryHtml;
+
+        var container = document.getElementById('fs-tables');
+        if (!d.expected_available && d.config_level) {
+          var rows = d.config_level.map(function(t) {
+            return '<tr><td>' + esc(t.name) + '</td><td>' + esc(t.category) + '</td><td>' + esc(t.column) + '</td><td>' + esc(t.params.join(', ')) + '</td></tr>';
+          }).join('');
+          container.innerHTML = '<h3>日更配置清单（配置级）</h3>'
+            + '<table><thead><tr><th>指标</th><th>类别</th><th>价格列</th><th>参数/周期</th></tr></thead><tbody>' + rows + '</tbody></table>';
+        } else {
+          container.innerHTML = '';
+          d.tables.forEach(function(t) {
+            var det = document.createElement('details');
+            det.className = 'fs-table';
+            var redBadge = t.red && t.red.length ? ' <span class="err">缺 ' + t.red.length + '</span>' : '';
+            var yellowBadge = t.yellow && t.yellow.length ? ' <span style="color:#a80;">停滞 ' + t.yellow.length + '</span>' : '';
+            det.innerHTML = '<summary>' + esc(t.table)
+              + '（库内 ' + t.db_column_count + ' 列，watermark ' + esc(t.watermark || '—') + '）'
+              + redBadge + yellowBadge
+              + ' <button class="btn-sm" data-backfill="' + esc(t.table) + '">补全此表</button></summary>'
+              + (t.red && t.red.length
+                  ? '<p class="err">配置有但库缺（<a href="/">前往新因子申请</a>；或点上方"补全此表"）：</p>' + colChips(t.red, 'red') : '')
+              + (t.green && t.green.length ? '<p class="ok">在库且在日更：</p>' + colChips(t.green, 'green') : '')
+              + (t.yellow && t.yellow.length
+                  ? '<p style="color:#a80;">在库但不在日更配置（停滞风险；"补全此表"只对配置内列生效，黄列可逐个删除）：</p>'
+                    + colChips(t.yellow, 'yellow', t.table) : '');
+            container.appendChild(det);
+          });
+          // 补全此表（indicators 官方脚本，共用 indicators 管线锁）
+          container.querySelectorAll('[data-backfill]').forEach(function(btn) {
+            btn.addEventListener('click', function(ev) {
+              ev.preventDefault();
+              var table = btn.dataset.backfill;
+              if (!confirm('确认对 ' + table + ' 执行 indicators 官方 backfill（--execute，后台任务）？')) return;
+              btn.disabled = true;
+              fetch('/api/admin/factor-backfill', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({table: table})
+              })
+              .then(function(r) { return r.json(); })
+              .then(function(d) {
+                if (!d.ok) { alert(d.error || '触发失败'); btn.disabled = false; return; }
+                pollFsJob(d.job_id);
+              });
+            });
+          });
+          // 黄列删除（官方脚本 drop_factor_columns.py，输入列名二次确认）
+          container.querySelectorAll('.fs-yellow .fs-del').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var table = btn.dataset.table, col = btn.dataset.col;
+              var typed = prompt('危险操作：将从 ' + table + ' 删除列 ' + col + '（不可恢复）。\n请输入列名确认：');
+              if (typed === null) return;
+              if (typed.trim() !== col) { alert('输入不匹配，已取消'); return; }
+              fetch('/api/admin/factor-columns/drop', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({table: table, columns: [col]})
+              })
+              .then(function(r) { return r.json(); })
+              .then(function(d) {
+                if (!d.ok) { alert(d.error || '触发失败'); return; }
+                pollFsJob(d.job_id);
+              });
+            });
+          });
+          // 客户端即时过滤：匹配表名或任一因子列名
+          document.getElementById('fs-search').addEventListener('input', function(e) {
+            var kw = e.target.value.trim().toLowerCase();
+            container.querySelectorAll('.fs-table').forEach(function(det) {
+              var hit = !kw || det.textContent.toLowerCase().indexOf(kw) >= 0;
+              det.style.display = hit ? '' : 'none';
+            });
+          });
+        }
+
+        var um = d.unmanaged_tables || [];
+        document.getElementById('fs-unmanaged').innerHTML = um.length
+          ? '<p class="opt">未纳管表（不参与对账）：' + um.map(function(t) { return esc(t.table); }).join('，') + '</p>'
+          : '';
+      })
+      .catch(function(err) {
+        cardError(
+          document.getElementById('fs-summary'),
+          isAbort(err) ? '因子状态加载超时（30s），请重试' : ('因子状态加载失败：' + err),
+          loadFactorStatus
+        );
+      });
+  }
+  document.getElementById('btn-fs-refresh').addEventListener('click', loadFactorStatus);
+
+  // ---------- Tab 5: 维护区 ----------
+  function fmtGb(bytes) { return bytes == null ? '—' : (bytes / 1073741824).toFixed(2) + ' GB'; }
+
+  function loadMaintenance() {
+    fetchWithTimeout('/api/admin/maintenance/batches')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        document.getElementById('mt-summary').innerHTML =
+          '<p>产物根：<code>' + esc(d.backtests_dir) + '</code>；可删批次合计占用：<strong>'
+          + fmtGb(d.total_size_bytes) + '</strong></p>';
+        var rows = d.batches.map(function(b) {
+          var cb = b.protected
+            ? '<span class="opt">受保护</span>'
+            : '<input type="checkbox" class="mt-check" value="' + esc(b.name) + '" data-size="' + (b.size_bytes || 0) + '">';
+          return '<tr><td>' + cb + '</td><td>' + esc(b.name) + '</td><td>' + esc(b.mtime) + '</td>'
+            + '<td>' + fmtGb(b.size_bytes) + '</td><td>' + esc(b.strategy_count) + '</td></tr>';
+        }).join('');
+        document.getElementById('mt-table').innerHTML = d.batches.length
+          ? '<table><thead><tr><th>选择</th><th>批次</th><th>修改时间</th><th>体积</th><th>策略数</th></tr></thead><tbody>'
+            + rows + '</tbody></table>'
+          : '<p class="opt">无批次目录。</p>';
+      })
+      .catch(function(err) {
+        cardError(document.getElementById('mt-summary'),
+          isAbort(err) ? '批次列表加载超时，请重试' : ('批次列表加载失败：' + err), loadMaintenance);
+      });
+  }
+  document.getElementById('btn-mt-refresh').addEventListener('click', loadMaintenance);
+
+  document.getElementById('mt-delete').addEventListener('click', function() {
+    var checked = Array.prototype.filter.call(
+      document.querySelectorAll('.mt-check'), function(c) { return c.checked; });
+    if (!checked.length) { alert('请先勾选要删除的批次'); return; }
+    var names = checked.map(function(c) { return c.value; });
+    var totalBytes = checked.reduce(function(s, c) { return s + Number(c.dataset.size || 0); }, 0);
+    var typed = prompt('危险操作：将永久删除 ' + names.length + ' 个批次目录（'
+      + names.join(', ') + '），释放约 ' + fmtGb(totalBytes) + '。\n请输入 DELETE 确认：');
+    if (typed === null) return;
+    if (typed.trim() !== 'DELETE') { alert('输入不匹配，已取消'); return; }
+    document.getElementById('mt-status').textContent = '删除中...';
+    fetch('/api/admin/maintenance/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({names: names})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var msg = d.deleted && d.deleted.length ? '已删除: ' + d.deleted.join(', ') : '';
+      if (d.errors && d.errors.length) msg += (msg ? '；' : '') + '失败: ' + d.errors.join('；');
+      document.getElementById('mt-status').textContent = msg || (d.error || '完成');
+      loadMaintenance();
+    });
+  });
 
   loadOverview();
   loadTimers();
-  loadFactorSelect();
+  loadFactorStatus();
+  loadOnboard();
+  loadMaintenance();
 })();
 </script>
 {% endblock %}

@@ -351,15 +351,30 @@ P1.5 新能力（因子前置三步向导，默认首屏）：
   任务状态与日志落盘 `outputs/gui-console/factor-admin/<job_id>/` 并 3 秒轮询。
 - NL 通道缺因子错误处新增"前往新因子申请"链接（自动预填指标名/周期猜测）。
 
-P3a 新能力（统一管理台 `/admin`，**只读**；写/删只走各项目官方脚本）：
+P3a 能力（统一管理台 `/admin`，定位：**只查询状态**，增删改全走各项目官方脚本）：
 - **Tab 1 总览**：日线（估算行数 pg_class.reltuples、watermark、股票数、最近 15 个交易日）、
-  因子库（11 表估算行数 + 各自 watermark + 滞后表清单）、回测产物（批次数/策略目录数/du 占用，
+  因子库（纳管表估算行数 + 各自 watermark + 滞后表清单）、回测产物（批次数/策略目录数/du 占用，
   60s 缓存）、三域 watermark 健康灯（绿/黄/红）。
-- **Tab 2 日更状态（只读）**：三条管线卡片（`systemctl show` 读取，无需 root）——
-  quant-ts-daily.timer（16:30）、indicators-tushare-daily.timer（16:40）、qre-refresh.timer；
-  qre-refresh 未安装时显示安装命令文本（仅展示，不提供按钮）。
-- **Tab 3 数据查询（只读）**：日线分页查询 + 因子查询（因子下拉复用 `/api/factors`，
-  表/列名白名单校验防注入，limit ≤ 1000）+ CSV 下载。
+- **Tab 2 日更中心**：三条管线卡片（`systemctl show` 只读）+ "立即运行"（中文确认，
+  只调官方脚本，管线独立锁 409，后台任务 + 日志落盘轮询）+ "最近日志"（journalctl 只读带回退）。
+- **Tab 3 因子状态**（REFocus：替代原数据查询）：三方对账（仅状态无数据行）——
+  库中因子列 × 日更配置展开列（indicators_tushare 自身 factor 类推导，纯展开不触 DB）×
+  watermark；绿（在库且在日更）/ 黄（在库不在日更，停滞风险）/ 红（配置有库缺，链向新因子申请）；
+  展开失败降级配置级展示。
+- **Tab 4 策略状态**：catalog 策略清单 × refresh 注册表 × 最近 delta 摘要；注册/移出 +
+  **删除策略**（输入策略 id 二次确认 → 删 catalog YAML + 自动移出注册表，历史产物保留仅提示）+
+  新策略链向因子向导。注册机制：`outputs/refresh/registry.json` 存在且非空时
+  `refresh_batch.py` 自动按表过滤，缺省全量（不改 systemd）。
+- **Tab 5 维护区**：outputs/backtests 批次清单（体积/策略数/修改时间）+ 勾选删除
+  （输入 DELETE 二次确认、显示释放体积、路径白名单防越界、refresh/incremental 系统目录受保护）。
+
+MANAGE 追加（写操作全部走官方脚本，危险操作中文二次确认，后台任务+锁+日志轮询）：
+- **因子补全**：因子状态 tab 每表"补全此表" → indicators 官方
+  `run_factor_admin.py backfill --baseline-ref HEAD --categories <类别> --max-workers 4 --execute`
+  （与日更 indicators 管线共用任务锁 409）。
+- **因子删列**：新官方脚本 `indicators_tushare/scripts/drop_factor_columns.py`
+  （默认 dry-run；安全检查：纳管表白名单、禁删 ts_code/trade_date、日更配置展开集内列需 --force）；
+  GUI 黄列 chip 带 ×（绿列禁删）→ 输入列名二次确认 → 后台任务执行。
 
 ---
 

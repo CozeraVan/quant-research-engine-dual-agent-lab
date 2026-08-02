@@ -292,6 +292,225 @@ def create_app() -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc)}), 400
 
+    # --- 管理台 MANAGE：策略删除 / 因子补全 / 因子删除 / 维护区 ---
+
+    @app.route("/api/admin/strategies/delete", methods=["POST"])
+    def api_admin_strategy_delete() -> Any:
+        from quant_research_engine.gui.strategy_admin import delete_strategy
+
+        data = request.get_json(silent=True) or {}
+        strategy_id = (data.get("strategy_id") or "").strip()
+        if not strategy_id:
+            return jsonify({"ok": False, "error": "策略 ID 不能为空"}), 400
+        try:
+            result = delete_strategy(strategy_id)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, **result})
+
+    @app.route("/api/admin/factor-backfill", methods=["POST"])
+    def api_admin_factor_backfill() -> Any:
+        from quant_research_engine.gui.daily_jobs import INDICATORS_DIR, UV_BIN, start_script_job
+        from quant_research_engine.gui.factor_wizard import parse_factor_table_name
+
+        data = request.get_json(silent=True) or {}
+        table = (data.get("table") or "").strip()
+        parsed = parse_factor_table_name(table.split(".")[-1])
+        if parsed is None:
+            return jsonify({"ok": False, "error": f"非法因子表名: {table}"}), 400
+        category, _ = parsed
+        try:
+            record = start_script_job(
+                lock_key="indicators",  # 与日更 indicators 管线共用锁
+                label=f"因子补全 {table}",
+                cmd=[UV_BIN, "run", "python", "run_factor_admin.py", "backfill",
+                     "--baseline-ref", "HEAD", "--categories", category,
+                     "--max-workers", "4", "--execute"],
+                cwd=INDICATORS_DIR,
+            )
+        except RuntimeError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 409
+        return jsonify({"ok": True, **record})
+
+    @app.route("/api/admin/factor-columns/drop", methods=["POST"])
+    def api_admin_factor_columns_drop() -> Any:
+        from quant_research_engine.gui.daily_jobs import INDICATORS_DIR, UV_BIN, start_script_job
+        from quant_research_engine.gui.factor_wizard import parse_factor_table_name
+
+        data = request.get_json(silent=True) or {}
+        table = (data.get("table") or "").strip()
+        columns = data.get("columns") or []
+        if isinstance(columns, str):
+            columns = [columns]
+        columns = [str(c).strip() for c in columns if str(c).strip()]
+        if parse_factor_table_name(table.split(".")[-1]) is None:
+            return jsonify({"ok": False, "error": f"非法因子表名: {table}"}), 400
+        if not columns:
+            return jsonify({"ok": False, "error": "未指定要删除的列"}), 400
+        if any(c in ("ts_code", "trade_date") for c in columns):
+            return jsonify({"ok": False, "error": "关键列 ts_code/trade_date 不可删除"}), 400
+        try:
+            record = start_script_job(
+                lock_key="indicators",
+                label=f"删除因子列 {table}({', '.join(columns)})",
+                cmd=[UV_BIN, "run", "python", "scripts/drop_factor_columns.py",
+                     "--table", table.split(".")[-1], "--columns", *columns, "--execute"],
+                cwd=INDICATORS_DIR,
+            )
+        except RuntimeError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 409
+        return jsonify({"ok": True, **record})
+
+    @app.route("/api/admin/maintenance/batches")
+    def api_admin_maintenance_batches() -> Any:
+        from quant_research_engine.gui.maintenance import list_batches
+
+        return jsonify({"ok": True, **list_batches()})
+
+    @app.route("/api/admin/maintenance/delete", methods=["POST"])
+    def api_admin_maintenance_delete() -> Any:
+        from quant_research_engine.gui.maintenance import delete_batches
+
+        data = request.get_json(silent=True) or {}
+        names = data.get("names") or []
+        if not isinstance(names, list) or not names:
+            return jsonify({"ok": False, "error": "未选择要删除的批次"}), 400
+        result = delete_batches([str(n) for n in names])
+        if result["errors"] and not result["deleted"]:
+            return jsonify({"ok": False, **result}), 400
+        return jsonify({"ok": True, **result})
+
+    # --- 管理台 P3b：日更手动触发 + 接入中心 ---
+
+    @app.route("/api/admin/daily-jobs/<pipeline>", methods=["POST"])
+    def api_admin_daily_job_start(pipeline: str) -> Any:
+        from quant_research_engine.gui.daily_jobs import start_daily_job
+
+        try:
+            record = start_daily_job(pipeline)
+        except KeyError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 404
+        except RuntimeError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 409
+        return jsonify({"ok": True, **record})
+
+    @app.route("/api/admin/daily-jobs/<job_id>")
+    def api_admin_daily_job_status(job_id: str) -> Any:
+        from quant_research_engine.gui.daily_jobs import get_daily_job
+
+        record = get_daily_job(job_id)
+        if record is None:
+            return jsonify({"ok": False, "error": "任务不存在"}), 404
+        return jsonify({"ok": True, **record})
+
+    @app.route("/api/admin/daily-logs/<pipeline>")
+    def api_admin_daily_logs(pipeline: str) -> Any:
+        from quant_research_engine.gui.daily_jobs import PIPELINES, journalctl_tail
+
+        spec = PIPELINES.get(pipeline)
+        if spec is None:
+            return jsonify({"ok": False, "error": f"未知管线: {pipeline}"}), 404
+        result = journalctl_tail(spec["unit"])
+        return jsonify({"ok": result["source"] != "error", **result})
+
+    @app.route("/api/admin/refresh")
+    def api_admin_refresh_overview() -> Any:
+        from quant_research_engine.gui.refresh_registry import refresh_overview
+
+        return jsonify({"ok": True, **refresh_overview()})
+
+    @app.route("/api/admin/refresh/register", methods=["POST"])
+    def api_admin_refresh_register() -> Any:
+        from quant_research_engine.gui.refresh_registry import (
+            list_catalog_strategies,
+            register_strategy,
+        )
+
+        data = request.get_json(silent=True) or {}
+        strategy_id = (data.get("strategy_id") or "").strip()
+        if not strategy_id:
+            return jsonify({"ok": False, "error": "策略 ID 不能为空"}), 400
+        if strategy_id not in list_catalog_strategies():
+            return jsonify({"ok": False, "error": f"策略不在 catalog 中: {strategy_id}"}), 400
+        registry = register_strategy(strategy_id)
+        return jsonify({"ok": True, "registered": registry["include"], "stopped": registry["stopped"]})
+
+    @app.route("/api/admin/refresh/unregister", methods=["POST"])
+    def api_admin_refresh_unregister() -> Any:
+        from quant_research_engine.gui.refresh_registry import unregister_strategy
+
+        data = request.get_json(silent=True) or {}
+        strategy_id = (data.get("strategy_id") or "").strip()
+        if not strategy_id:
+            return jsonify({"ok": False, "error": "策略 ID 不能为空"}), 400
+        registry = unregister_strategy(strategy_id)
+        return jsonify({"ok": True, "registered": registry["include"], "stopped": registry["stopped"]})
+
+    @app.route("/api/admin/strategies/toggle", methods=["POST"])
+    def api_admin_strategy_toggle() -> Any:
+        """持续更新开关（只改注册表，不触发任何运行）。"""
+        from quant_research_engine.gui.refresh_registry import (
+            list_catalog_strategies,
+            set_strategy_stopped,
+        )
+
+        data = request.get_json(silent=True) or {}
+        strategy_id = (data.get("strategy_id") or "").strip()
+        stopped = bool(data.get("stopped"))
+        if not strategy_id:
+            return jsonify({"ok": False, "error": "策略 ID 不能为空"}), 400
+        if strategy_id not in list_catalog_strategies():
+            return jsonify({"ok": False, "error": f"策略不在 catalog 中: {strategy_id}"}), 400
+        registry = set_strategy_stopped(strategy_id, stopped)
+        return jsonify({
+            "ok": True,
+            "stopped": registry["stopped"],
+            "message": "已切换，将于下个定时任务生效",
+        })
+
+    @app.route("/admin/strategy/<strategy_id>")
+    def admin_strategy_detail(strategy_id: str) -> Any:
+        from quant_research_engine.gui.refresh_registry import (
+            latest_strategy_result,
+            list_result_artifacts,
+        )
+        from quant_research_engine.gui.strategy_admin import strategy_catalog_info
+
+        info = strategy_catalog_info(strategy_id)
+        if not info:
+            return render_template("error.html", message=f"策略不在 catalog 中: {strategy_id}"), 404
+        result = latest_strategy_result(strategy_id)
+        artifacts = list_result_artifacts(result["artifact_dir"]) if result else []
+        return render_template(
+            "strategy_status_detail.html",
+            strategy_id=strategy_id,
+            info=info,
+            result=result,
+            artifacts=artifacts,
+        )
+
+    @app.route("/api/admin/strategy/<strategy_id>/artifact/<path:rel_path>")
+    def api_admin_strategy_artifact(strategy_id: str, rel_path: str) -> Any:
+        from flask import send_file
+
+        from quant_research_engine.gui.refresh_registry import (
+            DEFAULT_BACKTESTS_DIR,
+            latest_strategy_result,
+        )
+
+        result = latest_strategy_result(strategy_id)
+        if result is None:
+            return jsonify({"error": "无结果产物"}), 404
+        root = Path(result["artifact_dir"]).resolve()
+        backtests_root = DEFAULT_BACKTESTS_DIR.resolve()
+        # 白名单：产物根必须位于 backtests 下，目标文件必须在产物根内
+        if backtests_root not in root.parents:
+            return jsonify({"error": "产物路径越界"}), 400
+        target = (root / rel_path).resolve()
+        if root not in target.parents or not target.is_file():
+            return jsonify({"error": "文件不存在"}), 404
+        return send_file(target, as_attachment=True, download_name=target.name)
+
     # --- 管理台 API（QRE-ADMIN-CONSOLE-P3A-001，只读） ---
 
     @app.route("/admin")
@@ -326,61 +545,14 @@ def create_app() -> Flask:
 
         return jsonify({"ok": True, "timers": timer_status()})
 
-    @app.route("/api/admin/query/daily")
-    def api_admin_query_daily() -> Any:
-        from quant_research_engine.gui.admin import query_daily, rows_to_csv
+    @app.route("/api/admin/factor-status")
+    def api_admin_factor_status() -> Any:
+        from quant_research_engine.gui.admin import factor_status
 
         try:
-            result = query_daily(
-                ts_code=request.args.get("ts_code", ""),
-                start=request.args.get("start", ""),
-                end=request.args.get("end", ""),
-                limit=request.args.get("limit", 200),
-                offset=request.args.get("offset", 0),
-                db_url=request.args.get("db_url") or None,
-            )
-        except ValueError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 400
+            return jsonify({"ok": True, **factor_status(request.args.get("db_url") or None)})
         except Exception as exc:
-            return jsonify({"ok": False, "error": f"查询失败（{exc}）"}), 503
-        if request.args.get("format") == "csv":
-            from flask import Response
-
-            return Response(
-                rows_to_csv(result["rows"]),
-                mimetype="text/csv",
-                headers={"Content-Disposition": "attachment; filename=daily_query.csv"},
-            )
-        return jsonify({"ok": True, **result})
-
-    @app.route("/api/admin/query/factor")
-    def api_admin_query_factor() -> Any:
-        from quant_research_engine.gui.admin import query_factor, rows_to_csv
-
-        try:
-            result = query_factor(
-                table=request.args.get("table", ""),
-                column=request.args.get("column", ""),
-                ts_code=request.args.get("ts_code", ""),
-                start=request.args.get("start", ""),
-                end=request.args.get("end", ""),
-                limit=request.args.get("limit", 200),
-                offset=request.args.get("offset", 0),
-                db_url=request.args.get("db_url") or None,
-            )
-        except ValueError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 400
-        except Exception as exc:
-            return jsonify({"ok": False, "error": f"查询失败（{exc}）"}), 503
-        if request.args.get("format") == "csv":
-            from flask import Response
-
-            return Response(
-                rows_to_csv(result["rows"]),
-                mimetype="text/csv",
-                headers={"Content-Disposition": "attachment; filename=factor_query.csv"},
-            )
-        return jsonify({"ok": True, **result})
+            return jsonify({"ok": False, "error": f"因子状态获取失败（{exc}）"}), 503
 
     # --- 因子向导 API（QRE-GUI-FACTOR-WIZARD-001） ---
 

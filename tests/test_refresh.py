@@ -215,6 +215,7 @@ def _argv(tmp_path, *extra):
     return [
         "--state-file", str(tmp_path / "state.json"),
         "--output-root", str(tmp_path / "batches"),
+        "--mode", "full",  # 这些用例验证全窗路径（execute_batch 已 mock）
         *extra,
     ]
 

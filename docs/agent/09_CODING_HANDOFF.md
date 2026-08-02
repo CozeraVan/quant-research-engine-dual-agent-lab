@@ -2,6 +2,306 @@
 
 ## Task ID
 
+QRE-REFRESH-INCREMENTAL-001 (refresh 增量合并：小水印差只跑新增交易日并合并进既有结果)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1319 tests green, 7 new; real-DB equivalence PASS; awaiting commit approval)
+
+## Implementation Summary
+
+- **设计**：docs/design/refresh_incremental.md。核心决策——**复用 7 月增量引擎**（`orchestration/incremental.py::run_incremental`，real-DB gate 曾证分段≡全跑字节一致），不新造合并逻辑：
+  - **未平仓持仓延续（最大难点）**：由 checkpoint（`incremental_state.py` per-symbol 状态机：持仓数量/入场信息/trailing 锚/待成交订单存*触发日*/现金）解决；continuation 窗口带 warmup（150 天×2）且最早回溯至最早持仓入场日 −7 天，窗口边界无缝续跑；flat symbol 现金由累计 orders 精确重放。
+  - **合并**：orders/trades/failed concat+键去重(keep=last)+排序重写；equity 追加写、汇总时去重；buy-hold 锚定原窗口 first_mark_price。
+  - **聚合指标**：`_recompute_summary` 每次从拼接后完整台账重算 summary.csv（总收益/超额/胜率），非增量估计。
+  - **失效兜底**：config_hash 不匹配 → 自动 bootstrap；水印差 >45 自然日（≈30 交易日）→ 删 state_dir 全窗重建。
+- **实现**（scripts/refresh_batch.py）：`--mode incremental|full`（默认 incremental；`--full-window` 保留旧行为）；`--incremental-threshold-days`（默认 45）；`should_full_rebuild()` / `write_incremental_summary_metrics()`（合并后 summary.csv → backtest/summary_metrics.json，供 delta 报告复用）/ `run_incremental_refresh()`（逐策略编排，单策略失败不阻塞）；增量结果存 `outputs/refresh/incremental/<sid>/`，state.json config 记 mode，last_run.json 记每策略 watermark/updated/new_rows/duration。docstring 更新。
+- **测试**：tests/test_refresh_incremental.py 7 例（阈值回退/无 checkpoint/损坏 checkpoint、summary_metrics 聚合、编排 mock（小差不重建/大差删目录重建/单策略失败隔离/参数透传）、合并去重+聚合重算契约）；tests/test_refresh.py 三个旧脚本用例 argv 加 `--mode full` 保持原语义。
+- 真实 outputs/refresh/state.json 已备份至 /tmp（未改动真实 outputs；验证全部走临时目录）。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1319 passed (基线 1312 + 7 新增)
+# 真实等价性（2 策略 × 200 股 × 2 年窗，临时目录）：
+#   watermark=2026-07-31，D1=2026-07-17（10 交易日前）
+#   tf01a_ma_cross_20_120:  bootstrap(D1) 351 trades → 增量续跑 +3 = 354
+#     vs 一次性 bootstrap(D2) 354，trades_match=True
+#     mean_total_return diff=3.5e-18，末日权益 max|diff|=4.7e-10
+#   mr01a_rsi14_oversold_reversal: 332 + 0 = 332，match=True，
+#     mean_return diff=0.0，equity diff=0.0
+#   EQUIVALENCE: PASS（差异仅在浮点舍入内）
+```
+
+## Known Limitations
+
+- continuation 不回删滚动窗口起点之前的旧台账（long-run 累积）；需要严格滚动窗口语义时用 `--full-window`。
+- universe_filter 只影响新入场，既有持仓保留（7 月设计 §4.3 既定语义）。
+- GUI 策略详情页的结果提取搜索 `outputs/backtests/**`，不覆盖增量存储 `outputs/refresh/incremental/`（后续可扩展 latest_strategy_result 数据源）。
+- 增量模式不写 batch_summary/delta_report（delta 报告仍属 full 模式；增量每策略指标在 last_run.json 与各 state_dir/backtest/summary_metrics.json）。
+- 全量 111 策略首次 bootstrap 仍需完整跑一次（之后每日增量为分钟级）；验证只用了 200 股，全量首次运行成本未实测。
+
+---
+
+# Coding Handoff (archive: QRE-ADMIN-STRAT-TAB-001)
+
+## Task ID
+
+QRE-ADMIN-STRAT-TAB-001 (策略状态 tab 四项修改：详情页链接、四列精简、开关按钮、删除连动产物)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1312 tests green, 13 new; awaiting commit approval)
+
+## Implementation Summary
+
+1. **策略详情页**：`/admin/strategy/<sid>`（新模板 strategy_status_detail.html）= catalog YAML 简介（`strategy_admin.strategy_catalog_info`：头部注释块 + experiment.name + 出入场条件 + 持仓天数）+ 最近结果指标卡 + 产物下载（`/api/admin/strategy/<sid>/artifact/<rel>`，双白名单：产物根在 backtests 内 + 目标在产物根内）。
+2. **四列精简**：`refresh_registry.latest_strategy_result()`（`outputs/backtests/**/<sid>/backtest/strategy_performance.json` 取 mtime 最新，300s 缓存，excess 缺失时 benchmark_* 兜底）；refresh_overview 每策略输出 date_start/end、traded/total symbols、excess_return、max_drawdown，无结果 None（前端"—"）。旧列（注册/状态/变化/均值/Δ）删除。
+3. **开关按钮（registry v2）**：`{"include": [...], "stopped": [...]}`，兼容纯数组与线上旧格式 `{"strategies": [...]}`（视为 include、stopped=[]）。include 空=全量模式（默认全开启）；`set_strategy_stopped` 只改文件不触发运行（提示"将于下个定时任务生效"）。`refresh_batch.load_registry_ids` 返回 `{ids, stopped}`：ids=include−空判断，主流程 discover 后过滤 stopped（--strategies 优先且不过滤）。按钮绿=开启/灰=停止；横幅文案更新（全量=默认全开启停止除外 / 注册=只跑注册未停止）。
+4. **删除连动产物**：`strategy_admin.delete_strategy` 改为删 catalog YAML + 移出注册表（include+stopped 双清）+ 删除 `outputs/backtests/*/<sid>/`（白名单：resolve 后 parent.parent==backtests 根，更深嵌套不动）+ 清结果缓存，返回 deleted_files/deleted_dirs/errors。不做运行中检查（GUI 弹窗文案含"不可恢复"）。
+5. 测试：`tests/test_gui_admin_strat_tab.py` 13 个（结果提取最新/benchmark 兜底/缓存/无结果、四列数据、v2 stopped 两模式、旧格式兼容、catalog 简介、删除连动白名单、toggle/详情/artifact 路由含越界）；p3b/manage 旧测试同步 v2 语义。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1312 passed (基线 1299 + 13 新增)
+# 真实只读冒烟：latest_strategy_result(mr01a) 正确选中 full_history_overnight/0e875c6a10da
+# （benchmark_excess 兜底生效）；产物 25 文件；registry v2 读取线上 {"strategies": []} 正常；
+# 详情页 200 含指标卡；artifact 下载 200 (5390B) → SMOKE OK
+```
+
+## Known Limitations
+
+- 详情页数据源为"最新 mtime 的 strategy_performance.json"，refresh 滚动窗口（2 年）与全历史批次区间不同，指标卡不标注来源批次类型（source_file 可见）。
+- stopped 过滤在 `discover_strategies` 之后按文件名 stem 排除；--strategies 显式指定时不应用 stopped（设计：显式优先）。
+- 删除连动只清 `<backtests>/<batch>/<sid>` 一级目录；refresh delta 报告（跨策略合订本）中的该策略行不删（下次 refresh 自动刷新）。
+- 后台 refresh 运行中删除策略可能出现该策略目录被重建（运行完成时）——弹窗已提示风险，未加锁。
+
+---
+
+# Coding Handoff (archive: QRE-ADMIN-MANAGE-001)
+
+## Task ID
+
+QRE-ADMIN-MANAGE-001 (管理台 Tab4/Tab5：策略删除、因子补全/删列、维护区清理)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1299 tests green, 15 new; awaiting commit approval)
+
+## Implementation Summary
+
+1. **恢复策略管理**：admin.html 去掉全部 .p3c-hidden（注册/移出、新建策略链接、前往新因子申请）；每行新增"删除策略"（prompt 输入策略 id 二次确认）→ `gui/strategy_admin.delete_strategy`：删 `strategies/catalog/<id>.yaml` + 自动 `unregister_strategy`；outputs 历史产物不删，返回 artifact_dirs 仅提示。
+2. **因子补全**：因子状态 tab 每表"补全此表"（confirm）→ POST `/api/admin/factor-backfill` → `daily_jobs.start_script_job`（新增通用任务入口，与管线锁同一 `_active_jobs`；lock_key=indicators 与日更共用）跑 `run_factor_admin.py backfill --baseline-ref HEAD --categories <类别> --max-workers 4 --execute`；黄列文案注明补全只对配置内列生效。
+3. **因子删列**：indicators 新官方脚本 `scripts/drop_factor_columns.py`（dry-run 默认；安全检查：纳管表名正则+表存在、禁删 ts_code/trade_date、列必须在库存在、在当前 config 展开集内（项目自身 factor 类纯展开）拒绝除非 --force 并告警）；GUI 黄列 chip 带 ×（绿列无按钮）→ prompt 输入列名确认 → `/api/admin/factor-columns/drop` → 同锁后台任务。
+4. **Tab 5 维护区**：`gui/maintenance.py` — `list_batches`（du 体积/mtime/策略数/受保护标记，300s 缓存）+ `delete_batches`（名称正则 + resolve 后 parent==root 白名单 + PROTECTED={refresh, incremental} 拒删 + 删后清相关缓存）；UI 勾选 + 显示合计释放体积 + 输入 DELETE 二次确认。
+5. 测试 `tests/test_gui_admin_manage.py` 15 个：策略删除+注册表联动+产物保留提示、通用任务与管线锁互斥、drop 脚本保护列/非法表拒绝（真实 subprocess，免 DB 路径）、批次列表保护标记、白名单删除（受保护/越界/注入名/符号链接逃逸拒绝）、6 个路由用例（命令构造断言、409、400）、页面 MANAGE UI 断言。旧 query-only 页面断言同步更新。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1299 passed (基线 1284 + 15 新增)
+# drop 脚本真实冒烟（indicators uv 环境，全程零写入）：
+#   --columns rsi_14（配置列）→ 拒绝「在日更配置展开集中，拒绝删除」exit 2
+#   --columns ts_code → 拒绝「关键列不可删除」exit 2
+#   --table public.stock_daily → 拒绝「非法因子表名」exit 2
+#   --columns rsi_14 --force → WARNING + DRY-RUN 打印 ALTER TABLE，exit 0，未执行
+# 注：当前全库已无黄列（上游近期扩充了 config），黄列删除按钮暂无可作用对象，语义保留。
+```
+
+## Known Limitations
+
+- 批次删除为路由内同步 rmtree（GB 级几秒~十几秒）；未走后台任务（rmtree 非脚本调用），大目录删除时请求会阻塞到完成。
+- 补全/删列任务与日更 indicators 管线共锁：日更运行中按钮会 409（设计行为）。
+- 因子补全按表类别整体 backfill（官方脚本粒度），无法只补单表中的部分列。
+- 删列后 GUI 对账缓存最长 300s 才刷新（pollFsJob 完成时前端会主动重拉，已缓解）。
+
+---
+
+# Coding Handoff (archive: QRE-HAZARD-FIX-001)
+
+## Task ID
+
+QRE-HAZARD-FIX-001 (三隐患修复：注册表语义告警 + overview 冷载提速 + hardened 安装脚本)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1284 tests green, 2 new; awaiting commit approval)
+
+## Implementation Summary
+
+1. **注册表语义告警（隐患 #5）**：`refresh_registry.refresh_overview` 新增 `mode` 字段
+   （`full_catalog` 空注册表 / `registry` 仅注册策略）；admin.html 策略状态 tab 顶部显眼横幅
+   （`.mode-banner` 黄底）：全量模式显示"当前为全量模式（N 策略）；注册任意策略后将切换为
+   仅注册策略模式"；注册模式显示蓝底对应文案。新增 2 测试（mode 两态 + 页面横幅断言）。
+2. **overview 冷载提速（隐患 #4）**：瓶颈实测 `COUNT(DISTINCT ts_code)` on 858 chunk =
+   10.34s（占首载 9.98s 的绝大部分）。改为 `pg_stats.n_distinct` 估算（0.003s；负值按占比
+   × reltuples 处理），键名改 `estimated_symbol_count`，前端标签"估算股票数"，与 reltuples
+   估算语义对齐；300s 缓存 + single-flight 不变。FakeStore 同步改 pg_stats 分支。
+3. **安装脚本（隐患 #1 准备）**：`scripts/install_timers_hardened.sh`（bash -n 通过，未执行）：
+   4 步打印（cp → daemon-reload → enable --now → list-timers 确认），全用 sudo；末尾打印
+   quant_ts/indicators 两项目 hardened unit 的手动安装指引（不代装；提示先停旧 unit 防重复触发）。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1284 passed (基线 1282 + 2 新增)
+bash -n scripts/install_timers_hardened.sh → OK
+# overview 冷载实测（time curl，临时 8899 端口已关停）：
+#   改前首载 9.98s（COUNT DISTINCT=10.34s 单独计时确认）
+#   改后首载 2.19s（剩余主要为 du -sb 4.18GB 遍历 + 10 表 MAX(trade_date)）
+#   二载 0.0015s（缓存命中）
+# 估算精度：pg_stats n_distinct=5209 vs 精确 5549（-6.1%，标"估算"可接受）
+```
+
+## Known Limitations
+
+- 冷载剩余 ~2.2s 主要是 du 遍历产物目录；如需再降可放宽 du 缓存粒度或后台预热，未做。
+- n_distinct 依赖 ANALYZE 统计，新大批入库后估算会滞后到下次 analyze（Autovacuum 正常周期内）。
+- install 脚本未执行（按任务要求）；执行后 qre-refresh.timer 才生效。
+
+---
+
+# Coding Handoff (archive: QRE-ADMIN-DASH-QUERY-001)
+
+## Task ID
+
+QRE-ADMIN-DASH-QUERY-001 (管理台 dashboard 查询台化：加载体验 + overview 提速 + 新建/入库 UI 暂缓)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1281 tests green, 3 new; awaiting commit approval)
+
+## Implementation Summary
+
+- **前端加载体验（admin.html）**：新增 `fetchWithTimeout`（AbortController 30s）+ `cardError`（中文错误+重试按钮）；overview/timers/factor-status/refresh 四个 fetch 本已独立，现全部带 30s 超时与 per-card catch（超时/失败只影响该卡片，其余卡片与全部按钮不受影响）；页面骨架静态 HTML 立即渲染，按钮从不等待数据。
+- **后端提速（admin.py）**：`CACHE_TTL_SECONDS` 60→300（overview_daily 的 COUNT(DISTINCT ts_code)/858-chunk watermark、overview_factors、du -sb 全部经同一 `_cached` 路径，自动对齐 300s）；`_cached` 升级 single-flight（per-key lock + 双重检查，并发同 key 共享一次计算）。
+- **新建/入库 UI 暂缓（代码保留）**：新增 `.p3c-hidden{display:none!important}` + TODO-P3c-restore 注释——策略状态 tab 的注册/移出按钮（JS 生成，包 hidden span）、表头"新建策略（因子向导）"链接、因子状态红区的"前往新因子申请"链接；回测工作台首页（/）的因子向导/NL 通道不动（属回测区）；日更中心"立即运行"保留（触发已完善脚本）。
+- **查询体验**：因子状态 tab 加 `fs-search`（按表名/列名客户端即时过滤 .fs-table）；策略状态 tab 加 `ob-search`（按策略 id 过滤 .ob-row）；汇总计数不变。
+- 测试：TTL=300 断言、single-flight 并发共享（4 线程 1 次计算）、页面查询台模式断言（搜索框存在、p3c-hidden ≥2、TODO 标记、红区链接仅在隐藏 span 内）。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1281 passed (基线 1278 + 3 新增)
+# time curl 实测（临时 8899 端口，已关停）：
+#   GET /admin                 0.004s（骨架）
+#   /api/admin/overview 首载   9.98s（冷缓存：COUNT DISTINCT + du + 858 chunk）
+#   /api/admin/overview 二/三载 0.0009s / 0.0010s（300s 缓存命中）
+#   /api/admin/factor-status   1.70s → 0.02s；timers 0.017s；refresh 0.004s
+```
+
+## Known Limitations
+
+- overview 冷缓存首载仍 ~10s（COUNT DISTINCT 858 chunk 为真实成本；single-flight 保证并发只算一次，前端卡片独立不阻塞其它区）。若要首载也快，需把 distinct count 换估算（pg_stats），留待用户拍板。
+- 隐藏的注册/新因子/新策略功能的路由与后端逻辑全部保留可用（仅 UI 隐藏），P3c 恢复只需去掉 p3c-hidden。
+- 搜索为客户端过滤（不重新请求），346 列 chip 全部渲染在折叠 details 内，未做虚拟化。
+
+---
+
+# Coding Handoff (archive: QRE-ADMIN-STATUS-REFocus-001)
+
+## Task ID
+
+QRE-ADMIN-STATUS-REFocus-001 (管理台定位修正：撤数据查询，因子状态三方对账，策略状态重组)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1278 tests green; awaiting commit approval)
+
+## Implementation Summary
+
+- **撤 Tab 3 数据查询**：删除 `/api/admin/query/daily`、`/api/admin/query/factor` 路由；`admin.py` 删除 `query_daily`/`query_factor`/`rows_to_csv`/`_clamp_limit`/`MAX_QUERY_LIMIT`（仅服务于此）；admin.html 查询 tab/JS 全撤；相关 11 个测试删除/改写（含路由 404 断言）。
+- **新 Tab 因子状态**（`admin.factor_status` + GET `/api/admin/factor-status`）：三方对账仅状态——a) 库中列（纳管表 get_table_columns 剔除 ts_code/trade_date）；b) 日更应存在列；c) watermark。标注 green/yellow/red + 汇总计数 + 红列链向新因子申请；未纳管孤儿表保持信息段。
+- **日更列展开方式（选择与理由）**：选用 subprocess 调 indicators_tushare 自身 uv 环境跑**纯展开脚本**（`FactorRegistry.discover` + `load_factor_specs` + `resolve_specs` + 每个 factor 实例 `preview_columns(params)`），不用 `run_factor_admin.py plan`/`collect_expected_columns`——后者经 `load_tasks` 会写 meta schema（ensure_supporting_schemas/register_*），违反只读定位；纯展开不实例化 DBManager、零 DB 接触，且用项目自己的 factor 类做输出列命名（权威，含 macdh/macds 等多输出与参数后缀）。实测 1.4s 展开 10 表 206 列 0 失败；300s 缓存。失败降级 `_config_level_tasks`（直接解析 yaml 为 指标名+类别+价格列+参数，标注"配置级"）。
+- **Tab 4 重组为"策略状态"**：tab 改名，内容沿用（catalog × 注册表 × delta + 注册/移出 + 因子向导链接）。
+- 测试：新增 4 个对账用例（展开成功/失败、三路状态标注含汇总、降级配置级）+ 3 个路由用例（查询 404、factor-status 200/503）；p3b 页面断言随改名更新。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1278 passed (1282 − 11 查询用例 + 7 新用例)
+# 真实只读冒烟（实际执行）：expected_available=True；summary green=206 yellow=138 red=0；
+# 10 纳管表逐表计数合理（green 合计恰等于配置展开 206 列，0 缺列）；
+# unmanaged=[stock_daily_vortex_close] → SMOKE OK
+```
+
+## Known Limitations
+
+- 138 个 yellow（在库不在日更配置）为历史配置删减的真实状态，仅展示不处理。
+- 配置展开每次缓存 300s；factors.yaml 变更后最长 5 分钟才在对账中反映（P1.5 新因子链本身写 yaml 后sample 回填，不经过此缓存路径，不受影响）。
+- 黄列没有"重新纳入日更"按钮（属 P3c/配置编辑范畴）；红列仅链接到向导新因子申请。
+- 策略 Tab 的每策略信息仍依赖最近一次 delta_report（refresh 机制所限）。
+
+---
+
+# Coding Handoff (archive: QRE-ADMIN-CONSOLE-P3B-001)
+
+## Task ID
+
+QRE-ADMIN-CONSOLE-P3B-001 (管理台 P3b：日更手动触发 + 接入中心/refresh 注册表)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (1282 tests green, 18 new; awaiting commit approval)
+
+## Implementation Summary
+
+- **refresh 注册机制（选择与理由）**：refresh 原生 = 全量扫描 catalog + `--strategies` 过滤，无注册表、无 per-strategy watermark（state 仅全局 last_data_date）。最小改动方案：新增注册表文件 `outputs/refresh/registry.json`，`scripts/refresh_batch.py` 增加 `--registry`（默认该路径），文件存在且非空时自动作为策略过滤（`--strategies` 显式给定优先；文件缺失/空/损坏 → 全量扫描，与现状逐字节一致）。理由：复用既有 `discover_strategies` 过滤通道，不改 systemd unit（timer 未安装，用户安装后自动生效），不引入第二套状态。
+- 新模块 `gui/daily_jobs.py`：三管线命令表（quant-ts `sync_manager.py --mode daily`、indicators `run_daily.py --max-workers 4`、qre-refresh `scripts/refresh_batch.py --jobs 4`；uv=`/home/van/.local/bin/uv`，cwd 各项目根）；每管线独立锁（重入 RuntimeError→409）；后台线程 subprocess，落盘 `outputs/gui-console/daily-jobs/<job_id>/{status.json,output.log}`；`journalctl_tail`（读不需 root，失败回退项目 logs 目录最新 .log tail）。
+- 新模块 `gui/refresh_registry.py`：注册表 load/save/register/unregister（去重排序）、`list_catalog_strategies`、`refresh_overview`（state + 注册表 + 最新 delta_report.json 每策略 status/transition/收益/Δ）。
+- `gui/app.py`：POST `/api/admin/daily-jobs/<pipeline>`（404/409）、GET `/api/admin/daily-jobs/<job_id>`、GET `/api/admin/daily-logs/<pipeline>`、GET `/api/admin/refresh`、POST `/api/admin/refresh/register|unregister`（catalog 校验 400）。
+- `templates/admin.html`：Tab 2 改"日更中心"，每卡片"立即运行"（confirm 弹窗）+"最近日志"按钮 + 任务区 3s 轮询日志 tail；新 Tab 4"接入中心"：refresh state/delta 摘要 + 全 catalog 注册表（加入/移出按钮）+ 因子向导入口链接。
+- 测试 `tests/test_gui_admin_p3b.py` 18 个：registry loader（缺/空/坏→None）、注册读写去重、catalog 列举、refresh_overview 组装、daily job 命令构造/失败/管线锁/未知管线、journalctl 正常/回退/无回退、路由 200/400/404/409 与注册全流程。另：test_gui_admin 旧断言随 tab 改名"日更中心"更新；test_gui_factor_wizard 锁测试 sleep 0.3→0.6 消抖（全量并发下曾偶发）。
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1282 passed (基线 1264 + 18 新增)
+```
+
+## Known Limitations
+
+- 未真实触发三条管线脚本（按任务要求 mock subprocess）；首次手动触发建议盯 output.log。
+- refresh 无 per-strategy watermark（机制本身是全量滚动窗口重跑）；Tab4 的"每策略"信息来自最近一次 delta_report，首次运行前为空。
+- 注册表生效后，移出注册表的策略不再被日更覆盖（其历史批次仍在 outputs）；这是机制语义无误但需用户知晓。
+- journalctl 回退仅覆盖 quant-ts/indicators 的 logs 目录；qre-refresh 无项目日志目录（timer 未安装）。
+- Tab 5 维护区未做（P3c）。
+
+---
+
+# Coding Handoff (archive: QRE-ADMIN-FACTOR-HEALTH-FIX-001)
+
+## Task ID
+
 QRE-ADMIN-FACTOR-HEALTH-FIX-001 (管理台因子健康灯误报修复：纳管表机制)
 
 ## Written By

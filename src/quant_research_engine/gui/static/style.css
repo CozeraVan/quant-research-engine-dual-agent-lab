@@ -143,3 +143,22 @@ code.log { white-space: pre-wrap; word-break: break-all; }
 .health-green { color: #080; font-weight: 600; }
 .health-yellow { color: #a80; font-weight: 600; }
 .health-red { color: #c00; font-weight: 600; }
+
+/* --- Factor status (REFocus) --- */
+.fs-cols { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.2rem 0 0.6rem; }
+.fs-chip { font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 3px; border: 1px solid #ccc; }
+.fs-green { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; }
+.fs-yellow { background: #fff8e1; border-color: #e0c060; color: #7a5800; }
+.fs-red { background: #ffebee; border-color: #ef9a9a; color: #b71c1c; }
+
+/* --- Dashboard query-only mode (QRE-ADMIN-DASH-QUERY-001) --- */
+/* TODO-P3c-restore: 新建因子/新策略/注册操作暂缓时隐藏 */
+.p3c-hidden { display: none !important; }
+
+/* --- Registry mode banner (QRE-HAZARD-FIX-001) --- */
+.mode-banner { background: #fff8e1; border: 1px solid #e0c060; border-radius: 4px; padding: 0.5rem 0.8rem; font-size: 0.9rem; }
+.mode-banner-registry { background: #e3f2fd; border-color: #90caf9; }
+
+/* --- Strategy toggle buttons (STRAT-TAB) --- */
+.toggle-on { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; font-weight: 600; }
+.toggle-off { background: #eeeeee; border-color: #bbb; color: #777; }

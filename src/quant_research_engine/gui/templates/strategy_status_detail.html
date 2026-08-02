@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>策略详情 {{ strategy_id }}</h1>
+
+<p><a href="/admin">← 返回管理台策略状态</a></p>
+
+<div class="section">
+  <button class="section-toggle" data-section="sd-info">策略简介（catalog YAML）&#9660;</button>
+  <div id="sec-sd-info" class="section-body">
+    {% if info.name %}<p><strong>实验名：</strong>{{ info.name }}</p>{% endif %}
+    {% if info.entry %}<p><strong>入场条件：</strong><code>{{ info.entry }}</code></p>{% endif %}
+    {% if info.exit %}<p><strong>出场条件：</strong><code>{{ info.exit }}</code></p>{% endif %}
+    {% if info.max_holding_days %}<p><strong>最大持仓天数：</strong>{{ info.max_holding_days }}</p>{% endif %}
+    {% if info.comments %}
+    <pre class="compiled-yaml">{% for line in info.comments %}{{ line }}
+{% endfor %}</pre>
+    {% endif %}
+    <p class="opt">定义文件：<code>{{ info.file }}</code></p>
+  </div>
+</div>
+
+{% if result %}
+<div class="section">
+  <button class="section-toggle" data-section="sd-result">最近一次回测结果 &#9660;</button>
+  <div id="sec-sd-result" class="section-body">
+    {% set m = result.metrics %}
+    <table class="summary-table">
+    <thead><tr><th>指标</th><th>值</th></tr></thead>
+    <tbody>
+    <tr><td>回测区间</td><td>{{ m.date_start or '—' }} 至 {{ m.date_end or '—' }}</td></tr>
+    <tr><td>回测股票数量</td><td>{{ m.traded_symbol_count or '—' }} / {{ m.symbol_count or '—' }}（触发/总数）</td></tr>
+    <tr><td>总收益率</td><td>{{ m.strategy_total_return | fmtval(true) }}</td></tr>
+    <tr><td>买入持有收益率</td><td>{{ m.buy_hold_return | fmtval(true) }}</td></tr>
+    <tr><td>策略超额收益</td><td>{{ (m.excess_return_vs_buy_hold if m.excess_return_vs_buy_hold is not none else m.benchmark_excess) | fmtval(true) }}</td></tr>
+    <tr><td>最大回撤</td><td>{{ m.max_drawdown | fmtval(true) }}</td></tr>
+    <tr><td>胜率</td><td>{{ m.win_rate | fmtval(true) }}</td></tr>
+    <tr><td>盈亏比</td><td>{{ m.profit_factor | fmtval(false) }}</td></tr>
+    <tr><td>总交易数</td><td>{{ m.total_trade_count or '—' }}</td></tr>
+    </tbody>
+    </table>
+    <p class="opt">来源：<code>{{ result.source_file }}</code>；引擎输出，非投资建议。</p>
+  </div>
+</div>
+
+{% if artifacts %}
+<h2>产物文件下载</h2>
+<table>
+<thead><tr><th>文件</th><th>下载</th></tr></thead>
+<tbody>
+{% for f in artifacts %}
+<tr><td>{{ f.rel }}</td>
+  <td><a href="/api/admin/strategy/{{ strategy_id }}/artifact/{{ f.rel }}" download>下载</a></td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+
+{% else %}
+<p class="opt">该策略暂无回测结果（未跑过批次/refresh，或产物已清理）。</p>
+{% endif %}
+{% endblock %}

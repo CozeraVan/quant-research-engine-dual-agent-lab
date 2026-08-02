@@ -297,7 +297,7 @@ def test_job_lock_conflict(job_env):
     repo, _ = job_env
 
     def slow_runner(cmd, cwd, job_dir):
-        time.sleep(0.3)
+        time.sleep(0.6)
         return 0
 
     start_factor_job(name="rsi", column="close", periods=[21], repo=repo, step_runner=slow_runner)

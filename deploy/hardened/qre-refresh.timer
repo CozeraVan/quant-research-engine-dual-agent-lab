@@ -1,0 +1,15 @@
+# Hardened variant of qre-refresh.timer (NOT installed automatically).
+# 与原版差异：随机延迟 5 分钟，避免与其它定时任务整点争抢 DB 锁。
+# 安装命令见 qre-refresh.service 头部注释。
+
+[Unit]
+Description=Daily QRE strategy refresh check (hardened)
+
+[Timer]
+OnCalendar=*-*-* 18:30:00
+RandomizedDelaySec=300
+AccuracySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target
