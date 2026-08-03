@@ -436,3 +436,13 @@ def test_index_page_contains_wizard(app_client):
     assert "wz-factor-groups" in html
     assert "wz-admin-submit" in html
     assert "wzGotoFactorAdmin" in html
+
+
+def test_factor_admin_backfill_commands_pin_baseline_head():
+    """回归：backfill 必须固定 --baseline-ref HEAD，否则默认基线会选 ~291 列
+    （2026-08-03 实战发现的重大隐患：全量重算并覆盖 statistics 口径）。"""
+    from quant_research_engine.gui import factor_admin
+
+    for cmd in (factor_admin.SAMPLE_BACKFILL_CMD, factor_admin.FULL_BACKFILL_CMD, factor_admin.PLAN_CMD):
+        assert "--baseline-ref" in cmd
+        assert cmd[cmd.index("--baseline-ref") + 1] == "HEAD"

@@ -1,0 +1,35 @@
+experiment:
+  name: gui_accept_rsi14_reversal
+  market_profile: ashare_daily_default
+  frequency: daily
+data:
+  market_fields:
+  - open
+  - high
+  - low
+  - close
+  - pre_close
+  - vol
+  - amount
+  factor_fields:
+    rsi_14: factors.stock_daily_momentum_close.rsi_14
+universe:
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+signal:
+  entry: (rsi_14 < 30.0)
+  exit: (rsi_14 > 70.0)
+holding:
+  max_holding_days: 20
+evaluation:
+  forward_return_horizons:
+  - 1
+  - 3
+  - 5
+  - 10
+  - 20
+  quantiles: 5
+risk:
+  stop_loss_pct: 0.08

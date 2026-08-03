@@ -29,9 +29,9 @@ ENV_INDICATORS_REPO = "QRE_INDICATORS_REPO"
 FACTOR_ADMIN_DIR = GUI_BASE_DIR / "factor-admin"
 
 SAMPLE_VALIDATE_CMD = ["uv", "run", "python", "run_factor_admin.py", "validate", "--codes", "000001.SZ", "--sample-rows", "800"]
-PLAN_CMD = ["uv", "run", "python", "run_factor_admin.py", "plan"]
-SAMPLE_BACKFILL_CMD = ["uv", "run", "python", "run_factor_admin.py", "backfill", "--sample-codes", "000001.SZ", "--max-workers", "4", "--execute"]
-FULL_BACKFILL_CMD = ["uv", "run", "python", "run_factor_admin.py", "backfill", "--max-workers", "4", "--execute"]
+PLAN_CMD = ["uv", "run", "python", "run_factor_admin.py", "plan", "--baseline-ref", "HEAD"]
+SAMPLE_BACKFILL_CMD = ["uv", "run", "python", "run_factor_admin.py", "backfill", "--baseline-ref", "HEAD", "--sample-codes", "000001.SZ", "--max-workers", "4", "--execute"]
+FULL_BACKFILL_CMD = ["uv", "run", "python", "run_factor_admin.py", "backfill", "--baseline-ref", "HEAD", "--max-workers", "4", "--execute"]
 
 # (step_name, cmd)；sample 链依次执行
 SAMPLE_STEPS = [

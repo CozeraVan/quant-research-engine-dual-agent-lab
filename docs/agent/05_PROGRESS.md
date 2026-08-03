@@ -203,6 +203,13 @@ QRE-REPORT-BENCHMARK-001: **DONE (awaiting commit).** (1) Report blank columns: 
 
 ## Latest Verified State
 
+Recorded on 2026-08-03 (GUI factor panel E2E + three deep fixes):
+
+- First GUI factor-panel creation end-to-end: rsi_9 (5551 stocks, 13,363,067 rows, 0 failures, values sane). Duplicate rejection verified (rsi_21).
+- Deep fixes: factor_admin commands pin --baseline-ref HEAD (+regression test); indicators _ensure_hypertable auto-compression disarmed (2200+ chunks decompressed, policies removed); ensure_factor_table skips manual CREATE INDEX on hypertables (861-chunk lock convoy, 2 stalls).
+- Wizard acceptance strategy gui_accept_rsi14_reversal.yaml added to catalog for 20:30 refresh auto-coverage check.
+- qre-refresh.timer installed (Mon-Fri 20:30, after factor job ends ~19:20 + 1h buffer).
+
 Recorded on 2026-07-27 (full-history 111-strategy batch COMPLETE + Timescale lock root cause):
 
 - Full-history overnight run finished: 111/111 strategies OK across two batches — `7a7091245d87` (22 ok, first attempt, 281min) + `0e875c6a10da` (89 ok, resume, 1381min). Range 2010-01-04 → 2026-07-27, 5,547 symbols, vectorized, jobs 4, apply-stops + universe-filter, benchmark 000300.SH. Products: `outputs/backtests/full_history_overnight/<batch>/<strategy>/backtest/*` + `aggregate_summary.csv`.

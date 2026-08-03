@@ -2,6 +2,49 @@
 
 ## Task ID
 
+QRE-FACTOR-PANEL-E2E-001 (GUI factor panel end-to-end acceptance: rsi_9 + 3 deep fixes)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (committed)
+
+## Implementation Summary
+
+1. **factor_admin.py**: PLAN/SAMPLE_BACKFILL/FULL_BACKFILL commands now pin
+   `--baseline-ref HEAD`. Without it, run_factor_admin's default baseline
+   (116d7cd) selects ~291 columns — a full-history recompute of everything
+   including statistics semantics — instead of only the requested factor.
+   Found during the first real panel run (sample stalled 20+ min).
+2. **Regression test**: `test_factor_admin_backfill_commands_pin_baseline_head`.
+3. **Acceptance strategy** `gui_accept_rsi14_reversal.yaml` (wizard-built):
+   rsi_14 < 30 entry / > 70 exit, 8% stop; registered for the 20:30 refresh
+   auto-coverage check.
+4. **Panel acceptance facts**: duplicate-factor rejection works (rsi_21
+   refused with config rollback); rsi_9 created, sample-verified, full
+   backfill 5551 stocks / 13,363,067 rows / 0 failures; values sane
+   (rsi_9 > rsi_14 in uptrend, all within [0,100]).
+5. **Upstream fixes in indicators_tushare** (commit 9ffefbd): disarmed
+   _ensure_hypertable auto-compression; CREATE INDEX gated to
+   non-TimescaleDB mode (861-chunk lock convoy, two real stalls).
+
+## Validation Output
+
+```bash
+uv run pytest -q → 1319+1 passed (baseline regression included)
+rsi_9: 13,363,067 rows / 5,544 stocks / latest 2026-07-31 / 0 out-of-range
+compression: 0 chunks, 0 policies after cleanup
+```
+
+# Coding Handoff (archive: QRE-REFRESH-INCREMENTAL-001)
+
+# Coding Handoff
+
+## Task ID
+
 QRE-REFRESH-INCREMENTAL-001 (refresh 增量合并：小水印差只跑新增交易日并合并进既有结果)
 
 ## Written By
