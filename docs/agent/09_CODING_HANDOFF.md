@@ -2,6 +2,146 @@
 
 ## Task ID
 
+QRE-GUI-FACTOR-CREATE-P2-001 (GUI 新因子创建闭环：NL/手写 → 生成草稿 → 查重 → 沙箱冒烟 → 确认晋升 → indicators 入库)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+1. **`gui/factor_nl_compiler.py`**（新）：因子 NL 生成器。复用 `nl_compiler.call_llm`
+   （新增可选 `system_prompt` 参数）与 `nl_config`。独立系统提示词（FactorBase
+   约束 + SMA/ATR 两个 few-shot），两段式输出协议 `<<<CODE>>>` / `<<<META>>>`
+   （YAML: name/category/column/periods|params），超范围输出 `<<<ERROR>>>` 转
+   "请走人工通道"。`check_code_safety(code)`：AST 白名单——只允许 import
+   pandas/pandas_ta/numpy/typing/core.factor_base；禁 open/eval/exec/compile/
+   __import__/input/globals/locals；禁危险 dunder（__class__/__globals__/
+   __subclasses__ 等 12 个；`__init__` 等常规魔术方法允许）；语法错误即拒绝。
+   `generate_factor_code(description, http_post=None, env=None)` →
+   {ok, code, meta} / {ok: False, code, error}。
+2. **`gui/factor_create.py`**（新，纯函数层，repo/runner/job_starter 可注入）：
+   - `check_factor_duplicate(name, category, column, params, tables_columns=None,
+     config_path=None)`：库内现列（表 `stock_daily_<cat>_<col>`，列名
+     `<name>_<suffix>` 精确/前缀匹配）+ config 条目双源查重；同名指标（任意
+     类别/价格列）一律拒绝并引导走 factor-admin 通道。
+   - 沙箱：`save_factor_to_sandbox`（安全检查 → `sandbox/factors/<name>_factor.py`）、
+     `list_sandbox`、`discard_factor`。
+   - `run_smoke`：subprocess 跑 indicators `sandbox/smoke_factor.py`（uv run，
+     cwd=repo，120s 超时），解析 stdout 最后一行 JSON。
+   - `check_no_admin_running`：pgrep -af "run_factor_admin|run_factor_repair"
+     为空检查（过滤含 "pgrep" 的行，消除 bash -c 自匹配误报）。
+   - `promote_factor(name, category, column, params, ...)`：pgrep 闸 → 复制
+     `factors/<name>_factor.py`（已存在拒绝）→ 二次安全检查 → 备份 + 追加
+     config（periods/params/[null] 三种风格）→ `start_script_job(lock_key=
+     "indicators")` 后台跑 `validate --codes 600519.SH --sample-rows 800 &&
+     backfill --baseline-ref HEAD --categories <cat> --max-workers 4 --execute`
+     （bash -c 串联）；写入失败自动回滚（删文件、恢复备份）。
+3. **indicators `sandbox/smoke_factor.py`**（新）：CLI 冒烟——importlib 加载文件 →
+   唯一 FactorBase 子类 → DBManager.load_stock_history 只读单股近 N 日 →
+   逐参数 calculate() → 断言无异常/列存在/跳过 warmup 非全 NaN/列名规范化无重复；
+   stdout 末行 JSON，exit 0/1。
+4. **API（`gui/app.py`，6 个 `/api/factor-create/*`）**：nl-generate（只回填不执行）
+   / check（安全+查重，DB 挂降级 warning）/ smoke（同步 ≤120s）/ promote
+   （409=admin_busy|duplicate_name|job_conflict）/ sandbox / sandbox/delete。
+   job 状态复用 `/api/admin/daily-jobs/<job_id>`。
+5. **前端 `templates/admin.html`** 因子 tab 加「新建因子」折叠子区：NL 描述框 +
+   生成代码 → 代码编辑框 + name/category/column/periods 表单（meta 预填）→
+   查重+安全检查 / 冒烟测试 / 晋升入库（confirm 二次确认 + job 轮询）+ 沙箱列表
+   （删除）。全中文、零新框架。
+6. **测试 `tests/test_gui_factor_create.py`（42 条）**：假 http_post LLM 输出、
+   安全检查恶意样本、查重命中/不命中/同后缀不误判、冒烟子进程 mock、promote
+   pgrep 闸/复制/yaml 追加/回滚（tmp 假 indicators 树）、API 全链路 Flask
+   test client。
+
+## Validation Output
+
+```bash
+uv run pytest tests/test_gui_factor_create.py -q → 42 passed
+uv run pytest tests/ -k gui -q → 270 passed
+uv run pytest tests/ -x -q → 1385 passed
+```
+
+真实 E2E（2026-08-12，真实 DeepSeek + 真实 DB）：
+- `generate_factor_code("VIDYA 可变指数动态平均线，周期 20")` → VIDYAFactor
+  （overlap/close，periods [20]），代码含 get_price_series + p=None/list/int 分支。
+- 查重（真实 factors schema + config）：无冲突。
+- 冒烟：`sandbox/smoke_factor.py --code 600519.SH --days 400 --params '[20]'` →
+  ok，400 行，输出列 `vidya_20`，warmup 288 后非全 NaN，exit 0。
+- 晋升（真实 GUI server :8123，POST /api/factor-create/promote）→
+  `factors/vidya_factor.py` + config 追加（备份 factors.yaml.bak-20260812T030850），
+  job_id `20260812T030850074330`：validate 已通过（exit 0），backfill
+  （--categories overlap --execute，4 workers）进行中；backfill 前已确认
+  plan noop、无 run_factor_admin 在跑，范围严格只有 vidya_20 一列。
+- 查重闸实证：先生成过 roc（周期 25），发现 roc 已注册（params [null]），
+  同名拒绝规则因此加入（否则会产生重复 roc 类互相覆盖）。
+
+# Coding Handoff (archive: QRE-GUI-STRATEGY-CREATE-P1-001, GUI 策略创建闭环：查重 → 沙箱 → 冒烟 → 确认晋升 → catalog)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+1. **新模块 `gui/strategy_create.py`**（纯函数层，目录均可注入）：
+   - `check_strategy_duplicate(name, catalog_dir, sandbox_dir, scan_sandbox)`：扫
+     catalog（rglob `*.yaml` 读 experiment.name）+ 沙箱，命中返回中文冲突描述。
+   - `save_to_sandbox(yaml_text)`：validate_yaml → 查重 → 落盘
+     `outputs/sandbox/strategies/<name>.yaml`。沙箱独立于 catalog，refresh 日更
+     只扫 catalog，天然隔离。
+   - `list_sandbox()`：名称/文件/mtime/最近冒烟（sidecar `<name>.smoke.json`，
+     由 `record_smoke()` 写入）。
+   - `promote(name, category)`：类别白名单（CATALOG_CATEGORIES 7 类）→ 复制到
+     `strategies/catalog/<category>/` → 删沙箱 YAML（保留 smoke sidecar）。
+   - `discard(name)`：删沙箱 YAML + sidecar。
+   - 常量：`SMOKE_DEFAULT_CODE="600519.SH"`、`SMOKE_WINDOW_DAYS=180`。
+2. **API（`gui/app.py` create_app 内）**：
+   - `POST /api/strategies/create` {mode: manual|nl, yaml_text?|description?}：
+     nl 走 `compile_nl`；manual 走 validate_yaml + 因子存在性检查（复用
+     `nl_compiler._default_column_lookup` + `find_missing_factor_columns`，缺因子
+     入 handoff 队列并返回 code=missing_factors，DB 不可用降级 warning）→
+     查重（409）→ 存沙箱。
+   - `GET /api/strategies/sandbox`：列表 + 类别白名单。
+   - `POST /api/strategies/smoke` {name, code?}：`run_backtest(mode="single",
+     codes=[600519.SH], 近 180 天, background=True)`，run 记录打
+     `sandbox_strategy`/`purpose=smoke` 标记（`_mark_run` 落盘 status.json），
+     run_id 写 sidecar。
+   - `POST /api/strategies/promote` {name, category}：promote() 后立即触发一次
+     全量后台回测（`mode="shared"`、空 codes=全市场、近 2 年窗，对齐 refresh 默认
+     window-years=2；refresh 本身是独立 CLI 管线故不复用其调用）。并发槽满时
+     降级为 warning（策略随下次日更运行）。
+   - `POST /api/strategies/sandbox/delete` {name}：discard。
+3. **前端 `templates/index.html`**（编辑器 tab，无新框架）：编辑器操作行加
+   "存入沙箱"按钮；"沙箱策略"面板（列表 + 冒烟/晋升(类别下拉)/删除按钮，
+   冒烟状态链接到 /runs/<run_id>）。
+4. **测试 `tests/test_gui_strategy_create.py`**（23 条）：查重命中/不命中、
+   落盘与列出、缺因子分支（假 lookup + 假 enqueue）、promote 白名单/移动/查重拦截、
+   API 全链路（Flask test client，run_backtest mock 掉）。
+
+## Validation Output
+
+```bash
+uv run pytest tests/test_gui_strategy_create.py -q → 23 passed
+uv run pytest tests/ -k gui -q → 228 passed
+uv run pytest tests/ -x -q → 见 05_PROGRESS.md / 10_REVIEW_REPORT.md
+真实冒烟：见 10_REVIEW_REPORT.md（600519.SH 近 6 个月，GUI 等价链路）
+```
+
+# Coding Handoff (archive: QRE-FACTOR-PANEL-E2E-001)
+
+# Coding Handoff
+
+## Task ID
+
 QRE-FACTOR-PANEL-E2E-001 (GUI factor panel end-to-end acceptance: rsi_9 + 3 deep fixes)
 
 ## Written By

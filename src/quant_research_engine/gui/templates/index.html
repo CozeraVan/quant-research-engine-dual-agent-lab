@@ -764,6 +764,7 @@
     <textarea id="strategy-yaml" rows="24" cols="80" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
     <div class="editor-actions">
       <button id="btn-validate">验证 Validate</button>
+      <button id="btn-save-sandbox" title="校验 + 查重 + 因子检查后存入沙箱，不自动执行">存入沙箱</button>
       <label class="file-label">
         加载文件 Load file
         <input type="file" id="file-input" accept=".yaml,.yml" hidden>
@@ -875,6 +876,16 @@
 </div>
 
 <div id="run-result" class="result-box hidden"></div>
+
+<!-- 策略创建闭环（P1）：沙箱列表 + 冒烟 / 晋升 / 删除 -->
+<div class="panel" id="sandbox-panel">
+  <h2>沙箱策略 Sandbox
+    <button class="btn-sm" id="btn-sandbox-refresh">刷新</button>
+  </h2>
+  <p class="opt">沙箱策略不参与 refresh 日更；冒烟通过后可晋升入 catalog（晋升后立即触发一次全量后台回测）。</p>
+  <div id="sandbox-status" class="opt hidden"></div>
+  <div id="sandbox-list"></div>
+</div>
 </div>
 
 <script>
@@ -1424,6 +1435,115 @@
       runResult.innerHTML = '<p class="err">' + err + '</p>';
     });
   });
+
+  // ============================================================
+  // 策略创建闭环（P1）：存入沙箱 / 沙箱面板
+  // ============================================================
+  var sandboxStatus = document.getElementById("sandbox-status");
+  var sandboxList = document.getElementById("sandbox-list");
+  var sandboxCategories = [];
+
+  document.getElementById("btn-save-sandbox").addEventListener("click", function() {
+    fetch("/api/strategies/create", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({mode: "manual", yaml_text: yamlEl.value})
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(res) {
+      var d = res.body;
+      show(validateBox);
+      if (d.ok) {
+        var warn = (d.warnings || []).map(function(w) { return '<p class="opt">' + escHtml(w) + '</p>'; }).join('');
+        validateBox.innerHTML = '<span class="ok">已存入沙箱：' + escHtml(d.name) + '</span>' + warn;
+        loadSandbox();
+      } else {
+        validateBox.innerHTML = '<span class="err">' + escHtml(d.error || "存入沙箱失败") + '</span>';
+      }
+    })
+    .catch(function(err) {
+      show(validateBox);
+      validateBox.innerHTML = '<span class="err">' + err + '</span>';
+    });
+  });
+
+  function sandboxAction(url, payload, doneText) {
+    show(sandboxStatus);
+    sandboxStatus.textContent = "处理中...";
+    sandboxStatus.className = "opt";
+    return fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(res) {
+      var d = res.body;
+      if (d.ok) {
+        var msg = doneText;
+        if (d.run_id) msg += '（<a href="/runs/' + d.run_id + '">查看 run</a>）';
+        if (d.warning) msg += '<br><span class="opt">' + escHtml(d.warning) + '</span>';
+        sandboxStatus.innerHTML = '<span class="ok">' + msg + '</span>';
+      } else {
+        sandboxStatus.innerHTML = '<span class="err">' + escHtml(d.error || "操作失败") + '</span>';
+      }
+      loadSandbox();
+    })
+    .catch(function(err) {
+      sandboxStatus.innerHTML = '<span class="err">' + err + '</span>';
+    });
+  }
+
+  function loadSandbox() {
+    fetch("/api/strategies/sandbox")
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        sandboxCategories = d.categories || [];
+        var items = d.strategies || [];
+        if (!items.length) {
+          sandboxList.innerHTML = '<p class="opt">（沙箱为空：用上方"存入沙箱"按钮把编辑器中的策略放进来）</p>';
+          return;
+        }
+        var html = "";
+        items.forEach(function(s) {
+          var smoke = s.smoke
+            ? '冒烟: <a href="/runs/' + s.smoke.run_id + '">' + escHtml(s.smoke.status) + '</a>'
+            : '<span class="opt">未冒烟</span>';
+          var options = sandboxCategories.map(function(c) {
+            return '<option value="' + c + '">' + c + '</option>';
+          }).join('');
+          html +=
+            '<div class="rule-row" data-name="' + escHtml(s.name) + '">' +
+            '<strong>' + escHtml(s.name) + '</strong> ' +
+            '<span class="opt">' + escHtml(s.mtime || "") + '</span> ' + smoke + ' ' +
+            '<button class="btn-sm sb-smoke">冒烟测试</button> ' +
+            '<select class="sb-category">' + options + '</select>' +
+            '<button class="btn-sm sb-promote">晋升</button> ' +
+            '<button class="btn-sm sb-delete">删除</button>' +
+            '</div>';
+        });
+        sandboxList.innerHTML = html;
+        sandboxList.querySelectorAll(".rule-row").forEach(function(row) {
+          var name = row.getAttribute("data-name");
+          row.querySelector(".sb-smoke").addEventListener("click", function() {
+            sandboxAction("/api/strategies/smoke", {name: name}, "冒烟已启动（600519.SH 近 6 个月）");
+          });
+          row.querySelector(".sb-promote").addEventListener("click", function() {
+            var category = row.querySelector(".sb-category").value;
+            if (!confirm("确认将 " + name + " 晋升到 catalog/" + category + " 并触发全量回测？")) return;
+            sandboxAction("/api/strategies/promote", {name: name, category: category}, "已晋升");
+          });
+          row.querySelector(".sb-delete").addEventListener("click", function() {
+            if (!confirm("确认删除沙箱策略 " + name + "？")) return;
+            sandboxAction("/api/strategies/sandbox/delete", {name: name}, "已删除");
+          });
+        });
+      });
+  }
+
+  document.getElementById("btn-sandbox-refresh").addEventListener("click", loadSandbox);
+  loadSandbox();
 })();
 </script>
 {% endblock %}

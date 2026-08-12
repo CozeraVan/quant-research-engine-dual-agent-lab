@@ -13,6 +13,7 @@ StartLimitBurst=3
 
 [Service]
 Type=oneshot
+User=van
 WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
 Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
 ExecStart=/home/van/.local/bin/uv run python scripts/refresh_batch.py --jobs 4 --apply-stops --universe-filter

@@ -12,7 +12,9 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-ADMIN-CONSOLE-P3A-001 + QRE-ADMIN-FACTOR-HEALTH-FIX-001 (DONE — 1264 tests green; committing)
+QRE-GUI-FACTOR-CREATE-P2-001 (DONE — 1385 tests green; awaiting git approval)
+
+2026-08-12: GUI 新因子创建闭环 P2（/api/factor-create/* + indicators sandbox 冒烟 + 晋升 validate→backfill job）。真实 E2E：vidya 因子 DeepSeek 生成 → 冒烟过 → 晋升 job 20260812T030850074330。详见 09_CODING_HANDOFF 顶部。上一任务：QRE-ADMIN-CONSOLE-P3A-001 + QRE-ADMIN-FACTOR-HEALTH-FIX-001 (1264 tests green)。
 
 2026-07-28: admin console read-only slice (dashboard/timers/query) + factor-health fix (managed-table whitelist from indicators config; vortex orphan table demoted to informational). quant_ts upstream fix: normalize_reference_frame numeric coercion (daily_basic text→NUMERIC staging conflict), daily rerun completed, watermark 2026-07-27. Health: green.
 

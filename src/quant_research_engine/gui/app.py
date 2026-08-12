@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -627,6 +628,124 @@ def create_app() -> Flask:
             return jsonify({"ok": False, "error": str(exc)}), 409
         return jsonify({"ok": True, **record})
 
+    # --- 新因子创建闭环 API（P2：NL/手写 → 生成草稿 → 查重 → 沙箱冒烟 → 确认晋升） ---
+    # 与 /api/factor-admin/*（既有因子补周期/补列）区分：这里管全新因子。
+
+    @app.route("/api/factor-create/nl-generate", methods=["POST"])
+    def api_factor_create_nl_generate() -> Any:
+        from quant_research_engine.gui.factor_nl_compiler import generate_factor_code
+
+        data = request.get_json(silent=True) or {}
+        description = (data.get("description") or "").strip()
+        if not description:
+            return jsonify({"ok": False, "code": "empty", "error": "请先用自然语言描述要创建的因子"}), 400
+        result = generate_factor_code(description)
+        if result.get("code") == "not_configured":
+            return jsonify(result), 503
+        return jsonify(result)
+
+    @app.route("/api/factor-create/check", methods=["POST"])
+    def api_factor_create_check() -> Any:
+        from quant_research_engine.gui.factor_create import check_factor_duplicate, normalize_params
+        from quant_research_engine.gui.factor_nl_compiler import check_code_safety
+        from quant_research_engine.gui.factor_wizard import load_factor_tables_columns
+
+        data = request.get_json(silent=True) or {}
+        code = data.get("code") or ""
+        name = (data.get("name") or "").strip().lower()
+        category = (data.get("category") or "").strip().lower()
+        column = (data.get("column") or "").strip().lower()
+        if not name or not category or not column:
+            return jsonify({"ok": False, "error": "name/category/column 必填"}), 400
+
+        violations = check_code_safety(code) if code.strip() else ["代码不能为空"]
+        params = normalize_params(periods=data.get("periods"), params=data.get("params"))
+
+        duplicate = None
+        warning = None
+        if not violations:
+            try:
+                tables_columns = load_factor_tables_columns()
+            except Exception as exc:
+                tables_columns = None
+                warning = f"因子库不可用，跳过库内列查重（{exc}）；仅检查 config 条目"
+            duplicate = check_factor_duplicate(name, category, column, params, tables_columns=tables_columns)
+
+        resp: dict[str, Any] = {
+            "ok": not violations and duplicate is None,
+            "violations": violations,
+            "duplicate": duplicate,
+        }
+        if warning:
+            resp["warning"] = warning
+        return jsonify(resp)
+
+    @app.route("/api/factor-create/smoke", methods=["POST"])
+    def api_factor_create_smoke() -> Any:
+        from quant_research_engine.gui.factor_create import (
+            SMOKE_DEFAULT_CODE,
+            normalize_params,
+            run_smoke,
+            save_factor_to_sandbox,
+        )
+
+        data = request.get_json(silent=True) or {}
+        code = data.get("code") or ""
+        name = (data.get("name") or "").strip().lower()
+        if not name:
+            return jsonify({"ok": False, "error": "指标名不能为空"}), 400
+        saved = save_factor_to_sandbox(code, name)
+        if not saved["ok"]:
+            return jsonify(saved), 400
+        params = normalize_params(periods=data.get("periods"), params=data.get("params"))
+        result = run_smoke(
+            name,
+            code=(data.get("code_symbol") or SMOKE_DEFAULT_CODE).strip(),
+            params=params,
+        )
+        return jsonify(result)
+
+    @app.route("/api/factor-create/promote", methods=["POST"])
+    def api_factor_create_promote() -> Any:
+        from quant_research_engine.gui.factor_create import normalize_params, promote_factor
+
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip().lower()
+        category = (data.get("category") or "").strip().lower()
+        column = (data.get("column") or "").strip().lower()
+        if not name or not category or not column:
+            return jsonify({"ok": False, "error": "name/category/column 必填"}), 400
+        params = normalize_params(periods=data.get("periods"), params=data.get("params"))
+        result = promote_factor(name, category, column, params)
+        if not result["ok"]:
+            status = 404 if result.get("code") == "not_found" else (409 if result.get("code") in ("admin_busy", "duplicate_name", "job_conflict") else 400)
+            return jsonify(result), status
+        return jsonify(result)
+
+    @app.route("/api/factor-create/sandbox")
+    def api_factor_create_sandbox() -> Any:
+        from quant_research_engine.gui.factor_create import FACTOR_CATEGORIES, PRICE_COLUMNS, list_sandbox
+
+        return jsonify({
+            "ok": True,
+            "factors": list_sandbox(),
+            "categories": list(FACTOR_CATEGORIES),
+            "columns": list(PRICE_COLUMNS),
+        })
+
+    @app.route("/api/factor-create/sandbox/delete", methods=["POST"])
+    def api_factor_create_sandbox_delete() -> Any:
+        from quant_research_engine.gui.factor_create import discard_factor
+
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip().lower()
+        if not name:
+            return jsonify({"ok": False, "error": "指标名不能为空"}), 400
+        result = discard_factor(name)
+        if not result["ok"]:
+            return jsonify(result), 404
+        return jsonify(result)
+
     # --- Builder API routes ---
 
     @app.route("/api/nl_compile", methods=["POST"])
@@ -667,6 +786,175 @@ def create_app() -> Flask:
         if result.get("ok"):
             return jsonify({"valid": True})
         return jsonify({"valid": False, "issues": result.get("issues", [])})
+
+    # --- 策略创建闭环 API（P1：查重 → 沙箱 → 冒烟 → 用户确认晋升 → catalog） ---
+
+    def _mark_run(record: dict[str, Any], **extra: Any) -> None:
+        """在 run 记录上打标记并立刻落盘（后台线程结束时会原样重写 status.json）。"""
+        from quant_research_engine.gui import engine as _engine
+
+        record.update(extra)
+        _engine._write_json(_engine.RUNS_DIR / record["run_id"] / "status.json", record)
+
+    @app.route("/api/strategies/create", methods=["POST"])
+    def api_strategy_create() -> Any:
+        from quant_research_engine.gui import strategy_create
+        from quant_research_engine.gui.nl_compiler import (
+            _default_column_lookup,
+            _enqueue_missing_factors,
+            compile_nl,
+        )
+        from quant_research_engine.strategies.factor_request_queue import (
+            DEFAULT_QUEUE_PATH,
+            find_missing_factor_columns,
+        )
+        from quant_research_engine.strategies.spec import StrategySpec
+
+        data = request.get_json(silent=True) or {}
+        mode = data.get("mode", "manual")
+        warnings: list[str] = []
+
+        if mode == "nl":
+            description = (data.get("description") or "").strip()
+            if not description:
+                return jsonify({"ok": False, "code": "empty", "error": "请先用自然语言描述策略"}), 400
+            compiled = compile_nl(description, db_url=data.get("db_url") or None)
+            if not compiled.get("ok"):
+                status = 503 if compiled.get("code") == "not_configured" else 200
+                return jsonify(compiled), status
+            yaml_text = compiled["yaml"]
+            warnings.extend(compiled.get("warnings") or [])
+        else:
+            yaml_text = data.get("yaml_text") or data.get("yaml") or ""
+            validation = validate_yaml(yaml_text)
+            if not validation["valid"]:
+                return jsonify({"ok": False, "code": "invalid_yaml", "error": validation["error"]}), 400
+            # 因子存在性检查（DB 不可用时降级为 warning，与 NL 通道一致）
+            lookup = _default_column_lookup(data.get("db_url") or None)
+            if lookup is None:
+                warnings.append("因子库不可用，跳过因子存在性检查（提交回测时仍会校验）")
+            else:
+                import yaml as _yaml
+
+                spec = StrategySpec.from_mapping(_yaml.safe_load(yaml_text))
+                missing = find_missing_factor_columns(spec, lookup)
+                if missing:
+                    _enqueue_missing_factors(spec, missing, queue_path=DEFAULT_QUEUE_PATH)
+                    names = "、".join(f"{f.logical_name}({f.qualified_table}.{f.source_column})" for f in missing)
+                    return jsonify({
+                        "ok": False,
+                        "code": "missing_factors",
+                        "error": f"该策略未入沙箱：缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。",
+                        "missing_factors": [f.logical_name for f in missing],
+                    })
+
+        saved = strategy_create.save_to_sandbox(yaml_text)
+        if not saved["ok"]:
+            status = 409 if saved.get("code") == "duplicate_name" else 400
+            return jsonify(saved), status
+        return jsonify({"ok": True, "name": saved["name"], "yaml": yaml_text, "warnings": warnings})
+
+    @app.route("/api/strategies/sandbox")
+    def api_strategy_sandbox() -> Any:
+        from quant_research_engine.gui import strategy_create
+
+        return jsonify({
+            "ok": True,
+            "strategies": strategy_create.list_sandbox(),
+            "categories": list(strategy_create.CATALOG_CATEGORIES),
+        })
+
+    @app.route("/api/strategies/smoke", methods=["POST"])
+    def api_strategy_smoke() -> Any:
+        from quant_research_engine.gui import strategy_create
+
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"ok": False, "error": "策略名不能为空"}), 400
+        yaml_text = strategy_create.load_sandbox_yaml(name)
+        if yaml_text is None:
+            return jsonify({"ok": False, "error": f"沙箱中不存在策略: {name}"}), 404
+
+        code = (data.get("code") or strategy_create.SMOKE_DEFAULT_CODE).strip()
+        end = date.today()
+        start = end - timedelta(days=strategy_create.SMOKE_WINDOW_DAYS)
+        if not try_acquire_run_slot():
+            return jsonify({"ok": False, "error": "已有 2 个回测在运行，请稍后再提交"}), 409
+        try:
+            record = run_backtest(
+                yaml_text=yaml_text,
+                mode="single",
+                start=start.isoformat(),
+                end=end.isoformat(),
+                codes=code,
+                background=True,
+            )
+        except Exception as exc:
+            release_run_slot()
+            return jsonify({"ok": False, "error": str(exc)}), 500
+        _mark_run(record, sandbox_strategy=name, purpose="smoke")
+        strategy_create.record_smoke(name, record["run_id"], status="running")
+        return jsonify({"ok": True, "run_id": record["run_id"], "code": code,
+                        "start": start.isoformat(), "end": end.isoformat()})
+
+    @app.route("/api/strategies/promote", methods=["POST"])
+    def api_strategy_promote() -> Any:
+        from quant_research_engine.gui import strategy_create
+
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        category = (data.get("category") or "").strip()
+        if not name:
+            return jsonify({"ok": False, "error": "策略名不能为空"}), 400
+
+        result = strategy_create.promote(name, category)
+        if not result["ok"]:
+            status = 404 if result.get("code") == "not_found" else 400
+            return jsonify(result), status
+
+        # 晋升后立刻触发一次全量后台回测（shared 全市场、近 2 年窗口，
+        # 与 refresh 默认 window-years=2 对齐；refresh 本身是独立 CLI 管线）。
+        run_id = None
+        warning = None
+        if try_acquire_run_slot():
+            try:
+                yaml_text = Path(result["path"]).read_text(encoding="utf-8")
+                end = date.today()
+                start = end - timedelta(days=730)
+                record = run_backtest(
+                    yaml_text=yaml_text,
+                    mode="shared",
+                    start=start.isoformat(),
+                    end=end.isoformat(),
+                    codes="",  # 空 = 全市场
+                    background=True,
+                )
+                _mark_run(record, promoted_strategy=result["name"], purpose="promote_full")
+                run_id = record["run_id"]
+            except Exception as exc:
+                release_run_slot()
+                warning = f"已晋升，但全量回测启动失败：{exc}"
+        else:
+            warning = "已晋升；当前回测并发已满，全量回测未启动（将随下次 refresh 日更运行）"
+
+        resp: dict[str, Any] = {"ok": True, "path": result["path"], "run_id": run_id}
+        if warning:
+            resp["warning"] = warning
+        return jsonify(resp)
+
+    @app.route("/api/strategies/sandbox/delete", methods=["POST"])
+    def api_strategy_sandbox_delete() -> Any:
+        from quant_research_engine.gui import strategy_create
+
+        data = request.get_json(silent=True) or {}
+        name = (data.get("name") or "").strip()
+        if not name:
+            return jsonify({"ok": False, "error": "策略名不能为空"}), 400
+        result = strategy_create.discard(name)
+        if not result["ok"]:
+            return jsonify(result), 404
+        return jsonify(result)
 
     return app
 

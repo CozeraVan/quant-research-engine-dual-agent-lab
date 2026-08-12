@@ -58,6 +58,49 @@
   <div id="fs-job" class="result-box hidden"></div>
   <div id="fs-tables"></div>
   <div id="fs-unmanaged"></div>
+
+  <div class="section" style="margin-top:1.5rem;">
+    <button class="section-toggle" data-section="fc-create">新建因子（NL/手写 → 沙箱冒烟 → 晋升入库）&#9660;</button>
+    <div id="sec-fc-create" class="section-body">
+      <p class="opt">自然语言描述或直接在代码框手写；生成结果只回填不执行。晋升前必须通过「查重+安全检查」与「冒烟测试」。</p>
+      <p>
+        <textarea id="fc-desc" rows="2" style="width:100%;" placeholder="例：ROC 变动率指标，周期 25（pandas_ta 已有函数、单序列/HLC 输入的模板型指标）"></textarea>
+      </p>
+      <p><button id="fc-generate">生成代码</button> <span id="fc-gen-status" class="opt"></span></p>
+      <p><textarea id="fc-code" rows="14" style="width:100%;font-family:monospace;" placeholder="# 因子代码（可手写/粘贴，需继承 FactorBase）"></textarea></p>
+      <p>
+        指标名 <input type="text" id="fc-name" size="14" placeholder="roc">
+        类别 <select id="fc-category">
+          <option value="">选择…</option>
+          <option value="overlap">overlap</option>
+          <option value="momentum">momentum</option>
+          <option value="volatility">volatility</option>
+          <option value="trend">trend</option>
+          <option value="volume">volume</option>
+          <option value="statistics">statistics</option>
+          <option value="candle">candle</option>
+          <option value="performance">performance</option>
+        </select>
+        价格列 <select id="fc-column">
+          <option value="close">close</option>
+          <option value="typical_price">typical_price</option>
+          <option value="average_price">average_price</option>
+          <option value="median_price">median_price</option>
+        </select>
+        周期 <input type="text" id="fc-periods" size="14" placeholder="25 或 5,10,20">
+        <span class="opt">多参数指标请直接改代码后手写 config；无参填 null</span>
+      </p>
+      <p class="builder-actions">
+        <button id="fc-check">查重+安全检查</button>
+        <button id="fc-smoke">冒烟测试</button>
+        <button id="fc-promote">晋升入库</button>
+      </p>
+      <div id="fc-result" class="result-box hidden"></div>
+      <div id="fc-job" class="result-box hidden"></div>
+      <h4>因子沙箱 <button class="btn-sm" id="fc-sandbox-refresh">刷新</button></h4>
+      <div id="fc-sandbox-list" class="opt">（空）</div>
+    </div>
+  </div>
 </div>
 
 <!-- Tab 5: 维护区（outputs 产物清理，危险操作二次确认） -->
@@ -533,6 +576,144 @@
   }
   document.getElementById('btn-fs-refresh').addEventListener('click', loadFactorStatus);
 
+  // ---------- Tab 3b: 新建因子（factor-create 闭环） ----------
+  function fcPeriodsValue() {
+    var raw = document.getElementById('fc-periods').value.trim();
+    if (!raw || raw === 'null') return [null];
+    return raw.split(',').map(function(s) { return parseInt(s.trim(), 10); }).filter(function(n) { return !isNaN(n); });
+  }
+  function fcPayload() {
+    return {
+      code: document.getElementById('fc-code').value,
+      name: document.getElementById('fc-name').value.trim(),
+      category: document.getElementById('fc-category').value,
+      column: document.getElementById('fc-column').value,
+      periods: fcPeriodsValue()
+    };
+  }
+  function fcShow(html) {
+    var box = document.getElementById('fc-result');
+    box.classList.remove('hidden');
+    box.innerHTML = html;
+  }
+  function fcPost(url, payload, onOk) {
+    return fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    }).then(function(r) { return r.json(); }).then(onOk);
+  }
+
+  document.getElementById('fc-generate').addEventListener('click', function() {
+    var desc = document.getElementById('fc-desc').value.trim();
+    if (!desc) { alert('请先填写自然语言描述'); return; }
+    document.getElementById('fc-gen-status').textContent = '生成中（约十几秒）...';
+    fcPost('/api/factor-create/nl-generate', {description: desc}, function(d) {
+      if (!d.ok) {
+        document.getElementById('fc-gen-status').textContent = '';
+        fcShow('<p class="err">' + esc(d.error || '生成失败') + '</p>');
+        return;
+      }
+      document.getElementById('fc-gen-status').textContent = '已生成（请人工核对代码与参数）';
+      document.getElementById('fc-code').value = d.code;
+      if (d.meta) {
+        document.getElementById('fc-name').value = d.meta.name || '';
+        document.getElementById('fc-category').value = d.meta.category || '';
+        document.getElementById('fc-column').value = d.meta.column || 'close';
+        var periods = d.meta.periods;
+        if (periods && periods.length && periods[0] !== null) {
+          document.getElementById('fc-periods').value = periods.join(',');
+        } else if (d.meta.params) {
+          document.getElementById('fc-periods').value = '';
+        } else {
+          document.getElementById('fc-periods').value = 'null';
+        }
+      }
+    });
+  });
+
+  document.getElementById('fc-check').addEventListener('click', function() {
+    fcShow('<p class="opt">检查中...</p>');
+    fcPost('/api/factor-create/check', fcPayload(), function(d) {
+      var html = '';
+      if (d.violations && d.violations.length) html += '<p class="err">安全检查未通过：' + esc(d.violations.join('；')) + '</p>';
+      else html += '<p class="ok">安全检查通过</p>';
+      if (d.duplicate) html += '<p class="err">查重命中：' + esc(d.duplicate) + '</p>';
+      else if (!d.violations || !d.violations.length) html += '<p class="ok">查重通过（无冲突列）</p>';
+      if (d.warning) html += '<p class="opt">' + esc(d.warning) + '</p>';
+      fcShow(html);
+    });
+  });
+
+  document.getElementById('fc-smoke').addEventListener('click', function() {
+    fcShow('<p class="opt">冒烟中（单股只读，最长 120s）...</p>');
+    fcPost('/api/factor-create/smoke', fcPayload(), function(d) {
+      if (!d.ok) {
+        fcShow('<p class="err">冒烟失败：' + esc(d.error || (d.errors || []).join('；') || '未知错误') + '</p>');
+        return;
+      }
+      fcShow('<p class="ok">冒烟通过</p><p>因子类 ' + esc(d.factor_class)
+        + '（' + esc(d.indicator_name) + ' / ' + esc(d.category) + '），样本 ' + esc(d.code)
+        + ' ' + esc(d.rows) + ' 行，输出列：<code>' + esc((d.columns || []).join(', ')) + '</code></p>');
+      loadFcSandbox();
+    });
+  });
+
+  function pollFcJob(jobId) {
+    var box = document.getElementById('fc-job');
+    box.classList.remove('hidden');
+    fetch('/api/admin/daily-jobs/' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        var label = {running: '运行中', completed: '已完成', failed: '失败'}[d.status] || d.status;
+        var html = '<p>入库任务 ' + esc(d.job_id) + '（' + esc(d.label || '') + '）：<strong>' + label + '</strong></p>';
+        if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
+        if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
+        box.innerHTML = html;
+        if (d.status === 'running') {
+          setTimeout(function() { pollFcJob(jobId); }, 3000);
+        } else {
+          loadFactorStatus();
+          loadFcSandbox();
+        }
+      });
+  }
+
+  document.getElementById('fc-promote').addEventListener('click', function() {
+    var p = fcPayload();
+    if (!p.name || !p.category || !p.column) { alert('请填写 指标名/类别/价格列'); return; }
+    if (!confirm('确认晋升因子 ' + p.name + '（' + p.category + '/' + p.column + '，周期 ' + document.getElementById('fc-periods').value + '）？\n将写入 indicators_tushare 的 factors/ 与 config/factors.yaml，并后台执行 validate + backfill --execute。')) return;
+    fcPost('/api/factor-create/promote', p, function(d) {
+      if (!d.ok) { fcShow('<p class="err">晋升失败：' + esc(d.error || '未知错误') + '</p>'); return; }
+      fcShow('<p class="ok">已晋升：' + esc(d.path) + '</p><p class="opt">config 备份：' + esc(d.config_backup || '—') + '；次日 16:40 日更自动接管。</p>');
+      if (d.job_id) pollFcJob(d.job_id);
+    });
+  });
+
+  function loadFcSandbox() {
+    fetchWithTimeout('/api/factor-create/sandbox')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var el = document.getElementById('fc-sandbox-list');
+        if (!d.ok || !d.factors.length) { el.innerHTML = '<span class="opt">（空）</span>'; return; }
+        el.innerHTML = '<ul>' + d.factors.map(function(f) {
+          return '<li><code>' + esc(f.name) + '</code> <span class="opt">' + esc(f.mtime) + '</span>'
+            + ' <button class="btn-sm" data-fc-del="' + esc(f.name) + '">删除</button></li>';
+        }).join('') + '</ul>';
+        el.querySelectorAll('[data-fc-del]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (!confirm('删除沙箱因子 ' + btn.dataset.fcDel + '？')) return;
+            fcPost('/api/factor-create/sandbox/delete', {name: btn.dataset.fcDel}, function(d2) {
+              if (!d2.ok) alert(d2.error || '删除失败');
+              loadFcSandbox();
+            });
+          });
+        });
+      });
+  }
+  document.getElementById('fc-sandbox-refresh').addEventListener('click', loadFcSandbox);
+
   // ---------- Tab 5: 维护区 ----------
   function fmtGb(bytes) { return bytes == null ? '—' : (bytes / 1073741824).toFixed(2) + ' GB'; }
 
@@ -593,6 +774,7 @@
   loadFactorStatus();
   loadOnboard();
   loadMaintenance();
+  loadFcSandbox();
 })();
 </script>
 {% endblock %}

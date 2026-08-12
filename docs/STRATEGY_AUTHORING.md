@@ -82,6 +82,7 @@ evaluation:
 | 因子向导（GUI 首屏） | 下拉选因子 + 条件行 | 仅"比较 + 布尔"（AND/OR 组内统一）；不支持算术组合右值；产物填入编辑器由用户确认（安全闸，不自动执行） |
 | 高层 Builder / entry YAML | strategy/rules/factor_requirements/experiment 四段 | 见 `docs/strategy_entry/README.md`；`crosses_above/below` 会**降级为当周期比较**并给出 warning，不是真正的穿越事件 |
 | NL 自然语言 | 中文描述 | LLM 编译为低层 YAML，经 validate + 因子存在性检查；缺因子自动入 handoff 队列；同样只填编辑器待确认 |
+| GUI 沙箱/晋升（P1） | 编辑器 YAML 或 NL 编译产物 | "存入沙箱"做 validate + 查重 + 因子存在性检查；沙箱（`outputs/sandbox/strategies/`）不进 catalog、不参与日更；冒烟（单股 × 近 6 个月）后由用户确认晋升入 `strategies/catalog/<category>/` 并触发一次全量后台回测 |
 
 ## 4. 策略验收 checklist（提交前逐项过）
 
@@ -93,7 +94,8 @@ evaluation:
 - [ ] 需要日更时：把策略 YAML 放入 `strategies/catalog/<category>/`（遵循现有命名
       `<类别前缀><序号><变体>_<名称>.yaml` 与头部注释块），管理台"策略状态"可见；
       refresh 注册表生效期间需注册（当前注册表为空 = 全量，机制见
-      `docs/agent/09_CODING_HANDOFF.md` P3B 段）。
+      `docs/agent/09_CODING_HANDOFF.md` P3B 段）。GUI 通道可走"存入沙箱 →
+      冒烟测试 → 确认晋升"闭环（P1，见 §3 通道表），无需手动拷文件。
 - [ ] 结果页保留"引擎输出，非投资建议"认知（R-QRE-008）。
 
 ## 5. 明确不支持的语义（自然语言 → 标准策略的约束）

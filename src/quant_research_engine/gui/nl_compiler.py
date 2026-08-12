@@ -170,11 +170,13 @@ def call_llm(
     *,
     http_post: Callable[..., Any] | None = None,
     timeout: int = LLM_TIMEOUT_SECONDS,
+    system_prompt: str | None = None,
 ) -> str:
     """Call an OpenAI-compatible chat completions endpoint; return content text.
 
     ``http_post`` is injectable for tests: signature
     ``http_post(url, headers, payload, timeout) -> dict`` (parsed JSON body).
+    ``system_prompt`` 缺省用策略编译提示词；其他通道（如因子生成）可注入自己的。
     """
     url = f"{config['base_url']}/chat/completions"
     headers = {
@@ -184,7 +186,7 @@ def call_llm(
     payload = {
         "model": config["model"],
         "messages": [
-            {"role": "system", "content": build_system_prompt()},
+            {"role": "system", "content": system_prompt or build_system_prompt()},
             {"role": "user", "content": description},
         ],
         "temperature": 0.2,

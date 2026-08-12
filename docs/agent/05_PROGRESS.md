@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-08-12 QRE-GUI-FACTOR-CREATE-P2-001 DONE：`uv run pytest tests/ -x -q` → **1385 passed**（1343 + 42 新增，全绿）。GUI 新因子创建闭环：factor_nl_compiler（两段式协议 + AST 白名单安全检查，call_llm 加 system_prompt 参数）、factor_create（查重/沙箱/run_smoke/promote_factor：pgrep 闸 → 复制 factors/<name>_factor.py → config 备份追加 → start_script_job validate→backfill --execute 限新类别）、indicators sandbox/smoke_factor.py、6 个 /api/factor-create/* 路由、admin.html 因子 tab「新建因子」子区。真实 E2E：DeepSeek 生成 vidya → 真实 DB 冒烟（600519.SH 400 行，vidya_20）→ 真实晋升 job 20260812T030850074330（后台 validate+backfill overlap）。查重新增"同名指标拒绝"规则（roc 案例实证）。indicators 侧 FACTOR_AUTHORING §8 + PROJECT_GUIDE 入口表已同步。未提交，等用户审批。
+
 2026-07-28 QRE-REFRESH-INCREMENTAL-001 DONE：`uv run pytest -q` → **1319 passed**（1312 + 7 新增，全绿）。refresh 默认改增量合并（复用 7 月增量引擎 checkpoint/持仓延续/台账去重/聚合重算；>45 自然日或 config 变更自动全窗 bootstrap；--full-window 保留兜底）。真实等价性 PASS：tf01a 354 vs 354 trades（mean_return diff 3.5e-18，equity diff 4.7e-10）、mr01a 332 vs 332（diff 0.0），临时目录未动真实 outputs（state.json 已备份）。设计 docs/design/refresh_incremental.md。未提交，等用户审批。
 
 2026-07-28 QRE-ADMIN-STRAT-TAB-001 DONE：`uv run pytest -q` → **1312 passed**（1299 + 13 新增，全绿）。策略状态 tab 四项修改：策略名链接详情页（/admin/strategy/<sid>：简介+指标卡+产物下载双白名单）、四列精简（latest_strategy_result 取 mtime 最新 strategy_performance.json + benchmark 兜底 + 300s 缓存）、registry v2（include/stopped，兼容旧格式，绿/灰开关只改文件提示下次生效，refresh_batch 过滤 stopped）、删除连动产物（backtests/*/<sid> 白名单删除+清单）。真实冒烟：mr01a 详情页 200、下载 200、线上旧格式 registry 读取正常。详见 docs/agent/09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
