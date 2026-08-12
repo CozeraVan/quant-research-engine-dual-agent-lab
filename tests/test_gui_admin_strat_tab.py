@@ -99,6 +99,142 @@ def test_list_result_artifacts(tmp_path):
     assert "backtest/trades.csv" in rels
 
 
+# --- 增量产物合并（outputs/refresh/incremental/<sid>/） ---
+
+
+def _write_incremental(
+    root: Path, sid: str, metrics: dict | None = None, watermark: str | None = "2026-08-11"
+) -> Path:
+    inc_dir = root / sid
+    (inc_dir / "backtest").mkdir(parents=True)
+    payload = {
+        "symbol_count": 3788,
+        "traded_symbol_count": 2261,
+        "mean_total_return": 0.0364,
+        "total_trades": 9682,
+        "positive_return_symbol_rate": 0.36,
+        **(metrics or {}),
+    }
+    (inc_dir / "backtest" / "summary_metrics.json").write_text(json.dumps(payload), encoding="utf-8")
+    state: dict = {"strategy_id": sid, "symbols": {"AAA": {}}}
+    if watermark is not None:
+        state["data_watermark"] = watermark
+        state["last_processed_date"] = watermark
+    (inc_dir / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    return inc_dir / "backtest" / "summary_metrics.json"
+
+
+def test_latest_strategy_result_incremental_only(tmp_path):
+    _write_incremental(tmp_path / "inc", "s1")
+    result = latest_strategy_result("s1", tmp_path / "bt", tmp_path / "inc")
+    assert result["source"] == "incremental"
+    assert result["artifact_dir"] == str(tmp_path / "inc" / "s1")
+    m = result["metrics"]
+    assert m["date_end"] == "2026-08-11"  # 来自 state.json watermark
+    assert m["symbol_count"] == 3788
+    assert m["total_trades"] == 9682
+    # 增量没有的全量指标不得伪造
+    assert "excess_return_vs_buy_hold" not in m
+    assert "max_drawdown" not in m
+    assert result["full_metrics_as_of"] is None
+
+
+def test_latest_strategy_result_merged_incremental_newer(tmp_path):
+    import os
+    import time
+
+    batch = _write_result(tmp_path / "bt", "b1", "s1", {})
+    inc = _write_incremental(tmp_path / "inc", "s1")
+    # 增量更新
+    past = time.time() - 1000
+    os.utime(batch, (past, past))
+    result = latest_strategy_result("s1", tmp_path / "bt", tmp_path / "inc")
+    assert result["source"] == "merged"
+    assert result["artifact_dir"] == str(tmp_path / "inc" / "s1")
+    m = result["metrics"]
+    # 新鲜字段取增量
+    assert m["date_end"] == "2026-08-11"
+    assert m["symbol_count"] == 3788
+    assert m["traded_symbol_count"] == 2261
+    assert m["mean_total_return"] == pytest.approx(0.0364)
+    # 全量指标仍取批次 + as_of 标注
+    assert m["excess_return_vs_buy_hold"] == pytest.approx(-0.0234)
+    assert m["max_drawdown"] == pytest.approx(-0.35)
+    assert m["date_start"] == "2024-07-01"
+    assert m["strategy_name"] == "s1"
+    assert result["full_metrics_as_of"] == "2026-07-27"
+    assert set(result["source_mtimes"]) == {"batch", "incremental"}
+
+
+def test_latest_strategy_result_batch_newer_stays_batch(tmp_path):
+    import os
+    import time
+
+    batch = _write_result(tmp_path / "bt", "b1", "s1", {})
+    inc = _write_incremental(tmp_path / "inc", "s1")
+    past = time.time() - 1000
+    os.utime(inc, (past, past))
+    result = latest_strategy_result("s1", tmp_path / "bt", tmp_path / "inc")
+    assert result["source"] == "batch"
+    assert result["source_file"] == str(batch)
+    assert result["artifact_dir"] == str(batch.parent.parent)
+    m = result["metrics"]
+    assert m["date_end"] == "2026-07-27"
+    assert m["symbol_count"] == 5547
+    assert result["full_metrics_as_of"] == "2026-07-27"
+
+
+def test_latest_strategy_result_incremental_missing_watermark(tmp_path):
+    _write_incremental(tmp_path / "inc", "s1", watermark=None)
+    result = latest_strategy_result("s1", tmp_path / "bt", tmp_path / "inc")
+    assert result["source"] == "incremental"
+    # 无 watermark 时不得伪造 date_end
+    assert "date_end" not in result["metrics"]
+    assert result["metrics"]["symbol_count"] == 3788
+
+
+def test_latest_strategy_result_cache_key_isolation(tmp_path):
+    _write_result(tmp_path / "bt", "b1", "s1", {})
+    _write_incremental(tmp_path / "inc", "s1")
+    r1 = latest_strategy_result("s1", tmp_path / "bt", tmp_path / "inc")
+    r2 = latest_strategy_result("s1", tmp_path / "bt", tmp_path / "inc2")
+    # 不同增量根不串键：inc2 不存在 → 纯 batch
+    assert r1["source"] == "merged" or r1["source"] == "batch"
+    assert r2["source"] == "batch"
+    assert r2["artifact_dir"] != r1["artifact_dir"] or r1["source"] == "batch"
+    # 缓存命中返回同一对象键
+    assert latest_strategy_result("s1", tmp_path / "bt", tmp_path / "inc")["source"] == r1["source"]
+
+
+def test_overview_incremental_freshness(tmp_path):
+    import os
+    import time
+
+    catalog = tmp_path / "catalog"
+    catalog.mkdir()
+    (catalog / "s1.yaml").write_text("x: 1", encoding="utf-8")
+    batch = _write_result(tmp_path / "bt", "b1", "s1", {})
+    _write_incremental(tmp_path / "inc", "s1")
+    past = time.time() - 1000
+    os.utime(batch, (past, past))
+
+    overview = refresh_overview(
+        state_path=tmp_path / "state.json",
+        registry_path=tmp_path / "registry.json",
+        delta_root=tmp_path / "delta",
+        catalog_dir=catalog,
+        backtests_dir=tmp_path / "bt",
+        incremental_root=tmp_path / "inc",
+    )
+    s1 = overview["strategies"][0]
+    assert s1["date_end"] == "2026-08-11"
+    assert s1["symbol_count"] == 3788
+    assert s1["excess_return"] == pytest.approx(-0.0234)
+    assert s1["max_drawdown"] == pytest.approx(-0.35)
+    assert s1["source"] == "merged"
+    assert s1["full_metrics_as_of"] == "2026-07-27"
+
+
 # --- overview 四列数据 ---
 
 

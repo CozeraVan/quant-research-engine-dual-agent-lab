@@ -2,6 +2,65 @@
 
 ## Task ID
 
+QRE-ADMIN-STRAT-INCREMENTAL-FIX-001 (策略状态 tab 增量结果合并：date_end 停在全量批次的显示 bug)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+问题：策略状态 tab 数据只来自 `outputs/backtests/**/<sid>/backtest/strategy_performance.json`，
+而每日增量 refresh（qre-refresh.timer 20:30）只写 `outputs/refresh/incremental/<sid>/`，
+date_end 停在最近全量批次（2026-07-27），日更实际已到 2026-08-11。
+
+1. **`gui/refresh_registry.py`**：
+   - 新增 `DEFAULT_INCREMENTAL_ROOT = outputs/refresh/incremental`；
+     `_load_incremental_result()` 读 `<sid>/backtest/summary_metrics.json`
+     （5 键）+ 同目录 `state.json` 仅取 `data_watermark`/`last_processed_date`
+     （缺字段容错，不伪造 date_end；symbols 大字段不用于展示）。
+   - `latest_strategy_result(sid, backtests_dir, incremental_root=None)` 合并两源：
+     增量 mtime 更新 → source="merged"，新鲜字段（date_end/symbol_count/
+     traded_symbol_count/mean_total_return/total_trades/positive_return_symbol_rate）
+     取增量；全量指标（excess_return_vs_buy_hold/max_drawdown/date_start/
+     strategy_name 等）仍取最新批次，附 `full_metrics_as_of`（批次 date_end）与
+     `full_metrics_source_file`；artifact_dir 指向增量目录（详情页下载链接随之切换）。
+     批次更新 → "batch"；仅增量 → "incremental"。返回新增 `source`/`source_mtimes`，
+     原键（metrics/source_file/artifact_dir/mtime）不变。缓存键纳入增量根
+     （`strategy_result:<bt>:<inc>:<sid>`），`clear_strategy_result_cache` 同步。
+   - `refresh_overview(..., incremental_root=None)`：策略行 date_end 用合并新鲜值，
+     新增 `source` 与 `full_metrics_as_of`（仅当 < date_end 时下发，供前端标注）。
+2. **`gui/app.py`**：产物下载路由白名单从仅 backtests 扩到 backtests +
+   refresh/incremental 双根（root.parents 任一命中即合法）。
+3. **`templates/admin.html`**：超额/回撤单元格在 `full_metrics_as_of < date_end` 时
+   加小字"（全量截至 YYYY-MM-DD）"；date_start 缺失时区间列容错显示 "— ~ date_end"。
+4. **`templates/strategy_status_detail.html`**：来源行标注 batch/incremental/merged；
+   回测区间行附全量 as_of 小字。equity_curve.csv（133MB 级）保留下载链接，无内联预览。
+5. **测试 `tests/test_gui_admin_strat_tab.py`（+7 条）**：仅增量、merged（增量更新）、
+   批次更新保持 batch、缺 watermark 容错、缓存键隔离、overview 行合并值。
+
+## Validation Output
+
+```bash
+uv run pytest tests/test_gui_admin_strat_tab.py tests/test_gui_admin_p3b.py -x -q → 39 passed
+uv run pytest tests/ -x -q → 1391 passed（1385 + 6 净增，全绿）
+```
+
+真实数据验证（2026-08-12）：`latest_strategy_result("mr03a_bollinger_lower_reversion")`
+→ source="merged"，date_end=2026-08-11（增量 state.json watermark），
+symbol_count 3788 / traded 2261（增量），max_drawdown −0.4636 / benchmark_excess
+−0.3454 / date_start 2010-01-04（全量批次），full_metrics_as_of=2026-07-27，
+artifact_dir=outputs/refresh/incremental/mr03a_bollinger_lower_reversion。
+`refresh_overview()` 同行字段一致（source=merged，full_metrics_as_of=2026-07-27）。
+
+# Coding Handoff (archive: QRE-GUI-FACTOR-CREATE-P2-001, GUI 新因子创建闭环：NL/手写 → 生成草稿 → 查重 → 沙箱冒烟 → 确认晋升 → indicators 入库)
+
+## Task ID
+
 QRE-GUI-FACTOR-CREATE-P2-001 (GUI 新因子创建闭环：NL/手写 → 生成草稿 → 查重 → 沙箱冒烟 → 确认晋升 → indicators 入库)
 
 ## Written By

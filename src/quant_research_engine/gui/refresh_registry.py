@@ -24,6 +24,7 @@ DEFAULT_REGISTRY_PATH = Path("outputs/refresh/registry.json")
 DEFAULT_STATE_PATH = Path("outputs/refresh/state.json")
 DEFAULT_DELTA_ROOT = Path("outputs/refresh/delta")
 DEFAULT_BACKTESTS_DIR = Path("outputs/backtests")
+DEFAULT_INCREMENTAL_ROOT = Path("outputs/refresh/incremental")
 
 
 # ---------------------------------------------------------------------------
@@ -129,42 +130,138 @@ RESULT_METRIC_KEYS = (
     "strategy_name",
 )
 
+# 增量产物（outputs/refresh/incremental/<sid>/）中代表"新鲜度"的字段；
+# 全量指标（excess_return_vs_buy_hold/max_drawdown/date_start 等）增量没有，仍取自全量批次。
+_INCREMENTAL_METRIC_KEYS = (
+    "symbol_count",
+    "traded_symbol_count",
+    "mean_total_return",
+    "total_trades",
+    "positive_return_symbol_rate",
+)
+
+
+def _load_batch_result(
+    strategy_id: str, backtests_dir: Path
+) -> tuple[dict[str, Any], Path, float] | None:
+    """最新 strategy_performance.json → (metrics, path, mtime)。无结果/坏文件返回 None。"""
+    candidates = sorted(backtests_dir.glob(f"**/{strategy_id}/backtest/strategy_performance.json"))
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda p: p.stat().st_mtime)
+    try:
+        payload = json.loads(latest.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    metrics = {k: payload.get(k) for k in RESULT_METRIC_KEYS if payload.get(k) is not None}
+    # benchmark 超额兜底（存在 benchmark_excess* 键时取其一）
+    if "excess_return_vs_buy_hold" not in metrics:
+        for key, value in payload.items():
+            if key.startswith("benchmark_") and "excess" in key and isinstance(value, (int, float)):
+                metrics["benchmark_excess"] = value
+                break
+    return metrics, latest, latest.stat().st_mtime
+
+
+def _load_incremental_result(
+    strategy_id: str, incremental_root: Path
+) -> tuple[dict[str, Any], Path, float] | None:
+    """增量 summary_metrics.json + state.json watermark → (metrics, path, mtime)。
+
+    date_end 取自 state.json 的 data_watermark/last_processed_date（缺字段时容错为 None，
+    不伪造）。state.json 约 1MB 可整读，但只提取 watermark 字段。
+    """
+    metrics_path = incremental_root / strategy_id / "backtest" / "summary_metrics.json"
+    if not metrics_path.is_file():
+        return None
+    try:
+        payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    metrics = {k: payload.get(k) for k in _INCREMENTAL_METRIC_KEYS if payload.get(k) is not None}
+    state_path = incremental_root / strategy_id / "state.json"
+    watermark = None
+    if state_path.is_file():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            watermark = state.get("data_watermark") or state.get("last_processed_date")
+        except (json.JSONDecodeError, OSError):
+            watermark = None
+    if watermark:
+        metrics["date_end"] = watermark
+    return metrics, metrics_path, metrics_path.stat().st_mtime
+
 
 def latest_strategy_result(
     strategy_id: str,
     backtests_dir: Path | None = None,
+    incremental_root: Path | None = None,
 ) -> dict[str, Any] | None:
-    """找该策略最新的 strategy_performance.json（mtime 最大），返回指标+产物目录。
+    """该策略最新结果：全量批次 strategy_performance.json + 每日增量 summary_metrics.json 合并。
 
-    搜索 outputs/backtests/**/<strategy_id>/backtest/strategy_performance.json
-    （覆盖普通批次与 refresh/<batch>/<sid> 布局）。无结果返回 None。
+    - 新鲜度字段（date_end/symbol_count/traded_symbol_count/mean_total_return/
+      total_trades/positive_return_symbol_rate）：增量 mtime 更新时取增量，
+      date_end ← 增量 state.json 的 data_watermark/last_processed_date；
+    - 全量指标（excess_return_vs_buy_hold/max_drawdown/date_start/strategy_name 等）：
+      始终取最新全量批次，并附 full_metrics_as_of（该批次 date_end）供前端标注
+      "截至 <date> 全量"；
+    - source ∈ {"batch", "incremental", "merged"}；artifact_dir 指向最新来源所在目录
+      （增量更新时为 outputs/refresh/incremental/<sid>/，供详情页下载链接）。
+    无结果返回 None。
     """
     backtests_dir = backtests_dir or DEFAULT_BACKTESTS_DIR
+    incremental_root = incremental_root or DEFAULT_INCREMENTAL_ROOT
 
     def _produce() -> dict[str, Any] | None:
-        candidates = sorted(backtests_dir.glob(f"**/{strategy_id}/backtest/strategy_performance.json"))
-        if not candidates:
+        batch = _load_batch_result(strategy_id, backtests_dir)
+        inc = _load_incremental_result(strategy_id, incremental_root)
+        if batch is None and inc is None:
             return None
-        latest = max(candidates, key=lambda p: p.stat().st_mtime)
-        try:
-            payload = json.loads(latest.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return None
-        metrics = {k: payload.get(k) for k in RESULT_METRIC_KEYS if payload.get(k) is not None}
-        # benchmark 超额兜底（存在 benchmark_excess* 键时取其一）
-        if "excess_return_vs_buy_hold" not in metrics:
-            for key, value in payload.items():
-                if key.startswith("benchmark_") and "excess" in key and isinstance(value, (int, float)):
-                    metrics["benchmark_excess"] = value
-                    break
+
+        source_mtimes: dict[str, float] = {}
+        if batch is not None:
+            source_mtimes["batch"] = batch[2]
+        if inc is not None:
+            source_mtimes["incremental"] = inc[2]
+
+        if batch is None:
+            return {
+                "metrics": inc[0],
+                "source": "incremental",
+                "source_file": str(inc[1]),
+                "artifact_dir": str(inc[1].parent.parent),  # outputs/refresh/incremental/<sid>/
+                "mtime": inc[2],
+                "source_mtimes": source_mtimes,
+                "full_metrics_as_of": None,
+            }
+
+        metrics, batch_path, batch_mtime = batch
+        merged = dict(metrics)
+        use_incremental = inc is not None and inc[2] > batch_mtime
+        full_metrics_as_of = metrics.get("date_end")
+        if use_incremental:
+            merged.update(inc[0])
+            return {
+                "metrics": merged,
+                "source": "merged",
+                "source_file": str(inc[1]),
+                "artifact_dir": str(inc[1].parent.parent),
+                "mtime": inc[2],
+                "source_mtimes": source_mtimes,
+                "full_metrics_as_of": full_metrics_as_of,
+                "full_metrics_source_file": str(batch_path),
+            }
         return {
-            "metrics": metrics,
-            "source_file": str(latest),
-            "artifact_dir": str(latest.parent.parent),  # <...>/<sid>/
-            "mtime": latest.stat().st_mtime,
+            "metrics": merged,
+            "source": "batch",
+            "source_file": str(batch_path),
+            "artifact_dir": str(batch_path.parent.parent),  # <...>/<sid>/
+            "mtime": batch_mtime,
+            "source_mtimes": source_mtimes,
+            "full_metrics_as_of": full_metrics_as_of,
         }
 
-    return _cached(f"strategy_result:{backtests_dir}:{strategy_id}", _produce)
+    return _cached(f"strategy_result:{backtests_dir}:{incremental_root}:{strategy_id}", _produce)
 
 
 def list_result_artifacts(artifact_dir: str | Path) -> list[dict[str, str]]:
@@ -179,11 +276,16 @@ def list_result_artifacts(artifact_dir: str | Path) -> list[dict[str, str]]:
     return files
 
 
-def clear_strategy_result_cache(strategy_id: str, backtests_dir: Path | None = None) -> None:
+def clear_strategy_result_cache(
+    strategy_id: str,
+    backtests_dir: Path | None = None,
+    incremental_root: Path | None = None,
+) -> None:
     from quant_research_engine.gui import admin as _admin
 
     backtests_dir = backtests_dir or DEFAULT_BACKTESTS_DIR
-    _admin._cache.pop(f"strategy_result:{backtests_dir}:{strategy_id}", None)
+    incremental_root = incremental_root or DEFAULT_INCREMENTAL_ROOT
+    _admin._cache.pop(f"strategy_result:{backtests_dir}:{incremental_root}:{strategy_id}", None)
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +315,7 @@ def refresh_overview(
     delta_root: Path | None = None,
     catalog_dir: Path | None = None,
     backtests_dir: Path | None = None,
+    incremental_root: Path | None = None,
 ) -> dict[str, Any]:
     """策略状态总览：refresh state + 注册表 v2 + 最近 delta + 每策略最新结果四列。"""
     from quant_research_engine.orchestration.refresh import load_state
@@ -223,13 +326,16 @@ def refresh_overview(
     catalog = list_catalog_strategies(catalog_dir)
     delta = _latest_delta(delta_root or DEFAULT_DELTA_ROOT)
     backtests_dir = backtests_dir or DEFAULT_BACKTESTS_DIR
+    incremental_root = incremental_root or DEFAULT_INCREMENTAL_ROOT
 
     delta_rows = {row["strategy_id"]: row for row in (delta or {}).get("rows", [])}
     strategies: list[dict[str, Any]] = []
     for sid in catalog:
         row = delta_rows.get(sid, {})
-        result = latest_strategy_result(sid, backtests_dir)
+        result = latest_strategy_result(sid, backtests_dir, incremental_root)
         metrics = (result or {}).get("metrics", {})
+        full_as_of = (result or {}).get("full_metrics_as_of")
+        date_end = metrics.get("date_end")
         strategies.append(
             {
                 "strategy_id": sid,
@@ -239,11 +345,14 @@ def refresh_overview(
                 "registered": sid in include,
                 "status": row.get("status"),
                 "date_start": metrics.get("date_start"),
-                "date_end": metrics.get("date_end"),
+                "date_end": date_end,
                 "traded_symbol_count": metrics.get("traded_symbol_count"),
                 "symbol_count": metrics.get("symbol_count"),
                 "excess_return": metrics.get("excess_return_vs_buy_hold", metrics.get("benchmark_excess")),
                 "max_drawdown": metrics.get("max_drawdown"),
+                "source": (result or {}).get("source"),
+                # 超额/回撤等全量指标落后于 date_end 时，前端据此标注"截至 <date> 全量"
+                "full_metrics_as_of": full_as_of if full_as_of and date_end and full_as_of < date_end else None,
             }
         )
 

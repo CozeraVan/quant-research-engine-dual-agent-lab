@@ -496,6 +496,7 @@ def create_app() -> Flask:
 
         from quant_research_engine.gui.refresh_registry import (
             DEFAULT_BACKTESTS_DIR,
+            DEFAULT_INCREMENTAL_ROOT,
             latest_strategy_result,
         )
 
@@ -503,9 +504,9 @@ def create_app() -> Flask:
         if result is None:
             return jsonify({"error": "无结果产物"}), 404
         root = Path(result["artifact_dir"]).resolve()
-        backtests_root = DEFAULT_BACKTESTS_DIR.resolve()
-        # 白名单：产物根必须位于 backtests 下，目标文件必须在产物根内
-        if backtests_root not in root.parents:
+        # 白名单：产物根必须位于 backtests 或 refresh/incremental 下，目标文件必须在产物根内
+        allowed_roots = (DEFAULT_BACKTESTS_DIR.resolve(), DEFAULT_INCREMENTAL_ROOT.resolve())
+        if not any(ar in root.parents for ar in allowed_roots):
             return jsonify({"error": "产物路径越界"}), 400
         target = (root / rel_path).resolve()
         if root not in target.parents or not target.is_file():

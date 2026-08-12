@@ -27,7 +27,9 @@
     <table class="summary-table">
     <thead><tr><th>指标</th><th>值</th></tr></thead>
     <tbody>
-    <tr><td>回测区间</td><td>{{ m.date_start or '—' }} 至 {{ m.date_end or '—' }}</td></tr>
+    <tr><td>回测区间</td><td>{{ m.date_start or '—' }} 至 {{ m.date_end or '—' }}
+      {%- if result.full_metrics_as_of and m.date_end and result.full_metrics_as_of < m.date_end %}
+      <small class="opt">（超额/回撤等全量指标截至 {{ result.full_metrics_as_of }}）</small>{% endif %}</td></tr>
     <tr><td>回测股票数量</td><td>{{ m.traded_symbol_count or '—' }} / {{ m.symbol_count or '—' }}（触发/总数）</td></tr>
     <tr><td>总收益率</td><td>{{ m.strategy_total_return | fmtval(true) }}</td></tr>
     <tr><td>买入持有收益率</td><td>{{ m.buy_hold_return | fmtval(true) }}</td></tr>
@@ -38,7 +40,7 @@
     <tr><td>总交易数</td><td>{{ m.total_trade_count or '—' }}</td></tr>
     </tbody>
     </table>
-    <p class="opt">来源：<code>{{ result.source_file }}</code>；引擎输出，非投资建议。</p>
+    <p class="opt">来源：<code>{{ result.source_file }}</code>（{{ {'batch': '全量批次', 'incremental': '每日增量', 'merged': '增量+全量合并'}.get(result.source, result.source) }}）；引擎输出，非投资建议。</p>
   </div>
 </div>
 

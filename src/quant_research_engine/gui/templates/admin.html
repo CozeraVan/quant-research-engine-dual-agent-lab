@@ -334,16 +334,20 @@
             : '<button class="btn-sm toggle-off" data-toggle="' + esc(s.strategy_id) + '" data-stopped="1" title="点击开启持续更新">○ 停止</button>';
           var action = toggle
             + ' <button class="btn-sm btn-remove-cond" data-del="' + esc(s.strategy_id) + '">删除</button>';
-          var range = (s.date_start && s.date_end) ? esc(s.date_start) + ' ~ ' + esc(s.date_end) : '—';
+          var range = (s.date_start && s.date_end) ? esc(s.date_start) + ' ~ ' + esc(s.date_end)
+            : (s.date_end ? '— ~ ' + esc(s.date_end) : '—');
           var symbols = (s.traded_symbol_count != null && s.symbol_count != null)
             ? esc(s.traded_symbol_count) + ' / ' + esc(s.symbol_count) : '—';
+          // 全量指标落后于 date_end（增量更新）时标注"截至 <date> 全量"
+          var asOf = (s.full_metrics_as_of && s.date_end && s.full_metrics_as_of < s.date_end)
+            ? '<br><small class="opt">（全量截至 ' + esc(s.full_metrics_as_of) + '）</small>' : '';
           return '<tr class="ob-row" data-sid="' + esc(s.strategy_id) + '">'
             + '<td><a href="/admin/strategy/' + encodeURIComponent(s.strategy_id) + '" target="_blank">'
             + esc(s.strategy_id) + '</a></td>'
             + '<td>' + range + '</td>'
             + '<td>' + symbols + '</td>'
-            + '<td>' + fmtPct(s.excess_return) + '</td>'
-            + '<td>' + fmtPct(s.max_drawdown) + '</td>'
+            + '<td>' + fmtPct(s.excess_return) + asOf + '</td>'
+            + '<td>' + fmtPct(s.max_drawdown) + asOf + '</td>'
             + '<td>' + action + '</td></tr>';
         }).join('');
         document.getElementById('ob-registry-table').innerHTML =

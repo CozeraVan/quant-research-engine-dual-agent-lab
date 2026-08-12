@@ -2,6 +2,37 @@
 
 ## Task ID
 
+QRE-ADMIN-STRAT-INCREMENTAL-FIX-001 (策略状态 tab 增量结果合并)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 合并语义符合确诊结论：增量只在 mtime 更新时接管新鲜字段；全量指标永不取增量
+  （增量 summary_metrics 本就无这些键，merged 时显式附 full_metrics_as_of 防伪）。
+- 自审修复点：①缓存键初版不含增量根会串键，已纳入（clear_strategy_result_cache
+  同步）；②app.py 下载路由白名单原仅 backtests，增量 artifact_dir 会被 400，
+  已扩双根；③增量源无 date_start，admin.html 区间列与 detail 页均做容错显示。
+- 向后兼容：原返回键（metrics/source_file/artifact_dir/mtime）语义不变，
+  仅批次存在时行为与旧版一致（source="batch"）；旧 13 条 strat_tab 测试未改仍绿。
+- 测试 7 条新用例（仅增量/merged/批次更新/缺 watermark/缓存隔离/overview 行），
+  全量 1391 绿。state.json 整读约 1MB 仅取 watermark，equity_curve.csv 不读。
+
+## Behavior Verified
+
+见 09_CODING_HANDOFF.md 顶部 Validation Output（真实 mr03a：date_end=2026-08-11
+增量 + full_metrics_as_of=2026-07-27，source=merged）。
+
+# Review Report (archive)
+
+## Task ID
+
 QRE-GUI-FACTOR-CREATE-P2-001 (GUI 新因子创建闭环 P2)
 
 ## Reviewer

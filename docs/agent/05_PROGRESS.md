@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-08-12 QRE-ADMIN-STRAT-INCREMENTAL-FIX-001 DONE：`uv run pytest tests/ -x -q` → **1391 passed**（1385 + 6 净增，全绿）。策略状态 tab 增量显示 bug 修复：latest_strategy_result 合并 outputs/refresh/incremental/<sid>/（summary_metrics.json + state.json watermark），增量更新时新鲜字段取增量（date_end 2026-08-11）、全量指标带 full_metrics_as_of（2026-07-27）前端小字标注；artifact_dir 指向增量目录，app.py 下载白名单加 incremental 根；缓存键纳入增量根。真实验证 mr03a source=merged 符合预期。未提交，等用户审批。
+
 2026-08-12 QRE-GUI-FACTOR-CREATE-P2-001 DONE：`uv run pytest tests/ -x -q` → **1385 passed**（1343 + 42 新增，全绿）。GUI 新因子创建闭环：factor_nl_compiler（两段式协议 + AST 白名单安全检查，call_llm 加 system_prompt 参数）、factor_create（查重/沙箱/run_smoke/promote_factor：pgrep 闸 → 复制 factors/<name>_factor.py → config 备份追加 → start_script_job validate→backfill --execute 限新类别）、indicators sandbox/smoke_factor.py、6 个 /api/factor-create/* 路由、admin.html 因子 tab「新建因子」子区。真实 E2E：DeepSeek 生成 vidya → 真实 DB 冒烟（600519.SH 400 行，vidya_20）→ 真实晋升 job 20260812T030850074330（后台 validate+backfill overlap）。查重新增"同名指标拒绝"规则（roc 案例实证）。indicators 侧 FACTOR_AUTHORING §8 + PROJECT_GUIDE 入口表已同步。未提交，等用户审批。
 
 2026-07-28 QRE-REFRESH-INCREMENTAL-001 DONE：`uv run pytest -q` → **1319 passed**（1312 + 7 新增，全绿）。refresh 默认改增量合并（复用 7 月增量引擎 checkpoint/持仓延续/台账去重/聚合重算；>45 自然日或 config 变更自动全窗 bootstrap；--full-window 保留兜底）。真实等价性 PASS：tf01a 354 vs 354 trades（mean_return diff 3.5e-18，equity diff 4.7e-10）、mr01a 332 vs 332（diff 0.0），临时目录未动真实 outputs（state.json 已备份）。设计 docs/design/refresh_incremental.md。未提交，等用户审批。
