@@ -2,6 +2,10 @@
 
 ## Latest Verified State
 
+2026-08-12 QRE-GUI-UIUX-001 DONE：`uv run pytest tests/ -x -q` → **1391 passed**（全绿，无断言改动）。GUI 全站 UI/UX 优化（Data-Dense Dashboard 浅色）：style.css 全量重写为 :root 设计变量体系（--primary #1E40AF / --ok/--warn/--err 语义色 / 6px 圆角 / ui-monospace 等宽列）；按钮分级 .btn-primary（运行回测/生成代码等唯一实底）/.btn-ghost（刷新/验证/模板等）/.btn-danger-outline（删除/晋升入库描边红）；base.html 合并紧凑顶栏（brand QRE 控制台 + 右导航）；表格斑马纹 + sticky 表头 + .num 右对齐；tab 下划线式；section-toggle 白底 + primary 竖条；admin 健康灯放大状态条 + 关键数字 .kpi 19px。所有 id/JS/API/文案未动。临时实例 curl / 与 /admin 200 含新 class，进程已杀。详见 09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
+2026-08-12 QRE-GUI-HOME-REFACTOR-001 DONE：`uv run pytest tests/ -x -q` → **1391 passed**（全绿）。GUI 首页三 tab → 两 tab：「新增策略」（NL / 可视化构建 / 手写 YAML 三入口同页汇入底部 YAML 预览栏 + 回测参数 + 高级参数折叠区 + 沙箱面板）+「新增因子」（路径 A 补周期 wz-admin-* + 路径 B 全新指标 fc-create，后者从 admin.html 迁入，admin 原地留跳转链接）。tab-builder 与其 JS 全删（/api/builder/* 后端保留），app.py 零改动；元素 ID 保留（wz-*/nl-*/param-*/fc-*/sandbox-*），JS 重组为 tabs/strategy/factor 三个 IIFE。node --check 两模板内联 JS 通过；临时 GUI curl 抽查结构 + API 200。STRATEGY_AUTHORING §3 与 indicators FACTOR_AUTHORING §8 已同步。未提交，等用户审批。
+
 2026-08-12 QRE-ADMIN-STRAT-INCREMENTAL-FIX-001 DONE：`uv run pytest tests/ -x -q` → **1391 passed**（1385 + 6 净增，全绿）。策略状态 tab 增量显示 bug 修复：latest_strategy_result 合并 outputs/refresh/incremental/<sid>/（summary_metrics.json + state.json watermark），增量更新时新鲜字段取增量（date_end 2026-08-11）、全量指标带 full_metrics_as_of（2026-07-27）前端小字标注；artifact_dir 指向增量目录，app.py 下载白名单加 incremental 根；缓存键纳入增量根。真实验证 mr03a source=merged 符合预期。未提交，等用户审批。
 
 2026-08-12 QRE-GUI-FACTOR-CREATE-P2-001 DONE：`uv run pytest tests/ -x -q` → **1385 passed**（1343 + 42 新增，全绿）。GUI 新因子创建闭环：factor_nl_compiler（两段式协议 + AST 白名单安全检查，call_llm 加 system_prompt 参数）、factor_create（查重/沙箱/run_smoke/promote_factor：pgrep 闸 → 复制 factors/<name>_factor.py → config 备份追加 → start_script_job validate→backfill --execute 限新类别）、indicators sandbox/smoke_factor.py、6 个 /api/factor-create/* 路由、admin.html 因子 tab「新建因子」子区。真实 E2E：DeepSeek 生成 vidya → 真实 DB 冒烟（600519.SH 400 行，vidya_20）→ 真实晋升 job 20260812T030850074330（后台 validate+backfill overlap）。查重新增"同名指标拒绝"规则（roc 案例实证）。indicators 侧 FACTOR_AUTHORING §8 + PROJECT_GUIDE 入口表已同步。未提交，等用户审批。

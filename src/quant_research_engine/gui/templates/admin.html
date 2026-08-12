@@ -12,7 +12,7 @@
 
 <!-- Tab 1: 总览 -->
 <div id="tab-overview" class="tab-content active">
-  <p><button id="btn-ov-refresh">刷新 Refresh</button> <span id="ov-status" class="opt"></span></p>
+  <p><button id="btn-ov-refresh" class="btn btn-ghost">刷新 Refresh</button> <span id="ov-status" class="opt"></span></p>
   <div id="ov-health"></div>
   <div class="admin-cards">
     <div class="admin-card" id="ov-daily"><h3>日线数据</h3><div class="card-body opt">加载中...</div></div>
@@ -23,7 +23,7 @@
 
 <!-- Tab 2: 日更中心（手动触发 + 只读状态/日志） -->
 <div id="tab-timers" class="tab-content">
-  <p><button id="btn-timer-refresh">刷新 Refresh</button>
+  <p><button id="btn-timer-refresh" class="btn btn-ghost">刷新 Refresh</button>
     <span class="opt">状态来自 systemctl show（只读）；手动触发只调各项目官方脚本，不经 sudo/systemd</span></p>
   <div id="timer-cards" class="admin-cards"></div>
   <h3>最近日志 <span class="opt">journalctl（只读）</span></h3>
@@ -35,7 +35,7 @@
   <div class="section">
     <button class="section-toggle" data-section="ob-refresh">持续更新（QRE refresh）状态 &#9660;</button>
     <div id="sec-ob-refresh" class="section-body">
-      <p><button id="btn-ob-refresh">刷新 Refresh</button>
+      <p><button id="btn-ob-refresh" class="btn btn-ghost">刷新 Refresh</button>
         <a href="/" class="opt" style="margin-left:1rem;">→ 新建策略（因子向导）</a></p>
       <div id="ob-state"></div>
       <div id="ob-delta"></div>
@@ -52,65 +52,24 @@
 
 <!-- Tab 3: 因子状态（三方对账：库 × 日更配置 × watermark，仅状态无数据行） -->
 <div id="tab-factors" class="tab-content">
-  <p><button id="btn-fs-refresh">刷新 Refresh</button>
+  <p><button id="btn-fs-refresh" class="btn btn-ghost">刷新 Refresh</button>
     <span class="opt">对账口径：库中列（information_schema）× 日更配置展开列（indicators_tushare 自身 factor 类推导）× watermark</span></p>
   <div id="fs-summary"></div>
   <div id="fs-job" class="result-box hidden"></div>
   <div id="fs-tables"></div>
   <div id="fs-unmanaged"></div>
 
-  <div class="section" style="margin-top:1.5rem;">
-    <button class="section-toggle" data-section="fc-create">新建因子（NL/手写 → 沙箱冒烟 → 晋升入库）&#9660;</button>
-    <div id="sec-fc-create" class="section-body">
-      <p class="opt">自然语言描述或直接在代码框手写；生成结果只回填不执行。晋升前必须通过「查重+安全检查」与「冒烟测试」。</p>
-      <p>
-        <textarea id="fc-desc" rows="2" style="width:100%;" placeholder="例：ROC 变动率指标，周期 25（pandas_ta 已有函数、单序列/HLC 输入的模板型指标）"></textarea>
-      </p>
-      <p><button id="fc-generate">生成代码</button> <span id="fc-gen-status" class="opt"></span></p>
-      <p><textarea id="fc-code" rows="14" style="width:100%;font-family:monospace;" placeholder="# 因子代码（可手写/粘贴，需继承 FactorBase）"></textarea></p>
-      <p>
-        指标名 <input type="text" id="fc-name" size="14" placeholder="roc">
-        类别 <select id="fc-category">
-          <option value="">选择…</option>
-          <option value="overlap">overlap</option>
-          <option value="momentum">momentum</option>
-          <option value="volatility">volatility</option>
-          <option value="trend">trend</option>
-          <option value="volume">volume</option>
-          <option value="statistics">statistics</option>
-          <option value="candle">candle</option>
-          <option value="performance">performance</option>
-        </select>
-        价格列 <select id="fc-column">
-          <option value="close">close</option>
-          <option value="typical_price">typical_price</option>
-          <option value="average_price">average_price</option>
-          <option value="median_price">median_price</option>
-        </select>
-        周期 <input type="text" id="fc-periods" size="14" placeholder="25 或 5,10,20">
-        <span class="opt">多参数指标请直接改代码后手写 config；无参填 null</span>
-      </p>
-      <p class="builder-actions">
-        <button id="fc-check">查重+安全检查</button>
-        <button id="fc-smoke">冒烟测试</button>
-        <button id="fc-promote">晋升入库</button>
-      </p>
-      <div id="fc-result" class="result-box hidden"></div>
-      <div id="fc-job" class="result-box hidden"></div>
-      <h4>因子沙箱 <button class="btn-sm" id="fc-sandbox-refresh">刷新</button></h4>
-      <div id="fc-sandbox-list" class="opt">（空）</div>
-    </div>
-  </div>
+  <p style="margin-top:1.5rem;"><a href="/">→ 新增因子请前往首页</a><span class="opt">（路径 A 已有指标补周期 / 路径 B 全新指标 NL/手写生成，均在首页「新增因子」tab）</span></p>
 </div>
 
 <!-- Tab 5: 维护区（outputs 产物清理，危险操作二次确认） -->
 <div id="tab-maint" class="tab-content">
-  <p><button id="btn-mt-refresh">刷新 Refresh</button>
+  <p><button id="btn-mt-refresh" class="btn btn-ghost">刷新 Refresh</button>
     <span class="opt">仅可删除 outputs/backtests 下的批次目录；refresh/incremental 等系统目录受保护。</span></p>
   <div id="mt-summary"></div>
   <div id="mt-table"></div>
   <div class="builder-actions">
-    <button id="mt-delete">删除所选批次</button>
+    <button id="mt-delete" class="btn btn-danger-outline">删除所选批次</button>
     <span id="mt-status" class="opt"></span>
   </div>
 </div>
@@ -170,15 +129,15 @@
 
         var daily = d.daily;
         document.querySelector('#ov-daily .card-body').innerHTML =
-          '<p>估算行数：' + esc(daily.estimated_rows == null ? '—' : Number(daily.estimated_rows).toLocaleString()) + '</p>'
-          + '<p>最新交易日：<strong>' + esc(daily.watermark) + '</strong></p>'
-          + '<p>估算股票数：' + esc(daily.estimated_symbol_count == null ? '—' : Number(daily.estimated_symbol_count).toLocaleString()) + '</p>'
+          '<p>估算行数：<span class="num">' + esc(daily.estimated_rows == null ? '—' : Number(daily.estimated_rows).toLocaleString()) + '</span></p>'
+          + '<p>最新交易日：<strong class="kpi">' + esc(daily.watermark) + '</strong></p>'
+          + '<p>估算股票数：<span class="num">' + esc(daily.estimated_symbol_count == null ? '—' : Number(daily.estimated_symbol_count).toLocaleString()) + '</span></p>'
           + '<p>最近交易日：</p><p class="opt">' + esc((daily.recent_trade_dates || []).join('，')) + '</p>';
 
         var f = d.factors;
         var rows = f.tables.map(function(t) {
           var lag = f.lagging_tables.indexOf(t.table) >= 0 ? ' <span class="err">滞后</span>' : '';
-          return '<tr><td>' + esc(t.table) + '</td><td>' + esc(t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + '</td><td>' + esc(t.watermark) + lag + '</td></tr>';
+          return '<tr><td>' + esc(t.table) + '</td><td class="num">' + esc(t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + '</td><td>' + esc(t.watermark) + lag + '</td></tr>';
         }).join('');
         var unmanaged = (f.unmanaged_tables || []).map(function(t) {
           return esc(t.table) + '（约 ' + (t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + ' 行）';
@@ -191,9 +150,9 @@
         var b = d.backtests;
         var sizeGb = b.size_bytes == null ? '—' : (b.size_bytes / 1073741824).toFixed(2) + ' GB';
         document.querySelector('#ov-backtests .card-body').innerHTML =
-          '<p>批次数：' + esc(b.batch_count) + '</p>'
+          '<p>批次数：<strong class="kpi">' + esc(b.batch_count) + '</strong></p>'
           + '<p>策略产物目录数：' + esc(b.strategy_dir_count) + '</p>'
-          + '<p>磁盘占用：' + sizeGb + '</p>'
+          + '<p>磁盘占用：<strong class="kpi">' + sizeGb + '</strong></p>'
           + '<p>最近批次：' + esc(b.latest_batch || '—') + '</p>';
       })
       .catch(function(err) {
@@ -346,8 +305,8 @@
             + esc(s.strategy_id) + '</a></td>'
             + '<td>' + range + '</td>'
             + '<td>' + symbols + '</td>'
-            + '<td>' + fmtPct(s.excess_return) + asOf + '</td>'
-            + '<td>' + fmtPct(s.max_drawdown) + asOf + '</td>'
+            + '<td class="num">' + fmtPct(s.excess_return) + asOf + '</td>'
+            + '<td class="num">' + fmtPct(s.max_drawdown) + asOf + '</td>'
             + '<td>' + action + '</td></tr>';
         }).join('');
         document.getElementById('ob-registry-table').innerHTML =
@@ -483,7 +442,7 @@
         var s = d.summary;
         var summaryHtml = '<p>日线 watermark：' + esc(d.daily_watermark)
           + '；<span class="ok">在库且在日更 ' + s.green + '</span>'
-          + ' / <span style="color:#a80;font-weight:600;">在库不在日更 ' + s.yellow + '</span>'
+          + ' / <span class="health-yellow">在库不在日更 ' + s.yellow + '</span>'
           + ' / <span class="err">配置有但库缺 ' + s.red + '</span>'
           + ' <input type="text" id="fs-search" placeholder="搜索因子列/表名..." size="20"></p>';
         if (!d.expected_available) {
@@ -504,7 +463,7 @@
             var det = document.createElement('details');
             det.className = 'fs-table';
             var redBadge = t.red && t.red.length ? ' <span class="err">缺 ' + t.red.length + '</span>' : '';
-            var yellowBadge = t.yellow && t.yellow.length ? ' <span style="color:#a80;">停滞 ' + t.yellow.length + '</span>' : '';
+            var yellowBadge = t.yellow && t.yellow.length ? ' <span class="health-yellow">停滞 ' + t.yellow.length + '</span>' : '';
             det.innerHTML = '<summary>' + esc(t.table)
               + '（库内 ' + t.db_column_count + ' 列，watermark ' + esc(t.watermark || '—') + '）'
               + redBadge + yellowBadge
@@ -513,7 +472,7 @@
                   ? '<p class="err">配置有但库缺（<a href="/">前往新因子申请</a>；或点上方"补全此表"）：</p>' + colChips(t.red, 'red') : '')
               + (t.green && t.green.length ? '<p class="ok">在库且在日更：</p>' + colChips(t.green, 'green') : '')
               + (t.yellow && t.yellow.length
-                  ? '<p style="color:#a80;">在库但不在日更配置（停滞风险；"补全此表"只对配置内列生效，黄列可逐个删除）：</p>'
+                  ? '<p class="health-yellow">在库但不在日更配置（停滞风险；"补全此表"只对配置内列生效，黄列可逐个删除）：</p>'
                     + colChips(t.yellow, 'yellow', t.table) : '');
             container.appendChild(det);
           });
@@ -580,143 +539,6 @@
   }
   document.getElementById('btn-fs-refresh').addEventListener('click', loadFactorStatus);
 
-  // ---------- Tab 3b: 新建因子（factor-create 闭环） ----------
-  function fcPeriodsValue() {
-    var raw = document.getElementById('fc-periods').value.trim();
-    if (!raw || raw === 'null') return [null];
-    return raw.split(',').map(function(s) { return parseInt(s.trim(), 10); }).filter(function(n) { return !isNaN(n); });
-  }
-  function fcPayload() {
-    return {
-      code: document.getElementById('fc-code').value,
-      name: document.getElementById('fc-name').value.trim(),
-      category: document.getElementById('fc-category').value,
-      column: document.getElementById('fc-column').value,
-      periods: fcPeriodsValue()
-    };
-  }
-  function fcShow(html) {
-    var box = document.getElementById('fc-result');
-    box.classList.remove('hidden');
-    box.innerHTML = html;
-  }
-  function fcPost(url, payload, onOk) {
-    return fetch(url, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    }).then(function(r) { return r.json(); }).then(onOk);
-  }
-
-  document.getElementById('fc-generate').addEventListener('click', function() {
-    var desc = document.getElementById('fc-desc').value.trim();
-    if (!desc) { alert('请先填写自然语言描述'); return; }
-    document.getElementById('fc-gen-status').textContent = '生成中（约十几秒）...';
-    fcPost('/api/factor-create/nl-generate', {description: desc}, function(d) {
-      if (!d.ok) {
-        document.getElementById('fc-gen-status').textContent = '';
-        fcShow('<p class="err">' + esc(d.error || '生成失败') + '</p>');
-        return;
-      }
-      document.getElementById('fc-gen-status').textContent = '已生成（请人工核对代码与参数）';
-      document.getElementById('fc-code').value = d.code;
-      if (d.meta) {
-        document.getElementById('fc-name').value = d.meta.name || '';
-        document.getElementById('fc-category').value = d.meta.category || '';
-        document.getElementById('fc-column').value = d.meta.column || 'close';
-        var periods = d.meta.periods;
-        if (periods && periods.length && periods[0] !== null) {
-          document.getElementById('fc-periods').value = periods.join(',');
-        } else if (d.meta.params) {
-          document.getElementById('fc-periods').value = '';
-        } else {
-          document.getElementById('fc-periods').value = 'null';
-        }
-      }
-    });
-  });
-
-  document.getElementById('fc-check').addEventListener('click', function() {
-    fcShow('<p class="opt">检查中...</p>');
-    fcPost('/api/factor-create/check', fcPayload(), function(d) {
-      var html = '';
-      if (d.violations && d.violations.length) html += '<p class="err">安全检查未通过：' + esc(d.violations.join('；')) + '</p>';
-      else html += '<p class="ok">安全检查通过</p>';
-      if (d.duplicate) html += '<p class="err">查重命中：' + esc(d.duplicate) + '</p>';
-      else if (!d.violations || !d.violations.length) html += '<p class="ok">查重通过（无冲突列）</p>';
-      if (d.warning) html += '<p class="opt">' + esc(d.warning) + '</p>';
-      fcShow(html);
-    });
-  });
-
-  document.getElementById('fc-smoke').addEventListener('click', function() {
-    fcShow('<p class="opt">冒烟中（单股只读，最长 120s）...</p>');
-    fcPost('/api/factor-create/smoke', fcPayload(), function(d) {
-      if (!d.ok) {
-        fcShow('<p class="err">冒烟失败：' + esc(d.error || (d.errors || []).join('；') || '未知错误') + '</p>');
-        return;
-      }
-      fcShow('<p class="ok">冒烟通过</p><p>因子类 ' + esc(d.factor_class)
-        + '（' + esc(d.indicator_name) + ' / ' + esc(d.category) + '），样本 ' + esc(d.code)
-        + ' ' + esc(d.rows) + ' 行，输出列：<code>' + esc((d.columns || []).join(', ')) + '</code></p>');
-      loadFcSandbox();
-    });
-  });
-
-  function pollFcJob(jobId) {
-    var box = document.getElementById('fc-job');
-    box.classList.remove('hidden');
-    fetch('/api/admin/daily-jobs/' + jobId)
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (!d.ok) return;
-        var label = {running: '运行中', completed: '已完成', failed: '失败'}[d.status] || d.status;
-        var html = '<p>入库任务 ' + esc(d.job_id) + '（' + esc(d.label || '') + '）：<strong>' + label + '</strong></p>';
-        if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
-        if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
-        box.innerHTML = html;
-        if (d.status === 'running') {
-          setTimeout(function() { pollFcJob(jobId); }, 3000);
-        } else {
-          loadFactorStatus();
-          loadFcSandbox();
-        }
-      });
-  }
-
-  document.getElementById('fc-promote').addEventListener('click', function() {
-    var p = fcPayload();
-    if (!p.name || !p.category || !p.column) { alert('请填写 指标名/类别/价格列'); return; }
-    if (!confirm('确认晋升因子 ' + p.name + '（' + p.category + '/' + p.column + '，周期 ' + document.getElementById('fc-periods').value + '）？\n将写入 indicators_tushare 的 factors/ 与 config/factors.yaml，并后台执行 validate + backfill --execute。')) return;
-    fcPost('/api/factor-create/promote', p, function(d) {
-      if (!d.ok) { fcShow('<p class="err">晋升失败：' + esc(d.error || '未知错误') + '</p>'); return; }
-      fcShow('<p class="ok">已晋升：' + esc(d.path) + '</p><p class="opt">config 备份：' + esc(d.config_backup || '—') + '；次日 16:40 日更自动接管。</p>');
-      if (d.job_id) pollFcJob(d.job_id);
-    });
-  });
-
-  function loadFcSandbox() {
-    fetchWithTimeout('/api/factor-create/sandbox')
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        var el = document.getElementById('fc-sandbox-list');
-        if (!d.ok || !d.factors.length) { el.innerHTML = '<span class="opt">（空）</span>'; return; }
-        el.innerHTML = '<ul>' + d.factors.map(function(f) {
-          return '<li><code>' + esc(f.name) + '</code> <span class="opt">' + esc(f.mtime) + '</span>'
-            + ' <button class="btn-sm" data-fc-del="' + esc(f.name) + '">删除</button></li>';
-        }).join('') + '</ul>';
-        el.querySelectorAll('[data-fc-del]').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            if (!confirm('删除沙箱因子 ' + btn.dataset.fcDel + '？')) return;
-            fcPost('/api/factor-create/sandbox/delete', {name: btn.dataset.fcDel}, function(d2) {
-              if (!d2.ok) alert(d2.error || '删除失败');
-              loadFcSandbox();
-            });
-          });
-        });
-      });
-  }
-  document.getElementById('fc-sandbox-refresh').addEventListener('click', loadFcSandbox);
 
   // ---------- Tab 5: 维护区 ----------
   function fmtGb(bytes) { return bytes == null ? '—' : (bytes / 1073741824).toFixed(2) + ' GB'; }
@@ -734,7 +556,7 @@
             ? '<span class="opt">受保护</span>'
             : '<input type="checkbox" class="mt-check" value="' + esc(b.name) + '" data-size="' + (b.size_bytes || 0) + '">';
           return '<tr><td>' + cb + '</td><td>' + esc(b.name) + '</td><td>' + esc(b.mtime) + '</td>'
-            + '<td>' + fmtGb(b.size_bytes) + '</td><td>' + esc(b.strategy_count) + '</td></tr>';
+            + '<td class="num">' + fmtGb(b.size_bytes) + '</td><td class="num">' + esc(b.strategy_count) + '</td></tr>';
         }).join('');
         document.getElementById('mt-table').innerHTML = d.batches.length
           ? '<table><thead><tr><th>选择</th><th>批次</th><th>修改时间</th><th>体积</th><th>策略数</th></tr></thead><tbody>'
@@ -778,7 +600,6 @@
   loadFactorStatus();
   loadOnboard();
   loadMaintenance();
-  loadFcSandbox();
 })();
 </script>
 {% endblock %}

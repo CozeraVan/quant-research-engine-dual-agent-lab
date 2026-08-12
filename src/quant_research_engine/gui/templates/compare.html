@@ -19,9 +19,9 @@
 {% for row in rows %}
 <tr>
   <td>{{ row.label }}</td>
-  <td>{{ row.a | fmtval(row.is_pct) }}</td>
-  <td>{{ row.b | fmtval(row.is_pct) }}</td>
-  <td class="{{ 'diff-pos' if row.diff is not none and row.diff > 0 else 'diff-neg' if row.diff is not none and row.diff < 0 else '' }}">
+  <td class="num">{{ row.a | fmtval(row.is_pct) }}</td>
+  <td class="num">{{ row.b | fmtval(row.is_pct) }}</td>
+  <td class="num {{ 'diff-pos' if row.diff is not none and row.diff > 0 else 'diff-neg' if row.diff is not none and row.diff < 0 else '' }}">
     {% if row.diff is not none %}{{ row.diff | fmtval(row.is_pct) }}{% else %}—{% endif %}
   </td>
 </tr>

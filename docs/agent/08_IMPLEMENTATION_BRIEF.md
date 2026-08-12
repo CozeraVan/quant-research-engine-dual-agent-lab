@@ -1,5 +1,70 @@
 # Implementation Brief
 
+> 2026-08-12 QRE-GUI-UIUX-001（GUI 全站 UI/UX 优化）为纯样式/模板 class 改动，方案由用户直接指定（设计变量 + 按钮分级 + 信息直读化），未单独写 brief；实现与验证见 09_CODING_HANDOFF.md / 10_REVIEW_REPORT.md 顶部。
+
+## Task ID
+
+QRE-GUI-HOME-REFACTOR-001 (GUI 首页三 tab → 两 tab 重构)
+
+## Created By
+
+KIMI_CODE (single agent; 用户批准的方案 2026-08-12)
+
+## Intended Implementer
+
+KIMI_CODE
+
+## Goal
+
+首页 `index.html` 三 tab（因子向导 / 策略构建器 / YAML 编辑器）合并为两 tab：
+「新增策略」（默认 landing，NL / 可视化构建 / 手写 YAML 三入口同页汇入底部
+YAML 预览栏）+「新增因子」（路径 A 补周期 + 路径 B 全新指标 fc-create，
+fc-create 从 admin.html 因子 tab 迁入）。
+
+## Semantics (locked by user plan)
+
+- Tab 1 三段垂直流：顶部 NL 面板（#/api/nl_compile）→ 中部可视化构建
+  （wizard step1 因子选择 + step2 条件/风控，"生成 YAML"改为同页填入预览栏，
+  无 tab 跳转）→ 底部 YAML 预览栏（可编辑）+ 操作行 + 回测参数表单
+  （高级参数：引擎/执行方式/DB URL/market profile/输出目录，默认折叠）+
+  沙箱策略面板。运行按钮逻辑不变（预检勾选 → 小范围）。
+- Tab 2：路径说明卡 → 路径 A（wizard step3 wz-admin-*，POST
+  /api/factor-admin/request）→ 路径 B（fc-create 子区整体迁入，
+  /api/factor-create/* 功能不变）。
+- NL 缺因子错误引导改为跳「新增因子」tab（wzGotoFactorAdmin 切 tab-factor
+  并预填路径 A）。
+- admin.html 因子 tab 删除 fc-create 子区 HTML 与 fc JS，原地留
+  「→ 新增因子请前往首页」链接；其余不动。
+- 删除 tab-builder 全部 HTML 与其 JS IIFE（b-* 元素全删）；
+  后端 /api/builder/* 保留不删；app.py 零改动。
+- 元素 ID 尽量保留（wz-*/nl-*/param-*/fc-*/sandbox-*）；原生 JS IIFE 重组为
+  tabs / strategy / factor 三个独立作用域；不引入框架/依赖。
+
+## Scope
+
+1. `templates/index.html` 整体重写为两 tab。
+2. `templates/admin.html` 删 fc-create。
+3. 测试断言更新（test_gui_factor_wizard / test_gui_app / test_gui_admin）。
+4. 文档：STRATEGY_AUTHORING §3、indicators FACTOR_AUTHORING §8、docs/agent 同步。
+
+## Non-Goals
+
+- 不做 git commit（用户显式约束）。
+- 不跑真实回测/backfill；不新增依赖；后端零改动。
+
+## Expected Tests
+
+```bash
+uv run pytest tests/ -x -q
+```
+
+## Acceptance Criteria
+
+- 首页两个 tab，无 tab-builder；admin 无 fc-create；全量 pytest 绿；
+  临时 GUI curl 抽查 / 与 /admin 结构及 /api/factors 等 API 200。
+
+# Implementation Brief (archive: QRE-GUI-FACTOR-CREATE-P2-001, GUI 新因子创建闭环 P2)
+
 ## Task ID
 
 QRE-GUI-FACTOR-CREATE-P2-001 (GUI 新因子创建闭环 P2)

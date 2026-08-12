@@ -440,6 +440,8 @@ def test_admin_page_200(app_client):
     assert "管理台" in html
     assert "总览" in html and "日更中心" in html and "因子状态" in html and "策略状态" in html
     assert "数据查询" not in html  # REFocus：查询 tab 已撤
+    assert "fc-create" not in html  # 新建因子子区已迁往首页「新增因子」tab
+    assert "新增因子请前往首页" in html
 
 
 def test_api_admin_overview_ok(app_client, monkeypatch):

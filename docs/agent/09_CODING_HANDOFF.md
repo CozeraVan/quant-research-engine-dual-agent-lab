@@ -2,7 +2,116 @@
 
 ## Task ID
 
-QRE-ADMIN-STRAT-INCREMENTAL-FIX-001 (策略状态 tab 增量结果合并：date_end 停在全量批次的显示 bug)
+QRE-GUI-UIUX-001 (GUI 全站 UI/UX 优化：Data-Dense Dashboard 浅色风格)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+按 ui-ux-pro-max 数据库选定的 Data-Dense Dashboard（浅色）方案执行，不改任何
+元素 id / JS 逻辑 / API / 表单字段 / 文案：
+
+1. **`static/style.css` 全量重写**：设计变量集中 `:root`
+   （--bg #F8FAFC / --card #FFF / --border #E2E8F0 / --text #1E293B /
+   --muted #64748B / --primary #1E40AF / --primary-hover #1E3A8A /
+   --ok #16A34A / --warn #B45309 / --err #DC2626 / --radius 6px / --mono），
+   全站引用变量。按钮分级体系 .btn / .btn-primary / .btn-ghost /
+   .btn-danger-outline / .btn-sm；表格斑马纹 + hover 高亮 + sticky 表头 +
+   .num 右对齐 tabular-nums；tab 改下划线式（active 2px primary 指示条）；
+   section-toggle 改白底 + 左侧 4px primary 竖条；health-green/yellow/red 与
+   .ok/.err 颜色值换为语义色（类名不变）；字体 system-ui + PingFang SC /
+   Microsoft YaHei 回退，等宽列 ui-monospace 栈。
+2. **`templates/base.html`**：nav 与标题合并为紧凑顶栏 .topbar
+   （左 brand「QRE 控制台」，右导航链接）。
+3. **按钮分级归类（仅加 class）**：primary 实底仅 btn-run（运行回测）、
+   fc-generate（生成代码）、btn-compare、btn-full-run；刷新/验证/加载文件/
+   模板/编译/提交申请/查重/冒烟 → .btn-ghost；危险操作（mt-delete、fc-promote、
+   sb-delete、fc 沙箱删除、wz-admin-confirm 全量回填）→ .btn-danger-outline。
+4. **信息直读化**：admin 健康灯 CSS 级放大为状态条（#ov-health p 16px 半粗）；
+   最新交易日 / 批次数 / 磁盘占用加 .kpi（19px 半粗）；估算行数、因子表行数、
+   超额收益/最大回撤、批次体积/策略数、run_detail 摘要值、compare A/B/差异列、
+   strategy_status_detail 指标值加 .num；admin.html 三处内联 `color:#a80`
+   替换为 .health-yellow。
+5. **未动**：所有 id、事件绑定、JS 逻辑、API、文案语言；「引擎输出，非投资建议」
+   提示保留；tests 断言只引用 id（btn-nl-compile / btn-save-sandbox），无需改断言。
+
+## Validation
+
+- `uv run pytest tests/ -x -q` → **1391 passed**（全绿，无断言改动）。
+- 临时实例 `uv run qre gui --host 127.0.0.1 --port 8123`：
+  - `curl /` → 200，含 class="topbar"/brand、btn-primary ×2、btn-ghost ×8；
+  - `curl /admin` → 200，含 topbar、btn-ghost ×5、btn-danger-outline；
+  - `curl /static/style.css` → 含 --primary: #1E40AF。
+- 实例已用 `pkill -f 'qre g[u]i'` 杀掉，8123 端口确认释放。
+
+## Files Changed
+
+- `src/quant_research_engine/gui/static/style.css`（全量重写）
+- `src/quant_research_engine/gui/templates/base.html`（顶栏）
+- `src/quant_research_engine/gui/templates/index.html`（按钮 class）
+- `src/quant_research_engine/gui/templates/admin.html`（按钮 class + kpi/num/health-yellow）
+- `src/quant_research_engine/gui/templates/runs.html`、`run_detail.html`、
+  `compare.html`、`strategy_status_detail.html`（按钮 class / .num 列）
+
+# Coding Handoff (archive: QRE-GUI-HOME-REFACTOR-001, GUI 首页三 tab → 两 tab 重构)
+
+## Task ID
+
+QRE-GUI-HOME-REFACTOR-001 (GUI 首页三 tab → 两 tab 重构)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+1. **`templates/index.html` 整体重写（1549 行 → ~1060 行）**：三 tab（wizard/builder/
+   editor）合并为两 tab。「新增策略」（默认 landing）三段垂直流：顶部 NL 面板
+   （nl-*，/api/nl_compile 产物填同页底部预览栏，缺因子引导跳「新增因子」tab）→
+   中部可视化构建（wizard step1 因子实时枚举 + step2 条件/持仓风控，wz-fill-editor
+   改为校验后同页填入 #strategy-yaml 并 scrollIntoView，不再跳 tab）→ 底部 YAML
+   预览栏（可编辑）+ 操作行（验证/加载文件/模板/保存模板/存入沙箱）+ 回测参数表单
+   （常显精简项 + 默认折叠「高级参数」区：引擎/执行方式/DB URL/market profile/
+   输出目录）+ 沙箱策略面板。运行逻辑不变（预检勾选 → 小范围）。「新增因子」tab：
+   路径说明卡 + 路径 A（wz-admin-* 新因子申请整体移入）+ 路径 B（fc-create 子区
+   从 admin.html 整体移入，/api/factor-create/* 调用不变）。JS 重组为三个 IIFE
+   （tabs+section toggle / strategy / factor），元素 ID 全部保留（b-* 除外，全删），
+   rerun_yaml sessionStorage 回填改为同页滚动。tab-builder HTML 与其 JS IIFE 全删；
+   后端 /api/builder/* 保留，app.py 零改动。
+2. **`templates/admin.html`**：因子 tab 的 fc-create 子区 HTML 与 fc JS 全删，
+   原地留「→ 新增因子请前往首页」链接（href="/"）；其余不动。
+3. **测试**：test_gui_factor_wizard.test_index_page_contains_wizard 与
+   test_gui_app.test_index_includes_builder_tab 改为新两 tab 结构断言（含
+   fc-create 在首页、tab-builder/builder-layout/b-id 不存在）；
+   test_gui_admin.test_admin_page_200 增加 admin 无 fc-create + 跳转链接断言。
+4. **文档**：STRATEGY_AUTHORING §3 通道表重写（三入口合一页）；indicators
+   FACTOR_AUTHORING §8 改为首页「新增因子」tab 路径 B（路径 A 同页）。
+
+## Validation Output
+
+```bash
+uv run pytest tests/ -x -q → 1391 passed, 4 warnings（全绿）
+node --check（index.html / admin.html 内联 JS 提取）→ 双双语法通过
+scripts/check-progress-docs.sh → passed
+```
+
+临时 GUI 冒烟（127.0.0.1:8123，未跑真实回测/backfill）：`/` 含 tab-strategy /
+tab-factor / fc-code / wz-factor-groups，无 tab-builder / builder-layout / b-id；
+`/admin` 无 fc-create / fc-code，含「新增因子请前往首页」；
+/api/factors、/api/factor-create/sandbox、/api/strategies/sandbox 均 200。
+进程已清理。
+
+# Coding Handoff (archive: QRE-ADMIN-STRAT-INCREMENTAL-FIX-001, 策略状态 tab 增量结果合并：date_end 停在全量批次的显示 bug)
 
 ## Written By
 

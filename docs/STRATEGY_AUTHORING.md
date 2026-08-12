@@ -75,14 +75,18 @@ evaluation:
 - 执行语义：T 日信号，T+1 开盘价成交（catalog 惯例 execution 段注释说明；
   低层引擎固定 t_plus_1_open）。
 
-## 3. 三条录入通道及其边界
+## 3. 录入通道及其边界（2026-08-12 起：首页「新增策略」tab 一页完成）
+
+首页（`/`）已重构为两个 tab：「新增策略」与「新增因子」。策略录入的三个入口
+（NL / 可视化构建 / 手写 YAML）全部合并在「新增策略」tab 同一页：
 
 | 通道 | 输入 | 边界 |
 |---|---|---|
-| 因子向导（GUI 首屏） | 下拉选因子 + 条件行 | 仅"比较 + 布尔"（AND/OR 组内统一）；不支持算术组合右值；产物填入编辑器由用户确认（安全闸，不自动执行） |
-| 高层 Builder / entry YAML | strategy/rules/factor_requirements/experiment 四段 | 见 `docs/strategy_entry/README.md`；`crosses_above/below` 会**降级为当周期比较**并给出 warning，不是真正的穿越事件 |
-| NL 自然语言 | 中文描述 | LLM 编译为低层 YAML，经 validate + 因子存在性检查；缺因子自动入 handoff 队列；同样只填编辑器待确认 |
-| GUI 沙箱/晋升（P1） | 编辑器 YAML 或 NL 编译产物 | "存入沙箱"做 validate + 查重 + 因子存在性检查；沙箱（`outputs/sandbox/strategies/`）不进 catalog、不参与日更；冒烟（单股 × 近 6 个月）后由用户确认晋升入 `strategies/catalog/<category>/` 并触发一次全量后台回测 |
+| 自然语言 NL（「新增策略」顶部） | 中文描述 | LLM 编译为低层 YAML，经 validate + 因子存在性检查；缺因子自动入 handoff 队列并引导去「新增因子」tab；只填入同页底部 YAML 预览栏待确认（安全闸，不自动执行） |
+| 可视化构建（「新增策略」中部） | 下拉选因子 + 条件行 | 仅"比较 + 布尔"（AND/OR 组内统一）；不支持算术组合右值；"校验并填入下方 YAML 预览栏"（同页操作，无 tab 跳转，不自动执行） |
+| 手写/粘贴 YAML（「新增策略」底部预览栏） | 低层 StrategySpec YAML | 与 NL/可视化产物共用同一预览栏；验证 / 加载文件 / 模板 / 存入沙箱 / 回测参数表单 + 高级参数（默认折叠）均在该栏周围 |
+| 高层 Builder / entry YAML（仅 API） | strategy/rules/factor_requirements/experiment 四段 | GUI 构建器 tab 已删除；`/api/builder/*` 保留供脚本调用；`crosses_above/below` 会**降级为当周期比较**并给出 warning，不是真正的穿越事件 |
+| GUI 沙箱/晋升（P1） | 预览栏 YAML 或 NL 编译产物 | "存入沙箱"做 validate + 查重 + 因子存在性检查；沙箱（`outputs/sandbox/strategies/`）不进 catalog、不参与日更；冒烟（单股 × 近 6 个月）后由用户确认晋升入 `strategies/catalog/<category>/` 并触发一次全量后台回测 |
 
 ## 4. 策略验收 checklist（提交前逐项过）
 

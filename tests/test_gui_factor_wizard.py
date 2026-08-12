@@ -432,10 +432,21 @@ def test_index_page_contains_wizard(app_client):
     resp = app_client.get("/")
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    assert "因子向导" in html
+    # 两 tab 结构：新增策略（默认）+ 新增因子
+    assert "新增策略" in html
+    assert "新增因子" in html
+    assert 'id="tab-strategy"' in html
+    assert 'id="tab-factor"' in html
+    # 可视化构建区与路径 A（补周期）元素保留
     assert "wz-factor-groups" in html
     assert "wz-admin-submit" in html
     assert "wzGotoFactorAdmin" in html
+    # 路径 B（全新指标 fc-create）已迁入首页
+    assert 'id="fc-code"' in html
+    assert 'id="fc-promote"' in html
+    # 旧 builder tab 已删除
+    assert "tab-builder" not in html
+    assert "builder-layout" not in html
 
 
 def test_factor_admin_backfill_commands_pin_baseline_head():

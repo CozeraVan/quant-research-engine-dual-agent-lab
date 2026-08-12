@@ -2,6 +2,68 @@
 
 ## Task ID
 
+QRE-GUI-UIUX-001 (GUI 全站 UI/UX 优化：Data-Dense Dashboard 浅色风格)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 方案逐条对齐用户指定设计变量：:root 集中定义 --bg/--card/--border/--text/
+  --muted/--primary/--primary-hover/--ok/--warn/--err，全站引用，无散落硬编码
+  hex（admin.html 三处内联 #a80 已替换为 .health-yellow）。
+- 按钮分级落实：每屏/卡片唯一 primary（运行回测 / 生成代码 / 对比 / 放大全范围），
+  次要操作 .btn-ghost，危险操作 .btn-danger-outline 描边红无实底。
+- 约束遵守：所有元素 id、JS 事件绑定、API、表单字段、中文文案未动；
+  「引擎输出，非投资建议」提示保留；health-*/.ok/.err 类名不变仅换色值。
+- 验证：`uv run pytest tests/ -x -q` 1391 passed 全绿（无断言改动）；
+  临时实例 curl / 与 /admin 均 200 且含新 class；进程已杀、端口已释放。
+- 无 Required Fixes。
+
+## Required Fixes
+
+无。
+
+# Review Report (archive: QRE-GUI-HOME-REFACTOR-001, GUI 首页三 tab → 两 tab 重构)
+
+## Task ID
+
+QRE-GUI-HOME-REFACTOR-001 (GUI 首页三 tab → 两 tab 重构)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 结构与用户批准方案逐条对齐：两 tab、三段垂直流、路径 A/B、fc-create 迁入、
+  admin 留跳转链接、tab-builder 与 b-* JS 全删、/api/builder/* 与 app.py 未动。
+- 元素 ID 全部保留（wz-*/nl-*/param-*/fc-*/sandbox-*），JS 逻辑逐段平移，
+  仅两处行为改动（均为方案要求）：wz-fill-editor 同页填入 + 滚动；NL 缺因子
+  跳「新增因子」tab 路径 A 预填。rerun_yaml 回填改同页滚动。
+- 自审修复点：①fc JS 迁入时 pollFcJob 原调用 admin 专属的 loadFactorStatus()，
+  已移除该调用（loadFcSandbox 保留）；②高级参数区用既有 section-toggle/collapsed
+  机制实现默认折叠，无需新 CSS；③node --check 双模板内联 JS 通过。
+- 测试 1391 绿；存在性断言已更新为新结构（两 tab、fc-create 在首页、admin 无
+  fc-create、tab-builder 不存在）。无真实回测/backfill 执行（standing instruction）。
+
+## Behavior Verified
+
+见 09_CODING_HANDOFF.md 顶部 Validation Output（临时 GUI curl 抽查）。
+
+# Review Report (archive)
+
+## Task ID
+
 QRE-ADMIN-STRAT-INCREMENTAL-FIX-001 (策略状态 tab 增量结果合并)
 
 ## Reviewer

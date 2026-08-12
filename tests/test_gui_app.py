@@ -502,12 +502,16 @@ def test_builder_validate_invalid(app_client):
     assert len(data["issues"]) > 0
 
 
-# --- Builder: index page includes builder tab ---
+# --- Index page structure (two-tab workbench; builder tab removed) ---
 
 
-def test_index_includes_builder_tab(app_client):
+def test_index_two_tab_structure(app_client):
     resp = app_client.get("/")
     assert resp.status_code == 200
-    assert b"Builder" in resp.data
-    assert b"YAML \xe7\xbc\x96\xe8\xbe\x91\xe5\x99\xa8" in resp.data
-    assert b"builder-layout" in resp.data
+    html = resp.data.decode("utf-8")
+    # 新两 tab：新增策略（含 YAML 预览栏）+ 新增因子；旧 builder tab 已删
+    assert "新增策略" in html
+    assert 'id="strategy-yaml"' in html
+    assert "tab-builder" not in html
+    assert "builder-layout" not in html
+    assert 'id="b-id"' not in html

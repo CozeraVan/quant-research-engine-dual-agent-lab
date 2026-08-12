@@ -3,20 +3,31 @@
 <h1>QRE 回测控制台</h1>
 
 <div class="tabs">
-  <button class="tab active" data-tab="wizard">因子向导 Wizard</button>
-  <button class="tab" data-tab="builder">策略构建器 Builder</button>
-  <button class="tab" data-tab="editor">YAML 编辑器（高级）</button>
+  <button class="tab active" data-tab="strategy">新增策略</button>
+  <button class="tab" data-tab="factor">新增因子</button>
 </div>
 
 <!-- ============================================================ -->
-<!-- WIZARD TAB (三步向导：选因子 → 设条件 → 新因子申请)             -->
+<!-- TAB 1: 新增策略（三段垂直流：NL / 可视化构建 → YAML 预览 + 回测参数）  -->
 <!-- ============================================================ -->
-<div id="tab-wizard" class="tab-content active">
+<div id="tab-strategy" class="tab-content active">
 
-  <!-- Step 1: 选因子 -->
+  <!-- 顶部：自然语言描述区（安全闸：仅填入下方预览栏，需用户确认后手动提交） -->
+  <div class="panel nl-panel">
+    <h2>方式一：自然语言描述策略</h2>
+    <textarea id="nl-description" rows="3" placeholder="例：20 日均线上穿 120 日均线买入，跌破 60 日线卖出，止损 -8%"></textarea>
+    <div class="editor-actions">
+      <button id="btn-nl-compile" class="btn btn-ghost">编译为 YAML</button>
+      <span id="nl-status" class="hidden"></span>
+    </div>
+    <div id="nl-result" class="result-box hidden"></div>
+  </div>
+
+  <!-- 中部：可视化构建区 -->
   <div class="section">
-    <button class="section-toggle" data-section="wz-factors">第 1 步：选择因子（来自因子库实时枚举）&#9660;</button>
+    <button class="section-toggle" data-section="wz-factors">方式二：可视化构建 · 第 1 步 选择因子（来自因子库实时枚举）&#9660;</button>
     <div id="sec-wz-factors" class="section-body">
+      <p class="opt">与上方自然语言方式任选其一，结果都汇入下方 YAML 预览栏。</p>
       <div id="wz-factor-status" class="opt">加载因子目录中...</div>
       <div id="wz-factor-groups"></div>
       <h4>已选因子 → data.factor_fields 预览</h4>
@@ -24,9 +35,8 @@
     </div>
   </div>
 
-  <!-- Step 2: 条件构建器 -->
   <div class="section">
-    <button class="section-toggle" data-section="wz-conditions">第 2 步：设置入场/出场条件（比较 + 布尔）&#9660;</button>
+    <button class="section-toggle" data-section="wz-conditions">方式二：可视化构建 · 第 2 步 设置入场/出场条件（比较 + 布尔）&#9660;</button>
     <div id="sec-wz-conditions" class="section-body">
       <div class="form-grid">
         <label>策略 ID</label>
@@ -73,15 +83,169 @@
       <h4 style="margin-top:12px;">策略 YAML 预览</h4>
       <pre id="wz-yaml-preview" class="compiled-yaml">（选择因子并添加条件后自动生成）</pre>
       <div class="builder-actions">
-        <button id="wz-fill-editor">校验并填入 YAML 编辑器</button>
+        <button id="wz-fill-editor" class="btn btn-ghost">校验并填入下方 YAML 预览栏</button>
         <span id="wz-status" class="hidden"></span>
       </div>
     </div>
   </div>
 
-  <!-- Step 3: 新因子申请 -->
+  <!-- 底部：YAML 预览栏 + 回测参数 -->
+  <div class="layout">
+    <div class="panel editor-panel">
+      <h2>策略 YAML 预览栏（可编辑）</h2>
+      <textarea id="strategy-yaml" rows="24" cols="80" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
+      <div class="editor-actions">
+        <button id="btn-validate" class="btn btn-ghost">验证 Validate</button>
+        <button id="btn-save-sandbox" class="btn btn-ghost" title="校验 + 查重 + 因子检查后存入沙箱，不自动执行">存入沙箱</button>
+        <label class="file-label btn-ghost">
+          加载文件 Load file
+          <input type="file" id="file-input" accept=".yaml,.yml" hidden>
+        </label>
+        <select id="template-select">
+          <option value="">-- 模板 templates --</option>
+          <option value="{{ default_strategy_name }}" selected>{{ default_strategy_name }} (默认 default)</option>
+          {% for name in templates %}
+          {% if name != default_strategy_name %}
+          <option value="{{ name }}">{{ name }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+        <input type="text" id="template-name" placeholder="模板名称 template name" size="16">
+        <button id="btn-save-template" class="btn btn-ghost">保存模板 Save Template</button>
+      </div>
+      <div id="validate-result" class="result-box hidden"></div>
+    </div>
+
+    <div class="panel param-panel">
+      <h2>回测参数 Parameters</h2>
+      <div class="form-grid">
+        <label>模式 Mode</label>
+        <select id="param-mode">
+          <option value="single">单标的 Single-symbol</option>
+          <option value="batch" selected>批量 Batch</option>
+          <option value="shared">共享资金 Shared-cash</option>
+        </select>
+
+        <label>标的范围 Universe</label>
+        <span class="label-inline"><input type="checkbox" id="param-all-market"> 全部 A 股（全市场，留空代码时生效）</span>
+
+        <label>股票代码 Codes</label>
+        <textarea id="param-codes" rows="2" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ">000001.SZ,000002.SZ</textarea>
+
+        <label>开始 Start</label>
+        <input type="text" id="param-start" value="2026-01-05" placeholder="YYYY-MM-DD">
+
+        <label>结束 End</label>
+        <input type="text" id="param-end" value="2026-03-31" placeholder="YYYY-MM-DD">
+
+        <label>快捷区间 Range</label>
+        <span>
+          <button type="button" class="btn-sm range-btn" data-years="1">近1年</button>
+          <button type="button" class="btn-sm range-btn" data-years="2">近2年</button>
+          <button type="button" class="btn-sm range-btn" data-years="5">近5年</button>
+          <button type="button" class="btn-sm" id="range-all">全期(2010起)</button>
+        </span>
+
+        <label>初始资金 Initial Cash</label>
+        <input type="text" id="param-cash" value="100000" placeholder="100000">
+
+        <label>最大持仓 Max Positions</label>
+        <input type="text" id="param-maxpos" value="10" placeholder="10（共享资金模式用）">
+
+        <label>佣金率 Commission</label>
+        <input type="text" id="param-commission" value="0.0003" placeholder="0.0003">
+
+        <label>最低佣金 Min Commission</label>
+        <input type="text" id="param-min-commission" value="5.0" placeholder="5.0">
+
+        <label>印花税(卖出) Stamp Tax</label>
+        <input type="text" id="param-stamp-tax" value="0.0005" placeholder="0.0005">
+
+        <label>买入滑点 Slippage Buy</label>
+        <input type="text" id="param-slip-buy" value="0" placeholder="0">
+
+        <label>卖出滑点 Slippage Sell</label>
+        <input type="text" id="param-slip-sell" value="0" placeholder="0">
+
+        <label>止损 Stop Loss %</label>
+        <input type="text" id="param-stop-loss" placeholder="可空，如 0.08">
+
+        <label>止盈 Take Profit %</label>
+        <input type="text" id="param-take-profit" placeholder="可空，如 0.15">
+
+        <label>移动止损 Trailing %</label>
+        <input type="text" id="param-trailing-stop" placeholder="可空，如 0.05">
+
+        <label>小样本预检 Precheck</label>
+        <span class="label-inline"><input type="checkbox" id="param-precheck" checked> 先跑前 20 只 × 近 6 个月</span>
+      </div>
+
+      <!-- 高级参数（默认折叠） -->
+      <div class="section">
+        <button class="section-toggle collapsed" data-section="adv-params">高级参数（引擎/执行方式/DB/输出）&#9660;</button>
+        <div id="sec-adv-params" class="section-body collapsed">
+          <div class="form-grid">
+            <label>引擎实现 Engine Impl</label>
+            <select id="param-engine-impl">
+              <option value="simulator">逐 bar 仿真 simulator</option>
+              <option value="vectorized">向量化 vectorized</option>
+            </select>
+
+            <label>执行方式 Executor</label>
+            <select id="param-executor">
+              <option value="module">模块直调 Module (direct)</option>
+              <option value="cli">CLI 子进程 (subprocess)</option>
+            </select>
+
+            <label>数据库 DB URL</label>
+            <input type="text" id="param-dburl" placeholder="postgresql+psycopg:///tushare_data">
+
+            <label>市场规则 Market Profile</label>
+            <input type="text" id="param-profile" placeholder="configs/market_profiles/ashare_daily_default.yaml">
+
+            <label>输出目录 Output Dir</label>
+            <input type="text" id="param-output" value="outputs/gui-run" placeholder="outputs/gui-run">
+          </div>
+        </div>
+      </div>
+
+      <div class="run-actions">
+        <button id="btn-run" class="btn btn-primary">运行回测 Run Backtest</button>
+        <span id="run-status" class="hidden"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="run-result" class="result-box hidden"></div>
+
+  <!-- 策略创建闭环（P1）：沙箱列表 + 冒烟 / 晋升 / 删除 -->
+  <div class="panel" id="sandbox-panel">
+    <h2>沙箱策略 Sandbox
+      <button class="btn-sm" id="btn-sandbox-refresh">刷新</button>
+    </h2>
+    <p class="opt">沙箱策略不参与 refresh 日更；冒烟通过后可晋升入 catalog（晋升后立即触发一次全量后台回测）。</p>
+    <div id="sandbox-status" class="opt hidden"></div>
+    <div id="sandbox-list"></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 2: 新增因子（路径 A 补周期 / 路径 B 全新指标）                  -->
+<!-- ============================================================ -->
+<div id="tab-factor" class="tab-content">
+
+  <div class="panel">
+    <h2>两条路径说明</h2>
+    <p class="opt">
+      已有指标想补周期或换价格源 → 走<strong>路径 A</strong>（自动跑 validate → plan → sample 回填，全量回填需人工确认）；
+      全新指标 → 走<strong>路径 B</strong>（NL/手写生成代码 → 查重 → 沙箱冒烟 → 晋升入库）。
+      操作前可先在<a href="/admin">管理台</a>「因子状态」tab 查对账（在库/在日更/缺口），避免重复申请。
+    </p>
+  </div>
+
+  <!-- 路径 A：已有指标 · 新增周期/价格源（联动 indicators_tushare） -->
   <div class="section">
-    <button class="section-toggle" data-section="wz-admin">第 3 步：新因子申请（联动 indicators_tushare）&#9660;</button>
+    <button class="section-toggle" data-section="wz-admin">路径 A：已有指标 · 新增周期/价格源&#9660;</button>
     <div id="sec-wz-admin" class="section-body">
       <div id="wz-admin-status" class="opt">加载指标清单中...</div>
       <div class="form-grid form-grid-3">
@@ -95,17 +259,87 @@
         <input type="text" id="wz-admin-periods" placeholder="如 5,10,20">
       </div>
       <div class="builder-actions">
-        <button id="wz-admin-submit">提交申请（自动跑 validate → plan → sample 回填）</button>
+        <button id="wz-admin-submit" class="btn btn-ghost">提交申请（自动跑 validate → plan → sample 回填）</button>
         <span class="opt">全量回填需人工确认后才会执行</span>
       </div>
       <div id="wz-admin-job" class="result-box hidden"></div>
+    </div>
+  </div>
+
+  <!-- 路径 B：全新指标 · NL/手写生成（NL → 代码 → 查重 → 冒烟 → 晋升） -->
+  <div class="section">
+    <button class="section-toggle" data-section="fc-create">路径 B：全新指标 · NL/手写生成（沙箱冒烟 → 晋升入库）&#9660;</button>
+    <div id="sec-fc-create" class="section-body">
+      <p class="opt">自然语言描述或直接在代码框手写；生成结果只回填不执行。晋升前必须通过「查重+安全检查」与「冒烟测试」。</p>
+      <p>
+        <textarea id="fc-desc" rows="2" style="width:100%;" placeholder="例：ROC 变动率指标，周期 25（pandas_ta 已有函数、单序列/HLC 输入的模板型指标）"></textarea>
+      </p>
+      <p><button id="fc-generate" class="btn btn-primary">生成代码</button> <span id="fc-gen-status" class="opt"></span></p>
+      <p><textarea id="fc-code" rows="14" style="width:100%;font-family:monospace;" placeholder="# 因子代码（可手写/粘贴，需继承 FactorBase）"></textarea></p>
+      <p>
+        指标名 <input type="text" id="fc-name" size="14" placeholder="roc">
+        类别 <select id="fc-category">
+          <option value="">选择…</option>
+          <option value="overlap">overlap</option>
+          <option value="momentum">momentum</option>
+          <option value="volatility">volatility</option>
+          <option value="trend">trend</option>
+          <option value="volume">volume</option>
+          <option value="statistics">statistics</option>
+          <option value="candle">candle</option>
+          <option value="performance">performance</option>
+        </select>
+        价格列 <select id="fc-column">
+          <option value="close">close</option>
+          <option value="typical_price">typical_price</option>
+          <option value="average_price">average_price</option>
+          <option value="median_price">median_price</option>
+        </select>
+        周期 <input type="text" id="fc-periods" size="14" placeholder="25 或 5,10,20">
+        <span class="opt">多参数指标请直接改代码后手写 config；无参填 null</span>
+      </p>
+      <p class="builder-actions">
+        <button id="fc-check" class="btn btn-ghost">查重+安全检查</button>
+        <button id="fc-smoke" class="btn btn-ghost">冒烟测试</button>
+        <button id="fc-promote" class="btn btn-danger-outline">晋升入库</button>
+      </p>
+      <div id="fc-result" class="result-box hidden"></div>
+      <div id="fc-job" class="result-box hidden"></div>
+      <h4>因子沙箱 <button class="btn-sm" id="fc-sandbox-refresh">刷新</button></h4>
+      <div id="fc-sandbox-list" class="opt">（空）</div>
     </div>
   </div>
 </div>
 
 <script>
 // ============================================================
-// WIZARD (三步向导) — 独立作用域
+// TAB SWITCHING + SECTION TOGGLE — 独立作用域
+// ============================================================
+(function() {
+  var tabs = document.querySelectorAll('.tab');
+  var contents = document.querySelectorAll('.tab-content');
+  tabs.forEach(function(t) {
+    t.addEventListener('click', function() {
+      tabs.forEach(function(x) { x.classList.remove('active'); });
+      contents.forEach(function(x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.section-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var sec = document.getElementById('sec-' + btn.dataset.section);
+      sec.classList.toggle('collapsed');
+      btn.classList.toggle('collapsed');
+    });
+  });
+})();
+</script>
+
+<script>
+// ============================================================
+// TAB 1 新增策略 — 独立作用域（可视化构建 + NL + YAML 预览 + 回测参数 + 沙箱）
 // ============================================================
 (function() {
   var MARKET_FIELDS = ["open", "high", "low", "close", "pre_close", "vol", "amount"];
@@ -115,8 +349,13 @@
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function show(el) { el.classList.remove("hidden"); }
+  function hide(el) { el.classList.add("hidden"); }
 
-  // ---------- Step 1: factor catalog ----------
+  // ---------- 可视化构建 · Step 1: factor catalog ----------
   function loadFactorCatalog() {
     fetch("/api/factors")
       .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
@@ -183,7 +422,7 @@
     return keys.map(function(a) { return "    " + a + ": " + selectedFactors[a]; }).join("\n");
   }
 
-  // ---------- Step 2: condition builder ----------
+  // ---------- 可视化构建 · Step 2: condition builder ----------
   function operandOptions() {
     var opts = MARKET_FIELDS.map(function(f) { return {value: f, label: "行情 · " + f}; });
     Object.keys(selectedFactors).forEach(function(a) {
@@ -357,9 +596,9 @@
     .then(function(d) {
       if (d.valid) {
         document.getElementById("strategy-yaml").value = preview.yaml;
-        statusEl.textContent = "校验通过，已填入编辑器，请检查确认后提交回测";
+        statusEl.textContent = "校验通过，已填入下方 YAML 预览栏，请检查确认后提交回测";
         statusEl.className = "ok";
-        document.querySelector('.tab[data-tab="editor"]').click();
+        document.getElementById("strategy-yaml").scrollIntoView({behavior: "smooth"});
       } else {
         statusEl.textContent = "校验失败: " + d.error;
         statusEl.className = "err";
@@ -367,874 +606,22 @@
     });
   });
 
-  // ---------- Step 3: factor admin ----------
-  var pollTimer = null;
-
-  function loadIndicators() {
-    fetch("/api/factor-admin/indicators")
-      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
-      .then(function(res) {
-        var statusEl = document.getElementById("wz-admin-status");
-        if (!res.body.ok) {
-          statusEl.innerHTML = '<span class="err">' + esc(res.body.error || "指标清单不可用") + '</span>';
-          document.getElementById("wz-admin-submit").disabled = true;
-          return;
-        }
-        statusEl.textContent = "指标名与价格类型来自 indicators_tushare 已配置清单：";
-        fillSelect(document.getElementById("wz-admin-name"),
-          res.body.names.map(function(n) { return {value: n, label: n}; }));
-        fillSelect(document.getElementById("wz-admin-column"),
-          res.body.columns.map(function(c) { return {value: c, label: c}; }));
-      })
-      .catch(function(err) {
-        document.getElementById("wz-admin-status").innerHTML =
-          '<span class="err">指标清单加载失败: ' + esc(err) + '</span>';
-      });
-  }
-
-  function renderJob(d) {
-    var box = document.getElementById("wz-admin-job");
-    box.classList.remove("hidden");
-    var statusLabel = {
-      running: "运行中", awaiting_execute_confirmation: "sample 完成，待人工确认",
-      completed: "已完成", failed: "失败"
-    }[d.status] || d.status;
-    var html = '<p><strong>任务:</strong> ' + esc(d.job_id) + ' <strong>状态:</strong> ' + esc(statusLabel)
-      + (d.step ? '（步骤: ' + esc(d.step) + '）' : '') + '</p>';
-    if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
-    if (d.status === "awaiting_execute_confirmation") {
-      html += '<p class="ok">sample 回填成功。确认无误后点击按钮执行全量回填（重操作）：</p>'
-        + '<button id="wz-admin-confirm">确认全量回填 --execute</button>';
-    }
-    if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
-    box.innerHTML = html;
-    var btn = document.getElementById("wz-admin-confirm");
-    if (btn) {
-      btn.addEventListener("click", function() {
-        btn.disabled = true;
-        fetch("/api/factor-admin/" + d.job_id + "/execute", {method: "POST"})
-          .then(function(r) { return r.json(); })
-          .then(function(res) {
-            if (!res.ok) { btn.disabled = false; alert(res.error || "确认失败"); }
-            pollJob(d.job_id);
-          });
-      });
-    }
-  }
-
-  function pollJob(jobId) {
-    if (pollTimer) clearTimeout(pollTimer);
-    fetch("/api/factor-admin/jobs/" + jobId)
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (!d.ok) return;
-        renderJob(d);
-        if (d.status === "running") {
-          pollTimer = setTimeout(function() { pollJob(jobId); }, 3000);
-        }
-      });
-  }
-
-  document.getElementById("wz-admin-submit").addEventListener("click", function() {
-    var payload = {
-      name: document.getElementById("wz-admin-name").value,
-      column: document.getElementById("wz-admin-column").value,
-      periods: document.getElementById("wz-admin-periods").value
-    };
-    fetch("/api/factor-admin/request", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
-    })
-    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
-    .then(function(res) {
-      if (!res.body.ok) {
-        var box = document.getElementById("wz-admin-job");
-        box.classList.remove("hidden");
-        box.innerHTML = '<p class="err">' + esc(res.body.error || "提交失败") + '</p>';
-        return;
-      }
-      renderJob(res.body);
-      pollJob(res.body.job_id);
-    });
-  });
-
-  // NL 缺因子跳转入口：切到向导 tab 并预填
-  window.wzGotoFactorAdmin = function(indicatorName, period) {
-    document.querySelector('.tab[data-tab="wizard"]').click();
-    var sec = document.getElementById("sec-wz-admin");
-    if (sec.classList.contains("collapsed")) {
-      document.querySelector('.section-toggle[data-section="wz-admin"]').click();
-    }
-    if (indicatorName) {
-      var nameSel = document.getElementById("wz-admin-name");
-      for (var i = 0; i < nameSel.options.length; i++) {
-        if (nameSel.options[i].value === indicatorName) { nameSel.value = indicatorName; break; }
-      }
-    }
-    if (period) document.getElementById("wz-admin-periods").value = period;
-    sec.scrollIntoView({behavior: "smooth"});
-  };
-
-  // init
-  loadFactorCatalog();
-  loadIndicators();
-  wzAddCondition("entry");
-  refreshWizard();
-})();
-</script>
-
-<!-- ============================================================ -->
-<!-- BUILDER TAB                                                     -->
-<!-- ============================================================ -->
-<div id="tab-builder" class="tab-content">
-<div class="builder-layout">
-  <div class="builder-main">
-
-    <!-- Section 1: Strategy Identity -->
-    <div class="section">
-      <button class="section-toggle" data-section="identity">策略基本信息 Strategy Identity &#9660;</button>
-      <div id="sec-identity" class="section-body">
-        <div class="form-grid">
-          <label>ID <span class="req">*</span></label>
-          <input type="text" id="b-id" placeholder="rsi2_oversold_reversal" data-required="true">
-
-          <label>名称 Name <span class="req">*</span></label>
-          <input type="text" id="b-name" placeholder="RSI2 Oversold Reversal" data-required="true">
-
-          <label>策略族 Family <span class="req">*</span></label>
-          <select id="b-family" data-required="true">
-            <option value="mean_reversion">均值回归 Mean Reversion</option>
-            <option value="trend_following">趋势跟踪 Trend Following</option>
-            <option value="breakout">突破 Breakout</option>
-            <option value="momentum">动量 Momentum</option>
-            <option value="carry">套利 Carry</option>
-            <option value="arbitrage">套利 Arbitrage</option>
-            <option value="custom">自定义 Custom</option>
-          </select>
-
-          <label>方向 Direction <span class="req">*</span></label>
-          <select id="b-direction" data-required="true">
-            <option value="long_only">仅做多 Long Only</option>
-            <option value="short_only">仅做空 Short Only</option>
-            <option value="long_short">多空 Long/Short</option>
-          </select>
-
-          <label>描述 Description <span class="req">*</span></label>
-          <textarea id="b-description" rows="2" placeholder="简要策略描述..." data-required="true"></textarea>
-
-          <label>版本 Version</label>
-          <input type="text" id="b-version" placeholder="1.0.0">
-        </div>
-      </div>
-    </div>
-
-    <!-- Section 2: Entry/Exit Rules -->
-    <div class="section">
-      <button class="section-toggle" data-section="rules">入场/离场规则 Entry / Exit Rules &#9660;</button>
-      <div id="sec-rules" class="section-body">
-
-        <h4>入场条件 Entry Conditions</h4>
-        <div class="rule-row">
-          <label class="label-sm">组合逻辑 Combinator</label>
-          <select id="b-entry-combinator">
-            <option value="all">ALL (AND)</option>
-            <option value="any">ANY (OR)</option>
-          </select>
-        </div>
-        <div id="entry-conditions" class="condition-list">
-          <div class="condition-item">
-            <select class="cond-alias-type">
-              <option value="alias">别名 Alias</option>
-              <option value="builtin">内置 Built-in</option>
-            </select>
-            <input type="text" class="cond-alias" placeholder="alias" size="12">
-            <select class="cond-op">
-              <option value="<">&lt;</option>
-              <option value=">">&gt;</option>
-              <option value="<=">&lt;=</option>
-              <option value=">=">&gt;=</option>
-              <option value="==">==</option>
-              <option value="!=">!=</option>
-              <option value="crosses_above">上穿 cross &gt;</option>
-              <option value="crosses_below">下穿 cross &lt;</option>
-            </select>
-            <input type="text" class="cond-value" placeholder="value or alias" size="12">
-            <button class="btn-sm btn-remove-cond" title="删除 Remove">x</button>
-          </div>
-        </div>
-        <button class="btn-sm" onclick="addCondition('entry-conditions')">+ 添加条件 Add Condition</button>
-
-        <h4 style="margin-top:12px;">离场条件 Exit Conditions <span class="opt">(可选 optional)</span></h4>
-        <div id="exit-enabled-wrap" class="rule-row">
-          <label class="label-sm">启用 Enable</label>
-          <input type="checkbox" id="b-exit-enabled" onchange="toggleExitSection()">
-        </div>
-        <div id="exit-section" style="display:none;">
-          <div class="rule-row">
-            <label class="label-sm">组合逻辑 Combinator</label>
-            <select id="b-exit-combinator">
-              <option value="all">ALL (AND)</option>
-              <option value="any">ANY (OR)</option>
-            </select>
-          </div>
-          <div id="exit-conditions" class="condition-list">
-            <div class="condition-item">
-              <select class="cond-alias-type">
-                <option value="alias">别名 Alias</option>
-                <option value="builtin">内置 Built-in</option>
-              </select>
-              <input type="text" class="cond-alias" placeholder="alias" size="12">
-              <select class="cond-op">
-                <option value="<">&lt;</option>
-                <option value=">">&gt;</option>
-                <option value="<=">&lt;=</option>
-                <option value=">=">&gt;=</option>
-                <option value="==">==</option>
-                <option value="!=">!=</option>
-                <option value="crosses_above">上穿 cross &gt;</option>
-                <option value="crosses_below">下穿 cross &lt;</option>
-              </select>
-              <input type="text" class="cond-value" placeholder="value or alias" size="12">
-              <button class="btn-sm btn-remove-cond" title="删除 Remove">x</button>
-            </div>
-          </div>
-          <button class="btn-sm" onclick="addCondition('exit-conditions')">+ 添加条件 Add Condition</button>
-        </div>
-
-        <h4 style="margin-top:12px;">风控参数 Risk Controls <span class="opt">(可选 optional)</span></h4>
-        <div class="form-grid form-grid-3">
-          <label>止损 Stop Loss %</label>
-          <input type="number" id="b-stop-loss" step="0.01" placeholder="e.g. 0.05">
-
-          <label>止盈 Take Profit %</label>
-          <input type="number" id="b-take-profit" step="0.01" placeholder="e.g. 0.10">
-
-          <label>最大持仓天数 Max Hold Days</label>
-          <input type="number" id="b-max-hold" placeholder="e.g. 20">
-        </div>
-      </div>
-    </div>
-
-    <!-- Section 3: Factor Requirements -->
-    <div class="section">
-      <button class="section-toggle" data-section="factors">因子需求 Factor Requirements &#9660;</button>
-      <div id="sec-factors" class="section-body">
-        <div id="factor-rows">
-          <div class="factor-item">
-            <input type="text" class="f-alias" placeholder="alias" size="10">
-            <select class="f-indicator">
-              <option value="">--指标 indicator--</option>
-              <option value="rsi">rsi</option>
-              <option value="ema">ema</option>
-              <option value="sma">sma</option>
-              <option value="wma">wma</option>
-              <option value="macd">macd</option>
-              <option value="bollinger">bollinger</option>
-              <option value="atr">atr</option>
-              <option value="adx">adx</option>
-              <option value="cci">cci</option>
-              <option value="mfi">mfi</option>
-              <option value="obv">obv</option>
-              <option value="stochastic">stochastic</option>
-              <option value="williams_r">williams_r</option>
-            </select>
-            <select class="f-source">
-              <option value="close">close</option>
-              <option value="open">open</option>
-              <option value="high">high</option>
-              <option value="low">low</option>
-              <option value="typical">typical</option>
-              <option value="hlc3">hlc3</option>
-              <option value="ohlc4">ohlc4</option>
-            </select>
-            <input type="number" class="f-period" placeholder="period" size="6" min="1">
-            <input type="text" class="f-params" placeholder="params" size="10">
-            <input type="text" class="f-output" placeholder="output" size="8">
-            <label class="label-inline"><input type="checkbox" class="f-required" checked> 必需 req</label>
-            <button class="btn-sm btn-remove-factor" title="删除 Remove">x</button>
-          </div>
-        </div>
-        <button class="btn-sm" onclick="addFactor()">+ 添加因子 Add Factor</button>
-      </div>
-    </div>
-
-    <!-- Section 4: Experiment Config -->
-    <div class="section">
-      <button class="section-toggle" data-section="experiment">实验配置 Experiment Configuration &#9660;</button>
-      <div id="sec-experiment" class="section-body">
-        <div class="form-grid">
-          <label>实验 ID</label>
-          <input type="text" id="b-exp-id" placeholder="auto-from-strategy-id">
-
-          <label>频率 Frequency</label>
-          <select id="b-frequency">
-            <option value="daily">日线 daily</option>
-          </select>
-
-          <label>市场 Market</label>
-          <select id="b-market">
-            <option value="ashare">A股 ashare</option>
-          </select>
-
-          <label>开始 Start <span class="req">*</span></label>
-          <input type="date" id="b-start" value="2025-01-02" data-required="true">
-
-          <label>结束 End <span class="req">*</span></label>
-          <input type="date" id="b-end" value="2026-05-23" data-required="true">
-
-          <label>股票池 Universe</label>
-          <select id="b-universe">
-            <option value="all_a">全 A 股 All A-shares</option>
-          </select>
-
-          <label>排除 ST</label>
-          <input type="checkbox" id="b-exclude-st" checked>
-
-          <label>排除停牌</label>
-          <input type="checkbox" id="b-exclude-suspended" checked>
-
-          <label>排除风险警示</label>
-          <input type="checkbox" id="b-exclude-risk" checked>
-
-          <label>最少上市天数</label>
-          <input type="number" id="b-min-listing" value="120" min="1">
-
-          <label>初始资金 Initial Cash</label>
-          <input type="number" id="b-cash" value="100000" min="1">
-
-          <label>最大持仓数 Max Positions</label>
-          <input type="number" id="b-maxpos" value="10" min="1">
-        </div>
-      </div>
-    </div>
-
-    <!-- Action buttons -->
-    <div class="builder-actions">
-      <button id="btn-compile">编译 Compile</button>
-      <span class="opt">运行参数 Run params:</span>
-      <select id="b-mode">
-        <option value="batch">批量 Batch</option>
-        <option value="shared">共享资金 Shared-cash</option>
-        <option value="single">单标的 Single-symbol</option>
-      </select>
-      <input type="text" id="b-codes" value="000001.SZ,000002.SZ" placeholder="codes" size="20">
-      <button id="btn-run-builder">运行 Run</button>
-      <span id="builder-run-status" class="hidden"></span>
-    </div>
-
-    <div id="compile-result" class="result-box hidden"></div>
-    <div id="builder-run-result" class="result-box hidden"></div>
-  </div>
-
-  <div class="builder-side">
-    <div class="info-box">
-      <strong>使用提示 Tips</strong>
-      <ul>
-        <li>填写所有必填字段 (<span class="req">*</span>)</li>
-        <li>每个条件需要绑定一个因子别名</li>
-        <li>内置别名: <code>close open high low pre_close vol amount</code></li>
-        <li>点击 <strong>编译 Compile</strong> 生成低层 YAML 规格</li>
-        <li>点击 <strong>运行 Run</strong> 编译并执行回测</li>
-        <li>切换到 <strong>YAML 编辑器</strong> 可手动编写策略</li>
-      </ul>
-    </div>
-  </div>
-</div>
-</div>
-
-<!-- ============================================================ -->
-<!-- EDITOR TAB (existing YAML editor)                              -->
-<!-- ============================================================ -->
-<div id="tab-editor" class="tab-content">
-<!-- 通道 C：自然语言 → YAML（安全闸：仅填入编辑器，需用户确认后手动提交） -->
-<div class="panel nl-panel">
-  <h2>自然语言描述策略（通道 C）</h2>
-  <textarea id="nl-description" rows="3" placeholder="例：20 日均线上穿 120 日均线买入，跌破 60 日线卖出，止损 -8%"></textarea>
-  <div class="editor-actions">
-    <button id="btn-nl-compile">编译为 YAML</button>
-    <span id="nl-status" class="hidden"></span>
-  </div>
-  <div id="nl-result" class="result-box hidden"></div>
-</div>
-
-<div class="layout">
-  <div class="panel editor-panel">
-    <h2>策略 YAML</h2>
-    <textarea id="strategy-yaml" rows="24" cols="80" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
-    <div class="editor-actions">
-      <button id="btn-validate">验证 Validate</button>
-      <button id="btn-save-sandbox" title="校验 + 查重 + 因子检查后存入沙箱，不自动执行">存入沙箱</button>
-      <label class="file-label">
-        加载文件 Load file
-        <input type="file" id="file-input" accept=".yaml,.yml" hidden>
-      </label>
-      <select id="template-select">
-        <option value="">-- 模板 templates --</option>
-        <option value="{{ default_strategy_name }}" selected>{{ default_strategy_name }} (默认 default)</option>
-        {% for name in templates %}
-        {% if name != default_strategy_name %}
-        <option value="{{ name }}">{{ name }}</option>
-        {% endif %}
-        {% endfor %}
-      </select>
-      <input type="text" id="template-name" placeholder="模板名称 template name" size="16">
-      <button id="btn-save-template">保存模板 Save Template</button>
-    </div>
-    <div id="validate-result" class="result-box hidden"></div>
-  </div>
-
-  <div class="panel param-panel">
-    <h2>回测参数 Parameters</h2>
-    <div class="form-grid">
-      <label>模式 Mode</label>
-      <select id="param-mode">
-        <option value="single">单标的 Single-symbol</option>
-        <option value="batch" selected>批量 Batch</option>
-        <option value="shared">共享资金 Shared-cash</option>
-      </select>
-
-      <label>标的范围 Universe</label>
-      <span class="label-inline"><input type="checkbox" id="param-all-market"> 全部 A 股（全市场，留空代码时生效）</span>
-
-      <label>股票代码 Codes</label>
-      <textarea id="param-codes" rows="2" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ">000001.SZ,000002.SZ</textarea>
-
-      <label>开始 Start</label>
-      <input type="text" id="param-start" value="2026-01-05" placeholder="YYYY-MM-DD">
-
-      <label>结束 End</label>
-      <input type="text" id="param-end" value="2026-03-31" placeholder="YYYY-MM-DD">
-
-      <label>快捷区间 Range</label>
-      <span>
-        <button type="button" class="btn-sm range-btn" data-years="1">近1年</button>
-        <button type="button" class="btn-sm range-btn" data-years="2">近2年</button>
-        <button type="button" class="btn-sm range-btn" data-years="5">近5年</button>
-        <button type="button" class="btn-sm" id="range-all">全期(2010起)</button>
-      </span>
-
-      <label>初始资金 Initial Cash</label>
-      <input type="text" id="param-cash" value="100000" placeholder="100000">
-
-      <label>最大持仓 Max Positions</label>
-      <input type="text" id="param-maxpos" value="10" placeholder="10（共享资金模式用）">
-
-      <label>佣金率 Commission</label>
-      <input type="text" id="param-commission" value="0.0003" placeholder="0.0003">
-
-      <label>最低佣金 Min Commission</label>
-      <input type="text" id="param-min-commission" value="5.0" placeholder="5.0">
-
-      <label>印花税(卖出) Stamp Tax</label>
-      <input type="text" id="param-stamp-tax" value="0.0005" placeholder="0.0005">
-
-      <label>买入滑点 Slippage Buy</label>
-      <input type="text" id="param-slip-buy" value="0" placeholder="0">
-
-      <label>卖出滑点 Slippage Sell</label>
-      <input type="text" id="param-slip-sell" value="0" placeholder="0">
-
-      <label>止损 Stop Loss %</label>
-      <input type="text" id="param-stop-loss" placeholder="可空，如 0.08">
-
-      <label>止盈 Take Profit %</label>
-      <input type="text" id="param-take-profit" placeholder="可空，如 0.15">
-
-      <label>移动止损 Trailing %</label>
-      <input type="text" id="param-trailing-stop" placeholder="可空，如 0.05">
-
-      <label>引擎实现 Engine Impl</label>
-      <select id="param-engine-impl">
-        <option value="simulator">逐 bar 仿真 simulator</option>
-        <option value="vectorized">向量化 vectorized</option>
-      </select>
-
-      <label>小样本预检 Precheck</label>
-      <span class="label-inline"><input type="checkbox" id="param-precheck" checked> 先跑前 20 只 × 近 6 个月</span>
-
-      <label>输出目录 Output Dir</label>
-      <input type="text" id="param-output" value="outputs/gui-run" placeholder="outputs/gui-run">
-
-      <label>数据库 DB URL</label>
-      <input type="text" id="param-dburl" placeholder="postgresql+psycopg:///tushare_data">
-
-      <label>市场规则 Market Profile</label>
-      <input type="text" id="param-profile" placeholder="configs/market_profiles/ashare_daily_default.yaml">
-
-      <label>执行方式 Executor</label>
-      <select id="param-executor">
-        <option value="module">模块直调 Module (direct)</option>
-        <option value="cli">CLI 子进程 (subprocess)</option>
-      </select>
-    </div>
-    <div class="run-actions">
-      <button id="btn-run">运行回测 Run Backtest</button>
-      <span id="run-status" class="hidden"></span>
-    </div>
-  </div>
-</div>
-
-<div id="run-result" class="result-box hidden"></div>
-
-<!-- 策略创建闭环（P1）：沙箱列表 + 冒烟 / 晋升 / 删除 -->
-<div class="panel" id="sandbox-panel">
-  <h2>沙箱策略 Sandbox
-    <button class="btn-sm" id="btn-sandbox-refresh">刷新</button>
-  </h2>
-  <p class="opt">沙箱策略不参与 refresh 日更；冒烟通过后可晋升入 catalog（晋升后立即触发一次全量后台回测）。</p>
-  <div id="sandbox-status" class="opt hidden"></div>
-  <div id="sandbox-list"></div>
-</div>
-</div>
-
-<script>
-(function() {
-  // ============================================================
-  // TAB SWITCHING
-  // ============================================================
-  var tabs = document.querySelectorAll('.tab');
-  var contents = document.querySelectorAll('.tab-content');
-  tabs.forEach(function(t) {
-    t.addEventListener('click', function() {
-      tabs.forEach(function(x) { x.classList.remove('active'); });
-      contents.forEach(function(x) { x.classList.remove('active'); });
-      t.classList.add('active');
-      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
-    });
-  });
-
-  // ============================================================
-  // SECTION TOGGLE
-  // ============================================================
-  document.querySelectorAll('.section-toggle').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var sec = document.getElementById('sec-' + btn.dataset.section);
-      sec.classList.toggle('collapsed');
-      btn.classList.toggle('collapsed');
-    });
-  });
-
-  // ============================================================
-  // BUILDER HELPERS
-  // ============================================================
-  window.toggleExitSection = function() {
-    var chk = document.getElementById('b-exit-enabled');
-    var sec = document.getElementById('exit-section');
-    sec.style.display = chk.checked ? '' : 'none';
-  };
-
-  window.addCondition = function(containerId) {
-    var container = document.getElementById(containerId);
-    var div = document.createElement('div');
-    div.className = 'condition-item';
-    div.innerHTML = '<select class="cond-alias-type"><option value="alias">别名 Alias</option><option value="builtin">内置 Built-in</option></select> '
-      + '<input type="text" class="cond-alias" placeholder="alias" size="12"> '
-      + '<select class="cond-op"><option value="<">&lt;</option><option value=">">&gt;</option><option value="<=">&lt;=</option><option value=">=">&gt;=</option><option value="==">==</option><option value="!=">!=</option><option value="crosses_above">上穿 cross &gt;</option><option value="crosses_below">下穿 cross &lt;</option></select> '
-      + '<input type="text" class="cond-value" placeholder="value or alias" size="12"> '
-      + '<button class="btn-sm btn-remove-cond" title="删除 Remove">x</button>';
-    container.appendChild(div);
-    div.querySelector('.btn-remove-cond').addEventListener('click', function() { div.remove(); });
-  };
-
-  document.querySelectorAll('.btn-remove-cond').forEach(function(b) {
-    b.addEventListener('click', function() { b.closest('.condition-item').remove(); });
-  });
-
-  window.addFactor = function() {
-    var container = document.getElementById('factor-rows');
-    var div = document.createElement('div');
-    div.className = 'factor-item';
-    div.innerHTML = '<input type="text" class="f-alias" placeholder="alias" size="10"> '
-      + '<select class="f-indicator"><option value="">--指标 indicator--</option><option value="rsi">rsi</option><option value="ema">ema</option><option value="sma">sma</option><option value="wma">wma</option><option value="macd">macd</option><option value="bollinger">bollinger</option><option value="atr">atr</option><option value="adx">adx</option><option value="cci">cci</option><option value="mfi">mfi</option><option value="obv">obv</option><option value="stochastic">stochastic</option><option value="williams_r">williams_r</option></select> '
-      + '<select class="f-source"><option value="close">close</option><option value="open">open</option><option value="high">high</option><option value="low">low</option><option value="typical">typical</option><option value="hlc3">hlc3</option><option value="ohlc4">ohlc4</option></select> '
-      + '<input type="number" class="f-period" placeholder="period" size="6" min="1"> '
-      + '<input type="text" class="f-params" placeholder="params" size="10"> '
-      + '<input type="text" class="f-output" placeholder="output" size="8"> '
-      + '<label class="label-inline"><input type="checkbox" class="f-required" checked> 必需 req</label> '
-      + '<button class="btn-sm btn-remove-factor" title="删除 Remove">x</button>';
-    container.appendChild(div);
-    div.querySelector('.btn-remove-factor').addEventListener('click', function() { div.remove(); });
-  };
-
-  document.querySelectorAll('.btn-remove-factor').forEach(function(b) {
-    b.addEventListener('click', function() { b.closest('.factor-item').remove(); });
-  });
-
-  // ============================================================
-  // SERIALIZE BUILDER FORM -> HIGH-LEVEL ENTRY
-  // ============================================================
-  function readConditions(containerId) {
-    var items = document.getElementById(containerId).querySelectorAll('.condition-item');
-    var conds = [];
-    items.forEach(function(item) {
-      var alias = item.querySelector('.cond-alias').value.trim();
-      if (!alias) return;
-      var entry = {
-        alias: alias,
-        operator: item.querySelector('.cond-op').value
-      };
-      var val = item.querySelector('.cond-value').value.trim();
-      if (val) {
-        var num = parseFloat(val);
-        entry.value = isNaN(num) ? val : num;
-      }
-      conds.push(entry);
-    });
-    return conds;
-  }
-
-  function serializeForm() {
-    var data = {};
-
-    // strategy
-    data.strategy = {
-      id: document.getElementById('b-id').value.trim(),
-      name: document.getElementById('b-name').value.trim(),
-      family: document.getElementById('b-family').value,
-      direction: document.getElementById('b-direction').value,
-      description: document.getElementById('b-description').value.trim()
-    };
-    var ver = document.getElementById('b-version').value.trim();
-    if (ver) data.strategy.version = ver;
-
-    // rules
-    var entryConds = readConditions('entry-conditions');
-    var rules = {};
-    rules.entry = {};
-    rules.entry[document.getElementById('b-entry-combinator').value] = entryConds;
-
-    if (document.getElementById('b-exit-enabled').checked) {
-      var exitConds = readConditions('exit-conditions');
-      if (exitConds.length > 0) {
-        rules.exit = {};
-        rules.exit[document.getElementById('b-exit-combinator').value] = exitConds;
-      }
-    }
-
-    var risk = {};
-    var sl = document.getElementById('b-stop-loss').value;
-    var tp = document.getElementById('b-take-profit').value;
-    var mh = document.getElementById('b-max-hold').value;
-    if (sl) risk.stop_loss_pct = parseFloat(sl);
-    if (tp) risk.take_profit_pct = parseFloat(tp);
-    if (mh) risk.max_holding_days = parseInt(mh);
-    if (Object.keys(risk).length > 0) rules.risk = risk;
-
-    data.rules = rules;
-
-    // factor_requirements
-    var factors = [];
-    document.getElementById('factor-rows').querySelectorAll('.factor-item').forEach(function(item) {
-      var alias = item.querySelector('.f-alias').value.trim();
-      var indicator = item.querySelector('.f-indicator').value;
-      if (!alias || !indicator) return;
-      var req = {
-        alias: alias,
-        indicator: indicator,
-        source: item.querySelector('.f-source').value,
-        period: parseInt(item.querySelector('.f-period').value) || undefined,
-        reason: 'GUI builder entry'
-      };
-      var params = item.querySelector('.f-params').value.trim();
-      var output = item.querySelector('.f-output').value.trim();
-      var required = item.querySelector('.f-required').checked;
-      if (params) req.params = params;
-      if (output) req.output = output;
-      if (!required) req.required = false;
-      factors.push(req);
-    });
-    data.factor_requirements = factors;
-
-    // experiment
-    var expId = document.getElementById('b-exp-id').value.trim();
-    var strategyId = data.strategy.id;
-    data.experiment = {
-      id: expId || strategyId || 'gui-build',
-      frequency: document.getElementById('b-frequency').value,
-      market: document.getElementById('b-market').value,
-      start: document.getElementById('b-start').value,
-      end: document.getElementById('b-end').value,
-      universe: {
-        include: document.getElementById('b-universe').value,
-        exclude_st: document.getElementById('b-exclude-st').checked,
-        exclude_suspended: document.getElementById('b-exclude-suspended').checked,
-        exclude_risk_warning: document.getElementById('b-exclude-risk').checked,
-        min_listing_days: parseInt(document.getElementById('b-min-listing').value) || 120
-      },
-      execution: {
-        market_profile: 'ashare_daily_default'
-      },
-      capital: {
-        initial_cash: parseFloat(document.getElementById('b-cash').value) || 100000,
-        max_positions: parseInt(document.getElementById('b-maxpos').value) || 10
-      }
-    };
-    return data;
-  }
-
-  // ============================================================
-  // COMPILE
-  // ============================================================
-  document.getElementById('btn-compile').addEventListener('click', function() {
-    var data = serializeForm();
-    var resultBox = document.getElementById('compile-result');
-    resultBox.classList.remove('hidden');
-    resultBox.innerHTML = '<span>编译中 Compiling...</span>';
-
-    fetch('/api/builder/compile', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(data)
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.ok) {
-        resultBox.innerHTML = '<div class="ok">编译成功 Compilation successful</div>'
-          + '<pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
-        // Store for run
-        resultBox._compiledYaml = d.yaml;
-      } else {
-        var issues = (d.issues || []).map(function(i) {
-          return '<li class="' + i.level + '">[' + i.level + '] ' + escHtml(i.message) + '</li>';
-        }).join('');
-        resultBox.innerHTML = '<div class="err">编译失败 Compilation failed:</div><ul>' + issues + '</ul>';
-        resultBox._compiledYaml = null;
-      }
-    })
-    .catch(function(err) {
-      resultBox.innerHTML = '<span class="err">错误 Error: ' + err + '</span>';
-    });
-  });
-
-  // ============================================================
-  // RUN (builder)
-  // ============================================================
-  document.getElementById('btn-run-builder').addEventListener('click', function() {
-    var compileResult = document.getElementById('compile-result');
-    var statusEl = document.getElementById('builder-run-status');
-    var resultBox = document.getElementById('builder-run-result');
-
-    // If we already compiled, reuse it; otherwise compile first
-    function doRun(yamlText) {
-      var payload = {
-        yaml: yamlText,
-        mode: document.getElementById('b-mode').value,
-        start: document.getElementById('b-start').value,
-        end: document.getElementById('b-end').value,
-        codes: document.getElementById('b-codes').value,
-        initial_cash: document.getElementById('b-cash').value,
-        max_positions: document.getElementById('b-maxpos').value,
-        output_dir: 'outputs/gui-run',
-        executor: 'module'
-      };
-
-      statusEl.classList.remove('hidden');
-      statusEl.textContent = '运行中 Running...';
-      statusEl.className = '';
-
-      fetch('/api/run', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-      })
-      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
-      .then(function(res) {
-        var d = res.body;
-        resultBox.classList.remove('hidden');
-        if (res.status === 200 && d.run_id) {
-          statusEl.textContent = '已提交 Queued';
-          statusEl.className = 'ok';
-          resultBox.innerHTML =
-            '<p><strong>运行 ID Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>'
-            + '<p><strong>模式 Mode:</strong> ' + d.mode + '</p>'
-            + '<p>后台执行中，<a href="/runs/' + d.run_id + '">查看进度与结果 View Results</a></p>';
-        } else {
-          statusEl.textContent = '失败 Failed';
-          statusEl.className = 'err';
-          resultBox.innerHTML = '<p class="err">错误 Error: ' + (d.error || 'Unknown error') + '</p>';
-        }
-      })
-      .catch(function(err) {
-        statusEl.textContent = '错误 Error';
-        statusEl.className = 'err';
-        resultBox.innerHTML = '<p class="err">' + err + '</p>';
-      });
-    }
-
-    if (compileResult._compiledYaml) {
-      doRun(compileResult._compiledYaml);
-      return;
-    }
-
-    // Compile then run
-    var data = serializeForm();
-    statusEl.classList.remove('hidden');
-    statusEl.textContent = '编译中 Compiling...';
-    statusEl.className = '';
-
-    fetch('/api/builder/compile', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(data)
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.ok) {
-        compileResult._compiledYaml = d.yaml;
-        compileResult.classList.remove('hidden');
-        compileResult.innerHTML = '<div class="ok">编译成功 Compilation successful</div>'
-          + '<pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
-        doRun(d.yaml);
-      } else {
-        var issues = (d.issues || []).map(function(i) {
-          return '<li class="' + i.level + '">[' + i.level + '] ' + escHtml(i.message) + '</li>';
-        }).join('');
-        compileResult.classList.remove('hidden');
-        compileResult.innerHTML = '<div class="err">编译失败 Compilation failed:</div><ul>' + issues + '</ul>';
-        statusEl.textContent = '编译失败 Compile failed';
-        statusEl.className = 'err';
-      }
-    })
-    .catch(function(err) {
-      statusEl.textContent = '错误 Error';
-      statusEl.className = 'err';
-      resultBox.innerHTML = '<p class="err">' + err + '</p>';
-    });
-  });
-
-  function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  // ============================================================
-  // EDITOR TAB (existing logic, unchanged)
-  // ============================================================
+  // ---------- YAML 预览栏 ----------
   var yamlEl = document.getElementById("strategy-yaml");
   var validateBox = document.getElementById("validate-result");
   var runStatus = document.getElementById("run-status");
   var runResult = document.getElementById("run-result");
-
-  function show(el) { el.classList.remove("hidden"); }
-  function hide(el) { el.classList.add("hidden"); }
 
   (function() {
     var yaml = sessionStorage.getItem("rerun_yaml");
     if (yaml) {
       sessionStorage.removeItem("rerun_yaml");
       yamlEl.value = yaml;
-      // Switch to editor tab
-      document.querySelectorAll('.tab-content').forEach(function(x) { x.classList.remove('active'); });
-      document.getElementById('tab-editor').classList.add('active');
-      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-      var edTab = document.querySelector('.tab[data-tab="editor"]');
-      if (edTab) edTab.classList.add('active');
+      yamlEl.scrollIntoView({behavior: "smooth"});
     }
   })();
 
-  // ============================================================
-  // 通道 C: NL → YAML (安全闸：只填入编辑器，绝不自动执行)
-  // ============================================================
+  // ---------- 方式一: NL → YAML (安全闸：只填入预览栏，绝不自动执行) ----------
   var nlDesc = document.getElementById("nl-description");
   var nlStatus = document.getElementById("nl-status");
   var nlResult = document.getElementById("nl-result");
@@ -1261,16 +648,16 @@
         nlStatus.className = "ok";
         yamlEl.value = d.yaml;
         var warn = (d.warnings || []).map(function(w) { return '<p class="opt">' + escHtml(w) + '</p>'; }).join('');
-        nlResult.innerHTML = '<p class="ok">已填入下方 YAML 编辑器，<strong>请检查确认后再提交回测</strong>（不会自动执行）。</p>' + warn;
+        nlResult.innerHTML = '<p class="ok">已填入下方 YAML 预览栏，<strong>请检查确认后再提交回测</strong>（不会自动执行）。</p>' + warn;
       } else {
         nlStatus.textContent = "编译失败";
         nlStatus.className = "err";
         var html = '<p class="err">' + escHtml(d.error || "未知错误") + '</p>';
         if (d.code === "missing_factors") {
-          html += '<p><a href="#" id="nl-goto-factor-admin">→ 前往新因子申请（向导第 3 步）</a></p>';
+          html += '<p><a href="#" id="nl-goto-factor-admin">→ 前往「新增因子」tab（路径 A 补周期 / 路径 B 全新指标）</a></p>';
         }
         if (d.yaml) {
-          html += '<p class="opt">可编辑草稿（修正后可手动粘贴到编辑器）：</p><pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
+          html += '<p class="opt">可编辑草稿（修正后可手动粘贴到预览栏）：</p><pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
         }
         nlResult.innerHTML = html;
         var gotoLink = document.getElementById("nl-goto-factor-admin");
@@ -1436,9 +823,7 @@
     });
   });
 
-  // ============================================================
-  // 策略创建闭环（P1）：存入沙箱 / 沙箱面板
-  // ============================================================
+  // ---------- 策略创建闭环（P1）：存入沙箱 / 沙箱面板 ----------
   var sandboxStatus = document.getElementById("sandbox-status");
   var sandboxList = document.getElementById("sandbox-list");
   var sandboxCategories = [];
@@ -1502,7 +887,7 @@
         sandboxCategories = d.categories || [];
         var items = d.strategies || [];
         if (!items.length) {
-          sandboxList.innerHTML = '<p class="opt">（沙箱为空：用上方"存入沙箱"按钮把编辑器中的策略放进来）</p>';
+          sandboxList.innerHTML = '<p class="opt">（沙箱为空：用上方"存入沙箱"按钮把预览栏中的策略放进来）</p>';
           return;
         }
         var html = "";
@@ -1520,7 +905,7 @@
             '<button class="btn-sm sb-smoke">冒烟测试</button> ' +
             '<select class="sb-category">' + options + '</select>' +
             '<button class="btn-sm sb-promote">晋升</button> ' +
-            '<button class="btn-sm sb-delete">删除</button>' +
+            '<button class="btn-sm btn-danger-outline sb-delete">删除</button>' +
             '</div>';
         });
         sandboxList.innerHTML = html;
@@ -1543,7 +928,284 @@
   }
 
   document.getElementById("btn-sandbox-refresh").addEventListener("click", loadSandbox);
+
+  // init
+  loadFactorCatalog();
+  wzAddCondition("entry");
+  refreshWizard();
   loadSandbox();
+})();
+</script>
+
+<script>
+// ============================================================
+// TAB 2 新增因子 — 独立作用域（路径 A factor-admin + 路径 B factor-create）
+// ============================================================
+(function() {
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function fillSelect(sel, options, current) {
+    sel.innerHTML = "";
+    options.forEach(function(o) {
+      var opt = document.createElement("option");
+      opt.value = o.value;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  }
+
+  // ---------- 路径 A：已有指标 · 新增周期/价格源 ----------
+  var pollTimer = null;
+
+  function loadIndicators() {
+    fetch("/api/factor-admin/indicators")
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var statusEl = document.getElementById("wz-admin-status");
+        if (!res.body.ok) {
+          statusEl.innerHTML = '<span class="err">' + esc(res.body.error || "指标清单不可用") + '</span>';
+          document.getElementById("wz-admin-submit").disabled = true;
+          return;
+        }
+        statusEl.textContent = "指标名与价格类型来自 indicators_tushare 已配置清单：";
+        fillSelect(document.getElementById("wz-admin-name"),
+          res.body.names.map(function(n) { return {value: n, label: n}; }));
+        fillSelect(document.getElementById("wz-admin-column"),
+          res.body.columns.map(function(c) { return {value: c, label: c}; }));
+      })
+      .catch(function(err) {
+        document.getElementById("wz-admin-status").innerHTML =
+          '<span class="err">指标清单加载失败: ' + esc(err) + '</span>';
+      });
+  }
+
+  function renderJob(d) {
+    var box = document.getElementById("wz-admin-job");
+    box.classList.remove("hidden");
+    var statusLabel = {
+      running: "运行中", awaiting_execute_confirmation: "sample 完成，待人工确认",
+      completed: "已完成", failed: "失败"
+    }[d.status] || d.status;
+    var html = '<p><strong>任务:</strong> ' + esc(d.job_id) + ' <strong>状态:</strong> ' + esc(statusLabel)
+      + (d.step ? '（步骤: ' + esc(d.step) + '）' : '') + '</p>';
+    if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
+    if (d.status === "awaiting_execute_confirmation") {
+      html += '<p class="ok">sample 回填成功。确认无误后点击按钮执行全量回填（重操作）：</p>'
+        + '<button id="wz-admin-confirm" class="btn btn-danger-outline">确认全量回填 --execute</button>';
+    }
+    if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
+    box.innerHTML = html;
+    var btn = document.getElementById("wz-admin-confirm");
+    if (btn) {
+      btn.addEventListener("click", function() {
+        btn.disabled = true;
+        fetch("/api/factor-admin/" + d.job_id + "/execute", {method: "POST"})
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (!res.ok) { btn.disabled = false; alert(res.error || "确认失败"); }
+            pollJob(d.job_id);
+          });
+      });
+    }
+  }
+
+  function pollJob(jobId) {
+    if (pollTimer) clearTimeout(pollTimer);
+    fetch("/api/factor-admin/jobs/" + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        renderJob(d);
+        if (d.status === "running") {
+          pollTimer = setTimeout(function() { pollJob(jobId); }, 3000);
+        }
+      });
+  }
+
+  document.getElementById("wz-admin-submit").addEventListener("click", function() {
+    var payload = {
+      name: document.getElementById("wz-admin-name").value,
+      column: document.getElementById("wz-admin-column").value,
+      periods: document.getElementById("wz-admin-periods").value
+    };
+    fetch("/api/factor-admin/request", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(res) {
+      if (!res.body.ok) {
+        var box = document.getElementById("wz-admin-job");
+        box.classList.remove("hidden");
+        box.innerHTML = '<p class="err">' + esc(res.body.error || "提交失败") + '</p>';
+        return;
+      }
+      renderJob(res.body);
+      pollJob(res.body.job_id);
+    });
+  });
+
+  // NL 缺因子跳转入口：切到「新增因子」tab 的路径 A 并预填
+  window.wzGotoFactorAdmin = function(indicatorName, period) {
+    document.querySelector('.tab[data-tab="factor"]').click();
+    var sec = document.getElementById("sec-wz-admin");
+    if (sec.classList.contains("collapsed")) {
+      document.querySelector('.section-toggle[data-section="wz-admin"]').click();
+    }
+    if (indicatorName) {
+      var nameSel = document.getElementById("wz-admin-name");
+      for (var i = 0; i < nameSel.options.length; i++) {
+        if (nameSel.options[i].value === indicatorName) { nameSel.value = indicatorName; break; }
+      }
+    }
+    if (period) document.getElementById("wz-admin-periods").value = period;
+    sec.scrollIntoView({behavior: "smooth"});
+  };
+
+  // ---------- 路径 B：全新指标 · NL/手写生成（factor-create 闭环） ----------
+  function fcPeriodsValue() {
+    var raw = document.getElementById('fc-periods').value.trim();
+    if (!raw || raw === 'null') return [null];
+    return raw.split(',').map(function(s) { return parseInt(s.trim(), 10); }).filter(function(n) { return !isNaN(n); });
+  }
+  function fcPayload() {
+    return {
+      code: document.getElementById('fc-code').value,
+      name: document.getElementById('fc-name').value.trim(),
+      category: document.getElementById('fc-category').value,
+      column: document.getElementById('fc-column').value,
+      periods: fcPeriodsValue()
+    };
+  }
+  function fcShow(html) {
+    var box = document.getElementById('fc-result');
+    box.classList.remove('hidden');
+    box.innerHTML = html;
+  }
+  function fcPost(url, payload, onOk) {
+    return fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    }).then(function(r) { return r.json(); }).then(onOk);
+  }
+
+  document.getElementById('fc-generate').addEventListener('click', function() {
+    var desc = document.getElementById('fc-desc').value.trim();
+    if (!desc) { alert('请先填写自然语言描述'); return; }
+    document.getElementById('fc-gen-status').textContent = '生成中（约十几秒）...';
+    fcPost('/api/factor-create/nl-generate', {description: desc}, function(d) {
+      if (!d.ok) {
+        document.getElementById('fc-gen-status').textContent = '';
+        fcShow('<p class="err">' + esc(d.error || '生成失败') + '</p>');
+        return;
+      }
+      document.getElementById('fc-gen-status').textContent = '已生成（请人工核对代码与参数）';
+      document.getElementById('fc-code').value = d.code;
+      if (d.meta) {
+        document.getElementById('fc-name').value = d.meta.name || '';
+        document.getElementById('fc-category').value = d.meta.category || '';
+        document.getElementById('fc-column').value = d.meta.column || 'close';
+        var periods = d.meta.periods;
+        if (periods && periods.length && periods[0] !== null) {
+          document.getElementById('fc-periods').value = periods.join(',');
+        } else if (d.meta.params) {
+          document.getElementById('fc-periods').value = '';
+        } else {
+          document.getElementById('fc-periods').value = 'null';
+        }
+      }
+    });
+  });
+
+  document.getElementById('fc-check').addEventListener('click', function() {
+    fcShow('<p class="opt">检查中...</p>');
+    fcPost('/api/factor-create/check', fcPayload(), function(d) {
+      var html = '';
+      if (d.violations && d.violations.length) html += '<p class="err">安全检查未通过：' + esc(d.violations.join('；')) + '</p>';
+      else html += '<p class="ok">安全检查通过</p>';
+      if (d.duplicate) html += '<p class="err">查重命中：' + esc(d.duplicate) + '</p>';
+      else if (!d.violations || !d.violations.length) html += '<p class="ok">查重通过（无冲突列）</p>';
+      if (d.warning) html += '<p class="opt">' + esc(d.warning) + '</p>';
+      fcShow(html);
+    });
+  });
+
+  document.getElementById('fc-smoke').addEventListener('click', function() {
+    fcShow('<p class="opt">冒烟中（单股只读，最长 120s）...</p>');
+    fcPost('/api/factor-create/smoke', fcPayload(), function(d) {
+      if (!d.ok) {
+        fcShow('<p class="err">冒烟失败：' + esc(d.error || (d.errors || []).join('；') || '未知错误') + '</p>');
+        return;
+      }
+      fcShow('<p class="ok">冒烟通过</p><p>因子类 ' + esc(d.factor_class)
+        + '（' + esc(d.indicator_name) + ' / ' + esc(d.category) + '），样本 ' + esc(d.code)
+        + ' ' + esc(d.rows) + ' 行，输出列：<code>' + esc((d.columns || []).join(', ')) + '</code></p>');
+      loadFcSandbox();
+    });
+  });
+
+  function pollFcJob(jobId) {
+    var box = document.getElementById('fc-job');
+    box.classList.remove('hidden');
+    fetch('/api/admin/daily-jobs/' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        var label = {running: '运行中', completed: '已完成', failed: '失败'}[d.status] || d.status;
+        var html = '<p>入库任务 ' + esc(d.job_id) + '（' + esc(d.label || '') + '）：<strong>' + label + '</strong></p>';
+        if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
+        if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
+        box.innerHTML = html;
+        if (d.status === 'running') {
+          setTimeout(function() { pollFcJob(jobId); }, 3000);
+        } else {
+          loadFcSandbox();
+        }
+      });
+  }
+
+  document.getElementById('fc-promote').addEventListener('click', function() {
+    var p = fcPayload();
+    if (!p.name || !p.category || !p.column) { alert('请填写 指标名/类别/价格列'); return; }
+    if (!confirm('确认晋升因子 ' + p.name + '（' + p.category + '/' + p.column + '，周期 ' + document.getElementById('fc-periods').value + '）？\n将写入 indicators_tushare 的 factors/ 与 config/factors.yaml，并后台执行 validate + backfill --execute。')) return;
+    fcPost('/api/factor-create/promote', p, function(d) {
+      if (!d.ok) { fcShow('<p class="err">晋升失败：' + esc(d.error || '未知错误') + '</p>'); return; }
+      fcShow('<p class="ok">已晋升：' + esc(d.path) + '</p><p class="opt">config 备份：' + esc(d.config_backup || '—') + '；次日 16:40 日更自动接管。</p>');
+      if (d.job_id) pollFcJob(d.job_id);
+    });
+  });
+
+  function loadFcSandbox() {
+    fetch('/api/factor-create/sandbox')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var el = document.getElementById('fc-sandbox-list');
+        if (!d.ok || !d.factors.length) { el.innerHTML = '<span class="opt">（空）</span>'; return; }
+        el.innerHTML = '<ul>' + d.factors.map(function(f) {
+          return '<li><code>' + esc(f.name) + '</code> <span class="opt">' + esc(f.mtime) + '</span>'
+            + ' <button class="btn-sm btn-danger-outline" data-fc-del="' + esc(f.name) + '">删除</button></li>';
+        }).join('') + '</ul>';
+        el.querySelectorAll('[data-fc-del]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (!confirm('删除沙箱因子 ' + btn.dataset.fcDel + '？')) return;
+            fcPost('/api/factor-create/sandbox/delete', {name: btn.dataset.fcDel}, function(d2) {
+              if (!d2.ok) alert(d2.error || '删除失败');
+              loadFcSandbox();
+            });
+          });
+        });
+      });
+  }
+  document.getElementById('fc-sandbox-refresh').addEventListener('click', loadFcSandbox);
+
+  // init
+  loadIndicators();
+  loadFcSandbox();
 })();
 </script>
 {% endblock %}

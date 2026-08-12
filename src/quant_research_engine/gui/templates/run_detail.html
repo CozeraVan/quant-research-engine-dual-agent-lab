@@ -11,7 +11,7 @@
 <div class="precheck-banner">
   <strong>这是小样本预检（前 20 只 × 近 6 个月）。</strong>
   结果仅用于快速验证策略可跑通，不代表完整区间表现。
-  <button id="btn-full-run">放大到完整范围 Run Full Scope</button>
+  <button id="btn-full-run" class="btn btn-primary">放大到完整范围 Run Full Scope</button>
   <span id="full-run-status"></span>
 </div>
 {% endif %}
@@ -27,7 +27,7 @@
 </div>
 
 <div class="actions">
-  <button id="btn-rerun">重新运行 Rerun</button>
+  <button id="btn-rerun" class="btn btn-ghost">重新运行 Rerun</button>
 </div>
 
 {% if summary_fields %}
@@ -36,7 +36,7 @@
 <thead><tr><th>指标 Metric</th><th>值 Value</th></tr></thead>
 <tbody>
 {% for row in summary_fields %}
-<tr><td>{{ row.label }}</td><td>{{ row.value | fmtval(row.is_pct) }}</td></tr>
+<tr><td>{{ row.label }}</td><td class="num">{{ row.value | fmtval(row.is_pct) }}</td></tr>
 {% endfor %}
 </tbody>
 </table>

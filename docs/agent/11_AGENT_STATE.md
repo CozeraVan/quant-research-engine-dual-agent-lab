@@ -12,7 +12,9 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-FACTOR-CREATE-P2-001 (DONE — 1385 tests green; awaiting git approval)
+QRE-GUI-HOME-REFACTOR-001 (DONE — 1391 tests green; awaiting git approval)
+
+2026-08-12: GUI 首页三 tab → 两 tab（新增策略一页三入口 + 新增因子路径 A/B，fc-create 迁入首页，tab-builder 删除，app.py 零改动）。详见 09_CODING_HANDOFF 顶部。上一任务：QRE-ADMIN-STRAT-INCREMENTAL-FIX-001（策略状态 tab 增量合并）。
 
 2026-08-12: GUI 新因子创建闭环 P2（/api/factor-create/* + indicators sandbox 冒烟 + 晋升 validate→backfill job）。真实 E2E：vidya 因子 DeepSeek 生成 → 冒烟过 → 晋升 job 20260812T030850074330。详见 09_CODING_HANDOFF 顶部。上一任务：QRE-ADMIN-CONSOLE-P3A-001 + QRE-ADMIN-FACTOR-HEALTH-FIX-001 (1264 tests green)。
 

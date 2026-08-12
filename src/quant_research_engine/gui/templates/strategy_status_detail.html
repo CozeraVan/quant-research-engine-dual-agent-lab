@@ -31,13 +31,13 @@
       {%- if result.full_metrics_as_of and m.date_end and result.full_metrics_as_of < m.date_end %}
       <small class="opt">（超额/回撤等全量指标截至 {{ result.full_metrics_as_of }}）</small>{% endif %}</td></tr>
     <tr><td>回测股票数量</td><td>{{ m.traded_symbol_count or '—' }} / {{ m.symbol_count or '—' }}（触发/总数）</td></tr>
-    <tr><td>总收益率</td><td>{{ m.strategy_total_return | fmtval(true) }}</td></tr>
-    <tr><td>买入持有收益率</td><td>{{ m.buy_hold_return | fmtval(true) }}</td></tr>
-    <tr><td>策略超额收益</td><td>{{ (m.excess_return_vs_buy_hold if m.excess_return_vs_buy_hold is not none else m.benchmark_excess) | fmtval(true) }}</td></tr>
-    <tr><td>最大回撤</td><td>{{ m.max_drawdown | fmtval(true) }}</td></tr>
-    <tr><td>胜率</td><td>{{ m.win_rate | fmtval(true) }}</td></tr>
-    <tr><td>盈亏比</td><td>{{ m.profit_factor | fmtval(false) }}</td></tr>
-    <tr><td>总交易数</td><td>{{ m.total_trade_count or '—' }}</td></tr>
+    <tr><td>总收益率</td><td class="num">{{ m.strategy_total_return | fmtval(true) }}</td></tr>
+    <tr><td>买入持有收益率</td><td class="num">{{ m.buy_hold_return | fmtval(true) }}</td></tr>
+    <tr><td>策略超额收益</td><td class="num">{{ (m.excess_return_vs_buy_hold if m.excess_return_vs_buy_hold is not none else m.benchmark_excess) | fmtval(true) }}</td></tr>
+    <tr><td>最大回撤</td><td class="num">{{ m.max_drawdown | fmtval(true) }}</td></tr>
+    <tr><td>胜率</td><td class="num">{{ m.win_rate | fmtval(true) }}</td></tr>
+    <tr><td>盈亏比</td><td class="num">{{ m.profit_factor | fmtval(false) }}</td></tr>
+    <tr><td>总交易数</td><td class="num">{{ m.total_trade_count or '—' }}</td></tr>
     </tbody>
     </table>
     <p class="opt">来源：<code>{{ result.source_file }}</code>（{{ {'batch': '全量批次', 'incremental': '每日增量', 'merged': '增量+全量合并'}.get(result.source, result.source) }}）；引擎输出，非投资建议。</p>
