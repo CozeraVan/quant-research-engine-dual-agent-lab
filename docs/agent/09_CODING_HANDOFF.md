@@ -2,6 +2,77 @@
 
 ## Task ID
 
+QRE-ALPHA191-STRAT-LOOP-001 (P6：头部 alpha191 因子新建策略闭环自测)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+零代码改动任务：3 个头部 alpha191 因子各设计一个阈值策略，走通
+「沙箱→冒烟→晋升→全市场回测→报告→日更登记」全闭环，**无断点、无引擎修复**。
+
+**策略设计**（阈值标定：alpha083/099 本身即 cs_rank 输出 ∈[-1,0]，阈值即
+截面分位；alpha042 阈值取自 2024-08-14 起全市场分位数 p90≈0.015/中位≈-0.24）：
+
+| 策略 | 因子语义 | 入场 | 出场 | 持仓 |
+|---|---|---|---|---|
+| pv06a_alpha083_high_rank_mvp | -RANK(COV(RANK(HIGH),RANK(VOL),5)) | alpha083 > -0.2（前20%） | alpha083 < -0.5 | 10 天，止损 8% |
+| pv06b_alpha099_high_rank_mvp | 同族，HIGH→CLOSE | alpha099 > -0.2 | alpha099 < -0.5 | 同上 |
+| pv06c_alpha042_high_rank_mvp | (-RANK(STD(HIGH,10)))*CORR(HIGH,VOL,10) | alpha042 > 0.0（≈前12%） | alpha042 < -0.25 | 同上 |
+
+**闭环各环节（耗时实测）**：
+
+1. 沙箱登记（save_to_sandbox：validate+查重+落盘 outputs/sandbox/strategies/）
+   3/3 ok，各 ~0.15s。
+2. 冒烟（qre backtest-batch，20 大盘股 × 2026-02-14~08-14）3/3 ok：
+   57.5s / 46.7s / 49.3s；round trips 129 / 124 / 100，信号正常产出；
+   smoke sidecar 已记录。
+3. 晋升（promote → strategies/catalog/price_volume/）3/3 ok，各 ~0.15s。
+4. 全市场回测（batch_backtest_runner，5560 股 × 2025-08-14~2026-08-14，
+   vectorized，chunk 400，compact+workbook，apply-stops，universe-filter，
+   benchmark 000300.SH，jobs 3）3/3 ok，各 683/692/694s（eval ~14s，
+   preflight ~74s）。产物 outputs/backtests/alpha191_p6/568f665c8217/。
+5. 报告：每策略 backtest_report.html/xlsx + 图 + report_manifest 齐全；
+   `qre report-audit` status=ok（matched 3 / missing 0 / issues 0）。
+6. 日更登记：registry include 空 = 全量扫描 catalog，晋升即被
+   refresh_batch 拾取；`refresh_batch.py --check-only --strategies pv06*`
+   正常（watermark 2026-08-14 vs state 2026-08-11 → refresh needed）。
+
+**回测关键指标**（batch 每股 100 万满仓复利口径；benchmark=沪深300）：
+
+| 策略 | 总收益 | 基准收益 | 最大回撤 | 交易数 | 胜率 | Sharpe | PF |
+|---|---|---|---|---|---|---|---|
+| pv06a alpha083 | +1.61% | +11.76% | -1.08% | 17170（2688 股） | 48.8% | 0.77 | 1.12 |
+| pv06b alpha099 | +1.03% | +11.76% | -1.11% | 17054（2689 股） | 48.8% | 0.53 | 1.10 |
+| pv06c alpha042 | +1.44% | +11.76% | -1.45% | 11637（2694 股） | 49.6% | 0.72 | 1.15 |
+
+（正收益但跑输基准——满仓复利 per-symbol 口径下正 IC 因子的截面优势被
+稀释，符合"链路验证"定位；非投资建议，R-QRE-008。）
+
+## Validation
+
+- `uv run pytest tests/ -x -q` → **1398 passed**（无代码改动，无新增测试需求）。
+- preflight 小样本（3 股）全 ok：alpha083 coverage 1.0、join 1.0；
+  全市场批次 preflight=warning 为 universe 排除计数>0 的设计行为
+  （check_universe excluded→warning，见 preflight.py:232），非断点。
+
+## Findings / Follow-ups
+
+- 无断点：alpha191 因子三段式寻址（factors.stock_daily_alpha191.<col>）在
+  validate/查重/preflight/eval/backtest/refresh 全链路开箱可用。
+- 策略收益口径提示：batch per-symbol 满仓复利会稀释截面选股效应；后续若要
+  验证截面超额，可跑 shared-cash + score_weight 变体（未做，超出本任务）。
+
+---
+
+## Task ID
+
 QRE-EVAL-ALPHA191-001 (Alpha191 赚钱效应评估管线 + GUI 路径 C 登记)
 
 ## Written By

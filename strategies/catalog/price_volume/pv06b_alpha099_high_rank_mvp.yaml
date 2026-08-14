@@ -1,0 +1,66 @@
+# =============================================================================
+# 量价 — GTJA Alpha191 面板因子（P6 闭环自测）
+# =============================================================================
+# 策略 ID:     pv06b_alpha099_high_rank
+# 策略名称:   Alpha099 高秩收盘价量背离（高位 rank 做多）
+# 难度:       ★★☆☆☆ (2/5)
+# 说明:       alpha099=-RANK(COV(RANK(CLOSE),RANK(VOL),5))，与 alpha083 同族（HIGH→CLOSE）。entry>-0.2=截面前 20%%，exit<-0.5=跌出前一半。
+#             因子已截面 rank（cs_rank 输出），阈值即截面分位过滤，无需引擎改动。
+#             窗口 2024-08-14~2026-08-14 全市场 rank IC=+0.058 / ICIR=+0.892 / 一致率=82.1%。
+# 数据依赖:   factors.stock_daily_alpha191.alpha099
+# 入场规则:   alpha099 > -0.2
+# 出场规则:   alpha099 < -0.5
+# 持仓天数:   10 天
+# 方向:       long_only
+# 校验状态:   P6 沙箱冒烟
+# =============================================================================
+
+experiment:
+  name: pv06b_alpha099_high_rank_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    alpha099: factors.stock_daily_alpha191.alpha099
+
+universe:
+  market: ashare
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+
+signal:
+  type: expression
+  entry: alpha099 > -0.2
+  exit: alpha099 < -0.5
+
+execution:
+  signal_date: t
+  entry_execution: t_plus_1_open
+  exit_execution: t_plus_1_open
+
+holding:
+  max_holding_days: 10
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: null
+  trailing_stop_pct: null
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5

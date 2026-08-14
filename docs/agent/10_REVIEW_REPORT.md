@@ -2,7 +2,41 @@
 
 ## Task ID
 
-QRE-EVAL-ALPHA191-001 (Alpha191 赚钱效应评估管线 + GUI 路径 C 登记)
+QRE-ALPHA191-STRAT-LOOP-001 (P6：头部 alpha191 因子新建策略闭环自测)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 任务书逐项落实：3 个指定因子（083/099/042）各一策略；信号用纯阈值比较
+  （DSL §2 子集内，无函数/穿越/多周期），未触碰引擎——alpha083/099 本身
+  是 cs_rank 输出（∈[-1,0]，阈值即截面分位），alpha042 阈值用真实全市场
+  分位数标定（p90≈0.015、中位≈-0.24），无需截面 zscore/rank 算子。
+- 闭环六环节全部实测通过且有计时/产物证据（沙箱→冒烟→晋升→全市场回测
+  →报告→日更登记），详见 09 顶部。断点数为零，故无修复与新增测试；
+  pytest 1398 绿（与任务前一致）。
+- 口径说明：回测为 batch per-symbol 满仓复利（每股 100 万），基准 000300.SH；
+  三策略正收益但跑输基准属预期（截面 IC 优势在该口径下被稀释），报告已
+  注明非投资建议（R-QRE-008）。
+- preflight=warning 已定位：check_universe 排除计数>0 → warning
+  （preflight.py:232 设计行为）；小样本 preflight 全 ok（factor coverage
+  1.0 / join 1.0），因子链路本身无缺口。
+- 守约束：未 git commit；未改业务库；未动后台无关进程；回测产物在
+  outputs/（仓外 symlink）。
+
+## Required Fixes
+
+无。
+
+---
+
+# Review Report (archive: QRE-EVAL-ALPHA191-001, Alpha191 赚钱效应评估管线 + GUI 路径 C 登记)
 
 ## Reviewer
 

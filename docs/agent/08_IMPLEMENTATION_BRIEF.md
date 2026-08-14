@@ -2,6 +2,58 @@
 
 ## Task ID
 
+QRE-ALPHA191-STRAT-LOOP-001 (P6：头部 alpha191 因子新建策略闭环自测)
+
+## Created By
+
+KIMI_CODE (single agent; 用户 2026-08-14 直接指定的任务书)
+
+## Intended Implementer
+
+KIMI_CODE
+
+## Goal
+
+从 P5 全量 leaderboard 头部显著因子选 3 个（alpha083/alpha099/alpha042），
+各设计一个最简策略并走完整「新建策略闭环」：沙箱（validate+查重）→ 小样本
+冒烟 → 晋升 catalog → 全市场近 1 年回测 → 报告生成确认 → 日更登记确认。
+验证引擎的因子→策略→回测→日更链路对 alpha191 面板因子开箱可用；有断点做
+最小修复（带测试），无断点如实记录。
+
+## Semantics (locked by user plan)
+
+- 因子语义查 indicators_tushare/alpha191 formulas+errata；信号用阈值
+  （alpha083/099 本身即 cs_rank 输出 ∈[-1,0]，阈值即截面分位；alpha042
+  用全市场分位数标定阈值），不引入引擎不支持的算子。
+- 沙箱/晋升走 gui/strategy_create.py 既有机制；回测走
+  scripts/batch_backtest_runner.py（对齐 overnight 规范：vectorized、
+  symbol-chunk 400、compact、workbook、apply-stops、universe-filter、
+  benchmark 000300.SH）。
+- 日更：refresh registry include 空 = 全量扫描 catalog，晋升即登记。
+- 窗口：冒烟 20 股 × 近 6 个月；正式 2025-08-14~2026-08-14 全市场。
+
+## Scope
+
+1. 3 个策略 YAML（沙箱 → catalog/price_volume/pv06{a,b,c}）。
+2. 回测产物 outputs/backtests/alpha191_p6/。
+3. docs/agent 05/08/09/10 同步。
+
+## Non-Goals
+
+- 不做 git commit；不改引擎代码（预期零断点，若有则最小修复+测试）；
+  不改业务数据库；不动后台无关进程；不调整因子公式。
+
+## Expected Tests
+
+```bash
+uv run pytest tests/ -x -q   # 无代码改动时应保持 1398 绿
+uv run qre report-audit <run>/<sid>/report_manifest.json
+```
+
+---
+
+## Task ID
+
 QRE-EVAL-ALPHA191-001 (Alpha191 赚钱效应评估管线 + GUI 路径 C 登记)
 
 ## Created By

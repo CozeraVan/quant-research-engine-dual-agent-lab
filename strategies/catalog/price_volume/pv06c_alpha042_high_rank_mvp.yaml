@@ -1,0 +1,66 @@
+# =============================================================================
+# 量价 — GTJA Alpha191 面板因子（P6 闭环自测）
+# =============================================================================
+# 策略 ID:     pv06c_alpha042_high_rank
+# 策略名称:   Alpha042 低波高价量正相关（高值做多）
+# 难度:       ★★☆☆☆ (2/5)
+# 说明:       alpha042=(-RANK(STD(HIGH,10)))*CORR(HIGH,VOL,10)，低波动且价量正相关者值高。entry>0.0≈截面前 12%%（p90=0.015），exit<-0.25≈跌破中位数(-0.24)。
+#             因子已截面 rank（cs_rank 输出），阈值即截面分位过滤，无需引擎改动。
+#             窗口 2024-08-14~2026-08-14 全市场 rank IC=+0.076 / ICIR=+0.497 / 一致率=67.5%。
+# 数据依赖:   factors.stock_daily_alpha191.alpha042
+# 入场规则:   alpha042 > 0.0
+# 出场规则:   alpha042 < -0.25
+# 持仓天数:   10 天
+# 方向:       long_only
+# 校验状态:   P6 沙箱冒烟
+# =============================================================================
+
+experiment:
+  name: pv06c_alpha042_high_rank_mvp
+  market_profile: ashare_daily_default
+  frequency: daily
+  objective: screen_then_validate
+
+data:
+  market_table: public.stock_daily
+  factor_schema: factors
+  market_fields:
+    - open
+    - high
+    - low
+    - close
+    - pre_close
+    - vol
+    - amount
+  factor_fields:
+    alpha042: factors.stock_daily_alpha191.alpha042
+
+universe:
+  market: ashare
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+
+signal:
+  type: expression
+  entry: alpha042 > 0.0
+  exit: alpha042 < -0.25
+
+execution:
+  signal_date: t
+  entry_execution: t_plus_1_open
+  exit_execution: t_plus_1_open
+
+holding:
+  max_holding_days: 10
+  direction: long_only
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: null
+  trailing_stop_pct: null
+
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
