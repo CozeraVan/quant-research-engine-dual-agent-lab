@@ -71,10 +71,15 @@ MANAGED_FACTOR_TABLES_FALLBACK = [
     "stock_daily_volume_close",
 ]
 
+# alpha191 面板通道表：不符合 stock_daily_<category>_<price> 命名（无价格后缀），
+# 不在 indicators config/factors.yaml 内，由 alpha191 子包独立日更，单独登记纳管。
+ALPHA191_TABLE = "stock_daily_alpha191"
+
 
 def managed_factor_tables(repo: Path | None = None) -> set[str]:
     """纳管表清单：由 indicators_tushare config/factors.yaml 的 category+column
-    组合推导（stock_daily_<category>_<column>）；repo 不可用时回退硬编码清单。"""
+    组合推导（stock_daily_<category>_<column>），另加 alpha191 面板表；
+    repo 不可用时回退硬编码清单。"""
     try:
         import yaml
 
@@ -88,10 +93,10 @@ def managed_factor_tables(repo: Path | None = None) -> set[str]:
             if entry.get("category") and entry.get("column")
         }
         if combos:
-            return combos
+            return combos | {ALPHA191_TABLE}
     except Exception:
         pass
-    return set(MANAGED_FACTOR_TABLES_FALLBACK)
+    return set(MANAGED_FACTOR_TABLES_FALLBACK) | {ALPHA191_TABLE}
 
 
 def _store(db_url: str | None = None):
@@ -191,7 +196,9 @@ def overview_factors(db_url: str | None = None, daily_max: str | None = None) ->
                 managed_infos: list[dict[str, Any]] = []
                 unmanaged_infos: list[dict[str, Any]] = []
                 for table in tables:
-                    if parse_factor_table_name(table) is None:
+                    # 不符合 <category>_<price> 命名但在纳管清单内的表（如 alpha191）
+                    # 也纳入对账，不跳过。
+                    if parse_factor_table_name(table) is None and table not in managed:
                         continue
                     info = {
                         "table": f"factors.{table}",
@@ -384,6 +391,24 @@ for spec, definition in resolved:
         "params": [str(p) for p in (spec.params or [None])],
         "expanded": ok,
     })
+# alpha191 面板通道：不在 config/factors.yaml，列清单来自其静态 manifest
+# （由 indicators 侧 scripts/gen_alpha191_manifest.py 生成）。
+try:
+    from pathlib import Path
+
+    import yaml
+
+    manifest = Path("alpha191/factors_manifest.yaml")
+    if manifest.exists():
+        data = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
+        columns = data.get("columns") or []
+        if columns:
+            out["stock_daily_alpha191"] = {
+                "columns": sorted(str(c) for c in columns),
+                "tasks": [{"name": "alpha191_panel", "params": [], "expanded": True}],
+            }
+except Exception:
+    pass
 print(json.dumps({
     table: {"columns": sorted(v["columns"]), "tasks": v["tasks"]}
     for table, v in out.items()

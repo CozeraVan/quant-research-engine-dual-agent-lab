@@ -354,6 +354,7 @@ def test_managed_factor_tables_from_config(tmp_path, monkeypatch):
         "stock_daily_overlap_close",
         "stock_daily_overlap_typical_price",
         "stock_daily_momentum_close",
+        "stock_daily_alpha191",
     }
 
 
@@ -362,9 +363,43 @@ def test_managed_factor_tables_fallback(monkeypatch, tmp_path):
 
     monkeypatch.setattr(fa, "indicators_repo", lambda env=None: tmp_path / "nonexistent")
     tables = admin.managed_factor_tables()
-    assert tables == set(admin.MANAGED_FACTOR_TABLES_FALLBACK)
-    assert len(tables) == 10
+    assert tables == set(admin.MANAGED_FACTOR_TABLES_FALLBACK) | {"stock_daily_alpha191"}
+    assert len(tables) == 11
     assert "stock_daily_vortex_close" not in tables
+
+
+def test_factor_status_includes_alpha191(monkeypatch):
+    """alpha191 表不符合 <category>_<price> 命名，但纳管后仍参与对账。"""
+    expected = _expected_payload()
+    expected["stock_daily_alpha191"] = {
+        "columns": ["alpha001", "alpha002"],
+        "tasks": [{"name": "alpha191_panel", "params": [], "expanded": True}],
+    }
+    _setup_factor_status(
+        monkeypatch,
+        {
+            "stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14", "rsi_6", "macd_12_26_9"],
+            "stock_daily_overlap_close": ["ts_code", "trade_date", "sma_20", "sma_60"],
+            # alpha191 表在库但列尚未全建（回填中）：alpha002 缺失 → red
+            "stock_daily_alpha191": ["ts_code", "trade_date", "alpha001"],
+        },
+        expected,
+    )
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.managed_factor_tables",
+        lambda repo=None: {
+            "stock_daily_momentum_close",
+            "stock_daily_overlap_close",
+            "stock_daily_alpha191",
+        },
+    )
+    status = factor_status()
+    by_table = {t["table"]: t for t in status["tables"]}
+    alpha = by_table["factors.stock_daily_alpha191"]
+    assert alpha["green"] == ["alpha001"]
+    assert alpha["red"] == ["alpha002"]
+    assert alpha["yellow"] == []
+    admin._cache.clear()
 
 
 def test_overview_factors_orphan_goes_unmanaged(monkeypatch):

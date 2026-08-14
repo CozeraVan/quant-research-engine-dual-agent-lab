@@ -2,6 +2,56 @@
 
 ## Task ID
 
+QRE-ADMIN-ALPHA191-RECON-001 (dashboard 因子对账登记 stock_daily_alpha191)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+alpha191 面板通道表（indicators_tushare 侧 `alpha191/` 子包日更，独立于
+config/factors.yaml 的 category×price 体系）登记进管理台因子对账：
+
+1. **`gui/admin.py`**：
+   - 新增 `ALPHA191_TABLE = "stock_daily_alpha191"` 常量；
+     `managed_factor_tables()` 在 yaml 推导与 fallback 两条路径都并入该表。
+   - `overview_factors()` 的表过滤改为「不符合 `<category>_<price>` 命名
+     **且不在纳管清单**才跳过」，alpha191 由此进入对账（watermark/滞后判定）。
+   - `EXPECTED_COLUMNS_SCRIPT` 追加读取 indicators 侧
+     `alpha191/factors_manifest.yaml`（由 indicators
+     `scripts/gen_alpha191_manifest.py` 从 FORMULAS 注册表生成，191 列），
+     合成 `stock_daily_alpha191` 的期望列；manifest 缺失时静默跳过（降级不变）。
+2. **不做的事**：`parse_factor_table_name` 正则未动 —— admin 的
+   因子补全/删列按钮对 alpha191 返回 400（alpha191 回填走自己的
+   `alpha191.runner`，不经 run_factor_admin）；factor_wizard 分组也不含它。
+3. **测试**：tests/test_gui_admin.py 更新 2 个既有断言（config/fallback 清单
+   含 alpha191，fallback 计数 10→11）+ 新增
+   `test_factor_status_includes_alpha191`（绿/红分流）。
+
+## Validation
+
+- `uv run pytest tests/ -x -q` → **1392 passed**（1391 + 1 净增，全绿）。
+- 真实对账（2026-08-14，`postgresql+psycopg://…/tushare_data`）：
+  `factor_status()` 中 `factors.stock_daily_alpha191` watermark=2026-08-13、
+  db_cols=191、green=191 / yellow=0 / red=0，`expected_available=True`；
+  `overview_factors()` 含该表且不在 lagging_tables。
+- 依赖前置：indicators 侧已生成 `alpha191/factors_manifest.yaml`（191 列）
+  并完成当日日更点火（5560 行 upsert，alpha191-daily.timer 17:00 工作日）。
+
+## Follow-ups
+
+- alpha191 全历史回填进行中（indicators 侧后台任务），回填完成前列可能
+  短暂显示 red（缺列）——对账语义正确，无需处理。
+
+---
+
+## Task ID
+
 QRE-GUI-UIUX-001 (GUI 全站 UI/UX 优化：Data-Dense Dashboard 浅色风格)
 
 ## Written By
