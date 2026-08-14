@@ -235,10 +235,12 @@
 <div id="tab-factor" class="tab-content">
 
   <div class="panel">
-    <h2>两条路径说明</h2>
+    <h2>路径说明（A / B / C）</h2>
     <p class="opt">
       已有指标想补周期或换价格源 → 走<strong>路径 A</strong>（自动跑 validate → plan → sample 回填，全量回填需人工确认）；
-      全新指标 → 走<strong>路径 B</strong>（NL/手写生成代码 → 查重 → 沙箱冒烟 → 晋升入库）。
+      全新指标 → 走<strong>路径 B</strong>（NL/手写生成代码 → 查重 → 沙箱冒烟 → 晋升入库）。<br>
+      <strong>路径 C</strong>：公式化面板因子（Alpha191 通道）——191 个 GTJA 短周期量价因子，面板计算通道，
+      见 indicators_tushare/alpha191/README.md；本期不支持 GUI 内新建此类因子。<br>
       操作前可先在<a href="/admin">管理台</a>「因子状态」tab 查对账（在库/在日更/缺口），避免重复申请。
     </p>
   </div>

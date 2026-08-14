@@ -2,6 +2,71 @@
 
 ## Task ID
 
+QRE-EVAL-ALPHA191-001 (Alpha191 赚钱效应评估管线 + GUI 路径 C 登记)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+1. **`src/quant_research_engine/evaluation/alpha191.py`**（新增）：口径常量
+   （ALPHA191_TABLE / ALL_ALPHA_FACTORS / FORWARD_HORIZONS=[1,3,5,10,20] /
+   PRIMARY_HORIZON=5 / QUANTILES=5 / 显著性阈值 0.05+0.55）；
+   `daily_rank_ic()`（逐日 Spearman，与引擎 ic_summary 同公式，补引擎不落盘的
+   std 供 ICIR）；`summarize_factor_result()`（ic_win_rate 取方向一致率：负 IC
+   因子取 1−正向占比；top_minus_bottom=Q5−Q1，quantile=1 为因子最低组）；
+   `build_leaderboard()`（|mean_rank_ic| 降序、NaN 垫底）；
+   `evaluate_alpha_factors()`（每批 batch_size=10 个因子一次
+   ResearchFrameAssembler.build(ts_codes=None, market_fields=["close"],
+   factor_fields=FactorFieldRequest.from_target(f,"factors.stock_daily_alpha191.f"))，
+   逐因子 evaluate(signal="close > 0" 占位, quantiles=5, 成本引擎默认 None)，
+   批后 del+gc；单因子失败记 None 行不阻断）。
+2. **`scripts/eval_alpha191.py`**（新增薄 CLI）：--start/--end（默认近 2 年）/
+   --factors(all|逗号列)/--top(stdout 打印行数，CSV 始终全量)/--output
+   （默认 outputs/alpha191/leaderboard.csv）/--batch-size/--db-url。
+3. **`tests/test_eval_alpha191.py`**（新增 6 用例）：合成面板（因子驱动次日
+   收益）端到端正 IC/★、排序与列结构、日频 IC、失败行不阻断、CLI main
+   （monkeypatch store+evaluate）写 CSV、resolve_factors 校验。
+4. **`gui/templates/index.html`**：新增因子 tab 路径说明卡 h2 改
+   「路径说明（A / B / C）」并加路径 C 文案（Alpha191 通道，指向
+   indicators_tushare/alpha191/README.md，本期不支持 GUI 内新建）。纯文案，
+   JS/路由零改动。
+5. **引擎/catalog/assembler 零改动**：stock_daily_alpha191 直接走既有
+   FactorFieldRequest 三段式寻址（factors.<table>.<column>），无需 factors.yaml
+   纳管适配。
+
+## Validation
+
+- `uv run pytest tests/ -x -q` → **1398 passed**（1392 + 6 净增，全绿）。
+- 真实小样本（postgresql+psycopg:///tushare_data）：
+  - 用户指定窗口 2025-08-01~2026-08-13：3 因子全 None（observation_dates=0）——
+    回填当前仅完成 2010→2013 + 日更当日 2026-08-13，该窗口无因子数据，管线
+    行为正确（非装配缺陷）。
+  - 改用已覆盖窗口 2012-08-01~2013-08-13：alpha001 rank_ic=0.0551/胜率 0.812/
+    ICIR 0.890/★；alpha006 0.0512/0.705/0.521/★（top_minus_bottom NaN）；
+    alpha012 0.0204/0.624/0.327；234 个交易日。leaderboard 写 /tmp/alpha_eval_smoke.csv。
+
+## Findings / Follow-ups
+
+- **上游数据疑点（未处理，登记）**：alpha006 在回填段逐日仅 ~3 个 distinct 值
+  （2013-01-15：2157 行仅 3 值；全窗口 53 万行仅 701 distinct），疑似
+  indicators 侧 alpha006 公式把时序 corr 算成截面/常量。引擎 qcut 无法分 5 层
+  → top_minus_bottom NaN 是正确表象。建议回填完成后在 indicators 侧核查
+  alpha006（GTJA #6 = −corr(open, volume, 10) 应为逐股时序）。
+- 回填完成前用默认近 2 年窗口跑 `--factors all` 会得到大量 None 行；待 P3c
+  行数/覆盖验证通过后再跑全量 leaderboard。
+- ★ 判定用方向一致率（负 IC 因子按反向计），与用户任务书「胜率≥0.55」的
+  字面口径有解释性偏离，已在 alpha191.py docstring 注明。
+
+---
+
+## Task ID
+
 QRE-ADMIN-ALPHA191-RECON-001 (dashboard 因子对账登记 stock_daily_alpha191)
 
 ## Written By

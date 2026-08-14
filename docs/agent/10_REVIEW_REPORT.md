@@ -2,7 +2,46 @@
 
 ## Task ID
 
-QRE-GUI-UIUX-001 (GUI 全站 UI/UX 优化：Data-Dense Dashboard 浅色风格)
+QRE-EVAL-ALPHA191-001 (Alpha191 赚钱效应评估管线 + GUI 路径 C 登记)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 逐条对齐任务书：CLI 参数齐全（--start/--end/--factors/--top/--output，另加
+  --batch-size/--db-url 两个无害扩展）；默认近 2 年；分批 10 因子取数批后
+  del+gc；leaderboard 列与排序（|mean_rank_ic| 降序）符合规格。
+- 引擎/catalog/assembler 零改动：alpha191 表走既有 FactorFieldRequest
+  三段式寻址，无需 factors.yaml 纳管适配（任务书预警的装配坑不存在）。
+- 口径选择均有出处并在 docstring 注明：signal_expression="close > 0" 占位
+  （本评估不看事件流）；quantile=1 最低组/5 最高组（引擎 qcut 语义），
+  top_minus_bottom=Q5−Q1 与 rank IC 同号为方向一致；ICIR 用与引擎同公式的
+  日频 rank IC 重算 std（引擎只输出均值/胜率）。
+- 偏离（已登记）：①★ 胜率采用方向一致率（负 IC 因子取 1−正向占比），对
+  任务书字面「胜率≥0.55」的解释性扩展；②用户指定冒烟窗口 2025-08-01~
+  2026-08-13 因回填仅完成 2010→2013+日更当日而无因子数据，改用已覆盖窗口
+  2012-08-01~2013-08-13 验证（3 因子 234 交易日，alpha001/alpha006 ★）。
+- 测试：`uv run pytest tests/ -x -q` → 1398 passed（6 净增：合成面板端到端
+  正 IC/★、排序、日频 IC、失败行、CLI mock 写 CSV、参数校验）。
+- 上游发现（不属本任务范围，未处理）：alpha006 回填段逐日仅 ~3 个 distinct
+  值 → qcut 分层塌陷、top_minus_bottom NaN 为正确表象；建议 indicators 侧
+  核查 alpha006 公式。
+- GUI 改动为纯文案（h2 + 路径 C 一条），无 JS/路由变更；无测试断言引用旧
+  文案（grep 确认）。
+
+## Required Fixes
+
+无。
+
+---
+
+# Review Report (archive: QRE-GUI-UIUX-001, GUI 全站 UI/UX 优化：Data-Dense Dashboard 浅色风格)
 
 ## Reviewer
 

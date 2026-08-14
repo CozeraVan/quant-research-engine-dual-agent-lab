@@ -1,5 +1,66 @@
 # Implementation Brief
 
+## Task ID
+
+QRE-EVAL-ALPHA191-001 (Alpha191 赚钱效应评估管线 + GUI 路径 C 登记)
+
+## Created By
+
+KIMI_CODE (single agent; 用户 2026-08-14 直接指定的任务书)
+
+## Intended Implementer
+
+KIMI_CODE
+
+## Goal
+
+为 indicators_tushare 新建的 alpha191 面板因子库（factors.stock_daily_alpha191，
+191 列 alpha001..alpha191）提供赚钱效应评估 CLI：逐因子装配面板（close + 单因子
+列，全市场）→ EvaluationEngine.evaluate → leaderboard CSV。并在 GUI「新增因子」
+tab 路径说明卡登记路径 C（Alpha191 通道，纯文案，本期不支持 GUI 内新建）。
+
+## Semantics (locked by user plan)
+
+- CLI：`scripts/eval_alpha191.py [--start S] [--end E] [--factors alpha001,...|all]
+  [--top N] [--output PATH]`；默认窗口近 2 年（R-QRE-009 先小样本后全期）。
+- 评估口径：forward_horizons=[1,3,5,10,20]，quantiles=5，成本沿用引擎默认
+  （round_trip_cost_rate=None）；主排序键 mean_rank_ic(h=5)。
+- leaderboard 列：factor, mean_rank_ic, icir(日频 rank IC 均值/std), ic_win_rate
+  （方向一致率）, top_minus_bottom(h=5, Q5−Q1), observation_dates, significant
+  （★：|rank_ic|≥0.05 且胜率≥0.55）；按 |mean_rank_ic| 降序。
+- 内存：因子分批（默认每批 10 个）取数，批后 del + gc。
+- 测试：合成面板 + mock evaluate 验证 CLI 输出结构与排序。
+
+## Scope
+
+1. 新增 `src/quant_research_engine/evaluation/alpha191.py`（口径常量 +
+   daily_rank_ic/summarize_factor_result/build_leaderboard/evaluate_alpha_factors）。
+2. 新增 `scripts/eval_alpha191.py`（薄 CLI）。
+3. 新增 `tests/test_eval_alpha191.py`。
+4. `gui/templates/index.html` 新增因子 tab 路径说明卡加路径 C 文案（h2 改
+   「路径说明（A / B / C）」）。
+5. 文档：docs/agent 05/08/09/10 同步。
+
+## Non-Goals
+
+- 不做 git commit（用户显式约束）。
+- 不改 EvaluationEngine / catalog / assembler 语义；不动 alpha191 回填；
+  不修复上游 alpha006 逐日常量疑点（仅登记发现）。
+
+## Expected Tests
+
+```bash
+uv run pytest tests/ -x -q
+QRE_MARKET_DB_URL='postgresql+psycopg:///tushare_data' uv run python \
+  scripts/eval_alpha191.py --start 2012-08-01 --end 2013-08-13 \
+  --factors alpha001,alpha006,alpha012 --output /tmp/alpha_eval_smoke.csv
+```
+
+（用户指定窗口 2025-08-01~2026-08-13 因回填尚未推进到该区间（当前 2010→2013 +
+日更当日），改用已覆盖窗口 2012-08-01~2013-08-13 做真实小样本；详见 09/10。）
+
+---
+
 > 2026-08-12 QRE-GUI-UIUX-001（GUI 全站 UI/UX 优化）为纯样式/模板 class 改动，方案由用户直接指定（设计变量 + 按钮分级 + 信息直读化），未单独写 brief；实现与验证见 09_CODING_HANDOFF.md / 10_REVIEW_REPORT.md 顶部。
 
 ## Task ID
