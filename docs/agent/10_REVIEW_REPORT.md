@@ -2,6 +2,24 @@
 
 ## Task ID
 
+QRE-GUI-ALPHA191-GROUP-001 (alpha191 进因子下拉 + GUI 开机自启服务)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 改动最小：factor_wizard.py 仅新增 alpha191 特判分支 + 1 行 label 映射，不影响既有 10 组逻辑；服务文件为新增不触碰现有单元。
+- 验证：pytest 1398 全绿；真实 GUI 重启后 /api/factors 返回 alpha191×191；systemctl is-active=active，curl / =200。
+- 无 Required Fixes。
+
+## Task ID
+
 QRE-ALPHA191-STRAT-LOOP-001 (P6：头部 alpha191 因子新建策略闭环自测)
 
 ## Reviewer

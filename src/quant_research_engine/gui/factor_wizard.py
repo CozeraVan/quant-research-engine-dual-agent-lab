@@ -27,6 +27,7 @@ CATEGORY_LABELS = {
     "volatility": "波动率",
     "volume": "成交量",
     "vortex": "涡流",
+    "alpha191": "Alpha191 量价因子",
 }
 
 PRICE_COLUMN_LABELS = {
@@ -72,6 +73,18 @@ def build_factor_groups(tables_columns: dict[str, list[str]]) -> list[dict[str, 
     for table in sorted(tables_columns):
         parsed = parse_factor_table_name(table)
         if parsed is None:
+            # alpha191 面板表无价格后缀，单独成组（与 admin.py 的纳管口径一致）
+            if table == "stock_daily_alpha191":
+                for column in tables_columns[table]:
+                    if column in _SKIP_COLUMNS:
+                        continue
+                    by_category.setdefault("alpha191", []).append(
+                        {
+                            "table": f"factors.{table}",
+                            "column": column,
+                            "label": f"Alpha191 · {column}",
+                        }
+                    )
             continue
         category, price_col = parsed
         price_label = PRICE_COLUMN_LABELS.get(price_col, price_col)

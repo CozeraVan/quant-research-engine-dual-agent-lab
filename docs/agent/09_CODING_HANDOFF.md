@@ -2,6 +2,20 @@
 
 ## Task ID
 
+QRE-GUI-ALPHA191-GROUP-001 (alpha191 进因子下拉 + GUI 开机自启服务)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Summary
+
+- `gui/factor_wizard.py`：`build_factor_groups` 对 `stock_daily_alpha191`（无价格后缀，parse_factor_table_name 返回 None）单独成组 alpha191；`CATEGORY_LABELS` 加 `alpha191: Alpha191 量价因子`。验证：重启 GUI 后 `curl /api/factors` 10 组，alpha191 组 191 项。
+- `deploy/hardened/qre-gui.service`（新增）：GUI 常驻 systemd 服务，EnvironmentFile 读 .env，Restart=on-failure，MemoryMax=2G，已安装并 `enable --now`（开机自启生效，实测 active + 200）。
+- 测试：`uv run pytest tests/ -x -q` → 1398 passed。
+
+## Task ID
+
 QRE-ALPHA191-STRAT-LOOP-001 (P6：头部 alpha191 因子新建策略闭环自测)
 
 ## Written By

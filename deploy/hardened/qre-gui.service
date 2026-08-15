@@ -1,0 +1,30 @@
+# QRE Dashboard GUI 常驻服务（开机自启）。
+# 安装（需 sudo）：
+#   sudo cp deploy/hardened/qre-gui.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qre-gui.service
+
+[Unit]
+Description=QRE Dashboard GUI (Flask, port 8080)
+After=network-online.target postgresql.service
+Wants=network-online.target
+# 失败自愈：10 分钟内最多 5 次
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=van
+WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
+EnvironmentFile=-/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.env
+Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+ExecStart=/home/van/.local/bin/uv run qre gui --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=10
+# 护栏：GUI 为轻量 Web 服务，限 2G 足够
+MemoryMax=2G
+Nice=5
+SyslogIdentifier=qre-gui
+
+[Install]
+WantedBy=multi-user.target
