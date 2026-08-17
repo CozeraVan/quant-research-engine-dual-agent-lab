@@ -2,6 +2,15 @@
 
 ## Task ID
 
+QRE-ADMIN-TIMERS-001 (dashboard 日更定时任务清单补全)
+
+## Summary
+
+- gui/admin.py TIMER_UNITS 新增 3 条：alpha191-daily.timer、cluster-ashare-daily.timer（含 ExecStartPost 的 daily_tags 增量）、cluster-ashare-tags-weekly.timer。纯配置数组追加，无逻辑改动。
+- 验证：pytest 1398 绿；systemctl restart qre-gui 后 /api/admin/timers 返回 6 条 installed+active。
+
+## Task ID
+
 QRE-GUI-ALPHA191-GROUP-001 (alpha191 进因子下拉 + GUI 开机自启服务)
 
 ## Written By

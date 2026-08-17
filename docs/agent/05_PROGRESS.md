@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-08-17 QRE-ADMIN-TIMERS-001 DONE：`uv run pytest tests/ -x -q` → **1398 passed**。dashboard 日更定时任务清单补全：TIMER_UNITS 由 3 → 6（新增 alpha191-daily / cluster-ashare-daily / cluster-ashare-tags-weekly），重启后 /api/admin/timers 实测 6 条全 active、next 触发时间正确。
+
 2026-08-15 QRE-GUI-ALPHA191-GROUP-001 DONE：`uv run pytest tests/ -x -q` → **1398 passed**（全绿）。① 修复 /api/factors 下拉缺 alpha191 组：`factor_wizard.build_factor_groups` 对无价格后缀的 `stock_daily_alpha191` 单独成组（label「Alpha191 · alphaXXX」，与 admin.py 纳管口径一致），CATEGORY_LABELS 加 alpha191；重启后实测 10 组含 alpha191×191。② 新增 `deploy/hardened/qre-gui.service`（GUI 常驻 + 开机自启：After postgresql/network-online，EnvironmentFile=.env，Restart=on-failure 10s，MemoryMax=2G，已 cp 至 /etc/systemd/system 并 enable --now，实测 active + 首页 200）。详见 09_CODING_HANDOFF.md 顶部。
 
 2026-08-15 QRE-ALPHA191-STRAT-LOOP-001 DONE（P6）：`uv run pytest tests/ -x -q` → **1398 passed**（零代码改动，无断点无修复）。3 个头部 alpha191 因子策略全链路闭环自测通过：pv06a_alpha083 / pv06b_alpha099 / pv06c_alpha042_high_rank_mvp（阈值即截面分位：083/099 > -0.2 入场、< -0.5 出场；042 > 0.0 入场、< -0.25 出场；持仓 10 天止损 8%）。各环节：沙箱登记 3×0.15s → 冒烟 20 股×6 月 57.5/46.7/49.3s（trades 129/124/100）→ 晋升 price_volume → 全市场 5560 股×近 1 年回测 3/3 ok（各 ~690s，jobs 3，产物 outputs/backtests/alpha191_p6/568f665c8217/）→ 报告齐全 report-audit ok → 日更（registry 空=全量扫描，refresh --check-only 正常）。回测：总收益 +1.61/+1.03/+1.44%（基准 000300.SH +11.76%），回撤 -1.08/-1.11/-1.45%，交易 17170/17054/11637 笔，胜率 ~49%。preflight=warning 系 universe 排除计数的设计行为非断点。详见 09_CODING_HANDOFF.md 顶部。未提交，等用户审批。

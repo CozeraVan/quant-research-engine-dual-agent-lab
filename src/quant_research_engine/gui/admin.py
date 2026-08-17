@@ -22,7 +22,10 @@ CACHE_TTL_SECONDS = 300
 TIMER_UNITS = [
     {"unit": "quant-ts-daily.timer", "label": "日线数据 quant_ts", "service": "quant-ts-daily.service"},
     {"unit": "indicators-tushare-daily.timer", "label": "因子库 indicators_tushare", "service": "indicators-tushare-daily.service"},
+    {"unit": "alpha191-daily.timer", "label": "Alpha191 因子日更", "service": "alpha191-daily.service"},
     {"unit": "qre-refresh.timer", "label": "QRE 回测增量刷新", "service": "qre-refresh.service"},
+    {"unit": "cluster-ashare-daily.timer", "label": "聚类反推+daily_tags", "service": "cluster-ashare-daily.service"},
+    {"unit": "cluster-ashare-tags-weekly.timer", "label": "聚类标签库周更", "service": "cluster-ashare-tags-weekly.service"},
 ]
 
 QRE_REFRESH_INSTALL_HINT = (

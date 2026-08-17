@@ -2,6 +2,18 @@
 
 ## Task ID
 
+QRE-ADMIN-TIMERS-001 (dashboard 日更定时任务清单补全)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 改动为 TIMER_UNITS 纯追加，风险为零；实测 6 条定时任务状态正确。无 Required Fixes。
+
+## Task ID
+
 QRE-GUI-ALPHA191-GROUP-001 (alpha191 进因子下拉 + GUI 开机自启服务)
 
 ## Reviewer
