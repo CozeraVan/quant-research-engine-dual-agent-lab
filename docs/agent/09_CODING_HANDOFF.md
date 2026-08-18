@@ -2,6 +2,90 @@
 
 ## Task ID
 
+QRE-M5C-MINED-FACTOR-STRAT-001 (M5c：因子工厂 Top3 因子 → QRE 正式策略闭环验证)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization; 回测结论为「未复现 M3b 超额」，策略上线与否待用户决策)
+
+## Implementation Summary
+
+零 QRE 代码改动任务（同 P6 先例）：cluster.mined_factors 综合分 Top 3
+（MF_001/002/003，M3b 跨年度加固存活）各转译一个 QRE 策略，走通
+「沙箱→冒烟→晋升→全市场回测→报告 audit」全闭环。
+
+**转译方案（关键决策）**：QRE 信号 DSL（evaluation/signals.py）只支持行内
+"因子 vs 阈值/布尔组合"（比较 + and/or + 算术 + .shift），**不支持截面
+rank/分位**；alpha072/082 在 factors.stock_daily_alpha191 中也非 cs_rank
+（2026-08-17 实测 min 21.07 / max 99.39），P6 的固定阈值近似不可用。
+两条候选路（阈值绝对化 / 读 cluster.mined_factor_signals）都被否：
+阈值随 regime 漂移；signals 是长表且未命中股票无行（QRE 行情×因子
+inner join 会把缺行股票丢出 universe）。最终方案：cluster-ashare 侧用共享
+executor（condition_mask，与 M3b 验证/注册表信号同一函数）逐日全市场
+物化 0/1 宽表 `cluster.mined_factor_flags(trade_date, ts_code, mf_001/002/003)`
+（未命中也写 0），QRE 以既有三段式寻址 `cluster.mined_factor_flags.mf_00X`
+直接引用（FactorFieldRequest 本就支持任意 schema），entry 为行内等值
+`mf_00X == 1`。QRE 对业务库只读红线不受影响：建表/写库全部由
+cluster-ashare 脚本执行（deploy/sql/20260818_mined_factor_flags.sql +
+analysis/factor_flags_export.py，回填 279 交易日 1,526,215 行，
+与 mined_factor_signals 重叠窗口逐行一致，双向差集为 0）。
+
+**策略**（cross_sectional，T 日信号 T+1 开盘，持仓 5 日对齐 M3b +5 窗口，
+止损 8%，universe 过滤 ST/停牌/风险警示/上市<120 日）：
+
+| 策略 | 因子 | 条件语义 |
+|---|---|---|
+| cs07a_mf001_atrr14_high_hv20_normal_mvp | MF_001 | atrr_14 截面≥80% ∧ 非 hv20:极低 |
+| cs07b_mf002_alpha072_low_mvp | MF_002 | alpha072 截面≤20% |
+| cs07c_mf003_alpha082_low_mvp | MF_003 | alpha082 截面≤20% |
+
+**闭环各环节**：
+
+1. 沙箱登记（save_to_sandbox：validate+查重+落盘 outputs/sandbox/strategies/）3/3 ok。
+2. preflight 实测 cluster schema 寻址正常（check_factor_schema/coverage/join 全 ok）。
+3. 冒烟（qre backtest-batch，20 股 × 2026-02-18~2026-08-17）3/3 ok：
+   trades 14/91/76，成本生效，无失败单异常；sidecar 已记录。
+   注：cs07a 冒烟仅 1/20 股有交易（MF_001 信号池偏中小盘，20 只大盘样本命中少），
+   冒烟只验证链路，全市场回测覆盖 1346 只有交易股票。
+4. 晋升（promote → strategies/catalog/cross_sectional/）3/3 ok。
+5. 全市场回测（batch_backtest_runner，3820 股（universe 过滤后）×
+   2025-08-18~2026-08-17，--apply-stops --universe-filter --compact --workbook
+   --jobs 3，基准 reference.index_daily/000300.SH）3/3 ok，各 ~556s，
+   批次 `outputs/backtests/b21f1008ec98/`。
+6. report-audit：3 backtest + 3 eval manifest 全部 status=ok / issues=0。
+
+**回测指标（近 1 年，含成本，基准 000300.SH +11.83%）**：
+
+| 策略 | 组合总收益 | 超额 vs 基准 | 最大回撤 | 夏普 | 交易数 | 胜率(笔) | 正收益股比例 |
+|---|---|---|---|---|---|---|---|
+| cs07a MF_001 | +0.75% | **-11.08%** | -1.65% | 0.32 | 14,441 | 44.2% | 14.5% |
+| cs07b MF_002 | +0.54% | **-11.29%** | -1.28% | 0.28 | 13,660 | 46.2% | 30.1% |
+| cs07c MF_003 | +0.26% | **-11.58%** | -1.39% | 0.14 | 13,013 | 45.5% | 29.0% |
+
+eval 阶段事件前瞻（~25 万事件/策略）：+5 日均值 +0.32%/+0.14%/+0.09%，
+胜率 46.6%/46.8%/46.6%（<50%），中位数全为负。
+
+**与 M3b 预期对比（结论：方向不一致）**：M3b evidence 的 +5 超额
+（MF_001 +7.89% / MF_002 +3.53% / MF_003 +3.74%）在 QRE 近 1 年
+全市场口径下未复现——三策略超额全为显著负值。口径差异需如实说明：
+M3b 是「涨幅 Top1% 异动日触发」的事件采样（2015-2025 跨 regime  pooled，
+无成本无止损、收盘口径）；QRE 是「每日全市场信号」全时段触发
+（T+1 开盘、含成本、8% 止损、5 日到期）。近 1 年为基准 +11.8% 的
+偏牛 regime，且 M5b 监控首报已显示 37 因子中 28 个近 20 日超额为负
+（近期整体衰减），二者一致。**建议：MF_001/002/003 由「在库」转
+「衰减观察」（cluster 侧 mined_factors.status，待用户确认后执行），
+不接入自动交易日更**；策略 YAML 保留 catalog 供后续 regime 切换后复测。
+
+**测试**：`uv run pytest tests/ -x -q` → 1398 passed（零代码改动，基线持平）。
+日更：refresh registry 为空 = 全量扫描，cs07a/b/c 会随 refresh 日更拾取
+（refresh 仅重算回测产物，非交易执行）。
+
+## Task ID
+
 QRE-ADMIN-TIMERS-001 (dashboard 日更定时任务清单补全)
 
 ## Summary

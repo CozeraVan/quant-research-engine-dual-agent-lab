@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-08-18 QRE-M5C-MINED-FACTOR-STRAT-001 DONE：`uv run pytest tests/ -x -q` → **1398 passed**（零 QRE 代码改动）。cluster.mined_factors Top3（MF_001 atrr_14偏高∧非hv20:极低 / MF_002 alpha072偏低 / MF_003 alpha082偏低）转译为 cs07a/b/c（cross_sectional）：QRE DSL 不支持截面分位 → cluster-ashare 侧物化宽布尔表 cluster.mined_factor_flags（共享 condition_mask executor，279 交易日 152.6 万行，与 signals 逐行一致），QRE 三段式寻址 cluster schema 零改动。闭环：沙箱 3/3 → 冒烟 20 股×半年 3/3（trades 14/91/76）→ 晋升 → 全市场 3820 股×近 1 年（含成本/止损 8%/universe 过滤/基准 000300.SH，批次 b21f1008ec98，各 ~556s）3/3 ok → report-audit 6/6 ok。**结论：未复现 M3b 超额方向**——组合总收益 +0.75/+0.54/+0.26% vs 基准 +11.83%（超额 -11.1/-11.3/-11.6%），eval +5 日胜率 46.6~46.8% <50%，与 M5b 监控「近期 28/37 因子超额为负」一致；建议三因子转「衰减观察」待用户确认。详见 09_CODING_HANDOFF.md 顶部。未提交，等用户审批。
+
 2026-08-17 QRE-ADMIN-TIMERS-001 DONE：`uv run pytest tests/ -x -q` → **1398 passed**。dashboard 日更定时任务清单补全：TIMER_UNITS 由 3 → 6（新增 alpha191-daily / cluster-ashare-daily / cluster-ashare-tags-weekly），重启后 /api/admin/timers 实测 6 条全 active、next 触发时间正确。
 
 2026-08-15 QRE-GUI-ALPHA191-GROUP-001 DONE：`uv run pytest tests/ -x -q` → **1398 passed**（全绿）。① 修复 /api/factors 下拉缺 alpha191 组：`factor_wizard.build_factor_groups` 对无价格后缀的 `stock_daily_alpha191` 单独成组（label「Alpha191 · alphaXXX」，与 admin.py 纳管口径一致），CATEGORY_LABELS 加 alpha191；重启后实测 10 组含 alpha191×191。② 新增 `deploy/hardened/qre-gui.service`（GUI 常驻 + 开机自启：After postgresql/network-online，EnvironmentFile=.env，Restart=on-failure 10s，MemoryMax=2G，已 cp 至 /etc/systemd/system 并 enable --now，实测 active + 首页 200）。详见 09_CODING_HANDOFF.md 顶部。

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-GUI-FACTOR-CREATE-P2-001 (GUI 新因子创建闭环 P2)
+QRE-M5C-MINED-FACTOR-STRAT-001 (M5c：因子工厂 Top3 因子 → QRE 正式策略闭环验证)
 
 ## Current Status
 
@@ -10,11 +10,13 @@ DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approv
 
 ## Task Note
 
-新通道 `/api/factor-create/*`：NL/手写 → LLM 草稿（只回填）→ 查重+AST 安全检查 →
-indicators 沙箱单股冒烟 → 确认晋升（factors/<name>_factor.py + config 追加 +
-后台 validate→backfill --execute job）。细节见 `09_CODING_HANDOFF.md` 顶部。
-真实 E2E：vidya/overlap/close[20] 已晋升，job 20260812T030850074330；
-config/factors.yaml 保持未提交（backfill 完成后按 FACTOR_AUTHORING 纪律备份+提交）。
+cluster-ashare M5c 联动任务：cluster.mined_factors Top3（MF_001/002/003）
+转译为 cs07a/b/c（strategies/catalog/cross_sectional/），经沙箱→冒烟→晋升→
+全市场近 1 年回测（批次 b21f1008ec98）→ report-audit 全通过。
+截面分位语义由 cluster-ashare 物化表 cluster.mined_factor_flags 承载，
+QRE 零代码改动。回测结论：近 1 年未复现 M3b 超额（超额 -11.1~-11.6%），
+建议三因子转「衰减观察」——状态调整与是否 commit 均待用户审批。
+细节见 `09_CODING_HANDOFF.md` 顶部。
 
 # Task Handoff (archive)
 

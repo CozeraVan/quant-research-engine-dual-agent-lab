@@ -2,6 +2,35 @@
 
 ## Task ID
 
+QRE-M5C-MINED-FACTOR-STRAT-001 (M5c：因子工厂 Top3 因子 → QRE 正式策略闭环验证)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 任务书逐项落实：Top3 以库内 evidence 为准（MF_001/002/003，综合分顺序）；
+  每因子一策略；沙箱→冒烟→晋升→全市场回测→report-audit 全闭环无断点。
+- 转译方案侵入最小：QRE 零代码改动（FactorFieldRequest 既有任意 schema
+  三段式寻址；信号表达式 `mf_00X == 1` 在 DSL §2 子集内）；截面分位语义
+  由 cluster-ashare 共享 executor（condition_mask，与 M3b/注册表同一函数）
+  物化，未复制第二份实现；QRE 只读红线未破（建表写库全在 cluster schema、
+  由 cluster 项目脚本执行）。
+- 诚实边界已标注：冒烟 cs07a 仅 1/20 股有交易（样本为大盘股，MF_001 池偏
+  中小盘）；M3b（异动日事件采样、无成本）与 QRE（每日全市场、含成本止损）
+  口径差异在对比结论中如实说明，未把「不一致」淡化。
+- 回测结论为负（近 1 年超额 -11.1%/-11.3%/-11.6%），如实记录并给出
+  「转衰减观察」建议而非强行上线——符合统计纪律。
+- 验证：pytest 1398 绿（无代码改动）；flags↔signals 双向差集为 0；
+  report-audit 6/6 ok。无 Required Fixes。
+
+## Task ID
+
 QRE-ADMIN-TIMERS-001 (dashboard 日更定时任务清单补全)
 
 ## Review Status

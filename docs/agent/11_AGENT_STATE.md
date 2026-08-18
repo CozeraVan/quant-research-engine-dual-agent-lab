@@ -12,7 +12,16 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-HOME-REFACTOR-001 (DONE — 1391 tests green; awaiting git approval)
+QRE-M5C-MINED-FACTOR-STRAT-001 (DONE — 1398 tests green，零 QRE 代码改动；awaiting git approval)
+
+2026-08-18: 因子工厂 Top3（cluster.mined_factors MF_001/002/003）转译为
+cs07a/b/c（catalog/cross_sectional/），截面分位由 cluster-ashare 物化表
+cluster.mined_factor_flags 承载（QRE 三段式寻址 cluster schema，零引擎改动）。
+闭环：沙箱 3/3 → 冒烟 20 股×半年 3/3 → 晋升 → 全市场 3820 股×近 1 年
+（成本/止损 8%/universe 过滤/基准 000300.SH，批次 b21f1008ec98）3/3 ok →
+report-audit 6/6 ok。结论：近 1 年未复现 M3b 超额（-11.1/-11.3/-11.6% vs
+基准），建议三因子转「衰减观察」（cluster 侧 status 调整待用户确认）。
+详见 09_CODING_HANDOFF 顶部。上一任务：QRE-ADMIN-TIMERS-001。
 
 2026-08-12: GUI 首页三 tab → 两 tab（新增策略一页三入口 + 新增因子路径 A/B，fc-create 迁入首页，tab-builder 删除，app.py 零改动）。详见 09_CODING_HANDOFF 顶部。上一任务：QRE-ADMIN-STRAT-INCREMENTAL-FIX-001（策略状态 tab 增量合并）。
 
