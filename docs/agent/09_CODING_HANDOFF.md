@@ -2,6 +2,71 @@
 
 ## Task ID
 
+QRE-ADMIN-CLUSTER-001 (dashboard 新增「聚类分析」页：只读展示 cluster-ashare 因子工厂产出)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+管理台定位保持「只查询状态」：全部数据源只读（PG 只发 SELECT，文件只读），
+不写任何数据；每个分区独立 try/except 降级，某数据源不可用时该分区显示
+错误+重试按钮，不拖垮整页。
+
+**改动文件**：
+
+1. `src/quant_research_engine/gui/cluster_admin.py`（新增，~330 行）：
+   - `cluster_repo()`：`QRE_CLUSTER_REPO` 环境变量，默认
+     `Path(__file__).parents[4]/"cluster-ashare"`（= /home/van/quant-workspace/cluster-ashare，
+     与 QRE_INDICATORS_REPO 先例一致）。
+   - `factor_registry(db_url)`：SELECT cluster.mined_factors（factor_id/
+     family/status/definition/evidence），展开为 因子 id/条件 key/类型/状态
+     （在库=绿 active、衰减观察=黄 decay）/跨年数 n_years/方向一致率
+     consistency/+5 超额 excess_d5；status_counts 汇总。
+   - `m4_overview(repo)`：读 clustering/m4_meta.json（k、ARI、n_sig、
+     hidden.explain 画像、top_dims）+ m4_trajectories_alive.csv（20 轨迹，
+     q<0.05 且正超额标 significant 排前）+ hidden_cluster_members.csv
+     前 50 行。
+   - `monitor_health(repo)`：glob 最新 monitor_*.md，`parse_monitor_md`
+     解析 markdown 因子表（MF_ 行过滤表头/分隔线），按建议列计数 +
+     「建议转衰减观察」清单。
+   - `report_links(repo)`：REPORT_ARTIFACTS 清单（不存在的跳过）+ 最新
+     monitor 报告置顶；`resolve_artifact` 白名单：resolve 后必须在
+     factor_mining 根内且后缀 ∈ {.md,.csv,.json}。
+   - `cluster_overview`：聚合四分区，分区级异常兜底。
+   - 全部走 admin._cached TTL 300s（含 single-flight）。
+2. `src/quant_research_engine/gui/app.py`：+2 路由——`GET /api/admin/cluster`
+   （聚合 JSON）、`GET /api/admin/cluster/artifact/<path>`（send_file 下载，
+   白名单外 404）。
+3. `src/quant_research_engine/gui/templates/admin.html`：第 6 个 tab
+   「聚类分析」，4 个 section-toggle 分区 + loadCluster() JS
+   （fetchWithTimeout 30s、cardError 重试、注册表客户端搜索过滤）；
+   沿用现有 ok/err/health-yellow/kpi/num/admin-card 样式类，零 CSS 改动。
+4. `tests/test_gui_cluster.py`（新增 14 用例）：monitor md 解析、
+   m4_overview 正常/缺文件/坏 JSON 降级、monitor 缺目录/空目录降级、
+   report_links 存在性过滤、resolve_artifact 越界+后缀白名单、
+   factor_registry fake-store + /api/admin/cluster 路由 200 分区降级、
+   下载路由正反例、/admin 页面含新 tab。
+
+**真实验证**（2026-08-19）：
+`sudo -n systemctl restart qre-gui.service` → active；
+`curl /admin` 200；`curl /api/admin/cluster` → 四分区全 ok：
+registry total=38（在库 35/衰减观察 3），m4 k=20 sig=2 trajs=20
+members=50，monitor report=monitor_2026-08-18.md 正常 9/关注 23/
+建议转衰减 5（MF_008/011/015/025/035），links artifacts=13；
+下载 m4_meta.json 200、monitor md 200、parquet 404、路径穿越 404。
+
+**测试**：`uv run pytest tests/ -x -q` → 1412 passed（1398 + 14，全绿）。
+
+上一任务：QRE-M5C-MINED-FACTOR-STRAT-001。
+
+## Task ID
+
 QRE-M5C-MINED-FACTOR-STRAT-001 (M5c：因子工厂 Top3 因子 → QRE 正式策略闭环验证)
 
 ## Written By

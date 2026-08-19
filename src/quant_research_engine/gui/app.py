@@ -513,6 +513,25 @@ def create_app() -> Flask:
             return jsonify({"error": "文件不存在"}), 404
         return send_file(target, as_attachment=True, download_name=target.name)
 
+    # --- 管理台「聚类分析」（QRE-ADMIN-CLUSTER-001，只读展示 cluster-ashare 产出） ---
+
+    @app.route("/api/admin/cluster")
+    def api_admin_cluster() -> Any:
+        from quant_research_engine.gui.cluster_admin import cluster_overview
+
+        return jsonify(cluster_overview(request.args.get("db_url") or None))
+
+    @app.route("/api/admin/cluster/artifact/<path:rel_path>")
+    def api_admin_cluster_artifact(rel_path: str) -> Any:
+        from flask import send_file
+
+        from quant_research_engine.gui.cluster_admin import resolve_artifact
+
+        target = resolve_artifact(rel_path)
+        if target is None:
+            return jsonify({"error": "文件不存在或不在白名单内"}), 404
+        return send_file(target, as_attachment=True, download_name=target.name)
+
     # --- 管理台 API（QRE-ADMIN-CONSOLE-P3A-001，只读） ---
 
     @app.route("/admin")

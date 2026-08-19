@@ -2,6 +2,34 @@
 
 ## Task ID
 
+QRE-ADMIN-CLUSTER-001 (dashboard 聚类分析页)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 只读红线未破：PG 只发 SELECT（cluster.mined_factors），文件只读；
+  无任何写库/写文件路径；下载走独立白名单（resolve 后必须在
+  factor_mining 根内 + 后缀 ∈ {.md,.csv,.json}），路径穿越与 parquet
+  实测 404。
+- 错误降级符合要求：四分区各自 try/except + 路由级兜底；测试覆盖
+  DB 不可用、m4_meta 缺失/坏 JSON、monitor 目录缺失/为空等降级路径。
+- 缓存沿用 admin._cached TTL 300s（single-flight），与既有分区一致。
+- 路径不硬编码：QRE_CLUSTER_REPO 环境变量 + parents[4] 默认，同
+  QRE_INDICATORS_REPO 先例。
+- UI 复用现有样式类与 fetchWithTimeout/cardError 模式，零 CSS 改动。
+- 验证：pytest 1412 绿（1398+14）；重启 qre-gui 后 curl /admin 200、
+  /api/admin/cluster 四分区全 ok（真实数据：38 因子、20 轨迹、
+  monitor 9/23/5、13 个下载产物）。无 Required Fixes。
+
+## Task ID
+
 QRE-M5C-MINED-FACTOR-STRAT-001 (M5c：因子工厂 Top3 因子 → QRE 正式策略闭环验证)
 
 ## Reviewer

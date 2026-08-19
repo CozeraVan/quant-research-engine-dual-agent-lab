@@ -12,7 +12,14 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-M5C-MINED-FACTOR-STRAT-001 (DONE — 1398 tests green，零 QRE 代码改动；awaiting git approval)
+QRE-ADMIN-CLUSTER-001 (DONE — 1412 tests green；awaiting git approval)
+
+2026-08-19: dashboard 新增「聚类分析」tab（只读展示 cluster-ashare 因子工厂
+产出）：gui/cluster_admin.py（QRE_CLUSTER_REPO，分区降级+TTL 300s 缓存），
+app.py +/api/admin/cluster 与 /api/admin/cluster/artifact/<path> 下载白名单，
+admin.html 第 6 tab 四分区（38 因子注册表/M4 轨迹+traj13 成员/衰减监控
+9-23-5/13 个产物链接）。重启 qre-gui 实测全 ok。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-M5C-MINED-FACTOR-STRAT-001。
 
 2026-08-18: 因子工厂 Top3（cluster.mined_factors MF_001/002/003）转译为
 cs07a/b/c（catalog/cross_sectional/），截面分位由 cluster-ashare 物化表
@@ -122,6 +129,13 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1412 passed, 4 warnings (2026-08-19, QRE-ADMIN-CLUSTER-001)
+curl /admin → 200；/api/admin/cluster 四分区全 ok
+下载白名单：md/json 200，parquet 404，路径穿越 404
+systemctl restart qre-gui.service → active
+```
 
 ```
 uv run pytest -q → 1034 passed, 4 warnings (2026-07-19, M9.1b final)

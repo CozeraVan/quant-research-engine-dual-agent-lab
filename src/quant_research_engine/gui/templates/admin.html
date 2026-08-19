@@ -8,6 +8,7 @@
   <button class="tab" data-tab="factors">因子状态</button>
   <button class="tab" data-tab="onboard">策略状态</button>
   <button class="tab" data-tab="maint">维护区</button>
+  <button class="tab" data-tab="cluster">聚类分析</button>
 </div>
 
 <!-- Tab 1: 总览 -->
@@ -74,9 +75,43 @@
   </div>
 </div>
 
+<!-- Tab 6: 聚类分析（只读展示 cluster-ashare 因子工厂产出，不写任何数据） -->
+<div id="tab-cluster" class="tab-content">
+  <p><button id="btn-cl-refresh" class="btn btn-ghost">刷新 Refresh</button>
+    <span class="opt">数据源：PG cluster schema + cluster-ashare outputs/factor_mining（只读；路径可用 QRE_CLUSTER_REPO 覆盖）</span>
+    <span id="cl-repo" class="opt"></span></p>
+
+  <div class="section">
+    <button class="section-toggle" data-section="cl-registry">因子注册表（cluster.mined_factors）&#9660;</button>
+    <div id="sec-cl-registry" class="section-body">
+      <div id="cl-registry"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <button class="section-toggle" data-section="cl-m4">M4 隐性聚类（截面 KMeans 轨迹 POC）&#9660;</button>
+    <div id="sec-cl-m4" class="section-body">
+      <div id="cl-m4"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <button class="section-toggle" data-section="cl-monitor">衰减监控（最新 monitor 报告）&#9660;</button>
+    <div id="sec-cl-monitor" class="section-body">
+      <div id="cl-monitor"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <button class="section-toggle" data-section="cl-links">报告与产物下载&#9660;</button>
+    <div id="sec-cl-links" class="section-body">
+      <div id="cl-links"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+</div>
+
 <script>
-(function() {
-  // tab switching
+(function() {  // tab switching
   var tabs = document.querySelectorAll('.tab');
   tabs.forEach(function(t) {
     t.addEventListener('click', function() {
@@ -595,11 +630,172 @@
     });
   });
 
+  // ---------- Tab 6: 聚类分析（只读，分区独立降级） ----------
+  function clSectionError(el, section, retryFn) {
+    el.innerHTML = '<span class="err">' + esc(section.error || '加载失败') + '</span> <button class="btn-sm">重试</button>';
+    el.querySelector('button').addEventListener('click', retryFn);
+  }
+
+  function renderCluster(d) {
+    document.getElementById('cl-repo').textContent = 'repo: ' + (d.repo || '—');
+    var s = d.sections || {};
+
+    // 分区 1：因子注册表
+    var regEl = document.getElementById('cl-registry');
+    var reg = s.registry || {ok: false, error: '无数据'};
+    if (!reg.ok) {
+      clSectionError(regEl, reg, loadCluster);
+    } else {
+      var counts = Object.keys(reg.status_counts || {}).map(function(k) {
+        return esc(k) + ' ' + reg.status_counts[k];
+      }).join(' / ');
+      var rows = (reg.factors || []).map(function(f) {
+        var statusHtml = f.status_class === 'active'
+          ? '<span class="ok">' + esc(f.status) + '</span>'
+          : (f.status_class === 'decay'
+              ? '<span class="health-yellow">' + esc(f.status) + '</span>'
+              : esc(f.status));
+        return '<tr class="cl-row" data-kw="' + esc((f.factor_id + ' ' + f.key + ' ' + f.type).toLowerCase()) + '">'
+          + '<td>' + esc(f.factor_id) + '</td>'
+          + '<td>' + esc(f.key) + '</td>'
+          + '<td>' + esc(f.type) + '</td>'
+          + '<td>' + statusHtml + '</td>'
+          + '<td class="num">' + esc(f.n_years == null ? '—' : f.n_years) + '</td>'
+          + '<td class="num">' + fmtPct(f.consistency) + '</td>'
+          + '<td class="num">' + fmtPct(f.excess_d5) + '</td></tr>';
+      }).join('');
+      regEl.innerHTML = '<p>共 <strong>' + reg.total + '</strong> 因子（' + counts + '）'
+        + ' <input type="text" id="cl-search" placeholder="搜索因子 id/条件/类型..." size="24"></p>'
+        + '<table><thead><tr><th>因子</th><th>条件</th><th>类型</th><th>状态</th><th>跨年数</th><th>方向一致率</th><th>+5 超额</th></tr></thead>'
+        + '<tbody>' + rows + '</tbody></table>';
+      document.getElementById('cl-search').addEventListener('input', function(e) {
+        var kw = e.target.value.trim().toLowerCase();
+        document.querySelectorAll('.cl-row').forEach(function(row) {
+          row.style.display = (!kw || row.dataset.kw.indexOf(kw) >= 0) ? '' : 'none';
+        });
+      });
+    }
+
+    // 分区 2：M4 隐性聚类
+    var m4El = document.getElementById('cl-m4');
+    var m4 = s.m4 || {ok: false, error: '无数据'};
+    if (!m4.ok) {
+      clSectionError(m4El, m4, loadCluster);
+    } else {
+      var html = '<div class="admin-cards">'
+        + '<div class="admin-card"><h3>关键指标</h3><div class="card-body">'
+        + '<p>窗口：' + esc((m4.dates || []).join(' ~ ')) + '（' + esc(m4.n_days) + ' 交易日）</p>'
+        + '<p>最优 k：<strong class="kpi">' + esc(m4.best_k) + '</strong>；轨迹数 ' + esc(m4.n_traj)
+        + '；显著轨迹 <strong class="kpi">' + esc(m4.n_sig) + '</strong></p>'
+        + '<p>ARI 稳定性：mean <span class="num">' + esc(m4.ari_mean == null ? '—' : Number(m4.ari_mean).toFixed(3)) + '</span>'
+        + ' / median <span class="num">' + esc(m4.ari_median == null ? '—' : Number(m4.ari_median).toFixed(3)) + '</span>（相邻日，494 对）</p>'
+        + '<p class="opt">收益口径：' + esc(m4.forward || '') + '</p>'
+        + '</div></div>';
+      if (m4.hidden_profile) {
+        var hp = m4.hidden_profile;
+        html += '<div class="admin-card"><h3>隐性簇候选 traj' + esc(hp.traj) + ' 画像</h3><div class="card-body">'
+          + '<p>快照 ' + esc(hp.snapshot) + '，成员 ' + esc(hp.n_members) + ' 只；'
+          + '解释度 <strong class="kpi">' + esc(hp.explain_total == null ? '—' : Number(hp.explain_total).toFixed(2)) + '</strong>（&lt;0.5 = 隐性成色足）</p>'
+          + '<p>行业 Top：' + esc(hp.industry_top) + '（占比 '
+          + esc(hp.industry_share == null ? '—' : (Number(hp.industry_share) * 100).toFixed(1) + '%') + '）</p>'
+          + '<p class="opt">Top 维度：' + (hp.top_dims || []).slice(0, 8).map(function(t) {
+              return esc(t[0]) + '(' + (Number(t[1]) >= 0 ? '+' : '') + Number(t[1]).toFixed(2) + ')';
+            }).join('，') + '</p>'
+          + '</div></div>';
+      }
+      html += '</div>';
+      var tRows = (m4.trajectories || []).map(function(t) {
+        return '<tr' + (t.significant ? ' class="ok"' : '') + '>'
+          + '<td>traj' + esc(t.traj) + (t.significant ? ' ★' : '') + '</td>'
+          + '<td class="num">' + esc(t.days) + '</td>'
+          + '<td class="num">' + esc(t.avg_n == null ? '—' : Number(t.avg_n).toFixed(0)) + '</td>'
+          + '<td class="num">' + fmtPct(t.mean) + '</td>'
+          + '<td class="num">' + esc(t.t == null ? '—' : Number(t.t).toFixed(2)) + '</td>'
+          + '<td class="num">' + esc(t.p == null ? '—' : Number(t.p).toFixed(4)) + '</td>'
+          + '<td class="num">' + esc(t.q == null ? '—' : Number(t.q).toFixed(4)) + '</td>'
+          + '<td class="num">' + fmtPct(t.pos_ratio) + '</td></tr>';
+      }).join('');
+      html += '<h3>轨迹超额（★ = FDR q&lt;0.05 且正超额）</h3>'
+        + '<table><thead><tr><th>轨迹</th><th>天数</th><th>日均成员</th><th>+5 超额均值</th><th>t</th><th>p</th><th>q</th><th>上涨占比</th></tr></thead>'
+        + '<tbody>' + tRows + '</tbody></table>';
+      if (m4.hidden_members && m4.hidden_members.length) {
+        html += '<h3>traj13 当日成员（前 ' + m4.hidden_members_limit + ' / 共 ' + esc(m4.hidden_members_total || '—') + '）</h3>'
+          + '<p class="opt">' + m4.hidden_members.map(esc).join('，') + '</p>';
+      }
+      m4El.innerHTML = html;
+    }
+
+    // 分区 3：衰减监控
+    var monEl = document.getElementById('cl-monitor');
+    var mon = s.monitor || {ok: false, error: '无数据'};
+    if (!mon.ok) {
+      clSectionError(monEl, mon, loadCluster);
+    } else {
+      var c = mon.counts || {};
+      var mHtml = '<p>报告：' + esc(mon.report) + '（' + esc(mon.factor_count) + ' 因子）'
+        + '；<span class="ok">正常 ' + (c['正常'] || 0) + '</span>'
+        + ' / <span class="health-yellow">关注 ' + (c['关注'] || 0) + '</span>'
+        + ' / <span class="err">建议转衰减观察 ' + (c['建议转衰减观察'] || 0) + '</span></p>';
+      if (mon.decay_candidates && mon.decay_candidates.length) {
+        mHtml += '<p class="err">建议转衰减观察：' + mon.decay_candidates.map(esc).join('，') + '</p>';
+      }
+      var mRows = (mon.rows || []).map(function(r) {
+        var cls = r.advice === '正常' ? 'ok' : (r.advice.indexOf('衰减') >= 0 ? 'err' : 'health-yellow');
+        return '<tr><td>' + esc(r.factor_id) + '</td><td>' + esc(r.condition) + '</td>'
+          + '<td class="num">' + esc(r.excess_20d) + '</td><td class="num">' + esc(r.excess_60d) + '</td>'
+          + '<td>' + esc(r.trend) + '</td><td class="' + cls + '">' + esc(r.advice) + '</td></tr>';
+      }).join('');
+      mHtml += '<table><thead><tr><th>因子</th><th>条件</th><th>近20日超额</th><th>近60日超额</th><th>趋势</th><th>建议</th></tr></thead>'
+        + '<tbody>' + mRows + '</tbody></table>';
+      monEl.innerHTML = mHtml;
+    }
+
+    // 分区 4：报告链接
+    var linkEl = document.getElementById('cl-links');
+    var lk = s.links || {ok: false, error: '无数据'};
+    if (!lk.ok) {
+      clSectionError(linkEl, lk, loadCluster);
+    } else {
+      var lRows = (lk.artifacts || []).map(function(a) {
+        var kb = a.size_bytes == null ? '—' : (a.size_bytes / 1024).toFixed(1) + ' KB';
+        return '<tr><td>' + esc(a.label) + '</td><td><code>' + esc(a.rel) + '</code></td>'
+          + '<td class="num">' + kb + '</td>'
+          + '<td><a href="/api/admin/cluster/artifact/' + encodeURIComponent(a.rel) + '" download>下载</a></td></tr>';
+      }).join('');
+      linkEl.innerHTML = '<p class="opt">产物根：<code>' + esc(lk.root) + '</code></p>'
+        + (lRows
+          ? '<table><thead><tr><th>报告</th><th>路径</th><th>大小</th><th>操作</th></tr></thead><tbody>' + lRows + '</tbody></table>'
+          : '<p class="opt">无可用产物。</p>');
+    }
+  }
+
+  function loadCluster() {
+    fetchWithTimeout('/api/admin/cluster')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) {
+          ['cl-registry', 'cl-m4', 'cl-monitor', 'cl-links'].forEach(function(id) {
+            clSectionError(document.getElementById(id), {error: d.error || '加载失败'}, loadCluster);
+          });
+          return;
+        }
+        renderCluster(d);
+      })
+      .catch(function(err) {
+        var msg = isAbort(err) ? '聚类分析加载超时（30s），请重试' : ('聚类分析加载失败：' + err);
+        ['cl-registry', 'cl-m4', 'cl-monitor', 'cl-links'].forEach(function(id) {
+          clSectionError(document.getElementById(id), {error: msg}, loadCluster);
+        });
+      });
+  }
+  document.getElementById('btn-cl-refresh').addEventListener('click', loadCluster);
+
   loadOverview();
   loadTimers();
   loadFactorStatus();
   loadOnboard();
   loadMaintenance();
+  loadCluster();
 })();
 </script>
 {% endblock %}
