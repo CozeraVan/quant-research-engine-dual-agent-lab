@@ -194,7 +194,9 @@ def test_factor_status_three_way(monkeypatch):
     ovl = by_table["factors.stock_daily_overlap_close"]
     assert ovl["green"] == ["sma_20", "sma_60"]
     assert ovl["yellow"] == [] and ovl["red"] == []
-    assert status["summary"] == {"green": 3, "yellow": 1, "red": 2}
+    assert status["summary"]["green"] == 3
+    assert status["summary"]["yellow"] == 1
+    assert status["summary"]["red"] == 2
     admin._cache.clear()
 
 
@@ -213,6 +215,120 @@ def test_factor_status_degrades_to_config_level(monkeypatch):
     assert status["config_level"][0]["name"] == "rsi"
     for t in status["tables"]:
         assert "green" not in t  # 无列级状态
+    admin._cache.clear()
+
+
+# --- 新鲜度判定（交易日 lag，QRE-ADMIN-FACTOR-FRESH-001） ---
+
+
+def test_trade_day_lag_trading_days_not_calendar_days():
+    """跨周末/长假只算交易日差：07-24(五)→07-27(一) 自然日 3 天但交易日差为 1。"""
+    dates = ["2026-07-27", "2026-07-24", "2026-07-23", "2026-07-22"]
+    assert admin.trade_day_lag("2026-07-27", "2026-07-27", dates) == 0
+    assert admin.trade_day_lag("2026-07-24", "2026-07-27", dates) == 1
+    assert admin.trade_day_lag("2026-07-22", "2026-07-27", dates) == 3
+    # 任一输入缺失 → None（降级）
+    assert admin.trade_day_lag(None, "2026-07-27", dates) is None
+    assert admin.trade_day_lag("2026-07-24", None, dates) is None
+    assert admin.trade_day_lag("2026-07-24", "2026-07-27", None) is None
+    assert admin.trade_day_lag("2026-07-24", "2026-07-27", []) is None
+
+
+def test_fresh_level_thresholds():
+    assert admin._fresh_level(0) == "ok"
+    assert admin._fresh_level(1) == "warn"
+    assert admin._fresh_level(2) == "err"
+    assert admin._fresh_level(9) == "err"
+    assert admin._fresh_level(None) is None
+
+
+def test_factor_status_freshness_lag(monkeypatch):
+    """表 watermark 07-24、日线 07-27（交易日序列 2 天）→ lag_days=1 / fresh=warn，
+    按自然日差则是 3 天会误报严重滞后——验证用的是交易日差。"""
+    _setup_factor_status(
+        monkeypatch,
+        {
+            "stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14"],
+            "stock_daily_overlap_close": ["ts_code", "trade_date", "sma_20", "sma_60"],
+        },
+        _expected_payload(),
+    )
+    status = factor_status()
+    assert status["fresh_available"] is True
+    by_table = {t["table"]: t for t in status["tables"]}
+    mom = by_table["factors.stock_daily_momentum_close"]
+    assert mom["lag_days"] == 1
+    assert mom["fresh"] == "warn"
+    assert status["summary"]["lagging"] == 2
+    assert status["summary"]["stale"] == 0
+    admin._cache.clear()
+
+
+def test_factor_status_freshness_levels_and_stale(monkeypatch):
+    """lag 0=ok / ≥2=err 的分档；stale 计入 lagging。"""
+    admin._cache.clear()
+
+    class _ColumnStore(FakeStore):
+        def get_table_columns(self, table_name, *, engine=None):
+            return ["ts_code", "trade_date", "x"]
+
+    store = _ColumnStore(factor_maxes={
+        "stock_daily_momentum_close": "2026-07-27",  # 最新
+        "stock_daily_overlap_close": "2026-07-22",   # 落后 3 个交易日
+    })
+
+    # 交易日序列含 4 天，让 overlap 算出 lag=3
+    class _Conn(_FakeConn):
+        def execute(self, clause, params=None):
+            sql = str(clause)
+            if "DISTINCT trade_date" in sql:
+                return _FakeResult(
+                    rows=[("2026-07-27",), ("2026-07-24",), ("2026-07-23",), ("2026-07-22",)]
+                )
+            return super().execute(clause, params)
+
+    store.market_engine = type("_Eng", (), {"begin": lambda self: _Conn(store)})()
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: store)
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.managed_factor_tables",
+        lambda repo=None: {"stock_daily_momentum_close", "stock_daily_overlap_close"},
+    )
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.expected_factor_columns",
+        lambda repo=None, runner=None: None,
+    )
+    status = factor_status()
+    by_table = {t["table"]: t for t in status["tables"]}
+    assert by_table["factors.stock_daily_momentum_close"]["fresh"] == "ok"
+    assert by_table["factors.stock_daily_momentum_close"]["lag_days"] == 0
+    assert by_table["factors.stock_daily_overlap_close"]["fresh"] == "err"
+    assert by_table["factors.stock_daily_overlap_close"]["lag_days"] == 3
+    assert status["summary"]["lagging"] == 1
+    assert status["summary"]["stale"] == 1
+    admin._cache.clear()
+
+
+def test_factor_status_freshness_degrades_when_dates_unavailable(monkeypatch):
+    """交易日序列查询失败：fresh/lag_days 为 null，页面其余部分不受影响。"""
+    _setup_factor_status(
+        monkeypatch,
+        {"stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14"]},
+        _expected_payload(),
+    )
+
+    def _boom(db_url=None):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr("quant_research_engine.gui.admin.overview_daily", _boom)
+    status = factor_status()
+    assert status["fresh_available"] is False
+    for t in status["tables"]:
+        assert t["fresh"] is None
+        assert t["lag_days"] is None
+    assert status["summary"]["lagging"] == 0
+    assert status["summary"]["stale"] == 0
+    # 列级对账不受影响
+    assert status["expected_available"] is True
     admin._cache.clear()
 
 

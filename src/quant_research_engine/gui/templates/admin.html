@@ -478,10 +478,17 @@
         var summaryHtml = '<p>日线 watermark：' + esc(d.daily_watermark)
           + '；<span class="ok">在库且在日更 ' + s.green + '</span>'
           + ' / <span class="health-yellow">在库不在日更 ' + s.yellow + '</span>'
-          + ' / <span class="err">配置有但库缺 ' + s.red + '</span>'
-          + ' <input type="text" id="fs-search" placeholder="搜索因子列/表名..." size="20"></p>';
+          + ' / <span class="err">配置有但库缺 ' + s.red + '</span>';
+        if (s.lagging) {
+          summaryHtml += '；新鲜度：<span class="health-yellow">滞后 ' + (s.lagging - s.stale) + '</span>'
+            + (s.stale ? ' / <span class="err">严重滞后 ' + s.stale + '</span>' : '') + ' 张';
+        }
+        summaryHtml += ' <input type="text" id="fs-search" placeholder="搜索因子列/表名..." size="20"></p>';
         if (!d.expected_available) {
           summaryHtml += '<p class="err">配置列展开失败，降级为配置级展示（指标名+参数，无列级对账）。</p>';
+        }
+        if (d.fresh_available === false) {
+          summaryHtml += '<p class="opt">交易日序列不可用，新鲜度判定降级（显示 -）。</p>';
         }
         document.getElementById('fs-summary').innerHTML = summaryHtml;
 
@@ -499,8 +506,13 @@
             det.className = 'fs-table';
             var redBadge = t.red && t.red.length ? ' <span class="err">缺 ' + t.red.length + '</span>' : '';
             var yellowBadge = t.yellow && t.yellow.length ? ' <span class="health-yellow">停滞 ' + t.yellow.length + '</span>' : '';
+            var freshBadge = t.fresh === 'ok' ? ' <span class="ok">最新</span>'
+              : t.fresh === 'warn' ? ' <span class="health-yellow">滞后1日</span>'
+              : t.fresh === 'err' ? ' <span class="err">严重滞后' + t.lag_days + '日</span>'
+              : ' <span class="opt">-</span>';
             det.innerHTML = '<summary>' + esc(t.table)
               + '（库内 ' + t.db_column_count + ' 列，watermark ' + esc(t.watermark || '—') + '）'
+              + freshBadge
               + redBadge + yellowBadge
               + ' <button class="btn-sm" data-backfill="' + esc(t.table) + '">补全此表</button></summary>'
               + (t.red && t.red.length

@@ -2,6 +2,35 @@
 
 ## Task ID
 
+QRE-ADMIN-FACTOR-FRESH-001 (因子状态 tab 新鲜度判定)
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 只读红线未破：新鲜度判定复用 overview_daily 既有 SELECT（DISTINCT
+  trade_date），无新查询类型、无任何写路径；沿用 `_cached` TTL 300s
+  single-flight 缓存模式。
+- 口径正确性有测试钉住：lag 用交易日序列计数而非自然日差（07-24→07-27
+  跨周末 lag=1 而非 3），集成用例防回归；alpha191 无价格后缀表同样判定。
+- 降级符合要求：交易日序列查询失败时 fresh/lag_days=null、
+  fresh_available=False，前端显示 "-"，列级三方对账与页面其余部分
+  不受影响（有专门降级用例）。
+- UI 复用现有 ok/err/health-yellow/opt 语义类，零 CSS 新增，符合
+  Data-Dense 现有视觉体系。
+- 验证：pytest 1417 绿（1412+5）；重启 qre-gui 后 curl
+  /api/admin/factor-status 实测 daily_watermark 2026-08-18、alpha191
+  lag=1 warn、其余 10 表 lag=0 ok、summary lagging=1/stale=0，与
+  「VM 停机漏跑 alpha191 日更」的真实状态一致。无 Required Fixes。
+
+## Task ID
+
 QRE-ADMIN-CLUSTER-001 (dashboard 聚类分析页)
 
 ## Reviewer

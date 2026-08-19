@@ -2,6 +2,60 @@
 
 ## Task ID
 
+QRE-ADMIN-FACTOR-FRESH-001 (因子状态 tab 加新鲜度/滞后判定)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+背景：VM 停机导致 alpha191 日更漏跑（因子表停 08-17、stock_daily 已 08-18），
+总览 tab 显示滞后，但因子状态 tab 只做列级三方对账、无新鲜度判定，全绿，
+用户视角矛盾。本任务给因子状态 tab 补交易日 lag 判定。
+
+**改动文件**：
+
+1. `src/quant_research_engine/gui/admin.py`：
+   - 新增 `trade_day_lag(table_watermark, daily_watermark, trade_dates)`：
+     交易日差 = stock_daily 日期序列中晚于表 watermark 且不晚于基准的
+     日期个数（非自然日差，跨周末不误报）；任一输入缺失返回 None。
+   - 新增 `_fresh_level(lag)`：0→"ok" / 1→"warn" / ≥2→"err" / None→None。
+   - `factor_status()`：复用 `overview_daily(db_url)["recent_trade_dates"]`
+     （既有 DISTINCT trade_date 查询，同一 `_cached` TTL 300s），try/except
+     包裹——失败时 trade_dates=None → 全表 fresh/lag_days=null、
+     `fresh_available=False`，列级对账不受影响。每表 entry 加
+     `lag_days`/`fresh`；返回加 `fresh_available` 与
+     `summary.lagging`（lag≥1 计数）/`summary.stale`（lag≥2 计数）。
+     alpha191 表在纳管清单内，同样判定（watermark 缺失→null 降级）。
+2. `src/quant_research_engine/gui/templates/admin.html` 因子 tab：
+   每表 `<summary>` 行 watermark 后加新鲜度徽标（ok=「最新」绿 /
+   warn=「滞后1日」黄 / err=「严重滞后N日」红 / null=opt「-」）；
+   summary 区在 lagging>0 时追加「新鲜度：滞后 X / 严重滞后 Y 张」；
+   `fresh_available===false` 时提示降级。复用 ok/err/health-yellow/opt
+   语义类，零 CSS 新增。
+3. `tests/test_gui_admin.py`：+5 用例——`trade_day_lag` 交易日差
+   （07-24 五→07-27 一自然日 3 天但 lag=1）与缺失输入降级、
+   `_fresh_level` 分档、factor_status lag=1 warn 集成（防自然日差回归）、
+   lag 0/3 分档 + summary lagging/stale 计数、overview_daily 异常时
+   fresh=null 且列级对账不受影响的降级路径。既有 three_way 用例的
+   summary 断言改为逐 key（summary 新增两键）。
+
+**真实验证**（2026-08-19）：`sudo -n systemctl restart qre-gui.service` →
+active；`curl /api/admin/factor-status` → daily_watermark 2026-08-18、
+fresh_available true、alpha191 wm 2026-08-17 lag=1 fresh=warn、其余 10 张
+纳管表 lag=0 fresh=ok，summary green=537/yellow=0/red=0/lagging=1/stale=0。
+
+**测试**：`uv run pytest tests/ -x -q` → 1417 passed（1412 + 5，全绿）。
+
+上一任务：QRE-ADMIN-CLUSTER-001。
+
+## Task ID
+
 QRE-ADMIN-CLUSTER-001 (dashboard 新增「聚类分析」页：只读展示 cluster-ashare 因子工厂产出)
 
 ## Written By

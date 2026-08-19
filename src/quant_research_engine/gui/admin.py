@@ -453,6 +453,31 @@ def expected_factor_columns(
     return _cached(f"expected_factor_columns:{repo}", _produce, ttl=EXPECTED_COLUMNS_TTL)
 
 
+def trade_day_lag(
+    table_watermark: str | None,
+    daily_watermark: str | None,
+    trade_dates: list[str] | None,
+) -> int | None:
+    """交易日差（非自然日差）：stock_daily 日期序列中晚于表 watermark 且
+    不晚于日线基准的日期个数。任一输入缺失返回 None（前端降级显示 "-"）。"""
+    if not table_watermark or not daily_watermark or not trade_dates:
+        return None
+    tw = str(table_watermark)[:10]
+    dw = str(daily_watermark)[:10]
+    return sum(1 for d in trade_dates if tw < str(d)[:10] <= dw)
+
+
+def _fresh_level(lag_days: int | None) -> str | None:
+    """lag 0=ok（最新）；1=warn（滞后1日）；≥2=err（严重滞后）。"""
+    if lag_days is None:
+        return None
+    if lag_days <= 0:
+        return "ok"
+    if lag_days == 1:
+        return "warn"
+    return "err"
+
+
 def factor_status(
     db_url: str | None = None,
     *,
@@ -464,10 +489,19 @@ def factor_status(
     - green 在库且在日更配置；
     - yellow 在库但不在日更配置（停滞风险）；
     - red 在日更配置但库中缺列（缺因子）。
+    另附新鲜度判定：以 stock_daily 最近交易日序列算各表交易日 lag，
+    lag 0=ok / 1=warn / ≥2=err；基准查询失败时 fresh/lag_days 为 null。
     配置展开失败时降级为"配置级"展示（expected_available=False，不打列级状态）。
     """
     factors = overview_factors(db_url)
     expected = expected_factor_columns(repo, runner=runner)
+
+    # 新鲜度判定的交易日序列（复用 overview_daily 的 DISTINCT trade_date 查询，
+    # 同一 TTL 缓存）；查询失败时 trade_dates=None → fresh 字段为 null 降级。
+    try:
+        trade_dates: list[str] | None = overview_daily(db_url).get("recent_trade_dates")
+    except Exception:
+        trade_dates = None
 
     store = _store(db_url)
     try:
@@ -488,6 +522,9 @@ def factor_status(
             "estimated_rows": info["estimated_rows"],
             "db_column_count": len(actual),
         }
+        lag = trade_day_lag(info["watermark"], factors["daily_watermark"], trade_dates)
+        entry["lag_days"] = lag
+        entry["fresh"] = _fresh_level(lag)
         if expected is not None and bare in expected:
             want = set(expected[bare]["columns"])
             entry["expected_available"] = True
@@ -516,6 +553,7 @@ def factor_status(
     return {
         "expected_available": expected is not None,
         "daily_watermark": factors["daily_watermark"],
+        "fresh_available": trade_dates is not None,
         "tables": tables,
         "unmanaged_tables": factors["unmanaged_tables"],
         "config_level": config_level,
@@ -523,6 +561,8 @@ def factor_status(
             "green": sum(len(t.get("green", [])) for t in tables),
             "yellow": yellow_total,
             "red": red_total,
+            "lagging": sum(1 for t in tables if t["lag_days"] is not None and t["lag_days"] >= 1),
+            "stale": sum(1 for t in tables if t["lag_days"] is not None and t["lag_days"] >= 2),
         },
     }
 
