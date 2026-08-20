@@ -12,7 +12,20 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-PROMO-GATE-001 (DONE — 1454 tests green；awaiting git approval)
+QRE-GUI-DEEP-VALIDATE-001 (DONE — 1471 tests green；awaiting git approval)
+
+2026-08-20: deep-validate 501 骨架落地为真功能。cluster-ashare 新增薄脚本
+analysis/pool_from_conditions.py（条件 JSON→逐日池 parquet，DB 全留 cluster
+侧，表达式求值复用 QRE evaluate_expression_signal；未走 factor_executor——
+其分位/tag 语义与 QRE 布尔 DSL 不匹配）；QRE 新增 gui/deep_validate.py
+（spec_to_conditions 纯函数转换器/locate_strategy_yaml/parse_report_summary/
+start_deep_validate_job，复用 daily_jobs 基建，lock_key=deep-validate:<name>，
+price/eval 缓存键含区间断点续跑）；app.py POST/GET deep-validate 真实现
+（404/400×3/500/409 分层，缺因子自动入队）；index.html 沙箱行按钮+通用
+入口+10s 轮询不设放弃上限。真实 E2E：mr01a 全历史 → NO-GO（gate3 净超额
+-0.130% t=-10.75），报告落 cluster outputs/factor_mining/validation/。
+未重启 qre-gui，GUI HTTP 链路待重启验证。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-GUI-PROMO-GATE-001。
 
 2026-08-20: 全量回测结果成为晋升后的状态闸。晋升 mark 加 promotion_gate/
 promotion_forced（线程启动前预合并）；engine 收尾新钩子 →
@@ -148,6 +161,15 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1471 passed, 4 warnings (2026-08-20, QRE-GUI-DEEP-VALIDATE-001)
+node --check index.html 三段内联 JS → OK
+真实 E2E：mr01a 全历史（2015-01-01~2026-08-19）池 2826 信号日/均 3770 只；
+四关验证 ~14min → NO-GO（gate1 -0.087% t=-13.12 / gate3 -0.130% t=-10.75 /
+gate4 等权 -0.080% t=-18.64）；parse_report_summary 对真实报告逐关解析正确
+未重启 qre-gui（用户约束）；未 commit
+```
 
 ```
 uv run pytest tests/ -x -q → 1454 passed, 4 warnings (2026-08-20, QRE-GUI-PROMO-GATE-001)

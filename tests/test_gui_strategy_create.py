@@ -680,11 +680,3 @@ def test_api_promote_marks_run_and_force_gate_note(app_client):
     assert status["promotion_forced"] is True
 
 
-def test_api_deep_validate_501(app_client):
-    client, _, _, _ = app_client
-    resp = client.post("/api/strategies/sc_demo/deep-validate", json={})
-    assert resp.status_code == 501
-    data = resp.get_json()
-    assert data["ok"] is False and data["code"] == "not_implemented"
-    assert "策略→信号池转换器" in data["error"]
-    assert "validate_factor.py" in data["design"]["target_cli"]

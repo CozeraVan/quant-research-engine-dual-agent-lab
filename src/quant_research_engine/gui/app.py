@@ -1001,32 +1001,105 @@ def create_app() -> Flask:
 
     @app.route("/api/strategies/<name>/deep-validate", methods=["POST"])
     def api_strategy_deep_validate(name: str) -> Any:
-        """四关验证（cluster-ashare validate_factor.py）预留端点骨架。
+        """深度验证：策略 YAML → 逐日信号池 → cluster-ashare 四关验证（异步）。
 
-        深度验证需要把策略 YAML 的信号规则转换成逐日股票池
-        （cluster-ashare 侧 --pool-... 输入），该「策略→信号池转换器」尚未实现，
-        本端点只返回 501 + 设计说明，不执行任何验证。
+        链路：定位策略 YAML（沙箱优先，其次 catalog）→ StrategySpec 解析 →
+        因子存在性检查（缺失入补因子队列）→ deep_validate.start_deep_validate_job
+        （复用 daily_jobs 基建，lock_key=deep-validate:<name> 同名串行）。
+        立即返回 job_id，前端轮询 GET .../deep-validate/<job_id>。
         """
-        return jsonify({
+        from quant_research_engine.gui import deep_validate
+        from quant_research_engine.gui.nl_compiler import (
+            _default_column_lookup,
+            _enqueue_missing_factors,
+        )
+        from quant_research_engine.strategies.factor_request_queue import (
+            DEFAULT_QUEUE_PATH,
+            find_missing_factor_columns,
+        )
+        from quant_research_engine.strategies.spec import StrategySpec
+
+        data = request.get_json(silent=True) or {}
+        name = name.strip()
+        yaml_text = deep_validate.locate_strategy_yaml(name)
+        if yaml_text is None:
+            return jsonify({"ok": False, "code": "not_found",
+                            "error": f"沙箱与 catalog 中均不存在策略: {name}"}), 404
+        try:
+            import yaml as _yaml
+
+            spec = StrategySpec.from_mapping(_yaml.safe_load(yaml_text))
+        except Exception as exc:
+            return jsonify({"ok": False, "code": "invalid_yaml",
+                            "error": f"策略 YAML 解析失败: {exc}"}), 400
+        if not (spec.signal_expression or "").strip():
+            return jsonify({"ok": False, "code": "no_entry_signal",
+                            "error": f"策略 {name} 无入场表达式（signal.entry），"
+                                     "无法生成信号池"}), 400
+
+        env_error = deep_validate.cluster_available()
+        if env_error:
+            return jsonify({"ok": False, "code": "cluster_unavailable",
+                            "error": f"cluster-ashare 环境不可用：{env_error}"}), 500
+
+        warnings: list[str] = []
+        lookup = _default_column_lookup(data.get("db_url") or None)
+        if lookup is None:
+            warnings.append("因子库不可用，跳过因子存在性检查（信号池生成时缺列会失败）")
+        else:
+            missing = find_missing_factor_columns(spec, lookup)
+            if missing:
+                _enqueue_missing_factors(spec, missing, queue_path=DEFAULT_QUEUE_PATH)
+                names = "、".join(
+                    f"{f.logical_name}({f.qualified_table}.{f.source_column})"
+                    for f in missing)
+                return jsonify({
+                    "ok": False,
+                    "code": "missing_factors",
+                    "error": f"缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。",
+                    "missing_factors": [f.logical_name for f in missing],
+                }), 400
+
+        try:
+            record = deep_validate.start_deep_validate_job(
+                name, spec,
+                d0=(data.get("d0") or "").strip() or None,
+                d1=(data.get("d1") or "").strip() or None,
+            )
+        except ValueError as exc:
+            return jsonify({"ok": False, "code": "invalid_params",
+                            "error": str(exc)}), 400
+        except RuntimeError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 409
+        if warnings:
+            record["warnings"] = warnings
+        return jsonify(record)
+
+    @app.route("/api/strategies/<name>/deep-validate/<job_id>")
+    def api_strategy_deep_validate_status(name: str, job_id: str) -> Any:
+        from quant_research_engine.gui.daily_jobs import DAILY_JOBS_DIR, get_daily_job
+
+        record = get_daily_job(job_id)
+        if record is None:
+            return jsonify({"ok": False, "error": "任务不存在"}), 404
+        resp: dict[str, Any] = {"ok": True, "job_id": job_id,
+                                "status": record["status"]}
+        if record["status"] == "running":
+            return jsonify(resp)
+        result: dict[str, Any] | None = None
+        result_path = DAILY_JOBS_DIR / job_id / "result.json"
+        if result_path.exists():
+            try:
+                parsed = json.loads(result_path.read_text(encoding="utf-8"))
+                if isinstance(parsed, dict):
+                    result = parsed
+            except (json.JSONDecodeError, OSError):
+                result = None
+        resp["result"] = result or {
             "ok": False,
-            "code": "not_implemented",
-            "error": "待实现：需要策略→信号池转换器（策略 YAML 信号规则 → 逐日股票池），"
-                     "当前端点仅为预留骨架，不执行验证。",
-            "design": {
-                "target_cli": (
-                    "/home/van/quant-workspace/cluster-ashare/.venv/bin/python "
-                    "/home/van/quant-workspace/cluster-ashare/analysis/validate_factor.py --pool-..."
-                ),
-                "missing_piece": "strategy→signal-pool 转换器：解析 catalog YAML 的 "
-                                 "signal.entry/universe 规则，产出 cluster-ashare 可消费的逐日股票池文件",
-                "planned_flow": [
-                    "1. 按 name 在 strategies/catalog 定位策略 YAML",
-                    "2. 转换器生成逐日信号池（落盘 outputs/deep-validate/<name>/pool.*）",
-                    "3. 异步 job 调用 validate_factor.py（复用 daily_jobs 模式）",
-                    "4. 结果回写策略状态并在 dashboard 展示",
-                ],
-            },
-        }), 501
+            "error": record.get("error") or "深度验证失败（无结果文件）",
+        }
+        return jsonify(resp)
 
     @app.route("/api/strategies/sandbox/delete", methods=["POST"])
     def api_strategy_sandbox_delete() -> Any:

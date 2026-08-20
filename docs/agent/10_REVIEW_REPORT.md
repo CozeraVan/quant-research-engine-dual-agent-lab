@@ -2,6 +2,56 @@
 
 ## Task ID
 
+QRE-GUI-DEEP-VALIDATE-001（deep-validate 501 骨架落地）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 只读边界：QRE 侧零 DB 取数——池生成与四关验证全部 subprocess 调
+  cluster-ashare 官方 venv + 脚本；cluster 侧只新增一个 analysis 脚本，
+  既有代码零改动（git status 双侧核实）。
+- 求值语义零重写：pool_from_conditions.py 通过 qre_src sys.path 直接
+  import QRE 的 evaluate_expression_signal，与 QRE evaluation engine 同一
+  函数同一面板排序口径；SQL 标识符白名单正则（^[A-Za-z_][A-Za-z0-9_]*$）
+  覆盖 schema/table/column，条件 JSON 即使被篡改也注不了 SQL。
+- 缓存正确性：load_price_panel 对已存在缓存路径不做范围校验（读源码确认
+  gates.py:137），故 price/eval 缓存文件名强制含 d0/d1——换区间不会误命中
+  旧缓存；同区间重跑则断点续跑（eval_cache 逐日追加语义来自既有框架）。
+- 口径诚实：信号池只纳入场条件（任务书明确要求），scope_note 写进条件
+  JSON 与 job result；报告由 cluster 框架生成，自带诚实边界章节。
+- 并发与生命周期：lock_key=deep-validate:<name> 同名串行（409 路径有测试）；
+  不同策略可并行；subprocess 各 4h 超时；前端轮询不设放弃上限（仅连续 30
+  次网络失败停止），匹配「可能几十分钟」的真实耗时（实测 mr01a ~14min）。
+- 错误分层与既有 GUI 惯例一致：404 未找到 / 400 invalid_yaml·
+  no_entry_signal·missing_factors（缺因子自动入队，复用 factor_request_queue
+  链路）/ 500 cluster_unavailable（预检 venv+两脚本存在性）/ 409 在途。
+- 模块级常量（CATALOG_DIR 等）by-value import 的 monkeypatch 陷阱已在测试
+  fixture 里显式处理（patch deep_validate.CATALOG_DIR 而非源模块）。
+- 前端：runDeepValidate 单一函数复用于行按钮与通用入口，escHtml 全覆盖
+  服务端字符串；node --check 三段内联 JS 通过。
+
+## Required Fixes
+
+None.
+
+## Residual Risks
+
+- 未重启 qre-gui.service，POST/GET 的真实 HTTP 链路未在运行服务上验证
+  （用户约束）；转换器→cluster 两脚本的真实链路已用 mr01a 命令行全程跑通。
+- 全历史池生成内存峰值与全市场面板成正比（mr01a 1121 万行因子表合并，
+  实测顺利）；used_fields 只拉被引用列已控制列宽，但不限行数。
+- GUI 进程内 runner 线程持两个长 subprocess；GUI 重启后线程丢失，job
+  status.json 滞留 running（与 daily_jobs 既有行为一致，未自愈）。
+
+## Task ID
+
 QRE-GUI-PROMO-GATE-001（全量回测结果成为晋升后的状态闸）
 
 ## Reviewer

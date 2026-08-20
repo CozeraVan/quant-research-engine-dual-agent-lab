@@ -226,6 +226,14 @@
     <p class="opt">沙箱策略不参与 refresh 日更；冒烟通过后可晋升入 catalog（晋升后立即触发一次全量后台回测）。</p>
     <div id="sandbox-status" class="opt hidden"></div>
     <div id="sandbox-list"></div>
+    <div class="opt" style="margin-top:8px">
+      深度验证（catalog/沙箱任意策略，cluster-ashare 四关）：
+      <input id="dv-name" placeholder="策略名，如 mr01a_rsi14_oversold_reversal" style="width:280px">
+      <input id="dv-d0" placeholder="起 2015-01-01" style="width:110px">
+      <input id="dv-d1" placeholder="止 今天" style="width:110px">
+      <button class="btn-sm" id="btn-deep-validate">深度验证</button>
+      <div id="dv-status" class="opt"></div>
+    </div>
   </div>
 </div>
 
@@ -881,6 +889,63 @@
     });
   }
 
+  // ---------- 深度验证（cluster-ashare 四关，异步长任务） ----------
+  function runDeepValidate(name, d0, d1, slot) {
+    slot.innerHTML = '<span class="opt">深度验证提交中...</span>';
+    fetch("/api/strategies/" + encodeURIComponent(name) + "/deep-validate", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({d0: d0 || "", d1: d1 || ""})
+    }).then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) {
+          slot.innerHTML = '<span class="err">深度验证启动失败：' + escHtml(d.error || "未知错误") + '</span>';
+          return;
+        }
+        var jobId = d.job_id;
+        slot.innerHTML = '<span class="opt">深度验证中（' + escHtml(d.d0) + ' ~ ' + escHtml(d.d1) + '，任务 ' + escHtml(jobId) + '）... 可能耗时数十分钟，可离开页面稍后刷新查看</span>';
+        // 长任务轮询：10s 间隔，不设放弃上限（仅连续失败 30 次才停）
+        var fails = 0;
+        var timer = setInterval(function() {
+          fetch("/api/strategies/" + encodeURIComponent(name) + "/deep-validate/" + encodeURIComponent(jobId))
+            .then(function(r) { return r.json(); })
+            .then(function(p) {
+              if (!p.ok) { fails++; if (fails >= 30) clearInterval(timer); return; }
+              fails = 0;
+              if (p.status === "running") return;
+              clearInterval(timer);
+              var res2 = p.result || {};
+              if (res2.ok && res2.verdict) {
+                var cls = res2.verdict === "GO" ? "ok" : "err";
+                var html2 = '<span class="' + cls + '">四关验证：' + escHtml(res2.verdict) + '</span>';
+                (res2.gates || []).forEach(function(g) {
+                  html2 += ' <span class="opt">' + escHtml(g.gate) + ' ' + escHtml(g.mean_excess) + '(t=' + escHtml(g.t) + ')</span>';
+                });
+                if (res2.pool) html2 += ' <span class="opt">池：' + res2.pool.signal_days + ' 信号日/均 ' + res2.pool.avg_size + ' 只</span>';
+                if (res2.report_path) html2 += '<br><span class="opt">报告：' + escHtml(res2.report_path) + '</span>';
+                if (res2.conclusion) html2 += '<br><span class="opt">' + escHtml(res2.conclusion) + '</span>';
+                slot.innerHTML = html2;
+              } else {
+                slot.innerHTML = '<span class="err">深度验证失败：' + escHtml(res2.error || "未知错误") + '</span>';
+              }
+            })
+            .catch(function() { fails++; if (fails >= 30) clearInterval(timer); });
+        }, 10000);
+      })
+      .catch(function() {
+        slot.innerHTML = '<span class="err">深度验证请求失败</span>';
+      });
+  }
+
+  document.getElementById("btn-deep-validate").addEventListener("click", function() {
+    var name = document.getElementById("dv-name").value.trim();
+    if (!name) { alert("请填写策略名"); return; }
+    if (!confirm("对 " + name + " 跑 cluster-ashare 四关深度验证？\n口径：入场条件逐日信号池（出场/止盈止损不进池），可能耗时数十分钟。")) return;
+    runDeepValidate(name,
+      document.getElementById("dv-d0").value.trim(),
+      document.getElementById("dv-d1").value.trim(),
+      document.getElementById("dv-status"));
+  });
+
   function loadSandbox() {
     fetch("/api/strategies/sandbox")
       .then(function(r) { return r.json(); })
@@ -925,7 +990,9 @@
             '<button class="btn-sm sb-smoke">冒烟测试</button> ' +
             '<select class="sb-category">' + options + '</select>' +
             '<button class="btn-sm sb-promote">晋升</button> ' +
+            '<button class="btn-sm sb-deepval" title="cluster-ashare 四关验证（入场信号逐日池，可能耗时数十分钟）">深度验证</button> ' +
             '<button class="btn-sm btn-danger-outline sb-delete">删除</button>' +
+            '<div class="opt dv-slot"></div>' +
             '</div>';
         });
         sandboxList.innerHTML = html;
@@ -949,6 +1016,10 @@
           row.querySelector(".sb-delete").addEventListener("click", function() {
             if (!confirm("确认删除沙箱策略 " + name + "？")) return;
             sandboxAction("/api/strategies/sandbox/delete", {name: name}, "已删除");
+          });
+          row.querySelector(".sb-deepval").addEventListener("click", function() {
+            if (!confirm("对 " + name + " 跑 cluster-ashare 四关深度验证？\n口径：入场条件逐日信号池（出场/止盈止损不进池），默认区间 2015-01-01 至今，可能耗时数十分钟。")) return;
+            runDeepValidate(name, "", "", row.querySelector(".dv-slot"));
           });
         });
       });

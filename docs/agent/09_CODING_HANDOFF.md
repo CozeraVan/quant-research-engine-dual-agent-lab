@@ -2,6 +2,89 @@
 
 ## Task ID
 
+QRE-GUI-DEEP-VALIDATE-001 (deep-validate 501 骨架落地：策略 YAML → 逐日信号池 → 四关验证)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+承接 cfb860d 的 501 骨架，把 deep-validate 落地为真功能：GUI 对任意
+catalog/沙箱策略一键跑 cluster-ashare 四关重型验证。
+
+**① 路线选择（cluster 侧薄脚本，非 factor_executor）**：调查了
+cluster-ashare `src/factor_executor.py`——其 condition_mask 语义是
+「因子截面分位 + tag」筛池（服务 cluster.mined_factors），与 QRE 策略的
+布尔表达式 DSL（如 `(close > sma_200) & (rsi_2 < 10)`）语义不匹配，强用会
+改变策略含义。故采用任务书推荐路线：cluster-ashare 新增
+`analysis/pool_from_conditions.py`（唯一新增文件，不改其既有代码），
+输入条件 JSON、输出逐日池 parquet（trade_date, ts_code，直接可被
+`signals.signal_from_parquet` 消费）。DB 访问与因子口径全留在 cluster 侧，
+QRE 不碰业务库。表达式求值**不重写**：脚本把 QRE `src/` 插入 sys.path 直接
+import `quant_research_engine.evaluation.signals.evaluate_expression_signal`
+（纯 ast/pandas 模块），面板 sort(ts_code, trade_date) 后整表求值，与 QRE
+EvaluationEngine 口径一致。列名/schema 表白名单正则校验防注入；只拉
+used_fields（ast Name 节点）引用的列控内存。
+
+**② QRE 转换器（新模块 `gui/deep_validate.py`，纯函数可单测）**：
+- `spec_to_conditions(spec, d0, d1)`：StrategySpec → 条件 JSON
+  （name/expression/factor_fields/market_fields/used_fields/d0/d1/qre_src/
+  scope_note）。只纳入**入场**表达式；出场/止盈止损/持仓不进池（口径写进
+  scope_note 与 job 结果）。
+- `locate_strategy_yaml(name)`：沙箱优先，catalog rglob 按文件 stem 与
+  experiment.name 双通道匹配。
+- `parse_report_summary(md)` / `parse_validate_stdout(stdout)`：结论段
+  GO/NO-GO + reasons + 「## 3. 四关结果」表逐关（天数/平均超额/t/正值率），
+  已对真实 MF_001 / qre_mr01a 报告验证。
+
+**③ 异步 job**：`start_deep_validate_job` 复用
+`daily_jobs.start_script_job`（lock_key=`deep-validate:<name>` 同名串行
+409）。runner 顺序跑两个 subprocess（cluster `.venv/bin/python`，各 4h
+超时）：①pool_from_conditions.py → ②validate_factor.py --pool-parquet
+--name qre_<name> --d0/--d1 --price-cache/--eval-cache（缓存键含区间落
+`outputs/factor_mining/validation/qre_cache/`，断点续跑；daily_basic 缓存
+存在则加 --basic-cache 启用 gate4）。终态解析 stdout + 报告 md 写
+job_dir/result.json（verdict/conclusion/gates/pool 统计/report_path）。
+
+**④ API（app.py）**：`POST /api/strategies/<name>/deep-validate`
+（可带 d0/d1，默认 2015-01-01~今天）→ 404 未找到 / 400 invalid_yaml ·
+no_entry_signal · missing_factors（复用 `_default_column_lookup` +
+`find_missing_factor_columns`，缺失自动入 factor_request_queue）/ 500
+cluster_unavailable（venv/脚本缺失预检）/ 409 同名在途；成功返回 job_id。
+新增 `GET /api/strategies/<name>/deep-validate/<job_id>` 轮询（与因子冒烟
+异步模式一致，终态附 result.json）。
+
+**⑤ 前端（index.html）**：沙箱列表每行加「深度验证」按钮 + 行内 dv-slot
+结果区；沙箱面板底部加「catalog/沙箱任意策略名 + d0/d1」通用入口。提交后
+10s 轮询、**不设放弃上限**（仅连续 30 次网络失败才停）；终态渲染 GO 绿 /
+NO-GO 红 + 逐关净超额/t + 池统计 + 报告路径 + 结论段。node --check 三段
+内联 JS 全过。
+
+**真实端到端冒烟**（catalog mr01a_rsi14_oversold_reversal，全历史默认
+区间 2015-01-01~2026-08-19，直接命令行走 QRE 转换器→cluster 两脚本）：
+- 池生成 41s：2826 信号日、1065 万条、平均 3770 只/日
+  （rsi_14>30 本就是宽条件）；
+- 四关验证 ~14min（含 1105 万行价格长表首建缓存）：**NO-GO**——
+  gate1 -0.087%(t=-13.12)、gate2 -0.121%(t=-10.01)、
+  gate3 子组合净超额 -0.130%(t=-10.75)、gate4 等权 -0.080%(t=-18.64)；
+  报告 `cluster-ashare/outputs/factor_mining/validation/
+  qre_mr01a_rsi14_oversold_reversal_四关验证报告.md`，
+  parse_report_summary 逐关解析正确。
+
+**测试**：`uv run pytest tests/ -x -q` → **1471 passed**（1454 + 17 净增：
+新文件 test_gui_deep_validate.py 16 例——转换器/定位/报告解析/job worker
+mock subprocess happy+pool失败+validate失败+日期校验/API 404/400×3/500/409/
+提交+轮询；旧 501 测试删除）。未重启 qre-gui（用户约束）；未 commit。
+
+上一任务：QRE-GUI-PROMO-GATE-001。
+
+## Task ID
+
 QRE-GUI-PROMO-GATE-001 (全量回测结果成为晋升后的状态闸)
 
 ## Written By
