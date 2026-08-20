@@ -267,3 +267,43 @@ def test_script_force_overrides_watermark(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["refresh_batch.py", *_argv(tmp_path, "--force")])
     assert script.main() == 0
     assert len(list((tmp_path / "delta").glob("*"))) == 2
+
+
+# ---------------------------------------------------------------------------
+# 晋升全量回测闸过滤（QRE-GUI-PROMO-GATE-001）
+
+
+def test_apply_gate_filter(tmp_path):
+    script = _load_script(tmp_path)
+    paths = [tmp_path / f"{sid}.yaml" for sid in ("a", "b", "c", "d")]
+    gates = {
+        "b": {"gate": "failed", "forced": False},
+        "c": {"gate": "failed", "forced": True},   # 强制在库：不跳过
+        "d": {"gate": "passed", "forced": False},
+    }
+    kept, skipped = script._apply_gate_filter(paths, gates)
+    assert [p.stem for p in kept] == ["a", "c", "d"]
+    assert skipped == ["b"]
+
+
+def test_script_skips_gate_failed_strategies(tmp_path, monkeypatch, capsys):
+    from quant_research_engine.gui.refresh_registry import save_gate
+
+    script = _load_script(tmp_path)
+    _patch_script_env(script, tmp_path, monkeypatch, date(2026, 5, 20))
+    monkeypatch.setattr(script, "DEFAULT_DELTA_ROOT", tmp_path / "delta")
+    gates_dir = tmp_path / "gates"
+    monkeypatch.setattr(script, "DEFAULT_GATES_DIR", gates_dir)
+    save_gate("s2", {"strategy": "s2", "gate": "failed", "forced": False}, gates_dir)
+
+    monkeypatch.setattr(sys, "argv", ["refresh_batch.py", *_argv(tmp_path)])
+    assert script.main() == 0
+    out = capsys.readouterr().out
+    assert "promotion-gate: skipped 1 failed strategies: s2" in out
+    state = load_state(tmp_path / "state.json")
+    assert state.strategy_count == 1  # 只剩 s1
+    # 跳过名单记入批次 config
+    batches = list((tmp_path / "batches").glob("*"))
+    assert len(batches) == 1
+    summary = json.loads((batches[0] / "batch_summary.json").read_text(encoding="utf-8"))
+    assert summary["config"]["gate_skipped"] == ["s2"]

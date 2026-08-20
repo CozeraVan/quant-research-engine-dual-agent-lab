@@ -181,7 +181,8 @@ def test_api_run_success(monkeypatch, app_client, tmp_path):
 
     assert resp.status_code == 200
     data = json.loads(resp.data)
-    assert data["status"] == "running"
+    # fake_run_via_module 瞬间完成，响应时 run 可能已 completed——两种状态都合法
+    assert data["status"] in ("running", "completed")
     assert data["mode"] == "single"
 
     # background thread finishes the run; poll until done

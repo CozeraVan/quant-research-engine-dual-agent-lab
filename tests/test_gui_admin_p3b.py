@@ -374,3 +374,71 @@ def test_admin_page_contains_p3b_ui(app_client):
     assert "立即运行" in html
     assert "最近日志" in html
     assert "加入持续更新" in html or "持续更新" in html
+
+
+# --- 晋升全量回测闸（QRE-GUI-PROMO-GATE-001） ---
+
+
+def test_gate_save_load_roundtrip(tmp_path):
+    from quant_research_engine.gui.refresh_registry import (
+        gate_blocks_daily,
+        load_all_gates,
+        load_gate,
+        save_gate,
+    )
+
+    assert load_gate("a", tmp_path) is None
+    save_gate("a", {"strategy": "a", "gate": "passed", "forced": False}, tmp_path)
+    save_gate("b", {"strategy": "b", "gate": "failed", "forced": False}, tmp_path)
+    save_gate("c", {"strategy": "c", "gate": "failed", "forced": True}, tmp_path)
+    (tmp_path / "bad.json").write_text("{oops", encoding="utf-8")
+    assert load_gate("a", tmp_path)["gate"] == "passed"
+    assert load_gate("bad", tmp_path) is None
+    gates = load_all_gates(tmp_path)
+    assert sorted(gates) == ["a", "b", "c"]
+    assert gate_blocks_daily(gates["a"]) is False
+    assert gate_blocks_daily(gates["b"]) is True
+    assert gate_blocks_daily(gates["c"]) is False  # 强制在库
+    assert gate_blocks_daily(None) is False  # 未评估
+
+
+def test_list_catalog_strategies_skip_failed_gate(tmp_path):
+    from quant_research_engine.gui.refresh_registry import save_gate
+
+    catalog = tmp_path / "catalog"
+    (catalog / "mean_reversion").mkdir(parents=True)
+    for sid in ("a", "b", "c"):
+        (catalog / "mean_reversion" / f"{sid}.yaml").write_text("x: 1", encoding="utf-8")
+    gates = tmp_path / "gates"
+    save_gate("b", {"strategy": "b", "gate": "failed", "forced": False}, gates)
+    save_gate("c", {"strategy": "c", "gate": "failed", "forced": True}, gates)
+    # 默认语义不变（注册/开关校验不受影响）
+    assert list_catalog_strategies(catalog) == ["a", "b", "c"]
+    # 日更拾取：跳过 failed 且非 forced；未评估与强制在库正常拾取
+    assert list_catalog_strategies(catalog, skip_failed_gate=True, gates_dir=gates) == ["a", "c"]
+
+
+def test_refresh_overview_gate_fields(tmp_path):
+    from quant_research_engine.gui.refresh_registry import save_gate
+
+    catalog = tmp_path / "catalog"
+    catalog.mkdir()
+    for sid in ("a", "b", "c"):
+        (catalog / f"{sid}.yaml").write_text("x: 1", encoding="utf-8")
+    gates = tmp_path / "gates"
+    save_gate("a", {"strategy": "a", "gate": "passed", "forced": False}, gates)
+    save_gate("b", {"strategy": "b", "gate": "failed", "forced": False}, gates)
+    overview = refresh_overview(
+        state_path=tmp_path / "state.json",
+        registry_path=tmp_path / "registry.json",
+        delta_root=tmp_path / "delta",
+        catalog_dir=catalog,
+        backtests_dir=tmp_path / "no-backtests",
+        gates_dir=gates,
+    )
+    by_id = {s["strategy_id"]: s for s in overview["strategies"]}
+    assert by_id["a"]["gate"]["gate"] == "passed"
+    assert by_id["a"]["gate_blocks_daily"] is False
+    assert by_id["b"]["gate_blocks_daily"] is True
+    assert by_id["c"]["gate"] is None  # 未评估
+    assert overview["gate_skipped"] == ["b"]

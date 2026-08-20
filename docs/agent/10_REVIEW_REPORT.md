@@ -2,6 +2,53 @@
 
 ## Task ID
 
+QRE-GUI-PROMO-GATE-001（全量回测结果成为晋升后的状态闸）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 标记与竞态：promotion_gate/promotion_forced 经 `run_backtest(mark=...)` 在
+  线程启动前合并进 record（app.py promote 路由），与 sandbox 标记同机制，
+  未回到事后打标记的竞态老路。
+- 评估口径零新增：复用 `extract_run_summary`（strategy_performance.json 优先、
+  stdout 兜底）取 SMOKE 同款 4 键；判据写死在 strategy_create（30 笔 + 超额>0），
+  无量纲漂移空间。run 失败→failed+error，缺指标→failed（宁严勿宽）。
+- 状态存储选型：gates 落 `outputs/refresh/gates/`（outputs 为符号链接出仓，不进
+  git），catalog YAML 零改动；`save_gate` tmp+os.replace 原子写，与既有
+  sidecar/registry 惯例一致。注册表格式未动（gates 独立目录，register/
+  unregister 的 save_registry 归一化不会丢 gate 数据）。
+- 日更跳过只挂在 refresh_batch 的自动拾取路径（`--strategies` 显式指定时优先，
+  不做闸过滤——手动点名视为操作员知情决定）；跳过名单双落：stdout 日志 +
+  batch_summary config.gate_skipped。list_catalog_strategies 新参数默认 False，
+  注册/开关 400 校验语义不变（存量 1437 测试零适配即绿可证）。
+- force 语义闭环：评估照跑（finalize_promotion_gate 不区分 forced），
+  `gate_blocks_daily` 对 forced 恒 False，dashboard 独立「强制在库」橙标，
+  API 响应 gate_note 注明。三点一致。
+- deep-validate 为纯 501 骨架：路由不与 sandbox/delete 等静态段冲突
+  （<name>/deep-validate 三段锚定），无任何外部调用。
+- admin.html 新列仅消费 refresh_overview 新增的 gate 字段（缺失=null→灰），
+  前端对旧响应兼容；node --check 随 test_gui_admin 通过。
+
+## Required Fixes
+
+None.
+
+## Residual Risks
+
+- 未重启 qre-gui.service，dashboard 列与 promote→gate→日更的真实 E2E 未在
+  运行中的服务上验证（用户约束）。
+- 判据为写死最简版；发现期/全量口径对齐、四关验证落地依赖后续
+  「策略→信号池转换器」。
+
+## Task ID
+
 QRE-GUI-CREATE-GAPS-001（新增策略/因子闭环四缺口）
 
 ## Reviewer

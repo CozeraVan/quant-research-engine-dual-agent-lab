@@ -25,6 +25,7 @@ DEFAULT_STATE_PATH = Path("outputs/refresh/state.json")
 DEFAULT_DELTA_ROOT = Path("outputs/refresh/delta")
 DEFAULT_BACKTESTS_DIR = Path("outputs/backtests")
 DEFAULT_INCREMENTAL_ROOT = Path("outputs/refresh/incremental")
+DEFAULT_GATES_DIR = Path("outputs/refresh/gates")
 
 
 # ---------------------------------------------------------------------------
@@ -103,11 +104,92 @@ def set_strategy_stopped(
     return save_registry(data, path)
 
 
-def list_catalog_strategies(catalog_dir: Path | None = None) -> list[str]:
+# ---------------------------------------------------------------------------
+# 晋升全量回测闸（promotion gate）：outputs/refresh/gates/<name>.json
+# ---------------------------------------------------------------------------
+#
+# 与 registry.json/state.json 同族的状态存储（outputs/refresh/ 下，不进 git 管理的
+# catalog）。gate 语义：passed=全量回测达标；failed=未达标（日更跳过，forced 除外）；
+# 文件缺失=未评估=正常拾取（兼容存量策略）。
+
+
+def _safe_gate_name(name: str) -> str:
+    return name.replace("/", "_").replace("\\", "_").strip()
+
+
+def gate_path(name: str, gates_dir: Path | None = None) -> Path:
+    gates_dir = gates_dir or DEFAULT_GATES_DIR
+    return gates_dir / f"{_safe_gate_name(name)}.json"
+
+
+def load_gate(name: str, gates_dir: Path | None = None) -> dict[str, Any] | None:
+    """读取策略的晋升闸结果；缺失或损坏返回 None。"""
+    path = gate_path(name, gates_dir)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def save_gate(name: str, payload: dict[str, Any], gates_dir: Path | None = None) -> Path:
+    """原子写 gate 文件（tmp + os.replace）。"""
+    import os
+
+    gates_dir = gates_dir or DEFAULT_GATES_DIR
+    gates_dir.mkdir(parents=True, exist_ok=True)
+    path = gate_path(name, gates_dir)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp, path)
+    return path
+
+
+def gate_blocks_daily(gate: dict[str, Any] | None) -> bool:
+    """该 gate 结果是否阻止日更：failed 且非 force 晋升。"""
+    if not gate:
+        return False
+    return gate.get("gate") == "failed" and not gate.get("forced")
+
+
+def load_all_gates(gates_dir: Path | None = None) -> dict[str, dict[str, Any]]:
+    """读取全部 gate 文件 → {strategy: payload}（坏文件跳过）。"""
+    gates_dir = gates_dir or DEFAULT_GATES_DIR
+    gates: dict[str, dict[str, Any]] = {}
+    if not gates_dir.is_dir():
+        return gates
+    for path in sorted(gates_dir.glob("*.json")):
+        if path.name.endswith(".tmp"):
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(data, dict):
+            gates[str(data.get("strategy") or path.stem)] = data
+    return gates
+
+
+def list_catalog_strategies(
+    catalog_dir: Path | None = None,
+    *,
+    skip_failed_gate: bool = False,
+    gates_dir: Path | None = None,
+) -> list[str]:
+    """列出 catalog 策略 id。
+
+    ``skip_failed_gate=True`` 时跳过 gate=failed 且非 forced 的策略
+    （gate 缺失=未评估=正常拾取）；默认 False，注册/开关校验语义不变。
+    """
     catalog_dir = catalog_dir or CATALOG_DIR
     if not catalog_dir.is_dir():
         return []
-    return sorted(p.stem for p in catalog_dir.rglob("*.yaml"))
+    ids = sorted(p.stem for p in catalog_dir.rglob("*.yaml"))
+    if skip_failed_gate:
+        ids = [sid for sid in ids if not gate_blocks_daily(load_gate(sid, gates_dir))]
+    return ids
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +398,7 @@ def refresh_overview(
     catalog_dir: Path | None = None,
     backtests_dir: Path | None = None,
     incremental_root: Path | None = None,
+    gates_dir: Path | None = None,
 ) -> dict[str, Any]:
     """策略状态总览：refresh state + 注册表 v2 + 最近 delta + 每策略最新结果四列。"""
     from quant_research_engine.orchestration.refresh import load_state
@@ -329,9 +412,11 @@ def refresh_overview(
     incremental_root = incremental_root or DEFAULT_INCREMENTAL_ROOT
 
     delta_rows = {row["strategy_id"]: row for row in (delta or {}).get("rows", [])}
+    all_gates = load_all_gates(gates_dir)
     strategies: list[dict[str, Any]] = []
     for sid in catalog:
         row = delta_rows.get(sid, {})
+        gate = all_gates.get(sid)
         result = latest_strategy_result(sid, backtests_dir, incremental_root)
         metrics = (result or {}).get("metrics", {})
         full_as_of = (result or {}).get("full_metrics_as_of")
@@ -353,9 +438,13 @@ def refresh_overview(
                 "source": (result or {}).get("source"),
                 # 超额/回撤等全量指标落后于 date_end 时，前端据此标注"截至 <date> 全量"
                 "full_metrics_as_of": full_as_of if full_as_of and date_end and full_as_of < date_end else None,
+                # 晋升全量回测闸：None=未评估；failed 且非 forced 时将被日更跳过
+                "gate": gate,
+                "gate_blocks_daily": gate_blocks_daily(gate),
             }
         )
 
+    gate_skipped = [s["strategy_id"] for s in strategies if s["gate_blocks_daily"]]
     mode = "registry" if include else "full_catalog"
     return {
         "state": state.to_dict() if state else None,
@@ -366,6 +455,7 @@ def refresh_overview(
         "mode": mode,
         "catalog_total": len(catalog),
         "unregistered": [sid for sid in catalog if sid not in include],
+        "gate_skipped": gate_skipped,
         "latest_delta": (
             {
                 "dir": delta["_dir"],

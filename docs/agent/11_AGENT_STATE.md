@@ -12,7 +12,18 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-CREATE-GAPS-001 (DONE — 1437 tests green；awaiting git approval)
+QRE-GUI-PROMO-GATE-001 (DONE — 1454 tests green；awaiting git approval)
+
+2026-08-20: 全量回测结果成为晋升后的状态闸。晋升 mark 加 promotion_gate/
+promotion_forced（线程启动前预合并）；engine 收尾新钩子 →
+strategy_create.finalize_promotion_gate（写死判据：交易≥30 且超额>0 →
+passed）原子写 outputs/refresh/gates/<name>.json（catalog 不动）；refresh_batch
+日更跳过 gate=failed 非 forced（日志 + config.gate_skipped），refresh_overview
+行加 gate 字段；admin.html 策略状态表加「全量回测闸」四态列（绿/红+tooltip/
+灰/橙强制在库）；force 晋升评估照跑不阻止日更（API gate_note 注明）；新增
+POST /api/strategies/<name>/deep-validate 501 骨架（策略→信号池转换器待实现）。
+未重启 qre-gui，真实 E2E 待重启验证。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-GUI-CREATE-GAPS-001。
 
 2026-08-20: GUI 新增策略/因子闭环四缺口补齐——①策略冒烟 sidecar 闭环
 （engine 终态钩子 + mark 预合并消竞态 + list_sandbox 自愈 + 前端三色渲染）；
@@ -137,6 +148,12 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1454 passed, 4 warnings (2026-08-20, QRE-GUI-PROMO-GATE-001)
+node --check admin.html 内联 JS → 随 test_gui_admin 通过
+未重启 qre-gui（用户约束）；未 commit
+```
 
 ```
 uv run pytest tests/ -x -q → 1437 passed, 4 warnings (2026-08-20, QRE-GUI-CREATE-GAPS-001)

@@ -288,6 +288,78 @@ def list_sandbox(sandbox_dir: Path | None = None) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# 晋升全量回测闸（promotion gate）：run 收尾评估 + 结果落盘
+# ---------------------------------------------------------------------------
+
+# 写死的最简判据（QRE-GUI-PROMO-GATE-001）：交易次数 >= 30 且超额(对买入持有) > 0
+GATE_MIN_TRADES = 30
+GATE_METRIC_KEYS = (
+    "total_trade_count",
+    "strategy_total_return",
+    "excess_return_vs_buy_hold",
+    "max_drawdown",
+)
+
+
+def finalize_promotion_gate(
+    record: dict[str, Any],
+    *,
+    gates_dir: Path | None = None,
+    summary: dict[str, Any] | None = None,
+) -> Path | None:
+    """run 结束时评估晋升闸并回写 ``outputs/refresh/gates/<name>.json``。
+
+    由 engine._execute_and_finalize 在 run 收尾时调用（record 带 promotion_gate
+    标记）。判据写死：交易次数 >= 30 且 excess_return_vs_buy_hold > 0 → passed，
+    否则 failed；run 本身失败也记 failed（附 error）。force 晋升的策略照常评估，
+    ``forced=True`` 透传（日更不跳过，仅展示「强制在库」）。
+    非晋升闸 run（无标记）返回 None。
+    """
+    if not record.get("promotion_gate"):
+        return None
+    name = record.get("promoted_strategy")
+    if not name:
+        return None
+    from quant_research_engine.gui.refresh_registry import load_gate, save_gate
+
+    forced = bool(record.get("promotion_forced"))
+    payload = load_gate(name, gates_dir) or {}
+    payload.update(
+        {
+            "strategy": name,
+            "run_id": record.get("run_id"),
+            "forced": forced,
+            "criteria": {
+                "min_trades": GATE_MIN_TRADES,
+                "min_excess_return_vs_buy_hold": 0,
+            },
+            "evaluated_at": _now_iso(),
+        }
+    )
+    if record.get("status") != "completed":
+        payload["gate"] = "failed"
+        payload["error"] = record.get("error") or "晋升全量回测失败（详见 run 日志）"
+        payload.pop("metrics", None)
+    else:
+        if summary is None:
+            summary = extract_run_summary(record) or {}
+        metrics_src = summary.get("metrics", {})
+        metrics = {k: metrics_src[k] for k in GATE_METRIC_KEYS if k in metrics_src}
+        trades = metrics.get("total_trade_count")
+        excess = metrics.get("excess_return_vs_buy_hold")
+        passed = (
+            isinstance(trades, (int, float))
+            and trades >= GATE_MIN_TRADES
+            and isinstance(excess, (int, float))
+            and excess > 0
+        )
+        payload["gate"] = "passed" if passed else "failed"
+        payload["metrics"] = metrics
+        payload.pop("error", None)
+    return save_gate(name, payload, gates_dir)
+
+
+# ---------------------------------------------------------------------------
 # 晋升 / 删除
 # ---------------------------------------------------------------------------
 

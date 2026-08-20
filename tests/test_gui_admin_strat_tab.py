@@ -452,3 +452,18 @@ def test_route_strategy_artifact(app_client, monkeypatch, tmp_path):
     assert resp.status_code in (400, 404)
     resp = app_client.get("/api/admin/strategy/ghost/artifact/x.json")
     assert resp.status_code == 404
+
+
+# --- 晋升全量回测闸展示（QRE-GUI-PROMO-GATE-001） ---
+
+
+def test_admin_html_gate_column():
+    """admin.html 策略状态表含「全量回测闸」列与三态+强制在库渲染。"""
+    html = (
+        Path(__file__).resolve().parent.parent
+        / "src/quant_research_engine/gui/templates/admin.html"
+    ).read_text(encoding="utf-8")
+    assert "全量回测闸" in html
+    assert "gate-pass" in html and "gate-fail" in html
+    assert "gate-forced" in html and "gate-none" in html
+    assert "强制在库" in html and "未评估" in html

@@ -975,7 +975,13 @@ def create_app() -> Flask:
                     end=end.isoformat(),
                     codes="",  # 空 = 全市场
                     background=True,
-                    mark={"promoted_strategy": result["name"], "purpose": "promote_full"},
+                    # 晋升闸标记：run 收尾时由 engine 钩子评估并回写 gate 文件
+                    mark={
+                        "promotion_gate": True,
+                        "promoted_strategy": result["name"],
+                        "purpose": "promote_full",
+                        "promotion_forced": bool(result.get("forced")),
+                    },
                 )
                 run_id = record["run_id"]
             except Exception as exc:
@@ -988,9 +994,39 @@ def create_app() -> Flask:
         if result.get("forced"):
             resp["forced"] = True
             resp["warning"] = (warning + "；" if warning else "") + "已使用 force=true 跳过冒烟校验（管理员通道）"
+            resp["gate_note"] = "force 晋升：全量回测闸仍会评估并展示，结果不阻止日更（强制在库）"
         elif warning:
             resp["warning"] = warning
         return jsonify(resp)
+
+    @app.route("/api/strategies/<name>/deep-validate", methods=["POST"])
+    def api_strategy_deep_validate(name: str) -> Any:
+        """四关验证（cluster-ashare validate_factor.py）预留端点骨架。
+
+        深度验证需要把策略 YAML 的信号规则转换成逐日股票池
+        （cluster-ashare 侧 --pool-... 输入），该「策略→信号池转换器」尚未实现，
+        本端点只返回 501 + 设计说明，不执行任何验证。
+        """
+        return jsonify({
+            "ok": False,
+            "code": "not_implemented",
+            "error": "待实现：需要策略→信号池转换器（策略 YAML 信号规则 → 逐日股票池），"
+                     "当前端点仅为预留骨架，不执行验证。",
+            "design": {
+                "target_cli": (
+                    "/home/van/quant-workspace/cluster-ashare/.venv/bin/python "
+                    "/home/van/quant-workspace/cluster-ashare/analysis/validate_factor.py --pool-..."
+                ),
+                "missing_piece": "strategy→signal-pool 转换器：解析 catalog YAML 的 "
+                                 "signal.entry/universe 规则，产出 cluster-ashare 可消费的逐日股票池文件",
+                "planned_flow": [
+                    "1. 按 name 在 strategies/catalog 定位策略 YAML",
+                    "2. 转换器生成逐日信号池（落盘 outputs/deep-validate/<name>/pool.*）",
+                    "3. 异步 job 调用 validate_factor.py（复用 daily_jobs 模式）",
+                    "4. 结果回写策略状态并在 dashboard 展示",
+                ],
+            },
+        }), 501
 
     @app.route("/api/strategies/sandbox/delete", methods=["POST"])
     def api_strategy_sandbox_delete() -> Any:

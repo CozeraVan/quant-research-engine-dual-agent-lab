@@ -341,6 +341,15 @@ def _execute_and_finalize(
         except Exception:
             pass
 
+    # 晋升全量回测闸：评估并回写 outputs/refresh/gates/<name>.json（同样兜底）。
+    if record.get("promotion_gate"):
+        try:
+            from quant_research_engine.gui import strategy_create
+
+            strategy_create.finalize_promotion_gate(record)
+        except Exception:
+            pass
+
 
 def _run_via_module(
     *,

@@ -505,3 +505,186 @@ def test_index_page_contains_sandbox_panel(app_client):
     # 沙箱列表冒烟状态渲染（通过/失败/冒烟中）与因子冒烟轮询
     assert "冒烟通过" in html and "冒烟失败" in html and "冒烟中" in html
     assert "/api/factor-create/smoke/" in html
+
+
+# --- 晋升全量回测闸（promotion gate，QRE-GUI-PROMO-GATE-001） ---
+
+
+def _gate_record(**over):
+    record = {
+        "promotion_gate": True,
+        "promoted_strategy": "sc_demo",
+        "run_id": "rid-gate",
+        "status": "completed",
+    }
+    record.update(over)
+    return record
+
+
+def _gate_summary(trades=50, excess=0.02):
+    return {"metrics": {
+        "total_trade_count": trades,
+        "strategy_total_return": 0.10,
+        "excess_return_vs_buy_hold": excess,
+        "max_drawdown": -0.05,
+        "unrelated": 1,
+    }}
+
+
+def test_finalize_promotion_gate_passed(tmp_path):
+    path = strategy_create.finalize_promotion_gate(
+        _gate_record(), gates_dir=tmp_path, summary=_gate_summary()
+    )
+    gate = json.loads(path.read_text(encoding="utf-8"))
+    assert gate["strategy"] == "sc_demo"
+    assert gate["run_id"] == "rid-gate"
+    assert gate["gate"] == "passed"
+    assert gate["forced"] is False
+    assert gate["criteria"]["min_trades"] == 30
+    assert gate["metrics"] == {
+        "total_trade_count": 50,
+        "strategy_total_return": 0.10,
+        "excess_return_vs_buy_hold": 0.02,
+        "max_drawdown": -0.05,
+    }
+    assert "error" not in gate and gate["evaluated_at"]
+
+
+def test_finalize_promotion_gate_failed_too_few_trades(tmp_path):
+    path = strategy_create.finalize_promotion_gate(
+        _gate_record(), gates_dir=tmp_path, summary=_gate_summary(trades=29, excess=0.5)
+    )
+    assert json.loads(path.read_text(encoding="utf-8"))["gate"] == "failed"
+
+
+def test_finalize_promotion_gate_failed_negative_excess(tmp_path):
+    path = strategy_create.finalize_promotion_gate(
+        _gate_record(), gates_dir=tmp_path, summary=_gate_summary(trades=100, excess=0.0)
+    )
+    assert json.loads(path.read_text(encoding="utf-8"))["gate"] == "failed"
+
+
+def test_finalize_promotion_gate_failed_missing_metrics(tmp_path):
+    path = strategy_create.finalize_promotion_gate(
+        _gate_record(), gates_dir=tmp_path, summary={"metrics": {}}
+    )
+    assert json.loads(path.read_text(encoding="utf-8"))["gate"] == "failed"
+
+
+def test_finalize_promotion_gate_run_failed(tmp_path):
+    path = strategy_create.finalize_promotion_gate(
+        _gate_record(status="failed", error="引擎炸了"), gates_dir=tmp_path
+    )
+    gate = json.loads(path.read_text(encoding="utf-8"))
+    assert gate["gate"] == "failed"
+    assert "引擎炸了" in gate["error"]
+    assert "metrics" not in gate
+
+
+def test_finalize_promotion_gate_forced_passthrough(tmp_path):
+    """force 晋升：评估照跑，forced 标记透传（failed 不阻止日更）。"""
+    from quant_research_engine.gui.refresh_registry import gate_blocks_daily, load_gate
+
+    strategy_create.finalize_promotion_gate(
+        _gate_record(promotion_forced=True), gates_dir=tmp_path,
+        summary=_gate_summary(trades=1, excess=-0.5),
+    )
+    gate = load_gate("sc_demo", tmp_path)
+    assert gate["gate"] == "failed" and gate["forced"] is True
+    assert gate_blocks_daily(gate) is False  # 强制在库：不阻止日更
+
+
+def test_finalize_promotion_gate_ignores_unmarked_run(tmp_path):
+    assert strategy_create.finalize_promotion_gate(
+        {"run_id": "x", "status": "completed"}, gates_dir=tmp_path
+    ) is None
+    assert strategy_create.finalize_promotion_gate(
+        {"promotion_gate": True, "status": "completed"}, gates_dir=tmp_path
+    ) is None  # 无策略名
+
+
+def test_engine_finalize_hook_writes_gate(monkeypatch, tmp_path):
+    """engine._execute_and_finalize 对带 promotion_gate 标记的 run 回写 gate 文件。"""
+    from quant_research_engine.gui import engine
+    from quant_research_engine.gui import refresh_registry
+
+    runs_dir = tmp_path / "runs"
+    run_dir = runs_dir / "rid-g1"
+    run_dir.mkdir(parents=True)
+    gates_dir = tmp_path / "gates"
+    monkeypatch.setattr(engine, "RUNS_DIR", runs_dir)
+    monkeypatch.setattr(refresh_registry, "DEFAULT_GATES_DIR", gates_dir)
+
+    def fake_cli(cmd, stdout_path, stderr_path):
+        stdout_path.write_text(
+            "trades=50\ntotal_return=0.10\nexcess_return_vs_buy_hold=0.02\nmax_drawdown=-0.05\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(engine, "_run_via_cli", fake_cli)
+    record = {
+        "run_id": "rid-g1",
+        "executor": "cli",
+        "promotion_gate": True,
+        "promoted_strategy": "sc_demo",
+        "status": "running",
+    }
+    engine._execute_and_finalize(record, run_dir, ["true"], {})
+    gate = json.loads((gates_dir / "sc_demo.json").read_text(encoding="utf-8"))
+    assert gate["gate"] == "passed"
+    assert gate["metrics"]["total_trade_count"] == 50.0
+
+
+def test_engine_finalize_hook_gate_failure(monkeypatch, tmp_path):
+    from quant_research_engine.gui import engine
+    from quant_research_engine.gui import refresh_registry
+
+    runs_dir = tmp_path / "runs"
+    run_dir = runs_dir / "rid-g2"
+    run_dir.mkdir(parents=True)
+    gates_dir = tmp_path / "gates"
+    monkeypatch.setattr(engine, "RUNS_DIR", runs_dir)
+    monkeypatch.setattr(refresh_registry, "DEFAULT_GATES_DIR", gates_dir)
+
+    def boom(cmd, stdout_path, stderr_path):
+        raise RuntimeError("引擎炸了")
+
+    monkeypatch.setattr(engine, "_run_via_cli", boom)
+    record = {
+        "run_id": "rid-g2",
+        "executor": "cli",
+        "promotion_gate": True,
+        "promoted_strategy": "sc_demo",
+        "status": "running",
+    }
+    engine._execute_and_finalize(record, run_dir, ["true"], {})
+    gate = json.loads((gates_dir / "sc_demo.json").read_text(encoding="utf-8"))
+    assert gate["gate"] == "failed"
+    assert "引擎炸了" in gate["error"]
+
+
+def test_api_promote_marks_run_and_force_gate_note(app_client):
+    """晋升触发的全量回测带 promotion_gate 标记；force 响应注明闸语义。"""
+    client, sandbox, catalog, runs_dir = app_client
+    client.post("/api/strategies/create", json={"mode": "manual", "yaml_text": _VALID_YAML})
+    # force=true 跳过冒烟闸
+    resp = client.post("/api/strategies/promote",
+                       json={"name": "sc_demo", "category": "mean_reversion", "force": True})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True and data["forced"] is True
+    assert "强制在库" in data["gate_note"]
+    status = json.loads((runs_dir / "test-run-1" / "status.json").read_text(encoding="utf-8"))
+    assert status["promotion_gate"] is True
+    assert status["promoted_strategy"] == "sc_demo"
+    assert status["promotion_forced"] is True
+
+
+def test_api_deep_validate_501(app_client):
+    client, _, _, _ = app_client
+    resp = client.post("/api/strategies/sc_demo/deep-validate", json={})
+    assert resp.status_code == 501
+    data = resp.get_json()
+    assert data["ok"] is False and data["code"] == "not_implemented"
+    assert "策略→信号池转换器" in data["error"]
+    assert "validate_factor.py" in data["design"]["target_cli"]

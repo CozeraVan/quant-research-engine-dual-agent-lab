@@ -335,6 +335,25 @@
           // 全量指标落后于 date_end（增量更新）时标注"截至 <date> 全量"
           var asOf = (s.full_metrics_as_of && s.date_end && s.full_metrics_as_of < s.date_end)
             ? '<br><small class="opt">（全量截至 ' + esc(s.full_metrics_as_of) + '）</small>' : '';
+          // 晋升全量回测闸：passed 绿 / failed 红（tooltip 关键数字）/ 未评估 灰；
+          // force 晋升且 failed → 橙「强制在库」（闸不阻止日更）
+          var gateHtml;
+          if (!s.gate) {
+            gateHtml = '<span class="gate-badge gate-none" title="晋升后未跑过全量回测闸">— 未评估</span>';
+          } else {
+            var gm = s.gate.metrics || {};
+            var gtip = '交易 ' + (gm.total_trade_count != null ? gm.total_trade_count : '—')
+              + ' 次，超额 ' + (gm.excess_return_vs_buy_hold != null ? fmtPct(gm.excess_return_vs_buy_hold) : '—')
+              + '，回撤 ' + (gm.max_drawdown != null ? fmtPct(gm.max_drawdown) : '—')
+              + '（判据：交易≥30 且超额>0；评估于 ' + esc(s.gate.evaluated_at || '—') + '）';
+            if (s.gate.gate === 'passed') {
+              gateHtml = '<span class="gate-badge gate-pass" title="' + esc(gtip) + '">✓ 通过</span>';
+            } else if (s.gate.forced) {
+              gateHtml = '<span class="gate-badge gate-forced" title="' + esc(gtip) + '（force 晋升，不阻止日更）">⚑ 强制在库</span>';
+            } else {
+              gateHtml = '<span class="gate-badge gate-fail" title="' + esc(gtip) + '（日更跳过）">✗ 未过</span>';
+            }
+          }
           return '<tr class="ob-row" data-sid="' + esc(s.strategy_id) + '">'
             + '<td><a href="/admin/strategy/' + encodeURIComponent(s.strategy_id) + '" target="_blank">'
             + esc(s.strategy_id) + '</a></td>'
@@ -342,6 +361,7 @@
             + '<td>' + symbols + '</td>'
             + '<td class="num">' + fmtPct(s.excess_return) + asOf + '</td>'
             + '<td class="num">' + fmtPct(s.max_drawdown) + asOf + '</td>'
+            + '<td>' + gateHtml + '</td>'
             + '<td>' + action + '</td></tr>';
         }).join('');
         document.getElementById('ob-registry-table').innerHTML =
@@ -354,7 +374,7 @@
             ? '<p class="opt">停止中：' + d.stopped.map(esc).join('，') + '（将于下次 refresh 跳过）</p>' : '')
           + '<p>已注册 ' + d.registered.length + ' / catalog ' + d.catalog_total + ' 个策略'
           + ' <input type="text" id="ob-search" placeholder="搜索策略 id..." size="20"></p>'
-          + '<table><thead><tr><th>策略</th><th>回测起止</th><th>股票数量</th><th>超额收益</th><th>最大回撤</th><th>操作</th></tr></thead>'
+          + '<table><thead><tr><th>策略</th><th>回测起止</th><th>股票数量</th><th>超额收益</th><th>最大回撤</th><th>全量回测闸</th><th>操作</th></tr></thead>'
           + '<tbody>' + rows + '</tbody></table>';
 
         document.getElementById('ob-search').addEventListener('input', function(e) {

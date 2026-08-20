@@ -2,6 +2,73 @@
 
 ## Task ID
 
+QRE-GUI-PROMO-GATE-001 (全量回测结果成为晋升后的状态闸)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+承接 76045d2「冒烟闭环+晋升闸」：晋升触发的全量回测不再跑完就完，结果评估为
+promotion gate 并反哺日更与 dashboard。
+
+**① 晋升回测打标记**：`gui/app.py` `/api/strategies/promote` 的全量回测 mark 改为
+`{promotion_gate: True, promoted_strategy, purpose: "promote_full",
+promotion_forced: bool}`，仍经 `run_backtest(mark=...)` 在线程启动前合并进
+record（沿用上一轮消竞态结论）。force 晋升响应新增 `gate_note`（「闸结果仅展示，
+不阻止日更（强制在库）」）。
+
+**② 收尾评估钩子**：`gui/engine.py` `_execute_and_finalize` 尾部新增
+promotion_gate 钩子（与 sandbox 钩子并列，try/except 兜底）→
+`strategy_create.finalize_promotion_gate`（strategy_create.py:214 区域新增）：
+判据写死 `GATE_MIN_TRADES=30` 且 `excess_return_vs_buy_hold > 0` → passed，
+否则 failed；run 失败记 failed + error；指标复用 `extract_run_summary`
+（SMOKE 同款 4 键）。结果原子写到 **`outputs/refresh/gates/<name>.json`**
+（选型理由：与 registry.json/state.json 同族状态存储，在 outputs 下不进 git，
+不污染 catalog；catalog 旁 <name>.gate.json 方案会弄脏仓库工作树）。
+`gui/refresh_registry.py` 新增 `DEFAULT_GATES_DIR` / `gate_path` / `load_gate` /
+`save_gate`（tmp+os.replace）/ `load_all_gates` / `gate_blocks_daily`
+（failed 且非 forced 才阻止日更）。
+
+**③ 日更联动**：`scripts/refresh_batch.py` 新增 `_apply_gate_filter()`（纯函数，
+可测）；main() 在 stopped 过滤后跳过 gate=failed 非 forced 策略（`--strategies`
+显式指定优先不做闸过滤），打印 `promotion-gate: skipped N failed strategies: ...`，
+跳过名单记入 batch config `gate_skipped`（incremental 与 full 两处）。
+`refresh_registry.list_catalog_strategies` 加 `skip_failed_gate=False`（默认
+False——注册/开关校验语义不变）+ `gates_dir` 参数；`refresh_overview` 每行加
+`gate` / `gate_blocks_daily`，顶层加 `gate_skipped`（跳过原因落 API 响应）。
+
+**④ dashboard**：admin.html 策略状态 tab 表加「全量回测闸」列：
+passed=绿✓通过 / failed=红✗未过（title tooltip 展示交易次数/超额/回撤/判据/
+评估时间，标注「日更跳过」）/ 无 gate 文件=灰—未评估 / forced 且 failed=橙
+⚑强制在库；style.css 加 `.gate-badge` 四态样式。
+
+**⑤ force 通道**：force 晋升的 run mark 带 promotion_forced=True，闸评估照跑、
+payload 透传 forced=True；`gate_blocks_daily` 对 forced 恒 False（不阻止日更）；
+dashboard 显「强制在库」。
+
+**⑥ 四关验证预留**：`POST /api/strategies/<name>/deep-validate` 端点骨架
+（app.py，501 + code=not_implemented + design 字段：目标 CLI 路径、缺失的
+「策略→信号池转换器」说明、四步规划），不实现转换逻辑。
+
+**测试**：`uv run pytest tests/ -x -q` → **1454 passed**（1437 + 17 净增，全绿）。
+新增：gate 评估判据 passed/failed×3(交易不足/超额≤0/缺指标)/run失败/forced 透传/
+无标记忽略 7 例 + engine 钩子 completed/failed 2 例 + API mark 与 force gate_note +
+deep-validate 501（test_gui_strategy_create.py）；gate 读写/阻止语义/catalog skip/
+overview 字段 3 例（test_gui_admin_p3b.py）；admin.html 列渲染断言 1 例
+（test_gui_admin_strat_tab.py）；_apply_gate_filter 单测 + refresh_batch e2e
+跳过+config 记录 2 例（test_refresh.py）。node --check admin.html 内联 JS 随
+test_gui_admin 通过。未重启 qre-gui（用户约束），真实 E2E 待重启验证。
+
+上一任务：QRE-GUI-CREATE-GAPS-001。
+
+## Task ID
+
 QRE-GUI-CREATE-GAPS-001 (新增策略/因子闭环四缺口：冒烟回写 / 晋升闸 / 因子冒烟异步化 / 死代码)
 
 ## Written By

@@ -57,6 +57,22 @@ DEFAULT_BATCH_ROOT = ROOT / "outputs" / "backtests" / "refresh"
 DEFAULT_STATE_FILE = ROOT / "outputs" / "refresh" / "state.json"
 DEFAULT_DELTA_ROOT = ROOT / "outputs" / "refresh" / "delta"
 DEFAULT_REGISTRY_FILE = ROOT / "outputs" / "refresh" / "registry.json"
+DEFAULT_GATES_DIR = ROOT / "outputs" / "refresh" / "gates"
+
+
+def _apply_gate_filter(
+    yaml_paths: list[Path],
+    gates: dict[str, dict[str, Any]],
+) -> tuple[list[Path], list[str]]:
+    """晋升全量回测闸过滤：剔除 gate=failed 且非 forced 的策略。
+
+    返回 (保留列表, 跳过名单)。gate 缺失=未评估=正常拾取（兼容存量策略）。
+    """
+    from quant_research_engine.gui.refresh_registry import gate_blocks_daily
+
+    kept = [p for p in yaml_paths if not gate_blocks_daily(gates.get(p.stem))]
+    skipped = sorted({p.stem for p in yaml_paths} - {p.stem for p in kept})
+    return kept, skipped
 
 
 def load_registry_ids(registry_path: Path) -> dict[str, Any]:
@@ -281,6 +297,19 @@ def main() -> int:
         yaml_paths = [p for p in yaml_paths if p.stem not in registry_stopped]
         if before != len(yaml_paths):
             print(f"registry: skipped {before - len(yaml_paths)} stopped strategies")
+
+    # 晋升全量回测闸：gate=failed 且非 force 晋升的策略跳过日更
+    # （gate 缺失=未评估=正常拾取；--strategies 显式指定时优先，不做闸过滤）
+    gate_skipped: list[str] = []
+    if not args.strategies:
+        from quant_research_engine.gui.refresh_registry import load_all_gates
+
+        all_gates = load_all_gates(DEFAULT_GATES_DIR)
+        if all_gates:
+            yaml_paths, gate_skipped = _apply_gate_filter(yaml_paths, all_gates)
+            if gate_skipped:
+                print(f"promotion-gate: skipped {len(gate_skipped)} failed strategies: "
+                      + ", ".join(gate_skipped))
     batch_id = new_batch_id()
 
     if mode == "incremental":
@@ -331,6 +360,7 @@ def main() -> int:
                     "apply_stops": args.apply_stops,
                     "universe_filter": args.universe_filter,
                     "registry": str(args.registry) if registry_ids else None,
+                    "gate_skipped": gate_skipped,
                 },
             ),
         )
@@ -376,6 +406,7 @@ def main() -> int:
             "universe_filter": args.universe_filter,
             "window_years": args.window_years,
             "registry": str(args.registry) if registry_ids else None,
+            "gate_skipped": gate_skipped,
         },
         results=results,
         summary=counts,
