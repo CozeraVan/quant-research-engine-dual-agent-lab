@@ -297,8 +297,6 @@ code.log { white-space: pre-wrap; word-break: break-all; }
 .fs-red { background: #FEF2F2; border-color: #FECACA; color: var(--err); }
 
 /* --- Dashboard query-only mode (QRE-ADMIN-DASH-QUERY-001) --- */
-/* TODO-P3c-restore: 新建因子/新策略/注册操作暂缓时隐藏 */
-.p3c-hidden { display: none !important; }
 
 /* --- Registry mode banner (QRE-HAZARD-FIX-001) --- */
 .mode-banner {

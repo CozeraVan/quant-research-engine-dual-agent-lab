@@ -894,9 +894,27 @@
         }
         var html = "";
         items.forEach(function(s) {
-          var smoke = s.smoke
-            ? '冒烟: <a href="/runs/' + s.smoke.run_id + '">' + escHtml(s.smoke.status) + '</a>'
-            : '<span class="opt">未冒烟</span>';
+          var smoke;
+          if (s.smoke) {
+            var st = s.smoke.status;
+            var cls = st === "completed" ? "ok" : (st === "failed" ? "err" : "opt");
+            var label = st === "completed" ? "冒烟通过" : (st === "failed" ? "冒烟失败" : "冒烟中");
+            smoke = '冒烟: <a href="/runs/' + s.smoke.run_id + '" class="' + cls + '">' + label + '</a>';
+            if (st === "completed" && s.smoke.metrics) {
+              var m = s.smoke.metrics;
+              var parts = [];
+              if (m.total_trade_count != null) parts.push("交易 " + m.total_trade_count);
+              if (m.strategy_total_return != null) parts.push("收益 " + (m.strategy_total_return * 100).toFixed(2) + "%");
+              if (m.excess_return_vs_buy_hold != null) parts.push("超额 " + (m.excess_return_vs_buy_hold * 100).toFixed(2) + "%");
+              if (m.max_drawdown != null) parts.push("回撤 " + (m.max_drawdown * 100).toFixed(2) + "%");
+              if (parts.length) smoke += ' <span class="opt">(' + escHtml(parts.join("，")) + ')</span>';
+            }
+            if (st === "failed" && s.smoke.error) {
+              smoke += ' <span class="err">' + escHtml(String(s.smoke.error).slice(0, 120)) + '</span>';
+            }
+          } else {
+            smoke = '<span class="opt">未冒烟</span>';
+          }
           var options = sandboxCategories.map(function(c) {
             return '<option value="' + c + '">' + c + '</option>';
           }).join('');
@@ -915,6 +933,13 @@
           var name = row.getAttribute("data-name");
           row.querySelector(".sb-smoke").addEventListener("click", function() {
             sandboxAction("/api/strategies/smoke", {name: name}, "冒烟已启动（600519.SH 近 6 个月）");
+            // 冒烟为后台 run：轮询沙箱列表刷新 sidecar 状态（通过=绿/失败=红）
+            var polls = 0;
+            var timer = setInterval(function() {
+              polls++;
+              loadSandbox();
+              if (polls >= 24) clearInterval(timer);
+            }, 5000);
           });
           row.querySelector(".sb-promote").addEventListener("click", function() {
             var category = row.querySelector(".sb-category").value;
@@ -1138,18 +1163,34 @@
   });
 
   document.getElementById('fc-smoke').addEventListener('click', function() {
-    fcShow('<p class="opt">冒烟中（单股只读，最长 120s）...</p>');
+    fcShow('<p class="opt">冒烟任务提交中...</p>');
     fcPost('/api/factor-create/smoke', fcPayload(), function(d) {
-      if (!d.ok) {
-        fcShow('<p class="err">冒烟失败：' + esc(d.error || (d.errors || []).join('；') || '未知错误') + '</p>');
-        return;
-      }
-      fcShow('<p class="ok">冒烟通过</p><p>因子类 ' + esc(d.factor_class)
-        + '（' + esc(d.indicator_name) + ' / ' + esc(d.category) + '），样本 ' + esc(d.code)
-        + ' ' + esc(d.rows) + ' 行，输出列：<code>' + esc((d.columns || []).join(', ')) + '</code></p>');
-      loadFcSandbox();
+      if (!d.ok) { fcShow('<p class="err">冒烟失败：' + esc(d.error || '未知错误') + '</p>'); return; }
+      pollFcSmoke(d.job_id);
     });
   });
+
+  // 冒烟为后台 job（最长 120s）：提交后轮询状态，终态渲染与既同步版一致
+  function pollFcSmoke(jobId) {
+    fcShow('<p class="opt">冒烟中（单股只读，最长 120s）... 任务 ' + esc(jobId) + '</p>');
+    fetch('/api/factor-create/smoke/' + jobId)
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var d = res.body;
+        if (!d.ok) { fcShow('<p class="err">' + esc(d.error || '冒烟状态查询失败') + '</p>'); return; }
+        if (d.status === 'running') { setTimeout(function() { pollFcSmoke(jobId); }, 2000); return; }
+        var r2 = d.result || {};
+        if (!r2.ok) {
+          fcShow('<p class="err">冒烟失败：' + esc(r2.error || (r2.errors || []).join('；') || '未知错误') + '</p>');
+          return;
+        }
+        fcShow('<p class="ok">冒烟通过</p><p>因子类 ' + esc(r2.factor_class)
+          + '（' + esc(r2.indicator_name) + ' / ' + esc(r2.category) + '），样本 ' + esc(r2.code)
+          + ' ' + esc(r2.rows) + ' 行，输出列：<code>' + esc((r2.columns || []).join(', ')) + '</code></p>');
+        loadFcSandbox();
+      })
+      .catch(function(err) { fcShow('<p class="err">' + esc(err) + '</p>'); });
+  }
 
   function pollFcJob(jobId) {
     var box = document.getElementById('fc-job');

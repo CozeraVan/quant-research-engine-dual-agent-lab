@@ -132,7 +132,7 @@ def test_promote_moves_file(tmp_path):
     catalog = tmp_path / "catalog"
     sandbox = tmp_path / "sandbox"
     save_to_sandbox(_VALID_YAML, catalog_dir=catalog, sandbox_dir=sandbox)
-    record_smoke("sc_demo", "rid-1", sandbox_dir=sandbox)
+    record_smoke("sc_demo", "rid-1", status="completed", sandbox_dir=sandbox)
 
     result = promote("sc_demo", "mean_reversion", catalog_dir=catalog, sandbox_dir=sandbox)
     assert result["ok"] is True
@@ -142,6 +142,156 @@ def test_promote_moves_file(tmp_path):
     assert not (sandbox / "sc_demo.yaml").exists()
     # 冒烟 sidecar 保留作历史记录
     assert (sandbox / "sc_demo.smoke.json").exists()
+
+
+# --- 晋升冒烟状态闸（缺口 2） ---
+
+
+def test_promote_blocked_without_smoke(tmp_path):
+    catalog = tmp_path / "catalog"
+    sandbox = tmp_path / "sandbox"
+    save_to_sandbox(_VALID_YAML, catalog_dir=catalog, sandbox_dir=sandbox)
+    result = promote("sc_demo", "mean_reversion", catalog_dir=catalog, sandbox_dir=sandbox)
+    assert result["ok"] is False
+    assert result["code"] == "smoke_not_passed"
+    assert "冒烟" in result["error"]
+    assert (sandbox / "sc_demo.yaml").exists()  # 未移动
+
+
+def test_promote_blocked_when_smoke_running_or_failed(tmp_path):
+    catalog = tmp_path / "catalog"
+    sandbox = tmp_path / "sandbox"
+    save_to_sandbox(_VALID_YAML, catalog_dir=catalog, sandbox_dir=sandbox)
+    record_smoke("sc_demo", "rid-1", status="running", sandbox_dir=sandbox)
+    assert promote("sc_demo", "mean_reversion", catalog_dir=catalog, sandbox_dir=sandbox)["code"] == "smoke_not_passed"
+    record_smoke("sc_demo", "rid-1", status="failed", sandbox_dir=sandbox)
+    assert promote("sc_demo", "mean_reversion", catalog_dir=catalog, sandbox_dir=sandbox)["code"] == "smoke_not_passed"
+
+
+def test_promote_force_bypasses_gate(tmp_path):
+    catalog = tmp_path / "catalog"
+    sandbox = tmp_path / "sandbox"
+    save_to_sandbox(_VALID_YAML, catalog_dir=catalog, sandbox_dir=sandbox)
+    result = promote("sc_demo", "mean_reversion", catalog_dir=catalog, sandbox_dir=sandbox, force=True)
+    assert result["ok"] is True
+    assert result["forced"] is True
+    assert (catalog / "mean_reversion" / "sc_demo.yaml").exists()
+
+
+# --- 冒烟 sidecar 闭环（缺口 1） ---
+
+
+def test_finalize_smoke_completed_writes_metrics(tmp_path):
+    sandbox = tmp_path / "sandbox"
+    save_to_sandbox(_VALID_YAML, catalog_dir=tmp_path / "catalog", sandbox_dir=sandbox)
+    record_smoke("sc_demo", "rid-1", sandbox_dir=sandbox)
+    record = {
+        "sandbox_strategy": "sc_demo",
+        "run_id": "rid-1",
+        "status": "completed",
+        "finished_at": "2026-08-20T00:00:00+00:00",
+    }
+    summary = {"metrics": {
+        "total_trade_count": 7,
+        "strategy_total_return": 0.05,
+        "excess_return_vs_buy_hold": 0.01,
+        "max_drawdown": -0.02,
+        "unrelated": 1,
+    }}
+    strategy_create.finalize_smoke(record, sandbox_dir=sandbox, summary=summary)
+    smoke = json.loads((sandbox / "sc_demo.smoke.json").read_text(encoding="utf-8"))
+    assert smoke["status"] == "completed"
+    assert smoke["finished_at"] == "2026-08-20T00:00:00+00:00"
+    assert smoke["metrics"] == {
+        "total_trade_count": 7,
+        "strategy_total_return": 0.05,
+        "excess_return_vs_buy_hold": 0.01,
+        "max_drawdown": -0.02,
+    }
+    # 再次冒烟（running）不应残留上次的 error/metrics 之外的脏数据
+    record_smoke("sc_demo", "rid-2", sandbox_dir=sandbox)
+    failed = {"sandbox_strategy": "sc_demo", "run_id": "rid-2", "status": "failed", "error": "boom"}
+    strategy_create.finalize_smoke(failed, sandbox_dir=sandbox)
+    smoke = json.loads((sandbox / "sc_demo.smoke.json").read_text(encoding="utf-8"))
+    assert smoke["status"] == "failed" and smoke["error"] == "boom"
+
+
+def test_finalize_smoke_ignores_unmarked_run(tmp_path):
+    assert strategy_create.finalize_smoke({"run_id": "x", "status": "completed"}, sandbox_dir=tmp_path) is None
+
+
+def test_engine_finalize_hook_writes_sidecar(monkeypatch, tmp_path):
+    """engine._execute_and_finalize 对带 sandbox_strategy 标记的 run 回写 sidecar。"""
+    from quant_research_engine.gui import engine
+
+    runs_dir = tmp_path / "runs"
+    run_dir = runs_dir / "rid-1"
+    run_dir.mkdir(parents=True)
+    sandbox = tmp_path / "sandbox"
+    monkeypatch.setattr(engine, "RUNS_DIR", runs_dir)
+    monkeypatch.setattr(strategy_create, "DEFAULT_SANDBOX_DIR", sandbox)
+    record_smoke("sc_demo", "rid-1", sandbox_dir=sandbox)
+
+    def fake_cli(cmd, stdout_path, stderr_path):
+        stdout_path.write_text(
+            "trades=3\ntotal_return=0.05\nexcess_return_vs_buy_hold=0.01\nmax_drawdown=-0.02\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(engine, "_run_via_cli", fake_cli)
+    record = {"run_id": "rid-1", "executor": "cli", "sandbox_strategy": "sc_demo", "status": "running"}
+    engine._execute_and_finalize(record, run_dir, ["true"], {})
+    smoke = json.loads((sandbox / "sc_demo.smoke.json").read_text(encoding="utf-8"))
+    assert smoke["status"] == "completed"
+    assert smoke["metrics"]["total_trade_count"] == 3.0
+    assert smoke["metrics"]["strategy_total_return"] == 0.05
+    assert smoke["metrics"]["excess_return_vs_buy_hold"] == 0.01
+    assert smoke["metrics"]["max_drawdown"] == -0.02
+    assert smoke["finished_at"]
+
+
+def test_engine_finalize_hook_failure(monkeypatch, tmp_path):
+    from quant_research_engine.gui import engine
+
+    runs_dir = tmp_path / "runs"
+    run_dir = runs_dir / "rid-1"
+    run_dir.mkdir(parents=True)
+    sandbox = tmp_path / "sandbox"
+    monkeypatch.setattr(engine, "RUNS_DIR", runs_dir)
+    monkeypatch.setattr(strategy_create, "DEFAULT_SANDBOX_DIR", sandbox)
+    record_smoke("sc_demo", "rid-1", sandbox_dir=sandbox)
+
+    def boom(cmd, stdout_path, stderr_path):
+        raise RuntimeError("引擎炸了")
+
+    monkeypatch.setattr(engine, "_run_via_cli", boom)
+    record = {"run_id": "rid-1", "executor": "cli", "sandbox_strategy": "sc_demo", "status": "running"}
+    engine._execute_and_finalize(record, run_dir, ["true"], {})
+    smoke = json.loads((sandbox / "sc_demo.smoke.json").read_text(encoding="utf-8"))
+    assert smoke["status"] == "failed"
+    assert "引擎炸了" in smoke["error"]
+
+
+def test_list_sandbox_self_heals_stale_running(monkeypatch, tmp_path):
+    """GUI 重启丢线程后 sidecar 滞留 running：list_sandbox 查 run 终态补写。"""
+    from quant_research_engine.gui import engine
+
+    runs_dir = tmp_path / "runs"
+    run_dir = runs_dir / "rid-1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "status.json").write_text(json.dumps({
+        "run_id": "rid-1", "sandbox_strategy": "sc_demo", "status": "completed",
+        "finished_at": "2026-08-20T01:00:00+00:00",
+    }), encoding="utf-8")
+    (run_dir / "stdout.log").write_text("trades=2\ntotal_return=0.01\n", encoding="utf-8")
+    monkeypatch.setattr(engine, "RUNS_DIR", runs_dir)
+
+    sandbox = tmp_path / "sandbox"
+    save_to_sandbox(_VALID_YAML, catalog_dir=tmp_path / "catalog", sandbox_dir=sandbox)
+    record_smoke("sc_demo", "rid-1", sandbox_dir=sandbox)  # running
+    entry = list_sandbox(sandbox)[0]
+    assert entry["smoke"]["status"] == "completed"
+    assert entry["smoke"]["metrics"]["total_trade_count"] == 2.0
 
 
 def test_promote_blocked_by_catalog_duplicate(tmp_path):
@@ -186,11 +336,17 @@ def app_client(monkeypatch, tmp_path):
         "quant_research_engine.gui.nl_compiler._default_column_lookup",
         lambda db_url=None: (lambda table: {"rsi_14"}),
     )
-    # 假 run_backtest：不真跑，只建 run 目录供 _mark_run 落盘
+    # 假 run_backtest：不真跑，建 run 目录并落盘 status.json（含 mark 合并，
+    # 与真实 run_backtest 行为对齐）
     def fake_run_backtest(**kwargs):
         rid = "test-run-1"
         (runs_dir / rid).mkdir(parents=True, exist_ok=True)
-        return {"run_id": rid, "status": "running", "kwargs": kwargs}
+        record = {"run_id": rid, "status": "running", "kwargs": kwargs}
+        record.update(kwargs.get("mark") or {})
+        (runs_dir / rid / "status.json").write_text(
+            json.dumps(record, ensure_ascii=False), encoding="utf-8"
+        )
+        return record
 
     monkeypatch.setattr("quant_research_engine.gui.app.run_backtest", fake_run_backtest)
 
@@ -283,6 +439,7 @@ def test_api_smoke_not_found(app_client):
 def test_api_promote(app_client):
     client, sandbox, catalog, runs_dir = app_client
     client.post("/api/strategies/create", json={"mode": "manual", "yaml_text": _VALID_YAML})
+    strategy_create.record_smoke("sc_demo", "rid-smoke", status="completed", sandbox_dir=sandbox)
     resp = client.post("/api/strategies/promote", json={"name": "sc_demo", "category": "breakout"})
     assert resp.status_code == 200
     data = resp.get_json()
@@ -295,6 +452,29 @@ def test_api_promote(app_client):
     # 全量回测参数：shared + 空 codes（全市场）
     assert status["kwargs"]["mode"] == "shared"
     assert status["kwargs"]["codes"] == ""
+
+
+def test_api_promote_blocked_without_smoke_409(app_client):
+    client, sandbox, _, _ = app_client
+    client.post("/api/strategies/create", json={"mode": "manual", "yaml_text": _VALID_YAML})
+    resp = client.post("/api/strategies/promote", json={"name": "sc_demo", "category": "breakout"})
+    assert resp.status_code == 409
+    data = resp.get_json()
+    assert data["code"] == "smoke_not_passed"
+    assert "冒烟" in data["error"]
+    assert (sandbox / "sc_demo.yaml").exists()  # 未移动
+
+
+def test_api_promote_force_bypass(app_client):
+    client, sandbox, catalog, _ = app_client
+    client.post("/api/strategies/create", json={"mode": "manual", "yaml_text": _VALID_YAML})
+    resp = client.post("/api/strategies/promote", json={"name": "sc_demo", "category": "breakout", "force": True})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["forced"] is True
+    assert "force" in data["warning"]
+    assert (catalog / "breakout" / "sc_demo.yaml").exists()
 
 
 def test_api_promote_invalid_category(app_client):
@@ -322,3 +502,6 @@ def test_index_page_contains_sandbox_panel(app_client):
     html = resp.data.decode("utf-8")
     assert "沙箱策略" in html
     assert "btn-save-sandbox" in html
+    # 沙箱列表冒烟状态渲染（通过/失败/冒烟中）与因子冒烟轮询
+    assert "冒烟通过" in html and "冒烟失败" in html and "冒烟中" in html
+    assert "/api/factor-create/smoke/" in html

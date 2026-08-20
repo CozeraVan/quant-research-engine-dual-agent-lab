@@ -2,6 +2,44 @@
 
 ## Task ID
 
+QRE-GUI-CREATE-GAPS-001（新增策略/因子闭环四缺口）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 缺口 1（策略冒烟闭环）：回写钩子放在 engine._execute_and_finalize 尾部
+  （run 终态唯一收口点），整体 try/except 兜底——sidecar 回写失败不影响
+  run 收尾；标记经 run_backtest(mark=...) 在线程启动前合并进 record，消除
+  原 _mark_run 事后写 status.json 的竞态（极快失败的 run 可能丢标记）。
+  sidecar 一律 tmp+os.replace 原子写。list_sandbox 自愈覆盖 GUI 重启丢
+  daemon 线程的滞留 running。指标复用 extract_run_summary 既有口径
+  （strategy_performance.json 优先、stdout key=value 兜底），未引入新口径。
+- 缺口 2（晋升闸）：gate 放在查重/存在性检查之后、写动作之前（fail-fast，
+  无副作用）；force=true 管理员通道在响应里以 forced + warning 显式注明。
+  策略/因子两侧语义一致（只认 status=="completed"）。
+- 缺口 3（因子冒烟异步化）：调度复用 daily_jobs.start_script_job 与
+  lock_key 机制（factor-smoke:<name> 同名串行，不同名可并行），未新造
+  job 基础设施；run_smoke 的 120s 超时与末行 JSON 解析逻辑原样保留
+  （仅抽出 _smoke_cmd/_parse_smoke_stdout 供两处复用）。结果双写：
+  job_dir/result.json（轮询端点读）+ 沙箱 sidecar（晋升闸读）。
+- 缺口 4：全仓 grep 确认 .p3c-hidden 仅 style.css 两处（注释+规则）与
+  一个「断言不存在」的测试，模板/JS 零引用，删除安全。
+- 兼容性：sync POST /api/factor-create/smoke 的响应契约改变（columns→
+  job_id）是有意为之，前端同步改轮询；test_api_smoke 相应改写。
+  run_backtest 新增 mark 为可选参数，既有调用方零影响。
+- 验证：pytest 1437 绿（1417 + 20 净增）；node --check 三段内联 JS OK。
+  未重启 qre-gui（用户显式约束），真实端到端验证留待服务重启后。
+  无 Required Fixes。
+
+## Task ID
+
 QRE-ADMIN-FACTOR-FRESH-001 (因子状态 tab 新鲜度判定)
 
 ## Reviewer

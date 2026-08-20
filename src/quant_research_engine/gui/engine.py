@@ -173,6 +173,7 @@ def run_backtest(
     trailing_stop_pct: float | None = None,
     precheck: bool = False,
     background: bool = False,
+    mark: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run a backtest and return the run record.
 
@@ -180,6 +181,9 @@ def run_backtest(
     record is returned immediately with ``status="running"``; status.json is
     updated in place when the run finishes. The caller is responsible for
     acquiring/releasing a concurrency slot (see api_run).
+
+    ``mark`` 的键值在线程启动前合并进 run 记录（如 sandbox_strategy/purpose），
+    避免事后补写与后台线程的完成回写产生竞态。
     """
     _ensure_dirs()
     rid = _run_id()
@@ -247,6 +251,8 @@ def run_backtest(
     if precheck:
         record["precheck"] = True
         record["full_params"] = full_params
+    if mark:
+        record.update(mark)
     _write_json(run_dir / "request.json", record)
     _write_json(run_dir / "status.json", record)
 
@@ -324,6 +330,16 @@ def _execute_and_finalize(
                 artifacts[rel] = str(p)
         record["artifacts"] = artifacts
         _write_json(run_dir / "status.json", record)
+
+    # 沙箱策略冒烟闭环：run 终态回写 <name>.smoke.json sidecar。
+    # sidecar 回写失败不应影响 run 本身的收尾，故整体兜底。
+    if record.get("sandbox_strategy"):
+        try:
+            from quant_research_engine.gui import strategy_create
+
+            strategy_create.finalize_smoke(record)
+        except Exception:
+            pass
 
 
 def _run_via_module(

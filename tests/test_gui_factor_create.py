@@ -285,6 +285,77 @@ def test_run_smoke_missing_sandbox(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# 异步冒烟（缺口 3）：start_smoke_job 复用 start_script_job 调度协议
+# ---------------------------------------------------------------------------
+
+
+def _sync_job_starter(captured: dict):
+    """假 job_starter：同步执行 worker（daily_jobs runner 协议），返回 job 记录。"""
+
+    def starter(*, lock_key, label, cmd, cwd, runner):
+        captured.update(lock_key=lock_key, label=label, cmd=cmd, cwd=cwd)
+        job_dir = captured["job_root"] / "job-1"
+        job_dir.mkdir(parents=True, exist_ok=True)
+        exit_code = runner(cmd, cwd, job_dir)
+        return {"job_id": "job-1", "status": "completed" if exit_code == 0 else "failed"}
+
+    return starter
+
+
+def test_start_smoke_job_ok_writes_sidecar_and_result(tmp_path):
+    repo = _make_repo(tmp_path)
+    factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    payload = {"ok": True, "indicator_name": "roc", "factor_class": "ROCFactor",
+               "category": "momentum", "code": "600519.SH", "columns": ["roc_25"], "rows": 400, "errors": []}
+    captured: dict = {"job_root": tmp_path / "jobs"}
+    result = factor_create.start_smoke_job(
+        "roc", params=[25], repo=repo,
+        smoke_runner=_smoke_runner(payload), job_starter=_sync_job_starter(captured),
+    )
+    assert result["ok"] is True and result["job_id"] == "job-1" and result["status"] == "running"
+    assert captured["lock_key"] == "factor-smoke:roc"
+    # 终态：sidecar completed + job_dir/result.json
+    sidecar = json.loads((repo / "sandbox" / "factors" / "roc.smoke.json").read_text(encoding="utf-8"))
+    assert sidecar["status"] == "completed"
+    assert sidecar["result"]["columns"] == ["roc_25"]
+    job_result = json.loads((captured["job_root"] / "job-1" / "result.json").read_text(encoding="utf-8"))
+    assert job_result["ok"] is True and job_result["rows"] == 400
+
+
+def test_start_smoke_job_failure_marks_sidecar_failed(tmp_path):
+    repo = _make_repo(tmp_path)
+    factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+
+    def bad_runner(cmd, cwd, timeout):
+        return subprocess.CompletedProcess(args=cmd, returncode=2, stdout="boom", stderr="traceback...")
+
+    captured: dict = {"job_root": tmp_path / "jobs"}
+    factor_create.start_smoke_job(
+        "roc", repo=repo, smoke_runner=bad_runner, job_starter=_sync_job_starter(captured)
+    )
+    sidecar = json.loads((repo / "sandbox" / "factors" / "roc.smoke.json").read_text(encoding="utf-8"))
+    assert sidecar["status"] == "failed"
+    assert "无法解析" in sidecar["error"]
+    job_result = json.loads((captured["job_root"] / "job-1" / "result.json").read_text(encoding="utf-8"))
+    assert job_result["ok"] is False
+
+
+def test_start_smoke_job_missing_sandbox(tmp_path):
+    repo = _make_repo(tmp_path)
+    result = factor_create.start_smoke_job("ghost", repo=repo, job_starter=_fake_job_starter)
+    assert result["ok"] is False and result["code"] == "not_found"
+
+
+def test_discard_factor_removes_smoke_sidecar(tmp_path):
+    repo = _make_repo(tmp_path)
+    factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    _write_smoke_ok(repo, "roc")
+    discarded = factor_create.discard_factor("roc", repo=repo)
+    assert discarded["ok"] is True
+    assert not (repo / "sandbox" / "factors" / "roc.smoke.json").exists()
+
+
+# ---------------------------------------------------------------------------
 # config 追加 / 晋升
 # ---------------------------------------------------------------------------
 
@@ -316,6 +387,15 @@ def test_append_config_entry_null_params(tmp_path):
     assert "    params: [null]" in config_path.read_text(encoding="utf-8")
 
 
+def _write_smoke_ok(repo: Path, name: str) -> None:
+    """写入一条「冒烟通过」sidecar（晋升状态闸的前置条件）。"""
+    factor_create._write_smoke_sidecar(
+        name,
+        {"name": name, "status": "completed", "result": {"ok": True}, "finished_at": "2026-08-20T00:00:00+00:00"},
+        repo=repo,
+    )
+
+
 def _fake_job_starter(**kwargs):
     return {"job_id": "job-test-1", "status": "running", **kwargs}
 
@@ -323,6 +403,7 @@ def _fake_job_starter(**kwargs):
 def test_promote_rejects_when_admin_busy(tmp_path):
     repo = _make_repo(tmp_path)
     factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    _write_smoke_ok(repo, "roc")
     result = factor_create.promote_factor(
         "roc", "momentum", "close", [25], repo=repo, pgrep_runner=_pgrep_busy, job_starter=_fake_job_starter
     )
@@ -330,9 +411,44 @@ def test_promote_rejects_when_admin_busy(tmp_path):
     assert not (repo / "factors" / "roc_factor.py").exists()
 
 
+def test_promote_blocked_without_smoke(tmp_path):
+    repo = _make_repo(tmp_path)
+    factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    result = factor_create.promote_factor(
+        "roc", "momentum", "close", [25], repo=repo, pgrep_runner=_pgrep_idle, job_starter=_fake_job_starter
+    )
+    assert result["ok"] is False and result["code"] == "smoke_not_passed"
+    assert "冒烟" in result["error"]
+    assert not (repo / "factors" / "roc_factor.py").exists()
+
+
+def test_promote_blocked_when_smoke_failed(tmp_path):
+    repo = _make_repo(tmp_path)
+    factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    factor_create._write_smoke_sidecar(
+        "roc", {"name": "roc", "status": "failed", "error": "语法错误"}, repo=repo
+    )
+    result = factor_create.promote_factor(
+        "roc", "momentum", "close", [25], repo=repo, pgrep_runner=_pgrep_idle, job_starter=_fake_job_starter
+    )
+    assert result["ok"] is False and result["code"] == "smoke_not_passed"
+
+
+def test_promote_force_bypasses_smoke_gate(tmp_path):
+    repo = _make_repo(tmp_path)
+    factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    result = factor_create.promote_factor(
+        "roc", "momentum", "close", [25], repo=repo,
+        pgrep_runner=_pgrep_idle, job_starter=_fake_job_starter, force=True,
+    )
+    assert result["ok"] is True and result["forced"] is True
+    assert (repo / "factors" / "roc_factor.py").exists()
+
+
 def test_promote_ok_copies_appends_starts_job(tmp_path):
     repo = _make_repo(tmp_path)
     factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    _write_smoke_ok(repo, "roc")
     started: list[dict] = []
 
     def starter(**kwargs):
@@ -354,6 +470,7 @@ def test_promote_rejects_existing_module(tmp_path):
     repo = _make_repo(tmp_path)
     (repo / "factors" / "roc_factor.py").write_text("# existing\n", encoding="utf-8")
     factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    _write_smoke_ok(repo, "roc")
     result = factor_create.promote_factor(
         "roc", "momentum", "close", [25], repo=repo, pgrep_runner=_pgrep_idle, job_starter=_fake_job_starter
     )
@@ -371,6 +488,7 @@ def test_promote_rejects_missing_sandbox(tmp_path):
 def test_promote_rejects_bad_category(tmp_path):
     repo = _make_repo(tmp_path)
     factor_create.save_factor_to_sandbox(VALID_CODE, "roc", repo=repo)
+    _write_smoke_ok(repo, "roc")
     result = factor_create.promote_factor(
         "roc", "weird", "close", [25], repo=repo, pgrep_runner=_pgrep_idle, job_starter=_fake_job_starter
     )
@@ -445,21 +563,75 @@ def test_api_check_duplicate_with_db_down(client, monkeypatch, tmp_path):
     assert "因子库不可用" in data["warning"]
 
 
-def test_api_smoke(client, monkeypatch):
+def test_api_smoke_submits_async_job(client, monkeypatch):
+    """POST /api/factor-create/smoke 改为异步：提交即返回 job_id。"""
     monkeypatch.setattr(
         factor_create, "save_factor_to_sandbox", lambda code, name, **kw: {"ok": True, "name": name, "path": "/tmp/x.py"}
     )
-    monkeypatch.setattr(
-        factor_create,
-        "run_smoke",
-        lambda name, **kwargs: {"ok": True, "indicator_name": name, "columns": ["roc_25"], "errors": []},
-    )
+    captured: dict = {}
+
+    def fake_start(name, **kwargs):
+        captured.update(name=name, params=kwargs.get("params"))
+        return {"ok": True, "job_id": "job-1", "status": "running", "name": name}
+
+    monkeypatch.setattr(factor_create, "start_smoke_job", fake_start)
     resp = client.post(
         "/api/factor-create/smoke",
         json={"code": VALID_CODE, "name": "roc", "category": "momentum", "column": "close", "periods": [25]},
     )
     data = resp.get_json()
-    assert data["ok"] is True and data["columns"] == ["roc_25"]
+    assert resp.status_code == 200
+    assert data["ok"] is True and data["job_id"] == "job-1" and data["status"] == "running"
+    assert captured["params"] == [25]
+
+
+def test_api_smoke_lock_conflict_409(client, monkeypatch):
+    monkeypatch.setattr(
+        factor_create, "save_factor_to_sandbox", lambda code, name, **kw: {"ok": True, "name": name}
+    )
+
+    def busy(name, **kwargs):
+        raise RuntimeError("「新因子冒烟 roc」已有任务在运行，请等待完成后再触发")
+
+    monkeypatch.setattr(factor_create, "start_smoke_job", busy)
+    resp = client.post(
+        "/api/factor-create/smoke",
+        json={"code": VALID_CODE, "name": "roc", "category": "momentum", "column": "close"},
+    )
+    assert resp.status_code == 409
+
+
+def test_api_smoke_status_polling(client, monkeypatch, tmp_path):
+    """GET /api/factor-create/smoke/<job_id>：running → 终态读 result.json。"""
+    from quant_research_engine.gui import daily_jobs
+
+    jobs_dir = tmp_path / "daily-jobs"
+    monkeypatch.setattr(daily_jobs, "DAILY_JOBS_DIR", jobs_dir)
+
+    job_dir = jobs_dir / "job-1"
+    job_dir.mkdir(parents=True)
+    (job_dir / "status.json").write_text(json.dumps({
+        "job_id": "job-1", "status": "running", "label": "新因子冒烟 roc",
+        "created_at": "2026-08-20T00:00:00+00:00",
+    }), encoding="utf-8")
+    resp = client.get("/api/factor-create/smoke/job-1")
+    data = resp.get_json()
+    assert resp.status_code == 200 and data["status"] == "running" and "result" not in data
+
+    # 终态：status failed + result.json 带错误详情
+    (job_dir / "status.json").write_text(json.dumps({
+        "job_id": "job-1", "status": "failed", "error": "脚本退出码 1（详见日志）",
+        "created_at": "2026-08-20T00:00:00+00:00",
+    }), encoding="utf-8")
+    (job_dir / "result.json").write_text(json.dumps({
+        "ok": False, "error": "冒烟输出无法解析（exit=2）：boom",
+    }), encoding="utf-8")
+    resp = client.get("/api/factor-create/smoke/job-1")
+    data = resp.get_json()
+    assert data["status"] == "failed"
+    assert data["result"]["ok"] is False and "无法解析" in data["result"]["error"]
+
+    assert client.get("/api/factor-create/smoke/ghost").status_code == 404
 
 
 def test_api_promote(client, monkeypatch):
@@ -490,6 +662,29 @@ def test_api_promote_busy_conflict(client, monkeypatch):
         json={"name": "roc", "category": "momentum", "column": "close", "periods": [25]},
     )
     assert resp.status_code == 409
+
+
+def test_api_promote_smoke_gate_409_and_force(client, monkeypatch):
+    """晋升状态闸：smoke_not_passed → 409；force=true 透传并注明。"""
+    seen: dict = {}
+
+    def fake_promote(name, category, column, params, **kwargs):
+        seen["force"] = kwargs.get("force")
+        if not kwargs.get("force"):
+            return {"ok": False, "code": "smoke_not_passed", "error": "未通过冒烟测试：请先运行冒烟测试"}
+        return {"ok": True, "name": name, "path": "/repo/factors/roc_factor.py", "job_id": "j", "forced": True}
+
+    monkeypatch.setattr(factor_create, "promote_factor", fake_promote)
+    payload = {"name": "roc", "category": "momentum", "column": "close", "periods": [25]}
+    resp = client.post("/api/factor-create/promote", json=payload)
+    assert resp.status_code == 409
+    assert resp.get_json()["code"] == "smoke_not_passed"
+
+    resp = client.post("/api/factor-create/promote", json={**payload, "force": True})
+    data = resp.get_json()
+    assert resp.status_code == 200 and data["forced"] is True
+    assert "force" in data["warning"]
+    assert seen["force"] is True
 
 
 def test_api_sandbox_list_and_delete(client, monkeypatch, tmp_path):

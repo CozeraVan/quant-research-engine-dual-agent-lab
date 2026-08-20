@@ -2,6 +2,71 @@
 
 ## Task ID
 
+QRE-GUI-CREATE-GAPS-001（新增策略/因子闭环四缺口：冒烟回写、晋升闸、因子冒烟异步化、死代码清理）
+
+## Created By
+
+KIMI_CODE（用户 2026-08-20 直接指定的任务书；关联 CR `change_requests/2026-08-12_gui_create_strategy_factor.md`）
+
+## Intended Implementer
+
+KIMI_CODE
+
+## Goal
+
+补齐 GUI「新增策略」「新增因子」全链路四个已确诊缺口，不重构既有设计：
+
+1. **策略冒烟状态闭环**：`_execute_and_finalize`（gui/engine.py）在 run 结束时检测
+   `sandbox_strategy` 标记，回写 sidecar `<name>.smoke.json`（completed/failed +
+   交易次数/收益率/超额/最大回撤 + finished_at，原子写）；`list_sandbox` 对
+   running sidecar 自愈（查 run status 终态即补写，覆盖 GUI 重启丢线程场景）；
+   沙箱列表前端按状态着色（绿/红/灰），失败展示原因摘要。
+2. **晋升状态闸**：`strategy_create.promote` 与 `factor_create.promote_factor` 加
+   `force=False` 参数；sidecar 缺失或 status != completed 时拒绝
+   （code=smoke_not_passed，路由层 409 +「先通过冒烟测试」）；force=true 为管理员
+   通道，响应注明 forced。因子侧新增最小 sidecar（sandbox/factors/<name>.smoke.json）。
+3. **因子冒烟异步化**：`POST /api/factor-create/smoke` 改提交即返回 job_id，复用
+   `daily_jobs.start_script_job`（lock_key=factor-smoke:<name>，同名串行）；
+   worker 复用既有 `run_smoke`（120s 超时与末行 JSON 解析逻辑不变），结果写
+   job_dir/result.json + 因子冒烟 sidecar；新增 `GET /api/factor-create/smoke/<job_id>`
+   轮询；前端 fc-smoke 改轮询。
+4. **死代码**：删 style.css `.p3c-hidden` + TODO-P3c-restore 注释（全仓无引用）。
+
+## Semantics
+
+- 策略冒烟标记经 `run_backtest(mark=...)` 在 run 记录创建时合并（消除原
+  `_mark_run` 的事后写入竞态：极快失败的 run 可能在线程结束后才打标记）。
+- sidecar status 语义：completed = 冒烟通过；failed = 回测失败/解析失败；
+  running = 在途。晋升只认 completed。
+- 冒烟指标取自既有 `engine.extract_run_summary`（strategy_performance.json 优先，
+  stdout key=value 兜底），不引入新口径。
+
+## Scope
+
+1. `gui/engine.py`：run_backtest 加 `mark` 参数；`_execute_and_finalize` 尾部钩子。
+2. `gui/strategy_create.py`：`finalize_smoke` / `read_smoke` / 原子写；list_sandbox 自愈；promote 加 force 闸。
+3. `gui/factor_create.py`：冒烟 sidecar 读写 + `start_smoke_job`；promote_factor 加 force 闸。
+4. `gui/app.py`：smoke/promote 路由改造（mark、force、409、新轮询端点）；删 `_mark_run`。
+5. `gui/templates/index.html`：沙箱列表冒烟状态着色 + 失败原因；fc-smoke 轮询。
+6. `gui/static/style.css`：删 `.p3c-hidden` 两行。
+7. tests：test_gui_strategy_create.py / test_gui_factor_create.py 增补与适配。
+8. docs/agent 05/08/09/10/11 同步。
+
+## Non-Goals
+
+- 不 git commit、不重启 qre-gui.service；不改回测引擎语义；不动 admin.html；
+  不重构 daily_jobs / factor_admin。
+
+## Expected Tests
+
+```bash
+uv run pytest tests/ -x -q   # 基线 1417，净增新用例后全绿
+```
+
+---
+
+## Task ID
+
 QRE-ALPHA191-STRAT-LOOP-001 (P6：头部 alpha191 因子新建策略闭环自测)
 
 ## Created By

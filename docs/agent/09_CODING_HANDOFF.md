@@ -2,6 +2,62 @@
 
 ## Task ID
 
+QRE-GUI-CREATE-GAPS-001 (新增策略/因子闭环四缺口：冒烟回写 / 晋升闸 / 因子冒烟异步化 / 死代码)
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+关联 CR：change_requests/2026-08-12_gui_create_strategy_factor.md。
+
+**缺口 1 策略冒烟闭环**：
+- `gui/engine.py`：`run_backtest` 加 `mark` 参数（线程启动前合并进 run 记录，
+  消除事后打标记的竞态）；`_execute_and_finalize` 尾部钩子——record 带
+  `sandbox_strategy` 时调 `strategy_create.finalize_smoke`（try/except 兜底）。
+- `gui/strategy_create.py`：`finalize_smoke`（status=completed/failed +
+  metrics[交易次数/总收益/超额/最大回撤，取自 engine.extract_run_summary] +
+  finished_at + error）；`_atomic_write_json`（tmp+os.replace，record_smoke
+  同用）；`read_smoke`；`list_sandbox` 对 running sidecar 自愈（查 run 终态
+  补写，覆盖 GUI 重启丢 daemon 线程场景）。
+- `index.html` 沙箱列表：通过=绿「冒烟通过」+ 指标摘要 / 失败=红 + 失败原因
+  摘要（120 字截断）/ 在途=灰「冒烟中」；点击冒烟后每 5s 轮询刷新至多 2 分钟。
+
+**缺口 2 晋升状态闸**：`strategy_create.promote` 与 `factor_create.promote_factor`
+加 `force=False`；sidecar 缺失或 status != completed → code=smoke_not_passed，
+路由层 409 +「先通过冒烟测试」；force=true 绕过且响应带 `forced: true` +
+warning 注明。因子侧新增最小 sidecar `sandbox/factors/<name>.smoke.json`
+（读 `read_smoke_record`，删因子时连删）。策略侧 gate 在查重之后（结构性
+冲突优先报错）。
+
+**缺口 3 因子冒烟异步化**：
+- `gui/factor_create.py`：`start_smoke_job` 复用 `daily_jobs.start_script_job`
+  （lock_key=`factor-smoke:<name>` 同名串行）；worker 内部跑既有 `run_smoke`
+  （120s 超时与末行 JSON 解析不变，仅抽出 `_smoke_cmd`/`_parse_smoke_stdout`
+  复用）；终态双写 job_dir/result.json + 沙箱 sidecar。
+- `app.py`：POST /api/factor-create/smoke 提交即返回 `{ok, job_id, status:
+  "running"}`（锁冲突 409）；新增 GET /api/factor-create/smoke/<job_id>
+  （running 透传 / 终态合并 result.json）。
+- `index.html` fc-smoke 改轮询（2s 间隔），终态渲染与既同步版一致。
+
+**缺口 4 死代码**：删 `static/style.css` 的 `.p3c-hidden` + TODO-P3c-restore
+注释（全仓 grep 确认模板/JS 零引用）。
+
+**测试**：`uv run pytest tests/ -x -q` → 1437 passed（1417 + 20 净增，全绿）。
+新增：策略侧 finalize/hook/自愈/gate/force 10 例；因子侧 start_smoke_job 3 例、
+晋升闸 3 例、discard 连删 1 例、API 异步提交/409/轮询/force 4 例（test_api_smoke
+按异步契约改写）。node --check 三段内联 JS OK。未重启 qre-gui（用户约束），
+真实 E2E 待服务重启后验证。
+
+上一任务：QRE-ADMIN-FACTOR-FRESH-001。
+
+## Task ID
+
 QRE-ADMIN-FACTOR-FRESH-001 (因子状态 tab 加新鲜度/滞后判定)
 
 ## Written By

@@ -705,8 +705,8 @@ def create_app() -> Flask:
         from quant_research_engine.gui.factor_create import (
             SMOKE_DEFAULT_CODE,
             normalize_params,
-            run_smoke,
             save_factor_to_sandbox,
+            start_smoke_job,
         )
 
         data = request.get_json(silent=True) or {}
@@ -718,12 +718,40 @@ def create_app() -> Flask:
         if not saved["ok"]:
             return jsonify(saved), 400
         params = normalize_params(periods=data.get("periods"), params=data.get("params"))
-        result = run_smoke(
-            name,
-            code=(data.get("code_symbol") or SMOKE_DEFAULT_CODE).strip(),
-            params=params,
-        )
+        # 异步模型：提交即返回 job_id，前端轮询 GET /api/factor-create/smoke/<job_id>
+        try:
+            result = start_smoke_job(
+                name,
+                code=(data.get("code_symbol") or SMOKE_DEFAULT_CODE).strip(),
+                params=params,
+            )
+        except RuntimeError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 409
+        if not result["ok"]:
+            return jsonify(result), 400
         return jsonify(result)
+
+    @app.route("/api/factor-create/smoke/<job_id>")
+    def api_factor_create_smoke_status(job_id: str) -> Any:
+        from quant_research_engine.gui.daily_jobs import DAILY_JOBS_DIR, get_daily_job
+
+        record = get_daily_job(job_id)
+        if record is None:
+            return jsonify({"ok": False, "error": "任务不存在"}), 404
+        resp: dict[str, Any] = {"ok": True, "job_id": job_id, "status": record["status"]}
+        if record["status"] == "running":
+            return jsonify(resp)
+        result: dict[str, Any] | None = None
+        result_path = DAILY_JOBS_DIR / job_id / "result.json"
+        if result_path.exists():
+            try:
+                parsed = json.loads(result_path.read_text(encoding="utf-8"))
+                if isinstance(parsed, dict):
+                    result = parsed
+            except (json.JSONDecodeError, OSError):
+                result = None
+        resp["result"] = result or {"ok": False, "error": record.get("error") or "冒烟失败（无结果文件）"}
+        return jsonify(resp)
 
     @app.route("/api/factor-create/promote", methods=["POST"])
     def api_factor_create_promote() -> Any:
@@ -733,13 +761,16 @@ def create_app() -> Flask:
         name = (data.get("name") or "").strip().lower()
         category = (data.get("category") or "").strip().lower()
         column = (data.get("column") or "").strip().lower()
+        force = bool(data.get("force"))
         if not name or not category or not column:
             return jsonify({"ok": False, "error": "name/category/column 必填"}), 400
         params = normalize_params(periods=data.get("periods"), params=data.get("params"))
-        result = promote_factor(name, category, column, params)
+        result = promote_factor(name, category, column, params, force=force)
         if not result["ok"]:
-            status = 404 if result.get("code") == "not_found" else (409 if result.get("code") in ("admin_busy", "duplicate_name", "job_conflict") else 400)
+            status = 404 if result.get("code") == "not_found" else (409 if result.get("code") in ("admin_busy", "duplicate_name", "job_conflict", "smoke_not_passed") else 400)
             return jsonify(result), status
+        if result.get("forced"):
+            result["warning"] = "已使用 force=true 跳过冒烟校验（管理员通道）"
         return jsonify(result)
 
     @app.route("/api/factor-create/sandbox")
@@ -808,13 +839,6 @@ def create_app() -> Flask:
         return jsonify({"valid": False, "issues": result.get("issues", [])})
 
     # --- 策略创建闭环 API（P1：查重 → 沙箱 → 冒烟 → 用户确认晋升 → catalog） ---
-
-    def _mark_run(record: dict[str, Any], **extra: Any) -> None:
-        """在 run 记录上打标记并立刻落盘（后台线程结束时会原样重写 status.json）。"""
-        from quant_research_engine.gui import engine as _engine
-
-        record.update(extra)
-        _engine._write_json(_engine.RUNS_DIR / record["run_id"] / "status.json", record)
 
     @app.route("/api/strategies/create", methods=["POST"])
     def api_strategy_create() -> Any:
@@ -909,11 +933,12 @@ def create_app() -> Flask:
                 end=end.isoformat(),
                 codes=code,
                 background=True,
+                # 标记在线程启动前合并进 run 记录；run 终态由 engine 回写 sidecar
+                mark={"sandbox_strategy": name, "purpose": "smoke"},
             )
         except Exception as exc:
             release_run_slot()
             return jsonify({"ok": False, "error": str(exc)}), 500
-        _mark_run(record, sandbox_strategy=name, purpose="smoke")
         strategy_create.record_smoke(name, record["run_id"], status="running")
         return jsonify({"ok": True, "run_id": record["run_id"], "code": code,
                         "start": start.isoformat(), "end": end.isoformat()})
@@ -925,12 +950,13 @@ def create_app() -> Flask:
         data = request.get_json(silent=True) or {}
         name = (data.get("name") or "").strip()
         category = (data.get("category") or "").strip()
+        force = bool(data.get("force"))
         if not name:
             return jsonify({"ok": False, "error": "策略名不能为空"}), 400
 
-        result = strategy_create.promote(name, category)
+        result = strategy_create.promote(name, category, force=force)
         if not result["ok"]:
-            status = 404 if result.get("code") == "not_found" else 400
+            status = 404 if result.get("code") == "not_found" else (409 if result.get("code") == "smoke_not_passed" else 400)
             return jsonify(result), status
 
         # 晋升后立刻触发一次全量后台回测（shared 全市场、近 2 年窗口，
@@ -949,8 +975,8 @@ def create_app() -> Flask:
                     end=end.isoformat(),
                     codes="",  # 空 = 全市场
                     background=True,
+                    mark={"promoted_strategy": result["name"], "purpose": "promote_full"},
                 )
-                _mark_run(record, promoted_strategy=result["name"], purpose="promote_full")
                 run_id = record["run_id"]
             except Exception as exc:
                 release_run_slot()
@@ -959,7 +985,10 @@ def create_app() -> Flask:
             warning = "已晋升；当前回测并发已满，全量回测未启动（将随下次 refresh 日更运行）"
 
         resp: dict[str, Any] = {"ok": True, "path": result["path"], "run_id": run_id}
-        if warning:
+        if result.get("forced"):
+            resp["forced"] = True
+            resp["warning"] = (warning + "；" if warning else "") + "已使用 force=true 跳过冒烟校验（管理员通道）"
+        elif warning:
             resp["warning"] = warning
         return jsonify(resp)
 

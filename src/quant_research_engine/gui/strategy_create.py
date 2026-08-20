@@ -10,12 +10,13 @@ refresh 日更只扫描 catalog，因此沙箱策略天然不会被日更拾取�
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from quant_research_engine.gui.engine import validate_yaml
+from quant_research_engine.gui.engine import extract_run_summary, validate_yaml
 from quant_research_engine.gui.refresh_registry import CATALOG_DIR
 
 DEFAULT_SANDBOX_DIR = Path("outputs/sandbox/strategies")
@@ -158,6 +159,17 @@ def load_sandbox_yaml(name: str, sandbox_dir: Path | None = None) -> str | None:
     return path.read_text(encoding="utf-8")
 
 
+def _now_iso() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """原子写 JSON（tmp + os.replace），避免并发读到半写文件。"""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def record_smoke(
     name: str,
     run_id: str,
@@ -171,11 +183,83 @@ def record_smoke(
     payload = {
         "run_id": run_id,
         "status": status,
-        "recorded_at": datetime.now(tz=timezone.utc).isoformat(),
+        "recorded_at": _now_iso(),
     }
     path = smoke_sidecar_path(name, sandbox_dir)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _atomic_write_json(path, payload)
     return path
+
+
+def read_smoke(name: str, sandbox_dir: Path | None = None) -> dict[str, Any] | None:
+    """读取冒烟 sidecar；缺失或损坏返回 None。"""
+    path = smoke_sidecar_path(name, sandbox_dir)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+# 冒烟回写 sidecar 的关键指标（取自 engine.extract_run_summary 的 metrics）
+SMOKE_METRIC_KEYS = (
+    "total_trade_count",
+    "strategy_total_return",
+    "excess_return_vs_buy_hold",
+    "max_drawdown",
+)
+
+
+def finalize_smoke(
+    record: dict[str, Any],
+    *,
+    sandbox_dir: Path | None = None,
+    summary: dict[str, Any] | None = None,
+) -> Path | None:
+    """run 结束时回写冒烟 sidecar：status=completed/failed + 关键指标 + 完成时间。
+
+    由 engine._execute_and_finalize 在 run 收尾时调用（record 带 sandbox_strategy
+    标记）；也可被 list_sandbox 用于自愈（GUI 重启丢线程导致 sidecar 滞留 running）。
+    非沙箱冒烟 run（无标记）返回 None。
+    """
+    name = record.get("sandbox_strategy")
+    if not name:
+        return None
+    status = "completed" if record.get("status") == "completed" else "failed"
+    payload = read_smoke(name, sandbox_dir) or {}
+    payload["run_id"] = record.get("run_id")
+    payload["status"] = status
+    payload["finished_at"] = record.get("finished_at") or _now_iso()
+    if status == "completed":
+        if summary is None:
+            summary = extract_run_summary(record) or {}
+        metrics_src = summary.get("metrics", {})
+        payload["metrics"] = {k: metrics_src[k] for k in SMOKE_METRIC_KEYS if k in metrics_src}
+        payload.pop("error", None)
+    else:
+        payload["error"] = record.get("error") or "冒烟回测失败（详见 run 日志）"
+    sandbox_dir = sandbox_dir or DEFAULT_SANDBOX_DIR
+    sandbox_dir.mkdir(parents=True, exist_ok=True)
+    path = smoke_sidecar_path(name, sandbox_dir)
+    _atomic_write_json(path, payload)
+    return path
+
+
+def _self_heal_smoke(entry: dict[str, Any], sandbox_dir: Path) -> None:
+    """sidecar 滞留 running 时查 run 终态补写（覆盖 GUI 重启丢后台线程的场景）。"""
+    smoke = entry.get("smoke")
+    if not smoke or smoke.get("status") != "running":
+        return
+    try:
+        from quant_research_engine.gui.engine import get_run
+
+        record = get_run(str(smoke.get("run_id") or ""))
+    except Exception:
+        return
+    if record and record.get("status") in ("completed", "failed"):
+        finalize_smoke(record, sandbox_dir=sandbox_dir)
+        entry["smoke"] = read_smoke(entry["name"], sandbox_dir)
 
 
 def list_sandbox(sandbox_dir: Path | None = None) -> list[dict[str, Any]]:
@@ -198,6 +282,7 @@ def list_sandbox(sandbox_dir: Path | None = None) -> list[dict[str, Any]]:
                 entry["smoke"] = json.loads(sidecar.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 pass
+        _self_heal_smoke(entry, sandbox_dir)
         entries.append(entry)
     return entries
 
@@ -213,10 +298,13 @@ def promote(
     *,
     catalog_dir: Path | None = None,
     sandbox_dir: Path | None = None,
+    force: bool = False,
 ) -> dict[str, Any]:
     """把沙箱策略复制到 ``strategies/catalog/<category>/`` 并从沙箱移除。
 
     冒烟 sidecar 保留在沙箱目录作为历史记录。
+    状态闸：sidecar 缺失或 status != "completed" 时拒绝晋升
+    （code=smoke_not_passed）；``force=True`` 为管理员绕过通道。
     """
     category = (category or "").strip()
     if category not in CATALOG_CATEGORIES:
@@ -238,12 +326,25 @@ def promote(
     if conflict:
         return {"ok": False, "code": "duplicate_name", "error": f"策略名冲突：{conflict}"}
 
+    if not force:
+        smoke = read_smoke(spec_name, sandbox_dir) or read_smoke(name, sandbox_dir)
+        if not smoke or smoke.get("status") != "completed":
+            return {
+                "ok": False,
+                "code": "smoke_not_passed",
+                "error": "未通过冒烟测试：请先在沙箱运行冒烟测试并等待通过后再晋升"
+                "（管理员可用 force=true 强制晋升）。",
+            }
+
     dest_dir = catalog_dir / category
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / src.name
     shutil.copy2(src, dest)
     src.unlink()
-    return {"ok": True, "name": spec_name, "category": category, "path": str(dest)}
+    result: dict[str, Any] = {"ok": True, "name": spec_name, "category": category, "path": str(dest)}
+    if force:
+        result["forced"] = True
+    return result
 
 
 def discard(name: str, *, sandbox_dir: Path | None = None) -> dict[str, Any]:

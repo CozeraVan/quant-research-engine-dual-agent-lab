@@ -2,6 +2,31 @@
 
 ## Task ID
 
+QRE-GUI-CREATE-GAPS-001 (新增策略/因子闭环四缺口)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+GUI「新增策略/新增因子」全链路四缺口补齐：①策略冒烟状态闭环——
+engine._execute_and_finalize 终态钩子回写 `<name>.smoke.json`
+（completed/failed + 关键指标 + finished_at，原子写），run 标记改由
+run_backtest(mark=...) 预合并，list_sandbox 自愈滞留 running；前端沙箱列表
+三色渲染 + 失败原因摘要 + 轮询刷新。②晋升状态闸——promote /
+promote_factor 加 `force`，sidecar 非 completed → 409 smoke_not_passed，
+force=true 管理员通道响应注明。③因子冒烟 120s 同步阻塞改异步——
+start_smoke_job 复用 daily_jobs.start_script_job（lock_key=factor-smoke:<name>），
+POST 即返 job_id + GET /api/factor-create/smoke/<job_id> 轮询 + 前端轮询，
+120s 超时与 JSON 解析口径不变。④删 style.css .p3c-hidden 死代码。
+1437 tests green（+20 净增）。未重启 qre-gui（用户约束），真实 E2E 待重启。
+细节见 `09_CODING_HANDOFF.md` 顶部。
+
+# Task Handoff (archive)
+
+## Task ID
+
 QRE-M5C-MINED-FACTOR-STRAT-001 (M5c：因子工厂 Top3 因子 → QRE 正式策略闭环验证)
 
 ## Current Status
@@ -17,8 +42,6 @@ cluster-ashare M5c 联动任务：cluster.mined_factors Top3（MF_001/002/003）
 QRE 零代码改动。回测结论：近 1 年未复现 M3b 超额（超额 -11.1~-11.6%），
 建议三因子转「衰减观察」——状态调整与是否 commit 均待用户审批。
 细节见 `09_CODING_HANDOFF.md` 顶部。
-
-# Task Handoff (archive)
 
 ## Task ID
 

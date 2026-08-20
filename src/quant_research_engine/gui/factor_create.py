@@ -3,10 +3,13 @@
 与 ``factor_admin.py``（既有因子补周期/补列）区分：本模块管**全新因子**。
 - 沙箱在 indicators 项目内 ``sandbox/factors/``（独立目录，不在 factors 包内，
   不会被 core/factor_registry.py 自动发现）。
-- 冒烟 = 子进程跑 indicators 官方 ``sandbox/smoke_factor.py``（单股、只读 DB）。
-- 晋升 = pgrep 安全检查 → 复制为 ``factors/<name>_factor.py`` → 追加
-  ``config/factors.yaml`` → 后台 job（validate → backfill --execute，复用
-  daily_jobs.start_script_job，lock_key="indicators" 与日更/补全共用锁）。
+- 冒烟 = 子进程跑 indicators 官方 ``sandbox/smoke_factor.py``（单股、只读 DB），
+  异步调度复用 daily_jobs.start_script_job（lock_key=factor-smoke:<name>）；
+  结果持久化到 sidecar ``sandbox/factors/<name>.smoke.json``（晋升状态闸依据）。
+- 晋升 = pgrep 安全检查 → 冒烟通过闸（force 可绕）→ 复制为
+  ``factors/<name>_factor.py`` → 追加 ``config/factors.yaml`` → 后台 job
+  （validate → backfill --execute，复用 daily_jobs.start_script_job，
+  lock_key="indicators" 与日更/补全共用锁）。
 
 QRE 对业务 DB 只读；所有写库动作全部走 indicators 官方脚本。
 repo / runner / job_starter 均可注入，便于测试。
@@ -15,6 +18,7 @@ repo / runner / job_starter 均可注入，便于测试。
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -212,8 +216,13 @@ def discard_factor(name: str, *, repo: Path | None = None) -> dict[str, Any]:
     path = sandbox_dir / f"{_safe_name(name).lower()}_factor.py"
     if not path.exists():
         return {"ok": False, "code": "not_found", "error": f"沙箱中不存在因子: {name}"}
+    deleted = [str(path)]
     path.unlink()
-    return {"ok": True, "deleted": [str(path)]}
+    sidecar = smoke_sidecar_path(name, repo)
+    if sidecar.exists():
+        sidecar.unlink()
+        deleted.append(str(sidecar))
+    return {"ok": True, "deleted": deleted}
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +232,41 @@ def discard_factor(name: str, *, repo: Path | None = None) -> dict[str, Any]:
 
 def _default_smoke_runner(cmd: list[str], cwd: Path, timeout: int) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, timeout=timeout)
+
+
+def _smoke_cmd(sandbox_file: Path, code: str, days: int, params: list[Any] | None) -> list[str]:
+    return [
+        UV_BIN,
+        "run",
+        "python",
+        "sandbox/smoke_factor.py",
+        str(sandbox_file),
+        "--code",
+        code,
+        "--days",
+        str(days),
+        "--params",
+        json.dumps(params if params is not None else [None]),
+    ]
+
+
+def _parse_smoke_stdout(proc: subprocess.CompletedProcess) -> dict[str, Any]:
+    """解析冒烟子进程 stdout 最后一行 JSON（既有口径，不变）。"""
+    stdout = (proc.stdout or "").strip()
+    payload: dict[str, Any] | None = None
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                payload = json.loads(line)
+                break
+            except json.JSONDecodeError:
+                continue
+    if payload is None:
+        tail = (proc.stderr or stdout)[-500:]
+        return {"ok": False, "error": f"冒烟输出无法解析（exit={proc.returncode}）：{tail}"}
+    payload["exit_code"] = proc.returncode
+    return payload
 
 
 def run_smoke(
@@ -240,19 +284,7 @@ def run_smoke(
     sandbox_file = sandbox_factors_dir(repo) / f"{_safe_name(name).lower()}_factor.py"
     if not sandbox_file.exists():
         return {"ok": False, "error": f"沙箱中不存在因子: {name}（请先保存代码到沙箱）"}
-    cmd = [
-        UV_BIN,
-        "run",
-        "python",
-        "sandbox/smoke_factor.py",
-        str(sandbox_file),
-        "--code",
-        code,
-        "--days",
-        str(days),
-        "--params",
-        json.dumps(params if params is not None else [None]),
-    ]
+    cmd = _smoke_cmd(sandbox_file, code, days, params)
     run = runner or _default_smoke_runner
     try:
         proc = run(cmd, repo, timeout)
@@ -260,22 +292,109 @@ def run_smoke(
         return {"ok": False, "error": f"冒烟超时（>{timeout}s），已中止"}
     except Exception as exc:
         return {"ok": False, "error": f"冒烟子进程异常：{exc}"}
+    return _parse_smoke_stdout(proc)
 
-    stdout = (proc.stdout or "").strip()
-    payload: dict[str, Any] | None = None
-    for line in reversed(stdout.splitlines()):
-        line = line.strip()
-        if line.startswith("{"):
-            try:
-                payload = json.loads(line)
-                break
-            except json.JSONDecodeError:
-                continue
-    if payload is None:
-        tail = (proc.stderr or stdout)[-500:]
-        return {"ok": False, "error": f"冒烟输出无法解析（exit={proc.returncode}）：{tail}"}
-    payload["exit_code"] = proc.returncode
-    return payload
+
+# ---------------------------------------------------------------------------
+# 冒烟 sidecar（晋升状态闸依据）与异步调度
+# ---------------------------------------------------------------------------
+
+
+def smoke_sidecar_path(name: str, repo: Path | None = None) -> Path:
+    return sandbox_factors_dir(repo) / f"{_safe_name(name).lower()}.smoke.json"
+
+
+def _now_iso() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _write_smoke_sidecar(name: str, payload: dict[str, Any], repo: Path | None = None) -> Path:
+    """原子写冒烟 sidecar（tmp + os.replace）。"""
+    path = smoke_sidecar_path(name, repo)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp, path)
+    return path
+
+
+def read_smoke_record(name: str, repo: Path | None = None) -> dict[str, Any] | None:
+    """读取最近一次冒烟记录；缺失或损坏返回 None。"""
+    path = smoke_sidecar_path(name, repo)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def start_smoke_job(
+    name: str,
+    *,
+    code: str = SMOKE_DEFAULT_CODE,
+    days: int = SMOKE_DEFAULT_DAYS,
+    params: list[Any] | None = None,
+    repo: Path | None = None,
+    timeout: int = SMOKE_TIMEOUT_SECONDS,
+    smoke_runner: Callable[..., subprocess.CompletedProcess] | None = None,
+    job_starter: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """提交异步冒烟：复用 daily_jobs.start_script_job（lock_key=factor-smoke:<name>，同名串行）。
+
+    立即返回 {"ok", "job_id", "status": "running"}；后台线程跑既有 run_smoke
+    （120s 超时与末行 JSON 解析不变），终态写两处：
+    - job_dir/result.json（GET /api/factor-create/smoke/<job_id> 轮询读取）；
+    - 沙箱 sidecar <name>.smoke.json（晋升状态闸依据，status=completed/failed）。
+    同名因子在途时 start_script_job 抛 RuntimeError（路由层转 409）。
+    """
+    repo = repo or indicators_repo()
+    name = _safe_name(name).lower()
+    sandbox_file = sandbox_factors_dir(repo) / f"{name}_factor.py"
+    if not sandbox_file.exists():
+        return {"ok": False, "code": "not_found", "error": f"沙箱中不存在因子: {name}（请先保存代码到沙箱）"}
+
+    cmd = _smoke_cmd(sandbox_file, code, days, params)
+    # 先落 running sidecar（早于线程启动，避免快任务终态被覆盖）
+    _write_smoke_sidecar(
+        name, {"name": name, "status": "running", "code": code, "started_at": _now_iso()}, repo=repo
+    )
+
+    def _worker(job_cmd: list[str], cwd: Path, job_dir: Path) -> int:
+        result = run_smoke(name, code=code, days=days, params=params, repo=repo, timeout=timeout, runner=smoke_runner)
+        from quant_research_engine.gui.daily_jobs import _append_log
+
+        _append_log(Path(job_dir), json.dumps(result, ensure_ascii=False, default=str) + "\n")
+        try:
+            (Path(job_dir) / "result.json").write_text(
+                json.dumps(result, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
+            )
+        except OSError:
+            pass
+        sidecar: dict[str, Any] = {
+            "name": name,
+            "status": "completed" if result.get("ok") else "failed",
+            "code": code,
+            "result": result,
+            "finished_at": _now_iso(),
+        }
+        if not result.get("ok"):
+            sidecar["error"] = (
+                result.get("error") or "；".join(str(e) for e in (result.get("errors") or [])) or "冒烟失败"
+            )
+        _write_smoke_sidecar(name, sidecar, repo=repo)
+        return 0 if result.get("ok") else 1
+
+    starter = job_starter or start_script_job
+    record = starter(
+        lock_key=f"factor-smoke:{name}",
+        label=f"新因子冒烟 {name}",
+        cmd=cmd,
+        cwd=repo,
+        runner=_worker,
+    )
+    return {"ok": True, "job_id": record.get("job_id"), "status": "running", "name": name}
 
 
 # ---------------------------------------------------------------------------
@@ -353,10 +472,13 @@ def promote_factor(
     repo: Path | None = None,
     pgrep_runner: Callable[[], subprocess.CompletedProcess] | None = None,
     job_starter: Callable[..., dict[str, Any]] | None = None,
+    force: bool = False,
 ) -> dict[str, Any]:
-    """晋升：pgrep 检查 → 复制进 factors/ → 追加 config → 后台 validate+backfill job。
+    """晋升：pgrep 检查 → 冒烟通过闸 → 复制进 factors/ → 追加 config → 后台 validate+backfill job。
 
     任一步失败自动回滚（删新文件、恢复 config 备份）。
+    状态闸：冒烟 sidecar 缺失或 status != "completed" 时拒绝
+    （code=smoke_not_passed）；``force=True`` 为管理员绕过通道。
     """
     name = _safe_name(name).lower()
     category = (category or "").strip().lower()
@@ -372,6 +494,16 @@ def promote_factor(
     src = sandbox_factors_dir(repo) / f"{name}_factor.py"
     if not src.exists():
         return {"ok": False, "code": "not_found", "error": f"沙箱中不存在因子: {name}（请先冒烟通过）"}
+
+    if not force:
+        smoke = read_smoke_record(name, repo)
+        if not smoke or smoke.get("status") != "completed":
+            return {
+                "ok": False,
+                "code": "smoke_not_passed",
+                "error": "未通过冒烟测试：请先运行冒烟测试并等待通过后再晋升"
+                "（管理员可用 force=true 强制晋升）。",
+            }
 
     busy = check_no_admin_running(pgrep_runner)
     if busy:
@@ -460,4 +592,5 @@ def promote_factor(
         "path": str(dest),
         "config_backup": str(backup_path),
         "job_id": record.get("job_id"),
+        **({"forced": True} if force else {}),
     }

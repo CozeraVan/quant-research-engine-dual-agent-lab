@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-ADMIN-CLUSTER-001 (DONE — 1412 tests green；awaiting git approval)
+QRE-GUI-CREATE-GAPS-001 (DONE — 1437 tests green；awaiting git approval)
+
+2026-08-20: GUI 新增策略/因子闭环四缺口补齐——①策略冒烟 sidecar 闭环
+（engine 终态钩子 + mark 预合并消竞态 + list_sandbox 自愈 + 前端三色渲染）；
+②晋升冒烟状态闸（promote/promote_factor 加 force，smoke_not_passed → 409）；
+③因子冒烟同步改异步（复用 daily_jobs lock_key 机制，POST 返回 job_id +
+GET 轮询端点 + 前端轮询）；④删 .p3c-hidden 死代码。未重启 qre-gui，
+真实 E2E 待重启验证。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-ADMIN-FACTOR-FRESH-001。
 
 2026-08-19: dashboard 新增「聚类分析」tab（只读展示 cluster-ashare 因子工厂
 产出）：gui/cluster_admin.py（QRE_CLUSTER_REPO，分区降级+TTL 300s 缓存），
@@ -129,6 +137,13 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1437 passed, 4 warnings (2026-08-20, QRE-GUI-CREATE-GAPS-001)
+node --check index.html 三段内联 JS → OK
+grep .p3c-hidden / TODO-P3c → 全仓零引用（仅剩「断言不存在」测试）
+未重启 qre-gui（用户约束）
+```
 
 ```
 uv run pytest tests/ -x -q → 1412 passed, 4 warnings (2026-08-19, QRE-ADMIN-CLUSTER-001)
