@@ -1,4 +1,4 @@
-"""FRM 风险管理分析包（R1）。
+"""FRM 风险管理分析包（R1 + R2）。
 
 纯函数 + pandas/numpy/arch/scipy，不读 DB、不依赖 QRE 内部状态，
 可被 cluster-ashare 等外部项目独立 import。
@@ -12,9 +12,36 @@
 - dependence.py：Spearman/Kendall 秩相关（书2 Ch12 式 12.13/12.14）、
   相关矩阵正定性检查、simple/log 收益换算（式 12.5）。
 - performance.py：Sharpe/Treynor/Sortino/IR/Jensen's α（书1 Ch5）。
+- backtest_var.py：VaR 回测（书2 Ch6）——HIT 序列、覆盖率 Bernoulli LR
+  检验、独立性 Christoffersen 转移矩阵 LR、多重检验假阳性警示。
+- stress.py：压力测试（书4 Ch8）——历史情景库回放（累计损失/峰谷/
+  Peak/VaR）、reverse stress（β 穿透反查市场冲击分位/σ 倍数）、
+  相关性崩溃提示。
+- inference.py：Bootstrap 推断（书2 Ch13）——CBB（块长 √n）与 iid 对照
+  给年化收益/夏普/最大回撤算置信区间，MC 标准误 σ/√b。
 - report.py：``build_risk_report`` 机读报告骨架（markdown 渲染留 R3）。
 """
 
-from quant_research_engine.risk import constants, dependence, performance, report, tail, volatility
+from quant_research_engine.risk import (
+    backtest_var,
+    constants,
+    dependence,
+    inference,
+    performance,
+    report,
+    stress,
+    tail,
+    volatility,
+)
 
-__all__ = ["constants", "dependence", "performance", "report", "tail", "volatility"]
+__all__ = [
+    "backtest_var",
+    "constants",
+    "dependence",
+    "inference",
+    "performance",
+    "report",
+    "stress",
+    "tail",
+    "volatility",
+]

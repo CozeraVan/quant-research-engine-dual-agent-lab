@@ -2,6 +2,66 @@
 
 ## Task ID
 
+QRE-RISK-CORE-002（FRM 风险管理模块 R2：VaR 回测 + 压力测试 + Bootstrap 推断）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **纯函数边界**：新模块零 DB、零 QRE 内部 import（只 import
+  numpy/pandas/scipy/arch 与包内 constants/volatility/performance），
+  cluster-ashare 独立 import 目标不受损；arch CBB 与 scipy chi2/binomtest
+  均为 R1 已引入依赖，无新增第三方库。
+- **公式忠实度**：逐条对照 `docs/frm/FRM量化风控知识摘要.md`——HIT 定义
+  （书2 Ch6 式 6.6，严格 >，损失正号）、Bernoulli 覆盖率 LR（教材方法③，
+  附方法①精确二项；note 注明「公式同 Kupiec，摘要声明教材未点名」）、
+  独立性 Christoffersen 转移矩阵 LR（摘要只给思路未点名，注释与返回值
+  如实标注出处差异，符合 CR 允许的偏差申报路径）、多重检验 1−(1−α)ⁿ
+  （教材 40.1%/99.4% 复现）、CBB 块长 q≈√n 与 MC 标准误 σ/√b（式 13.3）、
+  iid 低估不确定性的教材论断（式 13.11 后讨论）。所有口径差异写进
+  返回 dict note。
+- **已知答案核对**：覆盖率 LR 手算 4.13085（n=100/x=10/p=0.05）、
+  边界 x=0/x=n 解析式、独立性 LR 手算（3/2/2/0 转移计数）、情景回放
+  手算（累计 −0.119179、峰谷 0.05、Peak/VaR=2.5）、reverse stress
+  β=2 精确穿透 + 分位/σ 倍数 numpy 独立复算、最大回撤手算 0.2、
+  夏普与 performance 同口径、bootstrap 固定 seed 复现 + CI 含样本统计量。
+  无纯冒烟断言；随机数据全固定 seed。
+- **防前视**：默认 VaR 序列用 ewma_forecast_series（raw.shift(1)，R1 已
+  验证的 PIT 语义）；μ=0 RiskMetrics 口径避免全样本均值前视，note 披露。
+- **降级语义**：report 三节对数据不足/索引不符/样本不覆盖窗口全部降级
+  error 节不抛异常（有测试）；stress/bootstrap 默认关、var_backtest 默认
+  开，meta.sections 回显开关。
+- **基线无回归**：1578 passed（1532 + 46 净增），4 warnings 与基线一致。
+  插曲：基线首跑 test_gui_factor_wizard.py::test_job_lock_conflict 失败，
+  单独与全量复跑均绿，与已知环境敏感 flake 同族，非本任务引入。
+- **既有测试改动**：仅 test_risk_report.py 的 top-level keys 集合断言
+  随 report 接口扩展更新（加 var_backtest），属接口变化的必要同步，
+  未改任何既有逻辑断言。
+
+## Required Fixes
+
+None.
+
+## Residual Risks
+
+- iid_underestimates 对最大回撤在纯 ARCH 聚类下不稳定（实测反向），
+  测试改用 AR(1) 序列自相关验证教材机制；结论解读应聚焦均值类统计量。
+- reverse stress 的 β 线性穿透是近似（教材：压力期相关性上升不能简单
+  线性放大），note 已声明；深度非线性穿透（如波动 targeting 策略）需
+  未来按策略结构定制。
+- 情景回放的相关性崩溃用 Pearson（与 dependence 模块一致的基线口径）；
+  尾部秩相关崩溃可在 R3 后按需补。
+- R3（markdown 渲染、回测报告集成、GUI 展示区）未做，按 CR roadmap
+  后续单独 brief。
+
+## Task ID
+
 QRE-RISK-CORE-001（FRM 风险管理模块 R1：risk 包核心）
 
 ## Reviewer

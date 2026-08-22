@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from quant_research_engine.risk.report import build_risk_report
@@ -25,7 +26,10 @@ def benchmark(returns):
 class TestStructure:
     def test_top_level_keys(self, returns):
         report = build_risk_report(returns)
-        assert set(report) == {"meta", "distribution", "tail", "volatility", "dependence", "performance"}
+        assert set(report) == {
+            "meta", "distribution", "tail", "volatility", "dependence",
+            "performance", "var_backtest",
+        }
 
     def test_tail_three_methods_two_levels(self, returns):
         report = build_risk_report(returns)
@@ -90,3 +94,87 @@ class TestDegradation:
         """叶子函数的参数校验仍硬失败（<2 obs）——但 report 降级为 error 节。"""
         report = build_risk_report([0.01])
         assert "error" in report["distribution"]
+
+
+class TestVarBacktestSection:
+    def test_default_on_with_ewma_var(self, returns):
+        """默认开启；VaR 序列默认 EWMA 预测 σ×z（μ=0 RiskMetrics 口径）。"""
+        report = build_risk_report(returns)
+        section = report["var_backtest"]
+        assert section["enabled"] is True
+        assert set(section["levels"]) == {"95pct", "99pct"}
+        for entry in section["levels"].values():
+            assert "error" not in entry
+            assert entry["n_obs"] == 399  # EWMA forecast shift(1) 丢首值
+            assert "EWMA" in entry["var_source"]
+        assert section["false_positive_warning"]["examples"]["n_tests_10"] == pytest.approx(
+            0.401263, abs=1e-6
+        )
+
+    def test_explicit_var_series_overrides_default(self, returns):
+        """config.var_series 显式传入 → var_source 注明，n_obs 不再减一。"""
+        var = np.full(len(returns), 0.10)
+        report = build_risk_report(returns, config={"var_series": var})
+        entry = report["var_backtest"]["levels"]["99pct"]
+        assert entry["n_obs"] == len(returns)
+        assert entry["violations"] == 0
+        assert "config.var_series" in entry["var_source"]
+
+    def test_disable_via_config(self, returns):
+        report = build_risk_report(returns, config={"var_backtest": False})
+        assert report["var_backtest"] == {"enabled": False}
+        assert report["meta"]["sections"]["var_backtest"] is False
+
+
+class TestStressSection:
+    def test_default_off(self, returns):
+        assert "stress" not in build_risk_report(returns)
+
+    def test_non_datetime_index_degrades(self, returns):
+        report = build_risk_report(returns, config={"stress": True})
+        assert "error" in report["stress"]
+
+    def test_replay_with_datetime_index(self):
+        idx = pd.date_range("2018-01-01", periods=250, freq="B")
+        rng = np.random.default_rng(6)
+        returns = pd.Series(rng.normal(0, 0.01, 250), index=idx)
+        benchmark = pd.Series(returns * 0.8 + rng.normal(0, 0.005, 250), index=idx)
+        report = build_risk_report(
+            returns,
+            benchmark,
+            config={"stress": True, "reverse_stress_threshold": 0.15},
+        )
+        section = report["stress"]
+        assert "error" not in section["scenarios"]["bear_2018"]
+        assert "error" in section["scenarios"]["covid_2020"]  # 样本未覆盖
+        assert section["var_es_reference"]["var"] is not None
+        reverse = section["reverse_stress"]
+        assert "error" not in reverse
+        assert reverse["required_market_shock"] > 0
+
+    def test_reverse_stress_requires_benchmark(self):
+        idx = pd.date_range("2018-01-01", periods=250, freq="B")
+        returns = pd.Series(np.sin(np.arange(250) * 0.1) * 0.01, index=idx)
+        report = build_risk_report(
+            returns, config={"stress": True, "reverse_stress_threshold": 0.15}
+        )
+        assert "error" in report["stress"]["reverse_stress"]
+
+
+class TestBootstrapSection:
+    def test_default_off(self, returns):
+        assert "bootstrap" not in build_risk_report(returns)
+
+    def test_enabled_structure_and_json(self, returns, benchmark):
+        report = build_risk_report(
+            returns, benchmark, config={"bootstrap": True, "bootstrap_reps": 100}
+        )
+        section = report["bootstrap"]
+        assert set(section) == {"annualized_return", "sharpe", "max_drawdown"}
+        cbb = section["sharpe"]["cbb"]
+        assert cbb["n_bootstrap"] == 100
+        assert cbb["seed"] == 42  # 默认固定种子（可复现）
+        assert cbb["mc_standard_error"] == pytest.approx(
+            cbb["bootstrap_std"] / np.sqrt(100), rel=1e-12
+        )
+        json.dumps(report)

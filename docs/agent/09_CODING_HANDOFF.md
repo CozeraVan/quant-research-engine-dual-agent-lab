@@ -2,6 +2,128 @@
 
 ## Task ID
 
+QRE-RISK-CORE-002（FRM 风险管理模块 R2：VaR 回测 + 压力测试 + Bootstrap 推断）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+在 R1 包（commit 96db59d）上落地 R2 三模块 + 报告扩展，风格延续 R1
+（纯函数、零 DB、参数集中 constants.py、结果 dict 全参数回显 + 口径 note）。
+
+**新模块与接口**：
+- `backtest_var.py`（书2 Ch6）：`hit_series(returns, var_series)`（I_t =
+  1{L_t > VaR_t}，严格大于，索引对齐去 NaN）；`coverage_lr_test(hits,
+  confidence)`（Bernoulli LR = −2[(n−x)ln((1−p)/(1−p̂)) + x·ln(p/p̂)] ~
+  χ²₁，0·ln0 按极限 0 处理；附 scipy binomtest 精确二项 p 值——教材方法
+  ①③；note 注明公式同 Kupiec 但摘要声明教材未点名）；
+  `independence_lr_test(hits)`（Christoffersen 一阶 Markov 转移矩阵 LR_ind
+  ~ χ²₁，零计数单元跳过；note 注明摘要只给思路 E[HIT_t·HIT_{t+1}]=(1−p)²
+  未点名 Christoffersen）；`false_positive_probability(alpha, n)` =
+  1−(1−α)ⁿ；`backtest_var_summary`（统一 dict：violations/expected/
+  violation_rate/coverage/independence/conclusion）。
+- `stress.py`（书4 Ch8）：`HISTORICAL_SCENARIOS` 常量（crash_2015
+  2015-06-15~09-30 / bear_2018 全年 / covid_2020 2020-01-20~03-31 /
+  microcap_liquidity_2024 2024-01-01~02-29）；`replay_scenario(strategy,
+  window, benchmark=None, var=None, es=None)`（窗口内累计损失 1−Π(1+r)、
+  峰谷=窗口内净值最大回撤、Peak/VaR 与 Peak/ES、基准窗口累计收益、
+  相关性崩溃=窗口内 vs 窗口外 Pearson 相关 delta，呼应 LTCM 红线）；
+  `replay_historical_scenarios`（批量，样本不覆盖的窗口记 error 不抛）；
+  `reverse_stress(strategy, benchmark, loss_threshold, horizon=21)`（β 穿透
+  S*=阈值/β，在基准 h 日滚动累计收益分布上给经验分位与 σ 倍数；β≤0
+  报错——市场冲击不构成损失通道需假设性情景）。
+- `inference.py`（书2 Ch13）：`bootstrap_metric_ci(returns, metric,
+  method="cbb"|"iid", ...)`——CBB 用 arch.bootstrap.CircularBlockBootstrap
+  （arch 8 参数名是 seed 不是 random_state，已实测），块长默认
+  ceil(√n)；指标 = 年化收益（日均×252）/夏普（与 performance 同口径）/
+  最大回撤（净值峰谷）；percentile 置信区间 + MC 标准误 σ̂/√b（式 13.3）；
+  iid 对照 note 标注「波动聚类下低估不确定性，A 股禁用其作结论依据」；
+  `bootstrap_summary`（三指标 × CBB+iid + iid_underestimates 标志）。
+- `report.py`：report_version 升 "R2"；`build_risk_report` 新增三节——
+  `var_backtest`（默认开；VaR 序列默认 z_X·sqrt(ewma_forecast_series)
+  μ=0 RiskMetrics 口径，n_obs 因 shift(1) 减一；`config.var_series` 可
+  显式覆盖；附多重检验假阳性警示 1−0.95^10/^100）、`stress`（config
+  stress=True 开；需 DatetimeIndex，否则 error 降级；VaR/ES 参照取最高
+  置信水平 EWMA 参数法；`reverse_stress_threshold` + benchmark 时附
+  reverse stress）、`bootstrap`（config bootstrap=True 开，reps/seed/
+  ci_level/block_size 可配，默认 seed=42 固定可复现）；meta 加 sections
+  开关回显。
+
+**测试（46 个新增，1532 → 1578）**：tests/test_risk_backtest_var.py（16）、
+test_risk_stress.py（12）、test_risk_inference.py（11）、test_risk_report.py
+增补（+7，含 top-level keys 更新）。已知答案核对清单：
+- HIT 手算（严格 >、对齐丢 NaN）；
+- 覆盖率 LR 手算 n=100/x=10/p=0.05 → 4.13085（p≈0.0421 拒绝）；p̂=p →
+  LR=0；x=0 → −2·n·ln(1−p)；x=n → −2·n·ln(p)；精确二项对 scipy；
+- 独立性 LR 手算 hits=[0,0,1,0,0,1,0,0]（n00=3/n01=2/n10=2/n11=0，π̄=2/7）；
+  高持续 Markov 链拒绝、iid Bernoulli 不拒绝；
+- 假阳性 1−0.95^10=0.401263、^100=0.994079（教材值）；
+- 情景回放手算：r=[−0.10,0.02,−0.05,0.01] → 累计 −0.119179、峰谷 0.05、
+  Peak/VaR=2.5；相关性崩溃合成（窗口内 corr=1、窗口外≈0）delta>0；
+- reverse stress 手算：r=2b → β=2 精确、S*=0.10、0.95^5−1=−0.22622、
+  分位/σ 倍数对 numpy 独立复算；β≤0 报错；
+- bootstrap：固定 seed CI 含样本统计量；MC 标准误=σ̂/√b rel 1e-12；
+  同 seed 完全复现；块长 ceil(√400)=20；最大回撤手算 0.2；夏普口径与
+  performance 一致；AR(1) φ=0.6 下夏普/年化收益 iid_std < cbb_std
+  （iid_underestimates=True）；
+- report：var_backtest 默认开/显式 var_series 覆盖/config 关；stress 默认
+  关、非 DatetimeIndex 降级 error、2018 样本回放 + reverse stress；
+  bootstrap 默认关、开启后结构 + JSON 可序列化。
+
+## Key Decisions
+
+- **覆盖率 LR 同时给渐近 χ² 与精确二项 p**：教材 Ch6 列三种方法，LR（③）
+  与精确分布（①）互补；未实现 CLT 渐近检验（②，与 ③ 大样本等价）。
+- **独立性按 Christoffersen 转移矩阵实现**：摘要声明教材只给思路、未点名
+  Kupiec/Christoffersen；注释与返回值 note 如实标注出处差异（CR 允许）。
+- **默认 VaR 序列取 μ=0 RiskMetrics 口径**（VaR_t = z·σ_t^EWMA）：避免用
+  全样本均值造成前视；note 披露，`var_series` 可随时显式覆盖。
+- **reverse stress 用 β 线性穿透**：教材提示情景放大是近似（压力期相关性
+  上升不能线性外推），note 已声明；β≤0 直接报错不硬算。
+- **iid_underestimates 测试用 AR(1) 而非纯 ARCH**：纯波动聚类下最大回撤
+  的 iid/CBB 离散度差异不稳定（实测 0.1478 vs 0.1488 反向）；教材机制的
+  稳健体现是序列自相关下均值类统计量（夏普/年化收益）iid 低估 CBB。
+- **arch 8 API**：CircularBlockBootstrap 参数名是 `seed`（非 random_state），
+  实测确认。
+
+## Files Changed
+
+- `src/quant_research_engine/risk/backtest_var.py`（新）、`stress.py`（新）、
+  `inference.py`（新）
+- `src/quant_research_engine/risk/constants.py`（情景库/REVERSE_STRESS_HORIZON/
+  BOOTSTRAP_* / default_block_size）、`report.py`（三节扩展，R2）、
+  `__init__.py`（导出新模块）
+- `tests/test_risk_backtest_var.py`、`test_risk_stress.py`、
+  `test_risk_inference.py`（新）；`tests/test_risk_report.py`（+7）
+- `docs/agent/08_IMPLEMENTATION_BRIEF.md`（R2 brief）、`10_REVIEW_REPORT.md`、
+  `04_TASK_HANDOFF.md`、`05_PROGRESS.md`、`11_AGENT_STATE.md`
+
+## Validation
+
+1. `uv run pytest tests/ -x -q` → **1578 passed, 4 warnings**（基线 1532 +
+   46 净增；风险包 107/107 绿）
+2. `scripts/check-progress-docs.sh` → passed
+3. `git diff --check` → clean
+
+## Known Limitations / Follow-ups
+
+- R3（markdown 渲染、回测报告集成钩子、GUI 展示区）未做；R4 晋升闸单独 CR。
+- 基线复跑插曲：首跑 `test_gui_factor_wizard.py::test_job_lock_conflict`
+  失败（1 failed / 787 passed），单独复跑与全量复跑均绿——与已知
+  环境敏感 flake（test_daily_job_lock_per_pipeline / test_api_run_success）
+  同族，非本任务引入。
+- 情景库只存日期窗口常量；真实行情回放由调用方提供序列（R3 集成时接
+  回测产物 + 基准）。
+- Bootstrap b=1000 × 3 指标 × 2 方法约秒级；report 默认关，由 config 显式开。
+
+## Task ID
+
 QRE-RISK-CORE-001（FRM 风险管理模块 R1：risk 包核心 tail/volatility/dependence/performance + 报告骨架）
 
 ## Written By

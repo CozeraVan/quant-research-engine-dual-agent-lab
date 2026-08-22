@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-RISK-CORE-001 (FRM 风险管理模块 R1：risk 包核心)
+QRE-RISK-CORE-002 (FRM 风险管理模块 R2：VaR 回测 + 压力测试 + Bootstrap 推断)
 
 ## Current Status
 
@@ -10,16 +10,21 @@ DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approv
 
 ## Task Note
 
-新包 `src/quant_research_engine/risk/`（纯函数，不读 DB、不依赖 QRE 内部
-状态，cluster-ashare 可独立 import）：tail（VaR/ES 历史模拟/参数正态/
-EWMA 三口径 + 偏度峰度 + JB）、volatility（EWMA λ=0.94 + shift(1) 防前视
-forecast + GARCH(1,1) 平稳性/V_L/半衰期 + regime）、dependence
-（Spearman/Kendall/正定性/simple↔log）、performance（Sharpe/Treynor/
-Sortino/IR/Jensen，Sharpe 与引擎 portfolio/risk.py 同口径）、report
-（build_risk_report 机读骨架）。公式以 FRM 知识摘要为准，61 个新测试
-全部教材例题/手算/scipy 对照核对。1532 tests green（+61 净增）。
-未 commit、未重启 qre-gui（用户约束）。细节见 `09_CODING_HANDOFF.md` 顶部。
-上一任务：QRE-GUI-DEEP-VALIDATE-001（deep-validate 真功能，1471 green）。
+R2 在 R1（commit 96db59d）上落地三模块 + 报告扩展，公式以 FRM 知识摘要
+为准：`backtest_var.py`（书2 Ch6：HIT 序列、覆盖率 Bernoulli LR + 精确
+二项、独立性 Christoffersen 转移矩阵 LR——摘要未点名，注释标注出处
+差异、多重检验假阳性 1−(1−α)ⁿ、backtest_var_summary 统一 dict）；
+`stress.py`（书4 Ch8：A 股四历史情景库、回放=累计损失/峰谷/Peak/VaR +
+相关性崩溃提示、reverse stress β 穿透反查市场冲击分位/σ 倍数）；
+`inference.py`（书2 Ch13：arch CircularBlockBootstrap 块长 √n 给年化
+收益/夏普/最大回撤算置信区间 + iid 对照 + MC 标准误 σ/√b）；`report.py`
+升 R2（var_backtest 默认开用 EWMA μ=0 VaR、stress/bootstrap config 可选
+开启）。46 个新测试全为已知答案核对（LR 手算 4.13085、转移计数手算、
+情景回放手算 −0.119179/0.05/2.5、reverse β=2 穿透、bootstrap 固定 seed
+CI 含真值 + MC 标准误核对、AR(1) 下 iid 低估 CBB）。1578 tests green
+（+46 净增）。未 commit、未重启 qre-gui（用户约束）。细节见
+`09_CODING_HANDOFF.md` 顶部。上一任务：QRE-RISK-CORE-001（R1 核心包，
+1532 green，commit 96db59d）。
 
 # Task Handoff (archive)
 

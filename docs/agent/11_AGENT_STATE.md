@@ -12,21 +12,21 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-CORE-001 (DONE — 1532 tests green；awaiting git approval)
+QRE-RISK-CORE-002 (DONE — 1578 tests green；awaiting git approval)
 
-2026-08-22: FRM 风险模块 R1 落地。新包 `src/quant_research_engine/risk/`
-（纯函数 + pandas/numpy/arch/scipy，不读 DB、不依赖 QRE 内部状态，未来
-cluster-ashare 独立 import）：tail（VaR/ES 三口径 + 偏度峰度 + JB +
-分布摘要）、volatility（EWMA raw + shift(1) forecast + GARCH(1,1) arch
-拟合含平稳性/V_L/半衰期 + regime 标记）、dependence（Spearman/Kendall +
-正定性 + simple/log 换算）、performance（Sharpe/Treynor/Sortino/IR/Jensen，
-Sharpe 与 portfolio/risk.py 同口径）、report（build_risk_report 机读骨架，
-R3 再做 markdown 渲染）。公式以 docs/frm/FRM量化风控知识摘要.md 为准；
-61 个新测试全为已知答案核对（教材式 1.7 例题 49.79/59.96、EWMA 手算、
-GARCH 确定性模拟真值恢复、scipy 双口径对照、秩相关手算 0.5/⅓、绩效
-手算值）。未 commit、未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
-上一任务：QRE-GUI-DEEP-VALIDATE-001 (DONE — 1471 tests green；awaiting
-git approval)。
+2026-08-22: FRM 风险模块 R2 落地（R1 = commit 96db59d）。risk 包新增
+backtest_var（书2 Ch6：HIT、覆盖率 Bernoulli LR + 精确二项、独立性
+Christoffersen 转移矩阵 LR——摘要未点名 Kupiec/Christoffersen 如实标注、
+多重检验假阳性 1−(1−α)ⁿ）、stress（书4 Ch8：A 股四情景库、回放累计损失/
+峰谷/Peak/VaR + 相关性崩溃提示、reverse stress β 穿透反查市场冲击分位/
+σ 倍数）、inference（书2 Ch13：arch CBB 块长 √n 给年化收益/夏普/最大
+回撤 CI + iid 对照 + MC 标准误 σ/√b）；report.py 升 R2（var_backtest
+默认开用 EWMA μ=0 VaR 防前视，stress/bootstrap config 可选开启）。
+46 个新测试全为已知答案核对（LR 手算 4.13085、转移计数手算、回放
+−0.119179/0.05/2.5、reverse β=2、bootstrap 固定 seed CI 含真值 +
+AR(1) 下 iid 低估 CBB）。未 commit、未重启 qre-gui。详见
+09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-CORE-001 (DONE — 1532 tests green；commit 96db59d)。
 
 2026-08-20: deep-validate 501 骨架落地为真功能。cluster-ashare 新增薄脚本
 analysis/pool_from_conditions.py（条件 JSON→逐日池 parquet，DB 全留 cluster
@@ -169,12 +169,20 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `b72b9af` Vectorize analytics cross-symbol; backtest stage 25.9s (target met) (6 files)
+- Last commit: `96db59d` feat(risk): FRM 风险模块 R1 核心包（R2 未 commit，工作树含 R2 改动）
 - Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked).
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1578 passed, 4 warnings（2026-08-22, QRE-RISK-CORE-002；基线 1532 + 46 净增）
+风险包单测 107/107 绿（R2 46 新：LR/转移计数/情景回放/reverse/bootstrap 全手算核对）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+注：基线首跑 test_gui_factor_wizard.py::test_job_lock_conflict 失败，单独+全量复跑均绿（环境敏感 flake，非本任务引入）
+```
 
 ```
 uv run pytest tests/ -x -q → 1532 passed, 4 warnings（2026-08-22, QRE-RISK-CORE-001；基线 1471 + 61 净增）
