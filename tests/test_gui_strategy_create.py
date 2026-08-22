@@ -680,3 +680,108 @@ def test_api_promote_marks_run_and_force_gate_note(app_client):
     assert status["promotion_forced"] is True
 
 
+
+
+# --- 晋升闸 R4 风险判据（QRE-RISK-GATE-004） ---
+
+
+def _risk_report_payload(es99=0.02, lr_reject=False):
+    return {
+        "tail": {"99pct": {"historical_simulation": {"es": es99}}},
+        "var_backtest": {
+            "enabled": True,
+            "levels": {"99pct": {"coverage": {"reject_5pct": lr_reject}}},
+        },
+    }
+
+
+def _write_risk_report(monkeypatch, tmp_path, run_id="rid-gate", payload=None):
+    """把 risk_report.json 落到假 RUNS_DIR 下并切换 risk_report 模块指向。"""
+    from quant_research_engine.gui import risk_report as risk_report_mod
+
+    runs_dir = tmp_path / "runs"
+    (runs_dir / run_id).mkdir(parents=True, exist_ok=True)
+    (runs_dir / run_id / "risk_report.json").write_text(
+        json.dumps(payload if payload is not None else _risk_report_payload()),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(risk_report_mod, "RUNS_DIR", runs_dir)
+
+
+def test_gate_risk_ok(monkeypatch, tmp_path):
+    """ES99 未超阈且 VaR 回测通过 → risk.status=ok，不阻止日更。"""
+    from quant_research_engine.gui.refresh_registry import gate_blocks_daily, load_gate
+
+    _write_risk_report(monkeypatch, tmp_path)
+    strategy_create.finalize_promotion_gate(
+        _gate_record(), gates_dir=tmp_path / "gates", summary=_gate_summary()
+    )
+    gate = load_gate("sc_demo", tmp_path / "gates")
+    assert gate["gate"] == "passed"
+    risk = gate["risk"]
+    assert risk["status"] == "ok"
+    assert risk["es99"] == 0.02 and risk["es99_threshold"] == 0.03
+    assert risk["var_lr_reject"] is False and risk["var_confidence"] == 0.99
+    assert risk["reasons"] == []
+    assert gate_blocks_daily(gate) is False
+
+
+def test_gate_risk_warning_es99_exceeds(monkeypatch, tmp_path):
+    """ES99 超阈 → warning（主判据 passed 不变），阻止日更。"""
+    from quant_research_engine.gui.refresh_registry import gate_blocks_daily, load_gate
+
+    _write_risk_report(monkeypatch, tmp_path, payload=_risk_report_payload(es99=0.05))
+    strategy_create.finalize_promotion_gate(
+        _gate_record(), gates_dir=tmp_path / "gates", summary=_gate_summary()
+    )
+    gate = load_gate("sc_demo", tmp_path / "gates")
+    assert gate["gate"] == "passed"  # 主判据照旧
+    assert gate["risk"]["status"] == "warning"
+    assert gate["risk"]["reasons"] == ["es99_exceeds_threshold"]
+    assert gate_blocks_daily(gate) is True
+
+
+def test_gate_risk_warning_var_lr_rejected(monkeypatch, tmp_path):
+    """VaR 覆盖率 LR 被拒绝 → warning，阻止日更。"""
+    from quant_research_engine.gui.refresh_registry import gate_blocks_daily, load_gate
+
+    _write_risk_report(monkeypatch, tmp_path, payload=_risk_report_payload(lr_reject=True))
+    strategy_create.finalize_promotion_gate(
+        _gate_record(), gates_dir=tmp_path / "gates", summary=_gate_summary()
+    )
+    gate = load_gate("sc_demo", tmp_path / "gates")
+    assert gate["risk"]["status"] == "warning"
+    assert gate["risk"]["reasons"] == ["var_lr_rejected"]
+    assert gate["risk"]["es99"] == 0.02
+    assert gate_blocks_daily(gate) is True
+
+
+def test_gate_risk_unavailable_no_report(tmp_path):
+    """无 risk_report.json → risk.status=unavailable，不阻断日更。"""
+    from quant_research_engine.gui.refresh_registry import gate_blocks_daily, load_gate
+
+    strategy_create.finalize_promotion_gate(
+        _gate_record(), gates_dir=tmp_path, summary=_gate_summary()
+    )
+    gate = load_gate("sc_demo", tmp_path)
+    assert gate["gate"] == "passed"
+    risk = gate["risk"]
+    assert risk["status"] == "unavailable"
+    assert risk["es99"] is None and risk["var_lr_reject"] is None
+    assert risk["reasons"] == []
+    assert gate_blocks_daily(gate) is False
+
+
+def test_gate_risk_warning_forced_not_blocked(monkeypatch, tmp_path):
+    """force 晋升：risk=warning 照评估但不阻止日更。"""
+    from quant_research_engine.gui.refresh_registry import gate_blocks_daily, load_gate
+
+    _write_risk_report(monkeypatch, tmp_path, payload=_risk_report_payload(es99=0.05))
+    strategy_create.finalize_promotion_gate(
+        _gate_record(promotion_forced=True), gates_dir=tmp_path / "gates",
+        summary=_gate_summary(),
+    )
+    gate = load_gate("sc_demo", tmp_path / "gates")
+    assert gate["risk"]["status"] == "warning"
+    assert gate["forced"] is True
+    assert gate_blocks_daily(gate) is False  # 强制在库：不阻止日更

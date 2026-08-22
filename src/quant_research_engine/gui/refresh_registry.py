@@ -110,6 +110,7 @@ def set_strategy_stopped(
 #
 # 与 registry.json/state.json 同族的状态存储（outputs/refresh/ 下，不进 git 管理的
 # catalog）。gate 语义：passed=全量回测达标；failed=未达标（日更跳过，forced 除外）；
+# R4 风险判据：risk.status=warning 同效阻止日更（forced 除外），unavailable/缺失不阻断；
 # 文件缺失=未评估=正常拾取（兼容存量策略）。
 
 
@@ -148,10 +149,18 @@ def save_gate(name: str, payload: dict[str, Any], gates_dir: Path | None = None)
 
 
 def gate_blocks_daily(gate: dict[str, Any] | None) -> bool:
-    """该 gate 结果是否阻止日更：failed 且非 force 晋升。"""
+    """该 gate 结果是否阻止日更。
+
+    ``gate == "failed"``（主判据未过）或 ``risk.status == "warning"``
+    （R4 风险判据触发）且非 force 晋升 → 阻止；risk 缺失/unavailable 不阻断。
+    """
     if not gate:
         return False
-    return gate.get("gate") == "failed" and not gate.get("forced")
+    if gate.get("forced"):
+        return False
+    if gate.get("gate") == "failed":
+        return True
+    return bool((gate.get("risk") or {}).get("status") == "warning")
 
 
 def load_all_gates(gates_dir: Path | None = None) -> dict[str, dict[str, Any]]:

@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-RISK-INTEGRATION-003（FRM 风险管理模块 R3：risk 包集成进回测报告与 GUI 展示）
+QRE-RISK-GATE-004（FRM 风险管理模块 R4：晋升全量回测闸加入风险判据）
 
 ## Reviewer
 
@@ -14,56 +14,48 @@ PASS
 
 ## Findings
 
-- **集成点最小侵入**：run 收尾钩子完全复刻 finalize_smoke /
-  finalize_promotion_gate 的 try/except 兜底模式
-  （`gui/engine.py:354-361`），钩子异常不影响 run 状态（专项测试
-  `TestEngineHookWiring` 覆盖：钩子抛 RuntimeError 后 status.json 仍为
-  completed）。回测引擎本体零改动；risk 包保持可独立 import
-  （`render_risk_markdown` 在 risk/report.py，不 import 任何 GUI 模块）。
-- **收益口径最小加工**：组合级 `equity_curve.csv` 的 `daily_return` 列
-  直取（引擎组合口径）；per-symbol 目录文件按列头排除（含 symbol 列）；
-  缺 daily_return 退化 `total_equity.pct_change()`；现状产物无
-  `benchmark_close` 列 → benchmark=None，report 基准相关节自动 null，
-  markdown 如实显示「无基准收益序列：β/Treynor/IR/Jensen's α 未计算」。
-- **幂等与原子写**：risk_report.json tmp+os.replace 原子写；summary.md
-  追加「## 风险分析」节前先移除既有同名副（到下一个同级标题），
-  二次 finalize 不重复（专项测试覆盖）；无 summary.md 时退化写
-  runs/<run_id>/risk_report.md。
-- **按需 job**：复用 daily_jobs.start_script_job，
-  lock_key=risk-report:<run_id>（同 run 409）；in-process runner 不开
-  subprocess；bootstrap 仅在此开启（b=1000 默认，异步可接受）。GET
-  轮询端点校验 job.pipeline 前缀防跨 run 串读。
-- **#4 策略级 badge 决定不加**（CR 允许）：admin 策略状态表数据源是
-  refresh_overview（outputs/refresh 产物，非 GUI run），其产物树没有
-  risk_report.json；要显示 ES 需对 refresh 产物额外跑风险分析，属于
-  refresh 管线改动，超出 R3「别硬塞」边界。已在 08/09 记录理由。
-- **E2E 数值 sanity**（mr01a，5 股 × 2024-2025，vectorized，真实 DB）：
-  n=484；99% VaR 参数正态 1.50% / 历史模拟 1.79%，ES 1.72% / 2.19%
-  （日损失口径，量级合理）；JB=629.81 p<0.0001 拒绝正态（超额峰度
-  5.35，A 股典型）；VaR 回测 95% 违约 19/期望 24.15（covLR p=0.2648）、
-  99% 7/4.83（p=0.3524），独立性 p=0.2244/0.6743 → 均不拒绝；
-  Sharpe 0.02 / Sortino 0.03（该区间近 flat，与权益曲线一致）；
-  四情景中 2024 小微盘窗口覆盖（36 天，累计损失 -6.20% 即盈利，
-  峰谷 5.19%），其余三窗口如实标「样本不覆盖」。
-  已知现象（R2 口径，非 R3 引入）：该策略长时段空仓 → EWMA σ≈0 →
-  EWMA VaR≈0 且 Peak/VaR 比值失真（-2532.15）；属如实输出，
-  口径改进留 R4/后续。
-- **偏差**：无 Required Fix。GARCH 对该近 flat 序列 α+β=1.00 非平稳
-  （arch ConvergenceWarning，report 如实 stationary=False、长期波动
-  显示「—」）——渲染层已正确处理 None。
+- **改动最小、复用到位**：闸判据挂在唯一收口点
+  `refresh_registry.gate_blocks_daily`（refresh_batch.py /
+  list_catalog_strategies / refresh_overview 三处调用方零改动自动生效）；
+  风险数据复用 R3 既有 `risk_report.load_risk_report` 与
+  `runs/<run_id>/risk_report.json`，无新增存储、无 DB 访问。
+- **判据语义符合任务书**：ES99 取历史模拟口径（经验日收益，非参数
+  假设）阈值 3%（`risk/constants.py::GATE_ES99_MAX`，可调整）；VaR 回测
+  取 99% 节覆盖率 Kupiec LR `reject_5pct`（与 ES99 同置信，
+  `GATE_VAR_CONFIDENCE`）；主判据（交易≥30 且超额>0）逻辑零改动，
+  warning 只影响 `gate_blocks_daily` 与 admin 徽标。unavailable（无
+  report/损坏/run 失败）不阻断——专项测试覆盖。
+- **force 通道**：warning + forced → 评估照跑、`forced` 透传、
+  gate_blocks_daily=False（专项测试）；admin tooltip 注明「force 晋升，
+  不阻止日更」。
+- **存量兼容**：旧 gate json 无 risk 节 → `gate.get("risk")` 为 None，
+  gate_blocks_daily 行为与 R4 前完全一致（test_gui_admin_p3b 既有用例
+  未改动、全绿佐证）；admin 仅在 risk.status==='warning' 时追加徽标。
+- **字段缺失健壮性**：老格式 report 缺 tail/var_backtest 键时子项记
+  None、不触发 warning（evaluate_gate_risk 逐层 `or {}` 取值）。
+- **偏差**：无 Required Fix。已知边界：①风险判据取 99% 单置信节
+  （95% 节拒绝不触发 warning），与任务书「ES99 + VaR 回测」口径一致；
+  ②独立性 LR 不进闸判据（仅报告层展示），因任务书只点名 Kupiec
+  覆盖率；③run 失败时 risk=unavailable（此时 gate 已 failed 阻断，
+  risk 维度无增量信息）。
 
 ## Validation Evidence
 
 ```
-uv run pytest tests/ -x -q → 1599 passed, 4 warnings（2026-08-22，
-  QRE-RISK-INTEGRATION-003；基线 1578 + 21 净增：test_gui_risk_report.py
-  17 新 + test_risk_report.py TestRenderMarkdown 4 新）
-首跑 FAILED tests/test_gui_factor_wizard.py::test_job_lock_conflict
-  → 全量复跑 1599 全绿（已知环境敏感 flake，任务书已列）
+uv run pytest tests/ -x -q → 1605 passed, 4 warnings（2026-08-22，
+  QRE-RISK-GATE-004；基线 1599 + 6 净增：test_gui_strategy_create.py
+  R4 节 5 新 + test_gui_admin_strat_tab.py 徽标 1 新）
+定向：tests/test_gui_strategy_create.py test_gui_admin_strat_tab.py
+  test_refresh.py test_gui_admin_p3b.py → 103 passed（2.86s）
 scripts/check-progress-docs.sh → passed
 git diff --check → clean
-真实 E2E：run 20260822T114522831346（mr01a 5股×2024-2025）completed；
-  runs/<run_id>/risk_report.json 生成（meta.sections stress=True
-  bootstrap=False）；outputs/gui-run/summary.md 追加「## 风险分析」节，
-  既有结构保留；关键数字见 Findings
 ```
+
+## Required Fixes
+
+无。
+
+## Nice-to-Have
+
+- 后续可考虑把 95% 节 VaR 回测也纳入判据、或对存量 gate 回填 risk 节；
+  均不影响本次正确性，留待用户决策。

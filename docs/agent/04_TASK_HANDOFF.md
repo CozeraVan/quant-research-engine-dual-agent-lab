@@ -2,6 +2,33 @@
 
 ## Task ID
 
+QRE-RISK-GATE-004 (FRM 风险管理模块 R4：晋升全量回测闸加入风险判据)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+R4 在 R3（risk_report.json 随 completed run 自动生成）上给晋升全量回测闸
+（QRE-GUI-PROMO-GATE-001，commit cfb860d）加风险维度：`risk/constants.py`
+集中阈值（`GATE_ES99_MAX=0.03`、`GATE_VAR_CONFIDENCE=0.99`）；
+`gui/risk_report.py::evaluate_gate_risk(run_id)` 读该 run 的
+risk_report.json——99% ES（历史模拟日收益口径）> 3% 或 99% 覆盖率
+Kupiec LR `reject_5pct` → `risk.status=warning`；report 缺失/损坏 →
+unavailable 不阻断；`strategy_create.finalize_promotion_gate` 写 gate json
+新 `risk` 节，主判据照旧；`refresh_registry.gate_blocks_daily` 扩展为
+failed 或 risk=warning 且非 forced 即阻止日更（force 通道照评估不阻断）；
+admin.html 闸列 warning 追加「⚠ 风险警示」徽标（tooltip ES99 + VaR 回测
+结论）+ style.css `.gate-risk`。1605 tests green（+6 净增：四情形 + force
+覆盖 + 徽标渲染）。存量 gate json 无 risk 节行为不变。未 commit、未重启
+qre-gui（用户约束）。细节见 `09_CODING_HANDOFF.md` 顶部。上一任务：
+QRE-RISK-INTEGRATION-003（R3 集成，1599 green，commit 6852eaa）。
+
+# Task Handoff (archive: QRE-RISK-CORE-002, R2 VaR 回测/压力测试/Bootstrap)
+
+## Task ID
+
 QRE-RISK-CORE-002 (FRM 风险管理模块 R2：VaR 回测 + 压力测试 + Bootstrap 推断)
 
 ## Current Status

@@ -2,7 +2,59 @@
 
 ## Task ID
 
-QRE-RISK-INTEGRATION-003（FRM 风险管理模块 R3：risk 包集成进回测报告与 GUI 展示）
+QRE-RISK-GATE-004（FRM 风险管理模块 R4：晋升全量回测闸加入风险判据）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization；R2/R3 也在同一待审批队列)
+
+## Implementation Summary
+
+晋升全量回测闸（QRE-GUI-PROMO-GATE-001，commit cfb860d）加入 FRM 风险
+判据维度：闸评估时读该 run 的 `runs/<run_id>/risk_report.json`，ES99 超阈
+或 VaR 覆盖率 Kupiec LR 被拒绝 → `risk.status=warning`，与 failed 同效阻止
+日更（force 可覆盖）；主判据（交易≥30 且超额>0）照旧。
+
+**改动清单**：
+- `risk/constants.py`：+ `GATE_ES99_MAX = 0.03`（99% ES 历史模拟日收益
+  损失口径上限）、`GATE_VAR_CONFIDENCE = 0.99`（VaR 回测试用置信节，
+  与 ES99 同置信；LR 显著性 5% 沿用 backtest_var 既有 reject_5pct）。
+- `gui/risk_report.py`：+ `evaluate_gate_risk(run_id)`——load_risk_report
+  → risk 判据 dict（status ok|warning|unavailable + es99/es99_threshold/
+  var_lr_reject/var_confidence/reasons/report_run_id）。ES99 取
+  `tail.99pct.historical_simulation.es`（经验日收益口径）；VaR 取
+  `var_backtest.levels.99pct.coverage.reject_5pct`（Kupiec 覆盖率 LR；
+  独立性检验不进闸判据）。report 缺失/损坏 → unavailable 不阻断；
+  关键字段缺失 → 该子项记 None 不触发 warning。
+- `gui/strategy_create.py::finalize_promotion_gate`：payload 增加
+  `"risk": evaluate_gate_risk(record.run_id)`（run 失败时同路径评估，
+  report 不存在自然落 unavailable）；docstring 同步。
+- `gui/refresh_registry.py::gate_blocks_daily`：forced → False；
+  gate=="failed" 或 risk.status=="warning" → True。注释/文档串同步。
+- `gui/templates/admin.html`：闸列 risk=warning 时追加
+  `<span class="gate-badge gate-risk">⚠ 风险警示</span>`，tooltip 显示
+  ES99/阈值 + VaR 回测（99% Kupiec LR）结论与 force/日更跳过语义。
+- `gui/static/style.css`：+ `.gate-risk`（橙色徽标）。
+- 测试（+7）：`tests/test_gui_strategy_create.py` R4 节——risk ok /
+  warning（ES 超阈）/ warning（LR 拒绝）/ unavailable（无 report）/
+  warning+force 不阻断（均含 gate_blocks_daily 联动，monkeypatch
+  risk_report.RUNS_DIR 落假报告）；`tests/test_gui_admin_strat_tab.py`
+  `test_admin_html_gate_risk_badge`（徽标类/tooltip 字符串 + CSS 断言）。
+
+**存量兼容**：旧 gate json 无 risk 节 → gate_blocks_daily 不受影响，
+admin 不显示徽标；下次晋升回测评估自然写入。
+
+## Validation
+
+- `uv run pytest tests/test_gui_strategy_create.py tests/test_gui_admin_strat_tab.py
+  tests/test_refresh.py tests/test_gui_admin_p3b.py -q` → 103 passed。
+- 全量 `uv run pytest tests/ -x -q` 结果见 10_REVIEW_REPORT.md。
+
+
 
 ## Written By
 

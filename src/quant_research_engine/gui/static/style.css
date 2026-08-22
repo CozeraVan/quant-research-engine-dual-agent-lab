@@ -315,6 +315,7 @@ code.log { white-space: pre-wrap; word-break: break-all; }
 .gate-fail { background: #FEF2F2; border-color: #FECACA; color: var(--err); font-weight: 600; }
 .gate-forced { background: #FFFBEB; border-color: #FDE68A; color: #B45309; font-weight: 600; }
 .gate-none { background: var(--bg); border-color: var(--border); color: var(--muted); }
+.gate-risk { background: #FFF7ED; border-color: #FDBA74; color: #C2410C; font-weight: 600; }
 
 /* 风险分析卡片（FRM 风险模块 R3） */
 .risk-cards { display: flex; flex-wrap: wrap; gap: 16px; }

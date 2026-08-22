@@ -467,3 +467,14 @@ def test_admin_html_gate_column():
     assert "gate-pass" in html and "gate-fail" in html
     assert "gate-forced" in html and "gate-none" in html
     assert "强制在库" in html and "未评估" in html
+
+
+def test_admin_html_gate_risk_badge():
+    """R4：risk=warning 时闸列追加风险徽标与 ES99/VaR 回测 tooltip，样式类已定义。"""
+    root = Path(__file__).resolve().parent.parent
+    html = (root / "src/quant_research_engine/gui/templates/admin.html").read_text(encoding="utf-8")
+    css = (root / "src/quant_research_engine/gui/static/style.css").read_text(encoding="utf-8")
+    assert "gate-risk" in html and ".gate-risk" in css
+    assert "⚠ 风险警示" in html
+    assert "ES99" in html and "Kupiec LR" in html
+    assert "s.gate.risk" in html and "gr.status === 'warning'" in html

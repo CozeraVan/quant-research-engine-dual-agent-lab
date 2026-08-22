@@ -12,7 +12,19 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-INTEGRATION-003 (DONE — 1599 tests green；awaiting git approval)
+QRE-RISK-GATE-004 (DONE — 1605 tests green；awaiting git approval)
+
+2026-08-22: FRM 风险模块 R4 落地（R1=96db59d / R2=f52c0f4 / R3=6852eaa）。
+晋升全量回测闸加入风险判据：risk/constants.py 加 GATE_ES99_MAX=0.03 /
+GATE_VAR_CONFIDENCE=0.99；gui/risk_report.py 加 evaluate_gate_risk（读
+runs/<run_id>/risk_report.json，ES99 超阈或 99% 覆盖率 Kupiec LR 拒绝 →
+risk=warning，缺失 → unavailable 不阻断）；finalize_promotion_gate 写
+gate json risk 节（主判据照旧）；gate_blocks_daily 扩展 failed 或
+risk=warning 非 forced 即阻止日更（force 照评估不阻断）；admin.html
+闸列 warning 追加「⚠ 风险警示」徽标（tooltip ES99 + VaR 回测结论）
++ style.css .gate-risk。存量 gate json 无 risk 节行为不变。1605 tests
+green（+6）。未 commit、未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-INTEGRATION-003 (DONE — 1599 tests green；awaiting git approval)
 
 2026-08-22: FRM 风险模块 R3 落地（R1=96db59d / R2=f52c0f4）。risk 包集成进
 回测报告与 GUI：risk/report.py + render_risk_markdown（汉化风险分析节，

@@ -353,6 +353,17 @@
             } else {
               gateHtml = '<span class="gate-badge gate-fail" title="' + esc(gtip) + '（日更跳过）">✗ 未过</span>';
             }
+            // R4 风险判据：risk=warning 追加风险徽标（与未过同效阻止日更，force 除外）
+            var gr = s.gate.risk;
+            if (gr && gr.status === 'warning') {
+              var rtip = '风险警示：ES99 '
+                + (gr.es99 != null ? fmtPct(gr.es99) : '—')
+                + '（阈值 ' + (gr.es99_threshold != null ? fmtPct(gr.es99_threshold) : '—') + '），'
+                + 'VaR 回测（' + (gr.var_confidence != null ? Math.round(gr.var_confidence * 100) : '—') + '% Kupiec LR）：'
+                + (gr.var_lr_reject ? '被拒绝' : '通过')
+                + (s.gate.forced ? '（force 晋升，不阻止日更）' : '（日更跳过）');
+              gateHtml += ' <span class="gate-badge gate-risk" title="' + esc(rtip) + '">⚠ 风险警示</span>';
+            }
           }
           return '<tr class="ob-row" data-sid="' + esc(s.strategy_id) + '">'
             + '<td><a href="/admin/strategy/' + encodeURIComponent(s.strategy_id) + '" target="_blank">'

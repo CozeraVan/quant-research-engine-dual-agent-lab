@@ -54,6 +54,14 @@ BOOTSTRAP_CI_LEVEL = 0.95
 #: Bootstrap 默认随机种子（教材强调可复现性/监管合规；None = 不固定）
 BOOTSTRAP_SEED = 42
 
+#: 晋升闸风险判据（R4）：99% ES（日收益损失口径，历史模拟）上限，
+#: 超过则闸的 risk 维度记 warning（与 failed 同效阻止日更，force 可覆盖）
+GATE_ES99_MAX = 0.03
+
+#: 晋升闸 VaR 回测试用置信水平（取 var_backtest 对应节的覆盖率
+#: Kupiec LR 检验，5% 显著被拒绝 → warning；与 ES99 同置信）
+GATE_VAR_CONFIDENCE = 0.99
+
 
 def default_block_size(n_obs: int) -> int:
     """CBB 块长经验法则 q ≈ √n（书2 Ch13），向上取整、至少为 1。"""

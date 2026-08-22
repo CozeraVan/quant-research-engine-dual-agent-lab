@@ -313,6 +313,8 @@ def finalize_promotion_gate(
     标记）。判据写死：交易次数 >= 30 且 excess_return_vs_buy_hold > 0 → passed，
     否则 failed；run 本身失败也记 failed（附 error）。force 晋升的策略照常评估，
     ``forced=True`` 透传（日更不跳过，仅展示「强制在库」）。
+    R4 风险判据：附加 ``risk`` 节（见 risk_report.evaluate_gate_risk），
+    status=warning 时与 failed 同效阻止日更（forced 除外），unavailable 不阻断。
     非晋升闸 run（无标记）返回 None。
     """
     if not record.get("promotion_gate"):
@@ -321,6 +323,7 @@ def finalize_promotion_gate(
     if not name:
         return None
     from quant_research_engine.gui.refresh_registry import load_gate, save_gate
+    from quant_research_engine.gui.risk_report import evaluate_gate_risk
 
     forced = bool(record.get("promotion_forced"))
     payload = load_gate(name, gates_dir) or {}
@@ -334,6 +337,10 @@ def finalize_promotion_gate(
                 "min_excess_return_vs_buy_hold": 0,
             },
             "evaluated_at": _now_iso(),
+            # R4 风险判据：读该 run 的 risk_report.json；不存在 →
+            # status=unavailable（不判、不阻断）；ES99 超阈或 VaR 覆盖率
+            # LR 被拒绝 → warning（与 failed 同效阻止日更，force 可覆盖）。
+            "risk": evaluate_gate_risk(record.get("run_id")),
         }
     )
     if record.get("status") != "completed":

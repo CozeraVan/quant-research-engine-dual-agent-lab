@@ -48,6 +48,51 @@ def load_risk_report(run_id: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+def evaluate_gate_risk(run_id: str | None) -> dict[str, Any]:
+    """晋升闸风险判据（R4）：读 run 的 risk_report.json 给闸的 risk 节。
+
+    - report 不存在/损坏 → ``status="unavailable"``（不判风险项、不阻断）。
+    - ES99（历史模拟，日收益损失口径）> ``risk.constants.GATE_ES99_MAX``
+      或 ``GATE_VAR_CONFIDENCE`` 节覆盖率 Kupiec LR 检验被拒绝（5% 显著）
+      → ``status="warning"``，``reasons`` 记录触发项；否则 ``"ok"``。
+    - 关键字段缺失（老格式 report）时该子项记 None、不触发 warning。
+    """
+    from quant_research_engine.risk import constants as risk_constants
+
+    threshold = risk_constants.GATE_ES99_MAX
+    var_conf = risk_constants.GATE_VAR_CONFIDENCE
+    level_key = f"{int(round(var_conf * 100))}pct"
+    risk: dict[str, Any] = {
+        "status": "unavailable",
+        "es99": None,
+        "es99_threshold": threshold,
+        "var_lr_reject": None,
+        "var_confidence": var_conf,
+        "reasons": [],
+        "report_run_id": run_id,
+    }
+    if not run_id:
+        return risk
+    report = load_risk_report(str(run_id))
+    if report is None:
+        return risk
+
+    tail = report.get("tail") or {}
+    es99 = (((tail.get(level_key) or {}).get("historical_simulation") or {}).get("es"))
+    var_bt = report.get("var_backtest") or {}
+    coverage = ((var_bt.get("levels") or {}).get(level_key) or {}).get("coverage") or {}
+    var_lr_reject = coverage.get("reject_5pct")
+
+    risk["es99"] = es99 if isinstance(es99, (int, float)) else None
+    risk["var_lr_reject"] = bool(var_lr_reject) if var_lr_reject is not None else None
+    if risk["es99"] is not None and risk["es99"] > threshold:
+        risk["reasons"].append("es99_exceeds_threshold")
+    if risk["var_lr_reject"]:
+        risk["reasons"].append("var_lr_rejected")
+    risk["status"] = "warning" if risk["reasons"] else "ok"
+    return risk
+
+
 def _find_portfolio_equity_curve(record: dict[str, Any]) -> Path | None:
     """定位组合级 equity_curve.csv。
 

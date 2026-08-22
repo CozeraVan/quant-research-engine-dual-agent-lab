@@ -2,13 +2,14 @@
 
 ## Task ID
 
-QRE-RISK-INTEGRATION-003（FRM 风险管理模块 R3：risk 包集成进回测报告与 GUI 展示）
+QRE-RISK-GATE-004（FRM 风险管理模块 R4：晋升全量回测闸加入风险判据）
 
 ## Created By
 
 KIMI_CODE（用户 2026-08-22 直接指定的任务书；依据已批准 CR
-`docs/frm/CR_2026-08-21_frm_risk_module.md` R3 阶段；R1 = commit 96db59d、
-R2 = commit f52c0f4 已完成，risk 包就绪）
+`docs/frm/CR_2026-08-21_frm_risk_module.md` R4 阶段；R1 = commit 96db59d、
+R2 = commit f52c0f4、R3 = commit 6852eaa 已完成，risk_report.json 已随
+每个 completed run 自动生成）
 
 ## Intended Implementer
 
@@ -16,84 +17,77 @@ KIMI_CODE
 
 ## Goal
 
-把 risk 包接进回测生命周期与 GUI，四处集成：
+在晋升全量回测闸（QRE-GUI-PROMO-GATE-001，commit cfb860d）的评估中
+增加 FRM 风险维度：
 
-1. **run 收尾自动生成风险分析**：`gui/engine.py::_execute_and_finalize`
-   终态后新增钩子（仿 finalize_smoke/finalize_promotion_gate 的
-   try/except 兜底模式，绝不影响 run 本身）。新模块
-   `gui/risk_report.py`：
-   - `extract_strategy_returns(record)`：从 run 产物定位组合级
-     `equity_curve.csv`（排除 per-symbol 目录下的单标的文件；优先含
-     `daily_return` 列的组合级文件，退化为 `total_equity.pct_change()`）；
-     若含 `benchmark_close` 列则一并取基准逐日收益（现状产物无此列 →
-     benchmark=None，report 基准相关节自动为 null）。
-   - `finalize_risk_report(record)`：仅 completed run；调
-     `risk.report.build_risk_report`（var_backtest 默认开、stress 开、
-     bootstrap 关——太慢，留按需）；JSON 原子写
-     `outputs/gui-console/runs/<run_id>/risk_report.json`；markdown 节
-     （`render_risk_markdown`）追加到产物 `summary.md`（「## 风险分析」，
-     若已存在该节则先移除旧节再追加，幂等）；无 summary.md 时写
-     `runs/<run_id>/risk_report.md`。
-2. **markdown 渲染**：`risk/report.py` 加
-   `render_risk_markdown(report_dict) -> str`——汉化、指标两位小数、
-   分区：分布与尾部 / VaR 回测 / 波动率 / 压力测试 / 绩效；error 节
-   如实显示「数据不足」。
-3. **GUI 展示**：`run_detail.html` 新增「风险分析」区——
-   - 有 risk_report.json：卡片式渲染（VaR/ES 三口径 95/99、JB 检验结论、
-     VaR 回测违约数与 LR 结论、EWMA/GARCH 当前波动率与 regime、四情景
-     压力结果表、绩效五指标）。app.py run_detail 路由读取 JSON 传模板。
-   - 无（老 run）：显示「未生成」+「生成风险分析」按钮 →
-     POST `/api/runs/<run_id>/risk-report`（异步 job 复用 daily_jobs
-     start_script_job，lock_key=`risk-report:<run_id>`，in-process
-     runner，bootstrap=开）→ 返回 job_id；GET
-     `/api/runs/<run_id>/risk-report/job/<job_id>` 轮询；完成后前端刷新。
-     404（run 不存在）/409（同 run 已有 job 在跑）/400（run 未完成）。
-4. **策略级汇总（可选）**：admin.html 策略列表若无合适位置则不加
-   （CR 允许「别硬塞」）——落地时调查后决定并记录理由。
+1. **风险判据**：`finalize_promotion_gate` 收尾时读取该 run 的
+   `runs/<run_id>/risk_report.json`：
+   - 不存在/损坏 → `risk.status = "unavailable"`，不判风险项、不阻断。
+   - 存在 → 取 99% ES（历史模拟口径，日收益损失取正）与 99% VaR 回测
+     覆盖率 Kupiec LR 检验（5% 显著）：
+     - ES99 > 阈值（默认 3%）或覆盖率 LR 被拒绝 → `risk.status = "warning"`。
+     - 否则 `risk.status = "ok"`。
+2. **闸语义**：主判据（交易≥30 且超额>0）照旧；`risk.status == "warning"`
+   时与 failed 同效阻止日更拾取（force 晋升可覆盖），gate json 记录
+   risk 详情（独立一节，便于 admin 展示）。
+3. **admin GUI**：策略状态表「全量回测闸」列在 risk=warning 时追加
+   ⚠ 风险警示徽标，tooltip 显示 ES99 与 VaR 回测结论。
+4. **测试**：risk ok / warning（ES 超阈）/ warning（LR 拒绝）/
+   unavailable（无 risk_report）四情形 + force 覆盖 + admin 徽标渲染。
 
 ## Semantics
 
-- 收益口径：组合级 `daily_return` 列（引擎组合口径，最小加工）；
-  trade_date → DatetimeIndex（stress 情景窗口按日期切片需要）。
-- stress 开：四情景库默认；无 benchmark → 无相关性崩溃/基准对照，如实标注。
-- bootstrap 仅在按需 job 开启（b=默认 1000，CBB 分钟级可接受于异步）。
-- 钩子失败只吞掉（与 smoke/promotion_gate 一致），run 状态不受影响。
+- 阈值集中在 `risk/constants.py`：`GATE_ES99_MAX = 0.03`（日收益口径
+  99% ES 上限）、`GATE_VAR_CONFIDENCE = 0.99`（VaR 回测取 99% 节，
+  与 ES99 同置信）。LR 显著性 5% 沿用 backtest_var 既有 `reject_5pct`。
+- ES99 取 `report["tail"]["99pct"]["historical_simulation"]["es"]`
+  （经验日收益口径，非参数假设）；VaR 回测取
+  `report["var_backtest"]["levels"]["99pct"]["coverage"]["reject_5pct"]`
+  （Kupiec 覆盖率 LR；独立性检验不进闸判据，仅报告）。
+- 关键字段缺失（老格式 report）→ 该子项不触发 warning，如实记 None。
+- gate json 新增一节（不改动既有顶层键语义）：
+
+  ```json
+  "risk": {
+    "status": "ok | warning | unavailable",
+    "es99": 0.0219,
+    "es99_threshold": 0.03,
+    "var_lr_reject": false,
+    "var_confidence": 0.99,
+    "reasons": ["es99_exceeds_threshold", "var_lr_rejected"],
+    "report_run_id": "rid-gate"
+  }
+  ```
+
+- `gate_blocks_daily` 扩展：`(gate == "failed" 或 risk.status == "warning")`
+  且非 forced → 阻止日更。force 通道照旧评估、不阻断。
 
 ## Scope
 
-1. `src/quant_research_engine/risk/report.py`：+ `render_risk_markdown`。
-2. `src/quant_research_engine/gui/risk_report.py`（新）：收益提取、
-   finalize 钩子、按需 job 启动。
-3. `src/quant_research_engine/gui/engine.py`：收尾钩子（try/except 兜底）。
-4. `src/quant_research_engine/gui/app.py`：run_detail 传 risk + 两个端点。
-5. `src/quant_research_engine/gui/templates/run_detail.html`：风险分析区。
-6. `tests/test_risk_report.py` 增补；新 `tests/test_gui_risk_report.py`；
-   `tests/test_gui_app.py` 增补端点/模板用例。
-7. docs/agent 08/10/09/05/11 同步。
+1. `src/quant_research_engine/risk/constants.py`：+ `GATE_ES99_MAX`、
+   `GATE_VAR_CONFIDENCE`。
+2. `src/quant_research_engine/gui/risk_report.py`：+
+   `evaluate_gate_risk(run_id)`（load_risk_report → risk 判据 dict）。
+3. `src/quant_research_engine/gui/strategy_create.py`：
+   `finalize_promotion_gate` 写入 `payload["risk"]`（复用 record.run_id；
+   run 失败时同路径评估，report 不存在自然落 unavailable）。
+4. `src/quant_research_engine/gui/refresh_registry.py`：
+   `gate_blocks_daily` 加 risk warning 分支（docstring 同步）。
+5. `src/quant_research_engine/gui/templates/admin.html`：闸列追加
+   risk=warning 徽标 + tooltip（ES99/VaR 结论）；`static/style.css`
+   加 `.gate-risk` 样式。
+6. 测试：`tests/test_gui_strategy_create.py`（四情形 + force + gate_blocks_daily
+   联动）、`tests/test_gui_admin_strat_tab.py`（徽标字符串断言）。
+7. docs/agent 08/10/09/05/04/11 同步。
 
 ## Non-Goals
 
 - 不 git commit、不重启 qre-gui.service。
-- 不做 R4 晋升闸风险判据（单独 CR 审批）。
-- 不改回测引擎本体；risk 包保持可独立 import（render 不依赖 GUI）。
-- admin.html 策略列表 badge 仅在确有合适位置时加，否则记录理由跳过。
-
-## Expected Tests
-
-- render_risk_markdown：分区齐全（分布与尾部/VaR 回测/波动率/压力/绩效）、
-  两位小数、error 节降级为「数据不足」文本、无 stress/bootstrap 键时不渲染对应区。
-- extract_strategy_returns：组合级优先（含 daily_return）、per-symbol 目录
-  文件被排除、缺 daily_return 时 pct_change 退化、benchmark_close 缺失 → None。
-- finalize 钩子：tmp_path 假 run 产物全链路（JSON 落盘 + summary.md 追加 +
-  幂等重跑不重复节）；failed run 跳过；无 equity_curve 时不产出不抛错。
-- 端点：POST 200（job 启动，runner mock）/404/400/409；GET 轮询 200/404；
-  run_detail 模板含/不含 risk 区两种渲染。
-- `uv run pytest tests/ -x -q` 全绿（基线 1578，只增不红）。
+- 不改 risk 包核心计算、不改 refresh 管线取数逻辑、不动 DB。
+- 不对存量 gate json 回填 risk 节（下次晋升回测评估自然写入；
+  缺失时 admin 不显示徽标，语义=未知不阻断）。
 
 ## Validation
 
-1. `uv run pytest tests/ -x -q`
-2. 真实 E2E：catalog 策略小样本真实 run → risk_report.json + summary.md
-   风险节，数值 sane（VaR 量级、LR p 值）贴 10_REVIEW_REPORT
-3. `scripts/check-progress-docs.sh`
-4. `git diff --check`；`git status` 核对变更清单
+- `uv run pytest tests/ -x -q` 全绿（基线 1599）。
+- 单测覆盖四情形 + force 覆盖 + admin 徽标。
