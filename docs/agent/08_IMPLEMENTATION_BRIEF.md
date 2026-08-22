@@ -2,11 +2,13 @@
 
 ## Task ID
 
-QRE-RISK-CORE-002（FRM 风险管理模块 R2：VaR 回测 + 压力测试 + Bootstrap 推断）
+QRE-RISK-INTEGRATION-003（FRM 风险管理模块 R3：risk 包集成进回测报告与 GUI 展示）
 
 ## Created By
 
-KIMI_CODE（用户 2026-08-22 直接指定的任务书；依据已批准 CR `docs/frm/CR_2026-08-21_frm_risk_module.md` R2 阶段；R1 已完成 commit 96db59d）
+KIMI_CODE（用户 2026-08-22 直接指定的任务书；依据已批准 CR
+`docs/frm/CR_2026-08-21_frm_risk_module.md` R3 阶段；R1 = commit 96db59d、
+R2 = commit f52c0f4 已完成，risk 包就绪）
 
 ## Intended Implementer
 
@@ -14,100 +16,84 @@ KIMI_CODE
 
 ## Goal
 
-在 R1 risk 包基础上落地 R2 三个模块 + 报告扩展，保持 R1 风格（纯函数、
-零 DB、参数集中 constants.py、每个结果 dict 回显参数与口径 note）：
+把 risk 包接进回测生命周期与 GUI，四处集成：
 
-1. `risk/backtest_var.py`（书2 Ch6）：
-   - `hit_series(returns, var_series)`：I_t = 1{L_t > VaR_t}（L=−R）。
-   - `coverage_lr_test(hits, confidence)`：HIT ~ Bernoulli(1−p) 的 LR 检验，
-     LR = −2ln(L(p)/L(p̂)) ~ χ²₁，p̂ = x/n 为违约率 MLE；附精确二项 p 值
-     （教材三种方法之①③）。
-   - `independence_lr_test(hits)`：Christoffersen 转移矩阵 LR_ind ~ χ²₁
-     （摘要声明教材 Ch6 只给思路 E[HIT_t·HIT_{t+1}]=(1−p)²、未点名
-     Kupiec/Christoffersen；按标准 Christoffersen 实现并在注释/返回值
-     注明出处差异）。
-   - `false_positive_probability(alpha, n)` = 1−(1−α)ⁿ（多重检验警示）。
-   - `backtest_var_summary(returns, var_series, confidence)`：统一 dict
-     （violations、expected、LR/p 值、结论）。
-2. `risk/stress.py`（书4 Ch8）：
-   - 历史情景库（常量，窗口参数化可增删）：2015 股灾（2015-06~2015-09）、
-     2018 单边熊（2018 全年）、2020 疫情（2020-01~2020-03）、
-     2024 小微盘流动性危机（2024-01~2024-02）。
-   - `replay_scenario`：情景窗口内策略累计损失、峰谷（窗口内最大回撤）、
-     Peak/VaR 与 Peak/ES 比值（var-backtesting 口径参考）、基准窗口收益、
-     窗口内 vs 全样本相关性变化（相关性崩溃提示，呼应 LTCM 红线）。
-   - `reverse_stress`：给定亏损阈值，按 β 穿透反推所需市场冲击，并在基准
-     滚动窗口收益分布上给出对应经验分位与 σ 倍数。
-3. `risk/inference.py`（书2 Ch13）：
-   - `bootstrap_metric_ci`：Circular Block Bootstrap
-     （arch.bootstrap.CircularBlockBootstrap，块长默认 ceil(√n)）给
-     年化收益/夏普/最大回撤算百分位置信区间；输出 MC 标准误 σ/√b（式 13.3）。
-   - iid bootstrap 对照（method="iid"），note 说明波动聚类下 iid 低估
-     不确定性（教材式 13.11 后讨论）。
-4. `risk/report.py` 扩展：`build_risk_report` 新增三节——
-   `var_backtest`（默认开启，VaR 序列默认用 R1 EWMA 预测 σ×z、μ=0
-   RiskMetrics 口径，note 披露；亦可 config 显式传入 var_series）、
-   `stress`（config `stress=True` 开启，需基准做相关性，无基准时只回放
-   策略自身）、`bootstrap`（config `bootstrap=True` 开启，b 与 seed 可配）。
-   report_version 升 "R2"。
+1. **run 收尾自动生成风险分析**：`gui/engine.py::_execute_and_finalize`
+   终态后新增钩子（仿 finalize_smoke/finalize_promotion_gate 的
+   try/except 兜底模式，绝不影响 run 本身）。新模块
+   `gui/risk_report.py`：
+   - `extract_strategy_returns(record)`：从 run 产物定位组合级
+     `equity_curve.csv`（排除 per-symbol 目录下的单标的文件；优先含
+     `daily_return` 列的组合级文件，退化为 `total_equity.pct_change()`）；
+     若含 `benchmark_close` 列则一并取基准逐日收益（现状产物无此列 →
+     benchmark=None，report 基准相关节自动为 null）。
+   - `finalize_risk_report(record)`：仅 completed run；调
+     `risk.report.build_risk_report`（var_backtest 默认开、stress 开、
+     bootstrap 关——太慢，留按需）；JSON 原子写
+     `outputs/gui-console/runs/<run_id>/risk_report.json`；markdown 节
+     （`render_risk_markdown`）追加到产物 `summary.md`（「## 风险分析」，
+     若已存在该节则先移除旧节再追加，幂等）；无 summary.md 时写
+     `runs/<run_id>/risk_report.md`。
+2. **markdown 渲染**：`risk/report.py` 加
+   `render_risk_markdown(report_dict) -> str`——汉化、指标两位小数、
+   分区：分布与尾部 / VaR 回测 / 波动率 / 压力测试 / 绩效；error 节
+   如实显示「数据不足」。
+3. **GUI 展示**：`run_detail.html` 新增「风险分析」区——
+   - 有 risk_report.json：卡片式渲染（VaR/ES 三口径 95/99、JB 检验结论、
+     VaR 回测违约数与 LR 结论、EWMA/GARCH 当前波动率与 regime、四情景
+     压力结果表、绩效五指标）。app.py run_detail 路由读取 JSON 传模板。
+   - 无（老 run）：显示「未生成」+「生成风险分析」按钮 →
+     POST `/api/runs/<run_id>/risk-report`（异步 job 复用 daily_jobs
+     start_script_job，lock_key=`risk-report:<run_id>`，in-process
+     runner，bootstrap=开）→ 返回 job_id；GET
+     `/api/runs/<run_id>/risk-report/job/<job_id>` 轮询；完成后前端刷新。
+     404（run 不存在）/409（同 run 已有 job 在跑）/400（run 未完成）。
+4. **策略级汇总（可选）**：admin.html 策略列表若无合适位置则不加
+   （CR 允许「别硬塞」）——落地时调查后决定并记录理由。
 
-## Semantics（公式以 `docs/frm/FRM量化风控知识摘要.md` 为准）
+## Semantics
 
-- HIT：I_t = 1[L_t > VaR_t]，p-VaR 定义 Pr(L>VaR)=1−p（式 6.6）；
-  well-specified 模型 HIT ~ iid Bernoulli(1−p)。
-- 覆盖率 LR（Bernoulli 似然比，教材方法③；同 Kupiec 但未点名）：
-  LR = −2·[(n−x)·ln((1−p)/(1−p̂)) + x·ln(p/p̂)] ~ χ²₁；x=0 或 x=n 时
-  对应项按 0·ln0=0 极限处理。
-- 独立性 LR（Christoffersen）：转移计数 n00/n01/n10/n11，
-  π01=n01/(n00+n01)、π11=n11/(n10+n11)、π̄=(n01+n11)/n；
-  LR_ind = −2·ln[ (1−π̄)^{n00+n10}·π̄^{n01+n11} /
-  ((1−π01)^n00·π01^n01·(1−π11)^n10·π11^n11) ] ~ χ²₁；零计数单元跳过。
-  注释注明：摘要只给思路（H0: E[HIT_t·HIT_{t+1}]=(1−p)²），未点名
-  Christoffersen。
-- 多重检验：1−(1−α)ⁿ（n=10→40.1%，n=100→99.4%）。
-- 情景回放：累计损失 = 1−Π(1+r_t)；峰谷 = 窗口内净值曲线最大回撤
-  （损失口径）；Peak/VaR、Peak/ES 无量纲比值。
-- reverse stress：所需市场冲击 S* = 阈值/β（β 用 performance.beta 口径），
-  在基准 h 日滚动累计收益分布上取经验分位（≤S* 的窗口占比）与
-  σ 倍数 S*/σ_roll。
-- CBB：块长 q≈√n（向上取整），b 次重抽样；指标置信区间取 bootstrap
-  分布的 (α/2, 1−α/2) 分位；MC 标准误 = std(g*)/√b。
+- 收益口径：组合级 `daily_return` 列（引擎组合口径，最小加工）；
+  trade_date → DatetimeIndex（stress 情景窗口按日期切片需要）。
+- stress 开：四情景库默认；无 benchmark → 无相关性崩溃/基准对照，如实标注。
+- bootstrap 仅在按需 job 开启（b=默认 1000，CBB 分钟级可接受于异步）。
+- 钩子失败只吞掉（与 smoke/promotion_gate 一致），run 状态不受影响。
 
 ## Scope
 
-1. `src/quant_research_engine/risk/`：新增 `backtest_var.py`、`stress.py`、
-   `inference.py`；改 `constants.py`（情景库常量、bootstrap 默认）、
-   `report.py`（三节扩展）、`__init__.py`（导出新模块）。
-2. `tests/test_risk_backtest_var.py`、`test_risk_stress.py`、
-   `test_risk_inference.py`；`test_risk_report.py` 增补。
-3. docs/agent 08/10/09/05/11 同步。
+1. `src/quant_research_engine/risk/report.py`：+ `render_risk_markdown`。
+2. `src/quant_research_engine/gui/risk_report.py`（新）：收益提取、
+   finalize 钩子、按需 job 启动。
+3. `src/quant_research_engine/gui/engine.py`：收尾钩子（try/except 兜底）。
+4. `src/quant_research_engine/gui/app.py`：run_detail 传 risk + 两个端点。
+5. `src/quant_research_engine/gui/templates/run_detail.html`：风险分析区。
+6. `tests/test_risk_report.py` 增补；新 `tests/test_gui_risk_report.py`；
+   `tests/test_gui_app.py` 增补端点/模板用例。
+7. docs/agent 08/10/09/05/11 同步。
 
 ## Non-Goals
 
 - 不 git commit、不重启 qre-gui.service。
-- 不做 R3（markdown 渲染、回测报告集成钩子、GUI 展示区）与 R4 晋升闸。
-- 不读 DB；情景库只存日期窗口常量，不提供真实行情数据（回放输入由调用方给）。
-- 不做 Basel 三区交通灯、不做 Expected Shortfall 回测（教材本批章节未覆盖）。
+- 不做 R4 晋升闸风险判据（单独 CR 审批）。
+- 不改回测引擎本体；risk 包保持可独立 import（render 不依赖 GUI）。
+- admin.html 策略列表 badge 仅在确有合适位置时加，否则记录理由跳过。
 
 ## Expected Tests
 
-- HIT 构造手算（已知 returns/VaR → 0/1 序列）。
-- 覆盖率 LR 手算小样本（n=100, x=10, p=0.05 等）对 scipy chi2 p 值；
-  x=0/x=n 边界不 NaN；违约率恰等于 1−p 时 LR=0。
-- 独立性 LR 对手算转移计数；独立合成序列大样本不拒绝、聚集序列拒绝。
-- false_positive_probability：1−0.95^10≈0.401263、^100≈0.994079。
-- 情景回放手算：已知窗口收益 → 累计损失/峰谷精确值；Peak/VaR 比值；
-  相关性崩溃：构造窗口内相关性显著上升的合成数据 → delta 方向正确。
-- reverse stress 手算：合成基准滚动分布 → 分位/σ 倍数核对；β≤0 时报错或
-  给出不可穿透说明。
-- bootstrap：固定 seed；合成已知分布数据 → 95% CI 包含样本统计量；
-  MC 标准误 = std/√b 核对；iid 与 cbb 双方法均产出；块长默认 ceil(√n)。
-- report：新三节键结构、config 开关（stress/bootstrap 默认关、var_backtest
-  默认开）、显式 var_series 覆盖默认 EWMA VaR。
-- `uv run pytest tests/ -x -q` 全绿（基线 1532，只增不红）。
+- render_risk_markdown：分区齐全（分布与尾部/VaR 回测/波动率/压力/绩效）、
+  两位小数、error 节降级为「数据不足」文本、无 stress/bootstrap 键时不渲染对应区。
+- extract_strategy_returns：组合级优先（含 daily_return）、per-symbol 目录
+  文件被排除、缺 daily_return 时 pct_change 退化、benchmark_close 缺失 → None。
+- finalize 钩子：tmp_path 假 run 产物全链路（JSON 落盘 + summary.md 追加 +
+  幂等重跑不重复节）；failed run 跳过；无 equity_curve 时不产出不抛错。
+- 端点：POST 200（job 启动，runner mock）/404/400/409；GET 轮询 200/404；
+  run_detail 模板含/不含 risk 区两种渲染。
+- `uv run pytest tests/ -x -q` 全绿（基线 1578，只增不红）。
 
 ## Validation
 
 1. `uv run pytest tests/ -x -q`
-2. `scripts/check-progress-docs.sh`
-3. `git diff --check`；`git status` 核对变更清单
+2. 真实 E2E：catalog 策略小样本真实 run → risk_report.json + summary.md
+   风险节，数值 sane（VaR 量级、LR p 值）贴 10_REVIEW_REPORT
+3. `scripts/check-progress-docs.sh`
+4. `git diff --check`；`git status` 核对变更清单

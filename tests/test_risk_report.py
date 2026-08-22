@@ -178,3 +178,52 @@ class TestBootstrapSection:
             cbb["bootstrap_std"] / np.sqrt(100), rel=1e-12
         )
         json.dumps(report)
+
+
+class TestRenderMarkdown:
+    """R3：render_risk_markdown 汉化渲染。"""
+
+    def test_sections_and_two_decimals(self):
+        from quant_research_engine.risk.report import render_risk_markdown
+
+        idx = pd.date_range("2018-01-01", periods=600, freq="B")
+        rng = np.random.default_rng(5)
+        returns = pd.Series(rng.standard_t(6, 600) * 0.012, index=idx)
+        benchmark = pd.Series(0.6 * returns.to_numpy() + rng.normal(0, 0.008, 600), index=idx)
+        report = build_risk_report(returns, benchmark, config={"stress": True})
+        md = render_risk_markdown(report)
+        assert md.startswith("## 风险分析")
+        for header in ("### 分布与尾部", "### VaR 回测", "### 波动率", "### 压力测试", "### 绩效风险指标"):
+            assert header in md
+        assert "Jarque-Bera" in md
+        assert "Sharpe" in md and "Sortino" in md
+        # VaR 渲染为百分比两位小数
+        import re
+        assert re.search(r"\| 99% \| 历史模拟 \| -?\d+\.\d{2}% \| -?\d+\.\d{2}% \|", md)
+        # bootstrap 未开启 → 不渲染该区
+        assert "Bootstrap" not in md
+
+    def test_error_sections_degrade(self):
+        from quant_research_engine.risk.report import render_risk_markdown
+
+        report = build_risk_report([0.01, -0.02, 0.005])  # GARCH 数据不足
+        md = render_risk_markdown(report)
+        assert "数据不足" in md
+        assert "### 压力测试" not in md  # stress 未开启
+
+    def test_bootstrap_section_rendered_when_enabled(self, returns):
+        from quant_research_engine.risk.report import render_risk_markdown
+
+        report = build_risk_report(returns, config={"bootstrap": True, "bootstrap_reps": 50})
+        md = render_risk_markdown(report)
+        assert "### Bootstrap 置信区间（CBB）" in md
+        assert "sharpe" in md
+
+    def test_scenario_not_covered_note(self):
+        from quant_research_engine.risk.report import render_risk_markdown
+
+        idx = pd.date_range("2025-01-01", periods=120, freq="B")
+        returns = pd.Series(np.sin(np.arange(120) * 0.1) * 0.01, index=idx)
+        report = build_risk_report(returns, config={"stress": True})
+        md = render_risk_markdown(report)
+        assert "样本不覆盖该窗口" in md

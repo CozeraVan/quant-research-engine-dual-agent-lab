@@ -75,6 +75,126 @@ def _fmtval(value: Any, is_pct: bool = False) -> str:
     return str(value)
 
 
+def _risk_display(report: dict[str, Any] | None) -> dict[str, Any] | None:
+    """把 risk_report.json 整理成模板卡片视图（None → 模板显示「未生成」）。"""
+    if not isinstance(report, dict):
+        return None
+
+    def _pct(value: Any) -> str:
+        if value is None or isinstance(value, bool):
+            return "—"
+        try:
+            return f"{float(value) * 100:.2f}%"
+        except (TypeError, ValueError):
+            return str(value)
+
+    def _f2(value: Any) -> str:
+        if value is None or isinstance(value, bool):
+            return "—"
+        try:
+            return f"{float(value):.2f}"
+        except (TypeError, ValueError):
+            return str(value)
+
+    def _p4(value: Any) -> str:
+        try:
+            return f"{float(value):.4f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    method_labels = {
+        "parametric_normal": "参数正态",
+        "historical_simulation": "历史模拟",
+        "ewma_parametric": "EWMA 参数",
+    }
+    view: dict[str, Any] = {"meta": report.get("meta", {})}
+
+    dist = report.get("distribution", {})
+    if isinstance(dist, dict) and "error" not in dist:
+        view["distribution"] = {
+            "jb_statistic": _f2(dist.get("jb_statistic")),
+            "jb_p_value": _p4(dist.get("jb_p_value")),
+            "reject_normal": bool(dist.get("reject_normal_5pct")),
+            "skew": _f2(dist.get("skew_sample")),
+            "excess_kurtosis": _f2(dist.get("excess_kurtosis_sample")),
+        }
+
+    tail_rows: list[dict[str, str]] = []
+    for level_key, methods in (report.get("tail") or {}).items():
+        for method_key, entry in (methods or {}).items():
+            if not isinstance(entry, dict) or "error" in entry:
+                continue
+            tail_rows.append({
+                "level": level_key.replace("pct", "%"),
+                "method": method_labels.get(method_key, method_key),
+                "var": _pct(entry.get("var")),
+                "es": _pct(entry.get("es")),
+            })
+    view["tail_rows"] = tail_rows
+
+    bt_rows: list[dict[str, str]] = []
+    var_bt = report.get("var_backtest") or {}
+    if var_bt.get("enabled"):
+        for level_key, entry in (var_bt.get("levels") or {}).items():
+            if not isinstance(entry, dict) or "error" in entry:
+                continue
+            bt_rows.append({
+                "level": level_key.replace("pct", "%"),
+                "violations": f"{entry.get('violations')}/{_f2(entry.get('expected_violations'))}",
+                "violation_rate": _pct(entry.get("violation_rate")),
+                "coverage_p": _p4((entry.get("coverage") or {}).get("p_value")),
+                "independence_p": _p4((entry.get("independence") or {}).get("p_value")),
+                "conclusion": str(entry.get("conclusion", "—")),
+            })
+    view["var_backtest_rows"] = bt_rows
+
+    vol = report.get("volatility") or {}
+    ewma = vol.get("ewma_latest") or {}
+    garch = vol.get("garch11") or {}
+    regime = vol.get("regime") or {}
+    ann = (report.get("meta") or {}).get("annualization_factor", 252)
+    daily_vol = ewma.get("volatility_forecast")
+    view["volatility"] = {
+        "ewma_daily": _pct(daily_vol),
+        "ewma_annual": _pct(daily_vol * ann**0.5 if isinstance(daily_vol, (int, float)) else None),
+        "garch_persistence": _f2(garch.get("persistence")),
+        "garch_long_run": _pct(garch.get("long_run_volatility")),
+        "garch_error": garch.get("error"),
+        "regime": regime.get("latest") if isinstance(regime, dict) and "error" not in regime else None,
+    }
+
+    stress_rows: list[dict[str, str]] = []
+    stress_section = report.get("stress") or {}
+    for name, entry in (stress_section.get("scenarios") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        if "error" in entry:
+            stress_rows.append({"name": name, "note": "样本不覆盖该窗口"})
+            continue
+        window = entry.get("window") or {}
+        stress_rows.append({
+            "name": name,
+            "window": f"{window.get('start', '?')}~{window.get('end', '?')}",
+            "n_days": str(entry.get("n_days", "—")),
+            "cum_loss": _pct(entry.get("strategy_cumulative_loss")),
+            "peak_trough": _pct(entry.get("strategy_peak_trough_drawdown")),
+            "peak_to_var": _f2(entry.get("peak_to_var")),
+            "note": "",
+        })
+    view["stress_rows"] = stress_rows
+
+    perf = report.get("performance") or {}
+    if isinstance(perf, dict) and "error" not in perf:
+        view["performance"] = {
+            "sharpe": _f2((perf.get("sharpe") or {}).get("sharpe")),
+            "sortino": _f2((perf.get("sortino") or {}).get("sortino")),
+            "beta": _f2(perf.get("beta")),
+            "treynor": _f2((perf.get("treynor") or {}).get("treynor") if perf.get("treynor") else None),
+            "information_ratio": _f2((perf.get("information_ratio") or {}).get("information_ratio") if perf.get("information_ratio") else None),
+        }
+    return view
+
+
 def _summary_display_rows(summary: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Ordered display rows for the run-detail summary card."""
     if not summary:
@@ -124,6 +244,9 @@ def create_app() -> Flask:
         artifacts = get_run_artifacts(run_id)
         summary = extract_run_summary(record)
         equity_svg = equity_curve_svg(record)
+        from quant_research_engine.gui import risk_report as rr
+
+        risk_report = rr.load_risk_report(run_id)
         return render_template(
             "run_detail.html",
             run=record,
@@ -133,6 +256,8 @@ def create_app() -> Flask:
             summary=summary,
             summary_fields=_summary_display_rows(summary),
             equity_svg=equity_svg,
+            risk_report=risk_report,
+            risk_view=_risk_display(risk_report),
         )
 
     @app.route("/compare")
@@ -245,6 +370,33 @@ def create_app() -> Flask:
         if yaml_text is None:
             return jsonify({"error": "not found"}), 404
         return jsonify({"yaml": yaml_text})
+
+    # --- 风险分析（FRM 风险模块 R3）---
+
+    @app.route("/api/runs/<run_id>/risk-report", methods=["POST"])
+    def api_run_risk_report(run_id: str) -> Any:
+        """按需生成风险分析（bootstrap 开），异步 job 复用 daily_jobs 基建。"""
+        from quant_research_engine.gui import risk_report as rr
+
+        record = get_run(run_id)
+        if record is None:
+            return jsonify({"error": "run not found"}), 404
+        if record.get("status") != "completed":
+            return jsonify({"error": f"run 状态为 {record.get('status')}，仅 completed run 可生成"}), 400
+        try:
+            job = rr.start_risk_report_job(record)
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 409
+        return jsonify({"job_id": job["job_id"], "status": job["status"]})
+
+    @app.route("/api/runs/<run_id>/risk-report/job/<job_id>")
+    def api_run_risk_report_job(run_id: str, job_id: str) -> Any:
+        from quant_research_engine.gui.daily_jobs import get_daily_job
+
+        job = get_daily_job(job_id)
+        if job is None or job.get("pipeline") != f"risk-report:{run_id}":
+            return jsonify({"error": "job not found"}), 404
+        return jsonify(job)
 
     @app.route("/api/runs/<run_id>/artifact/<path:rel_path>")
     def api_run_artifact(run_id: str, rel_path: str) -> Any:

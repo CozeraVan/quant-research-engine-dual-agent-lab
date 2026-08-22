@@ -12,7 +12,22 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-CORE-002 (DONE — 1578 tests green；awaiting git approval)
+QRE-RISK-INTEGRATION-003 (DONE — 1599 tests green；awaiting git approval)
+
+2026-08-22: FRM 风险模块 R3 落地（R1=96db59d / R2=f52c0f4）。risk 包集成进
+回测报告与 GUI：risk/report.py + render_risk_markdown（汉化风险分析节，
+两位小数，分布与尾部/VaR回测/波动率/压力/绩效分区，error 降级）；
+新 gui/risk_report.py（组合级 equity_curve.csv daily_return 提取 +
+benchmark_close 可选 + finalize 钩子写 runs/<run_id>/risk_report.json +
+幂等追加 summary.md 风险节 + daily_jobs 按需 job bootstrap 开）；
+engine.py:354-361 收尾钩子（try/except 兜底同 smoke/promotion_gate）；
+app.py run_detail risk 视图 + POST/GET risk-report 端点（404/400/409）；
+run_detail.html 风险分析六卡片 + 老 run 按需生成按钮。#4 admin badge
+未加（refresh_overview 无 risk_report，硬塞超范围）。真实 E2E：mr01a
+5 股×2024-2025，n=484，99% VaR 1.50%/1.79%、ES 1.72%/2.19%，JB
+p<0.0001，VaR 回测两级均不拒绝，summary.md 风险节落盘。未 commit、
+未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-CORE-002 (DONE — 1578 tests green；awaiting git approval)
 
 2026-08-22: FRM 风险模块 R2 落地（R1 = commit 96db59d）。risk 包新增
 backtest_var（书2 Ch6：HIT、覆盖率 Bernoulli LR + 精确二项、独立性
@@ -169,12 +184,20 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 ## Git State
 
 - Current branch: `master`
-- Last commit: `96db59d` feat(risk): FRM 风险模块 R1 核心包（R2 未 commit，工作树含 R2 改动）
-- Working tree: clean except untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked).
+- Last commit: `96db59d` feat(risk): FRM 风险模块 R1 核心包（R2+R3 未 commit，工作树含两者改动）
+- Working tree: R2/R3 改动 + untracked `.claude/scheduled_tasks.lock` (lock file, intentionally untracked)。
 - **Run outputs now live outside the repo**: `outputs` → symlink to `/home/van/qre-outputs/` (all 19GB preserved there); `QRE_OUTPUT_DIR` env var overrides the batch runner output root.
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1599 passed, 4 warnings（2026-08-22, QRE-RISK-INTEGRATION-003；基线 1578 + 21 净增）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+真实 E2E：run 20260822T114522831346（mr01a 5股×2024-2025）→ risk_report.json + summary.md 风险节
+注：首跑 test_gui_factor_wizard.py::test_job_lock_conflict 失败，全量复跑 1599 全绿（已知 flake）
+```
 
 ```
 uv run pytest tests/ -x -q → 1578 passed, 4 warnings（2026-08-22, QRE-RISK-CORE-002；基线 1532 + 46 净增）

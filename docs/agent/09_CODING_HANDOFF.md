@@ -2,6 +2,88 @@
 
 ## Task ID
 
+QRE-RISK-INTEGRATION-003（FRM 风险管理模块 R3：risk 包集成进回测报告与 GUI 展示）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization；R2 也在同一待审批队列)
+
+## Implementation Summary
+
+把 risk 包接进回测生命周期与 GUI（CR R3 阶段；R1=96db59d / R2=f52c0f4）。
+
+**改动清单**：
+- `risk/report.py` + `render_risk_markdown(report_dict) -> str`：汉化
+  「## 风险分析」节，比率两位小数 / p 值四位，分区=分布与尾部（矩+JB+
+  VaR/ES 三口径×95/99 表）/ VaR 回测（违约数·覆盖率 LR p·独立性 LR p·
+  结论 + 多重检验警示）/ 波动率（EWMA 日+年化、GARCH α+β·长期波动·
+  半衰期、regime）/ 压力测试（四情景表 + Peak/VaR 参照 + reverse，有键
+  才渲染）/ 绩效（Sharpe/Sortino，有基准加 β/Treynor/IR/α）/ Bootstrap
+  CI（有键才渲染）。error 节降级「数据不足」一行。零 GUI 依赖。
+- 新 `gui/risk_report.py`：`extract_strategy_returns(record)`（定位组合级
+  equity_curve.csv——列头含 daily_return 或 total_equity 且不含 symbol
+  列，per-symbol 目录文件排除；daily_return 直取，缺则 pct_change 退化；
+  trade_date→DatetimeIndex；有 benchmark_close 列才取基准）；
+  `generate_risk_report`（var_backtest 开/stress 开/bootstrap 可配；
+  JSON tmp+os.replace 原子写 runs/<run_id>/risk_report.json；markdown
+  幂等追加产物 summary.md「## 风险分析」节——先移除既有同名副，无
+  summary.md 退化写 runs/<run_id>/risk_report.md）；
+  `finalize_risk_report`（仅 completed，bootstrap 关）；
+  `start_risk_report_job`（复用 daily_jobs.start_script_job，
+  lock_key=risk-report:<run_id>，in-process runner，bootstrap 开）。
+- `gui/engine.py:354-361`：_execute_and_finalize 尾部新钩子，与
+  smoke/promotion_gate 同模式 try/except 兜底。
+- `gui/app.py`：run_detail 路由加载 risk_report.json + `_risk_display`
+  卡片视图；POST /api/runs/<run_id>/risk-report（404/400 非 completed/
+  409 同 run 重入）+ GET …/risk-report/job/<job_id>（校验 pipeline 前缀）。
+- `templates/run_detail.html`：「风险分析」区——有报告渲染六组卡片
+  （VaR/ES 三口径表、分布/JB、VaR 回测表+结论、波动率、四情景压力表、
+  绩效）；无报告且 completed → 「未生成」+ 生成按钮（POST→5s 轮询→
+  完成自动刷新）；failed → 提示无分析。`static/style.css` 加
+  .risk-cards/.risk-card。
+- 测试：新 `tests/test_gui_risk_report.py` 17 个（提取口径×4、finalize
+  ×4、engine 钩子接线×1 含异常吞掉、端点×5、模板×3）；
+  `tests/test_risk_report.py` +TestRenderMarkdown 4 个。
+- **#4 admin 策略列表 badge 未加**（任务书允许）：admin 策略表数据源
+  refresh_overview（outputs/refresh 产物，非 GUI run）无 risk_report.json，
+  需对 refresh 管线额外跑风险分析，超出 R3「别硬塞」边界。
+
+**真实 E2E**（未重启 qre-gui，直接 module executor 跑）：
+run 20260822T114522831346（mr01a，5 股 × 2024-01~2025-12，vectorized）
+→ completed；risk_report.json n=484；99% VaR 参数正态 1.50%/历史模拟
+1.79%，ES 1.72%/2.19%；JB=629.81 p<0.0001 拒绝正态（超额峰度 5.35）；
+VaR 回测 95% 违约 19/24.15（covLR p=0.2648）、99% 7/4.83（p=0.3524）、
+独立性 p=0.2244/0.6743 均不拒绝；EWMA σ≈0（策略长时段空仓，R2 口径
+如实输出，Peak/VaR 比值失真 -2532.15 已知现象留后续）；GARCH α+β=1.00
+非平稳如实标注；2024 小微盘情景覆盖（36 天，损失 -6.20% 即盈利），
+其余三情景「样本不覆盖」；Sharpe 0.02/Sortino 0.03；summary.md 风险节
+追加且既有结构保留。
+
+## Validation
+
+```
+uv run pytest tests/ -x -q → 1599 passed, 4 warnings（1578 + 21 净增）
+（首跑 test_gui_factor_wizard.py::test_job_lock_conflict 失败 → 全量复跑
+  全绿，已知环境敏感 flake）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
+
+## Git Finalization
+
+未 commit（用户约束：不 commit、不重启 qre-gui.service）。建议 commit
+message：`feat(risk): FRM 风险模块 R3 回测报告与 GUI 集成`。
+
+---
+
+# 以下为历史 handoff（QRE-RISK-CORE-002 及更早）
+
+## Task ID
+
 QRE-RISK-CORE-002（FRM 风险管理模块 R2：VaR 回测 + 压力测试 + Bootstrap 推断）
 
 ## Written By

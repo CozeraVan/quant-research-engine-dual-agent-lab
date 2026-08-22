@@ -350,6 +350,16 @@ def _execute_and_finalize(
         except Exception:
             pass
 
+    # FRM 风险分析：completed run 自动生成 risk_report.json + 报告风险节。
+    # 失败绝不影响 run 本身（与 smoke/promotion_gate 同模式兜底）。
+    if record.get("status") == "completed":
+        try:
+            from quant_research_engine.gui import risk_report
+
+            risk_report.finalize_risk_report(record)
+        except Exception:
+            pass
+
 
 def _run_via_module(
     *,

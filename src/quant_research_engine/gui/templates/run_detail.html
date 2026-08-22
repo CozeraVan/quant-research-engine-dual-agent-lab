@@ -47,6 +47,96 @@
 <div class="equity-chart">{{ equity_svg | safe }}</div>
 {% endif %}
 
+<h2>风险分析 Risk Analysis <span class="opt">（QRE risk 包，FRM 口径；仅风险度量，非投资建议）</span></h2>
+{% if risk_view %}
+<div class="risk-cards">
+  <div class="risk-card">
+    <h3>尾部风险 VaR / ES（日损失）</h3>
+    <table>
+      <thead><tr><th>置信</th><th>口径</th><th>VaR</th><th>ES</th></tr></thead>
+      <tbody>
+      {% for row in risk_view.tail_rows %}
+      <tr><td>{{ row.level }}</td><td>{{ row.method }}</td><td class="num">{{ row.var }}</td><td class="num">{{ row.es }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="risk-card">
+    <h3>收益分布 / 正态性</h3>
+    {% if risk_view.distribution %}
+    <p>偏度 {{ risk_view.distribution.skew }}，超额峰度 {{ risk_view.distribution.excess_kurtosis }}</p>
+    <p>Jarque-Bera 统计量 {{ risk_view.distribution.jb_statistic }}，p={{ risk_view.distribution.jb_p_value }}
+      → <strong>{{ '拒绝正态（5%）' if risk_view.distribution.reject_normal else '不拒绝正态（5%）' }}</strong></p>
+    {% else %}
+    <p class="opt">数据不足</p>
+    {% endif %}
+  </div>
+  <div class="risk-card">
+    <h3>VaR 回测（HIT / LR）</h3>
+    {% if risk_view.var_backtest_rows %}
+    <table>
+      <thead><tr><th>置信</th><th>违约/期望</th><th>违约率</th><th>覆盖率 p</th><th>独立性 p</th></tr></thead>
+      <tbody>
+      {% for row in risk_view.var_backtest_rows %}
+      <tr><td>{{ row.level }}</td><td class="num">{{ row.violations }}</td><td class="num">{{ row.violation_rate }}</td>
+        <td class="num">{{ row.coverage_p }}</td><td class="num">{{ row.independence_p }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% for row in risk_view.var_backtest_rows %}
+    <p class="opt">{{ row.level }}：{{ row.conclusion }}</p>
+    {% endfor %}
+    {% else %}
+    <p class="opt">数据不足</p>
+    {% endif %}
+  </div>
+  <div class="risk-card">
+    <h3>波动率</h3>
+    <p>EWMA 次日预测：日 {{ risk_view.volatility.ewma_daily }}（年化 {{ risk_view.volatility.ewma_annual }}）</p>
+    {% if risk_view.volatility.garch_error %}
+    <p class="opt">GARCH(1,1)：{{ risk_view.volatility.garch_error }}</p>
+    {% else %}
+    <p>GARCH(1,1)：α+β={{ risk_view.volatility.garch_persistence }}，长期波动（日）{{ risk_view.volatility.garch_long_run }}</p>
+    {% endif %}
+    {% if risk_view.volatility.regime %}
+    <p>当前 regime：<strong>{{ risk_view.volatility.regime }}</strong></p>
+    {% endif %}
+  </div>
+  {% if risk_view.stress_rows %}
+  <div class="risk-card">
+    <h3>压力测试（历史情景回放）</h3>
+    <table>
+      <thead><tr><th>情景</th><th>窗口</th><th>天数</th><th>累计损失</th><th>峰谷</th><th>Peak/VaR</th></tr></thead>
+      <tbody>
+      {% for row in risk_view.stress_rows %}
+      <tr><td>{{ row.name }}</td>
+        {% if row.note %}<td colspan="5" class="opt">{{ row.note }}</td>
+        {% else %}<td>{{ row.window }}</td><td class="num">{{ row.n_days }}</td>
+        <td class="num">{{ row.cum_loss }}</td><td class="num">{{ row.peak_trough }}</td>
+        <td class="num">{{ row.peak_to_var }}</td>{% endif %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if risk_view.performance %}
+  <div class="risk-card">
+    <h3>绩效风险指标</h3>
+    <p>Sharpe {{ risk_view.performance.sharpe }}，Sortino {{ risk_view.performance.sortino }}，
+      β {{ risk_view.performance.beta }}，Treynor {{ risk_view.performance.treynor }}，
+      IR {{ risk_view.performance.information_ratio }}</p>
+  </div>
+  {% endif %}
+</div>
+{% elif run.status == 'completed' %}
+<p class="opt">该 run 未生成风险分析（可能是老 run）。</p>
+<button id="btn-risk-report" class="btn btn-primary">生成风险分析（含 bootstrap，约需数分钟）</button>
+<span id="risk-report-status"></span>
+{% else %}
+<p class="opt">run 未成功完成，无风险分析。</p>
+{% endif %}
+
 {% if artifacts %}
 <h2>输出文件 Artifacts</h2>
 {% set groups = [('Excel 工作簿', '.xlsx'), ('CSV 数据表', '.csv'), ('JSON 数据', '.json'), ('其他文件', None)] %}
@@ -85,6 +175,44 @@
 
 <script>
 var runId = "{{ run.run_id }}";
+
+var btnRisk = document.getElementById("btn-risk-report");
+if (btnRisk) {
+  btnRisk.addEventListener("click", function() {
+    btnRisk.disabled = true;
+    var statusEl = document.getElementById("risk-report-status");
+    statusEl.textContent = " 已提交，生成中…";
+    fetch("/api/runs/" + runId + "/risk-report", {method: "POST"})
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        if (res.status !== 200) {
+          statusEl.textContent = " 提交失败: " + (res.body.error || res.status);
+          btnRisk.disabled = false;
+          return;
+        }
+        var jobId = res.body.job_id;
+        var timer = setInterval(function() {
+          fetch("/api/runs/" + runId + "/risk-report/job/" + jobId)
+            .then(function(r) { return r.json(); })
+            .then(function(job) {
+              if (job.status === "completed") {
+                clearInterval(timer);
+                statusEl.textContent = " 已生成，正在刷新…";
+                window.location.reload();
+              } else if (job.status === "failed") {
+                clearInterval(timer);
+                statusEl.textContent = " 生成失败: " + (job.error || "未知错误");
+                btnRisk.disabled = false;
+              }
+            });
+        }, 5000);
+      })
+      .catch(function(err) {
+        statusEl.textContent = " 提交失败: " + err;
+        btnRisk.disabled = false;
+      });
+  });
+}
 var fullParams = {{ (run.full_params or None) | tojson | safe }};
 
 document.getElementById("btn-rerun").addEventListener("click", function() {
