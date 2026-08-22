@@ -2,6 +2,29 @@
 
 ## Task ID
 
+QRE-RISK-CORE-001 (FRM 风险管理模块 R1：risk 包核心)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+新包 `src/quant_research_engine/risk/`（纯函数，不读 DB、不依赖 QRE 内部
+状态，cluster-ashare 可独立 import）：tail（VaR/ES 历史模拟/参数正态/
+EWMA 三口径 + 偏度峰度 + JB）、volatility（EWMA λ=0.94 + shift(1) 防前视
+forecast + GARCH(1,1) 平稳性/V_L/半衰期 + regime）、dependence
+（Spearman/Kendall/正定性/simple↔log）、performance（Sharpe/Treynor/
+Sortino/IR/Jensen，Sharpe 与引擎 portfolio/risk.py 同口径）、report
+（build_risk_report 机读骨架）。公式以 FRM 知识摘要为准，61 个新测试
+全部教材例题/手算/scipy 对照核对。1532 tests green（+61 净增）。
+未 commit、未重启 qre-gui（用户约束）。细节见 `09_CODING_HANDOFF.md` 顶部。
+上一任务：QRE-GUI-DEEP-VALIDATE-001（deep-validate 真功能，1471 green）。
+
+# Task Handoff (archive)
+
+## Task ID
+
 QRE-GUI-CREATE-GAPS-001 (新增策略/因子闭环四缺口)
 
 ## Current Status

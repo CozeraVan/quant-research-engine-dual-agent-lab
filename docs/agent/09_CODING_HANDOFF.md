@@ -2,6 +2,111 @@
 
 ## Task ID
 
+QRE-RISK-CORE-001（FRM 风险管理模块 R1：risk 包核心 tail/volatility/dependence/performance + 报告骨架）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization)
+
+## Implementation Summary
+
+新包 `src/quant_research_engine/risk/`（纯函数 + pandas/numpy/arch/scipy，
+不读 DB、不依赖 QRE 内部状态，可被 cluster-ashare 独立 import）。公式一律
+以 `docs/frm/FRM量化风控知识摘要.md` 为准，损失取正号约定（书4 Ch1）。
+
+**包结构与接口**：
+- `constants.py`：ANNUALIZATION_FACTOR=252、CONFIDENCE_LEVELS=(0.95,0.99)、
+  EWMA_LAMBDA=0.94、DEFAULT_RISK_FREE_RATE=0.03、REGIME_QUANTILES=(1/3,2/3)、
+  Z_95/Z_99（scipy 精确值）；每个结果 dict 回显所用参数。
+- `tail.py`：parametric_normal_var_es / historical_var_es /
+  ewma_parametric_var_es / skew_kurtosis / jarque_bera_test /
+  distribution_summary。历史模拟用 numpy linear 插值（披露），
+  ES=不低于 VaR 的损失均值（含 VaR，ES≥VaR 恒成立）；偏度/峰度双口径
+  （sample analog 1/n = scipy bias=True；n−1 校正 = bias=False）；
+  JB 用 scipy（教材式 12.11 是 T−1，scipy 是 T，note 披露）。
+- `volatility.py`：ewma_variance_series（raw：σ²_n=λσ²_{n−1}+(1−λ)r²_n，
+  手算 [1e-4,1.18e-4,1.6492e-4] 核对）+ ewma_forecast_series（raw.shift(1)
+  point-in-time 防前视）+ ewma_volatility_series + latest_ewma_forecast +
+  fit_garch11（arch，收益 ×100 拟合 ÷100² 还原 ω/V_L；α+β<1 平稳、
+  V_L=ω/(1−α−β)、半衰期 ln(0.5)/ln(α+β)）+ volatility_regime
+  （三分位规则写死并披露）。
+- `dependence.py`：spearman_corr / kendall_corr（scipy，式 12.13/12.14）、
+  is_positive_definite（最小特征值 > 1e-8）、simple_to_log_returns /
+  log_to_simple_returns（log1p/expm1，式 12.5）。
+- `performance.py`：beta（式 5.1）/ sharpe_ratio（与引擎 portfolio/risk.py
+  同口径：(mean(r−rf/252)/std(ddof=1))·√252）/ sortino_ratio /
+  treynor_ratio / information_ratio / jensens_alpha（市场模型回归截距，
+  日频 α 与 ×252 年化均报）/ performance_summary（benchmark=None 时
+  基准相关键为 null）。
+- `report.py`：build_risk_report(returns, benchmark=None, config=None) -> dict
+  （机读 R1 骨架；meta 参数回显 + distribution/tail/volatility/dependence/
+  performance 六节；数据不足的节降级 {"error": ...} 不抛异常；markdown
+  渲染留 R3）。
+
+**测试（61 个新增）**：tests/test_risk_{tail,volatility,dependence,
+performance,report}.py。教材例题/解析解复现：书4 Ch1 式 1.7
+（μ=−20,σ=30,99% → VaR 49.79/ES 59.96）；EWMA 三步手算；GARCH 确定性
+模拟（手写递推固定 seed，真值 ω=1e-6/α=0.08/β=0.90）→ 拟合 α≈0.076/
+β≈0.899、平稳、半衰期 27.7 天 sane；α+β=1.05 模拟 → stationary=False；
+EWMA 与 arch 固定参数 GARCH(ω=0,α=0.06,β=0.94) 交叉一致（shift(1) 后
+~1e-12）；偏度/峰度对 scipy 双口径；JB 正态样本不拒绝/t4 拒绝；
+Spearman/Kendall 手算小样本（0.5、1/3）；equicorrelation PD 通过 /
+[[1,2],[2,1]] 拒绝；simple↔log 往返 1e-12；Sharpe 手算 10.5131 且与
+portfolio/risk.py 同输入同值（rel 1e-9）；Sortino 手算 36.66；IR 手算
+4.205；Jensen 精确线性恢复（α=0.001, β=1.5）；regime 三段合成标签正确；
+report 结构键/参数回显/benchmark=None 降级/JSON 可序列化。
+
+**依赖**：pyproject.toml + uv.lock 新增 arch>=6.3.0（前一轮已装，实际
+arch 8.0.0 / scipy 1.18.1）。
+
+## Key Decisions
+
+1. **EWMA raw 口径采用 brief 手算数（σ²_n 含 r_n）**：式 3.2 原文用 r_{n−1}，
+   但 brief 明确给出手算序列 [1e-4, 1.18e-4, 1.6492e-4]（要求 σ²_n 含 r_n）。
+   两者仅一阶平移关系；raw 序列末值即次日预测，point-in-time 对齐另提供
+   ewma_forecast_series（raw.shift(1)）满足「rolling 必须 shift(1) 防前视」。
+   与 arch 交叉验证确认语义（arch day-t 方差仅用 r_{t−1} = 本实现 shift(1)）。
+2. **GARCH 模拟用确定性手写递推**：arch 8.0.0 的 simulate 不再接受 seed 参数
+   （np.random.seed 亦不复现），测试改为固定 default_rng 的手写式 3.4 递推。
+3. **arch 8.0.0 无 RiskMetrics2006/EWMAVariance 的 arch_model 字符串入口**：
+   交叉验证改用固定参数 GARCH（ω=0, α=1−λ, β=λ，EWMA 是其特例）。
+4. **历史模拟 ES 取「≥VaR」均值**（含 VaR 本身）：保证 ES≥VaR 在任意小
+   样本/并列值下恒成立；口径写进返回 dict 的 note。
+5. **Sharpe 与引擎同口径**（std ddof=1、rf/252 日化、×√252），用
+   summarize_equity_curve 做同输入一致性抽查（rel 1e-9）。
+
+## Files Changed
+
+- 新增：`src/quant_research_engine/risk/{__init__,constants,tail,volatility,
+  dependence,performance,report}.py`
+- 新增：`tests/test_risk_{tail,volatility,dependence,performance,report}.py`
+  （61 用例）
+- 既有（前一轮）：pyproject.toml / uv.lock（arch>=6.3.0）、
+  docs/agent/08_IMPLEMENTATION_BRIEF.md、docs/frm/（教材 + CR + 摘要）
+
+## Validation
+
+```
+uv run pytest tests/ -x -q → 1532 passed, 4 warnings（基线 1471 + 61 净增，全绿）
+风险包单测 61/61 绿（含全部教材例题复现）
+scripts/check-progress-docs.sh → 见 10_REVIEW_REPORT
+git diff --check → clean
+```
+
+## Known Limitations / Follow-ups
+
+- R2（HIT/LR 回测、压力测试、CBB bootstrap）与 R3（markdown 渲染、回测报告
+  集成、GUI 展示区）不在本任务范围（见 08 brief Non-Goals）。
+- 非平稳 GARCH 输入（α+β≥1）触发 arch DataScaleWarning（爆炸模拟的固有
+  现象），测试中显式 filterwarnings 压制。
+- 未 git commit、未重启 qre-gui.service（用户约束）。
+
+## Task ID
+
 QRE-GUI-DEEP-VALIDATE-001 (deep-validate 501 骨架落地：策略 YAML → 逐日信号池 → 四关验证)
 
 ## Written By

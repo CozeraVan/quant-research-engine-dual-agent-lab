@@ -2,6 +2,58 @@
 
 ## Task ID
 
+QRE-RISK-CORE-001（FRM 风险管理模块 R1：risk 包核心）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **纯函数边界**：risk 包零 DB、零 QRE 内部 import（grep 核实：只 import
+  numpy/pandas/scipy/arch 与自身 constants/volatility），满足 cluster-ashare
+  独立 import 的最终目标。`tail.ewma_parametric_var_es` 对
+  `volatility.ewma_variance_series` 是包内延迟 import，无循环。
+- **公式忠实度**：逐条对照 `docs/frm/FRM量化风控知识摘要.md`——参数正态
+  VaR/ES（书4 Ch1 式 1.7，教材例题 49.79/59.96 复现到 1e-2 内）、历史模拟
+  （书4 Ch2 有序统计量 + 插值披露）、EWMA（式 3.2，brief 手算序列逐位
+  核对）、GARCH（式 3.4，V_L/半衰期/平稳判据）、偏度峰度（书2 Ch5 sample
+  analog 手算 + scipy 双口径）、JB（式 12.11，T vs T−1 差异披露）、
+  Spearman/Kendall（式 12.13/12.14 手算 0.5、1/3）、正定性（书2 Ch12
+  特征值法）、绩效五指标（书1 Ch5，Sharpe 与 portfolio/risk.py 同口径
+  抽查一致 rel 1e-9）。所有口径差异（ES 含 VaR、插值方法、scipy JB 用 T）
+  都写进返回 dict 的 note 字段，报告可审计。
+- **防前视**：ewma_forecast_series = raw.shift(1) 有专门测试（改动 r_t
+  不影响 ≤t 的预测值）；arch 交叉验证确认 raw/shift(1) 语义对应关系。
+- **常量集中与参数回显**：constants.py 单一来源；report.meta 与各结果 dict
+  均携带所用 λ/rf/年化/置信水平/分位。
+- **降级语义**：report 对可预期失败（GARCH <50 obs、<2 obs）降级
+  {"error": ...} 而非崩溃；benchmark=None 时基准节为 null（有测试）。
+- **测试质量**：61 用例全部含已知答案（解析值/手算/scipy 对照/确定性
+  模拟复现），无纯冒烟断言；随机数据全部固定 seed。
+- **基线无回归**：1532 passed（1471 + 61 净增），4 warnings 与基线一致
+  （numpy RuntimeWarning 来自既有用例，非本任务引入）。
+
+## Required Fixes
+
+None.
+
+## Residual Risks
+
+- arch 8.0.0 与 brief 写作时的 API 差异（simulate 无 seed、无 RiskMetrics
+  字符串入口）已用手写确定性模拟 + 固定参数 GARCH 绕开；若未来降级 arch
+  版本交叉测试仍成立（只用 fix/conditional_volatility 基础 API）。
+- GARCH 拟合是 MLE，短样本（<~500 obs）参数噪声大；测试用 3000-4000 obs
+  的 sane 范围断言，生产短序列结果应配合 V_L/半衰期的量级检查阅读。
+- R2/R3 未做（backtest_var/stress/inference/markdown 渲染/集成），按 CR
+  roadmap 后续单独 brief。
+
+## Task ID
+
 QRE-GUI-DEEP-VALIDATE-001（deep-validate 501 骨架落地）
 
 ## Reviewer

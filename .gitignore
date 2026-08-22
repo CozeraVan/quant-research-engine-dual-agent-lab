@@ -34,3 +34,4 @@ logs/
 
 # Agent temporary files
 .agent-backups/
+docs/frm/*.pdf

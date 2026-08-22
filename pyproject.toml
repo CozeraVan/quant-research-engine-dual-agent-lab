@@ -5,6 +5,7 @@ description = "Reusable multi-market research and backtesting framework, first i
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "arch>=6.3.0",
   "flask>=3.0.0",
   "matplotlib>=3.7.0",
   "openpyxl>=3.1.0",

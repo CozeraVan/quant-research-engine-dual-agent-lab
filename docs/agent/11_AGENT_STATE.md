@@ -12,7 +12,21 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-DEEP-VALIDATE-001 (DONE — 1471 tests green；awaiting git approval)
+QRE-RISK-CORE-001 (DONE — 1532 tests green；awaiting git approval)
+
+2026-08-22: FRM 风险模块 R1 落地。新包 `src/quant_research_engine/risk/`
+（纯函数 + pandas/numpy/arch/scipy，不读 DB、不依赖 QRE 内部状态，未来
+cluster-ashare 独立 import）：tail（VaR/ES 三口径 + 偏度峰度 + JB +
+分布摘要）、volatility（EWMA raw + shift(1) forecast + GARCH(1,1) arch
+拟合含平稳性/V_L/半衰期 + regime 标记）、dependence（Spearman/Kendall +
+正定性 + simple/log 换算）、performance（Sharpe/Treynor/Sortino/IR/Jensen，
+Sharpe 与 portfolio/risk.py 同口径）、report（build_risk_report 机读骨架，
+R3 再做 markdown 渲染）。公式以 docs/frm/FRM量化风控知识摘要.md 为准；
+61 个新测试全为已知答案核对（教材式 1.7 例题 49.79/59.96、EWMA 手算、
+GARCH 确定性模拟真值恢复、scipy 双口径对照、秩相关手算 0.5/⅓、绩效
+手算值）。未 commit、未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-GUI-DEEP-VALIDATE-001 (DONE — 1471 tests green；awaiting
+git approval)。
 
 2026-08-20: deep-validate 501 骨架落地为真功能。cluster-ashare 新增薄脚本
 analysis/pool_from_conditions.py（条件 JSON→逐日池 parquet，DB 全留 cluster
@@ -161,6 +175,13 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1532 passed, 4 warnings（2026-08-22, QRE-RISK-CORE-001；基线 1471 + 61 净增）
+风险包单测 61/61 绿（教材例题/解析解/手算/scipy 对照全覆盖）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
 ```
 uv run pytest tests/ -x -q → 1471 passed, 4 warnings (2026-08-20, QRE-GUI-DEEP-VALIDATE-001)

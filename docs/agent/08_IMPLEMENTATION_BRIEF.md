@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-GUI-DEEP-VALIDATE-001（deep-validate 501 骨架落地：策略 YAML → 逐日信号池 → 四关验证）
+QRE-RISK-CORE-001（FRM 风险管理模块 R1：risk 包核心 tail/volatility/dependence/performance + 报告骨架）
 
 ## Created By
 
-KIMI_CODE（用户 2026-08-20 直接指定的任务书；承接 cfb860d 的 501 骨架）
+KIMI_CODE（用户 2026-08-21 直接指定的任务书；依据已批准 CR `docs/frm/CR_2026-08-21_frm_risk_module.md` R1 阶段）
 
 ## Intended Implementer
 
@@ -14,89 +14,86 @@ KIMI_CODE
 
 ## Goal
 
-让 GUI 对任意 catalog/沙箱策略一键跑 cluster-ashare 的四关重型验证
-（`analysis/validate_factor.py`）。核心缺口是「策略 YAML → 逐日信号池」
-转换器。本轮落地：
+落地 FRM 风险模块 R1：新包 `src/quant_research_engine/risk/`，**纯函数 +
+pandas/numpy，不读 DB、不依赖 QRE 内部状态**——未来要被 cluster-ashare
+股票池项目独立 import（用户明确的最终目标）。四个模块 + 报告骨架：
 
-1. **cluster-ashare 侧薄脚本** `analysis/pool_from_conditions.py`：输入条件
-   JSON（QRE 转换器产出）+ 区间，输出逐日池 parquet（trade_date, ts_code）。
-   DB 访问与因子口径全部留在 cluster-ashare（QRE 只读业务库传统不破）。
-   条件求值**不重写**：脚本把 QRE 的 `src/` 插入 sys.path，直接 import
-   `quant_research_engine.evaluation.signals.evaluate_expression_signal`
-   （纯 ast/pandas 模块，无重依赖），框架构造对齐 QRE evaluation engine
-   （sort ts_code/trade_date 后整表面板求值）。
-2. **QRE 转换器**（纯函数，新模块 `gui/deep_validate.py`）：
-   `spec_to_conditions(spec, d0, d1)` → 条件 JSON（name / expression /
-   factor_fields / market_fields / used_fields / d0 / d1）。used_fields 用
-   ast 走 expression 的 Name 节点，cluster 脚本只拉取被引用的列（控内存）。
-   `locate_strategy_yaml(name)`：沙箱优先，其次 catalog rglob 按
-   experiment.name / 文件 stem 匹配。`parse_report_summary(md_text)`：
-   解析四关报告 markdown 的「## 0. 结论」（GO/NO-GO + reasons）与
-   「## 3. 四关结果」表（各关平均超额/t），纯函数可单测。
-3. **异步 job**：`start_deep_validate_job` 复用 `daily_jobs.start_script_job`
-   （lock_key=`deep-validate:<name>`，同名串行；runner 可注入便于测试）。
-   runner 顺序跑两个 subprocess（cluster `.venv/bin/python`）：
-   ① pool_from_conditions.py → ② validate_factor.py --pool-parquet
-   （--price-cache / --eval-cache 按区间落 cluster outputs 实现断点续跑；
-   daily_basic 缓存存在则加 --basic-cache 启用 gate4）。终态解析报告写
-   job_dir/result.json（verdict/reasons/gates 摘要/报告路径/池统计）。
-4. **API**：`POST /api/strategies/<name>/deep-validate`（可带 d0/d1 覆盖，
-   默认 2015-01-01 ~ 当天）→ 定位 YAML → StrategySpec 解析 → 无入场表达式
-   400 → cluster venv/脚本缺失 500 → 因子存在性检查（复用
-   `_default_column_lookup` + `find_missing_factor_columns`，缺失则入
-   factor_request_queue 并 400）→ 提交 job 返回 job_id；同名在途 409。
-   新增 `GET /api/strategies/<name>/deep-validate/<job_id>` 轮询（终态附
-   result.json）。
-5. **前端**：index.html 沙箱列表每行加「深度验证」按钮；提交后轮询（10s
-   间隔，不设放弃上限）；终态行内渲染 GO 绿 / NO-GO 红 + 四关净超额摘要
-   + 报告路径，失败显示错误。
+1. `risk/tail.py`：VaR/ES 三口径（历史模拟有序统计量、参数正态、EWMA 参数法）
+   + 偏度/峰度 + JB 正态检验 + 分布摘要。损失取正号约定（教材书4 Ch1）。
+2. `risk/volatility.py`：EWMA 波动率序列（λ=0.94，RiskMetrics 递推）；
+   GARCH(1,1) 拟合（arch，α+β<1 平稳性检查、V_L=ω/(1−α−β)、半衰期）；
+   波动率 regime 简单标记（分位规则写死并披露）。
+3. `risk/dependence.py`：Spearman/Kendall 秩相关（scipy）、相关矩阵正定性
+   检查（特征值）、simple/log 收益换算。
+4. `risk/performance.py`：Sharpe/Treynor/Sortino/IR/Jensen's α（书1 Ch5 公式；
+   Sharpe 口径与引擎 `portfolio/risk.py` 一致：(mean(r−rf/252)/std)·√252）。
+5. `risk/report.py`：`build_risk_report(returns, benchmark=None, config=None)
+   -> dict` 机读骨架（markdown 渲染留 R3）。
 
-## Semantics
+## Semantics（公式一律以 `docs/frm/FRM量化风控知识摘要.md` 为准）
 
-- 信号池口径：T 日收盘满足**入场条件**的股票集合；出场/止盈止损/持仓参数
-  不进池（四关验证的是信号本身的选股能力），报告/结果注明该口径。
-- 默认区间 2015-01-01 ~ 今天；请求参数 d0/d1 可覆盖（YYYY-MM-DD 校验）。
-- 表达式求值语义与 QRE evaluation engine 一致（同一函数，整表面板
-  sort(ts_code, trade_date) 后求值；含 shift() 的表达式按此口径）。
-- 区间缓存键：price/eval 缓存文件名含 d0/d1，换区间不命中旧缓存
-  （load_price_panel 对已有缓存路径不做范围校验，必须靠文件名隔离）。
-- 验证 name 用 `qre_<safe_name>`，报告落 cluster 侧
-  `outputs/factor_mining/validation/qre_<name>_四关验证报告.md`（不改
-  cluster 代码，只用其输出目录）。
+- 参数正态 VaR = μ + σ·z_X，ES = μ + σ·φ(z_X)/(1−X)（损失口径；z_95=1.64485，
+  z_99=2.32635）。教材例题：μ=−20, σ=30, X=99% → VaR=49.79, ES=59.96
+  （书4 Ch1 式 1.7）——作为解析值单测。
+- 历史模拟：损失升序后取有序统计量/线性插值分位；ES = 超 VaR 损失均值。
+  方法写进返回 dict（插值方法披露）。
+- EWMA：σ²_n = λ·σ²_{n−1} + (1−λ)·r²_{n−1}（式 3.2），λ=0.94（RiskMetrics
+  日频推荐）；初始化 σ²_1 = r²_1 并披露；序列按「day t 的值仅用 ≤t−1 数据」
+  对齐（自带 shift(1) 防前视语义）；最新值即次日 σ 预测。
+- GARCH(1,1)：σ²_n = ω + α·r²_{n−1} + β·σ²_{n−1}（式 3.4）；用 arch 拟合
+  （收益 ×100 拟合后 ÷100² 还原方差，arch 官方数值稳定性惯例）；返回
+  ω/α/β、α+β、平稳标志、V_L、半衰期 ln(0.5)/ln(α+β)、最新条件波动。
+- 偏度/峰度：教材 sample analog（μ̂3/σ̂³、μ̂4/σ̂⁴，1/n 口径）与
+  n−1 小样本校正版（= scipy bias=False）双口径；JB = scipy.stats.jarque_bera
+  （χ²(2)，教材式 12.11 用 T−1，scipy 用 T，差异披露）。
+- 秩相关：scipy.stats.spearmanr / kendalltau（式 12.13/12.14）。
+- 正定性：相关矩阵最小特征值 > tol → positive definite（书2 Ch12）。
+- 绩效：Sharpe=(E[R]−r)/σ、Treynor=(E[R]−r)/β、Sortino=(R_p−T)/ downside
+  dev、TE=std(R_p−R_b)、IR=mean(active)/TE、Jensen α = 市场模型回归截距
+  （日频 α 与 ×252 年化均报）；β=cov(R_i,R_M)/σ²_M。
+- 常量集中 `risk/constants.py`：年化 252、置信水平 95%/99%、λ=0.94、
+  默认 rf=3%/年、regime 分位 (1/3, 2/3)；每个结果 dict 携带所用参数。
 
 ## Scope
 
-1. cluster-ashare（邻居项目新增一个脚本，不改既有代码）：
-   `analysis/pool_from_conditions.py`。
-2. QRE：`src/quant_research_engine/gui/deep_validate.py`（新模块：转换器 +
-   job 启动 + 报告解析）。
-3. `gui/app.py`：501 骨架替换为真实现 + GET 轮询端点。
-4. `gui/templates/index.html`：沙箱行加按钮 + 轮询渲染。
-5. tests：新 `tests/test_gui_deep_validate.py`（转换器纯函数 / 报告解析 /
-   API mock subprocess / 409 / 400 / 500 路径）；删除/改写旧 501 测试。
-6. docs/agent 08/10/09/05/11 同步。
+1. `src/quant_research_engine/risk/`：`__init__.py`、`constants.py`、`tail.py`、
+   `volatility.py`、`dependence.py`、`performance.py`、`report.py`。
+2. `pyproject.toml`：新增依赖 `arch`、`scipy`（CR §7 已定）；`uv sync`。
+3. `tests/test_risk_tail.py`、`test_risk_volatility.py`、`test_risk_dependence.py`、
+   `test_risk_performance.py`、`test_risk_report.py`。
+4. docs/agent 08/10/09/05/11 同步。
 
 ## Non-Goals
 
-- 不 git commit、不重启 qre-gui.service；不改 cluster-ashare 既有代码
-  （只新增一个 analysis 脚本）；QRE 侧不直连业务库取数（DB 全走 cluster
-  脚本）；不改 validate_factor.py / factor_validation 任何文件；不动
-  出场/风控参数语义。
+- 不 git commit、不重启 qre-gui.service。
+- 不做 R2（HIT/LR 回测、压力测试、CBB bootstrap）与 R3（markdown 渲染、
+  回测报告集成、GUI 展示区）。
+- 不改回测引擎 / portfolio/risk.py 既有口径；不读 DB。
+- 不做 Cornish-Fisher、GARCH-t（arch 支持但 R1 固定正态创新，留后续）。
 
 ## Expected Tests
 
-- 转换器：catalog YAML → 条件 JSON（expression/factor_fields/used_fields/
-  区间默认与覆盖）；无 signal.entry → 明确错误；locate 沙箱优先于 catalog。
-- 报告解析：样例 md → verdict/reasons/gate 摘要；GO 与 NO-GO 两种。
-- API：404 未知策略；400 无入场表达式/缺因子（入队）；500 cluster 脚本缺失；
-  409 同名在途；happy path（注入 fake starter+runner）返回 job_id 且轮询
-  终态含 verdict 与报告路径。
-- `uv run pytest tests/ -x -q` 全绿（基线 1454）。
+- 参数正态 VaR/ES 对教材解析值（49.79/59.96 @99%；95% z=1.645 口径）。
+- 历史模拟：构造已知损失序列核对第 k 大损失与 ES 均值；ES ≥ VaR 恒成立。
+- EWMA 递推手算 3 步核对（r=[0.01,−0.02,0.03]，λ=0.94 →
+  σ²=[1e-4, 1.18e-4, 1.6492e-4]）；与 arch EWMA/RiskMetrics 交叉。
+- GARCH：arch 模拟已知 (ω,α,β) 数据 → 拟合 α+β sane 范围（~0.9–1.0）、
+  平稳标志、V_L>0、半衰期正且量级合理（股权类 ~数十天）；不平稳输入
+  （α+β≥1 模拟）→ stationary=False。
+- 偏度/峰度对 scipy（bias=True/False 两口径）；正态样本 JB 不拒绝、
+  厚尾样本 JB 拒绝。
+- Spearman/Kendall 对手算小样本（x=[1,2,3], y=[1,3,2] → ρS=0.5, τ=1/3）。
+- 正定性：equicorrelation PD 通过；[[1,2],[2,1]] 非 PD 拒绝。
+- simple↔log 换算往返一致（log1p/expm1）。
+- Sharpe/Sortino/Treynor/IR/Jensen 对手算值（固定小样本手工核算）；
+  Sharpe 与引擎 portfolio/risk.py 口径一致性抽查（同输入同值）。
+- regime 标记：平静/高波合成序列 → 规则标签正确。
+- report：build_risk_report 结构键齐全、参数回显、benchmark=None 时
+  基准相关节为 null 而不报错。
+- `uv run pytest tests/ -x -q` 全绿（基线 1471，只增不红）。
 
 ## Validation
 
 1. `uv run pytest tests/ -x -q`
-2. `node --check` index.html 内联 JS（随既有 GUI 测试或手工抽取）
-3. 真实端到端冒烟：挑 catalog 策略 mr01a（rsi_14 单因子）跑一次完整
-   deep-validate 流程（直接命令行调转换器+两个 cluster 脚本），核对
-   `qre_mr01a_rsi14_oversold_reversal_四关验证报告.md` 结论段。
+2. `scripts/check-progress-docs.sh`
+3. `git diff --check`；`git status` 核对变更清单
