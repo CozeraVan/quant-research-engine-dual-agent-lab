@@ -2,6 +2,88 @@
 
 ## Task ID
 
+QRE-RISK-RATES-005（FRM 风险管理模块 R5：利率与债券计算内核）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization；R2/R3/R4 也在同一待审批队列)
+
+## Implementation Summary
+
+FRM 风险模块 R5 落地（依据已批准 CR `docs/frm/CR_2026-08-23_risk_derivatives_extension.md` R5 阶段）：risk 包新增利率与债券两个纯函数内核（零 DB、零行情，输入为 dict/现金流表），公式与数值例题以 `docs/frm/FRM量化风控知识摘要.md` 为准。
+
+**改动清单**：
+- `risk/rates.py`（新）：`convert_compounding`（式 16.2）/
+  `periodic_to_continuous`（式 16.4）/`continuous_to_periodic`（式 16.5）/
+  `future_value`/`present_value`（式 16.1/16.3）/`spot_to_discount_factor`/
+  `discount_factor_to_spot`（书4 Ch10）/`interp_zero_rate`（linear 利率线性
+  或 log_linear 折现因子对数线性，域外平坦外推披露）/
+  `bootstrap_zero_curve`（书4 Ch9 附息债由短到长解 d(k)，输出连续复利
+  零息利率）/`forward_rate`（连续式 + 式 10.5 半年复利增长因子比）/
+  `par_yield`（式 16.7/10.4）。曲线统一约定：连续复利零息利率（小数），
+  期限年。
+- `risk/bonds.py`（新）：`coupon_schedule`（付息日估值口径现金流表）/
+  `price_from_yield` + `ytm`（scipy brentq，区间 YTM_BRACKET）/
+  `accrued_interest`（actual/actual 式 9.2 与 30/360 书3 Ch17 双口径）/
+  `clean_to_dirty`/`dirty_to_clean`/`yield_duration_convexity`（式 12.6：
+  Macaulay/Modified D、Yield/Modified C）/`price_from_zero_curve`（曲线
+  折现 + shift 参数）/`effective_duration_convexity`（式 12.1/12.3 ±Δr
+  重定价）/`dv01`/`dv01_from_duration`/`duration_from_dv01`
+  （D=10,000×DV01/Value）/`portfolio_aggregate`（DV01 可加、D/C 市值
+  加权）/`dv01_hedge_face`（对冲面值=组合DV01/工具每面值DV01）/
+  `parallel_shift_approx`（式 12.4 二阶）/`key_rate_shifts`（书4 Ch13
+  三角帽局部线性 shift、端点外延、Σw=1 → ΣKR01=DV01 一阶自检）/
+  `convertible_bond_floor`（债底=ΣCF·e^{−(r+s)t}，spread duration ±Δs
+  重定价）。
+- `risk/constants.py`：+ `DEFAULT_DAY_COUNT="actual/actual"`（中国惯例）、
+  `CURVE_INTERPOLATION="linear"`、`KEY_RATE_TENORS`（0.25–30y 十节点）、
+  `RATE_SHOCK_BP=1.0`、`YTM_BRACKET=(-0.05, 1.0)`；全部在结果 dict 回显。
+- `risk/__init__.py`：导出 rates/bonds，docstring 升 R1+R2+R5。
+- `pyproject.toml`：补 `scipy>=1.11.0` 显式依赖（R1 起 constants.py
+  import scipy 但未声明，CR §3 点名顺手修复）。
+- 测试（+52）：`tests/test_risk_rates.py`（26）、`tests/test_risk_bonds.py`
+  （26），命名/结构沿用既有 risk 测试风格（类分组 + 教材例题 + 手算 +
+  自检恒等式 + 边界报错）。
+
+**数值验收对照**（CR §4 R5 行全覆盖）：
+- 书4 Ch9 bootstrap：d = 0.991909/0.980944/0.969406/0.956909 精确复现
+  （atol 1e-6），折现回验各债 dirty price 自洽；
+- par yield 式 16.7/10.4：2.2103%（手算一致），平价债回验=100；
+- 平坦曲线连续年金解析解：P=8.6394、D=4.7504、C=30.862（周付息网格
+  逼近 rel<1e-2）；
+- DV01↔duration：duration_from_dv01 与 effective duration 一致（1e-12）；
+- ΣKR01=DV01：一阶恒等式 rel 3.5e-6（rtol 1e-4 自检 True），5y 债风险
+  集中 5y 节点、7y+ 节点暴露为 0；
+- 平行移动 +100bp：二阶近似 vs 直接重定价 rel 偏差 1.9e-5（<1e-3 容差）；
+- 转债债底：手算 3 期折现一致（1e-10）、s=0 退化为无风险折现价、
+  spread duration = r+s 水平 effective duration（rel 1e-6）。
+
+**存量兼容**：既有 risk 模块零行为改动；1605 基线测试零改动全绿。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1657 passed, 4 warnings（2026-08-23，
+基线 1605 + 52 净增；风险包新单测 52/52 绿）
+```
+
+## Known Limitations
+
+- KR01 的 ΣKR01=DV01 为一阶恒等式，残差是价格对利率非线性的二阶项
+  （量级 ~C·n·(Δr)²，测试容差 rtol 1e-4），已在 note 披露。
+- 插值域外平坦外推（端点值），已在 docstring/note 披露。
+- PCA 冲击、转债条款引擎、信用违约模型、互换/期货定价按 CR §6 不做。
+
+---
+
+# Coding Handoff (archive: QRE-RISK-GATE-004, R4 晋升闸风险判据)
+
+## Task ID
+
 QRE-RISK-GATE-004（FRM 风险管理模块 R4：晋升全量回测闸加入风险判据）
 
 ## Written By

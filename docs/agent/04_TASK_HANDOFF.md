@@ -2,6 +2,36 @@
 
 ## Task ID
 
+QRE-RISK-RATES-005 (FRM 风险管理模块 R5：利率与债券计算内核)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+R5 在 R1–R4 已完成的 risk 包上落地利率与债券计算内核（依据已批准 CR
+`docs/frm/CR_2026-08-23_risk_derivatives_extension.md` R5 阶段，纯函数
+零 DB 零行情）：新增 `risk/rates.py`（式 16.1–16.5 复利换算、PV/FV、
+spot↔折现因子、书4 Ch9 附息债 bootstrap 零息曲线、线性/对数线性插值、
+远期利率连续式与式 10.5、par yield 式 16.7/10.4）与 `risk/bonds.py`
+（YTM brentq、actual/actual 与 30/360 应计利息、式 12.6 久期凸性、
+式 12.1/12.3 effective duration/convexity、DV01 与 D↔DV01 换算、
+组合聚合与 DV01 对冲配比、式 12.4 平行移动二阶近似、书4 Ch13 KR01
+含 ΣKR01=DV01 自检、书3 Ch16/17 转债债底折现与 spread duration）；
+`risk/constants.py` 追加集中参数（day count/插值/key rate 节点/Δr bp/
+YTM bracket，全部结果 dict 回显）；`pyproject.toml` 补 scipy 显式依赖。
+教材数值全复现：bootstrap d=0.991909/0.980944/0.969406/0.956909、
+par yield 2.2103%、平坦曲线年金解析解 P/D/C、DV01↔D 自洽、
+ΣKR01=DV01、+100bp 二阶近似 vs 重定价 rel 1.9e-5。1657 tests green
+（+52）。既有 risk 模块零行为改动。未 commit、未重启 qre-gui（用户
+约束）。细节见 `09_CODING_HANDOFF.md` 顶部。上一任务：
+QRE-RISK-GATE-004（R4 晋升闸风险判据，1605 green，待审批）。
+
+# Task Handoff (archive: QRE-RISK-GATE-004, R4 晋升闸风险判据)
+
+## Task ID
+
 QRE-RISK-GATE-004 (FRM 风险管理模块 R4：晋升全量回测闸加入风险判据)
 
 ## Current Status

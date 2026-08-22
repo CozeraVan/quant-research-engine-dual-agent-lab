@@ -12,7 +12,23 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-GATE-004 (DONE — 1605 tests green；awaiting git approval)
+QRE-RISK-RATES-005 (DONE — 1657 tests green；awaiting git approval)
+
+2026-08-23: FRM 风险模块 R5 落地（CR_2026-08-23_risk_derivatives_extension
+R5 阶段；R1=96db59d / R2=f52c0f4 / R3=6852eaa，R4 待审批）。risk 包新增
+rates.py（式 16.1–16.5 复利换算、PV/FV、spot↔折现因子、书4 Ch9 附息债
+bootstrap 零息曲线、线性/对数线性插值、远期利率、par yield 式 16.7/10.4）
+与 bonds.py（YTM brentq、actual/actual+30/360 应计利息、式 12.6 久期凸性、
+effective duration/convexity、DV01 与 D↔DV01、组合聚合与对冲配比、
+式 12.4 二阶近似、书4 Ch13 KR01（ΣKR01=DV01 自检）、书3 Ch16/17 转债
+债底+spread duration）；constants.py 加 DEFAULT_DAY_COUNT/
+CURVE_INTERPOLATION/KEY_RATE_TENORS/RATE_SHOCK_BP/YTM_BRACKET（全部
+结果 dict 回显）；pyproject.toml 补 scipy 显式依赖。教材数值全复现：
+bootstrap d=0.991909/0.980944/0.969406/0.956909、par yield 2.2103%、
+年金解析解 P/D/C、ΣKR01=DV01、+100bp 二阶近似 rel 偏差 1.9e-5。
+纯函数零 DB 零行情，既有 risk 模块零行为改动。1657 tests green（+52）。
+未 commit、未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-GATE-004 (DONE — 1605 tests green；awaiting git approval)
 
 2026-08-22: FRM 风险模块 R4 落地（R1=96db59d / R2=f52c0f4 / R3=6852eaa）。
 晋升全量回测闸加入风险判据：risk/constants.py 加 GATE_ES99_MAX=0.03 /
@@ -202,6 +218,13 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1657 passed, 4 warnings（2026-08-23, QRE-RISK-RATES-005；基线 1605 + 52 净增）
+风险新单测 52/52 绿（bootstrap/par yield/年金解析解/DV01/KR01/情景/债底全教材数值核对）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
 ```
 uv run pytest tests/ -x -q → 1599 passed, 4 warnings（2026-08-22, QRE-RISK-INTEGRATION-003；基线 1578 + 21 净增）

@@ -63,6 +63,25 @@ GATE_ES99_MAX = 0.03
 GATE_VAR_CONFIDENCE = 0.99
 
 
+#: 债券应计利息默认 day count（中国债券惯例 actual/actual，CR §4 约束；
+#: 参数化可选 "30/360"，见书3 Ch17 公司债惯例）
+DEFAULT_DAY_COUNT = "actual/actual"
+
+#: 零息曲线默认插值方式（"linear"=零息利率线性插值；
+#: "log_linear"=折现因子对数线性插值，即远期利率分段常数）
+CURVE_INTERPOLATION = "linear"
+
+#: Key rate 节点（年；书4 Ch13，覆盖短中长腿与 FRTB 10 节点口径的常用子集）
+KEY_RATE_TENORS: tuple[float, ...] = (0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 20.0, 30.0)
+
+#: 利率扰动步长（bp）：effective duration/convexity、DV01、KR01、
+#: spread duration 的 ±Δr 重定价统一用 1bp
+RATE_SHOCK_BP = 1.0
+
+#: YTM 反解的 brentq 搜索区间（年化收益率，-5% ~ 100%；书4 Ch11 迭代求解）
+YTM_BRACKET: tuple[float, float] = (-0.05, 1.0)
+
+
 def default_block_size(n_obs: int) -> int:
     """CBB 块长经验法则 q ≈ √n（书2 Ch13），向上取整、至少为 1。"""
     if n_obs < 1:

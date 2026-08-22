@@ -2,6 +2,61 @@
 
 ## Task ID
 
+QRE-RISK-RATES-005（FRM 风险管理模块 R5：利率与债券计算内核）
+
+## Created By
+
+KIMI_CODE（用户 2026-08-23 直接指定的任务书；依据已批准 CR
+`docs/frm/CR_2026-08-23_risk_derivatives_extension.md` R5 阶段；
+R1–R4 已完成）
+
+## Intended Implementer
+
+KIMI_CODE
+
+## Goal
+
+在 `risk/` 包内新增两个纯函数内核（零 DB、零行情依赖，输入为 dict/现金流表）：
+
+1. `risk/rates.py`：复利频率换算（式 16.1–16.5）、PV/FV、spot↔折现因子、
+   附息债 bootstrap 零息曲线（线性/对数线性插值）、远期利率（连续式与
+   半年复利式 10.5）、par yield（式 16.7/10.4）。
+2. `risk/bonds.py`：YTM 反解（scipy brentq）、dirty/clean 与应计利息
+   （day count 参数化，默认 actual/actual）、Macaulay/Modified duration、
+   yield convexity、effective duration/convexity（±Δr 重定价）、DV01 及
+   D↔DV01 换算、组合聚合（DV01 可加、D/C 市值加权、DV01 对冲配比）、
+   利率情景冲击（平行移动二阶近似；key-rate 扭转 KR01，ΣKR01=DV01 自检）、
+   可转债债底折现（无风险+信用利差，spread duration）。
+3. `risk/constants.py` 追加集中参数（day count 默认、曲线插值方式、
+   key rate 节点、Δr 扰动 bp、YTM bracket），全部在结果 dict 回显。
+4. `pyproject.toml` 补 scipy 显式依赖声明。
+
+## 验收（CR §4 R5 行）
+
+- 书4 Ch9 bootstrap 折现因子例：maturities 0.5/1/1.5/2、coupons
+  5.75/5.5/5.875/5.5、prices 102.0426/103.5197/105.5852/106.4136 →
+  d = 0.991909/0.980944/0.969406/0.956909（1e-6 容差）。
+- par yield 算例（式 16.7/10.4）+ 平价债回验。
+- 平坦曲线连续年金债久期/凸性解析解核对。
+- DV01↔duration 换算自洽（D = 10,000×DV01/Value）。
+- KR01 之和 = DV01。
+- 平行移动二阶近似 ΔP=−D·P·Δr+½CP(Δr)² 与直接重定价偏差在容差内。
+
+## 约束
+
+纯函数、零 DB；不改既有 risk 模块行为；PCA 冲击/条款引擎/信用违约模型/
+互换期货定价不做。既有 1605 测试保持全绿。
+
+## Validation
+
+`uv run pytest tests/ -x -q`（目标 1605 + 新增全绿）
+
+---
+
+# Implementation Brief (archive: QRE-RISK-GATE-004, R4 晋升闸风险判据)
+
+## Task ID
+
 QRE-RISK-GATE-004（FRM 风险管理模块 R4：晋升全量回测闸加入风险判据）
 
 ## Created By

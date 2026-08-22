@@ -1,4 +1,4 @@
-"""FRM 风险管理分析包（R1 + R2）。
+"""FRM 风险管理分析包（R1 + R2 + R5）。
 
 纯函数 + pandas/numpy/arch/scipy，不读 DB、不依赖 QRE 内部状态，
 可被 cluster-ashare 等外部项目独立 import。
@@ -20,14 +20,22 @@
 - inference.py：Bootstrap 推断（书2 Ch13）——CBB（块长 √n）与 iid 对照
   给年化收益/夏普/最大回撤算置信区间，MC 标准误 σ/√b。
 - report.py：``build_risk_report`` 机读报告骨架（markdown 渲染留 R3）。
+- rates.py（R5）：复利换算（书3 Ch16 式 16.1–16.5）、PV/FV、spot↔折现因子、
+  附息债 bootstrap 零息曲线（书4 Ch9）、远期利率、par yield（式 16.7/10.4）。
+- bonds.py（R5）：YTM（brentq，书4 Ch11）、dirty/clean 与应计利息（式 9.2）、
+  Macaulay/Modified duration、yield/effective convexity、DV01（书4 Ch12）、
+  组合聚合与 DV01 对冲、平行移动二阶近似（式 12.4）、KR01（书4 Ch13）、
+  可转债债底折现与 spread duration（书3 Ch16/17）。
 """
 
 from quant_research_engine.risk import (
     backtest_var,
+    bonds,
     constants,
     dependence,
     inference,
     performance,
+    rates,
     report,
     stress,
     tail,
@@ -36,10 +44,12 @@ from quant_research_engine.risk import (
 
 __all__ = [
     "backtest_var",
+    "bonds",
     "constants",
     "dependence",
     "inference",
     "performance",
+    "rates",
     "report",
     "stress",
     "tail",
