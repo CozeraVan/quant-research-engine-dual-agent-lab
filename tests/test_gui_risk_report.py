@@ -281,3 +281,132 @@ class TestRunDetailTemplate:
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
         assert 'id="btn-risk-report"' not in html
+
+
+# --- R7：组合与衍生品风险（portfolio 扩展节 + 可选闸判据） ---
+
+
+def _portfolio_section(dv01=400.0, delta=1.0):
+    return {
+        "meta": {"legs": {"equity": True, "fixed_income": True, "options": True}},
+        "fixed_income": {
+            "n_positions": 1,
+            "total_market_value": 1_000_000.0,
+            "dv01": dv01,
+            "duration": 4.0,
+            "convexity": 20.0,
+            "kr01": {
+                "key_tenors": [1.0, 5.0],
+                "kr01": [100.0, 300.0],
+                "kr01_sum": dv01,
+            },
+        },
+        "options": {
+            "n_positions": 1,
+            "delta": delta,
+            "gamma": 0.02,
+            "vega": 20.0,
+            "theta": -4.0,
+            "rho": 3.0,
+        },
+        "dgv_var": {"method": "normal", "confidence": 0.99, "var": 123.45},
+    }
+
+
+def _write_report_with_portfolio(tmp_path, monkeypatch, run_id="rid-r7", portfolio=None):
+    """把含/不含 portfolio 节的假 risk_report.json 落到假 RUNS_DIR。"""
+    runs_dir = tmp_path / "runs"
+    (runs_dir / run_id).mkdir(parents=True, exist_ok=True)
+    payload = {
+        "meta": {"n_obs": 100},
+        "tail": {"99pct": {"historical_simulation": {"es": 0.02}}},
+        "var_backtest": {"levels": {"99pct": {"coverage": {"reject_5pct": False}}}},
+    }
+    if portfolio is not None:
+        payload["portfolio"] = portfolio
+    (runs_dir / run_id / "risk_report.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+    monkeypatch.setattr(rr, "RUNS_DIR", runs_dir)
+
+
+class TestRunDetailPortfolioCard:
+    def test_card_rendered_when_portfolio_section_present(self, app_client, tmp_path, monkeypatch):
+        _write_run(tmp_path, "runwithderiv", status="completed")
+        _write_report_with_portfolio(tmp_path, monkeypatch, run_id="runwithderiv",
+                                     portfolio=_portfolio_section())
+        resp = app_client.get("/runs/runwithderiv")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "衍生品风险（组合层）" in html
+        assert "KR01" in html
+        assert "组合 Greeks" in html
+        assert "DGV" in html
+
+    def test_card_absent_without_portfolio_section(self, app_client, tmp_path, monkeypatch):
+        """老格式 risk_report.json（无 portfolio 节）→ 不显示卡片、页面不炸。"""
+        _write_run(tmp_path, "runnod", status="completed")
+        _write_report_with_portfolio(tmp_path, monkeypatch, run_id="runnod", portfolio=None)
+        resp = app_client.get("/runs/runnod")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        assert "衍生品风险" not in html
+
+
+class TestGateDerivativeLimits:
+    def test_default_disabled_zero_behavior_change(self, tmp_path, monkeypatch):
+        """阈值默认 None：即使 report 有 portfolio 节也不追加判据、不加新键。"""
+        from quant_research_engine.risk import constants as risk_constants
+
+        assert risk_constants.GATE_DV01_MAX is None
+        assert risk_constants.GATE_GREEKS_MAX is None
+        _write_report_with_portfolio(tmp_path, monkeypatch, portfolio=_portfolio_section())
+        risk = rr.evaluate_gate_risk("rid-r7")
+        assert risk["status"] == "ok"
+        assert risk["reasons"] == []
+        assert set(risk) == {
+            "status", "es99", "es99_threshold", "var_lr_reject",
+            "var_confidence", "reasons", "report_run_id",
+        }  # 与 R4 输出逐键一致
+
+    def test_dv01_limit_exceeded_warns(self, tmp_path, monkeypatch):
+        from quant_research_engine.risk import constants as risk_constants
+
+        monkeypatch.setattr(risk_constants, "GATE_DV01_MAX", 100.0)
+        _write_report_with_portfolio(tmp_path, monkeypatch, portfolio=_portfolio_section(dv01=400.0))
+        risk = rr.evaluate_gate_risk("rid-r7")
+        assert risk["status"] == "warning"
+        assert "dv01_exceeds_limit" in risk["reasons"]
+        assert risk["dv01"] == 400.0
+        assert risk["dv01_threshold"] == 100.0
+
+    def test_dv01_under_limit_ok(self, tmp_path, monkeypatch):
+        from quant_research_engine.risk import constants as risk_constants
+
+        monkeypatch.setattr(risk_constants, "GATE_DV01_MAX", 1000.0)
+        _write_report_with_portfolio(tmp_path, monkeypatch, portfolio=_portfolio_section(dv01=400.0))
+        risk = rr.evaluate_gate_risk("rid-r7")
+        assert risk["status"] == "ok"
+        assert risk["dv01"] == 400.0
+
+    def test_greeks_limit_exceeded_warns(self, tmp_path, monkeypatch):
+        from quant_research_engine.risk import constants as risk_constants
+
+        monkeypatch.setattr(risk_constants, "GATE_GREEKS_MAX", {"delta": 0.5})
+        _write_report_with_portfolio(tmp_path, monkeypatch, portfolio=_portfolio_section(delta=-1.0))
+        risk = rr.evaluate_gate_risk("rid-r7")
+        assert risk["status"] == "warning"
+        assert "greek_delta_exceeds_limit" in risk["reasons"]
+        assert risk["greeks"]["delta"] == -1.0
+
+    def test_enabled_but_no_portfolio_section_no_trigger(self, tmp_path, monkeypatch):
+        """启用判据但 report 无 portfolio 节（老 run）→ 子项 None、不触发。"""
+        from quant_research_engine.risk import constants as risk_constants
+
+        monkeypatch.setattr(risk_constants, "GATE_DV01_MAX", 100.0)
+        monkeypatch.setattr(risk_constants, "GATE_GREEKS_MAX", {"delta": 1.0})
+        _write_report_with_portfolio(tmp_path, monkeypatch, portfolio=None)
+        risk = rr.evaluate_gate_risk("rid-r7")
+        assert risk["status"] == "ok"
+        assert risk["dv01"] is None and risk["greeks"] is None
+        assert risk["reasons"] == []

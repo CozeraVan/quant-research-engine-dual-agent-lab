@@ -227,3 +227,79 @@ class TestRenderMarkdown:
         report = build_risk_report(returns, config={"stress": True})
         md = render_risk_markdown(report)
         assert "样本不覆盖该窗口" in md
+
+
+class TestPortfolioSection:
+    """R7 组合层：默认关（向后兼容），显式传入衍生品头寸才追加 portfolio 节。"""
+
+    OPTION_POSITIONS = [
+        {"name": "call_a", "quantity": 2.0, "delta": 0.5, "gamma": 0.01, "vega": 10.0, "theta": -2.0, "rho": 3.0},
+    ]
+    BOND_POSITIONS = [
+        {"name": "bond_a", "market_value": 1_000_000.0, "duration": 4.0, "convexity": 20.0, "dv01": 400.0},
+    ]
+
+    def test_default_off_backward_compatible(self, returns):
+        report = build_risk_report(returns)
+        assert "portfolio" not in report
+        assert report["meta"]["sections"]["portfolio"] is False
+
+    def test_enabled_with_option_positions(self, returns):
+        report = build_risk_report(
+            returns,
+            config={
+                "option_positions": self.OPTION_POSITIONS,
+                "dgv": {"spot_shock_sd": 1.5},
+            },
+        )
+        section = report["portfolio"]
+        assert "error" not in section
+        assert section["meta"]["legs"] == {"equity": True, "fixed_income": False, "options": True}
+        assert section["options"]["delta"] == pytest.approx(1.0)
+        assert "error" not in section["dgv_var"]
+        assert report["meta"]["sections"]["portfolio"] is True
+        json.dumps(report)
+
+    def test_enabled_with_bond_positions(self, returns):
+        report = build_risk_report(returns, config={"bond_positions": self.BOND_POSITIONS})
+        fi = report["portfolio"]["fixed_income"]
+        assert fi["dv01"] == pytest.approx(400.0)
+        assert fi["duration"] == pytest.approx(4.0)
+
+    def test_bad_positions_degrade_to_error_section(self, returns):
+        report = build_risk_report(
+            returns,
+            config={"bond_positions": [{"market_value": 0.0, "duration": 1.0, "convexity": 1.0, "dv01": 0.0}]},
+        )
+        assert "error" in report["portfolio"]
+
+    def test_render_markdown_portfolio_section(self, returns):
+        from quant_research_engine.risk.report import render_risk_markdown
+
+        report = build_risk_report(
+            returns,
+            config={
+                "bond_positions": self.BOND_POSITIONS,
+                "option_positions": self.OPTION_POSITIONS,
+                "dgv": {"spot_shock_sd": 1.5},
+            },
+        )
+        md = render_risk_markdown(report)
+        assert "### 组合与衍生品风险" in md
+        assert "DV01" in md and "Greeks" in md and "DGV" in md
+
+    def test_render_markdown_no_portfolio_by_default(self, returns):
+        from quant_research_engine.risk.report import render_risk_markdown
+
+        md = render_risk_markdown(build_risk_report(returns))
+        assert "组合与衍生品风险" not in md
+
+    def test_old_format_report_without_portfolio_renders(self, returns):
+        """向后兼容：老格式 report dict（无 portfolio 键）渲染不炸。"""
+        from quant_research_engine.risk.report import render_risk_markdown
+
+        report = build_risk_report(returns)
+        report["meta"].pop("sections", None)  # 模拟 R2 之前的老 meta
+        md = render_risk_markdown(report)
+        assert md.startswith("## 风险分析")
+        assert "组合与衍生品风险" not in md

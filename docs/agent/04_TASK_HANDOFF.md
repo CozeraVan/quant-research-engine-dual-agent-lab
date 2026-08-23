@@ -2,6 +2,36 @@
 
 ## Task ID
 
+QRE-RISK-PORTFOLIO-007 (FRM 风险管理模块 R7：组合层汇总 + risk_report 扩展 + GUI 卡片 + 可选闸扩展)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+R7 在 R6（期权内核 + DGV-VaR，1696 绿）上落地组合层与集成（依据已批准 CR
+`docs/frm/CR_2026-08-23_risk_derivatives_extension.md` R7 阶段，CR 状态已改
+「R5–R7 已完成」）：新 `risk/portfolio.py`（纯函数零 DB，
+`summarize_mixed_portfolio`——股票腿沿用 R1–R4 收益序列法
+performance_summary + EWMA VaR/ES 参照、债券/转债腿 DV01 可加/D·C 市值
+加权 + 可选 KR01 按节点加总、期权腿组合 Greeks 加权求和、config 显式给
+dgv.spot_shock_sd 才计算 DGV-VaR；仅股票输入退化为仅 equity 节）；
+`risk/report.py` config 显式传入非空 bond_positions/option_positions/bond_kr01
+才追加 `portfolio` 节（meta.sections 回显）+ markdown 渲染「组合与衍生品风险」；
+GUI `_risk_display` + run_detail.html 追加「衍生品风险（组合层）」卡片
+（有节才显示）；`risk/constants.py` 加 GATE_DV01_MAX/GATE_GREEKS_MAX
+（默认 None=不启用），`evaluate_gate_risk` 启用时追加组合 DV01/Greeks 限额
+判据，默认关闭时返回与 R4 逐键一致。1724 tests green（+28：portfolio 14 +
+report 7 + gui 7）。默认 run 产物零变化，老格式 report 三处（markdown/GUI/
+闸）健壮性专项测试覆盖。未 commit、未重启 qre-gui（用户约束）。细节见
+`09_CODING_HANDOFF.md` 顶部。上一任务：QRE-RISK-OPTIONS-006（R6 期权内核，
+1696 green，待审批）。
+
+# Task Handoff (archive: QRE-RISK-OPTIONS-006, R6 期权内核 + DGV-VaR)
+
+## Task ID
+
 QRE-RISK-OPTIONS-006 (FRM 风险管理模块 R6：期权计算内核 + DGV-VaR)
 
 ## Current Status

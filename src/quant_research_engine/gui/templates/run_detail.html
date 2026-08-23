@@ -128,6 +128,41 @@
       IR {{ risk_view.performance.information_ratio }}</p>
   </div>
   {% endif %}
+  {% if risk_view.portfolio %}
+  <div class="risk-card">
+    <h3>衍生品风险（组合层）</h3>
+    {% if risk_view.portfolio.fixed_income %}
+    <p>债券/转债腿：{{ risk_view.portfolio.fixed_income.n_positions }} 个头寸，市值
+      {{ risk_view.portfolio.fixed_income.total_market_value }}，DV01
+      {{ risk_view.portfolio.fixed_income.dv01 }}（元/bp），久期
+      {{ risk_view.portfolio.fixed_income.duration }}，凸性
+      {{ risk_view.portfolio.fixed_income.convexity }}</p>
+    {% endif %}
+    {% if risk_view.portfolio.kr01_rows %}
+    <table>
+      <thead><tr><th>Key rate 节点（年）</th><th>KR01（元/bp）</th></tr></thead>
+      <tbody>
+      {% for row in risk_view.portfolio.kr01_rows %}
+      <tr><td>{{ row.tenor }}</td><td class="num">{{ row.kr01 }}</td></tr>
+      {% endfor %}
+      <tr><td><strong>Σ（≈DV01）</strong></td><td class="num"><strong>{{ risk_view.portfolio.kr01_sum }}</strong></td></tr>
+      </tbody>
+    </table>
+    {% endif %}
+    {% if risk_view.portfolio.options %}
+    <p>期权腿：{{ risk_view.portfolio.options.n_positions }} 个头寸，组合 Greeks：Δ
+      {{ risk_view.portfolio.options.delta }}，Γ {{ risk_view.portfolio.options.gamma }}，
+      vega {{ risk_view.portfolio.options.vega }}，θ {{ risk_view.portfolio.options.theta }}，
+      ρ {{ risk_view.portfolio.options.rho }}</p>
+    {% endif %}
+    {% if risk_view.portfolio.dgv_var %}
+    <p>DGV 近似 VaR（{{ risk_view.portfolio.dgv_var.method }}，
+      {{ risk_view.portfolio.dgv_var.confidence }}）：
+      <strong>{{ risk_view.portfolio.dgv_var.var }}</strong>
+      （ΔV ≈ Δ·δS + ½Γ(δS)² + vega·δσ）</p>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 {% elif run.status == 'completed' %}
 <p class="opt">该 run 未生成风险分析（可能是老 run）。</p>

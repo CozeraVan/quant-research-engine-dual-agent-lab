@@ -2,6 +2,84 @@
 
 ## Task ID
 
+QRE-RISK-PORTFOLIO-007（FRM 风险管理模块 R7：组合层汇总 + risk_report 扩展 + GUI 卡片 + 可选闸扩展）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization；R2–R6 也在同一待审批队列)
+
+## Implementation Summary
+
+FRM 风险模块 R7 落地（依据已批准 CR `docs/frm/CR_2026-08-23_risk_derivatives_extension.md`
+R7 阶段；R5 = commit 5472832、R6 已完）：组合层汇总 + risk_report 扩展 +
+GUI 卡片 + 可选晋升闸判据，全部向后兼容（默认 run 产物零变化）。
+
+**改动清单**：
+- `risk/portfolio.py`（新，纯函数零 DB）：`summarize_mixed_portfolio`——
+  股票腿沿用 R1–R4 收益序列法（performance_summary + 当前 1 日 EWMA 参数
+  VaR/ES 参照）；债券/转债腿 `bonds.portfolio_aggregate`（DV01 可加、
+  D/C 市值加权）+ 可选逐头寸 `bonds.key_rate_shifts` KR01 按节点加总
+  （kr01_sum 与 DV01 并列披露，口径可不同不强制相等）；期权腿
+  `options.portfolio_greeks`（数量×单值求和）；可选 DGV-VaR——config
+  显式给 `dgv.spot_shock_sd` 才计算（组合层无标的价格水平无法自动推导，
+  披露于 docstring）。输出 JSON 可序列化（numpy→list）；三腿至少给一条
+  否则 ValueError；仅股票输入退化为仅 equity 节。
+- `risk/report.py`：config 显式传入非空 `bond_positions`/`option_positions`/
+  `bond_kr01` 之一才追加 `report["portfolio"]` 节（`_safe` 兜底，
+  meta.sections["portfolio"] 回显；portfolio_config 可覆盖，缺省继承
+  外层 rf/lam/ann）；`render_risk_markdown` 有该节才渲染
+  「### 组合与衍生品风险」（DV01/久期/凸性 + KR01 表 + 组合 Greeks +
+  DGV-VaR；error 节降级）。
+- `risk/constants.py`：+ `GATE_DV01_MAX=None`、`GATE_GREEKS_MAX=None`
+  （R7 可选闸判据阈值，默认 None=不启用）。
+- `gui/risk_report.py::evaluate_gate_risk`：两阈值全 None（默认）时返回
+  dict 与 R4 逐键一致、不读 portfolio 节；任一非 None 且 report 有
+  portfolio 节时追加 |DV01| 与 |Δ|/|Γ|/|vega| 限额检查（超阈 →
+  reason `dv01_exceeds_limit`/`greek_<name>_exceeds_limit` → warning）；
+  节缺失/字段缺失子项记 None 不触发（与 R4 缺失语义一致）。
+- `gui/app.py::_risk_display`：+ portfolio 视图（fixed_income/kr01_rows/
+  options/dgv_var，error 节跳过）；`templates/run_detail.html`：
+  `risk_view.portfolio` 存在时追加「衍生品风险（组合层）」卡片（沿用
+  risk-card 模式，无此节不显示，老 run 页面零变化）。
+- 测试（+28）：`tests/test_risk_portfolio.py`（新 14：纯股票退化/混合合并
+  手算/KR01 加总对单头寸一致+ΣKR01≈DV01/零市值报错/DGV 开关与校验/
+  JSON 序列化）；`tests/test_risk_report.py`（+7：默认关向后兼容/期权腿/
+  债券腿/error 降级/markdown 两态/老 meta 无 sections 渲染不炸）；
+  `tests/test_gui_risk_report.py`（+7：卡片有无两渲染、闸默认关闭
+  逐键一致/DV01 超阈 warning/未超阈 ok/Greeks 超阈/启用但无节不触发）。
+
+**向后兼容**：默认 run 收尾钩子不传衍生品键 → risk_report.json 与 summary.md
+产物零变化；老格式 report（无 portfolio 节、甚至无 meta.sections）GUI 渲染、
+markdown 渲染、闸评估均不炸（专项测试覆盖）。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1724 passed, 4 warnings（2026-08-23，
+基线 1696 + 28 净增，全绿）
+定向：test_risk_portfolio.py 14/14、test_risk_report.py 29/29、
+test_gui_risk_report.py 24/24 全绿
+```
+
+## Known Limitations
+
+- DGV-VaR 需调用方显式给 spot/vol shock（组合层无标的价格水平）；多腿
+  风险因子相关性（股票腿与期权标的）未建模，披露于 derivatives_var。
+- 闸扩展默认关闭；启用需改 constants（GATE_DV01_MAX/GATE_GREEKS_MAX），
+  属用户显式决策。
+- 当前 run 均为纯股票策略，portfolio 节无真实产出路径（行情接入留待
+  未来数据源 CR，见 CR §5）。
+
+---
+
+# Coding Handoff (archive: QRE-RISK-OPTIONS-006, R6 期权内核 + DGV-VaR)
+
+## Task ID
+
 QRE-RISK-OPTIONS-006（FRM 风险管理模块 R6：期权计算内核 + DGV-VaR）
 
 ## Written By

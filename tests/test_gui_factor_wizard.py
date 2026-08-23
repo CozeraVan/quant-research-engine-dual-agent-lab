@@ -303,8 +303,9 @@ def test_job_lock_conflict(job_env):
     start_factor_job(name="rsi", column="close", periods=[21], repo=repo, step_runner=slow_runner)
     with pytest.raises(RuntimeError, match="已有一个因子任务"):
         start_factor_job(name="sma", column="close", periods=[60], repo=repo, step_runner=slow_runner)
-    # 等第一个跑完释放锁
-    deadline = time.time() + 5
+    # 等第一个跑完释放锁（slow_runner 有 3 步 × 0.6s，全量套件高负载下调度
+    # 延迟可能超过 5s，余量放宽到 30s，仅影响该测试的等待上限）
+    deadline = time.time() + 30
     while factor_admin.active_job_id() is not None and time.time() < deadline:
         time.sleep(0.05)
     assert factor_admin.active_job_id() is None

@@ -92,6 +92,17 @@ DEFAULT_TREE_STEPS = 50
 GREEK_SHOCK_SIGMA = 1e-4
 GREEK_SHOCK_RATE = 1e-4
 
+#: 晋升闸衍生品限额判据（R7，可选，默认 None = 不启用）：
+#: 组合债券/转债腿 |DV01| 上限（元/bp，绝对值口径）。仅当 risk_report.json
+#: 存在 portfolio 节且本阈值非 None 时才追加判据；启用后超阈 →
+#: risk.status=warning（reason=dv01_exceeds_limit）。
+GATE_DV01_MAX: float | None = None
+
+#: 晋升闸期权腿 Greeks 限额（R7，可选，默认 None = 不启用）：
+#: {"delta": ..., "gamma": ..., "vega": ...}（绝对值口径，键可子集）。
+#: 超阈 → risk.status=warning（reason=greek_<name>_exceeds_limit）。
+GATE_GREEKS_MAX: dict[str, float] | None = None
+
 
 def default_block_size(n_obs: int) -> int:
     """CBB 块长经验法则 q ≈ √n（书2 Ch13），向上取整、至少为 1。"""

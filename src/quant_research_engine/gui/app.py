@@ -192,6 +192,46 @@ def _risk_display(report: dict[str, Any] | None) -> dict[str, Any] | None:
             "treynor": _f2((perf.get("treynor") or {}).get("treynor") if perf.get("treynor") else None),
             "information_ratio": _f2((perf.get("information_ratio") or {}).get("information_ratio") if perf.get("information_ratio") else None),
         }
+
+    # R7 组合与衍生品风险（可选节；老 run 无此节 → 不渲染卡片）
+    portfolio = report.get("portfolio")
+    if isinstance(portfolio, dict) and "error" not in portfolio:
+        card: dict[str, Any] = {}
+        fi = portfolio.get("fixed_income")
+        if isinstance(fi, dict) and "error" not in fi:
+            card["fixed_income"] = {
+                "n_positions": fi.get("n_positions"),
+                "total_market_value": _f2(fi.get("total_market_value")),
+                "dv01": _f2(fi.get("dv01")),
+                "duration": _f2(fi.get("duration")),
+                "convexity": _f2(fi.get("convexity")),
+            }
+            kr01 = fi.get("kr01")
+            if isinstance(kr01, dict):
+                card["kr01_rows"] = [
+                    {"tenor": _f2(k), "kr01": _f2(v)}
+                    for k, v in zip(kr01.get("key_tenors") or [], kr01.get("kr01") or [])
+                ]
+                card["kr01_sum"] = _f2(kr01.get("kr01_sum"))
+        opts = portfolio.get("options")
+        if isinstance(opts, dict) and "error" not in opts:
+            card["options"] = {
+                "n_positions": opts.get("n_positions"),
+                "delta": _f2(opts.get("delta")),
+                "gamma": _f2(opts.get("gamma")),
+                "vega": _f2(opts.get("vega")),
+                "theta": _f2(opts.get("theta")),
+                "rho": _f2(opts.get("rho")),
+            }
+        dgv = portfolio.get("dgv_var")
+        if isinstance(dgv, dict) and "error" not in dgv:
+            card["dgv_var"] = {
+                "method": dgv.get("method"),
+                "confidence": _pct(dgv.get("confidence")),
+                "var": _f2(dgv.get("var")),
+            }
+        if card:
+            view["portfolio"] = card
     return view
 
 

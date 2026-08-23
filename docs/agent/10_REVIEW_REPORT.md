@@ -2,6 +2,53 @@
 
 ## Task ID
 
+QRE-RISK-PORTFOLIO-007（FRM 风险管理模块 R7：组合层汇总 + risk_report 扩展 + GUI 卡片 + 可选闸扩展）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **范围与 CR §2 R7 一一对应**：组合层汇总（risk/portfolio.py：股票腿
+  R1–R4 收益序列法、债券/转债腿 DV01/KR01、期权腿组合 Greeks、可选
+  DGV-VaR）、risk_report 扩展（可选 portfolio 节 + markdown 渲染）、
+  GUI 卡片组（沿用 risk-card 模式，有节才显示）、晋升闸可选判据
+  （默认关闭）全覆盖。
+- **纪律一致**：portfolio.py 纯函数零 DB；参数集中 constants.py 并回显；
+  既有 risk 模块零行为改动（仅 report.py 增加可选节 + __init__ 增列）。
+- **向后兼容（专项测试覆盖）**：默认 run 产物零变化（收尾钩子不传衍生品
+  键，top-level keys 测试未改动仍绿）；老格式 report（无 portfolio 节、
+  老 meta 无 sections）markdown/GUI/闸三处均不炸；闸阈值默认 None 时
+  evaluate_gate_risk 返回与 R4 逐键一致（set(risk) 断言）。
+- **数值自检**：KR01 按节点加总 = 合并现金流单独跑 key_rate_shifts
+  （rel 1e-12），kr01_sum ≈ 曲线口径 DV01（一阶恒等式 rel 1e-4）；
+  债券聚合/期权 Greeks 加对手算；DGV-VaR 复用 R6 已验证内核。
+- **披露**：DGV 需调用方显式给 spot/vol shock（组合层无标的价格水平）；
+  kr01_sum 与 portfolio DV01 口径可不同不强制相等（并列披露）。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1724 passed, 4 warnings（基线 1696 + 28 净增，全绿）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+# Review Report (archive: QRE-RISK-OPTIONS-006, R6 期权内核 + DGV-VaR)
+
+## Task ID
+
 QRE-RISK-OPTIONS-006（FRM 风险管理模块 R6：期权计算内核 + DGV-VaR）
 
 ## Reviewer

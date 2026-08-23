@@ -14,11 +14,16 @@
     正数）+ benchmark 时附 reverse stress。
   - ``bootstrap``（默认 False）：CBB 置信区间节；``bootstrap_reps`` /
     ``bootstrap_seed`` / ``bootstrap_ci_level`` / ``block_size`` 可配。
+  - R7 组合层（默认关）：config 显式传入非空 ``bond_positions`` /
+    ``option_positions`` / ``bond_kr01`` 之一才追加 ``portfolio`` 节
+    （``portfolio.summarize_mixed_portfolio``，股票腿=本报告同一 returns
+    序列的收益序列法摘要）；``dgv`` 子 dict 显式给出才计算 DGV-VaR。
+    默认 run 收尾钩子不传这些键 → 产物零变化（向后兼容）。
   其余键原样忽略。
 
 结构键：meta（参数回显）、distribution、tail（三口径 × 置信水平）、
 volatility（ewma/garch/regime）、dependence（需 benchmark）、performance、
-var_backtest、stress（可选）、bootstrap（可选）。
+var_backtest、stress（可选）、bootstrap（可选）、portfolio（可选，R7）。
 数据不足（如 GARCH < 50 obs）的节返回 ``{"error": ...}`` 而非抛异常。
 """
 
@@ -34,6 +39,7 @@ from quant_research_engine.risk import (
     dependence,
     inference,
     performance,
+    portfolio,
     stress,
     tail,
     volatility,
@@ -128,6 +134,7 @@ def build_risk_report(
                 "var_backtest": bool(cfg.get("var_backtest", True)),
                 "stress": bool(cfg.get("stress", False)),
                 "bootstrap": bool(cfg.get("bootstrap", False)),
+                "portfolio": _portfolio_requested(cfg),
             },
         },
         "distribution": _safe(tail.distribution_summary, r),
@@ -148,7 +155,31 @@ def build_risk_report(
         )
     if cfg.get("bootstrap", False):
         report["bootstrap"] = _build_bootstrap_section(r, cfg, rf, ann)
+    if _portfolio_requested(cfg):
+        report["portfolio"] = _safe(
+            portfolio.summarize_mixed_portfolio,
+            returns=r,
+            benchmark=benchmark,
+            bond_positions=cfg.get("bond_positions"),
+            option_positions=cfg.get("option_positions"),
+            bond_kr01=cfg.get("bond_kr01"),
+            config=cfg.get("portfolio_config")
+            or {
+                "risk_free_rate": rf,
+                "annualization_factor": ann,
+                "lam": lam,
+                "dgv": cfg.get("dgv"),
+            },
+        )
     return report
+
+
+def _portfolio_requested(cfg: dict[str, Any]) -> bool:
+    """R7 组合层开关：config 显式传入任一非空衍生品头寸键才追加 portfolio 节。"""
+    return any(
+        bool(cfg.get(key))
+        for key in ("bond_positions", "option_positions", "bond_kr01")
+    )
 
 
 def _default_var_series(r: pd.Series, confidence: float, lam: float) -> pd.Series:
@@ -310,7 +341,8 @@ def render_risk_markdown(report: dict[str, Any]) -> str:
     """把 build_risk_report 的机读 dict 渲染为汉化 markdown（「## 风险分析」节）。
 
     分区：分布与尾部 / VaR 回测 / 波动率 / 压力测试（有键才渲染）/ 绩效
-    （+ bootstrap CI，有键才渲染）。error 节如实降级为「数据不足」一行。
+    （+ 组合与衍生品风险（R7，有键才渲染）+ bootstrap CI，有键才渲染）。
+    error 节如实降级为「数据不足」一行。
     """
     meta = report.get("meta", {})
     lines: list[str] = [
@@ -497,6 +529,56 @@ def render_risk_markdown(report: dict[str, Any]) -> str:
         else:
             lines.append("- 无基准收益序列：β/Treynor/IR/Jensen's α 未计算")
     lines.append("")
+
+    # --- 组合与衍生品风险（R7；仅当调用方显式传入衍生品头寸才有键） ---
+    portfolio_section = report.get("portfolio")
+    if isinstance(portfolio_section, dict):
+        lines.append("### 组合与衍生品风险")
+        lines.append("")
+        err = _err(portfolio_section)
+        if err:
+            lines.append(f"- {err}")
+        else:
+            legs = (portfolio_section.get("meta") or {}).get("legs") or {}
+            fi = portfolio_section.get("fixed_income")
+            if isinstance(fi, dict) and "error" not in fi:
+                lines.append(
+                    f"- 债券/转债腿：{fi.get('n_positions')} 个头寸，市值 "
+                    f"{_f2(fi.get('total_market_value'))}，组合 DV01 "
+                    f"{_f2(fi.get('dv01'))}（元/bp），久期 {_f2(fi.get('duration'))}，"
+                    f"凸性 {_f2(fi.get('convexity'))}"
+                )
+                kr01 = fi.get("kr01")
+                if isinstance(kr01, dict):
+                    tenors = kr01.get("key_tenors", [])
+                    values = kr01.get("kr01", [])
+                    pairs = "、".join(
+                        f"{_f2(k)}y={_f2(v)}" for k, v in zip(tenors, values)
+                    )
+                    lines.append(
+                        f"- KR01（元/bp，Σ={_f2(kr01.get('kr01_sum'))}）：{pairs}"
+                    )
+            opts = portfolio_section.get("options")
+            if isinstance(opts, dict) and "error" not in opts:
+                lines.append(
+                    f"- 期权腿：{opts.get('n_positions')} 个头寸，组合 Greeks："
+                    f"Δ {_f2(opts.get('delta'))}，Γ {_f2(opts.get('gamma'))}，"
+                    f"vega {_f2(opts.get('vega'))}，θ {_f2(opts.get('theta'))}，"
+                    f"ρ {_f2(opts.get('rho'))}"
+                )
+            dgv = portfolio_section.get("dgv_var")
+            if isinstance(dgv, dict):
+                if "error" in dgv:
+                    lines.append(f"- DGV-VaR：{dgv['error']}")
+                else:
+                    lines.append(
+                        f"- DGV 近似 VaR（{dgv.get('method')}，"
+                        f"{float(dgv.get('confidence', 0)) * 100:.0f}%）："
+                        f"{_f2(dgv.get('var'))}（ΔV ≈ Δ·δS + ½Γ(δS)² + vega·δσ）"
+                    )
+            if legs.get("equity") and not fi and not opts:
+                lines.append("- 仅股票腿：衍生品风险节无增量内容")
+        lines.append("")
 
     # --- bootstrap（按需任务才开启） ---
     boot = report.get("bootstrap")

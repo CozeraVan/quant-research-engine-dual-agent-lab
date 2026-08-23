@@ -1,4 +1,4 @@
-"""FRM 风险管理分析包（R1 + R2 + R5 + R6）。
+"""FRM 风险管理分析包（R1 + R2 + R5 + R6 + R7）。
 
 纯函数 + pandas/numpy/arch/scipy，不读 DB、不依赖 QRE 内部状态，
 可被 cluster-ashare 等外部项目独立 import。
@@ -34,6 +34,10 @@
 - derivatives_var.py（R6）：Delta-Gamma-Vega 近似组合 P&L
   （式 2.3 + vega 项）、非中心卡方累积量解析矩、正态/Cornish-Fisher
   分位 VaR、VaR 序列对接 backtest_var.backtest_var_summary。
+- portfolio.py（R7）：混合头寸组合层汇总——股票腿沿用 R1–R4 收益序列法、
+  债券/转债腿 DV01/KR01（portfolio_aggregate + key_rate_shifts 加总）、
+  期权腿组合 Greeks（portfolio_greeks）、可选 DGV-VaR；仅股票输入退化
+  为仅 equity 节。
 """
 
 from quant_research_engine.risk import (
@@ -45,6 +49,7 @@ from quant_research_engine.risk import (
     inference,
     options,
     performance,
+    portfolio,
     rates,
     report,
     stress,
@@ -61,6 +66,7 @@ __all__ = [
     "inference",
     "options",
     "performance",
+    "portfolio",
     "rates",
     "report",
     "stress",

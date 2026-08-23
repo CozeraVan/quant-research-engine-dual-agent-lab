@@ -15,6 +15,11 @@
 - ``start_risk_report_job(record)``：按需生成（bootstrap 开），复用
   daily_jobs 的 start_script_job（lock_key=risk-report:<run_id>，
   in-process runner，不写 cmd）。
+- R7：risk_report.json 可含可选 ``portfolio`` 扩展节（调用方显式传入
+  衍生品头寸才产生；老 run 无此节，GUI 与闸对缺省节健壮）；
+  ``evaluate_gate_risk`` 在 ``risk.constants.GATE_DV01_MAX`` /
+  ``GATE_GREEKS_MAX`` 非 None 时追加组合 DV01/Greeks 限额判据
+  （默认 None=不启用，行为与 R4 逐键一致）。
 """
 
 from __future__ import annotations
@@ -56,11 +61,19 @@ def evaluate_gate_risk(run_id: str | None) -> dict[str, Any]:
       或 ``GATE_VAR_CONFIDENCE`` 节覆盖率 Kupiec LR 检验被拒绝（5% 显著）
       → ``status="warning"``，``reasons`` 记录触发项；否则 ``"ok"``。
     - 关键字段缺失（老格式 report）时该子项记 None、不触发 warning。
+    - R7 可选衍生品限额判据（默认关闭）：``GATE_DV01_MAX`` /
+      ``GATE_GREEKS_MAX`` 任一非 None 且 report 存在 ``portfolio`` 节时，
+      追加债券腿 |DV01| 与期权腿 |Delta|/|Gamma|/|Vega| 限额检查，超阈 →
+      warning；两个阈值均为 None（默认）时返回 dict 与 R4 行为逐键一致，
+      且不读取 portfolio 节。
     """
     from quant_research_engine.risk import constants as risk_constants
 
     threshold = risk_constants.GATE_ES99_MAX
     var_conf = risk_constants.GATE_VAR_CONFIDENCE
+    dv01_max = risk_constants.GATE_DV01_MAX
+    greeks_max = risk_constants.GATE_GREEKS_MAX
+    deriv_limits_enabled = dv01_max is not None or greeks_max is not None
     level_key = f"{int(round(var_conf * 100))}pct"
     risk: dict[str, Any] = {
         "status": "unavailable",
@@ -89,8 +102,45 @@ def evaluate_gate_risk(run_id: str | None) -> dict[str, Any]:
         risk["reasons"].append("es99_exceeds_threshold")
     if risk["var_lr_reject"]:
         risk["reasons"].append("var_lr_rejected")
+    if deriv_limits_enabled:
+        _apply_derivative_limits(risk, report, dv01_max, greeks_max)
     risk["status"] = "warning" if risk["reasons"] else "ok"
     return risk
+
+
+def _apply_derivative_limits(
+    risk: dict[str, Any],
+    report: dict[str, Any],
+    dv01_max: float | None,
+    greeks_max: dict[str, float] | None,
+) -> None:
+    """R7 衍生品限额判据（仅在显式启用时调用）。
+
+    读 report 的 ``portfolio`` 节：债券/转债腿 ``fixed_income.dv01`` 与
+    期权腿 ``options.delta/gamma/vega``（绝对值口径）。节缺失/为 error/
+    字段缺失时对应子项记 None、不触发 warning（与 R4 缺失语义一致）。
+    """
+    portfolio = report.get("portfolio") or {}
+    if "error" in portfolio:
+        portfolio = {}
+    fixed_income = portfolio.get("fixed_income") or {}
+    dv01 = fixed_income.get("dv01")
+    risk["dv01"] = dv01 if isinstance(dv01, (int, float)) else None
+    risk["dv01_threshold"] = dv01_max
+    if risk["dv01"] is not None and dv01_max is not None and abs(risk["dv01"]) > dv01_max:
+        risk["reasons"].append("dv01_exceeds_limit")
+    options_leg = portfolio.get("options") or {}
+    greeks = {
+        name: options_leg.get(name)
+        for name in ("delta", "gamma", "vega")
+        if isinstance(options_leg.get(name), (int, float))
+    }
+    risk["greeks"] = greeks or None
+    risk["greeks_limits"] = greeks_max
+    for name, limit in (greeks_max or {}).items():
+        value = greeks.get(name)
+        if value is not None and abs(value) > limit:
+            risk["reasons"].append(f"greek_{name}_exceeds_limit")
 
 
 def _find_portfolio_equity_curve(record: dict[str, Any]) -> Path | None:

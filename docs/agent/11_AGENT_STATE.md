@@ -12,7 +12,23 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-OPTIONS-006 (DONE — 1696 tests green；awaiting git approval)
+QRE-RISK-PORTFOLIO-007 (DONE — 1724 tests green；awaiting git approval)
+
+2026-08-23: FRM 风险模块 R7 落地（CR_2026-08-23_risk_derivatives_extension
+R7 阶段，CR 状态改「R5–R7 已完成」；R5=5472832、R6 待审批）。新
+risk/portfolio.py（纯函数零 DB，summarize_mixed_portfolio：股票腿沿用
+R1–R4 收益序列法、债券/转债腿 DV01 可加 + D/C 市值加权 + 可选 KR01 按
+节点加总、期权腿组合 Greeks 加权求和、config 显式给 dgv.spot_shock_sd
+才计算 DGV-VaR；仅股票退化为仅 equity 节）；risk/report.py 显式传入
+bond_positions/option_positions/bond_kr01 才追加 portfolio 节 +
+markdown「组合与衍生品风险」渲染；GUI run_detail 有节才追加「衍生品风险
+（组合层）」卡片（_risk_display + risk-card 模式）；constants.py 加
+GATE_DV01_MAX/GATE_GREEKS_MAX（默认 None=不启用），evaluate_gate_risk
+启用时追加组合 DV01/Greeks 限额判据、默认关闭时返回与 R4 逐键一致。
+1724 tests green（+28：portfolio 14 + report 7 + gui 7）。默认 run 产物
+零变化，老格式 report 向后兼容专项测试覆盖。未 commit、未重启 qre-gui。
+详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-OPTIONS-006 (DONE — 1696 tests green；awaiting git approval)
 
 2026-08-23: FRM 风险模块 R6 落地（CR_2026-08-23_risk_derivatives_extension
 R6 阶段；R5=5472832）。risk 包新增 options.py（BSM 式 15.6–15.9 无股息/
@@ -236,6 +252,13 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1724 passed, 4 warnings（2026-08-23, QRE-RISK-PORTFOLIO-007；基线 1696 + 28 净增）
+风险新单测 28/28 绿（组合层退化/混合合并/KR01 加总/DGV 开关 + report 节开关与渲染两态 + GUI 卡片两态 + 闸默认关闭逐键一致与启用判据）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
 ```
 uv run pytest tests/ -x -q → 1696 passed, 4 warnings（2026-08-23, QRE-RISK-OPTIONS-006；基线 1657 + 39 净增）

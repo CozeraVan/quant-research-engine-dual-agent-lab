@@ -2,6 +2,59 @@
 
 ## Task ID
 
+QRE-RISK-PORTFOLIO-007（FRM 风险管理模块 R7：组合层汇总 + risk_report 扩展 + GUI 卡片 + 可选闸扩展）
+
+## Created By
+
+KIMI_CODE（用户 2026-08-23 直接指定的任务书；依据已批准 CR
+`docs/frm/CR_2026-08-23_risk_derivatives_extension.md` R7 阶段；
+R5 = commit 5472832、R6 已完成（1696 绿）待审批）
+
+## Intended Implementer
+
+KIMI_CODE
+
+## Goal
+
+1. 新 `risk/portfolio.py`（纯函数零 DB）：`summarize_mixed_portfolio`——
+   股票腿沿用 R1–R4 收益序列法（performance_summary + EWMA 参数 VaR/ES 参照）、
+   债券/转债腿用 `bonds.portfolio_aggregate`（DV01 可加、D/C 市值加权）与
+   可选 `bonds.key_rate_shifts` 逐头寸 KR01 按节点加总、期权腿用
+   `options.portfolio_greeks`（加权求和）、可选 `derivatives_var.dgv_var`
+   （config 显式给 spot/vol shock 才计算）；输出合并 dict（JSON 可序列化，
+   numpy 数组转 list）。仅股票输入退化为仅 equity 节。
+2. `risk/report.py`：config 显式传入 `bond_positions`/`option_positions`/
+   `bond_kr01` 之一（非空）才追加 `report["portfolio"]` 节
+   （meta.sections["portfolio"] 回显）；`render_risk_markdown` 有该节才渲染
+   「### 组合与衍生品风险」。默认 run 产物零变化（收尾钩子不传这些键）。
+3. GUI：`_risk_display` 增加 portfolio 视图；`run_detail.html` 在
+   `risk_view.portfolio` 存在时追加「衍生品风险」卡片组（沿用 risk-card
+   模式），无此节不显示。
+4. 晋升闸扩展（可选判据，默认关闭）：`risk/constants.py` 加
+   `GATE_DV01_MAX=None` / `GATE_GREEKS_MAX=None`；
+   `evaluate_gate_risk` 仅在阈值非 None 且 report 有 portfolio 节时追加
+   dv01/greeks 判据（超阈 → reason + warning）；阈值全 None 时返回 dict
+   与现状逐键一致（零行为变化）。
+5. 测试：组合汇总（纯股票退化/混合合并/空输入报错/KR01 加总）、report
+   节开关与渲染两态、risk_report.json 向后兼容（老格式读取不炸）、
+   GUI 卡片有无两渲染、闸默认关闭零变化 + 启用判据逻辑。
+
+## 约束
+
+纯函数、零 DB；不改既有 risk 模块行为；既有 1696 测试保持全绿；
+不 git commit、不重启 qre-gui。
+
+## Validation
+
+`uv run pytest tests/ -x -q`（目标 1696 + 新增全绿）；
+`scripts/check-progress-docs.sh` → passed。
+
+---
+
+# Implementation Brief (archive: QRE-RISK-OPTIONS-006, R6 期权内核 + DGV-VaR)
+
+## Task ID
+
 QRE-RISK-OPTIONS-006（FRM 风险管理模块 R6：期权计算内核 + DGV-VaR）
 
 ## Created By
