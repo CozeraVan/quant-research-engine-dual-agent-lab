@@ -2,6 +2,79 @@
 
 ## Task ID
 
+QRE-RISK-BAROMETER-M3-010（大盘/板块风险风向标 M3：日更 timer 接入 + GUI 风向标页 + 阈值首轮校准观察）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization；M1=64addd7、M2=b0713d7 已提交，R2–R7 也在待审批队列)
+
+## Implementation Summary
+
+M3 落地（CR `docs/frm/CR_2026-08-23_market_risk_barometer.md` §5 M3 阶段，
+CR 状态改「✅ M1–M3 已完成」）：
+
+**改动清单**：
+- `deploy/hardened/qre-barometer.{service,timer}`（新）：Mon..Fri 18:30、
+  Persistent=true、oneshot、沿用 qre-refresh hardened 护栏（Restart
+  on-failure、MemoryMax=4G、Nice=10、TimeoutStartSec=1800）；ExecStart
+  `uv run python -m quant_research_engine.risk.barometer_job`（无参 =
+  默认最近交易日）；安装命令在头部注释，未 sudo。
+- `risk/barometer_job.py`：+ `latest_trade_date`（trade_calendar 最近
+  开市日）；main 无 --date/--d0 时默认该日（timer 调用口径）。
+- `apps/cli.py`：+ `qre barometer` 子命令（--date/--d0/--d1/--chunk/
+  --no-json/--no-cluster，转发 barometer_job.main）。
+- `gui/admin.py`：TIMER_UNITS + qre-barometer.timer（「大盘风险风向标」）+
+  QRE_BAROMETER_INSTALL_HINT；`gui/daily_jobs.py`：PIPELINES +
+  qre-barometer（日更中心手动触发）。
+- `gui/market_risk.py`（新）：`market_risk_overview` 只读
+  market_risk.daily（_store + _cached TTL 300s + 降级）——最新 market 行
+  （总分/灯/四指标/双判据详情）、近 252 日五序列、行业/簇两视图板块表
+  （行业按总分降序、簇按突破占比降序）。
+- `gui/app.py`：+ `/api/admin/market-risk`；`gui/templates/admin.html`：
+  + 「大盘风险」tab（总分仪表盘红黄绿灯、五序列客户端 inline SVG
+  polyline、行业/动态簇热力表切换、预警双判据详情表；复用现有
+  tab/section/risk-card/health-* 样式，零新前端框架）。
+- `docs/frm/CR_2026-08-23_market_risk_barometer.md`：状态改 M1–M3 已完成。
+- `docs/agent/06_DECISION_LOG.md`：阈值首轮校准观察（red 11/1850=0.59%
+  全为已知风险事件、amber 11.8%、corr 0.10≈P95、breach 3%≈P93，
+  初值保留）。
+- 测试（+14）：`tests/test_gui_market_risk.py` 13（overview 排序/空表/
+  双降级/路由 200/admin tab 存在/TIMER_UNITS/install_hint/deploy 文件
+  静态校验/PIPELINES/CLI 解析与分发）+ `test_risk_barometer_job.py` +1
+  （默认最近交易日）。
+
+**真实冒烟**：market_risk_overview 真库 ok（2026-08-20 总分 63.3 green、
+252 日序列、105 行业、14 簇）。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1778 passed, 4 warnings（1764 + 14 净增）
+market_risk_overview() 真库直连 ok
+scripts/check-progress-docs.sh → passed；git diff --check → clean
+```
+
+## Known Limitations
+
+- qre-gui 未重启（用户约束），GUI 页面未经浏览器人工核对；timer 未安装
+  （sudo 由主代理/用户执行，命令见 deploy 文件头注释与 admin 日更中心
+  install_hint）。
+
+## Next Steps
+
+无（CR M1–M3 全部完成）。用户侧待办：sudo 安装 qre-barometer.timer +
+重启 qre-gui 后人工核对「大盘风险」tab。
+
+---
+
+# Coding Handoff (archive: QRE-RISK-BAROMETER-M2-009, 风向标 M2 数据装配与回填)
+
+## Task ID
+
 QRE-RISK-BAROMETER-M2-009（大盘/板块风险风向标 M2：数据装配 + 历史回填 + market_risk_daily 产出）
 
 ## Written By

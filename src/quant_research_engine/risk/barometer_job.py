@@ -132,6 +132,23 @@ def fetch_trade_dates(engine, d0: dt.date, d1: dt.date) -> list[dt.date]:
     return [d if isinstance(d, dt.date) else d.date() for d in frame["cal_date"]]
 
 
+def latest_trade_date(engine, on_or_before: dt.date | None = None) -> dt.date:
+    """最近交易日（≤ on_or_before，默认今天）；日更模式默认日期。"""
+    ref = on_or_before or dt.date.today()
+    frame = pd.read_sql(
+        text(
+            "SELECT cal_date FROM reference.trade_calendar "
+            "WHERE is_open = 1 AND cal_date <= :d ORDER BY cal_date DESC LIMIT 1"
+        ),
+        engine,
+        params={"d": ref},
+    )
+    if frame.empty:
+        raise ValueError(f"no trade date on or before {ref}")
+    d = frame["cal_date"].iloc[0]
+    return d if isinstance(d, dt.date) else d.date()
+
+
 def _pivot(frame: pd.DataFrame, value_col: str) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame()
@@ -523,8 +540,14 @@ def main(argv: list[str] | None = None) -> None:
     engine = get_engine(args.db_url)
     if args.date:
         d = dt.date.fromisoformat(args.date)
-        summary = run_date(engine, d, write_json=not args.no_json, fetch_cluster=not args.no_cluster)
     elif args.d0 and args.d1:
+        d = None
+    else:
+        d = latest_trade_date(engine)  # 日更默认：最近交易日
+        log.info("未指定日期，默认最近交易日 %s", d)
+    if d is not None:
+        summary = run_date(engine, d, write_json=not args.no_json, fetch_cluster=not args.no_cluster)
+    else:
         summary = run_range(
             engine,
             dt.date.fromisoformat(args.d0),
@@ -533,8 +556,6 @@ def main(argv: list[str] | None = None) -> None:
             write_json=not args.no_json,
             fetch_cluster=not args.no_cluster,
         )
-    else:
-        parser.error("give --date or --d0/--d1")
     log.info("done: %s", summary)
 
 

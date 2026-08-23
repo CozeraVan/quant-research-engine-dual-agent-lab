@@ -26,11 +26,17 @@ TIMER_UNITS = [
     {"unit": "qre-refresh.timer", "label": "QRE 回测增量刷新", "service": "qre-refresh.service"},
     {"unit": "cluster-ashare-daily.timer", "label": "聚类反推+daily_tags", "service": "cluster-ashare-daily.service"},
     {"unit": "cluster-ashare-tags-weekly.timer", "label": "聚类标签库周更", "service": "cluster-ashare-tags-weekly.service"},
+    {"unit": "qre-barometer.timer", "label": "大盘风险风向标", "service": "qre-barometer.service"},
 ]
 
 QRE_REFRESH_INSTALL_HINT = (
     "sudo cp deploy/qre-refresh.* /etc/systemd/system/ && "
     "sudo systemctl daemon-reload && sudo systemctl enable --now qre-refresh.timer"
+)
+
+QRE_BAROMETER_INSTALL_HINT = (
+    "sudo cp deploy/hardened/qre-barometer.* /etc/systemd/system/ && "
+    "sudo systemctl daemon-reload && sudo systemctl enable --now qre-barometer.timer"
 )
 
 # 简单 TTL 缓存：{key: (timestamp, value)}；single-flight：同 key 并发共享一次计算
@@ -351,6 +357,8 @@ def timer_status(
             entry["status"] = "not_installed"
             if spec["unit"] == "qre-refresh.timer":
                 entry["install_hint"] = QRE_REFRESH_INSTALL_HINT
+            elif spec["unit"] == "qre-barometer.timer":
+                entry["install_hint"] = QRE_BAROMETER_INSTALL_HINT
         else:
             entry["status"] = "installed"
             entry["active_state"] = timer_props.get("ActiveState")

@@ -1,0 +1,16 @@
+# Hardened variant of qre-barometer.timer (NOT installed automatically).
+# 调度：周一至周五 18:30（cluster-ashare 17:30 日更之后、qre-refresh 20:30 之前，
+# 确保 cluster.daily_tags 当日簇已写完；CR §4 日更链末端位置）。
+# 安装命令见 qre-barometer.service 头部注释。
+
+[Unit]
+Description=Daily QRE market risk barometer (hardened)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 18:30:00
+RandomizedDelaySec=300
+AccuracySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

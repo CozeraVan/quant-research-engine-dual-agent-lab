@@ -2,6 +2,23 @@
 
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.
 
+### 2026-08-23: 风向标预警阈值首轮校准观察（M3，初值不动）
+
+- Decision: 预警阈值保留 CR §2 初值（相关 20 日升幅 > +0.10、VaR99 突破
+  占比 > 3%），不调整；本记录为回填数据上的首轮观察。
+- Observation（2019-01-02→2026-08-20，1,850 个交易日 market 行）：
+  red 11 天（0.59%）全部为已知风险事件（2020-02-03/04/28 疫情、
+  2024-01-29~02-05 + 2024-02-28 微盘、2024-10-09 国庆后回撤、
+  2025-04-07 关税暴跌），选择性佳；amber 219 天（11.8%）。
+  单判据频率：corr_change>0.10 占 5.8%（0.10 ≈ 全样本 P95，
+  分位数 P50/P90/P95/P99 = −0.006/0.065/0.106/0.202）；
+  breach>3% 占 7.2%（3% ≈ P93，P50/P90/P95/P99 =
+  0.003/0.022/0.044/0.184）。
+- Assessment: red 双超阈频率与质量均合理；amber 略多但作为早期预警
+  可接受。若后续觉得 amber 过频，breach 阈值可上调至 4–5%（P95 附近），
+  corr 阈值不动。留待 M3 上线后实际使用再定。
+- Owner: KIMI_CODE (per CR §2 阈值校准要求)
+
 ### 2026-08-23: market_risk_daily 结果表落独立 schema `market_risk`（风向标 M2）
 
 - Decision: 大盘/板块风险风向标结果表建在新 schema `market_risk`

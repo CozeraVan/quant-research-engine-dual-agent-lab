@@ -180,3 +180,16 @@ class TestRunRangeEndToEnd:
         monkeypatch.setattr(job, "fetch_trade_dates", lambda e, d0, d1: [])
         with pytest.raises(ValueError, match="no trade dates"):
             job.run_range(eng, dt.date(2026, 8, 20), dt.date(2026, 8, 20))
+
+    def test_main_defaults_to_latest_trade_date(self, monkeypatch):
+        """日更模式不带 --date：默认最近交易日（timer 调用口径）。"""
+        captured = {}
+        monkeypatch.setattr(job, "get_engine", lambda url=None: FakeEngine())
+        monkeypatch.setattr(job, "latest_trade_date", lambda e: dt.date(2026, 8, 20))
+        monkeypatch.setattr(
+            job,
+            "run_date",
+            lambda e, d, **kw: captured.setdefault("date", d) or {"rows_written": 0},
+        )
+        job.main([])
+        assert captured["date"] == dt.date(2026, 8, 20)

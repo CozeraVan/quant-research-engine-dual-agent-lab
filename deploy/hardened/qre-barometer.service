@@ -1,0 +1,29 @@
+# Hardened variant of qre-barometer.service (NOT installed automatically).
+# 大盘/板块风险风向标日更（market_risk.daily，CR_2026-08-23_market_risk_barometer M3）。
+# 单日模式默认最近交易日（reference.trade_calendar），实测 ~80s/日。
+# 安装（需 sudo，由用户手动执行）：
+#   sudo cp deploy/hardened/qre-barometer.service deploy/hardened/qre-barometer.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qre-barometer.timer
+
+[Unit]
+Description=QRE market risk barometer daily (market_risk.daily, hardened)
+# 失败后由 [Service] Restart=on-failure 重试；10 分钟内最多 3 次
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=van
+WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
+Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+ExecStart=/home/van/.local/bin/uv run python -m quant_research_engine.risk.barometer_job
+Restart=on-failure
+RestartSec=300
+# 护栏：单日模式实测 ~80s，给足余量
+TimeoutStartSec=1800
+MemoryMax=4G
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+SyslogIdentifier=qre-barometer

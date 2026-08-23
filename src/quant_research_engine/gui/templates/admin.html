@@ -9,6 +9,7 @@
   <button class="tab" data-tab="onboard">策略状态</button>
   <button class="tab" data-tab="maint">维护区</button>
   <button class="tab" data-tab="cluster">聚类分析</button>
+  <button class="tab" data-tab="risk">大盘风险</button>
 </div>
 
 <!-- Tab 1: 总览 -->
@@ -106,6 +107,36 @@
     <button class="section-toggle" data-section="cl-links">报告与产物下载&#9660;</button>
     <div id="sec-cl-links" class="section-body">
       <div id="cl-links"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab 7: 大盘风险（market_risk.daily 只读；CR_2026-08-23_market_risk_barometer M3） -->
+<div id="tab-risk" class="tab-content">
+  <p><button id="btn-risk-refresh" class="btn btn-ghost">刷新 Refresh</button>
+    <span class="opt">数据源：market_risk.daily（只读，barometer_job 日更；QRE 首次写自有结果表）</span></p>
+  <div id="risk-gauge"><span class="opt">加载中...</span></div>
+  <div class="section">
+    <button class="section-toggle" data-section="risk-series">指标时间序列（近 252 交易日）&#9660;</button>
+    <div id="sec-risk-series" class="section-body">
+      <div id="risk-series"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <button class="section-toggle" data-section="risk-boards">板块热力表（行业 / 动态簇）&#9660;</button>
+    <div id="sec-risk-boards" class="section-body">
+      <p>
+        <button id="btn-risk-ind" class="btn btn-ghost">行业口径</button>
+        <button id="btn-risk-clu" class="btn btn-ghost">动态簇口径</button>
+        <span class="opt">簇分数 M2 不算（成员逐日变动），簇表按当日突破占比排序</span>
+      </p>
+      <div id="risk-boards"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <button class="section-toggle" data-section="risk-alert">预警判定详情（双判据 vs 阈值）&#9660;</button>
+    <div id="sec-risk-alert" class="section-body">
+      <div id="risk-alert"><span class="opt">加载中...</span></div>
     </div>
   </div>
 </div>
@@ -833,12 +864,124 @@
   }
   document.getElementById('btn-cl-refresh').addEventListener('click', loadCluster);
 
+  // ---------- Tab 7: 大盘风险风向标 ----------
+  var riskBoardView = 'industry';
+  function riskAlertBadge(a) {
+    var cls = a === 'red' ? 'health-red' : (a === 'amber' ? 'health-yellow' : 'health-green');
+    var label = a === 'red' ? '🔴 RED' : (a === 'amber' ? '🟡 AMBER' : '🟢 GREEN');
+    return '<span class="' + cls + '">' + label + '</span>';
+  }
+  function riskScoreColor(score) {
+    if (score == null) return '';
+    var h = 120 - Math.round(score * 1.2);  // 0→绿 120°, 100→红 0°
+    return 'background:hsl(' + h + ',70%,85%);';
+  }
+  function riskSvgLine(values, color, width, height) {
+    var pts = [];
+    var nums = values.filter(function(v) { return v != null; });
+    if (!nums.length) return '<span class="opt">无数据</span>';
+    var lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
+    var span = (hi - lo) || 1e-9;
+    values.forEach(function(v, i) {
+      if (v == null) return;
+      var x = (i / Math.max(values.length - 1, 1)) * width;
+      var y = height - ((v - lo) / span) * (height - 4) - 2;
+      pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+    });
+    return '<svg width="' + width + '" height="' + height + '" style="border:1px solid #e2e8f0;background:#fff">'
+      + '<polyline fill="none" stroke="' + color + '" stroke-width="1.5" points="' + pts.join(' ') + '"/></svg>'
+      + ' <span class="opt">' + lo.toPrecision(3) + ' ~ ' + hi.toPrecision(3) + '</span>';
+  }
+  function renderMarketRisk(d) {
+    if (d.empty) {
+      document.getElementById('risk-gauge').innerHTML = '<span class="opt">' + esc(d.note || '暂无数据') + '</span>';
+      document.getElementById('risk-series').innerHTML = '<span class="opt">暂无数据</span>';
+      document.getElementById('risk-boards').innerHTML = '<span class="opt">暂无数据</span>';
+      document.getElementById('risk-alert').innerHTML = '<span class="opt">暂无数据</span>';
+      return;
+    }
+    var m = d.market || {};
+    document.getElementById('risk-gauge').innerHTML =
+      '<div class="risk-cards"><div class="risk-card">'
+      + '<h3>全市场风险总分（' + esc(d.latest_date) + '）</h3>'
+      + '<p><strong class="kpi" style="font-size:28px;' + (m.warmup ? '' : '') + '">'
+      + esc(m.total_score == null ? '—(warmup)' : Number(m.total_score).toFixed(1)) + '</strong> / 100</p>'
+      + '<p>' + riskAlertBadge(m.alert) + ' 覆盖股票 ' + esc(m.n_stocks) + ' 只</p>'
+      + '<p class="opt">σ 中位 ' + esc(m.median_sigma == null ? '—' : (m.median_sigma * 100).toFixed(2) + '%')
+      + ' ｜ 离散度 ' + esc(m.dispersion == null ? '—' : (m.dispersion * 100).toFixed(2) + '%')
+      + ' ｜ 平均相关 ' + esc(m.avg_corr == null ? '—' : m.avg_corr.toFixed(3))
+      + ' ｜ 突破占比 ' + esc(m.breach_ratio == null ? '—' : (m.breach_ratio * 100).toFixed(2) + '%') + '</p>'
+      + '</div></div>';
+
+    var s = d.series || {};
+    var W = 640, H = 140;
+    document.getElementById('risk-series').innerHTML =
+      ['total_score|总分（0-100）|#dc2626', 'avg_corr|平均两两相关|#2563eb',
+       'breach_ratio|VaR 突破占比|#d97706', 'median_sigma|截面 σ 中位数|#059669',
+       'dispersion|截面离散度|#7c3aed'].map(function(spec) {
+        var parts = spec.split('|');
+        return '<p><strong>' + esc(parts[1]) + '</strong><br>' + riskSvgLine(s[parts[0]] || [], parts[2], W, H) + '</p>';
+      }).join('');
+
+    renderRiskBoard(d);
+  }
+  function renderRiskBoard(d) {
+    var list = riskBoardView === 'industry' ? (d.industries || []) : (d.clusters || []);
+    var rows = list.map(function(e) {
+      var scoreCell = e.total_score == null
+        ? '<td class="num">—</td>'
+        : '<td class="num" style="' + riskScoreColor(e.total_score) + '">' + Number(e.total_score).toFixed(1) + '</td>';
+      return '<tr><td>' + esc(e.name) + '</td>' + scoreCell
+        + '<td>' + (e.alert ? riskAlertBadge(e.alert) : '<span class="opt">—</span>') + '</td>'
+        + '<td class="num">' + esc(e.breach_ratio == null ? '—' : (e.breach_ratio * 100).toFixed(2) + '%') + '</td>'
+        + '<td class="num">' + esc(e.avg_corr == null ? '—' : Number(e.avg_corr).toFixed(3)) + '</td>'
+        + '<td class="num">' + esc(e.n_stocks) + '</td></tr>';
+    }).join('');
+    document.getElementById('risk-boards').innerHTML =
+      '<table><thead><tr><th>' + (riskBoardView === 'industry' ? '行业' : '动态簇')
+      + '</th><th>总分</th><th>预警</th><th>突破占比</th><th>平均相关</th><th>股票数</th></tr></thead>'
+      + '<tbody>' + (rows || '<tr><td colspan="6" class="opt">无数据</td></tr>') + '</tbody></table>';
+
+    var ad = (d.market && d.market.alert_detail) || {};
+    document.getElementById('risk-alert').innerHTML =
+      '<table><thead><tr><th>判据</th><th>当前值</th><th>阈值</th><th>是否超阈</th></tr></thead><tbody>'
+      + '<tr><td>平均相关 20 日升幅</td><td class="num">' + esc(ad.corr_change == null ? '—(历史不足)' : ad.corr_change.toFixed(3)) + '</td>'
+      + '<td class="num">' + esc(ad.corr_jump_threshold) + '</td><td>' + esc(ad.corr_exceed ? '超阈' : '未超') + '</td></tr>'
+      + '<tr><td>VaR99 突破占比</td><td class="num">' + esc(ad.breach_ratio_latest == null ? '—' : (ad.breach_ratio_latest * 100).toFixed(2) + '%') + '</td>'
+      + '<td class="num">' + esc(ad.breach_ratio_threshold == null ? '—' : (ad.breach_ratio_threshold * 100).toFixed(0) + '%') + '</td><td>' + esc(ad.breach_exceed ? '超阈' : '未超') + '</td></tr>'
+      + '</tbody></table>'
+      + '<p class="opt">双超阈 → red；单超阈 → amber；否则 green（阈值初值，CR §2 注明待校准）</p>';
+  }
+  function loadMarketRisk() {
+    fetchWithTimeout('/api/admin/market-risk')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) {
+          cardError(document.getElementById('risk-gauge'), d.error || '大盘风险加载失败', loadMarketRisk);
+          return;
+        }
+        renderMarketRisk(d);
+      })
+      .catch(function(err) {
+        var msg = isAbort(err) ? '大盘风险加载超时（30s），请重试' : ('大盘风险加载失败：' + err);
+        cardError(document.getElementById('risk-gauge'), msg, loadMarketRisk);
+      });
+  }
+  document.getElementById('btn-risk-refresh').addEventListener('click', loadMarketRisk);
+  document.getElementById('btn-risk-ind').addEventListener('click', function() {
+    riskBoardView = 'industry'; loadMarketRisk();
+  });
+  document.getElementById('btn-risk-clu').addEventListener('click', function() {
+    riskBoardView = 'cluster'; loadMarketRisk();
+  });
+
   loadOverview();
   loadTimers();
   loadFactorStatus();
   loadOnboard();
   loadMaintenance();
   loadCluster();
+  loadMarketRisk();
 })();
 </script>
 {% endblock %}

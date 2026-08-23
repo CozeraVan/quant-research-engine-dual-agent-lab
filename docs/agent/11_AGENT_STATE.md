@@ -12,7 +12,18 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-BAROMETER-M2-009 (DONE — 1764 tests green；awaiting git approval)
+QRE-RISK-BAROMETER-M3-010 (DONE — 1778 tests green；awaiting git approval)
+
+2026-08-23: 风向标 M3 落地（CR 状态改「✅ M1–M3 已完成」）。
+deploy/hardened/qre-barometer.{service,timer}（Mon..Fri 18:30、Persistent、
+默认最近交易日，未 sudo）；barometer_job latest_trade_date 默认日期 +
+`qre barometer` CLI；admin TIMER_UNITS/PIPELINES 登记；/admin 新「大盘
+风险」tab（gui/market_risk.py 只读 market_risk.daily + 仪表盘/五序列
+SVG/双口径热力表/预警详情，复用现有样式）；阈值首轮校准观察入 06
+（red 11/1850=0.59% 全为已知风险事件，初值保留）。真库冒烟 ok。
+1778 tests green（+14）。未 commit、未重启 qre-gui、未装 timer。
+详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-BAROMETER-M2-009 (DONE — 1764 tests green；commit b0713d7)
 
 2026-08-23: 大盘/板块风险风向标 M2 落地（CR_2026-08-23_market_risk_barometer
 §5 M2 阶段；M1 = commit 64addd7）。新 risk/barometer_job.py（risk 包唯一
@@ -281,6 +292,13 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1778 passed, 4 warnings（2026-08-23, QRE-RISK-BAROMETER-M3-010；基线 1764 + 14 净增）
+真实冒烟：market_risk_overview() 真库 ok（2026-08-20 总分 63.3 green，252 日序列，105 行业，14 簇）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
 ```
 uv run pytest tests/ -x -q → 1764 passed, 4 warnings（2026-08-23, QRE-RISK-BAROMETER-M2-009；基线 1754 + 10 净增）

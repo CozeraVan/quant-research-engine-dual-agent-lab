@@ -705,6 +705,14 @@ def create_app() -> Flask:
             return jsonify({"error": "文件不存在"}), 404
         return send_file(target, as_attachment=True, download_name=target.name)
 
+    # --- 管理台「大盘风险」风向标（QRE-RISK-BAROMETER-M3-010，只读 market_risk.daily） ---
+
+    @app.route("/api/admin/market-risk")
+    def api_admin_market_risk() -> Any:
+        from quant_research_engine.gui.market_risk import market_risk_overview
+
+        return jsonify(market_risk_overview(request.args.get("db_url") or None))
+
     # --- 管理台「聚类分析」（QRE-ADMIN-CLUSTER-001，只读展示 cluster-ashare 产出） ---
 
     @app.route("/api/admin/cluster")

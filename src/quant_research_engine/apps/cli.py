@@ -368,6 +368,16 @@ def build_parser() -> argparse.ArgumentParser:
     gui_parser.add_argument("--port", type=int, default=8080, help="Port to bind the console server to.")
     gui_parser.add_argument("--debug", action="store_true", help="Run Flask in debug mode (not recommended for production).")
 
+    barometer_parser = subparsers.add_parser(
+        "barometer", help="Run market risk barometer daily job (default: latest trade date)"
+    )
+    barometer_parser.add_argument("--date", default=None, help="Single trade date YYYY-MM-DD (default: latest open day).")
+    barometer_parser.add_argument("--d0", default=None, help="Backfill range start YYYY-MM-DD.")
+    barometer_parser.add_argument("--d1", default=None, help="Backfill range end YYYY-MM-DD.")
+    barometer_parser.add_argument("--chunk", default="year", choices=["year", "month", "all"], help="Backfill chunk size.")
+    barometer_parser.add_argument("--no-json", action="store_true", help="Skip JSON artifacts.")
+    barometer_parser.add_argument("--no-cluster", action="store_true", help="Skip dynamic cluster groups.")
+
     return parser
 
 
@@ -1886,6 +1896,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         from quant_research_engine.gui.app import launch_gui
 
         launch_gui(host=args.host, port=args.port, debug=args.debug)
+        return 0
+
+    if args.command == "barometer":
+        from quant_research_engine.risk import barometer_job
+
+        argv = []
+        if args.date:
+            argv += ["--date", args.date]
+        if args.d0 and args.d1:
+            argv += ["--d0", args.d0, "--d1", args.d1, "--chunk", args.chunk]
+        if args.no_json:
+            argv.append("--no-json")
+        if args.no_cluster:
+            argv.append("--no-cluster")
+        barometer_job.main(argv)
         return 0
 
     parser.error(f"Unsupported command: {args.command}")

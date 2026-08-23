@@ -46,6 +46,13 @@ PIPELINES: dict[str, dict[str, Any]] = {
         "unit": "qre-refresh.service",
         "log_dirs": [],
     },
+    "qre-barometer": {
+        "label": "大盘风险风向标",
+        "cmd": [UV_BIN, "run", "python", "-m", "quant_research_engine.risk.barometer_job"],
+        "cwd": QRE_ROOT,
+        "unit": "qre-barometer.service",
+        "log_dirs": [],
+    },
 }
 
 # 每条管线独立单任务锁

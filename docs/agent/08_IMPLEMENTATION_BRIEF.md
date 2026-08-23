@@ -2,7 +2,50 @@
 
 ## Task ID
 
-QRE-RISK-BAROMETER-M2-009（大盘/板块风险风向标 M2：数据装配 + 历史回填 + market_risk_daily 产出）
+QRE-RISK-BAROMETER-M3-010（大盘/板块风险风向标 M3：日更 timer 接入 + GUI 风向标页 + 阈值首轮校准观察）
+
+## Created By
+
+KIMI_CODE（主代理 2026-08-23 指定的任务书；依据已批准 CR
+`docs/frm/CR_2026-08-23_market_risk_barometer.md` §4/§5 M3 阶段；
+M1=64addd7、M2=b0713d7，基线 1764 tests green）
+
+## Intended Implementer
+
+KIMI_CODE（子代理执行 M3）
+
+## Goal
+
+1. 日更接入：`deploy/hardened/qre-barometer.{service,timer}`
+   （Mon..Fri 18:30、Persistent=true、oneshot、沿用 hardened 模板护栏；
+   安装命令写注释，不 sudo）；barometer_job 无 --date 时默认最近交易日
+   （latest_trade_date）；`qre barometer` CLI 子命令；
+   admin TIMER_UNITS + daily_jobs PIPELINES 登记（日更中心可见可手触）。
+2. GUI：/admin 新增「大盘风险」tab——总分仪表盘（最新日 + 红黄绿灯 +
+   四指标当前值）、五序列 SVG 时间序列（近 252 日，客户端 polyline，
+   与 run_detail 同方案 inline SVG、零新前端框架）、板块热力表（行业/动态簇
+   双视图切换，按总分/突破占比排序着色）、预警详情（双判据当前值 vs 阈值）。
+   数据层 `gui/market_risk.py::market_risk_overview`（只读 market_risk.daily，
+   _cached TTL 300s，分区降级）；路由 `/api/admin/market-risk`。
+3. 阈值首轮校准：回填 1,850 日统计 red/amber 频率与双判据分位数，
+   结论记 06_DECISION_LOG（初值不动，记录观察）。
+4. 测试：timer/service 静态校验、TIMER_UNITS/install_hint、PIPELINES
+   登记、CLI 解析与分发、overview 数据层（fake store：排序/空表/双降级）、
+   路由 200、admin 页含新 tab、barometer_job 默认日期。
+5. CR 状态改「✅ M1–M3 已完成」；docs/agent 同步。
+
+## 约束
+
+最小侵入；既有 1764 测试全绿；不 git commit、不 sudo、不重启 qre-gui。
+
+## Validation
+
+`uv run pytest tests/ -x -q`（目标 1764 + 新增全绿）；真实库
+market_risk_overview 直连冒烟；`scripts/check-progress-docs.sh` → passed。
+
+---
+
+# Implementation Brief (archive: QRE-RISK-BAROMETER-M2-009, 风向标 M2 数据装配与回填)
 
 ## Created By
 

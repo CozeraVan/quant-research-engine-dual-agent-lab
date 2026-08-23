@@ -2,6 +2,31 @@
 
 ## Task ID
 
+QRE-RISK-BAROMETER-M3-010 (大盘/板块风险风向标 M3：日更 timer 接入 + GUI 风向标页 + 阈值首轮校准观察)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+M3（CR 末阶段，CR 状态改「✅ M1–M3 已完成」）：deploy/hardened/
+qre-barometer.{service,timer}（Mon..Fri 18:30、Persistent、hardened 护栏、
+默认最近交易日单日模式，未 sudo）；`qre barometer` CLI；admin TIMER_UNITS
++ install_hint + daily_jobs PIPELINES 登记；/admin 新「大盘风险」tab——
+新 `gui/market_risk.py::market_risk_overview`（只读 market_risk.daily、
+_cached 300s、分区降级）+ 路由 /api/admin/market-risk + 仪表盘红黄绿灯/
+五序列 inline SVG/行业+动态簇热力表/预警双判据详情（复用现有样式，零新
+前端框架）；阈值首轮校准观察入 06（red 11/1850=0.59% 全为已知风险事件，
+初值保留）。真库冒烟 ok（2026-08-20 总分 63.3 green）。1778 tests green
+（+14）。未 commit、未重启 qre-gui、未装 timer（sudo 留主代理/用户）。
+细节见 `09_CODING_HANDOFF.md` 顶部。上一任务：QRE-RISK-BAROMETER-M2-009
+（M2 装配+回填，1764 green，b0713d7）。
+
+# Task Handoff (archive: QRE-RISK-BAROMETER-M2-009, 风向标 M2 数据装配与回填)
+
+## Task ID
+
 QRE-RISK-BAROMETER-M2-009 (大盘/板块风险风向标 M2：数据装配 + 历史回填 + market_risk_daily 产出)
 
 ## Current Status

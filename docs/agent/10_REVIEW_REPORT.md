@@ -2,7 +2,54 @@
 
 ## Task ID
 
-QRE-RISK-BAROMETER-M2-009（大盘/板块风险风向标 M2：数据装配 + 历史回填 + market_risk_daily 产出）
+QRE-RISK-BAROMETER-M3-010（大盘/板块风险风向标 M3：日更 timer + GUI 风向标页 + 阈值校准观察）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **范围与 CR §5 M3 行一一对应**：deploy/hardened/qre-barometer.{service,
+  timer}（Mon..Fri 18:30、Persistent、oneshot、沿用 qre-refresh hardened
+  模板护栏；安装说明在头部注释，未 sudo）、barometer_job 默认最近交易日、
+  `qre barometer` CLI、admin TIMER_UNITS + install_hint + daily_jobs
+  PIPELINES 登记、/admin「大盘风险」tab（仪表盘/五序列 SVG/双口径
+  热力表/预警详情）、阈值首轮校准观察入 06、CR 状态改 M1–M3 已完成。
+- **纪律一致**：GUI 只读 market_risk.daily（cluster tab 同款 _store +
+  _cached TTL 300s + 分区降级）；图表沿用项目 inline SVG 方案（客户端
+  polyline，与 run_detail equity_svg 同思路），零新前端框架；
+  timer/service 与现有 hardened 模板逐字段对齐（User/WorkingDirectory/
+  Environment/Restart/MemoryMax/Nice/IOScheduling*/SyslogIdentifier）。
+- **真实冒烟**：market_risk_overview 直连真库 ok——latest 2026-08-20、
+  market 总分 63.3/green/5541 只、序列 252 日、行业 105（top 黄金 86.1）、
+  簇 14（top 跳空:低开 breach 10.8%）。
+- **阈值校准观察（06 已记录）**：1,850 日 red 11（0.59%，全为已知风险
+  事件）、amber 219（11.8%）；corr 阈值 0.10≈P95、breach 阈值 3%≈P93；
+  初值保留，若 amber 嫌多 breach 可上调 4–5%。
+- **披露**：GUI 页面未经浏览器人工核对（qre-gui 未重启，用户约束）；
+  timer 未安装（sudo 由主代理/用户执行）。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1778 passed, 4 warnings（基线 1764 + 14 净增，全绿）
+真实冒烟：market_risk_overview() 真库 ok（2026-08-20，63.3 green）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+# Review Report (archive: QRE-RISK-BAROMETER-M2-009, 风向标 M2 数据装配与回填)
 
 ## Reviewer
 
