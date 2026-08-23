@@ -232,6 +232,7 @@ def build_barometer(
             "dispersion": cs["sections"]["dispersion"]["dispersion_equal_weight"],
             "avg_pairwise_corr": corr_s,
             "breach_ratio": breach_s,
+            "n_stocks": cs["sections"]["dispersion"]["n_stocks"],
             "portfolio_es99": es99_s,
         }
         score_series = {

@@ -2,7 +2,71 @@
 
 ## Task ID
 
-QRE-RISK-BAROMETER-M1-008（大盘/板块风险风向标 M1：cross_section + barometer 纯函数内核）
+QRE-RISK-BAROMETER-M2-009（大盘/板块风险风向标 M2：数据装配 + 历史回填 + market_risk_daily 产出）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **范围与 CR §5 M2 行一一对应**：barometer_job.py（唯一读写 DB 层：
+  业务表只读，只写自有 market_risk schema）+ 单日/区间两模式 + 年分块
+  312 交易日 buffer + 幂等 upsert + JSON 产物 + 真实回填 + 方向性验证。
+  M1 内核零行为改动（仅 build_barometer indicators 增列 n_stocks 序列，
+  纯增量）。
+- **schema 决策**：独立 schema `market_risk`（QRE 产出与 cluster-ashare
+  的 cluster schema 分空间；van 已验证 CREATE SCHEMA 权限；写库通道沿用
+  cluster 日更同款 sqlalchemy engine + 事务，行级 ON CONFLICT 幂等）。
+  表 `market_risk.daily(trade_date, scope, n_stocks, indicators/scores/alert
+  jsonb, created_at)`，PK (trade_date, scope)，120 个 scope
+  （1 market + 105 industry + 14 cluster tag）。
+- **口径**：收益 = pct_chg/100（tushare 前收盘口径，与 cluster-ashare
+  tags_daily 一致）；市值 = daily_basic.total_mv 行内归一化；行业静态
+  映射（stock_basic.industry）；簇 = cluster.daily_tags 当日 tag→成员，
+  <5 只跳过。簇行只出当日截面指标（scores=None + note 披露：成员逐日
+  变动，252 日分数需固定成员历史，M2 不算）。
+- **真实回填**：2019-01-02 → 2026-08-20，8 个年块（每块 312 交易日
+  buffer），约 21 分钟单进程，220,034 行 / 1,850 交易日 × 120 scope；
+  每日 JSON 产物 outputs/market_risk/<date>.json（共 1,850 个）。
+- **方向性验证（CR §5 M2 硬要求，全过）**：market 行全样本分位对照——
+  - 2020-02-03 疫情暴跌：突破占比 85.2%（P100）、总分 87.7（P99）、
+    alert=red；次日 02-04 red。
+  - 2024-01-29~02-05 微盘危机：总分 93.9–99.4（P99–100）、
+    02-05 突破占比 58.6%（P100）、连续 red。
+  - 常态对照 2023-06：总分 28–36（P10–21）、alert=green。
+  - 全样本 red 共 11 天，全部为已知风险事件：2020-02-03/04/28（疫情）、
+    2024-01-29~02-05、2024-02-28（微盘）、2024-10-09（国庆后回撤）、
+    2025-04-07（关税暴跌）——方向性与选择性俱佳。
+- **披露/已知边界**：2020-02-04 离散度 12.0（P100）为新股首日 ±44%
+  无涨跌幅限制的极端收益所致（数据特征非 bug，等权标准差对离群敏感，
+  如实披露）；回填期间单日冒烟发现 daily_basic 缺个别 BJ 股
+  （920395.BJ 等）市值列，已修为 reindex 缺列补 NaN（加权时剔除）。
+- **测试**：+10（分块边界/DDL/幂等 upsert SQL 与 NaN→None/簇 <5 跳过/
+  端到端 monkeypatch 管线 + JSON 产物），全量 1764 绿。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1764 passed, 4 warnings（基线 1754 + 10 净增，全绿）
+真实回填：2019-01-02→2026-08-20，8 chunks，220,034 行 / 1,850 日 × 120 scope，~21min
+方向性验证：2020-02-03 red（breach 85.2% P100）、2024-02-05 red（score 99.4 P100）、
+  常态 2023-06 green（score P10–21）；全样本 red 11 天全部为已知风险事件
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+# Review Report (archive: QRE-RISK-BAROMETER-M1-008, 风向标 M1 纯函数内核)
 
 ## Reviewer
 

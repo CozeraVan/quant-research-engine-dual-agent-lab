@@ -2,6 +2,22 @@
 
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.
 
+### 2026-08-23: market_risk_daily 结果表落独立 schema `market_risk`（风向标 M2）
+
+- Decision: 大盘/板块风险风向标结果表建在新 schema `market_risk`
+  （表 `market_risk.daily`，PK (trade_date, scope)，行级 ON CONFLICT
+  幂等 upsert）；不写 cluster schema。写库通道沿用 cluster 日更同款
+  sqlalchemy engine + 单事务；收益口径用 `stock_daily.pct_chg/100`
+  （tushare 前收盘口径，与 cluster-ashare tags_daily 一致）。
+- Reason: QRE 产出与 cluster-ashare 产物（cluster schema）分空间，
+  避免跨项目写对方 schema 的所有权混淆；与「引擎与结果分空间存放」
+  既有原则一致；用户 van 已验证 CREATE SCHEMA 权限。
+- Alternatives: 写 cluster schema（rejected——所有权混淆）；窗口
+  DELETE+INSERT（rejected——结果行少、非千万级长表，行级 upsert 更简单）。
+- Impact: 新增一个 schema + 一张表；业务表保持只读；QRE 首次向业务库
+  写自有结果表（CR §4 已批准此通道）。
+- Owner: KIMI_CODE (per approved CR_2026-08-23_market_risk_barometer §4)
+
 ## Format
 
 ### 2026-07-19: Record GPU availability (RTX 5070 Ti); defer GPU acceleration

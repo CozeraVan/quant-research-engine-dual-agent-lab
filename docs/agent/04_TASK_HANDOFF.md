@@ -2,6 +2,31 @@
 
 ## Task ID
 
+QRE-RISK-BAROMETER-M2-009 (大盘/板块风险风向标 M2：数据装配 + 历史回填 + market_risk_daily 产出)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+M2 在 M1（commit 64addd7，1754 绿）上落地：新 `risk/barometer_job.py`
+（risk 包唯一读写 DB 层，业务表只读）——pct_chg/100 收益面板 +
+total_mv 市值 + stock_basic.industry 行业 + cluster.daily_tags 当日簇
+（<5 跳过）→ M1 纯函数 → 独立 schema `market_risk.daily` 表
+（PK (trade_date, scope)，ON CONFLICT 幂等 upsert）+ JSON 产物
+outputs/market_risk/<date>.json；年分块 + 312 交易日 buffer。真实回填
+2019-01-02→2026-08-20 完成：220,034 行 / 1,850 日 × 120 scope，~21min。
+方向性验证全过：2020-02-03 red（突破 85.2% P100）、2024-02 微盘连续 red
+（总分 P99–100）、常态 green；全样本 red 11 天均为已知风险事件。
+簇分数 M2 不算（成员逐日变动，披露）。1764 tests green（+10）。
+未 commit、未重启 qre-gui。细节见 `09_CODING_HANDOFF.md` 顶部。
+上一任务：QRE-RISK-BAROMETER-M1-008（M1 纯函数内核，1754 green，已提交 64addd7）。
+
+# Task Handoff (archive: QRE-RISK-BAROMETER-M1-008, 风向标 M1 纯函数内核)
+
+## Task ID
+
 QRE-RISK-BAROMETER-M1-008 (大盘/板块风险风向标 M1：cross_section + barometer 纯函数内核)
 
 ## Current Status

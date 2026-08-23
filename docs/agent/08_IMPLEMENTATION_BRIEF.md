@@ -2,7 +2,72 @@
 
 ## Task ID
 
-QRE-RISK-BAROMETER-M1-008（大盘/板块风险风向标 M1：cross_section + barometer 纯函数内核）
+QRE-RISK-BAROMETER-M2-009（大盘/板块风险风向标 M2：数据装配 + 历史回填 + market_risk_daily 产出）
+
+## Created By
+
+KIMI_CODE（主代理 2026-08-23 指定的任务书；依据已批准 CR
+`docs/frm/CR_2026-08-23_market_risk_barometer.md` §4/§5 M2 阶段；
+M1 = commit 64addd7，基线 1754 tests green）
+
+## Intended Implementer
+
+KIMI_CODE（子代理执行 M2 装配层）
+
+## Goal
+
+1. 新 `risk/barometer_job.py`（本包唯一读 DB 层，只读业务表 + 写自有结果表）：
+   - 取数：`public.stock_daily.pct_chg/100` 收益面板（前收盘口径，与
+     cluster-ashare tags_daily 一致）、`reference.daily_basic.total_mv`
+     市值面板、`reference.stock_basic.industry` 行业分组、
+     `cluster.daily_tags` 当日标签簇分组（簇内 <5 只跳过）、
+     `reference.trade_calendar`（cal_date/is_open）交易日历；
+   - 单日与区间两模式；区间按 chunk（默认年）分块，每块前补
+     252+60=312 交易日 buffer（分位窗口 + 相关窗口 warmup），
+     块内计算后只写块区间日期，块间幂等；
+   - 调用 M1 纯函数（build_barometer / cross_section / 零改动）；
+   - 结果写 `outputs/market_risk/<date>.json` + `market_risk.daily`
+     表（ON CONFLICT (trade_date, scope) 幂等 upsert）。
+2. 结果表 DDL：独立 schema `market_risk`（决策与理由见下）：
+   `(trade_date, scope, n_stocks, indicators jsonb, scores jsonb,
+   alert jsonb, created_at)`，PK (trade_date, scope)；
+   scope ∈ `market` / `industry:<行业>` / `cluster:<tag>`。
+3. 回填入口：模块 __main__（`--date` 单日 / `--d0 --d1 --chunk year`
+   区间回填，进度日志），回填 2019-01→今（覆盖 CR 验收的 2020-02
+   疫情与 2024-02 微盘危机方向性验证时点，且超 CR「近 252+60」下限）。
+4. 方向性验证：2020-02-03、2024-01 下旬~02 初的风险分数/突破占比/
+   相关系数 vs 常态分位，摘要写进 10_REVIEW。
+5. 测试：monkeypatch 取数函数 + fake engine（沿用 test_postgres_store
+   模式）——幂等 upsert SQL、簇 <5 跳过、分块边界、端到端小面板。
+
+## schema 决策（记录理由）
+
+独立 schema `market_risk`，理由：①QRE 产出与 cluster-ashare 产物
+（cluster schema）分空间，避免跨项目写对方 schema 的所有权混淆；
+②用户 van 已验证有 CREATE SCHEMA 权限；③与「引擎与结果分空间存放」
+既有原则一致。写库通道沿用 cluster 日更同款 sqlalchemy engine +
+事务写入（ upsert 改 ON CONFLICT 行级幂等，因结果行少、非千万级长表）。
+
+## 口径与边界（披露）
+
+- 收益 = pct_chg/100（tushare 前收盘复权一致口径）；市值权重 = total_mv
+  当日截面归一化。
+- cluster 簇成员逐日变动：簇行输出当日截面指标 + 预警；252 日分数需
+  固定成员历史序列，M2 对簇不计算分数（scores=null + note 披露），
+  行业（静态映射）与全市场计算完整分数。
+- 组合法 ES99/组合汇总为整段统计，入 JSON 产物与 market 行 indicators；
+  表按日行存储指标/分数/预警。
+- 不修改 M1 内核行为（只 import 调用）。
+
+## Validation
+
+`uv run pytest tests/ -x -q`（目标 1754 + 新增全绿）；
+真实库回填一次 + 方向性验证摘要；
+`scripts/check-progress-docs.sh` → passed。
+
+---
+
+# Implementation Brief (archive: QRE-RISK-BAROMETER-M1-008, 风向标 M1 纯函数内核)
 
 ## Created By
 

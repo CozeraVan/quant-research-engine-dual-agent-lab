@@ -12,7 +12,20 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-BAROMETER-M1-008 (DONE — 1754 tests green；awaiting git approval)
+QRE-RISK-BAROMETER-M2-009 (DONE — 1764 tests green；awaiting git approval)
+
+2026-08-23: 大盘/板块风险风向标 M2 落地（CR_2026-08-23_market_risk_barometer
+§5 M2 阶段；M1 = commit 64addd7）。新 risk/barometer_job.py（risk 包唯一
+读写 DB 层：pct_chg/100 收益 + total_mv 市值 + industry 行业 +
+daily_tags 当日簇 <5 跳过 → M1 纯函数 → 独立 schema market_risk.daily
+表（PK (trade_date,scope)、ON CONFLICT 幂等 upsert）+ JSON 产物
+outputs/market_risk/<date>.json；年分块 + 312 交易日 buffer）。真实回填
+2019-01-02→2026-08-20：220,034 行 / 1,850 日 × 120 scope，~21min。
+方向性验证全过：2020-02-03 red（突破 85.2% P100）、2024-02 微盘连续
+red（总分 P99–100）、常态 green；全样本 red 11 天均为已知风险事件。
+1764 tests green（+10）。未 commit、未重启 qre-gui。详见
+09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-BAROMETER-M1-008 (DONE — 1754 tests green；commit 64addd7)
 
 2026-08-23: 大盘/板块风险风向标 M1 落地（CR_2026-08-23_market_risk_barometer
 §5 M1 阶段）。risk 包新增 cross_section.py（纯函数零 DB、向量化：EWMA
@@ -268,6 +281,14 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1764 passed, 4 warnings（2026-08-23, QRE-RISK-BAROMETER-M2-009；基线 1754 + 10 净增）
+真实回填：2019-01-02→2026-08-20，8 年块，220,034 行 / 1,850 交易日 × 120 scope，~21min
+方向性验证：2020-02-03 red（breach 85.2% P100）、2024-02-05 red（score 99.4 P100）、常态 2023-06 green（P10–21）；red 11 天全为已知风险事件
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
 ```
 uv run pytest tests/ -x -q → 1754 passed, 4 warnings（2026-08-23, QRE-RISK-BAROMETER-M1-008；基线 1724 + 30 净增）

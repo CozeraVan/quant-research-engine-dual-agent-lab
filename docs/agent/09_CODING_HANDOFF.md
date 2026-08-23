@@ -2,6 +2,72 @@
 
 ## Task ID
 
+QRE-RISK-BAROMETER-M2-009（大盘/板块风险风向标 M2：数据装配 + 历史回填 + market_risk_daily 产出）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization；M1=64addd7 已提交，R2–R7 也在待审批队列)
+
+## Implementation Summary
+
+M2 落地（CR `docs/frm/CR_2026-08-23_market_risk_barometer.md` §5 M2 阶段）：
+新 `risk/barometer_job.py`（risk 包唯一读写 DB 层）——取数
+（stock_daily.pct_chg/100 收益面板、daily_basic.total_mv 市值、
+stock_basic.industry 行业、cluster.daily_tags 当日簇 <5 跳过、
+trade_calendar 日历）→ 调 M1 纯函数 → 写 `market_risk.daily` 表
+（独立 schema，PK (trade_date, scope)，ON CONFLICT 幂等 upsert，
+scope ∈ market / industry:<行业> / cluster:<tag>）+ JSON 产物
+outputs/market_risk/<date>.json。区间按年分块、每块前补 312 交易日
+buffer（252 分位 + 60 相关 warmup），块间幂等。入口
+`python -m quant_research_engine.risk.barometer_job --date D |
+--d0 --d1 --chunk year`。簇行只出当日截面指标（成员逐日变动，
+M2 不算簇分数，scores=None 披露）；行业与全市场完整分数。
+M1 内核零行为改动（barometer.build_barometer indicators 仅增列
+n_stocks 序列）。
+
+**真实回填**：2019-01-02 → 2026-08-20，8 年块，~21 分钟单进程，
+220,034 行 / 1,850 交易日 × 120 scope（1 market + 105 industry +
+14 cluster tag），JSON 产物 1,850 个。
+
+**方向性验证（全过）**：2020-02-03 疫情 red（突破占比 85.2% P100、
+总分 87.7 P99）；2024-01-29~02-05 微盘危机连续 red（总分 93.9–99.4
+P99–100，02-05 突破 58.6% P100）；常态 2023-06 green（P10–21）；
+全样本 red 11 天全部为已知风险事件（+2024-10-09、2025-04-07）。
+
+**测试**（+10）：`tests/test_risk_barometer_job.py`——分块边界、
+DDL、幂等 upsert（ON CONFLICT + NaN→None）、簇 <5 跳过、端到端
+monkeypatch 管线 + JSON 产物、空日历报错。全量 1764 绿。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1764 passed, 4 warnings（1754 + 10 净增）
+回填：2019-01-02→2026-08-20，8 chunks，220,034 行，~21min
+scripts/check-progress-docs.sh → passed；git diff --check → clean
+```
+
+## Known Limitations
+
+- 簇分数 M2 不算（成员逐日变动）；2020-02-04 离散度 12.0 为新股首日
+  ±44% 极端收益（数据特征，等权 std 对离群敏感，披露）；
+  daily_basic 缺个别 BJ 股市值 → reindex 补 NaN 加权剔除。
+- 日更 timer（M3）未接；单日模式实测 ~80s（315 日 buffer × 5565 股）。
+
+## Next Steps
+
+M3：日更 systemd timer（18:30，Persistent）+ GUI 风向标页 +
+阈值首轮校准记录进 06_DECISION_LOG。
+
+---
+
+# Coding Handoff (archive: QRE-RISK-BAROMETER-M1-008, 风向标 M1 纯函数内核)
+
+## Task ID
+
 QRE-RISK-BAROMETER-M1-008（大盘/板块风险风向标 M1：cross_section + barometer 纯函数内核）
 
 ## Written By
