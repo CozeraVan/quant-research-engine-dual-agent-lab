@@ -213,13 +213,59 @@ tushare 日期字符串与 DB DATE 列的转换、curve_term=0 点（隔夜）�
 | D1.3 | cb_daily 历史回填（周末） + 对账 | High | TODO |
 | D1.4 | sync_manager 接线（备份→dry-run→评审→上线→灰度） | High | TODO |
 | D2.1 | yc_curve 入库（akshare bond_china_yield，分段回填）+ 决策记录 | High | TODO |
-| D2.2 | QRE load_zero_curve 适配 + 示例管道 + 单测 | High | TODO |
-| D1.5 | QRE 转债债底示例管道 + 单测 | Medium | TODO |
+| D2.2 | QRE load_zero_curve 适配 + 示例管道 + 单测 | High | DONE（见 §11） |
+| D1.5 | QRE 转债债底示例管道 + 单测 | Medium | DONE（见 §11） |
 | D3.1 | opt_basic/opt_daily 入库 + 回填 | Medium | TODO |
-| D3.2 | QRE 期权链适配 + 隐波示例管道 + 单测 | Medium | TODO |
+| D3.2 | QRE 期权链适配 + 隐波示例管道 + 单测 | Medium | DONE（见 §11） |
 | ALL | docs/agent 全套记忆文件 + quant_ts README 表归属更新 | High | TODO |
 
 ## 10. Proposed Agent State Transition
 
 - Next Phase: `PLANNING`（批准后进入 D1 实施 brief）
 - Next Owner: `KIMI_CODE`
+
+## 11. 适配层落地（2026-08-23，QRE-DERIV-ADAPTER-013，D1.5/D2.2/D3.2 DONE）
+
+QRE 侧只读适配层 `src/quant_research_engine/data/derivatives.py` 落地，
+示例管道 `scripts/derivatives_adapter_smoke.py`，单测 `tests/test_data_derivatives.py`
+（纯函数 11 个 + DB 冒烟 4 个，DB 用例在无 QRE_MARKET_DB_URL 时 skip）。
+
+三个 loader 的口径、近似与披露：
+
+1. `load_zero_curve(trade_date)` → {期限年: 连续复利零息率}。
+   读 `derivatives.yc_curve`（curve_name=中债国债收益率曲线、curve_type='1' 即期）；
+   yield（百分数）÷100 后**视为 1 年一期复利**，经 `rates.periodic_to_continuous(rate, 1)`
+   转连续复利——该转换为近似（中债即期收益率本身非年复利口径），已在 docstring 披露。
+   节点 8 个（0.25/0.5/1/3/5/7/10/30 年），curve_term=0 隔夜点缺失时自然丢弃（t>0 过滤），
+   节点间期限由内核插值补齐。当日无数据取 ≤trade_date 最近有数据日，
+   实际日期用 `latest_curve_date(trade_date)` 查询披露。
+2. `load_cb_terms` + `cb_cashflows` + `cb_bond_floor`（示例管道）。
+   现金流近似口径（披露）：①coupon_rate 为累进票息参考值，按常数票息；
+   ②剩余期限 (maturity_date−as_of)/365 取整到 1/pay_per_year 付息网格
+   （bonds.coupon_schedule 的「估值日=付息日」口径，无应计利息）；
+   ③到期赎回按面值 100（未含到期赎回溢价/补偿利率，cb_basic 无该字段）；
+   ④信用利差调用方给定（示例默认 100bp 连续复利，本 CR 不做评级映射）。
+   5 只存续转债（兴业/上银/通22/重银/牧原，2026-08-21）债底 99.14–101.74 vs
+   cb_daily.bond_value 105.4–111.2，系统性差 −5.6~−9.5，**可解释**：
+   主因是转债到期赎回价普遍为 106–115（含补偿利率），本近似按面值 100 折现，
+   差异量级与赎回溢价折现一致；次因信用利差假设与票息/应计口径。验证用，不求一致。
+3. `load_option_chain(trade_date, underlying='510050.SH')`：
+   opt_daily.settle JOIN opt_basic（opt_code 前缀匹配标的），T=actual/365（近似披露），
+   r=当日曲线 0.25 年节点；逐合约 `options.implied_vol` 反解，越界合约 iv=None 不阻塞；
+   平值 call/put 隐波健全性断言 (1%, 150%)（越界抛 AssertionError）。
+   **已知数据缺口**：库内 stock_daily/index_daily 均无 ETF 日线（510050.SH 不在库），
+   标的价格优先 stock_daily → index_daily 查找，均缺时须由调用方传
+   `underlying_price`；示例脚本用平值行权价 put-call parity 反推现货价
+   （S=(C−P)+K·e^{−rT}，欧式近似、忽略股息与价差，披露于输出）。
+   缺口补数（fund_daily 入库）列为后续可选项，不阻塞本 CR。
+
+冒烟实测（2026-08-21，`scripts/derivatives_adapter_smoke.py`）：
+
+- 零息曲线 8 节点：0.25y=1.164%（连续）… 30y=2.110%，单调合理。
+- 转债债底 5 只全为正、spread_duration 1.00–1.98 ∈ (0,10)，差异披露如上。
+- 50ETF 平值（K=3.0，2026-08-26 到期）call/put 隐波均 13.67%，parity 反推
+  标的价 2.9931；call=put 同值是 settle 口径下 parity 自洽的佐证。
+
+验证：`uv run pytest -q` → 1795 passed + 4 skipped（无库；基线 1784 + 11 净增）；
+带库 `QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data` 跑新测试 15/15 绿。
+未 commit（留主代理呈交用户批准）。

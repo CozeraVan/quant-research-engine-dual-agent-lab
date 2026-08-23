@@ -2,6 +2,39 @@
 
 ## Task ID
 
+QRE-DERIV-ADAPTER-013 (衍生品数据适配层：yc_curve/cb/opt 三个只读 loader + 示例管道，CR D1.5/D2.2/D3.2)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+新 `src/quant_research_engine/data/derivatives.py`（只读适配层，QRE 唯一读
+derivatives schema 的代码）：`load_zero_curve`（yc_curve 即期 8 节点，
+yield%÷100 视为年复利→连续复利近似披露；当日无数据取 ≤trade_date 最近日，
+`latest_curve_date` 披露实际日期）、`load_cb_terms`/`cb_cashflows`/
+`cb_bond_floor`（现金流近似：常数票息/期限取整付息网格/面值到期无赎回
+溢价/利差默认 100bp → convertible_bond_floor + cb_daily.bond_value 对比）、
+`load_option_chain`（settle JOIN opt_basic，T=actual/365，r=0.25y 节点，
+逐合约 implied_vol，平值隐波断言 (1%,150%)）。已知缺口：库内无 ETF 日线
+（510050.SH 不在 stock_daily/index_daily），标的价缺失时须传
+`underlying_price`，示例脚本用平值 put-call parity 反推（披露）。
+示例 `scripts/derivatives_adapter_smoke.py` + 测试
+`tests/test_data_derivatives.py` 15 个（纯函数 11 + DB 冒烟 4 无库 skip）。
+冒烟 2026-08-21：曲线 1.164%–2.110%；5 只存续转债债底 99.14–101.74 vs
+bond_value 105.4–111.2（差异主因到期赎回溢价未含，可解释已披露 CR §11）；
+50ETF 平值 K=3.0 call/put IV 13.67%。全量 1795 绿 + 4 skipped
+（基线 1784 + 11 净增）。未 commit、未重启 qre-gui。详见
+09_CODING_HANDOFF.md 顶部、05_PROGRESS.md 顶部、CR §11。
+上一任务：QRE-GUI-DERIV-CARD-012 / QRE-RISK-GUIDE-011（见 05/09）。
+
+---
+
+# Task Handoff (archive: QRE-RISK-BAROMETER-M3-010)
+
+## Task ID
+
 QRE-RISK-BAROMETER-M3-010 (大盘/板块风险风向标 M3：日更 timer 接入 + GUI 风向标页 + 阈值首轮校准观察)
 
 ## Current Status

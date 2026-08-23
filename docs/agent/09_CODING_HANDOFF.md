@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-GUI-DERIV-CARD-012（总览 tab 衍生品数据卡片）
+QRE-DERIV-ADAPTER-013（衍生品数据适配层：yc_curve/cb/opt 三个只读 loader + 示例管道，CR D1.5/D2.2/D3.2）
+
+## Implementation Summary
+
+新模块 `data/derivatives.py`（QRE 对业务库只读；唯一直接读 derivatives schema 的代码）：`load_zero_curve`（yc_curve 即期曲线 yield%÷100 视为年复利 → periodic_to_continuous(m=1) 转连续复利近似，披露；当日无数据取 ≤trade_date 最近日，`latest_curve_date` 查实际日期）；`load_cb_terms`/`cb_cashflows`/`cb_bond_floor`（cb_basic 条款 → coupon_schedule 现金流近似：常数票息、剩余期限取整付息网格、到期按面值 100 无赎回溢价 → convertible_bond_floor + 同日 cb_daily.bond_value 对比）；`load_option_chain`（opt_daily.settle JOIN opt_basic opt_code 前缀匹配，T=actual/365，r=0.25y 节点，逐合约 implied_vol 反解越界记 None，平值 call/put 隐波断言 (1%,150%)）。已知缺口：库内无 ETF 日线（510050.SH 不在 stock_daily/index_daily），标的价格查库失败时须传 `underlying_price`，示例脚本用平值 put-call parity 反推（披露）。示例 `scripts/derivatives_adapter_smoke.py`；测试 `tests/test_data_derivatives.py` 15 个（纯函数 11 + DB 冒烟 4，无 QRE_MARKET_DB_URL 时 skip）。冒烟实测 2026-08-21：曲线 8 节点 1.164%–2.110%；兴业/上银/通22/重银/牧原债底 99.14–101.74 vs bond_value 105.4–111.2（差异主因到期赎回溢价 106–115 未含，可解释已披露）；50ETF 平值 K=3.0 call/put IV 均 13.67%。全量 1795 绿 + 4 skipped（基线 1784 + 11 净增）。未 commit、未重启 qre-gui。详见 05_PROGRESS.md 顶部与 CR §11。
+
+---
+
+## Archive: QRE-GUI-DERIV-CARD-012（总览 tab 衍生品数据卡片）
 
 ## Implementation Summary
 

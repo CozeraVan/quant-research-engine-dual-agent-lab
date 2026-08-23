@@ -12,7 +12,20 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-BAROMETER-M3-010 (DONE — 1778 tests green；awaiting git approval)
+QRE-DERIV-ADAPTER-013 (DONE — 1795 tests green + 4 skipped；awaiting git approval)
+
+2026-08-23: 衍生品数据适配层落地（CR_2026-08-23_derivatives_market_data
+D1.5/D2.2/D3.2，CR §11 追加「适配层落地」）。新 data/derivatives.py
+（只读：load_zero_curve 连续复利近似+最近日回填、load_cb_terms/
+cb_cashflows/cb_bond_floor 债底示例、load_option_chain 平值隐波断言；
+库内无 ETF 日线为已知缺口，标的价缺失时传 underlying_price，示例用
+put-call parity 反推披露）+ scripts/derivatives_adapter_smoke.py +
+tests/test_data_derivatives.py（纯函数 11 + DB 冒烟 4 无库 skip）。
+冒烟 2026-08-21：曲线 8 节点 1.164%–2.110%；5 只转债债底 99.14–101.74
+vs bond_value 105.4–111.2（赎回溢价差异可解释）；50ETF 平值 IV 13.67%。
+1795 tests green + 4 skipped（基线 1784 + 11 净增）。未 commit、
+未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-GUI-DERIV-CARD-012 (DONE — 1784 tests green；见 05/09)
 
 2026-08-23: 风向标 M3 落地（CR 状态改「✅ M1–M3 已完成」）。
 deploy/hardened/qre-barometer.{service,timer}（Mon..Fri 18:30、Persistent、
@@ -292,6 +305,17 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest -q → 1795 passed, 4 skipped, 4 warnings（2026-08-23, QRE-DERIV-ADAPTER-013；基线 1784 + 11 净增）
+带库：QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data pytest tests/test_data_derivatives.py → 15 passed
+真实冒烟：scripts/derivatives_adapter_smoke.py 2026-08-21 → 曲线 8 节点 1.164%–2.110%；
+  转债债底 5 只 99.14–101.74 vs bond_value 105.4–111.2（赎回溢价差异可解释）；
+  50ETF 平值 K=3.0 call/put IV 13.67%（parity 标的 2.9931）
+基线首跑 test_gui_admin_p3b.py::test_daily_job_lock_per_pipeline 失败，单独复跑绿（已知 flake 家族）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
 ```
 uv run pytest tests/ -x -q → 1778 passed, 4 warnings（2026-08-23, QRE-RISK-BAROMETER-M3-010；基线 1764 + 14 净增）

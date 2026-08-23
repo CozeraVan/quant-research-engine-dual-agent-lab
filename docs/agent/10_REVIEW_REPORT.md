@@ -2,6 +2,64 @@
 
 ## Task ID
 
+QRE-DERIV-ADAPTER-013（衍生品数据适配层：yc_curve/cb/opt 三个只读 loader + 示例管道）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **范围与 CR §6 D1.5/D2.2/D3.2 行一一对应**：三个 loader + 示例管道 +
+  单测；内核函数签名零改动，data/derivatives.py 是唯一直接读
+  derivatives schema 的新代码（QRE 只读，无任何写库语句）。
+- **口径披露齐全**：连续复利转换近似（yield%÷100 视为年复利）、8 节点
+  插值近似、最近日回填 + latest_curve_date 披露、转债现金流四近似
+  （常数票息/网格取整/面值到期/利差假设）、T=actual/365、parity 反推
+  标的价——均写入 docstring、示例输出与 CR §11。
+- **已知边界**：①库内无 ETF 日线（510050.SH 不在 stock_daily/
+  index_daily），load_option_chain 标的价缺失时明确抛错引导传
+  underlying_price，示例用 parity 反推（欧式近似）——缺口补数列后续；
+  ②转债债底 vs bond_value 系统性差 −5.6~−9.5，主因到期赎回溢价
+  106–115 未含（cb_basic 无赎回价字段），差异可解释，CR 验收本就
+  「不求一致」；③平值隐波 call=put 同值（13.67%）是 settle 口径下
+  parity 自洽的结果，非 bug。
+- **测试纪律**：纯函数 11 个真单测；DB 冒烟 4 个按 QRE_MARKET_DB_URL
+  skip（与仓库「单测不依赖真实库」惯例一致）；带库 15/15 绿。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1795 passed, 4 skipped, 4 warnings（基线 1784 + 11 净增）
+带库：QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+  pytest tests/test_data_derivatives.py -q → 15 passed
+冒烟：scripts/derivatives_adapter_smoke.py 2026-08-21 → 曲线 8 节点
+  1.164%–2.110%；债底 5 只全正、spread_duration 1.00–1.98；
+  50ETF 平值 K=3.0 call/put IV 13.67%（断言通过）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+## Nice-to-Have
+
+- fund_daily（ETF 日线）入库后可去掉 parity 反推旁路；
+- cb_coupon 精确票息与到期赎回价字段接入可收窄债底差异；均不阻塞本 CR。
+
+---
+
+# Review Report (archive: QRE-RISK-BAROMETER-M3-010)
+
+## Task ID
+
 QRE-RISK-BAROMETER-M3-010（大盘/板块风险风向标 M3：日更 timer + GUI 风向标页 + 阈值校准观察）
 
 ## Reviewer
