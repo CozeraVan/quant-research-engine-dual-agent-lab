@@ -325,3 +325,8 @@ code.log { white-space: pre-wrap; word-break: break-all; }
 }
 .risk-card h3 { margin-top: 0; font-size: 14px; }
 .risk-card p { margin: 4px 0; font-size: 13px; }
+
+/* 可排序表头（QRE-GUI-SORT-016） */
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--accent, #58a6ff); }
+.sort-arrow { font-size: 0.75em; }

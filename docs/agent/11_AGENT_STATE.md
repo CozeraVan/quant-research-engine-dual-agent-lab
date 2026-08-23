@@ -12,14 +12,13 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-DERIV-FRESH-015 (DONE — 1795 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-SORT-016 (DONE — 1795 tests green + 4 skipped；awaiting git approval)
 
-2026-08-23: 衍生品卡片补登 fund_daily（六表）+ 日更新鲜度灯（watermark vs
-stock_daily 最近交易日，health-green/yellow）+ _estimate_rows hypertable
-chunk 汇总修复。另：修复 2026-08-21 周五 quant-ts 日更中断事故——手动补跑
-sync_manager（自愈补 08-21 共 5,543 行；第 5 步 derivatives 六项首次实盘全过）
-+ 依次重启下游五 service 补 08-21。qre-gui 已重启。详见 05 顶部。
-上一任务：QRE-FUND-DAILY-014 (DONE — 1795 tests green；见 05/09)
+2026-08-23: 策略状态表客户端排序（回测起止/股票数量/超额收益/最大回撤
+四列可点击，升降序切换，null 恒排末位；纯模板 JS）。下游补跑链验证：
+四 service 补跑 exit 0，stock_daily/factors/cluster.daily_tags/
+market_risk.daily watermark 全到 2026-08-21，周五事故清零。qre-gui 已重启。
+上一任务：QRE-GUI-DERIV-FRESH-015 (DONE — 1795 tests green；见 05/09)
 
 2026-08-23: 风向标 M3 落地（CR 状态改「✅ M1–M3 已完成」）。
 deploy/hardened/qre-barometer.{service,timer}（Mon..Fri 18:30、Persistent、

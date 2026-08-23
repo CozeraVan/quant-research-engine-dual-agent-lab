@@ -406,7 +406,9 @@
         }
         document.getElementById('ob-state').innerHTML = stateHtml;
 
-        var rows = d.strategies.map(function(s) {
+        // 可排序策略表（QRE-GUI-SORT-016）：点击表头按列排序，null 恒排末位
+        var sortState = {key: null, dir: 1};
+        function buildRow(s) {
           // 持续更新开关：绿色=开启，灰色=停止
           var toggle = s.enabled
             ? '<button class="btn-sm toggle-on" data-toggle="' + esc(s.strategy_id) + '" data-stopped="0" title="点击停止持续更新">● 开启</button>'
@@ -459,27 +461,68 @@
             + '<td class="num">' + fmtPct(s.max_drawdown) + asOf + '</td>'
             + '<td>' + gateHtml + '</td>'
             + '<td>' + action + '</td></tr>';
-        }).join('');
-        document.getElementById('ob-registry-table').innerHTML =
-          (d.mode === 'full_catalog'
-            ? '<p class="mode-banner">⚠ 当前为<strong>全量模式</strong>（默认全部开启，refresh 跑全部 '
-              + d.catalog_total + ' 个 catalog 策略，停止中的除外）；注册任意策略后将切换为<strong>仅注册策略模式</strong>。</p>'
-            : '<p class="mode-banner mode-banner-registry">当前为<strong>仅注册策略模式</strong>（refresh 只跑已注册且未停止的 '
-              + d.registered.length + ' 个）；注册表清空后恢复全量模式。</p>')
-          + (d.stopped && d.stopped.length
-            ? '<p class="opt">停止中：' + d.stopped.map(esc).join('，') + '（将于下次 refresh 跳过）</p>' : '')
-          + '<p>已注册 ' + d.registered.length + ' / catalog ' + d.catalog_total + ' 个策略'
-          + ' <input type="text" id="ob-search" placeholder="搜索策略 id..." size="20"></p>'
-          + '<table><thead><tr><th>策略</th><th>回测起止</th><th>股票数量</th><th>超额收益</th><th>最大回撤</th><th>全量回测闸</th><th>操作</th></tr></thead>'
-          + '<tbody>' + rows + '</tbody></table>';
-
-        document.getElementById('ob-search').addEventListener('input', function(e) {
-          var kw = e.target.value.trim().toLowerCase();
-          document.querySelectorAll('.ob-row').forEach(function(row) {
-            row.style.display = (!kw || row.dataset.sid.toLowerCase().indexOf(kw) >= 0) ? '' : 'none';
+        }
+        function stratVal(s, key) {
+          if (key === 'date_end') return s.date_end || '';
+          if (key === 'symbol_count') return s.symbol_count;
+          return s[key];
+        }
+        function sortedStrategies() {
+          if (!sortState.key) return d.strategies;
+          var arr = d.strategies.slice();
+          arr.sort(function(a, b) {
+            var va = stratVal(a, sortState.key), vb = stratVal(b, sortState.key);
+            if (va == null && vb == null) return 0;
+            if (va == null) return 1;   // null 恒排末位（与排序方向无关）
+            if (vb == null) return -1;
+            var cmp = (typeof va === 'number' && typeof vb === 'number')
+              ? va - vb : String(va).localeCompare(String(vb));
+            return cmp * sortState.dir;
           });
-        });
+          return arr;
+        }
+        function sortArrow(key) {
+          if (sortState.key !== key) return '';
+          return sortState.dir === 1 ? ' <span class="sort-arrow">▲</span>' : ' <span class="sort-arrow">▼</span>';
+        }
+        function renderRegistryTable() {
+          var rows = sortedStrategies().map(buildRow).join('');
+          document.getElementById('ob-registry-table').innerHTML =
+            (d.mode === 'full_catalog'
+              ? '<p class="mode-banner">⚠ 当前为<strong>全量模式</strong>（默认全部开启，refresh 跑全部 '
+                + d.catalog_total + ' 个 catalog 策略，停止中的除外）；注册任意策略后将切换为<strong>仅注册策略模式</strong>。</p>'
+              : '<p class="mode-banner mode-banner-registry">当前为<strong>仅注册策略模式</strong>（refresh 只跑已注册且未停止的 '
+                + d.registered.length + ' 个）；注册表清空后恢复全量模式。</p>')
+            + (d.stopped && d.stopped.length
+              ? '<p class="opt">停止中：' + d.stopped.map(esc).join('，') + '（将于下次 refresh 跳过）</p>' : '')
+            + '<p>已注册 ' + d.registered.length + ' / catalog ' + d.catalog_total + ' 个策略'
+            + ' <input type="text" id="ob-search" placeholder="搜索策略 id..." size="20"></p>'
+            + '<table><thead><tr><th>策略</th>'
+            + '<th class="sortable" data-sort="date_end">回测起止' + sortArrow('date_end') + '</th>'
+            + '<th class="sortable" data-sort="symbol_count">股票数量' + sortArrow('symbol_count') + '</th>'
+            + '<th class="sortable" data-sort="excess_return">超额收益' + sortArrow('excess_return') + '</th>'
+            + '<th class="sortable" data-sort="max_drawdown">最大回撤' + sortArrow('max_drawdown') + '</th>'
+            + '<th>全量回测闸</th><th>操作</th></tr></thead>'
+            + '<tbody>' + rows + '</tbody></table>';
 
+          document.getElementById('ob-search').addEventListener('input', function(e) {
+            var kw = e.target.value.trim().toLowerCase();
+            document.querySelectorAll('.ob-row').forEach(function(row) {
+              row.style.display = (!kw || row.dataset.sid.toLowerCase().indexOf(kw) >= 0) ? '' : 'none';
+            });
+          });
+          // 表头排序：同列再点切换升降序
+          document.querySelectorAll('#ob-registry-table th.sortable').forEach(function(th) {
+            th.addEventListener('click', function() {
+              var key = th.dataset.sort;
+              sortState = (sortState.key === key)
+                ? {key: key, dir: -sortState.dir} : {key: key, dir: 1};
+              renderRegistryTable();
+            });
+          });
+          bindRowActions();
+        }
+        function bindRowActions() {
         // 持续更新开关：只改注册表，不触发运行
         document.querySelectorAll('[data-toggle]').forEach(function(btn) {
           btn.addEventListener('click', function() {
@@ -524,6 +567,8 @@
             });
           });
         });
+        }
+        renderRegistryTable();
       })
       .catch(function(err) {
         cardError(
