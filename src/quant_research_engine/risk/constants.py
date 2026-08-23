@@ -81,6 +81,17 @@ RATE_SHOCK_BP = 1.0
 #: YTM 反解的 brentq 搜索区间（年化收益率，-5% ~ 100%；书4 Ch11 迭代求解）
 YTM_BRACKET: tuple[float, float] = (-0.05, 1.0)
 
+#: 隐含波动率反解的 brentq 搜索区间（年化波动率，书4 Ch15 successive bisection）
+IV_BRACKET: tuple[float, float] = (1e-4, 5.0)
+
+#: CRR 二叉树默认步数（书4 Ch14：实务至少 30–50 步）
+DEFAULT_TREE_STEPS = 50
+
+#: 美式 Greeks 数值差分的微扰步长（书4 Ch16：vega/rho 微扰重建树）：
+#: σ 扰动（绝对，1e-4 = 0.01%）与 r 扰动（绝对，1e-4 = 1bp）
+GREEK_SHOCK_SIGMA = 1e-4
+GREEK_SHOCK_RATE = 1e-4
+
 
 def default_block_size(n_obs: int) -> int:
     """CBB 块长经验法则 q ≈ √n（书2 Ch13），向上取整、至少为 1。"""

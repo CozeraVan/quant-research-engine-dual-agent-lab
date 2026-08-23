@@ -12,7 +12,25 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-RATES-005 (DONE — 1657 tests green；awaiting git approval)
+QRE-RISK-OPTIONS-006 (DONE — 1696 tests green；awaiting git approval)
+
+2026-08-23: FRM 风险模块 R6 落地（CR_2026-08-23_risk_derivatives_extension
+R6 阶段；R5=5472832）。risk 包新增 options.py（BSM 式 15.6–15.9 无股息/
+q/离散股息 S₀−D、Black's 式 15.12/15.13、隐波 brentq IV_BRACKET、CRR
+式 14.4–14.7 欧式+美式含 q + 第一层 delta + 可选全节点网格、美式 Greeks
+数值差分（书4 Ch16）、Greeks 解析全组 Table 16.2 含 q 版与期货期权版
+rho=−f·T、组合 Greeks 加权）与 derivatives_var.py（DGV 近似 P&L
+式 2.3+vega 项、非中心卡方累积量解析矩、正态/Cornish-Fisher 分位 VaR、
+VaR 序列对接 backtest_var_summary 复用 HIT/LR）；constants.py 加
+IV_BRACKET/DEFAULT_TREE_STEPS=50/GREEK_SHOCK_*（全部 dict 回显）。
+教材数值全复现：BSM 例 c=8.3069/p=7.9715+parity、隐波 7.00→25.14%、
+美式 put 节点 3.058/0.494/5.699（欧式 2.838，参数 S=29,K=30,r=3%,σ=25%,
+T=1 经教材原文 p193 核对）、收敛 3.082/3.067/3.059/3.055、PDE 恒等式
+1e-10、纯 gamma 解析二阶矩、CF-VaR 对 MC rel 5%、VaR 序列回测违约率
+≈1% 不拒绝。自审修正 Black76 theta 符号（有限差分自检发现）。
+纯函数零 DB 零行情，既有 risk 模块零行为改动。1696 tests green（+39）。
+未 commit、未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-RATES-005 (DONE — 1657 tests green；awaiting git approval)
 
 2026-08-23: FRM 风险模块 R5 落地（CR_2026-08-23_risk_derivatives_extension
 R5 阶段；R1=96db59d / R2=f52c0f4 / R3=6852eaa，R4 待审批）。risk 包新增
@@ -218,6 +236,13 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1696 passed, 4 warnings（2026-08-23, QRE-RISK-OPTIONS-006；基线 1657 + 39 净增）
+风险新单测 39/39 绿（BSM/隐波/二叉树收敛/PDE/Black76/美式 Greeks/DGV 解析矩/CF/MC/回测集成全教材数值核对）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
 ```
 uv run pytest tests/ -x -q → 1657 passed, 4 warnings（2026-08-23, QRE-RISK-RATES-005；基线 1605 + 52 净增）

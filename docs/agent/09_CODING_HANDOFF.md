@@ -2,6 +2,93 @@
 
 ## Task ID
 
+QRE-RISK-OPTIONS-006（FRM 风险管理模块 R6：期权计算内核 + DGV-VaR）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization；R2/R3/R4/R5 也在同一待审批队列)
+
+## Implementation Summary
+
+FRM 风险模块 R6 落地（依据已批准 CR `docs/frm/CR_2026-08-23_risk_derivatives_extension.md`
+R6 阶段；R5 = commit 5472832）：risk 包新增期权内核与 Delta-Gamma-Vega VaR
+适配器两个纯函数模块（零 DB、零行情），公式与数值例题以
+`docs/frm/FRM量化风控知识摘要.md` 为准（二叉树收敛例参数 S=29,K=30,r=3%,
+σ=25%,T=1 已核对教材原文 p193 确认）。
+
+**改动清单**：
+- `risk/options.py`（新）：`bsm_price`（式 15.6–15.9：无股息/连续股息 q/
+  离散股息 S₀−D 修正，输出 d1/d2）；`black76_price`（式 15.12/15.13
+  期货期权）；`implied_vol`（scipy brentq，区间 IV_BRACKET）；
+  `crr_tree`（式 14.4–14.7：u=e^{σ√Δt}、d=1/u、p=(e^{(r−q)Δt}−d)/(u−d)、
+  欧式+美式 backward induction、第一层两节点输出 delta 式 14.1、
+  return_grid 可选输出全节点网格+美式行权标记）；`bsm_greeks`
+  （式 16.1 + Table 16.2 含 q 版全组）；`black76_greeks`（期货期权版，
+  rho=−f·T，theta 利用 F₀N′(d1)=KN′(d2) 化简为 r·f−时间衰减项）；
+  `american_greeks_numeric`（书4 Ch16 方法：delta 第一层、gamma 第二层
+  两个 delta 差、theta 隔层中节点、vega/rho ±h 微扰重建树）；
+  `portfolio_greeks`（头寸加权求和）。
+- `risk/derivatives_var.py`（新）：`dgv_pnl`（ΔV ≈ Δ·δS + ½Γ(δS)² +
+  vega·δσ，式 2.3 + vega 项，支持逐情景数组）；`dgv_var`（二次型 P&L
+  解析矩——非中心卡方累积量 κ_r = 2^{r−1}(r−1)!(1+rλ)b^r，
+  λ=a²/4b²，vega 只进 κ2；正态/Cornish-Fisher 分位 VaR，损失正号与
+  tail.py 同口径；δS/δσ 独立假设披露）；`dgv_var_series`（逐日 VaR
+  序列，直接喂 backtest_var.backtest_var_summary，不新造回测引擎）。
+- `risk/constants.py`：+ `IV_BRACKET=(1e-4, 5.0)`、
+  `DEFAULT_TREE_STEPS=50`（书4 Ch14 实务 30–50 步）、
+  `GREEK_SHOCK_SIGMA=GREEK_SHOCK_RATE=1e-4`；全部结果 dict 回显。
+- `risk/__init__.py`：导出 options/derivatives_var，docstring 升 R6。
+- 测试（+39）：`tests/test_risk_options.py`（25）、
+  `tests/test_risk_derivatives_var.py`（14），沿用既有 risk 测试风格。
+
+**数值验收对照**（CR §4 R6 行全覆盖）：
+- BSM 教材例 S=56,K=60,r=5%,σ=30%,T=1.5：d1=0.2001、d2=−0.1674、
+  c=8.3069、p=7.9715 精确复现；parity c−p = S₀−Ke^{−rT} 1e-10 自洽；
+- 隐波反解教材例：市价 7.00 → σ=0.2514（abs 5e-4）；
+- 二叉树美式 put（S=29,K=30,r=3%,σ=25%,T=1）：2 步=3.058
+  （节点 B=0.494 不行权、C=5.699 提前行权、欧式=2.838、美式溢价 0.22）、
+  4 步=3.097、20/50/100/500 步 = 3.082/3.067/3.059/3.055 全复现
+  （abs 5e-4）；
+- Greeks：BSM PDE θ+rSΔ+½σ²S²Γ=rf（call/put/q 版均 1e-10）；
+  解析 Greeks 对中心差分（rel 1e-5）；美式数值 Greeks 200 步逼近
+  BSM（delta/gamma abs 1e-3）；Black76 rho=−f·T 精确；
+- DGV-VaR：delta 中性纯 gamma 解析矩核对（E=½ΓsS²、Var=½Γ²sS⁴、
+  偏度 2√2、超额峰度 12，χ²₁ 解析值）；解析矩对 200 万 MC
+  （rel≤2%）；CF-VaR 对 MC 99% 分位（rel 5%，偏度<0.5 适用域）；
+  VaR 序列 + backtest_var_summary 集成：2000 日合成回测违约率
+  ≈1%、独立性 LR 不拒绝。
+
+**关键披露**：Cornish-Fisher 摘要声明教材章节未点名（按业界标准实现并
+标注）；CF 仅偏度适中时有效，高偏度纯 gamma χ² 型 P&L 下分位失真
+（docstring + 测试注明）。Black76 theta 首版符号错误经有限差分
+自检发现并修正（θ = r·f − F₀e^{−rT}N′(d1)σ/(2√T)）。
+
+**存量兼容**：既有 risk 模块零行为改动；1657 基线测试零改动全绿。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1696 passed, 4 warnings（2026-08-23，
+基线 1657 + 39 净增；风险包新单测 39/39 绿）
+```
+
+## Known Limitations
+
+- CRR 收敛 O(1/n) 振荡：树↔BSM 收敛测试容差 abs 3e-3（500–1000 步）。
+- DGV 假设 δS/δσ 独立（rho=0），多因子协方差扩展留待 R7+。
+- CF 高偏度失真已知限制（上述披露）；Heston/波动率曲面/LSM/奇异期权
+  按 CR §6 不做。
+
+---
+
+# Coding Handoff (archive: QRE-RISK-RATES-005, R5 利率与债券内核)
+
+## Task ID
+
 QRE-RISK-RATES-005（FRM 风险管理模块 R5：利率与债券计算内核）
 
 ## Written By

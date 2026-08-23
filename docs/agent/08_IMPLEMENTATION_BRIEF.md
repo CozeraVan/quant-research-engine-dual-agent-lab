@@ -2,6 +2,67 @@
 
 ## Task ID
 
+QRE-RISK-OPTIONS-006（FRM 风险管理模块 R6：期权计算内核 + DGV-VaR）
+
+## Created By
+
+KIMI_CODE（用户 2026-08-23 直接指定的任务书；依据已批准 CR
+`docs/frm/CR_2026-08-23_risk_derivatives_extension.md` R6 阶段；
+R5 = commit 5472832 已完成）
+
+## Intended Implementer
+
+KIMI_CODE
+
+## Goal
+
+在 `risk/` 包内新增两个纯函数内核（零 DB、零行情依赖）：
+
+1. `risk/options.py`：
+   - BSM 定价（式 15.6–15.9：无股息/连续股息 q；离散股息修正 S₀−D）；
+   - Black's model 期货期权定价（式 15.12/15.13）；
+   - 隐含波动率 scipy brentq 反解（bracket 集中 constants）；
+   - CRR 二叉树（式 14.4–14.7：u/d/p、欧式+美式 backward induction、
+     含股息 q；可选输出全节点网格；树第一层节点输出 delta）；
+   - 美式 Greeks 数值差分（书4 Ch16 方法：delta 第一层、gamma 第二层、
+     theta 隔层中节点、vega/rho 微扰重建树）；
+   - Greeks 全组解析（Table 16.2 含 q 版 + 期货期权版 rho=−f·T）；
+   - 组合 Greeks = 头寸加权求和。
+2. `risk/derivatives_var.py`：Delta-Gamma-Vega 近似组合 P&L
+   （ΔV ≈ Δ·δS + ½Γ(δS)² + vega·δσ，式 2.3 + vega 项）；
+   二次型 P&L 的解析矩（非中心卡方累积量）→ 正态 / Cornish-Fisher
+   分位 VaR；VaR 序列函数对接既有 backtest_var.backtest_var_summary
+   复用 HIT/LR（不新造回测引擎）。
+3. `risk/constants.py` 追加：IV_BRACKET、DEFAULT_TREE_STEPS、
+   数值差分微扰参数，全部在结果 dict 回显。
+
+## 验收（CR §4 R6 行）
+
+- BSM 教材解析例：S=56,K=60,r=5%,σ=30%,T=1.5 → d1=0.2001、
+  d2=−0.1674、c=8.3069、p=7.9715（含 put-call parity 自检）。
+- 隐波反解教材例：同参数 call 市价 7.00 → σ≈25.14%。
+- 二叉树收敛例（书4 Ch14 美式 put：S=29,K=30,r=3%,σ=25%,T=1）：
+  2 步=3.058（节点 B=0.494、C=5.699 提前行权，欧式=2.838）、
+  4 步=3.097；20/50/100/500 步 → 3.082/3.067/3.059/3.055。
+- Greeks 对 BSM PDE 恒等式 θ + rSΔ + ½σ²S²Γ = rf（式 16.2）。
+- DGV-VaR：delta 中性纯 gamma 组合对解析二阶矩核对
+  （Var = ½Γ²sS⁴，均值 = ½ΓsS²）。
+
+## 约束
+
+纯函数、零 DB；不改既有 risk 模块行为；不做 Heston/波动率曲面/
+LSM/奇异期权。既有 1657 测试保持全绿。不 git commit。
+
+## Validation
+
+`uv run pytest tests/ -x -q`（目标 1657 + 新增全绿）
+
+---
+
+# Implementation Brief (archive: QRE-RISK-RATES-005, R5 利率与债券内核)
+
+## Task ID
+
 QRE-RISK-RATES-005（FRM 风险管理模块 R5：利率与债券计算内核）
 
 ## Created By

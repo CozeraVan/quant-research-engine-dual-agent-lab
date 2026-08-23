@@ -1,4 +1,4 @@
-"""FRM 风险管理分析包（R1 + R2 + R5）。
+"""FRM 风险管理分析包（R1 + R2 + R5 + R6）。
 
 纯函数 + pandas/numpy/arch/scipy，不读 DB、不依赖 QRE 内部状态，
 可被 cluster-ashare 等外部项目独立 import。
@@ -26,6 +26,14 @@
   Macaulay/Modified duration、yield/effective convexity、DV01（书4 Ch12）、
   组合聚合与 DV01 对冲、平行移动二阶近似（式 12.4）、KR01（书4 Ch13）、
   可转债债底折现与 spread duration（书3 Ch16/17）。
+- options.py（R6）：BSM 定价（式 15.6–15.9，无股息/q/离散股息 S₀−D）、
+  Black's model 期货期权（式 15.12/15.13）、隐含波动率 brentq 反解
+  （书4 Ch15）、CRR 二叉树（式 14.4–14.7，欧式+美式、含 q、第一层
+  delta 输出）、美式 Greeks 数值差分（书4 Ch16）、Greeks 解析全组
+  （Table 16.2 含 q 版与期货期权版）、组合 Greeks 加权求和。
+- derivatives_var.py（R6）：Delta-Gamma-Vega 近似组合 P&L
+  （式 2.3 + vega 项）、非中心卡方累积量解析矩、正态/Cornish-Fisher
+  分位 VaR、VaR 序列对接 backtest_var.backtest_var_summary。
 """
 
 from quant_research_engine.risk import (
@@ -33,7 +41,9 @@ from quant_research_engine.risk import (
     bonds,
     constants,
     dependence,
+    derivatives_var,
     inference,
+    options,
     performance,
     rates,
     report,
@@ -47,7 +57,9 @@ __all__ = [
     "bonds",
     "constants",
     "dependence",
+    "derivatives_var",
     "inference",
+    "options",
     "performance",
     "rates",
     "report",

@@ -2,6 +2,37 @@
 
 ## Task ID
 
+QRE-RISK-OPTIONS-006 (FRM 风险管理模块 R6：期权计算内核 + DGV-VaR)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+R6 在 R5（commit 5472832）上落地期权内核与 DGV-VaR 适配器（依据已批准
+CR `docs/frm/CR_2026-08-23_risk_derivatives_extension.md` R6 阶段，纯函数
+零 DB 零行情）：新增 `risk/options.py`（BSM 式 15.6–15.9 无股息/q/离散
+股息 S₀−D、Black's 式 15.12/15.13、隐波 brentq（IV_BRACKET）、CRR
+式 14.4–14.7 欧式+美式含 q、第一层 delta、美式 Greeks 数值差分、
+Greeks 全组 Table 16.2 含 q 版与期货期权版 rho=−f·T、组合 Greeks
+加权求和）与 `risk/derivatives_var.py`（ΔV ≈ Δ·δS+½Γ(δS)²+vega·δσ、
+非中心卡方累积量解析矩、正态/Cornish-Fisher 分位 VaR、VaR 序列对接
+backtest_var.backtest_var_summary 复用 HIT/LR）；`risk/constants.py`
+追加 IV_BRACKET/DEFAULT_TREE_STEPS=50/GREEK_SHOCK_*，全部结果 dict
+回显。教材数值全复现：BSM 例 d1=0.2001/c=8.3069/p=7.9715+parity、
+隐波 7.00→25.14%、美式 put 节点值 3.058/0.494/5.699（欧式 2.838）+
+收敛 3.082/3.067/3.059/3.055（参数 S=29,K=30,r=3%,σ=25%,T=1 经教材
+原文 p193 核对）、PDE 恒等式 1e-10、纯 gamma 解析二阶矩 Var=½Γ²sS⁴、
+CF-VaR 对 MC rel 5%、VaR 序列回测违约率 ≈1% 不拒绝。1696 tests
+green（+39）。既有 risk 模块零行为改动。未 commit、未重启 qre-gui
+（用户约束）。细节见 `09_CODING_HANDOFF.md` 顶部。上一任务：
+QRE-RISK-RATES-005（R5 利率与债券内核，1657 green，待审批）。
+
+# Task Handoff (archive: QRE-RISK-RATES-005, R5 利率与债券内核)
+
+## Task ID
+
 QRE-RISK-RATES-005 (FRM 风险管理模块 R5：利率与债券计算内核)
 
 ## Current Status

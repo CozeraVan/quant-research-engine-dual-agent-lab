@@ -2,6 +2,62 @@
 
 ## Task ID
 
+QRE-RISK-OPTIONS-006（FRM 风险管理模块 R6：期权计算内核 + DGV-VaR）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **范围与 CR §2 R6 表一一对应**：options.py（BSM 无股息/q/离散股息、
+  Black's、隐波 brentq、CRR 欧式+美式含 q、树第一层 delta、美式 Greeks
+  数值差分、Greeks 全组含 q 版与期货期权版、组合 Greeks 加权）与
+  derivatives_var.py（DGV 近似 P&L、正态/CF 分位、VaR 序列对接
+  backtest_var_summary 复用 HIT/LR，未新造回测引擎）全覆盖；不做项
+  （Heston/波动率曲面/LSM/奇异期权）未触碰。
+- **纪律一致**：纯函数零 DB；参数集中 constants.py（IV_BRACKET/
+  DEFAULT_TREE_STEPS/GREEK_SHOCK_SIGMA/GREEK_SHOCK_RATE）并全部在
+  结果 dict 回显；既有 risk 模块零行为改动（仅 __init__ 增列）。
+- **数值验收（CR §4 R6 行全部通过）**：BSM 教材例 d1=0.2001/
+  d2=−0.1674/c=8.3069/p=7.9715 + parity 1e-10 自洽；隐波 7.00→25.14%；
+  美式 put 教材节点值（A=3.058/B=0.494/C=5.699 行权/欧式 2.838）+
+  收敛 20/50/100/500 → 3.082/3.067/3.059/3.055；PDE 恒等式
+  （q=0 与 q 版 (r−q)SΔ 形式）1e-10；纯 gamma 组合解析二阶矩
+  Var=½Γ²sS⁴ 核对；CF-VaR 对 MC 分位 rel 5%（偏度<0.5 适用域）；
+  VaR 序列→backtest_var_summary 集成回测违约率 ≈1% 不拒绝。
+- **教材参数溯源**：二叉树收敛例参数（S=29,K=30,r=3%,σ=25%,T=1）
+  摘要未载明，已从教材原文 PDF p193 抽取确认（Figure 14.5/14.6
+  及收敛段），注释写入测试文件头。
+- **自审修正**：Black76 theta 首版符号错误（−r·c 应为 +r·f 结构），
+  由有限差分自检测试发现后修正为 θ = r·f − F₀e^{−rT}N′(d1)σ/(2√T)，
+  修正后五值全对有限差分（rel 1e-5）。
+- **遗留/披露**：CF 在高偏度（纯 gamma χ² 型）下分位失真为已知限制
+  （docstring+测试注明，矩核对不受影响）；DGV 的 δS/δσ 独立假设披露；
+  CRR 树↔BSM 收敛测试容差 abs 3e-3（O(1/n) 振荡收敛性质）。
+
+## Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1696 passed, 4 warnings（基线 1657 + 39 净增，全绿）
+tests/test_risk_options.py + tests/test_risk_derivatives_var.py 单独 39/39 绿
+scripts/check-progress-docs.sh → 待 docs 同步后运行
+```
+
+## Required Fixes
+
+无。
+
+---
+
+# Review Report (archive: QRE-RISK-RATES-005, R5 利率与债券内核)
+
+## Task ID
+
 QRE-RISK-RATES-005（FRM 风险管理模块 R5：利率与债券计算内核）
 
 ## Reviewer
