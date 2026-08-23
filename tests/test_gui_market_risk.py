@@ -165,6 +165,17 @@ class TestAdminPage:
         assert "大盘风险" in html
         assert "/api/admin/market-risk" in html
 
+    def test_admin_layman_guide_present(self):
+        """通俗说明块：面向一般投资人的备注（风险分数/红绿灯/四指标白话）。"""
+        from quant_research_engine.gui.app import create_app
+
+        client = create_app().test_client()
+        html = client.get("/admin").get_data(as_text=True)
+        assert "怎么看懂这个页面" in html
+        assert "现在市场整体危险吗" in html
+        assert "不构成投资建议" in html
+        assert "同步程度" in html and "传染" in html
+
     def test_timer_units_include_barometer(self):
         units = {u["unit"] for u in admin.TIMER_UNITS}
         assert "qre-barometer.timer" in units

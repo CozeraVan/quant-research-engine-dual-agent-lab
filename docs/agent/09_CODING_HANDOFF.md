@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-RISK-BAROMETER-M3-010（大盘/板块风险风向标 M3：日更 timer 接入 + GUI 风向标页 + 阈值首轮校准观察）
+QRE-RISK-GUIDE-011（大盘风险 tab 通俗说明块）
+
+## Implementation Summary
+
+`admin.html`「大盘风险」tab 新增可折叠「💡 怎么看懂这个页面」说明块（总分/红绿灯/四指标白话/热力表读法/免责声明）+ 三个 section 标题附白话提示；`test_gui_market_risk.py` +1（guide 存在性断言）。纯模板文案，无逻辑变更。验证：test_gui_market_risk.py 14/14 绿。详见 05_PROGRESS.md 顶部。
+
+---
+
+## Archive: QRE-RISK-BAROMETER-M3-010（大盘/板块风险风向标 M3：日更 timer 接入 + GUI 风向标页 + 阈值首轮校准观察）
 
 ## Written By
 

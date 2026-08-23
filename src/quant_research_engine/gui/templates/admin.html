@@ -115,15 +115,41 @@
 <div id="tab-risk" class="tab-content">
   <p><button id="btn-risk-refresh" class="btn btn-ghost">刷新 Refresh</button>
     <span class="opt">数据源：market_risk.daily（只读，barometer_job 日更；QRE 首次写自有结果表）</span></p>
+  <div class="section">
+    <button class="section-toggle" data-section="risk-guide">💡 怎么看懂这个页面（通俗说明）&#9660;</button>
+    <div id="sec-risk-guide" class="section-body">
+      <div class="risk-card">
+        <p><strong>这个页面只回答一个问题：现在市场整体危险吗？</strong></p>
+        <p><strong>总分（0–100）</strong>：越高越危险。它不是预测涨跌，而是衡量「市场当前的风险紧绷程度」。
+          分数是把下面四个指标各自放在过去一年（252 个交易日）的历史里排名后综合得到的——
+          80 分意为「比过去一年 80% 的日子都更危险」。</p>
+        <p><strong>红绿灯</strong>：🟢 正常；🟡 注意（两个报警器有一个响了）；🔴 高风险（两个都响）。
+          历史回填显示红灯非常罕见（约 0.6% 的交易日），且全部出现在已知极端时期（2020 疫情、2024 微盘危机等）。</p>
+        <p><strong>四个指标的白话解释</strong>：</p>
+        <ul>
+          <li><strong>截面 σ 中位数</strong>：全市场股票「平均波动有多大」。越大说明个股上蹿下跳越厉害。</li>
+          <li><strong>截面离散度</strong>：股票之间涨跌的「分化程度」。大 = 有的暴涨有的暴跌，市场不平静。</li>
+          <li><strong>平均两两相关</strong>：股票们涨跌的「同步程度」（0~1）。越接近 1 越同涨同跌；
+            短期内快速飙升常是系统性风险积聚的前兆（跌的时候往往一起跌）。</li>
+          <li><strong>VaR 突破占比</strong>：今天有多少比例的股票跌穿了各自的「安全线」（统计学上只有 1% 该跌穿）。
+            超过 3% 说明下跌不是个票问题，而是在传染。</li>
+        </ul>
+        <p><strong>板块热力表</strong>：看风险集中在哪。红色越深分数越高；「行业口径」按传统行业分类，
+          「动态簇口径」按系统自动归纳的当日热点标签分组。</p>
+        <p><strong>预警判定详情</strong>：两个报警器的当前读数与触发线，供想看细节的人核对。</p>
+        <p class="opt">提示：本页为风险监测工具，不构成投资建议；分数高不代表马上跌，只代表「市场处于历史上少见的紧绷状态」。</p>
+      </div>
+    </div>
+  </div>
   <div id="risk-gauge"><span class="opt">加载中...</span></div>
   <div class="section">
-    <button class="section-toggle" data-section="risk-series">指标时间序列（近 252 交易日）&#9660;</button>
+    <button class="section-toggle" data-section="risk-series">指标时间序列（近 252 交易日）<span class="opt">——每条线的纵轴自适应：看「形状」，峰值即危险时刻</span> &#9660;</button>
     <div id="sec-risk-series" class="section-body">
       <div id="risk-series"><span class="opt">加载中...</span></div>
     </div>
   </div>
   <div class="section">
-    <button class="section-toggle" data-section="risk-boards">板块热力表（行业 / 动态簇）&#9660;</button>
+    <button class="section-toggle" data-section="risk-boards">板块热力表（行业 / 动态簇）<span class="opt">——看风险集中在哪些板块，越红越危险</span> &#9660;</button>
     <div id="sec-risk-boards" class="section-body">
       <p>
         <button id="btn-risk-ind" class="btn btn-ghost">行业口径</button>
@@ -134,7 +160,7 @@
     </div>
   </div>
   <div class="section">
-    <button class="section-toggle" data-section="risk-alert">预警判定详情（双判据 vs 阈值）&#9660;</button>
+    <button class="section-toggle" data-section="risk-alert">预警判定详情（双判据 vs 阈值）<span class="opt">——两个报警器的当前读数与触发线</span> &#9660;</button>
     <div id="sec-risk-alert" class="section-body">
       <div id="risk-alert"><span class="opt">加载中...</span></div>
     </div>
