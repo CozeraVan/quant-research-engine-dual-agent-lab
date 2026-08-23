@@ -64,6 +64,16 @@ FRM 风险模块 R5（rates/bonds）、R6（options）、R7（portfolio/derivati
 - 权限验证方式：复用 quant_ts `reference_data_permission_smoke.py` 模式，只读不调库，
   作为各阶段第一步验收。
 
+### 3.1 冒烟实测结论（2026-08-23，D1.1 已完成）
+
+五接口全部可用。三个实现细节（已据此修订验收标准，决策见 06_DECISION_LOG）：
+1. `cb_daily` 默认返回 11 列**不含 bond_value/cb_value**——handler 必须显式声明
+   fields（权限没问题，是接口默认裁剪）。
+2. `opt_daily` 按 trade_date 全市场快照达单次 15000 行上限会截断（含中金所股指
+   期权）——回填/日更必须按 exchange 过滤（SSE/SZSE）或分页。
+3. `bond_china_yield` 入参日期必须 `YYYYMMDD` 无连字符；返回含多条曲线需按
+   「曲线名称=中债国债收益率曲线」过滤；期限节点仅 8 个（见 §6 D2 验收修订）。
+
 ## 4. 管线归属与惯例（依据 quant_ts README/代码）
 
 quant_ts 的标准做法有两套：
@@ -139,7 +149,9 @@ hypertable：沿用 `ensure_reference_table`/`base_engine.init_db_structure` 的
   示例管道：最新交易日曲线插值 + 一个 5 年期附息债 price_from_zero_curve/effective_duration。
 - 验收标准：
   - [ ] yc_curve 数据源（akshare bond_china_yield）决策记录进 06_DECISION_LOG.md
-  - [ ] 表建成；抽查 3 个交易日曲线节点数 ≥ 20、yield 在 0–10% 合理区间
+  - [ ] 表建成；抽查 3 个交易日曲线节点数 ≥ 8（akshare bond_china_yield 实测返回
+        3月/6月/1/3/5/7/10/30 年共 8 节点，已覆盖主要 key-rate 期限；2/15/20 年等
+        缺失节点由适配层插值补齐，节点稀疏的近似口径在结果中披露）、yield 在 0–10% 合理区间
   - [ ] 日更自动入库成功
   - [ ] 示例管道：interp_zero_rate 对曲线上/曲线外期限插值结果单调合理；pytest 绿
 
