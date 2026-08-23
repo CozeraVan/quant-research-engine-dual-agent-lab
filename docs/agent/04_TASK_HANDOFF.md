@@ -2,6 +2,35 @@
 
 ## Task ID
 
+QRE-RISK-BAROMETER-M1-008 (大盘/板块风险风向标 M1：cross_section + barometer 纯函数内核)
+
+## Current Status
+
+DONE (implementation; review PASS in `10_REVIEW_REPORT.md`; awaiting user-approved git finalization)
+
+## Task Note
+
+M1 在 R7（1724 绿）上落地（依据已批准 CR
+`docs/frm/CR_2026-08-23_market_risk_barometer.md` §5 M1 阶段）：新
+`risk/cross_section.py`（纯函数零 DB、向量化——EWMA 方差面板与单列口径
+atol 1e-15 一致、截面波动率中位/90 分位、等权/市值加权离散度、滚动 60 日
+平均两两相关等权 + w_i·w_j 偶权近似、VaR 突破计数/占比严格 r<−VaR 同
+HIT 口径、cross_sectional_summary 一把梭 σ forecast shift(1) 防前视）；
+新 `risk/barometer.py`（组合法封装 100% 复用 volatility/tail 出 EWMA σ
+与 VaR/ES 95/99、252 日滚动分位分数 warmup 降级 None、红/黄/绿预警
+双判据、build_barometer 全市场+板块统一 dict、分组映射调用方传入不感知
+来源）；`risk/constants.py` 加 BAROMETER_CORR_WINDOW=60 /
+BAROMETER_SCORE_WINDOW=252 / ALERT_CORR_LOOKBACK=20 / ALERT_CORR_JUMP
+=0.10 / ALERT_BREACH_RATIO_MAX=0.03 / BREACH_CONFIDENCE=0.99 /
+CROSS_SECTION_SIGMA_QUANTILE=0.90 全回显。1754 tests green（+30：
+cross_section 17 + barometer 13）。未 commit、未重启 qre-gui（用户约束）。
+细节见 `09_CODING_HANDOFF.md` 顶部。上一任务：QRE-RISK-PORTFOLIO-007
+（R7 组合层汇总，1724 green，待审批）。
+
+# Task Handoff (archive: QRE-RISK-PORTFOLIO-007, R7 组合层汇总)
+
+## Task ID
+
 QRE-RISK-PORTFOLIO-007 (FRM 风险管理模块 R7：组合层汇总 + risk_report 扩展 + GUI 卡片 + 可选闸扩展)
 
 ## Current Status

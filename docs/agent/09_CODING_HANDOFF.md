@@ -2,6 +2,88 @@
 
 ## Task ID
 
+QRE-RISK-BAROMETER-M1-008（大盘/板块风险风向标 M1：cross_section + barometer 纯函数内核）
+
+## Written By
+
+KIMI_CODE (single agent)
+
+## Status
+
+DONE (awaiting git finalization；R2–R7 也在同一待审批队列)
+
+## Implementation Summary
+
+大盘/板块风险风向标 M1 落地（依据已批准 CR
+`docs/frm/CR_2026-08-23_market_risk_barometer.md` §2/§4/§5 M1 阶段）：
+截面聚合 + 组合法 + 分数归一化 + 预警判定的纯函数内核，零 DB。
+
+**改动清单**：
+- `risk/cross_section.py`（新，纯函数零 DB、向量化）：
+  `ewma_variance_panel`（逐列 EWMA 方差面板，σ²_1=r²_1、NaN 跳过、
+  方差顺延，与 volatility.ewma_variance_series 单列口径 atol 1e-15
+  一致）；`cross_sectional_volatility_stats`（逐日 σ 中位数/90 分位/
+  覆盖数）；`cross_sectional_dispersion`（当日收益等权 ddof=1 标准差 +
+  市值加权 Σw(r−μ_w)² 口径标准差，权重行内归一化）；
+  `average_pairwise_correlation`（滚动 60 日窗口、完整窗口个股才计入、
+  等权=相关矩阵上三角均值、市值加权=w_i·w_j 偶权加权均值的常规近似
+  并披露）；`var_breach_ratio_series`（r<−VaR 严格口径同 HIT）；
+  `cross_sectional_summary` 一把梭（VaR 用 EWMA 参数法 μ=0、
+  σ forecast=raw.shift(1) 防前视）。
+- `risk/barometer.py`（新，纯函数零 DB）：`portfolio_return_series`
+  （等权/市值加权组合日收益）；`portfolio_risk_summary`（100% 复用
+  volatility.latest_ewma_forecast + tail.historical/ewma_parametric_var_es
+  出 EWMA σ 与 VaR/ES 95/99）；`rolling_percentile_score`（252 日滚动
+  分位 0–100，历史不足 → None+warmup，不伪造）；`evaluate_alert`
+  （相关 20 日升幅与突破占比双超阈 red/单超阈 amber/否则 green，相关
+  历史不足判据不触发并披露）；`build_barometer`（全市场 + groups 映射
+  板块统一 dict，<2 成员组跳过记入 skipped_groups，总分=五指标
+  SCORE_COMPONENTS 非 warmup 等权均值）。
+- `risk/constants.py`：+ BAROMETER_CORR_WINDOW=60、
+  BAROMETER_SCORE_WINDOW=252、BAROMETER_ALERT_CORR_LOOKBACK=20、
+  BAROMETER_ALERT_CORR_JUMP=0.10、BAROMETER_ALERT_BREACH_RATIO_MAX=0.03、
+  BAROMETER_BREACH_CONFIDENCE=0.99、CROSS_SECTION_SIGMA_QUANTILE=0.90
+  （全部结果 dict 回显；阈值初值 CR §2 注明待首批真实数据校准）。
+- `risk/__init__.py`：增列 barometer/cross_section（docstring 同步）。
+- 测试（+30）：`tests/test_risk_cross_section.py`（17：面板对单列一致性/
+  NaN 顺延/手算两步递推/分位手算/离散度手算/等权 vs 加权差异/完全相关
+  面板/相关 == np.corrcoef/窗口 warmup/偶权方向/不完整列剔除/突破计数与
+  边界/summary 集成 shift 防前视）；`tests/test_risk_barometer.py`
+  （13：组合收益手算/组合法对 tail+volatility 逐键一致/滚动分位已知值/
+  warmup 降级/预警 green/amber×2/red/相关历史不足披露/组装结构与跳过组/
+  warmup 传播总分 None/等权 vs 市值加权差异/常量回显）。
+
+## Validation Evidence
+
+```
+uv run pytest tests/test_risk_cross_section.py tests/test_risk_barometer.py → 30 passed
+uv run pytest tests/ -x -q → 1754 passed, 4 warnings（基线 1724 + 30 净增，全绿）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+注：全量首跑 test_gui_risk_report.py::test_post_conflict_409 失败，单独与
+全量复跑均绿（环境敏感 flake，非本任务引入）
+```
+
+## Known Limitations
+
+- 加权平均相关为 w_i·w_j 偶权常规近似（非严格加权相关系数，docstring
+  披露）；加权离散度未做 1−Σw² 集中度校正。
+- 预警阈值 +0.10/3% 为 CR 注明待校准初值，M3 首批真实数据校准。
+- M2 数据装配层（barometer_job.py 读库）本阶段不做。
+
+## Next Steps
+
+M2：barometer_job.py 数据装配（daily_basic.total_mv 市值、
+stock_basic.industry 行业、cluster.daily_tags/company_tags 簇、
+public.stock_daily 收益面板——数据事实已核查在库）+ 历史回填
+252+60 交易日 + market_risk_daily 产出。
+
+---
+
+# Coding Handoff (archive: QRE-RISK-PORTFOLIO-007, R7 组合层汇总)
+
+## Task ID
+
 QRE-RISK-PORTFOLIO-007（FRM 风险管理模块 R7：组合层汇总 + risk_report 扩展 + GUI 卡片 + 可选闸扩展）
 
 ## Written By

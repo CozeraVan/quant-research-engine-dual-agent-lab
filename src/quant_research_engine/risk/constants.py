@@ -98,10 +98,33 @@ GREEK_SHOCK_RATE = 1e-4
 #: risk.status=warning（reason=dv01_exceeds_limit）。
 GATE_DV01_MAX: float | None = None
 
-#: 晋升闸期权腿 Greeks 限额（R7，可选，默认 None = 不启用）：
+#: 晋升闸衍生品限额判据（R7，可选，默认 None = 不启用）：
 #: {"delta": ..., "gamma": ..., "vega": ...}（绝对值口径，键可子集）。
 #: 超阈 → risk.status=warning（reason=greek_<name>_exceeds_limit）。
 GATE_GREEKS_MAX: dict[str, float] | None = None
+
+# ── 大盘/板块风险风向标（CR_2026-08-23_market_risk_barometer §2，M1）──
+
+#: 平均两两相关系数的滚动窗口（交易日）
+BAROMETER_CORR_WINDOW = 60
+
+#: 风险分数归一化的滚动历史窗口（交易日；不足则 warmup 降级为 None）
+BAROMETER_SCORE_WINDOW = 252
+
+#: 红灯预警：相关系数升幅回望窗口（交易日）
+BAROMETER_ALERT_CORR_LOOKBACK = 20
+
+#: 红灯预警：相关系数 20 日升幅阈值（初值，CR §2 注明需首批真实数据校准）
+BAROMETER_ALERT_CORR_JUMP = 0.10
+
+#: 红灯预警：VaR 突破占比阈值（99% VaR 期望突破率 1% 的 3 倍；初值待校准）
+BAROMETER_ALERT_BREACH_RATIO_MAX = 0.03
+
+#: VaR 突破占比的个股 VaR 置信水平（EWMA 参数法，μ=0）
+BAROMETER_BREACH_CONFIDENCE = 0.99
+
+#: 截面波动率统计的高分位（尾部厚度）
+CROSS_SECTION_SIGMA_QUANTILE = 0.90
 
 
 def default_block_size(n_obs: int) -> int:

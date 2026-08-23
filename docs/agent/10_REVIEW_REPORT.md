@@ -2,7 +2,58 @@
 
 ## Task ID
 
-QRE-RISK-PORTFOLIO-007（FRM 风险管理模块 R7：组合层汇总 + risk_report 扩展 + GUI 卡片 + 可选闸扩展）
+QRE-RISK-BAROMETER-M1-008（大盘/板块风险风向标 M1：cross_section + barometer 纯函数内核）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **范围与 CR §5 M1 行一一对应**：cross_section.py（EWMA 方差面板、
+  截面波动率中位/90 分位、等权/市值加权离散度、滚动 60 日平均两两
+  相关等权 + w_i·w_j 偶权近似、VaR 突破计数/占比）+ barometer.py
+  （组合法封装复用 volatility/tail、252 日滚动分位分数、红/黄/绿
+  预警、全市场+板块组装）+ constants 集中参数全回显 + 合成面板单测，
+  全覆盖；M2 数据装配（barometer_job.py）按 CR 分期不做。
+- **纪律一致**：两新模块纯函数零 DB；参数集中 constants.py
+  （BAROMETER_CORR_WINDOW/SCORE_WINDOW/ALERT_*/BREACH_CONFIDENCE/
+  CROSS_SECTION_SIGMA_QUANTILE）并全部在结果 dict 回显；既有 risk
+  模块零行为改动（仅 __init__ 增列）。
+- **数值自检**：EWMA 面板逐列 == volatility.ewma_variance_series
+  （atol 1e-15，含 NaN 顺延对 dropna 语义）；两股面板平均相关 ==
+  np.corrcoef（1e-12）；完全相关/反相面板均值 −1/3 手算；离散度
+  等权 ddof=1 与加权 Σw(r−μ_w)² 手算核对；VaR 突破严格 r<−VaR 与
+  backtest_var HIT 同口径；组合法 VaR/ES 与 tail 直接调用逐键一致；
+  预警三态（green/amber×2/red）与阈值回显断言；warmup 降级 None
+  不伪造分数；权重倾斜下等权 vs 市值加权组合序列差异用例。
+- **披露**：加权平均相关为 w_i·w_j 偶权常规近似（非严格加权相关
+  系数）；相关窗口内个股需完整 window 观测否则当日剔除；加权离散度
+  未做 1−Σw² 集中度校正；预警阈值 +0.10/3% 为 CR 注明待校准初值；
+  相关历史不足 20 日时 corr 判据不触发（None 披露）。
+
+## Validation Evidence
+
+```
+uv run pytest tests/test_risk_cross_section.py tests/test_risk_barometer.py → 30 passed
+uv run pytest tests/ -x -q → 1754 passed, 4 warnings（基线 1724 + 30 净增，全绿）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+注：全量首跑 test_gui_risk_report.py::TestRiskReportEndpoints::test_post_conflict_409
+失败，单独 24/24 绿、全量复跑全绿（环境敏感 flake，同既往 test_job_lock_conflict 类）
+```
+
+## Required Fixes
+
+无。
+
+---
+
+# Review Report (archive: QRE-RISK-PORTFOLIO-007, R7 组合层汇总)
 
 ## Reviewer
 

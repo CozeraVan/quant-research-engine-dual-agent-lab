@@ -12,7 +12,23 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-RISK-PORTFOLIO-007 (DONE — 1724 tests green；awaiting git approval)
+QRE-RISK-BAROMETER-M1-008 (DONE — 1754 tests green；awaiting git approval)
+
+2026-08-23: 大盘/板块风险风向标 M1 落地（CR_2026-08-23_market_risk_barometer
+§5 M1 阶段）。risk 包新增 cross_section.py（纯函数零 DB、向量化：EWMA
+方差面板与 volatility 单列口径 atol 1e-15 一致、截面波动率中位/90 分位、
+等权/市值加权离散度、滚动 60 日平均两两相关等权 + w_i·w_j 偶权近似、
+VaR 突破计数/占比、summary 一把梭 σ shift(1) 防前视）与 barometer.py
+（组合法 100% 复用 volatility/tail、252 日滚动分位分数 warmup 降级
+None、红/黄/绿双判据预警、build_barometer 全市场+板块统一 dict、分组
+映射调用方传入）；constants.py 加 BAROMETER_CORR_WINDOW=60/
+SCORE_WINDOW=252/ALERT_CORR_LOOKBACK=20/ALERT_CORR_JUMP=0.10/
+ALERT_BREACH_RATIO_MAX=0.03/BREACH_CONFIDENCE=0.99/
+CROSS_SECTION_SIGMA_QUANTILE=0.90 全回显（阈值初值待 M3 校准）。
+1754 tests green（+30：cross_section 17 + barometer 13）。全量首跑
+test_gui_risk_report.py::test_post_conflict_409 flake，复跑全绿。
+未 commit、未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
+上一任务：QRE-RISK-PORTFOLIO-007 (DONE — 1724 tests green；awaiting git approval)
 
 2026-08-23: FRM 风险模块 R7 落地（CR_2026-08-23_risk_derivatives_extension
 R7 阶段，CR 状态改「R5–R7 已完成」；R5=5472832、R6 待审批）。新
@@ -252,6 +268,14 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest tests/ -x -q → 1754 passed, 4 warnings（2026-08-23, QRE-RISK-BAROMETER-M1-008；基线 1724 + 30 净增）
+风险新单测 30/30 绿（cross_section 17：面板对单列一致/相关==np.corrcoef/离散度手算/突破计数；barometer 13：组合法对 tail+volatility 逐键一致/预警三态/warmup 降级/等权 vs 市值加权差异）
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+注：全量首跑 test_gui_risk_report.py::test_post_conflict_409 失败，单独与全量复跑均绿（环境敏感 flake）
+```
 
 ```
 uv run pytest tests/ -x -q → 1724 passed, 4 warnings（2026-08-23, QRE-RISK-PORTFOLIO-007；基线 1696 + 28 净增）

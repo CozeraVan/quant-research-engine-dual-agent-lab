@@ -2,7 +2,68 @@
 
 ## Task ID
 
-QRE-RISK-PORTFOLIO-007（FRM 风险管理模块 R7：组合层汇总 + risk_report 扩展 + GUI 卡片 + 可选闸扩展）
+QRE-RISK-BAROMETER-M1-008（大盘/板块风险风向标 M1：cross_section + barometer 纯函数内核）
+
+## Created By
+
+KIMI_CODE（主代理 2026-08-23 指定的任务书；依据已批准 CR
+`docs/frm/CR_2026-08-23_market_risk_barometer.md` §2/§4/§5 M1 阶段；
+前置 R1–R7 已完成，基线 1724 tests green）
+
+## Intended Implementer
+
+KIMI_CODE（子代理执行 M1 内核）
+
+## Goal
+
+1. 新 `risk/cross_section.py`（纯函数零 DB、向量化）：
+   - `ewma_variance_panel`：个股收益面板（dates×stocks）→ 逐列 EWMA
+     方差面板，口径与 volatility.ewma_variance_series 完全一致
+     （σ²_1=r²_1、λ=0.94；NaN 观测跳过、方差顺延，对齐单列 dropna 语义）；
+   - `cross_sectional_volatility_stats`：EWMA σ 面板 → 逐日中位数/90 分位/
+     覆盖股票数；
+   - `cross_sectional_dispersion`：当日收益截面 → 等权标准差与市值加权
+     标准差（权重行内归一化，Σw(r−μ_w)² 口径）；
+   - `average_pairwise_correlation`：滚动窗口（默认 60）两两相关均值——
+     等权 = 相关矩阵上三角均值；市值加权 = 以 w_i·w_j 为偶权的加权均值
+     （常规近似，docstring 披露）；窗口内个股按列均值/标准差标准化、
+     不足 window 个非 NaN 观测的个股当日剔除；
+   - `var_breach_ratio_series`：当日收益 vs 各自 EWMA VaR（损失正号口径
+     r < −VaR）→ 逐日突破计数/占比。
+2. 新 `risk/barometer.py`（纯函数）：
+   - `portfolio_return_series`：面板收益+权重 → 等权/市值加权组合收益；
+   - `portfolio_risk_summary`：组合序列 → 复用 volatility + tail 出
+     EWMA σ 预测与 VaR95/99、ES95/99（历史模拟 + EWMA 参数法）；
+   - `rolling_percentile_score`：指标序列对 252 日滚动窗口的分位数
+     （0–100，含当日）；历史不足 → None + warmup 标记，不伪造；
+   - `evaluate_alert`：相关系数 20 日升幅与 VaR 突破占比双超阈 → red、
+     单超阈 → amber、否则 green；阈值集中 constants 并回显；
+   - `build_barometer`：全市场 + 板块（groups 映射由调用方传入，
+     不感知行业/簇来源）统一输出 dict（五指标各做滚动分位，
+     等权合成总分，任一 warmup 则总分标注、全 warmup 则总分为 None）。
+3. `risk/constants.py` 追加：BAROMETER_CORR_WINDOW=60、
+   BAROMETER_SCORE_WINDOW=252、BAROMETER_ALERT_CORR_LOOKBACK=20、
+   BAROMETER_ALERT_CORR_JUMP=0.10、BAROMETER_ALERT_BREACH_RATIO_MAX=0.03、
+   BAROMETER_BREACH_CONFIDENCE=0.99、CROSS_SECTION_SIGMA_QUANTILE=0.90，
+   全部在结果 dict 回显。
+4. 测试 `tests/test_risk_cross_section.py`、`tests/test_risk_barometer.py`：
+   合成面板已知答案核对（EWMA 面板对单列一致性、已知相关系数面板、
+   离散度手算、突破计数）、预警三态、warmup 降级、等权 vs 市值加权
+   差异、组合序列对接 tail/volatility 集成。
+
+## 约束
+
+纯函数零 DB；既有 1724 测试保持全绿；不 git commit；M2 数据装配
+（barometer_job.py）不做。
+
+## Validation
+
+`uv run pytest tests/ -x -q`（目标 1724 + 新增全绿）；
+`scripts/check-progress-docs.sh` → passed。
+
+---
+
+# Implementation Brief (archive: QRE-RISK-PORTFOLIO-007, R7 组合层汇总)
 
 ## Created By
 

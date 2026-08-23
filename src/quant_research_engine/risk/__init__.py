@@ -38,12 +38,21 @@
   债券/转债腿 DV01/KR01（portfolio_aggregate + key_rate_shifts 加总）、
   期权腿组合 Greeks（portfolio_greeks）、可选 DGV-VaR；仅股票输入退化
   为仅 equity 节。
+- cross_section.py（风向标 M1）：截面聚合——EWMA 方差面板（与单列口径
+  一致）、截面波动率中位/90 分位、等权/市值加权离散度、滚动 60 日平均
+  两两相关（等权 + w_i·w_j 偶权近似）、VaR 突破计数/占比。
+- barometer.py（风向标 M1）：组合法封装（等权/市值加权组合收益 → 复用
+  volatility/tail 出 EWMA σ 与 VaR/ES）、252 日滚动分位分数（warmup
+  降级 None）、红/黄/绿预警判定、全市场+板块结果组装（分组映射由
+  调用方传入）。
 """
 
 from quant_research_engine.risk import (
     backtest_var,
+    barometer,
     bonds,
     constants,
+    cross_section,
     dependence,
     derivatives_var,
     inference,
@@ -59,8 +68,10 @@ from quant_research_engine.risk import (
 
 __all__ = [
     "backtest_var",
+    "barometer",
     "bonds",
     "constants",
+    "cross_section",
     "dependence",
     "derivatives_var",
     "inference",
