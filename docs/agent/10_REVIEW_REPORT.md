@@ -2,6 +2,70 @@
 
 ## Task ID
 
+QRE-GUI-LAB-PORT-017（回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **8080 零行为变化（机械核对）**：新 create_app 的 url_map（rule+methods）
+  与 git HEAD 版本逐条相等（59/59）；被搬走路由的函数体逐字不变，仅从
+  create_app 闭包迁入 `strategy_lab_routes.register_strategy_lab_routes`，
+  create_app 尾部调用同一函数。Flask endpoint 名随函数 __name__ 不变。
+- **既有测试锚点兼容**：test_gui_strategy_create.py 把 monkeypatch 打在
+  `gui.app.try_acquire_run_slot/release_run_slot/run_backtest`——app.py
+  保持三符号 re-export，共享模块经 gui.app 命名空间调用时解析，
+  该测试文件零改动通过（重构后首轮全量曾因此 14 errors，已修复复跑全绿）。
+- **lab.html 原样性**：两个 tab 的 HTML/JS 由脚本按行号从 index.html /
+  admin.html 精确切片组装（非手抄），含 QRE-GUI-SORT-016 排序 JS、
+  搜索框、toggle/删除、gate/风险徽标；helpers（esc/fetchWithTimeout/
+  cardError/isAbort）随 onboard JS 一并移植；两个 <script> 均为独立
+  IIFE，无 DOM id 冲突。
+- **范围裁切**：lab 不挂 /admin、/api/admin/overview、factor-create/*、
+  builder/* 等 8080 专有路由（测试断言 lab⊂create_app 且专有规律互斥）；
+  /runs、/runs/<id> 及 run artifact/risk-report API 一并在共享集内，
+  保证新增策略 tab 的冒烟/回测/深度验证链接在 8081 可用。
+- **运维**：qre-gui-lab.service enabled/active，与 qre-gui 并存互不干扰；
+  base.html 顶栏「管理台 Admin」链接在 8081 上 404（指向 8080 功能，
+  已知留白，待用户对齐优化方向时处理）。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1807 passed, 4 skipped, 4 warnings（基线 1795 + 12 净增）
+路由集合核对：create_app() vs git HEAD → equal: True（59/59）
+冒烟（两个 service 均重启后）：
+  curl 8081 / → 含「新增策略」「回测管理」、data-tab strategy/onboard
+  curl 8081 /api/admin/refresh → ok True, registered 0/118, stopped 118
+  curl 8080 /api/admin/refresh → 同上（一致）
+  curl 8081 /admin/strategy/bo01a_donchian_20_breakout → 200（8080 同 200）
+  curl 8080 / → 200；curl 8080 /admin → 200
+  curl 8081 /api/strategies/sandbox → ok true
+systemctl is-enabled qre-gui-lab → enabled；is-active → active
+```
+
+## Required Fixes
+
+无。
+
+## Nice-to-Have
+
+- lab 顶栏导航与 8080 的互链口径、页面标题/样式对齐等，留待用户明天
+  对齐优化方向后处理（本任务明确只做移植）。
+
+---
+
+# Review Report (archive: QRE-DERIV-ADAPTER-013)
+
+## Task ID
+
 QRE-DERIV-ADAPTER-013（衍生品数据适配层：yc_curve/cb/opt 三个只读 loader + 示例管道）
 
 ## Reviewer

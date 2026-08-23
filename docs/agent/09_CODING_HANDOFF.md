@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-DERIV-ADAPTER-013（衍生品数据适配层：yc_curve/cb/opt 三个只读 loader + 示例管道，CR D1.5/D2.2/D3.2）
+QRE-GUI-LAB-PORT-017（回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081）
+
+## Implementation Summary
+
+纯移植，零优化/功能增删。①路由共享：新 `gui/strategy_lab_routes.py::register_strategy_lab_routes(app)`——create_app 内「新增策略/策略状态/run 查看」相关闭包路由原样搬入（/api/validate、/api/run、/api/runs* 与 /runs、/runs/<id> 页面、/api/templates GET/POST/<name>、/api/factors、/api/nl_compile、/api/strategies/create|sandbox|smoke|promote|sandbox/delete|deep-validate(+status)、/api/admin/refresh(+register/unregister)、/api/admin/strategies/toggle|delete、/admin/strategy/<id>、/api/admin/strategy/<id>/artifact 白名单下载）；`create_app` 尾部调用同一注册函数。机械核对：新 create_app 路由表与 git HEAD 逐条相等（59/59 rule+method）。兼容锚点：try_acquire_run_slot/release_run_slot/run_backtest 在 app.py 保持 re-export，共享模块经 gui.app 命名空间调用时解析——test_gui_strategy_create.py 的 monkeypatch（打在 gui.app.*）零改动通过。②新 `gui/lab.py`（create_lab_app/launch_lab_gui，模板/静态目录调用时读 gui_app.TEMPLATE_DIR/STATIC_DIR 以兼容既有 monkeypatch 测试模式）+ `templates/lab.html`（两 tab「新增策略」「回测管理」，内容由脚本从 index.html strategy tab 与 admin.html onboard tab 精确切片组装，含 tab 切换/section 折叠 helpers、排序 JS、搜索框、toggle/删除、gate/风险徽标；CSS 复用 style.css；附 /runs 页面保证 tab 内 run 链接可用）。③CLI：`qre gui` 不变；`qre gui --lab` 启动 lab（默认 8081，显式 --port 优先）。④systemd：`deploy/hardened/qre-gui-lab.service` 仿 qre-gui.service（端口 8081、SyslogIdentifier=qre-gui-lab），已 sudo cp + daemon-reload + enable --now（enabled/active）。⑤测试 `tests/test_gui_lab.py` +12。验证：`uv run pytest -q` → 1807 passed + 4 skipped（全绿）；冒烟 8081 / 双 tab 在、/api/admin/refresh stopped 118/118、策略详情 200；8080 / 与 /admin 200、同 API 结果一致。无 CR（纯移植无设计决策）。两个 service 均已重启。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-DERIV-ADAPTER-013（衍生品数据适配层：yc_curve/cb/opt 三个只读 loader + 示例管道，CR D1.5/D2.2/D3.2）
 
 ## Implementation Summary
 

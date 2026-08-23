@@ -367,6 +367,11 @@ def build_parser() -> argparse.ArgumentParser:
     gui_parser.add_argument("--host", default="127.0.0.1", help="Host to bind the console server to.")
     gui_parser.add_argument("--port", type=int, default=8080, help="Port to bind the console server to.")
     gui_parser.add_argument("--debug", action="store_true", help="Run Flask in debug mode (not recommended for production).")
+    gui_parser.add_argument(
+        "--lab",
+        action="store_true",
+        help="Launch the strategy lab app (新增策略 + 回测管理 only, default port 8081) instead of the full console.",
+    )
 
     barometer_parser = subparsers.add_parser(
         "barometer", help="Run market risk barometer daily job (default: latest trade date)"
@@ -1893,6 +1898,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "gui":
+        if getattr(args, "lab", False):
+            from quant_research_engine.gui.lab import launch_lab_gui
+
+            # lab 默认端口 8081（用户显式 --port 时从其值）
+            port = 8081 if args.port == 8080 else args.port
+            launch_lab_gui(host=args.host, port=port, debug=args.debug)
+            return 0
         from quant_research_engine.gui.app import launch_gui
 
         launch_gui(host=args.host, port=args.port, debug=args.debug)

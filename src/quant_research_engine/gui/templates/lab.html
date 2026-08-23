@@ -1,0 +1,1207 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>QRE 策略实验台 Strategy Lab <span class="opt">（新增策略 + 回测管理；与 8080 控制台共享后端路由）</span></h1>
+
+<div class="tabs">
+  <button class="tab active" data-tab="strategy">新增策略</button>
+  <button class="tab" data-tab="onboard">回测管理</button>
+</div>
+
+<!-- TAB 1: 新增策略（自 index.html strategy tab 原样移植，QRE-GUI-LAB-PORT-017） -->
+<div id="tab-strategy" class="tab-content active">
+
+  <!-- 顶部：自然语言描述区（安全闸：仅填入下方预览栏，需用户确认后手动提交） -->
+  <div class="panel nl-panel">
+    <h2>方式一：自然语言描述策略</h2>
+    <textarea id="nl-description" rows="3" placeholder="例：20 日均线上穿 120 日均线买入，跌破 60 日线卖出，止损 -8%"></textarea>
+    <div class="editor-actions">
+      <button id="btn-nl-compile" class="btn btn-ghost">编译为 YAML</button>
+      <span id="nl-status" class="hidden"></span>
+    </div>
+    <div id="nl-result" class="result-box hidden"></div>
+  </div>
+
+  <!-- 中部：可视化构建区 -->
+  <div class="section">
+    <button class="section-toggle" data-section="wz-factors">方式二：可视化构建 · 第 1 步 选择因子（来自因子库实时枚举）&#9660;</button>
+    <div id="sec-wz-factors" class="section-body">
+      <p class="opt">与上方自然语言方式任选其一，结果都汇入下方 YAML 预览栏。</p>
+      <div id="wz-factor-status" class="opt">加载因子目录中...</div>
+      <div id="wz-factor-groups"></div>
+      <h4>已选因子 → data.factor_fields 预览</h4>
+      <pre id="wz-factor-preview" class="compiled-yaml">（尚未选择因子）</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <button class="section-toggle" data-section="wz-conditions">方式二：可视化构建 · 第 2 步 设置入场/出场条件（比较 + 布尔）&#9660;</button>
+    <div id="sec-wz-conditions" class="section-body">
+      <div class="form-grid">
+        <label>策略 ID</label>
+        <input type="text" id="wz-name" placeholder="wizard_strategy">
+      </div>
+
+      <h4>入场条件组</h4>
+      <div class="rule-row">
+        <label class="label-sm">组内逻辑</label>
+        <select id="wz-entry-combinator">
+          <option value="and">AND（全部满足）</option>
+          <option value="or">OR（任一满足）</option>
+        </select>
+      </div>
+      <div id="wz-entry-conditions" class="condition-list"></div>
+      <button class="btn-sm" onclick="wzAddCondition('entry')">+ 添加入场条件</button>
+
+      <h4 style="margin-top:12px;">出场条件组 <span class="opt">(可选)</span></h4>
+      <div class="rule-row">
+        <label class="label-sm">组内逻辑</label>
+        <select id="wz-exit-combinator">
+          <option value="and">AND（全部满足）</option>
+          <option value="or">OR（任一满足）</option>
+        </select>
+      </div>
+      <div id="wz-exit-conditions" class="condition-list"></div>
+      <button class="btn-sm" onclick="wzAddCondition('exit')">+ 添加出场条件</button>
+
+      <h4 style="margin-top:12px;">持仓与风控</h4>
+      <div class="form-grid form-grid-3">
+        <label>最大持仓天数</label>
+        <input type="number" id="wz-holding" value="20" min="1">
+
+        <label>止损 Stop Loss</label>
+        <input type="number" id="wz-stop-loss" step="0.01" placeholder="可空，如 0.08">
+
+        <label>止盈 Take Profit</label>
+        <input type="number" id="wz-take-profit" step="0.01" placeholder="可空，如 0.15">
+
+        <label>移动止损 Trailing</label>
+        <input type="number" id="wz-trailing" step="0.01" placeholder="可空，如 0.05">
+      </div>
+
+      <h4 style="margin-top:12px;">策略 YAML 预览</h4>
+      <pre id="wz-yaml-preview" class="compiled-yaml">（选择因子并添加条件后自动生成）</pre>
+      <div class="builder-actions">
+        <button id="wz-fill-editor" class="btn btn-ghost">校验并填入下方 YAML 预览栏</button>
+        <span id="wz-status" class="hidden"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部：YAML 预览栏 + 回测参数 -->
+  <div class="layout">
+    <div class="panel editor-panel">
+      <h2>策略 YAML 预览栏（可编辑）</h2>
+      <textarea id="strategy-yaml" rows="24" cols="80" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
+      <div class="editor-actions">
+        <button id="btn-validate" class="btn btn-ghost">验证 Validate</button>
+        <button id="btn-save-sandbox" class="btn btn-ghost" title="校验 + 查重 + 因子检查后存入沙箱，不自动执行">存入沙箱</button>
+        <label class="file-label btn-ghost">
+          加载文件 Load file
+          <input type="file" id="file-input" accept=".yaml,.yml" hidden>
+        </label>
+        <select id="template-select">
+          <option value="">-- 模板 templates --</option>
+          <option value="{{ default_strategy_name }}" selected>{{ default_strategy_name }} (默认 default)</option>
+          {% for name in templates %}
+          {% if name != default_strategy_name %}
+          <option value="{{ name }}">{{ name }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+        <input type="text" id="template-name" placeholder="模板名称 template name" size="16">
+        <button id="btn-save-template" class="btn btn-ghost">保存模板 Save Template</button>
+      </div>
+      <div id="validate-result" class="result-box hidden"></div>
+    </div>
+
+    <div class="panel param-panel">
+      <h2>回测参数 Parameters</h2>
+      <div class="form-grid">
+        <label>模式 Mode</label>
+        <select id="param-mode">
+          <option value="single">单标的 Single-symbol</option>
+          <option value="batch" selected>批量 Batch</option>
+          <option value="shared">共享资金 Shared-cash</option>
+        </select>
+
+        <label>标的范围 Universe</label>
+        <span class="label-inline"><input type="checkbox" id="param-all-market"> 全部 A 股（全市场，留空代码时生效）</span>
+
+        <label>股票代码 Codes</label>
+        <textarea id="param-codes" rows="2" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ">000001.SZ,000002.SZ</textarea>
+
+        <label>开始 Start</label>
+        <input type="text" id="param-start" value="2026-01-05" placeholder="YYYY-MM-DD">
+
+        <label>结束 End</label>
+        <input type="text" id="param-end" value="2026-03-31" placeholder="YYYY-MM-DD">
+
+        <label>快捷区间 Range</label>
+        <span>
+          <button type="button" class="btn-sm range-btn" data-years="1">近1年</button>
+          <button type="button" class="btn-sm range-btn" data-years="2">近2年</button>
+          <button type="button" class="btn-sm range-btn" data-years="5">近5年</button>
+          <button type="button" class="btn-sm" id="range-all">全期(2010起)</button>
+        </span>
+
+        <label>初始资金 Initial Cash</label>
+        <input type="text" id="param-cash" value="100000" placeholder="100000">
+
+        <label>最大持仓 Max Positions</label>
+        <input type="text" id="param-maxpos" value="10" placeholder="10（共享资金模式用）">
+
+        <label>佣金率 Commission</label>
+        <input type="text" id="param-commission" value="0.0003" placeholder="0.0003">
+
+        <label>最低佣金 Min Commission</label>
+        <input type="text" id="param-min-commission" value="5.0" placeholder="5.0">
+
+        <label>印花税(卖出) Stamp Tax</label>
+        <input type="text" id="param-stamp-tax" value="0.0005" placeholder="0.0005">
+
+        <label>买入滑点 Slippage Buy</label>
+        <input type="text" id="param-slip-buy" value="0" placeholder="0">
+
+        <label>卖出滑点 Slippage Sell</label>
+        <input type="text" id="param-slip-sell" value="0" placeholder="0">
+
+        <label>止损 Stop Loss %</label>
+        <input type="text" id="param-stop-loss" placeholder="可空，如 0.08">
+
+        <label>止盈 Take Profit %</label>
+        <input type="text" id="param-take-profit" placeholder="可空，如 0.15">
+
+        <label>移动止损 Trailing %</label>
+        <input type="text" id="param-trailing-stop" placeholder="可空，如 0.05">
+
+        <label>小样本预检 Precheck</label>
+        <span class="label-inline"><input type="checkbox" id="param-precheck" checked> 先跑前 20 只 × 近 6 个月</span>
+      </div>
+
+      <!-- 高级参数（默认折叠） -->
+      <div class="section">
+        <button class="section-toggle collapsed" data-section="adv-params">高级参数（引擎/执行方式/DB/输出）&#9660;</button>
+        <div id="sec-adv-params" class="section-body collapsed">
+          <div class="form-grid">
+            <label>引擎实现 Engine Impl</label>
+            <select id="param-engine-impl">
+              <option value="simulator">逐 bar 仿真 simulator</option>
+              <option value="vectorized">向量化 vectorized</option>
+            </select>
+
+            <label>执行方式 Executor</label>
+            <select id="param-executor">
+              <option value="module">模块直调 Module (direct)</option>
+              <option value="cli">CLI 子进程 (subprocess)</option>
+            </select>
+
+            <label>数据库 DB URL</label>
+            <input type="text" id="param-dburl" placeholder="postgresql+psycopg:///tushare_data">
+
+            <label>市场规则 Market Profile</label>
+            <input type="text" id="param-profile" placeholder="configs/market_profiles/ashare_daily_default.yaml">
+
+            <label>输出目录 Output Dir</label>
+            <input type="text" id="param-output" value="outputs/gui-run" placeholder="outputs/gui-run">
+          </div>
+        </div>
+      </div>
+
+      <div class="run-actions">
+        <button id="btn-run" class="btn btn-primary">运行回测 Run Backtest</button>
+        <span id="run-status" class="hidden"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="run-result" class="result-box hidden"></div>
+
+  <!-- 策略创建闭环（P1）：沙箱列表 + 冒烟 / 晋升 / 删除 -->
+  <div class="panel" id="sandbox-panel">
+    <h2>沙箱策略 Sandbox
+      <button class="btn-sm" id="btn-sandbox-refresh">刷新</button>
+    </h2>
+    <p class="opt">沙箱策略不参与 refresh 日更；冒烟通过后可晋升入 catalog（晋升后立即触发一次全量后台回测）。</p>
+    <div id="sandbox-status" class="opt hidden"></div>
+    <div id="sandbox-list"></div>
+    <div class="opt" style="margin-top:8px">
+      深度验证（catalog/沙箱任意策略，cluster-ashare 四关）：
+      <input id="dv-name" placeholder="策略名，如 mr01a_rsi14_oversold_reversal" style="width:280px">
+      <input id="dv-d0" placeholder="起 2015-01-01" style="width:110px">
+      <input id="dv-d1" placeholder="止 今天" style="width:110px">
+      <button class="btn-sm" id="btn-deep-validate">深度验证</button>
+      <div id="dv-status" class="opt"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: 回测管理（自 admin.html onboard tab 原样移植，QRE-GUI-LAB-PORT-017） -->
+<div id="tab-onboard" class="tab-content">
+  <div class="section">
+    <button class="section-toggle" data-section="ob-refresh">持续更新（QRE refresh）状态 &#9660;</button>
+    <div id="sec-ob-refresh" class="section-body">
+      <p><button id="btn-ob-refresh" class="btn btn-ghost">刷新 Refresh</button>
+        <a href="/" class="opt" style="margin-left:1rem;">→ 新建策略（因子向导）</a></p>
+      <div id="ob-state"></div>
+      <div id="ob-delta"></div>
+    </div>
+  </div>
+  <div class="section">
+    <button class="section-toggle" data-section="ob-registry">策略注册表（加入持续更新）&#9660;</button>
+    <div id="sec-ob-registry" class="section-body">
+      <p class="opt">注册表文件 outputs/refresh/registry.json；存在且非空时 refresh 只跑已注册策略，缺省为全量 catalog。</p>
+      <div id="ob-registry-table"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// TAB SWITCHING + SECTION TOGGLE — 独立作用域
+// ============================================================
+(function() {
+  var tabs = document.querySelectorAll('.tab');
+  var contents = document.querySelectorAll('.tab-content');
+  tabs.forEach(function(t) {
+    t.addEventListener('click', function() {
+      tabs.forEach(function(x) { x.classList.remove('active'); });
+      contents.forEach(function(x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('.section-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var sec = document.getElementById('sec-' + btn.dataset.section);
+      sec.classList.toggle('collapsed');
+      btn.classList.toggle('collapsed');
+    });
+  });
+})();
+</script>
+
+<script>
+// ============================================================
+// TAB 1 新增策略 — 独立作用域（可视化构建 + NL + YAML 预览 + 回测参数 + 沙箱）
+// ============================================================
+(function() {
+  var MARKET_FIELDS = ["open", "high", "low", "close", "pre_close", "vol", "amount"];
+  var OPS = [">", ">=", "<", "<=", "==", "!="];
+  var selectedFactors = {};  // alias -> target (factors.table.column)
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function show(el) { el.classList.remove("hidden"); }
+  function hide(el) { el.classList.add("hidden"); }
+
+  // ---------- 可视化构建 · Step 1: factor catalog ----------
+  function loadFactorCatalog() {
+    fetch("/api/factors")
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var statusEl = document.getElementById("wz-factor-status");
+        if (!res.body.ok) {
+          statusEl.innerHTML = '<span class="err">' + esc(res.body.error || "因子库不可用") + '</span>';
+          document.getElementById("sec-wz-factors").classList.add("wz-disabled");
+          return;
+        }
+        statusEl.textContent = "勾选需要的因子（行情字段可直接用于条件，无需勾选）：";
+        var container = document.getElementById("wz-factor-groups");
+        container.innerHTML = "";
+        res.body.groups.forEach(function(group) {
+          if (group.group === "market") return;  // 行情字段始终可用
+          var det = document.createElement("details");
+          var sum = document.createElement("summary");
+          sum.textContent = group.label + "（" + group.items.length + "）";
+          det.appendChild(sum);
+          group.items.forEach(function(item) {
+            var label = document.createElement("label");
+            label.className = "wz-factor-item";
+            var cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.dataset.table = item.table;
+            cb.dataset.column = item.column;
+            cb.addEventListener("change", onFactorToggle);
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(" " + item.label));
+            det.appendChild(label);
+          });
+          container.appendChild(det);
+        });
+      })
+      .catch(function(err) {
+        document.getElementById("wz-factor-status").innerHTML =
+          '<span class="err">因子目录加载失败: ' + esc(err) + '，可回退手写 YAML 通道。</span>';
+      });
+  }
+
+  function onFactorToggle(e) {
+    var cb = e.target;
+    var alias = cb.dataset.column;
+    var target = cb.dataset.table + "." + cb.dataset.column;
+    if (cb.checked) {
+      // 别名冲突时追加表后缀
+      var finalAlias = alias;
+      var i = 2;
+      while (selectedFactors[finalAlias] && selectedFactors[finalAlias] !== target) {
+        finalAlias = alias + "_" + i;
+        i++;
+      }
+      cb.dataset.alias = finalAlias;
+      selectedFactors[finalAlias] = target;
+    } else {
+      delete selectedFactors[cb.dataset.alias || alias];
+    }
+    refreshWizard();
+  }
+
+  function factorPreview() {
+    var keys = Object.keys(selectedFactors);
+    if (!keys.length) return "（尚未选择因子）";
+    return keys.map(function(a) { return "    " + a + ": " + selectedFactors[a]; }).join("\n");
+  }
+
+  // ---------- 可视化构建 · Step 2: condition builder ----------
+  function operandOptions() {
+    var opts = MARKET_FIELDS.map(function(f) { return {value: f, label: "行情 · " + f}; });
+    Object.keys(selectedFactors).forEach(function(a) {
+      opts.push({value: a, label: "因子 · " + a});
+    });
+    return opts;
+  }
+
+  function fillSelect(sel, options, current) {
+    sel.innerHTML = "";
+    options.forEach(function(o) {
+      var opt = document.createElement("option");
+      opt.value = o.value;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  }
+
+  window.wzAddCondition = function(group) {
+    var container = document.getElementById("wz-" + group + "-conditions");
+    var row = document.createElement("div");
+    row.className = "condition-item wz-cond";
+
+    var left = document.createElement("select");
+    left.className = "wz-left";
+    var op = document.createElement("select");
+    op.className = "wz-op";
+    OPS.forEach(function(o) {
+      var opt = document.createElement("option");
+      opt.value = o; opt.textContent = o;
+      op.appendChild(opt);
+    });
+    var rtype = document.createElement("select");
+    rtype.className = "wz-rtype";
+    [["number", "数值"], ["field", "因子/字段"]].forEach(function(p) {
+      var opt = document.createElement("option");
+      opt.value = p[0]; opt.textContent = p[1];
+      rtype.appendChild(opt);
+    });
+    var rnum = document.createElement("input");
+    rnum.className = "wz-rnum";
+    rnum.type = "number";
+    rnum.step = "any";
+    rnum.placeholder = "数值";
+    rnum.size = 8;
+    var rfield = document.createElement("select");
+    rfield.className = "wz-rfield";
+    rfield.style.display = "none";
+    var rm = document.createElement("button");
+    rm.className = "btn-sm btn-remove-cond";
+    rm.textContent = "x";
+    rm.addEventListener("click", function() { row.remove(); refreshWizard(); });
+
+    rtype.addEventListener("change", function() {
+      rnum.style.display = rtype.value === "number" ? "" : "none";
+      rfield.style.display = rtype.value === "field" ? "" : "none";
+      refreshWizard();
+    });
+    [left, op, rnum, rfield].forEach(function(el) {
+      el.addEventListener("change", refreshWizard);
+      el.addEventListener("input", refreshWizard);
+    });
+
+    row.appendChild(left); row.appendChild(op); row.appendChild(rtype);
+    row.appendChild(rnum); row.appendChild(rfield); row.appendChild(rm);
+    container.appendChild(row);
+    refreshOperandSelects();
+    refreshWizard();
+  };
+
+  function refreshOperandSelects() {
+    var opts = operandOptions();
+    document.querySelectorAll(".wz-cond").forEach(function(row) {
+      var left = row.querySelector(".wz-left");
+      var rfield = row.querySelector(".wz-rfield");
+      var lv = left.value, rv = rfield.value;
+      fillSelect(left, opts, lv);
+      fillSelect(rfield, opts, rv);
+    });
+  }
+
+  function readGroup(group) {
+    var rows = document.querySelectorAll("#wz-" + group + "-conditions .wz-cond");
+    var parts = [];
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var l = row.querySelector(".wz-left").value;
+      var op = row.querySelector(".wz-op").value;
+      var isNum = row.querySelector(".wz-rtype").value === "number";
+      var r = isNum ? row.querySelector(".wz-rnum").value.trim() : row.querySelector(".wz-rfield").value;
+      if (!l || r === "") return {error: "有条件行未填完整"};
+      parts.push("(" + l + " " + op + " " + r + ")");
+    }
+    var comb = document.getElementById("wz-" + group + "-combinator").value;
+    return {expression: parts.length ? parts.join(comb === "and" ? " and " : " or ") : null};
+  }
+
+  function buildYamlPreview() {
+    var entry = readGroup("entry");
+    var exit = readGroup("exit");
+    if (entry.error) return {error: "入场" + entry.error};
+    if (exit.error) return {error: "出场" + exit.error};
+    if (!entry.expression) return {error: "至少需要一条入场条件"};
+
+    var name = document.getElementById("wz-name").value.trim() || "wizard_strategy";
+    var holding = parseInt(document.getElementById("wz-holding").value, 10) || 20;
+    var lines = [];
+    lines.push("experiment:");
+    lines.push("  name: " + name);
+    lines.push("  market_profile: ashare_daily_default");
+    lines.push("  frequency: daily");
+    lines.push("data:");
+    lines.push("  market_fields: [open, high, low, close, pre_close, vol, amount]");
+    lines.push("  factor_fields:");
+    var keys = Object.keys(selectedFactors);
+    if (keys.length) {
+      keys.forEach(function(a) { lines.push("    " + a + ": " + selectedFactors[a]); });
+    } else {
+      lines.push("    {}");
+    }
+    lines.push("universe:");
+    lines.push("  exclude_st: true");
+    lines.push("  exclude_suspended: true");
+    lines.push("  exclude_risk_warning: true");
+    lines.push("  min_listing_days: 120");
+    lines.push("signal:");
+    lines.push("  entry: \"" + entry.expression.replace(/"/g, '\\"') + "\"");
+    if (exit.expression) lines.push("  exit: \"" + exit.expression.replace(/"/g, '\\"') + "\"");
+    lines.push("holding:");
+    lines.push("  max_holding_days: " + holding);
+    var stops = [
+      ["stop_loss_pct", document.getElementById("wz-stop-loss").value],
+      ["take_profit_pct", document.getElementById("wz-take-profit").value],
+      ["trailing_stop_pct", document.getElementById("wz-trailing").value],
+    ].filter(function(p) { return p[1] !== ""; });
+    if (stops.length) {
+      lines.push("risk:");
+      stops.forEach(function(p) { lines.push("  " + p[0] + ": " + p[1]); });
+    }
+    lines.push("evaluation:");
+    lines.push("  forward_return_horizons: [1, 3, 5, 10, 20]");
+    lines.push("  quantiles: 5");
+    return {yaml: lines.join("\n") + "\n", entry: entry.expression, exit: exit.expression};
+  }
+
+  function refreshWizard() {
+    document.getElementById("wz-factor-preview").textContent = factorPreview();
+    refreshOperandSelects();
+    var preview = buildYamlPreview();
+    document.getElementById("wz-yaml-preview").textContent =
+      preview.error ? ("（" + preview.error + "）") : preview.yaml;
+    return preview;
+  }
+
+  document.getElementById("wz-fill-editor").addEventListener("click", function() {
+    var preview = buildYamlPreview();
+    var statusEl = document.getElementById("wz-status");
+    statusEl.classList.remove("hidden");
+    if (preview.error) {
+      statusEl.textContent = preview.error;
+      statusEl.className = "err";
+      return;
+    }
+    fetch("/api/validate", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({yaml: preview.yaml})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.valid) {
+        document.getElementById("strategy-yaml").value = preview.yaml;
+        statusEl.textContent = "校验通过，已填入下方 YAML 预览栏，请检查确认后提交回测";
+        statusEl.className = "ok";
+        document.getElementById("strategy-yaml").scrollIntoView({behavior: "smooth"});
+      } else {
+        statusEl.textContent = "校验失败: " + d.error;
+        statusEl.className = "err";
+      }
+    });
+  });
+
+  // ---------- YAML 预览栏 ----------
+  var yamlEl = document.getElementById("strategy-yaml");
+  var validateBox = document.getElementById("validate-result");
+  var runStatus = document.getElementById("run-status");
+  var runResult = document.getElementById("run-result");
+
+  (function() {
+    var yaml = sessionStorage.getItem("rerun_yaml");
+    if (yaml) {
+      sessionStorage.removeItem("rerun_yaml");
+      yamlEl.value = yaml;
+      yamlEl.scrollIntoView({behavior: "smooth"});
+    }
+  })();
+
+  // ---------- 方式一: NL → YAML (安全闸：只填入预览栏，绝不自动执行) ----------
+  var nlDesc = document.getElementById("nl-description");
+  var nlStatus = document.getElementById("nl-status");
+  var nlResult = document.getElementById("nl-result");
+
+  document.getElementById("btn-nl-compile").addEventListener("click", function() {
+    var description = nlDesc.value.trim();
+    if (!description) { alert("请先用自然语言描述策略"); return; }
+    show(nlStatus);
+    nlStatus.textContent = "编译中 Compiling...";
+    nlStatus.className = "";
+    hide(nlResult);
+
+    fetch("/api/nl_compile", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({description: description})
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(res) {
+      var d = res.body;
+      show(nlResult);
+      if (d.ok) {
+        nlStatus.textContent = "编译成功";
+        nlStatus.className = "ok";
+        yamlEl.value = d.yaml;
+        var warn = (d.warnings || []).map(function(w) { return '<p class="opt">' + escHtml(w) + '</p>'; }).join('');
+        nlResult.innerHTML = '<p class="ok">已填入下方 YAML 预览栏，<strong>请检查确认后再提交回测</strong>（不会自动执行）。</p>' + warn;
+      } else {
+        nlStatus.textContent = "编译失败";
+        nlStatus.className = "err";
+        var html = '<p class="err">' + escHtml(d.error || "未知错误") + '</p>';
+        if (d.code === "missing_factors") {
+          html += '<p><a href="#" id="nl-goto-factor-admin">→ 前往「新增因子」tab（路径 A 补周期 / 路径 B 全新指标）</a></p>';
+        }
+        if (d.yaml) {
+          html += '<p class="opt">可编辑草稿（修正后可手动粘贴到预览栏）：</p><pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
+        }
+        nlResult.innerHTML = html;
+        var gotoLink = document.getElementById("nl-goto-factor-admin");
+        if (gotoLink) {
+          gotoLink.addEventListener("click", function(ev) {
+            ev.preventDefault();
+            // 从缺因子别名猜测指标名/周期（如 rsi_14 → rsi + 14）
+            var alias = (d.missing_factors && d.missing_factors[0]) || "";
+            var m = alias.match(/^(.*?)(\d+)$/);
+            var period = m ? m[2] : "";
+            var name = "";
+            if (m) {
+              var base = m[1].replace(/_+$/, "");
+              // 别名尾部可能还有参数段，取首个下划线前缀作为指标名猜测
+              name = base.split("_")[0];
+            }
+            if (window.wzGotoFactorAdmin) window.wzGotoFactorAdmin(name, period);
+          });
+        }
+      }
+    })
+    .catch(function(err) {
+      nlStatus.textContent = "错误 Error";
+      nlStatus.className = "err";
+      nlResult.innerHTML = '<p class="err">' + err + '</p>';
+      show(nlResult);
+    });
+  });
+
+  // File load
+  document.getElementById("file-input").addEventListener("change", function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev) { yamlEl.value = ev.target.result; };
+    reader.readAsText(file);
+  });
+
+  // Template load
+  document.getElementById("template-select").addEventListener("change", function(e) {
+    var name = e.target.value;
+    if (!name) return;
+    fetch("/api/templates/" + name)
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (d.yaml) yamlEl.value = d.yaml; });
+  });
+
+  // Validate
+  document.getElementById("btn-validate").addEventListener("click", function() {
+    fetch("/api/validate", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({yaml: yamlEl.value})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      show(validateBox);
+      if (d.valid) {
+        validateBox.innerHTML = '<span class="ok">YAML 格式有效 Valid</span>';
+      } else {
+        validateBox.innerHTML = '<span class="err">' + d.error + '</span>';
+      }
+    });
+  });
+
+  // Save template
+  document.getElementById("btn-save-template").addEventListener("click", function() {
+    var name = document.getElementById("template-name").value.trim();
+    if (!name) { alert("请输入模板名称 Enter a template name"); return; }
+    fetch("/api/templates", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name: name, yaml: yamlEl.value})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { alert(d.error); }
+      else { alert("已保存 Saved: " + d.saved); location.reload(); }
+    });
+  });
+
+  // Quick range buttons
+  function isoDate(d) { return d.toISOString().slice(0, 10); }
+  document.querySelectorAll(".range-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var years = parseInt(btn.dataset.years, 10);
+      var end = new Date();
+      var start = new Date();
+      start.setFullYear(start.getFullYear() - years);
+      document.getElementById("param-start").value = isoDate(start);
+      document.getElementById("param-end").value = isoDate(end);
+    });
+  });
+  document.getElementById("range-all").addEventListener("click", function() {
+    document.getElementById("param-start").value = "2010-01-04";
+    document.getElementById("param-end").value = isoDate(new Date());
+  });
+  // "全部 A 股" clears the codes box
+  document.getElementById("param-all-market").addEventListener("change", function(e) {
+    document.getElementById("param-codes").disabled = e.target.checked;
+  });
+
+  // Run
+  document.getElementById("btn-run").addEventListener("click", function() {
+    var allMarket = document.getElementById("param-all-market").checked;
+    var payload = {
+      yaml: yamlEl.value,
+      mode: document.getElementById("param-mode").value,
+      start: document.getElementById("param-start").value,
+      end: document.getElementById("param-end").value,
+      codes: allMarket ? "" : document.getElementById("param-codes").value,
+      all_market: allMarket,
+      initial_cash: document.getElementById("param-cash").value,
+      max_positions: document.getElementById("param-maxpos").value,
+      commission_rate: document.getElementById("param-commission").value,
+      min_commission: document.getElementById("param-min-commission").value,
+      stamp_tax_sell: document.getElementById("param-stamp-tax").value,
+      slippage_buy_rate: document.getElementById("param-slip-buy").value,
+      slippage_sell_rate: document.getElementById("param-slip-sell").value,
+      stop_loss_pct: document.getElementById("param-stop-loss").value,
+      take_profit_pct: document.getElementById("param-take-profit").value,
+      trailing_stop_pct: document.getElementById("param-trailing-stop").value,
+      engine_impl: document.getElementById("param-engine-impl").value,
+      precheck: document.getElementById("param-precheck").checked,
+      output_dir: document.getElementById("param-output").value,
+      db_url: document.getElementById("param-dburl").value,
+      market_profile: document.getElementById("param-profile").value,
+      executor: document.getElementById("param-executor").value
+    };
+
+    show(runStatus);
+    runStatus.textContent = "提交中 Submitting...";
+    runStatus.className = "";
+
+    fetch("/api/run", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    })
+    .then(function(r) {
+      return r.json().then(function(d) { return {status: r.status, body: d}; });
+    })
+    .then(function(res) {
+      var d = res.body;
+      show(runResult);
+      if (res.status === 200 && d.run_id) {
+        runStatus.textContent = "已提交 Queued";
+        runStatus.className = "ok";
+        runResult.innerHTML =
+          '<p><strong>运行 ID Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>' +
+          '<p><strong>模式 Mode:</strong> ' + d.mode + (d.precheck ? '（小样本预检 precheck）' : '') + '</p>' +
+          '<p>后台执行中，<a href="/runs/' + d.run_id + '">查看进度与结果 View Results</a>（页面每 3 秒自动刷新）</p>';
+      } else {
+        runStatus.textContent = "失败 Failed";
+        runStatus.className = "err";
+        runResult.innerHTML = '<p class="err">错误 Error: ' + (d.error || "Unknown error") + '</p>';
+      }
+    })
+    .catch(function(err) {
+      runStatus.textContent = "错误 Error";
+      runStatus.className = "err";
+      runResult.innerHTML = '<p class="err">' + err + '</p>';
+    });
+  });
+
+  // ---------- 策略创建闭环（P1）：存入沙箱 / 沙箱面板 ----------
+  var sandboxStatus = document.getElementById("sandbox-status");
+  var sandboxList = document.getElementById("sandbox-list");
+  var sandboxCategories = [];
+
+  document.getElementById("btn-save-sandbox").addEventListener("click", function() {
+    fetch("/api/strategies/create", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({mode: "manual", yaml_text: yamlEl.value})
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(res) {
+      var d = res.body;
+      show(validateBox);
+      if (d.ok) {
+        var warn = (d.warnings || []).map(function(w) { return '<p class="opt">' + escHtml(w) + '</p>'; }).join('');
+        validateBox.innerHTML = '<span class="ok">已存入沙箱：' + escHtml(d.name) + '</span>' + warn;
+        loadSandbox();
+      } else {
+        validateBox.innerHTML = '<span class="err">' + escHtml(d.error || "存入沙箱失败") + '</span>';
+      }
+    })
+    .catch(function(err) {
+      show(validateBox);
+      validateBox.innerHTML = '<span class="err">' + err + '</span>';
+    });
+  });
+
+  function sandboxAction(url, payload, doneText) {
+    show(sandboxStatus);
+    sandboxStatus.textContent = "处理中...";
+    sandboxStatus.className = "opt";
+    return fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(res) {
+      var d = res.body;
+      if (d.ok) {
+        var msg = doneText;
+        if (d.run_id) msg += '（<a href="/runs/' + d.run_id + '">查看 run</a>）';
+        if (d.warning) msg += '<br><span class="opt">' + escHtml(d.warning) + '</span>';
+        sandboxStatus.innerHTML = '<span class="ok">' + msg + '</span>';
+      } else {
+        sandboxStatus.innerHTML = '<span class="err">' + escHtml(d.error || "操作失败") + '</span>';
+      }
+      loadSandbox();
+    })
+    .catch(function(err) {
+      sandboxStatus.innerHTML = '<span class="err">' + err + '</span>';
+    });
+  }
+
+  // ---------- 深度验证（cluster-ashare 四关，异步长任务） ----------
+  function runDeepValidate(name, d0, d1, slot) {
+    slot.innerHTML = '<span class="opt">深度验证提交中...</span>';
+    fetch("/api/strategies/" + encodeURIComponent(name) + "/deep-validate", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({d0: d0 || "", d1: d1 || ""})
+    }).then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) {
+          slot.innerHTML = '<span class="err">深度验证启动失败：' + escHtml(d.error || "未知错误") + '</span>';
+          return;
+        }
+        var jobId = d.job_id;
+        slot.innerHTML = '<span class="opt">深度验证中（' + escHtml(d.d0) + ' ~ ' + escHtml(d.d1) + '，任务 ' + escHtml(jobId) + '）... 可能耗时数十分钟，可离开页面稍后刷新查看</span>';
+        // 长任务轮询：10s 间隔，不设放弃上限（仅连续失败 30 次才停）
+        var fails = 0;
+        var timer = setInterval(function() {
+          fetch("/api/strategies/" + encodeURIComponent(name) + "/deep-validate/" + encodeURIComponent(jobId))
+            .then(function(r) { return r.json(); })
+            .then(function(p) {
+              if (!p.ok) { fails++; if (fails >= 30) clearInterval(timer); return; }
+              fails = 0;
+              if (p.status === "running") return;
+              clearInterval(timer);
+              var res2 = p.result || {};
+              if (res2.ok && res2.verdict) {
+                var cls = res2.verdict === "GO" ? "ok" : "err";
+                var html2 = '<span class="' + cls + '">四关验证：' + escHtml(res2.verdict) + '</span>';
+                (res2.gates || []).forEach(function(g) {
+                  html2 += ' <span class="opt">' + escHtml(g.gate) + ' ' + escHtml(g.mean_excess) + '(t=' + escHtml(g.t) + ')</span>';
+                });
+                if (res2.pool) html2 += ' <span class="opt">池：' + res2.pool.signal_days + ' 信号日/均 ' + res2.pool.avg_size + ' 只</span>';
+                if (res2.report_path) html2 += '<br><span class="opt">报告：' + escHtml(res2.report_path) + '</span>';
+                if (res2.conclusion) html2 += '<br><span class="opt">' + escHtml(res2.conclusion) + '</span>';
+                slot.innerHTML = html2;
+              } else {
+                slot.innerHTML = '<span class="err">深度验证失败：' + escHtml(res2.error || "未知错误") + '</span>';
+              }
+            })
+            .catch(function() { fails++; if (fails >= 30) clearInterval(timer); });
+        }, 10000);
+      })
+      .catch(function() {
+        slot.innerHTML = '<span class="err">深度验证请求失败</span>';
+      });
+  }
+
+  document.getElementById("btn-deep-validate").addEventListener("click", function() {
+    var name = document.getElementById("dv-name").value.trim();
+    if (!name) { alert("请填写策略名"); return; }
+    if (!confirm("对 " + name + " 跑 cluster-ashare 四关深度验证？\n口径：入场条件逐日信号池（出场/止盈止损不进池），可能耗时数十分钟。")) return;
+    runDeepValidate(name,
+      document.getElementById("dv-d0").value.trim(),
+      document.getElementById("dv-d1").value.trim(),
+      document.getElementById("dv-status"));
+  });
+
+  function loadSandbox() {
+    fetch("/api/strategies/sandbox")
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        sandboxCategories = d.categories || [];
+        var items = d.strategies || [];
+        if (!items.length) {
+          sandboxList.innerHTML = '<p class="opt">（沙箱为空：用上方"存入沙箱"按钮把预览栏中的策略放进来）</p>';
+          return;
+        }
+        var html = "";
+        items.forEach(function(s) {
+          var smoke;
+          if (s.smoke) {
+            var st = s.smoke.status;
+            var cls = st === "completed" ? "ok" : (st === "failed" ? "err" : "opt");
+            var label = st === "completed" ? "冒烟通过" : (st === "failed" ? "冒烟失败" : "冒烟中");
+            smoke = '冒烟: <a href="/runs/' + s.smoke.run_id + '" class="' + cls + '">' + label + '</a>';
+            if (st === "completed" && s.smoke.metrics) {
+              var m = s.smoke.metrics;
+              var parts = [];
+              if (m.total_trade_count != null) parts.push("交易 " + m.total_trade_count);
+              if (m.strategy_total_return != null) parts.push("收益 " + (m.strategy_total_return * 100).toFixed(2) + "%");
+              if (m.excess_return_vs_buy_hold != null) parts.push("超额 " + (m.excess_return_vs_buy_hold * 100).toFixed(2) + "%");
+              if (m.max_drawdown != null) parts.push("回撤 " + (m.max_drawdown * 100).toFixed(2) + "%");
+              if (parts.length) smoke += ' <span class="opt">(' + escHtml(parts.join("，")) + ')</span>';
+            }
+            if (st === "failed" && s.smoke.error) {
+              smoke += ' <span class="err">' + escHtml(String(s.smoke.error).slice(0, 120)) + '</span>';
+            }
+          } else {
+            smoke = '<span class="opt">未冒烟</span>';
+          }
+          var options = sandboxCategories.map(function(c) {
+            return '<option value="' + c + '">' + c + '</option>';
+          }).join('');
+          html +=
+            '<div class="rule-row" data-name="' + escHtml(s.name) + '">' +
+            '<strong>' + escHtml(s.name) + '</strong> ' +
+            '<span class="opt">' + escHtml(s.mtime || "") + '</span> ' + smoke + ' ' +
+            '<button class="btn-sm sb-smoke">冒烟测试</button> ' +
+            '<select class="sb-category">' + options + '</select>' +
+            '<button class="btn-sm sb-promote">晋升</button> ' +
+            '<button class="btn-sm sb-deepval" title="cluster-ashare 四关验证（入场信号逐日池，可能耗时数十分钟）">深度验证</button> ' +
+            '<button class="btn-sm btn-danger-outline sb-delete">删除</button>' +
+            '<div class="opt dv-slot"></div>' +
+            '</div>';
+        });
+        sandboxList.innerHTML = html;
+        sandboxList.querySelectorAll(".rule-row").forEach(function(row) {
+          var name = row.getAttribute("data-name");
+          row.querySelector(".sb-smoke").addEventListener("click", function() {
+            sandboxAction("/api/strategies/smoke", {name: name}, "冒烟已启动（600519.SH 近 6 个月）");
+            // 冒烟为后台 run：轮询沙箱列表刷新 sidecar 状态（通过=绿/失败=红）
+            var polls = 0;
+            var timer = setInterval(function() {
+              polls++;
+              loadSandbox();
+              if (polls >= 24) clearInterval(timer);
+            }, 5000);
+          });
+          row.querySelector(".sb-promote").addEventListener("click", function() {
+            var category = row.querySelector(".sb-category").value;
+            if (!confirm("确认将 " + name + " 晋升到 catalog/" + category + " 并触发全量回测？")) return;
+            sandboxAction("/api/strategies/promote", {name: name, category: category}, "已晋升");
+          });
+          row.querySelector(".sb-delete").addEventListener("click", function() {
+            if (!confirm("确认删除沙箱策略 " + name + "？")) return;
+            sandboxAction("/api/strategies/sandbox/delete", {name: name}, "已删除");
+          });
+          row.querySelector(".sb-deepval").addEventListener("click", function() {
+            if (!confirm("对 " + name + " 跑 cluster-ashare 四关深度验证？\n口径：入场条件逐日信号池（出场/止盈止损不进池），默认区间 2015-01-01 至今，可能耗时数十分钟。")) return;
+            runDeepValidate(name, "", "", row.querySelector(".dv-slot"));
+          });
+        });
+      });
+  }
+
+  document.getElementById("btn-sandbox-refresh").addEventListener("click", loadSandbox);
+
+  // init
+  loadFactorCatalog();
+  wzAddCondition("entry");
+  refreshWizard();
+  loadSandbox();
+})();
+</script>
+
+<script>
+// TAB 2 回测管理 — 独立作用域（自 admin.html onboard tab JS 原样移植，含所需 helpers）
+(function() {
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // 各卡片独立异步加载：30s AbortController 超时，单卡片失败只影响自身（中文错误+重试），
+  // 页面骨架与所有按钮不等待任何请求。
+  function fetchWithTimeout(url, ms) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function() { ctrl.abort(); }, ms || 30000);
+    return fetch(url, {signal: ctrl.signal}).finally(function() { clearTimeout(timer); });
+  }
+
+  function cardError(el, message, retryFn) {
+    el.innerHTML = '<span class="err">' + esc(message) + '</span> '
+      + '<button class="btn-sm">重试</button>';
+    el.querySelector('button').addEventListener('click', retryFn);
+  }
+
+  function isAbort(err) { return err && err.name === 'AbortError'; }
+
+  // ---------- Tab 4: 策略状态 ----------
+  function fmtPct(v) { return (v == null) ? '—' : (v * 100).toFixed(2) + '%'; }
+
+  function loadOnboard() {
+    fetchWithTimeout('/api/admin/refresh')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        var stateHtml;
+        if (d.state) {
+          stateHtml = '<p>数据 watermark：<strong>' + esc(d.state.last_data_date) + '</strong>'
+            + '；上次运行：' + esc(d.state.last_run_at || '—')
+            + '；策略 ' + esc(d.state.ok_count) + '/' + esc(d.state.strategy_count) + ' ok'
+            + '；窗口 ' + esc(d.state.window_years) + ' 年</p>';
+        } else {
+          stateHtml = '<p class="opt">尚无 refresh 状态（从未运行过）。</p>';
+        }
+        if (d.latest_delta) {
+          stateHtml += '<p>最近 delta：' + esc(d.latest_delta.dir)
+            + '（数据日 ' + esc(d.latest_delta.data_date) + '，'
+            + esc(d.latest_delta.strategy_count) + ' 策略中 ' + esc(d.latest_delta.changed) + ' 个有变化）</p>';
+        }
+        document.getElementById('ob-state').innerHTML = stateHtml;
+
+        // 可排序策略表（QRE-GUI-SORT-016）：点击表头按列排序，null 恒排末位
+        var sortState = {key: null, dir: 1};
+        function buildRow(s) {
+          // 持续更新开关：绿色=开启，灰色=停止
+          var toggle = s.enabled
+            ? '<button class="btn-sm toggle-on" data-toggle="' + esc(s.strategy_id) + '" data-stopped="0" title="点击停止持续更新">● 开启</button>'
+            : '<button class="btn-sm toggle-off" data-toggle="' + esc(s.strategy_id) + '" data-stopped="1" title="点击开启持续更新">○ 停止</button>';
+          var action = toggle
+            + ' <button class="btn-sm btn-remove-cond" data-del="' + esc(s.strategy_id) + '">删除</button>';
+          var range = (s.date_start && s.date_end) ? esc(s.date_start) + ' ~ ' + esc(s.date_end)
+            : (s.date_end ? '— ~ ' + esc(s.date_end) : '—');
+          var symbols = (s.traded_symbol_count != null && s.symbol_count != null)
+            ? esc(s.traded_symbol_count) + ' / ' + esc(s.symbol_count) : '—';
+          // 全量指标落后于 date_end（增量更新）时标注"截至 <date> 全量"
+          var asOf = (s.full_metrics_as_of && s.date_end && s.full_metrics_as_of < s.date_end)
+            ? '<br><small class="opt">（全量截至 ' + esc(s.full_metrics_as_of) + '）</small>' : '';
+          // 晋升全量回测闸：passed 绿 / failed 红（tooltip 关键数字）/ 未评估 灰；
+          // force 晋升且 failed → 橙「强制在库」（闸不阻止日更）
+          var gateHtml;
+          if (!s.gate) {
+            gateHtml = '<span class="gate-badge gate-none" title="晋升后未跑过全量回测闸">— 未评估</span>';
+          } else {
+            var gm = s.gate.metrics || {};
+            var gtip = '交易 ' + (gm.total_trade_count != null ? gm.total_trade_count : '—')
+              + ' 次，超额 ' + (gm.excess_return_vs_buy_hold != null ? fmtPct(gm.excess_return_vs_buy_hold) : '—')
+              + '，回撤 ' + (gm.max_drawdown != null ? fmtPct(gm.max_drawdown) : '—')
+              + '（判据：交易≥30 且超额>0；评估于 ' + esc(s.gate.evaluated_at || '—') + '）';
+            if (s.gate.gate === 'passed') {
+              gateHtml = '<span class="gate-badge gate-pass" title="' + esc(gtip) + '">✓ 通过</span>';
+            } else if (s.gate.forced) {
+              gateHtml = '<span class="gate-badge gate-forced" title="' + esc(gtip) + '（force 晋升，不阻止日更）">⚑ 强制在库</span>';
+            } else {
+              gateHtml = '<span class="gate-badge gate-fail" title="' + esc(gtip) + '（日更跳过）">✗ 未过</span>';
+            }
+            // R4 风险判据：risk=warning 追加风险徽标（与未过同效阻止日更，force 除外）
+            var gr = s.gate.risk;
+            if (gr && gr.status === 'warning') {
+              var rtip = '风险警示：ES99 '
+                + (gr.es99 != null ? fmtPct(gr.es99) : '—')
+                + '（阈值 ' + (gr.es99_threshold != null ? fmtPct(gr.es99_threshold) : '—') + '），'
+                + 'VaR 回测（' + (gr.var_confidence != null ? Math.round(gr.var_confidence * 100) : '—') + '% Kupiec LR）：'
+                + (gr.var_lr_reject ? '被拒绝' : '通过')
+                + (s.gate.forced ? '（force 晋升，不阻止日更）' : '（日更跳过）');
+              gateHtml += ' <span class="gate-badge gate-risk" title="' + esc(rtip) + '">⚠ 风险警示</span>';
+            }
+          }
+          return '<tr class="ob-row" data-sid="' + esc(s.strategy_id) + '">'
+            + '<td><a href="/admin/strategy/' + encodeURIComponent(s.strategy_id) + '" target="_blank">'
+            + esc(s.strategy_id) + '</a></td>'
+            + '<td>' + range + '</td>'
+            + '<td>' + symbols + '</td>'
+            + '<td class="num">' + fmtPct(s.excess_return) + asOf + '</td>'
+            + '<td class="num">' + fmtPct(s.max_drawdown) + asOf + '</td>'
+            + '<td>' + gateHtml + '</td>'
+            + '<td>' + action + '</td></tr>';
+        }
+        function stratVal(s, key) {
+          if (key === 'date_end') return s.date_end || '';
+          if (key === 'symbol_count') return s.symbol_count;
+          return s[key];
+        }
+        function sortedStrategies() {
+          if (!sortState.key) return d.strategies;
+          var arr = d.strategies.slice();
+          arr.sort(function(a, b) {
+            var va = stratVal(a, sortState.key), vb = stratVal(b, sortState.key);
+            if (va == null && vb == null) return 0;
+            if (va == null) return 1;   // null 恒排末位（与排序方向无关）
+            if (vb == null) return -1;
+            var cmp = (typeof va === 'number' && typeof vb === 'number')
+              ? va - vb : String(va).localeCompare(String(vb));
+            return cmp * sortState.dir;
+          });
+          return arr;
+        }
+        function sortArrow(key) {
+          if (sortState.key !== key) return '';
+          return sortState.dir === 1 ? ' <span class="sort-arrow">▲</span>' : ' <span class="sort-arrow">▼</span>';
+        }
+        function renderRegistryTable() {
+          var rows = sortedStrategies().map(buildRow).join('');
+          document.getElementById('ob-registry-table').innerHTML =
+            (d.mode === 'full_catalog'
+              ? '<p class="mode-banner">⚠ 当前为<strong>全量模式</strong>（默认全部开启，refresh 跑全部 '
+                + d.catalog_total + ' 个 catalog 策略，停止中的除外）；注册任意策略后将切换为<strong>仅注册策略模式</strong>。</p>'
+              : '<p class="mode-banner mode-banner-registry">当前为<strong>仅注册策略模式</strong>（refresh 只跑已注册且未停止的 '
+                + d.registered.length + ' 个）；注册表清空后恢复全量模式。</p>')
+            + (d.stopped && d.stopped.length
+              ? '<p class="opt">停止中：' + d.stopped.map(esc).join('，') + '（将于下次 refresh 跳过）</p>' : '')
+            + '<p>已注册 ' + d.registered.length + ' / catalog ' + d.catalog_total + ' 个策略'
+            + ' <input type="text" id="ob-search" placeholder="搜索策略 id..." size="20"></p>'
+            + '<table><thead><tr><th>策略</th>'
+            + '<th class="sortable" data-sort="date_end">回测起止' + sortArrow('date_end') + '</th>'
+            + '<th class="sortable" data-sort="symbol_count">股票数量' + sortArrow('symbol_count') + '</th>'
+            + '<th class="sortable" data-sort="excess_return">超额收益' + sortArrow('excess_return') + '</th>'
+            + '<th class="sortable" data-sort="max_drawdown">最大回撤' + sortArrow('max_drawdown') + '</th>'
+            + '<th>全量回测闸</th><th>操作</th></tr></thead>'
+            + '<tbody>' + rows + '</tbody></table>';
+
+          document.getElementById('ob-search').addEventListener('input', function(e) {
+            var kw = e.target.value.trim().toLowerCase();
+            document.querySelectorAll('.ob-row').forEach(function(row) {
+              row.style.display = (!kw || row.dataset.sid.toLowerCase().indexOf(kw) >= 0) ? '' : 'none';
+            });
+          });
+          // 表头排序：同列再点切换升降序
+          document.querySelectorAll('#ob-registry-table th.sortable').forEach(function(th) {
+            th.addEventListener('click', function() {
+              var key = th.dataset.sort;
+              sortState = (sortState.key === key)
+                ? {key: key, dir: -sortState.dir} : {key: key, dir: 1};
+              renderRegistryTable();
+            });
+          });
+          bindRowActions();
+        }
+        function bindRowActions() {
+        // 持续更新开关：只改注册表，不触发运行
+        document.querySelectorAll('[data-toggle]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var sid = btn.dataset.toggle;
+            var toStopped = btn.dataset.stopped === '0';
+            fetch('/api/admin/strategies/toggle', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({strategy_id: sid, stopped: toStopped})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (!d.ok) { alert(d.error || '切换失败'); return; }
+              alert((toStopped ? '已停止：' : '已开启：') + sid + '\n' + d.message);
+              loadOnboard();
+            });
+          });
+        });
+        // 删除策略：输入策略 id 二次确认（连动删除本地回测产物）
+        document.querySelectorAll('[data-del]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var sid = btn.dataset.del;
+            var typed = prompt('危险操作：将删除 catalog 策略文件 ' + sid + '.yaml、注册表条目及本地回测产物目录（不可恢复）。\n请输入策略 id 确认：');
+            if (typed === null) return;
+            if (typed.trim() !== sid) { alert('输入不匹配，已取消'); return; }
+            fetch('/api/admin/strategies/delete', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({strategy_id: sid})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d.ok) {
+                var msg = d.note || '已删除';
+                if (d.deleted_dirs && d.deleted_dirs.length) msg += '\n产物目录：' + d.deleted_dirs.join('\n');
+                if (d.errors && d.errors.length) msg += '\n警告：' + d.errors.join('；');
+                alert(msg);
+              } else {
+                alert('删除失败：' + d.error);
+              }
+              loadOnboard();
+            });
+          });
+        });
+        }
+        renderRegistryTable();
+      })
+      .catch(function(err) {
+        cardError(
+          document.getElementById('ob-state'),
+          isAbort(err) ? '策略状态加载超时（30s），请重试' : ('策略状态加载失败：' + err),
+          loadOnboard
+        );
+      });
+  }
+
+  function setRegistration(strategyId, register) {
+    fetch('/api/admin/refresh/' + (register ? 'register' : 'unregister'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({strategy_id: strategyId})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert(d.error || '操作失败'); }
+      loadOnboard();
+    });
+  }
+  document.getElementById('btn-ob-refresh').addEventListener('click', loadOnboard);
+
+  loadOnboard();
+})();
+</script>
+{% endblock %}

@@ -12,7 +12,22 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-SORT-016 (DONE — 1795 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-LAB-PORT-017 (DONE — 1807 tests green + 4 skipped；awaiting git approval)
+
+2026-08-23: 回测台新端口移植——「新增策略」+「回测管理（策略状态）」
+两页面原样移植到独立 Flask 应用 @8081（纯移植零优化）。路由共享：
+新 gui/strategy_lab_routes.py::register_strategy_lab_routes(app)，
+create_app 与 create_lab_app 共用；新 create_app 路由表与 git HEAD
+逐条相等（59/59）。try_acquire_run_slot/release_run_slot/run_backtest
+在 app.py re-export 并经 gui.app 调用时解析（兼容既有测试 monkeypatch）。
+新 gui/lab.py + templates/lab.html（两 tab 内容脚本切片组装，含排序
+JS/搜索/toggle/删除/gate 徽标；附 /runs 页面）。CLI：qre gui --lab
+（默认 8081）。systemd：deploy/hardened/qre-gui-lab.service 已安装
+enable --now（enabled/active，SyslogIdentifier=qre-gui-lab）。
+测试 tests/test_gui_lab.py +12。冒烟：8081 / 双 tab、/api/admin/refresh
+stopped 118/118（8080 一致）、策略详情 200；8080 / 与 /admin 200。
+两个 service 均已重启。无 CR（纯移植）。未 git commit。
+上一任务：QRE-GUI-SORT-016 (DONE — 1795 tests green + 4 skipped；见 05/09)
 
 2026-08-23: 策略状态表客户端排序（回测起止/股票数量/超额收益/最大回撤
 四列可点击，升降序切换，null 恒排末位；纯模板 JS）。下游补跑链验证：

@@ -2,11 +2,34 @@
 
 ## Task ID
 
-QRE-DERIV-ADAPTER-013 (衍生品数据适配层：yc_curve/cb/opt 三个只读 loader + 示例管道，CR D1.5/D2.2/D3.2)
+QRE-GUI-LAB-PORT-017 (回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081)
 
 ## Current Status
 
 DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+纯移植，零优化/美化/功能增删。新 `gui/strategy_lab_routes.py`::
+`register_strategy_lab_routes(app)` 共享注册（create_app 尾部调用，
+路由表与 git HEAD 逐条相等 59/59）；新 `gui/lab.py`（create_lab_app /
+launch_lab_gui）+ `templates/lab.html`（「新增策略」自 index.html
+strategy tab、「回测管理」自 admin.html onboard tab 脚本精确切片，
+含排序 JS/搜索/toggle/删除/gate 徽标，附 /runs 页面）。CLI：
+`qre gui --lab`（默认 8081，--port 优先）；`qre gui` 不变。systemd：
+`deploy/hardened/qre-gui-lab.service`（端口 8081、
+SyslogIdentifier=qre-gui-lab）已 sudo 安装 enable --now
+（enabled/active）。测试 `tests/test_gui_lab.py` +12；全量
+`uv run pytest -q` → 1807 passed + 4 skipped（基线 1795 + 12）。
+冒烟：8081 / 双 tab、/api/admin/refresh stopped 118/118（与 8080
+一致）、/admin/strategy/<id> 200；8080 / 与 /admin 200。两个 service
+均已重启。无 CR（纯移植无设计决策）。未 commit。详见
+09_CODING_HANDOFF.md 顶部、05_PROGRESS.md 顶部。
+上一任务：QRE-GUI-SORT-016 / QRE-GUI-DERIV-FRESH-015（见 05/09）。
+
+---
+
+## Archive: QRE-DERIV-ADAPTER-013 (衍生品数据适配层：yc_curve/cb/opt 三个只读 loader + 示例管道，CR D1.5/D2.2/D3.2)
 
 ## Task Note
 
