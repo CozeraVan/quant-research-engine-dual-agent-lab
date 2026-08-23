@@ -18,10 +18,10 @@ QRE 对业务库只读；本模块是唯一直接读 `derivatives` schema 的代
   （信用利差假设、票息近似、应计利息口径），见示例脚本输出。
 - 期权链：`opt_daily.settle` 为期权市价（结算价口径，比 close 稳），
   到期时间 T = (maturity_date − trade_date)/365（actual/365，近似）；
-  无风险利率取当日曲线 0.25 年节点。标的价格优先读 `public.stock_daily`，
-  其次 `reference.index_daily`；库内暂无 ETF 日线（510050.SH 不在两表中），
-  此时须由调用方传入 `underlying_price`（示例脚本用平值合约 put-call parity
-  反推标的价格，已在结果中披露）。
+  无风险利率取当日曲线 0.25 年节点。标的价格依次查 `public.stock_daily`、
+  `public.fund_daily`（ETF 日线，2026-08-23 起入库）、`reference.index_daily`；
+  三表均无数据时须由调用方传入 `underlying_price`（示例脚本保留了平值合约
+  put-call parity 反推作为兜底，使用时在结果中披露）。
 """
 
 from __future__ import annotations
@@ -241,13 +241,15 @@ def load_underlying_close(
     trade_date: date | str,
     engine: Engine | None = None,
 ) -> dict[str, object]:
-    """标的当日（或 ≤ trade_date 最近）收盘价：先 public.stock_daily，后 reference.index_daily。
+    """标的当日（或 ≤ trade_date 最近）收盘价：依次查 public.stock_daily、
+    public.fund_daily（ETF）、reference.index_daily。
 
-    库内暂无 ETF 日线时抛 ValueError，由调用方改用 underlying_price 传参。
+    三表均无收盘价时抛 ValueError，由调用方改用 underlying_price 传参
+    （示例脚本可用平值合约 put-call parity 反推兜底）。
     """
     resolved = _resolve_engine(engine)
     as_of = _as_date(trade_date)
-    for table in ("public.stock_daily", "reference.index_daily"):
+    for table in ("public.stock_daily", "public.fund_daily", "reference.index_daily"):
         query = text(
             f"""
             SELECT trade_date, close
@@ -261,7 +263,7 @@ def load_underlying_close(
             row = conn.execute(query, {"ts_code": underlying, "trade_date": as_of}).one_or_none()
         if row is not None:
             return {"underlying": underlying, "price": float(row[1]), "price_date": row[0], "source": table}
-    raise ValueError(f"{underlying} 在 stock_daily / index_daily 均无收盘价，请用 underlying_price 传参")
+    raise ValueError(f"{underlying} 在 stock_daily / fund_daily / index_daily 均无收盘价，请用 underlying_price 传参")
 
 
 def estimate_spot_from_parity(

@@ -253,18 +253,19 @@ QRE 侧只读适配层 `src/quant_research_engine/data/derivatives.py` 落地，
    opt_daily.settle JOIN opt_basic（opt_code 前缀匹配标的），T=actual/365（近似披露），
    r=当日曲线 0.25 年节点；逐合约 `options.implied_vol` 反解，越界合约 iv=None 不阻塞；
    平值 call/put 隐波健全性断言 (1%, 150%)（越界抛 AssertionError）。
-   **已知数据缺口**：库内 stock_daily/index_daily 均无 ETF 日线（510050.SH 不在库），
-   标的价格优先 stock_daily → index_daily 查找，均缺时须由调用方传
-   `underlying_price`；示例脚本用平值行权价 put-call parity 反推现货价
-   （S=(C−P)+K·e^{−rT}，欧式近似、忽略股息与价差，披露于输出）。
-   缺口补数（fund_daily 入库）列为后续可选项，不阻塞本 CR。
+   ~~已知数据缺口~~（已补齐，2026-08-23）：fund_daily 管线已落地（quant_ts
+   `277d590`，public.fund_daily hypertable，回填 2010→2026 共 2,993,007 行
+   × 2717 只基金，已挂 sync_manager 日更第 5 步）。标的价格查找链更新为
+   stock_daily → fund_daily → index_daily，均缺时才须调用方传
+   `underlying_price`；put-call parity 反推（S=(C−P)+K·e^{−rT}）降为兜底。
 
 冒烟实测（2026-08-21，`scripts/derivatives_adapter_smoke.py`）：
 
 - 零息曲线 8 节点：0.25y=1.164%（连续）… 30y=2.110%，单调合理。
 - 转债债底 5 只全为正、spread_duration 1.00–1.98 ∈ (0,10)，差异披露如上。
-- 50ETF 平值（K=3.0，2026-08-26 到期）call/put 隐波均 13.67%，parity 反推
-  标的价 2.9931；call=put 同值是 settle 口径下 parity 自洽的佐证。
+- 50ETF 平值（K=3.0，2026-08-26 到期）call IV 13.71% / put IV 13.63%，
+  标的价 2.9930 读自 public.fund_daily 真实收盘价；与此前 parity 反推
+  （2.9931 / IV 13.67%）互相印证，parity 口径自洽。
 
 验证：`uv run pytest -q` → 1795 passed + 4 skipped（无库；基线 1784 + 11 净增）；
 带库 `QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data` 跑新测试 15/15 绿。

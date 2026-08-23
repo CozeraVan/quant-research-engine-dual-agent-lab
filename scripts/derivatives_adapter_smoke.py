@@ -7,9 +7,9 @@
 1. 零息曲线：节点数与首尾值（yield% ÷100 视为年复利 → 连续复利，近似口径披露）。
 2. 转债债底：5 只存续转债 convertible_bond_floor vs cb_daily.bond_value
    （差异可解释：信用利差假设 100bp、累进票息常数近似、估值日=付息日无应计）。
-3. 50ETF 期权链：平值 call/put 隐波。库内暂无 ETF 日线（510050.SH 不在
-   stock_daily/index_daily），标的价格用平值合约 put-call parity 反推（欧式
-   近似，忽略股息与价差，仅作示例），已在输出中披露。
+3. 50ETF 期权链：平值 call/put 隐波。标的价格读 `public.fund_daily`
+   真实 ETF 收盘价（2026-08-23 起入库；此前的 put-call parity 反推降为兜底，
+   见 `derivatives.load_option_chain` 的 underlying_price 参数）。
 """
 
 from __future__ import annotations
@@ -50,29 +50,13 @@ def main(trade_date: str) -> None:
     print("    差异口径：信用利差假设、累进票息常数近似、估值日=付息日（无应计）、税；不求数值一致")
 
     print(f"\n[3] {UNDERLYING} 期权链平值隐波（T=actual/365，r=0.25y 节点）")
-    # 库内暂无 ETF 日线：先用平值合约 put-call parity 反推标的价格（披露）
+    # fund_daily 已入库（2026-08-23 起）：标的价直接读真实 ETF 收盘价，
+    # parity 反推仅作交叉核对
     r = derivatives.load_zero_curve(trade_date)[0.25]
-    chain_frame = derivatives._load_chain_frame(derivatives._as_date(trade_date), UNDERLYING, derivatives._default_engine())
-    first_maturity = chain_frame["maturity_date"].min()
-    near = chain_frame[chain_frame["maturity_date"] == first_maturity]
-    strikes = sorted(near["exercise_price"].unique())
-    # 每个行权价 parity 各估一个 S，取 |C−P| 最小（最平值）者，降低价差噪声
-    estimates = []
-    for strike in strikes:
-        pair = near[near["exercise_price"] == strike].set_index("call_put")
-        if {"call", "put"} - set(pair.index):
-            continue
-        T = float(pair.iloc[0]["T"])
-        estimates.append(
-            (abs(float(pair.loc["call", "settle"]) - float(pair.loc["put", "settle"])), strike, T,
-             derivatives.estimate_spot_from_parity(
-                 float(pair.loc["call", "settle"]), float(pair.loc["put", "settle"]), float(strike), r, T))
-        )
-    assert estimates, "无 call/put 成对的行权价，无法 parity 反推"
-    _, mid_strike, _, spot = min(estimates)
-    print(f"    标的价格 {spot:.4f}（put-call parity 反推 K={mid_strike}，库内无 ETF 日线，披露口径）")
-    chain = derivatives.load_option_chain(trade_date, UNDERLYING, underlying_price=spot)
+    chain = derivatives.load_option_chain(trade_date, UNDERLYING)
+    print(f"    标的价格 {chain['spot']:.4f}（{chain['spot_source']}，{chain['spot_date']}）")
     atm = chain["atm"]
+    first_maturity = chain["chain"]["maturity_date"].min()
     print(
         f"    平值 K={atm['strike']}（{first_maturity} 到期）: "
         f"call IV {atm['call_iv']:.2%} / put IV {atm['put_iv']:.2%} | "
