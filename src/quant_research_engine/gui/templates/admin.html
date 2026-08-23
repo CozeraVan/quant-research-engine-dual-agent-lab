@@ -20,6 +20,7 @@
     <div class="admin-card" id="ov-daily"><h3>日线数据</h3><div class="card-body opt">加载中...</div></div>
     <div class="admin-card" id="ov-factors"><h3>因子库</h3><div class="card-body opt">加载中...</div></div>
     <div class="admin-card" id="ov-backtests"><h3>回测产物</h3><div class="card-body opt">加载中...</div></div>
+    <div class="admin-card" id="ov-derivatives"><h3>衍生品数据</h3><div class="card-body opt">加载中...</div></div>
   </div>
 </div>
 
@@ -246,6 +247,25 @@
           + '<p>策略产物目录数：' + esc(b.strategy_dir_count) + '</p>'
           + '<p>磁盘占用：<strong class="kpi">' + sizeGb + '</strong></p>'
           + '<p>最近批次：' + esc(b.latest_batch || '—') + '</p>';
+
+        // 衍生品域（QRE-GUI-DERIV-CARD-012）：五表行数 + 最新日期，降级「未初始化」
+        var dvEl = document.querySelector('#ov-derivatives .card-body');
+        var dv = d.derivatives || {ok: false, error: '无数据'};
+        if (!dv.ok) {
+          dvEl.innerHTML = '<p class="err">' + esc(dv.error || '衍生品域不可用') + '</p>';
+        } else if (!dv.present_count) {
+          dvEl.innerHTML = '<p class="opt">未初始化（derivatives schema 暂无表；日更接线 D1.4 待做）</p>';
+        } else {
+          var dvRows = (dv.tables || []).map(function(t) {
+            var body = t.present
+              ? '<td class="num">' + esc(t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + '</td><td>' + esc(t.watermark || '—') + '</td>'
+              : '<td colspan="2" class="opt">未初始化</td>';
+            return '<tr><td>' + esc(t.label) + '</td>' + body + '</tr>';
+          }).join('');
+          dvEl.innerHTML =
+            '<p class="opt">derivatives schema：' + dv.present_count + ' / ' + dv.total + ' 张表在库（日更接线 D1.4 待做）</p>'
+            + '<table><thead><tr><th>表</th><th>估算行数</th><th>最新日期</th></tr></thead><tbody>' + dvRows + '</tbody></table>';
+        }
       })
       .catch(function(err) {
         cardError(

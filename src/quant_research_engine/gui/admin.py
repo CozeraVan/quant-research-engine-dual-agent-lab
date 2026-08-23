@@ -278,6 +278,63 @@ def overview_backtests(outputs_dir: str | Path | None = None) -> dict[str, Any]:
     return _cached(f"overview_backtests:{root}", _produce)
 
 
+#: 衍生品域五表（quant_ts derivatives schema；静态表无 trade_date，只报行数）
+DERIVATIVES_TABLES: list[tuple[str, str, bool]] = [
+    ("cb_daily", "转债日线", True),
+    ("cb_basic", "转债基础信息（静态）", False),
+    ("opt_daily", "期权日线", True),
+    ("opt_basic", "期权基础信息（静态）", False),
+    ("yc_curve", "收益率曲线", True),
+]
+
+
+def overview_derivatives(db_url: str | None = None) -> dict[str, Any]:
+    """衍生品域（QRE-GUI-DERIV-CARD-012）：derivatives schema 五表各自的
+    估算行数 + 最新 trade_date（静态表仅行数）。表不存在/schema 未建 →
+    present=False 优雅降级（卡片显示「未初始化」）；整域查询失败 → ok=False。
+    """
+    from sqlalchemy import text
+
+    def _produce() -> dict[str, Any]:
+        try:
+            store = _store(db_url)
+        except Exception as exc:
+            return {"ok": False, "error": f"数据库不可用（{exc}）", "tables": []}
+        try:
+            tables: list[dict[str, Any]] = []
+            with store.market_engine.begin() as conn:
+                for table, label, has_date in DERIVATIVES_TABLES:
+                    exists = conn.execute(
+                        text("SELECT to_regclass(:name)"),
+                        {"name": f"derivatives.{table}"},
+                    ).scalar()
+                    info: dict[str, Any] = {
+                        "table": f"derivatives.{table}",
+                        "label": label,
+                        "present": exists is not None,
+                        "estimated_rows": None,
+                        "watermark": None,
+                    }
+                    if exists is not None:
+                        rows_est = _estimate_rows(conn, "derivatives", table)
+                        # reltuples=-1 = 从未 ANALYZE（新表），如实降级为 None
+                        info["estimated_rows"] = rows_est if rows_est is not None and rows_est >= 0 else None
+                        if has_date:
+                            wm = conn.execute(
+                                text(f'SELECT MAX(trade_date) FROM derivatives."{table}"')
+                            ).scalar()
+                            info["watermark"] = str(wm) if wm else None
+                    tables.append(info)
+            present = sum(1 for t in tables if t["present"])
+            return {"ok": True, "tables": tables, "present_count": present, "total": len(DERIVATIVES_TABLES)}
+        except Exception as exc:
+            return {"ok": False, "error": f"derivatives 查询失败（{exc}）", "tables": []}
+        finally:
+            store.close()
+
+    return _cached(f"overview_derivatives:{db_url}", _produce)
+
+
 # ---------------------------------------------------------------------------
 # 健康灯
 # ---------------------------------------------------------------------------

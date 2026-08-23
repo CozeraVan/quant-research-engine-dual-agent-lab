@@ -744,6 +744,7 @@ def create_app() -> Flask:
             health_status,
             overview_backtests,
             overview_daily,
+            overview_derivatives,
             overview_factors,
         )
 
@@ -754,11 +755,12 @@ def create_app() -> Flask:
         except Exception as exc:
             return jsonify({"ok": False, "error": f"数据库不可用（{exc}）"}), 503
         backtests = overview_backtests()
+        derivatives = overview_derivatives(db_url)  # 内部自降级，不拖垮总览
         health = health_status(
             daily.get("watermark"),
             [t["watermark"] for t in factors["tables"]],
         )
-        return jsonify({"ok": True, "daily": daily, "factors": factors, "backtests": backtests, "health": health})
+        return jsonify({"ok": True, "daily": daily, "factors": factors, "backtests": backtests, "health": health, "derivatives": derivatives})
 
     @app.route("/api/admin/timers")
     def api_admin_timers() -> Any:

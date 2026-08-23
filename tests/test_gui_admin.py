@@ -742,3 +742,121 @@ def test_admin_template_script_parses_with_node():
     js_path.write_text("\n".join(scripts), encoding="utf-8")
     result = subprocess.run([node, "--check", str(js_path)], capture_output=True, text=True)
     assert result.returncode == 0, f"admin.html 内联 JS 语法错误: {result.stderr[:500]}"
+
+
+# --- 衍生品域卡片（QRE-GUI-DERIV-CARD-012） ---
+
+
+class _DerivConn(_FakeConn):
+    """derivatives schema 五表：to_regclass 存在性 + 行数 + MAX(trade_date)。"""
+
+    def __init__(self, store, present_tables, watermarks=None):
+        super().__init__(store)
+        self._present = set(present_tables)
+        self._watermarks = watermarks or {}
+
+    def execute(self, clause, params=None):
+        sql = str(clause)
+        if "to_regclass" in sql:
+            name = (params or {}).get("name", "")
+            table = name.split(".")[-1]
+            return _FakeResult(scalar=name if table in self._present else None)
+        if "MAX(trade_date)" in sql and "derivatives" in sql:
+            for table, wm in self._watermarks.items():
+                if f'"{table}"' in sql:
+                    return _FakeResult(scalar=wm)
+            return _FakeResult(scalar=None)
+        return super().execute(clause, params)
+
+
+class _DerivStore(FakeStore):
+    def __init__(self, conn):
+        self._conn = conn
+        self.queries = []
+
+    @property
+    def market_engine(self):
+        store = self
+
+        class _E:
+            def begin(self):
+                return store._conn
+
+        return _E()
+
+
+def _setup_derivatives(monkeypatch, present, watermarks=None):
+    admin._cache.clear()
+    store = FakeStore()
+    conn = _DerivConn(store, present, watermarks)
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin._store", lambda db_url=None: _DerivStore(conn)
+    )
+    return conn
+
+
+def test_overview_derivatives_ok(monkeypatch):
+    _setup_derivatives(
+        monkeypatch,
+        present={"cb_daily", "cb_basic", "yc_curve", "opt_daily", "opt_basic"},
+        watermarks={"cb_daily": "2026-08-20", "yc_curve": "2026-08-20", "opt_daily": "2026-08-19"},
+    )
+    out = admin.overview_derivatives()
+    assert out["ok"] is True
+    assert out["present_count"] == 5 and out["total"] == 5
+    by_table = {t["table"]: t for t in out["tables"]}
+    assert by_table["derivatives.cb_daily"]["watermark"] == "2026-08-20"
+    assert by_table["derivatives.cb_daily"]["estimated_rows"] == 123456  # pg_class fake
+    # 静态表：只有行数，无 watermark
+    assert by_table["derivatives.cb_basic"]["watermark"] is None
+    assert by_table["derivatives.cb_basic"]["estimated_rows"] == 123456
+    admin._cache.clear()
+
+
+def test_overview_derivatives_partial_and_missing(monkeypatch):
+    """部分表存在；缺失表 present=False、行数/日期为 None（卡片显示未初始化）。"""
+    _setup_derivatives(monkeypatch, present={"cb_basic"}, watermarks={})
+    out = admin.overview_derivatives()
+    assert out["ok"] is True
+    assert out["present_count"] == 1
+    by_table = {t["table"]: t for t in out["tables"]}
+    assert by_table["derivatives.cb_basic"]["present"] is True
+    assert by_table["derivatives.opt_daily"]["present"] is False
+    assert by_table["derivatives.opt_daily"]["estimated_rows"] is None
+    admin._cache.clear()
+
+
+def test_overview_derivatives_db_down(monkeypatch):
+    admin._cache.clear()
+
+    def boom(db_url=None):
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", boom)
+    out = admin.overview_derivatives()
+    assert out["ok"] is False
+    assert "数据库不可用" in out["error"]
+    admin._cache.clear()
+
+
+def test_api_admin_overview_includes_derivatives(app_client, monkeypatch):
+    _setup_derivatives(
+        monkeypatch,
+        present={"cb_daily", "cb_basic"},
+        watermarks={"cb_daily": "2026-08-20"},
+    )
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.managed_factor_tables",
+        lambda repo=None: {"stock_daily_momentum_close", "stock_daily_overlap_close"},
+    )
+    resp = app_client.get("/api/admin/overview")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["derivatives"]["present_count"] == 2
+
+
+def test_admin_template_has_derivatives_card(app_client):
+    html = app_client.get("/admin").data.decode("utf-8")
+    assert 'id="ov-derivatives"' in html
+    assert "衍生品数据" in html

@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-RISK-GUIDE-011（大盘风险 tab 通俗说明块）
+QRE-GUI-DERIV-CARD-012（总览 tab 衍生品数据卡片）
+
+## Implementation Summary
+
+总览 tab 加第四张卡片「衍生品数据」：`gui/admin.py` + `overview_derivatives`（只读 derivatives schema 五表：to_regclass 存在性 + reltuples 估算行数（-1 未 ANALYZE 降级 None）+ 日表 MAX(trade_date)，静态表仅行数；表缺失 present=False、整域异常 ok=False 自降级；_cached TTL 300s 沿用现有模式）；`app.py` overview 端点挂 derivatives 节；`admin.html` + ov-derivatives 卡片渲染（零表 → 「未初始化」+ D1.4 备注）。真库冒烟 ok（5/5 在库，日表 watermark 2026-08-21）。测试 +5（三态 + 端点 + 卡片存在性），全量 1784 绿（1779 + 5）。未 commit、未重启 qre-gui。详见 05_PROGRESS.md 顶部。
+
+---
+
+## Archive: QRE-RISK-GUIDE-011（大盘风险 tab 通俗说明块）
 
 ## Implementation Summary
 
