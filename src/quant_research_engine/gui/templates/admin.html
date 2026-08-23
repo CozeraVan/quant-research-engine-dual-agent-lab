@@ -248,23 +248,31 @@
           + '<p>磁盘占用：<strong class="kpi">' + sizeGb + '</strong></p>'
           + '<p>最近批次：' + esc(b.latest_batch || '—') + '</p>';
 
-        // 衍生品域（QRE-GUI-DERIV-CARD-012）：五表行数 + 最新日期，降级「未初始化」
+        // 衍生品域（QRE-GUI-DERIV-CARD-012 / FRESH-015）：六表行数 + 最新日期 + 日更新鲜度
         var dvEl = document.querySelector('#ov-derivatives .card-body');
         var dv = d.derivatives || {ok: false, error: '无数据'};
         if (!dv.ok) {
           dvEl.innerHTML = '<p class="err">' + esc(dv.error || '衍生品域不可用') + '</p>';
         } else if (!dv.present_count) {
-          dvEl.innerHTML = '<p class="opt">未初始化（derivatives schema 暂无表；日更接线 D1.4 待做）</p>';
+          dvEl.innerHTML = '<p class="opt">未初始化（derivatives schema 暂无表）</p>';
         } else {
           var dvRows = (dv.tables || []).map(function(t) {
-            var body = t.present
-              ? '<td class="num">' + esc(t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + '</td><td>' + esc(t.watermark || '—') + '</td>'
-              : '<td colspan="2" class="opt">未初始化</td>';
-            return '<tr><td>' + esc(t.label) + '</td>' + body + '</tr>';
+            if (!t.present) return '<tr><td>' + esc(t.label) + '</td><td colspan="3" class="opt">未初始化</td></tr>';
+            var freshCell = '';
+            if (t.watermark) {
+              freshCell = t.fresh === true ? '<td class="health-green">✓ 日更正常</td>'
+                : t.fresh === false ? '<td class="health-yellow">⚠ 滞后</td>'
+                : '<td class="opt">—</td>';
+            } else {
+              freshCell = '<td class="opt">静态表</td>';
+            }
+            return '<tr><td>' + esc(t.label) + '</td>'
+              + '<td class="num">' + esc(t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + '</td>'
+              + '<td>' + esc(t.watermark || '—') + '</td>' + freshCell + '</tr>';
           }).join('');
           dvEl.innerHTML =
-            '<p class="opt">derivatives schema：' + dv.present_count + ' / ' + dv.total + ' 张表在库（日更接线 D1.4 待做）</p>'
-            + '<table><thead><tr><th>表</th><th>估算行数</th><th>最新日期</th></tr></thead><tbody>' + dvRows + '</tbody></table>';
+            '<p class="opt">' + dv.present_count + ' / ' + dv.total + ' 张表在库；基准最近交易日：' + esc(dv.latest_trade_date || '—') + '（随 quant-ts 日更，周一~周五 16:30）</p>'
+            + '<table><thead><tr><th>表</th><th>估算行数</th><th>最新日期</th><th>日更状态</th></tr></thead><tbody>' + dvRows + '</tbody></table>';
         }
       })
       .catch(function(err) {

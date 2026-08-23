@@ -748,12 +748,13 @@ def test_admin_template_script_parses_with_node():
 
 
 class _DerivConn(_FakeConn):
-    """derivatives schema 五表：to_regclass 存在性 + 行数 + MAX(trade_date)。"""
+    """derivatives 五表 + public.fund_daily：to_regclass 存在性 + 行数 + MAX(trade_date)。"""
 
-    def __init__(self, store, present_tables, watermarks=None):
+    def __init__(self, store, present_tables, watermarks=None, latest_trade="2026-08-20"):
         super().__init__(store)
         self._present = set(present_tables)
         self._watermarks = watermarks or {}
+        self._latest_trade = latest_trade
 
     def execute(self, clause, params=None):
         sql = str(clause)
@@ -761,7 +762,9 @@ class _DerivConn(_FakeConn):
             name = (params or {}).get("name", "")
             table = name.split(".")[-1]
             return _FakeResult(scalar=name if table in self._present else None)
-        if "MAX(trade_date)" in sql and "derivatives" in sql:
+        if "MAX(trade_date)" in sql and "FROM public.stock_daily" in sql:
+            return _FakeResult(scalar=self._latest_trade)
+        if "MAX(trade_date)" in sql:
             for table, wm in self._watermarks.items():
                 if f'"{table}"' in sql:
                     return _FakeResult(scalar=wm)
@@ -798,18 +801,29 @@ def _setup_derivatives(monkeypatch, present, watermarks=None):
 def test_overview_derivatives_ok(monkeypatch):
     _setup_derivatives(
         monkeypatch,
-        present={"cb_daily", "cb_basic", "yc_curve", "opt_daily", "opt_basic"},
-        watermarks={"cb_daily": "2026-08-20", "yc_curve": "2026-08-20", "opt_daily": "2026-08-19"},
+        present={"cb_daily", "cb_basic", "yc_curve", "opt_daily", "opt_basic", "fund_daily"},
+        watermarks={
+            "cb_daily": "2026-08-20",
+            "yc_curve": "2026-08-20",
+            "opt_daily": "2026-08-19",
+            "fund_daily": "2026-08-20",
+        },
     )
     out = admin.overview_derivatives()
     assert out["ok"] is True
-    assert out["present_count"] == 5 and out["total"] == 5
+    assert out["present_count"] == 6 and out["total"] == 6
+    assert out["latest_trade_date"] == "2026-08-20"
     by_table = {t["table"]: t for t in out["tables"]}
     assert by_table["derivatives.cb_daily"]["watermark"] == "2026-08-20"
     assert by_table["derivatives.cb_daily"]["estimated_rows"] == 123456  # pg_class fake
     # 静态表：只有行数，无 watermark
     assert by_table["derivatives.cb_basic"]["watermark"] is None
     assert by_table["derivatives.cb_basic"]["estimated_rows"] == 123456
+    # 新鲜度（QRE-GUI-DERIV-FRESH-015）：== 最近交易日 → fresh True；落后 → False
+    assert by_table["derivatives.cb_daily"]["fresh"] is True
+    assert by_table["public.fund_daily"]["fresh"] is True
+    assert by_table["derivatives.opt_daily"]["fresh"] is False
+    assert by_table["derivatives.cb_basic"]["fresh"] is None  # 静态表不判断
     admin._cache.clear()
 
 

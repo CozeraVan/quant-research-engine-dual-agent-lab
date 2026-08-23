@@ -12,20 +12,14 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-DERIV-ADAPTER-013 (DONE — 1795 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-DERIV-FRESH-015 (DONE — 1795 tests green + 4 skipped；awaiting git approval)
 
-2026-08-23: 衍生品数据适配层落地（CR_2026-08-23_derivatives_market_data
-D1.5/D2.2/D3.2，CR §11 追加「适配层落地」）。新 data/derivatives.py
-（只读：load_zero_curve 连续复利近似+最近日回填、load_cb_terms/
-cb_cashflows/cb_bond_floor 债底示例、load_option_chain 平值隐波断言；
-库内无 ETF 日线为已知缺口，标的价缺失时传 underlying_price，示例用
-put-call parity 反推披露）+ scripts/derivatives_adapter_smoke.py +
-tests/test_data_derivatives.py（纯函数 11 + DB 冒烟 4 无库 skip）。
-冒烟 2026-08-21：曲线 8 节点 1.164%–2.110%；5 只转债债底 99.14–101.74
-vs bond_value 105.4–111.2（赎回溢价差异可解释）；50ETF 平值 IV 13.67%。
-1795 tests green + 4 skipped（基线 1784 + 11 净增）。未 commit、
-未重启 qre-gui。详见 09_CODING_HANDOFF 顶部。
-上一任务：QRE-GUI-DERIV-CARD-012 (DONE — 1784 tests green；见 05/09)
+2026-08-23: 衍生品卡片补登 fund_daily（六表）+ 日更新鲜度灯（watermark vs
+stock_daily 最近交易日，health-green/yellow）+ _estimate_rows hypertable
+chunk 汇总修复。另：修复 2026-08-21 周五 quant-ts 日更中断事故——手动补跑
+sync_manager（自愈补 08-21 共 5,543 行；第 5 步 derivatives 六项首次实盘全过）
++ 依次重启下游五 service 补 08-21。qre-gui 已重启。详见 05 顶部。
+上一任务：QRE-FUND-DAILY-014 (DONE — 1795 tests green；见 05/09)
 
 2026-08-23: 风向标 M3 落地（CR 状态改「✅ M1–M3 已完成」）。
 deploy/hardened/qre-barometer.{service,timer}（Mon..Fri 18:30、Persistent、

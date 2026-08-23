@@ -119,6 +119,8 @@ def _store(db_url: str | None = None):
 
 
 def _estimate_rows(conn, schema: str, table: str) -> int | None:
+    """pg_class.reltuples 估算行数；TimescaleDB hypertable 的 reltuples 记在
+    chunk 上（父表恒 0），此时退而汇总各 chunk 的 reltuples。"""
     from sqlalchemy import text
 
     row = conn.execute(
@@ -131,7 +133,23 @@ def _estimate_rows(conn, schema: str, table: str) -> int | None:
     ).fetchone()
     if row is None or row[0] is None:
         return None
-    return int(row[0])
+    estimate = int(row[0])
+    if estimate > 0:
+        return estimate
+    # hypertable 父表 reltuples=0 → 汇总 chunk（非 hypertable 查不到行，返回 0）
+    chunk_row = conn.execute(
+        text(
+            "SELECT COALESCE(SUM(c.reltuples), 0)::bigint "
+            "FROM timescaledb_information.chunks ch "
+            "JOIN pg_class c ON c.relname = ch.chunk_name "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = ch.chunk_schema "
+            "WHERE ch.hypertable_name = :table AND ch.hypertable_schema = :schema"
+        ),
+        {"schema": schema, "table": table},
+    ).fetchone()
+    if chunk_row is not None and chunk_row[0] is not None and int(chunk_row[0]) > 0:
+        return int(chunk_row[0])
+    return estimate
 
 
 # ---------------------------------------------------------------------------
@@ -278,20 +296,27 @@ def overview_backtests(outputs_dir: str | Path | None = None) -> dict[str, Any]:
     return _cached(f"overview_backtests:{root}", _produce)
 
 
-#: 衍生品域五表（quant_ts derivatives schema；静态表无 trade_date，只报行数）
-DERIVATIVES_TABLES: list[tuple[str, str, bool]] = [
-    ("cb_daily", "转债日线", True),
-    ("cb_basic", "转债基础信息（静态）", False),
-    ("opt_daily", "期权日线", True),
-    ("opt_basic", "期权基础信息（静态）", False),
-    ("yc_curve", "收益率曲线", True),
+#: 衍生品域六表（quant_ts derivatives schema + public.fund_daily 基金/ETF 日线；
+#: 静态表无 trade_date，只报行数）。元组 = (schema, table, label, has_date)
+DERIVATIVES_TABLES: list[tuple[str, str, str, bool]] = [
+    ("derivatives", "cb_daily", "转债日线", True),
+    ("derivatives", "cb_basic", "转债基础信息（静态）", False),
+    ("derivatives", "opt_daily", "期权日线", True),
+    ("derivatives", "opt_basic", "期权基础信息（静态）", False),
+    ("derivatives", "yc_curve", "收益率曲线", True),
+    ("public", "fund_daily", "基金/ETF 日线", True),
 ]
 
 
 def overview_derivatives(db_url: str | None = None) -> dict[str, Any]:
-    """衍生品域（QRE-GUI-DERIV-CARD-012）：derivatives schema 五表各自的
-    估算行数 + 最新 trade_date（静态表仅行数）。表不存在/schema 未建 →
-    present=False 优雅降级（卡片显示「未初始化」）；整域查询失败 → ok=False。
+    """衍生品域（QRE-GUI-DERIV-CARD-012）：derivatives schema 五表 + public.fund_daily
+    各自的估算行数 + 最新 trade_date（静态表仅行数）。
+
+    日更新鲜度（QRE-GUI-DERIV-FRESH-015）：日表 watermark 与 stock_daily 最新
+    交易日对比——一致 → fresh=True（日更正常）；落后 → fresh=False（滞后，
+    卡片标黄）。stock_daily 查询失败 → fresh=None 不判断。周末/节假日
+    watermark 落后属正常，freshness 只相对最近交易日，不对日历日。
+    表不存在/schema 未建 → present=False 优雅降级；整域查询失败 → ok=False。
     """
     from sqlalchemy import text
 
@@ -303,30 +328,42 @@ def overview_derivatives(db_url: str | None = None) -> dict[str, Any]:
         try:
             tables: list[dict[str, Any]] = []
             with store.market_engine.begin() as conn:
-                for table, label, has_date in DERIVATIVES_TABLES:
+                latest_trade = conn.execute(
+                    text("SELECT MAX(trade_date) FROM public.stock_daily")
+                ).scalar()
+                for schema, table, label, has_date in DERIVATIVES_TABLES:
                     exists = conn.execute(
                         text("SELECT to_regclass(:name)"),
-                        {"name": f"derivatives.{table}"},
+                        {"name": f"{schema}.{table}"},
                     ).scalar()
                     info: dict[str, Any] = {
-                        "table": f"derivatives.{table}",
+                        "table": f"{schema}.{table}",
                         "label": label,
                         "present": exists is not None,
                         "estimated_rows": None,
                         "watermark": None,
+                        "fresh": None,
                     }
                     if exists is not None:
-                        rows_est = _estimate_rows(conn, "derivatives", table)
+                        rows_est = _estimate_rows(conn, schema, table)
                         # reltuples=-1 = 从未 ANALYZE（新表），如实降级为 None
                         info["estimated_rows"] = rows_est if rows_est is not None and rows_est >= 0 else None
                         if has_date:
                             wm = conn.execute(
-                                text(f'SELECT MAX(trade_date) FROM derivatives."{table}"')
+                                text(f'SELECT MAX(trade_date) FROM {schema}."{table}"')
                             ).scalar()
                             info["watermark"] = str(wm) if wm else None
+                            if wm is not None and latest_trade is not None:
+                                info["fresh"] = wm >= latest_trade
                     tables.append(info)
             present = sum(1 for t in tables if t["present"])
-            return {"ok": True, "tables": tables, "present_count": present, "total": len(DERIVATIVES_TABLES)}
+            return {
+                "ok": True,
+                "tables": tables,
+                "present_count": present,
+                "total": len(DERIVATIVES_TABLES),
+                "latest_trade_date": str(latest_trade) if latest_trade else None,
+            }
         except Exception as exc:
             return {"ok": False, "error": f"derivatives 查询失败（{exc}）", "tables": []}
         finally:
