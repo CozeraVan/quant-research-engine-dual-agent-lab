@@ -3,6 +3,9 @@
 覆盖：lab 首页两个 tab、策略详情页与产物下载、关键 API
 （/api/admin/refresh、/api/strategies/sandbox、/api/strategies/create 校验路径、
 /api/admin/strategies/toggle），并确认 lab 不挂 8080 专有路由而 create_app 保持不变。
+
+QRE-GUI-LAB-ENTRY-018：「新增策略」tab 三入口结构（自然语言/快速向导/高级 YAML）、
+必选标注、高级选项折叠、NL 示例句与两步确认冒烟按钮。
 """
 
 from __future__ import annotations
@@ -69,6 +72,59 @@ def test_lab_does_not_mount_full_console_routes(lab_client):
     assert lab_client.get("/api/admin/overview").status_code == 404
     assert lab_client.get("/api/factor-create/sandbox").status_code == 404
     assert lab_client.get("/api/builder/indicator-catalog").status_code == 404
+
+
+# --- 新增策略 tab 三入口结构（QRE-GUI-LAB-ENTRY-018） ---
+
+
+def test_lab_strategy_three_entry_tabs(lab_client):
+    resp = lab_client.get("/")
+    assert resp.status_code == 200
+    html = resp.data.decode("utf-8")
+    # 三个入口 tab，自然语言默认选中
+    assert 'data-entry-tab="nl"' in html
+    assert 'data-entry-tab="wizard"' in html
+    assert 'data-entry-tab="yaml"' in html
+    assert 'id="entry-tab-nl" class="entry-content active"' in html
+    assert 'id="entry-tab-wizard" class="entry-content"' in html
+    assert 'id="entry-tab-yaml" class="entry-content"' in html
+    # NL 入口：大号输入框 + 可点击示例句（≥3 个，含规格指定两句）
+    assert html.count('class="nl-example"') >= 3
+    assert "5日均线上穿200日均线买入，下穿卖出，止损8%" in html
+    assert "收盘价低于10元买入，高于12元卖出" in html
+    # 快速向导：入场/出场条件必选（红色 * 标注）+ 占位示例提示
+    assert '入场条件 <span class="req">*</span>' in html
+    assert '出场条件 <span class="req">*</span>' in html
+    assert "EMA5 上穿 EMA200" in html
+    assert "EMA5 下穿 EMA200" in html
+    # 向导比较符含上穿/下穿
+    assert 'crosses_above' in html and '上穿' in html
+    assert 'crosses_below' in html and '下穿' in html
+    # 高级选项（可选）默认折叠
+    assert 'data-section="wz-advanced"' in html
+    assert 'id="sec-wz-advanced" class="section-body collapsed"' in html
+    # 高级 YAML 底部冒烟按钮（两步确认第 1 步）
+    assert 'id="btn-save-smoke"' in html
+    assert "正式回测（晋升）" in html
+    # 回测参数：必选仅回测区间与标的范围；其余收进折叠的高级参数
+    assert '回测区间 <span class="req">*</span>' in html
+    assert '标的范围 <span class="req">*</span>' in html
+    assert 'id="param-all-market" checked' in html
+    assert 'id="sec-adv-params" class="section-body collapsed"' in html
+    assert 'id="param-commission" value="0.0003"' in html
+    assert 'id="param-min-commission" value="5.0"' in html
+    assert 'id="param-stamp-tax" value="0.0005"' in html
+    # 旧平铺结构（checkbox 因子菜单栏）已移除
+    assert 'id="wz-factor-groups"' not in html
+    assert 'sec-wz-factors' not in html
+    # 因子三级联动选单（QRE-GUI-LAB-ENTRY-020）：大类 → 子类 → 因子 + 跨级搜索
+    assert "wz-fact-group" in html          # 一级：大类
+    assert "wz-fact-sub" in html            # 二级：子类（表/分段）
+    assert "syncFactorSelect" in html       # 三级联动同步
+    assert "跨级直达" in html               # 搜索提示语
+    assert "optgroup" not in html           # 旧单组长下拉已移除
+    # 每条件取反（NOT）：引擎 ast.Not + 向导勾选
+    assert "wz-not" in html and "取反" in html
 
 
 # --- 策略详情页 + 产物下载 ---

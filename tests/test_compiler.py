@@ -711,3 +711,17 @@ def test_compile_to_strategy_spec_evaluate_expression_ema200_bb():
     if spec.exit_signal_expression:
         exit_signal = evaluate_expression_signal(frame, spec.exit_signal_expression)
         assert exit_signal.tolist() == [False, False, True]
+
+
+def test_evaluate_expression_signal_not_operator():
+    """信号引擎支持 not 取反（向导「排除型」条件：A and B and not E）。"""
+    frame = pd.DataFrame({
+        "close": [10.0, 12.0, 9.0],
+        "open": [9.0, 11.0, 10.0],
+    })
+    # 单纯 not
+    sig = evaluate_expression_signal(frame, "(not (close > open))")
+    assert sig.tolist() == [False, False, True]
+    # 组合：close > open and not (close > 11)
+    sig2 = evaluate_expression_signal(frame, "(close > open) and (not (close > 11))")
+    assert sig2.tolist() == [True, False, False]

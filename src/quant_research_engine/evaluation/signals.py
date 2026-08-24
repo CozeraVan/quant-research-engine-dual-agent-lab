@@ -101,6 +101,9 @@ def _eval_node(node: ast.AST, frame: pd.DataFrame) -> object:
             return -_eval_node(node.operand, frame)
         if isinstance(node.op, ast.UAdd):
             return _eval_node(node.operand, frame)
+        if isinstance(node.op, ast.Not):
+            # 布尔取反：支持向导「排除型」条件（如 A and B and not E）
+            return ~_as_bool_series(_eval_node(node.operand, frame))
 
     raise ValueError(f"Unsupported expression: {ast.dump(node)}")
 

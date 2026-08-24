@@ -2,7 +2,71 @@
 
 ## Task ID
 
-QRE-GUI-LAB-PORT-017（回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081）
+QRE-GUI-LAB-ENTRY-018（8081 回测台「新增策略」tab 三入口递进重构：自然语言 / 快速向导 / 高级 YAML）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **范围裁切**：`git diff --name-only HEAD` 仅 `templates/lab.html`、
+  `static/style.css`、`tests/test_gui_lab.py`；8080 模板（index.html/
+  admin.html）与 app.py 零改动，`test_create_app_routes_unchanged`
+  （lab⊂create_app、59 条专有规律互斥）原样通过。
+- **规格映射核对**：三入口 tab（nl 默认 active / wizard / yaml）；
+  NL 4 示例句含规格指定两句且点击填入；向导条件行 = 搜索下拉 →
+  比较符（上穿/下穿/大于/小于/≥/≤）→ 右值（因子下拉 或 固定值勾选+数字）；
+  入场/出场红色 * 必选且 buildYamlPreview 两组均强制；占位示例
+  EMA5 上/下穿 EMA200（真库 /api/factors 实测含 ema_5/ema_200，
+  JS 内置 close/pre_close 回退）；高级选项/高级参数两面板的默认值
+  与 PORT-017 逐字段一致（佣金 0.0003、最低 5.0、印花税 0.0005 等不变）。
+- **上穿/下穿语义**：编译为 `(l > r) and (l.shift(1) <= r.shift(1))`——
+  表达式 DSL（evaluation/signals.py）实测支持 `.shift` 方法调用，
+  比 nl_compiler 的"当日状态改写"更贴近用户直觉；右值为固定数字时
+  shift 项退化为常量比较，无非法语法。
+- **两步确认**：原有"存入沙箱 → 冒烟 → 晋升触发全量回测"流程不变，
+  仅显性化——新增 #btn-save-smoke（第 1 步一键入箱+冒烟）、晋升按钮
+  改「正式回测（晋升）」且 confirm 带冒烟指标摘要；无摘要时明示风险。
+  后端 API 契约零变化（create/smoke/promote 参数与响应结构未动）。
+- **零依赖**：搜索下拉为原生 JS（filter 输入重建 optgroup），
+  无新前端框架/CDN；style.css 纯追加新类，既有规则逐字未动。
+- **JS 健壮性**：三个 <script> 块 node `new Function` 语法自检全过；
+  目录加载失败时向导显示中文错误并提示回退高级 YAML 通道；
+  因子别名冲突 `_2` 后缀保证表达式唯一；usedFactors() 只收集条件
+  实际引用的因子（未用不进 factor_fields）。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1808 passed, 4 skipped, 4 warnings（基线 1807 + 1 净增）
+tests/test_gui_lab.py → 13 passed（含新 test_lab_strategy_three_entry_tabs）
+node 语法自检：script 0/1/2 syntax ok
+冒烟（qre-gui-lab 重启后）：
+  systemctl is-active qre-gui-lab → active
+  curl 8081 / → 200，含 data-entry-tab="nl"/"wizard"/"yaml"（18 处新结构命中）
+  curl 8080 / → 200（8080 未重启，模板零改动）
+scripts/check-progress-docs.sh → Progress docs check passed.
+```
+
+## Required Fixes
+
+无。
+
+## Nice-to-Have
+
+- 向导下拉项 500+ 因子时下拉较长，可考虑后续加分页/常用置顶（本轮规格未要求）。
+- NL 通道的 missing_factors 链接仍指向 8080「新增因子」概念（lab 无该 tab，
+  沿用 PORT-017 已知留白）。
+
+---
+
+## Archive: QRE-GUI-LAB-PORT-017（回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081）
 
 ## Reviewer
 

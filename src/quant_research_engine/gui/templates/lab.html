@@ -7,90 +7,99 @@
   <button class="tab" data-tab="onboard">回测管理</button>
 </div>
 
-<!-- TAB 1: 新增策略（自 index.html strategy tab 原样移植，QRE-GUI-LAB-PORT-017） -->
+<!-- TAB 1: 新增策略（三入口 tab 递进重构，QRE-GUI-LAB-ENTRY-018） -->
 <div id="tab-strategy" class="tab-content active">
 
-  <!-- 顶部：自然语言描述区（安全闸：仅填入下方预览栏，需用户确认后手动提交） -->
-  <div class="panel nl-panel">
-    <h2>方式一：自然语言描述策略</h2>
-    <textarea id="nl-description" rows="3" placeholder="例：20 日均线上穿 120 日均线买入，跌破 60 日线卖出，止损 -8%"></textarea>
-    <div class="editor-actions">
-      <button id="btn-nl-compile" class="btn btn-ghost">编译为 YAML</button>
-      <span id="nl-status" class="hidden"></span>
-    </div>
-    <div id="nl-result" class="result-box hidden"></div>
+  <!-- 三个入口：自然语言（默认，所有人）→ 快速向导（因子库主角）→ 高级 YAML（有基础用户） -->
+  <div class="tabs entry-tabs">
+    <button class="entry-tab active" data-entry-tab="nl">① 自然语言 <span class="opt">人人可用</span></button>
+    <button class="entry-tab" data-entry-tab="wizard">② 快速向导 <span class="opt">从因子库挑条件</span></button>
+    <button class="entry-tab" data-entry-tab="yaml">③ 高级 YAML <span class="opt">直接编辑</span></button>
   </div>
 
-  <!-- 中部：可视化构建区 -->
-  <div class="section">
-    <button class="section-toggle" data-section="wz-factors">方式二：可视化构建 · 第 1 步 选择因子（来自因子库实时枚举）&#9660;</button>
-    <div id="sec-wz-factors" class="section-body">
-      <p class="opt">与上方自然语言方式任选其一，结果都汇入下方 YAML 预览栏。</p>
+  <!-- 入口 1：自然语言 -->
+  <div id="entry-tab-nl" class="entry-content active">
+    <div class="panel nl-panel">
+      <h2>用一句话描述你的策略</h2>
+      <textarea id="nl-description" rows="5" placeholder="例：5日均线上穿200日均线买入，下穿卖出，止损8%"></textarea>
+      <div id="nl-examples">
+        <span class="opt">没思路？点一个示例填入：</span><br>
+        <button type="button" class="nl-example">5日均线上穿200日均线买入，下穿卖出，止损8%</button>
+        <button type="button" class="nl-example">收盘价低于10元买入，高于12元卖出</button>
+        <button type="button" class="nl-example">20日均线上穿60日均线买入，下穿卖出，止损8%</button>
+        <button type="button" class="nl-example">收盘价高于10元买入，跌破20日均线卖出，最多持仓20天</button>
+      </div>
+      <div class="editor-actions">
+        <button id="btn-nl-compile" class="btn btn-primary">生成策略 YAML</button>
+        <span id="nl-status" class="hidden"></span>
+      </div>
+      <div id="nl-result" class="result-box hidden"></div>
+    </div>
+  </div>
+
+  <!-- 入口 2：快速向导（主角是因子库；条件行 = 因子下拉 → 比较符 → 右值） -->
+  <div id="entry-tab-wizard" class="entry-content">
+    <div class="panel">
+      <h2>快速向导：从因子库挑条件，自动生成策略</h2>
       <div id="wz-factor-status" class="opt">加载因子目录中...</div>
-      <div id="wz-factor-groups"></div>
-      <h4>已选因子 → data.factor_fields 预览</h4>
-      <pre id="wz-factor-preview" class="compiled-yaml">（尚未选择因子）</pre>
-    </div>
-  </div>
-
-  <div class="section">
-    <button class="section-toggle" data-section="wz-conditions">方式二：可视化构建 · 第 2 步 设置入场/出场条件（比较 + 布尔）&#9660;</button>
-    <div id="sec-wz-conditions" class="section-body">
-      <div class="form-grid">
+      <div class="form-grid" style="margin-top:6px;">
         <label>策略 ID</label>
         <input type="text" id="wz-name" placeholder="wizard_strategy">
       </div>
 
-      <h4>入场条件组</h4>
-      <div class="rule-row">
-        <label class="label-sm">组内逻辑</label>
-        <select id="wz-entry-combinator">
-          <option value="and">AND（全部满足）</option>
-          <option value="or">OR（任一满足）</option>
-        </select>
-      </div>
+      <h4 style="margin-top:10px;">入场条件 <span class="req">*</span> <span class="opt">（示例占位可改：EMA5 上穿 EMA200）</span></h4>
       <div id="wz-entry-conditions" class="condition-list"></div>
       <button class="btn-sm" onclick="wzAddCondition('entry')">+ 添加入场条件</button>
 
-      <h4 style="margin-top:12px;">出场条件组 <span class="opt">(可选)</span></h4>
-      <div class="rule-row">
-        <label class="label-sm">组内逻辑</label>
-        <select id="wz-exit-combinator">
-          <option value="and">AND（全部满足）</option>
-          <option value="or">OR（任一满足）</option>
-        </select>
-      </div>
+      <h4 style="margin-top:12px;">出场条件 <span class="req">*</span> <span class="opt">（示例占位可改：EMA5 下穿 EMA200）</span></h4>
       <div id="wz-exit-conditions" class="condition-list"></div>
       <button class="btn-sm" onclick="wzAddCondition('exit')">+ 添加出场条件</button>
 
-      <h4 style="margin-top:12px;">持仓与风控</h4>
-      <div class="form-grid form-grid-3">
-        <label>最大持仓天数</label>
-        <input type="number" id="wz-holding" value="20" min="1">
+      <!-- 高级选项（可选，默认折叠） -->
+      <div class="section" style="margin-top:12px;">
+        <button class="section-toggle collapsed" data-section="wz-advanced">高级选项（可选：止盈 / 止损 / 移动止损 / 最大持仓天数 / 条件组 AND·OR）&#9660;</button>
+        <div id="sec-wz-advanced" class="section-body collapsed">
+          <div class="form-grid form-grid-3">
+            <label>入场条件组合</label>
+            <select id="wz-entry-combinator">
+              <option value="and">AND（全部满足）</option>
+              <option value="or">OR（任一满足）</option>
+            </select>
 
-        <label>止损 Stop Loss</label>
-        <input type="number" id="wz-stop-loss" step="0.01" placeholder="可空，如 0.08">
+            <label>出场条件组合</label>
+            <select id="wz-exit-combinator">
+              <option value="and">AND（全部满足）</option>
+              <option value="or">OR（任一满足）</option>
+            </select>
 
-        <label>止盈 Take Profit</label>
-        <input type="number" id="wz-take-profit" step="0.01" placeholder="可空，如 0.15">
+            <label>最大持仓天数</label>
+            <input type="number" id="wz-holding" value="20" min="1">
 
-        <label>移动止损 Trailing</label>
-        <input type="number" id="wz-trailing" step="0.01" placeholder="可空，如 0.05">
+            <label>止损 Stop Loss</label>
+            <input type="number" id="wz-stop-loss" step="0.01" placeholder="可空，如 0.08">
+
+            <label>止盈 Take Profit</label>
+            <input type="number" id="wz-take-profit" step="0.01" placeholder="可空，如 0.15">
+
+            <label>移动止损 Trailing</label>
+            <input type="number" id="wz-trailing" step="0.01" placeholder="可空，如 0.05">
+          </div>
+        </div>
       </div>
 
       <h4 style="margin-top:12px;">策略 YAML 预览</h4>
-      <pre id="wz-yaml-preview" class="compiled-yaml">（选择因子并添加条件后自动生成）</pre>
+      <pre id="wz-yaml-preview" class="compiled-yaml">（添加入场/出场条件后自动生成）</pre>
       <div class="builder-actions">
-        <button id="wz-fill-editor" class="btn btn-ghost">校验并填入下方 YAML 预览栏</button>
+        <button id="wz-fill-editor" class="btn btn-primary">校验并填入「高级 YAML」</button>
         <span id="wz-status" class="hidden"></span>
       </div>
     </div>
   </div>
 
-  <!-- 底部：YAML 预览栏 + 回测参数 -->
-  <div class="layout">
+  <!-- 入口 3：高级 YAML（前两个通道的输出都落到这里，可编辑） -->
+  <div id="entry-tab-yaml" class="entry-content">
     <div class="panel editor-panel">
-      <h2>策略 YAML 预览栏（可编辑）</h2>
+      <h2>策略 YAML 编辑器 <span class="opt">（自然语言 / 快速向导的结果都落到此处，可直接修改）</span></h2>
       <textarea id="strategy-yaml" rows="24" cols="80" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
       <div class="editor-actions">
         <button id="btn-validate" class="btn btn-ghost">验证 Validate</button>
@@ -112,97 +121,99 @@
         <button id="btn-save-template" class="btn btn-ghost">保存模板 Save Template</button>
       </div>
       <div id="validate-result" class="result-box hidden"></div>
+      <div class="editor-actions">
+        <button id="btn-save-smoke" class="btn btn-primary" title="存入沙箱并启动冒烟测试（600519.SH 近 6 个月）">存入沙箱 + 冒烟测试</button>
+        <span class="opt">两步确认：第 1 步冒烟；通过后到下方「沙箱策略」列表点「正式回测（晋升）」才会全量执行。</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 回测参数（三个入口共用）：必选仅回测区间与标的范围，其余收进高级参数 -->
+  <div class="panel param-panel">
+    <h2>回测参数 Parameters</h2>
+    <div class="form-grid">
+      <label>回测区间 <span class="req">*</span></label>
+      <span>
+        <input type="text" id="param-start" placeholder="YYYY-MM-DD" size="11"> ~
+        <input type="text" id="param-end" placeholder="YYYY-MM-DD" size="11">
+        <button type="button" class="btn-sm range-btn" data-years="1">近1年</button>
+        <button type="button" class="btn-sm range-btn" data-years="2">近2年（默认）</button>
+        <button type="button" class="btn-sm range-btn" data-years="5">近5年</button>
+        <button type="button" class="btn-sm" id="range-all">全期(2010起)</button>
+      </span>
+
+      <label>标的范围 <span class="req">*</span></label>
+      <span class="label-inline"><input type="checkbox" id="param-all-market" checked> 全部 A 股（默认全市场；取消勾选后可填代码）</span>
+
+      <label>股票代码 Codes</label>
+      <textarea id="param-codes" rows="2" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ" disabled></textarea>
     </div>
 
-    <div class="panel param-panel">
-      <h2>回测参数 Parameters</h2>
-      <div class="form-grid">
-        <label>模式 Mode</label>
-        <select id="param-mode">
-          <option value="single">单标的 Single-symbol</option>
-          <option value="batch" selected>批量 Batch</option>
-          <option value="shared">共享资金 Shared-cash</option>
-        </select>
+    <!-- 高级参数（默认折叠，保留现有默认值自动生成） -->
+    <div class="section" style="margin-top:10px;">
+      <button class="section-toggle collapsed" data-section="adv-params">高级参数（可选：模式/资金/佣金/印花税/滑点/止损止盈/引擎等）&#9660;</button>
+      <div id="sec-adv-params" class="section-body collapsed">
+        <div class="form-grid">
+          <label>模式 Mode</label>
+          <select id="param-mode">
+            <option value="single">单标的 Single-symbol</option>
+            <option value="batch" selected>批量 Batch</option>
+            <option value="shared">共享资金 Shared-cash</option>
+          </select>
 
-        <label>标的范围 Universe</label>
-        <span class="label-inline"><input type="checkbox" id="param-all-market"> 全部 A 股（全市场，留空代码时生效）</span>
+          <label>初始资金 Initial Cash</label>
+          <input type="text" id="param-cash" value="100000" placeholder="100000">
 
-        <label>股票代码 Codes</label>
-        <textarea id="param-codes" rows="2" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ">000001.SZ,000002.SZ</textarea>
+          <label>最大持仓 Max Positions</label>
+          <input type="text" id="param-maxpos" value="10" placeholder="10（共享资金模式用）">
 
-        <label>开始 Start</label>
-        <input type="text" id="param-start" value="2026-01-05" placeholder="YYYY-MM-DD">
+          <label>佣金率 Commission</label>
+          <input type="text" id="param-commission" value="0.0003" placeholder="0.0003">
 
-        <label>结束 End</label>
-        <input type="text" id="param-end" value="2026-03-31" placeholder="YYYY-MM-DD">
+          <label>最低佣金 Min Commission</label>
+          <input type="text" id="param-min-commission" value="5.0" placeholder="5.0">
 
-        <label>快捷区间 Range</label>
-        <span>
-          <button type="button" class="btn-sm range-btn" data-years="1">近1年</button>
-          <button type="button" class="btn-sm range-btn" data-years="2">近2年</button>
-          <button type="button" class="btn-sm range-btn" data-years="5">近5年</button>
-          <button type="button" class="btn-sm" id="range-all">全期(2010起)</button>
-        </span>
+          <label>印花税(卖出) Stamp Tax</label>
+          <input type="text" id="param-stamp-tax" value="0.0005" placeholder="0.0005">
 
-        <label>初始资金 Initial Cash</label>
-        <input type="text" id="param-cash" value="100000" placeholder="100000">
+          <label>买入滑点 Slippage Buy</label>
+          <input type="text" id="param-slip-buy" value="0" placeholder="0">
 
-        <label>最大持仓 Max Positions</label>
-        <input type="text" id="param-maxpos" value="10" placeholder="10（共享资金模式用）">
+          <label>卖出滑点 Slippage Sell</label>
+          <input type="text" id="param-slip-sell" value="0" placeholder="0">
 
-        <label>佣金率 Commission</label>
-        <input type="text" id="param-commission" value="0.0003" placeholder="0.0003">
+          <label>止损 Stop Loss %</label>
+          <input type="text" id="param-stop-loss" placeholder="可空，如 0.08">
 
-        <label>最低佣金 Min Commission</label>
-        <input type="text" id="param-min-commission" value="5.0" placeholder="5.0">
+          <label>止盈 Take Profit %</label>
+          <input type="text" id="param-take-profit" placeholder="可空，如 0.15">
 
-        <label>印花税(卖出) Stamp Tax</label>
-        <input type="text" id="param-stamp-tax" value="0.0005" placeholder="0.0005">
+          <label>移动止损 Trailing %</label>
+          <input type="text" id="param-trailing-stop" placeholder="可空，如 0.05">
 
-        <label>买入滑点 Slippage Buy</label>
-        <input type="text" id="param-slip-buy" value="0" placeholder="0">
+          <label>小样本预检 Precheck</label>
+          <span class="label-inline"><input type="checkbox" id="param-precheck" checked> 先跑前 20 只 × 近 6 个月</span>
 
-        <label>卖出滑点 Slippage Sell</label>
-        <input type="text" id="param-slip-sell" value="0" placeholder="0">
+          <label>引擎实现 Engine Impl</label>
+          <select id="param-engine-impl">
+            <option value="simulator">逐 bar 仿真 simulator</option>
+            <option value="vectorized">向量化 vectorized</option>
+          </select>
 
-        <label>止损 Stop Loss %</label>
-        <input type="text" id="param-stop-loss" placeholder="可空，如 0.08">
+          <label>执行方式 Executor</label>
+          <select id="param-executor">
+            <option value="module">模块直调 Module (direct)</option>
+            <option value="cli">CLI 子进程 (subprocess)</option>
+          </select>
 
-        <label>止盈 Take Profit %</label>
-        <input type="text" id="param-take-profit" placeholder="可空，如 0.15">
+          <label>数据库 DB URL</label>
+          <input type="text" id="param-dburl" placeholder="postgresql+psycopg:///tushare_data">
 
-        <label>移动止损 Trailing %</label>
-        <input type="text" id="param-trailing-stop" placeholder="可空，如 0.05">
+          <label>市场规则 Market Profile</label>
+          <input type="text" id="param-profile" placeholder="configs/market_profiles/ashare_daily_default.yaml">
 
-        <label>小样本预检 Precheck</label>
-        <span class="label-inline"><input type="checkbox" id="param-precheck" checked> 先跑前 20 只 × 近 6 个月</span>
-      </div>
-
-      <!-- 高级参数（默认折叠） -->
-      <div class="section">
-        <button class="section-toggle collapsed" data-section="adv-params">高级参数（引擎/执行方式/DB/输出）&#9660;</button>
-        <div id="sec-adv-params" class="section-body collapsed">
-          <div class="form-grid">
-            <label>引擎实现 Engine Impl</label>
-            <select id="param-engine-impl">
-              <option value="simulator">逐 bar 仿真 simulator</option>
-              <option value="vectorized">向量化 vectorized</option>
-            </select>
-
-            <label>执行方式 Executor</label>
-            <select id="param-executor">
-              <option value="module">模块直调 Module (direct)</option>
-              <option value="cli">CLI 子进程 (subprocess)</option>
-            </select>
-
-            <label>数据库 DB URL</label>
-            <input type="text" id="param-dburl" placeholder="postgresql+psycopg:///tushare_data">
-
-            <label>市场规则 Market Profile</label>
-            <input type="text" id="param-profile" placeholder="configs/market_profiles/ashare_daily_default.yaml">
-
-            <label>输出目录 Output Dir</label>
-            <input type="text" id="param-output" value="outputs/gui-run" placeholder="outputs/gui-run">
+          <label>输出目录 Output Dir</label>
+          <input type="text" id="param-output" value="outputs/gui-run" placeholder="outputs/gui-run">
           </div>
         </div>
       </div>
@@ -212,7 +223,6 @@
         <span id="run-status" class="hidden"></span>
       </div>
     </div>
-  </div>
 
   <div id="run-result" class="result-box hidden"></div>
 
@@ -283,12 +293,22 @@
 
 <script>
 // ============================================================
-// TAB 1 新增策略 — 独立作用域（可视化构建 + NL + YAML 预览 + 回测参数 + 沙箱）
+// TAB 1 新增策略 — 独立作用域（三入口：NL / 快速向导 / 高级 YAML + 回测参数 + 沙箱）
 // ============================================================
 (function() {
   var MARKET_FIELDS = ["open", "high", "low", "close", "pre_close", "vol", "amount"];
-  var OPS = [">", ">=", "<", "<=", "==", "!="];
-  var selectedFactors = {};  // alias -> target (factors.table.column)
+  // 向导比较符：上穿/下穿编译为带 shift(1) 的真实穿越事件（表达式 DSL 支持 .shift）
+  var OPS = [
+    {value: "crosses_above", label: "上穿"},
+    {value: "crosses_below", label: "下穿"},
+    {value: ">",  label: "大于"},
+    {value: "<",  label: "小于"},
+    {value: ">=", label: "大于等于"},
+    {value: "<=", label: "小于等于"}
+  ];
+  var FACTOR_OPTIONS = [];    // {value, label, group}（含行情字段，value=别名）
+  var ALIAS_TARGET = {};      // 因子别名 -> factors.table.column（行情字段不在其中）
+  var catalogReady = false;
 
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -299,7 +319,20 @@
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
 
-  // ---------- 可视化构建 · Step 1: factor catalog ----------
+  // ---------- 三个入口 tab 切换 ----------
+  function switchEntryTab(name) {
+    document.querySelectorAll(".entry-tab").forEach(function(t) {
+      t.classList.toggle("active", t.dataset.entryTab === name);
+    });
+    document.querySelectorAll(".entry-content").forEach(function(c) {
+      c.classList.toggle("active", c.id === "entry-tab-" + name);
+    });
+  }
+  document.querySelectorAll(".entry-tab").forEach(function(t) {
+    t.addEventListener("click", function() { switchEntryTab(t.dataset.entryTab); });
+  });
+
+  // ---------- 因子目录 → 分组选项（带搜索的下拉选单数据源） ----------
   function loadFactorCatalog() {
     fetch("/api/factors")
       .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
@@ -307,146 +340,254 @@
         var statusEl = document.getElementById("wz-factor-status");
         if (!res.body.ok) {
           statusEl.innerHTML = '<span class="err">' + esc(res.body.error || "因子库不可用") + '</span>';
-          document.getElementById("sec-wz-factors").classList.add("wz-disabled");
           return;
         }
-        statusEl.textContent = "勾选需要的因子（行情字段可直接用于条件，无需勾选）：";
-        var container = document.getElementById("wz-factor-groups");
-        container.innerHTML = "";
+        statusEl.textContent = "条件行选因子：大类 → 子类 → 因子（三级选单），或在搜索框输入关键字跨级直达：";
         res.body.groups.forEach(function(group) {
-          if (group.group === "market") return;  // 行情字段始终可用
-          var det = document.createElement("details");
-          var sum = document.createElement("summary");
-          sum.textContent = group.label + "（" + group.items.length + "）";
-          det.appendChild(sum);
           group.items.forEach(function(item) {
-            var label = document.createElement("label");
-            label.className = "wz-factor-item";
-            var cb = document.createElement("input");
-            cb.type = "checkbox";
-            cb.dataset.table = item.table;
-            cb.dataset.column = item.column;
-            cb.addEventListener("change", onFactorToggle);
-            label.appendChild(cb);
-            label.appendChild(document.createTextNode(" " + item.label));
-            det.appendChild(label);
+            // 别名冲突时追加数字后缀，保证表达式内唯一
+            var alias = item.column;
+            var i = 2;
+            while (ALIAS_TARGET[alias] && ALIAS_TARGET[alias] !== item.table + "." + item.column) {
+              alias = item.column + "_" + i;
+              i++;
+            }
+            if (group.group !== "market") ALIAS_TARGET[alias] = item.table + "." + item.column;
+            FACTOR_OPTIONS.push({value: alias, label: item.label, group: group.label, _table: item.table});
           });
-          container.appendChild(det);
         });
+        // 三级选单的第二级：组内按数据表细分；单表 >30 项时按名称排序分段（避免长列表）
+        var byGroupTable = {};
+        FACTOR_OPTIONS.forEach(function(o) {
+          var k = o.group + "|" + o._table;
+          (byGroupTable[k] = byGroupTable[k] || []).push(o);
+        });
+        Object.keys(byGroupTable).forEach(function(k) {
+          var items = byGroupTable[k];
+          var short = items[0]._table.replace("factors.stock_daily_", "").replace("public.", "");
+          if (items.length <= 30) {
+            items.forEach(function(o) { o.sub = short; });
+            return;
+          }
+          var sorted = items.slice().sort(function(a, b) { return a.value < b.value ? -1 : 1; });
+          for (var i = 0; i < sorted.length; i += 30) {
+            var chunk = sorted.slice(i, i + 30);
+            var seg = short + " " + chunk[0].value + "~" + chunk[chunk.length - 1].value;
+            chunk.forEach(function(o) { o.sub = seg; });
+          }
+        });
+        catalogReady = true;
+        // 重渲染已存在的条件行下拉（目录加载前添加的行）
+        document.querySelectorAll(".wz-factsel").forEach(function(wrap) {
+          var sels = wrap.querySelectorAll("select");
+          syncFactorSelect(wrap, sels[sels.length - 1].value);
+        });
+        prefillPlaceholderConditions();
+        refreshWizard();
       })
       .catch(function(err) {
         document.getElementById("wz-factor-status").innerHTML =
-          '<span class="err">因子目录加载失败: ' + esc(err) + '，可回退手写 YAML 通道。</span>';
+          '<span class="err">因子目录加载失败: ' + esc(err) + '，可回退「高级 YAML」手写通道。</span>';
       });
   }
 
-  function onFactorToggle(e) {
-    var cb = e.target;
-    var alias = cb.dataset.column;
-    var target = cb.dataset.table + "." + cb.dataset.column;
-    if (cb.checked) {
-      // 别名冲突时追加表后缀
-      var finalAlias = alias;
-      var i = 2;
-      while (selectedFactors[finalAlias] && selectedFactors[finalAlias] !== target) {
-        finalAlias = alias + "_" + i;
-        i++;
-      }
-      cb.dataset.alias = finalAlias;
-      selectedFactors[finalAlias] = target;
-    } else {
-      delete selectedFactors[cb.dataset.alias || alias];
-    }
-    refreshWizard();
+  // 占位示例：因子库有 ema_5/ema_200 就用，否则回退行情字段 close/pre_close
+  function prefillPlaceholderConditions() {
+    if (document.querySelectorAll(".wz-cond").length) return;
+    var hasEma = FACTOR_OPTIONS.some(function(o) { return o.value === "ema_5"; })
+      && FACTOR_OPTIONS.some(function(o) { return o.value === "ema_200"; });
+    var l = hasEma ? "ema_5" : "close";
+    var r = hasEma ? "ema_200" : "pre_close";
+    wzAddCondition("entry", {left: l, op: "crosses_above", right: r});
+    wzAddCondition("exit",  {left: l, op: "crosses_below", right: r});
   }
 
-  function factorPreview() {
-    var keys = Object.keys(selectedFactors);
-    if (!keys.length) return "（尚未选择因子）";
-    return keys.map(function(a) { return "    " + a + ": " + selectedFactors[a]; }).join("\n");
-  }
-
-  // ---------- 可视化构建 · Step 2: condition builder ----------
-  function operandOptions() {
-    var opts = MARKET_FIELDS.map(function(f) { return {value: f, label: "行情 · " + f}; });
-    Object.keys(selectedFactors).forEach(function(a) {
-      opts.push({value: a, label: "因子 · " + a});
+  // ---------- 三级联动下拉（大类 → 子类 → 因子）+ 跨级搜索（原生 JS，零依赖） ----------
+  function factorGroups() {
+    var order = [];
+    FACTOR_OPTIONS.forEach(function(o) {
+      if (order.indexOf(o.group) < 0) order.push(o.group);
     });
-    return opts;
+    return order;
   }
 
-  function fillSelect(sel, options, current) {
+  function factorSubs(group) {
+    var order = [];
+    FACTOR_OPTIONS.forEach(function(o) {
+      if (o.group === group && order.indexOf(o.sub) < 0) order.push(o.sub);
+    });
+    return order;
+  }
+
+  function renderFactorOptions(sel, kw, current, groupFilter, subFilter) {
     sel.innerHTML = "";
-    options.forEach(function(o) {
+    var kwl = (kw || "").trim().toLowerCase();
+    // 有搜索关键字 → 跨级匹配直达；否则按 大类 → 子类 逐级收窄，避免长列表
+    FACTOR_OPTIONS.forEach(function(o) {
+      if (kwl) {
+        if (o.label.toLowerCase().indexOf(kwl) < 0 && o.value.toLowerCase().indexOf(kwl) < 0) return;
+      } else {
+        if (groupFilter && o.group !== groupFilter) return;
+        if (subFilter && o.sub !== subFilter) return;
+      }
       var opt = document.createElement("option");
       opt.value = o.value;
-      opt.textContent = o.label;
+      opt.textContent = kwl ? (o.group + " · " + o.sub + " · " + o.label) : o.label;
       sel.appendChild(opt);
     });
     if (current) sel.value = current;
   }
 
-  window.wzAddCondition = function(group) {
+  function makeFactorSelect(cls) {
+    var wrap = document.createElement("span");
+    wrap.className = "wz-factsel";
+    var filter = document.createElement("input");
+    filter.className = "wz-fact-filter";
+    filter.placeholder = "搜索";
+    var groupSel = document.createElement("select");   // 一级：大类
+    groupSel.className = "wz-fact-group";
+    var subSel = document.createElement("select");     // 二级：子类（表/分段）
+    subSel.className = "wz-fact-sub";
+    var sel = document.createElement("select");        // 三级：因子
+    sel.className = cls;
+    groupSel.addEventListener("change", function() {
+      fillSubOptions(wrap);
+      renderFactorOptions(sel, filter.value, null, filter.value.trim() ? null : groupSel.value, filter.value.trim() ? null : subSel.value);
+      refreshWizard();
+    });
+    subSel.addEventListener("change", function() {
+      renderFactorOptions(sel, filter.value, null, filter.value.trim() ? null : groupSel.value, filter.value.trim() ? null : subSel.value);
+      refreshWizard();
+    });
+    filter.addEventListener("input", function() {
+      // 输入关键字时忽略分级过滤，跨级直达
+      renderFactorOptions(sel, filter.value, sel.value, null, null);
+    });
+    sel.addEventListener("change", refreshWizard);
+    wrap.appendChild(filter);
+    wrap.appendChild(groupSel);
+    wrap.appendChild(subSel);
+    wrap.appendChild(sel);
+    return wrap;
+  }
+
+  function fillSubOptions(wrap, current) {
+    var groupSel = wrap.querySelector(".wz-fact-group");
+    var subSel = wrap.querySelector(".wz-fact-sub");
+    subSel.innerHTML = "";
+    factorSubs(groupSel.value).forEach(function(s) {
+      var opt = document.createElement("option");
+      opt.value = s; opt.textContent = s;
+      subSel.appendChild(opt);
+    });
+    if (current) subSel.value = current;
+  }
+
+  // 目录就绪后（或预设值时）同步某个三级选单：填充大类/子类并按值所在位置联动
+  function syncFactorSelect(wrap, current) {
+    var sels = wrap.querySelectorAll("select");
+    var groupSel = sels[0], subSel = sels[1], sel = sels[2];
+    var cur = current || sel.value;
+    var curOpt = null;
+    FACTOR_OPTIONS.forEach(function(o) { if (o.value === cur) curOpt = o; });
+    groupSel.innerHTML = "";
+    factorGroups().forEach(function(g) {
+      var opt = document.createElement("option");
+      opt.value = g; opt.textContent = g;
+      groupSel.appendChild(opt);
+    });
+    if (curOpt) groupSel.value = curOpt.group;
+    fillSubOptions(wrap, curOpt ? curOpt.sub : null);
+    renderFactorOptions(sel, "", cur, groupSel.value, subSel.value);
+  }
+
+  function setFactorSelectValue(wrap, value) {
+    syncFactorSelect(wrap, value);
+    var sels = wrap.querySelectorAll("select");
+    sels[2].value = value;
+    refreshWizard();
+  }
+
+  // ---------- 条件行：因子下拉 → 比较符 → 右值（因子 或 固定值） ----------
+  window.wzAddCondition = function(group, preset) {
     var container = document.getElementById("wz-" + group + "-conditions");
     var row = document.createElement("div");
     row.className = "condition-item wz-cond";
 
-    var left = document.createElement("select");
-    left.className = "wz-left";
+    var leftWrap = makeFactorSelect("wz-left");
+
     var op = document.createElement("select");
     op.className = "wz-op";
     OPS.forEach(function(o) {
       var opt = document.createElement("option");
-      opt.value = o; opt.textContent = o;
+      opt.value = o.value; opt.textContent = o.label;
       op.appendChild(opt);
     });
-    var rtype = document.createElement("select");
-    rtype.className = "wz-rtype";
-    [["number", "数值"], ["field", "因子/字段"]].forEach(function(p) {
-      var opt = document.createElement("option");
-      opt.value = p[0]; opt.textContent = p[1];
-      rtype.appendChild(opt);
-    });
+
+    var fixedLabel = document.createElement("label");
+    fixedLabel.className = "label-inline";
+    var isfixed = document.createElement("input");
+    isfixed.type = "checkbox";
+    isfixed.className = "wz-isfixed";
+    fixedLabel.appendChild(isfixed);
+    fixedLabel.appendChild(document.createTextNode(" 固定值"));
+
+    var rightWrap = makeFactorSelect("wz-rfield");
     var rnum = document.createElement("input");
     rnum.className = "wz-rnum";
     rnum.type = "number";
     rnum.step = "any";
-    rnum.placeholder = "数值";
-    rnum.size = 8;
-    var rfield = document.createElement("select");
-    rfield.className = "wz-rfield";
-    rfield.style.display = "none";
+    rnum.placeholder = "如 10";
+    rnum.size = 7;
+    rnum.style.display = "none";
+
+    // 每条件取反（NOT）：覆盖「排除型」组合，如 A and B and not E
+    var notLabel = document.createElement("label");
+    notLabel.className = "label-inline";
+    notLabel.title = "勾选后该条件取反（not）";
+    var notCb = document.createElement("input");
+    notCb.type = "checkbox";
+    notCb.className = "wz-not";
+    notCb.addEventListener("change", refreshWizard);
+    notLabel.appendChild(notCb);
+    notLabel.appendChild(document.createTextNode(" 取反"));
+
     var rm = document.createElement("button");
     rm.className = "btn-sm btn-remove-cond";
     rm.textContent = "x";
     rm.addEventListener("click", function() { row.remove(); refreshWizard(); });
 
-    rtype.addEventListener("change", function() {
-      rnum.style.display = rtype.value === "number" ? "" : "none";
-      rfield.style.display = rtype.value === "field" ? "" : "none";
+    isfixed.addEventListener("change", function() {
+      rnum.style.display = isfixed.checked ? "" : "none";
+      rightWrap.style.display = isfixed.checked ? "none" : "";
       refreshWizard();
     });
-    [left, op, rnum, rfield].forEach(function(el) {
+    [op, rnum].forEach(function(el) {
       el.addEventListener("change", refreshWizard);
       el.addEventListener("input", refreshWizard);
     });
 
-    row.appendChild(left); row.appendChild(op); row.appendChild(rtype);
-    row.appendChild(rnum); row.appendChild(rfield); row.appendChild(rm);
+    row.appendChild(leftWrap); row.appendChild(op); row.appendChild(fixedLabel);
+    row.appendChild(rightWrap); row.appendChild(rnum); row.appendChild(notLabel); row.appendChild(rm);
     container.appendChild(row);
-    refreshOperandSelects();
+
+    if (preset) {
+      if (preset.left) setFactorSelectValue(leftWrap, preset.left);
+      if (preset.op) op.value = preset.op;
+      if (preset.right) setFactorSelectValue(rightWrap, preset.right);
+    }
     refreshWizard();
   };
 
-  function refreshOperandSelects() {
-    var opts = operandOptions();
-    document.querySelectorAll(".wz-cond").forEach(function(row) {
-      var left = row.querySelector(".wz-left");
-      var rfield = row.querySelector(".wz-rfield");
-      var lv = left.value, rv = rfield.value;
-      fillSelect(left, opts, lv);
-      fillSelect(rfield, opts, rv);
-    });
+  // 上穿/下穿 → 带 shift(1) 的穿越事件；右值为固定数字时其 shift 退化为常量
+  function condExpression(l, op, r, rIsNum) {
+    if (op === "crosses_above" || op === "crosses_below") {
+      var cmp = op === "crosses_above" ? ">" : "<";
+      var prev = op === "crosses_above" ? "<=" : ">=";
+      var rPrev = rIsNum ? r : (r + ".shift(1)");
+      return "(" + l + " " + cmp + " " + r + ") and (" + l + ".shift(1) " + prev + " " + rPrev + ")";
+    }
+    return l + " " + op + " " + r;
   }
 
   function readGroup(group) {
@@ -456,13 +597,29 @@
       var row = rows[i];
       var l = row.querySelector(".wz-left").value;
       var op = row.querySelector(".wz-op").value;
-      var isNum = row.querySelector(".wz-rtype").value === "number";
+      var isNum = row.querySelector(".wz-isfixed").checked;
       var r = isNum ? row.querySelector(".wz-rnum").value.trim() : row.querySelector(".wz-rfield").value;
       if (!l || r === "") return {error: "有条件行未填完整"};
-      parts.push("(" + l + " " + op + " " + r + ")");
+      var expr = "(" + condExpression(l, op, r, isNum) + ")";
+      // 每条件取反（NOT）：编译为 (not (...))，引擎支持 ast.Not
+      if (row.querySelector(".wz-not").checked) expr = "(not " + expr + ")";
+      parts.push(expr);
     }
     var comb = document.getElementById("wz-" + group + "-combinator").value;
     return {expression: parts.length ? parts.join(comb === "and" ? " and " : " or ") : null};
+  }
+
+  // 条件中实际用到的因子别名 → data.factor_fields
+  function usedFactors() {
+    var used = {};
+    document.querySelectorAll(".wz-cond").forEach(function(row) {
+      [row.querySelector(".wz-left").value,
+       row.querySelector(".wz-isfixed").checked ? null : row.querySelector(".wz-rfield").value
+      ].forEach(function(v) {
+        if (v && ALIAS_TARGET[v]) used[v] = ALIAS_TARGET[v];
+      });
+    });
+    return used;
   }
 
   function buildYamlPreview() {
@@ -471,6 +628,7 @@
     if (entry.error) return {error: "入场" + entry.error};
     if (exit.error) return {error: "出场" + exit.error};
     if (!entry.expression) return {error: "至少需要一条入场条件"};
+    if (!exit.expression) return {error: "至少需要一条出场条件"};
 
     var name = document.getElementById("wz-name").value.trim() || "wizard_strategy";
     var holding = parseInt(document.getElementById("wz-holding").value, 10) || 20;
@@ -482,9 +640,10 @@
     lines.push("data:");
     lines.push("  market_fields: [open, high, low, close, pre_close, vol, amount]");
     lines.push("  factor_fields:");
-    var keys = Object.keys(selectedFactors);
+    var factors = usedFactors();
+    var keys = Object.keys(factors);
     if (keys.length) {
-      keys.forEach(function(a) { lines.push("    " + a + ": " + selectedFactors[a]); });
+      keys.forEach(function(a) { lines.push("    " + a + ": " + factors[a]); });
     } else {
       lines.push("    {}");
     }
@@ -495,7 +654,7 @@
     lines.push("  min_listing_days: 120");
     lines.push("signal:");
     lines.push("  entry: \"" + entry.expression.replace(/"/g, '\\"') + "\"");
-    if (exit.expression) lines.push("  exit: \"" + exit.expression.replace(/"/g, '\\"') + "\"");
+    lines.push("  exit: \"" + exit.expression.replace(/"/g, '\\"') + "\"");
     lines.push("holding:");
     lines.push("  max_holding_days: " + holding);
     var stops = [
@@ -514,8 +673,6 @@
   }
 
   function refreshWizard() {
-    document.getElementById("wz-factor-preview").textContent = factorPreview();
-    refreshOperandSelects();
     var preview = buildYamlPreview();
     document.getElementById("wz-yaml-preview").textContent =
       preview.error ? ("（" + preview.error + "）") : preview.yaml;
@@ -540,9 +697,9 @@
     .then(function(d) {
       if (d.valid) {
         document.getElementById("strategy-yaml").value = preview.yaml;
-        statusEl.textContent = "校验通过，已填入下方 YAML 预览栏，请检查确认后提交回测";
+        statusEl.textContent = "校验通过，已填入「高级 YAML」tab，可前往查看/修改";
         statusEl.className = "ok";
-        document.getElementById("strategy-yaml").scrollIntoView({behavior: "smooth"});
+        switchEntryTab("yaml");
       } else {
         statusEl.textContent = "校验失败: " + d.error;
         statusEl.className = "err";
@@ -550,7 +707,7 @@
     });
   });
 
-  // ---------- YAML 预览栏 ----------
+  // ---------- 高级 YAML 编辑器 ----------
   var yamlEl = document.getElementById("strategy-yaml");
   var validateBox = document.getElementById("validate-result");
   var runStatus = document.getElementById("run-status");
@@ -561,14 +718,23 @@
     if (yaml) {
       sessionStorage.removeItem("rerun_yaml");
       yamlEl.value = yaml;
+      switchEntryTab("yaml");
       yamlEl.scrollIntoView({behavior: "smooth"});
     }
   })();
 
-  // ---------- 方式一: NL → YAML (安全闸：只填入预览栏，绝不自动执行) ----------
+  // ---------- 入口 1: NL → YAML（安全闸：只填入高级 YAML 编辑器，绝不自动执行） ----------
   var nlDesc = document.getElementById("nl-description");
   var nlStatus = document.getElementById("nl-status");
   var nlResult = document.getElementById("nl-result");
+
+  // 可点击示例句：点击填入输入框
+  document.querySelectorAll(".nl-example").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      nlDesc.value = btn.textContent.trim();
+      nlDesc.focus();
+    });
+  });
 
   document.getElementById("btn-nl-compile").addEventListener("click", function() {
     var description = nlDesc.value.trim();
@@ -592,7 +758,12 @@
         nlStatus.className = "ok";
         yamlEl.value = d.yaml;
         var warn = (d.warnings || []).map(function(w) { return '<p class="opt">' + escHtml(w) + '</p>'; }).join('');
-        nlResult.innerHTML = '<p class="ok">已填入下方 YAML 预览栏，<strong>请检查确认后再提交回测</strong>（不会自动执行）。</p>' + warn;
+        nlResult.innerHTML = '<p class="ok">已生成并同步到「高级 YAML」tab 的编辑器，' +
+          '<a href="#" id="nl-goto-yaml">→ 前往查看/修改</a>。<strong>请检查确认后再提交回测</strong>（不会自动执行）。</p>' + warn;
+        var gotoYaml = document.getElementById("nl-goto-yaml");
+        if (gotoYaml) {
+          gotoYaml.addEventListener("click", function(ev) { ev.preventDefault(); switchEntryTab("yaml"); });
+        }
       } else {
         nlStatus.textContent = "编译失败";
         nlStatus.className = "err";
@@ -601,7 +772,7 @@
           html += '<p><a href="#" id="nl-goto-factor-admin">→ 前往「新增因子」tab（路径 A 补周期 / 路径 B 全新指标）</a></p>';
         }
         if (d.yaml) {
-          html += '<p class="opt">可编辑草稿（修正后可手动粘贴到预览栏）：</p><pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
+          html += '<p class="opt">可编辑草稿（修正后可手动粘贴到「高级 YAML」编辑器）：</p><pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
         }
         nlResult.innerHTML = html;
         var gotoLink = document.getElementById("nl-goto-factor-admin");
@@ -685,14 +856,16 @@
 
   // Quick range buttons
   function isoDate(d) { return d.toISOString().slice(0, 10); }
+  function setRangeYears(years) {
+    var end = new Date();
+    var start = new Date();
+    start.setFullYear(start.getFullYear() - years);
+    document.getElementById("param-start").value = isoDate(start);
+    document.getElementById("param-end").value = isoDate(end);
+  }
   document.querySelectorAll(".range-btn").forEach(function(btn) {
     btn.addEventListener("click", function() {
-      var years = parseInt(btn.dataset.years, 10);
-      var end = new Date();
-      var start = new Date();
-      start.setFullYear(start.getFullYear() - years);
-      document.getElementById("param-start").value = isoDate(start);
-      document.getElementById("param-end").value = isoDate(end);
+      setRangeYears(parseInt(btn.dataset.years, 10));
     });
   });
   document.getElementById("range-all").addEventListener("click", function() {
@@ -771,14 +944,19 @@
   var sandboxStatus = document.getElementById("sandbox-status");
   var sandboxList = document.getElementById("sandbox-list");
   var sandboxCategories = [];
+  var smokeSummary = {};  // name -> 冒烟指标摘要文本（两步确认第 2 步展示用）
 
-  document.getElementById("btn-save-sandbox").addEventListener("click", function() {
-    fetch("/api/strategies/create", {
+  function saveToSandbox() {
+    return fetch("/api/strategies/create", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({mode: "manual", yaml_text: yamlEl.value})
     })
-    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); });
+  }
+
+  document.getElementById("btn-save-sandbox").addEventListener("click", function() {
+    saveToSandbox()
     .then(function(res) {
       var d = res.body;
       show(validateBox);
@@ -789,6 +967,35 @@
       } else {
         validateBox.innerHTML = '<span class="err">' + escHtml(d.error || "存入沙箱失败") + '</span>';
       }
+    })
+    .catch(function(err) {
+      show(validateBox);
+      validateBox.innerHTML = '<span class="err">' + err + '</span>';
+    });
+  });
+
+  // 高级 YAML 底部冒烟入口：两步确认第 1 步（存入沙箱 + 启动冒烟，绝不自动正式回测）
+  document.getElementById("btn-save-smoke").addEventListener("click", function() {
+    saveToSandbox()
+    .then(function(res) {
+      var d = res.body;
+      show(validateBox);
+      if (!d.ok) {
+        validateBox.innerHTML = '<span class="err">' + escHtml(d.error || "存入沙箱失败") + '</span>';
+        return;
+      }
+      var name = d.name;
+      validateBox.innerHTML = '<span class="ok">已存入沙箱：' + escHtml(name) + '，冒烟测试启动中...</span>';
+      sandboxAction("/api/strategies/smoke", {name: name},
+        "两步确认 · 第 1 步：冒烟已启动（600519.SH 近 6 个月）；通过后在下方列表点「正式回测（晋升）」");
+      // 轮询沙箱列表刷新冒烟 sidecar 状态（通过=绿/失败=红）
+      var polls = 0;
+      var timer = setInterval(function() {
+        polls++;
+        loadSandbox();
+        if (polls >= 24) clearInterval(timer);
+      }, 5000);
+      document.getElementById("sandbox-panel").scrollIntoView({behavior: "smooth"});
     })
     .catch(function(err) {
       show(validateBox);
@@ -888,10 +1095,11 @@
         sandboxCategories = d.categories || [];
         var items = d.strategies || [];
         if (!items.length) {
-          sandboxList.innerHTML = '<p class="opt">（沙箱为空：用上方"存入沙箱"按钮把预览栏中的策略放进来）</p>';
+          sandboxList.innerHTML = '<p class="opt">（沙箱为空：在「高级 YAML」tab 用「存入沙箱」或「存入沙箱 + 冒烟测试」把策略放进来）</p>';
           return;
         }
         var html = "";
+        smokeSummary = {};
         items.forEach(function(s) {
           var smoke;
           if (s.smoke) {
@@ -906,7 +1114,10 @@
               if (m.strategy_total_return != null) parts.push("收益 " + (m.strategy_total_return * 100).toFixed(2) + "%");
               if (m.excess_return_vs_buy_hold != null) parts.push("超额 " + (m.excess_return_vs_buy_hold * 100).toFixed(2) + "%");
               if (m.max_drawdown != null) parts.push("回撤 " + (m.max_drawdown * 100).toFixed(2) + "%");
-              if (parts.length) smoke += ' <span class="opt">(' + escHtml(parts.join("，")) + ')</span>';
+              if (parts.length) {
+                smoke += ' <span class="opt">(' + escHtml(parts.join("，")) + ')</span>';
+                smokeSummary[s.name] = parts.join("，");
+              }
             }
             if (st === "failed" && s.smoke.error) {
               smoke += ' <span class="err">' + escHtml(String(s.smoke.error).slice(0, 120)) + '</span>';
@@ -923,7 +1134,7 @@
             '<span class="opt">' + escHtml(s.mtime || "") + '</span> ' + smoke + ' ' +
             '<button class="btn-sm sb-smoke">冒烟测试</button> ' +
             '<select class="sb-category">' + options + '</select>' +
-            '<button class="btn-sm sb-promote">晋升</button> ' +
+            '<button class="btn-sm sb-promote" title="两步确认 · 第 2 步：晋升入 catalog 并立即触发全量正式回测">正式回测（晋升）</button> ' +
             '<button class="btn-sm sb-deepval" title="cluster-ashare 四关验证（入场信号逐日池，可能耗时数十分钟）">深度验证</button> ' +
             '<button class="btn-sm btn-danger-outline sb-delete">删除</button>' +
             '<div class="opt dv-slot"></div>' +
@@ -944,8 +1155,15 @@
           });
           row.querySelector(".sb-promote").addEventListener("click", function() {
             var category = row.querySelector(".sb-category").value;
-            if (!confirm("确认将 " + name + " 晋升到 catalog/" + category + " 并触发全量回测？")) return;
-            sandboxAction("/api/strategies/promote", {name: name, category: category}, "已晋升");
+            var msg = "两步确认 · 第 2 步（正式回测）：\n"
+              + "策略 " + name + " 将晋升到 catalog/" + category + " 并立即触发一次全量正式回测。\n";
+            if (smokeSummary[name]) {
+              msg += "冒烟摘要（600519.SH 近 6 个月）：" + smokeSummary[name] + "。\n";
+            } else {
+              msg += "注意：该策略尚无已通过的冒烟摘要。\n";
+            }
+            if (!confirm(msg + "确认执行正式回测？")) return;
+            sandboxAction("/api/strategies/promote", {name: name, category: category}, "已晋升（全量正式回测已触发）");
           });
           row.querySelector(".sb-delete").addEventListener("click", function() {
             if (!confirm("确认删除沙箱策略 " + name + "？")) return;
@@ -961,10 +1179,10 @@
 
   document.getElementById("btn-sandbox-refresh").addEventListener("click", loadSandbox);
 
-  // init
-  loadFactorCatalog();
-  wzAddCondition("entry");
-  refreshWizard();
+  // init：默认回测区间=近2年、标的范围=全 A 股（HTML 已 checked/disabled）
+  setRangeYears(2);
+  loadFactorCatalog();  // 完成后预填占位条件（EMA5 上/下穿 EMA200，无 ema 字段则回退 close/pre_close）
+  if (!catalogReady) { /* 目录加载失败时保留空白条件行，便于理解格式 */ }
   loadSandbox();
 })();
 </script>

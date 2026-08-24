@@ -12,7 +12,18 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-LAB-PORT-017 (DONE — 1807 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-LAB-ENTRY-020 (DONE — 1809 tests green + 4 skipped；awaiting git approval)
+
+2026-08-24: 因子选单改三级联动（大类 → 子类[表，>30 项按 30 分段] → 因子，
+搜索跨级直达）；每条件加「取反」勾选（编译 (not (...))，引擎 signals.py
+补 ast.Not 支持）；跨优先级嵌套不做（走高级 YAML）。8080 零改动。
+上一任务：QRE-GUI-LAB-ENTRY-019 (DONE — 1808 tests green；见 05/09)
+两步确认显性化：晋升按钮改「正式回测（晋升）」confirm 带冒烟摘要。
+selectedFactors 改由条件行使用推导（usedFactors），删除 #wz-factor-groups。
+style.css 纯追加；零新前端依赖；API 契约零变化。测试 test_gui_lab.py +1。
+冒烟：qre-gui-lab 重启 active，8081 / 200 含三 entry-tab 标记，8080 / 200；
+node 语法自检三个 script 块全过。无 CR。未 git commit，等用户审批。
+上一任务：QRE-GUI-LAB-PORT-017 (DONE — 1807 tests green + 4 skipped；见 05/09)
 
 2026-08-23: 回测台新端口移植——「新增策略」+「回测管理（策略状态）」
 两页面原样移植到独立 Flask 应用 @8081（纯移植零优化）。路由共享：

@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-GUI-LAB-PORT-017（回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081）
+QRE-GUI-LAB-ENTRY-018（8081 回测台「新增策略」tab 三入口递进重构：自然语言 / 快速向导 / 高级 YAML）
+
+## Implementation Summary
+
+按用户拍板规格把 lab.html「新增策略」tab 的平铺结构替换为三入口 tab（8081 独占模板，8080 index.html/admin.html/app.py 零改动，`git diff --name-only HEAD` 仅 lab.html + style.css + test_gui_lab.py）。①HTML：`.entry-tabs` 子 tab 条（① 自然语言·默认 active ② 快速向导 ③ 高级 YAML）+ 三个 `.entry-content` 面板；回测参数区与沙箱面板为三入口共用。②自然语言：rows=5 大输入框 + `#nl-examples` 4 个 `.nl-example` 示例句按钮（点击填入输入框并 focus）；编译成功 `yamlEl.value = d.yaml` 同步到高级 YAML 编辑器，结果框给「→ 前往查看/修改」链接调 `switchEntryTab("yaml")`。③快速向导：因子 checkbox 菜单栏删除，改为**带搜索的分组下拉**——`/api/factors` 各组（含行情字段组）展开为 `FACTOR_OPTIONS`（别名冲突 `_2` 后缀，`ALIAS_TARGET` 记 factors.table.column），每个 `.wz-factsel` = filter 输入（实时按 label/别名关键字重建 select 的 optgroup）+ select；条件行 = 左因子下拉 → `.wz-op` 比较符（上穿 crosses_above/下穿 crosses_below/大于/小于/大于等于/小于等于）→ 右值（`.wz-rfield` 因子下拉，或勾选 `.wz-isfixed`「固定值」填 `.wz-rnum` 数字）；上穿/下穿编译为真实穿越事件 `(l > r) and (l.shift(1) <= r.shift(1))`（表达式 DSL 支持 `.shift`，右值为数字时 shift 退化常量）。入场/出场 `span.req` 红色 * 必选（buildYamlPreview 两组均强制），占位示例预填 EMA5 上穿 EMA200 / 下穿（`prefillPlaceholderConditions`，因子库实测含 ema_5/ema_200，缺失则回退 close/pre_close）；止盈/止损/移动止损/最大持仓天数/条件组 AND·OR 收进折叠 `#sec-wz-advanced`「高级选项（可选）」。`selectedFactors` 不再靠勾选维护，`usedFactors()` 从条件行实际使用推导。④高级 YAML：编辑器 + 验证/存入沙箱/上传/模板照旧，底部新增 `#btn-save-smoke`「存入沙箱 + 冒烟测试」（saveToSandbox() 抽取复用 → /api/strategies/smoke → 5s 轮询 + 滚动到沙箱面板）= 两步确认第 1 步。⑤回测参数：必选 * 仅回测区间（init `setRangeYears(2)` 默认近两年）与标的范围（`#param-all-market` 默认 checked、codes disabled）；模式/资金/佣金 0.0003/最低佣金 5.0/印花税 0.0005/滑点/止损止盈/precheck/引擎/executor/DB/profile/output 全部并入折叠 `#sec-adv-params` 高级参数（默认值不变）。⑥两步确认显性化：沙箱列表晋升按钮改「正式回测（晋升）」，confirm 文案带冒烟指标摘要（`smokeSummary` map，loadSandbox 时从 smoke.metrics 填充；无摘要时明示「尚无已通过的冒烟摘要」）；API 契约与后端零变化。⑦style.css 纯追加（.entry-tab/.entry-content/.nl-example/.wz-factsel/#nl-description），既有规则零改动；零新前端框架/CDN。测试 `tests/test_gui_lab.py` +1（test_lab_strategy_three_entry_tabs：三 tab 标记与默认 active、≥3 示例句含规格两句、req 必选标注四处、两个折叠面板、btn-save-smoke、「正式回测（晋升）」、摩擦默认值、旧 `#wz-factor-groups` 移除断言），既有 12 用例零改动通过。验证：`uv run pytest -q` → 1808 passed + 4 skipped（全绿）；node `new Function` 语法自检三个 <script> 块全过；`sudo -n systemctl restart qre-gui-lab.service` 后 is-active=active、curl 8081 / 200 且含 `data-entry-tab="nl"/"wizard"/"yaml"`（entry-tab/nl-example/btn-save-smoke 共 18 处命中）、8080 / 200。无 CR（用户已拍板规格）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-LAB-PORT-017（回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081）
 
 ## Implementation Summary
 
