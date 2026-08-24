@@ -351,12 +351,8 @@ th.sortable:hover { color: var(--accent, #58a6ff); }
 }
 .nl-example:hover { color: var(--primary); border-color: var(--primary); }
 
-/* 快速向导：二级联动因子选单（搜索 + 分类 select + 因子 select） */
+/* 快速向导：三级联动因子选单（大类 select + 子类 select + 因子 select） */
 .wz-factsel { display: inline-flex; gap: 3px; align-items: center; }
-.wz-factsel .wz-fact-filter {
-  width: 64px; padding: 3px 5px; border: 1px solid var(--border);
-  border-radius: var(--radius); font-size: 12px;
-}
 .wz-factsel .wz-fact-group { max-width: 90px; }
 .wz-factsel .wz-fact-sub { max-width: 150px; }
 .wz-factsel select { max-width: 200px; }

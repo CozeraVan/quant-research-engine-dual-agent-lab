@@ -106,6 +106,10 @@ def test_lab_strategy_three_entry_tabs(lab_client):
     # 高级 YAML 底部冒烟按钮（两步确认第 1 步）
     assert 'id="btn-save-smoke"' in html
     assert "正式回测（晋升）" in html
+    # 向导内鼠标-only 闭环（QRE-GUI-LAB-ENTRY-022）：冒烟按钮在向导页 + 去高级 YAML 为次按钮
+    assert 'id="wz-save-smoke"' in html
+    assert "去高级 YAML 修改详情" in html
+    assert "saveAndSmoke" in html  # 向导/高级共用冒烟流程
     # 回测参数：必选仅回测区间与标的范围；其余收进折叠的高级参数
     assert '回测区间 <span class="req">*</span>' in html
     assert '标的范围 <span class="req">*</span>' in html
@@ -117,12 +121,12 @@ def test_lab_strategy_three_entry_tabs(lab_client):
     # 旧平铺结构（checkbox 因子菜单栏）已移除
     assert 'id="wz-factor-groups"' not in html
     assert 'sec-wz-factors' not in html
-    # 因子三级联动选单（QRE-GUI-LAB-ENTRY-020）：大类 → 子类 → 因子 + 跨级搜索
+    # 因子三级联动选单（QRE-GUI-LAB-ENTRY-020/021）：大类 → 子类 → 因子
     assert "wz-fact-group" in html          # 一级：大类
     assert "wz-fact-sub" in html            # 二级：子类（表/分段）
     assert "syncFactorSelect" in html       # 三级联动同步
-    assert "跨级直达" in html               # 搜索提示语
     assert "optgroup" not in html           # 旧单组长下拉已移除
+    assert "wz-fact-filter" not in html     # 搜索框已删除（用户反馈多余）
     # 每条件取反（NOT）：引擎 ast.Not + 向导勾选
     assert "wz-not" in html and "取反" in html
 

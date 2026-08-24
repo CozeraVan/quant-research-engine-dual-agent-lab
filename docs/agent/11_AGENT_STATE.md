@@ -12,12 +12,13 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-LAB-ENTRY-020 (DONE — 1809 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-LAB-ENTRY-022 (DONE — 1809 tests green + 4 skipped；awaiting git approval)
 
-2026-08-24: 因子选单改三级联动（大类 → 子类[表，>30 项按 30 分段] → 因子，
-搜索跨级直达）；每条件加「取反」勾选（编译 (not (...))，引擎 signals.py
-补 ast.Not 支持）；跨优先级嵌套不做（走高级 YAML）。8080 零改动。
-上一任务：QRE-GUI-LAB-ENTRY-019 (DONE — 1808 tests green；见 05/09)
+2026-08-24: ①NL 示例编译失败无法复现（curl 4/4 + jsdom 点击流均成功，
+疑 DeepSeek 抖动/缓存旧页）②高级选项七输入补 change+input 监听即时刷新
+YAML 预览 ③向导页加「存入沙箱+冒烟测试」主按钮（saveAndSmoke 共用流程），
+「去高级 YAML」降为次按钮，向导全程鼠标闭环不强制跳 tab。8080 零改动。
+上一任务：QRE-GUI-LAB-ENTRY-021 (DONE — 1809 tests green；见 05/09)
 两步确认显性化：晋升按钮改「正式回测（晋升）」confirm 带冒烟摘要。
 selectedFactors 改由条件行使用推导（usedFactors），删除 #wz-factor-groups。
 style.css 纯追加；零新前端依赖；API 契约零变化。测试 test_gui_lab.py +1。

@@ -90,9 +90,11 @@
       <h4 style="margin-top:12px;">策略 YAML 预览</h4>
       <pre id="wz-yaml-preview" class="compiled-yaml">（添加入场/出场条件后自动生成）</pre>
       <div class="builder-actions">
-        <button id="wz-fill-editor" class="btn btn-primary">校验并填入「高级 YAML」</button>
+        <button id="wz-save-smoke" class="btn btn-primary" title="向导内直接完成：存入沙箱并启动冒烟测试（600519.SH 近 6 个月）">存入沙箱 + 冒烟测试</button>
+        <button id="wz-fill-editor" class="btn btn-ghost" title="把生成的 YAML 填入「高级 YAML」tab 并跳转，供手动精修">去高级 YAML 修改详情 →</button>
         <span id="wz-status" class="hidden"></span>
       </div>
+      <p class="opt" style="margin-top:6px;">两步确认：此处点「存入沙箱 + 冒烟测试」为第 1 步；冒烟通过后在下方「沙箱策略」列表点「正式回测（晋升）」——全程鼠标操作，无需切换选项卡。</p>
     </div>
   </div>
 
@@ -342,7 +344,7 @@
           statusEl.innerHTML = '<span class="err">' + esc(res.body.error || "因子库不可用") + '</span>';
           return;
         }
-        statusEl.textContent = "条件行选因子：大类 → 子类 → 因子（三级选单），或在搜索框输入关键字跨级直达：";
+        statusEl.textContent = "条件行选因子：大类 → 子类 → 因子（三级选单逐级收窄）：";
         res.body.groups.forEach(function(group) {
           group.items.forEach(function(item) {
             // 别名冲突时追加数字后缀，保证表达式内唯一
@@ -402,7 +404,7 @@
     wzAddCondition("exit",  {left: l, op: "crosses_below", right: r});
   }
 
-  // ---------- 三级联动下拉（大类 → 子类 → 因子）+ 跨级搜索（原生 JS，零依赖） ----------
+  // ---------- 三级联动下拉（大类 → 子类 → 因子，原生 JS，零依赖） ----------
   function factorGroups() {
     var order = [];
     FACTOR_OPTIONS.forEach(function(o) {
@@ -419,20 +421,15 @@
     return order;
   }
 
-  function renderFactorOptions(sel, kw, current, groupFilter, subFilter) {
+  function renderFactorOptions(sel, current, groupFilter, subFilter) {
     sel.innerHTML = "";
-    var kwl = (kw || "").trim().toLowerCase();
-    // 有搜索关键字 → 跨级匹配直达；否则按 大类 → 子类 逐级收窄，避免长列表
+    // 按 大类 → 子类 逐级收窄，避免长列表
     FACTOR_OPTIONS.forEach(function(o) {
-      if (kwl) {
-        if (o.label.toLowerCase().indexOf(kwl) < 0 && o.value.toLowerCase().indexOf(kwl) < 0) return;
-      } else {
-        if (groupFilter && o.group !== groupFilter) return;
-        if (subFilter && o.sub !== subFilter) return;
-      }
+      if (groupFilter && o.group !== groupFilter) return;
+      if (subFilter && o.sub !== subFilter) return;
       var opt = document.createElement("option");
       opt.value = o.value;
-      opt.textContent = kwl ? (o.group + " · " + o.sub + " · " + o.label) : o.label;
+      opt.textContent = o.label;
       sel.appendChild(opt);
     });
     if (current) sel.value = current;
@@ -441,9 +438,6 @@
   function makeFactorSelect(cls) {
     var wrap = document.createElement("span");
     wrap.className = "wz-factsel";
-    var filter = document.createElement("input");
-    filter.className = "wz-fact-filter";
-    filter.placeholder = "搜索";
     var groupSel = document.createElement("select");   // 一级：大类
     groupSel.className = "wz-fact-group";
     var subSel = document.createElement("select");     // 二级：子类（表/分段）
@@ -452,19 +446,14 @@
     sel.className = cls;
     groupSel.addEventListener("change", function() {
       fillSubOptions(wrap);
-      renderFactorOptions(sel, filter.value, null, filter.value.trim() ? null : groupSel.value, filter.value.trim() ? null : subSel.value);
+      renderFactorOptions(sel, null, groupSel.value, subSel.value);
       refreshWizard();
     });
     subSel.addEventListener("change", function() {
-      renderFactorOptions(sel, filter.value, null, filter.value.trim() ? null : groupSel.value, filter.value.trim() ? null : subSel.value);
+      renderFactorOptions(sel, null, groupSel.value, subSel.value);
       refreshWizard();
     });
-    filter.addEventListener("input", function() {
-      // 输入关键字时忽略分级过滤，跨级直达
-      renderFactorOptions(sel, filter.value, sel.value, null, null);
-    });
     sel.addEventListener("change", refreshWizard);
-    wrap.appendChild(filter);
     wrap.appendChild(groupSel);
     wrap.appendChild(subSel);
     wrap.appendChild(sel);
@@ -498,7 +487,7 @@
     });
     if (curOpt) groupSel.value = curOpt.group;
     fillSubOptions(wrap, curOpt ? curOpt.sub : null);
-    renderFactorOptions(sel, "", cur, groupSel.value, subSel.value);
+    renderFactorOptions(sel, cur, groupSel.value, subSel.value);
   }
 
   function setFactorSelectValue(wrap, value) {
@@ -575,6 +564,10 @@
       if (preset.left) setFactorSelectValue(leftWrap, preset.left);
       if (preset.op) op.value = preset.op;
       if (preset.right) setFactorSelectValue(rightWrap, preset.right);
+    } else if (catalogReady) {
+      // 目录就绪后新增的行：立即同步三级选单（否则下拉为空）
+      syncFactorSelect(leftWrap, null);
+      syncFactorSelect(rightWrap, null);
     }
     refreshWizard();
   };
@@ -679,6 +672,14 @@
     return preview;
   }
 
+  // 高级选项/策略 ID 实时同步 YAML 预览（bug 修复：此前这些输入没有监听）
+  ["wz-name", "wz-entry-combinator", "wz-exit-combinator",
+   "wz-holding", "wz-stop-loss", "wz-take-profit", "wz-trailing"].forEach(function(id) {
+    var el = document.getElementById(id);
+    el.addEventListener("change", refreshWizard);
+    el.addEventListener("input", refreshWizard);
+  });
+
   document.getElementById("wz-fill-editor").addEventListener("click", function() {
     var preview = buildYamlPreview();
     var statusEl = document.getElementById("wz-status");
@@ -697,7 +698,7 @@
     .then(function(d) {
       if (d.valid) {
         document.getElementById("strategy-yaml").value = preview.yaml;
-        statusEl.textContent = "校验通过，已填入「高级 YAML」tab，可前往查看/修改";
+        statusEl.textContent = "校验通过，已填入「高级 YAML」tab，正在前往修改…";
         statusEl.className = "ok";
         switchEntryTab("yaml");
       } else {
@@ -705,6 +706,19 @@
         statusEl.className = "err";
       }
     });
+  });
+
+  // 向导内鼠标-only 闭环：存入沙箱 + 冒烟（两步确认第 1 步），不跳转选项卡
+  document.getElementById("wz-save-smoke").addEventListener("click", function() {
+    var preview = buildYamlPreview();
+    var statusEl = document.getElementById("wz-status");
+    statusEl.classList.remove("hidden");
+    if (preview.error) {
+      statusEl.textContent = preview.error;
+      statusEl.className = "err";
+      return;
+    }
+    saveAndSmoke(preview.yaml, statusEl, "向导策略已存入沙箱");
   });
 
   // ---------- 高级 YAML 编辑器 ----------
@@ -946,13 +960,42 @@
   var sandboxCategories = [];
   var smokeSummary = {};  // name -> 冒烟指标摘要文本（两步确认第 2 步展示用）
 
-  function saveToSandbox() {
+  function saveToSandbox(yamlText) {
     return fetch("/api/strategies/create", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({mode: "manual", yaml_text: yamlEl.value})
+      body: JSON.stringify({mode: "manual", yaml_text: yamlText != null ? yamlText : yamlEl.value})
     })
     .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); });
+  }
+
+  // 存入沙箱 + 冒烟（两步确认第 1 步）的共用流程：高级 YAML 与快速向导共用
+  function saveAndSmoke(yamlText, statusEl, okPrefix) {
+    saveToSandbox(yamlText)
+    .then(function(res) {
+      var d = res.body;
+      show(statusEl);
+      if (!d.ok) {
+        statusEl.innerHTML = '<span class="err">' + escHtml(d.error || "存入沙箱失败") + '</span>';
+        return;
+      }
+      var name = d.name;
+      statusEl.innerHTML = '<span class="ok">' + escHtml(okPrefix || "已存入沙箱") + '：' + escHtml(name) + '，冒烟测试启动中...</span>';
+      sandboxAction("/api/strategies/smoke", {name: name},
+        "两步确认 · 第 1 步：冒烟已启动（600519.SH 近 6 个月）；通过后在下方列表点「正式回测（晋升）」");
+      // 轮询沙箱列表刷新冒烟 sidecar 状态（通过=绿/失败=红）
+      var polls = 0;
+      var timer = setInterval(function() {
+        polls++;
+        loadSandbox();
+        if (polls >= 24) clearInterval(timer);
+      }, 5000);
+      document.getElementById("sandbox-panel").scrollIntoView({behavior: "smooth"});
+    })
+    .catch(function(err) {
+      show(statusEl);
+      statusEl.innerHTML = '<span class="err">' + err + '</span>';
+    });
   }
 
   document.getElementById("btn-save-sandbox").addEventListener("click", function() {
@@ -976,31 +1019,7 @@
 
   // 高级 YAML 底部冒烟入口：两步确认第 1 步（存入沙箱 + 启动冒烟，绝不自动正式回测）
   document.getElementById("btn-save-smoke").addEventListener("click", function() {
-    saveToSandbox()
-    .then(function(res) {
-      var d = res.body;
-      show(validateBox);
-      if (!d.ok) {
-        validateBox.innerHTML = '<span class="err">' + escHtml(d.error || "存入沙箱失败") + '</span>';
-        return;
-      }
-      var name = d.name;
-      validateBox.innerHTML = '<span class="ok">已存入沙箱：' + escHtml(name) + '，冒烟测试启动中...</span>';
-      sandboxAction("/api/strategies/smoke", {name: name},
-        "两步确认 · 第 1 步：冒烟已启动（600519.SH 近 6 个月）；通过后在下方列表点「正式回测（晋升）」");
-      // 轮询沙箱列表刷新冒烟 sidecar 状态（通过=绿/失败=红）
-      var polls = 0;
-      var timer = setInterval(function() {
-        polls++;
-        loadSandbox();
-        if (polls >= 24) clearInterval(timer);
-      }, 5000);
-      document.getElementById("sandbox-panel").scrollIntoView({behavior: "smooth"});
-    })
-    .catch(function(err) {
-      show(validateBox);
-      validateBox.innerHTML = '<span class="err">' + err + '</span>';
-    });
+    saveAndSmoke(yamlEl.value, validateBox, "已存入沙箱");
   });
 
   function sandboxAction(url, payload, doneText) {
