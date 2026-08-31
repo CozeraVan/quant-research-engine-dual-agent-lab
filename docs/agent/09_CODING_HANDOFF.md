@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-GUI-LAB-ENTRY-018（8081 回测台「新增策略」tab 三入口递进重构：自然语言 / 快速向导 / 高级 YAML）
+QRE-GUI-LAB-RESULT-030（B 层关键词换代：jieba 碎片词 → 东财+同花顺概念板块成分；8080 总览「概念标签源」卡片）
+
+## Implementation Summary
+
+跨仓任务。cluster-ashare 侧（详见该仓 README/docs）：新 `src/tags_lb_concept.py` 双源采集 B 层概念板块成分（东财 akshare 接口 + 同花顺自带分页抓取——akshare 1.18.x 已删 cons_ths；q.10jqka.com.cn 落地页 + page_info + 无 field 段 ajax 翻页、hexin-v 现算、尾页空表终止、回绕页去重、浮点代码截断映射 stock_basic.symbol）、`scripts/drop_lb_jieba.py` 删旧 NLP B 层（97,838 行已执行）、`run_mvp1 build-tags` 周更接线、`tags_lb.py` DEPRECATED。本仓（QRE）改动：①`gui/admin.py` 新 `overview_concept_tags(db_url)` + `CONCEPT_TAG_SOURCES` 常量——cluster.company_tags B 层 GROUP BY source（tag 条数/概念数/覆盖股票数/最新 first_seen），表缺失 present=False、DB 挂 ok=False，自降级不拖垮总览（同 overview_derivatives 模式）；②`gui/app.py` `/api/admin/overview` payload 加 `concept_tags`；③`gui/templates/admin.html` 总览加 `#ov-concept-tags` 卡片（概念标签源（B 层），表格：源/概念数/标签条数/覆盖股票/最新入库，零数据源标红「无数据」）。8081 归因端（lab_result.py）零改动——直接消费新 B 层。测试 `tests/test_gui_admin.py` +7（正常/缺源补零/表缺失/DB 挂/总览 payload/失败不 503/模板断言）。验证：`uv run pytest -q` → 1840 passed + 4 skipped（全绿，基线 1833+7）；带库 test_client 实测 /api/admin/overview concept_tags 返回 em_concept(290 概念/26,701 标签/5,261 股) + ths_concept(375/15,847/4,190)；8081 tag-analysis 实测示例 run 20260831T045758989180 B 层 20 块全真概念词；admin.html node --check 过。未重启 service、未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-LAB-ENTRY-018（8081 回测台「新增策略」tab 三入口递进重构：自然语言 / 快速向导 / 高级 YAML）
 
 ## Implementation Summary
 

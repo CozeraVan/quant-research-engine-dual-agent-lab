@@ -427,6 +427,7 @@ def create_app() -> Flask:
         from quant_research_engine.gui.admin import (
             health_status,
             overview_backtests,
+            overview_concept_tags,
             overview_daily,
             overview_derivatives,
             overview_factors,
@@ -440,11 +441,12 @@ def create_app() -> Flask:
             return jsonify({"ok": False, "error": f"数据库不可用（{exc}）"}), 503
         backtests = overview_backtests()
         derivatives = overview_derivatives(db_url)  # 内部自降级，不拖垮总览
+        concept_tags = overview_concept_tags(db_url)  # 内部自降级，不拖垮总览
         health = health_status(
             daily.get("watermark"),
             [t["watermark"] for t in factors["tables"]],
         )
-        return jsonify({"ok": True, "daily": daily, "factors": factors, "backtests": backtests, "health": health, "derivatives": derivatives})
+        return jsonify({"ok": True, "daily": daily, "factors": factors, "backtests": backtests, "health": health, "derivatives": derivatives, "concept_tags": concept_tags})
 
     @app.route("/api/admin/timers")
     def api_admin_timers() -> Any:

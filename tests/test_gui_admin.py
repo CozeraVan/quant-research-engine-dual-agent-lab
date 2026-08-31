@@ -874,3 +874,128 @@ def test_admin_template_has_derivatives_card(app_client):
     html = app_client.get("/admin").data.decode("utf-8")
     assert 'id="ov-derivatives"' in html
     assert "衍生品数据" in html
+
+
+# --- 概念标签源卡片（QRE-GUI-CONCEPT-TAG-CARD-030） ---
+
+
+class _ConceptConn(_FakeConn):
+    """cluster.company_tags B 层：to_regclass 存在性 + GROUP BY source 聚合行。"""
+
+    def __init__(self, store, present=True, group_rows=None):
+        super().__init__(store)
+        self._present = present
+        self._group_rows = group_rows or []
+
+    def execute(self, clause, params=None):
+        sql = str(clause)
+        if "to_regclass" in sql:
+            return _FakeResult(scalar="cluster.company_tags" if self._present else None)
+        if "FROM cluster.company_tags" in sql and "GROUP BY source" in sql:
+            return _FakeResult(rows=self._group_rows)
+        return super().execute(clause, params)
+
+
+def _setup_concept_tags(monkeypatch, present=True, group_rows=None):
+    admin._cache.clear()
+    store = FakeStore()
+    conn = _ConceptConn(store, present=present, group_rows=group_rows)
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin._store", lambda db_url=None: _DerivStore(conn)
+    )
+    return conn
+
+
+def test_overview_concept_tags_ok(monkeypatch):
+    _setup_concept_tags(
+        monkeypatch,
+        group_rows=[
+            ("em_concept", 60000, 480, 5200, "2026-08-31"),
+            ("ths_concept", 55000, 370, 5300, "2026-08-31"),
+            ("legacy_source", 10, 2, 5, "2026-01-01"),  # 未登记源也如实列出
+        ],
+    )
+    out = admin.overview_concept_tags()
+    assert out["ok"] is True and out["present"] is True
+    by_source = {s["source"]: s for s in out["sources"]}
+    assert by_source["em_concept"]["label"] == "东方财富概念板块"
+    assert by_source["em_concept"]["uniq_tags"] == 480
+    assert by_source["em_concept"]["tag_rows"] == 60000
+    assert by_source["em_concept"]["stocks"] == 5200
+    assert by_source["em_concept"]["latest_seen"] == "2026-08-31"
+    assert by_source["ths_concept"]["stocks"] == 5300
+    assert by_source["legacy_source"]["uniq_tags"] == 2
+    admin._cache.clear()
+
+
+def test_overview_concept_tags_missing_source_zero_fill(monkeypatch):
+    """只有东财源时，同花顺源显示 0 而不是消失。"""
+    _setup_concept_tags(
+        monkeypatch,
+        group_rows=[("em_concept", 100, 10, 50, "2026-08-31")],
+    )
+    out = admin.overview_concept_tags()
+    by_source = {s["source"]: s for s in out["sources"]}
+    assert by_source["ths_concept"]["tag_rows"] == 0
+    assert by_source["ths_concept"]["latest_seen"] is None
+    admin._cache.clear()
+
+
+def test_overview_concept_tags_table_absent(monkeypatch):
+    _setup_concept_tags(monkeypatch, present=False)
+    out = admin.overview_concept_tags()
+    assert out["ok"] is True and out["present"] is False
+    assert out["sources"] == []
+    admin._cache.clear()
+
+
+def test_overview_concept_tags_db_down(monkeypatch):
+    admin._cache.clear()
+
+    def boom(db_url=None):
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", boom)
+    out = admin.overview_concept_tags()
+    assert out["ok"] is False
+    assert "数据库不可用" in out["error"]
+    admin._cache.clear()
+
+
+def test_api_admin_overview_includes_concept_tags(app_client, monkeypatch):
+    _setup_concept_tags(
+        monkeypatch,
+        group_rows=[("em_concept", 60000, 480, 5200, "2026-08-31")],
+    )
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.managed_factor_tables",
+        lambda repo=None: {"stock_daily_momentum_close", "stock_daily_overlap_close"},
+    )
+    resp = app_client.get("/api/admin/overview")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["concept_tags"]["ok"] is True
+    em = {s["source"]: s for s in data["concept_tags"]["sources"]}["em_concept"]
+    assert em["uniq_tags"] == 480
+
+
+def test_api_admin_overview_concept_tags_failure_no_503(app_client, monkeypatch):
+    """概念标签查询失败自降级（ok=False），不拖垮总览 503 语义。"""
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: FakeStore())
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.managed_factor_tables",
+        lambda repo=None: {"stock_daily_momentum_close", "stock_daily_overlap_close"},
+    )
+    monkeypatch.setattr(admin, "overview_concept_tags",
+                        lambda db_url=None: {"ok": False, "error": "boom", "sources": []})
+    resp = app_client.get("/api/admin/overview")
+    assert resp.status_code == 200
+    assert resp.get_json()["concept_tags"]["ok"] is False
+    admin._cache.clear()
+
+
+def test_admin_template_has_concept_tags_card(app_client):
+    html = app_client.get("/admin").data.decode("utf-8")
+    assert 'id="ov-concept-tags"' in html
+    assert "概念标签源" in html

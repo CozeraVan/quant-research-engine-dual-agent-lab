@@ -372,6 +372,74 @@ def overview_derivatives(db_url: str | None = None) -> dict[str, Any]:
     return _cached(f"overview_derivatives:{db_url}", _produce)
 
 
+#: B 层概念标签源（QRE-GUI-CONCEPT-TAG-CARD-030）：cluster.company_tags layer='B'
+#: 的 source 分布卡片。2026-08-31 起 B 层 = 东财+同花顺概念板块成分
+#: （em_concept / ths_concept，取代已删除的 jieba 碎片词 tushare_stock_company）。
+CONCEPT_TAG_SOURCES: list[tuple[str, str]] = [
+    ("em_concept", "东方财富概念板块"),
+    ("ths_concept", "同花顺概念板块"),
+]
+
+
+def overview_concept_tags(db_url: str | None = None) -> dict[str, Any]:
+    """概念标签源卡片：B 层各 source 的 tag 数 / 覆盖股票数 / 标签条数 / 最新 first_seen。
+
+    cluster.company_tags 不存在 → present=False 优雅降级；查询失败 → ok=False，
+    不拖垮总览（与 overview_derivatives 同款自降级）。
+    """
+    from sqlalchemy import text
+
+    def _produce() -> dict[str, Any]:
+        try:
+            store = _store(db_url)
+        except Exception as exc:
+            return {"ok": False, "error": f"数据库不可用（{exc}）", "sources": []}
+        try:
+            with store.market_engine.begin() as conn:
+                exists = conn.execute(
+                    text("SELECT to_regclass('cluster.company_tags')")
+                ).scalar()
+                if exists is None:
+                    return {"ok": True, "present": False, "sources": []}
+                rows = conn.execute(
+                    text(
+                        "SELECT source, count(*) AS tag_rows, count(DISTINCT tag) AS uniq_tags, "
+                        "count(DISTINCT ts_code) AS stocks, max(first_seen) AS latest_seen "
+                        "FROM cluster.company_tags WHERE layer = 'B' GROUP BY source"
+                    )
+                ).fetchall()
+            by_source = {str(r[0]): r for r in rows}
+            sources: list[dict[str, Any]] = []
+            for source, label in CONCEPT_TAG_SOURCES:
+                r = by_source.get(source)
+                sources.append({
+                    "source": source,
+                    "label": label,
+                    "tag_rows": int(r[1]) if r else 0,
+                    "uniq_tags": int(r[2]) if r else 0,
+                    "stocks": int(r[3]) if r else 0,
+                    "latest_seen": str(r[4]) if r and r[4] else None,
+                })
+            # 未登记在 CONCEPT_TAG_SOURCES 的 B 层源（如历史遗留）也如实列出
+            for source, r in sorted(by_source.items()):
+                if source not in dict(CONCEPT_TAG_SOURCES):
+                    sources.append({
+                        "source": source,
+                        "label": source,
+                        "tag_rows": int(r[1]),
+                        "uniq_tags": int(r[2]),
+                        "stocks": int(r[3]),
+                        "latest_seen": str(r[4]) if r[4] else None,
+                    })
+            return {"ok": True, "present": True, "sources": sources}
+        except Exception as exc:
+            return {"ok": False, "error": f"概念标签源查询失败（{exc}）", "sources": []}
+        finally:
+            store.close()
+
+    return _cached(f"overview_concept_tags:{db_url}", _produce)
+
+
 # ---------------------------------------------------------------------------
 # 健康灯
 # ---------------------------------------------------------------------------

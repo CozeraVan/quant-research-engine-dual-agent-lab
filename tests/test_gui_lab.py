@@ -292,6 +292,7 @@ def test_create_app_routes_unchanged():
     # lab 路由是主控制台的子集（除 8081 专属的结果可视化路由，QRE-GUI-LAB-RESULT-023）
     lab_only = {"/lab/runs/<run_id>", "/api/lab/runs/<run_id>/chart-data",
                 "/api/lab/runs/<run_id>/tag-analysis",
+                "/api/lab/runs/<run_id>/risk-analysis",  # QRE-GUI-LAB-RESULT-031
                 "/lab/runs/<run_id>/symbol/<ts_code>",
                 "/api/lab/runs/<run_id>/symbol/<ts_code>/detail"}
     assert lab_rules - lab_only <= full_rules

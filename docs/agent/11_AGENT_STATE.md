@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-LAB-RESULT-023~026 (DONE — 1824 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-LAB-RESULT-030 (DONE — 1840 tests green + 4 skipped；awaiting git approval)
+
+2026-08-31: B 层关键词换代（cluster-ashare 东财+同花顺概念板块成分替换 jieba
+碎片词，旧数据已删 97,838 行）+ 8080 总览「概念标签源（B 层）」卡片
+（admin.py overview_concept_tags / app.py payload / admin.html 卡片）；
+8081 归因端零改动实测受益（B 层真概念词：华为概念/CPO概念/PCB 等）。
+cluster-ashare 204 passed。遗留：东财接口当日断连，504 板块入库 290，
+网络恢复后重跑幂等补齐。未 git commit，等用户审批。
+上一任务：QRE-GUI-LAB-RESULT-023~026 (DONE — 1824 tests green + 4 skipped；awaiting git approval)
 
 2026-08-24: ①NL 示例编译失败无法复现（curl 4/4 + jsdom 点击流均成功，
 疑 DeepSeek 抖动/缓存旧页）②高级选项七输入补 change+input 监听即时刷新

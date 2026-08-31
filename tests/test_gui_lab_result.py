@@ -29,6 +29,12 @@ def _make_run(tmp_path: Path, with_files: bool = True) -> Path:
         "status": "completed",
         "output_dir": str(out),
         "artifacts": {},
+        "start": "2024-01-02",
+        "end": "2024-02-02",
+        "codes": ["000001.SZ", "000002.SZ", "600000.SH"],
+        "initial_cash": None,
+        "max_positions": None,
+        "engine_impl": "vectorized",
     }
     if with_files:
         dates = ["2024-01-02", "2024-01-03", "2024-01-04", "2024-02-01", "2024-02-02"]
@@ -307,7 +313,8 @@ def test_tag_aggregate_and_percentile():
     }
     tag_rows = [
         ("S1", "申万L1:电子", "A"), ("S2", "申万L1:电子", "A"),
-        ("S1", "中信L1:电子", "A"),          # QRE-GUI-LAB-RESULT-026：也收，去前缀后与申万L1重名 → 同股只计一次
+        ("S1", "中信L1:电子", "A"),          # QRE-GUI-LAB-RESULT-029：非申万L1前缀 → A 层丢弃
+        ("S2", "申万L2:消费电子", "A"),      # QRE-GUI-LAB-RESULT-029：L2 → A 层丢弃
         ("S3", "申万L1:银行", "A"),
         ("S1", "人工智能", "B"), ("S2", "人工智能", "B"),
         ("S1", "动量20日:偏强(5-20%)", "C"),
@@ -316,11 +323,11 @@ def test_tag_aggregate_and_percentile():
     names = {"S1": "股票一", "S2": "股票二", "S3": "股票三"}
     layers = _aggregate_tag_layers(stats, tag_rows, names)
 
-    # A 层：电子(S1+S2，S1 双前缀去重只计一次) 与 银行(S3)，按 |total_pnl| 降序
+    # A 层：电子(S1+S2，只计申万L1) 与 银行(S3)，按 |total_pnl| 降序
     assert [t["tag"] for t in layers["A"]] == ["电子", "银行"]
     elec = layers["A"][0]
     assert elec["total_pnl"] == 200.0
-    assert elec["trades"] == 3          # 若未去重会是 5（S1 被两个前缀计两次）
+    assert elec["trades"] == 3          # 中信L1 / 申万L2 不再计入
     assert elec["win_rate"] == round(2 / 3, 6)
     assert elec["avg_ret"] == round(0.04 / 3, 6)
     # 个股按 total_pnl 降序，分位 = rank/N（N=3）
@@ -373,6 +380,8 @@ def test_symbol_detail_page_and_endpoint(lab_client):
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
     assert "candlestick" in html and "chart-kline" in html and "个股回测详情" in html
+    # RESULT-035：防溢出样式（长文本/宽表格不出框）
+    assert "word-break: break-all" in html and "overflow: hidden" in html
 
     d = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
     assert d["ok"] is True
@@ -494,7 +503,7 @@ def test_tag_analysis_filtered_count(lab_client, monkeypatch):
                        ("000001.SZ", "国际", "B"),
                        ("000001.SZ", "国际", "B"),   # 重复只计一次
                        ("000001.SZ", "其他", "B"),
-                       ("000001.SZ", "国际", "A")],  # A 层不计入
+                       ("000001.SZ", "申万L1:国际", "A")],  # A 层不计入 filtered_count
                       {"000001.SZ": "测试股"}, None),
     )
     d = lab_client.get(f"/api/lab/runs/{RUN_ID}/tag-analysis").get_json()
@@ -533,3 +542,264 @@ def test_symbol_stats_extra_fields_pure(tmp_path):
     s = layers["B"][0]["symbols"][0]
     assert s["best_ret"] == 0.03 and s["worst_ret"] == -0.01
     assert s["avg_hold_days"] is None
+
+
+# --- K 线买卖信号修复 + A 层只留申万 L1 + 板块自然涨幅基准（QRE-GUI-LAB-RESULT-029） ---
+
+
+def test_scatter_marker_uses_value_not_coord():
+    """K 线页买卖散点必须用 value（scatter series data 不认 coord，
+    coord 是 markPoint 的属性 —— RESULT-029 K 线信号缺失的根因）。
+    RESULT-034 起主结果页不再显示买卖点散点，仅 K 线页保留。"""
+    tpl_dir = Path(__file__).resolve().parent.parent / "src" / "quant_research_engine" / "gui" / "templates"
+    text = (tpl_dir / "lab_symbol.html").read_text(encoding="utf-8")
+    assert "coord: [" not in text, "lab_symbol.html 买卖散点仍在用 coord（不会被渲染）"
+    assert "value: [" in text
+    main = (tpl_dir / "lab_result.html").read_text(encoding="utf-8")
+    assert "coord: [" not in main
+
+
+def test_tag_aggregate_layer_a_only_sw_l1():
+    """A 层只保留 `申万L1:` 前缀；只有 L2/L3/中信等标签的个股归入「未标记」。"""
+    from quant_research_engine.gui.lab_result import _aggregate_tag_layers
+
+    stats = {
+        "S1": {"total_pnl": 100.0, "trades": 1, "sum_ret": 0.01, "wins": 1},
+        "S2": {"total_pnl": 50.0, "trades": 1, "sum_ret": 0.02, "wins": 1},
+    }
+    tag_rows = [
+        ("S1", "申万L1:电子", "A"),
+        ("S1", "申万L2:消费电子", "A"),   # L2 丢
+        ("S1", "申万L3:品牌消费电子", "A"),  # L3 丢
+        ("S2", "中信L1:电子", "A"),       # 中信丢
+        ("S2", "申万L2:其他电子", "A"),   # L2 丢
+    ]
+    layers = _aggregate_tag_layers(stats, tag_rows, {})
+    tags = [t["tag"] for t in layers["A"]]
+    assert "电子" in tags and "未标记" in tags
+    assert len(tags) == 2  # 消费电子/品牌消费电子/其他电子均不出现
+    unmarked = next(t for t in layers["A"] if t["tag"] == "未标记")
+    assert [s["ts_code"] for s in unmarked["symbols"]] == ["S2"]
+
+
+def test_tag_analysis_bench_ret(lab_client, monkeypatch):
+    """tag-analysis 每个 tag 带 bench_ret：板块内个股区间收益的等权平均（人造样本核对数值）。"""
+    from quant_research_engine.gui import lab_result
+
+    monkeypatch.setattr(
+        lab_result, "_fetch_company_tags",
+        lambda syms: ([("000001.SZ", "申万L1:银行", "A")], {"000001.SZ": "测试股"}, None),
+    )
+    # 该 run 只有 000001.SZ 产生交易：bench_ret = 该股区间收益
+    monkeypatch.setattr(
+        lab_result, "_fetch_symbol_range_returns",
+        lambda syms, d0, d1: {"000001.SZ": 0.25},
+    )
+    d = lab_client.get(f"/api/lab/runs/{RUN_ID}/tag-analysis").get_json()
+    assert d["ok"] is True
+    a0 = d["layers"]["A"][0]
+    assert a0["tag"] == "银行" and a0["bench_ret"] == 0.25
+    # QRE-GUI-LAB-RESULT-032：bench_ret 下沉到个股级
+    assert a0["symbols"][0]["bench_ret"] == 0.25
+    # 无行情的 tag → None 不报错
+    monkeypatch.setattr(lab_result, "_fetch_symbol_range_returns", lambda syms, d0, d1: None)
+    d2 = lab_client.get(f"/api/lab/runs/{RUN_ID}/tag-analysis").get_json()
+    assert d2["layers"]["A"][0]["bench_ret"] is None
+    assert d2["layers"]["A"][0]["symbols"][0]["bench_ret"] is None
+
+
+def test_symbol_detail_benchmarks(lab_client, monkeypatch):
+    """个股详情带 benchmarks（按净值交易日对齐）+ 无净值时降级 None（QRE-GUI-LAB-RESULT-033）。"""
+    from quant_research_engine.gui import lab_result
+
+    fake = {"000001.SH": {"name": "上证指数", "closes": [1.0, 2.0]}}
+    monkeypatch.setattr(lab_result, "_benchmark_series", lambda dates: (fake, None))
+    d = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
+    if d["equity"]:
+        assert d["benchmarks"] == fake
+    else:  # 无净值曲线 → benchmarks None 不报错
+        assert d["benchmarks"] is None
+
+
+def test_factor_thresholds_pure():
+    """出入场表达式阈值提取（QRE-GUI-LAB-RESULT-036）。"""
+    from quant_research_engine.gui.lab_result import _factor_thresholds
+
+    assert _factor_thresholds("rsi_14", "rsi_14 > 30", "rsi_14 > 60") == [30.0, 60.0]
+    assert _factor_thresholds("rsi_14", "30 < rsi_14", "") == [30.0]
+    assert _factor_thresholds("rsi_14", "close > ema_20", "ema_20 < close") == []
+
+
+def test_symbol_detail_total_ret_pct(lab_client):
+    """个股详情 summary 带 total_ret_pct（净值末/初-1），与自然涨幅同口径（QRE-GUI-LAB-RESULT-034）。"""
+    d = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
+    assert "total_ret_pct" in d["summary"]
+    eq = d.get("equity")
+    if eq and len(eq["values"]) >= 2 and eq["values"][0]:
+        assert d["summary"]["total_ret_pct"] == round(eq["values"][-1] / eq["values"][0] - 1, 6)
+    else:
+        assert d["summary"]["total_ret_pct"] is None
+
+
+def test_symbol_detail_bench_ret(lab_client, monkeypatch):
+    """个股详情 summary 带 bench_ret（区间买入持有自然收益）；缺数据降级 None。"""
+    from quant_research_engine.gui import lab_result
+
+    monkeypatch.setattr(
+        lab_result, "_fetch_symbol_range_returns",
+        lambda syms, d0, d1: {syms[0]: 0.42},
+    )
+    d = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
+    assert d["summary"]["bench_ret"] == 0.42
+    monkeypatch.setattr(lab_result, "_fetch_symbol_range_returns", lambda syms, d0, d1: None)
+    d2 = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
+    assert d2["summary"]["bench_ret"] is None
+
+
+def test_tag_bench_ret_pure():
+    """纯函数：等权平均只算有数据的个股；全缺 / rets None → None。"""
+    from quant_research_engine.gui.lab_result import _tag_bench_ret
+
+    assert _tag_bench_ret(["A", "B", "C"], {"A": 0.1, "B": -0.2}) == round((0.1 - 0.2) / 2, 6)
+    assert _tag_bench_ret(["A"], {"X": 0.5}) is None
+    assert _tag_bench_ret(["A"], None) is None
+
+
+# --- 回测参数信息条 + FRM 风险区块（QRE-GUI-LAB-RESULT-031） ---
+
+
+def test_chart_data_meta_block(lab_client):
+    """chart-data 带 meta 块：区间/标的/默认资金持仓/引擎/默认费率。"""
+    d = lab_client.get(f"/api/lab/runs/{RUN_ID}/chart-data").get_json()
+    meta = d["meta"]
+    assert meta["strategy_name"] == "test_strategy"
+    assert meta["date_start"] == "2024-01-02" and meta["date_end"] == "2024-02-02"
+    assert meta["mode"] == "batch" and meta["whole_market"] is False
+    assert meta["n_codes"] == 3 and meta["codes_sample"] == ["000001.SZ", "000002.SZ", "600000.SH"]
+    assert meta["initial_cash"] == 100_000.0 and meta["max_positions"] == 10  # 缺省默认
+    assert meta["engine_impl"] == "vectorized"
+    fees = meta["fees"]
+    assert fees["commission_rate"] == 0.0003 and fees["stamp_tax_sell"] == 0.0005
+    assert fees["min_commission"] == 5.0 and fees["overridden"] is False
+
+
+def test_run_meta_pure():
+    """纯函数：profile_overrides 覆盖费率；空 codes → 全 A 股；字符串 codes 兼容。"""
+    from quant_research_engine.gui.lab_result import _run_meta
+
+    meta = _run_meta(
+        {"mode": "batch", "start": "2025-01-01", "end": "2025-06-30",
+         "codes": "600519.SH 000001.SZ", "initial_cash": "500000",
+         "max_positions": "20", "engine_impl": "simulator",
+         "profile_overrides": {"commission_rate": 0.0001}},
+        {"name": "x"},
+    )
+    assert meta["n_codes"] == 2 and meta["codes_sample"] == ["600519.SH", "000001.SZ"]
+    assert meta["initial_cash"] == 500_000.0 and meta["max_positions"] == 20
+    assert meta["fees"]["commission_rate"] == 0.0001 and meta["fees"]["overridden"] is True
+    assert meta["fees"]["stamp_tax_sell"] == 0.0005  # 未覆盖的仍为默认
+    full = _run_meta({"mode": "batch", "codes": []}, {})
+    assert full["whole_market"] is True and full["n_codes"] == 0
+
+
+def test_histogram_normal_data_pure():
+    """纯函数：分箱数/计数守恒/正态曲线形状；退化输入返回 None。"""
+    from quant_research_engine.gui.lab_result import histogram_normal_data
+
+    rets = [(-0.02 + 0.001 * i) for i in range(41)]  # 41 个均匀样本
+    h = histogram_normal_data(rets, 0.0, 0.01, n_bins=10)
+    assert h is not None
+    assert len(h["edges"]) == 11 and len(h["counts"]) == 10 and len(h["normal"]) == 10
+    assert sum(h["counts"]) == 41
+    assert h["edges"][0] == pytest.approx(-0.02) and h["edges"][-1] == pytest.approx(0.02)
+    # 正态拟合峰值在均值 0 附近
+    peak_x = max(h["normal"], key=lambda p: p[1])[0]
+    assert abs(peak_x) < 0.005
+    assert histogram_normal_data([0.01], 0.0, 0.01) is None      # 样本不足
+    assert histogram_normal_data(rets, 0.0, 0.0) is None         # std=0
+    assert histogram_normal_data([0.01, 0.01, 0.01], 0.01, 0.001) is None  # 无离散度
+
+
+def _write_risk_report(tmp_path: Path) -> None:
+    """最小 risk_report.json：覆盖五个图表节的典型结构。"""
+    report = {
+        "meta": {"n_obs": 100, "annualization_factor": 252},
+        "distribution": {"mean": 0.001, "std": 0.01, "min": -0.03, "max": 0.03,
+                         "skew_sample": 0.5, "excess_kurtosis_sample": 2.0,
+                         "reject_normal_5pct": True},
+        "tail": {"95pct": {"historical_simulation": {"var": 0.02, "es": 0.025}},
+                 "99pct": {"historical_simulation": {"var": 0.03, "es": 0.04}}},
+        "volatility": {"ewma_latest": {"volatility_forecast": 0.01},
+                       "garch11": {"latest_conditional_volatility": 0.011},
+                       "regime": {"counts": {"low": 40, "mid": 35, "high": 25}, "latest": "low"}},
+        "var_backtest": {"enabled": True, "levels": {
+            "95pct": {"reject_5pct": False, "conclusion": "不拒绝",
+                      "coverage": {"violation_rate": 0.04, "expected_violation_rate": 0.05,
+                                   "violations": 4, "n_obs": 100}}}},
+        "stress": {"scenarios": {
+            "covid_2020": {"description": "2020 疫情跳空", "error": "no observations"},
+            "microcap_2024": {"description": "微盘股流动性", "window": {"start": "2024-01-01"},
+                              "strategy_cumulative_loss": -0.05,
+                              "strategy_peak_trough_drawdown": 0.08}}},
+    }
+    (tmp_path / "runs" / RUN_ID / "risk_report.json").write_text(
+        json.dumps(report), encoding="utf-8")
+
+
+def test_risk_analysis_endpoint(lab_client, monkeypatch, tmp_path):
+    """有报告：has_report + 五节结构 + 直方图（equity_curve 提取日收益）；数值核对。"""
+    from quant_research_engine.gui import risk_report as rr
+
+    monkeypatch.setattr(rr, "RUNS_DIR", tmp_path / "runs")
+    _write_risk_report(tmp_path)
+    d = lab_client.get(f"/api/lab/runs/{RUN_ID}/risk-analysis").get_json()
+    assert d["ok"] is True and d["has_report"] is True and d["n_obs"] == 100
+    assert d["var_es"]["95pct"] == {"var": 0.02, "es": 0.025}
+    assert d["var_es"]["99pct"]["var"] == 0.03
+    assert d["volatility"]["ewma_annual"] == pytest.approx(0.01 * 252 ** 0.5)
+    assert d["volatility"]["regime_counts"] == {"low": 40, "mid": 35, "high": 25}
+    assert d["volatility"]["latest_regime"] == "low"
+    st = d["stress"]
+    assert len(st["scenarios"]) == 1 and st["scenarios"][0]["max_dd"] == 0.08
+    assert st["skipped"] == ["2020 疫情跳空"]
+    bt = d["var_backtest"]["95pct"]
+    assert bt["reject"] is False and bt["violation_rate"] == 0.04 and bt["expected_rate"] == 0.05
+    # 直方图来自 equity_curve.csv 日收益（4 个收益点），分箱计数守恒
+    assert d["histogram"] is not None
+    assert sum(d["histogram"]["counts"]) == 4
+    assert lab_client.get("/api/lab/runs/ghost/risk-analysis").status_code == 404
+
+
+def test_risk_analysis_no_report(lab_client, monkeypatch, tmp_path):
+    """无报告 / 报告损坏：has_report False，端点仍 200（前端显示生成按钮）。"""
+    from quant_research_engine.gui import risk_report as rr
+
+    monkeypatch.setattr(rr, "RUNS_DIR", tmp_path / "runs")
+    d = lab_client.get(f"/api/lab/runs/{RUN_ID}/risk-analysis").get_json()
+    assert d["ok"] is True and d["has_report"] is False
+    (tmp_path / "runs" / RUN_ID / "risk_report.json").write_text("{broken", encoding="utf-8")
+    d2 = lab_client.get(f"/api/lab/runs/{RUN_ID}/risk-analysis").get_json()
+    assert d2["ok"] is True and d2["has_report"] is False
+
+
+def test_risk_view_partial_report():
+    """纯函数容错：缺节的 report → 对应键 None，不抛错。"""
+    from quant_research_engine.gui.lab_result import build_lab_risk_view
+
+    v = build_lab_risk_view({})
+    assert v["dist"] is None and v["var_es"] is None and v["volatility"] is None
+    assert v["stress"] is None and v["var_backtest"] is None
+    v2 = build_lab_risk_view({"tail": {"95pct": {"historical_simulation": {"var": 0.01, "es": 0.02}}},
+                              "var_backtest": {"enabled": False}})
+    assert v2["var_es"]["95pct"]["var"] == 0.01
+    assert v2["var_es"].get("99pct") is None
+    assert v2["var_backtest"] is None
+
+
+def test_risk_analysis_admin_console_absent():
+    """8080 主控制台不挂 risk-analysis 路由（共享的 POST risk-report 保持不变）。"""
+    from quant_research_engine.gui.app import create_app
+
+    rules = {r.rule for r in create_app().url_map.iter_rules()}
+    assert "/api/lab/runs/<run_id>/risk-analysis" not in rules
+    assert "/api/runs/<run_id>/risk-report" in rules  # 共享路由不变

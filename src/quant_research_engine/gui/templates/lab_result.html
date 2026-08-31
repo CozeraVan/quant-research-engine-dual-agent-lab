@@ -41,11 +41,25 @@
   #tag-detail th.sortable:hover { color: #2563eb; }
   #tag-detail a.detail-link { color: #2563eb; text-decoration: none; }
   #tag-detail a.detail-link:hover { text-decoration: underline; }
+  /* QRE-GUI-LAB-RESULT-031：回测参数信息条 + FRM 风险区块 */
+  .meta-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+  .meta-chips .chip { font-size: 12px; color: #555; background: #f6f7f9; border: 1px solid #e5e7eb; border-radius: 12px; padding: 2px 10px; white-space: nowrap; }
+  .meta-chips .chip b { color: #333; font-weight: 600; }
+  .risk-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+  .risk-grid .risk-col { flex: 1; min-width: 320px; }
+  .risk-cards { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .risk-cards .metric-card { border-color: #fecaca; background: #fef6f6; }
+  .risk-light { display: inline-block; padding: 2px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .risk-light.ok { background: #e7f6ec; color: #1a9e4b; border: 1px solid #b7e4c7; }
+  .risk-light.bad { background: #fdecec; color: #d43030; border: 1px solid #f5b5b5; }
+  #risk-gen-btn { padding: 4px 16px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; font-size: 13px; }
+  #risk-gen-btn:disabled { opacity: 0.5; cursor: default; }
 </style>
 {% endblock %}
 {% block content %}
 <h1 style="font-size:18px;">回测结果 <span class="opt">{{ run_id }}</span></h1>
 <p class="brief-line" id="brief-line" title="点击展开/收起策略简介">📄 <span id="brief-text">策略简介加载中…</span></p>
+<div class="meta-chips" id="meta-chips"></div>
 
 <div class="metric-strip" id="metric-strip"></div>
 
@@ -57,7 +71,7 @@
 </div>
 
 <div class="chart-box" id="box-tags">
-  <div class="chart-title">赚钱效应归因 <span class="opt">（矩块面积 = |总净盈亏|，颜色红赚绿亏、越深金额越大；点击矩块或下方排行表行下钻；行业 = A 层全部分类，仅统计本 run 实际交易的个股）</span></div>
+  <div class="chart-title">赚钱效应归因 <span class="opt">（矩块面积 = |总净盈亏|，颜色红赚绿亏、越深金额越大；点击矩块或下方排行表行下钻；行业 = 申万一级行业（A 层只保留 `申万L1:`），仅统计本 run 实际交易的个股）</span></div>
   <div class="tag-tabs" id="tag-tabs">
     <button data-layer="A" class="active">行业板块</button>
     <button data-layer="B">关键词</button>
@@ -67,6 +81,11 @@
   <div id="tag-note" class="opt" style="font-size:12px;"></div>
   <div id="tag-rank"></div>
   <div id="tag-detail"></div>
+</div>
+
+<div class="chart-box" id="box-risk">
+  <div class="chart-title">风险分析（FRM） <span class="opt" id="risk-subtitle">（日收益口径；VaR / ES / 压力测试均为损失数字，红色 = 亏损）</span></div>
+  <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
 </div>
 
 <p><a href="/runs/{{ run_id }}">查看原始文字详情 →</a>　<a href="/">← 返回实验台</a></p>
@@ -92,6 +111,7 @@
     .then(function(d) {
       if (!d.ok) { empty('chart-main', d.error || '加载失败'); return; }
       renderBrief(d.brief);
+      renderMeta(d.meta);
       renderMetrics(d.metrics);
       if (!d.dates || !d.equity) {
         empty('chart-main');
@@ -148,7 +168,9 @@
 
   function renderTagChart() {
     // 后端已排好序（|总净盈亏| 降序），B 层已完成停用词过滤并只保留前 20 个
+    // QRE-GUI-LAB-RESULT-035：rankDir=1 时重排为「最差在前」，热力图与排行表同步切换
     var items = (tagData.layers[curLayer] || []).slice();
+    if (rankDir === 1) items.sort(function(a, b) { return a.total_pnl - b.total_pnl; });
     var noteEl = document.getElementById('tag-note');
     var rankEl = document.getElementById('tag-rank');
     if (!items.length) {
@@ -161,8 +183,13 @@
     if (curLayer === 'B' && tagData.filtered_count) {
       noteText += '已过滤 ' + tagData.filtered_count + ' 个无效关键词。';
     }
+    // 热力图统一只铺当前排序口径的前 20 个，完整列表见下方排行表
+    var tmItems = items.slice(0, 20);
+    if (items.length > tmItems.length) {
+      noteText += (noteText ? '　' : '') + '热力图仅显示' + (rankDir === 1 ? '最差' : '前') + ' 20 个，共 ' + items.length + ' 个（完整见下表）。';
+    }
     noteEl.textContent = noteText;
-    var maxAbs = Math.max.apply(null, items.map(function(t) { return Math.abs(t.total_pnl); }));
+    var maxAbs = Math.max.apply(null, tmItems.map(function(t) { return Math.abs(t.total_pnl); }));
     var el = document.getElementById('chart-tags');
     el.style.height = '420px';
     if (!tagChart) {
@@ -187,6 +214,7 @@
           var t = p.data.tagObj;
           return t.tag + '<br>总净盈亏 ' + t.total_pnl.toFixed(2) + ' 元' +
                  '<br>平均每笔净收益 ' + (t.avg_ret * 100).toFixed(2) + '%' +
+                 '<br>板块同期自然涨幅 ' + (t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%') +
                  '<br>交易笔数 ' + t.trades + '　胜率 ' + (t.win_rate * 100).toFixed(2) + '%';
         },
       },
@@ -203,7 +231,7 @@
           },
         },
         itemStyle: { borderColor: '#fff', borderWidth: 2, gapWidth: 2 },
-        data: items.map(function(t) {
+        data: tmItems.map(function(t) {
           return {
             name: t.tag, value: Math.abs(t.total_pnl) || 1, tagObj: t,
             itemStyle: { color: pnlColor(t.total_pnl, maxAbs) },
@@ -215,9 +243,11 @@
     renderTagRank(items);
   }
 
-  // 冗余交互：tag 排行表（按总净盈亏降序），点击行同样下钻
+  // 冗余交互：tag 排行表，点击行下钻；QRE-GUI-LAB-RESULT-034：可切换正/倒序（最差在前 ⇄ 最好在前）
+  var rankDir = -1;  // -1 = 总净盈亏降序（最好在前），1 = 升序（最差在前）
   function renderTagRank(items) {
-    var rows = items.slice().sort(function(a, b) { return b.total_pnl - a.total_pnl; }).map(function(t) {
+    var sorted = items.slice().sort(function(a, b) { return (b.total_pnl - a.total_pnl) * (rankDir === -1 ? 1 : -1); });
+    var rows = sorted.map(function(t) {
       return '<tr class="tag-row" data-tag="' + t.tag + '"><td>' + t.tag + '</td>' +
              '<td class="' + cls(t.total_pnl) + '">' + t.total_pnl.toFixed(2) + '</td>' +
              '<td>' + t.trades + '</td>' +
@@ -225,13 +255,19 @@
              '<td>' + (t.win_rate * 100).toFixed(2) + '%</td></tr>';
     }).join('');
     var el = document.getElementById('tag-rank');
-    el.innerHTML = '<table><thead><tr><th>板块 / 标签（点击行下钻）</th><th>总净盈亏(元)</th>' +
-                   '<th>交易笔数</th><th>平均每笔净收益</th><th>胜率</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    el.innerHTML = '<table><thead><tr><th>板块 / 标签（点击行下钻）' +
+                   '<a href="javascript:void(0)" id="rank-toggle" style="margin-left:8px;font-weight:normal;color:#2563eb">' +
+                   (rankDir === -1 ? '⇅ 当前最好在前，点击查看最差' : '⇅ 当前最差在前，点击查看最好') + '</a></th>' +
+                   '<th>总净盈亏(元)</th><th>交易笔数</th><th>平均每笔净收益</th><th>胜率</th></tr></thead><tbody>' + rows + '</tbody></table>';
     el.querySelectorAll('tr.tag-row').forEach(function(tr) {
       tr.addEventListener('click', function() {
         var t = items.find(function(x) { return x.tag === tr.dataset.tag; });
         if (t) drillDown(t);
       });
+    });
+    document.getElementById('rank-toggle').addEventListener('click', function() {
+      rankDir = -rankDir;
+      renderTagChart();  // 热力图与排行表同步切换最差/最好在前
     });
   }
 
@@ -251,6 +287,7 @@
     { key: 'best_ret', label: '最佳单笔收益%', pct: true },
     { key: 'worst_ret', label: '最差单笔收益%', pct: true },
     { key: 'avg_hold_days', label: '平均持仓天数' },
+    { key: 'bench_ret', label: '区间自然涨幅%', pct: true },
     { key: 'percentile', label: '赚钱效应分位', pctRank: true },
   ];
 
@@ -288,8 +325,11 @@
       return '<th class="sortable" data-key="' + c.key + '">' + c.label + arrow + '</th>';
     }).join('');
     var el = document.getElementById('tag-detail');
+    var benchTxt = t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%';
     el.innerHTML = '<div class="opt" style="font-size:12px;margin-bottom:4px;">' + t.tag +
-                   '　个股贡献（点击行看个股详情；点列头排序）</div>' +
+                   '　个股贡献（点击行看个股详情；点列头排序）' +
+                   '　策略平均每笔 <span class="' + cls(t.avg_ret) + '">' + (t.avg_ret * 100).toFixed(2) + '%</span>' +
+                   ' vs 板块同期自然涨幅 <span class="' + cls(t.bench_ret) + '">' + benchTxt + '</span></div>' +
                    '<table><thead><tr>' + head + '<th></th></tr></thead><tbody>' + rows + '</tbody></table>';
     el.querySelectorAll('th.sortable').forEach(function(th) {
       th.addEventListener('click', function() {
@@ -332,6 +372,215 @@
       card('胜率', pct(m.win_rate), cls(m.win_rate));
   }
 
+  // --- QRE-GUI-LAB-RESULT-031：回测参数信息条（chip 样式，少文字） ---
+  function chip(label, value) {
+    return '<span class="chip">' + label + ' <b>' + value + '</b></span>';
+  }
+  function renderMeta(meta) {
+    var el = document.getElementById('meta-chips');
+    if (!meta) { el.innerHTML = ''; return; }
+    var chips = [];
+    if (meta.strategy_name) chips.push(chip('策略', meta.strategy_name));
+    if (meta.date_start && meta.date_end) chips.push(chip('区间', meta.date_start + ' → ' + meta.date_end));
+    if (meta.whole_market) {
+      chips.push(chip('标的', '全 A 股'));
+    } else if (meta.n_codes) {
+      var scope = meta.mode === 'single' ? meta.codes_sample.join(' ') : meta.n_codes + ' 只（' + meta.codes_sample.join(' ') + (meta.n_codes > 5 ? ' …' : '') + '）';
+      chips.push(chip('标的', scope));
+    }
+    chips.push(chip('初始资金', Number(meta.initial_cash).toLocaleString('zh-CN') + ' 元'));
+    chips.push(chip('最大持仓', meta.max_positions + ' 只'));
+    chips.push(chip('引擎', meta.engine_impl));
+    var f = meta.fees || {};
+    if (f.commission_rate != null) {
+      chips.push(chip('费率',
+        '佣金 ' + (f.commission_rate * 100).toFixed(2) + '%' +
+        '（最低 ' + f.min_commission + ' 元）' +
+        ' 印花税 ' + (f.stamp_tax_sell * 100).toFixed(2) + '%' +
+        ' 过户费 ' + (f.transfer_fee_rate * 100).toFixed(3) + '%' +
+        (f.overridden ? '（自定义）' : '（默认）')));
+    }
+    el.innerHTML = chips.join('');
+  }
+
+  // --- QRE-GUI-LAB-RESULT-031：FRM 风险区块 ---
+  var riskCharts = [];
+  function loadRisk() {
+    return fetch('/api/lab/runs/' + RUN_ID + '/risk-analysis')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) { riskEmpty(d.error || '加载失败'); return; }
+        if (!d.has_report) { riskNoReport(); return; }
+        renderRisk(d);
+      })
+      .catch(function() { riskEmpty('风险数据加载失败'); });
+  }
+
+  function riskEmpty(msg) {
+    document.getElementById('risk-body').innerHTML = '<div class="chart-empty">' + msg + '</div>';
+  }
+
+  function riskNoReport() {
+    var body = document.getElementById('risk-body');
+    body.innerHTML = '<div class="chart-empty">暂无风险报告　<button id="risk-gen-btn">生成风险报告</button>' +
+                     '<div class="opt" style="font-size:12px;margin-top:6px;">（基于本次回测日收益序列异步生成，约需数十秒）</div></div>';
+    document.getElementById('risk-gen-btn').addEventListener('click', function() {
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = '生成中…';
+      fetch('/api/runs/' + RUN_ID + '/risk-report', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(j) {
+          if (!j.job_id) { riskEmpty(j.error || '生成任务启动失败'); return; }
+          pollRiskJob(j.job_id);
+        })
+        .catch(function() { riskEmpty('生成任务启动失败'); });
+    });
+  }
+
+  function pollRiskJob(jobId) {
+    fetch('/api/runs/' + RUN_ID + '/risk-report/job/' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(j) {
+        if (j.status === 'running') { setTimeout(function() { pollRiskJob(jobId); }, 2000); return; }
+        if (j.status === 'completed') { loadRisk(); return; }
+        riskEmpty('风险报告生成失败' + (j.error ? '：' + j.error : ''));
+      })
+      .catch(function() { riskEmpty('生成状态查询失败'); });
+  }
+
+  function renderRisk(d) {
+    riskCharts.forEach(function(c) { c.dispose(); });
+    riskCharts = [];
+    var body = document.getElementById('risk-body');
+    var sub = '（日收益口径 n=' + (d.n_obs == null ? '—' : d.n_obs) + '；VaR / ES / 压力测试均为损失数字，红色 = 亏损）';
+    document.getElementById('risk-subtitle').textContent = sub;
+
+    // VaR / ES 卡片 + VaR 回测状态灯（历史模拟口径，损失取正号）
+    var cardsHtml = '';
+    var ve = d.var_es || {};
+    ['95pct', '99pct'].forEach(function(lv) {
+      var v = ve[lv];
+      if (!v) return;
+      var label = lv === '95pct' ? '95%' : '99%';
+      cardsHtml += card('VaR ' + label, v.var == null ? '—' : (v.var * 100).toFixed(2) + '%', 'neg') +
+                   card('ES ' + label, v.es == null ? '—' : (v.es * 100).toFixed(2) + '%', 'neg');
+    });
+    var bt = d.var_backtest || {};
+    var lightsHtml = '';
+    ['95pct', '99pct'].forEach(function(lv) {
+      var b = bt[lv];
+      if (!b) return;
+      var label = lv === '95pct' ? 'VaR95 回测' : 'VaR99 回测';
+      lightsHtml += '<span class="risk-light ' + (b.reject ? 'bad' : 'ok') + '" title="' +
+                    (b.conclusion || '') + '">' + label + (b.reject ? ' 不合格' : ' 合格') +
+                    '（突破率 ' + (b.violation_rate * 100).toFixed(2) + '% / 预期 ' +
+                    (b.expected_rate * 100).toFixed(2) + '%）</span> ';
+    });
+    var vol = d.volatility || {};
+    var volTxt = [];
+    if (vol.ewma_annual != null) volTxt.push('EWMA 年化波动 ' + (vol.ewma_annual * 100).toFixed(2) + '%');
+    if (vol.garch_annual != null) volTxt.push('GARCH 年化波动 ' + (vol.garch_annual * 100).toFixed(2) + '%');
+    if (vol.latest_regime) volTxt.push('当前波动状态 ' + vol.latest_regime);
+
+    body.innerHTML =
+      '<div class="risk-cards">' + (cardsHtml || '<span class="opt">暂无 VaR/ES 数据</span>') + '</div>' +
+      '<div style="margin-bottom:8px;">' + lightsHtml + '</div>' +
+      '<div class="risk-grid">' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">日收益分布 <span class="opt">（直方图 + 正态拟合，竖线为 VaR）</span></div><div id="chart-risk-dist" style="height:240px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">波动率状态 <span class="opt">（' + (volTxt.join('；') || '暂无') + '）</span></div><div id="chart-risk-vol" style="height:240px;"></div></div>' +
+      '</div>' +
+      '<div class="chart-title" style="font-size:13px;margin-top:8px;">压力测试 <span class="opt" id="risk-stress-note"></span></div>' +
+      '<div id="chart-risk-stress" style="height:220px;"></div>';
+
+    renderRiskDist(d);
+    renderRiskVol(d);
+    renderRiskStress(d);
+    window.addEventListener('resize', function() {
+      riskCharts.forEach(function(c) { c.resize(); });
+    });
+  }
+
+  function renderRiskDist(d) {
+    var el = document.getElementById('chart-risk-dist');
+    var h = d.histogram;
+    if (!h) { el.innerHTML = '<div class="chart-empty">暂无分布数据</div>'; el.style.height = 'auto'; return; }
+    var mids = [];
+    for (var i = 0; i < h.counts.length; i++) mids.push([(h.edges[i] + h.edges[i + 1]) / 2, h.counts[i]]);
+    var marks = [];
+    var ve = d.var_es || {};
+    if (ve['95pct'] && ve['95pct'].var != null) marks.push({ xAxis: -ve['95pct'].var, label: { formatter: 'VaR95' }, lineStyle: { color: '#d43030', type: 'dashed' } });
+    if (ve['99pct'] && ve['99pct'].var != null) marks.push({ xAxis: -ve['99pct'].var, label: { formatter: 'VaR99' }, lineStyle: { color: '#8b0000', type: 'dashed' } });
+    var c = echarts.init(el);
+    riskCharts.push(c);
+    c.setOption({
+      animation: false,
+      tooltip: { trigger: 'axis',
+                 valueFormatter: function(v) { return typeof v === 'number' && Math.abs(v) < 1 ? (v * 100).toFixed(2) + '%' : v; } },
+      grid: { left: 45, right: 15, top: 25, bottom: 25 },
+      xAxis: { type: 'value', name: '日收益', axisLabel: { formatter: function(v) { return (v * 100).toFixed(1) + '%'; } } },
+      yAxis: { type: 'value', name: '天数' },
+      series: [
+        { name: '实际分布', type: 'bar', data: mids, barCategoryGap: '5%',
+          itemStyle: { color: '#93c5fd' }, markLine: { symbol: 'none', silent: true, data: marks } },
+        { name: '正态拟合', type: 'line', data: h.normal, showSymbol: false,
+          lineStyle: { width: 1.5, type: 'dashed' }, color: '#f59e0b' },
+      ],
+    });
+  }
+
+  function renderRiskVol(d) {
+    var el = document.getElementById('chart-risk-vol');
+    var vol = d.volatility || {};
+    var rc = vol.regime_counts;
+    if (!rc) { el.innerHTML = '<div class="chart-empty">暂无波动率数据</div>'; el.style.height = 'auto'; return; }
+    var order = ['low', 'mid', 'high'];
+    var names = { low: '低波动', mid: '中波动', high: '高波动' };
+    var c = echarts.init(el);
+    riskCharts.push(c);
+    c.setOption({
+      animation: false,
+      tooltip: {},
+      grid: { left: 45, right: 15, top: 25, bottom: 25 },
+      xAxis: { type: 'category', data: order.map(function(k) { return names[k]; }) },
+      yAxis: { type: 'value', name: '天数' },
+      series: [{
+        type: 'bar', barWidth: '45%',
+        data: order.map(function(k) {
+          return { value: rc[k] || 0, itemStyle: { color: k === vol.latest_regime ? '#2563eb' : '#d1d5db' } };
+        }),
+        label: { show: true, position: 'top' },
+      }],
+    });
+  }
+
+  function renderRiskStress(d) {
+    var el = document.getElementById('chart-risk-stress');
+    var st = d.stress || { scenarios: [], skipped: [] };
+    var noteEl = document.getElementById('risk-stress-note');
+    noteEl.textContent = st.skipped && st.skipped.length
+      ? '（以下情景回测区间未覆盖，未参与：' + st.skipped.join('、') + '）' : '';
+    if (!st.scenarios || !st.scenarios.length) {
+      el.innerHTML = '<div class="chart-empty">暂无压力测试数据</div>'; el.style.height = 'auto'; return;
+    }
+    var c = echarts.init(el);
+    riskCharts.push(c);
+    c.setOption({
+      animation: false,
+      tooltip: { trigger: 'axis', valueFormatter: function(v) { return v == null ? '—' : (v * 100).toFixed(2) + '%'; } },
+      legend: { data: ['区间累计损失', '窗口最大回撤'], top: 0 },
+      grid: { left: 50, right: 15, top: 30, bottom: 25 },
+      xAxis: { type: 'category', data: st.scenarios.map(function(s) { return s.description; }) },
+      yAxis: { type: 'value', name: '损失%', axisLabel: { formatter: function(v) { return (v * 100).toFixed(0) + '%'; } } },
+      series: [
+        { name: '区间累计损失', type: 'bar', data: st.scenarios.map(function(s) { return s.cum_loss; }), itemStyle: { color: '#d43030' } },
+        { name: '窗口最大回撤', type: 'bar', data: st.scenarios.map(function(s) { return s.max_dd; }), itemStyle: { color: '#f59e0b' } },
+      ],
+    });
+  }
+
+  loadRisk();
+
   // --- 核心：净值 vs 基准 + 回撤双 grid ---
   var mainChart = null, benchChart = null, DATA = null, curBench = '000001.SH';
 
@@ -356,32 +605,7 @@
       name: '策略', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
       data: stratRet, showSymbol: false, lineStyle: { width: 2 }, color: '#2563eb',
     }];
-    if (d.trades && d.trades.points.length) {
-      var eqByDate = {};
-      dates.forEach(function(dt, i) { eqByDate[dt] = stratRet[i]; });
-      var buys = [], sells = [];
-      d.trades.points.forEach(function(p) {
-        var b = eqByDate[p.entry_date], s = eqByDate[p.exit_date];
-        var tip = p.symbol + '<br>入场 ' + p.entry_date + '<br>出场 ' + p.exit_date +
-                  '<br>净收益 ' + (p.net_return * 100).toFixed(2) + '%';
-        if (b != null) buys.push({ coord: [p.entry_date, b], tip: tip });
-        if (s != null) sells.push({ coord: [p.exit_date, s], tip: tip });
-      });
-      series.push({
-        name: '买入', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: buys,
-        symbol: 'triangle', symbolSize: 9, itemStyle: { color: '#d43030' },
-        tooltip: { formatter: function(p) { return p.data.tip; } },
-      });
-      series.push({
-        name: '卖出', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: sells,
-        symbol: 'triangle', symbolRotate: 180, symbolSize: 9, itemStyle: { color: '#1a9e4b' },
-        tooltip: { formatter: function(p) { return p.data.tip; } },
-      });
-      if (d.trades.sampled) {
-        document.querySelector('#box-main .chart-title .opt').textContent =
-          '（买卖点过多，仅显示 |收益| 最高的 ' + d.trades.points.length + ' / ' + d.trades.total + ' 笔）';
-      }
-    }
+    // QRE-GUI-LAB-RESULT-034：交易信号过多时买卖点散点反而糊住净值曲线，首页不再显示
     var hasDD = dd.some(function(v) { return v != null; });
     if (hasDD) {
       series.push({

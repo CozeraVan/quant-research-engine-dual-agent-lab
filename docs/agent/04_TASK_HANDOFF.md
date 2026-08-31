@@ -2,7 +2,30 @@
 
 ## Task ID
 
-QRE-GUI-LAB-PORT-017 (回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081)
+QRE-GUI-LAB-RESULT-030 (B 层关键词换代：jieba 碎片词 → 东财+同花顺概念板块成分；8080 总览加「概念标签源」卡片)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+跨仓任务（cluster-ashare 改造 + 本仓消费/展示）：①cluster-ashare 新
+`src/tags_lb_concept.py`（东财 akshare + 同花顺自带分页抓取双源采集，
+layer='B' source='em_concept'/'ths_concept'，upsert 幂等 + 失败板块
+extra_passes 补抓），`scripts/drop_lb_jieba.py` 删除旧 NLP B 层
+（97,838 行 + 5,206 字典行，已执行），`tags_lb.py` 标 DEPRECATED，
+`run_mvp1 build-tags` 周更接线（deploy 注释同步）。②本仓 admin.py 新
+`overview_concept_tags`（B 层 source 分布，自降级），app.py 总览 payload
+加 concept_tags，admin.html 加「概念标签源（B 层）」卡片。③8081 归因端
+零改动验证：tag-analysis B 层已显示真概念词（华为概念/CPO概念/PCB 等）。
+测试：本仓 1840 passed + 4 skipped（+7）；cluster-ashare 204 passed（+12）。
+遗留：东财接口当日长时段断连，504 板块入库 290，网络恢复后重跑幂等补齐
+（方法见 cluster-ashare README 已知限制）。
+
+---
+
+## Archive: QRE-GUI-LAB-PORT-017 (回测台新端口移植：新增策略 + 回测管理两页面 → 独立 Flask 应用 @8081)
 
 ## Current Status
 

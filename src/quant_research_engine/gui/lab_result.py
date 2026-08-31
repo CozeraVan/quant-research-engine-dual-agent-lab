@@ -9,16 +9,23 @@
 - ``GET /api/lab/runs/<run_id>/tag-analysis`` 赚钱效应归因 JSON（QRE-GUI-LAB-RESULT-024）
 
 数据全部来自本地已有产物（equity_curve.csv / drawdown_curve.csv /
-round_trips.csv / strategy_performance.json）、
+round_trips.csv / strategy_performance.json / risk_report.json）、
 本地 PostgreSQL ``reference.index_daily`` 基准指数日线与
 ``cluster.company_tags`` 板块/关键词/动态标签，不造数据；
 任一数据源缺失时对应字段为 None / 空数组 + note，由前端显示「暂无数据」。
+
+QRE-GUI-LAB-RESULT-031：
+- chart-data 新增 ``meta`` 块（回测参数信息条：区间/标的/资金/持仓/引擎/费率）。
+- 新增 ``GET /api/lab/runs/<run_id>/risk-analysis``：FRM 风险报告
+  （risk_report.json）转为前端图表就绪 JSON；无报告时 has_report=False，
+  前端显示「生成风险报告」按钮走共享的 POST /api/runs/<id>/risk-report。
 """
 
 from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -198,6 +205,7 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
             perf = None
 
     data["brief"] = _strategy_brief(record, perf)
+    data["meta"] = _run_meta(record, data["brief"])
 
     metrics: dict[str, Any] = {}
     if perf:
@@ -376,9 +384,9 @@ def _aggregate_tag_layers(
 
     分位 = 按 total_pnl 在全 run 交易个股中的排名百分位（1-based rank / N，
     越小越靠前，前端显示「前 X.X%」）。
-    A 层纳入全部 A 层 tag（去掉 `申万L1:` 等前缀显示）；每层把没有任何
-    该层 tag 的交易个股归入「未标记」块；B 层先经 is_noise_keyword 过滤
-    停用词（A/C 层不过滤），只保留按 |总净盈亏| 排序的前 LAYER_B_TOP_N 个，
+    A 层只保留 `申万L1:` 前缀的一级行业（QRE-GUI-LAB-RESULT-029，去掉前缀显示）；
+    每层把没有任何该层 tag 的交易个股归入「未标记」块；B 层先经 is_noise_keyword
+    过滤停用词（A/C 层不过滤），只保留按 |总净盈亏| 排序的前 LAYER_B_TOP_N 个，
     其余不显示（无合并块）。
     """
     layers: dict[str, dict[str, dict[str, Any]]] = {"A": {}, "B": {}, "C": {}}
@@ -389,6 +397,8 @@ def _aggregate_tag_layers(
         if s is None or layer not in layers:
             continue
         if layer == "A":
+            if not tag.startswith("申万L1:"):  # 029：A 层只留申万一级行业
+                continue
             tag = _strip_tag_prefix(tag)
         elif layer == "B" and is_noise_keyword(tag):
             continue
@@ -460,6 +470,54 @@ def _aggregate_tag_layers(
     return result
 
 
+def _fetch_symbol_range_returns(
+    symbols: list[str], start: str | None, end: str | None
+) -> dict[str, float] | None:
+    """批量查 public.stock_daily，算每股区间等权买入持有收益（末收/首收 - 1）。
+
+    一次 IN 查询取全部 ts_code 区间内 (trade_date, close)，按 ts_code 分组在
+    Python 里取首末收盘。任一个股区间内不足 2 个交易日则跳过。
+    DB 失败 / 无起止日期 / 无数据 → None（降级，不报错）。
+    """
+    if not symbols or not start or not end:
+        return None
+    try:
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.admin import _store
+        from quant_research_engine.risk.barometer_job import DEFAULT_DB_URL
+
+        try:
+            store = _store()
+        except Exception:
+            store = _store(DEFAULT_DB_URL)
+        with store.market_engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT ts_code, trade_date, close FROM public.stock_daily "
+                    "WHERE ts_code = ANY(:codes) AND trade_date BETWEEN :d0 AND :d1 "
+                    "ORDER BY ts_code, trade_date"
+                ),
+                {"codes": symbols, "d0": start, "d1": end},
+            ).fetchall()
+    except Exception:
+        return None
+    closes: dict[str, list[float]] = {}
+    for ts_code, _trade_date, close in rows:
+        if close is not None:
+            closes.setdefault(ts_code, []).append(float(close))
+    rets = {ts: cs[-1] / cs[0] - 1 for ts, cs in closes.items() if len(cs) >= 2 and cs[0]}
+    return rets or None
+
+
+def _tag_bench_ret(symbols: list[str], rets: dict[str, float] | None) -> float | None:
+    """纯函数：板块自然涨幅 = 板块内个股区间收益的等权平均（无数据 → None）。"""
+    if not rets:
+        return None
+    vals = [rets[s] for s in symbols if s in rets]
+    return round(sum(vals) / len(vals), 6) if vals else None
+
+
 def build_lab_tag_analysis(record: dict[str, Any]) -> dict[str, Any]:
     """组装 /api/lab/runs/<id>/tag-analysis 的 JSON payload。"""
     data: dict[str, Any] = {"ok": True, "run_id": record.get("run_id"),
@@ -478,6 +536,16 @@ def build_lab_tag_analysis(record: dict[str, Any]) -> dict[str, Any]:
         tag for _, tag, layer in tag_rows if layer == "B" and is_noise_keyword(tag)
     })
     layers = _aggregate_tag_layers(stats, tag_rows, names)
+    # QRE-GUI-LAB-RESULT-029：每个 tag 加 bench_ret = 板块内个股在 run 区间的
+    # 等权买入持有自然收益；DB 失败整体降级 None，不报错。
+    # QRE-GUI-LAB-RESULT-032：bench_ret 同时下沉到个股级（下钻表/个股详情对比用）。
+    sym_rets = _fetch_symbol_range_returns(list(stats), record.get("start"), record.get("end"))
+    for items in layers.values():
+        for item in items:
+            item["bench_ret"] = _tag_bench_ret([s["ts_code"] for s in item["symbols"]], sym_rets)
+            for s in item["symbols"]:
+                v = (sym_rets or {}).get(s["ts_code"])
+                s["bench_ret"] = round(v, 6) if v is not None else None
     data["layers"] = layers
     for layer, items in layers.items():
         if not items:
@@ -543,6 +611,94 @@ def _fetch_stock_daily(ts_code: str, start: str | None, end: str | None) -> tupl
     }, None
 
 
+# --- 策略因子副图（QRE-GUI-LAB-RESULT-036） ---
+
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _strategy_factor_specs(record: dict[str, Any]) -> tuple[dict[str, tuple[str, str]], str, str]:
+    """从 run 目录 strategy.yaml 提取因子映射与出入场表达式。
+
+    返回 ({显示名: (schema_table, column)}, entry, exit)。表/列名逐段校验
+    标识符，防注入；任何失败返回 ({}, "", "")。
+    """
+    import yaml
+
+    from quant_research_engine.gui.engine import RUNS_DIR
+
+    path = RUNS_DIR / record.get("run_id", "") / "strategy.yaml"
+    if not path.exists():
+        return {}, "", ""
+    try:
+        cfg = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}, "", ""
+    specs: dict[str, tuple[str, str]] = {}
+    factor_fields = ((cfg.get("data") or {}).get("factor_fields") or {})
+    for name, ref in factor_fields.items():
+        parts = str(ref).split(".")
+        if len(parts) < 2 or not all(_IDENT_RE.match(p) for p in parts):
+            continue
+        specs[str(name)] = (".".join(parts[:-1]), parts[-1])
+    sig = cfg.get("signal") or {}
+    return specs, str(sig.get("entry") or ""), str(sig.get("exit") or "")
+
+
+def _factor_thresholds(name: str, entry: str, exit_: str) -> list[float]:
+    """提取该因子在出入场表达式里的数值阈值（如 rsi_14 > 30 → [30.0]）。"""
+    vals: list[float] = []
+    for expr in (entry, exit_):
+        if not expr:
+            continue
+        for m in re.finditer(re.escape(name) + r"\s*[<>=!]+\s*(-?\d+(?:\.\d+)?)", expr):
+            vals.append(float(m.group(1)))
+        for m in re.finditer(r"(-?\d+(?:\.\d+)?)\s*[<>=!]+\s*" + re.escape(name), expr):
+            vals.append(float(m.group(1)))
+    return vals
+
+
+def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str]) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """按 K 线日期对齐拉取策略因子序列（含出入场阈值）。失败降级 (None, note)。"""
+    specs, entry, exit_ = _strategy_factor_specs(record)
+    if not specs or not dates:
+        return None, None
+    try:
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.admin import _store
+        from quant_research_engine.risk.barometer_job import DEFAULT_DB_URL
+
+        try:
+            store = _store()
+        except Exception:
+            store = _store(DEFAULT_DB_URL)
+        with store.market_engine.begin() as conn:
+            raw: dict[str, dict[str, float]] = {}
+            for name, (table, col) in specs.items():
+                rows = conn.execute(
+                    text(
+                        f'SELECT trade_date, "{col}" FROM {table} '
+                        "WHERE ts_code = :c AND trade_date BETWEEN :d0 AND :d1"
+                    ),
+                    {"c": ts_code, "d0": dates[0], "d1": dates[-1]},
+                ).fetchall()
+                raw[name] = {str(r[0]): float(r[1]) for r in rows if r[1] is not None}
+    except Exception as exc:
+        return None, f"因子数据不可用（{exc}）"
+    panels = []
+    for name in specs:
+        series = [round(raw[name][d], 4) if d in raw[name] else None for d in dates]
+        if any(v is not None for v in series):
+            panels.append({
+                "name": name,
+                "values": series,
+                "thresholds": _factor_thresholds(name, entry, exit_),
+            })
+    if not panels:
+        return None, "该股区间无因子数据"
+    return panels, None
+
+
 def build_lab_symbol_detail(record: dict[str, Any], ts_code: str) -> dict[str, Any] | None:
     """组装 /api/lab/runs/<id>/symbol/<ts_code>/detail；个股无交易返回 None（404）。"""
     stats = _symbol_trade_stats(record)
@@ -551,6 +707,8 @@ def build_lab_symbol_detail(record: dict[str, Any], ts_code: str) -> dict[str, A
         return None
     names = _fetch_company_tags([ts_code])[1]
     pct_map = _percentile_map(stats)
+    # QRE-GUI-LAB-RESULT-032：个股区间买入持有自然收益（对比策略交易收益用）
+    bench = (_fetch_symbol_range_returns([ts_code], record.get("start"), record.get("end")) or {}).get(ts_code)
     data: dict[str, Any] = {
         "ok": True,
         "run_id": record.get("run_id"),
@@ -562,6 +720,7 @@ def build_lab_symbol_detail(record: dict[str, Any], ts_code: str) -> dict[str, A
             "avg_ret": round(s["sum_ret"] / s["trades"], 6),
             "win_rate": round(s["wins"] / s["trades"], 6),
             "percentile": pct_map[ts_code],
+            "bench_ret": round(bench, 6) if bench is not None else None,
         },
     }
 
@@ -610,6 +769,207 @@ def build_lab_symbol_detail(record: dict[str, Any], ts_code: str) -> dict[str, A
     kline, kline_note = _fetch_stock_daily(ts_code, record.get("start"), record.get("end"))
     data["kline"] = kline
     data["kline_note"] = kline_note
+
+    # QRE-GUI-LAB-RESULT-036：策略因子副图（按 K 线日期对齐，含出入场阈值线）
+    panels, factor_note = _fetch_factor_panels(record, ts_code, (kline or {}).get("dates") or [])
+    data["factors"] = panels
+    data["factor_note"] = factor_note
+
+    # QRE-GUI-LAB-RESULT-033：净值曲线对比项——基准指数（按个股净值交易日对齐）
+    if data["equity"]:
+        benchmarks, bench_note = _benchmark_series(data["equity"]["dates"])
+        data["benchmarks"] = benchmarks or None
+        data["benchmark_note"] = bench_note
+    else:
+        data["benchmarks"] = None
+        data["benchmark_note"] = None
+
+    # QRE-GUI-LAB-RESULT-034：策略区间收益率（净值末/初-1），与自然涨幅同口径对比
+    vals = (data["equity"] or {}).get("values") or []
+    data["summary"]["total_ret_pct"] = (
+        round(vals[-1] / vals[0] - 1, 6) if len(vals) >= 2 and vals[0] else None
+    )
+    return data
+
+
+def _run_meta(record: dict[str, Any], brief: dict[str, str]) -> dict[str, Any]:
+    """回测参数信息条（QRE-GUI-LAB-RESULT-031）：status.json 字段 + 费率。
+
+    费率 = AShareMarketProfile 默认值叠加 record["profile_overrides"]；
+    initial_cash 缺省 10 万、max_positions 缺省 10（与 gui/engine.py 一致）。
+    """
+    codes = record.get("codes") or []
+    if isinstance(codes, str):  # 兼容历史 run 的空格拼接串
+        codes = codes.split()
+    overrides = record.get("profile_overrides") or {}
+    fees: dict[str, Any] = {}
+    try:
+        from quant_research_engine.markets.ashare import AShareMarketProfile
+
+        default_profile = AShareMarketProfile()
+        for key in ("commission_rate", "min_commission", "stamp_tax_sell", "transfer_fee_rate"):
+            val = overrides.get(key)
+            fees[key] = float(val) if val is not None else float(getattr(default_profile, key))
+        fees["overridden"] = any(overrides.get(k) is not None for k in fees if k != "overridden")
+    except Exception:  # profile 模块不可用时降级
+        fees = {"overridden": bool(overrides)}
+
+    def _num(v: Any, default: float) -> float:
+        try:
+            return float(v) if v not in (None, "") else default
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "strategy_name": brief.get("name"),
+        "date_start": record.get("start"),
+        "date_end": record.get("end"),
+        "mode": record.get("mode"),
+        "whole_market": not codes,
+        "n_codes": len(codes),
+        "codes_sample": codes[:5],
+        "initial_cash": _num(record.get("initial_cash"), 100_000.0),
+        "max_positions": int(_num(record.get("max_positions"), 10)),
+        "engine_impl": record.get("engine_impl") or "simulator",
+        "fees": fees,
+    }
+
+
+# --- FRM 风险分析（QRE-GUI-LAB-RESULT-031） ---
+
+HISTOGRAM_BINS = 40
+
+
+def histogram_normal_data(
+    returns: list[float], mean: float, std: float, n_bins: int = HISTOGRAM_BINS
+) -> dict[str, Any] | None:
+    """纯函数：日收益序列 → 直方图分箱 + 正态拟合曲线（与直方图同量纲）。
+
+    返回 {"edges": [...(n_bins+1)], "counts": [...], "normal": [[x, y], ...]}；
+    normal 的 y = 正态密度 × 样本数 × 箱宽，可直接与 counts 叠图。
+    样本 <2 或 std <= 0 返回 None。
+    """
+    vals = [float(r) for r in returns if r is not None]
+    if len(vals) < 2 or not std or std <= 0:
+        return None
+    lo, hi = min(vals), max(vals)
+    if hi <= lo:
+        return None
+    width = (hi - lo) / n_bins
+    edges = [round(lo + i * width, 8) for i in range(n_bins + 1)]
+    counts = [0] * n_bins
+    for v in vals:
+        idx = min(int((v - lo) / width), n_bins - 1)
+        counts[idx] += 1
+    import math
+
+    normal = []
+    for i in range(n_bins):
+        x = (edges[i] + edges[i + 1]) / 2
+        pdf = math.exp(-0.5 * ((x - mean) / std) ** 2) / (std * math.sqrt(2 * math.pi))
+        normal.append([round(x, 8), round(pdf * len(vals) * width, 4)])
+    return {"edges": edges, "counts": counts, "normal": normal}
+
+
+def build_lab_risk_view(report: dict[str, Any]) -> dict[str, Any]:
+    """纯函数：risk_report.json → 前端图表就绪视图（缺节一律 None/空，不抛错）。"""
+    meta = report.get("meta") or {}
+    dist = report.get("distribution") or {}
+    view: dict[str, Any] = {
+        "n_obs": meta.get("n_obs"),
+        "dist": {
+            "mean": dist.get("mean"),
+            "std": dist.get("std"),
+            "min": dist.get("min"),
+            "max": dist.get("max"),
+            "skew": dist.get("skew_sample"),
+            "excess_kurtosis": dist.get("excess_kurtosis_sample"),
+            "reject_normal": dist.get("reject_normal_5pct"),
+        } if dist else None,
+    }
+
+    # VaR / ES 卡片：历史模拟口径（损失取正号）
+    tail = report.get("tail") or {}
+    var_es: dict[str, Any] = {}
+    for level in ("95pct", "99pct"):
+        hs = ((tail.get(level) or {}).get("historical_simulation")) or {}
+        if isinstance(hs.get("var"), (int, float)):
+            var_es[level] = {"var": hs.get("var"), "es": hs.get("es")}
+    view["var_es"] = var_es or None
+
+    # 波动率：EWMA / GARCH 条件波动（年化 ×√252）+ 波动状态分布
+    vol = report.get("volatility") or {}
+    ann = float(meta.get("annualization_factor") or 252)
+    ewma_sig = ((vol.get("ewma_latest") or {}).get("volatility_forecast"))
+    garch_sig = ((vol.get("garch11") or {}).get("latest_conditional_volatility"))
+    regime = vol.get("regime") or {}
+    view["volatility"] = {
+        "ewma_annual": round(ewma_sig * ann ** 0.5, 6) if isinstance(ewma_sig, (int, float)) else None,
+        "garch_annual": round(garch_sig * ann ** 0.5, 6) if isinstance(garch_sig, (int, float)) else None,
+        "regime_counts": regime.get("counts") or None,
+        "latest_regime": regime.get("latest"),
+    } if vol else None
+
+    # 压力测试：窗口内覆盖不足的情景（带 error）归入 skipped
+    stress = report.get("stress") or {}
+    scenarios: list[dict[str, Any]] = []
+    skipped: list[str] = []
+    for name, sc in (stress.get("scenarios") or {}).items():
+        if not isinstance(sc, dict):
+            continue
+        if "error" in sc:
+            skipped.append(str(sc.get("description") or name))
+            continue
+        scenarios.append({
+            "name": name,
+            "description": sc.get("description") or name,
+            "cum_loss": sc.get("strategy_cumulative_loss"),
+            "max_dd": sc.get("strategy_peak_trough_drawdown"),
+        })
+    view["stress"] = {"scenarios": scenarios, "skipped": skipped} if (scenarios or skipped) else None
+
+    # VaR 回测：覆盖率 + 独立性合格灯
+    var_bt = report.get("var_backtest") or {}
+    if var_bt.get("enabled"):
+        levels: dict[str, Any] = {}
+        for level, lv in (var_bt.get("levels") or {}).items():
+            cov = (lv or {}).get("coverage") or {}
+            if not isinstance(cov.get("violation_rate"), (int, float)):
+                continue
+            levels[level] = {
+                "violation_rate": cov.get("violation_rate"),
+                "expected_rate": cov.get("expected_violation_rate"),
+                "violations": cov.get("violations"),
+                "n_obs": cov.get("n_obs"),
+                "reject": bool(lv.get("reject_5pct")),
+                "conclusion": lv.get("conclusion"),
+            }
+        view["var_backtest"] = levels or None
+    else:
+        view["var_backtest"] = None
+    return view
+
+
+def build_lab_risk_analysis(record: dict[str, Any]) -> dict[str, Any]:
+    """组装 /api/lab/runs/<id>/risk-analysis 的 JSON payload。"""
+    from quant_research_engine.gui import risk_report as risk_mod
+
+    data: dict[str, Any] = {"ok": True, "run_id": record.get("run_id"), "has_report": False}
+    report = risk_mod.load_risk_report(str(record.get("run_id")))
+    if report is None:
+        return data
+    data["has_report"] = True
+    data.update(build_lab_risk_view(report))
+
+    # 直方图需要逐日收益原始序列（report 里只有统计量）：复用 FRM 模块的提取逻辑
+    mean = ((data.get("dist") or {}).get("mean"))
+    std = ((data.get("dist") or {}).get("std"))
+    data["histogram"] = None
+    if isinstance(mean, (int, float)) and isinstance(std, (int, float)):
+        extracted = risk_mod.extract_strategy_returns(record)
+        if extracted is not None:
+            returns, _bench = extracted
+            data["histogram"] = histogram_normal_data(list(returns), float(mean), float(std))
     return data
 
 
@@ -636,6 +996,13 @@ def register_lab_result_routes(app: Flask) -> None:
         if record is None:
             return jsonify({"ok": False, "error": f"run {run_id} 不存在"}), 404
         return jsonify(build_lab_tag_analysis(record))
+
+    @app.route("/api/lab/runs/<run_id>/risk-analysis")
+    def lab_run_risk_analysis(run_id: str):  # type: ignore[no-untyped-def]
+        record = get_run(run_id)
+        if record is None:
+            return jsonify({"ok": False, "error": f"run {run_id} 不存在"}), 404
+        return jsonify(build_lab_risk_analysis(record))
 
     @app.route("/lab/runs/<run_id>/symbol/<ts_code>")
     def lab_run_symbol(run_id: str, ts_code: str):  # type: ignore[no-untyped-def]
