@@ -938,9 +938,9 @@
         runStatus.textContent = "已提交 Queued";
         runStatus.className = "ok";
         runResult.innerHTML =
-          '<p><strong>运行 ID Run ID:</strong> <a href="/runs/' + d.run_id + '">' + d.run_id + '</a></p>' +
+          '<p><strong>运行 ID Run ID:</strong> <a href="/lab/runs/' + d.run_id + '">' + d.run_id + '</a></p>' +
           '<p><strong>模式 Mode:</strong> ' + d.mode + (d.precheck ? '（小样本预检 precheck）' : '') + '</p>' +
-          '<p>后台执行中，<a href="/runs/' + d.run_id + '">查看进度与结果 View Results</a>（页面每 3 秒自动刷新）</p>';
+          '<p>后台执行中，<a href="/lab/runs/' + d.run_id + '">查看进度与结果 View Results</a></p>';
       } else {
         runStatus.textContent = "失败 Failed";
         runStatus.className = "err";
@@ -1036,7 +1036,7 @@
       var d = res.body;
       if (d.ok) {
         var msg = doneText;
-        if (d.run_id) msg += '（<a href="/runs/' + d.run_id + '">查看 run</a>）';
+        if (d.run_id) msg += '（<a href="/lab/runs/' + d.run_id + '">查看 run</a>）';
         if (d.warning) msg += '<br><span class="opt">' + escHtml(d.warning) + '</span>';
         sandboxStatus.innerHTML = '<span class="ok">' + msg + '</span>';
       } else {
@@ -1125,7 +1125,7 @@
             var st = s.smoke.status;
             var cls = st === "completed" ? "ok" : (st === "failed" ? "err" : "opt");
             var label = st === "completed" ? "冒烟通过" : (st === "failed" ? "冒烟失败" : "冒烟中");
-            smoke = '冒烟: <a href="/runs/' + s.smoke.run_id + '" class="' + cls + '">' + label + '</a>';
+            smoke = '冒烟: <a href="/lab/runs/' + s.smoke.run_id + '" class="' + cls + '">' + label + '</a>';
             if (st === "completed" && s.smoke.metrics) {
               var m = s.smoke.metrics;
               var parts = [];

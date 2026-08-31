@@ -289,8 +289,13 @@ def test_create_app_routes_unchanged():
 
     full_rules = {r.rule for r in create_app().url_map.iter_rules()}
     lab_rules = {r.rule for r in create_lab_app().url_map.iter_rules()}
-    # lab 路由是主控制台的子集
-    assert lab_rules <= full_rules
+    # lab 路由是主控制台的子集（除 8081 专属的结果可视化路由，QRE-GUI-LAB-RESULT-023）
+    lab_only = {"/lab/runs/<run_id>", "/api/lab/runs/<run_id>/chart-data",
+                "/api/lab/runs/<run_id>/tag-analysis",
+                "/lab/runs/<run_id>/symbol/<ts_code>",
+                "/api/lab/runs/<run_id>/symbol/<ts_code>/detail"}
+    assert lab_rules - lab_only <= full_rules
+    assert lab_only & full_rules == set()  # 8080 不挂新路由
     # 主控制台专有规律犹在
     for rule in ("/admin", "/api/admin/overview", "/api/factor-create/sandbox",
                  "/api/builder/compile", "/api/admin/market-risk", "/compare"):

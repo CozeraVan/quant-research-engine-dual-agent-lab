@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-LAB-ENTRY-022 (DONE — 1809 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-LAB-RESULT-023~026 (DONE — 1824 tests green + 4 skipped；awaiting git approval)
 
 2026-08-24: ①NL 示例编译失败无法复现（curl 4/4 + jsdom 点击流均成功，
 疑 DeepSeek 抖动/缓存旧页）②高级选项七输入补 change+input 监听即时刷新

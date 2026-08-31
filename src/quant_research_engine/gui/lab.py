@@ -13,6 +13,7 @@ import os
 from flask import Flask, render_template
 
 from quant_research_engine.gui.engine import list_templates
+from quant_research_engine.gui.lab_result import register_lab_result_routes
 from quant_research_engine.gui.strategy_lab_routes import register_strategy_lab_routes
 
 
@@ -38,6 +39,8 @@ def create_lab_app() -> Flask:
         )
 
     register_strategy_lab_routes(app)
+    # 8081 专属：ECharts 回测结果页（/lab/runs/<id>，8080 的 /runs/<id> 不变）
+    register_lab_result_routes(app)
     return app
 
 
