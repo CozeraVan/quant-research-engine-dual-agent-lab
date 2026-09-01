@@ -216,21 +216,29 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
     if perf:
         total = perf.get("strategy_total_return")
+        buy_hold = perf.get("buy_hold_return")
+        excess = perf.get("excess_return_vs_buy_hold")
+        # 引擎目前不写 excess/date_start/date_end（恒 None），降级为现算/取 run 区间
+        if excess is None and isinstance(total, (int, float)) and isinstance(buy_hold, (int, float)):
+            excess = total - buy_hold
+        date_start = perf.get("date_start") or record.get("start")
+        date_end = perf.get("date_end") or record.get("end")
         metrics = {
             "total_return": total,
-            "excess_return": perf.get("excess_return_vs_buy_hold"),
+            "excess_return": excess,
+            "buy_hold_return": buy_hold,
             "sharpe": perf.get("sharpe"),
             "max_drawdown": perf.get("max_drawdown"),
             "win_rate": perf.get("win_rate"),
-            "date_start": perf.get("date_start"),
-            "date_end": perf.get("date_end"),
+            "date_start": date_start,
+            "date_end": date_end,
         }
-        if isinstance(total, (int, float)) and perf.get("date_start") and perf.get("date_end"):
+        if isinstance(total, (int, float)) and date_start and date_end:
             try:
                 from datetime import date as _date
 
-                d0 = _date.fromisoformat(str(perf["date_start"]))
-                d1 = _date.fromisoformat(str(perf["date_end"]))
+                d0 = _date.fromisoformat(str(date_start))
+                d1 = _date.fromisoformat(str(date_end))
                 years = max((d1 - d0).days / 365.25, 1 / 365.25)
                 metrics["annual_return"] = round((1 + total) ** (1 / years) - 1, 6)
             except (ValueError, OverflowError, ZeroDivisionError):
@@ -381,16 +389,46 @@ def _fetch_company_tags(symbols: list[str]) -> tuple[list[tuple[str, str, str]],
     return [(ts, tag, layer) for ts, tag, layer in tag_rows], names, None
 
 
+def _fetch_industries(symbols: list[str]) -> dict[str, str]:
+    """reference.stock_basic 的通用行业（tushare industry 字段），供 A 层兜底：
+    申万行业标签不覆盖北交所个股，无 A 层 tag 时用通用行业入块（显示名加 ·通用 后缀）。
+    DB 失败返回空 dict（调用方退化为「未标记」），不报错。
+    """
+    if not symbols:
+        return {}
+    try:
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.admin import _store
+        from quant_research_engine.risk.barometer_job import DEFAULT_DB_URL
+
+        try:
+            store = _store()
+        except Exception:
+            store = _store(DEFAULT_DB_URL)
+        with store.market_engine.begin() as conn:
+            rows = conn.execute(
+                text("SELECT ts_code, industry FROM reference.stock_basic WHERE ts_code = ANY(:codes)"),
+                {"codes": symbols},
+            ).fetchall()
+    except Exception:
+        return {}
+    return {ts: ind for ts, ind in rows if ind}
+
+
 def _aggregate_tag_layers(
     stats: dict[str, dict[str, Any]],
     tag_rows: list[tuple[str, str, str]],
     names: dict[str, str],
+    industries: dict[str, str] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """纯函数：个股交易统计 × 标签行 → A/B/C 三层 tag 聚合（含个股分位）。
 
     分位 = 按 total_pnl 在全 run 交易个股中的排名百分位（1-based rank / N，
     越小越靠前，前端显示「前 X.X%」）。
     A 层只保留 `申万L1:` 前缀的一级行业（QRE-GUI-LAB-RESULT-029，去掉前缀显示）；
+    申万不覆盖的股票（北交所等）用 industries（stock_basic 通用行业）兜底，
+    显示名加 `·通用` 后缀区分分类体系（QRE-GUI-CONSOL-045）；
     每层把没有任何该层 tag 的交易个股归入「未标记」块；B 层先经 is_noise_keyword
     过滤停用词（A/C 层不过滤），只保留按 |总净盈亏| 排序的前 LAYER_B_TOP_N 个，
     其余不显示（无合并块）。
@@ -419,6 +457,24 @@ def _aggregate_tag_layers(
         bucket["trades"] += s["trades"]
         bucket["sum_ret"] += s["sum_ret"]
         bucket["wins"] += s["wins"]
+
+    # A 层兜底：无申万行业标签的个股（北交所等）按 stock_basic 通用行业入块，
+    # 显示名加 ·通用 后缀区分分类体系；无通用行业的仍归「未标记」。
+    if industries:
+        for sym in set(stats) - tagged["A"]:
+            ind = industries.get(sym)
+            if not ind:
+                continue
+            tag = f"{ind}·通用"
+            tagged["A"].add(sym)
+            bucket = layers["A"].setdefault(tag, {"tags": tag, "symbols": set(), "total_pnl": 0.0,
+                                                  "trades": 0, "sum_ret": 0.0, "wins": 0})
+            s = stats[sym]
+            bucket["symbols"].add(sym)
+            bucket["total_pnl"] += s["total_pnl"]
+            bucket["trades"] += s["trades"]
+            bucket["sum_ret"] += s["sum_ret"]
+            bucket["wins"] += s["wins"]
 
     # 缺该层任何 tag 的交易个股 → 「未标记」块
     for layer in layers:
@@ -541,7 +597,8 @@ def build_lab_tag_analysis(record: dict[str, Any]) -> dict[str, Any]:
     data["filtered_count"] = len({
         tag for _, tag, layer in tag_rows if layer == "B" and is_noise_keyword(tag)
     })
-    layers = _aggregate_tag_layers(stats, tag_rows, names)
+    industries = _fetch_industries(list(stats))
+    layers = _aggregate_tag_layers(stats, tag_rows, names, industries=industries)
     # QRE-GUI-LAB-RESULT-029：每个 tag 加 bench_ret = 板块内个股在 run 区间的
     # 等权买入持有自然收益；DB 失败整体降级 None，不报错。
     # QRE-GUI-LAB-RESULT-032：bench_ret 同时下沉到个股级（下钻表/个股详情对比用）。

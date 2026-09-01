@@ -349,6 +349,33 @@ def test_tag_aggregate_and_percentile():
     assert layers["C"][1]["trades"] == 2
 
 
+def test_tag_aggregate_layer_a_industry_fallback():
+    """A 层兜底：无申万L1标签的个股（北交所等）按 stock_basic 通用行业入块，
+    显示名加 ·通用 后缀；无通用行业的仍归「未标记」（QRE-GUI-CONSOL-045）。"""
+    from quant_research_engine.gui.lab_result import _aggregate_tag_layers
+
+    stats = {
+        "S1": {"total_pnl": 300.0, "trades": 2, "sum_ret": 0.06, "wins": 2},
+        "BJ1": {"total_pnl": 50.0, "trades": 1, "sum_ret": 0.01, "wins": 1},   # 北交所，无申万标签
+        "BJ2": {"total_pnl": 20.0, "trades": 1, "sum_ret": 0.02, "wins": 0},   # 北交所，无申万且无通用行业
+    }
+    tag_rows = [("S1", "申万L1:电子", "A")]
+    industries = {"S1": "电子", "BJ1": "半导体"}
+    layers = _aggregate_tag_layers(stats, tag_rows, {}, industries=industries)
+    tags = [t["tag"] for t in layers["A"]]
+    assert "半导体·通用" in tags          # BJ1 兜底入通用行业块
+    assert "未标记" in tags               # BJ2 仍归未标记
+    fallback = next(t for t in layers["A"] if t["tag"] == "半导体·通用")
+    assert fallback["total_pnl"] == 50.0
+    assert [s["ts_code"] for s in fallback["symbols"]] == ["BJ1"]
+    unmarked = next(t for t in layers["A"] if t["tag"] == "未标记")
+    assert [s["ts_code"] for s in unmarked["symbols"]] == ["BJ2"]
+    # 不传 industries：BJ1/BJ2 都归未标记（向后兼容旧调用）
+    layers2 = _aggregate_tag_layers(stats, tag_rows, {})
+    unmarked2 = next(t for t in layers2["A"] if t["tag"] == "未标记")
+    assert sorted(s["ts_code"] for s in unmarked2["symbols"]) == ["BJ1", "BJ2"]
+
+
 def test_tag_aggregate_layer_b_top_n_truncate():
     """B 层 >20 个 tag：只保留前 LAYER_B_TOP_N 个，无合并块（QRE-GUI-LAB-RESULT-028）。"""
     from quant_research_engine.gui.lab_result import LAYER_B_TOP_N, _aggregate_tag_layers
@@ -557,6 +584,26 @@ def test_scatter_marker_uses_value_not_coord():
     assert "value: [" in text
     main = (tpl_dir / "lab_result.html").read_text(encoding="utf-8")
     assert "coord: [" not in main
+
+
+def test_kline_factor_grids_scale_with_factor_count():
+    """多因子策略（如 MACD 双因子）个股 K 线页：grid 必须按因子个数动态生成，
+    否则 gridIndex 2+i 越界、ECharts setOption 抛 coordinateSystem undefined，
+    被 catch 后整页（K线/买卖点/下单表/交易明细）全部空白 —— CONSOL-041 根因。"""
+    tpl_dir = Path(__file__).resolve().parent.parent / "src" / "quant_research_engine" / "gui" / "templates"
+    text = (tpl_dir / "lab_symbol.html").read_text(encoding="utf-8")
+    assert "grids.push" in text, "lab_symbol.html 因子 grid 不是动态生成的"
+    assert "factors.length * 160" in text, "K 线图高度未随因子个数扩展"
+
+
+def test_main_chart_series_have_stable_ids():
+    """主结果页净值图系列必须带稳定 id（strategy/dd/bench）——否则 applyBench 的
+    setOption 按索引合并会把「策略」系列冲掉，基准与策略无法同图重叠（CONSOL-042）。"""
+    tpl_dir = Path(__file__).resolve().parent.parent / "src" / "quant_research_engine" / "gui" / "templates"
+    text = (tpl_dir / "lab_result.html").read_text(encoding="utf-8")
+    assert "id: 'strategy'" in text
+    assert "id: 'dd'" in text
+    assert "id: 'bench'" in text
 
 
 def test_tag_aggregate_layer_a_only_sw_l1():

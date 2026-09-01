@@ -130,7 +130,7 @@
     if (!d.kline || !d.kline.dates.length) { empty('chart-kline', d.kline_note || '暂无数据'); return; }
     var dates = d.kline.dates;
     var klineEl = document.getElementById('chart-kline');
-    if (d.factors && d.factors.length) klineEl.style.height = '580px';
+    if (d.factors && d.factors.length) klineEl.style.height = (420 + d.factors.length * 160) + 'px';
     var chart = echarts.init(klineEl);
     var series = [
       { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
@@ -167,9 +167,17 @@
       //   未来若策略用 MA/EMA/BOLL 这类 overlap 指标，可在此按因子类型叠加）
       var factors = d.factors || [];
       var hasF = factors.length > 0;
-      var grids = hasF
-        ? [{ left: 60, right: 20, top: 30, height: '46%' }, { left: 60, right: 20, top: '57%', height: '12%' }, { left: 60, right: 20, top: '74%', height: '16%' }]
-        : [{ left: 60, right: 20, top: 30, height: '58%' }, { left: 60, right: 20, top: '74%', height: '14%' }];
+      // grid 数 = 2（K线+量）+ 因子个数，每个因子一副图，索引与 series/xAxis/yAxis 一一对应
+      var grids;
+      if (!hasF) {
+        grids = [{ left: 60, right: 20, top: 30, height: '58%' }, { left: 60, right: 20, top: '74%', height: '14%' }];
+      } else {
+        grids = [{ left: 60, right: 20, top: 30, height: '42%' }, { left: 60, right: 20, top: '53%', height: '10%' }];
+        var fTop = 66, fBottom = 93, fStep = (fBottom - fTop) / factors.length;
+        factors.forEach(function(f, i) {
+          grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
+        });
+      }
       var xAxis = [
         { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
         { type: 'category', data: dates, gridIndex: 1, axisLabel: { show: hasF ? false : true } },
