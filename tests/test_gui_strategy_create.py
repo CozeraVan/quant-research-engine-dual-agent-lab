@@ -495,16 +495,16 @@ def test_api_sandbox_delete(app_client):
     assert client.post("/api/strategies/sandbox/delete", json={"name": "sc_demo"}).status_code == 404
 
 
-def test_index_page_contains_sandbox_panel(app_client):
+def test_index_page_write_features_moved(app_client):
+    # QRE-GUI-CONSOL-039：8080 首页退役为引导页；沙箱面板/冒烟文案平移到 8081
+    # （8081 侧结构断言见 tests/test_gui_lab.py）
     client, _, _, _ = app_client
     resp = client.get("/")
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    assert "沙箱策略" in html
-    assert "btn-save-sandbox" in html
-    # 沙箱列表冒烟状态渲染（通过/失败/冒烟中）与因子冒烟轮询
-    assert "冒烟通过" in html and "冒烟失败" in html and "冒烟中" in html
-    assert "/api/factor-create/smoke/" in html
+    assert "已迁移至回测台" in html
+    assert "btn-save-sandbox" not in html
+    assert "/api/factor-create/smoke/" not in html
 
 
 # --- 晋升全量回测闸（promotion gate，QRE-GUI-PROMO-GATE-001） ---

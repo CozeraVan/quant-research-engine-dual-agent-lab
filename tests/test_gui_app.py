@@ -38,9 +38,12 @@ def test_index_returns_200(app_client):
     resp = app_client.get("/")
     assert resp.status_code == 200
     assert b"QRE \xe5\x9b\x9e\xe6\xb5\x8b\xe6\x8e\xa7\xe5\x88\xb6\xe5\x8f\xb0" in resp.data
-    assert b"bollinger_mean_reversion" in resp.data
-    assert b"bb_middle" in resp.data
-    assert b"bb_lower" in resp.data
+    # QRE-GUI-CONSOL-039：写策略/写因子迁移至 8081，首页为引导页
+    html = resp.data.decode("utf-8")
+    assert "已迁移至回测台" in html
+    assert "http://127.0.0.1:8081/" in html
+    assert 'href="/admin"' in html
+    assert 'href="/runs"' in html
 
 
 def test_default_strategy_template_uses_current_low_level_path():
@@ -503,16 +506,27 @@ def test_builder_validate_invalid(app_client):
     assert len(data["issues"]) > 0
 
 
-# --- Index page structure (two-tab workbench; builder tab removed) ---
+# --- Index page structure (QRE-GUI-CONSOL-039：引导页，写功能已迁至 8081) ---
 
 
-def test_index_two_tab_structure(app_client):
+def test_index_guidance_page(app_client):
     resp = app_client.get("/")
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    # 新两 tab：新增策略（含 YAML 预览栏）+ 新增因子；旧 builder tab 已删
-    assert "新增策略" in html
-    assert 'id="strategy-yaml"' in html
+    # 引导页：指向 8081 回测台与 /admin 管理台
+    assert "已迁移至回测台" in html
+    assert "http://127.0.0.1:8081/" in html
+    # 旧写功能 tab 已退役
+    assert 'data-tab="strategy"' not in html
+    assert 'data-tab="factor"' not in html
+    assert 'id="strategy-yaml"' not in html
+    assert 'id="tab-factor"' not in html
     assert "tab-builder" not in html
     assert "builder-layout" not in html
     assert 'id="b-id"' not in html
+
+
+def test_admin_page_unaffected(app_client):
+    # admin.html 管理台全部保留
+    resp = app_client.get("/admin")
+    assert resp.status_code == 200

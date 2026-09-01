@@ -429,25 +429,21 @@ def test_api_factor_admin_job_not_found(app_client):
     assert resp.status_code == 404
 
 
-def test_index_page_contains_wizard(app_client):
+def test_index_page_is_guidance(app_client):
+    # QRE-GUI-CONSOL-039：8080 首页写功能退役为引导页；因子 tab 平移到 8081
+    # （8081 侧结构断言见 tests/test_gui_lab.py::test_lab_factor_tab_content）
     resp = app_client.get("/")
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    # 两 tab 结构：新增策略（默认）+ 新增因子
-    assert "新增策略" in html
-    assert "新增因子" in html
-    assert 'id="tab-strategy"' in html
-    assert 'id="tab-factor"' in html
-    # 可视化构建区与路径 A（补周期）元素保留
-    assert "wz-factor-groups" in html
-    assert "wz-admin-submit" in html
-    assert "wzGotoFactorAdmin" in html
-    # 路径 B（全新指标 fc-create）已迁入首页
-    assert 'id="fc-code"' in html
-    assert 'id="fc-promote"' in html
-    # 旧 builder tab 已删除
+    assert "已迁移至回测台" in html
+    assert "http://127.0.0.1:8081/" in html
+    assert 'id="tab-factor"' not in html
+    assert "wz-admin-submit" not in html
+    assert 'id="fc-code"' not in html
     assert "tab-builder" not in html
     assert "builder-layout" not in html
+    # 因子 API 仍保留在 8080（共享注册，admin/其他页面继续可用）
+    assert app_client.get("/api/factor-admin/jobs/nope").status_code == 404
 
 
 def test_factor_admin_backfill_commands_pin_baseline_head():

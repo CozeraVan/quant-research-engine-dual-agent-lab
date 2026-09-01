@@ -803,3 +803,100 @@ def test_risk_analysis_admin_console_absent():
     rules = {r.rule for r in create_app().url_map.iter_rules()}
     assert "/api/lab/runs/<run_id>/risk-analysis" not in rules
     assert "/api/runs/<run_id>/risk-report" in rules  # 共享路由不变
+
+
+# --- 回测记录列表 + 删除（QRE-GUI-CONSOL-040，8081 独占） ---
+
+
+def _make_bare_run(runs_dir: Path, run_id: str, *, codes=None, created_at="2026-01-01T00:00:00",
+                   strategy_yaml: str | None = None) -> Path:
+    """造一个最小 run（status.json + 可选 strategy.yaml），无产物。"""
+    run_dir = runs_dir / run_id
+    run_dir.mkdir(parents=True)
+    status = {
+        "run_id": run_id,
+        "mode": "batch",
+        "status": "completed",
+        "output_dir": str(runs_dir.parent / "out" / run_id),
+        "start": "2025-01-01",
+        "end": "2025-12-31",
+        "created_at": created_at,
+    }
+    if codes is not None:
+        status["codes"] = codes
+    (run_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+    if strategy_yaml is not None:
+        (run_dir / "strategy.yaml").write_text(strategy_yaml, encoding="utf-8")
+    return run_dir
+
+
+def test_lab_runs_list_enriched(lab_client, tmp_path):
+    """/api/lab/runs：增强字段 + 策略名三级 fallback + 创建时间倒序。"""
+    runs_dir = tmp_path / "runs"
+    # 1) 头部注释名（fixture 自带 RUN_ID 即此型：strategy.yaml 注释「测试策略」）
+    # 2) 无注释 → fallback experiment.name
+    _make_bare_run(runs_dir, "20260102T000000000002", codes=[], created_at="2026-01-02T00:00:00",
+                   strategy_yaml="experiment:\n  name: yaml_fallback_strategy\n")
+    # 3) 无 strategy.yaml → fallback run_id；codes 缺省 → symbol_count None
+    _make_bare_run(runs_dir, "20260103T000000000003", created_at="2026-01-03T00:00:00")
+
+    resp = lab_client.get("/api/lab/runs")
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d["ok"] is True
+    by_id = {r["run_id"]: r for r in d["runs"]}
+    assert set(by_id) == {RUN_ID, "20260102T000000000002", "20260103T000000000003"}
+    # 三级 fallback
+    assert by_id[RUN_ID]["strategy_name"] == "测试策略"                    # 头部注释
+    assert by_id["20260102T000000000002"]["strategy_name"] == "yaml_fallback_strategy"  # experiment.name
+    assert by_id["20260103T000000000003"]["strategy_name"] == "20260103T000000000003"   # run_id
+    # symbol_count：codes 空/缺省 → None（前端显示「全 A 股」）
+    assert by_id[RUN_ID]["symbol_count"] == 3
+    assert by_id["20260102T000000000002"]["symbol_count"] is None
+    assert by_id["20260103T000000000003"]["symbol_count"] is None
+    # 创建时间倒序（fixture 的 RUN_ID 无 created_at，视为最早）
+    order = [r["run_id"] for r in d["runs"]]
+    assert order.index("20260103T000000000003") < order.index("20260102T000000000002")
+
+
+def test_lab_runs_delete_ok(lab_client, tmp_path):
+    """删除存在的 run：目录被删，返回 ok；output_dir 产物目录不动。"""
+    runs_dir = tmp_path / "runs"
+    run_dir = _make_bare_run(runs_dir, "20260104T000000000004")
+    out_dir = runs_dir.parent / "out" / "20260104T000000000004"
+    out_dir.mkdir(parents=True)
+    (out_dir / "equity_curve.csv").write_text("x", encoding="utf-8")
+
+    resp = lab_client.post("/api/lab/runs/20260104T000000000004/delete")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"ok": True}
+    assert not run_dir.exists()
+    assert (out_dir / "equity_curve.csv").exists()  # 产物目录不受影响
+    # 再删一次 → 404
+    assert lab_client.post("/api/lab/runs/20260104T000000000004/delete").status_code == 404
+
+
+def test_lab_runs_delete_invalid_id(lab_client, tmp_path):
+    """非法字符 / 路径穿越 → 400，且不删 RUNS_DIR 之外的东西。"""
+    runs_dir = tmp_path / "runs"
+    outside = runs_dir.parent / "evil"
+    outside.mkdir()
+    for bad in ("..", "bad.id", "bad id", "a" * 100 + "/x"):
+        resp = lab_client.post(f"/api/lab/runs/{bad}/delete")
+        assert resp.status_code in (400, 404), bad  # 含 / 的走不到路由（404），其余 400
+        if resp.status_code == 400:
+            assert resp.get_json()["ok"] is False
+    assert outside.exists() and runs_dir.exists()
+
+
+def test_lab_runs_delete_404(lab_client):
+    assert lab_client.post("/api/lab/runs/20260199T000000000000/delete").status_code == 404
+
+
+def test_lab_runs_routes_admin_absent():
+    """8080 主控制台不挂 /api/lab/runs 与 delete 路由。"""
+    from quant_research_engine.gui.app import create_app
+
+    rules = {r.rule for r in create_app().url_map.iter_rules()}
+    assert "/api/lab/runs" not in rules
+    assert "/api/lab/runs/<run_id>/delete" not in rules

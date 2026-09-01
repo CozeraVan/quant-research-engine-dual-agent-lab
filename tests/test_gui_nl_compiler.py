@@ -247,9 +247,10 @@ def test_route_success_200(app_client, monkeypatch):
     assert "rsi_14" in data["yaml"]
 
 
-def test_index_page_contains_nl_channel(app_client):
+def test_index_page_nl_channel_moved(app_client):
+    # QRE-GUI-CONSOL-039：8080 首页退役为引导页；NL 通道在 8081（test_gui_lab.py 覆盖）
     resp = app_client.get("/")
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    assert "自然语言描述策略" in html
-    assert "btn-nl-compile" in html
+    assert "已迁移至回测台" in html
+    assert "btn-nl-compile" not in html

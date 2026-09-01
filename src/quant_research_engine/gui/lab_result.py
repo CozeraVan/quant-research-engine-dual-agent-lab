@@ -19,6 +19,12 @@ QRE-GUI-LAB-RESULT-031：
 - 新增 ``GET /api/lab/runs/<run_id>/risk-analysis``：FRM 风险报告
   （risk_report.json）转为前端图表就绪 JSON；无报告时 has_report=False，
   前端显示「生成风险报告」按钮走共享的 POST /api/runs/<id>/risk-report。
+
+QRE-GUI-CONSOL-040（8081「回测管理」tab 改造为回测记录列表）：
+- ``GET /api/lab/runs``：list_runs() 增强列表（+strategy_name/symbol_count，
+  按创建时间倒序）。
+- ``POST /api/lab/runs/<run_id>/delete``：删除 RUNS_DIR/<run_id> 目录
+  （run_id 白名单校验防路径穿越；不动 request.json 里 output_dir 产物目录）。
 """
 
 from __future__ import annotations
@@ -973,8 +979,96 @@ def build_lab_risk_analysis(record: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+# --- 回测记录列表 + 删除（QRE-GUI-CONSOL-040，8081 独占） ---
+
+# run_id 白名单：拒绝路径穿越与特殊字符
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _strategy_name_from_yaml(run_id: str) -> str | None:
+    """从 run 目录 strategy.yaml 解析策略名（读取失败一律降级 None）。
+
+    优先级：头部注释行 ``# 策略名称: XXX`` → YAML ``experiment.name``。
+    """
+    from quant_research_engine.gui.engine import RUNS_DIR
+
+    path = RUNS_DIR / run_id / "strategy.yaml"
+    if not path.exists():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("#"):
+            break  # 头部注释块结束
+        content = line.lstrip("#").strip()
+        if content.startswith("策略名称"):
+            name = content.partition(":")[2].strip()
+            if name:
+                return name
+    try:
+        import yaml
+
+        cfg = yaml.safe_load(text) or {}
+        name = (cfg.get("experiment") or {}).get("name")
+        return str(name) if name else None
+    except Exception:
+        return None
+
+
+def build_lab_runs_list() -> list[dict[str, Any]]:
+    """list_runs() 增强：每条加 strategy_name / symbol_count，按创建时间倒序。
+
+    symbol_count 为 None 表示全 A 股（codes 为空/缺省），前端显示「全 A 股」。
+    """
+    from quant_research_engine.gui.engine import list_runs
+
+    items: list[dict[str, Any]] = []
+    for record in list_runs():
+        run_id = str(record.get("run_id") or "")
+        codes = record.get("codes") or []
+        if isinstance(codes, str):  # 兼容历史 run 的空格拼接串
+            codes = codes.split()
+        items.append({
+            "run_id": run_id,
+            "mode": record.get("mode"),
+            "start": record.get("start"),
+            "end": record.get("end"),
+            "status": record.get("status"),
+            "created_at": record.get("created_at"),
+            "finished_at": record.get("finished_at"),
+            "strategy_name": _strategy_name_from_yaml(run_id) or run_id,
+            "symbol_count": len(codes) if codes else None,
+        })
+    items.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+    return items
+
+
 def register_lab_result_routes(app: Flask) -> None:
     """注册 8081 lab 专属的回测结果可视化路由（8080 不注册）。"""
+
+    @app.route("/api/lab/runs")
+    def lab_runs_list():  # type: ignore[no-untyped-def]
+        return jsonify({"ok": True, "runs": build_lab_runs_list()})
+
+    @app.route("/api/lab/runs/<run_id>/delete", methods=["POST"])
+    def lab_run_delete(run_id: str):  # type: ignore[no-untyped-def]
+        import shutil
+
+        from quant_research_engine.gui.engine import RUNS_DIR
+
+        if not _RUN_ID_RE.match(run_id):
+            return jsonify({"ok": False, "error": f"非法 run_id: {run_id}"}), 400
+        base = RUNS_DIR.resolve()
+        run_dir = (base / run_id).resolve()
+        # 双保险：目录必须在 RUNS_DIR 内（白名单已挡穿越，此处防 symlink 等边角）
+        if run_dir.parent != base or not run_dir.is_dir():
+            return jsonify({"ok": False, "error": f"run {run_id} 不存在"}), 404
+        # 只删 RUNS_DIR 下的 run 目录；status.json 里 output_dir 指向的回测产物不动
+        shutil.rmtree(run_dir)
+        return jsonify({"ok": True})
 
     @app.route("/lab/runs/<run_id>")
     def lab_run_result(run_id: str):  # type: ignore[no-untyped-def]

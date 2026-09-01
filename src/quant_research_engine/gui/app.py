@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from typing import Any
@@ -11,7 +10,6 @@ from quant_research_engine.gui.engine import (
     compare_run_summaries,
     compile_high_level_entry,
     get_run,
-    list_templates,
 )
 
 # 兼容锚点：既有测试（tests/test_gui_strategy_create.py）将 monkeypatch 打在
@@ -256,13 +254,8 @@ def create_app() -> Flask:
 
     @app.route("/")
     def index() -> str:
-        templates = list_templates()
-        return render_template(
-            "index.html",
-            templates=templates,
-            default_strategy_yaml=_load_default_strategy_yaml(),
-            default_strategy_name="ema200_bollinger_reversal_mvp",
-        )
+        # QRE-GUI-CONSOL-039：写策略/写因子已迁移到 8081 回测台，首页为引导页
+        return render_template("index.html")
 
     @app.route("/compare")
     def compare_page() -> Any:
@@ -369,15 +362,6 @@ def create_app() -> Flask:
             return jsonify({"ok": False, "error": str(exc)}), 409
         return jsonify({"ok": True, **record})
 
-    @app.route("/api/admin/daily-jobs/<job_id>")
-    def api_admin_daily_job_status(job_id: str) -> Any:
-        from quant_research_engine.gui.daily_jobs import get_daily_job
-
-        record = get_daily_job(job_id)
-        if record is None:
-            return jsonify({"ok": False, "error": "任务不存在"}), 404
-        return jsonify({"ok": True, **record})
-
     @app.route("/api/admin/daily-logs/<pipeline>")
     def api_admin_daily_logs(pipeline: str) -> Any:
         from quant_research_engine.gui.daily_jobs import PIPELINES, journalctl_tail
@@ -463,216 +447,6 @@ def create_app() -> Flask:
         except Exception as exc:
             return jsonify({"ok": False, "error": f"因子状态获取失败（{exc}）"}), 503
 
-    # --- 因子向导 API（QRE-GUI-FACTOR-WIZARD-001） ---
-
-
-    @app.route("/api/factor-admin/indicators")
-    def api_factor_admin_indicators() -> Any:
-        from quant_research_engine.gui.factor_admin import config_path_for, indicators_repo, read_indicators
-
-        config_path = config_path_for(indicators_repo())
-        if not config_path.exists():
-            return jsonify({
-                "ok": False,
-                "error": f"indicators_tushare 配置不存在: {config_path}（可用环境变量 QRE_INDICATORS_REPO 指定路径）",
-            }), 503
-        try:
-            data = read_indicators(config_path)
-        except Exception as exc:
-            return jsonify({"ok": False, "error": f"读取因子配置失败：{exc}"}), 503
-        return jsonify({"ok": True, **data})
-
-    @app.route("/api/factor-admin/request", methods=["POST"])
-    def api_factor_admin_request() -> Any:
-        from quant_research_engine.gui.factor_admin import parse_periods, start_factor_job
-
-        data = request.get_json(silent=True) or {}
-        name = (data.get("name") or "").strip()
-        column = (data.get("column") or "").strip()
-        if not name or not column:
-            return jsonify({"ok": False, "error": "指标名与价格类型必填"}), 400
-        try:
-            periods = parse_periods(str(data.get("periods", "")))
-        except ValueError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 400
-        try:
-            record = start_factor_job(name=name, column=column, periods=periods)
-        except RuntimeError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 409
-        except Exception as exc:
-            return jsonify({"ok": False, "error": f"启动因子任务失败：{exc}"}), 500
-        return jsonify({"ok": record["status"] != "failed", **record})
-
-    @app.route("/api/factor-admin/jobs/<job_id>")
-    def api_factor_admin_job(job_id: str) -> Any:
-        from quant_research_engine.gui.factor_admin import get_job
-
-        record = get_job(job_id)
-        if record is None:
-            return jsonify({"ok": False, "error": "任务不存在"}), 404
-        return jsonify({"ok": True, **record})
-
-    @app.route("/api/factor-admin/<job_id>/execute", methods=["POST"])
-    def api_factor_admin_execute(job_id: str) -> Any:
-        from quant_research_engine.gui.factor_admin import confirm_execute
-
-        try:
-            record = confirm_execute(job_id)
-        except KeyError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 404
-        except RuntimeError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 409
-        return jsonify({"ok": True, **record})
-
-    # --- 新因子创建闭环 API（P2：NL/手写 → 生成草稿 → 查重 → 沙箱冒烟 → 确认晋升） ---
-    # 与 /api/factor-admin/*（既有因子补周期/补列）区分：这里管全新因子。
-
-    @app.route("/api/factor-create/nl-generate", methods=["POST"])
-    def api_factor_create_nl_generate() -> Any:
-        from quant_research_engine.gui.factor_nl_compiler import generate_factor_code
-
-        data = request.get_json(silent=True) or {}
-        description = (data.get("description") or "").strip()
-        if not description:
-            return jsonify({"ok": False, "code": "empty", "error": "请先用自然语言描述要创建的因子"}), 400
-        result = generate_factor_code(description)
-        if result.get("code") == "not_configured":
-            return jsonify(result), 503
-        return jsonify(result)
-
-    @app.route("/api/factor-create/check", methods=["POST"])
-    def api_factor_create_check() -> Any:
-        from quant_research_engine.gui.factor_create import check_factor_duplicate, normalize_params
-        from quant_research_engine.gui.factor_nl_compiler import check_code_safety
-        from quant_research_engine.gui.factor_wizard import load_factor_tables_columns
-
-        data = request.get_json(silent=True) or {}
-        code = data.get("code") or ""
-        name = (data.get("name") or "").strip().lower()
-        category = (data.get("category") or "").strip().lower()
-        column = (data.get("column") or "").strip().lower()
-        if not name or not category or not column:
-            return jsonify({"ok": False, "error": "name/category/column 必填"}), 400
-
-        violations = check_code_safety(code) if code.strip() else ["代码不能为空"]
-        params = normalize_params(periods=data.get("periods"), params=data.get("params"))
-
-        duplicate = None
-        warning = None
-        if not violations:
-            try:
-                tables_columns = load_factor_tables_columns()
-            except Exception as exc:
-                tables_columns = None
-                warning = f"因子库不可用，跳过库内列查重（{exc}）；仅检查 config 条目"
-            duplicate = check_factor_duplicate(name, category, column, params, tables_columns=tables_columns)
-
-        resp: dict[str, Any] = {
-            "ok": not violations and duplicate is None,
-            "violations": violations,
-            "duplicate": duplicate,
-        }
-        if warning:
-            resp["warning"] = warning
-        return jsonify(resp)
-
-    @app.route("/api/factor-create/smoke", methods=["POST"])
-    def api_factor_create_smoke() -> Any:
-        from quant_research_engine.gui.factor_create import (
-            SMOKE_DEFAULT_CODE,
-            normalize_params,
-            save_factor_to_sandbox,
-            start_smoke_job,
-        )
-
-        data = request.get_json(silent=True) or {}
-        code = data.get("code") or ""
-        name = (data.get("name") or "").strip().lower()
-        if not name:
-            return jsonify({"ok": False, "error": "指标名不能为空"}), 400
-        saved = save_factor_to_sandbox(code, name)
-        if not saved["ok"]:
-            return jsonify(saved), 400
-        params = normalize_params(periods=data.get("periods"), params=data.get("params"))
-        # 异步模型：提交即返回 job_id，前端轮询 GET /api/factor-create/smoke/<job_id>
-        try:
-            result = start_smoke_job(
-                name,
-                code=(data.get("code_symbol") or SMOKE_DEFAULT_CODE).strip(),
-                params=params,
-            )
-        except RuntimeError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 409
-        if not result["ok"]:
-            return jsonify(result), 400
-        return jsonify(result)
-
-    @app.route("/api/factor-create/smoke/<job_id>")
-    def api_factor_create_smoke_status(job_id: str) -> Any:
-        from quant_research_engine.gui.daily_jobs import DAILY_JOBS_DIR, get_daily_job
-
-        record = get_daily_job(job_id)
-        if record is None:
-            return jsonify({"ok": False, "error": "任务不存在"}), 404
-        resp: dict[str, Any] = {"ok": True, "job_id": job_id, "status": record["status"]}
-        if record["status"] == "running":
-            return jsonify(resp)
-        result: dict[str, Any] | None = None
-        result_path = DAILY_JOBS_DIR / job_id / "result.json"
-        if result_path.exists():
-            try:
-                parsed = json.loads(result_path.read_text(encoding="utf-8"))
-                if isinstance(parsed, dict):
-                    result = parsed
-            except (json.JSONDecodeError, OSError):
-                result = None
-        resp["result"] = result or {"ok": False, "error": record.get("error") or "冒烟失败（无结果文件）"}
-        return jsonify(resp)
-
-    @app.route("/api/factor-create/promote", methods=["POST"])
-    def api_factor_create_promote() -> Any:
-        from quant_research_engine.gui.factor_create import normalize_params, promote_factor
-
-        data = request.get_json(silent=True) or {}
-        name = (data.get("name") or "").strip().lower()
-        category = (data.get("category") or "").strip().lower()
-        column = (data.get("column") or "").strip().lower()
-        force = bool(data.get("force"))
-        if not name or not category or not column:
-            return jsonify({"ok": False, "error": "name/category/column 必填"}), 400
-        params = normalize_params(periods=data.get("periods"), params=data.get("params"))
-        result = promote_factor(name, category, column, params, force=force)
-        if not result["ok"]:
-            status = 404 if result.get("code") == "not_found" else (409 if result.get("code") in ("admin_busy", "duplicate_name", "job_conflict", "smoke_not_passed") else 400)
-            return jsonify(result), status
-        if result.get("forced"):
-            result["warning"] = "已使用 force=true 跳过冒烟校验（管理员通道）"
-        return jsonify(result)
-
-    @app.route("/api/factor-create/sandbox")
-    def api_factor_create_sandbox() -> Any:
-        from quant_research_engine.gui.factor_create import FACTOR_CATEGORIES, PRICE_COLUMNS, list_sandbox
-
-        return jsonify({
-            "ok": True,
-            "factors": list_sandbox(),
-            "categories": list(FACTOR_CATEGORIES),
-            "columns": list(PRICE_COLUMNS),
-        })
-
-    @app.route("/api/factor-create/sandbox/delete", methods=["POST"])
-    def api_factor_create_sandbox_delete() -> Any:
-        from quant_research_engine.gui.factor_create import discard_factor
-
-        data = request.get_json(silent=True) or {}
-        name = (data.get("name") or "").strip().lower()
-        if not name:
-            return jsonify({"ok": False, "error": "指标名不能为空"}), 400
-        result = discard_factor(name)
-        if not result["ok"]:
-            return jsonify(result), 404
-        return jsonify(result)
-
     # --- Builder API routes ---
 
 
@@ -703,9 +477,14 @@ def create_app() -> Flask:
         return jsonify({"valid": False, "issues": result.get("issues", [])})
 
     # --- 共享路由：新增策略 / 策略状态 / run 查看（QRE-GUI-LAB-PORT-017） ---
-    from quant_research_engine.gui.strategy_lab_routes import register_strategy_lab_routes
+    # --- 共享路由：新增因子（路径 A/B + 任务状态轮询，QRE-GUI-CONSOL-039） ---
+    from quant_research_engine.gui.strategy_lab_routes import (
+        register_factor_lab_routes,
+        register_strategy_lab_routes,
+    )
 
     register_strategy_lab_routes(app)
+    register_factor_lab_routes(app)
 
     return app
 

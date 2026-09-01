@@ -38,40 +38,95 @@ def lab_client(monkeypatch, tmp_path):
         yield client
 
 
-# --- 首页：两个 tab 原样移植 ---
+# --- 首页：三个 tab（新增策略 / 回测管理 / 新增因子） ---
 
 
 def test_lab_home_200_two_tabs(lab_client):
     resp = lab_client.get("/")
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    # 两个 tab 标记
+    # 三个 tab 标记
     assert 'data-tab="strategy"' in html
     assert "新增策略" in html
     assert 'data-tab="onboard"' in html
     assert "回测管理" in html
+    assert 'data-tab="factor"' in html
+    assert "新增因子" in html
     # 新增策略 tab 关键交互（自 index.html strategy tab 移植）
     assert 'id="tab-strategy"' in html
     assert 'id="btn-nl-compile"' in html
     assert 'id="btn-save-sandbox"' in html
     assert 'id="sandbox-panel"' in html
     assert 'id="btn-deep-validate"' in html
-    # 回测管理 tab 关键交互（自 admin.html onboard tab 移植，含 QRE-GUI-SORT-016 排序）
+    # 回测管理 tab：回测记录列表（QRE-GUI-CONSOL-040，原策略注册表已移除）
     assert 'id="tab-onboard"' in html
-    assert 'id="btn-ob-refresh"' in html
-    assert "ob-registry-table" in html
-    assert "sortable" in html
+    assert 'id="btn-ob-refresh"' in html  # refresh 状态卡保留
     assert "/api/admin/refresh" in html
-    assert "/api/admin/strategies/toggle" in html
-    assert "/api/admin/strategies/delete" in html
+    assert 'id="btn-runs-refresh"' in html
+    assert "ob-runs-table" in html
+    assert "回测记录" in html
+    assert "/api/lab/runs" in html
+    # 原「策略注册表」元素与交互已移除
+    assert "ob-registry-table" not in html
+    assert "策略注册表" not in html
+    assert "/api/admin/strategies/toggle" not in html
+    assert "/api/admin/strategies/delete" not in html
+    assert "renderRegistryTable" not in html
 
 
 def test_lab_does_not_mount_full_console_routes(lab_client):
-    # lab 只含两个页面相关路由：8080 的管理台/因子/构建器路由不在 lab 上
+    # lab 只含三个页面相关路由：8080 的管理台/构建器路由不在 lab 上
     assert lab_client.get("/admin").status_code == 404
     assert lab_client.get("/api/admin/overview").status_code == 404
-    assert lab_client.get("/api/factor-create/sandbox").status_code == 404
     assert lab_client.get("/api/builder/indicator-catalog").status_code == 404
+
+
+# --- 新增因子 tab（QRE-GUI-CONSOL-039：自 8080 index.html 平移，三路径保留） ---
+
+
+def test_lab_factor_tab_content(lab_client):
+    resp = lab_client.get("/")
+    assert resp.status_code == 200
+    html = resp.data.decode("utf-8")
+    # tab 容器与三路径
+    assert 'id="tab-factor"' in html
+    assert "路径 A" in html and "补数据" in html
+    assert "路径 B" in html and "造新指标" in html
+    assert "路径 C" in html and "Alpha191" in html
+    # 路径 A（factor-admin 补周期）关键元素
+    assert 'id="wz-admin-name"' in html
+    assert 'id="wz-admin-submit"' in html
+    assert "wzGotoFactorAdmin" in html
+    # 路径 B（factor-create 全新指标）关键元素
+    assert 'id="fc-code"' in html
+    assert 'id="fc-check"' in html
+    assert 'id="fc-smoke"' in html
+    assert 'id="fc-promote"' in html
+    assert 'id="fc-sandbox-list"' in html
+    # 冒烟轮询与状态文案（自 8080 平移的 JS）
+    assert "/api/factor-create/smoke/" in html
+    assert "wzGotoFactorAdmin" in html
+
+
+def test_lab_factor_apis_available(lab_client, monkeypatch, tmp_path):
+    """因子 API 在 8081 可用（与 8080 共享同一实现）。"""
+    import quant_research_engine.gui.factor_create as fc
+
+    monkeypatch.setattr(fc, "indicators_repo", lambda env=None: tmp_path)
+    resp = lab_client.get("/api/factor-create/sandbox")
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+    # 校验路径
+    assert lab_client.post(
+        "/api/factor-create/check", json={"name": "", "category": "", "column": ""}
+    ).status_code == 400
+    assert lab_client.post(
+        "/api/factor-admin/request", json={"name": "", "column": "close", "periods": "5"}
+    ).status_code == 400
+    assert lab_client.get("/api/factor-admin/jobs/nope").status_code == 404
+    assert lab_client.get("/api/factor-create/smoke/nope").status_code == 404
+    # 晋升后轮询用的 daily-jobs 状态查询（只读）也在 lab 上
+    assert lab_client.get("/api/admin/daily-jobs/nope").status_code == 404
 
 
 # --- 新增策略 tab 三入口结构（QRE-GUI-LAB-ENTRY-018） ---
@@ -294,11 +349,13 @@ def test_create_app_routes_unchanged():
                 "/api/lab/runs/<run_id>/tag-analysis",
                 "/api/lab/runs/<run_id>/risk-analysis",  # QRE-GUI-LAB-RESULT-031
                 "/lab/runs/<run_id>/symbol/<ts_code>",
-                "/api/lab/runs/<run_id>/symbol/<ts_code>/detail"}
+                "/api/lab/runs/<run_id>/symbol/<ts_code>/detail",
+                "/api/lab/runs",                          # QRE-GUI-CONSOL-040
+                "/api/lab/runs/<run_id>/delete"}          # QRE-GUI-CONSOL-040
     assert lab_rules - lab_only <= full_rules
     assert lab_only & full_rules == set()  # 8080 不挂新路由
-    # 主控制台专有规律犹在
-    for rule in ("/admin", "/api/admin/overview", "/api/factor-create/sandbox",
+    # 主控制台专有规律犹在（因子创建/补周期 API 自 QRE-GUI-CONSOL-039 起两应用共享）
+    for rule in ("/admin", "/api/admin/overview",
                  "/api/builder/compile", "/api/admin/market-risk", "/compare"):
         assert rule in full_rules
         assert rule not in lab_rules

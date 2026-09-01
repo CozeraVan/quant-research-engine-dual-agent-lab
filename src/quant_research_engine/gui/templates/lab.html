@@ -5,6 +5,7 @@
 <div class="tabs">
   <button class="tab active" data-tab="strategy">新增策略</button>
   <button class="tab" data-tab="onboard">回测管理</button>
+  <button class="tab" data-tab="factor">新增因子</button>
 </div>
 
 <!-- TAB 1: 新增策略（三入口 tab 递进重构，QRE-GUI-LAB-ENTRY-018） -->
@@ -247,22 +248,105 @@
   </div>
 </div>
 
-<!-- TAB 2: 回测管理（自 admin.html onboard tab 原样移植，QRE-GUI-LAB-PORT-017） -->
+<!-- TAB 2: 回测管理（回测记录列表：只显示实际跑过的 run，QRE-GUI-CONSOL-040） -->
 <div id="tab-onboard" class="tab-content">
   <div class="section">
-    <button class="section-toggle" data-section="ob-refresh">持续更新（QRE refresh）状态 &#9660;</button>
-    <div id="sec-ob-refresh" class="section-body">
-      <p><button id="btn-ob-refresh" class="btn btn-ghost">刷新 Refresh</button>
-        <a href="/" class="opt" style="margin-left:1rem;">→ 新建策略（因子向导）</a></p>
+    <button class="section-toggle" data-section="ob-runs">回测记录 &#9660;</button>
+    <div id="sec-ob-runs" class="section-body">
+      <p><button id="btn-runs-refresh" class="btn btn-ghost">刷新</button>
+        <span class="opt" style="margin-left:1rem;">这里只列出你实际跑过的回测；已完成的可查看结果。</span></p>
+      <div id="ob-runs-table"></div>
+    </div>
+  </div>
+  <div class="section">
+    <button class="section-toggle collapsed" data-section="ob-refresh">持续更新（QRE refresh）状态 &#9660;</button>
+    <div id="sec-ob-refresh" class="section-body collapsed">
+      <p><button id="btn-ob-refresh" class="btn btn-ghost">刷新 Refresh</button></p>
       <div id="ob-state"></div>
       <div id="ob-delta"></div>
     </div>
   </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 3: 新增因子（自 8080 index.html 因子 tab 平移，文案面向普通投资者，QRE-GUI-CONSOL-039） -->
+<!-- ============================================================ -->
+<div id="tab-factor" class="tab-content">
+
+  <div class="panel">
+    <h2>新增因子：三种情况，对号入座</h2>
+    <p class="opt">「因子」就是策略里用到的指标数据（比如 RSI、均线）。先想清楚自己属于哪种情况：</p>
+    <p class="opt">
+      <strong>路径 A · 补数据</strong>：库里已经有这个指标，但你想要的周期（比如 30 天的 RSI）或价格口径还没有 —— 选它。系统会自动检查并先试填一小批数据，确认无误后才补全量历史数据。<br>
+      <strong>路径 B · 造新指标</strong>：库里没有的新指标 —— 用一句话描述（或直接贴代码），系统生成/检查代码并做小样本试算，你确认后才正式加入因子库。<br>
+      <strong>路径 C · Alpha191 因子</strong>：一套现成的 191 个短周期量价公式因子（源自券商研报，俗称 Alpha191），已由后台统一算好，<strong>不需要在本页新建</strong> —— 想用时直接在「新增策略」的快速向导里按大类挑选即可。
+    </p>
+  </div>
+
+  <!-- 路径 A · 补数据：已有指标补周期/换价格口径（联动 indicators_tushare） -->
   <div class="section">
-    <button class="section-toggle" data-section="ob-registry">策略注册表（加入持续更新）&#9660;</button>
-    <div id="sec-ob-registry" class="section-body">
-      <p class="opt">注册表文件 outputs/refresh/registry.json；存在且非空时 refresh 只跑已注册策略，缺省为全量 catalog。</p>
-      <div id="ob-registry-table"></div>
+    <button class="section-toggle" data-section="wz-admin">路径 A · 补数据：已有指标，补周期/换价格口径&#9660;</button>
+    <div id="sec-wz-admin" class="section-body">
+      <div id="wz-admin-status" class="opt">加载指标清单中...</div>
+      <div class="form-grid form-grid-3">
+        <label>指标名（选库里已有的）</label>
+        <select id="wz-admin-name"></select>
+
+        <label>用哪种价格计算</label>
+        <select id="wz-admin-column"></select>
+
+        <label>周期（天数，多个用逗号分隔）</label>
+        <input type="text" id="wz-admin-periods" placeholder="如 5,10,20">
+      </div>
+      <div class="builder-actions">
+        <button id="wz-admin-submit" class="btn btn-ghost">提交申请（自动检查 → 小批量试填）</button>
+        <span class="opt">试填无误后，需你点确认才会补全量历史数据</span>
+      </div>
+      <div id="wz-admin-job" class="result-box hidden"></div>
+    </div>
+  </div>
+
+  <!-- 路径 B · 造新指标：一句话描述或贴代码（试算通过才入库） -->
+  <div class="section">
+    <button class="section-toggle" data-section="fc-create">路径 B · 造新指标：一句话描述或贴代码&#9660;</button>
+    <div id="sec-fc-create" class="section-body">
+      <p class="opt">先用大白话描述你想要的指标，点「生成代码」；懂代码的话也可以直接在代码框里手写。生成的内容只会填进框里，不会自动执行 —— 正式加入因子库前必须先通过「查重+安全检查」和「小样本试算」。</p>
+      <p>
+        <textarea id="fc-desc" rows="2" style="width:100%;" placeholder="例：25 天的 ROC 变动率（今天收盘价比 25 天前涨了百分之几）"></textarea>
+      </p>
+      <p><button id="fc-generate" class="btn btn-primary">生成代码</button> <span id="fc-gen-status" class="opt"></span></p>
+      <p><textarea id="fc-code" rows="14" style="width:100%;font-family:monospace;" placeholder="# 因子代码（可手写/粘贴，需继承 FactorBase）"></textarea></p>
+      <p>
+        指标名 <input type="text" id="fc-name" size="14" placeholder="roc">
+        类别 <select id="fc-category">
+          <option value="">选择…</option>
+          <option value="overlap">overlap</option>
+          <option value="momentum">momentum</option>
+          <option value="volatility">volatility</option>
+          <option value="trend">trend</option>
+          <option value="volume">volume</option>
+          <option value="statistics">statistics</option>
+          <option value="candle">candle</option>
+          <option value="performance">performance</option>
+        </select>
+        价格列 <select id="fc-column">
+          <option value="close">close</option>
+          <option value="typical_price">typical_price</option>
+          <option value="average_price">average_price</option>
+          <option value="median_price">median_price</option>
+        </select>
+        周期 <input type="text" id="fc-periods" size="14" placeholder="25 或 5,10,20">
+        <span class="opt">多个参数请直接改代码；不需要参数的指标填 null</span>
+      </p>
+      <p class="builder-actions">
+        <button id="fc-check" class="btn btn-ghost">查重 + 安全检查</button>
+        <button id="fc-smoke" class="btn btn-ghost">小样本试算</button>
+        <button id="fc-promote" class="btn btn-danger-outline">确认加入因子库</button>
+      </p>
+      <div id="fc-result" class="result-box hidden"></div>
+      <div id="fc-job" class="result-box hidden"></div>
+      <h4>待入库的因子草稿（沙箱） <button class="btn-sm" id="fc-sandbox-refresh">刷新</button></h4>
+      <div id="fc-sandbox-list" class="opt">（空）</div>
     </div>
   </div>
 </div>
@@ -1207,12 +1291,13 @@
 </script>
 
 <script>
-// TAB 2 回测管理 — 独立作用域（自 admin.html onboard tab JS 原样移植，含所需 helpers）
+// ============================================================
+// TAB 2 回测管理 — 独立作用域（回测记录列表 + refresh 状态卡，QRE-GUI-CONSOL-040）
+// ============================================================
 (function() {
   function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  // 各卡片独立异步加载：30s AbortController 超时，单卡片失败只影响自身（中文错误+重试），
-  // 页面骨架与所有按钮不等待任何请求。
+  // 各卡片独立异步加载：30s AbortController 超时，单卡片失败只影响自身（中文错误+重试）
   function fetchWithTimeout(url, ms) {
     var ctrl = new AbortController();
     var timer = setTimeout(function() { ctrl.abort(); }, ms || 30000);
@@ -1227,9 +1312,60 @@
 
   function isAbort(err) { return err && err.name === 'AbortError'; }
 
-  // ---------- Tab 4: 策略状态 ----------
-  function fmtPct(v) { return (v == null) ? '—' : (v * 100).toFixed(2) + '%'; }
+  // ---------- 回测记录（只显示实际跑过的 run） ----------
+  var STATUS_LABEL = {completed: '已完成', running: '运行中', queued: '排队中', failed: '失败'};
 
+  function loadRuns() {
+    var box = document.getElementById('ob-runs-table');
+    fetchWithTimeout('/api/lab/runs')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) { cardError(box, d.error || '回测记录加载失败', loadRuns); return; }
+        var runs = d.runs || [];
+        if (!runs.length) {
+          box.innerHTML = '<p class="opt">还没有回测记录，去「新增策略」跑第一个回测吧。</p>';
+          return;
+        }
+        var rows = runs.map(function(run) {
+          var statusLabel = STATUS_LABEL[run.status] || run.status || '—';
+          var range = (run.start || '—') + ' ~ ' + (run.end || '—');
+          var symbols = (run.symbol_count == null) ? '全 A 股' : esc(run.symbol_count) + ' 只';
+          var viewLink = (run.status === 'completed')
+            ? ' <a href="/lab/runs/' + encodeURIComponent(run.run_id) + '">查看结果 →</a>' : '';
+          return '<tr>'
+            + '<td>' + esc(run.strategy_name) + '</td>'
+            + '<td>' + esc(range) + '</td>'
+            + '<td>' + symbols + '</td>'
+            + '<td>' + esc(statusLabel) + '</td>'
+            + '<td class="opt">' + esc(run.created_at || '—') + '</td>'
+            + '<td>' + viewLink
+            + ' <button class="btn-sm btn-danger-outline" data-del-run="' + esc(run.run_id) + '">删除</button>'
+            + '</td></tr>';
+        }).join('');
+        box.innerHTML = '<table><thead><tr>'
+          + '<th>策略名称</th><th>回测区间</th><th>标的数</th><th>状态</th><th>创建时间</th><th>操作</th>'
+          + '</tr></thead><tbody>' + rows + '</tbody></table>';
+        box.querySelectorAll('[data-del-run]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var runId = btn.dataset.delRun;
+            if (!confirm('确认删除这条回测记录（' + runId + '）？\n删除后不可恢复。')) return;
+            fetch('/api/lab/runs/' + encodeURIComponent(runId) + '/delete', {method: 'POST'})
+              .then(function(r) { return r.json().then(function(d2) { return {status: r.status, body: d2}; }); })
+              .then(function(res) {
+                if (!res.body.ok) { alert(res.body.error || '删除失败'); return; }
+                loadRuns();
+              })
+              .catch(function(err) { alert('删除失败：' + err); });
+          });
+        });
+      })
+      .catch(function(err) {
+        cardError(box, isAbort(err) ? '回测记录加载超时（30s），请重试' : ('回测记录加载失败：' + err), loadRuns);
+      });
+  }
+  document.getElementById('btn-runs-refresh').addEventListener('click', loadRuns);
+
+  // ---------- 持续更新（QRE refresh）状态卡 ----------
   function loadOnboard() {
     fetchWithTimeout('/api/admin/refresh')
       .then(function(r) { return r.json(); })
@@ -1250,195 +1386,308 @@
             + esc(d.latest_delta.strategy_count) + ' 策略中 ' + esc(d.latest_delta.changed) + ' 个有变化）</p>';
         }
         document.getElementById('ob-state').innerHTML = stateHtml;
-
-        // 可排序策略表（QRE-GUI-SORT-016）：点击表头按列排序，null 恒排末位
-        var sortState = {key: null, dir: 1};
-        function buildRow(s) {
-          // 持续更新开关：绿色=开启，灰色=停止
-          var toggle = s.enabled
-            ? '<button class="btn-sm toggle-on" data-toggle="' + esc(s.strategy_id) + '" data-stopped="0" title="点击停止持续更新">● 开启</button>'
-            : '<button class="btn-sm toggle-off" data-toggle="' + esc(s.strategy_id) + '" data-stopped="1" title="点击开启持续更新">○ 停止</button>';
-          var action = toggle
-            + ' <button class="btn-sm btn-remove-cond" data-del="' + esc(s.strategy_id) + '">删除</button>';
-          var range = (s.date_start && s.date_end) ? esc(s.date_start) + ' ~ ' + esc(s.date_end)
-            : (s.date_end ? '— ~ ' + esc(s.date_end) : '—');
-          var symbols = (s.traded_symbol_count != null && s.symbol_count != null)
-            ? esc(s.traded_symbol_count) + ' / ' + esc(s.symbol_count) : '—';
-          // 全量指标落后于 date_end（增量更新）时标注"截至 <date> 全量"
-          var asOf = (s.full_metrics_as_of && s.date_end && s.full_metrics_as_of < s.date_end)
-            ? '<br><small class="opt">（全量截至 ' + esc(s.full_metrics_as_of) + '）</small>' : '';
-          // 晋升全量回测闸：passed 绿 / failed 红（tooltip 关键数字）/ 未评估 灰；
-          // force 晋升且 failed → 橙「强制在库」（闸不阻止日更）
-          var gateHtml;
-          if (!s.gate) {
-            gateHtml = '<span class="gate-badge gate-none" title="晋升后未跑过全量回测闸">— 未评估</span>';
-          } else {
-            var gm = s.gate.metrics || {};
-            var gtip = '交易 ' + (gm.total_trade_count != null ? gm.total_trade_count : '—')
-              + ' 次，超额 ' + (gm.excess_return_vs_buy_hold != null ? fmtPct(gm.excess_return_vs_buy_hold) : '—')
-              + '，回撤 ' + (gm.max_drawdown != null ? fmtPct(gm.max_drawdown) : '—')
-              + '（判据：交易≥30 且超额>0；评估于 ' + esc(s.gate.evaluated_at || '—') + '）';
-            if (s.gate.gate === 'passed') {
-              gateHtml = '<span class="gate-badge gate-pass" title="' + esc(gtip) + '">✓ 通过</span>';
-            } else if (s.gate.forced) {
-              gateHtml = '<span class="gate-badge gate-forced" title="' + esc(gtip) + '（force 晋升，不阻止日更）">⚑ 强制在库</span>';
-            } else {
-              gateHtml = '<span class="gate-badge gate-fail" title="' + esc(gtip) + '（日更跳过）">✗ 未过</span>';
-            }
-            // R4 风险判据：risk=warning 追加风险徽标（与未过同效阻止日更，force 除外）
-            var gr = s.gate.risk;
-            if (gr && gr.status === 'warning') {
-              var rtip = '风险警示：ES99 '
-                + (gr.es99 != null ? fmtPct(gr.es99) : '—')
-                + '（阈值 ' + (gr.es99_threshold != null ? fmtPct(gr.es99_threshold) : '—') + '），'
-                + 'VaR 回测（' + (gr.var_confidence != null ? Math.round(gr.var_confidence * 100) : '—') + '% Kupiec LR）：'
-                + (gr.var_lr_reject ? '被拒绝' : '通过')
-                + (s.gate.forced ? '（force 晋升，不阻止日更）' : '（日更跳过）');
-              gateHtml += ' <span class="gate-badge gate-risk" title="' + esc(rtip) + '">⚠ 风险警示</span>';
-            }
-          }
-          return '<tr class="ob-row" data-sid="' + esc(s.strategy_id) + '">'
-            + '<td><a href="/admin/strategy/' + encodeURIComponent(s.strategy_id) + '" target="_blank">'
-            + esc(s.strategy_id) + '</a></td>'
-            + '<td>' + range + '</td>'
-            + '<td>' + symbols + '</td>'
-            + '<td class="num">' + fmtPct(s.excess_return) + asOf + '</td>'
-            + '<td class="num">' + fmtPct(s.max_drawdown) + asOf + '</td>'
-            + '<td>' + gateHtml + '</td>'
-            + '<td>' + action + '</td></tr>';
-        }
-        function stratVal(s, key) {
-          if (key === 'date_end') return s.date_end || '';
-          if (key === 'symbol_count') return s.symbol_count;
-          return s[key];
-        }
-        function sortedStrategies() {
-          if (!sortState.key) return d.strategies;
-          var arr = d.strategies.slice();
-          arr.sort(function(a, b) {
-            var va = stratVal(a, sortState.key), vb = stratVal(b, sortState.key);
-            if (va == null && vb == null) return 0;
-            if (va == null) return 1;   // null 恒排末位（与排序方向无关）
-            if (vb == null) return -1;
-            var cmp = (typeof va === 'number' && typeof vb === 'number')
-              ? va - vb : String(va).localeCompare(String(vb));
-            return cmp * sortState.dir;
-          });
-          return arr;
-        }
-        function sortArrow(key) {
-          if (sortState.key !== key) return '';
-          return sortState.dir === 1 ? ' <span class="sort-arrow">▲</span>' : ' <span class="sort-arrow">▼</span>';
-        }
-        function renderRegistryTable() {
-          var rows = sortedStrategies().map(buildRow).join('');
-          document.getElementById('ob-registry-table').innerHTML =
-            (d.mode === 'full_catalog'
-              ? '<p class="mode-banner">⚠ 当前为<strong>全量模式</strong>（默认全部开启，refresh 跑全部 '
-                + d.catalog_total + ' 个 catalog 策略，停止中的除外）；注册任意策略后将切换为<strong>仅注册策略模式</strong>。</p>'
-              : '<p class="mode-banner mode-banner-registry">当前为<strong>仅注册策略模式</strong>（refresh 只跑已注册且未停止的 '
-                + d.registered.length + ' 个）；注册表清空后恢复全量模式。</p>')
-            + (d.stopped && d.stopped.length
-              ? '<p class="opt">停止中：' + d.stopped.map(esc).join('，') + '（将于下次 refresh 跳过）</p>' : '')
-            + '<p>已注册 ' + d.registered.length + ' / catalog ' + d.catalog_total + ' 个策略'
-            + ' <input type="text" id="ob-search" placeholder="搜索策略 id..." size="20"></p>'
-            + '<table><thead><tr><th>策略</th>'
-            + '<th class="sortable" data-sort="date_end">回测起止' + sortArrow('date_end') + '</th>'
-            + '<th class="sortable" data-sort="symbol_count">股票数量' + sortArrow('symbol_count') + '</th>'
-            + '<th class="sortable" data-sort="excess_return">超额收益' + sortArrow('excess_return') + '</th>'
-            + '<th class="sortable" data-sort="max_drawdown">最大回撤' + sortArrow('max_drawdown') + '</th>'
-            + '<th>全量回测闸</th><th>操作</th></tr></thead>'
-            + '<tbody>' + rows + '</tbody></table>';
-
-          document.getElementById('ob-search').addEventListener('input', function(e) {
-            var kw = e.target.value.trim().toLowerCase();
-            document.querySelectorAll('.ob-row').forEach(function(row) {
-              row.style.display = (!kw || row.dataset.sid.toLowerCase().indexOf(kw) >= 0) ? '' : 'none';
-            });
-          });
-          // 表头排序：同列再点切换升降序
-          document.querySelectorAll('#ob-registry-table th.sortable').forEach(function(th) {
-            th.addEventListener('click', function() {
-              var key = th.dataset.sort;
-              sortState = (sortState.key === key)
-                ? {key: key, dir: -sortState.dir} : {key: key, dir: 1};
-              renderRegistryTable();
-            });
-          });
-          bindRowActions();
-        }
-        function bindRowActions() {
-        // 持续更新开关：只改注册表，不触发运行
-        document.querySelectorAll('[data-toggle]').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            var sid = btn.dataset.toggle;
-            var toStopped = btn.dataset.stopped === '0';
-            fetch('/api/admin/strategies/toggle', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({strategy_id: sid, stopped: toStopped})
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-              if (!d.ok) { alert(d.error || '切换失败'); return; }
-              alert((toStopped ? '已停止：' : '已开启：') + sid + '\n' + d.message);
-              loadOnboard();
-            });
-          });
-        });
-        // 删除策略：输入策略 id 二次确认（连动删除本地回测产物）
-        document.querySelectorAll('[data-del]').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            var sid = btn.dataset.del;
-            var typed = prompt('危险操作：将删除 catalog 策略文件 ' + sid + '.yaml、注册表条目及本地回测产物目录（不可恢复）。\n请输入策略 id 确认：');
-            if (typed === null) return;
-            if (typed.trim() !== sid) { alert('输入不匹配，已取消'); return; }
-            fetch('/api/admin/strategies/delete', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({strategy_id: sid})
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-              if (d.ok) {
-                var msg = d.note || '已删除';
-                if (d.deleted_dirs && d.deleted_dirs.length) msg += '\n产物目录：' + d.deleted_dirs.join('\n');
-                if (d.errors && d.errors.length) msg += '\n警告：' + d.errors.join('；');
-                alert(msg);
-              } else {
-                alert('删除失败：' + d.error);
-              }
-              loadOnboard();
-            });
-          });
-        });
-        }
-        renderRegistryTable();
       })
       .catch(function(err) {
         cardError(
           document.getElementById('ob-state'),
-          isAbort(err) ? '策略状态加载超时（30s），请重试' : ('策略状态加载失败：' + err),
+          isAbort(err) ? 'refresh 状态加载超时（30s），请重试' : ('refresh 状态加载失败：' + err),
           loadOnboard
         );
       });
   }
-
-  function setRegistration(strategyId, register) {
-    fetch('/api/admin/refresh/' + (register ? 'register' : 'unregister'), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({strategy_id: strategyId})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) { alert(d.error || '操作失败'); }
-      loadOnboard();
-    });
-  }
   document.getElementById('btn-ob-refresh').addEventListener('click', loadOnboard);
 
+  loadRuns();
   loadOnboard();
+})();
+</script>
+
+<script>
+// ============================================================
+// TAB 3 新增因子 — 独立作用域（路径 A factor-admin + 路径 B factor-create，
+// 自 8080 index.html 因子 tab 平移，QRE-GUI-CONSOL-039）
+// ============================================================
+(function() {
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function fillSelect(sel, options, current) {
+    sel.innerHTML = "";
+    options.forEach(function(o) {
+      var opt = document.createElement("option");
+      opt.value = o.value;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  }
+
+  // ---------- 路径 A：已有指标 · 新增周期/价格源 ----------
+  var pollTimer = null;
+
+  function loadIndicators() {
+    fetch("/api/factor-admin/indicators")
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var statusEl = document.getElementById("wz-admin-status");
+        if (!res.body.ok) {
+          statusEl.innerHTML = '<span class="err">' + esc(res.body.error || "指标清单不可用") + '</span>';
+          document.getElementById("wz-admin-submit").disabled = true;
+          return;
+        }
+        statusEl.textContent = "从库里已有的指标中选一个，再选价格口径和要补的周期：";
+        fillSelect(document.getElementById("wz-admin-name"),
+          res.body.names.map(function(n) { return {value: n, label: n}; }));
+        fillSelect(document.getElementById("wz-admin-column"),
+          res.body.columns.map(function(c) { return {value: c, label: c}; }));
+      })
+      .catch(function(err) {
+        document.getElementById("wz-admin-status").innerHTML =
+          '<span class="err">指标清单加载失败: ' + esc(err) + '</span>';
+      });
+  }
+
+  function renderJob(d) {
+    var box = document.getElementById("wz-admin-job");
+    box.classList.remove("hidden");
+    var statusLabel = {
+      running: "运行中", awaiting_execute_confirmation: "试填完成，待你确认",
+      completed: "已完成", failed: "失败"
+    }[d.status] || d.status;
+    var html = '<p><strong>任务:</strong> ' + esc(d.job_id) + ' <strong>状态:</strong> ' + esc(statusLabel)
+      + (d.step ? '（步骤: ' + esc(d.step) + '）' : '') + '</p>';
+    if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
+    if (d.status === "awaiting_execute_confirmation") {
+      html += '<p class="ok">小批量试填成功。确认无误后点击按钮补全量历史数据（耗时较长）：</p>'
+        + '<button id="wz-admin-confirm" class="btn btn-danger-outline">确认补全量历史数据 --execute</button>';
+    }
+    if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
+    box.innerHTML = html;
+    var btn = document.getElementById("wz-admin-confirm");
+    if (btn) {
+      btn.addEventListener("click", function() {
+        btn.disabled = true;
+        fetch("/api/factor-admin/" + d.job_id + "/execute", {method: "POST"})
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (!res.ok) { btn.disabled = false; alert(res.error || "确认失败"); }
+            pollJob(d.job_id);
+          });
+      });
+    }
+  }
+
+  function pollJob(jobId) {
+    if (pollTimer) clearTimeout(pollTimer);
+    fetch("/api/factor-admin/jobs/" + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        renderJob(d);
+        if (d.status === "running") {
+          pollTimer = setTimeout(function() { pollJob(jobId); }, 3000);
+        }
+      });
+  }
+
+  document.getElementById("wz-admin-submit").addEventListener("click", function() {
+    var payload = {
+      name: document.getElementById("wz-admin-name").value,
+      column: document.getElementById("wz-admin-column").value,
+      periods: document.getElementById("wz-admin-periods").value
+    };
+    fetch("/api/factor-admin/request", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(res) {
+      if (!res.body.ok) {
+        var box = document.getElementById("wz-admin-job");
+        box.classList.remove("hidden");
+        box.innerHTML = '<p class="err">' + esc(res.body.error || "提交失败") + '</p>';
+        return;
+      }
+      renderJob(res.body);
+      pollJob(res.body.job_id);
+    });
+  });
+
+  // NL 缺因子跳转入口：切到「新增因子」tab 的路径 A 并预填
+  window.wzGotoFactorAdmin = function(indicatorName, period) {
+    document.querySelector('.tab[data-tab="factor"]').click();
+    var sec = document.getElementById("sec-wz-admin");
+    if (sec.classList.contains("collapsed")) {
+      document.querySelector('.section-toggle[data-section="wz-admin"]').click();
+    }
+    if (indicatorName) {
+      var nameSel = document.getElementById("wz-admin-name");
+      for (var i = 0; i < nameSel.options.length; i++) {
+        if (nameSel.options[i].value === indicatorName) { nameSel.value = indicatorName; break; }
+      }
+    }
+    if (period) document.getElementById("wz-admin-periods").value = period;
+    sec.scrollIntoView({behavior: "smooth"});
+  };
+
+  // ---------- 路径 B：全新指标 · NL/手写生成（factor-create 闭环） ----------
+  function fcPeriodsValue() {
+    var raw = document.getElementById('fc-periods').value.trim();
+    if (!raw || raw === 'null') return [null];
+    return raw.split(',').map(function(s) { return parseInt(s.trim(), 10); }).filter(function(n) { return !isNaN(n); });
+  }
+  function fcPayload() {
+    return {
+      code: document.getElementById('fc-code').value,
+      name: document.getElementById('fc-name').value.trim(),
+      category: document.getElementById('fc-category').value,
+      column: document.getElementById('fc-column').value,
+      periods: fcPeriodsValue()
+    };
+  }
+  function fcShow(html) {
+    var box = document.getElementById('fc-result');
+    box.classList.remove('hidden');
+    box.innerHTML = html;
+  }
+  function fcPost(url, payload, onOk) {
+    return fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    }).then(function(r) { return r.json(); }).then(onOk);
+  }
+
+  document.getElementById('fc-generate').addEventListener('click', function() {
+    var desc = document.getElementById('fc-desc').value.trim();
+    if (!desc) { alert('请先用一句话描述你想要的指标'); return; }
+    document.getElementById('fc-gen-status').textContent = '生成中（约十几秒）...';
+    fcPost('/api/factor-create/nl-generate', {description: desc}, function(d) {
+      if (!d.ok) {
+        document.getElementById('fc-gen-status').textContent = '';
+        fcShow('<p class="err">' + esc(d.error || '生成失败') + '</p>');
+        return;
+      }
+      document.getElementById('fc-gen-status').textContent = '已生成（请人工核对代码与参数）';
+      document.getElementById('fc-code').value = d.code;
+      if (d.meta) {
+        document.getElementById('fc-name').value = d.meta.name || '';
+        document.getElementById('fc-category').value = d.meta.category || '';
+        document.getElementById('fc-column').value = d.meta.column || 'close';
+        var periods = d.meta.periods;
+        if (periods && periods.length && periods[0] !== null) {
+          document.getElementById('fc-periods').value = periods.join(',');
+        } else if (d.meta.params) {
+          document.getElementById('fc-periods').value = '';
+        } else {
+          document.getElementById('fc-periods').value = 'null';
+        }
+      }
+    });
+  });
+
+  document.getElementById('fc-check').addEventListener('click', function() {
+    fcShow('<p class="opt">检查中...</p>');
+    fcPost('/api/factor-create/check', fcPayload(), function(d) {
+      var html = '';
+      if (d.violations && d.violations.length) html += '<p class="err">安全检查未通过：' + esc(d.violations.join('；')) + '</p>';
+      else html += '<p class="ok">安全检查通过</p>';
+      if (d.duplicate) html += '<p class="err">查重命中：' + esc(d.duplicate) + '</p>';
+      else if (!d.violations || !d.violations.length) html += '<p class="ok">查重通过（无冲突列）</p>';
+      if (d.warning) html += '<p class="opt">' + esc(d.warning) + '</p>';
+      fcShow(html);
+    });
+  });
+
+  document.getElementById('fc-smoke').addEventListener('click', function() {
+    fcShow('<p class="opt">小样本试算提交中...</p>');
+    fcPost('/api/factor-create/smoke', fcPayload(), function(d) {
+      if (!d.ok) { fcShow('<p class="err">试算失败：' + esc(d.error || '未知错误') + '</p>'); return; }
+      pollFcSmoke(d.job_id);
+    });
+  });
+
+  // 试算为后台 job（最长 120s）：提交后轮询状态
+  function pollFcSmoke(jobId) {
+    fcShow('<p class="opt">小样本试算中（用一只股票试算，最长约 2 分钟）... 任务 ' + esc(jobId) + '</p>');
+    fetch('/api/factor-create/smoke/' + jobId)
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var d = res.body;
+        if (!d.ok) { fcShow('<p class="err">' + esc(d.error || '试算状态查询失败') + '</p>'); return; }
+        if (d.status === 'running') { setTimeout(function() { pollFcSmoke(jobId); }, 2000); return; }
+        var r2 = d.result || {};
+        if (!r2.ok) {
+          fcShow('<p class="err">试算失败：' + esc(r2.error || (r2.errors || []).join('；') || '未知错误') + '</p>');
+          return;
+        }
+        fcShow('<p class="ok">试算通过</p><p>因子类 ' + esc(r2.factor_class)
+          + '（' + esc(r2.indicator_name) + ' / ' + esc(r2.category) + '），样本 ' + esc(r2.code)
+          + ' ' + esc(r2.rows) + ' 行，输出列：<code>' + esc((r2.columns || []).join(', ')) + '</code></p>');
+        loadFcSandbox();
+      })
+      .catch(function(err) { fcShow('<p class="err">' + esc(err) + '</p>'); });
+  }
+
+  function pollFcJob(jobId) {
+    var box = document.getElementById('fc-job');
+    box.classList.remove('hidden');
+    fetch('/api/admin/daily-jobs/' + jobId)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        var label = {running: '运行中', completed: '已完成', failed: '失败'}[d.status] || d.status;
+        var html = '<p>入库任务 ' + esc(d.job_id) + '（' + esc(d.label || '') + '）：<strong>' + label + '</strong></p>';
+        if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
+        if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
+        box.innerHTML = html;
+        if (d.status === 'running') {
+          setTimeout(function() { pollFcJob(jobId); }, 3000);
+        } else {
+          loadFcSandbox();
+        }
+      });
+  }
+
+  document.getElementById('fc-promote').addEventListener('click', function() {
+    var p = fcPayload();
+    if (!p.name || !p.category || !p.column) { alert('请填写 指标名/类别/价格列'); return; }
+    if (!confirm('确认把因子 ' + p.name + '（' + p.category + '/' + p.column + '，周期 ' + document.getElementById('fc-periods').value + '）正式加入因子库？\n加入后系统会自动检查并补算历史数据，之后每日自动更新。')) return;
+    fcPost('/api/factor-create/promote', p, function(d) {
+      if (!d.ok) { fcShow('<p class="err">加入因子库失败：' + esc(d.error || '未知错误') + '</p>'); return; }
+      fcShow('<p class="ok">已加入因子库：' + esc(d.path) + '</p><p class="opt">config 备份：' + esc(d.config_backup || '—') + '；次日起每日自动更新该因子。</p>');
+      if (d.job_id) pollFcJob(d.job_id);
+    });
+  });
+
+  function loadFcSandbox() {
+    fetch('/api/factor-create/sandbox')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var el = document.getElementById('fc-sandbox-list');
+        if (!d.ok || !d.factors.length) { el.innerHTML = '<span class="opt">（空）</span>'; return; }
+        el.innerHTML = '<ul>' + d.factors.map(function(f) {
+          return '<li><code>' + esc(f.name) + '</code> <span class="opt">' + esc(f.mtime) + '</span>'
+            + ' <button class="btn-sm btn-danger-outline" data-fc-del="' + esc(f.name) + '">删除</button></li>';
+        }).join('') + '</ul>';
+        el.querySelectorAll('[data-fc-del]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (!confirm('删除因子草稿 ' + btn.dataset.fcDel + '？')) return;
+            fcPost('/api/factor-create/sandbox/delete', {name: btn.dataset.fcDel}, function(d2) {
+              if (!d2.ok) alert(d2.error || '删除失败');
+              loadFcSandbox();
+            });
+          });
+        });
+      });
+  }
+  document.getElementById('fc-sandbox-refresh').addEventListener('click', loadFcSandbox);
+
+  // init
+  loadIndicators();
+  loadFcSandbox();
 })();
 </script>
 {% endblock %}
