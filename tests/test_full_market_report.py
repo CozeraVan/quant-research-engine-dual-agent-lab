@@ -270,6 +270,49 @@ class TestBuildStrategyPerformance:
         benchmark_keys = [k for k in perf if k.startswith("benchmark_")]
         assert len(benchmark_keys) == 0
 
+    def test_date_and_excess_fallback_when_summary_metrics_missing(self):
+        """QRE-ENG-046：summary_metrics 无 date_start/date_end/excess 时，
+        日期取净值曲线首末交易日，超额 = 组合总收益 − 买入持有。"""
+        r = _make_single_result("000001.SZ")
+        summary = pd.DataFrame([{
+            "symbol": "000001.SZ", "total_return": 0.18, "trade_count": 2,
+            "win_rate": 1.0, "total_cost": 20.0,
+        }])
+        rt = build_round_trips({"000001.SZ": r})
+        eq = build_full_market_equity_curve({"000001.SZ": r})
+        perf = build_strategy_performance(
+            {"symbol_count": 1, "traded_symbol_count": 1, "buy_hold_return": 0.10},
+            summary, rt, eq,
+            run_id="test-run", strategy_id="strat-1",
+        )
+        eq_first = str(eq["trade_date"].iloc[0])[:10]
+        eq_last = str(eq["trade_date"].iloc[-1])[:10]
+        assert perf["date_start"] == eq_first
+        assert perf["date_end"] == eq_last
+        assert perf["excess_return_vs_buy_hold"] == pytest.approx(
+            perf["strategy_total_return"] - 0.10
+        )
+
+    def test_summary_metrics_values_take_precedence(self):
+        """summary_metrics 显式提供日期/超额时优先使用，不走兜底。"""
+        r = _make_single_result("000001.SZ")
+        summary = pd.DataFrame([{
+            "symbol": "000001.SZ", "total_return": 0.18, "trade_count": 2,
+            "win_rate": 1.0, "total_cost": 20.0,
+        }])
+        rt = build_round_trips({"000001.SZ": r})
+        eq = build_full_market_equity_curve({"000001.SZ": r})
+        perf = build_strategy_performance(
+            {"symbol_count": 1, "traded_symbol_count": 1,
+             "date_start": "2020-01-01", "date_end": "2020-12-31",
+             "buy_hold_return": 0.10, "excess_return_vs_buy_hold": 0.05},
+            summary, rt, eq,
+            run_id="test-run", strategy_id="strat-1",
+        )
+        assert perf["date_start"] == "2020-01-01"
+        assert perf["date_end"] == "2020-12-31"
+        assert perf["excess_return_vs_buy_hold"] == 0.05
+
 
 class TestBuildTradeAnalysis:
     def test_empty_round_trips(self):

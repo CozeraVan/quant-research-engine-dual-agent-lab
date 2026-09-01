@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-09-01 QRE-ENG-046 DONE（引擎侧补漏，不碰 8081 GUI）：`uv run pytest -q` → **1864 passed + 4 skipped**（基线 1862 + 2 净增）。`build_strategy_performance`（portfolio/full_market_report.py）batch 分支补全引擎产物缺欠：`date_start`/`date_end` 在 summary_metrics 缺省时取净值曲线首末交易日；`excess_return_vs_buy_hold` 缺省且组合总收益与 buy_hold 均可用时现算（总收益 − 买入持有）。summary_metrics 显式提供时优先、不走兜底。存量 run 产物不变（GUI 层 CONSOL-043 降级逻辑继续覆盖旧文件），新跑回测直接产出完整字段。测试 +2（兜底生效/显式值优先）。等用户审批 commit。
+
 2026-09-01 QRE-GUI-CONSOL-045 DONE：`uv run pytest -q` → **1862 passed + 4 skipped**（基线 1861 + 1 净增）。用户报「行业板块第三名是未标记」——根因：A 层行业只收 `申万L1:` 标签（tushare_sw2021，覆盖 5504 股），**申万行业不覆盖北交所**，330 只 BJ 股全军覆没；MACD run 473 只交易股中 33 只 BJ 股（含华岭股份 920139.BJ）全落「未标记」块（pnl +263 万排第三）。修复：新 `_fetch_industries`（reference.stock_basic 的 tushare 通用 industry 字段，BJ 覆盖 329/330，DB 失败降级空 dict 不报错）+ `_aggregate_tag_layers` 加可选 `industries` 参——无申万标签的个股按通用行业入块，显示名加 `·通用` 后缀区分分类体系，仍无行业的才归「未标记」；lab_result.html A 层含 ·通用 块时图下注明兜底口径。实测 MACD run：「未标记」清零，33 只 BJ 股落入 20 个通用行业块（半导体/软件服务/小金属等），A 层 31→51 块。测试 +1（兜底入块/无行业仍未标记/不传 industries 向后兼容）。qre-gui-lab 已重启 active。等用户审批 commit（拟与 041~044 合并一笔）。
 
 2026-09-01 QRE-GUI-CONSOL-044 DONE：`uv run pytest -q` → **1861 passed + 4 skipped**（持平）。用户对两个「超额」数字困惑（指标卡 -20.49% vs 区间框 +9.95%）——实为两种口径：指标卡=全期 vs 持有不动（个股自然涨幅），区间框=滑块窗口 vs 选中指数。按用户批准改标签消歧：`card()` 加第 4 参 tip（title 悬浮注释）；指标卡「超额收益」→「超额收益·vs持有不动」（悬浮注明 策略全期总收益−同期买入持有、负值=跑输装死持有），「年化收益」加悬浮公式说明；区间结果框基准名动态化——「区间基准收益·上证指数」「区间超额·vs 上证指数」，随基准按钮切换（实测切沪深300标签跟随）。jsdom + 真实 echarts 实测标签与数值全对。qre-gui-lab 已重启 active。等用户审批 commit（拟与 041~043 合并一笔）。

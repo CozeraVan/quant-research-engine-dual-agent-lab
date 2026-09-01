@@ -922,13 +922,23 @@ def build_strategy_performance(
         }
 
     # batch mode
+    # QRE-ENG-046：date_start/date_end 缺省时取净值曲线首末交易日；
+    # excess_return_vs_buy_hold 缺省且组合总收益与买入持有均可用时现算（总收益 − 买入持有）。
+    eq_dates: list[str] = []
+    if not eq.empty and "trade_date" in eq.columns:
+        eq_dates = [str(d)[:10] for d in eq["trade_date"]]
+    buy_hold = summary_metrics.get("buy_hold_return")
+    strat_total = risk.get("total_return")
+    excess = summary_metrics.get("excess_return_vs_buy_hold")
+    if excess is None and isinstance(strat_total, (int, float)) and isinstance(buy_hold, (int, float)):
+        excess = float(strat_total - buy_hold)
     result: dict[str, Any] = {
         "run_id": run_id,
         "strategy_id": strategy_id,
         "strategy_name": strategy_name,
         "strategy_family": strategy_family,
-        "date_start": summary_metrics.get("date_start"),
-        "date_end": summary_metrics.get("date_end"),
+        "date_start": summary_metrics.get("date_start") or (eq_dates[0] if eq_dates else None),
+        "date_end": summary_metrics.get("date_end") or (eq_dates[-1] if eq_dates else None),
         "symbol_count": summary_metrics.get("symbol_count", len(summary) if summary is not None else 0),
         "traded_symbol_count": summary_metrics.get("traded_symbol_count"),
         "total_trade_count": total_trades,
@@ -947,7 +957,7 @@ def build_strategy_performance(
         "information_ratio": None,
         "strategy_total_return": risk.get("total_return"),
         "buy_hold_return": summary_metrics.get("buy_hold_return"),
-        "excess_return_vs_buy_hold": summary_metrics.get("excess_return_vs_buy_hold"),
+        "excess_return_vs_buy_hold": excess,
         "positive_symbol_rate": summary_metrics.get("positive_return_symbol_rate"),
         "mean_symbol_return": summary_metrics.get("mean_total_return"),
         "median_symbol_return": summary_metrics.get("median_total_return"),
