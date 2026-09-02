@@ -2,7 +2,199 @@
 
 ## Task ID
 
-QRE-GUI-LAB-ENTRY-018（8081 回测台「新增策略」tab 三入口递进重构：自然语言 / 快速向导 / 高级 YAML）
+QRE-GUI-POOL-MOM-004（「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **无前视**：历史日 T 的榜单字段全部来自 `WHERE trade_date = :d` 单行截面
+  （排名/共振/热力为组内截面计算）；post 列单独取 T 之后的数据且明确标注
+  「事后」；detail/members 以 end_date/trade_date 截断到 T。表本身
+  point-in-time（fwd_ret_w 只依赖 ≤T 数据），符合 R-QRE-003。
+- **post 口径**：∏(1+fwd_ret)−1 over (T, T+w]，与 M7 v2 文档口径一致；
+  不足 w 日或窗口含 None → NULL + 页面「未满窗口」注明（摘要条与列均有）。
+- **摘要统计**：加速度 None 的池不进 Top N（避免污染），但计入全体对照；
+  post 缺失各自剔除；全缺 → None 不炸（专项测试）。
+- **性能**：post 查询限定 T 后 20 个交易日（先 DISTINCT LIMIT 20 再区间
+  拉取），避免最早日期全表扫描；缓存键含 trade_date。
+- **范围**：pool_momentum.py / app.py（2 路由加参透传）/ admin.html /
+  测试文件；8081 零改动。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1929 passed, 4 skipped（1918 + 11 净增）
+tests/test_gui_pool_momentum.py → 65 passed
+node --check admin.html script → 通过
+sudo -n systemctl restart qre-gui → active；curl /admin → 200
+真库 /api/admin/pool-momentum?trade_date=2025-09-05：
+  concept 加速度 Top10 post_5 均值 +0.19%（胜率 0.3）vs 全体 1064 池 +0.88%
+  state Top10 post_5 均值 +0.64%（胜率 0.9）vs 全体 14 池 +0.95%
+  2025-08-21：concept Top10 post_5 −1.92% vs 全体 −0.29%；Top1 赛马概念 post_20 +16.14%
+detail end_date=2025-09-05 → 序列正确截断；members trade_date 生效
+scripts/check-progress-docs.sh → passed；git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-003（「聚类动量」页升级 M7 v2 前瞻口径）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **口径切换完整**：速度/加速度（compute_acceleration metric="fwd_ret"）、
+  热力（compute_heat 同参）、共振（resonance_flag 判 fwd_ret_w）、默认排序
+  与窗口切换键（fwd_ret_w）四处全部落 fwd；回看 ret_w 仅展示对照
+  （列名标「回看」），回看口径经 metric="ret" 仍可选并有测试锁定。
+- **滞后处理**：末日 fwd 全 NULL 时不展示空白榜单——默认切到最近
+  fwd 已补齐日 + fwd_lag 红色提示；全表无 fwd 的极端情形回退最新日、
+  加速度/热力全 None 不炸（专项测试）。
+- **事件列**：has_event 行级标记与 cluster-ashare M7 文档一致（仅
+  selection_artifact=true 的 8 个状态池）；concept 分区无事件列；
+  survive_3/5 末日 NULL 在声明卡注明。
+- **只读边界**：仅 SELECT；无写库；8081 零改动；既有测试仅 fixture
+  同步改 fwd 列（口径切换的预期更新），无逻辑删改。
+- **范围**：仅 pool_momentum.py / admin.html / 测试文件；app.py 与
+  style.css 本轮零改动。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1918 passed, 4 skipped（1909 + 9 净增）
+tests/test_gui_pool_momentum.py → 54 passed
+node --check admin.html script → 通过
+sudo -n systemctl restart qre-gui → active；curl /admin → 200
+真库 /api/admin/pool-momentum：
+  latest_date=2026-08-31 / overall=2026-09-01 / fwd_lag=true（提示文案正确）
+  concept fwd_ret_3 榜首「昨日打二板以上表现」+15.38%（heat3=1.0、共振=true）
+  state：8 个 artifact 池 has_event=true（跳空:高开 win_rate_1=0.658），
+        非 artifact 池 has_event=false
+detail（state/连涨:3日）：250 日 fwd_ret 序列，末日 None（一日滞后）正常
+scripts/check-progress-docs.sh → passed；git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-002（「聚类动量」页三项优化：池内个股明细 / 表头排序 / 行热力色阶）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **只读边界**：members 端点仅 SELECT（company_tags / daily_tags /
+  stock_daily / stock_basic），无写库；名称查询独立 try/except 降级。
+- **口径一致性**：`compute_member_metrics` 与 cluster-ashare M7 管线
+  `compute_stock_metrics` 同语义（复权 close×adj_factor 比值、vwap 直接
+  比值、近 w 日均量/近 50 日均量、窗口内缺行→None）；真库验证成员等权
+  ret_3 与 cluster.pool_momentum_daily 池值**逐位相等**
+  （0.017031048806369808），有效成员数 770 == n_stocks。
+- **热力色阶**：分位口径（heat=2×分位−1）抗极值，并列共享（rank_desc
+  同规则），None 与单有效值均降级 None；红涨绿跌符合 A 股惯例；「长弱
+  短升」改左边框+加粗，与热力背景无冲突（旧背景 CSS 规则已移除并注释）。
+- **排序**：前端 momGenericSort 与 Python sort_rows 同口径（None 恒末位、
+  双向切换、当前列 ▼/▲）。
+- **性能**：单池查询 ~数百股 ×51 交易日 × 一次 SQL，TTL 300s 缓存。
+- **范围**：仅 pool_momentum.py / app.py / admin.html / style.css /
+  测试文件；8081 零改动；既有测试零改动全绿。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1909 passed, 4 skipped（1888 + 21 净增）
+tests/test_gui_pool_momentum.py → 45 passed
+node --check admin.html script → 通过
+sudo -n systemctl restart qre-gui → active
+curl /admin → 200；/api/admin/pool-momentum/members 两池类型 → ok
+  concept/华为概念：771 成员（770 有行情，== n_stocks），成员等权 ret_3 与池表逐位一致
+  state/量比:突增：正常返回
+scripts/check-progress-docs.sh → passed；git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-001（8080 管理台「聚类动量因子研究」tab，只读 cluster.pool_momentum_daily）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **只读边界**：pool_momentum.py 仅两条 SELECT（max(trade_date) + 当日截面
+  / 单池序列），无任何写库语句；沿用 market_risk.py 的 _store/_cached/
+  ok=False 自降级模式，表缺失/DB 挂返回降级 payload 不拖垮整页。
+- **范围裁切**：`git diff --name-only HEAD` 仅 `gui/app.py`（+2 路由）、
+  `gui/templates/admin.html`（+1 tab）、`gui/static/style.css`（纯追加 3 类）、
+  新增 `gui/pool_momentum.py` 与 `tests/test_gui_pool_momentum.py`；
+  8081（gui/lab*.py）零改动；既有测试零改动全绿。
+- **口径一致性**：速度/加速度/长弱短升/共振四个纯逻辑口径在模块 docstring、
+  页面声明卡、测试中三处一致（加速度=ret_50 排名−ret_3 排名；
+  共振严格 >0；vol_chg_50 恒 0 已注明 50 日窗永不共振）。
+- **偏差声明**：concept 池当前快照前视偏差、state 池 point-in-time、
+  「不构成投资建议」均在页面顶部声明卡中（模板断言锁定）。
+- **参数安全**：pool_type 白名单（concept/state），其余 SQL 全参数绑定。
+- **JS 健壮性**：admin.html 单 <script> 块 node --check 过；detail 加载
+  失败/空数据有降级文案；零新前端框架（复用 riskSvgLine inline SVG）。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1888 passed, 4 skipped（基线 1864 + 24 净增）
+tests/test_gui_pool_momentum.py → 24 passed
+node --check admin.html script → 通过
+sudo -n systemctl restart qre-gui → is-active=active
+curl 8080 /admin → 200，含 data-tab="mom" 与 /api/admin/pool-momentum（3 处）
+curl /api/admin/pool-momentum → ok，latest=2026-09-01，concept 1066 / state 14
+curl /api/admin/pool-momentum/detail（concept/华为概念、state/量比:突增）→ ok，250 日序列
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Archive: QRE-GUI-LAB-ENTRY-018（8081 回测台「新增策略」tab 三入口递进重构：自然语言 / 快速向导 / 高级 YAML）
 
 ## Reviewer
 

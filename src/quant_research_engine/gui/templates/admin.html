@@ -10,6 +10,7 @@
   <button class="tab" data-tab="maint">维护区</button>
   <button class="tab" data-tab="cluster">聚类分析</button>
   <button class="tab" data-tab="risk">大盘风险</button>
+  <button class="tab" data-tab="mom">聚类动量</button>
 </div>
 
 <!-- Tab 1: 总览 -->
@@ -165,6 +166,76 @@
     <button class="section-toggle" data-section="risk-alert">预警判定详情（双判据 vs 阈值）<span class="opt">——两个报警器的当前读数与触发线</span> &#9660;</button>
     <div id="sec-risk-alert" class="section-body">
       <div id="risk-alert"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tab 8: 聚类动量因子研究（只读 cluster.pool_momentum_daily，cluster-ashare M7 日更产物） -->
+<div id="tab-mom" class="tab-content">
+  <p><button id="btn-mom-refresh" class="btn btn-ghost">刷新 Refresh</button>
+    <span class="opt">数据源：cluster.pool_momentum_daily（只读，cluster-ashare M7 管线每交易日 17:30 随日更链增量）</span></p>
+  <div class="risk-card">
+    <p><strong>数据口径与偏差声明（M7 v2，demo 版）</strong></p>
+    <ul>
+      <li><strong>主口径 = 前瞻收益 fwd_ret_w</strong>：每日按当日成分等权再平衡的前瞻收益
+        （fwd_ret = T 日成员 → T+1 等权实际收益，fwd_ret_w 为其 w 日复利累计），对标东财板块指数。
+        <strong>回看 ret_w 列（列名标「回看」）仅作对照</strong>。</li>
+      <li><strong>一日滞后</strong>：前瞻收益 T+1 收盘后才可算（由增量回填），末日 fwd 列全 NULL 属正常；
+        榜单默认展示最近 fwd 已补齐的交易日。</li>
+      <li><strong>事件池统计</strong>（state 分区右侧列）：次日溢价 / 3、5 日存活率 / 胜率，
+        仅 8 个 selection_artifact=true 的状态池有值，为<strong>对标同花顺涨停复盘的前瞻统计</strong>；
+        这些池的回看 ret_w 是同义反复，无研究意义。survive_3/5 需 T+3/T+5 标签，末日数天 NULL 正常。</li>
+      <li><strong>concept 池</strong>（东财/同花顺概念标签，约 1066 个）：成员为<strong>当前快照</strong>，
+        历史回看存在前视偏差（survivorship/look-ahead），demo 阶段接受，结论不可直接外推。</li>
+      <li><strong>state 池</strong>（技术状态标签，14 个）：point-in-time 成员，无该偏差。</li>
+      <li><strong>速度 vs 加速度</strong>：速度 = fwd_ret_50 截面排名（rank 1 最高）；
+        加速度 = fwd_ret_50 排名 − fwd_ret_3 排名，正值 = 短窗口排名比长窗口更靠前（排名跃升）。
+        「长弱短升」行（<span class="mom-hl-demo">左侧绿边 + 池名加粗</span>）：fwd_ret_50 排名位于后半区且 fwd_ret_3 排名进入前 10%。</li>
+      <li><strong>行背景热力</strong>：按当前选中窗口的 fwd_ret_w 截面分位连续渐变（红涨绿跌，
+        收益分位越高越红、越低越绿、中位近无色），分位口径抗极值；切换窗口时热力跟随重算。</li>
+      <li><strong>价量共振</strong>：fwd_ret_w &gt; 0 且 vwap_ret_w &gt; 0 且 vol_chg_w &gt; 0（w 为当前选中窗口），
+        前瞻收益与 vwap、交易量互证。注意 vol_chg_50 按定义恒为 0，故 50 日窗口永不共振。</li>
+      <li><strong>事后验证列（post_3/5/20）</strong>：选中历史日 T 时，该池 T 日之后 3/5/20 个交易日的
+        fwd_ret 复利实际收益；T 距最新日不足 w 天时显示「—」（未满窗口）。顶部摘要条给出
+        当日加速度 Top 10 池的 post_5 均值/中位数/胜率 vs 全体池均值——加速度有没有预测力一目了然。</li>
+      <li>回看 ret_w = 复权价 w 日涨幅（池内等权平均）；vwap_ret_w = vwap 口径 w 日涨幅；
+        vol_chg_w = 近 w 日均量/近 50 日均量 − 1。</li>
+    </ul>
+    <p class="opt">本页为研究查看工具，不构成投资建议。</p>
+  </div>
+  <div id="mom-overview"><span class="opt">加载中...</span></div>
+  <div id="mom-summary"></div>
+  <p>
+    <span class="opt">榜单日期：</span>
+    <select id="mom-date" class="mom-date"></select>
+    <span class="opt">（可选范围 = 有 fwd 前瞻数据的交易日；切换即看该日的速度/加速度/共振与事后验证）</span>
+  </p>
+  <p>
+    <span class="opt">排序窗口：</span>
+    <button class="btn btn-ghost mom-win" data-win="3">3 日</button>
+    <button class="btn btn-ghost mom-win" data-win="5">5 日</button>
+    <button class="btn btn-ghost mom-win" data-win="20">20 日</button>
+    <button class="btn btn-ghost mom-win" data-win="50">50 日</button>
+    <span class="opt">（表格默认按加速度降序；点击窗口切换赚钱效应列高亮、共振口径与行热力；点击数值列表头切换升/降序）</span>
+  </p>
+  <div class="section">
+    <button class="section-toggle" data-section="mom-concept">concept 概念池榜单（按加速度排序）<span class="opt">——点击池名看 250 日详情</span> &#9660;</button>
+    <div id="sec-mom-concept" class="section-body">
+      <div id="mom-concept"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <button class="section-toggle" data-section="mom-state">state 状态池榜单（按加速度排序）<span class="opt">——右侧事件池列仅 8 个 selection_artifact 池有值（对标同花顺涨停复盘的前瞻统计）</span> &#9660;</button>
+    <div id="sec-mom-state" class="section-body">
+      <div id="mom-state"><span class="opt">加载中...</span></div>
+    </div>
+  </div>
+  <div class="section">
+    <button class="section-toggle" data-section="mom-detail">单池详情（近 250 交易日）<span class="opt">——主线 fwd_ret_3/20/50（前瞻），回看 ret/vwap_ret/vol_chg 为浅色辅线</span> &#9660;</button>
+    <div id="sec-mom-detail" class="section-body">
+      <div id="mom-detail"><span class="opt">点击上方榜单中的池名查看该池时间序列</span></div>
+      <h4>池内个股明细 <span class="opt">（成员回看指标，描述性，即时算自 stock_daily；点击列头排序）</span></h4>
+      <div id="mom-members"></div>
     </div>
   </div>
 </div>
@@ -1097,6 +1168,302 @@
     riskBoardView = 'cluster'; loadMarketRisk();
   });
 
+  // ---------- Tab 8: 聚类动量因子研究 ----------
+  var momData = null;       // 最近一次 overview 响应
+  var momWindow = 3;        // 当前共振/热力口径窗口
+  var momSort = {key: 'acceleration', dir: -1};  // 主榜单排序（dir: -1 降序 / 1 升序）
+  var momMembers = null;    // 最近一次 members 响应
+  var momMemberSort = {key: 'ret_3', dir: -1};   // 成员明细排序
+  function momPct(v) {
+    return v == null ? '—' : (Number(v) * 100).toFixed(2) + '%';
+  }
+  function momPctCell(v, highlight) {
+    if (v == null) return '<td class="num">—</td>';
+    var color = v > 0 ? '#b91c1c' : (v < 0 ? '#15803d' : '');
+    return '<td class="num" style="' + (color ? 'color:' + color + ';' : '')
+      + (highlight ? 'font-weight:700;' : '') + '">' + momPct(v) + '</td>';
+  }
+  // 热力色：A 股红涨绿跌，heat ∈ [-1,1]（后端截面分位），0 附近近无色
+  function momHeatColor(h) {
+    if (h == null) return '';
+    var a = (0.06 + 0.30 * Math.abs(h)).toFixed(3);
+    return h >= 0 ? 'background:rgba(220,38,38,' + a + ');' : 'background:rgba(22,163,74,' + a + ');';
+  }
+  // 通用排序：None/null 恒排末位
+  function momGenericSort(rows, key, dir) {
+    return rows.slice().sort(function(a, b) {
+      var va = a[key], vb = b[key];
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (va < vb) return -dir;
+      if (va > vb) return dir;
+      return 0;
+    });
+  }
+  function momTh(key, label, sortState) {
+    var arrow = sortState.key === key ? (sortState.dir === -1 ? ' ▼' : ' ▲') : '';
+    return '<th class="mom-sort" data-key="' + esc(key) + '">' + esc(label) + arrow + '</th>';
+  }
+  function momTable(rows, poolType) {
+    var sorted = momGenericSort(rows, momSort.key, momSort.dir);
+    var w = momWindow;
+    var isState = poolType === 'state';
+    var ncol = isState ? 24 : 20;
+    var body = sorted.map(function(r) {
+      var reso = (r.resonance || {})[String(w)];
+      var heat = (r.heat || {})[String(w)];
+      var eventCells = '';
+      if (isState) {
+        eventCells = momPctCell(r.next_premium, false)
+          + momPctCell(r.survive_3, false) + momPctCell(r.survive_5, false)
+          + momPctCell(r.win_rate_1, false);
+      }
+      return '<tr' + (r.weak_long_strong_short ? ' class="mom-hl"' : '')
+        + ' style="' + momHeatColor(heat) + '">'
+        + '<td><a href="#" class="mom-pool" data-pt="' + esc(poolType) + '" data-pk="' + esc(r.pool_key) + '">'
+        + esc(r.pool_key) + '</a></td>'
+        + '<td class="num">' + esc(r.n_stocks) + '</td>'
+        + momPctCell(r.fwd_ret_3, w === 3) + momPctCell(r.fwd_ret_5, w === 5)
+        + momPctCell(r.fwd_ret_20, w === 20) + momPctCell(r.fwd_ret_50, w === 50)
+        + momPctCell(r.ret_3, false) + momPctCell(r.ret_5, false)
+        + momPctCell(r.ret_20, false) + momPctCell(r.ret_50, false)
+        + momPctCell(r.vwap_ret_3, w === 3) + momPctCell(r.vwap_ret_50, w === 50)
+        + momPctCell(r['vol_chg_' + w], false)
+        + '<td class="num">' + esc(r.speed_rank == null ? '—' : r.speed_rank) + '</td>'
+        + '<td class="num">' + esc(r.short_rank == null ? '—' : r.short_rank) + '</td>'
+        + '<td class="num">' + esc(r.acceleration == null ? '—' : (r.acceleration > 0 ? '+' : '') + r.acceleration) + '</td>'
+        + '<td>' + (reso ? '<span class="health-green">价量共振</span>' : '<span class="opt">—</span>') + '</td>'
+        + momPctCell(r.post_3, false) + momPctCell(r.post_5, false) + momPctCell(r.post_20, false)
+        + eventCells
+        + '</tr>';
+    }).join('');
+    var head = '<table><thead><tr><th>池</th>'
+      + momTh('n_stocks', '股票数', momSort)
+      + momTh('fwd_ret_3', 'fwd_3', momSort) + momTh('fwd_ret_5', 'fwd_5', momSort)
+      + momTh('fwd_ret_20', 'fwd_20', momSort) + momTh('fwd_ret_50', 'fwd_50', momSort)
+      + momTh('ret_3', '回看ret_3', momSort) + momTh('ret_5', '回看ret_5', momSort)
+      + momTh('ret_20', '回看ret_20', momSort) + momTh('ret_50', '回看ret_50', momSort)
+      + momTh('vwap_ret_3', 'vwap_3', momSort) + momTh('vwap_ret_50', 'vwap_50', momSort)
+      + momTh('vol_chg_' + w, 'vol_chg_' + w, momSort)
+      + momTh('speed_rank', '速度排名(50日)', momSort)
+      + momTh('short_rank', '短窗排名(3日)', momSort)
+      + momTh('acceleration', '加速度', momSort)
+      + '<th>共振(' + w + '日)</th>'
+      + momTh('post_3', '事后3日', momSort) + momTh('post_5', '事后5日', momSort)
+      + momTh('post_20', '事后20日', momSort)
+      + (isState
+        ? momTh('next_premium', '次日溢价', momSort)
+          + momTh('survive_3', '存活3日', momSort) + momTh('survive_5', '存活5日', momSort)
+          + momTh('win_rate_1', '胜率T+1', momSort)
+        : '')
+      + '</tr></thead><tbody>'
+      + (body || '<tr><td colspan="' + ncol + '" class="opt">无数据</td></tr>') + '</tbody></table>';
+    return head;
+  }
+  function momBindPoolLinks() {
+    document.querySelectorAll('.mom-pool').forEach(function(a) {
+      a.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        loadMomentumDetail(a.dataset.pt, a.dataset.pk);
+      });
+    });
+    document.querySelectorAll('#mom-concept th.mom-sort, #mom-state th.mom-sort').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var key = th.dataset.key;
+        if (momSort.key === key) {
+          momSort.dir = -momSort.dir;
+        } else {
+          momSort = {key: key, dir: -1};
+        }
+        renderMomentum();
+      });
+    });
+  }
+  function renderMomentum() {
+    if (!momData || !momData.ok) return;
+    document.getElementById('mom-concept').innerHTML = momTable(momData.concept || [], 'concept');
+    document.getElementById('mom-state').innerHTML = momTable(momData.state || [], 'state');
+    momBindPoolLinks();
+  }
+  // 验证摘要条：加速度 Top10 池 post_5 vs 全体（按 pool_type 各一行）
+  function momSummaryHtml(d) {
+    var s = d.summary || {};
+    function line(label, g) {
+      if (!g || g.n_top === 0) return '';
+      var f = function(v) { return v == null ? '—（未满窗口）' : (Number(v) * 100).toFixed(2) + '%'; };
+      return '<p><strong>' + esc(label) + '</strong>：加速度 Top ' + esc(g.n_top)
+        + ' 池事后 5 日 —— 均值 <strong>' + f(g.top_mean) + '</strong>'
+        + ' ｜ 中位 ' + f(g.top_median)
+        + ' ｜ 胜率 ' + (g.top_win_rate == null ? '—' : (Number(g.top_win_rate) * 100).toFixed(0) + '%')
+        + ' ｜ <span class="opt">全体 ' + esc(g.n_all) + ' 池均值 ' + f(g.all_mean) + '</span></p>';
+    }
+    var html = line('concept 概念池', s.concept) + line('state 状态池', s.state);
+    return html
+      ? '<div class="risk-card"><p><strong>验证摘要（' + esc(d.latest_date) + '，事后 5 日 fwd 复利）</strong></p>' + html + '</div>'
+      : '';
+  }
+  function loadMomentum(date) {
+    var url = '/api/admin/pool-momentum' + (date ? '?trade_date=' + encodeURIComponent(date) : '');
+    fetchWithTimeout(url)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) {
+          cardError(document.getElementById('mom-overview'), d.error || '聚类动量加载失败', function() { loadMomentum(date); });
+          return;
+        }
+        if (d.empty) {
+          document.getElementById('mom-overview').innerHTML = '<span class="opt">' + esc(d.note || '暂无数据') + '</span>';
+          document.getElementById('mom-concept').innerHTML = '<span class="opt">暂无数据</span>';
+          document.getElementById('mom-state').innerHTML = '<span class="opt">暂无数据</span>';
+          return;
+        }
+        momData = d;
+        // 日期下拉（可选范围 = 有 fwd 数据的交易日）
+        var sel = document.getElementById('mom-date');
+        sel.innerHTML = (d.dates || []).map(function(x) {
+          return '<option value="' + esc(x) + '"' + (x === d.latest_date ? ' selected' : '') + '>' + esc(x) + '</option>';
+        }).join('');
+        document.getElementById('mom-overview').innerHTML =
+          '<div class="risk-cards"><div class="risk-card">'
+          + '<h3>榜单日期：' + esc(d.latest_date) + '</h3>'
+          + '<p>concept 概念池 <strong>' + esc((d.concept || []).length) + '</strong> 个'
+          + ' ｜ state 状态池 <strong>' + esc((d.state || []).length) + '</strong> 个</p>'
+          + (d.fwd_lag
+            ? '<p class="err">⚠ ' + esc(d.fwd_note || '') + '</p>'
+            : '<p class="opt">' + esc(d.fwd_note || '') + '</p>')
+          + '<p class="opt">' + esc(d.note || '') + '</p>'
+          + '</div></div>';
+        document.getElementById('mom-summary').innerHTML = momSummaryHtml(d);
+        renderMomentum();
+      })
+      .catch(function(err) {
+        var msg = isAbort(err) ? '聚类动量加载超时（30s），请重试' : ('聚类动量加载失败：' + err);
+        cardError(document.getElementById('mom-overview'), msg, function() { loadMomentum(date); });
+      });
+  }
+  // 成员明细表（可排序，None 恒末位）
+  function momMemberTable(d) {
+    var sorted = momGenericSort(d.members || [], momMemberSort.key, momMemberSort.dir);
+    var body = sorted.map(function(m) {
+      return '<tr>'
+        + '<td>' + esc(m.ts_code) + '</td>'
+        + '<td>' + esc(m.name || '—') + '</td>'
+        + '<td class="num">' + esc(m.close == null ? '—' : Number(m.close).toFixed(2)) + '</td>'
+        + momPctCell(m.ret_3, false) + momPctCell(m.ret_5, false)
+        + momPctCell(m.ret_20, false) + momPctCell(m.ret_50, false)
+        + momPctCell(m.vwap_ret_3, false) + momPctCell(m.vwap_ret_50, false)
+        + momPctCell(m.vol_chg_3, false) + momPctCell(m.vol_chg_50, false)
+        + '</tr>';
+    }).join('');
+    return '<table><thead><tr>'
+      + momTh('ts_code', '代码', momMemberSort)
+      + momTh('name', '名称', momMemberSort)
+      + momTh('close', '收盘', momMemberSort)
+      + momTh('ret_3', 'ret_3', momMemberSort) + momTh('ret_5', 'ret_5', momMemberSort)
+      + momTh('ret_20', 'ret_20', momMemberSort) + momTh('ret_50', 'ret_50', momMemberSort)
+      + momTh('vwap_ret_3', 'vwap_3', momMemberSort) + momTh('vwap_ret_50', 'vwap_50', momMemberSort)
+      + momTh('vol_chg_3', 'vol_chg_3', momMemberSort) + momTh('vol_chg_50', 'vol_chg_50', momMemberSort)
+      + '</tr></thead><tbody>'
+      + (body || '<tr><td colspan="11" class="opt">无数据</td></tr>') + '</tbody></table>';
+  }
+  function renderMomentumMembers() {
+    if (!momMembers || !momMembers.ok || momMembers.empty) return;
+    document.getElementById('mom-members').innerHTML = momMemberTable(momMembers);
+    document.querySelectorAll('#mom-members th.mom-sort').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var key = th.dataset.key;
+        if (momMemberSort.key === key) {
+          momMemberSort.dir = -momMemberSort.dir;
+        } else {
+          momMemberSort = {key: key, dir: -1};
+        }
+        renderMomentumMembers();
+      });
+    });
+  }
+  function loadMomentumMembers(poolType, poolKey) {
+    var el = document.getElementById('mom-members');
+    el.innerHTML = '<span class="opt">成员明细加载中...</span>';
+    fetchWithTimeout('/api/admin/pool-momentum/members?pool_type=' + encodeURIComponent(poolType)
+        + '&pool_key=' + encodeURIComponent(poolKey)
+        + (momData && momData.latest_date ? '&trade_date=' + encodeURIComponent(momData.latest_date) : ''))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) {
+          el.innerHTML = '<p class="err">' + esc(d.error || '成员明细加载失败') + '</p>';
+          return;
+        }
+        if (d.empty) {
+          el.innerHTML = '<span class="opt">' + esc(d.note || '暂无成员') + '</span>';
+          return;
+        }
+        momMembers = d;
+        renderMomentumMembers();
+      })
+      .catch(function(err) {
+        el.innerHTML = '<p class="err">成员明细加载失败：' + esc(String(err)) + '</p>';
+      });
+  }
+  function loadMomentumDetail(poolType, poolKey) {
+    var el = document.getElementById('mom-detail');
+    el.innerHTML = '<span class="opt">加载中：' + esc(poolType) + ' / ' + esc(poolKey) + ' ...</span>';
+    document.getElementById('mom-members').innerHTML = '';
+    momMembers = null;
+    fetchWithTimeout('/api/admin/pool-momentum/detail?pool_type=' + encodeURIComponent(poolType)
+        + '&pool_key=' + encodeURIComponent(poolKey)
+        + (momData && momData.latest_date ? '&end_date=' + encodeURIComponent(momData.latest_date) : ''))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) {
+          el.innerHTML = '<p class="err">' + esc(d.error || '详情加载失败') + '</p>';
+          return;
+        }
+        if (d.empty) {
+          el.innerHTML = '<span class="opt">' + esc(d.note || '暂无数据') + '</span>';
+          return;
+        }
+        var s = d.series || {};
+        var W = 640, H = 140;
+        el.innerHTML = '<h3>' + esc(d.pool_type) + ' / ' + esc(d.pool_key)
+          + ' <span class="opt">（近 ' + esc((s.dates || []).length) + ' 交易日，'
+          + esc((s.dates || [])[0] || '?') + ' ~ ' + esc((s.dates || []).slice(-1)[0] || '?') + '）</span></h3>'
+          + [
+            'fwd_ret_3|fwd_ret_3（前瞻 3 日，主线）|#dc2626',
+            'fwd_ret_20|fwd_ret_20（前瞻 20 日，主线）|#d97706',
+            'fwd_ret_50|fwd_ret_50（前瞻 50 日，速度）|#2563eb',
+            'fwd_ret|fwd_ret（次日等权收益）|#b91c1c',
+            'ret_3|回看 ret_3（辅线）|#fca5a5',
+            'ret_20|回看 ret_20（辅线）|#fcd34d',
+            'ret_50|回看 ret_50（辅线）|#93c5fd',
+            'vwap_ret_3|vwap_ret_3（vwap 口径 3 日）|#059669',
+            'vwap_ret_50|vwap_ret_50（vwap 口径 50 日）|#0d9488',
+            'vol_chg_3|vol_chg_3（量能变化）|#7c3aed',
+            'vol_chg_50|vol_chg_50（恒为 0，构造口径）|#64748b',
+          ].map(function(spec) {
+            var parts = spec.split('|');
+            return '<p><strong>' + esc(parts[1]) + '</strong><br>'
+              + riskSvgLine(s[parts[0]] || [], parts[2], W, H) + '</p>';
+          }).join('');
+        loadMomentumMembers(poolType, poolKey);
+      })
+      .catch(function(err) {
+        el.innerHTML = '<p class="err">详情加载失败：' + esc(String(err)) + '</p>';
+      });
+  }
+  document.getElementById('btn-mom-refresh').addEventListener('click', function() { loadMomentum(); });
+  document.getElementById('mom-date').addEventListener('change', function() {
+    loadMomentum(this.value || null);
+  });
+  document.querySelectorAll('.mom-win').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      momWindow = Number(btn.dataset.win);
+      momSort = {key: 'fwd_ret_' + momWindow, dir: -1};
+      renderMomentum();
+    });
+  });
+
+
   loadOverview();
   loadTimers();
   loadFactorStatus();
@@ -1104,6 +1471,7 @@
   loadMaintenance();
   loadCluster();
   loadMarketRisk();
+  loadMomentum();
 })();
 </script>
 {% endblock %}

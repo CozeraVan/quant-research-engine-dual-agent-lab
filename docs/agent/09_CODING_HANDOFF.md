@@ -2,7 +2,39 @@
 
 ## Task ID
 
-QRE-GUI-LAB-RESULT-030（B 层关键词换代：jieba 碎片词 → 东财+同花顺概念板块成分；8080 总览「概念标签源」卡片）
+QRE-GUI-POOL-MOM-004（「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条）
+
+## Implementation Summary
+
+8080「聚类动量」tab 支持任意历史交易日回看，用于验证「加速度 Top 池是否随后跑赢」。①**日期选择器**：overview 新查 `DISTINCT trade_date WHERE fwd_ret_3 IS NOT NULL`（249 个可选日，降序）入 payload `dates`；`pool_momentum_overview(db_url, trade_date=None)` 加日期参（缓存键同步含日期），缺省仍为最近 fwd 已补齐日；前端 `#mom-date` 下拉，切换即重拉该日完整榜单（表天然 point-in-time：当日排名/共振只用 ≤T 数据）。②**事后验证列**（纯函数 `compute_post_returns`）：SQL 先取 T 之后 DISTINCT 交易日 LIMIT 20，再拉 (T, T+20日] 的 fwd_ret 日序列；post_w = ∏(1+fwd_ret)−1 over (T, T+w]，不足 w 日或窗口内含 None → None（未满窗口）；榜单两分区各加「事后3日/5日/20日」三个可排序列。③**验证摘要条**（纯函数 `accel_top_summary`）：按 pool_type 各算一行——加速度 Top 10 池（加速度 None 的池不入 Top）的 post_5 均值/中位数/胜率 vs 全体池 post_5 均值（缺失值各自剔除，全缺 → None）；前端 `#mom-summary` 卡片渲染。④**单池详情/成员明细随选中日期**：detail 加 `end_date` 参（SQL `trade_date <= :end`），members 已有 trade_date，前端均传 momData.latest_date。⑤**真库验证**：`?trade_date=2025-09-05` → concept 加速度 Top10 post_5 均值 +0.19%（胜率 0.3）vs 全体 1064 池 +0.88%；state Top10 post_5 均值 +0.64%（胜率 0.9）vs 全体 14 池 +0.95%——该日加速度 Top 并无超额，如实呈现；2025-08-21（最早日，20 日窗口满）concept Top10 post_5 −1.92% vs 全体 −0.29%，Top1 赛马概念 post_20=+16.14%；detail end_date=2025-09-05 序列正确截断（末日 2025-09-05）；members trade_date 生效。测试 +11（65 总）：compute_post_returns 复利/None 阻窗/缺序列 3、accel_top_summary 3（含 None 排除、accel None 不入 Top 但入全体）、overview 日期参数+post 列+摘要 2、无 post 日期全 NULL 1、detail end_date 1、路由带参 1（其中模板标记断言合并）。验证：`uv run pytest -q` → **1929 passed + 4 skipped**（1918 + 11）；admin.html script node --check 过；`sudo -n systemctl restart qre-gui` active，curl 全 200。无 CR（用户直接指派）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-003（「聚类动量」页升级 M7 v2 前瞻口径：fwd_ret 主口径 + 事件池统计 + 一日滞后处理）
+
+## Implementation Summary
+
+cluster-ashare M7 v2 已上线（pool_momentum_daily 新增 fwd_ret / fwd_ret_3/5/20/50 / next_premium / survive_3 / survive_5 / win_rate_1 九列，250 日已回填），本任务把 8080「聚类动量」页切到前瞻口径（用户已批准）。①**主口径切换**：`compute_acceleration` / `compute_heat` 加 `metric="fwd_ret"` 默认参（回看 metric="ret" 可选），`resonance_flag` 改判 fwd_ret_w>0 且 vwap_ret_w>0 且 vol_chg_w>0；_SELECT_COLS 扩到 26 列（ret×4 回看对照 + fwd×4 + vwap×4 + vol×4 + 事件×4）。②**末日滞后处理**：overview 新查 `max(trade_date) WHERE fwd_ret_3 IS NOT NULL`，榜单默认展示最近 fwd 已补齐日；payload 加 `latest_date_overall` / `fwd_lag` / `fwd_note`，fwd_lag=true 时前端红色 ⚠ 提示「前瞻收益 T+1 收盘后补齐：末日 X 的 fwd 列仍为 NULL（正常一日滞后），榜单展示最近已补齐日 Y」；完全无 fwd 数据时回退最新日不炸（加速度/热力全 None）。③**事件池**：行级 `has_event` = 四事件列任一非空；state 分区表加 4 列（次日溢价/存活3日/存活5日/胜率T+1，可排序，survive 末日数天 NULL 正常），concept 分区不显示；section 标题注明「对标同花顺涨停复盘的前瞻统计」。④**前端**：主榜单列重排为 fwd×4（主，窗口高亮）+ 回看ret×4（列名标「回看」）+ vwap×2 + vol_chg + 排名×2 + 加速度 + 共振（concept 17 列 / state 21 列）；窗口切换排序键改 `fwd_ret_w`；声明卡整体改写（主口径=当日成分等权再平衡前瞻收益对标东财板块指数、回看仅对照、artifact 池回看是同义反复、concept 快照前视偏差保留、一日滞后说明）；单池详情主线换 fwd_ret_3/20/50 + fwd_ret（粗色），回看 ret_3/20/50 浅色辅线，vwap/vol_chg 辅线保留；成员明细表不变、表头注明「成员回看指标（描述性）」。⑤**测试**（+9，54→63 总；v2 口径切换涉及旧 fixture 同步改 fwd 列）：fwd 排名独立于回看、metric="ret" 显式可选、heat 用 fwd、共振看 fwd、has_event 三态（artifact 池/普通 state/concept）、fwd_lag 三态（滞后展示补齐日+提示文案/无滞后/全表无 fwd 回退不炸）、detail fwd 序列与末日 NULL、模板 v2 标记断言。验证：`uv run pytest -q` → **1918 passed + 4 skipped**（1909 + 9）；admin.html script node --check 过；`sudo -n systemctl restart qre-gui` active。真库 curl 实测：overview latest_date=2026-08-31（overall 2026-09-01，fwd_lag=true，提示文案正确）；concept fwd_ret_3 榜首「昨日打二板以上表现」fwd3=+15.38%（heat3=1.0、共振=true），其次融资融券/昨日连板；state 分区 8 个 artifact 池 has_event=true 且 next_premium/win_rate_1 有值（跳空:高开 win_rate_1=0.658），非 artifact 池（趋势:sma20上方5日）has_event=false；detail（state/连涨:3日）250 日 fwd_ret 序列末日 None 正常。无 CR（用户已批准口径切换）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-002（「聚类动量」页三项优化：池内个股明细、表头排序、行热力色阶）
+
+## Implementation Summary
+
+在 POOL-MOM-001 基础上三项增强，8080 管理台「聚类动量」tab，全程只读。①**池内个股明细**：新 API `GET /api/admin/pool-momentum/members?pool_type=&pool_key=&trade_date=`（trade_date 缺省=池动量表最新交易日）——成员名单 concept 取 cluster.company_tags 快照（与 M7 管线 fetch_members 同口径，含全部 layer，前视偏差注明）、state 取当日 cluster.daily_tags（point-in-time）；个股指标由 `compute_member_metrics` 纯函数即时算自 public.stock_daily（51 交易日窗口：ret_w=close×adj_factor 比值−1、vwap_ret_w=vwap 比值−1、vol_chg_w=近 w 日均量/近 50 日均量−1，窗口内缺行→None，与管线宽表 shift/rolling(min_periods) 语义一致）；名称 LEFT JOIN reference.stock_basic（内层 try/except 降级无名称不拖垮页面）。前端单池详情区在 7 序列图下新增「池内个股明细」表（代码/名称/收盘/ret×4/vwap×2/vol_chg×2，默认 ret_3 降序）。**真库口径验证**：华为概念 771 成员中 770 只有行情（== 池表 n_stocks 770），成员等权平均 ret_3=0.017031048806369808 与 cluster.pool_momentum_daily 池值**逐位相等**。②**表头排序**：主榜单全部数值列（n_stocks/4 窗 ret/4 窗 vwap/vol_chg_w/速度排名/短窗排名/加速度）+ 成员明细全列点击表头切换升降序，当前列标 ▼/▲，None 恒排末位；纯前端 `momGenericSort`（Python 侧同口径纯函数 `sort_rows` 供默认序与测试）。③**行热力**：后端纯函数 `compute_heat` 在 overview 按 pool_type 组内对每个窗口算 ret_w 截面分位 heat=2×分位−1 ∈ [-1,1]（抗极值，并列共享，None→None，单有效值→None）；前端 `momHeatColor` 按 A 股红涨绿跌映射 rgba 透明度（0.06+0.30×|heat|），行背景渐变，切换窗口随 momWindow 重算；「长弱短升」高亮自背景色改为**左侧 4px 绿边 + 池名加粗**（style.css 旧 .mom-hl 背景规则移除——纯追加惯例的例外，避免与热力背景冲突，注释注明）。页面声明卡同步（热力口径 + 高亮新呈现）。8081 零改动。测试 tests/test_gui_pool_momentum.py +21（45 总：sort_rows 3、compute_heat 4、compute_member_metrics 手算/缺当日/缺 t−w/短历 vol 4、members 数据层 6（含名称降级、空成员、无行情）、members 路由 2、模板标记 1）。验证：`uv run pytest -q` → **1909 passed + 4 skipped**（1888 + 21）；admin.html script node --check 过；`sudo -n systemctl restart qre-gui` active；curl /admin 200；members API 两池类型真库 200（华为概念 771 成员带名称/全指标，量比:突增 state 池正常）。无 CR（用户直接指派优化）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-001（8080 管理台新增「聚类动量因子研究」tab：cluster-ashare M7 池动量管线只读展示）
+
+## Implementation Summary
+
+8080 管理台 admin.html 新增第 8 个 tab「聚类动量」（data-tab="mom"），只读 `cluster.pool_momentum_daily`（PK (trade_date, pool_type, pool_key)；concept 1066 池 + state 14 池，已回填 250 交易日约 27 万行），全程只读不写库。①**数据层** `gui/pool_momentum.py`（新，照抄 market_risk.py 模式：`_store` + `_cached` TTL 300s + ok=False 自降级）——`pool_momentum_overview`（max(trade_date) 当日全截面 → 按 pool_type 分组 → 组内 `compute_acceleration` 排名 → `sort_by_acceleration` 降序）；`pool_momentum_detail`（单池近 250 日 ret_3/ret_20/ret_50 + vwap_ret_3/50 + vol_chg_3/50 序列，DESC 查出后反转升序；pool_type 白名单校验）。②**纯逻辑**（零 DB 直接可测）：`rank_desc`（降序竞争排名、并列共享名次、None 不参与）；`compute_acceleration`——速度=ret_50 排名，加速度=ret_50 排名−ret_3 排名（正=短窗跃升），「长弱短升」=速度排名>n/2 且短窗排名≤max(1,n//10)；`resonance_flag`——ret_w>0 且 vwap_ret_w>0 且 vol_chg_w>0（严格大于；vol_chg_50 构造上恒 0 故 w=50 永不共振，页面注明）；`sort_by_acceleration`（None 恒末位）。③**路由**（app.py）：`GET /api/admin/pool-momentum`、`GET /api/admin/pool-momentum/detail?pool_type=&pool_key=`。④**前端**（admin.html）：口径与偏差声明卡（concept 池当前快照前视偏差 demo 接受 / state 池 point-in-time 无偏差 / 加速度口径 / 共振口径 / 免责声明）、最新交易日概览卡（日期+两池数量）、窗口切换按钮（3/5/20/50，切换赚钱效应列高亮+共振口径+排序列，默认按加速度降序）、concept/state 两分区榜单表（池名可点击、n_stocks、4 窗 ret、4 窗 vwap_ret、当前窗 vol_chg、速度排名/短窗排名/加速度（带+号）/共振标记；长弱短升行 `.mom-hl` 绿色高亮）、单池详情 section（点击池名拉 detail API，复用 `riskSvgLine` inline SVG polyline 渲 7 条序列，零新前端框架）。⑤**style.css 纯追加**（.mom-hl/.mom-hl-demo/.mom-win）。8081（lab*.py）零改动。测试 `tests/test_gui_pool_momentum.py` +24（纯逻辑 12：排名/加速度/长弱短升/共振/排序；数据层 7：fake store 分组排名/空表/DB 挂/查询失败/详情升序/空池/非法参数；路由 3；admin tab 存在性 1）。验证：`uv run pytest -q` → **1888 passed + 4 skipped**（基线 1864 + 24 净增，全绿）；admin.html 单 script 块 node --check 过；`sudo -n systemctl restart qre-gui` 后 is-active=active；真库 curl 实测——/admin 200 含 data-tab="mom" 与 API 路径（3 处命中）、/api/admin/pool-momentum 返回 latest=2026-09-01、concept 1066 + state 14（榜首 比亚迪概念 加速度 +766、ret_50 弱（-8.9%）而 ret_3 急升（+6.2%）的真实长弱短升样例）、detail（concept/华为概念、state/量比:突增）均返回 250 日序列 ok。`git diff --name-only HEAD` 仅 app.py/admin.html/style.css + 两个新文件。无 CR（用户直接指派的 demo 页，无架构/数据模型变更）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-LAB-RESULT-030（B 层关键词换代：jieba 碎片词 → 东财+同花顺概念板块成分；8080 总览「概念标签源」卡片）
 
 ## Implementation Summary
 

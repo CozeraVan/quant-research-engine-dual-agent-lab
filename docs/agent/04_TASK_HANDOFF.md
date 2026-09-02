@@ -2,7 +2,91 @@
 
 ## Task ID
 
-QRE-GUI-LAB-RESULT-030 (B 层关键词换代：jieba 碎片词 → 东财+同花顺概念板块成分；8080 总览加「概念标签源」卡片)
+QRE-GUI-POOL-MOM-004 (「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+overview 加 trade_date 参与 fwd 可选日期列表（下拉切换 point-in-time 榜单）；
+纯函数 compute_post_returns（post_w = T 后 w 日 fwd_ret 复利，不足窗口→NULL
+未满窗口）加「事后3/5/20日」三个可排序列；纯函数 accel_top_summary（加速度
+Top10 post_5 均值/中位/胜率 vs 全体，按 pool_type 各一行）渲染摘要条；
+detail 加 end_date、members 传选中日期。测试 +11（65 总），全量 1929
+passed + 4 skipped。qre-gui 已重启 active；真库：2025-09-05 concept 加速度
+Top10 post_5 +0.19% vs 全体 +0.88%（该日无超额，如实呈现）。未 git commit。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-003 (「聚类动量」页升级 M7 v2 前瞻口径：fwd_ret 主口径 + 事件池统计)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+M7 v2 新列（fwd_ret/fwd_ret_3/5/20/50/next_premium/survive_3/5/win_rate_1）
+接入 8080 聚类动量页：速度/加速度/热力/共振全部切 fwd 口径
+（compute_acceleration/compute_heat 加 metric 参、resonance 判 fwd），
+回看 ret_w 降级对照列；overview 默认展示最近 fwd 已补齐日 + fwd_lag
+红色提示（末日 NULL=正常 T+1 滞后）；state 分区 artifact 池加事件 4 列
+（has_event 行级标记，对标同花顺涨停复盘）；详情主线 fwd、回看浅色辅线；
+声明卡改写。测试 +9（54 总），全量 1918 passed + 4 skipped。qre-gui 已
+重启 active；真库实测榜单日 2026-08-31，concept fwd_ret_3 榜首
+「昨日打二板以上表现」+15.38%。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-002 (「聚类动量」页三项优化：池内个股明细 / 表头排序 / 行热力色阶)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+①新 API /api/admin/pool-momentum/members（pool_type/pool_key/trade_date，
+后者缺省=最新）：成员 concept=cluster.company_tags 快照、state=当日
+daily_tags；`compute_member_metrics` 纯函数即时算 stock_daily（51 日窗口，
+复权/vwap/均量比口径与 M7 管线逐位一致——华为概念成员等权 ret_3 与池表值
+完全相等、有效成员 770==n_stocks）；名称 reference.stock_basic 降级可选。
+②主榜单全部数值列+成员表全列点击排序（▼/▲，None 恒末位，前端
+momGenericSort / Python 侧同口径 sort_rows）。③行热力：compute_heat
+（ret_w 截面分位 heat∈[-1,1]，红涨绿跌）随窗口切换重算；「长弱短升」
+改左侧绿边+加粗避免与热力背景冲突。测试 +21（45 总），全量 1909 passed
++ 4 skipped。qre-gui 已重启 active，curl 实测全 200。未 git commit。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-001 (8080 管理台新增「聚类动量因子研究」tab：cluster-ashare M7 池动量管线只读展示)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+用户直接指派 demo 只读页。新 `gui/pool_momentum.py`（market_risk.py 同款
+只读数据层：_store/_cached TTL 300s/自降级）只读 `cluster.pool_momentum_daily`；
+纯逻辑（rank_desc 竞争排名 / compute_acceleration 速度=ret_50 排名·
+加速度=ret_50 排名−ret_3 排名·长弱短升=速度后半区且短窗前 10% /
+resonance_flag 价量三同正 / sort_by_acceleration）零 DB 可测。
+app.py +/api/admin/pool-momentum 与 /api/admin/pool-momentum/detail；
+admin.html +「聚类动量」tab（偏差声明卡：concept 池当前快照前视偏差
+demo 接受、state 池 point-in-time 无偏差；窗口 3/5/20/50 切换；concept/
+state 两榜单含 4 窗 ret + 4 窗 vwap_ret + vol_chg + 速度/短窗排名/加速度/
+共振标记；长弱短升高亮；点击池名看 250 日 7 序列 inline SVG，复用
+riskSvgLine，零新前端框架）；style.css 纯追加。8081 零改动。
+测试 +24（tests/test_gui_pool_momentum.py）；全量 1888 passed + 4 skipped。
+qre-gui 已重启 active，/admin 200、两 API 真库实测正常
+（2026-09-01：concept 1066 / state 14）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-LAB-RESULT-030 (B 层关键词换代：jieba 碎片词 → 东财+同花顺概念板块成分；8080 总览加「概念标签源」卡片)
 
 ## Current Status
 

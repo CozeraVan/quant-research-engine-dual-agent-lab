@@ -381,6 +381,45 @@ def create_app() -> Flask:
 
         return jsonify(market_risk_overview(request.args.get("db_url") or None))
 
+    # --- 管理台「聚类动量因子研究」（QRE-GUI-POOL-MOM-031，只读 cluster.pool_momentum_daily） ---
+
+    @app.route("/api/admin/pool-momentum")
+    def api_admin_pool_momentum() -> Any:
+        from quant_research_engine.gui.pool_momentum import pool_momentum_overview
+
+        return jsonify(
+            pool_momentum_overview(
+                request.args.get("db_url") or None,
+                request.args.get("trade_date") or None,
+            )
+        )
+
+    @app.route("/api/admin/pool-momentum/detail")
+    def api_admin_pool_momentum_detail() -> Any:
+        from quant_research_engine.gui.pool_momentum import pool_momentum_detail
+
+        return jsonify(
+            pool_momentum_detail(
+                request.args.get("pool_type", ""),
+                request.args.get("pool_key", ""),
+                request.args.get("db_url") or None,
+                request.args.get("end_date") or None,
+            )
+        )
+
+    @app.route("/api/admin/pool-momentum/members")
+    def api_admin_pool_momentum_members() -> Any:
+        from quant_research_engine.gui.pool_momentum import pool_momentum_members
+
+        return jsonify(
+            pool_momentum_members(
+                request.args.get("pool_type", ""),
+                request.args.get("pool_key", ""),
+                request.args.get("trade_date") or None,
+                request.args.get("db_url") or None,
+            )
+        )
+
     # --- 管理台「聚类分析」（QRE-ADMIN-CLUSTER-001，只读展示 cluster-ashare 产出） ---
 
     @app.route("/api/admin/cluster")

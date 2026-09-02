@@ -12,7 +12,49 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-LAB-RESULT-030 (DONE — 1840 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-POOL-MOM-004 (DONE — 1929 tests green + 4 skipped；awaiting git approval)
+
+2026-09-01: 「聚类动量」页 v3 历史回看。overview 加 trade_date 参 + fwd
+可选日期下拉（249 日，point-in-time 榜单）；事后验证列 post_3/5/20
+（compute_post_returns 纯函数，∏(1+fwd_ret)−1 over (T,T+w]，未满窗口→
+NULL）；验证摘要条（accel_top_summary 纯函数，加速度 Top10 post_5 均值/
+中位/胜率 vs 全体）；detail 加 end_date、members 传选中日期。测试 +11
+（65 总）。qre-gui 已重启 active；真库 2025-09-05 concept 加速度 Top10
+post_5 +0.19% vs 全体 +0.88%（该日无超额，如实呈现）。未 git commit。
+上一任务：QRE-GUI-POOL-MOM-003 (DONE — 1918 tests green + 4 skipped；awaiting git approval)
+
+2026-09-01: 「聚类动量」页升级 M7 v2 前瞻口径。速度/加速度/热力/共振全切
+fwd_ret_w（compute_acceleration/compute_heat 加 metric 参、resonance 判
+fwd）；回看 ret_w 降级对照列；overview 默认展示最近 fwd 已补齐日
+（fwd_lag 红色提示末日 NULL=正常 T+1 滞后）；state 分区 8 个 artifact
+池加事件 4 列（次日溢价/存活/胜率，对标同花顺涨停复盘）；详情主线 fwd、
+回看浅色辅线；声明卡改写。测试 +9（54 总）。qre-gui 已重启 active；
+真库榜单日 2026-08-31，concept fwd_ret_3 榜首「昨日打二板以上表现」。
+未 git commit，等用户审批。
+上一任务：QRE-GUI-POOL-MOM-002 (DONE — 1909 tests green + 4 skipped；awaiting git approval)
+
+2026-09-01: 「聚类动量」页三项优化。①池内个股明细：新 API
+/api/admin/pool-momentum/members（concept=company_tags 快照、state=当日
+daily_tags；compute_member_metrics 纯函数即时算 stock_daily，口径与 M7
+管线逐位一致——成员等权 ret_3 与池表值完全相等、有效成员数==n_stocks；
+名称 reference.stock_basic 降级可选），详情区新增可排序成员表。②主榜单
+全数值列+成员表点击表头排序（▼/▲、None 恒末位）。③行热力 compute_heat
+（ret_w 截面分位 heat∈[-1,1]，红涨绿跌）随窗口重算；长弱短升改左侧绿边
++加粗。测试 +21（45 总）。qre-gui 已重启 active，curl 全 200。
+未 git commit，等用户审批。
+上一任务：QRE-GUI-POOL-MOM-001 (DONE — 1888 tests green + 4 skipped；awaiting git approval)
+
+2026-09-01: 8080 管理台新增「聚类动量因子研究」tab（data-tab="mom"），
+只读 cluster.pool_momentum_daily（cluster-ashare M7 产物）。新
+gui/pool_momentum.py（market_risk.py 同款只读数据层 + 纯逻辑
+rank_desc/compute_acceleration/resonance_flag/sort_by_acceleration）；
+app.py +/api/admin/pool-momentum[/detail]；admin.html +tab（偏差声明
+卡 + 窗口 3/5/20/50 切换 + concept/state 双榜单 15 列 + 长弱短升高亮 +
+点击池名 250 日 inline SVG 详情）；style.css 纯追加。8081 零改动。
+测试 tests/test_gui_pool_momentum.py +24。qre-gui 已重启 active，
+真库 curl 三端实测 ok（2026-09-01：concept 1066 / state 14）。
+未 git commit，等用户审批。
+上一任务：QRE-GUI-LAB-RESULT-030 (DONE — 1840 tests green + 4 skipped；awaiting git approval)
 
 2026-08-31: B 层关键词换代（cluster-ashare 东财+同花顺概念板块成分替换 jieba
 碎片词，旧数据已删 97,838 行）+ 8080 总览「概念标签源（B 层）」卡片

@@ -357,3 +357,14 @@ th.sortable:hover { color: var(--accent, #58a6ff); }
 .wz-factsel .wz-fact-sub { max-width: 150px; }
 .wz-factsel select { max-width: 200px; }
 #nl-description { font-size: 14px; }
+
+/* 聚类动量因子研究（QRE-GUI-POOL-MOM-031；002 起 .mom-hl 不再设背景——行热力背景占用，见下方 v2 块） */
+.mom-hl td:first-child { font-weight: 600; }
+.mom-hl-demo { border-left: 4px solid #059669; font-weight: 600; padding: 0 4px; }
+.mom-win { margin-right: 4px; }
+
+/* 聚类动量 v2（QRE-GUI-POOL-MOM-002，纯追加）：长弱短升改左边框避免与行热力背景冲突 */
+.mom-hl { border-left: 4px solid #059669; }
+.mom-hl td:first-child { font-weight: 600; }
+th.mom-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+th.mom-sort:hover { color: var(--primary); }
