@@ -854,3 +854,137 @@ class TestAdminPageV4:
         assert "事后3日" in html or "post_3" in html
         assert "验证摘要" in html
         assert "未满窗口" in html
+
+
+# ---------------------------------------------------------------------------
+# v4（底部回避名单）：Bottom10 判定、回避汇总、API/页面标记
+# ---------------------------------------------------------------------------
+
+from quant_research_engine.gui.pool_momentum import (  # noqa: E402
+    avoid_list,
+    compute_bottom_avoid,
+)
+
+
+def _v4_rows(n, base=-0.01):
+    return [
+        {"pool_key": f"P{i}", "fwd_ret_3": base * i, "n_stocks": 20}
+        for i in range(n)
+    ]
+
+
+class TestComputeBottomAvoid:
+    def test_bottom_n_flagged(self):
+        rows = _v4_rows(15)
+        out = compute_bottom_avoid(rows)
+        flagged = [r["pool_key"] for r in out if r["avoid"]]
+        assert flagged == [f"P{i}" for i in range(5, 15)]  # fwd_ret_3 = -0.01*i，最低 10 个
+        assert len(flagged) == 10
+
+    def test_none_excluded(self):
+        rows = _v4_rows(12)
+        rows[11]["fwd_ret_3"] = None  # 最低值置 None → 不参与回避
+        out = compute_bottom_avoid(rows)
+        assert out[11]["avoid"] is False
+        assert sum(1 for r in out if r["avoid"]) == 10
+        assert out[10]["avoid"] is True
+
+    def test_min_stocks_excluded(self):
+        rows = _v4_rows(12)
+        rows[11]["n_stocks"] = 5  # 成员过少 → 不参与判定
+        out = compute_bottom_avoid(rows)
+        assert out[11]["avoid"] is False
+        assert sum(1 for r in out if r["avoid"]) == 10
+
+    def test_fewer_eligible_than_n(self):
+        rows = _v4_rows(3)
+        out = compute_bottom_avoid(rows)
+        assert all(r["avoid"] for r in out)  # 有效池不足 bottom_n 时全部回避
+
+    def test_empty_and_all_none(self):
+        assert compute_bottom_avoid([]) == []
+        rows = [{"pool_key": "A", "fwd_ret_3": None, "n_stocks": 50}]
+        out = compute_bottom_avoid(rows)
+        assert out[0]["avoid"] is False
+
+    def test_window_param(self):
+        rows = [
+            {"pool_key": "A", "fwd_ret_3": 0.1, "fwd_ret_5": -0.5, "n_stocks": 20},
+            {"pool_key": "B", "fwd_ret_3": -0.1, "fwd_ret_5": 0.5, "n_stocks": 20},
+        ]
+        out = compute_bottom_avoid(rows, window=5, bottom_n=1)
+        assert out[0]["avoid"] is True   # fwd_ret_5 最低
+        assert out[1]["avoid"] is False
+
+
+class TestAvoidList:
+    def test_sorted_ascending(self):
+        rows = compute_bottom_avoid(_v4_rows(12))
+        out = avoid_list(rows)
+        assert len(out) == 10
+        vals = [x["fwd_ret_3"] for x in out]
+        assert vals == sorted(vals)
+        assert out[0]["pool_key"] == "P11"  # 最弱
+        assert out[0]["n_stocks"] == 20
+
+
+class TestV4Overview:
+    def test_avoid_flags_and_payload(self, monkeypatch):
+        d = dt.date(2026, 8, 31)
+        # concept 12 池 fwd_ret_3 递增；state 2 池（fwd 最低者回避，但组内独立）
+        rows = [
+            _pool_row("concept", f"C{i}", 0.10, 0.001 * i, n=20)
+            for i in range(12)
+        ] + [
+            _pool_row("state", "弱势", -0.10, -0.02, n=30),
+            _pool_row("state", "强势", 0.30, 0.03, n=30),
+        ]
+        _patch_store(monkeypatch, _FakeConn(latest=d, overview_rows=rows))
+        out = pool_momentum_overview()
+        by_key = {r["pool_key"]: r for r in out["concept"]}
+        assert sum(1 for r in out["concept"] if r["avoid"]) == 10
+        assert by_key["C0"]["avoid"] is True    # fwd_ret_3 最低
+        assert by_key["C11"]["avoid"] is False  # 最高
+        # state 组内独立：有效池 2 < 10 → 全部回避
+        assert all(r["avoid"] for r in out["state"])
+        av = out["avoid"]
+        assert [x["pool_key"] for x in av["concept"]][:2] == ["C0", "C1"]
+        assert av["concept"][0]["fwd_ret_3"] == pytest.approx(0.0, abs=1e-12)
+        assert out["avoid_bottom_n"] == 10 and out["avoid_min_stocks"] == 10
+
+    def test_avoid_point_in_time(self, monkeypatch):
+        # 历史回看模式：回避按选中日截面计算（trade_date 传参链路复用）
+        rows = [_pool_row("concept", f"C{i}", 0.10, 0.001 * i, n=20) for i in range(12)]
+        _patch_store(
+            monkeypatch,
+            _FakeConn(latest=dt.date(2026, 9, 1), overview_rows=rows,
+                      fwd_latest=dt.date(2026, 8, 31)),
+        )
+        out = pool_momentum_overview(trade_date="2026-08-10")
+        assert out["latest_date"] == "2026-08-10"
+        assert sum(1 for r in out["concept"] if r["avoid"]) == 10
+
+    def test_avoid_route_field(self, monkeypatch):
+        rows = [_pool_row("concept", f"C{i}", 0.10, 0.001 * i, n=20) for i in range(12)]
+        _patch_store(monkeypatch, _FakeConn(latest=dt.date(2026, 8, 31), overview_rows=rows))
+        from quant_research_engine.gui.app import create_app
+
+        resp = create_app().test_client().get("/api/admin/pool-momentum")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert "avoid" in data
+        assert data["concept"][0]["avoid"] in (True, False)
+        assert len(data["avoid"]["concept"]) == 10
+
+
+class TestAdminPageV5:
+    def test_v4_markup(self):
+        from quant_research_engine.gui.app import create_app
+
+        html = create_app().test_client().get("/admin").get_data(as_text=True)
+        assert 'id="mom-avoid"' in html       # 回避汇总卡容器
+        assert "mom-avoid" in html            # 徽章样式类
+        assert "⚠ 回避" in html
+        assert "短窗最弱十分位" in html        # tooltip/卡片依据
+        assert "无选股价值" in html            # 声明卡补句
+        assert "NW t=−3.86" in html

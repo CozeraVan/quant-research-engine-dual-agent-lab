@@ -198,12 +198,19 @@
       <li><strong>事后验证列（post_3/5/20）</strong>：选中历史日 T 时，该池 T 日之后 3/5/20 个交易日的
         fwd_ret 复利实际收益；T 距最新日不足 w 天时显示「—」（未满窗口）。顶部摘要条给出
         当日加速度 Top 10 池的 post_5 均值/中位数/胜率 vs 全体池均值——加速度有没有预测力一目了然。</li>
+      <li><strong>底部回避名单（<span class="mom-avoid">⚠ 回避</span> 徽标 + 顶部回避卡）</strong>：
+        当前截面 fwd_ret_3 最低的 Bottom10 池（pool_type 组内、n_stocks≥10 参与判定）。
+        cluster-ashare M7 全历史描述性验证：这些池未来 3–5 日平均继续跑输约 0.2%/日
+        （NW t=−3.86，FDR q=0.001），20 日后衰减消失；反之<strong>顶部榜单各信号
+        （速度/加速度/共振/长弱短升）全历史验证均无选股价值——本页主要价值 = 底部回避名单</strong>。
+        历史回看模式下按选中日截面计算，保持 point-in-time。</li>
       <li>回看 ret_w = 复权价 w 日涨幅（池内等权平均）；vwap_ret_w = vwap 口径 w 日涨幅；
         vol_chg_w = 近 w 日均量/近 50 日均量 − 1。</li>
     </ul>
     <p class="opt">本页为研究查看工具，不构成投资建议。</p>
   </div>
   <div id="mom-overview"><span class="opt">加载中...</span></div>
+  <div id="mom-avoid"></div>
   <div id="mom-summary"></div>
   <p>
     <span class="opt">榜单日期：</span>
@@ -1222,7 +1229,11 @@
       return '<tr' + (r.weak_long_strong_short ? ' class="mom-hl"' : '')
         + ' style="' + momHeatColor(heat) + '">'
         + '<td><a href="#" class="mom-pool" data-pt="' + esc(poolType) + '" data-pk="' + esc(r.pool_key) + '">'
-        + esc(r.pool_key) + '</a></td>'
+        + esc(r.pool_key) + '</a>'
+        + (r.avoid
+          ? ' <span class="mom-avoid" title="短窗最弱十分位，历史验证未来 3-5 日平均继续跑输约 0.2%/日（M7 全历史描述性验证，NW t=−3.86，FDR q=0.001，20 日后消失）">⚠ 回避</span>'
+          : '')
+        + '</td>'
         + '<td class="num">' + esc(r.n_stocks) + '</td>'
         + momPctCell(r.fwd_ret_3, w === 3) + momPctCell(r.fwd_ret_5, w === 5)
         + momPctCell(r.fwd_ret_20, w === 20) + momPctCell(r.fwd_ret_50, w === 50)
@@ -1280,8 +1291,30 @@
       });
     });
   }
+  // 底部回避汇总卡：当前截面 fwd_ret_3 最低 Bottom10（组内，n_stocks≥10）
+  function momAvoidHtml(d) {
+    var av = d.avoid || {};
+    function items(poolType, list) {
+      if (!list || !list.length) return '';
+      return '<p><strong>' + esc(poolType) + '</strong>：'
+        + list.map(function(x) {
+          return '<a href="#" class="mom-pool" data-pt="' + esc(poolType) + '" data-pk="' + esc(x.pool_key) + '">'
+            + esc(x.pool_key) + '</a>'
+            + ' <span class="opt">' + momPct(x.fwd_ret_3) + '</span>';
+        }).join(' ｜ ') + '</p>';
+    }
+    var html = items('concept', av.concept) + items('state', av.state);
+    return html
+      ? '<div class="risk-card mom-avoid-card"><p><strong>⚠ 回避名单（' + esc(d.latest_date)
+        + '，fwd_ret_3 最低 Bottom ' + esc(d.avoid_bottom_n || 10)
+        + '，n_stocks≥' + esc(d.avoid_min_stocks || 10) + '）</strong>'
+        + ' <span class="opt">短窗最弱十分位，历史验证未来 3-5 日平均继续跑输约 0.2%/日——点击跳详情</span></p>'
+        + html + '</div>'
+      : '';
+  }
   function renderMomentum() {
     if (!momData || !momData.ok) return;
+    document.getElementById('mom-avoid').innerHTML = momAvoidHtml(momData);
     document.getElementById('mom-concept').innerHTML = momTable(momData.concept || [], 'concept');
     document.getElementById('mom-state').innerHTML = momTable(momData.state || [], 'state');
     momBindPoolLinks();

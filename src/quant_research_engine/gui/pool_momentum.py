@@ -24,6 +24,9 @@
 - 排名口径：每个 pool_type 内、截面按指标降序竞争排名（rank 1 = 最高，
   并列共享名次）。「长弱短升」候选 = 速度排名位于后半区（> n/2）且
   短窗口排名进入前 10%（不足 10 个池时取第 1 名）。
+- 底部回避（compute_bottom_avoid，v4）：截面 fwd_ret_3 最低的 Bottom10
+  （n_stocks≥10 参与判定）打 avoid=True 并在页面顶部汇总；依据 M7 全历史
+  描述性验证（NW t=−3.86，FDR q=0.001，20 日后消失），顶部信号全部无效。
 """
 
 from __future__ import annotations
@@ -41,6 +44,12 @@ ACCEL_WINDOW = 3
 DETAIL_DAYS = 250
 #: 事件池统计列（仅 selection_artifact=true 的 8 个状态池有值）
 EVENT_COLS = ("next_premium", "survive_3", "survive_5", "win_rate_1")
+
+#: 底部回避名单口径（cluster-ashare M7 全历史描述性验证）：
+#: 截面 fwd_ret_3 最低的 BottomN 池未来 3-5 日平均继续跑输约 0.2%/日
+#: （NW t=−3.86，FDR q=0.001），20 日后衰减消失；顶部信号全部无效。
+AVOID_BOTTOM_N = 10
+AVOID_MIN_STOCKS = 10
 
 _RET_COLS = tuple(f"ret_{w}" for w in WINDOWS)
 _FWD_COLS = tuple(f"fwd_ret_{w}" for w in WINDOWS)
@@ -134,6 +143,50 @@ def sort_by_acceleration(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 #: 事后验证窗口（T 日之后 w 个交易日的 fwd 复利收益）
 POST_WINDOWS = (3, 5, 20)
+
+
+def compute_bottom_avoid(
+    rows: list[dict[str, Any]],
+    window: int = ACCEL_WINDOW,
+    bottom_n: int = AVOID_BOTTOM_N,
+    min_stocks: int = AVOID_MIN_STOCKS,
+) -> list[dict[str, Any]]:
+    """底部回避标记（原地补充 row["avoid"]，纯函数）。
+
+    单个 pool_type 截面内，fwd_ret_{window} 最低的 bottom_n 个池标记
+    avoid=True（短窗动量最弱十分位，M7 全历史验证未来 3-5 日继续跑输）。
+    fwd 值为 None 或 n_stocks < min_stocks（成员过少信号不稳）的池
+    不参与判定；有效池不足 bottom_n 时全部有效池均回避。
+    """
+
+    eligible = sorted(
+        (
+            r for r in rows
+            if r.get(f"fwd_ret_{window}") is not None
+            and (r.get("n_stocks") or 0) >= min_stocks
+        ),
+        key=lambda r: r[f"fwd_ret_{window}"],
+    )
+    bottom = {id(r) for r in eligible[:bottom_n]}
+    for r in rows:
+        r["avoid"] = id(r) in bottom
+    return rows
+
+
+def avoid_list(rows: list[dict[str, Any]], window: int = ACCEL_WINDOW) -> list[dict[str, Any]]:
+    """回避名单摘要（纯函数）：avoid=True 的池按 fwd_ret_{window} 升序列出。"""
+
+    return [
+        {
+            "pool_key": r["pool_key"],
+            "fwd_ret_3": r.get(f"fwd_ret_{window}"),
+            "n_stocks": r.get("n_stocks"),
+        }
+        for r in sorted(
+            (r for r in rows if r.get("avoid")),
+            key=lambda r: r[f"fwd_ret_{window}"],
+        )
+    ]
 
 
 def compute_post_returns(
@@ -419,10 +472,14 @@ def pool_momentum_overview(
             entry["has_event"] = any(entry.get(c) is not None for c in EVENT_COLS)
             groups[pool_type].append(entry)
         summary: dict[str, Any] = {}
+        avoid: dict[str, Any] = {}
         for pool_type, group in groups.items():
             compute_post_returns(group, fwd_series)
-            groups[pool_type] = sort_by_acceleration(compute_heat(compute_acceleration(group)))
+            groups[pool_type] = sort_by_acceleration(
+                compute_bottom_avoid(compute_heat(compute_acceleration(group)))
+            )
             summary[pool_type] = accel_top_summary(group)
+            avoid[pool_type] = avoid_list(group)
             for entry in group:
                 entry.pop("_pool_type", None)
         fwd_lag = fwd_latest is not None and fwd_latest < latest
@@ -436,6 +493,9 @@ def pool_momentum_overview(
             "post_windows": list(POST_WINDOWS),
             "dates": dates,
             "summary": summary,
+            "avoid": avoid,
+            "avoid_bottom_n": AVOID_BOTTOM_N,
+            "avoid_min_stocks": AVOID_MIN_STOCKS,
             "speed_window": SPEED_WINDOW,
             "accel_window": ACCEL_WINDOW,
             "concept": groups["concept"],
@@ -445,7 +505,9 @@ def pool_momentum_overview(
                 "（当日成分等权再平衡，对标东财板块指数），回看 ret_w 仅对照；"
                 "concept 池成员为当前快照（前视偏差，demo 接受），state 池 point-in-time；"
                 "加速度 = fwd_ret_50 排名 − fwd_ret_3 排名（正 = 短窗跃升）；"
-                "post_w = T 日之后 w 个交易日的 fwd_ret 复利收益（不足 w 日 → NULL 未满窗口）"
+                "post_w = T 日之后 w 个交易日的 fwd_ret 复利收益（不足 w 日 → NULL 未满窗口）；"
+                "⚠ 回避 = 截面 fwd_ret_3 最低 Bottom10（n_stocks≥10），"
+                "历史验证未来 3-5 日平均继续跑输约 0.2%/日"
             ),
             "fwd_note": (
                 f"前瞻收益 T+1 收盘后补齐：末日 {latest} 的 fwd 列仍为 NULL（正常一日滞后），"

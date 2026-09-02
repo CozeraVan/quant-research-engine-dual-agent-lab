@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-GUI-POOL-MOM-004（「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条）
+QRE-GUI-POOL-MOM-005（「聚类动量」页 v4 底部减速回避名单：⚠ 回避徽标 + 顶部回避卡 + 声明卡补句）
+
+## Implementation Summary
+
+依据 cluster-ashare M7 全历史描述性实验结论（fwd_ret_3 最弱 Bottom10 池未来 3-5 日显著继续跑输，日均约 −0.2%，NW t=−3.86，FDR q=0.001，20 日后消失；顶部信号全部无效），8080「聚类动量」tab 落地回避名单。①**纯函数 `compute_bottom_avoid`**（gui/pool_momentum.py）：单 pool_type 截面内 fwd_ret_3（window 参数化）最低的 `AVOID_BOTTOM_N=10` 个池标 `avoid=True`；fwd 为 None 或 `n_stocks < AVOID_MIN_STOCKS=10`（成员过少信号不稳）不参与判定；有效池不足 10 时全部回避（state 组 14 有效池 → 最低 10 个回避）；纯函数 `avoid_list` 输出按 fwd_ret_3 升序的摘要。②**overview payload** 加 `avoid`（按 pool_type 分组：pool_key/fwd_ret_3/n_stocks）与 `avoid_bottom_n`/`avoid_min_stocks`；历史回看模式复用 trade_date 链路，回避按选中日截面计算保持 point-in-time；note 补回避口径。③**前端**（admin.html）：榜单行池名后加 `<span class="mom-avoid">⚠ 回避</span>` 徽章（title 注明依据「短窗最弱十分位，历史验证未来 3-5 日平均继续跑输约 0.2%/日（NW t=−3.86，FDR q=0.001，20 日后消失）」）；新 `#mom-avoid` 顶部汇总卡（`momAvoidHtml`，concept/state 各一行：池名 + fwd_ret_3，点击复用 `.mom-pool` 链接跳详情——renderMomentum 先渲卡再由 momBindPoolLinks 统一绑定）；声明卡新增一条：底部回避名单口径 + 验证数字 + 「顶部榜单各信号全历史验证均无选股价值——本页主要价值 = 底部回避名单」+ 历史回看 point-in-time 说明。④**style.css 纯追加**：`.mom-avoid` 实心白底 + 红边框徽章（区别于行热力半透明红/绿背景）、`.mom-avoid-card` 左侧红边。8081 零改动。测试 +11（76 总）：compute_bottom_avoid 6（bottom_n 标记/None 剔除/n_stocks 剔除/有效池不足/空与全 None/window 参数）、avoid_list 1、overview avoid 标记+payload 1、point-in-time 1、路由 avoid 字段 1、模板 v4 标记 1。验证：`uv run pytest -q` → **1940 passed + 4 skipped**（1929 + 11）；`sudo -n systemctl restart qre-gui` active，curl /admin 200、overview API 含 avoid 字段。真库 2026-08-31 回避名单：concept = 申万L3:疫苗（−5.73%）/医疗研发外包（−5.55%）/半导体设备（−4.96%）/通信线缆及配套（−4.80%）/半导体材料（−4.76%）/CRO（−4.02%）/国家大基金持股（−3.63%）/中芯概念（−3.38%）/申万L2:电子化学品Ⅱ（−3.35%）/申万L3:电子化学品Ⅲ（−3.35%）；state 有效 14 池取最低 10（跳空:低开 −2.35% 居首）。无 CR（用户直接指派）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-004（「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条）
 
 ## Implementation Summary
 

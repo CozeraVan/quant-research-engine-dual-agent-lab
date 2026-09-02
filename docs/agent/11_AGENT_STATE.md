@@ -12,7 +12,19 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-POOL-MOM-004 (DONE — 1929 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-POOL-MOM-005 (DONE — 1940 tests green + 4 skipped；awaiting git approval)
+
+2026-09-02: 「聚类动量」页 v4 底部减速回避名单（M7 全历史结论：
+fwd_ret_3 最弱 Bottom10 未来 3-5 日继续跑输约 0.2%/日，NW t=−3.86，
+FDR q=0.001，20 日后消失；顶部信号全部无效）。纯函数
+compute_bottom_avoid（组内最低 10 个标 avoid，None 与 n_stocks<10
+剔除）+ avoid_list；overview payload 加 avoid 三键；榜单行「⚠ 回避」
+徽章（白底红框区别于热力背景，title 注依据）+ 顶部 #mom-avoid 汇总卡
+（点击跳详情）+ 声明卡补「顶部无选股价值，主要价值=底部回避名单」。
+历史回看按选中日截面 point-in-time。测试 +11（76 总）。qre-gui 已重启
+active；真库 2026-08-31 concept 回避居首「申万L3:疫苗」−5.73%，state
+14 有效池取最低 10（跳空:低开 −2.35% 居首）。未 git commit。
+上一任务：QRE-GUI-POOL-MOM-004 (DONE — 1929 tests green + 4 skipped；awaiting git approval)
 
 2026-09-01: 「聚类动量」页 v3 历史回看。overview 加 trade_date 参 + fwd
 可选日期下拉（249 日，point-in-time 榜单）；事后验证列 post_3/5/20

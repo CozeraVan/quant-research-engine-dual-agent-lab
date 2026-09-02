@@ -2,7 +2,28 @@
 
 ## Task ID
 
-QRE-GUI-POOL-MOM-004 (「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条)
+QRE-GUI-POOL-MOM-005 (「聚类动量」页 v4 底部减速回避名单：⚠ 回避徽标 + 顶部回避卡 + 声明卡补句)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+依据 M7 全历史结论（fwd_ret_3 最弱 Bottom10 未来 3-5 日继续跑输约
+0.2%/日，NW t=−3.86，FDR q=0.001；顶部信号全部无效）：纯函数
+compute_bottom_avoid（组内 fwd_ret_3 最低 10 个标 avoid，None 与
+n_stocks<10 剔除）+ avoid_list 摘要；overview payload 加 avoid/
+avoid_bottom_n/avoid_min_stocks，历史回看按选中日截面保持 point-in-time；
+榜单行加「⚠ 回避」徽章（title 注明依据）、顶部 #mom-avoid 汇总卡
+（点击跳详情）、声明卡补「顶部无选股价值，主要价值=底部回避名单」。
+测试 +11（76 总），全量 1940 passed + 4 skipped。qre-gui 已重启
+active；真库 2026-08-31 concept 回避名单居首「申万L3:疫苗」−5.73%。
+未 git commit。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-004 (「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条)
 
 ## Current Status
 
