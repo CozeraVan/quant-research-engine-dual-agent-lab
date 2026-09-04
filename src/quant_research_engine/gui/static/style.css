@@ -372,3 +372,33 @@ th.mom-sort:hover { color: var(--primary); }
 /* v4 底部回避名单：实心白底+红边框徽章（区别于行热力半透明红/绿背景） */
 .mom-avoid { display: inline-block; margin-left: 4px; padding: 0 5px; border: 1px solid #b91c1c; border-radius: 3px; background: #fff; color: #b91c1c; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .mom-avoid-card { border-left: 4px solid #b91c1c; }
+
+/* v5 榜单可读性（纯追加）：横向滚动容器 + 详情面板上移；
+   v7 性能：首列 sticky 仅展开更多列时启用（.mom-sticky，大行数 sticky 是重绘杀手；
+   精简列模式不输出 mom-col-x 单元格，由 JS 侧控制，无需 display:none 规则） */
+.mom-scroll { overflow-x: auto; max-width: 100%; }
+.mom-scroll table { width: auto; min-width: 100%; }
+.mom-scroll.mom-sticky thead th:first-child {
+  position: sticky; left: 0; z-index: 3; background: var(--card);
+  box-shadow: 1px 0 0 var(--border);
+}
+.mom-scroll.mom-sticky tbody td:first-child {
+  position: sticky; left: 0; z-index: 2; background: var(--card);
+  box-shadow: 1px 0 0 var(--border); white-space: nowrap;
+}
+.mom-scroll.mom-sticky tbody tr:nth-child(even) td:first-child { background: var(--bg); }
+/* 热力行（tr 带 inline 背景）：sticky 首列继承行背景，保持热力连续 */
+.mom-scroll.mom-sticky tbody tr[style] td:first-child { background: inherit; }
+/* 行级渲染跳过：屏外行不参与首屏布局/绘制（「显示全部」大表时收益最大） */
+.mom-scroll tbody tr { content-visibility: auto; contain-intrinsic-size: auto 36px; }
+/* Top/Bottom 截断提示行 */
+.mom-gap td { text-align: center; }
+/* 单池详情面板：榜单上方（汇总卡之下），可关闭 */
+#mom-detail-panel {
+  border: 1px solid var(--border); border-left: 4px solid var(--primary);
+  border-radius: var(--radius); background: var(--card);
+  padding: 12px; margin-bottom: 8px; box-shadow: var(--shadow);
+}
+.mom-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+/* 成员明细表：限高内部滚动，表头 sticky（沿用全局 thead th sticky） */
+.mom-members-scroll { max-height: 420px; overflow: auto; }

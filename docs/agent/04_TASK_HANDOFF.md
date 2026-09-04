@@ -2,7 +2,32 @@
 
 ## Task ID
 
-QRE-GUI-POOL-MOM-005 (「聚类动量」页 v4 底部减速回避名单：⚠ 回避徽标 + 顶部回避卡 + 声明卡补句)
+QRE-GUI-POOL-MOM-006 (「聚类动量」页 v5 榜单可读性：横向滚动 + 首列 sticky + 精简列开关 + 详情面板上移)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+用户反馈：concept 榜单 17+ 列横向溢出挤压、点池名后详情在页面最底部
+需长滚。修复（admin.html + style.css，pool_momentum.py 零改动）：
+①momTable 包 .mom-scroll 横向滚动容器 + 首列池名 sticky（热力行首列
+background:inherit，行仅 heat 非空才输出 style）；②默认精简列（池名/
+股票数/当前窗口 fwd/速度/加速度/共振/回避徽章/事后×3），扩展列标
+mom-col-x + .mom-compact 隐藏，「#btn-mom-cols 展开更多列」开关切全量
+列（colspan 随视图 concept 9/20、state 13/24）；③删除底部
+data-section="mom-detail" 折叠区，新 #mom-detail-panel 固定在
+#mom-summary 之下、榜单之上（标题 + #mom-detail-close 关闭按钮 +
+scrollIntoView，点其他池原地替换）；④成员明细包 .mom-members-scroll
+限高 420px 内部滚动（表头 sticky 沿用全局规则）。测试 +2（78 总：
+v5 模板标记 + CSS 断言），全量 1942 passed + 4 skipped。qre-gui 已重启
+active；curl /admin 200 含新标记、overview（真库 2026-09-03：concept
+1066/state 14）与 detail API 200。未 git commit。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-005 (「聚类动量」页 v4 底部减速回避名单：⚠ 回避徽标 + 顶部回避卡 + 声明卡补句)
 
 ## Current Status
 

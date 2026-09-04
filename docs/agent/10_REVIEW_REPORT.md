@@ -2,7 +2,60 @@
 
 ## Task ID
 
-QRE-GUI-POOL-MOM-004（「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条）
+QRE-GUI-POOL-MOM-006（「聚类动量」页 v5 榜单可读性：横向滚动 + 首列 sticky + 精简列开关 + 详情面板上移）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **纯前端展示改动**：pool_momentum.py 零改动、零 API 契约变化、零 DB
+  行为变化；精简列只是 CSS `display:none`（完整列 DOM 仍在，排序绑定
+  不受影响），「展开更多列」可随时看全量数据——符合「默认一屏可读、
+  完整数据可及」。
+- **sticky 首列正确性**：热力行（tr 带 inline style）首列
+  `background: inherit` 继承行背景保持热力连续；momTable 行改为仅
+  heat 非空才输出 style 属性，避免空 style 匹配 `tr[style]` 导致首列
+  透明穿底；斑马纹 even 行首列 var(--bg) 与普通行 var(--card) 分层；
+  thead 角格 z-index 3 高于 tbody 首列 z-index 2。
+- **colspan 随视图**：精简 concept 9 / state 13，全量 20 / 24，与两种
+  模式的列数逐列数过一致。
+- **详情面板位置**：DOM 序 mom-summary < mom-detail-panel <
+  mom-concept（模板测试锁定）；旧底部 data-section="mom-detail" 区已删，
+  #mom-detail/#mom-members id 唯一；关闭按钮隐藏 + 清空 + momMembers
+  置 null；loadMomentumDetail 先 unhide + scrollIntoView 再拉数据，
+  点其他池原地替换（复用既有 fetch 链路，无重复请求）。
+- **排序回归**：momBindPoolLinks 的选择器按容器 id（#mom-concept/
+  #mom-state / #mom-members）取后代 th.mom-sort，新增的 .mom-scroll
+  包裹层不影响；momTh/momPctCell 的 cls 参可选，成员表调用零改动。
+- **范围**：仅 admin.html / style.css（纯追加 v5 块）/ 测试文件；
+  8081 零改动；既有 76 测试零改动全绿。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1942 passed, 4 skipped（1940 + 2 净增）
+tests/test_gui_pool_momentum.py → 78 passed（+2：v5 模板标记 + CSS 断言）
+node --check admin.html 内联 script → JS-OK
+sudo -n systemctl restart qre-gui → active
+curl 8080 /admin → 200，含 mom-detail-panel/btn-mom-cols/mom-col-x（24 处）
+curl /api/admin/pool-momentum → ok，latest 2026-09-03，concept 1066 / state 14
+curl /api/admin/pool-momentum/detail?pool_type=state&pool_key=量比:突增 → ok
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-004（「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条）
 
 ## Reviewer
 

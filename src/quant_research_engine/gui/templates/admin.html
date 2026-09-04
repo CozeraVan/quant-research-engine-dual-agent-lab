@@ -212,6 +212,16 @@
   <div id="mom-overview"><span class="opt">加载中...</span></div>
   <div id="mom-avoid"></div>
   <div id="mom-summary"></div>
+  <!-- 单池详情面板：点击榜单池名后在此展示（榜单上方，汇总卡之下），可关闭/替换 -->
+  <div id="mom-detail-panel" class="hidden">
+    <div class="mom-detail-head">
+      <strong id="mom-detail-title">单池详情</strong>
+      <button id="mom-detail-close" class="btn-sm">× 关闭</button>
+    </div>
+    <div id="mom-detail"><span class="opt">点击下方榜单中的池名查看该池时间序列</span></div>
+    <h4>池内个股明细 <span class="opt">（成员回看指标，描述性，即时算自 stock_daily；点击列头排序；表限高内部滚动）</span></h4>
+    <div id="mom-members"></div>
+  </div>
   <p>
     <span class="opt">榜单日期：</span>
     <select id="mom-date" class="mom-date"></select>
@@ -223,10 +233,13 @@
     <button class="btn btn-ghost mom-win" data-win="5">5 日</button>
     <button class="btn btn-ghost mom-win" data-win="20">20 日</button>
     <button class="btn btn-ghost mom-win" data-win="50">50 日</button>
-    <span class="opt">（表格默认按加速度降序；点击窗口切换赚钱效应列高亮、共振口径与行热力；点击数值列表头切换升/降序）</span>
+    <button id="btn-mom-cols" class="btn btn-ghost">展开更多列</button>
+    <span class="opt">（表格默认按加速度降序；点击窗口切换赚钱效应列高亮、共振口径与行热力；点击数值列表头切换升/降序；
+      默认精简列（池名/股票数/当前窗口 fwd/速度/加速度/共振/事后×3），且每组只渲染 Top/Bottom 50 行——表内「显示全部」展开；
+      「展开更多列」看全部列，此时表格可横向滚动、首列池名固定）</span>
   </p>
   <div class="section">
-    <button class="section-toggle" data-section="mom-concept">concept 概念池榜单（按加速度排序）<span class="opt">——点击池名看 250 日详情</span> &#9660;</button>
+    <button class="section-toggle" data-section="mom-concept">concept 概念池榜单（按加速度排序）<span class="opt">——点击池名在上方详情面板看 250 日时序 + 成员明细</span> &#9660;</button>
     <div id="sec-mom-concept" class="section-body">
       <div id="mom-concept"><span class="opt">加载中...</span></div>
     </div>
@@ -235,14 +248,6 @@
     <button class="section-toggle" data-section="mom-state">state 状态池榜单（按加速度排序）<span class="opt">——右侧事件池列仅 8 个 selection_artifact 池有值（对标同花顺涨停复盘的前瞻统计）</span> &#9660;</button>
     <div id="sec-mom-state" class="section-body">
       <div id="mom-state"><span class="opt">加载中...</span></div>
-    </div>
-  </div>
-  <div class="section">
-    <button class="section-toggle" data-section="mom-detail">单池详情（近 250 交易日）<span class="opt">——主线 fwd_ret_3/20/50（前瞻），回看 ret/vwap_ret/vol_chg 为浅色辅线</span> &#9660;</button>
-    <div id="sec-mom-detail" class="section-body">
-      <div id="mom-detail"><span class="opt">点击上方榜单中的池名查看该池时间序列</span></div>
-      <h4>池内个股明细 <span class="opt">（成员回看指标，描述性，即时算自 stock_daily；点击列头排序）</span></h4>
-      <div id="mom-members"></div>
     </div>
   </div>
 </div>
@@ -1181,13 +1186,15 @@
   var momSort = {key: 'acceleration', dir: -1};  // 主榜单排序（dir: -1 降序 / 1 升序）
   var momMembers = null;    // 最近一次 members 响应
   var momMemberSort = {key: 'ret_3', dir: -1};   // 成员明细排序
+  var momFull = false;      // 主榜单列视图：false=精简列（默认一屏可读），true=全部列
   function momPct(v) {
     return v == null ? '—' : (Number(v) * 100).toFixed(2) + '%';
   }
-  function momPctCell(v, highlight) {
-    if (v == null) return '<td class="num">—</td>';
+  function momPctCell(v, highlight, cls) {
+    var c = 'num' + (cls ? ' ' + cls : '');
+    if (v == null) return '<td class="' + c + '">—</td>';
     var color = v > 0 ? '#b91c1c' : (v < 0 ? '#15803d' : '');
-    return '<td class="num" style="' + (color ? 'color:' + color + ';' : '')
+    return '<td class="' + c + '" style="' + (color ? 'color:' + color + ';' : '')
       + (highlight ? 'font-weight:700;' : '') + '">' + momPct(v) + '</td>';
   }
   // 热力色：A 股红涨绿跌，heat ∈ [-1,1]（后端截面分位），0 附近近无色
@@ -1208,78 +1215,123 @@
       return 0;
     });
   }
-  function momTh(key, label, sortState) {
+  function momTh(key, label, sortState, cls) {
     var arrow = sortState.key === key ? (sortState.dir === -1 ? ' ▼' : ' ▲') : '';
-    return '<th class="mom-sort" data-key="' + esc(key) + '">' + esc(label) + arrow + '</th>';
+    return '<th class="mom-sort' + (cls ? ' ' + cls : '') + '" data-key="' + esc(key) + '">' + esc(label) + arrow + '</th>';
   }
+  // 精简列（默认）：池名/股票数/当前窗口 fwd/速度/加速度/共振/回避徽章/事后×3；
+  // 扩展列标 mom-col-x，精简模式下根本不输出这些 td/th（数据仍在 JS 内存，
+  // 「展开更多列」时再渲染）；首列 sticky 仅展开模式启用（.mom-sticky，
+  // 横向滚动只在全列时出现，大行数 sticky 是已知重绘杀手）。
+  var MOM_EDGE_N = 50;    // 默认每组只渲染 Top50 + Bottom50（加速度排序下两端=观察+回避名单）
+  var momShowAll = {concept: false, state: false};
   function momTable(rows, poolType) {
     var sorted = momGenericSort(rows, momSort.key, momSort.dir);
     var w = momWindow;
     var isState = poolType === 'state';
     var ncol = isState ? 24 : 20;
-    var body = sorted.map(function(r) {
+    if (!momFull) ncol = isState ? 13 : 9;
+    var total = sorted.length;
+    var truncated = !momShowAll[poolType] && total > 2 * MOM_EDGE_N;
+    var shown = truncated
+      ? sorted.slice(0, MOM_EDGE_N).concat(sorted.slice(total - MOM_EDGE_N))
+      : sorted;
+    function rowHtml(r) {
       var reso = (r.resonance || {})[String(w)];
       var heat = (r.heat || {})[String(w)];
-      var eventCells = '';
-      if (isState) {
-        eventCells = momPctCell(r.next_premium, false)
-          + momPctCell(r.survive_3, false) + momPctCell(r.survive_5, false)
-          + momPctCell(r.win_rate_1, false);
+      var cells = [
+        '<td><a href="#" class="mom-pool" data-pt="' + esc(poolType) + '" data-pk="' + esc(r.pool_key) + '">'
+          + esc(r.pool_key) + '</a>'
+          + (r.avoid
+            ? ' <span class="mom-avoid" title="短窗最弱十分位，历史验证未来 3-5 日平均继续跑输约 0.2%/日（M7 全历史描述性验证，NW t=−3.86，FDR q=0.001，20 日后消失）">⚠ 回避</span>'
+            : '')
+          + '</td>',
+        '<td class="num">' + esc(r.n_stocks) + '</td>'
+      ];
+      [3, 5, 20, 50].forEach(function(x) {
+        if (momFull || x === w) {
+          cells.push(momPctCell(r['fwd_ret_' + x], w === x, x === w ? '' : 'mom-col-x'));
+        }
+      });
+      if (momFull) {
+        cells.push(
+          momPctCell(r.ret_3, false, 'mom-col-x'), momPctCell(r.ret_5, false, 'mom-col-x'),
+          momPctCell(r.ret_20, false, 'mom-col-x'), momPctCell(r.ret_50, false, 'mom-col-x'),
+          momPctCell(r.vwap_ret_3, w === 3, 'mom-col-x'), momPctCell(r.vwap_ret_50, w === 50, 'mom-col-x'),
+          momPctCell(r['vol_chg_' + w], false, 'mom-col-x'));
       }
+      cells.push('<td class="num">' + esc(r.speed_rank == null ? '—' : r.speed_rank) + '</td>');
+      if (momFull) {
+        cells.push('<td class="num mom-col-x">' + esc(r.short_rank == null ? '—' : r.short_rank) + '</td>');
+      }
+      cells.push(
+        '<td class="num">' + esc(r.acceleration == null ? '—' : (r.acceleration > 0 ? '+' : '') + r.acceleration) + '</td>',
+        '<td>' + (reso ? '<span class="health-green">价量共振</span>' : '<span class="opt">—</span>') + '</td>',
+        momPctCell(r.post_3, false), momPctCell(r.post_5, false), momPctCell(r.post_20, false));
+      if (isState) {
+        cells.push(momPctCell(r.next_premium, false), momPctCell(r.survive_3, false),
+          momPctCell(r.survive_5, false), momPctCell(r.win_rate_1, false));
+      }
+      var heatStyle = momHeatColor(heat);
       return '<tr' + (r.weak_long_strong_short ? ' class="mom-hl"' : '')
-        + ' style="' + momHeatColor(heat) + '">'
-        + '<td><a href="#" class="mom-pool" data-pt="' + esc(poolType) + '" data-pk="' + esc(r.pool_key) + '">'
-        + esc(r.pool_key) + '</a>'
-        + (r.avoid
-          ? ' <span class="mom-avoid" title="短窗最弱十分位，历史验证未来 3-5 日平均继续跑输约 0.2%/日（M7 全历史描述性验证，NW t=−3.86，FDR q=0.001，20 日后消失）">⚠ 回避</span>'
-          : '')
-        + '</td>'
-        + '<td class="num">' + esc(r.n_stocks) + '</td>'
-        + momPctCell(r.fwd_ret_3, w === 3) + momPctCell(r.fwd_ret_5, w === 5)
-        + momPctCell(r.fwd_ret_20, w === 20) + momPctCell(r.fwd_ret_50, w === 50)
-        + momPctCell(r.ret_3, false) + momPctCell(r.ret_5, false)
-        + momPctCell(r.ret_20, false) + momPctCell(r.ret_50, false)
-        + momPctCell(r.vwap_ret_3, w === 3) + momPctCell(r.vwap_ret_50, w === 50)
-        + momPctCell(r['vol_chg_' + w], false)
-        + '<td class="num">' + esc(r.speed_rank == null ? '—' : r.speed_rank) + '</td>'
-        + '<td class="num">' + esc(r.short_rank == null ? '—' : r.short_rank) + '</td>'
-        + '<td class="num">' + esc(r.acceleration == null ? '—' : (r.acceleration > 0 ? '+' : '') + r.acceleration) + '</td>'
-        + '<td>' + (reso ? '<span class="health-green">价量共振</span>' : '<span class="opt">—</span>') + '</td>'
-        + momPctCell(r.post_3, false) + momPctCell(r.post_5, false) + momPctCell(r.post_20, false)
-        + eventCells
-        + '</tr>';
-    }).join('');
-    var head = '<table><thead><tr><th>池</th>'
-      + momTh('n_stocks', '股票数', momSort)
-      + momTh('fwd_ret_3', 'fwd_3', momSort) + momTh('fwd_ret_5', 'fwd_5', momSort)
-      + momTh('fwd_ret_20', 'fwd_20', momSort) + momTh('fwd_ret_50', 'fwd_50', momSort)
-      + momTh('ret_3', '回看ret_3', momSort) + momTh('ret_5', '回看ret_5', momSort)
-      + momTh('ret_20', '回看ret_20', momSort) + momTh('ret_50', '回看ret_50', momSort)
-      + momTh('vwap_ret_3', 'vwap_3', momSort) + momTh('vwap_ret_50', 'vwap_50', momSort)
-      + momTh('vol_chg_' + w, 'vol_chg_' + w, momSort)
-      + momTh('speed_rank', '速度排名(50日)', momSort)
-      + momTh('short_rank', '短窗排名(3日)', momSort)
-      + momTh('acceleration', '加速度', momSort)
-      + '<th>共振(' + w + '日)</th>'
-      + momTh('post_3', '事后3日', momSort) + momTh('post_5', '事后5日', momSort)
-      + momTh('post_20', '事后20日', momSort)
-      + (isState
-        ? momTh('next_premium', '次日溢价', momSort)
-          + momTh('survive_3', '存活3日', momSort) + momTh('survive_5', '存活5日', momSort)
-          + momTh('win_rate_1', '胜率T+1', momSort)
-        : '')
-      + '</tr></thead><tbody>'
-      + (body || '<tr><td colspan="' + ncol + '" class="opt">无数据</td></tr>') + '</tbody></table>';
-    return head;
+        + (heatStyle ? ' style="' + heatStyle + '"' : '') + '>'
+        + cells.join('') + '</tr>';
+    }
+    var bodyRows = shown.map(rowHtml);
+    if (truncated) {
+      bodyRows.splice(MOM_EDGE_N, 0,
+        '<tr class="mom-gap"><td colspan="' + ncol + '" class="opt">… 中间省略 '
+        + (total - 2 * MOM_EDGE_N) + ' 行（默认只渲染 Top/Bottom ' + MOM_EDGE_N + '） '
+        + '<button class="btn-sm mom-expand" data-pt="' + esc(poolType) + '">显示全部 '
+        + total + ' 行</button></td></tr>');
+    } else if (momShowAll[poolType] && total > 2 * MOM_EDGE_N) {
+      bodyRows.push('<tr class="mom-gap"><td colspan="' + ncol + '" class="opt">'
+        + '<button class="btn-sm mom-collapse" data-pt="' + esc(poolType) + '">收起为 Top/Bottom '
+        + MOM_EDGE_N + '</button></td></tr>');
+    }
+    var heads = ['<th>池</th>', momTh('n_stocks', '股票数', momSort)];
+    [3, 5, 20, 50].forEach(function(x) {
+      if (momFull || x === w) heads.push(momTh('fwd_ret_' + x, 'fwd_' + x, momSort, x === w ? '' : 'mom-col-x'));
+    });
+    if (momFull) {
+      heads.push(
+        momTh('ret_3', '回看ret_3', momSort, 'mom-col-x'), momTh('ret_5', '回看ret_5', momSort, 'mom-col-x'),
+        momTh('ret_20', '回看ret_20', momSort, 'mom-col-x'), momTh('ret_50', '回看ret_50', momSort, 'mom-col-x'),
+        momTh('vwap_ret_3', 'vwap_3', momSort, 'mom-col-x'), momTh('vwap_ret_50', 'vwap_50', momSort, 'mom-col-x'),
+        momTh('vol_chg_' + w, 'vol_chg_' + w, momSort, 'mom-col-x'));
+    }
+    heads.push(momTh('speed_rank', '速度排名(50日)', momSort));
+    if (momFull) heads.push(momTh('short_rank', '短窗排名(3日)', momSort, 'mom-col-x'));
+    heads.push(momTh('acceleration', '加速度', momSort),
+      '<th>共振(' + w + '日)</th>',
+      momTh('post_3', '事后3日', momSort), momTh('post_5', '事后5日', momSort),
+      momTh('post_20', '事后20日', momSort));
+    if (isState) {
+      heads.push(momTh('next_premium', '次日溢价', momSort),
+        momTh('survive_3', '存活3日', momSort), momTh('survive_5', '存活5日', momSort),
+        momTh('win_rate_1', '胜率T+1', momSort));
+    }
+    return '<div class="mom-scroll' + (momFull ? ' mom-sticky' : '') + '"><table><thead><tr>'
+      + heads.join('') + '</tr></thead><tbody>'
+      + (bodyRows.join('') || '<tr><td colspan="' + ncol + '" class="opt">无数据</td></tr>')
+      + '</tbody></table></div>';
   }
-  function momBindPoolLinks() {
-    document.querySelectorAll('.mom-pool').forEach(function(a) {
+  // 分区局部重渲：展开/收起只重建对应分区的表；排序键两表共享，排序时两表一起重渲
+  // （state 仅 14 行成本可忽略，保证两表表头箭头一致）
+  function momContainerId(poolType) { return poolType === 'state' ? 'mom-state' : 'mom-concept'; }
+  function momBindPoolLinksIn(el) {
+    el.querySelectorAll('.mom-pool').forEach(function(a) {
       a.addEventListener('click', function(ev) {
         ev.preventDefault();
         loadMomentumDetail(a.dataset.pt, a.dataset.pk);
       });
     });
-    document.querySelectorAll('#mom-concept th.mom-sort, #mom-state th.mom-sort').forEach(function(th) {
+  }
+  function renderMomentumTable(poolType) {
+    var el = document.getElementById(momContainerId(poolType));
+    el.innerHTML = momTable(momData[poolType] || [], poolType);
+    momBindPoolLinksIn(el);
+    el.querySelectorAll('th.mom-sort').forEach(function(th) {
       th.addEventListener('click', function() {
         var key = th.dataset.key;
         if (momSort.key === key) {
@@ -1287,9 +1339,25 @@
         } else {
           momSort = {key: key, dir: -1};
         }
-        renderMomentum();
+        renderMomentumTables();
       });
     });
+    el.querySelectorAll('.mom-expand').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        momShowAll[btn.dataset.pt] = true;
+        renderMomentumTable(btn.dataset.pt);
+      });
+    });
+    el.querySelectorAll('.mom-collapse').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        momShowAll[btn.dataset.pt] = false;
+        renderMomentumTable(btn.dataset.pt);
+      });
+    });
+  }
+  function renderMomentumTables() {
+    renderMomentumTable('concept');
+    renderMomentumTable('state');
   }
   // 底部回避汇总卡：当前截面 fwd_ret_3 最低 Bottom10（组内，n_stocks≥10）
   function momAvoidHtml(d) {
@@ -1315,9 +1383,8 @@
   function renderMomentum() {
     if (!momData || !momData.ok) return;
     document.getElementById('mom-avoid').innerHTML = momAvoidHtml(momData);
-    document.getElementById('mom-concept').innerHTML = momTable(momData.concept || [], 'concept');
-    document.getElementById('mom-state').innerHTML = momTable(momData.state || [], 'state');
-    momBindPoolLinks();
+    momBindPoolLinksIn(document.getElementById('mom-avoid'));
+    renderMomentumTables();
   }
   // 验证摘要条：加速度 Top10 池 post_5 vs 全体（按 pool_type 各一行）
   function momSummaryHtml(d) {
@@ -1402,7 +1469,8 @@
   }
   function renderMomentumMembers() {
     if (!momMembers || !momMembers.ok || momMembers.empty) return;
-    document.getElementById('mom-members').innerHTML = momMemberTable(momMembers);
+    document.getElementById('mom-members').innerHTML =
+      '<div class="mom-scroll mom-members-scroll">' + momMemberTable(momMembers) + '</div>';
     document.querySelectorAll('#mom-members th.mom-sort').forEach(function(th) {
       th.addEventListener('click', function() {
         var key = th.dataset.key;
@@ -1439,6 +1507,12 @@
       });
   }
   function loadMomentumDetail(poolType, poolKey) {
+    // 详情面板固定在榜单上方（汇总卡之下）：展示并滚动到位，再次点击其他池替换内容
+    var panel = document.getElementById('mom-detail-panel');
+    panel.classList.remove('hidden');
+    document.getElementById('mom-detail-title').textContent =
+      '单池详情：' + poolType + ' / ' + poolKey + '（近 250 交易日，主线 fwd_ret_3/20/50 前瞻，回看为浅色辅线）';
+    panel.scrollIntoView({behavior: 'smooth', block: 'start'});
     var el = document.getElementById('mom-detail');
     el.innerHTML = '<span class="opt">加载中：' + esc(poolType) + ' / ' + esc(poolKey) + ' ...</span>';
     document.getElementById('mom-members').innerHTML = '';
@@ -1485,6 +1559,18 @@
       });
   }
   document.getElementById('btn-mom-refresh').addEventListener('click', function() { loadMomentum(); });
+  document.getElementById('mom-detail-close').addEventListener('click', function() {
+    document.getElementById('mom-detail-panel').classList.add('hidden');
+    document.getElementById('mom-detail').innerHTML =
+      '<span class="opt">点击下方榜单中的池名查看该池时间序列</span>';
+    document.getElementById('mom-members').innerHTML = '';
+    momMembers = null;
+  });
+  document.getElementById('btn-mom-cols').addEventListener('click', function() {
+    momFull = !momFull;
+    this.textContent = momFull ? '收起为精简列' : '展开更多列';
+    renderMomentum();
+  });
   document.getElementById('mom-date').addEventListener('change', function() {
     loadMomentum(this.value || null);
   });

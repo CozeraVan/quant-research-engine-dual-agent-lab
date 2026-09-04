@@ -12,7 +12,37 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-POOL-MOM-005 (DONE — 1940 tests green + 4 skipped；awaiting git approval)
+QRE-GUI-POOL-MOM-007 (DONE — 1943 tests green + 4 skipped；awaiting git approval)
+
+2026-09-04: 「聚类动量」页 v7 前端渲染性能（用户反馈卡顿，排查确认
+瓶颈纯在前端 DOM：concept 1066 行 × 20 列 ≈ 2.1 万单元格 + 首列
+sticky 重绘）。纯前端优化，API/数据/pool_momentum.py 零改动：
+①默认 Top/Bottom 50 截断（MOM_EDGE_N=50 + momShowAll，.mom-gap 行
+「显示全部 N 行」/「收起」按钮）；②精简列模式不再输出 mom-col-x
+td/th（原 display:none 删除，展开更多列时才渲染）；③CSS 行级
+content-visibility: auto + contain-intrinsic-size；④首列 sticky 仅
+展开模式启用（.mom-scroll.mom-sticky）；⑤展开/收起只重渲本分区
+（renderMomentumTable(poolType)），排序两表共享键仍同刷。单元格数
+21,656 → 默认 ≈1,091（−95%）。改动 admin.html + style.css +
+tests/test_gui_pool_momentum.py（+1，79 总；v5 断言同步删
+mom-compact、加 v7 标记）。qre-gui 已重启 active；curl /admin 200
+含新标记，overview API 200（988KB/0.12s）。未 git commit。
+上一任务：QRE-GUI-POOL-MOM-006 (DONE — 1942 tests green + 4 skipped；awaiting git approval)
+
+2026-09-04: 「聚类动量」页 v5 榜单可读性（用户反馈两 UI 问题）。
+①concept 榜单 17+ 列横向溢出 → momTable 包 .mom-scroll 横向滚动 +
+首列池名 sticky（热力行 background:inherit，行仅 heat 非空才输出
+style）+ 默认精简列（池名/股票数/当前窗口 fwd/速度/加速度/共振/
+⚠回避/事后×3），扩展列标 mom-col-x、.mom-compact 隐藏，
+「#btn-mom-cols 展开更多列」开关切全量列。②点池名详情不再落页面
+底部 → 删底部 data-section="mom-detail" 折叠区，新 #mom-detail-panel
+固定于 #mom-summary 之下、榜单之上（标题 + 关闭按钮 + scrollIntoView，
+点其他池原地替换）；成员明细 .mom-members-scroll 限高 420px 内部滚动
+（表头 sticky 沿用全局）。改动集中 admin.html + style.css +
+tests/test_gui_pool_momentum.py（+2，78 总）；pool_momentum.py 零改动。
+qre-gui 已重启 active；curl /admin 200 含新标记，overview（真库
+2026-09-03：concept 1066/state 14）与 detail API 200。未 git commit。
+上一任务：QRE-GUI-POOL-MOM-005 (DONE — 1940 tests green + 4 skipped；awaiting git approval)
 
 2026-09-02: 「聚类动量」页 v4 底部减速回避名单（M7 全历史结论：
 fwd_ret_3 最弱 Bottom10 未来 3-5 日继续跑输约 0.2%/日，NW t=−3.86，

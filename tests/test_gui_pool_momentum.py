@@ -988,3 +988,59 @@ class TestAdminPageV5:
         assert "短窗最弱十分位" in html        # tooltip/卡片依据
         assert "无选股价值" in html            # 声明卡补句
         assert "NW t=−3.86" in html
+
+
+# ---------------------------------------------------------------------------
+# v5（榜单可读性）：横向滚动 + 首列 sticky + 精简列开关 + 详情面板上移
+# ---------------------------------------------------------------------------
+
+
+class TestAdminPageV6:
+    def test_v5_markup(self):
+        from quant_research_engine.gui.app import create_app
+
+        html = create_app().test_client().get("/admin").get_data(as_text=True)
+        # 详情面板：榜单上方（汇总卡之下）、带关闭按钮
+        assert 'id="mom-detail-panel"' in html
+        assert 'id="mom-detail-close"' in html
+        assert 'id="mom-detail-title"' in html
+        assert 'id="mom-detail"' in html and 'id="mom-members"' in html
+        assert html.index('id="mom-summary"') < html.index('id="mom-detail-panel"') \
+            < html.index('id="mom-concept"')
+        # 底部旧详情区已移除
+        assert 'data-section="mom-detail"' not in html
+        # 精简列开关 + 列标记 + 横向滚动/限高容器
+        assert 'id="btn-mom-cols"' in html
+        assert "展开更多列" in html
+        assert "mom-col-x" in html
+        assert "mom-scroll" in html and "mom-members-scroll" in html
+
+    def test_v7_render_perf_markup(self):
+        from quant_research_engine.gui.app import create_app
+
+        html = create_app().test_client().get("/admin").get_data(as_text=True)
+        # v7 渲染性能：默认 Top/Bottom 50 截断 + 「显示全部」/「收起」切换
+        assert "MOM_EDGE_N = 50" in html
+        assert "momShowAll" in html
+        assert "mom-expand" in html and "显示全部" in html
+        assert "mom-collapse" in html and "mom-gap" in html
+        # 精简模式不输出隐藏单元格（display:none 规则已删，JS 侧按 momFull 决定是否生成）
+        assert "mom-compact" not in html
+        # 首列 sticky 仅展开更多列时启用
+        assert "mom-sticky" in html
+        # 分区局部重渲
+        assert "renderMomentumTable" in html
+
+    def test_v5_css(self):
+        from pathlib import Path
+
+        css = Path(
+            __import__("quant_research_engine.gui", fromlist=["x"]).__path__[0]
+        ).joinpath("static", "style.css").read_text(encoding="utf-8")
+        assert ".mom-scroll" in css and "overflow-x: auto" in css
+        assert "position: sticky; left: 0" in css          # 首列池名 sticky（仅 .mom-sticky 展开模式）
+        assert ".mom-scroll.mom-sticky" in css
+        assert ".mom-compact" not in css                   # v7：精简列不再先渲染后隐藏
+        assert "content-visibility: auto" in css           # 行级渲染跳过
+        assert ".mom-gap" in css
+        assert ".mom-members-scroll" in css and "max-height: 420px" in css

@@ -2,7 +2,23 @@
 
 ## Task ID
 
-QRE-GUI-POOL-MOM-005（「聚类动量」页 v4 底部减速回避名单：⚠ 回避徽标 + 顶部回避卡 + 声明卡补句）
+QRE-GUI-POOL-MOM-007（「聚类动量」页 v7 前端渲染性能：Top/Bottom 50 截断 + 精简列不输出隐藏单元格 + 行级 content-visibility + sticky 仅展开模式 + 分区局部重渲）
+
+## Implementation Summary
+
+用户反馈「聚类动量」tab 卡顿严重；排查确认瓶颈纯在前端 DOM（服务端 RSS 正常、API 1MB/0.22s、无轮询）：concept 分区 1066 行 × 20 列 ≈ 2.1 万单元格，每格带内联热力 style，首列 position:sticky（大行数 sticky 是已知重绘杀手），且每次排序/切窗/切列整表重渲。纯前端渲染优化（API 契约与数据内容零变化，pool_momentum.py 零改动，8081 零改动）：①**默认 Top/Bottom 50 截断**（admin.html）：新 `MOM_EDGE_N=50` + `momShowAll={concept,state}` 状态；momTable 排序后默认只渲染 `slice(0,50) + slice(-50)`，中间插 `.mom-gap` 提示行（「… 中间省略 N 行」+「显示全部 N 行」按钮 `.mom-expand`，展开后表尾给「收起为 Top/Bottom 50」`.mom-collapse`）；加速度排序下 Top/Bottom 正是顶部观察 + 底部回避名单两端。②**精简列不再渲染后隐藏**：momTable 行/表头改为数组 cells/heads 按需 push——非当前窗口 fwd、回看 ret×4、vwap×2、vol_chg、short_rank 等 mom-col-x 扩展列仅在 `momFull=true` 时生成 td/th（数据仍在 JS 内存，「展开更多列」时才渲染）；CSS `.mom-compact .mom-col-x{display:none}` 规则删除。③**行级渲染跳过**：CSS `.mom-scroll tbody tr { content-visibility: auto; contain-intrinsic-size: auto 36px; }`，屏外行不参与首屏布局/绘制（「显示全部」大表时收益最大）。④**sticky 仅展开模式启用**：首列 sticky 四处选择器改挂 `.mom-scroll.mom-sticky`（momFull 时才加该类——横向滚动只在全列时出现，精简 9 列一屏放得下无需 sticky）。⑤**分区局部重渲**：momBindPoolLinks 拆为 `momBindPoolLinksIn(el)` + `renderMomentumTable(poolType)`（只重建对应分区 tbody）；展开/收起只重渲本分区；排序键两表共享，表头排序仍两表一起重渲（state 仅 14 行成本可忽略，保证箭头一致）；窗口切换走 renderMomentum 两表重渲（热力/高亮口径变化必须）。行/表头构建全程数组 join，无 O(n²) 字符串拼接。回避徽章、行热力、回避汇总卡、详情面板、成员明细功能全部保留（momAvoidHtml/momSummaryHtml/loadMomentumDetail 零改动）。渲染规模（真库 concept 1066 + state 14）：优化前 1066×20 + 14×24 ≈ 21,656 单元格；优化后默认视图 (50+50+1)×9 + 14×13 ≈ 1,091 单元格（≈ −95%），展开更多列（全 20 列）后 101×20+14×24 ≈ 2,356。测试 +1（79 总）：TestAdminPageV6 新增 test_v7_render_perf_markup（MOM_EDGE_N=50/momShowAll/mom-expand/显示全部/mom-collapse/mom-gap/mom-compact 不存在/mom-sticky/renderMomentumTable 标记）；test_v5_markup 删 mom-compact 断言；test_v5_css 改断言（.mom-scroll.mom-sticky、.mom-compact 不存在、content-visibility: auto、.mom-gap）。验证：`uv run pytest -q` → **1943 passed + 4 skipped**（1942 + 1）；admin.html 内联 script node --check 过；`sudo -n systemctl restart qre-gui` active；curl /admin 200 含新标记、overview API 200（988KB / 0.12s）。无 CR（用户直接指派）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-006（「聚类动量」页 v5 榜单可读性：横向滚动 + 首列 sticky + 精简列开关 + 详情面板上移）
+
+## Implementation Summary
+
+用户反馈两个 UI 问题：concept 榜单 17+ 列横向溢出挤压、点池名后详情渲染在页面最底部需长滚。修复（改动集中 admin.html + style.css + 测试，pool_momentum.py 零改动、零新纯逻辑）：①**榜单横向滚动 + 首列 sticky**：momTable 输出包一层 `<div class="mom-scroll">`（overflow-x auto）；CSS 首列 th/td `position: sticky; left: 0`（thead 角格 z-index 3、tbody z-index 2，右侧 1px 分隔影），斑马纹行首列背景 var(--bg)、热力行（tr 带 inline style）首列 `background: inherit` 保持热力连续——为此 momTable 行只在 heat 非空时才输出 style 属性（避免空 style 匹配 tr[style] 导致首列透明）。②**默认精简列 + 「展开更多列」开关**：momPctCell/momTh 加可选 cls 参；非当前窗口的 fwd 列、回看 ret×4、vwap×2、vol_chg、短窗排名标 `mom-col-x`，前端新状态 `momFull=false` 时容器加 `.mom-compact`（CSS `display:none` 隐藏扩展列）；精简列 = 池名（含⚠回避徽章）/股票数/当前窗口 fwd/速度排名/加速度/共振/事后×3（state 分区 + 事件 4 列），空数据 colspan 随视图动态（concept 9/20，state 13/24）；窗口切换按钮旁新 `#btn-mom-cols` 开关（文案「展开更多列」↔「收起为精简列」，切换重渲）。③**详情面板上移**：删除底部 `data-section="mom-detail"` 折叠区；新 `#mom-detail-panel` 固定在 `#mom-summary` 汇总卡之下、榜单之上（含标题 `#mom-detail-title` + `#mom-detail-close` 关闭按钮 + 原 #mom-detail/#mom-members 容器）；`loadMomentumDetail` 开头 unhide 面板、写标题、`scrollIntoView` 平滑滚动到位，点其他池原地替换内容，关闭按钮隐藏并清空。④**成员明细限高内部滚动**：renderMomentumMembers 输出包 `.mom-scroll mom-members-scroll`（max-height 420px，overflow auto；表头 sticky 沿用全局 `thead th` 规则）。concept 分区标题改注「点击池名在上方详情面板看 250 日时序 + 成员明细」。8081 零改动。测试 +2（78 总）：TestAdminPageV6 模板标记（面板/关闭按钮/位置序：mom-summary < mom-detail-panel < mom-concept、旧底区移除、btn-mom-cols/mom-col-x/mom-compact/mom-scroll/mom-members-scroll）+ CSS 规则断言（sticky left:0、overflow-x、compact 隐藏、限高 420px）。验证：`uv run pytest -q` → **1942 passed + 4 skipped**（1940 + 2）；admin.html 内联 script node --check 过；`sudo -n systemctl restart qre-gui` active；curl /admin 200 含新标记（24 处）、overview API 200（真库 latest 2026-09-03，concept 1066/state 14）、detail（state/量比:突增）200 ok。无 CR（用户直接指派）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-005（「聚类动量」页 v4 底部减速回避名单：⚠ 回避徽标 + 顶部回避卡 + 声明卡补句）
 
 ## Implementation Summary
 
