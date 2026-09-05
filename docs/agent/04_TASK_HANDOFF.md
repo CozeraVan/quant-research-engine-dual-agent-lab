@@ -2,7 +2,37 @@
 
 ## Task ID
 
-QRE-GUI-POOL-MOM-006 (「聚类动量」页 v5 榜单可读性：横向滚动 + 首列 sticky + 精简列开关 + 详情面板上移)
+QRE-NL-FACTOR-AUTOCORRECT-001 (NL 编译链路因子名自动纠错层：存在性校验 + 保守自动替换 + 候选提示 + prompt 注入真实目录)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+痛点（05 已记录）：DeepSeek 编造库中不存在的因子列名（rsi14/MACD 等），
+NL 编译产出 YAML 因因子缺失而失败，用户只见红色报错。本任务在
+引擎/编译器侧（8080/8081 共用，8081 gui/lab*.py 页面仍冻结）落地：
+①新 `gui/factor_correction.py` 纯函数层——`auto_fix_column`（保守：
+归一化等价 rsi14→rsi_14 / 唯一距离 1 且次优差距 ≥3 / 唯一前缀，
+其余一律不动给候选）、`suggest_similar_columns`（归一化编辑距离
+Top-5）、`correct_factor_fields`（同表候选优先，同表空则跨标准因子表
+兜底，列名对表写错直接换表）、`COMMON_FACTOR_TARGETS` 常用清单、
+中文提示格式化。②`gui/nl_compiler.compile_nl`：missing_factors 判定前
+先纠错——全部纠正成功则重写 YAML 正常返回（warnings 标注「已自动纠正
+X→Y」，响应带 corrections）；仍有未解决项则照旧入补因子队列，error 从
+「编译失败」改为 actionable 提示（每因子 Top-5 候选 + 常用因子清单），
+响应带 suggestions。③prompt 注入：build_system_prompt 追加「严禁编造
+因子名」硬约束 + COMMON_FACTOR_TARGETS 常用已落库列。④
+strategy_lab_routes 手工 YAML 通道（/api/strategies/create mode=manual）
+同样先纠错再入队，8080/8081 共享生效。测试 +17
+（tests/test_gui_factor_correction.py：编造名纠错/精确匹配不动/无匹配
+给候选/歧义前缀不纠正/prompt 注入/compile_nl 集成），全量 1960
+passed + 4 skipped（1943 + 17）。未 git commit。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-006 (「聚类动量」页 v5 榜单可读性：横向滚动 + 首列 sticky + 精简列开关 + 详情面板上移)
 
 ## Current Status
 

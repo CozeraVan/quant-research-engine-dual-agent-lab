@@ -445,24 +445,44 @@ def register_strategy_lab_routes(app: Flask) -> None:
             validation = validate_yaml(yaml_text)
             if not validation["valid"]:
                 return jsonify({"ok": False, "code": "invalid_yaml", "error": validation["error"]}), 400
-            # 因子存在性检查（DB 不可用时降级为 warning，与 NL 通道一致）
+            # 因子存在性检查（DB 不可用时降级为 warning，与 NL 通道一致）；
+            # 缺因子先走自动纠错层（与 NL 通道同一实现）
             lookup = _default_column_lookup(data.get("db_url") or None)
             if lookup is None:
                 warnings.append("因子库不可用，跳过因子存在性检查（提交回测时仍会校验）")
             else:
                 import yaml as _yaml
 
+                from quant_research_engine.gui.factor_correction import (
+                    correct_factor_fields,
+                    format_corrections_note,
+                    format_unresolved_hint,
+                )
+
+                mapping = _yaml.safe_load(yaml_text)
+                report = correct_factor_fields(mapping, lookup)
+                if report["corrections"]:
+                    yaml_text = _yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False)
+                    warnings.append(format_corrections_note(report["corrections"]))
                 spec = StrategySpec.from_mapping(_yaml.safe_load(yaml_text))
                 missing = find_missing_factor_columns(spec, lookup)
                 if missing:
                     _enqueue_missing_factors(spec, missing, queue_path=DEFAULT_QUEUE_PATH)
                     names = "、".join(f"{f.logical_name}({f.qualified_table}.{f.source_column})" for f in missing)
-                    return jsonify({
+                    error = f"该策略未入沙箱：缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。"
+                    if report["unresolved"]:
+                        error += "\n" + format_unresolved_hint(report["unresolved"])
+                    resp = {
                         "ok": False,
                         "code": "missing_factors",
-                        "error": f"该策略未入沙箱：缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。",
+                        "error": error,
                         "missing_factors": [f.logical_name for f in missing],
-                    })
+                        "suggestions": report["unresolved"],
+                    }
+                    if report["corrections"]:
+                        resp["corrections"] = report["corrections"]
+                        resp["yaml"] = yaml_text
+                    return jsonify(resp)
 
         saved = strategy_create.save_to_sandbox(yaml_text)
         if not saved["ok"]:

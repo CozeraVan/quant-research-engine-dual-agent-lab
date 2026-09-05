@@ -79,6 +79,11 @@ DSL 结构（低层 StrategySpec）：
 
 因子命名约定：factors.stock_daily_<类别>_<价格源>.<指标>_<周期>（部分指标含参数后缀）。
 价格源 source 通常为 close。可用指标目录（名称: 类别）：\
+
+【严禁编造因子名】factor_fields 的列名必须严格来自真实因子库：小写 snake_case，
+周期/参数用下划线连接（rsi_14、macd_12_26_9、bbl_20_2_0_2_0），大小写或
+分隔符写错（如 rsi14、MACD）都会导致编译失败。只允许使用下面目录中的指标；
+拿不准周期时用常用已落库列：\
 """
 
 _FEW_SHOT = """
@@ -138,11 +143,13 @@ evaluation:
 
 
 def build_system_prompt() -> str:
-    """System prompt: DSL doc + indicator catalog + few-shot examples."""
+    """System prompt: DSL doc + indicator catalog + 常用已落库列 + few-shot examples."""
+    from quant_research_engine.gui.factor_correction import COMMON_FACTOR_TARGETS
     from quant_research_engine.strategies.compiler import _INDICATOR_CATALOG
 
     catalog_items = sorted(f"{name}: {category}" for name, (category, _) in _INDICATOR_CATALOG.items())
-    return _DSL_DOC + "；".join(catalog_items) + "\n" + _FEW_SHOT
+    common_items = "；".join(COMMON_FACTOR_TARGETS)
+    return _DSL_DOC + "；".join(catalog_items) + f"\n常用已落库列：{common_items}\n" + _FEW_SHOT
 
 
 # ---------------------------------------------------------------------------
@@ -265,10 +272,14 @@ def compile_nl(
     """Compile a natural-language strategy description to a low-level YAML.
 
     Returns one of:
-      {"ok": True, "yaml": str, "warnings": [str, ...]}
+      {"ok": True, "yaml": str, "warnings": [str, ...], "corrections": 可选}
       {"ok": False, "code": "not_configured", "error": 中文}
       {"ok": False, "code": "llm_error"|"invalid_yaml"|"missing_factors",
-       "error": 中文, "yaml": 可选草稿, "missing_factors": [...]}
+       "error": 中文（含候选因子提示）, "yaml": 可选草稿,
+       "missing_factors": [...], "suggestions": [...], "corrections": 可选}
+
+    缺因子时先经 factor_correction 自动纠错层：无歧义相似名自动替换并在
+    响应标注「已自动纠正 X→Y」；无可靠匹配则附 Top-N 候选与常用因子清单。
     """
     description = (description or "").strip()
     if not description:
@@ -294,28 +305,62 @@ def compile_nl(
             "yaml": yaml_text,
         }
 
-    # 因子存在性检查（DB 不可用时跳过并提示）
+    # 因子存在性检查（DB 不可用时跳过并提示）；缺因子先走自动纠错层
     warnings: list[str] = []
+    corrections: list[dict[str, str]] = []
+    unresolved_hints: list[dict[str, Any]] = []
     lookup = column_lookup if column_lookup is not None else _default_column_lookup(db_url)
     if lookup is None:
         warnings.append("因子库不可用，跳过因子存在性检查（提交回测时仍会校验）")
     else:
         import yaml as _yaml
 
-        spec = StrategySpec.from_mapping(_yaml.safe_load(yaml_text))
+        from quant_research_engine.gui.factor_correction import (
+            correct_factor_fields,
+            format_corrections_note,
+            format_unresolved_hint,
+        )
+
+        mapping = _yaml.safe_load(yaml_text)
+        report = correct_factor_fields(mapping, lookup)
+        corrections = report["corrections"]
+        unresolved_hints = report["unresolved"]
+        if corrections:
+            yaml_text = _yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False)
+            revalidation = validate_yaml(yaml_text)
+            if not revalidation["valid"]:  # 兜底：纠错产物异常则退回原 YAML 与原名
+                yaml_text = strip_yaml_fence(raw)
+                mapping = _yaml.safe_load(yaml_text)
+                report = correct_factor_fields(mapping, lookup)
+                corrections = []
+                unresolved_hints = report["unresolved"]
+
+        spec = StrategySpec.from_mapping(mapping)
         missing = find_missing_factor_columns(spec, lookup)
         if missing:
             _enqueue_missing_factors(spec, missing, queue_path=queue_path or DEFAULT_QUEUE_PATH)
             names = "、".join(f"{f.logical_name}({f.qualified_table}.{f.source_column})" for f in missing)
-            return {
+            error = f"该策略已搁置：缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。"
+            if unresolved_hints:
+                error += "\n" + format_unresolved_hint(unresolved_hints)
+            if corrections:
+                error += "\n" + format_corrections_note(corrections)
+            result: dict[str, Any] = {
                 "ok": False,
                 "code": "missing_factors",
-                "error": f"该策略已搁置：缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。",
+                "error": error,
                 "yaml": yaml_text,
                 "missing_factors": [f.logical_name for f in missing],
+                "suggestions": unresolved_hints,
             }
+            if corrections:
+                result["corrections"] = corrections
+            return result
 
-    result: dict[str, Any] = {"ok": True, "yaml": yaml_text}
+    result = {"ok": True, "yaml": yaml_text}
+    if corrections:
+        warnings.append(format_corrections_note(corrections))
+        result["corrections"] = corrections
     if warnings:
         result["warnings"] = warnings
     return result

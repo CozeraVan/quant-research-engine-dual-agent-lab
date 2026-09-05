@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-GUI-POOL-MOM-007（「聚类动量」页 v7 前端渲染性能：Top/Bottom 50 截断 + 精简列不输出隐藏单元格 + 行级 content-visibility + sticky 仅展开模式 + 分区局部重渲）
+QRE-NL-FACTOR-AUTOCORRECT-001（NL 编译链路因子名自动纠错层：存在性校验 + 保守自动替换 + 候选提示 + prompt 注入真实目录）
+
+## Implementation Summary
+
+痛点（05_PROGRESS 已记录）：NL 策略编译链路中 DeepSeek 会编造数据库中不存在的因子列名（如 `rsi14`、`MACD`），产出 YAML 在因子存在性检查处失败，用户只见红色报错不知改法。本任务在引擎/编译器侧落地纠错层（8080 与 8081 共用 `strategy_lab_routes.py` / `nl_compiler.py`；8081 冻结页 `gui/lab*.py` 零改动）。①**新 `gui/factor_correction.py` 纯函数层**（零 DB 零 IO）：`auto_fix_column` 保守三规则——归一化（小写+去下划线）等价（`rsi14`→`rsi_14`、`MACD_12_26_9`→`macd_12_26_9`）、唯一候选归一化编辑距离 1 且次优差距 ≥3、唯一前缀匹配（`macd`→`macd_12_26_9` 仅当 macd 系列只有一列；signal/histogram 并列则不纠正给候选）；`suggest_similar_columns` 归一化距离排序 Top-5（确定性 tie-break）；`correct_factor_fields` 对解析后 mapping 就地改写 target（alias 与信号表达式不动）——同表候选优先，同表为空跨 8 个标准因子表兜底（列名对、表写错直接换表）；`COMMON_FACTOR_TARGETS` 18 条常用已落库列；`format_corrections_note`/`format_unresolved_hint` 中文提示。②**`nl_compiler.compile_nl` 集成**：missing_factors 判定前先跑纠错；全部纠正成功 → safe_dump 重写 YAML（重写后复跑 validate_yaml，异常兜底退回原 YAML）正常返回，warnings 标「已自动纠正因子名…X→Y」并附 `corrections` 字段；仍有未解决项 → 照旧入补因子队列，error 由「编译失败」改为 actionable 提示（每因子 Top-5 候选 + 常用因子清单），响应附 `suggestions` 字段。③**prompt 注入**：`_DSL_DOC` 追加「严禁编造因子名」硬约束（命名格式 + 错例），`build_system_prompt` 追加 COMMON_FACTOR_TARGETS「常用已落库列」。④**`strategy_lab_routes` 手工 YAML 通道**（POST /api/strategies/create mode=manual）同样先纠错再入队，错误响应带 suggestions/corrections。测试 **tests/test_gui_factor_correction.py +17**（纯函数 9：归一化等价/大小写/唯一前缀/歧义前缀不纠正/歧义距离不纠正/唯一距离1/精确不动/候选排序/格式化；mapping 层 4：精确不动/编造自动纠正/无匹配给候选/跨表换表；prompt 注入 1；compile_nl 集成 3：编造纠正成功返回 ok 且不入队、精确匹配原样保留不 dump、无匹配入队且 error 含候选与常用清单）。验证：`uv run pytest -q` → **1960 passed + 4 skipped**（1943 + 17）。真实演示（内存 lookup 桩）：`rsi14` + `macd_x_12_26_9` → 自动纠正为 `rsi_14` + `macd_12_26_9` 并标注；`rsi_99` → 报错附候选 rsi_14/rsi_6/sma_20/macd_12_26_9。无 CR（用户直接指派）。未 git commit，等用户审批。
+
+---
+
+## Archive: QRE-GUI-POOL-MOM-007（「聚类动量」页 v7 前端渲染性能：Top/Bottom 50 截断 + 精简列不输出隐藏单元格 + 行级 content-visibility + sticky 仅展开模式 + 分区局部重渲）
 
 ## Implementation Summary
 

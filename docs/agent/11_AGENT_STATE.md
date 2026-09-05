@@ -12,7 +12,25 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-GUI-POOL-MOM-007 (DONE — 1943 tests green + 4 skipped；awaiting git approval)
+QRE-NL-FACTOR-AUTOCORRECT-001 (DONE — 1960 tests green + 4 skipped；awaiting git approval)
+
+2026-09-05: NL 编译链路因子名自动纠错层（用户直接指派；8081 gui/lab*.py
+冻结页零改动，改动全在 8080/8081 共用的引擎/编译器侧）。痛点：DeepSeek
+编造库中不存在的因子列名（rsi14/MACD 等），YAML 因缺因子失败、用户
+只见红错。新 `gui/factor_correction.py` 纯函数层（零 DB 零 IO）：
+auto_fix_column 保守三规则——归一化（小写+去下划线）等价 / 唯一候选
+编辑距离 1 且次优差距 ≥3 / 唯一前缀（macd 系列多列并列则不纠正给候选）；
+suggest_similar_columns Top-5；correct_factor_fields（同表候选优先、
+同表空跨 8 个标准因子表兜底、列名对表写错直接换表，就地改写 target，
+alias 与信号表达式不动）；COMMON_FACTOR_TARGETS 18 条常用已落库列。
+compile_nl 在 missing_factors 判定前先纠错：全纠正成功重写 YAML 正常
+返回（warnings 标「已自动纠正 X→Y」+ corrections 字段）；仍有未解决项
+照旧入补因子队列，error 改 actionable（Top-5 候选 + 常用因子清单 +
+suggestions 字段）。build_system_prompt 注入「严禁编造因子名」硬约束 +
+常用已落库列。strategy_lab_routes 手工 YAML 通道（/api/strategies/create
+mode=manual）同逻辑生效。测试 tests/test_gui_factor_correction.py +17。
+未 git commit。
+上一任务：QRE-GUI-POOL-MOM-007 (DONE — 1943 tests green + 4 skipped；awaiting git approval)
 
 2026-09-04: 「聚类动量」页 v7 前端渲染性能（用户反馈卡顿，排查确认
 瓶颈纯在前端 DOM：concept 1066 行 × 20 列 ≈ 2.1 万单元格 + 首列
@@ -417,6 +435,14 @@ Parent change request: `docs/agent/change_requests/CR-0002-strategy-research-val
 - Remote: none configured.
 
 ## Latest Validation Evidence
+
+```
+uv run pytest -q → 1960 passed, 4 skipped, 4 warnings（2026-09-05, QRE-NL-FACTOR-AUTOCORRECT-001；基线 1943 + 17 净增）
+纠错演示（内存 column_lookup 桩）：编造 rsi14 + macd_x_12_26_9 → 自动纠正 rsi_14 + macd_12_26_9 并标注「已自动纠正」；
+  rsi_99 无可靠匹配 → 报错附 Top-5 候选（rsi_14/rsi_6/…）+ 常用因子清单，照常入补因子队列
+scripts/check-progress-docs.sh → passed
+git diff --check → clean
+```
 
 ```
 uv run pytest -q → 1795 passed, 4 skipped, 4 warnings（2026-08-23, QRE-DERIV-ADAPTER-013；基线 1784 + 11 净增）
