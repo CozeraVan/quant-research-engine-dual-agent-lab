@@ -2,7 +2,102 @@
 
 ## Task ID
 
-QRE-NL-FACTOR-AUTOCORRECT-001 (NL 编译链路因子名自动纠错层：存在性校验 + 保守自动替换 + 候选提示 + prompt 注入真实目录)
+QRE-SAAS-M3 (CR-0004 M3：Worker 客户端本体——出站轮询云端任务、本地跑回测、结果回传)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+新 `src/quant_research_engine/worker/` 包（client.py / runner.py /
+daemon.py）+ `apps/cli.py` 新增 `qre worker` 子命令（纯追加，与
+gui/barometer 同模式）+ `deploy/saas/qre-worker.service`（user 级模板，
+注释含安装命令，未安装）。lab*.py / 8080 零改动，未 commit、未重启服务。
+①client.py CloudClient：stdlib urllib（venv 无 requests），超时 30s +
+指数退避重试（仅传输错误/5xx，最多 3 次，4xx 抛 CloudError）；env
+SAAS_CLOUD_URL/SAAS_WORKER_TOKEN/SAAS_WORKER_ID；request_fn 注入点供测试
+直连 saas app test_client。②runner.py execute_job 复用既有链路不 fork：
+`gui.engine.run_backtest`（同 8081 批量回测入口）；smoke=既有 precheck
+（20 股+180 天），full=全量；summary=extract_run_summary、
+chart_data=lab_result.build_lab_chart_data；artifacts=[] TODO(M4) OSS；
+data_until=净值曲线末日。③daemon.py：轮询 lease（默认 15s）→ 执行 +
+心跳线程（默认 60s）→ done/failed 回传；异常全兜底不死；SIGTERM 等手头
+任务完成再退（TimeoutStopSec=900 兜底）。本地大库：引擎数据层全 SELECT
+只读（已核查 data/postgres/assembler/portfolio/risk_report，写点均为本地
+文件），QRE_MARKET_DB_URL 注入 qre_worker_ro 只读账号即可，零改造。
+测试 tests/test_worker.py 10 passed：端到端 done 闭环（mock 引擎层 +
+真实 lab_result 组装）、daemon 单轮/空轮、失败回队→耗尽、心跳线程、
+重试/放弃/4xx 不重试/错 token、CLI 注册。tests/test_gui_*.py+test_cli.py
+909 passed 零回归。遗留：OSS 产物上传（M4）、沙箱加固（SAAS-005）、
+真实云端联调（M4 部署后）、systemd 实机安装。
+
+---
+
+## Archive: QRE-SAAS-006 (CR-0004 M2：SaaS 登录鉴权——验证码登录 + Bearer session + 限流/配额，替换 X-User-Id 占位)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+全部改动限于 `gui/saas/app.py`、`deploy/saas/cloud_schema.sql`、
+`tests/test_gui_saas.py`；lab*.py / 8080 零改动，未 commit、未重启服务。
+①发送层可插拔（SAAS_AUTH_CHANNEL）：email=默认（smtplib STARTTLS 10s
+超时，SAAS_SMTP_* 配置）；sms=占位抛「短信通道未开通」；stub=测试通道
+记录到 app.extensions['sent_codes']。②新路由：POST /api/saas/auth/code
+（6 位码、5 分钟、sha256(code:target:salt) 落 sms_codes、发送失败 502、
+不暴露注册态；限流：同 target 60s、同 IP 10 次/小时，内存计数重启清零）、
+POST /api/saas/auth/login（compare_digest 校验最新未用未过期码→一次性
+used→无用户自动注册 email/phone 按 @ 判定→sessions 表 30 天 token）、
+GET /api/saas/me。③jobs 用户侧路由切 Bearer token；X-User-Id 保留为
+SAAS_DEV_AUTH=1 dev 后门（默认关）。④配额：当日任务数（含 smoke）>=
+quota_daily → 429。⑤schema 幂等迁移：users+email（部分唯一索引）/
+phone 可空、sms_codes+channel（phone 列实存 target，注释说明）、
+新增 sessions 表；已实测连 apply 两次幂等。worker token 鉴权不动。
+测试 22 passed（+11：全流程/错码/过期/复用/限流两档/502/无 token/
+dev 后门开关/配额）；tests/test_gui_*.py 子集 584 passed 零回归。
+遗留：图形验证码（TODO 注释，内测省略）、Worker 客户端（M3）、
+8081 前端四功能 UI、生产 SAAS_AUTH_SALT/SAAS_SMTP_* 配置。
+
+---
+
+## Archive: QRE-SAAS-001/002 (CR-0004 8081 SaaS MVP M1 切片：云小库 schema + 云侧任务队列协议 + QRE-SAAS-004 骨架 app)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+全部为新文件，既有 8080/8081 路由与冻结 lab*.py 零改动、未 git commit、
+未重启任何服务、未碰沙箱。①QRE-SAAS-001：`deploy/saas/cloud_schema.sql`
+五表（users/sms_codes/strategies/jobs/results）幂等可 apply（前置已验证）。
+②QRE-SAAS-002 + SAAS-004 骨架：新 `src/quant_research_engine/gui/saas/`
+（__init__.py + app.py），`create_saas_app()` 独立 Flask app，路由全挂
+`/api/saas/`：用户侧 POST /api/saas/jobs（yaml+params+kind=smoke|full，
+X-User-Id 占位鉴权、用户不存在自动建行 phone=pending_<id>，登录为
+QRE-SAAS-006）、GET /api/saas/jobs[/<id>]（状态/error/done 时 result
+摘要，列表 50 倒序）；Worker 侧 POST /api/saas/worker/jobs/lease
+（X-Worker-Token 校验 env SAAS_WORKER_TOKEN，未配置 503；事务内
+SELECT ... FOR UPDATE SKIP LOCKED 取最旧 queued 或 lease 过期且
+attempts<max_attempts 重排 → attempts+1/leased/15min 租约/leased_by，
+返回含 strategy yaml+params）、.../heartbeat（顺延 15min 校验 leased_by）、
+.../result（done 写 results ON CONFLICT(job_id) 幂等 + job done；
+failed 则 attempts 耗尽置 failed 否则清租回 queued）。DB 走 env
+SAAS_DB_URL，SQLAlchemy text() 全参数化，驱动复用项目既有 psycopg3
+（postgresql+psycopg:///）。测试 tests/test_gui_saas.py +11（真实本地
+PG 临时库：psql 以 van 经 unix socket 建/销库 + apply schema + 每用例
+TRUNCATE）：全生命周期、lease 过期重排、attempts 耗尽置 failed、token
+错 401、token 未配置 503、用户隔离、他人心跳/回传 409。新测试 11
+passed；全量 `pytest tests/ --ignore=tests/test_gui_saas.py` →
+1963 passed + 4 skipped 零回归。遗留：Worker 客户端本体（M3）、登录
+鉴权（QRE-SAAS-006）、8081 前端四功能裁剪 UI。
+
+---
+
+## Archive: QRE-NL-FACTOR-AUTOCORRECT-001 (NL 编译链路因子名自动纠错层：存在性校验 + 保守自动替换 + 候选提示 + prompt 注入真实目录)
 
 ## Current Status
 

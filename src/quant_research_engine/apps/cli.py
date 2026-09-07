@@ -383,6 +383,13 @@ def build_parser() -> argparse.ArgumentParser:
     barometer_parser.add_argument("--no-json", action="store_true", help="Skip JSON artifacts.")
     barometer_parser.add_argument("--no-cluster", action="store_true", help="Skip dynamic cluster groups.")
 
+    worker_parser = subparsers.add_parser(
+        "worker", help="Run the SaaS backtest worker (poll the cloud job queue)"
+    )
+    worker_parser.add_argument("--poll-seconds", type=float, default=None, help="Lease poll interval (default 15s, env SAAS_WORKER_POLL_SECONDS).")
+    worker_parser.add_argument("--heartbeat-seconds", type=float, default=None, help="Lease heartbeat interval (default 60s, env SAAS_WORKER_HEARTBEAT_SECONDS).")
+    worker_parser.add_argument("--once", action="store_true", help="Run a single poll cycle (debug).")
+
     return parser
 
 
@@ -1923,6 +1930,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.no_cluster:
             argv.append("--no-cluster")
         barometer_job.main(argv)
+        return 0
+
+    if args.command == "worker":
+        from quant_research_engine.worker.daemon import main as worker_main
+
+        argv = []
+        if args.poll_seconds is not None:
+            argv += ["--poll-seconds", str(args.poll_seconds)]
+        if args.heartbeat_seconds is not None:
+            argv += ["--heartbeat-seconds", str(args.heartbeat_seconds)]
+        if args.once:
+            argv.append("--once")
+        worker_main(argv)
         return 0
 
     parser.error(f"Unsupported command: {args.command}")
