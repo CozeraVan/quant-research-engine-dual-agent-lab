@@ -224,8 +224,8 @@
   </div>
   <p>
     <span class="opt">榜单日期：</span>
-    <select id="mom-date" class="mom-date"></select>
-    <span class="opt">（可选范围 = 有 fwd 前瞻数据的交易日；切换即看该日的速度/加速度/共振与事后验证）</span>
+    <input type="date" id="mom-date" class="mom-date">
+    <span class="opt">（日历点选任意交易日；最新 1 个交易日前瞻收益待 T+1 补齐，仅影响验证列）</span>
   </p>
   <p>
     <span class="opt">排序窗口：</span>
@@ -1419,11 +1419,13 @@
           return;
         }
         momData = d;
-        // 日期下拉（可选范围 = 有 fwd 数据的交易日）
+        // 日期日历（可选范围 = 全部交易日；非交易日输入在校验时回退）
         var sel = document.getElementById('mom-date');
-        sel.innerHTML = (d.dates || []).map(function(x) {
-          return '<option value="' + esc(x) + '"' + (x === d.latest_date ? ' selected' : '') + '>' + esc(x) + '</option>';
-        }).join('');
+        if (d.dates && d.dates.length) {
+          sel.min = d.dates[d.dates.length - 1];
+          sel.max = d.dates[0];
+          sel.value = d.latest_date;
+        }
         document.getElementById('mom-overview').innerHTML =
           '<div class="risk-cards"><div class="risk-card">'
           + '<h3>榜单日期：' + esc(d.latest_date) + '</h3>'
@@ -1572,7 +1574,13 @@
     renderMomentum();
   });
   document.getElementById('mom-date').addEventListener('change', function() {
-    loadMomentum(this.value || null);
+    var v = this.value;
+    // 仅接受真实交易日；非交易日/范围外输入回退到当前榜单日
+    if (v && momData && momData.dates && momData.dates.indexOf(v) === -1) {
+      this.value = momData.latest_date || v;
+      return;
+    }
+    loadMomentum(v || null);
   });
   document.querySelectorAll('.mom-win').forEach(function(btn) {
     btn.addEventListener('click', function() {

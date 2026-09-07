@@ -647,10 +647,10 @@ class TestV2FwdLag:
         )
         out = pool_momentum_overview()
         assert out["latest_date"] == "2026-09-01"
-        assert out["fwd_lag"] is False
-        # fwd 全 None → 加速度/热力全 None 但不炸
-        assert out["concept"][0]["acceleration"] is None
-        assert out["concept"][0]["heat"]["3"] is None
+        # v4：fwd 全 None → 自动降级 ret_* 口径（加速度按 ret 排名，非 None）
+        assert out["metric_basis"] == "ret"
+        assert out["fwd_lag"] is True
+        assert out["concept"][0]["acceleration"] is not None
 
 
 class TestV2DetailSeries:
@@ -1044,3 +1044,46 @@ class TestAdminPageV6:
         assert "content-visibility: auto" in css           # 行级渲染跳过
         assert ".mom-gap" in css
         assert ".mom-members-scroll" in css and "max-height: 420px" in css
+
+
+class TestMetricFallback:
+    """v4：末日 fwd 全 NULL 时速度/加速度/共振降级为 ret_* 已实现收益口径。"""
+
+    def test_fallback_to_ret_when_fwd_missing(self, monkeypatch):
+        d = dt.date(2026, 9, 4)
+        rows = [
+            _pool_row("concept", "长强短弱", 0.20, 0.01, vwap3=0.01, vol3=0.2,
+                      fwd50=None, fwd3=None),
+            _pool_row("concept", "长弱短强", 0.10, 0.05, vwap3=0.02, vol3=0.5,
+                      fwd50=None, fwd3=None),
+        ]
+        _patch_store(
+            monkeypatch,
+            _FakeConn(latest=d, overview_rows=rows, fwd_latest=dt.date(2026, 9, 3)),
+        )
+        out = pool_momentum_overview(trade_date=str(d))
+        assert out["ok"] is True
+        assert out["metric_basis"] == "ret"
+        assert out["fwd_lag"] is True
+        assert "已实现收益" in out["fwd_note"]
+        by_key = {r["pool_key"]: r for r in out["concept"]}
+        # ret 口径：长弱短强 speed=rank2、short=rank1 → accel = +1
+        assert by_key["长弱短强"]["acceleration"] == 1
+        assert by_key["长强短弱"]["acceleration"] == -1
+        # 共振也用 ret_3（两者 ret_3>0 且 vwap/vol 正 → 均共振）
+        assert by_key["长弱短强"]["resonance"]["3"] is True
+
+    def test_fwd_basis_unchanged_when_filled(self, monkeypatch):
+        d = dt.date(2026, 9, 1)
+        rows = [
+            _pool_row("concept", "华为概念", 0.10, 0.05, vwap3=0.02, vol3=0.5),
+        ]
+        _patch_store(monkeypatch, _FakeConn(latest=d, overview_rows=rows))
+        out = pool_momentum_overview()
+        assert out["metric_basis"] == "fwd_ret"
+        assert "已实现收益" not in out["fwd_note"]
+
+    def test_resonance_metric_param(self):
+        row = {"fwd_ret_3": None, "ret_3": 0.05, "vwap_ret_3": 0.02, "vol_chg_3": 0.5}
+        assert resonance_flag(row, 3) is False                    # fwd 缺失 → False
+        assert resonance_flag(row, 3, metric="ret") is True       # ret 口径 → True

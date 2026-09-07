@@ -121,10 +121,14 @@ def compute_acceleration(
     return rows
 
 
-def resonance_flag(row: dict[str, Any], window: int) -> bool:
-    """价量共振（v2 前瞻口径）：fwd_ret_w > 0 且 vwap_ret_w > 0 且 vol_chg_w > 0。"""
+def resonance_flag(row: dict[str, Any], window: int, metric: str = "fwd_ret") -> bool:
+    """价量共振：{metric}_{window} > 0 且 vwap_ret_w > 0 且 vol_chg_w > 0。
 
-    ret = row.get(f"fwd_ret_{window}")
+    metric 默认 fwd_ret（v2 前瞻口径）；末日 fwd 未补齐时调用方降级为 ret
+    （已实现收益口径）。
+    """
+
+    ret = row.get(f"{metric}_{window}")
     vwap = row.get(f"vwap_ret_{window}")
     vol = row.get(f"vol_chg_{window}")
     if ret is None or vwap is None or vol is None:
@@ -417,13 +421,14 @@ def pool_momentum_overview(
                     ),
                     {"d": shown},
                 ).fetchall()
-                # v3：可选日期列表（有 fwd 数据的交易日，降序）
+                # v4：可选日期列表（全部交易日，降序；末日 fwd 未补齐也可选，
+                # 前端以 fwd_lag 提示「前瞻收益待补齐」）
                 dates = [
                     str(r[0])
                     for r in conn.execute(
                         text(
                             "SELECT DISTINCT trade_date FROM cluster.pool_momentum_daily "
-                            "WHERE fwd_ret_3 IS NOT NULL ORDER BY trade_date DESC"
+                            "ORDER BY trade_date DESC"
                         )
                     ).fetchall()
                 ]
@@ -467,28 +472,57 @@ def pool_momentum_overview(
                 continue
             entry = _row_to_pool(row[1:])
             entry["_pool_type"] = pool_type
-            entry["resonance"] = {str(w): resonance_flag(entry, w) for w in WINDOWS}
             # 事件池标记：selection_artifact=true 的 8 个状态池才有事件统计
             entry["has_event"] = any(entry.get(c) is not None for c in EVENT_COLS)
             groups[pool_type].append(entry)
+        # v4：末日 fwd 未补齐（全 NULL）时，速度/加速度/热力/共振降级为
+        # ret_* 已实现收益口径（仍可比截面强弱），并在响应中标记 metric_basis
+        metric = (
+            "fwd_ret"
+            if any(
+                e.get("fwd_ret_3") is not None for g in groups.values() for e in g
+            )
+            else "ret"
+        )
+        for group in groups.values():
+            for entry in group:
+                entry["resonance"] = {
+                    str(w): resonance_flag(entry, w, metric=metric) for w in WINDOWS
+                }
         summary: dict[str, Any] = {}
         avoid: dict[str, Any] = {}
         for pool_type, group in groups.items():
             compute_post_returns(group, fwd_series)
             groups[pool_type] = sort_by_acceleration(
-                compute_bottom_avoid(compute_heat(compute_acceleration(group)))
+                compute_bottom_avoid(
+                    compute_heat(compute_acceleration(group, metric=metric), metric=metric)
+                )
             )
             summary[pool_type] = accel_top_summary(group)
             avoid[pool_type] = avoid_list(group)
             for entry in group:
                 entry.pop("_pool_type", None)
         fwd_lag = fwd_latest is not None and fwd_latest < latest
+        if metric == "ret":
+            fwd_lag = True
+            fwd_note = (
+                f"该日（{shown}）前瞻收益尚未补齐（T+1 收盘后回填）："
+                "速度/加速度/热力/共振按已实现收益 ret_* 口径展示，事后验证列暂缺"
+            )
+        elif fwd_lag:
+            fwd_note = (
+                f"前瞻收益 T+1 收盘后补齐：末日 {latest} 的 fwd 列仍为 NULL（正常一日滞后），"
+                f"榜单展示最近已补齐日 {shown}"
+            )
+        else:
+            fwd_note = "前瞻收益已补齐至榜单日期"
         return {
             "ok": True,
             "empty": False,
             "latest_date": shown,
             "latest_date_overall": str(latest),
             "fwd_lag": fwd_lag,
+            "metric_basis": metric,
             "windows": list(WINDOWS),
             "post_windows": list(POST_WINDOWS),
             "dates": dates,
@@ -502,19 +536,15 @@ def pool_momentum_overview(
             "state": groups["state"],
             "note": (
                 "只读 cluster.pool_momentum_daily（M7 v2）；主口径=fwd_ret_w 前瞻收益"
-                "（当日成分等权再平衡，对标东财板块指数），回看 ret_w 仅对照；"
+                "（当日成分等权再平衡，对标东财板块指数），回看 ret_w 仅对照"
+                "（fwd 未补齐的最新交易日自动降级为 ret 口径，见提示）；"
                 "concept 池成员为当前快照（前视偏差，demo 接受），state 池 point-in-time；"
-                "加速度 = fwd_ret_50 排名 − fwd_ret_3 排名（正 = 短窗跃升）；"
+                "加速度 = 收益 50 日排名 − 3 日排名（正 = 短窗跃升）；"
                 "post_w = T 日之后 w 个交易日的 fwd_ret 复利收益（不足 w 日 → NULL 未满窗口）；"
-                "⚠ 回避 = 截面 fwd_ret_3 最低 Bottom10（n_stocks≥10），"
+                "⚠ 回避 = 截面 fwd_ret_3 最低 Bottom10（n_stocks≥10，fwd 未补齐日为空），"
                 "历史验证未来 3-5 日平均继续跑输约 0.2%/日"
             ),
-            "fwd_note": (
-                f"前瞻收益 T+1 收盘后补齐：末日 {latest} 的 fwd 列仍为 NULL（正常一日滞后），"
-                f"榜单展示最近已补齐日 {shown}"
-                if fwd_lag
-                else "前瞻收益已补齐至榜单日期"
-            ),
+            "fwd_note": fwd_note,
         }
 
     return _cached(f"pool_momentum_overview:{db_url}:{trade_date}", _produce)
