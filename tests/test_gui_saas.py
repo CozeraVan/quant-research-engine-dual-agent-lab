@@ -95,7 +95,7 @@ class TestJobCreate:
         assert resp.status_code == 200
         body = resp.get_json()
         assert body["ok"] and body["status"] == "queued"
-        detail = client.get(f"/api/saas/jobs/{body['job_id']}").get_json()["job"]
+        detail = client.get(f"/api/saas/jobs/{body['job_id']}", headers={"X-User-Id": "7"}).get_json()["job"]
         assert detail["status"] == "queued"
         assert detail["kind"] == "smoke"
         assert detail["params"] == {"cash": 1000000}
@@ -120,7 +120,8 @@ class TestJobCreate:
         assert client.get("/api/saas/jobs", headers={"X-User-Id": "99"}).get_json()["jobs"] == []
 
     def test_get_unknown_job_404(self, client):
-        assert client.get("/api/saas/jobs/999").status_code == 404
+        assert client.get("/api/saas/jobs/999").status_code == 401  # 未登录
+        assert client.get("/api/saas/jobs/999", headers={"X-User-Id": "1"}).status_code == 404
 
 
 class TestWorkerAuth:
@@ -175,7 +176,7 @@ class TestLifecycle:
         })
         assert resp.status_code == 200 and resp.get_json()["status"] == "done"
 
-        detail = client.get(f"/api/saas/jobs/{job_id}").get_json()["job"]
+        detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
         assert detail["status"] == "done"
         assert detail["finished_at"]
         assert detail["result"]["summary"] == {"total_return": 0.42}
@@ -211,13 +212,13 @@ class TestLifecycle:
         _lease(client)  # attempts=1
         resp = _result(client, job_id, {"status": "failed", "error": "boom"})
         assert resp.get_json()["status"] == "queued"  # attempts 1 < max 2 → 回队
-        detail = client.get(f"/api/saas/jobs/{job_id}").get_json()["job"]
+        detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
         assert detail["status"] == "queued" and detail["error"] == "boom"
 
         _lease(client)  # attempts=2
         resp = _result(client, job_id, {"status": "failed", "error": "boom again"})
         assert resp.get_json()["status"] == "failed"  # attempts 耗尽 → failed
-        detail = client.get(f"/api/saas/jobs/{job_id}").get_json()["job"]
+        detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
         assert detail["status"] == "failed"
         assert detail["error"] == "boom again"
         assert detail["finished_at"]

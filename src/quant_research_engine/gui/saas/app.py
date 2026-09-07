@@ -28,14 +28,19 @@ import smtplib
 import time
 from datetime import date, datetime
 from email.message import EmailMessage
+from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 LEASE_MINUTES = 15
 JOB_KINDS = ("smoke", "full")
+
+GUI_DIR = Path(__file__).resolve().parent.parent
+SAAS_TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+SHARED_STATIC_DIR = GUI_DIR / "static"  # 复用 8080/8081 vendored echarts 等，不双份
 AUTH_CODE_TTL_MINUTES = 5
 AUTH_CODE_LENGTH = 6
 SESSION_TTL_DAYS = 30
@@ -208,7 +213,12 @@ def _job_view(row: Any) -> dict[str, Any]:
 
 
 def create_saas_app() -> Flask:
-    app = Flask(__name__)
+    app = Flask(
+        __name__,
+        template_folder=str(SAAS_TEMPLATE_DIR),
+        static_folder=str(SHARED_STATIC_DIR),
+        static_url_path="/static",
+    )
     app.config["SECRET_KEY"] = os.urandom(24)
     # 验证码限流计数（内存：重启清零，内测期可接受）
     app.extensions["rate_limit"] = {"target": {}, "ip": {}}
@@ -216,6 +226,60 @@ def create_saas_app() -> Flask:
     @app.errorhandler(RuntimeError)
     def _runtime_error(exc: RuntimeError) -> Any:  # SAAS_DB_URL 缺失等配置错误
         return jsonify({"ok": False, "error": str(exc)}), 503
+
+    # --- 页面（QRE-SAAS-004 四功能前端；页面本身不鉴权，JS 检查 localStorage
+    #     token，401 时跳 /saas/login；数据全走 /api/saas/* Bearer 鉴权） ---
+
+    @app.get("/saas/login")
+    def saas_login_page() -> str:
+        return render_template("login.html")
+
+    @app.get("/saas/")
+    def saas_dashboard_page() -> str:
+        return render_template("dashboard.html")
+
+    @app.get("/saas/new")
+    def saas_new_page() -> str:
+        return render_template("new.html")
+
+    @app.get("/saas/jobs/<int:job_id>")
+    def saas_job_page(job_id: int) -> str:
+        return render_template("job.html", job_id=job_id)
+
+    # --- 复用既有 NL 编译 / 因子目录（同一编译函数 + factor_correction 纠错层，
+    #     LLM key 只存服务端环境变量；两个路由都要求登录） ---
+
+    @app.post("/api/saas/nl/compile")
+    def api_saas_nl_compile() -> Any:
+        engine = _get_engine(app)
+        if _current_user_id(app, engine) is None:
+            return jsonify({"ok": False, "code": "unauthorized", "error": "未登录"}), 401
+        from quant_research_engine.gui.nl_compiler import compile_nl
+
+        data = request.get_json(silent=True) or {}
+        description = (data.get("description") or "").strip()
+        if not description:
+            return jsonify({"ok": False, "code": "empty", "error": "请先用自然语言描述策略"}), 400
+        result = compile_nl(description)
+        if result.get("code") == "not_configured":
+            return jsonify(result), 503
+        return jsonify(result)
+
+    @app.get("/api/saas/factors")
+    def api_saas_factors() -> Any:
+        engine = _get_engine(app)
+        if _current_user_id(app, engine) is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        from quant_research_engine.gui.factor_wizard import (
+            build_factor_groups,
+            load_factor_tables_columns,
+        )
+
+        try:
+            tables_columns = load_factor_tables_columns()
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"因子库不可用（{exc}）"}), 503
+        return jsonify({"ok": True, "groups": build_factor_groups(tables_columns)})
 
     # --- 鉴权（QRE-SAAS-006） ---
 
@@ -395,7 +459,7 @@ def create_saas_app() -> Flask:
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT j.*, r.summary AS result_summary "
+                    "SELECT j.*, r.summary AS result_summary, r.data_until AS result_data_until "
                     "FROM jobs j LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE j.user_id = :uid ORDER BY j.created_at DESC, j.id DESC LIMIT 50"
                 ),
@@ -405,12 +469,16 @@ def create_saas_app() -> Flask:
         for row in rows:
             item = _job_view(row)
             item["result_summary"] = _jsonable(row["result_summary"])
+            item["data_until"] = _jsonable(row["result_data_until"])
             jobs.append(item)
         return jsonify({"ok": True, "jobs": jobs})
 
     @app.get("/api/saas/jobs/<int:job_id>")
     def api_get_job(job_id: int) -> Any:
         engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
         with engine.connect() as conn:
             row = conn.execute(
                 text(
@@ -420,7 +488,8 @@ def create_saas_app() -> Flask:
                 ),
                 {"id": job_id},
             ).mappings().first()
-        if row is None:
+        # 他人任务与不存在一视同仁（404，不暴露任务存在性）
+        if row is None or row["user_id"] != uid:
             return jsonify({"ok": False, "error": "任务不存在"}), 404
         item = _job_view(row)
         if row["status"] == "done":

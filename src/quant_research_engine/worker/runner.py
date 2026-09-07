@@ -53,6 +53,13 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     yaml_text = str(strategy.get("yaml") or "").strip()
     if not yaml_text:
         raise RuntimeError("job 缺少策略 yaml")
+    # QRE-SAAS-005：公网 NL 产物前置安全闸——严格 schema + 信号表达式 AST 白名单
+    # （引擎表达式求值器允许任意 getattr/方法调用，必须在执行前锁死）。
+    from quant_research_engine.security.yaml_guard import validate_strategy_yaml
+
+    verdict = validate_strategy_yaml(yaml_text)
+    if not verdict["ok"]:
+        raise RuntimeError("策略 YAML 未通过安全校验：" + "；".join(verdict["issues"]))
     params = _job_params(job)
 
     codes = params.get("codes") or []
@@ -94,9 +101,15 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     summary["run_id"] = record.get("run_id")
     summary["kind"] = job.get("kind")
 
-    from quant_research_engine.gui.lab_result import build_lab_chart_data
+    from quant_research_engine.gui.lab_result import build_lab_chart_data, build_lab_tag_analysis
 
     chart_data = build_lab_chart_data(record)
+    # 板块/个股归因：与 8081 结果页同一组装函数（数据形态完全一致），
+    # 截断后挂到 chart_data.tag_analysis（体积控制见 trim_tag_analysis）。
+    try:
+        chart_data["tag_analysis"] = trim_tag_analysis(build_lab_tag_analysis(record))
+    except Exception:
+        chart_data["tag_analysis"] = None  # 归因失败不拖垮回传（DB 降级等）
 
     # 数据截止日期（静态快照声明）：优先净值曲线末日，回退 run 区间末日
     dates = chart_data.get("dates") or []
@@ -108,3 +121,34 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
         "artifacts": [],  # TODO(M4)：Excel/CSV 明细上传 OSS 后在此登记 oss_key
         "data_until": str(data_until),
     }
+
+
+#: 归因回传截断口径：板块/标签聚合全量保留（热力图与榜单所需），
+#: 每个板块内的个股明细只留按 |总净盈亏| 排序的 TOP/BOTTOM 各 TAG_SYMBOL_TOP_N 只
+#: （全市场 run 可能几千只，全量回传会让 results.chart_data 爆到 MB 级）；
+#: 附 symbols_total 记录截断前数量，前端可提示「仅显示前/后 N」。
+TAG_SYMBOL_TOP_N = 50
+
+
+def trim_tag_analysis(data: dict[str, Any], top_n: int = TAG_SYMBOL_TOP_N) -> dict[str, Any]:
+    """截断 build_lab_tag_analysis 的个股明细（纯函数）。"""
+    if not isinstance(data, dict):
+        return data
+    trimmed = dict(data)
+    layers = {}
+    for layer, items in (data.get("layers") or {}).items():
+        new_items = []
+        for item in items or []:
+            item = dict(item)
+            symbols = item.get("symbols") or []
+            item["symbols_total"] = len(symbols)
+            if len(symbols) > top_n * 2:
+                # symbols 已按 total_pnl 降序；取头部 top_n + 尾部 top_n
+                item["symbols"] = symbols[:top_n] + symbols[-top_n:]
+                item["symbols_truncated"] = True
+            else:
+                item["symbols_truncated"] = False
+            new_items.append(item)
+        layers[layer] = new_items
+    trimmed["layers"] = layers
+    return trimmed

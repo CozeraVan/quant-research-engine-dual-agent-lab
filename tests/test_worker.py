@@ -84,7 +84,7 @@ def _make_client(cloud, **kwargs) -> CloudClient:
 def _create_job(cloud, kind="full", params=None):
     _, tc = cloud
     resp = tc.post("/api/saas/jobs", json={
-        "yaml": "experiment:\n  name: t\nsignal:\n  entry: 'true'\n",
+        "yaml": "experiment:\n  name: t\ndata:\n  market_fields: [close]\nsignal:\n  entry: close > 0\n",
         "kind": kind,
         "params": params or {"start": "2026-01-01", "end": "2026-03-01"},
     }, headers={"X-User-Id": "1"})
@@ -94,7 +94,7 @@ def _create_job(cloud, kind="full", params=None):
 
 def _job_status(cloud, job_id):
     _, tc = cloud
-    return tc.get(f"/api/saas/jobs/{job_id}").get_json()["job"]
+    return tc.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
 
 
 def _fake_run_backtest(output_dir: str):
@@ -123,11 +123,20 @@ def _fake_run_backtest(output_dir: str):
 
 @pytest.fixture()
 def mock_engine(monkeypatch, tmp_path):
-    """mock run_backtest（写产物到 tmp_path），打桩基准指数查库。"""
+    """mock run_backtest（写产物到 tmp_path），打桩基准指数查库与归因 DB 查询。"""
     monkeypatch.setattr(runner_mod, "run_backtest",
                         lambda **kw: _fake_run_backtest(kw["output_dir"]))
     monkeypatch.setattr("quant_research_engine.gui.lab_result._benchmark_series",
                         lambda dates: ({}, "test: no benchmark"))
+    # 归因 DB 查询打桩（保持测试不依赖本地大库）：A 层行业标签
+    monkeypatch.setattr(
+        "quant_research_engine.gui.lab_result._fetch_company_tags",
+        lambda symbols: ([("000001.SZ", "申万L1:银行", "A")], {"000001.SZ": "平安银行"}, None),
+    )
+    monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_industries",
+                        lambda symbols: {})
+    monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_symbol_range_returns",
+                        lambda symbols, start, end: {"000001.SZ": 0.02})
 
 
 class TestEndToEnd:
@@ -146,6 +155,11 @@ class TestEndToEnd:
         assert payload["chart_data"]["dates"] == ["2026-01-05", "2026-01-06", "2026-01-07"]
         assert payload["artifacts"] == []  # TODO(M4) OSS
         assert payload["data_until"] == "2026-01-07"  # 净值曲线末日（数据实际覆盖）
+        # 归因数据：与 8081 同一组装函数，截断后挂 chart_data.tag_analysis
+        attr = payload["chart_data"]["tag_analysis"]
+        assert attr["ok"] and attr["layers"]["A"][0]["tag"] == "银行"
+        assert attr["layers"]["A"][0]["symbols"][0]["ts_code"] == "000001.SZ"
+        assert attr["layers"]["A"][0]["symbols_total"] == 1
 
         resp = client.report_result(job_id, {"status": "done", **payload})
         assert resp["status"] == "done"
@@ -154,6 +168,7 @@ class TestEndToEnd:
         assert detail["status"] == "done"
         assert detail["result"]["summary"]["strategy_total_return"] == 0.1
         assert detail["result"]["chart_data"]["equity"][0] == 100000.0
+        assert detail["result"]["chart_data"]["tag_analysis"]["layers"]["A"][0]["tag"] == "银行"
         assert detail["result"]["data_until"] == "2026-01-07"
 
     def test_daemon_single_round_done(self, cloud, mock_engine, tmp_path):
@@ -264,3 +279,23 @@ class TestCloudClientRetry:
 
         args = build_parser().parse_args(["worker", "--once", "--poll-seconds", "1"])
         assert args.command == "worker" and args.once and args.poll_seconds == 1.0
+
+
+class TestTrimTagAnalysis:
+    def test_truncates_symbols_keeps_aggregates(self):
+        symbols = [{"ts_code": f"{i:06d}.SZ", "total_pnl": 1000 - i, "trades": 1, "win_rate": 0.5}
+                   for i in range(150)]
+        data = {"ok": True, "layers": {"A": [{"tag": "银行", "total_pnl": 123, "symbols": symbols}],
+                                       "B": [], "C": []}, "notes": {}}
+        trimmed = runner_mod.trim_tag_analysis(data)
+        item = trimmed["layers"]["A"][0]
+        assert item["total_pnl"] == 123  # 板块聚合不动
+        assert item["symbols_total"] == 150 and item["symbols_truncated"] is True
+        assert len(item["symbols"]) == 100  # TOP 50 + BOTTOM 50
+        assert item["symbols"][0]["total_pnl"] == 1000
+        assert item["symbols"][-1]["total_pnl"] == 1000 - 149
+
+    def test_small_set_untouched(self):
+        data = {"layers": {"A": [{"tag": "x", "symbols": [{"ts_code": "1"}]}]}}
+        item = runner_mod.trim_tag_analysis(data)["layers"]["A"][0]
+        assert item["symbols_truncated"] is False and item["symbols_total"] == 1

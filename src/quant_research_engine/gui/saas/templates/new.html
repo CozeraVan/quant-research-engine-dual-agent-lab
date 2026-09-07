@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}新建回测 · A股回测台{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="topbar">
+    <div class="brand">新建回测</div>
+    <div><a href="/saas/">返回我的回测</a></div>
+  </div>
+  <div class="card">
+    <div class="tabs">
+      <div class="tab active" id="tab-nl" data-tab="nl">用一句话描述</div>
+      <div class="tab" id="tab-wizard" data-tab="wizard">快速向导</div>
+    </div>
+
+    <div id="pane-nl">
+      <label for="nl-input">描述你的交易策略</label>
+      <textarea id="nl-input" rows="4" placeholder="例如：RSI 低于 30 时买入，高于 70 时卖出"></textarea>
+      <div class="chips" id="nl-examples">
+        <span class="chip">RSI 低于 30 买入，高于 70 卖出</span>
+        <span class="chip">股价跌破布林下轨买入，回到中轨卖出</span>
+        <span class="chip">MACD 金叉买入，死叉卖出</span>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn" id="btn-nl-compile">生成策略</button>
+      </div>
+      <div id="nl-status" class="muted" style="margin-top:8px"></div>
+      <div id="nl-yaml-wrap" class="hidden" style="margin-top:12px">
+        <label for="nl-yaml">策略定义（可编辑）</label>
+        <textarea id="nl-yaml" rows="12" style="font-family:monospace;font-size:13px"></textarea>
+      </div>
+    </div>
+
+    <div id="pane-wizard" class="hidden">
+      <div class="row">
+        <div>
+          <label for="wz-group">因子类别</label>
+          <select id="wz-group"><option value="">加载中…</option></select>
+        </div>
+        <div>
+          <label for="wz-factor">因子</label>
+          <select id="wz-factor"><option value="">先选类别</option></select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="wz-entry-op">买入条件：因子值</label>
+          <select id="wz-entry-op"><option value="<=">低于（超跌买入）</option><option value=">=">高于（强势买入）</option></select>
+        </div>
+        <div>
+          <label for="wz-entry-val">阈值</label>
+          <input id="wz-entry-val" type="number" value="30" step="any">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="wz-exit-op">卖出条件：因子值</label>
+          <select id="wz-exit-op"><option value=">=">高于（止盈/超买卖出）</option><option value="<=">低于</option></select>
+        </div>
+        <div>
+          <label for="wz-exit-val">阈值</label>
+          <input id="wz-exit-val" type="number" value="70" step="any">
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn" id="btn-wz-build">生成策略</button>
+      </div>
+      <div id="wz-status" class="muted" style="margin-top:8px"></div>
+      <div id="wz-yaml-wrap" class="hidden" style="margin-top:12px">
+        <label for="wz-yaml">策略定义（可编辑）</label>
+        <textarea id="wz-yaml" rows="12" style="font-family:monospace;font-size:13px"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="run-card">
+    <h2>回测设置</h2>
+    <details>
+      <summary>高级选项（回测区间 / 资金量，有默认值）</summary>
+      <div class="row">
+        <div><label for="opt-start">开始日期</label><input id="opt-start" type="date"></div>
+        <div><label for="opt-end">结束日期</label><input id="opt-end" type="date"></div>
+        <div><label for="opt-cash">资金量（元）</label><input id="opt-cash" type="number" value="1000000"></div>
+      </div>
+    </details>
+    <div id="smoke-box" style="margin-top:12px">
+      <button class="btn" id="btn-smoke">先试算一下（小样本）</button>
+      <span id="smoke-status" class="muted" style="margin-left:8px"></span>
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn big" id="btn-submit" disabled>开始全量回测</button>
+    </div>
+    <div id="run-error" class="error"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+requireLogin();
+
+// --- tab 切换 ---
+let activeTab = 'nl';
+for (const tab of document.querySelectorAll('.tab')){
+  tab.addEventListener('click', () => {
+    activeTab = tab.dataset.tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
+    document.getElementById('pane-nl').classList.toggle('hidden', activeTab !== 'nl');
+    document.getElementById('pane-wizard').classList.toggle('hidden', activeTab !== 'wizard');
+  });
+}
+
+// --- 示例 chips ---
+for (const chip of document.querySelectorAll('#nl-examples .chip')){
+  chip.addEventListener('click', () => { document.getElementById('nl-input').value = chip.textContent; });
+}
+
+// --- 默认区间：近 2 年 ---
+(function(){
+  const end = new Date();
+  const start = new Date(end.getFullYear() - 2, end.getMonth(), end.getDate());
+  const iso = d => d.toISOString().slice(0, 10);
+  document.getElementById('opt-end').value = iso(end);
+  document.getElementById('opt-start').value = iso(start);
+})();
+
+function currentYaml(){
+  return document.getElementById(activeTab === 'nl' ? 'nl-yaml' : 'wz-yaml').value.trim();
+}
+function showYaml(text){
+  const wrap = document.getElementById(activeTab === 'nl' ? 'nl-yaml-wrap' : 'wz-yaml-wrap');
+  const area = document.getElementById(activeTab === 'nl' ? 'nl-yaml' : 'wz-yaml');
+  wrap.classList.remove('hidden');
+  area.value = text;
+  document.getElementById('run-card').classList.remove('hidden');
+  resetSmoke();
+}
+function resetSmoke(){
+  document.getElementById('btn-submit').disabled = true;
+  document.getElementById('smoke-status').textContent = '';
+}
+
+// --- NL 编译 ---
+document.getElementById('btn-nl-compile').addEventListener('click', async () => {
+  const description = document.getElementById('nl-input').value.trim();
+  if (!description) return;
+  const status = document.getElementById('nl-status');
+  status.textContent = '正在生成策略…';
+  const resp = await apiFetch('/api/saas/nl/compile', {json: {description}});
+  const data = await resp.json();
+  if (!data.ok){ status.textContent = data.error || '生成失败，请换个说法试试'; return; }
+  status.textContent = (data.warnings || []).join('；') || '生成成功，可检查后开始试算';
+  showYaml(data.yaml);
+});
+
+// --- 快速向导：因子目录 ---
+let factorGroups = [];
+async function loadFactors(){
+  const resp = await apiFetch('/api/saas/factors');
+  const data = await resp.json();
+  const groupSel = document.getElementById('wz-group');
+  if (!data.ok){ groupSel.innerHTML = '<option value="">因子库暂不可用</option>'; return; }
+  factorGroups = data.groups;
+  groupSel.innerHTML = factorGroups.map((g, i) => `<option value="${i}">${g.label}</option>`).join('');
+  fillFactors(0);
+}
+function fillFactors(gi){
+  const items = (factorGroups[gi] || {}).items || [];
+  document.getElementById('wz-factor').innerHTML =
+    items.map((it, i) => `<option value="${i}">${it.label}</option>`).join('');
+}
+document.getElementById('wz-group').addEventListener('change', e => fillFactors(Number(e.target.value)));
+loadFactors();
+
+document.getElementById('btn-wz-build').addEventListener('click', () => {
+  const g = factorGroups[Number(document.getElementById('wz-group').value)];
+  const item = (g.items || [])[Number(document.getElementById('wz-factor').value)];
+  if (!item) return;
+  const entryOp = document.getElementById('wz-entry-op').value;
+  const entryVal = document.getElementById('wz-entry-val').value;
+  const exitOp = document.getElementById('wz-exit-op').value;
+  const exitVal = document.getElementById('wz-exit-val').value;
+  let factorRef, name, fields;
+  if (item.table === 'public.stock_daily'){
+    name = item.column;
+    fields = `  market_fields: [open, high, low, close, pre_close, vol, amount]`;
+    factorRef = null;
+  } else {
+    name = item.column;
+    fields = `  market_fields: [open, high, low, close, pre_close, vol, amount]\n  factor_fields:\n    f0: ${item.table}.${item.column}`;
+    factorRef = 'f0';
+  }
+  const ref = factorRef || name;
+  const yaml = `experiment:\n  name: wizard_${name}\ndata:\n${fields}\nsignal:\n  entry: (${ref} ${entryOp} ${entryVal})\n  exit: (${ref} ${exitOp} ${exitVal})\nevaluation:\n  forward_return_horizons: [1, 3, 5, 10, 20]\nholding:\n  max_holding_days: 20\nrisk:\n  stop_loss_pct: 0.08\n`;
+  document.getElementById('wz-status').textContent = '已生成，可检查后开始试算';
+  showYaml(yaml);
+});
+
+// --- 试算 → 提交 ---
+let smokePassed = false;
+async function createJob(kind){
+  const yaml = currentYaml();
+  if (!yaml){ document.getElementById('run-error').textContent = '请先生成策略'; return null; }
+  const resp = await apiFetch('/api/saas/jobs', {json: {
+    yaml, kind,
+    params: {
+      start: document.getElementById('opt-start').value,
+      end: document.getElementById('opt-end').value,
+      initial_cash: Number(document.getElementById('opt-cash').value) || 1000000,
+    },
+  }});
+  const data = await resp.json();
+  if (!resp.ok || !data.ok){
+    document.getElementById('run-error').textContent = data.error || '提交失败';
+    return null;
+  }
+  return data.job_id;
+}
+async function pollJob(jobId){
+  for (;;){
+    await new Promise(r => setTimeout(r, 3000));
+    const resp = await apiFetch('/api/saas/jobs/' + jobId);
+    const data = await resp.json();
+    const status = data.job && data.job.status;
+    if (status === 'done') return data.job;
+    if (status === 'failed' || status === 'cancelled') throw new Error(data.job.error || '任务失败');
+  }
+}
+
+document.getElementById('btn-smoke').addEventListener('click', async () => {
+  const box = document.getElementById('smoke-status');
+  document.getElementById('run-error').textContent = '';
+  box.textContent = '试算运行中（小样本，通常 1 分钟内）…';
+  document.getElementById('btn-smoke').disabled = true;
+  try {
+    const jobId = await createJob('smoke');
+    if (jobId === null) return;
+    await pollJob(jobId);
+    box.textContent = '✓ 试算通过，可以开始全量回测';
+    smokePassed = true;
+    document.getElementById('btn-submit').disabled = false;
+  } catch (e) {
+    box.textContent = '试算未通过：' + e.message;
+  } finally {
+    document.getElementById('btn-smoke').disabled = false;
+  }
+});
+
+document.getElementById('btn-submit').addEventListener('click', async () => {
+  if (!smokePassed) return;
+  document.getElementById('btn-submit').disabled = true;
+  const jobId = await createJob('full');
+  if (jobId !== null) location.href = '/saas/jobs/' + jobId;
+  else document.getElementById('btn-submit').disabled = false;
+});
+</script>
+{% endblock %}

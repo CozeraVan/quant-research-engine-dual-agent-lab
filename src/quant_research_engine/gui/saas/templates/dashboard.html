@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}我的回测 · A股回测台{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="topbar">
+    <div class="brand">A股回测台</div>
+    <div><span class="muted" id="user-label"></span><a href="#" id="btn-logout">退出登录</a></div>
+  </div>
+  <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <h2>我的回测</h2>
+      <div class="muted">数据为静态快照，每份报告标注数据截止日期</div>
+    </div>
+    <a class="btn big" href="/saas/new" id="btn-new-job">新建回测</a>
+  </div>
+  <div class="card">
+    <table id="jobs-table">
+      <thead><tr><th>策略</th><th>类型</th><th>状态</th><th>创建时间</th><th>数据截止</th><th></th></tr></thead>
+      <tbody id="jobs-tbody"><tr><td colspan="6" class="muted">加载中…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+requireLogin();
+document.getElementById('btn-logout').addEventListener('click', (e) => {
+  e.preventDefault();
+  localStorage.removeItem(SAAS_TOKEN_KEY);
+  location.href = '/saas/login';
+});
+
+const KIND_LABEL = {smoke: '小样本试算', full: '全量回测'};
+function fmtTime(iso){ return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
+
+async function load(){
+  const [meResp, jobsResp] = await Promise.all([apiFetch('/api/saas/me'), apiFetch('/api/saas/jobs')]);
+  const me = await meResp.json();
+  if (me.ok) document.getElementById('user-label').textContent = me.user.email || me.user.phone || '';
+  const data = await jobsResp.json();
+  const tbody = document.getElementById('jobs-tbody');
+  if (!data.jobs || !data.jobs.length){
+    tbody.innerHTML = '<tr><td colspan="6" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  for (const job of data.jobs){
+    const tr = document.createElement('tr');
+    const status = STATUS_LABEL[job.status] || job.status;
+    let action = '';
+    if (job.status === 'done') action = `<a class="btn secondary" href="/saas/jobs/${job.id}">查看结果</a>`;
+    else if (job.status === 'failed') action = `<span class="muted" title="${job.error || ''}">失败原因</span>`;
+    else action = `<a class="muted" href="/saas/jobs/${job.id}">查看进度</a>`;
+    const name = '策略 #' + job.strategy_id;
+    tr.innerHTML = `<td>${name}</td><td>${KIND_LABEL[job.kind] || job.kind}</td>`
+      + `<td><span class="badge ${job.status}">${status}</span></td>`
+      + `<td>${fmtTime(job.created_at)}</td>`
+      + `<td>${job.data_until || '—'}</td>`
+      + `<td>${action}</td>`;
+    if (job.status === 'failed' && job.error){
+      const errTr = document.createElement('tr');
+      errTr.innerHTML = `<td colspan="6" class="error" style="border-bottom:1px solid var(--line)">${job.error}</td>`;
+      tbody.appendChild(tr); tbody.appendChild(errTr);
+    } else {
+      tbody.appendChild(tr);
+    }
+  }
+  // 有进行中的任务时每 5s 刷新一次列表
+  if (data.jobs.some(j => ['queued', 'leased', 'running'].includes(j.status))) setTimeout(load, 5000);
+}
+load();
+</script>
+{% endblock %}

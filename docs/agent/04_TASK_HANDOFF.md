@@ -2,7 +2,65 @@
 
 ## Task ID
 
-QRE-SAAS-M3 (CR-0004 M3：Worker 客户端本体——出站轮询云端任务、本地跑回测、结果回传)
+QRE-SAAS-004 (CR-0004 M1：SaaS 四功能前端——登录/工作台/新建回测/结果页)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+全部在 `gui/saas/` 内：templates/{base,login,dashboard,new,job}.html +
+saas/app.py 挂 4 个页面路由与 2 个 API。vanilla JS 无框架（同 admin.html
+风格），echarts 复用 gui/static/echarts.min.js（saas app static_folder 指向
+共享目录，不双份）。页面：/saas/login（验证码两步、token localStorage、
+登录即注册）；/saas/（任务列表+状态徽章+每 5s 自刷+失败原因）；
+/saas/new（NL tab：示例 chips→POST /api/saas/nl/compile→YAML 可编辑；
+向导 tab：/api/saas/factors 二级下拉+出入场阈值+高级选项折叠；强制先
+smoke 试算通过才允许提交 full）；/saas/jobs/<id>（指标卡+净值 vs 基准+
+回撤图，数据全来自 result.chart_data，5s 轮询，下载按钮 artifacts 空隐藏
+TODO(M4)）。API：/api/saas/nl/compile 直接调既有 compile_nl（含
+factor_correction 纠错层，LLM key 服务端 env）；/api/saas/factors 直接调
+factor_wizard.build_factor_groups；GET /api/saas/jobs/<id> 收紧为登录+属主
+校验（他人 404）；列表加 data_until。未 commit、未动 lab*.py/8080。
+测试 tests/test_gui_saas_pages.py +11（页面 200/关键元素/echarts 静态/
+NL 与因子路由 401·400·200·503/groups 结构）；既有 saas/worker 测试补
+鉴权头。全量回归见 05。遗留：下载按钮接 OSS（M4）、真实浏览器观感
+走查。注：归因热力已同日补齐（见 05 QRE-SAAS-004 补条目）——runner
+chart_data 补 tag_analysis（trim：板块聚合全量+个股 TOP/BOTTOM 各 50），
+job.html 加行业 treemap + 板块下钻 + 个股贡献榜。
+
+---
+
+## Archive: QRE-SAAS-005 (CR-0004 M2：NL 生成代码沙箱加固——表达式 AST 白名单 + Docker 隔离执行器)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+威胁模型：NL 写策略=声明式 YAML 无代码执行，但信号表达式求值器
+（evaluation/signals.py）允许任意 getattr/方法调用（注入面）；NL 写因子
+生成 Python 源码在 indicators_tushare subprocess 执行（唯一真执行点，
+已有 AST 白名单但无执行隔离）。实现（全新文件，引擎零改动）：
+①`security/yaml_guard.py`——validate_expression AST 白名单
+（禁裸调用/裸属性/下划线标识符/字符串常量/下标等，方法链白名单 30 个）
++ validate_strategy_yaml 严格 schema（节/键白名单、类型、因子引用标识符
++schema 白名单防 SQL 注入）；接线 worker runner.execute_job 执行前强制，
+不过 → job failed。②`worker/sandbox.py`——run_sandboxed（禁网/512m/
+1cpu/100 pids/只读根/nobody/120s 强杀按名 kill/输出限 1MB），docker 前缀
+可注入（SANDBOX_DOCKER_SUDO）。③deploy/saas/sandbox.Dockerfile
+（python:3.12-slim+pandas/numpy/pandas_ta，本次未实机构建，测试用
+python:3.12-slim 直跑）。未 commit、未动 lab*.py/8080、未碰
+factor_correction.py。测试 tests/test_security_sandbox.py 34 passed
+（schema 正反例 + 真容器禁网/内存/超时/只读 6 条）。遗留：因子冒烟
+沙箱化接入 factor-create 流程（禁网下数据须预导出挂载，M4 时定）、
+沙箱镜像实机构建、SaaS 前端入口挂 yaml_guard（8081 裁剪切片）。
+
+---
+
+## Archive: QRE-SAAS-M3 (CR-0004 M3：Worker 客户端本体——出站轮询云端任务、本地跑回测、结果回传)
 
 ## Current Status
 

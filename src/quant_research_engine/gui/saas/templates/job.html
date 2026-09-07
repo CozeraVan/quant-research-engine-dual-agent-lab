@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}回测结果 · A股回测台{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="topbar">
+    <div class="brand">回测结果</div>
+    <div><a href="/saas/">返回我的回测</a></div>
+  </div>
+
+  <div class="card" id="status-card">
+    <div id="job-status-line"><span class="badge queued" id="job-badge">加载中</span> <span class="muted" id="job-status-note"></span></div>
+    <div class="muted" id="job-meta-line" style="margin-top:8px"></div>
+  </div>
+
+  <div id="result-area" class="hidden">
+    <div class="metric-grid" id="metric-cards"></div>
+    <div class="card"><h2>净值曲线 vs 基准</h2><div id="chart-equity" class="chart"></div></div>
+    <div class="card"><h2>回撤</h2><div id="chart-drawdown" class="chart" style="height:200px"></div></div>
+    <div class="card hidden" id="attr-card">
+      <h2>板块贡献</h2>
+      <div class="muted" style="margin-bottom:8px">按行业/板块汇总策略盈亏（红=赚钱，绿=亏钱；面积=盈亏规模）</div>
+      <div id="chart-attr" class="chart" style="height:360px"></div>
+      <div id="attr-detail" class="hidden" style="margin-top:12px">
+        <h2 id="attr-detail-title">板块明细</h2>
+        <div class="muted hidden" id="attr-detail-note" style="margin-bottom:4px"></div>
+        <table><thead><tr><th>股票</th><th>名称</th><th>净盈亏</th><th>交易数</th><th>胜率</th></tr></thead>
+        <tbody id="attr-detail-tbody"></tbody></table>
+      </div>
+    </div>
+    <div class="card hidden" id="contrib-card">
+      <h2>个股贡献榜</h2>
+      <div style="margin-bottom:8px">
+        <button class="btn secondary" id="btn-contrib-top">赚钱最多</button>
+        <button class="btn secondary" id="btn-contrib-bottom">亏钱最多</button>
+      </div>
+      <table><thead><tr><th>股票</th><th>名称</th><th>净盈亏</th><th>交易数</th><th>胜率</th></tr></thead>
+      <tbody id="contrib-tbody"></tbody></table>
+    </div>
+    <!-- TODO(M4 OSS)：artifacts 非空时显示「下载报告」按钮（明细文件走 OSS 直传） -->
+    <div class="card hidden" id="download-card"><a class="btn" id="btn-download">下载报告</a></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/echarts.min.js"></script>
+<script>
+requireLogin();
+const JOB_ID = {{ job_id }};
+
+function renderMetrics(metrics){
+  if (!metrics) return;
+  const defs = [
+    ['total_return', '总收益率', pct], ['annual_return', '年化收益', pct],
+    ['excess_return', '超额收益·vs持有不动', pct], ['max_drawdown', '最大回撤', pct],
+    ['win_rate', '胜率', pct], ['sharpe', '夏普比率', v => v === null ? '—' : Number(v).toFixed(2)],
+  ];
+  const box = document.getElementById('metric-cards');
+  box.innerHTML = '';
+  for (const [key, label, fmt] of defs){
+    const v = metrics[key];
+    const div = document.createElement('div');
+    div.className = 'metric';
+    const cls = typeof v === 'number' ? (v >= 0 ? 'pos' : 'neg') : '';
+    div.innerHTML = `<div class="muted">${label}</div><div class="v ${cls}">${fmt(v)}</div>`;
+    box.appendChild(div);
+  }
+}
+
+function renderCharts(chart){
+  if (!chart || !chart.dates || !chart.equity) return;
+  const dates = chart.dates;
+  const norm = arr => {  // 归一化为起点 0% 的累计收益率
+    const base = arr.find(v => v !== null && v !== undefined);
+    return arr.map(v => (v === null || v === undefined || !base) ? null : (v / base - 1) * 100);
+  };
+  const series = [{name: '策略', type: 'line', data: norm(chart.equity), showSymbol: false}];
+  const benches = chart.benchmarks || {};
+  const first = Object.keys(benches)[0];
+  if (first) series.push({name: benches[first].name, type: 'line', data: norm(benches[first].closes), showSymbol: false, lineStyle: {opacity: 0.6}});
+  echarts.init(document.getElementById('chart-equity')).setOption({
+    tooltip: {trigger: 'axis'},
+    legend: {top: 0},
+    grid: {left: 50, right: 16, top: 30, bottom: 24},
+    xAxis: {type: 'category', data: dates},
+    yAxis: {type: 'value', axisLabel: {formatter: '{value}%'}},
+    series,
+  });
+  if (chart.drawdown_pct){
+    echarts.init(document.getElementById('chart-drawdown')).setOption({
+      tooltip: {trigger: 'axis'},
+      grid: {left: 50, right: 16, top: 10, bottom: 24},
+      xAxis: {type: 'category', data: dates},
+      yAxis: {type: 'value', axisLabel: {formatter: '{value}%'}},
+      series: [{name: '回撤', type: 'line', data: chart.drawdown_pct.map(v => v === null ? null : v * 100), showSymbol: false, areaStyle: {opacity: 0.15}}],
+    });
+  }
+}
+
+// --- 板块归因（tag_analysis.layers.A 行业层；红=赚/绿=亏，与 A 股习惯一致） ---
+function pnlColor(v){
+  if (v > 0) return 'rgba(220,38,38,0.75)';
+  if (v < 0) return 'rgba(22,163,74,0.75)';
+  return 'rgba(156,163,175,0.4)';
+}
+function fmtPnl(v){ return (v >= 0 ? '+' : '') + (v / 10000).toFixed(1) + ' 万'; }
+
+function renderAttribution(attr){
+  if (!attr || !attr.layers) return;
+  const items = (attr.layers.A || []).filter(it => it.tag !== '未标记');
+  const untagged = (attr.layers.A || []).find(it => it.tag === '未标记');
+  // 个股贡献榜：全层聚合去重（同一股可能出现在多个板块，按股合并）
+  const bySymbol = {};
+  for (const items2 of Object.values(attr.layers)){
+    for (const it of items2 || []){
+      for (const s of it.symbols || []){
+        const cur = bySymbol[s.ts_code];
+        if (!cur || Math.abs(s.total_pnl) > Math.abs(cur.total_pnl)) bySymbol[s.ts_code] = s;
+      }
+    }
+  }
+  const contrib = Object.values(bySymbol);
+  if (contrib.length){
+    document.getElementById('contrib-card').classList.remove('hidden');
+    const fill = (list) => {
+      document.getElementById('contrib-tbody').innerHTML = list.map(s =>
+        `<tr><td>${s.ts_code}</td><td>${s.name || ''}</td>`
+        + `<td style="color:${s.total_pnl >= 0 ? 'var(--red)' : 'var(--green)'}">${fmtPnl(s.total_pnl)}</td>`
+        + `<td>${s.trades}</td><td>${pct(s.win_rate)}</td></tr>`).join('');
+    };
+    document.getElementById('btn-contrib-top').addEventListener('click', () =>
+      fill([...contrib].sort((a, b) => b.total_pnl - a.total_pnl).slice(0, 20)));
+    document.getElementById('btn-contrib-bottom').addEventListener('click', () =>
+      fill([...contrib].sort((a, b) => a.total_pnl - b.total_pnl).slice(0, 20)));
+    document.getElementById('btn-contrib-top').click();
+  }
+  if (!items.length) return;
+  document.getElementById('attr-card').classList.remove('hidden');
+  const chart = echarts.init(document.getElementById('chart-attr'));
+  chart.setOption({
+    tooltip: {formatter: p => `${p.name}<br>净盈亏 ${fmtPnl(p.value)}`},
+    series: [{
+      type: 'treemap', roam: false, nodeClick: false,
+      breadcrumb: {show: false},
+      label: {formatter: p => `${p.name}\n${fmtPnl(p.value)}`},
+      data: items.map(it => ({
+        name: it.tag, value: Math.abs(it.total_pnl),
+        itemStyle: {color: pnlColor(it.total_pnl)},
+        _raw: it,
+      })),
+    }],
+  });
+  chart.on('click', p => {
+    const it = p.data && p.data._raw;
+    if (!it) return;
+    document.getElementById('attr-detail').classList.remove('hidden');
+    document.getElementById('attr-detail-title').textContent = it.tag + ' · 个股明细';
+    const note = document.getElementById('attr-detail-note');
+    if (it.symbols_truncated){
+      note.classList.remove('hidden');
+      note.textContent = `共 ${it.symbols_total} 只，仅显示盈亏前/后各 50`;
+    } else note.classList.add('hidden');
+    document.getElementById('attr-detail-tbody').innerHTML = (it.symbols || []).map(s =>
+      `<tr><td>${s.ts_code}</td><td>${s.name || ''}</td>`
+      + `<td style="color:${s.total_pnl >= 0 ? 'var(--red)' : 'var(--green)'}">${fmtPnl(s.total_pnl)}</td>`
+      + `<td>${s.trades}</td><td>${pct(s.win_rate)}</td></tr>`).join('');
+    document.getElementById('attr-detail').scrollIntoView({behavior: 'smooth'});
+  });
+  if (untagged){
+    // 「未标记」块只并入贡献榜，不进热力图（无行业指向）
+  }
+}
+
+async function poll(){
+  const resp = await apiFetch('/api/saas/jobs/' + JOB_ID);
+  const data = await resp.json();
+  const job = data.job;
+  const badge = document.getElementById('job-badge');
+  badge.className = 'badge ' + job.status;
+  badge.textContent = STATUS_LABEL[job.status] || job.status;
+  document.getElementById('job-meta-line').textContent =
+    `任务 #${job.id} · ${job.kind === 'smoke' ? '小样本试算' : '全量回测'} · 创建于 ${(job.created_at || '').replace('T', ' ').slice(0, 16)}`;
+
+  if (job.status === 'done'){
+    document.getElementById('job-status-note').textContent = job.result && job.result.data_until ? `数据截止 ${job.result.data_until}` : '';
+    document.getElementById('result-area').classList.remove('hidden');
+    const result = job.result || {};
+    renderMetrics(result.summary && result.summary.metrics ? result.summary.metrics : result.summary);
+    renderCharts(result.chart_data);
+    renderAttribution(result.chart_data && result.chart_data.tag_analysis);
+    const artifacts = (result && result.artifacts) || [];
+    if (artifacts.length) document.getElementById('download-card').classList.remove('hidden');
+    return;
+  }
+  if (job.status === 'failed'){
+    document.getElementById('job-status-note').textContent = '失败原因：' + (job.error || '未知');
+    return;
+  }
+  document.getElementById('job-status-note').textContent =
+    job.status === 'queued' ? '任务排队中，Worker 空闲后即开始（每 5 秒自动刷新）' : '正在回测，请稍候（每 5 秒自动刷新）';
+  setTimeout(poll, 5000);
+}
+poll();
+</script>
+{% endblock %}
