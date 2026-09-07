@@ -45,17 +45,17 @@ def test_lab_home_200_two_tabs(lab_client):
     resp = lab_client.get("/")
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    # 三个 tab 标记
+    # 两个 tab 标记（QRE-SAAS-011：「新增因子」tab 已删，「回测管理」更名「回测记录」）
     assert 'data-tab="strategy"' in html
     assert "新增策略" in html
     assert 'data-tab="onboard"' in html
-    assert "回测管理" in html
-    assert 'data-tab="factor"' in html
-    assert "新增因子" in html
+    assert "回测记录" in html
+    assert 'data-tab="factor"' not in html
+    assert "新增因子" not in html
     # 新增策略 tab 关键交互（自 index.html strategy tab 移植）
     assert 'id="tab-strategy"' in html
     assert 'id="btn-nl-compile"' in html
-    assert 'id="btn-save-sandbox"' in html
+    assert 'id="btn-save-sandbox"' not in html  # QRE-SAAS-011：一键回测，不再有单独「存入沙箱」
     assert 'id="sandbox-panel"' in html
     assert 'id="btn-deep-validate"' in html
     # 回测管理 tab：回测记录列表（QRE-GUI-CONSOL-040，原策略注册表已移除）
@@ -84,28 +84,19 @@ def test_lab_does_not_mount_full_console_routes(lab_client):
 # --- 新增因子 tab（QRE-GUI-CONSOL-039：自 8080 index.html 平移，三路径保留） ---
 
 
-def test_lab_factor_tab_content(lab_client):
+def test_lab_factor_tab_removed(lab_client):
+    """QRE-SAAS-011：「新增因子」tab 及其全部交互已删；缺因子走申请弹窗。"""
     resp = lab_client.get("/")
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
-    # tab 容器与三路径
-    assert 'id="tab-factor"' in html
-    assert "路径 A" in html and "补数据" in html
-    assert "路径 B" in html and "造新指标" in html
-    assert "路径 C" in html and "Alpha191" in html
-    # 路径 A（factor-admin 补周期）关键元素
-    assert 'id="wz-admin-name"' in html
-    assert 'id="wz-admin-submit"' in html
-    assert "wzGotoFactorAdmin" in html
-    # 路径 B（factor-create 全新指标）关键元素
-    assert 'id="fc-code"' in html
-    assert 'id="fc-check"' in html
-    assert 'id="fc-smoke"' in html
-    assert 'id="fc-promote"' in html
-    assert 'id="fc-sandbox-list"' in html
-    # 冒烟轮询与状态文案（自 8080 平移的 JS）
-    assert "/api/factor-create/smoke/" in html
-    assert "wzGotoFactorAdmin" in html
+    for marker in ('id="tab-factor"', 'id="fc-code"', 'id="fc-promote"',
+                   'id="wz-admin-submit"', "wzGotoFactorAdmin",
+                   "/api/factor-create/smoke/", 'data-tab="factor"'):
+        assert marker not in html, marker
+    # 缺因子申请弹窗（NL 编译 missing_factors 时弹出）
+    assert 'id="factor-modal"' in html
+    assert "提交因子需求" in html and "换个策略" in html
+    assert "/api/lab/factor-requests" in html
 
 
 def test_lab_factor_apis_available(lab_client, monkeypatch, tmp_path):
@@ -158,17 +149,23 @@ def test_lab_strategy_three_entry_tabs(lab_client):
     # 高级选项（可选）默认折叠
     assert 'data-section="wz-advanced"' in html
     assert 'id="sec-wz-advanced" class="section-body collapsed"' in html
-    # 高级 YAML 底部冒烟按钮（两步确认第 1 步）
+    # 一键回测（QRE-SAAS-011：流程后台化，单一「开始回测」按钮，无中间术语）
     assert 'id="btn-save-smoke"' in html
-    assert "正式回测（晋升）" in html
-    # 向导内鼠标-only 闭环（QRE-GUI-LAB-ENTRY-022）：冒烟按钮在向导页 + 去高级 YAML 为次按钮
+    assert "正式回测（晋升）" not in html
+    # 向导页同款一键按钮 + 去高级 YAML 为次按钮
     assert 'id="wz-save-smoke"' in html
     assert "去高级 YAML 修改详情" in html
-    assert "saveAndSmoke" in html  # 向导/高级共用冒烟流程
+    assert "startBacktest" in html  # 向导/高级共用一键流程
+    # 可见文案去术语（沙箱/冒烟/晋升不出现；id/类名等技术标识不受限）
+    import re as _re
+    visible = _re.sub(r"<!--.*?-->", "", html, flags=_re.S)
+    visible = _re.sub(r"<script>.*?</script>", "", visible, flags=_re.S)
+    for word in ("沙箱", "冒烟", "晋升"):
+        assert word not in visible, word
     # 回测参数：必选仅回测区间与标的范围；其余收进折叠的高级参数
     assert '回测区间 <span class="req">*</span>' in html
     assert '标的范围 <span class="req">*</span>' in html
-    assert 'id="param-all-market" checked' in html
+    assert 'id="scope-all"' in html and 'name="param-scope"' in html  # QRE-SAAS-012：标的范围改单选
     assert 'id="sec-adv-params" class="section-body collapsed"' in html
     assert 'id="param-commission" value="0.0003"' in html
     assert 'id="param-min-commission" value="5.0"' in html
@@ -351,7 +348,10 @@ def test_create_app_routes_unchanged():
                 "/lab/runs/<run_id>/symbol/<ts_code>",
                 "/api/lab/runs/<run_id>/symbol/<ts_code>/detail",
                 "/api/lab/runs",                          # QRE-GUI-CONSOL-040
-                "/api/lab/runs/<run_id>/delete"}          # QRE-GUI-CONSOL-040
+                "/api/lab/runs/<run_id>/delete",          # QRE-GUI-CONSOL-040
+                "/api/lab/factor-requests",             # QRE-SAAS-011（缺因子申请，JSONL）
+                "/api/lab/universes",                     # QRE-SAAS-012（标的范围归类）
+                "/api/lab/universes/members"}
     assert lab_rules - lab_only <= full_rules
     assert lab_only & full_rules == set()  # 8080 不挂新路由
     # 主控制台专有规律犹在（因子创建/补周期 API 自 QRE-GUI-CONSOL-039 起两应用共享）
@@ -359,3 +359,101 @@ def test_create_app_routes_unchanged():
                  "/api/builder/compile", "/api/admin/market-risk", "/compare"):
         assert rule in full_rules
         assert rule not in lab_rules
+
+
+def test_lab_factor_requests_api(lab_client, monkeypatch, tmp_path):
+    """QRE-SAAS-011：缺因子申请落 JSONL（不连库、不写因子表）。"""
+    import json
+
+    from quant_research_engine.gui import lab as lab_mod
+
+    target = tmp_path / "factor_requests.jsonl"
+    monkeypatch.setattr(lab_mod, "FACTOR_REQUESTS_PATH", target)
+    resp = lab_client.post("/api/lab/factor-requests",
+                           json={"factors": ["rsi_99", " foo_1 ", "rsi_99"], "strategy_name": "s1"})
+    assert resp.status_code == 200 and resp.get_json()["ok"]
+    record = json.loads(target.read_text(encoding="utf-8").strip())
+    assert record["factors"] == ["foo_1", "rsi_99"]  # 去重 + 排序
+    assert record["strategy_name"] == "s1"
+    assert lab_client.post("/api/lab/factor-requests", json={"factors": []}).status_code == 400
+
+
+# --- QRE-SAAS-012：标的范围富化（板块/概念归类） ---
+
+_FAKE_GROUPS = {
+    "ok": True,
+    "groups": [
+        {"group": "sw1", "label": "申万一级行业", "items": [{"key": "电子", "count": 618}]},
+        {"group": "ths", "label": "同花顺概念", "items": [{"key": "华为概念", "count": 770}]},
+    ],
+}
+
+
+def test_lab_universes_api(lab_client, monkeypatch):
+    monkeypatch.setattr("quant_research_engine.gui.universe.list_universes",
+                        lambda db_url=None: _FAKE_GROUPS)
+    monkeypatch.setattr("quant_research_engine.gui.universe.universe_members",
+                        lambda group, key, db_url=None: ["000001.SZ", "600000.SH"])
+    # 路由在 create_lab_app 里 from-import，需重建 app 让补丁生效
+    from quant_research_engine.gui.lab import create_lab_app
+
+    client = create_lab_app().test_client()
+    resp = client.get("/api/lab/universes")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] and data["groups"][0]["items"][0]["count"] == 618
+    resp = client.get("/api/lab/universes/members?group=sw1&key=电子")
+    assert resp.get_json()["codes"] == ["000001.SZ", "600000.SH"]
+
+
+def test_lab_universes_unknown_group_404(lab_client):
+    from quant_research_engine.gui.lab import create_lab_app
+
+    client = create_lab_app().test_client()
+    resp = client.get("/api/lab/universes/members?group=bogus&key=x")
+    assert resp.status_code == 404
+
+
+def test_lab_scope_controls_present(lab_client):
+    html = lab_client.get("/").data.decode("utf-8")
+    assert 'id="scope-all"' in html and 'id="scope-group"' in html and 'id="scope-codes"' in html
+    assert 'id="univ-group"' in html and 'id="univ-key-list"' in html
+    assert "resolveScopeCodes" in html and "/api/lab/universes/members" in html
+    assert "范围较大" in html  # 大范围护栏文案
+    assert "param-all-market" not in html  # 旧 checkbox 已移除
+
+
+def test_universe_members_sql_mapping(monkeypatch):
+    """universe_members 的组→SQL 映射（fake engine，不依赖真实库）。"""
+    from quant_research_engine.gui import universe as u
+
+    queries = []
+
+    class FakeConn:
+        def execute(self, stmt, params=None):
+            queries.append((str(stmt), params))
+            return self
+
+        def fetchall(self):
+            return [("000001.SZ",), ("600000.SH",)]
+
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    class FakeEngine:
+        def connect(self): return FakeConn()
+
+    monkeypatch.setattr(u, "_engine", lambda db_url=None: FakeEngine())
+    codes = u.universe_members("sw1", "电子")
+    assert codes == ["000001.SZ", "600000.SH"]
+    stmt, params = queries[0]
+    assert "申万L1:" in params["tag"] and params["tag"] == "申万L1:电子"
+    assert params["layer"] == "A"
+
+    codes = u.universe_members("industry", "半导体")
+    stmt, params = queries[-1]
+    assert "reference.stock_basic" in stmt
+
+    import pytest
+    with pytest.raises(KeyError):
+        u.universe_members("bogus", "x")

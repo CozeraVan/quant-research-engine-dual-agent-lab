@@ -12,7 +12,19 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-NL-FACTOR-AUTOCORRECT-001 (DONE — 1960 tests green + 4 skipped；awaiting git approval)
+QRE-SAAS-008 (DONE — 8081 重定位为 SaaS staging；awaiting git approval)
+
+2026-09-07（用户决策）：**8081 = SaaS staging（预发），ECS aguhuice.com = 生产**。
+发布流程约定：改动 → 8081 验证 → 用户验收 → 部署 ECS。
+8081 服务（qre-gui-lab，沿用服务名）ExecStart 已切换为 `qre saas --port 8081`
+（lab*.py 代码保留在仓库，仅不再起服务；8080 qre-gui 不动）。环境变量在
+`.env.saas-staging`（0600，gitignore .env.* 覆盖）：SAAS_DB_URL=本地库
+aguhuice_local、SAAS_AUTH_CHANNEL=stub + SAAS_STUB_LOG + SAAS_STUB_ECHO=1
+（staging 专用，生产严禁）。新系统服务 qre-saas-worker（轮询 8081，5s，
+只读账号连本地大库）。新 `qre saas` CLI 子命令。端到端已验证：
+dev_code 登录 → smoke job → worker done（65s）。全量 2054+4 绿。
+未 git commit。
+上一任务：QRE-SAAS-007 (DONE — 2052 tests green + 4 skipped；awaiting git approval)
 
 2026-09-05: NL 编译链路因子名自动纠错层（用户直接指派；8081 gui/lab*.py
 冻结页零改动，改动全在 8080/8081 共用的引擎/编译器侧）。痛点：DeepSeek

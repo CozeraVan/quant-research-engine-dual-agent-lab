@@ -6,18 +6,27 @@
     <div class="brand">A股回测台</div>
     <div><span class="muted" id="user-label"></span><a href="#" id="btn-logout">退出登录</a></div>
   </div>
-  <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+  <div class="panel" style="display:flex;justify-content:space-between;align-items:center">
     <div>
-      <h2>我的回测</h2>
-      <div class="muted">数据为静态快照，每份报告标注数据截止日期</div>
+      <h2>我的回测记录</h2>
+      <div class="opt">数据为静态快照，每份报告标注数据截止日期</div>
     </div>
     <a class="btn big" href="/saas/new" id="btn-new-job">新建回测</a>
   </div>
-  <div class="card">
+  <div class="panel">
     <table id="jobs-table">
-      <thead><tr><th>策略</th><th>类型</th><th>状态</th><th>创建时间</th><th>数据截止</th><th></th></tr></thead>
-      <tbody id="jobs-tbody"><tr><td colspan="6" class="muted">加载中…</td></tr></tbody>
+      <thead><tr><th>策略</th><th>状态</th><th>创建时间</th><th>数据截止</th><th></th></tr></thead>
+      <tbody id="jobs-tbody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
     </table>
+  </div>
+  <div class="panel">
+    <details id="factor-req-details">
+      <summary>我的因子申请（缺因子提交的需求在这里看进度）</summary>
+      <table style="margin-top:12px">
+        <thead><tr><th>因子</th><th>状态</th><th>说明</th><th>提交时间</th></tr></thead>
+        <tbody id="factor-req-tbody"><tr><td colspan="4" class="muted">加载中…</td></tr></tbody>
+      </table>
+    </details>
   </div>
 </div>
 {% endblock %}
@@ -30,7 +39,6 @@ document.getElementById('btn-logout').addEventListener('click', (e) => {
   location.href = '/saas/login';
 });
 
-const KIND_LABEL = {smoke: '小样本试算', full: '全量回测'};
 function fmtTime(iso){ return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
 
 async function load(){
@@ -39,35 +47,51 @@ async function load(){
   if (me.ok) document.getElementById('user-label').textContent = me.user.email || me.user.phone || '';
   const data = await jobsResp.json();
   const tbody = document.getElementById('jobs-tbody');
-  if (!data.jobs || !data.jobs.length){
-    tbody.innerHTML = '<tr><td colspan="6" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
+  // 后台预检任务（kind=smoke）不展示——用户视角只有「正式回测」
+  const jobs = (data.jobs || []).filter(j => j.kind !== 'smoke');
+  if (!jobs.length){
+    tbody.innerHTML = '<tr><td colspan="5" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
     return;
   }
   tbody.innerHTML = '';
-  for (const job of data.jobs){
+  for (const job of jobs){
     const tr = document.createElement('tr');
     const status = STATUS_LABEL[job.status] || job.status;
     let action = '';
-    if (job.status === 'done') action = `<a class="btn secondary" href="/saas/jobs/${job.id}">查看结果</a>`;
-    else if (job.status === 'failed') action = `<span class="muted" title="${job.error || ''}">失败原因</span>`;
-    else action = `<a class="muted" href="/saas/jobs/${job.id}">查看进度</a>`;
-    const name = '策略 #' + job.strategy_id;
-    tr.innerHTML = `<td>${name}</td><td>${KIND_LABEL[job.kind] || job.kind}</td>`
+    if (job.status === 'done') action = `<a class="btn ghost" href="/saas/jobs/${job.id}">查看结果</a>`;
+    else if (job.status === 'failed') action = '';
+    else action = `<a href="/saas/jobs/${job.id}">查看进度</a>`;
+    tr.innerHTML = `<td>${'策略 #' + job.strategy_id}</td>`
       + `<td><span class="badge ${job.status}">${status}</span></td>`
       + `<td>${fmtTime(job.created_at)}</td>`
       + `<td>${job.data_until || '—'}</td>`
       + `<td>${action}</td>`;
+    tbody.appendChild(tr);
     if (job.status === 'failed' && job.error){
       const errTr = document.createElement('tr');
-      errTr.innerHTML = `<td colspan="6" class="error" style="border-bottom:1px solid var(--line)">${job.error}</td>`;
-      tbody.appendChild(tr); tbody.appendChild(errTr);
-    } else {
-      tbody.appendChild(tr);
+      errTr.innerHTML = `<td colspan="5" class="error">${job.error}</td>`;
+      tbody.appendChild(errTr);
     }
   }
-  // 有进行中的任务时每 5s 刷新一次列表
-  if (data.jobs.some(j => ['queued', 'leased', 'running'].includes(j.status))) setTimeout(load, 5000);
+  if (jobs.some(j => ['queued', 'leased', 'running'].includes(j.status))) setTimeout(load, 5000);
 }
+
+const FREQ_STATUS = {pending: '审核中', approved: '已入库', rejected: '未采纳'};
+async function loadFactorRequests(){
+  const resp = await apiFetch('/api/saas/factor-requests');
+  const data = await resp.json();
+  const tbody = document.getElementById('factor-req-tbody');
+  const reqs = data.requests || [];
+  if (!reqs.length){
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">暂无申请</td></tr>';
+    return;
+  }
+  tbody.innerHTML = reqs.map(r =>
+    `<tr><td>${(r.factors || []).join('、')}</td>`
+    + `<td><span class="badge ${r.status === 'approved' ? 'done' : r.status === 'rejected' ? 'failed' : 'queued'}">${FREQ_STATUS[r.status] || r.status}</span></td>`
+    + `<td class="muted">${r.note || '—'}</td><td>${fmtTime(r.created_at)}</td></tr>`).join('');
+}
+loadFactorRequests();
 load();
 </script>
 {% endblock %}

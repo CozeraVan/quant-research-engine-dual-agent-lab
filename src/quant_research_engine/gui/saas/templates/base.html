@@ -5,54 +5,79 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}A股回测台{% endblock %}</title>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--line:#e5e7eb;--text:#1f2937;--muted:#6b7280;--accent:#2563eb;--green:#16a34a;--red:#dc2626;--amber:#d97706}
+/* 观感对齐 lab 版实验台（QRE-SAAS-010：以 lab 页面为蓝本的减法移植） */
+:root{--bg:#f6f7f9;--card:#fff;--line:#e5e7eb;--text:#1f2937;--muted:#888;--accent:#2563eb;--pos:#d43030;--neg:#1a9e4b}
 *{box-sizing:border-box}
-body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
-.container{max-width:960px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
-h1{font-size:20px;margin:8px 0 16px}
-h2{font-size:16px;margin:0 0 12px}
-.btn{display:inline-block;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:15px;cursor:pointer;text-decoration:none}
+body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+.container{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:8px 0 14px}
+h2{font-size:15px;margin:0 0 10px}
+a{color:var(--accent);text-decoration:none}
+.opt{color:var(--muted);font-weight:400}
+.panel,.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:14px}
+.btn{display:inline-block;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:14px;cursor:pointer;text-decoration:none}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
-.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
-.btn.big{font-size:17px;padding:14px 28px}
-input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:15px;background:#fff}
-label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
+.btn.primary,.btn-primary{background:var(--accent);color:#fff}
+.btn.ghost,.btn-ghost,.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+.btn.big{font-size:16px;padding:12px 28px}
+.btn-sm{padding:3px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px}
+input,select,textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff}
+textarea{font-family:inherit}
+textarea.code{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .muted{color:var(--muted);font-size:13px}
-.badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:13px}
-.badge.queued{background:#fef3c7;color:var(--amber)}
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px}
+.badge.queued{background:#fef3c7;color:#d97706}
 .badge.leased,.badge.running{background:#dbeafe;color:var(--accent)}
-.badge.done{background:#dcfce7;color:var(--green)}
-.badge.failed,.badge.cancelled{background:#fee2e2;color:var(--red)}
-table{width:100%;border-collapse:collapse}
-th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);font-size:14px}
+.badge.done{background:#dcfce7;color:var(--neg)}
+.badge.failed,.badge.cancelled{background:#fee2e2;color:var(--pos)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid #f0f0f0}
 th{color:var(--muted);font-weight:500}
-.error{color:var(--red);font-size:14px;margin-top:8px}
+.error{color:var(--pos);font-size:13px;margin-top:8px}
 .row{display:flex;gap:12px;flex-wrap:wrap}
 .row>div{flex:1;min-width:140px}
 .chart{width:100%;height:320px}
-.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-.metric{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}
-.metric .v{font-size:20px;font-weight:600;margin-top:4px}
-.metric .v.pos{color:var(--red)}.metric .v.neg{color:var(--green)}
-.topbar{display:flex;justify-content:space-between;align-items:center;padding:8px 0 16px}
-.topbar .brand{font-size:18px;font-weight:600}
-.topbar a{color:var(--muted);text-decoration:none;font-size:14px;margin-left:16px}
-.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.chip{border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer;background:#fff}
-.chip:hover{border-color:var(--accent);color:var(--accent)}
-details{margin-top:12px}summary{cursor:pointer;color:var(--muted);font-size:14px}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:4px 0 14px}
+.topbar .brand{font-size:17px;font-weight:600}
+.topbar a{color:var(--muted);font-size:13px;margin-left:14px}
 .hidden{display:none}
-.tabs{display:flex;gap:0;border-bottom:2px solid var(--line);margin-bottom:16px}
-.tab{padding:10px 20px;cursor:pointer;font-size:15px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px}
+details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px}
+/* tab（lab 同款） */
+.tabs{border-bottom:2px solid var(--line);margin-bottom:14px;display:flex}
+.tab{padding:8px 18px;cursor:pointer;font-size:14px;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+/* 指标卡 / 信息条（lab_result 同款） */
+.metric-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.metric-card{flex:1;min-width:110px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;text-align:center}
+.metric-card .m-label{font-size:12px;color:var(--muted)}
+.metric-card .m-value{font-size:18px;font-weight:600;margin-top:2px}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.flat{color:#333}
+.meta-chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.meta-chips .chip{font-size:12px;color:#555;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:2px 10px;white-space:nowrap}
+.meta-chips .chip b{color:#333;font-weight:600}
+.chart-box{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:14px}
+.chart-title{font-size:14px;font-weight:600;margin-bottom:4px}
+.chart-title .opt{font-weight:400}
+.chart-empty{color:#999;text-align:center;padding:40px 0;font-size:13px}
+.bench-bar{margin:4px 0 8px;font-size:13px}
+.bench-bar button{margin-right:6px;padding:2px 10px;border:1px solid #d1d5db;border-radius:12px;background:#fff;cursor:pointer;font-size:12px}
+.bench-bar button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tag-tabs{margin-bottom:8px}
+.tag-tabs button{margin-right:6px;padding:3px 14px;border:1px solid #d1d5db;border-radius:12px;background:#fff;cursor:pointer;font-size:13px}
+.tag-tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tag-rank{max-height:220px;overflow:auto;margin-top:8px}
+.tag-rank tr.tag-row{cursor:pointer}
+.tag-rank tr.tag-row:hover{background:#f0f6ff}
 </style>
 </head>
 <body>
 {% block body %}{% endblock %}
 <script>
 // 公共：token 存 localStorage；所有 API 带 Bearer；401 跳登录页
+// （staging 免登录 SAAS_AUTH_BYPASS=1 时路由不返 401，该逻辑不触发）
 const SAAS_TOKEN_KEY = 'saas_token';
+const SAAS_BYPASS = {{ saas_auth_bypass | default(false) | tojson }};  // staging 免登录（QRE-SAAS-009 防刷新环）
 function saasToken(){ return localStorage.getItem(SAAS_TOKEN_KEY) || ''; }
 async function apiFetch(url, opts){
   opts = opts || {};
@@ -62,9 +87,10 @@ async function apiFetch(url, opts){
   if (resp.status === 401){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; throw new Error('unauthorized'); }
   return resp;
 }
-function requireLogin(){ if (!saasToken()) location.href = '/saas/login'; }
+function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saas/login'; }
 function pct(v){ return (v === null || v === undefined) ? '—' : (v * 100).toFixed(2) + '%'; }
 function num(v){ return (v === null || v === undefined) ? '—' : Number(v).toLocaleString('zh-CN', {maximumFractionDigits: 2}); }
+function cls(v){ return v == null ? 'flat' : (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat')); }
 const STATUS_LABEL = {queued:'排队中', leased:'运行中', running:'运行中', done:'已完成', failed:'失败', cancelled:'已取消'};
 </script>
 {% block scripts %}{% endblock %}

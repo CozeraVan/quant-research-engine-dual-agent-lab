@@ -1,0 +1,39 @@
+# QRE SaaS staging（预发）应用（端口 8081，QRE-SAAS-008）。
+#
+# 2026-09-07 用户决策：8081 从 lab 应用切换为 SaaS staging——所有改动先在
+# 8081 验证，验收后再部署 ECS（生产）。lab*.py 代码保留在仓库，仅不再起服务。
+#
+# 本文件安装为 /etc/systemd/system/qre-gui-lab.service（沿用既有服务名，
+# 日志标识 qre-gui-lab 不变，journalctl -u qre-gui-lab 查看）。
+# 安装（需 sudo）：
+#   sudo cp deploy/saas/qre-saas-staging.service /etc/systemd/system/qre-gui-lab.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qre-gui-lab.service
+#
+# 环境变量在 .env.saas-staging（0600，gitignore：.env.*）：SAAS_DB_URL 指向本地
+# 演练库 aguhuice_local；SAAS_AUTH_CHANNEL=stub + SAAS_STUB_LOG（验证码落盘）
+# + SAAS_STUB_ECHO=1（响应带 dev_code）——staging 专用，生产 ECS 严禁这两项。
+
+[Unit]
+Description=QRE SaaS staging app (Flask, port 8081)
+After=network-online.target postgresql.service
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=van
+WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
+EnvironmentFile=-/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.env
+EnvironmentFile=/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.env.saas-staging
+Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+ExecStart=/home/van/.local/bin/uv run qre saas --host 0.0.0.0 --port 8081
+Restart=on-failure
+RestartSec=10
+MemoryMax=2G
+Nice=5
+SyslogIdentifier=qre-gui-lab
+
+[Install]
+WantedBy=multi-user.target

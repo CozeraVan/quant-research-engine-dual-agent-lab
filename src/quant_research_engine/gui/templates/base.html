@@ -11,9 +11,11 @@
 <header class="topbar">
   <a class="brand" href="/">QRE 控制台</a>
   <nav>
+    {% block nav %}
     <a href="/">编辑 Editor</a>
     <a href="/runs">历史 History</a>
     <a href="/admin">管理台 Admin</a>
+    {% endblock %}
   </nav>
 </header>
 <main>

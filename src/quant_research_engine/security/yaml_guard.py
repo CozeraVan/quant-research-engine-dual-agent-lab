@@ -29,7 +29,7 @@ _TOP_LEVEL_KEYS = frozenset({
     "experiment", "data", "signal", "evaluation", "holding", "risk", "portfolio", "universe",
 })
 _SECTION_KEYS: dict[str, frozenset[str]] = {
-    "experiment": frozenset({"name"}),
+    "experiment": frozenset({"name", "market_profile", "frequency"}),
     "data": frozenset({"market_fields", "factor_fields"}),
     "signal": frozenset({"entry", "exit"}),
     "evaluation": frozenset({"forward_return_horizons", "quantiles"}),
@@ -196,8 +196,10 @@ def validate_strategy_yaml(yaml_text: str) -> dict[str, Any]:
 
     # experiment.name
     experiment = raw.get("experiment") or {}
-    if isinstance(experiment, dict) and not isinstance(experiment.get("name", "x"), str):
-        issues.append("experiment.name 必须是字符串")
+    if isinstance(experiment, dict):
+        for key in ("name", "market_profile", "frequency"):
+            if key in experiment and not isinstance(experiment[key], str):
+                issues.append(f"experiment.{key} 必须是字符串")
 
     # data.market_fields / factor_fields
     data = raw.get("data") or {}

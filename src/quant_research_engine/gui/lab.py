@@ -1,16 +1,22 @@
 """策略实验台（lab）Flask 应用（QRE-GUI-LAB-PORT-017）。
 
-8081 独立端口应用，面向普通投资者：「新增策略」（三入口）+「回测管理（策略状态）」
-+「新增因子」（路径 A/B/C，QRE-GUI-CONSOL-039）三个 tab。
+8081 独立端口应用，面向普通投资者：「新增策略」（NL/快速向导/高级 YAML）
++「回测管理（回测记录）」两个 tab。QRE-SAAS-011（2026-09-07 用户决策，
+冻结解除）原位减法：删除「新增因子」tab（缺因子改走申请通道
+/api/lab/factor-requests，JSONL 落盘 outputs/factor_requests.jsonl，
+TODO(M4) 迁云到 saas factor_requests 表），创建流程后台化（一键回测）。
 路由通过 ``strategy_lab_routes.register_strategy_lab_routes`` 与
 ``register_factor_lab_routes`` 与 8080 主控制台共享。
 """
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timezone
+from pathlib import Path
 
-from flask import Flask, render_template
+from flask import Flask, jsonify, render_template, request
 
 from quant_research_engine.gui.engine import list_templates
 from quant_research_engine.gui.lab_result import register_lab_result_routes
@@ -18,6 +24,9 @@ from quant_research_engine.gui.strategy_lab_routes import (
     register_factor_lab_routes,
     register_strategy_lab_routes,
 )
+
+# 缺因子申请落盘（JSONL，一行一条；TODO(M4)：上云后迁 saas factor_requests 表）
+FACTOR_REQUESTS_PATH = Path("outputs/factor_requests.jsonl")
 
 
 def create_lab_app() -> Flask:
@@ -40,6 +49,49 @@ def create_lab_app() -> Flask:
             default_strategy_yaml=gui_app._load_default_strategy_yaml(),
             default_strategy_name="ema200_bollinger_reversal_mvp",
         )
+
+    @app.route("/api/lab/factor-requests", methods=["POST"])
+    def api_lab_factor_requests():
+        """缺因子申请（QRE-SAAS-011）：JSONL 追加落盘，运营离线审核。"""
+        data = request.get_json(silent=True) or {}
+        factors = data.get("factors")
+        if not isinstance(factors, list) or not factors or not all(
+            isinstance(f, str) and f.strip() for f in factors
+        ):
+            return jsonify({"ok": False, "error": "factors 须为非空字符串数组"}), 400
+        record = {
+            "factors": sorted({f.strip() for f in factors}),
+            "strategy_name": str(data.get("strategy_name") or "")[:200],
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
+        }
+        FACTOR_REQUESTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with FACTOR_REQUESTS_PATH.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        return jsonify({"ok": True})
+
+    # --- 标的范围归类（QRE-SAAS-012，8081 专属；8080 不挂） ---
+    from quant_research_engine.gui.admin import _cached
+    from quant_research_engine.gui.universe import list_universes, universe_members
+
+    @app.route("/api/lab/universes")
+    def api_lab_universes():
+        try:
+            return jsonify(_cached("lab_universes", lambda: list_universes()))
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"归类数据不可用（{exc}）"}), 503
+
+    @app.route("/api/lab/universes/members")
+    def api_lab_universe_members():
+        group = request.args.get("group", "")
+        key = request.args.get("key", "")
+        try:
+            codes = _cached(f"lab_universe_members:{group}:{key}",
+                            lambda: universe_members(group, key))
+        except KeyError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 404
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"归类数据不可用（{exc}）"}), 503
+        return jsonify({"ok": True, "codes": codes, "count": len(codes)})
 
     register_strategy_lab_routes(app)
     # 新增因子（路径 A/B + 任务状态轮询，QRE-GUI-CONSOL-039）

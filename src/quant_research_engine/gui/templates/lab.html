@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% block nav %}<a href="/">新建策略</a>
+    <a href="#tab-onboard">回测记录</a>{% endblock %}
 {% block content %}
-<h1>QRE 策略实验台 Strategy Lab <span class="opt">（新增策略 + 回测管理；与 8080 控制台共享后端路由）</span></h1>
+<h1>QRE 策略实验台 <span class="opt">（新增策略 + 回测记录）</span></h1>
 
 <div class="tabs">
   <button class="tab active" data-tab="strategy">新增策略</button>
-  <button class="tab" data-tab="onboard">回测管理</button>
-  <button class="tab" data-tab="factor">新增因子</button>
+  <button class="tab" data-tab="onboard">回测记录</button>
 </div>
 
 <!-- TAB 1: 新增策略（三入口 tab 递进重构，QRE-GUI-LAB-ENTRY-018） -->
@@ -88,14 +89,13 @@
         </div>
       </div>
 
-      <h4 style="margin-top:12px;">策略 YAML 预览</h4>
+      <h4 style="margin-top:12px;">策略代码预览（高级）</h4>
       <pre id="wz-yaml-preview" class="compiled-yaml">（添加入场/出场条件后自动生成）</pre>
       <div class="builder-actions">
-        <button id="wz-save-smoke" class="btn btn-primary" title="向导内直接完成：存入沙箱并启动冒烟测试（600519.SH 近 6 个月）">存入沙箱 + 冒烟测试</button>
-        <button id="wz-fill-editor" class="btn btn-ghost" title="把生成的 YAML 填入「高级 YAML」tab 并跳转，供手动精修">去高级 YAML 修改详情 →</button>
+        <button id="wz-save-smoke" class="btn btn-primary" title="先自动做小范围验证，通过后自动开始全量回测">开始回测</button>
+        <button id="wz-fill-editor" class="btn btn-ghost" title="把生成的策略代码填入「高级 YAML」tab 并跳转，供手动精修">去高级 YAML 修改详情 →</button>
         <span id="wz-status" class="hidden"></span>
       </div>
-      <p class="opt" style="margin-top:6px;">两步确认：此处点「存入沙箱 + 冒烟测试」为第 1 步；冒烟通过后在下方「沙箱策略」列表点「正式回测（晋升）」——全程鼠标操作，无需切换选项卡。</p>
     </div>
   </div>
 
@@ -106,7 +106,6 @@
       <textarea id="strategy-yaml" rows="24" cols="80" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
       <div class="editor-actions">
         <button id="btn-validate" class="btn btn-ghost">验证 Validate</button>
-        <button id="btn-save-sandbox" class="btn btn-ghost" title="校验 + 查重 + 因子检查后存入沙箱，不自动执行">存入沙箱</button>
         <label class="file-label btn-ghost">
           加载文件 Load file
           <input type="file" id="file-input" accept=".yaml,.yml" hidden>
@@ -125,8 +124,7 @@
       </div>
       <div id="validate-result" class="result-box hidden"></div>
       <div class="editor-actions">
-        <button id="btn-save-smoke" class="btn btn-primary" title="存入沙箱并启动冒烟测试（600519.SH 近 6 个月）">存入沙箱 + 冒烟测试</button>
-        <span class="opt">两步确认：第 1 步冒烟；通过后到下方「沙箱策略」列表点「正式回测（晋升）」才会全量执行。</span>
+        <button id="btn-save-smoke" class="btn btn-primary" title="先自动做小范围验证，通过后自动开始全量回测">开始回测</button>
       </div>
     </div>
   </div>
@@ -146,10 +144,22 @@
       </span>
 
       <label>标的范围 <span class="req">*</span></label>
-      <span class="label-inline"><input type="checkbox" id="param-all-market" checked> 全部 A 股（默认全市场；取消勾选后可填代码）</span>
+      <span>
+        <span class="label-inline"><input type="radio" name="param-scope" id="scope-all" value="all" checked> 全部 A 股</span>
+        <span class="label-inline"><input type="radio" name="param-scope" id="scope-group" value="group"> 按板块/概念</span>
+        <span class="label-inline"><input type="radio" name="param-scope" id="scope-codes" value="codes"> 指定股票代码</span>
+      </span>
 
-      <label>股票代码 Codes</label>
-      <textarea id="param-codes" rows="2" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ" disabled></textarea>
+      <label id="scope-group-label" class="hidden">板块/概念</label>
+      <span id="scope-group-row" class="hidden">
+        <select id="univ-group" style="max-width:220px"></select>
+        <input id="univ-key" list="univ-key-list" placeholder="输入关键字筛选…" style="max-width:260px">
+        <datalist id="univ-key-list"></datalist>
+        <span id="univ-count" class="opt"></span>
+      </span>
+
+      <label id="scope-codes-label" class="hidden">股票代码 Codes</label>
+      <textarea id="param-codes" rows="2" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ" class="hidden"></textarea>
     </div>
 
     <!-- 高级参数（默认折叠，保留现有默认值自动生成） -->
@@ -197,6 +207,8 @@
           <label>小样本预检 Precheck</label>
           <span class="label-inline"><input type="checkbox" id="param-precheck" checked> 先跑前 20 只 × 近 6 个月</span>
 
+          <!-- 内部工程参数：面向普通用户隐藏（QRE-SAAS-013），JS 仍读默认值 -->
+          <div class="hidden" id="param-internal-fields">
           <label>引擎实现 Engine Impl</label>
           <select id="param-engine-impl">
             <option value="simulator">逐 bar 仿真 simulator</option>
@@ -218,6 +230,7 @@
           <label>输出目录 Output Dir</label>
           <input type="text" id="param-output" value="outputs/gui-run" placeholder="outputs/gui-run">
           </div>
+          </div>
         </div>
       </div>
 
@@ -229,16 +242,16 @@
 
   <div id="run-result" class="result-box hidden"></div>
 
-  <!-- 策略创建闭环（P1）：沙箱列表 + 冒烟 / 晋升 / 删除 -->
-  <div class="panel" id="sandbox-panel">
-    <h2>沙箱策略 Sandbox
+  <!-- 我的策略：按用户要求隐藏（易困惑；底层 API 保留） -->
+  <div class="panel hidden" id="sandbox-panel">
+    <h2>我的策略
       <button class="btn-sm" id="btn-sandbox-refresh">刷新</button>
     </h2>
-    <p class="opt">沙箱策略不参与 refresh 日更；冒烟通过后可晋升入 catalog（晋升后立即触发一次全量后台回测）。</p>
+    <p class="opt">这里的策略不参与每日自动更新；验证通过的策略可以在这里正式运行（会自动触发一次全量回测）。</p>
     <div id="sandbox-status" class="opt hidden"></div>
     <div id="sandbox-list"></div>
     <div class="opt" style="margin-top:8px">
-      深度验证（catalog/沙箱任意策略，cluster-ashare 四关）：
+      深度验证（任意策略，cluster-ashare 四关）：
       <input id="dv-name" placeholder="策略名，如 mr01a_rsi14_oversold_reversal" style="width:280px">
       <input id="dv-d0" placeholder="起 2015-01-01" style="width:110px">
       <input id="dv-d1" placeholder="止 今天" style="width:110px">
@@ -268,86 +281,17 @@
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- TAB 3: 新增因子（自 8080 index.html 因子 tab 平移，文案面向普通投资者，QRE-GUI-CONSOL-039） -->
-<!-- ============================================================ -->
-<div id="tab-factor" class="tab-content">
-
-  <div class="panel">
-    <h2>新增因子：三种情况，对号入座</h2>
-    <p class="opt">「因子」就是策略里用到的指标数据（比如 RSI、均线）。先想清楚自己属于哪种情况：</p>
-    <p class="opt">
-      <strong>路径 A · 补数据</strong>：库里已经有这个指标，但你想要的周期（比如 30 天的 RSI）或价格口径还没有 —— 选它。系统会自动检查并先试填一小批数据，确认无误后才补全量历史数据。<br>
-      <strong>路径 B · 造新指标</strong>：库里没有的新指标 —— 用一句话描述（或直接贴代码），系统生成/检查代码并做小样本试算，你确认后才正式加入因子库。<br>
-      <strong>路径 C · Alpha191 因子</strong>：一套现成的 191 个短周期量价公式因子（源自券商研报，俗称 Alpha191），已由后台统一算好，<strong>不需要在本页新建</strong> —— 想用时直接在「新增策略」的快速向导里按大类挑选即可。
+<!-- 缺因子申请模态框（QRE-SAAS-011：替代原跳因子 tab 的链接；申请落 outputs/factor_requests.jsonl） -->
+<div id="factor-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;align-items:center;justify-content:center">
+  <div class="panel" style="max-width:420px;width:90%;margin:0">
+    <h2>当前因子库暂不支持</h2>
+    <p id="factor-modal-list"></p>
+    <p class="opt">你可以：<br>① 换个策略试试（多数常见指标已支持）<br>② 把缺的因子提交给我们——需求集中的因子会优先计算入库</p>
+    <p>
+      <button class="btn btn-ghost" id="btn-factor-close">换个策略</button>
+      <button class="btn btn-primary" id="btn-factor-submit">提交因子需求</button>
     </p>
-  </div>
-
-  <!-- 路径 A · 补数据：已有指标补周期/换价格口径（联动 indicators_tushare） -->
-  <div class="section">
-    <button class="section-toggle" data-section="wz-admin">路径 A · 补数据：已有指标，补周期/换价格口径&#9660;</button>
-    <div id="sec-wz-admin" class="section-body">
-      <div id="wz-admin-status" class="opt">加载指标清单中...</div>
-      <div class="form-grid form-grid-3">
-        <label>指标名（选库里已有的）</label>
-        <select id="wz-admin-name"></select>
-
-        <label>用哪种价格计算</label>
-        <select id="wz-admin-column"></select>
-
-        <label>周期（天数，多个用逗号分隔）</label>
-        <input type="text" id="wz-admin-periods" placeholder="如 5,10,20">
-      </div>
-      <div class="builder-actions">
-        <button id="wz-admin-submit" class="btn btn-ghost">提交申请（自动检查 → 小批量试填）</button>
-        <span class="opt">试填无误后，需你点确认才会补全量历史数据</span>
-      </div>
-      <div id="wz-admin-job" class="result-box hidden"></div>
-    </div>
-  </div>
-
-  <!-- 路径 B · 造新指标：一句话描述或贴代码（试算通过才入库） -->
-  <div class="section">
-    <button class="section-toggle" data-section="fc-create">路径 B · 造新指标：一句话描述或贴代码&#9660;</button>
-    <div id="sec-fc-create" class="section-body">
-      <p class="opt">先用大白话描述你想要的指标，点「生成代码」；懂代码的话也可以直接在代码框里手写。生成的内容只会填进框里，不会自动执行 —— 正式加入因子库前必须先通过「查重+安全检查」和「小样本试算」。</p>
-      <p>
-        <textarea id="fc-desc" rows="2" style="width:100%;" placeholder="例：25 天的 ROC 变动率（今天收盘价比 25 天前涨了百分之几）"></textarea>
-      </p>
-      <p><button id="fc-generate" class="btn btn-primary">生成代码</button> <span id="fc-gen-status" class="opt"></span></p>
-      <p><textarea id="fc-code" rows="14" style="width:100%;font-family:monospace;" placeholder="# 因子代码（可手写/粘贴，需继承 FactorBase）"></textarea></p>
-      <p>
-        指标名 <input type="text" id="fc-name" size="14" placeholder="roc">
-        类别 <select id="fc-category">
-          <option value="">选择…</option>
-          <option value="overlap">overlap</option>
-          <option value="momentum">momentum</option>
-          <option value="volatility">volatility</option>
-          <option value="trend">trend</option>
-          <option value="volume">volume</option>
-          <option value="statistics">statistics</option>
-          <option value="candle">candle</option>
-          <option value="performance">performance</option>
-        </select>
-        价格列 <select id="fc-column">
-          <option value="close">close</option>
-          <option value="typical_price">typical_price</option>
-          <option value="average_price">average_price</option>
-          <option value="median_price">median_price</option>
-        </select>
-        周期 <input type="text" id="fc-periods" size="14" placeholder="25 或 5,10,20">
-        <span class="opt">多个参数请直接改代码；不需要参数的指标填 null</span>
-      </p>
-      <p class="builder-actions">
-        <button id="fc-check" class="btn btn-ghost">查重 + 安全检查</button>
-        <button id="fc-smoke" class="btn btn-ghost">小样本试算</button>
-        <button id="fc-promote" class="btn btn-danger-outline">确认加入因子库</button>
-      </p>
-      <div id="fc-result" class="result-box hidden"></div>
-      <div id="fc-job" class="result-box hidden"></div>
-      <h4>待入库的因子草稿（沙箱） <button class="btn-sm" id="fc-sandbox-refresh">刷新</button></h4>
-      <div id="fc-sandbox-list" class="opt">（空）</div>
-    </div>
+    <p id="factor-modal-status" class="opt"></p>
   </div>
 </div>
 
@@ -792,7 +736,7 @@
     });
   });
 
-  // 向导内鼠标-only 闭环：存入沙箱 + 冒烟（两步确认第 1 步），不跳转选项卡
+  // 向导入口一键回测（QRE-SAAS-011：流程后台化，无需理解中间步骤）
   document.getElementById("wz-save-smoke").addEventListener("click", function() {
     var preview = buildYamlPreview();
     var statusEl = document.getElementById("wz-status");
@@ -802,7 +746,7 @@
       statusEl.className = "err";
       return;
     }
-    saveAndSmoke(preview.yaml, statusEl, "向导策略已存入沙箱");
+    startBacktest(preview.yaml, statusEl);
   });
 
   // ---------- 高级 YAML 编辑器 ----------
@@ -866,30 +810,13 @@
         nlStatus.textContent = "编译失败";
         nlStatus.className = "err";
         var html = '<p class="err">' + escHtml(d.error || "未知错误") + '</p>';
-        if (d.code === "missing_factors") {
-          html += '<p><a href="#" id="nl-goto-factor-admin">→ 前往「新增因子」tab（路径 A 补周期 / 路径 B 全新指标）</a></p>';
+        if (d.code === "missing_factors" && (d.missing_factors || []).length) {
+          openFactorModal(d.missing_factors, nlDesc.value.trim().slice(0, 50));
         }
         if (d.yaml) {
           html += '<p class="opt">可编辑草稿（修正后可手动粘贴到「高级 YAML」编辑器）：</p><pre class="compiled-yaml">' + escHtml(d.yaml) + '</pre>';
         }
         nlResult.innerHTML = html;
-        var gotoLink = document.getElementById("nl-goto-factor-admin");
-        if (gotoLink) {
-          gotoLink.addEventListener("click", function(ev) {
-            ev.preventDefault();
-            // 从缺因子别名猜测指标名/周期（如 rsi_14 → rsi + 14）
-            var alias = (d.missing_factors && d.missing_factors[0]) || "";
-            var m = alias.match(/^(.*?)(\d+)$/);
-            var period = m ? m[2] : "";
-            var name = "";
-            if (m) {
-              var base = m[1].replace(/_+$/, "");
-              // 别名尾部可能还有参数段，取首个下划线前缀作为指标名猜测
-              name = base.split("_")[0];
-            }
-            if (window.wzGotoFactorAdmin) window.wzGotoFactorAdmin(name, period);
-          });
-        }
       }
     })
     .catch(function(err) {
@@ -970,21 +897,93 @@
     document.getElementById("param-start").value = "2010-01-04";
     document.getElementById("param-end").value = isoDate(new Date());
   });
-  // "全部 A 股" clears the codes box
-  document.getElementById("param-all-market").addEventListener("change", function(e) {
-    document.getElementById("param-codes").disabled = e.target.checked;
+  // ---------- 标的范围（QRE-SAAS-012）：全部 A 股 / 板块概念 / 自定义代码 ----------
+  var UNIV_GROUPS = [];   // /api/lab/universes 分组数据
+  var scopeCodes = null;  // 板块模式解析出的成员 codes（提交前惰性拉取）
+
+  function currentScope() {
+    if (document.getElementById("scope-group").checked) return "group";
+    if (document.getElementById("scope-codes").checked) return "codes";
+    return "all";
+  }
+  function syncScopeUI() {
+    var scope = currentScope();
+    document.getElementById("scope-group-label").classList.toggle("hidden", scope !== "group");
+    document.getElementById("scope-group-row").classList.toggle("hidden", scope !== "group");
+    document.getElementById("scope-codes-label").classList.toggle("hidden", scope !== "codes");
+    document.getElementById("param-codes").classList.toggle("hidden", scope !== "codes");
+  }
+  document.querySelectorAll('input[name="param-scope"]').forEach(function(r) {
+    r.addEventListener("change", syncScopeUI);
   });
+
+  function loadUniverses() {
+    fetch("/api/lab/universes")
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        UNIV_GROUPS = d.groups;
+        var sel = document.getElementById("univ-group");
+        sel.innerHTML = UNIV_GROUPS.map(function(g) {
+          return '<option value="' + g.group + '">' + g.label + '（' + g.items.length + '）</option>';
+        }).join("");
+        fillUnivKeys();
+      });
+  }
+  function fillUnivKeys() {
+    var g = UNIV_GROUPS.find(function(x) { return x.group === document.getElementById("univ-group").value; });
+    var list = document.getElementById("univ-key-list");
+    list.innerHTML = (g ? g.items : []).map(function(it) {
+      return '<option value="' + it.key + '">' + it.key + '（' + it.count + ' 只）</option>';
+    }).join("");
+    document.getElementById("univ-key").value = "";
+    document.getElementById("univ-count").textContent = "";
+  }
+  document.getElementById("univ-group").addEventListener("change", fillUnivKeys);
+  document.getElementById("univ-key").addEventListener("change", function() {
+    var g = UNIV_GROUPS.find(function(x) { return x.group === document.getElementById("univ-group").value; });
+    var it = g && g.items.find(function(x) { return x.key === document.getElementById("univ-key").value.trim(); });
+    document.getElementById("univ-count").textContent = it ? ("约 " + it.count + " 只股票") : "";
+  });
+
+  // 提交前把板块选择解析成 codes（引擎不变，API 层转换）
+  function resolveScopeCodes() {
+    var scope = currentScope();
+    if (scope === "all") return Promise.resolve({codes: "", allMarket: true});
+    if (scope === "codes") {
+      return Promise.resolve({
+        codes: document.getElementById("param-codes").value,
+        allMarket: false,
+      });
+    }
+    var group = document.getElementById("univ-group").value;
+    var key = document.getElementById("univ-key").value.trim();
+    if (!group || !key) return Promise.reject(new Error("请选择板块/概念"));
+    return fetch("/api/lab/universes/members?group=" + encodeURIComponent(group) + "&key=" + encodeURIComponent(key))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) throw new Error(d.error || "成员解析失败");
+        if (!d.codes.length) throw new Error("该范围当前没有成员股票");
+        return {codes: d.codes.join(","), allMarket: false, count: d.count, label: key};
+      });
+  }
 
   // Run
   document.getElementById("btn-run").addEventListener("click", function() {
-    var allMarket = document.getElementById("param-all-market").checked;
-    var payload = {
-      yaml: yamlEl.value,
-      mode: document.getElementById("param-mode").value,
-      start: document.getElementById("param-start").value,
-      end: document.getElementById("param-end").value,
-      codes: allMarket ? "" : document.getElementById("param-codes").value,
-      all_market: allMarket,
+    resolveScopeCodes()
+    .then(function(scope) {
+      // 大范围护栏：>3000 只或全市场时提示预计耗时
+      if (scope.allMarket || (scope.count && scope.count > 3000)) {
+        var what = scope.allMarket ? "全部 A 股（约 5000+ 只）" : ("「" + scope.label + "」（" + scope.count + " 只）");
+        if (!confirm(what + " 范围较大，全量回测可能需要几分钟到十几分钟。确认开始？")) return null;
+      }
+      var payload = {
+        yaml: yamlEl.value,
+        mode: document.getElementById("param-mode").value,
+        start: document.getElementById("param-start").value,
+        end: document.getElementById("param-end").value,
+        codes: scope.codes,
+        all_market: scope.allMarket,
       initial_cash: document.getElementById("param-cash").value,
       max_positions: document.getElementById("param-maxpos").value,
       commission_rate: document.getElementById("param-commission").value,
@@ -1036,6 +1035,11 @@
       runStatus.className = "err";
       runResult.innerHTML = '<p class="err">' + err + '</p>';
     });
+    })
+    .catch(function(err) {  // 范围解析失败（未选板块/成员为空）
+      show(runResult);
+      runResult.innerHTML = '<p class="err">' + escHtml(err.message || String(err)) + '</p>';
+    });
   });
 
   // ---------- 策略创建闭环（P1）：存入沙箱 / 沙箱面板 ----------
@@ -1053,28 +1057,51 @@
     .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); });
   }
 
-  // 存入沙箱 + 冒烟（两步确认第 1 步）的共用流程：高级 YAML 与快速向导共用
-  function saveAndSmoke(yamlText, statusEl, okPrefix) {
+  // 一键回测（QRE-SAAS-011：流程后台化，用户无需理解中间步骤）：
+  // 保存 → 小范围验证 → 通过则自动正式回测。底层 API（create/smoke/promote）不变。
+  function startBacktest(yamlText, statusEl) {
+    show(statusEl);
+    statusEl.className = "";
+    statusEl.textContent = "正在保存策略…";
     saveToSandbox(yamlText)
     .then(function(res) {
       var d = res.body;
-      show(statusEl);
       if (!d.ok) {
-        statusEl.innerHTML = '<span class="err">' + escHtml(d.error || "存入沙箱失败") + '</span>';
-        return;
+        statusEl.innerHTML = '<span class="err">' + escHtml(d.error || "保存失败") + '</span>';
+        return null;
       }
       var name = d.name;
-      statusEl.innerHTML = '<span class="ok">' + escHtml(okPrefix || "已存入沙箱") + '：' + escHtml(name) + '，冒烟测试启动中...</span>';
-      sandboxAction("/api/strategies/smoke", {name: name},
-        "两步确认 · 第 1 步：冒烟已启动（600519.SH 近 6 个月）；通过后在下方列表点「正式回测（晋升）」");
-      // 轮询沙箱列表刷新冒烟 sidecar 状态（通过=绿/失败=红）
-      var polls = 0;
-      var timer = setInterval(function() {
-        polls++;
-        loadSandbox();
-        if (polls >= 24) clearInterval(timer);
-      }, 5000);
-      document.getElementById("sandbox-panel").scrollIntoView({behavior: "smooth"});
+      statusEl.textContent = "正在小范围验证策略（通常 1 分钟内）…";
+      return fetch("/api/strategies/smoke", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({name: name})
+      })
+      .then(function(r) { return r.json(); })
+      .then(function() { return waitForCheck(name); })
+      .then(function(check) {
+        if (!check.ok) {
+          statusEl.innerHTML = '<span class="err">策略在小样本上没跑通：' +
+            escHtml(check.error || "未知原因") + '</span>';
+          loadSandbox();
+          return;
+        }
+        statusEl.textContent = "验证通过，正在开始正式回测…";
+        var category = sandboxCategories[0] || "low_level";
+        fetch("/api/strategies/promote", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name: name, category: category})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d2) {
+          if (d2.ok) {
+            var link = d2.run_id ? ' <a href="/lab/runs/' + d2.run_id + '">查看进度与结果 →</a>' : '';
+            statusEl.innerHTML = '<span class="ok">已开始正式回测。' + link + '</span>';
+          } else {
+            statusEl.innerHTML = '<span class="err">' + escHtml(d2.error || "启动失败") + '</span>';
+          }
+          loadSandbox();
+        });
+      });
     })
     .catch(function(err) {
       show(statusEl);
@@ -1082,28 +1109,29 @@
     });
   }
 
-  document.getElementById("btn-save-sandbox").addEventListener("click", function() {
-    saveToSandbox()
-    .then(function(res) {
-      var d = res.body;
-      show(validateBox);
-      if (d.ok) {
-        var warn = (d.warnings || []).map(function(w) { return '<p class="opt">' + escHtml(w) + '</p>'; }).join('');
-        validateBox.innerHTML = '<span class="ok">已存入沙箱：' + escHtml(d.name) + '</span>' + warn;
-        loadSandbox();
-      } else {
-        validateBox.innerHTML = '<span class="err">' + escHtml(d.error || "存入沙箱失败") + '</span>';
-      }
-    })
-    .catch(function(err) {
-      show(validateBox);
-      validateBox.innerHTML = '<span class="err">' + err + '</span>';
+  // 轮询小范围验证结果（每 3s，最多约 4 分钟）
+  function waitForCheck(name) {
+    return new Promise(function(resolve) {
+      var polls = 0;
+      var timer = setInterval(function() {
+        polls++;
+        fetch("/api/strategies/sandbox")
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            var item = (d.strategies || []).find(function(s) { return s.name === name; });
+            var smoke = item && item.smoke;
+            if (smoke && smoke.status === "completed") { clearInterval(timer); resolve({ok: true}); }
+            else if (smoke && smoke.status === "failed") { clearInterval(timer); resolve({ok: false, error: smoke.error}); }
+            else if (polls >= 80) { clearInterval(timer); resolve({ok: false, error: "验证超时，请稍后在列表中查看状态"}); }
+          })
+          .catch(function() { if (polls >= 80) { clearInterval(timer); resolve({ok: false, error: "状态查询失败"}); } });
+      }, 3000);
     });
-  });
+  }
 
-  // 高级 YAML 底部冒烟入口：两步确认第 1 步（存入沙箱 + 启动冒烟，绝不自动正式回测）
+  // 高级 YAML 底部入口：同样一键回测
   document.getElementById("btn-save-smoke").addEventListener("click", function() {
-    saveAndSmoke(yamlEl.value, validateBox, "已存入沙箱");
+    startBacktest(yamlEl.value, validateBox);
   });
 
   function sandboxAction(url, payload, doneText) {
@@ -1198,7 +1226,7 @@
         sandboxCategories = d.categories || [];
         var items = d.strategies || [];
         if (!items.length) {
-          sandboxList.innerHTML = '<p class="opt">（沙箱为空：在「高级 YAML」tab 用「存入沙箱」或「存入沙箱 + 冒烟测试」把策略放进来）</p>';
+          sandboxList.innerHTML = '<p class="opt">（暂无策略：在上方任一入口生成策略后点「开始回测」）</p>';
           return;
         }
         var html = "";
@@ -1208,8 +1236,8 @@
           if (s.smoke) {
             var st = s.smoke.status;
             var cls = st === "completed" ? "ok" : (st === "failed" ? "err" : "opt");
-            var label = st === "completed" ? "冒烟通过" : (st === "failed" ? "冒烟失败" : "冒烟中");
-            smoke = '冒烟: <a href="/lab/runs/' + s.smoke.run_id + '" class="' + cls + '">' + label + '</a>';
+            var label = st === "completed" ? "验证通过" : (st === "failed" ? "验证失败" : "验证中");
+            smoke = '验证: <a href="/lab/runs/' + s.smoke.run_id + '" class="' + cls + '">' + label + '</a>';
             if (st === "completed" && s.smoke.metrics) {
               var m = s.smoke.metrics;
               var parts = [];
@@ -1226,7 +1254,7 @@
               smoke += ' <span class="err">' + escHtml(String(s.smoke.error).slice(0, 120)) + '</span>';
             }
           } else {
-            smoke = '<span class="opt">未冒烟</span>';
+            smoke = '<span class="opt">未验证</span>';
           }
           var options = sandboxCategories.map(function(c) {
             return '<option value="' + c + '">' + c + '</option>';
@@ -1235,9 +1263,9 @@
             '<div class="rule-row" data-name="' + escHtml(s.name) + '">' +
             '<strong>' + escHtml(s.name) + '</strong> ' +
             '<span class="opt">' + escHtml(s.mtime || "") + '</span> ' + smoke + ' ' +
-            '<button class="btn-sm sb-smoke">冒烟测试</button> ' +
+            '<button class="btn-sm sb-smoke">重新验证</button> ' +
             '<select class="sb-category">' + options + '</select>' +
-            '<button class="btn-sm sb-promote" title="两步确认 · 第 2 步：晋升入 catalog 并立即触发全量正式回测">正式回测（晋升）</button> ' +
+            '<button class="btn-sm sb-promote" title="正式发布该策略并立即开始一次全量回测">正式回测</button> ' +
             '<button class="btn-sm sb-deepval" title="cluster-ashare 四关验证（入场信号逐日池，可能耗时数十分钟）">深度验证</button> ' +
             '<button class="btn-sm btn-danger-outline sb-delete">删除</button>' +
             '<div class="opt dv-slot"></div>' +
@@ -1247,7 +1275,7 @@
         sandboxList.querySelectorAll(".rule-row").forEach(function(row) {
           var name = row.getAttribute("data-name");
           row.querySelector(".sb-smoke").addEventListener("click", function() {
-            sandboxAction("/api/strategies/smoke", {name: name}, "冒烟已启动（600519.SH 近 6 个月）");
+            sandboxAction("/api/strategies/smoke", {name: name}, "验证已启动（600519.SH 近 6 个月）");
             // 冒烟为后台 run：轮询沙箱列表刷新 sidecar 状态（通过=绿/失败=红）
             var polls = 0;
             var timer = setInterval(function() {
@@ -1258,18 +1286,17 @@
           });
           row.querySelector(".sb-promote").addEventListener("click", function() {
             var category = row.querySelector(".sb-category").value;
-            var msg = "两步确认 · 第 2 步（正式回测）：\n"
-              + "策略 " + name + " 将晋升到 catalog/" + category + " 并立即触发一次全量正式回测。\n";
+            var msg = "策略 " + name + " 将正式发布并立即开始一次全量回测。\n";
             if (smokeSummary[name]) {
-              msg += "冒烟摘要（600519.SH 近 6 个月）：" + smokeSummary[name] + "。\n";
+              msg += "小样本验证摘要（600519.SH 近 6 个月）：" + smokeSummary[name] + "。\n";
             } else {
-              msg += "注意：该策略尚无已通过的冒烟摘要。\n";
+              msg += "注意：该策略还没有通过小样本验证。\n";
             }
             if (!confirm(msg + "确认执行正式回测？")) return;
-            sandboxAction("/api/strategies/promote", {name: name, category: category}, "已晋升（全量正式回测已触发）");
+            sandboxAction("/api/strategies/promote", {name: name, category: category}, "已发布（全量回测已开始）");
           });
           row.querySelector(".sb-delete").addEventListener("click", function() {
-            if (!confirm("确认删除沙箱策略 " + name + "？")) return;
+            if (!confirm("确认删除策略 " + name + "？")) return;
             sandboxAction("/api/strategies/sandbox/delete", {name: name}, "已删除");
           });
           row.querySelector(".sb-deepval").addEventListener("click", function() {
@@ -1282,8 +1309,49 @@
 
   document.getElementById("btn-sandbox-refresh").addEventListener("click", loadSandbox);
 
-  // init：默认回测区间=近2年、标的范围=全 A 股（HTML 已 checked/disabled）
+  // ---------- 缺因子申请模态框（QRE-SAAS-011；申请落 JSONL，运营离线审核） ----------
+  var pendingFactors = [];
+  var pendingStrategyName = "";
+  window.openFactorModal = function(factors, strategyName) {
+    pendingFactors = factors;
+    pendingStrategyName = strategyName || "";
+    document.getElementById("factor-modal-list").textContent = "缺失因子：" + factors.join("、");
+    document.getElementById("factor-modal-status").textContent = "";
+    var btn = document.getElementById("btn-factor-submit");
+    btn.disabled = false;
+    btn.textContent = "提交因子需求";
+    document.getElementById("factor-modal").style.display = "flex";
+  };
+  document.getElementById("btn-factor-close").addEventListener("click", function() {
+    document.getElementById("factor-modal").style.display = "none";
+  });
+  document.getElementById("btn-factor-submit").addEventListener("click", function() {
+    var btn = this;
+    btn.disabled = true;
+    fetch("/api/lab/factor-requests", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({factors: pendingFactors, strategy_name: pendingStrategyName})
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+    .then(function(res) {
+      if (res.status === 200 && res.body.ok) {
+        btn.textContent = "已提交，我们会评估";
+        document.getElementById("factor-modal-status").textContent = "";
+      } else {
+        document.getElementById("factor-modal-status").textContent = res.body.error || "提交失败";
+        btn.disabled = false;
+      }
+    })
+    .catch(function(err) {
+      document.getElementById("factor-modal-status").textContent = String(err);
+      btn.disabled = false;
+    });
+  });
+
+  // init：默认回测区间=近2年、标的范围=全 A 股（HTML 已 checked）
   setRangeYears(2);
+  syncScopeUI();
+  loadUniverses();  // 标的范围归类（板块/概念分组，QRE-SAAS-012）
   loadFactorCatalog();  // 完成后预填占位条件（EMA5 上/下穿 EMA200，无 ema 字段则回退 close/pre_close）
   if (!catalogReady) { /* 目录加载失败时保留空白条件行，便于理解格式 */ }
   loadSandbox();
@@ -1402,292 +1470,4 @@
 })();
 </script>
 
-<script>
-// ============================================================
-// TAB 3 新增因子 — 独立作用域（路径 A factor-admin + 路径 B factor-create，
-// 自 8080 index.html 因子 tab 平移，QRE-GUI-CONSOL-039）
-// ============================================================
-(function() {
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  function fillSelect(sel, options, current) {
-    sel.innerHTML = "";
-    options.forEach(function(o) {
-      var opt = document.createElement("option");
-      opt.value = o.value;
-      opt.textContent = o.label;
-      sel.appendChild(opt);
-    });
-    if (current) sel.value = current;
-  }
-
-  // ---------- 路径 A：已有指标 · 新增周期/价格源 ----------
-  var pollTimer = null;
-
-  function loadIndicators() {
-    fetch("/api/factor-admin/indicators")
-      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
-      .then(function(res) {
-        var statusEl = document.getElementById("wz-admin-status");
-        if (!res.body.ok) {
-          statusEl.innerHTML = '<span class="err">' + esc(res.body.error || "指标清单不可用") + '</span>';
-          document.getElementById("wz-admin-submit").disabled = true;
-          return;
-        }
-        statusEl.textContent = "从库里已有的指标中选一个，再选价格口径和要补的周期：";
-        fillSelect(document.getElementById("wz-admin-name"),
-          res.body.names.map(function(n) { return {value: n, label: n}; }));
-        fillSelect(document.getElementById("wz-admin-column"),
-          res.body.columns.map(function(c) { return {value: c, label: c}; }));
-      })
-      .catch(function(err) {
-        document.getElementById("wz-admin-status").innerHTML =
-          '<span class="err">指标清单加载失败: ' + esc(err) + '</span>';
-      });
-  }
-
-  function renderJob(d) {
-    var box = document.getElementById("wz-admin-job");
-    box.classList.remove("hidden");
-    var statusLabel = {
-      running: "运行中", awaiting_execute_confirmation: "试填完成，待你确认",
-      completed: "已完成", failed: "失败"
-    }[d.status] || d.status;
-    var html = '<p><strong>任务:</strong> ' + esc(d.job_id) + ' <strong>状态:</strong> ' + esc(statusLabel)
-      + (d.step ? '（步骤: ' + esc(d.step) + '）' : '') + '</p>';
-    if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
-    if (d.status === "awaiting_execute_confirmation") {
-      html += '<p class="ok">小批量试填成功。确认无误后点击按钮补全量历史数据（耗时较长）：</p>'
-        + '<button id="wz-admin-confirm" class="btn btn-danger-outline">确认补全量历史数据 --execute</button>';
-    }
-    if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
-    box.innerHTML = html;
-    var btn = document.getElementById("wz-admin-confirm");
-    if (btn) {
-      btn.addEventListener("click", function() {
-        btn.disabled = true;
-        fetch("/api/factor-admin/" + d.job_id + "/execute", {method: "POST"})
-          .then(function(r) { return r.json(); })
-          .then(function(res) {
-            if (!res.ok) { btn.disabled = false; alert(res.error || "确认失败"); }
-            pollJob(d.job_id);
-          });
-      });
-    }
-  }
-
-  function pollJob(jobId) {
-    if (pollTimer) clearTimeout(pollTimer);
-    fetch("/api/factor-admin/jobs/" + jobId)
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (!d.ok) return;
-        renderJob(d);
-        if (d.status === "running") {
-          pollTimer = setTimeout(function() { pollJob(jobId); }, 3000);
-        }
-      });
-  }
-
-  document.getElementById("wz-admin-submit").addEventListener("click", function() {
-    var payload = {
-      name: document.getElementById("wz-admin-name").value,
-      column: document.getElementById("wz-admin-column").value,
-      periods: document.getElementById("wz-admin-periods").value
-    };
-    fetch("/api/factor-admin/request", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
-    })
-    .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
-    .then(function(res) {
-      if (!res.body.ok) {
-        var box = document.getElementById("wz-admin-job");
-        box.classList.remove("hidden");
-        box.innerHTML = '<p class="err">' + esc(res.body.error || "提交失败") + '</p>';
-        return;
-      }
-      renderJob(res.body);
-      pollJob(res.body.job_id);
-    });
-  });
-
-  // NL 缺因子跳转入口：切到「新增因子」tab 的路径 A 并预填
-  window.wzGotoFactorAdmin = function(indicatorName, period) {
-    document.querySelector('.tab[data-tab="factor"]').click();
-    var sec = document.getElementById("sec-wz-admin");
-    if (sec.classList.contains("collapsed")) {
-      document.querySelector('.section-toggle[data-section="wz-admin"]').click();
-    }
-    if (indicatorName) {
-      var nameSel = document.getElementById("wz-admin-name");
-      for (var i = 0; i < nameSel.options.length; i++) {
-        if (nameSel.options[i].value === indicatorName) { nameSel.value = indicatorName; break; }
-      }
-    }
-    if (period) document.getElementById("wz-admin-periods").value = period;
-    sec.scrollIntoView({behavior: "smooth"});
-  };
-
-  // ---------- 路径 B：全新指标 · NL/手写生成（factor-create 闭环） ----------
-  function fcPeriodsValue() {
-    var raw = document.getElementById('fc-periods').value.trim();
-    if (!raw || raw === 'null') return [null];
-    return raw.split(',').map(function(s) { return parseInt(s.trim(), 10); }).filter(function(n) { return !isNaN(n); });
-  }
-  function fcPayload() {
-    return {
-      code: document.getElementById('fc-code').value,
-      name: document.getElementById('fc-name').value.trim(),
-      category: document.getElementById('fc-category').value,
-      column: document.getElementById('fc-column').value,
-      periods: fcPeriodsValue()
-    };
-  }
-  function fcShow(html) {
-    var box = document.getElementById('fc-result');
-    box.classList.remove('hidden');
-    box.innerHTML = html;
-  }
-  function fcPost(url, payload, onOk) {
-    return fetch(url, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    }).then(function(r) { return r.json(); }).then(onOk);
-  }
-
-  document.getElementById('fc-generate').addEventListener('click', function() {
-    var desc = document.getElementById('fc-desc').value.trim();
-    if (!desc) { alert('请先用一句话描述你想要的指标'); return; }
-    document.getElementById('fc-gen-status').textContent = '生成中（约十几秒）...';
-    fcPost('/api/factor-create/nl-generate', {description: desc}, function(d) {
-      if (!d.ok) {
-        document.getElementById('fc-gen-status').textContent = '';
-        fcShow('<p class="err">' + esc(d.error || '生成失败') + '</p>');
-        return;
-      }
-      document.getElementById('fc-gen-status').textContent = '已生成（请人工核对代码与参数）';
-      document.getElementById('fc-code').value = d.code;
-      if (d.meta) {
-        document.getElementById('fc-name').value = d.meta.name || '';
-        document.getElementById('fc-category').value = d.meta.category || '';
-        document.getElementById('fc-column').value = d.meta.column || 'close';
-        var periods = d.meta.periods;
-        if (periods && periods.length && periods[0] !== null) {
-          document.getElementById('fc-periods').value = periods.join(',');
-        } else if (d.meta.params) {
-          document.getElementById('fc-periods').value = '';
-        } else {
-          document.getElementById('fc-periods').value = 'null';
-        }
-      }
-    });
-  });
-
-  document.getElementById('fc-check').addEventListener('click', function() {
-    fcShow('<p class="opt">检查中...</p>');
-    fcPost('/api/factor-create/check', fcPayload(), function(d) {
-      var html = '';
-      if (d.violations && d.violations.length) html += '<p class="err">安全检查未通过：' + esc(d.violations.join('；')) + '</p>';
-      else html += '<p class="ok">安全检查通过</p>';
-      if (d.duplicate) html += '<p class="err">查重命中：' + esc(d.duplicate) + '</p>';
-      else if (!d.violations || !d.violations.length) html += '<p class="ok">查重通过（无冲突列）</p>';
-      if (d.warning) html += '<p class="opt">' + esc(d.warning) + '</p>';
-      fcShow(html);
-    });
-  });
-
-  document.getElementById('fc-smoke').addEventListener('click', function() {
-    fcShow('<p class="opt">小样本试算提交中...</p>');
-    fcPost('/api/factor-create/smoke', fcPayload(), function(d) {
-      if (!d.ok) { fcShow('<p class="err">试算失败：' + esc(d.error || '未知错误') + '</p>'); return; }
-      pollFcSmoke(d.job_id);
-    });
-  });
-
-  // 试算为后台 job（最长 120s）：提交后轮询状态
-  function pollFcSmoke(jobId) {
-    fcShow('<p class="opt">小样本试算中（用一只股票试算，最长约 2 分钟）... 任务 ' + esc(jobId) + '</p>');
-    fetch('/api/factor-create/smoke/' + jobId)
-      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
-      .then(function(res) {
-        var d = res.body;
-        if (!d.ok) { fcShow('<p class="err">' + esc(d.error || '试算状态查询失败') + '</p>'); return; }
-        if (d.status === 'running') { setTimeout(function() { pollFcSmoke(jobId); }, 2000); return; }
-        var r2 = d.result || {};
-        if (!r2.ok) {
-          fcShow('<p class="err">试算失败：' + esc(r2.error || (r2.errors || []).join('；') || '未知错误') + '</p>');
-          return;
-        }
-        fcShow('<p class="ok">试算通过</p><p>因子类 ' + esc(r2.factor_class)
-          + '（' + esc(r2.indicator_name) + ' / ' + esc(r2.category) + '），样本 ' + esc(r2.code)
-          + ' ' + esc(r2.rows) + ' 行，输出列：<code>' + esc((r2.columns || []).join(', ')) + '</code></p>');
-        loadFcSandbox();
-      })
-      .catch(function(err) { fcShow('<p class="err">' + esc(err) + '</p>'); });
-  }
-
-  function pollFcJob(jobId) {
-    var box = document.getElementById('fc-job');
-    box.classList.remove('hidden');
-    fetch('/api/admin/daily-jobs/' + jobId)
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (!d.ok) return;
-        var label = {running: '运行中', completed: '已完成', failed: '失败'}[d.status] || d.status;
-        var html = '<p>入库任务 ' + esc(d.job_id) + '（' + esc(d.label || '') + '）：<strong>' + label + '</strong></p>';
-        if (d.error) html += '<p class="err">' + esc(d.error) + '</p>';
-        if (d.log_tail) html += '<pre class="compiled-yaml">' + esc(d.log_tail) + '</pre>';
-        box.innerHTML = html;
-        if (d.status === 'running') {
-          setTimeout(function() { pollFcJob(jobId); }, 3000);
-        } else {
-          loadFcSandbox();
-        }
-      });
-  }
-
-  document.getElementById('fc-promote').addEventListener('click', function() {
-    var p = fcPayload();
-    if (!p.name || !p.category || !p.column) { alert('请填写 指标名/类别/价格列'); return; }
-    if (!confirm('确认把因子 ' + p.name + '（' + p.category + '/' + p.column + '，周期 ' + document.getElementById('fc-periods').value + '）正式加入因子库？\n加入后系统会自动检查并补算历史数据，之后每日自动更新。')) return;
-    fcPost('/api/factor-create/promote', p, function(d) {
-      if (!d.ok) { fcShow('<p class="err">加入因子库失败：' + esc(d.error || '未知错误') + '</p>'); return; }
-      fcShow('<p class="ok">已加入因子库：' + esc(d.path) + '</p><p class="opt">config 备份：' + esc(d.config_backup || '—') + '；次日起每日自动更新该因子。</p>');
-      if (d.job_id) pollFcJob(d.job_id);
-    });
-  });
-
-  function loadFcSandbox() {
-    fetch('/api/factor-create/sandbox')
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        var el = document.getElementById('fc-sandbox-list');
-        if (!d.ok || !d.factors.length) { el.innerHTML = '<span class="opt">（空）</span>'; return; }
-        el.innerHTML = '<ul>' + d.factors.map(function(f) {
-          return '<li><code>' + esc(f.name) + '</code> <span class="opt">' + esc(f.mtime) + '</span>'
-            + ' <button class="btn-sm btn-danger-outline" data-fc-del="' + esc(f.name) + '">删除</button></li>';
-        }).join('') + '</ul>';
-        el.querySelectorAll('[data-fc-del]').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            if (!confirm('删除因子草稿 ' + btn.dataset.fcDel + '？')) return;
-            fcPost('/api/factor-create/sandbox/delete', {name: btn.dataset.fcDel}, function(d2) {
-              if (!d2.ok) alert(d2.error || '删除失败');
-              loadFcSandbox();
-            });
-          });
-        });
-      });
-  }
-  document.getElementById('fc-sandbox-refresh').addEventListener('click', loadFcSandbox);
-
-  // init
-  loadIndicators();
-  loadFcSandbox();
-})();
-</script>
 {% endblock %}

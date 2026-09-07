@@ -390,6 +390,13 @@ def build_parser() -> argparse.ArgumentParser:
     worker_parser.add_argument("--heartbeat-seconds", type=float, default=None, help="Lease heartbeat interval (default 60s, env SAAS_WORKER_HEARTBEAT_SECONDS).")
     worker_parser.add_argument("--once", action="store_true", help="Run a single poll cycle (debug).")
 
+    saas_parser = subparsers.add_parser(
+        "saas", help="Launch the SaaS app (user-facing pages + cloud API, default port 8081)"
+    )
+    saas_parser.add_argument("--host", default="0.0.0.0", help="Host to bind.")
+    saas_parser.add_argument("--port", type=int, default=8081, help="Port to bind.")
+    saas_parser.add_argument("--debug", action="store_true", help="Run Flask in debug mode (not for production).")
+
     return parser
 
 
@@ -1943,6 +1950,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.once:
             argv.append("--once")
         worker_main(argv)
+        return 0
+
+    if args.command == "saas":
+        from quant_research_engine.gui.saas.app import launch_saas
+
+        launch_saas(host=args.host, port=args.port, debug=args.debug)
         return 0
 
     parser.error(f"Unsupported command: {args.command}")

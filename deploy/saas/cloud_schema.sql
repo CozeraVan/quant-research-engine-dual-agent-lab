@@ -79,6 +79,21 @@ CREATE INDEX IF NOT EXISTS idx_jobs_pick ON jobs (status, priority DESC, created
     WHERE status = 'queued';
 CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id, created_at DESC);
 
+-- 缺因子申请（QRE-SAAS-007）：用户不直接增/改因子；缺因子时提交申请，
+-- 运营方按需求热度人工审核后离线计算入库（8080 管理台审核界面为后续任务）。
+CREATE TABLE IF NOT EXISTS factor_requests (
+    id             BIGSERIAL PRIMARY KEY,
+    user_id        BIGINT NOT NULL REFERENCES users(id),
+    strategy_name  TEXT,                          -- 触发申请的策略名（可空）
+    factors        JSONB NOT NULL,                -- 缺失因子名数组 ["rsi_14", ...]
+    status         TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','approved','rejected')),
+    note           TEXT,                          -- 审核备注（入库说明/拒绝原因）
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    reviewed_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_factor_requests_user ON factor_requests (user_id, created_at DESC);
+
 -- 结果：报告元数据 + 前端图表所需 JSON；大文件（Excel/CSV 明细）放 OSS
 CREATE TABLE IF NOT EXISTS results (
     id          BIGSERIAL PRIMARY KEY,

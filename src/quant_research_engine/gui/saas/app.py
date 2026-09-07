@@ -86,7 +86,12 @@ class SmsSender:
 
 
 class StubSender:
-    """测试/开发通道：不真发，记录到 app.extensions['sent_codes']。"""
+    """测试/开发通道：不真发，记录到 app.extensions['sent_codes']。
+
+    env SAAS_STUB_LOG（如 /tmp/saas_codes.log）设置时同步追加
+    `target code` 一行——供独立进程（本地演练/联调）读取验证码，
+    生产环境严禁设置。
+    """
 
     def __init__(self, app: Flask) -> None:
         self._app = app
@@ -95,6 +100,10 @@ class StubSender:
         self._app.extensions.setdefault("sent_codes", []).append(
             {"target": target, "code": code}
         )
+        log_path = os.environ.get("SAAS_STUB_LOG")
+        if log_path:
+            with open(log_path, "a", encoding="utf-8") as fh:
+                fh.write(f"{target} {code}\n")
 
 
 _SENDERS = {"email": EmailSender, "sms": SmsSender}
@@ -155,7 +164,24 @@ def _dev_auth_enabled(app: Flask) -> bool:
 
 
 def _current_user_id(app: Flask, engine: Engine) -> int | None:
-    """Bearer token → session user；SAAS_DEV_AUTH=1 时 X-User-Id 后门兜底。"""
+    """Bearer token → session user；SAAS_DEV_AUTH=1 时 X-User-Id 后门兜底。
+
+    SAAS_AUTH_BYPASS=1（staging 专用，生产严禁）：免登录，全部请求以
+    默认 staging 用户（email='staging@local'）身份通过，无则自动建行。
+    """
+    if str(_cfg(app, "SAAS_AUTH_BYPASS", "0") or "0") == "1":
+        with engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "INSERT INTO users (email) VALUES ('staging@local') "
+                    "ON CONFLICT (email) WHERE email IS NOT NULL DO NOTHING RETURNING id"
+                ),
+            ).first()
+            if row is None:
+                row = conn.execute(
+                    text("SELECT id FROM users WHERE email = 'staging@local'")
+                ).first()
+        return int(row.id)
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         token = auth[len("Bearer "):].strip()
@@ -223,6 +249,12 @@ def create_saas_app() -> Flask:
     # 验证码限流计数（内存：重启清零，内测期可接受）
     app.extensions["rate_limit"] = {"target": {}, "ip": {}}
 
+    @app.context_processor
+    def _inject_saas_flags() -> dict[str, Any]:
+        # SAAS_AUTH_BYPASS 注入模板（QRE-SAAS-009 修复：bypass 下前端
+        # requireLogin 无 token 跳登录页 × 登录页 302 回工作台 = 无限刷新环）
+        return {"saas_auth_bypass": str(_cfg(app, "SAAS_AUTH_BYPASS", "0") or "0") == "1"}
+
     @app.errorhandler(RuntimeError)
     def _runtime_error(exc: RuntimeError) -> Any:  # SAAS_DB_URL 缺失等配置错误
         return jsonify({"ok": False, "error": str(exc)}), 503
@@ -230,8 +262,25 @@ def create_saas_app() -> Flask:
     # --- 页面（QRE-SAAS-004 四功能前端；页面本身不鉴权，JS 检查 localStorage
     #     token，401 时跳 /saas/login；数据全走 /api/saas/* Bearer 鉴权） ---
 
+    @app.context_processor
+    def _saas_template_ctx() -> dict[str, Any]:
+        # 免登录开关注入模板（staging）：JS 据此跳过 token 检查与登录页跳转
+        return {"auth_bypass": str(_cfg(app, "SAAS_AUTH_BYPASS", "0") or "0") == "1"}
+
+    @app.get("/")
+    def saas_root() -> Any:
+        # SaaS 应用根路径直接进工作台（8081 staging 单用途端口）
+        from flask import redirect
+
+        return redirect("/saas/")
+
     @app.get("/saas/login")
-    def saas_login_page() -> str:
+    def saas_login_page() -> Any:
+        # staging 免登录（SAAS_AUTH_BYPASS=1，生产严禁）：登录页直接跳工作台
+        if str(_cfg(app, "SAAS_AUTH_BYPASS", "0") or "0") == "1":
+            from flask import redirect
+
+            return redirect("/saas/")
         return render_template("login.html")
 
     @app.get("/saas/")
@@ -281,6 +330,63 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": f"因子库不可用（{exc}）"}), 503
         return jsonify({"ok": True, "groups": build_factor_groups(tables_columns)})
 
+    # --- 缺因子申请（QRE-SAAS-007）：用户不直接增/改因子；申请落库，
+    #     运营方按需求热度人工审核后离线计算入库（8080 审核界面为后续任务） ---
+
+    @app.post("/api/saas/factor-requests")
+    def api_factor_request_create() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        data = request.get_json(silent=True) or {}
+        factors = data.get("factors")
+        if not isinstance(factors, list) or not factors or not all(isinstance(f, str) and f.strip() for f in factors):
+            return jsonify({"ok": False, "error": "factors 须为非空字符串数组"}), 400
+        factors = sorted({f.strip() for f in factors})
+        strategy_name = str(data.get("strategy_name") or "").strip() or None
+
+        with engine.begin() as conn:
+            # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（同 jobs 路由）
+            conn.execute(
+                text("INSERT INTO users (id, phone) VALUES (:id, :phone) ON CONFLICT (id) DO NOTHING"),
+                {"id": uid, "phone": f"pending_{uid}"},
+            )
+            recent = conn.execute(
+                text(
+                    "SELECT factors FROM factor_requests "
+                    "WHERE user_id = :uid AND created_at > now() - interval '24 hours'"
+                ),
+                {"uid": uid},
+            ).scalars().all()
+            if any(sorted(set(r)) == factors for r in recent):
+                return jsonify({"ok": False, "error": "这些因子你已提交过申请，我们会按需求热度评估，请耐心等待"}), 409
+            rid = conn.execute(
+                text(
+                    "INSERT INTO factor_requests (user_id, strategy_name, factors) "
+                    "VALUES (:uid, :name, CAST(:factors AS jsonb)) RETURNING id"
+                ),
+                {"uid": uid, "name": strategy_name, "factors": json.dumps(factors)},
+            ).scalar_one()
+        return jsonify({"ok": True, "id": rid, "status": "pending"})
+
+    @app.get("/api/saas/factor-requests")
+    def api_factor_request_list() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, strategy_name, factors, status, note, created_at "
+                    "FROM factor_requests WHERE user_id = :uid "
+                    "ORDER BY created_at DESC LIMIT 50"
+                ),
+                {"uid": uid},
+            ).mappings().all()
+        return jsonify({"ok": True, "requests": [_jsonable(dict(r)) for r in rows]})
+
     # --- 鉴权（QRE-SAAS-006） ---
 
     @app.post("/api/saas/auth/code")
@@ -324,7 +430,11 @@ def create_saas_app() -> Flask:
         rl["target"][target] = now
         rl["ip"][ip] = [*hits, now]
         # 响应不暴露 target 是否已注册
-        return jsonify({"ok": True, "channel": channel, "expires_in": AUTH_CODE_TTL_MINUTES * 60})
+        resp: dict[str, Any] = {"ok": True, "channel": channel, "expires_in": AUTH_CODE_TTL_MINUTES * 60}
+        # staging 友好开关：响应直接带验证码（生产严禁开启，仅供本地预发联调）
+        if str(_cfg(app, "SAAS_STUB_ECHO", "0") or "0") == "1":
+            resp["dev_code"] = code
+        return jsonify(resp)
 
     @app.post("/api/saas/auth/login")
     def api_auth_login() -> Any:

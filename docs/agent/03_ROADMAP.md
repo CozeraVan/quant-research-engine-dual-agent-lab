@@ -179,6 +179,19 @@
 | M10.3 | Continuous strategy refresh — idempotent re-run (F2) | DONE | KIMI_CODE | commit `1345471`; watermark + state + delta report + systemd units (documented, not installed); small-sample e2e passed | Preserve; timer install is a user decision |
 | M10.4 | ML clustering phase 2 (F3 phase 2, optional) | FUTURE | KIMI_CODE | Requires scikit-learn dependency approval | Evaluate after M10.1 proves value |
 
+## Milestone 11: SaaS MVP 上线（CR-0004，8081=staging / ECS=prod）
+
+| ID | Task | Status | Owner | Evidence | Next Step |
+|---|---|---|---|---|---|
+| M11.1 | 云小库 schema + 队列协议 + 登录鉴权 + 四功能前端 + Worker + 沙箱加固（SAAS-001~008） | DONE | KIMI_CODE | 05_PROGRESS 2026-09-07 系列条目；2057+4 tests green；8081 staging 全链路实测 | 部署 ECS（M4） |
+| M11.2 | SaaS 前端以 lab 观感重做 + 流程后台化（SAAS-010） | DONE | KIMI_CODE | 05_PROGRESS QRE-SAAS-010；禁链/零术语断言 | 用户 8081 观感验收 |
+| M11.3 | ECS 部署（OSS/域名备案/生产 env/systemd 实机） | TODO | KIMI_CODE | 待备案 | 备案下来后实施 |
+| M11.4 | 用户分层（游客/登录/付费，见 CR-0004「未来阶段」节） | FUTURE | — | 仅文档构想（SAAS-010 记录） | 上线后评估 |
+
+### 发布流程约定（2026-09-07 用户决策）
+
+改动 → 8081（staging）验证 → 用户验收 → 部署 ECS（生产）。
+
 ## Status Meaning
 
 - TODO: Not started

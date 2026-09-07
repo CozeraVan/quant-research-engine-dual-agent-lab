@@ -2,7 +2,127 @@
 
 ## Task ID
 
-QRE-SAAS-004 (CR-0004 M1：SaaS 四功能前端——登录/工作台/新建回测/结果页)
+QRE-SAAS-012 (8081 标的范围富化：申万行业/东财·同花顺概念/聚类池/通用行业 七组归类)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+新 `gui/universe.py`（只读：list_universes 七组 + universe_members 解析
+codes）；lab.py 挂 8081 专属 /api/lab/universes[/members]（_cached TTL，
+8080 不挂）；lab.html 标的范围原位改三选单选（全部 A 股/板块概念可搜索
+下拉+成员数提示/自定义代码），提交前解析为 codes 传既有 /api/run，
+引擎零改动；>3000 只或全市场 confirm 护栏。真库验收：七组数据齐全
+（sw1 电子 618、ths CPO 98 等），members 解析正确。测试 +4（20 总），
+全量 2063+4 绿。未 commit。遗留：用户 8081 验收；部署 ECS 时 universe
+数据源在 Worker 侧（本地大库）直接可用，云端不落明细的设计不变。
+
+---
+
+## Archive: QRE-SAAS-011 (lab 页面原位减法：删「新增因子」tab + 一键回测流程后台化 + 导航清理)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+用户批评 QRE-SAAS-010 重做模板（「我说过在原页面的基础上进行更改」）；
+纠偏：lab*.py 冻结解除，8081 lab 页面原位减法。改动：lab.html 删因子
+tab（按钮/面板/TAB3 JS 全块）+ 缺因子改弹窗（POST /api/lab/factor-requests
+JSONL 落 outputs/factor_requests.jsonl，TODO(M4) 迁云）+ 「存入沙箱+冒烟」
+两按钮统一为「开始回测」（自动 smoke→轮询→通过自动 promote 全量回测，
+失败显示人话）+ 可见文案去术语（沙箱/冒烟/晋升 → 我的策略/验证/发布）；
+base.html nav 改 block（8080 默认不变），lab 三模板覆盖去 /admin 链接。
+gui/lab.py 加 factor-requests 路由。saas/templates（SAAS-010）废弃保留
+备查。8080 未动、引擎/worker/security 未动。验收：8081 restart 后首页
+200、无禁词/无 admin 链接、/api/lab/runs 200、申请落盘实测。测试
+test_gui_lab.py 更新 +1（17 总），lab 相关 107 passed，全量回归见 05。
+遗留：用户 8081 验收新首页；ECS 部署；factor_requests 迁云。
+
+---
+
+## Archive: QRE-SAAS-010 (SaaS 前端以 lab 观感重做 + 流程后台化；SAAS-009 方向修正落实)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+用户 2026-09-07：SaaS 前端以验收过的 lab 页面为蓝本做减法移植
+（SAAS-009：自研模板验收不通过）。模板全部重写（gui/saas/templates/，
+lab*.py 只读未动）：base.html 换 lab 风 CSS 全套；new.html 两 tab +
+策略代码预览（高级）折叠 + 单一「开始回测」（后台静默 smoke→通过自动
+提交 full→跳结果页，零「沙箱/晋升/试算」字样，缺因子弹窗保留）；
+dashboard 过滤内部 smoke job、无管理面入口；job.html 结果页对齐
+lab_result.html（指标卡/meta chips/基准切换+滑块+回撤副图/归因 treemap
+三 tab+排行表+下钻静态明细）。保留 SAAS-009 防刷新环修复（bypass 注入
+模板，requireLogin 跳过）。CR-0004 追加用户分层构想（仅文档）；
+03_ROADMAP 加 Milestone 11。测试 27 passed（+4：新断言 + 零术语词表），
+全量 2058+4 绿。8081 lab 未动。未 commit。遗留：用户 8081 观感验收、
+ECS 部署（M4）、个股详情页（后续）。
+
+---
+
+## Archive: QRE-SAAS-008 (8081 重定位为 SaaS staging：qre-gui-lab 切换为 SaaS 应用 + 本地 Worker 常驻)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+用户 2026-09-07 决策：8081 = SaaS staging（预发），ECS = 生产；流程约定
+「改动 → 8081 验证 → 用户验收 → 部署 ECS」（已记入 11_AGENT_STATE）。
+lab*.py 一行未动，8080 未碰。变更：`qre saas` CLI 子命令；saas app 加
+SAAS_STUB_ECHO=1 开关（auth/code 响应带 dev_code，生产严禁）；8081 服务
+qre-gui-lab（沿用服务名）ExecStart 切换为 qre saas，env 走
+.env.saas-staging（0600，gitignore 已覆盖）；新系统服务 qre-saas-worker
+（轮询 8081/5s/只读大库账号）已 enable --now。repo 侧新增
+deploy/saas/qre-saas-staging.service 与 qre-saas-worker.service。
+端到端已验证（dev_code 登录→smoke→worker done 65s，8080 无恙）。
+测试 +2，全量 2054 passed + 4 skipped 零回归。未 commit。
+遗留：ECS 部署（M4：OSS/备案/生产 env）；8080 因子审核界面（SAAS-007 后续）。
+用户使用说明见 05_PROGRESS.md QRE-SAAS-008 条目与本文件下方。
+
+### 使用说明（staging 日常）
+- **免登录**（2026-09-07 用户决策，SAAS_AUTH_BYPASS=1）：直接打开
+  http://<本机>:8081/saas/ 即可用；/saas/login 自动跳工作台。
+  所有操作归属默认用户 staging@local。生产 ECS 保持验证码登录
+  （bypass 严禁开启）。
+- 任务进度：http://<本机>:8081/saas/ 自动刷新。
+- 服务状态：systemctl status qre-gui-lab（SaaS 应用）/
+  qre-saas-worker（Worker）；日志 journalctl -u qre-saas-worker -f。
+- 改了代码要验收：sudo systemctl restart qre-gui-lab（worker 按需）。
+
+---
+
+## Archive: QRE-SAAS-007 (SaaS 因子治理：缺因子申请人工审核通道 + 页面链接清理)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+用户新规：用户对因子零增/改/读操作；缺因子引导换策略 + 可申请入库
+（运营按热度人工审核离线计算）。判断：saas 无独立因子浏览入口（快速
+向导的因子下拉=构建策略必要交互，保留）；四模板本就无 /admin·8080/
+8081·factor-admin·factor-create 链接（已加参数化断言固化）。实现：
+cloud_schema.sql +factor_requests 表（幂等）；POST/GET
+/api/saas/factor-requests（24h 同集合去重 409、用户隔离）；new.html 缺
+因子模态框（missing_factors 触发，「换个策略」/「提交因子需求」→
+已提交）；dashboard.html 底部折叠「我的因子申请」状态列表。未 commit、
+未动 8080/8081/lab*.py、未改 NL 编译器。测试 +10（API 4 + 禁链·元素 6），
+test_gui_saas_pages.py 21 总。遗留：8080 管理台审核界面（后续任务）。
+前一任务 QRE-SAAS-004（四功能前端 + 归因打通，见下档）。
+
+---
+
+## Archive: QRE-SAAS-004 (CR-0004 M1：SaaS 四功能前端——登录/工作台/新建回测/结果页)
 
 ## Current Status
 
@@ -29,6 +149,11 @@ NL 与因子路由 401·400·200·503/groups 结构）；既有 saas/worker 测�
 走查。注：归因热力已同日补齐（见 05 QRE-SAAS-004 补条目）——runner
 chart_data 补 tag_analysis（trim：板块聚合全量+个股 TOP/BOTTOM 各 50），
 job.html 加行业 treemap + 板块下钻 + 个股贡献榜。
+另：同日完成 QRE-SAAS-M4-DRYRUN 真机闭环演练（详见 05 顶部条目）——
+SaaS app + Worker 本地同机全链路真实跑通（真实 DeepSeek NL 编译 +
+smoke/full 两 job done + 归因数据齐全），修复 yaml_guard experiment 键
+白名单漏项（NL 产物含 market_profile/frequency 会被误杀）+ StubSender
+SAAS_STUB_LOG 落盘开关。结论：达到「备案下来即可部署」的代码状态。
 
 ---
 
