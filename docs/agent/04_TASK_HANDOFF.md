@@ -2,7 +2,25 @@
 
 ## Task ID
 
-QRE-SAAS-012 (8081 标的范围富化：申万行业/东财·同花顺概念/聚类池/通用行业 七组归类)
+QRE-WORKER-ARTIFACT-PERSIST (缺陷修复：SaaS Worker 回测产物拷回持久存储，/tmp 沙箱丢失导致详情页全空)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+worker/runner.py：execute_job 在 run_backtest 返回后（成功/失败都执行）
+调新 `_persist_artifacts`——/tmp 沙箱 output_dir 整体 copytree 到
+RUNS_DIR/<run_id>/artifacts/（旧副本先清），record 的 artifacts map 绝对
+路径与 output_dir 改写指向持久副本并重写 status.json；/tmp 原件保留。
+非沙箱路径不受影响。测试 tests/test_worker.py +2（持久副本存在+路径
+改写+删沙箱后 loader 可用+重跑先清后拷；fixture 补 RUNS_DIR 隔离）。
+未 commit。前一任务 QRE-SAAS-012（标的范围富化，见下档）。
+
+---
+
+## Archive: QRE-SAAS-012 (8081 标的范围富化：申万行业/东财·同花顺概念/聚类池/通用行业 七组归类)
 
 ## Current Status
 

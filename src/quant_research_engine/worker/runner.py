@@ -39,6 +39,35 @@ from quant_research_engine.gui.engine import extract_run_summary, run_backtest
 DEFAULT_START_YEARS = 2
 
 
+def _persist_artifacts(record: dict[str, Any], output_dir: Path) -> None:
+    """把 /tmp 沙箱产物目录整体复制到 RUNS_DIR/<run_id>/artifacts/（持久位置），
+    并改写 run record（内存 + status.json）里 artifacts map 与 output_dir 的
+    绝对路径指向持久副本。产物为空则不动作。
+    """
+    import shutil
+
+    from quant_research_engine.gui import engine as gui_engine
+
+    if not output_dir.is_dir() or not any(output_dir.iterdir()):
+        return
+    run_dir = gui_engine.RUNS_DIR / str(record.get("run_id"))
+    persistent = run_dir / "artifacts"
+    if persistent.exists():
+        shutil.rmtree(persistent)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(output_dir, persistent)
+
+    old_prefix = str(output_dir.resolve())
+    new_prefix = str(persistent.resolve())
+    artifacts = record.get("artifacts") or {}
+    record["artifacts"] = {
+        rel: (new_prefix + path[len(old_prefix):] if path.startswith(old_prefix) else path)
+        for rel, path in artifacts.items()
+    }
+    record["output_dir"] = str(persistent)
+    gui_engine._write_json(run_dir / "status.json", record)
+
+
 def _job_params(job: dict[str, Any]) -> dict[str, Any]:
     params = job.get("params") or {}
     return params if isinstance(params, dict) else {}
@@ -94,6 +123,10 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
         precheck=(job.get("kind") == "smoke"),
         background=False,
     )
+    # 产物持久化（缺陷修复）：/tmp 沙箱在 WSL 重启/清理后丢失，导致详情页全空。
+    # 成功与失败路径都拷回（失败的部分产物/日志便于诊断）；/tmp 原件不动
+    # （清理由既有逻辑决定，不引入新清理行为）。
+    _persist_artifacts(record, output_dir)
     if record.get("status") != "completed":
         raise RuntimeError(f"回测失败：{record.get('error') or '未知错误'}")
 

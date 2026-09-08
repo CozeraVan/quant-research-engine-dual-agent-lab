@@ -126,6 +126,8 @@ def mock_engine(monkeypatch, tmp_path):
     """mock run_backtest（写产物到 tmp_path），打桩基准指数查库与归因 DB 查询。"""
     monkeypatch.setattr(runner_mod, "run_backtest",
                         lambda **kw: _fake_run_backtest(kw["output_dir"]))
+    # RUNS_DIR 隔离到临时目录（产物持久化断言用，不污染真实 outputs/）
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
     monkeypatch.setattr("quant_research_engine.gui.lab_result._benchmark_series",
                         lambda dates: ({}, "test: no benchmark"))
     # 归因 DB 查询打桩（保持测试不依赖本地大库）：A 层行业标签
@@ -299,3 +301,55 @@ class TestTrimTagAnalysis:
         data = {"layers": {"A": [{"tag": "x", "symbols": [{"ts_code": "1"}]}]}}
         item = runner_mod.trim_tag_analysis(data)["layers"]["A"][0]
         assert item["symbols_truncated"] is False and item["symbols_total"] == 1
+
+
+class TestArtifactPersistence:
+    """缺陷回归：worker 的 /tmp 沙箱产物必须拷回 RUNS_DIR 持久位置
+    （否则 WSL 重启后详情页 chart-data 全空）。"""
+
+    def test_artifacts_copied_to_runs_dir(self, cloud, mock_engine, tmp_path):
+        job_id = _create_job(cloud)
+        client = _make_client(cloud)
+        job = client.lease()
+        sandbox_dir = tmp_path / "sandbox"
+        payload = runner_mod.execute_job(job, work_base=sandbox_dir)
+
+        from quant_research_engine.gui import engine as gui_engine
+
+        persistent = gui_engine.RUNS_DIR / "test_run_1" / "artifacts"
+        # 产物拷回持久位置
+        assert (persistent / "equity_curve.csv").exists()
+        assert (persistent / "round_trips.csv").exists()
+        assert (persistent / "strategy_performance.json").exists()
+        # status.json 的 artifacts map / output_dir 指向持久副本
+        record = json.loads((persistent.parent / "status.json").read_text(encoding="utf-8"))
+        assert record["output_dir"] == str(persistent)
+        assert all(str(persistent) in p for p in record["artifacts"].values())
+        # /tmp 原件保留（清理由既有逻辑决定，不引入新行为）
+        assert (sandbox_dir / "artifacts" / "equity_curve.csv").exists()
+        # chart-data loader 能从持久副本读到（equity 序列正常组装）
+        assert payload["chart_data"]["equity"][0] == 100000.0
+        # 模拟 /tmp 丢失后 loader 仍可用
+        import shutil
+
+        shutil.rmtree(sandbox_dir)
+        from quant_research_engine.gui.lab_result import build_lab_chart_data
+
+        rebuilt = build_lab_chart_data(record)
+        assert rebuilt["equity"] == [100000.0, 101000.0, 100500.0]
+
+    def test_re_persist_replaces_stale_copy(self, cloud, mock_engine, tmp_path):
+        """同一 run_id 重复执行：旧持久副本先清再拷（不留陈旧文件）。"""
+        job_id = _create_job(cloud)
+        client = _make_client(cloud)
+        job = client.lease()
+        runner_mod.execute_job(job, work_base=tmp_path / "a")
+
+        from quant_research_engine.gui import engine as gui_engine
+
+        persistent = gui_engine.RUNS_DIR / "test_run_1" / "artifacts"
+        stale = persistent / "stale.txt"
+        stale.write_text("old", encoding="utf-8")
+        runner_mod.execute_job(job, work_base=tmp_path / "b")
+        assert not stale.exists()
+        assert (persistent / "equity_curve.csv").exists()
