@@ -21,6 +21,8 @@ Before modifying code or producing plans, read:
 - `docs/agent/09_CODING_HANDOFF.md`
 - `docs/agent/10_REVIEW_REPORT.md`
 - `docs/agent/11_AGENT_STATE.md`
+- `docs/agent/12_UI_STYLE_GUIDE.md`（UI 设计语言规范：后续页面开发必须遵守，改动需用户批准）
+- `docs/agent/13_UI_PERF_NOTES.md`（UI 性能评估与优化方案）
 
 ## Long-Term Memory Rule
 
