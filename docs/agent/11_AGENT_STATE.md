@@ -12,7 +12,38 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-008 (DONE — 8081 重定位为 SaaS staging；awaiting git approval)
+QRE-LAB-UI-LANDING-R3 (DONE — 18080 冻结定稿逐区块套用：两级条件组/编辑按钮回退/预检自动化/持仓迁移；awaiting git approval)
+
+2026-09-08（R2 纠偏，用户驳回 R1 适配改写）：以 synthesis.html 为唯一真相源 1:1 移植——lab-theme.css=设计稿 CSS 全量+母板类映射，模板区块/类名逐段对齐，数据全走真实 API（fees_summary/symbols 路由沿用 R1 新增），echarts 图按规则 4 保留但配色/区间卡/tooltip/三级显隐对齐设计稿。测试 2067+4 绿。R1 细节（已部分被 R2 覆盖）：把已定稿设计稿 synthesis.html（docs/agent/12_UI_STYLE_GUIDE.md 为其规范）
+原位落地 8081 lab 版（qre-gui-lab），8080 管理台零改动（git diff 仅 lab_* 模板 +
+gui/lab_result.py + lab 两个测试文件 + 新增 lab-theme.css/lab-ui.js/lab_symbols.html）。
+新建策略页：三入口并列卡 + PCB 排线（static/lab-ui.js）、预览栏（#strategy-yaml
+迁入参数区之后成唯一 YAML 真相源 + 参数合并行 + 复制）、策略 ID 公共项
+（param-sname，提交时 applyNameToYaml 写入 name；用户手改后不再自动覆盖）、
+日历选择器（LabUI.attachCalendar，最大可选日 = /api/admin/refresh 的
+state.last_data_date，禁今天及以后防未来函数）、唯一「运行回测」流水线
+（①/api/validate 含 ID 校验 → ②saveToSandbox+smoke+waitForCheck → ③/api/run
+沿用原参数 payload 与 >3000 只护栏；后端零改动；失败红字停留定位）。
+回测记录：「股票数量」列 + 状态徽章 + 删除改二次确认弹层（API 不变）。
+策略详情页：模块顺序 概述→收益曲线→交易磨损（新 box-fees，chart-data 新增
+fees_summary：round_trips.csv 真实费用列聚合，缺失则整块隐藏）→FRM→归因热力图
+→「查看个股回测明细 →」大入口卡；dataZoom 区间卡重算 rAF 节流；echarts 配色换
+淡紫规范（策略 #6750A4 / 基准虚线 #8B7FBE / 直方图 #B7A6E8，红绿只给涨跌）。
+新页 /lab/runs/<id>/symbols（lab_symbols.html + lab_result.py 新路由）：归因 A 层
+聚合成全量个股表，点列头排序、搜索框模糊过滤、完整代码回车直跳个股详情。
+个股详情页：顺序 概述→收益曲线（补区间卡五卡 + 滑块 rAF 重算）→交易磨损（该股
+orders/trades 聚合）→K线→交易明细→下单记录；配色同步规范。
+可见文案纪律：「沙箱/晋升」仍禁止；「冒烟测试：单股票 × 短期区间」为本轮用户
+批准的流水线文案（test_gui_lab 去术语断言同步放行冒烟一词）。
+测试：lab 两测试文件更新断言 + 3 新用例（fees 聚合、symbols 页、symbol 页结构）；
+lab 65 全绿；全量 `pytest tests/ -q` → **2067 passed + 4 skipped**（2065 + 2 净增）
+零回归。验证：restart qre-gui-lab 后 /、结果页、symbols、symbol、两个静态文件、
+chart-data 全 200；chart-data.fees_summary 真值（18,346 笔，佣金 133.05 万 +
+印花税 111.22 万 + 过户费 4.44 万 = 总磨损 248.70 万，毛收益 1,348.69 万）。
+未 git commit，等用户审批（commit message 需先出示）。
+上一任务：QRE-WORKER-ARTIFACT-PERSIST (DONE — 2065 tests green；awaiting git approval)
+
+2026-09-08 QRE-UI-STYLE-GUIDE（规范文档 + 性能审计已 commit：127200b）。
 
 2026-09-07（用户决策）：**8081 = SaaS staging（预发），ECS aguhuice.com = 生产**。
 发布流程约定：改动 → 8081 验证 → 用户验收 → 部署 ECS。

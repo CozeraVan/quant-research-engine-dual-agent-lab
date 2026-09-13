@@ -2,6 +2,60 @@
 
 ## Task ID
 
+QRE-LAB-UI-LANDING (设计稿 synthesis.html 视觉层与已批准结构调整原位落地 8081 lab 版)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+规范来源 docs/agent/12_UI_STYLE_GUIDE.md；性能依据 13_UI_PERF_NOTES.md。
+8080 管理台零改动（diff 只含 lab_* 模板 / gui/lab_result.py / lab 测试 /
+新增 lab-theme.css + lab-ui.js + lab_symbols.html）。
+
+- 主题抽到 static/lab-theme.css（tokens/字体/动效/组件类，仅 lab 模板 link），
+  交互组件抽到 static/lab-ui.js（PCB 排线 / 日历 / 流水线步骤态）。
+- lab.html：三入口并列卡+PCB；预览栏（#strategy-yaml 迁至参数区后为唯一真相源，
+  pv-params-line 参数合并行、复制按钮）；param-sname 公共策略 ID（applyNameToYaml
+  提交时写入 name，用户手改后不再自动覆盖）；LabUI.attachCalendar 日历（最大可选
+  = /api/admin/refresh state.last_data_date，禁未来函数）；唯一「运行回测」流水线
+  ①/api/validate（先验 ID 合法字符）→②saveToSandbox+smoke+waitForCheck→③/api/run
+  沿用原 payload 与 >3000 只护栏，后端零改动；各入口旧最终按钮（btn-save-smoke/
+  wz-save-smoke/wz-fill-editor/btn-validate/btn-run）删除，startBacktest 保留未用。
+  记录表加「股票数量」列（原有标的数更名）+ 状态徽章 + 删除改 #run-del-mask 二次
+  确认弹层（/api/lab/runs/<id>/delete 不变）。
+- lab_result.py：build_lab_chart_data 新增 fees_summary（round_trips.csv 费用列
+  全量聚合；缺文件/缺列返回 None 前端整块隐藏）；新路由 /lab/runs/<run_id>/symbols。
+  worker 复用该函数（SaaS job chart_data 随之带 fees_summary，纯增量键无回归）。
+- lab_result.html：顺序 概述→收益曲线→box-fees 磨损→FRM→归因 treemap→big-link
+  个股明细入口；dataZoom 区间卡 rAF 节流；配色换淡紫规范。
+- lab_symbols.html（新）：A 层聚合成全量个股表，排序/搜索/完整代码回车直跳。
+- lab_symbol.html：顺序 概述→收益曲线（区间卡五卡+滑块 rAF）→box-wear 磨损（该股
+  orders/trades 聚合）→K线→交易明细→下单记录→失败订单；配色同步。
+- 术语纪律：沙箱/晋升仍禁；「冒烟测试：单股票 × 短期区间」为用户本轮批准文案，
+  test_gui_lab 去术语断言已放行「冒烟」一词。
+- 测试：test_gui_lab.py / test_gui_lab_result.py 更新 + 3 新用例；lab 65 全绿；
+  全量 pytest tests/ -q → 2067 passed + 4 skipped（基线 2065+4，净增 2）。
+- 验证：sudo systemctl restart qre-gui-lab 后 /、/lab/runs/<id>(+symbols+symbol)、
+  两个静态文件、chart-data 全 200；fees_summary 真值已对账。
+- 未 commit。前一任务 QRE-WORKER-ARTIFACT-PERSIST（见 05_PROGRESS）。
+
+## 遗留风险
+
+- 浏览器观感未截图实测（无头环境）：PCB 排线/日历弹层/流水线动画建议人工开 8081 过一遍。
+- 流水线第②步 smoke 用策略默认标的（saveToSandbox/smoke 语义），第③步才应用参数区
+  区间/标的——与母板 SAAS-011 原流程语义一致，未改。
+- 预览栏未做行号/语法高亮（设计稿有）；落地为纯 textarea + 参数合并行，后续可补。
+
+---
+
+<details><summary>历史交接存档</summary>
+
+# Task Handoff
+
+## Task ID
+
 QRE-WORKER-ARTIFACT-PERSIST (缺陷修复：SaaS Worker 回测产物拷回持久存储，/tmp 沙箱丢失导致详情页全空)
 
 ## Current Status
@@ -851,3 +905,5 @@ uv run pytest -q → 1045 passed
 real batch: 106 analyzed / 5 skipped; metadata 5,256 symbols
 qre report-audit outputs/strategy_fit/f365c8a07b33/report_manifest.json --require-match → status=ok, 0 issues
 ```
+
+</details>

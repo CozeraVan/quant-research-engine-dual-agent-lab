@@ -196,6 +196,38 @@ def _strategy_brief(record: dict[str, Any], perf: dict[str, Any] | None) -> dict
     return brief
 
 
+def _fees_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """交易磨损汇总（QRE-LAB-UI-LANDING）：聚合 round_trips.csv 的真实费用列。
+
+    返回佣金/印花税/过户费/总费用/毛收益/净收益/买入成交额合计与交易笔数；
+    round_trips.csv 缺失或字段不全时返回 None（前端整块降级隐藏，不编数）。
+    """
+    path = _find_output_file(record, "round_trips.csv")
+    if path is None:
+        return None
+    try:
+        rows = _read_csv(path)
+    except OSError:
+        return None
+    if not rows:
+        return None
+    agg = {"commission": 0.0, "stamp_tax": 0.0, "transfer_fee": 0.0,
+           "total_cost": 0.0, "gross_pnl": 0.0, "net_pnl": 0.0, "invested": 0.0}
+    for r in rows:
+        for key, col in (("commission", "commission"), ("stamp_tax", "stamp_tax"),
+                         ("transfer_fee", "transfer_fee"), ("total_cost", "total_cost"),
+                         ("gross_pnl", "gross_pnl"), ("net_pnl", "net_pnl"),
+                         ("invested", "entry_notional")):
+            agg[key] += _f(r.get(col)) or 0.0
+    if agg["invested"] <= 0 and agg["total_cost"] <= 0:
+        return None
+    out = {k: round(v, 2) for k, v in agg.items()}
+    out["trades"] = len(rows)
+    # 滑点未单列：引擎 price==price_raw 时默认无滑点，残差并入「过户费/滑点等」由前端口径说明
+    out["other_cost"] = round(agg["total_cost"] - agg["commission"] - agg["stamp_tax"], 2)
+    return out
+
+
 def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
     """组装 /api/lab/runs/<id>/chart-data 的 JSON payload。"""
     data: dict[str, Any] = {"ok": True, "run_id": record.get("run_id")}
@@ -262,6 +294,7 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
 
     trades = _trade_points(record)
     data["trades"] = trades
+    data["fees_summary"] = _fees_summary(record)
     return data
 
 
@@ -1075,6 +1108,28 @@ def _strategy_name_from_yaml(run_id: str) -> str | None:
         return None
 
 
+def _excess_return_of(record: dict[str, Any]) -> float | None:
+    """该 run 的超额收益率（总收益 − 买入持有；QRE-LAB-UI-LANDING-R5 记录表新增列）。
+    仅 completed 且产物在的 run 有值，其余 None（前端显示「——」且排序恒排最后）。
+    """
+    if record.get("status") != "completed":
+        return None
+    path = _find_output_file(record, "strategy_performance.json")
+    if path is None:
+        return None
+    try:
+        perf = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(perf, dict):
+        return None
+    excess = perf.get("excess_return_vs_buy_hold")
+    total, buy_hold = perf.get("strategy_total_return"), perf.get("buy_hold_return")
+    if excess is None and isinstance(total, (int, float)) and isinstance(buy_hold, (int, float)):
+        excess = total - buy_hold
+    return round(excess, 6) if isinstance(excess, (int, float)) else None
+
+
 def build_lab_runs_list() -> list[dict[str, Any]]:
     """list_runs() 增强：每条加 strategy_name / symbol_count，按创建时间倒序。
 
@@ -1098,6 +1153,7 @@ def build_lab_runs_list() -> list[dict[str, Any]]:
             "finished_at": record.get("finished_at"),
             "strategy_name": _strategy_name_from_yaml(run_id) or run_id,
             "symbol_count": len(codes) if codes else None,
+            "excess_return": _excess_return_of(record),
         })
     items.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     return items
@@ -1154,6 +1210,13 @@ def register_lab_result_routes(app: Flask) -> None:
         if record is None:
             return jsonify({"ok": False, "error": f"run {run_id} 不存在"}), 404
         return jsonify(build_lab_risk_analysis(record))
+
+    @app.route("/lab/runs/<run_id>/symbols")
+    def lab_run_symbols(run_id: str):  # type: ignore[no-untyped-def]
+        record = get_run(run_id)
+        if record is None:
+            return render_template("error.html", message=f"Run {run_id} 不存在"), 404
+        return render_template("lab_symbols.html", run_id=run_id)
 
     @app.route("/lab/runs/<run_id>/symbol/<ts_code>")
     def lab_run_symbol(run_id: str, ts_code: str):  # type: ignore[no-untyped-def]

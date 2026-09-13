@@ -51,10 +51,14 @@ def _make_run(tmp_path: Path, with_files: bool = True) -> Path:
         )
         _write_csv(
             out / "round_trips.csv",
-            ["symbol", "entry_date", "exit_date", "holding_days", "net_return", "net_pnl", "exit_reason"],
-            [["000001.SZ", "2024-01-02", "2024-01-04", 5, 0.02, 100, "holding_period"],
-             ["000001.SZ", "2024-01-02", "2024-01-04", 3, 0.005, 100, "holding_period"],
-             ["000001.SZ", "2024-01-02", "2024-01-04", 7, 0.015, 100, "holding_period"]],
+            ["symbol", "entry_date", "exit_date", "holding_days", "net_return", "net_pnl", "exit_reason",
+             "gross_pnl", "commission", "stamp_tax", "transfer_fee", "total_cost", "entry_notional"],
+            [["000001.SZ", "2024-01-02", "2024-01-04", 5, 0.02, 100, "holding_period",
+              105, 3.0, 1.5, 0.5, 5.0, 1000],
+             ["000001.SZ", "2024-01-02", "2024-01-04", 3, 0.005, 100, "holding_period",
+              103, 2.0, 0.8, 0.2, 3.0, 1000],
+             ["000001.SZ", "2024-01-02", "2024-01-04", 7, 0.015, 100, "holding_period",
+              102, 1.5, 0.4, 0.1, 2.0, 1000]],
         )
         _write_csv(
             out / "symbol_performance.csv",
@@ -143,9 +147,20 @@ def test_lab_result_page_200(lab_client):
     assert resp.status_code == 200
     html = resp.data.decode("utf-8")
     assert "/static/echarts.min.js" in html
+    assert "/static/lab-theme.css" in html
     assert "chart-data" in html
     assert "dataZoom" in html
     assert "回撤" in html and "赚钱效应归因" in html and "treemap" in html
+    # QRE-LAB-UI-LANDING：模块顺序 概述→收益曲线→交易磨损→FRM→归因→个股明细入口
+    assert 'id="box-fees"' in html and "交易磨损" in html
+    assert 'id="big-symbols"' in html and "/symbols" in html
+    assert html.index('id="metric-strip"') < html.index('id="box-main"') \
+        < html.index('id="box-fees"') < html.index('id="box-risk"') \
+        < html.index('id="box-tags"') < html.index('id="big-symbols"')
+    # 滑块重算 rAF 节流（性能顺手项）
+    assert "requestAnimationFrame" in html
+    # treemap 三级显隐（面积分档 labelText）+ tooltip 贡献居前个股（1:1 移植设计稿）
+    assert "labelText" in html and "贡献居前" in html
     # QRE-GUI-LAB-RESULT-025：月度热力图与个股 Top10 区块已删除
     assert "chart-monthly" not in html and "chart-symbols" not in html
     assert lab_client.get("/lab/runs/ghost").status_code == 404
@@ -175,6 +190,17 @@ def test_lab_chart_data_ok(lab_client):
     assert d["trades"]["points"][0]["symbol"] == "000001.SZ"
     # QRE-GUI-LAB-RESULT-025：monthly/symbols 字段已随区块删除一并移除
     assert "monthly" not in d and "symbols" not in d
+    # QRE-LAB-UI-LANDING：交易磨损汇总（round_trips 真实费用列聚合）
+    fs = d["fees_summary"]
+    assert fs is not None
+    assert fs["commission"] == 6.5          # 3.0 + 2.0 + 1.5
+    assert fs["stamp_tax"] == 2.7           # 1.5 + 0.8 + 0.4
+    assert fs["transfer_fee"] == 0.8        # 0.5 + 0.2 + 0.1
+    assert fs["total_cost"] == 10.0         # 5 + 3 + 2
+    assert fs["gross_pnl"] == 310.0 and fs["net_pnl"] == 300.0
+    assert fs["invested"] == 3000.0
+    assert fs["trades"] == 3
+    assert fs["other_cost"] == round(10.0 - 6.5 - 2.7, 2)
     # 基准：测试环境 DB 可用则 5 指数，不可用则 None + note，两者都合法
     if d["benchmarks"] is not None:
         assert set(d["benchmarks"]) == {"000001.SH", "000300.SH", "000905.SH", "000852.SH", "399006.SZ"}
@@ -186,6 +212,34 @@ def test_lab_chart_data_ok(lab_client):
 
 def test_lab_chart_data_404(lab_client):
     assert lab_client.get("/api/lab/runs/ghost/chart-data").status_code == 404
+
+
+# --- QRE-LAB-UI-LANDING：个股明细列表页 ---
+
+
+def test_lab_symbols_page_200(lab_client):
+    resp = lab_client.get(f"/lab/runs/{RUN_ID}/symbols")
+    assert resp.status_code == 200
+    html = resp.data.decode("utf-8")
+    assert "/static/lab-theme.css" in html
+    assert 'id="sym-table"' in html and 'id="syms-filter"' in html
+    assert "tag-analysis" in html          # 数据源复用归因端点
+    assert "赚钱效应分位" in html and "总净盈亏" in html
+    assert "Enter" in html                 # 完整代码回车直跳
+    assert lab_client.get("/lab/runs/ghost/symbols").status_code == 404
+
+
+def test_lab_symbol_page_ui_landing(lab_client):
+    resp = lab_client.get(f"/lab/runs/{RUN_ID}/symbol/000001.SZ")
+    assert resp.status_code == 200
+    html = resp.data.decode("utf-8")
+    assert "/static/lab-theme.css" in html
+    # 模块顺序：概述 → 收益曲线（含区间卡） → 交易磨损 → K线 → 交易明细 → 下单记录
+    assert 'id="box-wear"' in html and "交易磨损" in html
+    assert 'id="range-strip"' in html and "区间超额" in html
+    assert html.index('id="sum-strip"') < html.index('id="chart-equity"') \
+        < html.index('id="box-wear"') < html.index('id="chart-kline"') \
+        < html.index('id="tbl-trades"') < html.index('id="tbl-orders"')
 
 
 def test_lab_chart_data_empty_run(monkeypatch, tmp_path):

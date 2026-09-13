@@ -10,7 +10,7 @@
   .metric-card { flex: 1; min-width: 110px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; text-align: center; }
   .metric-card .m-label { font-size: 12px; color: #888; }
   .metric-card .m-value { font-size: 18px; font-weight: 600; margin-top: 2px; }
-  .pos { color: #d43030; } .neg { color: #1a9e4b; } .flat { color: #333; }
+  .pos { color: #C93A3A; } .neg { color: #1E8E5A; } .flat { color: #333; }
   .bench-bar { margin: 4px 0 8px; font-size: 13px; }
   .bench-bar button { margin-right: 6px; padding: 2px 10px; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; cursor: pointer; font-size: 12px; }
   .bench-bar button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
@@ -19,7 +19,7 @@
   .chart-title .opt { font-weight: 400; }
   .chart-empty { color: #999; text-align: center; padding: 40px 0; font-size: 13px; }
   #range-strip { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 14px; }
-  #range-strip .metric-card { border-color: #bfdbfe; background: #eff6ff; }
+  #range-strip .metric-card { border-color: var(--tint-deep); background: var(--tint); }
   .tag-tabs { margin-bottom: 8px; }
   .tag-tabs button { margin-right: 6px; padding: 3px 14px; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; cursor: pointer; font-size: 13px; }
   .tag-tabs button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
@@ -28,16 +28,16 @@
   #tag-detail th, #tag-detail td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; text-align: right; }
   #tag-detail th:first-child, #tag-detail td:first-child { text-align: left; }
   #tag-detail th { color: #888; font-weight: 500; }
-  .pct-hi { color: #d43030; font-weight: 700; }
+  .pct-hi { color: #C93A3A; font-weight: 700; }
   #tag-rank { margin-top: 8px; max-height: 220px; overflow: auto; }
   #tag-rank table { width: 100%; border-collapse: collapse; font-size: 12px; }
   #tag-rank th, #tag-rank td { padding: 3px 8px; border-bottom: 1px solid #f5f5f5; text-align: right; }
   #tag-rank th:first-child, #tag-rank td:first-child { text-align: left; }
   #tag-rank th { color: #888; font-weight: 500; }
   #tag-rank tr.tag-row { cursor: pointer; }
-  #tag-rank tr.tag-row:hover { background: #f0f6ff; }
+  #tag-rank tr.tag-row:hover { background: var(--tint); }
   #tag-detail tr.sym-row { cursor: pointer; }
-  #tag-detail tr.sym-row:hover { background: #f0f6ff; }
+  #tag-detail tr.sym-row:hover { background: var(--tint); }
   #tag-detail th.sortable { cursor: pointer; user-select: none; }
   #tag-detail th.sortable:hover { color: #2563eb; }
   #tag-detail a.detail-link { color: #2563eb; text-decoration: none; }
@@ -53,12 +53,14 @@
   .risk-light { display: inline-block; padding: 2px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
   .risk-light.ok { background: #e7f6ec; color: #1a9e4b; border: 1px solid #b7e4c7; }
   .risk-light.bad { background: #fdecec; color: #d43030; border: 1px solid #f5b5b5; }
-  #risk-gen-btn { padding: 4px 16px; border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; font-size: 13px; }
+  #risk-gen-btn { padding: 4px 16px; border: 1px solid var(--lav); border-radius: 6px; background: var(--lav); color: #fff; cursor: pointer; font-size: 13px; }
   #risk-gen-btn:disabled { opacity: 0.5; cursor: default; }
 </style>
+<link rel="stylesheet" href="/static/lab-theme.css">
 {% endblock %}
 {% block content %}
-<h1 style="font-size:18px;">回测结果 <span class="opt">{{ run_id }}</span></h1>
+<div class="page-head" style="margin-bottom:4px">
+<h1 style="font-size:22px">回测结果 <span class="opt">{{ run_id }}</span></h1>
 <p class="brief-line" id="brief-line" title="点击展开/收起策略简介">📄 <span id="brief-text">策略简介加载中…</span></p>
 <div class="meta-chips" id="meta-chips"></div>
 
@@ -69,6 +71,16 @@
   <div class="bench-bar" id="bench-bar">基准：</div>
   <div id="chart-main" style="height:420px;"></div>
   <div id="range-strip"></div>
+</div>
+
+<div class="chart-box" id="box-fees" style="display:none">
+  <div class="chart-title">交易磨损 <span class="opt">（佣金 / 印花税 / 过户费等集中呈现；聚合自本次回测 round_trips 全量真实费用列）</span></div>
+  <div id="fees-body"></div>
+</div>
+
+<div class="chart-box" id="box-risk">
+  <div class="chart-title">风险分析（FRM） <span class="opt" id="risk-subtitle">（日收益口径；VaR / ES / 压力测试均为损失数字，红色 = 亏损）</span></div>
+  <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
 </div>
 
 <div class="chart-box" id="box-tags">
@@ -84,12 +96,12 @@
   <div id="tag-detail"></div>
 </div>
 
-<div class="chart-box" id="box-risk">
-  <div class="chart-title">风险分析（FRM） <span class="opt" id="risk-subtitle">（日收益口径；VaR / ES / 压力测试均为损失数字，红色 = 亏损）</span></div>
-  <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
+
+<a class="big-link" href="/lab/runs/{{ run_id }}/symbols" id="big-symbols"><span><span class="bl-main">📋 查看个股回测明细</span><span class="bl-sub">全部触发交易的个股列表：代码 / 名称 / 交易笔数 / 胜率 / 总净盈亏 / 超额等，可排序可搜索；点行进入个股详情（K线 + 买卖点 + 因子副图 + 交易明细）</span></span><span class="bl-arrow">→</span></a>
+
 </div>
 
-<p><a href="/runs/{{ run_id }}">查看原始文字详情 →</a>　<a href="/">← 返回实验台</a></p>
+<p style="margin-top:14px;font-size:13.5px"><a class="inl" href="/runs/{{ run_id }}">查看原始文字详情 →</a>　<a class="inl" href="/">← 返回实验台</a>　<a class="inl" href="/lab/runs/{{ run_id }}/symbols">个股回测明细 →</a></p>
 
 <script>
 (function() {
@@ -114,6 +126,7 @@
       renderBrief(d.brief);
       renderMeta(d.meta);
       renderMetrics(d.metrics);
+      renderFees(d.fees_summary, d.meta);
       if (!d.dates || !d.equity) {
         empty('chart-main');
         return;
@@ -151,8 +164,8 @@
   // 盈亏 → 颜色：赚红亏绿，按 |盈亏|/maxAbs 深浅分档
   function pnlColor(pnl, maxAbs) {
     var t = maxAbs > 0 ? Math.min(Math.abs(pnl) / maxAbs, 1) : 0;
-    var light = [245, 245, 245];
-    var deep = pnl >= 0 ? [212, 48, 48] : [26, 158, 75];
+    var light = [245, 244, 250];
+    var deep = pnl >= 0 ? [201, 58, 58] : [30, 142, 90];
     var mix = light.map(function(c, i) { return Math.round(c + (deep[i] - c) * (0.25 + 0.75 * t)); });
     return 'rgb(' + mix.join(',') + ')';
   }
@@ -216,10 +229,12 @@
       tooltip: {
         formatter: function(p) {
           var t = p.data.tagObj;
+          var tops = (t.symbols || []).slice(0, 3).map(function(s) { return (s.name || s.ts_code) + ' ' + s.total_pnl.toFixed(0); }).join('、');
           return t.tag + '<br>总净盈亏 ' + t.total_pnl.toFixed(2) + ' 元' +
                  '<br>平均每笔净收益 ' + (t.avg_ret * 100).toFixed(2) + '%' +
                  '<br>板块同期自然涨幅 ' + (t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%') +
-                 '<br>交易笔数 ' + t.trades + '　胜率 ' + (t.win_rate * 100).toFixed(2) + '%';
+                 '<br>交易笔数 ' + t.trades + '　胜率 ' + (t.win_rate * 100).toFixed(2) + '%' +
+                 '<br>个股 ' + (t.symbols || []).length + ' 只' + (tops ? '；贡献居前：' + tops : '');
         },
       },
       series: [{
@@ -229,15 +244,16 @@
         width: '100%', height: '100%',
         label: {
           show: true, fontSize: 12,
-          formatter: function(p) {
-            var t = p.data.tagObj;
-            return t.tag + '\n' + (t.total_pnl >= 0 ? '+' : '') + t.total_pnl.toFixed(2);
-          },
+          formatter: function(p) { return p.data.labelText; },  // 面积三级显隐在下方按 value 分档
         },
         itemStyle: { borderColor: '#fff', borderWidth: 2, gapWidth: 2 },
         data: tmItems.map(function(t) {
+          // QRE-LAB-UI-LANDING：三级显隐（>4% 名称+数值 / >1.1% 仅名称 / 其余纯块 hover 看 tooltip）
+          var frac = maxAbs > 0 ? Math.abs(t.total_pnl) / maxAbs : 0;
+          var labelText = frac > 0.04 ? t.tag + '\n' + (t.total_pnl >= 0 ? '+' : '') + t.total_pnl.toFixed(2)
+                        : frac > 0.011 ? t.tag : '';
           return {
-            name: t.tag, value: Math.abs(t.total_pnl) || 1, tagObj: t,
+            name: t.tag, value: Math.abs(t.total_pnl) || 1, tagObj: t, labelText: labelText,
             itemStyle: { color: pnlColor(t.total_pnl, maxAbs) },
           };
         }),
@@ -374,6 +390,41 @@
       card('夏普比率', num(m.sharpe), cls(m.sharpe)) +
       card('最大回撤', pct(m.max_drawdown), 'neg') +
       card('胜率', pct(m.win_rate), cls(m.win_rate));
+  }
+
+  // --- QRE-LAB-UI-LANDING：交易磨损区块（round_trips 全量聚合；无数据整块隐藏，不编数） ---
+  function renderFees(fees, meta) {
+    var box = document.getElementById('box-fees');
+    if (!fees) { box.style.display = 'none'; return; }
+    box.style.display = '';
+    var wear = fees.total_cost;
+    var ratio = fees.invested > 0 ? wear / fees.invested : null;
+    var eaten = fees.gross_pnl > 0 ? wear / fees.gross_pnl : null;
+    var f = (meta && meta.fees) || {};
+    function wc(label, val) {
+      return '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+    }
+    var chips = '';
+    if (f.commission_rate != null) {
+      chips = '<div class="meta-chips" style="margin-bottom:10px"><span class="chip">费率配置 <b>佣金 ' +
+        (f.commission_rate * 100).toFixed(2) + '%（最低 ' + f.min_commission + ' 元）· 印花税（卖出）' +
+        (f.stamp_tax_sell * 100).toFixed(2) + '% · 过户费 ' + (f.transfer_fee_rate * 100).toFixed(3) + '%</b></span></div>';
+    }
+    var maxV = Math.max(Math.abs(fees.gross_pnl), Math.abs(fees.net_pnl), 1);
+    var gw = Math.abs(fees.gross_pnl) / maxV * 100, nw = Math.abs(fees.net_pnl) / maxV * 100;
+    document.getElementById('fees-body').innerHTML = chips +
+      '<div class="wear-cards">' +
+        wc('佣金合计', num(fees.commission) + ' 元') +
+        wc('印花税合计', num(fees.stamp_tax) + ' 元') +
+        wc('过户费 / 其他', num(fees.other_cost) + ' 元') +
+        wc('总磨损', num(wear) + ' 元') +
+        wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%') +
+      '</div>' +
+      '<div class="wb">' +
+        '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + gw.toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + num(fees.gross_pnl) + ' 元</span></div>' +
+        '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + nw.toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + num(fees.net_pnl) + ' 元</span></div>' +
+        '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + num(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：本次回测 round_trips 全量 ' + fees.trades + ' 笔真实费用列聚合</div>' +
+      '</div>';
   }
 
   // --- QRE-GUI-LAB-RESULT-031：回测参数信息条（chip 样式，少文字） ---
@@ -526,9 +577,9 @@
       yAxis: { type: 'value', name: '天数' },
       series: [
         { name: '实际分布', type: 'bar', data: mids, barCategoryGap: '5%',
-          itemStyle: { color: '#93c5fd' }, markLine: { symbol: 'none', silent: true, data: marks } },
+          itemStyle: { color: '#B7A6E8' }, markLine: { symbol: 'none', silent: true, data: marks } },
         { name: '正态拟合', type: 'line', data: h.normal, showSymbol: false,
-          lineStyle: { width: 1.5, type: 'dashed' }, color: '#f59e0b' },
+          lineStyle: { width: 1.5, type: 'dashed' }, color: '#241F2E' },
       ],
     });
   }
@@ -551,7 +602,7 @@
       series: [{
         type: 'bar', barWidth: '45%',
         data: order.map(function(k) {
-          return { value: rc[k] || 0, itemStyle: { color: k === vol.latest_regime ? '#2563eb' : '#d1d5db' } };
+          return { value: rc[k] || 0, itemStyle: { color: k === vol.latest_regime ? '#6750A4' : '#D9D2EA' } };
         }),
         label: { show: true, position: 'top' },
       }],
@@ -578,7 +629,7 @@
       yAxis: { type: 'value', name: '损失%', axisLabel: { formatter: function(v) { return (v * 100).toFixed(0) + '%'; } } },
       series: [
         { name: '区间累计损失', type: 'bar', data: st.scenarios.map(function(s) { return s.cum_loss; }), itemStyle: { color: '#d43030' } },
-        { name: '窗口最大回撤', type: 'bar', data: st.scenarios.map(function(s) { return s.max_dd; }), itemStyle: { color: '#f59e0b' } },
+        { name: '窗口最大回撤', type: 'bar', data: st.scenarios.map(function(s) { return s.max_dd; }), itemStyle: { color: '#8B7FBE' } },
       ],
     });
   }
@@ -607,7 +658,7 @@
 
     var series = [{
       name: '策略', id: 'strategy', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
-      data: stratRet, showSymbol: false, lineStyle: { width: 2 }, color: '#2563eb',
+      data: stratRet, showSymbol: false, lineStyle: { width: 2 }, color: '#6750A4',
     }];
     // QRE-GUI-LAB-RESULT-034：交易信号过多时买卖点散点反而糊住净值曲线，首页不再显示
     var hasDD = dd.some(function(v) { return v != null; });
@@ -676,7 +727,12 @@
       applyBench();
     }
 
-    mainChart.on('datazoom', function() { updateRangeStrip(); });
+    var rafPending = false;  // 滑块重算 rAF 节流（13_UI_PERF_NOTES 顺手项）
+    mainChart.on('datazoom', function() {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(function() { rafPending = false; updateRangeStrip(); });
+    });
     window.addEventListener('resize', function() { mainChart && mainChart.resize(); });
     updateRangeStrip();
   }
@@ -688,7 +744,7 @@
     mainChart.setOption({
       series: [{
         name: '基准', id: 'bench', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ret,
-        showSymbol: false, lineStyle: { width: 1.5, type: 'dashed' }, color: '#f59e0b',
+        showSymbol: false, lineStyle: { width: 1.5, type: 'dashed' }, color: '#8B7FBE',
       }],
     });
   }

@@ -8,7 +8,7 @@
   .metric-card { flex: 1; min-width: 110px; max-width: 100%; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; text-align: center; box-sizing: border-box; overflow: hidden; }
   .metric-card .m-label { font-size: 12px; color: #888; }
   .metric-card .m-value { font-size: 15px; font-weight: 600; margin-top: 2px; word-break: break-all; }
-  .pos { color: #d43030; } .neg { color: #1a9e4b; } .flat { color: #333; }
+  .pos { color: #C93A3A; } .neg { color: #1E8E5A; } .flat { color: #333; }
   .chart-box { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 14px; overflow: hidden; }
   .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
   .chart-title .opt { font-weight: 400; }
@@ -18,24 +18,29 @@
   .detail-table th { color: #888; font-weight: 500; }
   .table-wrap { max-height: 360px; overflow: auto; max-width: 100%; }
 </style>
+<link rel="stylesheet" href="/static/lab-theme.css">
 {% endblock %}
 {% block content %}
-<h1 style="font-size:18px;">个股回测详情 <span class="opt">{{ ts_code }}　@ {{ run_id }}</span></h1>
+<div class="page-head" style="margin-bottom:4px">
+  <h1 style="font-size:22px;word-break:break-all">个股回测详情 <span class="opt">{{ ts_code }}　@ {{ run_id }}</span></h1>
+  <p style="font-size:13px;margin-top:6px"><a class="inl" href="/lab/runs/{{ run_id }}/symbols">← 个股明细列表</a>　<a class="inl" href="/lab/runs/{{ run_id }}">回测结果</a></p>
+</div>
 <div class="metric-strip" id="sum-strip"></div>
+
+<div class="chart-box">
+  <div class="chart-title">收益曲线 <span class="opt">（策略净值 vs 个股买入持有 vs 基准指数；拖动滑块缩放）</span></div>
+  <div id="chart-equity" style="height:260px;"></div>
+  <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
+</div>
+
+<div class="chart-box" id="box-wear" style="display:none">
+  <div class="chart-title">交易磨损 <span class="opt">（该股本次回测全部真实订单/成交费用聚合）</span></div>
+  <div id="wear-body"></div>
+</div>
 
 <div class="chart-box">
   <div class="chart-title">日 K 与买卖点 <span class="opt">（买 ▲红 / 卖 ▼绿，hover 看下单详情；拖动下方滑块缩放）</span></div>
   <div id="chart-kline" style="height:460px;"></div>
-</div>
-
-<div class="chart-box">
-  <div class="chart-title">该股净值曲线</div>
-  <div id="chart-equity" style="height:220px;"></div>
-</div>
-
-<div class="chart-box">
-  <div class="chart-title">下单记录 <span class="opt" id="orders-note"></span></div>
-  <div class="table-wrap" id="tbl-orders"></div>
 </div>
 
 <div class="chart-box">
@@ -44,11 +49,16 @@
 </div>
 
 <div class="chart-box">
+  <div class="chart-title">下单记录 <span class="opt" id="orders-note"></span></div>
+  <div class="table-wrap" id="tbl-orders"></div>
+</div>
+
+<div class="chart-box">
   <div class="chart-title">失败订单</div>
   <div class="table-wrap" id="tbl-failed"></div>
 </div>
 
-<p><a href="/lab/runs/{{ run_id }}">← 返回回测结果</a></p>
+<p><a href="/lab/runs/{{ run_id }}/symbols">← 个股明细列表</a>　<a href="/lab/runs/{{ run_id }}">回测结果</a></p>
 
 <script>
 (function() {
@@ -93,6 +103,7 @@
       }
       renderSummary(d.summary);
       renderEquity(d);
+      renderWear(d);
       renderKline(d);
       table('tbl-orders', d.orders, [
         ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
@@ -115,6 +126,45 @@
     })
     .catch(function() { empty('chart-kline', '数据加载失败'); });
 
+  // 交易磨损（QRE-LAB-UI-LANDING：orders 真实费用列聚合；无则整块隐藏）
+  function renderWear(d) {
+    var box = document.getElementById('box-wear');
+    if (!d.orders || !d.orders.length) { box.style.display = 'none'; return; }
+    var comm = 0, stamp = 0, transfer = 0, invested = 0;
+    d.orders.forEach(function(o) {
+      comm += Number(o.commission) || 0;
+      stamp += Number(o.stamp_tax) || 0;
+      transfer += Number(o.transfer_fee) || 0;
+      if (o.side === 'buy') invested += Number(o.notional) || 0;
+    });
+    var wear = comm + stamp + transfer;
+    var gross = null, net = null;
+    if (d.trades && d.trades.length && d.trades[0].gross_pnl != null) {
+      gross = 0; net = 0;
+      d.trades.forEach(function(t) { gross += Number(t.gross_pnl) || 0; net += Number(t.net_pnl) || 0; });
+    }
+    box.style.display = '';
+    function wc(label, val) {
+      return '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+    }
+    var ratio = invested > 0 ? wear / invested : null;
+    var html = '<div class="wear-cards">' +
+      wc('佣金合计', f2(comm) + ' 元') + wc('印花税合计', f2(stamp) + ' 元') +
+      wc('过户费合计', f2(transfer) + ' 元') + wc('总磨损', f2(wear) + ' 元') +
+      wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%') + '</div>';
+    if (gross != null) {
+      var maxV = Math.max(Math.abs(gross), Math.abs(net), 1);
+      var eaten = gross > 0 ? wear / gross : null;
+      html += '<div class="wb">' +
+        '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(gross) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(gross) + ' 元</span></div>' +
+        '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(net) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(net) + ' 元</span></div>' +
+        '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：该股 ' + d.trades.length + ' 笔完整交易</div></div>';
+    } else {
+      html += '<div class="wb-note">费用合计为订单口径；毛/净收益对比需 round_trips 数据（本 run 未产出）。</div>';
+    }
+    document.getElementById('wear-body').innerHTML = html;
+  }
+
   function renderSummary(s) {
     // 统一百分比口径（QRE-GUI-LAB-RESULT-034）：策略区间收益% vs 区间自然涨幅%，金额作辅助
     document.getElementById('sum-strip').innerHTML =
@@ -135,9 +185,9 @@
     var chart = echarts.init(klineEl);
     var series = [
       { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
-        itemStyle: { color: '#d43030', color0: '#1a9e4b', borderColor: '#d43030', borderColor0: '#1a9e4b' } },
+        itemStyle: { color: '#C93A3A', color0: '#1E8E5A', borderColor: '#C93A3A', borderColor0: '#1E8E5A' } },
       { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.kline.vols,
-        itemStyle: { color: '#93c5fd' } },
+        itemStyle: { color: '#B7A6E8' } },
     ];
     // 买卖点标记在 K 线上（买红三角贴最低价下方，卖绿三角贴最高价上方）
     if (d.orders && d.orders.length) {
@@ -195,13 +245,13 @@
           if (f.thresholds && f.thresholds.length) {
             markLine = {
               silent: true, symbol: 'none',
-              lineStyle: { type: 'dashed', color: '#f59e0b' },
+              lineStyle: { type: 'dashed', color: '#8B7FBE' },
               label: { formatter: function(p) { return Number(p.value).toFixed(2); }, fontSize: 10 },
               data: f.thresholds.map(function(v) { return { yAxis: v }; }),
             };
           }
           series.push({ name: f.name, type: 'line', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: f.values,
-            showSymbol: false, lineStyle: { width: 1.2 }, color: '#7c3aed', markLine: markLine });
+            showSymbol: false, lineStyle: { width: 1.2 }, color: '#6750A4', markLine: markLine });
         });
       }
       var zoomX = xAxis.map(function(_, i) { return i; });
@@ -238,10 +288,10 @@
       return (c / k0 - 1) * 100;
     });
     var series = [
-      { name: '策略净值(元)', type: 'line', data: eq.values, showSymbol: false, lineStyle: { width: 1.5 }, color: '#2563eb' },
+      { name: '策略净值(元)', type: 'line', data: eq.values, showSymbol: false, lineStyle: { width: 1.5 }, color: '#6750A4' },
     ];
     if (holdPct.some(function(v) { return v != null; })) {
-      series.push({ name: '个股持有到期收益%', type: 'line', yAxisIndex: 1, data: holdPct, showSymbol: false, lineStyle: { width: 1.2, type: 'dashed' }, color: '#d43030' });
+      series.push({ name: '个股持有到期收益%', type: 'line', yAxisIndex: 1, data: holdPct, showSymbol: false, lineStyle: { width: 1.2, type: 'dashed' }, color: '#9A93A6' });
     }
     if (d.benchmarks) {
       Object.keys(d.benchmarks).forEach(function(code) {
@@ -275,6 +325,46 @@
       dataZoom: [{ type: 'inside' }, { type: 'slider', bottom: 6, height: 18 }],
       series: series,
     });
+    // 区间信息卡（QRE-LAB-UI-LANDING：与策略页同口径，随滑块 rAF 节流重算）
+    var benchCode = d.benchmarks && d.benchmarks['000001.SH'] ? '000001.SH' : (d.benchmarks ? Object.keys(d.benchmarks)[0] : null);
+    function sliceRetPct(pctArr, i0, i1) {  // 由全期累计收益%序列换算区间收益
+      var a = null, b = null;
+      for (var i = i0; i <= i1; i++) if (pctArr[i] != null) { if (a == null) a = pctArr[i]; b = pctArr[i]; }
+      if (a == null || b == null) return null;
+      return (1 + b / 100) / (1 + a / 100) - 1;
+    }
+    var benchPct = null;
+    if (benchCode) {
+      var bcs = d.benchmarks[benchCode].closes, b0 = null;
+      benchPct = bcs.map(function(c) { if (c == null) return null; if (b0 == null) b0 = c; return (c / b0 - 1) * 100; });
+    }
+    function updateEqStrip() {
+      var strip = document.getElementById('range-strip');
+      if (!strip) return;
+      var dz = chart.getOption().dataZoom[0];
+      var n = eq.dates.length;
+      var i0 = dz.startValue != null ? dz.startValue : Math.floor((dz.start || 0) / 100 * (n - 1));
+      var i1 = dz.endValue != null ? dz.endValue : Math.ceil((dz.end != null ? dz.end : 100) / 100 * (n - 1));
+      i0 = Math.max(0, Math.min(i0, n - 1)); i1 = Math.max(i0, Math.min(i1, n - 1));
+      var ev = eq.values.slice(i0, i1 + 1).filter(function(v) { return v != null; });
+      var sRet = ev.length >= 2 ? ev[ev.length - 1] / ev[0] - 1 : null;
+      var hRet = sliceRetPct(holdPct, i0, i1);
+      var bRet = benchPct ? sliceRetPct(benchPct, i0, i1) : null;
+      var excess = (sRet != null && hRet != null) ? sRet - hRet : null;
+      strip.innerHTML =
+        card('区间策略收益', pct(sRet), cls(sRet)) +
+        card('区间买入持有收益', pct(hRet), cls(hRet)) +
+        card('区间基准收益·' + (benchCode ? d.benchmarks[benchCode].name : '基准'), pct(bRet), cls(bRet)) +
+        card('区间超额·vs买入持有', pct(excess), cls(excess)) +
+        card('交易日数', i1 - i0 + 1, 'flat');
+    }
+    var rafEq = false;
+    chart.on('datazoom', function() {
+      if (rafEq) return;
+      rafEq = true;
+      requestAnimationFrame(function() { rafEq = false; updateEqStrip(); });
+    });
+    updateEqStrip();
     window.addEventListener('resize', function() { chart.resize(); });
   }
 })();

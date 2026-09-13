@@ -1,23 +1,44 @@
 {% extends "base.html" %}
-{% block nav %}<a href="/">新建策略</a>
-    <a href="#tab-onboard">回测记录</a>{% endblock %}
+{% block nav %}<a href="#tab-strategy" data-tab-link="strategy">新建策略</a>
+    <a href="#tab-onboard" data-tab-link="onboard">回测记录</a>{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/lab-theme.css">
+<script src="/static/lab-ui.js"></script>{% endblock %}
 {% block content %}
-<h1>QRE 策略实验台 <span class="opt">（新增策略 + 回测记录）</span></h1>
-
-<div class="tabs">
-  <button class="tab active" data-tab="strategy">新增策略</button>
-  <button class="tab" data-tab="onboard">回测记录</button>
+<div class="page-head">
+  <h1>把一个想法，变成可验证的策略</h1>
+  <p>三种方式进入，按你的经验任选其一；下方回测参数对三个入口共用。提交后自动先对随机 1 只股票做冒烟测试，通过才进入全量回测。</p>
 </div>
+
+<!-- TAB 切换改由顶部导航承担（QRE-LAB-UI-LANDING-R5：原卡片上方重复 tab 按钮已删） -->
 
 <!-- TAB 1: 新增策略（三入口 tab 递进重构，QRE-GUI-LAB-ENTRY-018） -->
 <div id="tab-strategy" class="tab-content active">
 
-  <!-- 三个入口：自然语言（默认，所有人）→ 快速向导（因子库主角）→ 高级 YAML（有基础用户） -->
-  <div class="tabs entry-tabs">
-    <button class="entry-tab active" data-entry-tab="nl">① 自然语言 <span class="opt">人人可用</span></button>
-    <button class="entry-tab" data-entry-tab="wizard">② 快速向导 <span class="opt">从因子库挑条件</span></button>
-    <button class="entry-tab" data-entry-tab="yaml">③ 高级 YAML <span class="opt">直接编辑</span></button>
+  <!-- 三个入口：并列卡片 + PCB 排线（QRE-LAB-UI-LANDING；数据逻辑不变） -->
+  <div class="entry-grid" id="entryGrid">
+    <button class="entry-card entry-tab selected active" data-entry-tab="nl">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">① 人人可用</span>
+      <h3>自然语言描述</h3>
+      <div class="entry-desc">用一句中文描述买卖规则，AI 自动编译为策略代码，确认后再回测。</div>
+      <div class="entry-fit">适合：<b>没有编程基础</b>，先快速试一个想法</div>
+    </button>
+    <button class="entry-card entry-tab" data-entry-tab="wizard">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">② 从因子库挑条件</span>
+      <h3>快速向导</h3>
+      <div class="entry-desc">从因子库逐级挑选入场 / 出场条件，自动生成策略 YAML。</div>
+      <div class="entry-fit">适合：<b>懂指标与条件组合</b>，想精确控制信号</div>
+    </button>
+    <button class="entry-card entry-tab" data-entry-tab="yaml">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">③ 直接编辑</span>
+      <h3>策略代码 YAML</h3>
+      <div class="entry-desc">直接编写或粘贴策略 YAML，支持模板加载与保存模板。</div>
+      <div class="entry-fit">适合：<b>有经验的用户</b>，前两个入口的结果也落到这里</div>
+    </button>
   </div>
+  <div class="pcb-stage" id="pcb-stage" aria-hidden="true"><svg id="pcb-svg"></svg></div>
 
   <!-- 入口 1：自然语言 -->
   <div id="entry-tab-nl" class="entry-content active">
@@ -32,80 +53,44 @@
         <button type="button" class="nl-example">收盘价高于10元买入，跌破20日均线卖出，最多持仓20天</button>
       </div>
       <div class="editor-actions">
-        <button id="btn-nl-compile" class="btn btn-primary">生成策略 YAML</button>
+        <button id="btn-nl-compile" class="btn btn-primary">生成策略</button>
         <span id="nl-status" class="hidden"></span>
       </div>
       <div id="nl-result" class="result-box hidden"></div>
     </div>
   </div>
 
-  <!-- 入口 2：快速向导（主角是因子库；条件行 = 因子下拉 → 比较符 → 右值） -->
+  <!-- 入口 2：快速向导（两级条件组：组内 AND/OR + 组间 AND/OR；结构与 18080 定稿一致） -->
   <div id="entry-tab-wizard" class="entry-content">
     <div class="panel">
       <h2>快速向导：从因子库挑条件，自动生成策略</h2>
       <div id="wz-factor-status" class="opt">加载因子目录中...</div>
-      <div class="form-grid" style="margin-top:6px;">
-        <label>策略 ID</label>
-        <input type="text" id="wz-name" placeholder="wizard_strategy">
+      <p class="opt" style="margin:4px 0 2px">策略 ID 在下方「回测参数」区第一行统一命名（三个入口共用）。</p>
+
+      <h4 style="margin-top:10px;">入场条件 <span class="req">*</span> <span class="opt">（示例占位可改：EMA5 上穿 EMA200；组内先组合、组间再组合，单组时即扁平行为）</span></h4>
+      <div id="wz-entry" class="cond-groups"></div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
+        <button class="btn-sm" data-addgroup="entry">+ 添加条件组</button>
+        <span class="opt">更复杂的逻辑组合，可切换到自然语言或 YAML 入口直接描述</span>
       </div>
 
-      <h4 style="margin-top:10px;">入场条件 <span class="req">*</span> <span class="opt">（示例占位可改：EMA5 上穿 EMA200）</span></h4>
-      <div id="wz-entry-conditions" class="condition-list"></div>
-      <button class="btn-sm" onclick="wzAddCondition('entry')">+ 添加入场条件</button>
-
-      <h4 style="margin-top:12px;">出场条件 <span class="req">*</span> <span class="opt">（示例占位可改：EMA5 下穿 EMA200）</span></h4>
-      <div id="wz-exit-conditions" class="condition-list"></div>
-      <button class="btn-sm" onclick="wzAddCondition('exit')">+ 添加出场条件</button>
-
-      <!-- 高级选项（可选，默认折叠） -->
-      <div class="section" style="margin-top:12px;">
-        <button class="section-toggle collapsed" data-section="wz-advanced">高级选项（可选：止盈 / 止损 / 移动止损 / 最大持仓天数 / 条件组 AND·OR）&#9660;</button>
-        <div id="sec-wz-advanced" class="section-body collapsed">
-          <div class="form-grid form-grid-3">
-            <label>入场条件组合</label>
-            <select id="wz-entry-combinator">
-              <option value="and">AND（全部满足）</option>
-              <option value="or">OR（任一满足）</option>
-            </select>
-
-            <label>出场条件组合</label>
-            <select id="wz-exit-combinator">
-              <option value="and">AND（全部满足）</option>
-              <option value="or">OR（任一满足）</option>
-            </select>
-
-            <label>最大持仓天数</label>
-            <input type="number" id="wz-holding" value="20" min="1">
-
-            <label>止损 Stop Loss</label>
-            <input type="number" id="wz-stop-loss" step="0.01" placeholder="可空，如 0.08">
-
-            <label>止盈 Take Profit</label>
-            <input type="number" id="wz-take-profit" step="0.01" placeholder="可空，如 0.15">
-
-            <label>移动止损 Trailing</label>
-            <input type="number" id="wz-trailing" step="0.01" placeholder="可空，如 0.05">
-          </div>
-        </div>
+      <h4 style="margin-top:16px;">出场条件 <span class="req">*</span> <span class="opt">（示例占位可改：EMA5 下穿 EMA200）</span></h4>
+      <div id="wz-exit" class="cond-groups"></div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
+        <button class="btn-sm" data-addgroup="exit">+ 添加条件组</button>
+        <span class="opt">更复杂的逻辑组合，可切换到自然语言或 YAML 入口直接描述</span>
       </div>
 
-      <h4 style="margin-top:12px;">策略代码预览（高级）</h4>
-      <pre id="wz-yaml-preview" class="compiled-yaml">（添加入场/出场条件后自动生成）</pre>
-      <div class="builder-actions">
-        <button id="wz-save-smoke" class="btn btn-primary" title="先自动做小范围验证，通过后自动开始全量回测">开始回测</button>
-        <button id="wz-fill-editor" class="btn btn-ghost" title="把生成的策略代码填入「高级 YAML」tab 并跳转，供手动精修">去高级 YAML 修改详情 →</button>
-        <span id="wz-status" class="hidden"></span>
-      </div>
+      <p class="opt" style="margin-top:8px">条件改动实时生成代码并与页面底部「策略代码预览」栏同步，统一由底部「运行回测」提交。</p>
     </div>
   </div>
 
-  <!-- 入口 3：高级 YAML（前两个通道的输出都落到这里，可编辑） -->
+  <!-- 入口 3：高级 YAML（编辑器本体在底部「策略代码预览」栏，这里保留模板工具） -->
   <div id="entry-tab-yaml" class="entry-content">
     <div class="panel editor-panel">
-      <h2>策略 YAML 编辑器 <span class="opt">（自然语言 / 快速向导的结果都落到此处，可直接修改）</span></h2>
-      <textarea id="strategy-yaml" rows="24" cols="80" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
+      <h2>策略代码（YAML） <span class="opt">（编辑器在页面底部「策略代码预览」栏；自然语言 / 快速向导的结果都落到那里，可直接修改）</span></h2>
+      <p><button class="btn btn-ghost" id="btn-goto-preview">去底部编辑代码 ↓</button></p>
       <div class="editor-actions">
-        <button id="btn-validate" class="btn btn-ghost">验证 Validate</button>
         <label class="file-label btn-ghost">
           加载文件 Load file
           <input type="file" id="file-input" accept=".yaml,.yml" hidden>
@@ -122,10 +107,6 @@
         <input type="text" id="template-name" placeholder="模板名称 template name" size="16">
         <button id="btn-save-template" class="btn btn-ghost">保存模板 Save Template</button>
       </div>
-      <div id="validate-result" class="result-box hidden"></div>
-      <div class="editor-actions">
-        <button id="btn-save-smoke" class="btn btn-primary" title="先自动做小范围验证，通过后自动开始全量回测">开始回测</button>
-      </div>
     </div>
   </div>
 
@@ -133,14 +114,21 @@
   <div class="panel param-panel">
     <h2>回测参数 Parameters</h2>
     <div class="form-grid">
-      <label>回测区间 <span class="req">*</span></label>
+      <label>策略名称 / ID <span class="req">*</span></label>
       <span>
-        <input type="text" id="param-start" placeholder="YYYY-MM-DD" size="11"> ~
-        <input type="text" id="param-end" placeholder="YYYY-MM-DD" size="11">
+        <input type="text" id="param-sname" size="30" placeholder="留空则按入口与条件自动生成">
+        <span class="opt">三个入口共用；实时写入预览 YAML 的 name 字段；仅允许字母、数字、下划线、连字符</span>
+      </span>
+
+      <label>回测区间 <span class="req">*</span></label>
+      <span style="position:relative">
+        <input type="text" id="param-start" placeholder="YYYY-MM-DD" size="11" readonly class="date-input" title="点击打开日历"> ~
+        <input type="text" id="param-end" placeholder="YYYY-MM-DD" size="11" readonly class="date-input" title="点击打开日历">
         <button type="button" class="btn-sm range-btn" data-years="1">近1年</button>
         <button type="button" class="btn-sm range-btn" data-years="2">近2年（默认）</button>
         <button type="button" class="btn-sm range-btn" data-years="5">近5年</button>
         <button type="button" class="btn-sm" id="range-all">全期(2010起)</button>
+        <div class="cal-pop" id="cal-pop" style="display:none"></div>
       </span>
 
       <label>标的范围 <span class="req">*</span></label>
@@ -204,8 +192,10 @@
           <label>移动止损 Trailing %</label>
           <input type="text" id="param-trailing-stop" placeholder="可空，如 0.05">
 
-          <label>小样本预检 Precheck</label>
-          <span class="label-inline"><input type="checkbox" id="param-precheck" checked> 先跑前 20 只 × 近 6 个月</span>
+          <label>最大持仓天数 Max Holding</label>
+          <input type="text" id="param-holding" value="20" placeholder="默认 20；留空 = 不限">
+
+          <!-- 预检已从用户参数移除（18080 定稿）：冒烟固定后台自动跑，单股票自动跳过 -->
 
           <!-- 内部工程参数：面向普通用户隐藏（QRE-SAAS-013），JS 仍读默认值 -->
           <div class="hidden" id="param-internal-fields">
@@ -233,14 +223,30 @@
           </div>
         </div>
       </div>
+    </div><!-- /param-panel -->
 
-      <div class="run-actions">
-        <button id="btn-run" class="btn btn-primary">运行回测 Run Backtest</button>
-        <span id="run-status" class="hidden"></span>
-      </div>
+  <!-- 策略代码预览栏（唯一 YAML 真相源；三个入口的产出都汇聚到这里） -->
+  <div class="card" id="preview-card">
+    <div class="pv-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 style="margin:0;font-size:16px">策略代码预览 <span class="opt">（最终合并版：策略定义 + 回测参数；三个入口的产出都汇聚到这里）</span></h2>
+      <span style="margin-left:auto"></span>
+      <button class="btn-sm" id="pv-edit-toggle">编辑代码</button>
+      <button class="btn-sm" id="btn-copy-yaml">复制</button>
     </div>
+    <pre class="compiled-yaml pv" id="pv-view"></pre>
+    <textarea id="strategy-yaml" rows="20" cols="80" style="display:none;width:100%;font-family:var(--mono);font-size:12.5px" placeholder="粘贴或加载策略 YAML 文件...">{{ default_strategy_yaml }}</textarea>
+  </div>
 
-  <div id="run-result" class="result-box hidden"></div>
+  <!-- 唯一主按钮：运行回测流水线（校验 → 冒烟测试 → 全量回测；失败红字停留） -->
+  <div class="card" id="run-card" style="border-color:var(--lav-ink)">
+    <button id="btn-run-main" class="btn btn-primary btn-run-main">运行回测 Run Backtest</button>
+    <div id="pipe" style="display:none;margin-top:14px">
+      <div class="pipe-step" id="pipe-1"><span class="pipe-dot"></span><span class="pipe-name">校验 / 编译策略代码</span><span class="pipe-st"></span></div>
+      <div class="pipe-step" id="pipe-2"><span class="pipe-dot"></span><span class="pipe-name">冒烟测试：随机 1 只股票 × 短期区间（自动）</span><span class="pipe-st"></span></div>
+      <div class="pipe-step" id="pipe-3"><span class="pipe-dot"></span><span class="pipe-name">完整回测（全量标的 × 选定区间）</span><span class="pipe-st"></span></div>
+      <div id="run-result" class="result-box hidden pipe-err"></div>
+    </div>
+  </div>
 
   <!-- 我的策略：按用户要求隐藏（易困惑；底层 API 保留） -->
   <div class="panel hidden" id="sandbox-panel">
@@ -261,15 +267,16 @@
   </div>
 </div>
 
-<!-- TAB 2: 回测管理（回测记录列表：只显示实际跑过的 run，QRE-GUI-CONSOL-040） -->
+<!-- TAB 2: 回测记录（设计稿同款：工具行 + 主表格 + 删除弹层；数据 /api/lab/runs） -->
 <div id="tab-onboard" class="tab-content">
-  <div class="section">
-    <button class="section-toggle" data-section="ob-runs">回测记录 &#9660;</button>
-    <div id="sec-ob-runs" class="section-body">
-      <p><button id="btn-runs-refresh" class="btn btn-ghost">刷新</button>
-        <span class="opt" style="margin-left:1rem;">这里只列出你实际跑过的回测；已完成的可查看结果。</span></p>
-      <div id="ob-runs-table"></div>
+  <div class="card">
+    <div class="table-tools">
+      <button id="btn-runs-refresh" class="btn btn-ghost" style="padding:7px 18px">刷新</button>
+      <span class="opt">这里只列出你实际跑过的回测；已完成的可查看结果。</span>
+      <span style="margin-left:auto"></span>
+      <input type="text" id="recs-filter" placeholder="筛选策略名 / run_id…" style="width:220px">
     </div>
+    <div id="ob-runs-table"></div>
   </div>
   <div class="section">
     <button class="section-toggle collapsed" data-section="ob-refresh">持续更新（QRE refresh）状态 &#9660;</button>
@@ -277,6 +284,18 @@
       <p><button id="btn-ob-refresh" class="btn btn-ghost">刷新 Refresh</button></p>
       <div id="ob-state"></div>
       <div id="ob-delta"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 删除回测记录二次确认弹层（QRE-LAB-UI-LANDING） -->
+<div class="modal-mask" id="run-del-mask">
+  <div class="modal">
+    <h3>删除该回测记录？</h3>
+    <p id="run-del-text"></p>
+    <div class="m-actions">
+      <button class="btn btn-ghost" id="run-del-cancel">取消</button>
+      <button class="btn btn-primary" id="run-del-ok" style="background:var(--up);border-color:var(--up)">确认删除</button>
     </div>
   </div>
 </div>
@@ -302,14 +321,23 @@
 (function() {
   var tabs = document.querySelectorAll('.tab');
   var contents = document.querySelectorAll('.tab-content');
+  function activateTab(name) {
+    tabs.forEach(function(x) { x.classList.toggle('active', x.dataset.tab === name); });
+    contents.forEach(function(x) { x.classList.toggle('active', x.id === 'tab-' + name); });
+  }
   tabs.forEach(function(t) {
-    t.addEventListener('click', function() {
-      tabs.forEach(function(x) { x.classList.remove('active'); });
-      contents.forEach(function(x) { x.classList.remove('active'); });
-      t.classList.add('active');
-      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    t.addEventListener('click', function() { activateTab(t.dataset.tab); });
+  });
+  // 顶部导航承担 tab 切换（QRE-LAB-UI-LANDING-R5）
+  document.querySelectorAll('[data-tab-link]').forEach(function(a) {
+    a.addEventListener('click', function(ev) {
+      ev.preventDefault();
+      activateTab(a.dataset.tabLink);
+      history.replaceState(null, '', '#' + a.dataset.tabLink);
     });
   });
+  // 支持直接用 #strategy / #onboard 打开对应 tab
+  if (location.hash === '#onboard' || location.hash === '#tab-onboard') activateTab('onboard');
 
   document.querySelectorAll('.section-toggle').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -349,18 +377,29 @@
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
 
-  // ---------- 三个入口 tab 切换 ----------
+  // ---------- 三个入口卡切换（QRE-LAB-UI-LANDING：并列卡 + PCB 排线） ----------
+  var pcbStage = document.getElementById("pcb-stage");
+  function pcbCards() {
+    return Array.prototype.slice.call(document.querySelectorAll("#entryGrid .entry-card"));
+  }
   function switchEntryTab(name) {
     document.querySelectorAll(".entry-tab").forEach(function(t) {
       t.classList.toggle("active", t.dataset.entryTab === name);
+      t.classList.toggle("selected", t.dataset.entryTab === name);
     });
     document.querySelectorAll(".entry-content").forEach(function(c) {
       c.classList.toggle("active", c.id === "entry-tab-" + name);
     });
   }
   document.querySelectorAll(".entry-tab").forEach(function(t) {
-    t.addEventListener("click", function() { switchEntryTab(t.dataset.entryTab); });
+    t.addEventListener("click", function() {
+      switchEntryTab(t.dataset.entryTab);
+      if (window.LabUI) LabUI.energizePCB(pcbStage, pcbCards());
+      maybeAutoName();
+    });
   });
+  window.addEventListener("resize", function() { if (window.LabUI) LabUI.layoutPCB(pcbStage, pcbCards()); });
+  window.addEventListener("load", function() { if (window.LabUI) LabUI.layoutPCB(pcbStage, pcbCards()); });
 
   // ---------- 因子目录 → 分组选项（带搜索的下拉选单数据源） ----------
   function loadFactorCatalog() {
@@ -428,8 +467,8 @@
       && FACTOR_OPTIONS.some(function(o) { return o.value === "ema_200"; });
     var l = hasEma ? "ema_5" : "close";
     var r = hasEma ? "ema_200" : "pre_close";
-    wzAddCondition("entry", {left: l, op: "crosses_above", right: r});
-    wzAddCondition("exit",  {left: l, op: "crosses_below", right: r});
+    wzAddGroup("entry", {left: l, op: "crosses_above", right: r});
+    wzAddGroup("exit",  {left: l, op: "crosses_below", right: r});
   }
 
   // ---------- 三级联动下拉（大类 → 子类 → 因子，原生 JS，零依赖） ----------
@@ -526,8 +565,9 @@
   }
 
   // ---------- 条件行：因子下拉 → 比较符 → 右值（因子 或 固定值） ----------
-  window.wzAddCondition = function(group, preset) {
-    var container = document.getElementById("wz-" + group + "-conditions");
+  // ---------- 条件行：三级因子 → 比较符 → 右值（因子 或 固定值）+ 删除（逐条件 NOT 勾选已按 18080 定稿移除） ----------
+  function wzAddCondition(area, groupEl, preset) {
+    var container = groupEl.querySelector(".cond-group-rows");
     var row = document.createElement("div");
     row.className = "condition-item wz-cond";
 
@@ -558,21 +598,13 @@
     rnum.size = 7;
     rnum.style.display = "none";
 
-    // 每条件取反（NOT）：覆盖「排除型」组合，如 A and B and not E
-    var notLabel = document.createElement("label");
-    notLabel.className = "label-inline";
-    notLabel.title = "勾选后该条件取反（not）";
-    var notCb = document.createElement("input");
-    notCb.type = "checkbox";
-    notCb.className = "wz-not";
-    notCb.addEventListener("change", refreshWizard);
-    notLabel.appendChild(notCb);
-    notLabel.appendChild(document.createTextNode(" 取反"));
-
     var rm = document.createElement("button");
     rm.className = "btn-sm btn-remove-cond";
     rm.textContent = "x";
-    rm.addEventListener("click", function() { row.remove(); refreshWizard(); });
+    rm.addEventListener("click", function() {
+      if (container.querySelectorAll(".wz-cond").length <= 1) { alert("每组至少保留 1 条条件"); return; }
+      row.remove(); refreshWizard();
+    });
 
     isfixed.addEventListener("change", function() {
       rnum.style.display = isfixed.checked ? "" : "none";
@@ -585,7 +617,7 @@
     });
 
     row.appendChild(leftWrap); row.appendChild(op); row.appendChild(fixedLabel);
-    row.appendChild(rightWrap); row.appendChild(rnum); row.appendChild(notLabel); row.appendChild(rm);
+    row.appendChild(rightWrap); row.appendChild(rnum); row.appendChild(rm);
     container.appendChild(row);
 
     if (preset) {
@@ -598,7 +630,61 @@
       syncFactorSelect(rightWrap, null);
     }
     refreshWizard();
-  };
+  }
+
+  // ---------- 两级条件组（QRE-LAB-UI-LANDING-R3：与 18080 定稿逐行一致） ----------
+  function makeCombToggle(title) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "comb-toggle";
+    b.dataset.comb = "and"; b.textContent = "AND";
+    b.title = title || "组合方式（点击切换 AND / OR）";
+    b.addEventListener("click", function() {
+      b.dataset.comb = b.dataset.comb === "and" ? "or" : "and";
+      b.textContent = b.dataset.comb.toUpperCase();
+      refreshWizard();
+    });
+    return b;
+  }
+  function makeDivider() {
+    var d = document.createElement("div"); d.className = "comb-divider";
+    var b = makeCombToggle("条件组之间的组合方式（点击切换 AND / OR）");
+    d.appendChild(b); d._comb = b;
+    return d;
+  }
+  function refreshGroupTitles(area) {
+    document.querySelectorAll("#wz-" + area + " .cond-group").forEach(function(g, i) {
+      g.querySelector(".cond-group-title").textContent = "条件组 " + (i + 1);
+    });
+  }
+  function wzAddGroup(area, preset) {
+    var areaEl = document.getElementById("wz-" + area);
+    if (areaEl.querySelectorAll(".cond-group").length) areaEl.appendChild(makeDivider());
+    var g = document.createElement("div"); g.className = "cond-group";
+    var head = document.createElement("div"); head.className = "cond-group-head";
+    var title = document.createElement("span"); title.className = "cond-group-title";
+    var comb = makeCombToggle("组内条件组合方式（点击切换 AND / OR）");
+    var del = document.createElement("button");
+    del.className = "btn-sm btn-remove-cond"; del.textContent = "× 删除组"; del.title = "删除该条件组";
+    del.addEventListener("click", function() {
+      if (areaEl.querySelectorAll(".cond-group").length <= 1) { alert("至少保留 1 个条件组"); return; }
+      var prev = g.previousElementSibling, next = g.nextElementSibling;
+      if (prev && prev.classList.contains("comb-divider")) prev.remove();
+      else if (next && next.classList.contains("comb-divider")) next.remove();
+      g.remove(); refreshGroupTitles(area); refreshWizard();
+    });
+    head.appendChild(title); head.appendChild(comb); head.appendChild(del);
+    var rows = document.createElement("div"); rows.className = "cond-group-rows";
+    var addBtn = document.createElement("button");
+    addBtn.className = "btn-sm"; addBtn.textContent = "+ 添加条件";
+    addBtn.addEventListener("click", function() { wzAddCondition(area, g); });
+    g.appendChild(head); g.appendChild(rows); g.appendChild(addBtn);
+    areaEl.appendChild(g);
+    refreshGroupTitles(area);
+    if (preset) wzAddCondition(area, g, preset); else wzAddCondition(area, g);
+  }
+  document.querySelectorAll("[data-addgroup]").forEach(function(b) {
+    b.addEventListener("click", function() { markWizardDirty(); wzAddGroup(b.dataset.addgroup); });
+  });
 
   // 上穿/下穿 → 带 shift(1) 的穿越事件；右值为固定数字时其 shift 退化为常量
   function condExpression(l, op, r, rIsNum) {
@@ -612,22 +698,32 @@
   }
 
   function readGroup(group) {
-    var rows = document.querySelectorAll("#wz-" + group + "-conditions .wz-cond");
-    var parts = [];
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      var l = row.querySelector(".wz-left").value;
-      var op = row.querySelector(".wz-op").value;
-      var isNum = row.querySelector(".wz-isfixed").checked;
-      var r = isNum ? row.querySelector(".wz-rnum").value.trim() : row.querySelector(".wz-rfield").value;
-      if (!l || r === "") return {error: "有条件行未填完整"};
-      var expr = "(" + condExpression(l, op, r, isNum) + ")";
-      // 每条件取反（NOT）：编译为 (not (...))，引擎支持 ast.Not
-      if (row.querySelector(".wz-not").checked) expr = "(not " + expr + ")";
-      parts.push(expr);
+    // 两级条件组：组内按组内连接符组合，组间按各 divider 连接符组合；单组退化为扁平（不多余括号）
+    var groups = document.querySelectorAll("#wz-" + group + " .cond-group"), gexprs = [];
+    for (var gi = 0; gi < groups.length; gi++) {
+      var rows = groups[gi].querySelectorAll(".wz-cond"), parts = [];
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var l = row.querySelector(".wz-left").value;
+        var op = row.querySelector(".wz-op").value;
+        var isNum = row.querySelector(".wz-isfixed").checked;
+        var r = isNum ? row.querySelector(".wz-rnum").value.trim() : row.querySelector(".wz-rfield").value;
+        if (!l || r === "") return {error: "有条件行未填完整"};
+        parts.push("(" + condExpression(l, op, r, isNum) + ")");
+      }
+      if (!parts.length) return {error: "有条件组为空"};
+      var comb = groups[gi].querySelector(".comb-toggle").dataset.comb;
+      gexprs.push(parts.join(comb === "and" ? " and " : " or "));
     }
-    var comb = document.getElementById("wz-" + group + "-combinator").value;
-    return {expression: parts.length ? parts.join(comb === "and" ? " and " : " or ") : null};
+    if (!gexprs.length) return {expression: null};
+    if (gexprs.length === 1) return {expression: gexprs[0]};
+    var divs = document.querySelectorAll("#wz-" + group + " .comb-divider");
+    var expr = "(" + gexprs[0] + ")";
+    for (var k = 1; k < gexprs.length; k++) {
+      var dc = divs[k - 1] && divs[k - 1]._comb ? divs[k - 1]._comb.dataset.comb : "and";
+      expr += " " + (dc === "and" ? "and" : "or") + " (" + gexprs[k] + ")";
+    }
+    return {expression: expr};
   }
 
   // 条件中实际用到的因子别名 → data.factor_fields
@@ -651,8 +747,7 @@
     if (!entry.expression) return {error: "至少需要一条入场条件"};
     if (!exit.expression) return {error: "至少需要一条出场条件"};
 
-    var name = document.getElementById("wz-name").value.trim() || "wizard_strategy";
-    var holding = parseInt(document.getElementById("wz-holding").value, 10) || 20;
+    var name = document.getElementById("param-sname").value.trim() || "wizard_strategy";
     var lines = [];
     lines.push("experiment:");
     lines.push("  name: " + name);
@@ -676,83 +771,30 @@
     lines.push("signal:");
     lines.push("  entry: \"" + entry.expression.replace(/"/g, '\\"') + "\"");
     lines.push("  exit: \"" + exit.expression.replace(/"/g, '\\"') + "\"");
-    lines.push("holding:");
-    lines.push("  max_holding_days: " + holding);
-    var stops = [
-      ["stop_loss_pct", document.getElementById("wz-stop-loss").value],
-      ["take_profit_pct", document.getElementById("wz-take-profit").value],
-      ["trailing_stop_pct", document.getElementById("wz-trailing").value],
-    ].filter(function(p) { return p[1] !== ""; });
-    if (stops.length) {
-      lines.push("risk:");
-      stops.forEach(function(p) { lines.push("  " + p[0] + ": " + p[1]); });
-    }
     lines.push("evaluation:");
     lines.push("  forward_return_horizons: [1, 3, 5, 10, 20]");
     lines.push("  quantiles: 5");
     return {yaml: lines.join("\n") + "\n", entry: entry.expression, exit: exit.expression};
   }
 
+  // 用户动过向导后，生成的 YAML 实时汇入底部预览栏编辑器（唯一真相源）
+  var wizardDirty = false;
+  function markWizardDirty() { wizardDirty = true; }
   function refreshWizard() {
     var preview = buildYamlPreview();
-    document.getElementById("wz-yaml-preview").textContent =
-      preview.error ? ("（" + preview.error + "）") : preview.yaml;
+    // 向导内嵌预览框已删（18080 定稿：预览统一由底部预览栏承担，QRE-LAB-UI-LANDING-R5）
+    if (wizardDirty && !preview.error) {
+      document.getElementById("strategy-yaml").value = preview.yaml;
+      updateParamsLine();
+    }
     return preview;
   }
 
-  // 高级选项/策略 ID 实时同步 YAML 预览（bug 修复：此前这些输入没有监听）
-  ["wz-name", "wz-entry-combinator", "wz-exit-combinator",
-   "wz-holding", "wz-stop-loss", "wz-take-profit", "wz-trailing"].forEach(function(id) {
-    var el = document.getElementById(id);
-    el.addEventListener("change", refreshWizard);
-    el.addEventListener("input", refreshWizard);
-  });
+  // 高级选项实时同步 YAML 预览（策略 ID 已上移为公共参数 param-sname）
 
-  document.getElementById("wz-fill-editor").addEventListener("click", function() {
-    var preview = buildYamlPreview();
-    var statusEl = document.getElementById("wz-status");
-    statusEl.classList.remove("hidden");
-    if (preview.error) {
-      statusEl.textContent = preview.error;
-      statusEl.className = "err";
-      return;
-    }
-    fetch("/api/validate", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({yaml: preview.yaml})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.valid) {
-        document.getElementById("strategy-yaml").value = preview.yaml;
-        statusEl.textContent = "校验通过，已填入「高级 YAML」tab，正在前往修改…";
-        statusEl.className = "ok";
-        switchEntryTab("yaml");
-      } else {
-        statusEl.textContent = "校验失败: " + d.error;
-        statusEl.className = "err";
-      }
-    });
-  });
 
-  // 向导入口一键回测（QRE-SAAS-011：流程后台化，无需理解中间步骤）
-  document.getElementById("wz-save-smoke").addEventListener("click", function() {
-    var preview = buildYamlPreview();
-    var statusEl = document.getElementById("wz-status");
-    statusEl.classList.remove("hidden");
-    if (preview.error) {
-      statusEl.textContent = preview.error;
-      statusEl.className = "err";
-      return;
-    }
-    startBacktest(preview.yaml, statusEl);
-  });
-
-  // ---------- 高级 YAML 编辑器 ----------
+  // ---------- 预览栏编辑器（唯一 YAML 真相源，QRE-LAB-UI-LANDING） ----------
   var yamlEl = document.getElementById("strategy-yaml");
-  var validateBox = document.getElementById("validate-result");
-  var runStatus = document.getElementById("run-status");
   var runResult = document.getElementById("run-result");
 
   (function() {
@@ -799,13 +841,21 @@
         nlStatus.textContent = "编译成功";
         nlStatus.className = "ok";
         yamlEl.value = d.yaml;
+        // LLM 给的策略名填入公共 ID 字段（用户可改；用户命名过则不覆盖）
+        var nm = (d.yaml.match(/^\s*name:\s*(\S+)\s*$/m) || [])[1];
+        if (nm && !userNamed) { lastAuto = nm; document.getElementById("param-sname").value = nm; }
+        updateParamsLine();
         var warn = (d.warnings || []).map(function(w) { return '<p class="opt">' + escHtml(w) + '</p>'; }).join('');
-        nlResult.innerHTML = '<p class="ok">已生成并同步到「高级 YAML」tab 的编辑器，' +
-          '<a href="#" id="nl-goto-yaml">→ 前往查看/修改</a>。<strong>请检查确认后再提交回测</strong>（不会自动执行）。</p>' + warn;
+        nlResult.innerHTML = '<p class="ok">已生成并同步到底部「策略代码预览」栏，' +
+          '<a href="#" id="nl-goto-yaml">→ 前往查看/修改</a>。<strong>请检查确认后再点底部「运行回测」</strong>（不会自动执行）。</p>' + warn;
         var gotoYaml = document.getElementById("nl-goto-yaml");
         if (gotoYaml) {
-          gotoYaml.addEventListener("click", function(ev) { ev.preventDefault(); switchEntryTab("yaml"); });
+          gotoYaml.addEventListener("click", function(ev) {
+            ev.preventDefault();
+            document.getElementById("preview-card").scrollIntoView({behavior: "smooth", block: "center"});
+          });
         }
+        document.getElementById("preview-card").scrollIntoView({behavior: "smooth", block: "center"});
       } else {
         nlStatus.textContent = "编译失败";
         nlStatus.className = "err";
@@ -845,23 +895,7 @@
       .then(function(d) { if (d.yaml) yamlEl.value = d.yaml; });
   });
 
-  // Validate
-  document.getElementById("btn-validate").addEventListener("click", function() {
-    fetch("/api/validate", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({yaml: yamlEl.value})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      show(validateBox);
-      if (d.valid) {
-        validateBox.innerHTML = '<span class="ok">YAML 格式有效 Valid</span>';
-      } else {
-        validateBox.innerHTML = '<span class="err">' + d.error + '</span>';
-      }
-    });
-  });
+  // Validate 收进「运行回测」流水线第一步（原独立按钮已移除）
 
   // Save template
   document.getElementById("btn-save-template").addEventListener("click", function() {
@@ -879,23 +913,29 @@
     });
   });
 
-  // Quick range buttons
-  function isoDate(d) { return d.toISOString().slice(0, 10); }
+  // Quick range buttons（终点 = 数据最近交易日 DATA_MAX，禁未来函数）
+  var DATA_MAX = "";
+  function isoDate(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  function rangeEnd() { return DATA_MAX || isoDate(new Date()); }
   function setRangeYears(years) {
-    var end = new Date();
-    var start = new Date();
+    var end = DATA_MAX ? new Date(DATA_MAX + "T00:00:00") : new Date();
+    var start = new Date(end);
     start.setFullYear(start.getFullYear() - years);
     document.getElementById("param-start").value = isoDate(start);
     document.getElementById("param-end").value = isoDate(end);
+    updateParamsLine();
   }
   document.querySelectorAll(".range-btn").forEach(function(btn) {
     btn.addEventListener("click", function() {
       setRangeYears(parseInt(btn.dataset.years, 10));
+      document.getElementById("cal-pop").style.display = "none";
     });
   });
   document.getElementById("range-all").addEventListener("click", function() {
     document.getElementById("param-start").value = "2010-01-04";
-    document.getElementById("param-end").value = isoDate(new Date());
+    document.getElementById("param-end").value = rangeEnd();
+    document.getElementById("cal-pop").style.display = "none";
+    updateParamsLine();
   });
   // ---------- 标的范围（QRE-SAAS-012）：全部 A 股 / 板块概念 / 自定义代码 ----------
   var UNIV_GROUPS = [];   // /api/lab/universes 分组数据
@@ -968,22 +1008,130 @@
       });
   }
 
-  // Run
-  document.getElementById("btn-run").addEventListener("click", function() {
-    resolveScopeCodes()
-    .then(function(scope) {
-      // 大范围护栏：>3000 只或全市场时提示预计耗时
-      if (scope.allMarket || (scope.count && scope.count > 3000)) {
-        var what = scope.allMarket ? "全部 A 股（约 5000+ 只）" : ("「" + scope.label + "」（" + scope.count + " 只）");
-        if (!confirm(what + " 范围较大，全量回测可能需要几分钟到十几分钟。确认开始？")) return null;
-      }
-      var payload = {
-        yaml: yamlEl.value,
-        mode: document.getElementById("param-mode").value,
-        start: document.getElementById("param-start").value,
-        end: document.getElementById("param-end").value,
-        codes: scope.codes,
-        all_market: scope.allMarket,
+  // ---------- 唯一主按钮：运行回测流水线（QRE-LAB-UI-LANDING） ----------
+  // 步骤：① /api/validate 校验（含策略 ID 校验）→ ② 保存+小范围冒烟（复用 saveToSandbox/waitForCheck）
+  //       → ③ /api/run 全量回测（沿用原 btn-run 的参数 payload 与大范围护栏）。后端零改动。
+  var pipeEl = document.getElementById("pipe");
+  var pipeRunning = false;
+
+  function applyNameToYaml(y) {  // 公共项注入：策略 ID → experiment.name；最大持仓天数 → holding（YAML 已有则不动）
+    var id = document.getElementById("param-sname").value.trim();
+    if (id) {
+      if (/^[ \t]*name:/m.test(y)) y = y.replace(/^([ \t]*name:).*$/m, "$1 " + id);
+      else y = y.replace(/^(experiment:.*)$/m, "$1\n  name: " + id);
+    }
+    var hold = document.getElementById("param-holding").value.trim();
+    if (hold && !/^[ \t]*max_holding_days:/m.test(y)) {
+      if (/^holding:/m.test(y)) y = y.replace(/^holding:.*$/m, "holding:\n  max_holding_days: " + hold);
+      else y = y.replace(/\s*$/, "") + "\nholding:\n  max_holding_days: " + hold + "\n";
+    }
+    return y;
+  }
+  function currentEntry() {
+    var c = document.querySelector("#entryGrid .entry-card.selected");
+    return c ? c.dataset.entryTab : "nl";
+  }
+  var userNamed = false, lastAuto = "";
+  function genAutoId() {
+    var d = (DATA_MAX || "").replace(/-/g, "") || "00000000";
+    var e = currentEntry();
+    if (e === "wizard") {
+      var f = document.querySelector("#wz-entry .wz-left");
+      return "wizard_" + (f ? f.value : "cond") + "_" + d;
+    }
+    if (e === "yaml") return "custom_yaml_" + d;
+    return "nl_strategy_" + d;
+  }
+  function maybeAutoName() {
+    if (!userNamed) { lastAuto = genAutoId(); document.getElementById("param-sname").value = lastAuto; }
+    updateParamsLine();
+  }
+  document.getElementById("param-sname").addEventListener("input", function() {
+    userNamed = this.value !== lastAuto;  // 用户手改后以用户为准，不再自动覆盖
+    updateParamsLine();
+  });
+  /* 预览栏合并视图（设计稿同款：行号 + 简语法高亮 + 回测参数自动合并段） */
+  var PARAM_MARK = "# ===== 回测参数（自动合并：本段随上方参数区变化） =====";
+  function paramsYaml() {
+    var scope = currentScope();
+    var scopeLine = "  scope: all_a";
+    if (scope === "group") {
+      var gsel = document.getElementById("univ-group"), ksel = document.getElementById("univ-key");
+      scopeLine = "  scope: " + gsel.value + " / " + (ksel.value || "（未选）");
+    } else if (scope === "codes") {
+      scopeLine = "  codes: [" + (document.getElementById("param-codes").value.trim() || "（未填）") + "]";
+    }
+    var g = function(id) { return document.getElementById(id).value; };
+    var lines = ["backtest:",
+      '  start: "' + g("param-start") + '"',
+      '  end: "' + g("param-end") + '"',
+      scopeLine,
+      "  mode: " + g("param-mode"),
+      "  initial_cash: " + (g("param-cash") || 100000),
+      "  max_positions: " + (g("param-maxpos") || 10),
+      "  commission_rate: " + (g("param-commission") || 0.0003),
+      "  min_commission: " + (g("param-min-commission") || 5),
+      "  stamp_tax_sell: " + (g("param-stamp-tax") || 0.0005)];
+    var hold = g("param-holding").trim();
+    if (hold) lines.push("  max_holding_days: " + hold);  // 留空 = 不限
+    [["stop_loss_pct","param-stop-loss"],["take_profit_pct","param-take-profit"],["trailing_stop_pct","param-trailing-stop"]].forEach(function(p) {
+      var v = g(p[1]).trim(); if (v) lines.push("  " + p[0] + ": " + v);
+    });
+    return lines.join("\n");
+  }
+  function mergedYaml() { return applyNameToYaml(yamlEl.value.replace(/\s+$/, "")) + "\n\n" + PARAM_MARK + "\n" + paramsYaml() + "\n"; }
+  function hlLine(line) {
+    if (/^\s*#/.test(line)) return '<span class="yc">' + escHtml(line) + "</span>";
+    var m = line.match(/^(\s*)([\w_]+):(.*)$/);
+    if (m) return escHtml(m[1]) + '<span class="yk">' + escHtml(m[2]) + ":</span>" + '<span class="yv">' + escHtml(m[3]) + "</span>";
+    return '<span class="yv">' + escHtml(line) + "</span>";
+  }
+  var pvEditing = false;
+  function updateParamsLine() {  // 改名保留：重绘预览栏合并视图（原参数行已并入 pre）
+    if (pvEditing) return;
+    document.getElementById("pv-view").innerHTML = mergedYaml().split("\n").map(function(l) {
+      return '<span class="pv-line">' + hlLine(l) + "</span>";
+    }).join("");
+  }
+  document.getElementById("pv-edit-toggle").addEventListener("click", function() {
+    pvEditing = !pvEditing;
+    this.textContent = pvEditing ? "完成编辑" : "编辑代码";
+    this.classList.toggle("on", pvEditing);
+    document.getElementById("pv-view").style.display = pvEditing ? "none" : "";
+    yamlEl.style.display = pvEditing ? "" : "none";
+    if (pvEditing) yamlEl.focus(); else updateParamsLine();
+  });
+  yamlEl.addEventListener("input", updateParamsLine);
+  ["param-start","param-end","param-cash","param-mode","param-maxpos","param-commission","param-min-commission",
+   "param-stamp-tax","param-slip-buy","param-slip-sell","param-stop-loss","param-take-profit","param-trailing-stop",
+   "param-codes","param-holding","univ-group","univ-key"].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", updateParamsLine);
+    el.addEventListener("change", updateParamsLine);
+  });
+  document.querySelectorAll('input[name="param-scope"]').forEach(function(r) {
+    r.addEventListener("change", updateParamsLine);
+  });
+  document.getElementById("btn-copy-yaml").addEventListener("click", function() {
+    var txt = applyNameToYaml(yamlEl.value);
+    function done() { var b = document.getElementById("btn-copy-yaml"); b.textContent = "已复制 ✓"; setTimeout(function(){ b.textContent = "复制"; }, 1500); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, done);
+    else { yamlEl.select(); try { document.execCommand("copy"); } catch (e) {} done(); }
+  });
+  document.getElementById("btn-goto-preview").addEventListener("click", function() {
+    document.getElementById("preview-card").scrollIntoView({behavior: "smooth", block: "center"});
+    yamlEl.focus();
+  });
+
+  function buildRunPayload(scope) {
+    return {
+      yaml: applyNameToYaml(yamlEl.value),
+      mode: document.getElementById("param-mode").value,
+      start: document.getElementById("param-start").value,
+      end: document.getElementById("param-end").value,
+      codes: scope.codes,
+      all_market: scope.allMarket,
       initial_cash: document.getElementById("param-cash").value,
       max_positions: document.getElementById("param-maxpos").value,
       commission_rate: document.getElementById("param-commission").value,
@@ -995,52 +1143,118 @@
       take_profit_pct: document.getElementById("param-take-profit").value,
       trailing_stop_pct: document.getElementById("param-trailing-stop").value,
       engine_impl: document.getElementById("param-engine-impl").value,
-      precheck: document.getElementById("param-precheck").checked,
+      precheck: true,  // 18080 定稿：预检固定开启（后台自动冒烟），不再是用户参数
       output_dir: document.getElementById("param-output").value,
       db_url: document.getElementById("param-dburl").value,
       market_profile: document.getElementById("param-profile").value,
       executor: document.getElementById("param-executor").value
     };
+  }
 
-    show(runStatus);
-    runStatus.textContent = "提交中 Submitting...";
-    runStatus.className = "";
+  document.getElementById("btn-run-main").addEventListener("click", function() {
+    if (pipeRunning) return;
+    var btn = this;
+    pipeEl.style.display = "block";
+    LabUI.pipeReset(pipeEl);
+    runResult.className = "result-box hidden pipe-err";
+    runResult.style.display = "none";
+    LabUI.pipeDoing(pipeEl, 1);
 
-    fetch("/api/run", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
+    // ① 校验：先验策略 ID（公共项），再调 /api/validate 验 YAML
+    var sid = document.getElementById("param-sname").value.trim();
+    if (!sid || !/^[A-Za-z0-9_-]+$/.test(sid)) {
+      LabUI.pipeFail(pipeEl, 1, escHtml(sid ? ("策略 ID 含非法字符：「" + sid + "」——仅允许字母、数字、下划线、连字符。") : "策略名称 / ID 为空——请在「回测参数」第一行命名。"));
+      document.getElementById("param-sname").scrollIntoView({behavior: "smooth", block: "center"});
+      document.getElementById("param-sname").focus();
+      return;
+    }
+    var yamlText = applyNameToYaml(yamlEl.value);
+    pipeRunning = true; btn.disabled = true; btn.style.opacity = .65;
+    function abort() { pipeRunning = false; btn.disabled = false; btn.style.opacity = ""; }
+
+    fetch("/api/validate", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({yaml: yamlText})
     })
-    .then(function(r) {
-      return r.json().then(function(d) { return {status: r.status, body: d}; });
-    })
-    .then(function(res) {
-      var d = res.body;
-      show(runResult);
-      if (res.status === 200 && d.run_id) {
-        runStatus.textContent = "已提交 Queued";
-        runStatus.className = "ok";
-        runResult.innerHTML =
-          '<p><strong>运行 ID Run ID:</strong> <a href="/lab/runs/' + d.run_id + '">' + d.run_id + '</a></p>' +
-          '<p><strong>模式 Mode:</strong> ' + d.mode + (d.precheck ? '（小样本预检 precheck）' : '') + '</p>' +
-          '<p>后台执行中，<a href="/lab/runs/' + d.run_id + '">查看进度与结果 View Results</a></p>';
-      } else {
-        runStatus.textContent = "失败 Failed";
-        runStatus.className = "err";
-        runResult.innerHTML = '<p class="err">错误 Error: ' + (d.error || "Unknown error") + '</p>';
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.valid) {
+        LabUI.pipeFail(pipeEl, 1, escHtml(d.error || "YAML 校验失败"));
+        document.getElementById("preview-card").scrollIntoView({behavior: "smooth", block: "center"});
+        abort(); return null;
       }
+      LabUI.pipeDone(pipeEl, 1, "结构校验通过");
+      // ② 冒烟测试（自动，固定行为）：标的范围为单只股票时跳过并留痕（18080 定稿）
+      var isSingle = currentScope() === "codes" &&
+        document.getElementById("param-codes").value.split(",").map(function(s){ return s.trim(); }).filter(Boolean).length === 1;
+      if (isSingle) {
+        var st2 = pipeEl.querySelector("#pipe-2");
+        st2.classList.add("skip");
+        st2.querySelector(".pipe-st").textContent = "已跳过（单股票回测无需冒烟）";
+        return runFullBacktest();  // 直接进入第③步
+      }
+      LabUI.pipeDoing(pipeEl, 2);
+      return saveToSandbox(yamlText)
+        .then(function(res) {
+          var d2 = res.body;
+          if (!d2.ok) { LabUI.pipeFail(pipeEl, 2, escHtml(d2.error || "保存失败")); abort(); return null; }
+          var name = d2.name;
+          pipeEl.querySelector("#pipe-2 .pipe-st").textContent = "小范围验证中…";
+          return fetch("/api/strategies/smoke", {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({name: name})
+          })
+          .then(function(r) { return r.json(); })
+          .then(function() { return waitForCheck(name); })
+          .then(function(check) {
+            if (!check.ok) {
+              LabUI.pipeFail(pipeEl, 2, "策略在小样本上没跑通：" + escHtml(check.error || "未知原因"));
+              loadSandbox(); abort(); return null;
+            }
+            LabUI.pipeDone(pipeEl, 2, "冒烟通过（随机 1 只股票 × 短期区间）");
+            return runFullBacktest();
+          });
+        });
     })
     .catch(function(err) {
-      runStatus.textContent = "错误 Error";
-      runStatus.className = "err";
-      runResult.innerHTML = '<p class="err">' + err + '</p>';
-    });
-    })
-    .catch(function(err) {  // 范围解析失败（未选板块/成员为空）
+      if (pipeEl.querySelector("#pipe-3.doing")) LabUI.pipeFail(pipeEl, 3, escHtml(String(err)));
+      else LabUI.pipeFail(pipeEl, 1, escHtml(String(err)));
       show(runResult);
-      runResult.innerHTML = '<p class="err">' + escHtml(err.message || String(err)) + '</p>';
+      abort();
     });
   });
+
+  // ③ 全量回测（沿用参数区 payload 与范围解析；>3000 只护栏保留）
+  function runFullBacktest() {
+    LabUI.pipeDoing(pipeEl, 3);
+    return resolveScopeCodes().then(function(scope) {
+      if (scope.allMarket || (scope.count && scope.count > 3000)) {
+        var what = scope.allMarket ? "全部 A 股（约 5000+ 只）" : ("「" + scope.label + "」（" + scope.count + " 只）");
+        if (!confirm(what + " 范围较大，全量回测可能需要几分钟到十几分钟。确认开始？")) { pipeRunning = false; document.getElementById("btn-run-main").disabled = false; document.getElementById("btn-run-main").style.opacity = ""; return null; }
+      }
+      return fetch("/api/run", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(buildRunPayload(scope))
+      })
+      .then(function(r) { return r.json().then(function(d3) { return {status: r.status, body: d3}; }); })
+      .then(function(res) {
+        var d3 = res.body;
+        if (res.status === 200 && d3.run_id) {
+          LabUI.pipeDone(pipeEl, 3, "已提交");
+          runResult.className = "result-box ok pipe-err";
+          runResult.style.display = "block";
+          runResult.innerHTML =
+            '<p><strong>运行 ID Run ID:</strong> <a href="/lab/runs/' + d3.run_id + '">' + d3.run_id + '</a></p>' +
+            '<p>后台执行中，<a href="/lab/runs/' + d3.run_id + '">查看进度与结果 View Results</a></p>';
+        } else {
+          LabUI.pipeFail(pipeEl, 3, escHtml(d3.error || "提交失败"));
+        }
+        pipeRunning = false;
+        var btn = document.getElementById("btn-run-main");
+        btn.disabled = false; btn.style.opacity = "";
+      });
+    });
+  }
 
   // ---------- 策略创建闭环（P1）：存入沙箱 / 沙箱面板 ----------
   var sandboxStatus = document.getElementById("sandbox-status");
@@ -1129,10 +1343,11 @@
     });
   }
 
-  // 高级 YAML 底部入口：同样一键回测
-  document.getElementById("btn-save-smoke").addEventListener("click", function() {
-    startBacktest(yamlEl.value, validateBox);
-  });
+  // 一键回测已统一到底部「运行回测」流水线（QRE-LAB-UI-LANDING）；startBacktest 保留供兼容
+  // 向导面板任何输入都标记 dirty，此后生成代码实时汇入预览栏
+  document.getElementById("entry-tab-wizard").addEventListener("input", markWizardDirty);
+  document.getElementById("entry-tab-wizard").addEventListener("change", markWizardDirty);
+  document.getElementById("entry-tab-wizard").addEventListener("click", markWizardDirty);
 
   function sandboxAction(url, payload, doneText) {
     show(sandboxStatus);
@@ -1348,9 +1563,45 @@
     });
   });
 
-  // init：默认回测区间=近2年、标的范围=全 A 股（HTML 已 checked）
+  // init：数据截止日（真实，refresh 状态）→ 日历/快捷区间对齐；默认近2年、全 A 股
   setRangeYears(2);
   syncScopeUI();
+  updateParamsLine();
+  fetch("/api/admin/refresh")
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok && d.state && d.state.last_data_date) {
+        DATA_MAX = d.state.last_data_date;
+        var cal = LabUI.attachCalendar({
+          pop: document.getElementById("cal-pop"),
+          startInput: document.getElementById("param-start"),
+          endInput: document.getElementById("param-end"),
+          maxDate: DATA_MAX,
+          onChange: updateParamsLine
+        });
+        cal.clamp();
+        setRangeYears(2);  // 截止日对齐到最近交易日
+      } else {
+        LabUI.attachCalendar({
+          pop: document.getElementById("cal-pop"),
+          startInput: document.getElementById("param-start"),
+          endInput: document.getElementById("param-end"),
+          maxDate: isoDate(new Date()),
+          onChange: updateParamsLine
+        });
+      }
+      maybeAutoName();
+    })
+    .catch(function() {
+      LabUI.attachCalendar({
+        pop: document.getElementById("cal-pop"),
+        startInput: document.getElementById("param-start"),
+        endInput: document.getElementById("param-end"),
+        maxDate: isoDate(new Date()),
+        onChange: updateParamsLine
+      });
+      maybeAutoName();
+    });
   loadUniverses();  // 标的范围归类（板块/概念分组，QRE-SAAS-012）
   loadFactorCatalog();  // 完成后预填占位条件（EMA5 上/下穿 EMA200，无 ema 字段则回退 close/pre_close）
   if (!catalogReady) { /* 目录加载失败时保留空白条件行，便于理解格式 */ }
@@ -1383,55 +1634,122 @@
   // ---------- 回测记录（只显示实际跑过的 run） ----------
   var STATUS_LABEL = {completed: '已完成', running: '运行中', queued: '排队中', failed: '失败'};
 
+  var RUNS_CACHE = [];
   function loadRuns() {
     var box = document.getElementById('ob-runs-table');
     fetchWithTimeout('/api/lab/runs')
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (!d.ok) { cardError(box, d.error || '回测记录加载失败', loadRuns); return; }
-        var runs = d.runs || [];
-        if (!runs.length) {
-          box.innerHTML = '<p class="opt">还没有回测记录，去「新增策略」跑第一个回测吧。</p>';
-          return;
-        }
-        var rows = runs.map(function(run) {
-          var statusLabel = STATUS_LABEL[run.status] || run.status || '—';
-          var range = (run.start || '—') + ' ~ ' + (run.end || '—');
-          var symbols = (run.symbol_count == null) ? '全 A 股' : esc(run.symbol_count) + ' 只';
-          var viewLink = (run.status === 'completed')
-            ? ' <a href="/lab/runs/' + encodeURIComponent(run.run_id) + '">查看结果 →</a>' : '';
-          return '<tr>'
-            + '<td>' + esc(run.strategy_name) + '</td>'
-            + '<td>' + esc(range) + '</td>'
-            + '<td>' + symbols + '</td>'
-            + '<td>' + esc(statusLabel) + '</td>'
-            + '<td class="opt">' + esc(run.created_at || '—') + '</td>'
-            + '<td>' + viewLink
-            + ' <button class="btn-sm btn-danger-outline" data-del-run="' + esc(run.run_id) + '">删除</button>'
-            + '</td></tr>';
-        }).join('');
-        box.innerHTML = '<table><thead><tr>'
-          + '<th>策略名称</th><th>回测区间</th><th>标的数</th><th>状态</th><th>创建时间</th><th>操作</th>'
-          + '</tr></thead><tbody>' + rows + '</tbody></table>';
-        box.querySelectorAll('[data-del-run]').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            var runId = btn.dataset.delRun;
-            if (!confirm('确认删除这条回测记录（' + runId + '）？\n删除后不可恢复。')) return;
-            fetch('/api/lab/runs/' + encodeURIComponent(runId) + '/delete', {method: 'POST'})
-              .then(function(r) { return r.json().then(function(d2) { return {status: r.status, body: d2}; }); })
-              .then(function(res) {
-                if (!res.body.ok) { alert(res.body.error || '删除失败'); return; }
-                loadRuns();
-              })
-              .catch(function(err) { alert('删除失败：' + err); });
-          });
-        });
+        RUNS_CACHE = d.runs || [];
+        renderRuns();
       })
       .catch(function(err) {
         cardError(box, isAbort(err) ? '回测记录加载超时（30s），请重试' : ('回测记录加载失败：' + err), loadRuns);
       });
   }
+  var recsSort = {k: 'created_at', dir: -1};  // 默认按创建时间倒序
+  function sortRuns(runs) {
+    var k = recsSort.k, dir = recsSort.dir;
+    return runs.slice().sort(function(a, b) {
+      var va = a[k], vb = b[k];
+      // 无值（如未完成 run 的超额收益）恒排最后，与方向无关
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      var cmp = typeof va === 'string' ? String(va).localeCompare(String(vb)) : va - vb;
+      return cmp * dir;
+    });
+  }
+  function renderRuns() {
+    var box = document.getElementById('ob-runs-table');
+    var kw = (document.getElementById('recs-filter').value || '').trim().toLowerCase();
+    var runs = RUNS_CACHE.filter(function(r) {
+      return !kw || ((r.strategy_name || '') + ' ' + (r.run_id || '')).toLowerCase().indexOf(kw) >= 0;
+    });
+    if (!runs.length) {
+      box.innerHTML = '<p class="opt">' + (kw ? '没有匹配「' + esc(kw) + '」的记录。' : '还没有回测记录，去「新增策略」跑第一个回测吧。') + '</p>';
+      return;
+    }
+    (function() {
+        runs = sortRuns(runs);
+        var arrow = function(k) { return recsSort.k === k ? (recsSort.dir > 0 ? ' ▲' : ' ▼') : ''; };
+        var rows = runs.map(function(run) {
+          var statusLabel = STATUS_LABEL[run.status] || run.status || '—';
+          var badgeCls = run.status === 'completed' ? 'ok' : (run.status === 'failed' ? 'fail' : 'run');
+          var range = (run.start || '—') + ' ~ ' + (run.end || '—');
+          var symbols = (run.symbol_count == null) ? '全 A 股' : esc(run.symbol_count) + ' 只';
+          var excess = run.excess_return;
+          var excessHtml = (excess == null)
+            ? '<span class="opt">——</span>'
+            : '<span class="' + (excess >= 0 ? 'pos' : 'neg') + '">' + (excess >= 0 ? '+' : '') + (excess * 100).toFixed(2) + '%</span>';
+          var viewLink = (run.status === 'completed')
+            ? '<a class="view-link" href="/lab/runs/' + encodeURIComponent(run.run_id) + '">查看结果 →</a>' : '';
+          var clickable = run.status === 'completed';
+          return '<tr' + (clickable ? ' class="row-link" data-view="' + esc(run.run_id) + '" title="点击进入回测详情"' : '') + '>'
+            + '<td><strong>' + esc(run.strategy_name) + '</strong><br><span class="opt">' + esc(run.run_id) + '</span></td>'
+            + '<td class="opt">' + esc(range) + '</td>'
+            + '<td style="text-align:right">' + symbols + '</td>'
+            + '<td style="text-align:right">' + excessHtml + '</td>'
+            + '<td><span class="badge ' + badgeCls + '">' + esc(statusLabel) + '</span></td>'
+            + '<td class="opt">' + esc((run.created_at || '—').slice(0, 16).replace('T', ' ')) + '</td>'
+            + '<td style="white-space:nowrap">' + viewLink
+            + ' <button class="btn-sm btn-danger-outline" data-del-run="' + esc(run.run_id) + '">删除</button>'
+            + '</td></tr>';
+        }).join('');
+        box.innerHTML = '<table class="tbl"><thead><tr>'
+          + '<th>策略名称</th><th>回测区间</th><th>股票数量</th>'
+          + '<th class="sortable" data-k="excess_return" style="text-align:right">超额收益' + arrow('excess_return') + '</th>'
+          + '<th>状态</th>'
+          + '<th class="sortable" data-k="created_at">创建时间' + arrow('created_at') + '</th>'
+          + '<th style="cursor:default">操作</th>'
+          + '</tr></thead><tbody>' + rows + '</tbody></table>';
+        // 表头排序（升/降序切换；无值恒排最后）
+        box.querySelectorAll('th.sortable').forEach(function(th) {
+          th.addEventListener('click', function() {
+            var k = th.dataset.k;
+            if (recsSort.k === k) recsSort.dir = -recsSort.dir;
+            else recsSort = {k: k, dir: -1};
+            renderRuns();
+          });
+        });
+        // 整行可点击进入详情（删除按钮与链接自身不触发）
+        box.querySelectorAll('tr.row-link').forEach(function(tr) {
+          tr.addEventListener('click', function(ev) {
+            if (ev.target.closest('button') || ev.target.closest('a')) return;
+            window.location.href = '/lab/runs/' + encodeURIComponent(tr.dataset.view);
+          });
+        });
+        // 删除：二次确认弹层（替代原生 confirm）
+        var pendingDel = null;
+        var mask = document.getElementById('run-del-mask');
+        function closeMask() { mask.classList.remove('show'); pendingDel = null; }
+        document.getElementById('run-del-cancel').onclick = closeMask;
+        mask.onclick = function(ev) { if (ev.target === mask) closeMask(); };
+        document.getElementById('run-del-ok').onclick = function() {
+          if (!pendingDel) return;
+          var runId = pendingDel;
+          closeMask();
+          fetch('/api/lab/runs/' + encodeURIComponent(runId) + '/delete', {method: 'POST'})
+            .then(function(r) { return r.json().then(function(d2) { return {status: r.status, body: d2}; }); })
+            .then(function(res) {
+              if (!res.body.ok) { alert(res.body.error || '删除失败'); return; }
+              loadRuns();
+            })
+            .catch(function(err) { alert('删除失败：' + err); });
+        };
+        box.querySelectorAll('[data-del-run]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            pendingDel = btn.dataset.delRun;
+            document.getElementById('run-del-text').innerHTML =
+              '回测 <b>' + esc(pendingDel) + '</b> 的记录与结果文件将被移除，删除后不可恢复。';
+            mask.classList.add('show');
+          });
+        });
+    })();
+  }
   document.getElementById('btn-runs-refresh').addEventListener('click', loadRuns);
+  document.getElementById('recs-filter').addEventListener('input', renderRuns);
 
   // ---------- 持续更新（QRE refresh）状态卡 ----------
   function loadOnboard() {

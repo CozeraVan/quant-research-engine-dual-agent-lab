@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block nav %}<a href="/lab/runs/{{ run_id }}">← 返回回测结果</a>{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/lab-theme.css">
+<style>
+  .table-tools { display: flex; gap: 10px; align-items: center; margin: 10px 0 12px; flex-wrap: wrap; }
+  .table-tools input { width: 240px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-head" style="margin-bottom:14px">
+  <h1 style="font-size:22px">个股回测明细 <span class="opt">run {{ run_id }} · 按申万一级行业归并</span></h1>
+  <p class="opt" style="margin-top:6px">聚合自赚钱效应归因的行业层（仅本 run 实际交易的个股）；点列头排序，点行进个股详情；输入完整代码回车直跳。</p>
+</div>
+
+<div class="card">
+  <div class="table-tools">
+    <input type="text" id="syms-filter" placeholder="搜索代码 / 名称 / 行业（完整代码回车直跳）…">
+    <span class="opt" id="syms-hint">加载中…</span>
+  </div>
+  <div style="overflow:auto">
+    <table class="tbl" id="sym-table">
+      <thead><tr>
+        <th class="sortable" data-k="ts_code">代码 / 名称</th>
+        <th class="sortable" data-k="industry">行业</th>
+        <th class="sortable num" data-k="trades">交易笔数</th>
+        <th class="sortable num" data-k="win_rate">胜率%</th>
+        <th class="sortable num" data-k="total_pnl">总净盈亏(元)</th>
+        <th class="sortable num" data-k="avg_ret">平均净收益%</th>
+        <th class="sortable num" data-k="best_ret">最佳单笔%</th>
+        <th class="sortable num" data-k="worst_ret">最差单笔%</th>
+        <th class="sortable num" data-k="avg_hold_days">持仓天数</th>
+        <th class="sortable num" data-k="bench_ret">自然涨幅%</th>
+        <th class="sortable num" data-k="percentile">赚钱效应分位</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function() {
+  var RUN_ID = {{ run_id | tojson }};
+  function pct(v) { return v == null ? "—" : (v >= 0 ? "+" : "") + (v * 100).toFixed(2) + "%"; }
+  function cls(v) { return v > 0 ? "pos" : (v < 0 ? "neg" : "flat"); }
+  function num(v) { return v == null ? "—" : Number(v).toLocaleString("zh-CN", {maximumFractionDigits: 2}); }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  var ALL = [];
+  var sort = {k: "total_pnl", dir: -1};
+
+  fetch("/api/lab/runs/" + encodeURIComponent(RUN_ID) + "/tag-analysis")
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { document.getElementById("syms-hint").textContent = d.error || "加载失败"; return; }
+      var map = {};
+      ((d.layers || {}).A || []).forEach(function(tag) {
+        (tag.symbols || []).forEach(function(s) {
+          if (!map[s.ts_code]) map[s.ts_code] = Object.assign({industry: tag.tag}, s);
+        });
+      });
+      ALL = Object.keys(map).map(function(k) { return map[k]; });
+      render();
+    })
+    .catch(function() { document.getElementById("syms-hint").textContent = "加载失败"; });
+
+  function render() {
+    var kw = document.getElementById("syms-filter").value.trim().toLowerCase();
+    var rows = ALL.filter(function(s) {
+      return !kw || (s.ts_code + " " + (s.name || "") + " " + (s.industry || "")).toLowerCase().indexOf(kw) >= 0;
+    });
+    rows.sort(function(a, b) {
+      var va = a[sort.k], vb = b[sort.k];
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      var cmp = typeof va === "string" ? String(va).localeCompare(String(vb)) : va - vb;
+      return cmp * sort.dir;
+    });
+    document.querySelector("#sym-table tbody").innerHTML = rows.map(function(s) {
+      return '<tr data-code="' + esc(s.ts_code) + '">'
+        + '<td><strong>' + esc(s.ts_code) + '</strong> ' + esc(s.name || "") + '</td>'
+        + '<td class="opt">' + esc(s.industry || "") + '</td>'
+        + '<td>' + s.trades + '</td>'
+        + '<td>' + (s.win_rate * 100).toFixed(1) + '</td>'
+        + '<td class="' + cls(s.total_pnl) + '">' + num(s.total_pnl) + '</td>'
+        + '<td class="' + cls(s.avg_ret) + '">' + pct(s.avg_ret) + '</td>'
+        + '<td class="pos">' + pct(s.best_ret) + '</td>'
+        + '<td class="neg">' + pct(s.worst_ret) + '</td>'
+        + '<td>' + (s.avg_hold_days == null ? "—" : Number(s.avg_hold_days).toFixed(1)) + '</td>'
+        + '<td class="' + cls(s.bench_ret) + '">' + pct(s.bench_ret) + '</td>'
+        + '<td>' + (s.percentile == null ? "—" : "前" + (s.percentile * 100).toFixed(1) + "%") + '</td>'
+        + '</tr>';
+    }).join("");
+    document.getElementById("syms-hint").textContent = "共 " + rows.length + " 只" + (kw ? "（已筛选）" : "");
+    document.querySelectorAll("#sym-table tr[data-code]").forEach(function(tr) {
+      tr.addEventListener("click", function() { gotoSymbol(tr.dataset.code); });
+    });
+  }
+  function gotoSymbol(code) {
+    window.location.href = "/lab/runs/" + encodeURIComponent(RUN_ID) + "/symbol/" + encodeURIComponent(code);
+  }
+  document.querySelectorAll("#sym-table th[data-k]").forEach(function(th) {
+    th.addEventListener("click", function() {
+      var k = th.dataset.k;
+      if (sort.k === k) sort.dir = -sort.dir;
+      else sort = {k: k, dir: (k === "ts_code" || k === "industry") ? 1 : -1};
+      render();
+    });
+  });
+  document.getElementById("syms-filter").addEventListener("input", render);
+  document.getElementById("syms-filter").addEventListener("keydown", function(ev) {
+    if (ev.key !== "Enter") return;
+    var kw = this.value.trim().toUpperCase();
+    if (/^\d{6}\.(SZ|SH|BJ)$/i.test(kw)) { gotoSymbol(kw); return; }
+    var hit = ALL.find(function(s) { return s.ts_code.toUpperCase() === kw; });
+    if (hit) gotoSymbol(hit.ts_code);
+  });
+})();
+</script>
+<p style="margin-top:12px"><a href="/lab/runs/{{ run_id }}">← 返回回测结果</a></p>
+{% endblock %}

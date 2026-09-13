@@ -40,6 +40,14 @@ def create_lab_app() -> Flask:
     app.config["SECRET_KEY"] = os.urandom(24)
     app.add_template_filter(gui_app._fmtval, "fmtval")
 
+    @app.after_request
+    def lab_no_store(resp):  # type: ignore[no-untyped-def]
+        # QRE-LAB-UI-LANDING 缺陷修复：HTML 页面默认无 Cache-Control，浏览器启发式缓存
+        # 会让用户拿到编辑/重启窗口期的中间态页面（回测记录空白即此因）。lab 页面禁缓存。
+        if resp.content_type.startswith("text/html") or request.path.startswith("/api/"):
+            resp.headers["Cache-Control"] = "no-store"
+        return resp
+
     @app.route("/")
     def lab_index() -> str:
         templates = list_templates()
