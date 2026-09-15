@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-09-14 QRE-STREAMING-BATCH DONE（流式批量回测落地，内存峰值有界）：portfolio/streaming_batch.py 新增 run_batch_streaming——批量模式股票数超过 QRE_BATCH_CHUNK_SIZE（默认 250）或为全市场时按块加载/回测/落盘，避免全池 frame 一次性进内存；gui/engine.py _run_via_module 接流式入口（单标的/共享资金路径不变）；apps/cli.py backtest-batch 接线；修复流式路径空 CSV 写出。实测：5 年全市场 run（20260914T125635220084 / 20260914T162349176439）工作进程 RSS 14 分钟采样全程 383-534MB 有界（原 2G 限额下必 OOM；配合 MemoryMax 8G 双保险）。测试 tests/test_streaming_batch.py 新增（块切分/空块/汇总），全量 pytest 绿。
+
 ## Latest Verified State
 
 2026-09-15 QRE-BATCH-STREAMING-EMPTYCSV DONE（流式批量回测 5 年全市场 run 失败根因修复）：run 20260914T125635220084 跑 33 分钟死于收尾聚合，error="No columns to parse from file"。根因：全市场池里无交易/无数据个股（实测 3004/2994 个 trades/orders、2 个 equity_curve 文件只有 1 字节换行）——empty_single_symbol_result 的空 DataFrame（无列）to_csv 只写换行；非流式路径这些空 DataFrame 一直在内存不动所以从不报错，流式路径的 `_DiskBackedSingleResult` 代理 read_csv 读回时抛 EmptyDataError。修复：代理 `_read` 容忍 EmptyDataError 返回空 DataFrame（读侧容忍，与既有产物字节兼容；写侧格式不变）。回归测试 +1（含空结果个股的流式 run → write_batch_result 含全市场报告全链路不炸）。产物完整性评估：该 run 的 outputs/gui-run 是**共享目录**，已被后续 run 部分覆盖（equity_curve.csv 时间戳 09-13、summary.csv 09-14 21:28），归属不可靠且 run_manifest 未写出——**不可补跑收尾，建议重跑**（修复后同参数重跑即可）。全量 `pytest tests/` → **2072 passed + 4 skipped**（基线 2071 + 1）零回归。未 git commit，等用户审批。遗留观察（仅记录不修）：gui-run 共享输出目录多 run 互相覆盖是既有设计，详情页/审计靠 run 目录 artifacts（worker 已有持久化），lab /api/run 路径的 output_dir 隔离列为后续改进。

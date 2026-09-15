@@ -1118,27 +1118,49 @@ def main(argv: Sequence[str] | None = None) -> int:
             store = PostgresDataStore(settings)
             store.ping()
             spec = StrategySpec.from_yaml(args.strategy)
-            frame = ResearchFrameAssembler(store).build(
-                ts_codes=args.codes,
-                start=args.start,
-                end=args.end,
-                market_fields=spec.market_fields,
-                factor_fields=spec.factor_fields,
-                include_metadata=True,
-                metadata_as_of=getattr(args, "metadata_as_of", None) or None,
-            )
             market_profile = load_market_profile(args.market_profile) if args.market_profile else AShareMarketProfile()
-            result = BatchBacktestEngine(market_profile).run(
-                frame,
-                BatchBacktestRequest(
-                    symbols=args.codes,
-                    initial_cash_per_symbol=args.initial_cash,
-                    entry_signal=spec.signal_expression,
-                    exit_signal=spec.exit_signal_expression,
-                    holding_days=spec.holding_days,
-                    summary_metadata_columns=args.group_by,
-                ),
+            request = BatchBacktestRequest(
+                symbols=args.codes,
+                initial_cash_per_symbol=args.initial_cash,
+                entry_signal=spec.signal_expression,
+                exit_signal=spec.exit_signal_expression,
+                holding_days=spec.holding_days,
+                summary_metadata_columns=args.group_by,
             )
+
+            def _build_frame(ts_codes: Any) -> Any:
+                return ResearchFrameAssembler(store).build(
+                    ts_codes=ts_codes,
+                    start=args.start,
+                    end=args.end,
+                    market_fields=spec.market_fields,
+                    factor_fields=spec.factor_fields,
+                    include_metadata=True,
+                    metadata_as_of=getattr(args, "metadata_as_of", None) or None,
+                )
+
+            # 流式执行（内存峰值控制，2026-09-14）：股票数超过块大小或为
+            # 全市场时按块加载/跑/落盘；小样本维持原全量路径。
+            from quant_research_engine.portfolio.streaming_batch import (
+                STREAMING_MIN_SYMBOLS,
+                run_batch_streaming,
+            )
+
+            all_symbols = args.codes
+            if all_symbols is None:
+                metadata = store.load_security_metadata(ts_codes=None)
+                all_symbols = sorted(metadata["ts_code"].dropna().astype(str).unique().tolist())
+            if len(all_symbols) > STREAMING_MIN_SYMBOLS:
+                result = run_batch_streaming(
+                    frame_factory=_build_frame,
+                    symbols=all_symbols,
+                    request=request,
+                    market_profile=market_profile,
+                    output_dir=args.output_dir,
+                )
+            else:
+                frame = _build_frame(args.codes)
+                result = BatchBacktestEngine(market_profile).run(frame, request)
         except Exception as exc:
             print(str(exc), file=__import__("sys").stderr)
             return 2

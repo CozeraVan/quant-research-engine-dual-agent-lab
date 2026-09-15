@@ -412,6 +412,75 @@ def _run_via_module(
         # Empty code list = whole market (assembler/engine accept None).
         ts_codes = codes or None
 
+        # 批量模式流式执行（内存峰值控制，2026-09-14）：股票数超过
+        # QRE_BATCH_CHUNK_SIZE（默认 250）或为全市场时，按块加载+跑+落盘，
+        # 避免全池 frame 一次性进内存。单标的/共享资金路径不变。
+        if mode == "batch":
+            all_symbols = ts_codes
+            if all_symbols is None:
+                metadata = store.load_security_metadata(ts_codes=None)
+                all_symbols = sorted(metadata["ts_code"].dropna().astype(str).unique().tolist())
+            from quant_research_engine.portfolio.streaming_batch import (
+                STREAMING_MIN_SYMBOLS,
+                run_batch_streaming,
+            )
+
+            if len(all_symbols) > STREAMING_MIN_SYMBOLS:
+                if market_profile:
+                    mp = load_market_profile(market_profile)
+                    if profile_overrides:
+                        from dataclasses import replace
+
+                        valid = {k: float(v) for k, v in profile_overrides.items() if v is not None and hasattr(mp, k)}
+                        if valid:
+                            mp = replace(mp, **valid)
+                else:
+                    mp = build_market_profile(profile_overrides)
+
+                def frame_factory(chunk_symbols: list[str]) -> Any:
+                    return ResearchFrameAssembler(store).build(
+                        ts_codes=chunk_symbols,
+                        start=start,
+                        end=end,
+                        market_fields=spec.market_fields,
+                        factor_fields=spec.factor_fields,
+                        include_metadata=True,
+                    )
+
+                from quant_research_engine.portfolio.batch import BatchBacktestRequest
+                from quant_research_engine.portfolio.io import write_batch_result
+
+                buf_out = io.StringIO()
+                buf_err = io.StringIO()
+                with redirect_stdout(buf_out), redirect_stderr(buf_err):
+                    result = run_batch_streaming(
+                        frame_factory=frame_factory,
+                        symbols=all_symbols,
+                        request=BatchBacktestRequest(
+                            symbols=all_symbols,
+                            initial_cash_per_symbol=float(initial_cash) if initial_cash else 100_000.0,
+                            entry_signal=spec.signal_expression,
+                            exit_signal=spec.exit_signal_expression,
+                            holding_days=spec.holding_days,
+                            engine_impl=engine_impl,
+                            stop_loss_pct=stop_loss_pct,
+                            take_profit_pct=take_profit_pct,
+                            trailing_stop_pct=trailing_stop_pct,
+                        ),
+                        market_profile=mp,
+                        output_dir=output_dir,
+                    )
+                    print(f"strategy={spec.name}")
+                    print(f"symbols={len(result.symbols)}")
+                    for key, value in result.summary_metrics.items():
+                        print(f"{key}={value}")
+                    print(result.summary.to_csv(index=False).strip())
+                    if output_dir:
+                        write_batch_result(result, output_dir)
+                stdout_path.write_text(buf_out.getvalue(), encoding="utf-8")
+                stderr_path.write_text(buf_err.getvalue(), encoding="utf-8")
+                return
+
         frame = ResearchFrameAssembler(store).build(
             ts_codes=ts_codes,
             start=start,
