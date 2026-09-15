@@ -23,6 +23,7 @@ Before modifying code or producing plans, read:
 - `docs/agent/11_AGENT_STATE.md`
 - `docs/agent/12_UI_STYLE_GUIDE.md`（UI 设计语言规范：后续页面开发必须遵守，改动需用户批准）
 - `docs/agent/13_UI_PERF_NOTES.md`（UI 性能评估与优化方案）
+- `docs/agent/14_LAUNCH_ROADMAP.md`（上线路线图与工作手册：现状/ECS 架构/迁移阶段/踩坑/工作流/挂起任务）
 
 ## Long-Term Memory Rule
 

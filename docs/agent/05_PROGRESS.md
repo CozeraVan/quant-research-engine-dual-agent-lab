@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-09-15 QRE-DOCS-ROADMAP DONE（纯文档沉淀，零代码改动）：新建 `docs/agent/14_LAUNCH_ROADMAP.md`——上线路线图与工作手册，覆盖：项目现状总览（引擎能力/三端口分工/近期成果含流式回测与 precheck 修复）、UI 设计规范要点（18080 冻结基准与工作纪律）、ECS 上线架构（已定稿：ECS 2C2G 只跑 Web+Redis+用户小库，行情库与回测留家里 PC，worker 纯出站长拉云端队列）、迁移路线图 Phase 0-4（含 PG 2G 参数与 systemd 模板位置的可照做清单）、两周踩坑手册（WSL 端口抢占/双栈黑洞/MemoryMax 教训/precheck 语义/--noproxy/真 Chromium 验证）、工作流约定（逐次批准 commit/测试基线 2072+4/子代理分工/冒烟铁律/冻结清单）、挂起远期任务清单（9 项各一句话状态）。AGENTS.md 阅读清单加入该文档。未 commit，等用户批准。
+
 2026-09-14 QRE-STREAMING-BATCH DONE（流式批量回测落地，内存峰值有界）：portfolio/streaming_batch.py 新增 run_batch_streaming——批量模式股票数超过 QRE_BATCH_CHUNK_SIZE（默认 250）或为全市场时按块加载/回测/落盘，避免全池 frame 一次性进内存；gui/engine.py _run_via_module 接流式入口（单标的/共享资金路径不变）；apps/cli.py backtest-batch 接线；修复流式路径空 CSV 写出。实测：5 年全市场 run（20260914T125635220084 / 20260914T162349176439）工作进程 RSS 14 分钟采样全程 383-534MB 有界（原 2G 限额下必 OOM；配合 MemoryMax 8G 双保险）。测试 tests/test_streaming_batch.py 新增（块切分/空块/汇总），全量 pytest 绿。
 
 ## Latest Verified State
