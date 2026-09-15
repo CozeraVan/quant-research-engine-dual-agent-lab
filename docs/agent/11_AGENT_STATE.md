@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-LAB-UI-LANDING-R3 (DONE — 18080 冻结定稿逐区块套用：两级条件组/编辑按钮回退/预检自动化/持仓迁移；awaiting git approval)
+QRE-LAB-UI-LANDING-R6 (DONE — OOM 限额 2G→8G + 僵尸 run 自愈 + 重提 5 年全量回测；awaiting git approval)
 
 2026-09-08（R2 纠偏，用户驳回 R1 适配改写）：以 synthesis.html 为唯一真相源 1:1 移植——lab-theme.css=设计稿 CSS 全量+母板类映射，模板区块/类名逐段对齐，数据全走真实 API（fees_summary/symbols 路由沿用 R1 新增），echarts 图按规则 4 保留但配色/区间卡/tooltip/三级显隐对齐设计稿。测试 2067+4 绿。R1 细节（已部分被 R2 覆盖）：把已定稿设计稿 synthesis.html（docs/agent/12_UI_STYLE_GUIDE.md 为其规范）
 原位落地 8081 lab 版（qre-gui-lab），8080 管理台零改动（git diff 仅 lab_* 模板 +

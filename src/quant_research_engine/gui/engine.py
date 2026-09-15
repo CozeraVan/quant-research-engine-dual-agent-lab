@@ -239,6 +239,9 @@ def run_backtest(
         "created_at": datetime.now(tz=timezone.utc).isoformat(),
         "status": "running",
         "error": None,
+        # QRE-LAB-UI-LANDING-R6：僵尸 run 自愈——记录提交时的 GUI 进程 PID，
+        # module 执行器生命周期依附该进程，PID 不一致即执行器已随旧进程死亡
+        "gui_pid": os.getpid(),
     }
     if profile_overrides:
         record["profile_overrides"] = profile_overrides

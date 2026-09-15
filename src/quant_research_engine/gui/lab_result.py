@@ -31,12 +31,15 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, render_template
 
+from quant_research_engine.gui import engine as _engine
 from quant_research_engine.gui.engine import _find_output_file, get_run
 
 # 基准指数候选（默认第一个：上证指数）
@@ -1130,6 +1133,49 @@ def _excess_return_of(record: dict[str, Any]) -> float | None:
     return round(excess, 6) if isinstance(excess, (int, float)) else None
 
 
+def _reap_zombie_run(record: dict[str, Any]) -> dict[str, Any]:
+    """僵尸 run 自愈（QRE-LAB-UI-LANDING-R6）：status=running 但执行器已死 → 标记 failed。
+
+    判死规则（最小改动，不重执行器）：
+    - status.json 无 gui_pid 的旧 running run → 一律视为僵尸（PID 记录缺失无法证活）；
+    - executor=module：执行器跑在 GUI 进程内，status.json 的 gui_pid != 当前进程 PID
+      （说明 GUI 已重启，旧进程连同回测一起死了）→ 僵尸；
+    - executor=cli：子进程依附 GUI 启动，gui_pid 不一致同上；一致时再探活
+      （os.kill(pid, 0)，进程不存在/无权限→视为死）。
+    标记写回 status.json（error 注明检测原因与时间），request.json 不动。
+    """
+    if record.get("status") != "running":
+        return record
+    pid = record.get("gui_pid")
+    dead_reason: str | None = None
+    if not isinstance(pid, int) or pid <= 0:
+        dead_reason = "无 gui_pid 记录（早于 R6 的 run），无法证明执行器存活"
+    elif pid != os.getpid():
+        dead_reason = f"执行器依附的 GUI 进程 PID {pid} 已退出（当前 PID {os.getpid()}）"
+    else:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            dead_reason = f"GUI 进程 PID {pid} 探活失败"
+    if dead_reason is None:
+        return record
+    record = dict(record)
+    record["status"] = "failed"
+    record["error"] = (
+        f"僵尸 run 自动标记：{dead_reason}；检测时间 "
+        + datetime.now(tz=timezone.utc).isoformat()
+    )
+    run_id = str(record.get("run_id") or "")
+    if _RUN_ID_RE.match(run_id):
+        try:
+            (_engine.RUNS_DIR / run_id / "status.json").write_text(
+                json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except OSError:
+            pass
+    return record
+
+
 def build_lab_runs_list() -> list[dict[str, Any]]:
     """list_runs() 增强：每条加 strategy_name / symbol_count，按创建时间倒序。
 
@@ -1139,6 +1185,7 @@ def build_lab_runs_list() -> list[dict[str, Any]]:
 
     items: list[dict[str, Any]] = []
     for record in list_runs():
+        record = _reap_zombie_run(record)
         run_id = str(record.get("run_id") or "")
         codes = record.get("codes") or []
         if isinstance(codes, str):  # 兼容历史 run 的空格拼接串

@@ -2,7 +2,45 @@
 
 ## Task ID
 
-QRE-LAB-UI-LANDING (设计稿 synthesis.html 视觉层与已批准结构调整原位落地 8081 lab 版)
+QRE-BATCH-STREAMING-EMPTYCSV (流式批量回测空 CSV 崩溃修复：EmptyDataError 容忍)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+run 20260914T125635220084（5 年全市场）死于聚合阶段 "No columns to parse
+from file"：无交易个股的空 DataFrame（无列）落盘为无表头空文件，磁盘代理
+read_csv 读回抛错（非流式路径空 DataFrame 一直在内存所以从不触发）。
+修复仅 streaming_batch.py 一处：`_DiskBackedSingleResult._read` 捕获
+pd.errors.EmptyDataError 返回空 DataFrame（读侧容忍，字节兼容既有产物）。
+测试 +1（空结果个股全链路 write_batch_result 不炸）。失败 run 产物不可信
+（共享 output_dir 已被后续 run 部分覆盖且 run_manifest 缺失），建议重跑。
+未 commit。前一任务 QRE-BATCH-STREAMING（见下档）。
+
+---
+
+## Archive: QRE-BATCH-STREAMING (批量回测内存峰值控制：流式分块，OOM 7.7G → 实测 299MB@500只×2年)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+OOM 根因（profiling 实锤）：装配器一次性加载全池 frame（500×2y 即 691MB RSS，
+5000×5y 膨胀至 7.7G）。修复：新 `portfolio/streaming_batch.py` 流式分块
+（QRE_BATCH_CHUNK_SIZE 默认 250；块内跑既有 BatchBacktestEngine → 逐股落盘
+→ `_DiskBackedSingleResult` 磁盘懒加载代理 → 释放），gui/engine.py 与
+apps/cli.py 的 batch 路径在 >250 只或全市场时走流式，小样本不变；产物格式
+零变化（500×2y 产物逐位一致）。tests/test_streaming_batch.py +2，全量
+2071+4 绿。未重启 qre-gui-lab（进行中的全市场 run 不动），改动下次 run 生效。
+未 commit。前一任务 QRE-LAB-UI-LANDING（见下档）。
+
+---
+
+## Archive: QRE-LAB-UI-LANDING (设计稿 synthesis.html 视觉层与已批准结构调整原位落地 8081 lab 版)
 
 ## Current Status
 

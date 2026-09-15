@@ -1143,7 +1143,7 @@
       take_profit_pct: document.getElementById("param-take-profit").value,
       trailing_stop_pct: document.getElementById("param-trailing-stop").value,
       engine_impl: document.getElementById("param-engine-impl").value,
-      precheck: true,  // 18080 定稿：预检固定开启（后台自动冒烟），不再是用户参数
+      precheck: false,  // 小样本验证已由流水线第②步冒烟承担；③步必须是真正的全量回测（precheck=true 只跑截断小样本，full_params 无消费方）
       output_dir: document.getElementById("param-output").value,
       db_url: document.getElementById("param-dburl").value,
       market_profile: document.getElementById("param-profile").value,
@@ -1477,7 +1477,7 @@
           html +=
             '<div class="rule-row" data-name="' + escHtml(s.name) + '">' +
             '<strong>' + escHtml(s.name) + '</strong> ' +
-            '<span class="opt">' + escHtml(s.mtime || "") + '</span> ' + smoke + ' ' +
+            '<span class="opt">' + escHtml(window.LabUI ? LabUI.fmtLocalTime(s.mtime) : (s.mtime || "")) + '</span> ' + smoke + ' ' +
             '<button class="btn-sm sb-smoke">重新验证</button> ' +
             '<select class="sb-category">' + options + '</select>' +
             '<button class="btn-sm sb-promote" title="正式发布该策略并立即开始一次全量回测">正式回测</button> ' +
@@ -1692,7 +1692,7 @@
             + '<td style="text-align:right">' + symbols + '</td>'
             + '<td style="text-align:right">' + excessHtml + '</td>'
             + '<td><span class="badge ' + badgeCls + '">' + esc(statusLabel) + '</span></td>'
-            + '<td class="opt">' + esc((run.created_at || '—').slice(0, 16).replace('T', ' ')) + '</td>'
+            + '<td class="opt">' + esc(window.LabUI ? LabUI.fmtLocalTime(run.created_at) : (run.created_at || '—')) + '</td>'
             + '<td style="white-space:nowrap">' + viewLink
             + ' <button class="btn-sm btn-danger-outline" data-del-run="' + esc(run.run_id) + '">删除</button>'
             + '</td></tr>';

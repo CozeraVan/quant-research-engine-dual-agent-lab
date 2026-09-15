@@ -931,6 +931,46 @@ def _make_bare_run(runs_dir: Path, run_id: str, *, codes=None, created_at="2026-
     return run_dir
 
 
+def _make_running_run(runs_dir: Path, run_id: str, *, gui_pid=None) -> Path:
+    """造一个 status=running 的 run（用于僵尸自愈测试）。"""
+    run_dir = runs_dir / run_id
+    run_dir.mkdir(parents=True)
+    status = {
+        "run_id": run_id, "mode": "batch", "status": "running",
+        "output_dir": str(runs_dir.parent / "out" / run_id),
+        "start": "2025-01-01", "end": "2025-12-31",
+        "created_at": "2026-01-04T00:00:00", "executor": "module",
+    }
+    if gui_pid is not None:
+        status["gui_pid"] = gui_pid
+    (run_dir / "status.json").write_text(json.dumps(status), encoding="utf-8")
+    return run_dir
+
+
+def test_lab_runs_zombie_reap(lab_client, tmp_path):
+    """QRE-LAB-UI-LANDING-R6：running 但执行器已死的 run 自动标 failed；活 run 不动。"""
+    import os
+    runs_dir = tmp_path / "runs"
+    # 无 gui_pid 的旧 running run → 僵尸
+    _make_running_run(runs_dir, "20260104T000000000004")
+    # gui_pid 指向不存在的 PID（旧 GUI 进程已死）→ 僵尸
+    _make_running_run(runs_dir, "20260104T000000000005", gui_pid=2_000_000_000)
+    # gui_pid = 当前进程且探活通过 → 保持 running
+    _make_running_run(runs_dir, "20260104T000000000006", gui_pid=os.getpid())
+
+    resp = lab_client.get("/api/lab/runs")
+    assert resp.status_code == 200
+    by_id = {r["run_id"]: r for r in resp.get_json()["runs"]}
+    assert by_id["20260104T000000000004"]["status"] == "failed"
+    assert by_id["20260104T000000000005"]["status"] == "failed"
+    assert by_id["20260104T000000000006"]["status"] == "running"
+    # status.json 已写回，error 注明检测原因与时间
+    for rid in ("20260104T000000000004", "20260104T000000000005"):
+        st = json.loads((runs_dir / rid / "status.json").read_text(encoding="utf-8"))
+        assert st["status"] == "failed"
+        assert "僵尸 run 自动标记" in st["error"] and "检测时间" in st["error"]
+
+
 def test_lab_runs_list_enriched(lab_client, tmp_path):
     """/api/lab/runs：增强字段 + 策略名三级 fallback + 创建时间倒序。"""
     runs_dir = tmp_path / "runs"

@@ -232,7 +232,7 @@ def test_lab_strategy_three_entry_tabs(lab_client):
     # 预检开关移除（冒烟固定后台自动）；最大持仓天数迁移到通用高级参数
     assert 'id="param-precheck"' not in html
     assert 'id="param-holding"' in html and "最大持仓天数" in html
-    assert "precheck: true" in html
+    assert "precheck: false" in html  # ③步全真全量（预检截断已由冒烟承担）
 
 
 # --- 策略详情页 + 产物下载 ---

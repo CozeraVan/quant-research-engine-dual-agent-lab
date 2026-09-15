@@ -125,5 +125,15 @@
     if (err) { err.style.display = "block"; err.innerHTML = "<b>失败：</b>" + msg; }
   };
 
+  /* ==================== 时间戳：UTC ISO → 浏览器本地时区 ==================== */
+  /* 后端一律存 UTC（带 +00:00 偏移）；显示统一走此函数，输出 "YYYY-MM-DD HH:mm" 本地时间 */
+  LabUI.fmtLocalTime = function (iso) {
+    if (!iso) return "—";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    var p = function (n) { return ("0" + n).slice(-2); };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  };
+
   window.LabUI = LabUI;
 })();
