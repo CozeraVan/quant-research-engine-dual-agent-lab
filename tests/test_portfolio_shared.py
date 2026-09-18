@@ -97,11 +97,46 @@ def test_shared_cash_backtest_rejects_invalid_max_positions():
         initial_cash=100000.0,
         entry_signal="rsi_2 < 10",
         holding_days=2,
-        max_positions=0,
+        max_positions=-1,  # 负数仍拒绝
     )
 
-    with pytest.raises(ValueError, match="max_positions must be positive"):
+    with pytest.raises(ValueError, match="max_positions must be non-negative"):
         engine.run(make_shared_frame(), request)
+
+
+def make_wide_frame(n_symbols: int = 12) -> pd.DataFrame:
+    """12 只股票同日出信号的 frame（用于不限制持仓数测试）。"""
+    dates = pd.to_datetime(["2026-01-05", "2026-01-06", "2026-01-07"])
+    rows = []
+    for i in range(n_symbols):
+        for j, d in enumerate(dates):
+            rows.append(
+                {
+                    "ts_code": f"{i:06d}.SZ",
+                    "trade_date": d,
+                    "open": 10.0,
+                    "close": 10.0,
+                    "rsi_2": 5.0 if j == 0 else 50.0,  # 首日全部触发买入信号
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_shared_cash_backtest_zero_max_positions_means_unlimited():
+    """QRE-MAXPOS-UNLIMITED：max_positions=0 / None = 不限制，12 只全部买入（超默认 10）。"""
+    for mp in (0, None):
+        engine = SharedCashBacktestEngine(AShareMarketProfile())
+        request = SharedCashBacktestRequest(
+            symbols=[f"{i:06d}.SZ" for i in range(12)],
+            initial_cash=100000.0,
+            entry_signal="rsi_2 < 10",
+            holding_days=2,
+            max_positions=mp,
+        )
+        result = engine.run(make_wide_frame(), request)
+        buys = result.orders[result.orders["side"] == "buy"]
+        assert len(buys) == 12, f"max_positions={mp} 应买入全部 12 只"
+        assert result.equity_curve.iloc[1]["position_count"] == 12
 
 
 def test_shared_cash_backtest_can_size_entries_by_score_weight():

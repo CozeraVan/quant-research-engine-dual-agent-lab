@@ -18,7 +18,7 @@ class SharedCashBacktestRequest:
     initial_cash: float
     entry_signal: str
     holding_days: int
-    max_positions: int
+    max_positions: int | None  # None 或 0 = 不限制持仓数量（QRE-MAXPOS-UNLIMITED）
     exit_signal: str | None = None
     entry_price_column: str = "open"
     mark_price_column: str = "close"
@@ -107,8 +107,11 @@ class SharedCashBacktestEngine:
 
             if date_index + 1 < len(dates):
                 next_trade_date = dates[date_index + 1]
-                available_slots = request.max_positions - len(positions) - len(pending_buys.get(next_trade_date, []))
-                if available_slots > 0:
+                if request.max_positions is None or request.max_positions == 0:
+                    available_slots = None  # 不限制：全部候选都可进
+                else:
+                    available_slots = request.max_positions - len(positions) - len(pending_buys.get(next_trade_date, []))
+                if available_slots is None or available_slots > 0:
                     candidates = self._entry_candidates(day_frame, positions, pending_buys, next_trade_date)
                     pending_buys.setdefault(next_trade_date, []).extend(candidates[:available_slots])
 
@@ -411,7 +414,9 @@ class SharedCashBacktestEngine:
         ]
         weights = self._target_weights(request, day_frame, executable_symbols)
         for symbol in sorted(symbols):
-            if symbol in positions or symbol not in day_frame.index or len(positions) >= request.max_positions:
+            if symbol in positions or symbol not in day_frame.index:
+                continue
+            if request.max_positions and len(positions) >= request.max_positions:  # None/0 = 不限制
                 continue
             row = day_frame.loc[symbol]
             allocation = total_equity * weights.get(symbol, 0.0)
@@ -673,7 +678,10 @@ class SharedCashBacktestEngine:
             scores=scores,
             volatilities=volatilities,
         )
-        slot_exposure = min(len(symbols), request.max_positions) / request.max_positions
+        if request.max_positions:  # None/0 = 不限制：满仓权重不折减
+            slot_exposure = min(len(symbols), request.max_positions) / request.max_positions
+        else:
+            slot_exposure = 1.0
         return {symbol: weight * slot_exposure for symbol, weight in raw_weights.items()}
 
     def _column_values(
@@ -914,8 +922,8 @@ class SharedCashBacktestEngine:
             raise ValueError("initial_cash must be positive")
         if request.holding_days <= 0:
             raise ValueError("holding_days must be positive")
-        if request.max_positions <= 0:
-            raise ValueError("max_positions must be positive")
+        if request.max_positions is not None and request.max_positions < 0:
+            raise ValueError("max_positions must be non-negative (0 or None = unlimited)")
         if request.weight_model == "score_weight" and not request.score_column:
             raise ValueError("score_column is required for score_weight")
         if request.weight_model == "inverse_volatility" and not request.volatility_column:

@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-09-18 QRE-LAB-RANDOM-UNIVERSE + QRE-MAXPOS-UNLIMITED DONE（8081 lab 两功能，用户批准提交）：①标的范围新增「随机股票」——前端 N 输入（选中才显示，1~2000 校验）；/api/run 收 random_n（非法 400，设置后强制非全市场防误触）；engine.py 新 _sample_random_universe（load_security_metadata 轻量取全 A 清单，种子=run_id 可复现），抽样在 precheck 截断之前（冒烟兼容），实际 codes + universe=random 落盘 status.json；lab_result.py _run_meta 透出 random_n，结果页标的 chip 显示「随机 N 只」。②最大持仓 0=不限制——shared.py 的 max_positions 放宽 int|None（0/None=不限制，负数仍 ValueError），槽位/买入上限/权重折减三处消费点贯通 None 语义；engine.py 缺省保持 10、显式 0→None；API 0 放行；前端 min=0+文案+预览栏「不限制」。测试 +3（抽样数量/复现/越界、random_n 400 矩阵、shared 0/None 买 12 只超限+API 放行），全量 2076 passed + 4 skipped（基线 2074+2）零回归。真 Chromium 截图验证选项渲染与提交（run 20260915T041314375882 实测 random_n=5 落盘 5 只）。未 commit 待批→本 commit 落。
+
 2026-09-15 QRE-DOCS-ROADMAP DONE（纯文档沉淀，零代码改动）：新建 `docs/agent/14_LAUNCH_ROADMAP.md`——上线路线图与工作手册，覆盖：项目现状总览（引擎能力/三端口分工/近期成果含流式回测与 precheck 修复）、UI 设计规范要点（18080 冻结基准与工作纪律）、ECS 上线架构（已定稿：ECS 2C2G 只跑 Web+Redis+用户小库，行情库与回测留家里 PC，worker 纯出站长拉云端队列）、迁移路线图 Phase 0-4（含 PG 2G 参数与 systemd 模板位置的可照做清单）、两周踩坑手册（WSL 端口抢占/双栈黑洞/MemoryMax 教训/precheck 语义/--noproxy/真 Chromium 验证）、工作流约定（逐次批准 commit/测试基线 2072+4/子代理分工/冒烟铁律/冻结清单）、挂起远期任务清单（9 项各一句话状态）。AGENTS.md 阅读清单加入该文档。未 commit，等用户批准。
 
 2026-09-14 QRE-STREAMING-BATCH DONE（流式批量回测落地，内存峰值有界）：portfolio/streaming_batch.py 新增 run_batch_streaming——批量模式股票数超过 QRE_BATCH_CHUNK_SIZE（默认 250）或为全市场时按块加载/回测/落盘，避免全池 frame 一次性进内存；gui/engine.py _run_via_module 接流式入口（单标的/共享资金路径不变）；apps/cli.py backtest-batch 接线；修复流式路径空 CSV 写出。实测：5 年全市场 run（20260914T125635220084 / 20260914T162349176439）工作进程 RSS 14 分钟采样全程 383-534MB 有界（原 2G 限额下必 OOM；配合 MemoryMax 8G 双保险）。测试 tests/test_streaming_batch.py 新增（块切分/空块/汇总），全量 pytest 绿。

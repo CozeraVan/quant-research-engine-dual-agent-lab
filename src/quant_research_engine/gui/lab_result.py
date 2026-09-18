@@ -925,6 +925,7 @@ def _run_meta(record: dict[str, Any], brief: dict[str, str]) -> dict[str, Any]:
         "date_end": record.get("end"),
         "mode": record.get("mode"),
         "whole_market": not codes,
+        "random_n": record.get("random_n"),
         "n_codes": len(codes),
         "codes_sample": codes[:5],
         "initial_cash": _num(record.get("initial_cash"), 100_000.0),

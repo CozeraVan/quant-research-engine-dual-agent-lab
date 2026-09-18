@@ -108,8 +108,30 @@ def register_strategy_lab_routes(app: Flask) -> None:
 
         all_market = bool(data.get("all_market"))
         codes = data.get("codes") or ""
-        if not all_market and not codes.strip():
+        # 随机股票（QRE-LAB-RANDOM-UNIVERSE）：random_n = 服务端从全 A 股池抽 N 只
+        random_n = data.get("random_n")
+        if random_n not in (None, ""):
+            try:
+                random_n = int(random_n)
+            except (TypeError, ValueError):
+                return jsonify({"status": "error", "error": "random_n 必须是正整数"}), 400
+            if random_n < 1 or random_n > 2000:
+                return jsonify({"status": "error", "error": "random_n 须在 1~2000 之间"}), 400
+        else:
+            random_n = None
+        if random_n is not None:
+            all_market = False  # 抽样后按 codes 跑，避免误触全市场
+        if not all_market and not codes.strip() and random_n is None:
             return jsonify({"status": "error", "error": "请填写股票代码，或勾选“全部 A 股”"}), 400
+
+        max_positions = data.get("max_positions")
+        if max_positions not in (None, ""):
+            _mp_str = str(max_positions).strip()
+            if not (_mp_str.lstrip("-").isdigit()):
+                return jsonify({"status": "error", "error": "max_positions 必须是正整数"}), 400
+            max_positions = int(_mp_str)
+            if max_positions < 0:
+                return jsonify({"status": "error", "error": "max_positions 须 ≥0（0 = 不限制持仓数量）"}), 400
 
         mode = data.get("mode")
         if mode not in ("single", "batch", "shared"):
@@ -152,7 +174,7 @@ def register_strategy_lab_routes(app: Flask) -> None:
                 end=data["end"],
                 codes=codes,
                 initial_cash=data.get("initial_cash") or None,
-                max_positions=data.get("max_positions") or None,
+                max_positions=max_positions,
                 output_dir=data.get("output_dir") or None,
                 db_url=data.get("db_url") or None,
                 market_profile=data.get("market_profile") or None,
@@ -163,6 +185,7 @@ def register_strategy_lab_routes(app: Flask) -> None:
                 take_profit_pct=_opt_float("take_profit_pct"),
                 trailing_stop_pct=_opt_float("trailing_stop_pct"),
                 precheck=bool(data.get("precheck")),
+                random_n=random_n,
                 background=(executor != "cli"),
             )
             return jsonify(record)

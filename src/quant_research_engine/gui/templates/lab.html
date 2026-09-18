@@ -136,6 +136,7 @@
         <span class="label-inline"><input type="radio" name="param-scope" id="scope-all" value="all" checked> 全部 A 股</span>
         <span class="label-inline"><input type="radio" name="param-scope" id="scope-group" value="group"> 按板块/概念</span>
         <span class="label-inline"><input type="radio" name="param-scope" id="scope-codes" value="codes"> 指定股票代码</span>
+        <span class="label-inline"><input type="radio" name="param-scope" id="scope-random" value="random"> 随机股票</span>
       </span>
 
       <label id="scope-group-label" class="hidden">板块/概念</label>
@@ -148,6 +149,12 @@
 
       <label id="scope-codes-label" class="hidden">股票代码 Codes</label>
       <textarea id="param-codes" rows="2" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ" class="hidden"></textarea>
+
+      <label id="scope-random-label" class="hidden">随机数量 N</label>
+      <span id="scope-random-row" class="hidden">
+        <input type="number" id="param-random-n" min="1" max="2000" value="500" style="width:120px">
+        <span class="opt">从全 A 股池随机抽 N 只（1~2000；抽样在服务端进行，实际名单见结果页）</span>
+      </span>
     </div>
 
     <!-- 高级参数（默认折叠，保留现有默认值自动生成） -->
@@ -165,8 +172,9 @@
           <label>初始资金 Initial Cash</label>
           <input type="text" id="param-cash" value="100000" placeholder="100000">
 
-          <label>最大持仓 Max Positions</label>
-          <input type="text" id="param-maxpos" value="10" placeholder="10（共享资金模式用）">
+          <label>最大持仓股票数 Max Positions</label>
+          <span><input type="number" id="param-maxpos" value="10" min="0" step="1" style="width:120px">
+          <span class="opt">默认 10；填 0 表示不限制持仓数量（共享资金模式下生效）</span></span>
 
           <label>佣金率 Commission</label>
           <input type="text" id="param-commission" value="0.0003" placeholder="0.0003">
@@ -944,6 +952,7 @@
   function currentScope() {
     if (document.getElementById("scope-group").checked) return "group";
     if (document.getElementById("scope-codes").checked) return "codes";
+    if (document.getElementById("scope-random").checked) return "random";
     return "all";
   }
   function syncScopeUI() {
@@ -952,7 +961,10 @@
     document.getElementById("scope-group-row").classList.toggle("hidden", scope !== "group");
     document.getElementById("scope-codes-label").classList.toggle("hidden", scope !== "codes");
     document.getElementById("param-codes").classList.toggle("hidden", scope !== "codes");
+    document.getElementById("scope-random-label").classList.toggle("hidden", scope !== "random");
+    document.getElementById("scope-random-row").classList.toggle("hidden", scope !== "random");
   }
+  document.getElementById("param-random-n").addEventListener("input", updateParamsLine);
   document.querySelectorAll('input[name="param-scope"]').forEach(function(r) {
     r.addEventListener("change", syncScopeUI);
   });
@@ -990,6 +1002,13 @@
   function resolveScopeCodes() {
     var scope = currentScope();
     if (scope === "all") return Promise.resolve({codes: "", allMarket: true});
+    if (scope === "random") {
+      var n = parseInt(document.getElementById("param-random-n").value, 10);
+      if (!n || n < 1 || n > 2000) {
+        return Promise.reject(new Error("随机数量 N 须为 1~2000 的正整数"));
+      }
+      return Promise.resolve({codes: "", allMarket: false, randomN: n});
+    }
     if (scope === "codes") {
       return Promise.resolve({
         codes: document.getElementById("param-codes").value,
@@ -1058,6 +1077,8 @@
     if (scope === "group") {
       var gsel = document.getElementById("univ-group"), ksel = document.getElementById("univ-key");
       scopeLine = "  scope: " + gsel.value + " / " + (ksel.value || "（未选）");
+    } else if (scope === "random") {
+      scopeLine = "  scope: random " + (document.getElementById("param-random-n").value || "500") + " 只  # 服务端随机抽样";
     } else if (scope === "codes") {
       scopeLine = "  codes: [" + (document.getElementById("param-codes").value.trim() || "（未填）") + "]";
     }
@@ -1068,7 +1089,7 @@
       scopeLine,
       "  mode: " + g("param-mode"),
       "  initial_cash: " + (g("param-cash") || 100000),
-      "  max_positions: " + (g("param-maxpos") || 10),
+      "  max_positions: " + (g("param-maxpos").trim() === "0" ? "0  # 不限制" : (g("param-maxpos") || 10)),
       "  commission_rate: " + (g("param-commission") || 0.0003),
       "  min_commission: " + (g("param-min-commission") || 5),
       "  stamp_tax_sell: " + (g("param-stamp-tax") || 0.0005)];
@@ -1132,6 +1153,7 @@
       end: document.getElementById("param-end").value,
       codes: scope.codes,
       all_market: scope.allMarket,
+      random_n: scope.randomN || null,
       initial_cash: document.getElementById("param-cash").value,
       max_positions: document.getElementById("param-maxpos").value,
       commission_rate: document.getElementById("param-commission").value,

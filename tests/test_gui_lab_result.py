@@ -947,6 +947,57 @@ def _make_running_run(runs_dir: Path, run_id: str, *, gui_pid=None) -> Path:
     return run_dir
 
 
+def test_random_universe_sample(monkeypatch):
+    """QRE-LAB-RANDOM-UNIVERSE：抽样数量正确、同种子可复现、不越界。"""
+    import pandas as pd
+    import quant_research_engine.gui.engine as engine
+
+    class _FakeStore:
+        def __init__(self, settings):
+            pass
+
+        def load_security_metadata(self, ts_codes=None):
+            return pd.DataFrame({"ts_code": [f"{i:06d}.SZ" for i in range(100)]})
+
+    monkeypatch.setattr(
+        "quant_research_engine.data.postgres.PostgresDataStore", _FakeStore
+    )
+    from quant_research_engine.gui.engine import _sample_random_universe
+
+    a = _sample_random_universe(10, "rid1", db_url="postgresql+psycopg:///dummy")
+    b = _sample_random_universe(10, "rid1", db_url="postgresql+psycopg:///dummy")
+    c = _sample_random_universe(10, "rid2", db_url="postgresql+psycopg:///dummy")
+    assert len(a) == 10 and len(set(a)) == 10          # 数量正确且不重复
+    assert a == b                                       # 同 run_id 可复现
+    assert a != c or len(set(a) & set(c)) < 10          # 不同种子不同抽样（极大概率）
+    assert len(_sample_random_universe(5000, "rid1", db_url="postgresql+psycopg:///dummy")) == 100  # 超池子截断不越界
+
+
+def test_api_run_random_n_validation(lab_client):
+    """random_n 非法值 400；合法值放行到执行层（本用例只到校验/提交失败边界）。"""
+    base = {"yaml": "experiment:\n  name: t\nsignal:\n  entry: close > 0\n",
+            "mode": "batch", "start": "2025-01-01", "end": "2025-02-01"}
+    for bad in (0, -1, 2001, "abc"):
+        resp = lab_client.post("/api/run", json={**base, "random_n": bad})
+        assert resp.status_code == 400, bad
+        assert "random_n" in resp.get_json()["error"]
+
+
+def test_api_run_max_positions_validation(lab_client):
+    """max_positions 非法值 400（负数/0/非整数）；合法值放行到执行层。"""
+    base = {"yaml": "experiment:\n  name: t\nsignal:\n  entry: close > 0\n",
+            "mode": "batch", "start": "2025-01-01", "end": "2025-02-01",
+            "codes": "000001.SZ"}
+    for bad in (-3, "abc", 2.5):
+        resp = lab_client.post("/api/run", json={**base, "max_positions": bad})
+        assert resp.status_code == 400, bad
+        assert "max_positions" in resp.get_json()["error"]
+    # 0 = 不限制（QRE-MAXPOS-UNLIMITED）与正整数放行（后续执行层错误可接受，只断 400 边界）
+    for ok_val in (0, 20):
+        resp = lab_client.post("/api/run", json={**base, "max_positions": ok_val})
+        assert resp.status_code != 400, ok_val
+
+
 def test_lab_runs_zombie_reap(lab_client, tmp_path):
     """QRE-LAB-UI-LANDING-R6：running 但执行器已死的 run 自动标 failed；活 run 不动。"""
     import os

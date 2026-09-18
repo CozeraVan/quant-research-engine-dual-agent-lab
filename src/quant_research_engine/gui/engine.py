@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import subprocess
 import sys
 import tempfile
@@ -153,6 +154,18 @@ def compile_high_level_entry(data: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "issues": [{"level": "error", "message": f"Failed to generate spec: {exc}"}]}
 
 
+def _sample_random_universe(random_n: int, seed: str, *, db_url: str | None = None) -> list[str]:
+    """从全 A 股池随机抽 N 只（种子=run_id，可复现；N 超池子上限则截断）。"""
+    from quant_research_engine.data.settings import DatabaseSettings
+    from quant_research_engine.data.postgres import PostgresDataStore
+
+    settings = DatabaseSettings(market_db_url=db_url) if db_url else DatabaseSettings.from_env()
+    store = PostgresDataStore(settings)
+    meta = store.load_security_metadata(ts_codes=None)
+    pool = sorted(meta["ts_code"].dropna().astype(str).unique().tolist())
+    return random.Random(seed).sample(pool, min(random_n, len(pool)))
+
+
 def run_backtest(
     *,
     yaml_text: str,
@@ -172,6 +185,7 @@ def run_backtest(
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
     precheck: bool = False,
+    random_n: int | None = None,
     background: bool = False,
     mark: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -194,6 +208,14 @@ def run_backtest(
     strategy_path.write_text(yaml_text, encoding="utf-8")
 
     codes_list = [c.strip() for c in codes.split(",") if c.strip()]
+
+    # 服务端随机抽样（QRE-LAB-RANDOM-UNIVERSE）：random_n 指定时从全 A 股池抽 N 只。
+    # 种子取 run_id（同 run 可复现）；实际抽中的 codes 写进 record（status.json），
+    # 结果页/记录页可见实际抽中名单。
+    sampled_random = False
+    if random_n and not codes_list:
+        codes_list = _sample_random_universe(random_n, rid, db_url=db_url)
+        sampled_random = True
 
     full_params: dict[str, Any] | None = None
     if precheck:
@@ -251,6 +273,9 @@ def run_backtest(
         record["take_profit_pct"] = take_profit_pct
     if trailing_stop_pct is not None:
         record["trailing_stop_pct"] = trailing_stop_pct
+    if sampled_random:
+        record["random_n"] = random_n
+        record["universe"] = "random"
     if precheck:
         record["precheck"] = True
         record["full_params"] = full_params
@@ -602,7 +627,13 @@ def _execute_engine(
 
     elif mode == "shared":
         cash = float(initial_cash) if initial_cash else 100_000.0
-        positions = int(max_positions) if max_positions else 10
+        # QRE-MAXPOS-UNLIMITED：0 → None（不限制）；缺省保持 GUI 默认 10
+        if max_positions in (None, ""):
+            positions = 10
+        elif int(max_positions) == 0:
+            positions = None
+        else:
+            positions = int(max_positions)
         result = SharedCashBacktestEngine(mp).run(
             frame,
             SharedCashBacktestRequest(
