@@ -2,6 +2,14 @@
 
 ## Latest Verified State
 
+## Latest Verified State
+
+2026-09-18 QRE-ECS-LANDING DONE（ECS 基础环境 + aguhuice.com 落地页上线）：ECS 47.119.127.40（Ubuntu 24.04）——SSH 密码登录被拒（服务端仅 publickey），改用本地既有密钥 ~/.ssh/aguhuice_ed25519 登录成功。已装 nginx/ufw/fail2ban/certbot/python3-certbot-nginx；ufw 仅放行 22/80/443（active，默认 deny incoming）；fail2ban active（默认 sshd 防护）；deploy 用户（sudo 组，已写入同一公钥 authorized_keys，root 登录暂未禁，后续阶段再做）。落地页 /var/www/aguhuice/index.html（纯静态单页：品牌 A股回测台·aguhuice.com + 一句话介绍 + 三功能预告卡[自然语言写策略/可视化回测报告/板块与个股归因] +「内测即将开启」+ 页脚备案号占位「粤ICP备XXXXXXXX号-1」链 beian.miit.gov.cn；设计遵守 12_UI_STYLE_GUIDE 淡紫 tokens、系统字体栈、入场动效 viewIn、红绿仅涨跌语义；响应式单列）。Nginx 站点 /etc/nginx/sites-available/aguhuice（80 端口、gzip、静态缓存头、HTML no-cache），nginx -t 过 + reload。验证：WSL curl --noproxy '*' http://47.119.127.40/ → 200 内容正确；真 Chromium 截图桌面/移动两尺寸观感正常（/home/van/qre-outputs/landing2.png、landing_mobile.png）。版本管理：deploy/landing/index.html + nginx-aguhuice.conf（与线上一致已 diff 校验）。遗留：①DNS A 记录 aguhuice.com → 47.119.127.40（用户操作）后跑 `certbot --nginx -d aguhuice.com -d www.aguhuice.com` 开 HTTPS；②备案号下来后替换页脚占位；③后续阶段禁 root 密码登录/改 key-only。未 git commit，等用户审批。
+
+2026-09-18 QRE-SAAS-DESIGN DONE（纯设计，零代码）：新建 `docs/agent/15_SAAS_SYSTEMS_DESIGN.md`——内测四系统初步方案：用户系统（ECS，邮箱注册+三阶层配额+策略库）、Job 系统（ECS Redis 队列+PG 元数据，smoke/full 同协议，租约+心跳防僵尸，幂等覆盖写，worker 长轮询拉取协议）、结果系统（ECS 存元数据+产物，API 与 8081 结果页路径逐一对应降低前端迁移成本，磁盘水位清理）、后台管理（ECS，job/worker/用户/因子需求队列管理，家里 PG 状态经 worker 上报）。含全局架构图、数据模型、接口清单、8 条待用户拍板的开放问题、建议实施顺序（Job→结果→用户→管理）。待用户核验后对齐颗粒度再拆 TODO。
+
+## Latest Verified State
+
 2026-09-18 补：lab_result.html 结果页「随机 N 只」标的 chip（属 QRE-LAB-RANDOM-UNIVERSE，c6001b3 漏暂存）单独补齐提交。
 
 2026-09-18 QRE-ADMIN-PG-STATUS DONE（8080 管理台 PostgreSQL 状态卡片+管理按钮，用户批准提交）：总览页新增 PG 卡片——admin.py pg_status()（systemctl is-active 实时状态 + ss 5432 监听 + stock_daily max(trade_date) 新鲜度，DB 不可达降级 db_error 不报错页）与 pg_control()（白名单 {"start","restart"} 严格枚举，数组命令无拼接，sudo -n，30s 超时，失败返回 returncode+stderr 摘要）；app.py 新路由 GET /api/admin/pg-status、POST /api/admin/pg-control（非法 400/失败 502）；admin.html 卡片含刷新/开启/重启按钮（confirm 二次确认，重启注明中断读写），fetchWithTimeout 扩展 opts 支持 POST；style.css 加通用 badge 样式（8080 风，lab 有 theme 覆盖互不影响）。动机：PG 停机曾导致整条日更链失败。测试 +4（模板断言/非法 action 零执行/命令构造/降级路径），全量 2080 passed + 4 skipped 零回归。真机验证：/api/admin/pg-status 返回 active+5432 监听+新鲜度 2026-09-18。未 commit 待批→本 commit 落。

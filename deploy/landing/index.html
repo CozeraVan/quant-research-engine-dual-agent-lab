@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>aguhuice.com · A股回测台 — 验证你的交易策略</title>
+<meta name="description" content="面向普通投资者的 A 股日线量化回测工具：自然语言写策略、可视化回测报告、板块与个股归因。内测即将开启。">
+<style>
+/* 设计 tokens 取自 docs/agent/12_UI_STYLE_GUIDE.md（synthesis.html 定稿） */
+:root{
+  --paper:#FAF9FC;--panel:#FFFFFF;--tint:#F1EDF8;--tint-deep:#E6DEF3;
+  --lav:#6750A4;--lav-deep:#4A3A78;--lav-ink:#8B7FBE;
+  --ink:#241F2E;--grey:#6F6879;--faint:#9A93A6;--line:#E4DFEE;
+  --up:#C93A3A;--down:#1E8E5A;
+  --radius:10px;
+  --sans:"Noto Sans SC",-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --serif:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --shadow-1:0 1px 3px rgba(74,58,120,.08);
+  --shadow-2:0 8px 28px rgba(74,58,120,.14);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+::selection{background:var(--tint-deep)}
+
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+
+.hero{padding:96px 0 56px;text-align:center}
+.brand{font-family:var(--serif);font-weight:900;font-size:34px;letter-spacing:.5px;color:var(--lav-deep)}
+.brand .dot{color:var(--lav-ink)}
+.tagline{margin-top:18px;font-size:17px;color:var(--grey)}
+.hero .sub{margin-top:10px;font-size:13.5px;color:var(--faint)}
+/* 克制的涨跌语义点缀：仅示意收益曲线，不作装饰色滥用 */
+.spark{margin:28px auto 0;display:block}
+
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0 40px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 18px;box-shadow:var(--shadow-1);transition:box-shadow .3s var(--ease),transform .3s var(--ease)}
+.card:hover{box-shadow:var(--shadow-2);transform:translateY(-2px)}
+.card h3{font-family:var(--serif);font-size:16px;font-weight:700;margin-bottom:8px;color:var(--lav-deep)}
+.card p{font-size:13.5px;color:var(--grey)}
+
+.notice{margin:0 0 56px;background:var(--tint);border:1px solid var(--line);border-radius:var(--radius);padding:22px;text-align:center}
+.notice .t{font-family:var(--serif);font-weight:700;font-size:17px;color:var(--lav-deep)}
+.notice .d{margin-top:6px;color:var(--grey);font-size:13.5px}
+
+footer{border-top:1px solid var(--line);padding:20px 0 30px;text-align:center;font-size:12.5px;color:var(--faint)}
+footer a{color:var(--lav-ink);text-decoration:none}
+footer a:hover{color:var(--lav-deep)}
+
+@keyframes viewIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.hero,.cards,.notice{animation:viewIn .45s var(--ease) both}
+.cards{animation-delay:.08s}
+.notice{animation-delay:.16s}
+@media (max-width:720px){
+  .hero{padding:64px 0 40px}
+  .brand{font-size:27px}
+  .cards{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div class="brand">A股回测台<span class="dot"> · </span>aguhuice.com</div>
+    <p class="tagline">用一句话写下你的交易策略，立刻知道它在 A 股历史上能不能赚钱。</p>
+    <p class="sub">面向普通投资者的日线级量化回测工具 · 含手续费与滑点的真实口径</p>
+    <svg class="spark" width="260" height="56" viewBox="0 0 260 56" role="img" aria-label="示意收益曲线">
+      <polyline fill="none" stroke="#C93A3A" stroke-width="2" stroke-linecap="round"
+        points="0,44 26,40 52,43 78,34 104,36 130,26 156,29 182,18 208,22 234,10 260,14"/>
+      <polyline fill="none" stroke="#8B7FBE" stroke-width="1.5" stroke-dasharray="4 4"
+        points="0,38 26,39 52,37 78,38 104,35 130,36 156,33 182,34 208,31 234,32 260,30"/>
+    </svg>
+  </section>
+
+  <section class="cards">
+    <div class="card">
+      <h3>自然语言写策略</h3>
+      <p>不用学编程。说「RSI 低于 30 买入，高于 70 卖出」，系统自动编译成可执行的策略，并清楚标注用到的数据。</p>
+    </div>
+    <div class="card">
+      <h3>可视化回测报告</h3>
+      <p>净值曲线对比大盘、最大回撤、胜率、夏普比率一目了然；报告永久保存，随时回看。</p>
+    </div>
+    <div class="card">
+      <h3>板块与个股归因</h3>
+      <p>不只看总收益：钱是在哪些行业、哪些股票上赚的，热力图一图看清策略到底靠什么赚钱。</p>
+    </div>
+  </section>
+
+  <section class="notice">
+    <div class="t">内测即将开启</div>
+    <p class="d">我们正在做最后的准备。内测申请通道即将开放，敬请期待。</p>
+  </section>
+
+  <footer>
+    <p>© 2026 aguhuice.com · 本工具仅供研究学习，不构成投资建议</p>
+    <p style="margin-top:6px"><a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">湘ICP备2026040383号-1</a></p>
+  </footer>
+</div>
+</body>
+</html>
