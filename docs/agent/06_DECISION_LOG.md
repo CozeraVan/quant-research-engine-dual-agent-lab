@@ -1188,3 +1188,12 @@ No open questions remain.
 - Alternatives: Stop after stability hardening. Deferred to improve operator throughput during repeated smoke triage.
 - Impact: New brief adds `--details` mode with selector-safe behavior and targeted CLI regression coverage.
 - Owner: CODEX
+
+
+### 2026-09-18: 端口 8080/8081 同包部署的边界确认
+
+- Decision: 明确 8080 管理台与 8081 lab 同属单一包 `quant_research_engine`（`gui/` 下 admin.py 与 lab.py 两个 Flask 入口），同一 git 版本，引擎层（portfolio/、strategies/、data/）单例共享，不存在版本分叉风险。约定：(a) 引擎层任何改动两端同时生效，全量测试基线即兼容保障；(b) 8080 = 管理台（因子管理/PG 状态卡/聚类动量等，保持管理风格不动），8081 = 面向普通用户的 lab，UI 改动先在 18080 设计稿验证再移植 8081；(c) 未来 SaaS 化时 8081 的 Web 层与引擎经 job/worker 协议解耦（ECS + 家里 worker），8080 管理台留在本地不对外；(d) qre-outputs（22G 产物）与代码仓分离原则继续保持，产物不进仓。
+- Reason: 两端长期并行演进，曾出现「8081 改动是否影响 8080」的反复确认成本；白纸黑字固化边界可消除歧义，也为 SaaS 化解耦（15 号文档）定调。
+- Alternatives: 拆成两个包/两个仓库。否决——引擎单例共享是核心价值，拆包只会引入版本同步成本而无收益。
+- Impact: 引擎层改动无需双端协调评审，测试基线兜底；UI 改动有明确验证顺序（18080 → 8081）；SaaS 化路线（job/worker 解耦）与本约定一致。
+- Owner: KIMI_CODE（用户 2026-09-18 确认）
