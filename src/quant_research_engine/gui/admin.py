@@ -153,6 +153,83 @@ def _estimate_rows(conn, schema: str, table: str) -> int | None:
 
 
 # ---------------------------------------------------------------------------
+# PostgreSQL 状态与控制（QRE-ADMIN-PG-STATUS；8080 管理台总览卡片）
+# ---------------------------------------------------------------------------
+
+# 安全：只允许这两个白名单动作，严格枚举校验；禁止任何拼接式命令
+PG_ALLOWED_ACTIONS: frozenset[str] = frozenset({"start", "restart"})
+PG_CONTROL_TIMEOUT = 30  # 秒
+
+
+def pg_status(db_url: str | None = None) -> dict[str, Any]:
+    """PG 实时状态：systemctl is-active + 5432 监听 + stock_daily 数据新鲜度。
+
+    DB 不可达时 freshness 为 None + db_error 文案（不抛异常拖垮页面）。
+    """
+    from sqlalchemy import text
+
+    try:
+        proc = subprocess.run(
+            ["systemctl", "is-active", "postgresql"],
+            capture_output=True, text=True, timeout=10,
+        )
+        service = (proc.stdout or "").strip() or (proc.stderr or "").strip() or "unknown"
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        service = f"unknown（{exc}）"
+
+    try:
+        ss = subprocess.run(["ss", "-tln"], capture_output=True, text=True, timeout=10)
+        listen_5432 = ":5432" in (ss.stdout or "")
+    except (OSError, subprocess.TimeoutExpired):
+        listen_5432 = None
+
+    freshness: str | None = None
+    db_error: str | None = None
+    try:
+        store = _store(db_url)
+        try:
+            with store.market_engine.begin() as conn:
+                wm = conn.execute(text("SELECT MAX(trade_date) FROM public.stock_daily")).scalar()
+                freshness = str(wm) if wm else None
+        finally:
+            store.close()
+    except Exception as exc:
+        db_error = str(exc)
+
+    return {
+        "service": service,
+        "listen_5432": listen_5432,
+        "stock_daily_max_trade_date": freshness,
+        "db_error": db_error,
+    }
+
+
+def pg_control(action: str) -> dict[str, Any]:
+    """执行 sudo -n systemctl <action> postgresql（白名单 + 30s 超时）。
+
+    action 不在白名单 → ValueError（路由层转 400）。返回命令结果摘要。
+    """
+    if action not in PG_ALLOWED_ACTIONS:
+        raise ValueError(f"非法 action: {action!r}（仅允许 {sorted(PG_ALLOWED_ACTIONS)}）")
+    try:
+        proc = subprocess.run(
+            ["sudo", "-n", "systemctl", action, "postgresql"],
+            capture_output=True, text=True, timeout=PG_CONTROL_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "action": action, "error": f"命令超时（>{PG_CONTROL_TIMEOUT}s）"}
+    except OSError as exc:
+        return {"ok": False, "action": action, "error": str(exc)}
+    ok = proc.returncode == 0
+    return {
+        "ok": ok,
+        "action": action,
+        "returncode": proc.returncode,
+        "stderr": (proc.stderr or "").strip()[:500],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Tab 1 总览
 # ---------------------------------------------------------------------------
 

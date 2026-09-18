@@ -999,3 +999,87 @@ def test_admin_template_has_concept_tags_card(app_client):
     html = app_client.get("/admin").data.decode("utf-8")
     assert 'id="ov-concept-tags"' in html
     assert "概念标签源" in html
+
+
+# --- PostgreSQL 状态卡（QRE-ADMIN-PG-STATUS） ---
+
+
+def test_admin_template_has_pg_card(app_client):
+    html = app_client.get("/admin").data.decode("utf-8")
+    assert 'id="ov-pg"' in html
+    assert "pg-control" in html and "pg-status" in html
+    assert "重启将中断正在进行的读写" in html
+
+
+def test_pg_control_rejects_illegal_action(app_client, monkeypatch):
+    """白名单严格枚举：非法 action 400，且 subprocess 绝不被调用。"""
+    called = []
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.subprocess.run",
+        lambda *a, **kw: called.append(a),
+    )
+    for bad in ("stop", "enable", "rm -rf", "start; rm", "", "START"):
+        resp = app_client.post("/api/admin/pg-control", json={"action": bad})
+        assert resp.status_code == 400, bad
+        assert "仅允许" in resp.get_json()["error"]
+    assert called == []  # 白名单外零执行
+
+
+def test_pg_control_command_construction(app_client, monkeypatch):
+    """合法 action 构造精确命令数组（无拼接 shell），30s 超时。"""
+    import subprocess as sp
+
+    calls = []
+
+    class _P:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(cmd, **kw):
+        calls.append((cmd, kw))
+        return _P()
+
+    monkeypatch.setattr("quant_research_engine.gui.admin.subprocess.run", fake_run)
+    resp = app_client.post("/api/admin/pg-control", json={"action": "restart"})
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+    assert calls == [(["sudo", "-n", "systemctl", "restart", "postgresql"],
+                      {"capture_output": True, "text": True, "timeout": 30})]
+
+    # 失败路径：returncode 非 0 → 502 + stderr 摘要
+    class _F:
+        returncode = 1
+        stdout = ""
+        stderr = "Permission denied"
+
+    monkeypatch.setattr("quant_research_engine.gui.admin.subprocess.run",
+                        lambda *a, **kw: _F())
+    resp = app_client.post("/api/admin/pg-control", json={"action": "start"})
+    assert resp.status_code == 502
+    assert "Permission denied" in resp.get_json()["stderr"]
+
+
+def test_pg_status_api(app_client, monkeypatch):
+    """pg-status：mock systemctl/ss + DB 失败时降级为 db_error 而非报错页。"""
+    class _P:
+        def __init__(self, out):
+            self.stdout = out
+            self.stderr = ""
+            self.returncode = 0
+
+    def fake_run(cmd, **kw):
+        if cmd[:2] == ["systemctl", "is-active"]:
+            return _P("active\n")
+        return _P("LISTEN 0 0 127.0.0.1:5432\n")
+
+    monkeypatch.setattr("quant_research_engine.gui.admin.subprocess.run", fake_run)
+    monkeypatch.setattr("quant_research_engine.gui.admin._store",
+                        lambda db_url: (_ for _ in ()).throw(RuntimeError("boom")))
+    resp = app_client.get("/api/admin/pg-status")
+    assert resp.status_code == 200
+    d = resp.get_json()
+    assert d["service"] == "active"
+    assert d["listen_5432"] is True
+    assert d["stock_daily_max_trade_date"] is None
+    assert "boom" in d["db_error"]

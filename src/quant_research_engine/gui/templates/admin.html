@@ -23,6 +23,7 @@
     <div class="admin-card" id="ov-backtests"><h3>回测产物</h3><div class="card-body opt">加载中...</div></div>
     <div class="admin-card" id="ov-derivatives"><h3>衍生品数据</h3><div class="card-body opt">加载中...</div></div>
     <div class="admin-card" id="ov-concept-tags"><h3>概念标签源（B 层）</h3><div class="card-body opt">加载中...</div></div>
+    <div class="admin-card" id="ov-pg"><h3>PostgreSQL</h3><div class="card-body opt">加载中...</div></div>
   </div>
 </div>
 
@@ -273,10 +274,11 @@
 
   // 各卡片独立异步加载：30s AbortController 超时，单卡片失败只影响自身（中文错误+重试），
   // 页面骨架与所有按钮不等待任何请求。
-  function fetchWithTimeout(url, ms) {
+  function fetchWithTimeout(url, ms, opts) {
     var ctrl = new AbortController();
     var timer = setTimeout(function() { ctrl.abort(); }, ms || 30000);
-    return fetch(url, {signal: ctrl.signal}).finally(function() { clearTimeout(timer); });
+    var req = Object.assign({}, opts || {}, {signal: ctrl.signal});
+    return fetch(url, req).finally(function() { clearTimeout(timer); });
   }
 
   function cardError(el, message, retryFn) {
@@ -286,6 +288,65 @@
   }
 
   function isAbort(err) { return err && err.name === 'AbortError'; }
+
+  // ---------- Tab 1: PostgreSQL 状态卡（QRE-ADMIN-PG-STATUS） ----------
+  function pgAction(action, label, warn) {
+    if (!confirm(warn + '\n确认执行「' + label + '」？')) return;
+    var body = document.querySelector('#ov-pg .card-body');
+    body.innerHTML = '<span class="opt">执行中（' + label + '）…</span>';
+    fetchWithTimeout('/api/admin/pg-control', 35000, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: action}),
+    })
+      .then(function(r) { return r.json().then(function(d) { return {status: r.status, body: d}; }); })
+      .then(function(res) {
+        var d = res.body;
+        if (d.ok) {
+          body.innerHTML = '<span class="ok">' + label + '成功，正在刷新状态…</span>';
+          setTimeout(loadPgStatus, 2000);
+        } else {
+          body.innerHTML = '<span class="err">' + label + '失败：' + esc(d.error || d.stderr || '未知错误') + '</span> '
+            + '<button class="btn-sm" id="pg-retry">重试查看状态</button>';
+          document.getElementById('pg-retry').addEventListener('click', loadPgStatus);
+        }
+      })
+      .catch(function(err) {
+        body.innerHTML = '<span class="err">' + label + '请求失败：' + esc(String(err)) + '</span>';
+      });
+  }
+  function loadPgStatus() {
+    var body = document.querySelector('#ov-pg .card-body');
+    fetchWithTimeout('/api/admin/pg-status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) { body.innerHTML = '<span class="err">状态获取失败</span>'; return; }
+        var badge = d.service === 'active'
+          ? '<span class="badge ok">active</span>'
+          : '<span class="badge fail">' + esc(d.service || 'unknown') + '</span>';
+        var listen = d.listen_5432 == null ? '未知'
+          : (d.listen_5432 ? '监听 5432 ✓' : '未监听 5432');
+        var fresh = d.db_error
+          ? '<span class="err">数据库不可达（' + esc(String(d.db_error).slice(0, 80)) + '）</span>'
+          : ('stock_daily 最新交易日 <strong>' + esc(d.stock_daily_max_trade_date || '—') + '</strong>');
+        body.innerHTML =
+          '<p>服务状态：' + badge + '　<span class="opt">' + listen + '</span></p>'
+          + '<p>' + fresh + '</p>'
+          + '<p><button class="btn-sm" id="pg-refresh">刷新</button> '
+          + '<button class="btn-sm" id="pg-start">开启</button> '
+          + '<button class="btn-sm btn-danger-outline" id="pg-restart" title="重启将中断正在进行的读写">重启（中断读写）</button></p>';
+        document.getElementById('pg-refresh').addEventListener('click', loadPgStatus);
+        document.getElementById('pg-start').addEventListener('click', function() {
+          pgAction('start', '开启 PostgreSQL', '将执行 sudo systemctl start postgresql。');
+        });
+        document.getElementById('pg-restart').addEventListener('click', function() {
+          pgAction('restart', '重启 PostgreSQL', '重启将中断正在进行的读写！');
+        });
+      })
+      .catch(function(err) {
+        body.innerHTML = '<span class="err">状态获取失败：' + esc(String(err)) + '</span>';
+      });
+  }
+  loadPgStatus();
 
   // ---------- Tab 1: overview ----------
   function loadOverview() {

@@ -471,6 +471,24 @@ def create_app() -> Flask:
         )
         return jsonify({"ok": True, "daily": daily, "factors": factors, "backtests": backtests, "health": health, "derivatives": derivatives, "concept_tags": concept_tags})
 
+    @app.route("/api/admin/pg-status")
+    def api_admin_pg_status() -> Any:
+        from quant_research_engine.gui.admin import pg_status
+
+        return jsonify({"ok": True, **pg_status(request.args.get("db_url") or None)})
+
+    @app.route("/api/admin/pg-control", methods=["POST"])
+    def api_admin_pg_control() -> Any:
+        from quant_research_engine.gui.admin import pg_control
+
+        data = request.get_json(silent=True) or {}
+        action = str(data.get("action") or "")
+        try:
+            result = pg_control(action)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify(result), (200 if result.get("ok") else 502)
+
     @app.route("/api/admin/timers")
     def api_admin_timers() -> Any:
         from quant_research_engine.gui.admin import timer_status
