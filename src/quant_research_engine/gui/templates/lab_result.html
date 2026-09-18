@@ -437,7 +437,9 @@
     var chips = [];
     if (meta.strategy_name) chips.push(chip('策略', meta.strategy_name));
     if (meta.date_start && meta.date_end) chips.push(chip('区间', meta.date_start + ' → ' + meta.date_end));
-    if (meta.whole_market) {
+    if (meta.random_n) {
+      chips.push(chip('标的', '随机 ' + meta.random_n + ' 只'));
+    } else if (meta.whole_market) {
       chips.push(chip('标的', '全 A 股'));
     } else if (meta.n_codes) {
       var scope = meta.mode === 'single' ? meta.codes_sample.join(' ') : meta.n_codes + ' 只（' + meta.codes_sample.join(' ') + (meta.n_codes > 5 ? ' …' : '') + '）';

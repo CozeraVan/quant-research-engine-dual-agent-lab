@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-09-18 补：lab_result.html 结果页「随机 N 只」标的 chip（属 QRE-LAB-RANDOM-UNIVERSE，c6001b3 漏暂存）单独补齐提交。
+
 2026-09-18 QRE-ADMIN-PG-STATUS DONE（8080 管理台 PostgreSQL 状态卡片+管理按钮，用户批准提交）：总览页新增 PG 卡片——admin.py pg_status()（systemctl is-active 实时状态 + ss 5432 监听 + stock_daily max(trade_date) 新鲜度，DB 不可达降级 db_error 不报错页）与 pg_control()（白名单 {"start","restart"} 严格枚举，数组命令无拼接，sudo -n，30s 超时，失败返回 returncode+stderr 摘要）；app.py 新路由 GET /api/admin/pg-status、POST /api/admin/pg-control（非法 400/失败 502）；admin.html 卡片含刷新/开启/重启按钮（confirm 二次确认，重启注明中断读写），fetchWithTimeout 扩展 opts 支持 POST；style.css 加通用 badge 样式（8080 风，lab 有 theme 覆盖互不影响）。动机：PG 停机曾导致整条日更链失败。测试 +4（模板断言/非法 action 零执行/命令构造/降级路径），全量 2080 passed + 4 skipped 零回归。真机验证：/api/admin/pg-status 返回 active+5432 监听+新鲜度 2026-09-18。未 commit 待批→本 commit 落。
 
 2026-09-18 QRE-LAB-RANDOM-UNIVERSE + QRE-MAXPOS-UNLIMITED DONE（8081 lab 两功能，用户批准提交）：①标的范围新增「随机股票」——前端 N 输入（选中才显示，1~2000 校验）；/api/run 收 random_n（非法 400，设置后强制非全市场防误触）；engine.py 新 _sample_random_universe（load_security_metadata 轻量取全 A 清单，种子=run_id 可复现），抽样在 precheck 截断之前（冒烟兼容），实际 codes + universe=random 落盘 status.json；lab_result.py _run_meta 透出 random_n，结果页标的 chip 显示「随机 N 只」。②最大持仓 0=不限制——shared.py 的 max_positions 放宽 int|None（0/None=不限制，负数仍 ValueError），槽位/买入上限/权重折减三处消费点贯通 None 语义；engine.py 缺省保持 10、显式 0→None；API 0 放行；前端 min=0+文案+预览栏「不限制」。测试 +3（抽样数量/复现/越界、random_n 400 矩阵、shared 0/None 买 12 只超限+API 放行），全量 2076 passed + 4 skipped（基线 2074+2）零回归。真 Chromium 截图验证选项渲染与提交（run 20260915T041314375882 实测 random_n=5 落盘 5 只）。未 commit 待批→本 commit 落。
