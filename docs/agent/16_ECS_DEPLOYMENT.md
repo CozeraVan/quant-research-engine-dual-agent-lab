@@ -57,6 +57,11 @@ ECS 侧专属待办（隶属阶段 C）：
   /api/saas/auth/* 5r/m burst 2 防爆破；/api/worker/* 120r/m burst 30（另靠
   X-Worker-Token）；limit_conn 20/IP；超限 429，命中记 error_log 含 zone 名）
 - [ ] 禁 root 直连（PasswordAuthentication/PermitRootLogin 关闭，仅用 deploy 用户）
+- [x] 家里 worker 生产化（C3 完成，2026-09-19）：本机 systemd `qre-saas-worker.service`
+  （User=van，EnvironmentFile=/etc/qre-saas-worker.env[0600]，MemoryMax=4G，
+  Restart=always），指向 https://aguhuice.com，env 无任何代理变量；
+  公网端到端实测：smoke job#1 claimed→completed 84s，23 个产物文件 sha256 校验落盘
+  /srv/aguhuice/uploads/job_1/。仓库模板 deploy/saas/qre-saas-worker.service 已更新为生产版
 - [ ] 结果产物磁盘水位监控（40GB ESSD，结果只留元数据+图表 JSON，大文件走 OSS）
 - [ ] 落地页页脚备案号占位替换为正式号：湘ICP备2026040383号-1（改 `deploy/landing/index.html` 后 scp 同步，见第 5 节）
 

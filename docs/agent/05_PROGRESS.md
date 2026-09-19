@@ -4,6 +4,10 @@
 
 ## Latest Verified State
 
+2026-09-19 QRE-ECS-C3 DONE（家里 WSL worker 生产化：指向 https://aguhuice.com + systemd 常驻）：qre-saas-worker.service 由 staging（轮询 8081）改写为生产版——User=van、EnvironmentFile=/etc/qre-saas-worker.env（0600 root:van，含 QRE_SAAS_BASE_URL/TOKEN/ID + QRE_MARKET_DB_URL 只读账号 + QRE_WORKER_UPLOAD_FILES=1，token 从 ECS 读出经管道写入、不落仓库不落日志）、ExecStart=.venv python -m quant_research_engine.worker、Restart=always+10s、MemoryMax=4G（500×2y 实测峰值 300-950MB 的 4 倍余量）、TimeoutStopSec=900；unit 无任何代理变量（直连 HTTPS，Clash 7897 不污染）。enable --now active。端到端验证：因云端登录 SMTP 未配，job 经云端 PG 直插（users/strategies/jobs 三行，ops@local）——worker 公网 claim → 执行 → 两步回传 → completed（84s），结果 -15.35%/140 笔与 A4 同策略完全一致（确定性复现），23 个产物文件 sha256 校验落盘 ECS /srv/aguhuice/uploads/job_1/。仓库 deploy/saas/qre-saas-worker.service 更新为生产版。16 号文档 C3 状态块已写。全量 `pytest tests/` → **2101 passed + 4 skipped** 零回归（基线持平）。未 git commit/push。
+
+## Latest Verified State
+
 2026-09-19 QRE-ECS-C2 DONE（ECS 公网 API Nginx 分级 IP 限流）：deploy/landing/nginx-aguhuice.conf 顶部加 4 个 limit_req_zone + limit_conn_zone（sites 文件在 http 上下文被 include，可直接声明；坑：log_format 里 $limit_req_zone 非内置变量导致 nginx -t emerg，已移除，限流命中走默认 error_log 含 zone 名可 grep）。矩阵：写端点（POST /api/jobs|/api/saas/jobs|/api/saas/nl/compile）10r/m burst 3——map $request_method→$qre_write_key，GET/HEAD 键为空跳过（读列表不受写限流影响）；读端点 60r/m burst 20；/api/saas/auth/* 5r/m burst 2 防爆破；/api/worker/* 120r/m burst 30 宽松兜底（认证靠 token）；limit_conn 20/IP；超限 429。实测（公网 https://aguhuice.com，家里 IP 未被打死）：读 ×10 全 401（非 429）、worker claim 正常 200、POST /api/jobs ×8 → 401×4 后 429×4、auth ×6 → 502×3（SMTP 未配的既有行为）后 429×3、落地页 200、真 worker token claim 仍 200。certbot/ufw/fail2ban/qre-saas.service 未动。仓库 nginx 配置与线上一致。05/16 文档同步。未 git commit/push。
 
 ## Latest Verified State

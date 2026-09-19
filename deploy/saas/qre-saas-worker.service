@@ -1,20 +1,24 @@
-# QRE SaaS staging Worker（本机轮询 8081 的任务队列，QRE-SAAS-008）。
+# QRE SaaS 生产 Worker（家里 WSL，出站轮询 https://aguhuice.com，QRE-ECS-C3）
 #
-# 8081 = SaaS staging（预发）：本 Worker 从 http://127.0.0.1:8081 领任务、
-# 本地只读大库跑回测、结果回传 8081。生产 Worker 模板见同目录
-# qre-worker.service（指向 https://aguhuice.com）。
+# 架构：ECS 只跑 Web/API/PG 小库；回测算力与行情大库在本机。
+# 本服务纯出站 HTTPS 长轮询云端任务队列，无需公网入站。
 #
-# 安装（需 sudo，与 qre-gui-lab 同级系统服务）：
+# 机密在 /etc/qre-saas-worker.env（0600 root:van，不入仓库）：
+#   QRE_SAAS_BASE_URL=https://aguhuice.com
+#   QRE_WORKER_TOKEN=<与 ECS /etc/qre-saas.env 的 SAAS_WORKER_TOKEN 一致>
+#   QRE_WORKER_ID / QRE_MARKET_DB_URL（本地只读账号 qre_worker_ro）/
+#   QRE_WORKER_UPLOAD_FILES=1 / 轮询与心跳间隔
+# 注意：env 文件严禁带 http_proxy 等代理变量（worker 直连云端）。
+#
+# 安装（需 sudo）：
 #   sudo cp deploy/saas/qre-saas-worker.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now qre-saas-worker.service
 #   journalctl -u qre-saas-worker -f
-#
-# SAAS_WORKER_TOKEN 必须与 .env.saas-staging 中一致（EnvironmentFile 同一文件）。
 
 [Unit]
-Description=QRE SaaS staging worker (polls 127.0.0.1:8081 job queue)
-After=network-online.target postgresql.service qre-gui-lab.service
+Description=QRE SaaS production worker (polls https://aguhuice.com job queue)
+After=network-online.target postgresql.service
 Wants=network-online.target
 StartLimitIntervalSec=600
 StartLimitBurst=5
@@ -23,16 +27,13 @@ StartLimitBurst=5
 Type=simple
 User=van
 WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
-EnvironmentFile=/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.env.saas-staging
-Environment=SAAS_CLOUD_URL=http://127.0.0.1:8081
-Environment=SAAS_WORKER_ID=wsl-staging
-Environment=SAAS_WORKER_POLL_SECONDS=5
-Environment=QRE_MARKET_DB_URL=postgresql+psycopg://qre_worker_ro:qre_ro_local_only_2026@127.0.0.1/tushare_data
-ExecStart=/home/van/.local/bin/uv run qre worker
+EnvironmentFile=/etc/qre-saas-worker.env
+ExecStart=/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.venv/bin/python -m quant_research_engine.worker
 Restart=always
 RestartSec=10
 # 优雅退出：SIGTERM 后等手头任务完成回传（回测多为分钟级），超时强杀
 TimeoutStopSec=900
+# 回测峰值实测（流式引擎）：500只×2年 ≈300-950MB，留足余量
 MemoryMax=4G
 Nice=10
 SyslogIdentifier=qre-saas-worker
