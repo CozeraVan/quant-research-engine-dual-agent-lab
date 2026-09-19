@@ -52,7 +52,10 @@ worker 包（client/runner/daemon）、Docker 沙箱、流式批量回测均已�
 ECS 侧专属待办（隶属阶段 C）：
 
 - [x] 装 Python/Flask + PG 用户小库（C1 完成；PG 2G 参数调优暂未做，内测量级先观察）
-- [ ] Nginx IP 限流（如 10 req/min/IP；C2 待办，反代本身已完成）
+- [x] Nginx IP 限流（C2 完成，2026-09-19。矩阵：写端点 POST /api/jobs 等 10r/m
+  burst 3（仅写方法，$qre_write_key 空键跳过 GET）；读 /api/* 60r/m burst 20；
+  /api/saas/auth/* 5r/m burst 2 防爆破；/api/worker/* 120r/m burst 30（另靠
+  X-Worker-Token）；limit_conn 20/IP；超限 429，命中记 error_log 含 zone 名）
 - [ ] 禁 root 直连（PasswordAuthentication/PermitRootLogin 关闭，仅用 deploy 用户）
 - [ ] 结果产物磁盘水位监控（40GB ESSD，结果只留元数据+图表 JSON，大文件走 OSS）
 - [ ] 落地页页脚备案号占位替换为正式号：湘ICP备2026040383号-1（改 `deploy/landing/index.html` 后 scp 同步，见第 5 节）
