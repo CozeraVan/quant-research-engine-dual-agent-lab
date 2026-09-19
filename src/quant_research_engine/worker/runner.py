@@ -152,8 +152,38 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
         "summary": summary,
         "chart_data": chart_data,
         "artifacts": [],  # TODO(M4)：Excel/CSV 明细上传 OSS 后在此登记 oss_key
+        "files": collect_result_files(record),
         "data_until": str(data_until),
     }
+
+
+#: 回传文件清单的成员上限（总体积；大文件留 worker 本地，M4 走 OSS 直传）
+RESULT_FILES_MAX_BYTES = 20 * 1024 * 1024
+
+
+def collect_result_files(record: dict[str, Any],
+                         max_total_bytes: int = RESULT_FILES_MAX_BYTES) -> list[dict[str, Any]]:
+    """收集 run 产物文件清单（17 协议 §3.3 files）：name/size/sha256 + 本地 path。
+    幂等：同一 job 重复执行产物覆盖写（同 run_id 目录），清单重算即可。"""
+    import hashlib
+
+    files: list[dict[str, Any]] = []
+    total = 0
+    for rel, abs_path in sorted((record.get("artifacts") or {}).items()):
+        path = Path(abs_path)
+        if not path.is_file():
+            continue
+        size = path.stat().st_size
+        if total + size > max_total_bytes:
+            continue  # 超体积上限的跳过（仍留本地，不进回传清单）
+        files.append({
+            "name": Path(rel).name if len(Path(rel).parts) == 1 else rel,
+            "size": size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "path": str(path),
+        })
+        total += size
+    return files
 
 
 #: 归因回传截断口径：板块/标签聚合全量保留（热力图与榜单所需），

@@ -2,7 +2,48 @@
 
 ## Task ID
 
-QRE-BATCH-STREAMING-EMPTYCSV (流式批量回测空 CSV 崩溃修复：EmptyDataError 容忍)
+QRE-WORKER-RUNNER (A3：worker 执行端闭环——取消传播/两步回传/产物清单/env 新名)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+runner.py +collect_result_files（sha256 清单、20MB 上限、幂等覆盖）；
+daemon.py 取消传播（心跳见 cancel_requested → fail(canceled) + 丢弃结果，
+引擎单体不可中途杀的取舍已注释）+ 两步回传（QRE_WORKER_UPLOAD_FILES
+默认关）+ claim 长轮询；client.py +upload_files（multipart）/upload_fn 注入
+/env 新名优先（QRE_SAAS_BASE_URL 等）；python -m quant_research_engine.worker
+入口。服务端顺带修：fail canceled 终态、meta 对 completed 幂等。测试 +4，
+worker+saas 55 passed。未 commit。下一步 A4：本地双进程真实端到端
+（saas app + daemon 真引擎 smoke job 跑通）。
+
+---
+
+## Archive: QRE-JOB-API (A2：Flask 侧 job API 按 17 号协议改造——claim 长轮询/心跳迁移/两步 result/fail 分类/取消/幂等/惰性回收)
+
+## Current Status
+
+DONE (implementation; awaiting user-approved git finalization)
+
+## Task Note
+
+按 docs/agent/17_JOB_PROTOCOL.md 改造 gui/saas/app.py 过渡版（不另起炉灶）。
+schema 幂等迁移（jobs 加 8 列 + 列改名 + 状态枚举 done→completed，旧库升级
+实测通过；坑：先 DROP 旧 CHECK 再 UPDATE）。端点：worker claim（长轮询
+30s/空响应 200+null/SKIP LOCKED）/heartbeat（progress+message，首跳
+leased→running，带 cancel_requested）/result/meta→files（upload_token+
+sha256，SAAS_UPLOAD_DIR 落盘）/fail（error_class 分类）；用户
+POST/GET /api/jobs、POST /api/jobs/<id>/cancel（queued 直消/执行中置标记/
+终态 409）。惰性租约回收（无后台线程）+ 硬超时 expired。/api/saas/* 别名
+兼容；worker/client.py 与 saas 模板同步。测试 test_gui_saas.py +11
+（TestProtocolA2），全量见 05。未 commit。遗留：claim capabilities 过滤、
+parent_job_id 派生 full、文件分块续传（见 05 条目）。
+
+---
+
+## Archive: QRE-BATCH-STREAMING-EMPTYCSV (流式批量回测空 CSV 崩溃修复：EmptyDataError 容忍)
 
 ## Current Status
 

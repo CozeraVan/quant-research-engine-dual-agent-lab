@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import signal
+from pathlib import Path
 import threading
 import time
 from typing import Any, Callable
@@ -27,6 +28,12 @@ from quant_research_engine.worker.runner import execute_job
 
 DEFAULT_POLL_SECONDS = 15.0
 DEFAULT_HEARTBEAT_SECONDS = 60.0
+
+
+def _upload_files_enabled() -> bool:
+    # 产物文件上传统一开关（默认关：meta 里的 summary/chart_data 已够 Web 展示，
+    # 大 CSV 走 OSS 直传是 M4；本地 staging 联调可开）
+    return os.environ.get("QRE_WORKER_UPLOAD_FILES") == "1"
 
 
 def _log(msg: str) -> None:
@@ -54,14 +61,28 @@ class WorkerDaemon:
         self._stop.set()
 
     def _run_job(self, job: dict[str, Any]) -> None:
-        """执行单个 job：心跳线程 + 执行 + 回传。异常全部兜底。"""
+        """执行单个 job：心跳线程 + 执行 + 两步回传。异常全部兜底。
+
+        取消传播（17 协议 §5）：心跳响应 cancel_requested=true 时立即上报
+        fail(canceled) 并跳过结果回传。注意：引擎执行是单体的，无法中途杀——
+        取舍为「立即上报终态 + 本地跑完后丢弃结果」，单并发约束保持
+        （本 job 线程未结束前不 claim 下一个）。
+        """
         job_id = job["id"]
         done_event = threading.Event()
+        canceled = threading.Event()
 
         def _heartbeat_loop() -> None:
             while not done_event.wait(self.heartbeat_seconds):
                 try:
-                    self.client.heartbeat(job_id)
+                    resp = self.client.heartbeat(job_id)
+                    if resp.get("cancel_requested") and not canceled.is_set():
+                        canceled.set()
+                        _log(f"job {job_id} 收到取消标记，上报 canceled 并丢弃结果")
+                        try:
+                            self.client.fail(job_id, "用户取消", error_class="canceled")
+                        except Exception as exc:
+                            _log(f"job {job_id} canceled 上报失败（{exc}）")
                 except Exception as exc:  # 心跳失败不杀任务，租约过期由云端重排
                     _log(f"job {job_id} heartbeat 失败（{exc}），继续执行")
 
@@ -72,14 +93,25 @@ class WorkerDaemon:
         except Exception as exc:
             _log(f"job {job_id} 执行失败：{exc}")
             try:
-                self.client.report_result(job_id, {"status": "failed", "error": str(exc)})
+                self.client.fail(job_id, str(exc))
             except Exception as report_exc:
                 _log(f"job {job_id} failed 回传失败（{report_exc}），等租约过期重排")
             return
         finally:
             done_event.set()
+        if canceled.is_set():
+            return  # 已上报 canceled，丢弃结果
+        if not _upload_files_enabled():
+            payload = {**payload, "files": []}  # 不上传则不报清单，云端直接 completed
         try:
-            self.client.report_result(job_id, {"status": "done", **payload})
+            meta = self.client.report_result(job_id, payload)
+            upload_token = meta.get("upload_token")
+            files = payload.get("files") or []
+            if upload_token and files and _upload_files_enabled():
+                blobs = {}
+                for f in files:
+                    blobs[f["name"]] = Path(f["path"]).read_bytes()
+                self.client.upload_files(job_id, upload_token, blobs)
             _log(f"job {job_id} done，已回传")
         except Exception as exc:
             _log(f"job {job_id} done 回传失败（{exc}），等租约过期重排")
@@ -87,13 +119,13 @@ class WorkerDaemon:
     def run_once(self) -> bool:
         """单轮循环（测试友好）：领到并执行了一个任务返回 True，空轮 False。"""
         try:
-            job = self.client.lease()
+            job = self.client.claim(wait_seconds=self.poll_seconds)
         except CloudError as exc:
-            _log(f"lease 失败：{exc}")
+            _log(f"claim 失败：{exc}")
             return False
         if not job:
             return False
-        _log(f"leased job {job['id']}（kind={job.get('kind')}，attempts={job.get('attempts')}）")
+        _log(f"claimed job {job['id']}（kind={job.get('kind')}，attempt={job.get('attempt')}）")
         self._run_job(job)
         return True
 

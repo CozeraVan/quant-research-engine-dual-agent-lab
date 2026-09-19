@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import socket
 import time
 import urllib.error
@@ -74,6 +75,7 @@ class CloudClient:
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_base: float = DEFAULT_BACKOFF_BASE,
         request_fn: RequestFn | None = None,
+        upload_fn: Callable[[int, str, dict[str, bytes]], dict[str, Any]] | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not base_url:
@@ -81,20 +83,46 @@ class CloudClient:
         if not token:
             raise ValueError("SAAS_WORKER_TOKEN 未配置")
         self.base_url = base_url
+        self._token = token
+        self._timeout = timeout
         self.worker_id = worker_id or socket.gethostname()
         self.max_retries = max_retries
         self.backoff_base = backoff_base
         self._sleep = sleep
         self._request = request_fn or _urllib_request_fn(base_url, token, timeout)
+        self._upload_fn = upload_fn  # 测试注入点；None 时走 urllib multipart
 
     @classmethod
     def from_env(cls, **kwargs: Any) -> "CloudClient":
-        return cls(
-            base_url=os.environ.get("SAAS_CLOUD_URL", ""),
-            token=os.environ.get("SAAS_WORKER_TOKEN", ""),
-            worker_id=os.environ.get("SAAS_WORKER_ID") or None,
-            **kwargs,
+        # 新变量名（17 协议）优先，旧 SAAS_* 兼容
+        base = os.environ.get("QRE_SAAS_BASE_URL") or os.environ.get("SAAS_CLOUD_URL", "")
+        token = os.environ.get("QRE_WORKER_TOKEN") or os.environ.get("SAAS_WORKER_TOKEN", "")
+        worker_id = os.environ.get("QRE_WORKER_ID") or os.environ.get("SAAS_WORKER_ID") or None
+        return cls(base_url=base, token=token, worker_id=worker_id, **kwargs)
+
+    def upload_files(self, job_id: int, upload_token: str,
+                     files: dict[str, bytes]) -> dict[str, Any]:
+        """17 协议 §3.3 第二步：multipart 上传产物文件（stdlib 手工拼包）。"""
+        if self._upload_fn is not None:
+            return self._upload_fn(job_id, upload_token, files)
+        boundary = secrets.token_hex(16)
+        parts: list[bytes] = []
+        for name, blob in files.items():
+            parts.append(
+                f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; '
+                f'filename="{name}"\r\nContent-Type: application/octet-stream\r\n\r\n'.encode()
+                + blob + b"\r\n"
+            )
+        parts.append(f"--{boundary}--\r\n".encode())
+        body = b"".join(parts)
+        req = urllib.request.Request(
+            f"{self.base_url.rstrip('/')}/api/worker/jobs/{job_id}/result/files?upload_token={upload_token}",
+            data=body, method="POST",
+            headers={"X-Worker-Token": self._token,
+                     "Content-Type": f"multipart/form-data; boundary={boundary}"},
         )
+        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            return json.loads(resp.read().decode() or "{}")
 
     def _call(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         """重试仅覆盖传输错误与 5xx；4xx 业务错误直接抛 CloudError。"""
@@ -116,17 +144,29 @@ class CloudClient:
         raise CloudError(f"云端不可达（重试 {self.max_retries} 次后放弃）：{last_exc}",
                          getattr(last_exc, "status", None))
 
-    def lease(self) -> dict[str, Any] | None:
-        """认领一个任务；无任务返回 None。"""
-        data = self._call("POST", "/api/saas/worker/jobs/lease", {"worker_id": self.worker_id})
+    def claim(self, wait_seconds: float = 0) -> dict[str, Any] | None:
+        """认领一个任务（17 协议 §3.1 长轮询）；无任务返回 None。"""
+        data = self._call("POST", "/api/worker/jobs/claim",
+                          {"worker_id": self.worker_id, "wait_seconds": wait_seconds})
         return data.get("job")
 
-    def heartbeat(self, job_id: int) -> None:
-        self._call("POST", f"/api/saas/worker/jobs/{job_id}/heartbeat", {"worker_id": self.worker_id})
+    # 过渡版兼容别名
+    lease = claim
+
+    def heartbeat(self, job_id: int, progress: int | None = None, message: str | None = None) -> dict[str, Any]:
+        return self._call("POST", f"/api/worker/jobs/{job_id}/heartbeat",
+                          {"worker_id": self.worker_id, "progress": progress, "message": message})
 
     def report_result(self, job_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._call(
-            "POST",
-            f"/api/saas/worker/jobs/{job_id}/result",
-            {"worker_id": self.worker_id, **payload},
-        )
+        """两步回传（17 协议 §3.3）：meta →（有文件时）files。"""
+        meta = {"worker_id": self.worker_id,
+                "summary": payload.get("summary"),
+                "chart_data": payload.get("chart_data"),
+                "data_until": payload.get("data_until"),
+                "files": [{k: v for k, v in f.items() if k != "path"} for f in (payload.get("files") or [])]}
+        return self._call("POST", f"/api/worker/jobs/{job_id}/result/meta", meta)
+
+    def fail(self, job_id: int, error: str, error_class: str = "engine_error") -> dict[str, Any]:
+        return self._call("POST", f"/api/worker/jobs/{job_id}/fail",
+                          {"worker_id": self.worker_id, "error_class": error_class,
+                           "error_message": error})

@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import io
 import json
 import subprocess
 import uuid
@@ -163,11 +165,11 @@ class TestEndToEnd:
         assert attr["layers"]["A"][0]["symbols"][0]["ts_code"] == "000001.SZ"
         assert attr["layers"]["A"][0]["symbols_total"] == 1
 
-        resp = client.report_result(job_id, {"status": "done", **payload})
-        assert resp["status"] == "done"
+        resp = client.report_result(job_id, {**payload, "files": []})  # 默认不上传文件
+        assert resp["status"] == "completed"
 
         detail = _job_status(cloud, job_id)
-        assert detail["status"] == "done"
+        assert detail["status"] == "completed"
         assert detail["result"]["summary"]["strategy_total_return"] == 0.1
         assert detail["result"]["chart_data"]["equity"][0] == 100000.0
         assert detail["result"]["chart_data"]["tag_analysis"]["layers"]["A"][0]["tag"] == "银行"
@@ -178,7 +180,7 @@ class TestEndToEnd:
         client = _make_client(cloud)
         daemon = WorkerDaemon(client, poll_seconds=0, heartbeat_seconds=3600)
         assert daemon.run_once() is True
-        assert _job_status(cloud, job_id)["status"] == "done"
+        assert _job_status(cloud, job_id)["status"] == "completed"
 
     def test_daemon_empty_round(self, cloud):
         daemon = WorkerDaemon(_make_client(cloud), poll_seconds=0)
@@ -192,7 +194,7 @@ class TestEndToEnd:
         assert daemon.run_once() is True
         job = _job_status(cloud, job_id)
         assert job["status"] == "queued"  # attempts 1 < max 2 → 回队
-        assert "engine boom" in job["error"]
+        assert "engine boom" in job["error_message"]
         # 第二轮：attempts 耗尽 → failed
         assert daemon.run_once() is True
         assert _job_status(cloud, job_id)["status"] == "failed"
@@ -219,7 +221,7 @@ class TestEndToEnd:
         daemon = WorkerDaemon(client, runner=slow_runner, heartbeat_seconds=0.05)
         daemon._run_job(job)
         assert gate[0] and len(beats) >= 2
-        assert _job_status(cloud, job_id)["status"] == "done"
+        assert _job_status(cloud, job_id)["status"] == "completed"
 
 
 class TestCloudClientRetry:
@@ -353,3 +355,77 @@ class TestArtifactPersistence:
         runner_mod.execute_job(job, work_base=tmp_path / "b")
         assert not stale.exists()
         assert (persistent / "equity_curve.csv").exists()
+
+
+class TestA3ExecutionLoop:
+    """A3：取消传播 / 两步回传（meta+files）/ 幂等重传 / 环境变量别名。"""
+
+    def test_cancel_propagation(self, cloud):
+        """心跳发现 cancel_requested → fail(canceled) 上报，结果不回传。"""
+        job_id = _create_job(cloud)
+        client = _make_client(cloud)
+        job = client.claim()
+        # 用户取消
+        _, tc = cloud
+        tc.post(f"/api/jobs/{job_id}/cancel", headers={"X-User-Id": "1"})
+        calls = {"fail": None, "result": None}
+        orig_fail, orig_report = client.fail, client.report_result
+        client.fail = lambda *a, **kw: (calls.__setitem__("fail", (a, kw)), orig_fail(*a, **kw))[1]
+        client.report_result = lambda *a, **kw: (calls.__setitem__("result", True), orig_report(*a, **kw))[1]
+
+        def slow_runner(j):
+            import time as _t
+            _t.sleep(0.4)  # 等心跳线程发现取消
+            return {"summary": {}, "chart_data": {}, "artifacts": [], "files": [], "data_until": "2026-09-04"}
+
+        daemon = WorkerDaemon(client, runner=slow_runner, heartbeat_seconds=0.05)
+        daemon._run_job(job)
+        assert calls["fail"] is not None and calls["fail"][1].get("error_class") == "canceled"
+        assert calls["result"] is None  # 取消后不回传结果
+        assert _job_status(cloud, job_id)["status"] == "canceled"
+
+    def test_two_step_result_with_file_upload(self, cloud, tmp_path, monkeypatch):
+        """meta → upload_token → files：文件到达云端且 sha256 校验过。"""
+        monkeypatch.setenv("QRE_WORKER_UPLOAD_FILES", "1")
+        job_id = _create_job(cloud)
+        blob = b"trade_date,total_equity\n2026-01-05,100000\n"
+        art = tmp_path / "equity_curve.csv"
+        art.write_bytes(blob)
+        _, tc = cloud
+
+        client = _make_client(cloud)
+        # upload_fn 走 saas test_client（与 request_fn 同一个云端）
+        def upload_fn(jid, token, files):
+            data = {name: (io.BytesIO(b), name) for name, b in files.items()}
+            resp = tc.post(f"/api/worker/jobs/{jid}/result/files?upload_token={token}",
+                           data=data, headers={"X-Worker-Token": WORKER_TOKEN})
+            return resp.get_json()
+        client._upload_fn = upload_fn
+
+        job = client.claim()
+        payload = {
+            "summary": {"strategy_total_return": 0.1}, "chart_data": {}, "data_until": "2026-09-04",
+            "files": [{"name": "equity_curve.csv", "size": len(blob),
+                       "sha256": hashlib.sha256(blob).hexdigest(), "path": str(art)}],
+        }
+        daemon = WorkerDaemon(client, runner=lambda j: payload, heartbeat_seconds=3600)
+        daemon._run_job(job)
+        assert _job_status(cloud, job_id)["status"] == "completed"
+        # 幂等：重复 meta 提交不报错（覆盖写）
+        again = client.report_result(job_id, payload)
+        assert again["ok"] or again.get("status") in ("completed", "uploading")
+
+    def test_env_var_aliases(self, monkeypatch):
+        monkeypatch.setenv("QRE_SAAS_BASE_URL", "http://new")
+        monkeypatch.setenv("QRE_WORKER_TOKEN", "tok")
+        monkeypatch.setenv("QRE_WORKER_ID", "wid")
+        c = CloudClient.from_env(request_fn=lambda m, p, j: (200, {"job": None}))
+        assert c.base_url == "http://new" and c.worker_id == "wid"
+        # 旧变量回退
+        monkeypatch.delenv("QRE_SAAS_BASE_URL")
+        monkeypatch.setenv("SAAS_CLOUD_URL", "http://old")
+        c2 = CloudClient.from_env(request_fn=lambda m, p, j: (200, {}))
+        assert c2.base_url == "http://old"
+
+    def test_module_entrypoint(self):
+        import quant_research_engine.worker.__main__  # noqa: F401
