@@ -32,6 +32,13 @@
   **版本管理在仓库** `deploy/landing/`（index.html + nginx-aguhuice.conf，与线上 diff 校验一致）；
   Nginx 站点：`/etc/nginx/sites-available/aguhuice`。
 
+**C4 已验证（2026-09-19/20）**：临时测试账号方案——saas app 支持 env
+`SAAS_TEST_ACCOUNT_EMAIL`/`SAAS_TEST_ACCOUNT_PASSWORD` 内置账号（login 校验前短路，
+配置即凭证，存 /etc/qre-saas.env[0600]，不入仓库；内测开放前须移除）。公网端到端实测：
+测试账号登录 → POST /api/jobs（smoke job#2 58s completed；full job#3 20 只×6 月 115s
+completed）→ /api/results 列表与详情（summary/chart-data/tag-analysis）数据完整；
+权限语义：未登录 401、删他人结果 404。
+
 **C1 已上线（2026-09-19）**：
 - SaaS Web/API：`qre-saas.service`（gunicorn 2 workers，127.0.0.1:8090，MemoryMax=1G，
   User=www-data，EnvironmentFile=/etc/qre-saas.env[0600]，repo /srv/aguhuice/qre + venv

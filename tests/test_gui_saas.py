@@ -590,3 +590,25 @@ class TestResultsApi:
         assert client.get(f"/api/results/{job_id}/summary", headers=h).status_code == 404
         # 重复删除 404；他人删除 404
         assert client.delete(f"/api/results/{job_id}", headers=h).status_code == 404
+
+
+class TestBuiltinTestAccount:
+    """QRE-ECS-C4：内置测试账号（env 配置即凭证，SMTP 未配期间的联调通道）。"""
+
+    def test_test_account_login(self, client, app):
+        app.config["SAAS_TEST_ACCOUNT_EMAIL"] = "tester@local"
+        app.config["SAAS_TEST_ACCOUNT_PASSWORD"] = "pw123"
+        resp = client.post("/api/saas/auth/login",
+                           json={"target": "tester@local", "code": "pw123"})
+        assert resp.status_code == 200
+        token = resp.get_json()["token"]
+        me = client.get("/api/saas/me", headers={"Authorization": f"Bearer {token}"}).get_json()
+        assert me["user"]["email"] == "tester@local"
+        # 错密码仍 401
+        assert client.post("/api/saas/auth/login",
+                           json={"target": "tester@local", "code": "wrong"}).status_code == 401
+
+    def test_test_account_disabled_by_default(self, client):
+        resp = client.post("/api/saas/auth/login",
+                           json={"target": "tester@local", "code": "pw123"})
+        assert resp.status_code == 401

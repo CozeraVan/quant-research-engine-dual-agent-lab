@@ -4,6 +4,10 @@
 
 ## Latest Verified State
 
+2026-09-20 QRE-ECS-C4 DONE（公网端到端验证：WEB 提交 → ECS 接单 → 家里 worker 回测 → 回传 → WEB 查看）：临时账号方案=最小改动——saas app 的 login 加 env 内置账号短路（SAAS_TEST_ACCOUNT_EMAIL/PASSWORD，hmac.compare_digest 比对，跳过验证码表；配置即凭证存 ECS /etc/qre-saas.env[0600] 不入仓库；注释标明内测开放前须移除；补测试 +2：对码登录成功/错码 401/默认关闭 401）。ECS 侧 scp 更新 app.py（origin 已含 B1-B3，唯一 diff 即本补丁，零覆盖风险）+ restart qre-saas active。公网实测（https://aguhuice.com，测试账号 beta01）：登录换 token → POST /api/jobs smoke（job#2，58s completed：收益 -16.2%/140 笔）→ full（job#3，20 只×6 月，115s completed：收益 +1.06%）→ /api/results 列表（total=1 只列 full，smoke 不列——既定口径）+ 详情 summary/chart-data（124 点）/tag-analysis（A 层 25 板块）全通；权限语义：未登录 POST /api/jobs 401、删他人结果（job#1 属 ops@local）404。15 号文档 D 阶段写入内测三级权限定稿（游客：免登录/单股/近 2 年/单 IP 日 1 次/次日清空；登录会员：全功能/日 3 次/永久保存；付费：占位未来从会员上调）。全量 `pytest tests/` → **2103 passed + 4 skipped**（2101 + 2 新登录用例）；首次跑出现 1 个瞬时失败，连续 3 次复跑全绿（含 --lf），判定为偶发时序 flake 已记录。未 git commit/push。遗留：SMTP 配置后移除测试账号开关；游客层实现（D 阶段）。
+
+## Latest Verified State
+
 2026-09-19 QRE-ECS-C3 DONE（家里 WSL worker 生产化：指向 https://aguhuice.com + systemd 常驻）：qre-saas-worker.service 由 staging（轮询 8081）改写为生产版——User=van、EnvironmentFile=/etc/qre-saas-worker.env（0600 root:van，含 QRE_SAAS_BASE_URL/TOKEN/ID + QRE_MARKET_DB_URL 只读账号 + QRE_WORKER_UPLOAD_FILES=1，token 从 ECS 读出经管道写入、不落仓库不落日志）、ExecStart=.venv python -m quant_research_engine.worker、Restart=always+10s、MemoryMax=4G（500×2y 实测峰值 300-950MB 的 4 倍余量）、TimeoutStopSec=900；unit 无任何代理变量（直连 HTTPS，Clash 7897 不污染）。enable --now active。端到端验证：因云端登录 SMTP 未配，job 经云端 PG 直插（users/strategies/jobs 三行，ops@local）——worker 公网 claim → 执行 → 两步回传 → completed（84s），结果 -15.35%/140 笔与 A4 同策略完全一致（确定性复现），23 个产物文件 sha256 校验落盘 ECS /srv/aguhuice/uploads/job_1/。仓库 deploy/saas/qre-saas-worker.service 更新为生产版。16 号文档 C3 状态块已写。全量 `pytest tests/` → **2101 passed + 4 skipped** 零回归（基线持平）。未 git commit/push。
 
 ## Latest Verified State

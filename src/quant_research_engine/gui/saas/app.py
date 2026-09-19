@@ -504,19 +504,30 @@ def create_saas_app() -> Flask:
 
         engine = _get_engine(app)
         with engine.begin() as conn:
-            row = conn.execute(
-                text(
-                    "SELECT id, code_hash FROM sms_codes "
-                    "WHERE phone = :target AND used_at IS NULL AND expires_at > now() "
-                    "ORDER BY id DESC LIMIT 1"
-                ),
-                {"target": target},
-            ).mappings().first()
-            expected = row["code_hash"] if row else ""
-            actual = _code_hash(code, target, _auth_salt(app))
-            if row is None or not hmac.compare_digest(expected, actual):
-                return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
-            conn.execute(text("UPDATE sms_codes SET used_at = now() WHERE id = :id"), {"id": row["id"]})
+            # 内置测试账号（QRE-ECS-C4）：env SAAS_TEST_ACCOUNT_EMAIL/PASSWORD
+            # 配置时，该 target+code 直接放行（跳过验证码表；SMTP 未配期间的
+            # 联调通道，配置即凭证，生产内测前须移除或置空）。
+            test_email = _cfg(app, "SAAS_TEST_ACCOUNT_EMAIL")
+            test_pass = _cfg(app, "SAAS_TEST_ACCOUNT_PASSWORD")
+            bypass_code = bool(
+                test_email and test_pass
+                and hmac.compare_digest(target, test_email)
+                and hmac.compare_digest(code, test_pass)
+            )
+            if not bypass_code:
+                row = conn.execute(
+                    text(
+                        "SELECT id, code_hash FROM sms_codes "
+                        "WHERE phone = :target AND used_at IS NULL AND expires_at > now() "
+                        "ORDER BY id DESC LIMIT 1"
+                    ),
+                    {"target": target},
+                ).mappings().first()
+                expected = row["code_hash"] if row else ""
+                actual = _code_hash(code, target, _auth_salt(app))
+                if row is None or not hmac.compare_digest(expected, actual):
+                    return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
+                conn.execute(text("UPDATE sms_codes SET used_at = now() WHERE id = :id"), {"id": row["id"]})
 
             is_email = "@" in target
             col = "email" if is_email else "phone"
