@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<!--
+  A股回测台 · UI 概念稿（impeccable 指导）
+
+  设计思路：
+  1. 这是一个"完成任务"的工具（Operate 模式），所以克制造型、放大信息层级：纸张白的卡片浮在淡紫灰的台面上，
+     紫只做导航、主按钮、聚焦环这三种"可操作"信号，用户一眼知道哪里能点。
+  2. 色彩纪律严格守约：淡紫主题 + A股红涨绿跌 + 黑白灰，除此之外无彩色；收益数字一律tabular等宽，
+     红绿只出现在"涨跌"语义上，绝不做装饰。
+  3. 字体用「衬线中文大标题（券商研报式的可信感）+ 黑体正文 + 等宽数字」三层，三个页面共用同一套字阶与色板，
+     普通投资者看到的是"数字报纸"，不是"极客终端"。
+  4. 三个新建入口并列、各自标注适合谁（没接触过 / 有一点经验 / 会写代码），入口即分流，零术语；
+     详情页以曲线图为绝对主角，数字柔和渐进呈现（计数、描线、分区淡入），"查看详细数据"才把重表格展开。
+  5. 动效克制但处处有回应：可点之物皆有 hover/focus/位移反馈，运行中徽章呼吸，曲线入场描画——
+     灵动来自"回应"，不来自"漂浮"。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A股回测台 · 设计稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* 主题：淡紫 */
+  --lav-050:#F7F5FD;  /* 台面底色 */
+  --lav-100:#EFEAFB;
+  --lav-200:#DCD2F5;
+  --lav-500:#6C5CE7;  /* 主紫：可操作信号 */
+  --lav-600:#5749C9;
+  --lav-700:#463A9E;
+  --lav-ink:#241F45;  /* 带紫调的近黑 */
+  /* A股涨跌 */
+  --up:#C93C3C;   --up-soft:#FBEDED;
+  --up-text:#B23030;  /* 软底上的红字 */
+  --down:#178258; --down-soft:#E9F6F0;
+  /* 黑白灰 */
+  --paper:#FFFFFF;
+  --ink:#201D33;
+  --ink-2:#57546B;
+  --ink-3:#656178;
+  --line:#E5E2F0;
+  --line-strong:#CFC9E4;
+  /* 字 */
+  --serif:"Noto Serif SC",serif;
+  --sans:"Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+  --r:14px;
+  --shadow-1:0 1px 2px rgba(36,31,69,.05),0 4px 14px rgba(36,31,69,.06);
+  --shadow-2:0 2px 6px rgba(36,31,69,.07),0 14px 34px rgba(36,31,69,.13);
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--sans);
+  background:var(--lav-050);
+  color:var(--ink);
+  font-size:15px;line-height:1.7;
+  caret-color:var(--lav-500);
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--lav-200);color:var(--lav-ink)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:8px;border:2px solid var(--lav-050)}
+::-webkit-scrollbar-thumb:hover{background:var(--lav-500)}
+a{color:var(--lav-600);text-decoration:none;text-underline-offset:3px}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--lav-500);outline-offset:2px;border-radius:6px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.up{color:var(--up)} .down{color:var(--down)}
+
+/* ============ 顶栏 ============ */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  background:rgba(247,245,253,.92);
+  backdrop-filter:saturate(1.2) blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.topbar-in{max-width:1240px;margin:0 auto;padding:0 32px;height:64px;display:flex;align-items:center;gap:40px}
+.brand{display:flex;align-items:baseline;gap:10px;cursor:pointer}
+.brand-name{font-family:var(--serif);font-weight:900;font-size:21px;color:var(--lav-ink);letter-spacing:.02em}
+.brand-sub{font-size:12px;color:var(--ink-3);letter-spacing:.14em}
+.nav{display:flex;gap:6px;margin-left:auto}
+.nav button{
+  font-family:var(--sans);font-size:14.5px;font-weight:500;color:var(--ink-2);
+  background:none;border:none;cursor:pointer;padding:8px 16px;border-radius:10px;position:relative;
+  transition:color .25s var(--ease),background .25s var(--ease);
+}
+.nav button:hover{color:var(--lav-600);background:var(--lav-100)}
+.nav button.on{color:var(--lav-700);font-weight:700}
+.nav button.on::after{
+  content:"";position:absolute;left:16px;right:16px;bottom:2px;height:3px;border-radius:3px;
+  background:var(--lav-500);animation:indIn .35s var(--ease);
+}
+@keyframes indIn{from{transform:scaleX(.3);opacity:0}to{transform:scaleX(1);opacity:1}}
+
+.wrap{max-width:1240px;margin:0 auto;padding:40px 32px 96px}
+
+/* ============ 视图切换 ============ */
+.view{display:none}
+.view.show{display:block;animation:viewIn .5s var(--ease)}
+@keyframes viewIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.page-head{margin-bottom:32px}
+.page-title{font-family:var(--serif);font-weight:900;font-size:32px;color:var(--lav-ink);letter-spacing:.01em;line-height:1.3}
+.page-desc{color:var(--ink-2);margin-top:8px;max-width:68ch}
+
+/* ============ 通用 ============ */
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-1)}
+.btn{
+  font-family:var(--sans);font-size:15px;font-weight:700;cursor:pointer;border:none;
+  border-radius:12px;padding:13px 28px;position:relative;overflow:hidden;
+  transition:transform .2s var(--ease),box-shadow .3s var(--ease),background .25s;
+}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--lav-500);color:#fff;box-shadow:0 2px 10px rgba(108,92,231,.35)}
+.btn-primary:hover{background:var(--lav-600);box-shadow:0 6px 20px rgba(108,92,231,.42);transform:translateY(-1px)}
+.btn-primary::after{ /* 扫光 */
+  content:"";position:absolute;top:0;left:-80%;width:50%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);
+  transform:skewX(-20deg);transition:left .6s var(--ease);
+}
+.btn-primary:hover::after{left:130%}
+.btn-ghost{background:var(--paper);color:var(--lav-600);border:1px solid var(--line-strong);font-weight:500;padding:8px 18px;font-size:13.5px}
+.btn-ghost:hover{border-color:var(--lav-500);background:var(--lav-100);text-decoration:none}
+.chip{
+  display:inline-block;font-size:13px;color:var(--lav-700);background:var(--lav-100);
+  border:1px solid transparent;border-radius:999px;padding:5px 14px;cursor:pointer;
+  transition:all .22s var(--ease);
+}
+.chip:hover{background:var(--paper);border-color:var(--lav-500);transform:translateY(-1px);box-shadow:var(--shadow-1)}
+input,select,textarea{
+  font-family:var(--sans);font-size:14px;color:var(--ink);
+  background:var(--paper);border:1px solid var(--line-strong);border-radius:10px;
+  padding:10px 14px;transition:border-color .2s,box-shadow .2s;width:100%;
+}
+input:hover,select:hover,textarea:hover{border-color:var(--lav-500)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--lav-500);box-shadow:0 0 0 3px var(--lav-100)}
+label.f{display:block;font-size:13px;font-weight:500;color:var(--ink-2);margin-bottom:6px}
+details.adv{margin-top:16px;border-top:1px dashed var(--line-strong);padding-top:12px}
+details.adv summary{
+  cursor:pointer;font-size:13.5px;font-weight:500;color:var(--ink-2);list-style:none;
+  display:flex;align-items:center;gap:6px;user-select:none;transition:color .2s;
+}
+details.adv summary:hover{color:var(--lav-600)}
+details.adv summary::before{content:"";width:8px;height:8px;border-right:2px solid var(--lav-500);border-bottom:2px solid var(--lav-500);transform:rotate(-45deg);transition:transform .3s var(--ease)}
+details.adv[open] summary::before{transform:rotate(45deg)}
+details.adv .adv-body{padding-top:14px;animation:viewIn .4s var(--ease)}
+
+/* ============ 页1：新建策略 ============ */
+.entry-grid{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:22px;align-items:start}
+.entry{
+  display:flex;flex-direction:column;
+  transition:transform .3s var(--ease),box-shadow .3s var(--ease),border-color .3s;
+  position:relative;
+}
+.entry:hover{transform:translateY(-4px);box-shadow:var(--shadow-2);border-color:var(--lav-200)}
+.entry-head{padding:26px 26px 18px;border-bottom:1px solid var(--line)}
+.who{
+  display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;
+  color:var(--lav-700);background:var(--lav-100);border-radius:6px;padding:3px 10px;margin-bottom:12px;
+}
+.entry-head .entry-title{font-family:var(--serif);font-size:21px;font-weight:700;color:var(--lav-ink)}
+.entry-head p{font-size:13.5px;color:var(--ink-2);margin-top:6px;min-height:44px}
+.entry-body{padding:20px 26px 26px;display:flex;flex-direction:column;gap:14px;flex:1}
+.entry .btn-primary{margin-top:auto;width:100%}
+.hint{font-size:12.5px;color:var(--ink-3);display:flex;gap:6px;align-items:flex-start}
+.hint svg{flex:none;margin-top:3px}
+textarea.strategy{min-height:120px;resize:vertical;line-height:1.8}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.codebox{
+  font-family:var(--mono);font-size:12.5px;line-height:1.75;background:var(--lav-ink);color:#D9D4F2;
+  border-radius:10px;padding:16px 18px;overflow-x:auto;white-space:pre;tab-size:2;
+}
+.codebox .k{color:#B7AEF5}.codebox .s{color:#9FE8C6}.codebox .c{color:#6E6894}
+.yaml-edit{min-height:280px;font-family:var(--mono);font-size:12.5px;line-height:1.75;background:var(--lav-ink);color:#D9D4F2;border-color:var(--lav-ink)}
+.yaml-edit:focus{box-shadow:0 0 0 3px var(--lav-200)}
+.seg{display:flex;border:1px solid var(--line-strong);border-radius:10px;overflow:hidden}
+.seg button{
+  flex:1;font-family:var(--sans);font-size:13.5px;padding:9px 4px;background:var(--paper);
+  border:none;color:var(--ink-2);cursor:pointer;transition:all .22s var(--ease);font-weight:500;
+}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button:hover{background:var(--lav-100);color:var(--lav-700)}
+.seg button.on{background:var(--lav-500);color:#fff;font-weight:700}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.start-bar{
+  margin-top:36px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+  padding:22px 28px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-1);
+}
+.start-bar .note{font-size:13px;color:var(--ink-2);max-width:56ch}
+.start-bar .note b{color:var(--ink)}
+.pipe{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.pipe i{font-style:normal;color:var(--lav-500)}
+.dotsep{color:var(--line-strong)}
+
+/* ============ 页2：回测记录 ============ */
+.toolbar{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.toolbar .sp{flex:1}
+.search{max-width:260px}
+table.recs{width:100%;border-collapse:separate;border-spacing:0;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow-1)}
+.recs th{
+  text-align:left;font-size:12.5px;font-weight:700;color:var(--ink-3);letter-spacing:.05em;
+  padding:14px 18px;background:var(--lav-100);border-bottom:1px solid var(--line);white-space:nowrap;
+}
+.recs td{padding:16px 18px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+.recs tbody tr{transition:background .2s}
+.recs tbody tr:hover{background:var(--lav-050)}
+.recs tbody tr:last-child td{border-bottom:none}
+.recs .r{text-align:right}
+.sname{font-weight:700;color:var(--ink)}
+.ssub{font-size:12px;color:var(--ink-3);margin-top:2px}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;
+  border-radius:999px;padding:4px 12px;white-space:nowrap;
+}
+.badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.badge.queue{color:#6B6780;background:#F0EFF5}
+.badge.run{color:var(--lav-600);background:var(--lav-100)}
+.badge.run::before{animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+.badge.done{color:#146B49;background:var(--down-soft)}
+.badge.fail{color:var(--up-text);background:var(--up-soft)}
+.val{font-weight:700;font-size:14.5px}
+.muted{color:var(--ink-3)}
+.linkbtn{
+  background:none;border:none;font-family:var(--sans);font-size:13.5px;font-weight:500;color:var(--lav-600);
+  cursor:pointer;padding:4px 2px;border-radius:6px;position:relative;
+}
+.linkbtn::after{content:"";position:absolute;left:0;right:100%;bottom:0;height:1.5px;background:var(--lav-500);transition:right .3s var(--ease)}
+.linkbtn:hover::after{right:0}
+.progress-line{height:4px;border-radius:4px;background:var(--lav-100);margin-top:8px;width:120px;overflow:hidden}
+.progress-line i{display:block;height:100%;width:58%;border-radius:4px;background:var(--lav-500);animation:barBreath 2.4s ease-in-out infinite}
+@keyframes barBreath{0%,100%{opacity:1}50%{opacity:.55}}
+
+/* ============ 页3：结果详情 ============ */
+.back{background:none;border:none;color:var(--ink-2);font-size:13.5px;cursor:pointer;font-family:var(--sans);padding:6px 0;display:inline-flex;align-items:center;gap:6px;transition:color .2s}
+.back:hover{color:var(--lav-600)}
+.back svg{transition:transform .25s var(--ease)}
+.back:hover svg{transform:translateX(-3px)}
+.d-head{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap;margin:14px 0 28px}
+.d-head h2{font-family:var(--serif);font-size:30px;font-weight:900;color:var(--lav-ink)}
+.d-meta{font-size:13px;color:var(--ink-3);display:flex;gap:16px;flex-wrap:wrap;padding-bottom:6px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:26px}
+.kpi{padding:20px 22px;transition:transform .3s var(--ease),box-shadow .3s var(--ease)}
+.kpi:hover{transform:translateY(-3px);box-shadow:var(--shadow-2)}
+.kpi .k{font-size:13px;color:var(--ink-2);font-weight:500}
+.kpi .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:30px;font-weight:700;margin-top:4px;letter-spacing:-.02em}
+.kpi .s{font-size:12px;color:var(--ink-3);margin-top:2px}
+.chart-card{padding:26px 28px 20px;margin-bottom:26px}
+.chart-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.chart-top h3{font-family:var(--serif);font-size:18px;font-weight:700;color:var(--lav-ink);margin-right:auto}
+.legend{display:flex;gap:18px;font-size:12.5px;color:var(--ink-2)}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.chart-stage{position:relative}
+.chart-stage svg{width:100%;height:auto;display:block}
+.drawline{stroke-dasharray:2400;stroke-dashoffset:2400;animation:draw 2.2s var(--ease) .2s forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.fadeup{opacity:0;transform:translateY(14px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.fadeup.in{opacity:1;transform:none}
+.tooltip-demo{
+  position:absolute;pointer-events:none;background:var(--lav-ink);color:#fff;font-size:12px;
+  border-radius:8px;padding:8px 12px;box-shadow:var(--shadow-2);white-space:nowrap;
+}
+.detail-toggle{display:flex;justify-content:center;margin:8px 0 26px}
+table.mini{width:100%;border-collapse:collapse;font-size:13.5px}
+.mini th{text-align:left;font-size:12px;color:var(--ink-3);font-weight:700;padding:10px 14px;border-bottom:1px solid var(--line-strong);white-space:nowrap}
+.mini td{padding:11px 14px;border-bottom:1px solid var(--line)}
+.mini tbody tr{transition:background .2s}
+.mini tbody tr:hover{background:var(--lav-050)}
+.mini .r{text-align:right}
+.subgrid{display:grid;grid-template-columns:1.2fr 1fr;gap:22px;margin-bottom:26px}
+.subgrid .card{padding:22px 24px}
+.subgrid h4{font-family:var(--serif);font-size:16px;font-weight:700;color:var(--lav-ink);margin-bottom:14px}
+.month{display:grid;grid-template-columns:repeat(12,1fr);gap:5px}
+.month span{
+  aspect-ratio:1.4;border-radius:5px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:10.5px;transition:transform .2s var(--ease),box-shadow .2s;cursor:default;
+}
+.month span:hover{transform:scale(1.12);box-shadow:var(--shadow-1)}
+.collapsed{display:none}
+.collapsed.open{display:block;animation:viewIn .45s var(--ease)}
+
+/* ============ 缺因子弹窗（演示） ============ */
+.modal-mask{
+  position:fixed;inset:0;background:rgba(36,31,69,.45);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:24px;
+}
+.modal-mask.open{display:flex;animation:fadeIn .25s var(--ease)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{
+  background:var(--paper);border-radius:18px;max-width:460px;width:100%;padding:32px;box-shadow:var(--shadow-2);
+  animation:popIn .4s var(--ease);
+}
+@keyframes popIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+.modal h3{font-family:var(--serif);font-size:20px;font-weight:700;color:var(--lav-ink);margin-bottom:10px}
+.modal p{font-size:14px;color:var(--ink-2)}
+.modal .miss{background:var(--up-soft);border-radius:10px;padding:12px 16px;margin:16px 0;font-size:13.5px;color:var(--up-text)}
+.modal .actions{display:flex;gap:12px;justify-content:flex-end;margin-top:22px}
+
+footer{border-top:1px solid var(--line);padding:28px 32px;text-align:center;font-size:12.5px;color:var(--ink-3)}
+
+/* ============ 响应式 ============ */
+@media (max-width:1080px){
+  .entry-grid{grid-template-columns:1fr}
+  .entry-head p{min-height:0}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .subgrid{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .topbar-in{padding:0 16px;gap:12px;height:56px}
+  .brand-sub{display:none}
+  .wrap{padding:24px 16px 64px}
+  .page-title{font-size:25px}
+  .recs-wrap{overflow-x:auto}
+  table.recs{min-width:860px}
+  .kpis{grid-template-columns:1fr 1fr}
+  .kpi .v{font-size:24px}
+  .month{grid-template-columns:repeat(6,1fr)}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand" onclick="go('new')">
+      <span class="brand-name">A股回测台</span>
+      <span class="brand-sub">BACKTEST DESK</span>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-v="new" class="on">新建策略</button>
+      <button data-v="list">我的回测记录</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ══════════════ 页 1 · 新建策略 ══════════════ -->
+<section class="view show" id="v-new">
+  <div class="page-head">
+    <h1 class="page-title">说清楚你的想法，剩下的交给回测</h1>
+    <p class="page-desc">三种方式创建策略，选最适合你的那一种。提交后系统会先用一小段历史数据帮你「试跑」检查策略有没有问题，通过后再自动开始正式回测。</p>
+  </div>
+
+  <div class="entry-grid">
+
+    <!-- 入口① 自然语言 -->
+    <div class="card entry">
+      <div class="entry-head">
+        <span class="who">完全没接触过量化</span>
+        <h2 class="entry-title">说出你的想法</h2>
+        <p>用大白话描述你想怎么买卖，系统自动帮你翻译成策略。</p>
+      </div>
+      <div class="entry-body">
+        <div>
+          <label class="f" for="nl">我的策略想法</label>
+          <textarea id="nl" class="strategy" placeholder="例如：我想买最近跌得比较多、但公司业绩还不错的股票，涨回去就卖掉。"></textarea>
+        </div>
+        <div>
+          <label class="f">没思路？点一个试试</label>
+          <div class="chips">
+            <span class="chip">跌多了就抄底</span>
+            <span class="chip">跟着大盘趋势走</span>
+            <span class="chip">每月定投高分红股票</span>
+            <span class="chip">放量上涨时追入</span>
+          </div>
+        </div>
+        <details class="adv">
+          <summary>看看系统翻译成了什么（可修改）</summary>
+          <div class="adv-body">
+<div class="codebox"><span class="c"># 由你的描述自动生成，可直接改</span>
+<span class="k">strategy</span>: <span class="s">"低吸绩优股"</span>
+<span class="k">buy</span>:  <span class="c"># 过去20日跌幅&gt;8% 且 ROE&gt;10%</span>
+  <span class="k">when</span>: <span class="s">"pct_chg_20d &lt; -8 and roe &gt; 10"</span>
+<span class="k">sell</span>:
+  <span class="k">when</span>: <span class="s">"pct_chg_20d &gt; 10"</span></div>
+          </div>
+        </details>
+        <button class="btn btn-primary">开始回测</button>
+        <div class="hint">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#8B889E" stroke-width="1.5"/><path d="M8 7.5V11M8 5v.2" stroke="#8B889E" stroke-width="1.6" stroke-linecap="round"/></svg>
+          提交后先自动试跑，约 1 分钟；没问题才跑完整回测。
+        </div>
+      </div>
+    </div>
+
+    <!-- 入口② 快速向导 -->
+    <div class="card entry">
+      <div class="entry-head">
+        <span class="who">有一点投资经验</span>
+        <h2 class="entry-title">快速向导</h2>
+        <p>一步一步选：用什么信号、什么时候买卖、买哪些股票。</p>
+      </div>
+      <div class="entry-body">
+        <div class="row2">
+          <div>
+            <label class="f">信号类别</label>
+            <select><option>价格与均线</option><option>成交量</option><option>公司基本面</option><option>波动与风险</option></select>
+          </div>
+          <div>
+            <label class="f">具体信号</label>
+            <select><option>收盘价 vs 20日均线</option><option>5日 vs 20日均线交叉</option><option>20日涨跌幅</option></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label class="f">买入条件</label>
+            <select><option>收盘价站上20日均线</option><option>收盘价跌破20日均线</option></select>
+          </div>
+          <div>
+            <label class="f">卖出条件</label>
+            <select><option>收盘价跌破20日均线</option><option>持有满20个交易日</option><option>盈利达到10%</option></select>
+          </div>
+        </div>
+        <div>
+          <label class="f">买哪些股票</label>
+          <div class="seg">
+            <button class="on">全部 A 股</button>
+            <button>按板块概念</button>
+            <button>指定股票</button>
+          </div>
+        </div>
+        <div class="row2">
+          <div>
+            <label class="f">回测区间</label>
+            <select><option>近三年（2023-09 ～ 2026-09）</option><option>近一年</option><option>近五年</option><option>自定义</option></select>
+          </div>
+          <div>
+            <label class="f">投入本金</label>
+            <select><option>¥100,000</option><option>¥50,000</option><option>¥300,000</option><option>¥1,000,000</option></select>
+          </div>
+        </div>
+        <details class="adv">
+          <summary>高级设置（每只股票买多少、最多持有几只、手续费）</summary>
+          <div class="adv-body">
+            <div class="row2">
+              <div><label class="f">最多同时持有</label><select><option>10 只</option><option>5 只</option><option>20 只</option></select></div>
+              <div><label class="f">手续费假设</label><select><option>万三 + 印花税</option><option>万二点五</option></select></div>
+            </div>
+          </div>
+        </details>
+        <button class="btn btn-primary">开始回测</button>
+        <div class="hint">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#8B889E" stroke-width="1.5"/><path d="M8 7.5V11M8 5v.2" stroke="#8B889E" stroke-width="1.6" stroke-linecap="round"/></svg>
+          向导会帮你避开「未来函数」等常见陷阱，放心选。
+        </div>
+      </div>
+    </div>
+
+    <!-- 入口③ 策略代码 -->
+    <div class="card entry">
+      <div class="entry-head">
+        <span class="who">会写一点代码</span>
+        <h2 class="entry-title">直接写策略</h2>
+        <p>用简洁的 YAML 配置描述策略，改完直接跑。</p>
+      </div>
+      <div class="entry-body">
+        <textarea class="yaml-edit" spellcheck="false">strategy: "均线趋势跟随 v2"
+buy:
+  when: "ma(close,5) cross_above ma(close,20)"
+sell:
+  when: "ma(close,5) cross_below ma(close,20)"
+universe: "hs300"
+cash: 300000
+max_positions: 10</textarea>
+        <div class="chips">
+          <span class="chip">插入：均线交叉</span>
+          <span class="chip">插入：止盈止损</span>
+          <span class="chip">语法速查</span>
+        </div>
+        <button class="btn btn-primary">开始回测</button>
+        <div class="hint">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#8B889E" stroke-width="1.5"/><path d="M8 7.5V11M8 5v.2" stroke="#8B889E" stroke-width="1.6" stroke-linecap="round"/></svg>
+          保存草稿自动进行，刷新不丢。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="start-bar">
+    <div class="note"><b>提交后会发生什么？</b><br>
+      <span class="pipe"><i>①</i> 小样本试跑检查 <span class="dotsep">·</span> <i>②</i> 全量历史回测 <span class="dotsep">·</span> <i>③</i> 生成图文报告</span><br>
+      全程自动，可在「我的回测记录」里随时查看进度；试跑发现问题会告诉你哪里要改，不会直接报错劝退。
+    </div>
+    <button class="btn btn-ghost" onclick="go('list')" style="margin-left:auto">看看别人的回测记录 →</button>
+  </div>
+</section>
+
+<!-- ══════════════ 页 2 · 回测记录 ══════════════ -->
+<section class="view" id="v-list">
+  <div class="page-head">
+    <h1 class="page-title">我的回测记录</h1>
+    <p class="page-desc">每一次回测都保存在这里。绿色是跌、红色是涨（A股习惯），点击「查看结果」看完整报告。</p>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg" style="width:340px">
+      <button class="on">全部</button><button>已完成</button><button>进行中</button><button>失败</button>
+    </div>
+    <span class="sp"></span>
+    <input class="search" type="search" placeholder="搜索策略名称…">
+  </div>
+
+  <div class="recs-wrap">
+  <table class="recs">
+    <thead>
+      <tr>
+        <th>策略</th><th>状态</th><th>回测区间</th><th>标的范围</th>
+        <th class="r">总收益</th><th class="r">超额收益</th><th class="r">最大回撤</th>
+        <th>创建时间</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><div class="sname">均线趋势跟随 v2</div><div class="ssub">快速向导 · 沪深300</div></td>
+        <td><span class="badge done">已完成</span></td>
+        <td class="num muted">2023-09 ～ 2026-08</td>
+        <td>沪深300成分股</td>
+        <td class="r num val up">+38.6%</td>
+        <td class="r num up">+11.2%</td>
+        <td class="r num down">-14.3%</td>
+        <td class="muted">09-05 21:14</td>
+        <td><button class="linkbtn" onclick="go('detail')">查看结果</button></td>
+      </tr>
+      <tr>
+        <td><div class="sname">跌多了就抄底</div><div class="ssub">自然语言 · 全部A股</div></td>
+        <td><span class="badge run">运行中</span><div class="progress-line"><i></i></div></td>
+        <td class="num muted">2021-01 ～ 2026-08</td>
+        <td>全部 A 股</td>
+        <td class="r muted">—</td><td class="r muted">—</td><td class="r muted">—</td>
+        <td class="muted">09-07 10:02</td>
+        <td><button class="linkbtn" disabled style="color:var(--ink-3);cursor:default">进行中…</button></td>
+      </tr>
+      <tr>
+        <td><div class="sname">每月定投高分红</div><div class="ssub">自然语言 · 红利概念</div></td>
+        <td><span class="badge queue">排队中</span></td>
+        <td class="num muted">2019-01 ～ 2026-08</td>
+        <td>板块概念 · 高分红</td>
+        <td class="r muted">—</td><td class="r muted">—</td><td class="r muted">—</td>
+        <td class="muted">09-07 09:58</td>
+        <td><button class="linkbtn" style="color:var(--ink-3)">取消排队</button></td>
+      </tr>
+      <tr>
+        <td><div class="sname">放量突破追入</div><div class="ssub">策略代码 · 指定股票</div></td>
+        <td><span class="badge fail">失败</span></td>
+        <td class="num muted">2024-01 ～ 2026-08</td>
+        <td>指定 12 只股票</td>
+        <td class="r muted">—</td><td class="r muted">—</td><td class="r muted">—</td>
+        <td class="muted">09-06 16:40</td>
+        <td><button class="linkbtn" onclick="openModal()" style="color:var(--up)">查看原因</button></td>
+      </tr>
+      <tr>
+        <td><div class="sname">低波动稳健持有</div><div class="ssub">快速向导 · 中证500</div></td>
+        <td><span class="badge done">已完成</span></td>
+        <td class="num muted">2020-01 ～ 2026-08</td>
+        <td>中证500成分股</td>
+        <td class="r num val down">-6.8%</td>
+        <td class="r num down">-3.1%</td>
+        <td class="r num down">-22.5%</td>
+        <td class="muted">09-01 20:33</td>
+        <td><button class="linkbtn" onclick="go('detail')">查看结果</button></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ══════════════ 页 3 · 研究结果详情 ══════════════ -->
+<section class="view" id="v-detail">
+  <button class="back" onclick="go('list')">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    返回回测记录
+  </button>
+
+  <div class="d-head">
+    <h2>均线趋势跟随 v2</h2>
+    <div class="d-meta">
+      <span>回测区间 <b class="num">2023-09-01 ～ 2026-08-31</b>（约 3 年）</span>
+      <span>标的：沪深300成分股</span>
+      <span>本金 <b class="num">¥300,000</b></span>
+      <span class="badge done">已完成</span>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="card kpi fadeup"><div class="k">总收益</div><div class="v up" data-count="38.6" data-suf="%">0%</div><div class="s">期末资产 <span class="num">¥415,800</span></div></div>
+    <div class="card kpi fadeup"><div class="k">跑赢大盘（超额收益）</div><div class="v up" data-count="11.2" data-suf="%">0%</div><div class="s">同期沪深300 <span class="num up">+27.4%</span></div></div>
+    <div class="card kpi fadeup"><div class="k">最大回撤</div><div class="v down" data-count="-14.3" data-suf="%">0%</div><div class="s">最难熬时亏过 <span class="num">¥42,900</span></div></div>
+    <div class="card kpi fadeup"><div class="k">买卖胜率</div><div class="v" style="color:var(--lav-ink)" data-count="57.1" data-suf="%">0%</div><div class="s">共交易 <span class="num">63</span> 笔</div></div>
+  </div>
+
+  <div class="card chart-card fadeup">
+    <div class="chart-top">
+      <h3>本金变化曲线</h3>
+      <div class="legend">
+        <span><i style="background:var(--up)"></i>我的策略</span>
+        <span><i style="background:var(--ink-3)"></i>沪深300（对照）</span>
+      </div>
+      <div class="seg" style="width:220px">
+        <button class="on">收益</button><button>回撤</button><button>月度</button>
+      </div>
+    </div>
+    <div class="chart-stage">
+      <svg viewBox="0 0 1000 360" role="img" aria-label="策略与基准收益曲线示意">
+        <!-- 网格 -->
+        <g stroke="#ECE9F6" stroke-width="1">
+          <line x1="60" y1="40" x2="960" y2="40"/><line x1="60" y1="110" x2="960" y2="110"/>
+          <line x1="60" y1="180" x2="960" y2="180"/><line x1="60" y1="250" x2="960" y2="250"/>
+          <line x1="60" y1="320" x2="960" y2="320"/>
+        </g>
+        <g font-family="JetBrains Mono" font-size="11" fill="#8B889E">
+          <text x="30" y="44">+40%</text><text x="30" y="114">+20%</text>
+          <text x="30" y="184">0%</text><text x="30" y="254">-20%</text>
+          <text x="66" y="344">2023-09</text><text x="480" y="344">2025-03</text><text x="880" y="344">2026-08</text>
+        </g>
+        <!-- 回撤阴影区 -->
+        <path d="M430 118 L520 210 L610 196 L610 250 L430 250 Z" fill="#1F9D6B" opacity=".08"/>
+        <!-- 基准线 -->
+        <path class="drawline" d="M60 190 L140 175 L230 188 L320 160 L410 172 L500 150 L590 165 L680 138 L770 148 L860 120 L960 126"
+          fill="none" stroke="#8B889E" stroke-width="2" stroke-linecap="round"/>
+        <!-- 策略线（红涨） -->
+        <path class="drawline" d="M60 185 L140 160 L230 172 L320 140 L410 128 L430 118 L520 210 L610 150 L700 118 L790 128 L880 84 L960 74"
+          fill="none" stroke="#C93C3C" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="960" cy="74" r="5" fill="#C93C3C"/>
+        <circle cx="960" cy="74" r="10" fill="#C93C3C" opacity=".2">
+          <animate attributeName="r" values="6;14;6" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values=".35;.05;.35" dur="2s" repeatCount="indefinite"/>
+        </circle>
+      </svg>
+      <div class="tooltip-demo" style="left:47%;top:34%">
+        <div style="opacity:.7">2025-04-18</div>
+        <div>策略 <b class="up" style="color:#FF9D9D">+12.1%</b> · 回撤最深的一段</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="subgrid">
+    <div class="card fadeup">
+      <h4>每个月赚了多少</h4>
+      <div class="month" id="months"></div>
+      <p style="font-size:12px;color:var(--ink-3);margin-top:12px">红色为当月盈利，绿色为当月亏损，颜色越深幅度越大。悬停可细看。</p>
+    </div>
+    <div class="card fadeup">
+      <h4>赚在哪里，亏在哪里</h4>
+      <table class="mini">
+        <tr><th>阶段</th><th class="r">收益</th><th class="r">发生了什么</th></tr>
+        <tr><td>2023 Q4</td><td class="r num up">+9.8%</td><td class="muted">反弹抓住，持仓 8 只</td></tr>
+        <tr><td>2024 上半年</td><td class="r num down">-11.6%</td><td class="muted">阴跌行情反复止损</td></tr>
+        <tr><td>2024 Q4 ～ 2025 Q2</td><td class="r num up">+24.5%</td><td class="muted">趋势段完整吃到</td></tr>
+        <tr><td>2025 Q3 至今</td><td class="r num up">+12.4%</td><td class="muted">震荡上行，表现平稳</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="detail-toggle fadeup">
+    <button class="btn btn-ghost" id="toggleDetail" onclick="toggleDetail()">查看详细数据（逐笔交易 · 持仓明细）</button>
+  </div>
+
+  <div class="collapsed" id="detailData">
+    <div class="card" style="padding:24px 26px;margin-bottom:26px">
+      <h4 style="font-family:var(--serif);font-size:16px;color:var(--lav-ink);margin-bottom:14px">逐笔交易（最近 8 笔）</h4>
+      <table class="mini">
+        <tr><th>股票</th><th>买入日</th><th>卖出日</th><th class="r">持有天数</th><th class="r">盈亏</th></tr>
+        <tr><td>600519 贵州茅台</td><td class="num">07-14</td><td class="num">08-22</td><td class="r num">27</td><td class="r num up">+6.4%</td></tr>
+        <tr><td>300750 宁德时代</td><td class="num">06-30</td><td class="num">08-05</td><td class="r num">25</td><td class="r num up">+11.8%</td></tr>
+        <tr><td>601318 中国平安</td><td class="num">06-02</td><td class="num">06-27</td><td class="r num">18</td><td class="r num down">-3.2%</td></tr>
+        <tr><td>000858 五粮液</td><td class="num">05-19</td><td class="num">07-08</td><td class="r num">35</td><td class="r num up">+4.1%</td></tr>
+        <tr><td>002594 比亚迪</td><td class="num">04-21</td><td class="num">05-12</td><td class="r num">15</td><td class="r num down">-2.6%</td></tr>
+        <tr><td>600036 招商银行</td><td class="num">03-10</td><td class="num">05-28</td><td class="r num">56</td><td class="r num up">+8.9%</td></tr>
+        <tr><td>601899 紫金矿业</td><td class="num">02-17</td><td class="num">04-02</td><td class="r num">31</td><td class="r num up">+13.5%</td></tr>
+        <tr><td>000333 美的集团</td><td class="num">01-06</td><td class="num">02-11</td><td class="r num">25</td><td class="r num down">-1.8%</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- 缺因子弹窗：设计示例，平时隐藏，由记录页「查看原因」触发 -->
+<div class="modal-mask" id="modalMask" onclick="if(event.target===this)closeModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h3 id="mTitle">这次回测没跑起来</h3>
+    <p>你的策略里用到了一个系统还不认识的条件：</p>
+    <div class="miss num">factor "北向资金净流入"：暂无此数据</div>
+    <p>两个办法：① 换成意思相近的已有条件（如「大单净买入」）；② 告诉我们你需要这个数据，我们会优先接入。</p>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="closeModal()">返回修改策略</button>
+      <button class="btn btn-primary" onclick="closeModal()">提交数据需求</button>
+    </div>
+  </div>
+</div>
+
+<footer>A股回测台 · 界面设计稿（演示数据，仅供设计评审） · 红涨绿跌 · 淡紫主题</footer>
+
+<script>
+/* 视图切换（无框架，纯演示） */
+function go(v){
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('show'));
+  const el=document.getElementById('v-'+v); el.classList.add('show');
+  document.querySelectorAll('.nav button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.v===v || (v==='detail'&&b.dataset.v==='list'));
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(v==='detail') initDetail();
+}
+document.getElementById('nav').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(b) go(b.dataset.v);
+});
+
+/* 分段选择控件 */
+document.querySelectorAll('.seg').forEach(seg=>{
+  seg.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return;
+    seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+  });
+});
+
+/* 详情页：数字渐进计数 + 分区淡入（只初始化一次） */
+let detailDone=false;
+function initDetail(){
+  if(detailDone)return; detailDone=true;
+  document.querySelectorAll('[data-count]').forEach((el,idx)=>{
+    const target=parseFloat(el.dataset.count), suf=el.dataset.suf||'';
+    const t0=performance.now()+idx*150, dur=1200;
+    (function step(t){
+      const p=Math.min(1,Math.max(0,(t-t0)/dur));
+      const e=1-Math.pow(1-p,3);
+      const v=target*e;
+      el.textContent=(v>0?'+':'')+v.toFixed(1)+suf;
+      if(p<1) requestAnimationFrame(step);
+    })(performance.now());
+  });
+  document.querySelectorAll('.fadeup').forEach((el,i)=>setTimeout(()=>el.classList.add('in'),i*120));
+  buildMonths();
+}
+
+/* 月度收益热力格 */
+function buildMonths(){
+  const data=[2.1,4.6,-1.2,3.3,1.8,5.2,-6.4,-4.1,2.7,-2.9,-5.5,3.9,6.1,4.4,2.2,-1.5,7.8,5.5,3.1,1.2,-0.8,2.9,4.2,3.6,-1.9,1.1,2.8,0.6,3.4,-2.2,1.5,2.0,4.8,1.9,2.6];
+  const box=document.getElementById('months');
+  data.forEach(v=>{
+    const s=document.createElement('span');
+    const a=Math.min(1,Math.abs(v)/8);
+    if(v>=0){ s.style.background=`rgba(201,60,60,${.12+a*.75})`; s.style.color=a>.45?'#fff':'var(--up)'; }
+    else{ s.style.background=`rgba(23,130,88,${.12+a*.75})`; s.style.color=a>.45?'#fff':'var(--down)'; }
+    s.textContent=(v>0?'+':'')+v.toFixed(1);
+    s.title=(v>0?'盈利 ':'亏损 ')+Math.abs(v)+'%';
+    box.appendChild(s);
+  });
+}
+
+/* 详细数据展开 */
+function toggleDetail(){
+  const d=document.getElementById('detailData'), b=document.getElementById('toggleDetail');
+  const open=d.classList.toggle('open');
+  b.textContent=open?'收起详细数据':'查看详细数据（逐笔交易 · 持仓明细）';
+}
+
+/* 弹窗 */
+function openModal(){document.getElementById('modalMask').classList.add('open')}
+function closeModal(){document.getElementById('modalMask').classList.remove('open')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+</script>
+</body>
+</html>

@@ -146,3 +146,42 @@
 2. **结果系统**（把 8081 结果页数据源抽象出来，先本地跑通"经 ECS 读结果"）
 3. **用户系统**（加配额闸门）
 4. **后台管理**（最后，内测前几天能手动 SQL 顶着）
+
+---
+
+## 7. 实施 TODO（2026-09-18 与用户确认的顺序：全链路优先，登录/管理最后）
+
+> 原则：先打通"Web 提交策略 → worker 回测 → Web 看结果"全链路（风险最高），
+> 登录/后台管理最后；公网暴露前用 Nginx 层 IP 限流兜底（不做用户系统的过渡方案）。
+
+### 阶段 A：Job 系统 + worker 协议（本地双进程验证，不上云）
+- [ ] A1 定义 job 协议与状态机（queued→leased→running→uploading→completed/failed/canceled；租约+心跳）
+- [ ] A2 Flask 侧实现 job API：claim / heartbeat / result / fail（先用 PG 小库或 SQLite，Redis 可选）
+- [ ] A3 worker 端实现：轮询拉取 → 调 QRE 引擎（流式）→ 回传产物；幂等覆盖写
+- [ ] A4 本地端到端验证：Flask 起服务，worker 同机拉任务跑一条真实策略，结果回传可查询
+- [ ] A5 故障演练：杀 worker 进程 → 任务租约超时自动回队重跑（分布式僵尸防护实测）
+
+### 阶段 B：结果系统（Web 经 API 读结果）
+- [ ] B1 结果存储：results 表 + 产物目录结构（复用现 outputs 产物格式）
+- [ ] B2 结果 API：summary / chart-data / tag-analysis / risk / symbols / symbol 明细（路径对齐 8081）
+- [ ] B3 8081 结果页数据源切换到 API（前端展示层基本不动）
+
+### 阶段 C：ECS 部署打通（上线内测版）
+- [ ] C1 ECS 装 Python/Flask/PG 小库（2G 参数）+ systemd 服务
+- [ ] C2 Nginx 反代 /api 到 Flask + IP 限流（如 10 req/min/IP）
+- [ ] C3 家里 worker 服务化（systemd）+ worker token 认证，指向 https://aguhuice.com
+- [ ] C4 端到端公网验证：浏览器提交策略 → 家里 worker 跑 → 线上看结果
+- [ ] C5 8081 页面平移上 ECS（替换落地页为正式 app 入口，落地页保留为 / 首页）
+
+### 阶段 D：用户系统（配额精细化）
+- [ ] D1 注册/登录（邮箱+密码）+ users/strategies 表
+- [ ] D2 三阶层配额（游客 IP 限流 / 登录 / 付费占位）
+- [ ] D3 我的策略库 + 我的回测历史（关联 user_id）
+
+### 阶段 E：后台管理（最后）
+- [ ] E1 总览（job 数/成功率/队列深度/worker 心跳）
+- [ ] E2 用户管理 + 因子需求审核队列
+- [ ] E3 worker 运维（指令下发、家里 PG 状态经 worker 上报）
+
+### 待拍板开放问题（对齐颗粒度时逐条过）
+见第 5 节 8 条（游客计数方式/产物大小上限/worker token 轮换/邮箱验证/配额口径/冒烟强制/通知方式/磁盘水位）。

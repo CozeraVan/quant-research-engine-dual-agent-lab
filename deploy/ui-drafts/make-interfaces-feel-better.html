@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<!--
+设计思路（make-interfaces-feel-better）：
+1. 淡紫主题只做「结构与引导」——导航激活态、主按钮、选中描边用淡紫；盈亏数据严格红涨绿跌，两者永不混用，黑白灰承载正文。
+2. 三个页面共用同一套圆角（外 16 / 内 10，同心圆角）、同一套阴影层级（投影表高度、描边表结构）、同一套字体阶梯，保证跨页一致性。
+3. 所有数字用 tabular-nums 等宽数字，收益率变化不跳动；标题 text-wrap:balance，正文 pretty，长文本不孤儿。
+4. 动效全部可打断：交互动画只用 CSS transition 且声明具体属性（绝不用 transition:all），按压缩放恒为 0.96；入场动画按语义块 ~100ms 错峰出现一次，高频交互（hover/输入）不挂动画，只给 ≤150ms 颜色/描边反馈。
+5. 详情页渐进披露：先 4 个核心 KPI 和净值曲线一眼抓重点，回撤、月度收益、交易明细收进「查看详细数据」按钮后柔和展开，避免数字砸脸。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A股回测台 · 设计稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ---------- 设计令牌 ---------- */
+:root{
+  --purple-700:#6d4fc4; --purple-600:#7c5cd6; --purple-500:#8f6fe0;
+  --purple-100:#efeafa; --purple-50:#f7f4fd; --purple-border:#ddd2f2;
+  --up:#d92c3c; --up-bg:#fdf0f1;
+  --down:#1e9e62; --down-bg:#eef9f3;
+  --ink-900:#1b1b1f; --ink-700:#3c3c44; --ink-500:#6b6b75; --ink-400:#8b8b95;
+  --line:#e6e6ec; --bg:#fafafc; --card:#ffffff;
+  --r-outer:16px; --r-inner:10px;
+  --shadow-1:0 1px 2px rgba(27,27,31,.05),0 4px 14px rgba(27,27,31,.06);
+  --shadow-2:0 2px 4px rgba(27,27,31,.06),0 10px 28px rgba(109,79,196,.10);
+  --ease:cubic-bezier(.2,0,0,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{
+  font-family:"Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--ink-900);font-size:14px;line-height:1.6;
+}
+h1,h2,h3{text-wrap:balance}
+p,li,td{text-wrap:pretty}
+.num{font-variant-numeric:tabular-nums}
+a{color:var(--purple-600);text-decoration:none}
+
+/* ---------- 通用：按钮（压缩放 0.96，过渡属性明确） ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  border:none;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;
+  border-radius:var(--r-inner);min-height:44px;padding:0 22px;
+  transition-property:background-color,box-shadow,transform,color;
+  transition-duration:.15s;transition-timing-function:var(--ease);
+}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--purple-600);color:#fff;box-shadow:0 1px 2px rgba(109,79,196,.35),0 6px 16px rgba(109,79,196,.25)}
+.btn-primary:hover{background:var(--purple-700)}
+.btn-ghost{background:transparent;color:var(--ink-700);box-shadow:inset 0 0 0 1px var(--line)}
+.btn-ghost:hover{box-shadow:inset 0 0 0 1px var(--purple-border);color:var(--purple-600)}
+.btn-link{background:none;color:var(--purple-600);min-height:40px;padding:0 10px;font-weight:500}
+.btn-link:hover{color:var(--purple-700);background:var(--purple-50)}
+.btn-big{min-height:56px;font-size:16px;padding:0 40px;border-radius:12px;letter-spacing:.04em}
+
+/* ---------- 顶栏 ---------- */
+.topbar{
+  position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);
+  backdrop-filter:none;border-bottom:1px solid var(--line);
+}
+.topbar-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;height:60px;padding:0 24px;gap:32px}
+.brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;color:var(--ink-900)}
+.brand-mark{width:26px;height:26px;border-radius:8px;background:var(--purple-600);color:#fff;
+  display:grid;place-items:center;font-size:13px;font-weight:700}
+.nav{display:flex;gap:4px;margin-left:8px}
+.nav button{
+  position:relative;border:none;background:none;font-family:inherit;font-size:14px;font-weight:500;
+  color:var(--ink-500);cursor:pointer;padding:8px 14px;min-height:44px;border-radius:var(--r-inner);
+  transition-property:color,background-color;transition-duration:.15s;transition-timing-function:var(--ease);
+}
+.nav button:hover{color:var(--ink-900);background:var(--purple-50)}
+.nav button.active{color:var(--purple-700);font-weight:600}
+.nav button.active::after{
+  content:"";position:absolute;left:14px;right:14px;bottom:-9px;height:2px;border-radius:2px;
+  background:var(--purple-600);
+}
+.nav button:active{transform:scale(.96)}
+.user-chip{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--ink-500);font-size:13px}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--purple-100);color:var(--purple-700);
+  display:grid;place-items:center;font-weight:600;font-size:12px}
+
+/* ---------- 布局 ---------- */
+.wrap{max-width:1200px;margin:0 auto;padding:32px 24px 80px}
+.view{display:none}
+.view.active{display:block}
+.card{background:var(--card);border-radius:var(--r-outer);box-shadow:var(--shadow-1);padding:24px}
+.card + .card{margin-top:20px}
+.page-title{font-size:22px;font-weight:700;margin-bottom:6px}
+.page-sub{color:var(--ink-500);font-size:13.5px;margin-bottom:24px}
+
+/* 入场错峰动画：只跑一次，ease-out，~100ms 间隔 */
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.rise{animation:rise .45s var(--ease) both}
+.rise-1{animation-delay:.05s}.rise-2{animation-delay:.15s}.rise-3{animation-delay:.25s}
+.rise-4{animation-delay:.35s}.rise-5{animation-delay:.45s}
+@media (prefers-reduced-motion:reduce){.rise{animation:none}}
+
+/* ---------- 页1：三入口 ---------- */
+.entry-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
+.entry-card{
+  position:relative;text-align:left;background:var(--card);border-radius:var(--r-outer);
+  box-shadow:var(--shadow-1);padding:20px;cursor:pointer;font-family:inherit;border:none;width:100%;
+  transition-property:box-shadow,transform;transition-duration:.2s;transition-timing-function:var(--ease);
+}
+.entry-card:hover{box-shadow:var(--shadow-2);transform:translateY(-2px)}
+.entry-card:active{transform:scale(.98)}
+.entry-card.selected{box-shadow:var(--shadow-2),inset 0 0 0 2px var(--purple-600)}
+.entry-tag{
+  display:inline-block;font-size:12px;font-weight:600;color:var(--purple-700);
+  background:var(--purple-100);border-radius:999px;padding:3px 10px;margin-bottom:12px;
+}
+.entry-card h3{font-size:16px;font-weight:700;margin-bottom:6px}
+.entry-card p{font-size:13px;color:var(--ink-500)}
+.entry-card .fit{margin-top:12px;font-size:12px;color:var(--ink-400)}
+.entry-card .fit b{color:var(--ink-700);font-weight:600}
+.entry-check{
+  position:absolute;top:16px;right:16px;width:20px;height:20px;border-radius:50%;
+  box-shadow:inset 0 0 0 1.5px var(--line);
+  display:grid;place-items:center;color:#fff;
+  transition-property:background-color,box-shadow,transform;transition-duration:.15s;
+}
+.entry-card.selected .entry-check{background:var(--purple-600);box-shadow:none}
+.entry-check svg{opacity:0;transform:scale(.25);filter:blur(4px);
+  transition-property:opacity,transform,filter;transition-duration:.25s;transition-timing-function:var(--ease)}
+.entry-card.selected .entry-check svg{opacity:1;transform:scale(1);filter:blur(0)}
+
+/* 入口面板 */
+.entry-panel{display:none}
+.entry-panel.active{display:block}
+.panel-head{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+.panel-head h2{font-size:18px;font-weight:700}
+.panel-head span{font-size:13px;color:var(--ink-500)}
+
+textarea,input[type=text],input[type=number],select{
+  font-family:inherit;font-size:14px;color:var(--ink-900);background:#fff;
+  border:1px solid var(--line);border-radius:var(--r-inner);padding:10px 12px;
+  transition-property:border-color,box-shadow;transition-duration:.15s;
+}
+textarea:focus,input:focus,select:focus{
+  outline:none;border-color:var(--purple-500);
+  box-shadow:0 0 0 3px var(--purple-100);
+}
+textarea{width:100%;resize:vertical;line-height:1.7}
+.field-row{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-top:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:13px;font-weight:600;color:var(--ink-700)}
+.field .hint{font-size:12px;color:var(--ink-400);font-weight:400}
+
+/* 示例 chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{
+  border:1px solid var(--line);background:#fff;color:var(--ink-700);font-family:inherit;
+  font-size:12.5px;border-radius:999px;padding:6px 14px;cursor:pointer;min-height:32px;
+  transition-property:border-color,color,background-color,transform;transition-duration:.15s;transition-timing-function:var(--ease);
+}
+.chip:hover{border-color:var(--purple-500);color:var(--purple-700);background:var(--purple-50)}
+.chip:active{transform:scale(.96)}
+
+/* 代码预览 */
+.code-box{
+  background:#211d2b;color:#d9d4e8;border-radius:var(--r-inner);padding:16px;
+  font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.7;
+  overflow-x:auto;white-space:pre;margin-top:12px;
+}
+.code-box .k{color:#b79cf0}.code-box .s{color:#8fd6a8}
+
+/* 折叠区（退出更柔和：小 translateY，ease-out） */
+.collapse-toggle{
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;
+  background:none;border:none;font-family:inherit;font-size:13.5px;font-weight:600;
+  color:var(--ink-700);cursor:pointer;padding:12px 0;min-height:44px;
+  transition-property:color;transition-duration:.15s;
+}
+.collapse-toggle:hover{color:var(--purple-600)}
+.collapse-toggle .arrow{display:inline-block;transition-property:transform;transition-duration:.2s;transition-timing-function:var(--ease)}
+.collapse-toggle.open .arrow{transform:rotate(90deg)}
+.collapse-body{
+  overflow:hidden;max-height:0;opacity:0;transform:translateY(-4px);
+  transition-property:max-height,opacity,transform;transition-duration:.3s,.25s,.25s;transition-timing-function:var(--ease);
+}
+.collapse-body.open{max-height:640px;opacity:1;transform:translateY(0)}
+
+/* 条件行 */
+.cond-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--purple-50);
+  border-radius:var(--r-inner);padding:10px 12px;margin-bottom:8px}
+.cond-row select{min-width:120px;background:#fff}
+.cond-row .del{border:none;background:none;color:var(--ink-400);cursor:pointer;font-size:15px;
+  width:32px;height:32px;border-radius:8px;
+  transition-property:color,background-color;transition-duration:.15s}
+.cond-row .del:hover{color:var(--up);background:var(--up-bg)}
+.btn-sm{border:1px dashed var(--purple-border);background:none;color:var(--purple-600);
+  font-family:inherit;font-size:13px;font-weight:500;border-radius:var(--r-inner);
+  padding:8px 14px;cursor:pointer;min-height:36px;
+  transition-property:background-color,border-color,transform;transition-duration:.15s}
+.btn-sm:hover{background:var(--purple-50);border-color:var(--purple-500)}
+.btn-sm:active{transform:scale(.96)}
+
+/* 标的范围 */
+.scope-group{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.scope-opt{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:var(--r-inner);
+  border:1px solid var(--line);cursor:pointer;
+  transition-property:border-color,background-color;transition-duration:.15s}
+.scope-opt:hover{border-color:var(--purple-border)}
+.scope-opt.checked{border-color:var(--purple-500);background:var(--purple-50)}
+.scope-opt input{margin-top:4px;accent-color:var(--purple-600)}
+.scope-opt b{font-weight:600;font-size:14px}
+.scope-opt small{display:block;color:var(--ink-500);font-size:12.5px}
+.scope-detail{margin:8px 0 4px 26px;display:none}
+.scope-detail.show{display:block}
+
+/* 主 CTA 条 */
+.cta-bar{
+  position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);
+  margin:24px -24px -24px;padding:16px 24px;display:flex;align-items:center;gap:16px;
+  border-radius:0 0 var(--r-outer) var(--r-outer);
+}
+.cta-bar .note{font-size:12.5px;color:var(--ink-400)}
+
+/* ---------- 页2：记录表 ---------- */
+.table-card{padding:0;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{
+  text-align:left;font-size:12px;font-weight:600;color:var(--ink-400);
+  padding:14px 16px;border-bottom:1px solid var(--line);background:#fff;white-space:nowrap;
+}
+td{padding:16px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:13.5px}
+tbody tr{transition-property:background-color;transition-duration:.15s;cursor:pointer}
+tbody tr:hover{background:var(--purple-50)}
+tbody tr:last-child td{border-bottom:none}
+td .sname{font-weight:600;color:var(--ink-900)}
+td .sid{font-size:12px;color:var(--ink-400)}
+.v-up{color:var(--up);font-weight:600}
+.v-down{color:var(--down);font-weight:600}
+.v-flat{color:var(--ink-400)}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+  border-radius:999px;padding:4px 11px;white-space:nowrap;
+}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge-done{background:var(--purple-100);color:var(--purple-700)}
+.badge-run{background:var(--up-bg);color:var(--up)}
+.badge-run .dot{animation:pulse 1.4s var(--ease) infinite}
+.badge-queue{background:#f2f2f5;color:var(--ink-500)}
+.badge-fail{background:var(--down-bg);color:var(--down)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ---------- 页3：详情 ---------- */
+.detail-head{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:20px}
+.detail-head h2{font-size:20px;font-weight:700}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.kpi{background:var(--card);border-radius:var(--r-outer);box-shadow:var(--shadow-1);padding:18px 20px}
+.kpi .k-label{font-size:12.5px;color:var(--ink-400);margin-bottom:6px}
+.kpi .k-value{font-size:26px;font-weight:700;line-height:1.2}
+.kpi .k-sub{font-size:12px;color:var(--ink-500);margin-top:6px}
+.chart-card h3,.section-title{font-size:15px;font-weight:700;margin-bottom:4px}
+.chart-sub{font-size:12.5px;color:var(--ink-400);margin-bottom:16px}
+.chart-svg{width:100%;height:auto;display:block}
+.legend{display:flex;gap:20px;font-size:12.5px;color:var(--ink-500);margin-top:10px}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.detail-more{display:none}
+.detail-more.open{display:block}
+.metric-list{display:grid;grid-template-columns:1fr 1fr;gap:0 32px}
+.metric-list .mrow{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.metric-list .mrow span:first-child{color:var(--ink-500)}
+.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:12px}
+.mcell{border-radius:8px;padding:8px 6px;text-align:center;font-size:12px}
+.mcell .y{color:rgba(255,255,255,.75);font-size:10.5px;display:block}
+
+/* 弹窗示例（隐藏） */
+.modal-demo{display:none;position:fixed;inset:0;background:rgba(27,27,31,.45);z-index:50;
+  align-items:center;justify-content:center;padding:24px}
+.modal-demo.show{display:flex}
+.modal-box{background:#fff;border-radius:var(--r-outer);box-shadow:var(--shadow-2);
+  max-width:420px;width:100%;padding:24px}
+
+footer{max-width:1200px;margin:0 auto;padding:24px;color:var(--ink-400);font-size:12px;text-align:center}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:960px){
+  .entry-grid{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .two-col{grid-template-columns:1fr}
+  .topbar-inner{gap:12px;padding:0 16px}
+  .wrap{padding:24px 16px 64px}
+  .table-scroll{overflow-x:auto}
+  table{min-width:860px}
+  .month-grid{grid-template-columns:repeat(4,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== 顶栏 ===================== -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand"><span class="brand-mark">回</span>A股回测台</div>
+    <nav class="nav" id="mainNav">
+      <button class="active" data-view="create">新建策略</button>
+      <button data-view="records">我的回测记录</button>
+      <button data-view="detail">回测结果（示例）</button>
+    </nav>
+    <div class="user-chip"><span class="avatar">王</span>普通版 · 王先生</div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ===================== 页1：新建策略 ===================== -->
+<section class="view active" id="view-create">
+  <h1 class="page-title rise rise-1">新建策略</h1>
+  <p class="page-sub rise rise-1">选一种适合你的方式，描述清楚买卖规则，剩下的交给回测台。</p>
+
+  <!-- 三入口卡片 -->
+  <div class="entry-grid" id="entryGrid">
+    <button class="entry-card selected rise rise-1" data-entry="nl">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">推荐新手</span>
+      <h3>用大白话描述</h3>
+      <p>像跟朋友聊天一样写下你的想法，例如「涨过 20 日均线就买，跌破就卖」。</p>
+      <div class="fit">适合：<b>完全没接触过量化的投资者</b></div>
+    </button>
+    <button class="entry-card rise rise-2" data-entry="wizard">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">进阶</span>
+      <h3>快速向导</h3>
+      <p>从指标清单里挑条件，逐项设定买入、卖出规则和投资范围。</p>
+      <div class="fit">适合：<b>懂均线、MACD 等常见指标的用户</b></div>
+    </button>
+    <button class="entry-card rise rise-3" data-entry="code">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">专业</span>
+      <h3>直接写策略代码</h3>
+      <p>直接编辑策略配置文件，参数最齐全，改动最自由。</p>
+      <div class="fit">适合：<b>有编程或量化经验的用户</b></div>
+    </button>
+  </div>
+
+  <!-- 入口 1：自然语言 -->
+  <div class="card entry-panel active" id="entry-nl">
+    <div class="panel-head"><h2>用大白话描述你的策略</h2><span>说清楚什么时候买、什么时候卖就行</span></div>
+    <textarea rows="4" placeholder="例：5日均线上穿200日均线时买入，下穿时卖出；如果亏损超过8%也卖出">5日均线上穿200日均线时买入，下穿时卖出；如果亏损超过8%也卖出</textarea>
+    <div class="chips">
+      <span style="font-size:12.5px;color:var(--ink-400);align-self:center">没思路？点一个试试：</span>
+      <button class="chip">收盘价低于10元买入，高于12元卖出</button>
+      <button class="chip">20日均线上穿60日均线买入，下穿卖出</button>
+      <button class="chip">收盘价高于10元买入，跌破20日均线卖出，最多拿20天</button>
+    </div>
+    <div class="field-row">
+      <button class="btn btn-ghost" id="btnCompile">看看系统怎么理解</button>
+      <span style="font-size:12.5px;color:var(--ink-400);align-self:center">生成后可以逐句核对，确认无误再回测</span>
+    </div>
+
+    <button class="collapse-toggle" data-collapse="nlPreview"><span class="arrow">▸</span>系统理解结果（策略代码，可核对修改）</button>
+    <div class="collapse-body" id="nlPreview">
+      <div class="code-box"><span class="k">strategy</span>: <span class="s">双均线趋势跟随</span>
+<span class="k">buy_when</span>:  5日均线 <span class="s">上穿</span> 200日均线
+<span class="k">sell_when</span>: 5日均线 <span class="s">下穿</span> 200日均线
+<span class="k">protect</span>:   单只股票亏损超过 <span class="s">8%</span> 时卖出
+<span class="k">stocks</span>:    全部A股（剔除ST、停牌、上市不满120天）</div>
+    </div>
+  </div>
+
+  <!-- 入口 2：快速向导 -->
+  <div class="card entry-panel" id="entry-wizard">
+    <div class="panel-head"><h2>快速向导</h2><span>从指标清单挑条件，逐项设定</span></div>
+
+    <div class="field"><label>买入条件</label>
+      <div class="cond-row">
+        <select><option>均线类</option><option>摆动指标</option><option>成交量</option><option>价格形态</option></select>
+        <select><option>指数均线</option><option>简单均线</option></select>
+        <select><option>EMA 5日</option></select>
+        <select><option>上穿</option><option>下穿</option><option>大于</option><option>小于</option></select>
+        <select><option>EMA 200日</option></select>
+        <button class="del" title="删除此条件">×</button>
+      </div>
+      <button class="btn-sm">＋ 再加一条买入条件</button>
+    </div>
+
+    <div class="field" style="margin-top:16px"><label>卖出条件</label>
+      <div class="cond-row">
+        <select><option>均线类</option></select>
+        <select><option>指数均线</option></select>
+        <select><option>EMA 5日</option></select>
+        <select><option>下穿</option><option>上穿</option><option>大于</option><option>小于</option></select>
+        <select><option>EMA 200日</option></select>
+        <button class="del" title="删除此条件">×</button>
+      </div>
+      <button class="btn-sm">＋ 再加一条卖出条件</button>
+    </div>
+
+    <button class="collapse-toggle" data-collapse="wzAdv"><span class="arrow">▸</span>高级选项（止损、止盈、最长持有天数……）</button>
+    <div class="collapse-body" id="wzAdv">
+      <div class="field-row">
+        <div class="field"><label>亏损超过</label><span><input type="number" value="8" style="width:90px"> % 就卖出</span></div>
+        <div class="field"><label>盈利超过 <span class="hint">可不填</span></label><span><input type="number" placeholder="如 15" style="width:90px"> % 就卖出</span></div>
+        <div class="field"><label>最长持有</label><span><input type="number" value="20" style="width:90px"> 个交易日</span></div>
+      </div>
+    </div>
+
+    <button class="collapse-toggle" data-collapse="wzCode"><span class="arrow">▸</span>策略代码预览（高级，可不查看）</button>
+    <div class="collapse-body" id="wzCode">
+      <div class="code-box"><span class="k">buy_when</span>:  (ema_5 &gt; ema_200) <span class="s">且昨日不超过</span>
+<span class="k">sell_when</span>: (ema_5 &lt; ema_200) <span class="s">且昨日不低于</span>
+<span class="k">protect</span>:   亏损 <span class="s">8%</span> 卖出 · 最长持有 <span class="s">20</span> 天</div>
+    </div>
+  </div>
+
+  <!-- 入口 3：策略代码 -->
+  <div class="card entry-panel" id="entry-code">
+    <div class="panel-head"><h2>策略代码编辑器</h2><span>前两种方式生成的结果也可以在这里精修</span></div>
+    <div class="code-box" contenteditable="true" spellcheck="false" style="margin-top:0;min-height:220px"><span class="k">experiment</span>:
+  <span class="k">name</span>: my_dual_ma_strategy
+  <span class="k">frequency</span>: daily
+<span class="k">signal</span>:
+  <span class="k">entry</span>: <span class="s">"(ema_5 &gt; ema_200) and (ema_5.shift(1) &lt;= ema_200.shift(1))"</span>
+  <span class="k">exit</span>:  <span class="s">"(ema_5 &lt; ema_200) and (ema_5.shift(1) &gt;= ema_200.shift(1))"</span>
+<span class="k">risk</span>:
+  <span class="k">stop_loss_pct</span>: 0.08</div>
+    <div class="field-row">
+      <button class="btn btn-ghost">检查写法</button>
+      <button class="btn btn-ghost">从文件导入</button>
+    </div>
+  </div>
+
+  <!-- 共用：回测范围与参数 -->
+  <div class="card rise rise-4">
+    <div class="panel-head"><h2>回测范围</h2><span>这段历史 + 这些股票，试试你的策略表现</span></div>
+    <div class="field-row">
+      <div class="field"><label>时间段</label>
+        <span>
+          <input type="text" value="2024-09-07" style="width:120px"> 至
+          <input type="text" value="2026-09-07" style="width:120px">
+          <button class="chip">近1年</button><button class="chip" style="border-color:var(--purple-500);color:var(--purple-700);background:var(--purple-50)">近2年</button><button class="chip">近5年</button>
+        </span>
+      </div>
+      <div class="field"><label>投入本金</label><span><input type="text" value="100,000" style="width:120px"> 元</span></div>
+    </div>
+
+    <div class="field" style="margin-top:18px"><label>在哪些股票上测试</label>
+      <div class="scope-group">
+        <label class="scope-opt"><input type="radio" name="scope"><span><b>全部A股</b><small>约 5000+ 只，自动剔除 ST、停牌和新股，测试最全面，耗时较长</small></span></label>
+        <label class="scope-opt checked"><input type="radio" name="scope" checked><span><b>按板块 / 概念</b><small>只测你关心的行业或主题，速度与针对性兼顾</small></span></label>
+        <div class="scope-detail show">
+          <select style="min-width:200px">
+            <option>新能源与电力（38 个细分方向）</option>
+            <option>半导体与电子（41 个细分方向）</option>
+            <option>医药与健康（29 个细分方向）</option>
+            <option>消费与食品（33 个细分方向）</option>
+            <option>金融与地产（21 个细分方向）</option>
+            <option>高端制造（27 个细分方向）</option>
+            <option>数字经济与传媒（24 个细分方向）</option>
+          </select>
+          <input type="text" list="sectorList" placeholder="输入关键字搜索，如「光伏」" style="min-width:240px">
+          <datalist id="sectorList"><option value="光伏设备">光伏设备（87 只）</option><option value="锂电池">锂电池（64 只）</option><option value="白酒">白酒（19 只）</option></datalist>
+          <span style="font-size:12.5px;color:var(--ink-400);margin-left:8px">已选：光伏设备 · 约 87 只股票</span>
+        </div>
+        <label class="scope-opt"><input type="radio" name="scope"><span><b>指定股票</b><small>只测你自己列出的几只股票</small></span></label>
+        <div class="scope-detail"><textarea rows="2" placeholder="输入股票代码，用逗号隔开，如 000001.SZ, 600519.SH"></textarea></div>
+      </div>
+    </div>
+
+    <button class="collapse-toggle" data-collapse="advParams"><span class="arrow">▸</span>高级参数（手续费、滑点、最多持有几只……一般不用改）</button>
+    <div class="collapse-body" id="advParams">
+      <div class="field-row">
+        <div class="field"><label>买卖手续费</label><span><input type="text" value="0.03" style="width:90px"> %</span></div>
+        <div class="field"><label>卖出印花税</label><span><input type="text" value="0.05" style="width:90px"> %</span></div>
+        <div class="field"><label>最多同时持有</label><span><input type="number" value="10" style="width:90px"> 只</span></div>
+        <div class="field"><label>先小范围试跑</label><span style="font-size:13px;color:var(--ink-500)"><input type="checkbox" checked style="accent-color:var(--purple-600)"> 先用 20 只 × 近6个月快速验证</span></div>
+      </div>
+    </div>
+
+    <div class="cta-bar">
+      <button class="btn btn-primary btn-big" id="btnRun">开始回测</button>
+      <span class="note">点击后系统会先自动做一次小范围试跑，确认策略没问题再正式回测，全程无需你操作。</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 页2：回测记录 ===================== -->
+<section class="view" id="view-records">
+  <h1 class="page-title rise rise-1">我的回测记录</h1>
+  <p class="page-sub rise rise-1">这里只列出你实际跑过的回测；已完成的可以点击行查看结果。</p>
+  <div class="card table-card rise rise-2">
+    <div class="table-scroll">
+    <table>
+      <thead><tr>
+        <th>策略</th><th>状态</th><th>回测区间</th><th>标的范围</th>
+        <th style="text-align:right">总收益</th><th style="text-align:right">跑赢大盘</th><th style="text-align:right">最大回撤</th>
+        <th>创建时间</th><th></th>
+      </tr></thead>
+      <tbody id="recordsBody">
+        <tr data-goto="detail">
+          <td><div class="sname">双均线趋势跟随</div><div class="sid">EMA5 / EMA200</div></td>
+          <td><span class="badge badge-done"><span class="dot"></span>已完成</span></td>
+          <td class="num">2024-09 ~ 2026-09</td>
+          <td>光伏设备 · 87只</td>
+          <td class="num v-up" style="text-align:right">+38.6%</td>
+          <td class="num v-up" style="text-align:right">+21.4%</td>
+          <td class="num v-down" style="text-align:right">-14.2%</td>
+          <td class="num">09-06 21:14</td>
+          <td><button class="btn btn-link" data-goto="detail">查看结果</button></td>
+        </tr>
+        <tr>
+          <td><div class="sname">低价股波段</div><div class="sid">10元买 / 12元卖</div></td>
+          <td><span class="badge badge-run"><span class="dot"></span>运行中 · 63%</span></td>
+          <td class="num">2021-09 ~ 2026-09</td>
+          <td>全部A股</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num">09-07 10:02</td>
+          <td><button class="btn btn-link" disabled style="color:var(--ink-400)">等待完成</button></td>
+        </tr>
+        <tr>
+          <td><div class="sname">20日 / 60日均线</div><div class="sid">止损 8%</div></td>
+          <td><span class="badge badge-queue"><span class="dot"></span>排队中</span></td>
+          <td class="num">2024-09 ~ 2026-09</td>
+          <td>锂电池 · 64只</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num">09-07 10:05</td>
+          <td><button class="btn btn-link" disabled style="color:var(--ink-400)">等待完成</button></td>
+        </tr>
+        <tr>
+          <td><div class="sname">高股息持有测试</div><div class="sid">股息率 &gt; 4%</div></td>
+          <td><span class="badge badge-fail"><span class="dot"></span>失败</span></td>
+          <td class="num">2023-09 ~ 2026-09</td>
+          <td>指定股票 · 5只</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num v-flat" style="text-align:right">—</td>
+          <td class="num">09-05 16:40</td>
+          <td><button class="btn btn-link" id="btnFailWhy">失败原因</button></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 页3：结果详情 ===================== -->
+<section class="view" id="view-detail">
+  <div class="detail-head rise rise-1">
+    <button class="btn btn-ghost" data-goto="records" style="min-height:40px">← 返回记录</button>
+    <h2>双均线趋势跟随</h2>
+    <span class="badge badge-done"><span class="dot"></span>已完成</span>
+    <span style="font-size:13px;color:var(--ink-400)" class="num">2024-09-07 ~ 2026-09-07 · 光伏设备 87只 · 本金 10万</span>
+  </div>
+
+  <!-- 核心 KPI -->
+  <div class="kpi-grid">
+    <div class="kpi rise rise-1"><div class="k-label">总收益</div><div class="k-value v-up num">+38.6%</div><div class="k-sub">10 万本金变成 13.86 万</div></div>
+    <div class="kpi rise rise-2"><div class="k-label">跑赢大盘（沪深300）</div><div class="k-value v-up num">+21.4%</div><div class="k-sub">同期大盘 +17.2%</div></div>
+    <div class="kpi rise rise-3"><div class="k-label">最大回撤</div><div class="k-value v-down num">-14.2%</div><div class="k-sub">最惨时账面亏过 1.4 万左右</div></div>
+    <div class="kpi rise rise-4"><div class="k-label">交易次数 / 胜率</div><div class="k-value num">46 <span style="font-size:15px;color:var(--ink-500)">/ 58.7%</span></div><div class="k-sub">平均每 10 笔约 6 笔赚钱</div></div>
+  </div>
+
+  <!-- 净值曲线（主角） -->
+  <div class="card chart-card rise rise-2">
+    <h3>收益走势</h3>
+    <div class="chart-sub">紫色是你的策略，灰色是大盘。阴影处是亏损最多的那段时间。</div>
+    <svg class="chart-svg" viewBox="0 0 1100 320" preserveAspectRatio="none" aria-label="收益走势示意图">
+      <defs>
+        <linearGradient id="fillP" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#7c5cd6" stop-opacity=".18"/>
+          <stop offset="100%" stop-color="#7c5cd6" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <!-- 网格 -->
+      <g stroke="#e6e6ec" stroke-width="1">
+        <line x1="60" y1="40" x2="1060" y2="40"/><line x1="60" y1="110" x2="1060" y2="110"/>
+        <line x1="60" y1="180" x2="1060" y2="180"/><line x1="60" y1="250" x2="1060" y2="250"/>
+      </g>
+      <g fill="#8b8b95" font-size="11" font-family="inherit">
+        <text x="8" y="44">+40%</text><text x="8" y="114">+20%</text>
+        <text x="14" y="184">0%</text><text x="8" y="254">-20%</text>
+        <text x="60" y="300">24-09</text><text x="300" y="300">25-03</text>
+        <text x="540" y="300">25-09</text><text x="780" y="300">26-03</text><text x="1000" y="300">26-09</text>
+      </g>
+      <!-- 最大回撤阴影区 -->
+      <rect x="640" y="40" width="140" height="230" fill="#1e9e62" opacity=".06"/>
+      <text x="655" y="58" font-size="11" fill="#1e9e62">最大回撤区间</text>
+      <!-- 大盘（灰） -->
+      <path d="M60 190 L160 178 L260 186 L360 168 L460 172 L560 158 L660 178 L760 168 L860 150 L960 140 L1060 148"
+            fill="none" stroke="#b6b6c0" stroke-width="2"/>
+      <!-- 策略面积 + 线（紫） -->
+      <path d="M60 190 L160 172 L260 180 L360 150 L460 130 L560 100 L640 88 L700 130 L780 120 L860 90 L960 64 L1060 56 L1060 270 L60 270 Z"
+            fill="url(#fillP)"/>
+      <path id="eqLine" d="M60 190 L160 172 L260 180 L360 150 L460 130 L560 100 L640 88 L700 130 L780 120 L860 90 L960 64 L1060 56"
+            fill="none" stroke="#7c5cd6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="1060" cy="56" r="4.5" fill="#7c5cd6"/>
+    </svg>
+    <div class="legend">
+      <span><i style="background:var(--purple-600)"></i>我的策略 <b class="num v-up">+38.6%</b></span>
+      <span><i style="background:#b6b6c0"></i>沪深300 <b class="num v-up">+17.2%</b></span>
+      <span><i style="background:#1e9e62;opacity:.4"></i>最大回撤区间 <b class="num v-down">-14.2%</b></span>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn btn-primary" id="btnMore">查看详细数据</button>
+      <button class="btn btn-ghost">下载结果（CSV）</button>
+      <button class="btn btn-ghost" data-goto="create">基于此策略再改一版</button>
+    </div>
+  </div>
+
+  <!-- 渐进披露：详细数据 -->
+  <div class="detail-more" id="detailMore">
+    <div class="two-col" style="margin-top:20px">
+      <div class="card">
+        <h3 class="section-title">关键指标</h3>
+        <div class="chart-sub">同时间段内，这个策略的稳定性如何</div>
+        <div class="metric-list">
+          <div class="mrow"><span>折算年化收益</span><b class="num v-up">+17.9%</b></div>
+          <div class="mrow"><span>夏普比率（收益/波动）</span><b class="num">1.24</b></div>
+          <div class="mrow"><span>最长连亏</span><b class="num">4 笔</b></div>
+          <div class="mrow"><span>平均持有天数</span><b class="num">23 天</b></div>
+          <div class="mrow"><span>单笔最多赚</span><b class="num v-up">+31.2%</b></div>
+          <div class="mrow"><span>单笔最多亏</span><b class="num v-down">-8.0%</b></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">每月收益</h3>
+        <div class="chart-sub">红赚绿亏，颜色越深幅度越大</div>
+        <div class="month-grid num">
+          <div class="mcell" style="background:#d92c3c;color:#fff"><span class="y">25-10</span>+6.2%</div>
+          <div class="mcell" style="background:#ee8d95;color:#fff"><span class="y">25-11</span>+2.1%</div>
+          <div class="mcell" style="background:#8fd6a8"><span class="y">25-12</span>-1.8%</div>
+          <div class="mcell" style="background:#d92c3c;color:#fff"><span class="y">26-01</span>+7.4%</div>
+          <div class="mcell" style="background:#f3b5ba"><span class="y">26-02</span>+0.9%</div>
+          <div class="mcell" style="background:#1e9e62;color:#fff"><span class="y">26-03</span>-6.1%</div>
+          <div class="mcell" style="background:#63c491"><span class="y">26-04</span>-2.9%</div>
+          <div class="mcell" style="background:#ee8d95;color:#fff"><span class="y">26-05</span>+2.7%</div>
+          <div class="mcell" style="background:#e25763;color:#fff"><span class="y">26-06</span>+4.3%</div>
+          <div class="mcell" style="background:#d92c3c;color:#fff"><span class="y">26-07</span>+5.8%</div>
+          <div class="mcell" style="background:#ee8d95;color:#fff"><span class="y">26-08</span>+1.6%</div>
+          <div class="mcell" style="background:#f3b5ba"><span class="y">26-09</span>+0.4%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card table-card" style="margin-top:20px">
+      <div style="padding:20px 20px 0"><h3 class="section-title">交易明细（最近 5 笔）</h3>
+      <div class="chart-sub">共 46 笔，此处列出最近 5 笔</div></div>
+      <table>
+        <thead><tr><th>股票</th><th>买入</th><th>卖出</th><th>持有天数</th><th style="text-align:right">盈亏</th></tr></thead>
+        <tbody>
+          <tr><td><b>阳光电源</b> <span class="sid">300274.SZ</span></td><td class="num">08-03 · 68.42</td><td class="num">08-29 · 74.10</td><td class="num">19</td><td class="num v-up" style="text-align:right">+8.3%</td></tr>
+          <tr><td><b>隆基绿能</b> <span class="sid">601012.SH</span></td><td class="num">06-11 · 18.05</td><td class="num">06-30 · 16.61</td><td class="num">13</td><td class="num v-down" style="text-align:right">-8.0% <span class="sid">（止损）</span></td></tr>
+          <tr><td><b>通威股份</b> <span class="sid">600438.SH</span></td><td class="num">05-19 · 21.33</td><td class="num">06-08 · 24.92</td><td class="num">14</td><td class="num v-up" style="text-align:right">+16.8%</td></tr>
+          <tr><td><b>晶澳科技</b> <span class="sid">002459.SZ</span></td><td class="num">04-02 · 14.77</td><td class="num">04-25 · 15.36</td><td class="num">17</td><td class="num v-up" style="text-align:right">+4.0%</td></tr>
+          <tr><td><b>TCL中环</b> <span class="sid">002129.SZ</span></td><td class="num">03-05 · 9.86</td><td class="num">03-27 · 9.12</td><td class="num">16</td><td class="num v-down" style="text-align:right">-7.5%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- 缺因子弹窗（隐藏示例：向导指标清单暂未覆盖时弹出；「提交需求」后需求集中者优先入库） -->
+<div class="modal-demo" id="factorModal">
+  <div class="modal-box">
+    <h3 style="font-size:16px;margin-bottom:8px">当前指标库暂不支持</h3>
+    <p style="font-size:13.5px;color:var(--ink-700);margin-bottom:10px">你的策略用到了：<b>OBV 能量潮</b>，这个指标还没收录。</p>
+    <p style="font-size:13px;color:var(--ink-500);margin-bottom:18px">你可以换个写法重试（多数常见指标已支持）；或把需求提交给我们，需求集中的指标会优先收录。</p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" id="modalClose">换个写法</button>
+      <button class="btn btn-primary" id="modalSubmit">提交指标需求</button>
+    </div>
+  </div>
+</div>
+
+<footer>A股回测台 · 设计概念稿（演示数据，非真实回测结果）· 历史收益不代表未来表现</footer>
+
+<script>
+/* 视图切换：仅切换 class，入场动画只在该视图首次打开时播放一次 */
+(function(){
+  var seen = {};
+  function go(name){
+    document.querySelectorAll('.view').forEach(function(v){ v.classList.toggle('active', v.id === 'view-'+name); });
+    document.querySelectorAll('#mainNav button').forEach(function(b){ b.classList.toggle('active', b.dataset.view === name); });
+    if(!seen[name]){
+      seen[name] = true;
+      document.querySelectorAll('#view-'+name+' .rise').forEach(function(el){
+        el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+      });
+    } else {
+      document.querySelectorAll('#view-'+name+' .rise').forEach(function(el){ el.style.animation = 'none'; });
+    }
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll('#mainNav button,[data-goto]').forEach(function(el){
+    el.addEventListener('click', function(){ go(el.dataset.view || el.dataset.goto); });
+  });
+})();
+
+/* 页1：入口卡片选择 */
+(function(){
+  document.querySelectorAll('.entry-card').forEach(function(card){
+    card.addEventListener('click', function(){
+      document.querySelectorAll('.entry-card').forEach(function(c){ c.classList.toggle('selected', c === card); });
+      document.querySelectorAll('.entry-panel').forEach(function(p){ p.classList.toggle('active', p.id === 'entry-'+card.dataset.entry); });
+    });
+  });
+})();
+
+/* 折叠区（柔和进出：小 translateY + ease-out） */
+document.querySelectorAll('.collapse-toggle').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    btn.classList.toggle('open');
+    document.getElementById(btn.dataset.collapse).classList.toggle('open');
+  });
+});
+
+/* 标的范围单选高亮 + 子项展开 */
+document.querySelectorAll('input[name=scope]').forEach(function(r){
+  r.addEventListener('change', function(){
+    document.querySelectorAll('.scope-opt').forEach(function(o){
+      var on = o.querySelector('input').checked;
+      o.classList.toggle('checked', on);
+      var d = o.nextElementSibling;
+      if(d && d.classList.contains('scope-detail')) d.classList.toggle('show', on);
+    });
+  });
+});
+
+/* 示例 chips 填入文本框 */
+document.querySelectorAll('#entry-nl .chip').forEach(function(chip){
+  chip.addEventListener('click', function(){
+    document.querySelector('#entry-nl textarea').value = chip.textContent.trim();
+  });
+});
+
+/* 「看看系统怎么理解」→ 展开理解结果 */
+document.getElementById('btnCompile').addEventListener('click', function(){
+  var t = document.querySelector('[data-collapse=nlPreview]');
+  t.classList.add('open');
+  document.getElementById('nlPreview').classList.add('open');
+});
+
+/* 详情页：渐进披露详细数据 */
+document.getElementById('btnMore').addEventListener('click', function(){
+  var m = document.getElementById('detailMore');
+  var open = m.classList.toggle('open');
+  this.textContent = open ? '收起详细数据' : '查看详细数据';
+  if(open){
+    m.querySelectorAll('.card').forEach(function(c, i){
+      c.style.opacity = 0; c.style.transform = 'translateY(10px)';
+      c.style.transition = 'opacity .4s cubic-bezier(.2,0,0,1) ' + (i*0.1) + 's, transform .4s cubic-bezier(.2,0,0,1) ' + (i*0.1) + 's';
+      requestAnimationFrame(function(){ c.style.opacity = 1; c.style.transform = 'translateY(0)'; });
+    });
+  }
+});
+
+/* 失败原因 / 缺因子弹窗演示 */
+document.getElementById('btnFailWhy').addEventListener('click', function(e){
+  e.stopPropagation();
+  document.getElementById('factorModal').classList.add('show');
+});
+document.getElementById('modalClose').addEventListener('click', function(){
+  document.getElementById('factorModal').classList.remove('show');
+});
+document.getElementById('modalSubmit').addEventListener('click', function(){
+  this.textContent = '已提交，感谢反馈'; this.disabled = true;
+  setTimeout(function(){ document.getElementById('factorModal').classList.remove('show'); }, 900);
+});
+</script>
+</body>
+</html>

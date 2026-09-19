@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<!--
+  A股回测台 · UI 概念稿（frontend-design skill 指导）
+  设计思路：
+  1. 主题色取淡紫：紫在中国语境里近「钻研/书卷」气，区别于券商软件的红黑或互联网的蓝白，给「研究」一个安静的底色；红涨绿跌只出现在数据上，绝不用作装饰，保证数字一眼可读。
+  2. 三入口按用户经验分层并列成「三条通道」，每条通道卡片的纵深（表单露出的多少）随经验递增：自然语言只露一个输入框，向导露出条件行，代码入口直接露出编辑器，让用户「看脸」选门。
+  3. 记录页用一张真正的表格承担全部信息，状态徽章用形状+文字而非只靠颜色（运行中带呼吸点），收益数字用衬线大字让红绿成为页面上唯一的彩色焦点。
+  4. 详情页把净值曲线作为唯一的「主角」：首屏先给结论与曲线，明细表格默认折叠，点击「查看详细数据」渐进展开，避免一堆数字砸晕普通投资者。
+  5. 动效只回答用户动作：tab 切换淡移、卡片悬停微浮、按钮按压回弹、曲线一次性描绘入场；尊重 prefers-reduced-motion。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A股回测台 · 把想法变成可验证的策略</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9FC;          /* 页面底色：极淡的紫白 */
+    --panel:#FFFFFF;          /* 卡片白 */
+    --tint:#F1EDF8;           /* 淡紫区块底 */
+    --tint-deep:#E6DEF3;      /* 深一档淡紫（tab/悬停） */
+    --violet:#6750A4;         /* 主紫：主按钮、激活态 */
+    --violet-deep:#4A3A78;    /* 深紫：标题强调、按下态 */
+    --ink:#241F2E;            /* 正文近黑（带一点紫相） */
+    --grey:#6F6879;           /* 次要文字 */
+    --faint:#9A93A6;          /* 弱化文字 */
+    --line:#E4DFEE;           /* 分隔线 */
+    --up:#C93A3A;             /* 红涨 */
+    --up-soft:#FBEFEF;
+    --down:#1E8E5A;           /* 绿跌 */
+    --down-soft:#EBF6F0;
+    --radius:10px;
+    --sans:"Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    --serif:"Noto Serif SC","Songti SC",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--paper);color:var(--ink);font-family:var(--sans);
+    font-size:15px;line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--tint-deep)}
+  button{font-family:inherit;cursor:pointer}
+  input,textarea,select{font-family:inherit;font-size:14px;color:var(--ink)}
+
+  /* ============ 顶栏 ============ */
+  .topbar{
+    position:sticky;top:0;z-index:40;
+    background:rgba(250,249,252,.92);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar-inner{
+    max-width:1280px;margin:0 auto;padding:0 32px;
+    height:60px;display:flex;align-items:center;gap:28px;
+  }
+  .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--ink)}
+  .brand-mark{
+    width:30px;height:30px;border-radius:8px;background:var(--violet);
+    position:relative;flex:none;
+    transition:transform .35s cubic-bezier(.34,1.56,.64,1);
+  }
+  .brand:hover .brand-mark{transform:rotate(-8deg)}
+  .brand-mark::before{ /* 极简「K线」图形，三根柱子 */
+    content:"";position:absolute;left:7px;top:7px;bottom:7px;width:3px;border-radius:1.5px;
+    background:#fff;box-shadow:6px -3px 0 -0.5px #fff,12px 2px 0 -0.5px rgba(255,255,255,.75);
+  }
+  .brand-name{font-family:var(--serif);font-weight:900;font-size:18px;letter-spacing:.02em}
+  .brand-sub{font-size:12px;color:var(--faint);margin-left:2px}
+  .mainnav{margin-left:auto;display:flex;gap:4px}
+  .mainnav button{
+    border:none;background:none;padding:8px 16px;border-radius:999px;
+    font-size:14px;color:var(--grey);position:relative;
+    transition:color .2s,background .2s;
+  }
+  .mainnav button:hover{color:var(--violet-deep);background:var(--tint)}
+  .mainnav button.active{color:#fff;background:var(--violet);font-weight:500}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:40px 32px 96px}
+
+  /* ============ 视图切换 ============ */
+  .view{display:none}
+  .view.active{display:block;animation:viewIn .45s cubic-bezier(.22,.8,.3,1) both}
+  @keyframes viewIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  /* ============ 页头 ============ */
+  .page-head{margin-bottom:36px;max-width:640px}
+  .page-head h1{
+    font-family:var(--serif);font-weight:900;font-size:34px;line-height:1.3;letter-spacing:.01em;
+  }
+  .page-head p{margin-top:10px;color:var(--grey);font-size:15px;max-width:34em}
+
+  /* ============ 三入口通道 ============ */
+  .lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:start}
+  .lane{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:24px 24px 22px;display:flex;flex-direction:column;min-height:100%;
+    transition:border-color .25s,box-shadow .25s,transform .25s;
+  }
+  .lane:hover{border-color:var(--violet);box-shadow:0 10px 30px -14px rgba(74,58,120,.28);transform:translateY(-3px)}
+  .lane-for{
+    display:inline-flex;align-items:center;gap:8px;align-self:flex-start;
+    background:var(--tint);color:var(--violet-deep);
+    font-size:12.5px;font-weight:500;padding:4px 12px;border-radius:999px;margin-bottom:14px;
+  }
+  .lane h2{font-family:var(--serif);font-weight:700;font-size:20px}
+  .lane .lane-desc{color:var(--grey);font-size:13.5px;margin:6px 0 18px}
+  .lane-body{flex:1;display:flex;flex-direction:column;gap:12px}
+
+  /* 入口① 自然语言 */
+  .nl-box textarea{
+    width:100%;border:1px solid var(--line);border-radius:8px;padding:12px 14px;
+    background:var(--paper);resize:none;line-height:1.7;
+    transition:border-color .2s,box-shadow .2s;
+  }
+  .nl-box textarea:focus{outline:none;border-color:var(--violet);box-shadow:0 0 0 3px var(--tint-deep)}
+  .chips-label{font-size:12.5px;color:var(--faint)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{
+    border:1px solid var(--line);background:#fff;border-radius:999px;
+    padding:5px 12px;font-size:12.5px;color:var(--grey);
+    transition:all .2s;
+  }
+  .chip:hover{border-color:var(--violet);color:var(--violet-deep);background:var(--tint);transform:translateY(-1px)}
+
+  /* 代码预览（自然语言编译结果，默认折叠） */
+  .fold{border:1px dashed var(--line);border-radius:8px;overflow:hidden}
+  .fold summary{
+    list-style:none;padding:9px 14px;font-size:12.5px;color:var(--grey);cursor:pointer;
+    display:flex;align-items:center;gap:8px;user-select:none;
+    transition:background .2s;
+  }
+  .fold summary::-webkit-details-marker{display:none}
+  .fold summary:hover{background:var(--tint)}
+  .fold summary::before{content:"▸";color:var(--violet);transition:transform .25s;font-size:11px}
+  .fold[open] summary::before{transform:rotate(90deg)}
+  .fold pre{
+    border-top:1px dashed var(--line);background:#262033;color:#D9D2E8;
+    padding:14px 16px;font-size:12px;line-height:1.7;overflow-x:auto;
+    font-family:"SF Mono",Menlo,Consolas,monospace;
+  }
+  .fold pre .k{color:#B8A6E8}.fold pre .s{color:#E8B4B4}.fold pre .c{color:#7A7288}
+
+  /* 入口② 快速向导 */
+  .wz-row{display:flex;flex-direction:column;gap:6px}
+  .wz-row>label{font-size:12.5px;color:var(--grey);font-weight:500}
+  .selects{display:flex;gap:6px;flex-wrap:wrap}
+  select,.text-in{
+    border:1px solid var(--line);border-radius:7px;background:var(--paper);
+    padding:7px 10px;font-size:13px;transition:border-color .2s;
+  }
+  select:focus,.text-in:focus{outline:none;border-color:var(--violet)}
+  .cond-line{
+    display:flex;align-items:center;gap:6px;background:var(--tint);
+    border-radius:8px;padding:8px 10px;font-size:13px;flex-wrap:wrap;
+  }
+  .cond-line select{background:#fff;border-color:transparent}
+  .cond-line select:hover{border-color:var(--violet)}
+  .cond-op{color:var(--violet-deep);font-weight:500;font-size:12.5px;white-space:nowrap}
+  .scope-radios{display:flex;flex-direction:column;gap:7px}
+  .scope-radios label{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer}
+  .scope-radios input{accent-color:var(--violet)}
+  .scope-sub{
+    margin-left:26px;display:flex;gap:6px;flex-wrap:wrap;
+    animation:viewIn .35s ease both;
+  }
+  .mini-params{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .mini-params .field{display:flex;flex-direction:column;gap:4px}
+  .mini-params label{font-size:12px;color:var(--faint)}
+  .wz-adv-toggle{
+    border:none;background:none;color:var(--violet);font-size:12.5px;
+    align-self:flex-start;padding:2px 0;transition:opacity .2s;
+  }
+  .wz-adv-toggle:hover{opacity:.7}
+
+  /* 入口③ 代码 */
+  .code-window{
+    border-radius:8px;overflow:hidden;border:1px solid #3A324A;flex:1;display:flex;flex-direction:column;
+  }
+  .code-titlebar{
+    background:#2E2740;padding:8px 14px;display:flex;align-items:center;gap:6px;
+  }
+  .code-titlebar i{width:9px;height:9px;border-radius:50%;background:#5A5070}
+  .code-titlebar span{margin-left:8px;color:#8E84A6;font-size:11.5px;font-family:Menlo,monospace}
+  .code-window pre{
+    background:#262033;color:#D9D2E8;padding:14px 16px;font-size:12px;line-height:1.75;
+    font-family:"SF Mono",Menlo,Consolas,monospace;overflow-x:auto;flex:1;
+  }
+
+  .lane-cta{margin-top:16px}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    border:none;border-radius:8px;padding:11px 22px;font-size:14px;font-weight:500;
+    transition:transform .15s,background .2s,box-shadow .2s;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn-primary{background:var(--violet);color:#fff}
+  .btn-primary:hover{background:var(--violet-deep);box-shadow:0 6px 18px -8px rgba(74,58,120,.55)}
+  .btn-ghost{background:none;border:1px solid var(--line);color:var(--grey)}
+  .btn-ghost:hover{border-color:var(--violet);color:var(--violet-deep);background:var(--tint)}
+  .btn-block{width:100%}
+
+  /* ============ 共用参数条 + 主按钮 ============ */
+  .run-bar{
+    margin-top:24px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px 24px;display:flex;align-items:center;gap:28px;flex-wrap:wrap;
+  }
+  .run-bar .field{display:flex;flex-direction:column;gap:5px}
+  .run-bar label{font-size:12.5px;color:var(--grey);font-weight:500}
+  .range-quick{display:flex;gap:6px}
+  .range-quick .chip.sel{background:var(--violet);border-color:var(--violet);color:#fff}
+  .run-main{margin-left:auto;text-align:right}
+  .run-note{font-size:12px;color:var(--faint);margin-top:6px}
+  #btn-run-big{padding:14px 34px;font-size:16px;border-radius:10px}
+
+  /* ============ 记录页表格 ============ */
+  .table-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+  }
+  .table-tools{
+    padding:16px 24px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;
+  }
+  .table-tools p{font-size:13px;color:var(--grey)}
+  table{width:100%;border-collapse:collapse}
+  th{
+    text-align:left;font-size:12.5px;font-weight:500;color:var(--faint);
+    padding:12px 16px;border-bottom:1px solid var(--line);background:var(--paper);
+    white-space:nowrap;
+  }
+  td{padding:15px 16px;border-bottom:1px solid var(--line);font-size:13.5px;vertical-align:middle}
+  tbody tr{transition:background .15s}
+  tbody tr:hover{background:var(--tint)}
+  tbody tr:last-child td{border-bottom:none}
+  .num{font-family:var(--serif);font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+  .num.up{color:var(--up)} .num.down{color:var(--down)}
+  .sub-num{font-size:12.5px;font-variant-numeric:tabular-nums}
+  .sub-num.up{color:var(--up)} .sub-num.down{color:var(--down)}
+  .sname{font-weight:500}
+  .sname small{display:block;color:var(--faint);font-weight:400;font-size:12px;margin-top:2px}
+
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;
+    padding:4px 12px;border-radius:999px;white-space:nowrap;
+  }
+  .badge .dot{width:7px;height:7px;border-radius:50%;flex:none}
+  .badge.done{background:var(--up-soft);color:var(--up)}
+  .badge.done .dot{background:var(--up)}
+  .badge.done-neg{background:var(--down-soft);color:var(--down)}
+  .badge.done-neg .dot{background:var(--down)}
+  .badge.running{background:var(--tint-deep);color:var(--violet-deep)}
+  .badge.running .dot{background:var(--violet);animation:pulse 1.4s ease-in-out infinite}
+  .badge.queued{background:#F1EFF4;color:var(--grey)}
+  .badge.queued .dot{background:var(--faint)}
+  .badge.failed{background:#F5ECEC;color:#A06A6A}
+  .badge.failed .dot{background:#C08A8A}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(103,80,164,.45)}55%{box-shadow:0 0 0 6px rgba(103,80,164,0)}}
+
+  .link-btn{
+    border:none;background:none;color:var(--violet);font-size:13px;font-weight:500;padding:4px 2px;
+    position:relative;
+  }
+  .link-btn::after{
+    content:"";position:absolute;left:0;bottom:0;height:1.5px;width:100%;
+    background:var(--violet);transform:scaleX(0);transform-origin:left;transition:transform .25s;
+  }
+  .link-btn:hover::after{transform:scaleX(1)}
+
+  /* ============ 详情页 ============ */
+  .crumb{font-size:13px;color:var(--faint);margin-bottom:18px}
+  .crumb a{color:var(--violet);text-decoration:none}
+  .crumb a:hover{text-decoration:underline}
+  .detail-head{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:8px}
+  .detail-head h1{font-family:var(--serif);font-weight:900;font-size:28px}
+  .detail-head .meta{color:var(--grey);font-size:13px;padding-bottom:6px}
+  .detail-head .meta span+span::before{content:"·";margin:0 8px;color:var(--faint)}
+
+  .verdict{
+    margin:22px 0 28px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:24px 28px;display:flex;gap:40px;align-items:center;flex-wrap:wrap;
+  }
+  .verdict-main .lab{font-size:13px;color:var(--grey)}
+  .verdict-main .big{font-family:var(--serif);font-weight:900;font-size:52px;line-height:1.1;font-variant-numeric:tabular-nums}
+  .verdict-main .big.up{color:var(--up)} .verdict-main .big.down{color:var(--down)}
+  .verdict-main .vs{font-size:13px;color:var(--faint);margin-top:4px}
+  .verdict-grid{display:grid;grid-template-columns:repeat(4,auto);gap:14px 44px;margin-left:auto}
+  .vg-item .lab{font-size:12.5px;color:var(--faint)}
+  .vg-item .val{font-family:var(--serif);font-weight:700;font-size:21px;font-variant-numeric:tabular-nums}
+  .vg-item .val.up{color:var(--up)} .vg-item .val.down{color:var(--down)}
+
+  .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px 28px;margin-bottom:24px}
+  .chart-head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+  .chart-head h3{font-family:var(--serif);font-weight:700;font-size:17px}
+  .legend{display:flex;gap:18px;font-size:12.5px;color:var(--grey);margin-left:auto}
+  .legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+  .chart-svg{width:100%;height:auto;display:block}
+  .curve-strategy{stroke-dasharray:1600;stroke-dashoffset:1600;animation:draw 2.2s .3s cubic-bezier(.4,0,.2,1) forwards}
+  .curve-bench{stroke-dasharray:1600;stroke-dashoffset:1600;animation:draw 2.2s .7s cubic-bezier(.4,0,.2,1) forwards}
+  .curve-area{opacity:0;animation:fadeIn 1s 1.4s forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes fadeIn{to{opacity:1}}
+
+  .dd-chart{margin-top:4px}
+
+  .month-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;margin-top:14px}
+  .month-cell{
+    aspect-ratio:2.1/1;border-radius:5px;display:flex;align-items:center;justify-content:center;
+    font-size:11.5px;font-variant-numeric:tabular-nums;transition:transform .15s;cursor:default;
+  }
+  .month-cell:hover{transform:scale(1.12)}
+  .mc-up1{background:var(--up-soft);color:var(--up)}
+  .mc-up2{background:#F3D8D8;color:var(--up)}
+  .mc-up3{background:#E8B4B4;color:#7E2323}
+  .mc-dn1{background:var(--down-soft);color:var(--down)}
+  .mc-dn2{background:#C9E8D9;color:var(--down)}
+  .mc-dn3{background:#9AD2B8;color:#0E5A38}
+  .mc-flat{background:#F1EFF4;color:var(--faint)}
+
+  /* 渐进披露：详细数据 */
+  .detail-reveal{margin-top:8px}
+  .detail-reveal summary{
+    list-style:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+    color:var(--violet);font-weight:500;font-size:14px;padding:10px 0;user-select:none;
+  }
+  .detail-reveal summary::-webkit-details-marker{display:none}
+  .detail-reveal summary .caret{transition:transform .3s;display:inline-block;font-size:11px}
+  .detail-reveal[open] summary .caret{transform:rotate(90deg)}
+  .detail-reveal[open] .reveal-body{animation:viewIn .5s ease both}
+  .reveal-body{padding-top:12px}
+
+  .stat-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+  .stat-card{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .stat-card .lab{font-size:12px;color:var(--faint)}
+  .stat-card .val{font-family:var(--serif);font-weight:700;font-size:19px;margin-top:2px;font-variant-numeric:tabular-nums}
+  .stat-card .hint{font-size:11.5px;color:var(--faint);margin-top:2px}
+
+  /* 缺因子弹窗（隐藏示例） */
+  .modal-demo{display:none}
+
+  footer{border-top:1px solid var(--line);margin-top:64px;padding:28px 32px;text-align:center;color:var(--faint);font-size:12.5px}
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    .curve-strategy,.curve-bench{stroke-dashoffset:0}
+    .curve-area{opacity:1}
+  }
+
+  /* ============ 响应式 ============ */
+  @media (max-width:1024px){
+    .lanes{grid-template-columns:1fr}
+    .verdict-grid{grid-template-columns:repeat(2,auto);margin-left:0}
+    .stat-cards{grid-template-columns:repeat(2,1fr)}
+  }
+  @media (max-width:720px){
+    .wrap{padding:24px 16px 64px}
+    .topbar-inner{padding:0 16px;gap:12px}
+    .brand-sub{display:none}
+    .page-head h1{font-size:26px}
+    .month-grid{grid-template-columns:repeat(6,1fr)}
+    .verdict{gap:20px}
+    .verdict-main .big{font-size:40px}
+    table{font-size:13px}
+    th:nth-child(4),td:nth-child(4),th:nth-child(8),td:nth-child(8){display:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#">
+      <span class="brand-mark"></span>
+      <span class="brand-name">A股回测台</span>
+      <span class="brand-sub">用历史数据验证你的炒股想法</span>
+    </a>
+    <nav class="mainnav">
+      <button class="active" data-view="new">新建策略</button>
+      <button data-view="runs">我的回测记录</button>
+      <button data-view="detail">结果详情（示例）</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ================= 页 1：新建策略研究页 ================= -->
+  <section class="view active" id="view-new">
+    <div class="page-head">
+      <h1>先验证，再投入。</h1>
+      <p>写下你的选股或买卖想法，我们用过去十几年的 A 股真实行情替你跑一遍，告诉你这个想法历史上赚不赚钱。三种方式，按你的经验挑一个开始。</p>
+    </div>
+
+    <div class="lanes">
+      <!-- 入口① 自然语言 -->
+      <article class="lane">
+        <span class="lane-for">适合：完全没接触过量化</span>
+        <h2>用大白话说</h2>
+        <p class="lane-desc">就像跟朋友聊天一样描述你的想法，剩下的交给我们。</p>
+        <div class="lane-body">
+          <div class="nl-box">
+            <textarea rows="4">5日均线上穿20日均线时买入，下穿时卖出，跌8%就认赔离场</textarea>
+          </div>
+          <span class="chips-label">没思路？点一个试试：</span>
+          <div class="chips">
+            <button class="chip">股价站上60日线就买，跌破就卖</button>
+            <button class="chip">连续跌3天后买入，涨10%卖出</button>
+            <button class="chip">成交量突然放大一倍时跟进</button>
+          </div>
+          <details class="fold">
+            <summary>看看它变成了什么（自动生成的策略代码，可改）</summary>
+            <pre><span class="k">strategy</span>:
+  <span class="k">name</span>: <span class="s">均线交叉策略</span>
+  <span class="k">entry</span>: <span class="s">"5日均线上穿20日均线"</span>
+  <span class="k">exit</span>:  <span class="s">"5日均线下穿20日均线"</span>
+  <span class="k">stop_loss</span>: <span class="s">8%</span>
+  <span class="c"># 由系统自动生成，可直接编辑</span></pre>
+          </details>
+        </div>
+        <div class="lane-cta"><button class="btn btn-primary btn-block">生成并检查策略</button></div>
+      </article>
+
+      <!-- 入口② 快速向导 -->
+      <article class="lane">
+        <span class="lane-for">适合：知道均线、成交量这些概念</span>
+        <h2>一步步选条件</h2>
+        <p class="lane-desc">不用写任何代码，从条件库里挑出买入和卖出的规则。</p>
+        <div class="lane-body">
+          <div class="wz-row">
+            <label>什么时候买入</label>
+            <div class="cond-line">
+              <select><option>5日均线</option></select>
+              <span class="cond-op">上穿</span>
+              <select><option>20日均线</option></select>
+            </div>
+            <button class="wz-adv-toggle">+ 再加一个买入条件</button>
+          </div>
+          <div class="wz-row">
+            <label>什么时候卖出</label>
+            <div class="cond-line">
+              <select><option>5日均线</option></select>
+              <span class="cond-op">下穿</span>
+              <select><option>20日均线</option></select>
+            </div>
+          </div>
+          <div class="wz-row">
+            <label>在哪些股票上验证</label>
+            <div class="scope-radios">
+              <label><input type="radio" name="scope"> 全部 A 股（约5000只）</label>
+              <label><input type="radio" name="scope" checked> 按板块选</label>
+              <div class="scope-sub">
+                <select><option>新能源与电力</option><option>医药健康</option><option>科技互联网</option><option>金融地产</option><option>消费食品</option><option>周期制造</option><option>军工与央国企</option></select>
+                <select><option>光伏设备（86只）</option><option>锂电池（112只）</option></select>
+              </div>
+              <label><input type="radio" name="scope"> 指定几只股票</label>
+            </div>
+          </div>
+          <button class="wz-adv-toggle">更多设置：止盈止损、最多持有几天 ▾</button>
+        </div>
+        <div class="lane-cta"><button class="btn btn-ghost btn-block">用这组条件回测</button></div>
+      </article>
+
+      <!-- 入口③ 策略代码 -->
+      <article class="lane">
+        <span class="lane-for">适合：会写代码 / 有量化基础</span>
+        <h2>直接写代码</h2>
+        <p class="lane-desc">前两种方式生成的结果也会汇总到这里，可以直接精修。</p>
+        <div class="lane-body">
+          <div class="code-window">
+            <div class="code-titlebar"><i></i><i></i><i></i><span>strategy.yaml</span></div>
+            <pre><span class="k">experiment</span>:
+  <span class="k">name</span>: <span class="s">ma5_ma20_cross</span>
+  <span class="k">frequency</span>: <span class="s">daily</span>
+<span class="k">signal</span>:
+  <span class="k">entry</span>: <span class="s">"ma5 crosses_above ma20"</span>
+  <span class="k">exit</span>:  <span class="s">"ma5 crosses_below ma20"</span>
+<span class="k">risk</span>:
+  <span class="k">stop_loss_pct</span>: <span class="s">0.08</span>
+<span class="k">universe</span>:
+  <span class="k">exclude_st</span>: <span class="s">true</span></pre>
+          </div>
+        </div>
+        <div class="lane-cta">
+          <button class="btn btn-ghost btn-block">校验代码</button>
+        </div>
+      </article>
+    </div>
+
+    <!-- 共用回测参数 + 主按钮 -->
+    <div class="run-bar">
+      <div class="field">
+        <label>验证哪段时间</label>
+        <div class="range-quick">
+          <button class="chip">近1年</button>
+          <button class="chip sel">近2年</button>
+          <button class="chip">近5年</button>
+          <button class="chip">2010年至今</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>假设投入本金</label>
+        <select style="min-width:150px"><option>10 万元</option><option>30 万元</option><option>50 万元</option><option>100 万元</option></select>
+      </div>
+      <div class="run-main">
+        <button class="btn btn-primary" id="btn-run-big">开始回测</button>
+        <div class="run-note">先自动小范围试跑检查，没问题再正式跑，全程不用你管</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 页 2：回测记录页 ================= -->
+  <section class="view" id="view-runs">
+    <div class="page-head">
+      <h1>我的回测记录</h1>
+      <p>你跑过的每一次验证都在这里。已完成的可以点开看完整结果。</p>
+    </div>
+
+    <div class="table-card">
+      <div class="table-tools">
+        <p>共 5 次回测 · 按创建时间倒序</p>
+        <button class="btn btn-ghost" style="margin-left:auto;padding:7px 16px;font-size:13px">刷新</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>策略</th><th>状态</th><th>回测区间</th><th>标的范围</th>
+            <th>总收益</th><th>跑赢大盘</th><th>最深跌幅</th><th>创建时间</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="sname">均线交叉策略<small>5日线上穿20日线买卖</small></td>
+            <td><span class="badge done"><i class="dot"></i>已完成</span></td>
+            <td>2024-09 ~ 2026-09</td>
+            <td>光伏设备（86只）</td>
+            <td><span class="num up">+38.6%</span></td>
+            <td><span class="sub-num up">+21.4%</span></td>
+            <td><span class="sub-num down">-12.3%</span></td>
+            <td>09-06 21:14</td>
+            <td><button class="link-btn" data-view="detail">查看结果</button></td>
+          </tr>
+          <tr>
+            <td class="sname">低价股反弹<small>跌破10元买入，涨20%卖出</small></td>
+            <td><span class="badge done-neg"><i class="dot"></i>已完成</span></td>
+            <td>2021-09 ~ 2026-09</td>
+            <td>全部 A 股</td>
+            <td><span class="num down">-15.2%</span></td>
+            <td><span class="sub-num down">-9.8%</span></td>
+            <td><span class="sub-num down">-41.7%</span></td>
+            <td>09-05 15:42</td>
+            <td><button class="link-btn" data-view="detail">查看结果</button></td>
+          </tr>
+          <tr>
+            <td class="sname">放量突破跟进<small>成交量翻倍当日买入</small></td>
+            <td><span class="badge running"><i class="dot"></i>运行中 · 62%</span></td>
+            <td>2023-01 ~ 2026-09</td>
+            <td>锂电池（112只）</td>
+            <td colspan="3" style="color:var(--faint);font-size:12.5px">正在逐日模拟买卖，请稍候…</td>
+            <td>09-07 10:02</td>
+            <td><button class="link-btn" style="color:var(--faint)">进行中</button></td>
+          </tr>
+          <tr>
+            <td class="sname">高股息长持<small>股息率>4%买入并持有</small></td>
+            <td><span class="badge queued"><i class="dot"></i>排队中</span></td>
+            <td>2015-01 ~ 2026-09</td>
+            <td>全部 A 股</td>
+            <td colspan="3" style="color:var(--faint);font-size:12.5px">前面还有 1 个任务</td>
+            <td>09-07 10:05</td>
+            <td><button class="link-btn" style="color:var(--faint)">等待中</button></td>
+          </tr>
+          <tr>
+            <td class="sname">追涨杀跌测试<small>涨停次日买入，3天后卖出</small></td>
+            <td><span class="badge failed"><i class="dot"></i>失败</span></td>
+            <td>2024-01 ~ 2026-09</td>
+            <td>指定股票（3只）</td>
+            <td colspan="3" style="color:var(--faint);font-size:12.5px">策略里用了一个暂不支持的条件</td>
+            <td>09-04 09:31</td>
+            <td><button class="link-btn">查看原因</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 页 3：研究结果详情页 ================= -->
+  <section class="view" id="view-detail">
+    <p class="crumb"><a href="#" data-view="runs">我的回测记录</a> / 均线交叉策略</p>
+
+    <div class="detail-head">
+      <h1>均线交叉策略</h1>
+      <div class="meta">
+        <span>2024-09-01 ~ 2026-09-05（约2年）</span>
+        <span>光伏设备板块 · 86只</span>
+        <span>假设本金 10 万元</span>
+      </div>
+    </div>
+
+    <!-- 一句话结论 -->
+    <div class="verdict">
+      <div class="verdict-main">
+        <div class="lab">如果这两年照这个策略做，10 万变</div>
+        <div class="big up">13.86 万</div>
+        <div class="vs">同期沪深300：10 万变 11.72 万</div>
+      </div>
+      <div class="verdict-grid">
+        <div class="vg-item"><div class="lab">总收益</div><div class="val up">+38.6%</div></div>
+        <div class="vg-item"><div class="lab">跑赢大盘</div><div class="val up">+21.4%</div></div>
+        <div class="vg-item"><div class="lab">最深跌幅</div><div class="val down">-12.3%</div></div>
+        <div class="vg-item"><div class="lab">买卖胜率</div><div class="val">57%</div></div>
+      </div>
+    </div>
+
+    <!-- 主角：净值曲线 -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <h3>账户净值走势</h3>
+        <div class="legend">
+          <span><i style="background:var(--violet)"></i>本策略</span>
+          <span><i style="background:#B9B2C4"></i>沪深300（对照）</span>
+        </div>
+      </div>
+      <svg class="chart-svg" viewBox="0 0 1180 340" preserveAspectRatio="none" aria-label="策略与沪深300净值对比曲线">
+        <!-- 网格 -->
+        <g stroke="#EFEAF6" stroke-width="1">
+          <line x1="60" y1="40" x2="1140" y2="40"/><line x1="60" y1="110" x2="1140" y2="110"/>
+          <line x1="60" y1="180" x2="1140" y2="180"/><line x1="60" y1="250" x2="1140" y2="250"/>
+          <line x1="60" y1="320" x2="1140" y2="320"/>
+        </g>
+        <g fill="#9A93A6" font-size="11" font-family="Noto Sans SC">
+          <text x="8" y="44">1.45</text><text x="8" y="114">1.30</text>
+          <text x="8" y="184">1.15</text><text x="8" y="254">1.00</text><text x="8" y="324">0.85</text>
+          <text x="60" y="336">2024-09</text><text x="330" y="336">2025-03</text>
+          <text x="600" y="336">2025-09</text><text x="870" y="336">2026-03</text><text x="1090" y="336">2026-09</text>
+        </g>
+        <!-- 策略面积 -->
+        <path class="curve-area" fill="url(#gV)" opacity=".18"
+          d="M60,250 L140,238 L230,246 L320,214 L410,222 L500,188 L590,196 L680,160 L770,172 L860,138 L950,150 L1040,112 L1140,96 L1140,320 L60,320 Z"/>
+        <defs>
+          <linearGradient id="gV" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#6750A4"/><stop offset="1" stop-color="#6750A4" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- 对照 沪深300 -->
+        <path class="curve-bench" fill="none" stroke="#B9B2C4" stroke-width="2"
+          d="M60,250 L140,246 L230,252 L320,240 L410,244 L500,232 L590,236 L680,224 L770,228 L860,218 L950,222 L1040,210 L1140,204"/>
+        <!-- 策略 -->
+        <path class="curve-strategy" fill="none" stroke="#6750A4" stroke-width="3" stroke-linecap="round"
+          d="M60,250 L140,238 L230,246 L320,214 L410,222 L500,188 L590,196 L680,160 L770,172 L860,138 L950,150 L1040,112 L1140,96"/>
+        <!-- 最深跌幅标注 -->
+        <g font-size="11.5" font-family="Noto Sans SC">
+          <circle cx="230" cy="246" r="4" fill="#fff" stroke="#1E8E5A" stroke-width="2"/>
+          <text x="242" y="250" fill="#1E8E5A">最深回撤 -12.3%</text>
+          <circle cx="1140" cy="96" r="4.5" fill="#6750A4"/>
+          <text x="1064" y="86" fill="#6750A4" font-weight="600">净值 1.386</text>
+        </g>
+      </svg>
+
+      <!-- 回撤小图 -->
+      <div class="chart-head" style="margin-top:18px"><h3>浮亏程度（越往下亏得越多）</h3></div>
+      <svg class="chart-svg dd-chart" viewBox="0 0 1180 90" preserveAspectRatio="none" aria-label="回撤示意">
+        <path fill="#EBF6F0" d="M60,20 L140,34 L230,78 L320,42 L410,50 L500,30 L590,38 L680,26 L770,44 L860,28 L950,36 L1040,24 L1140,22 L1140,20 L60,20 Z"/>
+        <path fill="none" stroke="#1E8E5A" stroke-width="1.5"
+          d="M60,20 L140,34 L230,78 L320,42 L410,50 L500,30 L590,38 L680,26 L770,44 L860,28 L950,36 L1040,24 L1140,22"/>
+        <text x="242" y="86" font-size="11" fill="#1E8E5A" font-family="Noto Sans SC">最多时浮亏 12.3%（2025-01）</text>
+      </svg>
+    </div>
+
+    <!-- 月度收益热力格 -->
+    <div class="chart-card">
+      <div class="chart-head"><h3>每个月是赚是亏</h3>
+        <div class="legend"><span><i style="background:#E8B4B4"></i>赚</span><span><i style="background:#9AD2B8"></i>亏</span></div>
+      </div>
+      <div class="month-grid">
+        <div class="month-cell mc-up2">+3.1</div><div class="month-cell mc-dn1">-1.4</div><div class="month-cell mc-up3">+6.8</div><div class="month-cell mc-up1">+1.2</div>
+        <div class="month-cell mc-dn2">-3.6</div><div class="month-cell mc-up2">+2.9</div><div class="month-cell mc-up1">+0.8</div><div class="month-cell mc-up3">+7.4</div>
+        <div class="month-cell mc-dn3">-5.2</div><div class="month-cell mc-flat">0.0</div><div class="month-cell mc-up2">+4.1</div><div class="month-cell mc-up1">+1.6</div>
+        <div class="month-cell mc-up1">+0.9</div><div class="month-cell mc-dn1">-0.8</div><div class="month-cell mc-up2">+3.5</div><div class="month-cell mc-up2">+2.2</div>
+        <div class="month-cell mc-dn1">-1.1</div><div class="month-cell mc-up3">+5.9</div><div class="month-cell mc-up1">+1.4</div><div class="month-cell mc-dn2">-2.7</div>
+        <div class="month-cell mc-up2">+3.3</div><div class="month-cell mc-up1">+1.0</div><div class="month-cell mc-up2">+2.6</div><div class="month-cell mc-up1">+0.7</div>
+      </div>
+      <p style="font-size:12px;color:var(--faint);margin-top:10px">2024-09 至 2026-08 共 24 个月：17 个月赚钱，6 个月亏钱，1 个月持平。数字为当月收益（%）。</p>
+    </div>
+
+    <!-- 渐进披露：详细数据 -->
+    <details class="detail-reveal">
+      <summary><span class="caret">▸</span>查看详细数据（共 6 项指标、86 笔交易明细）</summary>
+      <div class="reveal-body">
+        <div class="stat-cards">
+          <div class="stat-card"><div class="lab">总收益</div><div class="val" style="color:var(--up)">+38.6%</div><div class="hint">10万 → 13.86万</div></div>
+          <div class="stat-card"><div class="lab">折算每年</div><div class="val" style="color:var(--up)">+17.8%</div><div class="hint">同期沪深300 +8.4%</div></div>
+          <div class="stat-card"><div class="lab">最深跌幅</div><div class="val" style="color:var(--down)">-12.3%</div><div class="hint">2025-01，历时 34 天修复</div></div>
+          <div class="stat-card"><div class="lab">波动程度</div><div class="val">中等</div><div class="hint">比大盘略晃</div></div>
+          <div class="stat-card"><div class="lab">共交易</div><div class="val">86 笔</div><div class="hint">平均持有 11 天</div></div>
+          <div class="stat-card"><div class="lab">赚钱的交易占</div><div class="val">57%</div><div class="hint">49 赚 / 37 亏</div></div>
+          <div class="stat-card"><div class="lab">平均每笔赚</div><div class="val" style="color:var(--up)">+6.2%</div><div class="hint">平均每笔亏 -3.1%</div></div>
+          <div class="stat-card"><div class="lab">交易费用合计</div><div class="val">412 元</div><div class="hint">佣金 + 印花税</div></div>
+        </div>
+        <div class="table-card">
+          <table>
+            <thead><tr><th>股票</th><th>买入</th><th>卖出</th><th>持有天数</th><th>这笔盈亏</th></tr></thead>
+            <tbody>
+              <tr><td class="sname">阳光电源</td><td>2025-11-14</td><td>2025-12-02</td><td>18</td><td><span class="sub-num up">+14.2%</span></td></tr>
+              <tr><td class="sname">隆基绿能</td><td>2025-08-21</td><td>2025-09-05</td><td>15</td><td><span class="sub-num up">+8.6%</span></td></tr>
+              <tr><td class="sname">通威股份</td><td>2025-12-19</td><td>2026-01-06</td><td>17</td><td><span class="sub-num down">-8.0%（止损）</span></td></tr>
+              <tr><td class="sname">晶澳科技</td><td>2026-03-10</td><td>2026-03-27</td><td>16</td><td><span class="sub-num up">+5.3%</span></td></tr>
+              <tr><td colspan="5" style="text-align:center;color:var(--faint);font-size:12.5px">… 其余 82 笔在完整报告中</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <!-- 缺因子弹窗（隐藏示例：失败任务的「查看原因」弹出）
+    <div class="modal-demo" id="factor-modal">
+      <h3>这个策略暂时跑不了</h3>
+      <p>策略里用到的「涨停次日开盘买入」条件，我们的条件库暂时不支持。</p>
+      <p>你可以：换个说法重试；或提交这个条件，需求多的我们会优先补上。</p>
+      <button>换个策略</button><button>提交条件需求</button>
+    </div>
+    -->
+  </section>
+
+</main>
+
+<footer>A股回测台 · 历史表现不代表未来收益，回测结果仅供学习参考，不构成投资建议</footer>
+
+<script>
+  // 顶部导航 + 「查看结果」联动切换三个视图（设计稿演示用）
+  document.querySelectorAll('[data-view]').forEach(function(el){
+    el.addEventListener('click', function(ev){
+      ev.preventDefault();
+      var name = el.dataset.view;
+      document.querySelectorAll('.view').forEach(function(v){
+        v.classList.toggle('active', v.id === 'view-' + name);
+      });
+      document.querySelectorAll('.mainnav button').forEach(function(b){
+        b.classList.toggle('active', b.dataset.view === name);
+      });
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    });
+  });
+</script>
+</body>
+</html>
