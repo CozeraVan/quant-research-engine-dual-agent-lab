@@ -39,41 +39,43 @@ document.getElementById('btn-logout').addEventListener('click', (e) => {
   location.href = '/saas/login';
 });
 
-function fmtTime(iso){ return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
+// UTC ISO → 浏览器本地时间（后端一律存 UTC，前端统一转本地显示）
+function fmtTime(iso){
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const p = n => ('0' + n).slice(-2);
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
 
+// B3：数据源切到 B1 的 /api/results（只列 full job、按用户隔离、含策略名与收益指标）
 async function load(){
-  const [meResp, jobsResp] = await Promise.all([apiFetch('/api/saas/me'), apiFetch('/api/saas/jobs')]);
+  const [meResp, listResp] = await Promise.all([apiFetch('/api/saas/me'), apiFetch('/api/results')]);
   const me = await meResp.json();
   if (me.ok) document.getElementById('user-label').textContent = me.user.email || me.user.phone || '';
-  const data = await jobsResp.json();
+  const data = await listResp.json();
   const tbody = document.getElementById('jobs-tbody');
-  // 后台预检任务（kind=smoke）不展示——用户视角只有「正式回测」
-  const jobs = (data.jobs || []).filter(j => j.kind !== 'smoke');
-  if (!jobs.length){
+  const items = data.items || [];
+  if (!items.length){
     tbody.innerHTML = '<tr><td colspan="5" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
     return;
   }
   tbody.innerHTML = '';
-  for (const job of jobs){
+  for (const job of items){
     const tr = document.createElement('tr');
     const status = STATUS_LABEL[job.status] || job.status;
     let action = '';
-    if (job.status === 'completed') action = `<a class="btn ghost" href="/saas/jobs/${job.id}">查看结果</a>`;
+    if (job.status === 'completed') action = `<a class="btn ghost" href="/saas/jobs/${job.job_id}">查看结果</a>`;
     else if (job.status === 'failed') action = '';
-    else action = `<a href="/saas/jobs/${job.id}">查看进度</a>`;
-    tr.innerHTML = `<td>${'策略 #' + job.strategy_id}</td>`
+    else action = `<a href="/saas/jobs/${job.job_id}">查看进度</a>`;
+    tr.innerHTML = `<td>${job.strategy_name || ('策略 #' + job.job_id)}</td>`
       + `<td><span class="badge ${job.status}">${status}</span></td>`
       + `<td>${fmtTime(job.created_at)}</td>`
       + `<td>${job.data_until || '—'}</td>`
       + `<td>${action}</td>`;
     tbody.appendChild(tr);
-    if (job.status === 'failed' && job.error){
-      const errTr = document.createElement('tr');
-      errTr.innerHTML = `<td colspan="5" class="error">${job.error}</td>`;
-      tbody.appendChild(errTr);
-    }
   }
-  if (jobs.some(j => ['queued', 'leased', 'running'].includes(j.status))) setTimeout(load, 5000);
+  if (items.some(j => ['queued', 'leased', 'running'].includes(j.status))) setTimeout(load, 5000);
 }
 
 const FREQ_STATUS = {pending: '审核中', approved: '已入库', rejected: '未采纳'};

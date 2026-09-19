@@ -260,37 +260,48 @@ function renderTagRank(items){
   });
 }
 
+// B3：数据源切到 B2 的 /api/results/<id> 系列端点（summary/chart-data/tag-analysis），
+// 不再走 /api/saas/jobs 的嵌套 result。未完成 409（带 status）→ 显示进行状态并轮询。
 async function poll(){
-  const resp = await apiFetch('/api/saas/jobs/' + JOB_ID);
+  const resp = await apiFetch('/api/results/' + JOB_ID + '/summary');
   const data = await resp.json();
-  const job = data.job;
   const badge = document.getElementById('job-badge');
-  badge.className = 'badge ' + job.status;
-  badge.textContent = STATUS_LABEL[job.status] || job.status;
 
-  if (job.status === 'completed'){
-    document.getElementById('status-card').classList.add('hidden');
-    document.getElementById('result-area').classList.remove('hidden');
-    const result = job.result || {};
-    const chart = result.chart_data || {};
-    const brief = chart.brief || {};
-    document.getElementById('brief-text').textContent = brief.name ? ('策略：' + brief.name) : '';
-    renderMeta(chart.meta, result.data_until);
-    renderMetrics(Object.assign({}, result.summary || {}, chart.metrics || {}));
-    if (chart.dates && chart.equity) renderMain(chart);
-    else empty('chart-main');
-    renderAttribution(chart.tag_analysis);
-    const artifacts = result.artifacts || [];
-    if (artifacts.length) document.getElementById('download-card').classList.remove('hidden');
+  if (resp.status === 409){
+    // 进行中：409 body 带真实 status
+    const st = data.status || 'running';
+    badge.className = 'badge ' + st;
+    badge.textContent = STATUS_LABEL[st] || st;
+    document.getElementById('job-status-note').textContent =
+      st === 'queued' ? '任务排队中，空闲后即开始（每 5 秒自动刷新）' :
+      st === 'failed' ? '任务失败：' + (data.error || '未知') :
+      '正在回测，请稍候（每 5 秒自动刷新）';
+    if (st !== 'failed') setTimeout(poll, 5000);
     return;
   }
-  if (job.status === 'failed'){
-    document.getElementById('job-status-note').textContent = '失败原因：' + (job.error || '未知');
+  if (!resp.ok || !data.ok){
+    badge.className = 'badge failed';
+    badge.textContent = '加载失败';
+    document.getElementById('job-status-note').textContent = data.error || ('HTTP ' + resp.status);
     return;
   }
-  document.getElementById('job-status-note').textContent =
-    job.status === 'queued' ? '任务排队中，空闲后即开始（每 5 秒自动刷新）' : '正在回测，请稍候（每 5 秒自动刷新）';
-  setTimeout(poll, 5000);
+
+  // 已完成：并行拉 chart-data 与 tag-analysis
+  document.getElementById('status-card').classList.add('hidden');
+  document.getElementById('result-area').classList.remove('hidden');
+  const [chartResp, tagResp] = await Promise.all([
+    apiFetch('/api/results/' + JOB_ID + '/chart-data'),
+    apiFetch('/api/results/' + JOB_ID + '/tag-analysis'),
+  ]);
+  const chart = (await chartResp.json()) || {};
+  const tag = tagResp.ok ? await tagResp.json() : null;
+  const brief = chart.brief || {};
+  document.getElementById('brief-text').textContent = brief.name ? ('策略：' + brief.name) : (data.strategy_name ? ('策略：' + data.strategy_name) : '');
+  renderMeta(chart.meta, data.data_until);
+  renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));
+  if (chart.dates && chart.equity) renderMain(chart);
+  else empty('chart-main');
+  renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
 }
 poll();
 </script>

@@ -264,3 +264,21 @@ class TestAuthBypass:
         # 默认关（client fixture 未开 bypass）：维持 401
         assert client.get("/api/saas/me").status_code == 401
         assert client.post("/api/saas/jobs", json={"yaml": "x"}).status_code == 401
+
+
+class TestResultsDataSource:
+    """B3：回测记录/结果详情页数据源切到 B1/B2 的 /api/results 系列。"""
+
+    def test_dashboard_uses_results_api(self, client):
+        html = client.get("/saas/").get_data(as_text=True)
+        assert "/api/results'" in html                      # 列表走 /api/results
+        assert "/api/saas/jobs')" not in html              # 不再走旧 jobs 列表
+        assert "job.job_id" in html                        # 新字段名
+        assert "strategy_name" in html
+
+    def test_job_page_uses_results_detail_apis(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        assert "/api/results/' + JOB_ID + '/summary'" in html
+        assert "/chart-data" in html and "/tag-analysis" in html
+        assert "resp.status === 409" in html               # 未完成 → 进行状态轮询
+        assert "/api/saas/jobs/' + JOB_ID" not in html     # 不再走旧 job 嵌套 result

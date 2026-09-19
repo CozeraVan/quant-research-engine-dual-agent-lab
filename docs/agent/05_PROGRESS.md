@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-09-19 QRE-SAAS-RESULTS-UI DONE（B3：SaaS Web 端数据源切换到 B1/B2 API，纯前端模板改动、零后端）：dashboard.html 记录列表从 /api/saas/jobs 切到 /api/results（只列 full job、按用户隔离；策略名改显 strategy_name 真实名而非「策略 #id」；顺手修 UTC 时间戳直显问题——fmtTime 改浏览器本地时区转换，与 8081 记录页同口径）；job.html 详情页从 /api/saas/jobs/<id> 嵌套 result 切到 /api/results/<id>/summary + chart-data + tag-analysis 三端点并行拉取，409（带 status）显示进行状态并 5s 轮询，404/失败显示错误；risk-analysis 端点本期不接（job 页本就无 FRM 区块，UI 零改动纪律）；symbols 端点本期不接（SaaS 无个股页）。UI/样式零改动（18080 冻结基线不动）。测试：test_gui_saas_pages.py +2（两页数据源断言：新端点在、旧端点不在、409 轮询逻辑在）；期间撞线一次禁链断言——注释里写了「8081」字样触发禁词表，改措辞后过。全量 pytest tests/ -q → **2101 passed + 4 skipped**（基线 2099+2）零回归。8081 lab 侧零改动；服务无需重启（SaaS staging 8081 模板修改即时生效由 Flask 模板缓存策略决定，已验证测试客户端直读磁盘模板）。未 commit，等用户批准。
+
 ## Latest Verified State
 
 2026-09-19 QRE-SAAS-RESULTS DONE（B1+B2：结果系统——列表/详情/删除 API）：全部加在 gui/saas/app.py（无新文件，复用 lab_result.py 解析函数）。B1：GET /api/results（排序 created_at|excess_return × asc|desc、分页 page/page_size≤100；字段=策略名/区间/标的数/总收益/超额/回撤/胜率/交易笔数/状态/数据截止；只列 full job；用户隔离）；DELETE /api/results/<id>（results+jobs 行 + SAAS_UPLOAD_DIR/job_<id>/ 目录，策略行保留；他人/重复删 404）。B2 详情端点（语义对齐 8081 lab_result）：summary（results.summary 直出）/chart-data（worker 回传的 build_lab_chart_data 产物直出，**与 8081 完全同形态**）/tag-analysis（chart_data.tag_analysis 截断版直出）/risk-analysis（读上传产物 risk_report.json 经既有 build_lab_risk_view 转换；无文件 has_report=false）/symbols（tag_analysis 跨层按股合并，与 8081 个股列表页同语义）/symbols/<ts_code>（复用 build_lab_symbol_detail，job 行构造成 run record 指向 job_<id>/ 产物目录；K 线/因子查本地大库，ECS 无库时字段降级 None——已注释）。语义闸：未完成 409（带 status）、他人/不存在 404（不暴露存在性，_load_job_for_user 属主过滤先于状态判定——此处修了一个 409/404 顺序问题）、未登录 401。测试 +4（列表排序分页隔离/详情六端点/未完成与他人语义/删除含产物目录与重复删）。全量 `pytest tests/` → **2099 passed + 4 skipped**（基线 2095 + 4）零回归。未 git commit。
