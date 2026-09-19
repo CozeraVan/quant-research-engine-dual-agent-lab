@@ -79,6 +79,37 @@ CREATE INDEX IF NOT EXISTS idx_jobs_pick ON jobs (status, priority DESC, created
     WHERE status = 'queued';
 CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs (user_id, created_at DESC);
 
+-- QRE-JOB-API（A2，2026-09-19）：jobs 表对齐 17_JOB_PROTOCOL.md。
+-- 幂等：列存在性检查 + IF NOT EXISTS，可重复执行。
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='jobs' AND column_name='lease_expires') THEN
+    ALTER TABLE jobs RENAME COLUMN lease_expires TO lease_expires_at;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_name='jobs' AND column_name='error') THEN
+    ALTER TABLE jobs RENAME COLUMN error TO error_message;
+  END IF;
+END $$;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS progress SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS progress_message TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cancel_requested BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_class TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS parent_job_id BIGINT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS upload_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idem
+    ON jobs (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+-- 状态枚举对齐协议：done → completed，新增 uploading/expired/canceled
+-- 注意顺序：先删旧 CHECK 再 UPDATE（旧 CHECK 不允许 completed）。
+ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_status_check;
+UPDATE jobs SET status = 'completed' WHERE status = 'done';
+UPDATE jobs SET status = 'canceled' WHERE status = 'cancelled';
+ALTER TABLE jobs ADD CONSTRAINT jobs_status_check
+    CHECK (status IN ('queued','leased','running','uploading','completed','failed','expired','canceled'));
+
 -- 缺因子申请（QRE-SAAS-007）：用户不直接增/改因子；缺因子时提交申请，
 -- 运营方按需求热度人工审核后离线计算入库（8080 管理台审核界面为后续任务）。
 CREATE TABLE IF NOT EXISTS factor_requests (

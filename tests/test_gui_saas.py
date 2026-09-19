@@ -153,7 +153,7 @@ class TestLifecycle:
         assert lease["job"]["attempts"] == 1
         assert lease["job"]["leased_by"] == "w1"
         assert lease["job"]["strategy"]["yaml"].startswith("signal:")
-        first_expiry = lease["job"]["lease_expires"]
+        first_expiry = lease["job"]["lease_expires_at"]
         assert first_expiry
 
         # 队列已空
@@ -162,22 +162,22 @@ class TestLifecycle:
         hb = client.post(f"/api/saas/worker/jobs/{job_id}/heartbeat",
                          json={"worker_id": "w1"}, headers=WORKER_HEADERS)
         assert hb.status_code == 200
-        assert hb.get_json()["lease_expires"] >= first_expiry
+        assert hb.get_json()["lease_expires_at"] >= first_expiry
         # 他人心跳被拒
         assert client.post(f"/api/saas/worker/jobs/{job_id}/heartbeat",
                            json={"worker_id": "w2"}, headers=WORKER_HEADERS).status_code == 409
 
         resp = _result(client, job_id, {
-            "status": "done",
+            "status": "completed",
             "summary": {"total_return": 0.42},
             "chart_data": {"equity": [[1, 1.0]]},
             "artifacts": [{"kind": "excel", "oss_key": "k"}],
             "data_until": "2026-09-04",
         })
-        assert resp.status_code == 200 and resp.get_json()["status"] == "done"
+        assert resp.status_code == 200 and resp.get_json()["status"] == "completed"
 
         detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
-        assert detail["status"] == "done"
+        assert detail["status"] == "completed"
         assert detail["finished_at"]
         assert detail["result"]["summary"] == {"total_return": 0.42}
         assert detail["result"]["data_until"] == "2026-09-04"
@@ -187,8 +187,8 @@ class TestLifecycle:
     def test_result_wrong_worker_409_and_unknown_404(self, client):
         job_id = _create_job(client).get_json()["job_id"]
         _lease(client)
-        assert _result(client, job_id, {"status": "done"}, worker_id="w2").status_code == 409
-        assert _result(client, 999, {"status": "done"}).status_code == 404
+        assert _result(client, job_id, {"status": "completed"}, worker_id="w2").status_code == 409
+        assert _result(client, 999, {"status": "completed"}).status_code == 404
         assert _result(client, job_id, {"status": "bogus"}).status_code == 400
 
     def test_lease_expiry_requeues(self, client, app):
@@ -199,7 +199,7 @@ class TestLifecycle:
         # Worker 宕机：lease 过期 → 可被其他 worker 重排
         engine = app.extensions["saas_engine"]
         with engine.begin() as conn:
-            conn.execute(text("UPDATE jobs SET lease_expires = now() - interval '1 minute' WHERE id = :id"),
+            conn.execute(text("UPDATE jobs SET lease_expires_at = now() - interval '1 minute' WHERE id = :id"),
                          {"id": job_id})
         lease = _lease(client, worker_id="w2").get_json()
         assert lease["job"]["id"] == job_id
@@ -213,14 +213,14 @@ class TestLifecycle:
         resp = _result(client, job_id, {"status": "failed", "error": "boom"})
         assert resp.get_json()["status"] == "queued"  # attempts 1 < max 2 → 回队
         detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
-        assert detail["status"] == "queued" and detail["error"] == "boom"
+        assert detail["status"] == "queued" and detail["error_message"] == "boom"
 
         _lease(client)  # attempts=2
         resp = _result(client, job_id, {"status": "failed", "error": "boom again"})
         assert resp.get_json()["status"] == "failed"  # attempts 耗尽 → failed
         detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
         assert detail["status"] == "failed"
-        assert detail["error"] == "boom again"
+        assert detail["error_message"] == "boom again"
         assert detail["finished_at"]
         # failed 任务不再被认领
         assert _lease(client).get_json()["job"] is None
@@ -352,3 +352,150 @@ class TestAuth:
                            headers=headers).status_code == 200
         resp = client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers)
         assert resp.status_code == 429
+
+
+class TestProtocolA2:
+    """QRE-JOB-API：17 号协议对齐（claim 长轮询/心跳迁移/两步 result/fail 分类/取消/幂等/回收）。"""
+
+    def test_claim_empty_is_200_null(self, client):
+        resp = client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        assert resp.status_code == 200 and resp.get_json()["job"] is None
+
+    def test_claim_returns_protocol_fields(self, client):
+        job_id = _create_job(client).get_json()["job_id"]
+        job = client.post("/api/worker/jobs/claim", json={"worker_id": "w1"},
+                          headers=WORKER_HEADERS).get_json()["job"]
+        assert job["id"] == job_id and job["attempt"] == 1
+        assert job["params_json"] == {"cash": 1000000}
+        assert job["lease_expires_at"] and job["cancel_requested"] is False
+
+    def test_heartbeat_progress_and_leased_to_running(self, client):
+        job_id = _create_job(client).get_json()["job_id"]
+        _lease(client)
+        hb = client.post(f"/api/worker/jobs/{job_id}/heartbeat",
+                         json={"worker_id": "w1", "progress": 42, "message": "回测中"},
+                         headers=WORKER_HEADERS).get_json()
+        assert hb["ok"] and hb["cancel_requested"] is False
+        detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
+        assert detail["status"] == "running"  # 首心跳驱动迁移
+        assert detail["progress"] == 42 and detail["progress_message"] == "回测中"
+        assert detail["heartbeat_at"]
+
+    def test_result_two_step_with_files(self, client, tmp_path, app):
+        import hashlib
+        import io
+
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path / "uploads")
+        job_id = _create_job(client).get_json()["job_id"]
+        _lease(client)
+        blob = b"trade_date,total_equity\n2026-01-05,100000\n"
+        digest = hashlib.sha256(blob).hexdigest()
+        meta = client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                           json={"worker_id": "w1", "summary": {"total_return": 0.1},
+                                 "chart_data": {}, "data_until": "2026-09-04",
+                                 "files": [{"name": "equity_curve.csv", "size": len(blob), "sha256": digest}]},
+                           headers=WORKER_HEADERS).get_json()
+        assert meta["status"] == "uploading" and meta["upload_token"]
+        token = meta["upload_token"]
+        # 错误 token 401
+        bad = client.post(f"/api/worker/jobs/{job_id}/result/files?upload_token=wrong",
+                          data={"equity_curve.csv": (io.BytesIO(blob), "equity_curve.csv")},
+                          headers=WORKER_HEADERS)
+        assert bad.status_code == 401
+        ok = client.post(f"/api/worker/jobs/{job_id}/result/files?upload_token={token}",
+                         data={"equity_curve.csv": (io.BytesIO(blob), "equity_curve.csv")},
+                         headers=WORKER_HEADERS).get_json()
+        assert ok["status"] == "completed"
+        assert (tmp_path / "uploads" / f"job_{job_id}" / "equity_curve.csv").read_bytes() == blob
+        detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
+        assert detail["status"] == "completed" and detail["result"]["summary"]["total_return"] == 0.1
+
+    def test_result_meta_empty_files_completes_immediately(self, client):
+        job_id = _create_job(client).get_json()["job_id"]
+        _lease(client)
+        meta = client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                           json={"worker_id": "w1", "summary": {}, "chart_data": {}, "files": []},
+                           headers=WORKER_HEADERS).get_json()
+        assert meta["status"] == "completed"
+
+    def test_fail_non_retryable_goes_failed_directly(self, client):
+        job_id = _create_job(client).get_json()["job_id"]
+        _lease(client)  # attempts=1 < max 2
+        resp = client.post(f"/api/worker/jobs/{job_id}/fail",
+                           json={"worker_id": "w1", "error_class": "strategy_compile_error",
+                                 "error_message": "YAML 不合法"},
+                           headers=WORKER_HEADERS).get_json()
+        assert resp["status"] == "failed"  # 不可重试：不排队直接终态
+        detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
+        assert detail["error_class"] == "strategy_compile_error"
+
+    def test_fail_bad_error_class_400(self, client):
+        job_id = _create_job(client).get_json()["job_id"]
+        _lease(client)
+        resp = client.post(f"/api/worker/jobs/{job_id}/fail",
+                           json={"worker_id": "w1", "error_class": "bogus"},
+                           headers=WORKER_HEADERS)
+        assert resp.status_code == 400
+
+    def test_cancel_queued_direct_and_running_via_flag(self, client):
+        # queued → 直接 canceled
+        job1 = _create_job(client).get_json()["job_id"]
+        resp = client.post(f"/api/jobs/{job1}/cancel", headers={"X-User-Id": "1"})
+        assert resp.get_json()["status"] == "canceled"
+        # running → cancel_requested，worker 心跳发现后 fail(canceled)
+        job2 = _create_job(client).get_json()["job_id"]
+        _lease(client)
+        client.post(f"/api/worker/jobs/{job2}/heartbeat", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        resp = client.post(f"/api/jobs/{job2}/cancel", headers={"X-User-Id": "1"})
+        assert resp.get_json()["cancel_requested"] is True
+        hb = client.post(f"/api/worker/jobs/{job2}/heartbeat",
+                         json={"worker_id": "w1"}, headers=WORKER_HEADERS).get_json()
+        assert hb["cancel_requested"] is True
+        # 终态取消 409；他人任务 404（job2 先置终态，避免回队干扰 job3 认领顺序）
+        client.post(f"/api/worker/jobs/{job2}/fail",
+                    json={"worker_id": "w1", "error_class": "strategy_compile_error",
+                          "error_message": "canceled"}, headers=WORKER_HEADERS)
+        job3 = _create_job(client).get_json()["job_id"]
+        _lease(client)
+        client.post(f"/api/saas/worker/jobs/{job3}/result",
+                    json={"worker_id": "w1", "status": "done", "summary": {}, "chart_data": {}},
+                    headers=WORKER_HEADERS)
+        assert client.post(f"/api/jobs/{job3}/cancel", headers={"X-User-Id": "1"}).status_code == 409
+        assert client.post(f"/api/jobs/{job2}/cancel", headers={"X-User-Id": "2"}).status_code == 404
+
+    def test_idempotency_key_dedup(self, client):
+        r1 = client.post("/api/jobs", json={"yaml": "x", "kind": "smoke",
+                                            "idempotency_key": "abc-1"}, headers={"X-User-Id": "1"})
+        r2 = client.post("/api/jobs", json={"yaml": "x", "kind": "smoke",
+                                            "idempotency_key": "abc-1"}, headers={"X-User-Id": "1"})
+        assert r1.get_json()["job_id"] == r2.get_json()["job_id"]
+        assert r2.get_json()["deduped"] is True
+
+    def test_lease_reaped_by_claim(self, client, app):
+        from sqlalchemy import text
+
+        job_id = _create_job(client).get_json()["job_id"]
+        _lease(client)
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE jobs SET lease_expires_at = now() - interval '1 minute' WHERE id = :id"),
+                         {"id": job_id})
+        # claim 惰性回收：过期任务回队后可被重新认领
+        job = client.post("/api/worker/jobs/claim", json={"worker_id": "w2"},
+                          headers=WORKER_HEADERS).get_json()["job"]
+        assert job["id"] == job_id and job["attempt"] == 2
+
+    def test_hard_timeout_expires_smoke(self, client, app):
+        from sqlalchemy import text
+
+        job_id = _create_job(client, kind="smoke").get_json()["job_id"]
+        _lease(client)
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE jobs SET started_at = now() - interval '11 minutes', "
+                              "lease_expires_at = now() + interval '10 minutes' WHERE id = :id"),
+                         {"id": job_id})
+        # 下次 claim 的惰性回收把超硬超时的 smoke 置 expired（租约未过期也要杀）
+        client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
+        assert detail["status"] == "expired"

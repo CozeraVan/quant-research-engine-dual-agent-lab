@@ -252,7 +252,7 @@ async function pollJob(jobId){
     const resp = await apiFetch('/api/saas/jobs/' + jobId);
     const data = await resp.json();
     const status = data.job && data.job.status;
-    if (status === 'done') return data.job;
+    if (status === 'completed') return data.job;
     if (status === 'failed' || status === 'cancelled') throw new Error(data.job.error || '任务失败');
   }
 }

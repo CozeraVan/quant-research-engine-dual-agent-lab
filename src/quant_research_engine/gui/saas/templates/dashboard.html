@@ -58,7 +58,7 @@ async function load(){
     const tr = document.createElement('tr');
     const status = STATUS_LABEL[job.status] || job.status;
     let action = '';
-    if (job.status === 'done') action = `<a class="btn ghost" href="/saas/jobs/${job.id}">查看结果</a>`;
+    if (job.status === 'completed') action = `<a class="btn ghost" href="/saas/jobs/${job.id}">查看结果</a>`;
     else if (job.status === 'failed') action = '';
     else action = `<a href="/saas/jobs/${job.id}">查看进度</a>`;
     tr.innerHTML = `<td>${'策略 #' + job.strategy_id}</td>`

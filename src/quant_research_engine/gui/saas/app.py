@@ -35,7 +35,7 @@ from flask import Flask, jsonify, render_template, request
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-LEASE_MINUTES = 15
+DEFAULT_LEASE_MINUTES = 15
 JOB_KINDS = ("smoke", "full")
 
 GUI_DIR = Path(__file__).resolve().parent.parent
@@ -118,6 +118,13 @@ def _get_engine(app: Flask) -> Engine:
         engine = create_engine(db_url)
         app.extensions["saas_engine"] = engine
     return engine
+
+
+def _lease_minutes(app: Flask) -> float:
+    try:
+        return float(_cfg(app, "SAAS_LEASE_MINUTES", str(DEFAULT_LEASE_MINUTES)) or DEFAULT_LEASE_MINUTES)
+    except ValueError:
+        return DEFAULT_LEASE_MINUTES
 
 
 def _worker_token(app: Flask) -> str | None:
@@ -218,6 +225,18 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
+# 状态机与字段对齐 docs/agent/17_JOB_PROTOCOL.md（QRE-JOB-API / A2）
+JOB_STATUSES = ("queued", "leased", "running", "uploading",
+                "completed", "failed", "expired", "canceled")
+TERMINAL_STATUSES = ("completed", "failed", "expired", "canceled")
+HEARTBEAT_INTERVAL_SECONDS = 60
+HARD_TIMEOUT = {"smoke": "10 minutes", "full": "6 hours"}  # 17 协议 §5，可调
+UPLOAD_HARD_TIMEOUT = "30 minutes"
+ERROR_CLASSES = ("strategy_compile_error", "data_missing",
+                 "engine_error", "system_error", "canceled")
+NON_RETRYABLE = ("strategy_compile_error", "data_missing")
+
+
 def _job_view(row: Any) -> dict[str, Any]:
     return _jsonable({
         "id": row.id,
@@ -230,12 +249,51 @@ def _job_view(row: Any) -> dict[str, Any]:
         "attempts": row.attempts,
         "max_attempts": row.max_attempts,
         "leased_by": row.leased_by,
-        "lease_expires": row.lease_expires,
-        "error": row.error,
+        "lease_expires_at": row.lease_expires_at,
+        "heartbeat_at": row.heartbeat_at,
+        "progress": row.progress,
+        "progress_message": row.progress_message,
+        "cancel_requested": row.cancel_requested,
+        "error_class": row.error_class,
+        "error_message": row.error_message,
+        "parent_job_id": row.parent_job_id,
         "created_at": row.created_at,
         "started_at": row.started_at,
         "finished_at": row.finished_at,
     })
+
+
+def _reap_expired(conn: Any) -> None:
+    """惰性租约回收（17 协议 §4.2）：在 claim/heartbeat/cancel 时顺带执行，
+    不起后台线程。租约过期的 leased/running/uploading 任务回队或置 failed；
+    超硬超时的置 expired（终态不回队）。"""
+    conn.execute(
+        text(
+            "UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, "
+            "heartbeat_at = NULL "
+            "WHERE status IN ('leased','running','uploading') "
+            "AND lease_expires_at < now() AND attempts < max_attempts"
+        )
+    )
+    conn.execute(
+        text(
+            "UPDATE jobs SET status = 'failed', error_class = 'system_error', "
+            "error_message = '租约超时且重试次数耗尽', finished_at = now(), lease_expires_at = NULL "
+            "WHERE status IN ('leased','running','uploading') "
+            "AND lease_expires_at < now() AND attempts >= max_attempts"
+        )
+    )
+    # 硬超时：smoke 10min / full 6h 自 started_at 起算；uploading 单独 30min
+    conn.execute(
+        text(
+            "UPDATE jobs SET status = 'expired', error_class = 'system_error', "
+            "error_message = '超过任务硬超时', finished_at = now(), lease_expires_at = NULL "
+            "WHERE (status IN ('leased','running') AND started_at IS NOT NULL AND "
+            "       started_at < now() - CASE kind WHEN 'smoke' THEN interval '10 minutes' "
+            "                                     ELSE interval '6 hours' END) "
+            "   OR (status = 'uploading' AND heartbeat_at < now() - interval '30 minutes')"
+        )
+    )
 
 
 def create_saas_app() -> Flask:
@@ -502,28 +560,38 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "用户不存在"}), 401
         return jsonify({"ok": True, "user": _jsonable(dict(user))})
 
-    # --- 用户侧：提交任务 / 查询 ---
+    # --- 用户侧：提交 / 查询 / 取消（17 协议 §2/§5；/api/saas/* 为兼容别名） ---
 
-    @app.post("/api/saas/jobs")
+    @app.post("/api/jobs")
+    @app.post("/api/saas/jobs")  # 兼容别名（既有前端/测试）
     def api_create_job() -> Any:
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
         if uid is None:
             return jsonify({"ok": False, "error": "未登录（Authorization: Bearer <token>）"}), 401
         data = request.get_json(silent=True) or {}
-        yaml_text = str(data.get("yaml") or "").strip()
+        yaml_text = str(data.get("yaml") or data.get("strategy_yaml") or "").strip()
         if not yaml_text:
             return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
         kind = str(data.get("kind") or "full")
         if kind not in JOB_KINDS:
             return jsonify({"ok": False, "error": f"kind 须为 {'/'.join(JOB_KINDS)}"}), 400
-        params = data.get("params") or {}
+        params = data.get("params") or data.get("params_json") or {}
         if not isinstance(params, dict):
             return jsonify({"ok": False, "error": "params 须为对象"}), 400
         name = str(data.get("name") or "未命名策略").strip() or "未命名策略"
         nl_text = data.get("nl_text")
+        idem = str(data.get("idempotency_key") or "").strip() or None
 
         with engine.begin() as conn:
+            # 幂等去重（17 协议 §4.4）：同用户同 key 返回既有 job
+            if idem:
+                existing = conn.execute(
+                    text("SELECT id FROM jobs WHERE user_id = :uid AND idempotency_key = :k"),
+                    {"uid": uid, "k": idem},
+                ).first()
+                if existing is not None:
+                    return jsonify({"ok": True, "job_id": existing.id, "deduped": True})
             # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（phone 占位 pending_<id>）
             conn.execute(
                 text(
@@ -553,13 +621,15 @@ def create_saas_app() -> Flask:
             ).scalar_one()
             job_id = conn.execute(
                 text(
-                    "INSERT INTO jobs (user_id, strategy_id, kind, params) "
-                    "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb)) RETURNING id"
+                    "INSERT INTO jobs (user_id, strategy_id, kind, params, idempotency_key) "
+                    "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), :idem) RETURNING id"
                 ),
-                {"uid": uid, "sid": strategy_id, "kind": kind, "params": json.dumps(params)},
+                {"uid": uid, "sid": strategy_id, "kind": kind,
+                 "params": json.dumps(params), "idem": idem},
             ).scalar_one()
         return jsonify({"ok": True, "job_id": job_id, "strategy_id": strategy_id, "status": "queued"})
 
+    @app.get("/api/jobs")
     @app.get("/api/saas/jobs")
     def api_list_jobs() -> Any:
         engine = _get_engine(app)
@@ -583,6 +653,7 @@ def create_saas_app() -> Flask:
             jobs.append(item)
         return jsonify({"ok": True, "jobs": jobs})
 
+    @app.get("/api/jobs/<int:job_id>")
     @app.get("/api/saas/jobs/<int:job_id>")
     def api_get_job(job_id: int) -> Any:
         engine = _get_engine(app)
@@ -602,7 +673,7 @@ def create_saas_app() -> Flask:
         if row is None or row["user_id"] != uid:
             return jsonify({"ok": False, "error": "任务不存在"}), 404
         item = _job_view(row)
-        if row["status"] == "done":
+        if row["status"] == "completed":
             item["result"] = {
                 "summary": _jsonable(row["result_summary"]),
                 "chart_data": _jsonable(row["result_chart_data"]),
@@ -611,10 +682,42 @@ def create_saas_app() -> Flask:
             }
         return jsonify({"ok": True, "job": item})
 
-    # --- Worker 侧：认领 / 心跳 / 回传（X-Worker-Token） ---
+    @app.post("/api/jobs/<int:job_id>/cancel")
+    @app.post("/api/saas/jobs/<int:job_id>/cancel")
+    def api_cancel_job(job_id: int) -> Any:
+        """用户取消（17 协议 §5）：queued 直接 canceled；执行中置 cancel_requested，
+        worker 下次心跳发现后自行终止；终态 409。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        with engine.begin() as conn:
+            _reap_expired(conn)
+            row = conn.execute(
+                text("SELECT * FROM jobs WHERE id = :id FOR UPDATE"),
+                {"id": job_id},
+            ).mappings().first()
+            if row is None or row["user_id"] != uid:
+                return jsonify({"ok": False, "error": "任务不存在"}), 404
+            if row["status"] in TERMINAL_STATUSES:
+                return jsonify({"ok": False, "error": f"任务已终态（{row['status']}），无法取消"}), 409
+            if row["status"] == "queued":
+                conn.execute(
+                    text("UPDATE jobs SET status = 'canceled', finished_at = now() WHERE id = :id"),
+                    {"id": job_id},
+                )
+                return jsonify({"ok": True, "status": "canceled"})
+            conn.execute(
+                text("UPDATE jobs SET cancel_requested = true WHERE id = :id"),
+                {"id": job_id},
+            )
+        return jsonify({"ok": True, "status": row["status"], "cancel_requested": True})
 
-    @app.post("/api/saas/worker/jobs/lease")
-    def api_lease_job() -> Any:
+    # --- Worker 侧（17 协议 §3；X-Worker-Token） ---
+
+    @app.post("/api/worker/jobs/claim")
+    @app.post("/api/saas/worker/jobs/lease")  # 兼容别名
+    def api_claim_job() -> Any:
         denied = _check_worker_auth(app)
         if denied is not None:
             return denied
@@ -622,38 +725,52 @@ def create_saas_app() -> Flask:
         worker_id = str(data.get("worker_id") or "").strip()
         if not worker_id:
             return jsonify({"ok": False, "error": "缺少 worker_id"}), 400
+        try:
+            wait_seconds = min(max(float(data.get("wait_seconds") or 0), 0.0), 30.0)
+        except (TypeError, ValueError):
+            wait_seconds = 0.0
 
         engine = _get_engine(app)
-        with engine.begin() as conn:
-            picked = conn.execute(
-                text(
-                    "SELECT id FROM jobs "
-                    "WHERE status = 'queued' "
-                    "   OR (status IN ('leased', 'running') AND lease_expires < now() "
-                    "       AND attempts < max_attempts) "
-                    "ORDER BY priority DESC, created_at LIMIT 1 "
-                    "FOR UPDATE SKIP LOCKED"
-                )
-            ).first()
-            if picked is None:
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            with engine.begin() as conn:
+                _reap_expired(conn)
+                picked = conn.execute(
+                    text(
+                        "SELECT id FROM jobs "
+                        "WHERE status = 'queued' "
+                        "ORDER BY priority DESC, created_at LIMIT 1 "
+                        "FOR UPDATE SKIP LOCKED"
+                    )
+                ).first()
+                if picked is not None:
+                    row = conn.execute(
+                        text(
+                            "UPDATE jobs SET status = 'leased', attempts = attempts + 1, "
+                            "leased_by = :wid, lease_expires_at = now() + :mins * interval '1 minute', "
+                            "started_at = COALESCE(started_at, now()), finished_at = NULL, "
+                            "error_message = NULL, error_class = NULL, heartbeat_at = NULL, "
+                            "progress = 0, progress_message = NULL, upload_token = NULL "
+                            "WHERE id = :id RETURNING *"
+                        ),
+                        {"wid": worker_id, "mins": _lease_minutes(app), "id": picked.id},
+                    ).mappings().one()
+                    strategy = conn.execute(
+                        text("SELECT id, name, nl_text, yaml FROM strategies WHERE id = :sid"),
+                        {"sid": row["strategy_id"]},
+                    ).mappings().one()
+                    job = _job_view(row)
+                    job["strategy"] = _jsonable(dict(strategy))
+                    job["attempt"] = row["attempts"]
+                    # 17 协议字段名：params_json
+                    job["params_json"] = job.pop("params")
+                    return jsonify({"ok": True, "job": job})
+            if time.monotonic() >= deadline:
+                # 空响应语义：200 + job:null（17 协议 §3.1）
                 return jsonify({"ok": True, "job": None})
-            row = conn.execute(
-                text(
-                    "UPDATE jobs SET status = 'leased', attempts = attempts + 1, "
-                    "leased_by = :wid, lease_expires = now() + make_interval(mins => :mins), "
-                    "started_at = COALESCE(started_at, now()), finished_at = NULL, error = NULL "
-                    "WHERE id = :id RETURNING *"
-                ),
-                {"wid": worker_id, "mins": LEASE_MINUTES, "id": picked.id},
-            ).mappings().one()
-            strategy = conn.execute(
-                text("SELECT id, name, nl_text, yaml FROM strategies WHERE id = :sid"),
-                {"sid": row["strategy_id"]},
-            ).mappings().one()
-        job = _job_view(row)
-        job["strategy"] = _jsonable(dict(strategy))
-        return jsonify({"ok": True, "job": job})
+            time.sleep(0.5)
 
+    @app.post("/api/worker/jobs/<int:job_id>/heartbeat")
     @app.post("/api/saas/worker/jobs/<int:job_id>/heartbeat")
     def api_heartbeat(job_id: int) -> Any:
         denied = _check_worker_auth(app)
@@ -661,31 +778,43 @@ def create_saas_app() -> Flask:
             return denied
         data = request.get_json(silent=True) or {}
         worker_id = str(data.get("worker_id") or "").strip()
+        progress = data.get("progress")
+        message = data.get("message")
         engine = _get_engine(app)
         with engine.begin() as conn:
+            _reap_expired(conn)
             row = conn.execute(
                 text(
-                    "UPDATE jobs SET lease_expires = now() + make_interval(mins => :mins) "
-                    "WHERE id = :id AND status IN ('leased', 'running') AND leased_by = :wid "
-                    "RETURNING id, lease_expires"
+                    "UPDATE jobs SET lease_expires_at = now() + :mins * interval '1 minute', "
+                    "heartbeat_at = now(), "
+                    "progress = COALESCE(:progress, progress), "
+                    "progress_message = COALESCE(:message, progress_message), "
+                    "status = CASE WHEN status = 'leased' THEN 'running' ELSE status END "
+                    "WHERE id = :id AND status IN ('leased','running','uploading') AND leased_by = :wid "
+                    "RETURNING id, lease_expires_at, cancel_requested, status"
                 ),
-                {"mins": LEASE_MINUTES, "id": job_id, "wid": worker_id},
+                {"mins": _lease_minutes(app), "id": job_id, "wid": worker_id,
+                 "progress": progress if progress is None else int(progress),
+                 "message": None if message is None else str(message)},
             ).mappings().first()
         if row is None:
             return jsonify({"ok": False, "error": "任务不存在、非运行中或 leased_by 不匹配"}), 409
-        return jsonify({"ok": True, "job_id": row["id"], "lease_expires": _jsonable(row["lease_expires"])})
+        return jsonify({
+            "ok": True, "job_id": row["id"],
+            "lease_expires_at": _jsonable(row["lease_expires_at"]),
+            "cancel_requested": bool(row["cancel_requested"]),
+            "status": row["status"],
+        })
 
-    @app.post("/api/saas/worker/jobs/<int:job_id>/result")
-    def api_report_result(job_id: int) -> Any:
+    @app.post("/api/worker/jobs/<int:job_id>/result/meta")
+    def api_result_meta(job_id: int) -> Any:
+        """17 协议 §3.3 第一步：回传元数据 + 文件清单 → upload_token，job 置 uploading；
+        清单为空则直接 completed。"""
         denied = _check_worker_auth(app)
         if denied is not None:
             return denied
         data = request.get_json(silent=True) or {}
         worker_id = str(data.get("worker_id") or "").strip()
-        status = str(data.get("status") or "")
-        if status not in ("done", "failed"):
-            return jsonify({"ok": False, "error": "status 须为 done/failed"}), 400
-
         engine = _get_engine(app)
         with engine.begin() as conn:
             job = conn.execute(
@@ -694,13 +823,174 @@ def create_saas_app() -> Flask:
             ).mappings().first()
             if job is None:
                 return jsonify({"ok": False, "error": "任务不存在"}), 404
-            if job["status"] not in ("leased", "running") or job["leased_by"] != worker_id:
+            # 幂等（17 协议 §4.3）：已 completed 的重复 meta 提交 → 200 no-op
+            if job["status"] == "completed":
+                return jsonify({"ok": True, "status": "completed", "deduped": True})
+            if job["status"] not in ("leased", "running", "uploading") or job["leased_by"] != worker_id:
                 return jsonify({"ok": False, "error": "任务非当前 worker 持有"}), 409
+            if job["cancel_requested"]:
+                conn.execute(
+                    text("UPDATE jobs SET status='canceled', finished_at=now(), "
+                         "lease_expires_at=NULL WHERE id=:id"),
+                    {"id": job_id},
+                )
+                return jsonify({"ok": True, "status": "canceled"})
 
-            if status == "done":
-                summary = data.get("summary") or {}
-                chart_data = data.get("chart_data") or {}
-                artifacts = data.get("artifacts") or []
+            summary = data.get("summary") or {}
+            chart_data = data.get("chart_data") or {}
+            files = data.get("files") or []
+            upload_token = secrets.token_urlsafe(24)
+            conn.execute(
+                text(
+                    "INSERT INTO results (job_id, user_id, summary, chart_data, artifacts, data_until) "
+                    "VALUES (:jid, :uid, CAST(:summary AS jsonb), CAST(:chart AS jsonb), "
+                    "CAST(:artifacts AS jsonb), :data_until) "
+                    "ON CONFLICT (job_id) DO UPDATE SET "
+                    "summary = EXCLUDED.summary, chart_data = EXCLUDED.chart_data, "
+                    "artifacts = EXCLUDED.artifacts, data_until = EXCLUDED.data_until"
+                ),
+                {
+                    "jid": job_id,
+                    "uid": job["user_id"],
+                    "summary": json.dumps(summary),
+                    "chart": json.dumps(chart_data),
+                    "artifacts": json.dumps(files),
+                    "data_until": data.get("data_until"),
+                },
+            )
+            if not files:
+                conn.execute(
+                    text("UPDATE jobs SET status='completed', finished_at=now(), "
+                         "lease_expires_at=NULL WHERE id=:id"),
+                    {"id": job_id},
+                )
+                return jsonify({"ok": True, "status": "completed"})
+            conn.execute(
+                text("UPDATE jobs SET status='uploading', upload_token=:tok, "
+                     "lease_expires_at = now() + interval '30 minutes' WHERE id=:id"),
+                {"tok": upload_token, "id": job_id},
+            )
+        return jsonify({"ok": True, "status": "uploading", "upload_token": upload_token})
+
+    @app.post("/api/worker/jobs/<int:job_id>/result/files")
+    def api_result_files(job_id: int) -> Any:
+        """17 协议 §3.3 第二步：multipart 上传产物文件（校验 upload_token + sha256），
+        全部到齐 → completed。文件落 SAAS_UPLOAD_DIR（默认 outputs/saas_uploads/job_<id>/）。"""
+        import hashlib as _hashlib
+
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        engine = _get_engine(app)
+        upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
+        with engine.begin() as conn:
+            job = conn.execute(
+                text("SELECT * FROM jobs WHERE id = :id FOR UPDATE"),
+                {"id": job_id},
+            ).mappings().first()
+            if job is None:
+                return jsonify({"ok": False, "error": "任务不存在"}), 404
+            if job["status"] != "uploading":
+                return jsonify({"ok": False, "error": "任务不在产物上传阶段"}), 409
+            if not job["upload_token"] or request.args.get("upload_token") != job["upload_token"]:
+                return jsonify({"ok": False, "error": "upload_token 无效"}), 401
+            manifest = {f["name"]: f for f in
+                        ((conn.execute(text("SELECT artifacts FROM results WHERE job_id=:id"),
+                                       {"id": job_id}).scalar()) or [])}
+            job_dir = upload_root / f"job_{job_id}"
+            job_dir.mkdir(parents=True, exist_ok=True)
+            uploaded = []
+            for name, file in request.files.items():
+                safe = Path(name).name  # 防路径穿越
+                if manifest and safe not in manifest:
+                    return jsonify({"ok": False, "error": f"文件不在清单内: {safe}"}), 400
+                blob = file.read()
+                expected = (manifest.get(safe) or {}).get("sha256")
+                if expected and _hashlib.sha256(blob).hexdigest() != expected:
+                    return jsonify({"ok": False, "error": f"文件校验失败: {safe}"}), 400
+                (job_dir / safe).write_bytes(blob)
+                uploaded.append(safe)
+            remaining = [n for n in manifest if not (job_dir / n).exists()]
+            if remaining:
+                return jsonify({"ok": True, "status": "uploading", "uploaded": uploaded,
+                                "remaining": remaining})
+            conn.execute(
+                text("UPDATE jobs SET status='completed', finished_at=now(), "
+                     "lease_expires_at=NULL, upload_token=NULL WHERE id=:id"),
+                {"id": job_id},
+            )
+        return jsonify({"ok": True, "status": "completed", "uploaded": uploaded})
+
+    @app.post("/api/worker/jobs/<int:job_id>/fail")
+    def api_fail_job(job_id: int) -> Any:
+        """17 协议 §3.4：error_class 分类；不可重试直接 failed，可重试回队。"""
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        worker_id = str(data.get("worker_id") or "").strip()
+        error_class = str(data.get("error_class") or "engine_error")
+        if error_class not in ERROR_CLASSES:
+            return jsonify({"ok": False, "error": f"error_class 须为 {'/'.join(ERROR_CLASSES)}"}), 400
+        error_message = str(data.get("error_message") or data.get("error") or "worker 报告失败")
+        retryable = bool(data.get("retryable", error_class not in NON_RETRYABLE))
+        engine = _get_engine(app)
+        with engine.begin() as conn:
+            job = conn.execute(
+                text("SELECT * FROM jobs WHERE id = :id FOR UPDATE"),
+                {"id": job_id},
+            ).mappings().first()
+            if job is None:
+                return jsonify({"ok": False, "error": "任务不存在"}), 404
+            if job["status"] not in ("leased", "running", "uploading") or job["leased_by"] != worker_id:
+                return jsonify({"ok": False, "error": "任务非当前 worker 持有"}), 409
+            if error_class == "canceled":
+                conn.execute(
+                    text("UPDATE jobs SET status='canceled', error_class='canceled', "
+                         "error_message=:em, finished_at=now(), lease_expires_at=NULL WHERE id=:id"),
+                    {"em": error_message, "id": job_id},
+                )
+                return jsonify({"ok": True, "job_id": job_id, "status": "canceled"})
+            if not retryable or job["attempts"] >= job["max_attempts"]:
+                conn.execute(
+                    text("UPDATE jobs SET status='failed', error_class=:ec, error_message=:em, "
+                         "finished_at=now(), lease_expires_at=NULL WHERE id=:id"),
+                    {"ec": error_class, "em": error_message, "id": job_id},
+                )
+                final_status = "failed"
+            else:
+                conn.execute(
+                    text("UPDATE jobs SET status='queued', error_class=:ec, error_message=:em, "
+                         "leased_by=NULL, lease_expires_at=NULL WHERE id=:id"),
+                    {"ec": error_class, "em": error_message, "id": job_id},
+                )
+                final_status = "queued"
+        return jsonify({"ok": True, "job_id": job_id, "status": final_status})
+
+    # --- 过渡版兼容：POST /api/saas/worker/jobs/<id>/result（单包 done/failed） ---
+    @app.post("/api/saas/worker/jobs/<int:job_id>/result")
+    def api_report_result_legacy(job_id: int) -> Any:
+        """旧单包回传：done → result/meta 语义（无文件直接 completed）；
+        failed → fail 语义（engine_error 可重试）。"""
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        worker_id = str(data.get("worker_id") or "").strip()
+        status = str(data.get("status") or "")
+        if status not in ("done", "completed", "failed"):
+            return jsonify({"ok": False, "error": "status 须为 done/failed"}), 400
+        engine = _get_engine(app)
+        with engine.begin() as conn:
+            job = conn.execute(
+                text("SELECT * FROM jobs WHERE id = :id FOR UPDATE"),
+                {"id": job_id},
+            ).mappings().first()
+            if job is None:
+                return jsonify({"ok": False, "error": "任务不存在"}), 404
+            if job["status"] not in ("leased", "running", "uploading") or job["leased_by"] != worker_id:
+                return jsonify({"ok": False, "error": "任务非当前 worker 持有"}), 409
+            if status in ("done", "completed"):
                 conn.execute(
                     text(
                         "INSERT INTO results (job_id, user_id, summary, chart_data, artifacts, data_until) "
@@ -711,41 +1001,32 @@ def create_saas_app() -> Flask:
                         "artifacts = EXCLUDED.artifacts, data_until = EXCLUDED.data_until"
                     ),
                     {
-                        "jid": job_id,
-                        "uid": job["user_id"],
-                        "summary": json.dumps(summary),
-                        "chart": json.dumps(chart_data),
-                        "artifacts": json.dumps(artifacts),
+                        "jid": job_id, "uid": job["user_id"],
+                        "summary": json.dumps(data.get("summary") or {}),
+                        "chart": json.dumps(data.get("chart_data") or {}),
+                        "artifacts": json.dumps(data.get("artifacts") or []),
                         "data_until": data.get("data_until"),
                     },
                 )
                 conn.execute(
-                    text(
-                        "UPDATE jobs SET status = 'done', finished_at = now(), error = NULL, "
-                        "lease_expires = NULL WHERE id = :id"
-                    ),
+                    text("UPDATE jobs SET status='completed', finished_at=now(), "
+                         "error_message=NULL, error_class=NULL, lease_expires_at=NULL WHERE id=:id"),
                     {"id": job_id},
                 )
-                return jsonify({"ok": True, "job_id": job_id, "status": "done"})
-
-            # failed：attempts 耗尽置 failed，否则回 queued 等待重排
-            error = str(data.get("error") or "worker 报告失败")
+                return jsonify({"ok": True, "job_id": job_id, "status": "completed"})
+            error_message = str(data.get("error") or "worker 报告失败")
             if job["attempts"] >= job["max_attempts"]:
                 conn.execute(
-                    text(
-                        "UPDATE jobs SET status = 'failed', error = :err, finished_at = now(), "
-                        "lease_expires = NULL WHERE id = :id"
-                    ),
-                    {"err": error, "id": job_id},
+                    text("UPDATE jobs SET status='failed', error_class='engine_error', "
+                         "error_message=:em, finished_at=now(), lease_expires_at=NULL WHERE id=:id"),
+                    {"em": error_message, "id": job_id},
                 )
                 final_status = "failed"
             else:
                 conn.execute(
-                    text(
-                        "UPDATE jobs SET status = 'queued', error = :err, "
-                        "leased_by = NULL, lease_expires = NULL WHERE id = :id"
-                    ),
-                    {"err": error, "id": job_id},
+                    text("UPDATE jobs SET status='queued', error_class='engine_error', "
+                         "error_message=:em, leased_by=NULL, lease_expires_at=NULL WHERE id=:id"),
+                    {"em": error_message, "id": job_id},
                 )
                 final_status = "queued"
         return jsonify({"ok": True, "job_id": job_id, "status": final_status})

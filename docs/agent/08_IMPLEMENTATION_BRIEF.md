@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-SAAS-001/002/003/004（CR-0004「8081 SaaS MVP 上线」M1 代码改造切片）
+QRE-JOB-API（A2：Flask 侧 job API 按 17 号协议改造过渡版）——已完成，见 05_PROGRESS 2026-09-19 条目
 
 ## Created By
 

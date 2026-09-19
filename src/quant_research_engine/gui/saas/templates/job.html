@@ -268,7 +268,7 @@ async function poll(){
   badge.className = 'badge ' + job.status;
   badge.textContent = STATUS_LABEL[job.status] || job.status;
 
-  if (job.status === 'done'){
+  if (job.status === 'completed'){
     document.getElementById('status-card').classList.add('hidden');
     document.getElementById('result-area').classList.remove('hidden');
     const result = job.result || {};
