@@ -2,6 +2,10 @@
 
 ## Latest Verified State
 
+## Latest Verified State
+
+2026-09-19 QRE-ECS-C1 DONE（ECS 部署 SaaS Web/API：Flask+PG 小库+systemd+Nginx 反代）：①ECS venv（/srv/aguhuice/qre/.venv）最小依赖 flask/sqlalchemy/psycopg[binary]/gunicorn/pyyaml——先验证 import 链 saas app 模块层零 pandas/numpy（重型栈都在引擎侧，ECS 不跑回测），`create_saas_app` import 实测通过；②PG 小库：本机 postgresql，库/角色 aguhuice，apply deploy/saas/cloud_schema.sql（7 表），GRANT 全表+序列（坑：角色初见密码认证失败，ALTER ROLE 重设后通——DO 块 CREATE ROLE 的密码转义曾出问题）；③qre-saas.service：gunicorn --workers 2 --bind 127.0.0.1:8090 --timeout 120 app factory，User=www-data，MemoryMax=1G，journald（SyslogIdentifier=qre-saas），enable --now active；④Nginx 443 server 块加 /api/+/saas/+/static/ 反代（proxy_read_timeout 120s、client_max_body_size 64m 供产物上传），certbot 行零改动，落地页 / 不变；仓库 deploy/landing/nginx-aguhuice.conf 已同步线上版。验证（全部公网 https://aguhuice.com 实测）：落地页 200、/saas/login 200、/api/saas/me 401（未登录）、claim 错 token 401、真 token 200 {"job":null}；ECS 内存充裕（available 1.05G）。16 号文档已更新 C1 状态与待办勾选。未 git commit/push（等用户批准）。遗留：C2 Nginx IP 限流；C3 家里 worker 指向 https://aguhuice.com；登录通道 SMTP 配置（SAAS_AUTH_CHANNEL=email 已配但 SMTP 未配，发码会 502——D 阶段处理）。
+
 2026-09-19 QRE-SAAS-RESULTS-UI DONE（B3：SaaS Web 端数据源切换到 B1/B2 API，纯前端模板改动、零后端）：dashboard.html 记录列表从 /api/saas/jobs 切到 /api/results（只列 full job、按用户隔离；策略名改显 strategy_name 真实名而非「策略 #id」；顺手修 UTC 时间戳直显问题——fmtTime 改浏览器本地时区转换，与 8081 记录页同口径）；job.html 详情页从 /api/saas/jobs/<id> 嵌套 result 切到 /api/results/<id>/summary + chart-data + tag-analysis 三端点并行拉取，409（带 status）显示进行状态并 5s 轮询，404/失败显示错误；risk-analysis 端点本期不接（job 页本就无 FRM 区块，UI 零改动纪律）；symbols 端点本期不接（SaaS 无个股页）。UI/样式零改动（18080 冻结基线不动）。测试：test_gui_saas_pages.py +2（两页数据源断言：新端点在、旧端点不在、409 轮询逻辑在）；期间撞线一次禁链断言——注释里写了「8081」字样触发禁词表，改措辞后过。全量 pytest tests/ -q → **2101 passed + 4 skipped**（基线 2099+2）零回归。8081 lab 侧零改动；服务无需重启（SaaS staging 8081 模板修改即时生效由 Flask 模板缓存策略决定，已验证测试客户端直读磁盘模板）。未 commit，等用户批准。
 
 ## Latest Verified State

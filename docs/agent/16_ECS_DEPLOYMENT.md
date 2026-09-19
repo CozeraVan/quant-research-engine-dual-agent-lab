@@ -32,6 +32,17 @@
   **版本管理在仓库** `deploy/landing/`（index.html + nginx-aguhuice.conf，与线上 diff 校验一致）；
   Nginx 站点：`/etc/nginx/sites-available/aguhuice`。
 
+**C1 已上线（2026-09-19）**：
+- SaaS Web/API：`qre-saas.service`（gunicorn 2 workers，127.0.0.1:8090，MemoryMax=1G，
+  User=www-data，EnvironmentFile=/etc/qre-saas.env[0600]，repo /srv/aguhuice/qre + venv
+  最小依赖 flask/sqlalchemy/psycopg[binary]/gunicorn/pyyaml——**无 pandas/numpy**）；
+- PG 小库：本机 postgresql，库 `aguhuice`，角色 `aguhuice`（密码在 /etc/qre-saas.env），
+  cloud_schema.sql 已 apply（7 表）；
+- Nginx：443 server 块反代 `/api/`、`/saas/`、`/static/` → 127.0.0.1:8090，
+  落地页静态 `/` 不变（仓库 nginx-aguhuice.conf 已同步线上版）；
+- 验证：公网 https://aguhuice.com/ 200（落地页）、/saas/login 200、/api/saas/me 401、
+  /api/worker/jobs/claim 错 token 401、真 token 200 {job:null}。
+
 代码侧（家里 WSL，部署备用）：SaaS app（gui/saas/：验证码登录/任务队列/worker 协议/四页前端）、
 worker 包（client/runner/daemon）、Docker 沙箱、流式批量回测均已实现并测试（见 05 逐条）。
 
@@ -40,8 +51,8 @@ worker 包（client/runner/daemon）、Docker 沙箱、流式批量回测均已�
 主线顺序见 `15_SAAS_SYSTEMS_DESIGN.md` 第 7 节 TODO（阶段 A–E；全链路优先，登录/管理最后）。
 ECS 侧专属待办（隶属阶段 C）：
 
-- [ ] 装 Python/Flask + PG 用户小库（2G 内存参数调优：shared_buffers/work_mem 压小）
-- [ ] Nginx 反代 /api 到 Flask + IP 限流（如 10 req/min/IP）
+- [x] 装 Python/Flask + PG 用户小库（C1 完成；PG 2G 参数调优暂未做，内测量级先观察）
+- [ ] Nginx IP 限流（如 10 req/min/IP；C2 待办，反代本身已完成）
 - [ ] 禁 root 直连（PasswordAuthentication/PermitRootLogin 关闭，仅用 deploy 用户）
 - [ ] 结果产物磁盘水位监控（40GB ESSD，结果只留元数据+图表 JSON，大文件走 OSS）
 - [ ] 落地页页脚备案号占位替换为正式号：湘ICP备2026040383号-1（改 `deploy/landing/index.html` 后 scp 同步，见第 5 节）
