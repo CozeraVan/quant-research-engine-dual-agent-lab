@@ -499,3 +499,94 @@ class TestProtocolA2:
         client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
         detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
         assert detail["status"] == "expired"
+
+
+class TestResultsApi:
+    """QRE-SAAS-RESULTS（B1+B2）：列表/详情/删除/未完成语义。"""
+
+    def _completed_job(self, client, app, tmp_path, name="s", excess=0.1):
+        """建 job → claim → meta 回传（含 chart_data.metrics.excess_return）→ completed。"""
+        import json as _json
+
+        resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": name,
+                                              "params": {"start": "2026-01-01", "end": "2026-03-01"}},
+                           headers={"X-User-Id": "1"})
+        job_id = resp.get_json()["job_id"]
+        client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        chart = {"metrics": {"excess_return": excess}, "dates": ["2026-01-05"],
+                 "equity": [1.0], "tag_analysis": {"ok": True, "layers": {"A": [
+                     {"tag": "银行", "total_pnl": 100.0, "trades": 2, "win_rate": 0.5,
+                      "avg_ret": 0.01, "symbols_total": 1, "symbols_truncated": False,
+                      "symbols": [{"ts_code": "000001.SZ", "name": "平安银行", "total_pnl": 100.0,
+                                   "trades": 2, "win_rate": 0.5, "avg_ret": 0.01}]}]}}}
+        client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                    json={"worker_id": "w1",
+                          "summary": {"strategy_total_return": 0.2, "win_rate": 0.5,
+                                      "max_drawdown": -0.1, "total_trade_count": 5,
+                                      "symbol_count": 20},
+                          "chart_data": chart, "data_until": "2026-02-27", "files": []},
+                    headers=WORKER_HEADERS)
+        return job_id
+
+    def test_list_sort_pagination(self, client, app, tmp_path):
+        j1 = self._completed_job(client, app, tmp_path, name="a", excess=0.3)
+        j2 = self._completed_job(client, app, tmp_path, name="b", excess=0.1)
+        resp = client.get("/api/results", headers={"X-User-Id": "1"}).get_json()
+        assert resp["ok"] and resp["total"] == 2
+        item = resp["items"][0]
+        for key in ("strategy_name", "status", "date_start", "date_end", "symbol_count",
+                    "excess_return", "max_drawdown", "win_rate", "total_trade_count",
+                    "data_until", "created_at"):
+            assert key in item
+        assert item["excess_return"] == 0.1  # created_at 倒序，最新在前
+        # 超额升序
+        asc = client.get("/api/results?sort=excess_return&order=asc",
+                         headers={"X-User-Id": "1"}).get_json()
+        assert [i["excess_return"] for i in asc["items"]] == [0.1, 0.3]
+        # 分页
+        p1 = client.get("/api/results?page=1&page_size=1", headers={"X-User-Id": "1"}).get_json()
+        assert p1["total"] == 2 and len(p1["items"]) == 1
+        # 用户隔离
+        assert client.get("/api/results", headers={"X-User-Id": "2"}).get_json()["total"] == 0
+        # 未登录
+        assert client.get("/api/results").status_code == 401
+
+    def test_detail_endpoints(self, client, app, tmp_path):
+        job_id = self._completed_job(client, app, tmp_path)
+        h = {"X-User-Id": "1"}
+        s = client.get(f"/api/results/{job_id}/summary", headers=h).get_json()
+        assert s["summary"]["strategy_total_return"] == 0.2 and s["data_until"] == "2026-02-27"
+        cd = client.get(f"/api/results/{job_id}/chart-data", headers=h).get_json()
+        assert cd["metrics"]["excess_return"] == 0.1
+        ta = client.get(f"/api/results/{job_id}/tag-analysis", headers=h).get_json()
+        assert ta["layers"]["A"][0]["tag"] == "银行"
+        sy = client.get(f"/api/results/{job_id}/symbols", headers=h).get_json()
+        assert sy["symbols"][0]["ts_code"] == "000001.SZ"
+        ra = client.get(f"/api/results/{job_id}/risk-analysis", headers=h).get_json()
+        assert ra["ok"] and ra["has_report"] is False  # 产物无 risk_report.json
+        # 个股无交易 → 404
+        d404 = client.get(f"/api/results/{job_id}/symbols/999999.XH", headers=h)
+        assert d404.status_code == 404
+
+    def test_unfinished_and_foreign_semantics(self, client, app, tmp_path):
+        # 未完成（queued）→ 409；他人 → 404；不存在 → 404
+        resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full"}, headers={"X-User-Id": "1"})
+        job_id = resp.get_json()["job_id"]
+        r = client.get(f"/api/results/{job_id}/chart-data", headers={"X-User-Id": "1"})
+        assert r.status_code == 409 and r.get_json()["status"] == "queued"
+        assert client.get(f"/api/results/{job_id}/chart-data", headers={"X-User-Id": "2"}).status_code == 404
+        assert client.get("/api/results/999/chart-data", headers={"X-User-Id": "1"}).status_code == 404
+        assert client.get(f"/api/results/{job_id}/chart-data").status_code == 401
+
+    def test_delete(self, client, app, tmp_path):
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path / "uploads")
+        job_id = self._completed_job(client, app, tmp_path)
+        job_dir = tmp_path / "uploads" / f"job_{job_id}"
+        job_dir.mkdir(parents=True)
+        (job_dir / "equity_curve.csv").write_text("x", encoding="utf-8")
+        h = {"X-User-Id": "1"}
+        assert client.delete(f"/api/results/{job_id}", headers=h).get_json()["ok"]
+        assert not job_dir.exists()
+        assert client.get(f"/api/results/{job_id}/summary", headers=h).status_code == 404
+        # 重复删除 404；他人删除 404
+        assert client.delete(f"/api/results/{job_id}", headers=h).status_code == 404

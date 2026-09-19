@@ -4,6 +4,10 @@
 
 ## Latest Verified State
 
+2026-09-19 QRE-SAAS-RESULTS DONE（B1+B2：结果系统——列表/详情/删除 API）：全部加在 gui/saas/app.py（无新文件，复用 lab_result.py 解析函数）。B1：GET /api/results（排序 created_at|excess_return × asc|desc、分页 page/page_size≤100；字段=策略名/区间/标的数/总收益/超额/回撤/胜率/交易笔数/状态/数据截止；只列 full job；用户隔离）；DELETE /api/results/<id>（results+jobs 行 + SAAS_UPLOAD_DIR/job_<id>/ 目录，策略行保留；他人/重复删 404）。B2 详情端点（语义对齐 8081 lab_result）：summary（results.summary 直出）/chart-data（worker 回传的 build_lab_chart_data 产物直出，**与 8081 完全同形态**）/tag-analysis（chart_data.tag_analysis 截断版直出）/risk-analysis（读上传产物 risk_report.json 经既有 build_lab_risk_view 转换；无文件 has_report=false）/symbols（tag_analysis 跨层按股合并，与 8081 个股列表页同语义）/symbols/<ts_code>（复用 build_lab_symbol_detail，job 行构造成 run record 指向 job_<id>/ 产物目录；K 线/因子查本地大库，ECS 无库时字段降级 None——已注释）。语义闸：未完成 409（带 status）、他人/不存在 404（不暴露存在性，_load_job_for_user 属主过滤先于状态判定——此处修了一个 409/404 顺序问题）、未登录 401。测试 +4（列表排序分页隔离/详情六端点/未完成与他人语义/删除含产物目录与重复删）。全量 `pytest tests/` → **2099 passed + 4 skipped**（基线 2095 + 4）零回归。未 git commit。
+
+## Latest Verified State
+
 2026-09-19 QRE-JOB-E2E DONE（A4+A5：本地双进程真实端到端 + 故障演练，全部通过）：环境——saas app @8091（aguhuice_e2e 临时库、SAAS_UPLOAD_DIR=/tmp 临时目录、短租约 SAAS_LEASE_MINUTES=0.25 供演练）+ worker daemon（python -m quant_research_engine.worker，真 runner、QRE_MARKET_DB_URL 真库）。**A4**：①smoke job（EMA5/EMA20 金叉）：queued→leased→running→completed 约 60s，summary 真实（收益 -15.35%/140 笔/胜率 33.6%），产物 23 个文件经 sha256 校验落盘云端（含 xlsx/html 报告）；②full job（20 只 × 近 6 个月）：132s completed，收益 -1.53%/549 笔/归因 A 层 27 板块/净值 486 点。**A5**：full job running 中 kill -9 worker → 租约 15s 过期 → **惰性回收语义实测**：无 worker 时无触发源，状态保持 running（设计如此，17 协议 §4.2「claim/heartbeat 时顺带」）；重启 worker 后首次 claim 即触发回收重排（attempts 1→2）→ 96s completed，结果与被 kill 前的同参数 job 完全一致（幂等覆盖写实锤）。发现并已修两处真实 bug（计入 A3 改动）：①fail(error_class=canceled) 原被默认 retryable 回队 → 修为终态 canceled；②result/meta 对已 completed 重复提交原 409 → 修为幂等 200（17 协议 §4.3）。另为演练加 SAAS_LEASE_MINUTES 配置（默认 15 不变；顺带修 make_interval 不支持 float 参数，改 `:mins * interval '1 minute'`）。演练产物/临时库已清理；8080/8081 未碰。测试全量 `pytest tests/` → **2095 passed + 4 skipped** 零回归。未 git commit。
 
 ## Latest Verified State

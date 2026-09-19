@@ -1031,6 +1031,222 @@ def create_saas_app() -> Flask:
                 final_status = "queued"
         return jsonify({"ok": True, "job_id": job_id, "status": final_status})
 
+    # --- 结果系统（QRE-SAAS-RESULTS / B1+B2；语义对齐 8081 lab_result 路由） ---
+
+    def _load_job_for_user(job_id: int, uid: int) -> Any:
+        """取 job+strategy+result；非本人/不存在返回 None（不暴露存在性）。"""
+        engine = _get_engine(app)
+        with engine.connect() as conn:
+            return conn.execute(
+                text(
+                    "SELECT j.*, s.name AS strategy_name, s.yaml AS strategy_yaml, "
+                    "r.summary AS result_summary, r.chart_data AS result_chart_data, "
+                    "r.artifacts AS result_artifacts, r.data_until AS result_data_until "
+                    "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
+                    "WHERE j.id = :id AND j.user_id = :uid"
+                ),
+                {"id": job_id, "uid": uid},
+            ).mappings().first()
+
+    def _result_record(row: Any) -> dict[str, Any]:
+        """把 job 行构造成 lab_result.py 认识的 run record（复用 8081 解析函数的关键）：
+        output_dir 指向上传目录 job_<id>/（产物同名同格式），_find_output_file 走 rglob。"""
+        params = row["params"] or {}
+        upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
+        codes = params.get("codes") or []
+        if isinstance(codes, str):
+            codes = [c.strip() for c in codes.split(",") if c.strip()]
+        return {
+            "run_id": f"job-{row['id']}",
+            "mode": params.get("mode") or "shared",
+            "start": params.get("start"),
+            "end": params.get("end"),
+            "codes": codes,
+            "initial_cash": params.get("initial_cash"),
+            "max_positions": params.get("max_positions"),
+            "engine_impl": params.get("engine_impl") or "simulator",
+            "output_dir": str(upload_root / f"job_{row['id']}"),
+            "artifacts": {},
+        }
+
+    def _require_completed_result(job_id: int) -> Any:
+        """返回 (row, error_response)。未完成 409；不存在/非本人 404。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return None, (jsonify({"ok": False, "error": "未登录"}), 401)
+        row = _load_job_for_user(job_id, uid)
+        if row is None:
+            return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
+        if row["status"] != "completed":
+            return None, (jsonify({"ok": False, "error": f"任务未完成（{row['status']}）",
+                                   "status": row["status"]}), 409)
+        return row, None
+
+    @app.get("/api/results")
+    def api_results_list() -> Any:
+        """B1 结果列表：?sort=created_at|excess_return&order=desc|asc&page=&page_size="""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        sort = request.args.get("sort", "created_at")
+        order = "asc" if request.args.get("order") == "asc" else "desc"
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+            page_size = min(100, max(1, int(request.args.get("page_size", 20))))
+        except ValueError:
+            return jsonify({"ok": False, "error": "page/page_size 须为整数"}), 400
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT j.id, j.kind, j.status, j.created_at, j.params, "
+                    "s.name AS strategy_name, r.summary, r.chart_data, r.data_until "
+                    "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
+                    "WHERE j.user_id = :uid AND j.kind = 'full' "
+                    "ORDER BY j.created_at DESC"
+                ),
+                {"uid": uid},
+            ).mappings().all()
+        items = []
+        for row in rows:
+            metrics = ((row["chart_data"] or {}).get("metrics") or {})
+            summary = row["summary"] or {}
+            params = row["params"] or {}
+            items.append({
+                "job_id": row["id"],
+                "strategy_name": row["strategy_name"],
+                "status": row["status"],
+                "date_start": params.get("start"),
+                "date_end": params.get("end"),
+                "symbol_count": summary.get("symbol_count"),
+                "total_return": summary.get("strategy_total_return"),
+                "excess_return": metrics.get("excess_return"),
+                "max_drawdown": summary.get("max_drawdown"),
+                "win_rate": summary.get("win_rate"),
+                "total_trade_count": summary.get("total_trade_count"),
+                "data_until": _jsonable(row["data_until"]),
+                "created_at": _jsonable(row["created_at"]),
+            })
+        if sort == "excess_return":
+            items.sort(key=lambda x: (x["excess_return"] is None, x["excess_return"]),
+                       reverse=(order == "desc"))
+        else:
+            items.sort(key=lambda x: x["created_at"] or "", reverse=(order == "desc"))
+        total = len(items)
+        items = items[(page - 1) * page_size: page * page_size]
+        return jsonify({"ok": True, "total": total, "page": page,
+                        "page_size": page_size, "items": items})
+
+    @app.delete("/api/results/<int:job_id>")
+    def api_result_delete(job_id: int) -> Any:
+        """B1 删除：results+jobs 行 + 产物目录（job_<id>/）。策略行保留。"""
+        import shutil
+
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        row = _load_job_for_user(job_id, uid)
+        if row is None:
+            return jsonify({"ok": False, "error": "任务不存在"}), 404
+        upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
+        job_dir = upload_root / f"job_{job_id}"
+        if job_dir.is_dir():
+            shutil.rmtree(job_dir)
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM results WHERE job_id = :id"), {"id": job_id})
+            conn.execute(text("DELETE FROM jobs WHERE id = :id"), {"id": job_id})
+        return jsonify({"ok": True, "deleted": job_id})
+
+    @app.get("/api/results/<int:job_id>/summary")
+    def api_result_summary(job_id: int) -> Any:
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        return jsonify({"ok": True, "job_id": job_id,
+                        "strategy_name": row["strategy_name"],
+                        "summary": _jsonable(row["result_summary"]),
+                        "data_until": _jsonable(row["result_data_until"])})
+
+    @app.get("/api/results/<int:job_id>/chart-data")
+    def api_result_chart_data(job_id: int) -> Any:
+        """与 8081 /api/lab/runs/<id>/chart-data 同形态（worker 侧 build_lab_chart_data 产物）。"""
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        return jsonify(row["result_chart_data"] or {"ok": False, "error": "无图表数据"})
+
+    @app.get("/api/results/<int:job_id>/tag-analysis")
+    def api_result_tag_analysis(job_id: int) -> Any:
+        """与 8081 同形态；为 worker 回传的截断版（板块聚合全量+个股 TOP/BOTTOM 各 50）。"""
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        tag = (row["result_chart_data"] or {}).get("tag_analysis")
+        if not tag:
+            return jsonify({"ok": False, "error": "无归因数据"}), 404
+        return jsonify(tag)
+
+    @app.get("/api/results/<int:job_id>/risk-analysis")
+    def api_result_risk_analysis(job_id: int) -> Any:
+        """与 8081 /api/lab/runs/<id>/risk-analysis 同形态；risk_report.json 须在上传产物里
+        （未上传或 worker 未生成时 has_report=false，前端显示暂无）。"""
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        from quant_research_engine.gui.lab_result import build_lab_risk_view
+
+        job_dir = Path(_result_record(row)["output_dir"])
+        report_path = job_dir / "risk_report.json"
+        data: dict[str, Any] = {"ok": True, "job_id": job_id, "has_report": False}
+        if report_path.exists():
+            try:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                report = None
+            if isinstance(report, dict):
+                data["has_report"] = True
+                data.update(build_lab_risk_view(report))
+        return jsonify(_jsonable(data))
+
+    @app.get("/api/results/<int:job_id>/symbols")
+    def api_result_symbols(job_id: int) -> Any:
+        """个股列表（8081 语义：tag-analysis 驱动的个股贡献聚合）。"""
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        tag = (row["result_chart_data"] or {}).get("tag_analysis")
+        if not tag:
+            return jsonify({"ok": False, "error": "无归因数据"}), 404
+        # 跨层按股合并（与 saas 结果页贡献榜同口径）
+        by_symbol: dict[str, Any] = {}
+        for items in (tag.get("layers") or {}).values():
+            for item in items or []:
+                for s in item.get("symbols") or []:
+                    cur = by_symbol.get(s["ts_code"])
+                    if cur is None or abs(s["total_pnl"]) > abs(cur["total_pnl"]):
+                        by_symbol[s["ts_code"]] = s
+        symbols = sorted(by_symbol.values(), key=lambda s: s["total_pnl"], reverse=True)
+        return jsonify({"ok": True, "job_id": job_id, "symbols": _jsonable(symbols)})
+
+    @app.get("/api/results/<int:job_id>/symbols/<ts_code>")
+    def api_result_symbol_detail(job_id: int, ts_code: str) -> Any:
+        """与 8081 /api/lab/runs/<id>/symbol/<ts>/detail 同形态。
+        注意：K 线/因子明细查本地大库，仅在能连库的部署（worker 同机/staging）可用；
+        云上 ECS 无库时相应字段降级为 None（lab_result 既有降级行为）。"""
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        from quant_research_engine.gui.lab_result import build_lab_symbol_detail
+
+        data = build_lab_symbol_detail(_result_record(row), ts_code)
+        if data is None:
+            return jsonify({"ok": False, "error": "该股票在本次回测中无交易"}), 404
+        return jsonify(_jsonable(data))
+
     return app
 
 
