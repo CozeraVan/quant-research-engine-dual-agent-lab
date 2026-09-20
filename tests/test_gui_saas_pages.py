@@ -81,10 +81,13 @@ class TestPages:
         resp = client.get("/saas/new")
         assert resp.status_code == 200
         html = resp.get_data(as_text=True)
-        assert 'id="tab-nl"' in html and 'id="tab-wizard"' in html
-        assert 'id="nl-input"' in html and 'id="wz-factor"' in html
-        assert 'id="btn-submit"' in html  # 单一「开始回测」（后台自动预检+提交）
-        assert 'id="yaml-preview"' in html  # 策略代码预览（高级，默认折叠）
+        # C5：三入口卡 + 共用参数 + 预览栏 + 唯一流水线按钮（冻结版结构平移）
+        assert 'id="entryGrid"' in html and 'data-entry="nl"' in html and 'data-entry="wizard"' in html and 'data-entry="yaml"' in html
+        assert 'id="nl-text"' in html and 'id="wz-entry"' in html and 'id="yaml-editor"' in html
+        assert 'id="btn-run-main"' in html  # 唯一「运行回测」（冒烟→全量流水线）
+        assert 'id="pv-view"' in html       # 策略代码预览栏（行号+高亮）
+        assert 'id="cal-pop"' in html       # 日历选区间
+        assert 'id="p-random-n"' in html    # 随机股票 N（板块/概念降级说明在页面上）
 
     def test_job_page(self, client):
         resp = client.get("/saas/jobs/1")
@@ -94,6 +97,8 @@ class TestPages:
         assert 'id="job-badge"' in html and '/static/echarts.min.js' in html
         assert 'id="chart-tags"' in html and 'id="tag-rank"' in html  # 归因区块
         assert 'id="metric-strip"' in html and 'id="meta-chips"' in html
+        assert 'id="box-risk"' in html and 'id="box-fees"' in html   # C5：FRM + 交易磨损（无数据整块隐藏）
+        assert 'id="big-symbols"' in html                            # 个股明细大入口
 
     def test_no_engineering_jargon(self, client):
         # 零术语原则：页面不得出现 沙箱/晋升/promote/试算 等内部词
@@ -271,10 +276,17 @@ class TestResultsDataSource:
 
     def test_dashboard_uses_results_api(self, client):
         html = client.get("/saas/").get_data(as_text=True)
-        assert "/api/results'" in html                      # 列表走 /api/results
+        assert "/api/results?sort=" in html                # 列表走 /api/results（排序/分页）
         assert "/api/saas/jobs')" not in html              # 不再走旧 jobs 列表
         assert "job.job_id" in html                        # 新字段名
         assert "strategy_name" in html
+
+    def test_symbols_pages_registered(self, client):
+        html = client.get("/saas/jobs/1/symbols").get_data(as_text=True)
+        assert 'id="sym-table"' in html and "/api/results/" in html and "/symbols" in html
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        assert 'id="sum-strip"' in html and 'id="chart-kline"' in html
+        assert "/api/results/" in html and "/symbols/" in html
 
     def test_job_page_uses_results_detail_apis(self, client):
         html = client.get("/saas/jobs/1").get_data(as_text=True)

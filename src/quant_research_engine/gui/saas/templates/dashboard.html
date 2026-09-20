@@ -14,10 +14,38 @@
     <a class="btn big" href="/saas/new" id="btn-new-job">新建回测</a>
   </div>
   <div class="panel">
-    <table id="jobs-table">
-      <thead><tr><th>策略</th><th>状态</th><th>创建时间</th><th>数据截止</th><th></th></tr></thead>
-      <tbody id="jobs-tbody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
+    <div class="table-tools">
+      <button class="btn-sm" id="btn-reload">刷新</button>
+      <span class="opt" id="list-hint"></span>
+      <span style="margin-left:auto"></span>
+      <span class="opt">排序：</span>
+      <button class="seg-btn active" data-sort="created_at">创建时间</button>
+      <button class="seg-btn" data-sort="excess_return">超额收益</button>
+    </div>
+    <table class="tbl" id="jobs-table">
+      <thead><tr>
+        <th>策略</th><th>回测区间</th><th class="num" style="text-align:right">股票数量</th>
+        <th class="num" style="text-align:right">超额收益</th><th>状态</th><th>创建时间</th><th style="text-align:right">操作</th>
+      </tr></thead>
+      <tbody id="jobs-tbody"><tr><td colspan="7" class="muted">加载中…</td></tr></tbody>
     </table>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+      <button class="btn-sm" id="pg-prev">← 上一页</button>
+      <span class="opt" id="pg-info"></span>
+      <button class="btn-sm" id="pg-next">下一页 →</button>
+    </div>
+  </div>
+
+  <!-- 删除确认弹层 -->
+  <div class="modal-mask" id="del-mask">
+    <div class="modal">
+      <h3>删除该回测记录？</h3>
+      <p id="del-text"></p>
+      <div class="m-actions">
+        <button class="btn btn-ghost" id="del-cancel">取消</button>
+        <button class="btn btn-primary" id="del-ok" style="background:var(--up);border-color:var(--up)">确认删除</button>
+      </div>
+    </div>
   </div>
   <div class="panel">
     <details id="factor-req-details">
@@ -48,35 +76,97 @@ function fmtTime(iso){
   return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-// B3：数据源切到 B1 的 /api/results（只列 full job、按用户隔离、含策略名与收益指标）
+// B3/C5：/api/results 列表（sort=created_at|excess_return × asc|desc + 分页 + 删除）
+let listState = {sort: 'created_at', order: 'desc', page: 1, pageSize: 20, total: 0};
+let pendingDel = null;
+function clsPnL(v){ return v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat'); }
+function fmtPct(v){ return v == null ? '——' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%'; }
+
 async function load(){
-  const [meResp, listResp] = await Promise.all([apiFetch('/api/saas/me'), apiFetch('/api/results')]);
+  const [meResp, listResp] = await Promise.all([
+    apiFetch('/api/saas/me'),
+    apiFetch(`/api/results?sort=${listState.sort}&order=${listState.order}&page=${listState.page}&page_size=${listState.pageSize}`),
+  ]);
   const me = await meResp.json();
   if (me.ok) document.getElementById('user-label').textContent = me.user.email || me.user.phone || '';
   const data = await listResp.json();
   const tbody = document.getElementById('jobs-tbody');
   const items = data.items || [];
+  listState.total = data.total || 0;
   if (!items.length){
-    tbody.innerHTML = '<tr><td colspan="5" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
-    return;
+    tbody.innerHTML = '<tr><td colspan="7" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
+  } else {
+    tbody.innerHTML = '';
+    for (const job of items){
+      const tr = document.createElement('tr');
+      const status = STATUS_LABEL[job.status] || job.status;
+      const done = job.status === 'completed';
+      if (done) { tr.className = 'row-link'; tr.title = '点击进入回测详情'; }
+      const range = (job.date_start || '—') + ' ~ ' + (job.date_end || '—');
+      const symbols = job.symbol_count == null ? '全 A 股' : job.symbol_count + ' 只';
+      const excess = job.excess_return == null
+        ? '<span class="opt">——</span>'
+        : `<span class="${clsPnL(job.excess_return)}">${fmtPct(job.excess_return)}</span>`;
+      const viewLink = done ? `<a class="view-link" href="/saas/jobs/${job.job_id}">查看结果 →</a>` : '';
+      tr.innerHTML = `<td><strong>${job.strategy_name || ('策略 #' + job.job_id)}</strong><br><span class="opt">#${job.job_id}</span></td>`
+        + `<td class="opt">${range}</td>`
+        + `<td style="text-align:right">${symbols}</td>`
+        + `<td style="text-align:right">${excess}</td>`
+        + `<td><span class="badge ${job.status}">${status}</span></td>`
+        + `<td>${fmtTime(job.created_at)}</td>`
+        + `<td style="text-align:right;white-space:nowrap">${viewLink} <button class="btn-sm btn-danger-outline" data-del="${job.job_id}">删除</button></td>`;
+      if (done) tr.addEventListener('click', ev => {
+        if (ev.target.closest('button') || ev.target.closest('a')) return;
+        location.href = '/saas/jobs/' + job.job_id;
+      });
+      tbody.appendChild(tr);
+    }
   }
-  tbody.innerHTML = '';
-  for (const job of items){
-    const tr = document.createElement('tr');
-    const status = STATUS_LABEL[job.status] || job.status;
-    let action = '';
-    if (job.status === 'completed') action = `<a class="btn ghost" href="/saas/jobs/${job.job_id}">查看结果</a>`;
-    else if (job.status === 'failed') action = '';
-    else action = `<a href="/saas/jobs/${job.job_id}">查看进度</a>`;
-    tr.innerHTML = `<td>${job.strategy_name || ('策略 #' + job.job_id)}</td>`
-      + `<td><span class="badge ${job.status}">${status}</span></td>`
-      + `<td>${fmtTime(job.created_at)}</td>`
-      + `<td>${job.data_until || '—'}</td>`
-      + `<td>${action}</td>`;
-    tbody.appendChild(tr);
-  }
+  tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
+    pendingDel = btn.dataset.del;
+    document.getElementById('del-text').innerHTML = '回测 <b>#' + pendingDel + '</b> 的记录与结果文件将被移除，删除后不可恢复。';
+    document.getElementById('del-mask').classList.add('show');
+  }));
+  document.getElementById('list-hint').textContent = `共 ${listState.total} 条`;
+  const pages = Math.max(1, Math.ceil(listState.total / listState.pageSize));
+  document.getElementById('pg-info').textContent = `第 ${listState.page} / ${pages} 页`;
+  document.getElementById('pg-prev').disabled = listState.page <= 1;
+  document.getElementById('pg-next').disabled = listState.page >= pages;
   if (items.some(j => ['queued', 'leased', 'running'].includes(j.status))) setTimeout(load, 5000);
 }
+
+// 排序切换（点同一键切升降序；换键重置为降序第一页）
+document.querySelectorAll('[data-sort]').forEach(btn => btn.addEventListener('click', () => {
+  const k = btn.dataset.sort;
+  if (listState.sort === k) listState.order = listState.order === 'desc' ? 'asc' : 'desc';
+  else { listState.sort = k; listState.order = 'desc'; }
+  document.querySelectorAll('[data-sort]').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('[data-sort]').forEach(b => {
+    b.textContent = (b.dataset.sort === 'created_at' ? '创建时间' : '超额收益') +
+      (b.dataset.sort === listState.sort ? (listState.order === 'desc' ? ' ▼' : ' ▲') : '');
+  });
+  listState.page = 1;
+  load();
+}));
+document.getElementById('pg-prev').addEventListener('click', () => { if (listState.page > 1){ listState.page--; load(); } });
+document.getElementById('pg-next').addEventListener('click', () => { listState.page++; load(); });
+document.getElementById('btn-reload').addEventListener('click', load);
+
+// 删除弹层
+document.getElementById('del-cancel').addEventListener('click', () => {
+  document.getElementById('del-mask').classList.remove('show'); pendingDel = null;
+});
+document.getElementById('del-mask').addEventListener('click', function(e){ if (e.target === this){ this.classList.remove('show'); pendingDel = null; } });
+document.getElementById('del-ok').addEventListener('click', async () => {
+  if (!pendingDel) return;
+  const id = pendingDel;
+  document.getElementById('del-mask').classList.remove('show');
+  pendingDel = null;
+  const resp = await apiFetch('/api/results/' + id, {method: 'DELETE'});
+  const d = await resp.json();
+  if (!resp.ok || !d.ok){ alert(d.error || '删除失败'); return; }
+  load();
+});
 
 const FREQ_STATUS = {pending: '审核中', approved: '已入库', rejected: '未采纳'};
 async function loadFactorRequests(){

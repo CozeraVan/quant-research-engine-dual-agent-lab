@@ -27,6 +27,19 @@ from quant_research_engine.worker import runner as runner_mod
 WORKER_TOKEN = "test-worker-token"
 
 
+def test_job_params_prefers_params_json():
+    """C5 联调修复：claim 下发 17 协议字段 params_json 必须生效（此前被丢弃按默认参数跑）。"""
+    from quant_research_engine.worker.runner import _job_params
+
+    job = {"params_json": {"start": "2026-03-01", "codes": ["300054.SZ"]}}
+    assert _job_params(job)["start"] == "2026-03-01"
+    assert _job_params(job)["codes"] == ["300054.SZ"]
+    # 兼容：旧键 params 仍可用；params_json 为字符串 JSON 也可解析；空值安全
+    assert _job_params({"params": {"a": 1}})["a"] == 1
+    assert _job_params({"params_json": '{"b": 2}'})["b"] == 2
+    assert _job_params({}) == {}
+
+
 def _psql(db: str, *args: str) -> None:
     subprocess.run(
         ["psql", f"postgresql:///{db}", "-v", "ON_ERROR_STOP=1", *args],

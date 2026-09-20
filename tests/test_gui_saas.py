@@ -410,6 +410,41 @@ class TestProtocolA2:
         detail = client.get(f"/api/saas/jobs/{job_id}", headers={"X-User-Id": "1"}).get_json()["job"]
         assert detail["status"] == "completed" and detail["result"]["summary"]["total_return"] == 0.1
 
+    def test_result_files_nested_paths(self, client, tmp_path, app):
+        """C5 修复：manifest 键含子目录（000001.SZ/trades.csv）时按完整相对路径匹配并保留子目录落盘。"""
+        import hashlib
+        import io as _io
+
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path / "uploads")
+        job_id = _create_job(client).get_json()["job_id"]
+        _lease(client)
+        blob = b"date,pnl\n2026-01-01,1\n"
+        digest = hashlib.sha256(blob).hexdigest()
+        meta = client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                           json={"worker_id": "w1", "summary": {"total_return": 0.1},
+                                 "chart_data": {}, "data_until": "2026-09-04",
+                                 "files": [{"name": "000001.SZ/trades.csv", "size": len(blob), "sha256": digest}]},
+                           headers=WORKER_HEADERS).get_json()
+        token = meta["upload_token"]
+        ok = client.post(f"/api/worker/jobs/{job_id}/result/files?upload_token={token}",
+                         data={"000001.SZ/trades.csv": (_io.BytesIO(blob), "000001.SZ/trades.csv")},
+                         headers=WORKER_HEADERS).get_json()
+        assert ok["status"] == "completed", ok
+        assert (tmp_path / "uploads" / f"job_{job_id}" / "000001.SZ" / "trades.csv").read_bytes() == blob
+        # 路径穿越仍拒绝
+        job2 = _create_job(client).get_json()["job_id"]
+        _lease(client, "w2")
+        meta2 = client.post(f"/api/worker/jobs/{job2}/result/meta",
+                            json={"worker_id": "w2", "summary": {"total_return": 0.1}, "chart_data": {},
+                                  "data_until": "2026-09-04",
+                                  "files": [{"name": "a.csv", "size": 1, "sha256": "x"}]},
+                            headers=WORKER_HEADERS).get_json()
+        resp = client.post(f"/api/worker/jobs/{job2}/result/files?upload_token={meta2['upload_token']}",
+                           data={"../evil.csv": (_io.BytesIO(b"x"), "../evil.csv")},
+                           headers=WORKER_HEADERS)
+        assert resp.status_code == 400
+        assert not (tmp_path / "uploads" / "evil.csv").exists()
+
     def test_result_meta_empty_files_completes_immediately(self, client):
         job_id = _create_job(client).get_json()["job_id"]
         _lease(client)

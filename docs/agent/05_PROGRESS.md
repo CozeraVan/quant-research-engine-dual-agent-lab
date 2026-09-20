@@ -2,6 +2,8 @@
 
 ## Latest Verified State
 
+2026-09-20 QRE-ECS-C5 DONE（8081 页面体系平移 SaaS/ECS，用户验收待批，未 commit）：SaaS 端五页齐——新建策略（冻结版三入口+PCB+日历+标的范围含随机 N 只+预览栏+流水线，未登录可浏览、提交 401 引导登录）、记录页（/api/results 排序/分页/删除/超额收益列）、详情页（+交易磨损+FRM 模块+个股明细入口）、个股列表与个股详情两新页。主题：base.html 引 lab-theme.css/lab-ui.js、accent 换淡紫。联调修复三处（均带测试）：worker params_json 丢弃、runner 不透 random_n、上传端点子目录文件名 400。nginx /static 优先级修复（仓库 nginx-aguhuice.conf 同步线上）。验证：本地 staging 全链路 Playwright 截图通过（/tmp/qre-shots/c5l2_*.png，个股页全模块渲染）；ECS 未登录态渲染正常；登录后链路未在 ECS 实测（凭证在 /etc/qre-saas.env，纪律不动不读）。测试 2106 passed + 4 skipped 零回归。未 commit，等用户批准。
+
 ## Latest Verified State
 
 2026-09-20 QRE-ECS-C4 DONE（公网端到端验证：WEB 提交 → ECS 接单 → 家里 worker 回测 → 回传 → WEB 查看）：临时账号方案=最小改动——saas app 的 login 加 env 内置账号短路（SAAS_TEST_ACCOUNT_EMAIL/PASSWORD，hmac.compare_digest 比对，跳过验证码表；配置即凭证存 ECS /etc/qre-saas.env[0600] 不入仓库；注释标明内测开放前须移除；补测试 +2：对码登录成功/错码 401/默认关闭 401）。ECS 侧 scp 更新 app.py（origin 已含 B1-B3，唯一 diff 即本补丁，零覆盖风险）+ restart qre-saas active。公网实测（https://aguhuice.com，测试账号 beta01）：登录换 token → POST /api/jobs smoke（job#2，58s completed：收益 -16.2%/140 笔）→ full（job#3，20 只×6 月，115s completed：收益 +1.06%）→ /api/results 列表（total=1 只列 full，smoke 不列——既定口径）+ 详情 summary/chart-data（124 点）/tag-analysis（A 层 25 板块）全通；权限语义：未登录 POST /api/jobs 401、删他人结果（job#1 属 ops@local）404。15 号文档 D 阶段写入内测三级权限定稿（游客：免登录/单股/近 2 年/单 IP 日 1 次/次日清空；登录会员：全功能/日 3 次/永久保存；付费：占位未来从会员上调）。全量 `pytest tests/` → **2103 passed + 4 skipped**（2101 + 2 新登录用例）；首次跑出现 1 个瞬时失败，连续 3 次复跑全绿（含 --lf），判定为偶发时序 flake 已记录。未 git commit/push。遗留：SMTP 配置后移除测试账号开关；游客层实现（D 阶段）。

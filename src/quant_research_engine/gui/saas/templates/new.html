@@ -1,289 +1,689 @@
 {% extends "base.html" %}
-{% block title %}新建回测 · A股回测台{% endblock %}
+{% block title %}新建策略 · A股回测台{% endblock %}
 {% block body %}
-<div class="container">
-  <div class="topbar">
-    <div class="brand">新建回测</div>
-    <div><a href="/saas/">返回我的回测</a></div>
-  </div>
-  <div class="panel">
-    <div class="tabs">
-      <button class="tab active" id="tab-nl" data-tab="nl" type="button">自然语言 <span class="opt">人人可用</span></button>
-      <button class="tab" id="tab-wizard" data-tab="wizard" type="button">快速向导 <span class="opt">从因子库挑条件</span></button>
-    </div>
-
-    <div id="pane-nl">
-      <h2>用一句话描述你的策略</h2>
-      <textarea id="nl-input" rows="4" placeholder="例：5日均线上穿200日均线买入，下穿卖出，止损8%"></textarea>
-      <div class="chips" id="nl-examples" style="margin:8px 0 12px;display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" class="btn-sm nl-example">RSI 低于 30 买入，高于 70 卖出</button>
-        <button type="button" class="btn-sm nl-example">股价跌破布林下轨买入，回到中轨卖出</button>
-        <button type="button" class="btn-sm nl-example">MACD 金叉买入，死叉卖出</button>
-      </div>
-      <button class="btn" id="btn-nl-compile" type="button">生成策略</button>
-      <span id="nl-status" class="muted" style="margin-left:8px"></span>
-    </div>
-
-    <div id="pane-wizard" class="hidden">
-      <h2>快速向导：从因子库挑条件</h2>
-      <div class="row">
-        <div>
-          <label for="wz-group">因子类别</label>
-          <select id="wz-group"><option value="">加载中…</option></select>
-        </div>
-        <div>
-          <label for="wz-factor">因子</label>
-          <select id="wz-factor"><option value="">先选类别</option></select>
-        </div>
-      </div>
-      <div class="row">
-        <div>
-          <label for="wz-entry-op">买入条件：因子值</label>
-          <select id="wz-entry-op"><option value="<=">低于（超跌买入）</option><option value=">=">高于（强势买入）</option></select>
-        </div>
-        <div>
-          <label for="wz-entry-val">阈值</label>
-          <input id="wz-entry-val" type="number" value="30" step="any">
-        </div>
-      </div>
-      <div class="row">
-        <div>
-          <label for="wz-exit-op">卖出条件：因子值</label>
-          <select id="wz-exit-op"><option value=">=">高于（止盈/超买卖出）</option><option value="<=">低于</option></select>
-        </div>
-        <div>
-          <label for="wz-exit-val">阈值</label>
-          <input id="wz-exit-val" type="number" value="70" step="any">
-        </div>
-      </div>
-      <div style="margin-top:12px">
-        <button class="btn" id="btn-wz-build" type="button">生成策略</button>
-        <span id="wz-status" class="muted" style="margin-left:8px"></span>
-      </div>
-    </div>
-
-    <details class="hidden" id="yaml-details" style="margin-top:14px">
-      <summary>策略代码预览（高级）</summary>
-      <textarea id="yaml-preview" class="code" rows="12" style="margin-top:8px"></textarea>
-    </details>
+<div class="wrap">
+  <div class="page-head">
+    <h1>把一个想法，变成可验证的策略</h1>
+    <p>三种方式进入，按你的经验任选其一；下方回测参数对三个入口共用。提交后自动先对随机 1 只股票做冒烟测试，通过才进入全量回测。</p>
+    <p style="font-size:13px"><a class="inl" href="/saas/">← 我的回测记录</a></p>
   </div>
 
-  <div class="panel hidden" id="run-card">
-    <h2>回测设置</h2>
-    <details>
-      <summary>高级选项（回测区间 / 资金量，有默认值）</summary>
-      <div class="row" style="margin-top:8px">
-        <div><label for="opt-start">开始日期</label><input id="opt-start" type="date"></div>
-        <div><label for="opt-end">结束日期</label><input id="opt-end" type="date"></div>
-        <div><label for="opt-cash">资金量（元）</label><input id="opt-cash" type="number" value="1000000"></div>
-      </div>
-    </details>
-    <div style="margin-top:16px">
-      <button class="btn big" id="btn-submit" type="button">开始回测</button>
-      <span id="run-status" class="muted" style="margin-left:10px"></span>
+  <!-- 三入口卡 + PCB 排线（冻结版结构） -->
+  <div class="entry-grid" id="entryGrid">
+    <button class="entry-card selected" data-entry="nl">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">① 人人可用</span>
+      <h3>自然语言描述</h3>
+      <p>用一句中文描述买卖规则，AI 自动编译为策略代码，确认后再回测。</p>
+      <div class="entry-fit">适合：<b>没有编程基础</b>，先快速试一个想法</div>
+    </button>
+    <button class="entry-card" data-entry="wizard">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">② 从因子库挑条件</span>
+      <h3>快速向导</h3>
+      <p>从因子库逐级挑选入场 / 出场条件，自动生成策略 YAML。</p>
+      <div class="entry-fit">适合：<b>懂指标与条件组合</b>，想精确控制信号</div>
+    </button>
+    <button class="entry-card" data-entry="yaml">
+      <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">③ 直接编辑</span>
+      <h3>策略代码 YAML</h3>
+      <p>直接编写或粘贴策略 YAML。</p>
+      <div class="entry-fit">适合：<b>有经验的用户</b>，前两个入口的结果也落到这里</div>
+    </button>
+  </div>
+  <div class="pcb-stage" id="pcb-stage" aria-hidden="true"><svg id="pcb-svg"></svg></div>
+
+  <!-- 入口详情区（单面板随选切换） -->
+  <div class="card entry-panel active" id="entry-nl">
+    <h3 style="font-size:16px;margin-bottom:10px;">用一句话描述你的策略</h3>
+    <textarea id="nl-text" rows="4" style="width:100%" placeholder="例：5日均线上穿200日均线买入，下穿卖出，止损8%"></textarea>
+    <div class="chip-row">
+      <span class="opt">没思路？点一个示例填入：</span>
+      <button class="chip nl-ex">5日均线上穿200日均线买入，下穿卖出，止损8%</button>
+      <button class="chip nl-ex">收盘价低于10元买入，高于12元卖出</button>
+      <button class="chip nl-ex">20日均线上穿60日均线买入，下穿卖出，止损8%</button>
+      <button class="chip nl-ex">收盘价高于10元买入，跌破20日均线卖出，最多持仓20天</button>
     </div>
-    <div id="run-error" class="error"></div>
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+      <button class="btn btn-primary" id="nl-compile">生成策略</button>
+      <span class="opt" id="nl-status"></span>
+    </div>
+    <div class="result-box" id="nl-result"></div>
   </div>
 
-  <div id="factor-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50">
-    <div class="panel" style="max-width:420px;width:90%;margin:0">
-      <h2>当前因子库暂不支持</h2>
-      <p id="factor-modal-list" style="font-size:14px"></p>
-      <p class="muted">你可以：<br>① 换个策略试试（多数常见指标已支持）<br>② 把缺的因子提交给我们——需求集中的因子会优先计算入库</p>
-      <div class="row" style="margin-top:12px">
-        <div><button class="btn ghost" id="btn-factor-close" style="width:100%">换个策略</button></div>
-        <div><button class="btn" id="btn-factor-submit" style="width:100%">提交因子需求</button></div>
+  <div class="card entry-panel" id="entry-wizard">
+    <h3 style="font-size:16px;margin-bottom:4px;">快速向导：从因子库挑条件，自动生成策略</h3>
+    <p class="opt" id="wz-factor-status" style="margin-bottom:12px">加载因子目录中…</p>
+    <h4 style="font-size:14px;margin:10px 0 8px;">入场条件 <span class="req">*</span> <span class="opt">（组内先组合、组间再组合；单组时即扁平行为）</span></h4>
+    <div id="wz-entry" class="cond-groups"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
+      <button class="btn-sm" data-addgroup="entry">+ 添加条件组</button>
+      <span class="opt">更复杂的逻辑组合，可切换到自然语言或 YAML 入口直接描述</span>
+    </div>
+    <h4 style="font-size:14px;margin:16px 0 8px;">出场条件 <span class="req">*</span></h4>
+    <div id="wz-exit" class="cond-groups"></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
+      <button class="btn-sm" data-addgroup="exit">+ 添加条件组</button>
+      <span class="opt">更复杂的逻辑组合，可切换到自然语言或 YAML 入口直接描述</span>
+    </div>
+    <p class="opt" style="margin-top:14px">条件任何改动都会实时生成策略代码，并汇入页面底部「策略代码预览」栏。</p>
+  </div>
+
+  <div class="card entry-panel" id="entry-yaml">
+    <h3 style="font-size:16px;margin-bottom:4px;">策略代码（YAML） <span class="opt">（编辑器在页面底部「策略代码预览」栏，可直接修改）</span></h3>
+    <p><button class="btn btn-ghost" id="btn-goto-preview">去底部编辑代码 ↓</button></p>
+  </div>
+
+  <!-- 回测参数（三入口共用） -->
+  <div class="card">
+    <h3 style="font-size:16px;margin-bottom:14px;">回测参数 Parameters</h3>
+    <div class="form-grid">
+      <label>策略名称 / ID <span class="req">*</span></label>
+      <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="p-sname" value="" placeholder="留空自动生成" style="width:280px">
+        <span class="opt">三个入口共用；仅允许字母、数字、下划线、连字符</span>
+      </span>
+      <label>回测区间 <span class="req">*</span></label>
+      <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative" id="range-row">
+        <input type="text" id="p-start" size="11" readonly class="date-input" title="点击打开日历"> ~
+        <input type="text" id="p-end" size="11" readonly class="date-input" title="点击打开日历">
+        <button class="btn-sm range-btn" data-years="1">近1年</button>
+        <button class="btn-sm range-btn on" data-years="2">近2年（默认）</button>
+        <button class="btn-sm range-btn" data-years="5">近5年</button>
+        <div class="cal-pop" id="cal-pop" style="display:none"></div>
+      </span>
+      <label>标的范围 <span class="req">*</span></label>
+      <span>
+        <label class="radio-inline"><input type="radio" name="scope" value="all" checked> 全部 A 股</label>
+        <label class="radio-inline"><input type="radio" name="scope" value="random"> 随机股票</label>
+        <label class="radio-inline"><input type="radio" name="scope" value="codes"> 指定股票代码</label>
+        <span class="opt" style="width:100%">板块/概念筛选依赖行情库（本部署暂不支持），可用「随机股票」或「指定代码」代替</span>
+      </span>
+      <label id="scope-random-label" style="display:none">随机数量 N</label>
+      <span id="scope-random-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="number" id="p-random-n" min="1" max="2000" value="500" style="width:120px">
+        <span class="opt">从全 A 股池随机抽 N 只（1~2000；抽样在执行端进行）</span>
+      </span>
+      <label id="scope-codes-label" style="display:none">股票代码 Codes</label>
+      <textarea id="param-codes" rows="2" style="display:none" placeholder="ts_code 逗号分隔，如 000001.SZ,000002.SZ"></textarea>
+    </div>
+
+    <button class="sec-toggle" id="adv-toggle">高级参数（可选：模式 / 资金 / 持仓 / 止损止盈 等）</button>
+    <div class="sec-body" id="adv-body"><div><div class="sec-inner">
+      <div class="form-grid form-grid-3">
+        <label>模式 Mode</label>
+        <select id="p-mode"><option value="shared" selected>共享资金 Shared</option><option value="batch">批量 Batch</option></select>
+        <label>初始资金 Initial Cash</label>
+        <input type="text" id="p-cash" value="100000">
+        <label>最大持仓股票数</label>
+        <input type="number" id="p-maxpos" value="10" min="0" step="1">
+        <label>最大持仓天数</label>
+        <input type="text" id="p-holding" value="20" placeholder="默认 20；留空 = 不限">
+        <label>止损 Stop Loss %</label>
+        <input type="text" id="p-sl" placeholder="可空，如 0.08">
+        <label>止盈 Take Profit %</label>
+        <input type="text" id="p-tp" placeholder="可空，如 0.15">
+        <label>移动止损 Trailing %</label>
+        <input type="text" id="p-ts" placeholder="可空，如 0.05">
       </div>
-      <div id="factor-modal-status" class="muted" style="margin-top:8px"></div>
+    </div></div></div>
+  </div>
+
+  <!-- 策略代码预览栏（唯一 YAML 真相源） -->
+  <div class="card" id="preview-card">
+    <div class="pv-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <h3 style="font-size:16px">策略代码预览 <span class="opt">（最终合并版：策略定义 + 回测参数；三个入口的产出都汇聚到这里）</span></h3>
+      <span style="margin-left:auto"></span>
+      <button class="btn-sm" id="pv-edit-toggle">编辑代码</button>
+      <button class="btn-sm" id="pv-copy">复制</button>
+    </div>
+    <pre class="compiled-yaml pv" id="pv-view"></pre>
+    <textarea id="yaml-editor" rows="18" style="display:none;width:100%;font-family:var(--mono);font-size:12.5px" placeholder="experiment:\n  name: my_strategy\nsignal:\n  entry: \"(close > open)\"\n  exit: \"(close < open)\"\n"></textarea>
+  </div>
+
+  <!-- 唯一主按钮：运行回测流水线 -->
+  <div class="card" id="run-card" style="border-color:var(--lav-ink)">
+    <button class="btn btn-primary btn-run-main" id="btn-run-main">运行回测 Run Backtest</button>
+    <div id="pipe" style="display:none;margin-top:16px">
+      <div class="pipe-step" id="pipe-1"><span class="pipe-dot"></span><span class="pipe-name">校验 / 编译策略代码</span><span class="pipe-st"></span></div>
+      <div class="pipe-step" id="pipe-2"><span class="pipe-dot"></span><span class="pipe-name">冒烟测试：随机 1 只股票 × 短期区间（自动）</span><span class="pipe-st"></span></div>
+      <div class="pipe-step" id="pipe-3"><span class="pipe-dot"></span><span class="pipe-name">完整回测（全量标的 × 选定区间）</span><span class="pipe-st"></span></div>
+      <div id="pipe-err" class="result-box err" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- 缺因子申请模态框 -->
+  <div class="modal-mask" id="factor-modal">
+    <div class="modal">
+      <h3>当前因子库暂不支持</h3>
+      <p id="factor-modal-list"></p>
+      <p class="opt">你可以：<br>① 换个策略试试（多数常见指标已支持）<br>② 把缺的因子提交给我们——需求集中的因子会优先计算入库</p>
+      <div class="m-actions">
+        <button class="btn btn-ghost" id="btn-factor-close">换个策略</button>
+        <button class="btn btn-primary" id="btn-factor-submit">提交因子需求</button>
+      </div>
+      <p id="factor-modal-status" class="opt" style="margin-top:8px"></p>
     </div>
   </div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
-requireLogin();
+// 新建策略页：未登录可浏览，提交时由 apiFetch 401 引导登录（C5 权限语义）
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toastNote(el, msg, isErr){ el.textContent = msg; el.style.color = isErr ? 'var(--up)' : 'var(--grey)'; }
 
-// --- tab 切换 ---
-let activeTab = 'nl';
-for (const tab of document.querySelectorAll('.tab')){
-  tab.addEventListener('click', () => {
-    activeTab = tab.dataset.tab;
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === tab));
-    document.getElementById('pane-nl').classList.toggle('hidden', activeTab !== 'nl');
-    document.getElementById('pane-wizard').classList.toggle('hidden', activeTab !== 'wizard');
+// ---------- 三入口卡切换 + PCB ----------
+function curEntry(){ const c = $('#entryGrid .entry-card.selected'); return c ? c.dataset.entry : 'nl'; }
+$$('#entryGrid .entry-card').forEach(card => {
+  card.addEventListener('click', () => {
+    $$('#entryGrid .entry-card').forEach(c => c.classList.toggle('selected', c === card));
+    $$('.entry-panel').forEach(p => p.classList.toggle('active', p.id === 'entry-' + card.dataset.entry));
+    if (window.LabUI) LabUI.energizePCB($('#pcb-stage'), $$('#entryGrid .entry-card'));
+    maybeAutoName();
   });
+});
+window.addEventListener('resize', () => window.LabUI && LabUI.layoutPCB($('#pcb-stage'), $$('#entryGrid .entry-card')));
+window.addEventListener('load', () => window.LabUI && LabUI.layoutPCB($('#pcb-stage'), $$('#entryGrid .entry-card')));
+
+// ---------- 策略名称 / ID（公共项） ----------
+let userNamed = false, lastAuto = '';
+function genAutoId(){
+  const d = new Date().toISOString().slice(0,10).replace(/-/g,''), e = curEntry();
+  if (e === 'wizard'){ const f = $('#wz-entry .wz-left'); return 'wizard_' + (f ? f.value : 'cond') + '_' + d; }
+  if (e === 'yaml') return 'custom_yaml_' + d;
+  return 'nl_strategy_' + d;
 }
-
-for (const chip of document.querySelectorAll('.nl-example')){
-  chip.addEventListener('click', () => { document.getElementById('nl-input').value = chip.textContent; });
+function maybeAutoName(){
+  if (!userNamed){ lastAuto = genAutoId(); $('#p-sname').value = lastAuto; }
+  refreshPreview();
 }
+$('#p-sname').addEventListener('input', function(){ userNamed = this.value !== lastAuto; refreshPreview(); });
 
-// --- 默认区间：近 2 年 ---
-(function(){
-  const end = new Date();
-  const start = new Date(end.getFullYear() - 2, end.getMonth(), end.getDate());
-  const iso = d => d.toISOString().slice(0, 10);
-  document.getElementById('opt-end').value = iso(end);
-  document.getElementById('opt-start').value = iso(start);
-})();
-
-function currentYaml(){ return document.getElementById('yaml-preview').value.trim(); }
-function showYaml(text){
-  document.getElementById('yaml-details').classList.remove('hidden');
-  document.getElementById('yaml-preview').value = text;
-  document.getElementById('run-card').classList.remove('hidden');
-  document.getElementById('run-status').textContent = '';
-  document.getElementById('run-error').textContent = '';
+// ---------- 预览栏（策略定义 + 回测参数自动合并，行号+高亮） ----------
+const PARAM_MARK = '# ===== 回测参数（自动合并：本段随上方参数区变化） =====';
+let strategyYaml = '';
+function setYaml(y){ strategyYaml = y; const ed = $('#yaml-editor'); if (ed.value !== y) ed.value = y; refreshPreview(); }
+function applyName(y){
+  const id = $('#p-sname').value.trim();
+  if (id){
+    if (/^[ \t]*name:/m.test(y)) y = y.replace(/^([ \t]*name:).*$/m, '$1 ' + id);
+    else y = y.replace(/^(experiment:.*)$/m, '$1\n  name: ' + id);
+  }
+  // 最大持仓天数注入 YAML holding 节（与 lab 版提交语义一致；引擎要求该节存在）
+  const hold = $('#p-holding').value.trim();
+  if (hold && !/^[ \t]*max_holding_days:/m.test(y)){
+    if (/^holding:/m.test(y)) y = y.replace(/^holding:.*$/m, 'holding:\n  max_holding_days: ' + hold);
+    else y = y.replace(/\s*$/, '') + '\nholding:\n  max_holding_days: ' + hold + '\n';
+  }
+  return y;
 }
+function paramsYaml(){
+  const scope = document.querySelector('input[name="scope"]:checked').value;
+  let scopeLine = '  scope: all_a';
+  if (scope === 'random') scopeLine = '  scope: random ' + ($('#p-random-n').value || '500') + ' 只  # 执行端随机抽样';
+  else if (scope === 'codes') scopeLine = '  codes: [' + ($('#param-codes').value.trim() || '（未填）') + ']';
+  const g = id => $(id).value;
+  const lines = ['backtest:',
+    '  start: "' + g('#p-start') + '"',
+    '  end: "' + g('#p-end') + '"',
+    scopeLine,
+    '  mode: ' + g('#p-mode'),
+    '  initial_cash: ' + (g('#p-cash') || 100000),
+    '  max_positions: ' + (g('#p-maxpos').trim() === '0' ? '0  # 不限制' : (g('#p-maxpos') || 10))];
+  const hold = g('#p-holding').trim();
+  if (hold) lines.push('  max_holding_days: ' + hold);
+  [['stop_loss_pct','#p-sl'],['take_profit_pct','#p-tp'],['trailing_stop_pct','#p-ts']].forEach(p => {
+    const v = g(p[1]).trim(); if (v) lines.push('  ' + p[0] + ': ' + v);
+  });
+  return lines.join('\n');
+}
+function mergedYaml(){ return applyName(strategyYaml.replace(/\s+$/, '')) + '\n\n' + PARAM_MARK + '\n' + paramsYaml() + '\n'; }
+function hlLine(line){
+  if (/^\s*#/.test(line)) return '<span class="yc">' + esc(line) + '</span>';
+  const m = line.match(/^(\s*)([\w_]+):(.*)$/);
+  if (m) return esc(m[1]) + '<span class="yk">' + esc(m[2]) + ':</span>' + '<span class="yv">' + esc(m[3]) + '</span>';
+  return '<span class="yv">' + esc(line) + '</span>';
+}
+let pvEditing = false;
+function refreshPreview(){
+  if (pvEditing) return;
+  $('#pv-view').innerHTML = mergedYaml().split('\n').map(l => '<span class="pv-line">' + hlLine(l) + '</span>').join('');
+}
+$('#pv-edit-toggle').addEventListener('click', function(){
+  pvEditing = !pvEditing;
+  this.textContent = pvEditing ? '完成编辑' : '编辑代码';
+  this.classList.toggle('on', pvEditing);
+  $('#pv-view').style.display = pvEditing ? 'none' : '';
+  $('#yaml-editor').style.display = pvEditing ? '' : 'none';
+  if (pvEditing) $('#yaml-editor').focus(); else refreshPreview();
+});
+$('#yaml-editor').addEventListener('input', function(){ strategyYaml = this.value; });
+$('#pv-copy').addEventListener('click', function(){
+  const txt = mergedYaml(), b = this;
+  const done = () => { b.textContent = '已复制 ✓'; setTimeout(() => b.textContent = '复制', 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, done);
+  else { $('#yaml-editor').value = txt; $('#yaml-editor').style.display = ''; $('#yaml-editor').select(); try { document.execCommand('copy'); } catch(e){} done(); $('#yaml-editor').style.display = pvEditing ? '' : 'none'; }
+});
+$('#btn-goto-preview').addEventListener('click', () => {
+  $('#preview-card').scrollIntoView({behavior: 'smooth', block: 'center'});
+  if (!pvEditing) $('#pv-edit-toggle').click();
+});
 
-// --- NL 生成 ---
-document.getElementById('btn-nl-compile').addEventListener('click', async () => {
-  const description = document.getElementById('nl-input').value.trim();
-  if (!description) return;
-  const status = document.getElementById('nl-status');
-  status.textContent = '正在生成策略…';
-  const resp = await apiFetch('/api/saas/nl/compile', {json: {description}});
-  const data = await resp.json();
-  if (!data.ok){
-    if (data.code === 'missing_factors' && (data.missing_factors || []).length){
-      openFactorModal(data.missing_factors);
-      status.textContent = '';
-      return;
+// ---------- 回测区间（日历 + 快捷区间；最大可选 = 今天） ----------
+function isoD(d){ return d.getFullYear() + '-' + ('0' + (d.getMonth()+1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+const TODAY_ISO = isoD(new Date());
+function setRangeYears(y){
+  const end = new Date(), start = new Date(); start.setFullYear(start.getFullYear() - y);
+  $('#p-start').value = isoD(start); $('#p-end').value = isoD(end); refreshPreview();
+}
+$$('.range-btn').forEach(b => b.addEventListener('click', function(){
+  $$('.range-btn').forEach(x => x.classList.toggle('on', x === b));
+  setRangeYears(+b.dataset.years);
+  $('#cal-pop').style.display = 'none';
+}));
+if (window.LabUI) LabUI.attachCalendar({
+  pop: $('#cal-pop'), startInput: $('#p-start'), endInput: $('#p-end'),
+  maxDate: TODAY_ISO, onChange: refreshPreview,
+});
+
+// ---------- 标的范围 ----------
+$$('input[name="scope"]').forEach(r => r.addEventListener('change', function(){
+  const v = document.querySelector('input[name="scope"]:checked').value;
+  $('#scope-random-label').style.display = v === 'random' ? '' : 'none';
+  $('#scope-random-row').style.display = v === 'random' ? 'flex' : 'none';
+  $('#scope-codes-label').style.display = v === 'codes' ? '' : 'none';
+  $('#param-codes').style.display = v === 'codes' ? '' : 'none';
+  refreshPreview();
+}));
+['#p-random-n', '#param-codes', '#p-sname', '#p-cash', '#p-maxpos', '#p-holding', '#p-sl', '#p-tp', '#p-ts', '#p-mode'].forEach(id => {
+  $(id).addEventListener('input', refreshPreview);
+  $(id).addEventListener('change', refreshPreview);
+});
+bindToggle('#adv-toggle', '#adv-body');
+function bindToggle(b, body){ $(b).addEventListener('click', function(){ this.classList.toggle('open'); $(body).classList.toggle('open'); }); }
+
+// ---------- 入口 1：自然语言 → /api/saas/nl/compile ----------
+$$('.nl-ex').forEach(c => c.addEventListener('click', () => { $('#nl-text').value = c.textContent.trim(); $('#nl-text').focus(); }));
+$('#nl-compile').addEventListener('click', async () => {
+  const txt = $('#nl-text').value.trim(), st = $('#nl-status'), box = $('#nl-result');
+  if (!txt){ toastNote(st, '请先用自然语言描述策略', true); $('#nl-text').focus(); return; }
+  box.className = 'result-box'; box.style.display = 'none';
+  st.textContent = '编译中 Compiling…';
+  try {
+    const resp = await apiFetch('/api/saas/nl/compile', {json: {description: txt}});
+    const d = await resp.json();
+    if (d.ok){
+      st.textContent = '编译成功';
+      setYaml(d.yaml);
+      const nm = (d.yaml.match(/^\s*name:\s*(\S+)\s*$/m) || [])[1];
+      if (nm && !userNamed){ lastAuto = nm; $('#p-sname').value = nm; }
+      box.className = 'result-box ok'; box.style.display = 'block';
+      box.innerHTML = '已生成并汇入页面底部「策略代码预览」栏，请检查确认后点底部「运行回测」（不会自动执行）。' +
+        ((d.warnings || []).map(w => '<br><span class="opt">' + esc(w) + '</span>').join(''));
+      $('#preview-card').scrollIntoView({behavior: 'smooth', block: 'center'});
+    } else {
+      st.textContent = '编译失败';
+      box.className = 'result-box err'; box.style.display = 'block';
+      box.innerHTML = esc(d.error || '未知错误');
+      if (d.code === 'missing_factors' && (d.missing_factors || []).length) openFactorModal(d.missing_factors);
+      if (d.yaml) box.innerHTML += '<p class="opt">可编辑草稿（修正后可粘贴到预览栏编辑器）：</p><pre class="compiled-yaml">' + esc(d.yaml) + '</pre>';
     }
-    status.textContent = data.error || '生成失败，请换个说法试试';
-    return;
+  } catch (e) {
+    if (e.message !== 'unauthorized'){ st.textContent = '错误'; box.className = 'result-box err'; box.style.display = 'block'; box.textContent = String(e); }
   }
-  status.textContent = (data.warnings || []).join('；') || '生成成功，可以开始回测';
-  showYaml(data.yaml);
 });
 
-// --- 快速向导：因子目录 ---
-let factorGroups = [];
-async function loadFactors(){
-  const resp = await apiFetch('/api/saas/factors');
-  const data = await resp.json();
-  const groupSel = document.getElementById('wz-group');
-  if (!data.ok){ groupSel.innerHTML = '<option value="">因子库暂不可用</option>'; return; }
-  factorGroups = data.groups;
-  groupSel.innerHTML = factorGroups.map((g, i) => `<option value="${i}">${g.label}</option>`).join('');
-  fillFactors(0);
-}
-function fillFactors(gi){
-  const items = (factorGroups[gi] || {}).items || [];
-  document.getElementById('wz-factor').innerHTML =
-    items.map((it, i) => `<option value="${i}">${it.label}</option>`).join('');
-}
-document.getElementById('wz-group').addEventListener('change', e => fillFactors(Number(e.target.value)));
-loadFactors();
-
-document.getElementById('btn-wz-build').addEventListener('click', () => {
-  const g = factorGroups[Number(document.getElementById('wz-group').value)];
-  const item = (g.items || [])[Number(document.getElementById('wz-factor').value)];
-  if (!item) return;
-  const entryOp = document.getElementById('wz-entry-op').value;
-  const entryVal = document.getElementById('wz-entry-val').value;
-  const exitOp = document.getElementById('wz-exit-op').value;
-  const exitVal = document.getElementById('wz-exit-val').value;
-  let fields, ref;
-  if (item.table === 'public.stock_daily'){
-    fields = '  market_fields: [open, high, low, close, pre_close, vol, amount]';
-    ref = item.column;
-  } else {
-    fields = `  market_fields: [open, high, low, close, pre_close, vol, amount]\n  factor_fields:\n    f0: ${item.table}.${item.column}`;
-    ref = 'f0';
-  }
-  const yaml = `experiment:\n  name: wizard_${item.column}\ndata:\n${fields}\nsignal:\n  entry: (${ref} ${entryOp} ${entryVal})\n  exit: (${ref} ${exitOp} ${exitVal})\nevaluation:\n  forward_return_horizons: [1, 3, 5, 10, 20]\nholding:\n  max_holding_days: 20\nrisk:\n  stop_loss_pct: 0.08\n`;
-  document.getElementById('wz-status').textContent = '已生成，可以开始回测';
-  showYaml(yaml);
-});
-
-// --- 缺因子申请模态框 ---
+// ---------- 缺因子申请模态框 ----------
 let pendingFactors = [];
 function openFactorModal(factors){
   pendingFactors = factors;
-  document.getElementById('factor-modal-list').textContent = '缺失因子：' + factors.join('、');
-  document.getElementById('factor-modal-status').textContent = '';
-  const btn = document.getElementById('btn-factor-submit');
-  btn.disabled = false;
-  btn.textContent = '提交因子需求';
-  document.getElementById('factor-modal').classList.remove('hidden');
+  $('#factor-modal-list').textContent = '缺失因子：' + factors.join('、');
+  $('#factor-modal-status').textContent = '';
+  const btn = $('#btn-factor-submit'); btn.disabled = false; btn.textContent = '提交因子需求';
+  $('#factor-modal').classList.add('show');
 }
-document.getElementById('btn-factor-close').addEventListener('click', () =>
-  document.getElementById('factor-modal').classList.add('hidden'));
-document.getElementById('btn-factor-submit').addEventListener('click', async () => {
-  const btn = document.getElementById('btn-factor-submit');
-  btn.disabled = true;
-  const status = document.getElementById('factor-modal-status');
-  const resp = await apiFetch('/api/saas/factor-requests', {json: {
-    factors: pendingFactors,
-    strategy_name: document.getElementById('nl-input').value.trim().slice(0, 50),
-  }});
-  const data = await resp.json();
-  if (resp.ok && data.ok){
-    btn.textContent = '已提交，我们会评估';
-    status.textContent = '可在「我的回测」页底部查看审核进度';
-  } else {
-    status.textContent = data.error || '提交失败';
-    btn.disabled = false;
-  }
+$('#btn-factor-close').addEventListener('click', () => $('#factor-modal').classList.remove('show'));
+$('#factor-modal').addEventListener('click', function(e){ if (e.target === this) this.classList.remove('show'); });
+$('#btn-factor-submit').addEventListener('click', async function(){
+  this.disabled = true;
+  const resp = await apiFetch('/api/saas/factor-requests', {json: {factors: pendingFactors, strategy_name: $('#p-sname').value || $('#nl-text').value.slice(0, 50)}});
+  const d = await resp.json();
+  if (resp.ok && d.ok){ this.textContent = '已提交，我们会评估'; }
+  else { $('#factor-modal-status').textContent = d.error || '提交失败'; this.disabled = false; }
 });
 
-// --- 开始回测：后台先跑小范围预检，通过后自动提交正式回测 ---
-async function createJob(kind){
-  const yaml = currentYaml();
-  if (!yaml){ document.getElementById('run-error').textContent = '请先生成策略'; return null; }
-  const resp = await apiFetch('/api/saas/jobs', {json: {
-    yaml, kind,
-    params: {
-      start: document.getElementById('opt-start').value,
-      end: document.getElementById('opt-end').value,
-      initial_cash: Number(document.getElementById('opt-cash').value) || 1000000,
-    },
-  }});
-  const data = await resp.json();
-  if (!resp.ok || !data.ok){
-    throw new Error(data.error || '提交失败');
+// ---------- 入口 2：快速向导（三级级联 + 两级条件组，逻辑同冻结版设计稿） ----------
+let FACTOR_OPTIONS = [], ALIAS_TARGET = {}, catalogReady = false;
+async function loadFactorCatalog(){
+  try {
+    const resp = await apiFetch('/api/saas/factors');
+    const d = await resp.json();
+    if (!d.ok){ $('#wz-factor-status').innerHTML = '<span class="err">因子库不可用</span>'; return; }
+    d.groups.forEach(group => {
+      (group.items || []).forEach(it => {
+        let alias = it.column, i = 2;
+        while (ALIAS_TARGET[alias] && ALIAS_TARGET[alias] !== it.table + '.' + it.column){ alias = it.column + '_' + i; i++; }
+        if (group.group !== 'market') ALIAS_TARGET[alias] = it.table + '.' + it.column;
+        FACTOR_OPTIONS.push({value: alias, label: it.label, group: group.label, _table: it.table});
+      });
+    });
+    // 子类分段（表 >30 项按名称切段）
+    const byGT = {};
+    FACTOR_OPTIONS.forEach(o => { const k = o.group + '|' + o._table; (byGT[k] = byGT[k] || []).push(o); });
+    Object.keys(byGT).forEach(k => {
+      const items = byGT[k];
+      const short = items[0]._table.replace('factors.stock_daily_', '').replace('public.', '');
+      if (items.length <= 30){ items.forEach(o => o.sub = short); return; }
+      const sorted = items.slice().sort((a, b) => a.value < b.value ? -1 : 1);
+      for (let i = 0; i < sorted.length; i += 30){
+        const chunk = sorted.slice(i, i + 30);
+        const seg = short + ' ' + chunk[0].value + '~' + chunk[chunk.length - 1].value;
+        chunk.forEach(o => o.sub = seg);
+      }
+    });
+    catalogReady = true;
+    $('#wz-factor-status').textContent = '条件行选因子：大类 → 子类 → 因子（三级选单逐级收窄），右值可选另一因子或勾「固定值」填数值。';
+    prefill();
+  } catch (e) {
+    $('#wz-factor-status').innerHTML = '<span class="err">因子目录加载失败，可改用自然语言或 YAML 入口</span>';
   }
-  return data.job_id;
 }
-async function pollJob(jobId){
-  for (;;){
-    await new Promise(r => setTimeout(r, 3000));
-    const resp = await apiFetch('/api/saas/jobs/' + jobId);
-    const data = await resp.json();
-    const status = data.job && data.job.status;
-    if (status === 'completed') return data.job;
-    if (status === 'failed' || status === 'cancelled') throw new Error(data.job.error || '任务失败');
+const OPS = [['crosses_above','上穿'],['crosses_below','下穿'],['>','大于'],['<','小于'],['>=','大于等于'],['<=','小于等于']];
+function factorGroups(){ const o = []; FACTOR_OPTIONS.forEach(x => { if (o.indexOf(x.group) < 0) o.push(x.group); }); return o; }
+function factorSubs(g){ const o = []; FACTOR_OPTIONS.forEach(x => { if (x.group === g && o.indexOf(x.sub) < 0) o.push(x.sub); }); return o; }
+function renderFactorOptions(sel, cur, gf, sf){
+  sel.innerHTML = '';
+  FACTOR_OPTIONS.forEach(o => {
+    if (gf && o.group !== gf) return;
+    if (sf && o.sub !== sf) return;
+    const e = document.createElement('option'); e.value = o.value; e.textContent = o.label; sel.appendChild(e);
+  });
+  if (cur) sel.value = cur;
+}
+function fillSubOptions(wrap, cur){
+  const g = wrap.querySelector('.wz-fact-group'), s = wrap.querySelector('.wz-fact-sub');
+  s.innerHTML = '';
+  factorSubs(g.value).forEach(x => { const e = document.createElement('option'); e.value = x; e.textContent = x; s.appendChild(e); });
+  if (cur) s.value = cur;
+}
+function syncFactorSelect(wrap, cur){
+  const sels = wrap.querySelectorAll('select'), g = sels[0], s = sels[1], sel = sels[2];
+  const c = cur || sel.value; let curOpt = null;
+  FACTOR_OPTIONS.forEach(o => { if (o.value === c) curOpt = o; });
+  g.innerHTML = '';
+  factorGroups().forEach(x => { const e = document.createElement('option'); e.value = x; e.textContent = x; g.appendChild(e); });
+  if (curOpt) g.value = curOpt.group;
+  fillSubOptions(wrap, curOpt ? curOpt.sub : null);
+  renderFactorOptions(sel, c, g.value, s.value);
+}
+function makeFactorSelect(cls){
+  const wrap = document.createElement('span'); wrap.className = 'wz-factsel';
+  const g = document.createElement('select'); g.className = 'wz-fact-group'; g.title = '大类';
+  const sub = document.createElement('select'); sub.className = 'wz-fact-sub'; sub.title = '子类';
+  const sel = document.createElement('select'); sel.className = cls; sel.title = '因子';
+  g.addEventListener('change', () => { fillSubOptions(wrap); renderFactorOptions(sel, null, g.value, sub.value); refreshWizard(); });
+  sub.addEventListener('change', () => { renderFactorOptions(sel, null, g.value, sub.value); refreshWizard(); });
+  sel.addEventListener('change', refreshWizard);
+  wrap.appendChild(g); wrap.appendChild(sub); wrap.appendChild(sel);
+  return wrap;
+}
+function setFactorSelectValue(wrap, v){ syncFactorSelect(wrap, v); wrap.querySelectorAll('select')[2].value = v; refreshWizard(); }
+function wzAddCondition(area, groupEl, preset){
+  const container = groupEl.querySelector('.cond-group-rows');
+  const row = document.createElement('div'); row.className = 'condition-item wz-cond';
+  const leftWrap = makeFactorSelect('wz-left');
+  const op = document.createElement('select'); op.className = 'wz-op';
+  OPS.forEach(o => { const e = document.createElement('option'); e.value = o[0]; e.textContent = o[1]; op.appendChild(e); });
+  const fixedLabel = document.createElement('label'); fixedLabel.className = 'label-inline';
+  const isfixed = document.createElement('input'); isfixed.type = 'checkbox'; isfixed.className = 'wz-isfixed';
+  fixedLabel.appendChild(isfixed); fixedLabel.appendChild(document.createTextNode(' 固定值'));
+  const rightWrap = makeFactorSelect('wz-rfield');
+  const rnum = document.createElement('input'); rnum.className = 'wz-rnum'; rnum.type = 'number'; rnum.step = 'any'; rnum.placeholder = '如 30'; rnum.style.display = 'none';
+  const rm = document.createElement('button'); rm.className = 'btn-sm btn-remove-cond'; rm.textContent = 'x';
+  rm.addEventListener('click', () => {
+    if (container.querySelectorAll('.wz-cond').length <= 1){ alert('每组至少保留 1 条条件'); return; }
+    row.remove(); refreshWizard();
+  });
+  isfixed.addEventListener('change', () => {
+    rnum.style.display = isfixed.checked ? '' : 'none';
+    rightWrap.style.display = isfixed.checked ? 'none' : '';
+    refreshWizard();
+  });
+  [op, rnum].forEach(el => { el.addEventListener('change', refreshWizard); el.addEventListener('input', refreshWizard); });
+  row.appendChild(leftWrap); row.appendChild(op); row.appendChild(fixedLabel);
+  row.appendChild(rightWrap); row.appendChild(rnum); row.appendChild(rm);
+  container.appendChild(row);
+  if (preset){
+    if (preset.left) setFactorSelectValue(leftWrap, preset.left);
+    if (preset.op) op.value = preset.op;
+    if (preset.fixed != null){ isfixed.checked = true; rnum.style.display = ''; rightWrap.style.display = 'none'; rnum.value = preset.fixed; }
+    else if (preset.right) setFactorSelectValue(rightWrap, preset.right);
+  } else if (catalogReady){ syncFactorSelect(leftWrap, null); syncFactorSelect(rightWrap, null); }
+  refreshWizard();
+}
+function makeCombToggle(title){
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'comb-toggle';
+  b.dataset.comb = 'and'; b.textContent = 'AND'; b.title = title || '组合方式（点击切换 AND / OR）';
+  b.addEventListener('click', () => {
+    b.dataset.comb = b.dataset.comb === 'and' ? 'or' : 'and';
+    b.textContent = b.dataset.comb.toUpperCase();
+    refreshWizard();
+  });
+  return b;
+}
+function makeDivider(){
+  const d = document.createElement('div'); d.className = 'comb-divider';
+  const b = makeCombToggle('条件组之间的组合方式（点击切换 AND / OR）');
+  d.appendChild(b); d._comb = b;
+  return d;
+}
+function refreshGroupTitles(area){
+  $$('#wz-' + area + ' .cond-group').forEach((g, i) => { g.querySelector('.cond-group-title').textContent = '条件组 ' + (i + 1); });
+}
+function wzAddGroup(area, preset){
+  const areaEl = $('#wz-' + area);
+  if (areaEl.querySelectorAll('.cond-group').length) areaEl.appendChild(makeDivider());
+  const g = document.createElement('div'); g.className = 'cond-group';
+  const head = document.createElement('div'); head.className = 'cond-group-head';
+  const title = document.createElement('span'); title.className = 'cond-group-title';
+  const comb = makeCombToggle('组内条件组合方式（点击切换 AND / OR）');
+  const del = document.createElement('button'); del.className = 'btn-sm btn-remove-cond'; del.textContent = '× 删除组';
+  del.addEventListener('click', () => {
+    if (areaEl.querySelectorAll('.cond-group').length <= 1){ alert('至少保留 1 个条件组'); return; }
+    const prev = g.previousElementSibling, next = g.nextElementSibling;
+    if (prev && prev.classList.contains('comb-divider')) prev.remove();
+    else if (next && next.classList.contains('comb-divider')) next.remove();
+    g.remove(); refreshGroupTitles(area); refreshWizard();
+  });
+  head.appendChild(title); head.appendChild(comb); head.appendChild(del);
+  const rows = document.createElement('div'); rows.className = 'cond-group-rows';
+  const addBtn = document.createElement('button'); addBtn.className = 'btn-sm'; addBtn.textContent = '+ 添加条件';
+  addBtn.addEventListener('click', () => wzAddCondition(area, g));
+  g.appendChild(head); g.appendChild(rows); g.appendChild(addBtn);
+  areaEl.appendChild(g);
+  refreshGroupTitles(area);
+  if (preset) wzAddCondition(area, g, preset); else wzAddCondition(area, g);
+}
+$$('[data-addgroup]').forEach(b => b.addEventListener('click', () => wzAddGroup(b.dataset.addgroup)));
+function condExpression(l, op, r, rIsNum){
+  if (op === 'crosses_above' || op === 'crosses_below'){
+    const cmp = op === 'crosses_above' ? '>' : '<', prev = op === 'crosses_above' ? '<=' : '>=';
+    const rPrev = rIsNum ? r : (r + '.shift(1)');
+    return '(' + l + ' ' + cmp + ' ' + r + ') and (' + l + '.shift(1) ' + prev + ' ' + rPrev + ')';
   }
+  return l + ' ' + op + ' ' + r;
+}
+function readGroup(group){
+  const groups = $$('#wz-' + group + ' .cond-group'), gexprs = [];
+  for (const g of groups){
+    const rows = g.querySelectorAll('.wz-cond'), parts = [];
+    for (const row of rows){
+      const l = row.querySelector('.wz-left').value, op = row.querySelector('.wz-op').value;
+      const isNum = row.querySelector('.wz-isfixed').checked;
+      const r = isNum ? row.querySelector('.wz-rnum').value.trim() : row.querySelector('.wz-rfield').value;
+      if (!l || r === '') return {error: '有条件行未填完整'};
+      parts.push('(' + condExpression(l, op, r, isNum) + ')');
+    }
+    if (!parts.length) return {error: '有条件组为空'};
+    const comb = g.querySelector('.comb-toggle').dataset.comb;
+    gexprs.push(parts.join(comb === 'and' ? ' and ' : ' or '));
+  }
+  if (!gexprs.length) return {expression: null};
+  if (gexprs.length === 1) return {expression: gexprs[0]};
+  const divs = $$('#wz-' + group + ' .comb-divider');
+  let expr = '(' + gexprs[0] + ')';
+  for (let k = 1; k < gexprs.length; k++){
+    const dc = divs[k - 1] && divs[k - 1]._comb ? divs[k - 1]._comb.dataset.comb : 'and';
+    expr += ' ' + (dc === 'and' ? 'and' : 'or') + ' (' + gexprs[k] + ')';
+  }
+  return {expression: expr};
+}
+function usedFactors(){
+  const used = {};
+  $$('.wz-cond').forEach(row => {
+    [row.querySelector('.wz-left').value, row.querySelector('.wz-isfixed').checked ? null : row.querySelector('.wz-rfield').value].forEach(v => {
+      if (v && ALIAS_TARGET[v]) used[v] = ALIAS_TARGET[v];
+    });
+  });
+  return used;
+}
+function refreshWizard(){
+  const entry = readGroup('entry'), exit = readGroup('exit');
+  if (entry.error || exit.error || !entry.expression || !exit.expression) return;
+  maybeAutoName();
+  const name = $('#p-sname').value.trim() || 'wizard_strategy';
+  const lines = ['experiment:', '  name: ' + name, '  market_profile: ashare_daily_default', '  frequency: daily',
+    'data:', '  market_fields: [open, high, low, close, pre_close, vol, amount]', '  factor_fields:'];
+  const factors = usedFactors(), keys = Object.keys(factors);
+  if (keys.length) keys.forEach(a => lines.push('    ' + a + ': ' + factors[a]));
+  else lines.push('    {}');
+  lines.push('universe:', '  exclude_st: true', '  exclude_suspended: true', '  exclude_risk_warning: true', '  min_listing_days: 120',
+    'signal:', '  entry: "' + entry.expression.replace(/"/g, '\\"') + '"', '  exit: "' + exit.expression.replace(/"/g, '\\"') + '"',
+    'evaluation:', '  forward_return_horizons: [1, 3, 5, 10, 20]', '  quantiles: 5');
+  setYaml(lines.join('\n'));
+}
+function prefill(){
+  if ($$('.wz-cond').length) return;
+  const hasEma = FACTOR_OPTIONS.some(o => o.value === 'ema_5') && FACTOR_OPTIONS.some(o => o.value === 'ema_200');
+  const l = hasEma ? 'ema_5' : 'close', r = hasEma ? 'ema_200' : 'pre_close';
+  wzAddGroup('entry', {left: l, op: 'crosses_above', right: r});
+  wzAddGroup('exit', {left: l, op: 'crosses_below', right: r});
 }
 
-document.getElementById('btn-submit').addEventListener('click', async () => {
-  const btn = document.getElementById('btn-submit');
-  const status = document.getElementById('run-status');
-  const errBox = document.getElementById('run-error');
-  errBox.textContent = '';
-  btn.disabled = true;
+// ---------- 运行回测流水线 ----------
+const pipeEl = $('#pipe');
+let pipeRunning = false;
+function pipeFailAt(i, msg){
+  const st = $('#pipe-' + i); st.classList.remove('doing'); st.classList.add('fail');
+  const err = $('#pipe-err'); err.style.display = 'block';
+  err.innerHTML = '<b>失败：</b>' + esc(msg) + '<br><span class="opt">已停留在当前步骤，修正后重新运行。</span>';
+}
+function buildParams(){
+  const scope = document.querySelector('input[name="scope"]:checked').value;
+  const params = {
+    start: $('#p-start').value, end: $('#p-end').value,
+    mode: $('#p-mode').value,
+    initial_cash: Number($('#p-cash').value) || 100000,
+    max_positions: $('#p-maxpos').value.trim() === '' ? 10 : Number($('#p-maxpos').value),
+  };
+  if (scope === 'random') params.random_n = parseInt($('#p-random-n').value, 10);
+  else if (scope === 'codes') params.codes = $('#param-codes').value.split(',').map(s => s.trim()).filter(Boolean);
+  const num = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
+  const sl = num('#p-sl'), tp = num('#p-tp'), ts = num('#p-ts');
+  if (sl != null) params.stop_loss_pct = sl;
+  if (tp != null) params.take_profit_pct = tp;
+  if (ts != null) params.trailing_stop_pct = ts;
+  const hold = $('#p-holding').value.trim();
+  if (hold) params.max_holding_days = parseInt(hold, 10);
+  return params;
+}
+async function createJob(kind){
+  const resp = await apiFetch('/api/saas/jobs', {json: {
+    yaml: applyName(strategyYaml), kind,
+    name: $('#p-sname').value.trim() || '未命名策略',
+    nl_text: curEntry() === 'nl' ? $('#nl-text').value.trim().slice(0, 200) : null,
+    params: buildParams(),
+  }});
+  const d = await resp.json();
+  if (!resp.ok || !d.ok) throw new Error(d.error || '提交失败（HTTP ' + resp.status + '）');
+  return d.job_id;
+}
+async function pollJob(jobId){
+  for (let i = 0; i < 80; i++){
+    await new Promise(r => setTimeout(r, 3000));
+    const resp = await apiFetch('/api/saas/jobs/' + jobId);
+    const d = await resp.json();
+    const st = d.job && d.job.status;
+    if (st === 'completed') return d.job;
+    if (st === 'failed' || st === 'cancelled' || st === 'canceled') throw new Error((d.job && d.job.error) || '任务失败');
+  }
+  throw new Error('验证超时，请稍后在「我的回测」查看状态');
+}
+$('#btn-run-main').addEventListener('click', async () => {
+  if (pipeRunning) return;
+  const btn = $('#btn-run-main');
+  pipeEl.style.display = 'block';
+  LabUI.pipeReset(pipeEl);
+  $('#pipe-err').style.display = 'none';
+  LabUI.pipeDoing(pipeEl, 1);
+  // ① 校验：策略 ID + YAML 结构
+  const sid = $('#p-sname').value.trim();
+  if (!sid || !/^[A-Za-z0-9_-]+$/.test(sid)){
+    pipeFailAt(1, sid ? ('策略 ID 含非法字符：「' + sid + '」——仅允许字母、数字、下划线、连字符。') : '策略名称 / ID 为空——请在「回测参数」第一行命名。');
+    $('#p-sname').scrollIntoView({behavior: 'smooth', block: 'center'}); $('#p-sname').focus();
+    return;
+  }
+  const scope = document.querySelector('input[name="scope"]:checked').value;
+  if (scope === 'random'){
+    const n = parseInt($('#p-random-n').value, 10);
+    if (!n || n < 1 || n > 2000){ pipeFailAt(1, '随机数量 N 须为 1~2000 的正整数。'); return; }
+  }
+  if (scope === 'codes' && !$('#param-codes').value.trim()){ pipeFailAt(1, '选择了「指定股票代码」但未填写代码。'); return; }
+  const y = strategyYaml;
+  if (!y.trim()){ pipeFailAt(1, '策略代码为空——三个入口任选一个生成或编写策略后重试。'); return; }
+  if (y.indexOf('experiment:') < 0 || y.indexOf('signal:') < 0){ pipeFailAt(1, 'YAML 缺少 experiment / signal 段——结构不完整，请在预览栏补全。'); return; }
+  pipeRunning = true; btn.disabled = true; btn.style.opacity = .65;
+  const abort = () => { pipeRunning = false; btn.disabled = false; btn.style.opacity = ''; };
   try {
-    status.textContent = '正在小范围验证策略（通常 1 分钟内）…';
+    LabUI.pipeDone(pipeEl, 1, '结构校验通过');
+    // ② 冒烟（kind=smoke，服务端小样本）
+    LabUI.pipeDoing(pipeEl, 2);
+    $('#pipe-2 .pipe-st').textContent = '小范围验证中…';
     const smokeId = await createJob('smoke');
-    if (smokeId === null) return;
     try {
       await pollJob(smokeId);
     } catch (e) {
-      errBox.textContent = '策略在小样本上没跑通：' + e.message;
-      status.textContent = '';
-      return;
+      pipeFailAt(2, '策略在小样本上没跑通：' + e.message);
+      abort(); return;
     }
-    status.textContent = '验证通过，正在提交正式回测…';
+    LabUI.pipeDone(pipeEl, 2, '冒烟通过');
+    // ③ 全量
+    LabUI.pipeDoing(pipeEl, 3);
     const fullId = await createJob('full');
-    if (fullId === null) return;
+    LabUI.pipeDone(pipeEl, 3, '已提交');
+    abort();
     location.href = '/saas/jobs/' + fullId;
   } catch (e) {
-    errBox.textContent = e.message;
-    status.textContent = '';
-  } finally {
-    btn.disabled = false;
+    if (e.message !== 'unauthorized'){
+      const doing3 = pipeEl.querySelector('#pipe-3.doing');
+      pipeFailAt(doing3 ? 3 : 2, String(e.message || e));
+      abort();
+    }
   }
 });
+
+// init（未登录可浏览整页：因子目录等登录后才加载，提交时由 apiFetch 401 引导登录）
+setRangeYears(2);
+refreshPreview();
+if (SAAS_BYPASS || saasToken()){
+  loadFactorCatalog();
+} else {
+  $('#wz-factor-status').textContent = '因子目录在登录后加载；可先浏览页面，提交时会引导登录。';
+}
+maybeAutoName();
 </script>
 {% endblock %}

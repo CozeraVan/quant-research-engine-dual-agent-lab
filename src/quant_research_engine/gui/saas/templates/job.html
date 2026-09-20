@@ -34,6 +34,26 @@
       <div id="tag-detail" style="margin-top:10px"></div>
     </div>
 
+    <!-- 交易磨损（chart-data.fees_summary；无则整块隐藏，C5 对齐 lab 版） -->
+    <div class="chart-box" id="box-fees" style="display:none">
+      <div class="chart-title">交易磨损 <span class="opt">（佣金 / 印花税 / 过户费等集中呈现；聚合自本次回测 round_trips 全量真实费用列）</span></div>
+      <div id="fees-body"></div>
+    </div>
+
+    <!-- FRM 风险模块（risk-analysis；has_report=false 时整块隐藏） -->
+    <div class="chart-box" id="box-risk" style="display:none">
+      <div class="chart-title">风险分析（FRM） <span class="opt" id="risk-subtitle"></span></div>
+      <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
+    </div>
+
+    <a class="big-link" id="big-symbols" href="#">
+      <span>
+        <span class="bl-main">📋 查看个股回测明细</span>
+        <span class="bl-sub">全部触发交易的个股列表：代码 / 名称 / 交易笔数 / 胜率 / 总净盈亏 / 超额等，可排序可搜索；点行进入个股详情</span>
+      </span>
+      <span class="bl-arrow">→</span>
+    </a>
+
     <!-- TODO(M4 OSS)：报告文件下载（明细走 OSS 直传） -->
     <div class="panel hidden" id="download-card"><a class="btn" id="btn-download">下载报告</a></div>
     <p><a href="/saas/">← 返回我的回测</a></p>
@@ -262,6 +282,173 @@ function renderTagRank(items){
 
 // B3：数据源切到 B2 的 /api/results/<id> 系列端点（summary/chart-data/tag-analysis），
 // 不再走 /api/saas/jobs 的嵌套 result。未完成 409（带 status）→ 显示进行状态并轮询。
+// --- 交易磨损 + FRM（C5，渲染逻辑与 lab 版一致） ---
+let riskCharts = [];
+function renderFees(fees, meta){
+  const box = document.getElementById('box-fees');
+  if (!fees){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  const wear = fees.total_cost;
+  const ratio = fees.invested > 0 ? wear / fees.invested : null;
+  const eaten = fees.gross_pnl > 0 ? wear / fees.gross_pnl : null;
+  const f = (meta && meta.fees) || {};
+  const wc = (label, val) => '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+  let chips = '';
+  if (f.commission_rate != null){
+    chips = '<div class="meta-chips" style="margin-bottom:10px"><span class="chip">费率配置 <b>佣金 ' +
+      (f.commission_rate * 100).toFixed(2) + '%（最低 ' + f.min_commission + ' 元）· 印花税（卖出）' +
+      (f.stamp_tax_sell * 100).toFixed(2) + '% · 过户费 ' + (f.transfer_fee_rate * 100).toFixed(3) + '%</b></span></div>';
+  }
+  const maxV = Math.max(Math.abs(fees.gross_pnl), Math.abs(fees.net_pnl), 1);
+  document.getElementById('fees-body').innerHTML = chips +
+    '<div class="wear-cards">' +
+      wc('佣金合计', num(fees.commission) + ' 元') +
+      wc('印花税合计', num(fees.stamp_tax) + ' 元') +
+      wc('过户费 / 其他', num(fees.other_cost) + ' 元') +
+      wc('总磨损', num(wear) + ' 元') +
+      wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%') +
+    '</div>' +
+    '<div class="wb">' +
+      '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + num(fees.gross_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + num(fees.net_pnl) + ' 元</span></div>' +
+      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + num(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：本次回测 round_trips 全量 ' + fees.trades + ' 笔真实费用列聚合</div>' +
+    '</div>';
+}
+async function loadRisk(){
+  const resp = await apiFetch('/api/results/' + JOB_ID + '/risk-analysis');
+  if (!resp.ok){ return; }
+  const d = await resp.json();
+  if (!d.ok || !d.has_report){ document.getElementById('box-risk').style.display = 'none'; return; }
+  document.getElementById('box-risk').style.display = '';
+  renderRisk(d);
+}
+function renderRisk(d) {
+    riskCharts.forEach(function(c) { c.dispose(); });
+    riskCharts = [];
+    var body = document.getElementById('risk-body');
+    var sub = '（日收益口径 n=' + (d.n_obs == null ? '—' : d.n_obs) + '；VaR / ES / 压力测试均为损失数字，红色 = 亏损）';
+    document.getElementById('risk-subtitle').textContent = sub;
+
+    // VaR / ES 卡片 + VaR 回测状态灯（历史模拟口径，损失取正号）
+    var cardsHtml = '';
+    var ve = d.var_es || {};
+    ['95pct', '99pct'].forEach(function(lv) {
+      var v = ve[lv];
+      if (!v) return;
+      var label = lv === '95pct' ? '95%' : '99%';
+      cardsHtml += card('VaR ' + label, v.var == null ? '—' : (v.var * 100).toFixed(2) + '%', 'neg') +
+                   card('ES ' + label, v.es == null ? '—' : (v.es * 100).toFixed(2) + '%', 'neg');
+    });
+    var bt = d.var_backtest || {};
+    var lightsHtml = '';
+    ['95pct', '99pct'].forEach(function(lv) {
+      var b = bt[lv];
+      if (!b) return;
+      var label = lv === '95pct' ? 'VaR95 回测' : 'VaR99 回测';
+      lightsHtml += '<span class="risk-light ' + (b.reject ? 'bad' : 'ok') + '" title="' +
+                    (b.conclusion || '') + '">' + label + (b.reject ? ' 不合格' : ' 合格') +
+                    '（突破率 ' + (b.violation_rate * 100).toFixed(2) + '% / 预期 ' +
+                    (b.expected_rate * 100).toFixed(2) + '%）</span> ';
+    });
+    var vol = d.volatility || {};
+    var volTxt = [];
+    if (vol.ewma_annual != null) volTxt.push('EWMA 年化波动 ' + (vol.ewma_annual * 100).toFixed(2) + '%');
+    if (vol.garch_annual != null) volTxt.push('GARCH 年化波动 ' + (vol.garch_annual * 100).toFixed(2) + '%');
+    if (vol.latest_regime) volTxt.push('当前波动状态 ' + vol.latest_regime);
+
+    body.innerHTML =
+      '<div class="risk-cards">' + (cardsHtml || '<span class="opt">暂无 VaR/ES 数据</span>') + '</div>' +
+      '<div style="margin-bottom:8px;">' + lightsHtml + '</div>' +
+      '<div class="risk-grid">' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">日收益分布 <span class="opt">（直方图 + 正态拟合，竖线为 VaR）</span></div><div id="chart-risk-dist" style="height:240px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">波动率状态 <span class="opt">（' + (volTxt.join('；') || '暂无') + '）</span></div><div id="chart-risk-vol" style="height:240px;"></div></div>' +
+      '</div>' +
+      '<div class="chart-title" style="font-size:13px;margin-top:8px;">压力测试 <span class="opt" id="risk-stress-note"></span></div>' +
+      '<div id="chart-risk-stress" style="height:220px;"></div>';
+
+    renderRiskDist(d);
+    renderRiskVol(d);
+    renderRiskStress(d);
+    window.addEventListener('resize', function() {
+      riskCharts.forEach(function(c) { c.resize(); });
+    });
+  }
+function renderRiskDist(d) {
+    var el = document.getElementById('chart-risk-dist');
+    var h = d.histogram;
+    if (!h) { el.innerHTML = '<div class="chart-empty">暂无分布数据</div>'; el.style.height = 'auto'; return; }
+    var mids = [];
+    for (var i = 0; i < h.counts.length; i++) mids.push([(h.edges[i] + h.edges[i + 1]) / 2, h.counts[i]]);
+    var marks = [];
+    var ve = d.var_es || {};
+    if (ve['95pct'] && ve['95pct'].var != null) marks.push({ xAxis: -ve['95pct'].var, label: { formatter: 'VaR95' }, lineStyle: { color: '#d43030', type: 'dashed' } });
+    if (ve['99pct'] && ve['99pct'].var != null) marks.push({ xAxis: -ve['99pct'].var, label: { formatter: 'VaR99' }, lineStyle: { color: '#8b0000', type: 'dashed' } });
+    var c = echarts.init(el);
+    riskCharts.push(c);
+    c.setOption({
+      animation: false,
+      tooltip: { trigger: 'axis',
+                 valueFormatter: function(v) { return typeof v === 'number' && Math.abs(v) < 1 ? (v * 100).toFixed(2) + '%' : v; } },
+      grid: { left: 45, right: 15, top: 25, bottom: 25 },
+      xAxis: { type: 'value', name: '日收益', axisLabel: { formatter: function(v) { return (v * 100).toFixed(1) + '%'; } } },
+      yAxis: { type: 'value', name: '天数' },
+      series: [
+        { name: '实际分布', type: 'bar', data: mids, barCategoryGap: '5%',
+          itemStyle: { color: '#B7A6E8' }, markLine: { symbol: 'none', silent: true, data: marks } },
+        { name: '正态拟合', type: 'line', data: h.normal, showSymbol: false,
+          lineStyle: { width: 1.5, type: 'dashed' }, color: '#241F2E' },
+      ],
+    });
+  }
+function renderRiskVol(d) {
+    var el = document.getElementById('chart-risk-vol');
+    var vol = d.volatility || {};
+    var rc = vol.regime_counts;
+    if (!rc) { el.innerHTML = '<div class="chart-empty">暂无波动率数据</div>'; el.style.height = 'auto'; return; }
+    var order = ['low', 'mid', 'high'];
+    var names = { low: '低波动', mid: '中波动', high: '高波动' };
+    var c = echarts.init(el);
+    riskCharts.push(c);
+    c.setOption({
+      animation: false,
+      tooltip: {},
+      grid: { left: 45, right: 15, top: 25, bottom: 25 },
+      xAxis: { type: 'category', data: order.map(function(k) { return names[k]; }) },
+      yAxis: { type: 'value', name: '天数' },
+      series: [{
+        type: 'bar', barWidth: '45%',
+        data: order.map(function(k) {
+          return { value: rc[k] || 0, itemStyle: { color: k === vol.latest_regime ? '#6750A4' : '#D9D2EA' } };
+        }),
+        label: { show: true, position: 'top' },
+      }],
+    });
+  }
+function renderRiskStress(d) {
+    var el = document.getElementById('chart-risk-stress');
+    var st = d.stress || { scenarios: [], skipped: [] };
+    var noteEl = document.getElementById('risk-stress-note');
+    noteEl.textContent = st.skipped && st.skipped.length
+      ? '（以下情景回测区间未覆盖，未参与：' + st.skipped.join('、') + '）' : '';
+    if (!st.scenarios || !st.scenarios.length) {
+      el.innerHTML = '<div class="chart-empty">暂无压力测试数据</div>'; el.style.height = 'auto'; return;
+    }
+    var c = echarts.init(el);
+    riskCharts.push(c);
+    c.setOption({
+      animation: false,
+      tooltip: { trigger: 'axis', valueFormatter: function(v) { return v == null ? '—' : (v * 100).toFixed(2) + '%'; } },
+      legend: { data: ['区间累计损失', '窗口最大回撤'], top: 0 },
+      grid: { left: 50, right: 15, top: 30, bottom: 25 },
+      xAxis: { type: 'category', data: st.scenarios.map(function(s) { return s.description; }) },
+      yAxis: { type: 'value', name: '损失%', axisLabel: { formatter: function(v) { return (v * 100).toFixed(0) + '%'; } } },
+      series: [
+        { name: '区间累计损失', type: 'bar', data: st.scenarios.map(function(s) { return s.cum_loss; }), itemStyle: { color: '#d43030' } },
+        { name: '窗口最大回撤', type: 'bar', data: st.scenarios.map(function(s) { return s.max_dd; }), itemStyle: { color: '#8B7FBE' } },
+      ],
+    });
+  }
+
 async function poll(){
   const resp = await apiFetch('/api/results/' + JOB_ID + '/summary');
   const data = await resp.json();
@@ -302,6 +489,9 @@ async function poll(){
   if (chart.dates && chart.equity) renderMain(chart);
   else empty('chart-main');
   renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
+  renderFees(chart.fees_summary || null, chart.meta || null);
+  document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
+  loadRisk();
 }
 poll();
 </script>

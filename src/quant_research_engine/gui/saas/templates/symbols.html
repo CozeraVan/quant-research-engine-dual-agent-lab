@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}个股回测明细 · A股回测台{% endblock %}
+{% block body %}
+<div class="wrap">
+  <div class="page-head" style="margin-bottom:14px">
+    <h1 style="font-size:22px">个股回测明细 <span class="opt">任务 #{{ job_id }}</span></h1>
+    <p class="opt" style="margin-top:6px">聚合自赚钱效应归因（仅本任务实际交易的个股）；点列头排序，点行进个股详情；输入完整代码回车直跳。</p>
+    <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}">← 返回回测结果</a></p>
+  </div>
+  <div class="card">
+    <div class="table-tools">
+      <input type="text" id="syms-filter" placeholder="筛选代码 / 名称（完整代码回车直跳）…" style="width:260px">
+      <span class="opt" id="syms-hint">加载中…</span>
+    </div>
+    <div style="overflow:auto">
+      <table class="tbl" id="sym-table">
+        <thead><tr>
+          <th class="sortable" data-k="ts_code">代码 / 名称</th>
+          <th class="num sortable" data-k="trades">交易笔数</th>
+          <th class="num sortable" data-k="win_rate">胜率%</th>
+          <th class="num sortable" data-k="total_pnl">总净盈亏(元)</th>
+          <th class="num sortable" data-k="avg_ret">平均净收益%</th>
+          <th class="num sortable" data-k="best_ret">最佳单笔%</th>
+          <th class="num sortable" data-k="worst_ret">最差单笔%</th>
+          <th class="num sortable" data-k="avg_hold_days">持仓天数</th>
+          <th class="num sortable" data-k="bench_ret">自然涨幅%</th>
+          <th class="num sortable" data-k="percentile">赚钱效应分位</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+requireLogin();
+const JOB_ID = {{ job_id }};
+const $ = s => document.querySelector(s);
+const $$ = s => Array.prototype.slice.call(document.querySelectorAll(s));
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+let ALL = [];
+let sort = {k: 'total_pnl', dir: -1};
+
+async function load(){
+  const resp = await apiFetch(`/api/results/${JOB_ID}/symbols`);
+  const d = await resp.json();
+  if (!resp.ok || !d.ok){ $('#syms-hint').textContent = d.error || ('加载失败 HTTP ' + resp.status); return; }
+  ALL = d.symbols || [];
+  render();
+}
+function render(){
+  const kw = $('#syms-filter').value.trim().toLowerCase();
+  const rows = ALL.filter(s => !kw || (s.ts_code + ' ' + (s.name || '')).toLowerCase().includes(kw));
+  rows.sort((a, b) => {
+    const va = a[sort.k], vb = b[sort.k];
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return (typeof va === 'string' ? String(va).localeCompare(String(vb)) : va - vb) * sort.dir;
+  });
+  $('#sym-table tbody').innerHTML = rows.map(s =>
+    `<tr class="row-link" data-code="${esc(s.ts_code)}">`
+    + `<td><strong>${esc(s.ts_code)}</strong> ${esc(s.name || '')}</td>`
+    + `<td class="num">${s.trades}</td>`
+    + `<td class="num">${(s.win_rate * 100).toFixed(1)}</td>`
+    + `<td class="num ${cls(s.total_pnl)}">${num(s.total_pnl)}</td>`
+    + `<td class="num ${cls(s.avg_ret)}">${pct(s.avg_ret)}</td>`
+    + `<td class="num pos">${pct(s.best_ret)}</td>`
+    + `<td class="num neg">${pct(s.worst_ret)}</td>`
+    + `<td class="num">${s.avg_hold_days == null ? '—' : Number(s.avg_hold_days).toFixed(1)}</td>`
+    + `<td class="num ${cls(s.bench_ret)}">${pct(s.bench_ret)}</td>`
+    + `<td class="num">${s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%'}</td></tr>`
+  ).join('');
+  $('#syms-hint').textContent = `共 ${rows.length} 只` + (kw ? '（已筛选）' : '');
+  $$('#sym-table tr[data-code]').forEach(tr => tr.addEventListener('click', () => gotoSymbol(tr.dataset.code)));
+}
+function gotoSymbol(code){ location.href = `/saas/jobs/${JOB_ID}/symbols/${encodeURIComponent(code)}`; }
+$$('#sym-table th.sortable').forEach(th => th.addEventListener('click', () => {
+  const k = th.dataset.k;
+  if (sort.k === k) sort.dir = -sort.dir;
+  else sort = {k, dir: k === 'ts_code' ? 1 : -1};
+  render();
+}));
+$('#syms-filter').addEventListener('input', render);
+$('#syms-filter').addEventListener('keydown', function(ev){
+  if (ev.key !== 'Enter') return;
+  const kw = this.value.trim().toUpperCase();
+  if (/^\d{6}\.(SZ|SH|BJ)$/i.test(kw)){ gotoSymbol(kw); return; }
+  const hit = ALL.find(s => s.ts_code.toUpperCase() === kw);
+  if (hit) gotoSymbol(hit.ts_code);
+});
+load();
+</script>
+{% endblock %}

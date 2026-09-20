@@ -39,6 +39,31 @@
 completed）→ /api/results 列表与详情（summary/chart-data/tag-analysis）数据完整；
 权限语义：未登录 401、删他人结果 404。
 
+**C5 已上线（2026-09-20）**：8081 lab 页面体系完整平移到 SaaS 端。
+- 页面：new.html 重写为冻结版三入口（自然语言/快速向导三级级联+两级条件组/高级 YAML）
+  + PCB 排线 + 日历选区间 + 标的范围（全 A/随机 N 只/指定代码；板块概念因 ECS 无行情库
+  降级为说明+替代选项）+ 预览栏（行号高亮、参数自动合并、持仓天数注入 YAML）+ 唯一
+  流水线按钮（校验→冒烟→全量，提交时 401 引导登录，未登录可浏览）；dashboard.html
+  记录页加超额收益列+排序+分页+删除弹层；job.html 加交易磨损与 FRM 风险模块
+  （risk-analysis 无报告整块隐藏）+ 个股明细大入口；新增 symbols.html/symbol.html
+  两页与路由（/saas/jobs/<id>/symbols[/<code>]）。
+- 主题：saas base.html 引入 lab-theme.css/lab-ui.js，--accent 换淡紫 #6750A4。
+- 联调修复（各带测试）：worker `_job_params` 只读 params 导致 17 协议 params_json 被丢弃
+  （按默认参数跑）→ 兼容读取；worker runner 透传 random_n；上传端点
+  /api/worker/jobs/<id>/result/files 清单键含子目录时 Path(name).name 拍平导致全部 400
+  → 按完整相对路径匹配+保留子目录（.. 穿越仍 400）。
+- nginx 修复：`location ~* \.(css|js...)$` 扩展名规则抢在 /static/ 前缀前导致 SaaS
+  静态资源 404 → 加 `^/static/` 优先段反代 gunicorn（仓库 deploy/landing/nginx-aguhuice.conf
+  已同步线上）。
+- 验证：本地 staging（18099，bypass+真行情库+本机 worker）Playwright 全链路——向导出
+  因子目录、提交→冒烟→全量 job completed、详情页（磨损可见/无风险报告正确隐藏）、
+  个股列表→点行进个股详情（平安银行：7 指标卡/收益曲线+区间卡/磨损/K线买卖点/交易明细
+  /下单记录全渲染）。ECS 公网验证（未登录态）：新建页 200 不跳登录、三卡+PCB+日历正常、
+  静态资源 200；登录后链路未在 ECS 实测——/etc/qre-saas.env 含测试账号凭证但纪律上不动
+  不读，留待用户验收时自验。
+- 部署：gui/ 全目录 rsync 至 /srv/aguhuice/qre（含模板+静态），runner.py 同步，qre-saas
+  restart 后 /saas/ 与 /saas/jobs/1/symbols 均 200。
+
 **C1 已上线（2026-09-19）**：
 - SaaS Web/API：`qre-saas.service`（gunicorn 2 workers，127.0.0.1:8090，MemoryMax=1G，
   User=www-data，EnvironmentFile=/etc/qre-saas.env[0600]，repo /srv/aguhuice/qre + venv

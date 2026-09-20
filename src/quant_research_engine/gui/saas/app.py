@@ -353,6 +353,15 @@ def create_saas_app() -> Flask:
     def saas_job_page(job_id: int) -> str:
         return render_template("job.html", job_id=job_id)
 
+    # C5：个股明细列表 / 个股详情页（数据走 /api/results/<id>/symbols*）
+    @app.get("/saas/jobs/<int:job_id>/symbols")
+    def saas_symbols_page(job_id: int) -> str:
+        return render_template("symbols.html", job_id=job_id)
+
+    @app.get("/saas/jobs/<int:job_id>/symbols/<ts_code>")
+    def saas_symbol_page(job_id: int, ts_code: str) -> str:
+        return render_template("symbol.html", job_id=job_id, ts_code=ts_code)
+
     # --- 复用既有 NL 编译 / 因子目录（同一编译函数 + factor_correction 纠错层，
     #     LLM key 只存服务端环境变量；两个路由都要求登录） ---
 
@@ -912,14 +921,21 @@ def create_saas_app() -> Flask:
             job_dir.mkdir(parents=True, exist_ok=True)
             uploaded = []
             for name, file in request.files.items():
-                safe = Path(name).name  # 防路径穿越
+                # C5 修复：清单键是带子目录的相对路径（如 000001.SZ/trades.csv），
+                # 按完整相对路径匹配并保留子目录落盘；仅拒绝绝对路径与 .. 穿越
+                rel = Path(name)
+                if rel.is_absolute() or ".." in rel.parts:
+                    return jsonify({"ok": False, "error": f"非法文件名: {name}"}), 400
+                safe = str(rel)
                 if manifest and safe not in manifest:
                     return jsonify({"ok": False, "error": f"文件不在清单内: {safe}"}), 400
                 blob = file.read()
                 expected = (manifest.get(safe) or {}).get("sha256")
                 if expected and _hashlib.sha256(blob).hexdigest() != expected:
                     return jsonify({"ok": False, "error": f"文件校验失败: {safe}"}), 400
-                (job_dir / safe).write_bytes(blob)
+                dest = job_dir / safe
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(blob)
                 uploaded.append(safe)
             remaining = [n for n in manifest if not (job_dir / n).exists()]
             if remaining:

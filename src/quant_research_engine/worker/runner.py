@@ -28,6 +28,7 @@ params 约定（全部可选）：
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from datetime import date, timedelta
@@ -69,7 +70,14 @@ def _persist_artifacts(record: dict[str, Any], output_dir: Path) -> None:
 
 
 def _job_params(job: dict[str, Any]) -> dict[str, Any]:
-    params = job.get("params") or {}
+    # 17 协议字段名为 params_json；旧键 params 兼容兜底（C5 联调修复：
+    # 此前只读 params，claim 下发的 params_json 被丢弃导致按默认参数跑）
+    params = job.get("params") or job.get("params_json") or {}
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except (json.JSONDecodeError, TypeError):
+            params = {}
     return params if isinstance(params, dict) else {}
 
 
@@ -121,6 +129,7 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
         take_profit_pct=params.get("take_profit_pct"),
         trailing_stop_pct=params.get("trailing_stop_pct"),
         precheck=(job.get("kind") == "smoke"),
+        random_n=(int(params["random_n"]) if params.get("random_n") is not None else None),
         background=False,
     )
     # 产物持久化（缺陷修复）：/tmp 沙箱在 WSL 重启/清理后丢失，导致详情页全空。

@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}个股回测详情 · A股回测台{% endblock %}
+{% block body %}
+<div class="wrap">
+  <div class="page-head" style="margin-bottom:4px">
+    <h1 style="font-size:22px" id="sym-title">个股回测详情 <span class="opt">{{ ts_code }}　@ 任务 #{{ job_id }}</span></h1>
+    <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}/symbols">← 个股明细列表</a>　<a class="inl" href="/saas/jobs/{{ job_id }}">回测结果</a>　<span class="opt" id="sym-note"></span></p>
+  </div>
+  <div class="metric-strip" id="sum-strip"></div>
+
+  <div class="chart-box" id="box-equity" style="display:none">
+    <div class="chart-title">收益曲线 <span class="opt">（策略净值 vs 个股买入持有 vs 基准指数；拖动滑块缩放）</span></div>
+    <div id="chart-equity" style="height:260px"></div>
+    <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
+  </div>
+
+  <div class="chart-box" id="box-wear" style="display:none">
+    <div class="chart-title">交易磨损 <span class="opt">（该股本次回测全部真实订单/成交费用聚合）</span></div>
+    <div id="wear-body"></div>
+  </div>
+
+  <div class="chart-box" id="box-kline" style="display:none">
+    <div class="chart-title">日 K 与买卖点 <span class="opt" id="kline-note"></span></div>
+    <div id="chart-kline" style="height:460px"></div>
+  </div>
+
+  <div class="chart-box" id="box-trades" style="display:none">
+    <div class="chart-title">交易明细（round trip）</div>
+    <div class="table-wrap" id="tbl-trades"></div>
+  </div>
+
+  <div class="chart-box" id="box-orders" style="display:none">
+    <div class="chart-title">下单记录 <span class="opt" id="orders-note"></span></div>
+    <div class="table-wrap" id="tbl-orders"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/echarts.min.js"></script>
+<script>
+requireLogin();
+const JOB_ID = {{ job_id }};
+const TS_CODE = {{ ts_code | tojson }};
+const $ = s => document.querySelector(s);
+function f2(v){ return v == null || v === '' ? '—' : Number(v).toFixed(2); }
+function card(label, value, klass){
+  return '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value ' + (klass || '') + '">' + value + '</div></div>';
+}
+function table(elId, rows, columns){
+  const el = document.getElementById(elId);
+  if (!rows || !rows.length){ el.innerHTML = '<div class="chart-empty">暂无数据</div>'; return; }
+  const thead = '<tr>' + columns.map(c => '<th>' + c[0] + '</th>').join('') + '</tr>';
+  const tbody = rows.map(r => '<tr>' + columns.map(c => {
+    let v = r[c[1]];
+    if (c[2] === 'num') v = f2(v);
+    if (c[2] === 'pct') v = pct(v);
+    const klass = c[2] === 'pnl' ? ' class="' + cls(v) + '"' : '';
+    if (c[2] === 'pnl') v = f2(v);
+    return '<td' + klass + '>' + (v == null || v === '' ? '—' : v) + '</td>';
+  }).join('') + '</tr>').join('');
+  el.innerHTML = '<table class="detail-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+}
+
+async function load(){
+  const resp = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`);
+  const d = await resp.json();
+  if (!resp.ok || !d.ok){
+    $('#sym-note').textContent = d.error || ('加载失败 HTTP ' + resp.status);
+    return;
+  }
+  renderSummary(d.summary);
+  renderEquity(d);
+  renderWear(d);
+  renderKline(d);
+  table('tbl-trades', d.trades, [
+    ['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
+    ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'],
+    ['毛盈亏', 'gross_pnl', 'pnl'], ['净盈亏', 'net_pnl', 'pnl'], ['出场原因', 'exit_reason']]);
+  table('tbl-orders', d.orders, [
+    ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
+    ['金额', 'notional', 'num'], ['费用', 'cost', 'num'], ['佣金', 'commission', 'num'],
+    ['印花税', 'stamp_tax', 'num'], ['过户费', 'transfer_fee', 'num']]);
+  if (d.trades && d.trades.length) $('#box-trades').style.display = '';
+  if (d.orders && d.orders.length) $('#box-orders').style.display = '';
+  $('#sym-note').textContent = (d.kline && d.kline.dates ? '全量 ' + d.kline.dates.length + ' 个交易日' : 'K线/因子明细在当前部署不可用（无行情库），已按既有降级隐藏');
+}
+
+function renderSummary(s){
+  $('#sym-title').innerHTML = (s.name || '') + ' <span class="opt">' + s.ts_code + '</span>';
+  $('#sum-strip').innerHTML =
+    card('总净盈亏', num(s.total_pnl) + ' 元', cls(s.total_pnl)) +
+    card('策略区间收益', (s.total_ret_pct == null ? '—' : pct(s.total_ret_pct)), cls(s.total_ret_pct)) +
+    card('交易笔数', s.trades, 'flat') +
+    card('胜率', pct(s.win_rate), cls(s.win_rate)) +
+    card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret)) +
+    card('区间自然涨幅', pct(s.bench_ret), cls(s.bench_ret)) +
+    card('赚钱效应分位', s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%', 'flat');
+}
+
+function renderEquity(d){
+  const eq = d.equity;
+  if (!eq || !eq.dates || !eq.dates.length) return;
+  $('#box-equity').style.display = '';
+  const dates = eq.dates, n = dates.length;
+  const kmap = {};
+  if (d.kline && d.kline.dates) d.kline.dates.forEach((dt, i) => { kmap[dt] = d.kline.ohlc[i][1]; });
+  let k0 = null;
+  const holdPct = dates.map(dt => {
+    const c = kmap[dt];
+    if (c == null) return null;
+    if (k0 == null) k0 = c;
+    return (c / k0 - 1) * 100;
+  });
+  const series = [{ name: '策略净值(元)', type: 'line', data: eq.values, showSymbol: false, lineStyle: {width: 1.5}, color: '#6750A4' }];
+  if (holdPct.some(v => v != null)) series.push({ name: '买入持有该股%', type: 'line', yAxisIndex: 1, data: holdPct, showSymbol: false, lineStyle: {width: 1.2, type: 'dashed'}, color: '#9A93A6' });
+  if (d.benchmarks) Object.keys(d.benchmarks).forEach(code => {
+    const b = d.benchmarks[code];
+    let b0 = null;
+    const bpct = b.closes.map(c => { if (c == null) return null; if (b0 == null) b0 = c; return (c / b0 - 1) * 100; });
+    series.push({ name: b.name + '%', type: 'line', yAxisIndex: 1, data: bpct, showSymbol: false, lineStyle: {width: 1}, color: '#B7A6E8' });
+  });
+  const chart = echarts.init($('#chart-equity'));
+  chart.setOption({
+    animation: false,
+    legend: {top: 0, textStyle: {fontSize: 11}},
+    tooltip: {trigger: 'axis', valueFormatter: v => v == null ? '—' : Number(v).toFixed(2)},
+    grid: {left: 70, right: 60, top: 26, bottom: 45},
+    xAxis: {type: 'category', data: dates},
+    yAxis: [{type: 'value', scale: true, name: '净值(元)'}, {type: 'value', scale: true, name: '累计收益%', axisLabel: {formatter: '{value}%'}}],
+    dataZoom: [{type: 'inside'}, {type: 'slider', bottom: 6, height: 18}],
+    series,
+  });
+  // 区间信息卡（与 8081 同口径）
+  function sliceRetPct(arr, i0, i1){
+    let a = null, b = null;
+    for (let i = i0; i <= i1; i++) if (arr[i] != null){ if (a == null) a = arr[i]; b = arr[i]; }
+    if (a == null || b == null) return null;
+    return (1 + b / 100) / (1 + a / 100) - 1;
+  }
+  function updateStrip(){
+    const dz = chart.getOption().dataZoom[0];
+    let i0 = dz.startValue != null ? dz.startValue : Math.floor((dz.start || 0) / 100 * (n - 1));
+    let i1 = dz.endValue != null ? dz.endValue : Math.ceil((dz.end != null ? dz.end : 100) / 100 * (n - 1));
+    i0 = Math.max(0, Math.min(i0, n - 1)); i1 = Math.max(i0, Math.min(i1, n - 1));
+    const ev = eq.values.slice(i0, i1 + 1).filter(v => v != null);
+    const sRet = ev.length >= 2 ? ev[ev.length - 1] / ev[0] - 1 : null;
+    const hRet = sliceRetPct(holdPct, i0, i1);
+    const excess = (sRet != null && hRet != null) ? sRet - hRet : null;
+    $('#range-strip').innerHTML =
+      card('区间策略收益', pct(sRet), cls(sRet)) +
+      card('区间买入持有收益', pct(hRet), cls(hRet)) +
+      card('区间超额·vs买入持有', pct(excess), cls(excess)) +
+      card('交易日数', i1 - i0 + 1, 'flat');
+  }
+  let raf = false;
+  chart.on('datazoom', () => { if (raf) return; raf = true; requestAnimationFrame(() => { raf = false; updateStrip(); }); });
+  updateStrip();
+  window.addEventListener('resize', () => chart.resize());
+}
+
+function renderWear(d){
+  if (!d.orders || !d.orders.length) return;
+  let comm = 0, stamp = 0, transfer = 0, invested = 0;
+  d.orders.forEach(o => {
+    comm += Number(o.commission) || 0; stamp += Number(o.stamp_tax) || 0; transfer += Number(o.transfer_fee) || 0;
+    if (o.side === 'buy') invested += Number(o.notional) || 0;
+  });
+  const wear = comm + stamp + transfer;
+  let gross = null, net = null;
+  if (d.trades && d.trades.length && d.trades[0].gross_pnl != null){
+    gross = 0; net = 0;
+    d.trades.forEach(t => { gross += Number(t.gross_pnl) || 0; net += Number(t.net_pnl) || 0; });
+  }
+  $('#box-wear').style.display = '';
+  const wc = (label, val) => '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+  const ratio = invested > 0 ? wear / invested : null;
+  let html = '<div class="wear-cards">' +
+    wc('佣金合计', f2(comm) + ' 元') + wc('印花税合计', f2(stamp) + ' 元') +
+    wc('过户费合计', f2(transfer) + ' 元') + wc('总磨损', f2(wear) + ' 元') +
+    wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%') + '</div>';
+  if (gross != null){
+    const maxV = Math.max(Math.abs(gross), Math.abs(net), 1);
+    const eaten = gross > 0 ? wear / gross : null;
+    html += '<div class="wb">' +
+      '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(gross) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(gross) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(net) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(net) + ' 元</span></div>' +
+      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div></div>';
+  }
+  $('#wear-body').innerHTML = html;
+}
+
+function renderKline(d){
+  if (!d.kline || !d.kline.dates || !d.kline.dates.length){
+    $('#box-kline').style.display = 'none';
+    return;  // ECS 无行情库：既有降级——整块隐藏不留空壳
+  }
+  $('#box-kline').style.display = '';
+  $('#kline-note').textContent = '（买 ▲红 / 卖 ▼绿；拖动下方滑块缩放）';
+  const dates = d.kline.dates;
+  const el = $('#chart-kline');
+  const factors = d.factors || [];
+  const hasF = factors.length > 0;
+  if (hasF) el.style.height = (420 + factors.length * 160) + 'px';
+  const chart = echarts.init(el);
+  const series = [
+    { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
+      itemStyle: { color: '#C93A3A', color0: '#1E8E5A', borderColor: '#C93A3A', borderColor0: '#1E8E5A' } },
+    { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.kline.vols,
+      itemStyle: { color: '#B7A6E8' } },
+  ];
+  if (d.orders && d.orders.length){
+    const idx = {}; dates.forEach((dt, i) => { idx[dt] = i; });
+    const lowByDate = {}, highByDate = {};
+    d.kline.ohlc.forEach((k, i) => { lowByDate[dates[i]] = k[2]; highByDate[dates[i]] = k[3]; });
+    const buys = [], sells = [];
+    d.orders.forEach(o => {
+      const dt = o.trade_date;
+      if (idx[dt] == null) return;
+      const tip = (o.side === 'buy' ? '买入' : '卖出') + ' ' + f2(o.quantity) + ' 股 @ ' + f2(o.price);
+      if (o.side === 'buy') buys.push({ value: [dt, lowByDate[dt] * 0.99], tip });
+      else sells.push({ value: [dt, highByDate[dt] * 1.01], tip });
+    });
+    series.push({ name: '买入', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: buys,
+      symbol: 'triangle', symbolSize: 10, itemStyle: { color: '#C93A3A' },
+      tooltip: { formatter: p => p.data.tip } });
+    series.push({ name: '卖出', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: sells,
+      symbol: 'triangle', symbolRotate: 180, symbolSize: 10, itemStyle: { color: '#1E8E5A' },
+      tooltip: { formatter: p => p.data.tip } });
+  }
+  const grids = !hasF
+    ? [{ left: 60, right: 20, top: 30, height: '58%' }, { left: 60, right: 20, top: '74%', height: '14%' }]
+    : [{ left: 60, right: 20, top: 30, height: '42%' }, { left: 60, right: 20, top: '53%', height: '10%' }];
+  const xAxis = [
+    { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
+    { type: 'category', data: dates, gridIndex: 1 },
+  ];
+  const yAxis = [
+    { type: 'value', gridIndex: 0, scale: true },
+    { type: 'value', gridIndex: 1, name: '量', axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
+  ];
+  if (hasF){
+    const fTop = 66, fBottom = 93, fStep = (fBottom - fTop) / factors.length;
+    factors.forEach((f, i) => {
+      grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
+      xAxis.push({ type: 'category', data: dates, gridIndex: 2 + i, axisLabel: { show: false } });
+      yAxis.push({ type: 'value', gridIndex: 2 + i, scale: true, name: f.name, nameTextStyle: { fontSize: 10 } });
+      let markLine = null;
+      if (f.thresholds && f.thresholds.length){
+        markLine = { silent: true, symbol: 'none',
+          lineStyle: { type: 'dashed', color: '#8B7FBE' },
+          label: { formatter: p => Number(p.value).toFixed(2), fontSize: 10 },
+          data: f.thresholds.map(v => ({ yAxis: v })) };
+      }
+      series.push({ name: f.name, type: 'line', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: f.values,
+        showSymbol: false, lineStyle: { width: 1.2 }, color: '#6750A4', markLine });
+    });
+  }
+  const zoomX = xAxis.map((_, i) => i);
+  chart.setOption({
+    animation: false,
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } },
+    legend: { data: ['K线', '买入', '卖出'].concat(factors.map(f => f.name)), top: 0 },
+    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    grid: grids, xAxis, yAxis,
+    dataZoom: [{ type: 'inside', xAxisIndex: zoomX }, { type: 'slider', xAxisIndex: zoomX, bottom: 6, height: 22 }],
+    series,
+  });
+  window.addEventListener('resize', () => chart.resize());
+}
+load();
+</script>
+{% endblock %}
