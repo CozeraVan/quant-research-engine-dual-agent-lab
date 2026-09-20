@@ -1142,13 +1142,24 @@ def create_saas_app() -> Flask:
             metrics = ((row["chart_data"] or {}).get("metrics") or {})
             summary = row["summary"] or {}
             params = row["params"] or {}
+            # symbol_count 兜底：summary 无此字段时按提交参数推导
+            # （指定代码数 / 随机 N 只；都没有 = 全 A，保持 None 由前端显示「全 A 股」）
+            symbol_count = summary.get("symbol_count")
+            if symbol_count is None:
+                codes = params.get("codes")
+                if isinstance(codes, str):
+                    codes = [c.strip() for c in codes.split(",") if c.strip()]
+                if codes:
+                    symbol_count = len(codes)
+                elif params.get("random_n"):
+                    symbol_count = params.get("random_n")
             items.append({
                 "job_id": row["id"],
                 "strategy_name": row["strategy_name"],
                 "status": row["status"],
                 "date_start": params.get("start"),
                 "date_end": params.get("end"),
-                "symbol_count": summary.get("symbol_count"),
+                "symbol_count": symbol_count,
                 "total_return": summary.get("strategy_total_return"),
                 "excess_return": metrics.get("excess_return"),
                 "max_drawdown": summary.get("max_drawdown"),

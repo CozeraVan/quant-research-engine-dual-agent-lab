@@ -586,6 +586,33 @@ class TestResultsApi:
         # 未登录
         assert client.get("/api/results").status_code == 401
 
+    def test_list_symbol_count_fallback(self, client, app, tmp_path):
+        """symbol_count 兜底：summary 无该字段时按 params 推导（codes 数 / random_n / 全A=None）。"""
+        import json as _json
+
+        def mk(params):
+            resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": "s",
+                                                  "params": params},
+                               headers={"X-User-Id": "1"})
+            job_id = resp.get_json()["job_id"]
+            client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+            client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                        json={"worker_id": "w1",
+                              "summary": {"strategy_total_return": 0.1},  # 无 symbol_count
+                              "chart_data": {"metrics": {}}, "data_until": "2026-02-27",
+                              "files": []},
+                        headers=WORKER_HEADERS)
+            return job_id
+
+        mk({"codes": ["000001.SZ"]})
+        mk({"codes": "000001.SZ, 600519.SH"})
+        mk({"random_n": 50})
+        mk({})  # 全 A
+        items = client.get("/api/results", headers={"X-User-Id": "1"}).get_json()["items"]
+        counts = sorted(i["symbol_count"] for i in items if i["symbol_count"] is not None)
+        assert counts == [1, 2, 50]
+        assert sum(1 for i in items if i["symbol_count"] is None) == 1
+
     def test_detail_endpoints(self, client, app, tmp_path):
         job_id = self._completed_job(client, app, tmp_path)
         h = {"X-User-Id": "1"}

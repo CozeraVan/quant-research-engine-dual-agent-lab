@@ -1,6 +1,15 @@
 # Progress Tracker
 
+2026-09-20 QRE-ECS-E2E-ACCEPT DONE（公网登录后全流程验收 + symbol_count 兜底修复）：Playwright 真浏览器走通 https://aguhuice.com 全流程——beta01 登录 → POST /api/jobs 提交 → 家里 worker 经公网 claim → completed → /api/results 列表与详情页渲染（收益曲线/热力图/交易磨损/个股入口，截图 /tmp/qre-shots/e2e_job.png、e2e_records.png）。job#8（单股 000001.SZ 近 6 月）2s 完成、2 笔交易、+1.50%，确认 worker 参数透传正常。期间发现并处理：
+- worker 参数契约是 params.codes/start/end（我的测试脚本误用 universe.mode/range.months 被静默忽略 → 按全 A 默认跑），job#7 因此实跑了全 A × 默认区间：attempt1 被 cgroup OOM（MemoryMax=4G）杀 → systemd 10s 拉起 → 租约超时回收 → attempt2 约 112s completed（+34.8%、212 笔）。故障自愈链路上线首日即实战验证通过。**遗留：全 A 任务的内存峰值贴近 4G 上限，worker 内存策略待评估（记入 15 号文档开放问题）。**
+- 记录页「股票数量」列对指定代码任务误显「全 A 股」：/api/results 的 symbol_count 只读 summary（引擎不写该字段）→ 加 params 兜底（codes 数 / random_n / 否则 None=全 A），+1 测试。ECS 已 scp 部署并重启验证（job#8 显示 1 只）。
+- 测试残留 job#4/5/6（YAML 校验失败）经 DELETE /api/results 清理完毕。
+- 登录页 maxlength=6 截断超长测试口令导致 Playwright 401（curl 正常）——纯测试脚本问题，真实用户 6 位验证码无影响，脚本改 JS 赋值绕过。
+- 决策入档：登录/验证码/短信/微信验证不自建，正式版外购成熟服务（15 号文档 D 阶段）。
+测试全量 **2107 passed + 4 skipped** 零回归。未 commit，等用户批准。
+
 ## Latest Verified State
+
 
 2026-09-20 QRE-ECS-C5 DONE（8081 页面体系平移 SaaS/ECS，用户验收待批，未 commit）：SaaS 端五页齐——新建策略（冻结版三入口+PCB+日历+标的范围含随机 N 只+预览栏+流水线，未登录可浏览、提交 401 引导登录）、记录页（/api/results 排序/分页/删除/超额收益列）、详情页（+交易磨损+FRM 模块+个股明细入口）、个股列表与个股详情两新页。主题：base.html 引 lab-theme.css/lab-ui.js、accent 换淡紫。联调修复三处（均带测试）：worker params_json 丢弃、runner 不透 random_n、上传端点子目录文件名 400。nginx /static 优先级修复（仓库 nginx-aguhuice.conf 同步线上）。验证：本地 staging 全链路 Playwright 截图通过（/tmp/qre-shots/c5l2_*.png，个股页全模块渲染）；ECS 未登录态渲染正常；登录后链路未在 ECS 实测（凭证在 /etc/qre-saas.env，纪律不动不读）。测试 2106 passed + 4 skipped 零回归。未 commit，等用户批准。
 
