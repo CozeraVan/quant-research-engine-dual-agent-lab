@@ -106,6 +106,10 @@ class TestPages:
         assert 'id="metric-strip"' in html and 'id="meta-chips"' in html
         assert 'id="box-risk"' in html and 'id="box-fees"' in html   # C5：FRM + 交易磨损（无数据整块隐藏）
         assert 'id="big-symbols"' in html                            # 个股明细大入口
+        # QRE-SAAS-DETAIL-UI：区间信息卡（8081 同款随滑块重算）+ meta chips 全字段
+        assert 'id="range-strip"' in html and "updateRangeStrip" in html
+        assert "区间策略收益" in html and "交易日数" in html
+        assert "最大持仓" in html and "引擎" in html and "费率" in html
 
     def test_no_engineering_jargon(self, client):
         # 零术语原则：页面不得出现 沙箱/晋升/promote/试算 等内部词

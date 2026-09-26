@@ -104,9 +104,17 @@ function renderMeta(meta, dataUntil){
   const chips = [];
   if (meta.strategy_name) chips.push(chip('策略', meta.strategy_name));
   if (meta.date_start && meta.date_end) chips.push(chip('区间', meta.date_start + ' → ' + meta.date_end));
-  if (meta.whole_market) chips.push(chip('标的', '全 A 股'));
+  if (meta.random_n) chips.push(chip('标的', '随机 ' + meta.random_n + ' 只'));
+  else if (meta.whole_market) chips.push(chip('标的', '全 A 股'));
   else if (meta.n_codes) chips.push(chip('标的', meta.n_codes + ' 只'));
   if (meta.initial_cash) chips.push(chip('初始资金', Number(meta.initial_cash).toLocaleString('zh-CN') + ' 元'));
+  if (meta.max_positions != null) chips.push(chip('最大持仓', meta.max_positions + ' 只'));
+  if (meta.engine_impl) chips.push(chip('引擎', meta.engine_impl));
+  const f = meta.fees || {};
+  if (f.commission_rate != null) chips.push(chip('费率',
+    '佣金 ' + (f.commission_rate * 100).toFixed(2) + '%（最低 ' + f.min_commission + ' 元）' +
+    ' 印花税 ' + (f.stamp_tax_sell * 100).toFixed(2) + '%' +
+    ' 过户费 ' + (f.transfer_fee_rate * 100).toFixed(3) + '%' + (f.overridden ? '（自定义）' : '（默认）')));
   if (dataUntil) chips.push(chip('数据截止', dataUntil));
   el.innerHTML = chips.join('');
 }
@@ -162,11 +170,58 @@ function renderMain(d){
         curBench = code;
         bar.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.code === code));
         applyBench();
+        if (mainChart) mainChart.dispatchAction({type: 'dataZoom', start: 0, end: 100});
+        else updateRangeStrip();
       });
       bar.appendChild(btn);
     });
     applyBench();
   }
+  // 区间信息卡（QRE-SAAS-DETAIL-UI：与 lab 版同款，随滑块缩放实时重算）
+  function sliceRet(arr, i0, i1){
+    const ev = arr.slice(i0, i1 + 1).filter(v => v != null);
+    return ev.length >= 2 ? ev[ev.length - 1] / ev[0] - 1 : null;
+  }
+  function sliceRetPct(arr, i0, i1){  // 累计收益%序列换算区间收益
+    let a = null, b = null;
+    for (let i = i0; i <= i1; i++) if (arr[i] != null){ if (a == null) a = arr[i]; b = arr[i]; }
+    if (a == null || b == null) return null;
+    return (1 + b / 100) / (1 + a / 100) - 1;
+  }
+  function updateRangeStrip(){
+    const strip = document.getElementById('range-strip');
+    if (!strip || !DATA || !DATA.dates) return;
+    const n = DATA.dates.length;
+    const dz = mainChart.getOption().dataZoom[0];
+    let i0 = dz.startValue != null ? dz.startValue : Math.floor((dz.start || 0) / 100 * (n - 1));
+    let i1 = dz.endValue != null ? dz.endValue : Math.ceil((dz.end != null ? dz.end : 100) / 100 * (n - 1));
+    i0 = Math.max(0, Math.min(i0, n - 1)); i1 = Math.max(i0, Math.min(i1, n - 1));
+    const eq = DATA.equity || [];
+    const sRet = sliceRet(eq, i0, i1);
+    let peak = -Infinity, mdd = 0;
+    eq.slice(i0, i1 + 1).forEach(v => { if (v == null) return; if (v > peak) peak = v; const ddv = v / peak - 1; if (ddv < mdd) mdd = ddv; });
+    let bRet = null, bName = '基准';
+    const benches = DATA.benchmarks || {};
+    if (curBench && benches[curBench]){
+      bName = benches[curBench].name;
+      const closes = benches[curBench].closes;
+      bRet = sliceRet(closes, i0, i1);
+    }
+    const excess = (sRet != null && bRet != null) ? sRet - bRet : null;
+    strip.innerHTML =
+      card('区间策略收益', pct(sRet), cls(sRet)) +
+      card('区间基准收益·' + bName, bRet == null ? '—' : pct(bRet), cls(bRet)) +
+      card('区间超额·vs ' + bName, excess == null ? '—' : pct(excess), cls(excess), '滑块窗口内：策略累计收益% − ' + bName + ' 累计收益%') +
+      card('区间最大回撤', pct(mdd), 'neg') +
+      card('交易日数', i1 - i0 + 1, 'flat');
+  }
+  let rafPending = false;
+  mainChart.on('datazoom', () => {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => { rafPending = false; updateRangeStrip(); });
+  });
+  updateRangeStrip();
   window.addEventListener('resize', () => mainChart && mainChart.resize());
 }
 function applyBench(){

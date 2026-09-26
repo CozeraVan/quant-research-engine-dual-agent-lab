@@ -18,6 +18,8 @@
 
 ## Latest Verified State
 
+2026-09-26 QRE-SAAS-DETAIL-UI DONE（公网详情页/个股详情页对齐 8081，用户验收待批，未 commit）：四端截图逐项 diff（8081 lab run vs SaaS job）后补齐——①策略详情页 job.html：新增「区间信息卡」五卡（区间策略收益/区间基准收益·当前基准/区间超额/区间最大回撤/交易日数，updateRangeStrip 随 dataZoom 经 rAF 节流实时重算，基准切换时重置缩放重算）；meta chips 补齐 8081 全字段（最大持仓/引擎/费率佣金·印花税·过户费 + 随机 N 只分支）。②个股详情页实测为数据降级而非 UI 缺失：shared 模式 run 无 per-symbol 产物目录（equity/orders 拿不到属正确降级，trades 走 round_trips 兜底）；batch 模式 run（demo01 job 18 实测）上传 manifest 含 per-symbol 目录后，7 指标卡+收益曲线+区间卡+磨损卡+交易明细+下单记录全部渲染。K线/买卖点/因子副图在 ECS 无行情库环境仍隐藏（如实降级说明文案在页）。③注释清理：job.html 注释含禁词「8081」触发禁链断言，改「lab 版」后过。验证截图：/tmp/qre-shots/d_saas_result18.png（区间卡 5+chips 7）/d_saas_symbol18.png（全模块）。测试断言补 range-strip/updateRangeStrip/meta 字段，全量 2118 passed + 4 skipped 零回归。遗留：FRM 依赖 worker 产物含 risk_report.json（当前不上传，页面正确隐藏）；个股买入持有线/基准线需行情库。部署：job.html scp+restart qre-saas 已生效。未 commit，等用户批准。
+
 2026-09-26 QRE-SAAS-RECORDS-UI DONE（公网记录页按 8081 冻结版对齐，用户验收待批，未 commit）：双端截图逐项 diff 后重写 dashboard.html 呈现层——①修掉结构性 bug：上一版 panel 未闭合导致页面渲染出两个重复「我的回测记录」头部块；②版式对齐：page-head 衬线大标题「回测记录」+ 灰字说明（原句照搬 8081「这里只列出你实际跑过的回测；已完成的可查看结果。」）、单卡片 .card（20/22px padding）、工具行=刷新 ghost 按钮+提示文字+右侧筛选框（8081 同款「筛选策略名 / 任务号…」，前端过滤）；③表头文字对齐「策略名称」，策略名下方小字「任务 #N」（8081 的 run_id opt 同款）；④状态徽章改贴 8081 类名（completed→ok 绿 pill、failed→fail 红 pill、进行中→run 紫呼吸点）；⑤SaaS 特有功能全部保留：排序 seg 按钮（创建时间/超额收益 ⇅）、分页、删除弹层、超额收益列、我的策略库与因子申请（换为同级 .card 呈现）。数据接口零改动（/api/results）。部署 scp+restart qre-saas，demo01 登录实测：重复头部消失、筛选生效、徽章/操作样式与 8081 一致。截图 /tmp/qre-shots/rec_8081.png（基准）/rec_saas_v2.png/rec_saas_v2_filter.png。测试断言更新（结构+无重复头部+筛选框），全量 pytest 零回归。未 commit，等用户批准。
 
 ## Latest Verified State
