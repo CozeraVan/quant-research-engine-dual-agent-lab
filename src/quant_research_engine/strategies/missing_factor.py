@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from quant_research_engine.data.catalog import FactorFieldRequest
-from quant_research_engine.preflight import PreflightReport, PreflightRequest
+
+if TYPE_CHECKING:  # 仅类型注解；运行期不引 preflight（其依赖 pandas，云端精简环境无）
+    from quant_research_engine.preflight import PreflightReport, PreflightRequest
 
 
 @dataclass(frozen=True)

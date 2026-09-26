@@ -817,3 +817,54 @@ class TestSaasMetadata:
         assert u.get_json()["generated_at"] == "2026-09-26T00:00:00Z"
         # 元数据对游客开放（只读目录；配额在提交环节收口）
         assert client.get("/api/saas/universes").status_code == 200
+
+
+class TestStrategyLibrary:
+    """QRE-SAAS-D3：我的策略库（CRUD/隔离/同名 upsert/引用禁删/回填读取）。"""
+
+    def _save(self, client, name="s1", yaml="yaml-v1", uid="1"):
+        return client.post("/api/saas/strategies", json={"name": name, "yaml": yaml},
+                           headers={"X-User-Id": uid})
+
+    def test_crud_and_isolation(self, client):
+        r = self._save(client)
+        assert r.status_code == 200 and r.get_json()["ok"]
+        sid = r.get_json()["strategy_id"]
+        # 同名 upsert（更新不新建）
+        r2 = self._save(client, yaml="yaml-v2")
+        assert r2.get_json()["strategy_id"] == sid and r2.get_json()["updated"] is True
+        got = client.get(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"}).get_json()
+        assert got["strategy"]["yaml"] == "yaml-v2"
+        # 列表
+        lst = client.get("/api/saas/strategies", headers={"X-User-Id": "1"}).get_json()
+        assert len(lst["strategies"]) == 1 and lst["strategies"][0]["job_count"] == 0
+        # 隔离：他人不可见/不可读
+        assert client.get("/api/saas/strategies", headers={"X-User-Id": "2"}).get_json()["strategies"] == []
+        assert client.get(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "2"}).status_code == 404
+        # 未登录 401
+        assert client.get("/api/saas/strategies").status_code == 401
+        # 重命名 + 同名冲突 409
+        self._save(client, name="s2")
+        rn = client.post(f"/api/saas/strategies/{sid}/rename", json={"name": "s2"},
+                         headers={"X-User-Id": "1"})
+        assert rn.status_code == 409
+        rn = client.post(f"/api/saas/strategies/{sid}/rename", json={"name": "s1-new"},
+                         headers={"X-User-Id": "1"})
+        assert rn.get_json()["ok"]
+        # 无引用可删
+        d = client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"})
+        assert d.get_json()["ok"]
+        assert client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"}).status_code == 404
+
+    def test_submit_upserts_strategy_and_referenced_delete_blocked(self, client):
+        # 提交回测自动入库：同名复用
+        for _ in range(2):
+            client.post("/api/jobs", json={"yaml": "y1", "kind": "smoke", "name": "my-strat"},
+                        headers={"X-User-Id": "1"})
+        lst = client.get("/api/saas/strategies", headers={"X-User-Id": "1"}).get_json()
+        assert len(lst["strategies"]) == 1
+        sid = lst["strategies"][0]["id"]
+        assert lst["strategies"][0]["job_count"] == 2
+        # 被 jobs 引用 → 禁删 409
+        d = client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"})
+        assert d.status_code == 409 and "不允许删除" in d.get_json()["error"]

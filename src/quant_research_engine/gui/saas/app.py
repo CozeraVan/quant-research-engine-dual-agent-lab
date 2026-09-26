@@ -473,6 +473,129 @@ def create_saas_app() -> Flask:
         except Exception as exc:
             return jsonify({"ok": False, "error": f"归类数据不可用（{exc}）"}), 503
 
+    # --- 我的策略库（QRE-SAAS-D3）：登录会员保存/复用/管理策略 YAML ---
+    # 提交回测时按 (user_id, name) upsert 复用；删除仅允许无回测引用的策略。
+
+    @app.get("/api/saas/strategies")
+    def api_strategies_list() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT s.id, s.name, s.created_at, s.updated_at, "
+                    "count(j.id) AS job_count, max(j.created_at) AS last_used_at "
+                    "FROM strategies s LEFT JOIN jobs j ON j.strategy_id = s.id "
+                    "WHERE s.user_id = :uid "
+                    "GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 200"
+                ),
+                {"uid": uid},
+            ).mappings().all()
+        return jsonify({"ok": True, "strategies": [_jsonable(dict(r)) for r in rows]})
+
+    @app.get("/api/saas/strategies/<int:strategy_id>")
+    def api_strategy_get(strategy_id: int) -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT id, name, yaml, nl_text, created_at, updated_at "
+                     "FROM strategies WHERE id = :id AND user_id = :uid"),
+                {"id": strategy_id, "uid": uid},
+            ).mappings().first()
+        if row is None:
+            return jsonify({"ok": False, "error": "策略不存在"}), 404
+        return jsonify({"ok": True, "strategy": _jsonable(dict(row))})
+
+    @app.post("/api/saas/strategies")
+    def api_strategy_save() -> Any:
+        """保存到我的策略库：按 (user_id, name) upsert（同名更新 YAML）。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "游客无法保存策略，注册会员后可保存到我的策略库"}), 401
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        yaml_text = str(data.get("yaml") or "").strip()
+        if not name:
+            return jsonify({"ok": False, "error": "缺少策略名称"}), 400
+        if not yaml_text:
+            return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
+        with engine.begin() as conn:
+            # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（同 jobs 路由）
+            conn.execute(
+                text("INSERT INTO users (id, phone) VALUES (:id, :phone) ON CONFLICT (id) DO NOTHING"),
+                {"id": uid, "phone": f"pending_{uid}"},
+            )
+            existing = conn.execute(
+                text("SELECT id FROM strategies WHERE user_id = :uid AND name = :name"),
+                {"uid": uid, "name": name},
+            ).first()
+            if existing is not None:
+                conn.execute(
+                    text("UPDATE strategies SET yaml = :yaml, nl_text = :nl, updated_at = now() "
+                         "WHERE id = :id"),
+                    {"yaml": yaml_text, "nl": data.get("nl_text"), "id": existing.id},
+                )
+                return jsonify({"ok": True, "strategy_id": existing.id, "updated": True})
+            sid = conn.execute(
+                text("INSERT INTO strategies (user_id, name, nl_text, yaml) "
+                     "VALUES (:uid, :name, :nl, :yaml) RETURNING id"),
+                {"uid": uid, "name": name, "nl": data.get("nl_text"), "yaml": yaml_text},
+            ).scalar_one()
+        return jsonify({"ok": True, "strategy_id": sid, "updated": False})
+
+    @app.post("/api/saas/strategies/<int:strategy_id>/rename")
+    def api_strategy_rename(strategy_id: int) -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        if not name:
+            return jsonify({"ok": False, "error": "缺少新名称"}), 400
+        with engine.begin() as conn:
+            dup = conn.execute(
+                text("SELECT id FROM strategies WHERE user_id = :uid AND name = :name AND id <> :id"),
+                {"uid": uid, "name": name, "id": strategy_id},
+            ).first()
+            if dup is not None:
+                return jsonify({"ok": False, "error": "已有同名策略"}), 409
+            row = conn.execute(
+                text("UPDATE strategies SET name = :name, updated_at = now() "
+                     "WHERE id = :id AND user_id = :uid RETURNING id"),
+                {"name": name, "id": strategy_id, "uid": uid},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "策略不存在"}), 404
+        return jsonify({"ok": True, "strategy_id": row.id})
+
+    @app.delete("/api/saas/strategies/<int:strategy_id>")
+    def api_strategy_delete(strategy_id: int) -> Any:
+        """删除策略：被回测任务引用的策略禁删（保历史可溯），提示先清理关联回测。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        with engine.begin() as conn:
+            used = conn.execute(
+                text("SELECT count(*) FROM jobs WHERE strategy_id = :id"), {"id": strategy_id}
+            ).scalar_one()
+            if used:
+                return jsonify({"ok": False, "error": f"该策略已关联 {used} 条回测记录，为保证历史可溯不允许删除；可重命名或另存新版本"}), 409
+            row = conn.execute(
+                text("DELETE FROM strategies WHERE id = :id AND user_id = :uid RETURNING id"),
+                {"id": strategy_id, "uid": uid},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "策略不存在"}), 404
+        return jsonify({"ok": True, "deleted": strategy_id})
+
     # --- 缺因子申请（QRE-SAAS-007）：用户不直接增/改因子；申请落库，
     #     运营方按需求热度人工审核后离线计算入库（8080 审核界面为后续任务） ---
 
@@ -800,13 +923,31 @@ def create_saas_app() -> Flask:
                 ).mappings().one()
                 if kind == "full" and quota_row["used_today"] >= MEMBER_DAILY_FULL_LIMIT:
                     return jsonify({"ok": False, "error": "会员每日可全量回测 3 次（今日已用完），明天再来或试试小样本验证"}), 403
-            strategy_id = conn.execute(
-                text(
-                    "INSERT INTO strategies (user_id, name, nl_text, yaml) "
-                    "VALUES (:uid, :name, :nl, :yaml) RETURNING id"
-                ),
-                {"uid": uid, "name": name, "nl": nl_text, "yaml": yaml_text},
-            ).scalar_one()
+            # 会员：按 (user_id, name) upsert 复用策略库行（QRE-SAAS-D3）
+            if uid is not None:
+                existing = conn.execute(
+                    text("SELECT id FROM strategies WHERE user_id = :uid AND name = :name"),
+                    {"uid": uid, "name": name},
+                ).first()
+                if existing is not None:
+                    conn.execute(
+                        text("UPDATE strategies SET yaml = :yaml, nl_text = :nl, updated_at = now() "
+                             "WHERE id = :id"),
+                        {"yaml": yaml_text, "nl": nl_text, "id": existing.id},
+                    )
+                    strategy_id = existing.id
+                else:
+                    strategy_id = None
+            else:
+                strategy_id = None
+            if strategy_id is None:
+                strategy_id = conn.execute(
+                    text(
+                        "INSERT INTO strategies (user_id, name, nl_text, yaml) "
+                        "VALUES (:uid, :name, :nl, :yaml) RETURNING id"
+                    ),
+                    {"uid": uid, "name": name, "nl": nl_text, "yaml": yaml_text},
+                ).scalar_one()
             job_id = conn.execute(
                 text(
                     "INSERT INTO jobs (user_id, strategy_id, kind, params, idempotency_key, guest_key) "

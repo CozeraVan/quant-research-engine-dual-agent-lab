@@ -1,5 +1,7 @@
 # Progress Tracker
 
+2026-09-26 QRE-SAAS-NL-COMPILE-FIX DONE（NL 编译 500 热修）：用户报告自然语言生成策略报 "SyntaxError: Unexpected token '<'"。根因：ECS 精简 venv 无 pandas，nl_compiler → factor_request_queue → missing_factor → preflight 的模块级导入链把 pandas 拽进来，Flask 500 返回 HTML 错误页，前端 JSON.parse 炸出原始报错。修复双管：① missing_factor 的 Preflight 类型导入移入 TYPE_CHECKING（仅注解用途，运行期断链，模拟无 pandas 环境验证导入通过）；② ECS /etc/qre-saas.env 补 QRE_NL_LLM_* 三键（从本地 .env 同步，此前 ECS 未配）。顺手加固：NL 编译前端 resp.json() 解析失败时显示友好中文错误（HTTP 状态码）而非原始 SyntaxError。公网实测：demo01 编译「5日均线上穿20日均线」200/1.6s 返回合法 YAML（警告：ECS 无库跳过因子存在性检查，提交时 worker 侧仍校验——既定降级）。测试 2118 passed + 4 skipped 零回归。ECS 已 scp 部署。未 commit，等用户批准。
+
 2026-09-26 QRE-SAAS-NOWRAP-FIX DONE（文字竖排热修）：用户报告游客弹层「取消」与向导「固定值」等文字逐字竖排。根因：窄 flex 容器内按钮/标签缺 white-space:nowrap（与早前 .radio-inline 竖排同源）。修复 lab-theme.css 三处：.btn 全局 nowrap、.label-inline nowrap、.modal .m-actions 加 flex-wrap:wrap（空间不足整行换行而非压字）。Playwright 实测：弹层三按钮单行横排（取消 74px 宽 38px 高正常），固定值标签单行。ECS 已 scp 部署。未 commit，等用户批准。
 
 2026-09-26 QRE-SAAS-GUEST-WIZARD-FIX DONE（向导游客加载修复）：用户报告游客态快速向导出入场条件为空。根因：new.html init 把 loadFactorCatalog() 门在登录态后（factor 端点匿名开放后前端门禁未同步解除）。修复：游客同样加载因子目录/板块名单。Playwright 验证：游客向导入/出场条件三级选单填充正常（544 因子可读），EMA 预填充、YAML 预览生成正常（截图 /tmp/qre-shots/wizard_check.png）。全量 2116 passed + 4 skipped 零回归。ECS 已 scp 部署。
@@ -15,6 +17,10 @@
 测试全量 **2107 passed + 4 skipped** 零回归。未 commit，等用户批准。
 
 ## Latest Verified State
+
+## Latest Verified State
+
+2026-09-26 QRE-SAAS-D3 DONE（我的策略库：策略从一次性提交物变用户资产）：①API（gui/saas/app.py）：GET /api/saas/strategies（列表含 job_count/last_used_at）、GET /<id>（回填读取）、POST（保存/按 (user_id,name) upsert 更新）、POST /<id>/rename（同名 409）、DELETE（被 jobs 引用 409 禁删保可溯「可重命名或另存新版本」）；游客 401 引导注册文案。②提交回测时会员策略按同名 upsert 复用（不再每次新建行；游客仍每次新建）。③前端：dashboard 加「我的策略库」面板（重命名 prompt/删除 confirm/去回测跳 /saas/new?strategy=<id>）；new.html 回填（?strategy=<id> → 载入 YAML+名称，window load 后执行 + __libBackfillOnce 跳过因子目录就绪触发的首次向导重建——实测时序坑：catalog 异步加载完成的 refreshWizard 会覆盖回填）。④公网 Playwright 实测（demo01，未烧回测配额）：保存 D3验证策略（upsert）→ 工作台列表两行（含回测次数/最近使用）→ ?strategy=16 回填名称+YAML 内容正确；截图 /tmp/qre-shots/d3-*.png。⑤ECS 已 scp（app.py/dashboard.html/new.html）+ restart qre-saas active。测试 +2（CRUD/隔离/upsert/引用禁删；提交回测自动入库同名复用+job_count），全量 `pytest tests/` → **2118 passed + 4 skipped**（2116 + 2）零回归。15 号文档 D3 勾选。未 git commit/push。
 
 ## Latest Verified State
 

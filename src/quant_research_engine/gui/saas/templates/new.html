@@ -361,7 +361,9 @@ $('#nl-compile').addEventListener('click', async () => {
   st.textContent = '编译中 Compiling…';
   try {
     const resp = await apiFetch('/api/saas/nl/compile', {json: {description: txt}});
-    const d = await resp.json();
+    let d;
+    try { d = await resp.json(); }
+    catch (_e) { d = { ok: false, error: '服务异常（HTTP ' + resp.status + '），请稍后重试；若持续出现请联系管理员' }; }
     if (d.ok){
       st.textContent = '编译成功';
       setYaml(d.yaml);
@@ -610,6 +612,7 @@ function refreshWizard(){
   lines.push('universe:', '  exclude_st: true', '  exclude_suspended: true', '  exclude_risk_warning: true', '  min_listing_days: 120',
     'signal:', '  entry: "' + entry.expression.replace(/"/g, '\\"') + '"', '  exit: "' + exit.expression.replace(/"/g, '\\"') + '"',
     'evaluation:', '  forward_return_horizons: [1, 3, 5, 10, 20]', '  quantiles: 5');
+  if (window.__libBackfillOnce) { window.__libBackfillOnce = false; return; }
   setYaml(lines.join('\n'));
 }
 function prefill(){
@@ -724,6 +727,26 @@ function updUnivCount(){
 $('#p-univ-group').addEventListener('change', fillUnivKeys);
 $('#p-univ-key').addEventListener('change', updUnivCount);
 loadUniverses();
+
+// 从策略库回填（QRE-SAAS-D3）：/saas/new?strategy=<id> → 载入 YAML 与名称
+//（在 window load 后执行：等向导默认渲染完成，避免被覆盖）
+window.addEventListener('load', () => setTimeout(loadStrategyFromQuery, 300));
+async function loadStrategyFromQuery(){
+  const sid = new URLSearchParams(location.search).get('strategy');
+  if (!sid) return;
+  window.__libBackfillOnce = true;  // 跳过因子目录就绪触发的首次向导重建
+  if (!saasToken()) return;  // 游客提示走提交时 401 引导
+  try {
+    const resp = await apiFetch('/api/saas/strategies/' + encodeURIComponent(sid));
+    const d = await resp.json();
+    if (!d.ok) return;
+    setYaml(d.strategy.yaml || '');
+    const nameEl = $('#p-sname');
+    nameEl.value = d.strategy.name || '';
+    userNamed = true;
+    refreshPreview();
+  } catch (e) { /* 401 等：静默 */ }
+}
 
 $('#btn-run-main').addEventListener('click', () => {
   if (pipeRunning) return;

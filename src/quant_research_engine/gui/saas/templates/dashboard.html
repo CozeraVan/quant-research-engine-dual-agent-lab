@@ -49,6 +49,14 @@
       </div>
     </div>
   </div>
+  <div class="panel" id="strat-panel">
+    <h2>我的策略库 <span class="opt" style="font-weight:400;font-size:12.5px">（同名策略自动复用更新；有回测记录的策略不可删）</span></h2>
+    <table class="tbl">
+      <thead><tr><th>策略名称</th><th class="num" style="text-align:right">回测次数</th><th>最近使用</th><th>创建时间</th><th style="text-align:right">操作</th></tr></thead>
+      <tbody id="strat-tbody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
+    </table>
+  </div>
+
   <div class="panel">
     <details id="factor-req-details">
       <summary>我的因子申请（缺因子提交的需求在这里看进度）</summary>
@@ -184,6 +192,43 @@ async function loadFactorRequests(){
     + `<td><span class="badge ${r.status === 'approved' ? 'done' : r.status === 'rejected' ? 'failed' : 'queued'}">${FREQ_STATUS[r.status] || r.status}</span></td>`
     + `<td class="muted">${r.note || '—'}</td><td>${fmtTime(r.created_at)}</td></tr>`).join('');
 }
+function fmtT(iso){ return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
+async function loadStrategies(){
+  const resp = await apiFetch('/api/saas/strategies');
+  const d = await resp.json();
+  const tbody = document.getElementById('strat-tbody');
+  const items = d.strategies || [];
+  if (!items.length){ tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无保存的策略（新建回测提交后自动入库）</td></tr>'; return; }
+  tbody.innerHTML = '';
+  for (const s of items){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.name}</td>`
+      + `<td class="num" style="text-align:right">${s.job_count}</td>`
+      + `<td>${fmtT(s.last_used_at)}</td><td>${fmtT(s.created_at)}</td>`
+      + `<td style="text-align:right;white-space:nowrap">`
+      + `<a href="/saas/new?strategy=${s.id}">去回测</a> `
+      + `<button class="btn-sm" data-ren="${s.id}">重命名</button> `
+      + `<button class="btn-sm" data-del="${s.id}">删除</button></td>`;
+    tbody.appendChild(tr);
+  }
+  tbody.querySelectorAll('[data-ren]').forEach(btn => btn.addEventListener('click', async () => {
+    const name = prompt('新的策略名称：');
+    if (!name) return;
+    const r = await apiFetch('/api/saas/strategies/' + btn.dataset.ren + '/rename', {method: 'POST', json: {name}});
+    const d = await r.json();
+    if (!d.ok) alert(d.error || '重命名失败');
+    loadStrategies();
+  }));
+  tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('确认删除该策略？（有关联回测记录的策略不可删）')) return;
+    const r = await apiFetch('/api/saas/strategies/' + btn.dataset.del, {method: 'DELETE'});
+    const d = await r.json();
+    if (!d.ok) alert(d.error || '删除失败');
+    loadStrategies();
+  }));
+}
+loadStrategies();
+
 loadFactorRequests();
 load();
 </script>
