@@ -785,14 +785,11 @@ async function startRun(){
   }
 }
 
-// init（未登录可浏览整页：因子目录等登录后才加载，提交时由 apiFetch 401 引导登录）
+// init（因子目录/板块名单为只读元数据，游客同样加载——2026-09-26 游客死循环热修后匿名开放；
+// 提交时才按游客/会员配额收口）
 setRangeYears(2);
 refreshPreview();
-if (SAAS_BYPASS || saasToken()){
-  loadFactorCatalog();
-} else {
-  $('#wz-factor-status').textContent = '因子目录在登录后加载；可先浏览页面，提交时会引导登录。';
-}
+loadFactorCatalog();
 maybeAutoName();
 </script>
 {% endblock %}

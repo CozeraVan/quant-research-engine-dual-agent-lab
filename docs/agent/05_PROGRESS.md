@@ -1,5 +1,7 @@
 # Progress Tracker
 
+2026-09-26 QRE-SAAS-GUEST-WIZARD-FIX DONE（向导游客加载修复）：用户报告游客态快速向导出入场条件为空。根因：new.html init 把 loadFactorCatalog() 门在登录态后（factor 端点匿名开放后前端门禁未同步解除）。修复：游客同样加载因子目录/板块名单。Playwright 验证：游客向导入/出场条件三级选单填充正常（544 因子可读），EMA 预填充、YAML 预览生成正常（截图 /tmp/qre-shots/wizard_check.png）。全量 2116 passed + 4 skipped 零回归。ECS 已 scp 部署。
+
 2026-09-26 QRE-SAAS-GUEST-LOOPFIX DONE（游客死循环热修）：用户报告公网点任何按钮被甩登录页。根因二重：① 因子目录/板块名单端点（/api/saas/factors、/api/saas/universes）要求登录，游客访问新建页加载向导即 401；② base.html apiFetch 对任何 401 一律跳登录页。修复：两端点改匿名开放（纯只读元数据，配额在提交环节收口；NL 编译仍登录限定——既定）；apiFetch 401 仅在"带了 token 但失效"时跳登录，游客 401 抛错交调用方处理。另发现 _load_saas_metadata 默认路径少一级（parents[3]→src/，应为 parents[4]；ECS 靠 env 显式指定所以线上无恙，本地/测试环境回退查库 503 暴露）。测试：2 条旧断言改新口径（匿名 200），全量 2116 passed + 4 skipped 零回归。ECS 已 scp 部署验证：游客进 / 直达 /saas/new 不跳转、游客条显示、因子目录匿名 200、零 JS 报错（截图 /tmp/qre-shots/fix_guest_home.png）。未 commit，等用户批准。
 
 2026-09-20 QRE-ECS-E2E-ACCEPT DONE（公网登录后全流程验收 + symbol_count 兜底修复）：Playwright 真浏览器走通 https://aguhuice.com 全流程——beta01 登录 → POST /api/jobs 提交 → 家里 worker 经公网 claim → completed → /api/results 列表与详情页渲染（收益曲线/热力图/交易磨损/个股入口，截图 /tmp/qre-shots/e2e_job.png、e2e_records.png）。job#8（单股 000001.SZ 近 6 月）2s 完成、2 笔交易、+1.50%，确认 worker 参数透传正常。期间发现并处理：
