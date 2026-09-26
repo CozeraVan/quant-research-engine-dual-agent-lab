@@ -442,3 +442,38 @@ class TestA3ExecutionLoop:
 
     def test_module_entrypoint(self):
         import quant_research_engine.worker.__main__  # noqa: F401
+
+
+class TestUniversePassthrough:
+    """QRE-SAAS-METADATA：params.universe={group,key} 在 worker 本地解析为 codes。"""
+
+    def test_universe_resolved_to_codes(self, cloud, mock_engine, tmp_path, monkeypatch):
+        captured = {}
+        orig = runner_mod.run_backtest
+
+        def capture(**kw):
+            captured.update(kw)
+            return orig(**kw)
+
+        monkeypatch.setattr(runner_mod, "run_backtest", capture)
+        monkeypatch.setattr(
+            "quant_research_engine.gui.universe.universe_members",
+            lambda group, key, db_url=None: ["000001.SZ", "600000.SH"],
+        )
+        job_id = _create_job(cloud)
+        client = _make_client(cloud)
+        job = client.claim()
+        job["params"] = {"start": "2026-01-01", "end": "2026-03-01",
+                         "universe": {"group": "sw1", "key": "电子"}}
+        payload = runner_mod.execute_job(job, work_base=tmp_path)
+        assert captured["codes"] == "000001.SZ,600000.SH"
+        assert payload["summary"]["strategy_total_return"] == 0.1
+
+    def test_universe_empty_fails(self, cloud, mock_engine, tmp_path, monkeypatch):
+        monkeypatch.setattr("quant_research_engine.gui.universe.universe_members",
+                            lambda group, key, db_url=None: [])
+        job_id = _create_job(cloud)
+        job = _make_client(cloud).claim()
+        job["params"] = {"universe": {"group": "sw1", "key": "空板块"}}
+        with pytest.raises(RuntimeError, match="无成分股"):
+            runner_mod.execute_job(job, work_base=tmp_path)

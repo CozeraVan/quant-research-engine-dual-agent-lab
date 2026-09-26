@@ -1,0 +1,19 @@
+# QRE SaaS 游客记录每日清理（D1D2：游客结果次日清空）
+# 安装（ECS，需 root）：
+#   sudo cp deploy/saas/qre-saas-guest-cleanup.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qre-saas-guest-cleanup.timer
+
+[Unit]
+Description=QRE SaaS guest results daily cleanup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/aguhuice/qre
+EnvironmentFile=/etc/qre-saas.env
+Environment=PYTHONPATH=/srv/aguhuice/qre/src
+ExecStart=/srv/aguhuice/qre/.venv/bin/python -m quant_research_engine.gui.saas.cleanup
+SyslogIdentifier=qre-saas-guest-cleanup
+
+[Install]
+WantedBy=multi-user.target

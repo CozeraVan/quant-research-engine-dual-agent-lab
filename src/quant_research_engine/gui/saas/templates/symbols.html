@@ -34,7 +34,7 @@
 {% endblock %}
 {% block scripts %}
 <script>
-requireLogin();
+// QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 const JOB_ID = {{ job_id }};
 const $ = s => document.querySelector(s);
 const $$ = s => Array.prototype.slice.call(document.querySelectorAll(s));

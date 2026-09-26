@@ -1,0 +1,9 @@
+[Unit]
+Description=QRE SaaS guest results daily cleanup (04:00)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

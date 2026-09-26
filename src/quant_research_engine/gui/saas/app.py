@@ -148,6 +148,28 @@ def _cfg(app: Flask, key: str, default: str | None = None) -> str | None:
     return value
 
 
+def _load_saas_metadata(app: Flask) -> dict | None:
+    """SaaS 元数据（因子目录+板块概念名单，QRE-SAAS-METADATA）：
+    读 SAAS_METADATA_PATH（默认仓库 deploy/saas/metadata.json），按 mtime 缓存。
+    文件不存在返回 None（路由回退本地 DB 口径，8081/staging 行为不变）。"""
+    path = Path(
+        _cfg(app, "SAAS_METADATA_PATH")
+        or Path(__file__).resolve().parents[4] / "deploy" / "saas" / "metadata.json"
+    )
+    if not path.exists():
+        return None
+    mtime = path.stat().st_mtime
+    cached = app.extensions.get("saas_metadata")
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    app.extensions["saas_metadata"] = (mtime, data)
+    return data
+
+
 def _get_sender(app: Flask) -> Any:
     channel = (_cfg(app, "SAAS_AUTH_CHANNEL", "email") or "email").strip()
     if channel == "stub":
@@ -234,6 +256,40 @@ HARD_TIMEOUT = {"smoke": "10 minutes", "full": "6 hours"}  # 17 协议 §5，可
 UPLOAD_HARD_TIMEOUT = "30 minutes"
 ERROR_CLASSES = ("strategy_compile_error", "data_missing",
                  "engine_error", "system_error", "canceled")
+
+# --- 内测三级权限（15 号文档 D 阶段定稿，2026-09-20） ---
+MEMBER_DAILY_FULL_LIMIT = 3      # 登录会员/付费占位：每日全量回测 3 次（smoke 不占）
+GUEST_DAILY_LIMIT = 1            # 游客：单 IP 每日 1 次
+GUEST_MAX_CODES = 1              # 游客：单支股票
+GUEST_MAX_DAYS = 731 + 7         # 游客：区间 ≤ 近 2 年（留一周宽限）
+GUEST_RESULT_NOTE = "游客结果次日清空，注册后可永久保存记录"
+_PBKDF2_ITERATIONS = 120_000
+
+
+def _client_ip() -> str:
+    # Nginx 反代已传 X-Forwarded-For（16 号文档 C1 配置）
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def _guest_key(app: Flask, ip: str) -> str:
+    return hashlib.sha256(f"guest:{ip}:{_auth_salt(app)}".encode()).hexdigest()[:32]
+
+
+def _password_hash(password: str, salt: str) -> str:
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), _PBKDF2_ITERATIONS)
+    return f"pbkdf2${_PBKDF2_ITERATIONS}${salt}${dk.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        _alg, iters, salt, _hex = stored.split("$", 3)
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), int(iters))
+        return hmac.compare_digest(dk.hex(), _hex)
+    except (ValueError, AttributeError):
+        return False
 NON_RETRYABLE = ("strategy_compile_error", "data_missing")
 
 
@@ -383,19 +439,39 @@ def create_saas_app() -> Flask:
 
     @app.get("/api/saas/factors")
     def api_saas_factors() -> Any:
-        engine = _get_engine(app)
-        if _current_user_id(app, engine) is None:
-            return jsonify({"ok": False, "error": "未登录"}), 401
+        # 因子目录是纯只读元数据，对游客开放（向导选因子需要；
+        # NL 编译仍登录限定——2026-09-20 用户拍板）。配额在提交环节收口。
         from quant_research_engine.gui.factor_wizard import (
             build_factor_groups,
             load_factor_tables_columns,
         )
 
+        # 元数据文件优先（ECS 无行情库；本地 staging 文件缺失时回退实时查库）
+        metadata = _load_saas_metadata(app)
+        if metadata and metadata.get("factors"):
+            return jsonify({"ok": True, "groups": metadata["factors"],
+                            "generated_at": metadata.get("generated_at")})
         try:
             tables_columns = load_factor_tables_columns()
         except Exception as exc:
             return jsonify({"ok": False, "error": f"因子库不可用（{exc}）"}), 503
         return jsonify({"ok": True, "groups": build_factor_groups(tables_columns)})
+
+    @app.get("/api/saas/universes")
+    def api_saas_universes() -> Any:
+        """板块/概念范围名单（名称+成员数；不含成分股明细）。
+        元数据文件优先，本地回退实时查库（gui/universe.py 七组）。
+        纯只读元数据，对游客开放（配额在提交环节收口）。"""
+        metadata = _load_saas_metadata(app)
+        if metadata and metadata.get("universes"):
+            return jsonify({"ok": True, "groups": metadata["universes"],
+                            "generated_at": metadata.get("generated_at")})
+        from quant_research_engine.gui.universe import list_universes
+
+        try:
+            return jsonify(list_universes())
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"归类数据不可用（{exc}）"}), 503
 
     # --- 缺因子申请（QRE-SAAS-007）：用户不直接增/改因子；申请落库，
     #     运营方按需求热度人工审核后离线计算入库（8080 审核界面为后续任务） ---
@@ -503,6 +579,46 @@ def create_saas_app() -> Flask:
             resp["dev_code"] = code
         return jsonify(resp)
 
+    @app.post("/api/saas/auth/register")
+    def api_auth_register() -> Any:
+        """内测临时注册（邮箱+密码，密码 pbkdf2 哈希存储）。
+
+        用户拍板：登录/验证码/短信/微信正式版外购，不自建；本端点仅内测期使用，
+        正式版替换为外购身份服务（15 号文档 D 阶段注释）。
+        """
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email") or data.get("target") or "").strip().lower()
+        password = str(data.get("password") or "")
+        if not email or "@" not in email or len(email) > 200:
+            return jsonify({"ok": False, "error": "邮箱格式不正确"}), 400
+        if len(password) < 8 or not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+            return jsonify({"ok": False, "error": "密码至少 8 位且需同时包含字母和数字"}), 400
+        engine = _get_engine(app)
+        with engine.begin() as conn:
+            existing = conn.execute(
+                text("SELECT id FROM users WHERE email = :e"), {"e": email}
+            ).first()
+            if existing is not None:
+                return jsonify({"ok": False, "error": "该邮箱已注册，请直接登录"}), 409
+            salt = secrets.token_hex(8)
+            user = conn.execute(
+                text(
+                    "INSERT INTO users (email, password_hash, tier, last_login_at) "
+                    "VALUES (:e, :h, 'member', now()) "
+                    "RETURNING id, phone, email, quota_daily, tier"
+                ),
+                {"e": email, "h": _password_hash(password, salt)},
+            ).mappings().one()
+            token = secrets.token_urlsafe(32)
+            conn.execute(
+                text(
+                    "INSERT INTO sessions (id, user_id, expires_at) "
+                    "VALUES (:token, :uid, now() + make_interval(days => :days))"
+                ),
+                {"token": token, "uid": user["id"], "days": SESSION_TTL_DAYS},
+            )
+        return jsonify({"ok": True, "token": token, "user": _jsonable(dict(user))})
+
     @app.post("/api/saas/auth/login")
     def api_auth_login() -> Any:
         data = request.get_json(silent=True) or {}
@@ -524,19 +640,28 @@ def create_saas_app() -> Flask:
                 and hmac.compare_digest(code, test_pass)
             )
             if not bypass_code:
-                row = conn.execute(
-                    text(
-                        "SELECT id, code_hash FROM sms_codes "
-                        "WHERE phone = :target AND used_at IS NULL AND expires_at > now() "
-                        "ORDER BY id DESC LIMIT 1"
-                    ),
-                    {"target": target},
+                # 邮箱+密码登录（内测临时方案，正式版外购身份服务后移除）
+                pw_user = conn.execute(
+                    text("SELECT id, password_hash FROM users WHERE email = :t"),
+                    {"t": target.lower()},
                 ).mappings().first()
-                expected = row["code_hash"] if row else ""
-                actual = _code_hash(code, target, _auth_salt(app))
-                if row is None or not hmac.compare_digest(expected, actual):
-                    return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
-                conn.execute(text("UPDATE sms_codes SET used_at = now() WHERE id = :id"), {"id": row["id"]})
+                if pw_user is not None and pw_user["password_hash"]:
+                    if not _verify_password(code, pw_user["password_hash"]):
+                        return jsonify({"ok": False, "error": "邮箱或密码错误"}), 401
+                else:
+                    row = conn.execute(
+                        text(
+                            "SELECT id, code_hash FROM sms_codes "
+                            "WHERE phone = :target AND used_at IS NULL AND expires_at > now() "
+                            "ORDER BY id DESC LIMIT 1"
+                        ),
+                        {"target": target},
+                    ).mappings().first()
+                    expected = row["code_hash"] if row else ""
+                    actual = _code_hash(code, target, _auth_salt(app))
+                    if row is None or not hmac.compare_digest(expected, actual):
+                        return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
+                    conn.execute(text("UPDATE sms_codes SET used_at = now() WHERE id = :id"), {"id": row["id"]})
 
             is_email = "@" in target
             col = "email" if is_email else "phone"
@@ -573,12 +698,20 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "未登录"}), 401
         with engine.connect() as conn:
             user = conn.execute(
-                text("SELECT id, phone, email, quota_daily FROM users WHERE id = :uid"),
+                text(
+                    "SELECT id, phone, email, quota_daily, tier, "
+                    "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id "
+                    " AND j.kind = 'full' AND j.created_at::date = now()::date) AS used_today "
+                    "FROM users u WHERE u.id = :uid"
+                ),
                 {"uid": uid},
             ).mappings().first()
         if user is None:
             return jsonify({"ok": False, "error": "用户不存在"}), 401
-        return jsonify({"ok": True, "user": _jsonable(dict(user))})
+        item = _jsonable(dict(user))
+        item["quota_limit"] = MEMBER_DAILY_FULL_LIMIT
+        item["quota_remaining"] = max(0, MEMBER_DAILY_FULL_LIMIT - (item.get("used_today") or 0))
+        return jsonify({"ok": True, "user": item})
 
     # --- 用户侧：提交 / 查询 / 取消（17 协议 §2/§5；/api/saas/* 为兼容别名） ---
 
@@ -587,51 +720,86 @@ def create_saas_app() -> Flask:
     def api_create_job() -> Any:
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
-        if uid is None:
-            return jsonify({"ok": False, "error": "未登录（Authorization: Bearer <token>）"}), 401
         data = request.get_json(silent=True) or {}
-        yaml_text = str(data.get("yaml") or data.get("strategy_yaml") or "").strip()
-        if not yaml_text:
-            return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
+        params_raw = data.get("params") or data.get("params_json") or {}
+        if not isinstance(params_raw, dict):
+            return jsonify({"ok": False, "error": "params 须为对象"}), 400
         kind = str(data.get("kind") or "full")
         if kind not in JOB_KINDS:
             return jsonify({"ok": False, "error": f"kind 须为 {'/'.join(JOB_KINDS)}"}), 400
-        params = data.get("params") or data.get("params_json") or {}
-        if not isinstance(params, dict):
-            return jsonify({"ok": False, "error": "params 须为对象"}), 400
+        yaml_text = str(data.get("yaml") or data.get("strategy_yaml") or "").strip()
+        if not yaml_text:
+            return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
+
+        # --- 游客通道（15 号文档 D 阶段定稿）：无 token 可提交，单 IP 每日 1 次、
+        #     单支股票、区间 ≤ 近 2 年；结果次日清空（每日清理任务） ---
+        guest_key = None
+        if uid is None:
+            codes = params_raw.get("codes") or []
+            if isinstance(codes, str):
+                codes = [c.strip() for c in codes.split(",") if c.strip()]
+            if len(codes) != GUEST_MAX_CODES:
+                return jsonify({"ok": False, "error": "游客仅支持单支股票回测。注册会员后可用全市场/板块/多股票"}), 403
+            try:
+                from datetime import date as _date
+
+                d0 = _date.fromisoformat(str(params_raw.get("start")))
+                d1 = _date.fromisoformat(str(params_raw.get("end")))
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": "请填写回测区间（开始/结束日期）"}), 400
+            if (d1 - d0).days > GUEST_MAX_DAYS or d0 > d1:
+                return jsonify({"ok": False, "error": "游客仅支持近 2 年内的区间。注册会员后不限"}), 403
+            guest_key = _guest_key(app, _client_ip())
+            used = 0
+            if kind == "full":
+                with engine.connect() as conn:
+                    used = conn.execute(
+                        text(
+                            "SELECT count(*) FROM jobs WHERE guest_key = :k "
+                            "AND kind = 'full' AND created_at::date = now()::date"
+                        ),
+                        {"k": guest_key},
+                    ).scalar_one()
+            if kind == "full" and used >= GUEST_DAILY_LIMIT:
+                return jsonify({"ok": False, "error": "游客每日可回测 1 次（今日已用完）。注册会员每日 3 次且记录永久保存"}), 403
+
+        if uid is None and guest_key is None:
+            return jsonify({"ok": False, "error": "未登录（Authorization: Bearer <token>）"}), 401
+        params = params_raw
         name = str(data.get("name") or "未命名策略").strip() or "未命名策略"
         nl_text = data.get("nl_text")
         idem = str(data.get("idempotency_key") or "").strip() or None
 
         with engine.begin() as conn:
-            # 幂等去重（17 协议 §4.4）：同用户同 key 返回既有 job
-            if idem:
+            # 幂等去重（17 协议 §4.4）：同用户同 key 返回既有 job（游客不开放）
+            if idem and uid is not None:
                 existing = conn.execute(
                     text("SELECT id FROM jobs WHERE user_id = :uid AND idempotency_key = :k"),
                     {"uid": uid, "k": idem},
                 ).first()
                 if existing is not None:
                     return jsonify({"ok": True, "job_id": existing.id, "deduped": True})
-            # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（phone 占位 pending_<id>）
-            conn.execute(
-                text(
-                    "INSERT INTO users (id, phone) VALUES (:id, :phone) "
-                    "ON CONFLICT (id) DO NOTHING"
-                ),
-                {"id": uid, "phone": f"pending_{uid}"},
-            )
-            # 每日配额：当日已建任务数（含 smoke）>= quota_daily 则拒绝
-            quota_row = conn.execute(
-                text(
-                    "SELECT quota_daily, "
-                    "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id "
-                    " AND j.created_at::date = now()::date) AS used_today "
-                    "FROM users u WHERE u.id = :uid"
-                ),
-                {"uid": uid},
-            ).mappings().one()
-            if quota_row["used_today"] >= quota_row["quota_daily"]:
-                return jsonify({"ok": False, "error": "已达当日回测次数配额"}), 429
+            if uid is not None:
+                # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（phone 占位 pending_<id>）
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, phone) VALUES (:id, :phone) "
+                        "ON CONFLICT (id) DO NOTHING"
+                    ),
+                    {"id": uid, "phone": f"pending_{uid}"},
+                )
+                # 会员配额（15 号文档）：每日全量回测 3 次，smoke 不占；付费占位同会员
+                quota_row = conn.execute(
+                    text(
+                        "SELECT tier, "
+                        "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id "
+                        " AND j.kind = 'full' AND j.created_at::date = now()::date) AS used_today "
+                        "FROM users u WHERE u.id = :uid"
+                    ),
+                    {"uid": uid},
+                ).mappings().one()
+                if kind == "full" and quota_row["used_today"] >= MEMBER_DAILY_FULL_LIMIT:
+                    return jsonify({"ok": False, "error": "会员每日可全量回测 3 次（今日已用完），明天再来或试试小样本验证"}), 403
             strategy_id = conn.execute(
                 text(
                     "INSERT INTO strategies (user_id, name, nl_text, yaml) "
@@ -641,13 +809,17 @@ def create_saas_app() -> Flask:
             ).scalar_one()
             job_id = conn.execute(
                 text(
-                    "INSERT INTO jobs (user_id, strategy_id, kind, params, idempotency_key) "
-                    "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), :idem) RETURNING id"
+                    "INSERT INTO jobs (user_id, strategy_id, kind, params, idempotency_key, guest_key) "
+                    "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), :idem, :gk) RETURNING id"
                 ),
                 {"uid": uid, "sid": strategy_id, "kind": kind,
-                 "params": json.dumps(params), "idem": idem},
+                 "params": json.dumps(params), "idem": idem, "gk": guest_key},
             ).scalar_one()
-        return jsonify({"ok": True, "job_id": job_id, "strategy_id": strategy_id, "status": "queued"})
+        resp: dict[str, Any] = {"ok": True, "job_id": job_id, "strategy_id": strategy_id, "status": "queued"}
+        if guest_key is not None:
+            resp["guest"] = True
+            resp["note"] = GUEST_RESULT_NOTE
+        return jsonify(resp)
 
     @app.get("/api/jobs")
     @app.get("/api/saas/jobs")
@@ -678,8 +850,6 @@ def create_saas_app() -> Flask:
     def api_get_job(job_id: int) -> Any:
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
-        if uid is None:
-            return jsonify({"ok": False, "error": "未登录"}), 401
         with engine.connect() as conn:
             row = conn.execute(
                 text(
@@ -689,8 +859,16 @@ def create_saas_app() -> Flask:
                 ),
                 {"id": job_id},
             ).mappings().first()
-        # 他人任务与不存在一视同仁（404，不暴露任务存在性）
-        if row is None or row["user_id"] != uid:
+        if row is None:
+            if uid is None:
+                return jsonify({"ok": False, "error": "未登录"}), 401
+            return jsonify({"ok": False, "error": "任务不存在"}), 404
+        if uid is None:
+            # 游客任务：同 IP（guest_key 匹配）可查看当次结果
+            if row["user_id"] is not None or row["guest_key"] != _guest_key(app, _client_ip()):
+                return jsonify({"ok": False, "error": "未登录"}), 401
+        elif row["user_id"] != uid:
+            # 他人任务与不存在一视同仁（404，不暴露任务存在性）
             return jsonify({"ok": False, "error": "任务不存在"}), 404
         item = _job_view(row)
         if row["status"] == "completed":
@@ -1076,6 +1254,22 @@ def create_saas_app() -> Flask:
                 {"id": job_id, "uid": uid},
             ).mappings().first()
 
+    def _load_job_for_guest(job_id: int) -> Any:
+        """游客 job 按同 IP guest_key 归属取行（D1D2）；不匹配返回 None。"""
+        engine = _get_engine(app)
+        with engine.connect() as conn:
+            return conn.execute(
+                text(
+                    "SELECT j.*, s.name AS strategy_name, s.yaml AS strategy_yaml, "
+                    "r.summary AS result_summary, r.chart_data AS result_chart_data, "
+                    "r.artifacts AS result_artifacts, r.data_until AS result_data_until "
+                    "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
+                    "WHERE j.id = :id AND j.user_id IS NULL AND j.guest_key = :gk"
+                ),
+                {"id": job_id, "gk": _guest_key(app, _client_ip())},
+            ).mappings().first()
+
     def _result_record(row: Any) -> dict[str, Any]:
         """把 job 行构造成 lab_result.py 认识的 run record（复用 8081 解析函数的关键）：
         output_dir 指向上传目录 job_<id>/（产物同名同格式），_find_output_file 走 rglob。"""
@@ -1102,10 +1296,13 @@ def create_saas_app() -> Flask:
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
         if uid is None:
-            return None, (jsonify({"ok": False, "error": "未登录"}), 401)
-        row = _load_job_for_user(job_id, uid)
-        if row is None:
-            return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
+            row = _load_job_for_guest(job_id)
+            if row is None:
+                return None, (jsonify({"ok": False, "error": "未登录"}), 401)
+        else:
+            row = _load_job_for_user(job_id, uid)
+            if row is None:
+                return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
         if row["status"] != "completed":
             return None, (jsonify({"ok": False, "error": f"任务未完成（{row['status']}）",
                                    "status": row["status"]}), 409)
@@ -1180,14 +1377,16 @@ def create_saas_app() -> Flask:
 
     @app.delete("/api/results/<int:job_id>")
     def api_result_delete(job_id: int) -> Any:
-        """B1 删除：results+jobs 行 + 产物目录（job_<id>/）。策略行保留。"""
+        """B1 删除：results+jobs 行 + 产物目录（job_<id>/）。策略行保留。
+        游客可删除同 IP 的游客记录（D1D2）。"""
         import shutil
 
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
         if uid is None:
-            return jsonify({"ok": False, "error": "未登录"}), 401
-        row = _load_job_for_user(job_id, uid)
+            row = _load_job_for_guest(job_id)
+        else:
+            row = _load_job_for_user(job_id, uid)
         if row is None:
             return jsonify({"ok": False, "error": "任务不存在"}), 404
         upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")

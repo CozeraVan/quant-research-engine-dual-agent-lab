@@ -32,12 +32,28 @@
   **版本管理在仓库** `deploy/landing/`（index.html + nginx-aguhuice.conf，与线上 diff 校验一致）；
   Nginx 站点：`/etc/nginx/sites-available/aguhuice`。
 
+**D1D2 已上线（2026-09-20）**：users+tier/password_hash、jobs+guest_key（幂等迁移已执行）；
+POST /api/saas/auth/register（邮箱+密码）；游客匿名提交（单 IP 日 1 次/单股/近 2 年，
+jobs.user_id NULL + guest_key=sha256(IP+salt)，每日 04:00
+qre-saas-guest-cleanup.timer 清空）；会员日 3 次全量（smoke 不占）403；
+登录页改邮箱+密码 UI。注意：D1D2 文件（app.py/cleanup.py/templates/cloud_schema.sql/
+timer 两单元）为 scp 同步（未走 git push），与仓库 HEAD 一致待正式提交。
+
+**元数据上云（2026-09-26）**：因子目录与板块/概念名单经
+`scripts/sync_saas_metadata.py` 导出为 deploy/saas/metadata.json（仅名称+数量，
+无行情/成分明细），scp 到 ECS 后由 /api/saas/factors 与 /api/saas/universes 直出
+（SAAS_METADATA_PATH 已在 /etc/qre-saas.env）。**因子库/聚类更新后再同步**：
+本地跑 `scripts/sync_saas_metadata.py` 然后 scp deploy/saas/metadata.json 到
+ECS 同路径即可（saas app 按文件 mtime 自动重载，无需重启）。
+
 **C4 已验证（2026-09-19/20）**：临时测试账号方案——saas app 支持 env
 `SAAS_TEST_ACCOUNT_EMAIL`/`SAAS_TEST_ACCOUNT_PASSWORD` 内置账号（login 校验前短路，
 配置即凭证，存 /etc/qre-saas.env[0600]，不入仓库；内测开放前须移除）。公网端到端实测：
 测试账号登录 → POST /api/jobs（smoke job#2 58s completed；full job#3 20 只×6 月 115s
 completed）→ /api/results 列表与详情（summary/chart-data/tag-analysis）数据完整；
 权限语义：未登录 401、删他人结果 404。
+
+**C5+游客 UX 已上线（2026-09-20）**：游客免登录测试（单股/近2年/日1次/结果次日清空）全链路打通——游客条+确认弹层+403 回填+结果页次日清空提示；公网新建页与 8081 参数区/顶栏完全对齐（全期按钮+费率滑点字段）；统一顶栏无管理台链接。
 
 **C5 已上线（2026-09-20）**：8081 lab 页面体系完整平移到 SaaS 端。
 - 页面：new.html 重写为冻结版三入口（自然语言/快速向导三级级联+两级条件组/高级 YAML）

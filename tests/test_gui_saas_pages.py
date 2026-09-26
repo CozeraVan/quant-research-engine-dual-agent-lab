@@ -67,7 +67,9 @@ class TestPages:
         assert resp.status_code == 200
         html = resp.get_data(as_text=True)
         assert 'id="login-target"' in html and 'id="login-code"' in html
-        assert 'id="btn-send-code"' in html and 'id="btn-login"' in html
+        # D1D2：邮箱+密码登录/注册（内测临时方案，验证码通道下线后 UI 替换）
+        assert 'id="tab-login"' in html and 'id="tab-register"' in html
+        assert 'type="password"' in html and 'id="btn-login"' in html
         assert 'name="viewport"' in html
 
     def test_dashboard_page(self, client):
@@ -148,8 +150,9 @@ class TestSaasNlCompileRoute:
 
 
 class TestSaasFactorsRoute:
-    def test_unauthorized_401(self, client):
-        assert client.get("/api/saas/factors").status_code == 401
+    def test_anonymous_allowed(self, client):
+        # 因子目录为只读元数据，对游客开放（配额在提交环节收口）
+        assert client.get("/api/saas/factors").status_code == 200
 
     def test_groups_shape(self, client, monkeypatch):
         monkeypatch.setattr(
@@ -268,7 +271,8 @@ class TestAuthBypass:
     def test_bypass_off_keeps_401(self, client):
         # 默认关（client fixture 未开 bypass）：维持 401
         assert client.get("/api/saas/me").status_code == 401
-        assert client.post("/api/saas/jobs", json={"yaml": "x"}).status_code == 401
+        # D1D2：匿名提交走游客校验（无单股参数 → 403 而非 401）
+        assert client.post("/api/saas/jobs", json={"yaml": "x"}).status_code == 403
 
 
 class TestResultsDataSource:
@@ -280,6 +284,26 @@ class TestResultsDataSource:
         assert "/api/saas/jobs')" not in html              # 不再走旧 jobs 列表
         assert "job.job_id" in html                        # 新字段名
         assert "strategy_name" in html
+
+    def test_guest_ux_elements(self, client):
+        """QRE-SAAS-GUEST-UX：统一顶栏/游客条/游客确认弹层/参数区 8081 对齐字段。"""
+        html = client.get("/saas/new").get_data(as_text=True)
+        # 统一顶栏（无指向 8080 管理台的链接由禁链断言另行保证）
+        assert 'class="topbar"' in html and 'data-nav="new"' in html and 'data-nav="records"' in html
+        assert 'id="guest-strip"' in html and "游客模式" in html
+        # 游客确认弹层：两按钮 + 说明文案
+        assert 'id="guest-modal"' in html and 'id="guest-continue"' in html and 'id="guest-register"' in html
+        assert "每日 1 次" in html and "结果次日清空" in html
+        # 参数区对齐：全期按钮 + 费率/滑点字段 + scope 三选项
+        assert 'id="range-all"' in html and "全期(2010起)" in html
+        assert 'id="p-comm"' in html and 'id="p-mincomm"' in html and 'id="p-stamp"' in html
+        assert 'id="p-slipb"' in html and 'id="p-slips"' in html
+        assert 'value="all"' in html and 'value="codes"' in html and 'value="random"' in html
+        # 游客分流逻辑
+        assert "isGuest()" in html and "openGuestModal" in html and "继续游客测试" in html
+        # job 页游客结果提示
+        job = client.get("/saas/jobs/1").get_data(as_text=True)
+        assert 'id="guest-result-note"' in job and "次日清空" in job
 
     def test_symbols_pages_registered(self, client):
         html = client.get("/saas/jobs/1/symbols").get_data(as_text=True)

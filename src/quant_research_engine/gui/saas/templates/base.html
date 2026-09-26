@@ -74,6 +74,15 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 <script src="/static/lab-ui.js"></script>
 </head>
 <body>
+<header class="topbar">
+  <a class="brand" href="/saas/">QRE 策略实验台</a>
+  <nav class="mainnav">
+    <a href="/saas/new" data-nav="new">新建策略</a>
+    <a href="/saas/" data-nav="records">回测记录</a>
+    <a href="/saas/login" data-nav="login" id="nav-login">登录 / 注册</a>
+  </nav>
+</header>
+<div class="guest-strip" id="guest-strip" style="display:none">游客模式：可免费测试单股策略（近 2 年、每日 1 次、结果次日清空）　<a class="inl" href="/saas/login">注册 / 登录，解锁全市场与保存记录 →</a></div>
 {% block body %}{% endblock %}
 <script>
 // 公共：token 存 localStorage；所有 API 带 Bearer；401 跳登录页
@@ -86,10 +95,32 @@ async function apiFetch(url, opts){
   opts.headers = Object.assign({}, opts.headers, {'Authorization': 'Bearer ' + saasToken()});
   if (opts.json !== undefined){ opts.method = opts.method || 'POST'; opts.headers['Content-Type']='application/json'; opts.body = JSON.stringify(opts.json); delete opts.json; }
   const resp = await fetch(url, opts);
-  if (resp.status === 401){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; throw new Error('unauthorized'); }
+  // 401 跳转仅限"带了 token 但已失效"（过期会话回登录页）；游客（无 token）不拽走，
+  // 由调用方按业务处理（如配额/权限弹层），否则公共页任何 401 都会把游客甩去登录。
+  if (resp.status === 401){
+    if (saasToken()){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; }
+    throw new Error('unauthorized');
+  }
   return resp;
 }
 function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saas/login'; }
+// QRE-SAAS-GUEST-UX：游客条（未登录时全局可见）；顶栏当前页高亮；已登录把「登录/注册」换「退出」
+(function(){
+  var loggedIn = SAAS_BYPASS || !!saasToken();
+  if (!loggedIn) { var g = document.getElementById('guest-strip'); if (g) g.style.display = 'block'; }
+  var path = location.pathname;
+  document.querySelectorAll('.mainnav a').forEach(function(a){
+    var nav = a.dataset.nav;
+    if ((nav === 'new' && path.indexOf('/saas/new') === 0) ||
+        (nav === 'records' && (path === '/saas/' || path.indexOf('/saas/jobs') === 0)) ||
+        (nav === 'login' && path.indexOf('/saas/login') === 0)) a.classList.add('active');
+  });
+  if (loggedIn) {
+    var l = document.getElementById('nav-login');
+    if (l) { l.textContent = '退出登录'; l.href = 'javascript:void(0)';
+      l.addEventListener('click', function(){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; }); }
+  }
+})();
 function pct(v){ return (v === null || v === undefined) ? '—' : (v * 100).toFixed(2) + '%'; }
 function num(v){ return (v === null || v === undefined) ? '—' : Number(v).toLocaleString('zh-CN', {maximumFractionDigits: 2}); }
 function cls(v){ return v == null ? 'flat' : (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat')); }

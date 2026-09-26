@@ -91,14 +91,21 @@
         <button class="btn-sm range-btn" data-years="1">近1年</button>
         <button class="btn-sm range-btn on" data-years="2">近2年（默认）</button>
         <button class="btn-sm range-btn" data-years="5">近5年</button>
+        <button class="btn-sm" id="range-all">全期(2010起)</button>
         <div class="cal-pop" id="cal-pop" style="display:none"></div>
       </span>
       <label>标的范围 <span class="req">*</span></label>
       <span>
         <label class="radio-inline"><input type="radio" name="scope" value="all" checked> 全部 A 股</label>
-        <label class="radio-inline"><input type="radio" name="scope" value="random"> 随机股票</label>
         <label class="radio-inline"><input type="radio" name="scope" value="codes"> 指定股票代码</label>
-        <span class="opt" style="width:100%">板块/概念筛选依赖行情库（本部署暂不支持），可用「随机股票」或「指定代码」代替</span>
+        <label class="radio-inline"><input type="radio" name="scope" value="random"> 随机股票</label>
+        <label class="radio-inline"><input type="radio" name="scope" value="univ"> 板块/概念</label>
+      </span>
+      <label id="scope-univ-label" style="display:none">板块/概念范围</label>
+      <span id="scope-univ-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="p-univ-group" style="max-width:200px"></select>
+        <select id="p-univ-key" style="max-width:260px"></select>
+        <span id="p-univ-count" class="opt"></span>
       </span>
       <label id="scope-random-label" style="display:none">随机数量 N</label>
       <span id="scope-random-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
@@ -126,6 +133,16 @@
         <input type="text" id="p-tp" placeholder="可空，如 0.15">
         <label>移动止损 Trailing %</label>
         <input type="text" id="p-ts" placeholder="可空，如 0.05">
+        <label>佣金率 Commission</label>
+        <input type="text" id="p-comm" value="0.0003">
+        <label>最低佣金 Min Commission</label>
+        <input type="text" id="p-mincomm" value="5.0">
+        <label>印花税(卖出) Stamp Tax</label>
+        <input type="text" id="p-stamp" value="0.0005">
+        <label>买入滑点 Slippage Buy</label>
+        <input type="text" id="p-slipb" value="0">
+        <label>卖出滑点 Slippage Sell</label>
+        <input type="text" id="p-slips" value="0">
       </div>
     </div></div></div>
   </div>
@@ -154,6 +171,21 @@
   </div>
 
   <!-- 缺因子申请模态框 -->
+  <!-- 游客确认弹层（QRE-SAAS-GUEST-UX：游客点运行先确认，不甩登录页） -->
+  <div class="modal-mask" id="guest-modal">
+    <div class="modal">
+      <h3>游客免登录测试</h3>
+      <p id="guest-modal-text">游客可免登录测试策略：<b>单支股票 · 近 2 年区间 · 每日 1 次 · 结果次日清空</b>。<br>
+      注册会员可解锁：全市场/板块回测、多股票、每日 3 次、记录永久保存。</p>
+      <p class="result-box err" id="guest-modal-err" style="display:none"></p>
+      <div class="m-actions">
+        <button class="btn btn-ghost" id="guest-cancel">取消</button>
+        <button class="btn btn-primary" id="guest-continue">继续游客测试</button>
+        <button class="btn btn-primary" id="guest-register" style="background:var(--up);border-color:var(--up)">注册 / 登录，解锁全部权限</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-mask" id="factor-modal">
     <div class="modal">
       <h3>当前因子库暂不支持</h3>
@@ -226,6 +258,11 @@ function paramsYaml(){
   let scopeLine = '  scope: all_a';
   if (scope === 'random') scopeLine = '  scope: random ' + ($('#p-random-n').value || '500') + ' 只  # 执行端随机抽样';
   else if (scope === 'codes') scopeLine = '  codes: [' + ($('#param-codes').value.trim() || '（未填）') + ']';
+  else if (scope === 'univ'){
+    const g = univGroups[Number($('#p-univ-group').value)];
+    const it = g && g.items[Number($('#p-univ-key').value)];
+    scopeLine = '  scope: ' + (g && it ? (g.label + '·' + it.key) : '（未选）');
+  }
   const g = id => $(id).value;
   const lines = ['backtest:',
     '  start: "' + g('#p-start') + '"',
@@ -236,7 +273,9 @@ function paramsYaml(){
     '  max_positions: ' + (g('#p-maxpos').trim() === '0' ? '0  # 不限制' : (g('#p-maxpos') || 10))];
   const hold = g('#p-holding').trim();
   if (hold) lines.push('  max_holding_days: ' + hold);
-  [['stop_loss_pct','#p-sl'],['take_profit_pct','#p-tp'],['trailing_stop_pct','#p-ts']].forEach(p => {
+  [['stop_loss_pct','#p-sl'],['take_profit_pct','#p-tp'],['trailing_stop_pct','#p-ts'],
+   ['commission_rate','#p-comm'],['min_commission','#p-mincomm'],['stamp_tax_sell','#p-stamp'],
+   ['slippage_buy','#p-slipb'],['slippage_sell','#p-slips']].forEach(p => {
     const v = g(p[1]).trim(); if (v) lines.push('  ' + p[0] + ': ' + v);
   });
   return lines.join('\n');
@@ -285,6 +324,11 @@ $$('.range-btn').forEach(b => b.addEventListener('click', function(){
   setRangeYears(+b.dataset.years);
   $('#cal-pop').style.display = 'none';
 }));
+$('#range-all').addEventListener('click', function(){
+  $$('.range-btn').forEach(x => x.classList.remove('on'));
+  $('#p-start').value = '2010-01-04'; $('#p-end').value = TODAY_ISO;
+  $('#cal-pop').style.display = 'none'; refreshPreview();
+});
 if (window.LabUI) LabUI.attachCalendar({
   pop: $('#cal-pop'), startInput: $('#p-start'), endInput: $('#p-end'),
   maxDate: TODAY_ISO, onChange: refreshPreview,
@@ -296,6 +340,8 @@ $$('input[name="scope"]').forEach(r => r.addEventListener('change', function(){
   $('#scope-random-label').style.display = v === 'random' ? '' : 'none';
   $('#scope-random-row').style.display = v === 'random' ? 'flex' : 'none';
   $('#scope-codes-label').style.display = v === 'codes' ? '' : 'none';
+  $('#scope-univ-label').style.display = v === 'univ' ? '' : 'none';
+  $('#scope-univ-row').style.display = v === 'univ' ? 'flex' : 'none';
   $('#param-codes').style.display = v === 'codes' ? '' : 'none';
   refreshPreview();
 }));
@@ -592,6 +638,11 @@ function buildParams(){
   };
   if (scope === 'random') params.random_n = parseInt($('#p-random-n').value, 10);
   else if (scope === 'codes') params.codes = $('#param-codes').value.split(',').map(s => s.trim()).filter(Boolean);
+  else if (scope === 'univ'){
+    const g = univGroups[Number($('#p-univ-group').value)];
+    const it = g && g.items[Number($('#p-univ-key').value)];
+    if (g && it) params.universe = {group: g.group, key: it.key};
+  }
   const num = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
   const sl = num('#p-sl'), tp = num('#p-tp'), ts = num('#p-ts');
   if (sl != null) params.stop_loss_pct = sl;
@@ -599,6 +650,13 @@ function buildParams(){
   if (ts != null) params.trailing_stop_pct = ts;
   const hold = $('#p-holding').value.trim();
   if (hold) params.max_holding_days = parseInt(hold, 10);
+  const fnum = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
+  const overrides = {};
+  [['commission_rate','#p-comm'],['min_commission','#p-mincomm'],['stamp_tax_sell','#p-stamp'],
+   ['slippage_buy_rate','#p-slipb'],['slippage_sell_rate','#p-slips']].forEach(p => {
+    const v = fnum(p[1]); if (v != null) overrides[p[0]] = v;
+  });
+  if (Object.keys(overrides).length) params.profile_overrides = overrides;
   return params;
 }
 async function createJob(kind){
@@ -623,8 +681,57 @@ async function pollJob(jobId){
   }
   throw new Error('验证超时，请稍后在「我的回测」查看状态');
 }
-$('#btn-run-main').addEventListener('click', async () => {
+function isGuest(){ return !SAAS_BYPASS && !saasToken(); }
+function openGuestModal(errText){
+  const err = $('#guest-modal-err');
+  if (errText){ err.style.display = 'block'; err.textContent = errText; }
+  else err.style.display = 'none';
+  $('#guest-modal').classList.add('show');
+}
+$('#guest-cancel').addEventListener('click', () => $('#guest-modal').classList.remove('show'));
+$('#guest-modal').addEventListener('click', function(e){ if (e.target === this) this.classList.remove('show'); });
+$('#guest-register').addEventListener('click', () => { location.href = '/saas/login'; });
+$('#guest-continue').addEventListener('click', () => {
+  $('#guest-modal').classList.remove('show');
+  // 游客约束前置提示（后端仍硬校验）：标的强制单股校验在提交时进行
+  startRun();
+});
+
+// 板块/概念名单（QRE-SAAS-METADATA：/api/saas/universes，登录后加载）
+let univGroups = [];
+async function loadUniverses(){
+  try {
+    const resp = await apiFetch('/api/saas/universes');
+    const d = await resp.json();
+    if (!d.ok) return;
+    univGroups = d.groups;
+    $('#p-univ-group').innerHTML = univGroups.map((g, i) =>
+      `<option value="${i}">${g.label}（${g.items.length}）</option>`).join('');
+    fillUnivKeys();
+  } catch (e) { /* 未登录等：保持禁用态 */ }
+}
+function fillUnivKeys(){
+  const g = univGroups[Number($('#p-univ-group').value)] || {items: []};
+  $('#p-univ-key').innerHTML = g.items.map((it, i) =>
+    `<option value="${i}">${it.key}（${it.count} 只）</option>`).join('');
+  updUnivCount();
+}
+function updUnivCount(){
+  const g = univGroups[Number($('#p-univ-group').value)] || {items: []};
+  const it = g.items[Number($('#p-univ-key').value)];
+  $('#p-univ-count').textContent = it ? ('约 ' + it.count + ' 只') : '';
+}
+$('#p-univ-group').addEventListener('change', fillUnivKeys);
+$('#p-univ-key').addEventListener('change', updUnivCount);
+loadUniverses();
+
+$('#btn-run-main').addEventListener('click', () => {
   if (pipeRunning) return;
+  if (isGuest()){ openGuestModal(); return; }  // 游客先确认，不甩登录页
+  startRun();
+});
+
+async function startRun(){
   const btn = $('#btn-run-main');
   pipeEl.style.display = 'block';
   LabUI.pipeReset(pipeEl);
@@ -666,15 +773,17 @@ $('#btn-run-main').addEventListener('click', async () => {
     const fullId = await createJob('full');
     LabUI.pipeDone(pipeEl, 3, '已提交');
     abort();
-    location.href = '/saas/jobs/' + fullId;
+    location.href = '/saas/jobs/' + fullId + (saasToken() ? '' : '?guest=1');  // 游客提示次日清空
   } catch (e) {
     if (e.message !== 'unauthorized'){
       const doing3 = pipeEl.querySelector('#pipe-3.doing');
-      pipeFailAt(doing3 ? 3 : 2, String(e.message || e));
+      const msg = String(e.message || e);
+      pipeFailAt(doing3 ? 3 : 2, msg);
+      if (isGuest() && /游客|注册/.test(msg)) openGuestModal(msg);  // 403 中文提示回弹层 + 注册引导
       abort();
     }
   }
-});
+}
 
 // init（未登录可浏览整页：因子目录等登录后才加载，提交时由 apiFetch 401 引导登录）
 setRangeYears(2);

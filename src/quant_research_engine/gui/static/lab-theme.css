@@ -68,7 +68,7 @@ textarea:focus,input:focus,select:focus{outline:none;border-color:var(--lav);box
 .form-grid{display:grid;grid-template-columns:150px 1fr;gap:12px 16px;align-items:center}
 .form-grid label{font-size:13.5px;color:var(--grey)}
 .form-grid-3{grid-template-columns:repeat(3,auto 1fr)}
-.radio-inline{display:inline-flex;align-items:center;gap:5px;margin-right:16px;font-size:13.5px;cursor:pointer}
+.radio-inline{display:inline-flex;align-items:center;gap:5px;margin-right:16px;font-size:13.5px;cursor:pointer;white-space:nowrap}
 .radio-inline input{accent-color:var(--lav)}
 
 .sec-toggle{width:100%;text-align:left;border:none;background:var(--tint);border-radius:8px;padding:9px 14px;font-size:13.5px;color:var(--lav-deep);font-weight:500;transition:background .2s;margin-top:12px}
@@ -436,3 +436,7 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 .editor-actions .btn,.editor-actions .btn-ghost,.editor-actions .file-label,.editor-actions select,.editor-actions input[type=text]{height:36px;display:inline-flex;align-items:center;padding-top:0;padding-bottom:0}
 /* 预览栏头部与运行区头部同理 */
 .pv-head .btn-sm{height:30px;display:inline-flex;align-items:center}
+
+/* ---- SaaS 游客提示条（QRE-SAAS-GUEST-UX） ---- */
+.guest-strip{background:var(--tint);border-bottom:1px solid var(--tint-deep);color:var(--lav-deep);font-size:13px;text-align:center;padding:7px 16px;line-height:1.5}
+.guest-strip a{color:var(--lav);font-weight:500}

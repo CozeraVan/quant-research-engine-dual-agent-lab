@@ -103,7 +103,7 @@ class TestJobCreate:
         assert _create_job(client, uid=7).status_code == 200
 
     def test_create_validation(self, client):
-        assert client.post("/api/saas/jobs", json={"yaml": "x"}).status_code == 401
+        assert client.post("/api/saas/jobs", json={"yaml": "x"}).status_code == 403  # D1D2：匿名按游客校验（无单股参数）
         assert client.post("/api/saas/jobs", json={"kind": "full"}, headers={"X-User-Id": "1"}).status_code == 400
         assert _create_job(client, kind="bogus").status_code == 400
         assert client.post("/api/saas/jobs", json={"yaml": "x", "params": [1]},
@@ -317,7 +317,7 @@ class TestAuth:
 
     def test_no_token_401(self, client):
         assert client.get("/api/saas/me").status_code == 401
-        assert client.post("/api/saas/jobs", json={"yaml": "x"}).status_code == 401
+        assert client.post("/api/saas/jobs", json={"yaml": "x"}).status_code == 403  # D1D2：匿名按游客校验（无单股参数）
         assert client.get("/api/saas/jobs").status_code == 401
         # 无效 token 401
         assert client.get("/api/saas/me",
@@ -331,27 +331,25 @@ class TestAuth:
         app2.config["SAAS_WORKER_TOKEN"] = WORKER_TOKEN
         c2 = app2.test_client()
         assert c2.post("/api/saas/jobs", json={"yaml": "x"},
-                       headers={"X-User-Id": "1"}).status_code == 401
+                       headers={"X-User-Id": "1"}).status_code == 403  # D1D2：游客校验
 
     def test_dev_backdoor_enabled(self, client):
         resp = client.post("/api/saas/jobs", json={"yaml": "x"}, headers={"X-User-Id": "42"})
         assert resp.status_code == 200
 
     def test_quota_429(self, client, app):
-        from sqlalchemy import text
-
+        # D1D2 新口径：会员每日 3 次全量（kind=full），smoke 不占配额，超限 403
         login = self._login(client, app, "quota@example.com")
         token = login.get_json()["token"]
-        uid = login.get_json()["user"]["id"]
-        engine = app.extensions["saas_engine"]
-        with engine.begin() as conn:
-            conn.execute(text("UPDATE users SET quota_daily = 2 WHERE id = :uid"), {"uid": uid})
         headers = {"Authorization": f"Bearer {token}"}
-        assert client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers).status_code == 200
+        for _ in range(3):
+            assert client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers).status_code == 200
+        resp = client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers)
+        assert resp.status_code == 403
+        assert "3 次" in resp.get_json()["error"]
+        # smoke 不占配额：超限后仍可提交 smoke
         assert client.post("/api/saas/jobs", json={"yaml": "x", "kind": "smoke"},
                            headers=headers).status_code == 200
-        resp = client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers)
-        assert resp.status_code == 429
 
 
 class TestProtocolA2:
@@ -590,10 +588,14 @@ class TestResultsApi:
         """symbol_count 兜底：summary 无该字段时按 params 推导（codes 数 / random_n / 全A=None）。"""
         import json as _json
 
+        uid_seq = iter(range(100, 110))
+
         def mk(params):
+            # 每个用例独立用户（D1D2 会员每日 3 次全量配额下避免互相挤占）
+            uid = next(uid_seq)
             resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": "s",
                                                   "params": params},
-                               headers={"X-User-Id": "1"})
+                               headers={"X-User-Id": str(uid)})
             job_id = resp.get_json()["job_id"]
             client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
             client.post(f"/api/worker/jobs/{job_id}/result/meta",
@@ -602,16 +604,26 @@ class TestResultsApi:
                               "chart_data": {"metrics": {}}, "data_until": "2026-02-27",
                               "files": []},
                         headers=WORKER_HEADERS)
-            return job_id
+            return uid
 
-        mk({"codes": ["000001.SZ"]})
-        mk({"codes": "000001.SZ, 600519.SH"})
-        mk({"random_n": 50})
-        mk({})  # 全 A
-        items = client.get("/api/results", headers={"X-User-Id": "1"}).get_json()["items"]
-        counts = sorted(i["symbol_count"] for i in items if i["symbol_count"] is not None)
-        assert counts == [1, 2, 50]
-        assert sum(1 for i in items if i["symbol_count"] is None) == 1
+        uids = []
+        uids.append(mk({"codes": ["000001.SZ"]}))
+        uids.append(mk({"codes": "000001.SZ, 600519.SH"}))
+        uids.append(mk({"random_n": 50}))
+        uids.append(mk({}))  # 全 A
+        # 列表按用户隔离：逐用户取自己的唯一一条记录验证兜底
+        counts = []
+        none_count = 0
+        for uid in uids:
+            items = client.get("/api/results", headers={"X-User-Id": str(uid)}).get_json()["items"]
+            assert len(items) == 1
+            sc = items[0]["symbol_count"]
+            if sc is None:
+                none_count += 1
+            else:
+                counts.append(sc)
+        assert sorted(counts) == [1, 2, 50]
+        assert none_count == 1
 
     def test_detail_endpoints(self, client, app, tmp_path):
         job_id = self._completed_job(client, app, tmp_path)
@@ -674,3 +686,134 @@ class TestBuiltinTestAccount:
         resp = client.post("/api/saas/auth/login",
                            json={"target": "tester@local", "code": "pw123"})
         assert resp.status_code == 401
+
+
+class TestTiersD1D2:
+    """QRE-SAAS-D1D2：注册/密码登录/游客提交/会员配额/游客清理。"""
+
+    def _register(self, client, email="m1@example.com", pw="abc12345"):
+        return client.post("/api/saas/auth/register", json={"email": email, "password": pw})
+
+    def test_register_and_password_login(self, client):
+        resp = self._register(client)
+        assert resp.status_code == 200 and resp.get_json()["token"]
+        assert resp.get_json()["user"]["tier"] == "member"
+        # 重复注册 409
+        assert self._register(client).status_code == 409
+        # 弱密码/坏邮箱 400
+        assert self._register(client, "m2@example.com", "short").status_code == 400
+        assert self._register(client, "not-an-email", "abc12345").status_code == 400
+        assert self._register(client, "m3@example.com", "abcdefgh").status_code == 400  # 无数字
+        # 密码登录（与验证码通道并存）
+        ok = client.post("/api/saas/auth/login", json={"target": "m1@example.com", "code": "abc12345"})
+        assert ok.status_code == 200 and ok.get_json()["token"]
+        bad = client.post("/api/saas/auth/login", json={"target": "m1@example.com", "code": "wrong123"})
+        assert bad.status_code == 401
+
+    def _guest_job(self, client, codes=("000001.SZ",), start="2025-01-01", end="2026-01-01", ip="1.2.3.4"):
+        return client.post("/api/jobs", json={
+            "yaml": "x", "kind": "full",
+            "params": {"codes": list(codes), "start": start, "end": end},
+        }, headers={"X-Forwarded-For": ip})
+
+    def test_guest_submit_and_limits(self, client):
+        resp = self._guest_job(client)
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["guest"] is True and "次日清空" in body["note"]
+        # 同 IP 当日第二次全量 → 403
+        assert self._guest_job(client).status_code == 403
+        # smoke 不占配额
+        smoke = client.post("/api/jobs", json={"yaml": "x", "kind": "smoke",
+            "params": {"codes": ["000001.SZ"], "start": "2025-01-01", "end": "2026-01-01"}},
+            headers={"X-Forwarded-For": "1.2.3.4"})
+        assert smoke.status_code == 200
+        # 多股 → 403；区间超 2 年 → 403；缺区间 → 400
+        assert self._guest_job(client, codes=("000001.SZ", "600000.SH"), ip="5.6.7.8").status_code == 403
+        assert self._guest_job(client, start="2020-01-01", end="2026-01-01", ip="5.6.7.8").status_code == 403
+        bad = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "params": {"codes": ["000001.SZ"]}},
+                          headers={"X-Forwarded-For": "5.6.7.8"})
+        assert bad.status_code == 400
+
+    def test_guest_views_own_job_by_ip(self, client, app):
+        job_id = self._guest_job(client).get_json()["job_id"]
+        # 同 IP 可查；异 IP 401
+        ok = client.get(f"/api/jobs/{job_id}", headers={"X-Forwarded-For": "1.2.3.4"})
+        assert ok.status_code == 200
+        assert client.get(f"/api/jobs/{job_id}", headers={"X-Forwarded-For": "9.9.9.9"}).status_code == 401
+        # worker 完成 → 游客按 IP 看结果端点
+        client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                    json={"worker_id": "w1", "summary": {"strategy_total_return": 0.1},
+                          "chart_data": {"metrics": {"excess_return": 0.05}}, "files": []},
+                    headers=WORKER_HEADERS)
+        r = client.get(f"/api/results/{job_id}/summary", headers={"X-Forwarded-For": "1.2.3.4"})
+        assert r.status_code == 200 and r.get_json()["summary"]["strategy_total_return"] == 0.1
+        assert client.get(f"/api/results/{job_id}/summary",
+                          headers={"X-Forwarded-For": "9.9.9.9"}).status_code == 401
+        # 游客结果不在会员列表口径之外泄漏：/api/results 需登录
+        assert client.get("/api/results", headers={"X-Forwarded-For": "1.2.3.4"}).status_code == 401
+
+    def test_me_quota_fields(self, client):
+        resp = self._register(client, "q@example.com")
+        token = resp.get_json()["token"]
+        me = client.get("/api/saas/me", headers={"Authorization": f"Bearer {token}"}).get_json()["user"]
+        assert me["quota_limit"] == 3 and me["quota_remaining"] == 3 and me["tier"] == "member"
+        client.post("/api/saas/jobs", json={"yaml": "x"},
+                    headers={"Authorization": f"Bearer {token}"})
+        me = client.get("/api/saas/me", headers={"Authorization": f"Bearer {token}"}).get_json()["user"]
+        assert me["quota_remaining"] == 2
+
+    def test_guest_cleanup(self, app, tmp_path):
+        from sqlalchemy import text as _text
+
+        from quant_research_engine.gui.saas.cleanup import cleanup_guest_jobs
+
+        engine = app.extensions["saas_engine"]
+        upload = tmp_path / "uploads"
+        (upload / "job_1").mkdir(parents=True)
+        with engine.begin() as conn:
+            sid = conn.execute(
+                _text("INSERT INTO strategies (user_id, name, yaml) VALUES (NULL, 'g', 'y') RETURNING id")
+            ).scalar_one()
+            jid = conn.execute(
+                _text("INSERT INTO jobs (user_id, strategy_id, kind, guest_key, created_at) "
+                      "VALUES (NULL, :sid, 'full', 'k1', now() - interval '1 day') RETURNING id"),
+                {"sid": sid},
+            ).scalar_one()
+            conn.execute(
+                _text("INSERT INTO results (job_id, user_id, summary, chart_data) "
+                      "VALUES (:j, NULL, '{}', '{}')"), {"j": jid}
+            )
+        # jobs.user_id NULL 但 results.user_id NOT NULL 参照 users——游客 results 行怎么写？
+        result = cleanup_guest_jobs(app.config["SAAS_DB_URL"], upload)
+        assert result["jobs"] == 1 and result["dirs"] == 1
+        with engine.connect() as conn:
+            assert conn.execute(_text("SELECT count(*) FROM jobs WHERE guest_key='k1'")).scalar_one() == 0
+            assert conn.execute(_text("SELECT count(*) FROM results WHERE job_id=:j"),
+                                {"j": jid}).scalar_one() == 0
+            assert conn.execute(_text("SELECT count(*) FROM strategies WHERE user_id IS NULL")).scalar_one() == 0
+
+
+class TestSaasMetadata:
+    """QRE-SAAS-METADATA：因子目录/板块名单元数据文件优先，缺失回退本地库。"""
+
+    def test_factors_and_universes_from_metadata_file(self, client, app, tmp_path):
+        import json as _json
+
+        meta = {
+            "generated_at": "2026-09-26T00:00:00Z",
+            "factors": [{"group": "momentum", "label": "动量",
+                         "items": [{"table": "factors.t", "column": "rsi_14", "label": "RSI"}]}],
+            "universes": [{"group": "sw1", "label": "申万一级行业",
+                           "items": [{"key": "电子", "count": 618}]}],
+        }
+        (tmp_path / "metadata.json").write_text(_json.dumps(meta), encoding="utf-8")
+        app.config["SAAS_METADATA_PATH"] = str(tmp_path / "metadata.json")
+        f = client.get("/api/saas/factors", headers={"X-User-Id": "1"})
+        u = client.get("/api/saas/universes", headers={"X-User-Id": "1"})
+        assert f.get_json()["groups"][0]["label"] == "动量"
+        assert u.get_json()["groups"][0]["items"][0] == {"key": "电子", "count": 618}
+        assert u.get_json()["generated_at"] == "2026-09-26T00:00:00Z"
+        # 元数据对游客开放（只读目录；配额在提交环节收口）
+        assert client.get("/api/saas/universes").status_code == 200

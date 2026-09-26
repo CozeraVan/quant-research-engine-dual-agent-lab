@@ -102,6 +102,18 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS parent_job_id BIGINT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS upload_token TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idem
     ON jobs (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+-- QRE-SAAS-D1D2（内测三级权限，2026-09-20）：密码登录临时方案 + 游客匿名提交
+-- users 加密码哈希与层级；jobs/strategies 的 user_id 可空（游客不落 users 行，
+-- 用 jobs.guest_key=sha256(IP+salt) 归属，每日清理任务删除次日以前的游客记录）。
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'member'
+    CHECK (tier IN ('guest','member','paid'));
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS guest_key TEXT;
+ALTER TABLE jobs ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE strategies ALTER COLUMN user_id DROP NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_jobs_guest ON jobs (guest_key, created_at DESC)
+    WHERE guest_key IS NOT NULL;
+
 -- 状态枚举对齐协议：done → completed，新增 uploading/expired/canceled
 -- 注意顺序：先删旧 CHECK 再 UPDATE（旧 CHECK 不允许 completed）。
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_status_check;
@@ -137,5 +149,6 @@ CREATE TABLE IF NOT EXISTS results (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_results_user ON results (user_id, created_at DESC);
+ALTER TABLE results ALTER COLUMN user_id DROP NOT NULL;  -- QRE-SAAS-D1D2：游客结果行
 
 COMMIT;

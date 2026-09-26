@@ -38,7 +38,7 @@
 {% block scripts %}
 <script src="/static/echarts.min.js"></script>
 <script>
-requireLogin();
+// QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 const JOB_ID = {{ job_id }};
 const TS_CODE = {{ ts_code | tojson }};
 const $ = s => document.querySelector(s);

@@ -102,6 +102,15 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     codes = params.get("codes") or []
     if isinstance(codes, str):
         codes = [c.strip() for c in codes.split(",") if c.strip()]
+    # 板块/概念范围（QRE-SAAS-METADATA）：params.universe={group,key} 在 worker
+    # 本地解析成 codes（全量行情库只在本机）；与显式 codes 同时给时显式优先
+    universe = params.get("universe")
+    if not codes and isinstance(universe, dict) and universe.get("group") and universe.get("key"):
+        from quant_research_engine.gui.universe import universe_members
+
+        codes = universe_members(str(universe["group"]), str(universe["key"]))
+        if not codes:
+            raise RuntimeError(f"板块/概念无成分股：{universe['group']}/{universe['key']}")
     end = str(params.get("end") or date.today().isoformat())
     start = str(
         params.get("start")

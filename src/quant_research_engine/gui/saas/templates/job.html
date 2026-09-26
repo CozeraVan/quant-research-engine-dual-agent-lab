@@ -6,12 +6,16 @@
   <p class="brief-line" style="font-size:12px;color:#888;margin:4px 0 10px">📄 <span id="brief-text">加载中…</span></p>
   <div class="meta-chips" id="meta-chips"></div>
 
+  <div class="panel hidden" id="guest-note" style="border-color:#d97706;background:#fef9ec">
+    <span style="color:#92400e;font-size:13px">游客模式：本次回测结果<strong>次日清空</strong>。<a href="/saas/login">注册会员</a>后可永久保存记录、每日 3 次全市场回测。</span>
+  </div>
   <div class="panel" id="status-card">
     <span class="badge queued" id="job-badge">加载中</span>
     <span class="muted" id="job-status-note" style="margin-left:8px"></span>
   </div>
 
   <div id="result-area" class="hidden">
+    <div class="guest-strip" id="guest-result-note" style="display:none;border-radius:8px;margin-bottom:12px">游客结果次日清空 —— <a class="inl" href="/saas/login">注册后可永久保存记录 / 跑全市场回测 →</a></div>
     <div class="metric-strip" id="metric-strip"></div>
 
     <div class="chart-box" id="box-main">
@@ -63,7 +67,7 @@
 {% block scripts %}
 <script src="/static/echarts.min.js"></script>
 <script>
-requireLogin();
+// QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 const JOB_ID = {{ job_id }};
 
 function card(label, value, klass, tip){
@@ -488,10 +492,14 @@ async function poll(){
   renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));
   if (chart.dates && chart.equity) renderMain(chart);
   else empty('chart-main');
+  if (!SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
   renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
   renderFees(chart.fees_summary || null, chart.meta || null);
   document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
   loadRisk();
+}
+if (new URLSearchParams(location.search).get('guest') === '1'){
+  document.getElementById('guest-note').classList.remove('hidden');
 }
 poll();
 </script>
