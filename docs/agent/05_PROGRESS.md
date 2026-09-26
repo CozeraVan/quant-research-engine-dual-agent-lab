@@ -1,5 +1,7 @@
 # Progress Tracker
 
+2026-09-26 QRE-SAAS-NOWRAP-FIX DONE（文字竖排热修）：用户报告游客弹层「取消」与向导「固定值」等文字逐字竖排。根因：窄 flex 容器内按钮/标签缺 white-space:nowrap（与早前 .radio-inline 竖排同源）。修复 lab-theme.css 三处：.btn 全局 nowrap、.label-inline nowrap、.modal .m-actions 加 flex-wrap:wrap（空间不足整行换行而非压字）。Playwright 实测：弹层三按钮单行横排（取消 74px 宽 38px 高正常），固定值标签单行。ECS 已 scp 部署。未 commit，等用户批准。
+
 2026-09-26 QRE-SAAS-GUEST-WIZARD-FIX DONE（向导游客加载修复）：用户报告游客态快速向导出入场条件为空。根因：new.html init 把 loadFactorCatalog() 门在登录态后（factor 端点匿名开放后前端门禁未同步解除）。修复：游客同样加载因子目录/板块名单。Playwright 验证：游客向导入/出场条件三级选单填充正常（544 因子可读），EMA 预填充、YAML 预览生成正常（截图 /tmp/qre-shots/wizard_check.png）。全量 2116 passed + 4 skipped 零回归。ECS 已 scp 部署。
 
 2026-09-26 QRE-SAAS-GUEST-LOOPFIX DONE（游客死循环热修）：用户报告公网点任何按钮被甩登录页。根因二重：① 因子目录/板块名单端点（/api/saas/factors、/api/saas/universes）要求登录，游客访问新建页加载向导即 401；② base.html apiFetch 对任何 401 一律跳登录页。修复：两端点改匿名开放（纯只读元数据，配额在提交环节收口；NL 编译仍登录限定——既定）；apiFetch 401 仅在"带了 token 但失效"时跳登录，游客 401 抛错交调用方处理。另发现 _load_saas_metadata 默认路径少一级（parents[3]→src/，应为 parents[4]；ECS 靠 env 显式指定所以线上无恙，本地/测试环境回退查库 503 暴露）。测试：2 条旧断言改新口径（匿名 200），全量 2116 passed + 4 skipped 零回归。ECS 已 scp 部署验证：游客进 / 直达 /saas/new 不跳转、游客条显示、因子目录匿名 200、零 JS 报错（截图 /tmp/qre-shots/fix_guest_home.png）。未 commit，等用户批准。
