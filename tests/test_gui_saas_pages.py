@@ -76,7 +76,12 @@ class TestPages:
         resp = client.get("/saas/")
         assert resp.status_code == 200
         html = resp.get_data(as_text=True)
-        assert 'id="jobs-tbody"' in html and 'id="btn-new-job"' in html
+        # QRE-SAAS-RECORDS-UI：与 8081 对齐的记录页结构
+        assert 'id="jobs-tbody"' in html and 'class="page-head"' in html
+        assert 'id="recs-filter"' in html and "筛选策略名" in html
+        assert 'class="card"' in html and 'id="del-mask"' in html
+        # 无重复头部 panel（历史结构 bug：曾渲染出两个「我的回测记录」头）
+        assert html.count("我的回测记录") <= 2
         assert '排队中' in html or "STATUS_LABEL" in html
 
     def test_new_page(self, client):

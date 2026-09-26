@@ -18,6 +18,8 @@
 
 ## Latest Verified State
 
+2026-09-26 QRE-SAAS-RECORDS-UI DONE（公网记录页按 8081 冻结版对齐，用户验收待批，未 commit）：双端截图逐项 diff 后重写 dashboard.html 呈现层——①修掉结构性 bug：上一版 panel 未闭合导致页面渲染出两个重复「我的回测记录」头部块；②版式对齐：page-head 衬线大标题「回测记录」+ 灰字说明（原句照搬 8081「这里只列出你实际跑过的回测；已完成的可查看结果。」）、单卡片 .card（20/22px padding）、工具行=刷新 ghost 按钮+提示文字+右侧筛选框（8081 同款「筛选策略名 / 任务号…」，前端过滤）；③表头文字对齐「策略名称」，策略名下方小字「任务 #N」（8081 的 run_id opt 同款）；④状态徽章改贴 8081 类名（completed→ok 绿 pill、failed→fail 红 pill、进行中→run 紫呼吸点）；⑤SaaS 特有功能全部保留：排序 seg 按钮（创建时间/超额收益 ⇅）、分页、删除弹层、超额收益列、我的策略库与因子申请（换为同级 .card 呈现）。数据接口零改动（/api/results）。部署 scp+restart qre-saas，demo01 登录实测：重复头部消失、筛选生效、徽章/操作样式与 8081 一致。截图 /tmp/qre-shots/rec_8081.png（基准）/rec_saas_v2.png/rec_saas_v2_filter.png。测试断言更新（结构+无重复头部+筛选框），全量 pytest 零回归。未 commit，等用户批准。
+
 ## Latest Verified State
 
 2026-09-26 QRE-SAAS-D3 DONE（我的策略库：策略从一次性提交物变用户资产）：①API（gui/saas/app.py）：GET /api/saas/strategies（列表含 job_count/last_used_at）、GET /<id>（回填读取）、POST（保存/按 (user_id,name) upsert 更新）、POST /<id>/rename（同名 409）、DELETE（被 jobs 引用 409 禁删保可溯「可重命名或另存新版本」）；游客 401 引导注册文案。②提交回测时会员策略按同名 upsert 复用（不再每次新建行；游客仍每次新建）。③前端：dashboard 加「我的策略库」面板（重命名 prompt/删除 confirm/去回测跳 /saas/new?strategy=<id>）；new.html 回填（?strategy=<id> → 载入 YAML+名称，window load 后执行 + __libBackfillOnce 跳过因子目录就绪触发的首次向导重建——实测时序坑：catalog 异步加载完成的 refreshWizard 会覆盖回填）。④公网 Playwright 实测（demo01，未烧回测配额）：保存 D3验证策略（upsert）→ 工作台列表两行（含回测次数/最近使用）→ ?strategy=16 回填名称+YAML 内容正确；截图 /tmp/qre-shots/d3-*.png。⑤ECS 已 scp（app.py/dashboard.html/new.html）+ restart qre-saas active。测试 +2（CRUD/隔离/upsert/引用禁删；提交回测自动入库同名复用+job_count），全量 `pytest tests/` → **2118 passed + 4 skipped**（2116 + 2）零回归。15 号文档 D3 勾选。未 git commit/push。
