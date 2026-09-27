@@ -302,23 +302,75 @@ function renderTagChart(){
   });
   renderTagRank(items);
 }
+// 下钻个股表：列与排序口径对齐 lab 版；点行进该股回测详情（QRE-SAAS-SYMBOL-UX）
+const DETAIL_COLS = [
+  {key: 'ts_code', label: '代码 / 名称', text: true},
+  {key: 'trades', label: '交易笔数', int: true},
+  {key: 'win_rate', label: '胜率%', pct: true},
+  {key: 'total_pnl', label: '总净盈亏(元)', money: true},
+  {key: 'avg_ret', label: '平均净收益%', pct: true},
+  {key: 'best_ret', label: '最佳单笔收益%', pct: true},
+  {key: 'worst_ret', label: '最差单笔收益%', pct: true},
+  {key: 'avg_hold_days', label: '平均持仓天数'},
+  {key: 'bench_ret', label: '区间自然涨幅%', pct: true},
+  {key: 'percentile', label: '赚钱效应分位', pctRank: true},
+];
+let detailSort = {key: 'total_pnl', dir: -1};
 function drillDown(t){
   if (curTag === t.tag){ curTag = null; document.getElementById('tag-detail').innerHTML = ''; return; }
   curTag = t.tag;
-  const syms = (t.symbols || []).slice().sort((a, b) => b.total_pnl - a.total_pnl);
+  detailSort = {key: 'total_pnl', dir: -1};
+  drawDetailTable(t);
+}
+function drawDetailTable(t){
+  function fmt(s, c){
+    const v = s[c.key];
+    if (c.text) return dispCode(s.ts_code) + ' ' + (s.name || '');
+    if (v == null) return '—';
+    if (c.int) return String(Math.round(v));
+    if (c.pct) return (v * 100).toFixed(2) + '%';
+    if (c.pctRank) return '前' + (v * 100).toFixed(1) + '%';
+    return Number(v).toFixed(2);
+  }
+  const syms = (t.symbols || []).slice().sort((a, b) => {
+    const c = DETAIL_COLS.find(x => x.key === detailSort.key);
+    const va = a[detailSort.key], vb = b[detailSort.key];
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;   // null 恒排末位，与方向无关
+    if (vb == null) return -1;
+    const cmp = c && c.text ? String(va).localeCompare(String(vb)) : va - vb;
+    return cmp * detailSort.dir;
+  });
+  const rows = syms.map(s => {
+    const tds = DETAIL_COLS.map(c => {
+      const klass = c.pctRank && s.percentile != null && s.percentile <= 0.05 ? 'pct-hi'
+                  : (c.money || c.pct) ? cls(s[c.key]) : '';
+      return '<td class="' + klass + '"' + (c.text ? '' : ' style="text-align:right"') + '>' + fmt(s, c) + '</td>';
+    }).join('');
+    return '<tr class="sym-row" data-code="' + dispCode(s.ts_code) + '" title="点击查看该股回测详情" style="cursor:pointer">' + tds + '</tr>';
+  }).join('');
+  const head = DETAIL_COLS.map(c => {
+    const arrow = detailSort.key === c.key ? (detailSort.dir > 0 ? ' ▲' : ' ▼') : '';
+    return '<th class="sortable" data-key="' + c.key + '" style="cursor:pointer' + (c.text ? '' : ';text-align:right') + '">' + c.label + arrow + '</th>';
+  }).join('');
   const note = t.symbols_truncated
-    ? '<div class="opt" style="font-size:12px;margin-bottom:4px">共 ' + t.symbols_total + ' 只，仅显示盈亏前/后各 50</div>' : '';
-  const rows = syms.map(s =>
-    '<tr><td>' + s.ts_code + ' ' + (s.name || '') + '</td>' +
-    '<td class="' + cls(s.total_pnl) + '" style="text-align:right">' + fmtPnl(s.total_pnl) + '</td>' +
-    '<td style="text-align:right">' + s.trades + '</td>' +
-    '<td style="text-align:right">' + pct(s.win_rate) + '</td>' +
-    '<td class="' + cls(s.avg_ret) + '" style="text-align:right">' + pct(s.avg_ret) + '</td></tr>').join('');
-  document.getElementById('tag-detail').innerHTML =
-    '<div style="font-size:13px;font-weight:600;margin-bottom:4px">' + t.tag + ' · 个股贡献</div>' + note +
-    '<table><thead><tr><th>股票</th><th style="text-align:right">总净盈亏(元)</th>' +
-    '<th style="text-align:right">交易笔数</th><th style="text-align:right">胜率</th>' +
-    '<th style="text-align:right">平均每笔</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    ? '　共 ' + t.symbols_total + ' 只，仅显示盈亏前/后各 50' : '';
+  const benchTxt = t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%';
+  const el = document.getElementById('tag-detail');
+  el.innerHTML = '<div class="opt" style="font-size:12px;margin-bottom:4px">' + t.tag +
+    '　个股贡献（点击行看个股详情；点列头排序）' + note +
+    '　策略平均每笔 <span class="' + cls(t.avg_ret) + '">' + (t.avg_ret * 100).toFixed(2) + '%</span>' +
+    ' vs 板块同期自然涨幅 <span class="' + cls(t.bench_ret) + '">' + benchTxt + '</span></div>' +
+    '<table class="tbl"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  el.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (detailSort.key === key) detailSort.dir = -detailSort.dir;
+    else detailSort = {key, dir: key === 'ts_code' ? 1 : -1};
+    drawDetailTable(t);
+  }));
+  el.querySelectorAll('tr.sym-row').forEach(tr => tr.addEventListener('click', () => {
+    location.href = '/saas/jobs/' + JOB_ID + '/symbols/' + encodeURIComponent(tr.dataset.code);
+  }));
 }
 function renderTagRank(items){
   const rows = items.map(t =>

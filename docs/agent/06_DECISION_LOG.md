@@ -1215,3 +1215,12 @@ No open questions remain.
 - Alternatives: ①nginx 层 IP 白名单——否决，管理员出口 IP 不固定；②保留公网 + 强化鉴权——否决，攻击面仍在；③管理台下线只靠 SQL——否决，五 tab 运维效率已经验证过价值。
 - Impact: 公网 console 路径一律 404（页面与 API 同测验证），/saas/new 等正常页面回归 200；tests/test_gui_saas_console.py 顶栏入口断言反转为「不注入」；运维速查见 16 号文档第 5 节。隧道内仍走 _require_admin 鉴权（双保险）。
 - Owner: KIMI_CODE（用户 2026-09-27 拍板方案 A）
+
+
+### 2026-09-27: 公网股票代码显示脱敏 + worker per-symbol 产物回传通道（QRE-SAAS-SYMBOL-UX）
+
+- Decision: ①公网用户可见页面的股票代码一律不显示 .SZ/.SH/.BJ 后缀（不暴露数据源代码体系）——内部存储/API 载荷保持带后缀原样，仅前端渲染层剥离（base.html 公共 dispCode()）；输入侧反向后缀补全规范化（60/68→SH、00/30→SZ、4/8/920→BJ，非法代码友好 400），规范化在提交落库前完成。②公网个股详情（K线/买卖点/因子/收益曲线/磨损）走「worker 回传 per-symbol 产物」：worker 本地有行情库，回测后对实际触发交易的个股逐个生成 build_lab_symbol_detail 同形态 JSON，gzip 写 `_symbol_details/<ts_code>.json.gz` 随既有 result/meta + result/files 通道上传（15MB 上限、按 |总净盈亏| 降序截断、清单内优先），ECS 落盘（SAAS_UPLOAD_DIR/job_<id>/）后 api_result_symbol_detail 读文件渲染；基准指数序列不随个股重复回传（复用任务级 chart_data.benchmarks 按个股净值日期对齐注入）；产物缺失回退本地实时查库（staging 行为不变）。
+- Reason: ECS 无行情库是既定架构（15 号文档），个股详情的 K线/因子只能来自 worker；复用既有两步回传协议与落盘目录零新增通道。截断+gzip 后单股 ~10-40KB，实测 2 股任务总上传 32 文件 / 数百 KB，远低于 20MB 清单上限，量级可接受故按批准方案直接实现。
+- Alternatives: ①ECS 建行情只读副本——否决，123GB 库上 2C2G/40G 盘不可行；②结果 jsonb 内嵌 per-symbol 明细——否决，results.chart_data 会爆到 MB 级拖垮列表查询；③按需回传（用户点详情才触发 worker 补传）——留作后续增强，当前任务完成即全量备齐更简单可靠。
+- Impact: worker runner 新增 build_symbol_detail_files/_fill_excess_return；saas app 个股详情端点支持无后缀代码解析（resolve_ts_code：先按本任务实际交易个股精确匹配再按号段推断）；结果删除（DELETE /api/results/<id>）连带清理 _symbol_details 目录（既有 job_dir 整删覆盖）；17 号协议 §3.3 files 清单语义不变（子目录相对路径已支持）。
+- Owner: KIMI_CODE

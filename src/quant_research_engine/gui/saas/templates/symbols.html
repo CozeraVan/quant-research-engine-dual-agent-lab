@@ -51,7 +51,7 @@ async function load(){
 }
 function render(){
   const kw = $('#syms-filter').value.trim().toLowerCase();
-  const rows = ALL.filter(s => !kw || (s.ts_code + ' ' + (s.name || '')).toLowerCase().includes(kw));
+  const rows = ALL.filter(s => !kw || (s.ts_code + ' ' + dispCode(s.ts_code) + ' ' + (s.name || '')).toLowerCase().includes(kw));
   rows.sort((a, b) => {
     const va = a[sort.k], vb = b[sort.k];
     if (va == null && vb == null) return 0;
@@ -60,8 +60,8 @@ function render(){
     return (typeof va === 'string' ? String(va).localeCompare(String(vb)) : va - vb) * sort.dir;
   });
   $('#sym-table tbody').innerHTML = rows.map(s =>
-    `<tr class="row-link" data-code="${esc(s.ts_code)}">`
-    + `<td><strong>${esc(s.ts_code)}</strong> ${esc(s.name || '')}</td>`
+    `<tr class="row-link" data-code="${esc(dispCode(s.ts_code))}">`
+    + `<td><strong>${esc(dispCode(s.ts_code))}</strong> ${esc(s.name || '')}</td>`
     + `<td class="num">${s.trades}</td>`
     + `<td class="num">${(s.win_rate * 100).toFixed(1)}</td>`
     + `<td class="num ${cls(s.total_pnl)}">${num(s.total_pnl)}</td>`
@@ -75,7 +75,7 @@ function render(){
   $('#syms-hint').textContent = `共 ${rows.length} 只` + (kw ? '（已筛选）' : '');
   $$('#sym-table tr[data-code]').forEach(tr => tr.addEventListener('click', () => gotoSymbol(tr.dataset.code)));
 }
-function gotoSymbol(code){ location.href = `/saas/jobs/${JOB_ID}/symbols/${encodeURIComponent(code)}`; }
+function gotoSymbol(code){ location.href = `/saas/jobs/${JOB_ID}/symbols/${encodeURIComponent(dispCode(code))}`; }
 $$('#sym-table th.sortable').forEach(th => th.addEventListener('click', () => {
   const k = th.dataset.k;
   if (sort.k === k) sort.dir = -sort.dir;
@@ -86,8 +86,9 @@ $('#syms-filter').addEventListener('input', render);
 $('#syms-filter').addEventListener('keydown', function(ev){
   if (ev.key !== 'Enter') return;
   const kw = this.value.trim().toUpperCase();
-  if (/^\d{6}\.(SZ|SH|BJ)$/i.test(kw)){ gotoSymbol(kw); return; }
-  const hit = ALL.find(s => s.ts_code.toUpperCase() === kw);
+  // 支持只输 6 位数字直跳（服务端解析后缀）；也兼容带后缀输入
+  if (/^\d{6}(\.(SZ|SH|BJ))?$/.test(kw)){ gotoSymbol(kw); return; }
+  const hit = ALL.find(s => s.ts_code.toUpperCase() === kw || dispCode(s.ts_code) === kw);
   if (hit) gotoSymbol(hit.ts_code);
 });
 load();

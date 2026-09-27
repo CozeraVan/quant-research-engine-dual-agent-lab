@@ -2,7 +2,51 @@
 
 ## Task ID
 
-QRE-SAAS-ADMIN-TUNNEL (SaaS 管理台撤公网改 SSH 隧道访问 + PG 每日备份；方案 A，用户拍板)
+QRE-SAAS-SYMBOL-UX (股票代码规范化/显示脱敏 + 超额收益修复 + per-symbol 产物回传打通公网个股详情 + 板块弹层修复)
+
+## Current Status
+
+DONE (implementation; deployed to ECS via rsync 临时部署（最终 git pull 对齐由用户做）; full test suite green; awaiting user-approved git finalization)
+
+## Task Note
+
+- A 代码规范化：`gui/saas/symbol_norm.py`（新，纯函数：normalize_ts_code /
+  normalize_ts_codes / strip_ts_suffix / resolve_ts_code；60/68→SH、00/30→SZ、
+  4/8/920→BJ；非法代码 ValueError 中文友好报错）。POST /api/saas/jobs 在游客校验
+  之前规范化 params.codes 并落库（内部存储/API 保持带后缀原样）。
+  显示脱敏：base.html 公共 `dispCode()` 剥后缀；symbols.html / job.html 下钻 /
+  symbol.html 标题与 URL 一律无后缀（URL /saas/jobs/<id>/symbols/000001，API 端
+  resolve_ts_code 先按本任务实际交易个股匹配、再按号段推断，非法 400）。
+  8081 lab 侧零改动。
+- B 超额收益「-」：根因是引擎 shared_cash 模式 strategy_performance 恒写
+  buy_hold_return=None（8081 同数据同样「—」，非公网独缺）。修法在 worker
+  runner._fill_excess_return：excess 为空时按实际交易个股区间等权买入持有补齐
+  （附 buy_hold_note 口径说明），DB 不可用保持 None。存量 8 条 completed job
+  （1/2/3/7/8/15/16/17）已用本地行情库算好经 psql 回填 ECS results.chart_data。
+- C per-symbol 产物回传（ECS 无行情库的打通方案）：worker runner
+  build_symbol_detail_files——回测后对实际交易个股逐个 build_lab_symbol_detail，
+  剔除基准序列（任务级 chart_data 已有，ECS 按个股净值日期对齐注入）后 gzip 写
+  `<output_dir>/_symbol_details/<ts_code>.json.gz`，登记 artifacts 随既有
+  result/files 通道上传（15MB 上限，按 |总净盈亏| 降序截断；collect_result_files
+  让 _symbol_details 优先进 20MB 清单）。ECS api_result_symbol_detail 优先读
+  上传 gzip，缺失回退本地 build（staging 不变）。saas/templates/symbol.html 重写
+  对齐 lab 版个股页模块（概述 7 卡 → 收益曲线+区间五卡 → 交易磨损 →
+  日K+买卖点+因子副图 → 交易明细 → 下单记录 → 失败订单），旧任务无产物优雅降级。
+- D 板块弹层：job.html 下钻表补齐 lab 版 10 列 + 列头排序（null 恒排末位）+
+  截断提示；点击个股行跳个股回测详情（此前无响应）。
+- 部署/验证：rsync 6 个 saas 文件到 ECS + restart qre-saas；本地 restart
+  qre-saas-worker 生效 runner；公网 demo01 实测 job 19 全链路（提交裸代码
+  000001/600519 → worker 回测 → 产物回传 → 页面全模块渲染，截图
+  /tmp/qre-shots/pub-*.png，零 JS 报错）。
+- **顺手修生产事故**：ECS PG workers 表（E1-E3 迁移所建）未授权 aguhuice，
+  worker claim 全部 500（任务停摆）——已 GRANT 修复并加默认权限，心跳恢复。
+- 测试：tests/test_saas_symbol_ux.py +31；test_gui_saas.py 一处断言更新
+  （非法后缀 400 / 无交易合法代码 404）。全量 pytest 零回归。
+- 未 commit。恢复命令见 16 号文档第 5 节运维速查。
+
+---
+
+## Archive: QRE-SAAS-ADMIN-TUNNEL (SaaS 管理台撤公网改 SSH 隧道访问 + PG 每日备份；方案 A，用户拍板)
 
 ## Current Status
 

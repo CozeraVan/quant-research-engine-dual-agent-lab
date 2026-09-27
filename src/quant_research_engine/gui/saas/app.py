@@ -35,6 +35,11 @@ from flask import Flask, jsonify, render_template, request
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
+from quant_research_engine.gui.saas.symbol_norm import (
+    normalize_ts_codes,
+    resolve_ts_code,
+)
+
 DEFAULT_LEASE_MINUTES = 15
 JOB_KINDS = ("smoke", "full")
 
@@ -882,6 +887,15 @@ def create_saas_app() -> Flask:
         kind = str(data.get("kind") or "full")
         if kind not in JOB_KINDS:
             return jsonify({"ok": False, "error": f"kind 须为 {'/'.join(JOB_KINDS)}"}), 400
+        # QRE-SAAS-SYMBOL-UX：标的代码输入规范化——支持只输 6 位数字自动补
+        # 交易所后缀（60/68→SH，00/30→SZ，4/8/920→BJ），兼容已带后缀输入；
+        # 非法代码 400 友好报错。内部存储保持带后缀原样。
+        if params_raw.get("codes"):
+            try:
+                params_raw = dict(params_raw)
+                params_raw["codes"] = normalize_ts_codes(params_raw["codes"])
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
         yaml_text = str(data.get("yaml") or data.get("strategy_yaml") or "").strip()
         if not yaml_text:
             return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
@@ -1646,15 +1660,70 @@ def create_saas_app() -> Flask:
 
     @app.get("/api/results/<int:job_id>/symbols/<ts_code>")
     def api_result_symbol_detail(job_id: int, ts_code: str) -> Any:
-        """与 8081 /api/lab/runs/<id>/symbol/<ts>/detail 同形态。
-        注意：K 线/因子明细查本地大库，仅在能连库的部署（worker 同机/staging）可用；
-        云上 ECS 无库时相应字段降级为 None（lab_result 既有降级行为）。"""
+        """与 lab 版 /api/lab/runs/<id>/symbol/<ts>/detail 同形态。
+
+        QRE-SAAS-SYMBOL-UX：
+        - ts_code 允许不带后缀（如 000001），先按本任务实际交易个股精确匹配，
+          匹配不到再按号段推断后缀；非法代码 400。
+        - 个股详情优先读 worker 回传的 per-symbol 产物
+          （<job_dir>/_symbol_details/<ts_code>.json.gz，含 K线/买卖点/因子/
+          收益曲线/磨损明细——ECS 无行情库，lab 版实时查库路径在云上用不了）；
+          缺失时回退 build_lab_symbol_detail（staging 等有库部署的既有行为）。
+        """
+        import gzip
+
         row, err = _require_completed_result(job_id)
         if err:
             return err
+        # 已知代码表：归因里的实际交易个股（截断版可能不全，故仅作匹配辅助）
+        known: list[str] = []
+        tag = (row["result_chart_data"] or {}).get("tag_analysis") or {}
+        for items in (tag.get("layers") or {}).values():
+            for item in items or []:
+                for s in item.get("symbols") or []:
+                    if s.get("ts_code"):
+                        known.append(s["ts_code"])
+        try:
+            code = resolve_ts_code(ts_code, known)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+        job_dir = Path(_result_record(row)["output_dir"])
+        detail_dir = job_dir / "_symbol_details"
+        detail_path = detail_dir / f"{code}.json.gz"
+        if not detail_path.exists() and detail_dir.is_dir():
+            # 后缀推断与实际回传不一致时的兜底：按 6 位数字前缀找文件
+            prefix = code.split(".")[0]
+            for p in sorted(detail_dir.glob(f"{prefix}.*.json.gz")):
+                detail_path = p
+                break
+        if detail_path.exists():
+            try:
+                data = json.loads(gzip.decompress(detail_path.read_bytes()).decode("utf-8"))
+            except (OSError, ValueError):
+                data = None
+            if isinstance(data, dict) and data.get("ok"):
+                # 基准指数对齐个股净值日期：复用任务级 chart_data.benchmarks
+                # （per-symbol 产物不带基准序列以控制回传体积）
+                eq = data.get("equity") or {}
+                benches = (row["result_chart_data"] or {}).get("benchmarks") or {}
+                eq_dates = eq.get("dates") or []
+                if eq_dates and benches:
+                    job_dates = (row["result_chart_data"] or {}).get("dates") or []
+                    aligned: dict[str, Any] = {}
+                    for bcode, b in benches.items():
+                        closes = b.get("closes") or []
+                        by_date = {d: c for d, c in zip(job_dates, closes)}
+                        series = [by_date.get(d) for d in eq_dates]
+                        if any(v is not None for v in series):
+                            aligned[bcode] = {"name": b.get("name"), "closes": series}
+                    data["benchmarks"] = aligned or None
+                else:
+                    data["benchmarks"] = None
+                return jsonify(_jsonable(data))
         from quant_research_engine.gui.lab_result import build_lab_symbol_detail
 
-        data = build_lab_symbol_detail(_result_record(row), ts_code)
+        data = build_lab_symbol_detail(_result_record(row), code)
         if data is None:
             return jsonify({"ok": False, "error": "该股票在本次回测中无交易"}), 404
         return jsonify(_jsonable(data))

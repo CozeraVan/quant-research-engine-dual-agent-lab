@@ -61,6 +61,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 .metric-card .m-label{font-size:12px;color:var(--muted)}
 .metric-card .m-value{font-size:18px;font-weight:600;margin-top:2px}
 .pos{color:var(--pos)}.neg{color:var(--neg)}.flat{color:#333}
+.pct-hi{color:var(--up);font-weight:700}
 .meta-chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
 .meta-chips .chip{font-size:12px;color:#555;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:2px 10px;white-space:nowrap}
 .meta-chips .chip b{color:#333;font-weight:600}
@@ -134,6 +135,9 @@ function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saa
 function pct(v){ return (v === null || v === undefined) ? '—' : (v * 100).toFixed(2) + '%'; }
 function num(v){ return (v === null || v === undefined) ? '—' : Number(v).toLocaleString('zh-CN', {maximumFractionDigits: 2}); }
 function cls(v){ return v == null ? 'flat' : (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat')); }
+// QRE-SAAS-SYMBOL-UX：股票代码显示脱敏——页面一律不显示交易所后缀
+//（内部存储/API 载荷保持带后缀原样，仅渲染层剥离）
+function dispCode(c){ return String(c == null ? '' : c).replace(/\.(SZ|SH|BJ)$/i, ''); }
 const STATUS_LABEL = {queued:'排队中', leased:'运行中', running:'运行中', uploading:'回传中', completed:'已完成', failed:'失败', expired:'超时', canceled:'已取消', done:'已完成', cancelled:'已取消'};
 </script>
 {% block scripts %}{% endblock %}

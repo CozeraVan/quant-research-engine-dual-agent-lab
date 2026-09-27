@@ -3,7 +3,7 @@
 {% block body %}
 <div class="wrap">
   <div class="page-head" style="margin-bottom:4px">
-    <h1 style="font-size:22px" id="sym-title">个股回测详情 <span class="opt">{{ ts_code }}　@ 任务 #{{ job_id }}</span></h1>
+    <h1 style="font-size:22px" id="sym-title">个股回测详情 <span class="opt">@ 任务 #{{ job_id }}</span></h1>
     <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}/symbols">← 个股明细列表</a>　<a class="inl" href="/saas/jobs/{{ job_id }}">回测结果</a>　<span class="opt" id="sym-note"></span></p>
   </div>
   <div class="metric-strip" id="sum-strip"></div>
@@ -33,12 +33,19 @@
     <div class="chart-title">下单记录 <span class="opt" id="orders-note"></span></div>
     <div class="table-wrap" id="tbl-orders"></div>
   </div>
+
+  <div class="chart-box" id="box-failed" style="display:none">
+    <div class="chart-title">失败订单</div>
+    <div class="table-wrap" id="tbl-failed"></div>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script src="/static/echarts.min.js"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
+// QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；
+// 股票代码一律不显示交易所后缀（dispCode，见 base.html）。
 const JOB_ID = {{ job_id }};
 const TS_CODE = {{ ts_code | tojson }};
 const $ = s => document.querySelector(s);
@@ -72,29 +79,40 @@ async function load(){
   renderEquity(d);
   renderWear(d);
   renderKline(d);
-  table('tbl-trades', d.trades, [
-    ['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
-    ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'],
-    ['毛盈亏', 'gross_pnl', 'pnl'], ['净盈亏', 'net_pnl', 'pnl'], ['出场原因', 'exit_reason']]);
+  const tradeCols = d.trades_source === 'round_trips'
+    ? [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
+       ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['净盈亏', 'net_pnl', 'pnl'],
+       ['净收益率', 'net_return', 'pct'], ['出场原因', 'exit_reason']]
+    : [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
+       ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['毛盈亏', 'gross_pnl', 'pnl'],
+       ['费用', 'cost', 'num'], ['净盈亏', 'net_pnl', 'pnl'], ['出场原因', 'exit_reason']];
+  table('tbl-trades', d.trades, tradeCols);
   table('tbl-orders', d.orders, [
     ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
     ['金额', 'notional', 'num'], ['费用', 'cost', 'num'], ['佣金', 'commission', 'num'],
     ['印花税', 'stamp_tax', 'num'], ['过户费', 'transfer_fee', 'num']]);
+  table('tbl-failed', d.failed_orders, [
+    ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
+    ['原因', 'reason']]);
   if (d.trades && d.trades.length) $('#box-trades').style.display = '';
   if (d.orders && d.orders.length) $('#box-orders').style.display = '';
-  $('#sym-note').textContent = (d.kline && d.kline.dates ? '全量 ' + d.kline.dates.length + ' 个交易日' : 'K线/因子明细在当前部署不可用（无行情库），已按既有降级隐藏');
+  if (d.failed_orders && d.failed_orders.length) $('#box-failed').style.display = '';
+  $('#sym-note').textContent = d.kline && d.kline.dates
+    ? '全量 ' + d.kline.dates.length + ' 个交易日'
+    : 'K线/因子明细暂缺（该股详情产物未随任务回传）';
 }
 
 function renderSummary(s){
-  $('#sym-title').innerHTML = (s.name || '') + ' <span class="opt">' + s.ts_code + '</span>';
+  $('#sym-title').innerHTML = (s.name || '') + ' <span class="opt">' + dispCode(s.ts_code) + '</span>';
+  // 与 lab 版同款的 7 指标卡：策略区间收益% vs 区间自然涨幅%，金额作辅助
   $('#sum-strip').innerHTML =
-    card('总净盈亏', num(s.total_pnl) + ' 元', cls(s.total_pnl)) +
-    card('策略区间收益', (s.total_ret_pct == null ? '—' : pct(s.total_ret_pct)), cls(s.total_ret_pct)) +
+    card('股票', dispCode(s.ts_code) + ' ' + (s.name || ''), 'flat') +
+    card('策略区间收益', (s.total_ret_pct == null ? '—' : pct(s.total_ret_pct)) + '（' + f2(s.total_pnl) + ' 元）', cls(s.total_ret_pct == null ? s.total_pnl : s.total_ret_pct)) +
+    card('区间自然涨幅', s.bench_ret == null ? '—' : pct(s.bench_ret), s.bench_ret == null ? 'flat' : cls(s.bench_ret)) +
     card('交易笔数', s.trades, 'flat') +
-    card('胜率', pct(s.win_rate), cls(s.win_rate)) +
     card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret)) +
-    card('区间自然涨幅', pct(s.bench_ret), cls(s.bench_ret)) +
-    card('赚钱效应分位', s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%', 'flat');
+    card('胜率', pct(s.win_rate), cls(s.win_rate)) +
+    card('赚钱效应分位', s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%', s.percentile != null && s.percentile <= 0.05 ? 'pos' : 'flat');
 }
 
 function renderEquity(d){
@@ -119,10 +137,16 @@ function renderEquity(d){
     const bpct = b.closes.map(c => { if (c == null) return null; if (b0 == null) b0 = c; return (c / b0 - 1) * 100; });
     series.push({ name: b.name + '%', type: 'line', yAxisIndex: 1, data: bpct, showSymbol: false, lineStyle: {width: 1}, color: '#B7A6E8' });
   });
+  // 基准默认只显示上证指数，其余经图例点开
+  const legendSelected = {};
+  series.forEach(s => {
+    const isBench = s.name.slice(-1) === '%' && s.name !== '买入持有该股%';
+    if (isBench && s.name.indexOf('上证指数') !== 0) legendSelected[s.name] = false;
+  });
   const chart = echarts.init($('#chart-equity'));
   chart.setOption({
     animation: false,
-    legend: {top: 0, textStyle: {fontSize: 11}},
+    legend: {top: 0, textStyle: {fontSize: 11}, selected: legendSelected},
     tooltip: {trigger: 'axis', valueFormatter: v => v == null ? '—' : Number(v).toFixed(2)},
     grid: {left: 70, right: 60, top: 26, bottom: 45},
     xAxis: {type: 'category', data: dates},
@@ -130,12 +154,18 @@ function renderEquity(d){
     dataZoom: [{type: 'inside'}, {type: 'slider', bottom: 6, height: 18}],
     series,
   });
-  // 区间信息卡（与 8081 同口径）
+  // 区间信息卡（与 lab 版同口径，随滑块 rAF 节流重算）
+  const benchCode = d.benchmarks && d.benchmarks['000001.SH'] ? '000001.SH' : (d.benchmarks ? Object.keys(d.benchmarks)[0] : null);
   function sliceRetPct(arr, i0, i1){
     let a = null, b = null;
     for (let i = i0; i <= i1; i++) if (arr[i] != null){ if (a == null) a = arr[i]; b = arr[i]; }
     if (a == null || b == null) return null;
     return (1 + b / 100) / (1 + a / 100) - 1;
+  }
+  let benchPct = null;
+  if (benchCode){
+    const bcs = d.benchmarks[benchCode].closes; let b0 = null;
+    benchPct = bcs.map(c => { if (c == null) return null; if (b0 == null) b0 = c; return (c / b0 - 1) * 100; });
   }
   function updateStrip(){
     const dz = chart.getOption().dataZoom[0];
@@ -145,10 +175,12 @@ function renderEquity(d){
     const ev = eq.values.slice(i0, i1 + 1).filter(v => v != null);
     const sRet = ev.length >= 2 ? ev[ev.length - 1] / ev[0] - 1 : null;
     const hRet = sliceRetPct(holdPct, i0, i1);
+    const bRet = benchPct ? sliceRetPct(benchPct, i0, i1) : null;
     const excess = (sRet != null && hRet != null) ? sRet - hRet : null;
     $('#range-strip').innerHTML =
       card('区间策略收益', pct(sRet), cls(sRet)) +
       card('区间买入持有收益', pct(hRet), cls(hRet)) +
+      card('区间基准收益·' + (benchCode ? d.benchmarks[benchCode].name : '基准'), pct(bRet), cls(bRet)) +
       card('区间超额·vs买入持有', pct(excess), cls(excess)) +
       card('交易日数', i1 - i0 + 1, 'flat');
   }
@@ -184,7 +216,7 @@ function renderWear(d){
     html += '<div class="wb">' +
       '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(gross) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(gross) + ' 元</span></div>' +
       '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(net) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(net) + ' 元</span></div>' +
-      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div></div>';
+      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：该股 ' + d.trades.length + ' 笔完整交易</div></div>';
   }
   $('#wear-body').innerHTML = html;
 }
@@ -192,10 +224,10 @@ function renderWear(d){
 function renderKline(d){
   if (!d.kline || !d.kline.dates || !d.kline.dates.length){
     $('#box-kline').style.display = 'none';
-    return;  // ECS 无行情库：既有降级——整块隐藏不留空壳
+    return;  // 无 K 线数据：整块隐藏不留空壳
   }
   $('#box-kline').style.display = '';
-  $('#kline-note').textContent = '（买 ▲红 / 卖 ▼绿；拖动下方滑块缩放）';
+  $('#kline-note').textContent = '（买 ▲红 / 卖 ▼绿，hover 看下单详情；拖动下方滑块缩放）';
   const dates = d.kline.dates;
   const el = $('#chart-kline');
   const factors = d.factors || [];
@@ -216,15 +248,17 @@ function renderKline(d){
     d.orders.forEach(o => {
       const dt = o.trade_date;
       if (idx[dt] == null) return;
-      const tip = (o.side === 'buy' ? '买入' : '卖出') + ' ' + f2(o.quantity) + ' 股 @ ' + f2(o.price);
+      const tip = (o.side === 'buy' ? '买入' : '卖出') + ' ' + f2(o.quantity) + ' 股 @ ' + f2(o.price) +
+        '<br>金额 ' + f2(o.notional) + ' 元<br>费用 ' + f2(o.cost) + ' 元（佣金 ' +
+        f2(o.commission) + ' / 印花税 ' + f2(o.stamp_tax) + ' / 过户费 ' + f2(o.transfer_fee) + '）';
       if (o.side === 'buy') buys.push({ value: [dt, lowByDate[dt] * 0.99], tip });
       else sells.push({ value: [dt, highByDate[dt] * 1.01], tip });
     });
     series.push({ name: '买入', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: buys,
-      symbol: 'triangle', symbolSize: 10, itemStyle: { color: '#C93A3A' },
+      symbol: 'triangle', symbolSize: 10, itemStyle: { color: '#d43030' },
       tooltip: { formatter: p => p.data.tip } });
     series.push({ name: '卖出', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: sells,
-      symbol: 'triangle', symbolRotate: 180, symbolSize: 10, itemStyle: { color: '#1E8E5A' },
+      symbol: 'triangle', symbolRotate: 180, symbolSize: 10, itemStyle: { color: '#1a9e4b' },
       tooltip: { formatter: p => p.data.tip } });
   }
   const grids = !hasF
@@ -232,7 +266,7 @@ function renderKline(d){
     : [{ left: 60, right: 20, top: 30, height: '42%' }, { left: 60, right: 20, top: '53%', height: '10%' }];
   const xAxis = [
     { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
-    { type: 'category', data: dates, gridIndex: 1 },
+    { type: 'category', data: dates, gridIndex: 1, axisLabel: { show: hasF ? false : true } },
   ];
   const yAxis = [
     { type: 'value', gridIndex: 0, scale: true },

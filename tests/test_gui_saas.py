@@ -638,9 +638,11 @@ class TestResultsApi:
         assert sy["symbols"][0]["ts_code"] == "000001.SZ"
         ra = client.get(f"/api/results/{job_id}/risk-analysis", headers=h).get_json()
         assert ra["ok"] and ra["has_report"] is False  # 产物无 risk_report.json
-        # 个股无交易 → 404
-        d404 = client.get(f"/api/results/{job_id}/symbols/999999.XH", headers=h)
+        # 个股无交易 → 404（格式合法但本次回测未交易）；格式非法 → 400 友好报错（SYMBOL-UX）
+        d404 = client.get(f"/api/results/{job_id}/symbols/000002.SZ", headers=h)
         assert d404.status_code == 404
+        d400 = client.get(f"/api/results/{job_id}/symbols/999999.XH", headers=h)
+        assert d400.status_code == 400
 
     def test_unfinished_and_foreign_semantics(self, client, app, tmp_path):
         # 未完成（queued）→ 409；他人 → 404；不存在 → 404

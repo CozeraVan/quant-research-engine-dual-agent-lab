@@ -12,7 +12,17 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-ADMIN-TUNNEL + QRE-SAAS-UI-ALIGN-FIX (DONE — 管理台撤公网改 SSH 隧道 + PG 每日备份 ECS→本地 + 公网顶栏/入口卡选中态/回测区间日历对齐 lab 版并已部署；全量 2130 零回归；awaiting git approval)
+QRE-SAAS-SYMBOL-UX (DONE — 股票代码规范化+显示脱敏、超额收益 vs 持有不动修复、worker per-symbol 产物回传打通公网个股详情、板块弹层列补齐+点击跳转；已 rsync 临时部署 ECS 并公网验证；全量测试零回归；awaiting git approval)
+
+2026-09-27：四项改动（细节见 04_TASK_HANDOFF.md 与 05_PROGRESS.md 同名条目）。
+要点：新 gui/saas/symbol_norm.py；worker runner 新增 _fill_excess_return +
+build_symbol_detail_files（_symbol_details/<ts_code>.json.gz 随 result/files 上传，
+15MB 截断）；ECS api_result_symbol_detail 优先读上传 gzip；saas 模板
+base/job/symbol/symbols/new 五处渲染层改动。顺手修 ECS workers 表缺授权导致的
+claim 500 生产事故（已 GRANT）。测试 +31（tests/test_saas_symbol_ux.py），
+test_gui_saas.py 一处断言更新。未 commit。
+
+上一任务：QRE-SAAS-ADMIN-TUNNEL + QRE-SAAS-UI-ALIGN-FIX (DONE — 管理台撤公网改 SSH 隧道 + PG 每日备份 ECS→本地 + 公网顶栏/入口卡选中态/回测区间日历对齐 lab 版并已部署；全量 2130 零回归；awaiting git approval)
 
 2026-09-27（方案 A，用户拍板）：nginx 对 /saas/console 与 /api/saas/console/* return 404
 （仓库 deploy/landing/nginx-aguhuice.conf 同步线上）；base.html 删顶栏管理台入口注入

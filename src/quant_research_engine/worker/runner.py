@@ -155,12 +155,18 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     from quant_research_engine.gui.lab_result import build_lab_chart_data, build_lab_tag_analysis
 
     chart_data = build_lab_chart_data(record)
+    _fill_excess_return(record, chart_data)
     # 板块/个股归因：与 8081 结果页同一组装函数（数据形态完全一致），
     # 截断后挂到 chart_data.tag_analysis（体积控制见 trim_tag_analysis）。
     try:
         chart_data["tag_analysis"] = trim_tag_analysis(build_lab_tag_analysis(record))
     except Exception:
         chart_data["tag_analysis"] = None  # 归因失败不拖垮回传（DB 降级等）
+
+    # QRE-SAAS-SYMBOL-UX（C）：per-symbol 产物回传——实际触发交易的个股各生成
+    # 一份详情 JSON（K线/买卖点/收益曲线/磨损明细/因子副图，gzip 压缩），
+    # 云端个股详情页直接读文件渲染（ECS 无行情库，实时查库路径不可用）。
+    symbol_details_meta = build_symbol_detail_files(record)
 
     # 数据截止日期（静态快照声明）：优先净值曲线末日，回退 run 区间末日
     dates = chart_data.get("dates") or []
@@ -172,7 +178,104 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
         "artifacts": [],  # TODO(M4)：Excel/CSV 明细上传 OSS 后在此登记 oss_key
         "files": collect_result_files(record),
         "data_until": str(data_until),
+        "symbol_details": symbol_details_meta,
     }
+
+
+def _fill_excess_return(record: dict[str, Any], chart_data: dict[str, Any]) -> None:
+    """B 修复：shared_cash 模式引擎不写 buy_hold_return（恒 None），导致
+    「超额收益 vs 持有不动」恒为「—」。此处补齐：实际交易个股在 run 区间的
+    等权买入持有收益（与 batch 模式 mean(buy_hold_return) 同族口径），
+    超额 = 策略全期总收益 − 该等权买入持有收益。DB 不可用保持 None 不报错。"""
+    metrics = chart_data.get("metrics")
+    if not isinstance(metrics, dict) or metrics.get("excess_return") is not None:
+        return
+    total = metrics.get("total_return")
+    if not isinstance(total, (int, float)):
+        return
+    try:
+        from quant_research_engine.gui.lab_result import (
+            _fetch_symbol_range_returns,
+            _symbol_trade_stats,
+        )
+
+        traded = list(_symbol_trade_stats(record))
+        if not traded:
+            return
+        start = metrics.get("date_start") or record.get("start")
+        end = metrics.get("date_end") or record.get("end")
+        rets = _fetch_symbol_range_returns(traded, start, end)
+    except Exception:
+        return
+    if not rets:
+        return
+    buy_hold = round(sum(rets.values()) / len(rets), 6)
+    metrics["buy_hold_return"] = buy_hold
+    metrics["excess_return"] = round(total - buy_hold, 6)
+    metrics["buy_hold_note"] = f"等权买入持有（实际交易 {len(rets)} 只）"
+
+
+#: per-symbol 详情产物总体积上限（gzip 后；超出按 |总净盈亏| 降序截断）
+SYMBOL_DETAILS_MAX_BYTES = 15 * 1024 * 1024
+SYMBOL_DETAILS_DIRNAME = "_symbol_details"
+
+
+def build_symbol_detail_files(
+    record: dict[str, Any],
+    max_total_bytes: int = SYMBOL_DETAILS_MAX_BYTES,
+) -> dict[str, Any]:
+    """为实际触发交易的个股生成详情产物（worker 侧，有行情库）。
+
+    产物：<output_dir>/_symbol_details/<ts_code>.json.gz，内容即
+    build_lab_symbol_detail 的 JSON（剔除 benchmarks——任务级 chart_data
+    已含基准序列，云端按个股净值日期对齐注入，避免每股重复回传）。
+    文件登记进 record["artifacts"]，随既有 result/files 通道回传。
+    失败不拖垮回传：整体 try 兜底，返回 {"count", "bytes", "truncated"}。
+    """
+    import gzip
+
+    meta: dict[str, Any] = {"count": 0, "bytes": 0, "truncated": False}
+    try:
+        from quant_research_engine.gui.lab_result import (
+            _symbol_trade_stats,
+            build_lab_symbol_detail,
+        )
+
+        stats = _symbol_trade_stats(record)
+        if not stats:
+            return meta
+        output_dir = Path(str(record.get("output_dir") or ""))
+        if not output_dir.is_dir():
+            return meta
+        detail_dir = output_dir / SYMBOL_DETAILS_DIRNAME
+        detail_dir.mkdir(parents=True, exist_ok=True)
+        artifacts = record.setdefault("artifacts", {})
+        # 与持仓盈亏相关性最高的优先（截断时保住头部）
+        ordered = sorted(stats, key=lambda s: abs(stats[s]["total_pnl"]), reverse=True)
+        for ts_code in ordered:
+            try:
+                data = build_lab_symbol_detail(record, ts_code)
+            except Exception:
+                continue
+            if not data:
+                continue
+            data.pop("benchmarks", None)
+            data.pop("benchmark_note", None)
+            blob = gzip.compress(
+                json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
+            )
+            if meta["bytes"] + len(blob) > max_total_bytes:
+                meta["truncated"] = True
+                break
+            rel = f"{SYMBOL_DETAILS_DIRNAME}/{ts_code}.json.gz"
+            path = detail_dir / f"{ts_code}.json.gz"
+            path.write_bytes(blob)
+            artifacts[rel] = str(path)
+            meta["count"] += 1
+            meta["bytes"] += len(blob)
+    except Exception:
+        return meta
+    return meta
 
 
 #: 回传文件清单的成员上限（总体积；大文件留 worker 本地，M4 走 OSS 直传）
@@ -187,7 +290,13 @@ def collect_result_files(record: dict[str, Any],
 
     files: list[dict[str, Any]] = []
     total = 0
-    for rel, abs_path in sorted((record.get("artifacts") or {}).items()):
+    # per-symbol 详情产物（_symbol_details/）优先进入清单：它们是个股详情页
+    # 在云端唯一的数据来源；其余大文件超限仍留 worker 本地（M4 走 OSS）
+    ordered = sorted(
+        (record.get("artifacts") or {}).items(),
+        key=lambda kv: (0 if kv[0].startswith(SYMBOL_DETAILS_DIRNAME + "/") else 1, kv[0]),
+    )
+    for rel, abs_path in ordered:
         path = Path(abs_path)
         if not path.is_file():
             continue
