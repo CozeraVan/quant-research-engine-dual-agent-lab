@@ -75,7 +75,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS member_expire_at TIMESTAMPTZ; -- 会�
 - [x] A3 后端：`GET /saas/login/authing`（302 + 内存 state 10min）→ `GET /saas/login/callback`（换票→JWKS 验签→建档→本地 session）；JSON 版 `POST /api/saas/auth/authing`；JWKS 内存缓存 1h + kid 未命中强制刷新；绑定旧账号 `POST /api/saas/auth/bind`。依赖新增 pyjwt[crypto]+requests（pyproject；ECS 精简 venv 已 pip install）
 - [x] A4 登录页改造（login.html：Authing 主入口按钮 + 邮箱密码/绑定旧账号折叠次要入口；新增 login_callback.html 落 token 跳工作台）
 - [x] A5 测试：tests/test_saas_authing.py +22（本地 RSA mock JWKS 验签正反例/kid 轮换刷新/首登建档/重复登录幂等/绑定四态/未配置 503/登录页元素）；全量 2207 passed + 4 skipped 零回归
-- [ ] A6 部署 + 实测手机号/扫码登录（env 已写 ECS /etc/qre-saas.env 与本地 .env.saas-staging[均0600]，ECS venv 依赖已装；**代码未部署，等 commit 批准**；⚠️ Playwright 实测跳转 Authing 报 redirect_uri_mismatch——需在控制台「应用配置→登录回调 URL」确认白名单含 https://www.aguhuice.com/saas/login/callback）
+- [x] A6 部署 + 实测手机号登录（2026-09-28 验收通过：commit 4fdae46 已部署；期间排掉三个 Authing 侧配置坑——回调白名单 redirect_uri_mismatch、应用访问授权「无权限登录此应用」、id_token 签名算法默认 HS256 需改 RS256。用户手机号建档成功并完成回测；手机号账号与 gmail 账号均已提为 admin，管理台经 SSH 隧道 localhost:9090/saas/console 验收）
 - [ ] A7（可选）管理台用户 tab 展示 authing_id/手机号字段
 
 ## 8. 风险与开放问题
