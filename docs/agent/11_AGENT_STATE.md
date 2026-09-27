@@ -12,7 +12,18 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-ADMIN-E1E3 (DONE — SaaS 后台管理三件套：/saas/console 总览+用户/因子审核+worker 运维；users+role/status、workers 表；测试 +12 全量 2130 零回归；awaiting git approval)
+QRE-SAAS-ADMIN-TUNNEL + QRE-SAAS-UI-ALIGN-FIX (DONE — 管理台撤公网改 SSH 隧道 + PG 每日备份 ECS→本地 + 公网顶栏/入口卡选中态/回测区间日历对齐 lab 版并已部署；全量 2130 零回归；awaiting git approval)
+
+2026-09-27（方案 A，用户拍板）：nginx 对 /saas/console 与 /api/saas/console/* return 404
+（仓库 deploy/landing/nginx-aguhuice.conf 同步线上）；base.html 删顶栏管理台入口注入
+（断言反转，注意注释含 "/admin" 子串会撞禁链）；新增 deploy/saas/admin-tunnel.sh
+（ssh -N -L 9090:127.0.0.1:8090）与 deploy/saas/pull-ecs-backup.sh；ECS cron 03:17
+pg_dump 留 7 天 + 本地 cron 04:23 scp 拉取留 7 份，两端验证落地。决策入 06 日志，
+运维速查入 16 号文档第 5 节。同日追加 UI-ALIGN-FIX：base.html 覆盖块对齐 lab 版
+顶栏/选中态/日历（探针提取计算样式，禁用字「lab 版」代称），rsync gui/ 部署后公网
+管理台入口消失、console 404 保持。未 commit。
+
+上一任务：QRE-SAAS-ADMIN-E1E3 (DONE — SaaS 后台管理三件套：/saas/console 总览+用户/因子审核+worker 运维；users+role/status、workers 表；测试 +12 全量 2130 零回归；awaiting git approval)
 
 2026-09-27：按 15 号文档 E 阶段落地 SaaS 管理后台（本地开发不部署）。users 加
 role/status 幂等迁移、新 workers 心跳表；_require_admin 门禁；/api/saas/console/*

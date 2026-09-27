@@ -205,6 +205,11 @@
 > 判在线）；管理员提升方式：SQL `UPDATE users SET role='admin' WHERE email='<邮箱>'`
 > （先正常注册再提升；测试管理员账号见 04_TASK_HANDOFF.md）。
 
+> 2026-09-27 方案 A（用户拍板，见 06 决策日志）：管理台已从公网撤下——nginx 对
+> /saas/console 与 /api/saas/console/* 直接 404，仅经 SSH 隧道访问
+> （deploy/saas/admin-tunnel.sh → http://localhost:9090/saas/console）；顶栏不再注入
+> 入口。上文本节「后台管理系统（ECS）」中关于公网访问的描述以此为准。
+
 ### 待拍板开放问题（对齐颗粒度时逐条过）
 见第 5 节 8 条（游客计数方式/产物大小上限/worker token 轮换/邮箱验证/配额口径/冒烟强制/通知方式/磁盘水位）。
 + 2026-09-20 新增：worker 全 A 任务内存峰值贴近 MemoryMax=4G（job#7 attempt1 OOM、attempt2 通过）——需评估全市场任务内存策略（升上限/分批/引擎流式化），登录会员开放全市场前必须解决。

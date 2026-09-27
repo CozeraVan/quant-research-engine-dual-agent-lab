@@ -2,7 +2,40 @@
 
 ## Task ID
 
-QRE-SAAS-ADMIN-E1E3 (SaaS 后台管理：E1 总览 / E2 用户与因子审核 / E3 worker 运维)
+QRE-SAAS-ADMIN-TUNNEL (SaaS 管理台撤公网改 SSH 隧道访问 + PG 每日备份；方案 A，用户拍板)
+
+## Current Status
+
+DONE (implementation; deployed to ECS; full test suite green; awaiting user-approved git finalization)
+
+## Task Note
+
+- 2026-09-27 追加 QRE-SAAS-UI-ALIGN-FIX（用户验收发现公网与 lab 版 UI 差距，已部署）：
+  顶栏对齐 lab 版（品牌 15px/700 深色、纯文本导航 14px 灰、无胶囊/激活底色、hover 主紫）；
+  入口卡选中态补「标题+描述变主紫」（lab 版实测为 style.css .entry-tab.active 遗留蓝
+  #1E40AF，SaaS 用 var(--accent) 等效）；回测区间修 `input{width:100%}` 撑破
+  .date-input（加 .date-input{width:auto}），日历弹层与 lab 版一致。改动全部在
+  saas/templates/base.html 覆盖块；禁链注意：CSS 注释里 "8081" 也撞
+  TestNoAdminLinks，用「lab 版」代称。随本轮部署后公网「管理台」入口同步消失
+  （注入 JS 删除生效），/saas/console 保持 404。Playwright 截图 /tmp/qre-shots/。
+- nginx（仓库 deploy/landing/nginx-aguhuice.conf，已 scp 同步线上并 nginx -t / reload）：
+  `location = /saas/console`、`= /api/saas/console`、`/api/saas/console/` 直接 return 404。
+  实测：公网 /saas/console → 404、/api/saas/console/overview → 404、/saas/new → 200；
+  ECS 本机 127.0.0.1:8090/saas/console → 200（隧道通路）。
+- base.html 删除顶栏「管理台」注入 JS；tests/test_gui_saas_console.py 断言反转为不注入。
+  坑：注释里写 "deploy/saas/admin-tunnel.sh" 含子串 "/admin" 会撞禁链断言，须改写措辞。
+- 隧道：deploy/saas/admin-tunnel.sh（ssh -N -L 9090:127.0.0.1:8090 root@47.119.127.40），
+  浏览器开 http://localhost:9090/saas/console，管理员账号正常登录。
+- PG 备份：ECS root cron `17 3 * * * /srv/aguhuice/backups/pg-backup.sh`（pg_dump custom，
+  保留 7 天）；本地 WSL cron `23 4 * * * .../deploy/saas/pull-ecs-backup.sh` scp 拉最新
+  dump 到 ~/quant-workspace/backups/ecs-aguhuice/（留 7 份）。两端手动触发已验证
+  （aguhuice-20260927-105046.dump，两端均 300,547B）。
+- 全量 pytest 2130 passed + 4 skipped 零回归；check-progress-docs.sh 通过。
+- 未 commit。恢复命令见 16 号文档第 5 节运维速查。
+
+---
+
+## Archive: QRE-SAAS-ADMIN-E1E3 (SaaS 后台管理：E1 总览 / E2 用户与因子审核 / E3 worker 运维)
 
 ## Current Status
 

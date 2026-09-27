@@ -91,6 +91,16 @@ completed）→ /api/results 列表与详情（summary/chart-data/tag-analysis�
 - 验证：公网 https://aguhuice.com/ 200（落地页）、/saas/login 200、/api/saas/me 401、
   /api/worker/jobs/claim 错 token 401、真 token 200 {job:null}。
 
+**QRE-SAAS-ADMIN-TUNNEL（2026-09-27，方案 A 已上线）**：
+- 管理台撤公网：nginx 对 `= /saas/console`、`= /api/saas/console`、`/api/saas/console/`
+  直接 `return 404`（仓库 deploy/landing/nginx-aguhuice.conf 已同步线上）；公网
+  /saas/console 与 /api/saas/console/overview 实测 404，其余页面回归正常。
+- 管理台访问改 SSH 隧道（gunicorn 127.0.0.1:8090 不动，隧道内仍走 _require_admin）。
+- PG 每日备份：ECS root cron 03:17 `/srv/aguhuice/backups/pg-backup.sh`
+  （pg_dump custom 格式，保留 7 天）；本地 WSL cron 04:23
+  `deploy/saas/pull-ecs-backup.sh` scp 拉取最新 dump 至
+  `~/quant-workspace/backups/ecs-aguhuice/`（本地留 7 份，拉取模式 ECS 无反向访问）。
+
 代码侧（家里 WSL，部署备用）：SaaS app（gui/saas/：验证码登录/任务队列/worker 协议/四页前端）、
 worker 包（client/runner/daemon）、Docker 沙箱、流式批量回测均已实现并测试（见 05 逐条）。
 
@@ -136,6 +146,16 @@ ufw allow 8080/tcp   # 例：临时放行（默认不要开别的端口）
 
 # fail2ban
 fail2ban-client status sshd
+
+# SaaS 管理台（QRE-SAAS-ADMIN-TUNNEL，2026-09-27 起公网 404，仅隧道访问）
+./deploy/saas/admin-tunnel.sh        # 本地执行后浏览器开 http://localhost:9090/saas/console
+curl -s -o /dev/null -w '%{http_code}\n' https://www.aguhuice.com/saas/console   # 应为 404
+
+# PG 备份（ECS cron 03:17 生成，本地 cron 04:23 拉取）
+ssh -i ~/.ssh/aguhuice_ed25519 root@47.119.127.40 'ls -lht /srv/aguhuice/backups/'   # ECS 端，留 7 天
+ls -lht ~/quant-workspace/backups/ecs-aguhuice/                                      # 本地端，留 7 份
+./deploy/saas/pull-ecs-backup.sh     # 手动拉取一次
+# 恢复：scp dump 上 ECS 后  sudo -u postgres pg_restore -d aguhuice --clean <file>
 ```
 
 ## 6. 纪律

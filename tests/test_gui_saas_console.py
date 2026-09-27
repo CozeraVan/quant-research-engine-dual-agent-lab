@@ -290,7 +290,8 @@ class TestConsolePage:
             for banned in ("/admin", "factor-admin", "factor-create", "8080", "8081"):
                 assert banned not in body, f"{page} 含禁链 {banned}"
 
-    def test_nav_entry_admin_only_js(self, client):
-        # 顶栏管理台入口仅对 is_admin 注入（base.html 公共逻辑）
+    def test_nav_entry_not_injected(self, client):
+        # QRE-SAAS-ADMIN-TUNNEL：管理台改 SSH 隧道访问，顶栏不再注入「管理台」入口
         html = client.get("/saas/").get_data(as_text=True)
-        assert "is_admin" in html and "/saas/console" in html
+        assert "管理台" not in html
+        assert "is_admin" not in html

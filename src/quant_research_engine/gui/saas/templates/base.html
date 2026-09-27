@@ -39,8 +39,16 @@ th{color:var(--muted);font-weight:500}
 .row>div{flex:1;min-width:140px}
 .chart{width:100%;height:320px}
 .topbar{display:flex;justify-content:space-between;align-items:center;padding:4px 0 14px}
-.topbar .brand{font-size:17px;font-weight:600}
-.topbar a{color:var(--muted);font-size:13px;margin-left:14px}
+/* QRE-SAAS-UI-ALIGN-FIX：顶栏对齐 lab 版实际渲染——品牌 15px/700 深色，
+   导航纯文本 14px 灰、hover 变色、无胶囊/激活底色（lab-theme 的 .mainnav 胶囊规则在此压掉） */
+.topbar .brand{color:var(--text);font-size:15px;font-weight:700}
+.topbar .mainnav a{color:var(--muted);font-size:14px;font-weight:500;padding:0;border-radius:0;background:none;margin-left:20px}
+.topbar .mainnav a:hover{color:var(--accent);background:none}
+.topbar .mainnav a.active{color:var(--muted);background:none;font-weight:500}
+/* 回测区间日期输入对齐 lab 版：紧凑宽度（上面 input{width:100%} 只针对常规表单控件） */
+.date-input{width:auto}
+/* 入口卡选中态对齐 lab 版：标题与描述变色（主紫），配合紫边/紫 tag/对勾构成完整选中反馈 */
+.entry-card.selected h3,.entry-card.selected p{color:var(--accent)}
 .hidden{display:none}
 details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px}
 /* tab（lab 同款） */
@@ -119,18 +127,8 @@ function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saa
     var l = document.getElementById('nav-login');
     if (l) { l.textContent = '退出登录'; l.href = 'javascript:void(0)';
       l.addEventListener('click', function(){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; }); }
-    // 管理台入口仅对管理员显示（QRE-SAAS-ADMIN-E1E3）：me 返回 is_admin 才注入导航链接
-    if (!SAAS_BYPASS) {
-      apiFetch('/api/saas/me').then(function(r){ return r.json(); }).then(function(d){
-        if (d && d.ok && d.user && d.user.is_admin) {
-          var a = document.createElement('a');
-          a.href = '/saas/console'; a.textContent = '管理台'; a.dataset.nav = 'console';
-          if (location.pathname.indexOf('/saas/console') === 0) a.classList.add('active');
-          var nav = document.querySelector('.mainnav');
-          if (nav) nav.insertBefore(a, document.getElementById('nav-login'));
-        }
-      }).catch(function(){ /* 非管理员或会话失效：不显示入口 */ });
-    }
+    // QRE-SAAS-ADMIN-TUNNEL：console 已从公网撤下（nginx 404），不再注入顶栏入口；
+    // 管理员经 SSH 隧道访问（脚本见 deploy/saas 目录）。
   }
 })();
 function pct(v){ return (v === null || v === undefined) ? '—' : (v * 100).toFixed(2) + '%'; }

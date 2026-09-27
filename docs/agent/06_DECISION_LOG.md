@@ -1206,3 +1206,12 @@ No open questions remain.
 - Alternatives: ①保留 /api/admin 前缀并豁免禁链断言——否决，纪律刚重写过且有两处撞线教训；②workers 表加 CHECK/心跳走 Redis——否决，纯 PG 是既定内测选型（17 号协议 §7）。
 - Impact: 管理端测试管理员账号 = 先注册再 `UPDATE users SET role='admin'`；未来若上正式管理台域名再议 /admin 命名。禁用账号的语义：登录 403 + 既有 session 立即失效（_current_user_id 的 status 过滤）。
 - Owner: KIMI_CODE
+
+
+### 2026-09-27: SaaS 管理台从公网撤下，改 SSH 隧道访问（方案 A）
+
+- Decision: `/saas/console` 与 `/api/saas/console/*` 在 nginx 层直接 return 404（仓库 deploy/landing/nginx-aguhuice.conf 管理，已同步线上）；gunicorn 仍只听 127.0.0.1:8090 不动，管理员经 `deploy/saas/admin-tunnel.sh`（ssh -N -L 9090:127.0.0.1:8090）访问 http://localhost:9090/saas/console。base.html 不再注入顶栏「管理台」入口（公网点了也是 404，入口无意义）。附加项：ECS 每日 pg_dump aguhuice 存 /srv/aguhuice/backups/ 保留 7 天（root cron 03:17），本地 WSL cron 04:23 经 deploy/saas/pull-ecs-backup.sh scp 拉取最新 dump 到 ~/quant-workspace/backups/ecs-aguhuice/（拉取模式，ECS 无反向访问）。
+- Reason: 管理台只面向管理员一人，公网暴露面纯负担（_require_admin 之外多一层纵深）；SSH 密钥本已是运维必备，隧道零新增攻击面、零新增组件。备份是用户批准的同批附加项——此前 PG 无任何离线副本。
+- Alternatives: ①nginx 层 IP 白名单——否决，管理员出口 IP 不固定；②保留公网 + 强化鉴权——否决，攻击面仍在；③管理台下线只靠 SQL——否决，五 tab 运维效率已经验证过价值。
+- Impact: 公网 console 路径一律 404（页面与 API 同测验证），/saas/new 等正常页面回归 200；tests/test_gui_saas_console.py 顶栏入口断言反转为「不注入」；运维速查见 16 号文档第 5 节。隧道内仍走 _require_admin 鉴权（双保险）。
+- Owner: KIMI_CODE（用户 2026-09-27 拍板方案 A）
