@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-UI-DESIGN-SYSTEM-DOC (DONE — 纯文档：12_UI_STYLE_GUIDE.md 重写为完整设计系统 25.3KB，每条规范标注源码 文件:行号；8081 lab 代码零改动；check-progress-docs.sh 通过；awaiting git approval)
+QRE-SAAS-ADMIN-E1E3 (DONE — SaaS 后台管理三件套：/saas/console 总览+用户/因子审核+worker 运维；users+role/status、workers 表；测试 +12 全量 2130 零回归；awaiting git approval)
+
+2026-09-27：按 15 号文档 E 阶段落地 SaaS 管理后台（本地开发不部署）。users 加
+role/status 幂等迁移、新 workers 心跳表；_require_admin 门禁；/api/saas/console/*
+八端点（overview/users tier+status/factor-requests review/workers/jobs retry+cancel）；
+console.html 五 tab 页面遵守 12 号设计系统；顶栏管理台入口仅 is_admin 注入。
+前缀弃 /admin 改 /console（禁链纪律含注释），E3 指令下发/家里 PG 状态卡裁剪留后续，
+决策入 06 日志。未 commit。
+上一任务：QRE-UI-DESIGN-SYSTEM-DOC (DONE — 纯文档：12_UI_STYLE_GUIDE.md 重写为完整设计系统 25.3KB，每条规范标注源码 文件:行号；8081 lab 代码零改动；check-progress-docs.sh 通过；awaiting git approval)
 
 2026-09-27：应用户要求把 8081 UI 设计知识从源码蒸馏进文档（根因：UI 对齐工作反复重读源码烧 token）。通读 lab-theme.css/lab-ui.js/lab.html/lab_result.html/lab_symbols.html/lab_symbol.html + SaaS base.html 复刻方式后重写 12 号文档：新增文件地图、36px 行内控件等高硬规则、ECharts 图表约定（纠正初版过时的 SVG 手绘描述）、treemap 三档显隐与 zr.off 陷阱、SaaS 复刻约定、禁链含注释教训。文档头部加「新页面开发前必读、改动规范需用户批准」。未 commit。
 

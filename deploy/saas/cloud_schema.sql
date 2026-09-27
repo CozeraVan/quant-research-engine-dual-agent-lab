@@ -151,4 +151,17 @@ CREATE TABLE IF NOT EXISTS results (
 CREATE INDEX IF NOT EXISTS idx_results_user ON results (user_id, created_at DESC);
 ALTER TABLE results ALTER COLUMN user_id DROP NOT NULL;  -- QRE-SAAS-D1D2：游客结果行
 
+-- QRE-SAAS-ADMIN-E1E3（后台管理，2026-09-27）：
+-- users 加管理角色与账号状态（role/status 取值由应用层校验，与 tier CHECK 同表风格
+-- 不再加约束，避免历史库升级顺序坑）；workers 表落账 worker 心跳（claim/heartbeat 时
+-- upsert，在线判定 = last_heartbeat_at 距今 < 3 分钟，应用层计算）。
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+CREATE TABLE IF NOT EXISTS workers (
+    name              TEXT PRIMARY KEY,           -- worker_id
+    capacity          INT,                        -- 并发能力上报（可空，预留）
+    first_seen_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 COMMIT;

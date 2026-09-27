@@ -119,6 +119,18 @@ function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saa
     var l = document.getElementById('nav-login');
     if (l) { l.textContent = '退出登录'; l.href = 'javascript:void(0)';
       l.addEventListener('click', function(){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; }); }
+    // 管理台入口仅对管理员显示（QRE-SAAS-ADMIN-E1E3）：me 返回 is_admin 才注入导航链接
+    if (!SAAS_BYPASS) {
+      apiFetch('/api/saas/me').then(function(r){ return r.json(); }).then(function(d){
+        if (d && d.ok && d.user && d.user.is_admin) {
+          var a = document.createElement('a');
+          a.href = '/saas/console'; a.textContent = '管理台'; a.dataset.nav = 'console';
+          if (location.pathname.indexOf('/saas/console') === 0) a.classList.add('active');
+          var nav = document.querySelector('.mainnav');
+          if (nav) nav.insertBefore(a, document.getElementById('nav-login'));
+        }
+      }).catch(function(){ /* 非管理员或会话失效：不显示入口 */ });
+    }
   }
 })();
 function pct(v){ return (v === null || v === undefined) ? '—' : (v * 100).toFixed(2) + '%'; }

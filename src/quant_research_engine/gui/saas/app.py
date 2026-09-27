@@ -218,8 +218,8 @@ def _current_user_id(app: Flask, engine: Engine) -> int | None:
             with engine.connect() as conn:
                 row = conn.execute(
                     text(
-                        "SELECT user_id FROM sessions "
-                        "WHERE id = :token AND expires_at > now()"
+                        "SELECT s.user_id FROM sessions s JOIN users u ON u.id = s.user_id "
+                        "WHERE s.id = :token AND s.expires_at > now() AND u.status = 'active'"
                     ),
                     {"token": token},
                 ).first()
@@ -235,6 +235,21 @@ def _current_user_id(app: Flask, engine: Engine) -> int | None:
                 return None
             return uid if uid > 0 else None
     return None
+
+
+def _require_admin(app: Flask, engine: Engine) -> tuple[int | None, Any]:
+    """后台管理门禁（QRE-SAAS-ADMIN-E1E3）：返回 (uid, None) 或 (None, response)。
+    未登录 401；非管理员 403（用户存在性不回显更多细节）。"""
+    uid = _current_user_id(app, engine)
+    if uid is None:
+        return None, (jsonify({"ok": False, "error": "未登录"}), 401)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT role FROM users WHERE id = :uid"), {"uid": uid}
+        ).first()
+    if row is None or row.role != "admin":
+        return None, (jsonify({"ok": False, "error": "无权限：仅管理员可用"}), 403)
+    return uid, None
 
 
 def _jsonable(value: Any) -> Any:
@@ -349,6 +364,20 @@ def _reap_expired(conn: Any) -> None:
             "                                     ELSE interval '6 hours' END) "
             "   OR (status = 'uploading' AND heartbeat_at < now() - interval '30 minutes')"
         )
+    )
+
+
+def _touch_worker(conn: Any, worker_id: str) -> None:
+    """worker 在线落账（E3）：claim/heartbeat 时 upsert workers 表，
+    在线判定 = last_heartbeat_at 距今 < 3 分钟（心跳间隔 60s 的 3 倍）。"""
+    if not worker_id:
+        return
+    conn.execute(
+        text(
+            "INSERT INTO workers (name, last_heartbeat_at) VALUES (:wid, now()) "
+            "ON CONFLICT (name) DO UPDATE SET last_heartbeat_at = now()"
+        ),
+        {"wid": worker_id},
     )
 
 
@@ -789,7 +818,7 @@ def create_saas_app() -> Flask:
             is_email = "@" in target
             col = "email" if is_email else "phone"
             user = conn.execute(
-                text(f"SELECT id, phone, email, quota_daily FROM users WHERE {col} = :target"),
+                text(f"SELECT id, phone, email, quota_daily, status FROM users WHERE {col} = :target"),
                 {"target": target},
             ).mappings().first()
             if user is None:
@@ -797,11 +826,13 @@ def create_saas_app() -> Flask:
                 user = conn.execute(
                     text(
                         f"INSERT INTO users ({col}, last_login_at) VALUES (:target, now()) "
-                        "RETURNING id, phone, email, quota_daily"
+                        "RETURNING id, phone, email, quota_daily, status"
                     ),
                     {"target": target},
                 ).mappings().one()
             else:
+                if user["status"] != "active":
+                    return jsonify({"ok": False, "error": "账号已被禁用，请联系运营方"}), 403
                 conn.execute(text("UPDATE users SET last_login_at = now() WHERE id = :id"), {"id": user["id"]})
             token = secrets.token_urlsafe(32)
             conn.execute(
@@ -822,7 +853,7 @@ def create_saas_app() -> Flask:
         with engine.connect() as conn:
             user = conn.execute(
                 text(
-                    "SELECT id, phone, email, quota_daily, tier, "
+                    "SELECT id, phone, email, quota_daily, tier, role, "
                     "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id "
                     " AND j.kind = 'full' AND j.created_at::date = now()::date) AS used_today "
                     "FROM users u WHERE u.id = :uid"
@@ -832,6 +863,7 @@ def create_saas_app() -> Flask:
         if user is None:
             return jsonify({"ok": False, "error": "用户不存在"}), 401
         item = _jsonable(dict(user))
+        item["is_admin"] = item.get("role") == "admin"
         item["quota_limit"] = MEMBER_DAILY_FULL_LIMIT
         item["quota_remaining"] = max(0, MEMBER_DAILY_FULL_LIMIT - (item.get("used_today") or 0))
         return jsonify({"ok": True, "user": item})
@@ -1074,6 +1106,7 @@ def create_saas_app() -> Flask:
         while True:
             with engine.begin() as conn:
                 _reap_expired(conn)
+                _touch_worker(conn, worker_id)
                 picked = conn.execute(
                     text(
                         "SELECT id FROM jobs "
@@ -1122,6 +1155,7 @@ def create_saas_app() -> Flask:
         engine = _get_engine(app)
         with engine.begin() as conn:
             _reap_expired(conn)
+            _touch_worker(conn, worker_id)
             row = conn.execute(
                 text(
                     "UPDATE jobs SET lease_expires_at = now() + :mins * interval '1 minute', "
@@ -1624,6 +1658,299 @@ def create_saas_app() -> Flask:
         if data is None:
             return jsonify({"ok": False, "error": "该股票在本次回测中无交易"}), 404
         return jsonify(_jsonable(data))
+
+    # --- 后台管理（QRE-SAAS-ADMIN-E1E3，15 号文档 E 阶段） ---
+    # 路由前缀用 /saas/console（不用 /admin 字样：SaaS 页面禁链纪律含 HTML/JS 注释，
+    # 见 12_UI_STYLE_GUIDE.md §7）。页面本身不鉴权（JS 门），数据端点全部
+    # _require_admin 服务端强制。管理员提升方式：UPDATE users SET role='admin'。
+
+    @app.get("/saas/console")
+    def saas_console_page() -> str:
+        return render_template("console.html")
+
+    @app.get("/api/saas/console/overview")
+    def api_console_overview() -> Any:
+        """E1 总览：用户/任务/配额/worker 关键指标 + 队列深度 + 服务器资源。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        with engine.connect() as conn:
+            users = conn.execute(
+                text(
+                    "SELECT count(*) AS total, "
+                    "count(*) FILTER (WHERE created_at::date = now()::date) AS new_today, "
+                    "count(*) FILTER (WHERE status <> 'active') AS disabled, "
+                    "count(*) FILTER (WHERE tier = 'member') AS member, "
+                    "count(*) FILTER (WHERE tier = 'paid') AS paid "
+                    "FROM users"
+                )
+            ).mappings().one()
+            jobs = conn.execute(
+                text(
+                    "SELECT count(*) AS total, "
+                    "count(*) FILTER (WHERE created_at::date = now()::date) AS today, "
+                    "count(*) FILTER (WHERE status = 'queued') AS queued, "
+                    "count(*) FILTER (WHERE status IN ('leased','running','uploading')) AS running, "
+                    "count(*) FILTER (WHERE status = 'completed' AND finished_at::date = now()::date) AS completed_today, "
+                    "count(*) FILTER (WHERE status IN ('failed','expired') AND finished_at::date = now()::date) AS failed_today, "
+                    "count(*) FILTER (WHERE status IN ('failed','expired')) AS failed_total "
+                    "FROM jobs"
+                )
+            ).mappings().one()
+            quota = conn.execute(
+                text(
+                    "SELECT count(DISTINCT user_id) AS active_members "
+                    "FROM jobs WHERE user_id IS NOT NULL AND kind = 'full' "
+                    "AND created_at::date = now()::date"
+                )
+            ).mappings().one()
+            workers = conn.execute(
+                text(
+                    "SELECT count(*) AS total, "
+                    "count(*) FILTER (WHERE last_heartbeat_at > now() - interval '3 minutes') AS online "
+                    "FROM workers"
+                )
+            ).mappings().one()
+            pending_factors = conn.execute(
+                text("SELECT count(*) FROM factor_requests WHERE status = 'pending'")
+            ).scalar_one()
+        terminal_today = (jobs["completed_today"] or 0) + (jobs["failed_today"] or 0)
+        # 服务器资源（真实采集，无第三方依赖）：负载 + 产物盘占用
+        server: dict[str, Any] = {}
+        try:
+            server["loadavg"] = [round(v, 2) for v in os.getloadavg()]
+        except OSError:
+            server["loadavg"] = None
+        try:
+            import shutil
+
+            upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
+            usage = shutil.disk_usage(upload_root if upload_root.exists() else ".")
+            server["disk"] = {"total": usage.total, "used": usage.used, "free": usage.free}
+        except OSError:
+            server["disk"] = None
+        return jsonify({"ok": True, "users": _jsonable(dict(users)),
+                        "jobs": _jsonable(dict(jobs)),
+                        "jobs_today_success_rate": (jobs["completed_today"] / terminal_today) if terminal_today else None,
+                        "quota": _jsonable(dict(quota)), "workers": _jsonable(dict(workers)),
+                        "pending_factor_requests": pending_factors, "server": server})
+
+    @app.get("/api/saas/console/users")
+    def api_console_users() -> Any:
+        """E2 用户列表（含当日已用配额与任务数）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT u.id, u.email, u.phone, u.tier, u.role, u.status, "
+                    "u.created_at, u.last_login_at, "
+                    "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id) AS job_count, "
+                    "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id AND j.kind = 'full' "
+                    " AND j.created_at::date = now()::date) AS used_today "
+                    "FROM users u ORDER BY u.created_at DESC LIMIT 500"
+                )
+            ).mappings().all()
+        return jsonify({"ok": True, "quota_limit": MEMBER_DAILY_FULL_LIMIT,
+                        "users": [_jsonable(dict(r)) for r in rows]})
+
+    @app.post("/api/saas/console/users/<int:user_id>/tier")
+    def api_console_user_tier(user_id: int) -> Any:
+        """E2 手动调 tier（member/paid；guest 是匿名口径不落 users 行）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        tier = str(data.get("tier") or "").strip()
+        if tier not in ("member", "paid"):
+            return jsonify({"ok": False, "error": "tier 须为 member/paid"}), 400
+        with engine.begin() as conn:
+            row = conn.execute(
+                text("UPDATE users SET tier = :tier WHERE id = :uid RETURNING id"),
+                {"tier": tier, "uid": user_id},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "用户不存在"}), 404
+        return jsonify({"ok": True, "user_id": row.id, "tier": tier})
+
+    @app.post("/api/saas/console/users/<int:user_id>/status")
+    def api_console_user_status(user_id: int) -> Any:
+        """E2 禁用/恢复账号。禁用后：登录 403、既有 session 立即失效
+        （_current_user_id 的 status='active' 过滤）。管理员不能禁用自己。"""
+        engine = _get_engine(app)
+        admin_uid, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        status = str(data.get("status") or "").strip()
+        if status not in ("active", "disabled"):
+            return jsonify({"ok": False, "error": "status 须为 active/disabled"}), 400
+        if status == "disabled" and user_id == admin_uid:
+            return jsonify({"ok": False, "error": "不能禁用当前登录的管理员账号"}), 400
+        with engine.begin() as conn:
+            row = conn.execute(
+                text("UPDATE users SET status = :st WHERE id = :uid RETURNING id"),
+                {"st": status, "uid": user_id},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "用户不存在"}), 404
+        return jsonify({"ok": True, "user_id": row.id, "status": status})
+
+    @app.get("/api/saas/console/factor-requests")
+    def api_console_factor_requests() -> Any:
+        """E2 因子申请审核队列（默认 pending，?status=all 看全部）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        status = str(request.args.get("status") or "pending").strip()
+        sql = (
+            "SELECT f.id, f.user_id, u.email AS user_email, u.phone AS user_phone, "
+            "f.strategy_name, f.factors, f.status, f.note, f.created_at, f.reviewed_at "
+            "FROM factor_requests f LEFT JOIN users u ON u.id = f.user_id "
+        )
+        params: dict[str, Any] = {}
+        if status != "all":
+            if status not in ("pending", "approved", "rejected"):
+                return jsonify({"ok": False, "error": "status 须为 pending/approved/rejected/all"}), 400
+            sql += "WHERE f.status = :st "
+            params["st"] = status
+        sql += "ORDER BY f.created_at DESC LIMIT 200"
+        with engine.connect() as conn:
+            rows = conn.execute(text(sql), params).mappings().all()
+        return jsonify({"ok": True, "requests": [_jsonable(dict(r)) for r in rows]})
+
+    @app.post("/api/saas/console/factor-requests/<int:req_id>/review")
+    def api_console_factor_review(req_id: int) -> Any:
+        """E2 审核：approve → approved（运营方据此离线计算入库）/ reject → rejected；
+        note 为审核备注。仅 pending 可审，重复审核 409。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        action = str(data.get("action") or "").strip()
+        if action not in ("approve", "reject"):
+            return jsonify({"ok": False, "error": "action 须为 approve/reject"}), 400
+        new_status = "approved" if action == "approve" else "rejected"
+        note = str(data.get("note") or "").strip() or None
+        with engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "UPDATE factor_requests SET status = :st, note = :note, reviewed_at = now() "
+                    "WHERE id = :id AND status = 'pending' RETURNING id"
+                ),
+                {"st": new_status, "note": note, "id": req_id},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "申请不存在或已审核"}), 409
+        return jsonify({"ok": True, "id": row.id, "status": new_status})
+
+    @app.get("/api/saas/console/workers")
+    def api_console_workers() -> Any:
+        """E3 worker 在线状态（近 3 分钟有心跳 = 在线）+ 当前持有的在跑任务数。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT w.name, w.capacity, w.first_seen_at, w.last_heartbeat_at, "
+                    "(w.last_heartbeat_at > now() - interval '3 minutes') AS online, "
+                    "(SELECT count(*) FROM jobs j WHERE j.leased_by = w.name "
+                    " AND j.status IN ('leased','running','uploading')) AS active_jobs "
+                    "FROM workers w ORDER BY w.last_heartbeat_at DESC"
+                )
+            ).mappings().all()
+        return jsonify({"ok": True, "workers": [_jsonable(dict(r)) for r in rows]})
+
+    @app.get("/api/saas/console/jobs")
+    def api_console_jobs() -> Any:
+        """E3 全量任务查看（默认 failed/expired，?status=all|queued|...）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        status = str(request.args.get("status") or "failed").strip()
+        sql = (
+            "SELECT j.id, j.user_id, u.email AS user_email, j.kind, j.status, "
+            "j.attempts, j.max_attempts, j.leased_by, j.progress, j.error_class, "
+            "j.error_message, j.created_at, j.started_at, j.finished_at, "
+            "s.name AS strategy_name "
+            "FROM jobs j LEFT JOIN users u ON u.id = j.user_id "
+            "LEFT JOIN strategies s ON s.id = j.strategy_id "
+        )
+        params: dict[str, Any] = {}
+        if status == "failed":
+            sql += "WHERE j.status IN ('failed','expired') "
+        elif status != "all":
+            if status not in JOB_STATUSES:
+                return jsonify({"ok": False, "error": f"status 须为 all/failed/{'/'.join(JOB_STATUSES)}"}), 400
+            sql += "WHERE j.status = :st "
+            params["st"] = status
+        sql += "ORDER BY j.created_at DESC LIMIT 200"
+        with engine.connect() as conn:
+            rows = conn.execute(text(sql), params).mappings().all()
+        return jsonify({"ok": True, "jobs": [_jsonable(dict(r)) for r in rows]})
+
+    @app.post("/api/saas/console/jobs/<int:job_id>/retry")
+    def api_console_job_retry(job_id: int) -> Any:
+        """E3 失败任务重试：终态（failed/expired/canceled）重置回 queued，
+        attempts 清零、错误与租约字段清空（job 幂等：产物按 job_id 覆盖写）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        with engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "UPDATE jobs SET status = 'queued', attempts = 0, leased_by = NULL, "
+                    "lease_expires_at = NULL, heartbeat_at = NULL, progress = 0, "
+                    "progress_message = NULL, cancel_requested = false, "
+                    "error_class = NULL, error_message = NULL, "
+                    "started_at = NULL, finished_at = NULL, upload_token = NULL "
+                    "WHERE id = :id AND status IN ('failed','expired','canceled') RETURNING id"
+                ),
+                {"id": job_id},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "任务不存在或非终态（仅失败/超时/已取消可重试）"}), 409
+        return jsonify({"ok": True, "job_id": row.id, "status": "queued"})
+
+    @app.post("/api/saas/console/jobs/<int:job_id>/cancel")
+    def api_console_job_cancel(job_id: int) -> Any:
+        """E3 管理员取消任意任务（语义同用户取消：queued 直接终态，
+        执行中置 cancel_requested 由 worker 心跳发现）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        with engine.begin() as conn:
+            _reap_expired(conn)
+            row = conn.execute(
+                text("SELECT * FROM jobs WHERE id = :id FOR UPDATE"),
+                {"id": job_id},
+            ).mappings().first()
+            if row is None:
+                return jsonify({"ok": False, "error": "任务不存在"}), 404
+            if row["status"] in TERMINAL_STATUSES:
+                return jsonify({"ok": False, "error": f"任务已终态（{row['status']}），无法取消"}), 409
+            if row["status"] == "queued":
+                conn.execute(
+                    text("UPDATE jobs SET status = 'canceled', finished_at = now() WHERE id = :id"),
+                    {"id": job_id},
+                )
+                return jsonify({"ok": True, "job_id": job_id, "status": "canceled"})
+            conn.execute(
+                text("UPDATE jobs SET cancel_requested = true WHERE id = :id"),
+                {"id": job_id},
+            )
+        return jsonify({"ok": True, "job_id": job_id, "status": row["status"], "cancel_requested": True})
 
     return app
 

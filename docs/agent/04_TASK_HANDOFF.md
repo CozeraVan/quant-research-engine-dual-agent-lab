@@ -2,7 +2,35 @@
 
 ## Task ID
 
-QRE-UI-DESIGN-SYSTEM-DOC (UI 设计系统文档：8081 lab 冻结版蒸馏为自包含规范)
+QRE-SAAS-ADMIN-E1E3 (SaaS 后台管理：E1 总览 / E2 用户与因子审核 / E3 worker 运维)
+
+## Current Status
+
+DONE (implementation; full test suite green; awaiting user-approved git finalization)
+
+## Task Note
+
+按 15 号文档 E 阶段实现 SaaS 管理后台（本地开发，不部署）：
+
+- schema（deploy/saas/cloud_schema.sql 幂等迁移）：users + role/status 两列；
+  新 workers 表（claim/heartbeat 时 upsert，3 分钟阈值判在线）。
+- 权限：users.role='admin' 判定；_require_admin 门禁（401/403）；禁用账号
+  登录 403 + 既有 session 立即失效；/api/saas/me 返回 is_admin。
+- 管理 API 前缀 /api/saas/console/*（不用 /admin——禁链纪律含注释，决策入
+  06 日志）：overview / users（tier 调整、禁用恢复）/ factor-requests 审核
+  （approve/reject+note）/ workers / jobs（失败查看、retry 回队、cancel）。
+- 页面 /saas/console（console.html 五 tab，lab-theme 组件规范）；顶栏
+  「管理台」入口仅 is_admin 时注入（base.html 公共 JS）。
+- 测试管理员账号：先正常注册再 SQL 提升——
+  `UPDATE users SET role='admin' WHERE email='<邮箱>'`；本地测试用例使用
+  admin@example.com / boss@example.com（测试临时库，非真实账号）。
+- 测试：tests/test_gui_saas_console.py +12；全量 2130 项零回归
+  （test_gui_risk_report 一次瞬时失败复跑即绿，同 09-20 flake 记录）。
+- 未 commit。E3 裁剪留后续：worker 指令下发、家里 PG 状态卡（需 worker 协议扩展）。
+
+---
+
+## Archive: QRE-UI-DESIGN-SYSTEM-DOC (UI 设计系统文档：8081 lab 冻结版蒸馏为自包含规范)
 
 ## Current Status
 

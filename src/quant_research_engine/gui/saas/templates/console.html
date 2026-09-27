@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}管理台 · A股回测台{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="page-head">
+    <h1>管理台</h1>
+    <p>运营后台：用户 / 任务 / 配额 / worker 状态一览，因子申请审核与失败任务运维。仅管理员可见。</p>
+  </div>
+  <div class="card hidden" id="no-access">
+    <p class="muted">无权限：本页仅管理员账号可用。</p>
+  </div>
+  <div id="console" class="hidden">
+    <div class="tabs">
+      <button class="tab active" data-tab="overview">总览</button>
+      <button class="tab" data-tab="users">用户</button>
+      <button class="tab" data-tab="factors">因子审核</button>
+      <button class="tab" data-tab="workers">Worker</button>
+      <button class="tab" data-tab="jobs">任务</button>
+    </div>
+
+    <div class="tab-pane" id="pane-overview">
+      <div class="metric-strip" id="ov-users"></div>
+      <div class="metric-strip" id="ov-jobs"></div>
+      <div class="card">
+        <h2>服务器资源</h2>
+        <div id="ov-server" class="muted">加载中…</div>
+      </div>
+    </div>
+
+    <div class="tab-pane hidden" id="pane-users">
+      <div class="card">
+        <h2>用户列表 <span class="opt" id="users-count"></span></h2>
+        <table class="tbl">
+          <thead><tr><th>ID</th><th>账号</th><th>层级</th><th>角色</th><th>状态</th>
+            <th class="num">任务数</th><th class="num">今日已用</th><th>注册时间</th><th>最近登录</th><th>操作</th></tr></thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-pane hidden" id="pane-factors">
+      <div class="card">
+        <h2>因子申请审核</h2>
+        <div class="bench-bar" id="factor-filter">
+          <button data-st="pending" class="active">待审核</button>
+          <button data-st="approved">已批准</button>
+          <button data-st="rejected">已拒绝</button>
+          <button data-st="all">全部</button>
+        </div>
+        <table class="tbl">
+          <thead><tr><th>ID</th><th>用户</th><th>触发策略</th><th>缺失因子</th><th>状态</th><th>提交时间</th><th>备注</th><th>操作</th></tr></thead>
+          <tbody id="factor-tbody"></tbody>
+        </table>
+        <div class="chart-empty hidden" id="factor-empty">暂无申请</div>
+      </div>
+    </div>
+
+    <div class="tab-pane hidden" id="pane-workers">
+      <div class="card">
+        <h2>Worker 状态 <span class="opt">（近 3 分钟有心跳 = 在线）</span></h2>
+        <table class="tbl">
+          <thead><tr><th>Worker</th><th>状态</th><th class="num">在跑任务</th><th>最近心跳</th><th>首次接入</th></tr></thead>
+          <tbody id="workers-tbody"></tbody>
+        </table>
+        <div class="chart-empty hidden" id="workers-empty">暂无 worker 记录</div>
+      </div>
+    </div>
+
+    <div class="tab-pane hidden" id="pane-jobs">
+      <div class="card">
+        <h2>任务运维</h2>
+        <div class="bench-bar" id="job-filter">
+          <button data-st="failed" class="active">失败/超时</button>
+          <button data-st="queued">排队中</button>
+          <button data-st="running">运行中</button>
+          <button data-st="all">全部</button>
+        </div>
+        <table class="tbl">
+          <thead><tr><th class="num">ID</th><th>用户</th><th>策略</th><th>类型</th><th>状态</th>
+            <th class="num">尝试</th><th>Worker</th><th>错误</th><th>创建时间</th><th>操作</th></tr></thead>
+          <tbody id="jobs-tbody"></tbody>
+        </table>
+        <div class="chart-empty hidden" id="jobs-empty">暂无任务</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  requireLogin();
+  var panes = {overview:'pane-overview', users:'pane-users', factors:'pane-factors', workers:'pane-workers', jobs:'pane-jobs'};
+  var factorSt = 'pending', jobSt = 'failed';
+
+  function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }
+  function fmt(t){ return t ? LabUI.fmtLocalTime(t) : '—'; }
+  function jobBadge(st){
+    var cls = st === 'completed' ? 'ok' : (st === 'failed' || st === 'expired' || st === 'canceled' ? 'fail' : 'run');
+    return '<span class="badge ' + cls + '">' + esc(STATUS_LABEL[st] || st) + '</span>';
+  }
+  function metric(label, value, title){
+    return '<div class="metric-card"' + (title ? ' title="' + esc(title) + '"' : '') +
+      '><div class="m-label">' + esc(label) + '</div><div class="m-value">' + esc(value) + '</div></div>';
+  }
+
+  // 门禁：仅管理员可用（数据端点另有服务端 403 强制）
+  apiFetch('/api/saas/me').then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok || !d.user || !d.user.is_admin){ document.getElementById('no-access').classList.remove('hidden'); return; }
+    document.getElementById('console').classList.remove('hidden');
+    loadOverview();
+  }).catch(function(){ document.getElementById('no-access').classList.remove('hidden'); });
+
+  document.querySelectorAll('.tabs .tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.tabs .tab').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      Object.keys(panes).forEach(function(k){ document.getElementById(panes[k]).classList.add('hidden'); });
+      document.getElementById(panes[btn.dataset.tab]).classList.remove('hidden');
+      ({overview: loadOverview, users: loadUsers, factors: loadFactorRequests, workers: loadWorkers, jobs: loadJobs})[btn.dataset.tab]();
+    });
+  });
+
+  // --- E1 总览 ---
+  function loadOverview(){
+    apiFetch('/api/saas/console/overview').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      var u = d.users, j = d.jobs, w = d.workers;
+      document.getElementById('ov-users').innerHTML =
+        metric('用户总数', u.total) + metric('今日新增', u.new_today) +
+        metric('会员', u.member) + metric('付费', u.paid) +
+        metric('已禁用', u.disabled) + metric('今日回测用户', d.quota.active_members, '今日提交过正式回测的去重会员数');
+      var rate = d.jobs_today_success_rate === null ? '—' : (d.jobs_today_success_rate * 100).toFixed(1) + '%';
+      document.getElementById('ov-jobs').innerHTML =
+        metric('今日任务', j.today) + metric('今日成功率', rate, '今日 完成 / (完成+失败超时)') +
+        metric('队列深度', j.queued) + metric('运行中', j.running) +
+        metric('Worker 在线', w.online + ' / ' + w.total, '在线 / 已接入总数') +
+        metric('待审因子', d.pending_factor_requests);
+      var sv = d.server || {};
+      var disk = sv.disk ? ('产物盘 ' + (sv.disk.used / 1073741824).toFixed(1) + ' / ' + (sv.disk.total / 1073741824).toFixed(1) + ' GB') : '不可用';
+      var load = sv.loadavg ? sv.loadavg.join(' / ') : '不可用';
+      document.getElementById('ov-server').innerHTML =
+        '系统负载（1/5/15 分钟）：' + esc(load) + '<br>' + esc(disk);
+    }).catch(function(){});
+  }
+
+  // --- E2 用户 ---
+  function loadUsers(){
+    apiFetch('/api/saas/console/users').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('users-count').textContent = '共 ' + d.users.length + ' 人（日配额 ' + d.quota_limit + ' 次）';
+      var html = d.users.map(function(u){
+        var acct = esc(u.email || u.phone || ('#' + u.id));
+        var tierSel = '<select data-uid="' + u.id + '" class="tier-sel">' +
+          ['member', 'paid'].map(function(t){ return '<option value="' + t + '"' + (u.tier === t ? ' selected' : '') + '>' + (t === 'member' ? '会员' : '付费') + '</option>'; }).join('') + '</select>';
+        var stBadge = u.status === 'active' ? '<span class="badge ok">正常</span>' : '<span class="badge fail">已禁用</span>';
+        var btn = u.status === 'active'
+          ? '<button class="btn-sm" data-act="disable" data-uid="' + u.id + '">禁用</button>'
+          : '<button class="btn-sm" data-act="enable" data-uid="' + u.id + '">恢复</button>';
+        return '<tr><td>' + u.id + '</td><td>' + acct + '</td><td>' + tierSel + '</td><td>' + esc(u.role) + '</td><td>' + stBadge +
+          '</td><td class="num">' + u.job_count + '</td><td class="num">' + u.used_today + ' / ' + d.quota_limit + '</td><td>' +
+          fmt(u.created_at) + '</td><td>' + fmt(u.last_login_at) + '</td><td>' + btn + '</td></tr>';
+      }).join('');
+      document.getElementById('users-tbody').innerHTML = html;
+    }).catch(function(){});
+  }
+  document.getElementById('users-tbody').addEventListener('change', function(ev){
+    if (!ev.target.classList.contains('tier-sel')) return;
+    apiFetch('/api/saas/console/users/' + ev.target.dataset.uid + '/tier', {json: {tier: ev.target.value}})
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d.ok){ alert(d.error || '操作失败'); } loadUsers();
+      }).catch(function(){});
+  });
+  document.getElementById('users-tbody').addEventListener('click', function(ev){
+    var act = ev.target.dataset && ev.target.dataset.act;
+    if (!act) return;
+    if (act === 'disable' && !confirm('确认禁用该账号？禁用后其登录与既有会话立即失效。')) return;
+    apiFetch('/api/saas/console/users/' + ev.target.dataset.uid + '/status',
+      {json: {status: act === 'disable' ? 'disabled' : 'active'}})
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d.ok){ alert(d.error || '操作失败'); } loadUsers();
+      }).catch(function(){});
+  });
+
+  // --- E2 因子审核 ---
+  document.getElementById('factor-filter').addEventListener('click', function(ev){
+    if (!ev.target.dataset.st) return;
+    factorSt = ev.target.dataset.st;
+    document.querySelectorAll('#factor-filter button').forEach(function(b){ b.classList.toggle('active', b === ev.target); });
+    loadFactorRequests();
+  });
+  function loadFactorRequests(){
+    apiFetch('/api/saas/console/factor-requests?status=' + factorSt).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('factor-empty').classList.toggle('hidden', d.requests.length > 0);
+      var html = d.requests.map(function(q){
+        var stBadge = q.status === 'approved' ? '<span class="badge ok">已批准</span>'
+          : q.status === 'rejected' ? '<span class="badge fail">已拒绝</span>' : '<span class="badge run">待审核</span>';
+        var ops = q.status === 'pending'
+          ? '<button class="btn-sm" data-rev="approve" data-rid="' + q.id + '">批准</button> <button class="btn-sm" data-rev="reject" data-rid="' + q.id + '">拒绝</button>'
+          : '—';
+        return '<tr><td>' + q.id + '</td><td>' + esc(q.user_email || q.user_phone || ('#' + q.user_id)) + '</td><td>' +
+          esc(q.strategy_name || '—') + '</td><td>' + esc((q.factors || []).join('、')) + '</td><td>' + stBadge + '</td><td>' +
+          fmt(q.created_at) + '</td><td>' + esc(q.note || '—') + '</td><td>' + ops + '</td></tr>';
+      }).join('');
+      document.getElementById('factor-tbody').innerHTML = html;
+    }).catch(function(){});
+  }
+  document.getElementById('factor-tbody').addEventListener('click', function(ev){
+    var rev = ev.target.dataset && ev.target.dataset.rev;
+    if (!rev) return;
+    var note = prompt(rev === 'approve' ? '批准备注（可空，如：已排期入库）' : '拒绝原因（可空）') ;
+    if (note === null) return;
+    apiFetch('/api/saas/console/factor-requests/' + ev.target.dataset.rid + '/review',
+      {json: {action: rev, note: note}})
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d.ok){ alert(d.error || '操作失败'); } loadFactorRequests();
+      }).catch(function(){});
+  });
+
+  // --- E3 Worker ---
+  function loadWorkers(){
+    apiFetch('/api/saas/console/workers').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('workers-empty').classList.toggle('hidden', d.workers.length > 0);
+      document.getElementById('workers-tbody').innerHTML = d.workers.map(function(w){
+        var stBadge = w.online ? '<span class="badge ok">在线</span>' : '<span class="badge fail">离线</span>';
+        return '<tr><td>' + esc(w.name) + '</td><td>' + stBadge + '</td><td class="num">' + w.active_jobs + '</td><td>' +
+          fmt(w.last_heartbeat_at) + '</td><td>' + fmt(w.first_seen_at) + '</td></tr>';
+      }).join('');
+    }).catch(function(){});
+  }
+
+  // --- E3 任务 ---
+  document.getElementById('job-filter').addEventListener('click', function(ev){
+    if (!ev.target.dataset.st) return;
+    jobSt = ev.target.dataset.st;
+    document.querySelectorAll('#job-filter button').forEach(function(b){ b.classList.toggle('active', b === ev.target); });
+    loadJobs();
+  });
+  function loadJobs(){
+    apiFetch('/api/saas/console/jobs?status=' + jobSt).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('jobs-empty').classList.toggle('hidden', d.jobs.length > 0);
+      document.getElementById('jobs-tbody').innerHTML = d.jobs.map(function(j){
+        var terminal = (j.status === 'failed' || j.status === 'expired' || j.status === 'canceled');
+        var active = (j.status === 'queued' || j.status === 'leased' || j.status === 'running' || j.status === 'uploading');
+        var ops = (terminal ? '<button class="btn-sm" data-job="retry" data-jid="' + j.id + '">重试</button> ' : '') +
+                  (active ? '<button class="btn-sm" data-job="cancel" data-jid="' + j.id + '">取消</button>' : '');
+        return '<tr><td class="num">' + j.id + '</td><td>' + esc(j.user_email || (j.user_id ? '#' + j.user_id : '游客')) + '</td><td>' +
+          esc(j.strategy_name || '—') + '</td><td>' + esc(j.kind) + '</td><td>' + jobBadge(j.status) + '</td><td class="num">' +
+          j.attempts + '/' + j.max_attempts + '</td><td>' + esc(j.leased_by || '—') + '</td><td>' +
+          esc(j.error_message || '—') + '</td><td>' + fmt(j.created_at) + '</td><td>' + (ops || '—') + '</td></tr>';
+      }).join('');
+    }).catch(function(){});
+  }
+  document.getElementById('jobs-tbody').addEventListener('click', function(ev){
+    var act = ev.target.dataset && ev.target.dataset.job;
+    if (!act) return;
+    if (act === 'cancel' && !confirm('确认取消该任务？运行中的任务将在 worker 下次心跳时终止。')) return;
+    if (act === 'retry' && !confirm('确认重试该任务？任务将重新排队（尝试次数清零）。')) return;
+    apiFetch('/api/saas/console/jobs/' + ev.target.dataset.jid + '/' + act, {json: {}})
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d.ok){ alert(d.error || '操作失败'); } loadJobs();
+      }).catch(function(){});
+  });
+})();
+</script>
+{% endblock %}

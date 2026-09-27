@@ -195,9 +195,15 @@
 临时测试账号通道（env 短路，上线前必须移除或改为外购服务对接）。
 
 ### 阶段 E：后台管理（最后）
-- [ ] E1 总览（job 数/成功率/队列深度/worker 心跳）
-- [ ] E2 用户管理 + 因子需求审核队列
-- [ ] E3 worker 运维（指令下发、家里 PG 状态经 worker 上报）
+- [x] E1 总览（job 数/成功率/队列深度/worker 心跳）（2026-09-27 QRE-SAAS-ADMIN-E1E3 落地）
+- [x] E2 用户管理 + 因子需求审核队列（2026-09-27 落地：用户列表/tier 调整/禁用恢复 + 申请 approve/reject）
+- [x] E3 worker 运维（2026-09-27 落地：worker 在线状态 + 失败任务查看/重试/取消；指令下发与家里 PG 状态卡为最小可行裁剪，见 06 决策日志）
+
+> E 阶段落地要点（2026-09-27）：路由前缀 /saas/console + /api/saas/console/*（不用 /admin
+> 字样——SaaS 禁链纪律含 HTML/JS 注释，见 12 号文档 §7）；users 表加 role/status 两列
+> （幂等迁移，应用层校验取值）；workers 表落账心跳（claim/heartbeat upsert，3 分钟阈值
+> 判在线）；管理员提升方式：SQL `UPDATE users SET role='admin' WHERE email='<邮箱>'`
+> （先正常注册再提升；测试管理员账号见 04_TASK_HANDOFF.md）。
 
 ### 待拍板开放问题（对齐颗粒度时逐条过）
 见第 5 节 8 条（游客计数方式/产物大小上限/worker token 轮换/邮箱验证/配额口径/冒烟强制/通知方式/磁盘水位）。

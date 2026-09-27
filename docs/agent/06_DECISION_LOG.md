@@ -1197,3 +1197,12 @@ No open questions remain.
 - Alternatives: 拆成两个包/两个仓库。否决——引擎单例共享是核心价值，拆包只会引入版本同步成本而无收益。
 - Impact: 引擎层改动无需双端协调评审，测试基线兜底；UI 改动有明确验证顺序（18080 → 8081）；SaaS 化路线（job/worker 解耦）与本约定一致。
 - Owner: KIMI_CODE（用户 2026-09-18 确认）
+
+
+### 2026-09-27: SaaS 后台管理（E1-E3）的路由前缀与最小可行裁剪
+
+- Decision: 后台管理路由用 `/saas/console` + `/api/saas/console/*`，不用设计文档 15 号原写的 `/api/admin/*`；users 表只加 `role`/`status` 两列（不加 CHECK 约束，取值应用层校验）；E3 只做 worker 在线状态 + 失败任务查看/重试/取消，指令下发与家里 PG 状态卡（经 worker 上报）留作后续。
+- Reason: 12 号文档 §7 禁链纪律（断言测试 TestNoAdminLinks）禁止 SaaS 页面出现 `/admin` 字样且含 HTML/JS 注释——管理台导航入口需经 base.html 公共 JS 注入，与 `/admin` 前缀天然冲突；`/console` 前缀两全。users 加 CHECK 约束在旧库升级时需 DO 块判存（tier 列当年踩过顺序坑），role/status 语义简单，应用层校验足够。指令下发需要 worker 协议加指令通道，超出 E 阶段「能手动 SQL 顶着」的内测定位。
+- Alternatives: ①保留 /api/admin 前缀并豁免禁链断言——否决，纪律刚重写过且有两处撞线教训；②workers 表加 CHECK/心跳走 Redis——否决，纯 PG 是既定内测选型（17 号协议 §7）。
+- Impact: 管理端测试管理员账号 = 先注册再 `UPDATE users SET role='admin'`；未来若上正式管理台域名再议 /admin 命名。禁用账号的语义：登录 403 + 既有 session 立即失效（_current_user_id 的 status 过滤）。
+- Owner: KIMI_CODE
