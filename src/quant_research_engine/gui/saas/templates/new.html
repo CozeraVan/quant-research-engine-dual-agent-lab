@@ -200,11 +200,12 @@
 
   <div class="modal-mask" id="factor-modal">
     <div class="modal">
-      <h3>当前因子库暂不支持</h3>
+      <h3>当前数据库中不含此因子</h3>
       <p id="factor-modal-list"></p>
       <p class="opt">你可以：<br>① 换个策略试试（多数常见指标已支持）<br>② 把缺的因子提交给我们——需求集中的因子会优先计算入库</p>
       <div class="m-actions">
         <button class="btn btn-ghost" id="btn-factor-close">换个策略</button>
+        <a class="btn btn-ghost" id="btn-factor-goto" href="/saas/factor-request">去申请新因子 →</a>
         <button class="btn btn-primary" id="btn-factor-submit">提交因子需求</button>
       </div>
       <p id="factor-modal-status" class="opt" style="margin-top:8px"></p>
@@ -403,6 +404,11 @@ function openFactorModal(factors){
   pendingFactors = factors;
   $('#factor-modal-list').textContent = '缺失因子：' + factors.join('、');
   $('#factor-modal-status').textContent = '';
+  // 跳转申请页并预填因子名与当前策略名（申请页可补充公式/用途）
+  const q = new URLSearchParams({factors: factors.join(',')});
+  const sn = $('#p-sname').value.trim();
+  if (sn) q.set('strategy', sn);
+  $('#btn-factor-goto').href = '/saas/factor-request?' + q.toString();
   const btn = $('#btn-factor-submit'); btn.disabled = false; btn.textContent = '提交因子需求';
   $('#factor-modal').classList.add('show');
 }
@@ -635,6 +641,20 @@ function prefill(){
   wzAddGroup('exit', {left: l, op: 'crosses_below', right: r});
 }
 
+// ---------- 缺因子兜底校验（向导从目录选取理论上不会缺；目录加载失败或
+// 预览栏被手工改过的 YAML 也可能引用未知因子，提交前统一拦截） ----------
+function yamlFactorAliases(y){
+  const m = y.match(/^\s*factor_fields:\s*\n((?:[ \t]+\S[^\n]*\n?)*)/m);
+  if (!m) return [];
+  return m[1].split('\n').map(l => (l.match(/^[ \t]+([A-Za-z_]\w*)\s*:/) || [])[1]).filter(Boolean);
+}
+function unknownYamlFactors(y){
+  if (!catalogReady) return [];  // 目录未加载不拦截（NL 编译路径已有服务端校验）
+  const known = {};
+  FACTOR_OPTIONS.forEach(o => { known[o.value] = true; });
+  return yamlFactorAliases(y).filter(a => !known[a]);
+}
+
 // ---------- 运行回测流水线 ----------
 const pipeEl = $('#pipe');
 let pipeRunning = false;
@@ -818,6 +838,13 @@ async function startRun(){
   const y = strategyYaml;
   if (!y.trim()){ pipeFailAt(1, '策略代码为空——三个入口任选一个生成或编写策略后重试。'); return; }
   if (y.indexOf('experiment:') < 0 || y.indexOf('signal:') < 0){ pipeFailAt(1, 'YAML 缺少 experiment / signal 段——结构不完整，请在预览栏补全。'); return; }
+  // 缺因子拦截（兜底：向导选项来自因子目录，正常不会触发；手工改 YAML 时兜底）
+  const missingF = unknownYamlFactors(y);
+  if (missingF.length){
+    pipeFailAt(1, '策略引用了因子库中不存在的因子：' + missingF.join('、') + '。可移除该因子，或提交新因子申请。');
+    openFactorModal(missingF);
+    return;
+  }
   pipeRunning = true; btn.disabled = true; btn.style.opacity = .65;
   const abort = () => { pipeRunning = false; btn.disabled = false; btn.style.opacity = ''; };
   try {

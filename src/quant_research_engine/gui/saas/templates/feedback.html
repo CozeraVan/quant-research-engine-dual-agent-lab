@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}意见反馈 · A股回测台{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="page-head">
+    <h1>意见反馈</h1>
+    <p>内测期间，你的每一条反馈都会直接进运营队列人工阅读。使用中遇到的问题、希望改进的地方、想要的功能，都欢迎告诉我们。</p>
+  </div>
+
+  <div class="card hidden" id="fb-login">
+    <p class="muted">反馈需登录后提交（便于我们跟进回复）。<a class="inl" href="/saas/login">去登录 / 注册 →</a></p>
+    <p class="muted">游客可先在「新建策略」免登录试用单股回测。</p>
+  </div>
+
+  <div class="card hidden" id="fb-form-card">
+    <div class="form-grid">
+      <label>反馈内容 <span class="req">*</span></label>
+      <span>
+        <textarea id="fb-content" rows="5" maxlength="2000" placeholder="问题现象 / 改进建议 / 想要的功能（最多 2000 字）"></textarea>
+      </span>
+      <label>联系方式 <span class="opt">（可选）</span></label>
+      <span>
+        <input type="text" id="fb-contact" maxlength="200" placeholder="邮箱 / 微信等，方便我们就反馈与你确认">
+      </span>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:12px;align-items:center">
+      <button class="btn btn-primary" id="fb-submit">提交反馈</button>
+      <span class="opt" id="fb-status"></span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="fb-history-card">
+    <h2>我的反馈 <span class="opt" id="fb-count"></span></h2>
+    <table class="tbl">
+      <thead><tr><th>内容</th><th>来源页面</th><th>提交时间</th></tr></thead>
+      <tbody id="fb-tbody"></tbody>
+    </table>
+    <div class="chart-empty hidden" id="fb-empty">还没有提交过反馈</div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  function esc(s){ var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+  var loggedIn = SAAS_BYPASS || !!saasToken();
+  if (!loggedIn){
+    document.getElementById('fb-login').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('fb-form-card').classList.remove('hidden');
+  document.getElementById('fb-history-card').classList.remove('hidden');
+
+  function loadHistory(){
+    apiFetch('/api/saas/feedback').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('fb-count').textContent = '共 ' + d.feedback.length + ' 条';
+      document.getElementById('fb-empty').classList.toggle('hidden', d.feedback.length > 0);
+      document.getElementById('fb-tbody').innerHTML = d.feedback.map(function(f){
+        return '<tr><td>' + esc(f.content) + '</td><td>' + esc(f.page || '—') + '</td><td>' +
+          (f.created_at ? LabUI.fmtLocalTime(f.created_at) : '—') + '</td></tr>';
+      }).join('');
+    }).catch(function(){});
+  }
+  loadHistory();
+
+  document.getElementById('fb-submit').addEventListener('click', function(){
+    var content = document.getElementById('fb-content').value.trim();
+    var st = document.getElementById('fb-status');
+    if (!content){ st.textContent = '请先填写反馈内容'; return; }
+    var btn = this; btn.disabled = true; st.textContent = '提交中…';
+    apiFetch('/api/saas/feedback', {json: {
+      content: content,
+      contact: document.getElementById('fb-contact').value.trim(),
+      page: document.referrer && document.referrer.indexOf(location.origin) === 0
+        ? document.referrer.slice(location.origin.length) : null
+    }}).then(function(r){ return r.json(); }).then(function(d){
+      btn.disabled = false;
+      if (d.ok){
+        st.textContent = '已提交，感谢反馈！';
+        document.getElementById('fb-content').value = '';
+        loadHistory();
+      } else {
+        st.textContent = d.error || '提交失败，请稍后重试';
+      }
+    }).catch(function(){ btn.disabled = false; st.textContent = '网络异常，请稍后重试'; });
+  });
+})();
+</script>
+{% endblock %}

@@ -439,6 +439,16 @@ def create_saas_app() -> Flask:
     def saas_new_page() -> str:
         return render_template("new.html")
 
+    # QRE-SAAS-FEEDBACK-FACTOR-REQ：意见反馈 / 申请新因子独立页（侧边栏入口，
+    # 仅登录用户可提交——游客不可，决策见 06 日志）
+    @app.get("/saas/feedback")
+    def saas_feedback_page() -> str:
+        return render_template("feedback.html")
+
+    @app.get("/saas/factor-request")
+    def saas_factor_request_page() -> str:
+        return render_template("factor_request.html")
+
     @app.get("/saas/jobs/<int:job_id>")
     def saas_job_page(job_id: int) -> str:
         return render_template("job.html", job_id=job_id)
@@ -652,6 +662,9 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "factors 须为非空字符串数组"}), 400
         factors = sorted({f.strip() for f in factors})
         strategy_name = str(data.get("strategy_name") or "").strip() or None
+        # QRE-SAAS-FEEDBACK-FACTOR-REQ：申请新因子页可附因子定义/用途，辅助人工审核
+        formula = str(data.get("formula") or "").strip()[:2000] or None
+        purpose = str(data.get("purpose") or "").strip()[:2000] or None
 
         with engine.begin() as conn:
             # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（同 jobs 路由）
@@ -670,10 +683,11 @@ def create_saas_app() -> Flask:
                 return jsonify({"ok": False, "error": "这些因子你已提交过申请，我们会按需求热度评估，请耐心等待"}), 409
             rid = conn.execute(
                 text(
-                    "INSERT INTO factor_requests (user_id, strategy_name, factors) "
-                    "VALUES (:uid, :name, CAST(:factors AS jsonb)) RETURNING id"
+                    "INSERT INTO factor_requests (user_id, strategy_name, factors, formula, purpose) "
+                    "VALUES (:uid, :name, CAST(:factors AS jsonb), :formula, :purpose) RETURNING id"
                 ),
-                {"uid": uid, "name": strategy_name, "factors": json.dumps(factors)},
+                {"uid": uid, "name": strategy_name, "factors": json.dumps(factors),
+                 "formula": formula, "purpose": purpose},
             ).scalar_one()
         return jsonify({"ok": True, "id": rid, "status": "pending"})
 
@@ -686,13 +700,71 @@ def create_saas_app() -> Flask:
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT id, strategy_name, factors, status, note, created_at "
+                    "SELECT id, strategy_name, factors, formula, purpose, status, note, created_at "
                     "FROM factor_requests WHERE user_id = :uid "
                     "ORDER BY created_at DESC LIMIT 50"
                 ),
                 {"uid": uid},
             ).mappings().all()
         return jsonify({"ok": True, "requests": [_jsonable(dict(r)) for r in rows]})
+
+    # --- 内测意见反馈（QRE-SAAS-FEEDBACK-FACTOR-REQ）：仅登录用户提交
+    #     （游客不可提交，决策见 06 日志）；管理台只读查看 ---
+    FEEDBACK_DAILY_LIMIT = 20  # 单用户每日反馈上限（防滥用，内测口径）
+
+    @app.post("/api/saas/feedback")
+    def api_feedback_create() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "反馈需登录后提交（游客可先在「新建策略」免登录试用）"}), 401
+        data = request.get_json(silent=True) or {}
+        content = str(data.get("content") or "").strip()
+        if not content:
+            return jsonify({"ok": False, "error": "请填写反馈内容"}), 400
+        if len(content) > 2000:
+            return jsonify({"ok": False, "error": "反馈内容过长（最多 2000 字）"}), 400
+        page = str(data.get("page") or "").strip()[:200] or None
+        contact = str(data.get("contact") or "").strip()[:200] or None
+        with engine.begin() as conn:
+            # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（同 jobs 路由）
+            conn.execute(
+                text("INSERT INTO users (id, phone) VALUES (:id, :phone) ON CONFLICT (id) DO NOTHING"),
+                {"id": uid, "phone": f"pending_{uid}"},
+            )
+            used = conn.execute(
+                text(
+                    "SELECT count(*) FROM feedback "
+                    "WHERE user_id = :uid AND created_at::date = now()::date"
+                ),
+                {"uid": uid},
+            ).scalar_one()
+            if used >= FEEDBACK_DAILY_LIMIT:
+                return jsonify({"ok": False, "error": "今日反馈提交次数已达上限，请明天再来"}), 429
+            fid = conn.execute(
+                text(
+                    "INSERT INTO feedback (user_id, content, page, contact) "
+                    "VALUES (:uid, :content, :page, :contact) RETURNING id"
+                ),
+                {"uid": uid, "content": content, "page": page, "contact": contact},
+            ).scalar_one()
+        return jsonify({"ok": True, "id": fid})
+
+    @app.get("/api/saas/feedback")
+    def api_feedback_list() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, content, page, created_at FROM feedback "
+                    "WHERE user_id = :uid ORDER BY created_at DESC LIMIT 50"
+                ),
+                {"uid": uid},
+            ).mappings().all()
+        return jsonify({"ok": True, "feedback": [_jsonable(dict(r)) for r in rows]})
 
     # --- 鉴权（QRE-SAAS-006） ---
 
@@ -1886,7 +1958,7 @@ def create_saas_app() -> Flask:
         status = str(request.args.get("status") or "pending").strip()
         sql = (
             "SELECT f.id, f.user_id, u.email AS user_email, u.phone AS user_phone, "
-            "f.strategy_name, f.factors, f.status, f.note, f.created_at, f.reviewed_at "
+            "f.strategy_name, f.factors, f.formula, f.purpose, f.status, f.note, f.created_at, f.reviewed_at "
             "FROM factor_requests f LEFT JOIN users u ON u.id = f.user_id "
         )
         params: dict[str, Any] = {}
@@ -1925,6 +1997,24 @@ def create_saas_app() -> Flask:
         if row is None:
             return jsonify({"ok": False, "error": "申请不存在或已审核"}), 409
         return jsonify({"ok": True, "id": row.id, "status": new_status})
+
+    @app.get("/api/saas/console/feedback")
+    def api_console_feedback() -> Any:
+        """反馈列表（QRE-SAAS-FEEDBACK-FACTOR-REQ）：只读，最新 200 条。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT f.id, f.user_id, u.email AS user_email, u.phone AS user_phone, "
+                    "f.content, f.page, f.contact, f.created_at "
+                    "FROM feedback f LEFT JOIN users u ON u.id = f.user_id "
+                    "ORDER BY f.created_at DESC LIMIT 200"
+                )
+            ).mappings().all()
+        return jsonify({"ok": True, "feedback": [_jsonable(dict(r)) for r in rows]})
 
     @app.get("/api/saas/console/workers")
     def api_console_workers() -> Any:

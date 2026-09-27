@@ -164,4 +164,20 @@ CREATE TABLE IF NOT EXISTS workers (
     last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- QRE-SAAS-FEEDBACK-FACTOR-REQ（2026-09-27）：
+-- ① factor_requests 补 formula/purpose（用户主动描述因子定义与用途，辅助人工审核）；
+-- ② 新 feedback 表：内测意见反馈，仅登录用户可提交（游客不可，见 06 决策日志），
+--    user_id 必填；page 记录提交来源页面路径，contact 为用户自愿留的联系方式。
+ALTER TABLE factor_requests ADD COLUMN IF NOT EXISTS formula TEXT;
+ALTER TABLE factor_requests ADD COLUMN IF NOT EXISTS purpose TEXT;
+CREATE TABLE IF NOT EXISTS feedback (
+    id         BIGSERIAL PRIMARY KEY,
+    user_id    BIGINT NOT NULL REFERENCES users(id),
+    content    TEXT NOT NULL,                     -- 反馈/改进建议正文
+    page       TEXT,                              -- 提交来源页面路径（可空）
+    contact    TEXT,                              -- 用户自愿留的联系方式（可空）
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at DESC);
+
 COMMIT;

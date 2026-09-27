@@ -2,7 +2,44 @@
 
 ## Task ID
 
-QRE-SAAS-LARGE-UNIVERSE-GUARD (公网 SaaS 大范围板块/全市场提交耗时护栏)
+QRE-SAAS-FEEDBACK-FACTOR-REQ (内测意见反馈页 + 申请新因子页 + 缺因子拦截跳转 + 全站侧边栏)
+
+## Current Status
+
+DONE (implementation; full test suite green (2185 passed + 4 skipped); 仅本地+staging 验证、未部署 ECS；awaiting user-approved git finalization)
+
+## Task Note
+
+- 侧边栏：此前 SaaS 页面无侧边栏（仅顶栏）。base.html 新增统一 `.sidenav`
+  组件（「意见反馈」/saas/feedback、「申请新因子」/saas/factor-request 两入口，
+  所有 extends base.html 的页面自动获得），样式用既有 tokens（--tint/--accent），
+  ≤960px 降级为顶部横排；当前页高亮由 base.html 公共 JS 按路径标记。
+- 反馈（需求 1）：新表 `feedback(id,user_id,content,page,contact,created_at)`。
+  **仅登录用户可提交**（游客 401 并引导登录；决策记录见 06 日志）；
+  content 必填 ≤2000 字，page/contact 可选；单用户每日 20 条上限（429）。
+  端点：POST/GET /api/saas/feedback（本人列表）；管理台只读
+  GET /api/saas/console/feedback + console.html 新「反馈」tab。
+- 申请新因子（需求 2）：独立页 /saas/factor-request（因子名称* / 计算公式 /
+  用途 / 关联策略），复用既有 POST /api/saas/factor-requests（幂等迁移
+  factor_requests 补 formula/purpose 两列，旧载荷兼容）；页内含「我的申请」
+  列表（状态徽章）。支持 ?factors=a,b&strategy=x 预填（缺因子弹层跳转来源）。
+- 缺因子拦截（需求 3）：①NL 入口——编译返回 missing_factors 弹层标题改为
+  「当前数据库中不含此因子」，新增「去申请新因子 →」跳转按钮（预填因子+策略名），
+  保留原「提交因子需求」快捷提交。②向导/YAML 兜底——startRun 校验段新增
+  unknownYamlFactors()：解析 YAML factor_fields 别名，与已加载因子目录比对，
+  未知则流水线第①步失败 + 同弹层（目录未加载时跳过，NL 路径服务端已校验）。
+- 部署注意：ECS 需先 apply deploy/saas/cloud_schema.sql（幂等，已验证对
+  aguhuice_local 重跑安全），再 rsync gui/saas/ 与重启 qre-saas。未 commit。
+- 验证：新 tests/test_saas_feedback.py +21（反馈 CRUD/权限三态/日上限/隔离、
+  factor 扩展字段回透与审核兼容、新页面元素、全页面侧边栏断言、禁链扫描、
+  弹层跳转与兜底校验断言）；全量 pytest 2185 passed + 4 skipped 零回归。
+  Playwright（本地 8095 staging + aguhuice_local）截图 13 张存
+  /tmp/qre-shots/saas-*.png：侧边栏/反馈提交/申请预填提交/console 反馈 tab/
+  缺因子弹层跳转落地/向导兜底拦截，零 JS 报错。
+
+---
+
+## Archive: QRE-SAAS-LARGE-UNIVERSE-GUARD (公网 SaaS 大范围板块/全市场提交耗时护栏)
 
 ## Current Status
 

@@ -280,3 +280,4 @@
 
 - 2026-09-08 初版：从 synthesis.html 定稿提取（用户验收通过）。
 - 2026-09-27（QRE-UI-DESIGN-SYSTEM-DOC）重写为完整设计系统：补文件地图、行内控件 36px 等高规范、ECharts 图表配置约定（此前文档写的是设计稿期 SVG 手绘方案，落地已改 ECharts）、SaaS 复刻约定、禁链含注释的教训；每条规范标注源码文件+行号。
+- 2026-09-27（QRE-SAAS-FEEDBACK-FACTOR-REQ）SaaS 侧新增统一侧边栏组件 `.sidenav`（saas/templates/base.html）：左列固定 150px、≤960px 降级顶部横排；链接态复用既有 tokens（默认 --muted 字、hover/active = `--tint` 底 + 主紫字），无新色相、无循环动效。此前 SaaS 页面无侧边栏，本条为新增组件登记（lab 侧不涉及）。

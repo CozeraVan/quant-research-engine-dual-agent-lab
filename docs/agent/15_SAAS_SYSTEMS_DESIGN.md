@@ -122,6 +122,8 @@
 
 ### 数据模型
 - `factor_requests(id, user_id, description, status[pending/approved/rejected/done], created_at, handled_at)`
+  （2026-09-27 实际落地：factors JSONB + strategy_name + formula/purpose + note/reviewed_at；审核经 /saas/console）
+- `feedback(id, user_id, content, page, contact, created_at)`（2026-09-27 QRE-SAAS-FEEDBACK-FACTOR-REQ：内测意见反馈，仅登录用户可提交，日 20 条上限；管理台只读）
 - `workers(id, name, last_heartbeat, status, capacity)`（PG 落账 + Redis 实时心跳）
 
 ### 关键接口

@@ -1224,3 +1224,11 @@ No open questions remain.
 - Alternatives: ①ECS 建行情只读副本——否决，123GB 库上 2C2G/40G 盘不可行；②结果 jsonb 内嵌 per-symbol 明细——否决，results.chart_data 会爆到 MB 级拖垮列表查询；③按需回传（用户点详情才触发 worker 补传）——留作后续增强，当前任务完成即全量备齐更简单可靠。
 - Impact: worker runner 新增 build_symbol_detail_files/_fill_excess_return；saas app 个股详情端点支持无后缀代码解析（resolve_ts_code：先按本任务实际交易个股精确匹配再按号段推断）；结果删除（DELETE /api/results/<id>）连带清理 _symbol_details 目录（既有 job_dir 整删覆盖）；17 号协议 §3.3 files 清单语义不变（子目录相对路径已支持）。
 - Owner: KIMI_CODE
+
+### 2026-09-27: 意见反馈仅登录用户可提交（QRE-SAAS-FEEDBACK-FACTOR-REQ）
+
+- Decision: 内测意见反馈（新表 feedback）**仅登录用户可提交**，游客 POST /api/saas/feedback 返回 401 并在页面显示登录引导卡；不做游客 IP 限流提交。防滥用改为单用户每日 20 条上限（429）。因子申请沿用既有口径（本就登录限定，24h 同因子集合去重）。
+- Reason: 反馈需要可跟进、可回复的账号主体，游客匿名反馈无法闭环且易被刷；游客的核心诉求（免登录试用）已由游客回测通道覆盖，反馈不属于试用刚需。登录限定下无需引入 IP 记列与限流逻辑，schema 最小。
+- Alternatives: ①游客按 guest_key/IP 限流提交——否决，无法跟进回复且多一条匿名滥用面；②完全放开——否决，无防护。
+- Impact: feedback.user_id NOT NULL；反馈页/申请页对游客显示登录引导卡而非表单；06 本条即「按现有鉴权体系决定」的拍板记录。
+- Owner: KIMI_CODE

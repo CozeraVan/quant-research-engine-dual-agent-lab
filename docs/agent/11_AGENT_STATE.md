@@ -12,7 +12,17 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-LARGE-UNIVERSE-GUARD (DONE — 公网大范围板块/全市场提交耗时护栏，阈值口径同 lab 版 3000；全量测试零回归；仅本地+staging 验证未部署 ECS；awaiting git approval)
+QRE-SAAS-FEEDBACK-FACTOR-REQ (DONE — 内测意见反馈页 + 申请新因子页 + 缺因子拦截跳转 + 全站统一侧边栏；全量 2185 passed + 4 skipped 零回归；仅本地+staging 验证未部署 ECS；awaiting git approval)
+
+2026-09-27：细节见 04_TASK_HANDOFF.md 与 05_PROGRESS.md 同名条目。要点：
+base.html 新增 .sidenav 侧边栏（意见反馈 / 申请新因子两入口，全页面自动获得）；
+新表 feedback（仅登录用户提交，日 20 条上限，决策见 06）+ console「反馈」tab
+（只读）；新页 /saas/factor-request（factor_requests 幂等补 formula/purpose 列）；
+new.html 缺因子弹层改「当前数据库中不含此因子」+ 跳转申请页按钮（预填），
+向导/YAML 提交前 unknownYamlFactors 兜底校验。测试 +21
+（tests/test_saas_feedback.py）。未 commit、未部署 ECS（schema 需先 apply）。
+
+上一任务：QRE-SAAS-LARGE-UNIVERSE-GUARD (DONE — 公网大范围板块/全市场提交耗时护栏，阈值口径同 lab 版 3000；全量测试零回归；仅本地+staging 验证未部署 ECS；awaiting git approval)
 
 2026-09-27：细节见 04_TASK_HANDOFF.md 与 05_PROGRESS.md 同名条目。要点：
 全部 A 股计数补为元数据字段 all_a_count（universe.py 新 all_a_count() =

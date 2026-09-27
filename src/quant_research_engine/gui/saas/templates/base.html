@@ -78,6 +78,18 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 .tag-rank{max-height:220px;overflow:auto;margin-top:8px}
 .tag-rank tr.tag-row{cursor:pointer}
 .tag-rank tr.tag-row:hover{background:#f0f6ff}
+/* 统一侧边栏（QRE-SAAS-FEEDBACK-FACTOR-REQ）：全页面左侧入口，配色遵循 lab 版主题变量 */
+.app-shell{display:flex;align-items:flex-start}
+.sidenav{flex:0 0 150px;padding:20px 8px 20px 16px;position:sticky;top:16px}
+.sidenav a{display:block;padding:8px 14px;border-radius:8px;color:var(--muted);font-size:13.5px;margin-bottom:4px;white-space:nowrap}
+.sidenav a:hover{background:var(--tint,#F1EDF8);color:var(--accent)}
+.sidenav a.active{background:var(--tint,#F1EDF8);color:var(--accent);font-weight:600}
+.app-main{flex:1;min-width:0}
+@media (max-width:960px){
+  .app-shell{display:block}
+  .sidenav{display:flex;position:static;padding:0 16px 10px}
+  .sidenav a{margin-bottom:0;margin-right:6px}
+}
 </style>
 <link rel="stylesheet" href="/static/lab-theme.css">
 <script src="/static/lab-ui.js"></script>
@@ -91,8 +103,16 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
     <a href="/saas/login" data-nav="login" id="nav-login">登录 / 注册</a>
   </nav>
 </header>
+<div class="app-shell">
+<aside class="sidenav">
+  <a href="/saas/feedback" data-nav="feedback">意见反馈</a>
+  <a href="/saas/factor-request" data-nav="factor-request">申请新因子</a>
+</aside>
+<div class="app-main">
 <div class="guest-strip" id="guest-strip" style="display:none">游客模式：可免费测试单股策略（近 2 年、每日 1 次、结果次日清空）　<a class="inl" href="/saas/login">注册 / 登录，解锁全市场与保存记录 →</a></div>
 {% block body %}{% endblock %}
+</div>
+</div>
 <script>
 // 公共：token 存 localStorage；所有 API 带 Bearer；401 跳登录页
 // （staging 免登录 SAAS_AUTH_BYPASS=1 时路由不返 401，该逻辑不触发）
@@ -123,6 +143,9 @@ function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saa
     if ((nav === 'new' && path.indexOf('/saas/new') === 0) ||
         (nav === 'records' && (path === '/saas/' || path.indexOf('/saas/jobs') === 0)) ||
         (nav === 'login' && path.indexOf('/saas/login') === 0)) a.classList.add('active');
+  });
+  document.querySelectorAll('.sidenav a').forEach(function(a){
+    if (a.dataset.nav && path.indexOf('/saas/' + a.dataset.nav) === 0) a.classList.add('active');
   });
   if (loggedIn) {
     var l = document.getElementById('nav-login');

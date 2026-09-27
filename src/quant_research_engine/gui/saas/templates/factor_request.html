@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}申请新因子 · A股回测台{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="page-head">
+    <h1>申请新因子</h1>
+    <p>策略用到的因子不在当前因子库内时，在这里提交申请：描述因子名称、计算公式与用途，提交后进入人工审核；需求集中的因子会优先计算入库。</p>
+  </div>
+
+  <div class="card hidden" id="fr-login">
+    <p class="muted">因子申请需登录后提交（审核结果会关联到你的账号）。<a class="inl" href="/saas/login">去登录 / 注册 →</a></p>
+  </div>
+
+  <div class="card hidden" id="fr-form-card">
+    <div class="form-grid">
+      <label>因子名称 <span class="req">*</span></label>
+      <span>
+        <input type="text" id="fr-names" placeholder="如 rsi_14；多个用逗号分隔">
+      </span>
+      <label>计算公式 / 定义 <span class="opt">（可选）</span></label>
+      <span>
+        <textarea id="fr-formula" rows="3" maxlength="2000" placeholder="例：(close - lag(close, 14)) / lag(close, 14)；描述越具体，审核入库越快"></textarea>
+      </span>
+      <label>用途说明 <span class="opt">（可选）</span></label>
+      <span>
+        <textarea id="fr-purpose" rows="3" maxlength="2000" placeholder="打算用它做什么样的策略 / 解决什么问题"></textarea>
+      </span>
+      <label>关联策略 <span class="opt">（可选）</span></label>
+      <span>
+        <input type="text" id="fr-strategy" placeholder="触发本次申请的策略名">
+      </span>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:12px;align-items:center">
+      <button class="btn btn-primary" id="fr-submit">提交申请</button>
+      <span class="opt" id="fr-status"></span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="fr-history-card">
+    <h2>我的申请 <span class="opt" id="fr-count"></span></h2>
+    <table class="tbl">
+      <thead><tr><th>因子</th><th>状态</th><th>审核备注</th><th>提交时间</th></tr></thead>
+      <tbody id="fr-tbody"></tbody>
+    </table>
+    <div class="chart-empty hidden" id="fr-empty">还没有提交过因子申请</div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  function esc(s){ var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+  var loggedIn = SAAS_BYPASS || !!saasToken();
+  if (!loggedIn){
+    document.getElementById('fr-login').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('fr-form-card').classList.remove('hidden');
+  document.getElementById('fr-history-card').classList.remove('hidden');
+
+  // 缺因子弹层跳转预填（?factors=a,b&strategy=xxx）
+  var q = new URLSearchParams(location.search);
+  if (q.get('factors')) document.getElementById('fr-names').value = q.get('factors');
+  if (q.get('strategy')) document.getElementById('fr-strategy').value = q.get('strategy');
+
+  function loadHistory(){
+    apiFetch('/api/saas/factor-requests').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('fr-count').textContent = '共 ' + d.requests.length + ' 条';
+      document.getElementById('fr-empty').classList.toggle('hidden', d.requests.length > 0);
+      document.getElementById('fr-tbody').innerHTML = d.requests.map(function(r){
+        var badge = r.status === 'approved' ? '<span class="badge ok">已批准</span>'
+          : r.status === 'rejected' ? '<span class="badge fail">已拒绝</span>' : '<span class="badge run">待审核</span>';
+        return '<tr><td>' + esc((r.factors || []).join('、')) + '</td><td>' + badge + '</td><td>' +
+          esc(r.note || '—') + '</td><td>' + (r.created_at ? LabUI.fmtLocalTime(r.created_at) : '—') + '</td></tr>';
+      }).join('');
+    }).catch(function(){});
+  }
+  loadHistory();
+
+  document.getElementById('fr-submit').addEventListener('click', function(){
+    var names = document.getElementById('fr-names').value.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    var st = document.getElementById('fr-status');
+    if (!names.length){ st.textContent = '请先填写因子名称'; return; }
+    var btn = this; btn.disabled = true; st.textContent = '提交中…';
+    apiFetch('/api/saas/factor-requests', {json: {
+      factors: names,
+      formula: document.getElementById('fr-formula').value.trim(),
+      purpose: document.getElementById('fr-purpose').value.trim(),
+      strategy_name: document.getElementById('fr-strategy').value.trim()
+    }}).then(function(r){ return r.json(); }).then(function(d){
+      btn.disabled = false;
+      if (d.ok){
+        st.textContent = '已提交，进入人工审核队列';
+        document.getElementById('fr-names').value = '';
+        document.getElementById('fr-formula').value = '';
+        document.getElementById('fr-purpose').value = '';
+        loadHistory();
+      } else {
+        st.textContent = d.error || '提交失败，请稍后重试';
+      }
+    }).catch(function(){ btn.disabled = false; st.textContent = '网络异常，请稍后重试'; });
+  });
+})();
+</script>
+{% endblock %}

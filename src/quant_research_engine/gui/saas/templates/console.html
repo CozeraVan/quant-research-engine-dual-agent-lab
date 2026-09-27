@@ -14,6 +14,7 @@
       <button class="tab active" data-tab="overview">总览</button>
       <button class="tab" data-tab="users">用户</button>
       <button class="tab" data-tab="factors">因子审核</button>
+      <button class="tab" data-tab="feedback">反馈</button>
       <button class="tab" data-tab="workers">Worker</button>
       <button class="tab" data-tab="jobs">任务</button>
     </div>
@@ -55,6 +56,17 @@
       </div>
     </div>
 
+    <div class="tab-pane hidden" id="pane-feedback">
+      <div class="card">
+        <h2>用户反馈 <span class="opt">（只读，最新 200 条）</span></h2>
+        <table class="tbl">
+          <thead><tr><th class="num">ID</th><th>用户</th><th>内容</th><th>来源页面</th><th>联系方式</th><th>提交时间</th></tr></thead>
+          <tbody id="feedback-tbody"></tbody>
+        </table>
+        <div class="chart-empty hidden" id="feedback-empty">暂无反馈</div>
+      </div>
+    </div>
+
     <div class="tab-pane hidden" id="pane-workers">
       <div class="card">
         <h2>Worker 状态 <span class="opt">（近 3 分钟有心跳 = 在线）</span></h2>
@@ -90,7 +102,7 @@
 <script>
 (function(){
   requireLogin();
-  var panes = {overview:'pane-overview', users:'pane-users', factors:'pane-factors', workers:'pane-workers', jobs:'pane-jobs'};
+  var panes = {overview:'pane-overview', users:'pane-users', factors:'pane-factors', feedback:'pane-feedback', workers:'pane-workers', jobs:'pane-jobs'};
   var factorSt = 'pending', jobSt = 'failed';
 
   function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }
@@ -117,7 +129,7 @@
       btn.classList.add('active');
       Object.keys(panes).forEach(function(k){ document.getElementById(panes[k]).classList.add('hidden'); });
       document.getElementById(panes[btn.dataset.tab]).classList.remove('hidden');
-      ({overview: loadOverview, users: loadUsers, factors: loadFactorRequests, workers: loadWorkers, jobs: loadJobs})[btn.dataset.tab]();
+      ({overview: loadOverview, users: loadUsers, factors: loadFactorRequests, feedback: loadFeedback, workers: loadWorkers, jobs: loadJobs})[btn.dataset.tab]();
     });
   });
 
@@ -200,7 +212,9 @@
           ? '<button class="btn-sm" data-rev="approve" data-rid="' + q.id + '">批准</button> <button class="btn-sm" data-rev="reject" data-rid="' + q.id + '">拒绝</button>'
           : '—';
         return '<tr><td>' + q.id + '</td><td>' + esc(q.user_email || q.user_phone || ('#' + q.user_id)) + '</td><td>' +
-          esc(q.strategy_name || '—') + '</td><td>' + esc((q.factors || []).join('、')) + '</td><td>' + stBadge + '</td><td>' +
+          esc(q.strategy_name || '—') + '</td><td>' + esc((q.factors || []).join('、')) +
+          (q.formula ? '<br><span class="opt">公式：' + esc(q.formula) + '</span>' : '') +
+          (q.purpose ? '<br><span class="opt">用途：' + esc(q.purpose) + '</span>' : '') + '</td><td>' + stBadge + '</td><td>' +
           fmt(q.created_at) + '</td><td>' + esc(q.note || '—') + '</td><td>' + ops + '</td></tr>';
       }).join('');
       document.getElementById('factor-tbody').innerHTML = html;
@@ -217,6 +231,19 @@
         if (!d.ok){ alert(d.error || '操作失败'); } loadFactorRequests();
       }).catch(function(){});
   });
+
+  // --- 反馈（只读） ---
+  function loadFeedback(){
+    apiFetch('/api/saas/console/feedback').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('feedback-empty').classList.toggle('hidden', d.feedback.length > 0);
+      document.getElementById('feedback-tbody').innerHTML = d.feedback.map(function(f){
+        return '<tr><td class="num">' + f.id + '</td><td>' + esc(f.user_email || f.user_phone || ('#' + f.user_id)) + '</td><td>' +
+          esc(f.content) + '</td><td>' + esc(f.page || '—') + '</td><td>' + esc(f.contact || '—') + '</td><td>' +
+          fmt(f.created_at) + '</td></tr>';
+      }).join('');
+    }).catch(function(){});
+  }
 
   // --- E3 Worker ---
   function loadWorkers(){
