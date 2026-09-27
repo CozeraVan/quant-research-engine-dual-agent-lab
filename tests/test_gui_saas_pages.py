@@ -221,6 +221,17 @@ class TestNoAdminLinks:
         html = client.get("/saas/new").get_data(as_text=True)
         assert 'id="factor-modal"' in html and '提交因子需求' in html and '换个策略' in html
 
+    def test_new_page_big_universe_guard(self, client):
+        """QRE-SAAS-LARGE-UNIVERSE-GUARD：大范围标的提交前耗时确认弹层（阈值口径同 lab 版 3000）。"""
+        html = client.get("/saas/new").get_data(as_text=True)
+        assert 'id="big-univ-modal"' in html
+        assert 'id="big-univ-ok"' in html and 'id="big-univ-cancel"' in html
+        assert 'class="modal-mask" id="big-univ-modal"' in html  # 规范弹层组件（非原生 confirm）
+        assert 'LARGE_UNIVERSE_THRESHOLD = 3000' in html
+        assert "大范围回测耗时提示" in html and "几分钟到十几分钟" in html
+        assert "confirmBigUniverse" in html and "largeUniverseEstimate" in html
+        assert "all_a_count" in html  # 全部 A 股计数来自 /api/saas/universes
+
     def test_dashboard_has_factor_request_section(self, client):
         html = client.get("/saas/").get_data(as_text=True)
         assert 'id="factor-req-tbody"' in html and '我的因子申请' in html

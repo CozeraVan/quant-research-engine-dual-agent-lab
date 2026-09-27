@@ -510,3 +510,28 @@ def test_universe_members_sql_mapping(monkeypatch):
     import pytest
     with pytest.raises(KeyError):
         u.universe_members("bogus", "x")
+
+
+def test_all_a_count_sql(monkeypatch):
+    """all_a_count：reference.stock_basic 行数（QRE-SAAS-LARGE-UNIVERSE-GUARD 元数据用）。"""
+    from quant_research_engine.gui import universe as u
+
+    queries = []
+
+    class FakeConn:
+        def execute(self, stmt, params=None):
+            queries.append(str(stmt))
+            return self
+
+        def scalar_one(self):
+            return 5531
+
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    class FakeEngine:
+        def connect(self): return FakeConn()
+
+    monkeypatch.setattr(u, "_engine", lambda db_url=None: FakeEngine())
+    assert u.all_a_count() == 5531
+    assert "reference.stock_basic" in queries[0]

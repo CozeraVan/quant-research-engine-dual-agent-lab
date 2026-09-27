@@ -36,6 +36,16 @@ GROUP_KEYS = {g["group"] for g in _GROUPS}
 LARGE_UNIVERSE_THRESHOLD = 3000
 
 
+def all_a_count(db_url: str | None = None) -> int:
+    """全部 A 股标的数（reference.stock_basic 行数；stock_basic 已无 list_status 列，
+    与 universe「通用行业」组同口径，含北交所）。供元数据导出与耗时护栏估算。"""
+    engine = _engine(db_url)
+    with engine.connect() as conn:
+        return int(
+            conn.execute(text("SELECT count(*) FROM reference.stock_basic")).scalar_one()
+        )
+
+
 def _engine(db_url: str | None = None):
     from quant_research_engine.gui.admin import _store
 

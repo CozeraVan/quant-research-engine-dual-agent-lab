@@ -25,12 +25,14 @@ def build_metadata(db_url: str | None = None) -> dict:
         build_factor_groups,
         load_factor_tables_columns,
     )
-    from quant_research_engine.gui.universe import list_universes
+    from quant_research_engine.gui.universe import all_a_count, list_universes
 
     return {
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "factors": build_factor_groups(load_factor_tables_columns(db_url)),
         "universes": list_universes(db_url)["groups"],
+        # 全部 A 股成分股计数（QRE-SAAS-LARGE-UNIVERSE-GUARD：前端大范围耗时护栏用）
+        "all_a_count": all_a_count(db_url),
     }
 
 
@@ -45,7 +47,7 @@ def main() -> None:
     out.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     n_factors = sum(len(g["items"]) for g in data["factors"])
     n_univ = sum(len(g["items"]) for g in data["universes"])
-    print(f"written {out}: 因子 {n_factors} 项 / 板块概念 {n_univ} 项 / {out.stat().st_size} bytes")
+    print(f"written {out}: 因子 {n_factors} 项 / 板块概念 {n_univ} 项 / 全部A股 {data['all_a_count']} 只 / {out.stat().st_size} bytes")
 
 
 if __name__ == "__main__":

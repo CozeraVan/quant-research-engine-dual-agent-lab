@@ -495,15 +495,22 @@ def create_saas_app() -> Flask:
     def api_saas_universes() -> Any:
         """板块/概念范围名单（名称+成员数；不含成分股明细）。
         元数据文件优先，本地回退实时查库（gui/universe.py 七组）。
-        纯只读元数据，对游客开放（配额在提交环节收口）。"""
+        纯只读元数据，对游客开放（配额在提交环节收口）。
+        all_a_count 供前端大范围耗时护栏（QRE-SAAS-LARGE-UNIVERSE-GUARD）估算全部 A 股数量。"""
         metadata = _load_saas_metadata(app)
         if metadata and metadata.get("universes"):
             return jsonify({"ok": True, "groups": metadata["universes"],
+                            "all_a_count": metadata.get("all_a_count"),
                             "generated_at": metadata.get("generated_at")})
-        from quant_research_engine.gui.universe import list_universes
+        from quant_research_engine.gui.universe import all_a_count, list_universes
 
         try:
-            return jsonify(list_universes())
+            data = list_universes()
+            try:
+                data["all_a_count"] = all_a_count()
+            except Exception:
+                data["all_a_count"] = None  # 计数失败不拖垮名单：前端按未知数量降级文案
+            return jsonify(data)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"归类数据不可用（{exc}）"}), 503
 

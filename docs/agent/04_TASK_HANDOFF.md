@@ -2,7 +2,34 @@
 
 ## Task ID
 
-QRE-SAAS-SYMBOL-UX (股票代码规范化/显示脱敏 + 超额收益修复 + per-symbol 产物回传打通公网个股详情 + 板块弹层修复)
+QRE-SAAS-LARGE-UNIVERSE-GUARD (公网 SaaS 大范围板块/全市场提交耗时护栏)
+
+## Current Status
+
+DONE (implementation; full test suite green; 仅本地+staging 验证、未部署 ECS；awaiting user-approved git finalization)
+
+## Task Note
+
+- 背景：公网新建策略页选大板块/概念或全部 A 股（5531 只）提交全量回测耗时
+  分钟级起，lab 版早有护栏，SaaS 侧缺失。
+- 阈值口径（与 lab 版一致）：universe.py `LARGE_UNIVERSE_THRESHOLD=3000`；
+  全部 A 股恒提示；板块/概念成员数 >3000 提示；指定代码/随机 N（≤2000）不触发。
+- 计数来源：板块成员数用 /api/saas/universes 既有 `items[].count`；全部 A 股
+  补新元数据字段 `all_a_count`（universe.py 新 `all_a_count()` =
+  reference.stock_basic 行数）；`scripts/sync_saas_metadata.py` 生成逻辑更新，
+  deploy/saas/metadata.json 已重生成；/api/saas/universes 双路径透出，缺失
+  降级 None。
+- 前端 saas/templates/new.html：流水线第③步提交 full job 前弹
+  `#big-univ-modal`（12 号规范 .modal-mask/.modal 组件，非原生 confirm），
+  文案含预计股票数与「几分钟到十几分钟」；确认才提交，取消收起流水线。
+- lab 侧零改动。测试 +3（test_gui_saas.py metadata 透出+降级、
+  test_gui_saas_pages.py 弹层断言、test_gui_lab.py all_a_count fake engine）。
+  全量 pytest 零回归。未 commit；未部署 ECS（metadata.json 需随部署 scp，
+  见 sync_saas_metadata.py docstring 命令）。
+
+---
+
+## Archive: QRE-SAAS-SYMBOL-UX (股票代码规范化/显示脱敏 + 超额收益修复 + per-symbol 产物回传打通公网个股详情 + 板块弹层修复)
 
 ## Current Status
 

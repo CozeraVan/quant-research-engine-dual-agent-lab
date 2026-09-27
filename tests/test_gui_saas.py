@@ -809,6 +809,7 @@ class TestSaasMetadata:
                          "items": [{"table": "factors.t", "column": "rsi_14", "label": "RSI"}]}],
             "universes": [{"group": "sw1", "label": "申万一级行业",
                            "items": [{"key": "电子", "count": 618}]}],
+            "all_a_count": 5531,  # QRE-SAAS-LARGE-UNIVERSE-GUARD
         }
         (tmp_path / "metadata.json").write_text(_json.dumps(meta), encoding="utf-8")
         app.config["SAAS_METADATA_PATH"] = str(tmp_path / "metadata.json")
@@ -817,8 +818,26 @@ class TestSaasMetadata:
         assert f.get_json()["groups"][0]["label"] == "动量"
         assert u.get_json()["groups"][0]["items"][0] == {"key": "电子", "count": 618}
         assert u.get_json()["generated_at"] == "2026-09-26T00:00:00Z"
+        assert u.get_json()["all_a_count"] == 5531  # 大范围护栏估算全部 A 股数量
         # 元数据对游客开放（只读目录；配额在提交环节收口）
         assert client.get("/api/saas/universes").status_code == 200
+
+    def test_universes_all_a_count_absent_degrades_to_none(self, client, app, tmp_path):
+        """旧版元数据文件（无 all_a_count）照常可用，护栏字段降级 None 不报错。"""
+        import json as _json
+
+        meta = {
+            "generated_at": "2026-09-26T00:00:00Z",
+            "factors": [{"group": "momentum", "label": "动量",
+                         "items": [{"table": "factors.t", "column": "rsi_14", "label": "RSI"}]}],
+            "universes": [{"group": "sw1", "label": "申万一级行业",
+                           "items": [{"key": "电子", "count": 618}]}],
+        }
+        (tmp_path / "metadata.json").write_text(_json.dumps(meta), encoding="utf-8")
+        app.config["SAAS_METADATA_PATH"] = str(tmp_path / "metadata.json")
+        u = client.get("/api/saas/universes", headers={"X-User-Id": "1"})
+        assert u.status_code == 200
+        assert u.get_json()["ok"] and u.get_json()["all_a_count"] is None
 
 
 class TestStrategyLibrary:

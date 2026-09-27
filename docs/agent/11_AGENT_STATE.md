@@ -12,7 +12,17 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-SYMBOL-UX (DONE — 股票代码规范化+显示脱敏、超额收益 vs 持有不动修复、worker per-symbol 产物回传打通公网个股详情、板块弹层列补齐+点击跳转；已 rsync 临时部署 ECS 并公网验证；全量测试零回归；awaiting git approval)
+QRE-SAAS-LARGE-UNIVERSE-GUARD (DONE — 公网大范围板块/全市场提交耗时护栏，阈值口径同 lab 版 3000；全量测试零回归；仅本地+staging 验证未部署 ECS；awaiting git approval)
+
+2026-09-27：细节见 04_TASK_HANDOFF.md 与 05_PROGRESS.md 同名条目。要点：
+全部 A 股计数补为元数据字段 all_a_count（universe.py 新 all_a_count() =
+reference.stock_basic 行数；sync_saas_metadata.py 生成逻辑更新，metadata.json
+已重生成 5531 只）；/api/saas/universes 双路径透出（缺失降级 None）；
+new.html 流水线第③步提交前按 LARGE_UNIVERSE_THRESHOLD=3000 判定，
+超阈弹 #big-univ-modal（规范 .modal-mask 组件）说明预计股票数与耗时，
+确认才提交。lab 侧零改动。测试 +3，全量零回归。未 commit。
+
+上一任务：QRE-SAAS-SYMBOL-UX (DONE — 股票代码规范化+显示脱敏、超额收益 vs 持有不动修复、worker per-symbol 产物回传打通公网个股详情、板块弹层列补齐+点击跳转；已 rsync 临时部署 ECS 并公网验证；全量测试零回归；awaiting git approval)
 
 2026-09-27：四项改动（细节见 04_TASK_HANDOFF.md 与 05_PROGRESS.md 同名条目）。
 要点：新 gui/saas/symbol_norm.py；worker runner 新增 _fill_excess_return +

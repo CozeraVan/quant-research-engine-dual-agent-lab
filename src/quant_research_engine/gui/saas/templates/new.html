@@ -186,6 +186,18 @@
     </div>
   </div>
 
+  <!-- 大范围标的耗时护栏弹层（QRE-SAAS-LARGE-UNIVERSE-GUARD，阈值口径与 lab 版一致） -->
+  <div class="modal-mask" id="big-univ-modal">
+    <div class="modal">
+      <h3>大范围回测耗时提示</h3>
+      <p id="big-univ-text"></p>
+      <div class="m-actions">
+        <button class="btn btn-ghost" id="big-univ-cancel">返回修改</button>
+        <button class="btn btn-primary" id="big-univ-ok">确认开始回测</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-mask" id="factor-modal">
     <div class="modal">
       <h3>当前因子库暂不支持</h3>
@@ -702,12 +714,14 @@ $('#guest-continue').addEventListener('click', () => {
 
 // 板块/概念名单（QRE-SAAS-METADATA：/api/saas/universes，登录后加载）
 let univGroups = [];
+let allACount = null;  // 全部 A 股成分股计数（QRE-SAAS-LARGE-UNIVERSE-GUARD；缺省时护栏按约数文案）
 async function loadUniverses(){
   try {
     const resp = await apiFetch('/api/saas/universes');
     const d = await resp.json();
     if (!d.ok) return;
     univGroups = d.groups;
+    allACount = (typeof d.all_a_count === 'number' && d.all_a_count > 0) ? d.all_a_count : null;
     $('#p-univ-group').innerHTML = univGroups.map((g, i) =>
       `<option value="${i}">${g.label}（${g.items.length}）</option>`).join('');
     fillUnivKeys();
@@ -727,6 +741,34 @@ function updUnivCount(){
 $('#p-univ-group').addEventListener('change', fillUnivKeys);
 $('#p-univ-key').addEventListener('change', updUnivCount);
 loadUniverses();
+
+// ---------- 大范围标的耗时护栏（QRE-SAAS-LARGE-UNIVERSE-GUARD）----------
+// 阈值口径与 lab 版一致：板块/概念成员数 > 3000 只或选全部 A 股时，提交前弹层确认。
+const LARGE_UNIVERSE_THRESHOLD = 3000;
+function largeUniverseEstimate(){
+  const scope = document.querySelector('input[name="scope"]:checked').value;
+  if (scope === 'all') return {label: '全部 A 股', count: allACount};
+  if (scope === 'univ'){
+    const g = univGroups[Number($('#p-univ-group').value)];
+    const it = g && g.items[Number($('#p-univ-key').value)];
+    if (it && typeof it.count === 'number' && it.count > LARGE_UNIVERSE_THRESHOLD)
+      return {label: g.label + '·' + it.key, count: it.count};
+  }
+  return null;
+}
+function confirmBigUniverse(est){
+  return new Promise(resolve => {
+    const size = est.count ? ('约 ' + est.count + ' 只') : '数千只';
+    $('#big-univ-text').innerHTML = '本次标的范围为 <b>' + esc(est.label) + '</b>（' + size +
+      '），范围较大，全量回测预计需要几分钟到十几分钟。提交后可在「我的回测记录」查看进度。确认开始？';
+    const mask = $('#big-univ-modal');
+    const done = ok => { mask.classList.remove('show'); resolve(ok); };
+    $('#big-univ-ok').onclick = () => done(true);
+    $('#big-univ-cancel').onclick = () => done(false);
+    mask.onclick = e => { if (e.target === mask) done(false); };
+    mask.classList.add('show');
+  });
+}
 
 // 从策略库回填（QRE-SAAS-D3）：/saas/new?strategy=<id> → 载入 YAML 与名称
 //（在 window load 后执行：等向导默认渲染完成，避免被覆盖）
@@ -791,7 +833,13 @@ async function startRun(){
       abort(); return;
     }
     LabUI.pipeDone(pipeEl, 2, '冒烟通过');
-    // ③ 全量
+    // ③ 全量（大范围标的先弹耗时确认护栏，用户确认后才提交）
+    const est = largeUniverseEstimate();
+    if (est && !(await confirmBigUniverse(est))){
+      abort();
+      pipeEl.style.display = 'none';  // 用户取消：收起流水线，可改小范围后重跑
+      return;
+    }
     LabUI.pipeDoing(pipeEl, 3);
     const fullId = await createJob('full');
     LabUI.pipeDone(pipeEl, 3, '已提交');
