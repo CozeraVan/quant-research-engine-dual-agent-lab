@@ -180,4 +180,14 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at DESC);
 
+-- QRE-AUTH-MEMBERSHIP（A2，2026-09-27，18 号设计文档 §3）：
+-- Authing 身份层接入。authing_id = OIDC sub（唯一，首登自动建档）；
+-- avatar_url 同步 Authing 资料；member_since/member_expire_at 为会员制预留字段
+-- （收费模式未定，只入库不生效）。email+password_hash 保留作降级登录通道。
+ALTER TABLE users ADD COLUMN IF NOT EXISTS authing_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_authing ON users (authing_id) WHERE authing_id IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS member_since TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS member_expire_at TIMESTAMPTZ;
+
 COMMIT;

@@ -5,27 +5,43 @@
   <div class="card">
     <h1 style="text-align:center">A股回测台</h1>
     <p class="muted" style="text-align:center">验证你的交易策略能否在 A 股赚钱</p>
-    <div class="tabs" style="justify-content:center">
-      <button class="tab active" id="tab-login" type="button">登录</button>
-      <button class="tab" id="tab-register" type="button">注册</button>
-    </div>
-    <label for="login-target">邮箱</label>
-    <input id="login-target" type="email" placeholder="you@example.com" autocomplete="username">
-    <label for="login-code">密码</label>
-    <input id="login-code" type="password" placeholder="至少 8 位，含字母和数字" autocomplete="current-password">
+    <a class="btn big btn-primary" id="btn-authing" href="/saas/login/authing" style="display:block;text-align:center;margin-top:12px">手机号 / 扫码登录（推荐）</a>
+    <p class="muted" style="text-align:center;margin-top:10px">短信验证码或微信扫码，首次登录自动注册</p>
     <div id="login-error" class="error"></div>
-    <button class="btn big" id="btn-login" style="width:100%;margin-top:16px">登录</button>
-    <p class="muted" style="text-align:center;margin-top:16px">内测期使用邮箱+密码（正式版将接入认证服务）<br>游客免登录：可直接在「新建回测」提交单支股票、近 2 年的回测（每日 1 次，结果次日清空）</p>
+
+    <details id="legacy-box">
+      <summary>使用内测邮箱账号登录（降级通道）</summary>
+      <div class="tabs" style="justify-content:center;margin-top:12px">
+        <button class="tab active" id="tab-login" type="button">登录</button>
+        <button class="tab" id="tab-register" type="button">注册</button>
+      </div>
+      <label for="login-target">邮箱</label>
+      <input id="login-target" type="email" placeholder="you@example.com" autocomplete="username">
+      <label for="login-code">密码</label>
+      <input id="login-code" type="password" placeholder="至少 8 位，含字母和数字" autocomplete="current-password">
+      <button class="btn ghost" id="btn-login" style="width:100%;margin-top:16px">登录</button>
+    </details>
+
+    <details id="bind-box">
+      <summary>已有内测账号？绑定到手机登录</summary>
+      <p class="muted" style="margin-top:10px">先用上方按钮完成手机 / 扫码登录，再在此输入旧账号的邮箱和密码，即可把旧账号的回测记录迁移到新身份。</p>
+      <label for="bind-email">旧账号邮箱</label>
+      <input id="bind-email" type="email" placeholder="you@example.com" autocomplete="username">
+      <label for="bind-password">旧账号密码</label>
+      <input id="bind-password" type="password" autocomplete="current-password">
+      <button class="btn ghost" id="btn-bind" style="width:100%;margin-top:16px">绑定旧账号</button>
+    </details>
+
+    <p class="muted" style="text-align:center;margin-top:16px">游客免登录：可直接在「新建策略」提交单支股票、近 2 年的回测（每日 1 次，结果次日清空）</p>
   </div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
-if (saasToken()) location.href = '/saas/';  // 已登录直接进工作台
-
-let mode = 'login';
 const errBox = document.getElementById('login-error');
 function fail(msg){ errBox.textContent = msg; }
+
+let mode = 'login';
 const btnLogin = document.getElementById('btn-login');
 document.getElementById('tab-login').addEventListener('click', () => {
   mode = 'login'; errBox.textContent = '';
@@ -54,6 +70,21 @@ btnLogin.addEventListener('click', async () => {
   const data = await resp.json();
   if (!resp.ok || !data.ok) return fail(data.error || (mode === 'register' ? '注册失败' : '登录失败'));
   localStorage.setItem(SAAS_TOKEN_KEY, data.token);
+  location.href = '/saas/';
+});
+
+document.getElementById('btn-bind').addEventListener('click', async () => {
+  errBox.textContent = '';
+  if (!saasToken()) return fail('请先用上方按钮完成手机 / 扫码登录，再绑定旧账号');
+  const email = document.getElementById('bind-email').value.trim();
+  const password = document.getElementById('bind-password').value;
+  if (!email || !password) return fail('请填写旧账号的邮箱和密码');
+  const resp = await apiFetch('/api/saas/auth/bind', {json: {email, password}});
+  const data = await resp.json();
+  if (!resp.ok || !data.ok) return fail(data.error || '绑定失败');
+  if (data.token) localStorage.setItem(SAAS_TOKEN_KEY, data.token);
+  errBox.textContent = '';
+  alert('绑定成功，旧账号数据已关联到当前登录身份');
   location.href = '/saas/';
 });
 </script>

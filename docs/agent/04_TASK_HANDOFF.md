@@ -2,7 +2,41 @@
 
 ## Task ID
 
-QRE-SAAS-FEEDBACK-FACTOR-REQ (内测意见反馈页 + 申请新因子页 + 缺因子拦截跳转 + 全站侧边栏)
+QRE-AUTH-MEMBERSHIP (Authing 身份层登录接入，A2-A6；18 号设计文档)
+
+## Current Status
+
+DONE (implementation; full test suite green (2207 passed + 4 skipped); 仅本地+staging 验证、代码未部署 ECS；awaiting user-approved git finalization + Authing 控制台回调白名单确认)
+
+## Task Note
+
+- 实施流程与设计文档 §6 的 Guard 方案不同：OIDC 授权码 + Authing 托管登录页跳转
+  （与控制台已配置的回调 URL 匹配，零前端 SDK）。18 号文档已注记。
+- A2：deploy/saas/cloud_schema.sql 幂等追加 users.authing_id（部分唯一索引）/
+  avatar_url/member_since/member_expire_at；aguhuice_local 已 apply。
+  **ECS 部署前须先 psql apply cloud_schema.sql**。
+- A3：新模块 src/quant_research_engine/gui/saas/authing.py（换票/JWKS 缓存/验签，
+  requests+pyjwt 惰性导入）；app.py 新增 GET /saas/login/authing（302+state）、
+  GET /saas/login/callback（验签→按 sub 建档/关联→本地 session→
+  login_callback.html 落 localStorage 跳工作台）、POST /api/saas/auth/authing
+  （JSON 版）、POST /api/saas/auth/bind（绑定旧邮箱账号，迁移 authing_id）。
+- 依赖：pyproject 加 pyjwt[crypto]>=2.8 + requests>=2.31（uv.lock 已更新）；
+  ECS 精简 venv 已 pip install 完成。
+- A4：login.html——Authing 主按钮 + 邮箱密码/绑定旧账号两个 details 折叠区；
+  已登录不再自动跳工作台（保证绑定入口可达）。新模板 login_callback.html。
+- A5：tests/test_saas_authing.py +22（本地 RSA mock JWKS 正反例/建档幂等/绑定四态）；
+  全量 2207 passed + 4 skipped 零回归。
+- A6：AUTHING_* 四键已写 ECS /etc/qre-saas.env 与本地 .env.saas-staging（0600）。
+  代码未部署：等 commit 后 ECS git pull + apply schema + restart qre-saas。
+- staging 实测（8091+aguhuice_local+真配置）：跳转 Authing 托管页链路通；
+  **⚠️ Authing 报 redirect_uri_mismatch**——需用户在控制台「应用配置→登录回调 URL」
+  确认白名单含 https://www.aguhuice.com/saas/login/callback。真实短信/扫码留用户实测。
+- 截图：/tmp/qre-shots/auth-login-page.png / auth-login-expanded.png /
+  auth-authing-hosted.png（mismatch 错误页）。
+
+---
+
+## Archive: QRE-SAAS-FEEDBACK-FACTOR-REQ (内测意见反馈页 + 申请新因子页 + 缺因子拦截跳转 + 全站侧边栏)
 
 ## Current Status
 

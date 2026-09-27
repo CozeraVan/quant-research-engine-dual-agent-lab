@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录中 · A股回测台</title>
+<style>
+:root{--bg:#FAF9FC;--card:#fff;--line:#E4DFEE;--text:#241F2E;--muted:#9A93A6;--accent:#6750A4;--err:#C93A3A}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+.wrap{max-width:420px;margin:12vh auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:24px;text-align:center}
+.msg{color:var(--muted);margin-top:8px}
+.err{color:var(--err)}
+a.btn{display:inline-block;margin-top:16px;background:var(--accent);color:#fff;border-radius:8px;padding:9px 22px;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="card">
+  {% if error %}
+  <h1 style="font-size:17px">登录未完成</h1>
+  <p class="msg err">{{ error }}</p>
+  <a class="btn" href="/saas/login">返回登录页</a>
+  {% else %}
+  <h1 style="font-size:17px">登录成功{{ '，' + nickname if nickname else '' }}</h1>
+  <p class="msg">正在进入工作台…</p>
+  {% endif %}
+</div></div>
+{% if token %}
+<script>
+localStorage.setItem('saas_token', {{ token | tojson }});
+location.replace('/saas/');
+</script>
+{% endif %}
+</body>
+</html>

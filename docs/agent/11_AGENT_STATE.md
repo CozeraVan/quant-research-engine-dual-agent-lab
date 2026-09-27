@@ -12,7 +12,16 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-FEEDBACK-FACTOR-REQ (DONE — 内测意见反馈页 + 申请新因子页 + 缺因子拦截跳转 + 全站统一侧边栏；全量 2185 passed + 4 skipped 零回归；仅本地+staging 验证未部署 ECS；awaiting git approval)
+QRE-AUTH-MEMBERSHIP (DONE — Authing OIDC 登录接入 A2-A6：schema 加 authing_id/avatar_url/member_*、新 authing.py 换票+JWKS 验签+自动建档+绑定旧账号、login.html 托管页主入口+邮箱密码折叠降级、测试 +22 全量 2207 passed + 4 skipped 零回归；env 已写 ECS/本地 0600、ECS venv 依赖已装；代码未部署；awaiting git approval + Authing 控制台回调白名单确认)
+
+2026-09-27：细节见 04_TASK_HANDOFF.md 与 05_PROGRESS.md 同名条目。要点：
+授权码+托管登录页流程（替代 §6 原 Guard 方案，已注记）；/saas/login/authing 302 →
+/saas/login/callback 验签建档发本地 session；POST /api/saas/auth/bind 迁移旧账号。
+**遗留用户操作**：Authing 控制台「登录回调 URL」白名单需含
+https://www.aguhuice.com/saas/login/callback（实测报 redirect_uri_mismatch）；
+部署待办：commit 批准后 ECS git pull + psql apply cloud_schema.sql + restart qre-saas。
+
+上一任务：QRE-SAAS-FEEDBACK-FACTOR-REQ (DONE — 内测意见反馈页 + 申请新因子页 + 缺因子拦截跳转 + 全站统一侧边栏；全量 2185 passed + 4 skipped 零回归；仅本地+staging 验证未部署 ECS；awaiting git approval)
 
 2026-09-27：细节见 04_TASK_HANDOFF.md 与 05_PROGRESS.md 同名条目。要点：
 base.html 新增 .sidenav 侧边栏（意见反馈 / 申请新因子两入口，全页面自动获得）；
