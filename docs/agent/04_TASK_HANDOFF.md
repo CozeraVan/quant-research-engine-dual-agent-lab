@@ -2,7 +2,26 @@
 
 ## Task ID
 
-QRE-WORKER-RUNNER (A3：worker 执行端闭环——取消传播/两步回传/产物清单/env 新名)
+QRE-UI-DESIGN-SYSTEM-DOC (UI 设计系统文档：8081 lab 冻结版蒸馏为自包含规范)
+
+## Current Status
+
+DONE (documentation only; awaiting user-approved git finalization)
+
+## Task Note
+
+重写 docs/agent/12_UI_STYLE_GUIDE.md（8.6KB→25.3KB）：设计 tokens
+（色板/字体/圆角/阴影全量色值）、布局体系（页面骨架/栅格/36px 行内控件
+等高硬规则）、组件库（按钮 7 变体/表单/折叠区/三入口卡+PCB/徽章/toast/
+弹层/表格排序/日历/流水线/磨损条）、ECharts 图表约定（系列配色硬规则、
+主图双 grid、treemap 三档显隐、K线买卖点）、动效规范（reduced-motion
+硬规则）、降级语义、禁链纪律（含注释也扫）、SaaS 复刻约定。每条标注
+源码 文件:行号。8081 lab 侧代码零改动。验证：check-progress-docs.sh 通过。
+未 commit。
+
+---
+
+## Archive: QRE-WORKER-RUNNER (A3：worker 执行端闭环——取消传播/两步回传/产物清单/env 新名)
 
 ## Current Status
 

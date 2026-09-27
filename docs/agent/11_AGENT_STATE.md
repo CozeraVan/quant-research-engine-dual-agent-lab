@@ -12,7 +12,11 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-LAB-UI-LANDING-R6 (DONE — OOM 限额 2G→8G + 僵尸 run 自愈 + 重提 5 年全量回测；awaiting git approval)
+QRE-UI-DESIGN-SYSTEM-DOC (DONE — 纯文档：12_UI_STYLE_GUIDE.md 重写为完整设计系统 25.3KB，每条规范标注源码 文件:行号；8081 lab 代码零改动；check-progress-docs.sh 通过；awaiting git approval)
+
+2026-09-27：应用户要求把 8081 UI 设计知识从源码蒸馏进文档（根因：UI 对齐工作反复重读源码烧 token）。通读 lab-theme.css/lab-ui.js/lab.html/lab_result.html/lab_symbols.html/lab_symbol.html + SaaS base.html 复刻方式后重写 12 号文档：新增文件地图、36px 行内控件等高硬规则、ECharts 图表约定（纠正初版过时的 SVG 手绘描述）、treemap 三档显隐与 zr.off 陷阱、SaaS 复刻约定、禁链含注释教训。文档头部加「新页面开发前必读、改动规范需用户批准」。未 commit。
+
+上一任务：QRE-LAB-UI-LANDING-R6 (DONE — OOM 限额 2G→8G + 僵尸 run 自愈 + 重提 5 年全量回测；awaiting git approval)
 
 2026-09-08（R2 纠偏，用户驳回 R1 适配改写）：以 synthesis.html 为唯一真相源 1:1 移植——lab-theme.css=设计稿 CSS 全量+母板类映射，模板区块/类名逐段对齐，数据全走真实 API（fees_summary/symbols 路由沿用 R1 新增），echarts 图按规则 4 保留但配色/区间卡/tooltip/三级显隐对齐设计稿。测试 2067+4 绿。R1 细节（已部分被 R2 覆盖）：把已定稿设计稿 synthesis.html（docs/agent/12_UI_STYLE_GUIDE.md 为其规范）
 原位落地 8081 lab 版（qre-gui-lab），8080 管理台零改动（git diff 仅 lab_* 模板 +

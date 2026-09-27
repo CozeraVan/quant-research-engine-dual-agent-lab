@@ -1,96 +1,282 @@
-# 12_UI_STYLE_GUIDE.md — QRE Lab UI 设计语言规范
+# 12_UI_STYLE_GUIDE.md — QRE UI 设计系统（8081 lab 冻结版为基准）
 
-> **来源与效力**：本规范从已定稿的设计稿 `/home/van/qre-outputs/ui-drafts/synthesis.html`（用户验收通过，8081 真实数据内嵌版）逐条提取固化。8081 lab 页面落地改版与后续所有新页面**必须遵守**本规范；修改本规范需用户批准。
-> 提取日期：2026-09-08。性能审计见 `13_UI_PERF_NOTES.md`。
+> **使用说明（必读）**
+> 1. 做**任何**新页面或改页面（8081 lab 侧 / SaaS aguhuice.com 侧）之前，先读完本文档；读完后**不需要再重读源码**去猜风格——本文档是自包含的设计系统蒸馏，所有色值/像素/类名都在此。
+> 2. **改动设计规范本身需用户批准**。若发现源码与本文档不一致，以 8081 lab 侧源码为准并修订本文档（同时告诉用户）；SaaS 侧必须与 8081 保持一致。
+> 3. 每条规范后括号内标注了对应源码位置（`文件:行号`），供核查，非必读。
+> 4. 基准源：`src/quant_research_engine/gui/static/lab-theme.css`（1:1 提取自用户验收定稿 `/home/van/qre-outputs/ui-drafts/synthesis.html`，2026-09-08 定稿冻结）。8080 管理台（style.css + admin.html 等）**不适用**本规范，也绝不可改。
+> 5. 性能约束另见 `13_UI_PERF_NOTES.md`（rAF 节流、contain、降采样等约定）。
+
+---
+
+## 0. 文件地图（这套 UI 由哪些文件构成）
+
+| 文件 | 角色 |
+|---|---|
+| `static/lab-theme.css`（442 行） | 唯一主题文件。设计 tokens + 全部组件样式 + 对 style.css 遗留规则的纠偏 |
+| `static/lab-ui.js`（139 行） | 共享交互：PCB 排线、日历弹层、运行流水线步骤态、UTC→本地时间格式化。暴露 `window.LabUI` |
+| `static/echarts.min.js` | 本地 ECharts（禁止 CDN），仅图表页引用 |
+| `static/style.css` | 8080 管理台旧样式，lab 页面会连带加载，lab-theme.css 尾部（`lab-theme.css:376-442`）负责逐项纠偏 |
+| `templates/base.html`（25 行） | 母板：`<header class="topbar">` + `<main>`，lab 各页 extends 它 |
+| `templates/lab.html` | 新建策略 + 回测记录（两 tab 同页） |
+| `templates/lab_result.html` | 回测结果详情页 |
+| `templates/lab_symbols.html` | 个股明细列表页 |
+| `templates/lab_symbol.html` | 个股回测详情页 |
+| SaaS 侧 `gui/saas/templates/*.html` | 复刻版：base.html 内嵌一份精简 tokens 后**同样引入 `/static/lab-theme.css` + `lab-ui.js`**（`saas/templates/base.html:73`），视觉以 lab-theme 为准 |
+
+**重要现状**：lab_result/lab_symbol 模板头部有一段页面级 `<style>`（如 `lab_result.html:5-58`），是落地早期残留的灰蓝色硬编码（`#2563eb` 蓝、`#e5e7eb` 灰等），其中大部分被 lab-theme.css 后加载覆盖/纠偏。**新代码一律用 lab-theme 的类与变量，禁止再写页面级硬编码颜色**；残留蓝（如 tag-rank 的 `#2563eb` 链接色、`lab_result.html:42-44`）属于已存在瑕疵，不是规范。
 
 ---
 
 ## 1. 设计 Tokens
 
-### 1.1 色板（CSS 变量名即落地名）
+### 1.1 色板（`lab-theme.css:5-18`，CSS 变量名即落地名，直接用 var()）
 
-| Token | Hex | 用途 |
+| Token | 色值 | 用途 |
 |---|---|---|
 | `--paper` | `#FAF9FC` | 页面底色（极淡紫白） |
 | `--panel` | `#FFFFFF` | 卡片/表面 |
-| `--tint` | `#F1EDF8` | 淡紫区块底（折叠头、chip、区间卡底） |
-| `--tint-deep` | `#E6DEF3` | 深一档淡紫（滑轨、悬停底） |
-| `--lav` | `#6750A4` | 主紫：主按钮、激活态、选中边框、主曲线 |
-| `--lav-deep` | `#4A3A78` | 深紫：按下/hover 加深、磨损数值、脉冲线 |
-| `--lav-ink` | `#8B7FBE` | 次级紫：虚线基准、十字线、阈值线 |
+| `--tint` | `#F1EDF8` | 淡紫区块底（折叠头、chip、区间卡底、行 hover） |
+| `--tint-deep` | `#E6DEF3` | 深一档淡紫（滑轨、hover 底） |
+| `--lav` | `#6750A4` | **主紫**：主按钮、激活态、选中边框、策略主曲线 |
+| `--lav-deep` | `#4A3A78` | 深紫：hover/按下加深、磨损数值、PCB 脉冲、结论强调 |
+| `--lav-ink` | `#8B7FBE` | 次级紫：基准虚线、阈值线、内链下划线 |
 | `--ink` | `#241F2E` | 正文近黑（带紫相）、toast 底 |
-| `--grey` | `#6F6879` | 次要文字 |
-| `--faint` | `#9A93A6` | 弱化文字、坐标轴、占位 |
+| `--grey` | `#6F6879` | 次要文字、label、表头 |
+| `--faint` | `#9A93A6` | 弱化文字、坐标轴、占位、页脚说明 |
 | `--line` | `#E4DFEE` | 分隔线/边框 |
-| `--up` | `#C93A3A` | **红涨**（仅涨跌语义） |
-| `--up-soft` / `--up-deep` | `#FBEFEF` / `#8B1A1A` | 红涨浅底 / 深红（VaR99、热力深色档） |
-| `--down` | `#1E8E5A` | **绿跌**（仅涨跌语义） |
-| `--down-soft` | `#EBF6F0` | 绿跌浅底、成功态 |
-| 热力浅基底 | `#F5F4FA` (rgb 245,244,250) | treemap 插值起点 |
+| `--up` | `#C93A3A` | **红涨**（A 股惯例：涨/赚/买入 = 红） |
+| `--up-soft` | `#FBEFEF` | 红浅底（fail 徽章、危险 hover） |
+| `--up-deep` | `#8B1A1A` | 深红（err 文字） |
+| `--down` | `#1E8E5A` | **绿跌**（跌/亏/卖出 = 绿）；同时作 ok/成功态文字 |
+| `--down-soft` | `#EBF6F0` | 绿浅底（ok 徽章/成功提示） |
+
+图表内补充色（JS 内直接使用，非 CSS 变量）：
+- 直方图柱 / 成交量柱 `#B7A6E8`（浅紫）；VaR95 虚线 `#d43030`、VaR99 `#8b0000`；回撤面积 `#d43030`；正态拟合线 `#241F2E`；波动率非当前档 `#D9D2EA`。
+- 买卖点：买 `#d43030` ▲、卖 `#1a9e4b` ▼；K 线阳线 `#C93A3A` / 阴线 `#1E8E5A`（`lab_symbol.html:188`）。
+- treemap 插值：浅基底 `rgb(245,244,250)` → 深档红 `[201,58,58]` / 绿 `[30,142,90]`，系数 `0.25 + 0.75·(|pnl|/maxAbs)`（`lab_result.html:165-171`）。
+- YAML 代码块：底 `#221D2E`、字 `#DCD4F0`、键 `#B7A6E8`、注释 `#7E7595`、值 `#EDE8F8`、行号 `#6E6591`（`lab-theme.css:134,270-275`）。
+- 成功/失败提示框边框：ok `#BFE3D0`、err `#F0CACA`（`lab-theme.css:136-137`）。
 
 **语义色纪律（硬规则）**：
-- 红 `#C93A3A` 与绿 `#1E8E5A` 只表达涨跌/盈亏/亏损风险，**禁止用作装饰、品牌色或普通状态色**。
-- 状态徽章：成功绿底（`--down-soft`）、失败红底（`--up-soft`）、运行中**用紫色呼吸点**而非第三色。
-- 交易磨损等中性财务量用 `--grey`/`--lav-deep` 呈现，不占用红绿。
-- 全页配色集合 = 淡紫系 + 红绿语义 + 黑白灰，不得引入第四种色相（基准虚线用 `--lav-ink`，禁用橙/蓝）。
+- 红绿**只表达涨跌/盈亏/亏损风险**，禁止作装饰、品牌色或普通状态色。运行中状态用紫色呼吸点，不用第三色。
+- 交易磨损等中性财务量用 `--lav-deep` 数字 + 双紫横条，不占红绿。
+- 全页配色集合 = 淡紫系 + 红绿语义 + 黑白灰，**不得引入第四种色相**（禁橙/蓝；例外是上述已存在的页面级残留，新代码不得效仿）。
 
-### 1.2 形状 / 阴影 / 边框
+### 1.2 形状 / 阴影 / 边框（`lab-theme.css:11,16-17`）
 
-- 圆角阶梯：卡片 `10px`（`--radius`）、入口卡 `12px`、按钮 `8px`、小按钮 `6px`、徽章/滑块 `999px`。
-- 阴影两级：`--shadow-1: 0 1px 3px rgba(74,58,120,.08)`（静态卡）；`--shadow-2: 0 8px 28px rgba(74,58,120,.14)`（hover/弹层）。阴影色一律带紫相，不用纯黑透明。
-- 边框：`1px solid var(--line)`；选中态用 `1.5px inset var(--lav)`；focus 环 `2px var(--lav)` + `outline-offset:2px`。
+- 圆角阶梯：卡片/普通按钮/输入框 `8~10px`（`--radius:10px`）、入口卡与弹层 `12px`、小按钮 `6px`、徽章/chip/导航胶囊 `999px`。
+- 阴影两级，**阴影色一律带紫相**（`rgba(74,58,120,...)`），不用纯黑透明：
+  - `--shadow-1: 0 1px 3px rgba(74,58,120,.08)` 静态卡
+  - `--shadow-2: 0 8px 28px rgba(74,58,120,.14)` hover/弹层
+- 边框 `1px solid var(--line)`；选中态 `inset 0 0 0 1.5px var(--lav)`；focus 环 `:focus-visible{outline:2px solid var(--lav);outline-offset:2px}`。
 
-## 2. 字体排印
+### 1.3 字体排印（`lab-theme.css:12-14,20,45`）
 
-- 字体栈（全部系统字体，**离线可用，禁止 webfont CDN**）：
-  - 正文 `--sans`: `"Noto Sans SC", -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif`
-  - 标题/大数字 `--serif`: `"Noto Serif SC", "Songti SC", "STSong", "SimSun", serif`
-  - 代码/YAML `--mono`: `"SF Mono", "JetBrains Mono", Consolas, "Courier New", monospace`
-- 用法规则：品牌名、页面 H1、指标卡大数字用衬线 700/900；正文与表格用无衬线；YAML 编辑器/预览用等宽。
-- 字号阶梯：H1 30px（详情页 22px）/ 区块标题 14.5–16px / 正文 15px / 表格 13.5px / 辅助 12–12.5px / 坐标轴 10–11px。指标卡数值 17–20px。
-- 数字一律 `font-variant-numeric: tabular-nums`；行高 1.65（正文）/1.3（标题）。
+- 全部系统字体栈，**离线可用，禁止 webfont CDN**：
+  - 正文 `--sans`: `"Noto Sans SC",-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif`
+  - 标题/大数字 `--serif`: `"Noto Serif SC","Songti SC","STSong","SimSun",serif`
+  - 代码 `--mono`: `"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace`
+- 用法：品牌名、页面 H1、指标卡大数字用衬线 700/900；正文表格用无衬线；YAML 用等宽。
+- 字号阶梯：H1 30px（详情页 22px）/ 区块标题 h2 16px、chart-title 14.5px / 正文 15px / 表格 13.5px（detail-table 12.5px）/ 辅助 `.opt` 12.5px / 坐标轴 10–11px / 指标卡数值 20px（个股页 15px）。
+- 数字一律 `font-variant-numeric:tabular-nums`；正文行高 1.65、标题 1.3。
+- 全站 reset：`*{box-sizing:border-box;margin:0;padding:0}`——**间距一律由容器控制，不给 h/p 写 margin**（`lab-theme.css:19,387`）。
 
-## 3. 动效规范
+---
 
-统一缓动 `--ease: cubic-bezier(.22,1,.36,1)`；入场回弹 `cubic-bezier(.34,1.56,.64,1)`。
+## 2. 布局体系
 
-| 场景 | 参数 |
+### 2.1 页面骨架
+
+- `base.html`：sticky 顶栏（60px 高、毛玻璃 `rgba(250,249,252,.92)` + blur(8px)、底边框，`lab-theme.css:26`）+ `<main>` 内容区。顶栏左侧 brand（30px 紫方块 logo + 衬线 18px 品牌名 + 12px 副标），右侧 `.mainnav` 胶囊导航（active = 紫底白字，`lab-theme.css:34-37`）。
+- 内容容器 `max-width:1280px; margin:0 auto; padding:32px 32px 80px`（lab 页因无 `.wrap` 包裹层，纠偏直接作用于 `main`，`lab-theme.css:378`）。
+- 页面头 `.page-head`：衬线 H1 + 灰字说明段（14.5px、`--grey`、max-width 46em，`lab-theme.css:45-46`）；详情页 H1 降 22px。
+- 卡片 `.card` / `.panel`：白底、1px `--line` 边框、圆角 10px、`padding:20px 22px`、`--shadow-1`、卡片间距 20px（`lab-theme.css:47,384`）。
+- 图表卡 `.chart-box`：同卡片规范，`padding:16px 18px`（`lab-theme.css:192`）。
+- 响应式断点 960px：多列 grid 降为 2 列 / 1 列（`lab-theme.css:310-316`）。
+
+### 2.2 栅格
+
+- 三入口卡 `.entry-grid`: `repeat(3,1fr)` gap 16px。
+- 指标卡 `.metric-strip`: `repeat(6,1fr)` gap 10px。
+- 区间信息卡 `.range-strip`: `repeat(5,1fr)` gap 10px。
+- 磨损卡 `.wear-cards`: `repeat(5,1fr)`；风险卡 `.risk-cards`: `repeat(4,1fr)`；风险双图 `.risk-grid`: `1fr 1fr` gap 16px。
+- 表单 `.form-grid`: `150px 1fr`（label 列固定 150px），`gap:12px 16px`，`align-items:center`（`lab-theme.css:68-69`）。
+
+### 2.3 行内控件等高对齐规范（修过同类 bug，硬规则）
+
+同一行混排的输入框/下拉/按钮必须**同高 36px 且垂直居中**（`lab-theme.css:430-438`）：
+```css
+.form-grid input[type=text],.form-grid input[type=number],.form-grid select{height:36px;line-height:normal;padding-top:0;padding-bottom:0}
+.form-grid .btn-sm{height:36px;display:inline-flex;align-items:center}
+```
+工具行（`.editor-actions` 等）同理：`height:36px; display:inline-flex; align-items:center; padding-top/bottom:0`。预览栏头部小按钮 30px。**新增行内控件时先查所在行是否已有 36px 约束，没有就加上**。
+
+---
+
+## 3. 组件库
+
+### 3.1 按钮（`lab-theme.css:49-61`）
+
+| 类 | 形态 | 交互 |
+|---|---|---|
+| `.btn.btn-primary` | 紫底白字，圆角 8px，padding 9px 22px，14px/500 | hover：深紫底 + 浮起 -1px + 紫光阴影 + **斜向高光扫过 0.55s**（仅主按钮有此光泽）；:active scale(.97) |
+| `.btn.btn-ghost` | 白底、深紫字、`--line` 边 | hover：紫边 + `--tint` 底 |
+| `.btn.btn-danger` | 白底红字浅红边（`#F0CACA`） | hover：`--up-soft` 底 + 红边 |
+| `.btn-sm` | 12.5px，padding 4px 12px，圆角 6px，白底灰字 | hover 紫边淡紫底；`.on` = 紫底白字（切换态） |
+| `.btn-run-main` | 主按钮加大：宽 100%、16px、padding 14px 22px、圆角 10px | 运行中 `disabled + opacity:.65` |
+| `.view-link` | 淡紫描边胶囊链接（次按钮级，"查看结果 →"） | hover 紫底白字浮起（`lab-theme.css:416-417`） |
+| `.seg-btn` | 胶囊切换按钮（基准切换、tag tabs） | `.active` 紫底白字（`lab-theme.css:196-198`） |
+| `.inl` | 行内链接：紫字 + `--lav-ink` 虚线下划线 | hover 深紫（`lab-theme.css:138-139`） |
+
+所有按钮 `white-space:nowrap`（防窄容器文字竖排，2026-09-26 修过的 bug）。
+
+### 3.2 表单控件（`lab-theme.css:63-72`）
+
+- `input/textarea/select`：1px `--line` 边、圆角 8px、padding 8px 12px、14px；hover 边变 `--lav-ink`；focus 紫边 + `box-shadow:0 0 0 3px rgba(103,80,164,.15)`（不用 outline）。
+- 必填星号 `.req` 红色常规字重（400，不加粗）；辅助说明 `.opt` 12.5px `--faint`。
+- 单选 `.radio-inline` / `.label-inline`：inline-flex、nowrap、`accent-color:var(--lav)`（原生 radio/checkbox 染紫）。
+
+### 3.3 折叠区（`lab-theme.css:74-81,323-329`）
+
+- `.section-toggle`（或 `.sec-toggle`）：整宽 `--tint` 底按钮 + 紫色小箭头（CSS border 三角，展开 rotate(-45°)→(45°)）。
+- 展开动画用 `grid-template-rows: 0fr→1fr`（0.35s），内容包一层 `overflow:hidden` div。**不用 max-height 动画**。
+- 规则：可选/高级内容默认折叠，必选直接露出。
+
+### 3.4 三入口卡 + PCB 排线（新建策略页独有）
+
+- `.entry-card`：12px 圆角、padding 20px、flex 纵向、`entry-fit`（适合人群）`margin-top:auto` 贴底保证三卡等高（`lab-theme.css:84-98,423-424`）。hover 浮起 -4px + 阴影升档；选中 = 紫边 + inset 1.5px 紫环 + 右上角对勾圆圈（对勾 scale .3→1 回弹）。
+- 三张卡标注适合人群：① 人人可用（自然语言）② 懂指标（快速向导）③ 有经验（YAML）；详情区**单面板随选切换，禁止三面板堆叠**。
+- PCB 排线层（`lab-ui.js:9-41`、`lab-theme.css:141-158`）：语义 = "数据从入口流向面板"，**只此一处，禁止蔓延到其他模块**。
+  - 形态：直角折线（垂直→水平→45° 斜段→垂直，禁止曲线），线宽 2px；卡出口焊盘 r=4，面板入口共享焊盘 r=6 + 芯点 r=2.4。
+  - 状态：未选中 = `#DCD5EA` 虚线（5 5）；选中 = `--lav` 实线 + `--lav-deep` 脉冲段（`pathLength=300`、`dasharray 14 286`、`dashoffset 300→0` 1.5s 线性循环，方向必须卡片→面板）。
+  - 切换瞬间一次性 0.5s「通电」紫光闪烁（drop-shadow），随后稳定点亮；旧线熄灭新线点亮。
+  - 端点用 `getBoundingClientRect` 实测，resize/load 时重算。
+
+### 3.5 状态徽章与提示框
+
+- `.badge`（`lab-theme.css:173-178`）：12px 胶囊，`.ok` 绿（`--down-soft` 底/`--down` 字/`#BFE3D0` 边）、`.fail` 红（`--up-soft`/`--up`/`#F0CACA`）、`.run` 紫（`--tint`/`--lav-deep`/`--tint-deep` 边）+ **紫点呼吸动画 breathe 1.6s 无限**（opacity .35↔1 + scale .8↔1.15）。
+- `.risk-light`：VaR 回测状态灯，`.ok` / `.bad` 两态（同徽章配色，`lab-theme.css:231-234`）。
+- `.result-box.ok/.err`：绿/红浅底提示条（编译结果、运行结果，`lab-theme.css:135-137`）。
+- `.chart-empty`：空态文案，`--faint` 居中 padding 34~40px。
+- `#toast`：底部居中黑底（`--ink`）胶囊，opacity+translate 进场，约 2.2s 自动消失（`lab-theme.css:255-256`）。
+- 弹层 `.modal-mask` + `.modal`：半透明紫黑罩 `rgba(36,31,46,.42)`、白卡 12px 圆角 max-width 400px；删除确认的主按钮改红底（`lab-theme.css:248-253`；用法见 `lab.html:299-309`）。删除等不可逆操作**必须二次确认弹层，不用原生 confirm 蒙混**（其他场景 confirm 可接受）。
+
+### 3.6 表格（`lab-theme.css:160-172,352,369-373`）
+
+- `table.tbl`：13.5px、无竖框无斑马纹；表头 `--grey` 12.5px、下边框 2px `--line`；行下边框 1px `#F2EFF7`；行 hover `--tint` 底。
+- 数值列右对齐 + tabular-nums（`td.num`/`th.num`）；首列左对齐。
+- 涨跌类名 `.pos`（红）/`.neg`（绿）/`.flat`（ink）。
+- 可排序列：`th.sortable`，hover 变紫，当前列显示 ▲▼；排序约定 **null 恒排最后、与方向无关**（`lab.html:1674-1685`）。文本列首点升序、数值列首点降序。
+- 整行点击跳详情用 `tr.row-link`（行内按钮/链接 stopPropagation，`lab.html:1738-1744`）。
+- 明细小表 `.detail-table` 12.5px 全数值右对齐（首列除外）；`.table-wrap{max-height:360px;overflow:auto}` 滚动容器。
+
+### 3.7 日历弹层（`lab-ui.js:47-107`、`lab-theme.css:278-293`）
+
+- 自绘日历（零依赖）：`.cal-pop` 288px 宽白卡弹层；`.cal-day.sel` 紫底白字、`.in-range` 淡紫底、超出 maxDate 的天 `:disabled` 灰 `#D5CFE3`。
+- **禁未来函数**：最大可选日 = 数据最近交易日（`/api/admin/refresh` 的 `state.last_data_date`），之后含今天全禁；输入框 readonly，只能点选。
+- 页脚必须注明「数据截至 X（最近交易日），之后日期不可选」。
+
+### 3.8 运行流水线（`lab-theme.css:296-308`、`lab-ui.js:110-126`）
+
+- `.pipe-step` 竖排步骤：圆点 doing = 紫圈呼吸（breathe 1.2s）、done = 实紫点、skip = 灰点、fail = 红点；右侧 `.pipe-st` 小字状态；doing/done 步骤显示进度条 `.pipe-bar`（`--tint-deep` 轨 + `--lav` 填充）。
+- 失败时红字 `.pipe-err` 停留定位，不自动消失。
+
+### 3.9 指标卡 / chips / 大入口 / 磨损条
+
+- `.metric`（或母板类 `.metric-card`，已纠偏对齐，`:400-407`）：白卡居中，`.m-label` 12px faint + `.m-value` 衬线 20px 700 + tabular-nums；hover 浮起 -2px；可带 `title` 解释口径。风险区卡片改淡红边 `#F0CACA` + `#FFFBFB` 底。
+- `.meta-chips .chip2`：白底 12px 参数 chip（`<b>` 强调值）。
+- `.range-strip .metric`：区间卡改 `--tint` 底 + `--tint-deep` 边，与普通指标卡区分。
+- `.big-link`：详情页→子页大入口卡（主标题 + 灰字副标 + 右侧 → 箭头，hover 紫边浮起箭头右移 4px，`lab-theme.css:240-245`）。
+- 交易磨损条 `.wb-*`：毛收益条 `#8B7FBE` / 净收益条 `#6750A4`，`--tint` 轨 18px 高，宽度按 |值|/max 归一，0.6s 生长动画；结论行「磨损吃掉毛收益 X（Y%）」用 `--lav-deep` 强调（`lab-theme.css:258-267`，渲染见 `lab_result.html:395-428`）。
+
+### 3.10 YAML 预览栏（`lab-theme.css:269-275`）
+
+`pre.compiled-yaml.pv`：深色代码块 + CSS counter 行号 + 简语法高亮（`.yk` 键紫 / `.yc` 注释灰 / `.yv` 值浅紫），max-height 340px 滚动。它是页面**唯一 YAML 真相源**，三个入口产出都汇聚到这里。
+
+---
+
+## 4. 图表规范（ECharts）
+
+- **选型**：ECharts（本地 `static/echarts.min.js`，禁 CDN）。仅结果页/个股页引用；lab.html（新建+记录页）无图表不引。
+- **通用约定**：`animation:false`（所有图，入场无描画动画）；`tooltip.trigger:'axis'`；多 grid 时 `axisPointer.link` 联动所有 x 轴；缩放 = `dataZoom:[{type:'inside'},{type:'slider',bottom:6,height:22}]`；容器显式高度（主图 420px、风险子图 220–240px、K线 460px 起）；`resize` 监听调 `chart.resize()`；销毁用 `chart.dispose()`（重渲染前 dispose 旧实例，见 `lab_result.html:510-511`）。
+- **系列配色（硬规则）**：
+  - 策略净值/主曲线：`#6750A4` 实线 2px（`lab_result.html:663`）
+  - 基准：`#8B7FBE` 虚线 1.5px（`:749`）；个股页的「持有到期」对比线 `#9A93A6` 虚线（`lab_symbol.html:294`）
+  - 回撤子图：`#d43030` 面积 0.35 透明（`lab_result.html:669`）
+  - 直方图 `#B7A6E8`、正态拟合 `#241F2E` 虚线、VaR95/99 markLine `#d43030`/`#8b0000` 虚线
+  - 波动率状态柱：当前档 `#6750A4`、其余 `#D9D2EA`
+  - 压力测试：区间累计损失 `#d43030`、窗口最大回撤 `#8B7FBE`
+  - K线：阳 `#C93A3A` / 阴 `#1E8E5A`；买 ▲ `#d43030` 贴最低价×0.99，卖 ▼ `#1a9e4b` 贴最高价×1.01（triangle / triangle+180°，size 10，hover tooltip 显示下单明细）
+  - 因子副图线 `#6750A4` 1.2px，阈值 markLine `#8B7FBE` 虚线
+- **策略结果主图结构**：双 grid（净值 52% + 回撤 16%，无回撤数据时单 grid 72%）+ 基准切换 seg 按钮组（纯前端切换 + "无基准"选项）+ **区间信息卡五卡**（区间策略收益/区间基准收益/区间超额/区间最大回撤/交易日数），监听 `datazoom` 事件用 **rAF 节流**重算（`lab_result.html:732-737,755-795`；区间收益口径 = 首末净值比 `(1+r₁)/(1+r₀)−1`）。信号散点不画在主图（交易多时糊住曲线，已决策，`lab_result.html:665`）。
+- **treemap 归因热力图**：`type:'treemap'`，`roam:false, nodeClick:false, breadcrumb.show:false`，白边 2px + gap 2px；面积 ∝ |总净盈亏|，颜色红赚绿亏按 `pnlColor()` 插值；**面积三级显隐**：>4% 名称+数值 / >1.1% 仅名称 / 其余纯块 hover 看 tooltip；只铺前 20 个（超出在 note 注明"完整见下表"）；点击矩块或排行表行下钻个股贡献表，再点收起；点空白处收起（用 `getZr().on('click')` 且**绝不能 `zr.off('click')`**——会拆掉 echarts 内部事件桥，`lab_result.html:215-217`）。
+- **K 线图结构**：grid 数 = 2（K线 58%/42% + 量 14%/10%）+ 每因子一副图；摆动指标（RSI 等）**不做价格叠加**（量纲不同，已决策，`lab_symbol.html:216-218`）。
+
+---
+
+## 5. 动效规范
+
+统一缓动 `--ease: cubic-bezier(.22,1,.36,1)`；回弹缓动 `cubic-bezier(.34,1.56,.64,1)`（brand mark、对勾、徽章入场）。
+
+| 场景 | 参数（出处） |
 |---|---|
-| 视图切换 | `viewIn`：opacity 0→1 + translateY 10px→0，0.45s |
-| 面板/区块切换 | `panelIn`：同上，0.3–0.35s |
+| 视图切换 | `viewIn` opacity 0→1 + translateY 10px→0，0.45s（`:41-42`） |
+| 面板/区块切换 | `panelIn` 同上幅度 8px，0.3–0.35s（`:100-101`） |
 | hover 浮起 | translateY(-1~-4px) + 阴影升档，0.2–0.25s |
-| 按压回弹 | `transform: scale(.97)`，:active 瞬时 |
-| 主按钮光泽 | 斜向高光扫过 0.55s（仅主按钮） |
-| 运行中徽章 | 紫点 `breathe` 1.6s 无限（opacity+scale） |
-| 折叠区 | `grid-template-rows 0fr→1fr`，0.35s |
+| 按压 | `:active` scale(.97~.985) 瞬时 |
+| 主按钮光泽 | 斜向高光扫过 0.55s（仅 `.btn-primary`） |
+| 运行中呼吸点 | `breathe` 1.6s（徽章）/ 1.2s（流水线点）无限 |
+| 折叠区 | grid-template-rows 0fr↔1fr，0.35s |
+| PCB 脉冲 | dashoffset 300→0 1.5s 线性无限；切换通电闪 0.5s 一次 |
+| 磨损条生长 | width 0.6s |
 
-**PCB 排线连接层**（入口卡→详情面板专用）：
-- 语义：表达"数据从入口流向面板"，只此一处，禁止蔓延到其他模块。
-- 形态：直角折线（垂直→水平→45° 斜段→垂直，禁止曲线），线宽 2px；卡片出口焊盘 r=4、面板入口共享焊盘 r=6+芯点。
-- 状态：未选中 = `#DCD5EA` 虚线（5 5）；选中 = `--lav` 实线 + `--lav-deep` 脉冲段（`pathLength=300`、`dasharray 14 286`、`dashoffset 300→0` 1.5s 线性循环，方向必须卡片→面板）。
-- 切换瞬间一次性 0.5s「通电」闪烁（drop-shadow 紫光），随后稳定点亮；切换时旧线熄灭新线点亮。
-- 端点用 `getBoundingClientRect` 实测，resize/load/路由回切时重算。
+**硬规则**：
+- `prefers-reduced-motion` 下所有 animation/transition 压到 0.01ms；PCB 脉冲与通电闪烁单独关闭，但**保留点亮/熄灭的静态区分**（`lab-theme.css:43,158`）。
+- 克制原则：纯展示区块（静态表格、说明文字、空态）不加循环动画；除呼吸点、PCB 脉冲外**不允许无限循环动效**；ECharts 图 `animation:false`。
+- ECharts 以外的 DOM 高频更新（滑块/缩放联动）一律 rAF 节流。
 
-**prefers-reduced-motion 降级（硬规则）**：媒体查询下所有 animation/transition 时长压到 0.01ms；脉冲与通电闪烁单独关闭，**保留点亮/熄灭的静态区分**。
+---
 
-**克制原则**：纯展示区块（静态表格、说明文字、空态）不加任何循环动画；除呼吸点、PCB 脉冲外不允许无限循环动效；图表入场描画最多一次。
+## 6. 降级语义与数据真实性（硬规则）
 
-## 4. 组件模式
+1. **数据缺失 → 模块整块隐藏，不留空壳**：无 fees 数据 → 交易磨损卡 `display:none`（`lab_result.html:398`、`lab_symbol.html:132`）；无风险报告 → FRM 区显示「生成风险报告」按钮或跳过说明，不放假数据。
+2. **序列缺失 → 图例/卡片同步隐藏**；图容器空态用 `.chart-empty` 文案（如「暂无分布数据」）。
+3. **样本截断 → 明确标注口径**：「热力图仅显示前 20 个，共 N 个」「已过滤 X 个无效关键词」「带 ·通用 后缀的为通用行业」（`lab_result.html:196-207`）。
+4. **禁止编数、禁止占位假图**：页面所有数值必须来自真实 API；mock 仅限流程交互且必须文案明示；接口给不出的总量不许推算冒充。
+5. **情景未覆盖 → 显示跳过说明**：压力测试 note「以下情景回测区间未覆盖，未参与：…」（`lab_result.html:617-619`）。
+6. **报错友好化**：fetch 失败/超时显示中文错误 + 重试按钮（`lab.html:1648-1652`）；JSON 解析失败显示 HTTP 状态码而非原始报错。
+7. 时间戳：后端存 UTC，前端一律 `LabUI.fmtLocalTime()` 转本地时区显示（`lab-ui.js:130-136`）。
 
-1. **三入口卡 + 排线切换**：三卡并列、各自标注适合人群（人人可用/懂指标/有经验），选中态紫边+对勾回弹；详情区**单面板随选切换，禁止三面板堆叠**。
-2. **指标卡**：grid 均分，衬线大数字 + 灰色小标签；涨跌着色；可带 title 解释口径。hover 微浮。
-3. **收益曲线组合**：SVG 手绘 = 净值主曲线（`--lav` 2.2px）+ 基准虚线 + 回撤红色填充子图（下挂，高≈24%）；下方双滑块（两个叠加 range input，紫填充轨）缩放；滑块下区间卡排（区间策略收益/区间基准/区间超额/区间最大回撤/交易日数）随滑块用 `(1+r₁)/(1+r₀)−1` 实时重算；hover 十字线（垂直虚线+吸附点+深色 tooltip 同显各序列当日值）。
-4. **treemap 热力图**：squarified 布局，矩形面积 ∝ |总净盈亏|，红赚绿亏按 |值|/max 在浅基底→深档间插值（0.22+0.78t）；三层 tab（行业/关键词/动态标签）+ 最好/最差切换；**面积三级显隐**：>4% 名称+数值、>1.1% 仅名称、其余纯块 + 跟随 tooltip（边缘翻转）；渲染必须 clamp 在容器内（右/下边减 1px 缝隙，Math.min 兜底）+ 容器 `overflow:hidden`；点击下钻个股贡献表，再点收起。
-5. **交易磨损区块**：费率 chip + 五卡（佣金/印花税/过户费滑点/总磨损/磨损占本金比）+ 毛收益 vs 净收益双横条（`#8B7FBE`/`#6750A4`）+「磨损吃掉毛收益 X（Y%）」结论行；中性色，不用红绿。
-6. **FRM 模块**：VaR/ES 95/99 红字卡 + 回测合格/不合格状态灯 + 日收益直方图（正态拟合虚线 + VaR95/99 竖线）+ 波动率状态柱（当前档紫色高亮）+ 压力测试；情景未覆盖时显示跳过说明而非假数据。
-7. **表格**：列头可排序（hover 变紫、▲▼）、关键字筛选、行 hover 淡紫底、删除走二次确认弹层（说明影响 + 确认/取消）；数值右对齐 tabular-nums。
-8. **渐进披露**：文字简介默认一行可点击展开；大表格/明细收进折叠区或大入口链接跳子视图；默认视图先给结论与图。
-9. **toast**：底部居中黑底胶囊，2.2s 自动消失，用于操作反馈与降级提示。
-10. **空态/缺失如实降级（硬规则）**：数据接口无此维度 → 整块省略不留空壳；序列缺失 → 图例/卡片同步隐藏；样本截断 → 明确标注口径（"基于已载入 N 只样本""仅显示前 20 个"）；禁止编数、禁止占位假图。
+---
 
-## 5. 页面结构规范
+## 7. 禁链与文案纪律（硬规则）
 
-- 两个详情页固定模块顺序：**结果概述（简介可折叠 + 指标卡）→ 收益曲线（滑块+区间卡）→ 交易磨损 → FRM（无数据则整块省略）→ 各自独有模块**（策略页：归因热力图→个股明细入口卡；个股页：K线买卖点→交易明细/下单记录）。
-- 新建策略页：三入口卡 → PCB 排线 → 单详情面板 → 共用回测参数区（必选只露区间+标的范围，其余收折叠高级参数）。
-- **数据真实性纪律（硬规则）**：页面所有数值必须来自真实 API/内嵌真实快照；mock 仅限流程交互（编译延迟、删除确认）且必须用 toast/文案明示；接口给不出的总量不许推算冒充。
-- 路由：hash 路由，三视图+子视图；所有按钮/链接必须有真实响应，禁止死按钮（未内嵌数据给 toast 说明）。
+- **SaaS 页面禁止出现指向内网/管理端的任何链接或字样**：`/admin`、`factor-admin`、`factor-create`、`8080`、`8081` 均不得出现在 SaaS 页面 HTML 中——**包括 HTML/JS 注释**（断言测试 `tests/test_gui_saas_pages.py:211-218` `TestNoAdminLinks` 逐页扫描）。曾在注释里写「8081」撞线两次，写注释时用「lab 版」代称。
+- 可见文案禁用内部术语「沙箱/晋升」，面向用户说「小范围验证/正式回测」；「冒烟测试」一词已获用户批准可出现在流水线文案。
+- 日期截止相关的所有选择控件必须对齐数据最近交易日（禁未来函数），见 §3.7。
+- 路由/交互完整性：所有按钮链接必须有真实响应，禁止死按钮；未实现的能力给 toast 或文案说明。
+
+---
+
+## 8. 页面级固定结构
+
+- **新建策略页**（lab.html）：page-head → 三入口卡 → PCB 排线 → 单详情面板 → 共用回测参数区（必选只露 策略 ID/回测区间/标的范围，其余收「高级参数」折叠区；内部工程参数 hidden）→ 策略代码预览栏（唯一 YAML 真相源）→ 唯一「运行回测」流水线卡（校验→冒烟→全量）。「我的策略」面板 hidden 保留。
+- **回测结果页**（lab_result.html）固定模块顺序：结果概述（简介可折叠 + meta chips + 6 指标卡）→ 收益曲线（基准切换 + 缩放 + 区间五卡）→ 交易磨损（无数据整块隐藏）→ FRM 风险 → 归因热力图（行业/关键词/动态标签三层 tab + 最好/最差切换 + 排行表 + 下钻）→ 「查看个股回测明细 →」大入口卡 → 底部辅助链接行。
+- **个股明细列表页**（lab_symbols.html）：page-head → 单卡片（工具行：搜索框 + 计数提示；全列可排序大表；点行进个股详情；完整代码回车直跳）。
+- **个股详情页**（lab_symbol.html）：概述 7 指标卡 → 收益曲线（净值 vs 持有到期 vs 基准 + 区间五卡）→ 交易磨损 → K线+买卖点（+因子副图）→ 交易明细 → 下单记录 → 失败订单。页头顶部与底部均有返回链接。
+
+---
+
+## 9. SaaS 侧复刻约定
+
+- SaaS 模板（`gui/saas/templates/`）**不复制主题代码**：base.html 内嵌一份极简 tokens 兜底后，直接 `<link href="/static/lab-theme.css">` + `<script src="/static/lab-ui.js">`（与 lab 同源，静态文件由同包 static 目录伺服）。视觉类名与 lab 完全一致（`.card` `.btn-primary` `.badge.ok/run/fail` `.metric-strip` `.page-head` 等）。
+- SaaS 特有元素复用既有类：游客提示条 `.guest-strip`（`lab-theme.css:441-442`）、job 状态徽章映射 queued/running→`.run`、completed→`.ok`、failed/canceled→`.fail`。
+- 对齐方法（历次 UI 对齐任务的做法）：8081 截图作基准 → SaaS 对应页截图 → 逐项 diff → 只改 SaaS 侧模板呈现层，数据接口零改动。**8081 lab 侧代码冻结，绝不许为了迁就 SaaS 改它。**
+
+---
+
+## 变更记录
+
+- 2026-09-08 初版：从 synthesis.html 定稿提取（用户验收通过）。
+- 2026-09-27（QRE-UI-DESIGN-SYSTEM-DOC）重写为完整设计系统：补文件地图、行内控件 36px 等高规范、ECharts 图表配置约定（此前文档写的是设计稿期 SVG 手绘方案，落地已改 ECharts）、SaaS 复刻约定、禁链含注释的教训；每条规范标注源码文件+行号。
