@@ -27,7 +27,7 @@ a{color:var(--accent);text-decoration:none}
 .btn.big{font-size:16px;padding:12px 28px}
 .btn-sm{padding:3px 12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px}
 input,select,textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff}
-textarea{font-family:inherit}
+textarea{font-family:inherit;resize:none}
 textarea.code{font-family:ui-monospace,Consolas,monospace;font-size:13px}
 label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
 .muted{color:var(--muted);font-size:13px}
@@ -47,7 +47,7 @@ th{color:var(--muted);font-weight:500}
    选择器用 header.topbar 提高优先级，压住 lab-theme.css 的浅色顶栏规则。 */
 header.topbar{display:flex;justify-content:space-between;align-items:center;background:#4A3C78;border-bottom:none}
 header.topbar .brand{color:#fff;font-size:15px;font-weight:700;flex-shrink:0}
-header.topbar .brand img{height:34px;display:block}
+header.topbar .brand img{height:46px;display:block}
 header.topbar .mainnav{display:flex;align-items:center;flex-wrap:nowrap;white-space:nowrap}
 header.topbar .mainnav a{color:rgba(255,255,255,.78);font-size:14px;font-weight:500;padding:0;border-radius:0;background:none;margin-left:20px}
 header.topbar .mainnav a:hover{color:#fff;background:none}
@@ -55,7 +55,7 @@ header.topbar .mainnav a.active{color:#fff;background:none;font-weight:600}
 /* 移动端：缩小 logo 与导航间距，强制单行不折行 */
 @media (max-width:960px){
   header.topbar{padding:0 12px}
-  header.topbar .brand img{height:24px !important}
+  header.topbar .brand img{height:30px !important}
   header.topbar .mainnav a{font-size:12.5px;margin-left:10px}
 }
 @media (max-width:400px){
@@ -108,17 +108,18 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 .tag-rank{max-height:220px;overflow:auto;margin-top:8px}
 .tag-rank tr.tag-row{cursor:pointer}
 .tag-rank tr.tag-row:hover{background:#f0f6ff}
-/* 统一侧边栏（QRE-SAAS-FEEDBACK-FACTOR-REQ）：全页面左侧入口，配色遵循 lab 版主题变量 */
+/* 统一侧边栏（QRE-SAAS-FEEDBACK-FACTOR-REQ）：悬浮左缘竖排按钮，全页面常驻可见，
+   不占文档流（移动端不再顶在 header 之下）；配色遵循 lab 版主题变量 */
+.sidenav{position:fixed;left:0;top:38%;transform:translateY(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;padding:0}
+.sidenav a{display:block;width:15px;padding:10px 6px;word-break:break-all;text-align:center;line-height:1.6;background:var(--tint,#F1EDF8);border:1px solid var(--line);border-left:none;border-radius:0 8px 8px 0;color:var(--accent);font-size:12.5px;box-shadow:1px 1px 6px rgba(74,60,120,.12);white-space:normal}
+.sidenav a:hover{background:var(--accent);color:#fff}
+.sidenav a.active{background:var(--accent);color:#fff;font-weight:600}
 .app-shell{display:flex;align-items:flex-start}
-.sidenav{flex:0 0 150px;padding:20px 8px 20px 16px;position:sticky;top:16px}
-.sidenav a{display:block;padding:8px 14px;border-radius:8px;color:var(--muted);font-size:13.5px;margin-bottom:4px;white-space:nowrap}
-.sidenav a:hover{background:var(--tint,#F1EDF8);color:var(--accent)}
-.sidenav a.active{background:var(--tint,#F1EDF8);color:var(--accent);font-weight:600}
 .app-main{flex:1;min-width:0}
 @media (max-width:960px){
-  .app-shell{display:block}
-  .sidenav{display:flex;position:static;padding:0 16px 10px}
-  .sidenav a{margin-bottom:0;margin-right:6px}
+  /* 移动端：悬浮钮改到左下部，避免压住页首内容 */
+  .sidenav{top:auto;bottom:140px;transform:none}
+  .sidenav a{font-size:12px;width:14px}
 }
 </style>
 <link rel="stylesheet" href="/static/lab-theme.css">
@@ -126,7 +127,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/saas/new"><img src="/static/logo-horizontal-white-2x.png" alt="A股回测台" style="height:34px;display:block"></a>
+  <a class="brand" href="/saas/new"><img src="/static/logo-horizontal-white-2x.png" alt="A股回测台" style="height:46px;display:block"></a>
   <nav class="mainnav">
     <a href="/saas/new" data-nav="new">新建策略</a>
     <a href="/saas/" data-nav="records">回测记录</a>

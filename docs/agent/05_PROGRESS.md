@@ -661,3 +661,9 @@ Historical row statuses (pre-migration, kept for old table rows):
 - NL 编译对游客开放（原 401 → 文件计数限流 10 次/IP/日，fcntl 锁跨 gunicorn worker；QRE_GUEST_NL_COUNTER 可配路径）；前端编译等待加已用时计时反馈（LLM 生成通常 10-40s）。
 - metadata.json 增 all_a_codes 字段（sync_saas_metadata.py 导出，需重新 scp 上 ECS）。
 - 测试：更新 NL 编译路由测试（游客 503/限流 403），新增 random-symbol 用例；定向 192 passed。
+
+## 2026-09-28 UI 细节优化（禁缩放/悬浮反馈钮/大 logo）
+
+- base.html：全局 textarea 禁缩放（resize:none）。
+- 侧栏「意见反馈 / 申请新因子」由文档流改为左缘悬浮竖排钮（fixed，桌面 38% 高、移动端左下 bottom:140px）；竖排实现弃用 writing-mode（flex 上下文字符叠加 bug），改 width 1 字 + word-break:break-all 逐字换行方案。
+- 顶栏 logo 放大：桌面 34→46px，移动端 24→30px。
