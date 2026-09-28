@@ -645,3 +645,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 - If code changed, update `04_TASK_HANDOFF.md` and this file.
 - If the workflow phase changed, update `11_AGENT_STATE.md`.
 - If architecture or major decisions changed, update `06_DECISION_LOG.md`.
+
+## 2026-09-28 品牌 Logo 接入
+
+- 用户提供正式品牌资产包（`/home/van/logo/A股回测台-brand-assets/`，含 web/app/svg 全套）。
+- 替换占位 favicon.svg → favicon.ico + 16/32/192 PNG + apple-touch-icon-180.png；顶部栏品牌文字 → 横版 logo 图（logo-horizontal-2x.png，height 34px），存放于 `src/quant_research_engine/gui/static/`。
+- 仅改 `saas/templates/base.html`（favicon link 组 + `.brand` 处），其余模板继承 base 自动生效。
+- 验证：staging 127.0.0.1:8091 静态资源 200，页面截图确认 header logo 渲染正常。
