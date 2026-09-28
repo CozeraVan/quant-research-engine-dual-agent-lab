@@ -178,6 +178,30 @@ function renderMain(d){
     applyBench();
   }
   // 区间信息卡（QRE-SAAS-DETAIL-UI：与 lab 版同款，随滑块缩放实时重算）
+  // QRE-SAAS-EXPOSURE-METRICS：持仓暴露度/持仓期年化——由 round trips 的
+  // entry/exit 日期展开成「逐日是否有持仓」掩码（同日多笔重叠按 1 天计），随区间联动
+  const dateIdx = {};
+  (d.dates || []).forEach((dt, i) => { dateIdx[dt] = i; });
+  const heldMask = new Array((d.dates || []).length).fill(false);
+  const tpts = (d.trades && d.trades.points) || [];
+  tpts.forEach(t => {
+    const a = dateIdx[t.entry_date], b = dateIdx[t.exit_date];
+    if (a == null || b == null) return;
+    for (let i = a; i <= b; i++) heldMask[i] = true;
+  });
+  const exposureTip = '有持仓的交易日数 ÷ 区间交易日数；同一日多笔持仓按 1 天计（重叠去重）' +
+    (d.trades && d.trades.sampled ? '；本任务交易超 500 笔，按回传的前 500 笔估算' : '');
+  const holdAnnualTip = '区间策略收益按实际持仓天数折算年化：(1+区间收益)^(252/持仓天数)−1；252 = 年交易日数';
+  function exposureCards(i0, i1, sRet){
+    let held = 0;
+    for (let i = i0; i <= i1; i++) if (heldMask[i]) held++;
+    if (!held) return card('持仓暴露度', '—', 'flat', exposureTip) +
+                    card('持仓期年化收益', '—', 'flat', holdAnnualTip + '；本区间无持仓');
+    const expo = held / (i1 - i0 + 1);
+    const ann = sRet == null ? null : Math.pow(1 + sRet, 252 / held) - 1;
+    return card('持仓暴露度', (expo * 100).toFixed(2) + '%', 'flat', exposureTip) +
+           card('持仓期年化收益', ann == null ? '—' : pct(ann), cls(ann), holdAnnualTip);
+  }
   function sliceRet(arr, i0, i1){
     const ev = arr.slice(i0, i1 + 1).filter(v => v != null);
     return ev.length >= 2 ? ev[ev.length - 1] / ev[0] - 1 : null;
@@ -213,7 +237,8 @@ function renderMain(d){
       card('区间基准收益·' + bName, bRet == null ? '—' : pct(bRet), cls(bRet)) +
       card('区间超额·vs ' + bName, excess == null ? '—' : pct(excess), cls(excess), '滑块窗口内：策略累计收益% − ' + bName + ' 累计收益%') +
       card('区间最大回撤', pct(mdd), 'neg') +
-      card('交易日数', i1 - i0 + 1, 'flat');
+      card('交易日数', i1 - i0 + 1, 'flat') +
+      exposureCards(i0, i1, sRet);
   }
   let rafPending = false;
   mainChart.on('datazoom', () => {

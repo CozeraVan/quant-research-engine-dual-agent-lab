@@ -61,10 +61,11 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 .metric-card .m-label{font-size:12px;color:var(--muted)}
 .metric-card .m-value{font-size:18px;font-weight:600;margin-top:2px}
 /* QRE-SAAS-DETAIL-CARD-UI：总结性卡片（概述指标卡 / 区间信息卡 / 个股简介卡）淡紫底 + 自适应均分整行。
-   区间五卡整行 5 等分填满（消除并列后末尾留白）；个股简介卡 auto-fit 放宽最小宽度，宽高比更舒展；
-   全部用 lab 版主题 token（--tint / --tint-deep），窄屏降级 2 列 / 自动换列。 */
+   区间卡整行均分填满（消除并列后末尾留白）；个股简介卡 auto-fit 放宽最小宽度，宽高比更舒展；
+   全部用 lab 版主题 token（--tint / --tint-deep），窄屏降级 2 列 / 自动换列。
+   QRE-SAAS-EXPOSURE-METRICS：区间卡加持仓暴露度/持仓期年化两张（7 卡），改 auto-fit 按卡数自适应。 */
 #metric-strip .metric-card,#sum-strip .metric-card,#range-strip .metric-card{background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)}
-#range-strip{grid-template-columns:repeat(5,1fr)}
+#range-strip{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
 #sum-strip{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 #sum-strip .metric-card{padding:10px 14px}
 #sum-strip .metric-card .m-value{font-size:15px}

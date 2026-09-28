@@ -278,6 +278,7 @@
 
 ## 变更记录
 
+- 2026-09-28（QRE-SAAS-EXPOSURE-METRICS）SaaS 详情页区间信息卡新增 2 张随滑块联动指标卡（第 6/7 张，job.html 与 symbol.html 同步）：**持仓暴露度**（有持仓交易日数 ÷ 区间交易日数，同日多笔按 1 天去重；数据源 = 结果已有 round trips 的 entry/exit 日期展开成逐日持仓掩码，job 级用 chart_data.trades.points，>500 笔 sampled 时悬停提示「按前 500 笔估算」，symbol 级用 d.trades 全量）与**持仓期年化收益**（(1+区间策略收益)^(252/持仓天数)−1，252=年交易日数）；区间内无持仓两卡均显示「—」，口径写在 title 悬停提示。`#range-strip` 网格由 `repeat(5,1fr)` 改 `repeat(auto-fit,minmax(130px,1fr))` 按卡数自适应（≤960px 仍降 2 列）。
 - 2026-09-28（QRE-SAAS-DETAIL-CARD-UI）SaaS 详情页卡片修正（saas/templates 侧，lab 侧零改动）：①区间五卡末尾留白根因——lab-theme.css 把 `.metric-strip` 纠偏为 `repeat(6,1fr)` 网格，五卡只占 5/6；saas base.html 加 `#range-strip{grid-template-columns:repeat(5,1fr)}`（≤960px 降 2 列）。②job.html 模块顺序对齐 §8：交易磨损 + FRM 移到收益曲线之后、归因之前。③symbol.html 顶部 7 简介卡（6 列网格装 7 卡导致 6+1 且窄高臃肿）改 `#sum-strip{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}` + 卡 padding 10px 14px + 数值 15px（对齐 §1.3「个股页 15px」）。④总结性卡片淡紫底：`#metric-strip/#sum-strip/#range-strip 的 .metric-card` 用 `--tint` 底 + `--tint-deep` 边（区间卡即 §3.9 `.range-strip .metric` 既有规范推广到概述/简介卡）。均用 ID 选择器压过 lab-theme 后加载的同族规则；Jinja 模板内 CSS 选择器 `{#id` 连写会被当注释，需 `{ #id` 留空格（本次踩过）。
 - 2026-09-08 初版：从 synthesis.html 定稿提取（用户验收通过）。
 - 2026-09-27（QRE-UI-DESIGN-SYSTEM-DOC）重写为完整设计系统：补文件地图、行内控件 36px 等高规范、ECharts 图表配置约定（此前文档写的是设计稿期 SVG 手绘方案，落地已改 ECharts）、SaaS 复刻约定、禁链含注释的教训；每条规范标注源码文件+行号。

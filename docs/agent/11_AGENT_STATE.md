@@ -12,7 +12,9 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-DETAIL-CARD-UI (DONE — 公网详情页卡片 UI 四项验收修改：区间五卡 repeat(5,1fr) 整行均分、job.html 交易磨损+FRM 移到收益曲线后、symbol.html 顶部 7 卡 auto-fit 舒展布局、总结性卡片统一 --tint 淡紫底；仅改 saas/templates 的 job.html/base.html，lab 侧零改动；全量 2212 passed + 4 skipped 零回归；staging 8097 宽+窄屏 Playwright 截图验证零 JS 报错；12 号文档变更记录已登记；未 commit 未部署；awaiting git approval)
+QRE-SAAS-EXPOSURE-METRICS (DONE — 区间信息卡加持仓暴露度/持仓期年化两张随滑块联动卡：round trips entry/exit 展开逐日持仓掩码（同日重叠去重），暴露度=持仓日数/区间日数，持仓期年化=(1+区间收益)^(252/持仓天数)−1，无持仓显示「—」口径入 title；#range-strip 改 auto-fit minmax(130px,1fr)；job.html/symbol.html 同步，lab 侧零改动；全量 2212 passed + 4 skipped 零回归；staging 8097 宽+窄屏 Playwright 探针实测联动与数值正确、零 JS 报错；12 号文档已登记；未 commit 未部署；awaiting git approval)
+
+上一任务：QRE-SAAS-DETAIL-CARD-UI (DONE — 公网详情页卡片 UI 四项验收修改：区间五卡 repeat(5,1fr) 整行均分、job.html 交易磨损+FRM 移到收益曲线后、symbol.html 顶部 7 卡 auto-fit 舒展布局、总结性卡片统一 --tint 淡紫底；仅改 saas/templates 的 job.html/base.html，lab 侧零改动；全量 2212 passed + 4 skipped 零回归；staging 8097 宽+窄屏 Playwright 截图验证零 JS 报错；12 号文档变更记录已登记；未 commit 未部署；awaiting git approval)
 
 上一任务：QRE-SAAS-SYMBOL-UX-SHARED-FIX (DONE — shared 模式 per-symbol 产物缺陷修复：runner._enrich_shared_symbol_detail 从任务级产物补齐 orders/failed_orders/wear/单票净值；job 21 存量产物已重算覆盖 ECS；公网 demo01 job 23 全链路验证全模块渲染；测试 +5 全量 2212 passed + 4 skipped 零回归；已 scp 临时部署；awaiting git approval)
 

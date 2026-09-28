@@ -2,7 +2,37 @@
 
 ## Task ID
 
-QRE-SAAS-DETAIL-CARD-UI (公网回测详情页/个股详情页卡片 UI 四项验收修改)
+QRE-SAAS-EXPOSURE-METRICS (区间信息卡新增持仓暴露度/持仓期年化收益两张联动卡)
+
+## Current Status
+
+DONE (implementation; full test suite green (2212 passed + 4 skipped); 仅本地 staging 验证、未部署 ECS；awaiting user-approved git finalization)
+
+## Task Note
+
+- 范围：saas/templates 的 job.html、symbol.html、base.html；lab 侧零改动。
+- 数据口径：持仓暴露度 = 有持仓交易日数 ÷ 区间交易日数。数据源用结果已有
+  round trips（job 级 chart_data.trades.points entry/exit 日期；symbol 级
+  d.trades 全量），每笔 [entry,exit] 展开到交易日轴成逐日持仓布尔掩码，
+  同日多笔重叠按 1 天去重；产物无逐日仓位序列，此为最准口径。
+  持仓期年化 = (1+区间策略收益)^(252/持仓天数)−1（252=年交易日数）。
+  区间无持仓 → 两卡均显示「—」；口径写 title 悬停提示；job 级 >500 笔
+  sampled 时提示「按前 500 笔估算」。
+- 联动：掩码在 renderMain/renderEquity 构建一次，updateRangeStrip（rAF 节流）
+  切片求和，随滑块重算，与既有区间卡同链路。
+- 样式：base.html #range-strip 由 repeat(5,1fr) 改
+  repeat(auto-fit,minmax(130px,1fr)) 按卡数自适应（≤960px 仍降 2 列），
+  卡片沿用淡紫底 metric-card 族（QRE-SAAS-DETAIL-CARD-UI）。
+- 测试：零新增零修改；全量 2212 passed + 4 skipped 零回归。
+- 验证：staging 8097 job 26，Playwright 宽+窄屏截图
+  /tmp/qre-shots/expo-{job,symbol}-{wide,narrow}.png；探针实测 7 卡、缩放联动
+  （80.00%/1.33% → 89.47%/4.41%）、无持仓区间「—」、数值抽查
+  1.0059^(252/112)−1≈1.33% 正确、零 JS 报错。
+- 12 号文档变更记录已登记（QRE-SAAS-EXPOSURE-METRICS）。未 commit、未部署。
+
+---
+
+## Archive: QRE-SAAS-DETAIL-CARD-UI (公网回测详情页/个股详情页卡片 UI 四项验收修改)
 
 ## Current Status
 

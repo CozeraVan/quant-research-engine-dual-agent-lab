@@ -155,6 +155,28 @@ function renderEquity(d){
     series,
   });
   // 区间信息卡（与 lab 版同口径，随滑块 rAF 节流重算）
+  // QRE-SAAS-EXPOSURE-METRICS：持仓暴露度/持仓期年化——round trips 展开成
+  // 逐日持仓掩码（同日多笔按 1 天计），随区间联动；无持仓区间显示「—」
+  const dateIdx = {};
+  dates.forEach((dt, i) => { dateIdx[dt] = i; });
+  const heldMask = new Array(n).fill(false);
+  (d.trades || []).forEach(t => {
+    const a = dateIdx[t.entry_date], b = dateIdx[t.exit_date];
+    if (a == null || b == null) return;
+    for (let i = a; i <= b; i++) heldMask[i] = true;
+  });
+  const exposureTip = '有持仓的交易日数 ÷ 区间交易日数；同一日多笔持仓按 1 天计（重叠去重）';
+  const holdAnnualTip = '区间策略收益按实际持仓天数折算年化：(1+区间收益)^(252/持仓天数)−1；252 = 年交易日数';
+  function exposureCards(i0, i1, sRet){
+    let held = 0;
+    for (let i = i0; i <= i1; i++) if (heldMask[i]) held++;
+    if (!held) return '<div class="metric-card" title="' + exposureTip + '"><div class="m-label">持仓暴露度</div><div class="m-value flat">—</div></div>' +
+                      '<div class="metric-card" title="' + holdAnnualTip + '；本区间无持仓"><div class="m-label">持仓期年化收益</div><div class="m-value flat">—</div></div>';
+    const expo = held / (i1 - i0 + 1);
+    const ann = sRet == null ? null : Math.pow(1 + sRet, 252 / held) - 1;
+    return '<div class="metric-card" title="' + exposureTip + '"><div class="m-label">持仓暴露度</div><div class="m-value flat">' + (expo * 100).toFixed(2) + '%</div></div>' +
+           '<div class="metric-card" title="' + holdAnnualTip + '"><div class="m-label">持仓期年化收益</div><div class="m-value ' + cls(ann) + '">' + (ann == null ? '—' : pct(ann)) + '</div></div>';
+  }
   const benchCode = d.benchmarks && d.benchmarks['000001.SH'] ? '000001.SH' : (d.benchmarks ? Object.keys(d.benchmarks)[0] : null);
   function sliceRetPct(arr, i0, i1){
     let a = null, b = null;
@@ -182,7 +204,8 @@ function renderEquity(d){
       card('区间买入持有收益', pct(hRet), cls(hRet)) +
       card('区间基准收益·' + (benchCode ? d.benchmarks[benchCode].name : '基准'), pct(bRet), cls(bRet)) +
       card('区间超额·vs买入持有', pct(excess), cls(excess)) +
-      card('交易日数', i1 - i0 + 1, 'flat');
+      card('交易日数', i1 - i0 + 1, 'flat') +
+      exposureCards(i0, i1, sRet);
   }
   let raf = false;
   chart.on('datazoom', () => { if (raf) return; raf = true; requestAnimationFrame(() => { raf = false; updateStrip(); }); });
