@@ -399,6 +399,23 @@ def test_health_red_large_lag_or_missing():
     assert health_status(None, ["2026-07-27"])["level"] == "red"
 
 
+def test_health_staleness_pending_trade_days():
+    """QRE-ADMIN-HEALTH-STALENESS：全链路同日断更不得误报 green。"""
+    # 全对齐但落后 1 个交易日 → yellow
+    h = health_status("2026-09-21", ["2026-09-21", "2026-09-21"], pending_trade_days=1)
+    assert h["level"] == "yellow" and "滞后 1 个交易日" in h["detail"]
+    # 全对齐但落后 4 个交易日（2026-09-21 断更事故复现场景）→ red
+    h = health_status("2026-09-21", ["2026-09-21", "2026-09-21"], pending_trade_days=4)
+    assert h["level"] == "red" and "滞后 4 个交易日" in h["detail"]
+    # 0 滞后不改变原判定
+    assert health_status("2026-09-28", ["2026-09-28"], pending_trade_days=0)["level"] == "green"
+    # None（日历不可用）不改变原判定
+    assert health_status("2026-07-27", ["2026-07-27"], pending_trade_days=None)["level"] == "green"
+    # 时效 + 对齐双问题时 red
+    h = health_status("2026-09-21", ["2026-09-20"], pending_trade_days=2)
+    assert h["level"] == "red"
+
+
 # --- overview_backtests ---
 
 

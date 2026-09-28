@@ -454,6 +454,7 @@ def create_app() -> Flask:
             overview_daily,
             overview_derivatives,
             overview_factors,
+            pending_trade_days,
         )
 
         db_url = request.args.get("db_url") or None
@@ -468,6 +469,7 @@ def create_app() -> Flask:
         health = health_status(
             daily.get("watermark"),
             [t["watermark"] for t in factors["tables"]],
+            pending_trade_days=pending_trade_days(daily.get("watermark"), db_url),
         )
         return jsonify({"ok": True, "daily": daily, "factors": factors, "backtests": backtests, "health": health, "derivatives": derivatives, "concept_tags": concept_tags})
 

@@ -522,8 +522,19 @@ def overview_concept_tags(db_url: str | None = None) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def health_status(daily_max: str | None, factor_watermarks: list[str | None]) -> dict[str, Any]:
-    """三域 watermark 对齐灯：全部同日=green；最小滞后 ≤3 天=yellow；否则 red。"""
+def health_status(
+    daily_max: str | None,
+    factor_watermarks: list[str | None],
+    pending_trade_days: int | None = None,
+) -> dict[str, Any]:
+    """三域 watermark 对齐灯 + 绝对时效灯（QRE-ADMIN-HEALTH-STALENESS 修复）。
+
+    原实现只比"日线与因子表是否互相对齐"——全链路一起断更时大家停在同一天，
+    灯会误报 green（2026-09-21 断更事故即此因）。新增 pending_trade_days：
+    交易日历中 (daily_max, today] 的开盘日数量；>=1 即说明数据落后于市场。
+    对齐判定规则不变：全部同日=green；最小滞后 ≤3 天=yellow；否则 red。
+    时效判定（优先于对齐）：pending=0 不影响；pending=1 → 至多 yellow；≥2 → red。
+    """
     if not daily_max:
         return {"level": "red", "detail": "日线 watermark 不可用"}
     known = [w for w in factor_watermarks if w]
@@ -532,16 +543,48 @@ def health_status(daily_max: str | None, factor_watermarks: list[str | None]) ->
     daily_date = date.fromisoformat(str(daily_max)[:10])
     lagging = [w for w in known if w < str(daily_max)]
     if not lagging and len(known) == len(factor_watermarks):
-        return {"level": "green", "detail": f"全部对齐 {daily_max}"}
-    min_lag = min((daily_date - date.fromisoformat(str(w)[:10])).days for w in lagging) if lagging else None
-    missing = len(factor_watermarks) - len(known)
-    detail_parts = []
-    if lagging:
-        detail_parts.append(f"{len(lagging)} 张因子表滞后（最小滞后 {min_lag} 天）")
-    if missing:
-        detail_parts.append(f"{missing} 张因子表无数据")
-    level = "yellow" if (min_lag is not None and min_lag <= 3 and not missing) else "red"
-    return {"level": level, "detail": "；".join(detail_parts) or "对齐"}
+        result = {"level": "green", "detail": f"全部对齐 {daily_max}"}
+    else:
+        min_lag = min((daily_date - date.fromisoformat(str(w)[:10])).days for w in lagging) if lagging else None
+        missing = len(factor_watermarks) - len(known)
+        detail_parts = []
+        if lagging:
+            detail_parts.append(f"{len(lagging)} 张因子表滞后（最小滞后 {min_lag} 天）")
+        if missing:
+            detail_parts.append(f"{missing} 张因子表无数据")
+        level = "yellow" if (min_lag is not None and min_lag <= 3 and not missing) else "red"
+        result = {"level": level, "detail": "；".join(detail_parts) or "对齐"}
+    # 时效降级：落后于最新开盘日则降灯（green→yellow/red，yellow→red）
+    if pending_trade_days is not None and pending_trade_days >= 1:
+        stale_note = f"数据滞后 {pending_trade_days} 个交易日（最新 {daily_max}）"
+        if pending_trade_days >= 2:
+            result = {"level": "red", "detail": stale_note + "；" + result["detail"]}
+        elif result["level"] == "green":
+            result = {"level": "yellow", "detail": stale_note}
+        else:
+            result["detail"] = stale_note + "；" + result["detail"]
+    return result
+
+
+def pending_trade_days(daily_max: str | None, db_url: str | None = None) -> int | None:
+    """交易日历口径：(daily_max, today] 内的开盘日数量。日历不可用时返回 None（不降级）。"""
+    if not daily_max:
+        return None
+    try:
+        from sqlalchemy import text
+
+        store = _store(db_url)
+        with store.market_engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT count(*) FROM reference.trade_calendar "
+                    "WHERE is_open = 1 AND cal_date > :since AND cal_date <= :today"
+                ),
+                {"since": str(daily_max)[:10], "today": date.today().isoformat()},
+            ).scalar_one()
+        return int(row)
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------

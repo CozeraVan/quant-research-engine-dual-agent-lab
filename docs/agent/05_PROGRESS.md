@@ -667,3 +667,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 - base.html：全局 textarea 禁缩放（resize:none）。
 - 侧栏「意见反馈 / 申请新因子」由文档流改为左缘悬浮竖排钮（fixed，桌面 38% 高、移动端左下 bottom:140px）；竖排实现弃用 writing-mode（flex 上下文字符叠加 bug），改 width 1 字 + word-break:break-all 逐字换行方案。
 - 顶栏 logo 放大：桌面 34→46px，移动端 24→30px。
+
+## 2026-09-28 数据断更事故处置 + 健康灯误报修复（QRE-ADMIN-HEALTH-STALENESS）
+
+- 事故：9/22-9/28 全链路数据停在 9/21，健康灯误报 green。根因：PC 多次关机/崩溃错过 16:30 日更窗口（9/25 为中秋休市无缺口）。
+- 处置：手动补齐 quant-ts 日同步（缺口自愈模式）→ indicators/alpha191/cluster/barometer/refresh 全链；index_daily 9/28 待 Tushare 发布后补拉成功。全表对齐 2026-09-28。
+- 教训：后台 Bash 跑 refresh_batch.py 必须 `set -a && . ./.env`（systemd 服务有 env，裸 shell 没有）。
+- 修复：admin.health_status 新增 pending_trade_days 参数（交易日历口径时效判定）——落后最新开盘日 1 天至多 yellow、≥2 天 red；同日断更不再误报 green。app.py 概览接口接入。测试 49 项全绿（含事故复现场景用例）。
