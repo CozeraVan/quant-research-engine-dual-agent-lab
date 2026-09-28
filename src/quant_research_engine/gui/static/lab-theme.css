@@ -279,9 +279,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .cal-pop{position:absolute;top:40px;left:0;z-index:60;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-2);padding:14px 16px;width:288px;animation:panelIn .25s var(--ease)}
 .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .cal-head b{font-size:14px;color:var(--lav-deep)}
+.cal-title{border:none;background:none;font-size:14px;font-weight:700;color:var(--lav-deep);padding:3px 12px;border-radius:6px;transition:all .2s}
+.cal-title:hover{background:var(--tint);color:var(--lav)}
 .cal-nav{border:1px solid var(--line);background:#fff;border-radius:6px;width:26px;height:26px;color:var(--grey);transition:all .2s}
 .cal-nav:hover{border-color:var(--lav);color:var(--lav-deep);background:var(--tint)}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-grid-ym{grid-template-columns:repeat(4,1fr);gap:6px;padding:4px 0}
 .cal-dow{font-size:11px;color:var(--faint);text-align:center;padding:3px 0}
 .cal-day{border:none;background:none;font-size:12.5px;text-align:center;padding:5px 0;border-radius:6px;color:var(--ink);transition:background .15s;font-variant-numeric:tabular-nums}
 .cal-day:hover:not(:disabled){background:var(--tint-deep)}
@@ -290,6 +293,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .cal-day.in-range{background:var(--tint);border-radius:0}
 .cal-day.sel{background:var(--lav);color:#fff;font-weight:600}
 .cal-day.sel:hover{background:var(--lav-deep)}
+/* 年/月钻取视图格子：与 .cal-day 同一族，选中态一致 */
+.cal-cell{border:none;background:none;font-size:12.5px;text-align:center;padding:10px 0;border-radius:6px;color:var(--ink);transition:background .15s;font-variant-numeric:tabular-nums}
+.cal-cell:hover:not(:disabled){background:var(--tint-deep)}
+.cal-cell:disabled{color:#D5CFE3;cursor:default}
+.cal-cell.sel{background:var(--lav);color:#fff;font-weight:600}
+.cal-cell.sel:hover{background:var(--lav-deep)}
 .cal-foot{font-size:11.5px;color:var(--faint);margin-top:8px;text-align:center}
 
 /* 运行流水线 */

@@ -171,11 +171,12 @@
 - 整行点击跳详情用 `tr.row-link`（行内按钮/链接 stopPropagation，`lab.html:1738-1744`）。
 - 明细小表 `.detail-table` 12.5px 全数值右对齐（首列除外）；`.table-wrap{max-height:360px;overflow:auto}` 滚动容器。
 
-### 3.7 日历弹层（`lab-ui.js:47-107`、`lab-theme.css:278-293`）
+### 3.7 日历弹层（`lab-ui.js:47-175`、`lab-theme.css:279-304`）
 
 - 自绘日历（零依赖）：`.cal-pop` 288px 宽白卡弹层；`.cal-day.sel` 紫底白字、`.in-range` 淡紫底、超出 maxDate 的天 `:disabled` 灰 `#D5CFE3`。
-- **禁未来函数**：最大可选日 = 数据最近交易日（`/api/admin/refresh` 的 `state.last_data_date`），之后含今天全禁；输入框 readonly，只能点选。
-- 页脚必须注明「数据截至 X（最近交易日），之后日期不可选」。
+- **年→月→日钻取**（QRE-CALENDAR-YEAR-PICKER）：点头部标题 `.cal-title`（年/月/年范围文案随视图切换）逐级上钻——日视图→年份视图（12 年/页九宫格 `.cal-grid-ym` 4 列，前后翻页 ±12 年，标题显示「YYYY – YYYY 年」）→选年进入月份视图（当年 12 个月）→选月回日视图。Esc 逐级返回（年→月→日→关闭弹层），年视图下再点标题直接回日视图；年/月格子用 `.cal-cell`（与 `.cal-day` 同族视觉），选中起/止日所在的年/月 `.sel` 紫底高亮，与选中日一致。头部翻页箭头各视图复用 `.cal-nav`。
+- **禁未来函数**：最大可选日 = 数据最近交易日（`/api/admin/refresh` 的 `state.last_data_date`），之后含今天全禁；输入框 readonly，只能点选。可选下界 `minDate`（可选 opts）同样生效：年视图整年超界、月视图整月超界的格子 `:disabled` 置灰禁点，翻页箭头在无可翻内容时禁用。
+- 页脚必须注明「数据截至 X（最近交易日），之后日期不可选」；年/月视图追加「Esc 或点标题返回上级」提示。
 
 ### 3.8 运行流水线（`lab-theme.css:296-308`、`lab-ui.js:110-126`）
 
@@ -278,6 +279,7 @@
 
 ## 变更记录
 
+- 2026-09-28（QRE-CALENDAR-YEAR-PICKER）共享日历组件（`lab-ui.js` attachCalendar，8081 lab 与 SaaS 同源）新增**年→月→日钻取**：点头部年月标题（新 `.cal-title` 按钮）进入年份视图（12 年/页九宫格 `.cal-grid-ym` 4 列 + `.cal-cell` 格子，翻页 ±12 年），选年进月份视图（12 个月），选月回日视图；Esc 逐级返回（年→月→日→关闭），年视图再点标题回日视图。年/月格子超 [minDate,maxDate] 范围 `:disabled` 置灰禁点（minDate 为新增可选 opts，未传则仅 maxDate 约束，调用方零改动）；选中起/止日所在年/月 `.sel` 紫底高亮与选中日一致（`.cal-cell.sel` 复用 `--lav`）；页脚数据截至提示不变，年/月视图追加「Esc 或点标题返回上级」。样式全部落在 `lab-theme.css` cal-pop 组件族（新增 `.cal-title`/`.cal-grid-ym`/`.cal-cell` 三条规则，无新色相、无循环动效）。lab/SaaS 模板零改动。
 - 2026-09-28（QRE-SAAS-EXPOSURE-METRICS）SaaS 详情页区间信息卡新增 2 张随滑块联动指标卡（第 6/7 张，job.html 与 symbol.html 同步）：**持仓暴露度**（有持仓交易日数 ÷ 区间交易日数，同日多笔按 1 天去重；数据源 = 结果已有 round trips 的 entry/exit 日期展开成逐日持仓掩码，job 级用 chart_data.trades.points，>500 笔 sampled 时悬停提示「按前 500 笔估算」，symbol 级用 d.trades 全量）与**持仓期年化收益**（(1+区间策略收益)^(252/持仓天数)−1，252=年交易日数）；区间内无持仓两卡均显示「—」，口径写在 title 悬停提示。`#range-strip` 网格由 `repeat(5,1fr)` 改 `repeat(auto-fit,minmax(130px,1fr))` 按卡数自适应（≤960px 仍降 2 列）。
 - 2026-09-28（QRE-SAAS-DETAIL-CARD-UI）SaaS 详情页卡片修正（saas/templates 侧，lab 侧零改动）：①区间五卡末尾留白根因——lab-theme.css 把 `.metric-strip` 纠偏为 `repeat(6,1fr)` 网格，五卡只占 5/6；saas base.html 加 `#range-strip{grid-template-columns:repeat(5,1fr)}`（≤960px 降 2 列）。②job.html 模块顺序对齐 §8：交易磨损 + FRM 移到收益曲线之后、归因之前。③symbol.html 顶部 7 简介卡（6 列网格装 7 卡导致 6+1 且窄高臃肿）改 `#sum-strip{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}` + 卡 padding 10px 14px + 数值 15px（对齐 §1.3「个股页 15px」）。④总结性卡片淡紫底：`#metric-strip/#sum-strip/#range-strip 的 .metric-card` 用 `--tint` 底 + `--tint-deep` 边（区间卡即 §3.9 `.range-strip .metric` 既有规范推广到概述/简介卡）。均用 ID 选择器压过 lab-theme 后加载的同族规则；Jinja 模板内 CSS 选择器 `{#id` 连写会被当注释，需 `{ #id` 留空格（本次踩过）。
 - 2026-09-08 初版：从 synthesis.html 定稿提取（用户验收通过）。

@@ -2,7 +2,41 @@
 
 ## Task ID
 
-QRE-SAAS-EXPOSURE-METRICS (区间信息卡新增持仓暴露度/持仓期年化收益两张联动卡)
+QRE-CALENDAR-YEAR-PICKER (回测区间日历 年→月→日 钻取选择，共享组件两端同步升级)
+
+## Current Status
+
+DONE (implementation; full test suite green (2212 passed + 4 skipped, 复跑确认); 仅本地 staging 验证、未部署 ECS；awaiting user-approved git finalization)
+
+## Task Note
+
+- 范围：共享静态文件 `static/lab-ui.js`（LabUI.attachCalendar）+ `static/lab-theme.css`
+  （cal-pop 组件族三条新规则）；8081 lab 与 SaaS 模板零改动（两端同源引用，自动同步升级）。
+- 交互：点头部年月标题（新 .cal-title 按钮）逐级上钻——日视图→年份视图
+  （12 年/页九宫格 .cal-grid-ym 4 列 + .cal-cell，翻页 ±12 年，标题「YYYY – YYYY 年」）
+  →选年进月份视图（当年 12 个月，翻页 ±1 年）→选月回日视图；Esc 逐级返回
+  （年→月→日→关闭弹层），年视图再点标题回日视图。头部 .cal-nav 翻页箭头各视图复用，
+  无可翻内容时禁用。
+- 约束：maxDate 禁未来逻辑与「数据截至 X（最近交易日）」页脚提示不变；新增可选
+  opts.minDate 下界（年整年/月整月超界格子 :disabled 置灰禁点，clamp 夹取下界），
+  调用方未传 minDate 行为与旧版完全一致（lab.html/new.html 零改动兼容）。
+- 样式：选中起/止日所在年/月 .cal-cell.sel 紫底白字（--lav），与选中日一致；
+  禁用格 #D5CFE3 同 .cal-day:disabled；无新色相、无循环动效。
+- 键盘：标题/格子/翻页均原生 button 可 Tab 聚焦（:focus-visible 紫环全局生效），
+  Esc 逐级回退/关闭。
+- 测试：现有断言仅查 #cal-pop/attachCalendar 存在性（test_gui_lab.py:205、
+  test_gui_saas_pages.py:96），无需修改；项目无 node 侧 JS 测试设施，按约定不新建。
+  全量 pytest tests/ -q → 2212 passed + 4 skipped 零回归
+  （test_gui_risk_report 一例首轮偶发失败，单测复跑通过，与本次 JS/CSS 改动无关）。
+- 验证：staging 8091 Playwright（~/.kimi-code/skills/smart-web-scraper/qre-calendar-verify.js）
+  截图 /tmp/qre-shots/cal-{0-page,1-date,2-year,3-month,4-back-to-date,4b-future-guard,5-final}.png；
+  DOM 探针实测：三视图切换、年视图 2027 置灰+下一页禁用、maxDate=2026-09-28 当月
+  29/30 禁点 28 可选、钻取选值正确（起始 2020-03-02/截止 2026-01-15）、Esc 回退与关闭、零 JS 报错。
+- 12 号文档 §3.7 与变更记录已登记（QRE-CALENDAR-YEAR-PICKER）。未 commit、未部署。
+
+---
+
+## Archive: QRE-SAAS-EXPOSURE-METRICS (区间信息卡新增持仓暴露度/持仓期年化收益两张联动卡)
 
 ## Current Status
 

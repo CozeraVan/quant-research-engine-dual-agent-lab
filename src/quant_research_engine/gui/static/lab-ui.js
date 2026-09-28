@@ -41,40 +41,108 @@
   };
 
   /* ==================== 日历（禁未来函数：maxDate 之后含今天全禁） ==================== */
+  /* 年→月→日钻取：点头部年月标题进入年份九宫格（12 年/页）→ 选年进月份视图 → 选月回日视图；
+     Esc / 再点标题返回上一级；年/月格子超出 [minDate, maxDate] 范围置灰禁点。 */
   function isoD(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
   function parseD(s) { var p = (s || "").split("-"); return p.length === 3 ? new Date(+p[0], +p[1] - 1, +p[2]) : null; }
-  /* opts: {pop, startInput, endInput, maxDate:'YYYY-MM-DD', onChange} */
+  /* opts: {pop, startInput, endInput, maxDate:'YYYY-MM-DD', minDate?:'YYYY-MM-DD', onChange} */
   LabUI.attachCalendar = function (opts) {
     var pop = opts.pop, sIn = opts.startInput, eIn = opts.endInput;
     var MAXD = parseD(opts.maxDate) || new Date();
-    var calMode = "start", calYM = null;
+    var MIND = parseD(opts.minDate) || null;
+    var calMode = "start", calYM = null, view = "date", yearBase = null;
+    var MONTHS = ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"];
     function clamp() {
       var s = parseD(sIn.value), e = parseD(eIn.value);
       if (e && e > MAXD) eIn.value = isoD(MAXD);
       if (s && s > MAXD) sIn.value = isoD(MAXD);
+      if (MIND) {
+        if (e && e < MIND) eIn.value = isoD(MIND);
+        if (s && s < MIND) sIn.value = isoD(MIND);
+      }
+    }
+    function isOpen() { return pop.style.display !== "none" && pop.style.display !== ""; }
+    function navBtn(dis) { return dis ? " disabled style='opacity:.35;cursor:default'" : ""; }
+    function headHtml(title, noPrev, noNext) {
+      return '<div class="cal-head"><button class="cal-nav" data-nav="-1"' + navBtn(noPrev) + '>‹</button>'
+        + '<button class="cal-title" type="button">' + title + '</button>'
+        + '<button class="cal-nav" data-nav="1"' + navBtn(noNext) + '>›</button></div>';
     }
     function render() {
       if (!calYM) { calYM = parseD(sIn.value) || MAXD; calYM = new Date(calYM.getFullYear(), calYM.getMonth(), 1); }
       var y = calYM.getFullYear(), m = calYM.getMonth();
       var s = parseD(sIn.value), e = parseD(eIn.value);
-      var pad = (new Date(y, m, 1).getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
-      var noNext = (new Date(y, m + 1, 1)) > MAXD;
-      var html = '<div class="cal-head"><button class="cal-nav" data-nav="-1">‹</button><b>' + y + " 年 " + (m + 1) + ' 月</b><button class="cal-nav" data-nav="1"' + (noNext ? " disabled style='opacity:.35;cursor:default'" : "") + ">›</button></div>";
-      html += '<div class="cal-grid">' + "一二三四五六日".split("").map(function (d) { return '<span class="cal-dow">' + d + "</span>"; }).join("");
-      for (var i = 0; i < pad; i++) html += '<span class="cal-day pad"></span>';
-      for (var d = 1; d <= days; d++) {
-        var dt = new Date(y, m, d), cls = "cal-day", dis = dt > MAXD;
-        if (s && dt.getTime() === s.getTime()) cls += " sel";
-        if (e && dt.getTime() === e.getTime()) cls += " sel";
-        if (s && e && dt > s && dt < e) cls += " in-range";
-        html += '<button class="' + cls + '" data-d="' + isoD(dt) + '"' + (dis ? " disabled" : "") + ">" + d + "</button>";
+      var html;
+      if (view === "year") {
+        /* 年份视图：12 年/页九宫格 */
+        if (yearBase === null) yearBase = Math.floor(y / 12) * 12;
+        var maxY = MAXD.getFullYear(), minY = MIND ? MIND.getFullYear() : null;
+        var noNextY = yearBase + 12 > maxY, noPrevY = minY !== null && yearBase - 12 + 11 < minY;
+        html = headHtml(yearBase + " – " + (yearBase + 11) + " 年", noPrevY, noNextY);
+        html += '<div class="cal-grid cal-grid-ym">';
+        for (var yy = yearBase; yy < yearBase + 12; yy++) {
+          var ydis = yy > maxY || (minY !== null && yy < minY);
+          var ycls = "cal-cell cal-year" + ((s && s.getFullYear() === yy) || (e && e.getFullYear() === yy) ? " sel" : "");
+          html += '<button class="' + ycls + '" data-y="' + yy + '"' + (ydis ? " disabled" : "") + ">" + yy + "</button>";
+        }
+        html += "</div>" + footHtml();
+      } else if (view === "month") {
+        /* 月份视图：当年 12 个月 */
+        var noNextM = new Date(y + 1, 0, 1) > MAXD, noPrevM = MIND && new Date(y, 0, 1) <= new Date(MIND.getFullYear(), MIND.getMonth(), 1);
+        html = headHtml(y + " 年", noPrevM, noNextM);
+        html += '<div class="cal-grid cal-grid-ym">';
+        for (var mm = 0; mm < 12; mm++) {
+          var mdis = new Date(y, mm, 1) > MAXD || (MIND && new Date(y, mm + 1, 0) < MIND);
+          var msel = (s && s.getFullYear() === y && s.getMonth() === mm) || (e && e.getFullYear() === y && e.getMonth() === mm);
+          html += '<button class="cal-cell cal-month' + (msel ? " sel" : "") + '" data-m="' + mm + '"' + (mdis ? " disabled" : "") + ">" + MONTHS[mm] + "</button>";
+        }
+        html += "</div>" + footHtml();
+      } else {
+        /* 日视图（原有逻辑） */
+        var pad = (new Date(y, m, 1).getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
+        var noNext = (new Date(y, m + 1, 1)) > MAXD;
+        var noPrev = MIND && new Date(y, m, 1) <= new Date(MIND.getFullYear(), MIND.getMonth(), 1);
+        html = headHtml(y + " 年 " + (m + 1) + " 月", noPrev, noNext);
+        html += '<div class="cal-grid">' + "一二三四五六日".split("").map(function (d) { return '<span class="cal-dow">' + d + "</span>"; }).join("");
+        for (var i = 0; i < pad; i++) html += '<span class="cal-day pad"></span>';
+        for (var d = 1; d <= days; d++) {
+          var dt = new Date(y, m, d), cls = "cal-day", dis = dt > MAXD || (MIND && dt < MIND);
+          if (s && dt.getTime() === s.getTime()) cls += " sel";
+          if (e && dt.getTime() === e.getTime()) cls += " sel";
+          if (s && e && dt > s && dt < e) cls += " in-range";
+          html += '<button class="' + cls + '" data-d="' + isoD(dt) + '"' + (dis ? " disabled" : "") + ">" + d + "</button>";
+        }
+        html += "</div>" + footHtml();
       }
-      html += '</div><div class="cal-foot">数据截至 ' + opts.maxDate + '（最近交易日），之后日期不可选<br>正在选择：' + (calMode === "start" ? "起始日" : "截止日") + "（点输入框切换）</div>";
       pop.innerHTML = html;
       pop.querySelectorAll(".cal-nav").forEach(function (b) {
         b.addEventListener("click", function (ev) {
           ev.stopPropagation(); if (b.disabled) return;
-          calYM = new Date(y, m + (+b.dataset.nav), 1); render();
+          var dir = +b.dataset.nav;
+          if (view === "year") { yearBase += dir * 12; calYM = new Date(yearBase, 0, 1); }
+          else if (view === "month") calYM = new Date(y + dir, m, 1);
+          else calYM = new Date(y, m + dir, 1);
+          render();
+        });
+      });
+      pop.querySelector(".cal-title").addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        /* 点标题钻取：日→年、月→年；年视图再点返回日视图 */
+        if (view === "date") { view = "year"; yearBase = Math.floor(y / 12) * 12; }
+        else if (view === "month") { view = "year"; yearBase = Math.floor(y / 12) * 12; }
+        else view = "date";
+        render();
+      });
+      pop.querySelectorAll(".cal-year[data-y]").forEach(function (b) {
+        b.addEventListener("click", function (ev) {
+          ev.stopPropagation(); if (b.disabled) return;
+          calYM = new Date(+b.dataset.y, calYM.getMonth(), 1); view = "month"; render();
+        });
+      });
+      pop.querySelectorAll(".cal-month[data-m]").forEach(function (b) {
+        b.addEventListener("click", function (ev) {
+          ev.stopPropagation(); if (b.disabled) return;
+          calYM = new Date(y, +b.dataset.m, 1); view = "date"; render();
         });
       });
       pop.querySelectorAll(".cal-day[data-d]").forEach(function (b) {
@@ -88,6 +156,19 @@
         });
       });
     }
+    function footHtml() {
+      return '<div class="cal-foot">数据截至 ' + opts.maxDate + '（最近交易日），之后日期不可选<br>正在选择：'
+        + (calMode === "start" ? "起始日" : "截止日") + "（点输入框切换）"
+        + (view !== "date" ? "<br>Esc 或点标题返回上级" : "") + "</div>";
+    }
+    /* 键盘：日历打开时 Esc 逐级返回（年→月→日→关闭） */
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Escape" || !isOpen()) return;
+      ev.stopPropagation();
+      if (view === "year") { view = "month"; render(); }
+      else if (view === "month") { view = "date"; render(); }
+      else pop.style.display = "none";
+    });
     [sIn, eIn].forEach(function (inp, idx) {
       inp.readOnly = true;
       inp.classList.add("date-input");
@@ -95,13 +176,13 @@
         ev.stopPropagation();
         clamp(); if (opts.onChange) opts.onChange();
         var mode = idx === 0 ? "start" : "end";
-        if (pop.style.display !== "none" && pop.style.display !== "" && calMode === mode) { pop.style.display = "none"; return; }
-        calMode = mode; calYM = parseD(inp.value) || calYM;
+        if (isOpen() && calMode === mode) { pop.style.display = "none"; return; }
+        calMode = mode; calYM = parseD(inp.value) || calYM; view = "date"; yearBase = null;
         pop.style.display = "block"; render();
       });
     });
     document.addEventListener("click", function (ev) {
-      if (pop.style.display === "block" && !pop.contains(ev.target)) pop.style.display = "none";
+      if (isOpen() && !pop.contains(ev.target)) pop.style.display = "none";
     });
     return { clamp: clamp, maxDate: MAXD, iso: isoD };
   };
