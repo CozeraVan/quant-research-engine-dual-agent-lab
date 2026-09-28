@@ -46,6 +46,26 @@ def all_a_count(db_url: str | None = None) -> int:
         )
 
 
+def all_a_codes(db_url: str | None = None) -> list[str]:
+    """全部 A 股 ts_code 列表（约 5.5k 条，~60KB）。供 SaaS 元数据导出与随机抽股。"""
+    engine = _engine(db_url)
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT ts_code FROM reference.stock_basic ORDER BY ts_code")).fetchall()
+    return [str(r[0]) for r in rows]
+
+
+def random_symbol(db_url: str | None = None) -> str | None:
+    """随机抽 1 只 A 股 ts_code（本地 DB 口径；SaaS 端优先走元数据 all_a_codes）。"""
+    import random
+
+    engine = _engine(db_url)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT ts_code FROM reference.stock_basic ORDER BY random() LIMIT 1")
+        ).fetchone()
+    return str(row[0]) if row else None
+
+
 def _engine(db_url: str | None = None):
     from quant_research_engine.gui.admin import _store
 

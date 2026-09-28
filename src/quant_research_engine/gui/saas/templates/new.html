@@ -113,7 +113,10 @@
         <span class="opt">从全 A 股池随机抽 N 只（1~2000；抽样在执行端进行）</span>
       </span>
       <label id="scope-codes-label" style="display:none">股票代码 Codes</label>
-      <textarea id="param-codes" rows="2" style="display:none" placeholder="股票代码逗号分隔，如 000001,600519"></textarea>
+      <span id="scope-codes-row" style="display:none;gap:8px;align-items:flex-start;flex-wrap:wrap">
+        <textarea id="param-codes" rows="2" style="flex:1;min-width:220px" placeholder="股票代码逗号分隔，如 000001,600519"></textarea>
+        <button type="button" class="btn-sm" id="btn-random-symbol" style="margin-top:4px" title="从全 A 股池随机抽 1 只填入">随机一只</button>
+      </span>
     </div>
 
     <button class="sec-toggle" id="adv-toggle">高级参数</button>
@@ -225,6 +228,11 @@ function toastNote(el, msg, isErr){ el.textContent = msg; el.style.color = isErr
 function curEntry(){ const c = $('#entryGrid .entry-card.selected'); return c ? c.dataset.entry : 'nl'; }
 $$('#entryGrid .entry-card').forEach(card => {
   card.addEventListener('click', () => {
+    // 游客不开放 3 号入口（策略代码）：弹层引导登录或用前两个入口
+    if (isGuest() && card.dataset.entry === 'yaml'){
+      openGuestModal('「策略代码」入口需登录后使用。游客可先用「自然语言描述」或「自选因子交易」生成策略并测试单只股票。');
+      return;
+    }
     $$('#entryGrid .entry-card').forEach(c => c.classList.toggle('selected', c === card));
     $$('.entry-panel').forEach(p => p.classList.toggle('active', p.id === 'entry-' + card.dataset.entry));
     if (window.LabUI) LabUI.energizePCB($('#pcb-stage'), $$('#entryGrid .entry-card'));
@@ -355,7 +363,7 @@ $$('input[name="scope"]').forEach(r => r.addEventListener('change', function(){
   $('#scope-codes-label').style.display = v === 'codes' ? '' : 'none';
   $('#scope-univ-label').style.display = v === 'univ' ? '' : 'none';
   $('#scope-univ-row').style.display = v === 'univ' ? 'flex' : 'none';
-  $('#param-codes').style.display = v === 'codes' ? '' : 'none';
+  $('#scope-codes-row').style.display = v === 'codes' ? 'flex' : 'none';
   refreshPreview();
 }));
 ['#p-random-n', '#param-codes', '#p-sname', '#p-cash', '#p-maxpos', '#p-holding', '#p-sl', '#p-tp', '#p-ts', '#p-mode'].forEach(id => {
@@ -367,18 +375,24 @@ function bindToggle(b, body){ $(b).addEventListener('click', function(){ this.cl
 
 // ---------- 入口 1：自然语言 → /api/saas/nl/compile ----------
 $$('.nl-ex').forEach(c => c.addEventListener('click', () => { $('#nl-text').value = c.textContent.trim(); $('#nl-text').focus(); }));
-$('#nl-compile').addEventListener('click', async () => {
+async function doNlCompile(){
   const txt = $('#nl-text').value.trim(), st = $('#nl-status'), box = $('#nl-result');
   if (!txt){ toastNote(st, '请先用自然语言描述策略', true); $('#nl-text').focus(); return; }
   box.className = 'result-box'; box.style.display = 'none';
-  st.textContent = '编译中 Compiling…';
+  // 编译耗时反馈（QRE-SAAS-NL-PROGRESS）：LLM 生成通常 10-40 秒，显示已用时避免"卡住"感
+  const t0 = Date.now(), btn = $('#nl-compile');
+  btn.disabled = true; btn.style.opacity = .65;
+  st.textContent = '编译中（大模型生成策略代码，通常 10-40 秒）…';
+  const timer = setInterval(() => {
+    st.textContent = '编译中（大模型生成策略代码，通常 10-40 秒）… 已用时 ' + Math.round((Date.now() - t0) / 1000) + ' 秒';
+  }, 1000);
   try {
     const resp = await apiFetch('/api/saas/nl/compile', {json: {description: txt}});
     let d;
     try { d = await resp.json(); }
     catch (_e) { d = { ok: false, error: '服务异常（HTTP ' + resp.status + '），请稍后重试；若持续出现请联系管理员' }; }
     if (d.ok){
-      st.textContent = '编译成功';
+      st.textContent = '编译成功（用时 ' + Math.round((Date.now() - t0) / 1000) + ' 秒）';
       setYaml(d.yaml);
       const nm = (d.yaml.match(/^\s*name:\s*(\S+)\s*$/m) || [])[1];
       if (nm && !userNamed){ lastAuto = nm; $('#p-sname').value = nm; }
@@ -395,7 +409,24 @@ $('#nl-compile').addEventListener('click', async () => {
     }
   } catch (e) {
     if (e.message !== 'unauthorized'){ st.textContent = '错误'; box.className = 'result-box err'; box.style.display = 'block'; box.textContent = String(e); }
+  } finally {
+    clearInterval(timer); btn.disabled = false; btn.style.opacity = '';
   }
+}
+$('#nl-compile').addEventListener('click', () => { if (guardGuest('compile')) return; doNlCompile(); });
+
+// 随机抽 1 只 A 股填入代码框（QRE-SAAS-GUEST-RANDOM-SYMBOL；对所有用户可用）
+$('#btn-random-symbol').addEventListener('click', async () => {
+  const b = $('#btn-random-symbol'); b.disabled = true; b.textContent = '抽取中…';
+  try {
+    const resp = await apiFetch('/api/saas/random-symbol');
+    const d = await resp.json();
+    if (d.ok && d.ts_code){
+      $('#param-codes').value = dispCode(d.ts_code);
+      $('#param-codes').dispatchEvent(new Event('input'));
+    } else { alert(d.error || '随机抽取失败，请手动输入代码'); }
+  } catch (e) { alert('随机抽取失败：' + (e.message || e)); }
+  b.disabled = false; b.textContent = '随机一只';
 });
 
 // ---------- 缺因子申请模态框 ----------
@@ -717,6 +748,13 @@ async function pollJob(jobId){
   throw new Error('验证超时，请稍后在「我的回测」查看状态');
 }
 function isGuest(){ return !SAAS_BYPASS && !saasToken(); }
+// 游客操作前置守卫（QRE-SAAS-GUEST-FLOW-2）：首次关键操作弹层说明单股限制，
+// 确认后记住本页选择（guestAck），继续执行被挂起的动作，不再重复打扰。
+let guestAck = false, guestPending = null;
+function guardGuest(action){
+  if (isGuest() && !guestAck){ guestPending = action; openGuestModal(); return true; }
+  return false;
+}
 function openGuestModal(errText){
   const err = $('#guest-modal-err');
   if (errText){ err.style.display = 'block'; err.textContent = errText; }
@@ -728,8 +766,10 @@ $('#guest-modal').addEventListener('click', function(e){ if (e.target === this) 
 $('#guest-register').addEventListener('click', () => { location.href = '/saas/login'; });
 $('#guest-continue').addEventListener('click', () => {
   $('#guest-modal').classList.remove('show');
-  // 游客约束前置提示（后端仍硬校验）：标的强制单股校验在提交时进行
-  startRun();
+  guestAck = true;
+  const act = guestPending; guestPending = null;
+  if (act === 'compile') doNlCompile();
+  else startRun();
 });
 
 // 板块/概念名单（QRE-SAAS-METADATA：/api/saas/universes，登录后加载）
@@ -812,7 +852,7 @@ async function loadStrategyFromQuery(){
 
 $('#btn-run-main').addEventListener('click', () => {
   if (pipeRunning) return;
-  if (isGuest()){ openGuestModal(); return; }  // 游客先确认，不甩登录页
+  if (guardGuest('run')) return;  // 游客先确认单股限制，确认后自动继续
   startRun();
 });
 
@@ -835,6 +875,16 @@ async function startRun(){
     if (!n || n < 1 || n > 2000){ pipeFailAt(1, '随机数量 N 须为 1~2000 的正整数。'); return; }
   }
   if (scope === 'codes' && !$('#param-codes').value.trim()){ pipeFailAt(1, '选择了「指定股票代码」但未填写代码。'); return; }
+  // 游客硬约束前置校验（QRE-SAAS-GUEST-FLOW-2）：仅单股，多股/空股直接在第 1 步拦截
+  if (isGuest()){
+    if (scope !== 'codes'){ pipeFailAt(1, '游客仅限「指定股票代码」单股回测——其他范围需注册会员。'); return; }
+    const gcodes = ($('#param-codes').value || '').split(/[，,\s]+/).filter(Boolean);
+    if (gcodes.length !== 1){
+      pipeFailAt(1, '游客测试仅限 1 只股票——请在代码框填 1 只，或点旁边「随机一只」自动填入。');
+      $('#param-codes').focus();
+      return;
+    }
+  }
   const y = strategyYaml;
   if (!y.trim()){ pipeFailAt(1, '策略代码为空——三个入口任选一个生成或编写策略后重试。'); return; }
   if (y.indexOf('experiment:') < 0 || y.indexOf('signal:') < 0){ pipeFailAt(1, 'YAML 缺少 experiment / signal 段——结构不完整，请在预览栏补全。'); return; }
@@ -849,6 +899,17 @@ async function startRun(){
   const abort = () => { pipeRunning = false; btn.disabled = false; btn.style.opacity = ''; };
   try {
     LabUI.pipeDone(pipeEl, 1, '结构校验通过');
+    if (isGuest()){
+      // 游客：单股回测无需冒烟，直接提交（QRE-SAAS-GUEST-FLOW-2）
+      $('#pipe-2 .pipe-name').textContent = '冒烟测试：游客单股回测自动跳过';
+      LabUI.pipeDone(pipeEl, 2, '跳过');
+      LabUI.pipeDoing(pipeEl, 3);
+      const gfullId = await createJob('full');
+      LabUI.pipeDone(pipeEl, 3, '已提交');
+      abort();
+      location.href = '/saas/jobs/' + gfullId + '?guest=1';
+      return;
+    }
     // ② 冒烟（kind=smoke，服务端小样本）
     LabUI.pipeDoing(pipeEl, 2);
     $('#pipe-2 .pipe-st').textContent = '小范围验证中…';
@@ -889,5 +950,22 @@ setRangeYears(2);
 refreshPreview();
 loadFactorCatalog();
 maybeAutoName();
+
+// 游客界面收口（QRE-SAAS-GUEST-FLOW-2）：标的强制「指定股票代码」单股；
+// 3 号入口（策略代码）置灰并标注登录可用；大范围护栏对游客不生效（无大范围可选）
+if (isGuest()){
+  $$('input[name="scope"]').forEach(r => {
+    if (r.value !== 'codes') r.closest('label').style.display = 'none';
+  });
+  const cr = document.querySelector('input[name="scope"][value="codes"]');
+  if (cr){ cr.checked = true; cr.dispatchEvent(new Event('change')); }
+  const yc = document.querySelector('.entry-card[data-entry="yaml"]');
+  if (yc){
+    yc.style.opacity = .5;
+    yc.style.cursor = 'not-allowed';
+    const tag = yc.querySelector('.entry-tag');
+    if (tag) tag.textContent = '③ 登录后可用';
+  }
+}
 </script>
 {% endblock %}

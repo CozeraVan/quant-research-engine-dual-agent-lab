@@ -25,7 +25,7 @@ def build_metadata(db_url: str | None = None) -> dict:
         build_factor_groups,
         load_factor_tables_columns,
     )
-    from quant_research_engine.gui.universe import all_a_count, list_universes
+    from quant_research_engine.gui.universe import all_a_codes, all_a_count, list_universes
 
     return {
         "generated_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -33,6 +33,8 @@ def build_metadata(db_url: str | None = None) -> dict:
         "universes": list_universes(db_url)["groups"],
         # 全部 A 股成分股计数（QRE-SAAS-LARGE-UNIVERSE-GUARD：前端大范围耗时护栏用）
         "all_a_count": all_a_count(db_url),
+        # 全 A 股代码清单（QRE-SAAS-GUEST-RANDOM-SYMBOL：随机抽股接口用；~60KB 可接受）
+        "all_a_codes": all_a_codes(db_url),
     }
 
 

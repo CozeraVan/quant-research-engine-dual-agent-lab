@@ -298,6 +298,40 @@ def _guest_key(app: Flask, ip: str) -> str:
     return hashlib.sha256(f"guest:{ip}:{_auth_salt(app)}".encode()).hexdigest()[:32]
 
 
+# 游客 NL 编译限流（QRE-SAAS-GUEST-NL）：LLM 调用有成本，游客单 IP 每日上限。
+# gunicorn 多 worker 下内存计数不可靠，用文件计数 + fcntl 锁兜底。
+GUEST_NL_DAILY_LIMIT = 10
+
+
+def _guest_nl_hit(app: Flask, ip: str) -> bool:
+    """游客 NL 编译计数：当日未超上限则计数 +1 返回 True，超限 False。"""
+    import fcntl
+
+    path = Path(os.environ.get("QRE_GUEST_NL_COUNTER", "/tmp/qre-guest-nl-counter.json"))
+    key = _guest_key(app, ip)
+    today = date.today().isoformat()
+    try:
+        with open(path, "a+", encoding="utf-8") as fh:
+            fh.seek(0)
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            try:
+                data = json.loads(fh.read() or "{}")
+            except json.JSONDecodeError:
+                data = {}
+            if data.get("date") != today:
+                data = {"date": today, "hits": {}}
+            hits = data["hits"]
+            if hits.get(key, 0) >= GUEST_NL_DAILY_LIMIT:
+                return False
+            hits[key] = hits.get(key, 0) + 1
+            fh.seek(0)
+            fh.truncate()
+            fh.write(json.dumps(data))
+            return True
+    except OSError:
+        return True  # 计数文件不可写时放行（不因此卡死游客功能）
+
+
 def _password_hash(password: str, salt: str) -> str:
     dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), _PBKDF2_ITERATIONS)
     return f"pbkdf2${_PBKDF2_ITERATIONS}${salt}${dk.hex()}"
@@ -472,8 +506,13 @@ def create_saas_app() -> Flask:
     @app.post("/api/saas/nl/compile")
     def api_saas_nl_compile() -> Any:
         engine = _get_engine(app)
-        if _current_user_id(app, engine) is None:
-            return jsonify({"ok": False, "code": "unauthorized", "error": "未登录"}), 401
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            # 游客开放 NL 编译（QRE-SAAS-GUEST-NL，2026-09-28）：配合游客单股回测流程；
+            # LLM 有调用成本，单 IP 每日限 GUEST_NL_DAILY_LIMIT 次（文件计数，跨 worker 可靠）。
+            if not _guest_nl_hit(app, _client_ip()):
+                return jsonify({"ok": False, "code": "guest_nl_limit",
+                                "error": f"游客每日可生成策略 {GUEST_NL_DAILY_LIMIT} 次（今日已用完）。注册会员不限次数"}), 403
         from quant_research_engine.gui.nl_compiler import compile_nl
 
         data = request.get_json(silent=True) or {}
@@ -527,6 +566,27 @@ def create_saas_app() -> Flask:
             return jsonify(data)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"归类数据不可用（{exc}）"}), 503
+
+    @app.get("/api/saas/random-symbol")
+    def api_saas_random_symbol() -> Any:
+        """随机抽取 1 只 A 股代码（QRE-SAAS-GUEST-RANDOM-SYMBOL）。
+        元数据 all_a_codes 优先（ECS 口径）；本地回退 reference.stock_basic 随机取一。
+        纯只读元数据，对游客开放。"""
+        import random as _random
+
+        metadata = _load_saas_metadata(app)
+        codes = (metadata or {}).get("all_a_codes") or []
+        if codes:
+            return jsonify({"ok": True, "ts_code": _random.choice(codes)})
+        try:
+            from quant_research_engine.gui.universe import random_symbol
+
+            code = random_symbol()
+            if code:
+                return jsonify({"ok": True, "ts_code": code})
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"股票池不可用（{exc}）"}), 503
+        return jsonify({"ok": False, "error": "股票池为空"}), 503
 
     # --- 我的策略库（QRE-SAAS-D3）：登录会员保存/复用/管理策略 YAML ---
     # 提交回测时按 (user_id, name) upsert 复用；删除仅允许无回测引用的策略。

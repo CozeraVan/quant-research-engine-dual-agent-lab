@@ -124,9 +124,31 @@ class TestPages:
         assert len(resp.data) > 100_000  # vendored echarts 复用，非占位
 
 
+class TestSaasRandomSymbolRoute:
+    def test_random_symbol_from_metadata(self, client):
+        """QRE-SAAS-GUEST-RANDOM-SYMBOL：元数据 all_a_codes 口径，游客可用。"""
+        resp = client.get("/api/saas/random-symbol")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["ok"] and isinstance(data["ts_code"], str) and data["ts_code"]
+
+
 class TestSaasNlCompileRoute:
-    def test_unauthorized_401(self, client):
-        assert client.post("/api/saas/nl/compile", json={"description": "x"}).status_code == 401
+    def test_guest_compile_allowed_but_rate_limited(self, client, monkeypatch, tmp_path):
+        """游客开放 NL 编译（QRE-SAAS-GUEST-NL）：未配置 LLM 时 503；
+        单 IP 每日限 GUEST_NL_DAILY_LIMIT 次，超限 403。"""
+        monkeypatch.setenv("QRE_GUEST_NL_COUNTER", str(tmp_path / "nl-counter.json"))
+        for var in ("QRE_NL_LLM_BASE_URL", "QRE_NL_LLM_API_KEY", "QRE_NL_LLM_MODEL"):
+            monkeypatch.delenv(var, raising=False)
+        # 游客（无 AUTH 头）不再 401：走到编译逻辑，LLM 未配置 → 503
+        assert client.post("/api/saas/nl/compile", json={"description": "x"}).status_code == 503
+        from quant_research_engine.gui.saas import app as saas_app
+
+        for _ in range(saas_app.GUEST_NL_DAILY_LIMIT - 1):
+            client.post("/api/saas/nl/compile", json={"description": "x"})
+        resp = client.post("/api/saas/nl/compile", json={"description": "x"})
+        assert resp.status_code == 403
+        assert resp.get_json()["code"] == "guest_nl_limit"
 
     def test_empty_description_400(self, client):
         resp = client.post("/api/saas/nl/compile", json={"description": " "}, headers=AUTH)

@@ -652,3 +652,12 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 替换占位 favicon.svg → favicon.ico + 16/32/192 PNG + apple-touch-icon-180.png；顶部栏品牌文字 → 横版 logo 图（logo-horizontal-2x.png，height 34px），存放于 `src/quant_research_engine/gui/static/`。
 - 仅改 `saas/templates/base.html`（favicon link 组 + `.brand` 处），其余模板继承 base 自动生效。
 - 验证：staging 127.0.0.1:8091 静态资源 200，页面截图确认 header logo 渲染正常。
+
+## 2026-09-28 移动端适配 + 紫色品牌头 + 备案页脚 + 游客流程重编（QRE-SAAS-GUEST-FLOW-2）
+
+- base.html 顶栏：主题深紫 #4A3C78 底 + 白色横版 logo（选择器 header.topbar 提优先级压 lab-theme 浅色规则）；移动端 ≤960px 缩小 logo/导航字号间距强制单行。
+- base.html 新增全站页脚：© 2026 A股回测台 + 湘ICP备2026040383号-1（链 beian.miit.gov.cn）。
+- 游客流程重编：① NL「生成策略」/「运行回测」首次触发弹层说明单股限制，确认后本页记住（guestAck）并继续挂起动作；② 游客标的强制单股（其余范围选项隐藏）、新增「随机一只」按钮（GET /api/saas/random-symbol，元数据 all_a_codes 口径）；③ 游客免冒烟直接提交；④ 3 号入口（策略代码）对游客置灰禁用。
+- NL 编译对游客开放（原 401 → 文件计数限流 10 次/IP/日，fcntl 锁跨 gunicorn worker；QRE_GUEST_NL_COUNTER 可配路径）；前端编译等待加已用时计时反馈（LLM 生成通常 10-40s）。
+- metadata.json 增 all_a_codes 字段（sync_saas_metadata.py 导出，需重新 scp 上 ECS）。
+- 测试：更新 NL 编译路由测试（游客 503/限流 403），新增 random-symbol 用例；定向 192 passed。
