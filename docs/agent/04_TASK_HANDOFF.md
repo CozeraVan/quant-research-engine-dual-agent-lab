@@ -2,7 +2,42 @@
 
 ## Task ID
 
-QRE-SAAS-SYMBOL-UX-SHARED-FIX (per-symbol 产物回传 shared 模式数据缺陷修复：equity/orders/wear 补齐)
+QRE-SAAS-DETAIL-CARD-UI (公网回测详情页/个股详情页卡片 UI 四项验收修改)
+
+## Current Status
+
+DONE (implementation; full test suite green (2212 passed + 4 skipped); 仅本地 staging 验证、未部署 ECS；awaiting user-approved git finalization)
+
+## Task Note
+
+- 范围：只改 SaaS 侧 src/quant_research_engine/gui/saas/templates/
+  （job.html、base.html），8081 lab 侧零改动。
+- ① 区间信息卡末尾留白：根因是 lab-theme.css 把 .metric-strip 纠偏成
+  repeat(6,1fr) 六列网格，五卡只占 5/6。base.html 加
+  `#range-strip{grid-template-columns:repeat(5,1fr)}` 整行均分；≤960px 降 2 列。
+- ② job.html 模块顺序对齐 12 号文档 §8：box-fees（交易磨损）+ box-risk（FRM）
+  DOM 移到 box-main（收益曲线）之后、box-tags（归因）之前。
+- ③ symbol.html 顶部 7 简介卡：`#sum-strip` 改
+  `repeat(auto-fit,minmax(200px,1fr))` + padding 10px 14px + 数值 15px
+  （对齐 §1.3 个股页口径），宽屏 5+2 舒展布局、宽高比约 3.4:1，窄屏自动降列。
+- ④ 总结性卡片淡紫底：#metric-strip/#sum-strip/#range-strip 的 .metric-card
+  统一 var(--tint) 底 + var(--tint-deep) 边（既有 token，无新色相）。
+  均用 ID 选择器压过 lab-theme.css 后加载的同族规则。
+- 踩坑（已记入 12 号文档变更记录）：Jinja 模板内联 CSS 中 `{#id` 连写会被当
+  Jinja 注释起始 → 500 TemplateSyntaxError，须写 `{ #id` 留空格。
+- 测试：零新增零修改（既有模板断言不含模块顺序，全绿）；全量
+  2212 passed + 4 skipped 零回归。
+- 验证：本地 staging（8097 + aguhuice_local + job 26；为截图把本地 run
+  20260927T040759327205 的 per-symbol 产物复制到 outputs/saas_uploads/job_26/
+  _symbol_details/ 并手工补 equity 字段——纯本地 staging fixture，不入库）。
+  Playwright 宽屏 1440 + 窄屏 390 截图 /tmp/qre-shots/cardui-{job,symbol}-{wide,narrow}.png；
+  DOM 探针：range-strip trailingGap=0、卡底 rgb(241,237,248)=--tint、模块顺序正确、
+  零 JS 报错。
+- 12 号文档变更记录已登记（QRE-SAAS-DETAIL-CARD-UI）。未 commit、未部署。
+
+---
+
+## Archive: QRE-SAAS-SYMBOL-UX-SHARED-FIX (per-symbol 产物回传 shared 模式数据缺陷修复)
 
 ## Current Status
 

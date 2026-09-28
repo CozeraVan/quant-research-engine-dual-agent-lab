@@ -12,7 +12,9 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-SYMBOL-UX-SHARED-FIX (DONE — shared 模式 per-symbol 产物缺陷修复：runner._enrich_shared_symbol_detail 从任务级产物补齐 orders/failed_orders/wear/单票净值；job 21 存量产物已重算覆盖 ECS；公网 demo01 job 23 全链路验证全模块渲染；测试 +5 全量 2212 passed + 4 skipped 零回归；已 scp 临时部署；awaiting git approval)
+QRE-SAAS-DETAIL-CARD-UI (DONE — 公网详情页卡片 UI 四项验收修改：区间五卡 repeat(5,1fr) 整行均分、job.html 交易磨损+FRM 移到收益曲线后、symbol.html 顶部 7 卡 auto-fit 舒展布局、总结性卡片统一 --tint 淡紫底；仅改 saas/templates 的 job.html/base.html，lab 侧零改动；全量 2212 passed + 4 skipped 零回归；staging 8097 宽+窄屏 Playwright 截图验证零 JS 报错；12 号文档变更记录已登记；未 commit 未部署；awaiting git approval)
+
+上一任务：QRE-SAAS-SYMBOL-UX-SHARED-FIX (DONE — shared 模式 per-symbol 产物缺陷修复：runner._enrich_shared_symbol_detail 从任务级产物补齐 orders/failed_orders/wear/单票净值；job 21 存量产物已重算覆盖 ECS；公网 demo01 job 23 全链路验证全模块渲染；测试 +5 全量 2212 passed + 4 skipped 零回归；已 scp 临时部署；awaiting git approval)
 
 上一任务：QRE-AUTH-MEMBERSHIP (DONE — Authing OIDC 登录接入 A2-A6：schema 加 authing_id/avatar_url/member_*、新 authing.py 换票+JWKS 验签+自动建档+绑定旧账号、login.html 托管页主入口+邮箱密码折叠降级、测试 +22 全量 2207 passed + 4 skipped 零回归；env 已写 ECS/本地 0600、ECS venv 依赖已装；代码未部署；awaiting git approval + Authing 控制台回调白名单确认)
 

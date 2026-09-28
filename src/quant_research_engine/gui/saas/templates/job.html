@@ -25,6 +25,18 @@
       <div class="metric-strip" id="range-strip" style="margin-top:10px"></div>
     </div>
 
+    <!-- 交易磨损（chart-data.fees_summary；无则整块隐藏，C5 对齐 lab 版） -->
+    <div class="chart-box" id="box-fees" style="display:none">
+      <div class="chart-title">交易磨损 <span class="opt">（佣金 / 印花税 / 过户费等集中呈现；聚合自本次回测 round_trips 全量真实费用列）</span></div>
+      <div id="fees-body"></div>
+    </div>
+
+    <!-- FRM 风险模块（risk-analysis；has_report=false 时整块隐藏） -->
+    <div class="chart-box" id="box-risk" style="display:none">
+      <div class="chart-title">风险分析（FRM） <span class="opt" id="risk-subtitle"></span></div>
+      <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
+    </div>
+
     <div class="chart-box" id="box-tags">
       <div class="chart-title">赚钱板块归因 <span class="opt">（矩块面积 = 盈亏规模，红赚绿亏、越深金额越大；点击矩块或下方榜单行看板块内个股）</span></div>
       <div class="tag-tabs" id="tag-tabs">
@@ -36,18 +48,6 @@
       <div id="tag-note" class="opt" style="font-size:12px"></div>
       <div class="tag-rank" id="tag-rank"></div>
       <div id="tag-detail" style="margin-top:10px"></div>
-    </div>
-
-    <!-- 交易磨损（chart-data.fees_summary；无则整块隐藏，C5 对齐 lab 版） -->
-    <div class="chart-box" id="box-fees" style="display:none">
-      <div class="chart-title">交易磨损 <span class="opt">（佣金 / 印花税 / 过户费等集中呈现；聚合自本次回测 round_trips 全量真实费用列）</span></div>
-      <div id="fees-body"></div>
-    </div>
-
-    <!-- FRM 风险模块（risk-analysis；has_report=false 时整块隐藏） -->
-    <div class="chart-box" id="box-risk" style="display:none">
-      <div class="chart-title">风险分析（FRM） <span class="opt" id="risk-subtitle"></span></div>
-      <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
     </div>
 
     <a class="big-link" id="big-symbols" href="#">
