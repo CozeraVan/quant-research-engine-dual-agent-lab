@@ -394,6 +394,10 @@ def create_saas_app() -> Flask:
         static_url_path="/static",
     )
     app.config["SECRET_KEY"] = os.urandom(24)
+    # 模板热加载（本地 staging 调文案用）：QRE_TEMPLATE_AUTORELOAD=1 时每次请求
+    # 重读模板，改完 Ctrl+S 刷新即生效；生产 ECS 不设置该变量（保持缓存性能）
+    if os.environ.get("QRE_TEMPLATE_AUTORELOAD") == "1":
+        app.config["TEMPLATES_AUTO_RELOAD"] = True
     # 验证码限流计数（内存：重启清零，内测期可接受）
     app.extensions["rate_limit"] = {"target": {}, "ip": {}}
 

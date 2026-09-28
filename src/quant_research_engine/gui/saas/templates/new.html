@@ -3,8 +3,8 @@
 {% block body %}
 <div class="wrap">
   <div class="page-head">
-    <h1>把一个想法，变成可验证的策略</h1>
-    <p>三种方式进入，按你的经验任选其一；下方回测参数对三个入口共用。提交后自动先对随机 1 只股票做冒烟测试，通过才进入全量回测。</p>
+    <h1>A股回测台，你的第一个和最后一个量化工具</h1>
+    <p>无需任何代码回测基础，把你的想法，变成可验证的策略。</p>
     <p style="font-size:13px"><a class="inl" href="/saas/">← 我的回测记录</a></p>
   </div>
 
@@ -14,22 +14,22 @@
       <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
       <span class="entry-tag">① 人人可用</span>
       <h3>自然语言描述</h3>
-      <p>用一句中文描述买卖规则，AI 自动编译为策略代码，确认后再回测。</p>
+      <p>只需描述你的交易想法，AI 自动编译为策略代码，确认后再回测。</p>
       <div class="entry-fit">适合：<b>没有编程基础</b>，先快速试一个想法</div>
     </button>
     <button class="entry-card" data-entry="wizard">
       <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
       <span class="entry-tag">② 从因子库挑条件</span>
-      <h3>快速向导</h3>
-      <p>从因子库逐级挑选入场 / 出场条件，自动生成策略 YAML。</p>
+      <h3>自选因子交易</h3>
+      <p>从因子库挑选因子，制定入场 / 出场条件，自动生成量化交易策略。</p>
       <div class="entry-fit">适合：<b>懂指标与条件组合</b>，想精确控制信号</div>
     </button>
     <button class="entry-card" data-entry="yaml">
       <span class="entry-check"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
       <span class="entry-tag">③ 直接编辑</span>
-      <h3>策略代码 YAML</h3>
-      <p>直接编写或粘贴策略 YAML。</p>
-      <div class="entry-fit">适合：<b>有经验的用户</b>，前两个入口的结果也落到这里</div>
+      <h3>策略代码</h3>
+      <p>直接编写量化交易策略，拓展性更强。</p>
+      <div class="entry-fit">适合：<b>有量化交易经验的用户</b>，自由度更高</div>
     </button>
   </div>
   <div class="pcb-stage" id="pcb-stage" aria-hidden="true"><svg id="pcb-svg"></svg></div>
@@ -37,7 +37,7 @@
   <!-- 入口详情区（单面板随选切换） -->
   <div class="card entry-panel active" id="entry-nl">
     <h3 style="font-size:16px;margin-bottom:10px;">用一句话描述你的策略</h3>
-    <textarea id="nl-text" rows="4" style="width:100%" placeholder="例：5日均线上穿200日均线买入，下穿卖出，止损8%"></textarea>
+    <textarea id="nl-text" rows="4" style="width:100%" placeholder="在此描述你的交易想法，最少包含买入条件以及卖出条件，然后点击下方生成策略按钮。"></textarea>
     <div class="chip-row">
       <span class="opt">没思路？点一个示例填入：</span>
       <button class="chip nl-ex">5日均线上穿200日均线买入，下穿卖出，止损8%</button>
@@ -46,32 +46,32 @@
       <button class="chip nl-ex">收盘价高于10元买入，跌破20日均线卖出，最多持仓20天</button>
     </div>
     <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
-      <button class="btn btn-primary" id="nl-compile">生成策略</button>
+      <button class="btn btn-primary" id="nl-compile" style="min-width:240px;padding:13px 28px;font-size:15px;font-weight:600">生成策略</button>
       <span class="opt" id="nl-status"></span>
     </div>
     <div class="result-box" id="nl-result"></div>
   </div>
 
   <div class="card entry-panel" id="entry-wizard">
-    <h3 style="font-size:16px;margin-bottom:4px;">快速向导：从因子库挑条件，自动生成策略</h3>
+    <h3 style="font-size:16px;margin-bottom:4px;">自选因子交易：从因子库挑条件，自动生成策略</h3>
     <p class="opt" id="wz-factor-status" style="margin-bottom:12px">加载因子目录中…</p>
     <h4 style="font-size:14px;margin:10px 0 8px;">入场条件 <span class="req">*</span> <span class="opt">（组内先组合、组间再组合；单组时即扁平行为）</span></h4>
     <div id="wz-entry" class="cond-groups"></div>
     <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
       <button class="btn-sm" data-addgroup="entry">+ 添加条件组</button>
-      <span class="opt">更复杂的逻辑组合，可切换到自然语言或 YAML 入口直接描述</span>
+      <span class="opt">更复杂的逻辑组合，可切换到自然语言或策略代码直接描述</span>
     </div>
     <h4 style="font-size:14px;margin:16px 0 8px;">出场条件 <span class="req">*</span></h4>
     <div id="wz-exit" class="cond-groups"></div>
     <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
       <button class="btn-sm" data-addgroup="exit">+ 添加条件组</button>
-      <span class="opt">更复杂的逻辑组合，可切换到自然语言或 YAML 入口直接描述</span>
+      <span class="opt">更复杂的逻辑组合，可切换到自然语言或策略代码入口直接描述</span>
     </div>
-    <p class="opt" style="margin-top:14px">条件任何改动都会实时生成策略代码，并汇入页面底部「策略代码预览」栏。</p>
+    <p class="opt" style="margin-top:14px"><a class="inl" href="/saas/factor-request">没有你要的因子？点此申请新因子 →</a></p>
   </div>
 
   <div class="card entry-panel" id="entry-yaml">
-    <h3 style="font-size:16px;margin-bottom:4px;">策略代码（YAML） <span class="opt">（编辑器在页面底部「策略代码预览」栏，可直接修改）</span></h3>
+    <h3 style="font-size:16px;margin-bottom:4px;">策略代码 <span class="opt">（编辑器在页面底部「策略代码预览」栏，可直接修改）</span></h3>
     <p><button class="btn btn-ghost" id="btn-goto-preview">去底部编辑代码 ↓</button></p>
   </div>
 
@@ -82,7 +82,7 @@
       <label>策略名称 / ID <span class="req">*</span></label>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" id="p-sname" value="" placeholder="留空自动生成" style="width:280px">
-        <span class="opt">三个入口共用；仅允许字母、数字、下划线、连字符</span>
+        <span class="opt">仅允许字母、数字、下划线、连字符</span>
       </span>
       <label>回测区间 <span class="req">*</span></label>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative" id="range-row">
@@ -113,10 +113,10 @@
         <span class="opt">从全 A 股池随机抽 N 只（1~2000；抽样在执行端进行）</span>
       </span>
       <label id="scope-codes-label" style="display:none">股票代码 Codes</label>
-      <textarea id="param-codes" rows="2" style="display:none" placeholder="股票代码逗号分隔，如 000001,600519（只输 6 位数字即可，系统自动识别交易所）"></textarea>
+      <textarea id="param-codes" rows="2" style="display:none" placeholder="股票代码逗号分隔，如 000001,600519"></textarea>
     </div>
 
-    <button class="sec-toggle" id="adv-toggle">高级参数（可选：模式 / 资金 / 持仓 / 止损止盈 等）</button>
+    <button class="sec-toggle" id="adv-toggle">高级参数</button>
     <div class="sec-body" id="adv-body"><div><div class="sec-inner">
       <div class="form-grid form-grid-3">
         <label>模式 Mode</label>
@@ -150,7 +150,7 @@
   <!-- 策略代码预览栏（唯一 YAML 真相源） -->
   <div class="card" id="preview-card">
     <div class="pv-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-      <h3 style="font-size:16px">策略代码预览 <span class="opt">（最终合并版：策略定义 + 回测参数；三个入口的产出都汇聚到这里）</span></h3>
+      <h3 style="font-size:16px">策略代码预览 <span class="opt">（无代码基础请勿编辑）</span></h3>
       <span style="margin-left:auto"></span>
       <button class="btn-sm" id="pv-edit-toggle">编辑代码</button>
       <button class="btn-sm" id="pv-copy">复制</button>
@@ -452,7 +452,7 @@ async function loadFactorCatalog(){
       }
     });
     catalogReady = true;
-    $('#wz-factor-status').textContent = '条件行选因子：大类 → 子类 → 因子（三级选单逐级收窄），右值可选另一因子或勾「固定值」填数值。';
+    $('#wz-factor-status').textContent = '条件行选因子：大类 → 子类 → 因子，右值可选另一因子或勾「固定值」填数值。';
     prefill();
   } catch (e) {
     $('#wz-factor-status').innerHTML = '<span class="err">因子目录加载失败，可改用自然语言或 YAML 入口</span>';

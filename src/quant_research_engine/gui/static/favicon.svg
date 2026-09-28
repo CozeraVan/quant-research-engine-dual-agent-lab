@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 占位网站图标（favicon）：淡紫圆角底 + K线蜡烛标记，正式 logo 定稿后整体替换本文件 -->
+  <rect width="64" height="64" rx="14" fill="#6750A4"/>
+  <g stroke="#fff" stroke-width="4" stroke-linecap="round">
+    <line x1="20" y1="14" x2="20" y2="24"/>
+    <line x1="20" y1="44" x2="20" y2="52"/>
+    <line x1="34" y1="22" x2="34" y2="30"/>
+    <line x1="34" y1="50" x2="34" y2="56"/>
+    <line x1="48" y1="10" x2="48" y2="20"/>
+    <line x1="48" y1="38" x2="48" y2="48"/>
+  </g>
+  <rect x="14" y="24" width="12" height="20" rx="2" fill="#fff"/>
+  <rect x="28" y="30" width="12" height="20" rx="2" fill="#E6DEF3"/>
+  <rect x="42" y="20" width="12" height="18" rx="2" fill="#fff"/>
+</svg>
