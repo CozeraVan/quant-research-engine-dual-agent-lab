@@ -12,7 +12,9 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-AUTH-MEMBERSHIP (DONE — Authing OIDC 登录接入 A2-A6：schema 加 authing_id/avatar_url/member_*、新 authing.py 换票+JWKS 验签+自动建档+绑定旧账号、login.html 托管页主入口+邮箱密码折叠降级、测试 +22 全量 2207 passed + 4 skipped 零回归；env 已写 ECS/本地 0600、ECS venv 依赖已装；代码未部署；awaiting git approval + Authing 控制台回调白名单确认)
+QRE-SAAS-SYMBOL-UX-SHARED-FIX (DONE — shared 模式 per-symbol 产物缺陷修复：runner._enrich_shared_symbol_detail 从任务级产物补齐 orders/failed_orders/wear/单票净值；job 21 存量产物已重算覆盖 ECS；公网 demo01 job 23 全链路验证全模块渲染；测试 +5 全量 2212 passed + 4 skipped 零回归；已 scp 临时部署；awaiting git approval)
+
+上一任务：QRE-AUTH-MEMBERSHIP (DONE — Authing OIDC 登录接入 A2-A6：schema 加 authing_id/avatar_url/member_*、新 authing.py 换票+JWKS 验签+自动建档+绑定旧账号、login.html 托管页主入口+邮箱密码折叠降级、测试 +22 全量 2207 passed + 4 skipped 零回归；env 已写 ECS/本地 0600、ECS venv 依赖已装；代码未部署；awaiting git approval + Authing 控制台回调白名单确认)
 
 2026-09-27：细节见 04_TASK_HANDOFF.md 与 05_PROGRESS.md 同名条目。要点：
 授权码+托管登录页流程（替代 §6 原 Guard 方案，已注记）；/saas/login/authing 302 →

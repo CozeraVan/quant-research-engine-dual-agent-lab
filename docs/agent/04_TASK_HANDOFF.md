@@ -2,7 +2,36 @@
 
 ## Task ID
 
-QRE-AUTH-MEMBERSHIP (Authing 身份层登录接入，A2-A6；18 号设计文档)
+QRE-SAAS-SYMBOL-UX-SHARED-FIX (per-symbol 产物回传 shared 模式数据缺陷修复：equity/orders/wear 补齐)
+
+## Current Status
+
+DONE (implementation; deployed to ECS via scp 临时部署（最终 git pull 对齐由用户做）; full test suite green (2212 passed + 4 skipped); awaiting user-approved git finalization)
+
+## Task Note
+
+- 根因：shared（共享资金）模式引擎不产出 per-symbol 目录（`<output_dir>/<ts_code>/`
+  仅 batch 有），build_lab_symbol_detail 的 equity/orders/failed_orders 全 None；
+  此前验证的 job 19 恰为 batch 模式所以漏测。job 21（真实用户 shared 单票）线上
+  收益曲线/买卖点缺失即此因。job 20 无产物属正常（smoke 0 笔交易）。
+- 修法（worker/runner.py，SaaS 链路专属，lab 版零改动）：新
+  `_enrich_shared_symbol_detail`——orders/failed_orders 从任务级 CSV 按 symbol
+  过滤；wear 聚合块从 round_trips 真实费用列算出；equity 仅单票 shared run 取
+  任务级 equity_curve.csv（口径正确），多股保持 None 不编数；回填
+  summary.total_ret_pct。symbol.html：renderWear 优先消费 d.wear；round_trips
+  口径交易明细补「费用」列。
+- 存量修复：job 21 用本地 run 目录重跑 builder 生成修正 gz（10.9KB，equity
+  480/kline 480/orders 19）scp 覆盖 ECS uploads/job_21/_symbol_details/。
+- 验证：公网 demo01 新 shared 单票 job 23 全链路（裸代码 603970 → 新 worker →
+  回传）API 与页面全模块渲染，截图 /tmp/qre-shots/pub-fix-symbol23.png 零 JS 报错。
+- 部署：scp symbol.html + restart qre-saas；runner.py 本地 restart
+  qre-saas-worker。临时部署，最终 git pull 对齐由用户做。
+- 测试：tests/test_saas_symbol_ux.py +5；全量 2212 passed + 4 skipped 零回归。
+- 未 commit。
+
+---
+
+## Archive: QRE-AUTH-MEMBERSHIP (Authing 身份层登录接入，A2-A6；18 号设计文档)
 
 ## Current Status
 

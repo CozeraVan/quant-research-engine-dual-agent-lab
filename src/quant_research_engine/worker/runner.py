@@ -220,6 +220,93 @@ SYMBOL_DETAILS_MAX_BYTES = 15 * 1024 * 1024
 SYMBOL_DETAILS_DIRNAME = "_symbol_details"
 
 
+def _read_csv_f(path: Path) -> list[dict[str, Any]]:
+    """读 CSV 并把可转数字的列转 float（与 lab_result._read_csv_rounded 同口径）。"""
+    import csv
+
+    from quant_research_engine.gui.lab_result import _f
+
+    with path.open(newline="", encoding="utf-8") as fh:
+        return [
+            {k: (_f(v) if isinstance(_f(v), float) else v) for k, v in row.items()}
+            for row in csv.DictReader(fh)
+        ]
+
+
+def _filter_symbol_csv(path: Path, ts_code: str) -> list[dict[str, Any]] | None:
+    """从任务级 CSV 过滤出某只股票的行（shared 模式无 per-symbol 目录）。"""
+    if not path.is_file():
+        return None
+    try:
+        rows = [r for r in _read_csv_f(path) if str(r.get("symbol") or "").strip() == ts_code]
+    except OSError:
+        return None
+    return rows or None
+
+
+def _enrich_shared_symbol_detail(
+    record: dict[str, Any], data: dict[str, Any], ts_code: str, *, single_symbol: bool
+) -> None:
+    """shared（共享资金）模式产物补齐：该模式引擎不产出 per-symbol 目录，
+    build_lab_symbol_detail 的 equity/orders/failed_orders 全为 None。
+
+    - orders/failed_orders：从任务级 orders.csv / failed_orders.csv 按 symbol 过滤
+      （shared 模式订单只有 cost 总费用列，无佣金/印花税拆分，前端如实显示「—」）；
+    - wear：任务级 round_trips 含真实费用拆分列，聚合出该股磨损
+      （commission/stamp_tax/transfer_fee/total_cost/invested=买入成交额/gross/net）；
+    - equity：仅当整个 run 实际只交易了这 1 只股票时，组合净值即该股策略净值
+      （口径正确，直接取任务级 equity_curve.csv）；多股 shared run 无法按股拆净值，
+      保持 None 前端整块隐藏（不编数），并回填 summary.total_ret_pct。
+    """
+    from quant_research_engine.gui.lab_result import _f
+
+    output_dir = Path(str(record.get("output_dir") or ""))
+    if data.get("orders") is None:
+        rows = _filter_symbol_csv(output_dir / "orders.csv", ts_code)
+        if rows:
+            data["orders"] = rows
+    if data.get("failed_orders") is None:
+        rows = _filter_symbol_csv(output_dir / "failed_orders.csv", ts_code)
+        if rows:
+            data["failed_orders"] = rows
+
+    trades = data.get("trades") or []
+    if data.get("wear") is None and trades:
+        agg = {"commission": 0.0, "stamp_tax": 0.0, "transfer_fee": 0.0,
+               "total_cost": 0.0, "gross_pnl": 0.0, "net_pnl": 0.0, "invested": 0.0}
+        for t in trades:
+            for key, col in (("commission", "commission"), ("stamp_tax", "stamp_tax"),
+                             ("transfer_fee", "transfer_fee"), ("total_cost", "total_cost"),
+                             ("gross_pnl", "gross_pnl"), ("net_pnl", "net_pnl"),
+                             ("invested", "entry_notional")):
+                agg[key] += _f(t.get(col)) or 0.0
+        if agg["invested"] > 0 or agg["total_cost"] > 0:
+            data["wear"] = {k: round(v, 2) for k, v in agg.items()}
+            data["wear"]["trades"] = len(trades)
+            data["wear"]["other_cost"] = round(
+                agg["total_cost"] - agg["commission"] - agg["stamp_tax"], 2)
+
+    if data.get("equity") is None and single_symbol:
+        eq_path = output_dir / "equity_curve.csv"
+        if eq_path.is_file():
+            try:
+                rows = _read_csv_f(eq_path)
+            except OSError:
+                rows = []
+            pairs = [
+                (str(r.get("trade_date") or "").strip(), _f(str(r.get("total_equity")) if r.get("total_equity") is not None else None))
+                for r in rows
+            ]
+            pairs = [(d, v) for d, v in pairs if d and v is not None]
+            if pairs:
+                data["equity"] = {"dates": [d for d, _ in pairs],
+                                  "values": [v for _, v in pairs]}
+                vals = data["equity"]["values"]
+                if len(vals) >= 2 and vals[0]:
+                    data.setdefault("summary", {})["total_ret_pct"] = round(vals[-1] / vals[0] - 1, 6)
+    return None
+
+
 def build_symbol_detail_files(
     record: dict[str, Any],
     max_total_bytes: int = SYMBOL_DETAILS_MAX_BYTES,
@@ -229,6 +316,7 @@ def build_symbol_detail_files(
     产物：<output_dir>/_symbol_details/<ts_code>.json.gz，内容即
     build_lab_symbol_detail 的 JSON（剔除 benchmarks——任务级 chart_data
     已含基准序列，云端按个股净值日期对齐注入，避免每股重复回传）。
+    shared 模式经 _enrich_shared_symbol_detail 补齐 orders/wear/单票净值。
     文件登记进 record["artifacts"]，随既有 result/files 通道回传。
     失败不拖垮回传：整体 try 兜底，返回 {"count", "bytes", "truncated"}。
     """
@@ -252,6 +340,7 @@ def build_symbol_detail_files(
         artifacts = record.setdefault("artifacts", {})
         # 与持仓盈亏相关性最高的优先（截断时保住头部）
         ordered = sorted(stats, key=lambda s: abs(stats[s]["total_pnl"]), reverse=True)
+        single_symbol = len(ordered) == 1
         for ts_code in ordered:
             try:
                 data = build_lab_symbol_detail(record, ts_code)
@@ -259,6 +348,10 @@ def build_symbol_detail_files(
                 continue
             if not data:
                 continue
+            try:
+                _enrich_shared_symbol_detail(record, data, ts_code, single_symbol=single_symbol)
+            except Exception:
+                pass  # 补齐失败保留原始详情（降级，不拖垮产物）
             data.pop("benchmarks", None)
             data.pop("benchmark_note", None)
             blob = gzip.compress(

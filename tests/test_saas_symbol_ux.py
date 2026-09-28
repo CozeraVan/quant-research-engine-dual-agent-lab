@@ -324,3 +324,123 @@ class TestWorkerSymbolDetailFiles:
         out.mkdir()
         meta = runner.build_symbol_detail_files({"run_id": "r", "output_dir": str(out)})
         assert meta["count"] == 0
+
+
+class TestEnrichSharedSymbolDetail:
+    """shared（共享资金）模式无 per-symbol 目录：enrich 从任务级产物补齐
+    orders/failed_orders/wear/单票净值（job 21 线上缺陷修复）。"""
+
+    def _record(self, tmp_path):
+        out = tmp_path / "out"
+        out.mkdir()
+        (out / "orders.csv").write_text(
+            "symbol,trade_date,side,quantity,price,notional,cost,reason\n"
+            "603970.SH,2024-10-15,buy,700,13.58,9506.0,5.09,\n"
+            "603970.SH,2024-11-12,sell,700,14.73,10311.0,10.26,\n"
+            "000001.SZ,2024-10-15,buy,100,10.0,1000.0,1.0,\n",
+            encoding="utf-8",
+        )
+        (out / "failed_orders.csv").write_text(
+            "symbol,trade_date,side,quantity,price,notional,reason\n"
+            "603970.SH,2024-12-01,buy,100,15.0,1500.0,price_limit\n",
+            encoding="utf-8",
+        )
+        (out / "equity_curve.csv").write_text(
+            "trade_date,cash,market_value,total_equity,position_count\n"
+            "2024-10-14,100000.0,0.0,100000.0,0\n"
+            "2024-10-15,90500.0,9506.0,100006.0,1\n"
+            "2024-11-12,100500.0,0.0,100500.0,0\n",
+            encoding="utf-8",
+        )
+        return {"run_id": "r1", "output_dir": str(out), "artifacts": {}}
+
+    def _trades(self):
+        return [{"symbol": "603970.SH", "commission": 5.09, "stamp_tax": 10.26,
+                 "transfer_fee": 0.5, "total_cost": 15.85, "gross_pnl": 805.0,
+                 "net_pnl": 789.15, "entry_notional": 9506.0}]
+
+    def test_fills_orders_failed_wear_equity_single_symbol(self, tmp_path):
+        from quant_research_engine.worker.runner import _enrich_shared_symbol_detail
+
+        data = {"summary": {}, "trades": self._trades(),
+                "orders": None, "failed_orders": None, "equity": None}
+        _enrich_shared_symbol_detail(self._record(tmp_path), data, "603970.SH",
+                                     single_symbol=True)
+        assert len(data["orders"]) == 2  # 只含该股，不含 000001.SZ 的行
+        assert all(o["symbol"] == "603970.SH" for o in data["orders"])
+        assert len(data["failed_orders"]) == 1
+        w = data["wear"]
+        assert w["total_cost"] == 15.85 and w["invested"] == 9506.0
+        assert w["gross_pnl"] == 805.0 and w["net_pnl"] == 789.15 and w["trades"] == 1
+        eq = data["equity"]
+        assert eq["dates"] == ["2024-10-14", "2024-10-15", "2024-11-12"]
+        assert eq["values"] == [100000.0, 100006.0, 100500.0]
+        assert data["summary"]["total_ret_pct"] == pytest.approx(0.005)
+
+    def test_multi_symbol_keeps_equity_none(self, tmp_path):
+        from quant_research_engine.worker.runner import _enrich_shared_symbol_detail
+
+        data = {"summary": {}, "trades": self._trades(),
+                "orders": None, "failed_orders": None, "equity": None}
+        _enrich_shared_symbol_detail(self._record(tmp_path), data, "603970.SH",
+                                     single_symbol=False)
+        assert data["equity"] is None  # 多股 shared 组合净值无法按股拆，不编数
+        assert len(data["orders"]) == 2  # orders/wear 仍可补齐
+
+    def test_existing_fields_not_overwritten(self, tmp_path):
+        from quant_research_engine.worker.runner import _enrich_shared_symbol_detail
+
+        data = {"summary": {}, "trades": self._trades(),
+                "orders": [{"trade_date": "2024-10-15"}],
+                "failed_orders": [],
+                "equity": {"dates": ["2024-01-01"], "values": [1.0]},
+                "wear": {"total_cost": 1.0}}
+        _enrich_shared_symbol_detail(self._record(tmp_path), data, "603970.SH",
+                                     single_symbol=True)
+        assert data["orders"] == [{"trade_date": "2024-10-15"}]
+        assert data["failed_orders"] == []
+        assert data["equity"]["values"] == [1.0]
+        assert data["wear"] == {"total_cost": 1.0}
+
+    def test_no_top_level_files_noop(self, tmp_path):
+        from quant_research_engine.worker.runner import _enrich_shared_symbol_detail
+
+        out = tmp_path / "empty"
+        out.mkdir()
+        data = {"summary": {}, "trades": [], "orders": None, "equity": None}
+        _enrich_shared_symbol_detail({"run_id": "r", "output_dir": str(out)},
+                                     data, "603970.SH", single_symbol=True)
+        assert data["orders"] is None and data["equity"] is None and "wear" not in data
+
+    def test_e2e_shared_job_produces_enriched_gzip(self, monkeypatch, tmp_path):
+        """build_symbol_detail_files 端到端：单股 shared run 的 gz 含 equity/orders/wear。"""
+        from quant_research_engine.gui import lab_result
+        from quant_research_engine.worker import runner
+
+        record = self._record(tmp_path)
+        out = tmp_path / "out"
+        (out / "round_trips.csv").write_text(
+            "symbol,net_pnl,net_return,holding_days,commission,stamp_tax,transfer_fee,"
+            "total_cost,gross_pnl,entry_notional\n"
+            "603970.SH,789.15,0.083,28,5.09,10.26,0.5,15.85,805.0,9506.0\n",
+            encoding="utf-8",
+        )
+
+        def fake_detail(rec, ts):
+            return {"ok": True, "summary": {"ts_code": ts},
+                    "trades": [{"symbol": ts, "commission": 5.09, "stamp_tax": 10.26,
+                                "transfer_fee": 0.5, "total_cost": 15.85,
+                                "gross_pnl": 805.0, "net_pnl": 789.15,
+                                "entry_notional": 9506.0}],
+                    "trades_source": "round_trips",
+                    "orders": None, "failed_orders": None, "equity": None,
+                    "kline": {"dates": ["2024-10-15"]}, "factors": []}
+
+        monkeypatch.setattr(lab_result, "build_lab_symbol_detail", fake_detail)
+        meta = runner.build_symbol_detail_files(record)
+        assert meta["count"] == 1
+        blob = (out / "_symbol_details" / "603970.SH.json.gz").read_bytes()
+        data = json.loads(gzip.decompress(blob).decode("utf-8"))
+        assert data["equity"]["values"][-1] == 100500.0
+        assert len(data["orders"]) == 2
+        assert data["wear"]["total_cost"] == 15.85

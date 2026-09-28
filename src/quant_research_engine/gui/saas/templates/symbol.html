@@ -81,8 +81,8 @@ async function load(){
   renderKline(d);
   const tradeCols = d.trades_source === 'round_trips'
     ? [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
-       ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['净盈亏', 'net_pnl', 'pnl'],
-       ['净收益率', 'net_return', 'pct'], ['出场原因', 'exit_reason']]
+       ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['费用', 'total_cost', 'num'],
+       ['净盈亏', 'net_pnl', 'pnl'], ['净收益率', 'net_return', 'pct'], ['出场原因', 'exit_reason']]
     : [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
        ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['毛盈亏', 'gross_pnl', 'pnl'],
        ['费用', 'cost', 'num'], ['净盈亏', 'net_pnl', 'pnl'], ['出场原因', 'exit_reason']];
@@ -191,6 +191,25 @@ function renderEquity(d){
 }
 
 function renderWear(d){
+  // shared 模式订单只有总费用列：worker 侧已从 round_trips 真实费用列聚合出 wear 块
+  const w = d.wear;
+  if (w){
+    $('#box-wear').style.display = '';
+    const wc = (label, val) => '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+    const ratio = w.invested > 0 ? w.total_cost / w.invested : null;
+    const eaten = w.gross_pnl > 0 ? w.total_cost / w.gross_pnl : null;
+    const maxV = Math.max(Math.abs(w.gross_pnl), Math.abs(w.net_pnl), 1);
+    $('#wear-body').innerHTML = '<div class="wear-cards">' +
+      wc('佣金合计', f2(w.commission) + ' 元') + wc('印花税合计', f2(w.stamp_tax) + ' 元') +
+      wc('过户费 / 其他', f2((w.transfer_fee || 0) + (w.other_cost || 0)) + ' 元') +
+      wc('总磨损', f2(w.total_cost) + ' 元') +
+      wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%') + '</div>' +
+      '<div class="wb">' +
+      '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(w.gross_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(w.net_pnl) + ' 元</span></div>' +
+      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(w.total_cost) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：该股 ' + (w.trades || (d.trades || []).length) + ' 笔完整交易真实费用列聚合</div></div>';
+    return;
+  }
   if (!d.orders || !d.orders.length) return;
   let comm = 0, stamp = 0, transfer = 0, invested = 0;
   d.orders.forEach(o => {
