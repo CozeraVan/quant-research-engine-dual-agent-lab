@@ -1286,14 +1286,15 @@ def create_saas_app() -> Flask:
                 # 会员配额（15 号文档）：每日全量回测 3 次，smoke 不占；付费占位同会员
                 quota_row = conn.execute(
                     text(
-                        "SELECT tier, "
+                        "SELECT tier, role, "
                         "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id "
                         " AND j.kind = 'full' AND j.created_at::date = now()::date) AS used_today "
                         "FROM users u WHERE u.id = :uid"
                     ),
                     {"uid": uid},
                 ).mappings().one()
-                if kind == "full" and quota_row["used_today"] >= MEMBER_DAILY_FULL_LIMIT:
+                # admin 不限测试次数（运营/开发者账号）
+                if kind == "full" and quota_row["role"] != "admin" and quota_row["used_today"] >= MEMBER_DAILY_FULL_LIMIT:
                     return jsonify({"ok": False, "error": "会员每日可全量回测 3 次（今日已用完），明天再来或试试小样本验证"}), 403
             # 会员：按 (user_id, name) upsert 复用策略库行（QRE-SAAS-D3）
             if uid is not None:

@@ -683,3 +683,8 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 源资产含 app/ 全套图标（iOS/Android/Play Store），留备未来客户端。
 - 测试：saas 定向 174 passed。
 - 页脚公安备案号左侧加入警徽图标（备案图标.png → static/beian-badge.png，14px 内联对齐）。
+
+## 2026-09-29 admin 不限回测次数 + 8081 定位确认
+
+- saas 配额检查：role='admin' 跳过每日全量回测次数上限（运营/开发者账号）；v448655762@gmail.com（id=5）、17157845743（id=6）两账号已在生产库为 admin。
+- 用户确认：8081 保留 lab 实验台定位，不与公网 SaaS 界面拉齐；已重启至最新代码。
