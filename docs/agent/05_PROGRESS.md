@@ -682,3 +682,4 @@ Historical row statuses (pre-migration, kept for old table rows):
 - PWA「安装到主屏幕」：manifest.json（图标路径改为 /static/icons/）+ 最小透传 sw.js（不做缓存，避免回测数据陈旧）经 app.py 根路径路由 `/manifest.json`、`/sw.js` 提供（sw 作用域需根路径）；base.html 全页注册 SW + theme-color + apple meta + 9 张 iOS 启动画面（splash，/static/icons/splash/）。
 - 源资产含 app/ 全套图标（iOS/Android/Play Store），留备未来客户端。
 - 测试：saas 定向 174 passed。
+- 页脚公安备案号左侧加入警徽图标（备案图标.png → static/beian-badge.png，14px 内联对齐）。
