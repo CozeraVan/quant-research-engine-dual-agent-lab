@@ -674,3 +674,11 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 处置：手动补齐 quant-ts 日同步（缺口自愈模式）→ indicators/alpha191/cluster/barometer/refresh 全链；index_daily 9/28 待 Tushare 发布后补拉成功。全表对齐 2026-09-28。
 - 教训：后台 Bash 跑 refresh_batch.py 必须 `set -a && . ./.env`（systemd 服务有 env，裸 shell 没有）。
 - 修复：admin.health_status 新增 pending_trade_days 参数（交易日历口径时效判定）——落后最新开盘日 1 天至多 yellow、≥2 天 red；同日断更不再误报 green。app.py 概览接口接入。测试 49 项全绿（含事故复现场景用例）。
+
+## 2026-09-29 公安备案 + 新版 logo + PWA 接入（QRE-SAAS-PWA）
+
+- 页脚新增公安备案链接「湘公网安备43080202001103号」（beian.mps.gov.cn 查询链接），与 ICP 备案同行展示。
+- 新版品牌资产同步：`logo/A股回测台-brand-assets/web/` → `gui/static/`（favicon 套装、apple-touch-icon-180、横版 logo ×2 全量换新）。
+- PWA「安装到主屏幕」：manifest.json（图标路径改为 /static/icons/）+ 最小透传 sw.js（不做缓存，避免回测数据陈旧）经 app.py 根路径路由 `/manifest.json`、`/sw.js` 提供（sw 作用域需根路径）；base.html 全页注册 SW + theme-color + apple meta + 9 张 iOS 启动画面（splash，/static/icons/splash/）。
+- 源资产含 app/ 全套图标（iOS/Android/Play Store），留备未来客户端。
+- 测试：saas 定向 174 passed。

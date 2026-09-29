@@ -460,6 +460,20 @@ def create_saas_app() -> Flask:
 
         return redirect("/saas/")
 
+    # PWA（QRE-SAAS-PWA）：manifest 与 service worker 必须挂在站点根路径
+    #（sw.js 若只在 /static/ 下，作用域被限制在 /static/，无法控制整站安装提示）
+    @app.get("/manifest.json")
+    def pwa_manifest() -> Any:
+        from flask import send_from_directory
+
+        return send_from_directory(str(SHARED_STATIC_DIR), "manifest.json", mimetype="application/manifest+json")
+
+    @app.get("/sw.js")
+    def pwa_service_worker() -> Any:
+        from flask import send_from_directory
+
+        return send_from_directory(str(SHARED_STATIC_DIR), "sw.js", mimetype="application/javascript")
+
     @app.get("/saas/login")
     def saas_login_page() -> Any:
         # staging 免登录（SAAS_AUTH_BYPASS=1，生产严禁）：登录页直接跳工作台
