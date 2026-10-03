@@ -748,3 +748,11 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 上限依据：内置 catalog 全部 124 个策略最多用 5 因子 / 2 表，故定为 **单策略 ≤20 个因子、≤3 张因子表**（`security/yaml_guard.py` 常量 MAX_FACTOR_FIELDS / MAX_FACTOR_TABLES，调参只改一处）。
 - 双层拦截：① SaaS 提交端 `api_create_job` 调 `check_factor_limits()`（宽容解析，只计数），三入口（NL/向导/YAML 编辑）汇聚于此即时报 400 中文错误；② worker 执行前 `validate_strategy_yaml()` 内置同一检查（权威闸）。
 - 测试：test_security_sandbox.py::TestFactorLimits（超限/限内/宽容解析），test_gui_saas.py::test_factor_limit_rejected_at_submit。saas 测试 184 passed。
+
+## 2026-10-03 N4b 因子上限接入 tier_policies（会员权限参数化）
+
+- tier_policies 新增 max_factor_fields（默认 20）/ max_factor_tables（默认 3）两列，0=不限；`_ensure_tier_policies()` 幂等 ALTER 自愈老库（进程级标记防重复 ALTER），cloud_schema.sql 同步。
+- yaml_guard：`validate_strategy_yaml()` / `check_factor_limits()` 接受 max 参数（None=常量默认，0=不限）。
+- 提交端 api_create_job 按用户角色（guest/member/paid）读 policy 校验，并把生效上限写入 job params `_factor_limits`；worker runner 执行前从 params 注入同一上限做权威复核（worker 无需直连 SaaS 库读配置）。
+- 管理台「角色权限配置」表新增两列可视化编辑，即时生效（清 60s 缓存）。
+- 测试：yaml_guard 参数化/0=不限、console policy 调低后提交即 400、params 透传断言；saas 全套 185 passed。

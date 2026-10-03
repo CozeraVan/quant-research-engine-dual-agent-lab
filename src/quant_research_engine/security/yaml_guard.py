@@ -164,12 +164,23 @@ def _is_ident(value: Any) -> bool:
     )
 
 
-def _factor_limit_issues(factor_fields: dict[Any, Any]) -> list[str]:
-    """因子资源配额检查：条目数与去重表数超限则给出中文报错。"""
+def _factor_limit_issues(
+    factor_fields: dict[Any, Any],
+    max_fields: int | None = None,
+    max_tables: int | None = None,
+) -> list[str]:
+    """因子资源配额检查：条目数与去重表数超限则给出中文报错。
+
+    max_fields / max_tables 为 None 时用模块常量默认；0 表示不限（供高权限角色）。
+    """
+    if max_fields is None:
+        max_fields = MAX_FACTOR_FIELDS
+    if max_tables is None:
+        max_tables = MAX_FACTOR_TABLES
     issues: list[str] = []
-    if len(factor_fields) > MAX_FACTOR_FIELDS:
+    if max_fields > 0 and len(factor_fields) > max_fields:
         issues.append(
-            f"因子数量超限：单策略最多引用 {MAX_FACTOR_FIELDS} 个因子（当前 {len(factor_fields)} 个），"
+            f"因子数量超限：单策略最多引用 {max_fields} 个因子（当前 {len(factor_fields)} 个），"
             "请精简策略条件"
         )
     tables: set[str] = set()
@@ -177,19 +188,24 @@ def _factor_limit_issues(factor_fields: dict[Any, Any]) -> list[str]:
         parts = str(target).split(".")
         if len(parts) >= 3:
             tables.add(".".join(parts[:2]))
-    if len(tables) > MAX_FACTOR_TABLES:
+    if max_tables > 0 and len(tables) > max_tables:
         issues.append(
-            f"因子来源表超限：单策略最多跨 {MAX_FACTOR_TABLES} 张因子表（当前 {len(tables)} 张），"
+            f"因子来源表超限：单策略最多跨 {max_tables} 张因子表（当前 {len(tables)} 张），"
             "请改用同表因子组合"
         )
     return issues
 
 
-def check_factor_limits(yaml_text: str) -> list[str]:
+def check_factor_limits(
+    yaml_text: str,
+    max_fields: int | None = None,
+    max_tables: int | None = None,
+) -> list[str]:
     """宽容版因子配额检查：仅供提交入口提前拦截。
 
     只解析 data.factor_fields 做计数；YAML 无法解析或结构异常时返回空列表
     （格式问题交由 validate_strategy_yaml / worker 完整校验报错）。
+    max_fields / max_tables 为 None 时用常量默认，0 表示不限。
     """
     try:
         raw = yaml.safe_load(yaml_text)
@@ -203,14 +219,21 @@ def check_factor_limits(yaml_text: str) -> list[str]:
     factor_fields = data.get("factor_fields") or {}
     if not isinstance(factor_fields, dict):
         return []
-    return _factor_limit_issues(factor_fields)
+    return _factor_limit_issues(factor_fields, max_fields, max_tables)
 
 
-def validate_strategy_yaml(yaml_text: str) -> dict[str, Any]:
+def validate_strategy_yaml(
+    yaml_text: str,
+    *,
+    max_factor_fields: int | None = None,
+    max_factor_tables: int | None = None,
+) -> dict[str, Any]:
     """策略 YAML 严格校验 → {"ok": True, "names": set} 或 {"ok": False, "issues": [...]}。
 
     在 ``validate_yaml``（engine.py 的 StrategySpec 结构校验）之上叠加：
     节/键白名单、类型检查、因子引用逐段标识符校验、信号表达式 AST 白名单。
+    max_factor_fields / max_factor_tables 为 None 时用常量默认，0 表示不限
+    （按角色权限从 tier_policies 注入）。
     """
     issues: list[str] = []
     if not isinstance(yaml_text, str) or not yaml_text.strip():
@@ -265,7 +288,7 @@ def validate_strategy_yaml(yaml_text: str) -> dict[str, Any]:
         if not isinstance(factor_fields, dict):
             issues.append("data.factor_fields 必须是映射（逻辑名 -> factors.table.column）")
         else:
-            issues.extend(_factor_limit_issues(factor_fields))
+            issues.extend(_factor_limit_issues(factor_fields, max_factor_fields, max_factor_tables))
             for logical, target in factor_fields.items():
                 if not _is_ident(logical):
                     issues.append(f"因子逻辑名非法: {logical!r}（须为标识符且不下划线开头）")

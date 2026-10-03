@@ -45,7 +45,7 @@
       <div class="card">
         <h2>角色权限配置 <span class="opt">（改动即时生效；0 = 不限）</span></h2>
         <table class="tbl">
-          <thead><tr><th>角色</th><th class="num">每日全量回测次数</th><th class="num">标的数上限</th><th class="num">区间天数上限</th><th>更新时间</th><th>操作</th></tr></thead>
+          <thead><tr><th>角色</th><th class="num">每日全量回测次数</th><th class="num">标的数上限</th><th class="num">区间天数上限</th><th class="num">因子数上限</th><th class="num">因子表数上限</th><th>更新时间</th><th>操作</th></tr></thead>
           <tbody id="policies-tbody"></tbody>
         </table>
         <p class="muted" style="margin-top:10px">角色阶梯可扩展：未来新增付费等级（如 vip）只需在库中插入新行并在此配置；admin 角色不受以上限制。</p>
@@ -185,6 +185,8 @@
           '<td class="num"><input type="number" min="0" max="100000" value="' + p.daily_full_limit + '" data-tier="' + esc(p.tier) + '" data-k="daily_full_limit" style="width:90px"></td>' +
           '<td class="num"><input type="number" min="0" max="100000" value="' + p.max_codes + '" data-tier="' + esc(p.tier) + '" data-k="max_codes" style="width:90px"></td>' +
           '<td class="num"><input type="number" min="0" max="100000" value="' + p.max_days + '" data-tier="' + esc(p.tier) + '" data-k="max_days" style="width:90px"></td>' +
+          '<td class="num"><input type="number" min="0" max="100000" value="' + p.max_factor_fields + '" data-tier="' + esc(p.tier) + '" data-k="max_factor_fields" style="width:90px" title="单策略可引用因子条数上限，0=不限"></td>' +
+          '<td class="num"><input type="number" min="0" max="100000" value="' + p.max_factor_tables + '" data-tier="' + esc(p.tier) + '" data-k="max_factor_tables" style="width:90px" title="单策略可跨因子表数上限，0=不限"></td>' +
           '<td>' + fmt(p.updated_at) + '</td>' +
           '<td><button class="btn-sm" data-save="' + esc(p.tier) + '">保存</button></td></tr>';
       }).join('');

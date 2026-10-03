@@ -289,16 +289,26 @@ _PBKDF2_ITERATIONS = 120_000
 
 # N1b/N1c 权限参数化（tier_policies 表）：角色→回测限额配置，管理台可改；
 # 框架支持无限加角色行（付费阶梯留空占位）。daily_full_limit=次数/日，
-# max_codes=标的数上限（0=不限），max_days=回测区间天数上限（0=不限）。
+# max_codes=标的数上限（0=不限），max_days=回测区间天数上限（0=不限），
+# max_factor_fields / max_factor_tables=单策略因子条数/因子表数上限（0=不限）。
 _TIER_POLICY_DEFAULTS = {
-    "guest":  {"daily_full_limit": GUEST_DAILY_LIMIT, "max_codes": GUEST_MAX_CODES, "max_days": GUEST_MAX_DAYS},
-    "member": {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0},
-    "paid":   {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0},
+    "guest":  {"daily_full_limit": GUEST_DAILY_LIMIT, "max_codes": GUEST_MAX_CODES, "max_days": GUEST_MAX_DAYS,
+               "max_factor_fields": 20, "max_factor_tables": 3},
+    "member": {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0,
+               "max_factor_fields": 20, "max_factor_tables": 3},
+    "paid":   {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0,
+               "max_factor_fields": 20, "max_factor_tables": 3},
 }
+_POLICY_KEYS = ("daily_full_limit", "max_codes", "max_days", "max_factor_fields", "max_factor_tables")
+# 进程级"已自愈"标记：避免每次缓存未命中都重复 CREATE/ALTER（减少锁开销）
+_POLICY_SCHEMA_ENSURED: set[int] = set()
 
 
 def _ensure_tier_policies(engine: Engine) -> None:
     """幂等建表 + 种子行（本地/ECS 两库随服务启动自愈，cloud_schema.sql 同步维护）。"""
+    key = id(engine)
+    if key in _POLICY_SCHEMA_ENSURED:
+        return
     with engine.begin() as conn:
         conn.execute(text(
             "CREATE TABLE IF NOT EXISTS tier_policies ("
@@ -306,16 +316,24 @@ def _ensure_tier_policies(engine: Engine) -> None:
             " daily_full_limit INT NOT NULL,"
             " max_codes INT NOT NULL DEFAULT 0,"
             " max_days INT NOT NULL DEFAULT 0,"
+            " max_factor_fields INT NOT NULL DEFAULT 20,"
+            " max_factor_tables INT NOT NULL DEFAULT 3,"
             " updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"
         ))
+        # 老库自愈：逐列补齐（ALTER ... IF NOT EXISTS 幂等）
+        conn.execute(text("ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_fields INT NOT NULL DEFAULT 20"))
+        conn.execute(text("ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_tables INT NOT NULL DEFAULT 3"))
         for tier, d in _TIER_POLICY_DEFAULTS.items():
             conn.execute(
                 text(
-                    "INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days) "
-                    "VALUES (:t, :l, :c, :d) ON CONFLICT (tier) DO NOTHING"
+                    "INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days, "
+                    " max_factor_fields, max_factor_tables) "
+                    "VALUES (:t, :l, :c, :d, :ff, :ft) ON CONFLICT (tier) DO NOTHING"
                 ),
-                {"t": tier, "l": d["daily_full_limit"], "c": d["max_codes"], "d": d["max_days"]},
+                {"t": tier, "l": d["daily_full_limit"], "c": d["max_codes"], "d": d["max_days"],
+                 "ff": d["max_factor_fields"], "ft": d["max_factor_tables"]},
             )
+    _POLICY_SCHEMA_ENSURED.add(key)
 
 
 def _get_policy(app: Flask, engine: Engine, tier: str) -> dict[str, int]:
@@ -332,7 +350,8 @@ def _get_policy(app: Flask, engine: Engine, tier: str) -> dict[str, int]:
         _ensure_tier_policies(engine)
         with engine.connect() as conn:
             row = conn.execute(
-                text("SELECT daily_full_limit, max_codes, max_days FROM tier_policies WHERE tier = :t"),
+                text("SELECT daily_full_limit, max_codes, max_days, max_factor_fields, max_factor_tables "
+                     "FROM tier_policies WHERE tier = :t"),
                 {"t": tier},
             ).mappings().first()
         policy = dict(row) if row else dict(default)
@@ -1321,10 +1340,28 @@ def create_saas_app() -> Flask:
         if not yaml_text:
             return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
         # 因子资源配额闸（2026-10-03）：提交时提前拦截"枚举全库因子"的资源滥用，
-        # 三个入口（NL/向导/ YAML 编辑）均汇聚于此，worker 执行前还会再校验一次。
-        limit_issues = check_factor_limits(yaml_text)
+        # 三个入口（NL/向导/ YAML 编辑）均汇聚于此。上限按角色读 tier_policies
+        # （管理台可改），并随 params 透传给 worker 做执行前权威复核。
+        if uid is None:
+            factor_pol = _get_policy(app, engine, "guest")
+        else:
+            with engine.connect() as conn:
+                tier_row = conn.execute(
+                    text("SELECT tier FROM users WHERE id = :uid"), {"uid": uid}
+                ).first()
+            factor_pol = _get_policy(app, engine, str(tier_row[0]) if tier_row else "member")
+        limit_issues = check_factor_limits(
+            yaml_text,
+            max_fields=int(factor_pol.get("max_factor_fields", 20)),
+            max_tables=int(factor_pol.get("max_factor_tables", 3)),
+        )
         if limit_issues:
             return jsonify({"ok": False, "error": "；".join(limit_issues)}), 400
+        params_raw = dict(params_raw)
+        params_raw["_factor_limits"] = {
+            "max_fields": int(factor_pol.get("max_factor_fields", 20)),
+            "max_tables": int(factor_pol.get("max_factor_tables", 3)),
+        }
 
         # --- 游客通道（15 号文档 D 阶段定稿；2026-10-03 限额参数化读 tier_policies） ---
         guest_key = None
@@ -2319,7 +2356,8 @@ def create_saas_app() -> Flask:
         _ensure_tier_policies(engine)
         with engine.connect() as conn:
             rows = conn.execute(
-                text("SELECT tier, daily_full_limit, max_codes, max_days, updated_at "
+                text("SELECT tier, daily_full_limit, max_codes, max_days, "
+                     "max_factor_fields, max_factor_tables, updated_at "
                      "FROM tier_policies ORDER BY tier")
             ).mappings().all()
         return jsonify({"ok": True, "policies": _jsonable([dict(r) for r in rows])})
@@ -2334,7 +2372,7 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "非法角色名"}), 400
         data = request.get_json(silent=True) or {}
         fields: dict[str, int] = {}
-        for k in ("daily_full_limit", "max_codes", "max_days"):
+        for k in _POLICY_KEYS:
             if k in data:
                 try:
                     v = int(data[k])
@@ -2349,9 +2387,11 @@ def create_saas_app() -> Flask:
         _ensure_tier_policies(engine)
         with engine.begin() as conn:
             conn.execute(
-                text("INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days) "
-                     "VALUES (:t, :l, :c, :d) ON CONFLICT (tier) DO NOTHING"),
-                {"t": tier, "l": default["daily_full_limit"], "c": default["max_codes"], "d": default["max_days"]},
+                text("INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days, "
+                     " max_factor_fields, max_factor_tables) "
+                     "VALUES (:t, :l, :c, :d, :ff, :ft) ON CONFLICT (tier) DO NOTHING"),
+                {"t": tier, "l": default["daily_full_limit"], "c": default["max_codes"], "d": default["max_days"],
+                 "ff": default["max_factor_fields"], "ft": default["max_factor_tables"]},
             )
             set_clause = ", ".join(f"{k} = :{k}" for k in fields)
             params = dict(fields)

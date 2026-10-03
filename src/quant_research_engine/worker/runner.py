@@ -92,12 +92,18 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
         raise RuntimeError("job 缺少策略 yaml")
     # QRE-SAAS-005：公网 NL 产物前置安全闸——严格 schema + 信号表达式 AST 白名单
     # （引擎表达式求值器允许任意 getattr/方法调用，必须在执行前锁死）。
+    # 因子上限按提交时角色权限从 params._factor_limits 注入（0=不限），缺失回退常量。
     from quant_research_engine.security.yaml_guard import validate_strategy_yaml
 
-    verdict = validate_strategy_yaml(yaml_text)
+    params = _job_params(job)
+    flimits = params.get("_factor_limits") if isinstance(params.get("_factor_limits"), dict) else {}
+    verdict = validate_strategy_yaml(
+        yaml_text,
+        max_factor_fields=int(flimits.get("max_fields", 20)),
+        max_factor_tables=int(flimits.get("max_tables", 3)),
+    )
     if not verdict["ok"]:
         raise RuntimeError("策略 YAML 未通过安全校验：" + "；".join(verdict["issues"]))
-    params = _job_params(job)
 
     codes = params.get("codes") or []
     if isinstance(codes, str):

@@ -198,12 +198,17 @@ CREATE TABLE IF NOT EXISTS tier_policies (
     daily_full_limit INT NOT NULL,
     max_codes        INT NOT NULL DEFAULT 0,
     max_days         INT NOT NULL DEFAULT 0,
+    max_factor_fields INT NOT NULL DEFAULT 20,
+    max_factor_tables INT NOT NULL DEFAULT 3,
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days) VALUES
-    ('guest',  1, 1, 738),
-    ('member', 3, 0, 0),
-    ('paid',   3, 0, 0)
+-- 老库自愈（应用启动时也会幂等执行同样的 ALTER）
+ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_fields INT NOT NULL DEFAULT 20;
+ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_tables INT NOT NULL DEFAULT 3;
+INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days, max_factor_fields, max_factor_tables) VALUES
+    ('guest',  1, 1, 738, 20, 3),
+    ('member', 3, 0, 0, 20, 3),
+    ('paid',   3, 0, 0, 20, 3)
 ON CONFLICT (tier) DO NOTHING;
 
 COMMIT;

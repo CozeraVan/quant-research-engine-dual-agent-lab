@@ -164,6 +164,21 @@ class TestFactorLimits:
         fields = {f"f{i}": "factors.stock_daily_momentum_close.rsi_14" for i in range(25)}
         assert check_factor_limits(self._yaml_with_factors(fields))
 
+    def test_custom_limits_from_policy(self):
+        # 角色权限注入：管理台把 member 调低到 5 个因子时，6 因子策略应被拒
+        fields = {f"f{i}": "factors.stock_daily_momentum_close.rsi_14" for i in range(6)}
+        yaml_text = self._yaml_with_factors(fields)
+        assert check_factor_limits(yaml_text, max_fields=20) == []
+        assert check_factor_limits(yaml_text, max_fields=5)
+        verdict = validate_strategy_yaml(yaml_text, max_factor_fields=5)
+        assert not verdict["ok"]
+
+    def test_zero_means_unlimited(self):
+        fields = {f"f{i}": "factors.stock_daily_momentum_close.rsi_14" for i in range(30)}
+        yaml_text = self._yaml_with_factors(fields)
+        assert check_factor_limits(yaml_text, max_fields=0, max_tables=0) == []
+        assert validate_strategy_yaml(yaml_text, max_factor_fields=0, max_factor_tables=0)["ok"]
+
 
 # --- Docker 沙箱（无 docker 环境 skip） ---
 

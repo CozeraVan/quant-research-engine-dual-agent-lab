@@ -80,10 +80,10 @@ def _admin_headers(app, email="admin@example.com"):
     return {"X-User-Id": str(uid)}, uid
 
 
-def _create_job(client, uid=1, kind="full"):
+def _create_job(client, uid=1, kind="full", yaml_text="signal:\n  entry: 'true'\n"):
     return client.post(
         "/api/saas/jobs",
-        json={"yaml": "signal:\n  entry: 'true'\n", "kind": kind, "params": {"cash": 1000000}, "name": "t"},
+        json={"yaml": yaml_text, "kind": kind, "params": {"cash": 1000000}, "name": "t"},
         headers={"X-User-Id": str(uid)},
     )
 
@@ -339,6 +339,29 @@ class TestTierPolicies:
         assert _create_job(client, uid=admin_uid).status_code == 200  # admin 不限
         # 恢复默认 3
         client.post("/api/saas/console/policies/member", json={"daily_full_limit": 3}, headers=headers)
+
+    def test_factor_limits_follow_policy(self, client, app):
+        # N4b 接入 N1：管理台把 member 因子上限调低到 5 → 6 因子策略提交即 400；
+        # 恢复 20 后同策略放行；0 = 不限
+        headers, _ = _admin_headers(app)
+        uid = _make_user(app, "f@example.com")
+        fields = "\n".join(
+            f"    f{i}: factors.stock_daily_momentum_close.rsi_14" for i in range(6)
+        )
+        yaml_text = (
+            "experiment:\n  name: t\ndata:\n  market_fields: [close]\n"
+            f"  factor_fields:\n{fields}\nsignal:\n  entry: f0 > 0\n"
+        )
+        client.post("/api/saas/console/policies/member", json={"max_factor_fields": 5}, headers=headers)
+        r = _create_job(client, uid=uid, yaml_text=yaml_text)
+        assert r.status_code == 400 and "因子数量超限" in r.get_json()["error"]
+        # params 透传给 worker 的上限也跟随 policy
+        client.post("/api/saas/console/policies/member", json={"max_factor_fields": 20}, headers=headers)
+        r2 = _create_job(client, uid=uid, yaml_text=yaml_text)
+        assert r2.status_code == 200
+        detail = client.get(f"/api/saas/jobs/{r2.get_json()['job_id']}",
+                            headers={"X-User-Id": str(uid)}).get_json()["job"]
+        assert detail["params"]["_factor_limits"] == {"max_fields": 20, "max_tables": 3}
 
     def test_overview_guest_stats(self, client, app):
         headers, _ = _admin_headers(app)

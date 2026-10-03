@@ -98,7 +98,7 @@ class TestJobCreate:
         detail = client.get(f"/api/saas/jobs/{body['job_id']}", headers={"X-User-Id": "7"}).get_json()["job"]
         assert detail["status"] == "queued"
         assert detail["kind"] == "smoke"
-        assert detail["params"] == {"cash": 1000000}
+        assert detail["params"] == {"cash": 1000000, "_factor_limits": {"max_fields": 20, "max_tables": 3}}
         # 同一占位用户再次提交不报错（ON CONFLICT DO NOTHING）
         assert _create_job(client, uid=7).status_code == 200
 
@@ -377,7 +377,7 @@ class TestProtocolA2:
         job = client.post("/api/worker/jobs/claim", json={"worker_id": "w1"},
                           headers=WORKER_HEADERS).get_json()["job"]
         assert job["id"] == job_id and job["attempt"] == 1
-        assert job["params_json"] == {"cash": 1000000}
+        assert job["params_json"] == {"cash": 1000000, "_factor_limits": {"max_fields": 20, "max_tables": 3}}
         assert job["lease_expires_at"] and job["cancel_requested"] is False
 
     def test_heartbeat_progress_and_leased_to_running(self, client):
