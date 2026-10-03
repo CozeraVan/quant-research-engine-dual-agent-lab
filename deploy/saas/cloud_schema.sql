@@ -190,4 +190,20 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS member_since TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS member_expire_at TIMESTAMPTZ;
 
+-- QRE-SAAS-TIER-POLICIES（N1b/N1c，2026-10-03）：角色权限参数化。
+-- daily_full_limit=每日全量回测次数（0=不限）；max_codes=标的数上限（0=不限）；
+-- max_days=回测区间天数上限（0=不限）。阶梯留空：新增付费等级只需插新行。
+CREATE TABLE IF NOT EXISTS tier_policies (
+    tier             TEXT PRIMARY KEY,
+    daily_full_limit INT NOT NULL,
+    max_codes        INT NOT NULL DEFAULT 0,
+    max_days         INT NOT NULL DEFAULT 0,
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days) VALUES
+    ('guest',  1, 1, 738),
+    ('member', 3, 0, 0),
+    ('paid',   3, 0, 0)
+ON CONFLICT (tier) DO NOTHING;
+
 COMMIT;

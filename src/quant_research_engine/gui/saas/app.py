@@ -23,6 +23,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import smtplib
 import time
@@ -277,13 +278,67 @@ UPLOAD_HARD_TIMEOUT = "30 minutes"
 ERROR_CLASSES = ("strategy_compile_error", "data_missing",
                  "engine_error", "system_error", "canceled")
 
-# --- 内测三级权限（15 号文档 D 阶段定稿，2026-09-20） ---
+# --- 内测三级权限（15 号文档 D 阶段定稿，2026-09-20；2026-10-03 参数化入库） ---
 MEMBER_DAILY_FULL_LIMIT = 3      # 登录会员/付费占位：每日全量回测 3 次（smoke 不占）
 GUEST_DAILY_LIMIT = 1            # 游客：单 IP 每日 1 次
 GUEST_MAX_CODES = 1              # 游客：单支股票
 GUEST_MAX_DAYS = 731 + 7         # 游客：区间 ≤ 近 2 年（留一周宽限）
 GUEST_RESULT_NOTE = "游客结果次日清空，注册后可永久保存记录"
 _PBKDF2_ITERATIONS = 120_000
+
+# N1b/N1c 权限参数化（tier_policies 表）：角色→回测限额配置，管理台可改；
+# 框架支持无限加角色行（付费阶梯留空占位）。daily_full_limit=次数/日，
+# max_codes=标的数上限（0=不限），max_days=回测区间天数上限（0=不限）。
+_TIER_POLICY_DEFAULTS = {
+    "guest":  {"daily_full_limit": GUEST_DAILY_LIMIT, "max_codes": GUEST_MAX_CODES, "max_days": GUEST_MAX_DAYS},
+    "member": {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0},
+    "paid":   {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0},
+}
+
+
+def _ensure_tier_policies(engine: Engine) -> None:
+    """幂等建表 + 种子行（本地/ECS 两库随服务启动自愈，cloud_schema.sql 同步维护）。"""
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS tier_policies ("
+            " tier TEXT PRIMARY KEY,"
+            " daily_full_limit INT NOT NULL,"
+            " max_codes INT NOT NULL DEFAULT 0,"
+            " max_days INT NOT NULL DEFAULT 0,"
+            " updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+        ))
+        for tier, d in _TIER_POLICY_DEFAULTS.items():
+            conn.execute(
+                text(
+                    "INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days) "
+                    "VALUES (:t, :l, :c, :d) ON CONFLICT (tier) DO NOTHING"
+                ),
+                {"t": tier, "l": d["daily_full_limit"], "c": d["max_codes"], "d": d["max_days"]},
+            )
+
+
+def _get_policy(app: Flask, engine: Engine, tier: str) -> dict[str, int]:
+    """读 tier_policies（60s 缓存）；表缺失/缺行回退到常量默认，永不因配置故障拒绝服务。"""
+    if not tier:
+        tier = "member"
+    cache = app.extensions.setdefault("tier_policy_cache", {})
+    hit = cache.get(tier)
+    now = time.time()
+    if hit and now - hit[0] < 60:
+        return hit[1]
+    default = _TIER_POLICY_DEFAULTS.get(tier, _TIER_POLICY_DEFAULTS["member"])
+    try:
+        _ensure_tier_policies(engine)
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT daily_full_limit, max_codes, max_days FROM tier_policies WHERE tier = :t"),
+                {"t": tier},
+            ).mappings().first()
+        policy = dict(row) if row else dict(default)
+    except Exception:
+        policy = dict(default)
+    cache[tier] = (now, policy)
+    return policy
 
 
 def _client_ip() -> str:
@@ -1217,8 +1272,9 @@ def create_saas_app() -> Flask:
             item["quota_limit"] = "不限"
             item["quota_remaining"] = None
         else:
-            item["quota_limit"] = MEMBER_DAILY_FULL_LIMIT
-            item["quota_remaining"] = max(0, MEMBER_DAILY_FULL_LIMIT - (item.get("used_today") or 0))
+            pol = _get_policy(app, engine, str(item.get("tier") or "member"))
+            item["quota_limit"] = pol["daily_full_limit"]
+            item["quota_remaining"] = max(0, pol["daily_full_limit"] - (item.get("used_today") or 0))
         return jsonify({"ok": True, "user": item})
 
     # --- 用户侧：提交 / 查询 / 取消（17 协议 §2/§5；/api/saas/* 为兼容别名） ---
@@ -1248,14 +1304,14 @@ def create_saas_app() -> Flask:
         if not yaml_text:
             return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
 
-        # --- 游客通道（15 号文档 D 阶段定稿）：无 token 可提交，单 IP 每日 1 次、
-        #     单支股票、区间 ≤ 近 2 年；结果次日清空（每日清理任务） ---
+        # --- 游客通道（15 号文档 D 阶段定稿；2026-10-03 限额参数化读 tier_policies） ---
         guest_key = None
         if uid is None:
+            pol = _get_policy(app, engine, "guest")
             codes = params_raw.get("codes") or []
             if isinstance(codes, str):
                 codes = [c.strip() for c in codes.split(",") if c.strip()]
-            if len(codes) != GUEST_MAX_CODES:
+            if pol["max_codes"] > 0 and len(codes) != pol["max_codes"]:
                 return jsonify({"ok": False, "error": "游客仅支持单支股票回测。注册会员后可用全市场/板块/多股票"}), 403
             try:
                 from datetime import date as _date
@@ -1264,7 +1320,7 @@ def create_saas_app() -> Flask:
                 d1 = _date.fromisoformat(str(params_raw.get("end")))
             except (TypeError, ValueError):
                 return jsonify({"ok": False, "error": "请填写回测区间（开始/结束日期）"}), 400
-            if (d1 - d0).days > GUEST_MAX_DAYS or d0 > d1:
+            if pol["max_days"] > 0 and ((d1 - d0).days > pol["max_days"] or d0 > d1):
                 return jsonify({"ok": False, "error": "游客仅支持近 2 年内的区间。注册会员后不限"}), 403
             guest_key = _guest_key(app, _client_ip())
             used = 0
@@ -1277,7 +1333,7 @@ def create_saas_app() -> Flask:
                         ),
                         {"k": guest_key},
                     ).scalar_one()
-            if kind == "full" and used >= GUEST_DAILY_LIMIT:
+            if kind == "full" and pol["daily_full_limit"] > 0 and used >= pol["daily_full_limit"]:
                 return jsonify({"ok": False, "error": "游客每日可回测 1 次（今日已用完）。注册会员每日 3 次且记录永久保存"}), 403
 
         if uid is None and guest_key is None:
@@ -1315,8 +1371,9 @@ def create_saas_app() -> Flask:
                     ),
                     {"uid": uid},
                 ).mappings().one()
-                # admin 不限测试次数（运营/开发者账号）
-                if kind == "full" and quota_row["role"] != "admin" and quota_row["used_today"] >= MEMBER_DAILY_FULL_LIMIT:
+                # admin 不限测试次数（运营/开发者账号）；限额参数化读 tier_policies
+                pol = _get_policy(app, engine, str(quota_row["tier"] or "member"))
+                if kind == "full" and quota_row["role"] != "admin" and pol["daily_full_limit"] > 0 and quota_row["used_today"] >= pol["daily_full_limit"]:
                     return jsonify({"ok": False, "error": "会员每日可全量回测 3 次（今日已用完），明天再来或试试小样本验证"}), 403
             # 会员：按 (user_id, name) upsert 复用策略库行（QRE-SAAS-D3）
             if uid is not None:
@@ -2123,6 +2180,17 @@ def create_saas_app() -> Flask:
                     "AND created_at::date = now()::date"
                 )
             ).mappings().one()
+            # N1a 游客统计口径：guest_key 非空即游客任务（guest_key 为 IP 哈希，distinct 即独立访客数）
+            guests = conn.execute(
+                text(
+                    "SELECT count(*) AS total, "
+                    "count(*) FILTER (WHERE created_at::date = now()::date) AS today, "
+                    "count(DISTINCT guest_key) AS unique_visitors, "
+                    "count(*) FILTER (WHERE status = 'completed') AS completed, "
+                    "count(*) FILTER (WHERE status IN ('failed','expired')) AS failed "
+                    "FROM jobs WHERE guest_key IS NOT NULL"
+                )
+            ).mappings().one()
             workers = conn.execute(
                 text(
                     "SELECT count(*) AS total, "
@@ -2152,6 +2220,7 @@ def create_saas_app() -> Flask:
                         "jobs": _jsonable(dict(jobs)),
                         "jobs_today_success_rate": (jobs["completed_today"] / terminal_today) if terminal_today else None,
                         "quota": _jsonable(dict(quota)), "workers": _jsonable(dict(workers)),
+                        "guests": _jsonable(dict(guests)),
                         "pending_factor_requests": pending_factors, "server": server})
 
     @app.get("/api/saas/console/users")
@@ -2217,6 +2286,61 @@ def create_saas_app() -> Flask:
         if row is None:
             return jsonify({"ok": False, "error": "用户不存在"}), 404
         return jsonify({"ok": True, "user_id": row.id, "status": status})
+
+    # --- N1b/N1c 权限管理：tier_policies 读改（角色→次数/标的/区间上限，阶梯留空可扩展） ---
+    @app.get("/api/saas/console/policies")
+    def api_console_policies() -> Any:
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        _ensure_tier_policies(engine)
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT tier, daily_full_limit, max_codes, max_days, updated_at "
+                     "FROM tier_policies ORDER BY tier")
+            ).mappings().all()
+        return jsonify({"ok": True, "policies": _jsonable([dict(r) for r in rows])})
+
+    @app.post("/api/saas/console/policies/<tier>")
+    def api_console_policy_update(tier: str) -> Any:
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        if not re.fullmatch(r"[a-z0-9_]{1,32}", tier or ""):
+            return jsonify({"ok": False, "error": "非法角色名"}), 400
+        data = request.get_json(silent=True) or {}
+        fields: dict[str, int] = {}
+        for k in ("daily_full_limit", "max_codes", "max_days"):
+            if k in data:
+                try:
+                    v = int(data[k])
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": f"{k} 必须为整数"}), 400
+                if v < 0 or v > 100000:
+                    return jsonify({"ok": False, "error": f"{k} 超出允许范围（0~100000）"}), 400
+                fields[k] = v
+        if not fields:
+            return jsonify({"ok": False, "error": "没有需要更新的字段"}), 400
+        default = _TIER_POLICY_DEFAULTS.get(tier, _TIER_POLICY_DEFAULTS["member"])
+        _ensure_tier_policies(engine)
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days) "
+                     "VALUES (:t, :l, :c, :d) ON CONFLICT (tier) DO NOTHING"),
+                {"t": tier, "l": default["daily_full_limit"], "c": default["max_codes"], "d": default["max_days"]},
+            )
+            set_clause = ", ".join(f"{k} = :{k}" for k in fields)
+            params = dict(fields)
+            params["t"] = tier
+            conn.execute(
+                text(f"UPDATE tier_policies SET {set_clause}, updated_at = now() WHERE tier = :t"),
+                params,
+            )
+        # 清缓存让新配置即时生效（60s 缓存之外的主动失效）
+        app.extensions.get("tier_policy_cache", {}).pop(tier, None)
+        return jsonify({"ok": True, "tier": tier, "updated": sorted(fields)})
 
     @app.get("/api/saas/console/factor-requests")
     def api_console_factor_requests() -> Any:

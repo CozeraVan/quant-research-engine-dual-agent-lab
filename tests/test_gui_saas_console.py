@@ -295,3 +295,63 @@ class TestConsolePage:
         html = client.get("/saas/").get_data(as_text=True)
         assert "管理台" not in html
         assert "is_admin" not in html
+
+
+class TestTierPolicies:
+    """N1b/N1c：角色权限参数化（tier_policies 表 + 管理台读写 + 配额检查接入）。"""
+
+    def test_auth_gate(self, client, app):
+        assert client.get("/api/saas/console/policies").status_code == 401
+        uid = _make_user(app, "plain@example.com")
+        h = {"X-User-Id": str(uid)}
+        assert client.get("/api/saas/console/policies", headers=h).status_code == 403
+
+    def test_seed_and_update(self, client, app):
+        headers, _ = _admin_headers(app)
+        d = client.get("/api/saas/console/policies", headers=headers).get_json()
+        assert d["ok"]
+        by_tier = {p["tier"]: p for p in d["policies"]}
+        # 种子行：三级权限与代码常量一致
+        assert by_tier["guest"]["daily_full_limit"] == 1
+        assert by_tier["guest"]["max_codes"] == 1 and by_tier["guest"]["max_days"] > 0
+        assert by_tier["member"]["daily_full_limit"] == 3
+        assert by_tier["member"]["max_codes"] == 0 and by_tier["member"]["max_days"] == 0
+        assert by_tier["paid"]["daily_full_limit"] == 3
+        # 更新 member 日限额 → 生效且入库
+        r = client.post("/api/saas/console/policies/member", json={"daily_full_limit": 5}, headers=headers)
+        assert r.get_json()["ok"] and r.get_json()["updated"] == ["daily_full_limit"]
+        d2 = client.get("/api/saas/console/policies", headers=headers).get_json()
+        assert {p["tier"]: p for p in d2["policies"]}["member"]["daily_full_limit"] == 5
+        # 校验：非法角色名 / 非法数值 / 空更新
+        assert client.post("/api/saas/console/policies/bad name!", json={"daily_full_limit": 1}, headers=headers).status_code == 400
+        assert client.post("/api/saas/console/policies/member", json={"daily_full_limit": -1}, headers=headers).status_code == 400
+        assert client.post("/api/saas/console/policies/member", json={}, headers=headers).status_code == 400
+
+    def test_member_quota_follows_policy(self, client, app):
+        # 改 member 日限额为 1 → 会员第二次提交被拒；admin 不受限
+        headers, admin_uid = _admin_headers(app)
+        client.post("/api/saas/console/policies/member", json={"daily_full_limit": 1}, headers=headers)
+        uid = _make_user(app, "u@example.com")
+        h = {"X-User-Id": str(uid)}
+        assert _create_job(client, uid=uid).status_code == 200
+        r = _create_job(client, uid=uid)
+        assert r.status_code == 403 and "每日" in r.get_json()["error"]
+        assert _create_job(client, uid=admin_uid).status_code == 200  # admin 不限
+        # 恢复默认 3
+        client.post("/api/saas/console/policies/member", json={"daily_full_limit": 3}, headers=headers)
+
+    def test_overview_guest_stats(self, client, app):
+        headers, _ = _admin_headers(app)
+        # 造一条游客任务（无 X-User-Id，走 guest 通道：单股 + 2 年内区间）
+        r = client.post("/api/saas/jobs", json={
+            "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+            "params": {"codes": ["000001"], "start": "2026-01-01", "end": "2026-09-01"},
+            "name": "guest-t"})
+        assert r.status_code == 200, r.get_json()
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        assert d["ok"] and d["guests"]["today"] == 1 and d["guests"]["unique_visitors"] == 1
+
+    def test_console_page_has_policies_tab(self, client):
+        html = client.get("/saas/console").get_data(as_text=True)
+        assert 'data-tab="policies"' in html and "/api/saas/console/policies" in html
+        assert 'id="ov-guests"' in html

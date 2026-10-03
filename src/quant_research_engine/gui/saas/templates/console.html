@@ -13,6 +13,7 @@
     <div class="tabs">
       <button class="tab active" data-tab="overview">总览</button>
       <button class="tab" data-tab="users">用户</button>
+      <button class="tab" data-tab="policies">权限</button>
       <button class="tab" data-tab="factors">因子审核</button>
       <button class="tab" data-tab="feedback">反馈</button>
       <button class="tab" data-tab="workers">Worker</button>
@@ -22,6 +23,7 @@
     <div class="tab-pane" id="pane-overview">
       <div class="metric-strip" id="ov-users"></div>
       <div class="metric-strip" id="ov-jobs"></div>
+      <div class="metric-strip" id="ov-guests"></div>
       <div class="card">
         <h2>服务器资源</h2>
         <div id="ov-server" class="muted">加载中…</div>
@@ -36,6 +38,17 @@
             <th class="num">任务数</th><th class="num">今日已用</th><th>注册时间</th><th>最近登录</th><th>操作</th></tr></thead>
           <tbody id="users-tbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="tab-pane hidden" id="pane-policies">
+      <div class="card">
+        <h2>角色权限配置 <span class="opt">（改动即时生效；0 = 不限）</span></h2>
+        <table class="tbl">
+          <thead><tr><th>角色</th><th class="num">每日全量回测次数</th><th class="num">标的数上限</th><th class="num">区间天数上限</th><th>更新时间</th><th>操作</th></tr></thead>
+          <tbody id="policies-tbody"></tbody>
+        </table>
+        <p class="muted" style="margin-top:10px">角色阶梯可扩展：未来新增付费等级（如 vip）只需在库中插入新行并在此配置；admin 角色不受以上限制。</p>
       </div>
     </div>
 
@@ -102,7 +115,7 @@
 <script>
 (function(){
   requireLogin();
-  var panes = {overview:'pane-overview', users:'pane-users', factors:'pane-factors', feedback:'pane-feedback', workers:'pane-workers', jobs:'pane-jobs'};
+  var panes = {overview:'pane-overview', users:'pane-users', policies:'pane-policies', factors:'pane-factors', feedback:'pane-feedback', workers:'pane-workers', jobs:'pane-jobs'};
   var factorSt = 'pending', jobSt = 'failed';
 
   function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }
@@ -129,7 +142,7 @@
       btn.classList.add('active');
       Object.keys(panes).forEach(function(k){ document.getElementById(panes[k]).classList.add('hidden'); });
       document.getElementById(panes[btn.dataset.tab]).classList.remove('hidden');
-      ({overview: loadOverview, users: loadUsers, factors: loadFactorRequests, feedback: loadFeedback, workers: loadWorkers, jobs: loadJobs})[btn.dataset.tab]();
+      ({overview: loadOverview, users: loadUsers, policies: loadPolicies, factors: loadFactorRequests, feedback: loadFeedback, workers: loadWorkers, jobs: loadJobs})[btn.dataset.tab]();
     });
   });
 
@@ -143,6 +156,12 @@
         metric('会员', u.member) + metric('付费', u.paid) +
         metric('已禁用', u.disabled) + metric('今日回测用户', d.quota.active_members, '今日提交过正式回测的去重会员数');
       var rate = d.jobs_today_success_rate === null ? '—' : (d.jobs_today_success_rate * 100).toFixed(1) + '%';
+      var g = d.guests || {};
+      var gRate = (g.completed || g.failed) ? (g.completed / (g.completed + g.failed) * 100).toFixed(1) + '%' : '—';
+      document.getElementById('ov-guests').innerHTML =
+        metric('游客今日任务', g.today || 0) + metric('游客累计任务', g.total || 0) +
+        metric('独立访客（按 IP）', g.unique_visitors || 0, 'guest_key 为加盐 IP 哈希，去重即独立访客') +
+        metric('游客任务成功率', gRate, '累计 完成 / (完成+失败超时)');
       document.getElementById('ov-jobs').innerHTML =
         metric('今日任务', j.today) + metric('今日成功率', rate, '今日 完成 / (完成+失败超时)') +
         metric('队列深度', j.queued) + metric('运行中', j.running) +
@@ -155,6 +174,34 @@
         '系统负载（1/5/15 分钟）：' + esc(load) + '<br>' + esc(disk);
     }).catch(function(){});
   }
+
+  // --- N1b 权限配置 ---
+  var TIER_LABELS = {guest: '游客', member: '注册会员', paid: '付费会员'};
+  function loadPolicies(){
+    apiFetch('/api/saas/console/policies').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('policies-tbody').innerHTML = d.policies.map(function(p){
+        return '<tr><td>' + esc(TIER_LABELS[p.tier] || p.tier) + ' <span class="opt">' + esc(p.tier) + '</span></td>' +
+          '<td class="num"><input type="number" min="0" max="100000" value="' + p.daily_full_limit + '" data-tier="' + esc(p.tier) + '" data-k="daily_full_limit" style="width:90px"></td>' +
+          '<td class="num"><input type="number" min="0" max="100000" value="' + p.max_codes + '" data-tier="' + esc(p.tier) + '" data-k="max_codes" style="width:90px"></td>' +
+          '<td class="num"><input type="number" min="0" max="100000" value="' + p.max_days + '" data-tier="' + esc(p.tier) + '" data-k="max_days" style="width:90px"></td>' +
+          '<td>' + fmt(p.updated_at) + '</td>' +
+          '<td><button class="btn-sm" data-save="' + esc(p.tier) + '">保存</button></td></tr>';
+      }).join('');
+    }).catch(function(){});
+  }
+  document.getElementById('policies-tbody').addEventListener('click', function(ev){
+    var tier = ev.target.dataset && ev.target.dataset.save;
+    if (!tier) return;
+    var body = {};
+    document.querySelectorAll('#policies-tbody input[data-tier="' + tier + '"]').forEach(function(inp){
+      body[inp.dataset.k] = parseInt(inp.value || '0', 10);
+    });
+    apiFetch('/api/saas/console/policies/' + tier, {json: body}).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok){ alert(d.error || '保存失败'); return; }
+      loadPolicies();
+    }).catch(function(){});
+  });
 
   // --- E2 用户 ---
   function loadUsers(){

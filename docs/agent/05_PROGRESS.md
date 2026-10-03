@@ -706,3 +706,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 ## 2026-10-03 工作流变更（用户授权）
 
 - **站立批准**：任何改动 commit+push 后直接部署 ECS，无需逐次批准部署（commit 信息仍需规范；危险操作如删库/改 nginx 主体架构仍需确认）。
+
+## 2026-10-03 N1 管理台优化（游客统计 + 权限参数化）
+
+- N1a 游客统计：console 总览新增游客指标条（今日/累计任务、按加盐 IP 哈希去重的独立访客数、游客任务成功率）；overview API 返回 guests 字段。
+- N1b 权限参数化：新增 tier_policies 表（tier → daily_full_limit/max_codes/max_days，0=不限），种子行 guest(1,1,738)/member(3,0,0)/paid(3,0,0)；游客与会员配额检查、/api/saas/me 全部改读 policy（60s 缓存，表缺失回退常量）；admin 仍不限。
+- N1c 阶梯留空：tier_policies 支持任意新增角色行，console 新增「权限」tab 可视化编辑（即时生效，改后主动清缓存）。
+- cloud_schema.sql 同步；测试 181 passed（新增 5 个 policy/guest 统计用例）。
