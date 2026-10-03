@@ -28,6 +28,7 @@ from quant_research_engine.worker.runner import execute_job
 
 DEFAULT_POLL_SECONDS = 15.0
 DEFAULT_HEARTBEAT_SECONDS = 60.0
+DEFAULT_STATUS_SECONDS = 15.0
 
 
 def _upload_files_enabled() -> bool:
@@ -48,14 +49,66 @@ class WorkerDaemon:
         runner: Callable[[dict[str, Any]], dict[str, Any]] = execute_job,
         poll_seconds: float = DEFAULT_POLL_SECONDS,
         heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
+        status_seconds: float = DEFAULT_STATUS_SECONDS,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.client = client
         self.runner = runner
         self.poll_seconds = poll_seconds
         self.heartbeat_seconds = heartbeat_seconds
+        self.status_seconds = status_seconds
         self._sleep = sleep
         self._stop = threading.Event()
+        # R3 切片1：槽位实时状态表（线程安全），供 status 上报线程读取
+        self._slot_lock = threading.Lock()
+        self._slots: dict[str, dict[str, Any]] = {}
+
+    # --- R3 切片1：槽位状态跟踪 + 周期上报 ---
+
+    def _slot_set(self, name: str, kind: str, busy: bool, job_id: int | None) -> None:
+        with self._slot_lock:
+            self._slots[name] = {"name": name, "kind": kind, "busy": busy, "job_id": job_id}
+
+    def slots_snapshot(self) -> list[dict[str, Any]]:
+        with self._slot_lock:
+            return [dict(s) for s in self._slots.values()]
+
+    def build_status_payload(self, limits: dict[str, Any],
+                             mem_fn: Callable[[], float] | None = None) -> dict[str, Any]:
+        """组装一次状态上报负载（纯函数便于测试）。"""
+        from quant_research_engine.worker.slots import mem_available_mb, mem_total_mb
+
+        avail = (mem_fn or mem_available_mb)()
+        if avail == float("inf"):
+            avail = None  # 非 Linux 读不到：JSONB 不能落 Infinity，降级 NULL
+        return {
+            "mem_available_mb": avail,
+            "mem_total_mb": mem_total_mb(),
+            "slots": self.slots_snapshot(),
+            "limits": limits,
+        }
+
+    def report_status_once(self, limits: dict[str, Any],
+                           mem_fn: Callable[[], float] | None = None) -> bool:
+        """上报一次状态；失败仅记日志返回 False，不抛异常。"""
+        try:
+            self.client.report_status(self.build_status_payload(limits, mem_fn))
+            return True
+        except Exception as exc:  # noqa: BLE001 —— 上报失败不中断 worker
+            _log(f"status 上报失败（{exc}）")
+            return False
+
+    def _status_loop(self, limits: dict[str, Any], mem_fn: Callable[[], float] | None) -> None:
+        self.report_status_once(limits, mem_fn)  # 启动即报一次，管理台尽快可见
+        while not self._stop.wait(self.status_seconds):
+            self.report_status_once(limits, mem_fn)
+
+    def _start_status_thread(self, limits: dict[str, Any],
+                             mem_fn: Callable[[], float] | None = None) -> threading.Thread:
+        t = threading.Thread(target=self._status_loop, name="status",
+                             args=(limits, mem_fn), daemon=True)
+        t.start()
+        return t
 
     def stop(self) -> None:
         self._stop.set()
@@ -132,11 +185,21 @@ class WorkerDaemon:
         if not job:
             return False
         _log(f"claimed job {job['id']}（kind={job.get('kind')}，attempt={job.get('attempt')}）")
-        self._run_job(job)
+        self._slot_set("main", "light", True, job["id"])
+        try:
+            self._run_job(job)
+        finally:
+            self._slot_set("main", "light", False, None)
         return True
 
     def run_forever(self) -> None:
         _log(f"worker {self.client.worker_id} 启动，轮询 {self.client.base_url}")
+        # R3 切片1：单槽旧模式等效上报（light_slots=1, heavy_slots=0）
+        self._slot_set("main", "light", False, None)
+        self._start_status_thread({
+            "light_slots": 1, "heavy_slots": 0,
+            "light_min_avail_mb": None, "heavy_min_avail_mb": None,
+        })
         while not self._stop.is_set():
             self.run_once()
             self._sleep(self.poll_seconds)
@@ -159,6 +222,7 @@ class WorkerDaemon:
             return execute_job_subprocess(j, is_canceled=ev.is_set)
 
         _log(f"[{slot_name}] 槽位启动（classes={classes}，内存闸门 {min_avail_mb:.0f}MB）")
+        self._slot_set(slot_name, "light" if classes == "light" else "heavy", False, None)
         while not self._stop.is_set():
             avail = mem_fn()
             if avail < min_avail_mb:
@@ -174,7 +238,12 @@ class WorkerDaemon:
             if not job:
                 continue
             _log(f"[{slot_name}] claimed job {job['id']}（kind={job.get('kind')}）")
-            self._run_job(job, runner=_runner)
+            kind = "light" if classes == "light" else "heavy"
+            self._slot_set(slot_name, kind, True, job["id"])
+            try:
+                self._run_job(job, runner=_runner)
+            finally:
+                self._slot_set(slot_name, kind, False, None)
         _log(f"[{slot_name}] 槽位退出")
 
     def run_slots_forever(
@@ -202,6 +271,13 @@ class WorkerDaemon:
             f"worker {self.client.worker_id} 启动（R2 多槽位：轻 {light_slots} + 重 {heavy_slots}），"
             f"轮询 {self.client.base_url}"
         )
+        limits = {
+            "light_slots": light_slots,
+            "heavy_slots": heavy_slots,
+            "light_min_avail_mb": light_min_avail_mb,
+            "heavy_min_avail_mb": heavy_min_avail_mb,
+        }
+        self._start_status_thread(limits, mem_fn)
         for t in threads:
             t.start()
         try:
@@ -223,6 +299,9 @@ def main(argv: list[str] | None = None) -> int:
                         default=float(os.environ.get("SAAS_WORKER_POLL_SECONDS", DEFAULT_POLL_SECONDS)))
     parser.add_argument("--heartbeat-seconds", type=float,
                         default=float(os.environ.get("SAAS_WORKER_HEARTBEAT_SECONDS", DEFAULT_HEARTBEAT_SECONDS)))
+    # R3 切片1：状态上报间隔（槽位占用/内存水位）
+    parser.add_argument("--status-seconds", type=float,
+                        default=float(os.environ.get("QRE_WORKER_STATUS_SECONDS", DEFAULT_STATUS_SECONDS)))
     parser.add_argument("--once", action="store_true", help="只跑一轮（调试用）")
     # R2 多槽位（默认开：轻 2 + 重 3 = 内存预算 2×1.5G+3×6G=21G ≤ 25.6G）；
     # --light-slots 0 --heavy-slots 0 回退旧版单槽 run_once 循环
@@ -241,6 +320,7 @@ def main(argv: list[str] | None = None) -> int:
         client,
         poll_seconds=args.poll_seconds,
         heartbeat_seconds=args.heartbeat_seconds,
+        status_seconds=args.status_seconds,
     )
 
     def _handle_signal(signum: int, frame: Any) -> None:

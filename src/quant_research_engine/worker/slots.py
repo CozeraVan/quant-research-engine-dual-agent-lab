@@ -31,6 +31,19 @@ def mem_available_mb(meminfo_path: str = "/proc/meminfo") -> float:
     return float("inf")
 
 
+def mem_total_mb(meminfo_path: str = "/proc/meminfo") -> float | None:
+    """本机物理内存总量（MB）。读 /proc/meminfo 的 MemTotal；
+    读取失败（非 Linux）返回 None（管理台降级为不显示总量）。"""
+    try:
+        with open(meminfo_path, encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("MemTotal:"):
+                    return float(line.split()[1]) / 1024.0
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
 def _child_entry(job: dict[str, Any], result_q: Any, runner: Callable[..., dict[str, Any]]) -> None:
     """子进程入口：执行 runner 并把结果/异常文本塞进队列。"""
     try:

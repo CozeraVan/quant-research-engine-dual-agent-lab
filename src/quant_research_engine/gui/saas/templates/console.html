@@ -25,6 +25,10 @@
       <div class="metric-strip" id="ov-jobs"></div>
       <div class="metric-strip" id="ov-guests"></div>
       <div class="card">
+        <h2>Worker 资源 <span class="opt">（槽位占用 / 内存水位；在线 = 心跳 60 秒内）</span></h2>
+        <div id="ov-worker-res" class="muted">加载中…</div>
+      </div>
+      <div class="card">
         <h2>服务器资源</h2>
         <div id="ov-server" class="muted">加载中…</div>
       </div>
@@ -112,6 +116,23 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<style>
+  /* R3 切片1：Worker 资源区块（在线点 / 内存条 / 槽位格） */
+  .wres-card { border:1px solid var(--line, #e5e0f0); border-radius:10px; padding:12px 14px; margin-bottom:10px; }
+  .wres-head { display:flex; align-items:center; gap:8px; font-weight:600; }
+  .wres-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .wres-dot.on { background:#2e9e5b; }
+  .wres-dot.off { background:#b9b3c9; }
+  .wres-meta { color:#8a84a0; font-size:12px; font-weight:400; }
+  .wres-mem { margin:8px 0; }
+  .wres-membar { height:8px; border-radius:4px; background:#efeaf8; overflow:hidden; margin-top:4px; }
+  .wres-membar > i { display:block; height:100%; background:#6750A4; }
+  .wres-slots { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .wres-slot { width:26px; height:26px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center;
+    font-size:11px; background:#efeaf8; color:#8a84a0; border:1px solid #e0d9f0; cursor:default; }
+  .wres-slot.busy { background:#6750A4; color:#fff; border-color:#6750A4; }
+  .wres-slot-label { font-size:12px; color:#8a84a0; margin-right:2px; }
+</style>
 <script>
 (function(){
   requireLogin();
@@ -173,9 +194,46 @@
       var load = sv.loadavg ? sv.loadavg.join(' / ') : '不可用';
       document.getElementById('ov-server').innerHTML =
         '系统负载（1/5/15 分钟）：' + esc(load) + '<br>' + esc(disk);
+      renderWorkerResources(d.workers_detail || []);
     }).catch(function(){});
   }
 
+  // --- R3 切片1：Worker 资源（只读展示，无远程调参） ---
+  function renderWorkerResources(list){
+    var el = document.getElementById('ov-worker-res');
+    if (!list.length){ el.className = 'muted'; el.textContent = '暂无 worker 记录'; return; }
+    el.className = '';
+    el.innerHTML = list.map(function(w){
+      var dot = '<span class="wres-dot ' + (w.online ? 'on' : 'off') + '"></span>';
+      var mem;
+      if (w.mem_available_mb === null || w.mem_available_mb === undefined){
+        mem = '<div class="wres-mem opt">内存：未上报（旧版 worker）</div>';
+      } else {
+        var total = w.mem_total_mb;
+        var pct = (total && total > 0) ? Math.max(0, Math.min(100, w.mem_available_mb / total * 100)) : null;
+        mem = '<div class="wres-mem"><span class="opt">内存可用</span> ' +
+          Math.round(w.mem_available_mb).toLocaleString() + ' / ' + (total ? Math.round(total).toLocaleString() : '—') + ' MB' +
+          (pct === null ? '' : '<div class="wres-membar"><i style="width:' + pct.toFixed(1) + '%"></i></div>') + '</div>';
+      }
+      var slots = w.slots || [];
+      var light = slots.filter(function(s){ return s.kind === 'light'; });
+      var heavy = slots.filter(function(s){ return s.kind !== 'light'; });
+      function cell(s){
+        var tip = s.name + '（' + (s.kind === 'light' ? '轻' : '重') + '）' +
+          (s.busy ? '：忙碌 job #' + (s.job_id === null || s.job_id === undefined ? '?' : s.job_id) : '：空闲');
+        return '<span class="wres-slot' + (s.busy ? ' busy' : '') + '" title="' + esc(tip) + '">' +
+          (s.kind === 'light' ? '轻' : '重') + '</span>';
+      }
+      var slotsHtml = '<div class="wres-slots">' +
+        (light.length ? '<span class="wres-slot-label">轻 ×' + light.length + '</span>' + light.map(cell).join('') : '') +
+        (heavy.length ? '<span class="wres-slot-label" style="margin-left:8px">重 ×' + heavy.length + '</span>' + heavy.map(cell).join('') : '') +
+        (slots.length ? '' : '<span class="opt">槽位未上报</span>') + '</div>';
+      return '<div class="wres-card"><div class="wres-head">' + dot + esc(w.name) +
+        ' <span class="wres-meta">' + (w.online ? '在线' : '离线') +
+        ' · 心跳 ' + fmt(w.last_heartbeat_at) + ' · 状态上报 ' + fmt(w.status_at) + '</span></div>' +
+        mem + slotsHtml + '</div>';
+    }).join('');
+  }
   // --- N1b 权限配置 ---
   var TIER_LABELS = {guest: '游客', member: '注册会员', paid: '付费会员'};
   function loadPolicies(){

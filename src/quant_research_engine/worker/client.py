@@ -171,6 +171,11 @@ class CloudClient:
                 "files": [{k: v for k, v in f.items() if k != "path"} for f in (payload.get("files") or [])]}
         return self._call("POST", f"/api/worker/jobs/{job_id}/result/meta", meta)
 
+    def report_status(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """R3 切片1：上报实时状态（槽位占用 + 内存水位）。"""
+        body = {"worker_id": self.worker_id, **payload}
+        return self._call("POST", "/api/worker/status", body)
+
     def fail(self, job_id: int, error: str, error_class: str = "engine_error") -> dict[str, Any]:
         return self._call("POST", f"/api/worker/jobs/{job_id}/fail",
                           {"worker_id": self.worker_id, "error_class": error_class,

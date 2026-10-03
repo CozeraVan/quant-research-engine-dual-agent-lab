@@ -12,7 +12,9 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-CALENDAR-YEAR-PICKER (DONE — 共享日历组件年→月→日钻取：点 .cal-title 标题上钻年份九宫格（12 年/页 ±12 年翻页）→月份视图→日视图，Esc 逐级返回/关闭；新增可选 opts.minDate 下界，年/月超界格子置灰禁点，maxDate 禁未来与「数据截至」页脚不变，调用方零改动兼容；.cal-cell.sel 紫底与选中日一致；仅改共享 lab-ui.js + lab-theme.css，lab/SaaS 模板零改动两端同步升级；全量 2212 passed + 4 skipped 零回归（复跑确认）；staging 8091 Playwright 三视图/禁未来/选值/Esc 实测零 JS 报错；12 号文档 §3.7+变更记录已登记；未 commit 未部署；awaiting git approval)
+QRE-SAAS-R3-SLICE1 (DONE — R3 后台资源可视化 切片1：worker 实时状态上报 + 管理台展示：新端点 POST /api/worker/status（workers 表懒自愈 ALTER 加 status JSONB/status_at，照抄 weight_class 模式）；worker daemon 线程安全槽位状态表 + 后台 status 线程（env QRE_WORKER_STATUS_SECONDS 默认 15s，失败仅记日志）+ client.report_status + slots.mem_total_mb；console overview 新增 workers_detail 数组 + console.html 总览 tab「Worker 资源」卡（在线点/内存条/槽位格，只读）；测试 +19（saas 10 + worker 9），`-k saas` 200 passed 零回归，本地 test_client 闭环冒烟通过；awaiting git approval（本会话用户已站立批准 commit+push+ECS 部署+worker 重启）)
+
+上一任务：QRE-CALENDAR-YEAR-PICKER (DONE — 共享日历组件年→月→日钻取：点 .cal-title 标题上钻年份九宫格（12 年/页 ±12 年翻页）→月份视图→日视图，Esc 逐级返回/关闭；新增可选 opts.minDate 下界，年/月超界格子置灰禁点，maxDate 禁未来与「数据截至」页脚不变，调用方零改动兼容；.cal-cell.sel 紫底与选中日一致；仅改共享 lab-ui.js + lab-theme.css，lab/SaaS 模板零改动两端同步升级；全量 2212 passed + 4 skipped 零回归（复跑确认）；staging 8091 Playwright 三视图/禁未来/选值/Esc 实测零 JS 报错；12 号文档 §3.7+变更记录已登记；未 commit 未部署；awaiting git approval)
 
 上一任务：QRE-SAAS-EXPOSURE-METRICS (DONE — 区间信息卡加持仓暴露度/持仓期年化两张随滑块联动卡：round trips entry/exit 展开逐日持仓掩码（同日重叠去重），暴露度=持仓日数/区间日数，持仓期年化=(1+区间收益)^(252/持仓天数)−1，无持仓显示「—」口径入 title；#range-strip 改 auto-fit minmax(130px,1fr)；job.html/symbol.html 同步，lab 侧零改动；全量 2212 passed + 4 skipped 零回归；staging 8097 宽+窄屏 Playwright 探针实测联动与数值正确、零 JS 报错；12 号文档已登记；未 commit 未部署；awaiting git approval)
 

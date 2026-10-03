@@ -166,6 +166,10 @@ CREATE TABLE IF NOT EXISTS workers (
     first_seen_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- R3 切片1（2026-10-03）：worker 实时状态快照（槽位占用/内存水位 JSONB；
+-- 旧 worker 不上报则为 NULL，管理台降级；应用层亦懒自愈 ALTER）
+ALTER TABLE workers ADD COLUMN IF NOT EXISTS status JSONB;
+ALTER TABLE workers ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ;
 
 -- QRE-SAAS-FEEDBACK-FACTOR-REQ（2026-09-27）：
 -- ① factor_requests 补 formula/purpose（用户主动描述因子定义与用途，辅助人工审核）；

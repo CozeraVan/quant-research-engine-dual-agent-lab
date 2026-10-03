@@ -156,6 +156,14 @@ ssh -i ~/.ssh/aguhuice_ed25519 root@47.119.127.40 'ls -lht /srv/aguhuice/backups
 ls -lht ~/quant-workspace/backups/ecs-aguhuice/                                      # 本地端，留 7 份
 ./deploy/saas/pull-ecs-backup.sh     # 手动拉取一次
 # 恢复：scp dump 上 ECS 后  sudo -u postgres pg_restore -d aguhuice --clean <file>
+
+# Worker 实时状态（R3 切片1，2026-10-03）：worker 每 15s 上报槽位/内存到
+# POST /api/worker/status（间隔 env QRE_WORKER_STATUS_SECONDS，默认 15，两端 env 文件无需改，
+# 有默认值）；workers 表 status/status_at 两列由云端懒自愈 ALTER 补齐（无需手工 psql）。
+# 管理台总览「Worker 资源」卡只读展示（在线=心跳<60s）。DB 直查：
+ssh -i ~/.ssh/aguhuice_ed25519 root@47.119.127.40 \
+  "sudo -u postgres psql aguhuice -c \"SELECT name, last_heartbeat_at, status_at, status FROM workers;\""
+systemctl --user restart qre-worker && journalctl --user -u qre-worker -n 30 --no-pager  # 本机 worker 重启/查上报日志
 ```
 
 ## 6. 纪律

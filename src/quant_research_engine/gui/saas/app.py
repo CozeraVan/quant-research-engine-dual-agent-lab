@@ -382,6 +382,21 @@ def _ensure_weight_class_column(engine: Engine) -> None:
     _WEIGHT_CLASS_ENSURED.add(key)
 
 
+# workers.status/status_at 懒自愈（同 weight_class 模式：进程级标记防重复 ALTER）。
+# R3 切片1：worker 实时状态（槽位占用/内存水位）JSONB 快照；旧库首次请求时补齐。
+_WORKER_STATUS_ENSURED: set[int] = set()
+
+
+def _ensure_worker_status_columns(engine: Engine) -> None:
+    key = id(engine)
+    if key in _WORKER_STATUS_ENSURED:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE workers ADD COLUMN IF NOT EXISTS status JSONB"))
+        conn.execute(text("ALTER TABLE workers ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ"))
+    _WORKER_STATUS_ENSURED.add(key)
+
+
 def classify_job_weight(kind: str, params: dict[str, Any]) -> str:
     """任务轻重分类：smoke/小范围显式标的 → light；板块/全市场/多标的 → heavy。"""
     if kind == "smoke":
@@ -1718,6 +1733,49 @@ def create_saas_app() -> Flask:
             "status": row["status"],
         })
 
+    @app.post("/api/worker/status")
+    def api_worker_status() -> Any:
+        """R3 切片1：worker 实时状态上报（槽位占用 + 内存水位）。
+
+        body: {worker_id, mem_available_mb, mem_total_mb,
+               slots: [{name, kind(light/heavy), busy, job_id}],
+               limits: {light_slots, heavy_slots, light_min_avail_mb, heavy_min_avail_mb}}
+        整个负载原样落 workers.status（JSONB），status_at=now()，同时刷新
+        last_heartbeat_at。旧 worker 不上报时列为 NULL，管理台降级展示。
+        """
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        worker_id = str(data.get("worker_id") or "").strip()
+        if not worker_id:
+            return jsonify({"ok": False, "error": "缺少 worker_id"}), 400
+        slots = data.get("slots")
+        if slots is not None and not isinstance(slots, list):
+            return jsonify({"ok": False, "error": "slots 须为数组"}), 400
+        limits = data.get("limits")
+        if limits is not None and not isinstance(limits, dict):
+            return jsonify({"ok": False, "error": "limits 须为对象"}), 400
+        status = {
+            "mem_available_mb": data.get("mem_available_mb"),
+            "mem_total_mb": data.get("mem_total_mb"),
+            "slots": slots or [],
+            "limits": limits or {},
+        }
+        engine = _get_engine(app)
+        _ensure_worker_status_columns(engine)
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO workers (name, last_heartbeat_at, status, status_at) "
+                    "VALUES (:wid, now(), CAST(:status AS jsonb), now()) "
+                    "ON CONFLICT (name) DO UPDATE SET last_heartbeat_at = now(), "
+                    "status = CAST(:status AS jsonb), status_at = now()"
+                ),
+                {"wid": worker_id, "status": json.dumps(status)},
+            )
+        return jsonify({"ok": True})
+
     @app.post("/api/worker/jobs/<int:job_id>/result/meta")
     def api_result_meta(job_id: int) -> Any:
         """17 协议 §3.3 第一步：回传元数据 + 文件清单 → upload_token，job 置 uploading；
@@ -2269,6 +2327,9 @@ def create_saas_app() -> Flask:
         _, denied = _require_admin(app, engine)
         if denied is not None:
             return denied
+        # R3 切片1：workers.status 懒自愈须在开读连接前完成（ALTER 需排他锁，
+        # 读连接的事务持有 workers 共享锁，嵌套调用会自我等待）
+        _ensure_worker_status_columns(engine)
         with engine.connect() as conn:
             users = conn.execute(
                 text(
@@ -2319,9 +2380,31 @@ def create_saas_app() -> Flask:
                     "FROM workers"
                 )
             ).mappings().one()
+            # R3 切片1：worker 资源明细（槽位/内存水位快照）。online 口径 = 心跳 <60s
+            # （上报默认 15s）；status 为 NULL 的旧 worker 降级为空槽位。
+            worker_rows = conn.execute(
+                text(
+                    "SELECT name, last_heartbeat_at, status, status_at, "
+                    "(last_heartbeat_at > now() - interval '60 seconds') AS online "
+                    "FROM workers ORDER BY last_heartbeat_at DESC"
+                )
+            ).mappings().all()
             pending_factors = conn.execute(
                 text("SELECT count(*) FROM factor_requests WHERE status = 'pending'")
             ).scalar_one()
+        workers_detail = []
+        for row in worker_rows:
+            st = row["status"] or {}
+            workers_detail.append(_jsonable({
+                "name": row["name"],
+                "last_heartbeat_at": row["last_heartbeat_at"],
+                "online": bool(row["online"]),
+                "mem_available_mb": st.get("mem_available_mb"),
+                "mem_total_mb": st.get("mem_total_mb"),
+                "slots": st.get("slots") or [],
+                "limits": st.get("limits") or {},
+                "status_at": row["status_at"],
+            }))
         terminal_today = (jobs["completed_today"] or 0) + (jobs["failed_today"] or 0)
         # 服务器资源（真实采集，无第三方依赖）：负载 + 产物盘占用
         server: dict[str, Any] = {}
@@ -2341,6 +2424,7 @@ def create_saas_app() -> Flask:
                         "jobs": _jsonable(dict(jobs)),
                         "jobs_today_success_rate": (jobs["completed_today"] / terminal_today) if terminal_today else None,
                         "quota": _jsonable(dict(quota)), "workers": _jsonable(dict(workers)),
+                        "workers_detail": workers_detail,
                         "guests": _jsonable(dict(guests)),
                         "pending_factor_requests": pending_factors, "server": server})
 

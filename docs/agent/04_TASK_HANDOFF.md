@@ -2,7 +2,51 @@
 
 ## Task ID
 
-QRE-CALENDAR-YEAR-PICKER (回测区间日历 年→月→日 钻取选择，共享组件两端同步升级)
+QRE-SAAS-R3-SLICE1 (R3 后台资源可视化 切片1：worker 实时状态上报 + 管理台展示)
+
+## Current Status
+
+DONE (implementation; `.venv/bin/pytest tests/ -q -k saas` 200 passed（基线 190 + 10 新增）零回归；
+worker 侧 +9 单测；本地 test_client 闭环冒烟通过；awaiting git finalization 后 ECS 部署)
+
+## Task Note
+
+- 云端新端点 `POST /api/worker/status`（X-Worker-Token 鉴权，401/503/400 分层）：
+  body {worker_id, mem_available_mb, mem_total_mb, slots:[{name,kind,busy,job_id}],
+  limits:{light_slots,heavy_slots,light_min_avail_mb,heavy_min_avail_mb}}，
+  整个负载落 `workers.status`（JSONB）+ `status_at`，同时刷新 last_heartbeat_at。
+- workers 表新增 status JSONB / status_at TIMESTAMPTZ 两列：懒自愈 ALTER 模式
+  （`_ensure_worker_status_columns` + 进程级 `_WORKER_STATUS_ENSURED` 标记，照抄
+  weight_class 模式）；cloud_schema.sql 幂等追加（放在 workers CREATE TABLE 之后）。
+  **踩坑**：overview 里懒自愈 ALTER 必须在开读连接之前执行——读连接事务持有 workers
+  共享锁，嵌套第二连接 ALTER 排他锁会自我等待（test_legacy_worker 用例实测挂死暴露）。
+- worker 侧：daemon.py 线程安全槽位状态表（`_slot_set`/`slots_snapshot`），
+  `_slot_loop` 启动即注册空闲、claim 后置 busy(job_id)、finally 复位；
+  后台 status 线程（`_status_loop`，间隔 env `QRE_WORKER_STATUS_SECONDS` 默认 15s，
+  启动即报一次），上报失败仅记日志不中断；单槽旧模式 run_forever 等效上报
+  （light_slots=1/heavy=0，槽位名 main）。client.py 加 `report_status`
+  （stdlib urllib 不变）；slots.py 加 `mem_total_mb`（/proc/meminfo MemTotal，
+  非 Linux 返回 None 降级）。mem_available_mb 为 inf 时降级 None（JSONB 落不了 Infinity）。
+- 管理台：console overview JSON 新增 `workers_detail` 数组（name/last_heartbeat_at/
+  online(心跳<60s)/mem_available_mb/mem_total_mb/slots/limits/status_at；**注意**：
+  既有 `workers` 键是 {total,online} 汇总对象被 ov-jobs 卡片消费，未改动，明细走新键）。
+  console.html 总览 tab 新增「Worker 资源」卡（#ov-worker-res，位于队列深度条与
+  服务器资源卡之间）：每 worker 一张卡——绿/灰在线点、内存可用条（可用/总量 MB，
+  未上报显示「旧版 worker」）、轻/重槽位格（忙碌紫底高亮 + title 显示 job_id，
+  空闲灰底）。只读展示，无远程调参。
+- 测试：tests/test_saas_worker_status.py +10（鉴权 401/503/400×2、落库+心跳刷新、
+  overview 明细透出、旧 worker NULL 降级、缺列旧库懒自愈 ALTER、页面区块断言）；
+  tests/test_worker_status.py +9（mem_total 解析/缺失、payload 组装与 inf 降级、
+  上报成功/失败兜底、run_once 与 _slot_loop 槽位 busy 跟踪、status 线程周期上报）。
+- 验证：`-k saas` 200 passed；/tmp/r3_smoke.py 本地闭环（daemon → CloudClient →
+  Flask test_client → overview workers_detail 槽位/内存正确）。
+- 部署要点：ECS git pull 后 restart qre-saas（懒自愈 ALTER 自动补列，无需手工 psql）；
+  本机 qre-worker（user 级）restart 后 15s 内开始上报。env `QRE_WORKER_STATUS_SECONDS`
+  有默认值 15，两端 env 文件无需改动。
+
+---
+
+## Archive: QRE-CALENDAR-YEAR-PICKER (回测区间日历 年→月→日 钻取选择，共享组件两端同步升级)
 
 ## Current Status
 
