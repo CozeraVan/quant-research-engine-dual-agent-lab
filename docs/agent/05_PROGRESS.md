@@ -733,3 +733,4 @@ Historical row statuses (pre-migration, kept for old table rows):
 ## 2026-10-03 N2 SEO 收尾（百度站长验证）
 
 - base.html head 加入百度站长验证码 meta（全站页面携带，首页验证即可）。
+- 改用百度文件验证法：baidu_verify_codeva-gDNoSKn1Mp.html 入 static + 根路径路由（/ 302 跳转时 meta 验证可能不被百度接受）。

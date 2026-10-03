@@ -551,6 +551,13 @@ def create_saas_app() -> Flask:
 
         return send_from_directory(str(SHARED_STATIC_DIR), "sitemap.xml", mimetype="application/xml")
 
+    # 百度站长文件验证（QRE-SAAS-SEO）：验证文件必须挂根路径
+    @app.get("/baidu_verify_codeva-gDNoSKn1Mp.html")
+    def seo_baidu_verify() -> Any:
+        from flask import send_from_directory
+
+        return send_from_directory(str(SHARED_STATIC_DIR), "baidu_verify_codeva-gDNoSKn1Mp.html", mimetype="text/html")
+
     @app.get("/saas/login")
     def saas_login_page() -> Any:
         # staging 免登录（SAAS_AUTH_BYPASS=1，生产严禁）：登录页直接跳工作台
