@@ -156,7 +156,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
   <a class="brand" href="/saas/new"><img src="/static/logo-horizontal-white-2x.png" alt="A股回测台" style="height:46px;display:block"></a>
   <nav class="mainnav">
     <a href="/saas/new" data-nav="new">新建策略</a>
-    <a href="/saas/" data-nav="records">回测记录</a>
+    <a href="/saas/profile" data-nav="records">个人信息</a>
     <a href="/saas/login" data-nav="login" id="nav-login">登录 / 注册</a>
   </nav>
 </header>
@@ -208,7 +208,7 @@ function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saa
   document.querySelectorAll('.mainnav a').forEach(function(a){
     var nav = a.dataset.nav;
     if ((nav === 'new' && path.indexOf('/saas/new') === 0) ||
-        (nav === 'records' && (path === '/saas/' || path.indexOf('/saas/jobs') === 0)) ||
+        (nav === 'records' && (path === '/saas/' || path.indexOf('/saas/jobs') === 0 || path.indexOf('/saas/profile') === 0)) ||
         (nav === 'login' && path.indexOf('/saas/login') === 0)) a.classList.add('active');
   });
   document.querySelectorAll('.sidenav a').forEach(function(a){

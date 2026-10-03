@@ -258,6 +258,24 @@ class TestNoAdminLinks:
         html = client.get("/saas/").get_data(as_text=True)
         assert 'id="factor-req-tbody"' in html and '我的因子申请' in html
 
+    def test_profile_page(self, client):
+        # QRE-SAAS-PROFILE：个人信息页 = 账号信息卡 + 复用记录区（_records_* partial）
+        resp = client.get("/saas/profile")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'id="pf-account"' in html and 'id="pf-tier"' in html and 'id="pf-quota"' in html
+        assert 'id="jobs-tbody"' in html and 'id="del-mask"' in html  # 回测记录内嵌
+        assert "个人信息" in html
+        # header 导航指向个人信息页
+        assert 'href="/saas/profile"' in html and "个人信息</a>" in html
+
+    def test_dashboard_and_profile_share_records_partials(self, client):
+        # 两页共用 _records_body/_records_scripts，渲染出的记录区结构一致
+        dash = client.get("/saas/").get_data(as_text=True)
+        prof = client.get("/saas/profile").get_data(as_text=True)
+        for marker in ('id="jobs-table"', 'id="strat-tbody"', 'id="factor-req-tbody"', "/api/results?sort="):
+            assert marker in dash and marker in prof
+
 
 class TestStubEcho:
     def test_echo_off_by_default(self, client):

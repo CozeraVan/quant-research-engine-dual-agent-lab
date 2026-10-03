@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}个人信息 · A股回测台{% endblock %}
+{% block body %}
+<div class="wrap">
+  <div class="page-head">
+    <h1>个人信息</h1>
+    <p>你的账号、会员权限与回测记录都在这里。</p>
+  </div>
+
+  <!-- 账号信息卡（QRE-SAAS-PROFILE） -->
+  <div class="card" id="profile-card">
+    <h2>账号信息</h2>
+    <div class="metric-strip" style="margin-bottom:0">
+      <div class="metric-card" style="background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)">
+        <div class="m-label">账号</div><div class="m-value" id="pf-account" style="font-size:14px">加载中…</div>
+      </div>
+      <div class="metric-card" style="background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)">
+        <div class="m-label">会员等级</div><div class="m-value" id="pf-tier" style="font-size:14px">—</div>
+      </div>
+      <div class="metric-card" style="background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)">
+        <div class="m-label">今日全量回测</div><div class="m-value" id="pf-quota" style="font-size:14px">—</div>
+      </div>
+      <div class="metric-card" style="background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)">
+        <div class="m-label">权限说明</div><div class="m-value" id="pf-perm" style="font-size:12.5px;font-weight:500">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-head" style="margin-top:6px">
+    <h1 style="font-size:16px">回测记录 <span class="opt" id="user-label" style="font-family:var(--sans);font-size:13px"></span></h1>
+  </div>
+{% include "_records_body.html" %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadProfile(){
+  const TIER_LABEL = {guest: '游客', member: '注册会员', paid: '付费会员'};
+  const PERM_LABEL = {
+    guest: '单股回测 · 近 2 年 · 每日 1 次 · 不保存记录',
+    member: '全市场 / 全历史 · 每日 3 次 · 记录永久保存',
+    paid: '内测期间同注册会员，更多权益即将开放',
+  };
+  try {
+    const resp = await apiFetch('/api/saas/me');
+    const d = await resp.json();
+    if (!d.ok) return;
+    const u = d.user;
+    document.getElementById('pf-account').textContent = u.email || u.phone || ('用户 #' + u.id);
+    const tier = u.tier || 'member';
+    document.getElementById('pf-tier').textContent = TIER_LABEL[tier] || tier;
+    const unlimited = u.is_admin || u.quota_limit === '不限';
+    document.getElementById('pf-quota').textContent = unlimited
+      ? '不限次数'
+      : ('已用 ' + (u.used_today || 0) + ' / ' + (u.quota_limit ?? '—') + ' 次');
+    document.getElementById('pf-perm').textContent =
+      unlimited ? '管理员：不限次数，全功能开放' : (PERM_LABEL[tier] || PERM_LABEL.member);
+  } catch (e) { /* 401 已由 apiFetch 处理 */ }
+}
+loadProfile();
+{% include "_records_scripts.html" %}
+</script>
+{% endblock %}

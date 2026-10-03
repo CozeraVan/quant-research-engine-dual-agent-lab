@@ -500,6 +500,11 @@ def create_saas_app() -> Flask:
     def saas_dashboard_page() -> str:
         return render_template("dashboard.html")
 
+    # QRE-SAAS-PROFILE：个人信息页（账号/会员/配额 + 内嵌回测记录）
+    @app.get("/saas/profile")
+    def saas_profile_page() -> str:
+        return render_template("profile.html")
+
     @app.get("/saas/new")
     def saas_new_page() -> str:
         return render_template("new.html")
@@ -1208,8 +1213,12 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "用户不存在"}), 401
         item = _jsonable(dict(user))
         item["is_admin"] = item.get("role") == "admin"
-        item["quota_limit"] = MEMBER_DAILY_FULL_LIMIT
-        item["quota_remaining"] = max(0, MEMBER_DAILY_FULL_LIMIT - (item.get("used_today") or 0))
+        if item["is_admin"]:  # admin 不限回测次数（QRE-SAAS-PROFILE）
+            item["quota_limit"] = "不限"
+            item["quota_remaining"] = None
+        else:
+            item["quota_limit"] = MEMBER_DAILY_FULL_LIMIT
+            item["quota_remaining"] = max(0, MEMBER_DAILY_FULL_LIMIT - (item.get("used_today") or 0))
         return jsonify({"ok": True, "user": item})
 
     # --- 用户侧：提交 / 查询 / 取消（17 协议 §2/§5；/api/saas/* 为兼容别名） ---

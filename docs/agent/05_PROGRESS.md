@@ -695,3 +695,14 @@ Historical row statuses (pre-migration, kept for old table rows):
 - base.html head：meta description/keywords/canonical + OG 四件套（og:image 用横版 logo）。
 - ECS nginx 需补两条 exact location（robots/sitemap → gunicorn），随部署一起改。
 - 后续待办：百度/Google Search Console 站长验证与主动推送（需用户注册站长平台账号拿验证码）。
+
+## 2026-10-03 个人信息页（QRE-SAAS-PROFILE）
+
+- 新增 /saas/profile：账号信息卡（账号/会员等级/今日配额/权限说明，admin 显示"不限次数"）+ 内嵌回测记录/策略库/因子申请。
+- 记录区抽成共享模板 `_records_body.html` / `_records_scripts.html`，dashboard 与 profile 复用同一渲染逻辑（无重复代码）。
+- header 导航「回测记录」更名「个人信息」指向 /saas/profile；/saas/ 旧记录页保留可直达。
+- /api/saas/me：admin 的 quota_limit 返回"不限"。新增 2 个测试（35 passed）。
+
+## 2026-10-03 工作流变更（用户授权）
+
+- **站立批准**：任何改动 commit+push 后直接部署 ECS，无需逐次批准部署（commit 信息仍需规范；危险操作如删库/改 nginx 主体架构仍需确认）。

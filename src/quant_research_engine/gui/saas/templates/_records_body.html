@@ -1,0 +1,52 @@
+  <div class="card">
+    <div class="table-tools">
+      <button class="btn btn-ghost" id="btn-reload" style="padding:7px 18px">刷新</button>
+      <span class="opt" id="list-hint"></span>
+      <span class="opt">排序：</span>
+      <button class="seg-btn active" data-sort="created_at">创建时间</button>
+      <button class="seg-btn" data-sort="excess_return">超额收益</button>
+      <span style="margin-left:auto"></span>
+      <input type="text" id="recs-filter" placeholder="筛选策略名 / 任务号…" style="width:220px">
+    </div>
+    <table class="tbl" id="jobs-table">
+      <thead><tr>
+        <th>策略名称</th><th>回测区间</th><th class="num" style="text-align:right">股票数量</th>
+        <th class="num" style="text-align:right">超额收益</th><th>状态</th><th>创建时间</th><th style="text-align:right">操作</th>
+      </tr></thead>
+      <tbody id="jobs-tbody"><tr><td colspan="7" class="muted">加载中…</td></tr></tbody>
+    </table>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+      <button class="btn-sm" id="pg-prev">← 上一页</button>
+      <span class="opt" id="pg-info"></span>
+      <button class="btn-sm" id="pg-next">下一页 →</button>
+    </div>
+  </div>
+
+  <!-- 删除确认弹层 -->
+  <div class="modal-mask" id="del-mask">
+    <div class="modal">
+      <h3>删除该回测记录？</h3>
+      <p id="del-text"></p>
+      <div class="m-actions">
+        <button class="btn btn-ghost" id="del-cancel">取消</button>
+        <button class="btn btn-primary" id="del-ok" style="background:var(--up);border-color:var(--up)">确认删除</button>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="strat-panel">
+    <h2>我的策略库 <span class="opt" style="font-weight:400;font-size:12.5px">（同名策略自动复用更新；有回测记录的策略不可删）</span></h2>
+    <table class="tbl">
+      <thead><tr><th>策略名称</th><th class="num" style="text-align:right">回测次数</th><th>最近使用</th><th>创建时间</th><th style="text-align:right">操作</th></tr></thead>
+      <tbody id="strat-tbody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <details id="factor-req-details">
+      <summary>我的因子申请（缺因子提交的需求在这里看进度）</summary>
+      <table style="margin-top:12px">
+        <thead><tr><th>因子</th><th>状态</th><th>说明</th><th>提交时间</th></tr></thead>
+        <tbody id="factor-req-tbody"><tr><td colspan="4" class="muted">加载中…</td></tr></tbody>
+      </table>
+    </details>
+  </div>

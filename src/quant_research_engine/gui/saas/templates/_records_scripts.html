@@ -1,0 +1,169 @@
+requireLogin();
+
+// UTC ISO → 浏览器本地时间（后端一律存 UTC，前端统一转本地显示）
+function fmtTime(iso){
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const p = n => ('0' + n).slice(-2);
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+// B3/C5：/api/results 列表（sort=created_at|excess_return × asc|desc + 分页 + 删除）
+let listState = {sort: 'created_at', order: 'desc', page: 1, pageSize: 20, total: 0};
+let pendingDel = null;
+function clsPnL(v){ return v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat'); }
+function fmtPct(v){ return v == null ? '——' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%'; }
+
+async function load(){
+  const [meResp, listResp] = await Promise.all([
+    apiFetch('/api/saas/me'),
+    apiFetch(`/api/results?sort=${listState.sort}&order=${listState.order}&page=${recsFilterKw ? 1 : listState.page}&page_size=${recsFilterKw ? 100 : listState.pageSize}`),
+  ]);
+  const me = await meResp.json();
+  if (me.ok) {
+    const u = me.user;
+    document.getElementById('user-label').textContent =
+      (u.email || u.phone || '') + (u.quota_limit === '不限' ? '（管理员 · 不限回测次数）' : '（今日剩余全量回测 ' + (u.quota_remaining ?? '—') + ' 次）');
+  }
+  const data = await listResp.json();
+  const tbody = document.getElementById('jobs-tbody');
+  let items = data.items || [];
+  if (recsFilterKw) items = items.filter(j => ((j.strategy_name || '') + ' ' + j.job_id).toLowerCase().includes(recsFilterKw));
+  listState.total = data.total || 0;
+  if (!items.length){
+    tbody.innerHTML = '<tr><td colspan="7" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
+  } else {
+    tbody.innerHTML = '';
+    for (const job of items){
+      const tr = document.createElement('tr');
+      const status = STATUS_LABEL[job.status] || job.status;
+      const badgeCls = job.status === 'completed' ? 'ok' : (job.status === 'failed' || job.status === 'cancelled' || job.status === 'canceled' || job.status === 'expired' ? 'fail' : 'run');
+      const done = job.status === 'completed';
+      if (done) { tr.className = 'row-link'; tr.title = '点击进入回测详情'; }
+      const range = (job.date_start || '—') + ' ~ ' + (job.date_end || '—');
+      const symbols = job.symbol_count == null ? '全 A 股' : job.symbol_count + ' 只';
+      const excess = job.excess_return == null
+        ? '<span class="opt">——</span>'
+        : `<span class="${clsPnL(job.excess_return)}">${fmtPct(job.excess_return)}</span>`;
+      const viewLink = done ? `<a class="view-link" href="/saas/jobs/${job.job_id}">查看结果 →</a>` : '';
+      tr.innerHTML = `<td><strong>${job.strategy_name || ('策略 #' + job.job_id)}</strong><br><span class="opt">任务 #${job.job_id}</span></td>`
+        + `<td class="opt">${range}</td>`
+        + `<td style="text-align:right">${symbols}</td>`
+        + `<td style="text-align:right">${excess}</td>`
+        + `<td><span class="badge ${badgeCls}">${status}</span></td>`
+        + `<td>${fmtTime(job.created_at)}</td>`
+        + `<td style="text-align:right;white-space:nowrap">${viewLink} <button class="btn-sm btn-danger-outline" data-del="${job.job_id}">删除</button></td>`;
+      if (done) tr.addEventListener('click', ev => {
+        if (ev.target.closest('button') || ev.target.closest('a')) return;
+        location.href = '/saas/jobs/' + job.job_id;
+      });
+      tbody.appendChild(tr);
+    }
+  }
+  tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
+    pendingDel = btn.dataset.del;
+    document.getElementById('del-text').innerHTML = '回测 <b>#' + pendingDel + '</b> 的记录与结果文件将被移除，删除后不可恢复。';
+    document.getElementById('del-mask').classList.add('show');
+  }));
+  document.getElementById('list-hint').textContent = recsFilterKw ? `共 ${items.length} 条（已筛选）` : `共 ${listState.total} 条`;
+  const pages = Math.max(1, Math.ceil(listState.total / listState.pageSize));
+  document.getElementById('pg-info').textContent = `第 ${listState.page} / ${pages} 页`;
+  document.getElementById('pg-prev').disabled = listState.page <= 1;
+  document.getElementById('pg-next').disabled = listState.page >= pages;
+  if (items.some(j => ['queued', 'leased', 'running'].includes(j.status))) setTimeout(load, 5000);
+}
+
+// 排序切换（点同一键切升降序；换键重置为降序第一页）
+document.querySelectorAll('[data-sort]').forEach(btn => btn.addEventListener('click', () => {
+  const k = btn.dataset.sort;
+  if (listState.sort === k) listState.order = listState.order === 'desc' ? 'asc' : 'desc';
+  else { listState.sort = k; listState.order = 'desc'; }
+  document.querySelectorAll('[data-sort]').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('[data-sort]').forEach(b => {
+    b.textContent = (b.dataset.sort === 'created_at' ? '创建时间' : '超额收益') +
+      (b.dataset.sort === listState.sort ? (listState.order === 'desc' ? ' ▼' : ' ▲') : '');
+  });
+  listState.page = 1;
+  load();
+}));
+document.getElementById('pg-prev').addEventListener('click', () => { if (listState.page > 1){ listState.page--; load(); } });
+document.getElementById('pg-next').addEventListener('click', () => { listState.page++; load(); });
+document.getElementById('btn-reload').addEventListener('click', load);
+let recsFilterKw = '';
+document.getElementById('recs-filter').addEventListener('input', function(){
+  recsFilterKw = this.value.trim().toLowerCase();
+  listState.page = 1;
+  load();
+});
+
+// 删除弹层
+document.getElementById('del-cancel').addEventListener('click', () => {
+  document.getElementById('del-mask').classList.remove('show'); pendingDel = null;
+});
+document.getElementById('del-mask').addEventListener('click', function(e){ if (e.target === this){ this.classList.remove('show'); pendingDel = null; } });
+document.getElementById('del-ok').addEventListener('click', async () => {
+  if (!pendingDel) return;
+  const id = pendingDel;
+  document.getElementById('del-mask').classList.remove('show');
+  pendingDel = null;
+  const resp = await apiFetch('/api/results/' + id, {method: 'DELETE'});
+  const d = await resp.json();
+  if (!resp.ok || !d.ok){ alert(d.error || '删除失败'); return; }
+  load();
+});
+
+const FREQ_STATUS = {pending: '审核中', approved: '已入库', rejected: '未采纳'};
+async function loadFactorRequests(){
+  const resp = await apiFetch('/api/saas/factor-requests');
+  const data = await resp.json();
+  const tbody = document.getElementById('factor-req-tbody');
+  const reqs = data.requests || [];
+  if (!reqs.length){
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">暂无申请</td></tr>';
+    return;
+  }
+  tbody.innerHTML = reqs.map(r =>
+    `<tr><td>${(r.factors || []).join('、')}</td>`
+    + `<td><span class="badge ${r.status === 'approved' ? 'done' : r.status === 'rejected' ? 'failed' : 'queued'}">${FREQ_STATUS[r.status] || r.status}</span></td>`
+    + `<td class="muted">${r.note || '—'}</td><td>${fmtTime(r.created_at)}</td></tr>`).join('');
+}
+function fmtT(iso){ return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
+async function loadStrategies(){
+  const resp = await apiFetch('/api/saas/strategies');
+  const d = await resp.json();
+  const tbody = document.getElementById('strat-tbody');
+  const items = d.strategies || [];
+  if (!items.length){ tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无保存的策略（新建回测提交后自动入库）</td></tr>'; return; }
+  tbody.innerHTML = '';
+  for (const s of items){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.name}</td>`
+      + `<td class="num" style="text-align:right">${s.job_count}</td>`
+      + `<td>${fmtT(s.last_used_at)}</td><td>${fmtT(s.created_at)}</td>`
+      + `<td style="text-align:right;white-space:nowrap">`
+      + `<a href="/saas/new?strategy=${s.id}">去回测</a> `
+      + `<button class="btn-sm" data-ren="${s.id}">重命名</button> `
+      + `<button class="btn-sm" data-del="${s.id}">删除</button></td>`;
+    tbody.appendChild(tr);
+  }
+  tbody.querySelectorAll('[data-ren]').forEach(btn => btn.addEventListener('click', async () => {
+    const name = prompt('新的策略名称：');
+    if (!name) return;
+    const r = await apiFetch('/api/saas/strategies/' + btn.dataset.ren + '/rename', {method: 'POST', json: {name}});
+    const d = await r.json();
+    if (!d.ok) alert(d.error || '重命名失败');
+    loadStrategies();
+  }));
+  tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('确认删除该策略？（有关联回测记录的策略不可删）')) return;
+    const r = await apiFetch('/api/saas/strategies/' + btn.dataset.del, {method: 'DELETE'});
+    const d = await r.json();
+    if (!d.ok) alert(d.error || '删除失败');
+    loadStrategies();
+  }));
+}
+loadStrategies();
+
+loadFactorRequests();
+load();
