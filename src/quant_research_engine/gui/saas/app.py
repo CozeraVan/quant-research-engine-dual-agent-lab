@@ -40,6 +40,7 @@ from quant_research_engine.gui.saas.symbol_norm import (
     normalize_ts_codes,
     resolve_ts_code,
 )
+from quant_research_engine.security.yaml_guard import check_factor_limits
 
 DEFAULT_LEASE_MINUTES = 15
 JOB_KINDS = ("smoke", "full")
@@ -1319,6 +1320,11 @@ def create_saas_app() -> Flask:
         yaml_text = str(data.get("yaml") or data.get("strategy_yaml") or "").strip()
         if not yaml_text:
             return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
+        # 因子资源配额闸（2026-10-03）：提交时提前拦截"枚举全库因子"的资源滥用，
+        # 三个入口（NL/向导/ YAML 编辑）均汇聚于此，worker 执行前还会再校验一次。
+        limit_issues = check_factor_limits(yaml_text)
+        if limit_issues:
+            return jsonify({"ok": False, "error": "；".join(limit_issues)}), 400
 
         # --- 游客通道（15 号文档 D 阶段定稿；2026-10-03 限额参数化读 tier_policies） ---
         guest_key = None

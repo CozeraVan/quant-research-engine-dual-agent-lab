@@ -109,6 +109,19 @@ class TestJobCreate:
         assert client.post("/api/saas/jobs", json={"yaml": "x", "params": [1]},
                            headers={"X-User-Id": "1"}).status_code == 400
 
+    def test_factor_limit_rejected_at_submit(self, client):
+        # 因子资源配额闸：>20 因子的策略在提交时即 400（worker 前拦截）
+        fields = "\n".join(
+            f"    f{i}: factors.stock_daily_momentum_close.rsi_14" for i in range(21)
+        )
+        yaml_text = (
+            "experiment:\n  name: abuse\ndata:\n  market_fields: [close]\n"
+            f"  factor_fields:\n{fields}\nsignal:\n  entry: f0 > 0\n"
+        )
+        resp = _create_job(client, uid=1, yaml_text=yaml_text)
+        assert resp.status_code == 400
+        assert "因子数量超限" in resp.get_json()["error"]
+
     def test_list_jobs_scoped_and_desc(self, client):
         _create_job(client, uid=1)
         _create_job(client, uid=1)

@@ -24,6 +24,13 @@ import yaml
 MAX_YAML_BYTES = 100_000
 MAX_EXPRESSION_CHARS = 2_000
 
+# 资源配额闸（2026-10-03）：单策略可引用的因子条数 / 涉及因子表数上限。
+# 依据：因子按表分组各发一条全区间 SELECT（postgres.load_factor_history），
+# 每表每年约 135 万行；内置 catalog 全部 124 个策略最多用 5 因子 / 2 表，
+# 20 / 3 对正常策略非常宽裕，却能挡住"枚举全库 537 列 × 11 表"的恶意策略。
+MAX_FACTOR_FIELDS = 20
+MAX_FACTOR_TABLES = 3
+
 # 顶层节白名单（对齐 strategies/spec.py 读取的节）
 _TOP_LEVEL_KEYS = frozenset({
     "experiment", "data", "signal", "evaluation", "holding", "risk", "portfolio", "universe",
@@ -157,6 +164,48 @@ def _is_ident(value: Any) -> bool:
     )
 
 
+def _factor_limit_issues(factor_fields: dict[Any, Any]) -> list[str]:
+    """因子资源配额检查：条目数与去重表数超限则给出中文报错。"""
+    issues: list[str] = []
+    if len(factor_fields) > MAX_FACTOR_FIELDS:
+        issues.append(
+            f"因子数量超限：单策略最多引用 {MAX_FACTOR_FIELDS} 个因子（当前 {len(factor_fields)} 个），"
+            "请精简策略条件"
+        )
+    tables: set[str] = set()
+    for target in factor_fields.values():
+        parts = str(target).split(".")
+        if len(parts) >= 3:
+            tables.add(".".join(parts[:2]))
+    if len(tables) > MAX_FACTOR_TABLES:
+        issues.append(
+            f"因子来源表超限：单策略最多跨 {MAX_FACTOR_TABLES} 张因子表（当前 {len(tables)} 张），"
+            "请改用同表因子组合"
+        )
+    return issues
+
+
+def check_factor_limits(yaml_text: str) -> list[str]:
+    """宽容版因子配额检查：仅供提交入口提前拦截。
+
+    只解析 data.factor_fields 做计数；YAML 无法解析或结构异常时返回空列表
+    （格式问题交由 validate_strategy_yaml / worker 完整校验报错）。
+    """
+    try:
+        raw = yaml.safe_load(yaml_text)
+    except Exception:
+        return []
+    if not isinstance(raw, dict):
+        return []
+    data = raw.get("data") or {}
+    if not isinstance(data, dict):
+        return []
+    factor_fields = data.get("factor_fields") or {}
+    if not isinstance(factor_fields, dict):
+        return []
+    return _factor_limit_issues(factor_fields)
+
+
 def validate_strategy_yaml(yaml_text: str) -> dict[str, Any]:
     """策略 YAML 严格校验 → {"ok": True, "names": set} 或 {"ok": False, "issues": [...]}。
 
@@ -216,6 +265,7 @@ def validate_strategy_yaml(yaml_text: str) -> dict[str, Any]:
         if not isinstance(factor_fields, dict):
             issues.append("data.factor_fields 必须是映射（逻辑名 -> factors.table.column）")
         else:
+            issues.extend(_factor_limit_issues(factor_fields))
             for logical, target in factor_fields.items():
                 if not _is_ident(logical):
                     issues.append(f"因子逻辑名非法: {logical!r}（须为标识符且不下划线开头）")

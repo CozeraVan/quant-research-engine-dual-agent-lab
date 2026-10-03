@@ -741,3 +741,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 新增 `deploy/saas/baidu_push.py`：从线上 sitemap.xml 取 URL（自动排除 /login），POST 到 `data.zz.baidu.com/urls`；token 走环境变量 `BAIDU_PUSH_TOKEN`，已写入 ECS `/etc/qre-saas.env`（不入 git）。
 - 首次推送 5 条全部成功（`{"remain":0,"success":5}`）；新站每日配额约 10 条，当天已用完，后续新页面上线后重跑脚本即可。
 - 待办：Google Search Console 验证（拿到 google-site-verification 后按百度 meta 同法接入 base.html）。
+
+## 2026-10-03 N4b 因子资源配额闸（防恶意策略全库扫因子）
+
+- 背景：因子按表分组各发一条全区间 SELECT（每表每年约 135 万行），用户策略理论上可枚举全库 ~537 列 × 11 表，造成大量 IO/merge 开销。此前无任何因子数量限制。
+- 上限依据：内置 catalog 全部 124 个策略最多用 5 因子 / 2 表，故定为 **单策略 ≤20 个因子、≤3 张因子表**（`security/yaml_guard.py` 常量 MAX_FACTOR_FIELDS / MAX_FACTOR_TABLES，调参只改一处）。
+- 双层拦截：① SaaS 提交端 `api_create_job` 调 `check_factor_limits()`（宽容解析，只计数），三入口（NL/向导/YAML 编辑）汇聚于此即时报 400 中文错误；② worker 执行前 `validate_strategy_yaml()` 内置同一检查（权威闸）。
+- 测试：test_security_sandbox.py::TestFactorLimits（超限/限内/宽容解析），test_gui_saas.py::test_factor_limit_rejected_at_submit。saas 测试 184 passed。

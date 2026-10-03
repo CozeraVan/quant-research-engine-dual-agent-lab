@@ -13,7 +13,11 @@ import os
 
 import pytest
 
-from quant_research_engine.security.yaml_guard import validate_expression, validate_strategy_yaml
+from quant_research_engine.security.yaml_guard import (
+    check_factor_limits,
+    validate_expression,
+    validate_strategy_yaml,
+)
 from quant_research_engine.worker import sandbox
 
 
@@ -114,6 +118,51 @@ class TestStrategyYamlGuard:
 
     def test_oversize_rejected(self):
         assert not validate_strategy_yaml("experiment: {" + "a" * 200_000)["ok"]
+
+
+class TestFactorLimits:
+    """因子资源配额闸（2026-10-03）：单策略 ≤20 因子、≤3 张因子表。"""
+
+    def _yaml_with_factors(self, fields: dict[str, str]) -> str:
+        lines = "\n".join(f"    {k}: {v}" for k, v in fields.items())
+        first = next(iter(fields))
+        return (
+            "experiment:\n  name: demo\ndata:\n  market_fields: [close]\n"
+            f"  factor_fields:\n{lines}\n"
+            f"signal:\n  entry: {first} > 0\n"
+        )
+
+    def test_too_many_factors_rejected(self):
+        fields = {f"f{i}": "factors.stock_daily_momentum_close.rsi_14" for i in range(21)}
+        verdict = validate_strategy_yaml(self._yaml_with_factors(fields))
+        assert not verdict["ok"]
+        assert any("因子数量超限" in i for i in verdict["issues"])
+
+    def test_too_many_tables_rejected(self):
+        fields = {
+            "a": "factors.stock_daily_momentum_close.rsi_14",
+            "b": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+            "c": "factors.stock_daily_overlap_close.ma_20",
+            "d": "factors.stock_daily_volume_close.obv",
+        }
+        verdict = validate_strategy_yaml(self._yaml_with_factors(fields))
+        assert not verdict["ok"]
+        assert any("因子来源表超限" in i for i in verdict["issues"])
+
+    def test_at_limit_passes(self):
+        fields = {
+            "a": "factors.stock_daily_momentum_close.rsi_14",
+            "b": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+            "c": "factors.stock_daily_overlap_close.ma_20",
+        }
+        verdict = validate_strategy_yaml(self._yaml_with_factors(fields))
+        assert verdict["ok"], verdict["issues"]
+
+    def test_check_factor_limits_lenient(self):
+        assert check_factor_limits("not: [valid") == []
+        assert check_factor_limits("just a string") == []
+        fields = {f"f{i}": "factors.stock_daily_momentum_close.rsi_14" for i in range(25)}
+        assert check_factor_limits(self._yaml_with_factors(fields))
 
 
 # --- Docker 沙箱（无 docker 环境 skip） ---
