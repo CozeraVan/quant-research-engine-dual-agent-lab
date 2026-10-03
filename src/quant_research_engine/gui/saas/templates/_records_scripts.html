@@ -1,5 +1,11 @@
 requireLogin();
 
+// XSS 防护（QRE-SAAS-SEC-HARDEN）：所有用户可控字符串进 innerHTML 前必须转义
+function escH(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 // UTC ISO → 浏览器本地时间（后端一律存 UTC，前端统一转本地显示）
 function fmtTime(iso){
   if (!iso) return '—';
@@ -47,7 +53,7 @@ async function load(){
         ? '<span class="opt">——</span>'
         : `<span class="${clsPnL(job.excess_return)}">${fmtPct(job.excess_return)}</span>`;
       const viewLink = done ? `<a class="view-link" href="/saas/jobs/${job.job_id}">查看结果 →</a>` : '';
-      tr.innerHTML = `<td><strong>${job.strategy_name || ('策略 #' + job.job_id)}</strong><br><span class="opt">任务 #${job.job_id}</span></td>`
+      tr.innerHTML = `<td><strong>${escH(job.strategy_name || ('策略 #' + job.job_id))}</strong><br><span class="opt">任务 #${job.job_id}</span></td>`
         + `<td class="opt">${range}</td>`
         + `<td style="text-align:right">${symbols}</td>`
         + `<td style="text-align:right">${excess}</td>`
@@ -124,9 +130,9 @@ async function loadFactorRequests(){
     return;
   }
   tbody.innerHTML = reqs.map(r =>
-    `<tr><td>${(r.factors || []).join('、')}</td>`
-    + `<td><span class="badge ${r.status === 'approved' ? 'done' : r.status === 'rejected' ? 'failed' : 'queued'}">${FREQ_STATUS[r.status] || r.status}</span></td>`
-    + `<td class="muted">${r.note || '—'}</td><td>${fmtTime(r.created_at)}</td></tr>`).join('');
+    `<tr><td>${escH((r.factors || []).join('、'))}</td>`
+    + `<td><span class="badge ${r.status === 'approved' ? 'done' : r.status === 'rejected' ? 'failed' : 'queued'}">${escH(FREQ_STATUS[r.status] || r.status)}</span></td>`
+    + `<td class="muted">${escH(r.note || '—')}</td><td>${fmtTime(r.created_at)}</td></tr>`).join('');
 }
 function fmtT(iso){ return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
 async function loadStrategies(){
@@ -138,7 +144,7 @@ async function loadStrategies(){
   tbody.innerHTML = '';
   for (const s of items){
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${s.name}</td>`
+    tr.innerHTML = `<td>${escH(s.name)}</td>`
       + `<td class="num" style="text-align:right">${s.job_count}</td>`
       + `<td>${fmtT(s.last_used_at)}</td><td>${fmtT(s.created_at)}</td>`
       + `<td style="text-align:right;white-space:nowrap">`

@@ -500,6 +500,15 @@ def create_saas_app() -> Flask:
     def _runtime_error(exc: RuntimeError) -> Any:  # SAAS_DB_URL 缺失等配置错误
         return jsonify({"ok": False, "error": str(exc)}), 503
 
+    # N4 安全响应头（QRE-SAAS-SEC-HARDEN）：防 MIME 嗅探/点击劫持/来源泄漏
+    @app.after_request
+    def _security_headers(resp: Any) -> Any:
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        return resp
+
     # --- 页面（QRE-SAAS-004 四功能前端；页面本身不鉴权，JS 检查 localStorage
     #     token，401 时跳 /saas/login；数据全走 /api/saas/* Bearer 鉴权） ---
 

@@ -713,3 +713,11 @@ Historical row statuses (pre-migration, kept for old table rows):
 - N1b 权限参数化：新增 tier_policies 表（tier → daily_full_limit/max_codes/max_days，0=不限），种子行 guest(1,1,738)/member(3,0,0)/paid(3,0,0)；游客与会员配额检查、/api/saas/me 全部改读 policy（60s 缓存，表缺失回退常量）；admin 仍不限。
 - N1c 阶梯留空：tier_policies 支持任意新增角色行，console 新增「权限」tab 可视化编辑（即时生效，改后主动清缓存）。
 - cloud_schema.sql 同步；测试 181 passed（新增 5 个 policy/guest 统计用例）。
+
+## 2026-10-03 N4 安全防护初步（QRE-SAAS-SEC-HARDEN）
+
+- SQL 注入审计：app.py 全量查询复核，仅 2 处 f-string 拼接 SQL，均为白名单标识符（email/phone 列名、policy 字段名），无注入面。
+- 修复存储型 XSS：_records_scripts（策略名/因子申请/备注/策略库名）、job.html（chip()/板块 tag）用户可控字符串进 innerHTML 前统一转义。
+- 安全响应头（Flask after_request）：nosniff / SAMEORIGIN / strict-origin-when-cross-origin / Permissions-Policy。
+- nginx 已有四层限流（read 60r/m、auth 5r/m、worker 120r/m、write 10r/m，429），DDoS 基础面已具备；阿里云基础防护兜底。
+- 测试 183 passed。

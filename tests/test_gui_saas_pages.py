@@ -378,3 +378,21 @@ class TestResultsDataSource:
         assert "/chart-data" in html and "/tag-analysis" in html
         assert "resp.status === 409" in html               # 未完成 → 进行状态轮询
         assert "/api/saas/jobs/' + JOB_ID" not in html     # 不再走旧 job 嵌套 result
+
+
+class TestSecurityHardening:
+    """N4 安全初步：响应头 + 模板转义（QRE-SAAS-SEC-HARDEN）。"""
+
+    def test_security_headers(self, client):
+        resp = client.get("/saas/")
+        assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+        assert resp.headers.get("X-Frame-Options") == "SAMEORIGIN"
+        assert "strict-origin" in (resp.headers.get("Referrer-Policy") or "")
+
+    def test_records_template_escapes_user_strings(self, client):
+        # 策略名/因子申请等用户输入进 innerHTML 前必须转义（防存储型 XSS）
+        for page in ("/saas/", "/saas/profile"):
+            html = client.get(page).get_data(as_text=True)
+            assert "function escH(" in html
+            assert "escH(job.strategy_name" in html and "escH(s.name)" in html
+            assert "escH(r.note" in html

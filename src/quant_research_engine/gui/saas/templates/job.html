@@ -79,7 +79,8 @@ function empty(id, msg){
   el.innerHTML = '<div class="chart-empty">' + (msg || '暂无数据') + '</div>';
   el.style.height = 'auto';
 }
-function chip(label, value){ return '<span class="chip">' + label + ' <b>' + value + '</b></span>'; }
+function escH(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function chip(label, value){ return '<span class="chip">' + escH(label) + ' <b>' + escH(value) + '</b></span>'; }
 function fmtPnl(v){ return (v >= 0 ? '+' : '') + Number(v).toFixed(2); }
 function toRet(arr){  // 归一化为起点 0% 的累计收益率%
   const base = arr.find(v => v !== null && v !== undefined);
@@ -382,7 +383,7 @@ function drawDetailTable(t){
     ? '　共 ' + t.symbols_total + ' 只，仅显示盈亏前/后各 50' : '';
   const benchTxt = t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%';
   const el = document.getElementById('tag-detail');
-  el.innerHTML = '<div class="opt" style="font-size:12px;margin-bottom:4px">' + t.tag +
+  el.innerHTML = '<div class="opt" style="font-size:12px;margin-bottom:4px">' + escH(t.tag) +
     '　个股贡献（点击行看个股详情；点列头排序）' + note +
     '　策略平均每笔 <span class="' + cls(t.avg_ret) + '">' + (t.avg_ret * 100).toFixed(2) + '%</span>' +
     ' vs 板块同期自然涨幅 <span class="' + cls(t.bench_ret) + '">' + benchTxt + '</span></div>' +
