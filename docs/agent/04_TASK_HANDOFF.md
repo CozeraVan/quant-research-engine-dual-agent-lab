@@ -18,8 +18,11 @@ worker 侧 +9 单测；本地 test_client 闭环冒烟通过；awaiting git fina
 - workers 表新增 status JSONB / status_at TIMESTAMPTZ 两列：懒自愈 ALTER 模式
   （`_ensure_worker_status_columns` + 进程级 `_WORKER_STATUS_ENSURED` 标记，照抄
   weight_class 模式）；cloud_schema.sql 幂等追加（放在 workers CREATE TABLE 之后）。
-  **踩坑**：overview 里懒自愈 ALTER 必须在开读连接之前执行——读连接事务持有 workers
-  共享锁，嵌套第二连接 ALTER 排他锁会自我等待（test_legacy_worker 用例实测挂死暴露）。
+  **踩坑 ×2**：①overview 里懒自愈 ALTER 必须在开读连接之前执行——读连接事务持有
+  workers 共享锁，嵌套第二连接 ALTER 排他锁会自我等待（test_legacy_worker 用例实测
+  挂死暴露）；②ECS 上 workers 表 owner 是 postgres（schema apply 所建），app 账号
+  ALTER 即使 IF NOT EXISTS 也报 must be owner（上线首报 500 实测）——ensure 改先查
+  information_schema，列在则不发 ALTER；新列首次手工 psql apply（已执行）。
 - worker 侧：daemon.py 线程安全槽位状态表（`_slot_set`/`slots_snapshot`），
   `_slot_loop` 启动即注册空闲、claim 后置 busy(job_id)、finally 复位；
   后台 status 线程（`_status_loop`，间隔 env `QRE_WORKER_STATUS_SECONDS` 默认 15s，

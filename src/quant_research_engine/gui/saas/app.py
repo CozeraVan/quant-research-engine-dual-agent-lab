@@ -391,9 +391,23 @@ def _ensure_worker_status_columns(engine: Engine) -> None:
     key = id(engine)
     if key in _WORKER_STATUS_ENSURED:
         return
+    # 先查 information_schema（普通 SELECT 即可）：列已存在就完全不发 ALTER——
+    # ECS 上 workers 表属 postgres（schema apply 创建），app 账号非 owner，
+    # ALTER 即使 IF NOT EXISTS 命中已有列也会报 must be owner（生产实测 500）。
     with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE workers ADD COLUMN IF NOT EXISTS status JSONB"))
-        conn.execute(text("ALTER TABLE workers ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ"))
+        existing = {
+            r[0]
+            for r in conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'workers' AND column_name IN ('status', 'status_at')"
+                )
+            )
+        }
+        if "status" not in existing:
+            conn.execute(text("ALTER TABLE workers ADD COLUMN IF NOT EXISTS status JSONB"))
+        if "status_at" not in existing:
+            conn.execute(text("ALTER TABLE workers ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ"))
     _WORKER_STATUS_ENSURED.add(key)
 
 
