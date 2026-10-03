@@ -721,3 +721,11 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 安全响应头（Flask after_request）：nosniff / SAMEORIGIN / strict-origin-when-cross-origin / Permissions-Policy。
 - nginx 已有四层限流（read 60r/m、auth 5r/m、worker 120r/m、write 10r/m，429），DDoS 基础面已具备；阿里云基础防护兜底。
 - 测试 183 passed。
+
+## 2026-10-03 N3 引擎压测容量基线（本机 worker：14600KF/32G）
+
+- 场景：全 A 股（5531 只）× 近 2 年（2024-10~2026-09）× RSI 单因子策略，simulator 引擎。
+- 单任务：110.8s，峰值内存 5.79G。
+- 2 并发：各 118.5s（劣化仅 7%），各占 5.79G（合计 11.6G），无争抢。
+- 容量结论：内存是瓶颈。按 80% 可用（25.6G）→ 全量任务安全并发 4；串行吞吐 ≈32 次/时，4 并发 ≈120+ 次/时。小样本/单股任务资源占用可忽略。
+- R2 输入：全量任务内存按 6G/个预算，调度器以内存余量为准入闸门。
