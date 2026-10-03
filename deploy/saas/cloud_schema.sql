@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status        TEXT NOT NULL DEFAULT 'queued'
                   CHECK (status IN ('queued','leased','running','done','failed','cancelled')),
     params        JSONB NOT NULL DEFAULT '{}',    -- 回测区间/资金/成本/股票池等覆盖参数
+    weight_class  TEXT NOT NULL DEFAULT 'heavy',  -- R2 任务分级：light=小范围 / heavy=全市场
     priority      INT NOT NULL DEFAULT 0,         -- 未来付费用户优先队列预留
     attempts      INT NOT NULL DEFAULT 0,
     max_attempts  INT NOT NULL DEFAULT 2,
@@ -100,6 +101,8 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_class TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS parent_job_id BIGINT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS upload_token TEXT;
+-- R2 多租户弹性调度（2026-10-03）：任务轻重分级列（老库自愈；应用启动亦幂等 ALTER）
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS weight_class TEXT NOT NULL DEFAULT 'heavy';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idem
     ON jobs (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 -- QRE-SAAS-D1D2（内测三级权限，2026-09-20）：密码登录临时方案 + 游客匿名提交

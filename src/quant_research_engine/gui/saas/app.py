@@ -361,6 +361,44 @@ def _get_policy(app: Flask, engine: Engine, tier: str) -> dict[str, int]:
     return policy
 
 
+# --- R2 多租户弹性调度：任务轻重分级（2026-10-03，依据 N3 容量基线） ---
+# 内存 ≈ 标的数 × 天数 × 因子表数：全A×2年峰值 5.79G（重），单股/小范围 ~1.5G（轻）。
+# 轻任务走专属槽位，避免游客单股测试被全市场任务堵死。
+JOB_WEIGHT_CLASSES = ("light", "heavy")
+LIGHT_MAX_CODES = 5
+
+# jobs.weight_class 懒自愈（同 tier_policies 模式：进程级标记防重复 ALTER）
+_WEIGHT_CLASS_ENSURED: set[int] = set()
+
+
+def _ensure_weight_class_column(engine: Engine) -> None:
+    key = id(engine)
+    if key in _WEIGHT_CLASS_ENSURED:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS weight_class TEXT NOT NULL DEFAULT 'heavy'"
+        ))
+    _WEIGHT_CLASS_ENSURED.add(key)
+
+
+def classify_job_weight(kind: str, params: dict[str, Any]) -> str:
+    """任务轻重分类：smoke/小范围显式标的 → light；板块/全市场/多标的 → heavy。"""
+    if kind == "smoke":
+        return "light"
+    if not isinstance(params, dict):
+        return "heavy"
+    universe = params.get("universe")
+    if isinstance(universe, dict) and universe.get("key"):
+        return "heavy"
+    codes = params.get("codes") or []
+    if isinstance(codes, str):
+        codes = [c.strip() for c in codes.split(",") if c.strip()]
+    if isinstance(codes, list) and 0 < len(codes) <= LIGHT_MAX_CODES:
+        return "light"
+    return "heavy"
+
+
 def _client_ip() -> str:
     # Nginx 反代已传 X-Forwarded-For（16 号文档 C1 配置）
     fwd = request.headers.get("X-Forwarded-For", "")
@@ -429,6 +467,7 @@ def _job_view(row: Any) -> dict[str, Any]:
         "strategy_id": row.strategy_id,
         "kind": row.kind,
         "status": row.status,
+        "weight_class": getattr(row, "weight_class", None),
         "params": row.params,
         "priority": row.priority,
         "attempts": row.attempts,
@@ -1401,6 +1440,8 @@ def create_saas_app() -> Flask:
         name = str(data.get("name") or "未命名策略").strip() or "未命名策略"
         nl_text = data.get("nl_text")
         idem = str(data.get("idempotency_key") or "").strip() or None
+        _ensure_weight_class_column(engine)
+        weight_class = classify_job_weight(kind, params)
 
         with engine.begin() as conn:
             # 幂等去重（17 协议 §4.4）：同用户同 key 返回既有 job（游客不开放）
@@ -1461,13 +1502,14 @@ def create_saas_app() -> Flask:
                 ).scalar_one()
             job_id = conn.execute(
                 text(
-                    "INSERT INTO jobs (user_id, strategy_id, kind, params, idempotency_key, guest_key) "
-                    "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), :idem, :gk) RETURNING id"
+                    "INSERT INTO jobs (user_id, strategy_id, kind, params, idempotency_key, guest_key, weight_class) "
+                    "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), :idem, :gk, :wc) RETURNING id"
                 ),
                 {"uid": uid, "sid": strategy_id, "kind": kind,
-                 "params": json.dumps(params), "idem": idem, "gk": guest_key},
+                 "params": json.dumps(params), "idem": idem, "gk": guest_key, "wc": weight_class},
             ).scalar_one()
-        resp: dict[str, Any] = {"ok": True, "job_id": job_id, "strategy_id": strategy_id, "status": "queued"}
+        resp: dict[str, Any] = {"ok": True, "job_id": job_id, "strategy_id": strategy_id,
+                                "status": "queued", "weight_class": weight_class}
         if guest_key is not None:
             resp["guest"] = True
             resp["note"] = GUEST_RESULT_NOTE
@@ -1523,6 +1565,16 @@ def create_saas_app() -> Flask:
             # 他人任务与不存在一视同仁（404，不暴露任务存在性）
             return jsonify({"ok": False, "error": "任务不存在"}), 404
         item = _job_view(row)
+        if row["status"] == "queued":
+            # R2：排队位置（前面还有几个任务），供前端显示「排队中，前面还有 N 个」
+            with engine.connect() as conn:
+                item["queue_position"] = conn.execute(
+                    text(
+                        "SELECT count(*) FROM jobs WHERE status = 'queued' "
+                        "AND (priority > :p OR (priority = :p AND created_at < :c))"
+                    ),
+                    {"p": row["priority"], "c": row["created_at"]},
+                ).scalar_one()
         if row["status"] == "completed":
             item["result"] = {
                 "summary": _jsonable(row["result_summary"]),
@@ -1579,8 +1631,15 @@ def create_saas_app() -> Flask:
             wait_seconds = min(max(float(data.get("wait_seconds") or 0), 0.0), 30.0)
         except (TypeError, ValueError):
             wait_seconds = 0.0
+        # R2：任务分级认领。classes="light" 只领轻任务（轻量槽专用）；
+        # 缺省/"any" 领任意任务（向后兼容旧 worker）。非法值 400。
+        classes = str(data.get("classes") or "any").strip().lower()
+        if classes not in ("any", "light"):
+            return jsonify({"ok": False, "error": "classes 须为 any/light"}), 400
 
         engine = _get_engine(app)
+        _ensure_weight_class_column(engine)
+        class_filter = "AND weight_class = 'light' " if classes == "light" else ""
         deadline = time.monotonic() + wait_seconds
         while True:
             with engine.begin() as conn:
@@ -1590,6 +1649,7 @@ def create_saas_app() -> Flask:
                     text(
                         "SELECT id FROM jobs "
                         "WHERE status = 'queued' "
+                        + class_filter +
                         "ORDER BY priority DESC, created_at LIMIT 1 "
                         "FOR UPDATE SKIP LOCKED"
                     )

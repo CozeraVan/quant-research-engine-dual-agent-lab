@@ -144,10 +144,15 @@ class CloudClient:
         raise CloudError(f"云端不可达（重试 {self.max_retries} 次后放弃）：{last_exc}",
                          getattr(last_exc, "status", None))
 
-    def claim(self, wait_seconds: float = 0) -> dict[str, Any] | None:
-        """认领一个任务（17 协议 §3.1 长轮询）；无任务返回 None。"""
+    def claim(self, wait_seconds: float = 0, classes: str = "any") -> dict[str, Any] | None:
+        """认领一个任务（17 协议 §3.1 长轮询）；无任务返回 None。
+
+        classes（R2 任务分级）："light" 只领轻量任务（轻量槽专用），
+        "any" 领任意任务（默认，与旧版行为一致）。
+        """
         data = self._call("POST", "/api/worker/jobs/claim",
-                          {"worker_id": self.worker_id, "wait_seconds": wait_seconds})
+                          {"worker_id": self.worker_id, "wait_seconds": wait_seconds,
+                           "classes": classes})
         return data.get("job")
 
     # 过渡版兼容别名

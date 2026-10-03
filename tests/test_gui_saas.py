@@ -902,3 +902,64 @@ class TestStrategyLibrary:
         # 被 jobs 引用 → 禁删 409
         d = client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"})
         assert d.status_code == 409 and "不允许删除" in d.get_json()["error"]
+
+
+class TestWeightClass:
+    """R2 多租户弹性调度 切片1：任务轻重分级 + 分类认领 + 排队位置。"""
+
+    def test_classify_rules(self):
+        from quant_research_engine.gui.saas.app import classify_job_weight
+        assert classify_job_weight("smoke", {}) == "light"
+        assert classify_job_weight("full", {"codes": ["000001.SZ"]}) == "light"
+        assert classify_job_weight("full", {"codes": [f"00000{i}.SZ" for i in range(5)]}) == "light"
+        assert classify_job_weight("full", {"codes": [f"0000{i:02d}.SZ" for i in range(20)]}) == "heavy"
+        assert classify_job_weight("full", {"universe": {"group": "industry", "key": "计算机"}}) == "heavy"
+        assert classify_job_weight("full", {}) == "heavy"
+        assert classify_job_weight("full", {"codes": "000001.SZ,000002.SZ"}) == "light"
+
+    def test_submit_stamps_weight_class(self, client):
+        r = client.post("/api/saas/jobs", json={
+            "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+            "params": {"codes": ["000001"], "start": "2025-01-01", "end": "2026-01-01"},
+            "name": "t"}, headers={"X-User-Id": "1"})
+        assert r.status_code == 200 and r.get_json()["weight_class"] == "light"
+        r2 = client.post("/api/saas/jobs", json={
+            "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+            "params": {"universe": {"group": "market", "key": "all"}},
+            "name": "t2"}, headers={"X-User-Id": "1"})
+        assert r2.status_code == 200 and r2.get_json()["weight_class"] == "heavy"
+        detail = client.get(f"/api/saas/jobs/{r2.get_json()['job_id']}",
+                            headers={"X-User-Id": "1"}).get_json()["job"]
+        assert detail["weight_class"] == "heavy"
+
+    def test_claim_light_only_skips_heavy(self, client):
+        heavy_id = client.post("/api/saas/jobs", json={
+            "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+            "params": {"universe": {"group": "market", "key": "all"}}, "name": "h"},
+            headers={"X-User-Id": "1"}).get_json()["job_id"]
+        light_id = client.post("/api/saas/jobs", json={
+            "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+            "params": {"codes": ["000001"], "start": "2025-01-01", "end": "2026-01-01"}, "name": "l"},
+            headers={"X-User-Id": "1"}).get_json()["job_id"]
+        # 轻量槽：跳过 heavy 领到 light
+        job = client.post("/api/worker/jobs/claim", json={"worker_id": "w1", "classes": "light"},
+                          headers=WORKER_HEADERS).get_json()["job"]
+        assert job["id"] == light_id
+        # 重量槽（any）：按创建顺序领到 heavy
+        job2 = client.post("/api/worker/jobs/claim", json={"worker_id": "w2", "classes": "any"},
+                           headers=WORKER_HEADERS).get_json()["job"]
+        assert job2["id"] == heavy_id
+        # 非法 classes
+        assert client.post("/api/worker/jobs/claim", json={"worker_id": "w1", "classes": "bogus"},
+                           headers=WORKER_HEADERS).status_code == 400
+
+    def test_queue_position(self, client):
+        ids = []
+        for i in range(3):
+            ids.append(client.post("/api/saas/jobs", json={
+                "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+                "params": {"universe": {"group": "market", "key": "all"}}, "name": f"q{i}"},
+                headers={"X-User-Id": "1"}).get_json()["job_id"])
+        d0 = client.get(f"/api/saas/jobs/{ids[0]}", headers={"X-User-Id": "1"}).get_json()["job"]
+        d2 = client.get(f"/api/saas/jobs/{ids[2]}", headers={"X-User-Id": "1"}).get_json()["job"]
+        assert d0["queue_position"] == 0 and d2["queue_position"] == 2
