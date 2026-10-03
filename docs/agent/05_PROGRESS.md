@@ -756,3 +756,11 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 提交端 api_create_job 按用户角色（guest/member/paid）读 policy 校验，并把生效上限写入 job params `_factor_limits`；worker runner 执行前从 params 注入同一上限做权威复核（worker 无需直连 SaaS 库读配置）。
 - 管理台「角色权限配置」表新增两列可视化编辑，即时生效（清 60s 缓存）。
 - 测试：yaml_guard 参数化/0=不限、console policy 调低后提交即 400、params 透传断言；saas 全套 185 passed。
+
+## 2026-10-03 R2 多租户弹性调度（切片 1+2，依据 N3 容量基线）
+
+- 方案（用户已对齐三层全套，预算 25.6G/并发 4 级）：轻 2 槽（1.5G/个）+ 重 3 槽（6G/个）= 21G。
+- 切片 1（云端）：`jobs.weight_class`（light/heavy，懒自愈 ALTER）；分类器 `classify_job_weight`（smoke/≤5 显式标的→light，板块/全市场/多标的→heavy）；`POST /api/worker/jobs/claim` 支持 `classes=light|any`（默认 any 向后兼容）；job 详情 queued 时返回 `queue_position`。cloud_schema.sql 同步。
+- 切片 2（worker）：`worker/slots.py`——`mem_available_mb()`（/proc/meminfo 闸门，读取失败不限制）+ `execute_job_subprocess()`（fork 子进程隔离：GIL/内存隔离、OOM 只死子进程报 exitcode、取消可 terminate 强杀）；daemon 新增 `_slot_loop`/`run_slots_forever`，轻槽 claim(light) 重槽 claim(any)，内存不足暂缓领取；CLI `--light-slots 2 --heavy-slots 3 --light-min-avail-mb 2000 --heavy-min-avail-mb 6500`（QRE_WORKER_* 环境变量可配），双 0 回退旧单槽。runner 现可接 canceled 事件提前终止；已上报 canceled 不再重复报 failed。
+- 测试：test_worker_slots.py（meminfo 解析/子进程成功-异常-崩溃-取消四态/槽位调度与闸门），test_gui_saas.py::TestWeightClass（分类规则/落库/分类认领/排队位置）。saas 全套 189 passed。
+- 待续：切片 3 systemd 托管（MemoryMax=26G 兜底）、切片 4 管理台轻/重队列深度 + 部署。

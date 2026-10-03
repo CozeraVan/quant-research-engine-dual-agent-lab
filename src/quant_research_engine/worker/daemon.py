@@ -60,17 +60,21 @@ class WorkerDaemon:
     def stop(self) -> None:
         self._stop.set()
 
-    def _run_job(self, job: dict[str, Any]) -> None:
+    def _run_job(self, job: dict[str, Any], runner: Callable[..., dict[str, Any]] | None = None) -> None:
         """执行单个 job：心跳线程 + 执行 + 两步回传。异常全部兜底。
 
         取消传播（17 协议 §5）：心跳响应 cancel_requested=true 时立即上报
-        fail(canceled) 并跳过结果回传。注意：引擎执行是单体的，无法中途杀——
-        取舍为「立即上报终态 + 本地跑完后丢弃结果」，单并发约束保持
-        （本 job 线程未结束前不 claim 下一个）。
+        fail(canceled) 并跳过结果回传。runner 可接收 canceled 事件做提前终止
+        （子进程模式可强杀）；不支持提前终止的单体 runner 则跑完后丢弃结果。
         """
         job_id = job["id"]
         done_event = threading.Event()
         canceled = threading.Event()
+        if runner is None:
+            base_runner = self.runner
+            run_fn: Callable[..., dict[str, Any]] = lambda j, _ev: base_runner(j)  # noqa: E731
+        else:
+            run_fn = runner
 
         def _heartbeat_loop() -> None:
             while not done_event.wait(self.heartbeat_seconds):
@@ -89,8 +93,10 @@ class WorkerDaemon:
         hb = threading.Thread(target=_heartbeat_loop, daemon=True)
         hb.start()
         try:
-            payload = self.runner(job)
+            payload = run_fn(job, canceled)
         except Exception as exc:
+            if canceled.is_set():
+                return  # 已上报 canceled，不再重复报 failed
             _log(f"job {job_id} 执行失败：{exc}")
             try:
                 self.client.fail(job_id, str(exc))
@@ -136,6 +142,78 @@ class WorkerDaemon:
             self._sleep(self.poll_seconds)
         _log("收到退出信号，已退出主循环")
 
+    # --- R2 多槽位模式（2026-10-03）：轻/重槽线程 + 内存闸门 + 子进程隔离 ---
+
+    def _slot_loop(
+        self,
+        slot_name: str,
+        classes: str,
+        min_avail_mb: float,
+        mem_fn: Callable[[], float],
+    ) -> None:
+        """单个槽位线程：内存够 → claim → 子进程执行 → 循环；收到 stop 后
+        跑完当前任务再退出（优雅退出语义与单槽一致）。"""
+        from quant_research_engine.worker.slots import execute_job_subprocess
+
+        def _runner(j: dict[str, Any], ev: threading.Event) -> dict[str, Any]:
+            return execute_job_subprocess(j, is_canceled=ev.is_set)
+
+        _log(f"[{slot_name}] 槽位启动（classes={classes}，内存闸门 {min_avail_mb:.0f}MB）")
+        while not self._stop.is_set():
+            avail = mem_fn()
+            if avail < min_avail_mb:
+                _log(f"[{slot_name}] 可用内存 {avail:.0f}MB < 闸门 {min_avail_mb:.0f}MB，暂缓领取")
+                self._sleep(self.poll_seconds)
+                continue
+            try:
+                job = self.client.claim(wait_seconds=self.poll_seconds, classes=classes)
+            except CloudError as exc:
+                _log(f"[{slot_name}] claim 失败：{exc}")
+                self._sleep(self.poll_seconds)
+                continue
+            if not job:
+                continue
+            _log(f"[{slot_name}] claimed job {job['id']}（kind={job.get('kind')}）")
+            self._run_job(job, runner=_runner)
+        _log(f"[{slot_name}] 槽位退出")
+
+    def run_slots_forever(
+        self,
+        light_slots: int,
+        heavy_slots: int,
+        light_min_avail_mb: float,
+        heavy_min_avail_mb: float,
+        mem_fn: Callable[[], float] | None = None,
+    ) -> None:
+        """多槽位主循环：轻量槽只领轻任务，重量槽领任意任务。"""
+        if mem_fn is None:
+            from quant_research_engine.worker.slots import mem_available_mb as mem_fn
+
+        threads: list[threading.Thread] = []
+        for i in range(light_slots):
+            threads.append(threading.Thread(
+                target=self._slot_loop, name=f"light-{i + 1}",
+                args=(f"light-{i + 1}", "light", light_min_avail_mb, mem_fn), daemon=True))
+        for i in range(heavy_slots):
+            threads.append(threading.Thread(
+                target=self._slot_loop, name=f"heavy-{i + 1}",
+                args=(f"heavy-{i + 1}", "any", heavy_min_avail_mb, mem_fn), daemon=True))
+        _log(
+            f"worker {self.client.worker_id} 启动（R2 多槽位：轻 {light_slots} + 重 {heavy_slots}），"
+            f"轮询 {self.client.base_url}"
+        )
+        for t in threads:
+            t.start()
+        try:
+            while any(t.is_alive() for t in threads):
+                for t in threads:
+                    t.join(timeout=0.5)
+        except KeyboardInterrupt:
+            self.stop()
+        for t in threads:
+            t.join()
+        _log("全部槽位已退出")
+
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
@@ -146,6 +224,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--heartbeat-seconds", type=float,
                         default=float(os.environ.get("SAAS_WORKER_HEARTBEAT_SECONDS", DEFAULT_HEARTBEAT_SECONDS)))
     parser.add_argument("--once", action="store_true", help="只跑一轮（调试用）")
+    # R2 多槽位（默认开：轻 2 + 重 3 = 内存预算 2×1.5G+3×6G=21G ≤ 25.6G）；
+    # --light-slots 0 --heavy-slots 0 回退旧版单槽 run_once 循环
+    parser.add_argument("--light-slots", type=int,
+                        default=int(os.environ.get("QRE_WORKER_LIGHT_SLOTS", "2")))
+    parser.add_argument("--heavy-slots", type=int,
+                        default=int(os.environ.get("QRE_WORKER_HEAVY_SLOTS", "3")))
+    parser.add_argument("--light-min-avail-mb", type=float,
+                        default=float(os.environ.get("QRE_WORKER_LIGHT_MIN_AVAIL_MB", "2000")))
+    parser.add_argument("--heavy-min-avail-mb", type=float,
+                        default=float(os.environ.get("QRE_WORKER_HEAVY_MIN_AVAIL_MB", "6500")))
     args = parser.parse_args(argv)
 
     client = CloudClient.from_env()
@@ -163,6 +251,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.once:
         daemon.run_once()
+        return 0
+    if args.light_slots + args.heavy_slots > 0:
+        daemon.run_slots_forever(
+            light_slots=args.light_slots,
+            heavy_slots=args.heavy_slots,
+            light_min_avail_mb=args.light_min_avail_mb,
+            heavy_min_avail_mb=args.heavy_min_avail_mb,
+        )
         return 0
     daemon.run_forever()
     return 0
