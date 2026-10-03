@@ -764,3 +764,11 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 切片 2（worker）：`worker/slots.py`——`mem_available_mb()`（/proc/meminfo 闸门，读取失败不限制）+ `execute_job_subprocess()`（fork 子进程隔离：GIL/内存隔离、OOM 只死子进程报 exitcode、取消可 terminate 强杀）；daemon 新增 `_slot_loop`/`run_slots_forever`，轻槽 claim(light) 重槽 claim(any)，内存不足暂缓领取；CLI `--light-slots 2 --heavy-slots 3 --light-min-avail-mb 2000 --heavy-min-avail-mb 6500`（QRE_WORKER_* 环境变量可配），双 0 回退旧单槽。runner 现可接 canceled 事件提前终止；已上报 canceled 不再重复报 failed。
 - 测试：test_worker_slots.py（meminfo 解析/子进程成功-异常-崩溃-取消四态/槽位调度与闸门），test_gui_saas.py::TestWeightClass（分类规则/落库/分类认领/排队位置）。saas 全套 189 passed。
 - 待续：切片 3 systemd 托管（MemoryMax=26G 兜底）、切片 4 管理台轻/重队列深度 + 部署。
+
+## 2026-10-03 R2 切片 3+4：worker systemd 上线 + 管理台队列可视化（生产端到端验证通过）
+
+- 切片 3：`deploy/saas/qre-worker.service` 更新（R2 槽位环境变量说明 + **MemoryMax=26G** cgroup 硬兜底，user 级委派实测生效）；本机安装 `systemctl --user enable --now qre-worker`，env 落 `~/.config/qre-worker.env`（0600，含 SAAS_WORKER_TOKEN + qre_worker_ro 重置后新密码 + **代理置空**——WSL Clash 会劫持 worker→云端 urllib 请求造成 read timeout，踩坑记录）。
+- ECS 配套修复：`qre-saas.service` 改 **gthread 2×8**（sync 2 workers 被 5 槽长轮询占满饿死，claim 全部 read timeout；unit 已收编进 deploy/saas/ 作 source of truth）。
+- 生产端到端验证：guest smoke 探针（单股 RSI）submit → `weight_class=light` 落库 → 轻槽秒领 → fork 子进程执行 → **completed**；此前一桩被我重启打断的 job 走「租约过期→惰性回收→重排→重试」自愈路径符合预期。
+- 切片 4：console overview 队列深度拆轻/重（queued_light/queued_heavy）+ 说明 tooltip；测试 190 passed。
+- 运维口径：worker 日志 `journalctl --user -u qre-worker -f`；槽位/闸门调参改 `~/.config/qre-worker.env` 后 `systemctl --user restart qre-worker`。

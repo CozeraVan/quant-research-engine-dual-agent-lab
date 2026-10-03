@@ -7,15 +7,22 @@
 #   systemctl --user enable --now qre-worker
 #   journalctl --user -u qre-worker -f
 #
-# 依赖环境变量（建议放 ~/.config/qre-worker.env 并配 EnvironmentFile）：
+# 依赖环境变量（建议放 ~/.config/qre-worker.env，EnvironmentFile 已引用）：
 #   SAAS_CLOUD_URL=https://aguhuice.com   # 云端 SaaS app 地址
 #   SAAS_WORKER_TOKEN=...                  # 与云端 SAAS_WORKER_TOKEN 一致
 #   SAAS_WORKER_ID=home-pc                 # 可空，默认 hostname
 #   QRE_MARKET_DB_URL=postgresql+psycopg://qre_worker_ro:***@127.0.0.1/tushare_data
 #                                          # 本地大库只读账号（QRE-SAAS-003）
+#
+# R2 多租户弹性调度（2026-10-03，N3 基线：单全A×2年任务峰值 5.79G）：
+#   QRE_WORKER_LIGHT_SLOTS=2               # 轻量槽（单股/小范围，预算 1.5G/个）
+#   QRE_WORKER_HEAVY_SLOTS=3               # 重量槽（板块/全市场，预算 6G/个）
+#   QRE_WORKER_LIGHT_MIN_AVAIL_MB=2000     # 轻槽内存闸门：可用低于此值暂缓领取
+#   QRE_WORKER_HEAVY_MIN_AVAIL_MB=6500     # 重槽内存闸门
+#   合计预算 2×1.5G+3×6G=21G ≤ 32G×80%；双槽设 0 回退旧单槽模式。
 
 [Unit]
-Description=QRE SaaS backtest worker (cloud job queue poller)
+Description=QRE SaaS backtest worker (cloud job queue poller, R2 slotted)
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -28,6 +35,13 @@ Restart=always
 RestartSec=10
 # 优雅退出：SIGTERM 后等手头任务完成回传（回测多为分钟级），超时强杀
 TimeoutStopSec=900
+# R2 内存硬兜底：cgroup 上限 26G（32G×80%）。超限由 cgroup 杀 worker
+# （Restart=always 拉起，被中断任务租约过期后云端自动重排），
+# 保证本机 PG/系统/日常使用不被回测拖垮。
+# 注意：user 级 MemoryMax 需要 cgroup v2 内存控制器委派；不生效时
+# （journalctl 有 "MemoryMax ... not available" 类警告）改用系统级 unit 或
+# 默认 slot 预算仍由内存闸门+槽位数软约束兜底。
+MemoryMax=26G
 
 [Install]
 WantedBy=default.target

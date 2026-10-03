@@ -135,3 +135,13 @@
 | 吞吐 | 串行 ≈32 次/时；4 并发 ≈120+ 次/时 |
 
 > R2 弹性调度以"内存余量 ≥ 6G"为全量任务准入条件；多任务排队时多开少核，单任务时集中核心。
+
+### R2 已落地（2026-10-03，commit d5da0dd / 965362d 起）
+
+- **任务分级**：`jobs.weight_class`——light（smoke / ≤5 显式标的）走 2 个轻量槽（预算 1.5G/个），heavy（板块/全市场）走 3 个重量槽（预算 6G/个）；合计 21G ≤ 25.6G。分类器 `classify_job_weight()`（saas/app.py）。
+- **分类认领**：`POST /api/worker/jobs/claim` 支持 `classes=light|any`；轻槽只领轻任务，游客单股测试永不被全市场任务堵死。
+- **内存闸门**：槽位领取前查 /proc/meminfo MemAvailable（轻 2000MB / 重 6500MB，env 可配），本机有其他负载时 worker 自动降速。
+- **子进程隔离**：每个 job 在 fork 子进程执行（GIL/内存隔离，OOM 只死子进程报 exitcode，取消可 terminate）。
+- **cgroup 兜底**：user systemd `MemoryMax=26G`（实测委派生效）；超限杀 worker，任务租约过期自动重排。
+- **ECS 配套**：gunicorn 改 gthread 2×8（sync 2 workers 被长轮询饿死的坑）；qre-saas.service / qre-worker.service 均收编 deploy/saas/。
+- **排队可视化**：job 详情 `queue_position`；console overview 队列深度拆轻/重。

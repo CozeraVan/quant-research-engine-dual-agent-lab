@@ -1,0 +1,24 @@
+[Unit]
+Description=QRE SaaS Web/API (Flask via gunicorn, 127.0.0.1:8090)
+After=network-online.target postgresql.service
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/srv/aguhuice/qre
+EnvironmentFile=/etc/qre-saas.env
+Environment=PYTHONPATH=/srv/aguhuice/qre/src
+# R2（2026-10-03）：worker 多槽位长轮询 claim，sync worker 会被占满饿死。
+# gthread：2 workers × 8 threads = 16 并发连接，长轮询/心跳/用户流量共存。
+ExecStart=/srv/aguhuice/qre/.venv/bin/gunicorn --workers 2 --threads 8 --worker-class gthread --bind 127.0.0.1:8090 --timeout 120 "quant_research_engine.gui.saas.app:create_saas_app()"
+Restart=on-failure
+RestartSec=5
+MemoryMax=1G
+SyslogIdentifier=qre-saas
+
+[Install]
+WantedBy=multi-user.target

@@ -2285,6 +2285,8 @@ def create_saas_app() -> Flask:
                     "SELECT count(*) AS total, "
                     "count(*) FILTER (WHERE created_at::date = now()::date) AS today, "
                     "count(*) FILTER (WHERE status = 'queued') AS queued, "
+                    "count(*) FILTER (WHERE status = 'queued' AND weight_class = 'light') AS queued_light, "
+                    "count(*) FILTER (WHERE status = 'queued' AND weight_class = 'heavy') AS queued_heavy, "
                     "count(*) FILTER (WHERE status IN ('leased','running','uploading')) AS running, "
                     "count(*) FILTER (WHERE status = 'completed' AND finished_at::date = now()::date) AS completed_today, "
                     "count(*) FILTER (WHERE status IN ('failed','expired') AND finished_at::date = now()::date) AS failed_today, "

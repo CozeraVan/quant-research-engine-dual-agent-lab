@@ -151,6 +151,21 @@ class TestOverview:
         assert d["jobs_today_success_rate"] is None  # 今日无终态
         assert "loadavg" in d["server"] and "disk" in d["server"]
 
+    def test_queued_split_by_weight(self, client, app):
+        # R2：队列深度按轻/重分级展示
+        headers, _ = _admin_headers(app)
+        client.post("/api/saas/jobs", json={
+            "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+            "params": {"codes": ["000001"], "start": "2025-01-01", "end": "2026-01-01"}, "name": "l"},
+            headers={"X-User-Id": "2"})
+        client.post("/api/saas/jobs", json={
+            "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+            "params": {"universe": {"group": "market", "key": "all"}}, "name": "h"},
+            headers={"X-User-Id": "2"})
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        assert d["jobs"]["queued"] == 2
+        assert d["jobs"]["queued_light"] == 1 and d["jobs"]["queued_heavy"] == 1
+
 
 class TestUsers:
     def test_list_and_tier(self, client, app):

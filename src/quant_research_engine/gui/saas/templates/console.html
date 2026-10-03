@@ -164,7 +164,8 @@
         metric('游客任务成功率', gRate, '累计 完成 / (完成+失败超时)');
       document.getElementById('ov-jobs').innerHTML =
         metric('今日任务', j.today) + metric('今日成功率', rate, '今日 完成 / (完成+失败超时)') +
-        metric('队列深度', j.queued) + metric('运行中', j.running) +
+        metric('队列深度', j.queued + '（轻 ' + (j.queued_light || 0) + ' / 重 ' + (j.queued_heavy || 0) + ')',
+               'R2 分级：轻=单股小范围走专属槽位，重=板块/全市场') + metric('运行中', j.running) +
         metric('Worker 在线', w.online + ' / ' + w.total, '在线 / 已接入总数') +
         metric('待审因子', d.pending_factor_requests);
       var sv = d.server || {};
