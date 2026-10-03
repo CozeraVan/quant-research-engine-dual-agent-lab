@@ -734,3 +734,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 
 - base.html head 加入百度站长验证码 meta（全站页面携带，首页验证即可）。
 - 改用百度文件验证法：baidu_verify_codeva-gDNoSKn1Mp.html 入 static + 根路径路由（/ 302 跳转时 meta 验证可能不被百度接受）。
+
+## 2026-10-03 百度主动推送接入（N2 收尾）
+
+- 用户在百度站长平台完成验证并取得主动推送接口 token。
+- 新增 `deploy/saas/baidu_push.py`：从线上 sitemap.xml 取 URL（自动排除 /login），POST 到 `data.zz.baidu.com/urls`；token 走环境变量 `BAIDU_PUSH_TOKEN`，已写入 ECS `/etc/qre-saas.env`（不入 git）。
+- 首次推送 5 条全部成功（`{"remain":0,"success":5}`）；新站每日配额约 10 条，当天已用完，后续新页面上线后重跑脚本即可。
+- 待办：Google Search Console 验证（拿到 google-site-verification 后按百度 meta 同法接入 base.html）。
