@@ -119,3 +119,8 @@
 | N4 | 安全防护初步 | 防 DDoS（nginx 限流/阿里云基础防护）、SQL 注入复查（全链路参数化查询审计）、XSS/CSRF、接口限流、敏感端点（console/feedback）访问控制复核 |
 
 > 执行顺序建议：N1（管理台，内测运营刚需）→ N4（安全，公网暴露面）→ N3（压测，出容量基线）→ N2（SEO，持续见效慢，早提交收录）。启动前逐项 brainstorm 对齐颗粒度。
+
+## 9. 数据源评估记录（2026-10-03）
+
+- **HiThink-Tech/Financial-API**（同花顺官方 hithink-finance，fuyao.aicubes.cn）：官方维护、统一 API Key，REST/MCP/CLI/Python SDK/DuckDB 多接入。日线/财务/估值/交易日历/指数板块/涨跌停与 Tushare 高度重叠，**可作 Tushare 稳定互备**（断更事故的保险）；公开 API 不含分钟 K/tick/L2，**解决不了分时数据需求**。结论：值得注册看额度，作为互备源候选，暂未接入。
+- **simonlin1212/a-stock-data**（2026-09-29 评估）：爬虫型 34 源聚合，腾讯分钟 K（1~60min）是分时数据候选，但稳定性/合规性弱，只配当备胎。暂不接入。

@@ -474,6 +474,19 @@ def create_saas_app() -> Flask:
 
         return send_from_directory(str(SHARED_STATIC_DIR), "sw.js", mimetype="application/javascript")
 
+    # SEO（QRE-SAAS-SEO）：robots.txt 与 sitemap.xml 需挂站点根路径，搜索引擎爬虫只认根
+    @app.get("/robots.txt")
+    def seo_robots() -> Any:
+        from flask import send_from_directory
+
+        return send_from_directory(str(SHARED_STATIC_DIR), "robots.txt", mimetype="text/plain")
+
+    @app.get("/sitemap.xml")
+    def seo_sitemap() -> Any:
+        from flask import send_from_directory
+
+        return send_from_directory(str(SHARED_STATIC_DIR), "sitemap.xml", mimetype="application/xml")
+
     @app.get("/saas/login")
     def saas_login_page() -> Any:
         # staging 免登录（SAAS_AUTH_BYPASS=1，生产严禁）：登录页直接跳工作台

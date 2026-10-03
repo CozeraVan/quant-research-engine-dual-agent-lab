@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /saas/console
+
+Sitemap: https://www.aguhuice.com/sitemap.xml

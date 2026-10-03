@@ -688,3 +688,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 
 - saas 配额检查：role='admin' 跳过每日全量回测次数上限（运营/开发者账号）；v448655762@gmail.com（id=5）、17157845743（id=6）两账号已在生产库为 admin。
 - 用户确认：8081 保留 lab 实验台定位，不与公网 SaaS 界面拉齐；已重启至最新代码。
+
+## 2026-10-03 SEO 基础设施（QRE-SAAS-SEO，N2 第一步）
+
+- 新增根路径路由 /robots.txt（放行全站、禁 /api 与 console、挂 sitemap）与 /sitemap.xml（6 个公开页）。
+- base.html head：meta description/keywords/canonical + OG 四件套（og:image 用横版 logo）。
+- ECS nginx 需补两条 exact location（robots/sitemap → gunicorn），随部署一起改。
+- 后续待办：百度/Google Search Console 站长验证与主动推送（需用户注册站长平台账号拿验证码）。
