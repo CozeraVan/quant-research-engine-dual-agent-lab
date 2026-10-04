@@ -411,6 +411,69 @@ def _ensure_worker_status_columns(engine: Engine) -> None:
     _WORKER_STATUS_ENSURED.add(key)
 
 
+# R3 切片2（2026-10-04）：资源调配封装——worker_configs 表承载各 worker 的期望
+# 槽位/内存闸门配置（version 单调递增），status 响应回带、管理台可编辑。
+_WORKER_CONFIGS_ENSURED: set[int] = set()
+
+_WORKER_CONFIG_KEYS = ("light_slots", "heavy_slots", "light_min_avail_mb", "heavy_min_avail_mb")
+
+
+def _ensure_worker_configs(engine: Engine) -> None:
+    key = id(engine)
+    if key in _WORKER_CONFIGS_ENSURED:
+        return
+    # 先查 information_schema 再决定是否 CREATE/ALTER（同 _ensure_worker_status_columns
+    # 的 owner 踩坑：ECS 上手工 apply 后表属 postgres，app 账号 CREATE/ALTER 会 500）。
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text("SELECT 1 FROM information_schema.tables "
+                 "WHERE table_name = 'worker_configs'")
+        ).first() is not None
+        if not table_exists:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS worker_configs ("
+                "worker_id TEXT PRIMARY KEY, "
+                "desired_light_slots INT, "
+                "desired_heavy_slots INT, "
+                "desired_light_min_avail_mb INT, "
+                "desired_heavy_min_avail_mb INT, "
+                "version INT NOT NULL DEFAULT 1, "
+                "updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), "
+                "updated_by TEXT)"
+            ))
+    _WORKER_CONFIGS_ENSURED.add(key)
+
+
+def _worker_config_view(row: Any) -> dict[str, Any]:
+    """worker_configs 行 → API 视图（limits 键名与 worker 上报的 limits 对齐）。"""
+    return _jsonable({
+        "worker_id": row["worker_id"],
+        "light_slots": row["desired_light_slots"],
+        "heavy_slots": row["desired_heavy_slots"],
+        "light_min_avail_mb": row["desired_light_min_avail_mb"],
+        "heavy_min_avail_mb": row["desired_heavy_min_avail_mb"],
+        "version": row["version"],
+        "updated_at": row["updated_at"],
+        "updated_by": row["updated_by"],
+    })
+
+
+def worker_config_mismatch(limits: dict[str, Any] | None,
+                           desired: dict[str, Any] | None) -> bool:
+    """一致性判定（R3 切片2）：worker 上报的当前生效 limits 与期望配置逐键比较。
+    无期望配置 → False（不涉及）；未上报 limits（旧 worker）→ True（降级提示）。"""
+    if not desired:
+        return False
+    if not limits:
+        return True
+    for k in _WORKER_CONFIG_KEYS:
+        if desired.get(k) is None:
+            continue  # 期望里未设的键不约束
+        if limits.get(k) != desired.get(k):
+            return True
+    return False
+
+
 def classify_job_weight(kind: str, params: dict[str, Any]) -> str:
     """任务轻重分类：smoke/小范围显式标的 → light；板块/全市场/多标的 → heavy。"""
     if kind == "smoke":
@@ -1756,6 +1819,8 @@ def create_saas_app() -> Flask:
                limits: {light_slots, heavy_slots, light_min_avail_mb, heavy_min_avail_mb}}
         整个负载原样落 workers.status（JSONB），status_at=now()，同时刷新
         last_heartbeat_at。旧 worker 不上报时列为 NULL，管理台降级展示。
+        R3 切片2：响应新增 desired_config（worker_configs 表该 worker 的期望
+        槽位/闸门配置 + version；无配置则 null），worker 侧据此比对记日志。
         """
         denied = _check_worker_auth(app)
         if denied is not None:
@@ -1778,6 +1843,7 @@ def create_saas_app() -> Flask:
         }
         engine = _get_engine(app)
         _ensure_worker_status_columns(engine)
+        _ensure_worker_configs(engine)
         with engine.begin() as conn:
             conn.execute(
                 text(
@@ -1788,7 +1854,15 @@ def create_saas_app() -> Flask:
                 ),
                 {"wid": worker_id, "status": json.dumps(status)},
             )
-        return jsonify({"ok": True})
+            # R3 切片2：回带该 worker 的期望配置（无配置 → null）
+            desired_row = conn.execute(
+                text("SELECT * FROM worker_configs WHERE worker_id = :wid"),
+                {"wid": worker_id},
+            ).mappings().first()
+        return jsonify({
+            "ok": True,
+            "desired_config": _worker_config_view(desired_row) if desired_row else None,
+        })
 
     @app.post("/api/worker/jobs/<int:job_id>/result/meta")
     def api_result_meta(job_id: int) -> Any:
@@ -2344,6 +2418,7 @@ def create_saas_app() -> Flask:
         # R3 切片1：workers.status 懒自愈须在开读连接前完成（ALTER 需排他锁，
         # 读连接的事务持有 workers 共享锁，嵌套调用会自我等待）
         _ensure_worker_status_columns(engine)
+        _ensure_worker_configs(engine)  # R3 切片2：期望配置表同上
         with engine.connect() as conn:
             users = conn.execute(
                 text(
@@ -2403,12 +2478,19 @@ def create_saas_app() -> Flask:
                     "FROM workers ORDER BY last_heartbeat_at DESC"
                 )
             ).mappings().all()
+            # R3 切片2：期望配置（worker_configs），供「当前生效 vs 期望」比对
+            desired_rows = conn.execute(
+                text("SELECT * FROM worker_configs")
+            ).mappings().all()
             pending_factors = conn.execute(
                 text("SELECT count(*) FROM factor_requests WHERE status = 'pending'")
             ).scalar_one()
+        desired_by_worker = {r["worker_id"]: _worker_config_view(r) for r in desired_rows}
         workers_detail = []
         for row in worker_rows:
             st = row["status"] or {}
+            limits = st.get("limits") or {}
+            desired = desired_by_worker.get(row["name"])
             workers_detail.append(_jsonable({
                 "name": row["name"],
                 "last_heartbeat_at": row["last_heartbeat_at"],
@@ -2416,7 +2498,9 @@ def create_saas_app() -> Flask:
                 "mem_available_mb": st.get("mem_available_mb"),
                 "mem_total_mb": st.get("mem_total_mb"),
                 "slots": st.get("slots") or [],
-                "limits": st.get("limits") or {},
+                "limits": limits,
+                "desired_config": desired,
+                "config_mismatch": worker_config_mismatch(limits or None, desired),
                 "status_at": row["status_at"],
             }))
         terminal_today = (jobs["completed_today"] or 0) + (jobs["failed_today"] or 0)
@@ -2650,6 +2734,49 @@ def create_saas_app() -> Flask:
                 )
             ).mappings().all()
         return jsonify({"ok": True, "workers": [_jsonable(dict(r)) for r in rows]})
+
+    @app.post("/api/saas/console/worker-config")
+    def api_console_worker_config() -> Any:
+        """R3 切片2：设置某 worker 的期望槽位/内存闸门配置（version 每次 +1）。
+        生效路径：worker 下次 status 上报响应带回 → 日志提示 → 管理员在本机执行
+        deploy/saas/worker-tune.sh 应用并重启 worker，上报 limits 回到一致态。"""
+        engine = _get_engine(app)
+        uid, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        worker_id = str(data.get("worker_id") or "").strip()
+        if not worker_id or len(worker_id) > 128:
+            return jsonify({"ok": False, "error": "worker_id 必填且 ≤128 字符"}), 400
+        fields: dict[str, int] = {}
+        for k in _WORKER_CONFIG_KEYS:
+            if k not in data or data[k] is None:
+                return jsonify({"ok": False, "error": f"缺少 {k}"}), 400
+            try:
+                v = int(data[k])
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"{k} 必须为整数"}), 400
+            if v < 0 or v > 1000000:
+                return jsonify({"ok": False, "error": f"{k} 超出允许范围（0~1000000）"}), 400
+            fields[k] = v
+        _ensure_worker_configs(engine)
+        with engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "INSERT INTO worker_configs (worker_id, desired_light_slots, desired_heavy_slots, "
+                    "desired_light_min_avail_mb, desired_heavy_min_avail_mb, version, updated_at, updated_by) "
+                    "VALUES (:wid, :light_slots, :heavy_slots, :light_min_avail_mb, :heavy_min_avail_mb, "
+                    "1, now(), :uby) "
+                    "ON CONFLICT (worker_id) DO UPDATE SET "
+                    "desired_light_slots = :light_slots, desired_heavy_slots = :heavy_slots, "
+                    "desired_light_min_avail_mb = :light_min_avail_mb, "
+                    "desired_heavy_min_avail_mb = :heavy_min_avail_mb, "
+                    "version = worker_configs.version + 1, updated_at = now(), updated_by = :uby "
+                    "RETURNING *"
+                ),
+                {"wid": worker_id, "uby": f"user#{uid}", **fields},
+            ).mappings().one()
+        return jsonify({"ok": True, "config": _worker_config_view(row)})
 
     @app.get("/api/saas/console/jobs")
     def api_console_jobs() -> Any:

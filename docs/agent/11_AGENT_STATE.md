@@ -12,15 +12,21 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-WORKER-CONSOLIDATION (DONE — worker 单例收敛：R2 调试期用户级 qre-worker(home-pc)
+QRE-SAAS-R3-SLICE2 (DONE — R3 切片2 资源调配封装（方案 C=A+B 混合，用户批准）：新表
+worker_configs（worker_id 主键/期望四值/version+1/updated_by，懒自愈+cloud_schema 同步）；
+status 响应回带 desired_config，worker _check_desired_config 比对记日志（同 version
+一次/恢复一致记「已生效」）；console Worker 卡「当前 vs 期望」高亮 + 可复制
+worker-tune.sh 命令 + 设为期望表单（POST /api/saas/console/worker-config admin 门禁）；
+deploy/saas/worker-tune.sh sed 更新 /etc env+备份+重启 qre-saas-worker（本机 tmp 实测）；
+测试 +11（saas 7 + worker 4），`-k saas` 207 passed 零回归，闭环冒烟通过；
+awaiting git approval（站立批准有效）；部署：ECS 首次手工建 worker_configs 表)
+
+上一任务：QRE-WORKER-CONSOLIDATION (DONE — worker 单例收敛：R2 调试期用户级 qre-worker(home-pc)
 与系统级 qre-saas-worker(wsl-home-pc) 双跑，收敛为唯一系统级 qre-saas-worker；
 /etc env 并入槽位/闸门/代理置空/QRE_MARKET_DB_URL 新密码；MemoryMax 16G→26G；
 用户级 unit/env 退役 *.retired；ECS workers 表 home-pc 僵尸行已清；
 收敛后 smoke job#35 completed(attempts=1) 端到端验证通过；docs 04/05/16 已同步；
 awaiting git approval（本会话用户已站立批准 commit+push）)
-
-下一任务：QRE-SAAS-R3-SLICE2 (资源调配封装：管理台侧手动/自动调整 worker 槽位与内存
-闸门——设计未与用户 brainstorm 对齐，开工前需先对齐颗粒度)
 
 上一任务：QRE-SAAS-R3-SLICE1 (DONE 已部署 — worker 实时状态上报 + 管理台「Worker 资源」卡)
 

@@ -2,7 +2,48 @@
 
 ## Task ID
 
-QRE-SAAS-R3-SLICE1 (R3 后台资源可视化 切片1：worker 实时状态上报 + 管理台展示)
+QRE-SAAS-R3-SLICE2 (R3 后台资源可视化 切片2：资源调配封装，方案 C=A+B 混合)
+
+## Current Status
+
+DONE (implementation; `.venv/bin/pytest tests/ -q -k saas` 207 passed（200 + 7 新增）零回归；
+worker 侧 +4 单测；本地闭环冒烟通过（含期望配置比对日志）；awaiting git finalization 后部署)
+
+## Task Note
+
+- B 侧（云端期望配置 + 比对）：新表 `worker_configs`（worker_id 主键单行/worker，
+  desired_light_slots/desired_heavy_slots/desired_light_min_avail_mb/
+  desired_heavy_min_avail_mb/version(每次+1)/updated_at/updated_by）；
+  `_ensure_worker_configs` 懒自愈（先查 information_schema.tables 再 CREATE，沿用
+  切片1 owner 踩坑教训）；cloud_schema.sql 同步。
+- `POST /api/worker/status` 响应新增 `desired_config`（无配置 → null）；worker daemon
+  `_check_desired_config` 与当前生效 limits 比对：不一致记「期望配置 vN 待应用
+  （逐键 当前→期望）+ worker-tune.sh 提示」，同 version 只提示一次；恢复一致记
+  「期望配置 vN 已生效」。
+- 管理台：console overview 的 workers_detail 每项新增 desired_config 与
+  config_mismatch（`worker_config_mismatch` 纯函数：期望为 None 的键不约束，
+  旧 worker 未上报 limits 视为不一致）；console.html Worker 卡显示「当前生效 vs
+  期望 vN（时间/操作人）」两行，不一致值橙色加粗 + 不一致徽章 + 橙底行；不一致时
+  显示可复制的 `bash deploy/saas/worker-tune.sh ...` 命令（复制按钮）；4 值编辑表单
+  「设为期望」提交 `POST /api/saas/console/worker-config`（admin 门禁，校验非负整数，
+  upsert + version+1，updated_by=user#uid）。
+- A 侧：新脚本 `deploy/saas/worker-tune.sh`（bash）——4 参数校验非负整数，sed 更新
+  /etc/qre-saas-worker.env（缺键追加，改前备份 .bak-<ts>），EUID 检查 sudo 自提权
+  （`sudo VAR=.. bash $0 ...`），重启 qre-saas-worker 并打印状态；测试钩子
+  QRE_WORKER_ENV_FILE 覆盖目标文件、QRE_WORKER_SERVICE 显式置空跳重启（本机 tmp
+  文件实测：就地更新/追加/备份/非法值 exit 2 全过）。
+- 一致性闭环：console 用「上报 limits == 期望」判定；worker 重启后上报自动回一致态，
+  无确认回执。
+- 测试：tests/test_saas_worker_status.py +7（保存接口 401/403/400×3、upsert version
+  递增单行、status 响应回带/无配置 null、overview mismatch 三态流转、纯函数边界）；
+  tests/test_worker_status.py +4（同 version 只记一次/新版本再提示、一致不记、
+  应用后「已生效」、无配置静默）。
+- 部署要点：**ECS 首次需手工建表**（owner 踩坑）：
+  `sudo -u postgres psql aguhuice -f` worker_configs 段；本机 staging 库自动懒建。
+
+---
+
+## Archive: QRE-SAAS-R3-SLICE1 (R3 后台资源可视化 切片1：worker 实时状态上报 + 管理台展示)
 
 ## Current Status
 

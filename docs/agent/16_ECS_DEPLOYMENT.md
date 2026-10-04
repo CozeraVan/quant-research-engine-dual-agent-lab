@@ -171,6 +171,17 @@ ls -lht ~/quant-workspace/backups/ecs-aguhuice/                                 
 # ① 应用层 ensure 改为先查 information_schema，列在则完全不发 ALTER；
 # ② 新列首次仍须手工 apply（已于 2026-10-03 执行）：
 #   sudo -u postgres psql aguhuice -c "ALTER TABLE workers ADD COLUMN IF NOT EXISTS status JSONB; ALTER TABLE workers ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ;"
+
+# Worker 资源调配（R3 切片2，2026-10-04）：管理台「Worker 资源」卡设期望槽位/闸门
+# （POST /api/saas/console/worker-config → worker_configs 表 version+1）；
+# worker 下轮 status 上报响应回带期望，不一致记日志「期望配置 vN 待应用」。
+# 应用方式=在本机执行（console 卡片给出可复制命令，数值取期望配置）：
+bash deploy/saas/worker-tune.sh --light-slots 2 --heavy-slots 3 \
+    --light-min-avail-mb 2000 --heavy-min-avail-mb 6500
+# 脚本：sed 更新 /etc/qre-saas-worker.env（缺键追加，改前 .bak-<ts> 备份）+
+# sudo 自提权 + systemctl restart qre-saas-worker；worker 重启后上报自动回一致态。
+# ⚠️ worker_configs 表 ECS 首次须手工建（owner 同 workers 踩坑）：
+#   sudo -u postgres psql aguhuice -c "CREATE TABLE IF NOT EXISTS worker_configs (worker_id TEXT PRIMARY KEY, desired_light_slots INT, desired_heavy_slots INT, desired_light_min_avail_mb INT, desired_heavy_min_avail_mb INT, version INT NOT NULL DEFAULT 1, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_by TEXT);"
 # DB 直查：
 ssh -i ~/.ssh/aguhuice_ed25519 root@47.119.127.40 \
   "sudo -u postgres psql aguhuice -c \"SELECT name, last_heartbeat_at, status_at, status FROM workers;\""

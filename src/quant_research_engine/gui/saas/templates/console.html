@@ -132,6 +132,14 @@
     font-size:11px; background:#efeaf8; color:#8a84a0; border:1px solid #e0d9f0; cursor:default; }
   .wres-slot.busy { background:#6750A4; color:#fff; border-color:#6750A4; }
   .wres-slot-label { font-size:12px; color:#8a84a0; margin-right:2px; }
+  /* R3 切片2：当前 vs 期望配置 */
+  .wres-cfgrow { margin-top:8px; font-size:12px; }
+  .wres-cfgrow.mismatch { background:#fdf3e7; border-left:3px solid #d98a1f; padding:4px 8px; border-radius:4px; }
+  .wres-cfg { display:inline-block; margin-right:6px; color:#5b5570; }
+  .wres-cfg.diff { color:#c25e10; font-weight:700; }
+  .wres-cmd { margin-top:6px; font-size:12px; color:#8a84a0; }
+  .wres-cmd code { background:#f4f0fb; padding:2px 6px; border-radius:4px; user-select:all; }
+  .wres-form { margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 </style>
 <script>
 (function(){
@@ -198,7 +206,8 @@
     }).catch(function(){});
   }
 
-  // --- R3 切片1：Worker 资源（只读展示，无远程调参） ---
+  // --- R3 切片1/2：Worker 资源（当前生效 vs 期望配置 + 调参表单） ---
+  var CFG_KEYS = [['light_slots','轻槽位'],['heavy_slots','重槽位'],['light_min_avail_mb','轻闸门MB'],['heavy_min_avail_mb','重闸门MB']];
   function renderWorkerResources(list){
     var el = document.getElementById('ov-worker-res');
     if (!list.length){ el.className = 'muted'; el.textContent = '暂无 worker 记录'; return; }
@@ -228,12 +237,66 @@
         (light.length ? '<span class="wres-slot-label">轻 ×' + light.length + '</span>' + light.map(cell).join('') : '') +
         (heavy.length ? '<span class="wres-slot-label" style="margin-left:8px">重 ×' + heavy.length + '</span>' + heavy.map(cell).join('') : '') +
         (slots.length ? '' : '<span class="opt">槽位未上报</span>') + '</div>';
+      // R3 切片2：当前生效 vs 期望配置
+      var lim = w.limits || {}, des = w.desired_config || null;
+      function cfgRow(label, obj, isDesired){
+        if (!obj) return '';
+        return '<span class="wres-meta">' + label + '：</span>' + CFG_KEYS.map(function(pair){
+          var k = pair[0], v = obj[k];
+          var diff = isDesired === null && des && des[k] !== null && des[k] !== undefined && v !== des[k];
+          return '<span class="wres-cfg' + (diff ? ' diff' : '') + '">' + pair[1] + ' ' +
+            (v === null || v === undefined ? '—' : v) + '</span>';
+        }).join(' ');
+      }
+      var cfgHtml;
+      if (des){
+        cfgHtml = '<div class="wres-cfgrow' + (w.config_mismatch ? ' mismatch' : '') + '">' +
+          cfgRow('当前生效', lim, null) + ' · ' +
+          cfgRow('期望 v' + des.version, des, true) +
+          ' <span class="wres-meta">（' + fmt(des.updated_at) + (des.updated_by ? '，' + esc(des.updated_by) : '') + '）</span>' +
+          (w.config_mismatch
+            ? '<span class="badge fail" style="margin-left:6px">不一致</span>'
+            : '<span class="badge ok" style="margin-left:6px">一致</span>') + '</div>';
+      } else {
+        cfgHtml = '<div class="wres-cfgrow">' + cfgRow('当前生效', lim, null) +
+          ' <span class="wres-meta">· 未设期望配置</span></div>';
+      }
+      if (des && w.config_mismatch){
+        var cmd = 'bash deploy/saas/worker-tune.sh --light-slots ' + des.light_slots +
+          ' --heavy-slots ' + des.heavy_slots + ' --light-min-avail-mb ' + des.light_min_avail_mb +
+          ' --heavy-min-avail-mb ' + des.heavy_min_avail_mb;
+        cfgHtml += '<div class="wres-cmd">本机应用：<code>' + esc(cmd) + '</code> ' +
+          '<button class="btn-sm" data-copy="' + esc(cmd) + '">复制</button></div>';
+      }
+      // 编辑表单（4 值，提交后期望版本 +1，worker 下轮上报比对）
+      var form = '<div class="wres-form">' + CFG_KEYS.map(function(pair){
+        var v = des && des[pair[0]] !== null && des[pair[0]] !== undefined ? des[pair[0]]
+          : (lim[pair[0]] !== null && lim[pair[0]] !== undefined ? lim[pair[0]] : '');
+        return '<label class="wres-meta">' + pair[1] + ' <input type="number" min="0" max="1000000" ' +
+          'style="width:80px" data-wcfg="' + pair[0] + '" data-wid="' + esc(w.name) + '" value="' + v + '"></label>';
+      }).join(' ') + ' <button class="btn-sm" data-wcfg-save="' + esc(w.name) + '">设为期望</button></div>';
       return '<div class="wres-card"><div class="wres-head">' + dot + esc(w.name) +
         ' <span class="wres-meta">' + (w.online ? '在线' : '离线') +
         ' · 心跳 ' + fmt(w.last_heartbeat_at) + ' · 状态上报 ' + fmt(w.status_at) + '</span></div>' +
-        mem + slotsHtml + '</div>';
+        mem + slotsHtml + cfgHtml + form + '</div>';
     }).join('');
   }
+  document.getElementById('ov-worker-res').addEventListener('click', function(ev){
+    var copyCmd = ev.target.dataset && ev.target.dataset.copy;
+    if (copyCmd){ navigator.clipboard.writeText(copyCmd).then(function(){ ev.target.textContent = '已复制'; }); return; }
+    var wid = ev.target.dataset && ev.target.dataset.wcfgSave;
+    if (!wid) return;
+    var body = {worker_id: wid}, bad = null;
+    document.querySelectorAll('#ov-worker-res input[data-wid="' + wid + '"]').forEach(function(inp){
+      var v = parseInt(inp.value, 10);
+      if (isNaN(v) || v < 0){ bad = inp.dataset.wcfg; } else { body[inp.dataset.wcfg] = v; }
+    });
+    if (bad){ alert('字段 ' + bad + ' 须为非负整数'); return; }
+    apiFetch('/api/saas/console/worker-config', {json: body}).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok){ alert(d.error || '保存失败'); return; }
+      loadOverview();
+    }).catch(function(){});
+  });
   // --- N1b 权限配置 ---
   var TIER_LABELS = {guest: '游客', member: '注册会员', paid: '付费会员'};
   function loadPolicies(){

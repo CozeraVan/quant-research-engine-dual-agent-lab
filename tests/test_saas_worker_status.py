@@ -78,7 +78,7 @@ def _clean(app):
     engine = _get_engine(app)
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE results, jobs, strategies, users, sessions, sms_codes, "
-                          "factor_requests, workers RESTART IDENTITY CASCADE"))
+                          "factor_requests, workers, worker_configs RESTART IDENTITY CASCADE"))
 
 
 def _admin_headers(app, email="admin@example.com"):
@@ -191,3 +191,100 @@ class TestConsolePageBlock:
         html = resp.get_data(as_text=True)
         assert "ov-worker-res" in html and "Worker 资源" in html
         assert "workers_detail" in html
+        # R3 切片2：期望配置表单与一键命令
+        assert "worker-config" in html and "worker-tune.sh" in html
+        assert "config_mismatch" in html
+
+
+class TestWorkerConfigs:
+    """R3 切片2：期望资源配置（worker_configs）CRUD + 一致性闭环。"""
+
+    BODY = {"worker_id": "home-worker", "light_slots": 2, "heavy_slots": 3,
+            "light_min_avail_mb": 2000, "heavy_min_avail_mb": 6500}
+
+    def test_unauthenticated_401(self, client):
+        assert client.post("/api/saas/console/worker-config", json=self.BODY).status_code == 401
+
+    def test_member_forbidden_403(self, client, app):
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            conn.execute(text("INSERT INTO users (email, role) VALUES ('m@e.c', 'user')"))
+        resp = client.post("/api/saas/console/worker-config", json=self.BODY,
+                           headers={"X-User-Id": "1"})
+        assert resp.status_code == 403
+
+    def test_upsert_and_version_increment(self, client, app):
+        headers = _admin_headers(app)
+        d = client.post("/api/saas/console/worker-config", json=self.BODY,
+                        headers=headers).get_json()
+        assert d["ok"] and d["config"]["version"] == 1
+        assert d["config"]["light_slots"] == 2 and d["config"]["updated_by"] == "user#1"
+        body2 = {**self.BODY, "heavy_slots": 4}
+        d2 = client.post("/api/saas/console/worker-config", json=body2,
+                         headers=headers).get_json()
+        assert d2["config"]["version"] == 2 and d2["config"]["heavy_slots"] == 4
+        engine = app.extensions["saas_engine"]
+        with engine.connect() as conn:
+            n = conn.execute(text("SELECT count(*) FROM worker_configs")).scalar_one()
+        assert n == 1  # upsert 单行
+
+    def test_validation_400(self, client, app):
+        headers = _admin_headers(app)
+        assert client.post("/api/saas/console/worker-config",
+                           json={k: v for k, v in self.BODY.items() if k != "heavy_slots"},
+                           headers=headers).status_code == 400
+        assert client.post("/api/saas/console/worker-config",
+                           json={**self.BODY, "light_slots": -1},
+                           headers=headers).status_code == 400
+        assert client.post("/api/saas/console/worker-config",
+                           json={**self.BODY, "worker_id": ""},
+                           headers=headers).status_code == 400
+
+    def test_status_response_carries_desired_config(self, client, app):
+        headers = _admin_headers(app)
+        client.post("/api/saas/console/worker-config", json=self.BODY, headers=headers)
+        # 无配置 worker → desired_config null
+        d0 = client.post("/api/worker/status", json=STATUS_BODY,
+                         headers=WORKER_HEADERS).get_json()
+        assert d0["desired_config"] is not None  # STATUS_BODY worker_id 同为 home-worker
+        assert d0["desired_config"]["version"] == 1
+        other = client.post("/api/worker/status", json={**STATUS_BODY, "worker_id": "other"},
+                            headers=WORKER_HEADERS).get_json()
+        assert other["desired_config"] is None
+
+    def test_overview_mismatch_flag(self, client, app):
+        headers = _admin_headers(app)
+        # 上报 limits(2,3,2000,6500) 后设期望 (1,3,2000,6500) → 不一致
+        client.post("/api/worker/status", json=STATUS_BODY, headers=WORKER_HEADERS)
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        w0 = d["workers_detail"][0]
+        assert w0["desired_config"] is None and w0["config_mismatch"] is False
+        client.post("/api/saas/console/worker-config",
+                    json={**self.BODY, "light_slots": 1}, headers=headers)
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        w = d["workers_detail"][0]
+        assert w["config_mismatch"] is True
+        assert w["desired_config"]["light_slots"] == 1
+        # 期望改回与上报一致（STATUS_BODY limits: 2/1/2000/6500）→ 一致
+        match = {"worker_id": "home-worker", "light_slots": 2, "heavy_slots": 1,
+                 "light_min_avail_mb": 2000, "heavy_min_avail_mb": 6500}
+        client.post("/api/saas/console/worker-config", json=match, headers=headers)
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        assert d["workers_detail"][0]["config_mismatch"] is False
+
+
+class TestMismatchLogic:
+    def test_worker_config_mismatch(self):
+        from quant_research_engine.gui.saas.app import worker_config_mismatch
+        des = {"light_slots": 2, "heavy_slots": 3,
+               "light_min_avail_mb": 2000, "heavy_min_avail_mb": 6500}
+        assert worker_config_mismatch(None, None) is False
+        assert worker_config_mismatch({"light_slots": 1}, None) is False
+        assert worker_config_mismatch(None, des) is True  # 旧 worker 未上报
+        assert worker_config_mismatch(dict(des), des) is False
+        assert worker_config_mismatch({**des, "heavy_slots": 4}, des) is True
+        # 期望里 None 的键不约束
+        assert worker_config_mismatch({"light_slots": 99},
+                                      {"light_slots": None, "heavy_slots": None,
+                                       "light_min_avail_mb": None,
+                                       "heavy_min_avail_mb": None}) is False

@@ -12,9 +12,10 @@ from quant_research_engine.worker.slots import mem_total_mb
 
 
 class _FakeClient:
-    def __init__(self, jobs=None, fail_on_status=False):
+    def __init__(self, jobs=None, fail_on_status=False, desired_config=None):
         self.jobs = list(jobs or [])
         self.fail_on_status = fail_on_status
+        self.desired_config = desired_config
         self.status_reports: list[dict] = []
         self.worker_id = "test-w"
         self.base_url = "http://fake"
@@ -35,7 +36,7 @@ class _FakeClient:
         if self.fail_on_status:
             raise RuntimeError("云端不可达")
         self.status_reports.append(payload)
-        return {"ok": True}
+        return {"ok": True, "desired_config": self.desired_config}
 
 
 def test_mem_total_mb_parse(tmp_path):
@@ -82,6 +83,50 @@ class TestReportStatusOnce:
         daemon = WorkerDaemon(_FakeClient(fail_on_status=True))
         assert daemon.report_status_once({}, mem_fn=lambda: 100.0) is False
         assert "status 上报失败" in capsys.readouterr().out
+
+
+class TestDesiredConfigComparison:
+    """R3 切片2：status 响应回带的期望配置与当前生效 limits 比对记日志。"""
+
+    LIMITS = {"light_slots": 2, "heavy_slots": 3,
+              "light_min_avail_mb": 2000.0, "heavy_min_avail_mb": 6500.0}
+
+    def test_mismatch_logs_once_per_version(self, capsys):
+        desired = {"worker_id": "test-w", "light_slots": 1, "heavy_slots": 3,
+                   "light_min_avail_mb": 2000, "heavy_min_avail_mb": 6500, "version": 5}
+        daemon = WorkerDaemon(_FakeClient(desired_config=desired))
+        assert daemon.report_status_once(self.LIMITS, mem_fn=lambda: 100.0) is True
+        out = capsys.readouterr().out
+        assert "期望配置 v5 待应用" in out and "light_slots" in out
+        # 同 version 第二次上报不再重复提示
+        daemon.report_status_once(self.LIMITS, mem_fn=lambda: 100.0)
+        assert "期望配置" not in capsys.readouterr().out
+        # 新版本再提示
+        daemon.client.desired_config = {**desired, "version": 6, "light_slots": 2}
+        daemon.report_status_once(self.LIMITS, mem_fn=lambda: 100.0)
+        assert "期望配置 v6" in capsys.readouterr().out
+
+    def test_matching_config_no_log_then_transition(self, capsys):
+        desired = {"worker_id": "test-w", "light_slots": 2, "heavy_slots": 3,
+                   "light_min_avail_mb": 2000, "heavy_min_avail_mb": 6500, "version": 5}
+        daemon = WorkerDaemon(_FakeClient(desired_config=desired))
+        daemon.report_status_once(self.LIMITS, mem_fn=lambda: 100.0)
+        assert "期望配置" not in capsys.readouterr().out
+
+    def test_applied_transition_logs_back_to_consistent(self, capsys):
+        desired = {"worker_id": "test-w", "light_slots": 1, "heavy_slots": 3,
+                   "light_min_avail_mb": 2000, "heavy_min_avail_mb": 6500, "version": 5}
+        daemon = WorkerDaemon(_FakeClient(desired_config=desired))
+        daemon.report_status_once(self.LIMITS, mem_fn=lambda: 100.0)
+        assert "待应用" in capsys.readouterr().out
+        # 管理员应用后 worker 重启，limits 变为期望值 → 记录「已生效」
+        daemon.report_status_once({**self.LIMITS, "light_slots": 1}, mem_fn=lambda: 100.0)
+        assert "期望配置 v5 已生效" in capsys.readouterr().out
+
+    def test_no_desired_config_silent(self, capsys):
+        daemon = WorkerDaemon(_FakeClient(desired_config=None))
+        daemon.report_status_once(self.LIMITS, mem_fn=lambda: 100.0)
+        assert "期望配置" not in capsys.readouterr().out
 
 
 class TestSlotTracking:

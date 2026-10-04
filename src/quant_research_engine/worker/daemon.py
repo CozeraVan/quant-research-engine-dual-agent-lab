@@ -62,6 +62,8 @@ class WorkerDaemon:
         # R3 切片1：槽位实时状态表（线程安全），供 status 上报线程读取
         self._slot_lock = threading.Lock()
         self._slots: dict[str, dict[str, Any]] = {}
+        # R3 切片2：期望配置比对——记录最近一次已提示的期望版本，避免每轮重复日志
+        self._desired_logged_version: int | None = None
 
     # --- R3 切片1：槽位状态跟踪 + 周期上报 ---
 
@@ -88,11 +90,36 @@ class WorkerDaemon:
             "limits": limits,
         }
 
+    _CONFIG_KEYS = ("light_slots", "heavy_slots", "light_min_avail_mb", "heavy_min_avail_mb")
+
+    def _check_desired_config(self, desired: dict[str, Any] | None,
+                              limits: dict[str, Any]) -> None:
+        """R3 切片2：上报响应回带的期望配置与当前生效值比对，不一致记日志
+        （同一 version 只提示一次；应用方式：本机执行 deploy/saas/worker-tune.sh）。"""
+        if not desired:
+            self._desired_logged_version = None
+            return
+        version = desired.get("version")
+        diff = {k: (limits.get(k), desired.get(k))
+                for k in self._CONFIG_KEYS
+                if desired.get(k) is not None and limits.get(k) != desired.get(k)}
+        if not diff:
+            if self._desired_logged_version is not None:
+                _log(f"期望配置 v{version} 已生效（与当前一致）")
+                self._desired_logged_version = None
+            return
+        if version != self._desired_logged_version:
+            detail = "，".join(f"{k}: 当前 {cur} → 期望 {want}" for k, (cur, want) in diff.items())
+            _log(f"期望配置 v{version} 待应用（{detail}）；"
+                 "本机执行 deploy/saas/worker-tune.sh 后重启 worker 生效")
+            self._desired_logged_version = version
+
     def report_status_once(self, limits: dict[str, Any],
                            mem_fn: Callable[[], float] | None = None) -> bool:
         """上报一次状态；失败仅记日志返回 False，不抛异常。"""
         try:
-            self.client.report_status(self.build_status_payload(limits, mem_fn))
+            resp = self.client.report_status(self.build_status_payload(limits, mem_fn))
+            self._check_desired_config((resp or {}).get("desired_config"), limits)
             return True
         except Exception as exc:  # noqa: BLE001 —— 上报失败不中断 worker
             _log(f"status 上报失败（{exc}）")

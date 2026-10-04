@@ -171,6 +171,19 @@ CREATE TABLE IF NOT EXISTS workers (
 ALTER TABLE workers ADD COLUMN IF NOT EXISTS status JSONB;
 ALTER TABLE workers ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ;
 
+-- R3 切片2（2026-10-04）：worker 期望资源配置（槽位数/内存闸门），管理台编辑、
+-- status 响应回带 worker 比对；version 每次修改 +1（worker 侧据此识别新配置）。
+CREATE TABLE IF NOT EXISTS worker_configs (
+    worker_id                  TEXT PRIMARY KEY,
+    desired_light_slots        INT,
+    desired_heavy_slots        INT,
+    desired_light_min_avail_mb INT,
+    desired_heavy_min_avail_mb INT,
+    version                    INT NOT NULL DEFAULT 1,
+    updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_by                 TEXT
+);
+
 -- QRE-SAAS-FEEDBACK-FACTOR-REQ（2026-09-27）：
 -- ① factor_requests 补 formula/purpose（用户主动描述因子定义与用途，辅助人工审核）；
 -- ② 新 feedback 表：内测意见反馈，仅登录用户可提交（游客不可，见 06 决策日志），
