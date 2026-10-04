@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-REPLAY-S2 (DONE — CR-2026-10-04 切片2 K线级重播：replay.js 向后兼容扩展
+QRE-SAAS-REPLAY-POLISH (DONE — 重播组件两项优化（用户批准）：①接管模式——replay.js
+opts.chartEl + destroy(keepDom)，symbol/job 删独立重播卡接管原 K线/收益曲线容器，
+退出内存重建静态+缩放/基准条/区间卡恢复（踩坑 classList.add 链式抛错已修）；
+②控制条打磨——SVG 图标+文字标签、cursor/hover/:focus-visible 紫环、transition 0.2s、
+prefers-reduced-motion 降级、36px 等高 8px 网格；staging 单容器 DOM 断言/退出还原/
+末帧 0.59% 强一致/UI 探针/reduced-motion 仿真/移动 375 全过，`-k saas` 235 passed；
+awaiting git approval（站立批准有效）→ 部署 ECS)
+
+上一任务：QRE-SAAS-REPLAY-S2 (DONE — CR-2026-10-04 切片2 K线级重播：replay.js 向后兼容扩展
 （series type/extra 透传、ev.price 定位、initialCursor/height、yAxes pct:false 修全轴%
 bug）；symbol.html #box-kreplay——K线/量/因子副图逐日推进、侧边信息卡（OHLC/因子/
 持仓/浮动盈亏·毛随帧跳动/已实现累计）、默认近 2 年起播；staging 全链路实测——

@@ -2,7 +2,43 @@
 
 ## Task ID
 
-QRE-SAAS-REPLAY-S2 (CR-2026-10-04 切片2：K线级重播（symbol.html 个股详情页）)
+QRE-SAAS-REPLAY-POLISH (重播组件两项优化：控制条 UI/UX 打磨 + 接管原图表容器模式，用户批准)
+
+## Current Status
+
+DONE (implementation; `-k saas` 235 passed 零回归；staging 接管闭环 + UI 探针 +
+reduced-motion 仿真全过；awaiting git finalization 后部署)
+
+## Task Note
+
+- 任务2 接管模式（用户原话「点击后会存在两个K线模块，建议在原K线模块上覆盖」）：
+  replay.js 新增 `opts.chartEl`（接管既有容器——先销毁静态实例防 dataZoom/legend 残留）
+  与 `destroy(keepDom)`（退出只撤控制条/日历、dispose 图表，容器交还调用方重建）；
+  symbol.html 删 #box-kreplay 独立卡，控制条插槽 #kreplay-bar-slot 进 #box-kline，
+  退出后 `renderKline(d)` 内存重建静态全量 + dataZoom 恢复；job.html 同理删
+  #box-replay，接管 #chart-main，重播期间隐藏基准切换条与区间信息卡（避免口径并存），
+  退出 renderMain(d) 恢复。**踩坑**：退出处理器里 `classList.add('hidden').innerHTML`
+  链式调用（add 不返回元素）抛 TypeError 中断恢复流程，Playwright 探针抓出。
+- 任务1 控制条打磨（ui-ux-pro-max 规则落地，与 12 号冲突处以 12 号为准）：
+  ①emoji 图标全换内联 SVG（play/pause/step/skip）+ 文字标签 + title/aria-label；
+  ②可点元素 cursor:pointer + hover 淡紫反馈 + :focus-visible 紫环（不去焦点环）；
+  ③transition 0.2s（150-300ms 区间），播放↔暂停图标即时切换带 opacity 过渡；
+  ④prefers-reduced-motion 媒体查询：事件弹入动画/峰值闪烁/按钮过渡全关
+  （仿真实测 transitionDuration≈0）；⑤按钮 36px 等高（§1 行内控件硬规则）、
+  8px 间距网格、播放钮主紫选中态与 entry-card.selected 同调性。
+- 验证（staging Playwright 全实跑）：
+  - symbol：进入重播 DOM 仅 1 个 #chart-kline（无第二模块）→ 浮动盈亏 −18.00 元
+    → 退出静态还原 + dataZoom 双组件恢复 ✓；
+  - job：进入接管（bench/strip 隐藏）→ 末帧累计收益 0.59% == 静态 ✓ → 退出
+    基准条/区间卡/缩放全恢复 ✓；
+  - UI 探针：cursor:pointer、高度 36px、transition 0.2s、.rp-btn:focus-visible
+    规则存在；reduced-motion 仿真 transition≈0 ✓；
+  - 移动 375 零横滚零 JS 报错（两端截图 .tmp/mobile-audit/{desktop,m375}-takeover-*.png）。
+- 测试：模板断言随接管模式更新（box-replay/box-kreplay 移除 → bar-slot/exit 按钮）。
+
+---
+
+## Archive: QRE-SAAS-REPLAY-S2 (CR-2026-10-04 切片2：K线级重播（symbol.html 个股详情页）)
 
 ## Current Status
 

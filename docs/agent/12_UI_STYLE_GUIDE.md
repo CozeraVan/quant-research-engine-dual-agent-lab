@@ -275,11 +275,16 @@
 - SaaS 特有元素复用既有类：游客提示条 `.guest-strip`（`lab-theme.css:441-442`）、job 状态徽章映射 queued/running→`.run`、completed→`.ok`、failed/canceled→`.fail`。
 - 对齐方法（历次 UI 对齐任务的做法）：8081 截图作基准 → SaaS 对应页截图 → 逐项 diff → 只改 SaaS 侧模板呈现层，数据接口零改动。**8081 lab 侧代码冻结，绝不许为了迁就 SaaS 改它。**
 
-### 3.11 回测重播组件（`replay.js` + `lab-theme.css` .rp-* 族，2026-10-04）
+### 3.11 回测重播组件（`replay.js` + `lab-theme.css` .rp-* 族，2026-10-04，2026-10-04 接管模式修订）
 
 - 共享组件：`static/replay.js`（saas/lab 同源），切片1 job.html 策略级重播首发，
   切片2 symbol.html K线级复用。API：`QREReplay.core`（纯逻辑：binEvents/
   positionCounts/nextEventfulCursor/frameMetrics）+ `QREReplay.attach(mountEl, opts)`。
+- **接管模式（2026-10-04 用户拍板，替代独立重播卡）**：点「重播」后接管原图表容器
+  渲染重播帧——`opts.chartEl` 传原容器（组件先销毁静态实例防 dataZoom/legend 残留），
+  控制条插在卡片内插槽 div；「退出重播」调 `destroy(keepDom=true)`（只撤控制条/日历、
+  dispose 图表）后由页面用内存数据重建静态全量渲染。**禁止再新建第二个同内容图表模块。**
+  接管期间隐藏冲突的静态交互（job 页隐藏基准切换与区间卡；退出恢复）。
 - 渲染红线（不可违反）：全量数据内存持有，每帧只把 `[0, cursor]` 截断喂 ECharts
   （未来数据天然不可见）；setOption 走 rAF 节流（~16ms 帧预算）；主轴=净值/行情序列
   交易日，事件按日归箱对齐。
@@ -290,6 +295,11 @@
   空仓快进）；事件流 `.rp-ev-day`/`.rp-ev-chip`（同日同类 >5 聚合可展开）；
   指标面板 `.rp-metrics`（auto-fit minmax(110px) 卡族），峰值刷新
   `.rp-peak-flash`（淡紫边+晕，无新色相）。
+- **交互打磨硬规则（2026-10-04）**：图标一律内联 SVG + 可见文字标签（禁 emoji、
+  禁无标签纯图标钮，辅助控件补 title/aria-label）；可点元素 cursor:pointer +
+  hover 淡紫反馈；`:focus-visible` 紫环不许去；transition 150–300ms（本组件 0.2s）；
+  `prefers-reduced-motion: reduce` 下弹入动画/峰值闪烁/按钮过渡全关；
+  按钮 36px 等高（§1 行内控件规则）、8px 间距网格。
 - 扩展选项（切片2 引入，向后兼容）：series `type`/`extra` 透传任意 ECharts 序列
   （candlestick/bar/scatter）；事件可带 `ev.price` 真实成交价定位；`opts.initialCursor`
   （窗口起播，如近 2 年）；`opts.height`；yAxes `pct:false`（价格/量/因子轴不加 %，
@@ -344,6 +354,7 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 ## 变更记录
 
+- 2026-10-04（QRE-SAAS-REPLAY-POLISH）§3.11 修订：重播改**接管模式**（接管原图表容器，禁第二模块，退出内存重建静态）+ 交互打磨硬规则（SVG 图标+文字标签、hover/focus-visible、150-300ms、prefers-reduced-motion 降级、36px 等高 8px 网格）。
 - 2026-10-04（QRE-SAAS-REPLAY-S1）新增 §3.11 回测重播组件规则：static/replay.js 共享组件（core 纯逻辑 + attach UI），[0,cursor] 截断渲染/rAF 节流/时序 T 与 T+1 相隔三条红线，.rp-* 控制条与事件流族（淡紫 tokens 无新色相），768px 断点折行，末帧指标=静态报告强一致性（Playwright 断言）。
 - 2026-10-04（QRE-SAAS-MOBILE-ADAPT）新增 §10 移动端适配规则：768px 主断点、表格块级横滚、长 chip 折行、点击目标 ≥44px（日历格子 40px 妥协）、输入控件 16px/44px、磨损块 2 列+grid 三段、lab-theme 后加载需高优先级选择器覆盖的踩坑。改动全部在 saas/templates/base.html 内嵌样式块；本条为「记录实际落地规则」，经用户任务书批准。
 - 2026-09-28（QRE-CALENDAR-YEAR-PICKER）共享日历组件（`lab-ui.js` attachCalendar，8081 lab 与 SaaS 同源）新增**年→月→日钻取**：点头部年月标题（新 `.cal-title` 按钮）进入年份视图（12 年/页九宫格 `.cal-grid-ym` 4 列 + `.cal-cell` 格子，翻页 ±12 年），选年进月份视图（12 个月），选月回日视图；Esc 逐级返回（年→月→日→关闭），年视图再点标题回日视图。年/月格子超 [minDate,maxDate] 范围 `:disabled` 置灰禁点（minDate 为新增可选 opts，未传则仅 maxDate 约束，调用方零改动）；选中起/止日所在年/月 `.sel` 紫底高亮与选中日一致（`.cal-cell.sel` 复用 `--lav`）；页脚数据截至提示不变，年/月视图追加「Esc 或点标题返回上级」。样式全部落在 `lab-theme.css` cal-pop 组件族（新增 `.cal-title`/`.cal-grid-ym`/`.cal-cell` 三条规则，无新色相、无循环动效）。lab/SaaS 模板零改动。

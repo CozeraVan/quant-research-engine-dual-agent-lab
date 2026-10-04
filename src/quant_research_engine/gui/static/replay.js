@@ -135,6 +135,18 @@
   function pct(v) { return v == null ? "—" : (v * 100).toFixed(2) + "%"; }
   function fnum(v, d) { return v == null ? "—" : Number(v).toFixed(d == null ? 2 : d); }
 
+  /* 内联 SVG 图标（UI 打磨 2026-10-04：禁 emoji；图标+文字标签） */
+  var ICONS = {
+    play: "M8 5v14l11-7z",
+    pause: "M6 5h4v14H6zM14 5h4v14h-4z",
+    step: "M6 5l8 7-8 7V5zM15 5h3v14h-3z",
+    skip: "M4 5l7 7-7 7V5zM12 5l7 7-7 7V5z",
+  };
+  function icon(name) {
+    return '<svg class="rp-ic" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">' +
+      '<path d="' + ICONS[name] + '" fill="currentColor"/></svg>';
+  }
+
   QREReplay.attach = function (mountEl, opts) {
     var dates = opts.dates || [];
     var n = dates.length;
@@ -150,27 +162,45 @@
 
     /* DOM：控制条 */
     var bar = h("div", "rp-bar");
-    var btnPlay = h("button", "rp-btn rp-play", "▶ 播放");
-    var btnStep = h("button", "rp-btn", "单步 →");
+    var btnPlay = h("button", "rp-btn rp-play");
+    btnPlay.setAttribute("aria-label", "播放 / 暂停");
+    btnPlay.title = "播放 / 暂停";
+    var btnStep = h("button", "rp-btn");
+    btnStep.innerHTML = icon("step") + "<span>单步</span>";
+    btnStep.title = "单步推进一帧";
     var speedSel = h("select", "rp-sel");
+    speedSel.setAttribute("aria-label", "播放速度");
+    speedSel.title = "播放速度（每帧追加 K 线根数）";
     [1, 2, 5, 10].forEach(function (v) {
       var o = h("option", null, v + "x"); o.value = v; speedSel.appendChild(o);
     });
     var startInput = h("input", "rp-date date-input");
+    startInput.setAttribute("aria-label", "起始日");
     startInput.value = dates[0] || "";
     startInput.readOnly = true;
     var slider = h("input", "rp-slider");
     slider.type = "range"; slider.min = 0; slider.max = Math.max(0, n - 1); slider.value = 0;
-    var btnSkip = h("button", "rp-btn", "空仓快进 ⏭");
+    slider.setAttribute("aria-label", "重播进度");
+    var btnSkip = h("button", "rp-btn");
+    btnSkip.innerHTML = icon("skip") + "<span>空仓快进</span>";
+    btnSkip.title = "跳到下一个有事件或持仓变化的交易日";
     var cur = h("span", "rp-cur", "");
     bar.appendChild(btnPlay); bar.appendChild(btnStep); bar.appendChild(speedSel);
     bar.appendChild(h("span", "rp-lbl", "起始日"));
     bar.appendChild(startInput); bar.appendChild(slider); bar.appendChild(btnSkip); bar.appendChild(cur);
     mountEl.appendChild(bar);
 
-    var chartEl = h("div", "rp-chart");
-    if (opts.height) chartEl.style.height = opts.height + "px";  // 切片2：多副图加高
-    mountEl.appendChild(chartEl);
+    /* 图表容器：opts.chartEl 传入时接管既有容器（切片2/策略页接管模式），否则自建 */
+    var ownChartEl = !opts.chartEl;
+    var chartEl = opts.chartEl || h("div", "rp-chart");
+    if (ownChartEl){
+      if (opts.height) chartEl.style.height = opts.height + "px";  // 切片2：多副图加高
+      mountEl.appendChild(chartEl);
+    } else {
+      // 接管：先销毁静态实例（避免旧 dataZoom/legend 残留与重播帧冲突），退出时由调用方重建
+      var oldInst = echarts.getInstanceByDom(chartEl);
+      if (oldInst) oldInst.dispose();
+    }
     var chart = echarts.init(chartEl);
 
     var metricsEl = opts.metricsEl || null;
@@ -339,16 +369,20 @@
       cursor = Math.min(n - 1, cursor + speed);
       renderFrame();
     }
+    function setPlayBtn() {
+      // 播放中状态切换即时生效，图标过渡由 CSS .rp-ic 处理
+      btnPlay.innerHTML = icon(playing ? "pause" : "play") + "<span>" + (playing ? "暂停" : "播放") + "</span>";
+    }
     function play() {
       if (playing || n <= 1) return;
       if (cursor >= n - 1) { cursor = 0; seenEventDate = {}; if (eventsEl) eventsEl.innerHTML = ""; }
       playing = true;
-      btnPlay.textContent = "⏸ 暂停";
+      setPlayBtn();
       timer = setInterval(frame, 120);
     }
     function pause() {
       playing = false;
-      btnPlay.textContent = "▶ 播放";
+      setPlayBtn();
       if (timer) { clearInterval(timer); timer = null; }
     }
     function seek(c) {
@@ -378,6 +412,7 @@
     });
     window.addEventListener("resize", function () { chart.resize(); });
 
+    setPlayBtn();
     renderFrame();
 
     return {
@@ -388,7 +423,16 @@
       metrics: function () {
         return frameMetrics(dates, (opts.series || [])[0] ? (opts.series[0].raw || []) : [], positions, opts.roundTrips, cursor);
       },
-      destroy: function () { pause(); chart.dispose(); mountEl.innerHTML = ""; },
+      // keepDom=true（接管模式退出）：只撤控制条与日历，保留图表容器由调用方重建静态图
+      destroy: function (keepDom) {
+        pause();
+        chart.dispose();
+        bar.remove();
+        var pop = mountEl.querySelector(".rp-calpop");
+        if (pop) pop.remove();
+        if (!keepDom) mountEl.innerHTML = "";
+        else if (ownChartEl) chartEl.remove();
+      },
     };
   };
 })();

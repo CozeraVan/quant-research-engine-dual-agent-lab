@@ -106,9 +106,9 @@ class TestPages:
         assert 'id="metric-strip"' in html and 'id="meta-chips"' in html
         assert 'id="box-risk"' in html and 'id="box-fees"' in html   # C5：FRM + 交易磨损（无数据整块隐藏）
         assert 'id="big-symbols"' in html                            # 个股明细大入口
-        # CR-2026-10-04 切片1：回测重播（共享组件 replay.js，切片2 复用）
-        assert '/static/replay.js' in html and 'id="box-replay"' in html and 'id="btn-replay"' in html
-        assert 'id="replay-mount"' in html and 'id="replay-metrics"' in html and 'id="replay-events"' in html
+        # CR-2026-10-04 切片1：回测重播（共享组件 replay.js；接管模式：接管原收益曲线容器）
+        assert '/static/replay.js' in html and 'id="btn-replay"' in html and 'id="btn-replay-exit"' in html
+        assert 'id="replay-bar-slot"' in html and 'id="replay-metrics"' in html and 'id="replay-events"' in html
         # QRE-SAAS-DETAIL-UI：区间信息卡（8081 同款随滑块重算）+ meta chips 全字段
         assert 'id="range-strip"' in html and "updateRangeStrip" in html
         assert "区间策略收益" in html and "交易日数" in html
@@ -373,9 +373,9 @@ class TestResultsDataSource:
         assert 'id="sym-table"' in html and "/api/results/" in html and "/symbols" in html
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
         assert 'id="sum-strip"' in html and 'id="chart-kline"' in html
-        # CR-2026-10-04 切片2：K线级重播（复用切片1 replay.js）
-        assert '/static/replay.js' in html and 'id="box-kreplay"' in html and 'id="btn-kreplay"' in html
-        assert 'id="kreplay-mount"' in html and 'id="kreplay-info"' in html and 'id="kreplay-events"' in html
+        # CR-2026-10-04 切片2：K线级重播（复用切片1 replay.js；接管模式：接管原 K线容器）
+        assert '/static/replay.js' in html and 'id="btn-kreplay"' in html and 'id="btn-kreplay-exit"' in html
+        assert 'id="kreplay-bar-slot"' in html and 'id="kreplay-info"' in html and 'id="kreplay-events"' in html
         assert "/api/results/" in html and "/symbols/" in html
 
     def test_job_page_uses_results_detail_apis(self, client):

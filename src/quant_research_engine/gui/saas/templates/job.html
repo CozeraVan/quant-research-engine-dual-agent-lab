@@ -20,21 +20,17 @@
 
     <div class="chart-box" id="box-main">
       <div class="chart-title">策略收益 vs 基准指数 <span class="opt">（累计收益率，全期起点 = 0%；拖动下方滑块或图上滚轮缩放区间）</span>
-        <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button></div>
+        <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button>
+        <button class="btn-sm hidden" id="btn-replay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
       <div class="bench-bar" id="bench-bar">基准：</div>
+      <!-- 回测重播（CR-2026-10-04 切片1 + 接管模式 2026-10-04 用户拍板：接管原收益曲线容器）。
+           时序红线：「信」= 信号日 T（成交日前一交易日），「入/出」= T+1 成交日；
+           历史回测为模拟成交，不构成投资建议。 -->
+      <div id="replay-bar-slot"></div>
       <div id="chart-main" style="height:420px"></div>
+      <div class="metric-strip rp-metrics hidden" id="replay-metrics"></div>
+      <div class="hidden" id="replay-events" style="max-height:220px;overflow:auto"></div>
       <div class="metric-strip" id="range-strip" style="margin-top:10px"></div>
-    </div>
-
-    <!-- 回测重播（CR-2026-10-04 切片1，组件 static/replay.js 切片2 复用）。
-         口径红线：「信」= 信号日 T（成交日前一交易日），「入/出」= T+1 成交日；
-         历史回测为模拟成交，不构成投资建议。 -->
-    <div class="chart-box hidden" id="box-replay">
-      <div class="chart-title">回测重播 <span class="opt">（「信」标记 = 信号日 T（收盘出信号），「入/出」标记 = T+1 开盘成交日；指标随帧重算，口径同静态报告；模拟历史数据，不构成投资建议）</span>
-        <button class="btn-sm" id="btn-replay-close" style="float:right">收起 ✕</button></div>
-      <div id="replay-mount"></div>
-      <div class="metric-strip rp-metrics" id="replay-metrics"></div>
-      <div id="replay-events" style="max-height:220px;overflow:auto"></div>
     </div>
 
     <!-- 交易磨损（chart-data.fees_summary；无则整块隐藏，C5 对齐 lab 版） -->
@@ -645,19 +641,30 @@ async function poll(){
   document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
   loadRisk();
 }
-// --- 回测重播（CR-2026-10-04 切片1）：组件装配（replay.js，切片2 个股页复用） ---
+// --- 回测重播（CR-2026-10-04 切片1 + 接管模式：接管原收益曲线容器，退出恢复静态） ---
 let replayCtl = null;
 function initReplay(d){
   const btn = document.getElementById('btn-replay');
   if (!btn || !d.dates || !d.dates.length || !d.equity){ if (btn) btn.style.display = 'none'; return; }
   btn.addEventListener('click', () => {
-    document.getElementById('box-replay').classList.remove('hidden');
-    document.getElementById('box-replay').scrollIntoView({behavior: 'smooth'});
-    if (!replayCtl) mountReplay(d);
+    btn.classList.add('hidden');
+    document.getElementById('btn-replay-exit').classList.remove('hidden');
+    // 重播期间隐藏静态交互：基准切换（重播按当前基准挂载）与区间信息卡（避免口径并存）
+    document.getElementById('bench-bar').style.display = 'none';
+    document.getElementById('range-strip').style.display = 'none';
+    document.getElementById('replay-metrics').classList.remove('hidden');
+    document.getElementById('replay-events').classList.remove('hidden');
+    if (!replayCtl) replayCtl = mountReplay(d);
   });
-  document.getElementById('btn-replay-close').addEventListener('click', () => {
-    if (replayCtl) replayCtl.pause();
-    document.getElementById('box-replay').classList.add('hidden');
+  document.getElementById('btn-replay-exit').addEventListener('click', () => {
+    if (replayCtl){ replayCtl.destroy(true); replayCtl = null; }
+    document.getElementById('replay-metrics').classList.add('hidden');
+    const ev = document.getElementById('replay-events'); ev.classList.add('hidden'); ev.innerHTML = '';
+    document.getElementById('btn-replay-exit').classList.add('hidden');
+    btn.classList.remove('hidden');
+    document.getElementById('bench-bar').style.display = '';
+    document.getElementById('range-strip').style.display = '';
+    renderMain(d);  // 数据全在内存，重建静态收益曲线（含基准条与区间卡）
   });
 }
 function mountReplay(d){
@@ -677,7 +684,7 @@ function mountReplay(d){
   if (benchCode) series.push({name: '基准·' + benches[benchCode].name, id: 'bench', color: '#f59e0b',
     dashed: true, data: toRet(benches[benchCode].closes), grid: 0});
   if (hasDD) series.push({name: '回撤', id: 'dd', color: '#d43030', data: dd, grid: 1, area: true, width: 1});
-  replayCtl = QREReplay.attach(document.getElementById('replay-mount'), {
+  return QREReplay.attach(document.getElementById('replay-bar-slot'), {
     dates: dates,
     series: series,
     grids: hasDD
@@ -688,6 +695,7 @@ function mountReplay(d){
       : [{name: '累计收益率%'}],
     events: events,
     roundTrips: trips,
+    chartEl: document.getElementById('chart-main'),  // 接管原容器
     metricsEl: document.getElementById('replay-metrics'),
     eventsEl: document.getElementById('replay-events'),
   });

@@ -476,3 +476,28 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
   .rp-ev-date{width:72px}
   .rp-ev-det{padding-left:78px}
 }
+
+/* ---- 重播组件 UI/UX 打磨（2026-10-04 用户批准：hover/focus 反馈、150-300ms 微交互、
+   reduced-motion 降级、SVG 图标+文字标签、36px 行内控件等高、8px 间距网格） ---- */
+.rp-btn,.rp-sel,.rp-date{cursor:pointer;transition:all .2s var(--ease)}
+.rp-btn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px}
+.rp-btn:hover{border-color:var(--lav);color:var(--lav-deep);background:var(--tint)}
+.rp-play:hover{background:var(--lav-deep);color:#fff;border-color:var(--lav-deep)}
+.rp-sel:hover,.rp-date:hover{border-color:var(--lav)}
+.rp-ev-agg{cursor:pointer;transition:all .2s var(--ease)}
+.rp-ev-agg:hover{background:var(--tint);border-color:var(--lav);color:var(--lav-deep)}
+.rp-slider{cursor:pointer}
+.rp-ic{display:inline-block;vertical-align:-2px;transition:opacity .2s var(--ease)}
+/* 焦点环（不许去掉）：全站 :focus-visible 紫环规范 */
+.rp-btn:focus-visible,.rp-sel:focus-visible,.rp-date:focus-visible,
+.rp-slider:focus-visible,.rp-ev-agg:focus-visible,
+#btn-replay:focus-visible,#btn-kreplay:focus-visible,
+#btn-replay-exit:focus-visible,#btn-kreplay-exit:focus-visible{
+  outline:2px solid var(--lav);outline-offset:2px;border-radius:6px}
+/* 选中态：播放中主紫底（与 entry-card.selected 同调性） */
+.rp-play{background:var(--lav);border-color:var(--lav);color:#fff;font-weight:600}
+@media (prefers-reduced-motion: reduce){
+  .rp-btn,.rp-sel,.rp-date,.rp-ev-agg,.rp-ic{transition:none}
+  .rp-pop{animation:none}
+  .rp-peak-flash .metric-card{border-color:var(--line);box-shadow:none}
+}

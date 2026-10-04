@@ -21,18 +21,14 @@
 
   <div class="chart-box" id="box-kline" style="display:none">
     <div class="chart-title">日 K 与买卖点 <span class="opt" id="kline-note"></span>
-      <button class="btn-sm" id="btn-kreplay" style="float:right">▶ 重播</button></div>
+      <button class="btn-sm" id="btn-kreplay" style="float:right">▶ 重播</button>
+      <button class="btn-sm hidden" id="btn-kreplay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
+    <!-- K线级重播（CR-2026-10-04 切片2 + 接管模式 2026-10-04 用户拍板：接管原 K线容器，
+         不新建第二模块；退出后恢复静态全量渲染）。时序红线同切片1。 -->
+    <div id="kreplay-bar-slot"></div>
     <div id="chart-kline" style="height:460px"></div>
-  </div>
-
-  <!-- K线级重播（CR-2026-10-04 切片2，复用切片1 replay.js 组件）。
-       时序红线同切片1：「信」= 信号日 T，「入/出」= T+1 成交日；模拟历史数据，不构成投资建议。 -->
-  <div class="chart-box hidden" id="box-kreplay">
-    <div class="chart-title">K线重播 <span class="opt">（「信」标记 = 信号日 T（收盘出信号），「入/出」标记 = T+1 成交日；默认近 2 年起播，可改起始日；浮动盈亏为毛口径（未扣卖出费用）；模拟历史数据，不构成投资建议）</span>
-      <button class="btn-sm" id="btn-kreplay-close" style="float:right">收起 ✕</button></div>
-    <div id="kreplay-mount"></div>
-    <div class="metric-strip rp-metrics" id="kreplay-info"></div>
-    <div id="kreplay-events" style="max-height:200px;overflow:auto"></div>
+    <div class="metric-strip rp-metrics hidden" id="kreplay-info"></div>
+    <div class="hidden" id="kreplay-events" style="max-height:200px;overflow:auto"></div>
   </div>
 
   <div class="chart-box" id="box-trades" style="display:none">
@@ -356,20 +352,31 @@ function renderKline(d){
   });
   window.addEventListener('resize', () => chart.resize());
 }
-// --- K线级重播（CR-2026-10-04 切片2，复用切片1 replay.js；公共 API 未改动） ---
-let kreplayCtl = null;
+// --- K线级重播（CR-2026-10-04 切片2 + 接管模式：接管原 K线容器，退出恢复静态） ---
+let kreplayCtl = null, klineData = null;
 function initKlineReplay(d){
+  klineData = d;
   const btn = $('#btn-kreplay');
   if (!btn) return;
   if (!d.kline || !d.kline.dates || !d.kline.dates.length){ btn.style.display = 'none'; return; }
   btn.addEventListener('click', () => {
-    $('#box-kreplay').classList.remove('hidden');
-    $('#box-kreplay').scrollIntoView({behavior: 'smooth'});
-    if (!kreplayCtl) mountKlineReplay(d);
+    btn.classList.add('hidden');
+    $('#btn-kreplay-exit').classList.remove('hidden');
+    $('#kreplay-info').classList.remove('hidden');
+    $('#kreplay-events').classList.remove('hidden');
+    // 接管原 K线容器：重播帧直接渲染进 #chart-kline（原静态实例由组件销毁）
+    kreplayCtl = mountKlineReplay(d);
+    $('#kreplay-info').insertAdjacentHTML('beforebegin',
+      '<p class="opt" style="font-size:12px;margin:6px 0" id="kreplay-note">「信」标记 = 信号日 T（收盘出信号），「入/出」标记 = T+1 成交日；浮动盈亏为毛口径（未扣卖出费用）；模拟历史数据，不构成投资建议。</p>');
   });
-  $('#btn-kreplay-close').addEventListener('click', () => {
-    if (kreplayCtl) kreplayCtl.pause();
-    $('#box-kreplay').classList.add('hidden');
+  $('#btn-kreplay-exit').addEventListener('click', () => {
+    if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = null; }
+    const note = $('#kreplay-note'); if (note) note.remove();
+    $('#kreplay-info').classList.add('hidden');
+    const ev = $('#kreplay-events'); ev.classList.add('hidden'); ev.innerHTML = '';
+    $('#btn-kreplay-exit').classList.add('hidden');
+    btn.classList.remove('hidden');
+    renderKline(d);  // 数据全在内存，重建静态全量 K 线
   });
 }
 function mountKlineReplay(d){
@@ -435,11 +442,11 @@ function mountKlineReplay(d){
       card('浮动盈亏·毛', (openTrip ? f2(unrealized) : '—') + (openTrip ? ' 元' : ''), cls(unrealized), '持仓中按当前帧收盘价估算，未扣卖出费用') +
       card('已实现盈亏累计', f2(realized) + ' 元', cls(realized), 'exit_date ≤ 当前帧的 round trips 净盈亏合计');
   }
-  kreplayCtl = QREReplay.attach($('#kreplay-mount'), {
+  return QREReplay.attach($('#kreplay-bar-slot'), {
     dates, series, grids, yAxes,
     events, roundTrips: trips,
     initialCursor: startIdx,
-    height: 460 + factors.length * 120,
+    chartEl: $('#chart-kline'),  // 接管原容器
     eventsEl: $('#kreplay-events'),
     onFrame: (cursor) => infoFrame(cursor),
   });
