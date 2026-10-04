@@ -116,10 +116,16 @@ ECS 侧专属待办（隶属阶段 C）：
   X-Worker-Token）；limit_conn 20/IP；超限 429，命中记 error_log 含 zone 名）
 - [ ] 禁 root 直连（PasswordAuthentication/PermitRootLogin 关闭，仅用 deploy 用户）
 - [x] 家里 worker 生产化（C3 完成，2026-09-19）：本机 systemd `qre-saas-worker.service`
-  （User=van，EnvironmentFile=/etc/qre-saas-worker.env[0600]，MemoryMax=4G，
-  Restart=always），指向 https://aguhuice.com，env 无任何代理变量；
+  （User=van，EnvironmentFile=/etc/qre-saas-worker.env[0600]，MemoryMax=26G（R2，2026-10-03
+  由 16G 上调），Restart=always），指向 https://aguhuice.com，env 无任何代理变量；
   公网端到端实测：smoke job#1 claimed→completed 84s，23 个产物文件 sha256 校验落盘
   /srv/aguhuice/uploads/job_1/。仓库模板 deploy/saas/qre-saas-worker.service 已更新为生产版
+- [x] **worker 单例收敛（2026-10-03 晚）**：R2 调试期引入的用户级 `systemctl --user
+  qre-worker`（worker_id=home-pc）与系统级 `qre-saas-worker`（wsl-home-pc）双跑，
+  绕过全局资源语义。已收敛为唯一系统级 `qre-saas-worker`：env 并入槽位/闸门/
+  代理置空/QRE_MARKET_DB_URL 新密码；用户级 unit+env 退役为 ~/.config/*.retired；
+  ECS workers 表 home-pc 僵尸行已清。收敛后端到端冒烟 job#35 completed(attempts=1)。
+  **不要再并存第二套 worker。**
 - [ ] 结果产物磁盘水位监控（40GB ESSD，结果只留元数据+图表 JSON，大文件走 OSS）
 - [ ] 落地页页脚备案号占位替换为正式号：湘ICP备2026040383号-1（改 `deploy/landing/index.html` 后 scp 同步，见第 5 节）
 
@@ -168,7 +174,7 @@ ls -lht ~/quant-workspace/backups/ecs-aguhuice/                                 
 # DB 直查：
 ssh -i ~/.ssh/aguhuice_ed25519 root@47.119.127.40 \
   "sudo -u postgres psql aguhuice -c \"SELECT name, last_heartbeat_at, status_at, status FROM workers;\""
-systemctl --user restart qre-worker && journalctl --user -u qre-worker -n 30 --no-pager  # 本机 worker 重启/查上报日志
+sudo -n systemctl restart qre-saas-worker && sudo -n journalctl -u qre-saas-worker -n 30 --no-pager  # 本机 worker 重启/查日志（唯一 worker：系统级 qre-saas-worker，2026-10-03 收敛）
 ```
 
 ## 6. 纪律

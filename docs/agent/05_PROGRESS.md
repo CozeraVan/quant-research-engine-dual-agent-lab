@@ -774,3 +774,17 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 生产端到端验证：guest smoke 探针（单股 RSI）submit → `weight_class=light` 落库 → 轻槽秒领 → fork 子进程执行 → **completed**；此前一桩被我重启打断的 job 走「租约过期→惰性回收→重排→重试」自愈路径符合预期。
 - 切片 4：console overview 队列深度拆轻/重（queued_light/queued_heavy）+ 说明 tooltip；测试 190 passed。
 - 运维口径：worker 日志 `journalctl --user -u qre-worker -f`；槽位/闸门调参改 `~/.config/qre-worker.env` 后 `systemctl --user restart qre-worker`。
+
+## 2026-10-03 晚 worker 单例收敛（R2/R3 运维收口）
+
+- 背景：R2 切片3 调试期另建了用户级 `systemctl --user qre-worker`（worker_id=home-pc），
+  与既有系统级 `qre-saas-worker`（wsl-home-pc，Restart=always）双跑——双 worker 绕过
+  轻重槽位+内存闸门的全局资源语义（用户发现并批准清理）。
+- 收敛为唯一**系统级** `qre-saas-worker`：/etc/qre-saas-worker.env 并入
+  QRE_WORKER_LIGHT/HEAVY_SLOTS、内存闸门、代理置空七行、QRE_MARKET_DB_URL 新密码
+  （R2 时只写进了用户级 env，/etc 旧密码导致收敛后首个任务 DB 连接失败，已修复）；
+  unit MemoryMax 16G→26G；用户级 unit/env 退役（~/.config/*.retired）；
+  ECS workers 表 home-pc 僵尸行已 DELETE。
+- 端到端验证：收敛后 smoke job#35 claimed→completed（attempts=1），
+  workers.status 正常上报（槽位+内存）。仓库 deploy/saas/qre-saas-worker.service 同步。
+- 教训记入 16 号文档：全机只允许一套 worker 服务。

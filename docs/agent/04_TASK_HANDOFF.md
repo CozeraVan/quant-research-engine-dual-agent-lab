@@ -44,8 +44,10 @@ worker 侧 +9 单测；本地 test_client 闭环冒烟通过；awaiting git fina
 - 验证：`-k saas` 200 passed；/tmp/r3_smoke.py 本地闭环（daemon → CloudClient →
   Flask test_client → overview workers_detail 槽位/内存正确）。
 - 部署要点：ECS git pull 后 restart qre-saas（懒自愈 ALTER 自动补列，无需手工 psql）；
-  本机 qre-worker（user 级）restart 后 15s 内开始上报。env `QRE_WORKER_STATUS_SECONDS`
+  本机 worker restart 后 15s 内开始上报。env `QRE_WORKER_STATUS_SECONDS`
   有默认值 15，两端 env 文件无需改动。
+  ⚠️ 2026-10-03 晚已收敛为唯一系统级 `qre-saas-worker`（见 16 号文档 C3 收敛条目），
+  上文「qre-worker（user 级）」均已退役。
 
 ---
 

@@ -12,7 +12,17 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-R3-SLICE1 (DONE — R3 后台资源可视化 切片1：worker 实时状态上报 + 管理台展示：新端点 POST /api/worker/status（workers 表懒自愈 ALTER 加 status JSONB/status_at，照抄 weight_class 模式）；worker daemon 线程安全槽位状态表 + 后台 status 线程（env QRE_WORKER_STATUS_SECONDS 默认 15s，失败仅记日志）+ client.report_status + slots.mem_total_mb；console overview 新增 workers_detail 数组 + console.html 总览 tab「Worker 资源」卡（在线点/内存条/槽位格，只读）；测试 +19（saas 10 + worker 9），`-k saas` 200 passed 零回归，本地 test_client 闭环冒烟通过；awaiting git approval（本会话用户已站立批准 commit+push+ECS 部署+worker 重启）)
+QRE-WORKER-CONSOLIDATION (DONE — worker 单例收敛：R2 调试期用户级 qre-worker(home-pc)
+与系统级 qre-saas-worker(wsl-home-pc) 双跑，收敛为唯一系统级 qre-saas-worker；
+/etc env 并入槽位/闸门/代理置空/QRE_MARKET_DB_URL 新密码；MemoryMax 16G→26G；
+用户级 unit/env 退役 *.retired；ECS workers 表 home-pc 僵尸行已清；
+收敛后 smoke job#35 completed(attempts=1) 端到端验证通过；docs 04/05/16 已同步；
+awaiting git approval（本会话用户已站立批准 commit+push）)
+
+下一任务：QRE-SAAS-R3-SLICE2 (资源调配封装：管理台侧手动/自动调整 worker 槽位与内存
+闸门——设计未与用户 brainstorm 对齐，开工前需先对齐颗粒度)
+
+上一任务：QRE-SAAS-R3-SLICE1 (DONE 已部署 — worker 实时状态上报 + 管理台「Worker 资源」卡)
 
 上一任务：QRE-CALENDAR-YEAR-PICKER (DONE — 共享日历组件年→月→日钻取：点 .cal-title 标题上钻年份九宫格（12 年/页 ±12 年翻页）→月份视图→日视图，Esc 逐级返回/关闭；新增可选 opts.minDate 下界，年/月超界格子置灰禁点，maxDate 禁未来与「数据截至」页脚不变，调用方零改动兼容；.cal-cell.sel 紫底与选中日一致；仅改共享 lab-ui.js + lab-theme.css，lab/SaaS 模板零改动两端同步升级；全量 2212 passed + 4 skipped 零回归（复跑确认）；staging 8091 Playwright 三视图/禁未来/选值/Esc 实测零 JS 报错；12 号文档 §3.7+变更记录已登记；未 commit 未部署；awaiting git approval)
 

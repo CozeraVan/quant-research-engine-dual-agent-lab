@@ -8,7 +8,17 @@
 #   QRE_WORKER_TOKEN=<与 ECS /etc/qre-saas.env 的 SAAS_WORKER_TOKEN 一致>
 #   QRE_WORKER_ID / QRE_MARKET_DB_URL（本地只读账号 qre_worker_ro）/
 #   QRE_WORKER_UPLOAD_FILES=1 / 轮询与心跳间隔
-# 注意：env 文件严禁带 http_proxy 等代理变量（worker 直连云端）。
+# R2 多租户弹性调度（2026-10-03，N3 基线：单全A×2年任务峰值 5.79G）：
+#   QRE_WORKER_LIGHT_SLOTS=2 / QRE_WORKER_HEAVY_SLOTS=3
+#   QRE_WORKER_LIGHT_MIN_AVAIL_MB=2000 / QRE_WORKER_HEAVY_MIN_AVAIL_MB=6500
+#   QRE_WORKER_STATUS_SECONDS=15（槽位/内存状态上报，R3）
+# 注意：env 文件必须显式置空 http_proxy/https_proxy/all_proxy（大小写七行），
+#   否则 WSL Clash 代理劫持 worker→云端请求造成 read timeout。
+#
+# 2026-10-03 收敛说明：本服务是全机唯一 worker。曾并存的用户级
+# systemctl --user qre-worker（R2 调试期引入）已停用并退役
+# （unit/env 改名 .retired 存于 ~/.config/）。不要再并存第二套 worker——
+# 双 worker 会绕过轻重槽位与内存闸门的全局资源语义。
 #
 # 安装（需 sudo）：
 #   sudo cp deploy/saas/qre-saas-worker.service /etc/systemd/system/
@@ -33,8 +43,10 @@ Restart=always
 RestartSec=10
 # 优雅退出：SIGTERM 后等手头任务完成回传（回测多为分钟级），超时强杀
 TimeoutStopSec=900
-# 回测峰值实测（流式引擎）：500只×2年 ≈300-950MB，留足余量
-MemoryMax=16G
+# R2 内存硬兜底（2026-10-03）：cgroup 上限 26G（32G×80%）。超限由 cgroup
+# 杀 worker（Restart=always 拉起，被中断任务租约过期后云端自动重排），
+# 保证本机 PG/系统/日常使用不被回测拖垮。单槽预算另由内存闸门软约束。
+MemoryMax=26G
 Nice=10
 SyslogIdentifier=qre-saas-worker
 
