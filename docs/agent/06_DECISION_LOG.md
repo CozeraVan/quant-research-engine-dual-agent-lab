@@ -2,6 +2,20 @@
 
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.
 
+### 2026-10-04: 策略资产化数据模型——strategies 加 entry_mode / wizard_state（CR-2026-10-04 模块一）
+
+- Decision: `strategies` 表新增 `entry_mode TEXT`（nl/wizard/yaml）与
+  `wizard_state JSONB`（向导结构化条件快照）。存量推断迁移：nl_text 非空 → nl，
+  否则 → yaml（一次性 UPDATE，幂等 WHERE entry_mode IS NULL）。
+- 写入链路：`POST /api/saas/strategies` 与 job 提交（api_create_job 的同名 upsert）
+  均接收并落库；upsert 时 wizard_state 用 COALESCE 保留旧快照（未传不覆盖）。
+- 降级规则：存量 wizard 策略无快照 → 详情页明示降级为 YAML 编辑（spec「风险」节）。
+- 运维：懒自愈 ALTER 先查 information_schema（ECS strategies 表 owner 是 postgres，
+  与 workers 表同一踩坑），ECS 首次手工 apply cloud_schema.sql 对应段。
+- Rationale: 策略库从「一次性提交物」升级为可还原编辑态的资产（按创建入口还原），
+  为模块二信号监控提供策略实体锚点。
+- Owner: KIMI_CODE（CR-2026-10-04 spec 已经用户批准）
+
 ### 2026-08-23: 风向标预警阈值首轮校准观察（M3，初值不动）
 
 - Decision: 预警阈值保留 CR §2 初值（相关 20 日升幅 > +0.10、VaR99 突破

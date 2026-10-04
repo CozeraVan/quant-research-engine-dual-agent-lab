@@ -444,6 +444,58 @@ def _ensure_worker_configs(engine: Engine) -> None:
     _WORKER_CONFIGS_ENSURED.add(key)
 
 
+# CR-2026-10-04 模块一：策略资产化——strategies 加 entry_mode/wizard_state
+_STRATEGY_ASSET_ENSURED: set[int] = set()
+
+STRATEGY_ENTRY_MODES = ("nl", "wizard", "yaml")
+ENTRY_MODE_LABELS = {"nl": "自然语言", "wizard": "自选因子", "yaml": "策略代码"}
+
+
+def _ensure_strategy_asset_columns(engine: Engine) -> None:
+    key = id(engine)
+    if key in _STRATEGY_ASSET_ENSURED:
+        return
+    # information_schema 先查再 ALTER（ECS strategies 表 owner 是 postgres，同
+    # workers 表踩坑）；存量推断：nl_text 非空 → nl，否则 → yaml。
+    with engine.begin() as conn:
+        existing = {
+            r[0]
+            for r in conn.execute(
+                text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = 'strategies' AND column_name IN ('entry_mode', 'wizard_state')"
+                )
+            )
+        }
+        if "entry_mode" not in existing:
+            conn.execute(text("ALTER TABLE strategies ADD COLUMN IF NOT EXISTS entry_mode TEXT"))
+        if "wizard_state" not in existing:
+            conn.execute(text("ALTER TABLE strategies ADD COLUMN IF NOT EXISTS wizard_state JSONB"))
+        conn.execute(text(
+            "UPDATE strategies SET entry_mode = "
+            "CASE WHEN nl_text IS NOT NULL AND btrim(nl_text) <> '' THEN 'nl' ELSE 'yaml' END "
+            "WHERE entry_mode IS NULL"
+        ))
+    _STRATEGY_ASSET_ENSURED.add(key)
+
+
+def _norm_entry_mode(value: Any) -> str | None:
+    """入参规范化：合法模式原样返回；缺省/非法返回 None（调用方按 nl_text 推断）。"""
+    v = str(value or "").strip().lower()
+    return v if v in STRATEGY_ENTRY_MODES else None
+
+
+def _infer_entry_mode(entry_mode: Any, nl_text: Any) -> str:
+    return _norm_entry_mode(entry_mode) or ("nl" if nl_text and str(nl_text).strip() else "yaml")
+
+
+def _norm_wizard_state(value: Any) -> str | None:
+    """wizard_state 入参：dict → JSON 字符串；None/其他 → None（不改写）。"""
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    return None
+
+
 def _worker_config_view(row: Any) -> dict[str, Any]:
     """worker_configs 行 → API 视图（limits 键名与 worker 上报的 limits 对齐）。"""
     return _jsonable({
@@ -761,6 +813,11 @@ def create_saas_app() -> Flask:
     def saas_symbol_page(job_id: int, ts_code: str) -> str:
         return render_template("symbol.html", job_id=job_id, ts_code=ts_code)
 
+    @app.get("/saas/strategies/<int:strategy_id>")
+    def saas_strategy_detail_page(strategy_id: int) -> str:
+        # CR-2026-10-04 模块一：策略资产详情页（登录限定由数据 API 强制：401/404）
+        return render_template("strategy.html", strategy_id=strategy_id)
+
     # --- 复用既有 NL 编译 / 因子目录（同一编译函数 + factor_correction 纠错层，
     #     LLM key 只存服务端环境变量；两个路由都要求登录） ---
 
@@ -858,10 +915,11 @@ def create_saas_app() -> Flask:
         uid = _current_user_id(app, engine)
         if uid is None:
             return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_strategy_asset_columns(engine)  # CR-2026-10-04：读连接前懒自愈
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT s.id, s.name, s.created_at, s.updated_at, "
+                    "SELECT s.id, s.name, s.entry_mode, s.created_at, s.updated_at, "
                     "count(j.id) AS job_count, max(j.created_at) AS last_used_at "
                     "FROM strategies s LEFT JOIN jobs j ON j.strategy_id = s.id "
                     "WHERE s.user_id = :uid "
@@ -877,15 +935,62 @@ def create_saas_app() -> Flask:
         uid = _current_user_id(app, engine)
         if uid is None:
             return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_strategy_asset_columns(engine)
         with engine.connect() as conn:
             row = conn.execute(
-                text("SELECT id, name, yaml, nl_text, created_at, updated_at "
+                text("SELECT id, name, yaml, nl_text, entry_mode, wizard_state, created_at, updated_at "
                      "FROM strategies WHERE id = :id AND user_id = :uid"),
                 {"id": strategy_id, "uid": uid},
             ).mappings().first()
         if row is None:
             return jsonify({"ok": False, "error": "策略不存在"}), 404
         return jsonify({"ok": True, "strategy": _jsonable(dict(row))})
+
+    @app.get("/api/saas/strategies/<int:strategy_id>/detail")
+    def api_strategy_detail(strategy_id: int) -> Any:
+        """CR-2026-10-04 模块一：策略详情页数据（源文件 + 全部历史回测）。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_strategy_asset_columns(engine)
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT id, name, yaml, nl_text, entry_mode, wizard_state, created_at, updated_at "
+                     "FROM strategies WHERE id = :id AND user_id = :uid"),
+                {"id": strategy_id, "uid": uid},
+            ).mappings().first()
+            if row is None:
+                return jsonify({"ok": False, "error": "策略不存在"}), 404
+            jobs = conn.execute(
+                text(
+                    "SELECT j.id, j.kind, j.status, j.created_at, j.params, "
+                    "r.summary, r.chart_data "
+                    "FROM jobs j LEFT JOIN results r ON r.job_id = j.id "
+                    "WHERE j.strategy_id = :sid AND j.user_id = :uid "
+                    "ORDER BY j.created_at DESC LIMIT 100"
+                ),
+                {"sid": strategy_id, "uid": uid},
+            ).mappings().all()
+        history = []
+        for j in jobs:
+            metrics = ((j["chart_data"] or {}).get("metrics") or {})
+            summary = j["summary"] or {}
+            params = j["params"] or {}
+            codes = params.get("codes")
+            if isinstance(codes, str):
+                codes = [c.strip() for c in codes.split(",") if c.strip()]
+            symbol_count = summary.get("symbol_count") or (
+                len(codes) if codes else params.get("random_n"))
+            history.append({
+                "job_id": j["id"], "kind": j["kind"], "status": j["status"],
+                "date_start": params.get("start"), "date_end": params.get("end"),
+                "symbol_count": symbol_count,
+                "total_return": summary.get("strategy_total_return"),
+                "excess_return": metrics.get("excess_return"),
+                "created_at": _jsonable(j["created_at"]),
+            })
+        return jsonify({"ok": True, "strategy": _jsonable(dict(row)), "jobs": history})
 
     @app.post("/api/saas/strategies")
     def api_strategy_save() -> Any:
@@ -901,6 +1006,11 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "缺少策略名称"}), 400
         if not yaml_text:
             return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
+        if data.get("entry_mode") is not None and _norm_entry_mode(data.get("entry_mode")) is None:
+            return jsonify({"ok": False, "error": "entry_mode 须为 nl/wizard/yaml"}), 400
+        entry_mode = _infer_entry_mode(data.get("entry_mode"), data.get("nl_text"))
+        wizard_state = _norm_wizard_state(data.get("wizard_state"))
+        _ensure_strategy_asset_columns(engine)
         with engine.begin() as conn:
             # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（同 jobs 路由）
             conn.execute(
@@ -913,15 +1023,18 @@ def create_saas_app() -> Flask:
             ).first()
             if existing is not None:
                 conn.execute(
-                    text("UPDATE strategies SET yaml = :yaml, nl_text = :nl, updated_at = now() "
+                    text("UPDATE strategies SET yaml = :yaml, nl_text = :nl, entry_mode = :em, "
+                         "wizard_state = COALESCE(CAST(:ws AS jsonb), wizard_state), updated_at = now() "
                          "WHERE id = :id"),
-                    {"yaml": yaml_text, "nl": data.get("nl_text"), "id": existing.id},
+                    {"yaml": yaml_text, "nl": data.get("nl_text"), "em": entry_mode,
+                     "ws": wizard_state, "id": existing.id},
                 )
                 return jsonify({"ok": True, "strategy_id": existing.id, "updated": True})
             sid = conn.execute(
-                text("INSERT INTO strategies (user_id, name, nl_text, yaml) "
-                     "VALUES (:uid, :name, :nl, :yaml) RETURNING id"),
-                {"uid": uid, "name": name, "nl": data.get("nl_text"), "yaml": yaml_text},
+                text("INSERT INTO strategies (user_id, name, nl_text, yaml, entry_mode, wizard_state) "
+                     "VALUES (:uid, :name, :nl, :yaml, :em, CAST(:ws AS jsonb)) RETURNING id"),
+                {"uid": uid, "name": name, "nl": data.get("nl_text"), "yaml": yaml_text,
+                 "em": entry_mode, "ws": wizard_state},
             ).scalar_one()
         return jsonify({"ok": True, "strategy_id": sid, "updated": False})
 
@@ -1540,6 +1653,10 @@ def create_saas_app() -> Flask:
         nl_text = data.get("nl_text")
         idem = str(data.get("idempotency_key") or "").strip() or None
         _ensure_weight_class_column(engine)
+        # CR-2026-10-04 模块一：提交链路落创建入口模式与向导快照（游客不入策略库）
+        entry_mode = _infer_entry_mode(data.get("entry_mode"), nl_text)
+        wizard_state = _norm_wizard_state(data.get("wizard_state"))
+        _ensure_strategy_asset_columns(engine)
         weight_class = classify_job_weight(kind, params)
 
         with engine.begin() as conn:
@@ -1582,9 +1699,11 @@ def create_saas_app() -> Flask:
                 ).first()
                 if existing is not None:
                     conn.execute(
-                        text("UPDATE strategies SET yaml = :yaml, nl_text = :nl, updated_at = now() "
+                        text("UPDATE strategies SET yaml = :yaml, nl_text = :nl, entry_mode = :em, "
+                             "wizard_state = COALESCE(CAST(:ws AS jsonb), wizard_state), updated_at = now() "
                              "WHERE id = :id"),
-                        {"yaml": yaml_text, "nl": nl_text, "id": existing.id},
+                        {"yaml": yaml_text, "nl": nl_text, "em": entry_mode,
+                         "ws": wizard_state, "id": existing.id},
                     )
                     strategy_id = existing.id
                 else:
@@ -1594,10 +1713,11 @@ def create_saas_app() -> Flask:
             if strategy_id is None:
                 strategy_id = conn.execute(
                     text(
-                        "INSERT INTO strategies (user_id, name, nl_text, yaml) "
-                        "VALUES (:uid, :name, :nl, :yaml) RETURNING id"
+                        "INSERT INTO strategies (user_id, name, nl_text, yaml, entry_mode, wizard_state) "
+                        "VALUES (:uid, :name, :nl, :yaml, :em, CAST(:ws AS jsonb)) RETURNING id"
                     ),
-                    {"uid": uid, "name": name, "nl": nl_text, "yaml": yaml_text},
+                    {"uid": uid, "name": name, "nl": nl_text, "yaml": yaml_text,
+                     "em": entry_mode, "ws": wizard_state},
                 ).scalar_one()
             job_id = conn.execute(
                 text(

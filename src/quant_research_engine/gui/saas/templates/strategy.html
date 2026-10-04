@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}策略详情 · A股回测台{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="page-head">
+    <h1>策略详情</h1>
+    <p id="sd-sub" class="muted">加载中…</p>
+  </div>
+  <div class="card hidden" id="sd-noaccess">
+    <p class="muted">该策略不存在或不属于当前账号。</p>
+  </div>
+  <div id="sd-main" class="hidden">
+    <div class="card">
+      <h2>源文件 <span class="opt" id="sd-mode-label"></span></h2>
+      <!-- nl 模式：原始自然语言（可改 + 重新编译） -->
+      <div id="sd-src-nl" class="hidden">
+        <textarea id="sd-nl-text" rows="5" style="width:100%"></textarea>
+        <p class="opt" style="margin:6px 0">改动自然语言后点「重新编译」生成新的策略代码，再点下方「保存修改」生效。</p>
+        <button class="btn-sm" id="sd-nl-recompile">重新编译</button>
+        <span class="opt" id="sd-nl-status" style="margin-left:8px"></span>
+      </div>
+      <!-- wizard 模式：快照条件组只读还原 + 跳转向导编辑 -->
+      <div id="sd-src-wizard" class="hidden">
+        <div id="sd-wz-summary"></div>
+        <p class="opt" style="margin:6px 0">结构化条件为创建时快照；点击按钮到新建页向导中编辑。</p>
+        <a class="btn-sm" id="sd-wz-edit" href="#">在向导中编辑 →</a>
+      </div>
+      <!-- yaml 模式：代码编辑框 -->
+      <div id="sd-src-yaml" class="hidden">
+        <textarea id="sd-yaml-text" rows="14" style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12.5px"></textarea>
+      </div>
+      <details style="margin-top:10px" id="sd-yaml-detail">
+        <summary>当前生效策略代码（YAML）</summary>
+        <pre id="sd-yaml-view" class="opt" style="white-space:pre-wrap;font-size:12px;margin-top:8px"></pre>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>操作</h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn-sm" id="sd-save">保存修改（同名更新）</button>
+        <button class="btn-sm" id="sd-save-as">另存为新策略</button>
+        <a class="btn-sm" id="sd-rerun" href="#">载入复测 →</a>
+        <span class="opt" id="sd-op-status"></span>
+      </div>
+    </div>
+
+    <!-- CR-2026-10-04 模块二占位：信号监控卡（开关 + 扫描范围 + 最近 7 日信号预览），另行实现 -->
+
+    <div class="card">
+      <h2>历史回测 <span class="opt" id="sd-jobs-count"></span></h2>
+      <table class="tbl">
+        <thead><tr><th class="num">任务</th><th>类型</th><th>状态</th><th>回测区间</th>
+          <th class="num">标的数</th><th class="num">收益率</th><th class="num">超额</th><th>创建时间</th></tr></thead>
+        <tbody id="sd-jobs-tbody"><tr><td colspan="8" class="muted">加载中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  requireLogin();
+  var sid = {{ strategy_id }};
+  var MODE_LABEL = {nl: '自然语言', wizard: '自选因子', yaml: '策略代码'};
+  var STATUS_LABEL2 = {queued: '排队中', leased: '已领取', running: '运行中', uploading: '回传中',
+    completed: '已完成', failed: '失败', expired: '超时', canceled: '已取消'};
+  var st = null;  // 当前策略数据
+
+  function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }
+  function fmt(t){ return t ? LabUI.fmtLocalTime(t) : '—'; }
+  function pct(v){ return (v === null || v === undefined) ? '—' : (v * 100).toFixed(2) + '%'; }
+
+  apiFetch('/api/saas/strategies/' + sid + '/detail').then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok){ document.getElementById('sd-noaccess').classList.remove('hidden'); return; }
+    st = d.strategy;
+    document.getElementById('sd-main').classList.remove('hidden');
+    document.getElementById('sd-sub').textContent =
+      st.name + '（#' + st.id + '）· 创建于 ' + fmt(st.created_at) + ' · 最近更新 ' + fmt(st.updated_at);
+    renderSource();
+    renderJobs(d.jobs || []);
+  }).catch(function(){ document.getElementById('sd-noaccess').classList.remove('hidden'); });
+
+  function renderSource(){
+    var mode = st.entry_mode || (st.nl_text ? 'nl' : 'yaml');
+    document.getElementById('sd-mode-label').textContent = '（创建入口：' + (MODE_LABEL[mode] || mode) + '）';
+    document.getElementById('sd-yaml-view').textContent = st.yaml || '';
+    if (mode === 'nl'){
+      document.getElementById('sd-src-nl').classList.remove('hidden');
+      document.getElementById('sd-nl-text').value = st.nl_text || '';
+    } else if (mode === 'wizard' && st.wizard_state){
+      document.getElementById('sd-src-wizard').classList.remove('hidden');
+      document.getElementById('sd-wz-summary').innerHTML = wizardSummaryHtml(st.wizard_state);
+      document.getElementById('sd-wz-edit').href = '/saas/new?strategy=' + st.id + '&mode=wizard';
+    } else {
+      if (mode === 'wizard' && !st.wizard_state){
+        document.getElementById('sd-mode-label').textContent = '（创建入口：自选因子；无快照，降级代码编辑）';
+      }
+      document.getElementById('sd-src-yaml').classList.remove('hidden');
+      document.getElementById('sd-yaml-text').value = st.yaml || '';
+    }
+    document.getElementById('sd-rerun').href = '/saas/new?strategy=' + st.id;
+  }
+
+  function wizardSummaryHtml(ws){
+    function area(label, a){
+      if (!a || !a.groups || !a.groups.length) return '';
+      var gs = a.groups.map(function(g){
+        var conds = (g.conds || []).map(function(c){
+          var right = (c.fixed !== null && c.fixed !== undefined && c.fixed !== '') ? c.fixed : c.right;
+          return esc(c.left) + ' ' + esc(c.op) + ' ' + esc(right);
+        }).join(' <b>' + esc((g.comb || 'and').toUpperCase()) + '</b> ');
+        return '<div class="opt" style="padding:2px 0">' + conds + '</div>';
+      }).join('<div class="opt" style="color:var(--faint)">— 组间 ' +
+        esc(((a.dividers || [])[0] || 'and').toUpperCase()) + ' —</div>');
+      return '<p style="margin:8px 0 2px"><b>' + label + '</b></p>' + gs;
+    }
+    return area('入场条件', ws.entry) + area('出场条件', ws.exit);
+  }
+
+  function renderJobs(jobs){
+    document.getElementById('sd-jobs-count').textContent = '（共 ' + jobs.length + ' 次）';
+    var tbody = document.getElementById('sd-jobs-tbody');
+    if (!jobs.length){ tbody.innerHTML = '<tr><td colspan="8" class="muted">暂无回测记录</td></tr>'; return; }
+    tbody.innerHTML = jobs.map(function(j){
+      var cls = j.status === 'completed' ? 'ok' : (j.status === 'failed' || j.status === 'expired' || j.status === 'canceled' ? 'fail' : 'run');
+      return '<tr class="row-link" data-href="/saas/jobs/' + j.job_id + '" style="cursor:pointer">' +
+        '<td class="num">#' + j.job_id + '</td><td>' + esc(j.kind) + '</td>' +
+        '<td><span class="badge ' + cls + '">' + esc(STATUS_LABEL2[j.status] || j.status) + '</span></td>' +
+        '<td>' + esc(j.date_start || '—') + ' ~ ' + esc(j.date_end || '—') + '</td>' +
+        '<td class="num">' + (j.symbol_count === null || j.symbol_count === undefined ? '全 A' : j.symbol_count) + '</td>' +
+        '<td class="num">' + pct(j.total_return) + '</td><td class="num">' + pct(j.excess_return) + '</td>' +
+        '<td>' + fmt(j.created_at) + '</td></tr>';
+    }).join('');
+    tbody.querySelectorAll('.row-link').forEach(function(tr){
+      tr.addEventListener('click', function(){ location.href = tr.dataset.href; });
+    });
+  }
+
+  function currentYaml(){
+    var yamlBox = document.getElementById('sd-src-yaml');
+    if (!yamlBox.classList.contains('hidden')) return document.getElementById('sd-yaml-text').value.trim();
+    return st.yaml;  // nl/wizard 模式保存当前生效 YAML（nl 重编译后 st.yaml 已被替换）
+  }
+
+  function saveAs(name){
+    return apiFetch('/api/saas/strategies', {json: {
+      name: name, yaml: currentYaml(), nl_text: st.nl_text,
+      entry_mode: st.entry_mode, wizard_state: st.wizard_state,
+    }}).then(function(r){ return r.json(); });
+  }
+
+  document.getElementById('sd-save').addEventListener('click', function(){
+    saveAs(st.name).then(function(d){
+      document.getElementById('sd-op-status').textContent = d.ok ? '已保存' : (d.error || '保存失败');
+    }).catch(function(){});
+  });
+  document.getElementById('sd-save-as').addEventListener('click', function(){
+    var name = prompt('新策略名称：', st.name + '_v2');
+    if (!name) return;
+    saveAs(name.trim()).then(function(d){
+      if (!d.ok){ alert(d.error || '保存失败'); return; }
+      location.href = '/saas/strategies/' + d.strategy_id;
+    }).catch(function(){});
+  });
+  document.getElementById('sd-nl-recompile').addEventListener('click', function(){
+    var txt = document.getElementById('sd-nl-text').value.trim();
+    var stEl = document.getElementById('sd-nl-status');
+    if (!txt){ stEl.textContent = '请先输入策略描述'; return; }
+    stEl.textContent = '编译中…';
+    apiFetch('/api/saas/nl/compile', {json: {description: txt}}).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok || !d.yaml){ stEl.textContent = d.error || '编译失败'; return; }
+      st.yaml = d.yaml;
+      st.nl_text = txt;
+      document.getElementById('sd-yaml-view').textContent = d.yaml;
+      var det = document.getElementById('sd-yaml-detail');
+      det.open = true;
+      stEl.textContent = '已重新编译（点「保存修改」生效）';
+    }).catch(function(){ stEl.textContent = '编译请求失败'; });
+  });
+})();
+</script>
+{% endblock %}

@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-MOBILE-ADAPT (DONE — 移动端 web UI 适配：Playwright 375×812 逐页审计
+QRE-SAAS-STRATEGY-ASSETS (DONE — CR-2026-10-04 模块一 策略库→策略资产：strategies 加
+entry_mode/wizard_state（懒自愈+存量推断+06 决策）；保存与 job 提交链路落模式与向导快照；
+新页 /saas/strategies/<id> 三模式源文件还原（nl 重编译/wizard 快照+跳向导编辑/yaml 编辑）+
+操作区+历史回测表+模块二占位注释；策略库行入口标签+详情链接；new.html 回填按
+entry_mode/mode 还原入口并修 staging bypass 回填失效；测试 +10，`-k saas` 218 passed 零回归，
+Playwright 桌面+移动截图零报错、向导回填逐键实测正确；awaiting git approval（站立批准有效）
+→ 部署 ECS 需手工 apply strategies 新列)
+
+上一任务：QRE-SAAS-MOBILE-ADAPT (DONE — 移动端 web UI 适配：Playwright 375×812 逐页审计
 （records/job/symbol 三页页级横滚，根因=表格溢出/长 chip nowrap/磨损块固定宽）→
 修复全集中在 base.html 新增 @media(max-width:768px) 规则块（表格块级横滚、chip 折行、
 触达 44px、输入 16px/44px 防 iOS 放大、磨损块 2 列+grid 三段）；踩坑 lab-theme.css

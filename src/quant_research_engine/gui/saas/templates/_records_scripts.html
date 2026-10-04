@@ -142,12 +142,16 @@ async function loadStrategies(){
   const items = d.strategies || [];
   if (!items.length){ tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无保存的策略（新建回测提交后自动入库）</td></tr>'; return; }
   tbody.innerHTML = '';
+  // CR-2026-10-04 模块一：入口标签 + 详情页入口
+  const MODE_LABEL = {nl: '自然语言', wizard: '自选因子', yaml: '策略代码'};
   for (const s of items){
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escH(s.name)}</td>`
+    const modeLabel = MODE_LABEL[s.entry_mode] || '策略代码';
+    tr.innerHTML = `<td>${escH(s.name)} <span class="badge queued" style="font-weight:400">${modeLabel}</span></td>`
       + `<td class="num" style="text-align:right">${s.job_count}</td>`
       + `<td>${fmtT(s.last_used_at)}</td><td>${fmtT(s.created_at)}</td>`
       + `<td style="text-align:right;white-space:nowrap">`
+      + `<a href="/saas/strategies/${s.id}">详情</a> `
       + `<a href="/saas/new?strategy=${s.id}">去回测</a> `
       + `<button class="btn-sm" data-ren="${s.id}">重命名</button> `
       + `<button class="btn-sm" data-del="${s.id}">删除</button></td>`;

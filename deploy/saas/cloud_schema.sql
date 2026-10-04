@@ -54,6 +54,15 @@ CREATE TABLE IF NOT EXISTS strategies (
 );
 CREATE INDEX IF NOT EXISTS idx_strategies_user ON strategies (user_id, updated_at DESC);
 
+-- CR-2026-10-04 模块一（策略资产化）：创建入口模式 + 向导结构化快照。
+-- entry_mode: nl / wizard / yaml；存量推断 nl_text 非空→nl，否则→yaml。
+-- 应用层亦懒自愈（先查 information_schema 再 ALTER，ECS 表 owner 为 postgres 须手工 apply）。
+ALTER TABLE strategies ADD COLUMN IF NOT EXISTS entry_mode TEXT;
+ALTER TABLE strategies ADD COLUMN IF NOT EXISTS wizard_state JSONB;
+UPDATE strategies SET entry_mode =
+    CASE WHEN nl_text IS NOT NULL AND btrim(nl_text) <> '' THEN 'nl' ELSE 'yaml' END
+WHERE entry_mode IS NULL;
+
 -- 回测任务：状态机 queued → leased → running → done / failed
 -- lease 过期（Worker 宕机）自动回队重试，见 worker_jobs 视图
 CREATE TABLE IF NOT EXISTS jobs (

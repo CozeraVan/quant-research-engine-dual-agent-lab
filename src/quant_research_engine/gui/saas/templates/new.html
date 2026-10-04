@@ -615,8 +615,7 @@ function condExpression(l, op, r, rIsNum){
   return l + ' ' + op + ' ' + r;
 }
 function readGroup(group){
-  const groups = $$('#wz-' + group + ' .cond-group'), gexprs = [];
-  for (const g of groups){
+  const groups = $$('#wz-' + group + ' .cond-group'), gexprs = [];  for (const g of groups){
     const rows = g.querySelectorAll('.wz-cond'), parts = [];
     for (const row of rows){
       const l = row.querySelector('.wz-left').value, op = row.querySelector('.wz-op').value;
@@ -638,6 +637,71 @@ function readGroup(group){
     expr += ' ' + (dc === 'and' ? 'and' : 'or') + ' (' + gexprs[k] + ')';
   }
   return {expression: expr};
+}
+
+// CR-2026-10-04 模块一：向导结构化状态快照（策略资产还原用）
+// 快照口径：{entry/exit: {groups: [{comb, conds: [{left, op, fixed, right}]}], dividers: [comb,...]}}
+function snapshotWzArea(area){
+  const groups = [];
+  $$('#wz-' + area + ' .cond-group').forEach(g => {
+    const conds = [];
+    g.querySelectorAll('.wz-cond').forEach(row => {
+      const isNum = row.querySelector('.wz-isfixed').checked;
+      conds.push({
+        left: row.querySelector('.wz-left').value,
+        op: row.querySelector('.wz-op').value,
+        fixed: isNum ? row.querySelector('.wz-rnum').value.trim() : null,
+        right: isNum ? null : row.querySelector('.wz-rfield').value,
+      });
+    });
+    const comb = g.querySelector('.comb-toggle');
+    groups.push({comb: comb ? comb.dataset.comb : 'and', conds});
+  });
+  const dividers = $$('#wz-' + area + ' .comb-divider').map(d => d._comb ? d._comb.dataset.comb : 'and');
+  return {groups, dividers};
+}
+function collectWizardState(){
+  return {entry: snapshotWzArea('entry'), exit: snapshotWzArea('exit')};
+}
+function restoreWizardState(state){
+  // 清空默认条件组后按快照重建；因子目录未就绪时由调用方延迟调用
+  ['entry', 'exit'].forEach(area => {
+    const a = state && state[area];
+    if (!a || !a.groups || !a.groups.length) return;
+    $('#wz-' + area).innerHTML = '';
+    a.groups.forEach((g, gi) => {
+      wzAddGroup(area);
+      const groups = $$('#wz-' + area + ' .cond-group'), gEl = groups[groups.length - 1];
+      const comb = gEl.querySelector('.comb-toggle');
+      comb.dataset.comb = g.comb === 'or' ? 'or' : 'and';
+      comb.textContent = comb.dataset.comb.toUpperCase();
+      // wzAddGroup 自带一条空条件；第一条复用，其余追加
+      (g.conds || []).forEach((c, ci) => {
+        if (ci === 0){
+          const row = gEl.querySelector('.wz-cond');
+          if (c.left) setFactorSelectValue(row.querySelector('.wz-factsel'), c.left);
+          if (c.op) row.querySelector('.wz-op').value = c.op;
+          if (c.fixed != null && c.fixed !== ''){
+            const isf = row.querySelector('.wz-isfixed');
+            isf.checked = true;
+            row.querySelector('.wz-rnum').style.display = '';
+            row.querySelector('.wz-rnum').value = c.fixed;
+            row.querySelectorAll('.wz-factsel')[1].style.display = 'none';
+          } else if (c.right){
+            setFactorSelectValue(row.querySelectorAll('.wz-factsel')[1], c.right);
+          }
+        } else {
+          wzAddCondition(area, gEl, {left: c.left, op: c.op, fixed: c.fixed, right: c.right});
+        }
+      });
+    });
+    // 组间 divider 组合方式
+    $$('#wz-' + area + ' .comb-divider').forEach((d, k) => {
+      const v = (a.dividers || [])[k];
+      if (d._comb && v){ d._comb.dataset.comb = v === 'or' ? 'or' : 'and'; d._comb.textContent = d._comb.dataset.comb.toUpperCase(); }
+    });
+  });
+  refreshWizard();
 }
 function usedFactors(){
   const used = {};
@@ -726,10 +790,14 @@ function buildParams(){
   return params;
 }
 async function createJob(kind){
+  const entryMode = curEntry();
   const resp = await apiFetch('/api/saas/jobs', {json: {
     yaml: applyName(strategyYaml), kind,
     name: $('#p-sname').value.trim() || '未命名策略',
-    nl_text: curEntry() === 'nl' ? $('#nl-text').value.trim().slice(0, 200) : null,
+    nl_text: entryMode === 'nl' ? $('#nl-text').value.trim().slice(0, 2000) : null,
+    // CR-2026-10-04 模块一：落创建入口模式 + 向导结构化快照（策略资产还原用）
+    entry_mode: entryMode,
+    wizard_state: entryMode === 'wizard' ? collectWizardState() : null,
     params: buildParams(),
   }});
   const d = await resp.json();
@@ -831,13 +899,20 @@ function confirmBigUniverse(est){
 }
 
 // 从策略库回填（QRE-SAAS-D3）：/saas/new?strategy=<id> → 载入 YAML 与名称
+// CR-2026-10-04 模块一：按 entry_mode 还原创建入口（?mode=nl|wizard|yaml 可显式指定）——
+// nl 回填原文本框；wizard 恢复快照条件组（无快照降级 YAML）；yaml 进代码入口。
 //（在 window load 后执行：等向导默认渲染完成，避免被覆盖）
 window.addEventListener('load', () => setTimeout(loadStrategyFromQuery, 300));
+function selectEntryCard(mode){
+  const card = document.querySelector('#entryGrid .entry-card[data-entry="' + mode + '"]');
+  if (card && !card.classList.contains('selected')) card.click();
+}
 async function loadStrategyFromQuery(){
-  const sid = new URLSearchParams(location.search).get('strategy');
+  const q = new URLSearchParams(location.search);
+  const sid = q.get('strategy');
   if (!sid) return;
   window.__libBackfillOnce = true;  // 跳过因子目录就绪触发的首次向导重建
-  if (!saasToken()) return;  // 游客提示走提交时 401 引导
+  if (isGuest()) return;  // 游客提示走提交时 401 引导（staging 免登录态 SAAS_BYPASS 放行）
   try {
     const resp = await apiFetch('/api/saas/strategies/' + encodeURIComponent(sid));
     const d = await resp.json();
@@ -846,6 +921,19 @@ async function loadStrategyFromQuery(){
     const nameEl = $('#p-sname');
     nameEl.value = d.strategy.name || '';
     userNamed = true;
+    const mode = q.get('mode') || d.strategy.entry_mode || 'yaml';
+    if (mode === 'nl'){
+      selectEntryCard('nl');
+      if (d.strategy.nl_text) $('#nl-text').value = d.strategy.nl_text;
+    } else if (mode === 'wizard' && d.strategy.wizard_state){
+      selectEntryCard('wizard');
+      // 因子目录异步就绪后才能还原因子下拉值（最多等 10s，超时降级 YAML 入口）
+      for (let i = 0; i < 34 && !catalogReady; i++) await new Promise(r => setTimeout(r, 300));
+      if (catalogReady) restoreWizardState(d.strategy.wizard_state);
+      else selectEntryCard('yaml');
+    } else {
+      selectEntryCard('yaml');
+    }
     refreshPreview();
   } catch (e) { /* 401 等：静默 */ }
 }

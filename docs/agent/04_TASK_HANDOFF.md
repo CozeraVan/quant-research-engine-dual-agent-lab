@@ -2,7 +2,48 @@
 
 ## Task ID
 
-QRE-SAAS-MOBILE-ADAPT (移动端 web UI 适配：375px 逐页审计 + base.html 统一移动端规则)
+QRE-SAAS-STRATEGY-ASSETS (CR-2026-10-04 模块一：策略库 → 策略资产)
+
+## Current Status
+
+DONE (implementation; `-k saas` 218 passed（208 + 10 新增）零回归；staging 8091 桌面
+1280 + 移动 375 截图验证零横滚零 JS 报错；向导快照回填实测逐键正确；
+awaiting git finalization 后部署；ECS 需手工 apply strategies 新列)
+
+## Task Note
+
+- 数据层：strategies 加 `entry_mode TEXT`（nl/wizard/yaml）+ `wizard_state JSONB`；
+  `_ensure_strategy_asset_columns` 懒自愈（先查 information_schema 再 ALTER——ECS 表
+  owner 是 postgres 的既有踩坑），存量推断迁移（nl_text 非空→nl 否则→yaml，幂等）；
+  cloud_schema.sql 同步。`_infer_entry_mode`/`_norm_wizard_state` 规范化入参
+  （非法 entry_mode 400；wizard_state 仅 dict 落库）。
+- 写入链路：POST /api/saas/strategies 与 api_create_job 同名 upsert 均落
+  entry_mode/wizard_state；upsert 用 COALESCE 保留旧快照（未传不覆盖）。
+- 读取：列表 API 加 entry_mode；新 `GET /api/saas/strategies/<id>/detail`
+  （登录 401 / 他人 404）返回策略全字段 + 全部历史 job（状态/区间/标的数/收益/超额，
+  symbol_count 兜底口径同 /api/results）。
+- 新页面 /saas/strategies/<id>（strategy.html）：源文件卡按 entry_mode 还原——
+  nl=原文大文本框+「重新编译」（走 /api/saas/nl/compile，编译结果入 YAML 预览待保存）；
+  wizard=快照条件组只读还原+「在向导中编辑 →」跳 /saas/new?strategy=<id>&mode=wizard
+  （无快照明示降级 YAML 编辑）；yaml=代码编辑框；当前生效 YAML details 折叠展示。
+  操作区：保存修改（同名 upsert）/另存为新策略/载入复测。历史回测卡（点击行跳结果页，
+  复用 records 徽章风格）。信号监控卡留 `<!-- CR-2026-10-04 模块二占位 -->` 注释。
+- 个人信息页策略库卡：名称旁加入口标签徽章（自然语言/自选因子/策略代码）+「详情」链接。
+- new.html：提交 payload 加 entry_mode=curEntry() + wizard_state=collectWizardState()
+  （快照口径 {entry/exit:{groups:[{comb,conds:[{left,op,fixed,right}]}],dividers}}）；
+  nl_text 截断 200→2000（原文可还原）；loadStrategyFromQuery 按 entry_mode/mode 参数
+  还原入口——nl 回填原文、wizard 等因子目录就绪后 restoreWizardState 重建条件组
+  （10s 超时降级 yaml）、其余进 yaml 入口；顺手修 staging bypass 下 `!saasToken()`
+  门导致回填不生效（改 isGuest() 判定）。
+- 验证：Playwright 桌面+移动截图（.tmp/mobile-audit/{desktop,m375}-sd-{yaml,wizard,nl}.png、
+  desktop-new-backfill-{wizard,nl}.png、records 两端）零 JS 报错零横滚；向导回填探针实测
+  conds 逐键还原（ema_5 crosses_above ema_200 / rsi_14<30 / exit crosses_below）。
+- 测试：tests/test_saas_strategy_assets.py +10（懒自愈+存量推断、保存/upsert/快照
+  COALESCE/400、job 提交落模式、详情 401/404/200 历史列表、页面结构含模块二占位断言）。
+
+---
+
+## Archive: QRE-SAAS-MOBILE-ADAPT (移动端 web UI 适配：375px 逐页审计 + base.html 统一移动端规则)
 
 ## Current Status
 
