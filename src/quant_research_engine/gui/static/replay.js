@@ -145,7 +145,7 @@
     var eventFlag = new Array(n).fill(false);
     bins.days.forEach(function (d) { var i = dateIdx[d]; if (i != null) eventFlag[i] = true; });
 
-    var cursor = 0, speed = 1, timer = null, playing = false;
+    var cursor = Math.max(0, Math.min(opts.initialCursor || 0, n - 1)), speed = 1, timer = null, playing = false;
     var seenEventDate = {};  // 事件流去重（弹入一次）
 
     /* DOM：控制条 */
@@ -169,6 +169,7 @@
     mountEl.appendChild(bar);
 
     var chartEl = h("div", "rp-chart");
+    if (opts.height) chartEl.style.height = opts.height + "px";  // 切片2：多副图加高
     mountEl.appendChild(chartEl);
     var chart = echarts.init(chartEl);
 
@@ -199,8 +200,8 @@
         var c0 = cursor + 1;
         var xData = dates.slice(0, c0);
         var series = (opts.series || []).map(function (s) {
-          return {
-            name: s.name, id: s.id, type: "line",
+          var base = {
+            name: s.name, id: s.id, type: s.type || "line",
             data: s.data.slice(0, c0),
             showSymbol: false, color: s.color,
             lineStyle: { width: s.width || (s.dashed ? 1.5 : 2), type: s.dashed ? "dashed" : "solid" },
@@ -208,6 +209,8 @@
             xAxisIndex: s.grid || 0, yAxisIndex: s.grid || 0,
             markPoint: s.mark ? markPoints(s) : undefined,
           };
+          // 切片2：K线/成交量/散点等任意 ECharts series 透传（extra 覆盖默认键）
+          return Object.assign(base, s.extra || {});
         });
         chart.setOption({
           animation: false,
@@ -218,7 +221,9 @@
             return { type: "category", data: xData, gridIndex: gi, axisLabel: { show: gi === (opts.grids || []).length - 1 } };
           }),
           yAxis: (opts.yAxes || [{ name: "累计收益率%" }]).map(function (y, yi) {
-            return { type: "value", gridIndex: yi, name: y.name, max: y.max, axisLabel: { formatter: "{value}%" } };
+            // 默认按收益率口径加 %（切片1）；切片2 传 pct:false（价格/量/因子轴）
+            return { type: "value", gridIndex: yi, name: y.name, max: y.max, scale: y.scale !== false,
+                     axisLabel: y.pct === false ? undefined : { formatter: "{value}%" } };
           }),
           series: series,
         }, { replaceMerge: ["xAxis", "series"] });
@@ -231,22 +236,27 @@
       });
     }
 
-    // 事件标记：信号日 T（成交日前一交易日，空心浅色）+ 成交日 T+1（实心）
+    // 事件标记：信号日 T（成交日前一交易日，空心浅色）+ 成交日 T+1（实心）。
+    // ev.price 存在时以事件真实成交价定位（K线买卖点口径），否则用该帧序列值。
     function markPoints(s) {
       var pts = [];
+      function yAt(i) {
+        var v = s.data[i];
+        return Array.isArray(v) ? v[1] : v;  // K线 [o,c,l,h] 取收盘
+      }
       bins.days.forEach(function (d) {
         var i = dateIdx[d];
         if (i == null || i > cursor) return;
         bins.byDate[d].forEach(function (ev) {
           pts.push({
-            coord: [d, s.data[i]],
+            coord: [d, (ev.price != null ? ev.price : yAt(i))],
             value: ev.kind === "entry" ? "入" : "出",
             itemStyle: { color: ev.kind === "entry" ? "#d43030" : "#1a9e4b" },
           });
           // 信号日 T = 成交日前一交易日（时序红线：相隔呈现，不神化策略时序）
-          if (i > 0 && s.data[i - 1] != null) {
+          if (i > 0 && yAt(i - 1) != null) {
             pts.push({
-              coord: [dates[i - 1], s.data[i - 1]], value: "信",
+              coord: [dates[i - 1], yAt(i - 1)], value: "信",
               symbol: "circle", symbolSize: 5,
               itemStyle: { color: "rgba(103,80,164,.45)" },
               label: { fontSize: 9, color: "rgba(103,80,164,.7)" },

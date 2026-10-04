@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-REPLAY-S1 (DONE — CR-2026-10-04 切片1 策略级回测重播+可复用重播引擎组件：
+QRE-SAAS-REPLAY-S2 (DONE — CR-2026-10-04 切片2 K线级重播：replay.js 向后兼容扩展
+（series type/extra 透传、ev.price 定位、initialCursor/height、yAxes pct:false 修全轴%
+bug）；symbol.html #box-kreplay——K线/量/因子副图逐日推进、侧边信息卡（OHLC/因子/
+持仓/浮动盈亏·毛随帧跳动/已实现累计）、默认近 2 年起播；staging 全链路实测——
+浮动盈亏 −18.00==手算、末帧已实现 587.45==静态 total_pnl、切片1 回归 0.59% 不变、
+移动 375 零横滚零报错；模板断言 +5，`-k saas` 235 passed 零回归；
+awaiting git approval（站立批准有效）→ 部署 ECS)
+
+上一任务：QRE-SAAS-REPLAY-S1 (DONE — CR-2026-10-04 切片1 策略级回测重播+可复用重播引擎组件：
 static/replay.js（core 纯逻辑+attach UI：播放/单步/速度档/日历起始日/拖拽/空仓快进，
 [0,cursor] 截断渲染+rAF 节流）+ lab-theme.css .rp-* 样式族；job.html #box-replay——
 曲线逐日生长/事件流弹入聚合/8 卡指标随帧重算/「信」T 与「入出」T+1 相隔呈现；

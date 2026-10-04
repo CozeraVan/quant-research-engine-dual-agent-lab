@@ -20,8 +20,19 @@
   </div>
 
   <div class="chart-box" id="box-kline" style="display:none">
-    <div class="chart-title">日 K 与买卖点 <span class="opt" id="kline-note"></span></div>
+    <div class="chart-title">日 K 与买卖点 <span class="opt" id="kline-note"></span>
+      <button class="btn-sm" id="btn-kreplay" style="float:right">▶ 重播</button></div>
     <div id="chart-kline" style="height:460px"></div>
+  </div>
+
+  <!-- K线级重播（CR-2026-10-04 切片2，复用切片1 replay.js 组件）。
+       时序红线同切片1：「信」= 信号日 T，「入/出」= T+1 成交日；模拟历史数据，不构成投资建议。 -->
+  <div class="chart-box hidden" id="box-kreplay">
+    <div class="chart-title">K线重播 <span class="opt">（「信」标记 = 信号日 T（收盘出信号），「入/出」标记 = T+1 成交日；默认近 2 年起播，可改起始日；浮动盈亏为毛口径（未扣卖出费用）；模拟历史数据，不构成投资建议）</span>
+      <button class="btn-sm" id="btn-kreplay-close" style="float:right">收起 ✕</button></div>
+    <div id="kreplay-mount"></div>
+    <div class="metric-strip rp-metrics" id="kreplay-info"></div>
+    <div id="kreplay-events" style="max-height:200px;overflow:auto"></div>
   </div>
 
   <div class="chart-box" id="box-trades" style="display:none">
@@ -42,6 +53,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/echarts.min.js"></script>
+<script src="/static/replay.js"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 // QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；
@@ -79,6 +91,7 @@ async function load(){
   renderEquity(d);
   renderWear(d);
   renderKline(d);
+  initKlineReplay(d);
   const tradeCols = d.trades_source === 'round_trips'
     ? [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
        ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['费用', 'total_cost', 'num'],
@@ -342,6 +355,94 @@ function renderKline(d){
     series,
   });
   window.addEventListener('resize', () => chart.resize());
+}
+// --- K线级重播（CR-2026-10-04 切片2，复用切片1 replay.js；公共 API 未改动） ---
+let kreplayCtl = null;
+function initKlineReplay(d){
+  const btn = $('#btn-kreplay');
+  if (!btn) return;
+  if (!d.kline || !d.kline.dates || !d.kline.dates.length){ btn.style.display = 'none'; return; }
+  btn.addEventListener('click', () => {
+    $('#box-kreplay').classList.remove('hidden');
+    $('#box-kreplay').scrollIntoView({behavior: 'smooth'});
+    if (!kreplayCtl) mountKlineReplay(d);
+  });
+  $('#btn-kreplay-close').addEventListener('click', () => {
+    if (kreplayCtl) kreplayCtl.pause();
+    $('#box-kreplay').classList.add('hidden');
+  });
+}
+function mountKlineReplay(d){
+  const dates = d.kline.dates, ohlc = d.kline.ohlc, vols = d.kline.vols;
+  const n = dates.length;
+  const factors = d.factors || [];
+  const trips = d.trades || [];
+  // 默认近 2 年起播（全期可经起始日/进度条回看）
+  const twoYearsAgo = (() => { const dt = new Date(dates[n - 1]); dt.setFullYear(dt.getFullYear() - 2); return dt.toISOString().slice(0, 10); })();
+  let startIdx = 0;
+  for (let i = 0; i < n; i++) if (dates[i] >= twoYearsAgo){ startIdx = i; break; }
+  // 事件：优先 orders（含真实下单价量），否则 round trips 兜底
+  const events = [];
+  if (d.orders && d.orders.length){
+    d.orders.forEach(o => events.push({
+      date: o.trade_date, kind: o.side === 'buy' ? 'entry' : 'exit',
+      symbol: (o.side === 'buy' ? '买' : '卖') + f2(o.quantity) + '股@' + f2(o.price), price: o.price,
+    }));
+  } else {
+    trips.forEach(t => {
+      events.push({date: t.entry_date, kind: 'entry', symbol: '买 ' + f2(t.quantity) + '股@' + f2(t.entry_price), price: t.entry_price});
+      if (t.exit_date) events.push({date: t.exit_date, kind: 'exit',
+        symbol: '卖@' + f2(t.exit_price), price: t.exit_price, pnl: t.net_return});
+    });
+  }
+  // 序列：K线 + 成交量 + 因子副图（组件 extra 透传任意 series 配置）
+  const series = [
+    { name: 'K线', type: 'candlestick', data: ohlc, grid: 0, mark: true,
+      extra: { itemStyle: { color: '#C93A3A', color0: '#1E8E5A', borderColor: '#C93A3A', borderColor0: '#1E8E5A' } } },
+    { name: '成交量', type: 'bar', data: vols, grid: 1, extra: { itemStyle: { color: '#B7A6E8' } } },
+  ];
+  const grids = [{ left: 60, right: 20, top: 30, height: factors.length ? '40%' : '56%' },
+                 { left: 60, right: 20, top: factors.length ? '48%' : '72%', height: '10%' }];
+  const yAxes = [{ name: '', pct: false }, { name: '量', pct: false }];
+  const fTop = 62, fBottom = 93, fStep = factors.length ? (fBottom - fTop) / factors.length : 0;
+  factors.forEach((f, i) => {
+    grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
+    yAxes.push({ name: f.name, pct: false });
+    series.push({ name: f.name, type: 'line', data: f.values, grid: 2 + i, color: '#6750A4', width: 1.2 });
+  });
+  // 侧边信息卡：当前帧 OHLC/因子值/持仓与浮动盈亏（毛口径）
+  const dateIdx = {}; dates.forEach((dt, i) => { dateIdx[dt] = i; });
+  function infoFrame(cursor){
+    const dt = dates[cursor], k = ohlc[cursor] || [];
+    let realized = 0, unrealized = 0, openTrip = null;
+    trips.forEach(t => {
+      if (t.exit_date && t.exit_date <= dt) realized += Number(t.net_pnl) || 0;
+      else if (t.entry_date <= dt && (!t.exit_date || t.exit_date > dt)){
+        if (typeof t.entry_price === 'number' && typeof t.quantity === 'number'){
+          unrealized += (k[1] - t.entry_price) * t.quantity;  // 毛浮动盈亏（未扣卖出费用）
+          openTrip = t;
+        }
+      }
+    });
+    const factorCards = factors.map(f =>
+      card(f.name, (f.values[cursor] == null ? '—' : Number(f.values[cursor]).toFixed(2)), 'flat')).join('');
+    $('#kreplay-info').innerHTML =
+      card('当前交易日', dt, 'flat') +
+      card('开 / 高 / 低 / 收', [f2(k[0]), f2(k[3]), f2(k[2]), f2(k[1])].join(' / '), 'flat') +
+      card('成交量', vols[cursor] == null ? '—' : (vols[cursor] / 10000).toFixed(0) + ' 万', 'flat') +
+      factorCards +
+      card('持仓状态', openTrip ? '持仓中（' + f2(openTrip.entry_price) + ' 入）' : '空仓', 'flat') +
+      card('浮动盈亏·毛', (openTrip ? f2(unrealized) : '—') + (openTrip ? ' 元' : ''), cls(unrealized), '持仓中按当前帧收盘价估算，未扣卖出费用') +
+      card('已实现盈亏累计', f2(realized) + ' 元', cls(realized), 'exit_date ≤ 当前帧的 round trips 净盈亏合计');
+  }
+  kreplayCtl = QREReplay.attach($('#kreplay-mount'), {
+    dates, series, grids, yAxes,
+    events, roundTrips: trips,
+    initialCursor: startIdx,
+    height: 460 + factors.length * 120,
+    eventsEl: $('#kreplay-events'),
+    onFrame: (cursor) => infoFrame(cursor),
+  });
 }
 load();
 </script>

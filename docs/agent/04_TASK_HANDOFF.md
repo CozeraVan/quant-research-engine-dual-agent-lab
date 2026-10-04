@@ -2,7 +2,42 @@
 
 ## Task ID
 
-QRE-SAAS-REPLAY-S1 (CR-2026-10-04 切片1：策略级回测重播 + 可复用重播引擎组件)
+QRE-SAAS-REPLAY-S2 (CR-2026-10-04 切片2：K线级重播（symbol.html 个股详情页）)
+
+## Current Status
+
+DONE (implementation; `-k saas` 235 passed 零回归 + 模板断言；staging 全链路 +
+末帧强一致性 + 浮动盈亏手算核对通过；切片1 回归确认；awaiting git finalization 后部署)
+
+## Task Note
+
+- replay.js 向后兼容扩展（切片1 公共 API 未改，job 页回归实测 0.59% 不变）：
+  ①series 支持 `type`（candlestick/bar/scatter 等）+ `extra` 任意 ECharts 配置透传；
+  ②事件支持 `ev.price` 真实成交价定位（K线买卖点口径，candlestick 序列值取收[1]）；
+  ③`opts.initialCursor`（默认近 2 年起播）；④`opts.height`（多副图加高）；
+  ⑤yAxes 支持 `pct:false`（价格/量/因子轴不加 %——首版切片1 遗留的「全轴 %」
+  在 K 线页暴露为价格轴显示 25% 的 bug，截图复核抓出修复）。
+- symbol.html：K线卡标题加「▶ 重播」→ #box-kreplay 卡（可收起）——K线/成交量/
+  因子副图逐日推进；事件源优先 orders（真实下单价量），缺失时 round trips 兜底
+  （entry_price/exit_price/quantity 字段齐全）；「信」T 淡紫点与「入/出」T+1 相隔呈现。
+- 侧边信息卡（onFrame 钩子渲染，组件零改动接入）：当前日 OHLC、成交量、各因子
+  当前值、持仓状态（entry_price 入）、**浮动盈亏·毛**（(帧收盘−entry_price)×数量，
+  随帧跳动，注明未扣卖出费用）、已实现盈亏累计（exit_date ≤ 帧的 net_pnl 合计）。
+- 重播窗口：默认近 2 年起播（initialCursor 计算），全期 3991 根可经日历/进度条
+  回看——组件截断渲染每帧全量重绘，实测 3991 根流畅无压力（无需 appendData）。
+- 验证（staging 8091 Playwright 全实跑）：
+  - 起播帧=近 2 年首日（slider 3506/3990），信息卡 OHLC/vol/rsi 逐帧正确；
+  - 持仓中段 seek 2026-03-06：「持仓中（10.84 入），浮动盈亏·毛 −18.00 元」
+    == 手算 (10.82−10.84)×900 ✓；
+  - **末帧强一致性**：已实现盈亏累计 587.45 元 == 静态页 total_pnl 587.45 元 ✓；
+  - 播放/单步/拖拽/快进（跳到 3852）全过；切片1 job 页重播回归 0.59% 不变 ✓；
+  - 移动 375 零横滚零 JS 报错（两端截图 .tmp/mobile-audit/{desktop,m375}-kreplay.png）。
+- 测试：test_gui_saas_pages.py symbol 页模板断言 +5（replay.js/box-kreplay/
+  btn-kreplay/kreplay-mount/info/events）。
+
+---
+
+## Archive: QRE-SAAS-REPLAY-S1 (CR-2026-10-04 切片1：策略级回测重播 + 可复用重播引擎组件)
 
 ## Current Status
 

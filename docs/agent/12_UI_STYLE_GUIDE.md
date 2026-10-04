@@ -290,6 +290,11 @@
   空仓快进）；事件流 `.rp-ev-day`/`.rp-ev-chip`（同日同类 >5 聚合可展开）；
   指标面板 `.rp-metrics`（auto-fit minmax(110px) 卡族），峰值刷新
   `.rp-peak-flash`（淡紫边+晕，无新色相）。
+- 扩展选项（切片2 引入，向后兼容）：series `type`/`extra` 透传任意 ECharts 序列
+  （candlestick/bar/scatter）；事件可带 `ev.price` 真实成交价定位；`opts.initialCursor`
+  （窗口起播，如近 2 年）；`opts.height`；yAxes `pct:false`（价格/量/因子轴不加 %，
+  收益率轴默认 %）。侧边信息卡经 `onFrame(cursor)` 钩子渲染（如 K线页 OHLC/因子值/
+  持仓浮动盈亏），组件不感知业务口径。
 - 移动端：768px 断点 `.rp-chart` 320→260px、控制条折行、事件日期列收窄。
 - 一致性要求：播放到最后一帧的指标值必须等于页面静态报告值（Playwright 断言校验，
   见 04 号 QRE-SAAS-REPLAY-S1 条目）。

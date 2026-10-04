@@ -373,6 +373,9 @@ class TestResultsDataSource:
         assert 'id="sym-table"' in html and "/api/results/" in html and "/symbols" in html
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
         assert 'id="sum-strip"' in html and 'id="chart-kline"' in html
+        # CR-2026-10-04 切片2：K线级重播（复用切片1 replay.js）
+        assert '/static/replay.js' in html and 'id="box-kreplay"' in html and 'id="btn-kreplay"' in html
+        assert 'id="kreplay-mount"' in html and 'id="kreplay-info"' in html and 'id="kreplay-events"' in html
         assert "/api/results/" in html and "/symbols/" in html
 
     def test_job_page_uses_results_detail_apis(self, client):
