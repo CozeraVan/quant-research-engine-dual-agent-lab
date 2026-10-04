@@ -2,7 +2,46 @@
 
 ## Task ID
 
-QRE-SAAS-SIGNAL-CONSOLIDATE (CR-2026-10-04 模块二 UX 收编：信号功能集成进「我的策略库」，用户拍板)
+QRE-SAAS-REPLAY-S1 (CR-2026-10-04 切片1：策略级回测重播 + 可复用重播引擎组件)
+
+## Current Status
+
+DONE (implementation; `-k saas` 235 passed 零回归 + 模板断言 +1；staging Playwright
+全操作链路 + 末帧强一致性实测通过；awaiting git finalization 后部署)
+
+## Task Note
+
+- 重播引擎组件 `static/replay.js`（saas/lab 共享目录，切片2 个股页直接复用）：
+  `QREReplay.core` 纯逻辑（indexDates/binEvents 事件按日归箱/positionCounts 差分展开
+  持仓序列/nextEventfulCursor 空仓快进/frameMetrics 截断序列逐帧指标——累计收益/
+  最大回撤+新峰值标记/夏普/胜率/盈亏比/持仓数/暴露度）+ `QREReplay.attach` UI 装配
+  （播放/暂停、单步、速度 1/2/5/10、起始日复用 LabUI.attachCalendar、可拖进度条、
+  空仓快进）。渲染红线：全量内存持有、每帧 [0,cursor] 截断喂 ECharts、rAF 节流。
+  样式追加 lab-theme.css `.rp-*` 组件族（淡紫 tokens，768px 断点折行）。
+- job.html 接入：收益曲线卡标题加「▶ 重播」，新开 #box-replay 卡（可收起）——
+  净值/基准/回撤双 grid 逐日生长；事件流按日弹入（同日同类 >5 只聚合「当日入场 N 只」
+  可展开）；指标面板 8 卡随帧重算（峰值刷新 .rp-peak-flash 视觉提示）；
+  **时序红线**：图上「信」标记=信号日 T（成交日前一交易日，淡紫小点）与「入/出」
+  成交日 T+1 相隔呈现 + 控制区口径文案 + 免责声明。
+- 主轴以净值序列交易日为准，事件按日归箱对齐（信号日取成交日在主轴上的前一交易日）。
+- 验证（staging 8091 Playwright，全实跑）：
+  - core 探针断言：归箱/持仓差分/快进（空仓跳到下一事件或持仓变化日）/frameMetrics
+    合成序列数值正确；
+  - 操作链路：打开 → 单步 ×3（slider=3）→ 播放（按钮转暂停）→ 暂停 → 拖进度条；
+  - **末帧强一致性**：重播累计收益 0.59% == 静态报告总收益率 0.59%（Playwright 断言）；
+  - 空仓快进：开头跳到首个入场日 2026-03-04；速度档 10x；事件流 16 行弹入；
+  - 起始日日历选 2026-03-07 → slider=5；移动 375 零横滚零 JS 报错（两端截图
+    .tmp/mobile-audit/{desktop,m375}-replay.png）。
+  - **测试脚本伪 bug 说明**：首轮「事件流 0 行」是脚本在组件自动暂停后又点播放
+    （组件重播会清空事件流从 0 开始），非组件缺陷，复测 16 行正常。
+- 测试：test_gui_saas_pages.py 模板断言 +5（replay.js 引用/box-replay/btn-replay/
+  replay-mount/metrics/events）；组件逻辑无 node 测试设施，按惯例走页面探针断言（已做）。
+- 切片2（symbol.html K线级）未做；组件已按复用设计（series/grids/yAxes/events/
+  roundTrips 全参数化）。
+
+---
+
+## Archive: QRE-SAAS-SIGNAL-CONSOLIDATE (CR-2026-10-04 模块二 UX 收编：信号功能集成进「我的策略库」，用户拍板)
 
 ## Current Status
 

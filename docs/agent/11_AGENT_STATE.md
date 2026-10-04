@@ -12,7 +12,16 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-SIGNAL-CONSOLIDATE (DONE — 模块二 UX 收编（用户拍板：信号集成进「我的策略库」，
+QRE-SAAS-REPLAY-S1 (DONE — CR-2026-10-04 切片1 策略级回测重播+可复用重播引擎组件：
+static/replay.js（core 纯逻辑+attach UI：播放/单步/速度档/日历起始日/拖拽/空仓快进，
+[0,cursor] 截断渲染+rAF 节流）+ lab-theme.css .rp-* 样式族；job.html #box-replay——
+曲线逐日生长/事件流弹入聚合/8 卡指标随帧重算/「信」T 与「入出」T+1 相隔呈现；
+staging 全操作链路实测 + **末帧强一致性断言（重播累计收益==静态总收益）** +
+core 探针/日历联动/事件流 16 行/桌面+375 零横滚零报错；模板断言 +5，
+`-k saas` 235 passed 零回归；awaiting git approval（站立批准有效）→ 部署 ECS；
+切片2（symbol K线级）留待后续，组件已全参数化)
+
+上一任务：QRE-SAAS-SIGNAL-CONSOLIDATE (DONE — 模块二 UX 收编（用户拍板：信号集成进「我的策略库」，
 不做独立栏目）：顶栏「信号」项移除、未读红点改挂「个人信息」导航；策略列表 API 聚合
 watch/latest_signals/signal_unread（两查无 N+1，最近信号日口径=max(trade_date) 当日
 entry/exit 计数）；策略库行加监控徽标/最近信号摘要/未读红点 + 卡标题「查看全部信号 →」；

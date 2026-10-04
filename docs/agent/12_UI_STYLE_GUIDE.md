@@ -275,6 +275,25 @@
 - SaaS 特有元素复用既有类：游客提示条 `.guest-strip`（`lab-theme.css:441-442`）、job 状态徽章映射 queued/running→`.run`、completed→`.ok`、failed/canceled→`.fail`。
 - 对齐方法（历次 UI 对齐任务的做法）：8081 截图作基准 → SaaS 对应页截图 → 逐项 diff → 只改 SaaS 侧模板呈现层，数据接口零改动。**8081 lab 侧代码冻结，绝不许为了迁就 SaaS 改它。**
 
+### 3.11 回测重播组件（`replay.js` + `lab-theme.css` .rp-* 族，2026-10-04）
+
+- 共享组件：`static/replay.js`（saas/lab 同源），切片1 job.html 策略级重播首发，
+  切片2 symbol.html K线级复用。API：`QREReplay.core`（纯逻辑：binEvents/
+  positionCounts/nextEventfulCursor/frameMetrics）+ `QREReplay.attach(mountEl, opts)`。
+- 渲染红线（不可违反）：全量数据内存持有，每帧只把 `[0, cursor]` 截断喂 ECharts
+  （未来数据天然不可见）；setOption 走 rAF 节流（~16ms 帧预算）；主轴=净值/行情序列
+  交易日，事件按日归箱对齐。
+- 时序红线：信号日 T（成交日前一交易日，淡紫小点「信」）与成交日 T+1（实心
+  「入」红/「出」绿 pin）相隔呈现，不得神化策略时序；控制区固定口径文案与免责声明。
+- 控制条族：`.rp-bar`（播放/暂停 `.rp-play` 主紫、单步、速度 1/2/5/10 `.rp-sel`、
+  起始日 `.rp-date` 复用 LabUI.attachCalendar、可拖进度 `.rp-slider` accent 主紫、
+  空仓快进）；事件流 `.rp-ev-day`/`.rp-ev-chip`（同日同类 >5 聚合可展开）；
+  指标面板 `.rp-metrics`（auto-fit minmax(110px) 卡族），峰值刷新
+  `.rp-peak-flash`（淡紫边+晕，无新色相）。
+- 移动端：768px 断点 `.rp-chart` 320→260px、控制条折行、事件日期列收窄。
+- 一致性要求：播放到最后一帧的指标值必须等于页面静态报告值（Playwright 断言校验，
+  见 04 号 QRE-SAAS-REPLAY-S1 条目）。
+
 ---
 
 ## 10. 移动端适配规则（QRE-SAAS-MOBILE-ADAPT，2026-10-04）
@@ -320,6 +339,7 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 ## 变更记录
 
+- 2026-10-04（QRE-SAAS-REPLAY-S1）新增 §3.11 回测重播组件规则：static/replay.js 共享组件（core 纯逻辑 + attach UI），[0,cursor] 截断渲染/rAF 节流/时序 T 与 T+1 相隔三条红线，.rp-* 控制条与事件流族（淡紫 tokens 无新色相），768px 断点折行，末帧指标=静态报告强一致性（Playwright 断言）。
 - 2026-10-04（QRE-SAAS-MOBILE-ADAPT）新增 §10 移动端适配规则：768px 主断点、表格块级横滚、长 chip 折行、点击目标 ≥44px（日历格子 40px 妥协）、输入控件 16px/44px、磨损块 2 列+grid 三段、lab-theme 后加载需高优先级选择器覆盖的踩坑。改动全部在 saas/templates/base.html 内嵌样式块；本条为「记录实际落地规则」，经用户任务书批准。
 - 2026-09-28（QRE-CALENDAR-YEAR-PICKER）共享日历组件（`lab-ui.js` attachCalendar，8081 lab 与 SaaS 同源）新增**年→月→日钻取**：点头部年月标题（新 `.cal-title` 按钮）进入年份视图（12 年/页九宫格 `.cal-grid-ym` 4 列 + `.cal-cell` 格子，翻页 ±12 年），选年进月份视图（12 个月），选月回日视图；Esc 逐级返回（年→月→日→关闭），年视图再点标题回日视图。年/月格子超 [minDate,maxDate] 范围 `:disabled` 置灰禁点（minDate 为新增可选 opts，未传则仅 maxDate 约束，调用方零改动）；选中起/止日所在年/月 `.sel` 紫底高亮与选中日一致（`.cal-cell.sel` 复用 `--lav`）；页脚数据截至提示不变，年/月视图追加「Esc 或点标题返回上级」。样式全部落在 `lab-theme.css` cal-pop 组件族（新增 `.cal-title`/`.cal-grid-ym`/`.cal-cell` 三条规则，无新色相、无循环动效）。lab/SaaS 模板零改动。
 - 2026-09-28（QRE-SAAS-EXPOSURE-METRICS）SaaS 详情页区间信息卡新增 2 张随滑块联动指标卡（第 6/7 张，job.html 与 symbol.html 同步）：**持仓暴露度**（有持仓交易日数 ÷ 区间交易日数，同日多笔按 1 天去重；数据源 = 结果已有 round trips 的 entry/exit 日期展开成逐日持仓掩码，job 级用 chart_data.trades.points，>500 笔 sampled 时悬停提示「按前 500 笔估算」，symbol 级用 d.trades 全量）与**持仓期年化收益**（(1+区间策略收益)^(252/持仓天数)−1，252=年交易日数）；区间内无持仓两卡均显示「—」，口径写在 title 悬停提示。`#range-strip` 网格由 `repeat(5,1fr)` 改 `repeat(auto-fit,minmax(130px,1fr))` 按卡数自适应（≤960px 仍降 2 列）。

@@ -449,3 +449,30 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 /* ---- SaaS 游客提示条（QRE-SAAS-GUEST-UX） ---- */
 .guest-strip{background:var(--tint);border-bottom:1px solid var(--tint-deep);color:var(--lav-deep);font-size:13px;text-align:center;padding:7px 16px;line-height:1.5}
 .guest-strip a{color:var(--lav);font-weight:500}
+
+/* ---- 回测重播组件（CR-2026-10-04 切片1；job/symbol 复用 replay.js） ---- */
+.rp-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.rp-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 14px;font-size:13px;color:var(--ink);cursor:pointer;transition:all .2s var(--ease)}
+.rp-btn:hover{border-color:var(--lav);color:var(--lav-deep);background:var(--tint)}
+.rp-play{background:var(--lav);border-color:var(--lav);color:#fff;font-weight:600}
+.rp-play:hover{background:var(--lav-deep);color:#fff}
+.rp-sel{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;background:#fff}
+.rp-lbl{font-size:12px;color:var(--faint)}
+.rp-date{width:110px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
+.rp-slider{flex:1;min-width:120px;accent-color:var(--lav)}
+.rp-cur{font-size:12px;color:var(--faint);font-variant-numeric:tabular-nums}
+.rp-chart{height:320px}
+.rp-calpop{position:relative}
+.rp-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin:12px 0}
+.rp-peak-flash .metric-card{border-color:var(--lav);box-shadow:0 0 0 2px var(--tint-deep)}
+.rp-ev-day{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line)}
+.rp-ev-date{font-size:12px;color:var(--faint);width:86px;flex:none;font-variant-numeric:tabular-nums}
+.rp-ev-chip{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--grey);background:#fff}
+.rp-ev-agg{cursor:pointer;font-weight:600}
+.rp-ev-det{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding:4px 0 2px 92px}
+.rp-pop{animation:panelIn .3s var(--ease)}
+@media(max-width:768px){
+  .rp-chart{height:260px}
+  .rp-ev-date{width:72px}
+  .rp-ev-det{padding-left:78px}
+}

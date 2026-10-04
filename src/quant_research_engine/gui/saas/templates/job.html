@@ -19,10 +19,22 @@
     <div class="metric-strip" id="metric-strip"></div>
 
     <div class="chart-box" id="box-main">
-      <div class="chart-title">策略收益 vs 基准指数 <span class="opt">（累计收益率，全期起点 = 0%；拖动下方滑块或图上滚轮缩放区间）</span></div>
+      <div class="chart-title">策略收益 vs 基准指数 <span class="opt">（累计收益率，全期起点 = 0%；拖动下方滑块或图上滚轮缩放区间）</span>
+        <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button></div>
       <div class="bench-bar" id="bench-bar">基准：</div>
       <div id="chart-main" style="height:420px"></div>
       <div class="metric-strip" id="range-strip" style="margin-top:10px"></div>
+    </div>
+
+    <!-- 回测重播（CR-2026-10-04 切片1，组件 static/replay.js 切片2 复用）。
+         口径红线：「信」= 信号日 T（成交日前一交易日），「入/出」= T+1 成交日；
+         历史回测为模拟成交，不构成投资建议。 -->
+    <div class="chart-box hidden" id="box-replay">
+      <div class="chart-title">回测重播 <span class="opt">（「信」标记 = 信号日 T（收盘出信号），「入/出」标记 = T+1 开盘成交日；指标随帧重算，口径同静态报告；模拟历史数据，不构成投资建议）</span>
+        <button class="btn-sm" id="btn-replay-close" style="float:right">收起 ✕</button></div>
+      <div id="replay-mount"></div>
+      <div class="metric-strip rp-metrics" id="replay-metrics"></div>
+      <div id="replay-events" style="max-height:220px;overflow:auto"></div>
     </div>
 
     <!-- 交易磨损（chart-data.fees_summary；无则整块隐藏，C5 对齐 lab 版） -->
@@ -66,6 +78,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/echarts.min.js"></script>
+<script src="/static/replay.js"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 const JOB_ID = {{ job_id }};
@@ -625,12 +638,61 @@ async function poll(){
   renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));
   if (chart.dates && chart.equity) renderMain(chart);
   else empty('chart-main');
+  initReplay(chart);
   if (!SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
   renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
   renderFees(chart.fees_summary || null, chart.meta || null);
   document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
   loadRisk();
 }
+// --- 回测重播（CR-2026-10-04 切片1）：组件装配（replay.js，切片2 个股页复用） ---
+let replayCtl = null;
+function initReplay(d){
+  const btn = document.getElementById('btn-replay');
+  if (!btn || !d.dates || !d.dates.length || !d.equity){ if (btn) btn.style.display = 'none'; return; }
+  btn.addEventListener('click', () => {
+    document.getElementById('box-replay').classList.remove('hidden');
+    document.getElementById('box-replay').scrollIntoView({behavior: 'smooth'});
+    if (!replayCtl) mountReplay(d);
+  });
+  document.getElementById('btn-replay-close').addEventListener('click', () => {
+    if (replayCtl) replayCtl.pause();
+    document.getElementById('box-replay').classList.add('hidden');
+  });
+}
+function mountReplay(d){
+  const dates = d.dates;
+  const dd = (d.drawdown_pct || []).map(v => v == null ? null : v * 100);
+  const hasDD = dd.some(v => v != null);
+  const benches = d.benchmarks || {};
+  const benchCode = curBench && benches[curBench] ? curBench : Object.keys(benches)[0];
+  const trips = (d.trades && d.trades.points) || [];
+  // 成交事件（信号日 T=成交日前一交易日，由组件在图上相隔标记）
+  const events = [];
+  trips.forEach(t => {
+    events.push({date: t.entry_date, kind: 'entry', symbol: t.symbol});
+    if (t.exit_date) events.push({date: t.exit_date, kind: 'exit', symbol: t.symbol, pnl: t.net_return});
+  });
+  const series = [{name: '策略', id: 'strategy', color: '#2563eb', data: toRet(d.equity), raw: d.equity, grid: 0, mark: true, width: 2}];
+  if (benchCode) series.push({name: '基准·' + benches[benchCode].name, id: 'bench', color: '#f59e0b',
+    dashed: true, data: toRet(benches[benchCode].closes), grid: 0});
+  if (hasDD) series.push({name: '回撤', id: 'dd', color: '#d43030', data: dd, grid: 1, area: true, width: 1});
+  replayCtl = QREReplay.attach(document.getElementById('replay-mount'), {
+    dates: dates,
+    series: series,
+    grids: hasDD
+      ? [{left: 55, right: 20, top: 30, height: '52%'}, {left: 55, right: 20, top: '70%', height: '18%'}]
+      : [{left: 55, right: 20, top: 30, height: '68%'}],
+    yAxes: hasDD
+      ? [{name: '累计收益率%'}, {name: '回撤%', max: 0}]
+      : [{name: '累计收益率%'}],
+    events: events,
+    roundTrips: trips,
+    metricsEl: document.getElementById('replay-metrics'),
+    eventsEl: document.getElementById('replay-events'),
+  });
+}
+
 if (new URLSearchParams(location.search).get('guest') === '1'){
   document.getElementById('guest-note').classList.remove('hidden');
 }
