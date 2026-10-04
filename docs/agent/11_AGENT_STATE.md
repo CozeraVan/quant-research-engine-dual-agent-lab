@@ -4,7 +4,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-AWAITING_GIT_APPROVAL
+IDLE（无进行中任务；用户 2026-10-04 确认收档）
 
 ## Current Owner
 
@@ -12,13 +12,27 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-REPLAY-LAYOUT-FIX (DONE — 重播速度档换行 bug 系统性调试：根因=base.html:56
+无。工作树干净，HEAD `6a69029`（已 push + ECS 部署）。测试基线 `-k saas` 235 passed。
+
+## 挂起 backlog（用户确认知悉，非进行中）
+
+1. **深度性能优化**（用户指示"放最后"）：回测详情缓存已做过一轮；剩余为更深的
+   引擎/前端性能项 + 引擎压力测试（每小时可处理多少全期全量回测/并发上限实测）。
+2. **信号监控「板块」范围二级选择 UI**：当前监控范围支持 最近回测快照/全A/自定义，
+   板块名单选择器未做（spec 留待细化项）。
+3. **重播已验证边界**（非缺陷，首次真实场景出现时再处理）：全市场任务「同日几十只
+   入场」聚合展开、orders 明细事件源路径（现走 round trips 兜底）、多因子副图页。
+4. **付费体系**：信号监控 scan_enabled / max_watches 已入 tier_policies 占位；
+   积分制 vs 会员制未定（用户明确暂缓）。
+5. **分时策略回测**：依赖分时数据源选型（用户曾寻找稳定便宜的 A 股分时数据源，未决）。
+6. **小程序/APP 端**：移动 web 适配已完成（2026-10-04）；原生端为远景项。
+
+上一任务：QRE-SAAS-REPLAY-LAYOUT-FIX (DONE — 重播速度档换行 bug 系统性调试：根因=base.html:56
 全局 select{width:100%} 使 .rp-sel 恒独占整行（五档宽度探针 width=bar 全宽实证，
 与视口无关）；修复=.rp-sel 显式宽度+36px 等高 + 控制条两语义分组
 （.rp-group-main 播放/单步/速度 nowrap 恒同排 / .rp-group-aux 允许折行）+
 去除重复「起始日」label；同一探针五档宽度中心 y 差 0px 前后对照证明修好；
-`-k saas` 235 passed；awaiting git approval（站立批准有效）→ 部署 ECS
-（生产 asset_v 缓存破除已就位，用户端将自动拿到新 replay.js）)
+`-k saas` 235 passed；已部署 ECS，生产 asset_v 缓存破除确保用户端自动拿到新版）
 
 上一任务：QRE-SAAS-WAIT-MASK + QRE-SAAS-REPLAY-LAYOUT (DONE — ①长等待遮罩组件 wait-mask.js
 （禁 ESC/背板/全锁、z-95、护栏弹层级冲突已处理）+ new.html 生成策略与运行回测两段式
