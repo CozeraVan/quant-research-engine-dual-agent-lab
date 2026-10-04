@@ -48,8 +48,8 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/static/echarts.min.js"></script>
-<script src="/static/replay.js"></script>
+<script src="/static/echarts.min.js?v={{ asset_v }}"></script>
+<script src="/static/replay.js?v={{ asset_v }}"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 // QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；

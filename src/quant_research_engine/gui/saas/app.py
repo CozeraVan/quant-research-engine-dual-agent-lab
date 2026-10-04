@@ -763,6 +763,15 @@ def create_saas_app() -> Flask:
         # requireLogin 无 token 跳登录页 × 登录页 302 回工作台 = 无限刷新环）
         return {"saas_auth_bypass": str(_cfg(app, "SAAS_AUTH_BYPASS", "0") or "0") == "1"}
 
+    # 静态资源缓存破除（2026-10-04）：/static/ 有 nginx expires 1h + 浏览器
+    # 内存缓存，部署后用户可能拿到旧 JS/CSS（重播布局错位即此类事故）。
+    # 进程启动时间戳作版本号——每次部署 restart 即全量刷新客户端缓存。
+    app.extensions["asset_v"] = str(int(time.time()))
+
+    @app.context_processor
+    def _inject_asset_v() -> dict[str, Any]:
+        return {"asset_v": app.extensions["asset_v"]}
+
     @app.errorhandler(RuntimeError)
     def _runtime_error(exc: RuntimeError) -> Any:  # SAAS_DB_URL 缺失等配置错误
         return jsonify({"ok": False, "error": str(exc)}), 503

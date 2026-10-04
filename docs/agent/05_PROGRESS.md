@@ -828,3 +828,11 @@ Historical row statuses (pre-migration, kept for old table rows):
 
 - base.html 导航链接默认 display:none，公共 JS 在已登录分支才显示（防游客端闪烁）；
   游客态顶栏只剩 新建策略 / 登录注册。测试 208 passed。
+
+## 2026-10-04 静态资源缓存破除（asset_v）
+
+- 事故：部署新 replay.js 后用户浏览器仍用内存/nginx 缓存旧版，重播倍速
+  按钮布局错位（旧版速度档独立成行）。
+- 方案：app 启动时间戳注入模板 asset_v，全站自有 JS/CSS 引用统一加 ?v=
+  （base/job/symbol 模板 7 处）；每次部署 restart 即客户端全量刷新。
+  图片/图标不加（变更极少）。`-k saas` 235 passed。
