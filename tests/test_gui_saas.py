@@ -963,3 +963,12 @@ class TestWeightClass:
         d0 = client.get(f"/api/saas/jobs/{ids[0]}", headers={"X-User-Id": "1"}).get_json()["job"]
         d2 = client.get(f"/api/saas/jobs/{ids[2]}", headers={"X-User-Id": "1"}).get_json()["job"]
         assert d0["queue_position"] == 0 and d2["queue_position"] == 2
+
+
+def test_seo_verification_files_served(client):
+    """百度/Google 站长验证文件挂根路径（QRE-SAAS-SEO）。"""
+    r = client.get("/google706490730bf04d58.html")
+    assert r.status_code == 200
+    assert b"google-site-verification: google706490730bf04d58.html" in r.data
+    r = client.get("/baidu_verify_codeva-gDNoSKn1Mp.html")
+    assert r.status_code == 200

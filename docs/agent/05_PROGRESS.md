@@ -790,3 +790,11 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 端到端验证：收敛后 smoke job#35 claimed→completed（attempts=1），
   workers.status 正常上报（槽位+内存）。仓库 deploy/saas/qre-saas-worker.service 同步。
 - 教训记入 16 号文档：全机只允许一套 worker 服务。
+
+## 2026-10-04 Google Search Console 文件验证上线
+
+- 验证文件 google706490730bf04d58.html 入 gui/static/，app.py 加根路径路由
+  /google706490730bf04d58.html（与百度同款）；nginx 仓库模板补录 SEO 四个 location
+  （百度/Google 验证 + robots + sitemap，消除 ECS 手改漂移）。
+- 测试：test_gui_saas.py::test_seo_verification_files_served（百度+Google 双断言），
+  `-k saas` 208 passed。

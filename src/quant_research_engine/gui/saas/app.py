@@ -709,6 +709,13 @@ def create_saas_app() -> Flask:
 
         return send_from_directory(str(SHARED_STATIC_DIR), "baidu_verify_codeva-gDNoSKn1Mp.html", mimetype="text/html")
 
+    # Google Search Console 文件验证（2026-10-04）：同百度，挂根路径
+    @app.get("/google706490730bf04d58.html")
+    def seo_google_verify() -> Any:
+        from flask import send_from_directory
+
+        return send_from_directory(str(SHARED_STATIC_DIR), "google706490730bf04d58.html", mimetype="text/html")
+
     @app.get("/saas/login")
     def saas_login_page() -> Any:
         # staging 免登录（SAAS_AUTH_BYPASS=1，生产严禁）：登录页直接跳工作台
