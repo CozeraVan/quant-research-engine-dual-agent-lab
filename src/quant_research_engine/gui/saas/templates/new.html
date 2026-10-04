@@ -380,8 +380,11 @@ async function doNlCompile(){
   if (!txt){ toastNote(st, '请先用自然语言描述策略', true); $('#nl-text').focus(); return; }
   box.className = 'result-box'; box.style.display = 'none';
   // 编译耗时反馈（QRE-SAAS-NL-PROGRESS）：LLM 生成通常 10-40 秒，显示已用时避免"卡住"感
-  const t0 = Date.now(), btn = $('#nl-compile');
+  const t0 = Date.now(), btn = $('#nl-compile'), runBtn = $('#btn-run-main');
   btn.disabled = true; btn.style.opacity = .65;
+  if (runBtn) runBtn.disabled = true;  // 遮罩期间同步置灰防重复提交
+  // 长等待遮罩（2026-10-04）：禁 ESC/背板关闭，页面交互全锁
+  LabUI.waitMask.show({title: 'AI 正在编译策略…', sub: '大模型生成策略代码，通常 10-40 秒，请勿关闭页面'});
   st.textContent = '编译中（大模型生成策略代码，通常 10-40 秒）…';
   const timer = setInterval(() => {
     st.textContent = '编译中（大模型生成策略代码，通常 10-40 秒）… 已用时 ' + Math.round((Date.now() - t0) / 1000) + ' 秒';
@@ -411,6 +414,8 @@ async function doNlCompile(){
     if (e.message !== 'unauthorized'){ st.textContent = '错误'; box.className = 'result-box err'; box.style.display = 'block'; box.textContent = String(e); }
   } finally {
     clearInterval(timer); btn.disabled = false; btn.style.opacity = '';
+    if (runBtn) runBtn.disabled = false;
+    LabUI.waitMask.hide();
   }
 }
 $('#nl-compile').addEventListener('click', () => { if (guardGuest('compile')) return; doNlCompile(); });
@@ -984,7 +989,9 @@ async function startRun(){
     return;
   }
   pipeRunning = true; btn.disabled = true; btn.style.opacity = .65;
-  const abort = () => { pipeRunning = false; btn.disabled = false; btn.style.opacity = ''; };
+  const abort = () => { pipeRunning = false; btn.disabled = false; btn.style.opacity = ''; LabUI.waitMask.hide(); };
+  // 长等待遮罩（2026-10-04 两段式）：先冒烟校验段
+  LabUI.waitMask.show({title: '冒烟校验中…', sub: '小范围验证策略可运行，通常几十秒，请勿关闭页面'});
   try {
     LabUI.pipeDone(pipeEl, 1, '结构校验通过');
     if (isGuest()){
@@ -992,6 +999,7 @@ async function startRun(){
       $('#pipe-2 .pipe-name').textContent = '冒烟测试：游客单股回测自动跳过';
       LabUI.pipeDone(pipeEl, 2, '跳过');
       LabUI.pipeDoing(pipeEl, 3);
+      LabUI.waitMask.update({title: '提交任务中…', sub: '游客单股回测，提交后自动跳转结果页'});
       const gfullId = await createJob('full');
       LabUI.pipeDone(pipeEl, 3, '已提交');
       abort();
@@ -1011,16 +1019,35 @@ async function startRun(){
     LabUI.pipeDone(pipeEl, 2, '冒烟通过');
     // ③ 全量（大范围标的先弹耗时确认护栏，用户确认后才提交）
     const est = largeUniverseEstimate();
-    if (est && !(await confirmBigUniverse(est))){
-      abort();
-      pipeEl.style.display = 'none';  // 用户取消：收起流水线，可改小范围后重跑
-      return;
+    if (est){
+      LabUI.waitMask.hide();  // 护栏弹层（z-80）需在遮罩之上可见，先关遮罩
+      const go = await confirmBigUniverse(est);
+      if (!go){
+        abort();
+        pipeEl.style.display = 'none';  // 用户取消：收起流水线，可改小范围后重跑
+        return;
+      }
+      LabUI.waitMask.show({title: '提交任务中…', sub: '正在提交全量回测任务'});
     }
     LabUI.pipeDoing(pipeEl, 3);
     const fullId = await createJob('full');
     LabUI.pipeDone(pipeEl, 3, '已提交');
-    abort();
-    location.href = '/saas/jobs/' + fullId + (saasToken() ? '' : '?guest=1');  // 游客提示次日清空
+    pipeRunning = false; btn.disabled = false; btn.style.opacity = '';
+    // 第二段：已提交排队中——用户选后台运行或继续等待（等待则轮询完成后跳结果页）
+    LabUI.waitMask.update({
+      title: '已提交，排队执行中',
+      sub: '任务在云端运行，关闭页面不影响结果',
+      buttons: [
+        {label: '后台运行，查看记录', onClick: () => { location.href = '/saas/profile'; }},
+        {label: '继续等待', primary: true, keepMask: true, onClick: async () => {
+          LabUI.waitMask.update({title: '任务执行中…', sub: '完成后自动跳转结果页；也可随时去「个人信息」查看进度', buttons: []});
+          try { await pollJob(fullId); } catch (_e) { /* 超时/失败同样跳任务页看状态 */ }
+          LabUI.waitMask.hide();
+          location.href = '/saas/jobs/' + fullId + (saasToken() ? '' : '?guest=1');
+          return true;
+        }},
+      ],
+    });
   } catch (e) {
     if (e.message !== 'unauthorized'){
       const doing3 = pipeEl.querySelector('#pipe-3.doing');

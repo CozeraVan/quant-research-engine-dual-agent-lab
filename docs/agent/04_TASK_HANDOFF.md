@@ -2,7 +2,50 @@
 
 ## Task ID
 
-QRE-SAAS-REPLAY-POLISH (重播组件两项优化：控制条 UI/UX 打磨 + 接管原图表容器模式，用户批准)
+QRE-SAAS-WAIT-MASK (首页长等待模态遮罩) + QRE-SAAS-REPLAY-LAYOUT (重播控制条布局调整)
+
+## Current Status
+
+DONE (implementation; `-k saas` 235 passed 零回归；staging 锁定/两段式双路径/失败路径/
+布局断言全过（含临时 worker 真实执行闭环）；awaiting git finalization 后部署)
+
+## Task Note
+
+- 遮罩组件 `static/wait-mask.js`（全站经 base.html 引入，可复用）：
+  `LabUI.waitMask.show/update/hide/isOpen`——半透明深色背板 + 居中淡紫卡片
+  （spinner + 阶段文案 + 副文案 + 可选分流按钮）；显示期间禁 ESC、禁背板点击、
+  页面交互物理全锁（.wm-lock 禁滚动 + 背板拦截）；z-index 95（高于 .modal-mask 80 /
+  cal-pop 60，低于 toast 99——大范围耗时护栏弹层 80 会被压，startRun 在
+  confirmBigUniverse 前先关遮罩、确认后再开，已处理层级冲突）；有分流按钮时
+  spinner 自动停转（等待语义交还用户）。CSS .wm-* 落 lab-theme.css（focus-visible
+  紫环、0.2s 过渡、prefers-reduced-motion spinner 动画关闭、768px 按钮堆叠 44px）。
+- new.html 接入：①生成策略——点击即开「AI 正在编译策略…」（副文案 10-40 秒），
+  #nl-compile 与 #btn-run-main 同步置灰，finally 关遮罩走现有结果/报错；②运行回测
+  两段式——pipeRunning 后开「冒烟校验中…」；游客路径切「提交任务中…」直跳；
+  全量提交成功后切「已提交，排队执行中」+ 副文案「任务在云端运行，关闭页面不影响
+  结果」+ 两按钮：「后台运行，查看记录」→ /saas/profile、「继续等待」→ 遮罩转
+  「任务执行中…」轮询完成后跳结果页（超时/失败同样跳任务页看状态）；失败一律
+  abort() 关遮罩走现有 pipeFailAt 报错。
+  **踩坑**：wait-mask 按钮包装函数 `b.keepMask || b.onClick()` 短路导致
+  keepMask=true 时 onClick 永不执行（「继续等待」假死），改先执行再判定。
+- 重播布局（replay.js 两端生效）：速度档与播放/单步并列同一控制排；进度条移出
+  控制排，经 `.rp-slider-row` 插到图表容器正下方（接管模式下 insertAfter chartEl，
+  自建模式 append 于 chartEl 后）；destroy 同步移除 sliderRow。
+- 验证（staging 8091 Playwright 全实跑）：
+  - 布局断言两端：bar 子元素序 [播放,单步,速度,起始日,快进] 无 slider、
+    `.rp-slider-row.previousElementSibling === chart`（桌面+375）✓；
+  - 遮罩锁定：elementFromPoint 命中遮罩层、ESC+背板点击不关、遮罩下按钮点击
+    无副作用、提交钮 disabled ✓；
+  - 两段式（临时 worker 指 staging 真实执行）：冒烟段「冒烟校验中…」→ 提交后
+    「已提交，排队执行中」+ 双按钮文案断言 → 路径A「继续等待」轮询后跳
+    /saas/jobs/37 ✓、路径B「后台运行」跳 /saas/profile ✓；
+  - 失败路径：NL 编译失败（staging 无 LLM 配置）遮罩正常关闭走报错 ✓；
+  - 移动 375：卡片宽 343 自适应、按钮堆叠、零横滚零 JS 报错
+    （截图 .tmp/mobile-audit/{desktop,m375}-mask-*.png、m375-replay-layout.png）。
+
+---
+
+## Archive: QRE-SAAS-REPLAY-POLISH (重播组件两项优化：控制条 UI/UX 打磨 + 接管原图表容器模式，用户批准)
 
 ## Current Status
 

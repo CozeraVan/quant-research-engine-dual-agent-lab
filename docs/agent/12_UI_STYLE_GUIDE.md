@@ -300,6 +300,26 @@
   hover 淡紫反馈；`:focus-visible` 紫环不许去；transition 150–300ms（本组件 0.2s）；
   `prefers-reduced-motion: reduce` 下弹入动画/峰值闪烁/按钮过渡全关；
   按钮 36px 等高（§1 行内控件规则）、8px 间距网格。
+- **布局规则（2026-10-04 布局调整）**：控制排 = 播放/暂停、单步、速度档、起始日、
+  空仓快进（倍速与播放钮同排）；**进度条不放控制排**，经 `.rp-slider-row` 置图表
+  容器正下方一行（视觉从属于图表；接管模式 insertAfter chartEl，自建模式紧随
+  chartEl）。移动端控制排可折行，进度条始终在图下方。
+
+### 3.12 长等待模态遮罩（`wait-mask.js` + `lab-theme.css` .wm-* 族，2026-10-04）
+
+- 用途：NL 编译 / 运行回测等长等待期间锁页面防误点与重复提交。API：
+  `LabUI.waitMask.show/update/hide/isOpen`（base.html 全站引入，任意页面可复用）。
+- 结构：半透明深色背板（rgba(36,31,46,.48)）+ 居中淡紫卡片（`.wm-card`，
+  spinner `.wm-spin` + 标题 `.wm-title` + 副文案 `.wm-sub` + 按钮排 `.wm-btns`）。
+- 硬规则：显示期间**禁 ESC 关闭、禁背板点击关闭、页面交互全锁**（`.wm-lock`
+  禁滚动 + 背板物理拦截）；z-index **95**（高于 `.modal-mask` 80 / cal-pop 60，
+  低于 toast 99）——与其他弹层并存时必须显式管理（如大范围耗时护栏：先关遮罩
+  再弹护栏，确认后重开）；分流按钮出现时 spinner 停转（等待语义交还用户）；
+  触发按钮同步 disabled 防重复提交。
+- 两段式范式（运行回测）：等待段「冒烟校验中…」→ 提交成功「已提交，排队执行中」
+  +「后台运行 / 继续等待」分流按钮；`keepMask` 按钮只保持遮罩，onClick 必先执行。
+- 打磨：focus-visible 紫环、0.2s 过渡、prefers-reduced-motion 下 spinner 动画关闭
+  （静态降级）、768px 卡片自适应 + 按钮堆叠 44px。
 - 扩展选项（切片2 引入，向后兼容）：series `type`/`extra` 透传任意 ECharts 序列
   （candlestick/bar/scatter）；事件可带 `ev.price` 真实成交价定位；`opts.initialCursor`
   （窗口起播，如近 2 年）；`opts.height`；yAxes `pct:false`（价格/量/因子轴不加 %，
@@ -354,6 +374,7 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 ## 变更记录
 
+- 2026-10-04（QRE-SAAS-WAIT-MASK + REPLAY-LAYOUT）新增 §3.12 长等待模态遮罩组件规则（禁 ESC/背板/全锁、z-95、两段式分流范式、keepMask 语义）；§3.11 补布局规则（倍速与播放同排、进度条置图表正下方 .rp-slider-row）。
 - 2026-10-04（QRE-SAAS-REPLAY-POLISH）§3.11 修订：重播改**接管模式**（接管原图表容器，禁第二模块，退出内存重建静态）+ 交互打磨硬规则（SVG 图标+文字标签、hover/focus-visible、150-300ms、prefers-reduced-motion 降级、36px 等高 8px 网格）。
 - 2026-10-04（QRE-SAAS-REPLAY-S1）新增 §3.11 回测重播组件规则：static/replay.js 共享组件（core 纯逻辑 + attach UI），[0,cursor] 截断渲染/rAF 节流/时序 T 与 T+1 相隔三条红线，.rp-* 控制条与事件流族（淡紫 tokens 无新色相），768px 断点折行，末帧指标=静态报告强一致性（Playwright 断言）。
 - 2026-10-04（QRE-SAAS-MOBILE-ADAPT）新增 §10 移动端适配规则：768px 主断点、表格块级横滚、长 chip 折行、点击目标 ≥44px（日历格子 40px 妥协）、输入控件 16px/44px、磨损块 2 列+grid 三段、lab-theme 后加载需高优先级选择器覆盖的踩坑。改动全部在 saas/templates/base.html 内嵌样式块；本条为「记录实际落地规则」，经用户任务书批准。

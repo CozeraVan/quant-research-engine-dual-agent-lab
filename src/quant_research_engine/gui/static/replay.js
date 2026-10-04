@@ -187,7 +187,7 @@
     var cur = h("span", "rp-cur", "");
     bar.appendChild(btnPlay); bar.appendChild(btnStep); bar.appendChild(speedSel);
     bar.appendChild(h("span", "rp-lbl", "起始日"));
-    bar.appendChild(startInput); bar.appendChild(slider); bar.appendChild(btnSkip); bar.appendChild(cur);
+    bar.appendChild(startInput); bar.appendChild(btnSkip); bar.appendChild(cur);
     mountEl.appendChild(bar);
 
     /* 图表容器：opts.chartEl 传入时接管既有容器（切片2/策略页接管模式），否则自建 */
@@ -202,6 +202,15 @@
       if (oldInst) oldInst.dispose();
     }
     var chart = echarts.init(chartEl);
+
+    /* 进度条：从控制排移出，放在图表正下方一行（视觉上从属于图表；2026-10-04 布局调整） */
+    var sliderRow = h("div", "rp-slider-row");
+    sliderRow.appendChild(slider);
+    if (opts.chartEl && chartEl.parentNode) {
+      chartEl.parentNode.insertBefore(sliderRow, chartEl.nextSibling);
+    } else {
+      mountEl.appendChild(sliderRow);
+    }
 
     var metricsEl = opts.metricsEl || null;
     var eventsEl = opts.eventsEl || null;
@@ -428,6 +437,7 @@
         pause();
         chart.dispose();
         bar.remove();
+        sliderRow.remove();
         var pop = mountEl.querySelector(".rp-calpop");
         if (pop) pop.remove();
         if (!keepDom) mountEl.innerHTML = "";

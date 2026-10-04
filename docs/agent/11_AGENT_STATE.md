@@ -12,7 +12,14 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-REPLAY-POLISH (DONE — 重播组件两项优化（用户批准）：①接管模式——replay.js
+QRE-SAAS-WAIT-MASK + QRE-SAAS-REPLAY-LAYOUT (DONE — ①长等待遮罩组件 wait-mask.js
+（禁 ESC/背板/全锁、z-95、护栏弹层级冲突已处理）+ new.html 生成策略与运行回测两段式
+接入（「继续等待/后台运行」分流，踩坑 keepMask 短路已修）；②重播布局：倍速与播放
+同排、进度条移至图表正下方（.rp-slider-row，两端生效）；staging 锁定探针/两段式
+临时 worker 真执行双路径/布局断言/移动 375 全过，`-k saas` 235 passed 零回归；
+awaiting git approval（站立批准有效）→ 部署 ECS)
+
+上一任务：QRE-SAAS-REPLAY-POLISH (DONE — 重播组件两项优化（用户批准）：①接管模式——replay.js
 opts.chartEl + destroy(keepDom)，symbol/job 删独立重播卡接管原 K线/收益曲线容器，
 退出内存重建静态+缩放/基准条/区间卡恢复（踩坑 classList.add 链式抛错已修）；
 ②控制条打磨——SVG 图标+文字标签、cursor/hover/:focus-visible 紫环、transition 0.2s、

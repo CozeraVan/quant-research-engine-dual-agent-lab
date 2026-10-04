@@ -501,3 +501,33 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
   .rp-pop{animation:none}
   .rp-peak-flash .metric-card{border-color:var(--line);box-shadow:none}
 }
+
+/* 进度条移至图表正下方（2026-10-04 布局调整：倍速与播放钮同排，进度条从属于图表） */
+.rp-slider-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+.rp-slider-row .rp-slider{flex:1;min-width:0}
+
+/* ---- 长等待模态遮罩（2026-10-04；z-index 95 高于 .modal-mask 80） ---- */
+.wm-mask{position:fixed;inset:0;background:rgba(36,31,46,.48);z-index:95;display:none;align-items:center;justify-content:center;padding:16px;animation:panelIn .2s var(--ease)}
+.wm-mask.show{display:flex}
+.wm-lock{overflow:hidden}
+.wm-card{background:#fff;border:1px solid var(--tint-deep);border-radius:14px;padding:26px 30px;max-width:380px;width:100%;text-align:center;box-shadow:var(--shadow-2)}
+.wm-spin{width:34px;height:34px;margin:0 auto 12px;border-radius:50%;border:3px solid var(--tint-deep);border-top-color:var(--lav);animation:wmSpin .9s linear infinite}
+@keyframes wmSpin{to{transform:rotate(360deg)}}
+.wm-title{font-size:15px;font-weight:600;color:var(--ink)}
+.wm-sub{font-size:12.5px;color:var(--grey);margin-top:8px;line-height:1.7}
+.wm-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+.wm-btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 16px;font-size:13.5px;color:var(--ink);cursor:pointer;transition:all .2s var(--ease);min-height:36px}
+.wm-btn:hover{border-color:var(--lav);color:var(--lav-deep);background:var(--tint)}
+.wm-btn.primary{background:var(--lav);border-color:var(--lav);color:#fff;font-weight:600}
+.wm-btn.primary:hover{background:var(--lav-deep);border-color:var(--lav-deep);color:#fff}
+.wm-btn:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
+@media(max-width:768px){
+  .wm-card{padding:22px 18px;max-width:100%}
+  .wm-btns{flex-direction:column}
+  .wm-btns .wm-btn{width:100%;min-height:44px}
+}
+@media (prefers-reduced-motion: reduce){
+  .wm-spin{animation:none;border-top-color:var(--tint-deep)}
+  .wm-mask{animation:none}
+  .wm-btn{transition:none}
+}
