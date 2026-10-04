@@ -142,12 +142,30 @@ async function loadStrategies(){
   const items = d.strategies || [];
   if (!items.length){ tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无保存的策略（新建回测提交后自动入库）</td></tr>'; return; }
   tbody.innerHTML = '';
-  // CR-2026-10-04 模块一：入口标签 + 详情页入口
+  // CR-2026-10-04 模块一：入口标签 + 详情页入口；模块二收编：行内信号状态
   const MODE_LABEL = {nl: '自然语言', wizard: '自选因子', yaml: '策略代码'};
+  const SCOPE_LABEL = {last_run_universe: '最近回测范围', sector: '板块/概念', all_a: '全部 A 股', custom: '自定义列表'};
   for (const s of items){
     const tr = document.createElement('tr');
     const modeLabel = MODE_LABEL[s.entry_mode] || '策略代码';
-    tr.innerHTML = `<td>${escH(s.name)} <span class="badge queued" style="font-weight:400">${modeLabel}</span></td>`
+    // 监控状态 + 最近信号摘要（一行小字；有未读信号时行首红点）
+    let sigLine;
+    if (s.watch && s.watch.enabled){
+      const scope = SCOPE_LABEL[s.watch.scope_type] || s.watch.scope_type;
+      const cs = (s.watch.scope_payload && s.watch.scope_payload.codes) || [];
+      let summ = '';
+      if (s.latest_signals){
+        const ls = s.latest_signals, d = String(ls.trade_date || '').slice(5);
+        summ = ` · ${d}：${ls.entry_n} 入场 ${ls.exit_n} 离场`;
+      }
+      sigLine = `<span style="color:var(--pos,#1a7f37)">监控中（${scope}${cs.length ? ' ' + cs.length + ' 只' : ''}）</span>${escH(summ)}`;
+    } else {
+      sigLine = `<a href="/saas/strategies/${s.id}" style="font-size:12px">开启监控 →</a>`;
+    }
+    const unreadDot = s.signal_unread
+      ? '<span title="有未读信号" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E5534B;margin-right:5px"></span>' : '';
+    tr.innerHTML = `<td>${escH(s.name)} <span class="badge queued" style="font-weight:400">${modeLabel}</span>`
+      + `<br><span class="opt" style="font-size:12px">${unreadDot}${sigLine}</span></td>`
       + `<td class="num" style="text-align:right">${s.job_count}</td>`
       + `<td>${fmtT(s.last_used_at)}</td><td>${fmtT(s.created_at)}</td>`
       + `<td style="text-align:right;white-space:nowrap">`

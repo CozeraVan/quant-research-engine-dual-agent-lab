@@ -985,6 +985,7 @@ def create_saas_app() -> Flask:
         if uid is None:
             return jsonify({"ok": False, "error": "未登录"}), 401
         _ensure_strategy_asset_columns(engine)  # CR-2026-10-04：读连接前懒自愈
+        _ensure_signal_tables(engine)  # 模块二收编：列表行集成信号状态
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
@@ -996,7 +997,43 @@ def create_saas_app() -> Flask:
                 ),
                 {"uid": uid},
             ).mappings().all()
-        return jsonify({"ok": True, "strategies": [_jsonable(dict(r)) for r in rows]})
+            # 模块二收编（2026-10-04 用户拍板：信号集成进策略库，不做独立栏目）：
+            # watch 状态 + 各 watch 最近信号日统计 + 未读判定，两次聚合查询避免 N+1。
+            watches = conn.execute(
+                text("SELECT strategy_id, scope_type, scope_payload, enabled "
+                     "FROM strategy_watches WHERE user_id = :uid"),
+                {"uid": uid},
+            ).mappings().all()
+            last_read = conn.execute(
+                text("SELECT signals_last_read_at FROM users WHERE id = :uid"),
+                {"uid": uid},
+            ).scalar_one_or_none()
+            sig_stats = conn.execute(
+                text(
+                    "SELECT w.strategy_id, e.trade_date, "
+                    "count(*) FILTER (WHERE e.signal_type = 'entry') AS entry_n, "
+                    "count(*) FILTER (WHERE e.signal_type = 'exit') AS exit_n, "
+                    "count(*) FILTER (WHERE e.created_at > :lr OR :lr_is_null) AS unread_n "
+                    "FROM signal_events e JOIN strategy_watches w ON w.id = e.watch_id "
+                    "WHERE w.user_id = :uid AND e.trade_date = ("
+                    "  SELECT max(e2.trade_date) FROM signal_events e2 WHERE e2.watch_id = e.watch_id) "
+                    "GROUP BY w.strategy_id, e.trade_date"
+                ),
+                {"uid": uid, "lr": last_read, "lr_is_null": last_read is None},
+            ).mappings().all()
+        watch_by_sid = {w["strategy_id"]: _jsonable(dict(w)) for w in watches}
+        stats_by_sid = {s["strategy_id"]: s for s in sig_stats}
+        items = []
+        for r in rows:
+            item = _jsonable(dict(r))
+            item["watch"] = watch_by_sid.get(r["id"])
+            st = stats_by_sid.get(r["id"])
+            item["latest_signals"] = (
+                {"trade_date": _jsonable(st["trade_date"]),
+                 "entry_n": st["entry_n"], "exit_n": st["exit_n"]} if st else None)
+            item["signal_unread"] = bool(st and st["unread_n"] > 0)
+            items.append(item)
+        return jsonify({"ok": True, "strategies": items})
 
     @app.get("/api/saas/strategies/<int:strategy_id>")
     def api_strategy_get(strategy_id: int) -> Any:

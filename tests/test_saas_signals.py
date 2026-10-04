@@ -211,6 +211,46 @@ class TestWorkerSignalApis:
                            headers=WORKER_HEADERS).status_code == 400
 
 
+class TestListApiSignalAggregation:
+    """模块二收编：策略列表 API 行内信号状态（watch/最近信号日统计/未读）。"""
+
+    def test_rows_without_watch(self, client, app):
+        headers = _user(app)
+        _strategy(app)
+        d = client.get("/api/saas/strategies", headers=headers).get_json()
+        s = d["strategies"][0]
+        assert s["watch"] is None and s["latest_signals"] is None
+        assert s["signal_unread"] is False
+
+    def test_watch_stats_and_unread_flow(self, client, app):
+        headers = _user(app)
+        sid = _strategy(app, name="s1")
+        _strategy(app, name="s2")  # 无监控行
+        client.post(f"/api/saas/strategies/{sid}/watch",
+                    json={"enabled": True, "scope_type": "custom",
+                          "scope_payload": {"codes": ["000001.SZ"]}}, headers=headers)
+        wid = client.get("/api/worker/watches", headers=WORKER_HEADERS).get_json()["watches"][0]["watch_id"]
+        events = [
+            {"watch_id": wid, "trade_date": "2026-10-01", "ts_code": "000001.SZ", "signal_type": "entry", "price": 1},
+            {"watch_id": wid, "trade_date": "2026-10-03", "ts_code": "000001.SZ", "signal_type": "entry", "price": 1},
+            {"watch_id": wid, "trade_date": "2026-10-03", "ts_code": "600519.SH", "signal_type": "exit", "price": 2},
+        ]
+        client.post("/api/worker/signals", json={"events": events}, headers=WORKER_HEADERS)
+        d = client.get("/api/saas/strategies", headers=headers).get_json()
+        by_name = {s["name"]: s for s in d["strategies"]}
+        s1 = by_name["s1"]
+        assert s1["watch"]["enabled"] is True and s1["watch"]["scope_type"] == "custom"
+        # 最近信号日 = 10-03（不是 10-01 的 1 条）
+        assert s1["latest_signals"]["trade_date"] == "2026-10-03"
+        assert s1["latest_signals"]["entry_n"] == 1 and s1["latest_signals"]["exit_n"] == 1
+        assert s1["signal_unread"] is True
+        assert by_name["s2"]["watch"] is None and by_name["s2"]["latest_signals"] is None
+        # mark-read 后未读消除
+        client.post("/api/saas/signals/mark-read", json={}, headers=headers)
+        d = client.get("/api/saas/strategies", headers=headers).get_json()
+        assert {s["name"]: s for s in d["strategies"]}["s1"]["signal_unread"] is False
+
+
 class TestSignalCenter:
     def _seed_events(self, client, app):
         headers = _user(app)

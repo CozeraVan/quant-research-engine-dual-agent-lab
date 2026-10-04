@@ -2,7 +2,40 @@
 
 ## Task ID
 
-QRE-SAAS-SIGNAL-CENTER (CR-2026-10-04 模块二：策略信号监控 + 站内信号中心)
+QRE-SAAS-SIGNAL-CONSOLIDATE (CR-2026-10-04 模块二 UX 收编：信号功能集成进「我的策略库」，用户拍板)
+
+## Current Status
+
+DONE (implementation; `-k saas` 235 passed（233 + 2 新增）零回归；staging 桌面+375
+三态截图与红点闭环实测通过；awaiting git finalization 后部署)
+
+## Task Note
+
+- 产品决策（2026-10-04 用户反馈）：信号不做独立栏目/顶栏导航，收编进策略库。
+  页面与接口全部保留，入口改挂在策略库。
+- 顶栏：移除「信号」导航项与其红点；未读信号红点改挂「个人信息」导航
+  （有未读信号时显示；进入 /saas/signals 或策略详情页信号区 mark-read 后消除；
+  红点 span 置于文字前，保住既有 `个人信息</a>` 断言）。
+- 策略列表 API 聚合（一条 watch 查询 + 一条按 watch 最近信号日聚合统计，无 N+1）：
+  每行新增 watch（状态/范围/快照）、latest_signals（最近信号日 + entry/exit 计数，
+  取各 watch max(trade_date) 当日）、signal_unread（最近信号日内
+  created_at > signals_last_read_at 的条数 > 0；从未读过则全计未读）。
+- 个人信息页策略库行：入口标签徽标 + 第二行小字——已开启=绿字「监控中（范围 N 只）
+  · MM-DD：X 入场 Y 离场」；未开启=「开启监控 →」链接跳详情页监控卡；有未读信号时
+  行首红点。卡片标题旁加「查看全部信号 →」链接到 /saas/signals。
+- 策略详情页：监控卡下方新增「该策略信号记录」区（复用 /api/saas/signals?
+  strategy_id=<id> 筛选——接口在模块二已支持该参数；按日期倒序 20/页分页 +
+  「查看全部 →」链接 + T+1 免责）；详情页信号区可见即 mark-read（红点消除）。
+- 信号中心 /saas/signals 保留但不进任何主导航；其红点元素 id 同步改 nav-records-dot。
+- 测试：test_saas_signals.py +2（列表聚合三态：无监控行 null 字段、有监控行
+  最近信号日统计取 max 日（10-01 旧日不混入）+ mark-read 后未读消除）。
+- 验证：staging Playwright 桌面+375——导航红点 block→详情页 mark-read→none 闭环、
+  行内红点/监控中徽标/开启监控链接三态、零横滚零 JS 报错；截图
+  .tmp/mobile-audit/{desktop,m375}-consol-{profile,detail}.png。
+
+---
+
+## Archive: QRE-SAAS-SIGNAL-CENTER (CR-2026-10-04 模块二：策略信号监控 + 站内信号中心)
 
 ## Current Status
 

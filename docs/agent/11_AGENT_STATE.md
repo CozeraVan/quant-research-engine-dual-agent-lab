@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-SIGNAL-CENTER (DONE — CR-2026-10-04 模块二 策略信号监控+站内信号中心：
+QRE-SAAS-SIGNAL-CONSOLIDATE (DONE — 模块二 UX 收编（用户拍板：信号集成进「我的策略库」，
+不做独立栏目）：顶栏「信号」项移除、未读红点改挂「个人信息」导航；策略列表 API 聚合
+watch/latest_signals/signal_unread（两查无 N+1，最近信号日口径=max(trade_date) 当日
+entry/exit 计数）；策略库行加监控徽标/最近信号摘要/未读红点 + 卡标题「查看全部信号 →」；
+详情页加「该策略信号记录」分页区（进入即 mark-read）；/saas/signals 保留不进主导航；
+测试 +2，`-k saas` 235 passed 零回归；staging 桌面+375 红点闭环与三态实测零报错；
+awaiting git approval（站立批准有效）→ 部署 ECS)
+
+上一任务：QRE-SAAS-SIGNAL-CENTER (DONE — CR-2026-10-04 模块二 策略信号监控+站内信号中心：
 新表 strategy_watches/signal_events + users.signals_last_read_at + tier_policies
 scan_enabled/max_watches（懒自愈+cloud_schema 同步）；用户侧 watch CRUD（默认
 last_run_universe 快照/上限 403/scan 关闭 403/他人 404）+ signals 筛选分页 +

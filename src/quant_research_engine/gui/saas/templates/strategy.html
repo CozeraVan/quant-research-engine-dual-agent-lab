@@ -67,6 +67,20 @@
     </div>
 
     <div class="card">
+      <h2>该策略信号记录 <span class="opt">（日线收盘后 T+1 参考，不构成投资建议）</span>
+        <a href="/saas/signals" style="font-size:12.5px;font-weight:400;margin-left:8px">查看全部 →</a></h2>
+      <table class="tbl">
+        <thead><tr><th>信号日期</th><th>股票</th><th>类型</th><th class="num">参考价</th><th>到达时间</th></tr></thead>
+        <tbody id="sd-sig-tbody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
+      </table>
+      <div class="bench-bar" style="margin-top:8px">
+        <button class="btn-sm" id="sd-sig-prev">← 上一页</button>
+        <span class="opt" id="sd-sig-page"></span>
+        <button class="btn-sm" id="sd-sig-next">下一页 →</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>历史回测 <span class="opt" id="sd-jobs-count"></span></h2>
       <table class="tbl">
         <thead><tr><th class="num">任务</th><th>类型</th><th>状态</th><th>回测区间</th>
@@ -100,7 +114,35 @@
     renderSource();
     renderJobs(d.jobs || []);
     renderWatch(d.watch, d.recent_signals_7d || 0);
+    loadSigPage(1);
+    // 信号区可见即视为已读（「个人信息」导航红点清零）
+    apiFetch('/api/saas/signals/mark-read', {json: {}}).then(function(){
+      var dot = document.getElementById('nav-records-dot');
+      if (dot) dot.style.display = 'none';
+    }).catch(function(){});
   }).catch(function(){ document.getElementById('sd-noaccess').classList.remove('hidden'); });
+
+  function loadSigPage(p){
+    apiFetch('/api/saas/signals?strategy_id=' + sid + '&page=' + p + '&page_size=20')
+      .then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      var tbody = document.getElementById('sd-sig-tbody');
+      if (!d.total){ tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无信号（开启监控后每日数据刷新自动扫描）</td></tr>'; }
+      else {
+        tbody.innerHTML = (d.items || []).map(function(e){
+          var badge = e.signal_type === 'entry'
+            ? '<span class="badge fail">入场</span>' : '<span class="badge run">出场</span>';
+          return '<tr><td>' + esc(e.trade_date) + '</td><td>' + esc(e.ts_code) + '</td><td>' + badge +
+            '</td><td class="num">' + (e.price === null || e.price === undefined ? '—' : Number(e.price).toFixed(2)) +
+            '</td><td>' + fmt(e.created_at) + '</td></tr>';
+        }).join('');
+      }
+      document.getElementById('sd-sig-page').textContent =
+        '第 ' + d.page + ' / ' + Math.max(1, Math.ceil(d.total / 20)) + ' 页 · 共 ' + d.total + ' 条';
+      document.getElementById('sd-sig-prev').onclick = function(){ if (p > 1) loadSigPage(p - 1); };
+      document.getElementById('sd-sig-next').onclick = function(){ loadSigPage(p + 1); };
+    }).catch(function(){});
+  }
 
   function renderSource(){
     var mode = st.entry_mode || (st.nl_text ? 'nl' : 'yaml');

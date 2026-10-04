@@ -41,9 +41,9 @@
   function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }
   function fmt(t){ return t ? LabUI.fmtLocalTime(t) : '—'; }
 
-  // 进入即 mark-read（header 红点清零）
+  // 进入即 mark-read（「个人信息」导航红点清零）
   apiFetch('/api/saas/signals/mark-read', {json: {}}).then(function(){
-    var dot = document.getElementById('nav-sig-dot');
+    var dot = document.getElementById('nav-records-dot');
     if (dot) dot.style.display = 'none';
   }).catch(function(){});
 
