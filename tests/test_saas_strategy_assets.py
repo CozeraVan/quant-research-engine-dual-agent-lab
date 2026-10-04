@@ -43,7 +43,7 @@ def saas_db():
         check=True, capture_output=True, text=True,
     )
     yield db_name
-    _psql("postgres", "-c", f"DROP DATABASE IF EXISTS {db_name}")
+    _psql("postgres", "-c", f"DROP DATABASE IF EXISTS {db_name} WITH (FORCE)")
 
 
 @pytest.fixture()
@@ -187,5 +187,5 @@ class TestDetailPage:
         html = resp.get_data(as_text=True)
         assert "sd-main" in html and "sd-src-nl" in html and "sd-src-wizard" in html
         assert "sd-src-yaml" in html and "sd-jobs-tbody" in html
-        assert "CR-2026-10-04 模块二占位" in html
+        assert "sd-watch-card" in html  # 模块二：信号监控卡
         assert "/detail" in html

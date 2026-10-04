@@ -45,7 +45,26 @@
       </div>
     </div>
 
-    <!-- CR-2026-10-04 模块二占位：信号监控卡（开关 + 扫描范围 + 最近 7 日信号预览），另行实现 -->
+    <div class="card" id="sd-watch-card">
+      <h2>信号监控 <span class="opt">（日线收盘后 T+1 参考信号，不构成投资建议）</span></h2>
+      <div id="sd-watch-body" class="muted">加载中…</div>
+      <div id="sd-watch-form" class="hidden">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px">
+          <label class="label-inline"><input type="checkbox" id="wd-enabled"> 启用每日扫描</label>
+          <span class="opt">扫描范围：</span>
+          <select id="wd-scope">
+            <option value="last_run_universe">最近回测范围（快照）</option>
+            <option value="all_a">全部 A 股</option>
+            <option value="custom">自定义股票列表</option>
+          </select>
+          <input type="text" id="wd-codes" class="hidden" placeholder="逗号分隔，如 000001,600519" style="width:220px">
+          <button class="btn-sm" id="wd-save">保存监控设置</button>
+          <button class="btn-sm hidden" id="wd-delete">关闭并删除监控</button>
+          <span class="opt" id="wd-status"></span>
+        </div>
+        <p class="opt" style="margin-top:6px" id="wd-recent"></p>
+      </div>
+    </div>
 
     <div class="card">
       <h2>历史回测 <span class="opt" id="sd-jobs-count"></span></h2>
@@ -80,6 +99,7 @@
       st.name + '（#' + st.id + '）· 创建于 ' + fmt(st.created_at) + ' · 最近更新 ' + fmt(st.updated_at);
     renderSource();
     renderJobs(d.jobs || []);
+    renderWatch(d.watch, d.recent_signals_7d || 0);
   }).catch(function(){ document.getElementById('sd-noaccess').classList.remove('hidden'); });
 
   function renderSource(){
@@ -119,8 +139,54 @@
     return area('入场条件', ws.entry) + area('出场条件', ws.exit);
   }
 
-  function renderJobs(jobs){
-    document.getElementById('sd-jobs-count').textContent = '（共 ' + jobs.length + ' 次）';
+  // CR-2026-10-04 模块二：信号监控卡
+  var SCOPE_LABEL = {last_run_universe: '最近回测范围', sector: '板块/概念', all_a: '全部 A 股', custom: '自定义列表'};
+  function renderWatch(watch, recent7){
+    document.getElementById('sd-watch-body').classList.add('hidden');
+    document.getElementById('sd-watch-form').classList.remove('hidden');
+    var en = document.getElementById('wd-enabled');
+    var scope = document.getElementById('wd-scope');
+    var codes = document.getElementById('wd-codes');
+    if (watch){
+      en.checked = !!watch.enabled;
+      scope.value = watch.scope_type || 'last_run_universe';
+      var cs = (watch.scope_payload && watch.scope_payload.codes) || [];
+      if (watch.scope_type === 'custom'){ codes.classList.remove('hidden'); codes.value = cs.join(','); }
+      document.getElementById('wd-delete').classList.remove('hidden');
+      document.getElementById('wd-recent').textContent =
+        '当前：' + (watch.enabled ? '已启用' : '已停用') + ' · 范围 ' +
+        (SCOPE_LABEL[watch.scope_type] || watch.scope_type) +
+        (cs.length ? '（' + cs.length + ' 只）' : '') +
+        ' · 最近 7 日信号 ' + recent7 + ' 条 · 更新于 ' + fmt(watch.updated_at);
+    } else {
+      document.getElementById('wd-recent').textContent = '未开启。启用后每日数据刷新完成自动扫描该策略信号。';
+    }
+  }
+  document.getElementById('wd-scope').addEventListener('change', function(){
+    document.getElementById('wd-codes').classList.toggle('hidden', this.value !== 'custom');
+  });
+  document.getElementById('wd-save').addEventListener('click', function(){
+    var scopeType = document.getElementById('wd-scope').value;
+    var body = {enabled: document.getElementById('wd-enabled').checked, scope_type: scopeType};
+    if (scopeType === 'custom'){
+      body.scope_payload = {codes: document.getElementById('wd-codes').value.split(',').map(function(s){ return s.trim(); }).filter(Boolean)};
+      if (!body.scope_payload.codes.length){ alert('自定义列表请至少填一个股票代码'); return; }
+    }
+    apiFetch('/api/saas/strategies/' + sid + '/watch', {json: body}).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok){ alert(d.error || '保存失败'); return; }
+      document.getElementById('wd-status').textContent = '已保存';
+      setTimeout(function(){ location.reload(); }, 400);
+    }).catch(function(){});
+  });
+  document.getElementById('wd-delete').addEventListener('click', function(){
+    if (!confirm('确认关闭并删除该策略的信号监控？历史信号保留可查。')) return;
+    apiFetch('/api/saas/strategies/' + sid + '/watch', {method: 'DELETE'}).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok){ alert(d.error || '删除失败'); return; }
+      location.reload();
+    }).catch(function(){});
+  });
+
+  function renderJobs(jobs){    document.getElementById('sd-jobs-count').textContent = '（共 ' + jobs.length + ' 次）';
     var tbody = document.getElementById('sd-jobs-tbody');
     if (!jobs.length){ tbody.innerHTML = '<tr><td colspan="8" class="muted">暂无回测记录</td></tr>'; return; }
     tbody.innerHTML = jobs.map(function(j){

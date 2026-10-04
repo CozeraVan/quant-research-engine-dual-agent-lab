@@ -193,6 +193,35 @@ CREATE TABLE IF NOT EXISTS worker_configs (
     updated_by                 TEXT
 );
 
+-- CR-2026-10-04 模块二（策略信号监控 + 站内信号中心）：
+-- strategy_watches 每用户每策略一行（UNIQUE(strategy_id,user_id)）；
+-- signal_events 唯一约束兜底扫描重跑幂等；users.signals_last_read_at 未读红点；
+-- tier_policies 加 scan_enabled/max_watches（内测期默认全开/20）。
+CREATE TABLE IF NOT EXISTS strategy_watches (
+    id            BIGSERIAL PRIMARY KEY,
+    strategy_id   BIGINT NOT NULL REFERENCES strategies(id),
+    user_id       BIGINT NOT NULL REFERENCES users(id),
+    scope_type    TEXT NOT NULL DEFAULT 'last_run_universe',
+    scope_payload JSONB,
+    enabled       BOOL NOT NULL DEFAULT true,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_watches_strategy_user
+    ON strategy_watches (strategy_id, user_id);
+CREATE TABLE IF NOT EXISTS signal_events (
+    id          BIGSERIAL PRIMARY KEY,
+    watch_id    BIGINT NOT NULL REFERENCES strategy_watches(id),
+    trade_date  DATE NOT NULL,
+    ts_code     TEXT NOT NULL,
+    signal_type TEXT NOT NULL,                -- entry / exit
+    price       NUMERIC,                      -- 收盘参考价（T+1 参考，非成交价）
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_unique
+    ON signal_events (watch_id, trade_date, ts_code, signal_type);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signals_last_read_at TIMESTAMPTZ;
+
 -- QRE-SAAS-FEEDBACK-FACTOR-REQ（2026-09-27）：
 -- ① factor_requests 补 formula/purpose（用户主动描述因子定义与用途，辅助人工审核）；
 -- ② 新 feedback 表：内测意见反馈，仅登录用户可提交（游客不可，见 06 决策日志），
@@ -234,6 +263,9 @@ CREATE TABLE IF NOT EXISTS tier_policies (
 -- 老库自愈（应用启动时也会幂等执行同样的 ALTER）
 ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_fields INT NOT NULL DEFAULT 20;
 ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_tables INT NOT NULL DEFAULT 3;
+-- CR-2026-10-04 模块二：信号扫描开关与 watch 上限（须在 tier_policies 建表之后）
+ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS scan_enabled BOOL NOT NULL DEFAULT true;
+ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_watches INT NOT NULL DEFAULT 20;
 INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days, max_factor_fields, max_factor_tables) VALUES
     ('guest',  1, 1, 738, 20, 3),
     ('member', 3, 0, 0, 20, 3),

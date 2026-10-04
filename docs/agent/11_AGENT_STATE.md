@@ -12,7 +12,18 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-STRATEGY-ASSETS (DONE — CR-2026-10-04 模块一 策略库→策略资产：strategies 加
+QRE-SAAS-SIGNAL-CENTER (DONE — CR-2026-10-04 模块二 策略信号监控+站内信号中心：
+新表 strategy_watches/signal_events + users.signals_last_read_at + tier_policies
+scan_enabled/max_watches（懒自愈+cloud_schema 同步）；用户侧 watch CRUD（默认
+last_run_universe 快照/上限 403/scan 关闭 403/他人 404）+ signals 筛选分页 +
+unread-count/mark-read；worker 侧 watches 下发 + signals 幂等回传；扫描脚本
+deploy/saas/signal_scan.py（复用 evaluate_expression_signal，按股分组求值防 shift
+跨股，挂 qre-refresh ExecStartPost=-）；strategy.html 监控卡做实 + 新页 /saas/signals
+信号中心 + 顶栏「信号」红点（信号中心页跳过查询防竞态）；测试 +15，staging 全链路
+实测（watch→回传→红点→mark-read 灭点）；awaiting git approval（站立批准有效）→
+ECS 新表手工 apply + 生产扫描实跑)
+
+上一任务：QRE-SAAS-STRATEGY-ASSETS (DONE — CR-2026-10-04 模块一 策略库→策略资产：strategies 加
 entry_mode/wizard_state（懒自愈+存量推断+06 决策）；保存与 job 提交链路落模式与向导快照；
 新页 /saas/strategies/<id> 三模式源文件还原（nl 重编译/wizard 快照+跳向导编辑/yaml 编辑）+
 操作区+历史回测表+模块二占位注释；策略库行入口标签+详情链接；new.html 回填按

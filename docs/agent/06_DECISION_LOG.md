@@ -2,6 +2,20 @@
 
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.
 
+### 2026-10-04: 策略信号监控数据模型——strategy_watches / signal_events（CR-2026-10-04 模块二）
+
+- Decision: 新增 `strategy_watches`（UNIQUE(strategy_id,user_id)；scope_type ∈
+  last_run_universe/sector/all_a/custom，scope_payload JSONB 存范围快照）与
+  `signal_events`（UNIQUE(watch_id,trade_date,ts_code,signal_type) 防重，扫描重跑幂等）；
+  `users.signals_last_read_at` 支撑 header 未读红点；`tier_policies` 加
+  `scan_enabled`（默认 true，未来付费收窄开关）与 `max_watches`（默认 20）。
+- 信号口径：日线收盘后 T+1 参考（price=收盘参考价），页面统一免责文案；
+  明确不做盘中实时/推送渠道（channel 预留）。
+- 扫描链路：本机 `deploy/saas/signal_scan.py` 挂 `qre-refresh.service`
+  `ExecStartPost=-`（数据刷新完成后触发；失败不影响 refresh）；云端零新端口、
+  零公网入站（worker token 出站拉 watches / 回传 signals）。
+- Owner: KIMI_CODE（CR-2026-10-04 spec 已经用户批准）
+
 ### 2026-10-04: 策略资产化数据模型——strategies 加 entry_mode / wizard_state（CR-2026-10-04 模块一）
 
 - Decision: `strategies` 表新增 `entry_mode TEXT`（nl/wizard/yaml）与

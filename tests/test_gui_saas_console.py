@@ -36,7 +36,7 @@ def saas_db():
         check=True, capture_output=True, text=True,
     )
     yield db_name
-    _psql("postgres", "-c", f"DROP DATABASE IF EXISTS {db_name}")
+    _psql("postgres", "-c", f"DROP DATABASE IF EXISTS {db_name} WITH (FORCE)")
 
 
 @pytest.fixture()

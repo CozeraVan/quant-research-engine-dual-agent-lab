@@ -293,13 +293,15 @@ _PBKDF2_ITERATIONS = 120_000
 # max_factor_fields / max_factor_tables=单策略因子条数/因子表数上限（0=不限）。
 _TIER_POLICY_DEFAULTS = {
     "guest":  {"daily_full_limit": GUEST_DAILY_LIMIT, "max_codes": GUEST_MAX_CODES, "max_days": GUEST_MAX_DAYS,
-               "max_factor_fields": 20, "max_factor_tables": 3},
+               "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
     "member": {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0,
-               "max_factor_fields": 20, "max_factor_tables": 3},
+               "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
     "paid":   {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0,
-               "max_factor_fields": 20, "max_factor_tables": 3},
+               "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
 }
 _POLICY_KEYS = ("daily_full_limit", "max_codes", "max_days", "max_factor_fields", "max_factor_tables")
+_POLICY_BOOL_KEYS = ("scan_enabled",)
+_POLICY_INT_KEYS = ("max_watches",)
 # 进程级"已自愈"标记：避免每次缓存未命中都重复 CREATE/ALTER（减少锁开销）
 _POLICY_SCHEMA_ENSURED: set[int] = set()
 
@@ -323,6 +325,9 @@ def _ensure_tier_policies(engine: Engine) -> None:
         # 老库自愈：逐列补齐（ALTER ... IF NOT EXISTS 幂等）
         conn.execute(text("ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_fields INT NOT NULL DEFAULT 20"))
         conn.execute(text("ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_tables INT NOT NULL DEFAULT 3"))
+        # CR-2026-10-04 模块二：信号扫描开关与每用户 watch 上限（内测期全 true/20）
+        conn.execute(text("ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS scan_enabled BOOL NOT NULL DEFAULT true"))
+        conn.execute(text("ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_watches INT NOT NULL DEFAULT 20"))
         for tier, d in _TIER_POLICY_DEFAULTS.items():
             conn.execute(
                 text(
@@ -350,8 +355,8 @@ def _get_policy(app: Flask, engine: Engine, tier: str) -> dict[str, int]:
         _ensure_tier_policies(engine)
         with engine.connect() as conn:
             row = conn.execute(
-                text("SELECT daily_full_limit, max_codes, max_days, max_factor_fields, max_factor_tables "
-                     "FROM tier_policies WHERE tier = :t"),
+                text("SELECT daily_full_limit, max_codes, max_days, max_factor_fields, max_factor_tables, "
+                     "scan_enabled, max_watches FROM tier_policies WHERE tier = :t"),
                 {"t": tier},
             ).mappings().first()
         policy = dict(row) if row else dict(default)
@@ -477,6 +482,65 @@ def _ensure_strategy_asset_columns(engine: Engine) -> None:
             "WHERE entry_mode IS NULL"
         ))
     _STRATEGY_ASSET_ENSURED.add(key)
+
+
+# CR-2026-10-04 模块二：策略信号监控——strategy_watches / signal_events /
+# users.signals_last_read_at（懒自愈，information_schema 先查再 CREATE/ALTER）
+_SIGNAL_TABLES_ENSURED: set[int] = set()
+
+WATCH_SCOPE_TYPES = ("last_run_universe", "sector", "all_a", "custom")
+
+
+def _ensure_signal_tables(engine: Engine) -> None:
+    key = id(engine)
+    if key in _SIGNAL_TABLES_ENSURED:
+        return
+    with engine.begin() as conn:
+        existing_tables = {
+            r[0]
+            for r in conn.execute(
+                text("SELECT table_name FROM information_schema.tables "
+                     "WHERE table_name IN ('strategy_watches', 'signal_events')")
+            )
+        }
+        if "strategy_watches" not in existing_tables:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS strategy_watches ("
+                "id BIGSERIAL PRIMARY KEY, "
+                "strategy_id BIGINT NOT NULL REFERENCES strategies(id), "
+                "user_id BIGINT NOT NULL REFERENCES users(id), "
+                "scope_type TEXT NOT NULL DEFAULT 'last_run_universe', "
+                "scope_payload JSONB, "
+                "enabled BOOL NOT NULL DEFAULT true, "
+                "created_at TIMESTAMPTZ NOT NULL DEFAULT now(), "
+                "updated_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_watches_strategy_user "
+                "ON strategy_watches (strategy_id, user_id)"
+            ))
+        if "signal_events" not in existing_tables:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS signal_events ("
+                "id BIGSERIAL PRIMARY KEY, "
+                "watch_id BIGINT NOT NULL REFERENCES strategy_watches(id), "
+                "trade_date DATE NOT NULL, "
+                "ts_code TEXT NOT NULL, "
+                "signal_type TEXT NOT NULL, "
+                "price NUMERIC, "
+                "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+            ))
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_unique "
+                "ON signal_events (watch_id, trade_date, ts_code, signal_type)"
+            ))
+        has_col = conn.execute(
+            text("SELECT 1 FROM information_schema.columns "
+                 "WHERE table_name = 'users' AND column_name = 'signals_last_read_at'")
+        ).first() is not None
+        if not has_col:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS signals_last_read_at TIMESTAMPTZ"))
+    _SIGNAL_TABLES_ENSURED.add(key)
 
 
 def _norm_entry_mode(value: Any) -> str | None:
@@ -818,6 +882,11 @@ def create_saas_app() -> Flask:
         # CR-2026-10-04 模块一：策略资产详情页（登录限定由数据 API 强制：401/404）
         return render_template("strategy.html", strategy_id=strategy_id)
 
+    @app.get("/saas/signals")
+    def saas_signals_page() -> str:
+        # CR-2026-10-04 模块二：站内信号中心（登录限定由数据 API 强制）
+        return render_template("signals.html")
+
     # --- 复用既有 NL 编译 / 因子目录（同一编译函数 + factor_correction 纠错层，
     #     LLM key 只存服务端环境变量；两个路由都要求登录） ---
 
@@ -990,7 +1059,219 @@ def create_saas_app() -> Flask:
                 "excess_return": metrics.get("excess_return"),
                 "created_at": _jsonable(j["created_at"]),
             })
-        return jsonify({"ok": True, "strategy": _jsonable(dict(row)), "jobs": history})
+        # 模块二：信号监控卡数据（watch 行 + 最近 7 日信号数）
+        _ensure_signal_tables(engine)
+        with engine.connect() as conn:
+            watch = conn.execute(
+                text("SELECT id, scope_type, scope_payload, enabled, updated_at "
+                     "FROM strategy_watches WHERE strategy_id = :sid AND user_id = :uid"),
+                {"sid": strategy_id, "uid": uid},
+            ).mappings().first()
+            recent_signals = 0
+            if watch is not None:
+                recent_signals = conn.execute(
+                    text("SELECT count(*) FROM signal_events "
+                         "WHERE watch_id = :wid AND trade_date >= CURRENT_DATE - 7"),
+                    {"wid": watch["id"]},
+                ).scalar_one()
+        return jsonify({"ok": True, "strategy": _jsonable(dict(row)), "jobs": history,
+                        "watch": _jsonable(dict(watch)) if watch else None,
+                        "recent_signals_7d": recent_signals})
+
+    # --- CR-2026-10-04 模块二：策略信号监控（用户侧） ---
+
+    def _get_owned_strategy(conn: Any, strategy_id: int, uid: int) -> Any:
+        return conn.execute(
+            text("SELECT id, user_id FROM strategies WHERE id = :id AND user_id = :uid"),
+            {"id": strategy_id, "uid": uid},
+        ).mappings().first()
+
+    @app.post("/api/saas/strategies/<int:strategy_id>/watch")
+    def api_strategy_watch_set(strategy_id: int) -> Any:
+        """开启/更新信号监控：body {enabled, scope_type, scope_payload}。
+        scan_enabled=false 的层级 403；每用户 watch 上限 tier_policies.max_watches。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        data = request.get_json(silent=True) or {}
+        scope_type = str(data.get("scope_type") or "last_run_universe").strip()
+        if scope_type not in WATCH_SCOPE_TYPES:
+            return jsonify({"ok": False, "error": "scope_type 须为 last_run_universe/sector/all_a/custom"}), 400
+        scope_payload = data.get("scope_payload")
+        if scope_payload is not None and not isinstance(scope_payload, dict):
+            return jsonify({"ok": False, "error": "scope_payload 须为对象"}), 400
+        enabled = bool(data.get("enabled", True))
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            st = _get_owned_strategy(conn, strategy_id, uid)
+            if st is None:
+                return jsonify({"ok": False, "error": "策略不存在"}), 404
+            tier_row = conn.execute(
+                text("SELECT tier FROM users WHERE id = :uid"), {"uid": uid}).first()
+            pol = _get_policy(app, engine, str(tier_row.tier or "member") if tier_row else "member")
+            if not pol.get("scan_enabled", True):
+                return jsonify({"ok": False, "error": "当前账号层级未开放信号监控"}), 403
+            existing = conn.execute(
+                text("SELECT id FROM strategy_watches WHERE strategy_id = :sid AND user_id = :uid"),
+                {"sid": strategy_id, "uid": uid},
+            ).first()
+            if existing is None and enabled:
+                count = conn.execute(
+                    text("SELECT count(*) FROM strategy_watches WHERE user_id = :uid AND enabled"),
+                    {"uid": uid},
+                ).scalar_one()
+                max_watches = int(pol.get("max_watches", 20))
+                if max_watches > 0 and count >= max_watches:
+                    return jsonify({"ok": False,
+                                    "error": f"信号监控上限 {max_watches} 个（已达上限，可先关闭其他策略的监控）"}), 403
+                # 默认范围 = 最近回测标的快照（last_run_universe）
+                if scope_type == "last_run_universe" and not scope_payload:
+                    snap = conn.execute(
+                        text("SELECT params FROM jobs WHERE strategy_id = :sid "
+                             "ORDER BY created_at DESC LIMIT 1"),
+                        {"sid": strategy_id},
+                    ).first()
+                    codes = ((snap.params if snap else None) or {}).get("codes") or []
+                    if isinstance(codes, str):
+                        codes = [c.strip() for c in codes.split(",") if c.strip()]
+                    scope_payload = {"codes": codes}
+            if existing is not None:
+                row = conn.execute(
+                    text("UPDATE strategy_watches SET enabled = :en, scope_type = :st, "
+                         "scope_payload = CAST(:sp AS jsonb), updated_at = now() "
+                         "WHERE id = :id RETURNING id"),
+                    {"en": enabled, "st": scope_type,
+                     "sp": json.dumps(scope_payload) if scope_payload is not None else None,
+                     "id": existing.id},
+                ).first()
+                return jsonify({"ok": True, "watch_id": row.id, "updated": True})
+            row = conn.execute(
+                text("INSERT INTO strategy_watches (strategy_id, user_id, scope_type, scope_payload, enabled) "
+                     "VALUES (:sid, :uid, :st, CAST(:sp AS jsonb), :en) RETURNING id"),
+                {"sid": strategy_id, "uid": uid, "st": scope_type,
+                 "sp": json.dumps(scope_payload) if scope_payload is not None else None,
+                 "en": enabled},
+            ).first()
+        return jsonify({"ok": True, "watch_id": row.id, "updated": False})
+
+    @app.delete("/api/saas/strategies/<int:strategy_id>/watch")
+    def api_strategy_watch_delete(strategy_id: int) -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            row = conn.execute(
+                text("DELETE FROM strategy_watches WHERE strategy_id = :sid AND user_id = :uid RETURNING id"),
+                {"sid": strategy_id, "uid": uid},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "监控不存在"}), 404
+        return jsonify({"ok": True, "deleted": row.id})
+
+    @app.get("/api/saas/signals")
+    def api_signals_list() -> Any:
+        """信号中心列表：?date_from&date_to&strategy_id&signal_type&ts_code&page&page_size"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+            page_size = min(100, max(1, int(request.args.get("page_size", 50))))
+        except ValueError:
+            return jsonify({"ok": False, "error": "page/page_size 须为整数"}), 400
+        conds = ["w.user_id = :uid"]
+        params: dict[str, Any] = {"uid": uid}
+        for key, col in (("date_from", "e.trade_date >= "), ("date_to", "e.trade_date <= ")):
+            v = str(request.args.get(key) or "").strip()
+            if v:
+                try:
+                    from datetime import date as _date
+                    _date.fromisoformat(v)
+                except ValueError:
+                    return jsonify({"ok": False, "error": f"{key} 须为 YYYY-MM-DD"}), 400
+                conds.append(f"{col} :{key}")
+                params[key] = v
+        sid = str(request.args.get("strategy_id") or "").strip()
+        if sid:
+            if not sid.isdigit():
+                return jsonify({"ok": False, "error": "strategy_id 须为整数"}), 400
+            conds.append("w.strategy_id = :sid")
+            params["sid"] = int(sid)
+        sig = str(request.args.get("signal_type") or "").strip()
+        if sig:
+            if sig not in ("entry", "exit"):
+                return jsonify({"ok": False, "error": "signal_type 须为 entry/exit"}), 400
+            conds.append("e.signal_type = :sig")
+            params["sig"] = sig
+        code = str(request.args.get("ts_code") or "").strip()
+        if code:
+            conds.append("e.ts_code = :code")
+            params["code"] = code
+        where = " AND ".join(conds)
+        _ensure_signal_tables(engine)
+        with engine.connect() as conn:
+            total = conn.execute(
+                text(f"SELECT count(*) FROM signal_events e "
+                     f"JOIN strategy_watches w ON w.id = e.watch_id WHERE {where}"),
+                params,
+            ).scalar_one()
+            rows = conn.execute(
+                text(f"SELECT e.id, e.trade_date, e.ts_code, e.signal_type, e.price, e.created_at, "
+                     f"w.strategy_id, s.name AS strategy_name "
+                     f"FROM signal_events e JOIN strategy_watches w ON w.id = e.watch_id "
+                     f"JOIN strategies s ON s.id = w.strategy_id "
+                     f"WHERE {where} ORDER BY e.trade_date DESC, e.id DESC "
+                     f"LIMIT :lim OFFSET :off"),
+                {**params, "lim": page_size, "off": (page - 1) * page_size},
+            ).mappings().all()
+        return jsonify({"ok": True, "total": total, "page": page, "page_size": page_size,
+                        "items": [_jsonable(dict(r)) for r in rows]})
+
+    @app.get("/api/saas/signals/unread-count")
+    def api_signals_unread() -> Any:
+        """header 未读红点：signals_last_read_at 之后到达的信号数（未读过长 null → 全部）。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_signal_tables(engine)
+        with engine.connect() as conn:
+            last_read = conn.execute(
+                text("SELECT signals_last_read_at FROM users WHERE id = :uid"),
+                {"uid": uid},
+            ).scalar_one_or_none()
+            if last_read is None:
+                count = conn.execute(
+                    text("SELECT count(*) FROM signal_events e "
+                         "JOIN strategy_watches w ON w.id = e.watch_id WHERE w.user_id = :uid"),
+                    {"uid": uid},
+                ).scalar_one()
+            else:
+                count = conn.execute(
+                    text("SELECT count(*) FROM signal_events e "
+                         "JOIN strategy_watches w ON w.id = e.watch_id "
+                         "WHERE w.user_id = :uid AND e.created_at > :lr"),
+                    {"uid": uid, "lr": last_read},
+                ).scalar_one()
+        return jsonify({"ok": True, "unread": count})
+
+    @app.post("/api/saas/signals/mark-read")
+    def api_signals_mark_read() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE users SET signals_last_read_at = now() WHERE id = :uid"),
+                {"uid": uid},
+            )
+        return jsonify({"ok": True})
 
     @app.post("/api/saas/strategies")
     def api_strategy_save() -> Any:
@@ -1990,6 +2271,95 @@ def create_saas_app() -> Flask:
             "ok": True,
             "desired_config": _worker_config_view(desired_row) if desired_row else None,
         })
+
+    @app.get("/api/worker/watches")
+    def api_worker_watches() -> Any:
+        """CR-2026-10-04 模块二：扫描脚本拉取全部 enabled watch + 策略 yaml + scope。
+        scan_enabled=false 层级的 watch 不下发。"""
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        _ensure_tier_policies(engine)
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT w.id AS watch_id, w.strategy_id, w.scope_type, w.scope_payload, "
+                    "s.name AS strategy_name, s.yaml, u.tier "
+                    "FROM strategy_watches w "
+                    "JOIN strategies s ON s.id = w.strategy_id "
+                    "JOIN users u ON u.id = w.user_id "
+                    "WHERE w.enabled ORDER BY w.id"
+                )
+            ).mappings().all()
+        watches = []
+        for r in rows:
+            pol = _get_policy(app, engine, str(r["tier"] or "member"))
+            if not pol.get("scan_enabled", True):
+                continue
+            watches.append(_jsonable({
+                "watch_id": r["watch_id"], "strategy_id": r["strategy_id"],
+                "strategy_name": r["strategy_name"], "yaml": r["yaml"],
+                "scope_type": r["scope_type"], "scope_payload": r["scope_payload"],
+            }))
+        return jsonify({"ok": True, "watches": watches})
+
+    @app.post("/api/worker/signals")
+    def api_worker_signals_ingest() -> Any:
+        """模块二：批量回传信号事件（唯一约束 ON CONFLICT DO NOTHING，重跑幂等）。"""
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        events = data.get("events")
+        if not isinstance(events, list) or not events:
+            return jsonify({"ok": False, "error": "events 须为非空数组"}), 400
+        if len(events) > 10000:
+            return jsonify({"ok": False, "error": "单次最多 10000 条"}), 400
+        clean = []
+        for i, ev in enumerate(events):
+            if not isinstance(ev, dict):
+                return jsonify({"ok": False, "error": f"events[{i}] 须为对象"}), 400
+            sig = str(ev.get("signal_type") or "")
+            td = str(ev.get("trade_date") or "")
+            code = str(ev.get("ts_code") or "").strip()
+            if sig not in ("entry", "exit"):
+                return jsonify({"ok": False, "error": f"events[{i}].signal_type 须为 entry/exit"}), 400
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", td):
+                return jsonify({"ok": False, "error": f"events[{i}].trade_date 须为 YYYY-MM-DD"}), 400
+            try:
+                from datetime import date as _date
+                _date.fromisoformat(td)  # 真实日期校验（2026-13-01 之类非法值拒收）
+            except ValueError:
+                return jsonify({"ok": False, "error": f"events[{i}].trade_date 非法日期"}), 400
+            if not code or len(code) > 16:
+                return jsonify({"ok": False, "error": f"events[{i}].ts_code 非法"}), 400
+            price = ev.get("price")
+            try:
+                price = None if price is None else float(price)
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"events[{i}].price 须为数值"}), 400
+            clean.append({"wid": ev.get("watch_id"), "td": td, "code": code,
+                          "sig": sig, "price": price})
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        inserted = 0
+        with engine.begin() as conn:
+            for ev in clean:
+                try:
+                    wid = int(ev["wid"])
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "watch_id 须为整数"}), 400
+                res = conn.execute(
+                    text("INSERT INTO signal_events (watch_id, trade_date, ts_code, signal_type, price) "
+                         "VALUES (:wid, :td, :code, :sig, :price) "
+                         "ON CONFLICT (watch_id, trade_date, ts_code, signal_type) DO NOTHING"),
+                    {"wid": wid, "td": ev["td"], "code": ev["code"],
+                     "sig": ev["sig"], "price": ev["price"]},
+                )
+                inserted += res.rowcount
+        return jsonify({"ok": True, "received": len(clean), "inserted": inserted})
 
     @app.post("/api/worker/jobs/<int:job_id>/result/meta")
     def api_result_meta(job_id: int) -> Any:

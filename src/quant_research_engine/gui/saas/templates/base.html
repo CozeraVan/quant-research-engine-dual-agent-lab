@@ -178,6 +178,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
   <a class="brand" href="/saas/new"><img src="/static/logo-horizontal-white-2x.png" alt="A股回测台" style="height:46px;display:block"></a>
   <nav class="mainnav">
     <a href="/saas/new" data-nav="new">新建策略</a>
+    <a href="/saas/signals" data-nav="signals" id="nav-signals" style="display:none;position:relative">信号<span id="nav-sig-dot" style="display:none;position:absolute;top:2px;right:-8px;width:8px;height:8px;border-radius:50%;background:#E5534B"></span></a>
     <a href="/saas/profile" data-nav="records" id="nav-profile" style="display:none">个人信息</a>
     <a href="/saas/login" data-nav="login" id="nav-login">登录 / 注册</a>
   </nav>
@@ -231,6 +232,7 @@ function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saa
     var nav = a.dataset.nav;
     if ((nav === 'new' && path.indexOf('/saas/new') === 0) ||
         (nav === 'records' && (path === '/saas/' || path.indexOf('/saas/jobs') === 0 || path.indexOf('/saas/profile') === 0)) ||
+        (nav === 'signals' && path.indexOf('/saas/signals') === 0) ||
         (nav === 'login' && path.indexOf('/saas/login') === 0)) a.classList.add('active');
   });
   document.querySelectorAll('.sidenav a').forEach(function(a){
@@ -239,6 +241,18 @@ function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saa
   if (loggedIn) {
     var p = document.getElementById('nav-profile');
     if (p) p.style.display = '';  // 「个人信息」仅登录后可见（游客隐藏，默认 display:none 防闪烁）
+    // CR-2026-10-04 模块二：「信号」入口 + 未读红点（仅登录态查询；
+    // 信号中心页进入即 mark-read，跳过未读查询避免竞态回亮）
+    var sn = document.getElementById('nav-signals');
+    if (sn) sn.style.display = '';
+    if (location.pathname.indexOf('/saas/signals') !== 0){
+      apiFetch('/api/saas/signals/unread-count').then(function(r){ return r.json(); }).then(function(d){
+        if (d.ok && d.unread > 0){
+          var dot = document.getElementById('nav-sig-dot');
+          if (dot) dot.style.display = 'block';
+        }
+      }).catch(function(){});
+    }
     var l = document.getElementById('nav-login');
     if (l) { l.textContent = '退出登录'; l.href = 'javascript:void(0)';
       l.addEventListener('click', function(){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; }); }

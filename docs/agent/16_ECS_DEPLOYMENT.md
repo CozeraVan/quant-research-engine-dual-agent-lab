@@ -172,8 +172,19 @@ ls -lht ~/quant-workspace/backups/ecs-aguhuice/                                 
 # ② 新列首次仍须手工 apply（已于 2026-10-03 执行）：
 #   sudo -u postgres psql aguhuice -c "ALTER TABLE workers ADD COLUMN IF NOT EXISTS status JSONB; ALTER TABLE workers ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ;"
 
-# Worker 资源调配（R3 切片2，2026-10-04）：管理台「Worker 资源」卡设期望槽位/闸门
-# （POST /api/saas/console/worker-config → worker_configs 表 version+1）；
+# 信号扫描（CR-2026-10-04 模块二）：deploy/saas/signal_scan.py 挂在本机
+# qre-refresh.service 的 ExecStartPost（refresh 成功后自动触发；`-` 前缀失败不影响 refresh）。
+# 手动跑：本机执行
+#   set -a; . /etc/qre-saas-worker.env; set +a
+#   /home/van/quant-workspace/quant-research-engine-dual-agent-lab/.venv/bin/python \
+#     deploy/saas/signal_scan.py
+# env 需要 QRE_SAAS_BASE_URL / QRE_WORKER_TOKEN / QRE_MARKET_DB_URL；
+# QRE_SIGNAL_SCAN_LOOKBACK_DAYS 默认 40。幂等可重跑（云端唯一约束去重）。
+# ECS 新表首次手工 apply（strategy_watches/signal_events；users/tier_policies 的
+# ALTER 由应用懒自愈，这两张表 owner 是 aguhuice）：
+#   sudo -u postgres psql aguhuice -f /srv/aguhuice/qre/deploy/saas/cloud_schema.sql
+
+# Worker 资源调配（R3 切片2，2026-10-04）：管理台「Worker 资源」卡设期望槽位/闸门# （POST /api/saas/console/worker-config → worker_configs 表 version+1）；
 # worker 下轮 status 上报响应回带期望，不一致记日志「期望配置 vN 待应用」。
 # 应用方式=在本机执行（console 卡片给出可复制命令，数值取期望配置）：
 bash deploy/saas/worker-tune.sh --light-slots 2 --heavy-slots 3 \

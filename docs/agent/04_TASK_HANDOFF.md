@@ -2,7 +2,56 @@
 
 ## Task ID
 
-QRE-SAAS-STRATEGY-ASSETS (CR-2026-10-04 模块一：策略库 → 策略资产)
+QRE-SAAS-SIGNAL-CENTER (CR-2026-10-04 模块二：策略信号监控 + 站内信号中心)
+
+## Current Status
+
+DONE (implementation; staging 验证通过；awaiting git finalization 后部署；ECS 新表
+strategy_watches/signal_events 首次手工 psql apply，tier_policies/users 的 ALTER 由
+应用懒自愈——这两张表 ECS 上 owner 是 aguhuice，无 owner 踩坑)
+
+## Task Note
+
+- 数据层（懒自愈 `_ensure_signal_tables` + cloud_schema.sql 同步）：
+  `strategy_watches`（UNIQUE(strategy_id,user_id)，scope_type ∈
+  last_run_universe/sector/all_a/custom，scope_payload JSONB 快照）；
+  `signal_events`（UNIQUE(watch_id,trade_date,ts_code,signal_type) 幂等防重）；
+  `users.signals_last_read_at`（未读红点）；`tier_policies` 加
+  `scan_enabled BOOL DEFAULT true` / `max_watches INT DEFAULT 20`（_get_policy 同步读取，
+  缓存兜底默认全开）。
+- 用户侧接口：POST/DELETE `/api/saas/strategies/<id>/watch`（默认 last_run_universe
+  自动取最近 job 的 params.codes 快照；max_watches 上限 403；scan_enabled=false 403；
+  他人策略 404）；`GET /api/saas/signals`（date_from/to、strategy_id、signal_type、
+  ts_code 筛选 + 分页，日期真实校验防 PG 500）；`GET /api/saas/signals/unread-count`；
+  `POST /api/saas/signals/mark-read`。详情 API 加 watch + recent_signals_7d。
+- worker 侧接口（X-Worker-Token）：`GET /api/worker/watches`（enabled + 策略 yaml +
+  scope，scan_enabled=false 层级不下发）；`POST /api/worker/signals`（批量，
+  ON CONFLICT DO NOTHING，单批 ≤10000，逐字段校验 400）。
+- 扫描脚本 `deploy/saas/signal_scan.py`（本机 worker 侧）：拉 watches → resolve_codes
+  （快照/custom 用 payload、sector 走 universe_members 本地库、all_a 取最近交易日
+  有行情全体）→ load_panel（只拉表达式引用列，因子表按表分组一次 SQL，别名对齐）→
+  compute_signals 按 ts_code 分组逐组求值（**shift 不跨股票边界**，与引擎求值器
+  evaluate_expression_signal 同一 AST 白名单）判最新交易日 entry/exit → 分批回传。
+  单 watch 失败记日志继续；QRE_SIGNAL_SCAN_LOOKBACK_DAYS 默认 40；单 watch 单日
+  信号上限 5000。挂载 qre-refresh.service `ExecStartPost=-`（refresh 成功后触发，
+  失败不影响 refresh 结果）。
+- 页面：strategy.html 监控卡做实（开关 + 范围选择[默认最近回测快照/全A/自定义] +
+  最近 7 日信号数 + 删除监控）；新页 /saas/signals 信号中心（筛选 + 分页表格 +
+  进入即 mark-read + 免责「日线收盘后 T+1 参考信号，不构成投资建议」）；
+  base.html 顶栏加「信号」入口（登录态才显示/查询）+ 未读红点（信号中心页跳过
+  未读查询避免 mark-read 竞态回亮——实测发现）。
+- 测试：tests/test_saas_signals.py +15（watch CRUD/默认快照/上限/scan 关闭 403/
+  权限 401/404、worker 鉴权与下发过滤、幂等回传 inserted=0、400 校验、筛选分页、
+  未读/mark-read、详情卡字段、扫描脚本 parse/compute 合成面板正确性+空信号+跨股边界）；
+  test_saas_strategy_assets.py 一处断言更新（占位注释→sd-watch-card）。
+  **踩坑**：cloud_schema.sql 里 tier_policies 的 ALTER 必须排在其 CREATE TABLE 之后
+  （初版顺序错误致临时库 schema apply 失败，测试基建抓出）。
+- 验证：staging 8091 实测 watch 创建→worker 拉取→信号回传→未读红点（block）→
+  信号中心 mark-read→红点灭；桌面+移动截图零横滚零 JS 报错。
+
+---
+
+## Archive: QRE-SAAS-STRATEGY-ASSETS (CR-2026-10-04 模块一：策略库 → 策略资产)
 
 ## Current Status
 

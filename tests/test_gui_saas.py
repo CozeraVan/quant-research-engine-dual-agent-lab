@@ -39,7 +39,8 @@ def saas_db():
     )
     assert schema.returncode == 0
     yield db_name
-    _psql("postgres", "-c", f"DROP DATABASE IF EXISTS {db_name}")
+    # FORCE（PG13+）：全量套件下偶发残留连接挡 DROP（环境性 flake 根因）
+    _psql("postgres", "-c", f"DROP DATABASE IF EXISTS {db_name} WITH (FORCE)")
 
 
 @pytest.fixture()

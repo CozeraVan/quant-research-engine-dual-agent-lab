@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}信号中心 · A股回测台{% endblock %}
+{% block body %}
+<div class="container">
+  <div class="page-head">
+    <h1>信号中心</h1>
+    <p>已开启监控策略的每日入场/出场信号。<b>日线收盘后 T+1 参考信号，不构成投资建议。</b></p>
+  </div>
+  <div class="card">
+    <div class="bench-bar" id="sig-filters">
+      <input type="date" id="sf-from" class="date-input"> ~
+      <input type="date" id="sf-to" class="date-input">
+      <select id="sf-type">
+        <option value="">全部类型</option>
+        <option value="entry">入场</option>
+        <option value="exit">出场</option>
+      </select>
+      <input type="text" id="sf-code" placeholder="股票代码，如 000001" style="width:160px">
+      <select id="sf-strategy"><option value="">全部策略</option></select>
+      <button class="btn-sm" id="sf-search">查询</button>
+    </div>
+    <table class="tbl">
+      <thead><tr><th>信号日期</th><th>策略</th><th>股票</th><th>类型</th>
+        <th class="num">参考价</th><th>到达时间</th></tr></thead>
+      <tbody id="sig-tbody"><tr><td colspan="6" class="muted">加载中…</td></tr></tbody>
+    </table>
+    <div class="bench-bar" style="margin-top:10px">
+      <button class="btn-sm" id="sig-prev">← 上一页</button>
+      <span class="opt" id="sig-page"></span>
+      <button class="btn-sm" id="sig-next">下一页 →</button>
+    </div>
+    <div class="chart-empty hidden" id="sig-empty">暂无信号。到策略详情页开启「信号监控」后，每日数据刷新后自动扫描。</div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  requireLogin();
+  var page = 1, pageSize = 50;
+  function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }
+  function fmt(t){ return t ? LabUI.fmtLocalTime(t) : '—'; }
+
+  // 进入即 mark-read（header 红点清零）
+  apiFetch('/api/saas/signals/mark-read', {json: {}}).then(function(){
+    var dot = document.getElementById('nav-sig-dot');
+    if (dot) dot.style.display = 'none';
+  }).catch(function(){});
+
+  // 策略筛选下拉（本人的策略）
+  apiFetch('/api/saas/strategies').then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok) return;
+    document.getElementById('sf-strategy').innerHTML = '<option value="">全部策略</option>' +
+      (d.strategies || []).map(function(s){ return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('');
+  }).catch(function(){});
+
+  function load(){
+    var q = new URLSearchParams({page: page, page_size: pageSize});
+    var f = document.getElementById('sf-from').value, t = document.getElementById('sf-to').value;
+    if (f) q.set('date_from', f);
+    if (t) q.set('date_to', t);
+    var ty = document.getElementById('sf-type').value;
+    if (ty) q.set('signal_type', ty);
+    var c = document.getElementById('sf-code').value.trim();
+    if (c) q.set('ts_code', c);
+    var sid = document.getElementById('sf-strategy').value;
+    if (sid) q.set('strategy_id', sid);
+    apiFetch('/api/saas/signals?' + q.toString()).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      document.getElementById('sig-empty').classList.toggle('hidden', d.total > 0);
+      document.getElementById('sig-page').textContent =
+        '第 ' + d.page + ' / ' + Math.max(1, Math.ceil(d.total / pageSize)) + ' 页 · 共 ' + d.total + ' 条';
+      document.getElementById('sig-tbody').innerHTML = (d.items || []).map(function(e){
+        var badge = e.signal_type === 'entry'
+          ? '<span class="badge fail">入场</span>' : '<span class="badge run">出场</span>';
+        return '<tr><td>' + esc(e.trade_date) + '</td>' +
+          '<td><a href="/saas/strategies/' + e.strategy_id + '">' + esc(e.strategy_name) + '</a></td>' +
+          '<td>' + esc(e.ts_code) + '</td><td>' + badge + '</td>' +
+          '<td class="num">' + (e.price === null || e.price === undefined ? '—' : Number(e.price).toFixed(2)) + '</td>' +
+          '<td>' + fmt(e.created_at) + '</td></tr>';
+      }).join('');
+    }).catch(function(){});
+  }
+  document.getElementById('sf-search').addEventListener('click', function(){ page = 1; load(); });
+  document.getElementById('sig-prev').addEventListener('click', function(){ if (page > 1){ page--; load(); } });
+  document.getElementById('sig-next').addEventListener('click', function(){ page++; load(); });
+  load();
+})();
+</script>
+{% endblock %}
