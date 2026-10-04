@@ -798,3 +798,12 @@ Historical row statuses (pre-migration, kept for old table rows):
   （百度/Google 验证 + robots + sitemap，消除 ECS 手改漂移）。
 - 测试：test_gui_saas.py::test_seo_verification_files_served（百度+Google 双断言），
   `-k saas` 208 passed。
+
+## 2026-10-04 SEO 首页标题/描述优化（百度搜索摘要）
+
+- 问题：百度收录首页标题显示「新建策略 · A股回测台」，摘要抓取的是表单label
+  噪声文本，不体现站点价值。
+- 改动：base.html 的 description/og:title/og:description 改为可覆盖 block；
+  首页 new.html title 改为「A股回测台 - 免费A股量化策略回测平台 | 自然语言写策略，
+  全市场历史回测」，描述突出「免费/自然语言/全市场5000+/完整报告/游客免注册」。
+  其余页面沿用 base 默认。`-k saas` 208 passed。

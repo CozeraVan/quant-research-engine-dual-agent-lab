@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}A股回测台{% endblock %}</title>
 <!-- SEO（QRE-SAAS-SEO） -->
-<meta name="description" content="A股回测台——A股日线量化策略回测工具。自然语言描述交易策略，自动对全市场5000+只股票进行历史回测，输出收益率、超额收益、交易磨损、板块热力图等完整报告。游客可免费测试。">
+<meta name="description" content="{% block description %}A股回测台——免费在线A股量化策略回测平台。用自然语言描述交易想法，AI 自动编译策略并对全市场5000+只A股做历史回测，输出收益率、超额收益、最大回撤、交易磨损与板块热力图完整报告。游客免注册免费测试。{% endblock %}">
 <meta name="keywords" content="A股回测,量化回测,策略回测,股票回测,量化交易,A股量化,回测平台,技术指标回测">
 <meta name="baidu-site-verification" content="codeva-gDNoSKn1Mp">
 <link rel="canonical" href="https://www.aguhuice.com{{ request.path if request else '' }}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="A股回测台">
-<meta property="og:title" content="A股回测台 - A股量化策略回测平台">
-<meta property="og:description" content="自然语言描述交易策略，自动对全市场A股历史回测，输出收益与磨损完整报告。游客可免费测试。">
+<meta property="og:title" content="{% block og_title %}A股回测台 - 免费在线A股量化策略回测平台{% endblock %}">
+<meta property="og:description" content="{% block og_description %}用自然语言描述交易想法，自动对全市场A股历史回测，输出收益、回撤与交易磨损完整报告。游客免注册免费测试。{% endblock %}">
 <meta property="og:url" content="https://www.aguhuice.com{{ request.path if request else '' }}">
 <meta property="og:image" content="https://www.aguhuice.com/static/logo-horizontal-2x.png">
 <link rel="manifest" href="/manifest.json">
