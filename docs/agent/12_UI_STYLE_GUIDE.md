@@ -300,10 +300,14 @@
   hover 淡紫反馈；`:focus-visible` 紫环不许去；transition 150–300ms（本组件 0.2s）；
   `prefers-reduced-motion: reduce` 下弹入动画/峰值闪烁/按钮过渡全关；
   按钮 36px 等高（§1 行内控件规则）、8px 间距网格。
-- **布局规则（2026-10-04 布局调整）**：控制排 = 播放/暂停、单步、速度档、起始日、
-  空仓快进（倍速与播放钮同排）；**进度条不放控制排**，经 `.rp-slider-row` 置图表
-  容器正下方一行（视觉从属于图表；接管模式 insertAfter chartEl，自建模式紧随
-  chartEl）。移动端控制排可折行，进度条始终在图下方。
+- **布局规则（2026-10-04 布局调整 + 根因修复）**：控制排分两个语义分组——
+  `.rp-group-main`（播放/暂停、单步、速度档，`flex-wrap:nowrap` **恒同排**，不靠
+  flex-wrap 宽度运气）与 `.rp-group-aux`（起始日、空仓快进、帧计数，允许折行）；
+  **进度条不放控制排**，经 `.rp-slider-row` 置图表容器正下方一行（视觉从属于图表；
+  接管模式 insertAfter chartEl，自建模式紧随 chartEl）。移动端辅助组可折行，
+  主控组始终同排。⚠️ 组件内 `<select>` 必须显式宽度（`.rp-sel{width:auto}`）——
+  base.html 有全局 `input,select,textarea{width:100%}`，不显式豁免就独占整行
+  （2026-10-04 换行 bug 根因）；行内控件 36px 等高同样适用于 select。
 
 ### 3.12 长等待模态遮罩（`wait-mask.js` + `lab-theme.css` .wm-* 族，2026-10-04）
 

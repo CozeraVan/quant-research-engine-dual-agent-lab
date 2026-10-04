@@ -185,10 +185,17 @@
     btnSkip.innerHTML = icon("skip") + "<span>空仓快进</span>";
     btnSkip.title = "跳到下一个有事件或持仓变化的交易日";
     var cur = h("span", "rp-cur", "");
-    bar.appendChild(btnPlay); bar.appendChild(btnStep); bar.appendChild(speedSel);
-    bar.appendChild(h("span", "rp-lbl", "起始日"));
-    bar.appendChild(startInput); bar.appendChild(btnSkip); bar.appendChild(cur);
     mountEl.appendChild(bar);
+
+    /* 布局分组（2026-10-04 根因修复）：主控组 [播放/单步/速度] 永不折行（nowrap），
+       辅助组 [起始日/快进] 允许折行——不依赖 flex-wrap 的宽度运气。
+       （根因：base.html 全局 select{width:100%} 曾使速度档独占整行） */
+    var groupMain = h("div", "rp-group rp-group-main");
+    groupMain.appendChild(btnPlay); groupMain.appendChild(btnStep); groupMain.appendChild(speedSel);
+    var groupAux = h("div", "rp-group rp-group-aux");
+    groupAux.appendChild(h("span", "rp-lbl", "起始日"));
+    groupAux.appendChild(startInput); groupAux.appendChild(btnSkip); groupAux.appendChild(cur);
+    bar.appendChild(groupMain); bar.appendChild(groupAux);
 
     /* 图表容器：opts.chartEl 传入时接管既有容器（切片2/策略页接管模式），否则自建 */
     var ownChartEl = !opts.chartEl;

@@ -531,3 +531,11 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
   .wm-mask{animation:none}
   .wm-btn{transition:none}
 }
+
+/* 速度档布局根因修复（2026-10-04）：base.html 全局 select{width:100%} 使 .rp-sel 独占整行
+   ——显式宽度 + 主控组 nowrap（[播放/单步/速度] 恒同排，不依赖 flex-wrap 宽度运气） */
+.rp-sel{width:auto;min-width:72px}
+.rp-group{display:flex;gap:8px;align-items:center}
+.rp-group-main{flex-wrap:nowrap;flex:none}
+.rp-group-aux{flex-wrap:wrap}
+.rp-sel{height:36px;box-sizing:border-box}  /* 与 .rp-btn 36px 等高（§1 行内控件规则） */

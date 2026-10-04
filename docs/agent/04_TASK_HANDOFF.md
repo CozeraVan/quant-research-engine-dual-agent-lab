@@ -2,7 +2,40 @@
 
 ## Task ID
 
-QRE-SAAS-WAIT-MASK (首页长等待模态遮罩) + QRE-SAAS-REPLAY-LAYOUT (重播控制条布局调整)
+QRE-SAAS-REPLAY-LAYOUT-FIX (重播速度档换行 bug 系统性调试：全局 select{width:100%} 根因)
+
+## Current Status
+
+DONE (root cause found & fixed; `-k saas` 235 passed 零回归；五档宽度探针全过；
+awaiting git finalization 后部署)
+
+## Task Note
+
+- 现象：用户强刷后重播控制条速度档仍单独成行。我上一轮只断言了 DOM 顺序
+  （[播放,单步,速度,…] 正确），未测**计算布局**。
+- 根因（探针实证）：五档宽度（1920/1440/1280/1024/768/414/375）下 `.rp-sel` 的
+  getBoundingClientRect().width 恒等于 `.rp-bar` 全宽（1030px 等）——`base.html:56`
+  全局规则 `input,select,textarea{width:100%}` 使速度档 select 独占整行，与视口
+  宽度无关，所以任何窗口都换行。（`.rp-date` 因 `.date-input{width:auto}` 旧规则
+  幸存，速度档无此豁免。）
+- 修复（对症下药 + 结构性加固）：
+  ①`.rp-sel{width:auto;min-width:72px;height:36px}`（lab-theme 后加载且类选择器
+  优先级高于元素选择器，同时补齐 §1 行内控件 36px 等高——修复前 select 31px）；
+  ②控制条改为两个语义分组：`.rp-group-main`（播放/单步/速度，flex-wrap:nowrap
+  恒同排）+ `.rp-group-aux`（起始日/快进/计数，允许折行）——不再依赖
+  `.rp-bar{flex-wrap:wrap}` 的宽度运气。
+  ③中途自查发现「起始日」label 重复渲染（旧直挂 appendChild 与新分组并存，
+  截图复核抓出），已去重。
+- 验证（同一探针前后对照）：修复前 1920~375 全宽度 `.rp-sel` 独占整行（width=
+  bar 宽）；修复后五档宽度 group-main 三子元素中心 y 差 = 0px、`.rp-lbl` 计数 = 1、
+  进度条在 chart 正下方、零横滚；symbol 页 1280 同步确认。
+  截图 .tmp/mobile-audit/{desktop,m375}-layout-fixed.png。
+- 经验：DOM 顺序断言 ≠ 布局断言；涉及换行/独占行的验证必须测
+  getBoundingClientRect 计算几何。
+
+---
+
+## Archive: QRE-SAAS-WAIT-MASK + QRE-SAAS-REPLAY-LAYOUT (首页长等待模态遮罩 + 重播控制条布局调整)
 
 ## Current Status
 

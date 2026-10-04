@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-WAIT-MASK + QRE-SAAS-REPLAY-LAYOUT (DONE — ①长等待遮罩组件 wait-mask.js
+QRE-SAAS-REPLAY-LAYOUT-FIX (DONE — 重播速度档换行 bug 系统性调试：根因=base.html:56
+全局 select{width:100%} 使 .rp-sel 恒独占整行（五档宽度探针 width=bar 全宽实证，
+与视口无关）；修复=.rp-sel 显式宽度+36px 等高 + 控制条两语义分组
+（.rp-group-main 播放/单步/速度 nowrap 恒同排 / .rp-group-aux 允许折行）+
+去除重复「起始日」label；同一探针五档宽度中心 y 差 0px 前后对照证明修好；
+`-k saas` 235 passed；awaiting git approval（站立批准有效）→ 部署 ECS
+（生产 asset_v 缓存破除已就位，用户端将自动拿到新 replay.js）)
+
+上一任务：QRE-SAAS-WAIT-MASK + QRE-SAAS-REPLAY-LAYOUT (DONE — ①长等待遮罩组件 wait-mask.js
 （禁 ESC/背板/全锁、z-95、护栏弹层级冲突已处理）+ new.html 生成策略与运行回测两段式
 接入（「继续等待/后台运行」分流，踩坑 keepMask 短路已修）；②重播布局：倍速与播放
 同排、进度条移至图表正下方（.rp-slider-row，两端生效）；staging 锁定探针/两段式
