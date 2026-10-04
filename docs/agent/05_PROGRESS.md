@@ -809,3 +809,8 @@ Historical row statuses (pre-migration, kept for old table rows):
   首页 new.html title 改为「A股回测台 - 免费A股量化策略回测平台 | 自然语言写策略，
   全市场历史回测」，描述突出「免费/自然语言/全市场5000+/完整报告/游客免注册」。
   其余页面沿用 base 默认。`-k saas` 208 passed。
+
+## 2026-10-04 顶栏「个人信息」仅登录可见
+
+- base.html 导航链接默认 display:none，公共 JS 在已登录分支才显示（防游客端闪烁）；
+  游客态顶栏只剩 新建策略 / 登录注册。测试 208 passed。

@@ -178,7 +178,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
   <a class="brand" href="/saas/new"><img src="/static/logo-horizontal-white-2x.png" alt="A股回测台" style="height:46px;display:block"></a>
   <nav class="mainnav">
     <a href="/saas/new" data-nav="new">新建策略</a>
-    <a href="/saas/profile" data-nav="records">个人信息</a>
+    <a href="/saas/profile" data-nav="records" id="nav-profile" style="display:none">个人信息</a>
     <a href="/saas/login" data-nav="login" id="nav-login">登录 / 注册</a>
   </nav>
 </header>
@@ -237,6 +237,8 @@ function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saa
     if (a.dataset.nav && path.indexOf('/saas/' + a.dataset.nav) === 0) a.classList.add('active');
   });
   if (loggedIn) {
+    var p = document.getElementById('nav-profile');
+    if (p) p.style.display = '';  // 「个人信息」仅登录后可见（游客隐藏，默认 display:none 防闪烁）
     var l = document.getElementById('nav-login');
     if (l) { l.textContent = '退出登录'; l.href = 'javascript:void(0)';
       l.addEventListener('click', function(){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; }); }
