@@ -5,6 +5,8 @@ Description=QRE continuous strategy refresh (watermark-gated catalog re-run)
 Type=oneshot
 WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
 Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+# CR-2026-10-04 模块二：信号扫描连云所需 env（QRE_SAAS_BASE_URL/QRE_WORKER_TOKEN）
+EnvironmentFile=-/etc/qre-saas-worker.env
 ExecStart=/usr/bin/env uv run python scripts/refresh_batch.py --jobs 4
 # CR-2026-10-04 模块二：refresh 完成后扫描信号（- 前缀忽略失败，不影响 refresh 结果；
 # env 文件需提供 QRE_SAAS_BASE_URL/QRE_WORKER_TOKEN，缺则脚本自检退出 2 不影响主流程）

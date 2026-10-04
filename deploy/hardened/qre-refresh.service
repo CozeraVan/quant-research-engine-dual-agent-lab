@@ -16,7 +16,11 @@ Type=oneshot
 User=van
 WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
 Environment=QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data
+# CR-2026-10-04 模块二：信号扫描要连云（QRE_SAAS_BASE_URL/QRE_WORKER_TOKEN 在此文件，0640 root:van）
+EnvironmentFile=-/etc/qre-saas-worker.env
 ExecStart=/home/van/.local/bin/uv run python scripts/refresh_batch.py --jobs 4 --apply-stops --universe-filter
+# refresh 成功后扫描信号（- 前缀忽略失败，幂等可重跑，不影响 refresh 结果）
+ExecStartPost=-/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.venv/bin/python deploy/saas/signal_scan.py
 # 自愈：脚本非零退出（部分策略失败也会返回 1）时 5 分钟后重试一次
 Restart=on-failure
 RestartSec=300

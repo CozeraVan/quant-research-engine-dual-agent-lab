@@ -112,13 +112,13 @@ def load_panel(engine, codes: list[str], spec: dict[str, Any],
                     used.add(node.id)
     frames = []
     market_cols = [c for c in (spec.get("market_fields") or []) if c in used]
-    if market_cols or "close" in used:
-        cols = sorted({*market_cols, "close"} if "close" in used else set(market_cols))
-        col_sql = ", ".join(cols)
-        frames.append(pd.read_sql(
-            text(f"SELECT ts_code, trade_date, {col_sql} FROM public.stock_daily "
-                 "WHERE trade_date BETWEEN :d0 AND :d1 AND ts_code = ANY(:codes)"),
-            engine, params={"d0": d0, "d1": d1, "codes": codes}))
+    # close 恒拉：信号事件的参考价列（即使表达式不引用）
+    cols = sorted({*market_cols, "close"})
+    col_sql = ", ".join(cols)
+    frames.append(pd.read_sql(
+        text(f"SELECT ts_code, trade_date, {col_sql} FROM public.stock_daily "
+             "WHERE trade_date BETWEEN :d0 AND :d1 AND ts_code = ANY(:codes)"),
+        engine, params={"d0": d0, "d1": d1, "codes": codes}))
     by_table: dict[str, list[tuple[str, str]]] = {}
     for alias, target in (spec.get("factor_fields") or {}).items():
         if alias not in used:
