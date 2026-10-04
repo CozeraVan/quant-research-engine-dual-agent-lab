@@ -148,6 +148,27 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
   .sidenav{top:auto;bottom:140px;transform:none}
   .sidenav a{font-size:12px;width:14px}
 }
+/* 移动端适配统一规则（QRE-SAAS-MOBILE-ADAPT，断点 768px，细则登记 12 号文档 §10）：
+   表格块级横滚、长 chip 允许折行、点击目标 ≥44px、输入控件 16px（防 iOS 聚焦自动放大）、
+   指标卡最小宽度收窄。桌面端零改动。 */
+@media (max-width:768px){
+  .container{padding:12px}
+  .tbl,.detail-table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .meta-chips .chip{white-space:normal}
+  .mainnav a,.sidenav a,.tab,.btn,.btn-sm,button,.bench-bar button,.tag-tabs button{min-height:44px;box-sizing:border-box}
+  input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px;min-height:44px;box-sizing:border-box}
+  /* 日历格子/翻页钮触达 40px（lab-theme 后加载，.cal-pop 前缀提优先级） */
+  .cal-pop .cal-day,.cal-pop .cal-cell{min-height:40px}
+  .cal-pop .cal-nav{width:40px;height:40px}
+  .metric-card{min-width:96px}
+  .page-head h1{font-size:22px}
+  /* 交易磨损：5 列卡降 2 列；磨损条 label/track/val 改 grid 三段收缩。
+     lab-theme.css 在 base 之后加载，须用更高优先级选择器（.chart-box 前缀）压过 */
+  .chart-box .wear-cards{grid-template-columns:repeat(2,1fr)}
+  .chart-box .wb-row{display:grid;grid-template-columns:96px 1fr auto;gap:8px}
+  .chart-box .wb-label{width:auto;text-align:left}
+  .chart-box .wb-val{width:auto;max-width:140px;font-size:11px}
+}
 </style>
 <link rel="stylesheet" href="/static/lab-theme.css">
 <script src="/static/lab-ui.js"></script>

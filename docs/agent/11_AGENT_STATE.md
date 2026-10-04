@@ -12,7 +12,16 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-R3-SLICE2 (DONE — R3 切片2 资源调配封装（方案 C=A+B 混合，用户批准）：新表
+QRE-SAAS-MOBILE-ADAPT (DONE — 移动端 web UI 适配：Playwright 375×812 逐页审计
+（records/job/symbol 三页页级横滚，根因=表格溢出/长 chip nowrap/磨损块固定宽）→
+修复全集中在 base.html 新增 @media(max-width:768px) 规则块（表格块级横滚、chip 折行、
+触达 44px、输入 16px/44px 防 iOS 放大、磨损块 2 列+grid 三段）；踩坑 lab-theme.css
+后加载压掉同优先级覆盖 → .chart-box 前缀，登记 12 号新 §10；全页零横滚零 JS 报错 +
+移动端交互冒烟（三入口/日历/提交流水线）通过 + 桌面 1280px 回归无破坏；
+`-k saas` 208 passed 零回归；awaiting git approval（站立批准有效）→ 部署 ECS 后
+公网 375px 复测)
+
+上一任务：QRE-SAAS-R3-SLICE2 (DONE 已部署 — R3 切片2 资源调配封装（方案 C=A+B 混合，用户批准）：新表
 worker_configs（worker_id 主键/期望四值/version+1/updated_by，懒自愈+cloud_schema 同步）；
 status 响应回带 desired_config，worker _check_desired_config 比对记日志（同 version
 一次/恢复一致记「已生效」）；console Worker 卡「当前 vs 期望」高亮 + 可复制

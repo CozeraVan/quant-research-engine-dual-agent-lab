@@ -2,7 +2,45 @@
 
 ## Task ID
 
-QRE-SAAS-R3-SLICE2 (R3 后台资源可视化 切片2：资源调配封装，方案 C=A+B 混合)
+QRE-SAAS-MOBILE-ADAPT (移动端 web UI 适配：375px 逐页审计 + base.html 统一移动端规则)
+
+## Current Status
+
+DONE (implementation; `-k saas` 208 passed 零回归；staging 8091 移动端 375×812 全页
+零横滚零 JS 报错 + 交互冒烟通过；桌面 1280px 回归截图无破坏；awaiting git finalization 后部署)
+
+## Task Note
+
+- 审计先行：Playwright（viewport 375×812 + isMobile + hasTouch）逐页截图 + 探针
+  （页级 scrollWidth、溢出元素 Top5、<44px 点击目标计数、pageerror 收集），脚本与
+  截图在 `.tmp/mobile-audit/`（gitignore 覆盖）。修复前问题清单：
+  ①records/profile/login 页级横滚 767px（记录表 #jobs-table 712px 溢出）；
+  ②job 页 625px（费率长 chip nowrap 392/424px + 交易磨损 .wear-cards 5 列网格
+  卡片 min-width 溢出 + .wb-row 磨损条 label 170px/val 190px 固定宽）；
+  ③symbol 页 571px（同上 + 交易明细表 517px）；④new 页无横滚（.yv YAML 行内滚动
+  属容器内行为）；⑤全站小点击目标偏多（36px 控件/日历格 26px）。
+  用户反馈的「header 两行」「textarea resize」现状已正常（960px 断点顶栏单行、
+  textarea resize:none 均在），本次复核确认。
+- 修复（全部集中在 saas/templates/base.html 内嵌样式末尾新增
+  `@media (max-width:768px)` 规则块，模板结构零改动，桌面零改动）：
+  表格 .tbl/.detail-table 块级 overflow-x 横滚；.meta-chips .chip 允许折行；
+  按钮/导航/tab min-height 44px；输入控件 16px+44px（防 iOS 聚焦放大，checkbox/
+  radio 例外）；日历格/翻页钮 40px（.cal-pop 前缀提优先级）；.metric-card
+  min-width 96px；.page-head h1 22px；磨损块 .chart-box .wear-cards 降 2 列 +
+  .wb-row 改 grid 96px/1fr/auto。
+- **踩坑**：lab-theme.css 在 base.html 内嵌样式之后加载，同优先级裸类名覆盖被静默
+  压掉（wear-cards 初版不生效，探针复核发现）→ 用 .chart-box 前缀提优先级
+  （与 §9「ID/高优先级选择器压过」约定一致），已登记 12 号文档 §10。
+- 验证：修复后全页 scrollWidth=375 零横滚、零 JS 报错；交互冒烟——三入口卡切换、
+  日历弹层 31 个可点日、选「指定股票代码」填 000001 提交，流水线走通到
+  「结构校验通过→冒烟测试 小范围验证中」（staging 无 worker，执行留生产验证）；
+  桌面 1280px 五页回归截图无破坏（chips 单行、6 卡一行、磨损块原样）。
+- 12 号文档新增 §10 移动端适配规则（768px 断点/44px 触达/表格横滚等落地细则与
+  审计结论），变更记录已登记；测试无模板断言受影响（纯 CSS）。
+
+---
+
+## Archive: QRE-SAAS-R3-SLICE2 (R3 后台资源可视化 切片2：资源调配封装，方案 C=A+B 混合)
 
 ## Current Status
 

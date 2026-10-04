@@ -277,8 +277,50 @@
 
 ---
 
+## 10. 移动端适配规则（QRE-SAAS-MOBILE-ADAPT，2026-10-04）
+
+适用范围：SaaS 公网页面（new/records/job/symbol/login/profile/feedback/factor-request）；
+console 管理台为本地桌面工具，不做移动端。改动全部集中在 `saas/templates/base.html`
+内嵌样式块末尾的 `@media (max-width:768px)` 移动端规则块，桌面端渲染零改动
+（1280px 回归截图对比确认）。
+
+落地规则（手机视口 375×812 实测口径）：
+
+- **断点**：移动端主断点 **768px**（新规则块）；既有 960px 断点（lab-theme.css:318-325
+  多列降 2 列、base.html 顶栏缩小、sidenav 移左下）保留不变。960 管「窄桌面/平板」，
+  768 管「手机」。
+- **横向滚动红线**：页面级 `scrollWidth > clientWidth` 视为 bug；审计脚本逐页探针
+  （`.tmp/mobile-audit/audit.js`，Playwright 375×812 + isMobile/hasTouch）。
+- **表格**：`.tbl` / `.detail-table` 移动端 `display:block; overflow-x:auto`（块级横滚，
+  表头随内容横向滑动，页面不整体横滚）；不做卡片化改写。
+- **长文本 chip**：`.meta-chips .chip` 取消 `white-space:nowrap` 允许折行（费率/区间
+  长 chip 在 375px 下原样溢出）。
+- **点击目标 ≥44px**：`.mainnav a` / `.sidenav` / `.tab` / `.btn` / `.btn-sm` / `button` /
+  `.bench-bar button` / `.tag-tabs button` 统一 `min-height:44px`；日历格子
+  `.cal-pop .cal-day/.cal-cell` `min-height:40px`、翻页钮 `.cal-nav` 40×40
+  （弹层内密度优先，40px 妥协值）。例外：logo 链接、纯文本行内链接不强制。
+- **输入控件**：`input/select/textarea` `font-size:16px; min-height:44px`——16px 是
+  iOS Safari 聚焦不自动放大的阈值；桌面端 36px 等高规则（§1）不变，移动端 44px 优先。
+  checkbox/radio 例外。
+- **交易磨损块**（job/symbol）：`.wear-cards` 5 列降 2 列；`.wb-row` 改
+  `grid-template-columns:96px 1fr auto`（`.wb-label`/`.wb-val` 取消固定 170/190px，
+  val 11px 上限 140px）。⚠️ lab-theme.css 在 base.html 内嵌样式**之后**加载，同优先级
+  规则会被覆盖——移动端覆盖必须用更高优先级选择器（`.chart-box` 前缀）或 ID 选择器
+  （同 §9 既有约定；本次初版用裸类名被静默压掉，探针复核才发现）。
+- **指标卡**：`.metric-card` min-width 110→96px；`.page-head h1` 降 22px。
+- **图表**：ECharts 容器宽度自适应既有实现（chart-box 100% 宽）已达标，未改。
+- **顶栏**：960px 断点既有单行精简（logo 30px + 导航 12.5px）实测 375px 单行不折行，未加汉堡。
+
+审计结论（修复前 → 修复后，375px）：records/profile/login 页级横滚（记录表 712px）→
+表内横滚；job 页横滚 625px（费率长 chip + 磨损 5 列卡 + 磨损条固定宽）→ 零横滚；
+symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedback/factor-request
+原本无横滚（YAML 预览行内滚动属容器内行为）。全部页面 JS 零报错。
+
+---
+
 ## 变更记录
 
+- 2026-10-04（QRE-SAAS-MOBILE-ADAPT）新增 §10 移动端适配规则：768px 主断点、表格块级横滚、长 chip 折行、点击目标 ≥44px（日历格子 40px 妥协）、输入控件 16px/44px、磨损块 2 列+grid 三段、lab-theme 后加载需高优先级选择器覆盖的踩坑。改动全部在 saas/templates/base.html 内嵌样式块；本条为「记录实际落地规则」，经用户任务书批准。
 - 2026-09-28（QRE-CALENDAR-YEAR-PICKER）共享日历组件（`lab-ui.js` attachCalendar，8081 lab 与 SaaS 同源）新增**年→月→日钻取**：点头部年月标题（新 `.cal-title` 按钮）进入年份视图（12 年/页九宫格 `.cal-grid-ym` 4 列 + `.cal-cell` 格子，翻页 ±12 年），选年进月份视图（12 个月），选月回日视图；Esc 逐级返回（年→月→日→关闭），年视图再点标题回日视图。年/月格子超 [minDate,maxDate] 范围 `:disabled` 置灰禁点（minDate 为新增可选 opts，未传则仅 maxDate 约束，调用方零改动）；选中起/止日所在年/月 `.sel` 紫底高亮与选中日一致（`.cal-cell.sel` 复用 `--lav`）；页脚数据截至提示不变，年/月视图追加「Esc 或点标题返回上级」。样式全部落在 `lab-theme.css` cal-pop 组件族（新增 `.cal-title`/`.cal-grid-ym`/`.cal-cell` 三条规则，无新色相、无循环动效）。lab/SaaS 模板零改动。
 - 2026-09-28（QRE-SAAS-EXPOSURE-METRICS）SaaS 详情页区间信息卡新增 2 张随滑块联动指标卡（第 6/7 张，job.html 与 symbol.html 同步）：**持仓暴露度**（有持仓交易日数 ÷ 区间交易日数，同日多笔按 1 天去重；数据源 = 结果已有 round trips 的 entry/exit 日期展开成逐日持仓掩码，job 级用 chart_data.trades.points，>500 笔 sampled 时悬停提示「按前 500 笔估算」，symbol 级用 d.trades 全量）与**持仓期年化收益**（(1+区间策略收益)^(252/持仓天数)−1，252=年交易日数）；区间内无持仓两卡均显示「—」，口径写在 title 悬停提示。`#range-strip` 网格由 `repeat(5,1fr)` 改 `repeat(auto-fit,minmax(130px,1fr))` 按卡数自适应（≤960px 仍降 2 列）。
 - 2026-09-28（QRE-SAAS-DETAIL-CARD-UI）SaaS 详情页卡片修正（saas/templates 侧，lab 侧零改动）：①区间五卡末尾留白根因——lab-theme.css 把 `.metric-strip` 纠偏为 `repeat(6,1fr)` 网格，五卡只占 5/6；saas base.html 加 `#range-strip{grid-template-columns:repeat(5,1fr)}`（≤960px 降 2 列）。②job.html 模块顺序对齐 §8：交易磨损 + FRM 移到收益曲线之后、归因之前。③symbol.html 顶部 7 简介卡（6 列网格装 7 卡导致 6+1 且窄高臃肿）改 `#sum-strip{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}` + 卡 padding 10px 14px + 数值 15px（对齐 §1.3「个股页 15px」）。④总结性卡片淡紫底：`#metric-strip/#sum-strip/#range-strip 的 .metric-card` 用 `--tint` 底 + `--tint-deep` 边（区间卡即 §3.9 `.range-strip .metric` 既有规范推广到概述/简介卡）。均用 ID 选择器压过 lab-theme 后加载的同族规则；Jinja 模板内 CSS 选择器 `{#id` 连写会被当注释，需 `{ #id` 留空格（本次踩过）。
