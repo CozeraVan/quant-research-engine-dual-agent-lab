@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SHARED-COST-BREAKDOWN (进行中→DONE 待部署 — 交易磨损卡佣金/印花税 0 值 bug：
+QRE-SHARED-COST-BREAKDOWN (DONE 已部署 — 交易磨损卡佣金/印花税 0 值 bug：
 shared.py 四路径改 calculate_cost_breakdown + lot 级组件分摊 + _trade_row 补 6 拆分列
 （键名同 vectorized）+ full_market_report shared_cash 补读聚合；存量不回填；
 真库实测 fees_summary 佣金 70/印花税 32.88/过户费 1.31（修复前为 0）；
