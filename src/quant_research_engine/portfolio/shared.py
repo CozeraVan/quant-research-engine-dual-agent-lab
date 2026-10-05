@@ -256,7 +256,8 @@ class SharedCashBacktestEngine:
             if not validation.allowed:
                 failed_orders.append(self._failed_order_row(order, validation.reason, symbol_metadata=symbol_metadata))
                 continue
-            cost = self.market_profile.calculate_cost(OrderSide.SELL, order.notional)
+            cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.SELL, order.notional)
+            cost = cost_parts["total"]
             cash += order.notional - cost
             orders.append(self._order_row(order, cost, symbol_metadata=symbol_metadata))
             trades.append(
@@ -268,6 +269,7 @@ class SharedCashBacktestEngine:
                     position=position,
                     exit_cost=cost,
                     exit_reason=exit_reason,
+                    exit_cost_parts=cost_parts,
                     symbol_metadata=symbol_metadata,
                 )
             )
@@ -290,6 +292,7 @@ class SharedCashBacktestEngine:
         position: dict[str, object],
         exit_cost: float,
         exit_reason: str,
+        exit_cost_parts: dict[str, float] | None = None,
         symbol_metadata: dict[str, dict[str, object]] | None = None,
     ) -> dict[str, object]:
         consumed = self._consume_lots(position, quantity)
@@ -307,6 +310,13 @@ class SharedCashBacktestEngine:
             "cost": cost,
             "net_pnl": gross_pnl - cost,
             "exit_reason": exit_reason,
+            # 费用拆分列（与 single_symbol_vectorized 键名完全一致；2026-10-05 补齐）
+            "entry_commission": consumed["entry_commission"],
+            "entry_stamp_tax": consumed["entry_stamp_tax"],
+            "entry_transfer_fee": consumed["entry_transfer_fee"],
+            "exit_commission": float((exit_cost_parts or {}).get("commission", 0.0)),
+            "exit_stamp_tax": float((exit_cost_parts or {}).get("stamp_tax", 0.0)),
+            "exit_transfer_fee": float((exit_cost_parts or {}).get("transfer_fee", 0.0)),
         }
         if symbol_metadata and symbol in symbol_metadata:
             for key, value in symbol_metadata[symbol].items():
@@ -319,6 +329,11 @@ class SharedCashBacktestEngine:
         remaining = quantity
         entry_notional = 0.0
         entry_cost = 0.0
+        # 费用拆分按比例分摊（与 entry_cost 同口径）；缺拆分的 lot 退化为
+        # 按 entry_cost 比例归入佣金组件（存量兼容，总额不变）
+        entry_commission = 0.0
+        entry_stamp_tax = 0.0
+        entry_transfer_fee = 0.0
         entry_date = None
         updated_lots: list[dict[str, object]] = []
         for lot in lots:
@@ -331,22 +346,41 @@ class SharedCashBacktestEngine:
                 if entry_date is None:
                     entry_date = lot["entry_date"]
                 entry_notional += consumed_quantity * float(lot["entry_price"])
-                entry_cost += float(lot["entry_cost"]) * consumed_quantity / lot_quantity
+                ratio = consumed_quantity / lot_quantity
+                entry_cost += float(lot["entry_cost"]) * ratio
+                parts = lot.get("entry_cost_parts")
+                if parts:
+                    entry_commission += float(parts["commission"]) * ratio
+                    entry_stamp_tax += float(parts["stamp_tax"]) * ratio
+                    entry_transfer_fee += float(parts["transfer_fee"]) * ratio
+                else:
+                    entry_commission += float(lot["entry_cost"]) * ratio  # 退化：归入佣金
                 remaining -= consumed_quantity
             leftover_quantity = lot_quantity - consumed_quantity
             if leftover_quantity > 0:
-                updated_lots.append(
-                    {
-                        **lot,
-                        "quantity": leftover_quantity,
-                        "entry_cost": float(lot["entry_cost"]) * leftover_quantity / lot_quantity,
+                leftover = {
+                    **lot,
+                    "quantity": leftover_quantity,
+                    "entry_cost": float(lot["entry_cost"]) * leftover_quantity / lot_quantity,
+                }
+                parts = lot.get("entry_cost_parts")
+                if parts:
+                    lratio = leftover_quantity / lot_quantity
+                    leftover["entry_cost_parts"] = {
+                        "commission": float(parts["commission"]) * lratio,
+                        "stamp_tax": float(parts["stamp_tax"]) * lratio,
+                        "transfer_fee": float(parts["transfer_fee"]) * lratio,
+                        "total": float(lot["entry_cost"]) * lratio,
                     }
-                )
+                updated_lots.append(leftover)
         position["lots"] = updated_lots
         return {
             "entry_date": entry_date if entry_date is not None else position["entry_date"],
             "entry_notional": entry_notional,
             "entry_cost": entry_cost,
+            "entry_commission": entry_commission,
+            "entry_stamp_tax": entry_stamp_tax,
+            "entry_transfer_fee": entry_transfer_fee,
         }
 
     def _sellable_quantity(self, position: dict[str, object], current_bar_index: int) -> int:
@@ -379,6 +413,7 @@ class SharedCashBacktestEngine:
         entry_date: pd.Timestamp,
         entry_cost: float,
         entry_bar_index: int,
+        entry_cost_parts: dict[str, float] | None = None,
     ) -> None:
         lots = list(position.get("lots", []))
         lots.append(
@@ -388,6 +423,8 @@ class SharedCashBacktestEngine:
                 "entry_date": entry_date,
                 "entry_cost": entry_cost,
                 "entry_bar_index": entry_bar_index,
+                # 费用拆分（佣金/印花税/过户费），缺失时消费按比例从 entry_cost 退化分摊
+                "entry_cost_parts": entry_cost_parts,
             }
         )
         position["lots"] = lots
@@ -442,7 +479,8 @@ class SharedCashBacktestEngine:
             if not validation.allowed:
                 failed_orders.append(self._failed_order_row(order, validation.reason, symbol_metadata=symbol_metadata))
                 continue
-            cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
+            cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.BUY, order.notional)
+            cost = cost_parts["total"]
             total_cash_needed = order.notional + cost
             if total_cash_needed > cash:
                 continue
@@ -462,6 +500,7 @@ class SharedCashBacktestEngine:
                         "entry_date": trade_date,
                         "entry_cost": cost,
                         "entry_bar_index": int(row["symbol_bar_index"]),
+                        "entry_cost_parts": cost_parts,
                     }
                 ],
             }
@@ -577,7 +616,8 @@ class SharedCashBacktestEngine:
         if not validation.allowed:
             failed_orders.append(self._failed_order_row(order, validation.reason, reason="rebalance", symbol_metadata=symbol_metadata))
             return cash
-        cost = self.market_profile.calculate_cost(OrderSide.SELL, order.notional)
+        cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.SELL, order.notional)
+        cost = cost_parts["total"]
         cash += order.notional - cost
         orders.append(self._order_row(order, cost, reason="rebalance", symbol_metadata=symbol_metadata))
         trades.append(
@@ -589,6 +629,7 @@ class SharedCashBacktestEngine:
                 position=position,
                 exit_cost=cost,
                 exit_reason="rebalance",
+                exit_cost_parts=cost_parts,
                 symbol_metadata=symbol_metadata,
             )
         )
@@ -638,7 +679,8 @@ class SharedCashBacktestEngine:
         if not validation.allowed:
             failed_orders.append(self._failed_order_row(order, validation.reason, reason="rebalance", symbol_metadata=symbol_metadata))
             return cash
-        cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
+        cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.BUY, order.notional)
+        cost = cost_parts["total"]
         total_cash_needed = order.notional + cost
         if total_cash_needed > cash:
             return cash
@@ -651,6 +693,7 @@ class SharedCashBacktestEngine:
             entry_date=trade_date,
             entry_cost=cost,
             entry_bar_index=int(row["symbol_bar_index"]),
+            entry_cost_parts=cost_parts,
         )
         position["trailing_anchor"] = max(float(position.get("trailing_anchor", price)), price)
         return cash

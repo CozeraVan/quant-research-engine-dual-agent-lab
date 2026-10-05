@@ -2,7 +2,34 @@
 
 ## Task ID
 
-QRE-SAAS-RESULT-ACTIONS (CR-2026-10-05：结果页显式入库 + 交易信号入口；策略库语义纠偏)
+QRE-SHARED-COST-BREAKDOWN (shared 模式交易费用拆分补齐——交易磨损卡佣金/印花税 0 值 bug)
+
+## Current Status
+
+DONE (implementation; `-k saas` 237 passed 零回归、portfolio/shared/market/worker 482 passed；
+真库实测数值证据齐；awaiting git finalization 后部署 + 本机 worker 重启)
+
+## Task Note
+
+- 根因链（用户定位，核实无误）：shared.py `_trade_row` 只写 cost 总费用 →
+  full_market_report shared_cash 分支不读拆分列 → round_trips.csv 拆分列空 →
+  `_fees_summary` 聚合 0 → 前端佣金/印花税 0、总磨损全进「过户费/其他」。
+- 修法（引擎口径变更，06 已登记）：shared.py 四路径（普通买/卖、rebalance 买/卖）
+  改用 `calculate_cost_breakdown`（total==calculate_cost 原口径不变）；lot 存
+  `entry_cost_parts`，`_consume_lots` 按比例分摊（缺拆分 lot 退化归佣金，总额不变）；
+  `_trade_row` 补 6 列（键名与 vectorized 完全一致）；full_market_report shared_cash
+  分支补读拆分聚合（与 batch 同口径）。存量产物不回填（文档注明）。
+- 测试：test_portfolio_shared.py 默认列集合断言补 6 列 + 新增拆分正确性
+  （组件和==cost、买入无印花税、卖出印花税>0）；test_full_market_report.py 新增
+  shared→round_trips 链路回归（三列非空、组件和≈total_cost）。
+- 实测数值证据（真库 shared 2025-06~12 × 000001.SZ+600519.SH，7 笔）：
+  每行 commission=10.0（最低 5 元双边）、stamp_tax 4.46~5.12、transfer_fee≈0.19；
+  _fees_summary 聚合 佣金 70.00 / 印花税 32.88 / 过户费 1.31 / 总磨损 104.19
+  （修复前佣金/印花税为 0、104.19 全进 other）。
+
+---
+
+## Archive: QRE-SAAS-RESULT-ACTIONS (CR-2026-10-05：结果页显式入库 + 交易信号入口；策略库语义纠偏)
 
 ## Current Status
 

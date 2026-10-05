@@ -12,7 +12,14 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-RESULT-ACTIONS (DONE 已部署 — CR-2026-10-05 结果页显式入库+信号入口：
+QRE-SHARED-COST-BREAKDOWN (进行中→DONE 待部署 — 交易磨损卡佣金/印花税 0 值 bug：
+shared.py 四路径改 calculate_cost_breakdown + lot 级组件分摊 + _trade_row 补 6 拆分列
+（键名同 vectorized）+ full_market_report shared_cash 补读聚合；存量不回填；
+真库实测 fees_summary 佣金 70/印花税 32.88/过户费 1.31（修复前为 0）；
+`-k saas` 237 passed + portfolio 族 482 passed 零回归；06+CR 已登记；
+站立批准有效 → commit+push+ECS 部署+重启本机 qre-saas-worker)
+
+上一任务：QRE-SAAS-RESULT-ACTIONS (DONE 已部署 — CR-2026-10-05 结果页显式入库+信号入口：
 核心语义=没超额收益的策略不进策略库；jobs FK 约束下用 strategies.in_library 旗标
 （提交建行不入库，显式保存/建 watch 才入库；存量一次性 backfill true）；
 结果页末尾「下一步」卡（保存三态 + 信号面板三 scope）；游客整卡隐藏；

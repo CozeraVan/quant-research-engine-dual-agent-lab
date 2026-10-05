@@ -414,6 +414,23 @@ def build_round_trips(
             net_pnl = record.get("net_pnl")
             gross_return = _safe_float(gross_pnl) / _safe_float(entry_notional) if entry_notional and gross_pnl is not None else None
             net_return = _safe_float(net_pnl) / _safe_float(entry_notional) if entry_notional and net_pnl is not None else None
+            # 2026-10-05 费用拆分补齐：shared 交易行 6 列（键名与 vectorized 一致）→
+            # 聚合到 round_trips 的 commission/stamp_tax/transfer_fee（与 batch 分支同口径）
+            entry_commission = record.get("entry_commission")
+            exit_commission = record.get("exit_commission")
+            commission = (
+                _safe_float(entry_commission or 0.0) + _safe_float(exit_commission or 0.0)
+                if entry_commission is not None or exit_commission is not None
+                else None
+            )
+            stamp_tax = record.get("exit_stamp_tax")
+            entry_tf = record.get("entry_transfer_fee")
+            exit_tf = record.get("exit_transfer_fee")
+            transfer_fee = (
+                _safe_float(entry_tf or 0.0) + _safe_float(exit_tf or 0.0)
+                if entry_tf is not None or exit_tf is not None
+                else None
+            )
             rows.append({
                 "run_id": run_id,
                 "strategy_id": strategy_id,
@@ -430,6 +447,9 @@ def build_round_trips(
                 "net_pnl": net_pnl,
                 "gross_return": gross_return,
                 "net_return": net_return,
+                "commission": commission,
+                "stamp_tax": stamp_tax,
+                "transfer_fee": transfer_fee,
                 "total_cost": record.get("cost"),
                 "exit_reason": record.get("exit_reason"),
                 "max_favorable_return": None,

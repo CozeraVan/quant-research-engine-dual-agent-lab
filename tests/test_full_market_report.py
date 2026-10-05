@@ -998,3 +998,40 @@ def test_symbol_performance_filters_zero_trade_symbols():
     symbols = result["symbol"].tolist() if not result.empty else []
     # A 有成交保留; B 有委托(持仓中)保留; C 无任何交易剔除
     assert symbols == ["A.SZ", "B.SZ"]
+
+
+def test_shared_cash_round_trips_cost_breakdown_chain():
+    """2026-10-05 费用拆分补齐回归链：shared 引擎交易行拆分列 →
+    build_round_trips(shared_cash) 的 commission/stamp_tax/transfer_fee 非空，
+    且 三组件和 ≈ total_cost（前端交易磨损卡的直接数据源口径）。"""
+    from quant_research_engine.markets.ashare import AShareMarketProfile
+    from quant_research_engine.portfolio.shared import (
+        SharedCashBacktestEngine, SharedCashBacktestRequest)
+
+    frame = pd.DataFrame({
+        "ts_code": ["000001.SZ"] * 5 + ["000002.SZ"] * 5,
+        "trade_date": pd.to_datetime(
+            ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09"] * 2),
+        "open": [10.0, 10.2, 10.5, 10.8, 11.0, 20.0, 19.8, 19.5, 19.0, 18.8],
+        "close": [10.1, 10.4, 10.7, 10.9, 11.1, 19.9, 19.7, 19.3, 18.9, 18.7],
+        "rsi_2": [5.0, 20.0, 30.0, 40.0, 50.0, 5.0, 20.0, 30.0, 40.0, 50.0],
+        "signal_score": [1.0] * 5 + [3.0] * 5,
+    })
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+    )
+    result = engine.run(frame, request)
+    trips = build_round_trips(result.trades, run_id="t", strategy_id="s",
+                              engine_mode="shared_cash")
+    assert not trips.empty
+    for col in ("commission", "stamp_tax", "transfer_fee"):
+        assert trips[col].notna().all(), col
+    for _, r in trips.iterrows():
+        assert r["commission"] > 0
+        assert r["stamp_tax"] > 0  # 卖出印花税（entry 无印花税，聚合列即 exit 口径）
+        assert abs(r["commission"] + r["stamp_tax"] + r["transfer_fee"] - r["total_cost"]) < 1e-6

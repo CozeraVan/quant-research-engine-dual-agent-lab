@@ -2,6 +2,17 @@
 
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.
 
+### 2026-10-05: shared 模式交易费用拆分列成为引擎口径（CR-2026-10-05）
+
+- Decision: shared（共享资金）模式交易行补齐 6 个费用拆分列
+  （entry/exit × commission/stamp_tax/transfer_fee），键名与 vectorized 完全一致；
+  lot 级按组件存储并按比例分摊；`calculate_cost_breakdown.total ==
+  calculate_cost` 保证 cost 总口径不变；存量产物不回填。
+- Rationale: 交易磨损卡佣金/印花税显示 0 的生产 bug；拆分后 full_market_report
+  shared_cash 分支与 batch 同口径聚合，_fees_summary 不再把总磨损全算进
+  「过户费/其他」。
+- Owner: KIMI_CODE（根因已由用户定位确认）
+
 ### 2026-10-04: 策略信号监控数据模型——strategy_watches / signal_events（CR-2026-10-04 模块二）
 
 - Decision: 新增 `strategy_watches`（UNIQUE(strategy_id,user_id)；scope_type ∈

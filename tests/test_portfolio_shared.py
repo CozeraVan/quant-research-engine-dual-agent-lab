@@ -716,7 +716,12 @@ def test_shared_cash_default_output_unchanged_when_no_metadata_requested():
     result = engine.run(frame, request)
 
     orders_default_cols = {"symbol", "trade_date", "side", "quantity", "price", "notional", "cost", "reason"}
-    trades_default_cols = {"symbol", "entry_date", "exit_date", "quantity", "entry_price", "exit_price", "gross_pnl", "cost", "net_pnl", "exit_reason"}
+    # 2026-10-05 费用拆分补齐：trades 新增 6 个拆分列（键名与 vectorized 一致），
+    # 存量默认列集合 + 拆分列
+    trades_default_cols = {"symbol", "entry_date", "exit_date", "quantity", "entry_price", "exit_price",
+                           "gross_pnl", "cost", "net_pnl", "exit_reason",
+                           "entry_commission", "entry_stamp_tax", "entry_transfer_fee",
+                           "exit_commission", "exit_stamp_tax", "exit_transfer_fee"}
     assert set(result.orders.columns) == orders_default_cols
     assert set(result.trades.columns) == trades_default_cols
 
@@ -802,3 +807,29 @@ def test_shared_cash_metadata_collision_does_not_overwrite_failed_order_failure_
     assert not result.failed_orders.empty
     for _, fo in result.failed_orders.iterrows():
         assert fo["failure_reason"] == "limit_up_buy_blocked"
+
+
+def test_shared_cash_trades_cost_breakdown_columns():
+    """2026-10-05 费用拆分补齐：shared 模式交易行 6 个拆分列非空，
+    entry/exit 三组件和 == entry/exit 总费用（commission+stamp+transfer ≈ cost）。"""
+    frame = make_shared_frame()
+    engine = SharedCashBacktestEngine(AShareMarketProfile())
+    request = SharedCashBacktestRequest(
+        symbols=["000001.SZ", "000002.SZ"],
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=2,
+        max_positions=2,
+    )
+
+    result = engine.run(frame, request)
+    assert not result.trades.empty
+    for _, t in result.trades.iterrows():
+        entry_sum = t["entry_commission"] + t["entry_stamp_tax"] + t["entry_transfer_fee"]
+        exit_sum = t["exit_commission"] + t["exit_stamp_tax"] + t["exit_transfer_fee"]
+        assert entry_sum > 0  # 买入佣金（最低 5 元）必有值
+        # 拆分和 == 总费用（calculate_cost_breakdown.total 口径 = calculate_cost）
+        assert abs((entry_sum + exit_sum) - t["cost"]) < 1e-6
+        assert t["entry_stamp_tax"] == 0.0  # 买入无印花税
+        assert t["exit_stamp_tax"] > 0.0    # 卖出印花税必有值
+        assert t["exit_commission"] > 0.0
