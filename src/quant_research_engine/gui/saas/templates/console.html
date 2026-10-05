@@ -331,7 +331,7 @@
   function loadUsers(){
     apiFetch('/api/saas/console/users').then(function(r){ return r.json(); }).then(function(d){
       if (!d.ok) return;
-      document.getElementById('users-count').textContent = '共 ' + d.users.length + ' 人（日配额 ' + d.quota_limit + ' 次）';
+      document.getElementById('users-count').textContent = '共 ' + d.users.length + ' 人（日配额 ' + (d.quota_limit === '不限' ? '不限' : d.quota_limit + ' 次') + '）';
       var html = d.users.map(function(u){
         var acct = esc(u.email || u.phone || ('#' + u.id));
         var tierSel = '<select data-uid="' + u.id + '" class="tier-sel">' +
@@ -341,7 +341,7 @@
           ? '<button class="btn-sm" data-act="disable" data-uid="' + u.id + '">禁用</button>'
           : '<button class="btn-sm" data-act="enable" data-uid="' + u.id + '">恢复</button>';
         return '<tr><td>' + u.id + '</td><td>' + acct + '</td><td>' + tierSel + '</td><td>' + esc(u.role) + '</td><td>' + stBadge +
-          '</td><td class="num">' + u.job_count + '</td><td class="num">' + u.used_today + ' / ' + d.quota_limit + '</td><td>' +
+          '</td><td class="num">' + u.job_count + '</td><td class="num">' + u.used_today + (d.quota_limit === '不限' ? ' / 不限' : ' / ' + d.quota_limit) + '</td><td>' +
           fmt(u.created_at) + '</td><td>' + fmt(u.last_login_at) + '</td><td>' + btn + '</td></tr>';
       }).join('');
       document.getElementById('users-tbody').innerHTML = html;

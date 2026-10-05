@@ -81,6 +81,21 @@ def _job_params(job: dict[str, Any]) -> dict[str, Any]:
     return params if isinstance(params, dict) else {}
 
 
+def fill_guest_codes(codes: list[str], auto_fill: int | None,
+                     pool_fn: Any = None) -> list[str]:
+    """游客自选不足上限的随机补齐（2026-10-05 内测调整）：云端无行情库只打
+    params.codes_auto_fill=N 标记，本机执行前从全量股票清单抽样补齐到 N 只。
+    pool_fn 可注入（测试）；默认 universe.all_a_codes（本地全量库）。"""
+    if not auto_fill or len(codes) >= int(auto_fill):
+        return codes
+    if pool_fn is None:
+        from quant_research_engine.gui.universe import all_a_codes as pool_fn
+    pool = [c for c in pool_fn() if c not in set(codes)]
+    need = min(int(auto_fill) - len(codes), len(pool))
+    import random as _random
+    return codes + _random.sample(pool, need)
+
+
 def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> dict[str, Any]:
     """执行 leased job，返回 result 回传 payload（不含 status 字段）。
 
@@ -108,6 +123,8 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     codes = params.get("codes") or []
     if isinstance(codes, str):
         codes = [c.strip() for c in codes.split(",") if c.strip()]
+    # 游客自选不足上限的随机补齐（2026-10-05 内测调整）：云端只打标记，本机补齐
+    codes = fill_guest_codes(codes, params.get("codes_auto_fill"))
     # 板块/概念范围（QRE-SAAS-METADATA）：params.universe={group,key} 在 worker
     # 本地解析成 codes（全量行情库只在本机）；与显式 codes 同时给时显式优先
     universe = params.get("universe")

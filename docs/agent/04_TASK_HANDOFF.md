@@ -2,7 +2,43 @@
 
 ## Task ID
 
-QRE-SAAS-REPLAY-LAYOUT-FIX (重播速度档换行 bug 系统性调试：全局 select{width:100%} 根因)
+QRE-SAAS-TIER-BETA-RELAX (内测期两层权限调整：游客 10 只/10 年/随机补齐，注册用户全放开)
+
+## Current Status
+
+DONE (implementation; `-k saas` 235 passed 零回归；staging bypass=0 实例游客全流程实测；
+awaiting git finalization 后部署 + 生产库 tier_policies 手工 UPDATE)
+
+## Task Note
+
+- 用户拍板（2026-10-05）：游客 近 2 年→10 年（3657 含宽限）、单股→最多 10 只
+  （自选不足随机补齐 / 随机股票 N≤10 直用）；每日 1 次、次日清空不变；板块/全市场
+  仍 403。member/paid 三值全 0=不限（每日 3 次取消），资源约束全交 R2 槽位体系。
+- 随机补齐位置与理由：**worker 侧**（runner.fill_guest_codes，云端打
+  `params.codes_auto_fill=N` 标记）。理由：云端 ECS 无行情库（数据不出家门），
+  股票清单只在本地；worker 执行前用 universe.all_a_codes 抽样补齐（自选在前、
+  无重复、池不足时给足可得数）。runner 抽成独立纯函数便于单测。
+- 改动：app.py（GUEST_MAX_CODES=10/GUEST_MAX_DAYS=3657、_TIER_POLICY_DEFAULTS
+  member/paid 全 0、游客闸门重写——codes ≤10 放行+标记补齐、>10 403、random_n
+  1~10、universe 403、超 10 年 403、文案更新、me 接口 limit≤0 显示「不限」、
+  console users quota_limit 读 member 实时值）；runner.py（fill_guest_codes +
+  接入）；cloud_schema.sql 种子值同步；前端文案（base guest-strip、new 弹层/
+  校验/游客收口（random 对游客放开、上限 10）、profile/login/job/feedback/console）。
+- ⚠️ 运维坑（staging 实测抓出）：tier_policies 种子 ON CONFLICT DO NOTHING
+  **不随代码常量更新**——部署后必须手工 UPDATE 各库三行，否则旧值生效
+  （8092 实测旧行 guest.max_codes=1 把新语义压回「1~1 只」）。19 号文档已登记。
+- 测试：test_gui_saas.py 游客链路重写（1 只标补齐/3 只放行+补齐/11 只 403/
+  10 年放行/超 10 年 403/缺区间 400/随机 10 放行/随机 11 403/板块 403/日配额不变）+
+  member 配额两测试改「不限」新口径；test_gui_saas_console.py 种子值断言更新；
+  test_worker.py +4（补齐保留自选/无重复/已满不动/池小于缺口）。
+- 验证：staging 8092（SAAS_AUTH_BYPASS=0 游客态实例）Playwright 桌面+375——
+  弹层/提示条文案、scope 仅 codes+random 可见、random max=10、提交 random-10
+  被云端接受并跳结果页（job 39），零 JS 报错（截图 .tmp/mobile-audit/
+  {desktop,m375}-guest-{modal,submit}.png）。
+
+---
+
+## Archive: QRE-SAAS-REPLAY-LAYOUT-FIX (重播速度档换行 bug 系统性调试：全局 select{width:100%} 根因)
 
 ## Current Status
 

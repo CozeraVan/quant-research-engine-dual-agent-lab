@@ -352,16 +352,15 @@ class TestAuth:
         assert resp.status_code == 200
 
     def test_quota_429(self, client, app):
-        # D1D2 新口径：会员每日 3 次全量（kind=full），smoke 不占配额，超限 403
+        # 2026-10-05 内测调整（19 号文档原则）：注册用户不限每日次数——
+        # 连提 4 次 full 全部接受，不再 403（限制只在 R2 槽位/内存资源层）
         login = self._login(client, app, "quota@example.com")
         token = login.get_json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
-        for _ in range(3):
-            assert client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers).status_code == 200
-        resp = client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers)
-        assert resp.status_code == 403
-        assert "3 次" in resp.get_json()["error"]
-        # smoke 不占配额：超限后仍可提交 smoke
+        for _ in range(4):
+            resp = client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers)
+            assert resp.status_code == 200, resp.get_json()
+        # smoke 同样不受限
         assert client.post("/api/saas/jobs", json={"yaml": "x", "kind": "smoke"},
                            headers=headers).status_code == 200
 
@@ -737,19 +736,42 @@ class TestTiersD1D2:
         assert resp.status_code == 200
         body = resp.get_json()
         assert body["guest"] is True and "次日清空" in body["note"]
-        # 同 IP 当日第二次全量 → 403
+        # 自选 1 只 → 云端打 codes_auto_fill=10 标记（worker 执行前随机补齐）
+        engine_job = client.get(f"/api/jobs/{body['job_id']}",
+                                headers={"X-Forwarded-For": "1.2.3.4"}).get_json()["job"]
+        assert engine_job["params"]["codes_auto_fill"] == 10
+        # 同 IP 当日第二次全量 → 403（每日 1 次不变）
         assert self._guest_job(client).status_code == 403
         # smoke 不占配额
         smoke = client.post("/api/jobs", json={"yaml": "x", "kind": "smoke",
             "params": {"codes": ["000001.SZ"], "start": "2025-01-01", "end": "2026-01-01"}},
             headers={"X-Forwarded-For": "1.2.3.4"})
         assert smoke.status_code == 200
-        # 多股 → 403；区间超 2 年 → 403；缺区间 → 400
-        assert self._guest_job(client, codes=("000001.SZ", "600000.SH"), ip="5.6.7.8").status_code == 403
-        assert self._guest_job(client, start="2020-01-01", end="2026-01-01", ip="5.6.7.8").status_code == 403
+        # 2026-10-05 内测调整：多股（≤10）放行并标补齐；11 只 → 403；
+        # 区间 ≤ 近 10 年放行、超 10 年 → 403；缺区间 → 400
+        r3 = self._guest_job(client, codes=("000001.SZ", "600000.SH", "600519.SH"), ip="5.6.7.8")
+        assert r3.status_code == 200
+        assert r3.get_json()["guest"] is True
+        codes11 = tuple(f"{i:06d}.SZ" for i in range(11))
+        assert self._guest_job(client, codes=codes11, ip="5.6.7.8").status_code == 403
+        assert self._guest_job(client, start="2016-10-01", end="2026-10-01", ip="5.6.7.9").status_code == 200
+        assert self._guest_job(client, start="2015-01-01", end="2026-01-01", ip="5.6.7.10").status_code == 403
         bad = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "params": {"codes": ["000001.SZ"]}},
-                          headers={"X-Forwarded-For": "5.6.7.8"})
+                          headers={"X-Forwarded-For": "5.6.7.11"})
         assert bad.status_code == 400
+        # 随机股票 N≤10 放行、>10 拦截；板块仍 403
+        rnd = client.post("/api/jobs", json={"yaml": "x", "kind": "full",
+            "params": {"random_n": 10, "start": "2025-01-01", "end": "2026-01-01"}},
+            headers={"X-Forwarded-For": "9.1.1.1"})
+        assert rnd.status_code == 200
+        rnd_over = client.post("/api/jobs", json={"yaml": "x", "kind": "full",
+            "params": {"random_n": 11, "start": "2025-01-01", "end": "2026-01-01"}},
+            headers={"X-Forwarded-For": "9.1.1.2"})
+        assert rnd_over.status_code == 403
+        univ = client.post("/api/jobs", json={"yaml": "x", "kind": "full",
+            "params": {"universe": {"group": "g", "key": "k"}, "start": "2025-01-01", "end": "2026-01-01"}},
+            headers={"X-Forwarded-For": "9.1.1.3"})
+        assert univ.status_code == 403
 
     def test_guest_views_own_job_by_ip(self, client, app):
         job_id = self._guest_job(client).get_json()["job_id"]
@@ -771,14 +793,15 @@ class TestTiersD1D2:
         assert client.get("/api/results", headers={"X-Forwarded-For": "1.2.3.4"}).status_code == 401
 
     def test_me_quota_fields(self, client):
+        # 2026-10-05 内测调整：注册用户不限次数 → 展示「不限」
         resp = self._register(client, "q@example.com")
         token = resp.get_json()["token"]
         me = client.get("/api/saas/me", headers={"Authorization": f"Bearer {token}"}).get_json()["user"]
-        assert me["quota_limit"] == 3 and me["quota_remaining"] == 3 and me["tier"] == "member"
+        assert me["quota_limit"] == "不限" and me["quota_remaining"] is None and me["tier"] == "member"
         client.post("/api/saas/jobs", json={"yaml": "x"},
                     headers={"Authorization": f"Bearer {token}"})
         me = client.get("/api/saas/me", headers={"Authorization": f"Bearer {token}"}).get_json()["user"]
-        assert me["quota_remaining"] == 2
+        assert me["quota_limit"] == "不限" and me["quota_remaining"] is None
 
     def test_guest_cleanup(self, app, tmp_path):
         from sqlalchemy import text as _text

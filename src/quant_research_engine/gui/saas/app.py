@@ -282,8 +282,8 @@ ERROR_CLASSES = ("strategy_compile_error", "data_missing",
 # --- 内测三级权限（15 号文档 D 阶段定稿，2026-09-20；2026-10-03 参数化入库） ---
 MEMBER_DAILY_FULL_LIMIT = 3      # 登录会员/付费占位：每日全量回测 3 次（smoke 不占）
 GUEST_DAILY_LIMIT = 1            # 游客：单 IP 每日 1 次
-GUEST_MAX_CODES = 1              # 游客：单支股票
-GUEST_MAX_DAYS = 731 + 7         # 游客：区间 ≤ 近 2 年（留一周宽限）
+GUEST_MAX_CODES = 10             # 游客：最多 10 只（自选不足自动随机补齐；2026-10-04 内测调整）
+GUEST_MAX_DAYS = 3650 + 7        # 游客：区间 ≤ 近 10 年（留一周宽限；2026-10-04 由近 2 年放宽）
 GUEST_RESULT_NOTE = "游客结果次日清空，注册后可永久保存记录"
 _PBKDF2_ITERATIONS = 120_000
 
@@ -294,9 +294,11 @@ _PBKDF2_ITERATIONS = 120_000
 _TIER_POLICY_DEFAULTS = {
     "guest":  {"daily_full_limit": GUEST_DAILY_LIMIT, "max_codes": GUEST_MAX_CODES, "max_days": GUEST_MAX_DAYS,
                "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
-    "member": {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0,
+    # 2026-10-04 内测期权限调整（用户拍板，19 号文档原则：注册用户功能全开，
+    # 限制只在并发与计算资源/R2 槽位体系）：daily_full_limit/max_codes/max_days 全 0=不限
+    "member": {"daily_full_limit": 0, "max_codes": 0, "max_days": 0,
                "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
-    "paid":   {"daily_full_limit": MEMBER_DAILY_FULL_LIMIT, "max_codes": 0, "max_days": 0,
+    "paid":   {"daily_full_limit": 0, "max_codes": 0, "max_days": 0,
                "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
 }
 _POLICY_KEYS = ("daily_full_limit", "max_codes", "max_days", "max_factor_fields", "max_factor_tables")
@@ -1887,8 +1889,12 @@ def create_saas_app() -> Flask:
             item["quota_remaining"] = None
         else:
             pol = _get_policy(app, engine, str(item.get("tier") or "member"))
-            item["quota_limit"] = pol["daily_full_limit"]
-            item["quota_remaining"] = max(0, pol["daily_full_limit"] - (item.get("used_today") or 0))
+            if int(pol["daily_full_limit"] or 0) <= 0:  # 2026-10-05 内测调整：注册用户不限次数
+                item["quota_limit"] = "不限"
+                item["quota_remaining"] = None
+            else:
+                item["quota_limit"] = pol["daily_full_limit"]
+                item["quota_remaining"] = max(0, pol["daily_full_limit"] - (item.get("used_today") or 0))
         return jsonify({"ok": True, "user": item})
 
     # --- 用户侧：提交 / 查询 / 取消（17 协议 §2/§5；/api/saas/* 为兼容别名） ---
@@ -1941,15 +1947,34 @@ def create_saas_app() -> Flask:
             "max_tables": int(factor_pol.get("max_factor_tables", 3)),
         }
 
-        # --- 游客通道（15 号文档 D 阶段定稿；2026-10-03 限额参数化读 tier_policies） ---
+        # --- 游客通道（15 号文档 D 阶段定稿；2026-10-03 限额参数化读 tier_policies；
+        #     2026-10-04 内测调整：最多 10 只（自选不足自动随机补齐）/近 10 年/日 1 次不变） ---
         guest_key = None
         if uid is None:
             pol = _get_policy(app, engine, "guest")
             codes = params_raw.get("codes") or []
             if isinstance(codes, str):
                 codes = [c.strip() for c in codes.split(",") if c.strip()]
-            if pol["max_codes"] > 0 and len(codes) != pol["max_codes"]:
-                return jsonify({"ok": False, "error": "游客仅支持单支股票回测。注册会员后可用全市场/板块/多股票"}), 403
+            random_n = params_raw.get("random_n")
+            max_codes = int(pol["max_codes"])
+            if params_raw.get("universe"):
+                return jsonify({"ok": False, "error": "游客暂不支持板块/概念与全市场回测——可选「指定股票代码」（最多 10 只）或「随机股票」。注册会员后不限范围"}), 403
+            if codes:
+                if max_codes > 0 and len(codes) > max_codes:
+                    return jsonify({"ok": False, "error": f"游客最多回测 {max_codes} 只股票（当前 {len(codes)} 只）。注册会员后不限数量"}), 403
+                # 自选不足上限 → 标记 worker 执行前随机补齐（params 落库可见口径）
+                if max_codes > 0 and len(codes) < max_codes:
+                    params_raw = dict(params_raw)
+                    params_raw["codes_auto_fill"] = max_codes
+            elif random_n is not None:
+                try:
+                    rn = int(random_n)
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "随机股票数量须为整数"}), 400
+                if max_codes > 0 and (rn < 1 or rn > max_codes):
+                    return jsonify({"ok": False, "error": f"游客随机股票数量须为 1~{max_codes} 只"}), 403
+            else:
+                return jsonify({"ok": False, "error": "游客请选择「指定股票代码」（最多 10 只，不足自动随机补齐）或「随机股票」（≤10 只）"}), 403
             try:
                 from datetime import date as _date
 
@@ -1958,7 +1983,7 @@ def create_saas_app() -> Flask:
             except (TypeError, ValueError):
                 return jsonify({"ok": False, "error": "请填写回测区间（开始/结束日期）"}), 400
             if pol["max_days"] > 0 and ((d1 - d0).days > pol["max_days"] or d0 > d1):
-                return jsonify({"ok": False, "error": "游客仅支持近 2 年内的区间。注册会员后不限"}), 403
+                return jsonify({"ok": False, "error": "游客仅支持近 10 年内的区间。注册会员后不限"}), 403
             guest_key = _guest_key(app, _client_ip())
             used = 0
             if kind == "full":
@@ -1971,7 +1996,7 @@ def create_saas_app() -> Flask:
                         {"k": guest_key},
                     ).scalar_one()
             if kind == "full" and pol["daily_full_limit"] > 0 and used >= pol["daily_full_limit"]:
-                return jsonify({"ok": False, "error": "游客每日可回测 1 次（今日已用完）。注册会员每日 3 次且记录永久保存"}), 403
+                return jsonify({"ok": False, "error": "游客每日可回测 1 次（今日已用完）。注册会员后不限次数且记录永久保存"}), 403
 
         if uid is None and guest_key is None:
             return jsonify({"ok": False, "error": "未登录（Authorization: Bearer <token>）"}), 401
@@ -3087,7 +3112,10 @@ def create_saas_app() -> Flask:
                     "FROM users u ORDER BY u.created_at DESC LIMIT 500"
                 )
             ).mappings().all()
-        return jsonify({"ok": True, "quota_limit": MEMBER_DAILY_FULL_LIMIT,
+        # 2026-10-05 内测调整：日配额读 tier_policies.member 实时值（0/不限 → 前端显示「不限」）
+        member_pol = _get_policy(app, engine, "member")
+        quota_limit = int(member_pol.get("daily_full_limit") or 0)
+        return jsonify({"ok": True, "quota_limit": quota_limit if quota_limit > 0 else "不限",
                         "users": [_jsonable(dict(r)) for r in rows]})
 
     @app.post("/api/saas/console/users/<int:user_id>/tier")

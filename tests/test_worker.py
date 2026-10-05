@@ -477,3 +477,29 @@ class TestUniversePassthrough:
         job["params"] = {"universe": {"group": "sw1", "key": "空板块"}}
         with pytest.raises(RuntimeError, match="无成分股"):
             runner_mod.execute_job(job, work_base=tmp_path)
+
+
+class TestGuestCodesAutoFill:
+    """2026-10-05 内测调整：游客自选不足 10 只时 worker 执行前随机补齐。"""
+
+    def test_fill_to_ten(self):
+        from quant_research_engine.worker.runner import fill_guest_codes
+        pool = [f"000{i:03d}.SZ" for i in range(50)]
+        out = fill_guest_codes(["000001.SZ", "600519.SH"], 10, pool_fn=lambda: pool)
+        assert len(out) == 10
+        assert out[:2] == ["000001.SZ", "600519.SH"]  # 自选保留在前
+        assert len(set(out)) == 10  # 无重复
+
+    def test_already_full_noop(self):
+        from quant_research_engine.worker.runner import fill_guest_codes
+        codes = [f"c{i}" for i in range(10)]
+        assert fill_guest_codes(codes, 10, pool_fn=lambda: ["x"]) == codes
+
+    def test_no_marker_noop(self):
+        from quant_research_engine.worker.runner import fill_guest_codes
+        assert fill_guest_codes(["a"], None, pool_fn=lambda: ["b"]) == ["a"]
+
+    def test_pool_smaller_than_need(self):
+        from quant_research_engine.worker.runner import fill_guest_codes
+        out = fill_guest_codes(["a"], 10, pool_fn=lambda: ["a", "b", "c"])
+        assert out == ["a", "b", "c"] or sorted(out) == ["a", "b", "c"]

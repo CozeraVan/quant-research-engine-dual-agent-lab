@@ -172,7 +172,7 @@ class TestUsers:
         headers, _ = _admin_headers(app)
         _create_job(client, uid=2)
         d = client.get("/api/saas/console/users", headers=headers).get_json()
-        assert d["quota_limit"] == 3
+        assert d["quota_limit"] == "不限"  # 2026-10-05 内测调整：注册用户不限次数
         u2 = next(u for u in d["users"] if u["id"] == 2)
         assert u2["job_count"] == 1 and u2["used_today"] == 1 and u2["tier"] == "member"
         # 调 tier
@@ -326,12 +326,13 @@ class TestTierPolicies:
         d = client.get("/api/saas/console/policies", headers=headers).get_json()
         assert d["ok"]
         by_tier = {p["tier"]: p for p in d["policies"]}
-        # 种子行：三级权限与代码常量一致
+        # 种子行：三级权限与代码常量一致（2026-10-05 内测调整：游客 10 只/近 10 年/日 1 次；
+        # 注册用户与付费占位全 0=不限，限制只在 R2 资源层）
         assert by_tier["guest"]["daily_full_limit"] == 1
-        assert by_tier["guest"]["max_codes"] == 1 and by_tier["guest"]["max_days"] > 0
-        assert by_tier["member"]["daily_full_limit"] == 3
+        assert by_tier["guest"]["max_codes"] == 10 and by_tier["guest"]["max_days"] == 3657
+        assert by_tier["member"]["daily_full_limit"] == 0
         assert by_tier["member"]["max_codes"] == 0 and by_tier["member"]["max_days"] == 0
-        assert by_tier["paid"]["daily_full_limit"] == 3
+        assert by_tier["paid"]["daily_full_limit"] == 0
         # 更新 member 日限额 → 生效且入库
         r = client.post("/api/saas/console/policies/member", json={"daily_full_limit": 5}, headers=headers)
         assert r.get_json()["ok"] and r.get_json()["updated"] == ["daily_full_limit"]

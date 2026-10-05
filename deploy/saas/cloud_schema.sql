@@ -267,9 +267,9 @@ ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_tables INT NOT NUL
 ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS scan_enabled BOOL NOT NULL DEFAULT true;
 ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_watches INT NOT NULL DEFAULT 20;
 INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days, max_factor_fields, max_factor_tables) VALUES
-    ('guest',  1, 1, 738, 20, 3),
-    ('member', 3, 0, 0, 20, 3),
-    ('paid',   3, 0, 0, 20, 3)
+    ('guest',  1, 10, 3657, 20, 3),
+    ('member', 0, 0, 0, 20, 3),
+    ('paid',   0, 0, 0, 20, 3)
 ON CONFLICT (tier) DO NOTHING;
 
 COMMIT;

@@ -178,8 +178,8 @@
   <div class="modal-mask" id="guest-modal">
     <div class="modal">
       <h3>游客免登录测试</h3>
-      <p id="guest-modal-text">游客可免登录测试策略：<b>单支股票 · 近 2 年区间 · 每日 1 次 · 结果次日清空</b>。<br>
-      注册会员可解锁：全市场/板块回测、多股票、每日 3 次、记录永久保存。</p>
+      <p id="guest-modal-text">游客可免登录测试策略：<b>最多 10 只股票（自选不足自动随机补齐）· 近 10 年区间 · 每日 1 次 · 结果次日清空</b>。<br>
+      注册会员可解锁：全部功能（全市场/板块/不限股票数/不限次数）、记录永久保存。</p>
       <p class="result-box err" id="guest-modal-err" style="display:none"></p>
       <div class="m-actions">
         <button class="btn btn-ghost" id="guest-cancel">取消</button>
@@ -968,13 +968,22 @@ async function startRun(){
     if (!n || n < 1 || n > 2000){ pipeFailAt(1, '随机数量 N 须为 1~2000 的正整数。'); return; }
   }
   if (scope === 'codes' && !$('#param-codes').value.trim()){ pipeFailAt(1, '选择了「指定股票代码」但未填写代码。'); return; }
-  // 游客硬约束前置校验（QRE-SAAS-GUEST-FLOW-2）：仅单股，多股/空股直接在第 1 步拦截
+  // 游客硬约束前置校验（QRE-SAAS-GUEST-FLOW-2 + 2026-10-04 内测调整）：
+  // 指定股票代码（≤10 只，不足云端标 worker 随机补齐）或随机股票（N≤10）
   if (isGuest()){
-    if (scope !== 'codes'){ pipeFailAt(1, '游客仅限「指定股票代码」单股回测——其他范围需注册会员。'); return; }
-    const gcodes = ($('#param-codes').value || '').split(/[，,\s]+/).filter(Boolean);
-    if (gcodes.length !== 1){
-      pipeFailAt(1, '游客测试仅限 1 只股票——请在代码框填 1 只，或点旁边「随机一只」自动填入。');
-      $('#param-codes').focus();
+    if (scope === 'random'){
+      const n = parseInt($('#p-random-n').value, 10);
+      if (!n || n < 1 || n > 10){ pipeFailAt(1, '游客随机股票数量须为 1~10 只。注册会员后不限'); return; }
+    } else if (scope === 'codes'){
+      const gcodes = ($('#param-codes').value || '').split(/[，,\s]+/).filter(Boolean);
+      if (gcodes.length < 1){
+        pipeFailAt(1, '选择了「指定股票代码」但未填写代码。');
+        $('#param-codes').focus();
+        return;
+      }
+      if (gcodes.length > 10){ pipeFailAt(1, '游客最多回测 10 只股票（当前 ' + gcodes.length + ' 只）。注册会员后不限数量'); return; }
+    } else {
+      pipeFailAt(1, '游客可选「指定股票代码」（最多 10 只）或「随机股票」（≤10 只）——板块/全市场需注册会员。');
       return;
     }
   }
@@ -999,7 +1008,7 @@ async function startRun(){
       $('#pipe-2 .pipe-name').textContent = '冒烟测试：游客单股回测自动跳过';
       LabUI.pipeDone(pipeEl, 2, '跳过');
       LabUI.pipeDoing(pipeEl, 3);
-      LabUI.waitMask.update({title: '提交任务中…', sub: '游客单股回测，提交后自动跳转结果页'});
+      LabUI.waitMask.update({title: '提交任务中…', sub: '游客体验回测（≤10 只 · 近 10 年），提交后自动跳转结果页'});
       const gfullId = await createJob('full');
       LabUI.pipeDone(pipeEl, 3, '已提交');
       abort();
@@ -1066,14 +1075,17 @@ refreshPreview();
 loadFactorCatalog();
 maybeAutoName();
 
-// 游客界面收口（QRE-SAAS-GUEST-FLOW-2）：标的强制「指定股票代码」单股；
-// 3 号入口（策略代码）置灰并标注登录可用；大范围护栏对游客不生效（无大范围可选）
+// 游客界面收口（QRE-SAAS-GUEST-FLOW-2 + 2026-10-04 内测调整）：
+// 标的可选「指定股票代码」（≤10 只，不足自动补齐）或「随机股票」（≤10 只），
+// 板块/全市场隐藏；3 号入口（策略代码）置灰并标注登录可用；大范围护栏对游客不生效
 if (isGuest()){
   $$('input[name="scope"]').forEach(r => {
-    if (r.value !== 'codes') r.closest('label').style.display = 'none';
+    if (r.value !== 'codes' && r.value !== 'random') r.closest('label').style.display = 'none';
   });
   const cr = document.querySelector('input[name="scope"][value="codes"]');
   if (cr){ cr.checked = true; cr.dispatchEvent(new Event('change')); }
+  const rn = $('#p-random-n');
+  if (rn) rn.max = 10;
   const yc = document.querySelector('.entry-card[data-entry="yaml"]');
   if (yc){
     yc.style.opacity = .5;
