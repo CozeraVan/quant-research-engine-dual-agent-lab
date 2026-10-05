@@ -63,6 +63,18 @@ UPDATE strategies SET entry_mode =
     CASE WHEN nl_text IS NOT NULL AND btrim(nl_text) <> '' THEN 'nl' ELSE 'yaml' END
 WHERE entry_mode IS NULL;
 
+-- QRE-SAAS-RESULT-ACTIONS（2026-10-05）：提交回测建行但默认不入库（in_library=false），
+-- 显式保存/建 watch 才进策略库；存量行 backfill true（仅列不存在时执行一次，
+-- 重复 apply 不得把后来未保存的行翻回 true）。
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='strategies' AND column_name='in_library') THEN
+        ALTER TABLE strategies ADD COLUMN in_library BOOL NOT NULL DEFAULT false;
+        UPDATE strategies SET in_library = true;
+    END IF;
+END $$;
+
 -- 回测任务：状态机 queued → leased → running → done / failed
 -- lease 过期（Worker 宕机）自动回队重试，见 worker_jobs 视图
 CREATE TABLE IF NOT EXISTS jobs (

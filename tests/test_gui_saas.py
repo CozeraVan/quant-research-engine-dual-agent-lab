@@ -915,14 +915,27 @@ class TestStrategyLibrary:
         assert client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"}).status_code == 404
 
     def test_submit_upserts_strategy_and_referenced_delete_blocked(self, client):
-        # 提交回测自动入库：同名复用
+        # 提交回测建策略行（jobs FK 需要）但**不入库**（QRE-SAAS-RESULT-ACTIONS
+        # 2026-10-05 用户拍板：无超额策略不进策略库）；同名复用不变
         for _ in range(2):
             client.post("/api/jobs", json={"yaml": "y1", "kind": "smoke", "name": "my-strat"},
                         headers={"X-User-Id": "1"})
         lst = client.get("/api/saas/strategies", headers={"X-User-Id": "1"}).get_json()
-        assert len(lst["strategies"]) == 1
-        sid = lst["strategies"][0]["id"]
-        assert lst["strategies"][0]["job_count"] == 2
+        assert lst["strategies"] == []  # 未显式保存 → 不入库
+        # 行存在（详情/回填不受 in_library 限制）且同名复用
+        lst_all = client.get("/api/saas/jobs", headers={"X-User-Id": "1"}).get_json()
+        sid = lst_all["jobs"][0]["strategy_id"]
+        got = client.get(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"}).get_json()
+        assert got["ok"] and got["strategy"]["in_library"] is False
+        assert len(lst_all["jobs"]) == 2 and all(j["strategy_id"] == sid for j in lst_all["jobs"])
+        # 显式保存 → 入库可见
+        sv = client.post(f"/api/saas/strategies/{sid}/save", json={}, headers={"X-User-Id": "1"})
+        assert sv.get_json()["ok"] and sv.get_json()["in_library"] is True
+        # 幂等
+        assert client.post(f"/api/saas/strategies/{sid}/save", json={},
+                           headers={"X-User-Id": "1"}).get_json()["ok"]
+        lst2 = client.get("/api/saas/strategies", headers={"X-User-Id": "1"}).get_json()
+        assert len(lst2["strategies"]) == 1 and lst2["strategies"][0]["job_count"] == 2
         # 被 jobs 引用 → 禁删 409
         d = client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"})
         assert d.status_code == 409 and "不允许删除" in d.get_json()["error"]

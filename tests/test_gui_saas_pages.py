@@ -106,6 +106,10 @@ class TestPages:
         assert 'id="metric-strip"' in html and 'id="meta-chips"' in html
         assert 'id="box-risk"' in html and 'id="box-fees"' in html   # C5：FRM + 交易磨损（无数据整块隐藏）
         assert 'id="big-symbols"' in html                            # 个股明细大入口
+        # QRE-SAAS-RESULT-ACTIONS：结果页末尾操作卡（保存入库/提示交易信号；游客 JS 隐藏）
+        assert 'id="box-actions"' in html and 'id="btn-save-lib"' in html
+        assert 'id="btn-signal-open"' in html and 'id="signal-panel"' in html
+        assert 'sig-scope' in html and 'last_run_universe' in html and 'all_a' in html
         # CR-2026-10-04 切片1：回测重播（共享组件 replay.js；接管模式：接管原收益曲线容器）
         assert '/static/replay.js' in html and 'id="btn-replay"' in html and 'id="btn-replay-exit"' in html
         assert 'id="replay-bar-slot"' in html and 'id="replay-metrics"' in html and 'id="replay-events"' in html

@@ -98,8 +98,8 @@ class TestLazyColumns:
         _STRATEGY_ASSET_ENSURED.discard(id(engine))
         with engine.begin() as conn:
             conn.execute(text(
-                "INSERT INTO strategies (user_id, name, nl_text, yaml) VALUES "
-                "(1, 'has_nl', '5日线上穿20日线', 'y: 1'), (1, 'no_nl', NULL, 'y: 1')"))
+                "INSERT INTO strategies (user_id, name, nl_text, yaml, in_library) VALUES "
+                "(1, 'has_nl', '5日线上穿20日线', 'y: 1', true), (1, 'no_nl', NULL, 'y: 1', true)"))
         d = client.get("/api/saas/strategies", headers={"X-User-Id": "1"}).get_json()
         assert d["ok"]
         modes = {s["name"]: s["entry_mode"] for s in d["strategies"]}

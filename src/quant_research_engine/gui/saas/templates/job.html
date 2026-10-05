@@ -66,6 +66,30 @@
       <span class="bl-arrow">→</span>
     </a>
 
+    <!-- QRE-SAAS-RESULT-ACTIONS（2026-10-05 用户拍板）：策略入库/交易信号改为结果页
+         显式触发——提交回测不再自动入库；游客隐藏（结果次日清空，无资产可存） -->
+    <div class="chart-box hidden" id="box-actions">
+      <div class="chart-title">下一步 <span class="opt">（测试满意的策略再入库跟踪；未保存的策略不进策略库）</span></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn-sm" id="btn-save-lib">保存到我的策略库</button>
+        <button class="btn-sm" id="btn-signal-open">提示交易信号</button>
+        <span class="opt" id="action-status"></span>
+      </div>
+      <div id="signal-panel" class="hidden" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:12px">
+        <p class="opt" style="margin:0 0 8px">每日收盘后扫描该策略的入场/出场信号（T+1 参考，不构成投资建议；隐含保存策略入库）。扫描范围：</p>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+          <label class="radio-inline"><input type="radio" name="sig-scope" value="last_run_universe" checked> 本次测试范围</label>
+          <label class="radio-inline"><input type="radio" name="sig-scope" value="sector"> 指定板块</label>
+          <label class="radio-inline"><input type="radio" name="sig-scope" value="all_a"> 全范围股票</label>
+          <span id="sig-sector-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="sig-univ-group" style="width:auto"></select>
+            <select id="sig-univ-key" style="width:auto"></select>
+          </span>
+          <button class="btn-sm" id="btn-signal-confirm" style="background:var(--accent);color:#fff;border-color:var(--accent)">开启信号监控</button>
+        </div>
+      </div>
+    </div>
+
     <!-- TODO(M4 OSS)：报告文件下载（明细走 OSS 直传） -->
     <div class="panel hidden" id="download-card"><a class="btn" id="btn-download">下载报告</a></div>
     <p><a href="/saas/">← 返回我的回测</a></p>
@@ -635,6 +659,7 @@ async function poll(){
   if (chart.dates && chart.equity) renderMain(chart);
   else empty('chart-main');
   initReplay(chart);
+  initResultActions(data, chart);
   if (!SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
   renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
   renderFees(chart.fees_summary || null, chart.meta || null);
@@ -698,6 +723,89 @@ function mountReplay(d){
     chartEl: document.getElementById('chart-main'),  // 接管原容器
     metricsEl: document.getElementById('replay-metrics'),
     eventsEl: document.getElementById('replay-events'),
+  });
+}
+
+// --- 结果页操作卡（QRE-SAAS-RESULT-ACTIONS 2026-10-05）：保存入库 / 提示交易信号 ---
+async function initResultActions(jobData, chart){
+  // 游客不显示（结果次日清空无资产可存，现有游客引导条已承担注册引导）
+  if (!SAAS_BYPASS && !saasToken()) return;
+  const job = jobData.job || jobData;  // /api/saas/jobs/<id> 包 {ok, job}
+  const sid = job.strategy_id;
+  if (!sid) return;
+  const box = document.getElementById('box-actions');
+  box.classList.remove('hidden');
+  const saveBtn = document.getElementById('btn-save-lib');
+  const statusEl = document.getElementById('action-status');
+  // 已保存状态回填
+  try {
+    const r = await apiFetch('/api/saas/strategies/' + sid);
+    const d = await r.json();
+    if (d.ok && d.strategy && d.strategy.in_library){
+      saveBtn.disabled = true;
+      saveBtn.textContent = '已保存到策略库 ✓';
+    }
+  } catch (e) { /* 静默 */ }
+  saveBtn.addEventListener('click', async () => {
+    saveBtn.disabled = true;
+    try {
+      const r = await apiFetch('/api/saas/strategies/' + sid + '/save', {json: {}});
+      const d = await r.json();
+      if (d.ok){ saveBtn.textContent = '已保存到策略库 ✓'; statusEl.innerHTML = '已入库，见 <a href="/saas/profile">个人信息 · 我的策略库</a>'; }
+      else { saveBtn.disabled = false; statusEl.textContent = d.error || '保存失败'; }
+    } catch (e) { saveBtn.disabled = false; }
+  });
+  // 信号面板
+  const panel = document.getElementById('signal-panel');
+  document.getElementById('btn-signal-open').addEventListener('click', () => {
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) loadSigUniverses();
+  });
+  document.querySelectorAll('input[name=sig-scope]').forEach(r => r.addEventListener('change', () => {
+    document.getElementById('sig-sector-row').style.display =
+      (document.querySelector('input[name=sig-scope]:checked').value === 'sector') ? 'inline-flex' : 'none';
+  }));
+  let sigGroups = null;
+  async function loadSigUniverses(){
+    if (sigGroups) return;
+    try {
+      const r = await apiFetch('/api/saas/universes');
+      const d = await r.json();
+      if (!d.ok) return;
+      sigGroups = d.groups;
+      document.getElementById('sig-univ-group').innerHTML =
+        sigGroups.map((g, i) => `<option value="${i}">${g.label}（${g.items.length}）</option>`).join('');
+      fillSigKeys();
+    } catch (e) { /* 静默 */ }
+  }
+  function fillSigKeys(){
+    const g = sigGroups[Number(document.getElementById('sig-univ-group').value)] || {items: []};
+    document.getElementById('sig-univ-key').innerHTML =
+      g.items.map((it, i) => `<option value="${i}">${it.key}（${it.count} 只）</option>`).join('');
+  }
+  document.getElementById('sig-univ-group').addEventListener('change', fillSigKeys);
+  document.getElementById('btn-signal-confirm').addEventListener('click', async () => {
+    const scopeType = document.querySelector('input[name=sig-scope]:checked').value;
+    const body = {enabled: true, scope_type: scopeType};
+    if (scopeType === 'sector'){
+      if (!sigGroups){ statusEl.textContent = '板块名单加载中，请稍候'; return; }
+      const g = sigGroups[Number(document.getElementById('sig-univ-group').value)];
+      const it = g && g.items[Number(document.getElementById('sig-univ-key').value)];
+      if (!it){ statusEl.textContent = '请选择板块'; return; }
+      body.scope_payload = {group: g.group, key: it.key};
+    }
+    // last_run_universe：云端自动取本次任务 codes 快照；all_a 无需 payload
+    const cfm = document.getElementById('btn-signal-confirm');
+    cfm.disabled = true;
+    try {
+      const r = await apiFetch('/api/saas/strategies/' + sid + '/watch', {json: body});
+      const d = await r.json();
+      if (d.ok){
+        panel.classList.add('hidden');
+        saveBtn.disabled = true; saveBtn.textContent = '已保存到策略库 ✓';  // 隐含入库
+        statusEl.innerHTML = '信号监控已开启，每日收盘后自动扫描。去 <a href="/saas/strategies/' + sid + '">策略详情</a> 管理，或到 <a href="/saas/signals">信号中心</a> 查看。';
+      } else { cfm.disabled = false; statusEl.textContent = d.error || '开启失败'; }
+    } catch (e) { cfm.disabled = false; }
   });
 }
 

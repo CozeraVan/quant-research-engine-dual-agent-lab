@@ -91,7 +91,7 @@ def _strategy(app, uid=1, name="s1"):
     engine = app.extensions["saas_engine"]
     with engine.begin() as conn:
         return conn.execute(
-            text("INSERT INTO strategies (user_id, name, yaml) VALUES (:u, :n, :y) RETURNING id"),
+            text("INSERT INTO strategies (user_id, name, yaml, in_library) VALUES (:u, :n, :y, true) RETURNING id"),
             {"u": uid, "n": name, "y": YAML_TEXT},
         ).scalar_one()
 
@@ -334,3 +334,28 @@ class TestScanScript:
         # 空信号：条件成立但不在信号日 / 恒假表达式
         assert compute_signals(panel, "close > 1000", d) == []
         assert compute_signals(panel, "ema_5 > close", _dt.date(2026, 9, 27)) == []
+
+
+class TestWatchImpliesLibrary:
+    """QRE-SAAS-RESULT-ACTIONS：开启交易信号隐含保存入库（watch 依赖策略持久化）。"""
+
+    def test_watch_marks_in_library(self, client, app):
+        headers = _user(app)
+        # 提交回测建行不入库
+        r = client.post("/api/saas/jobs", json={
+            "yaml": "signal:\n  entry: 'true'\n", "kind": "smoke",
+            "params": {"codes": ["000001"], "start": "2025-01-01", "end": "2025-06-01"},
+            "name": "watch-implies"}, headers=headers).get_json()
+        sid = r["strategy_id"]
+        assert client.get("/api/saas/strategies", headers=headers).get_json()["strategies"] == []
+        d = client.post(f"/api/saas/strategies/{sid}/watch", json={"enabled": True},
+                        headers=headers).get_json()
+        assert d["ok"]
+        lst = client.get("/api/saas/strategies", headers=headers).get_json()
+        assert len(lst["strategies"]) == 1 and lst["strategies"][0]["id"] == sid
+
+    def test_save_endpoint_auth_and_404(self, client, app):
+        assert client.post("/api/saas/strategies/1/save", json={}).status_code == 401
+        headers = _user(app)
+        assert client.post("/api/saas/strategies/999/save", json={},
+                           headers=headers).status_code == 404

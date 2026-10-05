@@ -464,13 +464,16 @@ def _ensure_strategy_asset_columns(engine: Engine) -> None:
         return
     # information_schema 先查再 ALTER（ECS strategies 表 owner 是 postgres，同
     # workers 表踩坑）；存量推断：nl_text 非空 → nl，否则 → yaml。
+    # QRE-SAAS-RESULT-ACTIONS（2026-10-05）：in_library 旗标——提交回测建行不入库，
+    # 显式保存/建 watch 才进策略库；存量行 backfill true（它们本就在库）。
     with engine.begin() as conn:
         existing = {
             r[0]
             for r in conn.execute(
                 text(
                     "SELECT column_name FROM information_schema.columns "
-                    "WHERE table_name = 'strategies' AND column_name IN ('entry_mode', 'wizard_state')"
+                    "WHERE table_name = 'strategies' "
+                    "AND column_name IN ('entry_mode', 'wizard_state', 'in_library')"
                 )
             )
         }
@@ -478,6 +481,10 @@ def _ensure_strategy_asset_columns(engine: Engine) -> None:
             conn.execute(text("ALTER TABLE strategies ADD COLUMN IF NOT EXISTS entry_mode TEXT"))
         if "wizard_state" not in existing:
             conn.execute(text("ALTER TABLE strategies ADD COLUMN IF NOT EXISTS wizard_state JSONB"))
+        if "in_library" not in existing:
+            conn.execute(text(
+                "ALTER TABLE strategies ADD COLUMN IF NOT EXISTS in_library BOOL NOT NULL DEFAULT false"))
+            conn.execute(text("UPDATE strategies SET in_library = true"))  # 存量本就在库
         conn.execute(text(
             "UPDATE strategies SET entry_mode = "
             "CASE WHEN nl_text IS NOT NULL AND btrim(nl_text) <> '' THEN 'nl' ELSE 'yaml' END "
@@ -1003,7 +1010,7 @@ def create_saas_app() -> Flask:
                     "SELECT s.id, s.name, s.entry_mode, s.created_at, s.updated_at, "
                     "count(j.id) AS job_count, max(j.created_at) AS last_used_at "
                     "FROM strategies s LEFT JOIN jobs j ON j.strategy_id = s.id "
-                    "WHERE s.user_id = :uid "
+                    "WHERE s.user_id = :uid AND s.in_library "
                     "GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 200"
                 ),
                 {"uid": uid},
@@ -1055,7 +1062,7 @@ def create_saas_app() -> Flask:
         _ensure_strategy_asset_columns(engine)
         with engine.connect() as conn:
             row = conn.execute(
-                text("SELECT id, name, yaml, nl_text, entry_mode, wizard_state, created_at, updated_at "
+                text("SELECT id, name, yaml, nl_text, entry_mode, wizard_state, in_library, created_at, updated_at "
                      "FROM strategies WHERE id = :id AND user_id = :uid"),
                 {"id": strategy_id, "uid": uid},
             ).mappings().first()
@@ -1073,7 +1080,7 @@ def create_saas_app() -> Flask:
         _ensure_strategy_asset_columns(engine)
         with engine.connect() as conn:
             row = conn.execute(
-                text("SELECT id, name, yaml, nl_text, entry_mode, wizard_state, created_at, updated_at "
+                text("SELECT id, name, yaml, nl_text, entry_mode, wizard_state, in_library, created_at, updated_at "
                      "FROM strategies WHERE id = :id AND user_id = :uid"),
                 {"id": strategy_id, "uid": uid},
             ).mappings().first()
@@ -1155,6 +1162,11 @@ def create_saas_app() -> Flask:
             st = _get_owned_strategy(conn, strategy_id, uid)
             if st is None:
                 return jsonify({"ok": False, "error": "策略不存在"}), 404
+            # 开启交易信号隐含保存策略入库（2026-10-05 用户拍板：watch 依赖策略持久化）
+            conn.execute(
+                text("UPDATE strategies SET in_library = true WHERE id = :sid"),
+                {"sid": strategy_id},
+            )
             tier_row = conn.execute(
                 text("SELECT tier FROM users WHERE id = :uid"), {"uid": uid}).first()
             pol = _get_policy(app, engine, str(tier_row.tier or "member") if tier_row else "member")
@@ -1353,19 +1365,39 @@ def create_saas_app() -> Flask:
             if existing is not None:
                 conn.execute(
                     text("UPDATE strategies SET yaml = :yaml, nl_text = :nl, entry_mode = :em, "
-                         "wizard_state = COALESCE(CAST(:ws AS jsonb), wizard_state), updated_at = now() "
+                         "wizard_state = COALESCE(CAST(:ws AS jsonb), wizard_state), "
+                         "in_library = true, updated_at = now() "  # 显式保存即入库
                          "WHERE id = :id"),
                     {"yaml": yaml_text, "nl": data.get("nl_text"), "em": entry_mode,
                      "ws": wizard_state, "id": existing.id},
                 )
                 return jsonify({"ok": True, "strategy_id": existing.id, "updated": True})
             sid = conn.execute(
-                text("INSERT INTO strategies (user_id, name, nl_text, yaml, entry_mode, wizard_state) "
-                     "VALUES (:uid, :name, :nl, :yaml, :em, CAST(:ws AS jsonb)) RETURNING id"),
+                text("INSERT INTO strategies (user_id, name, nl_text, yaml, entry_mode, wizard_state, in_library) "
+                     "VALUES (:uid, :name, :nl, :yaml, :em, CAST(:ws AS jsonb), true) RETURNING id"),
                 {"uid": uid, "name": name, "nl": data.get("nl_text"), "yaml": yaml_text,
                  "em": entry_mode, "ws": wizard_state},
             ).scalar_one()
         return jsonify({"ok": True, "strategy_id": sid, "updated": False})
+
+    @app.post("/api/saas/strategies/<int:strategy_id>/save")
+    def api_strategy_save_to_library(strategy_id: int) -> Any:
+        """QRE-SAAS-RESULT-ACTIONS（2026-10-05 用户拍板）：结果页「保存到我的策略库」——
+        把提交回测时自动建的策略行标记入库（幂等；提交回测不再自动入库）。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "游客结果次日清空，注册会员后可保存策略"}), 401
+        _ensure_strategy_asset_columns(engine)
+        with engine.begin() as conn:
+            row = conn.execute(
+                text("UPDATE strategies SET in_library = true, updated_at = now() "
+                     "WHERE id = :id AND user_id = :uid RETURNING id, in_library"),
+                {"id": strategy_id, "uid": uid},
+            ).mappings().first()
+        if row is None:
+            return jsonify({"ok": False, "error": "策略不存在"}), 404
+        return jsonify({"ok": True, "strategy_id": row["id"], "in_library": True})
 
     @app.post("/api/saas/strategies/<int:strategy_id>/rename")
     def api_strategy_rename(strategy_id: int) -> Any:
@@ -2832,6 +2864,7 @@ def create_saas_app() -> Flask:
         if err:
             return err
         return jsonify({"ok": True, "job_id": job_id,
+                        "strategy_id": row["strategy_id"],
                         "strategy_name": row["strategy_name"],
                         "summary": _jsonable(row["result_summary"]),
                         "data_until": _jsonable(row["result_data_until"])})

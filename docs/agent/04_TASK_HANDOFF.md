@@ -2,7 +2,40 @@
 
 ## Task ID
 
-QRE-SAAS-TIER-BETA-RELAX (内测期两层权限调整：游客 10 只/10 年/随机补齐，注册用户全放开)
+QRE-SAAS-RESULT-ACTIONS (CR-2026-10-05：结果页显式入库 + 交易信号入口；策略库语义纠偏)
+
+## Current Status
+
+DONE (implementation; `-k saas` 237 passed（235 + 2 新增）零回归；staging 三态 +
+游客态双端实测通过；awaiting git finalization 后部署；ECS 需手工 apply in_library 列)
+
+## Task Note
+
+- 核心语义（用户原话）：没超额收益的策略不该进策略库。现状是 api_create_job 提交即
+  upsert 且列表全量显示 → 改为提交建行不入库。
+- 约束与方案：jobs.strategy_id NOT NULL REFERENCES strategies(id)——提交必须建行
+  （FK + 记录页展示），故加 `in_library BOOL DEFAULT false` 旗标：提交 upsert 不动
+  旗标；策略库列表只显示 in_library=true；详情/回填不受限（job 关联行可读）。
+  存量行 backfill true（**DO 块只在列不存在时迁移一次**——幂等 apply 不得翻回
+  后来的未保存行，cloud_schema.sql 与应用层 ensure 同口径）。
+- 后端：POST /api/saas/strategies/<id>/save（幂等置库，401/404）；POST watch
+  隐含置 in_library=true（用户决策：信号依赖策略持久化）；/api/results/<id>/summary
+  补 strategy_id（结果页轮询走的是它，不是 /api/saas/jobs/<id>——探针抓出的接线点）。
+- 前端 job.html 结果页末尾「下一步」卡：「保存到我的策略库」（已保存回填置灰
+  ✓）+「提示交易信号」面板（三选一：本次测试范围/指定板块二级菜单（复用
+  /api/saas/universes）/全范围股票 → POST watch 三 scope_type）；游客整卡隐藏
+  （现有游客引导条承担注册引导）。
+- 测试：test_gui_saas.py 提交入库测试重写（提交后列表空/详情可读/保存后入库幂等/
+  FK 禁删不变）；test_saas_signals.py +2（watch 隐含入库、save 401/404）；
+  直插 helper 补 in_library=true；模板断言 +4（操作卡三要素）。
+- 验证（staging Playwright 全实跑）：未保存态→点保存→「已保存 ✓」disabled+
+  链接提示；信号面板三 scope + 板块二级菜单（7 组/31 项）；开启 sector watch
+  落库正确且隐含入库；游客 375 操作卡隐藏零横滚；桌面+移动截图
+  .tmp/mobile-audit/{desktop-ra-saved,desktop-ra-panel,m375-ra-actions,m375-ra-guest}.png。
+
+---
+
+## Archive: QRE-SAAS-TIER-BETA-RELAX (内测期两层权限调整：游客 10 只/10 年/随机补齐，注册用户全放开)
 
 ## Current Status
 

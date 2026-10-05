@@ -12,7 +12,15 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-TIER-BETA-RELAX (DONE 已部署 — 内测期两层权限调整（用户 2026-10-05 拍板）：
+QRE-SAAS-RESULT-ACTIONS (进行中→DONE 待部署 — CR-2026-10-05 结果页显式入库+信号入口：
+核心语义=没超额收益的策略不进策略库；jobs FK 约束下用 strategies.in_library 旗标
+（提交建行不入库，显式保存/建 watch 才入库；存量一次性 backfill true）；
+结果页末尾「下一步」卡（保存三态 + 信号面板三 scope）；游客整卡隐藏；
+/api/results/<id>/summary 补 strategy_id（轮询走它）；测试 +2 + 断言 4，
+`-k saas` 237 passed 零回归，staging 双端实测通过；站立批准有效 → commit+push+
+ECS 部署+手工 apply in_library 列)
+
+上一任务：QRE-SAAS-TIER-BETA-RELAX (DONE 已部署 — 内测期两层权限调整（用户 2026-10-05 拍板）：
 游客 10 只随机补齐（云端 codes_auto_fill 标记 + worker fill_guest_codes）/近 10 年/
 随机 N≤10，每日 1 次与次日清空不变；member/paid 三值全 0 不限；tier_policies 种子
 不随代码更新的运维坑登记 19 号文档；测试重写+worker +4，`-k saas` 235 passed 零回归；
