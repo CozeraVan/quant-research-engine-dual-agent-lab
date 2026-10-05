@@ -12,7 +12,7 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-RESULT-ACTIONS (进行中→DONE 待部署 — CR-2026-10-05 结果页显式入库+信号入口：
+QRE-SAAS-RESULT-ACTIONS (DONE 已部署 — CR-2026-10-05 结果页显式入库+信号入口：
 核心语义=没超额收益的策略不进策略库；jobs FK 约束下用 strategies.in_library 旗标
 （提交建行不入库，显式保存/建 watch 才入库；存量一次性 backfill true）；
 结果页末尾「下一步」卡（保存三态 + 信号面板三 scope）；游客整卡隐藏；
