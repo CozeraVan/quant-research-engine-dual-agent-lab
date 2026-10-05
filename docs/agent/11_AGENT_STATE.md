@@ -12,12 +12,13 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-TIER-BETA-RELAX (进行中→DONE 待部署 — 内测期两层权限调整（用户 2026-10-05 拍板）：
+QRE-SAAS-TIER-BETA-RELAX (DONE 已部署 — 内测期两层权限调整（用户 2026-10-05 拍板）：
 游客 10 只随机补齐（云端 codes_auto_fill 标记 + worker fill_guest_codes）/近 10 年/
 随机 N≤10，每日 1 次与次日清空不变；member/paid 三值全 0 不限；tier_policies 种子
-不随代码更新的运维坑登记 19 号文档（须手工 UPDATE 生产库三行）；测试重写+worker +4，
-`-k saas` 235 passed 零回归；staging 8092（bypass=0 游客态）双端实测通过；
-站立批准有效 → commit+push+ECS 部署+psql UPDATE tier_policies)
+不随代码更新的运维坑登记 19 号文档；测试重写+worker +4，`-k saas` 235 passed 零回归；
+staging 8092（bypass=0 游客态）双端实测通过；已 push（4b1c083）+ ECS 部署 +
+生产库 tier_policies 三行 UPDATE 验证 + 生产游客探针 job 43（3 自选+补齐，10 年区间）
+completed、8 只不同股票成交证明补齐执行；本机 qre-saas-worker 已重启加载新 runner)
 
 ## 挂起 backlog（用户确认知悉，非进行中）
 
