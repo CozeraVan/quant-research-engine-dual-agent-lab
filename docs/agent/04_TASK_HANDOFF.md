@@ -2,7 +2,32 @@
 
 ## Task ID
 
-QRE-SHARED-COST-BREAKDOWN (shared 模式交易费用拆分补齐——交易磨损卡佣金/印花税 0 值 bug)
+QRE-NL-FACTOR-PIPELINE (CR-2026-10-09：NL 编译因子名四层防线——MACD signal 编造 bug)
+
+## Current Status
+
+DONE (implementation; **未 commit**——用户明确本轮只本机实现+测试，commit 等批准；
+`-k saas` 237 passed 零回归 + 新增 12 全绿；顺手修了一个日期过期 flake)
+
+## Task Note
+
+- 四层全部落地（细节见 change_requests/CR-2026-10-09_nl_factor_pipeline.md）：
+  ①configs/factor_catalog_llm.txt 真实目录快照（559 列压缩 12 行，
+  gen_factor_catalog_llm.py 可再生成）注入 build_system_prompt + 硬约束；
+  ②configs/factor_aliases.json + auto_fix_column 第 0 层别名变体；
+  ③compile_nl 修复回路（_fixup_prompt 回喂，最多 2 次，fix_attempts 透出）；
+  ④format_unresolved_hint 补「申请新因子」指引（前端 missing_factors 弹层链路不变）。
+- 测试 tests/test_nl_factor_pipeline.py +12 全绿；用户报告案例
+  macd_signal_12_26_9→macds_12_26_9 有精确断言（test_auto_fix_macd_signal_to_macds）。
+- 顺手修 flake：test_saas_signals 信号日期硬编码 2026-10-01/02 在 10-09 过期
+  （recent_signals_7d 窗口）→ 改相对今天生成。
+- **未 commit**：工作区含全部改动（git status 见汇报）；ECS 部署待 commit 批准后
+  下一轮做（configs/ 快照入仓库即上 ECS，无需数据库迁移）。
+- 注意：catalog 快照是本地因子库口径，因子库新增列后需重跑生成脚本再提交。
+
+---
+
+## Archive: QRE-SHARED-COST-BREAKDOWN (shared 模式交易费用拆分补齐——交易磨损卡佣金/印花税 0 值 bug)
 
 ## Current Status
 

@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
 
 # 常用已落库因子列（与 strategies/compiler._INDICATOR_CATALOG 命名约定一致：
@@ -65,6 +66,47 @@ def _normalize(name: str) -> str:
     return name.lower().replace("_", "")
 
 
+# --- 别名字典（CR-2026-10-09 第 2 层；configs/factor_aliases.json 可维护） ---
+
+_ALIASES_CACHE: list[dict[str, str]] | None = None
+
+
+def load_factor_aliases(path: str | Path | None = None) -> list[dict[str, str]]:
+    """读别名字典（进程内缓存）。文件缺失/损坏返回空表（不影响主流程）。"""
+    global _ALIASES_CACHE
+    if path is None and _ALIASES_CACHE is not None:
+        return _ALIASES_CACHE
+    import json
+
+    target = Path(path) if path else (
+        Path(__file__).resolve().parents[3] / "configs" / "factor_aliases.json"
+    )
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+        aliases = [a for a in data.get("aliases", []) if a.get("from") and a.get("to")]
+    except (OSError, ValueError, AttributeError):
+        aliases = []
+    if path is None:
+        _ALIASES_CACHE = aliases
+    return aliases
+
+
+def alias_variants(name: str, aliases: list[dict[str, str]] | None = None) -> list[str]:
+    """按别名表生成变体（每条别名最多替换一次，保序去重，不含原名）。
+
+    例：macd_signal_12_26_9 →（signal→s）→ macd_s_12_26_9 → 归一化后与
+    macds_12_26_9 等价。
+    """
+    out: list[str] = []
+    for a in aliases if aliases is not None else load_factor_aliases():
+        src, dst = a["from"], a["to"]
+        if src in name:
+            variant = name.replace(src, dst, 1)
+            if variant != name and variant not in out:
+                out.append(variant)
+    return out
+
+
 def _levenshtein(a: str, b: str) -> int:
     if a == b:
         return 0
@@ -101,8 +143,10 @@ def suggest_similar_columns(
 
 
 def auto_fix_column(column: str, candidates: list[str] | set[str]) -> str | None:
-    """保守自动纠正：仅以下三种无歧义情形返回替换列名，否则 None。
+    """保守自动纠正：仅以下情形返回替换列名，否则 None。
 
+    0. 别名变体（CR-2026-10-09 第 2 层）：按 configs/factor_aliases.json 替换后
+       归一化命中唯一候选，如 ``macd_signal_12_26_9``→``macds_12_26_9``；
     1. 归一化后完全等价（大小写/下划线差异），如 ``rsi14``→``rsi_14``；
     2. 唯一候选的归一化编辑距离为 1，且次优距离 ≥3（明显更接近）；
     3. 唯一前缀匹配（归一化后候选以输入为前缀），如 ``macd``→``macd_12_26_9``
@@ -112,6 +156,14 @@ def auto_fix_column(column: str, candidates: list[str] | set[str]) -> str | None
     if not pool or column in pool:
         return None
     norm = _normalize(column)
+
+    # 0. 别名变体优先（命名同义词归一，先于编辑距离猜测）
+    alias_hits: list[str] = []
+    for variant in alias_variants(column):
+        alias_hits.extend(c for c in pool if _normalize(c) == _normalize(variant))
+    alias_hits = sorted(set(alias_hits))
+    if len(alias_hits) == 1:
+        return alias_hits[0]
 
     normalized_equal = [c for c in pool if _normalize(c) == norm]
     if normalized_equal:
@@ -250,4 +302,6 @@ def format_unresolved_hint(unresolved: list[dict[str, Any]]) -> str:
             lines.append(f"- {label}；库中暂无相似列")
     common = "、".join(t.rsplit(".", 1)[-1] for t in COMMON_FACTOR_TARGETS[:8])
     lines.append(f"常用已落库因子参考：{common} 等（完整目录见「新增策略」页因子目录）")
+    # CR-2026-10-09 第 4 层兜底：指引申请新增因子入口
+    lines.append("库中确实没有需要的因子？点下方「申请新因子」提交需求，入库后再试。")
     return "\n".join(lines)

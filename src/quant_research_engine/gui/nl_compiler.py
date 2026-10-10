@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from quant_research_engine.gui.engine import validate_yaml
+from quant_research_engine.gui.factor_correction import (
+    format_corrections_note,
+    format_unresolved_hint,
+)
 from quant_research_engine.strategies.factor_request_queue import (
     DEFAULT_QUEUE_PATH,
     build_requests_for_strategy,
@@ -143,13 +147,27 @@ evaluation:
 
 
 def build_system_prompt() -> str:
-    """System prompt: DSL doc + indicator catalog + 常用已落库列 + few-shot examples."""
+    """System prompt: DSL doc + 真实因子目录快照（有则用）+ indicator catalog +
+    常用已落库列 + few-shot examples。
+
+    CR-2026-10-09 第 1 层：注入 configs/factor_catalog_llm.txt 的真实目录
+    （factors.<表>.<列> 全量压缩清单），并加硬约束「factor_fields 只能引用
+    清单内的表.列，禁止发明」。快照缺失（本地开发未生成）时回退旧口径。"""
+    from quant_research_engine.gui.factor_catalog_llm import load_catalog_text
     from quant_research_engine.gui.factor_correction import COMMON_FACTOR_TARGETS
     from quant_research_engine.strategies.compiler import _INDICATOR_CATALOG
 
-    catalog_items = sorted(f"{name}: {category}" for name, (category, _) in _INDICATOR_CATALOG.items())
+    real_catalog = load_catalog_text()
     common_items = "；".join(COMMON_FACTOR_TARGETS)
-    return _DSL_DOC + "；".join(catalog_items) + f"\n常用已落库列：{common_items}\n" + _FEW_SHOT
+    if real_catalog is not None:
+        catalog_block = (
+            "\n真实因子库可用列（factor_fields 的 target 必须逐字引用以下 表.列，"
+            "禁止发明或改写字母）：\n" + real_catalog
+        )
+    else:
+        catalog_items = sorted(f"{name}: {category}" for name, (category, _) in _INDICATOR_CATALOG.items())
+        catalog_block = "；".join(catalog_items)
+    return _DSL_DOC + catalog_block + f"\n常用已落库列：{common_items}\n" + _FEW_SHOT
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +278,74 @@ def _enqueue_missing_factors(
 # ---------------------------------------------------------------------------
 
 
+# 校验+自动修复回路（CR-2026-10-09 第 3 层）：缺因子时把缺失名与库内相近
+# 候选回喂 LLM 重试，用户无感
+MAX_FIX_RETRIES = 2
+
+
+def _fixup_prompt(description: str, bad_yaml: str, hints: list[dict[str, Any]]) -> str:
+    """缺因子重试提示：原始需求 + 上次输出 + 缺失名与库内候选。"""
+    lines = [
+        "用户需求：" + description,
+        "",
+        "你上次输出的 YAML 引用了因子库中不存在的列：",
+    ]
+    for h in hints:
+        label = f"{h['table']}.{h['column']}"
+        if h.get("suggestions"):
+            lines.append(f"- {label}（库内相近候选：{'、'.join(h['suggestions'])}）")
+        else:
+            lines.append(f"- {label}（库内无相近列，请改用其他已落库因子表达）")
+    lines += [
+        "",
+        "上次输出：",
+        bad_yaml,
+        "",
+        "请只输出修正后的完整 YAML（只改 factor_fields 引用为真实存在的列，其余不变；"
+        "禁止编造列名）。",
+    ]
+    return "\n".join(lines)
+
+
+def _validate_and_correct(
+    raw: str,
+    lookup: Callable[[str], set[str]],
+) -> dict[str, Any]:
+    """一次输出的处理：剥围栏 → YAML 校验 → factor_correction 纠错 → 缺失判定。
+
+    返回 {ok, error?, yaml, mapping?, corrections, unresolved, missing}。
+    """
+    yaml_text = strip_yaml_fence(raw)
+    validation = validate_yaml(yaml_text)
+    if not validation["valid"]:
+        return {
+            "ok": False, "fatal": True, "yaml": yaml_text,
+            "error": f"LLM 输出的 YAML 未通过策略规格校验：{validation['error']}。可编辑下方草稿修正后使用。",
+            "code": "invalid_yaml", "corrections": [], "unresolved": [], "missing": [],
+        }
+    import yaml as _yaml
+
+    from quant_research_engine.gui.factor_correction import correct_factor_fields
+
+    mapping = _yaml.safe_load(yaml_text)
+    report = correct_factor_fields(mapping, lookup)
+    corrections = report["corrections"]
+    unresolved = report["unresolved"]
+    if corrections:
+        yaml_text = _yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False)
+        revalidation = validate_yaml(yaml_text)
+        if not revalidation["valid"]:  # 兜底：纠错产物异常则退回原 YAML 与原名
+            yaml_text = strip_yaml_fence(raw)
+            mapping = _yaml.safe_load(yaml_text)
+            report = correct_factor_fields(mapping, lookup)
+            corrections = []
+            unresolved = report["unresolved"]
+    spec = StrategySpec.from_mapping(mapping)
+    missing = find_missing_factor_columns(spec, lookup)
+    return {"ok": not missing, "yaml": yaml_text, "corrections": corrections,
+            "unresolved": unresolved, "missing": missing}
+
+
 def compile_nl(
     description: str,
     *,
@@ -272,14 +358,16 @@ def compile_nl(
     """Compile a natural-language strategy description to a low-level YAML.
 
     Returns one of:
-      {"ok": True, "yaml": str, "warnings": [str, ...], "corrections": 可选}
+      {"ok": True, "yaml": str, "warnings": [str, ...], "corrections": 可选,
+       "fix_attempts": 可选（修复重试次数，>0 表示走了回喂回路）}
       {"ok": False, "code": "not_configured", "error": 中文}
       {"ok": False, "code": "llm_error"|"invalid_yaml"|"missing_factors",
        "error": 中文（含候选因子提示）, "yaml": 可选草稿,
        "missing_factors": [...], "suggestions": [...], "corrections": 可选}
 
-    缺因子时先经 factor_correction 自动纠错层：无歧义相似名自动替换并在
-    响应标注「已自动纠正 X→Y」；无可靠匹配则附 Top-N 候选与常用因子清单。
+    四层防线（CR-2026-10-09）：①真实因子目录注入 prompt；②别名字典归一；
+    ③缺因子回喂 LLM 重试（最多 MAX_FIX_RETRIES 次，用户无感）；④兜底报错
+    附候选与申请新增因子指引。
     """
     description = (description or "").strip()
     if not description:
@@ -289,78 +377,79 @@ def compile_nl(
     if config is None:
         return {"ok": False, "code": "not_configured", "error": NOT_CONFIGURED_ERROR}
 
-    try:
-        raw = call_llm(description, config, http_post=http_post)
-    except Exception as exc:
-        return {"ok": False, "code": "llm_error", "error": f"LLM 调用失败：{exc}"}
-
-    yaml_text = strip_yaml_fence(raw)
-
-    validation = validate_yaml(yaml_text)
-    if not validation["valid"]:
-        return {
-            "ok": False,
-            "code": "invalid_yaml",
-            "error": f"LLM 输出的 YAML 未通过策略规格校验：{validation['error']}。可编辑下方草稿修正后使用。",
-            "yaml": yaml_text,
-        }
-
-    # 因子存在性检查（DB 不可用时跳过并提示）；缺因子先走自动纠错层
-    warnings: list[str] = []
-    corrections: list[dict[str, str]] = []
-    unresolved_hints: list[dict[str, Any]] = []
     lookup = column_lookup if column_lookup is not None else _default_column_lookup(db_url)
+    warnings: list[str] = []
     if lookup is None:
         warnings.append("因子库不可用，跳过因子存在性检查（提交回测时仍会校验）")
-    else:
+
+    # 修复回路：LLM 输出 → 校验+纠错 → 缺因子则回喂重试（仅 lookup 可用时）
+    prompt = description
+    fix_attempts = 0
+    outcome: dict[str, Any] | None = None
+    for attempt in range(1 + (MAX_FIX_RETRIES if lookup is not None else 0)):
+        try:
+            raw = call_llm(prompt, config, http_post=http_post)
+        except Exception as exc:
+            return {"ok": False, "code": "llm_error", "error": f"LLM 调用失败：{exc}"}
+        outcome = _validate_and_correct(raw, lookup) if lookup is not None else None
+        if lookup is None:
+            yaml_text = strip_yaml_fence(raw)
+            validation = validate_yaml(yaml_text)
+            if not validation["valid"]:
+                return {
+                    "ok": False, "code": "invalid_yaml", "yaml": yaml_text,
+                    "error": f"LLM 输出的 YAML 未通过策略规格校验：{validation['error']}。可编辑下方草稿修正后使用。",
+                }
+            outcome = {"ok": True, "yaml": yaml_text, "corrections": [], "unresolved": [], "missing": []}
+            break
+        assert outcome is not None
+        if outcome.get("fatal"):  # YAML 结构错误不回喂重试（与因子无关）
+            return {"ok": False, "code": outcome["code"], "error": outcome["error"],
+                    "yaml": outcome["yaml"]}
+        if outcome["ok"]:
+            break
+        if attempt < MAX_FIX_RETRIES:
+            fix_attempts += 1
+            prompt = _fixup_prompt(description, outcome["yaml"], outcome["unresolved"])
+
+    assert outcome is not None
+    yaml_text = outcome["yaml"]
+    corrections = outcome["corrections"]
+    unresolved_hints = outcome["unresolved"]
+    missing = outcome["missing"]
+
+    if missing:
         import yaml as _yaml
 
-        from quant_research_engine.gui.factor_correction import (
-            correct_factor_fields,
-            format_corrections_note,
-            format_unresolved_hint,
-        )
-
-        mapping = _yaml.safe_load(yaml_text)
-        report = correct_factor_fields(mapping, lookup)
-        corrections = report["corrections"]
-        unresolved_hints = report["unresolved"]
+        spec = StrategySpec.from_mapping(_yaml.safe_load(yaml_text))
+        _enqueue_missing_factors(spec, missing, queue_path=queue_path or DEFAULT_QUEUE_PATH)
+        names = "、".join(f"{f.logical_name}({f.qualified_table}.{f.source_column})" for f in missing)
+        error = f"该策略已搁置：缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。"
+        if unresolved_hints:
+            error += "\n" + format_unresolved_hint(unresolved_hints)
         if corrections:
-            yaml_text = _yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False)
-            revalidation = validate_yaml(yaml_text)
-            if not revalidation["valid"]:  # 兜底：纠错产物异常则退回原 YAML 与原名
-                yaml_text = strip_yaml_fence(raw)
-                mapping = _yaml.safe_load(yaml_text)
-                report = correct_factor_fields(mapping, lookup)
-                corrections = []
-                unresolved_hints = report["unresolved"]
-
-        spec = StrategySpec.from_mapping(mapping)
-        missing = find_missing_factor_columns(spec, lookup)
-        if missing:
-            _enqueue_missing_factors(spec, missing, queue_path=queue_path or DEFAULT_QUEUE_PATH)
-            names = "、".join(f"{f.logical_name}({f.qualified_table}.{f.source_column})" for f in missing)
-            error = f"该策略已搁置：缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。"
-            if unresolved_hints:
-                error += "\n" + format_unresolved_hint(unresolved_hints)
-            if corrections:
-                error += "\n" + format_corrections_note(corrections)
-            result: dict[str, Any] = {
-                "ok": False,
-                "code": "missing_factors",
-                "error": error,
-                "yaml": yaml_text,
-                "missing_factors": [f.logical_name for f in missing],
-                "suggestions": unresolved_hints,
-            }
-            if corrections:
-                result["corrections"] = corrections
-            return result
+            error += "\n" + format_corrections_note(corrections)
+        result: dict[str, Any] = {
+            "ok": False,
+            "code": "missing_factors",
+            "error": error,
+            "yaml": yaml_text,
+            "missing_factors": [f.logical_name for f in missing],
+            "suggestions": unresolved_hints,
+        }
+        if corrections:
+            result["corrections"] = corrections
+        if fix_attempts:
+            result["fix_attempts"] = fix_attempts
+        return result
 
     result = {"ok": True, "yaml": yaml_text}
     if corrections:
         warnings.append(format_corrections_note(corrections))
         result["corrections"] = corrections
+    if fix_attempts:
+        result["fix_attempts"] = fix_attempts
+        warnings.append(f"因子引用经 {fix_attempts} 轮自动修正后通过校验")
     if warnings:
         result["warnings"] = warnings
     return result

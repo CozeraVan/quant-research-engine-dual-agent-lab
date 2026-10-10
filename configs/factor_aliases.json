@@ -1,0 +1,12 @@
+{
+  "_comment": "因子命名别名表（CR-2026-10-09 NL 编译四层方案 第 2 层）：LLM/用户常见同义写法 → 库内实际命名组件。校正在归一化（小写+去下划线）后进行：把别名片段子串替换为库内写法再比对。有序应用，每条最多替换一次。",
+  "aliases": [
+    {"from": "macd_signal", "to": "macds", "note": "MACD signal 线：LLM 常写 macd_signal，库内为 macds"},
+    {"from": "macd_sig", "to": "macds", "note": "同上缩写"},
+    {"from": "signal", "to": "s", "note": "通用 signal 后缀（如 kdj_signal→…s 系列）"},
+    {"from": "dea", "to": "s", "note": "MACD/KDJ 的 DEA 线 = signal 线"},
+    {"from": "macd_hist", "to": "macdh", "note": "MACD 柱：hist→h"},
+    {"from": "macd_histogram", "to": "macdh", "note": "同上全称"},
+    {"from": "hist", "to": "h", "note": "通用 hist 后缀"}
+  ]
+}

@@ -259,23 +259,28 @@ class TestSignalCenter:
                     json={"enabled": True, "scope_type": "custom",
                           "scope_payload": {"codes": ["000001"]}}, headers=headers)
         wid = client.get("/api/worker/watches", headers=WORKER_HEADERS).get_json()["watches"][0]["watch_id"]
+        # 日期相对今天（7 日窗口测试防过期 flake；2026-10-09 曾因此挂）
+        from datetime import date, timedelta
+        today = date.today()
+        d1 = (today - timedelta(days=5)).isoformat()
+        d2 = (today - timedelta(days=1)).isoformat()
         events = [
-            {"watch_id": wid, "trade_date": "2026-10-01", "ts_code": "000001.SZ", "signal_type": "entry", "price": 10.5},
-            {"watch_id": wid, "trade_date": "2026-10-02", "ts_code": "600519.SH", "signal_type": "exit", "price": 1700.0},
+            {"watch_id": wid, "trade_date": d1, "ts_code": "000001.SZ", "signal_type": "entry", "price": 10.5},
+            {"watch_id": wid, "trade_date": d2, "ts_code": "600519.SH", "signal_type": "exit", "price": 1700.0},
         ]
         client.post("/api/worker/signals", json={"events": events}, headers=WORKER_HEADERS)
-        return headers, sid
+        return headers, sid, d1, d2
 
     def test_list_filter_pagination(self, client, app):
-        headers, sid = self._seed_events(client, app)
+        headers, sid, _d1, _d2 = self._seed_events(client, app)
         d = client.get("/api/saas/signals", headers=headers).get_json()
         assert d["total"] == 2
         d = client.get("/api/saas/signals?signal_type=entry", headers=headers).get_json()
         assert d["total"] == 1 and d["items"][0]["ts_code"] == "000001.SZ"
         d = client.get("/api/saas/signals?ts_code=600519.SH", headers=headers).get_json()
         assert d["total"] == 1 and d["items"][0]["signal_type"] == "exit"
-        d = client.get("/api/saas/signals?date_from=2026-10-02", headers=headers).get_json()
-        assert d["total"] == 1
+        d = client.get(f"/api/saas/signals?date_from={_d2}", headers=headers).get_json()
+        assert d["total"] == 1  # date_from=较新的那天只剩 1 条
         d = client.get(f"/api/saas/signals?strategy_id={sid}&page_size=1&page=2",
                        headers=headers).get_json()
         assert d["total"] == 2 and len(d["items"]) == 1
@@ -283,7 +288,7 @@ class TestSignalCenter:
         assert client.get("/api/saas/signals", ).status_code == 401
 
     def test_unread_and_mark_read(self, client, app):
-        headers, _ = self._seed_events(client, app)
+        headers, _, _d1, _d2 = self._seed_events(client, app)
         d = client.get("/api/saas/signals/unread-count", headers=headers).get_json()
         assert d["unread"] == 2  # 从未读过 → 全部未读
         client.post("/api/saas/signals/mark-read", json={}, headers=headers)
@@ -291,7 +296,7 @@ class TestSignalCenter:
         assert d["unread"] == 0
 
     def test_detail_watch_fields(self, client, app):
-        headers, sid = self._seed_events(client, app)
+        headers, sid, _d1, _d2 = self._seed_events(client, app)
         det = client.get(f"/api/saas/strategies/{sid}/detail", headers=headers).get_json()
         assert det["watch"]["scope_type"] == "custom"
         assert det["recent_signals_7d"] == 2  # 信号日期 10-01/02 在最近 7 天内
