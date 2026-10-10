@@ -859,3 +859,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 内测期总原则拍板：仅游客/注册用户两层；注册开放全部功能权限，
   限制只落在并发与计算资源（R2/R3 槽位闸门体系）。
 - 不讨论层级结构/定价/结算（用户明确暂缓）。
+
+## 2026-10-11 NL 缺因子误拦修复（前端校验口径）
+- 现象：NL 编译后端修复（ff0e39e/92271e6）后，用户在前端跑「MACD(12,26,9)金叉…」仍弹「缺失因子：macd、macd_signal」。
+- 根因：saas/templates/new.html 提交前校验 `unknownYamlFactors()` 把 factor_fields 的**键名（别名）**当因子列名与目录比对；NL 编译合法地自定义别名（macd/macd_signal），被误拦。服务端编译接口实测正常（返回 macd_12_26_9/macds_12_26_9 真实列）。
+- 修法：校验口径改为「映射目标列」（冒号后引用值末段，如 factors.<table>.<col> → col）对 KNOWN_COLS（目录加载时收集的真实列名集合）；兜底别名本身在列名集合中也算合法（兼容向导旧 YAML）。编造列仍可拦截（node 验证：合法 YAML 放行，编造列 macd_signal_12_26_9 仍报缺）。
+- 范围：仅 saas/templates/new.html；lab.html 无同款前端校验（只透传服务端 missing_factors），无需改。
+- 测试：-k saas 237 passed。

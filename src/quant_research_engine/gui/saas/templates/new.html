@@ -459,7 +459,7 @@ $('#btn-factor-submit').addEventListener('click', async function(){
 });
 
 // ---------- 入口 2：快速向导（三级级联 + 两级条件组，逻辑同冻结版设计稿） ----------
-let FACTOR_OPTIONS = [], ALIAS_TARGET = {}, catalogReady = false;
+let FACTOR_OPTIONS = [], ALIAS_TARGET = {}, KNOWN_COLS = {}, catalogReady = false;
 async function loadFactorCatalog(){
   try {
     const resp = await apiFetch('/api/saas/factors');
@@ -470,6 +470,7 @@ async function loadFactorCatalog(){
         let alias = it.column, i = 2;
         while (ALIAS_TARGET[alias] && ALIAS_TARGET[alias] !== it.table + '.' + it.column){ alias = it.column + '_' + i; i++; }
         if (group.group !== 'market') ALIAS_TARGET[alias] = it.table + '.' + it.column;
+        KNOWN_COLS[it.column] = true;
         FACTOR_OPTIONS.push({value: alias, label: it.label, group: group.label, _table: it.table});
       });
     });
@@ -743,16 +744,25 @@ function prefill(){
 
 // ---------- 缺因子兜底校验（向导从目录选取理论上不会缺；目录加载失败或
 // 预览栏被手工改过的 YAML 也可能引用未知因子，提交前统一拦截） ----------
+// factor_fields 解析为 [{alias, targetCol}]：targetCol 取冒号后映射值的最后一段
+//（如 factors.stock_daily_momentum_close.macds_12_26_9 → macds_12_26_9）。
+// 校验口径是「映射的目标列存在于因子库」，而非别名本身——NL 编译会自定义
+// 别名（如 macd / macd_signal），按别名校验会把合法策略误拦（2026-10-11 修复）。
 function yamlFactorAliases(y){
   const m = y.match(/^\s*factor_fields:\s*\n((?:[ \t]+\S[^\n]*\n?)*)/m);
   if (!m) return [];
-  return m[1].split('\n').map(l => (l.match(/^[ \t]+([A-Za-z_]\w*)\s*:/) || [])[1]).filter(Boolean);
+  return m[1].split('\n').map(l => {
+    const kv = l.match(/^[ \t]+([A-Za-z_]\w*)\s*:\s*(\S+)/);
+    if (!kv) return null;
+    const targetCol = kv[2].split('.').pop().replace(/['"]/g, '');
+    return {alias: kv[1], targetCol};
+  }).filter(Boolean);
 }
 function unknownYamlFactors(y){
   if (!catalogReady) return [];  // 目录未加载不拦截（NL 编译路径已有服务端校验）
-  const known = {};
-  FACTOR_OPTIONS.forEach(o => { known[o.value] = true; });
-  return yamlFactorAliases(y).filter(a => !known[a]);
+  return yamlFactorAliases(y)
+    .filter(f => !KNOWN_COLS[f.targetCol] && !KNOWN_COLS[f.alias])
+    .map(f => f.alias + '（目标列 ' + f.targetCol + '）');
 }
 
 // ---------- 运行回测流水线 ----------
