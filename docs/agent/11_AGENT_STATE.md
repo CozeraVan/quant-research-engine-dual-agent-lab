@@ -17,7 +17,7 @@ QRE-NL-FACTOR-PIPELINE (DONE 实现完成、**未 commit 待用户批准** — C
 别名字典（factor_aliases.json + auto_fix_column 第 0 层）/compile_nl 修复回路
 （回喂最多 2 次，fix_attempts 透出）/兜底报错补申请新因子指引；测试 +12 全绿含
 macd_signal→macds 精确案例；顺手修信号测试日期 flake；`-k saas` 237 passed 零回归；
-commit 批准后再 push+ECS 部署（快照入仓库即生效，无 DB 迁移）)
+commit 批准后再 push+ECS 部署（快照入仓库即生效，无 DB 迁移）；2026-10-10 已部署 ff0e39e + 生产实测 hotfix（平铺目录 + 快照 lookup 回退）另 commit)
 
 上一任务：QRE-SHARED-COST-BREAKDOWN (DONE 已部署 — 交易磨损卡佣金/印花税 0 值 bug：
 shared.py 四路径改 calculate_cost_breakdown + lot 级组件分摊 + _trade_row 补 6 拆分列

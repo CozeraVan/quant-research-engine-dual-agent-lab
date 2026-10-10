@@ -24,6 +24,11 @@ DONE (implementation; **未 commit**——用户明确本轮只本机实现+测�
 - **未 commit**：工作区含全部改动（git status 见汇报）；ECS 部署待 commit 批准后
   下一轮做（configs/ 快照入仓库即上 ECS，无需数据库迁移）。
 - 注意：catalog 快照是本地因子库口径，因子库新增列后需重跑生成脚本再提交。
+- **2026-10-10 生产实测 hotfix（ff0e39e 后追加）**：①@{} 压缩语法 LLM 误读
+  （仍写 macd_signal_12_26_9）→ 目录改平铺全列名（559 列零歧义）；
+  ②ECS 无行情库 → lookup=None 纠错/重试层失效 → gen 脚本加写
+  factor_catalog_llm.json，_default_column_lookup 失败回退快照；
+  ③缺因子入队 OSError 兜底（ECS outputs 权限）。测试同步更新。
 
 ---
 

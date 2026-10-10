@@ -241,7 +241,9 @@ def call_llm(
 
 
 def _default_column_lookup(db_url: str | None = None) -> Callable[[str], set[str]] | None:
-    """Build a read-only schema column lookup from the market DB; None if unavailable."""
+    """Build a read-only schema column lookup from the market DB; DB 不可用时
+    回退因子目录快照（configs/factor_catalog_llm.json）——ECS 无行情库，
+    没有快照兜底纠错/重试层会整个失效（2026-10-10 生产实测发现）。"""
     try:
         from quant_research_engine.data.settings import DatabaseSettings
         from quant_research_engine.data.postgres import PostgresDataStore
@@ -252,7 +254,9 @@ def _default_column_lookup(db_url: str | None = None) -> Callable[[str], set[str
         store.ping()
         return make_schema_column_lookup(store)
     except Exception:
-        return None
+        from quant_research_engine.gui.factor_catalog_llm import catalog_column_lookup
+
+        return catalog_column_lookup()
 
 
 def _enqueue_missing_factors(
@@ -422,7 +426,10 @@ def compile_nl(
         import yaml as _yaml
 
         spec = StrategySpec.from_mapping(_yaml.safe_load(yaml_text))
-        _enqueue_missing_factors(spec, missing, queue_path=queue_path or DEFAULT_QUEUE_PATH)
+        try:
+            _enqueue_missing_factors(spec, missing, queue_path=queue_path or DEFAULT_QUEUE_PATH)
+        except OSError:
+            pass  # 队列文件不可写（如 ECS 权限）不阻塞报错主流程
         names = "、".join(f"{f.logical_name}({f.qualified_table}.{f.source_column})" for f in missing)
         error = f"该策略已搁置：缺因子 {names}，已加入补因子队列通知 indicators_tushare 项目。"
         if unresolved_hints:

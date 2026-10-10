@@ -160,7 +160,10 @@ def test_compile_missing_factors_enqueued(tmp_path):
     assert entry["status"] == "pending"
 
 
-def test_compile_db_unavailable_skips_factor_check():
+def test_compile_db_unavailable_falls_back_to_catalog_snapshot():
+    """2026-10-10 起：DB 不可用不再跳过检查——回退 configs/factor_catalog_llm.json
+    快照 lookup（ECS 无行情库，纠错/重试层照常工作）。有效 YAML 正常通过且无
+    「跳过因子存在性检查」警告。"""
     result = compile_nl(
         "x",
         env=_llm_env(),
@@ -169,7 +172,7 @@ def test_compile_db_unavailable_skips_factor_check():
         db_url="postgresql+psycopg:///definitely_not_exists_db",
     )
     assert result["ok"] is True
-    assert any("跳过因子存在性检查" in w for w in result["warnings"])
+    assert not any("跳过因子存在性检查" in w for w in result.get("warnings", []))
 
 
 # --- route ---

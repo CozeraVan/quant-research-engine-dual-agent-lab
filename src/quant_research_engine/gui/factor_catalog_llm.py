@@ -1,49 +1,36 @@
 """NL 编译专用真实因子目录快照（CR-2026-10-09 四层方案 第 1 层）。
 
 LLM 没有真实因子目录时凭记忆编造列名（如 macd_signal_12_26_9，库内实为
-macds_12_26_9）。本模块把 factors schema 全量列压缩成编译 prompt 用清单，
-落盘 configs/factor_catalog_llm.txt（入仓库，ECS 无库也能用；因子库更新后跑
-scripts/gen_factor_catalog_llm.py 重新生成）。
-
-压缩格式：按指标基名分组——``macd@{12_26_9|6_13_5}`` 表示存在
-macd_12_26_9 与 macd_6_13_5 两列；无参数列直接列名。559 列压缩后 ~120 行。
+macds_12_26_9）。本模块把 factors schema 全量列渲染成编译 prompt 用清单
+（**平铺全列名**——2026-10-10 生产实测发现 macd@{...} 压缩语法 LLM 会误读，
+不如实展开），落盘 configs/factor_catalog_llm.txt（入仓库，ECS 无库也能用）+
+configs/factor_catalog_llm.json（机器可读，DB 不可用时作 factor 存在性
+lookup 兜底，让纠错/重试层在 ECS 同样生效）；因子库更新后跑
+scripts/gen_factor_catalog_llm.py 重新生成。
 """
 
 from __future__ import annotations
 
-import re
+import json
 from pathlib import Path
 from typing import Any
 
 DEFAULT_CATALOG_PATH = (
     Path(__file__).resolve().parents[3] / "configs" / "factor_catalog_llm.txt"
 )
+DEFAULT_CATALOG_JSON_PATH = (
+    Path(__file__).resolve().parents[3] / "configs" / "factor_catalog_llm.json"
+)
 
 _SKIP = frozenset({"ts_code", "trade_date"})
-_PARAM_SUFFIX = re.compile(r"^(?P<base>.+?)_(?P<params>[0-9][0-9_]*)$")
-
-
-def compress_columns(columns: list[str]) -> list[str]:
-    """列名清单 → 压缩分组行（确定性排序：基名 → 参数）。"""
-    by_base: dict[str, set[str]] = {}
-    plain: list[str] = []
-    for col in sorted(columns):
-        if col in _SKIP:
-            continue
-        m = _PARAM_SUFFIX.match(col)
-        if m:
-            by_base.setdefault(m.group("base"), set()).add(m.group("params"))
-        else:
-            plain.append(col)
-    out = list(plain)
-    for base in sorted(by_base):
-        params = sorted(by_base[base])
-        out.append(f"{base}@{{{'|'.join(params)}}}")
-    return out
 
 
 def render_catalog_text(tables_columns: dict[str, list[str]]) -> str:
-    """factors 表列 → prompt 用紧凑目录文本（每表一行，含中文类目/价格源）。"""
+    """factors 表列 → prompt 用目录文本（每表一行：全列名平铺 + 中文类目/价格源）。
+
+    平铺而非压缩：LLM 对 macd@{12_26_9|...} 压缩语法会误读（生产实测），
+    全量 559 列直接列出 token 成本可接受且零歧义。
+    """
     from quant_research_engine.gui.factor_wizard import (
         CATEGORY_LABELS,
         PRICE_COLUMN_LABELS,
@@ -62,19 +49,22 @@ def render_catalog_text(tables_columns: dict[str, list[str]]) -> str:
             label = "Alpha191 因子面板"
         else:
             label = table
-        groups = compress_columns(tables_columns[table])
-        lines.append(f"factors.{table}（{label}）：{'、'.join(groups)}")
+        cols = "、".join(c for c in sorted(tables_columns[table]) if c not in _SKIP)
+        lines.append(f"factors.{table}（{label}）：{cols}")
     return "\n".join(lines) + "\n"
 
 
 def generate_catalog(path: Path | None = None, db_url: str | None = None) -> Path:
-    """从本地因子库生成快照文件（需 QRE_MARKET_DB_URL）。返回写入路径。"""
+    """从本地因子库生成快照（txt + json 双格式）。返回 txt 路径。"""
     from quant_research_engine.gui.factor_wizard import load_factor_tables_columns
 
+    tables_columns = load_factor_tables_columns(db_url)
     target = path or DEFAULT_CATALOG_PATH
-    text = render_catalog_text(load_factor_tables_columns(db_url))
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text, encoding="utf-8")
+    target.write_text(render_catalog_text(tables_columns), encoding="utf-8")
+    json_path = target.with_suffix(".json")
+    json_path.write_text(
+        json.dumps(tables_columns, ensure_ascii=False, indent=1), encoding="utf-8")
     return target
 
 
@@ -82,7 +72,7 @@ _CATALOG_CACHE: dict[str, Any] = {}
 
 
 def load_catalog_text(path: Path | None = None) -> str | None:
-    """读快照（mtime 缓存）；文件不存在返回 None（调用方回退旧口径）。"""
+    """读文本快照（mtime 缓存）；文件不存在返回 None（调用方回退旧口径）。"""
     target = path or DEFAULT_CATALOG_PATH
     try:
         mtime = target.stat().st_mtime
@@ -97,3 +87,19 @@ def load_catalog_text(path: Path | None = None) -> str | None:
         return None
     _CATALOG_CACHE[str(target)] = (mtime, text)
     return text
+
+
+def catalog_column_lookup(path: Path | None = None) -> Any:
+    """快照 JSON → column_lookup(table)->set(columns)；文件缺失返回 None。
+
+    ECS 无行情库时让纠错/重试层照常工作（CR-2026-10-10 生产实测发现
+    lookup=None 导致二层失效）。
+    """
+    target = path or DEFAULT_CATALOG_JSON_PATH
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    tables = {f"factors.{t}": set(cols) for t, cols in data.items()}
+    tables.setdefault("public.stock_daily", set())  # 行情列不进 factor_fields，空集即可
+    return lambda table: tables.get(table, set())

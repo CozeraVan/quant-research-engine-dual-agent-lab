@@ -8,8 +8,7 @@ from pathlib import Path
 import pytest
 
 from quant_research_engine.gui.factor_catalog_llm import (
-    compress_columns,
-    generate_catalog,
+    catalog_column_lookup,
     load_catalog_text,
     render_catalog_text,
 )
@@ -68,32 +67,37 @@ def _lookup_factory(mapping=None):
 
 
 class TestLayer1Catalog:
-    def test_compress_groups_params(self):
-        out = compress_columns(["ts_code", "trade_date", "macd_12_26_9", "macd_6_13_5",
-                                "macds_12_26_9", "ha_close"])
-        assert "macd@{12_26_9|6_13_5}" in out and "macds@{12_26_9}" in out
-        assert "ha_close" in out and "ts_code" not in out
-
-    def test_render_has_table_column_and_label(self):
+    def test_render_flat_full_names(self):
+        # 2026-10-10 生产实测：@{} 压缩语法 LLM 会误读，必须平铺全列名
         text = render_catalog_text({"stock_daily_momentum_close": list(MACD_POOL)})
+        assert "macds_12_26_9" in text and "macd_12_26_9" in text and "@{" not in text
         assert "factors.stock_daily_momentum_close" in text and "动量" in text
-        assert "macds@{12_26_9}" in text
         assert "行情字段" in text and "close" in text
 
     def test_snapshot_roundtrip(self, tmp_path):
         p = tmp_path / "cat.txt"
-        generate_catalog(path=p, db_url=None) if False else None  # DB 不跑；用 render 直写
         p.write_text(render_catalog_text({"stock_daily_momentum_close": list(MACD_POOL)}),
                      encoding="utf-8")
-        assert load_catalog_text(p) is not None and "macds" in load_catalog_text(p)
+        assert load_catalog_text(p) is not None and "macds_12_26_9" in load_catalog_text(p)
         assert load_catalog_text(tmp_path / "missing.txt") is None
+
+    def test_json_lookup_fallback(self, tmp_path):
+        # DB 不可用时的 lookup 兜底（ECS 纠错/重试层依赖）
+        import json
+        p = tmp_path / "cat.json"
+        p.write_text(json.dumps({"stock_daily_momentum_close": sorted(MACD_POOL)}),
+                     encoding="utf-8")
+        lk = catalog_column_lookup(p)
+        cols = lk("factors.stock_daily_momentum_close")
+        assert "macds_12_26_9" in cols and "macd_signal_12_26_9" not in cols
+        assert catalog_column_lookup(tmp_path / "missing.json") is None
 
     def test_system_prompt_injects_real_catalog(self):
         # 仓库快照存在（scripts/gen_factor_catalog_llm.py 生成）
         prompt = build_system_prompt()
         assert "禁止发明" in prompt
         assert "factors.stock_daily_momentum_close" in prompt
-        assert "macds@{12_26_9" in prompt  # signal 线真实列名在目录内
+        assert "macds_12_26_9" in prompt  # 平铺全列名（非压缩语法）
 
 
 class TestLayer2Alias:
