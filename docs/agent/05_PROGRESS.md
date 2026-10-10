@@ -32,6 +32,8 @@
 
 2026-10-09 QRE-NL-FACTOR-PIPELINE 生产实测 hotfix（ff0e39e 部署后实测发现）：①@{} 压缩语法 LLM 误读（仍编造 macd_signal_12_26_9）→ configs/factor_catalog_llm.txt 改平铺全列名；②ECS 无库 lookup=None 致纠错/重试失效 → gen 脚本加写 JSON 快照、_default_column_lookup 回退；③入队 OSError 兜底。测试更新（平铺断言+JSON lookup+DB 不可用回退断言），`-k saas` 237 passed 零回归。
 
+2026-10-10 QRE-NL-FACTOR-PIPELINE 部署+生产实测完成：commit ff0e39e（四层防线）+ 92271e6（hotfix：平铺目录+快照 lookup 回退+入队 OSError 兜底）已 push 并部署 ECS（qre-saas active）。生产实测（公网 /api/saas/nl/compile，用户原话「日线 MACD(12,26,9)，金叉次日开盘买入，死叉次日开盘卖出；单标的全仓进出」）：ok=True 一次通过（fix_attempts 无需启用），factor_fields 为 macd_12_26_9 + macds_12_26_9 真实列名，编造名 macd_signal_12_26_9 不再出现。教训登记：压缩语法对 LLM 不可读，目录一律平铺全列名。
+
 # Progress Tracker
 
 2026-09-28 QRE-CALENDAR-YEAR-PICKER DONE（共享日历组件年→月→日钻取，用户直接指派；8081 lab 与 SaaS 两端同源同步升级，仅改共享静态文件 lab-ui.js + lab-theme.css，lab/SaaS 模板零改动）：①交互——点头部年月标题（新 `.cal-title` 按钮）逐级上钻：日视图→年份视图（12 年/页九宫格 `.cal-grid-ym` 4 列，翻页 ±12 年，标题「YYYY – YYYY 年」，无可翻页时箭头禁用）→选年进月份视图（当年 12 个月，翻页 ±1 年）→选月回日视图；Esc 逐级返回（年→月→日→关闭弹层），年视图再点标题回日视图。②约束保留——maxDate 禁未来逻辑不变；新增可选 opts.minDate 下界（年整年/月整月超界格子 `:disabled` 置灰禁点，clamp 同步夹取），调用方未传 minDate 则行为与旧版一致（零改动兼容）；「数据截至 X」页脚提示不变，年/月视图追加「Esc 或点标题返回上级」。③样式——选中起/止日所在年/月 `.cal-cell.sel` 紫底白字与选中日一致；新增 `.cal-title`/`.cal-grid-ym`/`.cal-cell` 三条规则落在 lab-theme.css cal-pop 组件族（淡紫 tokens，无新色相、无循环动效）。④键盘——标题/格子/翻页均为原生 button 可 Tab 聚焦（`:focus-visible` 紫环全局规则生效），Esc 回退如上。测试：现有断言（test_gui_lab.py:205、test_gui_saas_pages.py:96 仅查 `#cal-pop`/`attachCalendar` 存在性）无需修改；项目无 node 侧 JS 测试设施，按约定不新建。验证：staging 8091 Playwright 截图 6 张 /tmp/qre-shots/cal-{0-page,1-date,2-year,3-month,4-back-to-date,4b-future-guard,5-final}.png，DOM 探针实测：三视图切换正常、年视图 2027 置灰+下一页禁用、maxDate=2026-09-28 当月 29/30 禁点 28 可选、钻取选值正确（起始 2020-03-02 / 截止 2026-01-15）、Esc 逐级回退与关闭、零 JS 报错。12 号文档 §3.7 与变更记录已登记。未 commit、未部署。
