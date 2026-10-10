@@ -49,6 +49,7 @@ class WorkerDaemon:
         runner: Callable[[dict[str, Any]], dict[str, Any]] = execute_job,
         poll_seconds: float = DEFAULT_POLL_SECONDS,
         heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
+        max_heartbeat_failures: int = 3,
         status_seconds: float = DEFAULT_STATUS_SECONDS,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -56,6 +57,7 @@ class WorkerDaemon:
         self.runner = runner
         self.poll_seconds = poll_seconds
         self.heartbeat_seconds = heartbeat_seconds
+        self.max_heartbeat_failures = max_heartbeat_failures
         self.status_seconds = status_seconds
         self._sleep = sleep
         self._stop = threading.Event()
@@ -157,9 +159,11 @@ class WorkerDaemon:
             run_fn = runner
 
         def _heartbeat_loop() -> None:
+            failures = 0
             while not done_event.wait(self.heartbeat_seconds):
                 try:
                     resp = self.client.heartbeat(job_id)
+                    failures = 0
                     if resp.get("cancel_requested") and not canceled.is_set():
                         canceled.set()
                         _log(f"job {job_id} 收到取消标记，上报 canceled 并丢弃结果")
@@ -167,8 +171,22 @@ class WorkerDaemon:
                             self.client.fail(job_id, "用户取消", error_class="canceled")
                         except Exception as exc:
                             _log(f"job {job_id} canceled 上报失败（{exc}）")
-                except Exception as exc:  # 心跳失败不杀任务，租约过期由云端重排
-                    _log(f"job {job_id} heartbeat 失败（{exc}），继续执行")
+                except Exception as exc:
+                    # 单次失败可能是网络抖动，继续执行；连续失败达到阈值说明
+                    # lease 已丢失（任务不存在/非运行中/leased_by 不匹配——服务端
+                    # 已把任务标记过期），继续跑只是白费资源（job 54 白跑 25 分钟），
+                    # 置 canceled 终止子进程并释放槽位；结果本来也回传不上去，
+                    # 由云端按租约过期重排。
+                    failures += 1
+                    if failures >= self.max_heartbeat_failures:
+                        if not canceled.is_set():
+                            canceled.set()
+                            _log(
+                                f"job {job_id} heartbeat 连续 {failures} 次失败（{exc}），"
+                                "判定 lease 丢失，终止执行并释放槽位"
+                            )
+                        return
+                    _log(f"job {job_id} heartbeat 失败（{exc}），第 {failures} 次，继续执行")
 
         hb = threading.Thread(target=_heartbeat_loop, daemon=True)
         hb.start()

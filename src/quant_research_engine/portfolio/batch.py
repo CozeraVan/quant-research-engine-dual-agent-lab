@@ -150,8 +150,8 @@ class BatchBacktestEngine:
     def _validate_request(self, request: BatchBacktestRequest) -> None:
         if request.initial_cash_per_symbol <= 0:
             raise ValueError("initial_cash_per_symbol must be positive")
-        if request.holding_days <= 0:
-            raise ValueError("holding_days must be positive")
+        if request.holding_days < 0:
+            raise ValueError("holding_days must be >= 0 (0 = 不限持仓天数)")
         if request.engine_impl not in ENGINE_IMPLS:
             raise ValueError(f"Unsupported engine_impl: {request.engine_impl!r} (expected one of {ENGINE_IMPLS})")
         if request.position_sizing not in POSITION_SIZING_MODES:

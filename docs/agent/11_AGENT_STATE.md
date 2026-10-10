@@ -12,7 +12,14 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-NL-FACTOR-PIPELINE (DONE 实现完成、**未 commit 待用户批准** — CR-2026-10-09 NL 编译
+QRE-SAAS-SMOKE-INCIDENT (DONE 实现完成、**未 commit 待用户批准** — CR-2026-10-11 job 54 smoke
+全市场超时事故四 bug：①apply_precheck 空 codes 按 run_id seed 随机抽样不再放行全市场 +
+worker smoke 跳过全量后处理；②max_holding_days 0/null=不限（校验/编译/三引擎执行层全链）
+顺带 risk.*_pct=0=不启用；③心跳连续失败 3 次判 lease 丢失终止子进程释放槽位；
+④build_symbol_detail_files O(n²) 改一次解析逐股复用；测试 +9，`-k saas` 238 passed 零回归；
+commit 批准后 push+ECS 部署+重启本机 qre-saas-worker，无 DB 迁移)
+
+上一任务：QRE-NL-FACTOR-PIPELINE (DONE 实现完成、**未 commit 待用户批准** — CR-2026-10-09 NL 编译
 因子名四层防线：真实目录快照注入 prompt（configs/factor_catalog_llm.txt + gen 脚本）/
 别名字典（factor_aliases.json + auto_fix_column 第 0 层）/compile_nl 修复回路
 （回喂最多 2 次，fix_attempts 透出）/兜底报错补申请新因子指引；测试 +12 全绿含
@@ -867,9 +874,13 @@ Engine feature-complete (947 tests green); single-agent workflow active; batch p
    - NL→YAML 编译对（含用户修改终版、失败案例）入库 = 策略语料库；短期做 few-shot 示例注入提升复杂策略编译成功率；长期（几千条后）评估微调小模型替代大模型
    - 诚实口径：相同 YAML 在不同时点跑结果会因数据更新而不同，展示层须区分「编译一致」与「结果随数据变化」
 
-### B. 分时（分钟级）回测立项（小样本先行）
+### B. 分时（分钟级）回测立项 —— ⏸️ 已挂起（2026-10-11 用户指示）
 
-用户已备小范围小样本分时股票数据。正确路径（顺序不可跳）：
+**挂起原因**：等用户获取到可靠的分钟级数据源后再重启。小样本试点已完成（CR-2026-10-10_minute_data_pilot.md，tests/data_test 40 文件验证 B+ 级、因子引擎零改动可用、回测引擎 gap list G1-G7 与工作量分级），重启时直接读该 CR 文档续接，不要重跑试点。
+
+试点结论速记：数据源是第一前置（现有样本止于 2021-06、B 型缺 amount、复权锚点陈旧）；数据到位后仍需 1~2 天工程出「研究级」单标的分钟回测（G1 订单时间戳保真 + 数据接入层 bar_time + 清洗管线固化），「可信级」（T+1/日界/涨跌停拦截/年化口径）再 1~2 周；全市场分钟回测（G6 向量化重写）不做。tick 级数据已判定不需要（波段策略分钟粒度足够，tick 只对打板/微观结构有意义）。stk_mins 权限未实测（重启时第一件事）。
+
+重启后的原路径（顺序不可跳）：
 1. 分钟表结构设计与入库（分钟线体量 ≈ 日线 240 倍，存储方案先评审）
 2. 分钟级因子预计算管线（少量因子起步）
 3. 引擎日内模式原型：日内进出场、T+1 规则分钟级口径

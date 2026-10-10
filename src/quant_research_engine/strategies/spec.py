@@ -86,10 +86,12 @@ class StrategySpec:
             ],
             forward_horizons=horizons,
             quantiles=_optional_int(evaluation, "quantiles"),
-            holding_days=int(holding.get("max_holding_days", 1)),
-            stop_loss_pct=_optional_float(risk, "stop_loss_pct"),
-            take_profit_pct=_optional_float(risk, "take_profit_pct"),
-            trailing_stop_pct=_optional_float(risk, "trailing_stop_pct"),
+            # 键缺省 = 1 日（历史默认）；显式 0 或 null = 不限持仓天数
+            holding_days=(1 if "max_holding_days" not in holding
+                          else int(holding.get("max_holding_days") or 0)),
+            stop_loss_pct=_optional_pct(risk, "stop_loss_pct"),
+            take_profit_pct=_optional_pct(risk, "take_profit_pct"),
+            trailing_stop_pct=_optional_pct(risk, "trailing_stop_pct"),
             weight_model=_optional_str(portfolio, "weight_model"),
             score_column=_optional_str(portfolio, "score_column"),
             volatility_column=_optional_str(portfolio, "volatility_column"),
@@ -114,6 +116,15 @@ def _optional_float(raw: dict[str, Any], key: str) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _optional_pct(raw: dict[str, Any], key: str) -> float | None:
+    """止损/止盈类百分比：0 或 null = 不启用（引擎按 is not None 判定，
+    0.0 若不归一会变成"立即触发"）。与 holding.max_holding_days=0=不限 语义对齐。"""
+    value = _optional_float(raw, key)
+    if value == 0:
+        return None
+    return value
 
 
 def _optional_str(raw: dict[str, Any], key: str) -> str | None:

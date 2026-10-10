@@ -258,3 +258,52 @@ def test_single_symbol_backtest_sells_on_exit_signal_next_bar():
         {"trade_date": pd.Timestamp("2026-01-08"), "side": "sell"},
     ]
     assert result.trades.iloc[0]["exit_reason"] == "exit_signal"
+
+
+def test_single_symbol_backtest_holding_days_zero_means_unlimited():
+    """holding_days=0 = 不限持仓天数：无 exit_signal 时持有到数据末尾，
+    不触发 holding_period 强平（与 max_positions=0=不限 语义对齐）。"""
+    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
+    request = SingleSymbolBacktestRequest(
+        symbol="000001.SZ",
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=0,
+    )
+
+    result = engine.run(make_frame(), request)
+
+    # 只有买入单，持仓到末尾，无任何卖出/trade
+    assert [o["side"] for o in result.orders.to_dict("records")] == ["buy"]
+    assert result.trades.empty
+    assert result.equity_curve.iloc[-1]["position_quantity"] > 0
+
+
+def test_single_symbol_backtest_holding_days_zero_still_honors_exit_signal():
+    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
+    request = SingleSymbolBacktestRequest(
+        symbol="000001.SZ",
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        exit_signal="rsi_2 > 40",
+        holding_days=0,
+    )
+
+    result = engine.run(make_frame(), request)
+
+    assert len(result.trades) == 1
+    assert result.trades.iloc[0]["exit_reason"] == "exit_signal"
+    # 买入 01-06；rsi_2>40 首次出现在 01-09(50)，下一根 01-12 按 open 成交
+    assert result.trades.iloc[0]["exit_date"] == pd.Timestamp("2026-01-12")
+
+
+def test_single_symbol_backtest_holding_days_negative_rejected():
+    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
+    request = SingleSymbolBacktestRequest(
+        symbol="000001.SZ",
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=-1,
+    )
+    with pytest.raises(ValueError, match=">= 0"):
+        engine.run(make_frame(), request)

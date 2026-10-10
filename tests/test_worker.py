@@ -503,3 +503,81 @@ class TestGuestCodesAutoFill:
         from quant_research_engine.worker.runner import fill_guest_codes
         out = fill_guest_codes(["a"], 10, pool_fn=lambda: ["a", "b", "c"])
         assert out == ["a", "b", "c"] or sorted(out) == ["a", "b", "c"]
+
+
+class TestHeartbeatLeaseLoss:
+    """Bug 3：lease 丢失（任务已被服务端标记过期）后 worker 不得继续白跑。
+    job 54 事故：心跳持续失败仍跑了 25 分钟直到手动 kill。"""
+
+    class _StubClient:
+        worker_id = "w-test"
+
+        def __init__(self):
+            self.heartbeats = 0
+            self.results = []
+            self.fails = []
+
+        def heartbeat(self, job_id):
+            self.heartbeats += 1
+            raise RuntimeError("任务不存在、非运行中或 leased_by 不匹配")
+
+        def report_result(self, job_id, payload):
+            self.results.append(job_id)
+            return {}
+
+        def fail(self, job_id, msg, error_class=None):
+            self.fails.append((job_id, error_class))
+
+    def test_consecutive_heartbeat_failures_terminate_job(self):
+        import threading
+        import time
+
+        client = self._StubClient()
+        aborted = threading.Event()
+
+        def runner(j, ev):
+            for _ in range(500):
+                if ev.is_set():
+                    aborted.set()
+                    raise RuntimeError("用户取消")
+                time.sleep(0.01)
+            return {"summary": {}, "chart_data": {}, "artifacts": [], "data_until": "2026-01-01"}
+
+        daemon = WorkerDaemon(
+            client, poll_seconds=0, heartbeat_seconds=0.01, max_heartbeat_failures=3,
+        )
+        t0 = time.monotonic()
+        daemon._run_job({"id": 999999, "kind": "full"}, runner=runner)
+        elapsed = time.monotonic() - t0
+
+        assert aborted.is_set()          # 子执行收到终止信号
+        assert client.heartbeats >= 3    # 连续失败达到阈值
+        assert elapsed < 5               # 快速终止，不白跑
+        assert client.results == []      # 结果不回传（服务端已过期，回传也会被拒）
+
+    def test_transient_heartbeat_failure_does_not_abort(self):
+        import threading
+        import time
+
+        client = self._StubClient()
+        calls = {"n": 0}
+        orig_hb = client.heartbeat
+
+        def flaky(job_id):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return orig_hb(job_id)  # 第一次失败
+            return {"cancel_requested": False}
+
+        client.heartbeat = flaky
+
+        def runner(j, ev):
+            time.sleep(0.15)
+            assert not ev.is_set()  # 单次抖动不触发终止
+            return {"summary": {}, "chart_data": {}, "artifacts": [], "files": [], "data_until": "2026-01-01"}
+
+        daemon = WorkerDaemon(
+            client, poll_seconds=0, heartbeat_seconds=0.02, max_heartbeat_failures=3,
+        )
+        daemon._run_job({"id": 999998, "kind": "full"}, runner=runner)
+        assert client.results == [999998]  # 正常回传

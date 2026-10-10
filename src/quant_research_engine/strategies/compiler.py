@@ -364,7 +364,9 @@ def compile_to_strategy_spec_dict(entry: CompiledEntry) -> dict[str, Any]:
     if risk_raw is None:
         risk_raw = {}
 
-    holding_max = rules.get("max_holding_days") or experiment.get("max_holding_days")
+    holding_max = rules.get("max_holding_days")
+    if holding_max is None:
+        holding_max = experiment.get("max_holding_days")
     if holding_max is None and isinstance(risk_raw, dict):
         holding_max = risk_raw.get("max_holding_days", 1)
 

@@ -288,7 +288,7 @@ class TestWorkerSymbolDetailFiles:
 
         monkeypatch.setattr(
             lab_result, "build_lab_symbol_detail",
-            lambda record, ts: {"ok": True, "summary": {"ts_code": ts},
+            lambda record, ts, **kw: {"ok": True, "summary": {"ts_code": ts},
                                 "benchmarks": {"000001.SH": {"closes": [1]}},
                                 "kline": {"dates": ["2026-01-05"]}},
         )
@@ -311,7 +311,7 @@ class TestWorkerSymbolDetailFiles:
 
         monkeypatch.setattr(
             lab_result, "build_lab_symbol_detail",
-            lambda record, ts: {"ok": True, "pad": "x" * 10000},
+            lambda record, ts, **kw: {"ok": True, "pad": "x" * 10000},
         )
         record = self._record(tmp_path)
         meta = runner.build_symbol_detail_files(record, max_total_bytes=100)
@@ -324,6 +324,46 @@ class TestWorkerSymbolDetailFiles:
         out.mkdir()
         meta = runner.build_symbol_detail_files({"run_id": "r", "output_dir": str(out)})
         assert meta["count"] == 0
+
+
+    def test_round_trips_parsed_once_for_many_symbols(self, monkeypatch, tmp_path):
+        """Bug 4 回归：N 只股票的 detail 构建只解析一次 round_trips.csv
+        （job 54 卡死根因：每 symbol 重读全量 CSV，O(股票数×交易数)）。"""
+        from quant_research_engine.gui import lab_result
+        from quant_research_engine.worker import runner
+
+        record = self._record(tmp_path)  # round_trips.csv 含 2 只 symbol
+
+        stats_calls = []
+        orig_stats = lab_result._symbol_trade_stats
+        monkeypatch.setattr(
+            lab_result, "_symbol_trade_stats",
+            lambda rec: (stats_calls.append(1), orig_stats(rec))[1],
+        )
+        read_calls = []
+        orig_read = lab_result._read_csv
+        monkeypatch.setattr(
+            lab_result, "_read_csv",
+            lambda p: (read_calls.append(str(p)), orig_read(p))[1],
+        )
+        captured = {}
+
+        def spy_detail(rec, ts, **kw):
+            captured[ts] = kw
+            return {"ok": True, "summary": {"ts_code": ts}}
+
+        monkeypatch.setattr(lab_result, "build_lab_symbol_detail", spy_detail)
+        meta = runner.build_symbol_detail_files(record)
+
+        assert meta["count"] == 2
+        assert len(stats_calls) == 1  # stats 只算一次
+        # round_trips.csv 全文读取仅 2 次（stats 聚合 + 按 symbol 预分组），与股票数无关
+        rt_reads = [p for p in read_calls if p.endswith("round_trips.csv")]
+        assert len(rt_reads) == 2
+        # 每股调用都拿到了预算好的 stats 与分组行
+        for ts in ("000001.SZ", "600519.SH"):
+            assert ts in captured[ts]["stats"]
+            assert captured[ts]["round_trips_by_symbol"][ts]
 
 
 class TestEnrichSharedSymbolDetail:
@@ -426,7 +466,7 @@ class TestEnrichSharedSymbolDetail:
             encoding="utf-8",
         )
 
-        def fake_detail(rec, ts):
+        def fake_detail(rec, ts, **kw):
             return {"ok": True, "summary": {"ts_code": ts},
                     "trades": [{"symbol": ts, "commission": 5.09, "stamp_tax": 10.26,
                                 "transfer_fee": 0.5, "total_cost": 15.85,

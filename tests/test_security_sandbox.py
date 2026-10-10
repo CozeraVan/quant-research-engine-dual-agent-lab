@@ -116,6 +116,40 @@ class TestStrategyYamlGuard:
                                   "forward_return_horizons: [9999]")
         assert not validate_strategy_yaml(bad)["ok"]
 
+    def test_max_holding_days_zero_means_unlimited(self):
+        """0 = 不限持仓天数（job 53 事故：用户 UI 填 0 被误判非法）；
+        与 max_positions=0=不限 语义对齐。null/缺省同样合法。"""
+        ok = _VALID_YAML.replace("max_holding_days: 20", "max_holding_days: 0")
+        assert validate_strategy_yaml(ok)["ok"]
+        ok_null = _VALID_YAML.replace("  max_holding_days: 20\n", "")
+        assert validate_strategy_yaml(ok_null)["ok"]
+        # 显式 null 同样合法（= 不限）
+        ok_null2 = _VALID_YAML.replace("max_holding_days: 20", "max_holding_days: null")
+        assert validate_strategy_yaml(ok_null2)["ok"]
+        # 越界/非整数仍拒绝
+        bad = _VALID_YAML.replace("max_holding_days: 20", "max_holding_days: 1001")
+        assert not validate_strategy_yaml(bad)["ok"]
+        bad = _VALID_YAML.replace("max_holding_days: 20", "max_holding_days: 1.5")
+        assert not validate_strategy_yaml(bad)["ok"]
+
+    def test_risk_zero_means_disabled(self):
+        """risk.*_pct: 0 = 不启用（NL 编译产物对未设置的止损/止盈填 0）。"""
+        from quant_research_engine.strategies.spec import StrategySpec
+        import yaml as _yaml
+
+        ok = _VALID_YAML.replace("stop_loss_pct: 0.08", "stop_loss_pct: 0")
+        assert validate_strategy_yaml(ok)["ok"]
+        spec = StrategySpec.from_mapping(_yaml.safe_load(ok))
+        assert spec.stop_loss_pct is None  # 0 归一为 None，不会武装成立即触发
+        ok2 = _VALID_YAML.replace("stop_loss_pct: 0.08",
+                                  "stop_loss_pct: 0\n  take_profit_pct: 0\n  trailing_stop_pct: 0")
+        assert validate_strategy_yaml(ok2)["ok"]
+        # 正常值与越界值行为不变
+        spec = StrategySpec.from_mapping(_yaml.safe_load(_VALID_YAML))
+        assert spec.stop_loss_pct == 0.08
+        bad = _VALID_YAML.replace("stop_loss_pct: 0.08", "stop_loss_pct: 1.5")
+        assert not validate_strategy_yaml(bad)["ok"]
+
     def test_oversize_rejected(self):
         assert not validate_strategy_yaml("experiment: {" + "a" * 200_000)["ok"]
 

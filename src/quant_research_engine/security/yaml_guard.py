@@ -258,6 +258,8 @@ def validate_strategy_yaml(
 
     names: set[str] = set()
     for section, body in raw.items():
+        if body is None and section in _TOP_LEVEL_KEYS:
+            continue  # 空节（如 `holding:`）= 缺省，与下游 raw.get(section) or {} 口径一致
         if section not in _SECTION_KEYS or not isinstance(body, dict):
             if not isinstance(body, dict) and section in _TOP_LEVEL_KEYS:
                 issues.append(f"{section} 节必须是映射")
@@ -335,17 +337,17 @@ def validate_strategy_yaml(
     if isinstance(holding, dict):
         mhd = holding.get("max_holding_days")
         if mhd is not None and (
-            not isinstance(mhd, int) or isinstance(mhd, bool) or not 1 <= mhd <= 1000
+            not isinstance(mhd, int) or isinstance(mhd, bool) or not 0 <= mhd <= 1000
         ):
-            issues.append("holding.max_holding_days 必须是 1..1000 的整数")
+            issues.append("holding.max_holding_days 必须是 0..1000 的整数（0=不限持仓天数）")
     risk = raw.get("risk") or {}
     if isinstance(risk, dict):
         for key in ("stop_loss_pct", "take_profit_pct", "trailing_stop_pct"):
             val = risk.get(key)
             if val is not None and (
-                isinstance(val, bool) or not isinstance(val, (int, float)) or not 0 < val < 1
+                isinstance(val, bool) or not isinstance(val, (int, float)) or not 0 <= val < 1
             ):
-                issues.append(f"risk.{key} 必须是 (0, 1) 的小数")
+                issues.append(f"risk.{key} 必须是 [0, 1) 的小数（0=不启用）")
     universe = raw.get("universe") or {}
     if isinstance(universe, dict):
         for key in ("exclude_st", "exclude_suspended", "exclude_risk_warning"):

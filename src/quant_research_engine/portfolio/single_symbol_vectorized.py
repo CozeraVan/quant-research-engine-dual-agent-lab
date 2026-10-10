@@ -498,7 +498,7 @@ class SingleSymbolVectorizedEngine:
             heapq.heappush(heap, st.pending_buy_index)
         if start_index <= st.pending_sell_index < n:
             heapq.heappush(heap, st.pending_sell_index)
-        if st.quantity > 0 and st.entry_index != _NO_INDEX:
+        if st.quantity > 0 and st.entry_index != _NO_INDEX and holding_days > 0:
             restored_expiry = st.entry_index + holding_days
             if start_index <= restored_expiry < n:
                 heapq.heappush(heap, restored_expiry)
@@ -572,9 +572,10 @@ class SingleSymbolVectorizedEngine:
                             orders.append(self._order_row(order, cost, price_raw=price_raw, cost_parts=cost_parts))
                             st.pending_buy_index = _NO_INDEX
                             fills.append((i, st.cash, st.quantity))
-                            expiry = i + holding_days
-                            if expiry < n:
-                                heapq.heappush(heap, expiry)
+                            if holding_days > 0:  # 0 = 不限持仓天数，不登记到期 bar
+                                expiry = i + holding_days
+                                if expiry < n:
+                                    heapq.heappush(heap, expiry)
                         # else: simulator leaves pending_buy_index set (dead) — no
                         # further buys for this symbol; preserved identically.
                 # buy_quantity == 0: same dead-pending semantics as the simulator.
@@ -590,7 +591,7 @@ class SingleSymbolVectorizedEngine:
                 sell_reason: str | None = None
                 if st.pending_sell_index != _NO_INDEX and i == st.pending_sell_index:
                     sell_reason = st.pending_sell_reason or "exit_signal"
-                elif i == st.entry_index + holding_days:
+                elif holding_days > 0 and i == st.entry_index + holding_days:
                     sell_reason = "holding_period"
                 elif (
                     request.stop_loss_pct is not None
@@ -757,8 +758,8 @@ class SingleSymbolVectorizedEngine:
     def _validate(self, request: SingleSymbolBacktestRequest, position_sizing: str) -> None:
         if request.initial_cash <= 0:
             raise ValueError("initial_cash must be positive")
-        if request.holding_days <= 0:
-            raise ValueError("holding_days must be positive")
+        if request.holding_days < 0:
+            raise ValueError("holding_days must be >= 0 (0 = 不限持仓天数)")
         if position_sizing not in POSITION_SIZING_MODES:
             raise ValueError(
                 f"Unsupported position_sizing: {position_sizing!r} "

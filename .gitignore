@@ -36,3 +36,4 @@ logs/
 .agent-backups/
 docs/frm/*.pdf
 .tmp/
+tests/data_test/

@@ -68,10 +68,18 @@ def apply_precheck(
     *,
     max_codes: int = PRECHECK_MAX_CODES,
     window_days: int = PRECHECK_WINDOW_DAYS,
+    seed: str | None = None,
+    db_url: str | None = None,
 ) -> tuple[list[str], str, str]:
-    """Truncate the universe to the first ``max_codes`` codes and the window
-    to roughly the last ``window_days`` days before ``end``."""
+    """Truncate the universe to ``max_codes`` codes and the window
+    to roughly the last ``window_days`` days before ``end``.
+
+    codes 为空（全市场 scope）时绝不能原样放行——那会把"小样本预检"变成
+    全市场回测（job 54 事故）。此时从全 A 股池按 seed（run_id）随机抽
+    ``max_codes`` 只，与 _sample_random_universe 同口径、可复现。"""
     trimmed_codes = codes[:max_codes] if codes else codes
+    if not trimmed_codes:
+        trimmed_codes = _sample_random_universe(max_codes, seed or "precheck", db_url=db_url)
     try:
         end_date = date.fromisoformat(end)
         start_date = date.fromisoformat(start)
@@ -231,7 +239,7 @@ def run_backtest(
             "trailing_stop_pct": trailing_stop_pct,
             "profile_overrides": profile_overrides,
         }
-        codes_list, start, end = apply_precheck(codes_list, start, end)
+        codes_list, start, end = apply_precheck(codes_list, start, end, seed=rid, db_url=db_url)
 
     cli_cmd = _build_cli_command(
         mode=mode,

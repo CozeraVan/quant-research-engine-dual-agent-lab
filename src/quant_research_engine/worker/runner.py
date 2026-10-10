@@ -177,19 +177,30 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
 
     from quant_research_engine.gui.lab_result import build_lab_chart_data, build_lab_tag_analysis
 
+    is_smoke = job.get("kind") == "smoke"
+
     chart_data = build_lab_chart_data(record)
     _fill_excess_return(record, chart_data)
     # 板块/个股归因：与 8081 结果页同一组装函数（数据形态完全一致），
     # 截断后挂到 chart_data.tag_analysis（体积控制见 trim_tag_analysis）。
-    try:
-        chart_data["tag_analysis"] = trim_tag_analysis(build_lab_tag_analysis(record))
-    except Exception:
-        chart_data["tag_analysis"] = None  # 归因失败不拖垮回传（DB 降级等）
+    # smoke 只需最小结果摘要（成交数/收益/费用）证明链路通，跳过全量归因与
+    # per-symbol 详情后处理（job 54 事故：smoke 跑了全市场 5533 只的明细构建）。
+    # 8081 lab 流程 precheck 后接全量（record["full_params"] 链）不经此处，不受影响。
+    if is_smoke:
+        chart_data["tag_analysis"] = None
+    else:
+        try:
+            chart_data["tag_analysis"] = trim_tag_analysis(build_lab_tag_analysis(record))
+        except Exception:
+            chart_data["tag_analysis"] = None  # 归因失败不拖垮回传（DB 降级等）
 
     # QRE-SAAS-SYMBOL-UX（C）：per-symbol 产物回传——实际触发交易的个股各生成
     # 一份详情 JSON（K线/买卖点/收益曲线/磨损明细/因子副图，gzip 压缩），
     # 云端个股详情页直接读文件渲染（ECS 无行情库，实时查库路径不可用）。
-    symbol_details_meta = build_symbol_detail_files(record)
+    if is_smoke:
+        symbol_details_meta = {"count": 0, "bytes": 0, "truncated": False, "skipped": "smoke"}
+    else:
+        symbol_details_meta = build_symbol_detail_files(record)
 
     # 数据截止日期（静态快照声明）：优先净值曲线末日，回退 run 区间末日
     dates = chart_data.get("dates") or []
@@ -352,9 +363,23 @@ def build_symbol_detail_files(
             build_lab_symbol_detail,
         )
 
-        stats = _symbol_trade_stats(record)
+        stats = _symbol_trade_stats(record)  # round_trips.csv 只解析一次，逐股复用
         if not stats:
             return meta
+        # 按 symbol 预分组 round_trips 行，供 build_lab_symbol_detail 的
+        # trades 兜底分支复用（避免每股重读全量 CSV 的第二个 O(n²) 点）
+        from quant_research_engine.gui.lab_result import _find_output_file, _read_csv
+
+        rt_by_symbol: dict[str, list[dict[str, str]]] = {}
+        rt_path = _find_output_file(record, "round_trips.csv")
+        if rt_path is not None:
+            try:
+                for r in _read_csv(rt_path):
+                    sym = (r.get("symbol") or "").strip()
+                    if sym:
+                        rt_by_symbol.setdefault(sym, []).append(r)
+            except OSError:
+                rt_by_symbol = {}
         output_dir = Path(str(record.get("output_dir") or ""))
         if not output_dir.is_dir():
             return meta
@@ -366,7 +391,9 @@ def build_symbol_detail_files(
         single_symbol = len(ordered) == 1
         for ts_code in ordered:
             try:
-                data = build_lab_symbol_detail(record, ts_code)
+                data = build_lab_symbol_detail(
+                    record, ts_code, stats=stats, round_trips_by_symbol=rt_by_symbol
+                )
             except Exception:
                 continue
             if not data:

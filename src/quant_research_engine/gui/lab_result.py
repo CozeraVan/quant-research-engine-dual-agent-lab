@@ -798,9 +798,22 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
     return panels, None
 
 
-def build_lab_symbol_detail(record: dict[str, Any], ts_code: str) -> dict[str, Any] | None:
-    """组装 /api/lab/runs/<id>/symbol/<ts_code>/detail；个股无交易返回 None（404）。"""
-    stats = _symbol_trade_stats(record)
+def build_lab_symbol_detail(
+    record: dict[str, Any],
+    ts_code: str,
+    *,
+    stats: dict[str, dict[str, Any]] | None = None,
+    round_trips_by_symbol: dict[str, list[dict[str, str]]] | None = None,
+) -> dict[str, Any] | None:
+    """组装 /api/lab/runs/<id>/symbol/<ts_code>/detail；个股无交易返回 None（404）。
+
+    ``stats`` 可传入预算好的 _symbol_trade_stats 结果、``round_trips_by_symbol``
+    可传入按 symbol 预分组的 round_trips 行；缺省时现场计算。
+    批量场景（worker build_symbol_detail_files 逐股调用）必须传入，
+    否则每股重复全量解析 round_trips.csv（O(股票数×交易数)，job 54 卡死根因之一）。
+    """
+    if stats is None:
+        stats = _symbol_trade_stats(record)
     s = stats.get(ts_code)
     if s is None:
         return None
@@ -834,15 +847,20 @@ def build_lab_symbol_detail(record: dict[str, Any], ts_code: str) -> dict[str, A
         except OSError:
             pass
     if data["trades"] is None:
-        rt_path = _find_output_file(record, "round_trips.csv")
-        if rt_path is not None:
-            try:
-                rows = [r for r in _read_csv(rt_path) if (r.get("symbol") or "").strip() == ts_code]
-                data["trades"] = [{k: (_f(v) if isinstance(_f(v), float) else v) for k, v in r.items()} for r in rows] or None
-                if data["trades"]:
-                    data["trades_source"] = "round_trips"
-            except OSError:
-                pass
+        rows: list[dict[str, str]] | None = None
+        if round_trips_by_symbol is not None:
+            rows = round_trips_by_symbol.get(ts_code) or []
+        else:
+            rt_path = _find_output_file(record, "round_trips.csv")
+            if rt_path is not None:
+                try:
+                    rows = [r for r in _read_csv(rt_path) if (r.get("symbol") or "").strip() == ts_code]
+                except OSError:
+                    rows = None
+        if rows is not None:
+            data["trades"] = [{k: (_f(v) if isinstance(_f(v), float) else v) for k, v in r.items()} for r in rows] or None
+            if data["trades"]:
+                data["trades_source"] = "round_trips"
 
     for fname, key in (("orders.csv", "orders"), ("failed_orders.csv", "failed_orders")):
         data[key] = None

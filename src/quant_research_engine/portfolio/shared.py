@@ -218,6 +218,14 @@ class SharedCashBacktestEngine:
                 exit_reason = exit_decision.reason
             elif pending_exit_bar_index is not None and current_bar_index >= int(pending_exit_bar_index):
                 exit_reason = str(position.get("pending_exit_reason") or "exit_signal")
+            elif request.holding_days <= 0:
+                # holding_days=0 = 不限持仓天数：只认止损/止盈/exit_signal，永不到期强平
+                if request.exit_signal is not None and bool(row.get("exit_signal", False)):
+                    next_bar_index = current_bar_index + 1
+                    if pending_exit_bar_index is None or next_bar_index < int(pending_exit_bar_index):
+                        position["pending_exit_bar_index"] = next_bar_index
+                        position["pending_exit_reason"] = "exit_signal"
+                continue
             elif current_bar_index < int(position["entry_bar_index"]) + request.holding_days:
                 if request.exit_signal is not None and bool(row.get("exit_signal", False)):
                     next_bar_index = current_bar_index + 1
@@ -963,8 +971,8 @@ class SharedCashBacktestEngine:
     def _validate_request(self, request: SharedCashBacktestRequest) -> None:
         if request.initial_cash <= 0:
             raise ValueError("initial_cash must be positive")
-        if request.holding_days <= 0:
-            raise ValueError("holding_days must be positive")
+        if request.holding_days < 0:
+            raise ValueError("holding_days must be >= 0 (0 = 不限持仓天数)")
         if request.max_positions is not None and request.max_positions < 0:
             raise ValueError("max_positions must be non-negative (0 or None = unlimited)")
         if request.weight_model == "score_weight" and not request.score_column:

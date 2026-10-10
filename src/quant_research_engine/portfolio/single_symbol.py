@@ -171,7 +171,7 @@ class SingleSymbolBacktestEngine:
                 sell_reason: str | None = None
                 if pending_sell_index is not None and index == pending_sell_index:
                     sell_reason = pending_sell_reason or "exit_signal"
-                elif index == entry_index + request.holding_days:
+                elif request.holding_days > 0 and index == entry_index + request.holding_days:
                     sell_reason = "holding_period"
                 elif (
                     request.stop_loss_pct is not None
@@ -296,8 +296,8 @@ class SingleSymbolBacktestEngine:
     def _validate_request(self, request: SingleSymbolBacktestRequest) -> None:
         if request.initial_cash <= 0:
             raise ValueError("initial_cash must be positive")
-        if request.holding_days <= 0:
-            raise ValueError("holding_days must be positive")
+        if request.holding_days < 0:
+            raise ValueError("holding_days must be >= 0 (0 = 不限持仓天数)")
 
     def _empty_result(self, request: SingleSymbolBacktestRequest) -> SingleSymbolBacktestResult:
         return empty_single_symbol_result(request)

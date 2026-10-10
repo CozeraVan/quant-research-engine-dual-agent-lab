@@ -2,7 +2,33 @@
 
 ## Task ID
 
-QRE-NL-FACTOR-PIPELINE (CR-2026-10-09：NL 编译因子名四层防线——MACD signal 编造 bug)
+QRE-SAAS-SMOKE-INCIDENT (CR-2026-10-11：job 54 smoke 全市场超时事故修复——四 bug)
+
+## Current Status
+
+DONE (implementation; **未 commit**——commit + ECS 部署 + 重启本机 qre-saas-worker 待用户批准；
+`-k saas` 238 passed 零回归，saas/workbench/security/portfolio/compiler/worker/spec 套件全绿)
+
+## Task Note
+
+- 四 bug 修法与证据详见 change_requests/CR-2026-10-11_saas_smoke_incident.md：
+  ①apply_precheck 空 codes 改为按 run_id seed 随机抽样（绝不放行全市场）+ worker 侧
+  smoke 跳过 tag_analysis/symbol_details 全量后处理；
+  ②max_holding_days 0/null=不限（yaml_guard 放宽 + spec 显式 0→0/缺省→1 + compiler
+  0 值不再被 `or` 穿透 + 三个引擎 holding_period 守卫），顺带 risk.*_pct: 0=不启用
+  （校验 [0,1)，spec _optional_pct 归一 None）；
+  ③daemon 心跳连续失败 3 次（max_heartbeat_failures 可配）判定 lease 丢失，
+  置 canceled 终止子进程、释放槽位、不回传；
+  ④build_lab_symbol_detail 新增 stats=/round_trips_by_symbol= 参数，
+  build_symbol_detail_files 一次解析逐股复用，两处 O(n²) 消除。
+- 新测试 9 例（precheck 抽样/holding 0/risk 0/引擎 holding 0 三例/心跳两例/O(n²) 回归）。
+- 真库小样本实测：空 codes+max_codes=1 → 抽 1 只可复现；NL MACD YAML（holding=20、
+  risk 0 值）校验通过且 spec 归一正确。
+- **部署注意**：无 DB 迁移；commit 后须重启本机 qre-saas-worker 加载新 runner/daemon。
+
+---
+
+## Archive: QRE-NL-FACTOR-PIPELINE (CR-2026-10-09：NL 编译因子名四层防线——MACD signal 编造 bug)
 
 ## Current Status
 

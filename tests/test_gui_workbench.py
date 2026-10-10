@@ -78,10 +78,29 @@ def test_apply_precheck_keeps_short_window():
     assert end == "2026-03-31"
 
 
-def test_apply_precheck_keeps_empty_codes():
-    trimmed, start, end = apply_precheck([], "2010-01-04", "2026-03-31")
-    assert trimmed == []
+def test_apply_precheck_samples_when_codes_empty(monkeypatch):
+    """空 codes（全市场 scope）绝不放行——按 seed 从全 A 池随机抽 max_codes 只。
+
+    job 54 事故：codes=[] 原样返回导致 smoke 跑了全市场 5533 只。
+    """
+    from quant_research_engine.gui import engine as gui_engine
+
+    pool = [f"{i:06d}.SZ" for i in range(1, 100)]
+    calls = []
+    monkeypatch.setattr(
+        gui_engine,
+        "_sample_random_universe",
+        lambda n, seed, db_url=None: (calls.append((n, seed)), pool[:n])[1],
+    )
+    trimmed, start, end = apply_precheck([], "2010-01-04", "2026-03-31", max_codes=1, seed="rid-1")
+    assert calls == [(1, "rid-1")]
+    assert trimmed == pool[:1]
     assert start == "2025-10-02"
+    assert end == "2026-03-31"
+
+    # 同 seed 可复现
+    trimmed2, _, _ = apply_precheck([], "2010-01-04", "2026-03-31", max_codes=1, seed="rid-1")
+    assert trimmed2 == trimmed
 
 
 # --- concurrency slots (限流) ---
