@@ -28,6 +28,8 @@ Before modifying code or producing plans, read:
 - `docs/agent/16_ECS_DEPLOYMENT.md`（ECS 部署单一权威文档：实例/访问/现状/待办/运维速查）
 - `docs/agent/18_AUTH_MEMBERSHIP_DESIGN.md`（Authing 身份层 + Flask 会员体系设计：登录链路/数据模型/迁移/阶段 TODO）
 - `docs/agent/19_MONETIZATION_MATRIX.md`（可付费项目矩阵：11 项付费点映射 + 内测期两层开放原则，会员/管理台建设权威依据）
+- `docs/agent/20_DATA_DICTIONARY_DAILY_MINUTE.md`（行情数据字典：日线/分钟线表结构、单位口径、TimescaleDB 规范、PIT 硬规则）
+- `docs/agent/21_FACTOR_LIBRARY_PLAN.md`（Tushare 202 因子本地复现立项方案：表设计/P0-P8 批次/验收/风险）
 
 ## Long-Term Memory Rule
 
