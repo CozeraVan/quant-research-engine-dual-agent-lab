@@ -85,3 +85,19 @@ P0 字段核实**已通过**，关键字段全部存在：
 
 结论：现有入库流程**无需改动**即可承接量价类；基本面类与 Alpha101 是本立项新管线覆盖的范围，两通道互补不冲突。
 所有通道（含 GUI factor-create 晋升）完成后统一执行 FACTOR_AUTHORING §3-⑦ 的 NL 因子目录快照同步。
+
+## 9. P6 别名映射登记（2026-10-12，通道A已完成入库）
+
+tushare 官方因子名 → 库内等价列（不重复建列）：
+
+| tushare 名 | 库内列 |
+|---|---|
+| ma_20d | factors.stock_daily_overlap_close.sma_20 |
+| dif | factors.stock_daily_momentum_close.macd_12_26_9 |
+| dea | factors.stock_daily_momentum_close.macds_12_26_9 |
+| rsi | factors.stock_daily_momentum_close.rsi_14 |
+| return_5d | factors.stock_daily_performance_close.pctret_5 |
+
+P6 通道A新建列（11）：pctret_21/42/63/126/252（performance_close）；price_position_ir_60、days_down_up、price_dist、rsrs_18_200、macd_cn_12_26_9（momentum_close）。
+口径提醒：因子层为 hfq 尺度（CR-2026-10-11 方案A 设计），金标准比对必须按 hfq 口径（原始价 × adj_factor），不能直接对原始价。
+通道B（待做）：alpha_125/250/500/1000d_000300、alpha_528/792/1320d_000001 七个回归 Alpha + small_cap_reversal_21d（截面），走 alpha191 式面板管线。

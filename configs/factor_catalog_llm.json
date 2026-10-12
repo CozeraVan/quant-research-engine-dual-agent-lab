@@ -309,7 +309,12 @@
   "stochk_9_3_3",
   "tsi_13_25_7",
   "tsis_13_25_7",
-  "rsi_9"
+  "rsi_9",
+  "days_down_up",
+  "macd_cn_12_26_9",
+  "price_dist",
+  "price_position_ir_60",
+  "rsrs_18_200"
  ],
  "stock_daily_overlap_close": [
   "ts_code",
@@ -430,7 +435,12 @@
   "pctret_20",
   "pctret_250",
   "pctret_5",
-  "pctret_60"
+  "pctret_60",
+  "pctret_126",
+  "pctret_21",
+  "pctret_252",
+  "pctret_42",
+  "pctret_63"
  ],
  "stock_daily_statistics_close": [
   "ts_code",
