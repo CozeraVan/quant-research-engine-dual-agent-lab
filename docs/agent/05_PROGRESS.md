@@ -868,3 +868,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 修法：校验口径改为「映射目标列」（冒号后引用值末段，如 factors.<table>.<col> → col）对 KNOWN_COLS（目录加载时收集的真实列名集合）；兜底别名本身在列名集合中也算合法（兼容向导旧 YAML）。编造列仍可拦截（node 验证：合法 YAML 放行，编造列 macd_signal_12_26_9 仍报缺）。
 - 范围：仅 saas/templates/new.html；lab.html 无同款前端校验（只透传服务端 missing_factors），无需改。
 - 测试：-k saas 237 passed。
+
+## 2026-10-11~12 方案A数据重建 + 个股FRM/按需生成
+- **方案A收官**：stock_daily 换名原始价（含 2009 扩展段，1483 万行）；分钟线 stock_minute_1m 全量入库 4313 天（压缩开启）；因子 10 表 5853 只零失败重算 + alpha191 全量 1608 万行；抽查 sma_20/MACD 全部吻合。
+- **踩坑**：表 RENAME 后 GRANT 不随迁（qre_worker_ro 失权，job 56 失败，已补授权并写入 20 号文档）；磁盘 100% PG PANIC（压缩后 300G+ 可用）。
+- **公网上线**（93cb0eb/de3cc23）：run 级 FRM 回传修复（risk_report.json 登记 artifacts）；板块榜单列头排序；个股级 FRM 模块（risk 节随详情产物）；个股详情按需生成链路（kind=symbol_detail，幂等，产物落父 job 目录，前端按钮+轮询）；NaN→null 序列化修复（前端卡死根因）。
+- **存量估算**：全市场全期回测本地产出约 1.4G/次（个股子目录 1.3G + Excel 85M），网页渲染仅需 ~25MB——支撑未来存储分层策略（ECS 只存渲染产物、本地全量定期清理、研究级明细按需生成）。
+- **因子口径历史问题自愈**：旧管线 warmup 不足导致的早期因子 NULL（如 920195 MACD 2020 前）已随全历史重算修复；新回测不再出现。

@@ -27,18 +27,17 @@
 
 - 主键 `(ts_code, trade_date)`；索引 `trade_date DESC`。
 - hypertable：`trade_date`，**chunk = 7 天**，未开压缩。
-- 数据量：1363 万行，2010-01-04 → 最新交易日，全 A 约 5573 只。
-- 数据源：tushare `daily` + `adj_factor`，每日定时任务增量同步（quant_ts）。
+- 数据量：1483 万行，**2009-01-05 → 最新交易日**（2026-10-11 方案A重建时向前扩展了 2009 年），全 A 约 5573 只。
+- 数据源：tushare `daily`（**原始价**，2026-10-11 起；此前为 qfq）+ `adj_factor`，每日定时任务增量同步（quant_ts）。
 
-### ⚠️ 2.1 重大口径发现（2026-10-11）：stock_daily 是前复权，不是原始价
+### ⚠️ 2.1 历史问题（已解决，2026-10-12）：stock_daily 曾为前复权口径
 
-- `quant_ts/handlers/daily_handler.py` 用 `ts.pro_bar(adj='qfq')` 拉数 → 表内 OHLC 是**前复权价**，`pre_close`/`pct_chg` 为 tushare 调整后口径，`adj_factor` 列正常。
-- 自愈机制（README 声称除权日全历史重建）**实测失效**：000001.SZ 2010 年行锚定 2020-05 的旧因子（109.169），2026 年行是原始价尺度——同一股票序列混合了不同锚点，跨境界的收益率有假性跳变。
-- 后果：以 close 直接算收益率的回测/因子在除权日及锚点交界有误差；`pct_chg` 列本身正确。
-- 分钟线 `stock_minute_1m` 为**原始价+adj_factor**（经 tushare API 逐日裁决验证），是规范口径。
-- 处置方案见 `change_requests/CR-2026-10-11_stock_daily_qfq.md`，待用户决策。
+- 旧口径：`ts.pro_bar(adj='qfq')` 前复权价且自愈机制失效（混合锚点），详见 `change_requests/CR-2026-10-11_stock_daily_qfq.md`。
+- **现行口径（方案A，已生效）**：表内 OHLC 为**原始价**，`adj_factor` 列随行；复权在读取层做（indicators `IND_PRICE_BASIS=raw` / QRE `QRE_PRICE_BASIS=raw`，价格列×adj_factor=后复权；K线展示锚定最新价=前复权@today，与东财一致）。因子 10 表 + alpha191 已于 2026-10-12 按新口径全历史重算完成并抽查通过。
+- 旧表保留为 `public.stock_daily_qfq_legacy`（回滚用，方案A验收后删除）。
+- **坑：表重建 RENAME 后 PostgreSQL 表级 GRANT 不随迁**——2026-10-11 换名后 `qre_worker_ro` 失去 SELECT 致 job 56 冒烟失败。今后任何表重建/换名必须随迁 `GRANT SELECT ON ... TO qre_worker_ro`（及其他只读角色）。
 
-## 3. 分钟线行情：`public.stock_minute_1m`（入库中）
+## 3. 分钟线行情：`public.stock_minute_1m`（2026-10-11 全量入库完成）
 
 ### 3.1 数据源
 

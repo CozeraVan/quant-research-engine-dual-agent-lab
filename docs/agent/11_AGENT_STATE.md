@@ -4,7 +4,24 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-ACTIVE（2026-10-11：分钟线全量入库 + stock_daily 方案A重建，双线后台进行中）
+ACTIVE（2026-10-12：方案A数据重建全链收官 + 个股FRM/按需生成已上线；待小样本回测对账验收）
+
+## Current Task
+
+DATA-REBUILT-2026-10-11 **数据侧已全部完成**（2026-10-12 10:45 链条收官）：
+- 分钟线入库 `public.stock_minute_1m` 4313 天全量（TimescaleDB 压缩已开）；WSL 侧 /home/van/mindata CSV（324G）待用户确认后删除
+- stock_daily 已换名为原始价（旧表 `stock_daily_qfq_legacy` 留作回滚，验收后删）
+- 因子 10 表全历史重算 5853 只零失败；alpha191 全量 191 因子 1608 万行
+- 抽查通过：000001.SZ sma_20 与手工 close×adj_factor 一致；920195.BJ MACD 已修复全期无空值
+- alpha149/181/182 "benchmark missing" 告警系误报（000300.SH 数据完整），实测覆盖率正常，无需补救
+- **坑（已修复）**：表重建 RENAME 后 GRANT 不随迁 → qre_worker_ro 失 stock_daily SELECT 致 job 56 失败；已重新授权
+- **剩余**：小样本回测对账验收（用户侧跑一次即可）→ quant_ts / indicators_tushare 两仓库 commit（代码已改完待提交）
+
+SAAS-SYMBOL-2026-10-12（已部署 ECS，commit 93cb0eb + de3cc23）：
+- 个股级 FRM 模块（risk 节随详情产物，VaR/ES/EWMA波动/状态/夏普/压力测试）
+- 个股详情按需生成链路（kind=symbol_detail 轻量任务，幂等，产物落父 job 目录）
+- 板块/标签榜单列头排序；FRM 修复 run 级回传（risk_report.json 登记 artifacts）
+- NaN→null 序列化修复（前端 JSON.parse 卡死根因）
 
 ## Current Owner
 
@@ -12,7 +29,9 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-DATA-REBUILT-2026-10-11（进行中，未 commit）：
+详见上方 Current Phase（2026-10-12 已更新）。以下为历史任务存档：
+
+**（存档）DATA-REBUILT-2026-10-11 实施步骤**：
 1. **分钟线入库**（后台）：`quant_ts/import_minute_csv.py` 6 worker 把 /home/van/mindata（2009→2026，4313 天，324GB CSV，原始价）入库 `public.stock_minute_1m`（hypertable 7天chunk，量/额已换算手/千元），审计表 `stock_minute_1m_audit` 幂等断点续跑。预计 3-4 小时。
 2. **方案A 日线重建**（后台）：`quant_ts/rebuild_daily_raw.py` 按 trade_date 拉 pro.daily 原始价+adj_factor 建影子表 `public.stock_daily_raw`（4372 天，含 2009 扩展段），预计约 2 小时。**验收后人工换名**（SQL 在脚本尾注释）。
 3. **代码已改未生效（flag 门控，默认旧行为）**：

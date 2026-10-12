@@ -10,7 +10,15 @@ The base engine was already feature-complete (see roadmap M1-M8). Since 2026-07-
 - **M10 Strategy Operations**: strategy-fit analysis with significance tiers (binomial 90/99/99.9%, meta-test vs false-positive expectation, enrichment, BH-FDR, free-rider accounting) + v1.1 time stability (`symbol_month_returns.csv` + stability metric); runtime parameter overrides (cost rates) + backtest-time universe filtering; stop_loss/take_profit/trailing_stop in batch engines (dual-engine equality, opt-in `--apply-stops`); continuous refresh machinery (watermark + idempotent re-run + delta report + documented systemd units).
 - **Missing-factor lifecycle**: preflight robustness (no crash on missing columns), durable request queue with pending→fulfilled recheck, batch shelve-and-continue semantics, `docs/handoff.md` upstream contract for `indicators_tushare` (7 pending requests).
 
-Current delivery state: **1137 tests green**; git history finalized through commit `ed2b304`; run outputs externalized to `~/qre-outputs` (repo `outputs` symlink).
+Current delivery state: **1137 tests green**（注：此处为历史口径；2026-09 后 SaaS 阶段累计 2300+ 测试，以 `uv run pytest` 实测为准）; run outputs externalized to `~/qre-outputs` (repo `outputs` symlink).
+
+## 2026-09 ~ 2026-10 SaaS 内测阶段交付摘要（详见 11/14/15/18/19 号文档）
+
+- **SaaS 网站（aguhuice.com，ECS 47.119.127.40）**：三入口策略创建（自然语言 NL→YAML / 快速向导 / 策略代码）、Authing 手机验证码登录、游客/注册两级权限、回测记录与详情页（收益曲线/磨损/归因热力图/FRM 风险模块/K线重播）、策略库与买卖点信号、意见反馈与因子申请页、后台管理台（9090，SSH 隧道访问）、SEO（百度/Google 已收录）、PWA、移动端适配。
+- **Worker 架构**：ECS 只跑 Web/API/任务队列；WSL 本机 worker 轮询取任务、跑 QRE 回测、两阶段（meta/files）回传产物。轻/重槽位分类调度。
+- **数据底座（2026-10-11~12 方案A）**：stock_daily 切换原始价口径 + 读取层复权（前复权混合锚点问题根治）；分钟线 stock_minute_1m 全量入库 4313 天（TimescaleDB 压缩）；因子 10 表 + alpha191 全历史重算完成。
+- **2026-10-12**：run 级 FRM 风险报告回传修复上线；板块榜单列排序；个股级 FRM + 个股详情按需生成（symbol_detail 任务）上线；NaN 序列化卡死修复。
+- **关键纪律**：产出给前端 fetch 的 JSON 必须过 `_json_sanitize`（NaN→None）；表重建必须随迁 GRANT；大批量写入前先 `df -h /`。
 
 ## Completed
 
