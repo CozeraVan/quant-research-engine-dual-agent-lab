@@ -96,6 +96,21 @@ def fill_guest_codes(codes: list[str], auto_fill: int | None,
     return codes + _random.sample(pool, need)
 
 
+def _json_sanitize(obj: Any) -> Any:
+    """递归把 NaN/Inf（含 numpy 浮点）替换为 None——json.dumps 默认把 NaN 写成
+    裸 NaN token，是非法 JSON，浏览器 resp.json() 会抛 SyntaxError
+    （symbol_detail 页面卡「加载中」的根因，2026-10-12）。"""
+    import math
+
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _json_sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_sanitize(v) for v in obj]
+    return obj
+
+
 def _execute_symbol_detail(job: dict[str, Any]) -> dict[str, Any]:
     """kind=symbol_detail：为父 job 的某只已交易个股按需补生成详情产物并回传。
 
@@ -139,7 +154,7 @@ def _execute_symbol_detail(job: dict[str, Any]) -> dict[str, Any]:
     data.pop("benchmarks", None)
     data.pop("benchmark_note", None)
 
-    blob = gzip.compress(json.dumps(data, ensure_ascii=False, default=str).encode("utf-8"))
+    blob = gzip.compress(json.dumps(_json_sanitize(data), ensure_ascii=False, default=str).encode("utf-8"))
     output_dir = Path(str(record.get("output_dir") or ""))
     if not output_dir.is_dir():
         raise RuntimeError(f"run 产物目录不存在：{output_dir}")
@@ -488,7 +503,7 @@ def build_symbol_detail_files(
             data.pop("benchmarks", None)
             data.pop("benchmark_note", None)
             blob = gzip.compress(
-                json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")
+                json.dumps(_json_sanitize(data), ensure_ascii=False, default=str).encode("utf-8")
             )
             if meta["bytes"] + len(blob) > max_total_bytes:
                 meta["truncated"] = True

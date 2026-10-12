@@ -917,3 +917,7 @@ Engine feature-complete (947 tests green); single-agent workflow active; batch p
 - **个股级 FRM**：`build_lab_symbol_detail` 末尾嵌入 `risk` 节——基于个股区间日收盘价收益（DatetimeIndex，stress 节需要）调 `risk.report.build_risk_report`，轻量配置（var_backtest/bootstrap 关、stress 开）；批量与按需产物都带。前端 symbol.html 新增 FRM 卡片块（VaR/ES 95/99 历史法、EWMA 年化波动率、波动率状态、夏普、最好/最差单日、压力测试最差情景）。
 - **按需生成链路**：ECS `POST /api/results/<id>/symbols/<ts>/generate`（幂等：产物在→ready；同父job+股票有未完结任务→复用；否则建 kind=symbol_detail / weight_class=light / priority=10 的任务，params 带 parent_job_id+run_id+ts_code）→ worker `runner._execute_symbol_detail` 从本地 RUNS_DIR/<run_id> 读 status.json，复用 build_lab_symbol_detail 生成 gzip 写回 run 目录 _symbol_details/，走既有 meta/files 通道回传 → ECS api_result_files 完成分支把 symbol_detail 产物复制到父 job 目录 → 前端轮询 `gen-status` 到 ready 后重载。产物缺失时 404 改返回 can_generate=true + 生成按钮（替换原误导性"无交易"文案）。
 - **口径备忘**：历史 job 的旧详情文件无 risk 节（前端整块隐藏，不报错）；该股真实无交易时 worker 抛错、gen-status 返回 failed 并允许重试文案。
+
+### 2026-10-12 NaN 序列化修复（symbol_detail 卡"加载中"根因）
+
+risk 节含 NaN（如 GARCH 拟合失败/零方差 sharpe），`json.dumps` 默认把 NaN 写成裸 token = 非法 JSON → 浏览器 `resp.json()` 抛 SyntaxError，load() 中断，页面停在"详情已生成，加载中…"。修复：`worker/runner.py` 新增 `_json_sanitize`（递归 NaN/Inf→None，含 numpy 浮点），批量与按需两条 gzip 路径都应用。已用 node 严格 JSON.parse 验证。**教训：任何产出给前端 fetch 的 JSON 都必须过 _json_sanitize。**
