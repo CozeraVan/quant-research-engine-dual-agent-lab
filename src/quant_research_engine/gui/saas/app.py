@@ -2584,6 +2584,20 @@ def create_saas_app() -> Flask:
                      "lease_expires_at=NULL, upload_token=NULL WHERE id=:id"),
                 {"id": job_id},
             )
+            # symbol_detail 按需任务：产物落到父 job 目录（详情页只认父 job 目录），
+            # 失败不拖垮 completed 状态（gen-status 会因产物未就位允许重试）
+            if job["kind"] == "symbol_detail":
+                try:
+                    p = job["params"] or {}
+                    parent_id = int(p.get("parent_job_id"))
+                    code = str(p.get("ts_code"))
+                    src = job_dir / "_symbol_details" / f"{code}.json.gz"
+                    if src.is_file():
+                        dst_dir = upload_root / f"job_{parent_id}" / "_symbol_details"
+                        dst_dir.mkdir(parents=True, exist_ok=True)
+                        (dst_dir / f"{code}.json.gz").write_bytes(src.read_bytes())
+                except Exception:
+                    pass
         return jsonify({"ok": True, "status": "completed", "uploaded": uploaded})
 
     @app.post("/api/worker/jobs/<int:job_id>/fail")
@@ -2997,8 +3011,86 @@ def create_saas_app() -> Flask:
 
         data = build_lab_symbol_detail(_result_record(row), code)
         if data is None:
-            return jsonify({"ok": False, "error": "该股票在本次回测中无交易"}), 404
+            # 产物未回传（批量截断）不等于无交易：提示可按需生成，由前端出按钮
+            return jsonify({"ok": False, "error": "该股详情产物未随任务回传",
+                            "can_generate": True}), 404
         return jsonify(_jsonable(data))
+
+    def _symbol_detail_ready(job_id: int, code: str) -> bool:
+        """按需/批量产物是否已就位（与 api_result_symbol_detail 同套查找口径）。"""
+        job_dir = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads") / f"job_{job_id}"
+        detail_dir = job_dir / "_symbol_details"
+        if (detail_dir / f"{code}.json.gz").exists():
+            return True
+        if detail_dir.is_dir():
+            prefix = code.split(".")[0]
+            return any(detail_dir.glob(f"{prefix}.*.json.gz"))
+        return False
+
+    @app.post("/api/results/<int:job_id>/symbols/<ts_code>/generate")
+    def api_symbol_detail_generate(job_id: int, ts_code: str) -> Any:
+        """按需生成个股详情（QRE-SAAS-SYMBOL-ONDEMAND）：创建 kind=symbol_detail
+        轻量任务，worker 本地用行情库补生成该股详情 gzip 回传，ECS 落父 job 目录。
+        幂等：产物已存在直接 ready；同 (父job, 股票) 有未完结任务则复用。"""
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        try:
+            code = resolve_ts_code(ts_code, [])
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        if _symbol_detail_ready(job_id, code):
+            return jsonify({"ok": True, "status": "ready"})
+        run_id = ((row.get("result_summary") or {}).get("run_id")) if isinstance(row.get("result_summary"), dict) else None
+        if not run_id:
+            return jsonify({"ok": False, "error": "父任务缺少 run_id，无法按需生成"}), 409
+        engine = _get_engine(app)
+        with engine.begin() as conn:
+            pending = conn.execute(
+                text("SELECT id, status FROM jobs WHERE kind='symbol_detail' "
+                     "AND params->>'parent_job_id' = :pid AND params->>'ts_code' = :c "
+                     "AND status IN ('queued','leased','running','uploading') "
+                     "ORDER BY id DESC LIMIT 1"),
+                {"pid": str(job_id), "c": code},
+            ).mappings().first()
+            if pending:
+                return jsonify({"ok": True, "status": pending["status"], "gen_job_id": pending["id"]})
+            gen_id = conn.execute(
+                text("INSERT INTO jobs (user_id, strategy_id, kind, params, weight_class, priority) "
+                     "VALUES (:uid, :sid, 'symbol_detail', CAST(:params AS jsonb), 'light', 10) "
+                     "RETURNING id"),
+                {"uid": row["user_id"], "sid": row["strategy_id"],
+                 "params": json.dumps({"parent_job_id": job_id, "ts_code": code, "run_id": run_id})},
+            ).scalar_one()
+        return jsonify({"ok": True, "status": "queued", "gen_job_id": gen_id})
+
+    @app.get("/api/results/<int:job_id>/symbols/<ts_code>/gen-status")
+    def api_symbol_detail_gen_status(job_id: int, ts_code: str) -> Any:
+        """前端轮询：ready（产物就位）/ 生成中（gen 任务状态）/ failed（含 worker 报错）。"""
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        try:
+            code = resolve_ts_code(ts_code, [])
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        if _symbol_detail_ready(job_id, code):
+            return jsonify({"ok": True, "status": "ready"})
+        engine = _get_engine(app)
+        with engine.begin() as conn:
+            gen = conn.execute(
+                text("SELECT id, status, error_message FROM jobs WHERE kind='symbol_detail' "
+                     "AND params->>'parent_job_id' = :pid AND params->>'ts_code' = :c "
+                     "ORDER BY id DESC LIMIT 1"),
+                {"pid": str(job_id), "c": code},
+            ).mappings().first()
+        if gen is None:
+            return jsonify({"ok": True, "status": "none"})
+        if gen["status"] == "completed":
+            # 已完成但产物未就位（如文件校验失败）——视为可重试
+            return jsonify({"ok": True, "status": "none"})
+        return jsonify({"ok": True, "status": gen["status"], "gen_job_id": gen["id"],
+                        "error": gen["error_message"] if gen["status"] == "failed" else None})
 
     # --- 后台管理（QRE-SAAS-ADMIN-E1E3，15 号文档 E 阶段） ---
     # 路由前缀用 /saas/console（不用 /admin 字样：SaaS 页面禁链纪律含 HTML/JS 注释，

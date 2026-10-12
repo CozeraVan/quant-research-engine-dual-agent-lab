@@ -96,11 +96,81 @@ def fill_guest_codes(codes: list[str], auto_fill: int | None,
     return codes + _random.sample(pool, need)
 
 
+def _execute_symbol_detail(job: dict[str, Any]) -> dict[str, Any]:
+    """kind=symbol_detail：为父 job 的某只已交易个股按需补生成详情产物并回传。
+
+    params: {parent_job_id, ts_code, run_id}。run 产物已持久化在
+    RUNS_DIR/<run_id>/artifacts/（_persist_artifacts），此处复用批量同款
+    build_lab_symbol_detail 组装（含 FRM 个股风险节），gzip 写进同目录
+    _symbol_details/（幂等覆盖），files 清单只含这一个文件走既有
+    meta/files 两阶段回传；ECS 侧收到后落父 job 目录。
+    """
+    import gzip
+    import hashlib
+
+    from quant_research_engine.gui.engine import RUNS_DIR
+
+    params = _job_params(job)
+    run_id = str(params.get("run_id") or "").strip()
+    ts_code = str(params.get("ts_code") or "").strip().upper()
+    if not run_id or not ts_code:
+        raise RuntimeError("symbol_detail 任务缺少 run_id/ts_code")
+    status_path = RUNS_DIR / run_id / "status.json"
+    if not status_path.is_file():
+        raise RuntimeError(f"run 记录不存在：{run_id}（本地产物可能已清理）")
+    record = json.loads(status_path.read_text(encoding="utf-8"))
+
+    from quant_research_engine.gui.lab_result import (
+        _symbol_trade_stats,
+        build_lab_symbol_detail,
+    )
+
+    stats = _symbol_trade_stats(record)
+    if ts_code not in stats:
+        raise RuntimeError(f"{ts_code} 在本次回测中无交易")
+    data = build_lab_symbol_detail(record, ts_code, stats=stats)
+    if not data:
+        raise RuntimeError(f"{ts_code} 详情组装失败")
+    try:
+        _enrich_shared_symbol_detail(record, data, ts_code,
+                                     single_symbol=(len(stats) == 1))
+    except Exception:
+        pass  # 补齐失败保留原始详情（与批量同策略降级；batch 模式字段非 None 时内部不动作）
+    data.pop("benchmarks", None)
+    data.pop("benchmark_note", None)
+
+    blob = gzip.compress(json.dumps(data, ensure_ascii=False, default=str).encode("utf-8"))
+    output_dir = Path(str(record.get("output_dir") or ""))
+    if not output_dir.is_dir():
+        raise RuntimeError(f"run 产物目录不存在：{output_dir}")
+    detail_dir = output_dir / SYMBOL_DETAILS_DIRNAME
+    detail_dir.mkdir(parents=True, exist_ok=True)
+    path = detail_dir / f"{ts_code}.json.gz"
+    path.write_bytes(blob)
+    rel = f"{SYMBOL_DETAILS_DIRNAME}/{ts_code}.json.gz"
+    files = [{
+        "name": rel,
+        "size": len(blob),
+        "sha256": hashlib.sha256(blob).hexdigest(),
+        "path": str(path),
+    }]
+    return {
+        "summary": {"kind": "symbol_detail", "run_id": run_id, "ts_code": ts_code},
+        "chart_data": {},
+        "artifacts": [],
+        "files": files,
+        "data_until": None,
+        "symbol_details": {"count": 1, "bytes": len(blob), "on_demand": True},
+    }
+
+
 def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> dict[str, Any]:
     """执行 leased job，返回 result 回传 payload（不含 status 字段）。
 
     回测失败抛 RuntimeError（调用方负责回传 failed）。
     """
+    if job.get("kind") == "symbol_detail":
+        return _execute_symbol_detail(job)
     strategy = job.get("strategy") or {}
     yaml_text = str(strategy.get("yaml") or "").strip()
     if not yaml_text:

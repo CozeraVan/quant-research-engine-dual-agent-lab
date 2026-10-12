@@ -19,6 +19,12 @@
     <div id="wear-body"></div>
   </div>
 
+  <!-- FRM-SYMBOL：个股级风险分析（worker 生成详情时基于区间日收盘收益计算） -->
+  <div class="chart-box" id="box-risk" style="display:none">
+    <div class="chart-title">风险分析（FRM） <span class="opt">（基于该股区间日收盘价收益，刻画个股自身风险特征；组合层风险见回测结果页）</span></div>
+    <div id="risk-body"></div>
+  </div>
+
   <div class="chart-box" id="box-kline" style="display:none">
     <div class="chart-title">日 K 与买卖点 <span class="opt" id="kline-note"></span>
       <button class="btn-sm" id="btn-kreplay" style="float:right">▶ 重播</button>
@@ -80,12 +86,14 @@ async function load(){
   const resp = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`);
   const d = await resp.json();
   if (!resp.ok || !d.ok){
+    if (d.can_generate){ showGenerate(); return; }
     $('#sym-note').textContent = d.error || ('加载失败 HTTP ' + resp.status);
     return;
   }
   renderSummary(d.summary);
   renderEquity(d);
   renderWear(d);
+  renderRisk(d);
   renderKline(d);
   initKlineReplay(d);
   const tradeCols = d.trades_source === 'round_trips'
@@ -109,6 +117,76 @@ async function load(){
   $('#sym-note').textContent = d.kline && d.kline.dates
     ? '全量 ' + d.kline.dates.length + ' 个交易日'
     : 'K线/因子明细暂缺（该股详情产物未随任务回传）';
+}
+
+// 个股详情按需生成（QRE-SAAS-SYMBOL-ONDEMAND）：产物未回传时出按钮 → 创建
+// symbol_detail 轻量任务 → 轮询 gen-status → ready 后重载渲染
+function showGenerate(){
+  const el = $('#sym-note');
+  el.innerHTML = '该股详情产物未随任务回传（批量回传仅含头部个股）。' +
+    '<button class="btn-sm" id="btn-gen" style="margin-left:6px">生成该股详情</button>';
+  $('#btn-gen').addEventListener('click', async () => {
+    const btn = $('#btn-gen');
+    btn.disabled = true; btn.textContent = '生成中…';
+    try {
+      const r = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/generate`, {method: 'POST'});
+      const g = await r.json();
+      if (!g.ok){ el.textContent = g.error || '生成请求失败'; return; }
+      if (g.status === 'ready'){ load(); return; }
+      pollGen();
+    } catch (e) { el.textContent = '生成请求失败：' + e; }
+  });
+}
+async function pollGen(){
+  const el = $('#sym-note');
+  try {
+    const r = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`);
+    const g = await r.json();
+    if (g.ok && g.status === 'ready'){ el.textContent = '详情已生成，加载中…'; load(); return; }
+    if (g.ok && (g.status === 'failed' || g.status === 'none')){
+      el.textContent = '生成失败' + (g.error ? '：' + g.error : '，请重试'); showGenerate(); return;
+    }
+    el.textContent = '该股详情生成中（' + (g.status || 'queued') + '）…';
+  } catch (e) { /* 网络抖动继续轮询 */ }
+  setTimeout(pollGen, 3000);
+}
+
+// FRM-SYMBOL：个股级风险卡片（数据=详情 payload 的 risk 节，worker 侧已算好）
+function renderRisk(d){
+  const r = d.risk;
+  if (!r || !r.tail) return;
+  function tailOf(level, method){
+    const t = ((r.tail[level] || {})[method]) || {};
+    return t.var == null ? null : t;
+  }
+  const h95 = tailOf('95pct', 'historical_simulation'), h99 = tailOf('99pct', 'historical_simulation');
+  const p99 = tailOf('99pct', 'parametric_normal');
+  const ewma = ((r.volatility || {}).ewma_latest) || {};
+  const regime = ((r.volatility || {}).regime) || {};
+  const perf = r.performance || {};
+  const dist = r.distribution || {};
+  const regimeTxt = {low: '低波动', mid: '中波动', high: '高波动'}[regime.latest] || '—';
+  const annVol = ewma.volatility_forecast != null ? (ewma.volatility_forecast * Math.sqrt(252)) : null;
+  let html = '<div class="metric-strip">' +
+    card('95% VaR / ES（历史法）', h95 ? pct(-h95.var) + ' / ' + pct(-h95.es) : '—', 'flat') +
+    card('99% VaR / ES（历史法）', h99 ? pct(-h99.var) + ' / ' + pct(-h99.es) : '—', 'flat') +
+    card('99% VaR（参数法）', p99 ? pct(-p99.var) : '—', 'flat') +
+    card('EWMA 年化波动率', annVol != null ? pct(annVol) : '—', 'flat') +
+    card('波动率状态', regimeTxt, regime.latest === 'high' ? 'neg' : 'flat') +
+    card('夏普比率', (perf.sharpe && perf.sharpe.sharpe != null) ? Number(perf.sharpe.sharpe).toFixed(2) : '—', 'flat') +
+    card('最好 / 最差单日', (dist.max != null ? pct(dist.max) : '—') + ' / ' + (dist.min != null ? pct(dist.min) : '—'), 'flat') +
+    '</div>';
+  const sc = ((r.stress || {}).scenarios) || {};
+  const scList = Object.keys(sc).map(k => Object.assign({name: k}, sc[k])).filter(x => x.strategy_cumulative_return != null);
+  if (scList.length){
+    const worst = scList.reduce((a, b) => (a.strategy_cumulative_return < b.strategy_cumulative_return ? a : b));
+    html += '<div class="opt" style="font-size:12px;margin-top:6px">压力测试：覆盖 ' + scList.length +
+      ' 个历史极端情景，最差情景（' + (worst.description || worst.name) + '）累计收益 ' +
+      pct(worst.strategy_cumulative_return) + '，期间最大回撤 ' +
+      (worst.strategy_peak_trough_drawdown != null ? pct(-Math.abs(worst.strategy_peak_trough_drawdown)) : '—') + '</div>';
+  }
+  $('#risk-body').innerHTML = html;
+  $('#box-risk').style.display = '';
 }
 
 function renderSummary(s){

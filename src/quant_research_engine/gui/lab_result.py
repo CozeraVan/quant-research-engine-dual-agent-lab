@@ -910,6 +910,32 @@ def build_lab_symbol_detail(
     data["factors"] = panels
     data["factor_note"] = factor_note
 
+    # FRM-SYMBOL：个股级风险分析（基于区间日收盘价收益，刻画该股自身风险特征；
+    # 策略组合层风险在 run 级 risk_report.json）。轻量配置：不做 VaR 回测/Bootstrap，
+    # 保留 VaR/ES 三口径 + EWMA/GARCH 波动率 + 压力测试。失败降级 None 不拖垮详情。
+    data["risk"] = None
+    try:
+        kl_dates = (kline or {}).get("dates") or []
+        closes = [row[1] for row in (kline or {}).get("ohlc") or [] if row and row[1]]
+        if len(closes) >= 60 and len(kl_dates) == len((kline or {}).get("ohlc") or []):
+            import numpy as np
+            import pandas as pd
+
+            from quant_research_engine.risk.report import build_risk_report
+
+            arr = np.asarray(closes, dtype=float)
+            # stress 节按日期切情景窗口，要求 DatetimeIndex（与收益对齐从第 2 天起）
+            rets = pd.Series(
+                arr[1:] / arr[:-1] - 1.0,
+                index=pd.DatetimeIndex(pd.to_datetime(kl_dates[1:])),
+            )
+            data["risk"] = build_risk_report(
+                rets,
+                config={"var_backtest": False, "stress": True, "bootstrap": False},
+            )
+    except Exception:
+        data["risk"] = None
+
     # QRE-GUI-LAB-RESULT-033：净值曲线对比项——基准指数（按个股净值交易日对齐）
     if data["equity"]:
         benchmarks, bench_note = _benchmark_series(data["equity"]["dates"])
