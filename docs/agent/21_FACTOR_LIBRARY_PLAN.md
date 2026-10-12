@@ -72,3 +72,16 @@ P0 字段核实**已通过**，关键字段全部存在：
 - fina_indicator：`roe`/`roe_yearly`/`grossprofit_margin`/`debt_to_assets`/`current_ratio`/`quick_ratio`/`profit_dedt`（扣非净利润）✓
 
 遗留低风险：defer_tax_assets / lt_rec 早年覆盖率可能低（如实 NaN）；daily_basic 的 pe_ttm/dv_ratio 扩列降为可选项。
+
+## 8. 与现有因子入库流程的适配性结论（2026-10-12 核实）
+
+对照 `indicators_tushare/docs/FACTOR_AUTHORING.md`（validate→plan→小样本→backfill→日更接管）：
+
+| 因子类别 | 数量级 | 适用通道 |
+|---|---|---|
+| 纯量价、pandas_ta 可复现（Momentum 17 新列 + Reversal 3 等） | ~30-40 | ✅ 现有 FACTOR_AUTHORING §3 流程直接适用，只改 yaml 或新增 FactorBase 子类 |
+| 基本面/估值/流动性/成长/质量（ROE/毛利率/PE 分位等） | ~130 | ❌ 现有流程 §6 规则 4 明确拒绝非 OHLCV 输入；必须走本方案 P0-P8 的 `_pit_financial_panel` 面板管线 |
+| Alpha101（截面排名） | 31 | ❌ 走仿 alpha191 独立面板通道（本方案 §2），不进 validate/backfill 流程 |
+
+结论：现有入库流程**无需改动**即可承接量价类；基本面类与 Alpha101 是本立项新管线覆盖的范围，两通道互补不冲突。
+所有通道（含 GUI factor-create 晋升）完成后统一执行 FACTOR_AUTHORING §3-⑦ 的 NL 因子目录快照同步。

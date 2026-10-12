@@ -27,6 +27,21 @@ NL 输入「日线 MACD(12,26,9)，金叉买死叉卖」→ LLM 凭记忆写
    「申请新因子」入口指引（`format_unresolved_hint` 补指引行；前端既有
    missing_factors → 申请弹层链路不变）。
 
+## 长期防错位机制（2026-10-12 补充归档）
+
+除四层防线外，防错位还依赖两条流程纪律：
+
+1. **目录快照同步纪律**：`configs/factor_catalog_llm.{txt,json}` 是 NL prompt 的唯一因子目录
+   （ECS 无库，不能用实时查库替代）。任何通道新增因子后（FACTOR_AUTHORING §3 手工流程、
+   §8 GUI factor-create 晋升、未来 21 号文档 P0-P8 面板管线）都必须重跑
+   `scripts/gen_factor_catalog_llm.py` 并 push，ECS 例行 pull 后生效。
+   该步骤已写入 `indicators_tushare/docs/FACTOR_AUTHORING.md` §3-⑦ 与验收清单。
+2. **前端校验口径**：new.html 提交前校验只应比对 YAML `factor_fields` 的**值**（表.列），
+   不得比对键名（策略内别名合法）。2026-10-11 已修（05 号文档「NL 缺因子误拦修复」），
+   此处登记防止后续改前端校验时回归。
+
+相关记录：05_PROGRESS 2026-10-09（四层防线 + hotfix 平铺目录教训）、2026-10-11（前端误拦修复）。
+
 ## 测试
 
 `tests/test_nl_factor_pipeline.py` +12：压缩分组/目录渲染/快照读写/prompt 注入断言；
