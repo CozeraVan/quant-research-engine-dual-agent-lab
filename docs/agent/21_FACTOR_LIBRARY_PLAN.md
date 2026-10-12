@@ -63,7 +63,12 @@ Momentum(20)+Reversal(3)：已有等价列的（rsi/macd/return_*/ma_20d）登�
 - ann_date 缺失行用 end_date 兜底的比例需统计（潜在前视）
 - Alpha101 与官方口径细节（min_periods/并列处理）未公开 → 验收降为内部自洽，不追求与官方逐位一致
 
-## 7. 当前阻塞项
+## 7. 字段核实结果（2026-10-11 已确证）
 
-1. P0 前必须执行：`\d fundamentals.income/balancesheet/cashflow/fina_indicator` 核实字段（把风险清单从"预估"转"确证"）。
-2. dividend_yield_3y_avg 待 dividend 回填完成（核心层回填进行中，预计 2026-10-11 下午收尾）。
+P0 字段核实**已通过**，关键字段全部存在：
+- income：`ebit`/`ebitda`（直连列，无需拼装）✓ `int_exp` ✓ `n_income_attr_p` ✓ `rd_exp` ✓
+- balancesheet：`defer_tax_assets`（递延所得税资产）✓ `lt_rec`（长期应收款）✓ `prepayment`（预付）✓ `contract_liab`（合同负债，预收兜底）✓ **`total_share`（总股本）✓ → PIT 面板直接取股本，daily_basic 扩列取消**
+- cashflow：`n_cashflow_act` ✓ `n_cashflow_inv_act` ✓ `free_cashflow` ✓ `depr_fa_coga_dpba`/`amort_intang_assets` ✓
+- fina_indicator：`roe`/`roe_yearly`/`grossprofit_margin`/`debt_to_assets`/`current_ratio`/`quick_ratio`/`profit_dedt`（扣非净利润）✓
+
+遗留低风险：defer_tax_assets / lt_rec 早年覆盖率可能低（如实 NaN）；daily_basic 的 pe_ttm/dv_ratio 扩列降为可选项。

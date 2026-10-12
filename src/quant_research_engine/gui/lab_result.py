@@ -590,9 +590,12 @@ def _fetch_symbol_range_returns(
         except Exception:
             store = _store(DEFAULT_DB_URL)
         with store.market_engine.begin() as conn:
+            import os as _os
+            _raw = _os.environ.get("QRE_PRICE_BASIS", "qfq") == "raw"
+            _close_expr = "close * adj_factor" if _raw else "close"
             rows = conn.execute(
                 text(
-                    "SELECT ts_code, trade_date, close FROM public.stock_daily "
+                    f"SELECT ts_code, trade_date, {_close_expr} FROM public.stock_daily "
                     "WHERE ts_code = ANY(:codes) AND trade_date BETWEEN :d0 AND :d1 "
                     "ORDER BY ts_code, trade_date"
                 ),
@@ -691,12 +694,27 @@ def _fetch_stock_daily(ts_code: str, start: str | None, end: str | None) -> tupl
         except Exception:
             store = _store(DEFAULT_DB_URL)
         with store.market_engine.begin() as conn:
-            rows = conn.execute(
-                text(
+            import os as _os
+            if _os.environ.get("QRE_PRICE_BASIS", "qfq") == "raw":
+                # 方案A：K线展示锚定最新价（原始价 × fac/fac_latest = 前复权@最新）
+                _sql = (
+                    "SELECT trade_date, "
+                    "open * adj_factor / latest_fac, high * adj_factor / latest_fac, "
+                    "low * adj_factor / latest_fac, close * adj_factor / latest_fac, vol "
+                    "FROM public.stock_daily s "
+                    "JOIN (SELECT adj_factor AS latest_fac FROM public.stock_daily "
+                    "      WHERE ts_code = :c ORDER BY trade_date DESC LIMIT 1) t ON true "
+                    "WHERE ts_code = :c AND (CAST(:d0 AS date) IS NULL OR trade_date >= CAST(:d0 AS date)) "
+                    "AND (CAST(:d1 AS date) IS NULL OR trade_date <= CAST(:d1 AS date)) ORDER BY trade_date"
+                )
+            else:
+                _sql = (
                     "SELECT trade_date, open, high, low, close, vol FROM public.stock_daily "
                     "WHERE ts_code = :c AND (CAST(:d0 AS date) IS NULL OR trade_date >= CAST(:d0 AS date)) "
                     "AND (CAST(:d1 AS date) IS NULL OR trade_date <= CAST(:d1 AS date)) ORDER BY trade_date"
-                ),
+                )
+            rows = conn.execute(
+                text(_sql),
                 {"c": ts_code, "d0": start or None, "d1": end or None},
             ).fetchall()
     except Exception as exc:

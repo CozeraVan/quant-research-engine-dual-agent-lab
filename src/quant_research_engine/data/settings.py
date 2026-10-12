@@ -31,6 +31,8 @@ class DatabaseSettings:
     benchmark_db_url: str | None = None
     research_db_url: str | None = None
     tables: DatabaseTableConfig = DatabaseTableConfig()
+    # 价格口径：qfq=旧前复权表（默认）；raw=方案A原始价表，读取时 ×adj_factor 复权
+    price_basis: str = "qfq"
 
     @classmethod
     def from_env(cls) -> "DatabaseSettings":
@@ -52,4 +54,5 @@ class DatabaseSettings:
             benchmark_db_url=_get_env("QRE_BENCHMARK_DB_URL", "SR_BENCHMARK_DB_URL"),
             research_db_url=_get_env("QRE_RESEARCH_DB_URL", "SR_RESEARCH_DB_URL"),
             tables=tables,
+            price_basis=_get_env("QRE_PRICE_BASIS", None, "qfq") or "qfq",
         )

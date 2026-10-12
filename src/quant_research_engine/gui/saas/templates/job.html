@@ -431,17 +431,43 @@ function drawDetailTable(t){
     location.href = '/saas/jobs/' + JOB_ID + '/symbols/' + encodeURIComponent(tr.dataset.code);
   }));
 }
+// 板块榜单：列头点击排序（与下钻个股表同交互），行点击仍进个股下钻
+const TAG_COLS = [
+  {key: 'tag', label: '板块 / 标签（点击行看个股）', text: true},
+  {key: 'total_pnl', label: '总净盈亏(元)'},
+  {key: 'trades', label: '交易笔数'},
+  {key: 'avg_ret', label: '平均每笔'},
+  {key: 'win_rate', label: '胜率'},
+];
+let tagSort = {key: 'total_pnl', dir: -1};
 function renderTagRank(items){
-  const rows = items.map(t =>
+  const sorted = items.slice().sort((a, b) => {
+    const c = TAG_COLS.find(x => x.key === tagSort.key);
+    const va = a[tagSort.key], vb = b[tagSort.key];
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    const cmp = c && c.text ? String(va).localeCompare(String(vb)) : va - vb;
+    return cmp * tagSort.dir;
+  });
+  const rows = sorted.map(t =>
     '<tr class="tag-row" data-tag="' + t.tag + '"><td>' + t.tag + '</td>' +
     '<td class="' + cls(t.total_pnl) + '" style="text-align:right">' + fmtPnl(t.total_pnl) + '</td>' +
     '<td style="text-align:right">' + t.trades + '</td>' +
     '<td class="' + cls(t.avg_ret) + '" style="text-align:right">' + pct(t.avg_ret) + '</td>' +
     '<td style="text-align:right">' + pct(t.win_rate) + '</td></tr>').join('');
+  const head = TAG_COLS.map(c => {
+    const arrow = tagSort.key === c.key ? (tagSort.dir > 0 ? ' ▲' : ' ▼') : '';
+    return '<th class="sortable" data-key="' + c.key + '" style="cursor:pointer' + (c.text ? '' : ';text-align:right') + '">' + c.label + arrow + '</th>';
+  }).join('');
   const el = document.getElementById('tag-rank');
-  el.innerHTML = '<table><thead><tr><th>板块 / 标签（点击行看个股）</th>' +
-    '<th style="text-align:right">总净盈亏(元)</th><th style="text-align:right">交易笔数</th>' +
-    '<th style="text-align:right">平均每笔</th><th style="text-align:right">胜率</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  el.innerHTML = '<table><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table>';
+  el.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (tagSort.key === key) tagSort.dir = -tagSort.dir;
+    else tagSort = {key, dir: key === 'tag' ? 1 : -1};
+    renderTagRank(items);
+  }));
   el.querySelectorAll('tr.tag-row').forEach(tr => {
     tr.addEventListener('click', () => {
       const t = items.find(x => x.tag === tr.dataset.tag);

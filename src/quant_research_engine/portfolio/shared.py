@@ -783,15 +783,15 @@ class SharedCashBacktestEngine:
         if column == "limit_up":
             return self.market_profile.is_limit_up(
                 str(row["ts_code"]),
-                pre_close=self._optional_float(row, "pre_close"),
-                price=float(row["open"]),
+                pre_close=self._optional_float(row, "raw_pre_close") or self._optional_float(row, "pre_close"),
+                price=self._optional_float(row, "raw_open") or float(row["open"]),
                 is_st=self._row_flag(row, "is_st"),
             )
         if column == "limit_down":
             return self.market_profile.is_limit_down(
                 str(row["ts_code"]),
-                pre_close=self._optional_float(row, "pre_close"),
-                price=float(row["open"]),
+                pre_close=self._optional_float(row, "raw_pre_close") or self._optional_float(row, "pre_close"),
+                price=self._optional_float(row, "raw_open") or float(row["open"]),
                 is_st=self._row_flag(row, "is_st"),
             )
         return False

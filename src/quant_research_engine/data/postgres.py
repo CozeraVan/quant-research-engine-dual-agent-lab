@@ -91,15 +91,32 @@ class PostgresDataStore:
     ) -> pd.DataFrame:
         self._validate_date_range(start, end)
         fields = fields or ["open", "high", "low", "close", "pre_close", "vol", "amount"]
-        return self._load_table_frame(
+        # 方案A（CR-2026-10-11）：原始价口径下读取时应用复权（价格列 × adj_factor，
+        # 后复权尺度），保证收益率跨除权连续、全序列同锚。QRE_PRICE_BASIS=raw 激活。
+        raw_mode = getattr(self.settings, "price_basis", "qfq") == "raw"
+        source_columns = ["ts_code", "trade_date", *fields]
+        if raw_mode and "adj_factor" not in source_columns:
+            source_columns.append("adj_factor")
+        frame = self._load_table_frame(
             engine=self.market_engine,
             table_name=self.settings.tables.market_daily_table,
-            source_columns=["ts_code", "trade_date", *fields],
+            source_columns=source_columns,
             start=start,
             end=end,
             ts_codes=ts_codes,
             limit=limit,
         )
+        if raw_mode and not frame.empty and "adj_factor" in frame.columns:
+            # 涨跌停判定必须用原始价（交易所规则：round(pre_close×(1±幅度),2)），
+            # 复权尺度下判定会失真——保留 raw_open/raw_pre_close 供 portfolio 层使用。
+            frame["raw_open"] = pd.to_numeric(frame["open"], errors="coerce") if "open" in frame.columns else None
+            frame["raw_pre_close"] = pd.to_numeric(frame["pre_close"], errors="coerce") if "pre_close" in frame.columns else None
+            fac = pd.to_numeric(frame["adj_factor"], errors="coerce")
+            for col in ("open", "high", "low", "close", "pre_close", "vwap"):
+                if col in fields and col in frame.columns:
+                    frame[col] = pd.to_numeric(frame[col], errors="coerce") * fac
+            frame = frame.drop(columns=["adj_factor"])
+        return frame
 
     def load_benchmark_bars(
         self,

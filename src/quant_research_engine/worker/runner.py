@@ -171,6 +171,19 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     if record.get("status") != "completed":
         raise RuntimeError(f"回测失败：{record.get('error') or '未知错误'}")
 
+    # FRM 风险报告回传：engine 收尾钩子把 risk_report.json 写在 run 目录根部，
+    # 不在 artifacts map 里 → 从不上传 → 云端 FRM 模块恒隐藏。此处登记进
+    # artifacts，使其随 files 通道落到云端 job 目录根（saas risk-analysis
+    # 端点读 output_dir/risk_report.json）。缺失不拖垮回传。
+    try:
+        from quant_research_engine.gui.engine import RUNS_DIR as _RUNS_DIR
+
+        _rp = _RUNS_DIR / str(record.get("run_id")) / "risk_report.json"
+        if _rp.is_file():
+            record.setdefault("artifacts", {})["risk_report.json"] = str(_rp)
+    except Exception:
+        pass
+
     summary = (extract_run_summary(record) or {}).get("metrics") or {}
     summary["run_id"] = record.get("run_id")
     summary["kind"] = job.get("kind")

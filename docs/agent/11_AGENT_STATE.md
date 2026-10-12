@@ -4,7 +4,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-IDLE（无进行中任务；用户 2026-10-04 确认收档）
+ACTIVE（2026-10-11：分钟线全量入库 + stock_daily 方案A重建，双线后台进行中）
 
 ## Current Owner
 
@@ -12,7 +12,20 @@ KIMI_CODE (sole development agent; user is final approver)
 
 ## Current Task
 
-QRE-SAAS-SMOKE-INCIDENT (DONE 实现完成、**未 commit 待用户批准** — CR-2026-10-11 job 54 smoke
+DATA-REBUILT-2026-10-11（进行中，未 commit）：
+1. **分钟线入库**（后台）：`quant_ts/import_minute_csv.py` 6 worker 把 /home/van/mindata（2009→2026，4313 天，324GB CSV，原始价）入库 `public.stock_minute_1m`（hypertable 7天chunk，量/额已换算手/千元），审计表 `stock_minute_1m_audit` 幂等断点续跑。预计 3-4 小时。
+2. **方案A 日线重建**（后台）：`quant_ts/rebuild_daily_raw.py` 按 trade_date 拉 pro.daily 原始价+adj_factor 建影子表 `public.stock_daily_raw`（4372 天，含 2009 扩展段），预计约 2 小时。**验收后人工换名**（SQL 在脚本尾注释）。
+3. **代码已改未生效（flag 门控，默认旧行为）**：
+   - quant_ts `handlers/daily_handler.py`：fetch_data 弃 qfq 改 pro.daily 原始价（fetch_snapshot 本就是原始价——混合锚点根因）
+   - indicators `core/db_manager.py`：`_adjust_prices`（IND_PRICE_BASIS=raw 激活，价格列×adj_factor）
+   - indicators `alpha191/panel_loader.py`：同样 flag 门控复权
+   - QRE `data/settings.py` + `data/postgres.py`：`price_basis`/QRE_PRICE_BASIS=raw 时 load_daily_bars 复权并携带 raw_open/raw_pre_close
+   - QRE `portfolio/{shared,single_symbol,single_symbol_vectorized}.py`：涨跌停判定优先用 raw_open/raw_pre_close（交易所规则必须原始价）
+   - QRE `gui/lab_result.py`：区间收益 ×adj_factor；K线展示锚定最新价
+   - 验证：QRE 测试 2330 passed 零回归
+4. **换名后待办**：systemd 各服务加 IND_PRICE_BASIS=raw / QRE_PRICE_BASIS=raw 环境变量并重启 → 因子 11 表全量重算 → 小样本回测对账 → ECS 同步。
+
+上一任务：QRE-SAAS-SMOKE-INCIDENT (DONE 实现完成、**未 commit 待用户批准** — CR-2026-10-11 job 54 smoke
 全市场超时事故四 bug：①apply_precheck 空 codes 按 run_id seed 随机抽样不再放行全市场 +
 worker smoke 跳过全量后处理；②max_holding_days 0/null=不限（校验/编译/三引擎执行层全链）
 顺带 risk.*_pct=0=不启用；③心跳连续失败 3 次判 lease 丢失终止子进程释放槽位；
@@ -890,3 +903,11 @@ Engine feature-complete (947 tests green); single-agent workflow active; batch p
 ### 既有挂起项（不变）
 
 深度性能优化（用户指示放最后）、信号监控板块二级选择 UI、重播三处验证边界、付费体系层级/定价（用户暂缓）、结果页操作卡 UI 精修（用户说下周做）、小程序/APP 远景。
+
+### 2026-10-12 公网两项修复（FRM 数据链路 + 板块榜单排序）
+
+- **FRM 风险模块上公网**：根因是 worker 端 engine 收尾钩子生成的 `risk_report.json` 写在 run 目录根部，从未登记进 `record["artifacts"]`，`collect_result_files` 不上传 → ECS `output_dir/risk_report.json` 不存在 → job 页 FRM 模块（UI 早已就位）恒 `has_report=false` 隐藏。修复：`worker/runner.py` 在 `_persist_artifacts` 后把 run 目录的 `risk_report.json` 登记进 artifacts，随 files 通道上传到云端 job 目录根。仅对新 run 生效；历史 job 如需回填可单独做。
+- **板块/标签榜单排序**：saas `job.html` 的 `renderTagRank` 原来写死 total_pnl 降序；改为 TAG_COLS + tagSort 状态，列头点击切换排序（板块名/总净盈亏/交易笔数/平均每笔/胜率），null 恒排末位，行点击下钻个股不变。下钻个股表本来就有排序。
+- **权限坑补记**（20 号文档踩坑节待补）：方案A 表重建 RENAME 后 PostgreSQL 表级 GRANT 不随迁，`qre_worker_ro` 失去 stock_daily SELECT 导致 job 56 冒烟失败；已重新 GRANT。今后任何表重建必须随迁授权。
+- **已知缺口**：alpha191 重算日志告警 `reference.index_daily` 缺 000300.SH 基准 → alpha149/181/182 输出全 NaN；验收后需补指数行情并重算这三因子。
+- 8081 lab 与公网的 FRM 均只存在于策略回测（run）层面；个股级 FRM 两侧都没有，属新开发项。

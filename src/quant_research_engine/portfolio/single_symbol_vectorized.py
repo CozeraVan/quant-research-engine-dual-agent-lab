@@ -389,7 +389,8 @@ class SingleSymbolVectorizedEngine:
         )
         flag_arrays = {
             column: working[column].to_numpy()
-            for column in ("is_suspended", "limit_up", "limit_down", "is_st", "pre_close")
+            for column in ("is_suspended", "limit_up", "limit_down", "is_st", "pre_close",
+                           "raw_open", "raw_pre_close")
             if column in working.columns
         }
         high_prices = working["high"].to_numpy(dtype=float) if "high" in working.columns else None
@@ -462,15 +463,15 @@ class SingleSymbolVectorizedEngine:
             if column == "limit_up":
                 return self.market_profile.is_limit_up(
                     request.symbol,
-                    pre_close=opt_float(i, "pre_close"),
-                    price=float(open_prices[i]),
+                    pre_close=opt_float(i, "raw_pre_close") or opt_float(i, "pre_close"),
+                    price=opt_float(i, "raw_open") or float(open_prices[i]),
                     is_st=flag(i, "is_st"),
                 )
             if column == "limit_down":
                 return self.market_profile.is_limit_down(
                     request.symbol,
-                    pre_close=opt_float(i, "pre_close"),
-                    price=float(open_prices[i]),
+                    pre_close=opt_float(i, "raw_pre_close") or opt_float(i, "pre_close"),
+                    price=opt_float(i, "raw_open") or float(open_prices[i]),
                     is_st=flag(i, "is_st"),
                 )
             return False
