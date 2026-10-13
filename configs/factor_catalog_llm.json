@@ -314,7 +314,15 @@
   "macd_cn_12_26_9",
   "price_dist",
   "price_position_ir_60",
-  "rsrs_18_200"
+  "rsrs_18_200",
+  "alpha_1000d_000300",
+  "alpha_125d_000300",
+  "alpha_1320d_000001",
+  "alpha_250d_000300",
+  "alpha_500d_000300",
+  "alpha_528d_000001",
+  "alpha_792d_000001",
+  "small_cap_reversal_21d"
  ],
  "stock_daily_overlap_close": [
   "ts_code",

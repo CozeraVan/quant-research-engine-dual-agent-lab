@@ -1,5 +1,9 @@
 2026-10-12 FACTOR-P6A DONE（tushare doc_id=486 因子复现 P6 通道A：量价 11 新列入库）：①percent_return 扩周期 21/42/63/126/252 → pctret_21/42/63/126/252 入 stock_daily_performance_close；②新增 5 个 FactorBase 子类入 stock_daily_momentum_close：price_position_ir_60（(C−O)/(H−L) 的 60 日均值/标准差，除零保护）、days_down_up（|连涨−连跌−1|）、price_dist（心理整数关口距离分 1/10/100 段）、rsrs_18_200（low~high 18 日滚动 OLS 斜率的 200 日 zscore）、macd_cn_12_26_9（中式 2×(DIF−DEA)）。③全历史 backfill（5853 只，4 worker）完成，最新日覆盖：macd_cn/ddu/price_dist 5561/5561，rsrs 5413、ppir 5294、pctret_252 5391（warmup 与新股属正常 NaN）。④验收中金标准一度"不吻合"——排查确认**非 bug 而是方案A既定设计**（CR-2026-10-11）：因子层统一 hfq 尺度（原始价 × adj_factor，IND_PRICE_BASIS=raw 激活），收益率型因子 hfq/qfq 等价、价格型因子（sma_20=1631.87 即 hfq 尺度）与原始价呈 adj_factor 倍率；pctret_5/pctret_21 对 hfq 口径手工复核 0/4000+ 不匹配。教训：金标准比对必须先确认因子层口径（hfq），不能用原始价裸算。⑤QRE NL 因子目录快照已同步（新流程 §3-⑦ 首次执行，7 个新列全部入目录）。别名映射（tushare 名→库内列）：ma_20d→sma_20、dif→macd_12_26_9、dea→macds_12_26_9、rsi→rsi_14、return_5d→pctret_5，登记于 21 号文档 §8。待 commit（indicators_tushare：config+新类；QRE：目录快照）。
 
+2026-10-13 FACTOR-P0~P3 启动与中断续跑（用户批准启动 P0-P3）：①**P0 完成**：`factors._pit_financial_panel` 物化面板落地（panel_factors/pit_panel.py，全 SQL PIT join，14.12M 行×90 列，9.1GB，2009-01-05 起；四项验收全过：PIT 抽样逐值一致无未来数据、roe_ttm 中位 4.15%、ann_date 缺失兜底 0%、毛利率交叉比对中位差 0.00pp；坑：end_date−3 months 月末错位 → date_trunc('quarter')）。②因子规范落盘：`docs/agent/change_requests/factor_specs_p1p3.md`（agent-119 整理的 88 因子逐一表达式+口径注意点，P1-P3 实施蓝本）。③P1（Value11+Size3）/P2（Quality59）/P3（Growth15）三子代理并行开工，新表 stock_daily_value/size/quality/growth；**会话退出致三个回填中断**（已写 P1→2018 年底、P2→2025H1、P3→2021 年底，幂等无损），主代理直接以 setsid+nohup 按断点年段续跑（2019/2025H2/2022 起），预计当晚收尾。④权限核实：tushare 2000 积分 token 对 income/balancesheet/cashflow/fina_indicator/daily_basic/dividend/forecast/express/fina_audit 全部实测可用，仅 stk_factor/factor_list 无权限（=自研复现动因）。**未 commit（两仓库全部待批准）**；P1-P3 验收 + NL 目录同步 + P4/P5/P7 启动为下周最高优先级（恢复指引见 21 号文档 §0.1）。
+
+2026-10-12/13 FACTOR-P6B DONE（tushare 486 复现 P6 通道B：回归 Alpha 族 + 截面反转）：新增 `panel_factors/` 面板模块（loader/formulas/runner/verify，仿 alpha191 管线，CLI `-m panel_factors.runner run --start --end`，幂等 upsert 按年 chunk），7 个回归 Alpha（alpha_125/250/500/1000d_000300 + alpha_528/792/1320d_000001，个股 hfq 收益 vs 指数收益的滚动 OLS 截距）+ small_cap_reversal_21d（−21日累计收益的截面 rank/rank和，限 circ_mv 最小 20% 组，样本<100 整日 NaN）。全历史 18 chunks/1624 万行/7275s 写完；金标准 600519.SH alpha_125d 对慢速 numpy 实现 3281 行最大误差 2.8e-17；最新日覆盖 alpha_125d 5165/5798（warmup 正常）、scr 1092 ≈ 小市值 20% 组 ✓。**已知缺口：8 列不在 FactorBase 体系，16:40 日更不接管，增量靠手动跑 runner，待 P8 接调度**。崩溃插曲：PC 崩溃时 nohup 进程存活，误启重复任务已清理（幂等无损）。NL 目录快照已同步。至此 P6 全部完成 = doc_id=486 的 Momentum+Reversal 23 因子全覆盖；台账见 21 号文档 §0。待 commit（indicators_tushare: panel_factors/；QRE: 目录快照+文档）。P0-P3（基本面面板+Value/Quality/Growth）已获用户批准启动。
+
 2026-10-12 DOCS-FACTOR-PIPELINE 归档（纯文档，无代码）：①核实新因子入库流程（indicators_tushare FACTOR_AUTHORING）与 tushare 202 因子适配性——三通道分流结论写入 21 号文档 §8（量价类走现有 §3 流程；基本面类 ~130 个必须走 P0-P8 PIT 面板管线；Alpha101 走仿 alpha191 面板通道）。②堵 NL 因子错位流程漏洞：FACTOR_AUTHORING §3 新增第⑦步「NL 因子目录快照同步」+ 验收清单条目 + §8 GUI 晋升通道同样要求（新因子入库后必须重跑 gen_factor_catalog_llm.py 并 push，否则 ECS NL 目录与因子库错位复发）。③CR-2026-10-09 补「长期防错位机制」小节（快照同步纪律 + 前端校验只比对 factor_fields 值不比对别名键名）。
 
 2026-10-11 QRE-SAAS-SMOKE-INCIDENT DONE（job 54 smoke 全市场超时生产事故修复，四 bug，细节见 CR-2026-10-11_saas_smoke_incident）：①核心——apply_precheck 空 codes（scope=all_a）原样放行导致 smoke 跑全市场 5533 只，改为按 run_id seed 经 _sample_random_universe 随机抽 PRECHECK_MAX_CODES 只（DB 不可用时宁可失败）；worker execute_job 在 kind=smoke 时跳过 build_lab_tag_analysis 与 build_symbol_detail_files 全量后处理（symbol_details 记 skipped=smoke），8081 precheck→full_params 链不经此段不受影响。②max_holding_days 0/null=不限：yaml_guard 放宽 0..1000；spec 键缺省=1（历史默认）、显式 0/null→0；compiler 修 `or` 穿透丢失 0 值；single_symbol/single_symbol_vectorized/shared/batch 四引擎 holding_period 守卫 + 校验改 <0 拒绝；顺带 risk.stop/take/trailing=0=不启用（校验 [0,1)，spec 新增 _optional_pct 归一 None 防 0.0 武装成立即止损）。③daemon 心跳连续失败 max_heartbeat_failures=3 次判定 lease 丢失，置 canceled 经 slots.is_canceled terminate 子进程、释放槽位、不回传（服务端已过期），单次抖动不杀。④build_lab_symbol_detail 加 stats=/round_trips_by_symbol= 预算参数，build_symbol_detail_files round_trips.csv 只解析两次（聚合+分组）逐股复用，消除 stats 聚合与 trades 兜底两处 O(股票数×交易数)。测试 +9（precheck 抽样/holding 0/risk 0/引擎三例/心跳两例/O(n²) 回归），`-k saas` **238 passed**（基线 237）零回归；真库实测空 codes+max_codes=1 抽 1 只可复现、NL MACD YAML（holding=20/risk 0）校验通过。未 commit、未部署（无 DB 迁移，部署后须重启本机 qre-saas-worker）。
@@ -879,3 +883,20 @@ Historical row statuses (pre-migration, kept for old table rows):
 - **公网上线**（93cb0eb/de3cc23）：run 级 FRM 回传修复（risk_report.json 登记 artifacts）；板块榜单列头排序；个股级 FRM 模块（risk 节随详情产物）；个股详情按需生成链路（kind=symbol_detail，幂等，产物落父 job 目录，前端按钮+轮询）；NaN→null 序列化修复（前端卡死根因）。
 - **存量估算**：全市场全期回测本地产出约 1.4G/次（个股子目录 1.3G + Excel 85M），网页渲染仅需 ~25MB——支撑未来存储分层策略（ECS 只存渲染产物、本地全量定期清理、研究级明细按需生成）。
 - **因子口径历史问题自愈**：旧管线 warmup 不足导致的早期因子 NULL（如 920195 MACD 2020 前）已随全历史重算修复；新回测不再出现。
+
+## 2026-10-13 MACD 正反策略核验（job_58 vs job_66）
+
+- 背景：用户发现正向（金叉买死叉卖）与反向（死叉买金叉卖）两个策略都盈利，要求核验。
+- 结论：交易执行无 bug。抽 5 股（000001/000006/000007/000021/000027）共 446 笔，
+  与本地因子库重算 100% 吻合；口径为信号 T 日生成、T+1 开盘价成交（原始价口径）、全做多。
+- "正反都盈利"解释：两策略镜像互补（#66 出场日=#58 入场日），各持仓约 52% 时间，
+  拼起来接近满仓；2010-2026 全市场整体上行，~半仓多头即搭贝塔顺风车；聚合收益被
+  少数多倍股拉高（抽样 10 个 job×股票组合 8 个亏损）；另有存活者偏差（universe≈当前上市股）。
+- **发现的引擎问题（待修复，见 todolist）**：
+  1. 盈亏用原始价核算、忽略分红送转：000001 引擎买入持有 -52.7% vs hfq 实际 +95.7%，
+     策略与基准被同步系统性低估，高分红股扭曲更大 → 建议引擎改 hfq 口径核算。
+  2. profit_factor（两 job 均 <1）与 total_return（+269%/+220%）自相矛盾，
+     两指标核算基底不一致，需澄清。
+  3. job_58 的 000002.SZ 零交易异常：本地因子显示 1983 天满足入场条件，#66 同股 151 笔，
+     #58 一笔没有、failed_orders 为空 → 疑似运行时数据缺失，需排查。
+  4. jobs.params.max_holding_days=0 与策略 YAML（20/60）不一致，虽按 YAML 生效，落库有误导性。

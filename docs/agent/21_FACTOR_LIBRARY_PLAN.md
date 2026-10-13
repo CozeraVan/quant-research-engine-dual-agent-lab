@@ -1,5 +1,31 @@
 # 21_FACTOR_LIBRARY_PLAN.md — Tushare 202 因子本地复现立项方案
 
+## 0. 进度台账（2026-10-13 更新）
+
+| 批次 | 内容 | 状态 |
+|---|---|---|
+| P6 通道A | Momentum/Reversal 量价 10 新列（pctret_21/42/63/126/252、price_position_ir_60、days_down_up、price_dist、rsrs_18_200、macd_cn_12_26_9） | ✅ 已入库+日更接管（在 config/factors.yaml 体系内） |
+| P6 通道B | 7 个回归 Alpha（alpha_125/250/500/1000d_000300、alpha_528/792/1320d_000001）+ small_cap_reversal_21d | ✅ 已全历史入库（panel_factors/ 面板管线，18 chunks/1624 万行，金标准误差 2.8e-17）；❗不在 16:40 日更内，增量依赖 P8 |
+| P0 | `_pit_financial_panel` 物化面板 + 字段核实 | ✅ 已落地（2026-10-13，`panel_factors/pit_panel.py`；14.12M 行 × 90 列，2009-01-05 起，hypertable 7天chunk；四项验收全过：PIT 抽样逐值一致、roe_ttm 中位 4.15%、ann_date 缺失 0%、毛利率交叉比对中位差 0.00pp） |
+| P1 | Value 11 + Size 3 → factors.stock_daily_value / stock_daily_size | 🚧 回填中：已完成 2009-2018（660 万行/表），2019-01-01 起续跑（setsid nohup，日志 logs/value_size_full_20261013_010404.log）；实现 `panel_factors/value_size.py` + `value_size_verify.py` |
+| P2 | Quality 59 → factors.stock_daily_quality | 🚧 回填中：已完成 2009~2025H1（1323 万行），2025-07-01 起续跑（日志 logs/quality_full_20261013_011430.log）；实现 `panel_factors/quality.py` + `quality_verify.py` |
+| P3 | Growth 15 → factors.stock_daily_growth | 🚧 回填中：已完成 2009-2021（1027 万行），2022-01-01 起续跑（日志 logs/growth_full_20261013_010241.log）；实现 `panel_factors/growth.py`/`growth_runner.py` + `growth_verify.py` |
+| P4 | Liquidity 35（换手率族，纯量价+daily_basic，不依赖 P0） | ⏸ **下周最高优先级**，规范待 agent-119 导出（仿 factor_specs_p1p3.md） |
+| P5 | Risk 25（回归族 beta/sigma，复用通道B框架） | ⏸ **下周最高优先级** |
+| P7 | Alpha101 31（复用 alpha191 面板管线） | ⏸ **下周最高优先级** |
+| P8 | 每日增量调度（panel_factors 接入 timer）+ 全历史回填 + 验收 | ⏸ P4-P7 后统一做；⚠️ 通道B 8 列 + P0-P3 各表日更缺口由本项消除 |
+
+## 0.1 下周恢复指引（2026-10-13 记录）
+
+1. **先检查 P1-P3 收尾**：三表续跑进程是否结束（`pgrep -af panel_factors`），各表最新交易日是否到 2026-10-12+；跑各表的 `*_verify.py` 验收（P1: earnings_to_price vs 1/pe_ttm 相关性>0.95 等，见因子规范）。
+2. **commit 待批准**：indicators_tushare（panel_factors/ 全部 + P0/P1/P2/P3 实现）、QRE（factor_specs_p1p3.md、NL 目录快照、05/21 号文档）——本周所有改动均未 commit。
+3. **NL 目录快照同步**：P1-P3 入库后跑 `scripts/gen_factor_catalog_llm.py`（FACTOR_AUTHORING §3-⑦）。
+4. **随后启动 P4/P5/P7**（互不依赖可并行）：先让 agent-119 导出 P4/P5/P7 因子规范（仿 factor_specs_p1p3.md），再派实施。
+5. **P8 最后**：统一接日更（消除通道B/基本面表的手动补数缺口）。
+6. 因子层口径提醒：hfq 尺度（原始价 × adj_factor），金标准比对必须按 hfq，勿对原始价裸算（05 号文档 2026-10-12 条）。
+
+完成度：23/202 因子已覆盖（Momentum 20 + Reversal 3 全量）。权限与数据已核实达标（2026-10-13：income/balancesheet/cashflow/fina_indicator/daily_basic/dividend 接口实测可用，DB 四表 5573 只 2001 年起、daily_basic 1433 万行、dividend 25 万行齐备；仅 stk_factor/factor_list 官方接口无权限=自研复现动因）。
+
 > 立项日期：2026-10-11。来源：plan 子代理方案（agent-119），主代理核实背景后收录。
 > 决策背景：Tushare 因子库（doc_id=486，202 因子 9 大类，公式全公开）为单独付费接口（个人 2000 元/年），本机 token 无权限（factor_list/stk_factor_pro/stk_factor 实测拒绝）。决定自研复现——公式公开可审计、可自调参数、零费用。约 200/202 可复现，仅 dividend_yield_3y_avg 等 2 个待 dividend 回填完成。
 > 与现有因子库重叠仅 5~7%（MACD/RSI/收益率等 10~15 个）；现有 490 列全是纯量价，本方案补齐基本面/估值/流动性空白，直接解锁巴菲特策略因子化。
