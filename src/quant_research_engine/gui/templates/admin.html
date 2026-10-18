@@ -19,6 +19,7 @@
   <div id="ov-health"></div>
   <div class="admin-cards">
     <div class="admin-card" id="ov-daily"><h3>日线数据</h3><div class="card-body opt">加载中...</div></div>
+    <div class="admin-card" id="ov-minute"><h3>分钟线数据</h3><div class="card-body opt">加载中...</div></div>
     <div class="admin-card" id="ov-factors"><h3>因子库</h3><div class="card-body opt">加载中...</div></div>
     <div class="admin-card" id="ov-backtests"><h3>回测产物</h3><div class="card-body opt">加载中...</div></div>
     <div class="admin-card" id="ov-derivatives"><h3>衍生品数据</h3><div class="card-body opt">加载中...</div></div>
@@ -372,9 +373,44 @@
           + '<p>估算股票数：<span class="num">' + esc(daily.estimated_symbol_count == null ? '—' : Number(daily.estimated_symbol_count).toLocaleString()) + '</span></p>'
           + '<p>最近交易日：</p><p class="opt">' + esc((daily.recent_trade_dates || []).join('，')) + '</p>';
 
+        // 分钟线域（QRE-GUI-MINUTE-CARD-040）：stock_minute_1m 新鲜度 + 估算行数
+        // （chunk reltuples，非全表 count）+ 最近入库审计 + ingest timer 状态
+        var mEl = document.querySelector('#ov-minute .card-body');
+        var m = d.minute || {ok: false, error: '无数据'};
+        if (!m.ok) {
+          mEl.innerHTML = '<p class="err">' + esc(m.error || '分钟线域不可用') + '</p>';
+        } else if (!m.present) {
+          mEl.innerHTML = '<p class="opt">未初始化（public.stock_minute_1m 不存在）</p>';
+        } else {
+          var mHtml = '<p>估算行数：<span class="num">' + esc(m.estimated_rows == null ? '—' : Number(m.estimated_rows).toLocaleString()) + '</span></p>'
+            + '<p>最新分钟：<strong class="kpi">' + esc(m.watermark || '—') + '</strong></p>';
+          if (m.audit) {
+            var auditOk = m.audit.consistent === true;
+            mHtml += '<p>最近入库（' + esc(m.audit.trade_date) + '）：'
+              + '<span class="' + (auditOk ? 'health-green' : 'err') + '">'
+              + (auditOk ? '✓ 一致' : '✗ 不一致') + '</span>'
+              + ' csv ' + esc(m.audit.rows_csv == null ? '—' : Number(m.audit.rows_csv).toLocaleString())
+              + ' / db ' + esc(m.audit.rows_db == null ? '—' : Number(m.audit.rows_db).toLocaleString()) + '</p>';
+          } else {
+            mHtml += '<p class="opt">最近入库审计：—</p>';
+          }
+          if (m.timer) {
+            mHtml += m.timer.status === 'not_installed'
+              ? '<p class="err">minute-csv-ingest.timer 未安装</p>'
+              : '<p>timer：' + esc(m.timer.active_state || '—') + '（' + esc(m.timer.unit_file_state || '—') + '）；下次触发：' + esc(m.timer.next_elapse || '—') + '</p>'
+                + '<p>上次结果：' + esc(m.timer.last_result || '—') + '（exit=' + esc(m.timer.last_exit_status || '—') + '）</p>';
+          }
+          mEl.innerHTML = mHtml;
+        }
+
         var f = d.factors;
         var rows = f.tables.map(function(t) {
-          var lag = f.lagging_tables.indexOf(t.table) >= 0 ? ' <span class="err">滞后</span>' : '';
+          var lag = '';
+          if (t.daily_pipeline === false) {
+            lag = ' <span class="opt">未接日更</span>';
+          } else if (f.lagging_tables.indexOf(t.table) >= 0) {
+            lag = ' <span class="err">滞后</span>';
+          }
           return '<tr><td>' + esc(t.table) + '</td><td class="num">' + esc(t.estimated_rows == null ? '—' : Number(t.estimated_rows).toLocaleString()) + '</td><td>' + esc(t.watermark) + lag + '</td></tr>';
         }).join('');
         var unmanaged = (f.unmanaged_tables || []).map(function(t) {
@@ -456,7 +492,9 @@
   var UNIT_TO_PIPELINE = {
     'quant-ts-daily.timer': 'quant-ts',
     'indicators-tushare-daily.timer': 'indicators',
-    'qre-refresh.timer': 'qre-refresh'
+    'qre-refresh.timer': 'qre-refresh',
+    'qre-barometer.timer': 'qre-barometer',
+    'minute-csv-ingest.timer': 'minute-ingest'
   };
   var jobPollTimer = null;
 
@@ -482,10 +520,12 @@
               + '<p>上次运行：' + esc(t.last_run || '—') + '</p>'
               + '<p>上次结果：' + esc(t.last_result || '—') + '（exit=' + esc(t.last_exit_status || '—') + '）</p>';
           }
-          html += '<p>'
-            + '<button class="btn-sm" data-run="' + pipeline + '">立即运行</button> '
-            + '<button class="btn-sm" data-logs="' + pipeline + '">最近日志</button>'
-            + '</p><div class="job-area opt" id="job-' + pipeline + '"></div>';
+          if (pipeline) {
+            html += '<p>'
+              + '<button class="btn-sm" data-run="' + pipeline + '">立即运行</button> '
+              + '<button class="btn-sm" data-logs="' + pipeline + '">最近日志</button>'
+              + '</p><div class="job-area opt" id="job-' + pipeline + '"></div>';
+          }
           html += '</div>';
           card.innerHTML = html;
           container.appendChild(card);
@@ -834,7 +874,9 @@
             det.className = 'fs-table';
             var redBadge = t.red && t.red.length ? ' <span class="err">缺 ' + t.red.length + '</span>' : '';
             var yellowBadge = t.yellow && t.yellow.length ? ' <span class="health-yellow">停滞 ' + t.yellow.length + '</span>' : '';
-            var freshBadge = t.fresh === 'ok' ? ' <span class="ok">最新</span>'
+            var pending = t.daily_pipeline === false;
+            var freshBadge = pending ? ' <span class="opt">未接日更</span>'
+              : t.fresh === 'ok' ? ' <span class="ok">最新</span>'
               : t.fresh === 'warn' ? ' <span class="health-yellow">滞后1日</span>'
               : t.fresh === 'err' ? ' <span class="err">严重滞后' + t.lag_days + '日</span>'
               : ' <span class="opt">-</span>';
@@ -842,10 +884,13 @@
               + '（库内 ' + t.db_column_count + ' 列，watermark ' + esc(t.watermark || '—') + '）'
               + freshBadge
               + redBadge + yellowBadge
-              + ' <button class="btn-sm" data-backfill="' + esc(t.table) + '">补全此表</button></summary>'
+              + (pending ? '' : ' <button class="btn-sm" data-backfill="' + esc(t.table) + '">补全此表</button>') + '</summary>'
+              + (pending
+                  ? '<p class="opt">panel_factors 面板表，尚未接入日更（P8 任务）；仅展示库内列，不参与对账与滞后判定。</p>'
+                    + colChips(t.green, 'green') : '')
               + (t.red && t.red.length
                   ? '<p class="err">配置有但库缺（<a href="/">前往新因子申请</a>；或点上方"补全此表"）：</p>' + colChips(t.red, 'red') : '')
-              + (t.green && t.green.length ? '<p class="ok">在库且在日更：</p>' + colChips(t.green, 'green') : '')
+              + (!pending && t.green && t.green.length ? '<p class="ok">在库且在日更：</p>' + colChips(t.green, 'green') : '')
               + (t.yellow && t.yellow.length
                   ? '<p class="health-yellow">在库但不在日更配置（停滞风险；"补全此表"只对配置内列生效，黄列可逐个删除）：</p>'
                     + colChips(t.yellow, 'yellow', t.table) : '');

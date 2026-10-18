@@ -454,6 +454,7 @@ def create_app() -> Flask:
             overview_daily,
             overview_derivatives,
             overview_factors,
+            overview_minute,
             pending_trade_days,
         )
 
@@ -466,12 +467,14 @@ def create_app() -> Flask:
         backtests = overview_backtests()
         derivatives = overview_derivatives(db_url)  # 内部自降级，不拖垮总览
         concept_tags = overview_concept_tags(db_url)  # 内部自降级，不拖垮总览
+        minute = overview_minute(db_url)  # 内部自降级，不拖垮总览
         health = health_status(
             daily.get("watermark"),
-            [t["watermark"] for t in factors["tables"]],
+            # 未接日更的 panel 面板表不参与健康灯（避免误报红色故障）
+            [t["watermark"] for t in factors["tables"] if t.get("daily_pipeline", True)],
             pending_trade_days=pending_trade_days(daily.get("watermark"), db_url),
         )
-        return jsonify({"ok": True, "daily": daily, "factors": factors, "backtests": backtests, "health": health, "derivatives": derivatives, "concept_tags": concept_tags})
+        return jsonify({"ok": True, "daily": daily, "factors": factors, "backtests": backtests, "health": health, "derivatives": derivatives, "concept_tags": concept_tags, "minute": minute})
 
     @app.route("/api/admin/pg-status")
     def api_admin_pg_status() -> Any:

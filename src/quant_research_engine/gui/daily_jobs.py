@@ -53,6 +53,13 @@ PIPELINES: dict[str, dict[str, Any]] = {
         "unit": "qre-barometer.service",
         "log_dirs": [],
     },
+    "minute-ingest": {
+        "label": "分钟线 stock_minute_1m 入库",
+        "cmd": [UV_BIN, "run", "python", "minute_csv_daily_ingest.py"],
+        "cwd": QUANT_TS_DIR,
+        "unit": "minute-csv-ingest.service",
+        "log_dirs": [],
+    },
 }
 
 # 每条管线独立单任务锁

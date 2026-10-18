@@ -1,3 +1,5 @@
+2026-10-18 QRE-SHARED-OOM-FIX DONE（job#71 全市场全期 shared 回测 OOM 根治：子进程峰值 22.6GB → 3.96GB，cgroup 26G→18G，子进程 RLIMIT_AS 14G 可读配额错误）：**根因**——worker 默认 shared 模式无流式路径（流式只覆盖 batch）：①装配器一次性 build 全市场×全期 frame（~1450 万行），StringDtype/python-storage 的 ts_code 每格独立 str 对象 + bars×factors×metadata 三次全量 merge 拷贝，单装配峰值即 13.4GB（实测）；②include_metadata=True 把十几列富 metadata（name/industry/total_mv…）merge 到每根 K 线，而撮合只用 is_st/is_suspended；③`_prepare_frame` frame.copy()+逐股 chunk.copy()+concat+二次排序 ≈ 4× frame；④`_symbol_bar_indices` 对全量 frame iterrows 建 (symbol,date)→idx dict，~2200 万条 Python 对象 ≈ 5GB；⑤service MemoryMax=26G 高于物理内存 23G（WSL），cgroup 保护失效，最终全局 OOM killer 收尸（job#71 三次 -9）。**改法**（口径零改动，产物逐字节验证一致）：㈠`data/assembler.py` 新增 `build_chunked()`——按股分块（QRE_SHARED_CHUNK_SIZE 默认 500）走既有 build()、块后释放，metadata 只并请求列（默认 is_st/is_suspended），ts_code 转 category（categories=排序全量代码，与字符串字典序一致；1450 万行仅此省 ~1.5-2GB/份拷贝）；股票全集=区间内有 K 线代码 ∪ metadata 代码（不漏无 metadata 的代码），store 桩无 list_symbols_with_bars 时退化 metadata 集。㈡`portfolio/shared.py`——`_prepare_frame` 重写：全市场时不复制输入 frame，信号按 groupby().indices 行位置切片就地计算（语义与逐股 chunk 完全一致），算完裁剪日循环用不到的列（vol/amount/因子/metadata；保留 OHLC/pre_close/raw_*/is_st/is_suspended/score/volatility/metadata_columns 等撮合与权重必需列，首次漏 low 被既有止损测试抓出已补）；删除 `_symbol_bar_indices`（值本就在行内 symbol_bar_index 列）。㈢接线：gui/engine.py `_run_via_module` shared 分支与 apps/cli.py backtest-shared 均走 build_chunked；信号表达式引用的列经 `evaluation/signals.py::referenced_fields`（AST Name 收集）并入保留集，防裁掉信号输入（metadata_as_of 透传保持 PIT）。㈣`worker/slots.py` 子进程入口 `_apply_child_memory_limit`——RLIMIT_AS 默认 14G（QRE_WORKER_CHILD_MEM_GB 可配），超限抛可读「MemoryError: 任务超出资源配额（…上限 N GB…）」而非裸 -9。㈤`deploy/saas/qre-saas-worker.service` 与线上 /etc/systemd/system/qre-saas-worker.service MemoryMax 26G→18G，daemon-reload+restart 已生效（MemoryMax=19327352832）。**未做 float32 降精度**：信号输入因子列保持 float64（ema 近交叉值在 float32 相对误差 1e-7 下可能翻转信号，违反口径一致硬约束）；内存目标靠分块/category/裁剪达成，足够。**验证**：①测试——tests/test_cli.py 13 个 FakeAssembler 补 build_chunked 委托（接口演进），新增 +5（slots 子进程超配额可读错误×2、referenced_fields、build_chunked 行集等价+metadata 裁剪+as_of 透传、块边界内容不变），相关子集 484+221+26 passed，全量 pytest tests/ 绿；②冒烟——8 股×1.5 年 shared 产物与改动前基线逐字节一致（仅报告 html/xlsx 生成时间戳差异）；③中规模新旧代码对比——git worktree 取 HEAD 旧代码跑 300 股×4 年 shared，产物与现代码逐字节一致；④实弹——job#71 等价（ema_5×ema_200，全市场 2010-01-04→2026-10-18，shared，10 万初始资金，max_positions 不限）本地直跑（不走 ECS 队列，验证期间停 worker 防双跑）：**32 分钟跑完（旧 job#66 同类 2.5h，iterrows dict 删除顺带提速），/usr/bin/time -v 峰值 RSS 3.96GB ≪ 12GB 目标**，内存曲线平稳（15 分钟 2.44GB → 全程峰值 4.15GB），全程叠加 panel_factors（4.2GB）在跑无压力；结果形态合理（742 股成交 1460 笔往返）。**遗留/注意**：shared 逐日 boolean 扫描日循环（O(天数×行数)）未动，CPU 为主、内存瞬时小，后续可选优化；首次完整全量实弹在改造前跑出过 MemoryError 中间态（14G ulimit 兜底生效，恰验证配额错误路径）；job#71 可安全重提（worker 已重启含全部修复）。未 commit，等主代理处理。
+
 2026-10-12 FACTOR-P6A DONE（tushare doc_id=486 因子复现 P6 通道A：量价 11 新列入库）：①percent_return 扩周期 21/42/63/126/252 → pctret_21/42/63/126/252 入 stock_daily_performance_close；②新增 5 个 FactorBase 子类入 stock_daily_momentum_close：price_position_ir_60（(C−O)/(H−L) 的 60 日均值/标准差，除零保护）、days_down_up（|连涨−连跌−1|）、price_dist（心理整数关口距离分 1/10/100 段）、rsrs_18_200（low~high 18 日滚动 OLS 斜率的 200 日 zscore）、macd_cn_12_26_9（中式 2×(DIF−DEA)）。③全历史 backfill（5853 只，4 worker）完成，最新日覆盖：macd_cn/ddu/price_dist 5561/5561，rsrs 5413、ppir 5294、pctret_252 5391（warmup 与新股属正常 NaN）。④验收中金标准一度"不吻合"——排查确认**非 bug 而是方案A既定设计**（CR-2026-10-11）：因子层统一 hfq 尺度（原始价 × adj_factor，IND_PRICE_BASIS=raw 激活），收益率型因子 hfq/qfq 等价、价格型因子（sma_20=1631.87 即 hfq 尺度）与原始价呈 adj_factor 倍率；pctret_5/pctret_21 对 hfq 口径手工复核 0/4000+ 不匹配。教训：金标准比对必须先确认因子层口径（hfq），不能用原始价裸算。⑤QRE NL 因子目录快照已同步（新流程 §3-⑦ 首次执行，7 个新列全部入目录）。别名映射（tushare 名→库内列）：ma_20d→sma_20、dif→macd_12_26_9、dea→macds_12_26_9、rsi→rsi_14、return_5d→pctret_5，登记于 21 号文档 §8。待 commit（indicators_tushare：config+新类；QRE：目录快照）。
 
 2026-10-13 FACTOR-P0~P3 启动与中断续跑（用户批准启动 P0-P3）：①**P0 完成**：`factors._pit_financial_panel` 物化面板落地（panel_factors/pit_panel.py，全 SQL PIT join，14.12M 行×90 列，9.1GB，2009-01-05 起；四项验收全过：PIT 抽样逐值一致无未来数据、roe_ttm 中位 4.15%、ann_date 缺失兜底 0%、毛利率交叉比对中位差 0.00pp；坑：end_date−3 months 月末错位 → date_trunc('quarter')）。②因子规范落盘：`docs/agent/change_requests/factor_specs_p1p3.md`（agent-119 整理的 88 因子逐一表达式+口径注意点，P1-P3 实施蓝本）。③P1（Value11+Size3）/P2（Quality59）/P3（Growth15）三子代理并行开工，新表 stock_daily_value/size/quality/growth；**会话退出致三个回填中断**（已写 P1→2018 年底、P2→2025H1、P3→2021 年底，幂等无损），主代理直接以 setsid+nohup 按断点年段续跑（2019/2025H2/2022 起），预计当晚收尾。④权限核实：tushare 2000 积分 token 对 income/balancesheet/cashflow/fina_indicator/daily_basic/dividend/forecast/express/fina_audit 全部实测可用，仅 stk_factor/factor_list 无权限（=自研复现动因）。**未 commit（两仓库全部待批准）**；P1-P3 验收 + NL 目录同步 + P4/P5/P7 启动为下周最高优先级（恢复指引见 21 号文档 §0.1）。
@@ -920,3 +922,28 @@ Historical row statuses (pre-migration, kept for old table rows):
   ——tushare ebitda 仅半年/年报披露，改 ebit_ttm+最近年报折旧摊销口径，修复脚本跑批中）；
   P4/P5/P7 因子规范 91 个落盘（change_requests/factor_specs_p4p5p7.md）；
   job#71 OOM 确诊（子进程 22.6GB vs 物理 23GB），引擎降内存修复进行中。
+
+## 2026-10-18 8080 管理台可视化新数据资产（QRE-GUI-FACTOR-AUTO-MANAGE / MINUTE-CARD-040）
+
+- **因子表实时纳管**：gui/admin.py 新增 `_is_auto_managed_table`（`_pit_financial_panel`
+  或不符合 `<category>_<price>` 命名的 `stock_daily_*` 面板表）。`overview_factors`
+  将 factors schema 实时发现的此类表自动纳入监控并标注 `daily_pipeline=False`
+  （未接日更，P8 才接入）：只展示行数/watermark，不参与滞后判定与健康灯，避免误报红色。
+  可解析命名的孤儿表（如 vortex_close）仍为未纳管，语义不变。
+  健康灯入参在 app.py 过滤为仅日更中表。factor_status 对 pending 表跳过列级对账
+  （green=库内列如实展示，fresh/lag 为 null），summary 不计入滞后统计。
+  效果：P0-P5 七张新表（_pit_financial_panel / value / size / quality / growth /
+  liquidity / risk）落库即自动出现在监控中，未来 P7 alpha101 同规则免改代码。
+- **分钟线监控卡片**（总览页 #ov-minute）：MAX(trade_time) 走 time 索引（实测 ~0.2s），
+  行数用 timescaledb_information.chunks reltuples 估算（禁全表 count），最近入库审计取
+  stock_minute_1m_audit 最新一行 rows_csv==rows_db 一致性，外加 minute-csv-ingest.timer
+  的 systemctl 只读状态；60s 缓存，整域自降级。TIMER_UNITS 同步纳入该 timer，
+  daily_jobs 新增 minute-ingest 手动触发管线（quant_ts/minute_csv_daily_ingest.py）。
+- 模板：日更中心按钮仅在有对应管线时渲染（修复未映射 timer 产生 undefined 按钮的
+  旧问题，并补 qre-barometer 映射）；因子状态页 pending 表显示「未接日更」徽标、
+  不出「补全此表」按钮。
+- 验证：tests/test_gui_admin.py 新增 6 测试（自动纳管/孤儿语义/pending 免对账/分钟卡
+  ok·不一致·降级/timer 登记）；全量 gui+saas 相关 838 测试通过；重启 qre-gui 后
+  curl 验证 /api/admin/overview（health green，7 张 pending 表列出，minute 卡
+  估算 12.9 亿行、watermark 2026-10-16 15:30、审计一致、timer active）、
+  /api/admin/timers、/api/admin/factor-status 均正常。qre-saas-worker 未受影响。

@@ -1100,3 +1100,206 @@ def test_pg_status_api(app_client, monkeypatch):
     assert d["listen_5432"] is True
     assert d["stock_daily_max_trade_date"] is None
     assert "boom" in d["db_error"]
+
+
+# --- 因子表实时纳管（QRE-GUI-FACTOR-AUTO-MANAGE） ---
+
+
+def test_is_auto_managed_table():
+    assert admin._is_auto_managed_table("_pit_financial_panel") is True
+    assert admin._is_auto_managed_table("stock_daily_value") is True
+    assert admin._is_auto_managed_table("stock_daily_risk") is True
+    assert admin._is_auto_managed_table("stock_daily_alpha101") is True
+    # 可解析为 <category>_<price> 的孤儿表不自动纳管（保持历史孤儿语义）
+    assert admin._is_auto_managed_table("stock_daily_vortex_close") is False
+    assert admin._is_auto_managed_table("stock_daily_momentum_close") is False
+    assert admin._is_auto_managed_table("cb_daily") is False
+
+
+class _PanelConn(_FakeConn):
+    """factors schema 含 panel 面板表与一张孤儿表。"""
+
+    def execute(self, clause, params=None):
+        sql = str(clause)
+        if "information_schema.tables" in sql:
+            return _FakeResult(rows=[
+                ("_pit_financial_panel",),
+                ("stock_daily_momentum_close",),
+                ("stock_daily_overlap_close",),
+                ("stock_daily_value",),
+                ("stock_daily_vortex_close",),  # 可解析命名的孤儿表
+            ])
+        return super().execute(clause, params)
+
+
+class _PanelStore(FakeStore):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        store = self
+        self.market_engine = type("_Eng", (), {"begin": lambda self: _PanelConn(store)})()
+
+
+def test_overview_factors_auto_managed_pending(monkeypatch):
+    """panel 面板表落库即自动纳管为「未接日更」：出现在 tables 中，
+    不参与滞后判定；孤儿表仍为未纳管。"""
+    admin._cache.clear()
+    store = _PanelStore(factor_maxes={
+        "stock_daily_momentum_close": "2026-07-24",   # 日更中，滞后
+        "stock_daily_overlap_close": "2026-07-27",    # 日更中，最新
+        "stock_daily_value": None,                     # 未接日更，无数据也不算滞后
+        "_pit_financial_panel": "2026-07-20",
+        "stock_daily_vortex_close": None,
+    })
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: store)
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.managed_factor_tables",
+        lambda repo=None: {"stock_daily_momentum_close", "stock_daily_overlap_close"},
+    )
+    factors = admin.overview_factors()
+    by_table = {t["table"]: t for t in factors["tables"]}
+    assert by_table["factors.stock_daily_value"]["daily_pipeline"] is False
+    assert by_table["factors._pit_financial_panel"]["daily_pipeline"] is False
+    assert by_table["factors.stock_daily_momentum_close"]["daily_pipeline"] is True
+    # 未接日更表不进滞后清单；孤儿表进未纳管段
+    assert factors["lagging_tables"] == ["factors.stock_daily_momentum_close"]
+    assert [t["table"] for t in factors["unmanaged_tables"]] == ["factors.stock_daily_vortex_close"]
+    admin._cache.clear()
+
+
+def test_factor_status_pending_panel_no_reconcile(monkeypatch):
+    """未接日更的 panel 表：跳过列级对账与滞后判定，不误报停滞/严重滞后。"""
+    _setup_factor_status(
+        monkeypatch,
+        {
+            "stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14"],
+            "stock_daily_overlap_close": ["ts_code", "trade_date", "sma_20", "sma_60"],
+            "stock_daily_value": ["ts_code", "trade_date", "pe_ttm", "pb"],
+            "_pit_financial_panel": ["ts_code", "trade_date", "roe"],
+        },
+        _expected_payload(),
+    )
+    store = FakeStore(factor_maxes={
+        "stock_daily_momentum_close": "2026-07-27",
+        "stock_daily_overlap_close": "2026-07-27",
+        "stock_daily_value": None,
+        "_pit_financial_panel": "2026-07-20",
+    })
+    cols = {
+        "stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14"],
+        "stock_daily_overlap_close": ["ts_code", "trade_date", "sma_20", "sma_60"],
+        "stock_daily_value": ["ts_code", "trade_date", "pe_ttm", "pb"],
+        "_pit_financial_panel": ["ts_code", "trade_date", "roe"],
+    }
+    store.get_table_columns = lambda table_name, engine=None: cols.get(
+        table_name.split(".")[-1], ["ts_code", "trade_date"]
+    )
+    store.market_engine = type("_Eng", (), {"begin": lambda self: _PanelConn(store)})()
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: store)
+
+    status = factor_status()
+    by_table = {t["table"]: t for t in status["tables"]}
+    val = by_table["factors.stock_daily_value"]
+    assert val["daily_pipeline"] is False
+    assert val["fresh"] is None and val["lag_days"] is None
+    assert val["red"] == [] and val["yellow"] == []
+    assert val["green"] == ["pb", "pe_ttm"]  # 仅如实展示库内列
+    pit = by_table["factors._pit_financial_panel"]
+    assert pit["daily_pipeline"] is False and pit["fresh"] is None
+    # 滞后/严重滞后统计不含 pending 表
+    assert status["summary"]["lagging"] == 0
+    assert status["summary"]["stale"] == 0
+    admin._cache.clear()
+
+
+# --- 分钟线监控卡片（QRE-GUI-MINUTE-CARD-040） ---
+
+
+class _MinuteConn(_FakeConn):
+    def __init__(self, store, *, audit_rows=None, table_exists=True):
+        super().__init__(store)
+        self._audit_rows = audit_rows
+        self._table_exists = table_exists
+
+    def execute(self, clause, params=None):
+        sql = str(clause)
+        if "to_regclass" in sql:
+            return _FakeResult(scalar="x" if self._table_exists else None)
+        if "MAX(trade_time)" in sql:
+            return _FakeResult(scalar="2026-10-16 15:30:00")
+        if "stock_minute_1m_audit" in sql:
+            return _FakeResult(rows=self._audit_rows or [])
+        return super().execute(clause, params)
+
+
+class _MinuteStore(FakeStore):
+    def __init__(self, *, audit_rows=None, table_exists=True):
+        super().__init__()
+        store = self
+        self._conn_args = {"audit_rows": audit_rows, "table_exists": table_exists}
+        self.market_engine = type(
+            "_Eng", (), {"begin": lambda self: _MinuteConn(store, **store._conn_args)}
+        )()
+
+
+def _minute_runner(with_timer):
+    mapping = {
+        "minute-csv-ingest.timer": _Proc(
+            "LoadState=loaded\nActiveState=active\nUnitFileState=enabled\n"
+            "NextElapseUSecRealtime=Mon 2026-10-19 17:20:00 CST\n"
+        ),
+        "minute-csv-ingest.service": _Proc(
+            "LoadState=loaded\nActiveEnterTimestamp=Fri 2026-10-16 17:20:00 CST\n"
+            "Result=success\nExecMainStatus=0\n"
+        ),
+    }
+    return _runner_factory(mapping if with_timer else {})
+
+
+def test_overview_minute_ok(monkeypatch):
+    admin._cache.clear()
+    store = _MinuteStore(audit_rows=[("2026-10-16", 1354587, 1354587)])
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: store)
+    result = admin.overview_minute(runner=_minute_runner(True))
+    assert result["ok"] is True and result["present"] is True
+    assert result["watermark"] == "2026-10-16 15:30:00"
+    assert result["estimated_rows"] == 123456  # pg_class/chunk reltuples 估算，非全表 count
+    assert result["audit"]["trade_date"] == "2026-10-16"
+    assert result["audit"]["consistent"] is True
+    assert result["timer"]["status"] == "installed"
+    assert result["timer"]["active_state"] == "active"
+    assert result["timer"]["last_result"] == "success"
+    admin._cache.clear()
+
+
+def test_overview_minute_audit_inconsistent(monkeypatch):
+    admin._cache.clear()
+    store = _MinuteStore(audit_rows=[("2026-10-16", 1354587, 1354000)])
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: store)
+    result = admin.overview_minute(runner=_minute_runner(True))
+    assert result["audit"]["consistent"] is False
+    admin._cache.clear()
+
+
+def test_overview_minute_not_present_and_db_down(monkeypatch):
+    admin._cache.clear()
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin._store",
+        lambda db_url=None: _MinuteStore(table_exists=False),
+    )
+    result = admin.overview_minute(runner=_minute_runner(False))
+    assert result == {"ok": True, "present": False}
+    admin._cache.clear()
+
+    def boom(db_url=None):
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", boom)
+    result = admin.overview_minute(runner=_minute_runner(False))
+    assert result["ok"] is False and "数据库不可用" in result["error"]
+    admin._cache.clear()
+
+
+def test_timer_units_includes_minute_ingest():
+    units = {u["unit"]: u for u in admin.TIMER_UNITS}
+    assert "minute-csv-ingest.timer" in units
+    assert units["minute-csv-ingest.timer"]["service"] == "minute-csv-ingest.service"

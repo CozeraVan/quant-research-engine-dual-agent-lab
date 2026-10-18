@@ -27,6 +27,7 @@ TIMER_UNITS = [
     {"unit": "cluster-ashare-daily.timer", "label": "聚类反推+daily_tags", "service": "cluster-ashare-daily.service"},
     {"unit": "cluster-ashare-tags-weekly.timer", "label": "聚类标签库周更", "service": "cluster-ashare-tags-weekly.service"},
     {"unit": "qre-barometer.timer", "label": "大盘风险风向标", "service": "qre-barometer.service"},
+    {"unit": "minute-csv-ingest.timer", "label": "分钟线 stock_minute_1m 入库", "service": "minute-csv-ingest.service"},
 ]
 
 QRE_REFRESH_INSTALL_HINT = (
@@ -83,6 +84,21 @@ MANAGED_FACTOR_TABLES_FALLBACK = [
 # alpha191 面板通道表：不符合 stock_daily_<category>_<price> 命名（无价格后缀），
 # 不在 indicators config/factors.yaml 内，由 alpha191 子包独立日更，单独登记纳管。
 ALPHA191_TABLE = "stock_daily_alpha191"
+
+# P0 基本面 PIT 面板表（panel_factors 通道，尚未接日更，P8 任务接入）。
+PIT_FINANCIAL_PANEL_TABLE = "_pit_financial_panel"
+
+
+def _is_auto_managed_table(name: str) -> bool:
+    """实时纳管规则（QRE-GUI-FACTOR-AUTO-MANAGE）：factors schema 中实际存在、
+    但不符合 indicators <category>_<price> 命名的面板表（stock_daily_value /
+    stock_daily_size / stock_daily_risk / stock_daily_alpha101 等 P1-P7 面板，
+    以及 _pit_financial_panel）落库即自动纳入监控，标记为「未接日更」，
+    不参与滞后判定与健康灯。可解析为 <category>_<price> 的孤儿表
+    （如历史遗留 stock_daily_vortex_close）不受影响，仍为未纳管。"""
+    if name == PIT_FINANCIAL_PANEL_TABLE:
+        return True
+    return name.startswith("stock_daily_") and parse_factor_table_name(name) is None
 
 
 def managed_factor_tables(repo: Path | None = None) -> set[str]:
@@ -279,7 +295,15 @@ def overview_daily(db_url: str | None = None) -> dict[str, Any]:
 
 def overview_factors(db_url: str | None = None, daily_max: str | None = None) -> dict[str, Any]:
     """因子域：纳管表逐表估算行数 + watermark + 滞后清单；未纳管表（孤儿表）
-    单列信息段，不参与滞后判定与健康灯。"""
+    单列信息段，不参与滞后判定与健康灯。
+
+    纳管两类（QRE-GUI-FACTOR-AUTO-MANAGE）：
+    - 日更中（daily_pipeline=True）：factors.yaml 推导 ∪ alpha191，参与滞后判定；
+    - 未接日更（daily_pipeline=False）：factors schema 实时发现的 panel_factors
+      面板表（stock_daily_value/size/quality/growth/liquidity/risk/alpha101、
+      _pit_financial_panel 等，见 _is_auto_managed_table），落库即自动出现，
+      只展示行数/watermark，不参与滞后判定与健康灯（P8 才接日更）。
+    """
     from sqlalchemy import text
 
     def _produce() -> dict[str, Any]:
@@ -300,30 +324,34 @@ def overview_factors(db_url: str | None = None, daily_max: str | None = None) ->
                 managed_infos: list[dict[str, Any]] = []
                 unmanaged_infos: list[dict[str, Any]] = []
                 for table in tables:
-                    # 不符合 <category>_<price> 命名但在纳管清单内的表（如 alpha191）
-                    # 也纳入对账，不跳过。
-                    if parse_factor_table_name(table) is None and table not in managed:
+                    # 不符合 <category>_<price> 命名但在纳管清单内的表（如 alpha191、
+                    # panel 面板表）也纳入对账，不跳过。
+                    in_managed = table in managed or _is_auto_managed_table(table)
+                    if parse_factor_table_name(table) is None and not in_managed:
                         continue
                     info = {
                         "table": f"factors.{table}",
                         "estimated_rows": _estimate_rows(conn, "factors", table),
+                        "daily_pipeline": table in managed,
                     }
-                    if table in managed:
+                    if in_managed:
                         max_date = conn.execute(text(f'SELECT MAX(trade_date) FROM factors."{table}"')).scalar()
                         info["watermark"] = str(max_date) if max_date else None
                         managed_infos.append(info)
                     else:
                         unmanaged_infos.append(info)
                 # 纳管但 schema 中不存在的表也如实列出
-                present = {t.split(".")[-1] for t in (i["table"] for i in managed_infos)}
+                present = {t["table"].split(".")[-1] for t in managed_infos}
                 for missing in sorted(managed - present):
                     managed_infos.append(
-                        {"table": f"factors.{missing}", "estimated_rows": None, "watermark": None}
+                        {"table": f"factors.{missing}", "estimated_rows": None, "watermark": None,
+                         "daily_pipeline": True}
                     )
             lagging = [
                 info["table"]
                 for info in managed_infos
-                if daily_watermark and (info["watermark"] is None or info["watermark"] < daily_watermark)
+                if info.get("daily_pipeline", True)
+                and daily_watermark and (info["watermark"] is None or info["watermark"] < daily_watermark)
             ]
             return {
                 "daily_watermark": daily_watermark,
@@ -515,6 +543,85 @@ def overview_concept_tags(db_url: str | None = None) -> dict[str, Any]:
             store.close()
 
     return _cached(f"overview_concept_tags:{db_url}", _produce)
+
+
+# ---------------------------------------------------------------------------
+# 分钟线监控卡片（QRE-GUI-MINUTE-CARD-040）
+# ---------------------------------------------------------------------------
+
+#: minute-csv-ingest.timer（每工作日 17:20）对应的 systemd 单元；状态读取复用
+#: timer_status 的只读 systemctl show 通道。
+MINUTE_TIMER_SPEC = {
+    "unit": "minute-csv-ingest.timer",
+    "label": "分钟线 stock_minute_1m 入库",
+    "service": "minute-csv-ingest.service",
+}
+
+MINUTE_CACHE_TTL = 60
+
+
+def overview_minute(
+    db_url: str | None = None,
+    *,
+    runner: Callable[..., subprocess.CompletedProcess] | None = None,
+) -> dict[str, Any]:
+    """分钟线域：public.stock_minute_1m 新鲜度（MAX(trade_time)，走 time 索引，
+    毫秒级）+ chunk reltuples 估算行数（禁全表 count）+ 最近入库审计
+    （stock_minute_1m_audit 最近一行 rows_csv==rows_db 一致性）+
+    minute-csv-ingest.timer 状态。整域自降级，不拖垮总览。"""
+    from sqlalchemy import text
+
+    def _produce() -> dict[str, Any]:
+        try:
+            store = _store(db_url)
+        except Exception as exc:
+            return {"ok": False, "present": False, "error": f"数据库不可用（{exc}）"}
+        try:
+            with store.market_engine.begin() as conn:
+                exists = conn.execute(
+                    text("SELECT to_regclass('public.stock_minute_1m')")
+                ).scalar()
+                if exists is None:
+                    return {"ok": True, "present": False}
+                watermark = conn.execute(
+                    text("SELECT MAX(trade_time) FROM public.stock_minute_1m")
+                ).scalar()
+                rows_est = _estimate_rows(conn, "public", "stock_minute_1m")
+                audit: dict[str, Any] | None = None
+                audit_exists = conn.execute(
+                    text("SELECT to_regclass('public.stock_minute_1m_audit')")
+                ).scalar()
+                if audit_exists is not None:
+                    row = conn.execute(
+                        text(
+                            "SELECT trade_date, rows_csv, rows_db "
+                            "FROM public.stock_minute_1m_audit ORDER BY trade_date DESC LIMIT 1"
+                        )
+                    ).fetchone()
+                    if row is not None:
+                        audit = {
+                            "trade_date": str(row[0]),
+                            "rows_csv": int(row[1]) if row[1] is not None else None,
+                            "rows_db": int(row[2]) if row[2] is not None else None,
+                            "consistent": (
+                                row[1] is not None and row[2] is not None and int(row[1]) == int(row[2])
+                            ),
+                        }
+            timer = timer_status([MINUTE_TIMER_SPEC], runner=runner)[0]
+            return {
+                "ok": True,
+                "present": True,
+                "watermark": str(watermark) if watermark else None,
+                "estimated_rows": rows_est,
+                "audit": audit,
+                "timer": timer,
+            }
+        except Exception as exc:
+            return {"ok": False, "present": True, "error": f"分钟线查询失败（{exc}）"}
+        finally:
+            store.close()
+
+    return _cached(f"overview_minute:{db_url}", _produce, ttl=MINUTE_CACHE_TTL)
 
 
 # ---------------------------------------------------------------------------
@@ -811,7 +918,20 @@ def factor_status(
             "watermark": info["watermark"],
             "estimated_rows": info["estimated_rows"],
             "db_column_count": len(actual),
+            "daily_pipeline": info.get("daily_pipeline", True),
         }
+        if not entry["daily_pipeline"]:
+            # 未接日更的 panel 面板表：不做列级对账与滞后判定，仅展示库内列，
+            # 避免误报「停滞/严重滞后」（P8 接入日更后自动转为日更中口径）。
+            entry["lag_days"] = None
+            entry["fresh"] = None
+            entry["expected_available"] = False
+            entry["green"] = sorted(actual)
+            entry["yellow"] = []
+            entry["red"] = []
+            entry["tasks"] = []
+            tables.append(entry)
+            continue
         lag = trade_day_lag(info["watermark"], factors["daily_watermark"], trade_dates)
         entry["lag_days"] = lag
         entry["fresh"] = _fresh_level(lag)
