@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from quant_research_engine.core.models import Order, OrderSide, OrderType
-from quant_research_engine.evaluation.signals import evaluate_expression_signal
+from quant_research_engine.evaluation.signals import evaluate_expression_signal, referenced_fields
 from quant_research_engine.markets.ashare import AShareMarketProfile
 from quant_research_engine.portfolio.risk import summarize_equity_curve
 from quant_research_engine.portfolio.risk_controls import RiskControlConfig, evaluate_long_exit
@@ -54,7 +55,6 @@ class SharedCashBacktestEngine:
         symbol_metadata = self._build_metadata_lookup(working, request.metadata_columns or [])
 
         dates = working["trade_date"].drop_duplicates().sort_values().tolist()
-        symbol_bar_indices = self._symbol_bar_indices(working)
 
         cash = request.initial_cash
         positions: dict[str, dict[str, object]] = {}
@@ -72,7 +72,6 @@ class SharedCashBacktestEngine:
                 request=request,
                 trade_date=trade_date,
                 day_frame=day_frame,
-                symbol_bar_indices=symbol_bar_indices,
                 cash=cash,
                 positions=positions,
                 orders=orders,
@@ -139,21 +138,78 @@ class SharedCashBacktestEngine:
         )
 
     def _prepare_frame(self, frame: pd.DataFrame, request: SharedCashBacktestRequest) -> pd.DataFrame:
-        working = frame.copy()
+        """信号预计算 + 列裁剪（内存控制版，2026-10-18）。
+
+        旧实现 frame.copy() + 逐股 chunk.copy() + pd.concat + 二次排序，峰值约
+        4× 全市场 frame；全市场×全期（~2200 万行 × 全字段）仅此一步就十几 GB。
+        现实现：
+        - 全市场（symbols=None）时不复制输入 frame，直接在其上挂信号列；
+        - 信号按股切片计算（groupby().indices 只给行位置，不再整块复制后 concat），
+          每股信号语义与旧实现完全一致（同一 evaluate_expression_signal、同一切片口径）；
+        - 信号算完后把日循环用不到的列（vol/amount/因子/metadata 富字段等）丢弃，
+          行情面板里只有撮合关键价量列保留 float64；
+        - 最终 stable sort 为 (trade_date, ts_code)，行序与旧实现相同。
+        """
         if request.symbols:
-            working = working.loc[working["ts_code"].isin(request.symbols)].copy()
+            working = frame.loc[frame["ts_code"].isin(request.symbols)].copy()
+        else:
+            working = frame  # 调用方一次性使用（见 _run_via_module / CLI），就地扩展
         if working.empty:
             return working
         working["trade_date"] = pd.to_datetime(working["trade_date"])
-        parts = []
-        for _, symbol_frame in working.sort_values(["ts_code", "trade_date"]).groupby("ts_code", sort=True):
-            chunk = symbol_frame.copy()
-            chunk["entry_signal"] = evaluate_expression_signal(chunk, request.entry_signal)
-            if request.exit_signal is not None:
-                chunk["exit_signal"] = evaluate_expression_signal(chunk, request.exit_signal)
-            chunk["symbol_bar_index"] = range(len(chunk))
-            parts.append(chunk)
-        return pd.concat(parts, ignore_index=True).sort_values(["trade_date", "ts_code"]).reset_index(drop=True)
+        working = working.sort_values(["ts_code", "trade_date"], kind="stable").reset_index(drop=True)
+
+        entry_signal = np.zeros(len(working), dtype=bool)
+        exit_signal = (
+            np.zeros(len(working), dtype=bool) if request.exit_signal is not None else None
+        )
+        symbol_bar_index = np.zeros(len(working), dtype=np.int64)
+        for idx in working.groupby("ts_code", sort=True).indices.values():
+            sub = working.iloc[idx]
+            entry_signal[idx] = np.asarray(
+                evaluate_expression_signal(sub, request.entry_signal)
+            )
+            if exit_signal is not None:
+                exit_signal[idx] = np.asarray(
+                    evaluate_expression_signal(sub, request.exit_signal)
+                )
+            symbol_bar_index[idx] = np.arange(len(idx))
+        working["entry_signal"] = entry_signal
+        if exit_signal is not None:
+            working["exit_signal"] = exit_signal
+        working["symbol_bar_index"] = symbol_bar_index
+
+        keep = {
+            "ts_code",
+            "trade_date",
+            "entry_signal",
+            "symbol_bar_index",
+            request.entry_price_column,
+            request.mark_price_column,
+            # 撮合/风控路径按名探测的可选列（缺失时走回退逻辑，存在则必须保留原值）
+            "open",
+            "high",
+            "low",
+            "pre_close",
+            "raw_open",
+            "raw_pre_close",
+            "is_suspended",
+            "is_st",
+            "limit_up",
+            "limit_down",
+        }
+        if exit_signal is not None:
+            keep.add("exit_signal")
+        if request.score_column:
+            keep.add(request.score_column)
+        if request.volatility_column:
+            keep.add(request.volatility_column)
+        keep.update(request.metadata_columns or [])
+        drop = [c for c in working.columns if c not in keep]
+        if drop:
+            working = working.drop(columns=drop)
+
+        return working.sort_values(["trade_date", "ts_code"], kind="stable").reset_index(drop=True)
 
     def _build_metadata_lookup(
         self,
@@ -176,19 +232,12 @@ class SharedCashBacktestEngine:
                 lookup[str(ts_code)] = metadata
         return lookup
 
-    def _symbol_bar_indices(self, frame: pd.DataFrame) -> dict[tuple[str, pd.Timestamp], int]:
-        return {
-            (str(row["ts_code"]), row["trade_date"]): int(row["symbol_bar_index"])
-            for _, row in frame.iterrows()
-        }
-
     def _execute_due_sells(
         self,
         *,
         request: SharedCashBacktestRequest,
         trade_date: pd.Timestamp,
         day_frame: pd.DataFrame,
-        symbol_bar_indices: dict[tuple[str, pd.Timestamp], int],
         cash: float,
         positions: dict[str, dict[str, object]],
         orders: list[dict[str, object]],
@@ -200,7 +249,10 @@ class SharedCashBacktestEngine:
             if symbol not in day_frame.index:
                 continue
             row = day_frame.loc[symbol]
-            current_bar_index = symbol_bar_indices[(symbol, trade_date)]
+            # symbol_bar_index 已在 _prepare_frame 按股编号并随行携带；
+            # 旧实现另建 (symbol, date)→index 全量 dict（全市场全期 ~2200 万条目，
+            # 单项数百字节的 Python 对象，仅此一处即 ~5GB），此处直接读行值。
+            current_bar_index = int(row["symbol_bar_index"])
             position = positions[symbol]
             pending_exit_bar_index = position.get("pending_exit_bar_index")
             exit_decision = evaluate_long_exit(

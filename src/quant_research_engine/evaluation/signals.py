@@ -33,6 +33,20 @@ def evaluate_expression_signal(frame: pd.DataFrame, expression: str) -> pd.Serie
     return result.fillna(False).astype(bool)
 
 
+def referenced_fields(expression: str | None) -> set[str]:
+    """返回信号表达式引用的全部列名（ast.Name 节点）。
+
+    供装配/准备层判断哪些列是信号输入、必须保留（如 vol/amount/metadata 列被
+    信号引用时不能裁剪）。解析失败时返回空集（表达式合法性由求值阶段把关）。"""
+    if not expression:
+        return set()
+    try:
+        tree = ast.parse(expression, mode="eval")
+    except SyntaxError:
+        return set()
+    return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+
+
 def _eval_node(node: ast.AST, frame: pd.DataFrame) -> object:
     if isinstance(node, ast.BoolOp):
         values = [_as_bool_series(_eval_node(value, frame)) for value in node.values]

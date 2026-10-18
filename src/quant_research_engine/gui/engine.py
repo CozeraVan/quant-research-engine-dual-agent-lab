@@ -514,14 +514,38 @@ def _run_via_module(
                 stderr_path.write_text(buf_err.getvalue(), encoding="utf-8")
                 return
 
-        frame = ResearchFrameAssembler(store).build(
-            ts_codes=ts_codes,
-            start=start,
-            end=end,
-            market_fields=spec.market_fields,
-            factor_fields=spec.factor_fields,
-            include_metadata=True,
-        )
+        # 共享资金（shared）模式的内存收敛（2026-10-18，job#71 全市场全期 OOM 修复）：
+        # 分块装配（build_chunked）——按股分块加载/合并，metadata 只并撮合必需列
+        # （外加信号表达式实际引用的列，防裁剪掉信号输入），ts_code 转 category；
+        # 全市场 frame 不再一次性物化多份拷贝。交易信号/成交价/收益统计与旧口径一致
+        # （同表同区间同字段，仅装载组织方式不同）。
+        if mode == "shared":
+            from quant_research_engine.evaluation.signals import referenced_fields
+
+            signal_fields = referenced_fields(spec.signal_expression) | referenced_fields(
+                spec.exit_signal_expression
+            )
+            known_data_cols = set(spec.market_fields) | {
+                f.logical_name for f in spec.factor_fields
+            }
+            meta_extra = sorted(signal_fields - known_data_cols)
+            frame = ResearchFrameAssembler(store).build_chunked(
+                ts_codes=ts_codes,
+                start=start,
+                end=end,
+                market_fields=spec.market_fields,
+                factor_fields=spec.factor_fields,
+                metadata_columns=["is_st", "is_suspended", *meta_extra],
+            )
+        else:
+            frame = ResearchFrameAssembler(store).build(
+                ts_codes=ts_codes,
+                start=start,
+                end=end,
+                market_fields=spec.market_fields,
+                factor_fields=spec.factor_fields,
+                include_metadata=True,
+            )
 
         if market_profile:
             mp = load_market_profile(market_profile)

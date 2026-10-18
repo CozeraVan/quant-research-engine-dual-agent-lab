@@ -1257,13 +1257,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             store = PostgresDataStore(settings)
             store.ping()
             spec = StrategySpec.from_yaml(args.strategy)
-            frame = ResearchFrameAssembler(store).build(
+            # 分块装配（2026-10-18，job#71 OOM 修复）：与 build() 行集/数值一致，
+            # 只并撮合必需 + 用户指定 + 信号实际引用的 metadata 列，ts_code 转 category
+            from quant_research_engine.evaluation.signals import referenced_fields
+
+            signal_fields = referenced_fields(spec.signal_expression) | referenced_fields(
+                spec.exit_signal_expression
+            )
+            known_data_cols = set(spec.market_fields) | {
+                f.logical_name for f in spec.factor_fields
+            }
+            shared_meta_cols = sorted(
+                {"is_st", "is_suspended"} | set(args.metadata_columns or [])
+                | (signal_fields - known_data_cols)
+            )
+            frame = ResearchFrameAssembler(store).build_chunked(
                 ts_codes=args.codes,
                 start=args.start,
                 end=args.end,
                 market_fields=spec.market_fields,
                 factor_fields=spec.factor_fields,
-                include_metadata=True,
+                metadata_columns=shared_meta_cols,
                 metadata_as_of=getattr(args, "metadata_as_of", None) or None,
             )
             market_profile = load_market_profile(args.market_profile) if args.market_profile else AShareMarketProfile()

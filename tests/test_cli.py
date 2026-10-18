@@ -2155,6 +2155,9 @@ def test_cli_backtest_shared_prints_benchmark_relative_summary(capsys, monkeypat
         def __init__(self, store):
             self.store = store
 
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
+
         def build(self, **kwargs):
             return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
 
@@ -2225,6 +2228,9 @@ def test_cli_backtest_shared_can_print_markdown_summary(capsys, monkeypatch):
         def __init__(self, store):
             self.store = store
 
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
+
         def build(self, **kwargs):
             return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
 
@@ -2289,6 +2295,9 @@ def test_cli_backtest_shared_metadata_columns_persisted_to_output_dir(capsys, mo
     class FakeAssembler:
         def __init__(self, store):
             self.store = store
+
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
 
         def build(self, **kwargs):
             return pd.DataFrame({
@@ -2363,6 +2372,9 @@ def test_cli_backtest_shared_group_by_writes_grouped_artifacts(capsys, monkeypat
     class FakeAssembler:
         def __init__(self, store):
             self.store = store
+
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
 
         def build(self, **kwargs):
             return pd.DataFrame({
@@ -2483,6 +2495,9 @@ def test_cli_backtest_batch_can_print_markdown_summary(capsys, monkeypatch):
         def __init__(self, store):
             self.store = store
 
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
+
         def build(self, **kwargs):
             return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
 
@@ -2566,6 +2581,9 @@ def test_cli_backtest_batch_group_by_passthrough_column(capsys, monkeypatch):
         def __init__(self, store):
             self.store = store
 
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
+
         def build(self, **kwargs):
             return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
 
@@ -2645,6 +2663,9 @@ def test_cli_backtest_batch_prints_benchmark_relative_summary(capsys, monkeypatc
     class FakeAssembler:
         def __init__(self, store):
             self.store = store
+
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
 
         def build(self, **kwargs):
             return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
@@ -2737,6 +2758,9 @@ def test_cli_backtest_batch_metadata_as_of_threaded_to_assembler(capsys, monkeyp
         def __init__(self, store):
             self.store = store
 
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
+
         def build(self, **kwargs):
             captured_kwargs.update(kwargs)
             return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
@@ -2793,6 +2817,9 @@ def test_cli_backtest_batch_metadata_as_of_none_when_omitted(capsys, monkeypatch
         def __init__(self, store):
             self.store = store
 
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
+
         def build(self, **kwargs):
             captured_kwargs.update(kwargs)
             return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"])})
@@ -2846,6 +2873,9 @@ def test_cli_backtest_shared_metadata_as_of_threaded_to_assembler(capsys, monkey
     class FakeAssembler:
         def __init__(self, store):
             self.store = store
+
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
 
         def build(self, **kwargs):
             captured_kwargs.update(kwargs)
@@ -2912,6 +2942,9 @@ def test_cli_backtest_shared_metadata_as_of_none_when_omitted(capsys, monkeypatc
         def __init__(self, store):
             self.store = store
 
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
+
         def build(self, **kwargs):
             captured_kwargs.update(kwargs)
             return pd.DataFrame({
@@ -2975,6 +3008,9 @@ def test_cli_backtest_single_metadata_as_of_threaded_to_assembler(capsys, monkey
         def __init__(self, store):
             self.store = store
 
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
+
         def build(self, **kwargs):
             captured_kwargs.update(kwargs)
             return pd.DataFrame({"trade_date": pd.to_datetime(["2026-01-01"]), "ts_code": ["000001.SZ"], "open": [10.0], "close": [10.1]})
@@ -3031,6 +3067,9 @@ def test_cli_backtest_single_metadata_as_of_none_when_omitted(capsys, monkeypatc
     class FakeAssembler:
         def __init__(self, store):
             self.store = store
+
+        def build_chunked(self, **kwargs):
+            return self.build(**kwargs)
 
         def build(self, **kwargs):
             captured_kwargs.update(kwargs)

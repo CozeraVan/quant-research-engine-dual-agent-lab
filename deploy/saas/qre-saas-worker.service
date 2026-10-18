@@ -46,7 +46,11 @@ TimeoutStopSec=900
 # R2 内存硬兜底（2026-10-03）：cgroup 上限 26G（32G×80%）。超限由 cgroup
 # 杀 worker（Restart=always 拉起，被中断任务租约过期后云端自动重排），
 # 保证本机 PG/系统/日常使用不被回测拖垮。单槽预算另由内存闸门软约束。
-MemoryMax=26G
+# 2026-10-18 修正：本机物理内存实为 23G（WSL），26G 高于物理内存导致 cgroup
+# 保护失效（job#71 三次全局 OOM）；降为 18G（留 ~5G 给系统/PG/日常）。
+# 单任务子进程另有 RLIMIT_AS 软上限 QRE_WORKER_CHILD_MEM_GB（默认 14G，
+# 见 worker/slots.py），超限抛可读“任务超出资源配额”而非裸 -9。
+MemoryMax=18G
 Nice=10
 SyslogIdentifier=qre-saas-worker
 

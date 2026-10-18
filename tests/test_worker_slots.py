@@ -124,3 +124,33 @@ class TestSlotScheduling:
         daemon.stop()
         t.join(timeout=10)
         assert not t.is_alive()
+
+
+def _runner_raises_memory_error(job):
+    raise MemoryError("Unable to allocate (模拟超限)")
+
+
+class TestChildMemoryLimit:
+    def test_memory_error_raises_readable_quota_error(self, monkeypatch):
+        # 子进程 MemoryError（RLIMIT_AS 超配额的真实表现）必须转成可读
+        # 「任务超出资源配额」而不是裸 exitcode/-9。
+        # 注意：不在 fork 子进程里真实分配 GB 级内存——pytest 父进程带线程，
+        # fork 子进程在极限内存下 exit/join 队列有挂死风险（2026-10-18 全量套件实测）。
+        monkeypatch.setenv("QRE_WORKER_CHILD_MEM_GB", "1")
+        with pytest.raises(RuntimeError, match="任务超出资源配额"):
+            execute_job_subprocess({"id": 1}, runner=_runner_raises_memory_error)
+
+    def test_apply_limit_sets_rlimit_as(self, monkeypatch):
+        import resource
+
+        from quant_research_engine.worker.slots import _apply_child_memory_limit
+
+        monkeypatch.setenv("QRE_WORKER_CHILD_MEM_GB", "0")  # 0 = 不限制
+        soft_before, hard_before = resource.getrlimit(resource.RLIMIT_AS)
+        _apply_child_memory_limit()
+        assert resource.getrlimit(resource.RLIMIT_AS) == (soft_before, hard_before)
+
+    def test_under_limit_unaffected(self, monkeypatch):
+        monkeypatch.setenv("QRE_WORKER_CHILD_MEM_GB", "8")
+        payload = execute_job_subprocess({"id": 2}, runner=_runner_ok)
+        assert payload["summary"] == {"job": 2}

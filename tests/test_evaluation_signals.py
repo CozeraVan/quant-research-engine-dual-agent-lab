@@ -32,3 +32,13 @@ def test_evaluate_expression_signal_rejects_unknown_columns():
 
     with pytest.raises(ValueError, match="Unknown signal field"):
         evaluate_expression_signal(frame, "missing < 10")
+
+
+def test_referenced_fields_collects_column_names():
+    from quant_research_engine.evaluation.signals import referenced_fields
+
+    fields = referenced_fields("((ema_5 > ema_200) and (ema_5.shift(1) <= ema_200.shift(1)))")
+    assert fields == {"ema_5", "ema_200"}
+    assert referenced_fields("close > open and amount > 1000") == {"close", "open", "amount"}
+    assert referenced_fields(None) == set()
+    assert referenced_fields("") == set()

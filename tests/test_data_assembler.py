@@ -306,3 +306,69 @@ def test_metadata_as_of_none_when_omitted():
     )
 
     assert store.metadata_as_of is None
+
+
+def test_build_chunked_matches_build_rows_and_slims_metadata():
+    store = FakeStore()
+    assembler = ResearchFrameAssembler(store)
+    factor_request = FactorFieldRequest.from_target("rsi_2", "factors.stock_daily_momentum_close.rsi_2")
+
+    frame = assembler.build_chunked(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 5),
+        end=date(2026, 1, 5),
+        market_fields=["open", "close"],
+        factor_fields=[factor_request],
+        metadata_columns=["is_st", "is_suspended"],
+        chunk_size=1,
+        metadata_as_of=date(2025, 12, 31),
+    )
+
+    assert str(frame["ts_code"].dtype) == "category"
+    # 只并入请求的 metadata 列（board/list_date 等富字段不膨胀到每根 K 线）
+    assert set(frame.columns) == {
+        "ts_code", "trade_date", "open", "close", "rsi_2", "is_st", "is_suspended",
+    }
+    row = frame.iloc[0]
+    assert str(row["ts_code"]) == "000001.SZ"
+    assert row["open"] == 10.0 and row["close"] == 10.5 and row["rsi_2"] == 8.0
+    assert bool(row["is_st"]) is False and bool(row["is_suspended"]) is False
+    assert store.metadata_as_of == date(2025, 12, 31)
+
+
+def test_build_chunked_chunk_boundaries_do_not_change_content():
+    class MultiSymbolStore(FakeStore):
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            codes = ts_codes or ["000001.SZ", "000002.SZ", "000003.SZ"]
+            rows = []
+            for code in codes:
+                for day in ("2026-01-05", "2026-01-06"):
+                    rows.append({"ts_code": code, "trade_date": pd.Timestamp(day),
+                                 "open": 10.0, "close": 10.5})
+            return pd.DataFrame(rows)
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(columns=["ts_code", "trade_date"])
+
+        def load_security_metadata(self, ts_codes=None, *, as_of=None):
+            codes = ts_codes or ["000001.SZ", "000002.SZ", "000003.SZ"]
+            return pd.DataFrame({
+                "ts_code": codes,
+                "is_st": [False] * len(codes),
+                "is_suspended": [False] * len(codes),
+            })
+
+    assembler = ResearchFrameAssembler(MultiSymbolStore())
+    kwargs = dict(
+        ts_codes=["000001.SZ", "000002.SZ", "000003.SZ"],
+        start=date(2026, 1, 5), end=date(2026, 1, 6),
+        market_fields=["open", "close"], factor_fields=[],
+        metadata_columns=["is_st", "is_suspended"],
+    )
+    one = assembler.build_chunked(chunk_size=3, **kwargs)
+    many = assembler.build_chunked(chunk_size=1, **kwargs)
+    key = ["ts_code", "trade_date"]
+    one = one.assign(ts_code=one["ts_code"].astype(str)).sort_values(key).reset_index(drop=True)
+    many = many.assign(ts_code=many["ts_code"].astype(str)).sort_values(key).reset_index(drop=True)
+    pd.testing.assert_frame_equal(one, many, check_dtype=False)
+    assert len(one) == 6
