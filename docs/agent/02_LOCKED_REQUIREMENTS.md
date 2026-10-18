@@ -165,3 +165,17 @@ Do not commit code until:
 - required tests/checks have run or unavailable checks are documented,
 - `10_REVIEW_REPORT.md` has no Required Fixes,
 - user approval or standing approval exists.
+
+## R-MEM-001: 内存红线——任何全市场计算必须分块，任何长跑子进程必须有内存配额
+
+Status: LOCKED
+
+背景：2026-10-18 job#71（全市场全期回测）子进程峰值 22.6GB 被全局 OOM 连杀三次，拖垮 worker 全部槽位（详见 06 号文档同日决策）。此类事故一律不得重现。
+
+规则：
+
+1. 任何「全市场 × 全历史」量级的计算（回测、评估、因子计算、导出）**必须分块/流式**，禁止一次性物化全量面板到内存；新增此类代码路径时，峰值内存必须有实测数据。
+2. 单个子进程峰值内存预算 **≤ 物理内存 50%**（当前 23G 机器即 ≤12G）；worker 回测子进程强制 RLIMIT_AS（`QRE_WORKER_CHILD_MEM_GB`，默认 14G），超限必须抛可读「任务超出资源配额」错误，禁止裸 OOM -9。
+3. systemd 服务的 `MemoryMax` **不得超过物理内存的 80%**，使 cgroup 先于全局 OOM killer 生效；改机器内存配置后必须同步复核该值。
+4. DataFrame 装载纪律：禁用 `StringDtype(python)` 存高基数代码列（用 category）；metadata 只 merge 实际请求列；禁止 `iterrows()` 建逐行 Python 对象索引。
+5. 信号输入因子列保持 float64（精度硬约束，float32 可能翻转近交叉信号）；降内存只能靠分块/裁剪/编码，不许牺牲计算精度。

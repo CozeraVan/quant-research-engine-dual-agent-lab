@@ -1271,3 +1271,11 @@ No open questions remain.
 - Alternatives: ①游客按 guest_key/IP 限流提交——否决，无法跟进回复且多一条匿名滥用面；②完全放开——否决，无防护。
 - Impact: feedback.user_id NOT NULL；反馈页/申请页对游客显示登录引导卡而非表单；06 本条即「按现有鉴权体系决定」的拍板记录。
 - Owner: KIMI_CODE
+
+### 2026-10-18: 回测引擎 OOM 根治与内存红线立法（job#71 事故复盘）
+
+- Decision: ①引擎 shared 模式引入 `assembler.build_chunked` 按股分块（500 股/块）装载/合并/释放，`_prepare_frame` 重写为 groupby 行位置切片就地计算，删除 `_symbol_bar_indices` 的 iterrows 全量索引（原 ~5GB）；②worker 子进程 RLIMIT_AS 默认 14G（`QRE_WORKER_CHILD_MEM_GB` 可配，含 VSZ 守卫），超限抛「任务超出资源配额」；③qre-saas-worker.service MemoryMax 26G→18G（线上已生效）；④内存纪律写入 02 号文档 R-MEM-001（LOCKED）。实测峰值 22.6GB→3.96GB，全市场全期 2.5h→32min，新旧代码产物逐字节一致，2343 tests passed。
+- Reason: 事故根因是多点叠加——StringDtype(python) 高基数列、富 metadata 全量 merge、4× frame 拷贝、iterrows 建 2200 万条 Python 对象索引、MemoryMax 高于物理内存导致 cgroup 失效。任何单点修复都挡不住下一次，必须工程修复 + 配额兜底 + 规则立法三层一起做。
+- Alternatives: ①float32 全面降内存——否决，ema 近交叉值在 float32 相对误差下可能翻转信号，违反结果口径一致硬约束；②只调 MemoryMax 不改引擎——否决，治标，且 22.6G vs 23G 物理内存无解；③垂直扩容加内存——否决，2G ECS 的前车之鉴证明资源永远会被数据量吃掉，必须先有分块架构。
+- Impact: 全市场全期回测从"碰运气能跑"变为确定性可跑且更快；后续所有全市场量级代码路径受 R-MEM-001 约束；job#71 可安全重提（worker 已带新码完成 job#72）。
+- Owner: KIMI_CODE
