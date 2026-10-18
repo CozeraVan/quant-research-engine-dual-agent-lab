@@ -947,3 +947,20 @@ Historical row statuses (pre-migration, kept for old table rows):
   curl 验证 /api/admin/overview（health green，7 张 pending 表列出，minute 卡
   估算 12.9 亿行、watermark 2026-10-16 15:30、审计一致、timer active）、
   /api/admin/timers、/api/admin/factor-status 均正常。qre-saas-worker 未受影响。
+
+## 2026-10-18 方案A小样本回测对账验收（通过）
+
+**目的**：CR-2026-10-11 方案A（stock_daily 原始价+adj_factor、引擎/因子层 hfq=原始价×adj_factor）切换后遗留的回测口径验收。纯验收，引擎零改动；验收脚本与产物在 /tmp/planA_accept/（reconcile.py、signal_check.py、reconcile_report.json、run1/），未入仓。
+
+**口径核实（代码级）**：`data/postgres.py::load_daily_bars` 在 `QRE_PRICE_BASIS=raw`（本机 .env 与 /etc/qre-saas-worker.env 均已设）下把 OHLC/pre_close × adj_factor 转 hfq，另留 raw_open/raw_pre_close 仅用于涨跌停判定（交易所规则需原始价，`shared.py::_row_flag` 838-846 行）。shared 引擎成交价 = entry_price_column=open（即 hfq 开盘价），持仓逐日盯市 mark_price_column=close（hfq 收盘），全链路 hfq 尺度自洽。
+
+**样本**：000001.SZ / 600036.SH / 600519.SH / 601318.SH（区间内 adj_factor 分别变动 4/3/5/5 次），2024-10-08~2026-10-16，shared 模式，sma_5/sma_20 金叉买死叉卖（T+1 开盘价），初始资金 100 万，max_positions=4。跑完 44 笔往返、90 张订单、净值 492 点，总收益 +0.63%。
+
+**逐项结果**：
+1. **信号日因子值 vs factors 表**：90/90 张订单的信号日（成交日前一交易日）金叉/死叉判定与 `factors.stock_daily_overlap_close` 逐值复算完全一致（signal_check.py，bad=0）。因子口径确认 hfq：factors 表 sma_5/sma_20 vs 手工（原始 close × adj_factor）滚动均值，最大绝对差 ~0.005（四只票恒定，=factor 入库保留 2 位小数的舍入，相对误差 ≤4e-6），与方案A无关、不影响信号。
+2. **成交价口径**：90/90 张订单 price == 原始 open × adj_factor（零滑点内置 profile），最大绝对差 2.27e-13、相对误差 ≤2.2e-16。
+3. **权益曲线手工复算**：按 orders 逐日累加现金 + 持仓 qty × hfq_close 盯市，492 个交易日逐日对比 equity_curve.csv，最大绝对差 5.8e-10 元、相对误差 ≤6.0e-16，远优于 1e-6 容差。
+4. **除权日平滑**：持仓跨越 adj_factor 变动共 7 次（000001 两次、600036 两次、601318 三次），这些除权日 raw 收盘日收益为 -5.39%~-1.32% 的虚假跳空，而 hfq 日收益与组合当日收益均为正常量级（组合当日 -0.41%~+1.49%），无任何虚假跳变；组合全日收益 max +2.06% / min -2.50%，分布正常。
+5. **基线形态对比**：outputs 下 qfq 时代留存 run 均为不同策略/不同区间的全市场 batch 产物，无可直接对照的小样本基线；以 10-13 MACD 核验条目为参照，其登记的「盈亏按原始价核算、分红送转缺失」为切换初期观察，本次实测当前代码在 QRE_PRICE_BASIS=raw 下成交价/盯市已全链路 hfq（除权日 hfq 含分红调整，收益率为全收益口径）；**注意点（非 fail）**：hfq 尺度下成交股数是「伪股数」（按 hfq 价折算），绝对金额 PnL 被 adj_factor 缩放，百分比收益正确——阅读 orders/trades 绝对金额时需注意此口径。
+
+**结论**：方案A验收**通过**——信号、成交价、权益曲线三链路 hfq 口径一致且与库表逐值对账吻合（≤1e-15 相对误差量级），除权日无虚假跳变，未发现因复权口径切换引入的偏差。未 commit。
