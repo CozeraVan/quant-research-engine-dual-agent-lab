@@ -1,6 +1,6 @@
 # 21_FACTOR_LIBRARY_PLAN.md — Tushare 202 因子本地复现立项方案
 
-## 0. 进度台账（2026-10-18 更新：146/202 已入库验收，25 进行中，31 待启动）
+## 0. 进度台账（2026-10-19 更新：177/202 已入库验收，0 进行中，0 待启动，剩 P8 日更接线）
 
 | 批次 | 内容 | 状态 |
 |---|---|---|
@@ -11,11 +11,11 @@
 | P2 | Quality 59 → factors.stock_daily_quality | ✅ 2026-10-18 验收通过（51 rank 列值域、手工核对、毛利率同源比对 99.39%≤1e-4） |
 | P3 | Growth 15 → factors.stock_daily_growth | ✅ 2026-10-18 验收通过（RESULT: PASS） |
 | P4 | Liquidity 35 → factors.stock_daily_liquidity | ✅ 2026-10-18 全量落库验收（1613 万行，手工重算最大误差 2.9e-14，commit c2a0fd8） |
-| P5 | Risk 25（回归族 beta/sigma，复用通道B框架）→ factors.stock_daily_risk | 🚧 实施中（agent-132，2026-10-18 启动） |
-| P7 | Alpha101 31（复用 alpha191 面板管线）→ factors.stock_daily_alpha101 | ⏸ P5 完成后启动（防 formulas.py 并行冲突+控内存） |
+| P5 | Risk 25（回归族 beta/sigma，复用通道B框架）→ factors.stock_daily_risk | ✅ 2026-10-18 全量落库验收（1622 万行，最大误差 8.5e-15，commit 3ce37de） |
+| P7 | Alpha101 31（复用 alpha191 面板管线）→ factors.stock_daily_alpha101 | ✅ 2026-10-19 全量落库验收（1607 万行/5853 只/921 chunks，慢实现比对 max_abs_diff=0、rank 值域与 NaN 语义全过；VWAP 与 OHLC 同乘 adj_factor 同尺度，commit e35227b） |
 | P8 | 每日增量调度（panel_factors 接入 timer）+ 8080 纳管 | ⏸ P5/P7 后统一做；8080 自动发现已上线（5f6fcf6，pending 表标「未接日更」） |
 
-**完成度：146/202（72%）已入库验收** = Momentum 20 + Reversal 3 + Value 11 + Size 3 + Quality 59 + Growth 15 + Liquidity 35。进行中 25（Risk），待启动 31（Alpha101）。❗P0-P4 与通道B 均尚未接日更（P8 消除）。
+**完成度：177/202（88%）已入库验收** = Momentum 20 + Reversal 3 + Value 11 + Size 3 + Quality 59 + Growth 15 + Liquidity 35 + Risk 25 + Alpha101 31。剩余 25 个为原方案口径裁剪项（含 dividend_yield_3y_avg 等 2 个待 dividend 回填），明细见 §口径裁剪与原清单。❗P0/P4/P5/P7 与通道B 均尚未接日更（P8 消除）；NL 目录快照（configs/factor_catalog_llm.*）已于 2026-10-19 同步纳入 P4/P5/P7 新表。
 
 ## 0.1 下周恢复指引（2026-10-13 记录，已于 2026-10-18 执行完毕：P1-P3 验收通过、两仓库已提交、NL 目录已同步、P4 完成、P5 启动）
 
