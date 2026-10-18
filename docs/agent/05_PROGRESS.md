@@ -909,3 +909,14 @@ Historical row statuses (pre-migration, kept for old table rows):
 - NL 因子目录快照已重新生成（gen_factor_catalog_llm.py），新增 _pit_financial_panel、
   stock_daily_value/size/quality/growth 五张表，NL 入口现在可引用 P0-P3 全部因子。
 - 两仓库提交并推送：indicators 211cb76（panel_factors 全套）、QRE 6cb52db（核验结论+规范+目录）。
+
+## 2026-10-18 分钟线CSV定时入库工作流上线
+
+- quant_ts/minute_csv_daily_ingest.py：扫描 mindata → 幂等入库 stock_minute_1m →
+  行数校验通过才删 CSV（失败保留自动重试）；systemd timer minute-csv-ingest.timer
+  每工作日 17:20（避开 16:30/16:40 既有任务）。
+- 首跑 mindata/2026 五天 676.9 万行入库并清理 CSV；分钟线数据至 2026-10-16。
+- 同日：P1-P3 验收（quality/growth PASS，value 抽查过但发现 ebitda_to_market 仅 7 行
+  ——tushare ebitda 仅半年/年报披露，改 ebit_ttm+最近年报折旧摊销口径，修复脚本跑批中）；
+  P4/P5/P7 因子规范 91 个落盘（change_requests/factor_specs_p4p5p7.md）；
+  job#71 OOM 确诊（子进程 22.6GB vs 物理 23GB），引擎降内存修复进行中。

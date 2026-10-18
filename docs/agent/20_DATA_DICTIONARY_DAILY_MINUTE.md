@@ -1,7 +1,7 @@
 # 20_DATA_DICTIONARY_DAILY_MINUTE.md — 行情数据字典（日线 / 分钟线）
 
 > 单一权威文档：任何 agent 处理行情数据（读取、入库、因子计算、回测）前必须先读本文。
-> 最后更新：2026-10-11（分时数据验证与入库方案立项）
+> 最后更新：2026-10-18（分钟线 CSV 定时入库工作流上线，见 3.6）
 
 ---
 
@@ -89,7 +89,17 @@
 
 - 停牌占位行（全日零量）：保留入库，回测引擎需将零量 bar 视为不可成交。
 - 北交所 271 bar：任何按会话网格生成时间的逻辑必须区分市场。
-- 后续增量数据用户会追加拷贝到 `/home/van/mindata/`，重跑脚本即可幂等入库。
+- 后续增量数据用户会追加拷贝到 `/home/van/mindata/`，重跑脚本即可幂等入库（日常增量已由 3.6 的定时工作流接管，无需手动跑全量脚本）。
+
+### 3.6 分钟线 CSV 定时入库工作流（2026-10-18 上线）
+
+- **脚本**：`quant_ts/minute_csv_daily_ingest.py`（复用 `import_minute_csv.import_one` 的解析/换算/ON CONFLICT 口径，不另造轮子）。
+- **定时器**：systemd `minute-csv-ingest.timer` / `minute-csv-ingest.service`，**Mon..Fri 17:20**（避开 16:30 日线同步、16:40 因子日更），`Persistent=true`，User=van，`uv run` 于 `quant_ts/`。
+- **流程**：扫描 `/home/van/mindata/**/*.csv` → 审计表已完成的日期跳过解析直接进校验（幂等断点续跑）→ 新日期逐文件串行入库（单文件单事务，避免长事务）→ **校验：CSV 数据行数 == stock_minute_1m 该 trade_date 实时行数** → 通过才更新 `stock_minute_1m_audit` 并**删除对应 CSV**；失败保留 CSV、日志标 ERROR、进程 exit 1。
+- **日志**：`quant_ts/logs/minute_daily_ingest.log`（另 journalctl -u minute-csv-ingest.service）。
+- **手动入口**：`uv run python minute_csv_daily_ingest.py`；`--force` 强制重入库（验证幂等用，ON CONFLICT DO NOTHING 保证行数不增）；`--keep-csv` 校验后保留 CSV。
+- **失败处理**：校验不一致（rows_csv ≠ rows_db）或单文件异常 → 该文件不入审计、不删除，下个周期自动重试；排查看日志中 ❌ 行。
+- 首跑验证（2026-10-18）：`mindata/2026/` 5 个文件（20261012–20261016）共 6,769,394 行，强制重跑行数不变（幂等通过），校验全过后 5 个 CSV 已删除。
 
 ## 4. 因子表速览（`factors` schema，11 表约 490 列）
 
