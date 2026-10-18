@@ -128,7 +128,18 @@ class SingleSymbolBacktestEngine:
                 price = self.market_profile.apply_slippage(OrderSide.BUY, price_raw)
                 raw_quantity = int(cash // price)
                 buy_quantity = self.market_profile.round_order_quantity(OrderSide.BUY, raw_quantity)
-                if buy_quantity > 0:
+                if buy_quantity <= 0:
+                    order = Order(
+                        symbol=request.symbol,
+                        trade_date=trade_date.date(),
+                        side=OrderSide.BUY,
+                        order_type=OrderType.MARKET,
+                        quantity=buy_quantity,
+                        price=price,
+                    )
+                    failed_orders.append(self._failed_order_row(order, "insufficient_cash"))
+                    pending_buy_index = None
+                else:
                     order = Order(
                         symbol=request.symbol,
                         trade_date=trade_date.date(),
@@ -148,8 +159,29 @@ class SingleSymbolBacktestEngine:
                         pending_buy_index = None
                     else:
                         cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
-                        total_cash_needed = order.notional + cost
-                        if total_cash_needed <= cash:
+                        if order.notional + cost > cash:
+                            shrunk_quantity = self.market_profile.fit_buy_quantity_to_cash(
+                                buy_quantity, price, cash
+                            )
+                            if shrunk_quantity > 0:
+                                # No re-validation needed: same bar/price, still
+                                # lot-rounded, smaller quantity.
+                                buy_quantity = shrunk_quantity
+                                order = Order(
+                                    symbol=request.symbol,
+                                    trade_date=trade_date.date(),
+                                    side=OrderSide.BUY,
+                                    order_type=OrderType.MARKET,
+                                    quantity=buy_quantity,
+                                    price=price,
+                                )
+                                cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
+                            else:
+                                failed_orders.append(self._failed_order_row(order, "insufficient_cash"))
+                                pending_buy_index = None
+                                order = None
+                        if order is not None:
+                            total_cash_needed = order.notional + cost
                             cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.BUY, order.notional)
                             cash -= total_cash_needed
                             quantity = buy_quantity

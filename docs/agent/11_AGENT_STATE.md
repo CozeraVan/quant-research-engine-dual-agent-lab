@@ -4,7 +4,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-ACTIVE（2026-10-12：方案A数据重建全链收官 + 个股FRM/按需生成已上线；待小样本回测对账验收）
+ACTIVE（2026-10-18：QRE-DEAD-PENDING-FIX 引擎修复完成待 commit——缩量重试+insufficient_cash 登记，000002.SZ 真库验证 151 笔往返；另有 WIZARD-PRICE-BASIS / SHARED-OOM-FIX 两条待 commit）
 
 ## Current Task
 

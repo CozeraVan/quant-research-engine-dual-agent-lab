@@ -2,7 +2,34 @@
 
 ## Task ID
 
-QRE-SAAS-SMOKE-INCIDENT (CR-2026-10-11：job 54 smoke 全市场超时事故修复——四 bug)
+QRE-DEAD-PENDING-FIX（回测引擎「dead-pending」静默吞信号 bug 修复——缩量重试 + insufficient_cash 失败登记）
+
+## Current Status
+
+DONE (implementation; **未 commit**——commit 待用户/主代理批准；
+模拟器+向量化目标套件 144 passed，新增回归 5 例，真库 000002.SZ 验证 151 笔往返)
+
+## Task Note
+
+- 根因：full_compound 买入 `int(cash // price)` 名义额+费用略超现金时被拒，但既不改写
+  failed_order 也不重置 pending_buy_index → 该股后续入场信号全被静默吞掉
+  （job#58 共 135 只零交易股票，含 000002/000016/000725）。
+- 修法（single_symbol.py 与 single_symbol_vectorized.py 两路径同步）：
+  ①`AShareMarketProfile.fit_buy_quantity_to_cash` 逐手缩量直到 名义+费用 ≤ 现金
+  （费用走 calculate_cost 同口径，含 min_commission 5 元地板）；
+  ②缩量 ≥1 手按缩量成交；仍不足 1 手或一手都买不起 → failed_orders 记
+  reason=insufficient_cash 并重置 pending，后续信号可重试；fixed_cash 同语义。
+- 资金充足路径未触，既有行为逐字节不变（vectorized↔simulator 相等性套件守护）。
+- 真库验证：000002.SZ 2010 起 MACD 金叉单票回测 151 笔往返、首笔 2010-01-19
+  买入 9800 股@10.10（9900 缩量 1 手），sim/vec 逐帧相等。
+- **遗留（报表层，本次未改）**：full_market_report.py batch 分支 build_symbol_performance
+  （:575 起）以 round_trips 为准，零交易股票（即便有 failed_orders）从
+  symbol_performance 漏掉、与 summary.csv 口径不一致。
+- 测试：tests/test_portfolio_single_symbol.py +2、tests/test_single_symbol_vectorized.py +3。
+
+---
+
+## Archive: QRE-SAAS-SMOKE-INCIDENT (CR-2026-10-11：job 54 smoke 全市场超时事故修复——四 bug)
 
 ## Current Status
 

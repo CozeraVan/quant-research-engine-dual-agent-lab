@@ -40,6 +40,22 @@ class AShareMarketProfile:
             return quantity
         return quantity // self.buy_lot * self.buy_lot
 
+    def fit_buy_quantity_to_cash(self, quantity: int, price: float, cash: float) -> int:
+        """Shrink a lot-rounded buy quantity until notional + buy cost fits in cash.
+
+        Returns 0 when not even one lot is affordable.
+        """
+        if cash <= 0 or price <= 0 or quantity <= 0:
+            return 0
+        # notional must be < cash, so cash // price is a hard upper bound.
+        quantity = min(quantity, self.round_order_quantity(OrderSide.BUY, int(cash // price)))
+        while quantity > 0:
+            notional = quantity * price
+            if notional + self.calculate_cost(OrderSide.BUY, notional) <= cash:
+                return quantity
+            quantity -= self.buy_lot
+        return 0
+
     def calculate_cost(self, side: OrderSide, notional: float) -> float:
         if notional <= 0:
             return 0.0

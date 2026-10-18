@@ -307,3 +307,64 @@ def test_single_symbol_backtest_holding_days_negative_rejected():
     )
     with pytest.raises(ValueError, match=">= 0"):
         engine.run(make_frame(), request)
+
+
+def make_tight_cash_frame() -> pd.DataFrame:
+    """First pending buy: 9900×10.10 + fees = 100020.9969 > 100000 cash."""
+    frame = pd.DataFrame(
+        {
+            "ts_code": ["000002.SZ"] * 6,
+            "trade_date": pd.to_datetime(
+                ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08", "2026-01-09", "2026-01-12"]
+            ),
+            "open": [10.0, 10.10, 10.10, 10.0, 10.10, 10.10],
+            "close": [10.0, 10.10, 10.10, 10.0, 10.10, 10.10],
+            "flag": [True, False, False, True, False, False],
+        }
+    )
+    return frame
+
+
+def test_single_symbol_backtest_shrinks_buy_when_fees_exceed_cash():
+    """名义额+费用略超现金时缩量成交，且后续信号不被吞（dead-pending 回归）。"""
+    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
+    request = SingleSymbolBacktestRequest(
+        symbol="000002.SZ",
+        initial_cash=100000.0,
+        entry_signal="flag",
+        holding_days=1,
+    )
+
+    result = engine.run(make_tight_cash_frame(), request)
+
+    assert result.failed_orders.empty
+    assert result.orders[["trade_date", "side", "quantity", "price"]].to_dict("records") == [
+        {"trade_date": pd.Timestamp("2026-01-06"), "side": "buy", "quantity": 9800, "price": 10.10},
+        {"trade_date": pd.Timestamp("2026-01-07"), "side": "sell", "quantity": 9800, "price": 10.10},
+        {"trade_date": pd.Timestamp("2026-01-09"), "side": "buy", "quantity": 9800, "price": 10.10},
+        {"trade_date": pd.Timestamp("2026-01-12"), "side": "sell", "quantity": 9800, "price": 10.10},
+    ]
+    assert len(result.trades) == 2
+
+
+def test_single_symbol_backtest_records_insufficient_cash_and_retries_later_signals():
+    """缩量后仍不足一手：登记 failed_order 并重置 pending，后续信号再次尝试。"""
+    frame = make_tight_cash_frame()
+    frame["open"] = [50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+    frame["close"] = frame["open"]
+    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
+    request = SingleSymbolBacktestRequest(
+        symbol="000002.SZ",
+        initial_cash=5000.0,
+        entry_signal="flag",
+        holding_days=1,
+    )
+
+    result = engine.run(frame, request)
+
+    assert result.orders.empty
+    assert result.trades.empty
+    assert result.failed_orders[["trade_date", "side", "reason"]].to_dict("records") == [
+        {"trade_date": pd.Timestamp("2026-01-06"), "side": "buy", "reason": "insufficient_cash"},
+        {"trade_date": pd.Timestamp("2026-01-09"), "side": "buy", "reason": "insufficient_cash"},
+    ]

@@ -18,10 +18,14 @@ must match the simulator exactly for identical inputs.
 
 - ``full_compound`` (default): every entry invests all available cash
   (``int(cash // price)`` rounded to lots) — identical to the simulator.
+  When notional + fees exceed cash, the quantity is shrunk lot-by-lot
+  (``fit_buy_quantity_to_cash``); if not even one lot is affordable the
+  attempt is recorded in ``failed_orders`` (``insufficient_cash``) and the
+  pending buy is cleared so later entry signals can retry.
 - ``fixed_cash``: every entry invests a fixed notional equal to
   ``request.initial_cash`` (``int(initial_cash // price)`` rounded to lots);
-  the affordability check still uses current cash, so the same
-  dead-pending semantics apply once cash runs out.
+  the affordability check (with the same shrink/failed-order fallback)
+  still uses current cash.
 
 Incremental continuation (P1): :meth:`run_working_incremental` resumes the
 event loop from a :class:`SymbolState` checkpoint at a ``start_index`` bar.
@@ -539,7 +543,18 @@ class SingleSymbolVectorizedEngine:
                 else:
                     raw_quantity = int(st.cash // price)
                 buy_quantity = self.market_profile.round_order_quantity(OrderSide.BUY, raw_quantity)
-                if buy_quantity > 0:
+                if buy_quantity <= 0:
+                    order = Order(
+                        symbol=request.symbol,
+                        trade_date=pd.Timestamp(trade_dates[i]).date(),
+                        side=OrderSide.BUY,
+                        order_type=OrderType.MARKET,
+                        quantity=buy_quantity,
+                        price=price,
+                    )
+                    failed_orders.append(self._failed_order_row(order, "insufficient_cash"))
+                    st.pending_buy_index = _NO_INDEX
+                else:
                     order = Order(
                         symbol=request.symbol,
                         trade_date=pd.Timestamp(trade_dates[i]).date(),
@@ -559,8 +574,29 @@ class SingleSymbolVectorizedEngine:
                         st.pending_buy_index = _NO_INDEX
                     else:
                         cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
-                        total_cash_needed = order.notional + cost
-                        if total_cash_needed <= st.cash:
+                        if order.notional + cost > st.cash:
+                            shrunk_quantity = self.market_profile.fit_buy_quantity_to_cash(
+                                buy_quantity, price, st.cash
+                            )
+                            if shrunk_quantity > 0:
+                                # No re-validation needed: same bar/price, still
+                                # lot-rounded, smaller quantity.
+                                buy_quantity = shrunk_quantity
+                                order = Order(
+                                    symbol=request.symbol,
+                                    trade_date=pd.Timestamp(trade_dates[i]).date(),
+                                    side=OrderSide.BUY,
+                                    order_type=OrderType.MARKET,
+                                    quantity=buy_quantity,
+                                    price=price,
+                                )
+                                cost = self.market_profile.calculate_cost(OrderSide.BUY, order.notional)
+                            else:
+                                failed_orders.append(self._failed_order_row(order, "insufficient_cash"))
+                                st.pending_buy_index = _NO_INDEX
+                                order = None
+                        if order is not None:
+                            total_cash_needed = order.notional + cost
                             cost_parts = self.market_profile.calculate_cost_breakdown(OrderSide.BUY, order.notional)
                             st.cash -= total_cash_needed
                             st.quantity = buy_quantity
@@ -577,9 +613,6 @@ class SingleSymbolVectorizedEngine:
                                 expiry = i + holding_days
                                 if expiry < n:
                                     heapq.heappush(heap, expiry)
-                        # else: simulator leaves pending_buy_index set (dead) — no
-                        # further buys for this symbol; preserved identically.
-                # buy_quantity == 0: same dead-pending semantics as the simulator.
 
             # --- sell logic (mirrors simulator lines 101-157) ---
             if st.quantity > 0 and st.entry_index != _NO_INDEX:

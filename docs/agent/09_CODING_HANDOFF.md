@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-NL-FACTOR-AUTOCORRECT-001（NL 编译链路因子名自动纠错层：存在性校验 + 保守自动替换 + 候选提示 + prompt 注入真实目录）
+QRE-DEAD-PENDING-FIX（回测引擎「dead-pending」静默吞信号修复：缩量重试 + insufficient_cash 登记 + pending 重置）
+
+## Implementation Summary
+
+**根因**（前置只读排查确诊）：full_compound 仓位买入股数 `raw_quantity = int(cash // price)`，当名义额+费用略超现金（典型：000002.SZ 9900 股×10.10+费用 30.9969=100020.99 > 100000）买入被拒，但 `single_symbol.py` 的 `if total_cash_needed <= cash` 失败分支什么都不做——不写 failed_order、不重置 `pending_buy_index`，而入场要求 `pending_buy_index is None`，该股后续所有入场信号被静默吞掉（job#58 有 135 只股票零交易，含 000002/000016/000725）；向量化路径注释自述「保留 dead pending 语义」。**改法**（两条引擎路径同步实现，行为严格一致）：①`markets/ashare.py` 新增 `fit_buy_quantity_to_cash(quantity, price, cash)`——先以 `cash // price`（lot 取整）为上界，再逐手（buy_lot=100）递减直到 `notional + calculate_cost(BUY, notional) <= cash`，费用含 min_commission=5 元地板（这正是 `现金/(1+费率)//价格` 估算法会错的 case），返回 0 表示一手都买不起；②两个引擎买入执行块重构：`buy_quantity <= 0`（现金买不起一手）→ 直接登记 failed_order（reason=`insufficient_cash`）+ 重置 pending；validation 通过但 名义+费用>现金 → 缩量重试，缩量 ≥1 手按缩量成交（缩量单不重跑 validate_order：同 bar 同价、仍整手、数量更小，结果必同），缩量到 0 → 登记 `insufficient_cash` + 重置 pending。fixed_cash 模式同走缩量/登记（raw 从 initial_cash 算、可负担性对当前现金）。资金充足时代码分支完全未触，既有行为逐字节不变。**验证**：新增回归 5 例——test_portfolio_single_symbol.py +2（缩量成交 9800 股+后续信号再买再卖共 2 笔往返；5000 元买 50 元股两次信号各登记 insufficient_cash）、test_single_symbol_vectorized.py +3（同两场景断言 sim==vec 完全相等 + fixed_cash 一致）；`pytest tests/test_portfolio_single_symbol.py tests/test_single_symbol_vectorized.py tests/test_ashare_market_profile.py` → 144 passed；全量 `pytest tests/` → **2357 passed + 4 skipped（85s）零回归**。**真库验证**（postgresql tushare_data）：000002.SZ 2010-01-04→2026-10-16（3919 根，stock_daily ⋈ stock_daily_momentum_close），entry `(macd_12_26_9 > macds_12_26_9) and (macdh_12_26_9 > 0)`、exit `macd_12_26_9 < macds_12_26_9`、holding_days=0、初始 10 万 → **151 笔往返 / 302 订单 / 0 failed**，首笔 2010-01-19 买入 9800 股@10.10（9900 缩量 1 手，费 30.68），sim 与 vec orders/trades/summary 逐帧相等。**遗留**：full_market_report.py batch 分支 build_symbol_performance 以 round_trips 为准，零交易股票（即便有 failed_orders）从 symbol_performance 漏掉、与 summary.csv 口径不一致——本次只修引擎未改报表层，已登记 05_PROGRESS。未 git commit，等用户/主代理审批。
+
+---
+
+## Archive: QRE-NL-FACTOR-AUTOCORRECT-001（NL 编译链路因子名自动纠错层：存在性校验 + 保守自动替换 + 候选提示 + prompt 注入真实目录）
 
 ## Implementation Summary
 

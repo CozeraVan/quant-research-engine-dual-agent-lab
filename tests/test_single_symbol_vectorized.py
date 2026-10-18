@@ -658,3 +658,66 @@ def test_orders_and_trades_carry_cost_components():
     assert trade["exit_commission"] == sell["commission"]
     assert trade["exit_stamp_tax"] == sell["stamp_tax"]
     assert trade["entry_stamp_tax"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# dead-pending fix: shrink-to-fit buys + insufficient_cash registration
+# ---------------------------------------------------------------------------
+
+
+def _tight_cash_frame() -> pd.DataFrame:
+    """First pending buy: 9900×10.10 + fees = 100020.9969 > 100000 cash."""
+    frame = make_frame(
+        "000002.SZ",
+        [10.0, 10.10, 10.10, 10.0, 10.10, 10.10],
+        start="2026-01-05",
+    )
+    frame["flag"] = [True, False, False, True, False, False]
+    return frame
+
+
+def test_shrinks_buy_when_fees_exceed_cash_matches_simulator():
+    """缩量成交且后续信号不被吞；向量引擎与模拟器逐字节一致。"""
+    frame = _tight_cash_frame()
+    req = make_request("000002.SZ", initial_cash=100_000.0, entry_signal="flag", holding_days=1)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+
+    assert vec.failed_orders.empty
+    assert vec.orders[["side", "quantity", "price"]].to_dict("records") == [
+        {"side": "buy", "quantity": 9800, "price": 10.10},
+        {"side": "sell", "quantity": 9800, "price": 10.10},
+        {"side": "buy", "quantity": 9800, "price": 10.10},
+        {"side": "sell", "quantity": 9800, "price": 10.10},
+    ]
+    assert len(vec.trades) == 2
+
+
+def test_insufficient_cash_records_failed_order_and_retries_matches_simulator():
+    """缩量后仍不足一手：登记 insufficient_cash 并重置 pending，后续信号再次尝试。"""
+    frame = _tight_cash_frame()
+    frame["open"] = [50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+    frame["close"] = frame["open"]
+    req = make_request("000002.SZ", initial_cash=5_000.0, entry_signal="flag", holding_days=1)
+    sim, vec = run_both(frame, req)
+    assert_results_equal(sim, vec)
+
+    assert vec.orders.empty
+    assert vec.trades.empty
+    assert vec.failed_orders[["side", "reason"]].to_dict("records") == [
+        {"side": "buy", "reason": "insufficient_cash"},
+        {"side": "buy", "reason": "insufficient_cash"},
+    ]
+
+
+def test_fixed_cash_shrink_matches_simulator_semantics():
+    """fixed_cash 下现金不足时同样缩量/登记，两引擎一致。"""
+    frame = _tight_cash_frame()
+    frame["open"] = [10.0, 10.10, 10.10, 10.0, 10.10, 10.10]
+    frame["close"] = frame["open"]
+    req = make_request("000002.SZ", initial_cash=100_000.0, entry_signal="flag", holding_days=1)
+    vec_engine = SingleSymbolVectorizedEngine(PROFILE)
+    sim = SingleSymbolBacktestEngine(PROFILE).run(frame, req)
+    vec = vec_engine.run(frame, req, position_sizing="fixed_cash")
+    assert_results_equal(sim, vec)
+    assert vec.orders.iloc[0]["quantity"] == 9800
