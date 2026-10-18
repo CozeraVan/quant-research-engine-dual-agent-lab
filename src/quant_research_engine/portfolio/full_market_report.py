@@ -599,8 +599,10 @@ def build_symbol_performance(
             win_count = int(win_mask.sum())
             loss_count = int(loss_mask.sum())
             win_rate = win_count / trade_count if trade_count > 0 else None
-            gross_profit = float(sym_trades.loc[win_mask, "gross_pnl"].sum()) if win_count > 0 else 0.0
-            gross_loss = float(sym_trades.loc[loss_mask, "gross_pnl"].sum()) if loss_count > 0 else 0.0
+            # 口径统一为 net_pnl（与 batch 分支一致）：分类与金额同列，
+            # 避免毛盈亏为正但费用吃成净亏的交易污染 gross_loss 并使 abs() 失真
+            gross_profit = float(sym_trades.loc[win_mask, "net_pnl"].sum()) if win_count > 0 else 0.0
+            gross_loss = float(sym_trades.loc[loss_mask, "net_pnl"].sum()) if loss_count > 0 else 0.0
             net_profit = float(sym_trades["net_pnl"].sum())
             profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else None
             positive_pnl = sym_trades.loc[win_mask, "net_pnl"]

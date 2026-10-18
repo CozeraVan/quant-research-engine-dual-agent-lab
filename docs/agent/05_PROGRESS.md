@@ -966,3 +966,13 @@ Historical row statuses (pre-migration, kept for old table rows):
 5. **基线形态对比**：outputs 下 qfq 时代留存 run 均为不同策略/不同区间的全市场 batch 产物，无可直接对照的小样本基线；以 10-13 MACD 核验条目为参照，其登记的「盈亏按原始价核算、分红送转缺失」为切换初期观察，本次实测当前代码在 QRE_PRICE_BASIS=raw 下成交价/盯市已全链路 hfq（除权日 hfq 含分红调整，收益率为全收益口径）；**注意点（非 fail）**：hfq 尺度下成交股数是「伪股数」（按 hfq 价折算），绝对金额 PnL 被 adj_factor 缩放，百分比收益正确——阅读 orders/trades 绝对金额时需注意此口径。
 
 **结论**：方案A验收**通过**——信号、成交价、权益曲线三链路 hfq 口径一致且与库表逐值对账吻合（≤1e-15 相对误差量级），除权日无虚假跳变，未发现因复权口径切换引入的偏差。未 commit。
+
+## 2026-10-18 个股级 profit_factor 毛/净口径混用修复
+
+**背景**：job#58 观察到的 profit_factor 与 total_return 方向背离，经只读排查（explore 子代理）确认策略级为正常口径差（pf 只统计已平仓 net_pnl，total_return 含未平仓盯市浮盈），但个股级 SymbolPerformance（shared_cash 分支）存在真实 bug。
+
+**修复**：`portfolio/full_market_report.py::build_symbol_performance` shared_cash 分支，win/loss mask 按 net_pnl 分类、金额却取 gross_pnl——一笔毛利为正但费用吃成净亏的交易会进入亏损桶却贡献正值 gross_loss，经 abs() 后 pf 系统性失真。改为分类与金额同取 net_pnl（与 batch 分支既有口径一致）。
+
+**测试**：`tests/test_full_market_report.py` 新增 `test_profit_factor_net_consistent_with_masks` 回归（gross+10/净-20 混例，断言 pf=5.0 净口径）；全文件 64 测试通过。
+
+**附注（未改，正常口径）**：策略级 profit_factor 仅基于已平仓回合的 net_pnl，total_return 为期末净值/初值-1 含未平仓浮盈，两者方向可背离，属定义使然；后续可在 UI 加注说明。

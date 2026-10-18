@@ -874,6 +874,29 @@ class TestBuildSymbolPerformanceSharedCash:
         )
         assert df["failed_order_count"].iloc[0] == 0
 
+    def test_profit_factor_net_consistent_with_masks(self):
+        """回归：毛/净口径混用 bug——一笔 gross_pnl>0 但 net_pnl<0（费用吃掉毛利）
+        的交易应被分进亏损桶并以净额计入 gross_loss，避免正值污染 + abs() 失真。"""
+        rt = pd.DataFrame([
+            # 净盈利 100
+            {"symbol": "000001.SZ", "entry_date": "2026-01-05", "exit_date": "2026-01-08",
+             "quantity": 100, "entry_price": 10.0, "exit_price": 11.2,
+             "gross_pnl": 120.0, "net_pnl": 100.0, "total_cost": 20.0, "exit_reason": "signal"},
+            # 毛盈利 10 但费用 30 → 净亏 -20
+            {"symbol": "000001.SZ", "entry_date": "2026-02-05", "exit_date": "2026-02-08",
+             "quantity": 100, "entry_price": 10.0, "exit_price": 10.1,
+             "gross_pnl": 10.0, "net_pnl": -20.0, "total_cost": 30.0, "exit_reason": "signal"},
+        ])
+        df = build_symbol_performance(engine_mode="shared_cash", round_trips=rt, orders=pd.DataFrame())
+        row = df.iloc[0]
+        assert row["win_count"] == 1
+        assert row["loss_count"] == 1
+        # 净口径：盈利桶=100，亏损桶=-20，pf=5.0
+        assert row["gross_profit"] == pytest.approx(100.0)
+        assert row["gross_loss"] == pytest.approx(-20.0)
+        assert row["profit_factor"] == pytest.approx(5.0)
+        assert row["net_profit"] == pytest.approx(80.0)
+
 
 class TestBuildFullMarketEquityCurveSharedCash:
     def test_empty_equity_curve(self):
