@@ -33,7 +33,7 @@ _SYMBOL_PERFORMANCE_COLUMNS = [
     "net_profit", "profit_factor", "expectancy", "strategy_total_return",
     "buy_hold_return", "excess_return_vs_buy_hold", "sharpe", "sortino",
     "information_ratio_vs_buy_hold", "max_drawdown", "turnover", "total_cost",
-    "failed_order_count",
+    "failed_order_count", "has_trades",
 ]
 
 _EQUITY_CURVE_COLUMNS = [
@@ -113,6 +113,7 @@ COLUMN_LABELS: dict[str, str] = {
     "max_drawdown": "最大回撤",
     "turnover": "换手率",
     "failed_order_count": "失败委托数",
+    "has_trades": "有交易",
     # equity / drawdown curves
     "cash": "现金",
     "market_value": "持仓市值",
@@ -585,14 +586,21 @@ def build_symbol_performance(
         rt = round_trips if round_trips is not None else pd.DataFrame()
         od = orders if orders is not None else pd.DataFrame()
         fo = failed_orders if failed_orders is not None else pd.DataFrame()
-        if rt.empty:
-            return pd.DataFrame(columns=_SYMBOL_PERFORMANCE_COLUMNS)
-        symbols = sorted(rt["symbol"].dropna().unique())
         failed_by_symbol: dict[str, int] = {}
         if not fo.empty and "symbol" in fo.columns:
             failed_by_symbol = fo.groupby("symbol").size().to_dict()
-        for symbol in symbols:
-            sym_trades = rt[rt["symbol"] == symbol]
+        # symbol 集合 = round_trips ∪ failed_orders：零成交但有失败委托的
+        # 股票也入表（trade_count=0、net_profit=0、failed_order_count=N），
+        # 与 batch 分支“有委托即保留”的口径对齐。
+        symbols: set[str] = set()
+        if not rt.empty and "symbol" in rt.columns:
+            symbols.update(str(s) for s in rt["symbol"].dropna().unique())
+        symbols.update(str(s) for s in failed_by_symbol)
+        if not symbols:
+            return pd.DataFrame(columns=_SYMBOL_PERFORMANCE_COLUMNS)
+        empty_rt = pd.DataFrame(columns=rt.columns if not rt.empty else ["symbol", "net_pnl"])
+        for symbol in sorted(symbols):
+            sym_trades = rt[rt["symbol"] == symbol] if not rt.empty else empty_rt
             trade_count = len(sym_trades)
             win_mask = sym_trades["net_pnl"] > 0
             loss_mask = sym_trades["net_pnl"] < 0
@@ -638,6 +646,7 @@ def build_symbol_performance(
                 "turnover": None,
                 "total_cost": float(sym_trades["total_cost"].sum()) if "total_cost" in sym_trades.columns else None,
                 "failed_order_count": failed_by_symbol.get(symbol, 0),
+                "has_trades": trade_count > 0,
             })
     else:
         for record in summary.to_dict("records"):  # type: ignore[union-attr]
@@ -717,6 +726,7 @@ def build_symbol_performance(
                 "turnover": turnover,
                 "total_cost": record.get("total_cost"),
                 "failed_order_count": record.get("failed_order_count", 0),
+                "has_trades": bool(pd.notna(trade_count) and trade_count and trade_count > 0),
             })
     if not rows:
         return pd.DataFrame(columns=_SYMBOL_PERFORMANCE_COLUMNS)

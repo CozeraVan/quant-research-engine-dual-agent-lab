@@ -978,3 +978,16 @@ Historical row statuses (pre-migration, kept for old table rows):
 **测试**：`tests/test_full_market_report.py` 新增 `test_profit_factor_net_consistent_with_masks` 回归（gross+10/净-20 混例，断言 pf=5.0 净口径）；全文件 64 测试通过。
 
 **附注（未改，正常口径）**：策略级 profit_factor 仅基于已平仓回合的 net_pnl，total_return 为期末净值/初值-1 含未平仓浮盈，两者方向可背离，属定义使然；后续可在 UI 加注说明。
+
+## 2026-10-19 symbol_performance 零交易股票漏报口径修复
+
+**背景**：job#58 summary.csv 5531 行 vs symbol_performance.csv 5398 行——batch 分支 `build_symbol_performance`（`portfolio/full_market_report.py`）以 summary 为输入但只保留 trade_count/order_count 非零的行（有意设计，test_symbol_performance_filters_zero_trade_symbols 守护：有成交/有委托才入表），shared_cash 分支 symbol 集合只取 round_trips，零成交但有失败委托的股票两侧口径不一致，详情页/榜单漏票。
+
+**修复**（`full_market_report.py`）：
+1. batch 分支过滤语义不动（有成交或有委托才入表）；failed_order_count 透传列确认上游已由 `batch.py::_summary_row`（:181 `len(result.failed_orders)`）产出，缺列时 `record.get(..., 0)` 兜底——无需引擎侧改动。
+2. shared_cash 分支 symbol 集合从 round_trips 扩展为 round_trips ∪ failed_orders；round_trips 为空但 failed_orders 非空也出表。失败专属行口径：trade_count=0、win/loss=0、net_profit=0.0、win_rate=None、failed_order_count=N。
+3. symbol_performance 新增标识列 `has_trades`（bool，trade_count>0），同步 `_SYMBOL_PERFORMANCE_COLUMNS` 与 `COLUMN_LABELS`（中文标签「有交易」），前端可区分「有交易」与「仅有失败委托/委托未成交」。batch 分支 B 型（有委托无成交）has_trades=False。
+
+**测试**：`tests/test_full_market_report.py` +3（TestBuildSymbolPerformanceSharedCash::test_failed_only_symbol_included / test_failed_only_symbol_included_when_round_trips_empty；test_symbol_performance_filters_zero_trade_symbols 补充 has_trades 与 failed_order_count 兜底断言，C 仍剔除语义不变）；全文件 66 测试通过；全量 `uv run pytest tests/ -q` 零回归（见 09_CODING_HANDOFF）。
+
+**取舍说明**：加 has_trades 列侵入很小（一列 + 一个标签），优于复用 trade_count==0 推断（无法区分「有委托未成交」与「仅有失败委托」之外的语义且 bool 列对前端更直接）；`report_manifest._REQUIRED_COLUMNS_BY_ROLE["symbol_performance"]` 只要求 symbol+trade_count，不受影响。未 git commit，改动留工作区待审批。

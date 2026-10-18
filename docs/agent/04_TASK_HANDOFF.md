@@ -2,7 +2,32 @@
 
 ## Task ID
 
-QRE-DEAD-PENDING-FIX（回测引擎「dead-pending」静默吞信号 bug 修复——缩量重试 + insufficient_cash 失败登记）
+QRE-SYMBOL-PERF-ZERO-TRADE（symbol_performance 零交易股票漏报口径修复——failed_orders 并入 + has_trades 标识列）
+
+## Current Status
+
+DONE (implementation; **未 commit**——commit 待用户/主代理批准；
+tests/test_full_market_report.py 66 passed 含 +3 新测试，全量套件零回归)
+
+## Task Note
+
+- 根因（主代理已确诊）：job#58 summary.csv 5531 行 vs symbol_performance.csv 5398 行；
+  batch 分支过滤（有成交或有委托才入表，有意设计不动）与 shared_cash 分支
+  （symbol 集合仅取 round_trips）口径不一致，零交易/仅失败委托股票漏出。
+- 修法（src/quant_research_engine/portfolio/full_market_report.py）：
+  ①shared_cash 分支 symbol 集合 = round_trips ∪ failed_orders，rt 空但 failed 非空也出表，
+  失败专属行 trade_count=0 / net_profit=0.0 / failed_order_count=N；
+  ②batch 分支过滤不动；failed_order_count 上游确认由 batch.py::_summary_row 产出（无需引擎改动），
+  缺列兜底 0；
+  ③新增 has_trades 布尔列（trade_count>0），同步 _SYMBOL_PERFORMANCE_COLUMNS 与
+  COLUMN_LABELS（「有交易」），前端可区分有交易 vs 仅失败委托/未成交。
+- 测试：tests/test_full_market_report.py +3（failed_only_symbol_included、
+  failed_only_symbol_included_when_round_trips_empty、既有过滤测试补 has_trades/兜底断言）。
+- 取舍：加列侵入小且语义直接，优于让前端用 trade_count==0 推断；manifest 校验不受影响。
+
+---
+
+## Archive: QRE-DEAD-PENDING-FIX（回测引擎「dead-pending」静默吞信号 bug 修复——缩量重试 + insufficient_cash 失败登记）
 
 ## Current Status
 

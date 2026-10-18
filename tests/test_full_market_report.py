@@ -874,6 +874,45 @@ class TestBuildSymbolPerformanceSharedCash:
         )
         assert df["failed_order_count"].iloc[0] == 0
 
+    def test_failed_only_symbol_included(self):
+        """零成交但有失败委托的股票也入表（trade_count=0、net_profit=0、
+        failed_order_count=N），与 batch 分支“有委托即保留”口径对齐。"""
+        result = _make_shared_result(["000001.SZ"])
+        failed = pd.DataFrame({
+            "symbol": ["000002.SZ", "000002.SZ"],
+            "trade_date": pd.date_range("2026-01-05", periods=2, freq="B"),
+            "reason": ["insufficient_cash", "insufficient_cash"],
+        })
+        df = build_symbol_performance(
+            engine_mode="shared_cash", round_trips=result.trades,
+            orders=result.orders, failed_orders=failed,
+        )
+        assert set(df["symbol"]) == {"000001.SZ", "000002.SZ"}
+        row = df[df["symbol"] == "000002.SZ"].iloc[0]
+        assert row["trade_count"] == 0
+        assert row["net_profit"] == 0.0
+        assert row["failed_order_count"] == 2
+        assert row["has_trades"] == False  # noqa: E712
+        traded = df[df["symbol"] == "000001.SZ"].iloc[0]
+        assert traded["has_trades"] == True  # noqa: E712
+
+    def test_failed_only_symbol_included_when_round_trips_empty(self):
+        failed = pd.DataFrame({
+            "symbol": ["000003.SZ"],
+            "trade_date": ["2026-01-05"],
+            "reason": ["suspended"],
+        })
+        df = build_symbol_performance(
+            engine_mode="shared_cash", round_trips=pd.DataFrame(),
+            orders=pd.DataFrame(), failed_orders=failed,
+        )
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["symbol"] == "000003.SZ"
+        assert row["trade_count"] == 0
+        assert row["failed_order_count"] == 1
+        assert row["has_trades"] == False  # noqa: E712
+
     def test_profit_factor_net_consistent_with_masks(self):
         """回归：毛/净口径混用 bug——一笔 gross_pnl>0 但 net_pnl<0（费用吃掉毛利）
         的交易应被分进亏损桶并以净额计入 gross_loss，避免正值污染 + abs() 失真。"""
@@ -1021,6 +1060,9 @@ def test_symbol_performance_filters_zero_trade_symbols():
     symbols = result["symbol"].tolist() if not result.empty else []
     # A 有成交保留; B 有委托(持仓中)保留; C 无任何交易剔除
     assert symbols == ["A.SZ", "B.SZ"]
+    # has_trades 口径：仅 A 有成交；B 仅有委托为 False；summary 缺 failed_order_count 列时兜底 0
+    assert result.set_index("symbol")["has_trades"].to_dict() == {"A.SZ": True, "B.SZ": False}
+    assert (result["failed_order_count"] == 0).all()
 
 
 def test_shared_cash_round_trips_cost_breakdown_chain():
