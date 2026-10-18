@@ -900,3 +900,12 @@ Historical row statuses (pre-migration, kept for old table rows):
   3. job_58 的 000002.SZ 零交易异常：本地因子显示 1983 天满足入场条件，#66 同股 151 笔，
      #58 一笔没有、failed_orders 为空 → 疑似运行时数据缺失，需排查。
   4. jobs.params.max_holding_days=0 与策略 YAML（20/60）不一致，虽按 YAML 生效，落库有误导性。
+
+## 2026-10-13 周收尾：P1-P3 回填完成 + NL 目录快照同步
+
+- P1 value_size / P2 quality / P3 growth 三表断点续跑全部自然结束：
+  value/size 各 962.5 万行（earnings_cut 兜底 25.7 万格）、growth 续跑 611.7 万行、quality 续跑完成。
+  数据均已到 2026-10-12。**三个 verify 脚本尚未跑，列下周第一任务**。
+- NL 因子目录快照已重新生成（gen_factor_catalog_llm.py），新增 _pit_financial_panel、
+  stock_daily_value/size/quality/growth 五张表，NL 入口现在可引用 P0-P3 全部因子。
+- 两仓库提交并推送：indicators 211cb76（panel_factors 全套）、QRE 6cb52db（核验结论+规范+目录）。
