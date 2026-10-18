@@ -484,9 +484,21 @@ def register_strategy_lab_routes(app: Flask) -> None:
 
                 mapping = _yaml.safe_load(yaml_text)
                 report = correct_factor_fields(mapping, lookup)
-                if report["corrections"]:
+                # 同类指标基础价格口径统一（job#71 复盘：ema_5 落 close 表、
+                # ema_200 落 typical_price 表的混搭）——纠错之后、缺失判定之前
+                from quant_research_engine.gui.factor_wizard import (
+                    format_price_basis_note,
+                    unify_factor_price_basis,
+                )
+
+                factor_fields = (mapping.get("data") or {}).get("factor_fields") or {}
+                remaps = unify_factor_price_basis(factor_fields, lookup) if isinstance(factor_fields, dict) else []
+                if report["corrections"] or remaps:
                     yaml_text = _yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False)
+                if report["corrections"]:
                     warnings.append(format_corrections_note(report["corrections"]))
+                if remaps:
+                    warnings.append(format_price_basis_note(remaps))
                 spec = StrategySpec.from_mapping(_yaml.safe_load(yaml_text))
                 missing = find_missing_factor_columns(spec, lookup)
                 if missing:

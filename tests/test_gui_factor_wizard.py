@@ -12,7 +12,9 @@ from quant_research_engine.gui.factor_wizard import (
     build_factor_groups,
     build_strategy_yaml,
     combine_conditions,
+    format_price_basis_note,
     parse_factor_table_name,
+    unify_factor_price_basis,
 )
 from quant_research_engine.gui import factor_admin
 from quant_research_engine.gui.factor_admin import (
@@ -146,6 +148,104 @@ def test_build_strategy_yaml_no_exit_no_risk():
 def test_build_strategy_yaml_requires_entry():
     with pytest.raises(ValueError, match="入场条件"):
         build_strategy_yaml(name="x", factor_fields={}, entry_expression=None)
+
+
+# --- unify_factor_price_basis（job#71 复盘：同类指标基础价格口径统一） ---
+
+
+# 贴近生产实测（2026-10-18 tushare_data）：close 表有 ema_5 无 ema_200，
+# typical_price 表两者皆有（斐波那契周期组 3/5/8/13/21/34/55/89/200）
+_OVERLAP_SCHEMA = {
+    "factors.stock_daily_overlap_close": {"ema_5", "ema_12", "ema_26", "sma_5", "sma_200"},
+    "factors.stock_daily_overlap_typical_price": {"ema_3", "ema_5", "ema_200"},
+    "factors.stock_daily_overlap_average_price": set(),
+    "factors.stock_daily_momentum_close": {"rsi_14"},
+    "factors.stock_daily_momentum_typical_price": set(),
+    "factors.stock_daily_momentum_average_price": set(),
+}
+
+
+def _overlap_lookup(table: str) -> set[str]:
+    return _OVERLAP_SCHEMA.get(table, set())
+
+
+def test_unify_price_basis_ema5_ema200_same_table():
+    """job#71 案例：同选 ema_5 + ema_200 必须落同一张基础价格表。"""
+    fields = {
+        "ema_5": "factors.stock_daily_overlap_close.ema_5",
+        "ema_200": "factors.stock_daily_overlap_typical_price.ema_200",
+    }
+    remaps = unify_factor_price_basis(fields, _overlap_lookup)
+    # close 表缺 ema_200 → 整组回退 typical_price（两列都覆盖），口径一致
+    assert fields["ema_5"] == "factors.stock_daily_overlap_typical_price.ema_5"
+    assert fields["ema_200"] == "factors.stock_daily_overlap_typical_price.ema_200"
+    assert [r["alias"] for r in remaps] == ["ema_5"]
+
+
+def test_unify_price_basis_prefers_close_when_covering():
+    """close 表覆盖全部所选列时，即使选了典型价变体也统一回 close。"""
+    fields = {
+        "sma_5": "factors.stock_daily_overlap_close.sma_5",
+        "sma_200": "factors.stock_daily_overlap_typical_price.sma_200",
+    }
+    schema = dict(_OVERLAP_SCHEMA)
+    schema["factors.stock_daily_overlap_typical_price"] = {"sma_200"}
+    remaps = unify_factor_price_basis(fields, lambda t: schema.get(t, set()))
+    assert fields["sma_5"] == "factors.stock_daily_overlap_close.sma_5"
+    assert fields["sma_200"] == "factors.stock_daily_overlap_close.sma_200"
+    assert [r["alias"] for r in remaps] == ["sma_200"]
+
+
+def test_unify_price_basis_only_in_typical_price_untouched():
+    """只在 typical_price 表存在的合法映射不动（ema_3 无 close 变体）。"""
+    fields = {"ema_3": "factors.stock_daily_overlap_typical_price.ema_3"}
+    remaps = unify_factor_price_basis(fields, _overlap_lookup)
+    assert remaps == []
+    assert fields["ema_3"] == "factors.stock_daily_overlap_typical_price.ema_3"
+
+
+def test_unify_price_basis_per_column_fallback_when_no_full_cover():
+    """无任何表全覆盖时逐列回退：close 有的落 close，close 缺的留原表。"""
+    fields = {
+        "ema_5": "factors.stock_daily_overlap_typical_price.ema_5",
+        "sma_200": "factors.stock_daily_overlap_close.sma_200",
+        "ema_200": "factors.stock_daily_overlap_typical_price.ema_200",
+    }
+    schema = dict(_OVERLAP_SCHEMA)
+    # typical_price 不覆盖 sma_200、close 不覆盖 ema_200 → 无全覆盖表
+    remaps = unify_factor_price_basis(fields, lambda t: schema.get(t, set()))
+    assert fields["ema_5"] == "factors.stock_daily_overlap_close.ema_5"  # close 优先
+    assert fields["sma_200"] == "factors.stock_daily_overlap_close.sma_200"
+    assert fields["ema_200"] == "factors.stock_daily_overlap_typical_price.ema_200"
+    assert [r["alias"] for r in remaps] == ["ema_5"]
+
+
+def test_unify_price_basis_skips_non_factor_and_missing():
+    """行情字段/alpha191/缺列不动（缺列交给缺因子检查）。"""
+    fields = {
+        "close": "public.stock_daily.close",
+        "alpha1": "factors.stock_daily_alpha191.alpha1",
+        "ghost": "factors.stock_daily_overlap_close.ema_999",
+    }
+    remaps = unify_factor_price_basis(fields, _overlap_lookup)
+    assert remaps == []
+    assert fields["ghost"] == "factors.stock_daily_overlap_close.ema_999"
+
+
+def test_unify_price_basis_cross_category_independent():
+    """不同类别分组独立统一，互不牵连。"""
+    fields = {
+        "rsi_14": "factors.stock_daily_momentum_close.rsi_14",
+        "ema_200": "factors.stock_daily_overlap_typical_price.ema_200",
+    }
+    remaps = unify_factor_price_basis(fields, _overlap_lookup)
+    assert remaps == []
+    assert fields["rsi_14"] == "factors.stock_daily_momentum_close.rsi_14"
+
+
+def test_format_price_basis_note_mentions_alias():
+    note = format_price_basis_note([{"alias": "ema_5", "from": "a", "to": "b"}])
+    assert "ema_5" in note and "close" in note
 
 
 # --- parse_periods ---

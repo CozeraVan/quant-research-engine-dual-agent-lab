@@ -569,6 +569,43 @@ def _norm_wizard_state(value: Any) -> str | None:
     return None
 
 
+def _unify_price_basis_yaml(yaml_text: str) -> tuple[str, str | None]:
+    """同类指标基础价格口径统一（job#71 复盘，QRE-WIZARD-PRICE-BASIS-001）。
+
+    向导/NL/YAML 三入口汇聚的策略 YAML 在落库/提交前，把同类指标（如
+    ema 不同周期）统一到同一基础价格表（默认 close；某周期在 close 表
+    缺失时整组回退到能全覆盖的价格表）。返回 (yaml, 提示|None)；
+    解析失败或因子库不可用时原样返回（不阻塞主流程）。
+    """
+    try:
+        import yaml as _yaml
+
+        from quant_research_engine.gui.factor_wizard import (
+            format_price_basis_note,
+            unify_factor_price_basis,
+        )
+        from quant_research_engine.gui.nl_compiler import _default_column_lookup
+
+        mapping = _yaml.safe_load(yaml_text)
+        if not isinstance(mapping, dict):
+            return yaml_text, None
+        factor_fields = (mapping.get("data") or {}).get("factor_fields")
+        if not isinstance(factor_fields, dict) or not factor_fields:
+            return yaml_text, None
+        lookup = _default_column_lookup()
+        if lookup is None:
+            return yaml_text, None
+        remaps = unify_factor_price_basis(factor_fields, lookup)
+        if not remaps:
+            return yaml_text, None
+        return (
+            _yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False),
+            format_price_basis_note(remaps),
+        )
+    except Exception:
+        return yaml_text, None
+
+
 def _worker_config_view(row: Any) -> dict[str, Any]:
     """worker_configs 行 → API 视图（limits 键名与 worker 上报的 limits 对齐）。"""
     return _jsonable({
@@ -1347,6 +1384,8 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "缺少策略名称"}), 400
         if not yaml_text:
             return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
+        # 同类指标基础价格口径统一（QRE-WIZARD-PRICE-BASIS-001）
+        yaml_text, basis_note = _unify_price_basis_yaml(yaml_text)
         if data.get("entry_mode") is not None and _norm_entry_mode(data.get("entry_mode")) is None:
             return jsonify({"ok": False, "error": "entry_mode 须为 nl/wizard/yaml"}), 400
         entry_mode = _infer_entry_mode(data.get("entry_mode"), data.get("nl_text"))
@@ -1371,14 +1410,16 @@ def create_saas_app() -> Flask:
                     {"yaml": yaml_text, "nl": data.get("nl_text"), "em": entry_mode,
                      "ws": wizard_state, "id": existing.id},
                 )
-                return jsonify({"ok": True, "strategy_id": existing.id, "updated": True})
+                return jsonify({"ok": True, "strategy_id": existing.id, "updated": True,
+                                **({"warnings": [basis_note]} if basis_note else {})})
             sid = conn.execute(
                 text("INSERT INTO strategies (user_id, name, nl_text, yaml, entry_mode, wizard_state, in_library) "
                      "VALUES (:uid, :name, :nl, :yaml, :em, CAST(:ws AS jsonb), true) RETURNING id"),
                 {"uid": uid, "name": name, "nl": data.get("nl_text"), "yaml": yaml_text,
                  "em": entry_mode, "ws": wizard_state},
             ).scalar_one()
-        return jsonify({"ok": True, "strategy_id": sid, "updated": False})
+        return jsonify({"ok": True, "strategy_id": sid, "updated": False,
+                        **({"warnings": [basis_note]} if basis_note else {})})
 
     @app.post("/api/saas/strategies/<int:strategy_id>/save")
     def api_strategy_save_to_library(strategy_id: int) -> Any:
@@ -1955,6 +1996,9 @@ def create_saas_app() -> Flask:
         yaml_text = str(data.get("yaml") or data.get("strategy_yaml") or "").strip()
         if not yaml_text:
             return jsonify({"ok": False, "error": "缺少策略 yaml"}), 400
+        # 同类指标基础价格口径统一（QRE-WIZARD-PRICE-BASIS-001）：
+        # 在配额闸之前归一，配额按最终表口径核算
+        yaml_text, basis_note = _unify_price_basis_yaml(yaml_text)
         # 因子资源配额闸（2026-10-03）：提交时提前拦截"枚举全库因子"的资源滥用，
         # 三个入口（NL/向导/ YAML 编辑）均汇聚于此。上限按角色读 tier_policies
         # （管理台可改），并随 params 透传给 worker 做执行前权威复核。
@@ -2113,6 +2157,8 @@ def create_saas_app() -> Flask:
             ).scalar_one()
         resp: dict[str, Any] = {"ok": True, "job_id": job_id, "strategy_id": strategy_id,
                                 "status": "queued", "weight_class": weight_class}
+        if basis_note:
+            resp["warnings"] = [basis_note]
         if guest_key is not None:
             resp["guest"] = True
             resp["note"] = GUEST_RESULT_NOTE

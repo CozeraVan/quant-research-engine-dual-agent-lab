@@ -44,6 +44,10 @@ _SKIP_COLUMNS = frozenset({"ts_code", "trade_date"})
 
 COMPARISON_OPERATORS = [">", ">=", "<", "<=", "==", "!="]
 
+# 基础价格表统一优先级（QRE-WIZARD-PRICE-BASIS-001）：同一策略内同类指标
+# 默认 close；仅当某周期在 close 表不存在时整组回退到能全覆盖的价格表。
+PRICE_BASIS_PREFERENCE = ("close", "typical_price", "average_price")
+
 
 def parse_factor_table_name(table: str) -> tuple[str, str] | None:
     """Parse ``stock_daily_<category>_<price_col>`` → (category, price_col)."""
@@ -51,6 +55,88 @@ def parse_factor_table_name(table: str) -> tuple[str, str] | None:
     if not match:
         return None
     return match.group("category"), match.group("price")
+
+
+def unify_factor_price_basis(
+    factor_fields: dict[str, str],
+    column_lookup: Any,
+) -> list[dict[str, str]]:
+    """同一策略内同类因子统一基础价格表（就地改写 factor_fields）。
+
+    背景（job#71 复盘）：向导按「列名首次出现的表」定映射，用户同选
+    ema_5 + ema_200 时，ema_5 落到 close 表、ema_200 落到 typical_price
+    表（close 表无 ema_200 列），生成的 YAML 把同一均线的不同周期混在
+    两种基础价格上，语义偏离用户预期。
+
+    规则：
+    - 按类别（``stock_daily_<category>_<price>``）分组，非标准命名
+      （public.stock_daily、alpha191 面板表等）不动；
+    - 组内按 PRICE_BASIS_PREFERENCE 找第一张**覆盖全部所选列**的价格表，
+      整组迁移过去（默认 close；close 缺某周期时整组回退，如
+      ema_5+ema_200 → typical_price，保持同组同口径）；
+    - 没有任何一张表全覆盖时，逐列落到优先级最高的存在表；某列在所有
+      标准价格表都不存在时保持原样（交给缺因子检查/纠错层处理）。
+
+    ``column_lookup(qualified_table) -> set[str]``（只读，与
+    factor_correction 同一约定）。返回改写记录 [{alias, from, to}, ...]。
+    """
+    parsed: dict[str, tuple[str, str, str]] = {}  # alias -> (category, table, column)
+    for alias, target in factor_fields.items():
+        parts = str(target).rsplit(".", 1)
+        if len(parts) != 2:
+            continue
+        table, column = parts
+        short = table.split("factors.", 1)[-1]
+        name_parsed = parse_factor_table_name(short)
+        if name_parsed is None:
+            continue
+        parsed[str(alias)] = (name_parsed[0], table, column)
+
+    by_category: dict[str, list[str]] = {}
+    for alias, (category, _table, _column) in parsed.items():
+        by_category.setdefault(category, []).append(alias)
+
+    remaps: list[dict[str, str]] = []
+    for category in sorted(by_category):
+        aliases = by_category[category]
+        tables = {
+            price: f"factors.stock_daily_{category}_{price}"
+            for price in PRICE_BASIS_PREFERENCE
+        }
+        columns = {price: column_lookup(table) for price, table in tables.items()}
+        needed = {parsed[a][2] for a in aliases}
+        # 整组统一：优先级最高的全覆盖表
+        group_price = next(
+            (price for price in PRICE_BASIS_PREFERENCE
+             if columns[price] and needed <= columns[price]),
+            None,
+        )
+        for alias in aliases:
+            _cat, table, column = parsed[alias]
+            target_table = None
+            if group_price is not None:
+                target_table = tables[group_price]
+            else:
+                # 无全覆盖表：逐列回退到优先级最高的存在表
+                for price in PRICE_BASIS_PREFERENCE:
+                    if column in columns[price]:
+                        target_table = tables[price]
+                        break
+            if target_table is None or target_table == table:
+                continue
+            old = factor_fields[alias]
+            factor_fields[alias] = f"{target_table}.{column}"
+            remaps.append({"alias": alias, "from": str(old), "to": factor_fields[alias]})
+    return remaps
+
+
+def format_price_basis_note(remaps: list[dict[str, str]]) -> str:
+    """「已统一基础价格口径」的中文提示行。"""
+    items = "、".join(f"{r['alias']}: {r['from']} → {r['to']}" for r in remaps)
+    return (
+        "已统一同类指标的基础价格口径（同一策略内默认 close，"
+        f"某周期在 close 表缺失时整组回退到能全覆盖的价格表）：{items}"
+    )
 
 
 def build_factor_groups(tables_columns: dict[str, list[str]]) -> list[dict[str, Any]]:

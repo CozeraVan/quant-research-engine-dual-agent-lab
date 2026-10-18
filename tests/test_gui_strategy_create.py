@@ -404,6 +404,42 @@ def test_api_create_missing_factors(app_client, monkeypatch, tmp_path):
     assert not (sandbox / "sc_demo.yaml").exists()  # 缺因子不入沙箱
 
 
+# job#71 案例：同选 ema_5 + ema_200，close 表无 ema_200 → 整组统一回 typical_price
+_EMA_MIXED_YAML = (
+    "experiment:\n  name: sc_demo\n  market_profile: ashare_daily_default\n  frequency: daily\n"
+    "data:\n  market_fields: [open, high, low, close, pre_close, vol, amount]\n"
+    "  factor_fields:\n"
+    "    ema_5: factors.stock_daily_overlap_close.ema_5\n"
+    "    ema_200: factors.stock_daily_overlap_typical_price.ema_200\n"
+    "signal:\n  entry: ema_5 > ema_200\n  exit: ema_5 < ema_200\n"
+    "holding:\n  max_holding_days: 20\n"
+    "evaluation:\n  forward_return_horizons: [1, 3, 5]\n"
+)
+
+_EMA_LOOKUP_SCHEMA = {
+    "factors.stock_daily_overlap_close": {"ema_5", "ema_12", "ema_26"},
+    "factors.stock_daily_overlap_typical_price": {"ema_5", "ema_200"},
+}
+
+
+def test_api_create_unifies_price_basis(app_client, monkeypatch):
+    """同类指标基础价格口径统一（QRE-WIZARD-PRICE-BASIS-001）：ema_5/ema_200 同表。"""
+    client, sandbox, _, _ = app_client
+    monkeypatch.setattr(
+        "quant_research_engine.gui.nl_compiler._default_column_lookup",
+        lambda db_url=None: (lambda table: _EMA_LOOKUP_SCHEMA.get(table, set())),
+    )
+    resp = client.post("/api/strategies/create", json={"mode": "manual", "yaml_text": _EMA_MIXED_YAML})
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    saved = (sandbox / "sc_demo.yaml").read_text(encoding="utf-8")
+    assert "factors.stock_daily_overlap_typical_price.ema_5" in saved
+    assert "factors.stock_daily_overlap_typical_price.ema_200" in saved
+    assert "overlap_close" not in saved
+    assert any("基础价格口径" in w for w in data["warnings"])
+
+
 def test_api_sandbox_list(app_client):
     client, _, _, _ = app_client
     client.post("/api/strategies/create", json={"mode": "manual", "yaml_text": _VALID_YAML})
