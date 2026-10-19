@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-P8-PANEL-DAILY（panel_factors 全体系日更接线 + 8080 纳管 + P5 risk pair-aware warmup 修复）
+QRE-PARAM-PASSTHROUGH（SaaS 高级参数落库与引擎生效一致性：max_holding_days 参数权威化）
+
+## Implementation Summary
+
+**链路核查**：web 表单 → `POST /api/jobs`（jobs.params 原样落库）→ worker claim（17 协议 params_json）→ `worker/runner.py::execute_job` → `gui/engine.py::run_backtest` → 引擎请求。费率类（commission_rate/min_commission/stamp_tax_sell/滑点）经 `params.profile_overrides` 全链透传且 ECS 实证一致（job 59-71 落库值 == worker run 记录 status.json；job 62 round_trips 费用非零且与费率手算吻合）；历史「费用为 0」系 C5 params_json 丢弃事故，已修且有回归。**实证残留根因 = max_holding_days**：worker 从不传该参数且 run_backtest 无此形参，引擎只读 YAML `holding.max_holding_days`（spec.py:90），前端仅在 YAML 缺 holding 键时注入表单值（new.html applyName）——ECS job 65/66 落库 max_holding_days=0（用户要不限）但 YAML=60，引擎实跑 60 天。**修复**（params 显式给时为权威，覆盖 YAML holding 节）：①`gui/engine.py` run_backtest/_run_via_module 新增 `max_holding_days: int | None`，纯函数 `_override_holding_days`（None=不动 YAML；0=不限；frozen spec 走 dataclasses.replace），precheck full_params 与 run 记录同步携带；②`worker/runner.py` 透传 params.max_holding_days（含 0，不按 falsy 丢弃）；③`gui/strategy_lab_routes.py` /api/run + `templates/run_detail.html`：8081 precheck→全量重跑链同样透传（整数校验 ≥0）；④`gui/saas/templates/new.html` buildParams：留空落库 0（=不限），对齐占位符承诺。**测试**：test_gui_engine.py +2（覆盖语义 None/20/0 且原 spec 不变；run_backtest 记录+透传，0 透传/缺省不落键）；test_worker.py +2（TestParamPassthrough：params 全字段端到端到达 run_backtest kwargs；旧 job 无键传 None）。全量 `uv run python -m pytest tests/ -q` → 2365 passed, 4 skipped 零回归。未 git commit，等用户/主代理审批。
+
+---
+
+## Archive: QRE-P8-PANEL-DAILY（panel_factors 全体系日更接线 + 8080 纳管 + P5 risk pair-aware warmup 修复）
 
 ## Implementation Summary
 

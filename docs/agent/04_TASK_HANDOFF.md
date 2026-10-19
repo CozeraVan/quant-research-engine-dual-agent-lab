@@ -2,7 +2,29 @@
 
 ## Task ID
 
-QRE-P8-PANEL-DAILY（panel_factors 全体系日更接线：P0-P3/P4/P5/P7/通道B 接入 panel-factors-daily.timer + 8080 纳管）
+QRE-PARAM-PASSTHROUGH（SaaS 高级参数落库与引擎生效一致性修复）
+
+## Current Status
+
+DONE (implementation; **未 commit**——改动留工作区待批准；
+tests/test_gui_engine.py +2 / tests/test_worker.py +2，全量 2365 passed + 4 skipped 零回归)
+
+## Task Note
+
+- 核查结论：费率类高级参数（佣金率/最低佣金/印花税/滑点）经 params.profile_overrides
+  全链透传且与 ECS 实证一致（job 59-71 落库==worker run 记录；job 62 产物费用非零吻合手算）；
+  历史「费用为 0」系 C5 params_json 事故（已修有回归）。
+- 实证残留根因：max_holding_days 只落库不透传——worker/runner.py 未传、run_backtest 无形参，
+  引擎只读 YAML holding 节；前端仅 YAML 缺键时注入。ECS job 65/66：落库 0（不限）但 YAML=60，
+  引擎实跑 60 天。
+- 修法：params 为权威来源——engine.py 新增 max_holding_days 形参 + `_override_holding_days`
+  （None=不动 YAML，0=不限）；runner 透传（含 0）；8081 /api/run + run_detail.html 重跑链同步；
+  saas new.html 留空落库 0 对齐「留空=不限」占位符。
+- 验证：新增 4 测试全绿；ECS 库抽查 + 本地 worker run 记录比对完成（详见 05_PROGRESS）。
+
+---
+
+## Archive: QRE-P8-PANEL-DAILY（panel_factors 全体系日更接线：P0-P3/P4/P5/P7/通道B 接入 panel-factors-daily.timer + 8080 纳管）
 
 ## Current Status
 

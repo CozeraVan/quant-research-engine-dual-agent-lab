@@ -338,6 +338,71 @@ def test_run_backtest_module_executor_single(monkeypatch, tmp_path):
     assert result["mode"] == "single"
 
 
+# --- max_holding_days 参数透传（SaaS 高级参数 = 落库 = 引擎生效） ---
+
+
+def test_override_holding_days():
+    from quant_research_engine.gui.engine import _override_holding_days
+    from quant_research_engine.strategies.spec import StrategySpec
+
+    yaml_text = (
+        "experiment:\n  name: t\ndata:\n  market_fields: [close]\n"
+        "signal:\n  entry: close > 0\nevaluation:\n  forward_return_horizons: [1]\nholding:\n  max_holding_days: 60\n"
+    )
+    spec = StrategySpec.from_mapping(__import__("yaml").safe_load(yaml_text))
+    assert spec.holding_days == 60
+    # None = 不覆盖（YAML 为准）；显式值覆盖 YAML；0 = 不限持仓天数
+    assert _override_holding_days(spec, None).holding_days == 60
+    assert _override_holding_days(spec, 20).holding_days == 20
+    assert _override_holding_days(spec, 0).holding_days == 0
+    # 原 frozen 实例不被修改
+    assert spec.holding_days == 60
+
+
+def test_run_backtest_records_and_forwards_max_holding_days(monkeypatch, tmp_path):
+    """run_backtest 把 max_holding_days 写进 run 记录并透传给执行器。"""
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr("quant_research_engine.gui.engine.TEMPLATES_DIR", tmp_path / "templates")
+    monkeypatch.setattr("quant_research_engine.gui.engine.GUI_BASE_DIR", tmp_path)
+
+    captured = {}
+
+    def fake_run_via_module(**kwargs):
+        captured.update(kwargs)
+        kwargs["stdout_path"].write_text("strategy=t\norders=0\n", encoding="utf-8")
+        kwargs["stderr_path"].write_text("", encoding="utf-8")
+
+    monkeypatch.setattr("quant_research_engine.gui.engine._run_via_module", fake_run_via_module)
+
+    yaml_text = (
+        "experiment:\n  name: t\ndata:\n  market_fields: [close]\n"
+        "signal:\n  entry: close > 0\nholding:\n  max_holding_days: 60\n"
+    )
+    result = run_backtest(
+        yaml_text=yaml_text,
+        mode="shared",
+        start="2026-01-05",
+        end="2026-01-06",
+        codes="000001.SZ",
+        max_holding_days=0,
+        precheck=False,
+    )
+    assert result["status"] == "completed"
+    assert captured["max_holding_days"] == 0  # 0 也要透传（不限），不能按 falsy 丢弃
+    assert result["max_holding_days"] == 0
+
+    # 缺省（None）不落记录、不覆盖
+    result2 = run_backtest(
+        yaml_text=yaml_text,
+        mode="shared",
+        start="2026-01-05",
+        end="2026-01-06",
+        codes="000001.SZ",
+    )
+    assert captured["max_holding_days"] is None
+    assert "max_holding_days" not in result2
+
+
 # --- compile_high_level_entry ---
 
 

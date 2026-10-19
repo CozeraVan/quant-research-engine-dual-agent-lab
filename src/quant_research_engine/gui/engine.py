@@ -105,6 +105,19 @@ def build_market_profile(overrides: dict[str, float] | None) -> Any:
     return profile
 
 
+def _override_holding_days(spec: Any, max_holding_days: int | None) -> Any:
+    """显式 max_holding_days 覆盖 YAML holding 节；None 保持 YAML 原值。
+
+    语义与 StrategySpec 一致：0 = 不限持仓天数。StrategySpec 为 frozen
+    dataclass，用 replace 生成新实例。
+    """
+    if max_holding_days is None:
+        return spec
+    from dataclasses import replace
+
+    return replace(spec, holding_days=int(max_holding_days))
+
+
 def validate_yaml(yaml_text: str) -> dict[str, Any]:
     """Validate YAML text against the StrategySpec parser.
 
@@ -192,6 +205,7 @@ def run_backtest(
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
+    max_holding_days: int | None = None,
     precheck: bool = False,
     random_n: int | None = None,
     background: bool = False,
@@ -237,6 +251,7 @@ def run_backtest(
             "stop_loss_pct": stop_loss_pct,
             "take_profit_pct": take_profit_pct,
             "trailing_stop_pct": trailing_stop_pct,
+            "max_holding_days": max_holding_days,
             "profile_overrides": profile_overrides,
         }
         codes_list, start, end = apply_precheck(codes_list, start, end, seed=rid, db_url=db_url)
@@ -281,6 +296,9 @@ def run_backtest(
         record["take_profit_pct"] = take_profit_pct
     if trailing_stop_pct is not None:
         record["trailing_stop_pct"] = trailing_stop_pct
+    if max_holding_days is not None:
+        # 与 stop/take/trailing 同口径：显式传入时以参数为准覆盖 YAML holding 节
+        record["max_holding_days"] = int(max_holding_days)
     if sampled_random:
         record["random_n"] = random_n
         record["universe"] = "random"
@@ -308,6 +326,7 @@ def run_backtest(
         "stop_loss_pct": stop_loss_pct,
         "take_profit_pct": take_profit_pct,
         "trailing_stop_pct": trailing_stop_pct,
+        "max_holding_days": max_holding_days,
     }
 
     if background:
@@ -416,6 +435,7 @@ def _run_via_module(
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
+    max_holding_days: int | None = None,
 ) -> None:
     """Execute backtest via direct Python module call (mirrors CLI flow)."""
     import io
@@ -441,6 +461,10 @@ def _run_via_module(
         store.ping()
 
         spec = StrategySpec.from_yaml(tmp_path)
+        # max_holding_days 参数覆盖（SaaS 高级参数为权威来源）：jobs.params 落库值
+        # 与引擎生效值保持一致，不再依赖前端把表单值注入 YAML holding 节
+        # （YAML 自带 max_holding_days 时前端不覆盖，导致落库≠生效）。
+        spec = _override_holding_days(spec, max_holding_days)
 
         # Empty code list = whole market (assembler/engine accept None).
         ts_codes = codes or None

@@ -794,7 +794,8 @@ function buildParams(){
   if (tp != null) params.take_profit_pct = tp;
   if (ts != null) params.trailing_stop_pct = ts;
   const hold = $('#p-holding').value.trim();
-  if (hold) params.max_holding_days = parseInt(hold, 10);
+  // 留空 = 不限（0），与输入框占位符承诺一致；引擎端以 params 为权威覆盖 YAML holding 节
+  params.max_holding_days = hold ? parseInt(hold, 10) : 0;
   const fnum = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
   const overrides = {};
   [['commission_rate','#p-comm'],['min_commission','#p-mincomm'],['stamp_tax_sell','#p-stamp'],

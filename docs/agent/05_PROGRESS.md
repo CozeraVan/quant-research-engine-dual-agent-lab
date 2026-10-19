@@ -1012,3 +1012,21 @@ Historical row statuses (pre-migration, kept for old table rows):
 **验证**：①逐值一致——2026-10-09（全量回填日）20 股抽样 × 8 模块全市场单日复算，第三轮全 PASS（前两轮 FAIL 均为验证方法学产物：首轮 --codes 子集破坏横截面口径并短暂污染 10-09 抽样股，已由次轮全市场复算修复；复算值与首轮前的原始存量值逐值相符）；②幂等——同日复算两次，值与行数均不变；日更脚本二次运行全部 SKIP(fresh) 退出 0；③watermark——9 项（8 表 + 通道B 列）全部到 2026-10-16；④QRE `pytest tests/test_gui_admin*.py tests/test_gui_app.py tests/test_gui_saas_console.py` 146 passed；indicators `pytest tests/test_panel_factors_daily.py tests/test_alpha191_daily.py` 24 passed。
 
 未 git commit（两仓库改动均留工作区，待审批）。
+
+## 2026-10-19 SaaS 高级参数落库与引擎生效一致性修复（QRE-PARAM-PASSTHROUGH）
+
+**背景**：排查「web 高级参数（佣金率/最低佣金/印花税/滑点/初始资金/最大持仓数/回测区间等）与 jobs.params 落库、引擎实际生效不一致」。
+
+**链路核查结论**（web 表单 → POST /api/jobs → jobs.params 落库 → worker claim（17 协议 params_json）→ `worker/runner.py::execute_job` → `gui/engine.py::run_backtest` → 引擎请求对象）：
+- 佣金率/最低佣金/印花税/滑点：经 `params.profile_overrides`（键名与 `AShareMarketProfile` 字段一一对应）全链透传，ECS 库抽查 job 59-71 落库值与 worker 本地 run 记录（`outputs/gui-console/runs/<run_id>/status.json` 的 profile_overrides）一致；job 62 产物 round_trips.csv 费用合计非零且与费率手算吻合（佣金=双边成交额×0.0003 等）。历史上"费用为 0/按默认参数跑"是 C5 事故（claim 下发字段改名 params_json 后 worker 只读旧键 params），此前已修并有 `test_job_params_prefers_params_json` 回归。
+- **实证残留不一致 = max_holding_days**：ECS job 65/66 落库 `params.max_holding_days=0`（用户表单填 0=不限），但策略 YAML `holding.max_holding_days=60`，引擎实际按 60 天跑——根因是 worker 从不把 max_holding_days 传给 run_backtest（`gui/engine.py::run_backtest` 根本没有该参数），引擎只读 `StrategySpec.holding_days`（spec.py:90），生效与否全赖前端 applyName 的「YAML 缺 holding 节才注入表单值」（new.html:271，YAML 自带该键时不覆盖）。
+
+**修复**（params 为权威来源，显式给时覆盖 YAML holding 节）：
+1. `gui/engine.py`：`run_backtest`/`_run_via_module` 新增 `max_holding_days: int | None`；新纯函数 `_override_holding_days(spec, value)`（None=不动 YAML，0=不限；frozen dataclass 走 replace）；precheck 的 `full_params` 与 run 记录同步携带（仅显式给时落记录键）。
+2. `worker/runner.py`：execute_job 把 `params.max_holding_days` 透传给 run_backtest（含 0，不按 falsy 丢弃）；docstring 参数清单同步。
+3. `gui/strategy_lab_routes.py` `/api/run` + `gui/templates/run_detail.html`：8081 侧 precheck→全量重跑链同样透传 max_holding_days（整数校验，≥0）。
+4. `gui/saas/templates/new.html` buildParams：最大持仓天数留空时落库 `max_holding_days: 0`（=不限），与输入框占位符「留空 = 不限」承诺一致（此前留空不落键，实际被 YAML 默认值接管）。
+
+**测试**：tests/test_gui_engine.py +2（`_override_holding_days` 语义：None/20/0 覆盖且原 spec 不变；run_backtest 记录与透传含 0 透传、缺省不落键）；tests/test_worker.py +2（TestParamPassthrough：端到端 params 全字段到达 run_backtest kwargs，含 max_holding_days=0 与 profile_overrides 全量；旧 job 无该键时传 None 不覆盖 YAML）。全量 `uv run python -m pytest tests/ -q` → 2365 passed, 4 skipped 零回归。
+
+未 git commit，改动留工作区待审批。

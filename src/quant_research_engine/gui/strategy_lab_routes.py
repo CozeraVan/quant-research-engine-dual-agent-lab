@@ -160,6 +160,17 @@ def register_strategy_lab_routes(app: Flask) -> None:
                 return None
             return float(value)
 
+        max_holding_days = data.get("max_holding_days")
+        if max_holding_days in (None, ""):
+            max_holding_days = None
+        else:
+            try:
+                max_holding_days = int(max_holding_days)
+            except (TypeError, ValueError):
+                return jsonify({"status": "error", "error": "max_holding_days 必须是整数"}), 400
+            if max_holding_days < 0:
+                return jsonify({"status": "error", "error": "max_holding_days 须 ≥0（0 = 不限持仓天数）"}), 400
+
         if executor != "cli" and not _try_acquire_run_slot():
             return jsonify({
                 "status": "error",
@@ -184,6 +195,7 @@ def register_strategy_lab_routes(app: Flask) -> None:
                 stop_loss_pct=_opt_float("stop_loss_pct"),
                 take_profit_pct=_opt_float("take_profit_pct"),
                 trailing_stop_pct=_opt_float("trailing_stop_pct"),
+                max_holding_days=max_holding_days,
                 precheck=bool(data.get("precheck")),
                 random_n=random_n,
                 background=(executor != "cli"),

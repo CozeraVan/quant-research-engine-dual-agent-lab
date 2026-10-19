@@ -4,7 +4,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-ACTIVE（2026-10-19：QRE-P8-PANEL-DAILY panel_factors 全体系日更接线完成待 commit——panel-factors-daily.timer 17:45 已装，8 表 8080 转「日更中」，risk pair-aware warmup 修复；另有 QRE-SYMBOL-PERF-ZERO-TRADE / QRE-DEAD-PENDING-FIX / WIZARD-PRICE-BASIS / SHARED-OOM-FIX 待 commit）
+ACTIVE（2026-10-19：QRE-PARAM-PASSTHROUGH SaaS 高级参数一致性修复完成待 commit——max_holding_days 参数权威化覆盖 YAML holding 节，费率类实证已一致；另有 QRE-P8-PANEL-DAILY / QRE-SYMBOL-PERF-ZERO-TRADE / QRE-DEAD-PENDING-FIX / WIZARD-PRICE-BASIS / SHARED-OOM-FIX 待 commit）
 
 ## Current Task
 

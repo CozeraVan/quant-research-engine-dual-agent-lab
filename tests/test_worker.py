@@ -298,6 +298,86 @@ class TestCloudClientRetry:
         assert args.command == "worker" and args.once and args.poll_seconds == 1.0
 
 
+class TestParamPassthrough:
+    """参数透传链路回归：jobs.params 落库值必须原样到达引擎层 run_backtest
+    （含 max_holding_days/profile_overrides/止盈止损等高级参数）。"""
+
+    def test_params_reach_run_backtest(self, cloud, monkeypatch, tmp_path):
+        captured = {}
+
+        def capturing_run_backtest(**kw):
+            captured.update(kw)
+            return _fake_run_backtest(kw["output_dir"])
+
+        monkeypatch.setattr(runner_mod, "run_backtest", capturing_run_backtest)
+        monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._benchmark_series",
+                            lambda dates: ({}, "test: no benchmark"))
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_company_tags",
+                            lambda symbols: ([], {}, None))
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_industries",
+                            lambda symbols: {})
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_symbol_range_returns",
+                            lambda symbols, start, end: {})
+
+        params = {
+            "start": "2024-01-01", "end": "2026-01-01", "mode": "shared",
+            "codes": ["000001.SZ"],
+            "initial_cash": 200000, "max_positions": 5,
+            "max_holding_days": 0,
+            "stop_loss_pct": 0.08, "take_profit_pct": 0.15, "trailing_stop_pct": 0.05,
+            "profile_overrides": {
+                "commission_rate": 0.001, "min_commission": 8.0,
+                "stamp_tax_sell": 0.001, "slippage_buy_rate": 0.002,
+                "slippage_sell_rate": 0.002,
+            },
+        }
+        job_id = _create_job(cloud, params=params)
+        client = _make_client(cloud)
+        job = client.lease()
+        assert job["id"] == job_id
+
+        runner_mod.execute_job(job, work_base=tmp_path)
+
+        assert captured["start"] == "2024-01-01"
+        assert captured["end"] == "2026-01-01"
+        assert captured["mode"] == "shared"
+        assert captured["codes"] == "000001.SZ"
+        assert captured["initial_cash"] == "200000"
+        assert captured["max_positions"] == "5"
+        # 0 = 不限持仓天数：显式透传，不能按 falsy 丢弃
+        assert captured["max_holding_days"] == 0
+        assert captured["stop_loss_pct"] == 0.08
+        assert captured["take_profit_pct"] == 0.15
+        assert captured["trailing_stop_pct"] == 0.05
+        assert captured["profile_overrides"] == params["profile_overrides"]
+
+    def test_max_holding_days_absent_stays_none(self, cloud, monkeypatch, tmp_path):
+        """旧 job（params 无 max_holding_days）：不传覆盖值，YAML holding 节生效。"""
+        captured = {}
+
+        def capturing_run_backtest(**kw):
+            captured.update(kw)
+            return _fake_run_backtest(kw["output_dir"])
+
+        monkeypatch.setattr(runner_mod, "run_backtest", capturing_run_backtest)
+        monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._benchmark_series",
+                            lambda dates: ({}, "test: no benchmark"))
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_company_tags",
+                            lambda symbols: ([], {}, None))
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_industries",
+                            lambda symbols: {})
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_symbol_range_returns",
+                            lambda symbols, start, end: {})
+
+        job_id = _create_job(cloud, params={"start": "2026-01-01", "end": "2026-03-01",
+                                            "codes": ["000001.SZ"]})
+        job = _make_client(cloud).lease()
+        runner_mod.execute_job(job, work_base=tmp_path)
+        assert captured["max_holding_days"] is None
+
+
 class TestTrimTagAnalysis:
     def test_truncates_symbols_keeps_aggregates(self):
         symbols = [{"ts_code": f"{i:06d}.SZ", "total_pnl": 1000 - i, "trades": 1, "win_rate": 0.5}

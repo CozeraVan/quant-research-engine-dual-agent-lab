@@ -282,6 +282,7 @@ if (btnFull) {
           stop_loss_pct: fullParams.stop_loss_pct,
           take_profit_pct: fullParams.take_profit_pct,
           trailing_stop_pct: fullParams.trailing_stop_pct,
+          max_holding_days: (fullParams.max_holding_days != null ? fullParams.max_holding_days : ""),
           precheck: false,
           output_dir: "{{ run.output_dir or 'outputs/gui-run' }}",
           executor: "module"
