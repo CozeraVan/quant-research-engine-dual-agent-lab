@@ -4,7 +4,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-ACTIVE（2026-10-19：QRE-CUMRET-CHART 收益曲线口径修复完成待 commit——chart_data 新增 cumret 键 + job.html/lab_result.html 优先 cumret + job#58/#66 ECS chart_data 已打 cumret 补丁，2387 passed 零回归；前一项 QRE-PRICE-COLUMN-PARAM 已 commit（f27f597），当前工作区仅此一项未提交）
+ACTIVE（2026-10-19：QRE-SAAS-JOB-STRATEGY-CARD 回测详情页「策略信息」折叠卡完成待 commit——summary API 新增 strategy 对象 + job.html 默认折叠摘要卡，2388 passed 零回归；前一项 QRE-CUMRET-CHART 仍未 commit，工作区现有两项未提交）
 
 ## Current Task
 

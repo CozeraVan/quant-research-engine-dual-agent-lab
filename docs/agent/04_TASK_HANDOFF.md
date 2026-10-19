@@ -2,33 +2,32 @@
 
 ## Task ID
 
-QRE-CUMRET-CHART（收益曲线口径修复：chart_data 新增 cumret 键 + 前端 job.html/lab_result.html 优先 cumret + job#58/#66 ECS jsonb 补丁已应用）
+QRE-SAAS-JOB-STRATEGY-CARD（SaaS 回测详情页「策略信息」折叠卡）
 
 ## Current Status
 
-DONE (implementation；**未 commit**——改动留工作区待批准；ECS results.chart_data 已补 cumret，
-全量 2387 passed + 4 skipped 零回归)
+DONE (implementation；**未 commit**——改动留工作区待批准；全量 2388 passed + 4 skipped 零回归)
 
 ## Task Note
 
-- 引擎层：`SingleSymbolBacktestRequest`/`BatchBacktestRequest`/`SharedCashBacktestRequest`
-  新增 `exit_price_column: str | None = None`（None=跟随入场价列，既有行为逐字节不变）；
-  simulator / vectorized / shared 三执行路径卖出价统一改用出场价列；shared `_prepare_frame`
-  裁剪白名单并入出场价列。
-- vwap 口径：`public.stock_daily` 有原生 vwap 列（元，原始价尺度，数据字典 §2），无需
-  amount/vol 换算；hfq 口径（QRE_PRICE_BASIS=raw）下 `load_daily_bars` 既有复权循环已含 vwap
-  （×adj_factor 同尺度），新增打桩测试锁定。
-- 透传：web 表单 → jobs.params（entry_price/exit_price）→ worker/runner →
-  gui/engine.run_backtest（`_resolve_price_columns` 白名单校验 open/close/vwap，非法值建 run 前拒绝；
-  `_extend_market_fields` 把 vwap 并入装配字段防 frame 缺列）→ 引擎请求对象；
-  precheck full_params 与 run 记录同步携带；8081 /api/run + run_detail.html 全量重跑链同步。
-- UI：SaaS new.html 与 8081 lab.html 高级参数区各加两个下拉（入场价格/出场价格，
-  默认次日开盘价），预览栏 paramsYaml 同步显示；文案极简。
-- 兼容：不显式给时 open/open，与现状一致（默认不变性有 sim↔vec 等值 + 默认跟随测试）。
-- 冒烟（/tmp/qre_price_smoke.py，不入仓）：4 股 × 2025 全年 × 双均线（sma_5/sma_20）×
-  batch/vectorized，open/close/vwap 各一次——35 笔买入逐笔对库核对 0 mismatch，
-  三档总收益互异（6.29%/5.81%/6.97%）确认列切换生效。
+- 数据链路：`gui/saas/app.py` `_load_job_for_user`/`_load_job_for_guest` SELECT 提取公共
+  `_STRATEGY_COLS`（追加 s.entry_mode/nl_text/wizard_state/created_at）；`GET /api/results/<id>/summary`
+  响应新增 `strategy` 对象（name/entry_mode/nl_text/wizard_state/yaml/created_at）。
+  strategies 表列早已齐备（CR-2026-10-04），NL 原文 = nl_text 列，**无 schema 变更、无遗留缺口**。
+- 模板：`gui/saas/templates/job.html` 结果区顶部新增 `#box-strategy`——`.sec-toggle`+`.sec-body`
+  默认折叠；摘要行 = 策略名 + 入口类型（自然语言描述/快速向导/策略代码，存量回退+未知兜底）+
+  创建时间（LabUI.fmtLocalTime）；展开按入口分态（NL 原文+YAML / 向导条件组可读描述+YAML /
+  YAML 原文），YAML 走既有 `pre.compiled-yaml.pv` 深色块+行号+简高亮，零新色相/字体。
+- 权限：会员本人/游客同 IP 既有语义不变，策略内容本就属任务所有者可见范畴，无新增泄露面。
+- 测试：tests/test_gui_saas.py test_detail_endpoints 补断言 + 新增 test_detail_strategy_info_modes；
+  目标 94 passed；全量 2388 passed + 4 skipped。
+- 未做：8081 lab_result.html 未同步（任务书标注非必须）；ECS 部署仅需发代码重启（无 DB 迁移）。
 
+---
+
+## Archive: QRE-CUMRET-CHART（收益曲线口径修复：chart_data 新增 cumret 键 + job#58/#66 ECS jsonb 补丁）
+
+## Current Status
 ---
 
 ## Archive: QRE-BATCH-IPO-INJECTION（batch 全市场净值曲线「新股初始资金注入计为收益」聚合 bug 修复）

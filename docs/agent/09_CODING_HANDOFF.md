@@ -2,12 +2,17 @@
 
 ## Task ID
 
-QRE-CUMRET-CHART（收益曲线口径修复：chart_data 新增 cumret 键 + 前端优先用 cumret + job#58/#66 ECS jsonb 补丁）
+QRE-SAAS-JOB-STRATEGY-CARD（SaaS 回测详情页「策略信息」折叠卡：summary API 携带策略定义 + job.html 默认折叠摘要行）
 
 ## Implementation Summary
 
-**构建侧**：`gui/lab_result.py::_equity_series` 返回扩展为 (dates, equity, cumret|None)；`build_lab_chart_data` 在 equity_curve.csv 含 cumulative_return 列时落 `chart_data["cumret"]`——交集口径日收益累乘的小数累计收益率（0.15=+15%），与 dates 等长，剔除新股注资影响；旧产物无该列不落键（worker 上传链路经 build_lab_chart_data，自动覆盖）。**前端**：`gui/saas/templates/job.html` 新增 `stratRet(d)`（优先 cumret×100 转百分比，缺失回退 toRet(equity) 旧口径），应用于静态主图、mountReplay 重播组件（raw: d.equity 保留供悬浮原始权益）、updateRangeStrip 区间收益与区间回撤（cumret 时按净值 1+c 计算）；`gui/templates/lab_result.html`（8081 同 bug）renderMain 与区间卡同步改造。**测试**：tests/test_gui_lab_result.py 新增 test_chart_data_cumret_from_cumulative_return + 2 处断言（无列不落键、空态 cumret=None）；全量 `uv run python -m pytest tests/ -q` → 2387 passed, 4 skipped 零回归。**ECS 补丁**：备份（ECS /tmp/chart_data_job{58,66}_backup_20261019.json + 本机 /tmp 副本）后 jsonb_set 仅加 cumret 键，UPDATE 2 行 SELECT 复核（job#58 末端 −6.41%、job#66 末端 −28.71%，与 dates 等长，无注入尖峰；注意 cumret 为日复利交集口径，与 summary 资金加权 total_return −1.82%/−14.76% 方向一致但数值不必相等）。未 git commit，等用户/主代理审批。
+**数据链路**：strategies 表现有列已够用（name/nl_text/yaml/entry_mode/wizard_state/created_at，CR-2026-10-04 模块一起落库，NL 原文在 nl_text——无 schema 变更、无「NL 原文未落库」遗留）。`gui/saas/app.py`：`_load_job_for_user`/`_load_job_for_guest` 的 SELECT 提取公共 `_STRATEGY_COLS` 追加 entry_mode/nl_text/wizard_state/created_at；`GET /api/results/<id>/summary` 响应新增 `strategy` 对象（六键，经 _jsonable），会员/游客两路径同源，权限语义不变（他人 404、异 IP 游客 401）。**模板** `gui/saas/templates/job.html`：结果区顶部（metric-strip 前）新增 `#box-strategy` 折叠卡——`.sec-toggle`+`.sec-body`（grid-template-rows 0fr→1fr，既有折叠组件）默认折叠，摘要行「策略名 · 入口类型 · 创建于 <本地时间>」（LabUI.fmtLocalTime；entry_mode 映射 自然语言描述/快速向导/策略代码，存量回退 nl_text→nl 否则 yaml，兜底「未知」）；展开按入口分态：NL=原文+编译后 YAML，向导=条件组可读描述（复刻 strategy.html wizardSummaryHtml）+YAML（无快照降级 YAML+说明），代码=YAML 原文；YAML 用既有 `pre.compiled-yaml.pv` 深色块+行号+简高亮（hlYamlLine 与新建页同款）。零新色相/字体，escH 全量转义。**测试**：tests/test_gui_saas.py test_detail_endpoints 补 strategy 断言 + 新增 test_detail_strategy_info_modes（nl 入口）；目标 94 passed；全量 `uv run python -m pytest tests/ -q` → 2388 passed, 4 skipped 零回归。**未做**：8081 lab_result.html 未同步（任务书标注非必须）；ECS 部署仅需发代码重启。**验证命令**：`/home/van/.local/bin/uv run python -m pytest tests/ -q`。未 git commit，等用户/主代理审批。
 
+---
+
+## Archive: QRE-CUMRET-CHART（收益曲线口径修复：chart_data 新增 cumret 键 + 前端优先用 cumret + job#58/#66 ECS jsonb 补丁）
+
+## Implementation Summary
 ---
 
 ## Archive: QRE-PRICE-COLUMN-PARAM（web 高级参数「入场价格 / 出场价格」：引擎 exit_price_column 独立参数 + open/close/vwap 全链透传）

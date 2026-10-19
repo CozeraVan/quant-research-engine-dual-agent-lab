@@ -2758,13 +2758,20 @@ def create_saas_app() -> Flask:
 
     # --- 结果系统（QRE-SAAS-RESULTS / B1+B2；语义对齐 8081 lab_result 路由） ---
 
+    # 策略信息列（QRE-SAAS-JOB-STRATEGY-CARD）：详情页「策略信息」折叠卡数据源
+    _STRATEGY_COLS = (
+        "s.name AS strategy_name, s.yaml AS strategy_yaml, "
+        "s.entry_mode AS strategy_entry_mode, s.nl_text AS strategy_nl_text, "
+        "s.wizard_state AS strategy_wizard_state, s.created_at AS strategy_created_at"
+    )
+
     def _load_job_for_user(job_id: int, uid: int) -> Any:
         """取 job+strategy+result；非本人/不存在返回 None（不暴露存在性）。"""
         engine = _get_engine(app)
         with engine.connect() as conn:
             return conn.execute(
                 text(
-                    "SELECT j.*, s.name AS strategy_name, s.yaml AS strategy_yaml, "
+                    "SELECT j.*, " + _STRATEGY_COLS + ", "
                     "r.summary AS result_summary, r.chart_data AS result_chart_data, "
                     "r.artifacts AS result_artifacts, r.data_until AS result_data_until "
                     "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
@@ -2780,7 +2787,7 @@ def create_saas_app() -> Flask:
         with engine.connect() as conn:
             return conn.execute(
                 text(
-                    "SELECT j.*, s.name AS strategy_name, s.yaml AS strategy_yaml, "
+                    "SELECT j.*, " + _STRATEGY_COLS + ", "
                     "r.summary AS result_summary, r.chart_data AS result_chart_data, "
                     "r.artifacts AS result_artifacts, r.data_until AS result_data_until "
                     "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
@@ -2926,6 +2933,14 @@ def create_saas_app() -> Flask:
         return jsonify({"ok": True, "job_id": job_id,
                         "strategy_id": row["strategy_id"],
                         "strategy_name": row["strategy_name"],
+                        "strategy": _jsonable({
+                            "name": row["strategy_name"],
+                            "entry_mode": row["strategy_entry_mode"],
+                            "nl_text": row["strategy_nl_text"],
+                            "wizard_state": row["strategy_wizard_state"],
+                            "yaml": row["strategy_yaml"],
+                            "created_at": row["strategy_created_at"],
+                        }),
                         "summary": _jsonable(row["result_summary"]),
                         "data_until": _jsonable(row["result_data_until"])})
 

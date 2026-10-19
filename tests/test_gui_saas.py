@@ -643,6 +643,10 @@ class TestResultsApi:
         h = {"X-User-Id": "1"}
         s = client.get(f"/api/results/{job_id}/summary", headers=h).get_json()
         assert s["summary"]["strategy_total_return"] == 0.2 and s["data_until"] == "2026-02-27"
+        # QRE-SAAS-JOB-STRATEGY-CARD：summary 携带策略信息（折叠卡数据源）
+        st = s["strategy"]
+        assert st["name"] == "s" and st["yaml"] == "x" and st["entry_mode"] == "yaml"
+        assert st["nl_text"] is None and "created_at" in st
         cd = client.get(f"/api/results/{job_id}/chart-data", headers=h).get_json()
         assert cd["metrics"]["excess_return"] == 0.1
         ta = client.get(f"/api/results/{job_id}/tag-analysis", headers=h).get_json()
@@ -656,6 +660,25 @@ class TestResultsApi:
         assert d404.status_code == 404
         d400 = client.get(f"/api/results/{job_id}/symbols/999999.XH", headers=h)
         assert d400.status_code == 400
+
+    def test_detail_strategy_info_modes(self, client, app, tmp_path):
+        """QRE-SAAS-JOB-STRATEGY-CARD：NL 入口的原文与 entry_mode 随 summary 返回。"""
+        resp = client.post("/api/jobs",
+                           json={"yaml": "y: 1", "kind": "full", "name": "nl-s",
+                                 "nl_text": "低于 20 日均线买入",
+                                 "entry_mode": "nl",
+                                 "params": {"start": "2026-01-01", "end": "2026-03-01"}},
+                           headers={"X-User-Id": "1"})
+        job_id = resp.get_json()["job_id"]
+        client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                    json={"worker_id": "w1", "summary": {"strategy_total_return": 0.1},
+                          "chart_data": {"metrics": {}}, "files": []},
+                    headers=WORKER_HEADERS)
+        s = client.get(f"/api/results/{job_id}/summary", headers={"X-User-Id": "1"}).get_json()
+        st = s["strategy"]
+        assert st["entry_mode"] == "nl" and st["nl_text"] == "低于 20 日均线买入"
+        assert st["yaml"] == "y: 1" and st["wizard_state"] is None
 
     def test_unfinished_and_foreign_semantics(self, client, app, tmp_path):
         # 未完成（queued）→ 409；他人 → 404；不存在 → 404

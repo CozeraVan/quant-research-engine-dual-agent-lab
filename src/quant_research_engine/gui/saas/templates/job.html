@@ -16,6 +16,13 @@
 
   <div id="result-area" class="hidden">
     <div class="guest-strip" id="guest-result-note" style="display:none;border-radius:8px;margin-bottom:12px">游客结果次日清空 —— <a class="inl" href="/saas/login">注册后可永久保存记录 / 跑全市场回测 →</a></div>
+
+    <!-- QRE-SAAS-JOB-STRATEGY-CARD：策略信息折叠卡（默认折叠，一行摘要 = 策略名 + 入口类型 + 创建时间） -->
+    <div class="chart-box" id="box-strategy" style="display:none">
+      <button class="sec-toggle" id="stg-toggle" style="margin-top:0">策略信息　<span class="opt" id="stg-summary"></span></button>
+      <div class="sec-body" id="stg-body"><div><div class="sec-inner" id="stg-detail"></div></div></div>
+    </div>
+
     <div class="metric-strip" id="metric-strip"></div>
 
     <div class="chart-box" id="box-main">
@@ -658,6 +665,63 @@ function renderRiskStress(d) {
     });
   }
 
+// --- 策略信息折叠卡（QRE-SAAS-JOB-STRATEGY-CARD）：默认折叠，展开显示入口来源与策略定义 ---
+const ENTRY_MODE_LABEL = {nl: '自然语言描述', wizard: '快速向导', yaml: '策略代码'};
+function hlYamlLine(line){  // 与新建页预览栏同款简高亮（键紫/注释灰/值浅紫）
+  if (/^\s*#/.test(line)) return '<span class="yc">' + escH(line) + '</span>';
+  const m = line.match(/^(\s*)([\w_]+):(.*)$/);
+  if (m) return escH(m[1]) + '<span class="yk">' + escH(m[2]) + ':</span><span class="yv">' + escH(m[3]) + '</span>';
+  return '<span class="yv">' + escH(line) + '</span>';
+}
+function yamlPre(yaml){
+  return '<pre class="compiled-yaml pv">' +
+    String(yaml || '').replace(/\s+$/, '').split('\n')
+      .map(l => '<span class="pv-line">' + hlYamlLine(l) + '</span>').join('') + '</pre>';
+}
+function wizardSummaryHtml(ws){  // 与策略详情页同款条件组可读描述
+  function area(label, a){
+    if (!a || !a.groups || !a.groups.length) return '';
+    const gs = a.groups.map(g => {
+      const conds = (g.conds || []).map(c => {
+        const right = (c.fixed !== null && c.fixed !== undefined && c.fixed !== '') ? c.fixed : c.right;
+        return escH(c.left) + ' ' + escH(c.op) + ' ' + escH(right);
+      }).join(' <b>' + escH((g.comb || 'and').toUpperCase()) + '</b> ');
+      return '<div class="opt" style="padding:2px 0">' + conds + '</div>';
+    }).join('<div class="opt" style="color:var(--faint)">— 组间 ' +
+      escH(((a.dividers || [])[0] || 'and').toUpperCase()) + ' —</div>');
+    return '<p style="margin:8px 0 2px"><b>' + label + '</b></p>' + gs;
+  }
+  return area('入场条件', ws.entry) + area('出场条件', ws.exit);
+}
+function renderStrategyInfo(st){
+  const box = document.getElementById('box-strategy');
+  if (!st || !st.name){ box.style.display = 'none'; return; }
+  const mode = st.entry_mode || (st.nl_text ? 'nl' : 'yaml');
+  const modeLabel = ENTRY_MODE_LABEL[mode] || '未知';
+  document.getElementById('stg-summary').textContent =
+    st.name + ' · ' + modeLabel + ' · 创建于 ' +
+    (window.LabUI ? LabUI.fmtLocalTime(st.created_at) : (st.created_at || '—'));
+  let detail = '';
+  if (mode === 'nl' && st.nl_text){
+    detail += '<p style="margin:0 0 4px"><b>自然语言原文</b></p>' +
+      '<div class="opt" style="white-space:pre-wrap;color:var(--ink)">' + escH(st.nl_text) + '</div>' +
+      '<p style="margin:12px 0 4px"><b>编译后的策略 YAML</b></p>' + yamlPre(st.yaml);
+  } else if (mode === 'wizard' && st.wizard_state){
+    detail += '<p style="margin:0 0 2px"><b>向导条件</b></p>' + wizardSummaryHtml(st.wizard_state) +
+      '<p style="margin:12px 0 4px"><b>策略 YAML</b></p>' + yamlPre(st.yaml);
+  } else {
+    if (mode === 'wizard' && !st.wizard_state)
+      detail += '<p class="opt" style="margin:0 0 8px">（快速向导入口；无条件快照，显示最终 YAML）</p>';
+    detail += '<p style="margin:0 0 4px"><b>策略 YAML</b></p>' + yamlPre(st.yaml);
+  }
+  document.getElementById('stg-detail').innerHTML = detail;
+  box.style.display = '';
+}
+document.getElementById('stg-toggle').addEventListener('click', function(){
+  this.classList.toggle('open');
+  document.getElementById('stg-body').classList.toggle('open');
+});
+
 async function poll(){
   const resp = await apiFetch('/api/results/' + JOB_ID + '/summary');
   const data = await resp.json();
@@ -694,6 +758,7 @@ async function poll(){
   const brief = chart.brief || {};
   document.getElementById('brief-text').textContent = brief.name ? ('策略：' + brief.name) : (data.strategy_name ? ('策略：' + data.strategy_name) : '');
   renderMeta(chart.meta, data.data_until);
+  renderStrategyInfo(data.strategy);
   renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));
   if (chart.dates && chart.equity) renderMain(chart);
   else empty('chart-main');
