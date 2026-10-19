@@ -60,6 +60,13 @@ PIPELINES: dict[str, dict[str, Any]] = {
         "unit": "minute-csv-ingest.service",
         "log_dirs": [],
     },
+    "panel-factors": {
+        "label": "panel_factors P0-P7+通道B 日更",
+        "cmd": [UV_BIN, "run", "python", "scripts/panel_factors_daily.py"],
+        "cwd": INDICATORS_DIR,
+        "unit": "panel-factors-daily.service",
+        "log_dirs": [INDICATORS_DIR / "logs"],
+    },
 }
 
 # 每条管线独立单任务锁

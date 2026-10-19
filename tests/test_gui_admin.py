@@ -488,7 +488,7 @@ def test_managed_factor_tables_from_config(tmp_path, monkeypatch):
         "stock_daily_overlap_typical_price",
         "stock_daily_momentum_close",
         "stock_daily_alpha191",
-    }
+    } | set(admin.PANEL_FACTOR_TABLES)
 
 
 def test_managed_factor_tables_fallback(monkeypatch, tmp_path):
@@ -496,8 +496,12 @@ def test_managed_factor_tables_fallback(monkeypatch, tmp_path):
 
     monkeypatch.setattr(fa, "indicators_repo", lambda env=None: tmp_path / "nonexistent")
     tables = admin.managed_factor_tables()
-    assert tables == set(admin.MANAGED_FACTOR_TABLES_FALLBACK) | {"stock_daily_alpha191"}
-    assert len(tables) == 11
+    assert tables == (
+        set(admin.MANAGED_FACTOR_TABLES_FALLBACK)
+        | {"stock_daily_alpha191"}
+        | set(admin.PANEL_FACTOR_TABLES)
+    )
+    assert len(tables) == 11 + len(admin.PANEL_FACTOR_TABLES)
     assert "stock_daily_vortex_close" not in tables
 
 
@@ -1117,16 +1121,15 @@ def test_is_auto_managed_table():
 
 
 class _PanelConn(_FakeConn):
-    """factors schema 含 panel 面板表与一张孤儿表。"""
+    """factors schema 含未知 panel 面板表与一张孤儿表。"""
 
     def execute(self, clause, params=None):
         sql = str(clause)
         if "information_schema.tables" in sql:
             return _FakeResult(rows=[
-                ("_pit_financial_panel",),
+                ("stock_daily_newfactor",),       # 未登记的未来面板表 → pending
                 ("stock_daily_momentum_close",),
                 ("stock_daily_overlap_close",),
-                ("stock_daily_value",),
                 ("stock_daily_vortex_close",),  # 可解析命名的孤儿表
             ])
         return super().execute(clause, params)
@@ -1140,14 +1143,13 @@ class _PanelStore(FakeStore):
 
 
 def test_overview_factors_auto_managed_pending(monkeypatch):
-    """panel 面板表落库即自动纳管为「未接日更」：出现在 tables 中，
+    """未登记的未来 panel 面板表落库即自动纳管为「未接日更」：出现在 tables 中，
     不参与滞后判定；孤儿表仍为未纳管。"""
     admin._cache.clear()
     store = _PanelStore(factor_maxes={
         "stock_daily_momentum_close": "2026-07-24",   # 日更中，滞后
         "stock_daily_overlap_close": "2026-07-27",    # 日更中，最新
-        "stock_daily_value": None,                     # 未接日更，无数据也不算滞后
-        "_pit_financial_panel": "2026-07-20",
+        "stock_daily_newfactor": None,                 # 未接日更，无数据也不算滞后
         "stock_daily_vortex_close": None,
     })
     monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: store)
@@ -1157,8 +1159,7 @@ def test_overview_factors_auto_managed_pending(monkeypatch):
     )
     factors = admin.overview_factors()
     by_table = {t["table"]: t for t in factors["tables"]}
-    assert by_table["factors.stock_daily_value"]["daily_pipeline"] is False
-    assert by_table["factors._pit_financial_panel"]["daily_pipeline"] is False
+    assert by_table["factors.stock_daily_newfactor"]["daily_pipeline"] is False
     assert by_table["factors.stock_daily_momentum_close"]["daily_pipeline"] is True
     # 未接日更表不进滞后清单；孤儿表进未纳管段
     assert factors["lagging_tables"] == ["factors.stock_daily_momentum_close"]
@@ -1166,29 +1167,68 @@ def test_overview_factors_auto_managed_pending(monkeypatch):
     admin._cache.clear()
 
 
+def test_overview_factors_panel_tables_on_daily_pipeline(monkeypatch):
+    """P8：PANEL_FACTOR_TABLES 内 8 表登记为「日更中」（daily_pipeline=True），
+    参与滞后判定，不再出现「未接日更」pending 徽标。"""
+    admin._cache.clear()
+
+    class _PanelDailyConn(_FakeConn):
+        def execute(self, clause, params=None):
+            sql = str(clause)
+            if "information_schema.tables" in sql:
+                return _FakeResult(rows=[
+                    ("_pit_financial_panel",),
+                    ("stock_daily_value",),
+                    ("stock_daily_alpha101",),
+                ])
+            return super().execute(clause, params)
+
+    store = FakeStore(factor_maxes={
+        "_pit_financial_panel": "2026-07-27",
+        "stock_daily_value": "2026-07-24",   # 滞后 → 进 lagging 清单
+        "stock_daily_alpha101": "2026-07-27",
+    })
+    store.market_engine = type("_Eng", (), {"begin": lambda self: _PanelDailyConn(store)})()
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda db_url=None: store)
+    monkeypatch.setattr(
+        "quant_research_engine.gui.admin.managed_factor_tables",
+        lambda repo=None: {"stock_daily_value", "stock_daily_alpha101", "_pit_financial_panel"},
+    )
+    factors = admin.overview_factors()
+    by_table = {t["table"]: t for t in factors["tables"]}
+    for name in ("stock_daily_value", "stock_daily_alpha101", "_pit_financial_panel"):
+        assert by_table[f"factors.{name}"]["daily_pipeline"] is True
+    assert factors["lagging_tables"] == ["factors.stock_daily_value"]
+    admin._cache.clear()
+
+
+def test_managed_factor_tables_includes_panel_tables():
+    """PANEL_FACTOR_TABLES 全部进入纳管清单（回退路径不依赖 repo 配置）。"""
+    managed = admin.managed_factor_tables(repo=__import__("pathlib").Path("/nonexistent"))
+    for name in admin.PANEL_FACTOR_TABLES:
+        assert name in managed
+
+
 def test_factor_status_pending_panel_no_reconcile(monkeypatch):
-    """未接日更的 panel 表：跳过列级对账与滞后判定，不误报停滞/严重滞后。"""
+    """未接日更的未知 panel 表：跳过列级对账与滞后判定，不误报停滞/严重滞后。"""
     _setup_factor_status(
         monkeypatch,
         {
             "stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14"],
             "stock_daily_overlap_close": ["ts_code", "trade_date", "sma_20", "sma_60"],
-            "stock_daily_value": ["ts_code", "trade_date", "pe_ttm", "pb"],
-            "_pit_financial_panel": ["ts_code", "trade_date", "roe"],
+            "stock_daily_newfactor": ["ts_code", "trade_date", "foo", "bar"],
         },
         _expected_payload(),
     )
     store = FakeStore(factor_maxes={
         "stock_daily_momentum_close": "2026-07-27",
         "stock_daily_overlap_close": "2026-07-27",
-        "stock_daily_value": None,
-        "_pit_financial_panel": "2026-07-20",
+        "stock_daily_newfactor": None,
     })
     cols = {
         "stock_daily_momentum_close": ["ts_code", "trade_date", "rsi_14"],
         "stock_daily_overlap_close": ["ts_code", "trade_date", "sma_20", "sma_60"],
-        "stock_daily_value": ["ts_code", "trade_date", "pe_ttm", "pb"],
-        "_pit_financial_panel": ["ts_code", "trade_date", "roe"],
+        "stock_daily_newfactor": ["ts_code", "trade_date", "foo", "bar"],
     }
     store.get_table_columns = lambda table_name, engine=None: cols.get(
         table_name.split(".")[-1], ["ts_code", "trade_date"]
@@ -1198,13 +1238,11 @@ def test_factor_status_pending_panel_no_reconcile(monkeypatch):
 
     status = factor_status()
     by_table = {t["table"]: t for t in status["tables"]}
-    val = by_table["factors.stock_daily_value"]
-    assert val["daily_pipeline"] is False
-    assert val["fresh"] is None and val["lag_days"] is None
-    assert val["red"] == [] and val["yellow"] == []
-    assert val["green"] == ["pb", "pe_ttm"]  # 仅如实展示库内列
-    pit = by_table["factors._pit_financial_panel"]
-    assert pit["daily_pipeline"] is False and pit["fresh"] is None
+    newf = by_table["factors.stock_daily_newfactor"]
+    assert newf["daily_pipeline"] is False
+    assert newf["fresh"] is None and newf["lag_days"] is None
+    assert newf["red"] == [] and newf["yellow"] == []
+    assert newf["green"] == ["bar", "foo"]  # 仅如实展示库内列
     # 滞后/严重滞后统计不含 pending 表
     assert status["summary"]["lagging"] == 0
     assert status["summary"]["stale"] == 0

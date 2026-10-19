@@ -2,6 +2,30 @@
 
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.
 
+### 2026-10-19: P8 panel_factors 日更调度拓扑 + P5 risk pair-aware warmup
+
+- Decision: panel_factors 全体系（P0-P3 基本面链 + P4/P5/P7 + 通道B）不进
+  16:40 的 FactorBase 日更进程，而由独立 `panel-factors-daily.timer`
+  （Mon..Fri 17:45，minute-csv-ingest 之后）驱动
+  `scripts/panel_factors_daily.py`：watermark 幂等（每表 max(trade_date)，
+  通道B 取 alpha_125d_000300 非空最大日）、8 步串行且每步独立子进程
+  （内存隔离，守 R-MEM-001 23G 红线）、pit_panel→value/quality/growth
+  依赖门控（pit 失败跳过下游，价格类步骤照常）、失败汇总退出 1 可安全重跑。
+- Decision: `risk.py` 回归族 warmup 从「市场交易日数」（get_warmup_start
+  1340 交易日）改为 `_pair_aware_warmup_start`（个股第 1326 行历史日期
+  取 max）——回归族窗口按个股最近 1320 个有效 (r,ir) 样本对计数
+  （停牌日不占窗），按交易日数供给会让窗口期停牌 >20 日的股票
+  （实测 290 只）凑不足对数误产 NaN，增量≠全量。
+- Rationale: 验证发现（2026-10-09 抽样 000796.SZ beta_1320d 存量有值、
+  短 warmup 复算 NaN）；修复后增量单日全市场复算与存量全量值逐值一致
+  （8/8 表 PASS）。已知残留：历史各年 chunk 起点附近的旧口径 NaN 不回填
+  （如需修复可对 risk 做修复后全量重跑）。
+- 8080 纳管口径：PANEL_FACTOR_TABLES 8 表登记为「日更中」（参与滞后判定
+  与健康灯），列级对账清单由 EXPECTED_COLUMNS_SCRIPT 从 indicators 各
+  模块权威常量注入；`_is_auto_managed_table` 保留给未来未知面板表的
+  pending 通道。
+- Owner: KIMI_CODE
+
 ### 2026-10-05: shared 模式交易费用拆分列成为引擎口径（CR-2026-10-05）
 
 - Decision: shared（共享资金）模式交易行补齐 6 个费用拆分列

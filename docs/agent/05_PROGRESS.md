@@ -991,3 +991,24 @@ Historical row statuses (pre-migration, kept for old table rows):
 **测试**：`tests/test_full_market_report.py` +3（TestBuildSymbolPerformanceSharedCash::test_failed_only_symbol_included / test_failed_only_symbol_included_when_round_trips_empty；test_symbol_performance_filters_zero_trade_symbols 补充 has_trades 与 failed_order_count 兜底断言，C 仍剔除语义不变）；全文件 66 测试通过；全量 `uv run pytest tests/ -q` 零回归（见 09_CODING_HANDOFF）。
 
 **取舍说明**：加 has_trades 列侵入很小（一列 + 一个标签），优于复用 trade_count==0 推断（无法区分「有委托未成交」与「仅有失败委托」之外的语义且 bool 列对前端更直接）；`report_manifest._REQUIRED_COLUMNS_BY_ROLE["symbol_performance"]` 只要求 symbol+trade_count，不受影响。未 git commit，改动留工作区待审批。
+
+## 2026-10-19 P8 panel_factors 全体系日更接线（21 号台账收口）
+
+**背景**：P0 _pit_financial_panel、P1 value/size、P2 quality、P3 growth、P4 liquidity、P5 risk、P7 alpha101 与通道B 8 列已全历史落库，但均不在 16:40 的 FactorBase 日更体系内，断更靠手工补数（8080 上标「未接日更」pending 徽标）。
+
+**indicators 侧**（仓库 indicators_tushare）：
+- 新 `scripts/panel_factors_daily.py`（仿 scripts/alpha191_daily.py 的 watermark 幂等范式）：每表 max(trade_date)（通道B 取 alpha_125d_000300 非空最大日）已覆盖 stock_daily 最新交易日则跳过退出 0；否则从 watermark+1 增量补到最新。8 步串行、每步独立子进程（`python -m panel_factors.*` 官方 CLI，内存隔离守 R-MEM-001）：pit_panel → value_size → quality → growth → liquidity → risk → alpha101 → channel_b；pit_panel 失败时其下游自动跳过、价格类步骤照常；任一步失败汇总退出 1，重跑安全。支持 --only/--start/--end/--force 修复模式。
+- 增量语义：滚动窗口不只算当日——各模块 run() 内部按自身 MAX_WARMUP_DAYS 前推 warmup 计算后裁剪回增量区间，ON CONFLICT 覆盖，与全量重算逐值一致。
+- **P5 risk warmup 缺陷修复**：回归族窗口按个股最近 1320 个有效样本对计数（停牌日不占窗），原 get_warmup_start 按市场交易日数供给——窗口期停牌 >20 日的股票（实测 290 只）在增量/短 chunk 下凑不足对数被误产 NaN。risk.run 改用 `_pair_aware_warmup_start`（个股第 1326 行历史日期取 max），与全量口径对齐。（已知残留：2026 之前各年 chunk 起点附近的存量 NaN 属旧口径产物，如需修复可用修复后的 risk 全量重跑，本次未动历史。）
+- 新 `scripts/verify_p8_incremental.py`：抽样 20 股 × 单日（2026-10-09）全市场复算与存量全量值逐值比对 + 连跑两次幂等（值与行数均不变）。注意截面 rank/分组因子必须全市场复算，--codes 子集会改变横截面口径（首轮验证曾因此产生假阳性差异）。
+- systemd：`deploy/systemd/panel-factors-daily.{service,timer}`，已安装 /etc/systemd/system 并 enable；OnCalendar=Mon..Fri 17:45（minute-csv-ingest 17:20 之后），Persistent=true。
+- 首次追数（watermark 10-12 → 10-16，4 个交易日）全部成功，各步耗时：pit_panel 1.3min / value_size 3.9 / quality 1.5 / growth 1.2 / liquidity 0.5 / risk 0.9（修复后单日全市场约 1.5min）/ alpha101 1.1 / channel_b 1.0，合计约 11.4 min；日志 logs/panel_factors_daily_*.log。
+
+**QRE 侧**（8080 管理台）：
+- `gui/admin.py`：新增 `PANEL_FACTOR_TABLES`（8 表）登记进 `managed_factor_tables()`（yaml 路径与回退路径均并入）——panel 表从「未接日更 pending」转为「日更中」，参与滞后判定与健康灯；TIMER_UNITS 增 panel-factors-daily.timer；EXPECTED_COLUMNS_SCRIPT 增 panel_factors 各模块权威列清单注入（_pit_financial_panel 97 列 / value 12 / size 3 / quality 110 / growth 27 / liquidity 35 / risk 25 / alpha101 31，momentum_close 并入通道B 8 列），列级对账 green/yellow/red 生效；`_is_auto_managed_table` 保留给未来未知面板表的 pending 通道。
+- `gui/daily_jobs.py`：日更中心新增「panel-factors」手动触发管线（scripts/panel_factors_daily.py，unit=panel-factors-daily.service）；`templates/admin.html` UNIT_TO_PIPELINE 增映射（立即运行/最近日志按钮）。
+- 测试：test_gui_admin.py 更新 4 例（pending 语义改用假设的未来表 stock_daily_newfactor；managed 清单断言并入 PANEL_FACTOR_TABLES）+ 新增 2 例（panel 表 daily_pipeline=True 且参与滞后判定；回退路径含全部 panel 表）。
+
+**验证**：①逐值一致——2026-10-09（全量回填日）20 股抽样 × 8 模块全市场单日复算，第三轮全 PASS（前两轮 FAIL 均为验证方法学产物：首轮 --codes 子集破坏横截面口径并短暂污染 10-09 抽样股，已由次轮全市场复算修复；复算值与首轮前的原始存量值逐值相符）；②幂等——同日复算两次，值与行数均不变；日更脚本二次运行全部 SKIP(fresh) 退出 0；③watermark——9 项（8 表 + 通道B 列）全部到 2026-10-16；④QRE `pytest tests/test_gui_admin*.py tests/test_gui_app.py tests/test_gui_saas_console.py` 146 passed；indicators `pytest tests/test_panel_factors_daily.py tests/test_alpha191_daily.py` 24 passed。
+
+未 git commit（两仓库改动均留工作区，待审批）。

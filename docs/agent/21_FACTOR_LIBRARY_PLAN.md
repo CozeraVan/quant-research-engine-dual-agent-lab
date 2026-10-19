@@ -1,21 +1,21 @@
 # 21_FACTOR_LIBRARY_PLAN.md — Tushare 202 因子本地复现立项方案
 
-## 0. 进度台账（2026-10-19 更新：177/202 已入库验收，0 进行中，0 待启动，剩 P8 日更接线）
+## 0. 进度台账（2026-10-19 更新：177/202 已入库验收，P8 日更接线完成，全部批次收口）
 
 | 批次 | 内容 | 状态 |
 |---|---|---|
 | P6 通道A | Momentum/Reversal 量价 10 新列（pctret_21/42/63/126/252、price_position_ir_60、days_down_up、price_dist、rsrs_18_200、macd_cn_12_26_9） | ✅ 已入库+日更接管（在 config/factors.yaml 体系内） |
-| P6 通道B | 7 个回归 Alpha（alpha_125/250/500/1000d_000300、alpha_528/792/1320d_000001）+ small_cap_reversal_21d | ✅ 已全历史入库（panel_factors/ 面板管线，18 chunks/1624 万行，金标准误差 2.8e-17）；❗不在 16:40 日更内，增量依赖 P8 |
-| P0 | `_pit_financial_panel` 物化面板 + 字段核实 | ✅ 已落地（14.12M 行 × 90 列，2009-01-05 起；四项验收全过）。2026-10-18 修复：ebitda_ttm 改 ebit_ttm+最近年报折旧摊销（tushare ebitda 仅半年/年报披露），7 行→1113 万行 |
-| P1 | Value 11 + Size 3 → factors.stock_daily_value / stock_daily_size | ✅ 2026-10-18 验收通过（抽查 abs_diff=0；bm vs 1/pb 相关 0.98；ebitda 修复后 1080 万行） |
-| P2 | Quality 59 → factors.stock_daily_quality | ✅ 2026-10-18 验收通过（51 rank 列值域、手工核对、毛利率同源比对 99.39%≤1e-4） |
-| P3 | Growth 15 → factors.stock_daily_growth | ✅ 2026-10-18 验收通过（RESULT: PASS） |
-| P4 | Liquidity 35 → factors.stock_daily_liquidity | ✅ 2026-10-18 全量落库验收（1613 万行，手工重算最大误差 2.9e-14，commit c2a0fd8） |
-| P5 | Risk 25（回归族 beta/sigma，复用通道B框架）→ factors.stock_daily_risk | ✅ 2026-10-18 全量落库验收（1622 万行，最大误差 8.5e-15，commit 3ce37de） |
-| P7 | Alpha101 31（复用 alpha191 面板管线）→ factors.stock_daily_alpha101 | ✅ 2026-10-19 全量落库验收（1607 万行/5853 只/921 chunks，慢实现比对 max_abs_diff=0、rank 值域与 NaN 语义全过；VWAP 与 OHLC 同乘 adj_factor 同尺度，commit e35227b） |
-| P8 | 每日增量调度（panel_factors 接入 timer）+ 8080 纳管 | ⏸ P5/P7 后统一做；8080 自动发现已上线（5f6fcf6，pending 表标「未接日更」） |
+| P6 通道B | 7 个回归 Alpha（alpha_125/250/500/1000d_000300、alpha_528/792/1320d_000001）+ small_cap_reversal_21d | ✅ 已全历史入库（panel_factors/ 面板管线，18 chunks/1624 万行，金标准误差 2.8e-17）；✅ 2026-10-19 P8 接入日更（panel-factors-daily.timer channel_b 步骤） |
+| P0 | `_pit_financial_panel` 物化面板 + 字段核实 | ✅ 已落地（14.12M 行 × 90 列，2009-01-05 起；四项验收全过）。2026-10-18 修复：ebitda_ttm 改 ebit_ttm+最近年报折旧摊销（tushare ebitda 仅半年/年报披露），7 行→1113 万行；✅ P8 接入日更（感知新财报公告：增量从 watermark+1 起按 eff_ann<=trade_date 重选报告期） |
+| P1 | Value 11 + Size 3 → factors.stock_daily_value / stock_daily_size | ✅ 2026-10-18 验收通过（抽查 abs_diff=0；bm vs 1/pb 相关 0.98；ebitda 修复后 1080 万行）；✅ P8 接入日更 |
+| P2 | Quality 59 → factors.stock_daily_quality | ✅ 2026-10-18 验收通过（51 rank 列值域、手工核对、毛利率同源比对 99.39%≤1e-4）；✅ P8 接入日更 |
+| P3 | Growth 15 → factors.stock_daily_growth | ✅ 2026-10-18 验收通过（RESULT: PASS）；✅ P8 接入日更 |
+| P4 | Liquidity 35 → factors.stock_daily_liquidity | ✅ 2026-10-18 全量落库验收（1613 万行，手工重算最大误差 2.9e-14，commit c2a0fd8）；✅ P8 接入日更 |
+| P5 | Risk 25（回归族 beta/sigma，复用通道B框架）→ factors.stock_daily_risk | ✅ 2026-10-18 全量落库验收（1622 万行，最大误差 8.5e-15，commit 3ce37de）；✅ P8 接入日更（接入时发现并修复回归族 warmup 按市场交易日数供给的缺口——窗口期停牌 >20 日的股票会凑不足 1320 有效样本对被误产 NaN，约 290 只；改为 pair-aware warmup（个股第 1326 行历史日期取 max），增量与全量口径逐值一致） |
+| P7 | Alpha101 31（复用 alpha191 面板管线）→ factors.stock_daily_alpha101 | ✅ 2026-10-19 全量落库验收（1607 万行/5853 只/921 chunks，慢实现比对 max_abs_diff=0、rank 值域与 NaN 语义全过；VWAP 与 OHLC 同乘 adj_factor 同尺度，commit e35227b）；✅ P8 接入日更 |
+| P8 | 每日增量调度（panel_factors 接入 timer）+ 8080 纳管 | ✅ 2026-10-19 完成：`panel-factors-daily.timer`（每工作日 17:45，排在 minute-csv-ingest 17:20 后）驱动 indicators 侧 `scripts/panel_factors_daily.py`（watermark 幂等 + 串行子进程内存隔离 + pit→value/quality/growth 依赖门控 + 失败可重跑）；8080 纳管（PANEL_FACTOR_TABLES 登记为日更中、参与滞后判定与健康灯，TIMER_UNITS + daily_jobs「panel-factors」手动触发管线，列级对账由 EXPECTED_COLUMNS_SCRIPT 注入各模块权威列清单）；验证：2026-10-09 全市场单日复算 vs 存量全量值 20 股抽样逐值一致 + 连跑两次幂等（scripts/verify_p8_incremental.py）；首次追数（10-13~10-16，4 交易日）各步耗时 pit 1.3 / value_size 3.9 / quality 1.5 / growth 1.2 / liquidity 0.5 / risk 0.9 / alpha101 1.1 / channel_b 1.0 min，合计 ~11.4 min |
 
-**完成度：177/202（88%）已入库验收** = Momentum 20 + Reversal 3 + Value 11 + Size 3 + Quality 59 + Growth 15 + Liquidity 35 + Risk 25 + Alpha101 31。剩余 25 个为原方案口径裁剪项（含 dividend_yield_3y_avg 等 2 个待 dividend 回填），明细见 §口径裁剪与原清单。❗P0/P4/P5/P7 与通道B 均尚未接日更（P8 消除）；NL 目录快照（configs/factor_catalog_llm.*）已于 2026-10-19 同步纳入 P4/P5/P7 新表。
+**完成度：177/202（88%）已入库验收** = Momentum 20 + Reversal 3 + Value 11 + Size 3 + Quality 59 + Growth 15 + Liquidity 35 + Risk 25 + Alpha101 31。剩余 25 个为原方案口径裁剪项（含 dividend_yield_3y_avg 等 2 个待 dividend 回填），明细见 §口径裁剪与原清单。P0-P7 全部面板表与通道B 均已接日更（P8 收口）；NL 目录快照（configs/factor_catalog_llm.*）已于 2026-10-19 同步纳入 P4/P5/P7 新表。
 
 ## 0.1 下周恢复指引（2026-10-13 记录，已于 2026-10-18 执行完毕：P1-P3 验收通过、两仓库已提交、NL 目录已同步、P4 完成、P5 启动）
 

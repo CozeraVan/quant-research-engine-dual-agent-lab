@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-SYMBOL-PERF-ZERO-TRADE（symbol_performance 零交易股票漏报口径修复：shared_cash symbol 集合并入 failed_orders + has_trades 标识列）
+QRE-P8-PANEL-DAILY（panel_factors 全体系日更接线 + 8080 纳管 + P5 risk pair-aware warmup 修复）
+
+## Implementation Summary
+
+indicators 侧：新 `scripts/panel_factors_daily.py`——仿 alpha191_daily 的 watermark 幂等范式，8 步串行（pit_panel→value_size→quality→growth→liquidity→risk→alpha101→channel_b），每步独立 `python -m panel_factors.*` 子进程（内存隔离，守 R-MEM-001）；watermark=各表 max(trade_date)（通道B 取 alpha_125d_000300 非空最大日），已覆盖 stock_daily 最新交易日则跳过退出 0，否则从 watermark+1 补到最新（各模块内部 warmup 前推 + 裁剪 + ON CONFLICT 覆盖，增量==全量）；pit 失败跳过 value/quality/growth 三个下游，价格类步骤照常；任一步失败退出 1 可安全重跑；支持 --only/--start/--end/--force。新 `scripts/verify_p8_incremental.py`（抽样 20 股单日全市场复算逐值比对 + 连跑两次幂等；截面因子必须全市场复算，--codes 子集会破坏横截面口径——首轮假阳性即此因）。**P5 risk 修复**：`risk.py` 新增 `_pair_aware_warmup_start`（SELECT max(trade_date) ... row_number() rn=1326，按个股实际行数供给 warmup），替代单纯 get_warmup_start（市场交易日口径）——回归族「最近 1320 个有效样本对」窗口下，窗口期停牌 >20 日的股票（实测 290 只）原会被误产 NaN；修复后 2026-10-09 全市场单日复算与存量全量值逐值一致。systemd：`deploy/systemd/panel-factors-daily.{service,timer}`（OnCalendar=Mon..Fri 17:45，Persistent=true，已 cp /etc/systemd/system + enable --now）。QRE 侧：`gui/admin.py` 新增 `PANEL_FACTOR_TABLES` 8 表并入 `managed_factor_tables()` 两条路径（pending→日更中，参与滞后判定/健康灯），TIMER_UNITS 增 panel-factors-daily.timer，EXPECTED_COLUMNS_SCRIPT 注入 panel 各模块权威列清单（_pit 97/value 12/size 3/quality 110/growth 27/liquidity 35/risk 25/alpha101 31 + momentum_close 并入通道B 8 列）；`gui/daily_jobs.py` 增「panel-factors」管线；`templates/admin.html` UNIT_TO_PIPELINE 增 'panel-factors-daily.timer'→'panel-factors'。**测试**：indicators `pytest tests/test_panel_factors_daily.py tests/test_alpha191_daily.py` 24 passed；QRE `pytest tests/test_gui_admin.py tests/test_gui_admin_manage.py tests/test_gui_admin_p3b.py tests/test_gui_app.py tests/test_gui_saas_console.py` 146 passed（更新 4 例 pending 语义改用假设表 stock_daily_newfactor + managed 断言并入 PANEL_FACTOR_TABLES，新增 2 例）。**实测耗时**（首次追数 10-13~10-16 四交易日，全市场）：pit 1.3 / value_size 3.9 / quality 1.5 / growth 1.2 / liquidity 0.5 / risk 0.9 / alpha101 1.1 / channel_b 1.0 min，合计 ~11.4min；单日全市场复算（验证轮）：45s/199s/93s/63s/23s/87s(修复后)/61s/53s。**8080 验证**：/api/admin/overview factors 表 8 张 panel 表 daily_pipeline=true 无「未接日更」徽标，lagging_tables 不含之；/api/admin/timers 含 panel-factors-daily.timer installed+active。未 git commit，等用户/主代理审批。
+
+---
+
+## Archive: QRE-SYMBOL-PERF-ZERO-TRADE（symbol_performance 零交易股票漏报口径修复：shared_cash symbol 集合并入 failed_orders + has_trades 标识列）
 
 ## Implementation Summary
 

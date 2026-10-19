@@ -4,7 +4,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-ACTIVE（2026-10-19：QRE-SYMBOL-PERF-ZERO-TRADE 报表层口径修复完成待 commit——shared_cash 并入口径 failed_orders + has_trades 列；另有 QRE-DEAD-PENDING-FIX / WIZARD-PRICE-BASIS / SHARED-OOM-FIX 待 commit）
+ACTIVE（2026-10-19：QRE-P8-PANEL-DAILY panel_factors 全体系日更接线完成待 commit——panel-factors-daily.timer 17:45 已装，8 表 8080 转「日更中」，risk pair-aware warmup 修复；另有 QRE-SYMBOL-PERF-ZERO-TRADE / QRE-DEAD-PENDING-FIX / WIZARD-PRICE-BASIS / SHARED-OOM-FIX 待 commit）
 
 ## Current Task
 

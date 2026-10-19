@@ -2,7 +2,39 @@
 
 ## Task ID
 
-QRE-SYMBOL-PERF-ZERO-TRADE（symbol_performance 零交易股票漏报口径修复——failed_orders 并入 + has_trades 标识列）
+QRE-P8-PANEL-DAILY（panel_factors 全体系日更接线：P0-P3/P4/P5/P7/通道B 接入 panel-factors-daily.timer + 8080 纳管）
+
+## Current Status
+
+DONE (implementation; **未 commit**——两仓库改动留工作区待批准；
+indicators: tests/test_panel_factors_daily.py 等 24 passed；
+QRE: test_gui_admin* 等 146 passed)
+
+## Task Note
+
+- indicators_tushare：新 `scripts/panel_factors_daily.py`（watermark 幂等增量编排，
+  8 步串行子进程：pit_panel→value_size→quality→growth→liquidity→risk→alpha101→channel_b，
+  pit 失败跳过其下游；--only/--start/--end/--force 修复模式）+ `scripts/verify_p8_incremental.py`
+  （20 股抽样单日全市场复算 vs 存量全量值逐值比对 + 连跑两次幂等）+
+  `tests/test_panel_factors_daily.py`（10 例 Fake DB）+
+  `deploy/systemd/panel-factors-daily.{service,timer}`（已装 /etc，Mon..Fri 17:45，enable）。
+- **P5 risk warmup 修复**：回归族 1320 有效样本对窗口原按市场交易日数供给 warmup，
+  窗口期停牌 >20 日的 ~290 股被误产 NaN；改 `_pair_aware_warmup_start`
+  （个股第 1326 行历史日期取 max），增量与全量逐值一致（2026-10-09 验证 PASS）。
+  残留：历史各年 chunk 起点附近旧口径 NaN 未回填（可选全量重跑修复）。
+- QRE 8080：`gui/admin.py` 新增 PANEL_FACTOR_TABLES（8 表入 managed，转「日更中」
+  参与滞后判定与健康灯）+ TIMER_UNITS 增 panel-factors-daily.timer +
+  EXPECTED_COLUMNS_SCRIPT 注入 panel 各模块权威列清单；`gui/daily_jobs.py`
+  增「panel-factors」手动管线；`templates/admin.html` UNIT_TO_PIPELINE 增映射。
+- 验证：第三轮全市场单日复算 8/8 PASS（2026-10-09，20 股）；幂等（值/行数不变）；
+  日更二次运行全 SKIP(fresh) 退出 0；8080 API 确认 8 表 daily_pipeline=true、
+  无 pending 徽标、timer installed。
+- 首次追数耗时（10-13~10-16 四交易日）：pit 1.3 / value_size 3.9 / quality 1.5 /
+  growth 1.2 / liquidity 0.5 / risk 0.9 / alpha101 1.1 / channel_b 1.0 min（合计 ~11.4min）。
+
+---
+
+## Archive: QRE-SYMBOL-PERF-ZERO-TRADE（symbol_performance 零交易股票漏报口径修复——failed_orders 并入 + has_trades 标识列）
 
 ## Current Status
 

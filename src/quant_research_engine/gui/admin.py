@@ -28,6 +28,7 @@ TIMER_UNITS = [
     {"unit": "cluster-ashare-tags-weekly.timer", "label": "聚类标签库周更", "service": "cluster-ashare-tags-weekly.service"},
     {"unit": "qre-barometer.timer", "label": "大盘风险风向标", "service": "qre-barometer.service"},
     {"unit": "minute-csv-ingest.timer", "label": "分钟线 stock_minute_1m 入库", "service": "minute-csv-ingest.service"},
+    {"unit": "panel-factors-daily.timer", "label": "panel_factors P0-P7+通道B 日更", "service": "panel-factors-daily.service"},
 ]
 
 QRE_REFRESH_INSTALL_HINT = (
@@ -85,15 +86,32 @@ MANAGED_FACTOR_TABLES_FALLBACK = [
 # 不在 indicators config/factors.yaml 内，由 alpha191 子包独立日更，单独登记纳管。
 ALPHA191_TABLE = "stock_daily_alpha191"
 
-# P0 基本面 PIT 面板表（panel_factors 通道，尚未接日更，P8 任务接入）。
+# P0 基本面 PIT 面板表（panel_factors 通道，P8 起由 panel-factors-daily.timer 日更）。
 PIT_FINANCIAL_PANEL_TABLE = "_pit_financial_panel"
+
+# panel_factors 面板通道表（P8 已接日更，2026-10-19）：不符合
+# stock_daily_<category>_<price> 命名、不在 indicators config/factors.yaml 内，
+# 由 indicators 侧 scripts/panel_factors_daily.py（panel-factors-daily.timer，
+# 每工作日 17:45）统一增量日更，在此显式登记为「日更中」纳管表，
+# 参与滞后判定与健康灯；列级对账清单由 EXPECTED_COLUMNS_SCRIPT 注入。
+# （stock_daily_momentum_close 本就在 factors.yaml 通道纳管，通道B 8 列
+# 同属该表，不在此重复登记。）
+PANEL_FACTOR_TABLES = [
+    "_pit_financial_panel",
+    "stock_daily_value",
+    "stock_daily_size",
+    "stock_daily_quality",
+    "stock_daily_growth",
+    "stock_daily_liquidity",
+    "stock_daily_risk",
+    "stock_daily_alpha101",
+]
 
 
 def _is_auto_managed_table(name: str) -> bool:
     """实时纳管规则（QRE-GUI-FACTOR-AUTO-MANAGE）：factors schema 中实际存在、
-    但不符合 indicators <category>_<price> 命名的面板表（stock_daily_value /
-    stock_daily_size / stock_daily_risk / stock_daily_alpha101 等 P1-P7 面板，
-    以及 _pit_financial_panel）落库即自动纳入监控，标记为「未接日更」，
+    但不符合 indicators <category>_<price> 命名、也未列入 PANEL_FACTOR_TABLES
+    的面板表（未来的新面板表）落库即自动纳入监控，标记为「未接日更」，
     不参与滞后判定与健康灯。可解析为 <category>_<price> 的孤儿表
     （如历史遗留 stock_daily_vortex_close）不受影响，仍为未纳管。"""
     if name == PIT_FINANCIAL_PANEL_TABLE:
@@ -103,7 +121,8 @@ def _is_auto_managed_table(name: str) -> bool:
 
 def managed_factor_tables(repo: Path | None = None) -> set[str]:
     """纳管表清单：由 indicators_tushare config/factors.yaml 的 category+column
-    组合推导（stock_daily_<category>_<column>），另加 alpha191 面板表；
+    组合推导（stock_daily_<category>_<column>），另加 alpha191 面板表与
+    PANEL_FACTOR_TABLES（P8 已接日更的 panel_factors 面板表）；
     repo 不可用时回退硬编码清单。"""
     try:
         import yaml
@@ -118,10 +137,10 @@ def managed_factor_tables(repo: Path | None = None) -> set[str]:
             if entry.get("category") and entry.get("column")
         }
         if combos:
-            return combos | {ALPHA191_TABLE}
+            return combos | {ALPHA191_TABLE} | set(PANEL_FACTOR_TABLES)
     except Exception:
         pass
-    return set(MANAGED_FACTOR_TABLES_FALLBACK) | {ALPHA191_TABLE}
+    return set(MANAGED_FACTOR_TABLES_FALLBACK) | {ALPHA191_TABLE} | set(PANEL_FACTOR_TABLES)
 
 
 def _store(db_url: str | None = None):
@@ -298,11 +317,11 @@ def overview_factors(db_url: str | None = None, daily_max: str | None = None) ->
     单列信息段，不参与滞后判定与健康灯。
 
     纳管两类（QRE-GUI-FACTOR-AUTO-MANAGE）：
-    - 日更中（daily_pipeline=True）：factors.yaml 推导 ∪ alpha191，参与滞后判定；
-    - 未接日更（daily_pipeline=False）：factors schema 实时发现的 panel_factors
-      面板表（stock_daily_value/size/quality/growth/liquidity/risk/alpha101、
-      _pit_financial_panel 等，见 _is_auto_managed_table），落库即自动出现，
-      只展示行数/watermark，不参与滞后判定与健康灯（P8 才接日更）。
+    - 日更中（daily_pipeline=True）：factors.yaml 推导 ∪ alpha191 ∪
+      PANEL_FACTOR_TABLES（P8 已接日更的 panel_factors 面板表），参与滞后判定；
+    - 未接日更（daily_pipeline=False）：factors schema 实时发现的、不在
+      PANEL_FACTOR_TABLES 内的未知面板表（见 _is_auto_managed_table），
+      落库即自动出现，只展示行数/watermark，不参与滞后判定与健康灯。
     """
     from sqlalchemy import text
 
@@ -809,6 +828,33 @@ try:
             }
 except Exception:
     pass
+# panel_factors 面板通道（P8 已接 panel-factors-daily 日更）：不在
+# config/factors.yaml，列清单直接取 indicators 侧各模块的权威常量。
+try:
+    from panel_factors import alpha101, growth, liquidity, pit_panel, quality, risk, value_size
+    from panel_factors import loader as pf_loader
+
+    panel_expected = {
+        "_pit_financial_panel": pit_panel.META_COLS + pit_panel.DATA_COLS,
+        "stock_daily_value": value_size.VALUE_FACTORS,
+        "stock_daily_size": value_size.SIZE_FACTORS,
+        "stock_daily_quality": quality.factor_columns(),
+        "stock_daily_growth": growth.FACTOR_COLUMNS,
+        "stock_daily_liquidity": liquidity.FACTOR_COLUMNS,
+        "stock_daily_risk": risk.FACTOR_COLUMNS,
+        "stock_daily_alpha101": alpha101.FACTOR_COLUMNS,
+    }
+    for table, columns in panel_expected.items():
+        out[table] = {
+            "columns": sorted(str(c) for c in columns),
+            "tasks": [{"name": "panel_factors_daily", "params": [], "expanded": True}],
+        }
+    # 通道B 8 列与 factors.yaml momentum/close 因子同表，并入既有条目
+    momentum = out.setdefault("stock_daily_momentum_close", {"columns": set(), "tasks": []})
+    momentum["columns"].update(str(c) for c in pf_loader.FACTOR_COLUMNS)
+    momentum["tasks"].append({"name": "panel_channel_b", "params": [], "expanded": True})
+except Exception:
+    pass
 print(json.dumps({
     table: {"columns": sorted(v["columns"]), "tasks": v["tasks"]}
     for table, v in out.items()
@@ -921,8 +967,9 @@ def factor_status(
             "daily_pipeline": info.get("daily_pipeline", True),
         }
         if not entry["daily_pipeline"]:
-            # 未接日更的 panel 面板表：不做列级对账与滞后判定，仅展示库内列，
-            # 避免误报「停滞/严重滞后」（P8 接入日更后自动转为日更中口径）。
+            # 未接日更的未知 panel 面板表：不做列级对账与滞后判定，仅展示库内列，
+            # 避免误报「停滞/严重滞后」（接入日更并在 PANEL_FACTOR_TABLES 登记后
+            # 自动转为日更中口径）。
             entry["lag_days"] = None
             entry["fresh"] = None
             entry["expected_available"] = False
