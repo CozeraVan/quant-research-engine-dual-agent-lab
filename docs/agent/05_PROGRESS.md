@@ -1030,3 +1030,17 @@ Historical row statuses (pre-migration, kept for old table rows):
 **测试**：tests/test_gui_engine.py +2（`_override_holding_days` 语义：None/20/0 覆盖且原 spec 不变；run_backtest 记录与透传含 0 透传、缺省不落键）；tests/test_worker.py +2（TestParamPassthrough：端到端 params 全字段到达 run_backtest kwargs，含 max_holding_days=0 与 profile_overrides 全量；旧 job 无该键时传 None 不覆盖 YAML）。全量 `uv run python -m pytest tests/ -q` → 2365 passed, 4 skipped 零回归。
 
 未 git commit，改动留工作区待审批。
+
+## 2026-10-19 batch 全市场净值曲线「新股初始资金注入计为收益」聚合 bug 修复（QRE-BATCH-IPO-INJECTION）
+
+**根因**（job#66 / run 20261013T022229180230 实证确诊）：`portfolio/full_market_report.py::build_full_market_equity_curve` batch 分支逐日把各股 equity_curve 的 total_equity 直接求和，daily_return = 今日总和/昨日总和−1。2010 年后 IPO 的股票权益曲线从上市日才开始，首日即带完整 initial_cash（10 万）进入总和——注入被计为收益。job#66：曲线首日 1.468 亿（1468 只）→ 期末 4.70 亿（5531 只），曲线 total_return=+220.3%，而真实口径 Σfinal/Σinitial−1=−14.76%，与 round_trips 已平仓净盈亏 −7577 万、profit_factor 0.90 自洽。旧曲线日收益含 ±25% 级注入尖峰（真实修正后日收益仅 ±0.4% 量级）。**此 bug 同时解释了 job#58/#66 正反两策略「双盈利」的假象；修复前所有 batch 全量回测的总收益率与收益日历均不可信。**
+
+**修复**：
+1. `build_full_market_equity_curve` batch 分支重写（向量化，顺带消除 O(交易日×股票×行数) 循环）：daily_return_t = Σ_{昨日∩今日在市} equity_t / Σ_{昨日∩今日} equity_{t-1} − 1，新进入股票当日收益贡献为 0（注入视为外部现金流）；cumulative_return 由该日收益累乘。total_equity 水平值口径不变（仍含注入，反映真实资金）。
+2. `portfolio/risk.py::summarize_equity_curve`：曲线自带 daily_return/cumulative_return 列时优先用之（收益与 total_return 取列值），否则维持 pct_change 口径——shared_cash 与个股曲线数值不变（其 daily_return≡pct_change）。
+3. `build_strategy_performance` batch 分支：strategy_total_return 改为 `_aggregate_batch_total_return(summary)` = Σfinal_equity/Σinitial_cash−1（summary.csv 已有两列；缺列时回退修正后曲线累乘口径），excess_return_vs_buy_hold 现算逻辑（strat−buy_hold）随之同口径。buy_hold_return 核查结论：它是 per-symbol buy_hold 的均值（analytics.py summarize_batch_summary），不经过聚合曲线，不受注入影响，无需修改。
+4. shared_cash 分支不动（单组合现金流本无此问题）；前端 gui/ 直接消费 equity_curve.csv 的 daily_return/cumulative_return（lab_result.py / risk_report.py / engine.py），产物修正后展示自动正确，无需改前端。
+
+**验证**：①tests/test_full_market_report.py 新增 TestBatchEquityCurveIpoInjection 3 例（A 全程在市每日+1000、B 第 5 日带 10 万进入每日−500：进入日 daily_return=104000/103000−1 不含注入；strategy_total_return==(109000+97500)/200000−1=+3.25% 手工复算一致；summary 缺资金列时回退曲线口径）；②全量 `uv run python -m pytest tests/ -q` → 2368 passed, 4 skipped 零回归；③job#66 真实产物离线复核（/tmp/verify_job66_injection_fix.py，不入仓）：新口径 total_return=−14.756%（精确，summary.csv 直算）；修正后逐日序列（233 只有成交明细股票用 _symbol_details 精确日净值 + 5298 只无成交股票按首窗口月 flat 10 万近似注入）累乘 cumulative_return=+9.29%（日复利等权口径，与资金加权的 −14.76% 存在再平衡溢价差异，两者均已剔除注入），日收益分布 min=−0.42%/max=+0.37%（旧口径 ±25% 注入尖峰消失），绿日占比 54.9%（旧 54.7% 但旧分布被注入日扭曲，1297 天存在新股进入）。
+
+**取舍说明**：曲线 cumulative（日复利等权）与 strategy_total_return（资金加权聚合）刻意保留两种口径——前者服务日历/风险指标，后者与 profit_factor/净盈亏勾稽，已在 06 决策日志记录。未 git commit，改动留工作区待审批。

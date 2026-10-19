@@ -183,6 +183,90 @@ class TestBuildFullMarketEquityCurve:
         assert df["position_count"].iloc[0] == 2
 
 
+def _make_equity_only_result(symbol: str, equities: list[float], start: str) -> SingleSymbolBacktestResult:
+    """仅含净值曲线的最小 batch 个股结果（equities[0] 即 initial_cash 首日净值）。"""
+    n = len(equities)
+    return SingleSymbolBacktestResult(
+        orders=pd.DataFrame(),
+        trades=pd.DataFrame(),
+        equity_curve=pd.DataFrame({
+            "trade_date": pd.date_range(start, periods=n, freq="B"),
+            "cash": [0.0] * n,
+            "market_value": equities,
+            "position_quantity": [100] * n,
+            "total_equity": equities,
+        }),
+        failed_orders=pd.DataFrame(),
+        summary={
+            "initial_cash": equities[0],
+            "final_equity": equities[-1],
+            "total_return": equities[-1] / equities[0] - 1,
+        },
+    )
+
+
+class TestBatchEquityCurveIpoInjection:
+    """回归：batch 聚合净值曲线不得把中途上市新股的 initial_cash 注入计为收益。
+
+    A 全程在市（10 个交易日，100000 起每日 +1000，期末 109000）；
+    B 第 5 个交易日才进入（100000 起每日 -500，期末 97500）。
+    """
+
+    def _fixtures(self):
+        dates = pd.date_range("2026-01-05", periods=10, freq="B")
+        a = _make_equity_only_result("000001.SZ", [100000.0 + 1000.0 * i for i in range(10)], "2026-01-05")
+        b = _make_equity_only_result("000002.SZ", [100000.0 - 500.0 * i for i in range(6)], str(dates[4].date()))
+        results = {"000001.SZ": a, "000002.SZ": b}
+        summary = pd.DataFrame([
+            {"symbol": "000001.SZ", **a.summary},
+            {"symbol": "000002.SZ", **b.summary},
+        ])
+        return dates, results, summary
+
+    def test_entry_day_daily_return_excludes_injection(self):
+        dates, results, _ = self._fixtures()
+        eq = build_full_market_equity_curve(results)
+        assert pd.isna(eq["daily_return"].iloc[0])
+        # 进入日（index 4）：只有 A 的权益变动计入收益，B 的 10 万注入不计
+        entry_day_return = eq["daily_return"].iloc[4]
+        assert entry_day_return == pytest.approx(104000.0 / 103000.0 - 1.0)
+        # 旧口径会是 (104000+100000)/103000-1 ≈ 0.98，显式排除
+        assert entry_day_return < 0.02
+        # 次日两只均在市，正常共同贡献
+        assert eq["daily_return"].iloc[5] == pytest.approx(
+            (105000.0 + 99500.0) / (104000.0 + 100000.0) - 1.0
+        )
+        # total_equity 水平值仍含注入（真实资金口径）
+        assert eq["total_equity"].iloc[4] == pytest.approx(104000.0 + 100000.0)
+        # cumulative_return 为 daily_return 累乘
+        expected_cum = float((1.0 + eq["daily_return"].fillna(0.0)).prod() - 1.0)
+        assert eq["cumulative_return"].iloc[-1] == pytest.approx(expected_cum)
+
+    def test_strategy_total_return_uses_aggregate_cash_flow(self):
+        _, results, summary = self._fixtures()
+        eq = build_full_market_equity_curve(results)
+        perf = build_strategy_performance(
+            {"symbol_count": 2, "traded_symbol_count": 2},
+            summary, pd.DataFrame(), eq,
+            run_id="t", strategy_id="s",
+        )
+        # Σfinal/Σinitial − 1 = (109000+97500)/200000 − 1
+        assert perf["strategy_total_return"] == pytest.approx(206500.0 / 200000.0 - 1.0)
+
+    def test_strategy_total_return_falls_back_to_curve_without_cash_columns(self):
+        _, results, _ = self._fixtures()
+        eq = build_full_market_equity_curve(results)
+        summary = pd.DataFrame([
+            {"symbol": "000001.SZ", "total_return": 0.09, "trade_count": 1},
+            {"symbol": "000002.SZ", "total_return": -0.025, "trade_count": 1},
+        ])
+        perf = build_strategy_performance(
+            {"symbol_count": 2}, summary, pd.DataFrame(), eq,
+        )
+        # 无 initial_cash/final_equity 列时回退到修正后曲线的累乘口径
+        assert perf["strategy_total_return"] == pytest.approx(eq["cumulative_return"].iloc[-1])
+
+
 class TestBuildDrawdownCurve:
     def test_empty_equity(self):
         df = build_drawdown_curve(pd.DataFrame())

@@ -766,61 +766,72 @@ def build_full_market_equity_curve(
         }, columns=_EQUITY_CURVE_COLUMNS)
 
     # batch mode
-    all_dates: set[pd.Timestamp] = set()
-    symbol_curves: dict[str, pd.DataFrame] = {}
+    # daily_return 口径：仅由「上一交易日已在市」的股票贡献；当日新进入（如 IPO 上市）
+    # 的股票自带完整 initial_cash 进入总和，视为外部资金注入，不计入当日收益。
+    frames: list[pd.DataFrame] = []
     for symbol, single_result in results.items():  # type: ignore[union-attr]
         eq = getattr(single_result, "equity_curve", None)
         if eq is None or eq.empty or "trade_date" not in eq.columns:
             continue
-        eq = eq.copy()
-        eq["trade_date"] = pd.to_datetime(eq["trade_date"])
-        eq = eq.sort_values("trade_date")
-        symbol_curves[symbol] = eq
-        all_dates.update(eq["trade_date"].dropna().tolist())
+        keep = ["trade_date", "total_equity"]
+        for optional in ("cash", "market_value", "position_quantity"):
+            if optional in eq.columns:
+                keep.append(optional)
+        frame = eq.loc[:, keep].copy()
+        frame["symbol"] = symbol
+        frames.append(frame)
 
-    if not all_dates:
+    if not frames:
         return pd.DataFrame(columns=_EQUITY_CURVE_COLUMNS)
 
-    dates = sorted(all_dates)
-    rows: list[dict[str, Any]] = []
-    cumulative_return = 1.0
-    prev_total_equity: float | None = None
+    big = pd.concat(frames, ignore_index=True)
+    big["trade_date"] = pd.to_datetime(big["trade_date"])
+    big = big.dropna(subset=["trade_date"])
+    big = big.drop_duplicates(subset=["trade_date", "symbol"], keep="first")
+    big = big.sort_values("trade_date", kind="mergesort")
+    if big.empty:
+        return pd.DataFrame(columns=_EQUITY_CURVE_COLUMNS)
 
-    for date in dates:
-        total_equity = 0.0
-        cash = 0.0
-        market_value = 0.0
-        position_count = 0
-        for eq in symbol_curves.values():
-            day_data = eq[eq["trade_date"] == date]
-            if day_data.empty:
-                continue
-            total_equity += _safe_float(day_data["total_equity"].iloc[0])
-            if "cash" in day_data.columns:
-                cash += _safe_float(day_data["cash"].iloc[0])
-            if "market_value" in day_data.columns:
-                market_value += _safe_float(day_data["market_value"].iloc[0])
-            pos_qty = _safe_float(day_data.get("position_quantity", pd.Series([0])).iloc[0])
-            if pos_qty is not None and pos_qty > 0:
-                position_count += 1
-        daily_return = None
-        if prev_total_equity is not None and prev_total_equity > 0:
-            daily_return = (total_equity / prev_total_equity) - 1.0
-        cumulative_return *= (1.0 + (daily_return or 0.0))
+    for column in ("cash", "market_value", "position_quantity"):
+        if column not in big.columns:
+            big[column] = 0.0
+    for column in ("total_equity", "cash", "market_value", "position_quantity"):
+        big[column] = pd.to_numeric(big[column], errors="coerce").fillna(0.0)
 
-        rows.append({
-            "trade_date": date,
-            "cash": cash,
-            "market_value": market_value,
-            "total_equity": total_equity,
-            "daily_return": daily_return,
-            "cumulative_return": cumulative_return - 1.0,
-            "position_count": position_count,
-            "turnover": None,
-        })
-        prev_total_equity = total_equity
+    daily = big.groupby("trade_date", sort=True).agg(
+        total_equity=("total_equity", "sum"),
+        cash=("cash", "sum"),
+        market_value=("market_value", "sum"),
+    )
+    daily["position_count"] = (
+        (big["position_quantity"] > 0).groupby(big["trade_date"]).sum().astype(int)
+    )
 
-    return pd.DataFrame(rows, columns=_EQUITY_CURVE_COLUMNS)
+    # 交集口径日收益：对每个交易日，只在「当日与前一全局交易日均在市」的股票上
+    # 计算 Σequity_t / Σequity_{t-1} − 1；新股进入当日收益贡献为 0。
+    dates = daily.index
+    next_of = {dates[i - 1]: dates[i] for i in range(1, len(dates))}
+    cur = big[["trade_date", "symbol", "total_equity"]]
+    prev = cur.rename(columns={"total_equity": "prev_equity"}).copy()
+    prev["trade_date"] = prev["trade_date"].map(next_of)
+    prev = prev.dropna(subset=["trade_date"])
+    merged = cur.merge(prev, on=["trade_date", "symbol"], how="left")
+    both = merged.dropna(subset=["prev_equity"])
+    numerator = both.groupby("trade_date")["total_equity"].sum()
+    denominator = both.groupby("trade_date")["prev_equity"].sum()
+    daily["daily_return"] = (numerator / denominator.where(denominator > 0)) - 1.0
+    daily["cumulative_return"] = (1.0 + daily["daily_return"].fillna(0.0)).cumprod() - 1.0
+
+    return pd.DataFrame({
+        "trade_date": daily.index,
+        "cash": daily["cash"].to_numpy(),
+        "market_value": daily["market_value"].to_numpy(),
+        "total_equity": daily["total_equity"].to_numpy(),
+        "daily_return": daily["daily_return"].to_numpy(),
+        "cumulative_return": daily["cumulative_return"].to_numpy(),
+        "position_count": daily["position_count"].to_numpy(),
+        "turnover": None,
+    }, columns=_EQUITY_CURVE_COLUMNS)
 
 
 def build_drawdown_curve(equity_curve: pd.DataFrame) -> pd.DataFrame:
@@ -856,6 +867,24 @@ def build_drawdown_curve(equity_curve: pd.DataFrame) -> pd.DataFrame:
         "drawdown_pct": eq["drawdown_pct"],
         "drawdown_duration_days": duration_days,
     }, columns=_DRAWDOWN_CURVE_COLUMNS)
+
+
+def _aggregate_batch_total_return(summary: pd.DataFrame | None) -> float | None:
+    """batch 模式聚合总收益：Σfinal_equity / Σinitial_cash − 1。
+
+    全体参与回测股票按 initial_cash 加权聚合（initial_cash 一致时即等权），
+    中途上市新股的初始资金注入不计入收益，与 profit_factor/净盈亏口径可勾稽。
+    """
+    if summary is None or summary.empty:
+        return None
+    if not {"initial_cash", "final_equity"}.issubset(summary.columns):
+        return None
+    initial = pd.to_numeric(summary["initial_cash"], errors="coerce")
+    final = pd.to_numeric(summary["final_equity"], errors="coerce")
+    valid = initial.notna() & final.notna() & (initial > 0)
+    if not valid.any():
+        return None
+    return float(final[valid].sum() / initial[valid].sum() - 1.0)
 
 
 def build_strategy_performance(
@@ -956,11 +985,15 @@ def build_strategy_performance(
     # batch mode
     # QRE-ENG-046：date_start/date_end 缺省时取净值曲线首末交易日；
     # excess_return_vs_buy_hold 缺省且组合总收益与买入持有均可用时现算（总收益 − 买入持有）。
+    # 策略总收益口径：Σfinal_equity / Σinitial_cash − 1（全体参与股票等权聚合），
+    # 与 profit_factor/净盈亏可勾稽；新股 initial_cash 注入不计收益。
     eq_dates: list[str] = []
     if not eq.empty and "trade_date" in eq.columns:
         eq_dates = [str(d)[:10] for d in eq["trade_date"]]
     buy_hold = summary_metrics.get("buy_hold_return")
-    strat_total = risk.get("total_return")
+    strat_total = _aggregate_batch_total_return(summary)
+    if strat_total is None:
+        strat_total = risk.get("total_return")
     excess = summary_metrics.get("excess_return_vs_buy_hold")
     if excess is None and isinstance(strat_total, (int, float)) and isinstance(buy_hold, (int, float)):
         excess = float(strat_total - buy_hold)
@@ -987,7 +1020,7 @@ def build_strategy_performance(
         "sharpe": risk.get("sharpe"),
         "sortino": sortino,
         "information_ratio": None,
-        "strategy_total_return": risk.get("total_return"),
+        "strategy_total_return": strat_total,
         "buy_hold_return": summary_metrics.get("buy_hold_return"),
         "excess_return_vs_buy_hold": excess,
         "positive_symbol_rate": summary_metrics.get("positive_return_symbol_rate"),

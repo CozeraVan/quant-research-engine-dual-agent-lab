@@ -18,10 +18,22 @@ def summarize_equity_curve(
     if equity.empty:
         return _empty_metrics()
 
-    returns = equity.pct_change().dropna()
+    # 曲线若自带 daily_return/cumulative_return 列（全市场聚合曲线），优先使用：
+    # batch 模式下 total_equity 水平值含新股初始资金注入，pct_change 口径会把注入计为收益。
+    if "daily_return" in equity_curve.columns:
+        returns = pd.to_numeric(equity_curve["daily_return"], errors="coerce").dropna()
+    else:
+        returns = equity.pct_change().dropna()
     start_equity = float(equity.iloc[0])
     end_equity = float(equity.iloc[-1])
-    total_return = end_equity / start_equity - 1 if start_equity > 0 else None
+    total_return: float | None
+    cumulative = equity_curve.get("cumulative_return")
+    if cumulative is not None:
+        cumulative = pd.to_numeric(cumulative, errors="coerce").dropna()
+    if cumulative is not None and not cumulative.empty:
+        total_return = float(cumulative.iloc[-1])
+    else:
+        total_return = end_equity / start_equity - 1 if start_equity > 0 else None
     drawdown = equity / equity.cummax() - 1
     max_drawdown = float(drawdown.min()) if not drawdown.empty else None
     drawdown_period = _max_drawdown_period(equity_curve, equity, drawdown)

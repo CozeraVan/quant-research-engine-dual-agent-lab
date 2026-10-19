@@ -1303,3 +1303,11 @@ No open questions remain.
 - Alternatives: ①float32 全面降内存——否决，ema 近交叉值在 float32 相对误差下可能翻转信号，违反结果口径一致硬约束；②只调 MemoryMax 不改引擎——否决，治标，且 22.6G vs 23G 物理内存无解；③垂直扩容加内存——否决，2G ECS 的前车之鉴证明资源永远会被数据量吃掉，必须先有分块架构。
 - Impact: 全市场全期回测从"碰运气能跑"变为确定性可跑且更快；后续所有全市场量级代码路径受 R-MEM-001 约束；job#71 可安全重提（worker 已带新码完成 job#72）。
 - Owner: KIMI_CODE
+
+### 2026-10-19: batch 聚合收益口径立法——新股注入不计收益，strategy_total_return 用资金加权聚合（QRE-BATCH-IPO-INJECTION）
+
+- Decision: ①batch 全市场净值曲线 daily_return 只由「上一交易日已在市」股票的权益变动贡献（交集口径：Σ_{昨∩今} e_t / Σ_{昨∩今} e_{t-1} − 1），中途上市新股的 initial_cash 注入视为外部现金流、当日收益贡献为 0；cumulative_return 由该日收益累乘；total_equity 水平值不变（仍含注入，真实资金口径）。②batch 模式 strategy_total_return = Σfinal_equity/Σinitial_cash − 1（summary 的 initial_cash/final_equity 列直算，缺列回退修正后曲线），与 profit_factor/已平仓净盈亏可勾稽。③`summarize_equity_curve` 优先使用曲线自带 daily_return/cumulative_return 列。④buy_hold_return（per-symbol 均值）不经过聚合曲线、不受注入影响，维持不动；shared_cash 分支不动。
+- Reason: 旧口径把 4063 次新股 10 万注入计为收益，job#66 曲线报 +220.3% 而真实 −14.76%，正反两策略「双盈利」假象同源于此。交集口径是「注入=外部现金流」的标准做法；strategy_total_return 选资金加权聚合而非曲线累乘，是因为它与 profit_factor/净盈亏直接勾稽，且与 buy_hold（等权 per-symbol 均值，initial_cash 一致时两口径相等）可比。
+- Alternatives: ①把注入从 total_equity 水平值也剔除——否决，水平值应反映真实资金规模，且回撤/资金占用等模块消费水平值；②strategy_total_return 直接用修正后曲线累乘值——否决，日复利等权口径含再平衡溢价（job#66：+9.29% vs 资金加权 −14.76%），不与 profit_factor 勾稽；③按个股真实上市日重建历史曲线回填旧产物——留作后续，本次只修计算口径，历史产物标记不可信。
+- Impact: 修复前所有 batch 全量回测的 total_return/收益日历不可信（05_PROGRESS 2026-10-19 条已标注）；equity_curve.csv 列结构不变，前端零改动；历史 job 重跑报告生成即可得修正口径。
+- Owner: KIMI_CODE

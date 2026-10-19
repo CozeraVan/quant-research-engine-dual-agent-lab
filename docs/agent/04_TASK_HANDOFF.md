@@ -2,7 +2,31 @@
 
 ## Task ID
 
-QRE-PARAM-PASSTHROUGH（SaaS 高级参数落库与引擎生效一致性修复）
+QRE-BATCH-IPO-INJECTION（batch 全市场净值曲线「新股初始资金注入计为收益」聚合 bug 修复）
+
+## Current Status
+
+DONE (implementation; **未 commit**——改动留工作区待批准；
+tests/test_full_market_report.py +3（TestBatchEquityCurveIpoInjection），全量 2368 passed + 4 skipped 零回归)
+
+## Task Note
+
+- 根因：`build_full_market_equity_curve` batch 分支逐日直接求和各股 total_equity，
+  2010 后 IPO 股票首日带完整 initial_cash（10 万）进入总和，被 daily_return/total_return
+  计为收益。job#66：曲线 +220.3% vs 真实 Σfinal/Σinitial−1=−14.76%（与 profit_factor 0.90 勾稽）。
+  此 bug 同时解释 job#58/#66 正反策略「双盈利」假象；修复前历史 batch 全量回测总收益率/收益日历均不可信。
+- 修法：①batch 分支重写为交集口径 daily_return（昨日∩今日在市股票，注入视为外部现金流）
+  + 向量化；②risk.summarize_equity_curve 优先用曲线自带 daily_return/cumulative_return 列
+  （shared/个股曲线数值不变）；③strategy_total_return 改 `_aggregate_batch_total_return`
+  （Σfinal/Σinitial−1，缺列回退曲线口径）；buy_hold_return 系 per-symbol 均值不受注入影响，不动；
+  shared_cash 分支不动；前端直读 equity_curve.csv 无需改。
+- 验证：新增 3 例回归（进入日收益不含注入、聚合口径手工复算一致、缺列回退）；全量测试零回归；
+  job#66 真实产物离线复核（/tmp/verify_job66_injection_fix.py）：新口径 −14.756% 精确命中，
+  修正后日收益 ±0.4% 量级（旧 ±25% 注入尖峰消失）。详见 05_PROGRESS 2026-10-19 条与 06 决策日志同日条。
+
+---
+
+## Archive: QRE-PARAM-PASSTHROUGH（SaaS 高级参数落库与引擎生效一致性修复）
 
 ## Current Status
 

@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-PARAM-PASSTHROUGH（SaaS 高级参数落库与引擎生效一致性：max_holding_days 参数权威化）
+QRE-BATCH-IPO-INJECTION（batch 全市场净值曲线新股初始资金注入计为收益修复）
+
+## Implementation Summary
+
+**根因**（job#66 实证）：`portfolio/full_market_report.py::build_full_market_equity_curve` batch 分支逐日对各股 total_equity 直接求和，中途 IPO 股票首日带完整 initial_cash 进入总和被计为收益（job#66：+220.3% vs 真实 −14.76%）。**改动**：①该函数 batch 分支重写——concat 各股曲线为单表、按 (trade_date, symbol) 去重排序，groupby 聚合日级 total_equity/cash/market_value/position_count；daily_return 交集口径：`prev` 表把每股净值映射到下一全局交易日，merge 得「昨日∩今日均在市」子集，daily_return_t = Σe_t/Σe_{t-1}−1，新股进入当日贡献 0（注入=外部现金流），cumulative 累乘；同时消除旧 O(日×股) 逐日过滤循环。②`portfolio/risk.py::summarize_equity_curve`：曲线含 daily_return 列时 returns 取该列、total_return 取 cumulative_return 末值，否则维持 pct_change——shared_cash/个股曲线无 daily_return 列或两者等价，数值不变。③`build_strategy_performance` batch 分支：新增 `_aggregate_batch_total_return(summary)`（Σfinal_equity/Σinitial_cash−1，两列缺省时回退 None→曲线口径），strategy_total_return 与 excess_return_vs_buy_hold 现算逻辑共用该值；buy_hold_return 经核查为 per-symbol 均值（analytics.py），不受注入影响未动；shared_cash 分支未动；前端 gui/ 直读 equity_curve.csv（lab_result/risk_report/engine），零改动。**测试**：tests/test_full_market_report.py +3（TestBatchEquityCurveIpoInjection：进入日 daily_return=104000/103000−1 显式排除注入、strategy_total_return==(109000+97500)/200000−1 手工复算、缺资金列回退曲线口径）；全量 `uv run python -m pytest tests/ -q` → 2368 passed, 4 skipped 零回归。**job#66 离线复核**（/tmp/verify_job66_injection_fix.py，不入仓）：Σfinal/Σinitial−1=−14.756% 精确；修正日收益 min=−0.42%/max=+0.37%（旧 ±25% 尖峰消失），累乘 +9.29%（日复利等权口径，与资金加权 −14.76% 的差为再平衡溢价，口径差异已记录 06 决策日志）。未 git commit，等用户/主代理审批。
+
+---
+
+## Archive: QRE-PARAM-PASSTHROUGH（SaaS 高级参数落库与引擎生效一致性：max_holding_days 参数权威化）
 
 ## Implementation Summary
 
