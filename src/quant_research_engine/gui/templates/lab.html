@@ -203,6 +203,20 @@
           <label>最大持仓天数 Max Holding</label>
           <input type="text" id="param-holding" value="20" placeholder="默认 20；留空 = 不限">
 
+          <label>入场价格 Entry Price</label>
+          <select id="param-entry-price">
+            <option value="open" selected>次日开盘价</option>
+            <option value="close">次日收盘价</option>
+            <option value="vwap">次日均价 VWAP</option>
+          </select>
+
+          <label>出场价格 Exit Price</label>
+          <select id="param-exit-price">
+            <option value="open" selected>次日开盘价</option>
+            <option value="close">次日收盘价</option>
+            <option value="vwap">次日均价 VWAP</option>
+          </select>
+
           <!-- 预检已从用户参数移除（18080 定稿）：冒烟固定后台自动跑，单股票自动跳过 -->
 
           <!-- 内部工程参数：面向普通用户隐藏（QRE-SAAS-013），JS 仍读默认值 -->
@@ -1095,6 +1109,7 @@
       "  stamp_tax_sell: " + (g("param-stamp-tax") || 0.0005)];
     var hold = g("param-holding").trim();
     if (hold) lines.push("  max_holding_days: " + hold);  // 留空 = 不限
+    lines.push("  entry_price: " + g("param-entry-price"), "  exit_price: " + g("param-exit-price"));
     [["stop_loss_pct","param-stop-loss"],["take_profit_pct","param-take-profit"],["trailing_stop_pct","param-trailing-stop"]].forEach(function(p) {
       var v = g(p[1]).trim(); if (v) lines.push("  " + p[0] + ": " + v);
     });
@@ -1125,7 +1140,7 @@
   yamlEl.addEventListener("input", updateParamsLine);
   ["param-start","param-end","param-cash","param-mode","param-maxpos","param-commission","param-min-commission",
    "param-stamp-tax","param-slip-buy","param-slip-sell","param-stop-loss","param-take-profit","param-trailing-stop",
-   "param-codes","param-holding","univ-group","univ-key"].forEach(function(id) {
+   "param-codes","param-holding","param-entry-price","param-exit-price","univ-group","univ-key"].forEach(function(id) {
     var el = document.getElementById(id);
     if (!el) return;
     el.addEventListener("input", updateParamsLine);
@@ -1164,6 +1179,8 @@
       stop_loss_pct: document.getElementById("param-stop-loss").value,
       take_profit_pct: document.getElementById("param-take-profit").value,
       trailing_stop_pct: document.getElementById("param-trailing-stop").value,
+      entry_price: document.getElementById("param-entry-price").value,
+      exit_price: document.getElementById("param-exit-price").value,
       engine_impl: document.getElementById("param-engine-impl").value,
       precheck: false,  // 小样本验证已由流水线第②步冒烟承担；③步必须是真正的全量回测（precheck=true 只跑截断小样本，full_params 无消费方）
       output_dir: document.getElementById("param-output").value,

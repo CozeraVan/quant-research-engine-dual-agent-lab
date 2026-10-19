@@ -91,6 +91,7 @@ class _Prepared:
     trade_dates: np.ndarray
     open_prices: np.ndarray
     entry_prices: np.ndarray
+    exit_prices: np.ndarray
     mark_prices: np.ndarray
     entry_signals: np.ndarray
     exit_signals: np.ndarray | None
@@ -383,6 +384,12 @@ class SingleSymbolVectorizedEngine:
         # for fills; keep both arrays.
         open_prices = working["open"].to_numpy(dtype=float)
         entry_prices = working[request.entry_price_column].to_numpy(dtype=float)
+        exit_price_column = request.exit_price_column or request.entry_price_column
+        exit_prices = (
+            entry_prices
+            if exit_price_column == request.entry_price_column
+            else working[exit_price_column].to_numpy(dtype=float)
+        )
         mark_prices = working[request.mark_price_column].to_numpy(dtype=float)
         trade_dates = working["trade_date"].to_numpy()
         entry_signals = working["entry_signal"].to_numpy(dtype=bool)
@@ -419,6 +426,7 @@ class SingleSymbolVectorizedEngine:
             trade_dates=trade_dates,
             open_prices=open_prices,
             entry_prices=entry_prices,
+            exit_prices=exit_prices,
             mark_prices=mark_prices,
             entry_signals=entry_signals,
             exit_signals=exit_signals,
@@ -451,6 +459,7 @@ class SingleSymbolVectorizedEngine:
         n = prepared.n
         open_prices = prepared.open_prices
         entry_prices = prepared.entry_prices
+        exit_prices = prepared.exit_prices
         mark_prices = prepared.mark_prices
         trade_dates = prepared.trade_dates
         entry_signals = prepared.entry_signals
@@ -669,7 +678,7 @@ class SingleSymbolVectorizedEngine:
                         push_execution(next_index)
 
                 if sell_reason is not None:
-                    price_raw = float(entry_prices[i])
+                    price_raw = float(exit_prices[i])
                     price = self.market_profile.apply_slippage(OrderSide.SELL, price_raw)
                     order = Order(
                         symbol=request.symbol,

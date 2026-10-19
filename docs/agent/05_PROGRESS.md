@@ -1053,3 +1053,19 @@ Historical row statuses (pre-migration, kept for old table rows):
 - ECS aguhuice 库：DELETE jobs 47 行、results 33 行（保留 id 58/66）；删除前备份至 jobs_deleted_backup_20261019 / results_deleted_backup_20261019 表。
 - ECS /srv/aguhuice/uploads：删除 job_* 目录 32 个（保留 job_58/job_66），删除前打包 /srv/aguhuice/backups/uploads_deleted_20261019.tar.gz（89M→43M）。
 - 本机 /home/van/qre-outputs/gui-console/runs：删除 141 个历史 run 目录（保留 job#58/66 对应两 run），3.2G→2.6G。
+
+## 2026-10-19 web 高级参数新增「入场价格 / 出场价格」（QRE-PRICE-COLUMN-PARAM）
+
+**需求**：把引擎已支持的成交价列参数暴露到 web 高级参数——入场价与出场价各自独立可选 open（次日开盘价，默认）/ close（次日收盘价）/ vwap（次日均价），默认语义不变（信号日 T 收盘出信号、T+1 开盘价成交，买卖同）。
+
+**改动**：
+- 引擎：`SingleSymbolBacktestRequest`/`BatchBacktestRequest`/`SharedCashBacktestRequest` 新增 `exit_price_column: str | None = None`（None=跟随入场价列）；simulator/vectorized/shared 三路径卖出价改读出场价列（shared 裁剪白名单并入该列）；batch 两分支透传。
+- vwap：`stock_daily` 有原生 vwap 列（元，原始价尺度，20 号字典 §2），不做 amount/vol 换算；raw 口径下 load_daily_bars 既有 ×adj_factor 循环已含 vwap，同尺度。
+- 透传：gui/engine `_resolve_price_columns`（白名单校验，非法值建 run 前拒绝）+ `_extend_market_fields`（vwap 并入装配字段）；run_backtest run 记录与 precheck full_params 携带；worker/runner、8081 /api/run、run_detail.html 全量重跑链同步。
+- UI：SaaS new.html 与 8081 lab.html 高级参数区各加两个下拉（默认次日开盘价），预览栏同步。
+
+**测试**：tests/test_price_columns.py 新文件 13 例（vwap 成交价、出场独立性、默认不变性、5 组 entry×exit sim↔vec 等值、batch 两 impl、shared、raw 模式 vwap 缩放）；test_gui_engine.py +4；test_worker.py +1。全量 `uv run python -m pytest tests/ -q` → **2385 passed, 4 skipped** 零回归。
+
+**冒烟**（/tmp/qre_price_smoke.py，不入仓）：4 股（000001.SZ/600519.SH/000002.SZ/300750.SZ）× 2025 全年 × 双均线 sma_5/sma_20 × batch/vectorized，entry=open/close/vwap 各一次：各 35 笔买入逐笔对库核对 **0 mismatch**，三档总收益 6.29%/5.81%/6.97% 互异，确认成交价列确实切换且结果合理。
+
+未 git commit，改动留工作区待审批。

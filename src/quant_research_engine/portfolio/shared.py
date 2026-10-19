@@ -22,6 +22,7 @@ class SharedCashBacktestRequest:
     max_positions: int | None  # None 或 0 = 不限制持仓数量（QRE-MAXPOS-UNLIMITED）
     exit_signal: str | None = None
     entry_price_column: str = "open"
+    exit_price_column: str | None = None  # None = 跟随入场价列（既有行为）
     mark_price_column: str = "close"
     weight_model: str = "equal_weight"
     score_column: str | None = None
@@ -185,6 +186,7 @@ class SharedCashBacktestEngine:
             "entry_signal",
             "symbol_bar_index",
             request.entry_price_column,
+            request.exit_price_column or request.entry_price_column,
             request.mark_price_column,
             # 撮合/风控路径按名探测的可选列（缺失时走回退逻辑，存在则必须保留原值）
             "open",
@@ -297,7 +299,7 @@ class SharedCashBacktestEngine:
                         position["pending_exit_reason"] = "exit_signal"
                 continue
 
-            raw_exit_price = exit_decision.price if exit_decision.price is not None else float(row[request.entry_price_column])
+            raw_exit_price = exit_decision.price if exit_decision.price is not None else float(row[request.exit_price_column or request.entry_price_column])
             price = self.market_profile.apply_slippage(OrderSide.SELL, float(raw_exit_price))
             order = Order(
                 symbol=symbol,

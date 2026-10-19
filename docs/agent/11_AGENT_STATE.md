@@ -4,7 +4,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-ACTIVE（2026-10-19：QRE-BATCH-IPO-INJECTION batch 净值曲线新股注入计收益修复完成待 commit——交集口径 daily_return + strategy_total_return=Σfinal/Σinitial−1，job#66 复核 −14.756% 命中；另有 QRE-PARAM-PASSTHROUGH / QRE-P8-PANEL-DAILY / QRE-SYMBOL-PERF-ZERO-TRADE / QRE-DEAD-PENDING-FIX / WIZARD-PRICE-BASIS / SHARED-OOM-FIX 待 commit）
+ACTIVE（2026-10-19：QRE-PRICE-COLUMN-PARAM web 高级参数「入场/出场价格」完成待 commit——引擎 exit_price_column 独立参数（默认跟随入场）+ open/close/vwap 全链透传，2385 passed 零回归 + 冒烟三档列切换实证；此前 QRE-BATCH-IPO-INJECTION / QRE-PARAM-PASSTHROUGH / QRE-P8-PANEL-DAILY 等均已 commit，当前工作区仅此一项未提交）
 
 ## Current Task
 

@@ -34,6 +34,7 @@ class BatchBacktestRequest:
     holding_days: int
     exit_signal: str | None = None
     entry_price_column: str = "open"
+    exit_price_column: str | None = None  # None = 跟随入场价列（既有行为）
     mark_price_column: str = "close"
     summary_metadata_columns: list[str] | None = None
     engine_impl: str = "simulator"
@@ -77,6 +78,7 @@ class BatchBacktestEngine:
                     exit_signal=request.exit_signal,
                     holding_days=request.holding_days,
                     entry_price_column=request.entry_price_column,
+                    exit_price_column=request.exit_price_column,
                     mark_price_column=request.mark_price_column,
                     stop_loss_pct=request.stop_loss_pct,
                     take_profit_pct=request.take_profit_pct,
@@ -121,6 +123,7 @@ class BatchBacktestEngine:
                 exit_signal=request.exit_signal,
                 holding_days=request.holding_days,
                 entry_price_column=request.entry_price_column,
+                exit_price_column=request.exit_price_column,
                 mark_price_column=request.mark_price_column,
                 stop_loss_pct=request.stop_loss_pct,
                 take_profit_pct=request.take_profit_pct,

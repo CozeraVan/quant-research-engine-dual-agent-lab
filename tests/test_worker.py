@@ -352,6 +352,45 @@ class TestParamPassthrough:
         assert captured["trailing_stop_pct"] == 0.05
         assert captured["profile_overrides"] == params["profile_overrides"]
 
+    def test_price_columns_reach_run_backtest(self, cloud, monkeypatch, tmp_path):
+        """entry_price/exit_price 落库值必须原样到达 run_backtest（成交价列参数透传）。"""
+        captured = {}
+
+        def capturing_run_backtest(**kw):
+            captured.update(kw)
+            return _fake_run_backtest(kw["output_dir"])
+
+        monkeypatch.setattr(runner_mod, "run_backtest", capturing_run_backtest)
+        monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._benchmark_series",
+                            lambda dates: ({}, "test: no benchmark"))
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_company_tags",
+                            lambda symbols: ([], {}, None))
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_industries",
+                            lambda symbols: {})
+        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_symbol_range_returns",
+                            lambda symbols, start, end: {})
+
+        job_id = _create_job(cloud, params={
+            "start": "2024-01-01", "end": "2026-01-01", "codes": ["000001.SZ"],
+            "entry_price": "vwap", "exit_price": "close",
+        })
+        job = _make_client(cloud).lease()
+        assert job["id"] == job_id
+        runner_mod.execute_job(job, work_base=tmp_path)
+        assert captured["entry_price"] == "vwap"
+        assert captured["exit_price"] == "close"
+
+        # 旧 job（params 无成交价列键）：传 None，引擎默认 open/跟随入场
+        captured.clear()
+        job_id = _create_job(cloud, params={"start": "2024-01-01", "end": "2026-01-01",
+                                            "codes": ["000001.SZ"]})
+        job = _make_client(cloud).lease()
+        assert job["id"] == job_id
+        runner_mod.execute_job(job, work_base=tmp_path)
+        assert captured["entry_price"] is None
+        assert captured["exit_price"] is None
+
     def test_max_holding_days_absent_stays_none(self, cloud, monkeypatch, tmp_path):
         """旧 job（params 无 max_holding_days）：不传覆盖值，YAML holding 节生效。"""
         captured = {}

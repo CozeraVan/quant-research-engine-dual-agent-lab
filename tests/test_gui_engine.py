@@ -403,6 +403,119 @@ def test_run_backtest_records_and_forwards_max_holding_days(monkeypatch, tmp_pat
     assert "max_holding_days" not in result2
 
 
+# --- 成交价列参数透传（entry_price / exit_price，SaaS 高级参数） ---
+
+
+def test_resolve_price_columns():
+    from quant_research_engine.gui.engine import _resolve_price_columns
+
+    assert _resolve_price_columns(None, None) == ("open", "open")
+    assert _resolve_price_columns("close", None) == ("close", "close")  # 出场跟随入场
+    assert _resolve_price_columns("vwap", "open") == ("vwap", "open")
+    with pytest.raises(ValueError):
+        _resolve_price_columns("bad", None)
+    with pytest.raises(ValueError):
+        _resolve_price_columns(None, "bad")
+
+
+def test_extend_market_fields():
+    from quant_research_engine.gui.engine import _extend_market_fields
+
+    base = ["open", "high", "low", "close", "pre_close", "vol", "amount"]
+    assert _extend_market_fields(base, "open") == base
+    assert _extend_market_fields(base, "vwap", "close") == [*base, "vwap"]
+
+
+def test_run_backtest_records_and_forwards_price_columns(monkeypatch, tmp_path):
+    """run_backtest 把 entry_price/exit_price 写进 run 记录并透传给执行器。"""
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr("quant_research_engine.gui.engine.TEMPLATES_DIR", tmp_path / "templates")
+    monkeypatch.setattr("quant_research_engine.gui.engine.GUI_BASE_DIR", tmp_path)
+
+    captured = {}
+
+    def fake_run_via_module(**kwargs):
+        captured.update(kwargs)
+        kwargs["stdout_path"].write_text("strategy=t\norders=0\n", encoding="utf-8")
+        kwargs["stderr_path"].write_text("", encoding="utf-8")
+
+    monkeypatch.setattr("quant_research_engine.gui.engine._run_via_module", fake_run_via_module)
+
+    yaml_text = (
+        "experiment:\n  name: t\ndata:\n  market_fields: [close]\n"
+        "signal:\n  entry: close > 0\nholding:\n  max_holding_days: 20\n"
+    )
+    result = run_backtest(
+        yaml_text=yaml_text,
+        mode="shared",
+        start="2026-01-05",
+        end="2026-01-06",
+        codes="000001.SZ",
+        entry_price="close",
+        exit_price="vwap",
+    )
+    assert result["status"] == "completed"
+    assert captured["entry_price"] == "close"
+    assert captured["exit_price"] == "vwap"
+    assert result["entry_price"] == "close"
+    assert result["exit_price"] == "vwap"
+
+    # 缺省（None）不落记录键，引擎默认 open/跟随入场
+    result2 = run_backtest(
+        yaml_text=yaml_text,
+        mode="shared",
+        start="2026-01-05",
+        end="2026-01-06",
+        codes="000001.SZ",
+    )
+    assert captured["entry_price"] is None
+    assert captured["exit_price"] is None
+    assert "entry_price" not in result2
+    assert "exit_price" not in result2
+
+    # 非法列在建 run 前直接拒绝
+    with pytest.raises(ValueError):
+        run_backtest(
+            yaml_text=yaml_text,
+            mode="shared",
+            start="2026-01-05",
+            end="2026-01-06",
+            codes="000001.SZ",
+            entry_price="bad",
+        )
+
+
+def test_run_backtest_precheck_full_params_carry_price_columns(monkeypatch, tmp_path):
+    """precheck 的 full_params 携带 entry_price/exit_price（8081 全量重跑链透传）。"""
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr("quant_research_engine.gui.engine.TEMPLATES_DIR", tmp_path / "templates")
+    monkeypatch.setattr("quant_research_engine.gui.engine.GUI_BASE_DIR", tmp_path)
+
+    def fake_run_via_module(**kwargs):
+        kwargs["stdout_path"].write_text("strategy=t\norders=0\n", encoding="utf-8")
+        kwargs["stderr_path"].write_text("", encoding="utf-8")
+
+    monkeypatch.setattr("quant_research_engine.gui.engine._run_via_module", fake_run_via_module)
+
+    yaml_text = (
+        "experiment:\n  name: t\ndata:\n  market_fields: [close]\n"
+        "signal:\n  entry: close > 0\nholding:\n  max_holding_days: 20\n"
+    )
+    result = run_backtest(
+        yaml_text=yaml_text,
+        mode="shared",
+        start="2026-01-05",
+        end="2026-01-06",
+        codes="000001.SZ",
+        entry_price="vwap",
+        exit_price="close",
+        precheck=True,
+    )
+    assert result["status"] == "completed"
+    assert result["full_params"]["entry_price"] == "vwap"
+    assert result["full_params"]["exit_price"] == "close"
+
+
 # --- compile_high_level_entry ---
 
 

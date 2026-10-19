@@ -17,6 +17,7 @@ class SingleSymbolBacktestRequest:
     holding_days: int
     exit_signal: str | None = None
     entry_price_column: str = "open"
+    exit_price_column: str | None = None  # None = 跟随入场价列（既有行为）
     mark_price_column: str = "close"
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
@@ -100,6 +101,7 @@ class SingleSymbolBacktestEngine:
         working["entry_signal"] = evaluate_expression_signal(working, request.entry_signal)
         if request.exit_signal is not None:
             working["exit_signal"] = evaluate_expression_signal(working, request.exit_signal)
+        exit_price_column = request.exit_price_column or request.entry_price_column
         first_mark_price = float(working.iloc[0][request.mark_price_column])
 
         cash = request.initial_cash
@@ -239,7 +241,7 @@ class SingleSymbolBacktestEngine:
                         pending_sell_reason = "exit_signal"
 
                 if sell_reason is not None:
-                    price_raw = float(row[request.entry_price_column])
+                    price_raw = float(row[exit_price_column])
                     price = self.market_profile.apply_slippage(OrderSide.SELL, price_raw)
                     order = Order(
                         symbol=request.symbol,

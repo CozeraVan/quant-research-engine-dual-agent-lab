@@ -24,6 +24,7 @@ params 约定（全部可选）：
     mode: "shared"(默认)/"batch"/"single", initial_cash, max_positions,
     engine_impl, stop_loss_pct, take_profit_pct, trailing_stop_pct,
     max_holding_days（0=不限；显式给时覆盖 YAML holding 节，与落库口径一致）,
+    entry_price/exit_price: 成交价列 open|close|vwap（次日口径；缺省 open，出场缺省跟随入场）,
     profile_overrides: dict
 """
 
@@ -248,6 +249,10 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
         trailing_stop_pct=params.get("trailing_stop_pct"),
         max_holding_days=(int(params["max_holding_days"])
                           if params.get("max_holding_days") is not None else None),
+        entry_price=(str(params["entry_price"]).strip()
+                     if params.get("entry_price") not in (None, "") else None),
+        exit_price=(str(params["exit_price"]).strip()
+                    if params.get("exit_price") not in (None, "") else None),
         precheck=(job.get("kind") == "smoke"),
         random_n=(int(params["random_n"]) if params.get("random_n") is not None else None),
         background=False,

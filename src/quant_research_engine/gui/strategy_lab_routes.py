@@ -171,6 +171,15 @@ def register_strategy_lab_routes(app: Flask) -> None:
             if max_holding_days < 0:
                 return jsonify({"status": "error", "error": "max_holding_days 须 ≥0（0 = 不限持仓天数）"}), 400
 
+        price_choices = ("open", "close", "vwap")
+        entry_price = data.get("entry_price")
+        entry_price = str(entry_price).strip() if entry_price not in (None, "") else None
+        exit_price = data.get("exit_price")
+        exit_price = str(exit_price).strip() if exit_price not in (None, "") else None
+        for label, value in (("entry_price", entry_price), ("exit_price", exit_price)):
+            if value is not None and value not in price_choices:
+                return jsonify({"status": "error", "error": f"{label} 须为 {'/'.join(price_choices)}"}), 400
+
         if executor != "cli" and not _try_acquire_run_slot():
             return jsonify({
                 "status": "error",
@@ -196,6 +205,8 @@ def register_strategy_lab_routes(app: Flask) -> None:
                 take_profit_pct=_opt_float("take_profit_pct"),
                 trailing_stop_pct=_opt_float("trailing_stop_pct"),
                 max_holding_days=max_holding_days,
+                entry_price=entry_price,
+                exit_price=exit_price,
                 precheck=bool(data.get("precheck")),
                 random_n=random_n,
                 background=(executor != "cli"),

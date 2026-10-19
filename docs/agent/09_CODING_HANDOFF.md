@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-BATCH-IPO-INJECTION（batch 全市场净值曲线新股初始资金注入计为收益修复）
+QRE-PRICE-COLUMN-PARAM（web 高级参数「入场价格 / 出场价格」：引擎 exit_price_column 独立参数 + open/close/vwap 全链透传）
+
+## Implementation Summary
+
+**引擎层**：`portfolio/single_symbol.py`、`single_symbol_vectorized.py`、`batch.py`、`shared.py` 的请求 dataclass 新增 `exit_price_column: str | None = None`（None=跟随入场价列，默认行为逐字节不变）；simulator 卖出点（single_symbol.py:244）、vectorized `_Prepared.exit_prices` 数组 + `_run_loop` 卖出点（同列时复用 entry 数组零额外内存）、shared `_execute_due_sells` 卖出价（shared.py:302）三路径统一改读出场价列；shared `_prepare_frame` 列裁剪白名单加出场价列；batch 两分支透传给 SingleSymbolBacktestRequest。**vwap 数据可得性**：`public.stock_daily` 有原生 `vwap` 列（元、原始价尺度，20 号数据字典 §2）——不做 amount/vol 换算；hfq（QRE_PRICE_BASIS=raw）下 `postgres.py::load_daily_bars` 既有复权循环 `(open,high,low,close,pre_close,vwap)×adj_factor` 已覆盖 vwap 同尺度，新增打桩测试锁定。**透传链**（仿 max_holding_days/8b9312c 模式）：`gui/engine.py` 新增 `PRICE_COLUMN_CHOICES=("open","close","vwap")`、`_resolve_price_columns`（缺省 open、出场缺省跟随入场、非法值 ValueError）与 `_extend_market_fields`（vwap 等非默认列并入装配 market_fields 防 frame 缺列）；run_backtest/_run_via_module 新增 `entry_price/exit_price` 形参，run 记录与 precheck full_params 携带（None 不落键），三模式（single/batch/shared + streaming batch）请求对象均注入；`worker/runner.py` execute_job 透传 params.entry_price/exit_price（空串归 None）；`gui/strategy_lab_routes.py` /api/run 白名单校验 + 透传，`templates/run_detail.html` 全量重跑 fullParams 链同步。**UI**：`gui/saas/templates/new.html` 与 `gui/templates/lab.html` 高级参数区各加「入场价格/出场价格」两个下拉（次日开盘价/次日收盘价/次日均价 VWAP，默认开盘价），buildParams/buildRunPayload 携带，预览栏 paramsYaml 同步两行。**测试**：新增 `tests/test_price_columns.py` 13 例（vwap 成交价、出场独立性、默认跟随逐字节不变、5 组 entry×exit sim↔vec 等值、batch 两 impl 透传、shared 独立/默认、raw 模式 vwap×adj_factor 缩放）；test_gui_engine.py +4（resolve/extend 语义、run 记录+透传+非法拒绝、precheck full_params 携带）；test_worker.py +1（TestParamPassthrough：落库值到达 run_backtest kwargs、旧 job 无键传 None）。全量 `uv run python -m pytest tests/ -q` → 2385 passed, 4 skipped 零回归。**冒烟**（/tmp/qre_price_smoke.py，不入仓）：000001.SZ/600519.SH/000002.SZ/300750.SZ × 2025 全年 × 双均线（sma_5×sma_20，batch/vectorized），entry open/close/vwap 各一次，35 笔买入逐笔对库（load_daily_bars 同口径）0 mismatch，三档总收益 6.29%/5.81%/6.97% 互异确认切换生效。未 git commit，等用户/主代理审批。
+
+---
+
+## Archive: QRE-BATCH-IPO-INJECTION（batch 全市场净值曲线新股初始资金注入计为收益修复）
 
 ## Implementation Summary
 

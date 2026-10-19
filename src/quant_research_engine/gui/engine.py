@@ -118,6 +118,38 @@ def _override_holding_days(spec: Any, max_holding_days: int | None) -> Any:
     return replace(spec, holding_days=int(max_holding_days))
 
 
+#: 成交价列可选值（引擎请求对象 entry_price_column/exit_price_column）
+PRICE_COLUMN_CHOICES = ("open", "close", "vwap")
+
+
+def _resolve_price_columns(
+    entry_price: str | None, exit_price: str | None
+) -> tuple[str, str]:
+    """解析入/出场成交价列：缺省 open；出场缺省跟随入场。
+
+    返回 (entry_column, exit_column)，均为具体列名。非法值抛 ValueError。
+    vwap 为 stock_daily 原生列（元，原始价尺度；QRE_PRICE_BASIS=raw 时
+    读取层与其他价格列同乘 adj_factor，见 data/postgres.py）。
+    """
+    entry_col = entry_price or "open"
+    exit_col = exit_price or entry_col
+    for col in (entry_col, exit_col):
+        if col not in PRICE_COLUMN_CHOICES:
+            raise ValueError(
+                f"无效成交价列: {col!r}（可选 {'/'.join(PRICE_COLUMN_CHOICES)}）"
+            )
+    return entry_col, exit_col
+
+
+def _extend_market_fields(fields: list[str], *columns: str) -> list[str]:
+    """把成交价列并入 market_fields（frame 缺列引擎会 KeyError）。"""
+    merged = list(fields)
+    for col in columns:
+        if col not in merged:
+            merged.append(col)
+    return merged
+
+
 def validate_yaml(yaml_text: str) -> dict[str, Any]:
     """Validate YAML text against the StrategySpec parser.
 
@@ -206,6 +238,8 @@ def run_backtest(
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
     max_holding_days: int | None = None,
+    entry_price: str | None = None,
+    exit_price: str | None = None,
     precheck: bool = False,
     random_n: int | None = None,
     background: bool = False,
@@ -222,6 +256,8 @@ def run_backtest(
     避免事后补写与后台线程的完成回写产生竞态。
     """
     _ensure_dirs()
+    # 成交价列合法性前置校验（非法值在建 run 目录前拒绝）
+    _resolve_price_columns(entry_price, exit_price)
     rid = _run_id()
     run_dir = RUNS_DIR / rid
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -252,6 +288,8 @@ def run_backtest(
             "take_profit_pct": take_profit_pct,
             "trailing_stop_pct": trailing_stop_pct,
             "max_holding_days": max_holding_days,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
             "profile_overrides": profile_overrides,
         }
         codes_list, start, end = apply_precheck(codes_list, start, end, seed=rid, db_url=db_url)
@@ -299,6 +337,10 @@ def run_backtest(
     if max_holding_days is not None:
         # 与 stop/take/trailing 同口径：显式传入时以参数为准覆盖 YAML holding 节
         record["max_holding_days"] = int(max_holding_days)
+    if entry_price is not None:
+        record["entry_price"] = entry_price
+    if exit_price is not None:
+        record["exit_price"] = exit_price
     if sampled_random:
         record["random_n"] = random_n
         record["universe"] = "random"
@@ -327,6 +369,8 @@ def run_backtest(
         "take_profit_pct": take_profit_pct,
         "trailing_stop_pct": trailing_stop_pct,
         "max_holding_days": max_holding_days,
+        "entry_price": entry_price,
+        "exit_price": exit_price,
     }
 
     if background:
@@ -436,6 +480,8 @@ def _run_via_module(
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
     max_holding_days: int | None = None,
+    entry_price: str | None = None,
+    exit_price: str | None = None,
 ) -> None:
     """Execute backtest via direct Python module call (mirrors CLI flow)."""
     import io
@@ -465,6 +511,12 @@ def _run_via_module(
         # 与引擎生效值保持一致，不再依赖前端把表单值注入 YAML holding 节
         # （YAML 自带 max_holding_days 时前端不覆盖，导致落库≠生效）。
         spec = _override_holding_days(spec, max_holding_days)
+        # 成交价列参数（SaaS 高级参数为权威来源）：vwap 等非默认列需并入
+        # market_fields，否则装配出的 frame 缺列。
+        entry_price_column, exit_price_column = _resolve_price_columns(entry_price, exit_price)
+        market_fields = _extend_market_fields(
+            spec.market_fields, entry_price_column, exit_price_column
+        )
 
         # Empty code list = whole market (assembler/engine accept None).
         ts_codes = codes or None
@@ -499,7 +551,7 @@ def _run_via_module(
                         ts_codes=chunk_symbols,
                         start=start,
                         end=end,
-                        market_fields=spec.market_fields,
+                        market_fields=market_fields,
                         factor_fields=spec.factor_fields,
                         include_metadata=True,
                     )
@@ -519,6 +571,8 @@ def _run_via_module(
                             entry_signal=spec.signal_expression,
                             exit_signal=spec.exit_signal_expression,
                             holding_days=spec.holding_days,
+                            entry_price_column=entry_price_column,
+                            exit_price_column=exit_price_column,
                             engine_impl=engine_impl,
                             stop_loss_pct=stop_loss_pct,
                             take_profit_pct=take_profit_pct,
@@ -549,7 +603,7 @@ def _run_via_module(
             signal_fields = referenced_fields(spec.signal_expression) | referenced_fields(
                 spec.exit_signal_expression
             )
-            known_data_cols = set(spec.market_fields) | {
+            known_data_cols = set(market_fields) | {
                 f.logical_name for f in spec.factor_fields
             }
             meta_extra = sorted(signal_fields - known_data_cols)
@@ -557,7 +611,7 @@ def _run_via_module(
                 ts_codes=ts_codes,
                 start=start,
                 end=end,
-                market_fields=spec.market_fields,
+                market_fields=market_fields,
                 factor_fields=spec.factor_fields,
                 metadata_columns=["is_st", "is_suspended", *meta_extra],
             )
@@ -566,7 +620,7 @@ def _run_via_module(
                 ts_codes=ts_codes,
                 start=start,
                 end=end,
-                market_fields=spec.market_fields,
+                market_fields=market_fields,
                 factor_fields=spec.factor_fields,
                 include_metadata=True,
             )
@@ -600,6 +654,8 @@ def _run_via_module(
                 stop_loss_pct=stop_loss_pct,
                 take_profit_pct=take_profit_pct,
                 trailing_stop_pct=trailing_stop_pct,
+                entry_price_column=entry_price_column,
+                exit_price_column=exit_price_column,
             )
 
         stdout_path.write_text(buf_out.getvalue(), encoding="utf-8")
@@ -624,6 +680,8 @@ def _execute_engine(
     stop_loss_pct: float | None = None,
     take_profit_pct: float | None = None,
     trailing_stop_pct: float | None = None,
+    entry_price_column: str = "open",
+    exit_price_column: str = "open",
 ) -> None:
     from quant_research_engine.portfolio.single_symbol import SingleSymbolBacktestEngine, SingleSymbolBacktestRequest
     from quant_research_engine.portfolio.batch import BatchBacktestEngine, BatchBacktestRequest
@@ -645,6 +703,8 @@ def _execute_engine(
                 entry_signal=spec.signal_expression,
                 exit_signal=spec.exit_signal_expression,
                 holding_days=spec.holding_days,
+                entry_price_column=entry_price_column,
+                exit_price_column=exit_price_column,
             ),
         )
         print(f"strategy={spec.name}")
@@ -667,6 +727,8 @@ def _execute_engine(
                 entry_signal=spec.signal_expression,
                 exit_signal=spec.exit_signal_expression,
                 holding_days=spec.holding_days,
+                entry_price_column=entry_price_column,
+                exit_price_column=exit_price_column,
                 engine_impl=engine_impl,
                 stop_loss_pct=stop_loss_pct,
                 take_profit_pct=take_profit_pct,
@@ -699,6 +761,8 @@ def _execute_engine(
                 exit_signal=spec.exit_signal_expression,
                 holding_days=spec.holding_days,
                 max_positions=positions,
+                entry_price_column=entry_price_column,
+                exit_price_column=exit_price_column,
                 stop_loss_pct=stop_loss_pct,
                 take_profit_pct=take_profit_pct,
                 trailing_stop_pct=trailing_stop_pct,

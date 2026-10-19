@@ -130,6 +130,10 @@
         <input type="number" id="p-maxpos" value="10" min="0" step="1">
         <label>最大持仓天数</label>
         <input type="text" id="p-holding" value="20" placeholder="默认 20；留空 = 不限">
+        <label>入场价格</label>
+        <select id="p-entry-price"><option value="open" selected>次日开盘价</option><option value="close">次日收盘价</option><option value="vwap">次日均价 VWAP</option></select>
+        <label>出场价格</label>
+        <select id="p-exit-price"><option value="open" selected>次日开盘价</option><option value="close">次日收盘价</option><option value="vwap">次日均价 VWAP</option></select>
         <label>止损 Stop Loss %</label>
         <input type="text" id="p-sl" placeholder="可空，如 0.08">
         <label>止盈 Take Profit %</label>
@@ -294,6 +298,7 @@ function paramsYaml(){
     '  max_positions: ' + (g('#p-maxpos').trim() === '0' ? '0  # 不限制' : (g('#p-maxpos') || 10))];
   const hold = g('#p-holding').trim();
   if (hold) lines.push('  max_holding_days: ' + hold);
+  lines.push('  entry_price: ' + g('#p-entry-price'), '  exit_price: ' + g('#p-exit-price'));
   [['stop_loss_pct','#p-sl'],['take_profit_pct','#p-tp'],['trailing_stop_pct','#p-ts'],
    ['commission_rate','#p-comm'],['min_commission','#p-mincomm'],['stamp_tax_sell','#p-stamp'],
    ['slippage_buy','#p-slipb'],['slippage_sell','#p-slips']].forEach(p => {
@@ -366,7 +371,7 @@ $$('input[name="scope"]').forEach(r => r.addEventListener('change', function(){
   $('#scope-codes-row').style.display = v === 'codes' ? 'flex' : 'none';
   refreshPreview();
 }));
-['#p-random-n', '#param-codes', '#p-sname', '#p-cash', '#p-maxpos', '#p-holding', '#p-sl', '#p-tp', '#p-ts', '#p-mode'].forEach(id => {
+['#p-random-n', '#param-codes', '#p-sname', '#p-cash', '#p-maxpos', '#p-holding', '#p-entry-price', '#p-exit-price', '#p-sl', '#p-tp', '#p-ts', '#p-mode'].forEach(id => {
   $(id).addEventListener('input', refreshPreview);
   $(id).addEventListener('change', refreshPreview);
 });
@@ -796,6 +801,8 @@ function buildParams(){
   const hold = $('#p-holding').value.trim();
   // 留空 = 不限（0），与输入框占位符承诺一致；引擎端以 params 为权威覆盖 YAML holding 节
   params.max_holding_days = hold ? parseInt(hold, 10) : 0;
+  params.entry_price = $('#p-entry-price').value;
+  params.exit_price = $('#p-exit-price').value;
   const fnum = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
   const overrides = {};
   [['commission_rate','#p-comm'],['min_commission','#p-mincomm'],['stamp_tax_sell','#p-stamp'],
