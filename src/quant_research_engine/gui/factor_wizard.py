@@ -28,6 +28,28 @@ CATEGORY_LABELS = {
     "volume": "成交量",
     "vortex": "涡流",
     "alpha191": "Alpha191 量价因子",
+    # 2026-10-19 P1-P7 面板因子表（无价格后缀命名，整表成组）
+    "alpha101": "Alpha101 量价因子",
+    "liquidity": "流动性",
+    "risk": "风险",
+    "value": "估值",
+    "size": "市值规模",
+    "quality": "质量",
+    "growth": "成长",
+    "pit_financial": "基本面财务(PIT)",
+}
+
+# 无 <category>_<price> 后缀的面板表：整表成组（组键, 表名, 列名标签前缀）
+_PANEL_TABLES = {
+    "stock_daily_alpha191": ("alpha191", "Alpha191"),
+    "stock_daily_alpha101": ("alpha101", "Alpha101"),
+    "stock_daily_liquidity": ("liquidity", "流动性"),
+    "stock_daily_risk": ("risk", "风险"),
+    "stock_daily_value": ("value", "估值"),
+    "stock_daily_size": ("size", "规模"),
+    "stock_daily_quality": ("quality", "质量"),
+    "stock_daily_growth": ("growth", "成长"),
+    "_pit_financial_panel": ("pit_financial", "财务"),
 }
 
 PRICE_COLUMN_LABELS = {
@@ -159,16 +181,19 @@ def build_factor_groups(tables_columns: dict[str, list[str]]) -> list[dict[str, 
     for table in sorted(tables_columns):
         parsed = parse_factor_table_name(table)
         if parsed is None:
-            # alpha191 面板表无价格后缀，单独成组（与 admin.py 的纳管口径一致）
-            if table == "stock_daily_alpha191":
+            # 无价格后缀的面板表整表成组（alpha191/alpha101/liquidity/risk/
+            # value/size/quality/growth/_pit_financial_panel）
+            panel = _PANEL_TABLES.get(table)
+            if panel is not None:
+                group_key, label_prefix = panel
                 for column in tables_columns[table]:
                     if column in _SKIP_COLUMNS:
                         continue
-                    by_category.setdefault("alpha191", []).append(
+                    by_category.setdefault(group_key, []).append(
                         {
                             "table": f"factors.{table}",
                             "column": column,
-                            "label": f"Alpha191 · {column}",
+                            "label": f"{label_prefix} · {column}",
                         }
                     )
             continue

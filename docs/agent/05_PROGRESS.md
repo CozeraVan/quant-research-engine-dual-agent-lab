@@ -1069,3 +1069,9 @@ Historical row statuses (pre-migration, kept for old table rows):
 **冒烟**（/tmp/qre_price_smoke.py，不入仓）：4 股（000001.SZ/600519.SH/000002.SZ/300750.SZ）× 2025 全年 × 双均线 sma_5/sma_20 × batch/vectorized，entry=open/close/vwap 各一次：各 35 笔买入逐笔对库核对 **0 mismatch**，三档总收益 6.29%/5.81%/6.97% 互异，确认成交价列确实切换且结果合理。
 
 未 git commit，改动留工作区待审批。
+
+## 2026-10-19 SaaS 因子目录同步面板新表（902 项）
+
+- factor_wizard.build_factor_groups 新增 _PANEL_TABLES：alpha101/liquidity/risk/value/size/quality/growth/_pit_financial_panel 整表成组（此前仅认 <category>_<price> 命名与 alpha191，P1-P7 新表被静默跳过）。
+- scripts/sync_saas_metadata.py 重新导出：因子 562→902 项、18 组，scp 至 ECS 并重启 qre-saas；/api/saas/factors 实测 ok，向导与 NL 编译同步可见新因子。
+- 注意：因子库新增表后需重跑 sync_saas_metadata.py + scp（未来可挂日更）。
