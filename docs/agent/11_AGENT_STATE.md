@@ -4,7 +4,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-ACTIVE（2026-10-19：QRE-PRICE-COLUMN-PARAM web 高级参数「入场/出场价格」完成待 commit——引擎 exit_price_column 独立参数（默认跟随入场）+ open/close/vwap 全链透传，2385 passed 零回归 + 冒烟三档列切换实证；此前 QRE-BATCH-IPO-INJECTION / QRE-PARAM-PASSTHROUGH / QRE-P8-PANEL-DAILY 等均已 commit，当前工作区仅此一项未提交）
+ACTIVE（2026-10-19：QRE-CUMRET-CHART 收益曲线口径修复完成待 commit——chart_data 新增 cumret 键 + job.html/lab_result.html 优先 cumret + job#58/#66 ECS chart_data 已打 cumret 补丁，2387 passed 零回归；前一项 QRE-PRICE-COLUMN-PARAM 已 commit（f27f597），当前工作区仅此一项未提交）
 
 ## Current Task
 

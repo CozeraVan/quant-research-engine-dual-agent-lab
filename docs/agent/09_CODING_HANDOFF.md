@@ -2,7 +2,15 @@
 
 ## Task ID
 
-QRE-PRICE-COLUMN-PARAM（web 高级参数「入场价格 / 出场价格」：引擎 exit_price_column 独立参数 + open/close/vwap 全链透传）
+QRE-CUMRET-CHART（收益曲线口径修复：chart_data 新增 cumret 键 + 前端优先用 cumret + job#58/#66 ECS jsonb 补丁）
+
+## Implementation Summary
+
+**构建侧**：`gui/lab_result.py::_equity_series` 返回扩展为 (dates, equity, cumret|None)；`build_lab_chart_data` 在 equity_curve.csv 含 cumulative_return 列时落 `chart_data["cumret"]`——交集口径日收益累乘的小数累计收益率（0.15=+15%），与 dates 等长，剔除新股注资影响；旧产物无该列不落键（worker 上传链路经 build_lab_chart_data，自动覆盖）。**前端**：`gui/saas/templates/job.html` 新增 `stratRet(d)`（优先 cumret×100 转百分比，缺失回退 toRet(equity) 旧口径），应用于静态主图、mountReplay 重播组件（raw: d.equity 保留供悬浮原始权益）、updateRangeStrip 区间收益与区间回撤（cumret 时按净值 1+c 计算）；`gui/templates/lab_result.html`（8081 同 bug）renderMain 与区间卡同步改造。**测试**：tests/test_gui_lab_result.py 新增 test_chart_data_cumret_from_cumulative_return + 2 处断言（无列不落键、空态 cumret=None）；全量 `uv run python -m pytest tests/ -q` → 2387 passed, 4 skipped 零回归。**ECS 补丁**：备份（ECS /tmp/chart_data_job{58,66}_backup_20261019.json + 本机 /tmp 副本）后 jsonb_set 仅加 cumret 键，UPDATE 2 行 SELECT 复核（job#58 末端 −6.41%、job#66 末端 −28.71%，与 dates 等长，无注入尖峰；注意 cumret 为日复利交集口径，与 summary 资金加权 total_return −1.82%/−14.76% 方向一致但数值不必相等）。未 git commit，等用户/主代理审批。
+
+---
+
+## Archive: QRE-PRICE-COLUMN-PARAM（web 高级参数「入场价格 / 出场价格」：引擎 exit_price_column 独立参数 + open/close/vwap 全链透传）
 
 ## Implementation Summary
 

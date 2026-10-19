@@ -653,7 +653,11 @@
   function renderMain(d) {
     DATA = d;
     var dates = d.dates;
-    var stratRet = toRet(d.equity);
+    // 优先 chart_data.cumret（小数，交集口径日收益累乘，faf9629 起写入，
+    // 剔除新股注资影响）；旧数据无 cumret 时回退 equity/base−1 水平值口径
+    var stratRet = (d.cumret && d.cumret.length)
+      ? d.cumret.map(function(v) { return v == null ? null : v * 100; })
+      : toRet(d.equity);
     var dd = (d.drawdown_pct || []).map(function(v) { return v == null ? null : v * 100; });
 
     mainChart = echarts.init(document.getElementById('chart-main'));
@@ -761,7 +765,11 @@
     var i1 = dz.endValue != null ? dz.endValue : Math.ceil((dz.end != null ? dz.end : 100) / 100 * (n - 1));
     i0 = Math.max(0, Math.min(i0, n - 1));
     i1 = Math.max(i0, Math.min(i1, n - 1));
-    var eq = DATA.equity.slice(i0, i1 + 1);
+    // 区间策略收益：优先 cumret（交集口径净值 1+c，剔除注资影响），旧数据回退 equity 水平值
+    var src = (DATA.cumret && DATA.cumret.length)
+      ? DATA.cumret.slice(i0, i1 + 1).map(function(v) { return v == null ? null : 1 + v; })
+      : DATA.equity.slice(i0, i1 + 1);
+    var eq = src;
     var days = eq.length;
     var stratRet = null, mdd = null;
     var first = eq.find(function(v) { return v != null; });

@@ -67,7 +67,15 @@ def _f(value: str | None) -> float | None:
         return None
 
 
-def _equity_series(record: dict[str, Any]) -> tuple[list[str], list[float | None]] | None:
+def _equity_series(
+    record: dict[str, Any],
+) -> tuple[list[str], list[float | None], list[float | None] | None] | None:
+    """返回 (dates, total_equity 序列, cumulative_return 序列|None)。
+
+    cumulative_return 口径（faf9629 起由引擎写入）：交集口径日收益累乘的
+    累计收益率（小数，如 0.15 = +15%），与 dates 等长；新股注资不贡献收益。
+    旧产物缺该列时第三项为 None（调用方不落 cumret 键，前端回退旧口径）。
+    """
     path = _find_output_file(record, "equity_curve.csv")
     if path is None:
         return None
@@ -77,13 +85,21 @@ def _equity_series(record: dict[str, Any]) -> tuple[list[str], list[float | None
         return None
     dates: list[str] = []
     equity: list[float | None] = []
+    cumret: list[float | None] = []
+    has_cumret = False
     for row in rows:
         d = (row.get("trade_date") or "").strip()
         v = _f(row.get("total_equity"))
+        c = _f(row.get("cumulative_return"))
+        if c is not None:
+            has_cumret = True
         if d and v is not None:
             dates.append(d)
             equity.append(v)
-    return (dates, equity) if dates else None
+            cumret.append(c)
+    if not dates:
+        return None
+    return (dates, equity, cumret if has_cumret else None)
 
 
 def _drawdown_series(record: dict[str, Any], dates: list[str]) -> list[float | None] | None:
@@ -284,12 +300,17 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
     if eq is None:
         data["dates"] = None
         data["equity"] = None
+        data["cumret"] = None
         data["drawdown_pct"] = None
         data["benchmarks"] = None
     else:
-        dates, equity = eq
+        dates, equity, cumret = eq
         data["dates"] = dates
         data["equity"] = equity
+        # cumret：交集口径累计收益率（小数，与 dates 等长），faf9629 后产物才有；
+        # 旧产物（无 cumulative_return 列）不落键，前端回退 equity/base−1 旧口径
+        if cumret is not None:
+            data["cumret"] = cumret
         data["drawdown_pct"] = _drawdown_series(record, dates)
         benchmarks, bench_note = _benchmark_series(dates)
         data["benchmarks"] = benchmarks or None

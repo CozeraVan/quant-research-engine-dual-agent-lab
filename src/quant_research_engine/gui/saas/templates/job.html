@@ -119,6 +119,15 @@ function toRet(arr){  // 归一化为起点 0% 的累计收益率%
   const base = arr.find(v => v !== null && v !== undefined);
   return arr.map(v => (v === null || v === undefined || !base) ? null : (v / base - 1) * 100);
 }
+// 策略累计收益率%：优先 chart_data.cumret（小数，交集口径日收益累乘，
+// faf9629 起写入，剔除新股注资影响）；旧数据无 cumret 时回退 equity/base−1
+//（水平值口径，全市场回测会因新股注资虚高）
+function stratRet(d){
+  if (d && d.cumret && d.cumret.length){
+    return d.cumret.map(v => (v === null || v === undefined) ? null : v * 100);
+  }
+  return toRet(d.equity || []);
+}
 
 let mainChart = null, DATA = null, curBench = '';
 function renderMetrics(m){
@@ -159,7 +168,7 @@ function renderMain(d){
   const hasDD = dd.some(v => v != null);
   mainChart = echarts.init(document.getElementById('chart-main'));
   const series = [{
-    name: '策略', id: 'strategy', type: 'line', data: toRet(d.equity),
+    name: '策略', id: 'strategy', type: 'line', data: stratRet(d),
     showSymbol: false, lineStyle: {width: 2}, color: '#2563eb',
   }];
   if (hasDD) series.push({
@@ -255,9 +264,13 @@ function renderMain(d){
     let i1 = dz.endValue != null ? dz.endValue : Math.ceil((dz.end != null ? dz.end : 100) / 100 * (n - 1));
     i0 = Math.max(0, Math.min(i0, n - 1)); i1 = Math.max(i0, Math.min(i1, n - 1));
     const eq = DATA.equity || [];
-    const sRet = sliceRet(eq, i0, i1);
+    // 区间策略收益：优先 cumret（交集口径，剔除注资影响），旧数据回退 equity 水平值
+    const cum = (DATA.cumret && DATA.cumret.length) ? DATA.cumret : null;
+    const sRet = cum ? sliceRetPct(cum.map(v => v == null ? null : v * 100), i0, i1)
+                     : sliceRet(eq, i0, i1);
     let peak = -Infinity, mdd = 0;
-    eq.slice(i0, i1 + 1).forEach(v => { if (v == null) return; if (v > peak) peak = v; const ddv = v / peak - 1; if (ddv < mdd) mdd = ddv; });
+    (cum ? cum.map(v => v == null ? null : 1 + v) : eq)
+      .slice(i0, i1 + 1).forEach(v => { if (v == null) return; if (v > peak) peak = v; const ddv = v / peak - 1; if (ddv < mdd) mdd = ddv; });
     let bRet = null, bName = '基准';
     const benches = DATA.benchmarks || {};
     if (curBench && benches[curBench]){
@@ -731,7 +744,7 @@ function mountReplay(d){
     events.push({date: t.entry_date, kind: 'entry', symbol: t.symbol});
     if (t.exit_date) events.push({date: t.exit_date, kind: 'exit', symbol: t.symbol, pnl: t.net_return});
   });
-  const series = [{name: '策略', id: 'strategy', color: '#2563eb', data: toRet(d.equity), raw: d.equity, grid: 0, mark: true, width: 2}];
+  const series = [{name: '策略', id: 'strategy', color: '#2563eb', data: stratRet(d), raw: d.equity, grid: 0, mark: true, width: 2}];
   if (benchCode) series.push({name: '基准·' + benches[benchCode].name, id: 'bench', color: '#f59e0b',
     dashed: true, data: toRet(benches[benchCode].closes), grid: 0});
   if (hasDD) series.push({name: '回撤', id: 'dd', color: '#d43030', data: dd, grid: 1, area: true, width: 1});

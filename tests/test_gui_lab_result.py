@@ -173,6 +173,8 @@ def test_lab_chart_data_ok(lab_client):
     assert d["ok"] is True
     assert d["dates"] == ["2024-01-02", "2024-01-03", "2024-01-04", "2024-02-01", "2024-02-02"]
     assert d["equity"] == [100.0, 101.0, 99.0, 102.0, 103.0]
+    # fixture 的 equity_curve.csv 无 cumulative_return 列：不落 cumret 键（旧产物兼容）
+    assert "cumret" not in d
     assert len(d["drawdown_pct"]) == 5
     # 指标卡
     m = d["metrics"]
@@ -212,6 +214,39 @@ def test_lab_chart_data_ok(lab_client):
 
 def test_lab_chart_data_404(lab_client):
     assert lab_client.get("/api/lab/runs/ghost/chart-data").status_code == 404
+
+
+def test_chart_data_cumret_from_cumulative_return(tmp_path, monkeypatch):
+    """equity_curve.csv 带 cumulative_return 列（faf9629 起）→ chart_data.cumret 直取列值。
+
+    cumret 为交集口径日收益累乘的小数（与 dates 等长），前端 ×100 转百分比，
+    不再用 equity/首日−1 水平值口径（全市场回测会被新股注资扭曲）。
+    """
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+    run_dir = _make_run(tmp_path)
+    out = tmp_path / "out"
+    dates = ["2024-01-02", "2024-01-03", "2024-01-04", "2024-02-01", "2024-02-02"]
+    equity = [100.0, 101.0, 99.0, 102.0, 103.0]
+    cumret = [0.0, 0.01, -0.01, 0.02, 0.03]
+    _write_csv(
+        out / "equity_curve.csv",
+        ["trade_date", "cash", "market_value", "total_equity", "daily_return", "cumulative_return"],
+        [[d, 0, 0, e, "", c] for d, e, c in zip(dates, equity, cumret)],
+    )
+    (run_dir / "status.json").write_text(
+        json.dumps({
+            "run_id": RUN_ID, "output_dir": str(out),
+            "artifacts": {"equity_curve.csv": str(out / "equity_curve.csv")},
+        }),
+        encoding="utf-8",
+    )
+    from quant_research_engine.gui.lab_result import build_lab_chart_data
+
+    import json as _json
+    record = _json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
+    d = build_lab_chart_data(record)
+    assert d["equity"] == equity
+    assert d["cumret"] == cumret
 
 
 # --- QRE-LAB-UI-LANDING：个股明细列表页 ---
@@ -266,6 +301,7 @@ def test_lab_chart_data_empty_run(monkeypatch, tmp_path):
         d = client.get(f"/api/lab/runs/{RUN_ID}/chart-data").get_json()
     assert d["ok"] is True
     assert d["dates"] is None and d["equity"] is None
+    assert d["cumret"] is None
     assert d["drawdown_pct"] is None and d["benchmarks"] is None
     assert d["trades"] is None
     assert d["metrics"] is None

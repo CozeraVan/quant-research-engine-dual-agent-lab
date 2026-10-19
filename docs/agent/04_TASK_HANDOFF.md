@@ -2,13 +2,12 @@
 
 ## Task ID
 
-QRE-PRICE-COLUMN-PARAM（web 高级参数新增「入场价格 / 出场价格」选项：open/close/vwap 全链透传 + 引擎 exit_price_column 独立参数）
+QRE-CUMRET-CHART（收益曲线口径修复：chart_data 新增 cumret 键 + 前端 job.html/lab_result.html 优先 cumret + job#58/#66 ECS jsonb 补丁已应用）
 
 ## Current Status
 
-DONE (implementation; **未 commit**——改动留工作区待批准；
-tests/test_price_columns.py 新文件 13 例 + test_gui_engine.py +4 + test_worker.py +1，
-全量 2385 passed + 4 skipped 零回归；本地小样本冒烟 open/close/vwap 三档成交价列切换实证通过)
+DONE (implementation；**未 commit**——改动留工作区待批准；ECS results.chart_data 已补 cumret，
+全量 2387 passed + 4 skipped 零回归)
 
 ## Task Note
 
