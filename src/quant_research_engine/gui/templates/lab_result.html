@@ -161,12 +161,13 @@
     renderTagChart();
   }
 
-  // 盈亏 → 颜色：赚红亏绿，按 |盈亏|/maxAbs 深浅分档
-  function pnlColor(pnl, maxAbs) {
-    var t = maxAbs > 0 ? Math.min(Math.abs(pnl) / maxAbs, 1) : 0;
-    var light = [245, 244, 250];
-    var deep = pnl >= 0 ? [201, 58, 58] : [30, 142, 90];
-    var mix = light.map(function(c, i) { return Math.round(c + (deep[i] - c) * (0.25 + 0.75 * t)); });
+  // 盈亏 → 颜色：相对排名双色刻度（最好深红 → 中段灰白 → 最差深绿），全盈/全亏也有层次
+  function pnlColor(pnl, minPnl, maxPnl) {
+    var red = [201, 58, 58], light = [245, 244, 250], green = [30, 142, 90];
+    var t = maxPnl > minPnl ? (maxPnl - pnl) / (maxPnl - minPnl) : 0.5;  // 0=最好，1=最差
+    var a, b, f;
+    if (t <= 0.5) { a = red; b = light; f = t / 0.5; } else { a = light; b = green; f = (t - 0.5) / 0.5; }
+    var mix = a.map(function(c, i) { return Math.round(c + (b[i] - c) * f); });
     return 'rgb(' + mix.join(',') + ')';
   }
 
@@ -207,6 +208,8 @@
     }
     noteEl.textContent = noteText;
     var maxAbs = Math.max.apply(null, tmItems.map(function(t) { return Math.abs(t.total_pnl); }));
+    var tmPnls = tmItems.map(function(t) { return t.total_pnl; });
+    var minPnl = Math.min.apply(null, tmPnls), maxPnl = Math.max.apply(null, tmPnls);
     var el = document.getElementById('chart-tags');
     el.style.height = '420px';
     if (!tagChart) {
@@ -254,7 +257,7 @@
                         : frac > 0.011 ? t.tag : '';
           return {
             name: t.tag, value: Math.abs(t.total_pnl) || 1, tagObj: t, labelText: labelText,
-            itemStyle: { color: pnlColor(t.total_pnl, maxAbs) },
+            itemStyle: { color: pnlColor(t.total_pnl, minPnl, maxPnl) },
           };
         }),
       }],

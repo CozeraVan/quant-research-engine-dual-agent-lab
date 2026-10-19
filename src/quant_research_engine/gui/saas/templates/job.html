@@ -315,11 +315,12 @@ function applyBench(){
 
 // --- 赚钱板块归因（tag_analysis，数据为回传截断版：板块聚合全量 + 个股前/后各 50） ---
 let tagChart = null, tagData = null, curLayer = 'A', curTag = null;
-function pnlColor(pnl, maxAbs){
-  const t = maxAbs > 0 ? Math.min(Math.abs(pnl) / maxAbs, 1) : 0;
-  const light = [245, 245, 245];
-  const deep = pnl >= 0 ? [212, 48, 48] : [26, 158, 75];
-  const mix = light.map((c, i) => Math.round(c + (deep[i] - c) * (0.25 + 0.75 * t)));
+// 相对排名双色刻度：盈利降序 → 最好深红、最差深绿，中段趋近灰白（即使全盈/全亏也有层次）
+function pnlColor(pnl, minPnl, maxPnl){
+  const red = [212, 48, 48], light = [245, 245, 245], green = [26, 158, 75];
+  const t = maxPnl > minPnl ? (maxPnl - pnl) / (maxPnl - minPnl) : 0.5;  // 0=最好，1=最差
+  const seg = t <= 0.5 ? [red, light, t / 0.5] : [light, green, (t - 0.5) / 0.5];
+  const mix = seg[0].map((c, i) => Math.round(c + (seg[1][i] - c) * seg[2]));
   return 'rgb(' + mix.join(',') + ')';
 }
 function renderAttribution(attr){
@@ -350,7 +351,8 @@ function renderTagChart(){
   const tmItems = items.slice(0, 20);
   if (items.length > 20) noteText += (noteText ? '　' : '') + '热力图仅显示前 20 个，共 ' + items.length + ' 个（完整见下表）。';
   noteEl.textContent = noteText;
-  const maxAbs = Math.max.apply(null, tmItems.map(t => Math.abs(t.total_pnl)));
+  const tmPnls = tmItems.map(t => t.total_pnl);
+  const minPnl = Math.min.apply(null, tmPnls), maxPnl = Math.max.apply(null, tmPnls);
   const el = document.getElementById('chart-tags');
   el.style.height = '420px';
   if (!tagChart){
@@ -375,7 +377,7 @@ function renderTagChart(){
       itemStyle: {borderColor: '#fff', borderWidth: 2, gapWidth: 2},
       data: tmItems.map(t => ({
         name: t.tag, value: Math.abs(t.total_pnl) || 1, tagObj: t,
-        itemStyle: {color: pnlColor(t.total_pnl, maxAbs)},
+        itemStyle: {color: pnlColor(t.total_pnl, minPnl, maxPnl)},
       })),
     }],
   });

@@ -1079,3 +1079,12 @@ Historical row statuses (pre-migration, kept for old table rows):
 - factor_wizard.build_factor_groups 新增 _PANEL_TABLES：alpha101/liquidity/risk/value/size/quality/growth/_pit_financial_panel 整表成组（此前仅认 <category>_<price> 命名与 alpha191，P1-P7 新表被静默跳过）。
 - scripts/sync_saas_metadata.py 重新导出：因子 562→902 项、18 组，scp 至 ECS 并重启 qre-saas；/api/saas/factors 实测 ok，向导与 NL 编译同步可见新因子。
 - 注意：因子库新增表后需重跑 sync_saas_metadata.py + scp（未来可挂日更）。
+
+## 2026-10-19 赚钱板块热力图改相对排名双色刻度
+
+**问题**：旧 `pnlColor` 按盈亏符号取色（正=红系/负=绿系），策略整体盈利时所有板块全红、整体亏损时全绿，热力图无区分度。
+
+**改动**（saas `job.html` + 8081 `lab_result.html` 同步）：
+- 取色改为**相对排名双色刻度**：显示集内按 total_pnl 归一，最好=深红、最差=深绿、中段趋近灰白；盈利降序排列时自然呈现红→绿渐变，全盈/全亏策略也有层次。
+- 节点面积、tooltip、排行表逻辑不变；lab 版保留自身色板（[201,58,58]/[245,244,250]/[30,142,90]）。
+- Node 沙盒验证：全盈/全亏/混合/单值四场景输出正确渐变。
