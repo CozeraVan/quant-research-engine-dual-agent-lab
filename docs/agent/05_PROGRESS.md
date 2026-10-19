@@ -1046,3 +1046,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 **验证**：①tests/test_full_market_report.py 新增 TestBatchEquityCurveIpoInjection 3 例（A 全程在市每日+1000、B 第 5 日带 10 万进入每日−500：进入日 daily_return=104000/103000−1 不含注入；strategy_total_return==(109000+97500)/200000−1=+3.25% 手工复算一致；summary 缺资金列时回退曲线口径）；②全量 `uv run python -m pytest tests/ -q` → 2368 passed, 4 skipped 零回归；③job#66 真实产物离线复核（/tmp/verify_job66_injection_fix.py，不入仓）：新口径 total_return=−14.756%（精确，summary.csv 直算）；修正后逐日序列（233 只有成交明细股票用 _symbol_details 精确日净值 + 5298 只无成交股票按首窗口月 flat 10 万近似注入）累乘 cumulative_return=+9.29%（日复利等权口径，与资金加权的 −14.76% 存在再平衡溢价差异，两者均已剔除注入），日收益分布 min=−0.42%/max=+0.37%（旧口径 ±25% 注入尖峰消失），绿日占比 54.9%（旧 54.7% 但旧分布被注入日扭曲，1297 天存在新股进入）。
 
 **取舍说明**：曲线 cumulative（日复利等权）与 strategy_total_return（资金加权聚合）刻意保留两种口径——前者服务日历/风险指标，后者与 profit_factor/净盈亏勾稽，已在 06 决策日志记录。未 git commit，改动留工作区待审批。
+
+## 2026-10-19 历史回测测试数据清理（用户批准）
+
+因净值聚合注入 bug（faf9629 前）历史结果均不准，用户指示仅保留已修正的 job#58/#66，其余删除：
+- ECS aguhuice 库：DELETE jobs 47 行、results 33 行（保留 id 58/66）；删除前备份至 jobs_deleted_backup_20261019 / results_deleted_backup_20261019 表。
+- ECS /srv/aguhuice/uploads：删除 job_* 目录 32 个（保留 job_58/job_66），删除前打包 /srv/aguhuice/backups/uploads_deleted_20261019.tar.gz（89M→43M）。
+- 本机 /home/van/qre-outputs/gui-console/runs：删除 141 个历史 run 目录（保留 job#58/66 对应两 run），3.2G→2.6G。
