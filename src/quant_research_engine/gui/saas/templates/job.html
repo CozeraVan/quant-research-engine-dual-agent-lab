@@ -323,6 +323,11 @@ function pnlColor(pnl, minPnl, maxPnl){
   const mix = seg[0].map((c, i) => Math.round(c + (seg[1][i] - c) * seg[2]));
   return 'rgb(' + mix.join(',') + ')';
 }
+// 标签色：淡色块（中段灰白）用深紫保证可读，深色块（深红/深绿）用白
+function pnlTextColor(pnl, minPnl, maxPnl){
+  const t = maxPnl > minPnl ? (maxPnl - pnl) / (maxPnl - minPnl) : 0.5;
+  return (t > 0.25 && t < 0.75) ? '#4A3A78' : '#fff';
+}
 function renderAttribution(attr){
   if (!attr || !attr.layers){ document.getElementById('box-tags').classList.add('hidden'); return; }
   tagData = attr;
@@ -378,6 +383,7 @@ function renderTagChart(){
       data: tmItems.map(t => ({
         name: t.tag, value: Math.abs(t.total_pnl) || 1, tagObj: t,
         itemStyle: {color: pnlColor(t.total_pnl, minPnl, maxPnl)},
+        label: {color: pnlTextColor(t.total_pnl, minPnl, maxPnl)},
       })),
     }],
   });

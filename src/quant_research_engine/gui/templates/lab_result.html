@@ -171,6 +171,12 @@
     return 'rgb(' + mix.join(',') + ')';
   }
 
+  // 标签色：淡色块（中段灰白）用深紫保证可读，深色块（深红/深绿）用白
+  function pnlTextColor(pnl, minPnl, maxPnl) {
+    var t = maxPnl > minPnl ? (maxPnl - pnl) / (maxPnl - minPnl) : 0.5;
+    return (t > 0.25 && t < 0.75) ? '#4A3A78' : '#fff';
+  }
+
   function drillDown(t) {  // treemap 矩块与排行表共用的下钻入口
     if (curTag === t.tag) {  // 再次点击收起
       curTag = null;
@@ -258,6 +264,7 @@
           return {
             name: t.tag, value: Math.abs(t.total_pnl) || 1, tagObj: t, labelText: labelText,
             itemStyle: { color: pnlColor(t.total_pnl, minPnl, maxPnl) },
+            label: { color: pnlTextColor(t.total_pnl, minPnl, maxPnl) },
           };
         }),
       }],
