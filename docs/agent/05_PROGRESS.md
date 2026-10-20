@@ -1092,3 +1092,16 @@ Historical row statuses (pre-migration, kept for old table rows):
 ## 2026-10-19 热力图标签色自适应（淡色块深紫/深色块白）
 
 承接上一项：改相对排名刻度后中段板块底色趋近灰白，原白色标签不可读。新增 `pnlTextColor`：t∈(0.25,0.75) 淡色块用主题深紫 #4A3A78（--lav-deep），两端深色块保持白色。saas `job.html` 与 8081 `lab_result.html` 同步，per-node `label.color` 覆盖系列级默认。
+
+## 2026-10-20 SaaS 新建策略页极简化（QRE-SAAS-NEW-MINIMAL）
+
+**需求**：首页向极简靠拢——①策略代码预览默认折叠，3 号入口（策略代码）选中时自动展开并开放编辑，NL/向导入口「编辑代码」禁用（防不懂代码用户改出 bug）；②回测参数卡默认折叠、高级参数取消折叠直接显示；③删除全部英文备注。
+
+**改动**（仅 `gui/saas/templates/new.html`，8081 lab 版不动）：
+- 回测参数卡：h3 标题改为 `.sec-toggle` 折叠头（默认收起），原高级参数的 sec-toggle/sec-body 拆除直接平铺显示；策略名校验失败时 `paramSetOpen(true)` 自动展开再聚焦。
+- 预览卡：卡片头改为 sec-toggle「策略代码预览」（默认收起）+ 编辑/复制按钮保留在头行；`pvSetOpen()` 控制展开——选 3 号入口、NL 编译成功、点「去底部编辑代码」时自动展开。
+- `syncPreviewEditPerm(entry)`：仅 yaml 入口启用「编辑代码」，切离时若在编辑态先自动收编；按钮 disabled + title 提示「此入口由系统自动生成代码，无需手动编辑」。
+- 英文清理：Parameters / Codes / Mode / Initial Cash / Stop Loss / Take Profit / Trailing / Commission / Min Commission / Stamp Tax / Slippage Buy/Sell / Shared / Batch / Run Backtest 全部移除。
+- 复用既有 .sec-toggle/.sec-body 组件与色板，零新色相零新字体。
+
+**验证**：Node 解析 script 语法 OK、无 adv-toggle 残留、英文扫描清零；test_gui_saas_pages+test_gui_saas 94 passed。

@@ -75,10 +75,11 @@
     <p><button class="btn btn-ghost" id="btn-goto-preview">去底部编辑代码 ↓</button></p>
   </div>
 
-  <!-- 回测参数（三入口共用） -->
+  <!-- 回测参数（三入口共用，默认折叠） -->
   <div class="card">
-    <h3 style="font-size:16px;margin-bottom:14px;">回测参数 Parameters</h3>
-    <div class="form-grid">
+    <button class="sec-toggle" id="param-toggle" style="margin-top:0">回测参数</button>
+    <div class="sec-body" id="param-body"><div><div class="sec-inner">
+    <div class="form-grid" style="margin-top:14px">
       <label>策略名称 / ID <span class="req">*</span></label>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" id="p-sname" value="" placeholder="留空自动生成" style="width:280px">
@@ -112,63 +113,67 @@
         <input type="number" id="p-random-n" min="1" max="2000" value="500" style="width:120px">
         <span class="opt">从全 A 股池随机抽 N 只（1~2000；抽样在执行端进行）</span>
       </span>
-      <label id="scope-codes-label" style="display:none">股票代码 Codes</label>
+      <label id="scope-codes-label" style="display:none">股票代码</label>
       <span id="scope-codes-row" style="display:none;gap:8px;align-items:flex-start;flex-wrap:wrap">
         <textarea id="param-codes" rows="2" style="flex:1;min-width:220px" placeholder="股票代码逗号分隔，如 000001,600519"></textarea>
         <button type="button" class="btn-sm" id="btn-random-symbol" style="margin-top:4px" title="从全 A 股池随机抽 1 只填入">随机一只</button>
       </span>
     </div>
 
-    <button class="sec-toggle" id="adv-toggle">高级参数</button>
-    <div class="sec-body" id="adv-body"><div><div class="sec-inner">
-      <div class="form-grid form-grid-3">
-        <label>模式 Mode</label>
-        <select id="p-mode"><option value="shared" selected>共享资金 Shared</option><option value="batch">批量 Batch</option></select>
-        <label>初始资金 Initial Cash</label>
-        <input type="text" id="p-cash" value="100000">
-        <label>最大持仓股票数</label>
-        <input type="number" id="p-maxpos" value="10" min="0" step="1">
-        <label>最大持仓天数</label>
-        <input type="text" id="p-holding" value="20" placeholder="默认 20；留空 = 不限">
-        <label>入场价格</label>
-        <select id="p-entry-price"><option value="open" selected>次日开盘价</option><option value="close">次日收盘价</option><option value="vwap">次日均价 VWAP</option></select>
-        <label>出场价格</label>
-        <select id="p-exit-price"><option value="open" selected>次日开盘价</option><option value="close">次日收盘价</option><option value="vwap">次日均价 VWAP</option></select>
-        <label>止损 Stop Loss %</label>
-        <input type="text" id="p-sl" placeholder="可空，如 0.08">
-        <label>止盈 Take Profit %</label>
-        <input type="text" id="p-tp" placeholder="可空，如 0.15">
-        <label>移动止损 Trailing %</label>
-        <input type="text" id="p-ts" placeholder="可空，如 0.05">
-        <label>佣金率 Commission</label>
-        <input type="text" id="p-comm" value="0.0003">
-        <label>最低佣金 Min Commission</label>
-        <input type="text" id="p-mincomm" value="5.0">
-        <label>印花税(卖出) Stamp Tax</label>
-        <input type="text" id="p-stamp" value="0.0005">
-        <label>买入滑点 Slippage Buy</label>
-        <input type="text" id="p-slipb" value="0">
-        <label>卖出滑点 Slippage Sell</label>
-        <input type="text" id="p-slips" value="0">
+    <h4 style="font-size:14px;margin:18px 0 10px;">高级参数</h4>
+    <div class="form-grid form-grid-3">
+      <label>模式</label>
+      <select id="p-mode"><option value="shared" selected>共享资金</option><option value="batch">批量</option></select>
+      <label>初始资金</label>
+      <input type="text" id="p-cash" value="100000">
+      <label>最大持仓股票数</label>
+      <input type="number" id="p-maxpos" value="10" min="0" step="1">
+      <label>最大持仓天数</label>
+      <input type="text" id="p-holding" value="20" placeholder="默认 20；留空 = 不限">
+      <label>入场价格</label>
+      <select id="p-entry-price"><option value="open" selected>次日开盘价</option><option value="close">次日收盘价</option><option value="vwap">次日均价 VWAP</option></select>
+      <label>出场价格</label>
+      <select id="p-exit-price"><option value="open" selected>次日开盘价</option><option value="close">次日收盘价</option><option value="vwap">次日均价 VWAP</option></select>
+      <label>止损 %</label>
+      <input type="text" id="p-sl" placeholder="可空，如 0.08">
+      <label>止盈 %</label>
+      <input type="text" id="p-tp" placeholder="可空，如 0.15">
+      <label>移动止损 %</label>
+      <input type="text" id="p-ts" placeholder="可空，如 0.05">
+      <label>佣金率</label>
+      <input type="text" id="p-comm" value="0.0003">
+      <label>最低佣金</label>
+      <input type="text" id="p-mincomm" value="5.0">
+      <label>印花税(卖出)</label>
+      <input type="text" id="p-stamp" value="0.0005">
+      <label>买入滑点</label>
+      <input type="text" id="p-slipb" value="0">
+      <label>卖出滑点</label>
+      <input type="text" id="p-slips" value="0">
+    </div>
+    </div></div></div>
+  </div>
+
+  <!-- 策略代码预览栏（唯一 YAML 真相源，默认折叠） -->
+  <div class="card" id="preview-card">
+    <div class="pv-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="sec-toggle" id="pv-toggle" style="margin-top:0;width:auto">策略代码预览</button>
+      <span class="opt">（无代码基础请勿编辑）</span>
+      <span style="margin-left:auto"></span>
+      <button class="btn-sm" id="pv-edit-toggle" disabled>编辑代码</button>
+      <button class="btn-sm" id="pv-copy">复制</button>
+    </div>
+    <div class="sec-body" id="pv-body"><div><div class="sec-inner">
+      <div style="margin-top:12px">
+        <pre class="compiled-yaml pv" id="pv-view"></pre>
+        <textarea id="yaml-editor" rows="18" style="display:none;width:100%;font-family:var(--mono);font-size:12.5px" placeholder="experiment:\n  name: my_strategy\nsignal:\n  entry: \"(close > open)\"\n  exit: \"(close < open)\"\n"></textarea>
       </div>
     </div></div></div>
   </div>
 
-  <!-- 策略代码预览栏（唯一 YAML 真相源） -->
-  <div class="card" id="preview-card">
-    <div class="pv-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-      <h3 style="font-size:16px">策略代码预览 <span class="opt">（无代码基础请勿编辑）</span></h3>
-      <span style="margin-left:auto"></span>
-      <button class="btn-sm" id="pv-edit-toggle">编辑代码</button>
-      <button class="btn-sm" id="pv-copy">复制</button>
-    </div>
-    <pre class="compiled-yaml pv" id="pv-view"></pre>
-    <textarea id="yaml-editor" rows="18" style="display:none;width:100%;font-family:var(--mono);font-size:12.5px" placeholder="experiment:\n  name: my_strategy\nsignal:\n  entry: \"(close > open)\"\n  exit: \"(close < open)\"\n"></textarea>
-  </div>
-
   <!-- 唯一主按钮：运行回测流水线 -->
   <div class="card" id="run-card" style="border-color:var(--lav-ink)">
-    <button class="btn btn-primary btn-run-main" id="btn-run-main">运行回测 Run Backtest</button>
+    <button class="btn btn-primary btn-run-main" id="btn-run-main">运行回测</button>
     <div id="pipe" style="display:none;margin-top:16px">
       <div class="pipe-step" id="pipe-1"><span class="pipe-dot"></span><span class="pipe-name">校验 / 编译策略代码</span><span class="pipe-st"></span></div>
       <div class="pipe-step" id="pipe-2"><span class="pipe-dot"></span><span class="pipe-name">冒烟测试：随机 1 只股票 × 短期区间（自动）</span><span class="pipe-st"></span></div>
@@ -240,9 +245,18 @@ $$('#entryGrid .entry-card').forEach(card => {
     $$('#entryGrid .entry-card').forEach(c => c.classList.toggle('selected', c === card));
     $$('.entry-panel').forEach(p => p.classList.toggle('active', p.id === 'entry-' + card.dataset.entry));
     if (window.LabUI) LabUI.energizePCB($('#pcb-stage'), $$('#entryGrid .entry-card'));
+    syncPreviewEditPerm(card.dataset.entry);
     maybeAutoName();
   });
 });
+// 编辑代码仅 3 号入口（策略代码）开放；切走前若正在编辑先收编，防止生成态与手改态混乱
+function syncPreviewEditPerm(entry){
+  const btn = $('#pv-edit-toggle');
+  if (entry !== 'yaml' && pvEditing) $('#pv-edit-toggle').click();
+  btn.disabled = entry !== 'yaml';
+  btn.title = entry === 'yaml' ? '' : '此入口由系统自动生成代码，无需手动编辑';
+  if (entry === 'yaml') pvSetOpen(true);
+}
 window.addEventListener('resize', () => window.LabUI && LabUI.layoutPCB($('#pcb-stage'), $$('#entryGrid .entry-card')));
 window.addEventListener('load', () => window.LabUI && LabUI.layoutPCB($('#pcb-stage'), $$('#entryGrid .entry-card')));
 
@@ -334,8 +348,9 @@ $('#pv-copy').addEventListener('click', function(){
   else { $('#yaml-editor').value = txt; $('#yaml-editor').style.display = ''; $('#yaml-editor').select(); try { document.execCommand('copy'); } catch(e){} done(); $('#yaml-editor').style.display = pvEditing ? '' : 'none'; }
 });
 $('#btn-goto-preview').addEventListener('click', () => {
+  pvSetOpen(true);
   $('#preview-card').scrollIntoView({behavior: 'smooth', block: 'center'});
-  if (!pvEditing) $('#pv-edit-toggle').click();
+  if (!pvEditing && !$('#pv-edit-toggle').disabled) $('#pv-edit-toggle').click();
 });
 
 // ---------- 回测区间（日历 + 快捷区间；最大可选 = 今天） ----------
@@ -375,8 +390,17 @@ $$('input[name="scope"]').forEach(r => r.addEventListener('change', function(){
   $(id).addEventListener('input', refreshPreview);
   $(id).addEventListener('change', refreshPreview);
 });
-bindToggle('#adv-toggle', '#adv-body');
 function bindToggle(b, body){ $(b).addEventListener('click', function(){ this.classList.toggle('open'); $(body).classList.toggle('open'); }); }
+bindToggle('#param-toggle', '#param-body');
+bindToggle('#pv-toggle', '#pv-body');
+function pvSetOpen(open){
+  $('#pv-toggle').classList.toggle('open', open);
+  $('#pv-body').classList.toggle('open', open);
+}
+function paramSetOpen(open){
+  $('#param-toggle').classList.toggle('open', open);
+  $('#param-body').classList.toggle('open', open);
+}
 
 // ---------- 入口 1：自然语言 → /api/saas/nl/compile ----------
 $$('.nl-ex').forEach(c => c.addEventListener('click', () => { $('#nl-text').value = c.textContent.trim(); $('#nl-text').focus(); }));
@@ -407,6 +431,7 @@ async function doNlCompile(){
       box.className = 'result-box ok'; box.style.display = 'block';
       box.innerHTML = '已生成并汇入页面底部「策略代码预览」栏，请检查确认后点底部「运行回测」（不会自动执行）。' +
         ((d.warnings || []).map(w => '<br><span class="opt">' + esc(w) + '</span>').join(''));
+      pvSetOpen(true);
       $('#preview-card').scrollIntoView({behavior: 'smooth', block: 'center'});
     } else {
       st.textContent = '编译失败';
@@ -977,6 +1002,7 @@ async function startRun(){
   const sid = $('#p-sname').value.trim();
   if (!sid || !/^[A-Za-z0-9_-]+$/.test(sid)){
     pipeFailAt(1, sid ? ('策略 ID 含非法字符：「' + sid + '」——仅允许字母、数字、下划线、连字符。') : '策略名称 / ID 为空——请在「回测参数」第一行命名。');
+    paramSetOpen(true);
     $('#p-sname').scrollIntoView({behavior: 'smooth', block: 'center'}); $('#p-sname').focus();
     return;
   }
