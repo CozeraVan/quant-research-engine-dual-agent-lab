@@ -154,17 +154,12 @@
     </div></div></div>
   </div>
 
-  <!-- 策略代码预览栏（唯一 YAML 真相源，默认折叠） -->
+  <!-- 策略代码预览栏（唯一 YAML 真相源，默认折叠；仅 3 号入口可编辑） -->
   <div class="card" id="preview-card">
-    <div class="pv-head" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <button class="sec-toggle" id="pv-toggle" style="margin-top:0;width:auto">策略代码预览</button>
-      <span class="opt">（无代码基础请勿编辑）</span>
-      <span style="margin-left:auto"></span>
-      <button class="btn-sm" id="pv-edit-toggle" disabled>编辑代码</button>
-      <button class="btn-sm" id="pv-copy">复制</button>
-    </div>
+    <button class="sec-toggle" id="pv-toggle" style="margin-top:0">策略代码预览</button>
     <div class="sec-body" id="pv-body"><div><div class="sec-inner">
-      <div style="margin-top:12px">
+      <div style="margin-top:14px">
+        <p class="opt" id="pv-note" style="margin:0 0 8px;font-size:12.5px">由系统自动生成，仅供预览，无需修改</p>
         <pre class="compiled-yaml pv" id="pv-view"></pre>
         <textarea id="yaml-editor" rows="18" style="display:none;width:100%;font-family:var(--mono);font-size:12.5px" placeholder="experiment:\n  name: my_strategy\nsignal:\n  entry: \"(close > open)\"\n  exit: \"(close < open)\"\n"></textarea>
       </div>
@@ -249,13 +244,14 @@ $$('#entryGrid .entry-card').forEach(card => {
     maybeAutoName();
   });
 });
-// 编辑代码仅 3 号入口（策略代码）开放；切走前若正在编辑先收编，防止生成态与手改态混乱
+// 仅 3 号入口（策略代码）直接编辑预览区；NL/向导入口只读预览
 function syncPreviewEditPerm(entry){
-  const btn = $('#pv-edit-toggle');
-  if (entry !== 'yaml' && pvEditing) $('#pv-edit-toggle').click();
-  btn.disabled = entry !== 'yaml';
-  btn.title = entry === 'yaml' ? '' : '此入口由系统自动生成代码，无需手动编辑';
-  if (entry === 'yaml') pvSetOpen(true);
+  const isYaml = entry === 'yaml';
+  $('#pv-view').style.display = isYaml ? 'none' : '';
+  $('#yaml-editor').style.display = isYaml ? '' : 'none';
+  $('#pv-note').textContent = isYaml ? '可直接编辑下方策略代码' : '由系统自动生成，仅供预览，无需修改';
+  if (!isYaml) refreshPreview();
+  if (isYaml) pvSetOpen(true);
 }
 window.addEventListener('resize', () => window.LabUI && LabUI.layoutPCB($('#pcb-stage'), $$('#entryGrid .entry-card')));
 window.addEventListener('load', () => window.LabUI && LabUI.layoutPCB($('#pcb-stage'), $$('#entryGrid .entry-card')));
@@ -327,30 +323,14 @@ function hlLine(line){
   if (m) return esc(m[1]) + '<span class="yk">' + esc(m[2]) + ':</span>' + '<span class="yv">' + esc(m[3]) + '</span>';
   return '<span class="yv">' + esc(line) + '</span>';
 }
-let pvEditing = false;
 function refreshPreview(){
-  if (pvEditing) return;
   $('#pv-view').innerHTML = mergedYaml().split('\n').map(l => '<span class="pv-line">' + hlLine(l) + '</span>').join('');
 }
-$('#pv-edit-toggle').addEventListener('click', function(){
-  pvEditing = !pvEditing;
-  this.textContent = pvEditing ? '完成编辑' : '编辑代码';
-  this.classList.toggle('on', pvEditing);
-  $('#pv-view').style.display = pvEditing ? 'none' : '';
-  $('#yaml-editor').style.display = pvEditing ? '' : 'none';
-  if (pvEditing) $('#yaml-editor').focus(); else refreshPreview();
-});
 $('#yaml-editor').addEventListener('input', function(){ strategyYaml = this.value; });
-$('#pv-copy').addEventListener('click', function(){
-  const txt = mergedYaml(), b = this;
-  const done = () => { b.textContent = '已复制 ✓'; setTimeout(() => b.textContent = '复制', 1500); };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, done);
-  else { $('#yaml-editor').value = txt; $('#yaml-editor').style.display = ''; $('#yaml-editor').select(); try { document.execCommand('copy'); } catch(e){} done(); $('#yaml-editor').style.display = pvEditing ? '' : 'none'; }
-});
 $('#btn-goto-preview').addEventListener('click', () => {
   pvSetOpen(true);
   $('#preview-card').scrollIntoView({behavior: 'smooth', block: 'center'});
-  if (!pvEditing && !$('#pv-edit-toggle').disabled) $('#pv-edit-toggle').click();
+  if (curEntry() === 'yaml') $('#yaml-editor').focus();
 });
 
 // ---------- 回测区间（日历 + 快捷区间；最大可选 = 今天） ----------

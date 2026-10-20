@@ -1155,3 +1155,12 @@ Historical row statuses (pre-migration, kept for old table rows):
 **首跑推送（2026-10-19）**：job74 1 行（10-19，−0.161%）、job58 6 行（10-12→10-19）、job66 5 行（10-13→10-19）；/api/saas/showcase 实测三 job data_until=2026-10-19、tracking_since/days 正确、total_return 复利延伸。重跑 job74 幂等（last_daily=10-19 后待推送 0 行）。
 
 未 git commit，改动留工作区待审批。
+
+## 2026-10-20 预览卡再简化：删按钮、仅 3 号入口直编辑
+
+**需求**：彻底防误触——删除「编辑代码」「复制」按钮；NL/向导入口只读预览，策略代码入口直接编辑；折叠头与回测参数卡同款（全宽 sec-toggle）。
+
+**改动**（`gui/saas/templates/new.html`）：
+- 卡片头改为与回测参数卡一致的全宽 sec-toggle「策略代码预览」（默认折叠）；按钮全部移除；提示语移入卡内 `#pv-note` 分态显示：NL/向导「由系统自动生成，仅供预览，无需修改」+ 只读 pre；yaml「可直接编辑下方策略代码」+ textarea 直编辑（input 即同步 strategyYaml）。
+- `syncPreviewEditPerm` 简化为显隐切换；pvEditing 状态机、pv-edit-toggle/pv-copy 及其事件全部删除；「去底部编辑代码」改为展开+聚焦 textarea（仅 yaml 入口）。
+- JS 语法校验 OK；test_gui_saas_pages+test_gui_saas 100 passed。
