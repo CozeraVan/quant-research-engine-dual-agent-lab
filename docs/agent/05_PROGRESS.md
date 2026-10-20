@@ -1105,3 +1105,23 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 复用既有 .sec-toggle/.sec-body 组件与色板，零新色相零新字体。
 
 **验证**：Node 解析 script 语法 OK、无 adv-toggle 残留、英文扫描清零；test_gui_saas_pages+test_gui_saas 94 passed。
+
+## 2026-10-20 经典策略展示页阶段一（QRE-SAAS-SHOWCASE）
+
+**需求**：公开只读的经典策略展示页，header 与「新建策略/个人信息」并列，游客可见、无任何操作；第一批 = 用户验证过的 job #74/#66/#58。用户否决每日全量重跑（算力浪费），阶段二改为增量日更滚动（见下）。
+
+**数据模型**：新表 `showcase`（job_id PK REFERENCES jobs、title、subtitle、sort_order、is_active、created_at），与信号表同批 `_ensure_signal_tables` 惰性建表。
+
+**后端**（`gui/saas/app.py`）：
+- `_load_job_public` + `_is_showcase_job`；`_require_completed_result` 在归属校验失败后再查白名单，命中则放行并置 `g.showcase_readonly=True`——详情数据全通道（summary/chart-data/tag-analysis/symbols*/risk）自动只读开放。
+- 写操作不经过 `_require_completed_result`（delete/cancel/信号订阅/入库均按归属校验），只读不放行任何写。
+- summary 响应新增 `readonly` 布尔；新公开端点 `GET /api/saas/showcase`（无需登录，返回白名单 job 摘要指标）；页面路由 `/saas/showcase`。
+
+**前端**：
+- `showcase.html`：.tbl 表格（策略/区间/总收益/超额/回撤/胜率/笔数/数据截至），行点击进详情，底部复现引导卡；零新组件零新色相。
+- `base.html` 主导航新增「经典策略」（新建策略之后，全页面可见）。
+- `job.html` readonly 模式：隐藏 box-actions/download-card/游客提示条，标题加「经典策略展示 · 只读」chip，返回链接改回 /saas/showcase。
+
+**测试**：tests/test_gui_saas.py TestShowcase 4 例（公开列表、只读放行/写拒、is_active 语义、页面与导航）；SaaS 相关 136 passed。
+
+**阶段二（待做）**：增量日更滚动器——基线 job 冻结，每日因子入库后本地扫描当日信号 + 推进组合状态算当日收益，推送 ECS 追加展示曲线；需与引擎 shared-cash 语义等价性测试。已记 todo。

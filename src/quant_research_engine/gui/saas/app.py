@@ -32,7 +32,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, g, jsonify, render_template, request
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -509,7 +509,7 @@ def _ensure_signal_tables(engine: Engine) -> None:
             r[0]
             for r in conn.execute(
                 text("SELECT table_name FROM information_schema.tables "
-                     "WHERE table_name IN ('strategy_watches', 'signal_events')")
+                     "WHERE table_name IN ('strategy_watches', 'signal_events', 'showcase')")
             )
         }
         if "strategy_watches" not in existing_tables:
@@ -542,6 +542,17 @@ def _ensure_signal_tables(engine: Engine) -> None:
             conn.execute(text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_unique "
                 "ON signal_events (watch_id, trade_date, ts_code, signal_type)"
+            ))
+        if "showcase" not in existing_tables:
+            # 经典策略展示（QRE-SAAS-SHOWCASE）：job 公开放行白名单，只读
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS showcase ("
+                "job_id BIGINT PRIMARY KEY REFERENCES jobs(id), "
+                "title TEXT NOT NULL, "
+                "subtitle TEXT, "
+                "sort_order INT NOT NULL DEFAULT 0, "
+                "is_active BOOL NOT NULL DEFAULT true, "
+                "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
             ))
         has_col = conn.execute(
             text("SELECT 1 FROM information_schema.columns "
@@ -908,6 +919,52 @@ def create_saas_app() -> Flask:
     @app.get("/saas/new")
     def saas_new_page() -> str:
         return render_template("new.html")
+
+    # QRE-SAAS-SHOWCASE：经典策略展示页（游客可见、全站只读、无操作入口）
+    @app.get("/saas/showcase")
+    def saas_showcase_page() -> str:
+        return render_template("showcase.html")
+
+    @app.get("/api/saas/showcase")
+    def api_showcase_list() -> Any:
+        """经典策略公开展示列表（无需登录）。返回白名单 job 的摘要指标。"""
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT sc.job_id, sc.title, sc.subtitle, sc.sort_order, "
+                    "s.name AS strategy_name, j.created_at, j.params, "
+                    "r.summary, r.chart_data, r.data_until "
+                    "FROM showcase sc "
+                    "JOIN jobs j ON j.id = sc.job_id "
+                    "JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
+                    "WHERE sc.is_active AND j.status = 'completed' "
+                    "ORDER BY sc.sort_order, sc.job_id"
+                )
+            ).mappings().all()
+        items = []
+        for row in rows:
+            metrics = ((row["chart_data"] or {}).get("metrics") or {})
+            summary = row["summary"] or {}
+            params = row["params"] or {}
+            items.append({
+                "job_id": row["job_id"],
+                "title": row["title"],
+                "subtitle": row["subtitle"],
+                "strategy_name": row["strategy_name"],
+                "date_start": params.get("start"),
+                "date_end": params.get("end"),
+                "total_return": summary.get("strategy_total_return"),
+                "excess_return": metrics.get("excess_return"),
+                "max_drawdown": summary.get("max_drawdown"),
+                "win_rate": summary.get("win_rate"),
+                "total_trade_count": summary.get("total_trade_count"),
+                "sharpe": metrics.get("sharpe"),
+                "data_until": _jsonable(row["data_until"]),
+            })
+        return jsonify({"ok": True, "items": items})
 
     # QRE-SAAS-FEEDBACK-FACTOR-REQ：意见反馈 / 申请新因子独立页（侧边栏入口，
     # 仅登录用户可提交——游客不可，决策见 06 日志）
@@ -2797,6 +2854,32 @@ def create_saas_app() -> Flask:
                 {"id": job_id, "gk": _guest_key(app, _client_ip())},
             ).mappings().first()
 
+    def _load_job_public(job_id: int) -> Any:
+        """showcase 公开只读通道：不看归属，仅当 job 在 showcase 白名单且激活时放行。
+        调用方需先查 showcase 表；此处只做取行。"""
+        engine = _get_engine(app)
+        with engine.connect() as conn:
+            return conn.execute(
+                text(
+                    "SELECT j.*, " + _STRATEGY_COLS + ", "
+                    "r.summary AS result_summary, r.chart_data AS result_chart_data, "
+                    "r.artifacts AS result_artifacts, r.data_until AS result_data_until "
+                    "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
+                    "WHERE j.id = :id"
+                ),
+                {"id": job_id},
+            ).mappings().first()
+
+    def _is_showcase_job(job_id: int) -> bool:
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)  # showcase 表与信号表同批惰性建表
+        with engine.connect() as conn:
+            return conn.execute(
+                text("SELECT 1 FROM showcase WHERE job_id = :id AND is_active"),
+                {"id": job_id},
+            ).first() is not None
+
     def _result_record(row: Any) -> dict[str, Any]:
         """把 job 行构造成 lab_result.py 认识的 run record（复用 8081 解析函数的关键）：
         output_dir 指向上传目录 job_<id>/（产物同名同格式），_find_output_file 走 rglob。"""
@@ -2819,17 +2902,27 @@ def create_saas_app() -> Flask:
         }
 
     def _require_completed_result(job_id: int) -> Any:
-        """返回 (row, error_response)。未完成 409；不存在/非本人 404。"""
+        """返回 (row, error_response)。未完成 409；不存在/非本人 404。
+        showcase 白名单 job 对任何人放行只读（g.showcase_readonly=True），
+        写操作端点不经此函数，不受影响。"""
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
         if uid is None:
             row = _load_job_for_guest(job_id)
             if row is None:
-                return None, (jsonify({"ok": False, "error": "未登录"}), 401)
+                if _is_showcase_job(job_id):
+                    row = _load_job_public(job_id)
+                    g.showcase_readonly = row is not None
+                if row is None:
+                    return None, (jsonify({"ok": False, "error": "未登录"}), 401)
         else:
             row = _load_job_for_user(job_id, uid)
             if row is None:
-                return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
+                if _is_showcase_job(job_id):
+                    row = _load_job_public(job_id)
+                    g.showcase_readonly = row is not None
+                if row is None:
+                    return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
         if row["status"] != "completed":
             return None, (jsonify({"ok": False, "error": f"任务未完成（{row['status']}）",
                                    "status": row["status"]}), 409)
@@ -2931,6 +3024,7 @@ def create_saas_app() -> Flask:
         if err:
             return err
         return jsonify({"ok": True, "job_id": job_id,
+                        "readonly": bool(getattr(g, "showcase_readonly", False)),
                         "strategy_id": row["strategy_id"],
                         "strategy_name": row["strategy_name"],
                         "strategy": _jsonable({

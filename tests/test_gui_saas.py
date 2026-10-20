@@ -1032,3 +1032,84 @@ def test_seo_verification_files_served(client):
     assert b"google-site-verification: google706490730bf04d58.html" in r.data
     r = client.get("/baidu_verify_codeva-gDNoSKn1Mp.html")
     assert r.status_code == 200
+
+
+class TestShowcase:
+    """QRE-SAAS-SHOWCASE：经典策略公开展示（白名单 job 全站只读放行）。"""
+
+    def _completed_job(self, client, name="classic"):
+        resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": name,
+                                              "params": {"start": "2026-01-01", "end": "2026-03-01"}},
+                           headers={"X-User-Id": "1"})
+        job_id = resp.get_json()["job_id"]
+        client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        chart = {"metrics": {"excess_return": 0.05, "sharpe": 1.2},
+                 "dates": ["2026-01-05"], "equity": [1.0],
+                 "tag_analysis": {"ok": True, "layers": {"A": [
+                     {"tag": "银行", "total_pnl": 100.0, "trades": 2, "win_rate": 0.5,
+                      "avg_ret": 0.01, "symbols_total": 1, "symbols_truncated": False,
+                      "symbols": [{"ts_code": "000001.SZ", "name": "平安银行", "total_pnl": 100.0,
+                                   "trades": 2, "win_rate": 0.5, "avg_ret": 0.01}]}]}}}
+        client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                    json={"worker_id": "w1",
+                          "summary": {"strategy_total_return": 0.2, "win_rate": 0.5,
+                                      "max_drawdown": -0.1, "total_trade_count": 5},
+                          "chart_data": chart, "data_until": "2026-02-27", "files": []},
+                    headers=WORKER_HEADERS)
+        return job_id
+
+    def _pin_showcase(self, app, job_id, title="EMA 金叉", active=True):
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _ensure_signal_tables, _get_engine
+
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            conn.execute(text("INSERT INTO showcase (job_id, title, subtitle, sort_order, is_active) "
+                              "VALUES (:id, :t, '副标题', 1, :a)"),
+                         {"id": job_id, "t": title, "a": active})
+
+    def test_list_public(self, client, app):
+        d = client.get("/api/saas/showcase").get_json()
+        assert d["ok"] and d["items"] == []
+        job_id = self._completed_job(client)
+        self._pin_showcase(app, job_id)
+        items = client.get("/api/saas/showcase").get_json()["items"]
+        assert len(items) == 1
+        it = items[0]
+        assert it["job_id"] == job_id and it["title"] == "EMA 金叉"
+        assert it["total_return"] == 0.2 and it["excess_return"] == 0.05
+        assert it["max_drawdown"] == -0.1 and it["win_rate"] == 0.5
+        assert it["total_trade_count"] == 5 and it["data_until"] == "2026-02-27"
+
+    def test_readonly_access(self, client, app):
+        job_id = self._completed_job(client)
+        # 未挂 showcase：匿名 401、他人 404
+        assert client.get(f"/api/results/{job_id}/summary").status_code == 401
+        assert client.get(f"/api/results/{job_id}/summary", headers={"X-User-Id": "2"}).status_code == 404
+        self._pin_showcase(app, job_id)
+        # 匿名与他人 → 200 只读
+        anon = client.get(f"/api/results/{job_id}/summary").get_json()
+        assert anon["ok"] and anon["readonly"] is True
+        other = client.get(f"/api/results/{job_id}/summary", headers={"X-User-Id": "2"}).get_json()
+        assert other["ok"] and other["readonly"] is True
+        # 所有者不受影响
+        owner = client.get(f"/api/results/{job_id}/summary", headers={"X-User-Id": "1"}).get_json()
+        assert owner["ok"] and owner["readonly"] is False
+        # 只读不放行写操作：匿名删除仍被拒
+        assert client.delete(f"/api/results/{job_id}").status_code in (401, 404)
+        # 详情数据同通道只读放行
+        assert client.get(f"/api/results/{job_id}/chart-data").status_code == 200
+        assert client.get(f"/api/results/{job_id}/tag-analysis").status_code == 200
+
+    def test_inactive_not_listed(self, client, app):
+        job_id = self._completed_job(client)
+        self._pin_showcase(app, job_id, active=False)
+        assert client.get("/api/saas/showcase").get_json()["items"] == []
+        assert client.get(f"/api/results/{job_id}/summary").status_code == 401
+
+    def test_page_and_nav(self, client):
+        resp = client.get("/saas/showcase")
+        assert resp.status_code == 200 and "经典策略" in resp.get_data(as_text=True)
+        assert "/saas/showcase" in client.get("/saas/new").get_data(as_text=True)

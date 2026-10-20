@@ -757,6 +757,24 @@ async function poll(){
   // 已完成：并行拉 chart-data 与 tag-analysis
   document.getElementById('status-card').classList.add('hidden');
   document.getElementById('result-area').classList.remove('hidden');
+  if (data.readonly){
+    // 经典策略只读展示（QRE-SAAS-SHOWCASE）：隐藏全部操作入口与游客提示
+    ['box-actions', 'download-card', 'guest-result-note', 'guest-note'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el){ el.classList.add('hidden'); el.style.display = 'none'; }
+    });
+    const h1 = document.querySelector('h1');
+    if (h1 && !document.getElementById('readonly-chip')){
+      const chip = document.createElement('span');
+      chip.id = 'readonly-chip';
+      chip.className = 'opt';
+      chip.style.cssText = 'font-size:12.5px;margin-left:8px';
+      chip.textContent = '经典策略展示 · 只读';
+      h1.appendChild(chip);
+    }
+    const back = document.querySelector('a[href="/saas/"]');
+    if (back){ back.href = '/saas/showcase'; back.textContent = '← 返回经典策略'; }
+  }
   const [chartResp, tagResp] = await Promise.all([
     apiFetch('/api/results/' + JOB_ID + '/chart-data'),
     apiFetch('/api/results/' + JOB_ID + '/tag-analysis'),
@@ -772,7 +790,7 @@ async function poll(){
   else empty('chart-main');
   initReplay(chart);
   initResultActions(data, chart);
-  if (!SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
+  if (!data.readonly && !SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
   renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
   renderFees(chart.fees_summary || null, chart.meta || null);
   document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
