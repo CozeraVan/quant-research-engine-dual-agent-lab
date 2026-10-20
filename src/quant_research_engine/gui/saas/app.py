@@ -854,6 +854,11 @@ def create_saas_app() -> Flask:
         resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # HTML 页面禁启发式缓存：旧 HTML 会引用旧 asset_v 的静态资源，
+        # 部署后用户可能一直看到旧页面（2026-10-20 因子布局"没有变化"即此类）。
+        # 静态 /static/* 自带 ?v=asset_v 版本号，不受影响。
+        if resp.mimetype == "text/html":
+            resp.headers.setdefault("Cache-Control", "no-cache")
         return resp
 
     # --- 页面（QRE-SAAS-004 四功能前端；页面本身不鉴权，JS 检查 localStorage

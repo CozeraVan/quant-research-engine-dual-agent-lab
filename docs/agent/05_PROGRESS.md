@@ -1198,3 +1198,9 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 家族归组扩展：MACD 三元组泛化到 PPO/PVO（base/bases/baseh 同后缀）；新增 KDJ（k/d/j 同后缀三线）、STOCH/STOCHRSI、AROON、VORTEX 及通用「s 信号线对」（tsi/tsis、rvgi/rvgis、fisher/fisherts 等 sibling 存在才成组）多线单面板；family pane 用 COLORS.multi 循环色；单线家族不成组回落独立面板。渲染端 symbol.html/lab_symbol.html 零改动（panes[].series 本就多 series 通用）。
 - 验证：node 直跑 8 组真实列名场景全对；node --check 通过；pytest 176 passed。
 - **注意**：本机 qre-saas-worker 于 10-19 启动跑旧码（产物缺 col/table/MACD柱），已重启加载新码。
+
+## 2026-10-20 缓存根治：HTML 页面禁启发式缓存
+
+**现象**：因子布局修复部署后用户仍见旧界面。排查确认 ECS/8081/工作区三端 JS 哈希一致、页面模板为新、载荷正确——根因是浏览器启发式缓存旧 HTML（HTML 无 Cache-Control），旧 HTML 引用旧 asset_v 的 factor-layout.js（max-age=3600）。
+
+**修复**：`saas/app.py _security_headers` 对 text/html 响应补 `Cache-Control: no-cache`（每次请求重验证，静态资源仍走 ?v=asset_v 长缓存）。另：8081 lab 进程当时是 17:03 启动的旧码且已挂死，已重启加载新码。
