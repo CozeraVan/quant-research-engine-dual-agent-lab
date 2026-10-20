@@ -1,0 +1,40 @@
+# QRE 经典策略展示页增量日更滚动器（QRE-SAAS-SHOWCASE 阶段二）
+#
+# 冻结基线 job（74/58/66）全市场全期回测之后，每个交易日只算「当日组合
+# 日收益」推送 ECS showcase_daily 表（交集口径，与基线曲线连贯；幂等
+# upsert，重跑安全）。详见 scripts/showcase_roller.py 文件头。
+#
+# 机密在 /etc/qre-saas-worker.env（与 qre-saas-worker 同文件，0600）：
+#   QRE_SAAS_BASE_URL / QRE_WORKER_TOKEN / QRE_MARKET_DB_URL / QRE_PRICE_BASIS
+# 脚本自行解析该 env 文件注入环境，token 不落日志。
+#
+# 安装（需 sudo）：
+#   sudo cp deploy/saas/qre-showcase-roller.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qre-showcase-roller.timer
+#   journalctl -u qre-showcase-roller.service -f
+#
+# 手动入口：
+#   cd /home/van/quant-workspace/quant-research-engine-dual-agent-lab
+#   /home/van/.local/bin/uv run python scripts/showcase_roller.py            # dry-run
+#   /home/van/.local/bin/uv run python scripts/showcase_roller.py --push     # 推送
+
+[Unit]
+Description=QRE showcase daily incremental roller (push daily returns to ECS)
+After=network-online.target postgresql.service
+Wants=network-online.target
+# 日线/因子日更完成之后滚动：分钟线 17:20、panel-factors-daily 17:45（timer
+# 排 18:10 兜底顺序；OnCalendar 无严格先后，故此处仅文档化依赖）
+After=panel-factors-daily.service
+
+[Service]
+Type=oneshot
+User=van
+WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
+EnvironmentFile=/etc/qre-saas-worker.env
+ExecStart=/home/van/.local/bin/uv run python scripts/showcase_roller.py --push
+Nice=10
+SyslogIdentifier=qre-showcase-roller
+
+[Install]
+WantedBy=multi-user.target

@@ -1136,3 +1136,22 @@ Historical row statuses (pre-migration, kept for old table rows):
 **B. console 管理**：tab「经典策略」——列表（任务ID/标题/副标题/策略名/排序/状态/日更至/操作）+ 添加表单（job_id 须已完成，重复 409）+ 上线/下线切换 + 移除（连带删 showcase_daily，job 本体不动）。端点 GET/POST/POST<id>/DELETE `/api/saas/console/showcase*`，全部 `_require_admin` 强制。
 
 **测试**：TestShowcaseDailyAndConsole 2 例（推拉+延伸口径+幂等+非法拒绝 / CRUD+权限+状态语义），test_gui_saas.py 63 passed。
+
+## 2026-10-20 经典策略阶段二 C：增量日更滚动器上线（QRE-SAAS-SHOWCASE-2C）
+
+**交付**：
+- `scripts/showcase_roller.py`：冻结基线 job（74/58/66，JOB_RUN_MAP 映射本地 run 目录并校验 experiment.name）之后，每个交易日增量滚动「当日组合日收益」推送 ECS showcase_daily（CLI `--date/--dry-run(默认)/--push/--job`；幂等：只送 last_daily 之后行，ECS 端 upsert）。token/base_url 从 /etc/qre-saas-worker.env 解析注入（EnvironmentFile 同语义，代理变量显式置空生效），token 不落日志。
+- 状态重建：run artifacts 每股 equity_curve.csv 末行（cash/持仓/权益）+ orders.csv 最近买入（入场日/价/bars_held）+ failed_orders.csv 冻结日未决卖出；冻结日=组合 equity_curve.csv 末行。
+- 推进：每股 ResearchFrameAssembler.build 加载冻结日前后短窗口（新股=其全部早期 bar），信号同 evaluate_expression_signal，行处理/费用/校验逐语句复刻 SingleSymbolBacktestEngine（T 收盘信号→T+1 开盘成交，佣金 0.0003/最低 5/印花税 0.0005/滑点 0）；组合聚合用 faf9629 交集口径（昨∩今在市，新入市注入不计收益），与基线曲线连贯。
+- `tests/test_showcase_roller.py` 15 例：状态重建/失败单未决/单日与多日推进逐行等价/持仓期/止损/聚合交集口径/参数还原 + E2E 等价性（QRE_SHOWCASE_ROLLER_E2E=1 启用，job74 yaml × 5 股：CLI A 2025-01-01→08-29 vs CLI B→05-30 + 滚动，64 日 daily_return 全 0 mismatch ≤1e-8，每股末净值一致）。
+- `deploy/saas/qre-showcase-roller.{service,timer}`：Mon..Fri 18:10（panel-factors-daily 17:45 之后），Persistent=true，User=van，`uv run`；未 enable（待用户安装）。
+
+**引擎语义确认（与初设有出入，重要）**：
+1. **基线 job 实际 price_basis=qfq**（表内原始价原样读取，不做 ×adj_factor）：worker/gui engine 显式传 db_url → `DatabaseSettings(market_db_url=...)` 忽略 env 的 QRE_PRICE_BASIS=raw。产物成交价为原始价（如 000001.SZ 2026-07-21 买价 10.99=raw open，非 1527 后复权）。滚动器必须同构造路径，否则估值尺度错 ~adj_factor 倍。此是否符合 20 号字典 raw 口径预期存疑，疑似 worker 侧潜在缺陷（除权日基线曲线会吃未复权跳空），本次按基线保真未改动，建议另立项评估。
+2. YAML universe 节（exclude_st/exclude_suspended/min_listing_days）在 gui/worker batch 路径**未做符号级过滤**（apply_universe_filter 仅 orchestration research_run 用），实际生效的只有 metadata 快照 is_suspended/is_st 行级标志（撮合校验+涨跌停幅度）。
+3. 新股窗口内因子列全 NULL 时 psycopg 返回 object dtype None 列，表达式比较 TypeError——滚动器转数值列（None→NaN→信号 False 不交易），与引擎遇 float64 NaN 列行为一致。
+4. 冻结日「末日信号」：全期回测末日因 index+1==len 不调度，延展窗口中等价于调度到下一 bar——滚动器在冻结日行补做信号调度（含止损/止盈/出场信号优先级链），这是曲线连贯的关键。
+
+**首跑推送（2026-10-19）**：job74 1 行（10-19，−0.161%）、job58 6 行（10-12→10-19）、job66 5 行（10-13→10-19）；/api/saas/showcase 实测三 job data_until=2026-10-19、tracking_since/days 正确、total_return 复利延伸。重跑 job74 幂等（last_daily=10-19 后待推送 0 行）。
+
+未 git commit，改动留工作区待审批。

@@ -1,0 +1,14 @@
+# QRE 经典策略日更滚动器定时器：工作日 18:10（panel-factors-daily.timer
+# 17:45 之后，日线 16:30 / 分钟线 17:20 / 因子 17:45 全部就位再滚动）。
+# Persistent=true：关机错过的周期补跑（脚本幂等，起点取 ECS last_daily+1）。
+
+[Unit]
+Description=Run QRE showcase roller at 18:10 on weekdays (after panel-factors-daily 17:45)
+
+[Timer]
+OnCalendar=Mon..Fri 18:10:00
+Persistent=true
+Unit=qre-showcase-roller.service
+
+[Install]
+WantedBy=timers.target

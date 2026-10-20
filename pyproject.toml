@@ -32,3 +32,6 @@ packages = ["src/quant_research_engine"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+  "slow: 耗时/依赖外部资源的测试（默认跳过或由环境变量启用）",
+]
