@@ -795,8 +795,34 @@ def _factor_thresholds(name: str, entry: str, exit_: str) -> list[float]:
     return vals
 
 
+def _macd_hist_candidates(specs: dict[str, tuple[str, str]]) -> list[tuple[str, str]]:
+    """检测同表 macd_<P>+macds_<P> 同参数后缀被同时引用、而 macdh_<P> 未引用的情况。
+
+    返回需补查的 [(table, hist_col)]；供 _fetch_factor_panels 自动补 MACD 柱
+    （CR-2026-10-20 因子图表 TV 布局：DIF/DEA/HIST 合并单面板需要 HIST 数据）。
+    """
+    referenced = set(specs.values())
+    found: dict[tuple[str, str], set[str]] = {}
+    for table, col in specs.values():
+        m = re.fullmatch(r"(macd|macds)_(.+)", col)
+        if m:
+            found.setdefault((table, m.group(2)), set()).add(m.group(1))
+    out: list[tuple[str, str]] = []
+    for (table, suffix), kinds in found.items():
+        if kinds == {"macd", "macds"}:
+            hist = f"macdh_{suffix}"
+            if (table, hist) not in referenced:
+                out.append((table, hist))
+    return out
+
+
 def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str]) -> tuple[list[dict[str, Any]] | None, str | None]:
-    """按 K 线日期对齐拉取策略因子序列（含出入场阈值）。失败降级 (None, note)。"""
+    """按 K 线日期对齐拉取策略因子序列（含出入场阈值）。失败降级 (None, note)。
+
+    每个 panel 带 ``col``（真实因子列名）供前端分组启发式；策略同时引用
+    macd_<P>/macds_<P> 且表内存在 macdh_<P> 时自动补查 MACD 柱 panel（name=MACD柱），
+    补全失败静默跳过（每股至多一次 information_schema 查询，且仅当检测到 macd 对时）。
+    """
     specs, entry, exit_ = _strategy_factor_specs(record)
     if not specs or not dates:
         return None, None
@@ -810,7 +836,26 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
             store = _store()
         except Exception:
             store = _store(DEFAULT_DB_URL)
+        hist_specs: list[tuple[str, str]] = []  # [(table, hist_col)] 已确认存在的补查列
         with store.market_engine.begin() as conn:
+            candidates = _macd_hist_candidates(specs)
+            if candidates:
+                try:  # 列存在性探测失败整体降级：不补 HIST，不影响原 panel
+                    for table, hist in candidates:
+                        schema, _, tname = table.partition(".")
+                        if not tname:
+                            schema, tname = "public", schema
+                        hit = conn.execute(
+                            text(
+                                "SELECT 1 FROM information_schema.columns "
+                                "WHERE table_schema = :s AND table_name = :t AND column_name = :c"
+                            ),
+                            {"s": schema, "t": tname, "c": hist},
+                        ).first()
+                        if hit:
+                            hist_specs.append((table, hist))
+                except Exception:
+                    hist_specs = []
             raw: dict[str, dict[str, float]] = {}
             for name, (table, col) in specs.items():
                 rows = conn.execute(
@@ -821,6 +866,18 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
                     {"c": ts_code, "d0": dates[0], "d1": dates[-1]},
                 ).fetchall()
                 raw[name] = {str(r[0]): float(r[1]) for r in rows if r[1] is not None}
+            for table, hist in hist_specs:
+                try:
+                    rows = conn.execute(
+                        text(
+                            f'SELECT trade_date, "{hist}" FROM {table} '
+                            "WHERE ts_code = :c AND trade_date BETWEEN :d0 AND :d1"
+                        ),
+                        {"c": ts_code, "d0": dates[0], "d1": dates[-1]},
+                    ).fetchall()
+                    raw[("MACD柱", hist)] = {str(r[0]): float(r[1]) for r in rows if r[1] is not None}
+                except Exception:
+                    pass  # 单列补查失败静默跳过
     except Exception as exc:
         return None, f"因子数据不可用（{exc}）"
     panels = []
@@ -829,9 +886,17 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
         if any(v is not None for v in series):
             panels.append({
                 "name": name,
+                "col": specs[name][1],
                 "values": series,
                 "thresholds": _factor_thresholds(name, entry, exit_),
             })
+    for table, hist in hist_specs:
+        key = ("MACD柱", hist)
+        if key not in raw:
+            continue
+        series = [round(raw[key][d], 4) if d in raw[key] else None for d in dates]
+        if any(v is not None for v in series):
+            panels.append({"name": "MACD柱", "col": hist, "values": series, "thresholds": []})
     if not panels:
         return None, "该股区间无因子数据"
     return panels, None

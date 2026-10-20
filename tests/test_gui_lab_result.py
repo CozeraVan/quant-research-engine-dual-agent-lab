@@ -677,13 +677,15 @@ def test_scatter_marker_uses_value_not_coord():
 
 
 def test_kline_factor_grids_scale_with_factor_count():
-    """多因子策略（如 MACD 双因子）个股 K 线页：grid 必须按因子个数动态生成，
+    """多因子策略（如 MACD 双因子）个股 K 线页：grid 必须按面板数动态生成，
     否则 gridIndex 2+i 越界、ECharts setOption 抛 coordinateSystem undefined，
-    被 catch 后整页（K线/买卖点/下单表/交易明细）全部空白 —— CONSOL-041 根因。"""
+    被 catch 后整页（K线/买卖点/下单表/交易明细）全部空白 —— CONSOL-041 根因。
+    CR-2026-10-20 起面板数来自 QREFactorLayout 分组（overlay/MACD 合并不占面板）。"""
     tpl_dir = Path(__file__).resolve().parent.parent / "src" / "quant_research_engine" / "gui" / "templates"
     text = (tpl_dir / "lab_symbol.html").read_text(encoding="utf-8")
     assert "grids.push" in text, "lab_symbol.html 因子 grid 不是动态生成的"
-    assert "factors.length * 160" in text, "K 线图高度未随因子个数扩展"
+    assert "panes.length * 160" in text, "K 线图高度未随面板个数扩展"
+    assert "factor-layout.js" in text and "QREFactorLayout.plan" in text
 
 
 def test_main_chart_series_have_stable_ids():
@@ -765,6 +767,119 @@ def test_factor_thresholds_pure():
     assert _factor_thresholds("rsi_14", "rsi_14 > 30", "rsi_14 > 60") == [30.0, 60.0]
     assert _factor_thresholds("rsi_14", "30 < rsi_14", "") == [30.0]
     assert _factor_thresholds("rsi_14", "close > ema_20", "ema_20 < close") == []
+
+
+# --- 因子面板 col 元数据 + MACD 柱自动补全（CR-2026-10-20 因子图表 TV 布局） ---
+
+
+def test_macd_hist_candidates_pure():
+    """同表 macd_<P>+macds_<P> 成对且 macdh_<P> 未引用 → 候选；单线/已引用/跨表不成对。"""
+    from quant_research_engine.gui.lab_result import _macd_hist_candidates
+
+    specs = {"macd": ("factors.t", "macd_12_26_9"), "macd_sig": ("factors.t", "macds_12_26_9")}
+    assert _macd_hist_candidates(specs) == [("factors.t", "macdh_12_26_9")]
+    # 已引用 hist → 不补
+    specs2 = dict(specs, hist=("factors.t", "macdh_12_26_9"))
+    assert _macd_hist_candidates(specs2) == []
+    # 只有 macd 单线 → 不补
+    assert _macd_hist_candidates({"macd": ("factors.t", "macd_12_26_9")}) == []
+    # 跨表不算同参数对
+    cross = {"a": ("factors.t1", "macd_12_26_9"), "b": ("factors.t2", "macds_12_26_9")}
+    assert _macd_hist_candidates(cross) == []
+    # 不同后缀各自独立
+    multi = {
+        "m1": ("factors.t", "macd_12_26_9"), "s1": ("factors.t", "macds_12_26_9"),
+        "m2": ("factors.t", "macd_8_21_5"), "s2": ("factors.t", "macds_8_21_5"),
+    }
+    assert sorted(_macd_hist_candidates(multi)) == [
+        ("factors.t", "macdh_12_26_9"), ("factors.t", "macdh_8_21_5")]
+
+
+class _FakeRes:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+    def first(self):
+        return self._rows[0] if self._rows else None
+
+
+def _fake_factor_store(monkeypatch, values, existing_cols):
+    """构造假 store：information_schema 按 existing_cols 应答，因子查询按 values 应答。"""
+    import re as _re
+
+    class _Conn:
+        def execute(self, stmt, params=None):
+            sql = str(stmt)
+            if "information_schema.columns" in sql:
+                return _FakeRes([(1,)] if params.get("c") in existing_cols else [])
+            col = _re.search(r'"(\w+)" FROM', sql).group(1)
+            return _FakeRes([(d, values[col]) for d in ("2024-01-02", "2024-01-03") if col in values])
+
+    class _Begin:
+        def __enter__(self):
+            return _Conn()
+
+        def __exit__(self, *a):
+            return False
+
+    class _Engine:
+        def begin(self):
+            return _Begin()
+
+    class _Store:
+        market_engine = _Engine()
+
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda *a, **k: _Store())
+
+
+def test_fetch_factor_panels_col_and_macdh_backfill(monkeypatch, tmp_path):
+    """panel 带真实列名 col；macd/macds 同后缀成对且 macdh 存在时自动补 MACD柱 panel。"""
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+    run_dir = tmp_path / "runs" / "r1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "strategy.yaml").write_text(
+        "data:\n  factor_fields:\n"
+        "    macd: factors.stock_daily_tech.macd_12_26_9\n"
+        "    macd_signal: factors.stock_daily_tech.macds_12_26_9\n"
+        "signal:\n  entry: macd > 0\n  exit: macd < 0\n",
+        encoding="utf-8",
+    )
+    values = {"macd_12_26_9": 1.0, "macds_12_26_9": 0.5, "macdh_12_26_9": 0.5}
+    _fake_factor_store(monkeypatch, values, existing_cols={"macdh_12_26_9"})
+
+    from quant_research_engine.gui.lab_result import _fetch_factor_panels
+
+    panels, note = _fetch_factor_panels({"run_id": "r1"}, "000001.SZ", ["2024-01-02", "2024-01-03"])
+    assert note is None
+    assert [p["name"] for p in panels] == ["macd", "macd_signal", "MACD柱"]
+    assert panels[0]["col"] == "macd_12_26_9" and panels[1]["col"] == "macds_12_26_9"
+    assert panels[2]["col"] == "macdh_12_26_9" and panels[2]["thresholds"] == []
+    assert panels[0]["values"] == [1.0, 1.0] and panels[0]["thresholds"] == [0.0, 0.0]
+
+
+def test_fetch_factor_panels_macdh_missing_column(monkeypatch, tmp_path):
+    """macdh 列不存在 / 只引用 macd 单线：不补 panel，原功能不受影响。"""
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+    run_dir = tmp_path / "runs" / "r1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "strategy.yaml").write_text(
+        "data:\n  factor_fields:\n"
+        "    macd: factors.stock_daily_tech.macd_12_26_9\n"
+        "    macd_signal: factors.stock_daily_tech.macds_12_26_9\n",
+        encoding="utf-8",
+    )
+    values = {"macd_12_26_9": 1.0, "macds_12_26_9": 0.5}
+    _fake_factor_store(monkeypatch, values, existing_cols=set())  # macdh 不存在
+
+    from quant_research_engine.gui.lab_result import _fetch_factor_panels
+
+    panels, note = _fetch_factor_panels({"run_id": "r1"}, "000001.SZ", ["2024-01-02", "2024-01-03"])
+    assert note is None
+    assert [p["name"] for p in panels] == ["macd", "macd_signal"]
+    assert all("col" in p for p in panels)
 
 
 def test_symbol_detail_total_ret_pct(lab_client):

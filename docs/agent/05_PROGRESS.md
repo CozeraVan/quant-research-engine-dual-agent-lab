@@ -1171,3 +1171,19 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 06 决策日志新增「快照 vs 持续跟踪四层分工」：策展工作流 / 快照不可变 / 净值跟踪=未来付费 opt-in / 否决延伸用户原始 job。
 - 19 付费矩阵增补第 6 项升级方向（净值持续跟踪复用 showcase_roller）。
 - 测试 TestShowcaseBadgeInRecords 1 例；test_gui_saas.py 64 passed。
+
+## 2026-10-20 因子图表 TV 风格智能布局（CR-2026-10-20）
+
+**需求**：因子不再机械地每个占一个独立 grid 画单紫线；EMA/MA 叠加 K 线、MACD 三线合一面板（DIF/DEA 线+HIST 红绿柱）、chip 三态切换。设计经用户逐项确认（混合元数据+启发式、自动布局+chip、三处全覆盖），CR 见 change_requests/CR-2026-10-20_factor_chart_tv_layout.md。
+
+**改动**：
+- 后端 `gui/lab_result.py`：`_fetch_factor_panels` 每 panel 增加 `col`（真实列名）；新增 `_macd_hist_candidates`——同表 `macd_<P>`+`macds_<P>` 成对且 `macdh_<P>` 未引用时探测列存在则自动补查，追加「MACD柱」panel（探测/补查失败静默降级；仅命中候选时一次 information_schema 查询，批量路径性能受控）。
+- 新增共享布局库 `gui/static/factor-layout.js`（`QREFactorLayout.plan(factors, states)`，SaaS/lab 同 /static 目录共用）：overlay 正则（ema/ma/sma/wma/dema/tema/boll）→ K 线主图；MACD 按参数后缀或别名（dif/dea/hist、macd/macd_signal/MACD柱）归组单 pane（DIF #6750A4 / DEA #E8A33D / HIST bar 正 #C93A3A 负 #1E8E5A）；其余独立 pane 保留阈值 markLine；预留 `f.display` 元数据接口（后续期）。
+- `saas/templates/symbol.html`：renderKline 按布局计划重建（grid 数/高度按面板数自适应，dispose+init）；K 线标题行新增 #kline-chips——overlay 类 chip 三态 overlay→pane→hidden，MACD/普通面板 chip 两态 pane→hidden（量纲不同不可叠加，对 CR 三态循环的裁剪），状态 localStorage `qre_fct_<col或name>` 记忆；重播 mountKlineReplay 复用同一 plan，chip 切换时重播销毁重挂。
+- `templates/lab_symbol.html`（8081 个股详情实际模板）：自动分组布局，无 chip。
+- `gui/static/lab-theme.css`：.fct-chips/.fct-chip 三态样式，全用既有色 token。
+- 测试 `tests/test_gui_lab_result.py`：更新 1 旧断言 + 新增 3 例（候选纯函数、col+MACD柱补全、列缺失降级）。
+
+**验证**：node `new Function()` 解析两模板内联 script + `node --check factor-layout.js` 通过；node 直跑 plan 断言（EMA overlay、MACD 单 pane 三 series、rsi 独立 pane、非法状态回落）正确；pytest test_gui_saas+test_gui_lab_result+test_gui_saas_pages+test_gui_lab 共 176 passed。
+
+**遗留**：因子注册表 display 元数据字段与 sync_saas_metadata 同步链路为后续期，本期纯启发式。

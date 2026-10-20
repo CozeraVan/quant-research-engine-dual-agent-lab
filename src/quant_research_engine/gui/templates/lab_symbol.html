@@ -2,6 +2,7 @@
 {% block nav %}<a href="/">返回实验台</a>{% endblock %}
 {% block head %}
 <script src="/static/echarts.min.js"></script>
+<script src="/static/factor-layout.js"></script>
 <style>
   h1 { word-break: break-all; }
   .metric-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -181,7 +182,12 @@
     if (!d.kline || !d.kline.dates.length) { empty('chart-kline', d.kline_note || '暂无数据'); return; }
     var dates = d.kline.dates;
     var klineEl = document.getElementById('chart-kline');
-    if (d.factors && d.factors.length) klineEl.style.height = (420 + d.factors.length * 160) + 'px';
+    // CR-2026-10-20：因子分组布局（与 SaaS 页共用 QREFactorLayout）——均线 overlay 主图、
+    // MACD 合并单面板（DIF/DEA 双线 + HIST 红绿柱）、其余独立面板；内部版只做自动布局
+    var factors = d.factors || [];
+    var plan = QREFactorLayout.plan(factors, {});
+    var panes = plan.panes;
+    if (panes.length) klineEl.style.height = (420 + panes.length * 160) + 'px';
     var chart = echarts.init(klineEl);
     var series = [
       { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
@@ -212,20 +218,23 @@
         symbol: 'triangle', symbolRotate: 180, symbolSize: 10, itemStyle: { color: '#1a9e4b' },
         tooltip: { formatter: function(p) { return p.data.tip; } } });
     }
+    // 均线类因子叠加 K 线主图（共用价格轴）
+    plan.overlays.forEach(function(o) {
+      series.push({ name: o.name, type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: o.f.values,
+        showSymbol: false, lineStyle: { width: 1.2 }, color: o.color });
+    });
     chart.setOption((function() {
-      // QRE-GUI-LAB-RESULT-036：有策略因子时加第三个 grid 画因子线 + 出入场阈值虚线
-      // （RESULT-037 叠加模式已回退：RSI 等摆动指标量纲与价格不同，不做 K 线叠加；
-      //   未来若策略用 MA/EMA/BOLL 这类 overlap 指标，可在此按因子类型叠加）
-      var factors = d.factors || [];
-      var hasF = factors.length > 0;
-      // grid 数 = 2（K线+量）+ 因子个数，每个因子一副图，索引与 series/xAxis/yAxis 一一对应
+      // QRE-GUI-LAB-RESULT-036：因子副图 + 出入场阈值虚线；
+      // CR-2026-10-20 起经 QREFactorLayout 分组：overlay 不占面板，MACD 三元组合并一个面板
+      var hasF = panes.length > 0;
+      // grid 数 = 2（K线+量）+ 面板个数，索引与 series/xAxis/yAxis 一一对应
       var grids;
       if (!hasF) {
         grids = [{ left: 60, right: 20, top: 30, height: '58%' }, { left: 60, right: 20, top: '74%', height: '14%' }];
       } else {
         grids = [{ left: 60, right: 20, top: 30, height: '42%' }, { left: 60, right: 20, top: '53%', height: '10%' }];
-        var fTop = 66, fBottom = 93, fStep = (fBottom - fTop) / factors.length;
-        factors.forEach(function(f, i) {
+        var fTop = 66, fBottom = 93, fStep = (fBottom - fTop) / panes.length;
+        panes.forEach(function(p, i) {
           grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
         });
       }
@@ -238,27 +247,38 @@
         { type: 'value', gridIndex: 1, name: '量', axisLabel: { formatter: function(v) { return (v / 10000).toFixed(0) + '万'; } } },
       ];
       if (hasF) {
-        factors.forEach(function(f, i) {
+        panes.forEach(function(p, i) {
           xAxis.push({ type: 'category', data: dates, gridIndex: 2 + i });
-          yAxis.push({ type: 'value', gridIndex: 2 + i, scale: true, name: f.name, nameTextStyle: { fontSize: 10 } });
+          yAxis.push({ type: 'value', gridIndex: 2 + i, scale: true, name: p.name, nameTextStyle: { fontSize: 10 } });
           var markLine = null;
-          if (f.thresholds && f.thresholds.length) {
+          if (p.thresholds && p.thresholds.length) {
             markLine = {
               silent: true, symbol: 'none',
               lineStyle: { type: 'dashed', color: '#8B7FBE' },
-              label: { formatter: function(p) { return Number(p.value).toFixed(2); }, fontSize: 10 },
-              data: f.thresholds.map(function(v) { return { yAxis: v }; }),
+              label: { formatter: function(pp) { return Number(pp.value).toFixed(2); }, fontSize: 10 },
+              data: p.thresholds.map(function(v) { return { yAxis: v }; }),
             };
           }
-          series.push({ name: f.name, type: 'line', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: f.values,
-            showSymbol: false, lineStyle: { width: 1.2 }, color: '#6750A4', markLine: markLine });
+          p.series.forEach(function(s) {
+            if (s.hist) {  // MACD 柱：正红负绿（与 K 线涨跌同色）
+              series.push({ name: s.name, type: 'bar', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: s.values,
+                itemStyle: { color: function(pp) { return Number(pp.value) >= 0 ? QREFactorLayout.COLORS.histUp : QREFactorLayout.COLORS.histDown; } } });
+            } else {
+              series.push({ name: s.name, type: 'line', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: s.values,
+                showSymbol: false, lineStyle: { width: 1.2 }, color: s.color, markLine: markLine });
+              markLine = null;  // 阈值线只挂同面板第一条线，避免重复
+            }
+          });
         });
       }
       var zoomX = xAxis.map(function(_, i) { return i; });
+      var legendData = ['K线', '买入', '卖出']
+        .concat(plan.overlays.map(function(o) { return o.name; }))
+        .concat(panes.reduce(function(acc, p) { return acc.concat(p.series.map(function(s) { return s.name; })); }, []));
       return {
       animation: false,
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } },
-      legend: { data: ['K线', '买入', '卖出'].concat(factors.map(function(f) { return f.name; })), top: 0 },
+      legend: { data: legendData, top: 0 },
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       grid: grids,
       xAxis: xAxis,

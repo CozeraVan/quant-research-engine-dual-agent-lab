@@ -539,3 +539,12 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 .rp-group-main{flex-wrap:nowrap;flex:none}
 .rp-group-aux{flex-wrap:wrap}
 .rp-sel{height:36px;box-sizing:border-box}  /* 与 .rp-btn 36px 等高（§1 行内控件规则） */
+
+/* 因子 chip 三态切换（CR-2026-10-20 因子图表 TV 布局）：叠加K线 → 独立面板 → 隐藏。
+   胶囊 999px 同徽章/chip 族；主紫边框，选中态淡紫底，零新色相。 */
+.fct-chips{display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:10px;vertical-align:middle;font-weight:400}
+.fct-chip{border:1px solid var(--lav);background:#fff;color:var(--lav);border-radius:999px;padding:2px 10px;font-size:12px;line-height:1.7;cursor:pointer;transition:all .2s var(--ease)}
+.fct-chip:hover{background:var(--tint)}
+.fct-chip.st-overlay{background:var(--lav);color:#fff}
+.fct-chip.st-pane{background:var(--tint);color:var(--lav-deep);border-color:var(--tint-deep)}
+.fct-chip.st-hidden{border-color:var(--line);color:var(--faint);background:#fff;text-decoration:line-through}

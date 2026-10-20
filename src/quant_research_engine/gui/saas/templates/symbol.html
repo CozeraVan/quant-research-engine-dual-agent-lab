@@ -27,6 +27,7 @@
 
   <div class="chart-box" id="box-kline" style="display:none">
     <div class="chart-title">日 K 与买卖点 <span class="opt" id="kline-note"></span>
+      <span class="fct-chips" id="kline-chips"></span>
       <button class="btn-sm" id="btn-kreplay" style="float:right">▶ 重播</button>
       <button class="btn-sm hidden" id="btn-kreplay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
     <!-- K线级重播（CR-2026-10-04 切片2 + 接管模式 2026-10-04 用户拍板：接管原 K线容器，
@@ -56,6 +57,7 @@
 {% block scripts %}
 <script src="/static/echarts.min.js?v={{ asset_v }}"></script>
 <script src="/static/replay.js?v={{ asset_v }}"></script>
+<script src="/static/factor-layout.js?v={{ asset_v }}"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 // QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；
@@ -350,6 +352,44 @@ function renderWear(d){
   $('#wear-body').innerHTML = html;
 }
 
+// --- 因子 chip 三态（CR-2026-10-20）：叠加K线 → 独立面板 → 隐藏，localStorage 记忆 ---
+const FCT_LS_PREFIX = 'qre_fct_';
+function chipStates(){
+  const s = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (k && k.indexOf(FCT_LS_PREFIX) === 0) s[k.slice(FCT_LS_PREFIX.length)] = localStorage.getItem(k);
+    }
+  } catch (e) { /* localStorage 不可用（隐私模式等）：全部走默认态 */ }
+  return s;
+}
+function setChipState(key, st){
+  try { localStorage.setItem(FCT_LS_PREFIX + key, st); } catch (e) {}
+}
+function renderFactorChips(plan, d){
+  const slot = $('#kline-chips');
+  if (!slot) return;
+  slot.innerHTML = '';
+  plan.chips.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'fct-chip st-' + c.state;
+    b.textContent = c.label;
+    b.title = c.states.length > 2 ? '点击切换：叠加K线 → 独立面板 → 隐藏' : '点击切换：独立面板 → 隐藏';
+    b.addEventListener('click', () => {
+      const next = c.states[(c.states.indexOf(c.state) + 1) % c.states.length];
+      setChipState(c.key, next);
+      if (kreplayCtl){  // 重播进行中：以新布局重挂重播（组件销毁由 attach 内部 dispose 处理）
+        kreplayCtl.destroy(true);
+        kreplayCtl = mountKlineReplay(klineData);
+      } else {
+        renderKline(d);
+      }
+    });
+    slot.appendChild(b);
+  });
+}
+
 function renderKline(d){
   if (!d.kline || !d.kline.dates || !d.kline.dates.length){
     $('#box-kline').style.display = 'none';
@@ -359,9 +399,16 @@ function renderKline(d){
   $('#kline-note').textContent = '（买 ▲红 / 卖 ▼绿，hover 看下单详情；拖动下方滑块缩放）';
   const dates = d.kline.dates;
   const el = $('#chart-kline');
+  // CR-2026-10-20：因子分组布局（均线 overlay 主图 / MACD 合并面板 / 其余独立面板），
+  // chip 状态存 localStorage；面板数自适应容器高度（overlay 不占面板）
   const factors = d.factors || [];
-  const hasF = factors.length > 0;
-  if (hasF) el.style.height = (420 + factors.length * 160) + 'px';
+  const plan = QREFactorLayout.plan(factors, chipStates());
+  renderFactorChips(plan, d);
+  const panes = plan.panes;
+  const hasF = panes.length > 0;
+  el.style.height = hasF ? (420 + panes.length * 160) + 'px' : '460px';
+  const oldInst = echarts.getInstanceByDom(el);
+  if (oldInst) oldInst.dispose();  // chip 切换重渲染前销毁旧实例
   const chart = echarts.init(el);
   const series = [
     { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
@@ -369,6 +416,11 @@ function renderKline(d){
     { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.kline.vols,
       itemStyle: { color: '#B7A6E8' } },
   ];
+  // 均线类因子叠加 K 线主图（共用价格轴）
+  plan.overlays.forEach(o => {
+    series.push({ name: o.name, type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: o.f.values,
+      showSymbol: false, lineStyle: { width: 1.2 }, color: o.color });
+  });
   if (d.orders && d.orders.length){
     const idx = {}; dates.forEach((dt, i) => { idx[dt] = i; });
     const lowByDate = {}, highByDate = {};
@@ -402,27 +454,38 @@ function renderKline(d){
     { type: 'value', gridIndex: 1, name: '量', axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
   ];
   if (hasF){
-    const fTop = 66, fBottom = 93, fStep = (fBottom - fTop) / factors.length;
-    factors.forEach((f, i) => {
+    const fTop = 66, fBottom = 93, fStep = (fBottom - fTop) / panes.length;
+    panes.forEach((p, i) => {
       grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
       xAxis.push({ type: 'category', data: dates, gridIndex: 2 + i, axisLabel: { show: false } });
-      yAxis.push({ type: 'value', gridIndex: 2 + i, scale: true, name: f.name, nameTextStyle: { fontSize: 10 } });
+      yAxis.push({ type: 'value', gridIndex: 2 + i, scale: true, name: p.name, nameTextStyle: { fontSize: 10 } });
       let markLine = null;
-      if (f.thresholds && f.thresholds.length){
+      if (p.thresholds && p.thresholds.length){
         markLine = { silent: true, symbol: 'none',
           lineStyle: { type: 'dashed', color: '#8B7FBE' },
-          label: { formatter: p => Number(p.value).toFixed(2), fontSize: 10 },
-          data: f.thresholds.map(v => ({ yAxis: v })) };
+          label: { formatter: pp => Number(pp.value).toFixed(2), fontSize: 10 },
+          data: p.thresholds.map(v => ({ yAxis: v })) };
       }
-      series.push({ name: f.name, type: 'line', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: f.values,
-        showSymbol: false, lineStyle: { width: 1.2 }, color: '#6750A4', markLine });
+      p.series.forEach(s => {
+        if (s.hist){  // MACD 柱：正红负绿（与 K 线涨跌同色）
+          series.push({ name: s.name, type: 'bar', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: s.values,
+            itemStyle: { color: pp => (Number(pp.value) >= 0 ? QREFactorLayout.COLORS.histUp : QREFactorLayout.COLORS.histDown) } });
+        } else {
+          series.push({ name: s.name, type: 'line', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: s.values,
+            showSymbol: false, lineStyle: { width: 1.2 }, color: s.color, markLine });
+          markLine = null;  // 阈值线只挂同面板第一条线，避免重复
+        }
+      });
     });
   }
   const zoomX = xAxis.map((_, i) => i);
+  const legendData = ['K线', '买入', '卖出']
+    .concat(plan.overlays.map(o => o.name))
+    .concat(panes.reduce((acc, p) => acc.concat(p.series.map(s => s.name)), []));
   chart.setOption({
     animation: false,
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } },
-    legend: { data: ['K线', '买入', '卖出'].concat(factors.map(f => f.name)), top: 0 },
+    legend: { data: legendData, top: 0 },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     grid: grids, xAxis, yAxis,
     dataZoom: [{ type: 'inside', xAxisIndex: zoomX }, { type: 'slider', xAxisIndex: zoomX, bottom: 6, height: 22 }],
@@ -481,19 +544,36 @@ function mountKlineReplay(d){
     });
   }
   // 序列：K线 + 成交量 + 因子副图（组件 extra 透传任意 series 配置）
+  // CR-2026-10-20：与静态图共用 planFactorLayout 分组（overlay 上主图 / MACD 合并面板），
+  // chip 状态对重播同样生效；布局基于全量 factors 算一次，帧渲染由组件截断 values
   const series = [
     { name: 'K线', type: 'candlestick', data: ohlc, grid: 0, mark: true,
       extra: { itemStyle: { color: '#C93A3A', color0: '#1E8E5A', borderColor: '#C93A3A', borderColor0: '#1E8E5A' } } },
     { name: '成交量', type: 'bar', data: vols, grid: 1, extra: { itemStyle: { color: '#B7A6E8' } } },
   ];
-  const grids = [{ left: 60, right: 20, top: 30, height: factors.length ? '40%' : '56%' },
-                 { left: 60, right: 20, top: factors.length ? '48%' : '72%', height: '10%' }];
+  const plan = QREFactorLayout.plan(factors, chipStates());
+  const panes = plan.panes;
+  const kEl = $('#chart-kline');
+  kEl.style.height = panes.length ? (420 + panes.length * 160) + 'px' : '460px';
+  const grids = [{ left: 60, right: 20, top: 30, height: panes.length ? '40%' : '56%' },
+                 { left: 60, right: 20, top: panes.length ? '48%' : '72%', height: '10%' }];
   const yAxes = [{ name: '', pct: false }, { name: '量', pct: false }];
-  const fTop = 62, fBottom = 93, fStep = factors.length ? (fBottom - fTop) / factors.length : 0;
-  factors.forEach((f, i) => {
+  plan.overlays.forEach(o => {
+    series.push({ name: o.name, type: 'line', data: o.f.values, grid: 0, color: o.color, width: 1.2 });
+  });
+  const fTop = 62, fBottom = 93, fStep = panes.length ? (fBottom - fTop) / panes.length : 0;
+  panes.forEach((p, i) => {
     grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
-    yAxes.push({ name: f.name, pct: false });
-    series.push({ name: f.name, type: 'line', data: f.values, grid: 2 + i, color: '#6750A4', width: 1.2 });
+    yAxes.push({ name: p.name, pct: false });
+    p.series.forEach(s => {
+      const cfg = { name: s.name, type: s.type || 'line', data: s.values, grid: 2 + i,
+                    color: s.color || '#6750A4', width: 1.2 };
+      if (s.hist){  // MACD 柱：正红负绿（与 K 线涨跌同色；extra 透传覆盖组件默认 itemStyle）
+        cfg.color = undefined;
+        cfg.extra = { itemStyle: { color: pp => (Number(pp.value) >= 0 ? QREFactorLayout.COLORS.histUp : QREFactorLayout.COLORS.histDown) } };
+      }
+      series.push(cfg);
+    });
   });
   // 侧边信息卡：当前帧 OHLC/因子值/持仓与浮动盈亏（毛口径）
   const dateIdx = {}; dates.forEach((dt, i) => { dateIdx[dt] = i; });
