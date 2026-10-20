@@ -940,3 +940,34 @@ Engine feature-complete (947 tests green); single-agent workflow active; batch p
 ### 2026-10-12 NaN 序列化修复（symbol_detail 卡"加载中"根因）
 
 risk 节含 NaN（如 GARCH 拟合失败/零方差 sharpe），`json.dumps` 默认把 NaN 写成裸 token = 非法 JSON → 浏览器 `resp.json()` 抛 SyntaxError，load() 中断，页面停在"详情已生成，加载中…"。修复：`worker/runner.py` 新增 `_json_sanitize`（递归 NaN/Inf→None，含 numpy 浮点），批量与按需两条 gzip 路径都应用。已用 node 严格 JSON.parse 验证。**教训：任何产出给前端 fetch 的 JSON 都必须过 _json_sanitize。**
+
+### 2026-10-20 周末交接（token 耗尽，其他 agent 接续指引）
+
+**接手前必读**：根 AGENTS.md + docs/agent/00-21 全部；本周工作细节在 05_PROGRESS.md 2026-10-19/20 各节；commit 前必须同步更新 05_PROGRESS.md（pre-commit 钩子拦截）。
+
+#### 本周完成（全部已 commit+push+ECS 部署核实）
+- 经典策略展示页全套（85286a8/5c9319b）+ 滚动器 showcase_roller（5639ae1，工作日 18:10 timer）+ 预览卡简化（e242546）+ 徽章（799f218）。
+- 因子图表 TV 风格布局（6799964）：均线 overlay/MACD 合并面板/chip 三态，CR 见 change_requests/CR-2026-10-20_factor_chart_tv_layout.md。
+- 布局修复（c8259e5）：overlay 正则下划线 bug + 正则 `||` 链 bug + 家族归组扩展（KDJ/STOCH/AROON/VORTEX/PPO/PVO/s信号对）+ panel 补发 table 字段。
+- HTML 禁启发式缓存（ddc7a74）：text/html 加 `Cache-Control: no-cache`。
+- 运维备忘：qre-saas-worker（本机 systemd）重启需 `sudo -n systemctl restart qre-saas-worker`；8081 lab 是裸 `uv run qre gui --lab` 进程，改 GUI 代码后需手动重启（曾挂死）。
+
+#### 新发现 bug：回测结果可见性（未复现，待与用户核实）
+- 用户报告：job#76（私人回测）链接对游客可见。实测：#76 user_id=6，未登录 curl `/api/saas/jobs/76`、`/api/results/76/summary|chart-data|symbols/<code>` 全部 401——归属校验在码（`_require_completed_result`：本人 user_id / 游客 IP guest_key / showcase 白名单三条通道）。
+- 疑似解释（待用户确认观察路径）：a) 另一设备登录了同一账号；b) 看到的是 #74（经典策略白名单，设计内公开）；c) 游客 job 按公网 IP 归属（`guest_key`），同 Wi-Fi 设备共享出口 IP → 游客结果对同网络他人可见（设计使然，但体感像泄漏）。
+- 已批准方向（brainstorm 结论，下周实施）：
+  1. **端点归属普查**：枚举所有含 job_id 的 GET 端点（worker 通道除外），补 IDOR 自动化测试（他人 job 一律 404/401，不暴露存在性）。
+  2. **主动分享机制**：results 加 share_token（只读链接、可撤销、可设有效期），用户点「分享」生成链接；未授权访问一律 401/404。
+  3. **游客归属加固**：guest_key 从纯 IP 改为 IP+会话 cookie 双因子，或接受同 IP 风险并在 UI 明示「同网络可见」。
+  4. 用户回测结果默认私有；经典策略页是唯一公开通道。
+
+#### 待办清单（优先级序，接替者按此推进）
+1. 【下周主线】回测可见性核实与加固（上述 4 项，先与用户确认复现路径）。
+2. Web 文案精简化：备注改悬停 tooltip + 帮助中心页（用户已批准方向）。
+3. NL 入口加固：A1 输入前置校验（jev 判断是否可执行策略，含入场/出场条件）/ A2 生成策略限频防刷 token / A3 编译缓存一致性（高频策略模板复用、相同输入产出相同 yaml）。
+4. 引擎高级参数扩展：买/卖价选项（次日开盘/均价/收盘）已 brainstorm 批准，待实施。
+5. 经典策略按钮 UI 精修（用户说下周做）。
+6. 【已挂起】分时因子计算 + B 项引擎分时适配（等用户提供可靠分时数据源）。
+7. 【已挂起】worker price_basis=qfq 保真问题评估立项（滚动器发现：基线 job 实际跑 qfq 原始价尺度，疑似 worker 缺陷；修正需重跑基线，等用户决策）。
+8. 【已挂起】分时 csv 入库后 mindata/2026 CSV 删除确认。
+9. 【远景】性能优化（用户指示最后做）、信号监控板块二级 UI、付费体系分层（内测仅游客/注册两层，注册用户全权限仅并发限资源）、小程序/APP。
