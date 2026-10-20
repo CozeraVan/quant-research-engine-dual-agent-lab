@@ -1164,3 +1164,10 @@ Historical row statuses (pre-migration, kept for old table rows):
 - 卡片头改为与回测参数卡一致的全宽 sec-toggle「策略代码预览」（默认折叠）；按钮全部移除；提示语移入卡内 `#pv-note` 分态显示：NL/向导「由系统自动生成，仅供预览，无需修改」+ 只读 pre；yaml「可直接编辑下方策略代码」+ textarea 直编辑（input 即同步 strategyYaml）。
 - `syncPreviewEditPerm` 简化为显隐切换；pvEditing 状态机、pv-edit-toggle/pv-copy 及其事件全部删除；「去底部编辑代码」改为展开+聚焦 textarea（仅 yaml 入口）。
 - JS 语法校验 OK；test_gui_saas_pages+test_gui_saas 100 passed。
+
+## 2026-10-20 回测记录 showcase 徽章 + 四层分工决策
+
+- `/api/results` 列表项新增 `showcase` 布尔（激活白名单 job）；`_records_scripts.html` 命中行在策略名后渲染「经典策略·跟踪中 →」徽章（inl 链接 /saas/showcase，悬停说明快照不变/展示页日更）。
+- 06 决策日志新增「快照 vs 持续跟踪四层分工」：策展工作流 / 快照不可变 / 净值跟踪=未来付费 opt-in / 否决延伸用户原始 job。
+- 19 付费矩阵增补第 6 项升级方向（净值持续跟踪复用 showcase_roller）。
+- 测试 TestShowcaseBadgeInRecords 1 例；test_gui_saas.py 64 passed。

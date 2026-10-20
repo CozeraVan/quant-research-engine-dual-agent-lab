@@ -53,7 +53,10 @@ async function load(){
         ? '<span class="opt">——</span>'
         : `<span class="${clsPnL(job.excess_return)}">${fmtPct(job.excess_return)}</span>`;
       const viewLink = done ? `<a class="view-link" href="/saas/jobs/${job.job_id}">查看结果 →</a>` : '';
-      tr.innerHTML = `<td><strong>${escH(job.strategy_name || ('策略 #' + job.job_id))}</strong><br><span class="opt">任务 #${job.job_id}</span></td>`
+      const scBadge = job.showcase
+        ? ' <a class="inl" href="/saas/showcase" style="font-size:12px" title="该策略已收录进经典策略展示页，每日收盘后持续跟踪更新">经典策略·跟踪中 →</a>'
+        : '';
+      tr.innerHTML = `<td><strong>${escH(job.strategy_name || ('策略 #' + job.job_id))}</strong>${scBadge}<br><span class="opt">任务 #${job.job_id}</span></td>`
         + `<td class="opt">${range}</td>`
         + `<td style="text-align:right">${symbols}</td>`
         + `<td style="text-align:right">${excess}</td>`

@@ -1232,3 +1232,33 @@ class TestShowcaseDailyAndConsole:
         # 移除
         assert client.delete(f"/api/saas/console/showcase/{job_id}", headers=admin).get_json()["ok"]
         assert client.get("/api/saas/console/showcase", headers=admin).get_json()["items"] == []
+
+
+class TestShowcaseBadgeInRecords:
+    """回测记录列表的 showcase 徽章标记（QRE-SAAS-SHOWCASE-BADGE）。"""
+
+    def test_results_list_contains_showcase_flag(self, client, app):
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _ensure_signal_tables, _get_engine
+
+        def mk(name):
+            resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": name,
+                                                  "params": {"start": "2026-01-01", "end": "2026-03-01"}},
+                               headers={"X-User-Id": "1"})
+            jid = resp.get_json()["job_id"]
+            client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+            client.post(f"/api/worker/jobs/{jid}/result/meta",
+                        json={"worker_id": "w1", "summary": {"strategy_total_return": 0.1},
+                              "chart_data": {"metrics": {}}, "files": []},
+                        headers=WORKER_HEADERS)
+            return jid
+
+        j_show, j_plain = mk("a"), mk("b")
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            conn.execute(text("INSERT INTO showcase (job_id, title) VALUES (:id, 't')"), {"id": j_show})
+        items = client.get("/api/results", headers={"X-User-Id": "1"}).get_json()["items"]
+        flags = {i["job_id"]: i["showcase"] for i in items}
+        assert flags[j_show] is True and flags[j_plain] is False

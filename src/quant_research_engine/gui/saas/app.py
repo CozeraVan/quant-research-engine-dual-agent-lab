@@ -3078,6 +3078,10 @@ def create_saas_app() -> Flask:
                 ),
                 {"uid": uid},
             ).mappings().all()
+            _ensure_signal_tables(engine)
+            showcase_ids = {
+                r[0] for r in conn.execute(text("SELECT job_id FROM showcase WHERE is_active"))
+            }
         items = []
         for row in rows:
             metrics = ((row["chart_data"] or {}).get("metrics") or {})
@@ -3108,6 +3112,7 @@ def create_saas_app() -> Flask:
                 "total_trade_count": summary.get("total_trade_count"),
                 "data_until": _jsonable(row["data_until"]),
                 "created_at": _jsonable(row["created_at"]),
+                "showcase": row["id"] in showcase_ids,
             })
         if sort == "excess_return":
             items.sort(key=lambda x: (x["excess_return"] is None, x["excess_return"]),
