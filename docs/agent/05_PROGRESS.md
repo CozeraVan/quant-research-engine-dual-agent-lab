@@ -1187,3 +1187,14 @@ Historical row statuses (pre-migration, kept for old table rows):
 **验证**：node `new Function()` 解析两模板内联 script + `node --check factor-layout.js` 通过；node 直跑 plan 断言（EMA overlay、MACD 单 pane 三 series、rsi 独立 pane、非法状态回落）正确；pytest test_gui_saas+test_gui_lab_result+test_gui_saas_pages+test_gui_lab 共 176 passed。
 
 **遗留**：因子注册表 display 元数据字段与 sync_saas_metadata 同步链路为后续期，本期纯启发式。
+
+## 2026-10-20 因子布局修复：overlay 正则漏下划线命名（job#76 sma_5 未叠加根因）
+
+**根因（双bug）**：1) `factor-layout.js` OVERLAY_RE `^(ema|ma|sma...)\d*$` 不允许下划线，而真实列名是 `sma_5`/`ema_12`/`kama_10_2_30` 形态；2) 修复时发现同一常量写成 `regexA || regexB` 链——正则对象恒真，`||` 只保留第一个正则，BOLL 等轨道类从未生效。
+
+**修复**：
+- OVERLAY_RE 合并为单正则 `(?:...)` 交替，均线族（ema/ma/sma/wma/dema/tema/hma/kama/alma/rma/trima/jma/vidya/swma/fwma/pwma/sinwma/zl_ema）允许 `_?\d*`；轨道带（bbl/bbm/bbu、dcl/dcm/dcu、kc*、accb*、psarl/psars、supert_）与 hl2/hlc3/ohlc4/wcp/vwap_d/midpoint/midprice 进 overlay；负例（mad_30/massi/sma_slope/alpha/atr/obv）验证无误判。
+- 新增表类别规则：panel 带 `table` 字段（`_fetch_factor_panels` 补发，含 MACD柱 补全 panel），表名含 `overlap`（pandas-ta 口径主图指标表）直接 overlay——最稳信号，覆盖全部奇异均线。
+- 家族归组扩展：MACD 三元组泛化到 PPO/PVO（base/bases/baseh 同后缀）；新增 KDJ（k/d/j 同后缀三线）、STOCH/STOCHRSI、AROON、VORTEX 及通用「s 信号线对」（tsi/tsis、rvgi/rvgis、fisher/fisherts 等 sibling 存在才成组）多线单面板；family pane 用 COLORS.multi 循环色；单线家族不成组回落独立面板。渲染端 symbol.html/lab_symbol.html 零改动（panes[].series 本就多 series 通用）。
+- 验证：node 直跑 8 组真实列名场景全对；node --check 通过；pytest 176 passed。
+- **注意**：本机 qre-saas-worker 于 10-19 启动跑旧码（产物缺 col/table/MACD柱），已重启加载新码。

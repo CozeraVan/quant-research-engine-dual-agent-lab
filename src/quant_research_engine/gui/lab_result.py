@@ -887,6 +887,7 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
             panels.append({
                 "name": name,
                 "col": specs[name][1],
+                "table": specs[name][0],
                 "values": series,
                 "thresholds": _factor_thresholds(name, entry, exit_),
             })
@@ -896,7 +897,7 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
             continue
         series = [round(raw[key][d], 4) if d in raw[key] else None for d in dates]
         if any(v is not None for v in series):
-            panels.append({"name": "MACD柱", "col": hist, "values": series, "thresholds": []})
+            panels.append({"name": "MACD柱", "col": hist, "table": table, "values": series, "thresholds": []})
     if not panels:
         return None, "该股区间无因子数据"
     return panels, None
