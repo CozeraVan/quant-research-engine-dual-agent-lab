@@ -509,7 +509,7 @@ def _ensure_signal_tables(engine: Engine) -> None:
             r[0]
             for r in conn.execute(
                 text("SELECT table_name FROM information_schema.tables "
-                     "WHERE table_name IN ('strategy_watches', 'signal_events', 'showcase')")
+                     "WHERE table_name IN ('strategy_watches', 'signal_events', 'showcase', 'showcase_daily')")
             )
         }
         if "strategy_watches" not in existing_tables:
@@ -553,6 +553,20 @@ def _ensure_signal_tables(engine: Engine) -> None:
                 "sort_order INT NOT NULL DEFAULT 0, "
                 "is_active BOOL NOT NULL DEFAULT true, "
                 "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+            ))
+        if "showcase_daily" not in existing_tables:
+            # 阶段二增量日更：滚动器逐日回传的组合收益（基线 job 冻结点之后）
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS showcase_daily ("
+                "job_id BIGINT NOT NULL REFERENCES jobs(id), "
+                "trade_date DATE NOT NULL, "
+                "daily_return DOUBLE PRECISION NOT NULL, "
+                "equity DOUBLE PRECISION, "
+                "n_positions INT, "
+                "n_entries INT, "
+                "n_exits INT, "
+                "created_at TIMESTAMPTZ NOT NULL DEFAULT now(), "
+                "PRIMARY KEY (job_id, trade_date))"
             ))
         has_col = conn.execute(
             text("SELECT 1 FROM information_schema.columns "
@@ -944,26 +958,45 @@ def create_saas_app() -> Flask:
                     "ORDER BY sc.sort_order, sc.job_id"
                 )
             ).mappings().all()
-        items = []
-        for row in rows:
-            metrics = ((row["chart_data"] or {}).get("metrics") or {})
-            summary = row["summary"] or {}
-            params = row["params"] or {}
-            items.append({
-                "job_id": row["job_id"],
-                "title": row["title"],
-                "subtitle": row["subtitle"],
-                "strategy_name": row["strategy_name"],
-                "date_start": params.get("start"),
-                "date_end": params.get("end"),
-                "total_return": summary.get("strategy_total_return"),
-                "excess_return": metrics.get("excess_return"),
-                "max_drawdown": summary.get("max_drawdown"),
-                "win_rate": summary.get("win_rate"),
-                "total_trade_count": summary.get("total_trade_count"),
-                "sharpe": metrics.get("sharpe"),
-                "data_until": _jsonable(row["data_until"]),
-            })
+            items = []
+            for row in rows:
+                metrics = ((row["chart_data"] or {}).get("metrics") or {})
+                summary = row["summary"] or {}
+                params = row["params"] or {}
+                # 阶段二持续跟踪：冻结点之后的逐日收益复利延伸到最新交易日
+                daily_rows = conn.execute(
+                    text("SELECT trade_date, daily_return FROM showcase_daily "
+                         "WHERE job_id = :id ORDER BY trade_date"),
+                    {"id": row["job_id"]},
+                ).mappings().all()
+                total_return = summary.get("strategy_total_return")
+                tracking_since = None
+                if daily_rows:
+                    ext = 1.0 + (total_return or 0.0)
+                    for d in daily_rows:
+                        ext *= 1.0 + float(d["daily_return"])
+                    total_return = ext - 1.0
+                    tracking_since = _jsonable(daily_rows[0]["trade_date"])
+                    data_until = _jsonable(daily_rows[-1]["trade_date"])
+                else:
+                    data_until = _jsonable(row["data_until"])
+                items.append({
+                    "job_id": row["job_id"],
+                    "title": row["title"],
+                    "subtitle": row["subtitle"],
+                    "strategy_name": row["strategy_name"],
+                    "date_start": params.get("start"),
+                    "date_end": params.get("end"),
+                    "total_return": total_return,
+                    "excess_return": metrics.get("excess_return"),
+                    "max_drawdown": summary.get("max_drawdown"),
+                    "win_rate": summary.get("win_rate"),
+                    "total_trade_count": summary.get("total_trade_count"),
+                    "sharpe": metrics.get("sharpe"),
+                    "data_until": data_until,
+                    "tracking_since": tracking_since,
+                    "tracking_days": len(daily_rows),
+                })
         return jsonify({"ok": True, "items": items})
 
     # QRE-SAAS-FEEDBACK-FACTOR-REQ：意见反馈 / 申请新因子独立页（侧边栏入口，
@@ -2567,6 +2600,97 @@ def create_saas_app() -> Flask:
                 inserted += res.rowcount
         return jsonify({"ok": True, "received": len(clean), "inserted": inserted})
 
+    @app.get("/api/worker/showcase/jobs")
+    def api_worker_showcase_jobs() -> Any:
+        """QRE-SAAS-SHOWCASE 阶段二：滚动器拉取激活 showcase 的策略 yaml + 回测参数
+        + 已回传的最大 trade_date（增量起点）。"""
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT sc.job_id, sc.title, s.yaml, s.name AS strategy_name, j.params, "
+                    "(SELECT max(d.trade_date) FROM showcase_daily d WHERE d.job_id = sc.job_id) AS last_daily "
+                    "FROM showcase sc "
+                    "JOIN jobs j ON j.id = sc.job_id "
+                    "JOIN strategies s ON s.id = j.strategy_id "
+                    "WHERE sc.is_active AND j.status = 'completed' ORDER BY sc.sort_order, sc.job_id"
+                )
+            ).mappings().all()
+        return jsonify({"ok": True, "jobs": _jsonable([dict(r) for r in rows])})
+
+    @app.post("/api/worker/showcase/jobs/<int:job_id>/daily")
+    def api_worker_showcase_daily_ingest(job_id: int) -> Any:
+        """阶段二：滚动器批量回传逐日组合收益（主键幂等 upsert，重跑安全）。"""
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        rows = data.get("rows")
+        if not isinstance(rows, list) or not rows:
+            return jsonify({"ok": False, "error": "rows 须为非空数组"}), 400
+        if len(rows) > 500:
+            return jsonify({"ok": False, "error": "单次最多 500 行"}), 400
+        clean = []
+        from datetime import date as _date
+        for i, r in enumerate(rows):
+            if not isinstance(r, dict):
+                return jsonify({"ok": False, "error": f"rows[{i}] 须为对象"}), 400
+            td = str(r.get("trade_date") or "")
+            try:
+                _date.fromisoformat(td)
+            except ValueError:
+                return jsonify({"ok": False, "error": f"rows[{i}].trade_date 须为合法 YYYY-MM-DD"}), 400
+            try:
+                dr = float(r.get("daily_return"))
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"rows[{i}].daily_return 须为数值"}), 400
+            def _f(key):
+                v = r.get(key)
+                if v is None:
+                    return None
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    return None
+            def _i(key):
+                v = r.get(key)
+                if v is None:
+                    return None
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    return None
+            clean.append({"td": td, "dr": dr, "eq": _f("equity"),
+                          "np": _i("n_positions"), "ne": _i("n_entries"), "nx": _i("n_exits")})
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            if conn.execute(text("SELECT 1 FROM showcase WHERE job_id = :id AND is_active"),
+                            {"id": job_id}).first() is None:
+                return jsonify({"ok": False, "error": "非激活 showcase 任务"}), 404
+            upserted = 0
+            for r in clean:
+                res = conn.execute(
+                    text("INSERT INTO showcase_daily (job_id, trade_date, daily_return, equity, "
+                         "n_positions, n_entries, n_exits) "
+                         "VALUES (:id, :td, :dr, :eq, :np, :ne, :nx) "
+                         "ON CONFLICT (job_id, trade_date) DO UPDATE SET "
+                         "daily_return = EXCLUDED.daily_return, equity = EXCLUDED.equity, "
+                         "n_positions = EXCLUDED.n_positions, n_entries = EXCLUDED.n_entries, "
+                         "n_exits = EXCLUDED.n_exits"),
+                    {"id": job_id, **r},
+                )
+                upserted += res.rowcount
+            last = conn.execute(
+                text("SELECT max(trade_date) FROM showcase_daily WHERE job_id = :id"),
+                {"id": job_id},
+            ).scalar_one()
+        return jsonify({"ok": True, "upserted": upserted, "data_until": _jsonable(last)})
+
     @app.post("/api/worker/jobs/<int:job_id>/result/meta")
     def api_result_meta(job_id: int) -> Any:
         """17 协议 §3.3 第一步：回传元数据 + 文件清单 → upload_token，job 置 uploading；
@@ -3442,6 +3566,121 @@ def create_saas_app() -> Flask:
         return jsonify({"ok": True, "user_id": row.id, "status": status})
 
     # --- N1b/N1c 权限管理：tier_policies 读改（角色→次数/标的/区间上限，阶梯留空可扩展） ---
+    @app.get("/api/saas/console/showcase")
+    def api_console_showcase_list() -> Any:
+        """QRE-SAAS-SHOWCASE 管理：全部条目（含未激活）+ 策略名/任务状态/日更进度。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        _ensure_signal_tables(engine)
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT sc.job_id, sc.title, sc.subtitle, sc.sort_order, sc.is_active, "
+                    "sc.created_at, s.name AS strategy_name, j.status AS job_status, "
+                    "(SELECT max(d.trade_date) FROM showcase_daily d WHERE d.job_id = sc.job_id) AS last_daily "
+                    "FROM showcase sc "
+                    "JOIN jobs j ON j.id = sc.job_id "
+                    "JOIN strategies s ON s.id = j.strategy_id "
+                    "ORDER BY sc.sort_order, sc.job_id"
+                )
+            ).mappings().all()
+        return jsonify({"ok": True, "items": _jsonable([dict(r) for r in rows])})
+
+    @app.post("/api/saas/console/showcase")
+    def api_console_showcase_add() -> Any:
+        """新增 showcase 条目：job 须存在且 completed。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        try:
+            job_id = int(data.get("job_id"))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "job_id 须为整数"}), 400
+        title = str(data.get("title") or "").strip()
+        if not title or len(title) > 80:
+            return jsonify({"ok": False, "error": "title 必填且 ≤80 字"}), 400
+        subtitle = str(data.get("subtitle") or "").strip() or None
+        if subtitle and len(subtitle) > 120:
+            return jsonify({"ok": False, "error": "subtitle ≤120 字"}), 400
+        try:
+            sort_order = int(data.get("sort_order") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "sort_order 须为整数"}), 400
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            job = conn.execute(
+                text("SELECT status FROM jobs WHERE id = :id"), {"id": job_id}
+            ).mappings().first()
+            if job is None:
+                return jsonify({"ok": False, "error": "任务不存在"}), 404
+            if job["status"] != "completed":
+                return jsonify({"ok": False, "error": f"任务未完成（{job['status']}）"}), 409
+            res = conn.execute(
+                text("INSERT INTO showcase (job_id, title, subtitle, sort_order) "
+                     "VALUES (:id, :t, :st, :so) ON CONFLICT (job_id) DO NOTHING"),
+                {"id": job_id, "t": title, "st": subtitle, "so": sort_order},
+            )
+        if res.rowcount == 0:
+            return jsonify({"ok": False, "error": "该任务已在展示列表中"}), 409
+        return jsonify({"ok": True, "job_id": job_id})
+
+    @app.post("/api/saas/console/showcase/<int:job_id>")
+    def api_console_showcase_update(job_id: int) -> Any:
+        """更新 title/subtitle/sort_order/is_active（至少一项）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        sets, params = [], {"id": job_id}
+        if "title" in data:
+            title = str(data.get("title") or "").strip()
+            if not title or len(title) > 80:
+                return jsonify({"ok": False, "error": "title 必填且 ≤80 字"}), 400
+            sets.append("title = :t"); params["t"] = title
+        if "subtitle" in data:
+            subtitle = str(data.get("subtitle") or "").strip() or None
+            if subtitle and len(subtitle) > 120:
+                return jsonify({"ok": False, "error": "subtitle ≤120 字"}), 400
+            sets.append("subtitle = :st"); params["st"] = subtitle
+        if "sort_order" in data:
+            try:
+                params["so"] = int(data.get("sort_order"))
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": "sort_order 须为整数"}), 400
+            sets.append("sort_order = :so")
+        if "is_active" in data:
+            sets.append("is_active = :a"); params["a"] = bool(data.get("is_active"))
+        if not sets:
+            return jsonify({"ok": False, "error": "没有需要更新的字段"}), 400
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            res = conn.execute(
+                text(f"UPDATE showcase SET {', '.join(sets)} WHERE job_id = :id"), params
+            )
+        if res.rowcount == 0:
+            return jsonify({"ok": False, "error": "条目不存在"}), 404
+        return jsonify({"ok": True, "job_id": job_id, "updated": sorted(data)})
+
+    @app.delete("/api/saas/console/showcase/<int:job_id>")
+    def api_console_showcase_delete(job_id: int) -> Any:
+        """移出展示（只删 showcase 行与日更数据，job/结果不动）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM showcase_daily WHERE job_id = :id"), {"id": job_id})
+            res = conn.execute(text("DELETE FROM showcase WHERE job_id = :id"), {"id": job_id})
+        if res.rowcount == 0:
+            return jsonify({"ok": False, "error": "条目不存在"}), 404
+        return jsonify({"ok": True, "deleted": job_id})
+
     @app.get("/api/saas/console/policies")
     def api_console_policies() -> Any:
         engine = _get_engine(app)

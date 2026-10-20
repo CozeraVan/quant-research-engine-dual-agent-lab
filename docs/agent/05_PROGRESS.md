@@ -1125,3 +1125,14 @@ Historical row statuses (pre-migration, kept for old table rows):
 **测试**：tests/test_gui_saas.py TestShowcase 4 例（公开列表、只读放行/写拒、is_active 语义、页面与导航）；SaaS 相关 136 passed。
 
 **阶段二（待做）**：增量日更滚动器——基线 job 冻结，每日因子入库后本地扫描当日信号 + 推进组合状态算当日收益，推送 ECS 追加展示曲线；需与引擎 shared-cash 语义等价性测试。已记 todo。
+
+## 2026-10-20 经典策略阶段二 A/B：日更通道 + console 管理（QRE-SAAS-SHOWCASE-2）
+
+**A. 日更数据通道**：
+- 新表 `showcase_daily`（job_id+trade_date PK、daily_return、equity、n_positions、n_entries、n_exits），与 showcase 同批 `_ensure_signal_tables` 惰性建表。
+- worker 端点（X-Worker-Token 鉴权）：`GET /api/worker/showcase/jobs`（激活白名单 + 策略 yaml + job params + 已回传 max trade_date 作增量起点）；`POST /api/worker/showcase/jobs/<id>/daily`（批量 upsert，ON CONFLICT 更新幂等，行校验合法日期/数值，非白名单 404，单次≤500 行）。
+- 公开 `/api/saas/showcase` 延伸口径：有日更行时 total_return = (1+基线收益)×Π(1+日收益)−1 复利延伸，data_until 取最新日更日期，新增 tracking_since/tracking_days 字段；基线 metrics（超额/回撤/胜率）保持冻结口径不变。
+
+**B. console 管理**：tab「经典策略」——列表（任务ID/标题/副标题/策略名/排序/状态/日更至/操作）+ 添加表单（job_id 须已完成，重复 409）+ 上线/下线切换 + 移除（连带删 showcase_daily，job 本体不动）。端点 GET/POST/POST<id>/DELETE `/api/saas/console/showcase*`，全部 `_require_admin` 强制。
+
+**测试**：TestShowcaseDailyAndConsole 2 例（推拉+延伸口径+幂等+非法拒绝 / CRUD+权限+状态语义），test_gui_saas.py 63 passed。

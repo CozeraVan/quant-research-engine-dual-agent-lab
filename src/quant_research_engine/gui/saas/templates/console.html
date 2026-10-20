@@ -18,6 +18,7 @@
       <button class="tab" data-tab="feedback">反馈</button>
       <button class="tab" data-tab="workers">Worker</button>
       <button class="tab" data-tab="jobs">任务</button>
+      <button class="tab" data-tab="showcase">经典策略</button>
     </div>
 
     <div class="tab-pane" id="pane-overview">
@@ -112,6 +113,34 @@
         <div class="chart-empty hidden" id="jobs-empty">暂无任务</div>
       </div>
     </div>
+
+    <div class="tab-pane hidden" id="pane-showcase">
+      <div class="card">
+        <h2>经典策略展示 <span class="opt">（/saas/showcase 公开只读页的白名单；移除不删任务本身）</span></h2>
+        <table class="tbl">
+          <thead><tr><th class="num">任务ID</th><th>标题</th><th>副标题</th><th>策略</th><th class="num">排序</th><th>状态</th><th>日更至</th><th>操作</th></tr></thead>
+          <tbody id="showcase-tbody"></tbody>
+        </table>
+        <div class="chart-empty hidden" id="showcase-empty">暂无展示条目</div>
+      </div>
+      <div class="card">
+        <h2>添加展示策略</h2>
+        <div class="form-grid form-grid-3">
+          <label>任务 ID</label>
+          <input type="number" id="sc-add-job" placeholder="须为已完成的回测任务" style="width:160px">
+          <label>标题</label>
+          <input type="text" id="sc-add-title" placeholder="如 EMA5/200 金叉死叉" style="width:240px">
+          <label>副标题（可空）</label>
+          <input type="text" id="sc-add-subtitle" placeholder="如 双均线趋势跟踪 · 全A全期" style="width:280px">
+          <label>排序</label>
+          <input type="number" id="sc-add-sort" value="0" style="width:100px">
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-primary" id="sc-add-btn">添加</button>
+          <span class="opt" id="sc-add-status"></span>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -144,7 +173,7 @@
 <script>
 (function(){
   requireLogin();
-  var panes = {overview:'pane-overview', users:'pane-users', policies:'pane-policies', factors:'pane-factors', feedback:'pane-feedback', workers:'pane-workers', jobs:'pane-jobs'};
+  var panes = {overview:'pane-overview', users:'pane-users', policies:'pane-policies', factors:'pane-factors', feedback:'pane-feedback', workers:'pane-workers', jobs:'pane-jobs', showcase:'pane-showcase'};
   var factorSt = 'pending', jobSt = 'failed';
 
   function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }
@@ -171,7 +200,7 @@
       btn.classList.add('active');
       Object.keys(panes).forEach(function(k){ document.getElementById(panes[k]).classList.add('hidden'); });
       document.getElementById(panes[btn.dataset.tab]).classList.remove('hidden');
-      ({overview: loadOverview, users: loadUsers, policies: loadPolicies, factors: loadFactorRequests, feedback: loadFeedback, workers: loadWorkers, jobs: loadJobs})[btn.dataset.tab]();
+      ({overview: loadOverview, users: loadUsers, policies: loadPolicies, factors: loadFactorRequests, feedback: loadFeedback, workers: loadWorkers, jobs: loadJobs, showcase: loadShowcase})[btn.dataset.tab]();
     });
   });
 
@@ -461,6 +490,53 @@
       .then(function(r){ return r.json(); }).then(function(d){
         if (!d.ok){ alert(d.error || '操作失败'); } loadJobs();
       }).catch(function(){});
+  });
+  // --- 经典策略展示管理（QRE-SAAS-SHOWCASE） ---
+  function loadShowcase(){
+    apiFetch('/api/saas/console/showcase').then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      var tb = document.getElementById('showcase-tbody');
+      document.getElementById('showcase-empty').classList.toggle('hidden', d.items.length > 0);
+      tb.innerHTML = d.items.map(function(it){
+        return '<tr><td class="num">' + it.job_id + '</td>' +
+          '<td><strong>' + esc(it.title) + '</strong></td>' +
+          '<td>' + esc(it.subtitle || '—') + '</td>' +
+          '<td>' + esc(it.strategy_name) + '</td>' +
+          '<td class="num">' + it.sort_order + '</td>' +
+          '<td>' + (it.is_active ? '<span class="badge ok">展示中</span>' : '<span class="badge fail">已下线</span>') + '</td>' +
+          '<td>' + esc(it.last_daily || '—') + '</td>' +
+          '<td style="white-space:nowrap">' +
+            '<button class="btn-sm" data-sc="toggle" data-jid="' + it.job_id + '" data-active="' + (it.is_active ? 1 : 0) + '">' + (it.is_active ? '下线' : '上线') + '</button> ' +
+            '<button class="btn-sm" data-sc="del" data-jid="' + it.job_id + '" style="color:var(--up)">移除</button>' +
+          '</td></tr>';
+      }).join('');
+    }).catch(function(){});
+  }
+  document.getElementById('showcase-tbody').addEventListener('click', function(ev){
+    var act = ev.target.dataset && ev.target.dataset.sc;
+    if (!act) return;
+    var jid = ev.target.dataset.jid;
+    if (act === 'del' && !confirm('确认将任务 #' + jid + ' 移出经典策略展示？（任务与回测结果本身保留）')) return;
+    var req = act === 'del'
+      ? apiFetch('/api/saas/console/showcase/' + jid, {method: 'DELETE'})
+      : apiFetch('/api/saas/console/showcase/' + jid, {json: {is_active: ev.target.dataset.active !== '1'}});
+    req.then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok){ alert(d.error || '操作失败'); } loadShowcase();
+    }).catch(function(){});
+  });
+  document.getElementById('sc-add-btn').addEventListener('click', function(){
+    var st = document.getElementById('sc-add-status');
+    var payload = {
+      job_id: document.getElementById('sc-add-job').value,
+      title: document.getElementById('sc-add-title').value,
+      subtitle: document.getElementById('sc-add-subtitle').value,
+      sort_order: document.getElementById('sc-add-sort').value,
+    };
+    apiFetch('/api/saas/console/showcase', {json: payload}).then(function(r){ return r.json(); }).then(function(d){
+      st.textContent = d.ok ? ('已添加任务 #' + d.job_id) : (d.error || '添加失败');
+      st.style.color = d.ok ? 'var(--grey)' : 'var(--up)';
+      if (d.ok){ loadShowcase(); }
+    }).catch(function(){ st.textContent = '网络错误'; });
   });
 })();
 </script>

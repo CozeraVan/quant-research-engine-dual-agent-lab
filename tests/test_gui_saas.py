@@ -1113,3 +1113,122 @@ class TestShowcase:
         resp = client.get("/saas/showcase")
         assert resp.status_code == 200 and "经典策略" in resp.get_data(as_text=True)
         assert "/saas/showcase" in client.get("/saas/new").get_data(as_text=True)
+
+
+class TestShowcaseDailyAndConsole:
+    """QRE-SAAS-SHOWCASE 阶段二：worker 推拉端点 + 公开展示延伸 + console CRUD。"""
+
+    def _completed_job(self, client, name="classic2"):
+        resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": name,
+                                              "params": {"start": "2026-01-01", "end": "2026-03-01"}},
+                           headers={"X-User-Id": "1"})
+        job_id = resp.get_json()["job_id"]
+        client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                    json={"worker_id": "w1",
+                          "summary": {"strategy_total_return": 0.2, "win_rate": 0.5,
+                                      "max_drawdown": -0.1, "total_trade_count": 5},
+                          "chart_data": {"metrics": {"excess_return": 0.05}},
+                          "data_until": "2026-02-27", "files": []},
+                    headers=WORKER_HEADERS)
+        return job_id
+
+    def _pin(self, app, job_id):
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _ensure_signal_tables, _get_engine
+
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            conn.execute(text("INSERT INTO showcase (job_id, title) VALUES (:id, 't')"),
+                         {"id": job_id})
+
+    def _admin(self, app):
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _get_engine
+
+        with _get_engine(app).begin() as conn:
+            # dev 后门建用户不走序列，先对齐再插（否则 id=1 主键冲突）
+            conn.execute(text("SELECT setval('users_id_seq', COALESCE((SELECT max(id) FROM users), 1))"))
+            uid = conn.execute(
+                text("INSERT INTO users (email, role, status, tier) "
+                     "VALUES ('admin@sc.com', 'admin', 'active', 'member') RETURNING id")
+            ).scalar_one()
+        return {"X-User-Id": str(uid)}
+
+    def test_worker_push_pull_and_public_extension(self, client, app):
+        job_id = self._completed_job(client)
+        self._pin(app, job_id)
+        assert client.get("/api/worker/showcase/jobs").status_code in (401, 403)
+        pull = client.get("/api/worker/showcase/jobs", headers=WORKER_HEADERS).get_json()
+        j = pull["jobs"][0]
+        assert j["job_id"] == job_id and j["yaml"] and j["params"]["start"] == "2026-01-01"
+        assert j["last_daily"] is None
+        rows = [
+            {"trade_date": "2026-03-02", "daily_return": 0.01, "equity": 1.01,
+             "n_positions": 3, "n_entries": 1, "n_exits": 0},
+            {"trade_date": "2026-03-03", "daily_return": -0.005, "equity": 1.005,
+             "n_positions": 2, "n_entries": 0, "n_exits": 1},
+        ]
+        r = client.post(f"/api/worker/showcase/jobs/{job_id}/daily",
+                        json={"rows": rows}, headers=WORKER_HEADERS).get_json()
+        assert r["ok"] and r["upserted"] == 2 and r["data_until"] == "2026-03-03"
+        # 幂等重推（ON CONFLICT 更新）
+        r2 = client.post(f"/api/worker/showcase/jobs/{job_id}/daily",
+                         json={"rows": rows}, headers=WORKER_HEADERS).get_json()
+        assert r2["ok"] and r2["upserted"] == 2
+        pull2 = client.get("/api/worker/showcase/jobs", headers=WORKER_HEADERS).get_json()
+        assert pull2["jobs"][0]["last_daily"] == "2026-03-03"
+        # 公共 API 复利延伸：(1+0.2) × 1.01 × 0.995 − 1
+        item = client.get("/api/saas/showcase").get_json()["items"][0]
+        assert abs(item["total_return"] - (1.2 * 1.01 * 0.995 - 1)) < 1e-9
+        assert item["data_until"] == "2026-03-03"
+        assert item["tracking_since"] == "2026-03-02" and item["tracking_days"] == 2
+        # 非白名单 job 拒绝推送
+        assert client.post("/api/worker/showcase/jobs/9999/daily",
+                           json={"rows": rows}, headers=WORKER_HEADERS).status_code == 404
+        # 非法行拒绝
+        bad = client.post(f"/api/worker/showcase/jobs/{job_id}/daily",
+                          json={"rows": [{"trade_date": "2026-13-01", "daily_return": 0.01}]},
+                          headers=WORKER_HEADERS)
+        assert bad.status_code == 400
+
+    def test_console_crud(self, client, app):
+        job_id = self._completed_job(client)
+        # 非管理员 403
+        assert client.get("/api/saas/console/showcase", headers={"X-User-Id": "1"}).status_code == 403
+        admin = self._admin(app)
+        # 添加
+        r = client.post("/api/saas/console/showcase",
+                        json={"job_id": job_id, "title": "测试策略", "subtitle": "s", "sort_order": 2},
+                        headers=admin).get_json()
+        assert r["ok"]
+        assert client.post("/api/saas/console/showcase",
+                           json={"job_id": job_id, "title": "x"}, headers=admin).status_code == 409
+        # 校验：缺 title 400；job 不存在 404
+        assert client.post("/api/saas/console/showcase",
+                           json={"job_id": job_id}, headers=admin).status_code == 400
+        assert client.post("/api/saas/console/showcase",
+                           json={"job_id": 9999, "title": "x"}, headers=admin).status_code == 404
+        # 未完成 job 409
+        resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": "q", "params": {}},
+                           headers={"X-User-Id": "1"})
+        assert client.post("/api/saas/console/showcase",
+                           json={"job_id": resp.get_json()["job_id"], "title": "x"},
+                           headers=admin).status_code == 409
+        # 列表
+        items = client.get("/api/saas/console/showcase", headers=admin).get_json()["items"]
+        assert items[0]["title"] == "测试策略" and items[0]["is_active"] is True
+        assert items[0]["last_daily"] is None
+        # 更新（下线 + 改标题）
+        u = client.post(f"/api/saas/console/showcase/{job_id}",
+                        json={"is_active": False, "title": "改"}, headers=admin).get_json()
+        assert u["ok"]
+        items = client.get("/api/saas/console/showcase", headers=admin).get_json()["items"]
+        assert items[0]["is_active"] is False and items[0]["title"] == "改"
+        assert client.get("/api/saas/showcase").get_json()["items"] == []
+        # 移除
+        assert client.delete(f"/api/saas/console/showcase/{job_id}", headers=admin).get_json()["ok"]
+        assert client.get("/api/saas/console/showcase", headers=admin).get_json()["items"] == []
