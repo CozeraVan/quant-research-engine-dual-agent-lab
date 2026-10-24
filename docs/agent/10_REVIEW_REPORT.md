@@ -2,6 +2,40 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T5（SDD Task 5 回归与文档收尾）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（相关自动化回归与静态覆盖核对通过；真实浏览器/实机验收未执行）
+
+## Findings
+
+- 公共无权卡、加载失败卡及安全 next 回跳均在公共模板与登录链路实现；外部地址、协议相对地址、反斜杠与非 SaaS 路径有回归测试。
+- job/symbol/records 主请求均区分权限、业务响应和其他失败，具备请求/响应体超时、有限轮询、终态停止与重试路径；records 附属模块失败不会破坏主列表状态。
+- showcase 匿名及非所有者 GET 保持只读，生成 POST 为 403 且数据库断言未创建任务；`can_generate` 的 404 在通用无权分支前处理。
+- 181 项相关测试全部通过，无本改动失败或既有失败需要归因；无 Required Fix。
+
+## Validation Evidence
+
+```text
+/home/van/.local/bin/uv run python -m pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py -q
+181 passed in 15.04s
+```
+
+未做真实浏览器自动化，未执行游客/登录用户实机矩阵，未运行真实全量回测；因此本 PASS 不等同于 Step 2 实机验收完成。
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T4-AUX-ACCESS-FIX（Task 4 复审剩余问题）
 
 ## Reviewer

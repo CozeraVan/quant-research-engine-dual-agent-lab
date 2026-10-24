@@ -2,7 +2,23 @@
 
 ## Task ID
 
-QRE-SAAS-JOB-STRATEGY-CARD（SaaS 回测详情页「策略信息」折叠卡）
+QRE-SAAS-ACCESS-FALLBACK-T5（SDD Task 5：相关回归、覆盖核对与长期文档收尾）
+
+## Current Status
+
+DONE（实现 commits 9eac651..41550c6；相关回归 181 passed；仅提交文档，不 push、不部署）
+
+## Task Note
+
+- 覆盖确认：`base.html` 提供统一无权卡、加载失败卡与安全登录链接；`_safe_saas_next` 仅放行本站 `/saas/...`，邮箱与 Authing 登录均回跳原链接。
+- job/symbol/records 主资源 401/404 均进入统一无权或相应业务分支；其他 HTTP、网络、非 JSON 与响应体等待均有失败收口和重试。活跃状态有限轮询，终态停止，长等待不会无限转圈。
+- showcase 对匿名及非所有者保持 GET 只读，按需生成 POST 返回 403 且不建任务；个股仅 `404 + can_generate` 进入生成流程，不误判为无权。
+- 验证：`tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py` 共 181 passed，既有匿名 401、登录他人 404、本人未完成 409 契约不变。
+- 限制：本次未做真实浏览器自动化或游客/登录用户实机检查，未运行真实全量回测；Step 2 实机清单仍待人工验收。未 push、未部署。
+
+---
+
+## Archive: QRE-SAAS-JOB-STRATEGY-CARD（SaaS 回测详情页「策略信息」折叠卡）
 
 ## Current Status
 

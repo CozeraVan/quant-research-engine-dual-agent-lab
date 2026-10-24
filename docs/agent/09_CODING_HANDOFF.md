@@ -2,7 +2,19 @@
 
 ## Task ID
 
-QRE-SAAS-JOB-STRATEGY-CARD（SaaS 回测详情页「策略信息」折叠卡：summary API 携带策略定义 + job.html 默认折叠摘要行）
+QRE-SAAS-ACCESS-FALLBACK-T5（SaaS 访问兜底与有限轮询：回归及文档交接）
+
+## Implementation Summary
+
+本任务只做回归、覆盖核对和文档，无新增功能修改。既有实现 commits 9eac651..41550c6：`base.html`/`login*.html`/`app.py` 提供公共无权与加载失败卡、邮箱及 Authing 安全 next 回跳；job、symbol、records 分别收口主资源权限、异常、响应体等待、轮询终态、等待上限与手动重试；showcase 保留公开 GET 且生成 POST 返回 403；symbol 仅在 404 响应含 `can_generate` 时展示按需生成。records 附属策略库/因子申请使用局部失败与无权提示，不覆盖主列表或干扰主轮询。
+
+**验证命令**：`/home/van/.local/bin/uv run python -m pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py -q` → **181 passed**。同时核对后端匿名 401、登录他人 404、本人未完成 409 测试，以及 showcase 不创建生成任务和 `can_generate` 前端行为测试。
+
+**限制与后续**：未做真实浏览器自动化，未以游客/登录用户执行 Step 2 实机清单，未运行真实全量回测；这些场景需后续人工验收。未 push、未部署。
+
+---
+
+## Archive: QRE-SAAS-JOB-STRATEGY-CARD（SaaS 回测详情页「策略信息」折叠卡：summary API 携带策略定义 + job.html 默认折叠摘要行）
 
 ## Implementation Summary
 

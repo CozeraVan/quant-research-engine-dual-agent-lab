@@ -2,13 +2,17 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
+### 2026-10-24 QRE-SAAS-ACCESS-FALLBACK-T5 DONE
+
+实现 commits 9eac651..41550c6 已覆盖公共无权卡、next 安全回跳、job/symbol/records 有限轮询与重试、showcase 公开只读、`can_generate` 业务 404。Task 5 相关回归 181 passed，未改功能代码，未运行真实全量回测。真实浏览器自动化及游客/登录用户实机矩阵未做，Step 2 留待人工验收；未 push、未部署。
+
 ### 2026-10-24 FRM 缺失收口
 
 已修复并回填，不再属于待办。重要教训：所有关键小文件（FRM 等）必须显式设置回传优先级，不能依赖文件名字典序；全市场任务 20MB 上限会静默截断。本地产物 Windows 路径为 `\\wsl.localhost\Ubuntu-24.04\home\van\qre-outputs\gui-console\runs`；仓库 `outputs` 是指向 `/home/van/qre-outputs` 的软链接。
 
 ## Current Phase
 
-ACTIVE（2026-10-19：QRE-SAAS-JOB-STRATEGY-CARD 回测详情页「策略信息」折叠卡完成待 commit——summary API 新增 strategy 对象 + job.html 默认折叠摘要卡，2388 passed 零回归；前一项 QRE-CUMRET-CHART 仍未 commit，工作区现有两项未提交）
+DONE（2026-10-24：QRE-SAAS-ACCESS-FALLBACK-T5 回归与文档完成，181 passed；真实浏览器/实机验收未做，未 push、未部署）
 
 ## Current Task
 
