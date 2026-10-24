@@ -5,7 +5,7 @@
   <div class="card">
     <h1 style="text-align:center">A股回测台</h1>
     <p class="muted" style="text-align:center">验证你的交易策略能否在 A 股赚钱</p>
-    <a class="btn big btn-primary" id="btn-authing" href="/saas/login/authing" style="display:block;text-align:center;margin-top:12px">手机号 / 扫码登录（推荐）</a>
+    <a class="btn big btn-primary" id="btn-authing" href="/saas/login/authing?next={{ login_next | urlencode | replace('/', '%2F') | replace('?', '%3F') }}" style="display:block;text-align:center;margin-top:12px">手机号 / 扫码登录（推荐）</a>
     <p class="muted" style="text-align:center;margin-top:10px">短信验证码或微信扫码，首次登录自动注册</p>
     <div id="login-error" class="error"></div>
 
@@ -38,6 +38,7 @@
 {% endblock %}
 {% block scripts %}
 <script>
+const LOGIN_NEXT = {{ login_next | tojson }};
 const errBox = document.getElementById('login-error');
 function fail(msg){ errBox.textContent = msg; }
 
@@ -70,7 +71,7 @@ btnLogin.addEventListener('click', async () => {
   const data = await resp.json();
   if (!resp.ok || !data.ok) return fail(data.error || (mode === 'register' ? '注册失败' : '登录失败'));
   localStorage.setItem(SAAS_TOKEN_KEY, data.token);
-  location.href = '/saas/';
+  location.href = LOGIN_NEXT;
 });
 
 document.getElementById('btn-bind').addEventListener('click', async () => {
@@ -85,7 +86,7 @@ document.getElementById('btn-bind').addEventListener('click', async () => {
   if (data.token) localStorage.setItem(SAAS_TOKEN_KEY, data.token);
   errBox.textContent = '';
   alert('绑定成功，旧账号数据已关联到当前登录身份');
-  location.href = '/saas/';
+  location.href = LOGIN_NEXT;
 });
 </script>
 {% endblock %}

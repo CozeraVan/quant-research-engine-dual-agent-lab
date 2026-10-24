@@ -32,7 +32,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, g, jsonify, render_template, request
+from flask import Flask, g, jsonify, render_template, request, session
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -57,6 +57,18 @@ RATE_LIMIT_TARGET_SECONDS = 60   # 同 target 60 秒内只能发 1 次
 RATE_LIMIT_IP_MAX = 10           # 同 IP 每小时最多 10 次
 RATE_LIMIT_IP_WINDOW = 3600
 SMTP_TIMEOUT_SECONDS = 10
+
+
+def _safe_saas_next(value: Any) -> str:
+    from urllib.parse import urlsplit
+
+    raw = str(value or "").strip()
+    if not raw or "\\" in raw or raw.startswith("//"):
+        return "/saas/"
+    parsed = urlsplit(raw)
+    if parsed.scheme or parsed.netloc or not parsed.path.startswith("/saas/"):
+        return "/saas/"
+    return raw
 
 
 class EmailSender:
@@ -924,7 +936,9 @@ def create_saas_app() -> Flask:
             from flask import redirect
 
             return redirect("/saas/")
-        return render_template("login.html")
+        return render_template(
+            "login.html", login_next=_safe_saas_next(request.args.get("next"))
+        )
 
     @app.get("/saas/")
     def saas_dashboard_page() -> str:
@@ -1928,6 +1942,7 @@ def create_saas_app() -> Flask:
 
         from quant_research_engine.gui.saas import authing
 
+        session["authing_next"] = _safe_saas_next(request.args.get("next"))
         try:
             url = authing.build_authorize_url(app, authing.new_state(app))
         except authing.AuthingError as exc:
@@ -1938,6 +1953,7 @@ def create_saas_app() -> Flask:
     def saas_login_callback() -> Any:
         from quant_research_engine.gui.saas import authing
 
+        next_url = _safe_saas_next(session.pop("authing_next", "/saas/"))
         code = str(request.args.get("code") or "").strip()
         state = str(request.args.get("state") or "")
         if not code or not authing.pop_state(app, state):
@@ -1954,7 +1970,7 @@ def create_saas_app() -> Flask:
                 return render_template("login_callback.html", error=str(exc)), 403
             token = _session_for_user(conn, user["id"])
         return render_template("login_callback.html", token=token,
-                               nickname=user["nickname"] or "")
+                               nickname=user["nickname"] or "", next=next_url)
 
     @app.post("/api/saas/auth/authing")
     def api_auth_authing() -> Any:

@@ -2,6 +2,41 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T1（SDD Task 1：公共无权卡与安全登录回跳）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- `_safe_saas_next` 与 brief 规则逐条一致；Authing next 只经 Flask session 暂存，callback 消费时再次校验，覆盖恶意 session 值回归测试。
+- 公共 helper 使用 DOM API 与既有 `.card/.btn-primary/.btn-ghost/.opt`，未新增颜色或字体；`apiFetch` 默认行为兼容，关闭 401 跳转时仍清理失效 token 并抛出 `status=401`。
+- 仅改 Task 1 指定后端、母板、登录模板与测试；job/symbol/records、showcase 和既有 401/404/409 语义均未改。
+- 无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED: tests/test_gui_saas_pages.py + tests/test_saas_authing.py → 10 failed, 59 passed（功能缺失）
+GREEN: 同上 → 69 passed
+相关回归: 上述两文件 + tests/test_gui_saas.py → 133 passed
+Node new Function: base+login 3 段、login_callback 1 段渲染后脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-GUI-POOL-MOM-006（「聚类动量」页 v5 榜单可读性：横向滚动 + 首列 sticky + 精简列开关 + 详情面板上移）
 
 ## Reviewer

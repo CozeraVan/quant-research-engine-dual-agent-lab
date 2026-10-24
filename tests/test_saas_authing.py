@@ -131,10 +131,54 @@ def _login(client, app, id_token):
     return client.get(f"/saas/login/callback?code=fake-code&state={state}")
 
 
+@pytest.mark.parametrize("raw,expected", [
+    ("/saas/jobs/78?x=1#risk", "/saas/jobs/78?x=1#risk"),
+    ("https://evil.example/saas/jobs/78", "/saas/"),
+    ("//evil.example/saas/jobs/78", "/saas/"),
+    ("/%5c%5cevil.example", "/saas/"),
+    ("/other", "/saas/"),
+])
+def test_safe_next(raw, expected):
+    from quant_research_engine.gui.saas.app import _safe_saas_next
+
+    assert _safe_saas_next(raw) == expected
+
+
 class TestAuthorizeRedirect:
     def test_redirect_to_authing(self, client):
         state = _authorize_state(client)
         assert state
+
+    def test_next_is_stored_in_flask_session(self, client):
+        resp = client.get("/saas/login/authing?next=/saas/jobs/78%3Fx%3D1%23risk")
+        assert resp.status_code == 302
+        with client.session_transaction() as flask_session:
+            assert flask_session["authing_next"] == "/saas/jobs/78?x=1#risk"
+
+    def test_callback_revalidates_and_consumes_session_next(self, client, app, rsa_keys):
+        key, _ = rsa_keys
+        state = _authorize_state(client)
+        with client.session_transaction() as flask_session:
+            flask_session["authing_next"] = "https://evil.example/saas/jobs/78"
+        app.extensions["mock_auth"]["id_token"] = _make_id_token(key, sub="sub-next-revalidate")
+        resp = client.get(f"/saas/login/callback?code=c&state={state}")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'const NEXT = "/saas/";' in html
+        assert "location.replace(NEXT);" in html
+        with client.session_transaction() as flask_session:
+            assert "authing_next" not in flask_session
+
+    def test_callback_uses_stored_next(self, client, app, rsa_keys):
+        key, _ = rsa_keys
+        resp = client.get("/saas/login/authing?next=/saas/jobs/78%3Fx%3D1%23risk")
+        state = parse_qs(urlparse(resp.headers["Location"]).query)["state"][0]
+        app.extensions["mock_auth"]["id_token"] = _make_id_token(key, sub="sub-next")
+        callback = client.get(f"/saas/login/callback?code=c&state={state}")
+        assert callback.status_code == 200
+        html = callback.get_data(as_text=True)
+        assert 'const NEXT = "/saas/jobs/78?x=1#risk";' in html
+        assert "location.replace(NEXT);" in html
 
     def test_state_single_use(self, client, app, rsa_keys):
         key, _ = rsa_keys

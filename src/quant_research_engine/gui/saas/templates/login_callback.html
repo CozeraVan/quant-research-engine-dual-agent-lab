@@ -29,7 +29,8 @@ a.btn{display:inline-block;margin-top:16px;background:var(--accent);color:#fff;b
 {% if token %}
 <script>
 localStorage.setItem('saas_token', {{ token | tojson }});
-location.replace('/saas/');
+const NEXT = {{ next | default('/saas/', true) | tojson }};
+location.replace(NEXT);
 </script>
 {% endif %}
 </body>

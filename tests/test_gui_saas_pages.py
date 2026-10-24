@@ -72,6 +72,35 @@ class TestPages:
         assert 'type="password"' in html and 'id="btn-login"' in html
         assert 'name="viewport"' in html
 
+    def test_login_page_preserves_safe_next(self, client):
+        resp = client.get("/saas/login?next=/saas/jobs/78%3Fx%3D1%23risk")
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'const LOGIN_NEXT = "/saas/jobs/78?x=1#risk";' in html
+        assert "location.href = LOGIN_NEXT;" in html
+        assert "location.href = '/saas/';" not in html
+        assert 'href="/saas/login/authing?next=%2Fsaas%2Fjobs%2F78%3Fx%3D1%23risk"' in html
+
+    def test_common_access_fallback_helpers(self, client):
+        html = client.get("/saas/login").get_data(as_text=True)
+        for marker in (
+            "function saasLoginUrl()",
+            "function showAccessFallback(root)",
+            "function showLoadFailure(root, retryFn)",
+            "opts.redirectOn401 !== false",
+            "error.status = 401",
+            "location.pathname + location.search + location.hash",
+            "页面不存在或暂无访问权限",
+            "登录/注册",
+            "返回首页",
+            "登录后可查看并管理自己的回测记录",
+            "加载失败，请稍后重试",
+            "root.replaceChildren(card)",
+            "document.createElement",
+            "retryFn",
+        ):
+            assert marker in html
+
     def test_dashboard_page(self, client):
         resp = client.get("/saas/")
         assert resp.status_code == 200

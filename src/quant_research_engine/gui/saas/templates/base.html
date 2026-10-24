@@ -205,25 +205,74 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script>
-// 公共：token 存 localStorage；所有 API 带 Bearer；401 跳登录页
+// 公共：token 存 localStorage；所有 API 带 Bearer；失效会话跳登录并保留回跳地址
 // （staging 免登录 SAAS_AUTH_BYPASS=1 时路由不返 401，该逻辑不触发）
 const SAAS_TOKEN_KEY = 'saas_token';
 const SAAS_BYPASS = {{ saas_auth_bypass | default(false) | tojson }};  // staging 免登录（QRE-SAAS-009 防刷新环）
 function saasToken(){ return localStorage.getItem(SAAS_TOKEN_KEY) || ''; }
+function saasLoginUrl(){
+  const next = location.pathname + location.search + location.hash;
+  return '/saas/login?next=' + encodeURIComponent(next);
+}
 async function apiFetch(url, opts){
   opts = opts || {};
+  const redirectOn401 = opts.redirectOn401 !== false;
+  delete opts.redirectOn401;
   opts.headers = Object.assign({}, opts.headers, {'Authorization': 'Bearer ' + saasToken()});
   if (opts.json !== undefined){ opts.method = opts.method || 'POST'; opts.headers['Content-Type']='application/json'; opts.body = JSON.stringify(opts.json); delete opts.json; }
   const resp = await fetch(url, opts);
   // 401 跳转仅限"带了 token 但已失效"（过期会话回登录页）；游客（无 token）不拽走，
   // 由调用方按业务处理（如配额/权限弹层），否则公共页任何 401 都会把游客甩去登录。
   if (resp.status === 401){
-    if (saasToken()){ localStorage.removeItem(SAAS_TOKEN_KEY); location.href = '/saas/login'; }
-    throw new Error('unauthorized');
+    if (saasToken()){
+      localStorage.removeItem(SAAS_TOKEN_KEY);
+      if (redirectOn401) location.href = saasLoginUrl();
+    }
+    const error = new Error('unauthorized'); error.status = 401; throw error;
   }
   return resp;
 }
-function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = '/saas/login'; }
+function requireLogin(){ if (!SAAS_BYPASS && !saasToken()) location.href = saasLoginUrl(); }
+function showAccessFallback(root){
+  const card = document.createElement('div');
+  card.className = 'card';
+  const title = document.createElement('h2');
+  title.textContent = '页面不存在或暂无访问权限';
+  card.appendChild(title);
+  if (!SAAS_BYPASS && !saasToken()){
+    const hint = document.createElement('p');
+    hint.className = 'opt';
+    hint.textContent = '登录后可查看并管理自己的回测记录';
+    card.appendChild(hint);
+  }
+  const actions = document.createElement('div');
+  const login = document.createElement('a');
+  login.className = 'btn btn-primary';
+  login.href = saasLoginUrl();
+  login.textContent = '登录/注册';
+  const home = document.createElement('a');
+  home.className = 'btn btn-ghost';
+  home.href = '/saas/new';
+  home.textContent = '返回首页';
+  actions.appendChild(login);
+  actions.appendChild(home);
+  card.appendChild(actions);
+  root.replaceChildren(card);
+}
+function showLoadFailure(root, retryFn){
+  const card = document.createElement('div');
+  card.className = 'card';
+  const message = document.createElement('p');
+  message.textContent = '加载失败，请稍后重试';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn btn-primary';
+  retry.textContent = '重试';
+  retry.addEventListener('click', retryFn);
+  card.appendChild(message);
+  card.appendChild(retry);
+  root.replaceChildren(card);
+}
 // QRE-SAAS-GUEST-UX：游客条（未登录时全局可见）；顶栏当前页高亮；已登录把「登录/注册」换「退出」
 (function(){
   var loggedIn = SAAS_BYPASS || !!saasToken();
