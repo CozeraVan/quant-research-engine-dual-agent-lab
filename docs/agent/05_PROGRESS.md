@@ -1243,3 +1243,9 @@ Historical row statuses (pre-migration, kept for old table rows):
 - `job.html` 使用单一轮询控制器：401/404 复用公共无权卡且只替换 `.container`，其他异常复用加载失败卡；ACTIVE 每5秒刷新，TERMINAL 停止，连续异常3次或活跃等待5分钟暂停并可重试，重试前清旧 timer。`tag-analysis` 404 仍按无归因处理。
 - showcase 匿名/非所有者 GET 保持只读开放；`initResultActions` 对 readonly 直接返回，个股按需生成 POST 在 `_require_completed_result` 后拒绝 403，且不创建 `symbol_detail` 任务。
 - TDD：RED `2 failed, 103 passed`；GREEN 指定两测试文件 `105 passed`；加入 `test_saas_symbol_ux.py` 回归 `143 passed`；渲染后 job/base 3 段内联脚本 Node `new Function()` 全部通过。未跑全量回测。
+
+### Task 2 审查修复
+
+- completed 整轮必需资源与渲染成功后才清零连续异常计数，chart/tag 连续失败3次会暂停且保留重试；仅 summary 阶段401/404进入统一无权卡，chart 404进入加载失败，tag 404仍为空归因。
+- `loadRisk` 使用 `redirectOn401:false` 并收口网络/401/HTTP/JSON/render 异常，仅在风险区显示「风险分析加载失败」与重试，不触发整页无权或登录跳转。
+- 新增无依赖 Node fake-fetch/fake-timer 行为测试3例；审查修复 RED `3 failed, 40 deselected`，GREEN 定向 `3 passed`，指定两文件 `108 passed`，扩展回归 `146 passed`，Node 模板解析3段通过。

@@ -539,12 +539,27 @@ function renderFees(fees, meta){
     '</div>';
 }
 async function loadRisk(){
-  const resp = await apiFetch('/api/results/' + JOB_ID + '/risk-analysis');
-  if (!resp.ok){ return; }
-  const d = await resp.json();
-  if (!d.ok || !d.has_report){ document.getElementById('box-risk').style.display = 'none'; return; }
-  document.getElementById('box-risk').style.display = '';
-  renderRisk(d);
+  const box = document.getElementById('box-risk');
+  const body = document.getElementById('risk-body');
+  try {
+    const resp = await apiFetch('/api/results/' + JOB_ID + '/risk-analysis', {redirectOn401:false});
+    if (!resp.ok) throw pollHttpError(resp);
+    const d = await resp.json();
+    if (!d.ok || !d.has_report){ box.style.display = 'none'; return; }
+    box.style.display = '';
+    renderRisk(d);
+  } catch (error) {
+    box.style.display = '';
+    const message = document.createElement('div');
+    message.className = 'chart-empty';
+    message.textContent = '风险分析加载失败';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'btn-sm';
+    retry.textContent = '重试';
+    retry.addEventListener('click', loadRisk);
+    body.replaceChildren(message, retry);
+  }
 }
 function renderRisk(d) {
     riskCharts.forEach(function(c) { c.dispose(); });
@@ -781,10 +796,10 @@ function pauseActivePolling(){
   document.querySelector('.container').replaceChildren(card);
   jobContentDetached = true;
 }
-function handlePollError(error){
+function handlePollError(error, summaryLoaded){
   clearPollTimer();
   consecutiveErrors += 1;
-  if (error && (error.status === 401 || error.status === 404)){
+  if (!summaryLoaded && error && (error.status === 401 || error.status === 404)){
     showAccessFallback(document.querySelector('.container'));
     jobContentDetached = true;
     return;
@@ -811,6 +826,7 @@ async function poll(){
   if (pollInFlight) return;
   pollInFlight = true;
   restoreJobContent();
+  let summaryLoaded = false;
   try {
     const resp = await apiFetch('/api/results/' + JOB_ID + '/summary', {redirectOn401:false});
     if (resp.status === 404) throw pollHttpError(resp);
@@ -845,7 +861,7 @@ async function poll(){
       return;
     }
     if (!resp.ok || !data.ok) throw pollHttpError(resp);
-    consecutiveErrors = 0;
+    summaryLoaded = true;
     activeSince = null;
     clearPollTimer();
 
@@ -891,9 +907,10 @@ async function poll(){
     renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
     renderFees(chart.fees_summary || null, chart.meta || null);
     document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
+    consecutiveErrors = 0;
     loadRisk();
   } catch (error) {
-    handlePollError(error);
+    handlePollError(error, summaryLoaded);
   } finally {
     pollInFlight = false;
   }

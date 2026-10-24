@@ -2,6 +2,43 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T2-REVIEW-FIX（Task 2 审查问题修复）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- Important 1 已修复：`consecutiveErrors=0` 移至 summary、chart/tag 和结果渲染整轮成功之后；completed 资源连续失败同样三次暂停，无无限 timer，重试入口保留。
+- Important 2 已修复：`handlePollError` 通过 `summaryLoaded` 限定统一无权卡只服务 summary 主资源401/404；chart 404走加载失败，tag 404仍按无归因完成。
+- Minor 1 已修复：`loadRisk` 关闭401自动跳转，所有网络/HTTP/JSON/render 异常在函数内捕获，仅替换风险区内容并提供重试，不误判整页权限。
+- 行为测试直接执行模板提取的真实 JS，fake-fetch/fake-timer 无新依赖；覆盖审查指出的两类根因及风险区四类异常，不再仅依赖静态断言。
+- 无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED: 新增3项行为测试 → 3 failed, 40 deselected（计数1≠3、chart404误报无权、risk offline rejection）
+GREEN: 同上 → 3 passed, 40 deselected
+指定回归: tests/test_gui_saas_pages.py + tests/test_gui_saas.py → 108 passed
+扩展回归: 上述两文件 + tests/test_saas_symbol_ux.py → 146 passed
+Node new Function: 渲染后的 job/base 3段内联脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T2（SDD Task 2：job 详情状态机与 showcase 严格只读）
 
 ## Reviewer

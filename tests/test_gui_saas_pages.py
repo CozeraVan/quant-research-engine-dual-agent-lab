@@ -7,8 +7,12 @@
 
 from __future__ import annotations
 
+import json
+import re
+import shutil
 import subprocess
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -59,6 +63,70 @@ def client(saas_db):
 
 
 AUTH = {"X-User-Id": "1"}  # dev 后门
+
+
+_JOB_JS_HARNESS = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+function el(){
+  return {
+    children: [], childNodes: [], style: {}, className: '', textContent: '', innerHTML: '',
+    classList: {add(){}, remove(){}},
+    appendChild(...nodes){ this.children.push(...nodes); this.childNodes.push(...nodes); },
+    replaceChildren(...nodes){ this.children = [...nodes]; this.childNodes = [...nodes]; },
+    addEventListener(){},
+  };
+}
+function response(status, data, jsonError){
+  return {status, ok: status >= 200 && status < 300, json: async () => {
+    if (jsonError) throw new Error('invalid json');
+    return data;
+  }};
+}
+function createHarness(fetchImpl){
+  const root = el();
+  root.childNodes = [el()];
+  const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = el()); }});
+  const calls = {access: 0, failure: 0, attribution: 0, requests: []};
+  const timers = new Map();
+  let nextTimer = 1;
+  const document = {
+    querySelector(selector){
+      if (selector === '.container') return root;
+      if (selector === '.container .card') return root.children[root.children.length - 1];
+      return null;
+    },
+    getElementById(id){ return elements[id]; },
+    createElement(){ return el(); },
+  };
+  const context = vm.createContext({
+    console, document, JOB_ID: 1, STATUS_LABEL: {}, SAAS_BYPASS: false,
+    saasToken(){ return 'token'; },
+    apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
+    showAccessFallback(target){ calls.access += 1; target.replaceChildren(el()); },
+    showLoadFailure(target, retry){ calls.failure += 1; calls.retry = retry; target.replaceChildren(el()); },
+    setTimeout(fn){ const id = nextTimer++; timers.set(id, fn); return id; },
+    clearTimeout(id){ timers.delete(id); },
+    renderMeta(){}, renderStrategyInfo(){}, renderMetrics(){}, renderMain(){}, empty(){},
+    initReplay(){}, initResultActions(){}, renderFees(){}, loadRisk(){}, renderRisk(){},
+    renderAttribution(){ calls.attribution += 1; },
+  });
+  return {context, calls, timers, root, elements};
+}
+"""
+
+
+def _run_job_js(html: str, source_pattern: str, scenario: str) -> None:
+    match = re.search(source_pattern, html, re.S)
+    assert match, "未找到待测模板脚本"
+    node = shutil.which("node")
+    if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+        node = "/home/van/codex-local/node-v22/bin/node"
+    if not node:
+        pytest.skip("node 不可用")
+    script = _JOB_JS_HARNESS + "\nconst source = " + json.dumps(match.group(1)) + ";\n" + scenario
+    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr or result.stdout
 
 
 class TestPages:
@@ -165,6 +233,83 @@ class TestPages:
             "tagResp.status === 404",
         ):
             assert marker in html
+
+    def test_job_completed_resource_failures_pause_after_three_rounds(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(const ACTIVE =.*?)(?=// --- 回测重播)", r"""
+const h = createHarness(async url => {
+  if (url.includes('/summary')) return response(200, {ok: true, summary: {}});
+  if (url.includes('/chart-data')) return response(500, {ok: false});
+  return response(404, {ok: false});
+});
+vm.runInContext(source, h.context);
+(async () => {
+  for (let round = 0; round < 3; round += 1) await vm.runInContext('poll()', h.context);
+  assert.equal(vm.runInContext('consecutiveErrors', h.context), 3);
+  assert.equal(h.calls.failure, 3);
+  assert.equal(h.calls.access, 0);
+  assert.equal(h.timers.size, 0, '连续 chart 失败后必须暂停，不能继续无限轮询');
+  assert.equal(typeof h.calls.retry, 'function', '暂停后必须保留重试入口');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_job_resource_404_does_not_trigger_access_fallback(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(const ACTIVE =.*?)(?=// --- 回测重播)", r"""
+(async () => {
+  const chart404 = createHarness(async url => {
+    if (url.includes('/summary')) return response(200, {ok: true, summary: {}});
+    if (url.includes('/chart-data')) return response(404, {ok: false});
+    return response(404, {ok: false});
+  });
+  vm.runInContext(source, chart404.context);
+  await vm.runInContext('poll()', chart404.context);
+  assert.equal(chart404.calls.access, 0, 'chart-data 404 不是任务无权');
+  assert.equal(chart404.calls.failure, 1);
+
+  const summary404 = createHarness(async () => response(404, {ok: false}));
+  vm.runInContext(source, summary404.context);
+  await vm.runInContext('poll()', summary404.context);
+  assert.equal(summary404.calls.access, 1);
+  assert.equal(summary404.calls.failure, 0);
+
+  const tag404 = createHarness(async url => {
+    if (url.includes('/summary')) return response(200, {ok: true, summary: {}});
+    if (url.includes('/chart-data')) return response(200, {ok: true});
+    return response(404, {ok: false});
+  });
+  vm.runInContext(source, tag404.context);
+  await vm.runInContext('poll()', tag404.context);
+  assert.equal(tag404.calls.access, 0);
+  assert.equal(tag404.calls.failure, 0);
+  assert.equal(tag404.calls.attribution, 1, 'tag-analysis 404 仍按无归因完成整轮');
+  assert.equal(vm.runInContext('consecutiveErrors', tag404.context), 0);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_load_risk_errors_are_local_and_never_redirect(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(async function loadRisk\(\)\{.*?\})(?=\nfunction renderRisk)", r"""
+(async () => {
+  const unauthorized = new Error('unauthorized');
+  unauthorized.status = 401;
+  const scenarios = [
+    async () => { throw new Error('offline'); },
+    async () => { throw unauthorized; },
+    async () => response(500, {ok: false}),
+    async () => response(200, null, true),
+  ];
+  for (const apiFetch of scenarios){
+    const h = createHarness(apiFetch);
+    vm.runInContext(source, h.context);
+    await vm.runInContext('loadRisk()', h.context);
+    assert.equal(h.elements['box-risk'].style.display, '');
+    assert.equal(h.elements['risk-body'].children[0].textContent, '风险分析加载失败');
+    assert.equal(h.calls.access, 0, '风险区异常不能触发整页无权');
+    assert.equal(h.calls.requests.at(-1).options.redirectOn401, false);
+  }
+})().catch(error => { console.error(error); process.exit(1); });
+""")
 
     def test_no_engineering_jargon(self, client):
         # 零术语原则：页面不得出现 沙箱/晋升/promote/试算 等内部词
