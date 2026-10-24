@@ -2,6 +2,44 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T3-REVIEW-FIX（Task 3 审查问题修复）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 永久 pending 根因已消除：三条请求均有 AbortSignal 和明确超时，超时取 15 秒与 5 分钟剩余等待的较小值；5 分钟硬上限包含请求等待，超时显示加载失败并提供重试。
+- 重试卡死根因已消除：新轮次先 abort 并释放旧 in-flight，poll/generate/load 独立 epoch 防止旧 catch/finally 清除新状态；连续重试只保留最新请求，无重复 timer。
+- 旧 load 覆盖根因已消除：主 load 仅最新 epoch 可渲染，ready 与手动重试交叉时旧响应被忽略，重播初始化只发生在新一轮成功渲染。
+- 三条请求均先分流 HTTP 401/404；主详情仅为 `can_generate` 解析 404 JSON，解析失败仍统一无权。500 与非 JSON 500 不误判权限，生成 POST 失败恢复按钮。
+- 无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED pending/retry: 3 failed, 47 deselected → GREEN: 3 passed, 47 deselected
+RED load epoch: 1 failed, 50 deselected → GREEN: 1 passed, 50 deselected
+RED HTTP/JSON: 1 failed, 51 deselected → GREEN: 1 passed, 51 deselected
+状态机相关: 9 passed, 43 deselected
+扩展回归: tests/test_gui_saas_pages.py + tests/test_gui_saas.py + tests/test_saas_symbol_ux.py → 155 passed
+Node new Function: 渲染后的 symbol/base 3 段内联脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T3（SDD Task 3：个股详情与按需生成有限轮询）
 
 ## Reviewer

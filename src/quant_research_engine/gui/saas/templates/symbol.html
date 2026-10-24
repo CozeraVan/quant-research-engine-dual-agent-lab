@@ -85,12 +85,20 @@ function table(elId, rows, columns){
 }
 
 const SYMBOL_POLL_INTERVAL_MS = 3000;
+const SYMBOL_REQUEST_TIMEOUT_MS = 15000;
 const SYMBOL_MAX_CONSECUTIVE_ERRORS = 3;
 const SYMBOL_MAX_WAIT_MS = 5 * 60 * 1000;
 const SYMBOL_ACTIVE = new Set(['queued','leased','running','uploading']);
 const SYMBOL_CONTENT = Array.from(document.querySelector('.wrap').childNodes);
 let symbolPollTimer = null;
 let symbolPollInFlight = false;
+let symbolPollController = null;
+let symbolGenerateController = null;
+let symbolLoadController = null;
+let symbolLoadInFlight = false;
+let symbolPollEpoch = 0;
+let symbolGenerateEpoch = 0;
+let symbolLoadEpoch = 0;
 let symbolConsecutiveErrors = 0;
 let symbolActiveSince = null;
 let symbolContentDetached = false;
@@ -100,7 +108,34 @@ function clearSymbolPollTimer(){
 }
 function scheduleSymbolPoll(){
   clearSymbolPollTimer();
-  symbolPollTimer = setTimeout(() => { symbolPollTimer = null; pollGen(); }, SYMBOL_POLL_INTERVAL_MS);
+  symbolPollTimer = setTimeout(() => { symbolPollTimer = null; return pollGen(); }, SYMBOL_POLL_INTERVAL_MS);
+}
+function abortSymbolPoll(){
+  symbolPollEpoch += 1;
+  if (symbolPollController) symbolPollController.abort();
+  symbolPollController = null;
+  symbolPollInFlight = false;
+}
+function abortSymbolGenerate(){
+  symbolGenerateEpoch += 1;
+  if (symbolGenerateController) symbolGenerateController.abort();
+  symbolGenerateController = null;
+}
+function abortSymbolLoad(){
+  symbolLoadEpoch += 1;
+  if (symbolLoadController) symbolLoadController.abort();
+  symbolLoadController = null;
+  symbolLoadInFlight = false;
+}
+async function symbolFetchWithTimeout(url, options, controller){
+  const elapsed = symbolActiveSince === null ? 0 : Date.now() - symbolActiveSince;
+  const remaining = Math.max(0, SYMBOL_MAX_WAIT_MS - elapsed);
+  const timeout = setTimeout(() => controller.abort(), Math.min(SYMBOL_REQUEST_TIMEOUT_MS, remaining));
+  try {
+    return await apiFetch(url, Object.assign({}, options, {signal: controller.signal}));
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 function restoreSymbolContent(){
   if (!symbolContentDetached) return;
@@ -126,30 +161,12 @@ function retryLoad(){
 }
 function retryGen(){
   clearSymbolPollTimer();
+  abortSymbolGenerate();
+  abortSymbolLoad();
   symbolConsecutiveErrors = 0;
   symbolActiveSince = null;
   restoreSymbolContent();
   return pollGen();
-}
-function pauseSymbolPolling(){
-  clearSymbolPollTimer();
-  const card = document.createElement('div');
-  card.className = 'card';
-  const message = document.createElement('p');
-  message.textContent = '已暂停自动刷新';
-  const hint = document.createElement('p');
-  hint.className = 'opt';
-  hint.textContent = '生成任务可能仍在执行，可点击重试继续查看';
-  const retry = document.createElement('button');
-  retry.type = 'button';
-  retry.className = 'btn btn-primary';
-  retry.textContent = '重试';
-  retry.addEventListener('click', retryGen);
-  card.appendChild(message);
-  card.appendChild(hint);
-  card.appendChild(retry);
-  document.querySelector('.wrap').replaceChildren(card);
-  symbolContentDetached = true;
 }
 function handleSymbolPollError(error){
   clearSymbolPollTimer();
@@ -157,20 +174,40 @@ function handleSymbolPollError(error){
   symbolConsecutiveErrors += 1;
   showSymbolLoadFailure(retryGen);
   if (symbolConsecutiveErrors >= SYMBOL_MAX_CONSECUTIVE_ERRORS) return;
-  if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS){ pauseSymbolPolling(); return; }
+  if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS) return;
   scheduleSymbolPoll();
 }
 
 async function load(){
   clearSymbolPollTimer();
+  abortSymbolGenerate();
+  abortSymbolPoll();
+  abortSymbolLoad();
+  const epoch = symbolLoadEpoch;
+  const controller = new AbortController();
+  symbolLoadController = controller;
+  symbolLoadInFlight = true;
   symbolConsecutiveErrors = 0;
   symbolActiveSince = null;
   restoreSymbolContent();
   try {
-    const resp = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`, {redirectOn401:false});
-    const d = await resp.json();
-    if (resp.status === 404 && d.can_generate){ showGenerate(); return; }
-    if (resp.status === 401 || resp.status === 404){ showSymbolAccess(); return; }
+    const resp = await symbolFetchWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`, {redirectOn401:false}, controller);
+    if (epoch !== symbolLoadEpoch) return;
+    if (resp.status === 401){ showSymbolAccess(); return; }
+    let d;
+    if (resp.status === 404){
+      try { d = await resp.json(); }
+      catch (error) {
+        if (epoch === symbolLoadEpoch) showSymbolAccess();
+        return;
+      }
+      if (epoch !== symbolLoadEpoch) return;
+      if (d && d.can_generate){ showGenerate(); return; }
+      showSymbolAccess();
+      return;
+    }
+    d = await resp.json();
+    if (epoch !== symbolLoadEpoch) return;
     if (!resp.ok || !d.ok) throw new Error('加载失败 HTTP ' + resp.status);
     renderSummary(d.summary);
     renderEquity(d);
@@ -200,8 +237,14 @@ async function load(){
       ? '全量 ' + d.kline.dates.length + ' 个交易日'
       : 'K线/因子明细暂缺（该股详情产物未随任务回传）';
   } catch (error) {
+    if (epoch !== symbolLoadEpoch) return;
     if (error && (error.status === 401 || error.status === 404)){ showSymbolAccess(); return; }
     showSymbolLoadFailure(retryLoad);
+  } finally {
+    if (epoch === symbolLoadEpoch){
+      symbolLoadController = null;
+      symbolLoadInFlight = false;
+    }
   }
 }
 
@@ -209,6 +252,8 @@ async function load(){
 // symbol_detail 轻量任务 → 有限轮询 gen-status → ready 后重载渲染
 function showGenerate(message){
   clearSymbolPollTimer();
+  abortSymbolPoll();
+  abortSymbolLoad();
   restoreSymbolContent();
   const el = $('#sym-note');
   el.textContent = message || '该股详情产物未随任务回传（批量回传仅含头部个股）。';
@@ -221,33 +266,49 @@ function showGenerate(message){
   el.appendChild(btn);
   btn.addEventListener('click', async () => {
     clearSymbolPollTimer();
+    abortSymbolPoll();
+    abortSymbolGenerate();
+    abortSymbolLoad();
+    const epoch = symbolGenerateEpoch;
+    const controller = new AbortController();
+    symbolGenerateController = controller;
+    if (symbolActiveSince === null) symbolActiveSince = Date.now();
     btn.disabled = true; btn.textContent = '生成中…';
     try {
-      const r = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/generate`, {method: 'POST', redirectOn401:false});
-      const g = await r.json();
+      const r = await symbolFetchWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/generate`, {method: 'POST', redirectOn401:false}, controller);
+      if (epoch !== symbolGenerateEpoch) return;
       if (r.status === 401 || r.status === 404){ showSymbolAccess(); return; }
+      const g = await r.json();
+      if (epoch !== symbolGenerateEpoch) return;
       if (!r.ok || !g.ok){ showGenerate('生成请求失败' + (g.error ? '：' + g.error : '，请重试')); return; }
       if (g.status === 'ready'){ await load(); return; }
       if (!SYMBOL_ACTIVE.has(g.status)){ showGenerate('生成失败' + (g.error ? '：' + g.error : '，请重试')); return; }
       symbolConsecutiveErrors = 0;
-      symbolActiveSince = null;
       await pollGen();
     } catch (error) {
+      if (epoch !== symbolGenerateEpoch) return;
       if (error && (error.status === 401 || error.status === 404)){ showSymbolAccess(); return; }
       showGenerate('生成请求失败，请重试');
+    } finally {
+      if (epoch === symbolGenerateEpoch) symbolGenerateController = null;
     }
   });
 }
 async function pollGen(){
   clearSymbolPollTimer();
-  if (symbolPollInFlight) return;
+  abortSymbolPoll();
+  const epoch = symbolPollEpoch;
+  const controller = new AbortController();
+  symbolPollController = controller;
   symbolPollInFlight = true;
   if (symbolActiveSince === null) symbolActiveSince = Date.now();
   restoreSymbolContent();
   try {
-    const r = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`, {redirectOn401:false});
-    const g = await r.json();
+    const r = await symbolFetchWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`, {redirectOn401:false}, controller);
+    if (epoch !== symbolPollEpoch) return;
     if (r.status === 401 || r.status === 404){ showSymbolAccess(); return; }
+    const g = await r.json();
+    if (epoch !== symbolPollEpoch) return;
     if (!r.ok || !g.ok) throw new Error('生成状态加载失败 HTTP ' + r.status);
     symbolConsecutiveErrors = 0;
     if (g.status === 'ready'){
@@ -260,12 +321,15 @@ async function pollGen(){
       return;
     }
     $('#sym-note').textContent = '该股详情生成中（' + g.status + '）…';
-    if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS){ pauseSymbolPolling(); return; }
+    if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS){ showSymbolLoadFailure(retryGen); return; }
     scheduleSymbolPoll();
   } catch (error) {
-    handleSymbolPollError(error);
+    if (epoch === symbolPollEpoch) handleSymbolPollError(error);
   } finally {
-    symbolPollInFlight = false;
+    if (epoch === symbolPollEpoch){
+      symbolPollController = null;
+      symbolPollInFlight = false;
+    }
   }
 }
 

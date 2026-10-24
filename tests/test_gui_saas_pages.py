@@ -154,7 +154,7 @@ function createSymbolHarness(fetchImpl){
   const root = symbolEl();
   root.childNodes = [symbolEl()];
   const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = symbolEl()); }});
-  const calls = {access: 0, failure: 0, requests: []};
+  const calls = {access: 0, failure: 0, requests: [], summaries: [], replay: 0};
   const timers = new Map();
   let nextTimer = 1;
   let now = 1000;
@@ -169,20 +169,27 @@ function createSymbolHarness(fetchImpl){
     createElement(){ return symbolEl(); },
   };
   const context = vm.createContext({
-    console, document, JOB_ID: 1, TS_CODE: '000001.SZ', STATUS_LABEL: {},
+    console, document, JOB_ID: 1, TS_CODE: '000001.SZ', STATUS_LABEL: {}, AbortController,
     Date: {now(){ return now; }},
     $(selector){ return document.querySelector(selector); },
     apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
     showAccessFallback(target){ calls.access += 1; target.replaceChildren(symbolEl()); },
     showLoadFailure(target, retry){ calls.failure += 1; calls.retry = retry; target.replaceChildren(symbolEl()); },
-    setTimeout(fn){ const id = nextTimer++; timers.set(id, fn); return id; },
+    setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
     clearTimeout(id){ timers.delete(id); },
-    renderSummary(){}, renderEquity(){}, renderWear(){}, renderRisk(){}, renderKline(){},
-    initKlineReplay(){}, table(){}, pct(){ return ''; },
+    renderSummary(summary){ calls.summaries.push(summary); }, renderEquity(){}, renderWear(){}, renderRisk(){}, renderKline(){},
+    initKlineReplay(){ calls.replay += 1; }, table(){}, pct(){ return ''; },
   });
   return {
     context, calls, timers, root, elements,
     setNow(value){ now = value; },
+    async runNextTimer(){
+      const entry = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      assert.ok(entry, '必须存在可执行的 timeout');
+      timers.delete(entry[0]);
+      now = Math.max(now, entry[1].at);
+      return entry[1].fn();
+    },
     generateButton(){
       return elements['sym-note'].children.find(node => node.id === 'btn-gen') || elements['btn-gen'];
     },
@@ -249,6 +256,46 @@ class TestPages:
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
+    def test_symbol_http_status_precedes_json_for_all_requests(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  for (const status of [401, 404]){
+    const main = createSymbolHarness(async () => response(status, null, true));
+    vm.runInContext(source, main.context);
+    await vm.runInContext('load()', main.context);
+    assert.equal(main.calls.access, 1, '主详情非JSON ' + status + ' 必须显示无权卡');
+    assert.equal(main.calls.failure, 0);
+
+    const polling = createSymbolHarness(async () => response(status, null, true));
+    vm.runInContext(source, polling.context);
+    await vm.runInContext('pollGen()', polling.context);
+    assert.equal(polling.calls.access, 1, 'gen-status 非JSON ' + status + ' 必须显示无权卡');
+    assert.equal(polling.calls.failure, 0);
+    assert.equal(polling.timers.size, 0);
+
+    const generating = createSymbolHarness(async () => response(status, null, true));
+    vm.runInContext(source, generating.context);
+    await vm.runInContext('showGenerate()', generating.context);
+    await generating.generateButton().listeners.click();
+    assert.equal(generating.calls.access, 1, '生成 POST 非JSON ' + status + ' 必须显示无权卡');
+  }
+  for (const command of ['load()', 'pollGen()']){
+    const h = createSymbolHarness(async () => response(500, null, true));
+    vm.runInContext(source, h.context);
+    await vm.runInContext(command, h.context);
+    assert.equal(h.calls.access, 0);
+    assert.equal(h.calls.failure, 1, command + ' 的非JSON 500 必须显示加载失败');
+  }
+  const generating = createSymbolHarness(async () => response(500, null, true));
+  vm.runInContext(source, generating.context);
+  await vm.runInContext('showGenerate()', generating.context);
+  await generating.generateButton().listeners.click();
+  assert.equal(generating.calls.access, 0);
+  assert.equal(generating.generateButton().disabled, false, '生成 POST 非JSON 500 必须恢复重试按钮');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
     def test_symbol_generate_failure_restores_button(self, client):
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
         _run_symbol_js(html, r"""
@@ -305,6 +352,45 @@ class TestPages:
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
+    def test_symbol_load_latest_epoch_wins_without_duplicate_replay(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+function deferred(){
+  let resolve;
+  const promise = new Promise(r => { resolve = r; });
+  return {promise, resolve};
+}
+function detail(name){
+  return response(200, {ok: true, summary: {name}, trades: [], orders: [], failed_orders: []});
+}
+(async () => {
+  const mains = [];
+  let notifyMain;
+  const mainStarted = new Promise(resolve => { notifyMain = resolve; });
+  const h = createSymbolHarness((url, options) => {
+    if (url.endsWith('/gen-status')) return Promise.resolve(response(200, {ok: true, status: 'ready'}));
+    const pending = deferred();
+    mains.push({pending, options});
+    notifyMain();
+    return pending.promise;
+  });
+  vm.runInContext(source, h.context);
+  const readyLoad = vm.runInContext('pollGen()', h.context);
+  await mainStarted;
+  assert.equal(mains.length, 1);
+  const manualLoad = vm.runInContext('retryLoad()', h.context);
+  assert.equal(mains.length, 2);
+  mains[1].pending.resolve(detail('new'));
+  await manualLoad;
+  assert.deepEqual(h.calls.summaries.map(s => s.name), ['new']);
+  assert.equal(h.calls.replay, 1);
+  mains[0].pending.resolve(detail('old'));
+  await readyLoad;
+  assert.deepEqual(h.calls.summaries.map(s => s.name), ['new'], '旧 load 响应不能覆盖手动重试的新响应');
+  assert.equal(h.calls.replay, 1, '成功重入不能重复初始化重播监听');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
     def test_symbol_gen_status_errors_stop_after_three_with_single_timer_retry(self, client):
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
         _run_symbol_js(html, r"""
@@ -332,7 +418,82 @@ class TestPages:
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
-    def test_symbol_gen_status_wait_limit_pauses_with_retry(self, client):
+    def test_symbol_pending_requests_timeout_and_recover(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+function pendingResponse(options){
+  return new Promise((resolve, reject) => {
+    if (options.signal) options.signal.addEventListener('abort', () => {
+      const error = new Error('aborted'); error.name = 'AbortError'; reject(error);
+    });
+  });
+}
+(async () => {
+  let blocked = true;
+  const polling = createSymbolHarness(async (url, options) => {
+    if (blocked) return pendingResponse(options);
+    return response(200, {ok: true, status: 'queued'});
+  });
+  vm.runInContext(source, polling.context);
+  const first = vm.runInContext('pollGen()', polling.context);
+  assert.ok(polling.calls.requests[0].options.signal, 'gen-status 必须传 AbortSignal');
+  await polling.runNextTimer();
+  await first;
+  assert.equal(polling.calls.failure, 1, '永久 pending 必须在请求超时后显示失败');
+  assert.equal(typeof polling.calls.retry, 'function');
+  blocked = false;
+  await vm.runInContext('retryGen()', polling.context);
+  assert.equal(polling.calls.requests.length, 2, '超时后可以重新发起请求');
+  assert.equal(polling.timers.size, 1);
+
+  const generating = createSymbolHarness(async (url, options) => pendingResponse(options));
+  vm.runInContext(source, generating.context);
+  await vm.runInContext('showGenerate()', generating.context);
+  const click = generating.generateButton().listeners.click();
+  assert.ok(generating.calls.requests[0].options.signal, '生成 POST 必须传 AbortSignal');
+  await generating.runNextTimer();
+  await click;
+  assert.equal(generating.generateButton().disabled, false, '生成 POST 超时后必须恢复按钮');
+  assert.equal(generating.generateButton().textContent, '生成该股详情');
+
+  const hardDeadline = createSymbolHarness(async (url, options) => pendingResponse(options));
+  vm.runInContext(source, hardDeadline.context);
+  vm.runInContext('symbolActiveSince = 1000', hardDeadline.context);
+  hardDeadline.setNow(1000 + 5 * 60 * 1000 - 100);
+  const last = vm.runInContext('pollGen()', hardDeadline.context);
+  await hardDeadline.runNextTimer();
+  await last;
+  assert.equal(hardDeadline.calls.failure, 1, 'pending 也受包含网络等待的5分钟硬上限约束');
+  assert.equal(hardDeadline.timers.size, 0);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_retry_aborts_pending_without_duplicate_requests(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const h = createSymbolHarness(async (url, options) => new Promise((resolve, reject) => {
+    if (options.signal) options.signal.addEventListener('abort', () => {
+      const error = new Error('aborted'); error.name = 'AbortError'; reject(error);
+    });
+  }));
+  vm.runInContext(source, h.context);
+  const first = vm.runInContext('pollGen()', h.context);
+  const second = vm.runInContext('retryGen()', h.context);
+  const third = vm.runInContext('retryGen()', h.context);
+  assert.equal(h.calls.requests.length, 3, '每次手动重试都必须 abort 旧请求并发起新请求');
+  assert.equal(h.calls.requests[0].options.signal.aborted, true);
+  assert.equal(h.calls.requests[1].options.signal.aborted, true);
+  assert.equal(h.calls.requests[2].options.signal.aborted, false);
+  await h.runNextTimer();
+  await Promise.all([first, second, third]);
+  assert.equal(h.calls.requests.length, 3, '旧 Promise 收口不能触发额外请求');
+  assert.equal(h.calls.failure, 1, '被新轮次 abort 的旧请求不能累计失败');
+  assert.equal(h.timers.size, 0);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_gen_status_wait_limit_stops_with_retry(self, client):
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
         _run_symbol_js(html, r"""
 (async () => {
@@ -346,10 +507,8 @@ class TestPages:
   h.setNow(1000 + 5 * 60 * 1000);
   await vm.runInContext('pollGen()', h.context);
   assert.equal(h.timers.size, 0);
-  assert.equal(h.calls.failure, 0, '等待上限不是生成失败');
-  assert.equal(h.root.children[0].children[0].textContent, '已暂停自动刷新');
-  const retry = h.root.children[0].children.find(node => node.type === 'button');
-  assert.equal(typeof retry.listeners.click, 'function');
+  assert.equal(h.calls.failure, 1, '总等待超时必须显示失败');
+  assert.equal(typeof h.calls.retry, 'function');
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
