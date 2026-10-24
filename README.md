@@ -1,10 +1,95 @@
-# Quant Research Engine
+# Quant Research Engine (QRE)
 
-`quant-research-engine` 是一个本地化、只读的量化研究与回测引擎，首个目标市场为中国 A 股（日线级别技术因子研究）。
+**A local-first, read-only quantitative research and backtesting engine — production-proven on China A-share daily factor research, architected for multi-market extension.**
+
+**本地化、只读的量化研究与回测引擎 —— 已在 A 股日线因子研究中实战验证，架构面向多市场扩展。**
+
+![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Tests](https://img.shields.io/badge/tests-947%20passing-brightgreen)
+![Market](https://img.shields.io/badge/market-A--share-red)
+![Data](https://img.shields.io/badge/data-PostgreSQL%20%2B%20Tushare-336791)
+
+[Quick Start](QUICKSTART.md) · [中文完整文档](#完整中文文档) · [Design Docs](docs/agent/00_PRODUCT_VISION.md) · [Strategy Examples](docs/strategy_entry/examples.md)
+
+---
+
+## Why QRE?
+
+Most backtesting tools stop at toy examples. QRE was built to run **real, full-market research**: 5,500+ A-share stocks, 2010→today, with the trading rules that actually apply.
+
+- **Two engines, one workflow** — a vectorized **Evaluation Engine** (IC / Rank IC, quantile returns, factor decay) for fast whole-market screening, and an account-level **Portfolio Engine** (orders, fills, costs, slippage, positions, equity curves) for realistic validation.
+- **Real A-share market rules** — commission, stamp tax, transfer fees, price-limit checks, 100-share lots, T+1 sell restriction, FIFO lot accounting. Isolated in market profiles, so other markets plug in cleanly.
+- **No look-ahead, reproducible by construction** — signals on day `t` execute no earlier than `t+1`; every run emits a `report_manifest.json` so outputs are discoverable and auditable (`qre report-files` / `qre report-audit`).
+- **Strategies as data** — a readable 4-section YAML format (strategy / rules / factor_requirements / experiment) compiled to executable specs, with automatic factor-alias resolution and missing-factor detection.
+- **Built-in GUI console** — local Flask workbench: form-based strategy builder, natural-language → YAML compiler (with a hard safety gate: never auto-executes), run history, run comparison, and an admin console for data-pipeline status.
+- **Incremental daily updates** — after one full backtest, daily refreshes compute only new bars (seconds), with a verified guarantee: incremental ≡ full replay, byte-for-byte.
+- **947 passing tests** and a fully documented CLI surface.
+
+## 30-Second Start
+
+```bash
+cp .env.example .env   # fill in your PostgreSQL connection
+uv sync                # install dependencies
+uv run qre strategy-smoke && uv run qre gui
+```
+
+New here? **[QUICKSTART.md](QUICKSTART.md)** takes you from zero to your first backtest in ~10 minutes.
+
+## What a strategy looks like
+
+```yaml
+strategy:
+  id: bollinger_mean_reversion
+  family: mean_reversion
+rules:
+  entry:
+    all: [{ alias: close, operator: "<=", alias_b: bb_lower }]
+  exit:
+    any: [{ alias: close, operator: ">=", alias_b: bb_middle }]
+factor_requirements:
+  - { alias: bb_lower, indicator: bollinger, source: close, period: 20, params: { stddev: 2.0 }, output: lower }
+experiment:
+  market: ashare
+  start: 2010-01-04
+  universe: { include: all_a, exclude_st: true }
+```
+
+```bash
+uv run qre backtest-shared strategies/low_level/bollinger_mean_reversion.yaml \
+  --start 2024-01-01 --end 2024-12-31 \
+  --initial-cash 10000000 --max-positions 20 --output-dir outputs/shared/
+```
+
+Outputs: Excel / self-contained HTML reports, equity & drawdown charts, trade ledger, per-symbol performance, and machine-checkable manifests.
+
+## Ecosystem fit
+
+- **Data**: reads from PostgreSQL (`public.stock_daily`, `factors.*`); pairs naturally with Tushare-based loaders and indicator pipelines. The data layer is strictly **read-only** — QRE never writes to your upstream database.
+- **AI-agent friendly**: ships `AGENTS.md` / `CLAUDE.md` instructions and a documented agent-development workflow; the repo itself is maintained through a single-agent (Kimi Code) development process with decision logs in `docs/agent/`.
+
+## 中文简介
+
+QRE 是一个本地化、只读的量化研究与回测引擎，首个目标市场为中国 A 股（日线级别技术因子研究）：
+
+- **双引擎架构**：评估引擎（向量化 IC/Rank IC、分位数收益、因子衰减）负责全市场快速筛选；投资组合引擎（订单/成交/成本/滑点/T+1/权益曲线）负责真实账户级验证
+- **真实 A 股规则**：佣金、印花税、涨跌停、整手、T+1、FIFO 核算，集中在市场配置中
+- **无未来函数、可复现**：信号最早 `t+1` 执行；所有产物附 `report_manifest.json`，可发现、可审计
+- **策略即 YAML**：四段式高层入口编译为可执行规格，自动因子别名解析与缺失因子检测
+- **自带 GUI 控制台**：表单构建器、自然语言→YAML 编译器（安全闸：绝不自动执行）、Run 对比、管理台
+- **增量日更**：全量一次后每日只算新增 K 线（秒级），且验收门槛为「增量 ≡ 全量重放，逐字节一致」
+- **947 个测试通过**
+
+---
+
+## 完整中文文档
+
+<details>
+<summary><b>点击展开：完整 CLI 参考、参数手册、输出文件说明与项目结构（约 1300 行）</b></summary>
 
 ## 当前状态
 
-- **核心 MVP 已完成，本仓库处于维护模式。**
+- **核心 MVP 已完成，引擎持续维护中。**
 - QRE 当前 CLI 表面、产物合同和报告管道为稳定形态；新需求通过 `docs/agent/change_requests/` 进入单 agent 开发流程。
 - 上游数据生产工作属于 `quant_ts`，不在此仓库范围内。
 - 本 README 仅保留当前可用命令、产物文件、参数和验证方式，不含未来规划或愿望清单。
@@ -1081,3 +1166,13 @@ uv run pytest tests/test_tushare_security.py tests/test_postgres_store.py -q
 - [策略入口标准](docs/strategy_entry/README.md)
 - [策略示例](docs/strategy_entry/examples.md)
 - [单 agent 工作流与项目记忆](docs/agent/)
+
+</details>
+
+---
+
+## License
+
+[MIT](LICENSE) © 2026 CozeraVan
+
+**Disclaimer**: QRE is a research tool. Nothing here is investment advice; backtested performance does not guarantee future results. / 本工具仅供研究使用，不构成任何投资建议；回测表现不代表未来收益。
