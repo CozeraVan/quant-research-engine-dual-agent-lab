@@ -1215,3 +1215,18 @@ Historical row statuses (pre-migration, kept for old table rows):
 **修复**：回传排序改为 risk_report.json 最高优先级、_symbol_details 其次、其余产物最后；20MB 上限不变。新增 `test_risk_report_survives_upload_budget`（先验证旧逻辑失败），TestWorkerSymbolDetailFiles 5 passed；test_saas_symbol_ux 38 passed；test_worker+test_gui_saas+test_gui_risk_report 118 passed。
 
 **历史回填**：job58/66 旧 FRM 早于收益口径修正，先备份为 risk_report_pre_injection_fix.json，再基于修正后 equity_curve 的 daily_return 重算（未重跑回测）；job74/78 直接复用原报告。四个文件已上传 ECS job 目录并补 results.artifacts 元数据；公网 58/66/74 risk-analysis 实测 has_report=true，78 文件与元数据核验存在。
+
+
+## 2026-10-24 job#78 视频用结构化数据包（仅数据，无分镜）
+
+**目标**：将全量回测产物提炼给独立视频 agent，兼容不同视频方案；不生成图片、分镜或视频文案。
+
+**产物**：`/home/van/qre-outputs/video_packages/job_78/`，一次性导出脚本 `/home/van/qre-outputs/video_packages/_export_job78.py`（不入仓）。
+- `01_compact`：11 文件，196352B；核心参数/收益风险/磨损、年度月度收益、每5日净值、行业概念 Top/Bottom5、最佳/最差交易案例。
+- `02_standard`：14 文件，570091B；日净值、Top/Bottom10、完整 FRM、4 案例（增加最高费用、费用使盈转亏）。
+- `03_research`：18 文件，2388467B；全板块标签、5531 股票统计、252 日滚动风险、完整 FRM、6 案例（增加最大 MFE/MAE）。
+- 同目录有对应 ZIP；Windows 根路径 `\\wsl.localhost\Ubuntu-24.04\home\van\qre-outputs\video_packages\job_78`。
+
+**口径**：收益率/回撤/胜率均为小数（0.01=1%）；`metrics.json` 含 display 和方法说明；总收益为资金加权，累计曲线为交集日收益复利，禁止混用；引擎 Sharpe 与 FRM Sharpe 分开保留；热点仅指回测贡献归因。案例 K线/因子/订单取前后40交易日，不重跑回测。
+
+**验证**：manifest 文件大小+SHA256、JSON/CSV 解析、K线/净值/因子日期对齐全部通过；总收益/交易笔数/佣金印花税过户费与原始产物一致；best/worst/highest_fee/MFE/MAE 与 401247 笔 round_trips 全量极值一致。曾修正案例股票去重导致遗漏真实最差交易的问题，当前不做叙事性筛选。
