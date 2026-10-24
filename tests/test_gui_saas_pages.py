@@ -147,6 +147,25 @@ class TestPages:
         assert "区间策略收益" in html and "交易日数" in html
         assert "最大持仓" in html and "引擎" in html and "费率" in html
 
+    def test_job_polling_access_and_readonly_guards(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        for marker in (
+            "const ACTIVE = new Set(['queued','leased','running','uploading']);",
+            "const TERMINAL = new Set(['failed','expired','canceled','cancelled']);",
+            "const POLL_INTERVAL_MS = 5000;",
+            "const MAX_CONSECUTIVE_ERRORS = 3;",
+            "const MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;",
+            "apiFetch('/api/results/' + JOB_ID + '/summary', {redirectOn401:false})",
+            "showAccessFallback(document.querySelector('.container'))",
+            "showLoadFailure(document.querySelector('.container'), retryPoll)",
+            "已暂停自动刷新",
+            "clearPollTimer()",
+            "pollInFlight",
+            "if (jobData.readonly) return;",
+            "tagResp.status === 404",
+        ):
+            assert marker in html
+
     def test_no_engineering_jargon(self, client):
         # 零术语原则：页面不得出现 沙箱/晋升/promote/试算 等内部词
         for page in ("/saas/", "/saas/new", "/saas/jobs/1"):

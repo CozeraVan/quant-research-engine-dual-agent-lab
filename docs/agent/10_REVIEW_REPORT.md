@@ -2,6 +2,42 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T2（SDD Task 2：job 详情状态机与 showcase 严格只读）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 主容器限定为 `.container`，401/404 仅替换主内容并保留公共导航；匿名 401、登录 404、本人 409 后端契约未改。失败与暂停均不把任务伪报为 failed。
+- 单一 timer 在调度、重试、终态和无权出口均清理；`pollInFlight` 防重入。ACTIVE/TERMINAL 集合、5秒轮询、连续异常3次和活跃5分钟上限与 brief 一致。
+- `tag-analysis` 仅 404 降级为无归因，其他 HTTP/JSON/网络异常进入失败收口。showcase GET 及 `can_generate` 业务 404 保持原语义。
+- 前端 readonly 在结果操作初始化首行返回；后端写守护位于 `_require_completed_result` 之后、产物检查与任务插入之前，覆盖匿名和非所有者，所有者路径不受影响。
+- 无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED: tests/test_gui_saas_pages.py + tests/test_gui_saas.py → 2 failed, 103 passed（状态机缺失；POST 409≠403）
+GREEN: 同上 → 105 passed
+扩展回归: 上述两文件 + tests/test_saas_symbol_ux.py → 143 passed
+Node new Function: 渲染后的 job/base 3 段内联脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T1（SDD Task 1：公共无权卡与安全登录回跳）
 
 ## Reviewer

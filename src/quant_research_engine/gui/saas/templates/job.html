@@ -730,71 +730,173 @@ document.getElementById('stg-toggle').addEventListener('click', function(){
   document.getElementById('stg-body').classList.toggle('open');
 });
 
+const ACTIVE = new Set(['queued','leased','running','uploading']);
+const TERMINAL = new Set(['failed','expired','canceled','cancelled']);
+const POLL_INTERVAL_MS = 5000;
+const MAX_CONSECUTIVE_ERRORS = 3;
+const MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;
+const JOB_CONTENT = Array.from(document.querySelector('.container').childNodes);
+let pollTimer = null;
+let pollInFlight = false;
+let consecutiveErrors = 0;
+let activeSince = null;
+let jobContentDetached = false;
+
+function clearPollTimer(){
+  if (pollTimer !== null){ clearTimeout(pollTimer); pollTimer = null; }
+}
+function schedulePoll(){
+  clearPollTimer();
+  pollTimer = setTimeout(() => { pollTimer = null; poll(); }, POLL_INTERVAL_MS);
+}
+function restoreJobContent(){
+  if (!jobContentDetached) return;
+  document.querySelector('.container').replaceChildren(...JOB_CONTENT);
+  jobContentDetached = false;
+}
+function retryPoll(){
+  clearPollTimer();
+  consecutiveErrors = 0;
+  activeSince = null;
+  restoreJobContent();
+  poll();
+}
+function pauseActivePolling(){
+  clearPollTimer();
+  const card = document.createElement('div');
+  card.className = 'card';
+  const message = document.createElement('p');
+  message.textContent = '已暂停自动刷新';
+  const hint = document.createElement('p');
+  hint.className = 'opt';
+  hint.textContent = '任务仍在执行，可点击重试继续查看';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn btn-primary';
+  retry.textContent = '重试';
+  retry.addEventListener('click', retryPoll);
+  card.appendChild(message);
+  card.appendChild(hint);
+  card.appendChild(retry);
+  document.querySelector('.container').replaceChildren(card);
+  jobContentDetached = true;
+}
+function handlePollError(error){
+  clearPollTimer();
+  consecutiveErrors += 1;
+  if (error && (error.status === 401 || error.status === 404)){
+    showAccessFallback(document.querySelector('.container'));
+    jobContentDetached = true;
+    return;
+  }
+  showLoadFailure(document.querySelector('.container'), retryPoll);
+  jobContentDetached = true;
+  if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS){
+    const note = document.createElement('p');
+    note.className = 'opt';
+    note.textContent = '已暂停自动刷新';
+    document.querySelector('.container .card').appendChild(note);
+    return;
+  }
+  schedulePoll();
+}
+function pollHttpError(resp){
+  const error = new Error('HTTP ' + resp.status);
+  error.status = resp.status;
+  return error;
+}
+
 async function poll(){
-  const resp = await apiFetch('/api/results/' + JOB_ID + '/summary');
-  const data = await resp.json();
-  const badge = document.getElementById('job-badge');
+  clearPollTimer();
+  if (pollInFlight) return;
+  pollInFlight = true;
+  restoreJobContent();
+  try {
+    const resp = await apiFetch('/api/results/' + JOB_ID + '/summary', {redirectOn401:false});
+    if (resp.status === 404) throw pollHttpError(resp);
+    const data = await resp.json();
+    const badge = document.getElementById('job-badge');
 
-  if (resp.status === 409){
-    // 进行中：409 body 带真实 status
-    const st = data.status || 'running';
-    badge.className = 'badge ' + st;
-    badge.textContent = STATUS_LABEL[st] || st;
-    document.getElementById('job-status-note').textContent =
-      st === 'queued' ? '任务排队中，空闲后即开始（每 5 秒自动刷新）' :
-      st === 'failed' ? '任务失败：' + (data.error || '未知') :
-      '正在回测，请稍候（每 5 秒自动刷新）';
-    if (st !== 'failed') setTimeout(poll, 5000);
-    return;
-  }
-  if (!resp.ok || !data.ok){
-    badge.className = 'badge failed';
-    badge.textContent = '加载失败';
-    document.getElementById('job-status-note').textContent = data.error || ('HTTP ' + resp.status);
-    return;
-  }
-
-  // 已完成：并行拉 chart-data 与 tag-analysis
-  document.getElementById('status-card').classList.add('hidden');
-  document.getElementById('result-area').classList.remove('hidden');
-  if (data.readonly){
-    // 经典策略只读展示（QRE-SAAS-SHOWCASE）：隐藏全部操作入口与游客提示
-    ['box-actions', 'download-card', 'guest-result-note', 'guest-note'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el){ el.classList.add('hidden'); el.style.display = 'none'; }
-    });
-    const h1 = document.querySelector('h1');
-    if (h1 && !document.getElementById('readonly-chip')){
-      const chip = document.createElement('span');
-      chip.id = 'readonly-chip';
-      chip.className = 'opt';
-      chip.style.cssText = 'font-size:12.5px;margin-left:8px';
-      chip.textContent = '经典策略展示 · 只读';
-      h1.appendChild(chip);
+    if (resp.status === 409){
+      const st = data.status || 'running';
+      consecutiveErrors = 0;
+      badge.className = 'badge ' + st;
+      badge.textContent = STATUS_LABEL[st] || st;
+      if (ACTIVE.has(st)){
+        if (activeSince === null) activeSince = Date.now();
+        document.getElementById('job-status-note').textContent =
+          st === 'queued' ? '任务排队中，空闲后即开始（每 5 秒自动刷新）' :
+          '正在回测，请稍候（每 5 秒自动刷新）';
+        if (Date.now() - activeSince >= MAX_ACTIVE_WAIT_MS){ pauseActivePolling(); return; }
+        schedulePoll();
+        return;
+      }
+      activeSince = null;
+      if (TERMINAL.has(st)){
+        clearPollTimer();
+        badge.className = 'badge failed';
+        document.getElementById('job-status-note').textContent =
+          st === 'failed' ? '任务失败：' + (data.error || '未知') :
+          st === 'expired' ? '任务已超时' : '任务已取消';
+        return;
+      }
+      clearPollTimer();
+      document.getElementById('job-status-note').textContent = '任务状态：' + st;
+      return;
     }
-    const back = document.querySelector('a[href="/saas/"]');
-    if (back){ back.href = '/saas/showcase'; back.textContent = '← 返回经典策略'; }
+    if (!resp.ok || !data.ok) throw pollHttpError(resp);
+    consecutiveErrors = 0;
+    activeSince = null;
+    clearPollTimer();
+
+    // 已完成：并行拉 chart-data 与 tag-analysis
+    document.getElementById('status-card').classList.add('hidden');
+    document.getElementById('result-area').classList.remove('hidden');
+    if (data.readonly){
+      // 经典策略只读展示（QRE-SAAS-SHOWCASE）：隐藏全部操作入口与游客提示
+      ['box-actions', 'download-card', 'guest-result-note', 'guest-note'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el){ el.classList.add('hidden'); el.style.display = 'none'; }
+      });
+      const h1 = document.querySelector('h1');
+      if (h1 && !document.getElementById('readonly-chip')){
+        const chip = document.createElement('span');
+        chip.id = 'readonly-chip';
+        chip.className = 'opt';
+        chip.style.cssText = 'font-size:12.5px;margin-left:8px';
+        chip.textContent = '经典策略展示 · 只读';
+        h1.appendChild(chip);
+      }
+      const back = document.querySelector('a[href="/saas/"]');
+      if (back){ back.href = '/saas/showcase'; back.textContent = '← 返回经典策略'; }
+    }
+    const [chartResp, tagResp] = await Promise.all([
+      apiFetch('/api/results/' + JOB_ID + '/chart-data', {redirectOn401:false}),
+      apiFetch('/api/results/' + JOB_ID + '/tag-analysis', {redirectOn401:false}),
+    ]);
+    if (chartResp.status === 404 || !chartResp.ok) throw pollHttpError(chartResp);
+    if (!tagResp.ok && tagResp.status !== 404) throw pollHttpError(tagResp);
+    const chart = (await chartResp.json()) || {};
+    const tag = tagResp.status === 404 ? null : await tagResp.json();
+    const brief = chart.brief || {};
+    document.getElementById('brief-text').textContent = brief.name ? ('策略：' + brief.name) : (data.strategy_name ? ('策略：' + data.strategy_name) : '');
+    renderMeta(chart.meta, data.data_until);
+    renderStrategyInfo(data.strategy);
+    renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));
+    if (chart.dates && chart.equity) renderMain(chart);
+    else empty('chart-main');
+    initReplay(chart);
+    initResultActions(data, chart);
+    if (!data.readonly && !SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
+    renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
+    renderFees(chart.fees_summary || null, chart.meta || null);
+    document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
+    loadRisk();
+  } catch (error) {
+    handlePollError(error);
+  } finally {
+    pollInFlight = false;
   }
-  const [chartResp, tagResp] = await Promise.all([
-    apiFetch('/api/results/' + JOB_ID + '/chart-data'),
-    apiFetch('/api/results/' + JOB_ID + '/tag-analysis'),
-  ]);
-  const chart = (await chartResp.json()) || {};
-  const tag = tagResp.ok ? await tagResp.json() : null;
-  const brief = chart.brief || {};
-  document.getElementById('brief-text').textContent = brief.name ? ('策略：' + brief.name) : (data.strategy_name ? ('策略：' + data.strategy_name) : '');
-  renderMeta(chart.meta, data.data_until);
-  renderStrategyInfo(data.strategy);
-  renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));
-  if (chart.dates && chart.equity) renderMain(chart);
-  else empty('chart-main');
-  initReplay(chart);
-  initResultActions(data, chart);
-  if (!data.readonly && !SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
-  renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
-  renderFees(chart.fees_summary || null, chart.meta || null);
-  document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
-  loadRisk();
 }
 // --- 回测重播（CR-2026-10-04 切片1 + 接管模式：接管原收益曲线容器，退出恢复静态） ---
 let replayCtl = null;
@@ -858,6 +960,7 @@ function mountReplay(d){
 
 // --- 结果页操作卡（QRE-SAAS-RESULT-ACTIONS 2026-10-05）：保存入库 / 提示交易信号 ---
 async function initResultActions(jobData, chart){
+  if (jobData.readonly) return;
   // 游客不显示（结果次日清空无资产可存，现有游客引导条已承担注册引导）
   if (!SAAS_BYPASS && !saasToken()) return;
   const job = jobData.job || jobData;  // /api/saas/jobs/<id> 包 {ok, job}

@@ -3048,8 +3048,8 @@ def create_saas_app() -> Flask:
 
     def _require_completed_result(job_id: int) -> Any:
         """返回 (row, error_response)。未完成 409；不存在/非本人 404。
-        showcase 白名单 job 对任何人放行只读（g.showcase_readonly=True），
-        写操作端点不经此函数，不受影响。"""
+        showcase 白名单 job 对任何人放行只读（g.showcase_readonly=True）；
+        复用此入口的写端点必须显式拒绝 showcase_readonly。"""
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
         if uid is None:
@@ -3340,6 +3340,8 @@ def create_saas_app() -> Flask:
         row, err = _require_completed_result(job_id)
         if err:
             return err
+        if getattr(g, "showcase_readonly", False):
+            return jsonify({"ok": False, "error": "经典策略为只读展示"}), 403
         try:
             code = resolve_ts_code(ts_code, [])
         except ValueError as exc:

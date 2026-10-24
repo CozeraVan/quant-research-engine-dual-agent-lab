@@ -1099,9 +1099,28 @@ class TestShowcase:
         assert owner["ok"] and owner["readonly"] is False
         # 只读不放行写操作：匿名删除仍被拒
         assert client.delete(f"/api/results/{job_id}").status_code in (401, 404)
-        # 详情数据同通道只读放行
+        # 详情数据同通道只读放行；缺少按需产物仍是业务 404，不是无权
         assert client.get(f"/api/results/{job_id}/chart-data").status_code == 200
         assert client.get(f"/api/results/{job_id}/tag-analysis").status_code == 200
+        detail = client.get(f"/api/results/{job_id}/symbols/000001")
+        assert detail.status_code == 404 and detail.get_json()["can_generate"] is True
+
+    def test_showcase_symbol_generate_is_readonly(self, client, app):
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _get_engine
+
+        job_id = self._completed_job(client)
+        self._pin_showcase(app, job_id)
+        for headers in ({}, {"X-User-Id": "2"}):
+            detail = client.get(f"/api/results/{job_id}/symbols/000001", headers=headers)
+            assert detail.status_code == 404 and detail.get_json()["can_generate"] is True
+            resp = client.post(f"/api/results/{job_id}/symbols/000001/generate", headers=headers)
+            assert resp.status_code == 403
+            assert resp.get_json()["error"] == "经典策略为只读展示"
+        with _get_engine(app).connect() as conn:
+            count = conn.execute(text("SELECT count(*) FROM jobs WHERE kind='symbol_detail'")).scalar_one()
+        assert count == 0
 
     def test_inactive_not_listed(self, client, app):
         job_id = self._completed_job(client)
