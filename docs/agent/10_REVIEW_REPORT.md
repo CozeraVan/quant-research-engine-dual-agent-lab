@@ -2,6 +2,42 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T4-REVIEW-FIX（Task 4 全部审查问题）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 主列表/profile/new 及两个附属模块的请求与 JSON body 消费均处于同一 controller/deadline；operation 与 cancellation 竞速，body 不响应 abort 也能在 15 秒后收口。new 非 2xx 在 consume 内先于 JSON 返回并立即抛错。
+- 主 `load()` 的 epoch 与 controller 成对更新，旧 Promise 的渲染、catch、finally、附属初始化和调度均不能污染新轮次；手动重试可恢复。
+- 策略库/因子申请仅在 HTTP 200、业务 ok、目标数组有效后渲染并置 loaded；失败保持未加载并显示本模块错误，后续主列表成功或本模块按钮可重试，401/404 走统一无权卡。
+- 空态严格区分服务端 `items=[]` 与客户端筛选无匹配；既有单轮询 timer、5 分钟暂停和 80 次 new 轮询上限保留。
+- 无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED 审查测试: 6 failed, 58 deselected in 1.41s（筛选测试修正 this 后单独仍按预期失败）
+GREEN 指定页面: 64 passed in 7.11s
+扩展回归: tests/test_gui_saas_pages.py + tests/test_gui_saas.py + tests/test_saas_symbol_ux.py → 167 passed in 17.25s
+Node new Function: 三页 15 段内联脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T4（SDD Task 4：回测记录/profile/new 小修）
 
 ## Reviewer

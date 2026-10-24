@@ -22,11 +22,46 @@ function fmtPct(v){ return v == null ? '——' : (v >= 0 ? '+' : '') + (v * 100
 const RECORDS_ACTIVE = new Set(['queued', 'leased', 'running', 'uploading']);
 const RECORDS_POLL_INTERVAL_MS = 5000;
 const RECORDS_MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;
+const RECORDS_REQUEST_TIMEOUT_MS = 15000;
 const RECORDS_CONTENT = Array.from(document.querySelector('.wrap').childNodes);
 let recordsTimer = null;
 let recordsActiveSince = null;
 let recordsContentDetached = false;
-let recordsModulesLoaded = false;
+let recordsLoadController = null;
+let recordsLoadEpoch = 0;
+let recordsStrategiesLoaded = false;
+let recordsFactorRequestsLoaded = false;
+let recordsStrategiesLoading = false;
+let recordsFactorRequestsLoading = false;
+async function recordsRequestWithTimeout(url, options, controller, consume){
+  let timeout = null;
+  let onAbort = null;
+  const cancellation = new Promise((resolve, reject) => {
+    onAbort = () => {
+      const error = new Error('请求已取消');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    if (controller.signal.aborted) onAbort();
+    else controller.signal.addEventListener('abort', onAbort, {once: true});
+    timeout = setTimeout(() => controller.abort(), RECORDS_REQUEST_TIMEOUT_MS);
+  });
+  const operation = (async () => {
+    const resp = await apiFetch(url, Object.assign({}, options, {signal: controller.signal}));
+    return consume(resp);
+  })();
+  try {
+    return await Promise.race([operation, cancellation]);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+    controller.signal.removeEventListener('abort', onAbort);
+  }
+}
+function abortRecordsLoad(){
+  recordsLoadEpoch += 1;
+  if (recordsLoadController) recordsLoadController.abort();
+  recordsLoadController = null;
+}
 function clearRecordsTimer(){
   if (recordsTimer !== null){ clearTimeout(recordsTimer); recordsTimer = null; }
 }
@@ -47,6 +82,7 @@ function retryLoad(){
 }
 function showRecordsAccess(){
   clearRecordsTimer();
+  abortRecordsLoad();
   showAccessFallback(document.querySelector('.wrap'));
   recordsContentDetached = true;
 }
@@ -54,6 +90,23 @@ function showRecordsFailure(){
   clearRecordsTimer();
   showLoadFailure(document.querySelector('.wrap'), retryLoad);
   recordsContentDetached = true;
+}
+function showRecordsAuxFailure(tbody, colspan, retryFn){
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = colspan;
+  td.className = 'muted';
+  const message = document.createElement('span');
+  message.textContent = '加载失败，请稍后重试';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn-sm';
+  retry.textContent = '重试';
+  retry.addEventListener('click', retryFn);
+  td.appendChild(message);
+  td.appendChild(retry);
+  tr.appendChild(td);
+  tbody.replaceChildren(tr);
 }
 function pauseRecordsRefresh(){
   clearRecordsTimer();
@@ -78,26 +131,39 @@ function pauseRecordsRefresh(){
 
 async function load(){
   clearRecordsTimer();
+  abortRecordsLoad();
+  const epoch = recordsLoadEpoch;
+  const controller = new AbortController();
+  recordsLoadController = controller;
+  const listUrl = `/api/results?sort=${listState.sort}&order=${listState.order}&page=${recsFilterKw ? 1 : listState.page}&page_size=${recsFilterKw ? 100 : listState.pageSize}`;
   try {
-    const [meResp, listResp] = await Promise.all([
-      apiFetch('/api/saas/me', {redirectOn401:false}),
-      apiFetch(`/api/results?sort=${listState.sort}&order=${listState.order}&page=${recsFilterKw ? 1 : listState.page}&page_size=${recsFilterKw ? 100 : listState.pageSize}`, {redirectOn401:false}),
+    const [meResult, listResult] = await Promise.all([
+      recordsRequestWithTimeout('/api/saas/me', {redirectOn401:false}, controller, async resp => {
+        if (resp.status === 401 || resp.status === 404) return {resp, access: true};
+        return {resp, data: await resp.json()};
+      }),
+      recordsRequestWithTimeout(listUrl, {redirectOn401:false}, controller, async resp => {
+        if (resp.status === 401 || resp.status === 404) return {resp, access: true};
+        return {resp, data: await resp.json()};
+      }),
     ]);
-    if (listResp.status === 401 || listResp.status === 404){ showRecordsAccess(); return; }
-    const data = await listResp.json();
-    if (listResp.status !== 200 || !data.ok || !Array.isArray(data.items)) throw new Error('记录加载失败 HTTP ' + listResp.status);
-    const me = await meResp.json();
-    if (me.ok) {
-      const u = me.user;
-      document.getElementById('user-label').textContent =
-        (u.email || u.phone || '') + (u.quota_limit === '不限' ? '（管理员 · 不限回测次数）' : '（今日剩余全量回测 ' + (u.quota_remaining ?? '—') + ' 次）');
-    }
+    if (epoch !== recordsLoadEpoch) return;
+    if (meResult.access || listResult.access){ showRecordsAccess(); return; }
+    const meResp = meResult.resp, me = meResult.data;
+    const listResp = listResult.resp, data = listResult.data;
+    if (listResp.status !== 200 || !data || !data.ok || !Array.isArray(data.items)) throw new Error('记录加载失败 HTTP ' + listResp.status);
+    if (!meResp.ok || !me || !me.ok || !me.user) throw new Error('用户信息加载失败 HTTP ' + meResp.status);
+    const u = me.user;
+    document.getElementById('user-label').textContent =
+      (u.email || u.phone || '') + (u.quota_limit === '不限' ? '（管理员 · 不限回测次数）' : '（今日剩余全量回测 ' + (u.quota_remaining ?? '—') + ' 次）');
     const tbody = document.getElementById('jobs-tbody');
     let items = data.items;
     if (recsFilterKw) items = items.filter(j => ((j.strategy_name || '') + ' ' + j.job_id).toLowerCase().includes(recsFilterKw));
     listState.total = data.total || 0;
-    if (!items.length){
+    if (!data.items.length){
       tbody.innerHTML = '<tr><td colspan="7" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
+    } else if (!items.length){
+      tbody.innerHTML = '<tr><td colspan="7" class="muted">当前筛选无匹配结果</td></tr>';
     } else {
       tbody.innerHTML = '';
       for (const job of items){
@@ -139,12 +205,9 @@ async function load(){
     document.getElementById('pg-info').textContent = `第 ${listState.page} / ${pages} 页`;
     document.getElementById('pg-prev').disabled = listState.page <= 1;
     document.getElementById('pg-next').disabled = listState.page >= pages;
-    if (!recordsModulesLoaded){
-      recordsModulesLoaded = true;
-      loadStrategies();
-      loadFactorRequests();
-    }
-    if (items.some(j => RECORDS_ACTIVE.has(j.status))){
+    if (!recordsStrategiesLoaded && !recordsStrategiesLoading) loadStrategies();
+    if (!recordsFactorRequestsLoaded && !recordsFactorRequestsLoading) loadFactorRequests();
+    if (data.items.some(j => RECORDS_ACTIVE.has(j.status))){
       if (recordsActiveSince === null) recordsActiveSince = Date.now();
       if (Date.now() - recordsActiveSince >= RECORDS_MAX_ACTIVE_WAIT_MS){ pauseRecordsRefresh(); return; }
       scheduleRecordsRefresh();
@@ -153,8 +216,11 @@ async function load(){
       clearRecordsTimer();
     }
   } catch (error) {
+    if (epoch !== recordsLoadEpoch) return;
     if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
     showRecordsFailure();
+  } finally {
+    if (epoch === recordsLoadEpoch) recordsLoadController = null;
   }
 }
 
@@ -178,7 +244,7 @@ let recsFilterKw = '';
 document.getElementById('recs-filter').addEventListener('input', function(){
   recsFilterKw = this.value.trim().toLowerCase();
   listState.page = 1;
-  load();
+  return load();
 });
 
 // 删除弹层
@@ -199,74 +265,110 @@ document.getElementById('del-ok').addEventListener('click', async () => {
 
 const FREQ_STATUS = {pending: '审核中', approved: '已入库', rejected: '未采纳'};
 async function loadFactorRequests(){
-  const resp = await apiFetch('/api/saas/factor-requests');
-  const data = await resp.json();
+  if (recordsFactorRequestsLoading || recordsFactorRequestsLoaded) return;
+  recordsFactorRequestsLoading = true;
   const tbody = document.getElementById('factor-req-tbody');
-  const reqs = data.requests || [];
-  if (!reqs.length){
-    tbody.innerHTML = '<tr><td colspan="4" class="muted">暂无申请</td></tr>';
-    return;
+  const controller = new AbortController();
+  try {
+    const result = await recordsRequestWithTimeout('/api/saas/factor-requests', {redirectOn401:false}, controller, async resp => {
+      if (resp.status === 401 || resp.status === 404) return {resp, access: true};
+      return {resp, data: await resp.json()};
+    });
+    if (result.access){ showRecordsAccess(); return; }
+    const resp = result.resp, data = result.data;
+    if (resp.status !== 200 || !data || !data.ok || !Array.isArray(data.requests)) throw new Error('因子申请加载失败 HTTP ' + resp.status);
+    const reqs = data.requests;
+    if (!reqs.length){
+      tbody.innerHTML = '<tr><td colspan="4" class="muted">暂无申请</td></tr>';
+    } else {
+      tbody.innerHTML = reqs.map(r =>
+        `<tr><td>${escH((r.factors || []).join('、'))}</td>`
+        + `<td><span class="badge ${r.status === 'approved' ? 'done' : r.status === 'rejected' ? 'failed' : 'queued'}">${escH(FREQ_STATUS[r.status] || r.status)}</span></td>`
+        + `<td class="muted">${escH(r.note || '—')}</td><td>${fmtTime(r.created_at)}</td></tr>`).join('');
+    }
+    recordsFactorRequestsLoaded = true;
+  } catch (error) {
+    if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
+    showRecordsAuxFailure(tbody, 4, loadFactorRequests);
+  } finally {
+    recordsFactorRequestsLoading = false;
   }
-  tbody.innerHTML = reqs.map(r =>
-    `<tr><td>${escH((r.factors || []).join('、'))}</td>`
-    + `<td><span class="badge ${r.status === 'approved' ? 'done' : r.status === 'rejected' ? 'failed' : 'queued'}">${escH(FREQ_STATUS[r.status] || r.status)}</span></td>`
-    + `<td class="muted">${escH(r.note || '—')}</td><td>${fmtTime(r.created_at)}</td></tr>`).join('');
 }
 function fmtT(iso){ return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
-async function loadStrategies(){
-  const resp = await apiFetch('/api/saas/strategies');
-  const d = await resp.json();
+async function loadStrategies(force){
+  if (recordsStrategiesLoading || (recordsStrategiesLoaded && !force)) return;
+  recordsStrategiesLoading = true;
   const tbody = document.getElementById('strat-tbody');
-  const items = d.strategies || [];
-  if (!items.length){ tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无保存的策略（新建回测提交后自动入库）</td></tr>'; return; }
-  tbody.innerHTML = '';
-  // CR-2026-10-04 模块一：入口标签 + 详情页入口；模块二收编：行内信号状态
-  const MODE_LABEL = {nl: '自然语言', wizard: '自选因子', yaml: '策略代码'};
-  const SCOPE_LABEL = {last_run_universe: '最近回测范围', sector: '板块/概念', all_a: '全部 A 股', custom: '自定义列表'};
-  for (const s of items){
-    const tr = document.createElement('tr');
-    const modeLabel = MODE_LABEL[s.entry_mode] || '策略代码';
-    // 监控状态 + 最近信号摘要（一行小字；有未读信号时行首红点）
-    let sigLine;
-    if (s.watch && s.watch.enabled){
-      const scope = SCOPE_LABEL[s.watch.scope_type] || s.watch.scope_type;
-      const cs = (s.watch.scope_payload && s.watch.scope_payload.codes) || [];
-      let summ = '';
-      if (s.latest_signals){
-        const ls = s.latest_signals, d = String(ls.trade_date || '').slice(5);
-        summ = ` · ${d}：${ls.entry_n} 入场 ${ls.exit_n} 离场`;
-      }
-      sigLine = `<span style="color:var(--pos,#1a7f37)">监控中（${scope}${cs.length ? ' ' + cs.length + ' 只' : ''}）</span>${escH(summ)}`;
-    } else {
-      sigLine = `<a href="/saas/strategies/${s.id}" style="font-size:12px">开启监控 →</a>`;
+  const controller = new AbortController();
+  try {
+    const result = await recordsRequestWithTimeout('/api/saas/strategies', {redirectOn401:false}, controller, async resp => {
+      if (resp.status === 401 || resp.status === 404) return {resp, access: true};
+      return {resp, data: await resp.json()};
+    });
+    if (result.access){ showRecordsAccess(); return; }
+    const resp = result.resp, d = result.data;
+    if (resp.status !== 200 || !d || !d.ok || !Array.isArray(d.strategies)) throw new Error('策略库加载失败 HTTP ' + resp.status);
+    const items = d.strategies;
+    if (!items.length){
+      tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无保存的策略（新建回测提交后自动入库）</td></tr>';
+      recordsStrategiesLoaded = true;
+      return;
     }
-    const unreadDot = s.signal_unread
-      ? '<span title="有未读信号" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E5534B;margin-right:5px"></span>' : '';
-    tr.innerHTML = `<td>${escH(s.name)} <span class="badge queued" style="font-weight:400">${modeLabel}</span>`
-      + `<br><span class="opt" style="font-size:12px">${unreadDot}${sigLine}</span></td>`
-      + `<td class="num" style="text-align:right">${s.job_count}</td>`
-      + `<td>${fmtT(s.last_used_at)}</td><td>${fmtT(s.created_at)}</td>`
-      + `<td style="text-align:right;white-space:nowrap">`
-      + `<a href="/saas/strategies/${s.id}">详情</a> `
-      + `<a href="/saas/new?strategy=${s.id}">去回测</a> `
-      + `<button class="btn-sm" data-ren="${s.id}">重命名</button> `
-      + `<button class="btn-sm" data-del="${s.id}">删除</button></td>`;
-    tbody.appendChild(tr);
+    tbody.innerHTML = '';
+    // CR-2026-10-04 模块一：入口标签 + 详情页入口；模块二收编：行内信号状态
+    const MODE_LABEL = {nl: '自然语言', wizard: '自选因子', yaml: '策略代码'};
+    const SCOPE_LABEL = {last_run_universe: '最近回测范围', sector: '板块/概念', all_a: '全部 A 股', custom: '自定义列表'};
+    for (const s of items){
+      const tr = document.createElement('tr');
+      const modeLabel = MODE_LABEL[s.entry_mode] || '策略代码';
+      // 监控状态 + 最近信号摘要（一行小字；有未读信号时行首红点）
+      let sigLine;
+      if (s.watch && s.watch.enabled){
+        const scope = SCOPE_LABEL[s.watch.scope_type] || s.watch.scope_type;
+        const cs = (s.watch.scope_payload && s.watch.scope_payload.codes) || [];
+        let summ = '';
+        if (s.latest_signals){
+          const ls = s.latest_signals, d = String(ls.trade_date || '').slice(5);
+          summ = ` · ${d}：${ls.entry_n} 入场 ${ls.exit_n} 离场`;
+        }
+        sigLine = `<span style="color:var(--pos,#1a7f37)">监控中（${scope}${cs.length ? ' ' + cs.length + ' 只' : ''}）</span>${escH(summ)}`;
+      } else {
+        sigLine = `<a href="/saas/strategies/${s.id}" style="font-size:12px">开启监控 →</a>`;
+      }
+      const unreadDot = s.signal_unread
+        ? '<span title="有未读信号" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E5534B;margin-right:5px"></span>' : '';
+      tr.innerHTML = `<td>${escH(s.name)} <span class="badge queued" style="font-weight:400">${modeLabel}</span>`
+        + `<br><span class="opt" style="font-size:12px">${unreadDot}${sigLine}</span></td>`
+        + `<td class="num" style="text-align:right">${s.job_count}</td>`
+        + `<td>${fmtT(s.last_used_at)}</td><td>${fmtT(s.created_at)}</td>`
+        + `<td style="text-align:right;white-space:nowrap">`
+        + `<a href="/saas/strategies/${s.id}">详情</a> `
+        + `<a href="/saas/new?strategy=${s.id}">去回测</a> `
+        + `<button class="btn-sm" data-ren="${s.id}">重命名</button> `
+        + `<button class="btn-sm" data-del="${s.id}">删除</button></td>`;
+      tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('[data-ren]').forEach(btn => btn.addEventListener('click', async () => {
+      const name = prompt('新的策略名称：');
+      if (!name) return;
+      const r = await apiFetch('/api/saas/strategies/' + btn.dataset.ren + '/rename', {method: 'POST', json: {name}});
+      const d = await r.json();
+      if (!d.ok) alert(d.error || '重命名失败');
+      loadStrategies(true);
+    }));
+    tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm('确认删除该策略？（有关联回测记录的策略不可删）')) return;
+      const r = await apiFetch('/api/saas/strategies/' + btn.dataset.del, {method: 'DELETE'});
+      const d = await r.json();
+      if (!d.ok) alert(d.error || '删除失败');
+      loadStrategies(true);
+    }));
+    recordsStrategiesLoaded = true;
+  } catch (error) {
+    if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
+    showRecordsAuxFailure(tbody, 5, loadStrategies);
+  } finally {
+    recordsStrategiesLoading = false;
   }
-  tbody.querySelectorAll('[data-ren]').forEach(btn => btn.addEventListener('click', async () => {
-    const name = prompt('新的策略名称：');
-    if (!name) return;
-    const r = await apiFetch('/api/saas/strategies/' + btn.dataset.ren + '/rename', {method: 'POST', json: {name}});
-    const d = await r.json();
-    if (!d.ok) alert(d.error || '重命名失败');
-    loadStrategies();
-  }));
-  tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', async () => {
-    if (!confirm('确认删除该策略？（有关联回测记录的策略不可删）')) return;
-    const r = await apiFetch('/api/saas/strategies/' + btn.dataset.del, {method: 'DELETE'});
-    const d = await r.json();
-    if (!d.ok) alert(d.error || '删除失败');
-    loadStrategies();
-  }));
 }
 load();

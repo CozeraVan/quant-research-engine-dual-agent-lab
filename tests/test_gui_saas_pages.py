@@ -143,10 +143,24 @@ function recordsEl(){
     querySelectorAll(){ return []; },
   };
 }
+function recordsText(node){
+  return String(node.innerHTML || '') + String(node.textContent || '') + (node.children || []).map(recordsText).join('');
+}
 function recordsResponse(status, data, jsonError){
   return {status, ok: status >= 200 && status < 300, json: async () => {
     if (jsonError) throw new Error('invalid json');
     return data;
+  }};
+}
+function recordsDeferred(){
+  let resolve;
+  const promise = new Promise(r => { resolve = r; });
+  return {promise, resolve};
+}
+function recordsPendingBody(status, onBody){
+  return {status, ok: status >= 200 && status < 300, json(){
+    if (onBody) onBody();
+    return new Promise(() => {});
   }};
 }
 function createRecordsHarness(fetchImpl){
@@ -165,7 +179,7 @@ function createRecordsHarness(fetchImpl){
     createElement(){ return recordsEl(); },
   };
   const context = vm.createContext({
-    console, document, STATUS_LABEL: {}, SAAS_BYPASS: false,
+    console, document, STATUS_LABEL: {}, SAAS_BYPASS: false, AbortController,
     Date: {now(){ return now; }},
     location: {href: ''},
     requireLogin(){ calls.login += 1; },
@@ -175,7 +189,18 @@ function createRecordsHarness(fetchImpl){
     setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
     clearTimeout(id){ timers.delete(id); },
   });
-  return {context, calls, timers, root, elements, setNow(value){ now = value; }};
+  return {
+    context, calls, timers, root, elements,
+    setNow(value){ now = value; },
+    pollTimerCount(){ return [...timers.values()].filter(timer => timer.at - now === 5000).length; },
+    async runNextTimer(){
+      const entry = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      assert.ok(entry, '必须存在可执行的 timeout');
+      timers.delete(entry[0]);
+      now = Math.max(now, entry[1].at);
+      return entry[1].fn();
+    },
+  };
 }
 """
 
@@ -183,7 +208,8 @@ function createRecordsHarness(fetchImpl){
 def _run_records_js(html: str, scenario: str) -> None:
     scripts = re.findall(r"<script>([\s\S]*?)</script>", html)
     source = next(script for script in scripts if "function loadFactorRequests()" in script)
-    source = re.sub(r"\nload\(\);\s*$", "\nrecordsInitialLoad = load();", source)
+    source = source.replace("\nload();", "\nrecordsInitialLoad = load();", 1)
+    source = source.replace("\nloadProfile();", "\nprofileInitialLoad = loadProfile();", 1)
     assert "recordsInitialLoad = load();" in source
     node = shutil.which("node")
     if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
@@ -269,17 +295,191 @@ async function settle(h){
   });
   vm.runInContext(source, h.context);
   await vm.runInContext('recordsInitialLoad', h.context);
-  assert.equal(h.timers.size, 1);
+  assert.equal(h.pollTimerCount(), 1);
   await vm.runInContext('load()', h.context);
   await vm.runInContext('load()', h.context);
-  assert.equal(h.timers.size, 1, '重复 load 也只能保留一个 timer');
+  assert.equal(h.pollTimerCount(), 1, '重复 load 也只能保留一个 timer');
   h.setNow(1000 + 5 * 60 * 1000);
   await vm.runInContext('load()', h.context);
-  assert.equal(h.timers.size, 0, '活跃刷新到期后必须暂停');
+  assert.equal(h.pollTimerCount(), 0, '活跃刷新到期后必须暂停');
   assert.equal(vm.runInContext("document.querySelector('.wrap').children[0].children[0].textContent", h.context), '已暂停自动刷新');
   await h.elements['btn-reload'].listeners.click();
-  assert.equal(h.timers.size, 1, '手动刷新必须恢复自动刷新');
+  assert.equal(h.pollTimerCount(), 1, '手动刷新必须恢复自动刷新');
   assert.equal(h.calls.failure, 0, '暂停不得伪报加载失败');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_records_filter_empty_is_distinct_from_no_records(self, client):
+        html = client.get("/saas/").get_data(as_text=True)
+        _run_records_js(html, r"""
+(async () => {
+  const h = createRecordsHarness(async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    return recordsResponse(200, {ok: true, total: 1, items: [{job_id: 1, status: 'completed', strategy_name: 'alpha'}]});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('recordsInitialLoad', h.context);
+  h.elements['recs-filter'].value = 'missing';
+  await h.elements['recs-filter'].listeners.input.call(h.elements['recs-filter']);
+  assert.equal(h.elements['jobs-tbody'].innerHTML.includes('当前筛选无匹配结果'), true);
+  assert.equal(h.elements['jobs-tbody'].innerHTML.includes('还没有回测记录'), false);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_records_main_body_pending_times_out_and_retries(self, client):
+        html = client.get("/saas/").get_data(as_text=True)
+        _run_records_js(html, r"""
+(async () => {
+  const started = recordsDeferred();
+  let blocked = true;
+  const h = createRecordsHarness(async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    if (blocked) return recordsPendingBody(200, started.resolve);
+    return recordsResponse(200, {ok: true, items: [], total: 0});
+  });
+  vm.runInContext(source, h.context);
+  const pending = vm.runInContext('recordsInitialLoad', h.context);
+  await started.promise;
+  await h.runNextTimer();
+  await pending;
+  assert.equal(h.calls.failure, 1, '主列表 body pending 必须超时显示失败');
+  assert.equal(typeof h.calls.retry, 'function');
+  blocked = false;
+  await h.calls.retry();
+  assert.equal(h.elements['jobs-tbody'].innerHTML.includes('还没有回测记录'), true);
+  assert.equal(h.calls.requests.filter(r => r.url.startsWith('/api/results?')).length, 2);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_records_latest_load_epoch_controls_render_failure_and_timer(self, client):
+        html = client.get("/saas/").get_data(as_text=True)
+        _run_records_js(html, r"""
+function success(items){ return recordsResponse(200, {ok: true, items, total: items.length}); }
+function running(){ return [{job_id: 1, status: 'running', strategy_name: 'old'}]; }
+(async () => {
+  const first = recordsDeferred(), second = recordsDeferred();
+  let notifyFirst;
+  const firstStarted = new Promise(resolve => { notifyFirst = resolve; });
+  let round = 0;
+  const latest = createRecordsHarness(async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    round += 1;
+    if (round === 1){ notifyFirst(); return first.promise; }
+    return second.promise;
+  });
+  vm.runInContext(source, latest.context);
+  const oldLoad = vm.runInContext('recordsInitialLoad', latest.context);
+  await firstStarted;
+  const newLoad = vm.runInContext('load()', latest.context);
+  second.resolve(success([]));
+  await newLoad;
+  first.resolve(success(running()));
+  await oldLoad;
+  for (let i = 0; i < 12; i += 1) await Promise.resolve();
+  assert.equal(latest.elements['jobs-tbody'].innerHTML.includes('还没有回测记录'), true, '旧响应不能覆盖新空态');
+  assert.equal(latest.timers.size, 0, '旧活跃响应不能在新终态后调度');
+
+  const slow = recordsDeferred();
+  let notifySlow;
+  const slowStarted = new Promise(resolve => { notifySlow = resolve; });
+  let calls = 0;
+  const failure = createRecordsHarness(async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    calls += 1;
+    if (calls === 1){ notifySlow(); return slow.promise; }
+    return recordsResponse(500, {ok: false});
+  });
+  vm.runInContext(source, failure.context);
+  const stale = vm.runInContext('recordsInitialLoad', failure.context);
+  await slowStarted;
+  await vm.runInContext('load()', failure.context);
+  assert.equal(failure.calls.failure, 1);
+  slow.resolve(success(running()));
+  await stale;
+  assert.equal(failure.calls.failure, 1, '旧响应不能清除新失败');
+  assert.equal(failure.timers.size, 0, '旧响应不能在失败后重启 timer');
+  assert.equal(failure.calls.requests.some(r => r.url === '/api/saas/strategies'), false, '作废旧成功不能初始化附属模块');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_records_auxiliary_http_failures_and_retry(self, client):
+        html = client.get("/saas/").get_data(as_text=True)
+        _run_records_js(html, r"""
+async function flushAux(){ for (let i = 0; i < 12; i += 1) await Promise.resolve(); }
+(async () => {
+  for (const status of [401, 404]){
+    for (const target of ['/api/saas/strategies', '/api/saas/factor-requests']){
+      const h = createRecordsHarness(async url => {
+        if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+        if (url.startsWith('/api/results?')) return recordsResponse(200, {ok: true, items: [], total: 0});
+        if (url === target) return recordsResponse(status, {ok: false});
+        return recordsResponse(200, {ok: true, strategies: [], requests: []});
+      });
+      vm.runInContext(source, h.context);
+      await vm.runInContext('recordsInitialLoad', h.context);
+      await flushAux();
+      assert.equal(h.calls.access, 1, target + ' ' + status + ' 必须统一无权');
+    }
+  }
+  for (const target of ['/api/saas/strategies', '/api/saas/factor-requests']){
+    let attempts = 0;
+    const h = createRecordsHarness(async url => {
+      if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+      if (url.startsWith('/api/results?')) return recordsResponse(200, {ok: true, items: [], total: 0});
+      if (url === target){
+        attempts += 1;
+        if (attempts === 1) return recordsResponse(500, {ok: false});
+      }
+      return recordsResponse(200, {ok: true, strategies: [], requests: []});
+    });
+    vm.runInContext(source, h.context);
+    await vm.runInContext('recordsInitialLoad', h.context);
+    await flushAux();
+    const bodyId = target.endsWith('strategies') ? 'strat-tbody' : 'factor-req-tbody';
+    assert.equal(recordsText(h.elements[bodyId]).includes('加载失败'), true, target + ' 500 必须显示本模块失败');
+    assert.equal(recordsText(h.elements[bodyId]).includes('暂无'), false, '失败不得冒充空模块');
+    await vm.runInContext('load()', h.context);
+    await flushAux();
+    assert.equal(attempts, 2, '失败的附属模块必须在后续主列表成功时重试');
+    assert.equal(h.elements[bodyId].innerHTML.includes('暂无'), true);
+  }
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_profile_body_pending_times_out_and_retries(self, client):
+        html = client.get("/saas/profile").get_data(as_text=True)
+        _run_records_js(html, r"""
+(async () => {
+  const started = recordsDeferred();
+  let blocked = true;
+  let meCalls = 0;
+  const h = createRecordsHarness(async url => {
+    if (url === '/api/saas/me'){
+      meCalls += 1;
+      if (meCalls === 2 && blocked) return recordsPendingBody(200, started.resolve);
+      return recordsResponse(200, {ok: true, user: {email: 'recovered@example.com'}});
+    }
+    if (url.startsWith('/api/results?')) return recordsResponse(200, {ok: true, items: [], total: 0});
+    return recordsResponse(200, {ok: true, strategies: [], requests: []});
+  });
+  vm.runInContext(source, h.context);
+  const pending = vm.runInContext('profileInitialLoad', h.context);
+  await started.promise;
+  await h.runNextTimer();
+  await pending;
+  assert.equal(h.calls.failure, 1, 'profile body pending 必须超时显示失败');
+  assert.equal(typeof h.calls.retry, 'function');
+  blocked = false;
+  await h.calls.retry();
+  assert.equal(h.elements['pf-account'].textContent, 'recovered@example.com');
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
@@ -291,14 +491,15 @@ async function settle(h){
         )
         load_profile = re.search(r"async function loadProfile\(\)\{.*?\n\}", profile_script, re.S)
         assert load_profile
-        assert "apiFetch('/api/saas/me', {redirectOn401:false})" in load_profile.group(0)
-        assert "if (!resp.ok || !d.ok) return;" in load_profile.group(0)
+        assert "recordsRequestWithTimeout('/api/saas/me'" in load_profile.group(0)
+        assert "redirectOn401:false" in load_profile.group(0)
+        assert "showLoadFailure(document.getElementById('profile-card'), retryProfile)" in load_profile.group(0)
 
     def test_new_login_url_and_poll_job_fail_fast(self, client):
         html = client.get("/saas/new").get_data(as_text=True)
         assert "$('#guest-register').addEventListener('click', () => { location.href = saasLoginUrl(); });" in html
         assert "for (let i = 0; i < 80; i++)" in html
-        match = re.search(r"(async function pollJob\(jobId\)\{.*?\n\})(?=\nfunction isGuest)", html, re.S)
+        match = re.search(r"(const NEW_REQUEST_TIMEOUT_MS[\s\S]*?async function pollJob\(jobId\)\{.*?\n\})(?=\nfunction isGuest)", html, re.S)
         assert match
         node = shutil.which("node")
         if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
@@ -309,8 +510,23 @@ async function settle(h){
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const calls = [];
+const timers = new Map();
+let nextTimer = 1;
 const context = vm.createContext({
-  setTimeout(fn){ fn(); return 1; },
+  AbortController,
+  setTimeout(fn, delay){
+    const id = nextTimer++;
+    if (delay === 3000){ fn(); return id; }
+    timers.set(id, fn);
+    return id;
+  },
+  clearTimeout(id){ timers.delete(id); },
+  async runNextTimer(){
+    const entry = timers.entries().next().value;
+    assert.ok(entry, '请求必须存在 timeout');
+    timers.delete(entry[0]);
+    return entry[1]();
+  },
   apiFetch(url){ calls.push(url); return context.responses.shift(); },
   responses: [],
 });
@@ -321,13 +537,14 @@ function response(status, data){
         scenario = r"""
 (async () => {
   for (const responses of [
+    [Promise.resolve({status: 500, ok: false, json: async () => { throw new Error('非 2xx 不得解析 JSON'); }})],
     [response(500, {ok: false, error: 'down'})],
     [response(200, {ok: true})],
     [response(200, {ok: false, job: {status: 'running'}})],
   ]){
     calls.length = 0;
     context.responses = responses;
-    await assert.rejects(vm.runInContext('pollJob(7)', context));
+    await assert.rejects(vm.runInContext('pollJob(7)', context), /HTTP 500|任务状态加载失败/);
     assert.equal(calls.length, 1, '非 2xx、!ok 或缺 job 必须立即 fail-fast');
   }
   calls.length = 0;
@@ -335,6 +552,16 @@ function response(status, data){
   const job = await vm.runInContext('pollJob(7)', context);
   assert.equal(job.status, 'completed');
   assert.equal(calls.length, 1);
+
+  calls.length = 0;
+  context.responses = [Promise.resolve({status: 200, ok: true, json(){ return new Promise(() => {}); }})];
+  const pending = assert.rejects(vm.runInContext('pollJob(7)', context));
+  await Promise.resolve();
+  assert.equal(calls.length, 1, 'body pending 场景必须先发出请求');
+  assert.equal(timers.size, 1, 'body pending 时必须保留请求 timeout');
+  await context.runNextTimer();
+  await pending;
+  assert.equal(calls.length, 1, 'body pending 必须在本次请求超时后立即 fail-fast');
 })().catch(error => { console.error(error); process.exit(1); });
 """
         script = harness + "\nconst source = " + json.dumps(match.group(1)) + ";\nvm.runInContext(source, context);\n" + scenario

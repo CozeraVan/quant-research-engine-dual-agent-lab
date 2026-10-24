@@ -832,12 +832,43 @@ async function createJob(kind){
   if (!resp.ok || !d.ok) throw new Error(d.error || '提交失败（HTTP ' + resp.status + '）');
   return d.job_id;
 }
+const NEW_REQUEST_TIMEOUT_MS = 15000;
+async function newRequestWithTimeout(url, options, controller, consume){
+  let timeout = null;
+  let onAbort = null;
+  const cancellation = new Promise((resolve, reject) => {
+    onAbort = () => {
+      const error = new Error('请求已取消');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    if (controller.signal.aborted) onAbort();
+    else controller.signal.addEventListener('abort', onAbort, {once: true});
+    timeout = setTimeout(() => controller.abort(), NEW_REQUEST_TIMEOUT_MS);
+  });
+  const operation = (async () => {
+    const resp = await apiFetch(url, Object.assign({}, options, {signal: controller.signal}));
+    return consume(resp);
+  })();
+  try {
+    return await Promise.race([operation, cancellation]);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+    controller.signal.removeEventListener('abort', onAbort);
+  }
+}
 async function pollJob(jobId){
   for (let i = 0; i < 80; i++){
     await new Promise(r => setTimeout(r, 3000));
-    const resp = await apiFetch('/api/saas/jobs/' + jobId);
-    const d = await resp.json();
-    if (!resp.ok || !d.ok || !d.job) throw new Error((d && d.error) || '任务状态加载失败（HTTP ' + resp.status + '）');
+    const controller = new AbortController();
+    const result = await newRequestWithTimeout('/api/saas/jobs/' + jobId, {}, controller, async resp => {
+      if (!resp.ok) return {resp};
+      return {resp, data: await resp.json()};
+    });
+    const resp = result.resp;
+    if (!resp.ok) throw new Error('任务状态加载失败（HTTP ' + resp.status + '）');
+    const d = result.data;
+    if (!d || !d.ok || !d.job) throw new Error((d && d.error) || '任务状态加载失败');
     const st = d.job.status;
     if (st === 'completed') return d.job;
     if (st === 'failed' || st === 'cancelled' || st === 'canceled') throw new Error((d.job && d.job.error) || '任务失败');

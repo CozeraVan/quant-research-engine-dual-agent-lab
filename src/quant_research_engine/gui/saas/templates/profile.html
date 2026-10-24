@@ -34,6 +34,17 @@
 {% endblock %}
 {% block scripts %}
 <script>
+const PROFILE_CONTENT = Array.from(document.getElementById('profile-card').childNodes);
+let profileController = null;
+let profileEpoch = 0;
+let profileContentDetached = false;
+function retryProfile(){
+  if (profileContentDetached){
+    document.getElementById('profile-card').replaceChildren(...PROFILE_CONTENT);
+    profileContentDetached = false;
+  }
+  return loadProfile();
+}
 async function loadProfile(){
   const TIER_LABEL = {guest: '游客', member: '注册会员', paid: '付费会员'};
   const PERM_LABEL = {
@@ -41,10 +52,20 @@ async function loadProfile(){
     member: '全市场 / 全历史 · 不限次数 · 记录永久保存',
     paid: '内测期间同注册会员，更多权益即将开放',
   };
+  profileEpoch += 1;
+  if (profileController) profileController.abort();
+  const epoch = profileEpoch;
+  const controller = new AbortController();
+  profileController = controller;
   try {
-    const resp = await apiFetch('/api/saas/me', {redirectOn401:false});
-    const d = await resp.json();
-    if (!resp.ok || !d.ok) return;
+    const result = await recordsRequestWithTimeout('/api/saas/me', {redirectOn401:false}, controller, async resp => {
+      if (resp.status === 401 || resp.status === 404) return {resp, access: true};
+      return {resp, data: await resp.json()};
+    });
+    if (epoch !== profileEpoch) return;
+    if (result.access){ showRecordsAccess(); return; }
+    const resp = result.resp, d = result.data;
+    if (!resp.ok || !d || !d.ok || !d.user) throw new Error('个人信息加载失败 HTTP ' + resp.status);
     const u = d.user;
     document.getElementById('pf-account').textContent = u.email || u.phone || ('用户 #' + u.id);
     const tier = u.tier || 'member';
@@ -55,9 +76,16 @@ async function loadProfile(){
       : ('已用 ' + (u.used_today || 0) + ' / ' + (u.quota_limit ?? '—') + ' 次');
     document.getElementById('pf-perm').textContent =
       unlimited ? '管理员：不限次数，全功能开放' : (PERM_LABEL[tier] || PERM_LABEL.member);
-  } catch (e) { /* 保留当前内容，记录区统一处理权限与失败 */ }
+  } catch (error) {
+    if (epoch !== profileEpoch) return;
+    if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
+    showLoadFailure(document.getElementById('profile-card'), retryProfile);
+    profileContentDetached = true;
+  } finally {
+    if (epoch === profileEpoch) profileController = null;
+  }
 }
-loadProfile();
 {% include "_records_scripts.html" %}
+loadProfile();
 </script>
 {% endblock %}
