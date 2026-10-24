@@ -2,6 +2,42 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T4（SDD Task 4：回测记录/profile/new 小修）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 记录页不再顶层强制登录；`/api/results` 的 401/404 复用统一无权卡，其他 HTTP、业务 JSON 与解析失败复用加载失败卡，不再把失败渲染成空记录。仅 `200 + ok + Array.isArray(items)` 进入列表渲染，空数组才显示空态。
+- 策略库与因子申请延后到首次列表成功，且由 `recordsModulesLoaded` 保证只初始化一次；失败响应不会触发附属模块请求。
+- 每次加载与调度先清旧 timer；活跃集合包含 uploading，5 分钟到期暂停而非伪报失败，暂停卡与原刷新按钮都可手动恢复并复位等待起点。终态、无权与失败均停止自动刷新。
+- profile 的 `/api/saas/me` 关闭旧 401 跳转并检查 `resp.ok`；new 注册链接复用 `saasLoginUrl()`，`pollJob` 对非 2xx、`!ok`、缺 `job` 立即抛错，80 次上限未改。
+- 未改 job/symbol/base、公共 helper 或后端，showcase 与 `can_generate` 路径不受影响；无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED: 4 failed, 55 deselected in 0.85s
+GREEN: 4 passed, 55 deselected in 0.88s
+完整页面测试: 59 passed in 6.46s
+Node new Function: /saas/、/saas/profile、/saas/new 共 15 段内联脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T3-BODY-TIMEOUT-FIX（Task 3 响应体 pending 修复）
 
 ## Reviewer

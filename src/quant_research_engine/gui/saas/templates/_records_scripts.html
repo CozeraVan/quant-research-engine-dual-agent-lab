@@ -1,5 +1,3 @@
-requireLogin();
-
 // XSS 防护（QRE-SAAS-SEC-HARDEN）：所有用户可控字符串进 innerHTML 前必须转义
 function escH(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -21,66 +19,143 @@ let pendingDel = null;
 function clsPnL(v){ return v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat'); }
 function fmtPct(v){ return v == null ? '——' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%'; }
 
+const RECORDS_ACTIVE = new Set(['queued', 'leased', 'running', 'uploading']);
+const RECORDS_POLL_INTERVAL_MS = 5000;
+const RECORDS_MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;
+const RECORDS_CONTENT = Array.from(document.querySelector('.wrap').childNodes);
+let recordsTimer = null;
+let recordsActiveSince = null;
+let recordsContentDetached = false;
+let recordsModulesLoaded = false;
+function clearRecordsTimer(){
+  if (recordsTimer !== null){ clearTimeout(recordsTimer); recordsTimer = null; }
+}
+function scheduleRecordsRefresh(){
+  clearRecordsTimer();
+  recordsTimer = setTimeout(() => { recordsTimer = null; load(); }, RECORDS_POLL_INTERVAL_MS);
+}
+function restoreRecordsContent(){
+  if (!recordsContentDetached) return;
+  document.querySelector('.wrap').replaceChildren(...RECORDS_CONTENT);
+  recordsContentDetached = false;
+}
+function retryLoad(){
+  clearRecordsTimer();
+  recordsActiveSince = null;
+  restoreRecordsContent();
+  return load();
+}
+function showRecordsAccess(){
+  clearRecordsTimer();
+  showAccessFallback(document.querySelector('.wrap'));
+  recordsContentDetached = true;
+}
+function showRecordsFailure(){
+  clearRecordsTimer();
+  showLoadFailure(document.querySelector('.wrap'), retryLoad);
+  recordsContentDetached = true;
+}
+function pauseRecordsRefresh(){
+  clearRecordsTimer();
+  const card = document.createElement('div');
+  card.className = 'card';
+  const message = document.createElement('p');
+  message.textContent = '已暂停自动刷新';
+  const hint = document.createElement('p');
+  hint.className = 'opt';
+  hint.textContent = '任务仍在执行，可点击刷新继续查看';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn btn-primary';
+  retry.textContent = '刷新';
+  retry.addEventListener('click', retryLoad);
+  card.appendChild(message);
+  card.appendChild(hint);
+  card.appendChild(retry);
+  document.querySelector('.wrap').replaceChildren(card);
+  recordsContentDetached = true;
+}
+
 async function load(){
-  const [meResp, listResp] = await Promise.all([
-    apiFetch('/api/saas/me'),
-    apiFetch(`/api/results?sort=${listState.sort}&order=${listState.order}&page=${recsFilterKw ? 1 : listState.page}&page_size=${recsFilterKw ? 100 : listState.pageSize}`),
-  ]);
-  const me = await meResp.json();
-  if (me.ok) {
-    const u = me.user;
-    document.getElementById('user-label').textContent =
-      (u.email || u.phone || '') + (u.quota_limit === '不限' ? '（管理员 · 不限回测次数）' : '（今日剩余全量回测 ' + (u.quota_remaining ?? '—') + ' 次）');
-  }
-  const data = await listResp.json();
-  const tbody = document.getElementById('jobs-tbody');
-  let items = data.items || [];
-  if (recsFilterKw) items = items.filter(j => ((j.strategy_name || '') + ' ' + j.job_id).toLowerCase().includes(recsFilterKw));
-  listState.total = data.total || 0;
-  if (!items.length){
-    tbody.innerHTML = '<tr><td colspan="7" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
-  } else {
-    tbody.innerHTML = '';
-    for (const job of items){
-      const tr = document.createElement('tr');
-      const status = STATUS_LABEL[job.status] || job.status;
-      const badgeCls = job.status === 'completed' ? 'ok' : (job.status === 'failed' || job.status === 'cancelled' || job.status === 'canceled' || job.status === 'expired' ? 'fail' : 'run');
-      const done = job.status === 'completed';
-      if (done) { tr.className = 'row-link'; tr.title = '点击进入回测详情'; }
-      const range = (job.date_start || '—') + ' ~ ' + (job.date_end || '—');
-      const symbols = job.symbol_count == null ? '全 A 股' : job.symbol_count + ' 只';
-      const excess = job.excess_return == null
-        ? '<span class="opt">——</span>'
-        : `<span class="${clsPnL(job.excess_return)}">${fmtPct(job.excess_return)}</span>`;
-      const viewLink = done ? `<a class="view-link" href="/saas/jobs/${job.job_id}">查看结果 →</a>` : '';
-      const scBadge = job.showcase
-        ? ' <a class="inl" href="/saas/showcase" style="font-size:12px" title="该策略已收录进经典策略展示页，每日收盘后持续跟踪更新">经典策略·跟踪中 →</a>'
-        : '';
-      tr.innerHTML = `<td><strong>${escH(job.strategy_name || ('策略 #' + job.job_id))}</strong>${scBadge}<br><span class="opt">任务 #${job.job_id}</span></td>`
-        + `<td class="opt">${range}</td>`
-        + `<td style="text-align:right">${symbols}</td>`
-        + `<td style="text-align:right">${excess}</td>`
-        + `<td><span class="badge ${badgeCls}">${status}</span></td>`
-        + `<td>${fmtTime(job.created_at)}</td>`
-        + `<td style="text-align:right;white-space:nowrap">${viewLink} <button class="btn-sm btn-danger-outline" data-del="${job.job_id}">删除</button></td>`;
-      if (done) tr.addEventListener('click', ev => {
-        if (ev.target.closest('button') || ev.target.closest('a')) return;
-        location.href = '/saas/jobs/' + job.job_id;
-      });
-      tbody.appendChild(tr);
+  clearRecordsTimer();
+  try {
+    const [meResp, listResp] = await Promise.all([
+      apiFetch('/api/saas/me', {redirectOn401:false}),
+      apiFetch(`/api/results?sort=${listState.sort}&order=${listState.order}&page=${recsFilterKw ? 1 : listState.page}&page_size=${recsFilterKw ? 100 : listState.pageSize}`, {redirectOn401:false}),
+    ]);
+    if (listResp.status === 401 || listResp.status === 404){ showRecordsAccess(); return; }
+    const data = await listResp.json();
+    if (listResp.status !== 200 || !data.ok || !Array.isArray(data.items)) throw new Error('记录加载失败 HTTP ' + listResp.status);
+    const me = await meResp.json();
+    if (me.ok) {
+      const u = me.user;
+      document.getElementById('user-label').textContent =
+        (u.email || u.phone || '') + (u.quota_limit === '不限' ? '（管理员 · 不限回测次数）' : '（今日剩余全量回测 ' + (u.quota_remaining ?? '—') + ' 次）');
     }
+    const tbody = document.getElementById('jobs-tbody');
+    let items = data.items;
+    if (recsFilterKw) items = items.filter(j => ((j.strategy_name || '') + ' ' + j.job_id).toLowerCase().includes(recsFilterKw));
+    listState.total = data.total || 0;
+    if (!items.length){
+      tbody.innerHTML = '<tr><td colspan="7" class="muted">还没有回测记录，点右上角「新建回测」开始</td></tr>';
+    } else {
+      tbody.innerHTML = '';
+      for (const job of items){
+        const tr = document.createElement('tr');
+        const status = STATUS_LABEL[job.status] || job.status;
+        const badgeCls = job.status === 'completed' ? 'ok' : (job.status === 'failed' || job.status === 'cancelled' || job.status === 'canceled' || job.status === 'expired' ? 'fail' : 'run');
+        const done = job.status === 'completed';
+        if (done) { tr.className = 'row-link'; tr.title = '点击进入回测详情'; }
+        const range = (job.date_start || '—') + ' ~ ' + (job.date_end || '—');
+        const symbols = job.symbol_count == null ? '全 A 股' : job.symbol_count + ' 只';
+        const excess = job.excess_return == null
+          ? '<span class="opt">——</span>'
+          : `<span class="${clsPnL(job.excess_return)}">${fmtPct(job.excess_return)}</span>`;
+        const viewLink = done ? `<a class="view-link" href="/saas/jobs/${job.job_id}">查看结果 →</a>` : '';
+        const scBadge = job.showcase
+          ? ' <a class="inl" href="/saas/showcase" style="font-size:12px" title="该策略已收录进经典策略展示页，每日收盘后持续跟踪更新">经典策略·跟踪中 →</a>'
+          : '';
+        tr.innerHTML = `<td><strong>${escH(job.strategy_name || ('策略 #' + job.job_id))}</strong>${scBadge}<br><span class="opt">任务 #${job.job_id}</span></td>`
+          + `<td class="opt">${range}</td>`
+          + `<td style="text-align:right">${symbols}</td>`
+          + `<td style="text-align:right">${excess}</td>`
+          + `<td><span class="badge ${badgeCls}">${status}</span></td>`
+          + `<td>${fmtTime(job.created_at)}</td>`
+          + `<td style="text-align:right;white-space:nowrap">${viewLink} <button class="btn-sm btn-danger-outline" data-del="${job.job_id}">删除</button></td>`;
+        if (done) tr.addEventListener('click', ev => {
+          if (ev.target.closest('button') || ev.target.closest('a')) return;
+          location.href = '/saas/jobs/' + job.job_id;
+        });
+        tbody.appendChild(tr);
+      }
+    }
+    tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
+      pendingDel = btn.dataset.del;
+      document.getElementById('del-text').innerHTML = '回测 <b>#' + pendingDel + '</b> 的记录与结果文件将被移除，删除后不可恢复。';
+      document.getElementById('del-mask').classList.add('show');
+    }));
+    document.getElementById('list-hint').textContent = recsFilterKw ? `共 ${items.length} 条（已筛选）` : `共 ${listState.total} 条`;
+    const pages = Math.max(1, Math.ceil(listState.total / listState.pageSize));
+    document.getElementById('pg-info').textContent = `第 ${listState.page} / ${pages} 页`;
+    document.getElementById('pg-prev').disabled = listState.page <= 1;
+    document.getElementById('pg-next').disabled = listState.page >= pages;
+    if (!recordsModulesLoaded){
+      recordsModulesLoaded = true;
+      loadStrategies();
+      loadFactorRequests();
+    }
+    if (items.some(j => RECORDS_ACTIVE.has(j.status))){
+      if (recordsActiveSince === null) recordsActiveSince = Date.now();
+      if (Date.now() - recordsActiveSince >= RECORDS_MAX_ACTIVE_WAIT_MS){ pauseRecordsRefresh(); return; }
+      scheduleRecordsRefresh();
+    } else {
+      recordsActiveSince = null;
+      clearRecordsTimer();
+    }
+  } catch (error) {
+    if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
+    showRecordsFailure();
   }
-  tbody.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
-    pendingDel = btn.dataset.del;
-    document.getElementById('del-text').innerHTML = '回测 <b>#' + pendingDel + '</b> 的记录与结果文件将被移除，删除后不可恢复。';
-    document.getElementById('del-mask').classList.add('show');
-  }));
-  document.getElementById('list-hint').textContent = recsFilterKw ? `共 ${items.length} 条（已筛选）` : `共 ${listState.total} 条`;
-  const pages = Math.max(1, Math.ceil(listState.total / listState.pageSize));
-  document.getElementById('pg-info').textContent = `第 ${listState.page} / ${pages} 页`;
-  document.getElementById('pg-prev').disabled = listState.page <= 1;
-  document.getElementById('pg-next').disabled = listState.page >= pages;
-  if (items.some(j => ['queued', 'leased', 'running'].includes(j.status))) setTimeout(load, 5000);
 }
 
 // 排序切换（点同一键切升降序；换键重置为降序第一页）
@@ -98,7 +173,7 @@ document.querySelectorAll('[data-sort]').forEach(btn => btn.addEventListener('cl
 }));
 document.getElementById('pg-prev').addEventListener('click', () => { if (listState.page > 1){ listState.page--; load(); } });
 document.getElementById('pg-next').addEventListener('click', () => { listState.page++; load(); });
-document.getElementById('btn-reload').addEventListener('click', load);
+document.getElementById('btn-reload').addEventListener('click', retryLoad);
 let recsFilterKw = '';
 document.getElementById('recs-filter').addEventListener('input', function(){
   recsFilterKw = this.value.trim().toLowerCase();
@@ -194,7 +269,4 @@ async function loadStrategies(){
     loadStrategies();
   }));
 }
-loadStrategies();
-
-loadFactorRequests();
 load();

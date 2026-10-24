@@ -129,6 +129,219 @@ def _run_job_js(html: str, source_pattern: str, scenario: str) -> None:
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+_RECORDS_JS_HARNESS = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+function recordsEl(){
+  return {
+    children: [], childNodes: [], style: {}, className: '', textContent: '', innerHTML: '',
+    disabled: false, dataset: {}, listeners: {},
+    classList: {add(){}, remove(){}, toggle(){}},
+    appendChild(...nodes){ this.children.push(...nodes); this.childNodes.push(...nodes); },
+    replaceChildren(...nodes){ this.children = [...nodes]; this.childNodes = [...nodes]; },
+    addEventListener(type, fn){ this.listeners[type] = fn; },
+    querySelectorAll(){ return []; },
+  };
+}
+function recordsResponse(status, data, jsonError){
+  return {status, ok: status >= 200 && status < 300, json: async () => {
+    if (jsonError) throw new Error('invalid json');
+    return data;
+  }};
+}
+function createRecordsHarness(fetchImpl){
+  const root = recordsEl();
+  root.childNodes = [recordsEl()];
+  root.children = [...root.childNodes];
+  const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = recordsEl()); }});
+  const calls = {access: 0, failure: 0, login: 0, requests: []};
+  const timers = new Map();
+  let nextTimer = 1;
+  let now = 1000;
+  const document = {
+    querySelector(selector){ return selector === '.wrap' ? root : null; },
+    querySelectorAll(){ return []; },
+    getElementById(id){ return elements[id]; },
+    createElement(){ return recordsEl(); },
+  };
+  const context = vm.createContext({
+    console, document, STATUS_LABEL: {}, SAAS_BYPASS: false,
+    Date: {now(){ return now; }},
+    location: {href: ''},
+    requireLogin(){ calls.login += 1; },
+    apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
+    showAccessFallback(target){ calls.access += 1; target.replaceChildren(recordsEl()); },
+    showLoadFailure(target, retry){ calls.failure += 1; calls.retry = retry; target.replaceChildren(recordsEl()); },
+    setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
+    clearTimeout(id){ timers.delete(id); },
+  });
+  return {context, calls, timers, root, elements, setNow(value){ now = value; }};
+}
+"""
+
+
+def _run_records_js(html: str, scenario: str) -> None:
+    scripts = re.findall(r"<script>([\s\S]*?)</script>", html)
+    source = next(script for script in scripts if "function loadFactorRequests()" in script)
+    source = re.sub(r"\nload\(\);\s*$", "\nrecordsInitialLoad = load();", source)
+    assert "recordsInitialLoad = load();" in source
+    node = shutil.which("node")
+    if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+        node = "/home/van/codex-local/node-v22/bin/node"
+    if not node:
+        pytest.skip("node 不可用")
+    script = _RECORDS_JS_HARNESS + "\nconst source = " + json.dumps(source) + ";\n" + scenario
+    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+class TestRecordsAccessStateMachine:
+    def test_records_http_json_and_empty_states(self, client):
+        html = client.get("/saas/").get_data(as_text=True)
+        records_script = next(
+            script for script in re.findall(r"<script>([\s\S]*?)</script>", html)
+            if "function loadFactorRequests()" in script
+        )
+        assert not re.search(r"^requireLogin\(\);", records_script, re.M)
+        _run_records_js(html, r"""
+function recordsFetch(listResponse){
+  return async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    return listResponse;
+  };
+}
+async function settle(h){
+  await vm.runInContext('recordsInitialLoad.catch(() => {})', h.context);
+}
+(async () => {
+  for (const status of [401, 404]){
+    const h = createRecordsHarness(recordsFetch(recordsResponse(status, {ok: false})));
+    vm.runInContext(source, h.context);
+    await settle(h);
+    assert.equal(h.calls.access, 1, status + ' 必须显示统一无权卡');
+    assert.equal(h.calls.failure, 0);
+    assert.equal(h.elements['jobs-tbody'].innerHTML.includes('还没有回测记录'), false);
+    assert.equal(h.calls.requests.filter(r => r.url.startsWith('/api/results?')).length, 1);
+    assert.equal(h.calls.requests.filter(r => r.url.startsWith('/api/results?'))[0].options.redirectOn401, false);
+  }
+  for (const listResponse of [
+    recordsResponse(500, {ok: false}),
+    recordsResponse(200, {ok: false, items: []}),
+    recordsResponse(200, {ok: true}),
+    recordsResponse(201, {ok: true, items: []}),
+    recordsResponse(200, null, true),
+  ]){
+    const h = createRecordsHarness(recordsFetch(listResponse));
+    vm.runInContext(source, h.context);
+    await settle(h);
+    assert.equal(h.calls.access, 0);
+    assert.equal(h.calls.failure, 1, '非 200+ok+items 响应必须显示加载失败');
+    assert.equal(h.elements['jobs-tbody'].innerHTML.includes('还没有回测记录'), false, '失败不得冒充空记录');
+    assert.equal(h.calls.requests.some(r => r.url === '/api/saas/strategies'), false);
+    assert.equal(h.calls.requests.some(r => r.url === '/api/saas/factor-requests'), false);
+  }
+  const empty = createRecordsHarness(recordsFetch(recordsResponse(200, {ok: true, items: [], total: 0})));
+  vm.runInContext(source, empty.context);
+  await settle(empty);
+  assert.equal(empty.calls.access, 0);
+  assert.equal(empty.calls.failure, 0);
+  assert.equal(empty.elements['jobs-tbody'].innerHTML.includes('还没有回测记录'), true);
+  assert.deepEqual(empty.calls.requests.slice(0, 2).map(r => r.url.startsWith('/api/results?') ? 'results' : r.url), ['/api/saas/me', 'results']);
+  assert.equal(empty.calls.requests.filter(r => r.url === '/api/saas/strategies').length, 1, '首次成功后才加载策略库');
+  assert.equal(empty.calls.requests.filter(r => r.url === '/api/saas/factor-requests').length, 1, '首次成功后才加载因子申请');
+  await vm.runInContext('load()', empty.context);
+  assert.equal(empty.calls.requests.filter(r => r.url === '/api/saas/strategies').length, 1, '后续刷新不得重复初始化策略库');
+  assert.equal(empty.calls.requests.filter(r => r.url === '/api/saas/factor-requests').length, 1);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_records_single_timer_pause_and_manual_resume(self, client):
+        html = client.get("/saas/").get_data(as_text=True)
+        _run_records_js(html, r"""
+(async () => {
+  const h = createRecordsHarness(async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    return recordsResponse(200, {ok: true, total: 1, items: [{job_id: 1, status: 'running'}]});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('recordsInitialLoad', h.context);
+  assert.equal(h.timers.size, 1);
+  await vm.runInContext('load()', h.context);
+  await vm.runInContext('load()', h.context);
+  assert.equal(h.timers.size, 1, '重复 load 也只能保留一个 timer');
+  h.setNow(1000 + 5 * 60 * 1000);
+  await vm.runInContext('load()', h.context);
+  assert.equal(h.timers.size, 0, '活跃刷新到期后必须暂停');
+  assert.equal(vm.runInContext("document.querySelector('.wrap').children[0].children[0].textContent", h.context), '已暂停自动刷新');
+  await h.elements['btn-reload'].listeners.click();
+  assert.equal(h.timers.size, 1, '手动刷新必须恢复自动刷新');
+  assert.equal(h.calls.failure, 0, '暂停不得伪报加载失败');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_profile_me_disables_legacy_redirect(self, client):
+        html = client.get("/saas/profile").get_data(as_text=True)
+        profile_script = next(
+            script for script in re.findall(r"<script>([\s\S]*?)</script>", html)
+            if "async function loadProfile()" in script
+        )
+        load_profile = re.search(r"async function loadProfile\(\)\{.*?\n\}", profile_script, re.S)
+        assert load_profile
+        assert "apiFetch('/api/saas/me', {redirectOn401:false})" in load_profile.group(0)
+        assert "if (!resp.ok || !d.ok) return;" in load_profile.group(0)
+
+    def test_new_login_url_and_poll_job_fail_fast(self, client):
+        html = client.get("/saas/new").get_data(as_text=True)
+        assert "$('#guest-register').addEventListener('click', () => { location.href = saasLoginUrl(); });" in html
+        assert "for (let i = 0; i < 80; i++)" in html
+        match = re.search(r"(async function pollJob\(jobId\)\{.*?\n\})(?=\nfunction isGuest)", html, re.S)
+        assert match
+        node = shutil.which("node")
+        if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+            node = "/home/van/codex-local/node-v22/bin/node"
+        if not node:
+            pytest.skip("node 不可用")
+        harness = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const calls = [];
+const context = vm.createContext({
+  setTimeout(fn){ fn(); return 1; },
+  apiFetch(url){ calls.push(url); return context.responses.shift(); },
+  responses: [],
+});
+function response(status, data){
+  return Promise.resolve({status, ok: status >= 200 && status < 300, json: async () => data});
+}
+"""
+        scenario = r"""
+(async () => {
+  for (const responses of [
+    [response(500, {ok: false, error: 'down'})],
+    [response(200, {ok: true})],
+    [response(200, {ok: false, job: {status: 'running'}})],
+  ]){
+    calls.length = 0;
+    context.responses = responses;
+    await assert.rejects(vm.runInContext('pollJob(7)', context));
+    assert.equal(calls.length, 1, '非 2xx、!ok 或缺 job 必须立即 fail-fast');
+  }
+  calls.length = 0;
+  context.responses = [response(200, {ok: true, job: {status: 'completed'}})];
+  const job = await vm.runInContext('pollJob(7)', context);
+  assert.equal(job.status, 'completed');
+  assert.equal(calls.length, 1);
+})().catch(error => { console.error(error); process.exit(1); });
+"""
+        script = harness + "\nconst source = " + json.dumps(match.group(1)) + ";\nvm.runInContext(source, context);\n" + scenario
+        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr or result.stdout
+
+
 _SYMBOL_JS_HARNESS = r"""
 const assert = require('node:assert/strict');
 const vm = require('node:vm');

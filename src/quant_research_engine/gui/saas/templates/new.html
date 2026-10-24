@@ -837,7 +837,8 @@ async function pollJob(jobId){
     await new Promise(r => setTimeout(r, 3000));
     const resp = await apiFetch('/api/saas/jobs/' + jobId);
     const d = await resp.json();
-    const st = d.job && d.job.status;
+    if (!resp.ok || !d.ok || !d.job) throw new Error((d && d.error) || '任务状态加载失败（HTTP ' + resp.status + '）');
+    const st = d.job.status;
     if (st === 'completed') return d.job;
     if (st === 'failed' || st === 'cancelled' || st === 'canceled') throw new Error((d.job && d.job.error) || '任务失败');
   }
@@ -859,7 +860,7 @@ function openGuestModal(errText){
 }
 $('#guest-cancel').addEventListener('click', () => $('#guest-modal').classList.remove('show'));
 $('#guest-modal').addEventListener('click', function(e){ if (e.target === this) this.classList.remove('show'); });
-$('#guest-register').addEventListener('click', () => { location.href = '/saas/login'; });
+$('#guest-register').addEventListener('click', () => { location.href = saasLoginUrl(); });
 $('#guest-continue').addEventListener('click', () => {
   $('#guest-modal').classList.remove('show');
   guestAck = true;

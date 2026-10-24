@@ -42,9 +42,9 @@ async function loadProfile(){
     paid: '内测期间同注册会员，更多权益即将开放',
   };
   try {
-    const resp = await apiFetch('/api/saas/me');
+    const resp = await apiFetch('/api/saas/me', {redirectOn401:false});
     const d = await resp.json();
-    if (!d.ok) return;
+    if (!resp.ok || !d.ok) return;
     const u = d.user;
     document.getElementById('pf-account').textContent = u.email || u.phone || ('用户 #' + u.id);
     const tier = u.tier || 'member';
@@ -55,7 +55,7 @@ async function loadProfile(){
       : ('已用 ' + (u.used_today || 0) + ' / ' + (u.quota_limit ?? '—') + ' 次');
     document.getElementById('pf-perm').textContent =
       unlimited ? '管理员：不限次数，全功能开放' : (PERM_LABEL[tier] || PERM_LABEL.member);
-  } catch (e) { /* 401 已由 apiFetch 处理 */ }
+  } catch (e) { /* 保留当前内容，记录区统一处理权限与失败 */ }
 }
 loadProfile();
 {% include "_records_scripts.html" %}
