@@ -2,6 +2,41 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T4-AUX-ACCESS-FIX（Task 4 复审剩余问题）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 附属模块 401/404 已与主列表整页无权路径分离：`showRecordsAuxAccess` 只替换对应 tbody 并保留重试，不调用 `clearRecordsTimer`、`abortRecordsLoad` 或 `.wrap.replaceChildren`。
+- 两个模块的正常响应分支和 apiFetch 抛错分支均使用局部 helper；重试成功后按既有 loaded/loading 规则恢复内容。
+- 主列表自身 401/404 仍调用整页 `showRecordsAccess()`，既有权限语义不变；500 局部失败与超时/epoch 逻辑未改。
+- 测试覆盖主 DOM 节点引用、主 epoch、主请求 signal、单轮询 timer 与模块重试恢复，无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED: 1 failed, 63 deselected in 0.54s（实际命中整页 showAccessFallback 调用）
+GREEN: 1 passed, 63 deselected in 0.49s
+扩展回归: 167 passed in 17.23s
+Node new Function: 三页 15 段内联脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T4-REVIEW-FIX（Task 4 全部审查问题）
 
 ## Reviewer

@@ -91,13 +91,13 @@ function showRecordsFailure(){
   showLoadFailure(document.querySelector('.wrap'), retryLoad);
   recordsContentDetached = true;
 }
-function showRecordsAuxFailure(tbody, colspan, retryFn){
+function showRecordsAuxMessage(tbody, colspan, text, retryFn){
   const tr = document.createElement('tr');
   const td = document.createElement('td');
   td.colSpan = colspan;
   td.className = 'muted';
   const message = document.createElement('span');
-  message.textContent = '加载失败，请稍后重试';
+  message.textContent = text;
   const retry = document.createElement('button');
   retry.type = 'button';
   retry.className = 'btn-sm';
@@ -107,6 +107,12 @@ function showRecordsAuxFailure(tbody, colspan, retryFn){
   td.appendChild(retry);
   tr.appendChild(td);
   tbody.replaceChildren(tr);
+}
+function showRecordsAuxFailure(tbody, colspan, retryFn){
+  showRecordsAuxMessage(tbody, colspan, '加载失败，请稍后重试', retryFn);
+}
+function showRecordsAuxAccess(tbody, colspan, retryFn){
+  showRecordsAuxMessage(tbody, colspan, '页面不存在或暂无访问权限', retryFn);
 }
 function pauseRecordsRefresh(){
   clearRecordsTimer();
@@ -274,7 +280,7 @@ async function loadFactorRequests(){
       if (resp.status === 401 || resp.status === 404) return {resp, access: true};
       return {resp, data: await resp.json()};
     });
-    if (result.access){ showRecordsAccess(); return; }
+    if (result.access){ showRecordsAuxAccess(tbody, 4, loadFactorRequests); return; }
     const resp = result.resp, data = result.data;
     if (resp.status !== 200 || !data || !data.ok || !Array.isArray(data.requests)) throw new Error('因子申请加载失败 HTTP ' + resp.status);
     const reqs = data.requests;
@@ -288,7 +294,7 @@ async function loadFactorRequests(){
     }
     recordsFactorRequestsLoaded = true;
   } catch (error) {
-    if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
+    if (error && (error.status === 401 || error.status === 404)){ showRecordsAuxAccess(tbody, 4, loadFactorRequests); return; }
     showRecordsAuxFailure(tbody, 4, loadFactorRequests);
   } finally {
     recordsFactorRequestsLoading = false;
@@ -305,7 +311,7 @@ async function loadStrategies(force){
       if (resp.status === 401 || resp.status === 404) return {resp, access: true};
       return {resp, data: await resp.json()};
     });
-    if (result.access){ showRecordsAccess(); return; }
+    if (result.access){ showRecordsAuxAccess(tbody, 5, loadStrategies); return; }
     const resp = result.resp, d = result.data;
     if (resp.status !== 200 || !d || !d.ok || !Array.isArray(d.strategies)) throw new Error('策略库加载失败 HTTP ' + resp.status);
     const items = d.strategies;
@@ -365,7 +371,7 @@ async function loadStrategies(force){
     }));
     recordsStrategiesLoaded = true;
   } catch (error) {
-    if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
+    if (error && (error.status === 401 || error.status === 404)){ showRecordsAuxAccess(tbody, 5, loadStrategies); return; }
     showRecordsAuxFailure(tbody, 5, loadStrategies);
   } finally {
     recordsStrategiesLoading = false;

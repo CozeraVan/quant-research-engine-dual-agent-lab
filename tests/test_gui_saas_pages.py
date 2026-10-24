@@ -417,16 +417,34 @@ async function flushAux(){ for (let i = 0; i < 12; i += 1) await Promise.resolve
 (async () => {
   for (const status of [401, 404]){
     for (const target of ['/api/saas/strategies', '/api/saas/factor-requests']){
+      let attempts = 0;
       const h = createRecordsHarness(async url => {
         if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
-        if (url.startsWith('/api/results?')) return recordsResponse(200, {ok: true, items: [], total: 0});
-        if (url === target) return recordsResponse(status, {ok: false});
+        if (url.startsWith('/api/results?')) return recordsResponse(200, {ok: true, total: 1, items: [{job_id: 1, status: 'running'}]});
+        if (url === target){
+          attempts += 1;
+          if (attempts === 1) return recordsResponse(status, {ok: false});
+        }
         return recordsResponse(200, {ok: true, strategies: [], requests: []});
       });
       vm.runInContext(source, h.context);
       await vm.runInContext('recordsInitialLoad', h.context);
+      const mainChildren = [...h.root.children];
+      const mainEpoch = vm.runInContext('recordsLoadEpoch', h.context);
+      const mainRequest = h.calls.requests.find(r => r.url.startsWith('/api/results?'));
       await flushAux();
-      assert.equal(h.calls.access, 1, target + ' ' + status + ' 必须统一无权');
+      const bodyId = target.endsWith('strategies') ? 'strat-tbody' : 'factor-req-tbody';
+      assert.equal(h.calls.access, 0, target + ' 不得调用整页无权 helper');
+      assert.ok(h.root.children.every((node, index) => node === mainChildren[index]), '附属无权必须保留主列表 DOM');
+      assert.equal(vm.runInContext('recordsLoadEpoch', h.context), mainEpoch, '附属无权不得改变主 epoch');
+      assert.equal(mainRequest.options.signal.aborted, false, '附属无权不得 abort 主请求');
+      assert.equal(h.pollTimerCount(), 1, '附属无权不得停止主轮询');
+      assert.equal(recordsText(h.elements[bodyId]).includes('页面不存在或暂无访问权限'), true, '附属无权必须模块内提示');
+      const retry = h.elements[bodyId].children[0].children[0].children[1];
+      await retry.listeners.click();
+      assert.equal(attempts, 2, '模块内重试必须重新请求');
+      assert.equal(recordsText(h.elements[bodyId]).includes('暂无'), true, '模块重试成功必须恢复内容');
+      assert.equal(h.pollTimerCount(), 1, '模块重试不得影响主轮询');
     }
   }
   for (const target of ['/api/saas/strategies', '/api/saas/factor-requests']){
