@@ -84,73 +84,189 @@ function table(elId, rows, columns){
   el.innerHTML = '<table class="detail-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
 }
 
+const SYMBOL_POLL_INTERVAL_MS = 3000;
+const SYMBOL_MAX_CONSECUTIVE_ERRORS = 3;
+const SYMBOL_MAX_WAIT_MS = 5 * 60 * 1000;
+const SYMBOL_ACTIVE = new Set(['queued','leased','running','uploading']);
+const SYMBOL_CONTENT = Array.from(document.querySelector('.wrap').childNodes);
+let symbolPollTimer = null;
+let symbolPollInFlight = false;
+let symbolConsecutiveErrors = 0;
+let symbolActiveSince = null;
+let symbolContentDetached = false;
+
+function clearSymbolPollTimer(){
+  if (symbolPollTimer !== null){ clearTimeout(symbolPollTimer); symbolPollTimer = null; }
+}
+function scheduleSymbolPoll(){
+  clearSymbolPollTimer();
+  symbolPollTimer = setTimeout(() => { symbolPollTimer = null; pollGen(); }, SYMBOL_POLL_INTERVAL_MS);
+}
+function restoreSymbolContent(){
+  if (!symbolContentDetached) return;
+  document.querySelector('.wrap').replaceChildren(...SYMBOL_CONTENT);
+  symbolContentDetached = false;
+}
+function showSymbolAccess(){
+  clearSymbolPollTimer();
+  showAccessFallback(document.querySelector('.wrap'));
+  symbolContentDetached = true;
+}
+function showSymbolLoadFailure(retryFn){
+  clearSymbolPollTimer();
+  showLoadFailure(document.querySelector('.wrap'), retryFn);
+  symbolContentDetached = true;
+}
+function retryLoad(){
+  clearSymbolPollTimer();
+  symbolConsecutiveErrors = 0;
+  symbolActiveSince = null;
+  restoreSymbolContent();
+  return load();
+}
+function retryGen(){
+  clearSymbolPollTimer();
+  symbolConsecutiveErrors = 0;
+  symbolActiveSince = null;
+  restoreSymbolContent();
+  return pollGen();
+}
+function pauseSymbolPolling(){
+  clearSymbolPollTimer();
+  const card = document.createElement('div');
+  card.className = 'card';
+  const message = document.createElement('p');
+  message.textContent = '已暂停自动刷新';
+  const hint = document.createElement('p');
+  hint.className = 'opt';
+  hint.textContent = '生成任务可能仍在执行，可点击重试继续查看';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn btn-primary';
+  retry.textContent = '重试';
+  retry.addEventListener('click', retryGen);
+  card.appendChild(message);
+  card.appendChild(hint);
+  card.appendChild(retry);
+  document.querySelector('.wrap').replaceChildren(card);
+  symbolContentDetached = true;
+}
+function handleSymbolPollError(error){
+  clearSymbolPollTimer();
+  if (error && (error.status === 401 || error.status === 404)){ showSymbolAccess(); return; }
+  symbolConsecutiveErrors += 1;
+  showSymbolLoadFailure(retryGen);
+  if (symbolConsecutiveErrors >= SYMBOL_MAX_CONSECUTIVE_ERRORS) return;
+  if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS){ pauseSymbolPolling(); return; }
+  scheduleSymbolPoll();
+}
+
 async function load(){
-  const resp = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`);
-  const d = await resp.json();
-  if (!resp.ok || !d.ok){
-    if (d.can_generate){ showGenerate(); return; }
-    $('#sym-note').textContent = d.error || ('加载失败 HTTP ' + resp.status);
-    return;
+  clearSymbolPollTimer();
+  symbolConsecutiveErrors = 0;
+  symbolActiveSince = null;
+  restoreSymbolContent();
+  try {
+    const resp = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`, {redirectOn401:false});
+    const d = await resp.json();
+    if (resp.status === 404 && d.can_generate){ showGenerate(); return; }
+    if (resp.status === 401 || resp.status === 404){ showSymbolAccess(); return; }
+    if (!resp.ok || !d.ok) throw new Error('加载失败 HTTP ' + resp.status);
+    renderSummary(d.summary);
+    renderEquity(d);
+    renderWear(d);
+    renderRisk(d);
+    renderKline(d);
+    initKlineReplay(d);
+    const tradeCols = d.trades_source === 'round_trips'
+      ? [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
+         ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['费用', 'total_cost', 'num'],
+         ['净盈亏', 'net_pnl', 'pnl'], ['净收益率', 'net_return', 'pct'], ['出场原因', 'exit_reason']]
+      : [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
+         ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['毛盈亏', 'gross_pnl', 'pnl'],
+         ['费用', 'cost', 'num'], ['净盈亏', 'net_pnl', 'pnl'], ['出场原因', 'exit_reason']];
+    table('tbl-trades', d.trades, tradeCols);
+    table('tbl-orders', d.orders, [
+      ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
+      ['金额', 'notional', 'num'], ['费用', 'cost', 'num'], ['佣金', 'commission', 'num'],
+      ['印花税', 'stamp_tax', 'num'], ['过户费', 'transfer_fee', 'num']]);
+    table('tbl-failed', d.failed_orders, [
+      ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
+      ['原因', 'reason']]);
+    if (d.trades && d.trades.length) $('#box-trades').style.display = '';
+    if (d.orders && d.orders.length) $('#box-orders').style.display = '';
+    if (d.failed_orders && d.failed_orders.length) $('#box-failed').style.display = '';
+    $('#sym-note').textContent = d.kline && d.kline.dates
+      ? '全量 ' + d.kline.dates.length + ' 个交易日'
+      : 'K线/因子明细暂缺（该股详情产物未随任务回传）';
+  } catch (error) {
+    if (error && (error.status === 401 || error.status === 404)){ showSymbolAccess(); return; }
+    showSymbolLoadFailure(retryLoad);
   }
-  renderSummary(d.summary);
-  renderEquity(d);
-  renderWear(d);
-  renderRisk(d);
-  renderKline(d);
-  initKlineReplay(d);
-  const tradeCols = d.trades_source === 'round_trips'
-    ? [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
-       ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['费用', 'total_cost', 'num'],
-       ['净盈亏', 'net_pnl', 'pnl'], ['净收益率', 'net_return', 'pct'], ['出场原因', 'exit_reason']]
-    : [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
-       ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['毛盈亏', 'gross_pnl', 'pnl'],
-       ['费用', 'cost', 'num'], ['净盈亏', 'net_pnl', 'pnl'], ['出场原因', 'exit_reason']];
-  table('tbl-trades', d.trades, tradeCols);
-  table('tbl-orders', d.orders, [
-    ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
-    ['金额', 'notional', 'num'], ['费用', 'cost', 'num'], ['佣金', 'commission', 'num'],
-    ['印花税', 'stamp_tax', 'num'], ['过户费', 'transfer_fee', 'num']]);
-  table('tbl-failed', d.failed_orders, [
-    ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
-    ['原因', 'reason']]);
-  if (d.trades && d.trades.length) $('#box-trades').style.display = '';
-  if (d.orders && d.orders.length) $('#box-orders').style.display = '';
-  if (d.failed_orders && d.failed_orders.length) $('#box-failed').style.display = '';
-  $('#sym-note').textContent = d.kline && d.kline.dates
-    ? '全量 ' + d.kline.dates.length + ' 个交易日'
-    : 'K线/因子明细暂缺（该股详情产物未随任务回传）';
 }
 
 // 个股详情按需生成（QRE-SAAS-SYMBOL-ONDEMAND）：产物未回传时出按钮 → 创建
-// symbol_detail 轻量任务 → 轮询 gen-status → ready 后重载渲染
-function showGenerate(){
+// symbol_detail 轻量任务 → 有限轮询 gen-status → ready 后重载渲染
+function showGenerate(message){
+  clearSymbolPollTimer();
+  restoreSymbolContent();
   const el = $('#sym-note');
-  el.innerHTML = '该股详情产物未随任务回传（批量回传仅含头部个股）。' +
-    '<button class="btn-sm" id="btn-gen" style="margin-left:6px">生成该股详情</button>';
-  $('#btn-gen').addEventListener('click', async () => {
-    const btn = $('#btn-gen');
+  el.textContent = message || '该股详情产物未随任务回传（批量回传仅含头部个股）。';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn-sm';
+  btn.id = 'btn-gen';
+  btn.style.marginLeft = '6px';
+  btn.textContent = '生成该股详情';
+  el.appendChild(btn);
+  btn.addEventListener('click', async () => {
+    clearSymbolPollTimer();
     btn.disabled = true; btn.textContent = '生成中…';
     try {
-      const r = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/generate`, {method: 'POST'});
+      const r = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/generate`, {method: 'POST', redirectOn401:false});
       const g = await r.json();
-      if (!g.ok){ el.textContent = g.error || '生成请求失败'; return; }
-      if (g.status === 'ready'){ load(); return; }
-      pollGen();
-    } catch (e) { el.textContent = '生成请求失败：' + e; }
+      if (r.status === 401 || r.status === 404){ showSymbolAccess(); return; }
+      if (!r.ok || !g.ok){ showGenerate('生成请求失败' + (g.error ? '：' + g.error : '，请重试')); return; }
+      if (g.status === 'ready'){ await load(); return; }
+      if (!SYMBOL_ACTIVE.has(g.status)){ showGenerate('生成失败' + (g.error ? '：' + g.error : '，请重试')); return; }
+      symbolConsecutiveErrors = 0;
+      symbolActiveSince = null;
+      await pollGen();
+    } catch (error) {
+      if (error && (error.status === 401 || error.status === 404)){ showSymbolAccess(); return; }
+      showGenerate('生成请求失败，请重试');
+    }
   });
 }
 async function pollGen(){
-  const el = $('#sym-note');
+  clearSymbolPollTimer();
+  if (symbolPollInFlight) return;
+  symbolPollInFlight = true;
+  if (symbolActiveSince === null) symbolActiveSince = Date.now();
+  restoreSymbolContent();
   try {
-    const r = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`);
+    const r = await apiFetch(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`, {redirectOn401:false});
     const g = await r.json();
-    if (g.ok && g.status === 'ready'){ el.textContent = '详情已生成，加载中…'; load(); return; }
-    if (g.ok && (g.status === 'failed' || g.status === 'none')){
-      el.textContent = '生成失败' + (g.error ? '：' + g.error : '，请重试'); showGenerate(); return;
+    if (r.status === 401 || r.status === 404){ showSymbolAccess(); return; }
+    if (!r.ok || !g.ok) throw new Error('生成状态加载失败 HTTP ' + r.status);
+    symbolConsecutiveErrors = 0;
+    if (g.status === 'ready'){
+      $('#sym-note').textContent = '详情已生成，加载中…';
+      await load();
+      return;
     }
-    el.textContent = '该股详情生成中（' + (g.status || 'queued') + '）…';
-  } catch (e) { /* 网络抖动继续轮询 */ }
-  setTimeout(pollGen, 3000);
+    if (!SYMBOL_ACTIVE.has(g.status)){
+      showGenerate('生成失败' + (g.error ? '：' + g.error : '，请重试'));
+      return;
+    }
+    $('#sym-note').textContent = '该股详情生成中（' + g.status + '）…';
+    if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS){ pauseSymbolPolling(); return; }
+    scheduleSymbolPoll();
+  } catch (error) {
+    handleSymbolPollError(error);
+  } finally {
+    symbolPollInFlight = false;
+  }
 }
 
 // FRM-SYMBOL：个股级风险卡片（数据=详情 payload 的 risk 节，worker 侧已算好）

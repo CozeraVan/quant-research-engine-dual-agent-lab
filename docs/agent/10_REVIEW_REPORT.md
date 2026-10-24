@@ -2,6 +2,42 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T3（SDD Task 3：个股详情与按需生成有限轮询）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 主详情、生成 POST、gen-status 均使用 `redirectOn401:false` 并处理 HTTP/JSON/网络异常；`404 + can_generate` 严格先于通用 401/404 无权分支，showcase GET 后端与只读语义未改。
+- 主资源和轮询的 401/404 均复用统一无权卡，其他失败复用加载失败卡；仅替换 `.wrap` 内容并保存/恢复原节点，公共导航不受影响。
+- 仅活跃生成状态续轮；ready/failed/none/unknown/401/404 都停止。生成请求失败与生成终态失败均恢复可点击按钮及明确文案。
+- 连续异常 3 次和总等待 5 分钟均有上限；调度、重试、终态清 timer，`symbolPollInFlight` 防重入。超时显示暂停而非失败，重试不产生重复 timer。
+- 测试用 Node `vm` 直接执行渲染模板中的真实状态机脚本，覆盖业务 404、权限、HTTP/JSON、全部终态、异常上限、5 分钟暂停与重复重试；无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED: tests/test_gui_saas_pages.py -k 个股状态机相关5项 → 5 failed, 43 deselected
+GREEN: 同上 → 5 passed, 43 deselected
+扩展回归: tests/test_gui_saas_pages.py + tests/test_gui_saas.py + tests/test_saas_symbol_ux.py → 151 passed
+Node new Function: 渲染后的 symbol/base 3 段内联脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T2-REVIEW-FIX（Task 2 审查问题修复）
 
 ## Reviewer

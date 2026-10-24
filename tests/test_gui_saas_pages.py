@@ -129,7 +129,230 @@ def _run_job_js(html: str, source_pattern: str, scenario: str) -> None:
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+_SYMBOL_JS_HARNESS = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+function symbolEl(){
+  return {
+    id: '', children: [], childNodes: [], style: {}, className: '', _textContent: '', innerHTML: '',
+    get textContent(){ return this._textContent; },
+    set textContent(value){ this._textContent = value; this.children = []; this.childNodes = []; },
+    disabled: false, type: '', listeners: {},
+    classList: {add(){}, remove(){}},
+    appendChild(...nodes){ this.children.push(...nodes); this.childNodes.push(...nodes); },
+    replaceChildren(...nodes){ this.children = [...nodes]; this.childNodes = [...nodes]; },
+    addEventListener(type, fn){ this.listeners[type] = fn; },
+  };
+}
+function response(status, data, jsonError){
+  return {status, ok: status >= 200 && status < 300, json: async () => {
+    if (jsonError) throw new Error('invalid json');
+    return data;
+  }};
+}
+function createSymbolHarness(fetchImpl){
+  const root = symbolEl();
+  root.childNodes = [symbolEl()];
+  const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = symbolEl()); }});
+  const calls = {access: 0, failure: 0, requests: []};
+  const timers = new Map();
+  let nextTimer = 1;
+  let now = 1000;
+  const document = {
+    querySelector(selector){
+      if (selector === '.wrap') return root;
+      if (selector === '.wrap .card') return root.children[root.children.length - 1];
+      if (selector.startsWith('#')) return elements[selector.slice(1)];
+      return null;
+    },
+    getElementById(id){ return elements[id]; },
+    createElement(){ return symbolEl(); },
+  };
+  const context = vm.createContext({
+    console, document, JOB_ID: 1, TS_CODE: '000001.SZ', STATUS_LABEL: {},
+    Date: {now(){ return now; }},
+    $(selector){ return document.querySelector(selector); },
+    apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
+    showAccessFallback(target){ calls.access += 1; target.replaceChildren(symbolEl()); },
+    showLoadFailure(target, retry){ calls.failure += 1; calls.retry = retry; target.replaceChildren(symbolEl()); },
+    setTimeout(fn){ const id = nextTimer++; timers.set(id, fn); return id; },
+    clearTimeout(id){ timers.delete(id); },
+    renderSummary(){}, renderEquity(){}, renderWear(){}, renderRisk(){}, renderKline(){},
+    initKlineReplay(){}, table(){}, pct(){ return ''; },
+  });
+  return {
+    context, calls, timers, root, elements,
+    setNow(value){ now = value; },
+    generateButton(){
+      return elements['sym-note'].children.find(node => node.id === 'btn-gen') || elements['btn-gen'];
+    },
+  };
+}
+"""
+
+
+def _run_symbol_js(html: str, scenario: str) -> None:
+    match = re.search(
+        r"((?:const SYMBOL_POLL_INTERVAL_MS[\s\S]*?)?async function load\(\)\{.*\})(?=\n\n// FRM-SYMBOL)",
+        html,
+        re.S,
+    )
+    assert match, "未找到个股详情状态机脚本"
+    node = shutil.which("node")
+    if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+        node = "/home/van/codex-local/node-v22/bin/node"
+    if not node:
+        pytest.skip("node 不可用")
+    script = _SYMBOL_JS_HARNESS + "\nconst source = " + json.dumps(match.group(1)) + ";\n" + scenario
+    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 class TestPages:
+    def test_symbol_detail_http_json_and_generate_guards(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const canGenerate = createSymbolHarness(async () => response(404, {ok: false, can_generate: true}));
+  vm.runInContext(source, canGenerate.context);
+  await vm.runInContext('load()', canGenerate.context);
+  assert.equal(canGenerate.calls.access, 0, 'can_generate 的业务 404 不是无权');
+  assert.equal(canGenerate.calls.failure, 0);
+  assert.equal(canGenerate.calls.requests[0].options.redirectOn401, false);
+  assert.equal(canGenerate.generateButton().disabled, false);
+
+  const plain404 = createSymbolHarness(async () => response(404, {ok: false}));
+  vm.runInContext(source, plain404.context);
+  await vm.runInContext('load()', plain404.context);
+  assert.equal(plain404.calls.access, 1);
+  assert.equal(plain404.timers.size, 0);
+
+  const unauthorized = new Error('unauthorized'); unauthorized.status = 401;
+  const auth = createSymbolHarness(async () => { throw unauthorized; });
+  vm.runInContext(source, auth.context);
+  await vm.runInContext('load()', auth.context);
+  assert.equal(auth.calls.access, 1);
+  assert.equal(auth.calls.failure, 0);
+
+  for (const fetchImpl of [
+    async () => response(500, {ok: false}),
+    async () => response(200, null, true),
+    async () => { throw new Error('offline'); },
+  ]){
+    const h = createSymbolHarness(fetchImpl);
+    vm.runInContext(source, h.context);
+    await vm.runInContext('load()', h.context);
+    assert.equal(h.calls.access, 0);
+    assert.equal(h.calls.failure, 1);
+    assert.equal(typeof h.calls.retry, 'function');
+  }
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_generate_failure_restores_button(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  for (const fetchImpl of [
+    async () => response(500, {ok: false, error: '生成不可用'}),
+    async () => response(200, null, true),
+    async () => { throw new Error('offline'); },
+  ]){
+    const h = createSymbolHarness(fetchImpl);
+    vm.runInContext(source, h.context);
+    await vm.runInContext('showGenerate()', h.context);
+    await h.generateButton().listeners.click();
+    const restored = h.generateButton();
+    assert.equal(restored.disabled, false, '生成请求失败后必须恢复可用按钮');
+    assert.equal(restored.textContent, '生成该股详情');
+    assert.equal(h.timers.size, 0);
+    assert.equal(h.calls.requests[0].options.redirectOn401, false);
+  }
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_gen_status_terminal_states_stop(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  for (const status of ['failed', 'none', 'unknown']){
+    const h = createSymbolHarness(async () => response(200, {ok: true, status, error: 'worker error'}));
+    vm.runInContext(source, h.context);
+    await vm.runInContext('pollGen()', h.context);
+    assert.equal(h.timers.size, 0, status + ' 必须停止轮询');
+    assert.equal(h.generateButton().disabled, false);
+    assert.equal(h.calls.access, 0);
+  }
+  for (const status of [401, 404]){
+    const h = createSymbolHarness(async () => {
+      if (status === 401){ const error = new Error('unauthorized'); error.status = 401; throw error; }
+      return response(404, {ok: false});
+    });
+    vm.runInContext(source, h.context);
+    await vm.runInContext('pollGen()', h.context);
+    assert.equal(h.calls.access, 1, status + ' 必须显示统一无权卡');
+    assert.equal(h.timers.size, 0);
+  }
+  const ready = createSymbolHarness(async url => {
+    if (url.endsWith('/gen-status')) return response(200, {ok: true, status: 'ready'});
+    return response(200, {ok: true, summary: {}, trades: [], orders: [], failed_orders: []});
+  });
+  vm.runInContext(source, ready.context);
+  await vm.runInContext('pollGen()', ready.context);
+  assert.equal(ready.calls.requests.length, 2, 'ready 只能继续 load 主详情');
+  assert.equal(ready.timers.size, 0);
+  assert.equal(ready.calls.requests[0].options.redirectOn401, false);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_gen_status_errors_stop_after_three_with_single_timer_retry(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  for (const fetchImpl of [
+    async () => { throw new Error('offline'); },
+    async () => response(500, {ok: false}),
+    async () => response(200, null, true),
+  ]){
+    const h = createSymbolHarness(fetchImpl);
+    vm.runInContext(source, h.context);
+    for (let attempt = 1; attempt <= 3; attempt += 1){
+      await vm.runInContext('pollGen()', h.context);
+      assert.equal(h.calls.failure, attempt);
+      assert.equal(h.timers.size, attempt < 3 ? 1 : 0);
+    }
+    assert.equal(vm.runInContext('symbolConsecutiveErrors', h.context), 3);
+    assert.equal(h.calls.access, 0);
+    assert.equal(typeof h.calls.retry, 'function');
+    await vm.runInContext('retryGen()', h.context);
+    await vm.runInContext('retryGen()', h.context);
+    assert.equal(vm.runInContext('symbolConsecutiveErrors', h.context), 1);
+    assert.equal(h.timers.size, 1, '手动重试不能留下重复 timer');
+  }
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_gen_status_wait_limit_pauses_with_retry(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const h = createSymbolHarness(async () => response(200, {ok: true, status: 'queued'}));
+  vm.runInContext(source, h.context);
+  await vm.runInContext('pollGen()', h.context);
+  assert.equal(h.timers.size, 1);
+  await vm.runInContext('retryGen()', h.context);
+  await vm.runInContext('retryGen()', h.context);
+  assert.equal(h.timers.size, 1, '重复重试仍只能有一个 timer');
+  h.setNow(1000 + 5 * 60 * 1000);
+  await vm.runInContext('pollGen()', h.context);
+  assert.equal(h.timers.size, 0);
+  assert.equal(h.calls.failure, 0, '等待上限不是生成失败');
+  assert.equal(h.root.children[0].children[0].textContent, '已暂停自动刷新');
+  const retry = h.root.children[0].children.find(node => node.type === 'button');
+  assert.equal(typeof retry.listeners.click, 'function');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
     def test_login_page(self, client):
         resp = client.get("/saas/login")
         assert resp.status_code == 200
