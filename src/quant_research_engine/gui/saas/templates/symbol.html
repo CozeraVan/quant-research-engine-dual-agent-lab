@@ -91,11 +91,9 @@ const SYMBOL_MAX_WAIT_MS = 5 * 60 * 1000;
 const SYMBOL_ACTIVE = new Set(['queued','leased','running','uploading']);
 const SYMBOL_CONTENT = Array.from(document.querySelector('.wrap').childNodes);
 let symbolPollTimer = null;
-let symbolPollInFlight = false;
 let symbolPollController = null;
 let symbolGenerateController = null;
 let symbolLoadController = null;
-let symbolLoadInFlight = false;
 let symbolPollEpoch = 0;
 let symbolGenerateEpoch = 0;
 let symbolLoadEpoch = 0;
@@ -114,7 +112,6 @@ function abortSymbolPoll(){
   symbolPollEpoch += 1;
   if (symbolPollController) symbolPollController.abort();
   symbolPollController = null;
-  symbolPollInFlight = false;
 }
 function abortSymbolGenerate(){
   symbolGenerateEpoch += 1;
@@ -125,16 +122,31 @@ function abortSymbolLoad(){
   symbolLoadEpoch += 1;
   if (symbolLoadController) symbolLoadController.abort();
   symbolLoadController = null;
-  symbolLoadInFlight = false;
 }
-async function symbolFetchWithTimeout(url, options, controller){
+async function symbolRequestJsonWithTimeout(url, options, controller, consume){
   const elapsed = symbolActiveSince === null ? 0 : Date.now() - symbolActiveSince;
   const remaining = Math.max(0, SYMBOL_MAX_WAIT_MS - elapsed);
-  const timeout = setTimeout(() => controller.abort(), Math.min(SYMBOL_REQUEST_TIMEOUT_MS, remaining));
+  let timeout = null;
+  let onAbort = null;
+  const cancellation = new Promise((resolve, reject) => {
+    onAbort = () => {
+      const error = new Error('请求已取消');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    if (controller.signal.aborted) onAbort();
+    else controller.signal.addEventListener('abort', onAbort, {once: true});
+    timeout = setTimeout(() => controller.abort(), Math.min(SYMBOL_REQUEST_TIMEOUT_MS, remaining));
+  });
+  const operation = (async () => {
+    const resp = await apiFetch(url, Object.assign({}, options, {signal: controller.signal}));
+    return consume(resp);
+  })();
   try {
-    return await apiFetch(url, Object.assign({}, options, {signal: controller.signal}));
+    return await Promise.race([operation, cancellation]);
   } finally {
-    clearTimeout(timeout);
+    if (timeout !== null) clearTimeout(timeout);
+    controller.signal.removeEventListener('abort', onAbort);
   }
 }
 function restoreSymbolContent(){
@@ -186,28 +198,27 @@ async function load(){
   const epoch = symbolLoadEpoch;
   const controller = new AbortController();
   symbolLoadController = controller;
-  symbolLoadInFlight = true;
   symbolConsecutiveErrors = 0;
   symbolActiveSince = null;
   restoreSymbolContent();
   try {
-    const resp = await symbolFetchWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`, {redirectOn401:false}, controller);
-    if (epoch !== symbolLoadEpoch) return;
-    if (resp.status === 401){ showSymbolAccess(); return; }
-    let d;
-    if (resp.status === 404){
-      try { d = await resp.json(); }
-      catch (error) {
-        if (epoch === symbolLoadEpoch) showSymbolAccess();
-        return;
+    const result = await symbolRequestJsonWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`, {redirectOn401:false}, controller, async resp => {
+      if (resp.status === 401) return {resp, access: true};
+      if (resp.status === 404){
+        try {
+          const data = await resp.json();
+          return data && data.can_generate ? {resp, generate: true} : {resp, access: true};
+        } catch (error) {
+          if (error && error.name === 'AbortError') throw error;
+          return {resp, access: true};
+        }
       }
-      if (epoch !== symbolLoadEpoch) return;
-      if (d && d.can_generate){ showGenerate(); return; }
-      showSymbolAccess();
-      return;
-    }
-    d = await resp.json();
+      return {resp, data: await resp.json()};
+    });
     if (epoch !== symbolLoadEpoch) return;
+    if (result.access){ showSymbolAccess(); return; }
+    if (result.generate){ showGenerate(); return; }
+    const resp = result.resp, d = result.data;
     if (!resp.ok || !d.ok) throw new Error('加载失败 HTTP ' + resp.status);
     renderSummary(d.summary);
     renderEquity(d);
@@ -241,10 +252,7 @@ async function load(){
     if (error && (error.status === 401 || error.status === 404)){ showSymbolAccess(); return; }
     showSymbolLoadFailure(retryLoad);
   } finally {
-    if (epoch === symbolLoadEpoch){
-      symbolLoadController = null;
-      symbolLoadInFlight = false;
-    }
+    if (epoch === symbolLoadEpoch) symbolLoadController = null;
   }
 }
 
@@ -275,11 +283,13 @@ function showGenerate(message){
     if (symbolActiveSince === null) symbolActiveSince = Date.now();
     btn.disabled = true; btn.textContent = '生成中…';
     try {
-      const r = await symbolFetchWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/generate`, {method: 'POST', redirectOn401:false}, controller);
+      const result = await symbolRequestJsonWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/generate`, {method: 'POST', redirectOn401:false}, controller, async r => {
+        if (r.status === 401 || r.status === 404) return {r, access: true};
+        return {r, data: await r.json()};
+      });
       if (epoch !== symbolGenerateEpoch) return;
-      if (r.status === 401 || r.status === 404){ showSymbolAccess(); return; }
-      const g = await r.json();
-      if (epoch !== symbolGenerateEpoch) return;
+      if (result.access){ showSymbolAccess(); return; }
+      const r = result.r, g = result.data;
       if (!r.ok || !g.ok){ showGenerate('生成请求失败' + (g.error ? '：' + g.error : '，请重试')); return; }
       if (g.status === 'ready'){ await load(); return; }
       if (!SYMBOL_ACTIVE.has(g.status)){ showGenerate('生成失败' + (g.error ? '：' + g.error : '，请重试')); return; }
@@ -300,15 +310,16 @@ async function pollGen(){
   const epoch = symbolPollEpoch;
   const controller = new AbortController();
   symbolPollController = controller;
-  symbolPollInFlight = true;
   if (symbolActiveSince === null) symbolActiveSince = Date.now();
   restoreSymbolContent();
   try {
-    const r = await symbolFetchWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`, {redirectOn401:false}, controller);
+    const result = await symbolRequestJsonWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`, {redirectOn401:false}, controller, async r => {
+      if (r.status === 401 || r.status === 404) return {r, access: true};
+      return {r, data: await r.json()};
+    });
     if (epoch !== symbolPollEpoch) return;
-    if (r.status === 401 || r.status === 404){ showSymbolAccess(); return; }
-    const g = await r.json();
-    if (epoch !== symbolPollEpoch) return;
+    if (result.access){ showSymbolAccess(); return; }
+    const r = result.r, g = result.data;
     if (!r.ok || !g.ok) throw new Error('生成状态加载失败 HTTP ' + r.status);
     symbolConsecutiveErrors = 0;
     if (g.status === 'ready'){
@@ -326,10 +337,7 @@ async function pollGen(){
   } catch (error) {
     if (epoch === symbolPollEpoch) handleSymbolPollError(error);
   } finally {
-    if (epoch === symbolPollEpoch){
-      symbolPollController = null;
-      symbolPollInFlight = false;
-    }
+    if (epoch === symbolPollEpoch) symbolPollController = null;
   }
 }
 

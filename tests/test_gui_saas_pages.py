@@ -150,6 +150,17 @@ function response(status, data, jsonError){
     return data;
   }};
 }
+function bodyBarrier(){
+  let resolve;
+  const promise = new Promise(r => { resolve = r; });
+  return {promise, resolve};
+}
+function pendingBodyResponse(status, onBody){
+  return {status, ok: status >= 200 && status < 300, json(){
+    onBody();
+    return new Promise(() => {});
+  }};
+}
 function createSymbolHarness(fetchImpl){
   const root = symbolEl();
   root.childNodes = [symbolEl()];
@@ -465,6 +476,79 @@ function pendingResponse(options){
   await last;
   assert.equal(hardDeadline.calls.failure, 1, 'pending 也受包含网络等待的5分钟硬上限约束');
   assert.equal(hardDeadline.timers.size, 0);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_main_body_pending_times_out_and_retries(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const started = bodyBarrier();
+  let blocked = true;
+  const h = createSymbolHarness(async () => {
+    if (blocked) return pendingBodyResponse(200, started.resolve);
+    return response(200, {ok: true, summary: {name: 'recovered'}, trades: [], orders: [], failed_orders: []});
+  });
+  vm.runInContext(source, h.context);
+  const pending = vm.runInContext('load()', h.context);
+  await started.promise;
+  await h.runNextTimer();
+  await pending;
+  assert.equal(h.calls.failure, 1, '主详情 body pending 必须超时显示失败');
+  assert.equal(typeof h.calls.retry, 'function');
+  blocked = false;
+  await vm.runInContext('retryLoad()', h.context);
+  assert.equal(h.calls.requests.length, 2);
+  assert.deepEqual(h.calls.summaries.map(s => s.name), ['recovered']);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_generate_body_pending_times_out_and_retries(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const started = bodyBarrier();
+  let blocked = true;
+  const h = createSymbolHarness(async () => {
+    if (blocked) return pendingBodyResponse(200, started.resolve);
+    return response(500, {ok: false, error: '生成不可用'});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('showGenerate()', h.context);
+  const pending = h.generateButton().listeners.click();
+  await started.promise;
+  await h.runNextTimer();
+  await pending;
+  assert.equal(h.generateButton().disabled, false, '生成 POST body pending 超时后必须恢复按钮');
+  blocked = false;
+  await h.generateButton().listeners.click();
+  assert.equal(h.calls.requests.length, 2);
+  assert.equal(h.generateButton().disabled, false);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_gen_status_body_pending_times_out_and_retries(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const started = bodyBarrier();
+  let blocked = true;
+  const h = createSymbolHarness(async () => {
+    if (blocked) return pendingBodyResponse(200, started.resolve);
+    return response(200, {ok: true, status: 'none'});
+  });
+  vm.runInContext(source, h.context);
+  const pending = vm.runInContext('pollGen()', h.context);
+  await started.promise;
+  await h.runNextTimer();
+  await pending;
+  assert.equal(h.calls.failure, 1, 'gen-status body pending 必须超时显示失败');
+  assert.equal(typeof h.calls.retry, 'function');
+  blocked = false;
+  await vm.runInContext('retryGen()', h.context);
+  assert.equal(h.calls.requests.length, 2);
+  assert.equal(h.generateButton().disabled, false);
+  assert.equal(h.timers.size, 0);
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 

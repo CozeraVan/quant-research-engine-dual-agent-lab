@@ -2,6 +2,43 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-FALLBACK-T3-BODY-TIMEOUT-FIX（Task 3 响应体 pending 修复）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS
+
+## Findings
+
+- 根因已消除：统一 helper 在同一 controller/deadline 内等待 apiFetch 和 consume，consume 包含响应体读取/JSON 解析；不再在响应头到达时提前清 timeout。
+- cancellation Promise 与 operation 竞速，手动 abort 和 deadline 都能收口；测试 body 故意永不响应 abort，三条链路仍可超时并重试。
+- HTTP 优先语义保持在 consume 内：401/404 统一无权，主详情 404 仅为 `can_generate` 解析；404 body 的 AbortError 继续抛出，不误判为普通非 JSON 无权。
+- epoch、旧 controller abort、15 秒/5 分钟双上限均未改变；只写不读的 `symbolPollInFlight`/`symbolLoadInFlight` 已删除，无行为替代。
+- 无 Required Fix。
+
+## Validation Evidence
+
+```text
+RED body pending: 3 failed, 52 deselected in 0.85s（三条链路均无剩余 timeout）
+GREEN body pending: 3 passed, 52 deselected in 0.79s
+状态机相关: 12 passed, 43 deselected in 2.06s
+扩展回归: tests/test_gui_saas_pages.py + tests/test_gui_saas.py + tests/test_saas_symbol_ux.py → 158 passed in 16.37s
+Node new Function: 渲染后的 symbol/base 3 段内联脚本全部通过
+git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-ACCESS-FALLBACK-T3-REVIEW-FIX（Task 3 审查问题修复）
 
 ## Reviewer
