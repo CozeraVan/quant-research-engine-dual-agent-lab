@@ -2083,3 +2083,8 @@ qre report-audit outputs/strategy_fit/f365c8a07b33/report_manifest.json --requir
 ```
 
 </details>
+
+
+## 2026-10-24 当前交接
+
+FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典序挤掉 risk_report.json；现已给 FRM 最高回传优先级并补回归测试。job58/66/74/78 云端报告已回填，58/66 使用收益修正后的净值重算。后续重点为既定待办：统一无权页、Web 文案精简、NL 编译加固等。

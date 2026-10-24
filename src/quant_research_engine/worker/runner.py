@@ -539,11 +539,18 @@ def collect_result_files(record: dict[str, Any],
 
     files: list[dict[str, Any]] = []
     total = 0
-    # per-symbol 详情产物（_symbol_details/）优先进入清单：它们是个股详情页
-    # 在云端唯一的数据来源；其余大文件超限仍留 worker 本地（M4 走 OSS）
+    # FRM 报告是回测详情必需的小文件，必须最先占位：全量任务的逐股 CSV
+    # 很容易耗尽总上限，按文件名字典序会把 risk_report.json 静默挤掉。
+    # per-symbol 详情产物其次（云端个股详情唯一数据源）；其余大文件超限
+    # 仍留 worker 本地（M4 走 OSS）。
     ordered = sorted(
         (record.get("artifacts") or {}).items(),
-        key=lambda kv: (0 if kv[0].startswith(SYMBOL_DETAILS_DIRNAME + "/") else 1, kv[0]),
+        key=lambda kv: (
+            0 if kv[0] == "risk_report.json"
+            else 1 if kv[0].startswith(SYMBOL_DETAILS_DIRNAME + "/")
+            else 2,
+            kv[0],
+        ),
     )
     for rel, abs_path in ordered:
         path = Path(abs_path)

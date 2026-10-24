@@ -305,6 +305,27 @@ class TestWorkerSymbolDetailFiles:
         files = runner.collect_result_files(record)
         assert files[0]["name"].startswith("_symbol_details/")
 
+    def test_risk_report_survives_upload_budget(self, tmp_path):
+        """全量任务触及回传上限时，FRM 小文件也不得被逐股 CSV 挤掉。"""
+        from quant_research_engine.worker import runner
+
+        out = tmp_path / "out"
+        (out / "_symbol_details").mkdir(parents=True)
+        (out / "_symbol_details" / "000001.SZ.json.gz").write_bytes(b"s" * 60)
+        (out / "a.csv").write_bytes(b"a" * 35)
+        (out / "risk_report.json").write_bytes(b"r" * 10)
+        record = {
+            "artifacts": {
+                "a.csv": str(out / "a.csv"),
+                "risk_report.json": str(out / "risk_report.json"),
+                "_symbol_details/000001.SZ.json.gz": str(out / "_symbol_details" / "000001.SZ.json.gz"),
+            }
+        }
+        files = runner.collect_result_files(record, max_total_bytes=100)
+        assert [f["name"] for f in files] == [
+            "risk_report.json", "_symbol_details/000001.SZ.json.gz",
+        ]
+
     def test_truncation_by_bytes(self, monkeypatch, tmp_path):
         from quant_research_engine.gui import lab_result
         from quant_research_engine.worker import runner

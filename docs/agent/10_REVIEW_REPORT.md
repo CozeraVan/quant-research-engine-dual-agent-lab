@@ -813,3 +813,12 @@ git diff --check → clean
 
 - 后续可考虑把 95% 节 VaR 回测也纳入判据、或对存量 gate 回填 risk 节；
   均不影响本次正确性，留待用户决策。
+
+
+## 2026-10-24 FRM 回传优先级修复自审
+
+- 改动仅限 `worker/runner.py::collect_result_files` 排序与一条回归测试；未改回传上限、计算口径或前端。
+- RED→GREEN：新测试先复现 risk_report 被 100B 预算排除；修复后风险文件优先且 _symbol_details 次序保持。
+- 验证：tests/test_saas_symbol_ux.py 38 passed；tests/test_worker.py + test_gui_saas.py + test_gui_risk_report.py 118 passed。另一次异步轮询测试偶发 404，单测复跑通过，最终组合复跑全绿。
+- 历史回填不重跑回测；58/66 先重算修正口径 FRM，58/66/74 公网 API 已验证 has_report=true。
+- Required Fixes：无。

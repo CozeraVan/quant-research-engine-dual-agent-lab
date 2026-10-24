@@ -1204,3 +1204,14 @@ Historical row statuses (pre-migration, kept for old table rows):
 **现象**：因子布局修复部署后用户仍见旧界面。排查确认 ECS/8081/工作区三端 JS 哈希一致、页面模板为新、载荷正确——根因是浏览器启发式缓存旧 HTML（HTML 无 Cache-Control），旧 HTML 引用旧 asset_v 的 factor-layout.js（max-age=3600）。
 
 **修复**：`saas/app.py _security_headers` 对 text/html 响应补 `Cache-Control: no-cache`（每次请求重验证，静态资源仍走 ?v=asset_v 长缓存）。另：8081 lab 进程当时是 17:03 启动的旧码且已挂死，已重启加载新码。
+
+
+## 2026-10-24 FRM 回传缺失修复 + 历史任务回填
+
+**现象**：近期任务 FRM 有些显示、有些隐藏。排查确认不是计算或前端问题：本地 run 均有 risk_report.json，ECS 全量任务 job58/66/74/78 缺失。
+
+**根因**：`worker.collect_result_files` 的 20MB 回传总上限按 `_symbol_details` 优先、其余文件名字典序收集；全市场逐股 CSV 耗尽额度后，`risk_report.json` 被静默跳过。小范围任务额度充足因此正常。
+
+**修复**：回传排序改为 risk_report.json 最高优先级、_symbol_details 其次、其余产物最后；20MB 上限不变。新增 `test_risk_report_survives_upload_budget`（先验证旧逻辑失败），TestWorkerSymbolDetailFiles 5 passed；test_saas_symbol_ux 38 passed；test_worker+test_gui_saas+test_gui_risk_report 118 passed。
+
+**历史回填**：job58/66 旧 FRM 早于收益口径修正，先备份为 risk_report_pre_injection_fix.json，再基于修正后 equity_curve 的 daily_return 重算（未重跑回测）；job74/78 直接复用原报告。四个文件已上传 ECS job 目录并补 results.artifacts 元数据；公网 58/66/74 risk-analysis 实测 has_report=true，78 文件与元数据核验存在。

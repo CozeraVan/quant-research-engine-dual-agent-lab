@@ -2,6 +2,10 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
+### 2026-10-24 FRM 缺失收口
+
+已修复并回填，不再属于待办。重要教训：所有关键小文件（FRM 等）必须显式设置回传优先级，不能依赖文件名字典序；全市场任务 20MB 上限会静默截断。本地产物 Windows 路径为 `\\wsl.localhost\Ubuntu-24.04\home\van\qre-outputs\gui-console\runs`；仓库 `outputs` 是指向 `/home/van/qre-outputs` 的软链接。
+
 ## Current Phase
 
 ACTIVE（2026-10-19：QRE-SAAS-JOB-STRATEGY-CARD 回测详情页「策略信息」折叠卡完成待 commit——summary API 新增 strategy 对象 + job.html 默认折叠摘要卡，2388 passed 零回归；前一项 QRE-CUMRET-CHART 仍未 commit，工作区现有两项未提交）

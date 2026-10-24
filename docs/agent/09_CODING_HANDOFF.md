@@ -2830,3 +2830,15 @@ uv run pytest -q → 1134 passed, 4 warnings (1129 baseline + 5 new)
 #   A/B (1% trailing vs off): summaries differ — trailing measurably honored
 #   real trailing_stop exit observed (000001.SZ)
 ```
+
+
+## 2026-10-24 FRM 回传修复
+
+修改 `worker/runner.py`：risk_report.json 在 result/files 清单中最高优先，避免全量任务 20MB 上限将其挤掉。测试 `tests/test_saas_symbol_ux.py::TestWorkerSymbolDetailFiles::test_risk_report_survives_upload_budget`。
+
+```bash
+uv run pytest tests/test_saas_symbol_ux.py -q  # 38 passed
+uv run pytest tests/test_worker.py tests/test_gui_saas.py tests/test_gui_risk_report.py -q  # 118 passed
+```
+
+部署后需重启本机 `qre-saas-worker` 才会对后续任务生效。
