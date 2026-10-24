@@ -1230,3 +1230,8 @@ Historical row statuses (pre-migration, kept for old table rows):
 **口径**：收益率/回撤/胜率均为小数（0.01=1%）；`metrics.json` 含 display 和方法说明；总收益为资金加权，累计曲线为交集日收益复利，禁止混用；引擎 Sharpe 与 FRM Sharpe 分开保留；热点仅指回测贡献归因。案例 K线/因子/订单取前后40交易日，不重跑回测。
 
 **验证**：manifest 文件大小+SHA256、JSON/CSV 解析、K线/净值/因子日期对齐全部通过；总收益/交易笔数/佣金印花税过户费与原始产物一致；best/worst/highest_fee/MFE/MAE 与 401247 笔 round_trips 全量极值一致。曾修正案例股票去重导致遗漏真实最差交易的问题，当前不做叙事性筛选。
+
+
+## 2026-10-24 SaaS 统一无权页实施计划立项
+
+计划文件 `docs/superpowers/plans/2026-10-24-saas-access-fallback.md`。范围：公共无权卡、安全 next 回跳、job/symbol/records 轮询与失败收口、showcase 严格只读。后端匿名401/登录404/本人409契约不变；can_generate与showcase GET不回归。用户选择在当前主仓按子代理分任务执行。相关基线 tests/test_gui_saas.py + test_gui_saas_pages.py + test_saas_authing.py + test_gui_lab.py 共145 passed。
