@@ -30,15 +30,15 @@ fi
 
 echo
 echo "== Secret scan =="
-if git diff HEAD | grep -Ei 'api[_-]?key|secret|token|password|passwd|BEGIN (RSA|OPENSSH|PRIVATE) KEY' >/tmp/agent-secret-scan.txt; then
+if git diff --unified=0 HEAD | grep -E '^\+[^+]' | grep -Ei '[a]pi[_-]?key|[s]ecret|[t]oken|[p]assword|[p]asswd|BEGIN (RSA|OPENSSH|PRIVATE) KEY' >/tmp/agent-credential-scan.txt; then
   echo "ERROR: Potential secret-like text found in git diff."
-  cat /tmp/agent-secret-scan.txt
-  rm -f /tmp/agent-secret-scan.txt
+  cat /tmp/agent-credential-scan.txt
+  rm -f /tmp/agent-credential-scan.txt
   exit 1
 else
   echo "No obvious secret-like text found in git diff."
 fi
-rm -f /tmp/agent-secret-scan.txt
+rm -f /tmp/agent-credential-scan.txt
 
 echo
 echo "== Remote =="

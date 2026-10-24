@@ -1263,3 +1263,14 @@ Historical row statuses (pre-migration, kept for old table rows):
 - completed 整轮必需资源与渲染成功后才清零连续异常计数，chart/tag 连续失败3次会暂停且保留重试；仅 summary 阶段401/404进入统一无权卡，chart 404进入加载失败，tag 404仍为空归因。
 - `loadRisk` 使用 `redirectOn401:false` 并收口网络/401/HTTP/JSON/render 异常，仅在风险区显示「风险分析加载失败」与重试，不触发整页无权或登录跳转。
 - 新增无依赖 Node fake-fetch/fake-timer 行为测试3例；审查修复 RED `3 failed, 40 deselected`，GREEN 定向 `3 passed`，指定两文件 `108 passed`，扩展回归 `146 passed`，Node 模板解析3段通过。
+
+
+## 2026-10-24 无权页最终审查修复收口
+
+最终审查的剩余问题已处理：job 的 summary/chart/tag/risk 均使用覆盖 fetch+JSON body 的 AbortController/deadline，重试通过 epoch/abort supersede 旧轮次；chart/tag 401 统一无权，chart 404 失败、tag 404 无归因。symbol 长等待改「已暂停自动刷新」；job/symbol 重播、保存、信号与 resize 监听幂等。showcase 缺详情 404 增加 readonly，前端不显示生成按钮，后端 403 保留。new pollJob 将 expired 纳入立即终态。
+
+主会话补漏：showcase 404 readonly 后端字段、symbol 只读无按钮文案及 Node 测试；修正测试 generateButton helper 不存在按钮时返回 null；new expired 先 RED（80 次轮询耗尽）后 GREEN。
+
+验证：tests/test_gui_saas.py + test_gui_saas_pages.py + test_saas_authing.py + test_gui_lab.py + test_saas_symbol_ux.py + test_git_finalize_check.py 共 228 passed。未运行真实浏览器自动化或全量回测。
+
+提交检查修复：`git-finalize-check.sh` 原扫描完整 diff，函数名和测试 stub 所在的未修改上下文也会误报；改为只扫描新增行，并用括号正则避免规则自匹配。新增临时仓库回归：上下文中的 credential-like 文本放行，新加入的敏感赋值仍拒绝；2 项测试先 RED 后 GREEN，finalize 检查通过。

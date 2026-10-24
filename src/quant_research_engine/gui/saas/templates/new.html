@@ -871,7 +871,7 @@ async function pollJob(jobId){
     if (!d || !d.ok || !d.job) throw new Error((d && d.error) || '任务状态加载失败');
     const st = d.job.status;
     if (st === 'completed') return d.job;
-    if (st === 'failed' || st === 'cancelled' || st === 'canceled') throw new Error((d.job && d.job.error) || '任务失败');
+    if (st === 'failed' || st === 'expired' || st === 'cancelled' || st === 'canceled') throw new Error((d.job && d.job.error) || '任务失败');
   }
   throw new Error('验证超时，请稍后在「我的回测」查看状态');
 }

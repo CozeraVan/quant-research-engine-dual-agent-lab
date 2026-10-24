@@ -164,6 +164,26 @@ function showSymbolLoadFailure(retryFn){
   showLoadFailure(document.querySelector('.wrap'), retryFn);
   symbolContentDetached = true;
 }
+function pauseSymbolActivePolling(){
+  clearSymbolPollTimer();
+  const card = document.createElement('div');
+  card.className = 'card';
+  const message = document.createElement('p');
+  message.textContent = '已暂停自动刷新';
+  const hint = document.createElement('p');
+  hint.className = 'opt';
+  hint.textContent = '任务可能仍在运行，可点击重试继续查看生成状态';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn btn-primary';
+  retry.textContent = '重试';
+  retry.addEventListener('click', retryGen);
+  card.appendChild(message);
+  card.appendChild(hint);
+  card.appendChild(retry);
+  document.querySelector('.wrap').replaceChildren(card);
+  symbolContentDetached = true;
+}
 function retryLoad(){
   clearSymbolPollTimer();
   symbolConsecutiveErrors = 0;
@@ -184,9 +204,9 @@ function handleSymbolPollError(error){
   clearSymbolPollTimer();
   if (error && (error.status === 401 || error.status === 404)){ showSymbolAccess(); return; }
   symbolConsecutiveErrors += 1;
+  if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS){ pauseSymbolActivePolling(); return; }
   showSymbolLoadFailure(retryGen);
   if (symbolConsecutiveErrors >= SYMBOL_MAX_CONSECUTIVE_ERRORS) return;
-  if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS) return;
   scheduleSymbolPoll();
 }
 
@@ -207,7 +227,9 @@ async function load(){
       if (resp.status === 404){
         try {
           const data = await resp.json();
-          return data && data.can_generate ? {resp, generate: true} : {resp, access: true};
+          return data && data.can_generate
+            ? {resp, generate: !data.readonly, readonly: !!data.readonly}
+            : {resp, access: true};
         } catch (error) {
           if (error && error.name === 'AbortError') throw error;
           return {resp, access: true};
@@ -217,6 +239,11 @@ async function load(){
     });
     if (epoch !== symbolLoadEpoch) return;
     if (result.access){ showSymbolAccess(); return; }
+    if (result.readonly){
+      restoreSymbolContent();
+      $('#sym-note').textContent = '公开经典策略未提供该股详情。';
+      return;
+    }
     if (result.generate){ showGenerate(); return; }
     const resp = result.resp, d = result.data;
     if (!resp.ok || !d.ok) throw new Error('加载失败 HTTP ' + resp.status);
@@ -332,7 +359,7 @@ async function pollGen(){
       return;
     }
     $('#sym-note').textContent = '该股详情生成中（' + g.status + '）…';
-    if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS){ showSymbolLoadFailure(retryGen); return; }
+    if (Date.now() - symbolActiveSince >= SYMBOL_MAX_WAIT_MS){ pauseSymbolActivePolling(); return; }
     scheduleSymbolPoll();
   } catch (error) {
     if (epoch === symbolPollEpoch) handleSymbolPollError(error);
@@ -392,6 +419,8 @@ function renderSummary(s){
     card('赚钱效应分位', s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%', s.percentile != null && s.percentile <= 0.05 ? 'pos' : 'flat');
 }
 
+let equityResizeBound = false;
+let symbolEquityChart = null;
 function renderEquity(d){
   const eq = d.equity;
   if (!eq || !eq.dates || !eq.dates.length) return;
@@ -421,6 +450,7 @@ function renderEquity(d){
     if (isBench && s.name.indexOf('上证指数') !== 0) legendSelected[s.name] = false;
   });
   const chart = echarts.init($('#chart-equity'));
+  symbolEquityChart = chart;
   chart.setOption({
     animation: false,
     legend: {top: 0, textStyle: {fontSize: 11}, selected: legendSelected},
@@ -487,7 +517,10 @@ function renderEquity(d){
   let raf = false;
   chart.on('datazoom', () => { if (raf) return; raf = true; requestAnimationFrame(() => { raf = false; updateStrip(); }); });
   updateStrip();
-  window.addEventListener('resize', () => chart.resize());
+  if (!equityResizeBound){
+    equityResizeBound = true;
+    window.addEventListener('resize', () => symbolEquityChart && symbolEquityChart.resize());
+  }
 }
 
 function renderWear(d){
@@ -578,6 +611,8 @@ function renderFactorChips(plan, d){
   });
 }
 
+let klineResizeBound = false;
+let symbolKlineChart = null;
 function renderKline(d){
   if (!d.kline || !d.kline.dates || !d.kline.dates.length){
     $('#box-kline').style.display = 'none';
@@ -598,6 +633,7 @@ function renderKline(d){
   const oldInst = echarts.getInstanceByDom(el);
   if (oldInst) oldInst.dispose();  // chip 切换重渲染前销毁旧实例
   const chart = echarts.init(el);
+  symbolKlineChart = chart;
   const series = [
     { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
       itemStyle: { color: '#C93A3A', color0: '#1E8E5A', borderColor: '#C93A3A', borderColor0: '#1E8E5A' } },
@@ -679,7 +715,10 @@ function renderKline(d){
     dataZoom: [{ type: 'inside', xAxisIndex: zoomX }, { type: 'slider', xAxisIndex: zoomX, bottom: 6, height: 22 }],
     series,
   });
-  window.addEventListener('resize', () => chart.resize());
+  if (!klineResizeBound){
+    klineResizeBound = true;
+    window.addEventListener('resize', () => symbolKlineChart && symbolKlineChart.resize());
+  }
 }
 // --- K线级重播（CR-2026-10-04 切片2 + 接管模式：接管原 K线容器，退出恢复静态） ---
 let kreplayCtl = null, klineData = null;
@@ -688,13 +727,15 @@ function initKlineReplay(d){
   const btn = $('#btn-kreplay');
   if (!btn) return;
   if (!d.kline || !d.kline.dates || !d.kline.dates.length){ btn.style.display = 'none'; return; }
+  if (btn.dataset.replayBound === 'true') return;
+  btn.dataset.replayBound = 'true';
   btn.addEventListener('click', () => {
     btn.classList.add('hidden');
     $('#btn-kreplay-exit').classList.remove('hidden');
     $('#kreplay-info').classList.remove('hidden');
     $('#kreplay-events').classList.remove('hidden');
     // 接管原 K线容器：重播帧直接渲染进 #chart-kline（原静态实例由组件销毁）
-    kreplayCtl = mountKlineReplay(d);
+    kreplayCtl = mountKlineReplay(klineData);
     $('#kreplay-info').insertAdjacentHTML('beforebegin',
       '<p class="opt" style="font-size:12px;margin:6px 0" id="kreplay-note">「信」标记 = 信号日 T（收盘出信号），「入/出」标记 = T+1 成交日；浮动盈亏为毛口径（未扣卖出费用）；模拟历史数据，不构成投资建议。</p>');
   });
@@ -705,7 +746,7 @@ function initKlineReplay(d){
     const ev = $('#kreplay-events'); ev.classList.add('hidden'); ev.innerHTML = '';
     $('#btn-kreplay-exit').classList.add('hidden');
     btn.classList.remove('hidden');
-    renderKline(d);  // 数据全在内存，重建静态全量 K 线
+    renderKline(klineData);  // 数据全在内存，重建静态全量 K 线
   });
 }
 function mountKlineReplay(d){

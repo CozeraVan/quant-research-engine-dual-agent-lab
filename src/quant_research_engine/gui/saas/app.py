@@ -3318,7 +3318,8 @@ def create_saas_app() -> Flask:
         if data is None:
             # 产物未回传（批量截断）不等于无交易：提示可按需生成，由前端出按钮
             return jsonify({"ok": False, "error": "该股详情产物未随任务回传",
-                            "can_generate": True}), 404
+                            "can_generate": True,
+                            "readonly": bool(getattr(g, "showcase_readonly", False))}), 404
         return jsonify(_jsonable(data))
 
     def _symbol_detail_ready(job_id: int, code: str) -> bool:

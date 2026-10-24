@@ -2,19 +2,18 @@
 
 ## Task ID
 
-QRE-SAAS-ACCESS-FALLBACK-T5（SDD Task 5：相关回归、覆盖核对与长期文档收尾）
+QRE-SAAS-ACCESS-FALLBACK-FINAL-REVIEW（SaaS 无权页、请求兜底与只读交互最终收口）
 
 ## Current Status
 
-DONE（实现 commits 9eac651..41550c6；相关回归 181 passed；仅提交文档，不 push、不部署）
+DONE（实现与自动化验证完成；228 passed；授权 commit/push/ECS 部署）
 
 ## Task Note
 
-- 覆盖确认：`base.html` 提供统一无权卡、加载失败卡与安全登录链接；`_safe_saas_next` 仅放行本站 `/saas/...`，邮箱与 Authing 登录均回跳原链接。
-- job/symbol/records 主资源 401/404 均进入统一无权或相应业务分支；其他 HTTP、网络、非 JSON 与响应体等待均有失败收口和重试。活跃状态有限轮询，终态停止，长等待不会无限转圈。
-- showcase 对匿名及非所有者保持 GET 只读，按需生成 POST 返回 403 且不建任务；个股仅 `404 + can_generate` 进入生成流程，不误判为无权。
-- 验证：`tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py` 共 181 passed，既有匿名 401、登录他人 404、本人未完成 409 契约不变。
-- 限制：本次未做真实浏览器自动化或游客/登录用户实机检查，未运行真实全量回测；Step 2 实机清单仍待人工验收。未 push、未部署。
+- 公共无权卡、安全 next 回跳及 job/symbol/records 有限轮询已落地；job 的 summary/chart/tag/risk 均覆盖 fetch 与 JSON body 超时，重试通过 abort/epoch 隔离旧请求。
+- symbol 长等待显示暂停而非失败；job/symbol 重播、保存、信号与 resize 监听幂等。showcase 缺个股详情返回 `readonly`，前端不显示生成按钮，后端写操作 403 不变；new 对 expired 立即停止。
+- `git-finalize-check.sh` 仅扫描新增行，避免未修改上下文误报，同时保留新增敏感赋值拦截；临时仓库回归覆盖正反两路。
+- 验证：六个相关测试文件共 228 passed；finalize/progress/diff 检查通过。未做真实浏览器自动化，未运行真实全量回测；部署后由用户实机抽查无权页、登录回跳与生成等待状态。
 
 ---
 

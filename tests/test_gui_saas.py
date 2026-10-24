@@ -1114,7 +1114,9 @@ class TestShowcase:
         self._pin_showcase(app, job_id)
         for headers in ({}, {"X-User-Id": "2"}):
             detail = client.get(f"/api/results/{job_id}/symbols/000001", headers=headers)
-            assert detail.status_code == 404 and detail.get_json()["can_generate"] is True
+            assert detail.status_code == 404
+            assert detail.get_json()["can_generate"] is True
+            assert detail.get_json()["readonly"] is True
             resp = client.post(f"/api/results/{job_id}/symbols/000001/generate", headers=headers)
             assert resp.status_code == 403
             assert resp.get_json()["error"] == "经典策略为只读展示"

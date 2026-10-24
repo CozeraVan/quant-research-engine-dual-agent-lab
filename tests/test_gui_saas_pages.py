@@ -71,10 +71,12 @@ const vm = require('node:vm');
 function el(){
   return {
     children: [], childNodes: [], style: {}, className: '', textContent: '', innerHTML: '',
-    classList: {add(){}, remove(){}},
+    disabled: false, dataset: {}, listeners: {},
+    classList: {add(){}, remove(){}, toggle(){}, contains(){ return false; }},
     appendChild(...nodes){ this.children.push(...nodes); this.childNodes.push(...nodes); },
     replaceChildren(...nodes){ this.children = [...nodes]; this.childNodes = [...nodes]; },
-    addEventListener(){},
+    addEventListener(type, fn){ (this.listeners[type] ||= []).push(fn); },
+    querySelectorAll(){ return []; },
   };
 }
 function response(status, data, jsonError){
@@ -83,48 +85,89 @@ function response(status, data, jsonError){
     return data;
   }};
 }
+function jobDeferred(){
+  let resolve;
+  const promise = new Promise(r => { resolve = r; });
+  return {promise, resolve};
+}
+function jobPendingBody(status, onBody){
+  return {status, ok: status >= 200 && status < 300, json(){
+    if (onBody) onBody();
+    return new Promise(() => {});
+  }};
+}
+function jobPendingFetch(options){
+  return new Promise(() => {});
+}
 function createHarness(fetchImpl){
   const root = el();
   root.childNodes = [el()];
   const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = el()); }});
   const calls = {access: 0, failure: 0, attribution: 0, requests: []};
   const timers = new Map();
+  const windowListeners = {};
   let nextTimer = 1;
+  let now = 1000;
   const document = {
     querySelector(selector){
       if (selector === '.container') return root;
       if (selector === '.container .card') return root.children[root.children.length - 1];
+      if (selector.startsWith('input[name=sig-scope]:checked')) return Object.assign(el(), {value: 'last_run_universe'});
       return null;
     },
+    querySelectorAll(){ return []; },
     getElementById(id){ return elements[id]; },
     createElement(){ return el(); },
   };
+  const window = {
+    addEventListener(type, fn){ (windowListeners[type] ||= []).push(fn); },
+  };
   const context = vm.createContext({
-    console, document, JOB_ID: 1, STATUS_LABEL: {}, SAAS_BYPASS: false,
+    console, document, window, JOB_ID: 1, STATUS_LABEL: {}, SAAS_BYPASS: false, AbortController,
+    MAX_ACTIVE_WAIT_MS: 300000,
+    Date: {now(){ return now; }},
+    location: {search: ''}, URLSearchParams,
+    requestAnimationFrame(fn){ return fn(); },
     saasToken(){ return 'token'; },
     apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
     showAccessFallback(target){ calls.access += 1; target.replaceChildren(el()); },
     showLoadFailure(target, retry){ calls.failure += 1; calls.retry = retry; target.replaceChildren(el()); },
-    setTimeout(fn){ const id = nextTimer++; timers.set(id, fn); return id; },
+    setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
     clearTimeout(id){ timers.delete(id); },
     renderMeta(){}, renderStrategyInfo(){}, renderMetrics(){}, renderMain(){}, empty(){},
     initReplay(){}, initResultActions(){}, renderFees(){}, loadRisk(){}, renderRisk(){},
     renderAttribution(){ calls.attribution += 1; },
+    mountReplay(){ return {destroy(){}}; },
   });
-  return {context, calls, timers, root, elements};
+  return {
+    context, calls, timers, root, elements, windowListeners,
+    setNow(value){ now = value; },
+    listenerCount(id, type){ return (elements[id].listeners[type] || []).length; },
+    async runNextTimer(){
+      const entry = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      assert.ok(entry, '必须存在可执行的 timeout');
+      timers.delete(entry[0]);
+      now = Math.max(now, entry[1].at);
+      return entry[1].fn();
+    },
+  };
 }
 """
 
 
-def _run_job_js(html: str, source_pattern: str, scenario: str) -> None:
+def _run_job_js(html: str, source_pattern: str, scenario: str, prefix_pattern: str | None = None) -> None:
     match = re.search(source_pattern, html, re.S)
     assert match, "未找到待测模板脚本"
+    prefix = re.search(prefix_pattern, html, re.S) if prefix_pattern else None
+    if prefix_pattern:
+        assert prefix, "未找到待测模板前置脚本"
+    source = (prefix.group(1) if prefix else "") + match.group(1)
     node = shutil.which("node")
     if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
         node = "/home/van/codex-local/node-v22/bin/node"
     if not node:
         pytest.skip("node 不可用")
-    script = _JOB_JS_HARNESS + "\nconst source = " + json.dumps(match.group(1)) + ";\n" + scenario
+    script = _JOB_JS_HARNESS + "\nconst source = " + json.dumps(source) + ";\n" + scenario
     result = subprocess.run([node, "-e", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr or result.stdout
 
@@ -566,6 +609,11 @@ function response(status, data){
     assert.equal(calls.length, 1, '非 2xx、!ok 或缺 job 必须立即 fail-fast');
   }
   calls.length = 0;
+  context.responses = [response(200, {ok: true, job: {status: 'expired', error: '租约过期'}})];
+  await assert.rejects(vm.runInContext('pollJob(7)', context), /租约过期/);
+  assert.equal(calls.length, 1, 'expired 必须立即终态，不得继续轮询');
+
+  calls.length = 0;
   context.responses = [response(200, {ok: true, job: {status: 'completed'}})];
   const job = await vm.runInContext('pollJob(7)', context);
   assert.equal(job.status, 'completed');
@@ -595,11 +643,16 @@ function symbolEl(){
     id: '', children: [], childNodes: [], style: {}, className: '', _textContent: '', innerHTML: '',
     get textContent(){ return this._textContent; },
     set textContent(value){ this._textContent = value; this.children = []; this.childNodes = []; },
-    disabled: false, type: '', listeners: {},
-    classList: {add(){}, remove(){}},
+    disabled: false, type: '', listeners: {}, listenerCounts: {}, dataset: {},
+    classList: {add(){}, remove(){}, contains(){ return false; }},
     appendChild(...nodes){ this.children.push(...nodes); this.childNodes.push(...nodes); },
     replaceChildren(...nodes){ this.children = [...nodes]; this.childNodes = [...nodes]; },
-    addEventListener(type, fn){ this.listeners[type] = fn; },
+    addEventListener(type, fn){
+      this.listeners[type] = fn;
+      this.listenerCounts[type] = (this.listenerCounts[type] || 0) + 1;
+    },
+    insertAdjacentHTML(){},
+    remove(){},
   };
 }
 function response(status, data, jsonError){
@@ -623,8 +676,9 @@ function createSymbolHarness(fetchImpl){
   const root = symbolEl();
   root.childNodes = [symbolEl()];
   const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = symbolEl()); }});
-  const calls = {access: 0, failure: 0, requests: [], summaries: [], replay: 0};
+  const calls = {access: 0, failure: 0, requests: [], summaries: [], replay: 0, pause: []};
   const timers = new Map();
+  const windowListeners = {};
   let nextTimer = 1;
   let now = 1000;
   const document = {
@@ -637,20 +691,22 @@ function createSymbolHarness(fetchImpl){
     getElementById(id){ return elements[id]; },
     createElement(){ return symbolEl(); },
   };
+  const window = {addEventListener(type, fn){ (windowListeners[type] ||= []).push(fn); }};
   const context = vm.createContext({
-    console, document, JOB_ID: 1, TS_CODE: '000001.SZ', STATUS_LABEL: {}, AbortController,
+    console, document, window, JOB_ID: 1, TS_CODE: '000001.SZ', STATUS_LABEL: {}, AbortController,
     Date: {now(){ return now; }},
     $(selector){ return document.querySelector(selector); },
     apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
     showAccessFallback(target){ calls.access += 1; target.replaceChildren(symbolEl()); },
     showLoadFailure(target, retry){ calls.failure += 1; calls.retry = retry; target.replaceChildren(symbolEl()); },
+    pauseSymbolActivePolling(){ calls.pause.push({}); },
     setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
     clearTimeout(id){ timers.delete(id); },
     renderSummary(summary){ calls.summaries.push(summary); }, renderEquity(){}, renderWear(){}, renderRisk(){}, renderKline(){},
     initKlineReplay(){ calls.replay += 1; }, table(){}, pct(){ return ''; },
   });
   return {
-    context, calls, timers, root, elements,
+    context, calls, timers, root, elements, windowListeners,
     setNow(value){ now = value; },
     async runNextTimer(){
       const entry = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
@@ -660,20 +716,16 @@ function createSymbolHarness(fetchImpl){
       return entry[1].fn();
     },
     generateButton(){
-      return elements['sym-note'].children.find(node => node.id === 'btn-gen') || elements['btn-gen'];
+      return elements['sym-note'].children.find(node => node.id === 'btn-gen') || null;
     },
   };
 }
 """
 
 
-def _run_symbol_js(html: str, scenario: str) -> None:
-    match = re.search(
-        r"((?:const SYMBOL_POLL_INTERVAL_MS[\s\S]*?)?async function load\(\)\{.*\})(?=\n\n// FRM-SYMBOL)",
-        html,
-        re.S,
-    )
-    assert match, "未找到个股详情状态机脚本"
+def _run_symbol_script_js(html: str, source_pattern: str, scenario: str) -> None:
+    match = re.search(source_pattern, html, re.S)
+    assert match, "未找到个股详情脚本"
     node = shutil.which("node")
     if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
         node = "/home/van/codex-local/node-v22/bin/node"
@@ -682,6 +734,14 @@ def _run_symbol_js(html: str, scenario: str) -> None:
     script = _SYMBOL_JS_HARNESS + "\nconst source = " + json.dumps(match.group(1)) + ";\n" + scenario
     result = subprocess.run([node, "-e", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr or result.stdout
+
+
+def _run_symbol_js(html: str, scenario: str) -> None:
+    _run_symbol_script_js(
+        html,
+        r"((?:const SYMBOL_POLL_INTERVAL_MS[\s\S]*?)?async function load\(\)\{.*\})(?=\n\n// FRM-SYMBOL)",
+        scenario,
+    )
 
 
 class TestPages:
@@ -696,6 +756,14 @@ class TestPages:
   assert.equal(canGenerate.calls.failure, 0);
   assert.equal(canGenerate.calls.requests[0].options.redirectOn401, false);
   assert.equal(canGenerate.generateButton().disabled, false);
+
+  const readonly = createSymbolHarness(async () => response(404, {ok: false, can_generate: true, readonly: true}));
+  vm.runInContext(source, readonly.context);
+  await vm.runInContext('load()', readonly.context);
+  assert.equal(readonly.calls.access, 0, 'showcase 只读缺产物不应误报整页无权');
+  assert.equal(readonly.calls.failure, 0);
+  assert.ok(!readonly.generateButton(), 'showcase 只读不显示注定403的生成按钮：' + JSON.stringify(readonly.elements['sym-note']));
+  assert.match(readonly.elements['sym-note'].textContent, /公开经典策略/);
 
   const plain404 = createSymbolHarness(async () => response(404, {ok: false}));
   vm.runInContext(source, plain404.context);
@@ -927,12 +995,14 @@ function pendingResponse(options){
 
   const hardDeadline = createSymbolHarness(async (url, options) => pendingResponse(options));
   vm.runInContext(source, hardDeadline.context);
+  hardDeadline.context.pauseSymbolActivePolling = () => hardDeadline.calls.pause.push({});
   vm.runInContext('symbolActiveSince = 1000', hardDeadline.context);
   hardDeadline.setNow(1000 + 5 * 60 * 1000 - 100);
   const last = vm.runInContext('pollGen()', hardDeadline.context);
   await hardDeadline.runNextTimer();
   await last;
-  assert.equal(hardDeadline.calls.failure, 1, 'pending 也受包含网络等待的5分钟硬上限约束');
+  assert.equal(hardDeadline.calls.failure, 0, '5分钟硬上限不得显示加载失败');
+  assert.equal(hardDeadline.calls.pause.length, 1, 'pending 也受包含网络等待的5分钟暂停约束');
   assert.equal(hardDeadline.timers.size, 0);
 })().catch(error => { console.error(error); process.exit(1); });
 """)
@@ -1041,6 +1111,7 @@ function pendingResponse(options){
 (async () => {
   const h = createSymbolHarness(async () => response(200, {ok: true, status: 'queued'}));
   vm.runInContext(source, h.context);
+  h.context.pauseSymbolActivePolling = () => h.calls.pause.push({});
   await vm.runInContext('pollGen()', h.context);
   assert.equal(h.timers.size, 1);
   await vm.runInContext('retryGen()', h.context);
@@ -1049,8 +1120,61 @@ function pendingResponse(options){
   h.setNow(1000 + 5 * 60 * 1000);
   await vm.runInContext('pollGen()', h.context);
   assert.equal(h.timers.size, 0);
-  assert.equal(h.calls.failure, 1, '总等待超时必须显示失败');
-  assert.equal(typeof h.calls.retry, 'function');
+  assert.equal(h.calls.failure, 0, '活跃等待到期不得显示加载失败');
+  assert.equal(h.calls.pause.length, 1, '活跃等待到期必须暂停自动刷新');
+  assert.equal(typeof vm.runInContext('retryGen', h.context), 'function');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+        assert "已暂停自动刷新" in html
+        assert "任务可能仍在运行" in html
+
+    def test_symbol_repeated_replay_initialization_binds_once(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_script_js(html, r"(let kreplayCtl[\s\S]*?function initKlineReplay[\s\S]*?\n\})(?=\nfunction mountKlineReplay)", r"""
+(async () => {
+  const h = createSymbolHarness(async () => response(200, {ok: true}));
+  h.context.mountKlineReplay = () => ({destroy(){}});
+  vm.runInContext(source, h.context);
+  vm.runInContext('initKlineReplay({kline: null})', h.context);
+  const data = {kline: {dates: ['2026-01-01'], ohlc: [[1, 1, 1, 1]], vols: [1]}, trades: [], orders: []};
+  for (let i = 0; i < 2; i += 1) vm.runInContext('initKlineReplay(' + JSON.stringify(data) + ')', h.context);
+  assert.equal(h.elements['btn-kreplay'].listenerCounts.click, 1, '失败后重试与连续初始化只能绑定一次重播');
+  assert.equal(h.elements['btn-kreplay-exit'].listenerCounts.click, 1);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_equity_and_kline_resize_listeners_do_not_accumulate(self, client):
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_script_js(html, r"(let equityResizeBound[\s\S]*?)(?=\nfunction renderWear)", r"""
+(async () => {
+  const h = createSymbolHarness(async () => response(200, {ok: true}));
+  h.context.echarts = {init(){ return {
+    setOption(){}, on(){}, resize(){},
+    getOption(){ return {dataZoom: [{start: 0, end: 100}]}; },
+  }; }};
+  h.context.card = () => ''; h.context.pct = () => ''; h.context.cls = () => '';
+  vm.runInContext(source, h.context);
+  const data = {equity: {dates: ['2026-01-01'], values: [1]}, trades: []};
+  vm.runInContext('renderEquity(' + JSON.stringify(data) + ')', h.context);
+  vm.runInContext('renderEquity(' + JSON.stringify(data) + ')', h.context);
+  assert.equal((h.windowListeners.resize || []).length, 1, '收益图重复渲染不得累积 resize');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+        _run_symbol_script_js(html, r"(let klineResizeBound[\s\S]*?)(?=\n// --- K线级重播)", r"""
+(async () => {
+  const h = createSymbolHarness(async () => response(200, {ok: true}));
+  h.context.echarts = {
+    init(){ return {setOption(){}, resize(){}}; },
+    getInstanceByDom(){ return null; },
+  };
+  h.context.QREFactorLayout = {plan(){ return {chips: [], panes: [], overlays: []}; }};
+  h.context.chipStates = () => ({});
+  h.context.renderFactorChips = () => {};
+  vm.runInContext(source, h.context);
+  const data = {kline: {dates: ['2026-01-01'], ohlc: [[1, 1, 1, 1]], vols: [1]}, factors: [], orders: []};
+  vm.runInContext('renderKline(' + JSON.stringify(data) + ')', h.context);
+  vm.runInContext('renderKline(' + JSON.stringify(data) + ')', h.context);
+  assert.equal((h.windowListeners.resize || []).length, 1, 'K线重复渲染不得累积 resize');
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
@@ -1147,7 +1271,7 @@ function pendingResponse(options){
             "const POLL_INTERVAL_MS = 5000;",
             "const MAX_CONSECUTIVE_ERRORS = 3;",
             "const MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;",
-            "apiFetch('/api/results/' + JOB_ID + '/summary', {redirectOn401:false})",
+            "jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/summary', {redirectOn401:false}",
             "showAccessFallback(document.querySelector('.container'))",
             "showLoadFailure(document.querySelector('.container'), retryPoll)",
             "已暂停自动刷新",
@@ -1213,7 +1337,7 @@ vm.runInContext(source, h.context);
 
     def test_load_risk_errors_are_local_and_never_redirect(self, client):
         html = client.get("/saas/jobs/1").get_data(as_text=True)
-        _run_job_js(html, r"(async function loadRisk\(\)\{.*?\})(?=\nfunction renderRisk)", r"""
+        _run_job_js(html, r"(let riskEpoch[\s\S]*?async function loadRisk\(\)\{.*?\})(?=\nfunction renderRisk)", r"""
 (async () => {
   const unauthorized = new Error('unauthorized');
   unauthorized.status = 401;
@@ -1232,6 +1356,163 @@ vm.runInContext(source, h.context);
     assert.equal(h.calls.access, 0, '风险区异常不能触发整页无权');
     assert.equal(h.calls.requests.at(-1).options.redirectOn401, false);
   }
+})().catch(error => { console.error(error); process.exit(1); });
+""", r"(const JOB_REQUEST_TIMEOUT_MS[\s\S]*?)(?=function abortPoll)")
+
+    def test_job_all_resource_fetch_and_body_pending_time_out(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(const ACTIVE =.*?)(?=// --- 回测重播)", r"""
+(async () => {
+  for (const resource of ['summary', 'chart-data', 'tag-analysis']){
+    for (const kind of ['fetch', 'body']){
+      const started = jobDeferred();
+      const h = createHarness(async (url, options) => {
+        const pending = kind === 'fetch' ? jobPendingFetch(options) : jobPendingBody(200, started.resolve);
+        if (url.includes('/' + resource)) return pending;
+        if (url.includes('/summary')) return response(200, {ok: true, summary: {}});
+        if (url.includes('/chart-data')) return response(200, {ok: true});
+        return response(404, {ok: false});
+      });
+      vm.runInContext(source, h.context);
+      const pending = vm.runInContext('poll()', h.context);
+      if (kind === 'body') await started.promise;
+      assert.ok(h.calls.requests.some(r => r.options.signal), resource + ' ' + kind + ' 必须传 AbortSignal');
+      await h.runNextTimer();
+      await pending;
+      assert.equal(h.calls.failure, 1, resource + ' ' + kind + ' pending 必须超时失败');
+      assert.equal(h.calls.access, 0);
+      assert.ok(h.timers.size <= 1, resource + ' ' + kind + ' 收口后最多保留一个重试 timer');
+    }
+  }
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+        _run_job_js(html, r"(let riskEpoch[\s\S]*?async function loadRisk\(\)\{.*?\})(?=\nfunction renderRisk)", r"""
+(async () => {
+  for (const kind of ['fetch', 'body']){
+    const started = jobDeferred();
+    const h = createHarness(async (url, options) => kind === 'fetch' ? jobPendingFetch(options) : jobPendingBody(200, started.resolve));
+    vm.runInContext(source, h.context);
+    const pending = vm.runInContext('loadRisk()', h.context);
+    if (kind === 'body') await started.promise;
+    await h.runNextTimer();
+    await pending;
+    assert.equal(h.elements['risk-body'].children[0].textContent, '风险分析加载失败', kind + ' pending 必须局部收口');
+    assert.equal(h.calls.access, 0);
+    assert.equal(h.timers.size, 0);
+  }
+})().catch(error => { console.error(error); process.exit(1); });
+""", r"(const JOB_REQUEST_TIMEOUT_MS[\s\S]*?)(?=function abortPoll)")
+
+    def test_job_retry_supersedes_pending_round_without_duplicate_timers(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(const ACTIVE =.*?)(?=// --- 回测重播)", r"""
+(async () => {
+  let first = true;
+  const h = createHarness(async (url, options) => {
+    if (url.includes('/summary') && first) return jobPendingFetch(options);
+    if (url.includes('/summary')) return response(200, {ok: true, summary: {}});
+    if (url.includes('/chart-data')) return response(200, {ok: true});
+    return response(404, {ok: false});
+  });
+  vm.runInContext(source, h.context);
+  const oldRound = vm.runInContext('poll()', h.context);
+  first = false;
+  await vm.runInContext('retryPoll()', h.context);
+  assert.equal(h.calls.requests[0].options.signal.aborted, true, '手动重试必须 abort 旧请求');
+  assert.equal(h.timers.size, 0, '完成后不得遗留重复 timer');
+  await oldRound;
+  assert.equal(h.calls.failure, 0, '旧请求取消不得污染新成功轮次');
+  assert.equal(h.calls.attribution, 1);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_job_chart_and_tag_401_use_access_fallback(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(const ACTIVE =.*?)(?=// --- 回测重播)", r"""
+(async () => {
+  for (const resource of ['chart-data', 'tag-analysis']){
+    const h = createHarness(async url => {
+      if (url.includes('/summary')) return response(200, {ok: true, summary: {}});
+      if (url.includes('/' + resource)) return response(401, {ok: false});
+      return response(200, {ok: true});
+    });
+    vm.runInContext(source, h.context);
+    await vm.runInContext('poll()', h.context);
+    assert.equal(h.calls.access, 1, resource + ' 401 必须统一无权');
+    assert.equal(h.calls.failure, 0);
+    assert.equal(h.timers.size, 0);
+  }
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_job_repeated_success_and_retry_bind_listeners_once(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(const ACTIVE =[\s\S]*?async function initResultActions[\s\S]*?\n\})(?=\n\nif \(new URLSearchParams)", r"""
+function successFetch(url){
+  if (url.includes('/summary')) return response(200, {ok: true, strategy_id: 7, summary: {}});
+  if (url.includes('/chart-data')) return response(200, {ok: true, dates: ['2026-01-01'], equity: [1]});
+  if (url.includes('/tag-analysis')) return response(404, {ok: false});
+  if (url.endsWith('/api/saas/strategies/7')) return response(200, {ok: true, strategy: {in_library: false}});
+  if (url.endsWith('/api/saas/universes')) return response(200, {ok: true, groups: []});
+  return response(200, {ok: true});
+}
+async function assertSinglePost(h){
+  await h.elements['btn-save-lib'].listeners.click[0]();
+  assert.equal(h.calls.requests.filter(r => r.url.endsWith('/save')).length, 1, '一次保存点击只能发一次 POST');
+  await h.elements['btn-signal-open'].listeners.click[0]();
+  await h.elements['btn-signal-confirm'].listeners.click[0]();
+  assert.equal(h.calls.requests.filter(r => r.url.endsWith('/watch')).length, 1, '一次监控点击只能发一次 POST');
+}
+(async () => {
+  const twice = createHarness(async url => successFetch(url));
+  vm.runInContext(source, twice.context);
+  await vm.runInContext('poll()', twice.context);
+  await vm.runInContext('poll()', twice.context);
+  for (const id of ['btn-replay', 'btn-replay-exit', 'btn-save-lib', 'btn-signal-open', 'btn-signal-confirm'])
+    assert.equal(twice.listenerCount(id, 'click'), 1, id + ' 连续初始化不得重复绑定');
+  await assertSinglePost(twice);
+
+  let failed = true;
+  const retry = createHarness(async url => {
+    if (failed && url.includes('/chart-data')) return response(500, {ok: false});
+    return successFetch(url);
+  });
+  vm.runInContext(source, retry.context);
+  await vm.runInContext('poll()', retry.context);
+  failed = false;
+  await retry.calls.retry();
+  for (const id of ['btn-replay', 'btn-replay-exit', 'btn-save-lib', 'btn-signal-open', 'btn-signal-confirm'])
+    assert.equal(retry.listenerCount(id, 'click'), 1, id + ' 失败后重试不得重复绑定');
+  await assertSinglePost(retry);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_job_main_and_risk_resize_listeners_do_not_accumulate(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(let mainChart[\s\S]*?function renderMain[\s\S]*?\n\})(?=\nfunction applyBench)", r"""
+(async () => {
+  const h = createHarness(async () => response(200, {ok: true}));
+  h.context.echarts = {init(){ return {
+    setOption(){}, on(){}, resize(){}, dispatchAction(){},
+    getOption(){ return {dataZoom: [{start: 0, end: 100}]}; },
+  }; }};
+  h.context.pct = () => ''; h.context.cls = () => ''; h.context.stratRet = () => [];
+  h.context.card = () => '';
+  vm.runInContext(source, h.context);
+  const data = {dates: ['2026-01-01'], equity: [1], drawdown_pct: [], trades: {points: []}};
+  vm.runInContext('renderMain(' + JSON.stringify(data) + ')', h.context);
+  vm.runInContext('renderMain(' + JSON.stringify(data) + ')', h.context);
+  assert.equal((h.windowListeners.resize || []).length, 1, '主图重复渲染不得累积 resize');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+        _run_job_js(html, r"(let riskCharts[\s\S]*?function renderRisk\(d\) \{[\s\S]*?\n  \})(?=\nfunction renderRiskDist)", r"""
+(async () => {
+  const h = createHarness(async () => response(200, {ok: true}));
+  h.context.renderRiskDist = () => {}; h.context.renderRiskVol = () => {}; h.context.renderRiskStress = () => {};
+  vm.runInContext(source, h.context);
+  vm.runInContext('renderRisk({})', h.context);
+  vm.runInContext('renderRisk({})', h.context);
+  assert.equal((h.windowListeners.resize || []).length, 1, '风险图重复渲染不得累积 resize');
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 

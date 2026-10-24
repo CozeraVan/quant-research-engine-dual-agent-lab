@@ -2,9 +2,9 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
-### 2026-10-24 QRE-SAAS-ACCESS-FALLBACK-T5 DONE
+### 2026-10-24 QRE-SAAS-ACCESS-FALLBACK-FINAL-REVIEW DONE
 
-实现 commits 9eac651..41550c6 已覆盖公共无权卡、next 安全回跳、job/symbol/records 有限轮询与重试、showcase 公开只读、`can_generate` 业务 404。Task 5 相关回归 181 passed，未改功能代码，未运行真实全量回测。真实浏览器自动化及游客/登录用户实机矩阵未做，Step 2 留待人工验收；未 push、未部署。
+已覆盖公共无权卡、next 安全回跳、job/symbol/records 有限轮询与重试、showcase 公开只读及 `can_generate` 业务 404。最终补齐 job 请求/响应体超时与 epoch、symbol 暂停语义、交互监听幂等、showcase readonly 和 new expired 终态；提交检查仅扫描新增行并有正反回归。相关测试 228 passed，未运行真实全量回测或真实浏览器自动化；实机矩阵留待部署后人工验收。
 
 ### 2026-10-24 FRM 缺失收口
 
@@ -12,7 +12,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-DONE（2026-10-24：QRE-SAAS-ACCESS-FALLBACK-T5 回归与文档完成，181 passed；真实浏览器/实机验收未做，未 push、未部署）
+DONE（2026-10-24：QRE-SAAS-ACCESS-FALLBACK-FINAL-REVIEW 实现、回归与文档完成，228 passed；真实浏览器/实机验收未做）
 
 ## Current Task
 

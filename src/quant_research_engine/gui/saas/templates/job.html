@@ -137,6 +137,7 @@ function stratRet(d){
 }
 
 let mainChart = null, DATA = null, curBench = '';
+let mainResizeBound = false;
 function renderMetrics(m){
   const strip = document.getElementById('metric-strip');
   if (!m){ strip.innerHTML = ''; return; }
@@ -301,7 +302,10 @@ function renderMain(d){
     requestAnimationFrame(() => { rafPending = false; updateRangeStrip(); });
   });
   updateRangeStrip();
-  window.addEventListener('resize', () => mainChart && mainChart.resize());
+  if (!mainResizeBound){
+    mainResizeBound = true;
+    window.addEventListener('resize', () => mainChart && mainChart.resize());
+  }
 }
 function applyBench(){
   if (!mainChart || !DATA) return;
@@ -538,17 +542,28 @@ function renderFees(fees, meta){
       '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + num(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：本次回测 round_trips 全量 ' + fees.trades + ' 笔真实费用列聚合</div>' +
     '</div>';
 }
+let riskEpoch = 0;
+let riskController = null;
+let riskResizeBound = false;
 async function loadRisk(){
+  riskEpoch += 1;
+  const epoch = riskEpoch;
+  if (riskController) riskController.abort();
+  const controller = new AbortController();
+  riskController = controller;
   const box = document.getElementById('box-risk');
   const body = document.getElementById('risk-body');
   try {
-    const resp = await apiFetch('/api/results/' + JOB_ID + '/risk-analysis', {redirectOn401:false});
-    if (!resp.ok) throw pollHttpError(resp);
-    const d = await resp.json();
+    const d = await jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/risk-analysis', {redirectOn401:false}, controller, async resp => {
+      if (!resp.ok) throw pollHttpError(resp);
+      return resp.json();
+    });
+    if (epoch !== riskEpoch) return;
     if (!d.ok || !d.has_report){ box.style.display = 'none'; return; }
     box.style.display = '';
     renderRisk(d);
   } catch (error) {
+    if (epoch !== riskEpoch) return;
     box.style.display = '';
     const message = document.createElement('div');
     message.className = 'chart-empty';
@@ -559,6 +574,8 @@ async function loadRisk(){
     retry.textContent = '重试';
     retry.addEventListener('click', loadRisk);
     body.replaceChildren(message, retry);
+  } finally {
+    if (epoch === riskEpoch) riskController = null;
   }
 }
 function renderRisk(d) {
@@ -608,9 +625,12 @@ function renderRisk(d) {
     renderRiskDist(d);
     renderRiskVol(d);
     renderRiskStress(d);
-    window.addEventListener('resize', function() {
-      riskCharts.forEach(function(c) { c.resize(); });
-    });
+    if (!riskResizeBound){
+      riskResizeBound = true;
+      window.addEventListener('resize', function() {
+        riskCharts.forEach(function(c) { c.resize(); });
+      });
+    }
   }
 function renderRiskDist(d) {
     var el = document.getElementById('chart-risk-dist');
@@ -750,13 +770,48 @@ const TERMINAL = new Set(['failed','expired','canceled','cancelled']);
 const POLL_INTERVAL_MS = 5000;
 const MAX_CONSECUTIVE_ERRORS = 3;
 const MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;
+const JOB_REQUEST_TIMEOUT_MS = 15000;
 const JOB_CONTENT = Array.from(document.querySelector('.container').childNodes);
 let pollTimer = null;
 let pollInFlight = false;
+let pollEpoch = 0;
+let pollController = null;
 let consecutiveErrors = 0;
 let activeSince = null;
 let jobContentDetached = false;
 
+async function jobRequestJsonWithTimeout(url, options, controller, consume){
+  const elapsed = typeof activeSince === 'undefined' || activeSince === null ? 0 : Date.now() - activeSince;
+  const remaining = Math.max(0, MAX_ACTIVE_WAIT_MS - elapsed);
+  let timeout = null;
+  let onAbort = null;
+  const cancellation = new Promise((resolve, reject) => {
+    onAbort = () => {
+      const error = new Error('请求已取消');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    if (controller.signal.aborted) onAbort();
+    else controller.signal.addEventListener('abort', onAbort, {once: true});
+    timeout = setTimeout(() => controller.abort(), Math.min(JOB_REQUEST_TIMEOUT_MS, remaining));
+  });
+  const operation = (async () => {
+    const resp = await apiFetch(url, Object.assign({}, options, {signal: controller.signal}));
+    return consume(resp);
+  })();
+  operation.catch(() => {});
+  try {
+    return await Promise.race([operation, cancellation]);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+    controller.signal.removeEventListener('abort', onAbort);
+  }
+}
+function abortPoll(){
+  pollEpoch += 1;
+  if (pollController) pollController.abort();
+  pollController = null;
+}
 function clearPollTimer(){
   if (pollTimer !== null){ clearTimeout(pollTimer); pollTimer = null; }
 }
@@ -774,7 +829,7 @@ function retryPoll(){
   consecutiveErrors = 0;
   activeSince = null;
   restoreJobContent();
-  poll();
+  return poll();
 }
 function pauseActivePolling(){
   clearPollTimer();
@@ -799,7 +854,7 @@ function pauseActivePolling(){
 function handlePollError(error, summaryLoaded){
   clearPollTimer();
   consecutiveErrors += 1;
-  if (!summaryLoaded && error && (error.status === 401 || error.status === 404)){
+  if (error && (error.status === 401 || (!summaryLoaded && error.status === 404))){
     showAccessFallback(document.querySelector('.container'));
     jobContentDetached = true;
     return;
@@ -823,14 +878,21 @@ function pollHttpError(resp){
 
 async function poll(){
   clearPollTimer();
-  if (pollInFlight) return;
+  abortPoll();
+  const epoch = pollEpoch;
+  const controller = new AbortController();
+  pollController = controller;
   pollInFlight = true;
   restoreJobContent();
   let summaryLoaded = false;
   try {
-    const resp = await apiFetch('/api/results/' + JOB_ID + '/summary', {redirectOn401:false});
-    if (resp.status === 404) throw pollHttpError(resp);
-    const data = await resp.json();
+    const result = await jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/summary', {redirectOn401:false}, controller, async resp => {
+      if (resp.status === 401 || resp.status === 404) throw pollHttpError(resp);
+      if (resp.status !== 409 && !resp.ok) throw pollHttpError(resp);
+      return {resp, data: await resp.json()};
+    });
+    if (epoch !== pollEpoch) return;
+    const resp = result.resp, data = result.data;
     const badge = document.getElementById('job-badge');
 
     if (resp.status === 409){
@@ -860,7 +922,7 @@ async function poll(){
       document.getElementById('job-status-note').textContent = '任务状态：' + st;
       return;
     }
-    if (!resp.ok || !data.ok) throw pollHttpError(resp);
+    if (!data.ok) throw pollHttpError(resp);
     summaryLoaded = true;
     activeSince = null;
     clearPollTimer();
@@ -886,14 +948,21 @@ async function poll(){
       const back = document.querySelector('a[href="/saas/"]');
       if (back){ back.href = '/saas/showcase'; back.textContent = '← 返回经典策略'; }
     }
-    const [chartResp, tagResp] = await Promise.all([
-      apiFetch('/api/results/' + JOB_ID + '/chart-data', {redirectOn401:false}),
-      apiFetch('/api/results/' + JOB_ID + '/tag-analysis', {redirectOn401:false}),
+    const [chartResult, tagResult] = await Promise.all([
+      jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/chart-data', {redirectOn401:false}, controller, async chartResp => {
+        if (chartResp.status === 401) throw pollHttpError(chartResp);
+        if (!chartResp.ok) throw pollHttpError(chartResp);
+        return (await chartResp.json()) || {};
+      }),
+      jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/tag-analysis', {redirectOn401:false}, controller, async tagResp => {
+        if (tagResp.status === 401) throw pollHttpError(tagResp);
+        if (tagResp.status === 404) return null;
+        if (!tagResp.ok) throw pollHttpError(tagResp);
+        return tagResp.json();
+      }),
     ]);
-    if (chartResp.status === 404 || !chartResp.ok) throw pollHttpError(chartResp);
-    if (!tagResp.ok && tagResp.status !== 404) throw pollHttpError(tagResp);
-    const chart = (await chartResp.json()) || {};
-    const tag = tagResp.status === 404 ? null : await tagResp.json();
+    if (epoch !== pollEpoch) return;
+    const chart = chartResult, tag = tagResult;
     const brief = chart.brief || {};
     document.getElementById('brief-text').textContent = brief.name ? ('策略：' + brief.name) : (data.strategy_name ? ('策略：' + data.strategy_name) : '');
     renderMeta(chart.meta, data.data_until);
@@ -902,7 +971,8 @@ async function poll(){
     if (chart.dates && chart.equity) renderMain(chart);
     else empty('chart-main');
     initReplay(chart);
-    initResultActions(data, chart);
+    await initResultActions(data, chart);
+    if (epoch !== pollEpoch) return;
     if (!data.readonly && !SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
     renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
     renderFees(chart.fees_summary || null, chart.meta || null);
@@ -910,16 +980,22 @@ async function poll(){
     consecutiveErrors = 0;
     loadRisk();
   } catch (error) {
-    handlePollError(error, summaryLoaded);
+    if (epoch === pollEpoch) handlePollError(error, summaryLoaded);
   } finally {
-    pollInFlight = false;
+    if (epoch === pollEpoch){
+      pollInFlight = false;
+      pollController = null;
+    }
   }
 }
 // --- 回测重播（CR-2026-10-04 切片1 + 接管模式：接管原收益曲线容器，退出恢复静态） ---
-let replayCtl = null;
+let replayCtl = null, replayData = null;
 function initReplay(d){
+  replayData = d;
   const btn = document.getElementById('btn-replay');
   if (!btn || !d.dates || !d.dates.length || !d.equity){ if (btn) btn.style.display = 'none'; return; }
+  if (btn.dataset.replayBound === 'true') return;
+  btn.dataset.replayBound = 'true';
   btn.addEventListener('click', () => {
     btn.classList.add('hidden');
     document.getElementById('btn-replay-exit').classList.remove('hidden');
@@ -928,7 +1004,7 @@ function initReplay(d){
     document.getElementById('range-strip').style.display = 'none';
     document.getElementById('replay-metrics').classList.remove('hidden');
     document.getElementById('replay-events').classList.remove('hidden');
-    if (!replayCtl) replayCtl = mountReplay(d);
+    if (!replayCtl) replayCtl = mountReplay(replayData);
   });
   document.getElementById('btn-replay-exit').addEventListener('click', () => {
     if (replayCtl){ replayCtl.destroy(true); replayCtl = null; }
@@ -938,7 +1014,7 @@ function initReplay(d){
     btn.classList.remove('hidden');
     document.getElementById('bench-bar').style.display = '';
     document.getElementById('range-strip').style.display = '';
-    renderMain(d);  // 数据全在内存，重建静态收益曲线（含基准条与区间卡）
+    renderMain(replayData);  // 数据全在内存，重建静态收益曲线（含基准条与区间卡）
   });
 }
 function mountReplay(d){
@@ -984,6 +1060,8 @@ async function initResultActions(jobData, chart){
   const sid = job.strategy_id;
   if (!sid) return;
   const box = document.getElementById('box-actions');
+  if (box.dataset.actionsBound === 'true') return;
+  box.dataset.actionsBound = 'true';
   box.classList.remove('hidden');
   const saveBtn = document.getElementById('btn-save-lib');
   const statusEl = document.getElementById('action-status');

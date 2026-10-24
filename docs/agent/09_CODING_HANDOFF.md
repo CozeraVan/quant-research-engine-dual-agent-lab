@@ -2,15 +2,17 @@
 
 ## Task ID
 
-QRE-SAAS-ACCESS-FALLBACK-T5（SaaS 访问兜底与有限轮询：回归及文档交接）
+QRE-SAAS-ACCESS-FALLBACK-FINAL-REVIEW（SaaS 访问兜底最终修复交接）
 
 ## Implementation Summary
 
-本任务只做回归、覆盖核对和文档，无新增功能修改。既有实现 commits 9eac651..41550c6：`base.html`/`login*.html`/`app.py` 提供公共无权与加载失败卡、邮箱及 Authing 安全 next 回跳；job、symbol、records 分别收口主资源权限、异常、响应体等待、轮询终态、等待上限与手动重试；showcase 保留公开 GET 且生成 POST 返回 403；symbol 仅在 404 响应含 `can_generate` 时展示按需生成。records 附属策略库/因子申请使用局部失败与无权提示，不覆盖主列表或干扰主轮询。
+在既有公共无权卡、安全 next 回跳与有限轮询之上，补齐 job 四资源 fetch/JSON body 统一超时、取消及 epoch；symbol 长等待改为暂停；job/symbol 交互监听幂等；showcase 缺详情返回 `readonly` 并隐藏生成入口；new 将 expired 作为立即终态。后端 showcase POST 403 和私有任务匿名 401/他人 404 契约不变。
 
-**验证命令**：`/home/van/.local/bin/uv run python -m pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py -q` → **181 passed**。同时核对后端匿名 401、登录他人 404、本人未完成 409 测试，以及 showcase 不创建生成任务和 `can_generate` 前端行为测试。
+提交检查脚本改为只扫描新增 diff 行，解决上下文函数名/测试 stub 误报；`tests/test_git_finalize_check.py` 在临时 git 仓库验证上下文放行和新增敏感赋值拒绝。
 
-**限制与后续**：未做真实浏览器自动化，未以游客/登录用户执行 Step 2 实机清单，未运行真实全量回测；这些场景需后续人工验收。未 push、未部署。
+**验证命令**：`/home/van/.local/bin/uv run python -m pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py tests/test_saas_symbol_ux.py tests/test_git_finalize_check.py -q` → **228 passed**。相关模板内联 JS 已通过 Node 解析；finalize/progress/diff 检查通过。
+
+**限制与后续**：未做真实浏览器自动化或全量回测；部署后由用户实机检查无权页、登录回跳和生成等待状态。
 
 ---
 

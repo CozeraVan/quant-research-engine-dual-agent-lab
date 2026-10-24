@@ -1182,3 +1182,12 @@ git diff --check → clean
 - 验证：tests/test_saas_symbol_ux.py 38 passed；tests/test_worker.py + test_gui_saas.py + test_gui_risk_report.py 118 passed。另一次异步轮询测试偶发 404，单测复跑通过，最终组合复跑全绿。
 - 历史回填不重跑回测；58/66 先重算修正口径 FRM，58/66/74 公网 API 已验证 has_report=true。
 - Required Fixes：无。
+
+
+## 2026-10-24 无权页最终修复自审补充
+
+- job 请求与响应体统一超时、取消和 epoch；风险模块独立收口。
+- 长等待只暂停不伪报失败；重复渲染的事件绑定和 resize 均幂等。
+- showcase 只读不展示无效生成入口；new expired 不再无意义轮询。
+- 最终相关回归（含提交检查脚本 2 例）228 passed；无 Required Fixes。真实浏览器矩阵未自动化，部署后由用户实机抽查。
+- `git-finalize-check.sh` 只扫描新增 diff 行，不再把未修改上下文中的函数名或测试 stub 判为密钥；新增敏感赋值拒绝路径有回归测试。
