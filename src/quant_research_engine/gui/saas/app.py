@@ -15,6 +15,9 @@ lease 过期且 attempts < max_attempts 的任务可被重新认领（自动回�
   sms（占位，未开通）/stub（测试用，发送记录落 app.extensions['sent_codes']）。
 - TODO：图形验证码（内测期省略，上线前评估）。
 - Worker 侧 header X-Worker-Token（SAAS_WORKER_TOKEN，未配置一律 503）。
+- 游客归属（QRE-SAAS-ACCESS-HARDENING-001）：不按 IP。Cookie 缺失时应用签发随机
+  HttpOnly/SameSite=Lax 会话（qre_guest_sid），归属键由其派生；旧 IP 归属结果在
+  新会话首次创建任务时一次性迁移。默认私有不变。
 """
 
 from __future__ import annotations
@@ -740,7 +743,91 @@ def _client_ip() -> str:
 
 
 def _guest_key(app: Flask, ip: str) -> str:
+    """旧形态游客归属键（QRE-SAAS-D1D2）：sha256(IP+salt)。
+
+    QRE-SAAS-ACCESS-HARDENING-001 起新任务不再使用它归属（同 Wi-Fi 互见风险），
+    仅保留两个用途：① 新会话首次创建任务时把同 IP 的旧结果一次性迁移到新会话；
+    ② 游客 NL 编译限流计数（成本口径，与归属无关，仍按 IP）。
+    """
     return hashlib.sha256(f"guest:{ip}:{_auth_salt(app)}".encode()).hexdigest()[:32]
+
+
+# QRE-SAAS-ACCESS-HARDENING-001（P0-2）：游客归属从"纯 IP"改为随机会话 Cookie。
+# 应用在 Cookie 缺失时自动签发随机 sid（HttpOnly + SameSite=Lax），归属键只由
+# sid + 现有 salt 派生（sha256 截断 32 位，与旧 guest_key 同形同列，无 schema
+# 变更）；浏览器自动携带，JS 读不到也不需要读。同 Wi-Fi 的不同浏览器/隐身窗
+# 因此拿到不同 sid，结果互不可见。
+GUEST_COOKIE_NAME = "qre_guest_sid"
+GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 天
+# Secure 标志：ECS 全站 HTTPS 建议置 1（/etc/qre-saas.env 加 SAAS_GUEST_COOKIE_SECURE=1）；
+# 本地 staging 走 http，默认 0，否则浏览器不存 Cookie 会断游客链路。
+GUEST_COOKIE_SECURE_DEFAULT = "0"
+
+
+def _guest_cookie_secure(app: Flask) -> bool:
+    return str(_cfg(app, "SAAS_GUEST_COOKIE_SECURE", GUEST_COOKIE_SECURE_DEFAULT) or "0") == "1"
+
+
+def _guest_session_key(app: Flask, sid: str) -> str:
+    """游客会话归属键：只由随机会话值 + 现有 salt 派生（不明文存敏感信息）。"""
+    return hashlib.sha256(f"gsess:{sid}:{_auth_salt(app)}".encode()).hexdigest()[:32]
+
+
+def _guest_identity(app: Flask) -> tuple[str, str | None]:
+    """返回 (归属键, 需签发的 sid)。
+
+    Cookie 缺失时生成随机 sid 并随第二元素返回——调用方必须把它 Set-Cookie 到
+    响应上（_attach_guest_cookie），否则浏览器下次请求又是新会话。Cookie 存在
+    时第二元素为 None（绝不轮换已有会话）。
+    """
+    sid = request.cookies.get(GUEST_COOKIE_NAME)
+    if sid:
+        return _guest_session_key(app, sid), None
+    sid = secrets.token_urlsafe(32)
+    return _guest_session_key(app, sid), sid
+
+
+def _attach_guest_cookie(app: Flask, resp: Any, sid: str | None) -> Any:
+    """把新签发的游客会话 Cookie 写到响应上（sid 为 None 时原样返回）。"""
+    if sid is None:
+        return resp
+    resp.set_cookie(
+        GUEST_COOKIE_NAME, sid,
+        max_age=GUEST_COOKIE_MAX_AGE,
+        httponly=True, samesite="Lax", secure=_guest_cookie_secure(app),
+    )
+    return resp
+
+
+def _with_guest_cookie(app: Flask, err: tuple[Any, int], sid: str | None) -> tuple[Any, int]:
+    """给 (response, status) 错误元组补挂游客 Cookie（sid 为 None 时原样返回）。"""
+    if sid is None:
+        return err
+    return _attach_guest_cookie(app, err[0], sid), err[1]
+
+
+def _migrate_legacy_guest_jobs(app: Flask, engine: Engine, new_key: str) -> int:
+    """旧 IP 归属游客结果一次性迁移到新会话（QRE-SAAS-ACCESS-HARDENING-001）。
+
+    仅由"新会话首次创建游客任务"触发：把同 IP 旧 key（sha256(IP+salt)）的游客
+    任务改挂到新会话键下。迁移后旧 key 不再作为任何新任务的归属依据，也不再
+    能访问这些结果（无 Cookie 的同 IP 请求同样 401）——历史同 IP 风险只限旧
+    数据这一次，新会话彼此隔离。幂等：旧 key 行搬完后 UPDATE 影响 0 行；
+    进程级 guard 避免每个请求重复扫描。返回迁移行数。
+    """
+    old_key = _guest_key(app, _client_ip())
+    if old_key == new_key:  # 理论不可达（派生前缀不同），防御性短路
+        return 0
+    guard = app.extensions.setdefault("guest_migrated_old_keys", set())
+    if old_key in guard:
+        return 0
+    with engine.begin() as conn:
+        moved = conn.execute(
+            text("UPDATE jobs SET guest_key = :new WHERE user_id IS NULL AND guest_key = :old"),
+            {"new": new_key, "old": old_key},
+        ).rowcount or 0
+    guard.add(old_key)
+    return moved
 
 
 # 游客 NL 编译限流（QRE-SAAS-GUEST-NL）：LLM 调用有成本，游客单 IP 每日上限。
@@ -2189,8 +2276,10 @@ def create_saas_app() -> Flask:
         }
 
         # --- 游客通道（15 号文档 D 阶段定稿；2026-10-03 限额参数化读 tier_policies；
-        #     2026-10-04 内测调整：最多 10 只（自选不足自动随机补齐）/近 10 年/日 1 次不变） ---
+        #     2026-10-04 内测调整：最多 10 只（自选不足自动随机补齐）/近 10 年/日 1 次不变；
+        #     QRE-SAAS-ACCESS-HARDENING-001：归属改随机会话 Cookie，不再纯 IP） ---
         guest_key = None
+        new_guest_sid: str | None = None
         if uid is None:
             pol = _get_policy(app, engine, "guest")
             codes = params_raw.get("codes") or []
@@ -2225,7 +2314,12 @@ def create_saas_app() -> Flask:
                 return jsonify({"ok": False, "error": "请填写回测区间（开始/结束日期）"}), 400
             if pol["max_days"] > 0 and ((d1 - d0).days > pol["max_days"] or d0 > d1):
                 return jsonify({"ok": False, "error": "游客仅支持近 10 年内的区间。注册会员后不限"}), 403
-            guest_key = _guest_key(app, _client_ip())
+            # QRE-SAAS-ACCESS-HARDENING-001：归属键由会话 Cookie 派生（缺失时本次
+            # 请求签发，响应带上 Set-Cookie）；同 IP 旧结果在新会话首次创建任务时
+            # 一次性迁移到本会话（先迁移后计数，今日旧任务照占当日配额）。
+            guest_key, new_guest_sid = _guest_identity(app)
+            if new_guest_sid is not None:
+                _migrate_legacy_guest_jobs(app, engine, guest_key)
             used = 0
             if kind == "full":
                 with engine.connect() as conn:
@@ -2237,7 +2331,11 @@ def create_saas_app() -> Flask:
                         {"k": guest_key},
                     ).scalar_one()
             if kind == "full" and pol["daily_full_limit"] > 0 and used >= pol["daily_full_limit"]:
-                return jsonify({"ok": False, "error": "游客每日可回测 1 次（今日已用完）。注册会员后不限次数且记录永久保存"}), 403
+                # 403 也要带会话 Cookie：迁移后的归属得让浏览器拿到
+                return _with_guest_cookie(app, (
+                    jsonify({"ok": False, "error": "游客每日可回测 1 次（今日已用完）。注册会员后不限次数且记录永久保存"}),
+                    403,
+                ), new_guest_sid)
 
         if uid is None and guest_key is None:
             return jsonify({"ok": False, "error": "未登录（Authorization: Bearer <token>）"}), 401
@@ -2327,7 +2425,10 @@ def create_saas_app() -> Flask:
         if guest_key is not None:
             resp["guest"] = True
             resp["note"] = GUEST_RESULT_NOTE
-        return jsonify(resp)
+        response = jsonify(resp)
+        if new_guest_sid is not None:
+            _attach_guest_cookie(app, response, new_guest_sid)
+        return response
 
     @app.get("/api/jobs")
     @app.get("/api/saas/jobs")
@@ -2371,10 +2472,15 @@ def create_saas_app() -> Flask:
             if uid is None:
                 return jsonify({"ok": False, "error": "未登录"}), 401
             return jsonify({"ok": False, "error": "任务不存在"}), 404
+        guest_sid: str | None = None
         if uid is None:
-            # 游客任务：同 IP（guest_key 匹配）可查看当次结果
-            if row["user_id"] is not None or row["guest_key"] != _guest_key(app, _client_ip()):
-                return jsonify({"ok": False, "error": "未登录"}), 401
+            # QRE-SAAS-ACCESS-HARDENING-001：游客按会话 Cookie 归属（不再纯 IP）。
+            # 不存在/他人/异会话统一 401（不泄露存在性）；Cookie 缺失时顺手签发，
+            # 让随后的轮询（new.html pollJob）带上会话。
+            guest_key, guest_sid = _guest_identity(app)
+            if row["user_id"] is not None or row["guest_key"] != guest_key:
+                return _with_guest_cookie(
+                    app, (jsonify({"ok": False, "error": "未登录"}), 401), guest_sid)
         elif row["user_id"] != uid:
             # 他人任务与不存在一视同仁（404，不暴露任务存在性）
             return jsonify({"ok": False, "error": "任务不存在"}), 404
@@ -2396,7 +2502,7 @@ def create_saas_app() -> Flask:
                 "artifacts": _jsonable(row["result_artifacts"]),
                 "data_until": _jsonable(row["result_data_until"]),
             }
-        return jsonify({"ok": True, "job": item})
+        return _attach_guest_cookie(app, jsonify({"ok": True, "job": item}), guest_sid)
 
     @app.post("/api/jobs/<int:job_id>/cancel")
     @app.post("/api/saas/jobs/<int:job_id>/cancel")
@@ -3068,8 +3174,9 @@ def create_saas_app() -> Flask:
                 {"id": job_id, "uid": uid},
             ).mappings().first()
 
-    def _load_job_for_guest(job_id: int) -> Any:
-        """游客 job 按同 IP guest_key 归属取行（D1D2）；不匹配返回 None。"""
+    def _load_job_for_guest(job_id: int, guest_key: str) -> Any:
+        """游客 job 按会话归属键取行（QRE-SAAS-ACCESS-HARDENING-001：键由 Cookie
+        派生，不再按 IP）；不匹配返回 None（不暴露存在性）。"""
         engine = _get_engine(app)
         with engine.connect() as conn:
             return conn.execute(
@@ -3079,7 +3186,7 @@ def create_saas_app() -> Flask:
                     "LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE j.id = :id AND j.user_id IS NULL AND j.guest_key = :gk"
                 ),
-                {"id": job_id, "gk": _guest_key(app, _client_ip())},
+                {"id": job_id, "gk": guest_key},
             ).mappings().first()
 
     def _load_job_public(job_id: int) -> Any:
@@ -3136,17 +3243,22 @@ def create_saas_app() -> Flask:
         showcase 白名单 job 对任何人放行只读（g.showcase_readonly=True），
         但 P0-1B 起仅当结果合同为 verified——未验证的经典策略不再公开可见
         （白名单行/job/产物不动，本人仍按原权限可见）；
-        复用此入口的写端点必须显式拒绝 showcase_readonly。"""
+        复用此入口的写端点必须显式拒绝 showcase_readonly。
+        游客按会话 Cookie 归属（QRE-SAAS-ACCESS-HARDENING-001）：匿名且不匹配
+        时 401（与不存在一致，不泄露存在性），Cookie 缺失时顺手签发。"""
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
+        guest_sid: str | None = None
         if uid is None:
-            row = _load_job_for_guest(job_id)
+            guest_key, guest_sid = _guest_identity(app)
+            row = _load_job_for_guest(job_id, guest_key)
             if row is None:
                 if _is_showcase_job(job_id):
                     row = _load_job_public(job_id)
                     g.showcase_readonly = row is not None
                 if row is None:
-                    return None, (jsonify({"ok": False, "error": "未登录"}), 401)
+                    return None, _with_guest_cookie(
+                        app, (jsonify({"ok": False, "error": "未登录"}), 401), guest_sid)
         else:
             row = _load_job_for_user(job_id, uid)
             if row is None:
@@ -3156,8 +3268,9 @@ def create_saas_app() -> Flask:
                 if row is None:
                     return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
         if row["status"] != "completed":
-            return None, (jsonify({"ok": False, "error": f"任务未完成（{row['status']}）",
-                                   "status": row["status"]}), 409)
+            return None, _with_guest_cookie(
+                app, (jsonify({"ok": False, "error": f"任务未完成（{row['status']}）",
+                               "status": row["status"]}), 409), guest_sid)
         return row, None
 
     @app.get("/api/results")
@@ -3241,17 +3354,21 @@ def create_saas_app() -> Flask:
     @app.delete("/api/results/<int:job_id>")
     def api_result_delete(job_id: int) -> Any:
         """B1 删除：results+jobs 行 + 产物目录（job_<id>/）。策略行保留。
-        游客可删除同 IP 的游客记录（D1D2）。"""
+        游客可删除本人会话的游客记录（QRE-SAAS-ACCESS-HARDENING-001：按会话
+        Cookie 归属，不再按 IP）；他人/不存在统一 404（不泄露存在性）。"""
         import shutil
 
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
+        guest_sid: str | None = None
         if uid is None:
-            row = _load_job_for_guest(job_id)
+            guest_key, guest_sid = _guest_identity(app)
+            row = _load_job_for_guest(job_id, guest_key)
         else:
             row = _load_job_for_user(job_id, uid)
         if row is None:
-            return jsonify({"ok": False, "error": "任务不存在"}), 404
+            return _with_guest_cookie(
+                app, (jsonify({"ok": False, "error": "任务不存在"}), 404), guest_sid)
         upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
         job_dir = upload_root / f"job_{job_id}"
         if job_dir.is_dir():
@@ -3259,7 +3376,7 @@ def create_saas_app() -> Flask:
         with engine.begin() as conn:
             conn.execute(text("DELETE FROM results WHERE job_id = :id"), {"id": job_id})
             conn.execute(text("DELETE FROM jobs WHERE id = :id"), {"id": job_id})
-        return jsonify({"ok": True, "deleted": job_id})
+        return _attach_guest_cookie(app, jsonify({"ok": True, "deleted": job_id}), guest_sid)
 
     @app.get("/api/results/<int:job_id>/summary")
     def api_result_summary(job_id: int) -> Any:
@@ -3547,7 +3664,9 @@ def create_saas_app() -> Flask:
                     "AND created_at::date = now()::date"
                 )
             ).mappings().one()
-            # N1a 游客统计口径：guest_key 非空即游客任务（guest_key 为 IP 哈希，distinct 即独立访客数）
+            # N1a 游客统计口径：guest_key 非空即游客任务。QRE-SAAS-ACCESS-HARDENING-001
+            # 起归属键由会话 Cookie 派生（历史 IP 哈希行一次性迁移后同形），distinct
+            # 即独立游客会话数（清 Cookie/换浏览器会略高于独立访客数，属预期）。
             guests = conn.execute(
                 text(
                     "SELECT count(*) AS total, "

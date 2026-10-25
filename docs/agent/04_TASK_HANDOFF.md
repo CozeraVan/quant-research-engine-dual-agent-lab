@@ -2,7 +2,23 @@
 
 ## Task ID
 
-QRE-SAAS-RESULT-CONTRACT-001（P0-1B 结果合同版本、口径标签与旧结果隔离）
+QRE-SAAS-ACCESS-HARDENING-001（P0-2 测试账号、结果 IDOR 与游客归属）
+
+## Current Status
+
+IMPLEMENTED（2026-10-25，待用户验收；未 commit/push、未 ECS 代码部署、未跑真实回测）
+
+## Task Note
+
+- **ECS 测试账号已移除**（brief 目标 1）：只读核查确认存在（活跃键、值非空、移除前 bypass 实测 200、users 表 1 行遗留）；备份 `/etc/qre-saas.env.bak-access-hardening-20261025-173458`（0600）后注释两键并 restart qre-saas（active）。正式登录验证：登录页 200、Authing 302→demo.authing.cn、callback 假 code 400、me 401、测试账号正确密码 401（bypass 失效）、worker token 401、游客越权 400、showcase 200。env 另增 `SAAS_GUEST_COOKIE_SECURE=1`（下次重启生效）。全程未输出凭证。
+- **IDOR 矩阵**（目标 2）：`tests/test_saas_access_hardening.py` 31 例覆盖匿名 401 / 其他用户 404 / 本人 200 / 不存在（错误体与他人一致，不泄露存在性）/ showcase verified 公开只读 200 / 未验证白名单 401-404；写表面 delete 与 showcase generate 403 锁定。
+- **游客归属 = 随机会话 Cookie**（目标 3）：`qre_guest_sid`（随机 43 位、HttpOnly、SameSite=Lax、30 天、Secure 可配），归属键 sha256("gsess:"+sid+salt)[:32] 同形同列无 schema 变更；`_guest_identity` 缺失才签发（绝不轮换）；接入 POST /api/jobs、GET /api/jobs/<id>、`_require_completed_result`（8 结果端点）、DELETE /api/results/<id>；游客 NL 限流仍按 IP。
+- **历史迁移语义**（目标 4）：旧 IP 归属结果只在同一 IP 的**新会话首次创建任务**时一次性迁移（先迁移后计数，今日旧任务占当日配额）；只读不迁移；第二个同 IP 新会话见空档 401；迁移后旧 key 不归属也不可访问；新会话彼此隔离。
+- **不变式**：默认私有、Authing、worker token、结果合同、showcase verified、409/404 语义不变；主动分享不做（P1）。
+- **验证**：相关 329 passed；全量 2590 passed + 5 skipped；真实 Chromium 三上下文同 IP 双游客隔离 + 迁移可见 + 移动 375，证据 `.tmp/access-hardening/`。
+- **待办**：用户验收 → 批准后 commit/push → ECS 部署（部署后游客 Cookie 语义生效，env 的 Secure 标志同时生效）→ 真人 Authing 登录验收；users 表遗留测试账号行（无 password_hash）是否清理由用户/DBA 决定。
+
+## Archive: QRE-SAAS-RESULT-CONTRACT-001（P0-1B 结果合同版本、口径标签与旧结果隔离）
 
 ## Current Status
 

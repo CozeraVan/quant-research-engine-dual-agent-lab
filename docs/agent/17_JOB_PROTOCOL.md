@@ -73,7 +73,7 @@ queued ──claim──▶ leased ──首个心跳──▶ running ──res
 | error_class | TEXT | 可 | NULL | fail 分类（§3.4） |
 | error_message | TEXT | 可 | NULL | 用户可读原因 |
 | created_at / started_at / finished_at | TIMESTAMPTZ | 可 | now()/-/- | |
-| user_id | BIGINT | 可 | NULL | 登录用户；内测期可空（匿名/IP 限流） |
+| user_id | BIGINT | 可 | NULL | 登录用户；游客可空（会话 Cookie 归属，见 §4.6） |
 
 派生关系：`smoke` job completed 且带 `derive_full` 参数时，server 端自动创建对应
 `full` job（同 strategy + params 去掉 smoke 截断），`parent_job_id` 记录来源（可加列）。
@@ -194,7 +194,12 @@ AND lease_expires_at < now()` → attempts<max_attempts 则回队，否则 faile
 ### 4.6 认证
 
 worker → server：`X-Worker-Token: <预共享密钥>`（env SAAS_WORKER_TOKEN，未配置 server 返回 503）。
-用户 → server：内测期匿名（IP 限流）；D 阶段换 session token（15 号文档 §1）。
+用户 → server：登录用户 `Authorization: Bearer <session token>`（15 号文档 §1）。
+游客（未登录）归属（QRE-SAAS-ACCESS-HARDENING-001，2026-10-25）：**不按 IP**。
+Cookie 缺失时 server 签发随机 `qre_guest_sid`（HttpOnly/SameSite=Lax），
+`jobs.guest_key = sha256("gsess:"+sid+salt)[:32]`；旧版 sha256(IP+salt) 行仅在
+同一 IP 的新会话首次创建任务时一次性迁移到新键（先迁移后计数），迁移后旧键
+不再参与归属。游客 NL 编译限流例外地仍按 IP（成本口径）。协议字段与状态机不变。
 
 ---
 

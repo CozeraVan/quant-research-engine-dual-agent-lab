@@ -19,6 +19,9 @@
   `params.codes_auto_fill` 标记、worker 执行前用本地全量清单抽样补齐；或直接用
   「随机股票」N≤10）、**近 10 年**（max_days 3657 含一周宽限）、每日 1 次、
   结果次日清空。板块/全市场仍 403 拦截。
+- 游客归属（2026-10-25，QRE-SAAS-ACCESS-HARDENING-001）：按随机 HttpOnly/SameSite=Lax
+  会话 Cookie（`qre_guest_sid`）而非 IP——同 Wi-Fi 游客结果互不可见；每日 1 次配额
+  按会话计（清 Cookie 可重获，属软限额，持久限频为 P1）；游客 NL 编译限流仍按 IP。
 - ⚠️ 运维：tier_policies 种子行 ON CONFLICT DO NOTHING 不随代码常量更新——
   数值调整必须**手工 UPDATE 生产库**（ECS psql）与各本地库，部署清单里写明。
 

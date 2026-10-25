@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-SAAS-RESULT-CONTRACT-001（P0-1B）
+QRE-SAAS-ACCESS-HARDENING-001（P0-2）
 
 ## Reviewer
 
@@ -10,35 +10,48 @@ KIMI_CODE（single agent self-review）
 
 ## Review Status
 
-PASS（实现、全量回归与真实 Chromium 通过；用户接受未验证隔离规则并批准 commit + push + ECS 部署）
+PASS（实现、全量回归与真实 Chromium 通过；未 commit/push、未 ECS 代码部署，待用户验收）
 
 ## Self-Review Findings
 
-- **数值零改动已核对**：`api_result_meta` / `api_report_result_legacy` 的
-  summary / chart_data / artifacts / data_until 写入语句与原版逐字段一致，只在
-  INSERT 列与 ON CONFLICT 子句上追加 `result_contract`；58/66 的旧行不做任何 UPDATE，
-  测试断言其 `strategy_total_return` 仍为原值。
-- **分类不可被时间污染**：`resolve_result_contract(job_id, stored, data_until)`
-  无 created_at/now 入参；新增用例同时锁签名与「新播种无合同=未验证」。
-- **缺列方向安全**：`_ensure_result_contract_column` ALTER 失败 → 不写该列 →
-  读取按例外表解析，最坏情况是「新结果也按未验证处理」，不会把历史结果误放行成
-  verified（公开侧只可能更保守）。
-- **权限语义未变**：只改 `_load_job_public`（showcase 公开只读通道）加 verified 判定，
-  属主/游客/他人/匿名四条路径行为与改动前一致，未验证项对匿名/他人给出与未挂白名单
-  相同的 401/404。
-- **前端无新增设计资产**：徽标复用 `.badge.ok` / `.badge.fail`，提示复用
-  `data-tip` + `LabUI.helpTips`，未加 CSS、未加色相、未改 12_UI_STYLE_GUIDE 约定。
-- **遗留（不阻塞）**：管理台 `console.html` 未展示合同徽标（API 已带数据，留 P1 UI 精修）；
-  ECS 线上库需 DBA apply 新列；例外表暂只收录 58/66/74。
+- **凭证零输出已核对**：ECS 核查只用键名/计数/长度（email 20、password 24 字符）；
+  「bypass 移除前生效」与「移除后失效」两次登录验证的凭证均以 ECS 端 shell 变量
+  从备份文件取用、不回显；报告与文档只记录备份文件路径，不记录任何值。
+- **归属改造最小侵入已核对**：新键与旧 guest_key 同形（32 hex）同列，`jobs` 表
+  零 schema 变更（ECS app 账号非 owner 的 ALTER 坑完全绕开）；`_guest_identity`
+  有 Cookie 必复用（不存在轮换/丢会话风险）；401/403/404/409 错误元组统一经
+  `_with_guest_cookie` 补挂，配额 403 也带 Cookie（否则迁移后的归属浏览器拿不到）。
+- **迁移边界已核对**：只读路径不迁移（防被动访客摘历史）；先迁移后计数（今日旧
+  任务照占配额，无绕过）；guard 为进程级性能优化，UPDATE 本身幂等——复测临时
+  staging 时「重建库不重启服务」会命中旧 guard（测试手法问题，已在报告记录为
+  踩坑，单测 fresh app 全过）。
+- **IDOR 矩阵已核对**：匿名对「他人任务」与「不存在」错误体逐字节一致（测试断言
+  JSON 相等）；登录用户对两者 404 同体；showcase 未验证白名单项与未挂白名单同样
+  401/404；`GET /api/jobs/<id>` 维持无公开通道（job 页数据走 results 系列，
+  与既有行为一致，未扩大公开面）。
+- **不变式已核对**：默认私有、Authing、worker token（错 token 401 有用例）、
+  结果合同注入点、showcase verified 公开语义、409/404 业务语义、游客 NL 限流
+  （IP 口径，有用例）全部未动；主动分享未做。
+- **遗留（不阻塞）**：游客清 Cookie 可重获当日 1 次配额（软限额，持久限频属
+  P1 NL A2）；console 游客统计口径变为 distinct 会话（预期略高于独立访客数）；
+  ECS 部署新代码后 `SAAS_GUEST_COOKIE_SECURE=1` 才生效；users 表测试账号遗留行
+  未清（无 password_hash，不可密码登录）；真人 Authing 端到端登录待用户验收。
 
 ## Verification Commands
 
 ```
-.venv/bin/pytest tests/test_saas_result_contract.py -q          # 21 passed
-.venv/bin/pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py   tests/test_gui_saas_console.py tests/test_showcase_roller.py   tests/test_saas_help_copy.py tests/test_saas_parameter_tips.py -q   # 180 passed, 1 skipped
-.venv/bin/pytest tests/ -q --ignore=tests/data_test             # 2559 passed, 5 skipped
-PLAYWRIGHT_BROWSERS_PATH=.tmp/ms-playwright .tmp/browser-venv/bin/python   .tmp/result-contract/browser_audit.py                          # 1280/375 × 3 页全通过
+.venv/bin/pytest tests/test_saas_access_hardening.py -q          # 31 passed
+.venv/bin/pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py \
+  tests/test_saas_result_contract.py tests/test_gui_saas_console.py \
+  tests/test_saas_authing.py tests/test_saas_feedback.py \
+  tests/test_saas_signals.py tests/test_saas_worker_status.py \
+  tests/test_worker.py -q                                        # 329 passed（相关）
+.venv/bin/pytest tests/ --ignore=tests/data_test -q              # 2590 passed + 5 skipped
+PLAYWRIGHT_BROWSERS_PATH=.tmp/ms-playwright \
+  .tmp/browser-venv/bin/python .tmp/access-hardening/browser_audit.py   # 三上下文同 IP 全通过
 ```
+
+证据 `.tmp/access-hardening/`；ECS 验证记录见 `05_PROGRESS.md` 与 `.tmp/access-hardening/report.md`。
 
 ---
 

@@ -128,7 +128,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idem
     ON jobs (user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
 -- QRE-SAAS-D1D2（内测三级权限，2026-09-20）：密码登录临时方案 + 游客匿名提交
 -- users 加密码哈希与层级；jobs/strategies 的 user_id 可空（游客不落 users 行，
--- 用 jobs.guest_key=sha256(IP+salt) 归属，每日清理任务删除次日以前的游客记录）。
+-- 用 jobs.guest_key 归属，每日清理任务删除次日以前的游客记录）。
+-- QRE-SAAS-ACCESS-HARDENING-001（2026-10-25）：guest_key 改由随机会话 Cookie 派生
+-- （sha256("gsess:"+sid+salt)，HttpOnly/SameSite=Lax，缺失时应用自动签发），不再
+-- 按 IP——同 Wi-Fi 游客结果互不可见；历史 sha256(IP+salt) 行在新会话首次创建任务
+-- 时一次性迁移到该会话（幂等 UPDATE，无 schema 变更）。
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'member'
     CHECK (tier IN ('guest','member','paid'));

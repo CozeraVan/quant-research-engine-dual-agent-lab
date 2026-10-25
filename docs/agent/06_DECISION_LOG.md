@@ -1,3 +1,26 @@
+### 2026-10-25: 游客归属从纯 IP 改为随机会话 Cookie + ECS 内置测试账号移除（P0-2）
+
+- Decision: 新游客结果归属 = 应用签发的随机 `qre_guest_sid` Cookie
+  （HttpOnly / SameSite=Lax / Max-Age 30 天 / Secure 由 `SAAS_GUEST_COOKIE_SECURE`
+  控制，ECS 置 1），归属键 `sha256("gsess:"+sid+现有 salt)[:32]` 与旧 `guest_key`
+  同形同列——**无 schema 变更**。Cookie 缺失时自动签发；已存在绝不轮换。
+- Decision: 历史 IP 归属结果（`guest_key=sha256(IP+salt)`）只在**同一 IP 的新会话
+  首次创建游客任务**时一次性迁移到该会话（幂等 UPDATE + 进程级 guard；先迁移后计数，
+  今日旧任务照占当日配额）。只读请求不触发迁移（防止被动访客摘走历史结果）。
+  迁移后旧 key 不再作为新任务归属、也不再可访问；第二个同 IP 新会话看到空档（401）。
+- Rationale: 纯 IP 归属让同 Wi-Fi/NAT 的游客互见结果（P0 隐私底线）；roadmap §11.2
+  允许"IP+会话 Cookie 或明确迁移"二选一，本方案取"新数据纯会话 + 旧数据明确迁移一次"，
+  兼顾隐私与老访客连续性，且不动 schema（ECS 老库 app 账号非 owner，ALTER 有坑）。
+- Decision: 游客 NL 编译限流**仍按 IP**（成本口径与归属解耦；持久限频是 P1 的 NL A2）。
+- Decision: ECS 内置测试账号（`SAAS_TEST_ACCOUNT_EMAIL/PASSWORD`）移除：备份
+  `/etc/qre-saas.env.bak-access-hardening-20261025-173458` 后注释两键并重启，
+  正式 Authing/账号登录链路实测不受影响；users 表遗留行（无 password_hash）保留未动。
+- Alternatives: ①IP+Cookie 双键归属——否决，同 Wi-Fi 仍可通过 IP 键互见；
+  ②迁移放到任何匿名请求——否决，被动访客可摘走历史结果，改只在创建任务时迁移；
+  ③新列存会话 id——否决，同形键零 schema 变更更稳（ECS owner 踩坑）；
+  ④删 users 表测试账号行——否决，只做 env 处置，DB 清理留用户/DBA 决定。
+- Owner: KIMI_CODE（实施），待用户验收
+
 ### 2026-10-25: 结果合同版本、显式例外表与公开展示门禁（P0-1B）
 
 - Decision: 新增 `gui/saas/result_contract.py` 作为结果合同唯一权威：当前版本
@@ -1419,3 +1442,11 @@ No open questions remain.
 4. 四层分工：回测记录=快照（所有人）/ 信号监控=操作提醒（已上线）/ 净值持续跟踪=付费 opt-in（未来）/ 经典策略=管理员策展公开门面（已上线）。
 
 **备选否决**：直接延伸用户原始 job 的结果数据（混入不可变结果语义，且成本高）——否决。
+
+### 2026-10-25: 当前公测只推进用户可感知体验，暂停压测与硬件路线
+
+- Decision: 当前阶段不启动任何压力测试、深度性能测试、硬件扩容或其他硬件相关工作；容量实测、磁盘/备份演练和整体上云保留在长期 backlog 但暂停。P0-2 权限加固发布后，依次推进首次成功路径、结果理解与帮助、移动与可访问性、只读分享、结果 UI 和公测反馈。NL A2/A3 只作为减少等待、失败与重复编译的体验支撑。
+- Reason: 用户明确本地 PC 性能已知，现阶段资源应集中在公网用户直观可见、可感知的产品体验，而非容量或硬件建设。
+- Alternatives: 继续 P0-3 容量实测或提前云迁移——当前均否决，不删除长期条目，未来由用户明确重启。
+- Impact: `14_LAUNCH_ROADMAP.md` §11 顶部范围修订为当前最高优先级；worker 离线提示归入首次使用体验，不延伸为容量调参；第四入口仍排最后。
+- Owner: KIMI_CODE（用户 2026-10-25 拍板）

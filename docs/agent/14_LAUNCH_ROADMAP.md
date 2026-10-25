@@ -150,7 +150,9 @@
 
 ## 11. 公测阶段最高优先级（2026-10-25 用户拍板）
 
-未来一段时间以**公网优化、用户体验和服务器扩容为最高优先级**。第四入口（外部 AI Agent API）排在最后，设计仅记录于 `docs/superpowers/specs/2026-10-25-external-agent-api-brainstorm.md`，不在本轮启动。
+未来一段时间以**公网优化和用户体验为最高优先级**。第四入口（外部 AI Agent API）排在最后，设计仅记录于 `docs/superpowers/specs/2026-10-25-external-agent-api-brainstorm.md`，不在本轮启动。
+
+**当前范围修订（2026-10-25 用户再次拍板，优先于本节其他顺序表述）**：现阶段不做任何压力测试、深度性能测试、硬件扩容或其他硬件相关推进，只聚焦公网中用户直观可见、可感知的产品体验。P0-3 的容量实测、磁盘/备份演练和 §11.4 扩容工作全部暂停；§11.7 整体上云仅保留长期方案，不启动。worker 离线时的明确排队/维护提示归入首次使用体验，不做容量或硬件调参。当前顺序为：P0-2 权限加固验收发布 → 首次成功路径（NL 编译反馈、排队/等待/错误/重试、worker 离线提示）→ 结果理解与集中帮助 → 移动端与可访问性 → 默认私有的可撤销只读分享 → 经典策略及结果操作 UI → 公测运营反馈与关键浏览器自动化。NL A2/A3 仅作为减少等待、失败和重复编译的体验支撑，不扩展为性能工程。下文保留容量、云迁移和性能条目仅为完整 backlog，均不得在当前阶段主动启动。
 
 ### 11.1 对 Step 5 全项目审查的复核意见
 
@@ -175,6 +177,7 @@
 **P0-1A 核查结论（2026-10-25）**：worker 环境与实际进程均 `QRE_PRICE_BASIS=raw`；stock_daily 为原始价并含 adj_factor，job74 订单为原始价尺度。Step 5 的 price_basis 疑点排除，不重跑经典策略。后续 P0-1B 只做结果合同版本、口径标签和历史未验证结果隔离。
 
 **P0-1B 实施结论（2026-10-25，Kimi，未 commit/push/部署）**：结果合同已落地——`gui/saas/result_contract.py` 为唯一权威（版本 `2026-10-25.1`；曲线口径=日收益累乘交集口径剔注入，总收益口径=初始资金加权 Σfinal/Σinitial−1；显式例外表 58/66=verified、74=unverified、其余历史默认未验证；分类不依赖时间）。新结果在 worker 回传接收层带合同，worker/引擎/历史数值零改动；`/api/saas/showcase` 与 showcase 公开只读通道只放行 verified（74 不再公开可见，白名单行/job/产物保留，属主照旧可见）；页面用可见徽标 + data-tip 区分两种收益口径。全量 2559 passed + 5 skipped，真实 Chromium 1280/375 通过，证据 `.tmp/result-contract/`。**上线前置**：ECS 需 DBA apply `deploy/saas/cloud_schema.sql` 的 `results.result_contract` 列（app 账号非 owner）。
+**P0-2 实施结论（2026-10-25，Kimi，未 commit/push/未 ECS 代码部署）**：①ECS 内置测试账号已移除——备份 `/etc/qre-saas.env.bak-access-hardening-20261025-173458`（0600）后注释 `SAAS_TEST_ACCOUNT_EMAIL/PASSWORD` 并重启，正式 Authing/账号登录 8 项验证全过（测试账号正确密码改返 401 = bypass 失效），全程未输出凭证；env 增补 `SAAS_GUEST_COOKIE_SECURE=1`。②全部用户侧 job/result/symbol GET 的 IDOR 矩阵落地（`tests/test_saas_access_hardening.py` 31 例）：匿名 401、其他用户 404、不存在与他人错误体逐字节一致（不泄露存在性）、showcase verified 公开只读 200、未验证白名单项同样 401/404。③游客归属从纯 IP 改为随机 HttpOnly/SameSite=Lax 会话 Cookie（`qre_guest_sid`；归属键同形同列，**无 schema 变更**），旧 IP 归属结果在新会话首次创建任务时一次性迁移（先迁移后计数、只读不迁移、第二个同 IP 新会话见空档 401）。全量 2590 passed + 5 skipped；真实 Chromium 三上下文同 IP 双游客隔离 + 移动 375 通过，证据 `.tmp/access-hardening/`。**上线前置**：部署新代码后游客 Cookie 语义才生效（部署前 ECS 仍跑旧代码，线上游客归属维持纯 IP）。
 
 ### 11.3 P1：公测首周用户体验与转化
 
@@ -231,7 +234,7 @@
 
 #### P0（公测底线）
 1. ~~P0-1B：结果合同版本、收益口径标签、旧结果隔离。~~ ✅ 已实现待验收（2026-10-25；ECS 需先 apply `cloud_schema.sql` 新列，见 §11.2）。
-2. P0-2：测试账号核查、结果端点 IDOR、游客归属加固。
+2. ~~P0-2：测试账号核查、结果端点 IDOR、游客归属加固。~~ ✅ 已实现待验收（2026-10-25，见 §11.2；ECS 测试账号已移除，新代码待部署后游客 Cookie 语义生效）。
 3. P0-3：容量实测、worker 离线降级、磁盘水位、结果保留与备份恢复。
 
 #### P1（公测首周）

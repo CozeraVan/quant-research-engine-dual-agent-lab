@@ -2,6 +2,70 @@
 
 ## Task ID
 
+QRE-SAAS-ACCESS-HARDENING-001（P0-2 测试账号、结果 IDOR 与游客归属）
+
+## Release Status
+
+IMPLEMENTED，未 commit/push、未 ECS 代码部署。ECS 侧仅完成 env 安全处置（测试账号注释 + Secure 标志，已重启验证）；新代码（游客 Cookie 归属）待用户批准部署后生效。未跑真实回测。
+
+## Implementation Summary
+
+### 游客会话归属（src/quant_research_engine/gui/saas/app.py）
+
+| 符号 | 行为 |
+|---|---|
+| `GUEST_COOKIE_NAME="qre_guest_sid"` / `GUEST_COOKIE_MAX_AGE=30d` | Cookie 常量 |
+| `_guest_session_key(app, sid)` | 归属键 = sha256(`gsess:`+sid+salt)[:32]（同形同列，无 schema 变更） |
+| `_guest_identity(app)` | (归属键, 需签发 sid)；有 Cookie 复用、缺失才生成；**绝不轮换** |
+| `_attach_guest_cookie(app, resp, sid)` | HttpOnly + SameSite=Lax + Max-Age + Secure(`SAAS_GUEST_COOKIE_SECURE`，默认 0) |
+| `_with_guest_cookie(app, err, sid)` | (response, status) 错误元组补挂 Cookie |
+| `_migrate_legacy_guest_jobs(app, engine, new_key)` | 旧 IP 键行一次性 UPDATE 到新会话键；幂等 + 进程级 guard |
+| `_guest_key(app, ip)` | 保留：仅用于旧数据迁移与游客 NL 限流（IP 成本口径） |
+
+接入点：`POST /api/jobs`（新会话首次创建任务时迁移，先迁移后计数；403 配额响应也带
+Cookie）、`GET /api/jobs/<id>`（匿名 401 与不存在一致；成功/失败按需签发）、
+`_require_completed_result`（summary/chart-data/tag-analysis/risk-analysis/symbols/
+symbol detail/gen-status 共用；匿名 401、409 带 Cookie）、`DELETE /api/results/<id>`
+（游客按会话删除；他人/不存在统一 404）。`_load_job_for_guest(job_id, guest_key)`
+改签名传键。console 游客统计注释更新为 distinct 会话口径。`deploy/saas/cloud_schema.sql`
+guest_key 注释同步。模块 docstring 补游客归属说明。
+
+### IDOR 测试（tests/test_saas_access_hardening.py，31 例）
+
+游客 Cookie（签发/属性/随机/换 IP 不失效/双会话隔离/无 Cookie 同 IP 401/登录用户看
+游客任务 404）；历史迁移（一次性/只读不迁移/今日旧任务占配额/幂等）；结果端点矩阵
+（匿名 401、他人 404、本人业务态、不存在错误体一致、showcase verified 只读 200、
+未验证白名单 401-404 且不进公开列表、游客会话结果端点）；job 详情矩阵（含
+/api/saas 别名）；列表与相邻端点（8 个列表 401 + 按归属隔离 + 策略详情 401/404）；
+写表面（delete 矩阵、showcase generate 403、worker token 不变）；NL 限流仍按 IP。
+
+### ECS 处置（已执行）
+
+`/etc/qre-saas.env` 备份 `…bak-access-hardening-20261025-173458`（0600）→ 注释
+`SAAS_TEST_ACCOUNT_EMAIL/PASSWORD` → restart qre-saas（active）→ 正式登录 8 项验证
+全过（含测试账号正确密码 401）。新增 `SAAS_GUEST_COOKIE_SECURE=1`（下次重启生效）。
+
+## Verification Commands
+
+```bash
+.venv/bin/pytest tests/test_saas_access_hardening.py -q          # 31 passed
+.venv/bin/pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py \
+  tests/test_saas_result_contract.py tests/test_gui_saas_console.py \
+  tests/test_saas_authing.py tests/test_saas_feedback.py \
+  tests/test_saas_signals.py tests/test_saas_worker_status.py \
+  tests/test_worker.py -q                                        # 329 passed（相关）
+.venv/bin/pytest tests/ --ignore=tests/data_test -q              # 2590 passed + 5 skipped
+PLAYWRIGHT_BROWSERS_PATH=.tmp/ms-playwright \
+  .tmp/browser-venv/bin/python .tmp/access-hardening/browser_audit.py
+```
+
+证据：`.tmp/access-hardening/`（report.md、browser-evidence.json、7 截图、seed.py、
+browser_audit.py、server.log）。
+
+## Archive: QRE-SAAS-RESULT-CONTRACT-001（P0-1B 结果合同版本、口径标签与旧结果隔离）
+
+## Task ID
+
 QRE-SAAS-RESULT-CONTRACT-001（P0-1B 结果合同版本、口径标签与旧结果隔离）
 
 ## Release Status

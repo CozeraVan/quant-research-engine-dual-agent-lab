@@ -754,7 +754,9 @@ class TestTiersD1D2:
             "params": {"codes": list(codes), "start": start, "end": end},
         }, headers={"X-Forwarded-For": ip})
 
-    def test_guest_submit_and_limits(self, client):
+    def test_guest_submit_and_limits(self, client, app):
+        # QRE-SAAS-ACCESS-HARDENING-001：游客配额按会话 Cookie 归属（不再按 IP），
+        # 每个独立客户端 = 独立游客会话（各自Cookie 罐）。
         resp = self._guest_job(client)
         assert resp.status_code == 200
         body = resp.get_json()
@@ -763,7 +765,7 @@ class TestTiersD1D2:
         engine_job = client.get(f"/api/jobs/{body['job_id']}",
                                 headers={"X-Forwarded-For": "1.2.3.4"}).get_json()["job"]
         assert engine_job["params"]["codes_auto_fill"] == 10
-        # 同 IP 当日第二次全量 → 403（每日 1 次不变）
+        # 同会话当日第二次全量 → 403（每日 1 次不变）
         assert self._guest_job(client).status_code == 403
         # smoke 不占配额
         smoke = client.post("/api/jobs", json={"yaml": "x", "kind": "smoke",
@@ -772,37 +774,45 @@ class TestTiersD1D2:
         assert smoke.status_code == 200
         # 2026-10-05 内测调整：多股（≤10）放行并标补齐；11 只 → 403；
         # 区间 ≤ 近 10 年放行、超 10 年 → 403；缺区间 → 400
-        r3 = self._guest_job(client, codes=("000001.SZ", "600000.SH", "600519.SH"), ip="5.6.7.8")
+        # （以下各场景用独立客户端 = 独立会话，互不占当日配额）
+        c3 = app.test_client()
+        r3 = self._guest_job(c3, codes=("000001.SZ", "600000.SH", "600519.SH"), ip="5.6.7.8")
         assert r3.status_code == 200
         assert r3.get_json()["guest"] is True
         codes11 = tuple(f"{i:06d}.SZ" for i in range(11))
-        assert self._guest_job(client, codes=codes11, ip="5.6.7.8").status_code == 403
-        assert self._guest_job(client, start="2016-10-01", end="2026-10-01", ip="5.6.7.9").status_code == 200
-        assert self._guest_job(client, start="2015-01-01", end="2026-01-01", ip="5.6.7.10").status_code == 403
+        assert self._guest_job(app.test_client(), codes=codes11, ip="5.6.7.8").status_code == 403
+        assert self._guest_job(app.test_client(), start="2016-10-01", end="2026-10-01",
+                               ip="5.6.7.9").status_code == 200
+        assert self._guest_job(app.test_client(), start="2015-01-01", end="2026-01-01",
+                               ip="5.6.7.10").status_code == 403
         bad = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "params": {"codes": ["000001.SZ"]}},
                           headers={"X-Forwarded-For": "5.6.7.11"})
         assert bad.status_code == 400
-        # 随机股票 N≤10 放行、>10 拦截；板块仍 403
-        rnd = client.post("/api/jobs", json={"yaml": "x", "kind": "full",
+        # 随机股票 N≤10 放行、>10 拦截；板块仍 403（独立会话，避免与当日配额混淆）
+        rnd = app.test_client().post("/api/jobs", json={"yaml": "x", "kind": "full",
             "params": {"random_n": 10, "start": "2025-01-01", "end": "2026-01-01"}},
             headers={"X-Forwarded-For": "9.1.1.1"})
         assert rnd.status_code == 200
-        rnd_over = client.post("/api/jobs", json={"yaml": "x", "kind": "full",
+        rnd_over = app.test_client().post("/api/jobs", json={"yaml": "x", "kind": "full",
             "params": {"random_n": 11, "start": "2025-01-01", "end": "2026-01-01"}},
             headers={"X-Forwarded-For": "9.1.1.2"})
         assert rnd_over.status_code == 403
-        univ = client.post("/api/jobs", json={"yaml": "x", "kind": "full",
+        univ = app.test_client().post("/api/jobs", json={"yaml": "x", "kind": "full",
             "params": {"universe": {"group": "g", "key": "k"}, "start": "2025-01-01", "end": "2026-01-01"}},
             headers={"X-Forwarded-For": "9.1.1.3"})
         assert univ.status_code == 403
 
-    def test_guest_views_own_job_by_ip(self, client, app):
+    def test_guest_views_own_job_by_session(self, client, app):
+        # QRE-SAAS-ACCESS-HARDENING-001：原 by_ip 用例改写——归属 = 会话 Cookie。
         job_id = self._guest_job(client).get_json()["job_id"]
-        # 同 IP 可查；异 IP 401
-        ok = client.get(f"/api/jobs/{job_id}", headers={"X-Forwarded-For": "1.2.3.4"})
-        assert ok.status_code == 200
-        assert client.get(f"/api/jobs/{job_id}", headers={"X-Forwarded-For": "9.9.9.9"}).status_code == 401
-        # worker 完成 → 游客按 IP 看结果端点
+        # 本人会话可查；换 IP 不失效（会话即身份，不再看 IP）
+        assert client.get(f"/api/jobs/{job_id}").status_code == 200
+        assert client.get(f"/api/jobs/{job_id}", headers={"X-Forwarded-For": "9.9.9.9"}).status_code == 200
+        # 无会话 Cookie 的请求（哪怕同 IP）→ 401（防同 Wi-Fi 互见）
+        stranger = app.test_client()
+        assert stranger.get(f"/api/jobs/{job_id}",
+                            headers={"X-Forwarded-For": "1.2.3.4"}).status_code == 401
+        # worker 完成 → 游客按会话看结果端点
         client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
         client.post(f"/api/worker/jobs/{job_id}/result/meta",
                     json={"worker_id": "w1", "summary": {"strategy_total_return": 0.1},
@@ -810,8 +820,8 @@ class TestTiersD1D2:
                     headers=WORKER_HEADERS)
         r = client.get(f"/api/results/{job_id}/summary", headers={"X-Forwarded-For": "1.2.3.4"})
         assert r.status_code == 200 and r.get_json()["summary"]["strategy_total_return"] == 0.1
-        assert client.get(f"/api/results/{job_id}/summary",
-                          headers={"X-Forwarded-For": "9.9.9.9"}).status_code == 401
+        assert stranger.get(f"/api/results/{job_id}/summary",
+                            headers={"X-Forwarded-For": "1.2.3.4"}).status_code == 401
         # 游客结果不在会员列表口径之外泄漏：/api/results 需登录
         assert client.get("/api/results", headers={"X-Forwarded-For": "1.2.3.4"}).status_code == 401
 

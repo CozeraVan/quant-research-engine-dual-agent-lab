@@ -2,6 +2,10 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
+### 2026-10-25 QRE-SAAS-ACCESS-HARDENING-001 IMPLEMENTED（待用户验收）
+
+P0-2 已落地。**ECS 测试账号移除**：只读核查确认存在（活跃键、移除前 bypass 实测 200、users 表 1 行遗留）；备份 `/etc/qre-saas.env.bak-access-hardening-20261025-173458`（0600）后注释两键、restart qre-saas active；正式登录 8 项验证全过（登录页 200 / Authing 302→demo.authing.cn / callback 假 code 400 / me 401 / 测试账号正确密码 401 / worker 错 token 401 / 游客越权 400 / showcase 200）；env 增补 `SAAS_GUEST_COOKIE_SECURE=1`（下次重启生效）。全程未输出凭证。**IDOR 矩阵**：`tests/test_saas_access_hardening.py` 31 例覆盖全部用户侧 job/result/symbol GET（匿名 401、他人 404、本人 200、不存在与他人错误体逐字节一致不泄露存在性、showcase verified 公开只读 200、未验证白名单 401-404）+ 写表面（delete 矩阵、showcase generate 403、worker token 不变）+ 游客 NL 限流仍按 IP。**游客归属改随机会话 Cookie**：`qre_guest_sid`（43 位随机/HttpOnly/SameSite=Lax/30 天/Secure 可配），归属键 `sha256("gsess:"+sid+salt)[:32]` 同形同列**无 schema 变更**；`_guest_identity` 缺失才签发绝不轮换；`_migrate_legacy_guest_jobs` 旧 IP 归属结果在新会话首次创建任务时一次性迁移（先迁移后计数、幂等+进程级 guard）；接入 POST /api/jobs（403 也带 Cookie）、GET /api/jobs/<id>、`_require_completed_result`（8 结果端点）、DELETE /api/results/<id>。**历史迁移语义**：只读不迁移；原访客下次创建任务恢复连续性；第二个同 IP 新会话见空档 401；迁移后旧 key 不归属不可访问；新会话彼此隔离。**不变式**：默认私有、Authing、worker token、结果合同、showcase verified、409/404 语义全不变；主动分享不做（P1）。**测试**：RED=collection ImportError → GREEN=31 passed；改写 2 个旧 IP 语义用例；相关 329 passed；**全量 2590 passed + 5 skipped**（基线 2559+5 零回归）。**真实 Chromium** 三上下文全部来自 127.0.0.1：A 提交得 HttpOnly/Lax 随机 Cookie，任务页与迁移来的旧游客结果完整渲染；B（同 IP 新会话）看 A 的任务与迁移后旧任务均显无权兜底零泄漏；B 自己任务正常且 A 回看被拒；showcase 仍只列 verified；移动 375 零 JS error 零横溢；证据 `.tmp/access-hardening/`。**未 commit/push、未 ECS 代码部署、未跑真实回测**；ECS 仍跑旧代码（纯 IP 归属）直到部署批准。遗留：游客清 Cookie 可重获当日配额（软限额，P1 A2）；users 表测试账号行未清；真人 Authing 登录待用户验收。详细报告 `.tmp/access-hardening/report.md`。
+
 ### 2026-10-25 QRE-SAAS-RESULT-CONTRACT-001 IMPLEMENTED（待用户验收）
 
 P0-1B 结果合同已落地。**单一权威** `src/quant_research_engine/gui/saas/result_contract.py`：合同版本 `2026-10-25.1`、两种收益口径文案（曲线=日收益累乘交集口径剔注入；总收益=初始资金加权 Σfinal/Σinitial−1）、验证状态、**显式例外表**（58/66 verified、74 unverified、其余历史默认未验证）；分类函数无时间入参（签名被测试锁死），不存在按当前日期动态猜新旧。**注入点在 worker 回传接收层**（`api_result_meta` / `api_report_result_legacy`），worker/引擎零改动；`results.result_contract` 可空 JSONB + 懒自愈 ALTER + `cloud_schema.sql` 同步。**API 只增字段**（`/api/results`、`/api/results/<id>/summary`、`/api/saas/showcase`、`/api/saas/console/showcase`）。**公开展示只放行 verified**：`/api/saas/showcase` 与 showcase 公开只读通道对 74 关闭（匿名/他人得到与未挂白名单相同的 401/404），但 showcase 白名单行、job、产物全部保留，属主本人照旧可见自己的 74；默认私有、游客 guest_key、dev 后门、409/404 语义均未变。**前端**复用 badge + data-tip：`job.html` 合同徽标（已验证口径=绿 / 旧口径·未验证=红）+ 合同版本与数据截止 + 两种口径提示；`showcase.html` 页头与每行已验证徽标；`_records_scripts.html` 记录行合同标签。TDD 先 RED 后 GREEN：新测试文件 21 例 + `test_gui_saas_pages.py` +2 例（含 harness `renderContract` stub 修复 3 例旧失败）；相关 180 passed + 1 skipped；**全量 `pytest tests/ --ignore=tests/data_test` → 2559 passed + 5 skipped**。真实 Chromium 桌面 1280 与移动 375 各 3 页通过（showcase 只列 verified 且 74 不公开、新结果/74 徽标与口径提示可见、零 JS error、零横向溢出），证据 `.tmp/result-contract/`。**未 commit、未 push、未部署 ECS、未跑真实回测、未回填历史数值**；ECS 需 DBA apply `cloud_schema.sql` 新列，worker 不改不动。详细报告 `.tmp/result-contract/report.md`。
@@ -52,18 +56,18 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 ## Current Phase
 
-IMPLEMENTING（2026-10-25：P0-1B 已发布 37bcffa，showcase 仅 verified；当前 P0-2 权限安全）
+IMPLEMENTING（2026-10-25：P0-1B 已发布 37bcffa；P0-2 权限加固待用户批准 commit/push/ECS）
 
 ## Current Task
 
-见 `14_LAUNCH_ROADMAP.md` §11（公测）与 §11.7（未来整体上云）。顺序：
-1. P0-1 核查 price_basis 与收益口径，历史未验证结果隔离/打标，经典策略仅展示验证项。
-2. P0-2 测试账号核查、结果端点 IDOR、游客归属加固；主动分享 P1。
-3. P0-3 小样本后受控容量实测、worker 离线降级、磁盘/保留/备份恢复。
-4. P1 首次成功路径、NL A2/A3、帮助中心/只读分享、移动 Chromium 与运营指标。
-5. 20–50 人灰度，按成功率和 P95 反馈修正并测量驱动扩容。
-6. 未来整体上云：home PC 当前保持数据中心+主 worker；推广后迁移数据库/引擎/worker，重点为全量+增量迁移、云端对账、同 region 数据传输、影子运行与回滚。
-7. **第四入口外部 AI Agent API 最后**，方案见 `docs/superpowers/specs/2026-10-25-external-agent-api-brainstorm.md`，未启动。
+见 `14_LAUNCH_ROADMAP.md` §11。**2026-10-25 用户最新范围约束：不做任何压力测试、深度性能测试、硬件扩容或硬件相关推进，只做公网用户直观可见、可感知的产品体验。** 当前顺序：
+1. P0-2 权限加固等待用户验收与发布批准；这是公网数据私有权底线，不是性能/硬件工作。
+2. 首次成功路径：NL 编译反馈、明确排队/等待/错误/重试、可取消与 worker 离线提示；NL A2/A3 只作减少等待和重复编译的体验支撑。
+3. 结果理解、集中帮助中心、数据截止与费用口径说明。
+4. 移动端与可访问性：375px 核心流程、键盘焦点、加载/空态/错误态、图表与弹窗。
+5. 默认私有的可撤销只读分享，再做经典策略及结果操作 UI 精修。
+6. 公测运营反馈与关键浏览器自动化，依据真实用户反馈继续修正公网体验。
+7. 容量实测、磁盘/备份演练、深度性能、硬件扩容和整体上云全部暂停，仅保留在长期 backlog；第四入口外部 AI Agent API 仍排最后。
 
 DATA-REBUILT-2026-10-11 **数据侧已全部完成**（2026-10-12 10:45 链条收官）：
 - 分钟线入库 `public.stock_minute_1m` 4313 天全量（TimescaleDB 压缩已开）；WSL 侧 /home/van/mindata CSV（324G）待用户确认后删除
