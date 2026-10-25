@@ -4,6 +4,10 @@
 
 QRE-SAAS-RESULT-CONTRACT-001（P0-1B 结果合同版本、口径标签与旧结果隔离）
 
+## Release Status
+
+实现 `37bcffa` 已 push。ECS 已 apply results.result_contract 并同步生产文件，`qre-saas` active；公网 showcase 仅 58/66，74 匿名 401，58 合同字段正确。备份 `/tmp/qre-result-contract-pre-20261025.tgz`，未重启 worker。
+
 ## Implementation Summary
 
 新增 `src/quant_research_engine/gui/saas/result_contract.py`（结果合同唯一权威：版本

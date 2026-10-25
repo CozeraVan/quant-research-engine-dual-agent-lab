@@ -52,7 +52,7 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 ## Current Phase
 
-IMPLEMENTING（2026-10-25：P0-1B 用户批准，commit + push + ECS 部署；下一步 P0-2 权限安全）
+IMPLEMENTING（2026-10-25：P0-1B 已发布 37bcffa，showcase 仅 verified；当前 P0-2 权限安全）
 
 ## Current Task
 
