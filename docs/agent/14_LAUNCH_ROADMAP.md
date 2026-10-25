@@ -177,7 +177,7 @@
 **P0-1A 核查结论（2026-10-25）**：worker 环境与实际进程均 `QRE_PRICE_BASIS=raw`；stock_daily 为原始价并含 adj_factor，job74 订单为原始价尺度。Step 5 的 price_basis 疑点排除，不重跑经典策略。后续 P0-1B 只做结果合同版本、口径标签和历史未验证结果隔离。
 
 **P0-1B 实施结论（2026-10-25，Kimi，未 commit/push/部署）**：结果合同已落地——`gui/saas/result_contract.py` 为唯一权威（版本 `2026-10-25.1`；曲线口径=日收益累乘交集口径剔注入，总收益口径=初始资金加权 Σfinal/Σinitial−1；显式例外表 58/66=verified、74=unverified、其余历史默认未验证；分类不依赖时间）。新结果在 worker 回传接收层带合同，worker/引擎/历史数值零改动；`/api/saas/showcase` 与 showcase 公开只读通道只放行 verified（74 不再公开可见，白名单行/job/产物保留，属主照旧可见）；页面用可见徽标 + data-tip 区分两种收益口径。全量 2559 passed + 5 skipped，真实 Chromium 1280/375 通过，证据 `.tmp/result-contract/`。**上线前置**：ECS 需 DBA apply `deploy/saas/cloud_schema.sql` 的 `results.result_contract` 列（app 账号非 owner）。
-**P0-2 实施结论（2026-10-25，Kimi，未 commit/push/未 ECS 代码部署）**：①ECS 内置测试账号已移除——备份 `/etc/qre-saas.env.bak-access-hardening-20261025-173458`（0600）后注释 `SAAS_TEST_ACCOUNT_EMAIL/PASSWORD` 并重启，正式 Authing/账号登录 8 项验证全过（测试账号正确密码改返 401 = bypass 失效），全程未输出凭证；env 增补 `SAAS_GUEST_COOKIE_SECURE=1`。②全部用户侧 job/result/symbol GET 的 IDOR 矩阵落地（`tests/test_saas_access_hardening.py` 31 例）：匿名 401、其他用户 404、不存在与他人错误体逐字节一致（不泄露存在性）、showcase verified 公开只读 200、未验证白名单项同样 401/404。③游客归属从纯 IP 改为随机 HttpOnly/SameSite=Lax 会话 Cookie（`qre_guest_sid`；归属键同形同列，**无 schema 变更**），旧 IP 归属结果在新会话首次创建任务时一次性迁移（先迁移后计数、只读不迁移、第二个同 IP 新会话见空档 401）。全量 2590 passed + 5 skipped；真实 Chromium 三上下文同 IP 双游客隔离 + 移动 375 通过，证据 `.tmp/access-hardening/`。**上线前置**：部署新代码后游客 Cookie 语义才生效（部署前 ECS 仍跑旧代码，线上游客归属维持纯 IP）。
+**P0-2 发布结论（2026-10-25，commit `0799890` 已 push + ECS）**：①ECS 内置测试账号已移除，正式 Authing 链路保持正常。②全部用户侧 job/result/symbol GET 的 IDOR 矩阵落地（`tests/test_saas_access_hardening.py` 31 例）：匿名 401、其他用户 404、不存在与他人错误体逐字节一致、showcase verified 公开只读 200、未验证白名单项同样 401/404。③游客归属已从纯 IP 改为随机 Secure/HttpOnly/SameSite=Lax 会话 Cookie（`qre_guest_sid`；归属键同形同列，**无 schema 变更**），旧 IP 归属结果在新会话首次创建任务时一次性迁移。发布前全量复跑 2590 passed + 5 skipped；真实 Chromium 同 IP 双游客隔离 + 移动 375 通过。ECS 仅同步 app.py 与 cloud_schema.sql 注释并重启 qre-saas；公网双独立游客 Cookie 值不同、私有 74 匿名 401、58 verified 200、showcase 仅 58/66。备份 `/tmp/qre-access-hardening-pre-20261025-release/`；证据 `.tmp/access-hardening/` 与 `.tmp/access-hardening-production/`。
 
 ### 11.3 P1：公测首周用户体验与转化
 
@@ -233,9 +233,9 @@
 > TodoList 只允许增删完成项或调整优先级，不得用当前阶段短清单覆盖全量 backlog。已完成且经核实的旧项不再重复列入；长期挂起项必须保留并标明。
 
 #### P0（公测底线）
-1. ~~P0-1B：结果合同版本、收益口径标签、旧结果隔离。~~ ✅ 已实现待验收（2026-10-25；ECS 需先 apply `cloud_schema.sql` 新列，见 §11.2）。
-2. ~~P0-2：测试账号核查、结果端点 IDOR、游客归属加固。~~ ✅ 已实现待验收（2026-10-25，见 §11.2；ECS 测试账号已移除，新代码待部署后游客 Cookie 语义生效）。
-3. P0-3：容量实测、worker 离线降级、磁盘水位、结果保留与备份恢复。
+1. ~~P0-1B：结果合同版本、收益口径标签、旧结果隔离。~~ ✅ 已发布（2026-10-25，`37bcffa` + `a87a831`）。
+2. ~~P0-2：测试账号核查、结果端点 IDOR、游客归属加固。~~ ✅ 已发布（2026-10-25，`0799890`，公网权限与 Cookie 验证通过）。
+3. [挂起] P0-3：容量实测、磁盘水位、结果保留与备份恢复；worker 离线提示转入 P1 首次成功路径，不做压测或硬件推进。
 
 #### P1（公测首周）
 4. NL A2 持久限频与 A3 编译缓存。

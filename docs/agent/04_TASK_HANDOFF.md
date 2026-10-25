@@ -6,7 +6,9 @@ QRE-SAAS-ACCESS-HARDENING-001（P0-2 测试账号、结果 IDOR 与游客归属�
 
 ## Current Status
 
-IMPLEMENTED（2026-10-25，待用户验收；未 commit/push、未 ECS 代码部署、未跑真实回测）
+DONE（2026-10-25 用户批准 commit + push + ECS；实现 `0799890` 已发布，未跑真实回测）
+
+发布记录：全量复跑 2590 passed + 5 skipped。ECS 仅同步 app.py 与 cloud_schema.sql 注释并重启 qre-saas；公网双独立游客 Cookie 均为 43 位随机值且 Secure/HttpOnly/Lax，私有 74 匿名 401、verified 58 匿名 200、showcase 仅 58/66、Authing 302。备份 `/tmp/qre-access-hardening-pre-20261025-release/`，生产证据 `.tmp/access-hardening-production/`。
 
 ## Task Note
 
@@ -16,7 +18,7 @@ IMPLEMENTED（2026-10-25，待用户验收；未 commit/push、未 ECS 代码部
 - **历史迁移语义**（目标 4）：旧 IP 归属结果只在同一 IP 的**新会话首次创建任务**时一次性迁移（先迁移后计数，今日旧任务占当日配额）；只读不迁移；第二个同 IP 新会话见空档 401；迁移后旧 key 不归属也不可访问；新会话彼此隔离。
 - **不变式**：默认私有、Authing、worker token、结果合同、showcase verified、409/404 语义不变；主动分享不做（P1）。
 - **验证**：相关 329 passed；全量 2590 passed + 5 skipped；真实 Chromium 三上下文同 IP 双游客隔离 + 迁移可见 + 移动 375，证据 `.tmp/access-hardening/`。
-- **待办**：用户验收 → 批准后 commit/push → ECS 部署（部署后游客 Cookie 语义生效，env 的 Secure 标志同时生效）→ 真人 Authing 登录验收；users 表遗留测试账号行（无 password_hash）是否清理由用户/DBA 决定。
+- **剩余人工验收**：真人 Authing 登录由用户实机确认；users 表遗留测试账号行（无密码哈希）未删除，不影响密码登录关闭与本次权限加固结论。下一阶段按用户最新范围进入 P1 首次成功路径，不做压测或硬件推进。
 
 ## Archive: QRE-SAAS-RESULT-CONTRACT-001（P0-1B 结果合同版本、口径标签与旧结果隔离）
 

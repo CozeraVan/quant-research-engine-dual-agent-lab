@@ -38,10 +38,12 @@ jobs.user_id NULL + guest_key=sha256(IP+salt)，每日 04:00
 qre-saas-guest-cleanup.timer 清空）；会员日 3 次全量（smoke 不占）403；
 登录页改邮箱+密码 UI。注意：D1D2 文件（app.py/cleanup.py/templates/cloud_schema.sql/
 timer 两单元）为 scp 同步（未走 git push），与仓库 HEAD 一致待正式提交。
-**游客归属已于 2026-10-25 改为会话 Cookie（QRE-SAAS-ACCESS-HARDENING-001，代码未部署）**：
-新代码部署后 jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，HttpOnly/SameSite=Lax）
+**游客归属已于 2026-10-25 改为会话 Cookie 并发布（QRE-SAAS-ACCESS-HARDENING-001，commit `0799890`）**：
+jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSite=Lax）
 派生而非 sha256(IP+salt)——同 Wi-Fi 游客结果互不可见；旧 IP 归属行在新会话首次创建
-任务时一次性迁移；游客 NL 编译限流仍按 IP。**部署前 ECS 线上维持纯 IP 归属。**
+任务时一次性迁移；游客 NL 编译限流仍按 IP。ECS 仅同步 app.py 与 cloud_schema.sql 注释并
+重启 qre-saas；公网双独立游客 Cookie、私有结果隔离、verified showcase 与 Authing 均验证通过。
+回滚备份 `/tmp/qre-access-hardening-pre-20261025-release/`。
 
 **元数据上云（2026-09-26）**：因子目录与板块/概念名单经
 `scripts/sync_saas_metadata.py` 导出为 deploy/saas/metadata.json（仅名称+数量，
@@ -139,7 +141,7 @@ ECS 侧专属待办（隶属阶段 C）：
   代理置空/QRE_MARKET_DB_URL 新密码；用户级 unit+env 退役为 ~/.config/*.retired；
   ECS workers 表 home-pc 僵尸行已清。收敛后端到端冒烟 job#35 completed(attempts=1)。
   **不要再并存第二套 worker。**
-- [ ] **apply `deploy/saas/cloud_schema.sql` 新列（P0-1B 前置，未执行）**：`ALTER TABLE results ADD COLUMN IF NOT EXISTS result_contract JSONB;`（QRE-SAAS-RESULT-CONTRACT-001）。`results` 表 owner 是 postgres，app 账号 ALTER 会 must be owner——必须 DBA/psql 以 postgres 身份执行；未 apply 时 SaaS 降级为不写该列、按应用层显式例外表解析（58/66 verified、74 未验证），服务可用但新结果不带合同版本。worker 无需改动、无需重启。
+- [x] **apply `deploy/saas/cloud_schema.sql` 新列（P0-1B 已完成）**：`results.result_contract JSONB` 已由 postgres 执行，2026-10-25 发布时 information_schema 核查列存在。worker 无需改动、无需重启。
 - [ ] 结果产物磁盘水位监控（40GB ESSD，结果只留元数据+图表 JSON，大文件走 OSS）
 - [ ] 落地页页脚备案号占位替换为正式号：湘ICP备2026040383号-1（改 `deploy/landing/index.html` 后 scp 同步，见第 5 节）
 

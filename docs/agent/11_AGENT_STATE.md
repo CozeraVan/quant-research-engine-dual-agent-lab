@@ -54,14 +54,18 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 001 已回退。002 由 Kimi 完成：事件委托 + 单例提示框，动态节点无需 refresh；全面清理表单和结果页灰色备注。真实 Chromium 连续 3 次 hover、指标卡正文、移动 tap 与 375px 已验收；相关 230 passed，全量 2462 passed + 5 skipped，证据 `.tmp/help-copy-v2/`。已部署 ECS，`qre-saas` active；用户批准通过并允许本地 commit，不 push。
 
+### 2026-10-25 QRE-SAAS-ACCESS-HARDENING-001 RELEASED
+
+实现 `0799890` 已 commit/push 并部署 ECS。发布前全量复跑 2590 passed + 5 skipped；ECS 仅同步 app.py 与 cloud_schema.sql 注释并重启 qre-saas，未重启 worker、未跑真实回测。公网双游客会话 Cookie 独立且 Secure/HttpOnly/Lax，私有 74 匿名 401、verified 58 匿名 200、showcase 仅 58/66、Authing 302；备份 `/tmp/qre-access-hardening-pre-20261025-release/`，证据 `.tmp/access-hardening-production/`。真人 Authing 登录留用户实机验收。
+
 ## Current Phase
 
-IMPLEMENTING（2026-10-25：P0-1B 已发布 37bcffa；P0-2 权限加固待用户批准 commit/push/ECS）
+P0-2 DONE；下一阶段为 P1 首次成功路径（仅公网用户体验，不做压测或硬件工作）
 
 ## Current Task
 
 见 `14_LAUNCH_ROADMAP.md` §11。**2026-10-25 用户最新范围约束：不做任何压力测试、深度性能测试、硬件扩容或硬件相关推进，只做公网用户直观可见、可感知的产品体验。** 当前顺序：
-1. P0-2 权限加固等待用户验收与发布批准；这是公网数据私有权底线，不是性能/硬件工作。
+1. ~~P0-2 权限加固~~ 已发布 `0799890`。
 2. 首次成功路径：NL 编译反馈、明确排队/等待/错误/重试、可取消与 worker 离线提示；NL A2/A3 只作减少等待和重复编译的体验支撑。
 3. 结果理解、集中帮助中心、数据截止与费用口径说明。
 4. 移动端与可访问性：375px 核心流程、键盘焦点、加载/空态/错误态、图表与弹窗。
