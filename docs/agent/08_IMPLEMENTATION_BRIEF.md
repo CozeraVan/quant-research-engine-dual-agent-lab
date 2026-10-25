@@ -2,7 +2,35 @@
 
 ## Task ID
 
-QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：回测等待状态、worker 离线提示与失败恢复）
+QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与数据/费用口径）
+
+## Created By
+
+KIMI_CODE 布置，Step 5 实施（2026-10-25，用户批准计划 wonder-woman-medusa-psylocke）
+
+## 目标
+
+让普通用户能看懂回测结果，而不在结果页堆叠长备注：新增公开、集中的「使用说明」页，从结果页各模块精准跳转；同时补齐交易费用、数据截止和 VaR/ES 的关键口径。只整理和展示现有数据。
+
+1. 新增 `GET /saas/help`（游客与登录用户均可访问，继承 base，不新增 API 或数据库表）：按 `#contract`/`#metrics`/`#benchmark`/`#fees`/`#risk`/`#attribution`/`#replay` 锚点分节，内容简明可扫描；合同口径文案由路由传入 `DAILY_RETURN_BASIS`/`TOTAL_RETURN_BASIS`（result_contract 常量同源，不复制权威口径）。主导航加入精简「使用说明」入口，沿用现有 active 状态和移动样式，不增加侧边悬浮按钮。
+2. job/symbol 各模块标题区加入小型「说明 →」链接（合同/收益曲线/交易磨损/FRM/归因分别跳对应锚点；个股摘要数据截止跳 `#contract`）；job 收益曲线 tip 在 `renderContract(c)` 时用合同口径更新，无合同时保留静态回退；主指标仍保持 6 张，盈亏比只在帮助页与重播解释。
+3. 五张交易磨损卡增加卡级提示（佣金/卖出印花税/过户费及其他残差含滑点/总磨损/磨损占买入成交额合计；毛收益=未扣费、净收益=扣除费用）；job 费率 chip 增加默认/自定义配置提示；`bench-bar` 增加基准含义提示；重播指标为盈亏比、持仓暴露度、当前持仓增加统一提示。全部复用 `LabUI.helpTips`，桌面重复 hover、键盘 focus、移动 tap 可用，不新增常驻灰字。
+4. symbol worker gzip 与本地 fallback 两条返回路径都注入 `data_until`（不改 gzip 产物、不回填）；头部 `#sym-note` 显示数据截止并链接 `#contract`，缺字段显示「未声明」；VaR/ES UI 与 job/风险报告统一为损失正数，仅改显示符号，不改风险原值与计算。
+
+## 实施边界
+
+- 不改 schema、收益/风险/费用数值、回测引擎、worker 执行逻辑、配额、NL A2/A3；不运行真实回测；不做性能/容量/硬件/云迁移；不 commit/push/部署 ECS。
+- 不新增主指标卡（第 7 张）、不重算指标、不改 `risk` 原值；帮助页不写营销文案、不堆灰字、不引入第四色相或新 JS 框架。
+- 保留 P0 权限语义（默认私有、游客会话归属、showcase verified 公开只读）与结果合同语义（verified/unverified 分类、两种收益口径权威文案）。
+
+## Validation
+
+- TDD 先 RED 后 GREEN：`tests/test_saas_result_help.py`（新，17 例）+ `test_saas_help_copy.py`（+2）+ `test_saas_symbol_ux.py`（+2 API）+ `test_gui_saas_pages.py`（+1 Node harness）；P0-2/P0-1B 既有用例全保留。
+- 相关套件 502 passed；全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q`（2651 passed + 5 skipped，零回归）。
+- 真实 Chromium（临时 PG + 8099 staging + seed/worker 协议模拟，不跑真实回测）：帮助页锚点导航、模块深链、连续 hover/focus/tap、symbol data_until 与 VaR/ES 正号、1280/375 零 JS error 零横溢；证据 `.tmp/result-understanding/`。
+- `scripts/check-progress-docs.sh`、`scripts/git-finalize-check.sh`、`git diff --check` 通过；更新 04/05/08/09/10/11/14/16/17。
+
+## Archive: QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：回测等待状态、worker 离线提示与失败恢复）
 
 ## Created By
 

@@ -2,7 +2,24 @@
 
 ## Task ID
 
-QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：等待状态、离线提示与失败恢复）
+QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与数据/费用口径）
+
+## Current Status
+
+IMPLEMENTED（2026-10-25 Step 5 实施完成，TDD 先 RED 后 GREEN；未 commit/push/未 ECS 部署/未跑真实回测），等用户验收
+
+## Task Note
+
+- **范围**：P1 结果理解切片。不改 schema/引擎/worker 执行逻辑/结果数值/配额/NL A2/A3；不跑真实回测；不做压测/性能/硬件。详细设计与实现见 `08_IMPLEMENTATION_BRIEF.md` 与 `09_CODING_HANDOFF.md`（同名前新节），自审见 `10_REVIEW_REPORT.md`。
+- **新增公开帮助页**：`GET /saas/help` + `gui/saas/templates/help.html`（游客与登录用户均可访问，无新增 API/表）；七锚点小节（contract/metrics/benchmark/fees/risk/attribution/replay）表格化极简可扫描；两种收益口径文案由 `result_contract` 常量同源注入；主导航「使用说明」入口沿用 active 与移动样式；`lab-theme.css` 仅加 `.help-sec`/`.help-jump` 两条规则。
+- **结果页深链与合同同源**：job/symbol 模块标题「说明 →」跳 `/saas/help#<anchor>`；`renderContract` 用合同口径更新收益曲线 tip（`#curve-tip`），无合同保留静态回退；主指标卡保持 6 张（测试锁定 `renderMetrics` 6 个 card），盈亏比只在帮助页与重播解释。
+- **口径提示**：job/symbol 五类磨损卡卡级 tip + 毛/净标签 tip；job 费率 chip 默认/自定义 tip；`bench-bar` 基准含义 tip；`replay.js` 盈亏比/暴露度/当前持仓 tip。全部走 `LabUI.helpTips` 事件委托。
+- **symbol 数据截止与符号统一**：两条 API 返回路径注入 `data_until`；`#sym-note` 显示数据截止 + 口径说明链接（缺字段「未声明」）；VaR/ES 改损失正数展示（仅显示符号）。
+- **验证**：RED 19 失败 → GREEN；相关 502 passed；全量 2651 passed + 5 skipped；真实 Chromium 10/10（临时库 + 8099 staging，seed/worker 协议模拟），零 JS error、零横溢，证据 `.tmp/result-understanding/`。
+- **踩坑已修复**：移动 375 登录态顶栏因第 5 个导航项溢出 14px（lab-theme `.mainnav{gap:4px}` 后加载压制），≤400px 断点补 `gap:0` + logo 24px + 11.5px；溢出断言改为对比固定视口宽（移动模拟会撑大 innerWidth 漏报）。
+- **发布边界**：未 commit/push、未 ECS 部署（无 schema 变更；部署需同步 app.py、base.html、job.html、symbol.html、help.html、replay.js、lab-theme.css 并重启 qre-saas）。建议提交信息 `feat(saas): 增加结果指标帮助与费用口径说明`。下一阶段：移动端与可访问性；压测与硬件继续暂停。
+
+## Archive: QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：等待状态、离线提示与失败恢复）
 
 ## Current Status
 

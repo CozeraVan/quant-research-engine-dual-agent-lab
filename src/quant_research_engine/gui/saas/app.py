@@ -39,7 +39,12 @@ from flask import Flask, g, jsonify, render_template, request, session
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-from quant_research_engine.gui.saas.result_contract import build_result_contract, contract_view
+from quant_research_engine.gui.saas.result_contract import (
+    DAILY_RETURN_BASIS,
+    TOTAL_RETURN_BASIS,
+    build_result_contract,
+    contract_view,
+)
 from quant_research_engine.gui.saas.symbol_norm import (
     normalize_ts_codes,
     resolve_ts_code,
@@ -1128,6 +1133,17 @@ def create_saas_app() -> Flask:
     @app.get("/saas/showcase")
     def saas_showcase_page() -> str:
         return render_template("showcase.html")
+
+    # QRE-SAAS-RESULT-UNDERSTANDING：公开「使用说明」集中帮助页。游客与登录用户
+    # 均可访问（不新增 API / 表 / 鉴权门槛）；结果合同两种收益口径文案由
+    # result_contract 常量同源注入，避免页面与 API 措辞漂移。
+    @app.get("/saas/help")
+    def saas_help_page() -> str:
+        return render_template(
+            "help.html",
+            daily_return_basis=DAILY_RETURN_BASIS,
+            total_return_basis=TOTAL_RETURN_BASIS,
+        )
 
     @app.get("/api/saas/showcase")
     def api_showcase_list() -> Any:
@@ -3532,6 +3548,9 @@ def create_saas_app() -> Flask:
           （<job_dir>/_symbol_details/<ts_code>.json.gz，含 K线/买卖点/因子/
           收益曲线/磨损明细——ECS 无行情库，lab 版实时查库路径在云上用不了）；
           缺失时回退 build_lab_symbol_detail（staging 等有库部署的既有行为）。
+        QRE-SAAS-RESULT-UNDERSTANDING：两条返回路径都注入任务级
+        `data_until`（results.data_until，不改 gzip 产物、不回填），供页面头部
+        展示数据截止并链接口径说明；缺列/缺值时由前端显示「未声明」，不编日期。
         """
         import gzip
 
@@ -3583,6 +3602,7 @@ def create_saas_app() -> Flask:
                     data["benchmarks"] = aligned or None
                 else:
                     data["benchmarks"] = None
+                data["data_until"] = _jsonable(row["result_data_until"])
                 return jsonify(_jsonable(data))
         from quant_research_engine.gui.lab_result import build_lab_symbol_detail
 
@@ -3592,6 +3612,7 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "该股详情产物未随任务回传",
                             "can_generate": True,
                             "readonly": bool(getattr(g, "showcase_readonly", False))}), 404
+        data["data_until"] = _jsonable(row["result_data_until"])
         return jsonify(_jsonable(data))
 
     def _symbol_detail_ready(job_id: int, code: str) -> bool:

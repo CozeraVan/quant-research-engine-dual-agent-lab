@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}使用说明 · A股回测台｜指标、费用与风险口径一览{% endblock %}
+{% block description %}A股回测台使用说明：收益曲线与总收益率两种口径、基准指数对比、交易磨损与费用、VaR/ES 风险指标、板块归因与回测重播的含义和计算方式。{% endblock %}
+{% block body %}
+<div class="wrap">
+  <div class="page-head">
+    <h1>使用说明</h1>
+    <p>回测结果里每个数字的含义与口径，集中在一页讲清。结果页与个股页各模块标题旁的「说明 →」会直接跳到对应小节。</p>
+  </div>
+
+  <div class="card">
+    <div class="help-jump">
+      <a href="#contract">结果合同</a>
+      <a href="#metrics">收益指标</a>
+      <a href="#benchmark">基准对比</a>
+      <a href="#fees">交易磨损</a>
+      <a href="#risk">风险指标</a>
+      <a href="#attribution">板块归因</a>
+      <a href="#replay">回测重播</a>
+    </div>
+  </div>
+
+  <div class="card help-sec" id="contract">
+    <h2>结果合同与数据截止</h2>
+    <p style="font-size:13.5px;line-height:1.7">每条回测结果都带一份「结果合同」：合同版本、数据截止、两种收益口径与验证状态。结果页顶部徽标展示验证状态，悬停可见完整口径。</p>
+    <table class="tbl">
+      <thead><tr><th style="width:120px">项目</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td>收益曲线口径</td><td>{{ daily_return_basis }}</td></tr>
+        <tr><td>总收益率口径</td><td>{{ total_return_basis }}</td></tr>
+        <tr><td>两者关系</td><td>都已剔除新股注资，但加权方式不同：曲线按日复利，总收益按初始资金加权。数值可以有差，方向应一致。</td></tr>
+        <tr><td>数据截止</td><td>本次回测实际使用的行情最后交易日；截止日之后的数据不参与回测。</td></tr>
+        <tr><td>验证状态</td><td>已验证口径 = 收益口径经人工复核；旧口径·未验证 = 历史结果未带合同，不用于公开展示，仅所有者本人可见。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card help-sec" id="metrics">
+    <h2>收益与绩效指标</h2>
+    <table class="tbl">
+      <thead><tr><th style="width:120px">指标</th><th>含义与口径</th></tr></thead>
+      <tbody>
+        <tr><td>总收益率</td><td>初始资金加权总收益（Σ期末权益/Σ初始资金−1），与成交净盈亏、盈亏比直接勾稽。</td></tr>
+        <tr><td>年化收益</td><td>由总收益按回测起止区间几何年化：(1+总收益)^(1/年数)−1。</td></tr>
+        <tr><td>超额收益</td><td>策略全期总收益 − 同期买入并持有这些股票的收益；负值表示跑输持有不动。</td></tr>
+        <tr><td>夏普比率</td><td>日收益均值扣除无风险利率后除以日波动，再乘 √252 年化；衡量每承担一份风险换来多少回报。</td></tr>
+        <tr><td>最大回撤</td><td>净值从历史高点到随后低点的最大跌幅。</td></tr>
+        <tr><td>胜率</td><td>盈利交易笔数 ÷ 全部完整交易笔数。</td></tr>
+        <tr><td>盈亏比</td><td>已平仓交易的平均盈利 ÷ 平均亏损（取绝对值）；&gt;1 表示平均赚的比亏的多。只在回测重播指标中展示。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card help-sec" id="benchmark">
+    <h2>策略净值、买入持有与基准指数</h2>
+    <table class="tbl">
+      <thead><tr><th style="width:120px">项目</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td>策略净值曲线</td><td>策略账户权益随交易日的变化，展示为起点 0% 的累计收益率；口径见「结果合同」。</td></tr>
+        <tr><td>买入持有</td><td>区间一开始就买入这些股票并不再操作的自然涨幅，用来回答「不交易会不会更好」。</td></tr>
+        <tr><td>基准指数</td><td>用于对照的指数（默认上证指数）。切换基准可与不同市场对比；切到「无基准」时只看策略自身表现。</td></tr>
+        <tr><td>区间信息卡</td><td>拖动滑块或滚轮缩放后实时重算：区间策略收益、区间基准收益、区间超额、区间最大回撤、交易日数、持仓暴露度、持仓期年化收益。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card help-sec" id="fees">
+    <h2>交易磨损与费用口径</h2>
+    <table class="tbl">
+      <thead><tr><th style="width:120px">项目</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td>佣金</td><td>按成交金额乘以佣金率双向收取，受每笔最低佣金约束。</td></tr>
+        <tr><td>印花税</td><td>仅卖出成交按金额收取；买入不收印花税。</td></tr>
+        <tr><td>过户费 / 其他</td><td>过户费，以及总费用扣除佣金与印花税后的残差（含滑点等其他成本）。</td></tr>
+        <tr><td>总磨损</td><td>本次回测全部交易费用合计 = 佣金 + 印花税 + 过户费/其他。</td></tr>
+        <tr><td>磨损 / 投入本金</td><td>总磨损 ÷ 买入成交额合计；衡量费用对投入本金的侵蚀程度。</td></tr>
+        <tr><td>毛收益 / 净收益</td><td>毛收益 = 未扣除任何费用的盈亏；净收益 = 扣除全部磨损后实际落袋的盈亏。</td></tr>
+        <tr><td>费率配置</td><td>结果页费率胶囊显示本次实际生效的配置：默认 = 平台默认费率；自定义 = 提交时覆盖过佣金/印花税/过户费/滑点等参数。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card help-sec" id="risk">
+    <h2>风险指标（FRM）</h2>
+    <table class="tbl">
+      <thead><tr><th style="width:120px">项目</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td>VaR（风险价值）</td><td>给定置信水平（95%/99%）下的单日损失分位阈值：尾部约 5%/1% 的交易日，损失会超过该阈值。</td></tr>
+        <tr><td>ES（预期损失）</td><td>超过 VaR 阈值的尾部损失平均值。<b>损失以正数展示，数值越大风险越高。</b></td></tr>
+        <tr><td>历史法 / 参数法</td><td>历史法按真实收益排序取分位；参数法假设收益服从正态分布，用均值与波动率推算。</td></tr>
+        <tr><td>VaR 回测</td><td>统计实际损失突破 VaR 的频率是否接近预期水平，给出合格/不合格状态灯。</td></tr>
+        <tr><td>波动率</td><td>EWMA / GARCH 估计的条件波动年化值，以及低/中/高波动状态分布。</td></tr>
+        <tr><td>压力测试</td><td>把策略放进历史极端情景（急跌、反弹等）观察区间累计损失与窗口最大回撤；回测区间未覆盖的情景不参与计算。</td></tr>
+        <tr><td>局限</td><td>风险指标基于历史收益分布，是历史模拟结果，不能预测未来，也不构成投资建议。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card help-sec" id="attribution">
+    <h2>赚钱板块归因</h2>
+    <table class="tbl">
+      <thead><tr><th style="width:120px">项目</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td>三层标签</td><td>行业板块 / 概念关键词 / 技术标签（如均线多头、放量突破），分别按行业、市场主题与形态归类。</td></tr>
+        <tr><td>矩块与榜单</td><td>热力图矩块面积表示盈亏规模，红赚绿亏、颜色越深金额越大；点击矩块或榜单行看板块内个股贡献。</td></tr>
+        <tr><td>赚钱效应分位</td><td>该股在本策略全部交易个股中的盈利排名分位；前 5% 高亮。</td></tr>
+        <tr><td>噪声提醒</td><td>样本少的板块分位容易极端。归因只解释已经发生的盈亏，不构成选股建议。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card help-sec" id="replay">
+    <h2>回测重播</h2>
+    <table class="tbl">
+      <thead><tr><th style="width:120px">项目</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td>怎么用</td><td>结果页与个股页点「重播」，按交易日逐帧重放策略净值/K线与买卖点；支持播放、暂停、单步、调速、拖进度条与空仓快进。</td></tr>
+        <tr><td>信 / 入 / 出</td><td>「信」= 信号日 T（收盘出信号），「入/出」= T+1 成交日；两者相隔呈现，不神化策略时序。</td></tr>
+        <tr><td>持仓暴露度</td><td>截至当前帧有持仓的交易日数 ÷ 已播放交易日数；同一日多笔持仓按 1 天计。</td></tr>
+        <tr><td>盈亏比</td><td>已平仓交易的平均盈利 ÷ 平均亏损（取绝对值）；&gt;1 表示平均赚的比亏的多。</td></tr>
+        <tr><td>当前持仓</td><td>当前帧持有的股票只数。</td></tr>
+        <tr><td>声明</td><td>重放的是历史模拟成交，用于理解策略行为，不是实时建议，不构成投资建议。</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>还想自己试？</h2>
+    <p style="font-size:13.5px;line-height:1.8">
+      用自然语言描述交易想法即可生成策略并回测：<a class="inl" href="/saas/new">新建策略 →</a>；
+      也可以看看已验证的经典策略成绩：<a class="inl" href="/saas/showcase">经典策略 →</a>。
+    </p>
+    <p class="opt" style="font-size:12.5px;margin-top:8px">所有指标均来自真实回测产物；历史表现不构成投资建议。</p>
+  </div>
+</div>
+{% endblock %}

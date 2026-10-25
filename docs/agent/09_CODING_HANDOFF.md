@@ -2,7 +2,53 @@
 
 ## Task ID
 
-QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：等待状态、离线提示与失败恢复）
+QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与数据/费用口径）
+
+## Release Status
+
+IMPLEMENTED（2026-10-25，未 commit/push、未 ECS 部署、未跑真实回测）。全量 2651 passed + 5 skipped；真实 Chromium 10/10（证据 `.tmp/result-understanding/`）。ECS 部署需同步 app.py、base.html、job.html、symbol.html、help.html、replay.js、lab-theme.css 并重启 qre-saas（无 schema 变更）。
+
+## Implementation Summary
+
+### 后端（src/quant_research_engine/gui/saas/app.py）
+
+| 符号 / 端点 | 行为 |
+|---|---|
+| `GET /saas/help`（新） | 公开帮助页路由（无鉴权门槛，游客与登录用户均可访问）；`render_template("help.html", daily_return_basis=DAILY_RETURN_BASIS, total_return_basis=TOTAL_RETURN_BASIS)`——口径文案与 `result_contract` 常量同源，不复制 |
+| `api_result_symbol_detail`（gzip 路径） | 返回前 `data["data_until"] = _jsonable(row["result_data_until"])`；不改 gzip 产物、不回填 |
+| `api_result_symbol_detail`（本地 fallback） | `build_lab_symbol_detail` 结果同样注入 `data_until`；产物缺失的 404 分支不变（仍带 can_generate） |
+| import | `result_contract` 增加导入 `DAILY_RETURN_BASIS` / `TOTAL_RETURN_BASIS` |
+
+### 前端模板与静态（templates/base.html、help.html、job.html、symbol.html、static/replay.js、static/lab-theme.css）
+
+- `base.html`：主导航新增 `<a href="/saas/help" data-nav="help">使用说明</a>`（置于「经典策略」与「个人信息」之间）；nav active 判定增加 `nav === 'help' && path.indexOf('/saas/help') === 0`；`@media (max-width:400px)` 补 `header.topbar{padding:0 10px}`、logo 24px、`.mainnav{gap:0}`、链接 11.5px/6px——修掉第 5 个导航项在 375px 登录态的顶栏溢出（lab-theme 的 `.mainnav{gap:4px}` 后加载，须 `header.topbar` 前缀提优先级）。
+- `help.html`（新）：page-head + `.help-jump` 锚点胶囊 + 七张 `.card.help-sec`（id=contract/metrics/benchmark/fees/risk/attribution/replay），每节一张两列 `.tbl`（项目/含义），合同节两种口径由 `{{ daily_return_basis }}`/`{{ total_return_basis }}` 注入；尾部「还想自己试？」卡链接新建/经典策略；无营销文案、无常驻灰字（`class="opt"` 仅 1 处免责）。
+- `job.html`：`#box-contract`/`#box-main`/`#box-fees`/`#box-risk`/`#box-tags` 标题区各加 `<a class="inl" href="/saas/help#…">说明 →</a>`；曲线 tip 按钮加 `id="curve-tip"`（静态回退文案保留）；`renderContract` 在合同带 `daily_return_basis`/`total_return_basis` 时重写该 tip；`renderFees` 的 `wc()` 增加 tip 形参，五卡 + 费率 chip + 毛/净 `.wb-label` 全部挂 `data-tip`（卡与标签加 `tabindex=0`）；`bench-bar` 的「基准：」标签挂基准含义 tip；VaR/ES 卡 tip 补「损失以正数展示，数值越大风险越高」。
+- `symbol.html`：收益曲线/交易磨损/风险分析标题区加「说明 →」（#benchmark/#fees/#risk）；`load()` 末尾把 `#sym-note` 改为 innerHTML：`数据截止 <date|未声明> + 口径说明 → + 全量 N 个交易日|K线暂缺`；`renderRisk` 的 VaR/ES 由 `pct(-var)` 改 `pct(var)`（损失正数，与 job/风险报告一致），三张卡 tip 统一补正号约定；`renderWear` 两个分支的 `wc()` 均加卡级 tip 与毛/净标签 tip。
+- `replay.js`：`renderMetrics` 指标卡数组改为 4 列（label/value/class/tip），盈亏比/当前持仓/暴露度补 tip，卡片输出带 `tabindex=0 data-tip`；纯逻辑 `frameMetrics` 零改动。
+- `lab-theme.css`：仅新增 `.help-sec{scroll-margin-top:76px}` 与 `.help-jump`（既有 token，无新色相/循环动效）。
+
+### 测试
+
+- `tests/test_saas_result_help.py`（新，17 例）：帮助页 200（匿名/登录）、七锚点、禁链与术语、合同文案同源、模块深链、6 卡锁定 + 盈亏比不进主指标卡、`renderContract` 曲线 tip 合同同源与无合同回退（Node harness）、`renderFees` 五卡 + 费率 chip tip（Node harness）、费率默认文案、bench tip、symbol 磨损 tip、`replay.js` 三卡 tip（Node harness 跑真实 `renderMetrics`）、symbol 两路径 `data_until`、VaR/ES 正号静态断言。
+- `tests/test_saas_help_copy.py`（+2）：帮助页/导航/深链静态纪律；磨损/费率/基准/重播 tip 存在性。
+- `tests/test_saas_symbol_ux.py`（+2）：gzip 与本地 fallback 两路径 `data_until`（原字段不受影响）。
+- `tests/test_gui_saas_pages.py`（+1）：`#sym-note` 渲染 data_until/未声明/口径链接（symbol harness 补 `esc` 页面 helper 桩，其余用例不变）。
+
+### 复核记录（2026-10-25）
+
+1. 移动 375 顶栏溢出为真实缺陷（非测试噪声）：登录态 5 项导航 + lab-theme `gap:4px` 使顶栏 389px > 375px；已在 ≤400px 断点修复并把审计断言改为对比固定视口宽（移动模拟会撑大 innerWidth，只用 innerWidth 会漏报）。
+2. `#curve-tip` 静态回退保留：无合同时 `renderContract(null)` 不清空 tip，避免曲线说明消失。
+3. `data_until` 注入点在响应层（两路径一致），不改 worker 回传协议、不改 gzip 产物、不回填历史。
+
+### 主 Agent 复核 Required Fix（2026-10-25，聚焦修正：过户费/其他重复计入）
+
+1. **缺陷**：`worker/runner.py` 的 `wear.other_cost = total_cost − commission − stamp_tax` 已包含 `transfer_fee`（与滑点等残差，与 job 的 `fees_summary.other_cost` 同口径），但 `symbol.html` worker 回传分支显示 `(w.transfer_fee||0)+(w.other_cost||0)`，把过户费算了两遍（夹具 5.09/10.26/0.5/15.85 → other_cost=0.5，修复前显示 1.00）。
+2. **修正**：worker 回传分支改为只显示 `w.other_cost`（与 job.html 一致）；**未改 runner、未改任何费用原值或总磨损**；本地 fallback 第二分支仍按订单拆分显示 `过户费合计`（`transfer`），保持现状。
+3. **回归**：`tests/test_saas_result_help.py::TestSymbolWearNoDoubleCount` 2 例（Node harness 跑真实 `renderWear`：修复前 `1.00 元`→RED，修复后 `0.50 元`，并校验 `commission+stamp+other==total_cost`；本地 fallback 分支保持订单拆分）；`tests/test_saas_symbol_ux.py` 磨损夹具补 `other_cost==0.5` 与勾稽断言（锁定数据契约）。
+4. **浏览器证据同步**：`.tmp/result-understanding/browser_audit.py` 的 seed 磨损改为自洽（commission 42.10 + stamp 28.40 + other 12.80 = total 83.30，transfer_fee 3.2 为 other 的子集），symbol 页断言「过户费/其他 = 12.80 元」且不出现 16.00 元，三卡相加=总磨损；重跑 10/10 通过，截图已肉眼复核。
+
+## Archive: QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：等待状态、离线提示与失败恢复）
 
 ## Release Status
 

@@ -85,8 +85,15 @@ header.topbar .mainnav a.active{color:#fff;background:none;font-weight:600}
   header.topbar .brand img{height:30px !important}
   header.topbar .mainnav a{font-size:12.5px;margin-left:10px}
 }
+/* 超窄屏（≤400px）：导航增至 5 项（新建/经典/使用说明/个人信息/登录），
+   再收一档字号与间距 + logo 降高 + 去掉 lab-theme 的 4px gap（lab-theme 在
+   本样式块之后加载，须用 header.topbar 前缀提优先级才能压住），
+   保证 375px 单行不折行、不撑宽页面 */
 @media (max-width:400px){
-  header.topbar .mainnav a{font-size:12px;margin-left:8px}
+  header.topbar{padding:0 10px}
+  header.topbar .brand img{height:24px !important}
+  header.topbar .mainnav{gap:0}
+  header.topbar .mainnav a{font-size:11.5px;margin-left:6px}
 }
 /* 页脚：备案信息（QRE-SAAS-ICP-FOOTER） */
 .site-footer{margin-top:36px;padding:18px 16px 26px;text-align:center;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
@@ -180,6 +187,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
   <nav class="mainnav">
     <a href="/saas/new" data-nav="new">新建策略</a>
     <a href="/saas/showcase" data-nav="showcase">经典策略</a>
+    <a href="/saas/help" data-nav="help">使用说明</a>
     <a href="/saas/profile" data-nav="records" id="nav-profile" style="display:none;position:relative"><span id="nav-records-dot" style="display:none;position:absolute;top:2px;right:-8px;width:8px;height:8px;border-radius:50%;background:#E5534B"></span>个人信息</a>
     <a href="/saas/login" data-nav="login" id="nav-login">登录 / 注册</a>
   </nav>
@@ -282,6 +290,7 @@ function showLoadFailure(root, retryFn){
     var nav = a.dataset.nav;
     if ((nav === 'new' && path.indexOf('/saas/new') === 0) ||
         (nav === 'records' && (path === '/saas/' || path.indexOf('/saas/jobs') === 0 || path.indexOf('/saas/profile') === 0)) ||
+        (nav === 'help' && path.indexOf('/saas/help') === 0) ||
         (nav === 'login' && path.indexOf('/saas/login') === 0)) a.classList.add('active');
   });
   document.querySelectorAll('.sidenav a').forEach(function(a){

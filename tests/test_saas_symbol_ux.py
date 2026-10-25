@@ -14,6 +14,7 @@ import gzip
 import json
 import subprocess
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -232,6 +233,79 @@ class TestSymbolDetailFromUpload:
         assert resp.status_code == 400
 
 
+class TestSymbolDetailDataUntil:
+    """QRE-SAAS-RESULT-UNDERSTANDING：个股详情响应注入任务级数据截止。
+
+    worker 回传 gzip 与本地 fallback 两条返回路径都要带 `data_until`
+    （不改 gzip 产物、不回填），供页面头部展示并链接口径说明。
+    """
+
+    def _write_detail(self, app, job_id, ts_code, payload):
+        import gzip
+        import json
+
+        d = Path(app.config["SAAS_UPLOAD_DIR"]) / f"job_{job_id}" / "_symbol_details"
+        d.mkdir(parents=True)
+        (d / f"{ts_code}.json.gz").write_bytes(
+            gzip.compress(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+        )
+
+    def test_gzip_path_injects_task_data_until(self, app, client):
+        chart_data = {"tag_analysis": {"layers": {"A": [{"tag": "银行", "symbols": [
+            {"ts_code": "000001.SZ", "total_pnl": 1.0}]}]}}}
+        resp = client.post(
+            "/api/saas/jobs",
+            json={"yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+                  "params": {"codes": ["000001"]}, "name": "t"},
+            headers={"X-User-Id": "1"},
+        )
+        job_id = resp.get_json()["job_id"]
+        client.post("/api/saas/worker/jobs/lease", json={"worker_id": "w1"},
+                    headers=WORKER_HEADERS)
+        done = client.post(
+            f"/api/saas/worker/jobs/{job_id}/result",
+            json={"worker_id": "w1", "status": "done",
+                  "summary": {"strategy_total_return": 0.1}, "chart_data": chart_data,
+                  "data_until": "2026-02-27"},
+            headers=WORKER_HEADERS,
+        )
+        assert done.get_json()["status"] == "completed"
+        self._write_detail(app, job_id, "000001.SZ", {
+            "ok": True, "summary": {"ts_code": "000001.SZ", "name": "平安银行"},
+            "trades": [], "orders": [], "failed_orders": []})
+        d = client.get(f"/api/results/{job_id}/symbols/000001",
+                       headers={"X-User-Id": "1"}).get_json()
+        assert d["data_until"] == "2026-02-27"
+        assert d["summary"]["name"] == "平安银行"  # 原字段不受影响
+
+    def test_local_fallback_injects_task_data_until(self, app, client, monkeypatch):
+        chart_data = {"tag_analysis": {"layers": {}}}
+        resp = client.post(
+            "/api/saas/jobs",
+            json={"yaml": "signal:\n  entry: 'true'\n", "kind": "full",
+                  "params": {"codes": ["000001"]}, "name": "t"},
+            headers={"X-User-Id": "1"},
+        )
+        job_id = resp.get_json()["job_id"]
+        client.post("/api/saas/worker/jobs/lease", json={"worker_id": "w1"},
+                    headers=WORKER_HEADERS)
+        client.post(
+            f"/api/saas/worker/jobs/{job_id}/result",
+            json={"worker_id": "w1", "status": "done",
+                  "summary": {"strategy_total_return": 0.1}, "chart_data": chart_data,
+                  "data_until": "2026-02-27"},
+            headers=WORKER_HEADERS,
+        )
+        monkeypatch.setattr(
+            "quant_research_engine.gui.lab_result.build_lab_symbol_detail",
+            lambda record, ts, **kw: {"ok": True, "summary": {"ts_code": ts},
+                                      "trades": [], "orders": [], "failed_orders": []},
+        )
+        d = client.get(f"/api/results/{job_id}/symbols/000001",
+                       headers={"X-User-Id": "1"}).get_json()
+        assert d["data_until"] == "2026-02-27"
+
+
 class TestWorkerExcessFallback:
     def test_fill_excess_return_shared_mode(self, monkeypatch, tmp_path):
         from quant_research_engine.gui import lab_result
@@ -433,6 +507,12 @@ class TestEnrichSharedSymbolDetail:
         w = data["wear"]
         assert w["total_cost"] == 15.85 and w["invested"] == 9506.0
         assert w["gross_pnl"] == 805.0 and w["net_pnl"] == 789.15 and w["trades"] == 1
+        # other_cost = total_cost − commission − stamp_tax（已含 transfer_fee 与滑点残差，
+        # 与 job 的 fees_summary.other_cost 同口径）；显示层不得再叠加 transfer_fee
+        assert w["commission"] == 5.09 and w["stamp_tax"] == 10.26
+        assert w["transfer_fee"] == 0.5
+        assert w["other_cost"] == 0.5
+        assert round(w["commission"] + w["stamp_tax"] + w["other_cost"], 2) == w["total_cost"]
         eq = data["equity"]
         assert eq["dates"] == ["2024-10-14", "2024-10-15", "2024-11-12"]
         assert eq["values"] == [100000.0, 100006.0, 100500.0]

@@ -313,22 +313,26 @@
       return { data: pts, symbol: "pin", symbolSize: 22, label: { fontSize: 10, color: "#fff" } };
     }
 
-    /* 指标面板 */
+    /* 指标面板（QRE-SAAS-RESULT-UNDERSTANDING：盈亏比/暴露度/当前持仓带口径提示，
+       复用 LabUI.helpTips 事件委托——桌面 hover / 键盘 focus / 移动 tap） */
     var lastPeakFlash = 0;
     function renderMetrics(m) {
       if (!metricsEl) return;
       var cards = [
-        ["当前交易日", m.date || "—", ""],
-        ["累计收益", pct(m.totalRet), m.totalRet == null ? "" : (m.totalRet >= 0 ? "pos" : "neg")],
-        ["最大回撤", pct(m.maxDD), "neg"],
-        ["夏普比率", fnum(m.sharpe), ""],
-        ["胜率·已平仓 " + m.closedTrips + " 笔", pct(m.winRate), ""],
-        ["盈亏比", fnum(m.plRatio), ""],
-        ["当前持仓", m.positions + " 只", ""],
-        ["暴露度", pct(m.exposure), ""],
+        ["当前交易日", m.date || "—", "", ""],
+        ["累计收益", pct(m.totalRet), m.totalRet == null ? "" : (m.totalRet >= 0 ? "pos" : "neg"), ""],
+        ["最大回撤", pct(m.maxDD), "neg", ""],
+        ["夏普比率", fnum(m.sharpe), "", ""],
+        ["胜率·已平仓 " + m.closedTrips + " 笔", pct(m.winRate), "", ""],
+        ["盈亏比", fnum(m.plRatio), "",
+         "已平仓交易的平均盈利 ÷ 平均亏损（取绝对值）；>1 表示平均赚的比亏的多。只统计已平仓交易。"],
+        ["当前持仓", m.positions + " 只", "", "当前帧持有的股票只数。"],
+        ["暴露度", pct(m.exposure), "",
+         "持仓暴露度：截至当前帧有持仓的交易日数 ÷ 已播放交易日数；同一日多笔持仓按 1 天计。"],
       ];
       metricsEl.innerHTML = cards.map(function (c) {
-        return '<div class="metric-card"><div class="m-label">' + c[0] + "</div>" +
+        return '<div class="metric-card"' + (c[3] ? ' tabindex="0" data-tip="' + c[3] + '"' : "") +
+          '><div class="m-label">' + c[0] + "</div>" +
           '<div class="m-value ' + c[2] + '">' + c[1] + "</div></div>";
       }).join("");
       if (m.newPeak && Date.now() - lastPeakFlash > 800) {

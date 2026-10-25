@@ -2,7 +2,35 @@
 
 ## Task ID
 
-QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片）
+QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（实现、聚焦与全量回归、真实 Chromium 均通过；未 commit/push、未 ECS 部署、未跑真实回测，待用户验收）
+
+## Self-Review Findings
+
+- **范围铁律逐条核对**：schema（`cloud_schema.sql` 零改动）、收益/风险/费用数值、回测引擎、worker 执行逻辑、配额、NL A2/A3 均未触碰；`replay.js` 只改指标卡呈现结构（4 列加 tip），`frameMetrics` 纯逻辑零改动；symbol 仅把 `pct(-var)` 改为 `pct(var)`（显示符号），`risk` 原值与 FRM 计算未动；未启动真实 worker、未跑任何回测（浏览器任务由 seed + 真实 POST /api/jobs + worker 协议端点 claim/result/meta 模拟）。
+- **不新增第七张主指标卡已核对**：`renderMetrics` 仍产出 6 张卡（测试以 `body.count("card('") == 6` 锁定），盈亏比只出现在帮助页与重播指标；job.html 静态文本不含「盈亏比」。
+- **合同口径单一权威已核对**：帮助页两种收益口径由 `DAILY_RETURN_BASIS`/`TOTAL_RETURN_BASIS` 注入（测试断言与常量逐字一致）；`renderContract` 用合同字段更新曲线 tip，无合同时保留模板静态回退（harness 锁定不清空）。
+- **权限与合同语义零变化已核对**：`/saas/help` 不触碰任何数据端点；symbol detail 的 `data_until` 只在已通过 `_require_completed_result` 归属校验后返回（匿名 401/他人 404/不存在同体/showcase verified 公开只读语义由 `test_saas_access_hardening.py` 与 `test_saas_result_contract.py` 原样通过）；未验证历史结果仍不公开。
+- **提示组件复用已核对**：所有新提示走 `[data-tip]` + `LabUI.helpTips` 文档事件委托（动态重绘无需 refresh）；卡片/标签加 `tabindex=0` 支持键盘；真实 Chromium 连续 3 次 hover、focus、移动 tap 均给完整文案，二次 tap 关闭；未新增常驻灰字（帮助页 `class="opt"` 仅 1 处免责）。
+- **移动端硬门槛已核对**：375px 三页零 JS error、零横向溢出、顶栏导航单行（末项 right=368≤375）；期间发现并修复真实缺陷——第 5 个导航项使登录态顶栏溢出 14px，修法为 ≤400px 断点 `gap:0`+logo 24px+11.5px（未动桌面渲染）；审计断言改为对比固定视口宽以规避移动模拟撑大 innerWidth 的漏报。
+- **测试卫生**：RED 先于实现（19 失败证据存档 `.tmp/result-understanding/red-evidence.txt`）；全量 2651 passed + 5 skipped（基线 2629+5，零回归）；未改动任何既有断言语义（仅 symbol harness 补 `esc` helper 桩）。
+
+## Required Fixes
+
+无。（主 Agent 复核提出的 1 项 Required Fix 已于 2026-10-25 聚焦修正并补回归，见下。）
+
+## 复核修正记录（2026-10-25）
+
+1. **过户费/其他重复计入（symbol worker 回传分支）**：`wear.other_cost = total_cost − commission − stamp_tax` 已含 `transfer_fee` 与滑点残差（与 job `fees_summary.other_cost` 同口径），模板却再叠加 `w.transfer_fee`，导致双算（夹具显示 1.00 元，正确 0.50 元）。已改为只显示 `w.other_cost`；runner、费用原值、总磨损零改动；本地 fallback 分支（按订单拆分的 `过户费合计`）保持现状。回归 `TestSymbolWearNoDoubleCount`（RED：实际 1.00 元 → GREEN：0.50 元 + 勾稽校验）+ `test_saas_symbol_ux.py` 数据契约断言；真实 Chromium 重跑 symbol 页确认 12.80 元且 42.10+28.40+12.80=83.30，证据 `.tmp/result-understanding/`（`red-double-count.txt`、`green-double-count.txt`、`browser-evidence.json`、截图）。
+
+## Archive: QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片）
 
 ## Reviewer
 

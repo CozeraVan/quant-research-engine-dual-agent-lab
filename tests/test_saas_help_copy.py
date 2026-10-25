@@ -117,3 +117,42 @@ def test_result_pages_move_module_and_metric_notes_to_tips():
     assert "round_trips 全量真实费用列" in job
     assert "不构成投资建议" in job
     assert "不构成投资建议" in symbol
+
+
+def test_result_understanding_help_page_copy():
+    """QRE-SAAS-RESULT-UNDERSTANDING：集中帮助页 + 主导航入口 + 模块深链。"""
+    base = _template("base.html")
+    assert 'href="/saas/help"' in base and 'data-nav="help"' in base
+    assert "使用说明" in base
+    assert "path.indexOf('/saas/help') === 0" in base  # active 状态沿用现有机制
+    help_page = _template("help.html")
+    for anchor in ("contract", "metrics", "benchmark", "fees", "risk", "attribution", "replay"):
+        assert f'id="{anchor}"' in help_page, anchor
+    assert "{{ daily_return_basis }}" in help_page
+    assert "{{ total_return_basis }}" in help_page
+    # 不堆灰字：帮助页以表格/短句为主，不新增长篇辅助段落
+    assert help_page.count('class="opt"') <= 3
+    for page in ("job.html", "symbol.html"):
+        body = _template(page)
+        for anchor in ("fees", "risk"):
+            assert f'href="/saas/help#{anchor}"' in body, (page, anchor)
+    assert 'href="/saas/help#contract"' in _template("job.html")
+    assert 'href="/saas/help#attribution"' in _template("job.html")
+    assert 'href="/saas/help#benchmark"' in _template("job.html")
+    assert 'href="/saas/help#benchmark"' in _template("symbol.html")
+
+
+def test_wear_fee_and_bench_tips_present():
+    """五类磨损卡 / 费率 chip / bench-bar / 重播指标的口径提示（复用 LabUI.helpTips）。"""
+    job = _template("job.html")
+    for marker in ("佣金合计", "印花税合计", "过户费 / 其他", "总磨损", "磨损 / 投入本金"):
+        assert marker in job
+    assert "默认（平台默认费率）" in job
+    assert "基准是用于对照的指数" in job
+    assert "买入成交额" in job  # 磨损占比分母口径
+    replay = (ROOT / "src/quant_research_engine/gui/static/replay.js").read_text()
+    assert "已平仓交易的平均盈利" in replay
+    assert "有持仓的交易日数" in replay
+    assert "当前帧持有的股票只数" in replay
+    # 动态重绘的磨损卡由事件委托兜底，无需逐节点监听
+    assert "LabUI.helpTips()" in _template("base.html")

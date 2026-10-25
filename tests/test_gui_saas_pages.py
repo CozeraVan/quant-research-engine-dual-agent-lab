@@ -1034,6 +1034,7 @@ function createSymbolHarness(fetchImpl){
     clearTimeout(id){ timers.delete(id); },
     renderSummary(summary){ calls.summaries.push(summary); }, renderEquity(){}, renderWear(){}, renderRisk(){}, renderKline(){},
     initKlineReplay(){ calls.replay += 1; }, table(){}, pct(){ return ''; },
+    esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
   });
   return {
     context, calls, timers, root, elements, windowListeners,
@@ -1457,6 +1458,31 @@ function pendingResponse(options){
 """)
         assert "已暂停自动刷新" in html
         assert "任务可能仍在运行" in html
+
+    def test_symbol_note_shows_data_until_with_contract_link(self, client):
+        """QRE-SAAS-RESULT-UNDERSTANDING：头部 sym-note 显示数据截止并链到口径说明。"""
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const withUntil = createSymbolHarness(async () => response(200, {ok: true,
+    summary: {}, trades: [], orders: [], failed_orders: [],
+    data_until: '2026-02-27', kline: {dates: ['2026-01-05', '2026-01-06']}}));
+  vm.runInContext(source, withUntil.context);
+  await vm.runInContext('load()', withUntil.context);
+  const note = withUntil.elements['sym-note'].innerHTML;
+  assert.ok(note.includes('数据截止 2026-02-27'), note);
+  assert.ok(note.includes('/saas/help#contract'), note);
+  assert.ok(note.includes('全量 2 个交易日'), '既有交易日文案不得丢失：' + note);
+
+  const missing = createSymbolHarness(async () => response(200, {ok: true,
+    summary: {}, trades: [], orders: [], failed_orders: [], kline: null}));
+  vm.runInContext(source, missing.context);
+  await vm.runInContext('load()', missing.context);
+  const note2 = missing.elements['sym-note'].innerHTML;
+  assert.ok(note2.includes('数据截止 未声明'), '缺字段不编日期：' + note2);
+  assert.ok(note2.includes('/saas/help#contract'), note2);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
 
     def test_symbol_repeated_replay_initialization_binds_once(self, client):
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)

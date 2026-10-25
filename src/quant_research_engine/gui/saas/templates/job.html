@@ -50,6 +50,7 @@
     <div class="chart-box" id="box-contract" style="display:none;padding:12px 16px">
       <span class="badge" id="contract-badge" tabindex="0" data-tip="" aria-label="结果合同验证状态说明">—</span>
       <span class="opt" id="contract-note" style="margin-left:8px;font-size:12.5px"></span>
+      <a class="inl" href="/saas/help#contract" style="margin-left:8px;font-size:12.5px">说明 →</a>
     </div>
 
     <!-- QRE-SAAS-JOB-STRATEGY-CARD：策略信息折叠卡（默认折叠，一行摘要 = 策略名 + 入口类型 + 创建时间） -->
@@ -61,7 +62,8 @@
     <div class="metric-strip" id="metric-strip"></div>
 
     <div class="chart-box" id="box-main">
-      <div class="chart-title">策略收益 vs 基准指数 <button type="button" class="tip-trigger" data-tip="曲线为日收益累乘口径（交集口径、剔除新股注资）的累计收益率，起点 0%；与上方「总收益率」（初始资金加权）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
+      <div class="chart-title">策略收益 vs 基准指数 <button type="button" class="tip-trigger" id="curve-tip" data-tip="曲线为日收益累乘口径（交集口径、剔除新股注资）的累计收益率，起点 0%；与上方「总收益率」（初始资金加权）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
+        <a class="inl" href="/saas/help#benchmark" style="font-size:12.5px;font-weight:400">说明 →</a>
         <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button>
         <button class="btn-sm hidden" id="btn-replay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
       <div class="bench-bar" id="bench-bar">基准：</div>
@@ -77,18 +79,21 @@
 
     <!-- 交易磨损（chart-data.fees_summary；无则整块隐藏，C5 对齐 lab 版） -->
     <div class="chart-box" id="box-fees" style="display:none">
-      <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="佣金、印花税、过户费等，聚合自本次回测 round_trips 全量真实费用列。" aria-label="交易磨损说明">?</button></div>
+      <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="佣金、印花税、过户费等，聚合自本次回测 round_trips 全量真实费用列。" aria-label="交易磨损说明">?</button>
+        <a class="inl" href="/saas/help#fees" style="font-size:12.5px;font-weight:400">说明 →</a></div>
       <div id="fees-body"></div>
     </div>
 
     <!-- FRM 风险模块（risk-analysis；has_report=false 时整块隐藏） -->
     <div class="chart-box" id="box-risk" style="display:none">
-      <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" id="risk-tip" data-tip="基于策略日收益刻画波动、尾部损失和压力情景；损失以正数展示。" aria-label="风险分析说明">?</button></div>
+      <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" id="risk-tip" data-tip="基于策略日收益刻画波动、尾部损失和压力情景；损失以正数展示。" aria-label="风险分析说明">?</button>
+        <a class="inl" href="/saas/help#risk" style="font-size:12.5px;font-weight:400">说明 →</a></div>
       <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
     </div>
 
     <div class="chart-box" id="box-tags">
-      <div class="chart-title">赚钱板块归因 <button type="button" class="tip-trigger" data-tip="矩块面积表示盈亏规模；红赚绿亏，颜色越深金额越大。点击矩块或榜单行查看板块内个股。" aria-label="板块归因说明">?</button></div>
+      <div class="chart-title">赚钱板块归因 <button type="button" class="tip-trigger" data-tip="矩块面积表示盈亏规模；红赚绿亏，颜色越深金额越大。点击矩块或榜单行查看板块内个股。" aria-label="板块归因说明">?</button>
+        <a class="inl" href="/saas/help#attribution" style="font-size:12.5px;font-weight:400">说明 →</a></div>
       <div class="tag-tabs" id="tag-tabs">
         <button data-layer="A" class="active">行业板块</button>
         <button data-layer="B">概念关键词</button>
@@ -196,6 +201,14 @@ function renderContract(c){
   document.getElementById('contract-note').textContent =
     (c.note ? c.note + '　' : '') + '合同版本 ' + (c.version || '—') +
     '　数据截止 ' + (c.data_until || '未声明');
+  // QRE-SAAS-RESULT-UNDERSTANDING：收益曲线 tip 与结果合同同源——合同口径文案
+  // 直接注入，避免两处措辞漂移；无合同时保留模板里的静态安全回退。
+  const curveTip = document.getElementById('curve-tip');
+  if (curveTip && c.daily_return_basis && c.total_return_basis){
+    curveTip.setAttribute('data-tip',
+      '曲线为' + c.daily_return_basis + '的累计收益率，起点 0%；与上方「总收益率」（' +
+      c.total_return_basis + '）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。');
+  }
 }
 function renderMeta(meta, dataUntil){
   const el = document.getElementById('meta-chips');
@@ -256,7 +269,8 @@ function renderMain(d){
   const bar = document.getElementById('bench-bar');
   const benches = d.benchmarks || {};
   const codes = Object.keys(benches);
-  bar.innerHTML = '基准：';
+  // QRE-SAAS-RESULT-UNDERSTANDING：基准含义提示（无基准时保留既有说明）
+  bar.innerHTML = '<span class="opt" tabindex="0" data-tip="基准是用于对照的指数（默认上证指数）：与基准对比才能看出策略是否跑赢大盘；可切换不同基准，切到「无基准」时只看策略自身表现。">基准：</span>';
   if (!codes.length){
     bar.innerHTML += '<span class="opt">' + (d.benchmark_note || '暂无数据') + '</span>';
   } else {
@@ -568,25 +582,39 @@ function renderFees(fees, meta){
   const ratio = fees.invested > 0 ? wear / fees.invested : null;
   const eaten = fees.gross_pnl > 0 ? wear / fees.gross_pnl : null;
   const f = (meta && meta.fees) || {};
-  const wc = (label, val) => '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+  // QRE-SAAS-RESULT-UNDERSTANDING：五类磨损卡卡级口径提示（复用 LabUI.helpTips
+  // 事件委托，动态重绘无需 refresh；桌面 hover / 键盘 focus / 移动 tap 均可用）
+  const wc = (label, val, tip) => '<div class="metric-card"' + (tip ? ' tabindex="0" data-tip="' + escH(tip) + '"' : '') +
+    '><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+  const TIP_COMMISSION = '按成交金额乘以佣金率双向收取的佣金合计，受每笔最低佣金约束。';
+  const TIP_STAMP = '仅卖出成交按金额收取的印花税合计；买入不收印花税。';
+  const TIP_OTHER = '过户费，以及总费用扣除佣金与印花税后的残差（含滑点等其他成本）。';
+  const TIP_TOTAL = '本次回测全部交易费用合计 = 佣金 + 印花税 + 过户费/其他。';
+  const TIP_RATIO = '总磨损 ÷ 买入成交额合计；衡量费用对投入本金的侵蚀程度。';
+  const TIP_GROSS = '毛收益：未扣除任何交易费用的盈亏。';
+  const TIP_NET = '净收益：扣除全部交易磨损后实际落袋的盈亏。';
   let chips = '';
   if (f.commission_rate != null){
-    chips = '<div class="meta-chips" style="margin-bottom:10px"><span class="chip">费率配置 <b>佣金 ' +
+    const feeTip = '本次回测实际生效的费用配置：' +
+      (f.overridden ? '自定义（提交时覆盖过佣金/印花税/过户费/滑点等参数）' : '默认（平台默认费率）') +
+      '。最低佣金为每笔委托下限；磨损数值以真实成交记录为准。';
+    chips = '<div class="meta-chips" style="margin-bottom:10px"><span class="chip" tabindex="0" data-tip="' + escH(feeTip) + '">费率配置 <b>佣金 ' +
       (f.commission_rate * 100).toFixed(2) + '%（最低 ' + f.min_commission + ' 元）· 印花税（卖出）' +
-      (f.stamp_tax_sell * 100).toFixed(2) + '% · 过户费 ' + (f.transfer_fee_rate * 100).toFixed(3) + '%</b></span></div>';
+      (f.stamp_tax_sell * 100).toFixed(2) + '% · 过户费 ' + (f.transfer_fee_rate * 100).toFixed(3) + '%</b>' +
+      (f.overridden ? '（自定义）' : '（默认）') + '</span></div>';
   }
   const maxV = Math.max(Math.abs(fees.gross_pnl), Math.abs(fees.net_pnl), 1);
   document.getElementById('fees-body').innerHTML = chips +
     '<div class="wear-cards">' +
-      wc('佣金合计', num(fees.commission) + ' 元') +
-      wc('印花税合计', num(fees.stamp_tax) + ' 元') +
-      wc('过户费 / 其他', num(fees.other_cost) + ' 元') +
-      wc('总磨损', num(wear) + ' 元') +
-      wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%') +
+      wc('佣金合计', num(fees.commission) + ' 元', TIP_COMMISSION) +
+      wc('印花税合计', num(fees.stamp_tax) + ' 元', TIP_STAMP) +
+      wc('过户费 / 其他', num(fees.other_cost) + ' 元', TIP_OTHER) +
+      wc('总磨损', num(wear) + ' 元', TIP_TOTAL) +
+      wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%', TIP_RATIO) +
     '</div>' +
     '<div class="wb">' +
-      '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + num(fees.gross_pnl) + ' 元</span></div>' +
-      '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + num(fees.net_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + escH(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + num(fees.gross_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + escH(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + num(fees.net_pnl) + ' 元</span></div>' +
       '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + num(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div>' +
     '</div>';
 }
@@ -640,8 +668,8 @@ function renderRisk(d) {
       var v = ve[lv];
       if (!v) return;
       var label = lv === '95pct' ? '95%' : '99%';
-      cardsHtml += card('VaR ' + label, v.var == null ? '—' : (v.var * 100).toFixed(2) + '%', 'neg', '历史模拟法：' + label + ' 置信水平下的单日损失分位阈值；尾部约 ' + (lv === '95pct' ? '5%' : '1%') + ' 的损失会超过该阈值。') +
-                   card('ES ' + label, v.es == null ? '—' : (v.es * 100).toFixed(2) + '%', 'neg', '历史模拟法：超过 VaR 阈值的尾部损失平均值；损失以正数表示。');
+      cardsHtml += card('VaR ' + label, v.var == null ? '—' : (v.var * 100).toFixed(2) + '%', 'neg', '历史模拟法：' + label + ' 置信水平下的单日损失分位阈值；尾部约 ' + (lv === '95pct' ? '5%' : '1%') + ' 的损失会超过该阈值。损失以正数展示，数值越大风险越高。') +
+                   card('ES ' + label, v.es == null ? '—' : (v.es * 100).toFixed(2) + '%', 'neg', '历史模拟法：超过 VaR 阈值的尾部损失平均值；损失以正数展示，数值越大风险越高。');
     });
     var bt = d.var_backtest || {};
     var lightsHtml = '';

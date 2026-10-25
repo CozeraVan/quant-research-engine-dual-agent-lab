@@ -9,19 +9,22 @@
   <div class="metric-strip" id="sum-strip"></div>
 
   <div class="chart-box" id="box-equity" style="display:none">
-    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略净值、个股买入持有和基准指数；拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
+    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略净值、个股买入持有和基准指数；拖动滑块缩放区间。" aria-label="收益曲线说明">?</button>
+      <a class="inl" href="/saas/help#benchmark" style="font-size:12.5px;font-weight:400">说明 →</a></div>
     <div id="chart-equity" style="height:260px"></div>
     <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
   </div>
 
   <div class="chart-box" id="box-wear" style="display:none">
-    <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="聚合该股本次回测全部真实订单和成交费用。" aria-label="交易磨损说明">?</button></div>
+    <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="聚合该股本次回测全部真实订单和成交费用。" aria-label="交易磨损说明">?</button>
+      <a class="inl" href="/saas/help#fees" style="font-size:12.5px;font-weight:400">说明 →</a></div>
     <div id="wear-body"></div>
   </div>
 
   <!-- FRM-SYMBOL：个股级风险分析（worker 生成详情时基于区间日收盘收益计算） -->
   <div class="chart-box" id="box-risk" style="display:none">
-    <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" data-tip="基于该股区间日收盘收益刻画自身风险；组合层风险见回测结果页。" aria-label="风险分析说明">?</button></div>
+    <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" data-tip="基于该股区间日收盘收益刻画自身风险；组合层风险见回测结果页。损失以正数展示，数值越大风险越高。" aria-label="风险分析说明">?</button>
+      <a class="inl" href="/saas/help#risk" style="font-size:12.5px;font-weight:400">说明 →</a></div>
     <div id="risk-body"></div>
   </div>
 
@@ -272,9 +275,13 @@ async function load(){
     if (d.trades && d.trades.length) $('#box-trades').style.display = '';
     if (d.orders && d.orders.length) $('#box-orders').style.display = '';
     if (d.failed_orders && d.failed_orders.length) $('#box-failed').style.display = '';
-    $('#sym-note').textContent = d.kline && d.kline.dates
-      ? '全量 ' + d.kline.dates.length + ' 个交易日'
-      : 'K线/因子明细暂缺（该股详情产物未随任务回传）';
+    // QRE-SAAS-RESULT-UNDERSTANDING：头部展示任务级数据截止并链接口径说明；
+    // 缺字段显示「未声明」，不编日期
+    $('#sym-note').innerHTML = '数据截止 ' + (d.data_until ? esc(d.data_until) : '未声明') +
+      '　<a class="inl" href="/saas/help#contract">口径说明 →</a>' +
+      (d.kline && d.kline.dates
+        ? '　全量 ' + d.kline.dates.length + ' 个交易日'
+        : '　K线/因子明细暂缺（该股详情产物未随任务回传）');
   } catch (error) {
     if (epoch !== symbolLoadEpoch) return;
     if (error && (error.status === 401 || error.status === 404)){ showSymbolAccess(); return; }
@@ -385,10 +392,15 @@ function renderRisk(d){
   const dist = r.distribution || {};
   const regimeTxt = {low: '低波动', mid: '中波动', high: '高波动'}[regime.latest] || '—';
   const annVol = ewma.volatility_forecast != null ? (ewma.volatility_forecast * Math.sqrt(252)) : null;
+  // QRE-SAAS-RESULT-UNDERSTANDING：VaR/ES 与 job/风险报告统一为「损失正数」呈现
+  // （只改显示符号，不改 risk 原值与计算）
+  const lossTip = '历史模拟法：95% 单日损失分位阈值，以及超过该阈值的尾部平均损失；损失以正数展示，数值越大风险越高。';
+  const lossTip99 = '历史模拟法：99% 单日损失分位阈值，以及超过该阈值的尾部平均损失；损失以正数展示，数值越大风险越高。';
+  const paramTip = '正态假设下，按收益均值和波动率估算的 99% 单日损失分位阈值；损失以正数展示，数值越大风险越高。';
   let html = '<div class="metric-strip">' +
-    card('95% VaR / ES（历史法）', h95 ? pct(-h95.var) + ' / ' + pct(-h95.es) : '—', 'flat', '历史模拟法：95% 单日损失分位阈值，以及超过该阈值的尾部平均损失。') +
-    card('99% VaR / ES（历史法）', h99 ? pct(-h99.var) + ' / ' + pct(-h99.es) : '—', 'flat', '历史模拟法：99% 单日损失分位阈值，以及超过该阈值的尾部平均损失。') +
-    card('99% VaR（参数法）', p99 ? pct(-p99.var) : '—', 'flat', '正态假设下，按收益均值和波动率估算的 99% 单日损失分位阈值。') +
+    card('95% VaR / ES（历史法）', h95 ? pct(h95.var) + ' / ' + pct(h95.es) : '—', 'flat', lossTip) +
+    card('99% VaR / ES（历史法）', h99 ? pct(h99.var) + ' / ' + pct(h99.es) : '—', 'flat', lossTip99) +
+    card('99% VaR（参数法）', p99 ? pct(p99.var) : '—', 'flat', paramTip) +
     card('EWMA 年化波动率', annVol != null ? pct(annVol) : '—', 'flat', '指数加权移动平均模型估计的日波动，乘 √252 年化。') +
     card('波动率状态', regimeTxt, regime.latest === 'high' ? 'neg' : 'flat', '按历史波动水平划分为低、中、高状态。') +
     card('夏普比率', (perf.sharpe && perf.sharpe.sharpe != null) ? Number(perf.sharpe.sharpe).toFixed(2) : '—', 'flat', '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
@@ -526,21 +538,30 @@ function renderEquity(d){
 
 function renderWear(d){
   // shared 模式订单只有总费用列：worker 侧已从 round_trips 真实费用列聚合出 wear 块
+  // QRE-SAAS-RESULT-UNDERSTANDING：五类磨损卡卡级口径提示（与 job 页同源）
+  const TIP_COMMISSION = '按成交金额乘以佣金率双向收取的佣金合计，受每笔最低佣金约束。';
+  const TIP_STAMP = '仅卖出成交按金额收取的印花税合计；买入不收印花税。';
+  const TIP_OTHER = '过户费，以及总费用扣除佣金与印花税后的残差（含滑点等其他成本）。';
+  const TIP_TOTAL = '本次回测全部交易费用合计 = 佣金 + 印花税 + 过户费/其他。';
+  const TIP_RATIO = '总磨损 ÷ 买入成交额合计；衡量费用对投入本金的侵蚀程度。';
+  const TIP_GROSS = '毛收益：未扣除任何交易费用的盈亏。';
+  const TIP_NET = '净收益：扣除全部交易磨损后实际落袋的盈亏。';
+  const wc = (label, val, tip) => '<div class="metric-card"' + (tip ? ' tabindex="0" data-tip="' + esc(tip) + '"' : '') +
+    '><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
   const w = d.wear;
   if (w){
     $('#box-wear').style.display = '';
-    const wc = (label, val) => '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
     const ratio = w.invested > 0 ? w.total_cost / w.invested : null;
     const eaten = w.gross_pnl > 0 ? w.total_cost / w.gross_pnl : null;
     const maxV = Math.max(Math.abs(w.gross_pnl), Math.abs(w.net_pnl), 1);
     $('#wear-body').innerHTML = '<div class="wear-cards">' +
-      wc('佣金合计', f2(w.commission) + ' 元') + wc('印花税合计', f2(w.stamp_tax) + ' 元') +
-      wc('过户费 / 其他', f2((w.transfer_fee || 0) + (w.other_cost || 0)) + ' 元') +
-      wc('总磨损', f2(w.total_cost) + ' 元') +
-      wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%') + '</div>' +
+      wc('佣金合计', f2(w.commission) + ' 元', TIP_COMMISSION) + wc('印花税合计', f2(w.stamp_tax) + ' 元', TIP_STAMP) +
+      wc('过户费 / 其他', f2(w.other_cost || 0) + ' 元', TIP_OTHER) +
+      wc('总磨损', f2(w.total_cost) + ' 元', TIP_TOTAL) +
+      wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%', TIP_RATIO) + '</div>' +
       '<div class="wb">' +
-      '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(w.gross_pnl) + ' 元</span></div>' +
-      '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(w.net_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(w.gross_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(w.net_pnl) + ' 元</span></div>' +
       '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(w.total_cost) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div></div>';
     return;
   }
@@ -557,18 +578,17 @@ function renderWear(d){
     d.trades.forEach(t => { gross += Number(t.gross_pnl) || 0; net += Number(t.net_pnl) || 0; });
   }
   $('#box-wear').style.display = '';
-  const wc = (label, val) => '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
   const ratio = invested > 0 ? wear / invested : null;
   let html = '<div class="wear-cards">' +
-    wc('佣金合计', f2(comm) + ' 元') + wc('印花税合计', f2(stamp) + ' 元') +
-    wc('过户费合计', f2(transfer) + ' 元') + wc('总磨损', f2(wear) + ' 元') +
-    wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%') + '</div>';
+    wc('佣金合计', f2(comm) + ' 元', TIP_COMMISSION) + wc('印花税合计', f2(stamp) + ' 元', TIP_STAMP) +
+    wc('过户费合计', f2(transfer) + ' 元', TIP_OTHER) + wc('总磨损', f2(wear) + ' 元', TIP_TOTAL) +
+    wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%', TIP_RATIO) + '</div>';
   if (gross != null){
     const maxV = Math.max(Math.abs(gross), Math.abs(net), 1);
     const eaten = gross > 0 ? wear / gross : null;
     html += '<div class="wb">' +
-      '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(gross) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(gross) + ' 元</span></div>' +
-      '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(net) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(net) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(gross) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(gross) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(net) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(net) + ' 元</span></div>' +
       '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div></div>';
   }
   $('#wear-body').innerHTML = html;
