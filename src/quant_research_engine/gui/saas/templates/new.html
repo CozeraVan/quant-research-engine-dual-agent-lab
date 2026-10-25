@@ -82,7 +82,7 @@
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" id="p-sname" value="" placeholder="留空自动生成" style="width:280px">
       </span>
-      <label>回测区间 <span class="req">*</span></label>
+      <label tabindex="0" data-tip="回测开始和结束日期；全期从 2010 年起，实际可运行日期受数据库覆盖范围限制。">回测区间 <span class="req">*</span></label>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative" id="range-row">
         <input type="text" id="p-start" size="11" readonly class="date-input" title="点击打开日历"> ~
         <input type="text" id="p-end" size="11" readonly class="date-input" title="点击打开日历">
@@ -92,14 +92,14 @@
         <button class="btn-sm" id="range-all">全期(2010起)</button>
         <div class="cal-pop" id="cal-pop" style="display:none"></div>
       </span>
-      <label>标的范围 <span class="req">*</span></label>
+      <label tabindex="0" data-tip="选择回测股票范围：全部 A 股、指定代码、随机股票或板块/概念。">标的范围 <span class="req">*</span></label>
       <span>
         <label class="radio-inline"><input type="radio" name="scope" value="all" checked> 全部 A 股</label>
         <label class="radio-inline"><input type="radio" name="scope" value="codes"> 指定股票代码</label>
         <label class="radio-inline"><input type="radio" name="scope" value="random"> 随机股票</label>
         <label class="radio-inline"><input type="radio" name="scope" value="univ"> 板块/概念</label>
       </span>
-      <label id="scope-univ-label" style="display:none">板块/概念范围</label>
+      <label id="scope-univ-label" tabindex="0" data-tip="先选择板块或概念体系，再选择具体范围；回测仅包含该范围成分股。" style="display:none">板块/概念范围</label>
       <span id="scope-univ-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
         <select id="p-univ-group" style="max-width:200px"></select>
         <select id="p-univ-key" style="max-width:260px"></select>
@@ -109,7 +109,7 @@
       <span id="scope-random-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="number" id="p-random-n" min="1" max="2000" value="500" style="width:120px">
       </span>
-      <label id="scope-codes-label" style="display:none">股票代码</label>
+      <label id="scope-codes-label" tabindex="0" data-tip="输入一个或多个 6 位股票代码，用逗号分隔；无需输入 .SZ/.SH/.BJ 后缀，系统按代码规则识别。" style="display:none">股票代码</label>
       <span id="scope-codes-row" style="display:none;gap:8px;align-items:flex-start;flex-wrap:wrap">
         <textarea id="param-codes" rows="2" style="flex:1;min-width:220px" placeholder="股票代码逗号分隔，如 000001,600519"></textarea>
         <button type="button" class="btn-sm" id="btn-random-symbol" style="margin-top:4px" title="从全 A 股池随机抽 1 只填入">随机一只</button>
@@ -118,33 +118,33 @@
 
     <h4 style="font-size:14px;margin:18px 0 10px;">高级参数</h4>
     <div class="form-grid form-grid-3">
-      <label>模式</label>
+      <label tabindex="0" data-tip="共享资金：多只股票共用同一份总资金；批量：每只股票独立使用初始资金。">模式</label>
       <select id="p-mode"><option value="shared" selected>共享资金</option><option value="batch">批量</option></select>
-      <label>初始资金</label>
+      <label tabindex="0" data-tip="初始资金，单位：元。共享资金模式为组合总资金；批量模式为每只股票的独立资金。">初始资金</label>
       <input type="text" id="p-cash" value="100000">
-      <label>最大持仓股票数</label>
+      <label tabindex="0" data-tip="同时持仓的最大股票数量，0 = 不限。">最大持仓股票数</label>
       <input type="number" id="p-maxpos" value="10" min="0" step="1">
-      <label>最大持仓天数</label>
+      <label tabindex="0" data-tip="买入后允许持有的最长交易日数，0 或留空 = 不限；当前默认 20 天。">最大持仓天数</label>
       <input type="text" id="p-holding" value="20" placeholder="默认 20；留空 = 不限">
-      <label>入场价格</label>
+      <label tabindex="0" data-tip="入场信号出现后的下一交易日成交价格，可选下一交易日开盘价、收盘价或成交量加权均价 VWAP。">入场价格</label>
       <select id="p-entry-price"><option value="open" selected>次日开盘价</option><option value="close">次日收盘价</option><option value="vwap">次日均价 VWAP</option></select>
-      <label>出场价格</label>
+      <label tabindex="0" data-tip="出场信号出现后的下一交易日成交价格，可选下一交易日开盘价、收盘价或成交量加权均价 VWAP。">出场价格</label>
       <select id="p-exit-price"><option value="open" selected>次日开盘价</option><option value="close">次日收盘价</option><option value="vwap">次日均价 VWAP</option></select>
-      <label>止损 %</label>
+      <label tabindex="0" data-tip="相对实际入场价的止损比例，使用小数：0.08 = 8%；0 或留空 = 不启用。">止损 %</label>
       <input type="text" id="p-sl" placeholder="可空，如 0.08">
-      <label>止盈 %</label>
+      <label tabindex="0" data-tip="相对实际入场价的止盈比例，使用小数：0.15 = 15%；0 或留空 = 不启用。">止盈 %</label>
       <input type="text" id="p-tp" placeholder="可空，如 0.15">
-      <label>移动止损 %</label>
+      <label tabindex="0" data-tip="相对持仓期间最高价的回撤比例，使用小数：0.05 = 5%；0 或留空 = 不启用。">移动止损 %</label>
       <input type="text" id="p-ts" placeholder="可空，如 0.05">
-      <label>佣金率</label>
+      <label tabindex="0" data-tip="按成交金额收取的佣金率，使用小数：0.0003 = 0.03%；另受最低佣金约束。">佣金率</label>
       <input type="text" id="p-comm" value="0.0003">
-      <label>最低佣金</label>
+      <label tabindex="0" data-tip="每笔订单的最低佣金，单位：元。">最低佣金</label>
       <input type="text" id="p-mincomm" value="5.0">
-      <label>印花税(卖出)</label>
+      <label tabindex="0" data-tip="卖出时按成交金额收取的印花税率，使用小数：0.0005 = 0.05%。">印花税(卖出)</label>
       <input type="text" id="p-stamp" value="0.0005">
-      <label>买入滑点</label>
+      <label tabindex="0" data-tip="买入成交价相对基准价格的滑点比例，使用小数：0.001 = 0.1%；0 = 不计滑点。">买入滑点</label>
       <input type="text" id="p-slipb" value="0">
-      <label>卖出滑点</label>
+      <label tabindex="0" data-tip="卖出成交价相对基准价格的滑点比例，使用小数：0.001 = 0.1%；0 = 不计滑点。">卖出滑点</label>
       <input type="text" id="p-slips" value="0">
     </div>
     </div></div></div>

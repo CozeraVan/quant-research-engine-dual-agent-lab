@@ -201,6 +201,7 @@
 - 桌面 mouseover 每次均显示、mouseout 关闭；focusin/out 支持键盘；touch/pen pointerup 切换。触摸后 700ms 内忽略兼容鼠标事件，滚动时重新定位而非误关；Esc/外部触摸关闭并清理 ARIA。
 - 模块标题使用 `.tip-trigger` 问号按钮；指标卡整卡使用 `data-tip` + `tabindex=0`，不再为每卡额外画问号。提示层 fixed 定位、视口防溢出、`pointer-events:none`，颜色只用既有主题变量。
 - 必要权限、错误、动态状态、截断和免责声明保持可见，不得为精简而藏入提示。真实 Chromium 连续悬停与移动 tap 是此类改动的验收硬门槛。
+- 回测参数 label 使用 `data-tip` + `tabindex=0` 提供口径/单位/默认值：金额元、比例小数、0/留空规则、共享与批量资金差异；不增加可见灰字，不以 placeholder 替代默认值参数的说明。
 
 ### 3.14 自选因子三栏弹窗选择器（QRE-SAAS-FACTOR-PICKER-MODAL，2026-10-25）
 

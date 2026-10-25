@@ -2,11 +2,11 @@
 
 ## Task ID
 
-QRE-GUI-FACTOR-REGISTRY-001（因子语义注册表：中文展示/搜索 + NL 确定性别名解析）
+QRE-SAAS-PARAMETER-TIPS-001（回测参数口径与单位提示）
 
 ## Current Status
 
-DONE（2026-10-25 用户批准 commit + push + ECS 部署；含 NL holding 默认 0 热修）
+DONE（2026-10-25 用户批准通过，允许本地 commit + ECS 部署，不 push）
 
 ## Task Note
 

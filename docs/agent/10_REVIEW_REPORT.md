@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-GUI-FACTOR-REGISTRY-001（因子语义注册表）
+QRE-SAAS-PARAMETER-TIPS-001
 
 ## Reviewer
 
@@ -10,7 +10,7 @@ KIMI_CODE（single agent self-review）
 
 ## Review Status
 
-PASS（注册表与 holding 热修验证完成，全量 2534 passed + 5 skipped、真实 NL 五例全过；用户批准 commit + push + ECS 部署）
+PASS（参数提示与真实浏览器验收完成，全量 2536 passed + 5 skipped；用户批准本地 commit + ECS 部署，不 push）
 
 ## Holding Hotfix Review
 

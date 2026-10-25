@@ -2,7 +2,11 @@
 
 ## Task ID
 
-QRE-GUI-FACTOR-REGISTRY-001（因子语义注册表）
+QRE-SAAS-PARAMETER-TIPS-001（回测参数口径与单位提示）
+
+## Implementation Summary
+
+`new.html` 基础/高级参数 label 增加 `data-tip` 与 `tabindex=0`，复用 `LabUI.helpTips()`。说明共享/批量资金、金额元、比例小数、0/留空不限、次日价格、风险比例、费用与代码后缀；不改默认值、YAML 或回测。新增 `tests/test_saas_parameter_tips.py`；真实 Chromium 桌面/移动各 14 项通过，证据 `.tmp/parameter-tips/`，全量 2536 passed + 5 skipped。未 commit/push/ECS。
 
 ## Release Status
 

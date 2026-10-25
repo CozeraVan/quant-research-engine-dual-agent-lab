@@ -1,3 +1,11 @@
+### 2026-10-25: 回测参数说明复用统一提示组件
+
+- Decision: 基础/高级参数在 label 上以 `data-tip` 提供口径、单位、默认值和 0/留空
+  规则，使用现有悬停/聚焦/移动 tap，不增加可见灰字或另一套提示交互。
+- Rationale: 输入框已有默认值时 placeholder 不可见；共享/批量资金与比例单位最容易
+  误用。说明不改变参数值或回测行为，桌面和移动逐字段实测。
+- Owner: KIMI_CODE
+
 ### 2026-10-25: NL 未说明持仓期限时统一 max_holding_days=0
 
 - Decision: `holding.max_holding_days` 是最长持仓天数，0=不限。NL 编译缺少 holding
