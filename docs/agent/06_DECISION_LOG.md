@@ -1,3 +1,21 @@
+### 2026-10-25: 自选因子入口改三栏弹窗，select 降级为隐藏数据字段
+
+- Decision: 入口 2（自选因子交易）条件行的「大类 / 子类 / 因子」三个堆叠下拉，改为
+  「当前因子选择按钮 + 三栏联动弹窗 + 名称/字段搜索」。原 `.wz-left`/`.wz-rfield`
+  select **不删除、不改类名、不改 change 监听**，仅加 `.factor-picker-field` 类并
+  `display:none`，继续作为唯一数据字段；按钮只负责显示当前「大类 / 子类 / 因子」
+  与打开弹窗，不承载任何策略状态。最终因子选中后走 `syncFactorSelect` 写回隐藏
+  select，再 `dispatchEvent(new Event('change', {bubbles:true}))` 复用原 change
+  契约（refreshWizard），而不是直接调用刷新函数。
+- Rationale: 因子库数百项，一行三个下拉无法浏览定位；但 YAML、`usedFactors()`、
+  `readGroup()`、`snapshotWzArea()`、固定值切换、条件快照与策略还原、price basis
+  归一都建立在「select.value 即真相」之上，任何并行状态都会造成两处不一致。保留
+  隐藏 select 作为唯一值来源，让弹窗成为纯呈现层，契约回归面降到零。弹窗复用
+  `FACTOR_OPTIONS`/`factorGroups()`/`factorSubs()` 与既有目录加载结果，不新增 API
+  与依赖；样式复用既有 modal 组件与紫色主题变量，无新色相。移动端三栏降单列
+  堆叠 + 各自内部滚动，保证 375px 无页面横向溢出。
+- Owner: KIMI_CODE
+
 # Decision Log
 
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.

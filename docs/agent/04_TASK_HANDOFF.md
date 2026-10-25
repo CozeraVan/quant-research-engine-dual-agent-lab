@@ -2,18 +2,38 @@
 
 ## Task ID
 
-QRE-SAAS-HELP-COPY-002（Kimi 重做全站备注与提示交互）
+QRE-SAAS-FACTOR-PICKER-MODAL（自选因子三栏弹窗选择器）
 
 ## Current Status
 
-DONE（2026-10-25 用户批准通过；002 已部署 ECS 验收，允许本地 commit，不 push）
+DONE（2026-10-25 用户认可完成度并批准 commit + push）
 
 ## Task Note
 
-- 组件：`LabUI.helpTips()` 使用事件委托与单例提示框，动态节点无需 refresh；桌面 hover/focus、移动 tap、滚动跟随和 ARIA 已覆盖。
-- 文案：new/job/symbol 为主，同步 symbols/records/dashboard/console/strategy；删除重复说明，模块口径入问号、指标口径入整卡，必要状态/权限/截断/免责保留。
-- 验证：相关回归 230 passed；全量 2462 passed + 5 skipped。真实 Chromium 连续 3 次 hover、指标正文、移动 tap 和 375px 通过；截图与结果 `.tmp/help-copy-v2/`。
-- 边界：未运行真实回测，未部署 ECS，未 commit/push；用户验收和提交授权后再收尾。
+- 交互：每个因子位置由三个堆叠下拉改为「当前因子选择按钮 + 三栏弹窗 + 搜索」。按钮显示
+  「大类 / 子类 / 因子」，未选时显示「选择因子」；点击父级只更新下级，点最终因子回填并关闭；
+  搜索匹配 label/value/group/sub 并展示完整层级；支持关闭按钮、Esc、点遮罩、Tab 焦点锁，
+  打开后焦点进搜索、关闭后焦点回原按钮。
+- 数据契约：`.wz-left`/`.wz-rfield` select 降级为隐藏数据字段（`.factor-picker-field
+  select{display:none}`），仍是唯一值来源；`readGroup()`、`snapshotWzArea()`、`usedFactors()`、
+  YAML 预览、固定值切换、策略还原、price basis 归一全部零改动。弹窗复用 `FACTOR_OPTIONS`、
+  `factorGroups()`、`factorSubs()` 与既有目录加载结果，不新增 API、不加依赖。
+- 文件：`gui/saas/templates/new.html`（弹窗结构 + `openFactorPicker`/`closeFactorPicker`/
+  `syncFactorPickerButton`/`fpRender`/`fpPick`/`fpList`）、`gui/static/lab-theme.css`
+  （`.factor-select-btn` / `.fp-*` 族 + 768px 移动端降级）、`tests/test_saas_factor_picker.py`
+  （新增 10 项）、`tests/test_gui_saas_pages.py`（新增 `TestFactorPickerModal` 2 项）。
+- 验证：目标测试 10 passed；与 saas pages 合计 83 passed；相关 SaaS 回归 242 passed；
+  全量 2474 passed + 5 skipped。真实 Chromium 8091 桌面 1280 与移动 375 共 64/64 项通过
+  （左右因子三级选择、搜索/清空/空态、连续三次开关、Esc/遮罩/关闭按钮、焦点返回、Tab 焦点锁、
+  按钮与 YAML 一致、固定值、条件增删、AND/OR、无 JS error、无横向溢出）；
+  截图与结果 `.tmp/factor-picker-modal/`。
+- 部署：仅同步 `new.html` 与 `lab-theme.css` 两个生产文件并重启 `qre-saas`（未重启 worker，
+  未部署测试/文档）。覆盖前备份 `/tmp/qre-factor-picker-pre-20261025-124220/{new.html,lab-theme.css}`；
+  ECS 上两文件 SHA256 与本地一致（new.html `fd844541…`、lab-theme.css `1ff80af8…`），
+  公网 `/saas/new` 200 且含全部弹窗标记，公网 CSS 与本地逐字节一致。
+- ECS 既有未提交改动：11 个 SaaS 模板/静态文件与本地 HEAD 逐字节一致（上一任务
+  help-copy 部署遗留，与本任务无关），无覆盖风险。
+- 边界：未运行真实全量回测，未 commit、未 push；等用户实机验收。
 
 ---
 

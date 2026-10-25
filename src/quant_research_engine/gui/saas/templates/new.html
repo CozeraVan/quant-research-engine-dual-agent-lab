@@ -214,6 +214,25 @@
       <p id="factor-modal-status" class="opt" style="margin-top:8px"></p>
     </div>
   </div>
+
+  <!-- 自选因子三栏弹窗选择器（QRE-SAAS-FACTOR-PICKER-MODAL：按钮 + 三栏 + 搜索；
+       隐藏的 .wz-left/.wz-rfield select 仍是唯一数据字段，本弹窗只做呈现与选择） -->
+  <div class="modal-mask" id="factor-picker-modal" aria-hidden="true">
+    <div class="modal factor-picker" role="dialog" aria-modal="true" aria-label="选择因子">
+      <div class="fp-head">
+        <h3>选择因子</h3>
+        <button type="button" class="fp-close" id="factor-picker-close" aria-label="关闭因子选择器">×</button>
+      </div>
+      <input type="text" id="factor-picker-search" class="fp-search" placeholder="搜索因子名称或字段，如 ema、macd" aria-label="搜索因子">
+      <div class="fp-cols" id="factor-picker-cols">
+        <div class="fp-col"><h4>大类</h4><div class="fp-list" id="fp-list-group"></div></div>
+        <div class="fp-col"><h4>子类</h4><div class="fp-list" id="fp-list-sub"></div></div>
+        <div class="fp-col"><h4>因子</h4><div class="fp-list" id="fp-list-factor"></div></div>
+      </div>
+      <div class="fp-results" id="factor-picker-results" hidden></div>
+      <p class="fp-empty" id="factor-picker-empty" hidden>没有匹配的因子，换个关键词试试</p>
+    </div>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -528,19 +547,129 @@ function syncFactorSelect(wrap, cur){
   if (curOpt) g.value = curOpt.group;
   fillSubOptions(wrap, curOpt ? curOpt.sub : null);
   renderFactorOptions(sel, c, g.value, s.value);
+  syncFactorPickerButton(wrap);
 }
 function makeFactorSelect(cls){
-  const wrap = document.createElement('span'); wrap.className = 'wz-factsel';
+  const wrap = document.createElement('span'); wrap.className = 'wz-factsel factor-picker-field';
   const g = document.createElement('select'); g.className = 'wz-fact-group'; g.title = '大类';
   const sub = document.createElement('select'); sub.className = 'wz-fact-sub'; sub.title = '子类';
   const sel = document.createElement('select'); sel.className = cls; sel.title = '因子';
   g.addEventListener('change', () => { fillSubOptions(wrap); renderFactorOptions(sel, null, g.value, sub.value); refreshWizard(); });
   sub.addEventListener('change', () => { renderFactorOptions(sel, null, g.value, sub.value); refreshWizard(); });
   sel.addEventListener('change', refreshWizard);
-  wrap.appendChild(g); wrap.appendChild(sub); wrap.appendChild(sel);
+  // 按钮只负责显示当前「大类 / 子类 / 因子」并打开弹窗；三个 select 降级为隐藏数据字段
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'factor-select-btn'; btn.textContent = '选择因子';
+  btn.title = '点击从因子库选择因子';
+  btn.setAttribute('aria-haspopup', 'dialog');
+  btn.setAttribute('aria-label', '选择因子');
+  btn.addEventListener('click', () => openFactorPicker(wrap));
+  wrap.appendChild(btn); wrap.appendChild(g); wrap.appendChild(sub); wrap.appendChild(sel);
   return wrap;
 }
 function setFactorSelectValue(wrap, v){ syncFactorSelect(wrap, v); wrap.querySelectorAll('select')[2].value = v; refreshWizard(); }
+
+// ---------- 自选因子三栏弹窗选择器（QRE-SAAS-FACTOR-PICKER-MODAL） ----------
+// 数据契约：.wz-left/.wz-rfield 隐藏 select 仍是唯一值来源（readGroup / snapshotWzArea /
+// usedFactors / YAML / 固定值 / 策略还原口径不变），按钮只显示当前因子并打开弹窗；
+// 弹窗复用 FACTOR_OPTIONS、factorGroups()、factorSubs() 与既有目录加载结果，不新增 API。
+let fpWrap = null, fpLastFocus = null, fpSel = {group: null, sub: null};
+function fpFactorSel(wrap){ return wrap.querySelectorAll('select')[2]; }
+function fpFactorOpt(v){ for (const o of FACTOR_OPTIONS){ if (o.value === v) return o; } return null; }
+function fpButtonText(v){
+  const o = fpFactorOpt(v);
+  return o ? (o.group + ' / ' + o.sub + ' / ' + o.label) : '选择因子';
+}
+function syncFactorPickerButton(wrap){
+  const btn = wrap.querySelector('.factor-select-btn');
+  if (!btn) return;
+  const v = fpFactorSel(wrap).value, o = fpFactorOpt(v);
+  btn.textContent = fpButtonText(v);
+  btn.title = o ? (o.label + '（' + v + '）') : '点击从因子库选择因子';
+}
+function fpList(box, items, active, level){
+  box.innerHTML = '';
+  items.forEach(it => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fp-item' + (active && it.value === active ? ' sel' : '');
+    b.textContent = it.label;
+    b.dataset.value = it.value;
+    b.dataset.level = level;
+    b.addEventListener('click', () => fpPick(level, it.value));
+    box.appendChild(b);
+  });
+}
+function fpRender(){
+  const q = ($('#factor-picker-search').value || '').trim().toLowerCase();
+  const cols = $('#factor-picker-cols'), res = $('#factor-picker-results'), empty = $('#factor-picker-empty');
+  if (!q){
+    cols.hidden = false; res.hidden = true; empty.hidden = true;
+    res.innerHTML = '';  // 切回三栏时清空搜索结果，避免隐藏残留节点进入焦点链
+    fpList($('#fp-list-group'), factorGroups().map(g => ({value: g, label: g})), fpSel.group, 'group');
+    fpList($('#fp-list-sub'), fpSel.group ? factorSubs(fpSel.group).map(s => ({value: s, label: s})) : [], fpSel.sub, 'sub');
+    const cur = fpWrap ? fpFactorSel(fpWrap).value : '';
+    const facs = FACTOR_OPTIONS.filter(o => (!fpSel.group || o.group === fpSel.group) && (!fpSel.sub || o.sub === fpSel.sub));
+    fpList($('#fp-list-factor'), facs.map(o => ({value: o.value, label: o.label})), cur, 'factor');
+    return;
+  }
+  // 搜索：只读过滤当前弹窗显示，匹配 label/value/group/sub，结果带完整层级
+  const hits = FACTOR_OPTIONS.filter(o => (o.label + ' ' + o.value + ' ' + o.group + ' ' + o.sub).toLowerCase().indexOf(q) >= 0);
+  cols.hidden = true; res.hidden = false; empty.hidden = hits.length > 0;
+  fpList(res, hits.map(o => ({value: o.value, label: o.group + ' / ' + o.sub + ' / ' + o.label})), null, 'factor');
+}
+function fpPick(level, value){
+  if (level === 'group'){ if (fpSel.group !== value){ fpSel.group = value; fpSel.sub = null; } fpRender(); return; }
+  if (level === 'sub'){ fpSel.sub = value; fpRender(); return; }
+  if (!fpWrap) return;
+  // 最终因子：写回隐藏数据字段 → 同步按钮 → 派发一次原 change（refreshWizard）→ 关闭还焦
+  const sel = fpFactorSel(fpWrap);
+  syncFactorSelect(fpWrap, value);
+  if (sel.value !== value) sel.value = value;
+  sel.dispatchEvent(new Event('change', {bubbles: true}));
+  closeFactorPicker();
+}
+function openFactorPicker(wrap){
+  if (!catalogReady){
+    // 目录未加载 / 加载失败：不弹窗，沿用既有状态与错误提示
+    const st = $('#wz-factor-status');
+    if (st){ st.innerHTML = '<span class="err">因子目录未就绪，暂时无法挑选因子；可稍后重试，或改用自然语言 / 策略代码入口</span>'; st.style.display = ''; }
+    return;
+  }
+  fpWrap = wrap;
+  fpLastFocus = wrap.querySelector('.factor-select-btn');
+  const o = fpFactorOpt(fpFactorSel(wrap).value);
+  fpSel = {group: o ? o.group : null, sub: o ? o.sub : null};
+  const search = $('#factor-picker-search');
+  search.value = '';
+  fpRender();
+  $('#factor-picker-modal').classList.add('show');
+  search.focus();
+}
+function closeFactorPicker(){
+  const mask = $('#factor-picker-modal');
+  if (!mask.classList.contains('show')) return;
+  mask.classList.remove('show');
+  fpWrap = null;
+  if (fpLastFocus && fpLastFocus.focus) fpLastFocus.focus();
+  fpLastFocus = null;
+}
+// Esc 关闭；Tab 焦点锁在弹窗内（键盘可用）
+document.addEventListener('keydown', e => {
+  if (!$('#factor-picker-modal').classList.contains('show')) return;
+  if (e.key === 'Escape'){ if (e.preventDefault) e.preventDefault(); closeFactorPicker(); return; }
+  if (e.key === 'Tab'){
+    const items = $$('#factor-picker-modal button, #factor-picker-modal input')
+      .filter(el => !el.disabled && !(el.closest && el.closest('[hidden]')));
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first){ if (e.preventDefault) e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last){ if (e.preventDefault) e.preventDefault(); first.focus(); }
+  }
+});
+$('#factor-picker-close').addEventListener('click', closeFactorPicker);
+$('#factor-picker-modal').addEventListener('click', function(e){ if (e.target === this) closeFactorPicker(); });
+$('#factor-picker-search').addEventListener('input', fpRender);
 function wzAddCondition(area, groupEl, preset){
   const container = groupEl.querySelector('.cond-group-rows');
   const row = document.createElement('div'); row.className = 'condition-item wz-cond';

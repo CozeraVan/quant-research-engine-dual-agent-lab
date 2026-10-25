@@ -202,6 +202,39 @@
 - 模块标题使用 `.tip-trigger` 问号按钮；指标卡整卡使用 `data-tip` + `tabindex=0`，不再为每卡额外画问号。提示层 fixed 定位、视口防溢出、`pointer-events:none`，颜色只用既有主题变量。
 - 必要权限、错误、动态状态、截断和免责声明保持可见，不得为精简而藏入提示。真实 Chromium 连续悬停与移动 tap 是此类改动的验收硬门槛。
 
+### 3.14 自选因子三栏弹窗选择器（QRE-SAAS-FACTOR-PICKER-MODAL，2026-10-25）
+
+- 用途：入口 2（自选因子交易）条件行的因子选择。原一行三个堆叠下拉（大类/子类/因子）
+  改为「当前因子选择按钮 + 三栏联动弹窗 + 搜索」，只改 `gui/saas/templates/new.html`；
+  8081 lab 侧 `lab.html` 的自有向导副本冻结不动。
+- **数据契约（硬规则）**：`.wz-left` / `.wz-rfield` select **不删除、不改类名、不改
+  change 监听**，仅追加 `.factor-picker-field` 类并由 lab-theme.css
+  `.factor-picker-field select{display:none}` 隐藏，继续作为唯一数据字段。`readGroup()`、
+  `snapshotWzArea()`、`usedFactors()`、YAML 预览、固定值切换、策略还原、price basis
+  归一一律不因本组件改动。按钮（`.factor-select-btn`）只显示当前「大类 / 子类 / 因子」
+  （未选显示「选择因子」）并打开弹窗，**不承载任何策略状态**。最终因子选中后走
+  `syncFactorSelect` 写回隐藏 select，再 `dispatchEvent(new Event('change',{bubbles:true}))`
+  复用原 change 契约，禁止直接调用刷新函数绕过事件链。
+- 结构：`#factor-picker-modal` 复用 `.modal-mask` + `.modal.factor-picker`
+  （`role="dialog"`/`aria-modal`/`aria-label="选择因子"`），含 `#factor-picker-close`、
+  `#factor-picker-search`、三栏 `#fp-list-group`/`#fp-list-sub`/`#fp-list-factor`、
+  搜索结果 `#factor-picker-results`、空态 `#factor-picker-empty`。弹窗复用
+  `FACTOR_OPTIONS`/`factorGroups()`/`factorSubs()` 与既有 `/api/saas/factors` 目录加载
+  结果，**不新增 API、不加依赖**；目录未就绪（`catalogReady` false）不弹窗，只在
+  `#wz-factor-status` 沿用既有错误提示。
+- 交互硬规则：点父级只更新下级不改值；Esc、关闭按钮、点遮罩**只关不改值**；打开后焦点
+  进搜索框，关闭后焦点回到打开它的那个按钮（直接持有按钮元素，不用
+  `document.activeElement`——Safari 点击按钮不自动聚焦）；Tab 焦点锁在弹窗内循环并过滤
+  `[hidden]` 容器节点；搜索匹配 label/value/group/sub 并展示完整层级，清空恢复三栏，
+  切回三栏必须清空搜索结果容器（否则隐藏残留节点会劫持 Tab 焦点链末位）。
+- 视觉：`.fp-item` 选中态 `--lav` 底白字（与 `.cal-day.sel` 同调），列表 `--tint` hover，
+  三栏表头 `--tint` 底 + `--grey` 12px；弹层阴影 `--shadow-2`；`:focus-visible` 紫环；
+  无新色相、无循环动效。桌面 `max-width:780px`、`max-height:min(600px,calc(100vh - 48px))`。
+- 移动端（768px）：`width:calc(100vw - 24px)`、`max-height:calc(100vh - 40px)`、三栏
+  `grid-template-columns:1fr` 单列堆叠、`.fp-list{max-height:30vh}` 各自内部滚动；
+  按钮 `min-height:44px`（命中 §10 点击目标）且允许折行（`white-space:normal`）。
+  真实 Chromium 375px 硬门槛：无页面横向溢出、无 JS error。
+
 ---
 
 ## 4. 图表规范（ECharts）
@@ -385,6 +418,7 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 ## 变更记录
 
+- 2026-10-25（QRE-SAAS-FACTOR-PICKER-MODAL）新增 §3.14 自选因子三栏弹窗选择器：入口 2 条件行三个堆叠下拉改为「按钮 + 三栏弹窗 + 搜索」；`.wz-left`/`.wz-rfield` select 降级为隐藏数据字段（`.factor-picker-field select{display:none}`）但仍是唯一值来源，YAML/快照/固定值/策略还原/price basis 零改动；弹窗复用 `FACTOR_OPTIONS` 与既有目录加载，不新增 API 与依赖；Esc/遮罩/关闭按钮只关不改值、焦点进搜索并归还原按钮、Tab 焦点锁；样式复用既有 modal 与紫色主题变量，768px 三栏降单列 + 视口限高。改动集中在 `gui/saas/templates/new.html` 与 `static/lab-theme.css`（移动端规则随组件放 lab-theme.css，因 base.html 无同族竞争规则），8081 lab 侧零改动。
 - 2026-10-04（QRE-SAAS-WAIT-MASK + REPLAY-LAYOUT）新增 §3.12 长等待模态遮罩组件规则（禁 ESC/背板/全锁、z-95、两段式分流范式、keepMask 语义）；§3.11 补布局规则（倍速与播放同排、进度条置图表正下方 .rp-slider-row）。
 - 2026-10-04（QRE-SAAS-REPLAY-POLISH）§3.11 修订：重播改**接管模式**（接管原图表容器，禁第二模块，退出内存重建静态）+ 交互打磨硬规则（SVG 图标+文字标签、hover/focus-visible、150-300ms、prefers-reduced-motion 降级、36px 等高 8px 网格）。
 - 2026-10-04（QRE-SAAS-REPLAY-S1）新增 §3.11 回测重播组件规则：static/replay.js 共享组件（core 纯逻辑 + attach UI），[0,cursor] 截断渲染/rAF 节流/时序 T 与 T+1 相隔三条红线，.rp-* 控制条与事件流族（淡紫 tokens 无新色相），768px 断点折行，末帧指标=静态报告强一致性（Playwright 断言）。

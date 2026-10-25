@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-SAAS-HELP-COPY-002
+QRE-SAAS-FACTOR-PICKER-MODAL（自选因子三栏弹窗选择器）
 
 ## Reviewer
 
@@ -10,28 +10,49 @@ KIMI_CODE（single agent self-review）
 
 ## Review Status
 
-PASS（相关回归、真实 Chromium 桌面/移动及用户验收通过；允许本地 commit，不 push）
+PASS（TDD RED→GREEN、相关回归与全量零回归、真实 Chromium 双视口 64/64 通过、ECS 已部署待用户验收）
 
 ## Findings
 
-- 001 的文案遗漏、逐节点状态与缺少浏览器验收已由 002 针对性重做；没有复用被否决实现。
-- 真实浏览器暴露出 focus→touch、自动滚动和兼容 mouseout 三类问题，均先补失败用例再修复；最终首次 tap 不再闪关。
-- 指标说明与计算口径一致；权限、错误、截断、动态状态及免责声明保持可见。无 Required Fix。
+- 数据契约是本任务唯一高风险面。审查确认 `.wz-left`/`.wz-rfield` select 的类名、change
+  监听、`readGroup()`/`snapshotWzArea()`/`usedFactors()` 读取路径完全未动，弹窗只通过
+  `syncFactorSelect` + 一次 `change` 事件回填，不存在第二处策略状态。Node VM 用例对
+  `collectWizardState()` 做了快照→还原深比较，确认还原值与快照逐字段相等。
+- 实现审查中发现并修复一个真实缺陷：搜索后清空关键词切回三栏时，`#factor-picker-results`
+  里残留的旧按钮仍留在 DOM（容器 `hidden`），会成为 Tab 焦点链的「末位」，导致焦点锁失效、
+  Tab 把焦点带出弹窗。修复为切回三栏即 `res.innerHTML = ''`，同时焦点链过滤
+  `[hidden]` 容器内的节点；两端都补了回归断言（Node VM 断言 results 子节点被清空，
+  真实 Chromium 断言末位 Tab 回卷到关闭按钮）。
+- 焦点返回原先用 `document.activeElement`，审查后改为直接持有打开弹窗的那个按钮元素，
+  规避 Safari 点击按钮不自动聚焦导致焦点丢失的差异；真实浏览器两视口均验证焦点回到原按钮。
+- 样式审查：全部使用既有主题变量，无第四种色相、无循环动效；`.factor-picker-field
+  select{display:none}` 通过新增类名隔离，不影响 lab 侧 `lab.html` 的同名 `.wz-factsel`
+  结构（lab 侧冻结未改）。
+- 可访问性：`role="dialog"`/`aria-modal`/`aria-label`、按钮 `aria-haspopup` 与
+  `aria-label`、打开即聚焦搜索、Esc 关闭、Tab 焦点锁、`:focus-visible` 紫环均在位。
+- 无 Required Fix。
 
 ## Validation Evidence
 
 ```text
-相关 SaaS 回归：230 passed
-全量：2462 passed, 5 skipped
-真实 Chromium：桌面连续 3 次 hover 均显示完整正文；移动 tap 开关、375px 无横滚、零 JS error
-证据：.tmp/help-copy-v2/
+tests/test_saas_factor_picker.py                        10 passed
++ tests/test_gui_saas_pages.py                          83 passed
+相关 SaaS 回归（7 个文件）                              242 passed
+全量 pytest tests/ --ignore=tests/data_test            2474 passed, 5 skipped
+真实 Chromium（桌面 1280x900 + 移动 375x812）            64/64 通过
+Node 解析渲染后 new.html 内联脚本                       通过
+check-progress-docs.sh / git-finalize-check.sh / git diff --check   通过
+ECS：qre-saas active；new.html/lab-theme.css SHA256 本地=线上；
+公网 /saas/new 200 且含全部弹窗标记；公网 CSS 与本地逐字节一致
 ```
 
-未部署 ECS，未运行真实全量回测；等待用户验收与提交授权。
+未运行真实全量回测，未 commit、未 push；等用户实机验收与提交授权。
 
 ## Required Fixes
 
 无。
+
+---
 
 ---
 

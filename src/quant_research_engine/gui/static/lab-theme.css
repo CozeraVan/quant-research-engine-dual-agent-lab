@@ -559,3 +559,43 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 @media (hover:none){.tip-trigger{width:36px;height:36px}.tip-trigger svg{width:14px;height:14px}}
 @media (max-width:768px){.tip-trigger{min-width:36px;min-height:36px}}
 @media (prefers-reduced-motion:reduce){.tip-trigger{transition:none}}
+
+/* ---- 自选因子三栏弹窗选择器（QRE-SAAS-FACTOR-PICKER-MODAL，2026-10-25 用户批准）----
+   数据契约：.wz-left/.wz-rfield select 降级为隐藏数据字段（readGroup/snapshotWzArea/
+   usedFactors/YAML 口径不变），按钮仅显示当前「大类 / 子类 / 因子」并打开弹窗。
+   复用既有 modal-mask/.modal 组件与紫色主题变量，无新色相、无循环动效。 */
+.factor-picker-field select{display:none}
+.factor-select-btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;max-width:300px;padding:6px 12px;font-family:inherit;font-size:12.5px;color:var(--lav-deep);background:#fff;border:1px solid var(--line);border-radius:8px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:border-color .2s,box-shadow .2s}
+.factor-select-btn:hover{border-color:var(--lav-ink);box-shadow:var(--shadow-1)}
+.factor-select-btn:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
+#factor-picker-modal .modal.factor-picker{display:flex;flex-direction:column;gap:12px;width:calc(100vw - 48px);max-width:780px;max-height:min(600px,calc(100vh - 48px));padding:20px 22px}
+#factor-picker-modal .fp-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#factor-picker-modal .fp-head h3{margin-bottom:0;font-size:16px}
+#factor-picker-modal .fp-close{width:32px;height:32px;padding:0;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--grey);font-size:16px;line-height:1;cursor:pointer;transition:all .2s var(--ease)}
+#factor-picker-modal .fp-close:hover{border-color:var(--lav);color:var(--lav-deep);background:var(--tint)}
+#factor-picker-modal .fp-close:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
+#factor-picker-modal .fp-search{width:100%;box-sizing:border-box;height:36px;padding:0 12px;font-family:inherit;font-size:13.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px}
+#factor-picker-modal .fp-search:focus{border-color:var(--lav);box-shadow:0 0 0 3px rgba(103,80,164,.15);outline:none}
+#factor-picker-modal .fp-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;flex:1;min-height:0}
+#factor-picker-modal .fp-col{display:flex;flex-direction:column;min-height:0;overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:8px}
+#factor-picker-modal .fp-col h4{padding:7px 10px;font-size:12px;font-weight:600;color:var(--grey);background:var(--tint);border-bottom:1px solid var(--line)}
+#factor-picker-modal .fp-list{flex:1;min-height:0;overflow-y:auto;padding:4px;-webkit-overflow-scrolling:touch}
+#factor-picker-modal .fp-item{display:block;width:100%;box-sizing:border-box;padding:6px 9px;border:none;border-radius:6px;background:none;font-family:inherit;font-size:12.5px;line-height:1.5;color:var(--ink);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:background .15s var(--ease),color .15s var(--ease)}
+#factor-picker-modal .fp-item:hover{background:var(--tint);color:var(--lav-deep)}
+#factor-picker-modal .fp-item.sel{background:var(--lav);color:#fff;font-weight:500}
+#factor-picker-modal .fp-item:focus-visible{outline:2px solid var(--lav);outline-offset:-1px}
+#factor-picker-modal .fp-results{flex:1;min-height:0;overflow-y:auto;padding:4px;border:1px solid var(--line);border-radius:8px;-webkit-overflow-scrolling:touch}
+#factor-picker-modal .fp-results .fp-item{white-space:normal}
+#factor-picker-modal .fp-empty{padding:18px 10px;font-size:12.5px;color:var(--faint);text-align:center}
+#factor-picker-modal .fp-hint{padding:8px 10px;font-size:12px;color:var(--faint)}
+@media(max-width:768px){
+  /* 移动端：接近全宽 + 高度受视口限制，三栏降为单列堆叠、各自内部滚动，禁页面横滚 */
+  #factor-picker-modal .modal.factor-picker{width:calc(100vw - 24px);max-height:calc(100vh - 40px);padding:16px}
+  #factor-picker-modal .fp-cols{grid-template-columns:1fr;grid-auto-rows:auto}
+  #factor-picker-modal .fp-list{max-height:30vh}
+  #factor-picker-modal .fp-results{max-height:46vh}
+  .factor-select-btn{flex:1 1 160px;max-width:none;min-height:44px;white-space:normal}
+}
+@media (prefers-reduced-motion: reduce){
+  #factor-picker-modal .fp-item,#factor-picker-modal .fp-close,.factor-select-btn{transition:none}
+}

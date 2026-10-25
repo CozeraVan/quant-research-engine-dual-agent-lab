@@ -2,23 +2,29 @@
 
 ## Task ID
 
-QRE-SAAS-HELP-COPY-002（Kimi 重做全站备注与提示交互）
+QRE-SAAS-FACTOR-PICKER-MODAL（自选因子三栏弹窗选择器）
 
 ## Implementation Summary
 
-`LabUI.helpTips()` 使用 document 事件委托与单例 `#qre-help-tip`，动态节点无需 refresh。桌面 mouseover 只 show、mouseout hide，focusin/out 支持键盘，touch/pen pointerup 切换；700ms 内忽略触摸后的兼容鼠标事件，滚动时跟随定位。样式为 `.tip-trigger` 与 `.tip-pop`，复用既有主题变量。
+`gui/saas/templates/new.html`：`makeFactorSelect(cls)` 现在创建 `span.wz-factsel.factor-picker-field`，内嵌 `.factor-select-btn` 按钮 + 原有三个 select（`.wz-fact-group`/`.wz-fact-sub`/`cls`）。按钮 `textContent` 为「大类 / 子类 / 因子」（未选为「选择因子」），`title` 为「标签（字段）」+ `aria-haspopup="dialog"`。`syncFactorSelect` 末尾调用 `syncFactorPickerButton(wrap)`，因此目录加载、`setFactorSelectValue`（策略还原）与弹窗回填三条路径的按钮文案自动一致。
 
-new 删除重复组合说明、代码编辑器定位、预览备注和表单静态灰字；向导使用说明及入出场/ID/随机范围入提示。job/symbol 图表与风险说明入问号，收益/区间/VaR/ES 等口径入指标卡，磨损重复口径删除；symbols/records/dashboard/console/strategy 同步精简。权限、错误、动态状态、截断与免责声明保留。
+弹窗 `#factor-picker-modal`（复用 `.modal-mask` + `.modal.factor-picker`，`role="dialog"`/`aria-modal`/`aria-label`）包含 `#factor-picker-close`、`#factor-picker-search`、三栏 `#fp-list-group`/`#fp-list-sub`/`#fp-list-factor`、搜索结果 `#factor-picker-results` 与空态 `#factor-picker-empty`。`openFactorPicker(wrap)` 记录 `fpWrap` 与 `fpLastFocus`（直接取该 wrap 的按钮，不依赖 `document.activeElement`，规避 Safari 点击按钮不聚焦的差异），按当前值定位三栏，清空搜索并 `search.focus()`；`fpRender()` 无关键词时渲染三栏（当前项加 `.sel` 紫底），有关键词时对 `FACTOR_OPTIONS` 做只读过滤（`label/value/group/sub` 小写匹配）并展示完整层级；`fpPick(level, value)` 对 group/sub 只更新下级，对最终因子执行 `syncFactorSelect` 写回 → `sel.dispatchEvent(new Event('change', {bubbles:true}))` → `closeFactorPicker()`。`closeFactorPicker()` 关闭、清 `fpWrap`、把焦点还给 `fpLastFocus`。目录未就绪（`catalogReady === false`）时不弹窗，只在 `#wz-factor-status` 沿用既有错误提示。
 
-真实 Chromium 使用 8091 staging 既有 job 37 和 000001：桌面同一目标连续 3 次悬停均显示完整正文；移动首次 tap 显示、再次关闭，375px 无横向溢出；截图与结果在 `.tmp/help-copy-v2/`。未运行回测，未 commit/push。
+Esc 与 Tab 焦点锁通过 `document` 上的 keydown 监听实现（仅在弹窗 `show` 时生效）：Escape 关闭；Tab 在 `#factor-picker-modal button, #factor-picker-modal input` 中循环，并过滤 `[hidden]` 容器内的节点。遮罩点击（`e.target === this`）与关闭按钮同样只关不改值。
 
-2026-10-25 应用户要求已部署 ECS 验收：仅 9 个 SaaS 模板和两个共享静态文件，覆盖前备份 `/tmp/qre-help-copy-v2-pre-20261025.tgz`；`qre-saas` active，关键文件哈希一致，公网资源 200 且含新组件。未重启 worker。
+`gui/static/lab-theme.css` 新增 `.factor-select-btn` 与 `#factor-picker-modal` 下的 `.fp-head`/`.fp-close`/`.fp-search`/`.fp-cols`/`.fp-col`/`.fp-list`/`.fp-item`/`.fp-results`/`.fp-empty`/`.fp-hint` 规则，全部使用既有主题变量（`--lav`/`--tint`/`--line`/`--shadow-1` 等），无新色相、无循环动效；桌面 `max-width:780px`、`max-height:min(600px,calc(100vh - 48px))`；768px 下 `width:calc(100vw - 24px)`、`max-height:calc(100vh - 40px)`、三栏 `grid-template-columns:1fr` 单列堆叠、`.fp-list{max-height:30vh}`、按钮 `min-height:44px` 且允许折行。
 
-提交检查脚本改为只扫描新增 diff 行，解决上下文函数名/测试 stub 误报；`tests/test_git_finalize_check.py` 在临时 git 仓库验证上下文放行和新增敏感赋值拒绝。
+测试：`tests/test_saas_factor_picker.py`（新增）静态断言弹窗结构与契约 + 自建 Node VM mini-DOM harness 驱动真实向导源码，覆盖打开/父子联动/写回/一次 change/焦点返回、Esc 与遮罩只关不改值、目录未就绪不弹窗、搜索（过滤/空态/清空恢复/搜索选中/切回三栏清空残留）、向导回归（固定值、条件增删、AND/OR、快照→还原深比较）、渲染后内联脚本 Node 解析；`tests/test_gui_saas_pages.py` 新增 `TestFactorPickerModal`（渲染页弹窗标记 + CSS 隐藏规则与移动端降级）。
 
-**验证命令**：`/home/van/.local/bin/uv run python -m pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py tests/test_saas_symbol_ux.py tests/test_git_finalize_check.py -q` → **228 passed**。相关模板内联 JS 已通过 Node 解析；finalize/progress/diff 检查通过。
+**验证命令与结果**：
+- `uv run python -m pytest tests/test_saas_factor_picker.py -q` → 10 passed
+- `uv run python -m pytest tests/test_gui_saas_pages.py tests/test_saas_factor_picker.py -q` → 83 passed
+- `uv run python -m pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py tests/test_saas_symbol_ux.py tests/test_saas_help_copy.py tests/test_saas_factor_picker.py -q` → 242 passed
+- `uv run python -m pytest tests/ -q --ignore=tests/data_test` → 2474 passed, 5 skipped
+- `bash scripts/check-progress-docs.sh && bash scripts/git-finalize-check.sh && git diff --check` → 通过
+- 真实 Chromium（`.tmp/browser-venv` + `.tmp/ms-playwright`，8091 staging）`.tmp/factor-picker-modal/verify.py` → 桌面 1280×900 与移动 375×812 合计 **64/64 通过**，零 JS error、零页面横向溢出。
 
-**限制与后续**：未做真实浏览器自动化或全量回测；部署后由用户实机检查无权页、登录回跳和生成等待状态。
+**限制与后续**：未运行真实全量回测；未 commit、未 push（等用户批准）；8081 lab 侧 `lab.html` 的自有向导副本未改（lab 侧冻结，且 SaaS 与 lab 的 `.wz-factsel` 通过新增 `.factor-picker-field` 类隔离，互不影响）。
 
 ---
 

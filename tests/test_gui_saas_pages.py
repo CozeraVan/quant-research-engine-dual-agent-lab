@@ -1606,6 +1606,37 @@ class TestSaasFactorsRoute:
         assert any(g["label"] for g in data["groups"])
 
 
+class TestFactorPickerModal:
+    """QRE-SAAS-FACTOR-PICKER-MODAL：渲染后的 new.html 必须带三栏弹窗与隐藏数据字段契约。"""
+
+    def test_new_page_renders_picker_modal(self, client):
+        html = client.get("/saas/new").get_data(as_text=True)
+        # 弹窗结构（复用既有 modal-mask/.modal 组件）
+        assert 'class="modal-mask" id="factor-picker-modal"' in html
+        assert 'id="factor-picker-search"' in html
+        assert 'id="factor-picker-close"' in html
+        assert 'id="fp-list-group"' in html and 'id="fp-list-sub"' in html and 'id="fp-list-factor"' in html
+        assert 'id="factor-picker-results"' in html and 'id="factor-picker-empty"' in html
+        assert 'role="dialog"' in html and 'aria-modal="true"' in html
+        # 数据契约：按钮只呈现，.wz-left/.wz-rfield 仍是唯一值来源
+        assert "wrap.className = 'wz-factsel factor-picker-field'" in html
+        assert "sel.addEventListener('change', refreshWizard);" in html
+        assert "function openFactorPicker(wrap)" in html
+        assert "function closeFactorPicker()" in html
+        assert "function syncFactorPickerButton(wrap)" in html
+        assert "snapshotWzArea" in html and "setFactorSelectValue" in html
+
+    def test_picker_css_hides_data_selects(self):
+        css = (Path(__file__).resolve().parents[1]
+               / "src/quant_research_engine/gui/static/lab-theme.css").read_text()
+        assert ".factor-picker-field select{display:none}" in css
+        assert ".factor-select-btn" in css
+        assert "#factor-picker-modal .modal.factor-picker" in css
+        # 移动端：接近全宽 + 视口限高 + 三栏降单列，禁页面横滚
+        assert "calc(100vw - 24px)" in css and "calc(100vh - 40px)" in css
+        assert "grid-template-columns:1fr" in css
+
+
 class TestFactorRequests:
     def test_submit_list_dedup(self, client):
         resp = client.post("/api/saas/factor-requests",
