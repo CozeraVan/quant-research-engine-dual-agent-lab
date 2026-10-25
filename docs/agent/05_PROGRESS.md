@@ -1,3 +1,5 @@
+2026-10-25 QRE-GUI-FACTOR-REGISTRY-001 + QRE-NL-HOLDING-DEFAULT-001 RELEASED：实现 commit `ec1fd13` 已 push。ECS 同步 `configs/factor_registry.json`、metadata、registry/factor_catalog/factor_correction/factor_wizard/nl_compiler 与 new.html，旧文件备份 `/tmp/qre-factor-registry-pre-20261025.tgz`；`qre-saas` active，关键文件 SHA256 一致。公网 `/api/saas/factors` 的 ema_5 返回中文名/canonical/close/aliases；真实公网 NL MACD 金叉死叉编译 ok，DIF/DEA 链接正确且 `max_holding_days: 0`，未创建回测、未重启 worker。
+
 2026-10-25 QRE-GUI-FACTOR-REGISTRY-001 + QRE-NL-HOLDING-DEFAULT-001 USER ACCEPTED：用户批准 commit + push + ECS 部署。
 
 2026-10-25 QRE-NL-HOLDING-DEFAULT-001 IMPLEMENTED（Kimi，用户要求，未 commit/push/ECS）：真实编译抽查 MACD/RSI/BOLL/KDJ/MA/EMA，因子别名均正确，但模型常漏 holding 或自行填 999。`nl_compiler` 新增 `_with_default_holding(description)`：缺少 holding 补 `max_holding_days: 0`；用户未说明期限时覆盖模型自行天数为 0（不限），明确期限保留；已有天数仅做文本标量替换，不重写其他 YAML 格式。`holding` 就是最长持仓天数。staging 8091 通过现有 Kimi OpenAI 兼容配置注入 NL 环境（不复制凭证入仓），实际 `/api/saas/nl/compile` 重测此前失败的 MACD、RSI14、BOLL20、KDJ、MA5/20 **5/5 ok 且 max_holding_days 全部 0**，因子均链接真实 canonical，未创建任何回测任务。报告 `.tmp/factor-registry/nl-holding-default-report.json`。TDD 覆盖缺段、显式 5 天、模型编造 999、精确 YAML 格式保持。

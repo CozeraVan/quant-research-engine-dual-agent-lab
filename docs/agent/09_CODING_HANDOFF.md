@@ -4,6 +4,10 @@
 
 QRE-GUI-FACTOR-REGISTRY-001（因子语义注册表）
 
+## Release Status
+
+实现 commit `ec1fd13` 已 push。ECS 同步注册表、metadata、相关 Python 模块与 new.html，备份 `/tmp/qre-factor-registry-pre-20261025.tgz`，`qre-saas` active，哈希一致；公网因子 API 中文字段生效，真实 NL MACD 编译 ok 且 holding=0，未创建回测、未重启 worker。
+
 ## NL Holding Hotfix
 
 `gui/nl_compiler.py` 新增 `_with_default_holding`：缺 holding 补 0；描述无期限语义时覆盖模型编造天数为 0，明确期限保留；已有天数仅标量替换，其他 YAML 原文不动。staging 使用现有 OpenAI 兼容配置（凭证不入仓）后，真实 `/api/saas/nl/compile` 的 MACD/RSI/BOLL/KDJ/MA 五例全过且 holding=0，未创建回测。报告 `.tmp/factor-registry/nl-holding-default-report.json`。
