@@ -6,8 +6,7 @@ QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：等待状态、离线提示与失
 
 ## Release Status
 
-IMPLEMENTED，未 commit/push、未 ECS 代码部署、未跑真实回测。全量 2629 passed + 5 skipped；
-真实 Chromium 12/12 场景通过（证据 `.tmp/first-success-ux/`）。等用户验收后由用户批准提交。
+RELEASED（2026-10-25 用户批准 commit + push + ECS；实现 `a84a9a3` 已发布），未跑真实回测。全量 2629 passed + 5 skipped；真实 Chromium 12/12 场景通过（证据 `.tmp/first-success-ux/`）。ECS 五文件 SHA256 与仓库一致，备份 `/tmp/qre-first-success-ux-pre-20261025/`，生产证据 `.tmp/first-success-ux-production/`。
 
 ## Implementation Summary
 

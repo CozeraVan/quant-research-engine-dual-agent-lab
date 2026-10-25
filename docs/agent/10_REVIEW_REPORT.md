@@ -10,7 +10,7 @@ KIMI_CODE（single agent self-review）
 
 ## Review Status
 
-PASS（实现、全量回归与真实 Chromium 通过；未 commit/push、未 ECS 代码部署、未跑真实回测，待用户验收）
+PASS + RELEASED（2026-10-25 用户批准 commit + push + ECS；实现 `a84a9a3` 已发布；全量 2629 passed + 5 skipped、真实 Chromium 12/12；未跑真实回测）
 
 ## Self-Review Findings
 

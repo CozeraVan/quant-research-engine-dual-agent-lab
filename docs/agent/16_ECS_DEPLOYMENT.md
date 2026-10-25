@@ -45,6 +45,8 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 重启 qre-saas；公网双独立游客 Cookie、私有结果隔离、verified showcase 与 Authing 均验证通过。
 回滚备份 `/tmp/qre-access-hardening-pre-20261025-release/`。
 
+**P1 首次成功路径首切片已发布（2026-10-25，QRE-SAAS-FIRST-SUCCESS-UX-001，commit `a84a9a3`）**：new/job 展示队列位置、worker 离线、已等待与真实失败原因；游客/会员取消与失败恢复上线。仅同步 app.py、new.html、job.html、wait-mask.js、lab-theme.css 并重启 qre-saas，无 schema 变更、未重启 worker。公网五文件 SHA256 与仓库一致，58 verified 200、74 匿名 401、Authing 302。回滚备份 `/tmp/qre-first-success-ux-pre-20261025/`，生产证据 `.tmp/first-success-ux-production/`。
+
 **元数据上云（2026-09-26）**：因子目录与板块/概念名单经
 `scripts/sync_saas_metadata.py` 导出为 deploy/saas/metadata.json（仅名称+数量，
 无行情/成分明细），scp 到 ECS 后由 /api/saas/factors 与 /api/saas/universes 直出

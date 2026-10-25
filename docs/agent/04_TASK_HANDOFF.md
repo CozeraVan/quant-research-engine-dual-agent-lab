@@ -6,15 +6,15 @@ QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：等待状态、离线提示与失
 
 ## Current Status
 
-IMPLEMENTED（2026-10-25，TDD 先 RED 后 GREEN；未 commit/push、未 ECS 代码部署、未跑真实回测，待用户验收）
+DONE（2026-10-25 用户批准 commit + push + ECS；实现 `a84a9a3` 已发布，未跑真实回测）
 
 ## Task Note
 
 - **范围**：P1 首次成功路径首切片。不改 schema/引擎/worker 执行逻辑/结果数值/配额/NL A2/A3；不跑真实回测；不做压测/性能/硬件。详细设计与实现见 `08_IMPLEMENTATION_BRIEF.md` 与 `09_CODING_HANDOFF.md`（同名前新节），自审见 `10_REVIEW_REPORT.md`。
 - **后端**：`app.py` 新增 `_queue_position`/`_worker_online`/`_job_runtime_fields` 单一只读口径；GET job 补 `worker_online`；summary 409 增补 queue_position/worker_online/strategy_id/error_class/error_message/cancel_requested（failed 返回真实原因）；取消端点接入 P0-2 游客会话归属（同会话可取消、异会话/无 Cookie 401、登录他人 404、终态 409）。
 - **前端**：new.html 等待态文案 + AbortError 续轮 + PollTimeoutError 独立超时 + createJob 15s 超时；job.html 队列/离线/取消（自定义模态二次确认）/failed 恢复（登录用户 `/saas/new?strategy=<id>`、游客返回新建页、showcase 只读零入口）；wait-mask aria-live=polite + `.wm-meta` 秒数行（纯视觉）。
-- **验证**：新增 `tests/test_saas_first_success_ux.py` 21 例 + `tests/test_gui_saas_wait_mask.py` 4 例及 `test_gui_saas_pages.py` 运行态回归；主 Agent 复跑聚焦 115 passed；全量 2629 passed + 5 skipped；真实 Chromium 12/12（临时库 + 8099 staging，seed/协议模拟，零 JS error、零横溢、375 取消钮 44px），证据 `.tmp/first-success-ux/`。
-- **下一步**：用户验收 → 批准后 commit（建议 `feat(saas): 完善回测等待状态与失败恢复`）→ ECS 仅同步 app.py/两个模板/wait-mask.js/lab-theme.css 并重启 qre-saas（无 schema 变更、worker 不改）。P1 剩余：结果理解与集中帮助、移动端与可访问性深化、可撤销只读分享、经典策略 UI、运营指标与浏览器自动化；压测与硬件继续暂停。
+- **验证**：主 Agent 复跑聚焦 115 passed；全量 2629 passed + 5 skipped；真实 Chromium 12/12（临时库 + 8099 staging，seed/协议模拟，零 JS error、零横溢、375 取消钮 44px），证据 `.tmp/first-success-ux/`。
+- **发布**：实现 `a84a9a3` 已 push。ECS 备份 `/tmp/qre-first-success-ux-pre-20261025/` 后仅同步 app.py、new.html、job.html、wait-mask.js、lab-theme.css 并重启 qre-saas；公网五个文件 SHA256 与仓库一致，页面包含新运行态/取消/恢复标记，58 verified 200、74 匿名 401、Authing 302。生产证据 `.tmp/first-success-ux-production/`。下一阶段进入结果理解与集中帮助；压测与硬件继续暂停。
 
 ## Archive: QRE-SAAS-ACCESS-HARDENING-001（P0-2 测试账号、结果 IDOR 与游客归属）
 
