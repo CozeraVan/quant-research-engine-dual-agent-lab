@@ -251,3 +251,24 @@ Cookie 缺失时 server 签发随机 `qre_guest_sid`（HttpOnly/SameSite=Lax）�
 - result 从单包 JSON 改为 meta+files 两步（产物文件上云/OSS）；
 - 新增 idempotency_key、cancel_requested、hard deadline、error_class 分类；
 - jobs 表相应加列（迁移脚本随 A2 实现时提供）。
+
+---
+
+## 8. 用户侧运行态响应字段（QRE-SAAS-FIRST-SUCCESS-UX-001，2026-10-25）
+
+> 本节是公网前端可消费的**只读运行态契约**：状态机、租约、取消语义均不变，
+> 只是把既有队列/心跳/失败数据以不泄露 worker 细节的方式暴露给页面。
+
+| 端点 | 新增字段 | 口径 |
+|---|---|---|
+| `GET /api/jobs/<id>`（含 `/api/saas` 别名） | `queue_position` | 仅 `queued`：同优先级按 `created_at` 先后，前面还有几个 queued 任务（§3.1 claim 同序） |
+| 同上 | `worker_online` | 仅未终态（queued/leased/running/uploading）：任一 worker `last_heartbeat_at` 距 now < 3 分钟 → true。**只回布尔**，不回 worker 名称/地址/槽位/资源 |
+| `GET /api/results/<id>/summary>` 未完成 409 | `queue_position` / `worker_online` / `strategy_id` / `cancel_requested` / `error_class` / `error_message` | 与上行同口径；failed 的 `error_message`/`error_class` 即 §3.4 落库值（用户可读原因）。仅任务所有者或既有合法只读调用方（showcase verified）可达 409，匿名 401/他人 404 语义不变 |
+
+取消端点（§5）对游客开放（2026-10-25）：`POST /api/jobs/<id>/cancel` 按会话 Cookie
+归属（§4.6 `qre_guest_sid`/guest_key）——同会话可取消（queued 直接 canceled；
+leased/running/uploading 置 `cancel_requested`），异会话/无 Cookie 401（与不存在同体，
+不泄露存在性），登录用户他人任务 404，终态 409。showcase 只读 job 不提供取消入口。
+
+前端消费纪律（与本文档一致）：不虚构执行百分比或预计完成时间；排队/离线/已等待时间
+为全部可展示运行态；前台等待超时（new.html 80 轮）必须与策略失败区分。

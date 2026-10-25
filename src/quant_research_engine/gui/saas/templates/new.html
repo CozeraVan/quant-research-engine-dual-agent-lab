@@ -934,6 +934,19 @@ function pipeFailAt(i, msg){
   const err = $('#pipe-err'); err.style.display = 'block';
   err.innerHTML = '<b>失败：</b>' + esc(msg) + '<br><span class="opt">已停留在当前步骤，修正后重新运行。</span>';
 }
+// 非失败停留（QRE-SAAS-FIRST-SUCCESS-UX-001）：如冒烟前台等待超时——任务仍在
+// 后台执行，不写成策略失败、不自动提交全量，给任务页入口让用户自己看进度。
+// 中性「后台等待中」：移除 doing/fail（回到默认灰点），不套用失败红态、不加新组件。
+function pipeStopAt(i, msg, linkHref, linkText){
+  const st = $('#pipe-' + i);
+  st.classList.remove('doing'); st.classList.remove('fail');
+  const stText = st.querySelector('.pipe-st');
+  if (stText) stText.textContent = '后台等待中';
+  const err = $('#pipe-err'); err.style.display = 'block';
+  err.innerHTML = '<b>等待超时：</b>' + esc(msg) +
+    (linkHref ? '<br><a class="inl" href="' + esc(linkHref) + '">' + esc(linkText || '查看任务页') + ' →</a>' : '') +
+    '<br><span class="opt">未提交全量回测；可前往任务页查看后台进度，或修正后重新运行。</span>';
+}
 function buildParams(){
   const scope = document.querySelector('input[name="scope"]:checked').value;
   const params = {
@@ -970,18 +983,28 @@ function buildParams(){
 }
 async function createJob(kind){
   const entryMode = curEntry();
-  const resp = await apiFetch('/api/saas/jobs', {json: {
-    yaml: applyName(strategyYaml), kind,
-    name: $('#p-sname').value.trim() || '未命名策略',
-    nl_text: entryMode === 'nl' ? $('#nl-text').value.trim().slice(0, 2000) : null,
-    // CR-2026-10-04 模块一：落创建入口模式 + 向导结构化快照（策略资产还原用）
-    entry_mode: entryMode,
-    wizard_state: entryMode === 'wizard' ? collectWizardState() : null,
-    params: buildParams(),
-  }});
-  const d = await resp.json();
-  if (!resp.ok || !d.ok) throw new Error(d.error || '提交失败（HTTP ' + resp.status + '）');
-  return d.job_id;
+  const controller = new AbortController();
+  try {
+    // 提交包裹 15 秒超时：提交慢时给可重试的明确错误，避免遮罩无限等待
+    return await newRequestWithTimeout('/api/saas/jobs', {json: {
+      yaml: applyName(strategyYaml), kind,
+      name: $('#p-sname').value.trim() || '未命名策略',
+      nl_text: entryMode === 'nl' ? $('#nl-text').value.trim().slice(0, 2000) : null,
+      // CR-2026-10-04 模块一：落创建入口模式 + 向导结构化快照（策略资产还原用）
+      entry_mode: entryMode,
+      wizard_state: entryMode === 'wizard' ? collectWizardState() : null,
+      params: buildParams(),
+    }}, controller, async resp => {
+      const d = await resp.json().catch(() => null);
+      if (!resp.ok || !d || !d.ok) throw new Error((d && d.error) || '提交失败（HTTP ' + resp.status + '）');
+      return d.job_id;
+    });
+  } catch (e) {
+    if (e && e.name === 'AbortError'){
+      throw new Error('提交等待超时（15 秒）——任务可能已在后台创建，请稍后在「个人信息」确认，避免重复提交');
+    }
+    throw e;
+  }
 }
 const NEW_REQUEST_TIMEOUT_MS = 15000;
 async function newRequestWithTimeout(url, options, controller, consume){
@@ -1008,23 +1031,67 @@ async function newRequestWithTimeout(url, options, controller, consume){
     controller.signal.removeEventListener('abort', onAbort);
   }
 }
+// ---------- 等待态文案（QRE-SAAS-FIRST-SUCCESS-UX-001） ----------
+// 只表达真实已知信息：排队位置、worker 在线布尔、已等待时间；
+// 不虚构百分比或预计完成时间。秒数走 meta（视觉展示，不进 aria-live）。
+// 活跃态全集（与 job.html ACTIVE 一致）：queued/leased/running/uploading。
+const ACTIVE_WAIT_STATUSES = ['queued', 'leased', 'running', 'uploading'];
+function waitedText(ms){
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return '已等待 ' + s + ' 秒';
+  return '已等待 ' + Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒';
+}
+function jobWaitStatus(job, waitedMs){
+  const st = job && job.status;
+  const meta = waitedText(waitedMs);
+  if (job && job.worker_online === false && ACTIVE_WAIT_STATUSES.indexOf(st) >= 0){
+    return {title: '计算节点暂时离线', sub: '任务已保留，恢复后会继续；无需重复提交', meta};
+  }
+  if (st === 'queued'){
+    const n = typeof job.queue_position === 'number' ? job.queue_position : null;
+    return n !== null && n > 0
+      ? {title: '排队中，前面还有 ' + n + ' 个任务', sub: '任务在云端排队，空闲后自动开始', meta}
+      : {title: '排队中，等待计算节点领取', sub: '任务已进入队列', meta};
+  }
+  return {title: '任务执行中', sub: '完成后自动跳转结果页；也可随时去「个人信息」查看进度', meta};
+}
+function renderJobWait(job, waitedMs){
+  if (typeof LabUI === 'undefined' || !LabUI.waitMask) return;
+  const s = jobWaitStatus(job, waitedMs);
+  LabUI.waitMask.update({title: s.title, sub: s.sub, meta: s.meta});
+}
 async function pollJob(jobId){
+  const startedAt = Date.now();
   for (let i = 0; i < 80; i++){
     await new Promise(r => setTimeout(r, 3000));
     const controller = new AbortController();
-    const result = await newRequestWithTimeout('/api/saas/jobs/' + jobId, {}, controller, async resp => {
-      if (!resp.ok) return {resp};
-      return {resp, data: await resp.json()};
-    });
+    let result;
+    try {
+      result = await newRequestWithTimeout('/api/saas/jobs/' + jobId, {}, controller, async resp => {
+        if (!resp.ok) return {resp};
+        return {resp, data: await resp.json()};
+      });
+    } catch (e) {
+      // 单次 15 秒 AbortError = 临时状态刷新超时：继续下一轮，不判策略失败
+      if (e && e.name === 'AbortError') continue;
+      throw e;
+    }
     const resp = result.resp;
     if (!resp.ok) throw new Error('任务状态加载失败（HTTP ' + resp.status + '）');
     const d = result.data;
     if (!d || !d.ok || !d.job) throw new Error((d && d.error) || '任务状态加载失败');
     const st = d.job.status;
+    renderJobWait(d.job, Date.now() - startedAt);
     if (st === 'completed') return d.job;
-    if (st === 'failed' || st === 'expired' || st === 'cancelled' || st === 'canceled') throw new Error((d.job && d.job.error) || '任务失败');
+    if (st === 'failed' || st === 'expired' || st === 'cancelled' || st === 'canceled'){
+      // 终态带出后端真实 error_message（_job_view 字段），没有才回退通用文案
+      throw new Error((d.job && (d.job.error_message || d.job.error)) || '任务失败');
+    }
   }
-  throw new Error('验证超时，请稍后在「我的回测」查看状态');
+  // 前台等待上限（80 轮）是独立错误类型：不得写成策略失败，调用方分流到任务页
+  const err = new Error('任务仍在后台执行，请前往任务页查看');
+  err.name = 'PollTimeoutError';
+  throw err;
 }
 function isGuest(){ return !SAAS_BYPASS && !saasToken(); }
 // 游客操作前置守卫（QRE-SAAS-GUEST-FLOW-2）：首次关键操作弹层说明单股限制，
@@ -1229,7 +1296,13 @@ async function startRun(){
     try {
       await pollJob(smokeId);
     } catch (e) {
-      pipeFailAt(2, '策略在小样本上没跑通：' + e.message);
+      if (e && e.name === 'PollTimeoutError'){
+        // 前台等待上限 ≠ 策略失败：任务仍在后台执行，去任务页看，不自动提交全量
+        pipeStopAt(2, '任务仍在后台执行，请前往任务页查看',
+          '/saas/jobs/' + smokeId + (saasToken() ? '' : '?guest=1'), '前往任务页查看进度');
+      } else {
+        pipeFailAt(2, '策略在小样本上没跑通：' + e.message);
+      }
       abort(); return;
     }
     LabUI.pipeDone(pipeEl, 2, '冒烟通过');

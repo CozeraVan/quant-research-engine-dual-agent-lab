@@ -625,6 +625,7 @@ const context = vm.createContext({
   },
   apiFetch(url){ calls.push(url); return context.responses.shift(); },
   responses: [],
+  LabUI: {waitMask: {show(){}, update(){}, hide(){}}},
 });
 function response(status, data){
   return Promise.resolve({status, ok: status >= 200 && status < 300, json: async () => data});
@@ -655,17 +656,311 @@ function response(status, data){
   assert.equal(calls.length, 1);
 
   calls.length = 0;
-  context.responses = [Promise.resolve({status: 200, ok: true, json(){ return new Promise(() => {}); }})];
-  const pending = assert.rejects(vm.runInContext('pollJob(7)', context));
+  context.responses = [
+    Promise.resolve({status: 200, ok: true, json(){ return new Promise(() => {}); }}),
+    response(200, {ok: true, job: {status: 'running'}}),
+    response(200, {ok: true, job: {status: 'completed'}}),
+  ];
+  const pending = vm.runInContext('pollJob(7)', context);
   await Promise.resolve();
   assert.equal(calls.length, 1, 'body pending 场景必须先发出请求');
   assert.equal(timers.size, 1, 'body pending 时必须保留请求 timeout');
   await context.runNextTimer();
-  await pending;
-  assert.equal(calls.length, 1, 'body pending 必须在本次请求超时后立即 fail-fast');
+  // 单次 15 秒 AbortError 归为临时状态刷新超时：继续轮询，不判策略失败
+  const retriedJob = await pending;
+  assert.equal(retriedJob.status, 'completed');
+  assert.equal(calls.length, 3, '临时超时后必须继续轮询直到终态');
 })().catch(error => { console.error(error); process.exit(1); });
 """
         script = harness + "\nconst source = " + json.dumps(match.group(1)) + ";\nvm.runInContext(source, context);\n" + scenario
+        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr or result.stdout
+
+
+_NEW_WAIT_HARNESS = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+function response(status, data){
+  return Promise.resolve({status, ok: status >= 200 && status < 300, json: async () => data});
+}
+function createNewWaitHarness(fetchImpl){
+  const calls = [];
+  const timers = new Map();
+  const maskCalls = [];
+  let nextTimer = 1;
+  const context = vm.createContext({
+    AbortController,
+    setTimeout(fn, delay){
+      const id = nextTimer++;
+      if (delay === 3000){ fn(); return id; }
+      timers.set(id, fn);
+      return id;
+    },
+    clearTimeout(id){ timers.delete(id); },
+    async runNextTimer(){
+      const entry = timers.entries().next().value;
+      assert.ok(entry, '请求必须存在 timeout');
+      timers.delete(entry[0]);
+      return entry[1]();
+    },
+    apiFetch(url, options){ calls.push({url, options}); return fetchImpl(url, options); },
+    LabUI: {waitMask: {
+      show(opts){ maskCalls.push({op: 'show', opts}); },
+      update(opts){ maskCalls.push({op: 'update', opts}); },
+      hide(){ maskCalls.push({op: 'hide'}); },
+    }},
+  });
+  return {context, calls, timers, maskCalls};
+}
+"""
+
+
+class TestNewPageWaitStates:
+    """QRE-SAAS-FIRST-SUCCESS-UX-001：new.html 等待态准确表达排队/离线/超时。"""
+
+    def _run(self, html, scenario):
+        match = re.search(
+            r"(const NEW_REQUEST_TIMEOUT_MS[\s\S]*?async function pollJob\(jobId[\s\S]*?\n\})"
+            r"(?=\nfunction isGuest)", html, re.S)
+        assert match, "未找到 new.html 轮询脚本"
+        node = shutil.which("node")
+        if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+            node = "/home/van/codex-local/node-v22/bin/node"
+        if not node:
+            pytest.skip("node 不可用")
+        script = (_NEW_WAIT_HARNESS + "\nconst source = " + json.dumps(match.group(1))
+                  + ";\n" + scenario)
+        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr or result.stdout
+
+    def test_wait_copy_markers_present(self, client):
+        html = client.get("/saas/new").get_data(as_text=True)
+        assert "排队中，前面还有 " in html
+        assert "排队中，等待计算节点领取" in html
+        assert "计算节点暂时离线" in html
+        assert "任务已保留，恢复后会继续；无需重复提交" in html
+        assert "PollTimeoutError" in html
+        assert "任务仍在后台执行，请前往任务页查看" in html
+        # 真实失败仍写「没跑通」；前台等待超时不得冒充策略失败
+        assert "策略在小样本上没跑通" in html
+
+    def test_transient_abort_continues_polling(self, client):
+        html = client.get("/saas/new").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const pending = Promise.resolve({status: 200, ok: true, json(){ return new Promise(() => {}); }});
+  const queue = [pending, response(200, {ok: true, job: {status: 'running'}}),
+                 response(200, {ok: true, job: {status: 'completed'}})];
+  const hh = createNewWaitHarness(async () => queue.shift());
+  vm.runInContext(source, hh.context);
+  const done = vm.runInContext('pollJob(7)', hh.context);
+  await Promise.resolve();
+  assert.equal(hh.calls.length, 1, 'body pending 场景必须先发出请求');
+  await hh.context.runNextTimer();  // 15s 刷新超时 → AbortError
+  const job = await done;
+  assert.equal(job.status, 'completed');
+  assert.equal(hh.calls.length, 3, '单次 AbortError 后必须继续轮询');
+  assert.ok(hh.maskCalls.filter(c => c.op === 'update').length >= 2,
+    '每次成功轮询都要渲染等待态');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_http_500_and_terminal_fail_fast(self, client):
+        html = client.get("/saas/new").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  for (const bad of [response(500, {ok: false}), response(200, {ok: false, job: {}})]) {
+    const h = createNewWaitHarness(async () => bad);
+    vm.runInContext(source, h.context);
+    await assert.rejects(vm.runInContext('pollJob(7)', h.context), /HTTP 500|任务状态加载失败/);
+    assert.equal(h.calls.length, 1, 'HTTP 500 / 缺 job 必须 fail-fast');
+  }
+  // 终态必须带出后端真实 error_message（_job_view 字段），不是固定「任务失败」
+  const terminal = createNewWaitHarness(async () =>
+    response(200, {ok: true, job: {status: 'failed',
+                                   error_message: '策略第 3 行 entry 表达式不合法'}}));
+  vm.runInContext(source, terminal.context);
+  await assert.rejects(vm.runInContext('pollJob(7)', terminal.context),
+                       /策略第 3 行 entry 表达式不合法/);
+  assert.equal(terminal.calls.length, 1, '终态必须立即失败');
+  // 旧数据无 error_message 时回退通用文案
+  const legacy = createNewWaitHarness(async () =>
+    response(200, {ok: true, job: {status: 'expired'}}));
+  vm.runInContext(source, legacy.context);
+  await assert.rejects(vm.runInContext('pollJob(7)', legacy.context), /任务失败/);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_poll_timeout_is_distinct_error_not_strategy_failure(self, client):
+        html = client.get("/saas/new").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const h = createNewWaitHarness(async () =>
+    response(200, {ok: true, job: {status: 'running', queue_position: 1, worker_online: true}}));
+  vm.runInContext(source, h.context);
+  let err = null;
+  try { await vm.runInContext('pollJob(7)', h.context); } catch (e) { err = e; }
+  assert.ok(err, '80 轮后必须抛出独立超时错误');
+  assert.equal(err.name, 'PollTimeoutError', '前台等待上限必须是独立错误类型');
+  assert.ok(/任务仍在后台执行，请前往任务页查看/.test(err.message), err.message);
+  assert.equal(h.calls.length, 80, '必须保留 80 次轮询上限');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_queue_and_offline_copy_rendering(self, client):
+        html = client.get("/saas/new").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const h = createNewWaitHarness(async () => undefined);
+  vm.runInContext(source, h.context);
+  const queued = vm.runInContext(
+    "jobWaitStatus({status: 'queued', queue_position: 3, worker_online: true}, 42000)", h.context);
+  assert.ok(queued.title.includes('排队中，前面还有 3 个任务'), queued.title);
+  assert.ok(queued.meta.includes('42'), queued.meta);
+  const zero = vm.runInContext(
+    "jobWaitStatus({status: 'queued', queue_position: 0, worker_online: true}, 5000)", h.context);
+  assert.ok(zero.title.includes('排队中，等待计算节点领取'), zero.title);
+  const offline = vm.runInContext(
+    "jobWaitStatus({status: 'queued', queue_position: 0, worker_online: false}, 5000)", h.context);
+  assert.ok(offline.title.includes('计算节点暂时离线'), offline.title);
+  assert.ok(offline.sub.includes('任务已保留，恢复后会继续'), offline.sub);
+  assert.ok(offline.sub.includes('无需重复提交'), offline.sub);
+  // 离线提示覆盖全部活跃态（queued/leased/running/uploading），不止 queued/running
+  for (const st of ['queued', 'leased', 'running', 'uploading']){
+    const s = vm.runInContext(
+      "jobWaitStatus({status: '" + st + "', queue_position: 0, worker_online: false}, 5000)",
+      h.context);
+    assert.ok(s.title.includes('计算节点暂时离线'), st + ' 离线提示缺失: ' + s.title);
+    assert.ok(s.sub.includes('无需重复提交'), st);
+  }
+  // 终态（failed）不读离线提示
+  const terminal = vm.runInContext(
+    "jobWaitStatus({status: 'failed', worker_online: false}, 5000)", h.context);
+  assert.ok(!terminal.title.includes('计算节点暂时离线'), terminal.title);
+  const running = vm.runInContext(
+    "jobWaitStatus({status: 'running', worker_online: true}, 65000)", h.context);
+  assert.ok(running.meta.includes('1 分'), running.meta);
+  assert.ok(!JSON.stringify(running).includes('%'), '不得虚构百分比');
+  assert.ok(!JSON.stringify(running).includes('预计'), '不得虚构预计完成时间');
+  // 渲染入口：一次成功轮询把状态与秒数写进遮罩（meta 独立于 aria-live 文案）
+  vm.runInContext(
+    "renderJobWait({status: 'queued', queue_position: 2, worker_online: false}, 9000)", h.context);
+  const last = h.maskCalls[h.maskCalls.length - 1].opts;
+  assert.ok(last.title.includes('计算节点暂时离线'), JSON.stringify(last));
+  assert.ok(last.sub.includes('无需重复提交'), JSON.stringify(last));
+  assert.ok(last.meta.includes('9'), last.meta);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_pipe_stop_at_is_neutral_not_failure(self, client):
+        """前台等待超时（PollTimeoutError）是中性「后台等待中」，不得显示失败红态。"""
+        html = client.get("/saas/new").get_data(as_text=True)
+        fail_src = re.search(r"(function pipeFailAt\(i, msg\)\{[\s\S]*?\n\})", html, re.S)
+        stop_src = re.search(
+            r"(function pipeStopAt\(i, msg, linkHref, linkText\)\{[\s\S]*?\n\})", html, re.S)
+        assert fail_src and stop_src, "未找到 pipeFailAt/pipeStopAt"
+        node = shutil.which("node")
+        if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+            node = "/home/van/codex-local/node-v22/bin/node"
+        if not node:
+            pytest.skip("node 不可用")
+        harness = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+function makeEl(){
+  const e = {children: [], style: {}, classes: new Set(), _text: '', innerHTML: '',
+    classList: {add(c){ e.classes.add(c); }, remove(c){ e.classes.delete(c); },
+                contains(c){ return e.classes.has(c); }},
+    querySelector(){ return e._st || (e._st = makeEl()); }};
+  Object.defineProperty(e, 'textContent', {get(){ return e._text; }, set(v){ e._text = v; }});
+  return e;
+}
+const step = makeEl();
+const err = makeEl();
+const context = vm.createContext({
+  $(sel){ return sel.indexOf('pipe-err') >= 0 ? err : step; },
+  esc(s){ return String(s == null ? '' : s); },
+});
+"""
+        scenario = r"""
+(async () => {
+  vm.runInContext(source, context);
+  // 对照：真实失败仍走 fail 红态
+  vm.runInContext('pipeFailAt(2, "策略在小样本上没跑通：boom")', context);
+  assert.ok(step.classes.has('fail'), '真实失败必须保留 fail 态');
+  step.classes.delete('fail');
+  step.classes.add('doing');
+  // 前台等待超时：中性后台等待中——不加 fail、无新色相
+  vm.runInContext(
+    "pipeStopAt(2, '任务仍在后台执行，请前往任务页查看', '/saas/jobs/9?guest=1', '前往任务页查看进度')",
+    context);
+  assert.ok(!step.classes.has('fail'), '前台等待超时不得显示失败态');
+  assert.ok(!step.classes.has('doing'), '后台等待中不得残留 doing 态');
+  assert.equal(step.querySelector('.pipe-st').textContent, '后台等待中');
+  assert.equal(err.style.display, 'block');
+  assert.ok(err.innerHTML.indexOf('等待超时') >= 0, err.innerHTML);
+  assert.ok(err.innerHTML.indexOf('/saas/jobs/9?guest=1') >= 0, '必须提供任务页入口');
+  assert.ok(err.innerHTML.indexOf('未提交全量回测') >= 0, '不得自动提交全量');
+  assert.ok(err.innerHTML.indexOf('失败') < 0, '超时提示不得写「失败」');
+})().catch(error => { console.error(error); process.exit(1); });
+"""
+        script = (harness + "\nconst source = "
+                  + json.dumps(fail_src.group(1) + "\n" + stop_src.group(1)) + ";\n" + scenario)
+        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr or result.stdout
+
+    def test_create_job_submit_timeout_message(self, client):
+        html = client.get("/saas/new").get_data(as_text=True)
+        match = re.search(r"(async function createJob\(kind\)\{[\s\S]*?\n\})(?=\nfunction isGuest)",
+                          html, re.S)
+        assert match, "未找到 createJob"
+        node = shutil.which("node")
+        if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+            node = "/home/van/codex-local/node-v22/bin/node"
+        if not node:
+            pytest.skip("node 不可用")
+        harness = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const calls = [];
+const timers = new Map();
+let nextTimer = 1;
+const context = vm.createContext({
+  AbortController,
+  setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, fn); return id; },
+  clearTimeout(id){ timers.delete(id); },
+  async runNextTimer(){
+    const entry = timers.entries().next().value;
+    assert.ok(entry, '提交必须存在 timeout');
+    timers.delete(entry[0]);
+    return entry[1]();
+  },
+  apiFetch(url, options){ calls.push({url, options}); return new Promise(() => {}); },
+  curEntry(){ return 'yaml'; },
+  strategyYaml: 'yaml',
+  applyName(s){ return s; },
+  collectWizardState(){ return null; },
+  buildParams(){ return {}; },
+  $(sel){ return {value: ''}; },
+});
+"""
+        scenario = r"""
+(async () => {
+  vm.runInContext(source, context);
+  const pending = vm.runInContext('createJob("smoke")', context);
+  await Promise.resolve();
+  assert.equal(calls.length, 1, '提交必须先发出请求');
+  assert.equal(timers.size, 1, '提交必须带 15 秒超时');
+  await context.runNextTimer();
+  let err = null;
+  try { await pending; } catch (e) { err = e; }
+  assert.ok(err, '提交超时必须抛出可读错误');
+  assert.ok(/超时/.test(err.message), err.message);
+  assert.ok(/重复提交/.test(err.message), err.message);
+  assert.equal(calls.length, 1, '超时后不得自动重试提交');
+})().catch(error => { console.error(error); process.exit(1); });
+"""
+        script = harness + "\nconst source = " + json.dumps(match.group(1)) + ";\n" + scenario
         result = subprocess.run([node, "-e", script], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr or result.stdout
 
@@ -1317,6 +1612,277 @@ function pendingResponse(options){
         ):
             assert marker in html
 
+
+_JOB_RUNTIME_HARNESS = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+function jobEl(){
+  const e = {
+    children: [], childNodes: [], style: {}, className: '', _textContent: '', innerHTML: '',
+    disabled: false, dataset: {}, listeners: {}, classes: new Set(),
+    setAttribute(name, value){ this[name] = String(value); },
+    removeAttribute(name){ delete this[name]; },
+    appendChild(...nodes){ this.children.push(...nodes); this.childNodes.push(...nodes); },
+    replaceChildren(...nodes){ this.children = [...nodes]; this.childNodes = [...nodes]; },
+    addEventListener(type, fn){ (this.listeners[type] ||= []).push(fn); },
+    querySelectorAll(){ return []; },
+  };
+  Object.defineProperty(e, 'textContent', {
+    get(){ return e._textContent; }, set(v){ e._textContent = v; },
+  });
+  e.classList = {
+    add(c){ e.classes.add(c); },
+    remove(c){ e.classes.delete(c); },
+    toggle(c, force){ if (force === undefined ? !e.classes.has(c) : force) e.classes.add(c); else e.classes.delete(c); },
+    contains(c){ return e.classes.has(c); },
+  };
+  return e;
+}
+function response(status, data, jsonError){
+  return {status, ok: status >= 200 && status < 300, json: async () => {
+    if (jsonError) throw new Error('invalid json');
+    return data;
+  }};
+}
+function createJobRuntimeHarness(fetchImpl, opts){
+  opts = opts || {};
+  const root = jobEl();
+  root.childNodes = [jobEl()];
+  const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = jobEl()); }});
+  const calls = {access: 0, failure: 0, attribution: 0, requests: []};
+  const timers = new Map();
+  let nextTimer = 1;
+  let now = 1000;
+  const document = {
+    querySelector(selector){
+      if (selector === '.container') return root;
+      if (selector === '.container .card') return root.children[root.children.length - 1];
+      return null;
+    },
+    querySelectorAll(){ return []; },
+    getElementById(id){ return elements[id]; },
+    createElement(){ return jobEl(); },
+  };
+  const context = vm.createContext({
+    console, document, window: {addEventListener(){}}, JOB_ID: 1, STATUS_LABEL: {},
+    SAAS_BYPASS: !!opts.bypass, AbortController,
+    MAX_ACTIVE_WAIT_MS: 300000,
+    Date: {now(){ return now; }},
+    location: {search: ''}, URLSearchParams,
+    requestAnimationFrame(fn){ return fn(); },
+    saasToken(){ return opts.token === undefined ? 'token' : opts.token; },
+    apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
+    showAccessFallback(target){ calls.access += 1; target.replaceChildren(jobEl()); },
+    showLoadFailure(target, retry){ calls.failure += 1; calls.retry = retry; target.replaceChildren(jobEl()); },
+    setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
+    clearTimeout(id){ timers.delete(id); },
+    renderMeta(){}, renderStrategyInfo(){}, renderMetrics(){}, renderMain(){}, empty(){},
+    renderContract(){},
+    initReplay(){}, initResultActions(){}, renderFees(){}, loadRisk(){}, renderRisk(){},
+    renderAttribution(){ calls.attribution += 1; },
+    mountReplay(){ return {destroy(){}}; },
+  });
+  return {
+    context, calls, timers, root, elements,
+    setNow(value){ now = value; },
+    click(id){ (elements[id].listeners.click || []).forEach(fn => fn({target: elements[id]})); },
+    async runNextTimer(){
+      const entry = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      assert.ok(entry, '必须存在可执行的 timeout');
+      timers.delete(entry[0]);
+      now = Math.max(now, entry[1].at);
+      return entry[1].fn();
+    },
+  };
+}
+"""
+
+
+class TestJobPageRuntimeAndCancel:
+    """QRE-SAAS-FIRST-SUCCESS-UX-001：job.html 队列/离线/取消/失败恢复。"""
+
+    def _run(self, html, scenario):
+        match = re.search(r"(const ACTIVE =.*?)(?=// --- 回测重播)", html, re.S)
+        assert match, "未找到 job.html 轮询脚本"
+        node = shutil.which("node")
+        if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+            node = "/home/van/codex-local/node-v22/bin/node"
+        if not node:
+            pytest.skip("node 不可用")
+        script = (_JOB_RUNTIME_HARNESS + "\nconst source = " + json.dumps(match.group(1))
+                  + ";\n" + scenario)
+        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr or result.stdout
+
+    def test_runtime_markers_present(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        for marker in (
+            'id="btn-cancel-job"',
+            'id="cancel-modal"',
+            'id="recover-actions"',
+            'id="job-status-extra"',
+            "排队中，前面还有 ",
+            "排队中，等待计算节点领取",
+            "计算节点暂时离线，任务已保留，恢复后会继续；无需重复提交",
+            "按原策略重新回测",
+            "/api/saas/jobs/' + JOB_ID + '/cancel'",
+        ):
+            assert marker in html, marker
+
+    def test_queued_409_renders_queue_offline_and_cancel(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const h = createJobRuntimeHarness(async url => {
+    if (url.includes('/summary')) return response(409, {ok: false, status: 'queued',
+      queue_position: 3, worker_online: false, cancel_requested: false, strategy_id: 42,
+      error_class: null, error_message: null});
+    return response(200, {ok: true});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('poll()', h.context);
+  const note = h.elements['job-status-note'].textContent;
+  assert.ok(note.includes('排队中，前面还有 3 个任务'), note);
+  const extra = h.elements['job-status-extra'].textContent;
+  assert.ok(extra.includes('计算节点暂时离线'), extra);
+  assert.ok(extra.includes('无需重复提交'), extra);
+  assert.ok(extra.includes('已等待'), extra);
+  assert.equal(h.elements['job-badge'].className, 'badge queued');
+  assert.ok(!h.elements['status-actions'].classes.has('hidden'), '活跃任务必须出现取消入口');
+  assert.equal(h.elements['btn-cancel-job'].disabled, false);
+  assert.equal(h.timers.size, 1, '活跃态必须继续轮询');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_queued_zero_and_running_cancel_requested(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const zero = createJobRuntimeHarness(async () =>
+    response(409, {ok: false, status: 'queued', queue_position: 0, worker_online: true}));
+  vm.runInContext(source, zero.context);
+  await vm.runInContext('poll()', zero.context);
+  assert.ok(zero.elements['job-status-note'].textContent.includes('排队中，等待计算节点领取'));
+
+  const running = createJobRuntimeHarness(async () =>
+    response(409, {ok: false, status: 'running', worker_online: true, cancel_requested: true}));
+  vm.runInContext(source, running.context);
+  await vm.runInContext('poll()', running.context);
+  const note = running.elements['job-status-note'].textContent;
+  assert.ok(note.includes('正在取消'), note);
+  assert.equal(running.elements['btn-cancel-job'].disabled, true, '取消请求已发送必须禁用重复取消');
+  assert.ok(running.elements['cancel-status'].textContent.includes('正在取消'));
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_cancel_modal_confirms_and_cancels_queued(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const h = createJobRuntimeHarness(async url => {
+    if (url.includes('/summary')) return response(409, {ok: false, status: 'queued',
+      queue_position: 1, worker_online: true});
+    if (url.includes('/cancel')) return response(200, {ok: true, status: 'canceled'});
+    return response(200, {ok: true});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('poll()', h.context);
+  // 第一次点击只开二次确认模态，不得直接取消
+  h.click('btn-cancel-job');
+  assert.ok(h.elements['cancel-modal'].classes.has('show'), '取消必须走自定义模态二次确认');
+  assert.equal(h.calls.requests.filter(r => r.url.includes('/cancel')).length, 0);
+  // 取消按钮（模态内）不关模态
+  h.click('cancel-modal-no');
+  assert.ok(!h.elements['cancel-modal'].classes.has('show'));
+  assert.equal(h.calls.requests.filter(r => r.url.includes('/cancel')).length, 0);
+  // 确认取消 → POST 取消端点，queued 直接 canceled 后停止轮询
+  h.click('btn-cancel-job');
+  h.click('cancel-modal-yes');
+  await new Promise(r => setTimeout(r, 0));
+  const cancels = h.calls.requests.filter(r => r.url.includes('/cancel'));
+  assert.equal(cancels.length, 1, '确认后必须调用既有取消 API');
+  assert.equal(cancels[0].options.method, 'POST');
+  assert.equal(h.timers.size, 0, 'queued 取消成功后必须停止轮询');
+  assert.equal(h.elements['job-badge'].className, 'badge failed');
+  assert.ok(h.elements['job-status-note'].textContent.includes('已取消'));
+  assert.ok(h.elements['status-actions'].classes.has('hidden'));
+  // 重复点击不得产生第二次取消请求
+  h.click('cancel-modal-yes');
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(h.calls.requests.filter(r => r.url.includes('/cancel')).length, 1);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_cancel_running_marks_request_sent(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const h = createJobRuntimeHarness(async url => {
+    if (url.includes('/summary')) return response(409, {ok: false, status: 'running',
+      worker_online: true});
+    if (url.includes('/cancel')) return response(200, {ok: true, status: 'running',
+      cancel_requested: true});
+    return response(200, {ok: true});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('poll()', h.context);
+  h.click('btn-cancel-job');
+  h.click('cancel-modal-yes');
+  await new Promise(r => setTimeout(r, 0));
+  const status = h.elements['cancel-status'].textContent;
+  assert.ok(status.includes('取消请求已发送'), status);
+  assert.ok(status.includes('最终状态以服务端为准'), status);
+  assert.equal(h.elements['btn-cancel-job'].disabled, true);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_failed_recovery_links_for_login_and_guest(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const failed = {ok: false, status: 'failed', strategy_id: 42,
+                  error_class: 'strategy_compile_error',
+                  error_message: '策略第 3 行 entry 表达式不合法'};
+  const login = createJobRuntimeHarness(async () => response(409, failed), {token: 'token'});
+  vm.runInContext(source, login.context);
+  await vm.runInContext('poll()', login.context);
+  const err = login.elements['recover-error'].textContent;
+  assert.ok(err.includes('策略第 3 行 entry 表达式不合法'), err);
+  const link = login.elements['btn-rerun'];
+  assert.equal(link.textContent, '按原策略重新回测');
+  assert.equal(link.href, '/saas/new?strategy=42');
+  assert.ok(!login.elements['recover-actions'].classes.has('hidden'));
+  assert.equal(login.timers.size, 0, '终态必须停止轮询');
+
+  const guest = createJobRuntimeHarness(async () => response(409, failed), {token: ''});
+  vm.runInContext(source, guest.context);
+  await vm.runInContext('poll()', guest.context);
+  assert.equal(guest.elements['btn-rerun'].textContent, '返回新建页');
+  assert.equal(guest.elements['btn-rerun'].href, '/saas/new');
+  assert.ok(guest.elements['recover-error'].textContent.includes('策略第 3 行 entry 表达式不合法'));
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_readonly_completed_never_shows_cancel(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const h = createJobRuntimeHarness(async url => {
+    if (url.includes('/summary')) return response(200, {ok: true, readonly: true,
+      strategy_id: 1, strategy_name: '经典', summary: {}, result_contract: null});
+    return response(200, {ok: true});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('poll()', h.context);
+  assert.ok(h.elements['status-card'].classes.has('hidden'), '完成后状态卡隐藏');
+  assert.ok(h.elements['status-actions'].classes.has('hidden'), 'showcase 只读不得出现取消入口');
+  assert.ok(h.elements['recover-actions'].classes.has('hidden'), '只读不得出现重跑入口');
+  h.click('btn-cancel-job');
+  assert.equal(h.calls.requests.filter(r => r.url.includes('/cancel')).length, 0);
+  assert.ok(!h.elements['cancel-modal'].classes.has('show'));
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
     def test_job_contract_badge_labels_both_return_bases(self, client):
         """QRE-SAAS-RESULT-CONTRACT-001：合同徽标可见标签 + data-tip 区分两种收益口径。"""
         html = client.get("/saas/jobs/1").get_data(as_text=True)
@@ -1902,7 +2468,9 @@ class TestResultsDataSource:
         assert "/api/results/' + JOB_ID + '/summary'" in html
         assert "/chart-data" in html and "/tag-analysis" in html
         assert "resp.status === 409" in html               # 未完成 → 进行状态轮询
-        assert "/api/saas/jobs/' + JOB_ID" not in html     # 不再走旧 job 嵌套 result
+        assert "/api/saas/jobs/' + JOB_ID + '/result" not in html  # 不再走旧 job 嵌套 result
+        # QRE-SAAS-FIRST-SUCCESS-UX-001：取消走既有 cancel API（POST）
+        assert "/api/saas/jobs/' + JOB_ID + '/cancel" in html
 
 
 class TestSecurityHardening:

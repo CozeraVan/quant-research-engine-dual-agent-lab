@@ -7,16 +7,20 @@
  * prefers-reduced-motion 下 spinner 动画关闭（静态三点文案降级）。
  *
  * API：
- *   LabUI.waitMask.show({title, sub, buttons:[{label, primary, keepMask, onClick}]})
- *   LabUI.waitMask.update({title, sub, buttons})   // 部分字段可省略（沿用旧值）
+ *   LabUI.waitMask.show({title, sub, buttons:[{label, primary, keepMask, onClick}], meta})
+ *   LabUI.waitMask.update({title, sub, buttons, meta})   // 部分字段可省略（沿用旧值）
  *   LabUI.waitMask.hide()
  *   LabUI.waitMask.isOpen()
  * buttons.onClick 返回 true 或按钮带 keepMask 时保持遮罩（如「继续等待」），否则自动 hide。
+ *
+ * 可访问性（QRE-SAAS-FIRST-SUCCESS-UX-001）：title/sub 挂 aria-live="polite"，
+ * 状态变化（排队→执行中→离线提示）会被读屏播报；meta（如「已等待 N 秒」）是纯视觉
+ * 行，不进 aria-live，避免轮询每秒刷新时反复朗读。
  */
 (function () {
   "use strict";
-  var maskEl = null, cardEl = null, spinEl = null, titleEl = null, subEl = null, btnRow = null;
-  var state = { title: "", sub: "", buttons: [] };
+  var maskEl = null, cardEl = null, spinEl = null, titleEl = null, subEl = null, btnRow = null, metaEl = null;
+  var state = { title: "", sub: "", buttons: [], meta: "" };
 
   function h(tag, cls, text) {
     var el = document.createElement(tag);
@@ -34,11 +38,16 @@
     spinEl = h("div", "wm-spin");
     spinEl.setAttribute("aria-hidden", "true");
     titleEl = h("div", "wm-title");
+    titleEl.setAttribute("aria-live", "polite");
     subEl = h("div", "wm-sub");
+    subEl.setAttribute("aria-live", "polite");
+    metaEl = h("div", "wm-meta");  // 秒数等视觉行：无 aria-live，不参与朗读
+    metaEl.setAttribute("aria-hidden", "true");
     btnRow = h("div", "wm-btns");
     cardEl.appendChild(spinEl);
     cardEl.appendChild(titleEl);
     cardEl.appendChild(subEl);
+    cardEl.appendChild(metaEl);
     cardEl.appendChild(btnRow);
     maskEl.appendChild(cardEl);
     // 背板点击不关闭（刻意）；ESC 不监听即不关（刻意）
@@ -59,12 +68,19 @@
     });
   }
   function apply(patch) {
-    ["title", "sub", "buttons"].forEach(function (k) {
+    ["title", "sub", "buttons", "meta"].forEach(function (k) {
       if (patch[k] !== undefined) state[k] = patch[k];
     });
-    titleEl.textContent = state.title || "";
-    subEl.textContent = state.sub || "";
-    subEl.style.display = state.sub ? "" : "none";
+    var title = state.title || "", sub = state.sub || "";
+    // aria-live 降噪：文本没变就不碰 DOM——轮询每秒/每轮刷新不会重复播报同一句
+    if (titleEl.textContent !== title) titleEl.textContent = title;
+    if (subEl.textContent !== sub){
+      subEl.textContent = sub;
+      subEl.style.display = sub ? "" : "none";
+    }
+    // meta（秒数）是 aria-hidden 视觉行，照常更新
+    metaEl.textContent = state.meta || "";
+    metaEl.style.display = state.meta ? "" : "none";
     renderButtons();
   }
 
@@ -72,7 +88,7 @@
   LabUI.waitMask = {
     show: function (opts) {
       ensure();
-      state = { title: "", sub: "", buttons: [] };
+      state = { title: "", sub: "", buttons: [], meta: "" };
       apply(opts || {});
       maskEl.classList.add("show");
       document.body.classList.add("wm-lock");  // 锁页面滚动（交互由遮罩物理拦截）

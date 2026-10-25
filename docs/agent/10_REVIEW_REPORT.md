@@ -2,6 +2,43 @@
 
 ## Task ID
 
+QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（实现、全量回归与真实 Chromium 通过；未 commit/push、未 ECS 代码部署、未跑真实回测，待用户验收）
+
+## Self-Review Findings
+
+- **范围铁律逐条核对**：schema（`cloud_schema.sql` 零改动）、回测引擎、worker 执行逻辑、结果数值、配额、NL A2/A3 均未触碰；未启动真实 worker、未跑任何回测（浏览器任务全部由 seed SQL 与 worker 协议端点 claim/heartbeat/fail/status 模拟）；无压测/性能/硬件内容。
+- **不泄露 worker 细节已核对**：新增响应字段只有 `queue_position`（计数）与 `worker_online`（布尔）；测试用 `home-secret-worker` 作 worker_id 断言新字段不含其名称。`_job_view` 既有 `leased_by` 字段为 P0 前既有契约，本次未扩大暴露面（不改既有字段）。
+- **权限语义零变化已核对**：409 增补字段只对「已通过归属校验」的调用方可见（匿名/他人/不存在仍在 `_require_completed_result` 入口 401/404 且错误体逐字节一致，测试锁定）；showcase verified 公开只读 200 不变；游客取消与 GET job 同一归属函数（`_guest_identity`），异会话/无 Cookie 401 且与不存在同体，登录用户他人 404。
+- **取消防重复与终态已核对**：queued 取消成功即 `clearPollTimer`；running 只置 `cancel_requested`（最终状态以服务端为准，UI 明示）；`cancelInFlight` + 按钮 disabled 双闸；终态 409 既有行为保留（测试锁定）。
+- **不误报失败已核对**：单次 15s AbortError → 继续轮询（旧测试的「body pending 必须立即失败」预期已按计划改写）；HTTP 500/无权限/终态仍 fail-fast；80 轮上限是独立 `PollTimeoutError`，冒烟超时走 `pipeStopAt`（无「失败」前缀、有任务页入口、不提交全量）；「策略在小样本上没跑通」仅保留给真实终态失败。
+- **不虚构数据已核对**：等待态只渲染 queue_position / worker_online / 已等待时间；测试断言文案 JSON 不含 `%` 与「预计」。
+- **可访问性与移动已核对**：wait-mask title/sub aria-live=polite、秒数行 `.wm-meta` aria-hidden 且无 aria-live（轮询 3~5s 刷新不会每秒朗读）；375px 实测取消按钮 44px、零横溢；禁 ESC/禁背板/keepMask/spinner 停转/reduced-motion 既有语义有用例锁定；未动设计 token、8080/18080。
+- **测试卫生**：RED 先于实现（15 + 14 失败证据存档）；`workers` 表加入新测试 fixture TRUNCATE（避免心跳跨用例污染在线判定）；游客第二个任务用 smoke（不占每日 full 配额）。
+
+## Required Fixes
+
+无。（主 Agent 复核提出的 4 项 Required Fixes 已于 2026-10-25 聚焦修正并补回归，见下。）
+
+## 复核修正记录（2026-10-25）
+
+1. `pipeStopAt` 中性化：去掉 `fail` 类（移除 doing/fail + `.pipe-st`「后台等待中」文案），前台等待超时不再显示红色失败态；`pipeFailAt` 失败红态仅保留给真实失败。回归 `test_pipe_stop_at_is_neutral_not_failure` 锁定不加 fail、有任务页入口、不写「失败」。
+2. `jobWaitStatus` 离线提示扩展至全部活跃态（queued/leased/running/uploading；终态不读）；`pollJob` 终态抛出优先取后端 `error_message`。回归覆盖 4 活跃态、终态不读离线、真实 error_message 与无该字段时的回退。
+3. wait-mask `apply` 仅在 title/sub 文本实际变化时写 DOM——aria-live 不再被每轮轮询重复触发；meta（秒数）照常更新；API 与既有语义不变。回归用 textContent 写计数器锁定（未变 0 写、变化 1 写）。
+4. 浏览器取消模态截图证据修正：截图前等待可见与动画稳定，断言 computed display（flex/none）、bounding box、按钮可见与尺寸（确认钮 102×38 ≥36px），桌面/移动/登录用户三处一致；截图已肉眼复核模态清晰可见，`browser-evidence.json` 记录上述事实（不再只报 class 计数）。
+5. 文档格式化 churn 已清除：04/08/09/10 的历史标题层级恢复为与 HEAD 一致（纯新增，无批量重排）；09 归档的 P0-2 Release Status 同步为已发布事实（`0799890`，不再写"待部署"）。
+
+## Archive: QRE-SAAS-ACCESS-HARDENING-001（P0-2）
+
+## Task ID
+
 QRE-SAAS-ACCESS-HARDENING-001（P0-2）
 
 ## Reviewer

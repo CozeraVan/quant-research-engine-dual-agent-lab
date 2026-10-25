@@ -2,11 +2,55 @@
 
 ## Task ID
 
+QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：等待状态、离线提示与失败恢复）
+
+## Release Status
+
+IMPLEMENTED，未 commit/push、未 ECS 代码部署、未跑真实回测。全量 2629 passed + 5 skipped；
+真实 Chromium 12/12 场景通过（证据 `.tmp/first-success-ux/`）。等用户验收后由用户批准提交。
+
+## Implementation Summary
+
+### 后端统一运行态（src/quant_research_engine/gui/saas/app.py）
+
+| 符号 | 行为 |
+|---|---|
+| `_queue_position(conn, priority, created_at)` | 排队位置 SQL（同优先级按创建先后，前面还有几个 queued）——从 GET job 内联提出，供两处共用 |
+| `_worker_online(conn)` | 任一 worker `last_heartbeat_at > now() - interval '3 minutes'`（与管理台既有在线口径一致）；只回布尔 |
+| `_job_runtime_fields(engine, row)` | queued → `queue_position`；queued/leased/running/uploading → `worker_online`；终态不加 |
+| `GET /api/jobs/<id>`（含 /api/saas 别名） | `_job_view` 之后 `item.update(_job_runtime_fields(...))`；既有字段与权限语义不变 |
+| `_require_completed_result` 409 体 | 增补 `queue_position`（仅 queued）/`worker_online`/`strategy_id`/`cancel_requested`/`error_class`/`error_message`；`error` 文案保持「任务未完成（status）」不变 |
+| `POST /api/jobs/<id>/cancel`（含 /api/saas 别名） | 游客按会话归属：`_guest_identity` 取 guest_key；owned 判定 = 登录用户 user_id 匹配 / 游客 user_id IS NULL 且 guest_key 匹配；不 owned → 匿名 401（`_with_guest_cookie` 补签发会话 Cookie）/ 登录 404，与不存在同体；queued 直接 canceled、running 置 cancel_requested、终态 409 均不变 |
+
+### 前端（templates/new.html、templates/job.html、static/wait-mask.js、static/lab-theme.css）
+
+- `new.html`：`createJob` 包 `newRequestWithTimeout` 15s（AbortError → 「提交等待超时……避免重复提交」可读错误）；`pollJob` try/catch 包裹轮询请求，AbortError `continue`，其余原样抛出；80 轮耗尽抛 `PollTimeoutError`（name 区分，消息「任务仍在后台执行，请前往任务页查看」）；新增 `waitedText` / `jobWaitStatus` / `renderJobWait`（wait-mask title/sub/meta）；`pipeStopAt`（非失败停留：超时提示 + 任务页链接，不写「失败」前缀、不提交全量）；startRun 冒烟 catch 按 `PollTimeoutError` 分流。
+- `job.html`：`#status-card` 增 `#job-status-extra`（aria 无关的视觉副行）、`#status-actions`（`#btn-cancel-job` + `#cancel-status`）、`#recover-actions`（`#recover-error` + `#btn-rerun`）与 `#cancel-modal`（复用 `.modal-mask`/`.modal`，确认钮红底）；`renderJobRuntime` / `renderJobRecovery` / `setCancelModal` / `doCancelJob`；poll() 的 409 分支改调这两个渲染函数；completed 分支显式隐藏三个新区块并禁用取消按钮（防呆）。
+- `wait-mask.js`：title/sub `aria-live="polite"`；新增 `meta` 状态字段 → `.wm-meta`（`aria-hidden="true"`、无 aria-live）；`show/update` 透传 meta；其余语义不变。
+- `lab-theme.css`：仅新增 `.wm-meta{...tabular-nums}` 一条规则（无新色相、无新组件）。
+
+### 测试
+
+- `tests/test_saas_first_success_ux.py`（新，21 例）：运行态字段（queued N / running 无 queue_position / worker 在线-离线-过期 / 无 worker 明细泄露 / 游客可见）、409 契约（queued 全字段 / failed 真实 error_message+error_class+strategy_id / running 有 worker_online 无 queue_position / 权限语义不变 / 游客 owner 409 + 异会话 401 / showcase completed readonly 不变）、取消矩阵（登录 queued+running / 游客同会话 / 异会话 401 同体 / 无 Cookie 401 且任务不变 / 游客不能取消用户任务 / 他人 404 同体 / 匿名不存在 401 / 终态 409 / 401 带会话 Cookie）。
+- `tests/test_gui_saas_wait_mask.py`（新，4 例）：aria-live/meta 降噪、文本未变不写 DOM 回归、keepmask 与 spinner、CSS meta 与移动规则。
+- `tests/test_gui_saas_pages.py`：`TestNewPageWaitStates` 8 例（文案标记、AbortError 继续轮询、500/终态 fail-fast、PollTimeout 独立错误且 80 轮、queue/offline 文案与 meta、createJob 超时、pipeStopAt 中性态）+ `TestJobPageRuntimeAndCancel` 6 例（queued 409 渲染、N=0 与 cancel_requested、取消模态全流程与防重复、running 取消请求已发送、登录/游客恢复链接、readonly 零取消）；改写 `test_new_login_url_and_poll_job_fail_fast`（body pending → 超时后继续轮询至 completed）与 `test_job_page_uses_results_detail_apis`（旧断言精确到 `/result` 嵌套路径，新增 `/cancel` 断言）。
+
+### 主 Agent 复核 Required Fixes（2026-10-25，聚焦修正）
+
+1. `pipeStopAt` 去掉 `fail` 类，改中性「后台等待中」（移除 doing/fail + `.pipe-st` 文案，无新色相/组件）；`pipeFailAt` 失败红态仅保留给真实失败。回归 `test_pipe_stop_at_is_neutral_not_failure`。
+2. `jobWaitStatus` 离线提示覆盖全部活跃态（queued/leased/running/uploading，终态不读）；`pollJob` 终态优先抛后端 `error_message`（回退 `error`/通用文案）。
+3. wait-mask `apply` 仅在 title/sub 文本实际变化时写 DOM（aria-live 不被轮询重复触发），meta 照常更新，API 不变。回归 `test_wait_mask_skips_dom_write_when_text_unchanged`。
+4. 浏览器取消模态证据改为等待可见 + 动画稳定后断言 computed display / bounding box / 按钮可见再截图（桌面 1280 / 移动 375 / 登录用户三处），截图已肉眼复核；`browser-evidence.json` 记录模态事实（display=flex、确认钮 102×38）。
+
+## Archive: QRE-SAAS-ACCESS-HARDENING-001（P0-2 测试账号、结果 IDOR 与游客归属）
+
+## Task ID
+
 QRE-SAAS-ACCESS-HARDENING-001（P0-2 测试账号、结果 IDOR 与游客归属）
 
 ## Release Status
 
-IMPLEMENTED，未 commit/push、未 ECS 代码部署。ECS 侧仅完成 env 安全处置（测试账号注释 + Secure 标志，已重启验证）；新代码（游客 Cookie 归属）待用户批准部署后生效。未跑真实回测。
+RELEASED（2026-10-25 用户批准 commit + push + ECS；实现 `0799890` 已发布）。ECS 仅同步 app.py 与 cloud_schema.sql 注释并重启 qre-saas，未重启 worker；公网双独立游客 Cookie 值与隔离语义验证通过。未跑真实回测。
 
 ## Implementation Summary
 

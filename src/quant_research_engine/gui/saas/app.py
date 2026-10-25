@@ -906,6 +906,49 @@ def _job_view(row: Any) -> dict[str, Any]:
     })
 
 
+# --- 任务运行态只读口径（QRE-SAAS-FIRST-SUCCESS-UX-001）---
+# GET /api/jobs/<id> 与 /api/results/<id>/summary 的 409 共用同一套排队位置与
+# worker 在线判定，避免两处各写一套。公网只暴露布尔 worker_online 与排队计数，
+# 不暴露 worker 名称/地址/资源/内部日志。
+
+_ACTIVE_JOB_STATUSES = ("queued", "leased", "running", "uploading")
+
+
+def _queue_position(conn: Any, priority: Any, created_at: Any) -> int:
+    """排队位置：同优先级按创建先后，前面还有几个 queued 任务。"""
+    return conn.execute(
+        text(
+            "SELECT count(*) FROM jobs WHERE status = 'queued' "
+            "AND (priority > :p OR (priority = :p AND created_at < :c))"
+        ),
+        {"p": priority, "c": created_at},
+    ).scalar_one()
+
+
+def _worker_online(conn: Any) -> bool:
+    """worker 在线判定：任一 worker 心跳 < 3 分钟（心跳间隔 60s 的 3 倍）。"""
+    return conn.execute(
+        text(
+            "SELECT count(*) FROM workers "
+            "WHERE last_heartbeat_at > now() - interval '3 minutes'"
+        ),
+    ).scalar_one() > 0
+
+
+def _job_runtime_fields(engine: Any, row: Any) -> dict[str, Any]:
+    """按现有任务数据派生运行态字段：queue_position 仅 queued；worker_online
+    仅未完成任务（终态不需要）。不读取 worker 明细，只回布尔状态。"""
+    status = row["status"]
+    out: dict[str, Any] = {}
+    if status == "queued":
+        with engine.connect() as conn:
+            out["queue_position"] = _queue_position(conn, row["priority"], row["created_at"])
+    if status in _ACTIVE_JOB_STATUSES:
+        with engine.connect() as conn:
+            out["worker_online"] = _worker_online(conn)
+    return out
+
+
 def _reap_expired(conn: Any) -> None:
     """惰性租约回收（17 协议 §4.2）：在 claim/heartbeat/cancel 时顺带执行，
     不起后台线程。租约过期的 leased/running/uploading 任务回队或置 failed；
@@ -2485,16 +2528,8 @@ def create_saas_app() -> Flask:
             # 他人任务与不存在一视同仁（404，不暴露任务存在性）
             return jsonify({"ok": False, "error": "任务不存在"}), 404
         item = _job_view(row)
-        if row["status"] == "queued":
-            # R2：排队位置（前面还有几个任务），供前端显示「排队中，前面还有 N 个」
-            with engine.connect() as conn:
-                item["queue_position"] = conn.execute(
-                    text(
-                        "SELECT count(*) FROM jobs WHERE status = 'queued' "
-                        "AND (priority > :p OR (priority = :p AND created_at < :c))"
-                    ),
-                    {"p": row["priority"], "c": row["created_at"]},
-                ).scalar_one()
+        # QRE-SAAS-FIRST-SUCCESS-UX-001：排队位置 + worker 在线布尔（只读口径复用）
+        item.update(_job_runtime_fields(engine, row))
         if row["status"] == "completed":
             item["result"] = {
                 "summary": _jsonable(row["result_summary"]),
@@ -2508,18 +2543,32 @@ def create_saas_app() -> Flask:
     @app.post("/api/saas/jobs/<int:job_id>/cancel")
     def api_cancel_job(job_id: int) -> Any:
         """用户取消（17 协议 §5）：queued 直接 canceled；执行中置 cancel_requested，
-        worker 下次心跳发现后自行终止；终态 409。"""
+        worker 下次心跳发现后自行终止；终态 409。
+        QRE-SAAS-ACCESS-HARDENING-001：游客按会话 Cookie 归属取消（同会话可取消，
+        异会话/无 Cookie 401，不泄露存在性）；登录用户他人任务 404。"""
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
+        guest_key: str | None = None
+        guest_sid: str | None = None
         if uid is None:
-            return jsonify({"ok": False, "error": "未登录"}), 401
+            guest_key, guest_sid = _guest_identity(app)
         with engine.begin() as conn:
             _reap_expired(conn)
             row = conn.execute(
                 text("SELECT * FROM jobs WHERE id = :id FOR UPDATE"),
                 {"id": job_id},
             ).mappings().first()
-            if row is None or row["user_id"] != uid:
+            owned = (
+                row is not None and (
+                    row["user_id"] == uid if uid is not None
+                    else row["user_id"] is None and row["guest_key"] == guest_key
+                )
+            )
+            if not owned:
+                # 不存在/他人/异会话一视同仁：登录用户 404，匿名 401（不泄露存在性）
+                if uid is None:
+                    return _with_guest_cookie(
+                        app, (jsonify({"ok": False, "error": "未登录"}), 401), guest_sid)
                 return jsonify({"ok": False, "error": "任务不存在"}), 404
             if row["status"] in TERMINAL_STATUSES:
                 return jsonify({"ok": False, "error": f"任务已终态（{row['status']}），无法取消"}), 409
@@ -3268,9 +3317,20 @@ def create_saas_app() -> Flask:
                 if row is None:
                     return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
         if row["status"] != "completed":
-            return None, _with_guest_cookie(
-                app, (jsonify({"ok": False, "error": f"任务未完成（{row['status']}）",
-                               "status": row["status"]}), 409), guest_sid)
+            # QRE-SAAS-FIRST-SUCCESS-UX-001：未完成时把排队位置、worker 在线布尔、
+            # 真实失败原因与策略 ID 一并返回（仅本任务所有者/既有合法只读调用方
+            # 能到达这里；匿名/他人仍在上面 401/404，不泄露存在性）。
+            body: dict[str, Any] = {
+                "ok": False,
+                "error": f"任务未完成（{row['status']}）",
+                "status": row["status"],
+                "strategy_id": row["strategy_id"],
+                "cancel_requested": bool(row["cancel_requested"]),
+                "error_class": row["error_class"],
+                "error_message": row["error_message"],
+            }
+            body.update(_job_runtime_fields(engine, row))
+            return None, _with_guest_cookie(app, (jsonify(body), 409), guest_sid)
         return row, None
 
     @app.get("/api/results")

@@ -11,7 +11,35 @@
   </div>
   <div class="panel" id="status-card">
     <span class="badge queued" id="job-badge">加载中</span>
-    <span class="muted" id="job-status-note" style="margin-left:8px"></span>
+    <span class="muted" id="job-status-note" style="margin-left:8px" aria-live="polite"></span>
+    <!-- QRE-SAAS-FIRST-SUCCESS-UX-001：排队位置 / worker 离线 / 已等待时间（纯视觉，
+         不进 aria-live；不虚构百分比与预计完成时间） -->
+    <span class="opt hidden" id="job-status-extra" style="display:block;margin-top:6px;font-size:12.5px;line-height:1.7"></span>
+    <!-- 活跃任务操作区：取消（自定义模态二次确认）；cancel_requested 时禁用防重复 -->
+    <div id="status-actions" class="hidden" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button type="button" class="btn-sm" id="btn-cancel-job">取消任务</button>
+      <span class="opt" id="cancel-status" style="font-size:12.5px"></span>
+    </div>
+    <!-- failed/expired 恢复区：真实失败原因 + 重跑入口（登录用户按原策略回填；
+         游客仅返回新建页；showcase 只读不出现） -->
+    <div id="recover-actions" class="hidden" style="margin-top:10px">
+      <div class="opt" id="recover-error" style="font-size:12.5px;line-height:1.7;white-space:pre-wrap"></div>
+      <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn btn-ghost" id="btn-rerun" href="/saas/new">返回新建页</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 取消任务二次确认（复用既有自定义模态，不用原生 confirm） -->
+  <div class="modal-mask" id="cancel-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cancel-modal-title">
+      <h3 id="cancel-modal-title">取消任务</h3>
+      <p id="cancel-modal-text">排队中的任务会立即停止；已开始执行的任务会发送取消请求，最终状态以服务端为准。</p>
+      <div class="m-actions">
+        <button type="button" class="btn btn-ghost" id="cancel-modal-no">继续等待</button>
+        <button type="button" class="btn btn-primary" id="cancel-modal-yes" style="background:var(--up);border-color:var(--up)">确认取消</button>
+      </div>
+    </div>
   </div>
 
   <div id="result-area" class="hidden">
@@ -113,7 +141,7 @@
 <script src="/static/echarts.min.js?v={{ asset_v }}"></script>
 <script src="/static/replay.js?v={{ asset_v }}"></script>
 <script>
-// QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
+// QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（随机会话 Cookie 派生 guest_key，API 侧鉴权），不强制登录
 const JOB_ID = {{ job_id }};
 
 function card(label, value, klass, tip){
@@ -798,6 +826,124 @@ let pollController = null;
 let consecutiveErrors = 0;
 let activeSince = null;
 let jobContentDetached = false;
+let cancelInFlight = false;
+
+// ---------- 运行态展示与取消/恢复（QRE-SAAS-FIRST-SUCCESS-UX-001） ----------
+function waitedText(ms){
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return '已等待 ' + s + ' 秒';
+  return '已等待 ' + Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒';
+}
+// queued/running：队列位置、worker 离线提示、已等待时间；秒数仅视觉（#job-status-extra
+// 无 aria-live），不虚构百分比或预计完成时间。
+function renderJobRuntime(st, data){
+  const note = document.getElementById('job-status-note');
+  const extra = document.getElementById('job-status-extra');
+  const actions = document.getElementById('status-actions');
+  if (st === 'queued'){
+    const n = typeof data.queue_position === 'number' ? data.queue_position : null;
+    note.textContent = n !== null && n > 0
+      ? ('排队中，前面还有 ' + n + ' 个任务')
+      : '排队中，等待计算节点领取';
+  } else if (data.cancel_requested){
+    note.textContent = '正在取消，最终状态以服务端为准';
+  } else {
+    note.textContent = '任务执行中，请稍候（每 5 秒自动刷新）';
+  }
+  const extras = [];
+  if (data.worker_online === false){
+    extras.push('计算节点暂时离线，任务已保留，恢复后会继续；无需重复提交');
+  }
+  extras.push(waitedText(activeSince === null ? 0 : Date.now() - activeSince));
+  extra.textContent = extras.join('；');
+  extra.classList.remove('hidden');
+  const btn = document.getElementById('btn-cancel-job');
+  const status = document.getElementById('cancel-status');
+  actions.classList.remove('hidden');
+  if (data.cancel_requested){
+    btn.disabled = true; btn.style.opacity = .65;
+    status.textContent = '正在取消，请勿重复操作';
+  } else {
+    btn.disabled = false; btn.style.opacity = '';
+    status.textContent = '';
+  }
+}
+// failed/expired：展示后端真实 error_message；登录用户可按原策略重跑，游客仅返回新建页；
+// showcase 只读（readonly）不出现任何操作入口。
+function renderJobRecovery(st, data){
+  document.getElementById('job-status-extra').classList.add('hidden');
+  document.getElementById('status-actions').classList.add('hidden');
+  // 终态/只读下取消按钮一并禁用（防呆：容器隐藏之外的二次保险）
+  document.getElementById('btn-cancel-job').disabled = true;
+  const box = document.getElementById('recover-actions');
+  const err = document.getElementById('recover-error');
+  const link = document.getElementById('btn-rerun');
+  const reason = st === 'failed'
+    ? (data.error_message || data.error || '任务失败，服务端未记录原因')
+    : st === 'expired' ? '任务已超过最长时间限制' : '任务已取消';
+  err.textContent = st === 'failed' ? ('失败原因：' + reason) : reason;
+  if (data.readonly){
+    link.style.display = 'none';
+  } else if ((SAAS_BYPASS || saasToken()) && data.strategy_id){
+    link.style.display = '';
+    link.textContent = '按原策略重新回测';
+    link.href = '/saas/new?strategy=' + encodeURIComponent(data.strategy_id);
+  } else {
+    link.style.display = '';
+    link.textContent = '返回新建页';
+    link.href = '/saas/new';
+  }
+  box.classList.remove('hidden');
+}
+function setCancelModal(open){
+  document.getElementById('cancel-modal').classList.toggle('show', !!open);
+}
+document.getElementById('btn-cancel-job').addEventListener('click', function(){
+  const btn = document.getElementById('btn-cancel-job');
+  if (cancelInFlight || btn.disabled) return;
+  setCancelModal(true);
+});
+document.getElementById('cancel-modal-no').addEventListener('click', () => setCancelModal(false));
+document.getElementById('cancel-modal').addEventListener('click', function(e){
+  if (e.target === this) setCancelModal(false);
+});
+document.getElementById('cancel-modal-yes').addEventListener('click', () => doCancelJob());
+async function doCancelJob(){
+  const btn = document.getElementById('btn-cancel-job');
+  if (cancelInFlight || btn.disabled) return;
+  cancelInFlight = true;
+  setCancelModal(false);
+  const status = document.getElementById('cancel-status');
+  btn.disabled = true;
+  status.textContent = '正在提交取消请求…';
+  try {
+    const resp = await apiFetch('/api/saas/jobs/' + JOB_ID + '/cancel', {method: 'POST'});
+    const d = await resp.json().catch(() => null);
+    if (!resp.ok || !d || !d.ok) throw new Error((d && d.error) || ('取消失败（HTTP ' + resp.status + '）'));
+    if (d.status === 'canceled'){
+      // queued 直接 canceled：停止轮询，状态以服务端为准
+      clearPollTimer();
+      const badge = document.getElementById('job-badge');
+      badge.className = 'badge failed';
+      badge.textContent = STATUS_LABEL['canceled'] || '已取消';
+      document.getElementById('job-status-note').textContent = '任务已取消';
+      document.getElementById('job-status-extra').classList.add('hidden');
+      document.getElementById('status-actions').classList.add('hidden');
+      document.getElementById('recover-actions').classList.add('hidden');
+      return;
+    }
+    // running：取消请求已发送，worker 下次心跳后终止；最终状态以服务端为准
+    btn.style.opacity = .65;
+    status.textContent = '取消请求已发送，最终状态以服务端为准';
+  } catch (e) {
+    status.textContent = (e && e.status === 401)
+      ? '会话已失效，刷新页面后重试'
+      : (e.message || '取消失败，请稍后重试');
+    btn.disabled = false; btn.style.opacity = '';
+  } finally {
+    cancelInFlight = false;
+  }
+}
 
 async function jobRequestJsonWithTimeout(url, options, controller, consume){
   const elapsed = typeof activeSince === 'undefined' || activeSince === null ? 0 : Date.now() - activeSince;
@@ -921,9 +1067,7 @@ async function poll(){
       badge.textContent = STATUS_LABEL[st] || st;
       if (ACTIVE.has(st)){
         if (activeSince === null) activeSince = Date.now();
-        document.getElementById('job-status-note').textContent =
-          st === 'queued' ? '任务排队中，空闲后即开始（每 5 秒自动刷新）' :
-          '正在回测，请稍候（每 5 秒自动刷新）';
+        renderJobRuntime(st, data);
         if (Date.now() - activeSince >= MAX_ACTIVE_WAIT_MS){ pauseActivePolling(); return; }
         schedulePoll();
         return;
@@ -933,8 +1077,8 @@ async function poll(){
         clearPollTimer();
         badge.className = 'badge failed';
         document.getElementById('job-status-note').textContent =
-          st === 'failed' ? '任务失败：' + (data.error || '未知') :
-          st === 'expired' ? '任务已超时' : '任务已取消';
+          st === 'failed' ? '任务失败' : st === 'expired' ? '任务已超时' : '任务已取消';
+        renderJobRecovery(st, data);
         return;
       }
       clearPollTimer();
@@ -948,6 +1092,11 @@ async function poll(){
 
     // 已完成：并行拉 chart-data 与 tag-analysis
     document.getElementById('status-card').classList.add('hidden');
+    // 状态操作区/恢复区/运行态副行随状态卡一起隐藏（QRE-SAAS-FIRST-SUCCESS-UX-001）
+    ['job-status-extra', 'status-actions', 'recover-actions'].forEach(id => {
+      document.getElementById(id).classList.add('hidden');
+    });
+    document.getElementById('btn-cancel-job').disabled = true;
     document.getElementById('result-area').classList.remove('hidden');
     if (data.readonly){
       // 经典策略只读展示（QRE-SAAS-SHOWCASE）：隐藏全部操作入口与游客提示
