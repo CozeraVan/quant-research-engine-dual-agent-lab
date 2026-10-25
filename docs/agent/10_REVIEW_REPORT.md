@@ -2,7 +2,7 @@
 
 ## Task ID
 
-QRE-SAAS-ACCESS-FALLBACK-T5（SDD Task 5 回归与文档收尾）
+QRE-SAAS-HELP-COPY-002
 
 ## Reviewer
 
@@ -10,23 +10,24 @@ KIMI_CODE（single agent self-review）
 
 ## Review Status
 
-PASS（相关自动化回归与静态覆盖核对通过；真实浏览器/实机验收未执行）
+PASS（相关回归、真实 Chromium 桌面/移动及用户验收通过；允许本地 commit，不 push）
 
 ## Findings
 
-- 公共无权卡、加载失败卡及安全 next 回跳均在公共模板与登录链路实现；外部地址、协议相对地址、反斜杠与非 SaaS 路径有回归测试。
-- job/symbol/records 主请求均区分权限、业务响应和其他失败，具备请求/响应体超时、有限轮询、终态停止与重试路径；records 附属模块失败不会破坏主列表状态。
-- showcase 匿名及非所有者 GET 保持只读，生成 POST 为 403 且数据库断言未创建任务；`can_generate` 的 404 在通用无权分支前处理。
-- 181 项相关测试全部通过，无本改动失败或既有失败需要归因；无 Required Fix。
+- 001 的文案遗漏、逐节点状态与缺少浏览器验收已由 002 针对性重做；没有复用被否决实现。
+- 真实浏览器暴露出 focus→touch、自动滚动和兼容 mouseout 三类问题，均先补失败用例再修复；最终首次 tap 不再闪关。
+- 指标说明与计算口径一致；权限、错误、截断、动态状态及免责声明保持可见。无 Required Fix。
 
 ## Validation Evidence
 
 ```text
-/home/van/.local/bin/uv run python -m pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py -q
-181 passed in 15.04s
+相关 SaaS 回归：230 passed
+全量：2462 passed, 5 skipped
+真实 Chromium：桌面连续 3 次 hover 均显示完整正文；移动 tap 开关、375px 无横滚、零 JS error
+证据：.tmp/help-copy-v2/
 ```
 
-未做真实浏览器自动化，未执行游客/登录用户实机矩阵，未运行真实全量回测；因此本 PASS 不等同于 Step 2 实机验收完成。
+未部署 ECS，未运行真实全量回测；等待用户验收与提交授权。
 
 ## Required Fixes
 

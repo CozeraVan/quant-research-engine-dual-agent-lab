@@ -2,18 +2,18 @@
 
 ## Task ID
 
-QRE-SAAS-ACCESS-FALLBACK-FINAL-REVIEW（SaaS 无权页、请求兜底与只读交互最终收口）
+QRE-SAAS-HELP-COPY-002（Kimi 重做全站备注与提示交互）
 
 ## Current Status
 
-DONE（实现与自动化验证完成；228 passed；授权 commit/push/ECS 部署）
+DONE（2026-10-25 用户批准通过；002 已部署 ECS 验收，允许本地 commit，不 push）
 
 ## Task Note
 
-- 公共无权卡、安全 next 回跳及 job/symbol/records 有限轮询已落地；job 的 summary/chart/tag/risk 均覆盖 fetch 与 JSON body 超时，重试通过 abort/epoch 隔离旧请求。
-- symbol 长等待显示暂停而非失败；job/symbol 重播、保存、信号与 resize 监听幂等。showcase 缺个股详情返回 `readonly`，前端不显示生成按钮，后端写操作 403 不变；new 对 expired 立即停止。
-- `git-finalize-check.sh` 仅扫描新增行，避免未修改上下文误报，同时保留新增敏感赋值拦截；临时仓库回归覆盖正反两路。
-- 验证：六个相关测试文件共 228 passed；finalize/progress/diff 检查通过。未做真实浏览器自动化，未运行真实全量回测；部署后由用户实机抽查无权页、登录回跳与生成等待状态。
+- 组件：`LabUI.helpTips()` 使用事件委托与单例提示框，动态节点无需 refresh；桌面 hover/focus、移动 tap、滚动跟随和 ARIA 已覆盖。
+- 文案：new/job/symbol 为主，同步 symbols/records/dashboard/console/strategy；删除重复说明，模块口径入问号、指标口径入整卡，必要状态/权限/截断/免责保留。
+- 验证：相关回归 230 passed；全量 2462 passed + 5 skipped。真实 Chromium 连续 3 次 hover、指标正文、移动 tap 和 375px 通过；截图与结果 `.tmp/help-copy-v2/`。
+- 边界：未运行真实回测，未部署 ECS，未 commit/push；用户验收和提交授权后再收尾。
 
 ---
 

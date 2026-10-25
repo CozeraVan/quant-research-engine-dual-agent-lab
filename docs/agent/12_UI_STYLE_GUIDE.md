@@ -185,7 +185,7 @@
 
 ### 3.9 指标卡 / chips / 大入口 / 磨损条
 
-- `.metric`（或母板类 `.metric-card`，已纠偏对齐，`:400-407`）：白卡居中，`.m-label` 12px faint + `.m-value` 衬线 20px 700 + tabular-nums；hover 浮起 -2px；可带 `title` 解释口径。风险区卡片改淡红边 `#F0CACA` + `#FFFBFB` 底。
+- `.metric`（或母板类 `.metric-card`，已纠偏对齐，`:400-407`）：白卡居中，`.m-label` 12px faint + `.m-value` 衬线 20px 700 + tabular-nums；hover 浮起 -2px；SaaS 可带 `data-tip` 解释口径，由统一提示组件展示。风险区卡片改淡红边 `#F0CACA` + `#FFFBFB` 底。
 - `.meta-chips .chip2`：白底 12px 参数 chip（`<b>` 强调值）。
 - `.range-strip .metric`：区间卡改 `--tint` 底 + `--tint-deep` 边，与普通指标卡区分。
 - `.big-link`：详情页→子页大入口卡（主标题 + 灰字副标 + 右侧 → 箭头，hover 紫边浮起箭头右移 4px，`lab-theme.css:240-245`）。
@@ -194,6 +194,13 @@
 ### 3.10 YAML 预览栏（`lab-theme.css:269-275`）
 
 `pre.compiled-yaml.pv`：深色代码块 + CSS counter 行号 + 简语法高亮（`.yk` 键紫 / `.yc` 注释灰 / `.yv` 值浅紫），max-height 340px 滚动。它是页面**唯一 YAML 真相源**，三个入口产出都汇聚到这里。
+
+### 3.13 说明提示（QRE-SAAS-HELP-COPY-002）
+
+- `LabUI.helpTips()` 在 base 初始化一次，document 事件委托读取 `[data-tip]`，单例 `#qre-help-tip.tip-pop` 用 `textContent` 展示；动态重绘无需 refresh 或逐节点监听。
+- 桌面 mouseover 每次均显示、mouseout 关闭；focusin/out 支持键盘；touch/pen pointerup 切换。触摸后 700ms 内忽略兼容鼠标事件，滚动时重新定位而非误关；Esc/外部触摸关闭并清理 ARIA。
+- 模块标题使用 `.tip-trigger` 问号按钮；指标卡整卡使用 `data-tip` + `tabindex=0`，不再为每卡额外画问号。提示层 fixed 定位、视口防溢出、`pointer-events:none`，颜色只用既有主题变量。
+- 必要权限、错误、动态状态、截断和免责声明保持可见，不得为精简而藏入提示。真实 Chromium 连续悬停与移动 tap 是此类改动的验收硬门槛。
 
 ---
 

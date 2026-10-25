@@ -15,14 +15,14 @@
       <!-- nl 模式：原始自然语言（可改 + 重新编译） -->
       <div id="sd-src-nl" class="hidden">
         <textarea id="sd-nl-text" rows="5" style="width:100%"></textarea>
-        <p class="opt" style="margin:6px 0">改动自然语言后点「重新编译」生成新的策略代码，再点下方「保存修改」生效。</p>
+        <p class="opt" style="margin:6px 0">重新编译后，需保存修改才会生效。</p>
         <button class="btn-sm" id="sd-nl-recompile">重新编译</button>
         <span class="opt" id="sd-nl-status" style="margin-left:8px"></span>
       </div>
       <!-- wizard 模式：快照条件组只读还原 + 跳转向导编辑 -->
       <div id="sd-src-wizard" class="hidden">
         <div id="sd-wz-summary"></div>
-        <p class="opt" style="margin:6px 0">结构化条件为创建时快照；点击按钮到新建页向导中编辑。</p>
+
         <a class="btn-sm" id="sd-wz-edit" href="#">在向导中编辑 →</a>
       </div>
       <!-- yaml 模式：代码编辑框 -->

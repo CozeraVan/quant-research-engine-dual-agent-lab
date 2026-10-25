@@ -548,3 +548,14 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 .fct-chip.st-overlay{background:var(--lav);color:#fff}
 .fct-chip.st-pane{background:var(--tint);color:var(--lav-deep);border-color:var(--tint-deep)}
 .fct-chip.st-hidden{border-color:var(--line);color:var(--faint);background:#fff;text-decoration:line-through}
+
+/* 说明提示：事件委托，模块问号与指标卡共用；无需在动态重绘后重新绑定 */
+.tip-trigger{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:6px;padding:0;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--lav-deep);vertical-align:middle;cursor:pointer}
+.tip-trigger:hover{background:var(--tint);border-color:var(--lav)}
+.tip-trigger:focus-visible,.metric-card[data-tip]:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
+.tip-trigger svg{width:12px;height:12px;display:block}
+.metric-card[data-tip]{cursor:help}
+.tip-pop{position:fixed;z-index:75;display:none;max-width:300px;padding:9px 13px;border-radius:8px;background:var(--ink);color:#fff;box-shadow:var(--shadow-2);font:12.5px/1.7 var(--sans);white-space:normal;pointer-events:none}
+@media (hover:none){.tip-trigger{width:36px;height:36px}.tip-trigger svg{width:14px;height:14px}}
+@media (max-width:768px){.tip-trigger{min-width:36px;min-height:36px}}
+@media (prefers-reduced-motion:reduce){.tip-trigger{transition:none}}

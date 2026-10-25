@@ -2,6 +2,17 @@
 
 Use this file for decisions that affect architecture, data, safety, compliance, prompts, schema, deployment, or the development workflow.
 
+### 2026-10-25: SaaS 提示组件 001 否决回退，002 改事件委托
+
+- Decision: 001 用户验收否决，ECS 与本地全部回退且不 push；002 由 Kimi 实施。
+  不再使用逐节点绑定 + hover/focus/click 通道状态 + refresh，改为 document
+  事件委托 + 单例提示框。mouseover 只显示不 toggle，mouseout/focusout 关闭，
+  touch/pen pointerup 才切换，动态重绘节点无需刷新绑定。
+- Rationale: 001 文案覆盖不全、交互状态交叉导致重复悬停失效，且 DOM stub
+  测试未覆盖真实浏览器可见性。002 必须先在 Chromium 验证连续 3 次悬停、
+  指标卡正文、移动端 tap 和动态区间卡，再请求验收；未经明确指令不部署 ECS。
+- Owner: KIMI_CODE
+
 ### 2026-10-19: P8 panel_factors 日更调度拓扑 + P5 risk pair-aware warmup
 
 - Decision: panel_factors 全体系（P0-P3 基本面链 + P4/P5/P7 + 通道B）不进

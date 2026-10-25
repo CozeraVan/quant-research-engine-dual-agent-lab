@@ -3,8 +3,8 @@
 {% block body %}
 <div class="wrap">
   <div class="page-head" style="margin-bottom:14px">
-    <h1 style="font-size:22px">个股回测明细 <span class="opt">任务 #{{ job_id }}</span></h1>
-    <p class="opt" style="margin-top:6px">聚合自赚钱效应归因（仅本任务实际交易的个股）；点列头排序，点行进个股详情；输入完整代码回车直跳。</p>
+    <h1 style="font-size:22px">个股回测明细 <span class="opt">任务 #{{ job_id }}</span> <button type="button" class="tip-trigger" data-tip="聚合自赚钱效应归因，仅包含本任务实际交易的个股。" aria-label="个股明细口径">?</button></h1>
+    <p class="opt" style="margin-top:6px">点列头排序，点行进详情；输入完整代码回车直跳。</p>
     <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}">← 返回回测结果</a></p>
   </div>
   <div class="card">

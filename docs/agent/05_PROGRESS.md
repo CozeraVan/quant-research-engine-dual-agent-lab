@@ -1,3 +1,11 @@
+2026-10-25 QRE-SAAS-HELP-COPY-002 USER ACCEPTED：用户批准通过，允许本地提交并明确不 push；任务收尾为 DONE。
+
+2026-10-25 QRE-SAAS-HELP-COPY-002 ECS 验收部署：用户明确要求先部署。仅同步 9 个 SaaS 模板及 `lab-ui.js`/`lab-theme.css`，覆盖前备份 `/tmp/qre-help-copy-v2-pre-20261025.tgz`；`qre-saas` 重启后 active，关键文件 SHA256 本地/线上一致。公网 new/showcase/lab-ui/lab-theme 均 200 且含新组件，HTML no-cache，静态资源版本已更新。未部署引擎/测试/文档，未重启 worker，未 commit/push；留用户实机验收。
+
+2026-10-25 QRE-SAAS-HELP-COPY-002 IMPLEMENTED（Kimi 重做，未部署/未 commit/push）：共享 `LabUI.helpTips()` 改 document 事件委托 + 单例 `#qre-help-tip`，动态节点无需 refresh；桌面重复 hover、键盘 focus、touch/pen tap、Esc/外部关闭、滚动跟随定位，700ms 屏蔽触摸兼容鼠标事件。new 删除重复组合/编辑器定位/预览/表单灰字，job/symbol 图表说明入问号、收益区间与 FRM 口径入整卡，symbols/records/dashboard/console/strategy 同步；必要状态/权限/截断/免责保留。TDD 覆盖连续 hover、动态节点、focus→touch、合成 mouseout 和滚动。真实 Chromium 8091 既有 job 37/000001：桌面同目标 3 次均显示完整正文，移动首次 tap 显示且第二次关闭，375px 无横滚，new/job/symbol/profile/showcase 零 JS error；证据 `.tmp/help-copy-v2/`。相关回归 230 passed，全量 2462 passed + 5 skipped；未运行真实回测。
+
+2026-10-25 QRE-SAAS-HELP-COPY-001 REJECTED + 002 START：用户验收否决 001（灰色备注仍多、提示仅首次出现、指标卡无正文），明确不 push 并要求 Kimi 重做。ECS 已从 `/tmp/qre-help-copy-pre-20261025.tgz` 恢复，`qre-saas` active 且仓库干净，公网无新组件；本地 001 代码/测试/计划全部清理，仅保留设计文档提交 ae13001。002 根因：文案盘点不全、逐节点多通道状态与 refresh 复杂且不稳定、未做真实浏览器验收。新方案为事件委托 + 单例提示框，动态节点无需 refresh；真实 Chromium 连续交互为硬门槛，未获明确指令不再部署。
+
 2026-10-25 QRE-SAAS-HELP-COPY-001 DESIGN（用户已批准方向与设计文档本地提交）：Step 5 只读盘点 15 个 SaaS 模板约 45 处灰色备注，形成删除/可见保留/模块问号/指标卡说明四类清单。用户选定统一 help-tip：桌面 hover、键盘 focus、移动 tap，Esc/外部关闭，保留必要约束与免责，不改业务/API/布局。设计写入 `docs/superpowers/specs/2026-10-25-saas-help-copy-design.md`，实施任务写入 08；Step 5 负责后续独立实现，主 Agent 复核，验收前不 push、不部署。
 
 2026-10-24 QRE-SAAS-ACCESS-FALLBACK-T5 DONE（SDD Task 5 回归与文档收尾）：核对 commits 9eac651..41550c6 已覆盖公共无权/失败卡、安全 next 回跳、job/symbol/records 有限轮询与重试、showcase 公开 GET 只读及写操作 403、`404 + can_generate` 正常生成分支。完整相关回归 `tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_saas_authing.py tests/test_gui_lab.py` → **181 passed**，无失败，既有匿名 401/登录他人 404/本人 409 契约不变。已同步 04/05/09/10/11 长期文档与 Task 5 报告。未改功能代码，未做真实浏览器自动化或游客/登录用户实机检查，未运行真实全量回测，未 push、未部署；Step 2 实机清单留待人工验收。

@@ -216,5 +216,81 @@
     return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
   };
 
+  /* ==================== 说明提示：事件委托，动态节点无需重新绑定 ==================== */
+  LabUI.helpTips = function () {
+    if (LabUI._helpTipsStarted) return;
+    LabUI._helpTipsStarted = true;
+    var pop = null, active = null, touchOpen = null, lastTouch = 0, tipId = "qre-help-tip";
+    function targetOf(ev) {
+      return ev.target && ev.target.closest ? ev.target.closest("[data-tip]") : null;
+    }
+    function textOf(el) { return el ? String(el.getAttribute("data-tip") || "").trim() : ""; }
+    function hide() {
+      if (active) active.removeAttribute("aria-describedby");
+      active = null;
+      touchOpen = null;
+      if (pop) pop.style.display = "none";
+    }
+    function place(el) {
+      var r = el.getBoundingClientRect(), vw = window.innerWidth || 320, vh = window.innerHeight || 640;
+      pop.style.maxWidth = Math.min(300, vw - 24) + "px";
+      pop.style.visibility = "hidden";
+      var w = pop.offsetWidth || 0, h = pop.offsetHeight || 0;
+      var left = Math.max(12, Math.min(r.left + r.width / 2 - w / 2, vw - w - 12));
+      var top = r.bottom + 8;
+      if (top + h > vh - 12 && r.top - h - 8 > 12) top = r.top - h - 8;
+      pop.style.left = left + "px";
+      pop.style.top = Math.max(12, top) + "px";
+      pop.style.visibility = "visible";
+    }
+    function show(el) {
+      var text = textOf(el);
+      if (!text) { hide(); return; }
+      if (!pop) {
+        pop = document.createElement("div");
+        pop.id = tipId;
+        pop.className = "tip-pop";
+        pop.setAttribute("role", "tooltip");
+        document.body.appendChild(pop);
+      }
+      if (active && active !== el) active.removeAttribute("aria-describedby");
+      active = el;
+      pop.textContent = text;
+      pop.style.display = "block";
+      active.setAttribute("aria-describedby", tipId);
+      place(active);
+    }
+    document.addEventListener("mouseover", function (ev) {
+      if (Date.now() - lastTouch < 700) return;
+      var el = targetOf(ev);
+      if (el) show(el);
+    });
+    document.addEventListener("mouseout", function (ev) {
+      if (Date.now() - lastTouch < 700) return;
+      var el = targetOf(ev);
+      if (!el) return;
+      var next = ev.relatedTarget && ev.relatedTarget.closest ? ev.relatedTarget.closest("[data-tip]") : null;
+      if (next !== el) hide();
+    });
+    document.addEventListener("focusin", function (ev) { var el = targetOf(ev); if (el) show(el); });
+    document.addEventListener("focusout", function (ev) { if (targetOf(ev)) hide(); });
+    document.addEventListener("pointerup", function (ev) {
+      var el = targetOf(ev);
+      if (ev.pointerType === "touch" || ev.pointerType === "pen") {
+        lastTouch = Date.now();
+        if (!el) { hide(); return; }
+        if (touchOpen === el && pop && pop.style.display === "block") { hide(); return; }
+        show(el);
+        touchOpen = el;
+      } else if (!el) hide();
+    });
+    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") hide(); });
+    document.addEventListener("scroll", function () {
+      if (!active) return;
+      if (active.isConnected === false) { hide(); return; }
+      place(active);
+    }, true);
+  };
+
   window.LabUI = LabUI;
 })();

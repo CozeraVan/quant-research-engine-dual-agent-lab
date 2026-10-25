@@ -76,6 +76,8 @@ function el(){
     appendChild(...nodes){ this.children.push(...nodes); this.childNodes.push(...nodes); },
     replaceChildren(...nodes){ this.children = [...nodes]; this.childNodes = [...nodes]; },
     addEventListener(type, fn){ (this.listeners[type] ||= []).push(fn); },
+    setAttribute(name, value){ this[name] = String(value); },
+    removeAttribute(name){ delete this[name]; },
     querySelectorAll(){ return []; },
   };
 }
@@ -1509,6 +1511,7 @@ async function assertSinglePost(h){
 (async () => {
   const h = createHarness(async () => response(200, {ok: true}));
   h.context.renderRiskDist = () => {}; h.context.renderRiskVol = () => {}; h.context.renderRiskStress = () => {};
+  h.context.card = () => ''; h.context.escH = value => String(value);
   vm.runInContext(source, h.context);
   vm.runInContext('renderRisk({})', h.context);
   vm.runInContext('renderRisk({})', h.context);

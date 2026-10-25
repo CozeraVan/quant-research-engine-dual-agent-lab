@@ -26,7 +26,7 @@
     <div class="metric-strip" id="metric-strip"></div>
 
     <div class="chart-box" id="box-main">
-      <div class="chart-title">策略收益 vs 基准指数 <span class="opt">（累计收益率，全期起点 = 0%；拖动下方滑块或图上滚轮缩放区间）</span>
+      <div class="chart-title">策略收益 vs 基准指数 <button type="button" class="tip-trigger" data-tip="累计收益率以全期起点为 0%；拖动下方滑块或图上滚轮缩放区间。" aria-label="收益曲线说明">?</button>
         <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button>
         <button class="btn-sm hidden" id="btn-replay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
       <div class="bench-bar" id="bench-bar">基准：</div>
@@ -42,18 +42,18 @@
 
     <!-- 交易磨损（chart-data.fees_summary；无则整块隐藏，C5 对齐 lab 版） -->
     <div class="chart-box" id="box-fees" style="display:none">
-      <div class="chart-title">交易磨损 <span class="opt">（佣金 / 印花税 / 过户费等集中呈现；聚合自本次回测 round_trips 全量真实费用列）</span></div>
+      <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="佣金、印花税、过户费等，聚合自本次回测 round_trips 全量真实费用列。" aria-label="交易磨损说明">?</button></div>
       <div id="fees-body"></div>
     </div>
 
     <!-- FRM 风险模块（risk-analysis；has_report=false 时整块隐藏） -->
     <div class="chart-box" id="box-risk" style="display:none">
-      <div class="chart-title">风险分析（FRM） <span class="opt" id="risk-subtitle"></span></div>
+      <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" id="risk-tip" data-tip="基于策略日收益刻画波动、尾部损失和压力情景；损失以正数展示。" aria-label="风险分析说明">?</button></div>
       <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
     </div>
 
     <div class="chart-box" id="box-tags">
-      <div class="chart-title">赚钱板块归因 <span class="opt">（矩块面积 = 盈亏规模，红赚绿亏、越深金额越大；点击矩块或下方榜单行看板块内个股）</span></div>
+      <div class="chart-title">赚钱板块归因 <button type="button" class="tip-trigger" data-tip="矩块面积表示盈亏规模；红赚绿亏，颜色越深金额越大。点击矩块或榜单行查看板块内个股。" aria-label="板块归因说明">?</button></div>
       <div class="tag-tabs" id="tag-tabs">
         <button data-layer="A" class="active">行业板块</button>
         <button data-layer="B">概念关键词</button>
@@ -68,7 +68,6 @@
     <a class="big-link" id="big-symbols" href="#">
       <span>
         <span class="bl-main">📋 查看个股回测明细</span>
-        <span class="bl-sub">全部触发交易的个股列表：代码 / 名称 / 交易笔数 / 胜率 / 总净盈亏 / 超额等，可排序可搜索；点行进入个股详情</span>
       </span>
       <span class="bl-arrow">→</span>
     </a>
@@ -76,14 +75,14 @@
     <!-- QRE-SAAS-RESULT-ACTIONS（2026-10-05 用户拍板）：策略入库/交易信号改为结果页
          显式触发——提交回测不再自动入库；游客隐藏（结果次日清空，无资产可存） -->
     <div class="chart-box hidden" id="box-actions">
-      <div class="chart-title">下一步 <span class="opt">（测试满意的策略再入库跟踪；未保存的策略不进策略库）</span></div>
+      <div class="chart-title">下一步 <button type="button" class="tip-trigger" data-tip="满意的策略可保存到策略库；开启信号后会每日收盘扫描入出场条件，并同时保存策略。T+1 参考，不构成投资建议。" aria-label="后续操作说明">?</button></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <button class="btn-sm" id="btn-save-lib">保存到我的策略库</button>
         <button class="btn-sm" id="btn-signal-open">提示交易信号</button>
         <span class="opt" id="action-status"></span>
       </div>
       <div id="signal-panel" class="hidden" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:12px">
-        <p class="opt" style="margin:0 0 8px">每日收盘后扫描该策略的入场/出场信号（T+1 参考，不构成投资建议；隐含保存策略入库）。扫描范围：</p>
+        <p class="opt" style="margin:0 0 8px">T+1 参考，不构成投资建议。扫描范围：</p>
         <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
           <label class="radio-inline"><input type="radio" name="sig-scope" value="last_run_universe" checked> 本次测试范围</label>
           <label class="radio-inline"><input type="radio" name="sig-scope" value="sector"> 指定板块</label>
@@ -111,7 +110,7 @@
 const JOB_ID = {{ job_id }};
 
 function card(label, value, klass, tip){
-  return '<div class="metric-card"' + (tip ? ' title="' + tip + '"' : '') + '><div class="m-label">' + label + '</div>' +
+  return '<div class="metric-card"' + (tip ? ' tabindex="0" data-tip="' + escH(tip) + '"' : '') + '><div class="m-label">' + label + '</div>' +
          '<div class="m-value ' + (klass || '') + '">' + value + '</div></div>';
 }
 function empty(id, msg){
@@ -142,12 +141,12 @@ function renderMetrics(m){
   const strip = document.getElementById('metric-strip');
   if (!m){ strip.innerHTML = ''; return; }
   strip.innerHTML =
-    card('总收益率', pct(m.total_return ?? m.strategy_total_return), cls(m.total_return ?? m.strategy_total_return)) +
+    card('总收益率', pct(m.total_return ?? m.strategy_total_return), cls(m.total_return ?? m.strategy_total_return), '回测区间内策略累计净收益，相对初始资金口径；批量全市场按资金加权汇总。') +
     card('年化收益', pct(m.annual_return), cls(m.annual_return), '全期总收益按回测起止区间几何年化：(1+总收益)^(1/年数)−1') +
-    card('超额收益·vs持有不动', pct(m.excess_return), cls(m.excess_return), '策略全期总收益 − 同期买入并持有这些股票的收益；负值 = 跑输「装死持有」') +
-    card('夏普比率', (m.sharpe == null ? '—' : Number(m.sharpe).toFixed(2)), cls(m.sharpe)) +
-    card('最大回撤', pct(m.max_drawdown), 'neg') +
-    card('胜率', pct(m.win_rate), cls(m.win_rate));
+    card('超额收益·vs持有不动', pct(m.excess_return), cls(m.excess_return), '策略全期总收益 − 同期买入并持有这些股票的收益；负值 = 跑输持有不动') +
+    card('夏普比率', (m.sharpe == null ? '—' : Number(m.sharpe).toFixed(2)), cls(m.sharpe), '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
+    card('最大回撤', pct(m.max_drawdown), 'neg', '净值从历史高点到随后低点的最大跌幅。') +
+    card('胜率', pct(m.win_rate), cls(m.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。');
 }
 function renderMeta(meta, dataUntil){
   const el = document.getElementById('meta-chips');
@@ -288,11 +287,11 @@ function renderMain(d){
     }
     const excess = (sRet != null && bRet != null) ? sRet - bRet : null;
     strip.innerHTML =
-      card('区间策略收益', pct(sRet), cls(sRet)) +
-      card('区间基准收益·' + bName, bRet == null ? '—' : pct(bRet), cls(bRet)) +
+      card('区间策略收益', pct(sRet), cls(sRet), '当前缩放窗口内，策略首末累计净值之比 − 1。') +
+      card('区间基准收益·' + bName, bRet == null ? '—' : pct(bRet), cls(bRet), '当前缩放窗口内，基准指数首末收盘价之比 − 1。') +
       card('区间超额·vs ' + bName, excess == null ? '—' : pct(excess), cls(excess), '滑块窗口内：策略累计收益% − ' + bName + ' 累计收益%') +
-      card('区间最大回撤', pct(mdd), 'neg') +
-      card('交易日数', i1 - i0 + 1, 'flat') +
+      card('区间最大回撤', pct(mdd), 'neg', '当前缩放窗口内，净值高点到随后低点的最大跌幅。') +
+      card('交易日数', i1 - i0 + 1, 'flat', '当前缩放窗口包含的交易日数量。') +
       exposureCards(i0, i1, sRet);
   }
   let rafPending = false;
@@ -539,7 +538,7 @@ function renderFees(fees, meta){
     '<div class="wb">' +
       '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + num(fees.gross_pnl) + ' 元</span></div>' +
       '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + num(fees.net_pnl) + ' 元</span></div>' +
-      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + num(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：本次回测 round_trips 全量 ' + fees.trades + ' 笔真实费用列聚合</div>' +
+      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + num(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div>' +
     '</div>';
 }
 let riskEpoch = 0;
@@ -582,8 +581,8 @@ function renderRisk(d) {
     riskCharts.forEach(function(c) { c.dispose(); });
     riskCharts = [];
     var body = document.getElementById('risk-body');
-    var sub = '（日收益口径 n=' + (d.n_obs == null ? '—' : d.n_obs) + '；VaR / ES / 压力测试均为损失数字，红色 = 亏损）';
-    document.getElementById('risk-subtitle').textContent = sub;
+    var sub = '日收益口径 n=' + (d.n_obs == null ? '—' : d.n_obs) + '；VaR / ES / 压力测试均为损失数字，红色 = 亏损。';
+    document.getElementById('risk-tip').setAttribute('data-tip', sub);
 
     // VaR / ES 卡片 + VaR 回测状态灯（历史模拟口径，损失取正号）
     var cardsHtml = '';
@@ -592,8 +591,8 @@ function renderRisk(d) {
       var v = ve[lv];
       if (!v) return;
       var label = lv === '95pct' ? '95%' : '99%';
-      cardsHtml += card('VaR ' + label, v.var == null ? '—' : (v.var * 100).toFixed(2) + '%', 'neg') +
-                   card('ES ' + label, v.es == null ? '—' : (v.es * 100).toFixed(2) + '%', 'neg');
+      cardsHtml += card('VaR ' + label, v.var == null ? '—' : (v.var * 100).toFixed(2) + '%', 'neg', '历史模拟法：' + label + ' 置信水平下的单日损失分位阈值；尾部约 ' + (lv === '95pct' ? '5%' : '1%') + ' 的损失会超过该阈值。') +
+                   card('ES ' + label, v.es == null ? '—' : (v.es * 100).toFixed(2) + '%', 'neg', '历史模拟法：超过 VaR 阈值的尾部损失平均值；损失以正数表示。');
     });
     var bt = d.var_backtest || {};
     var lightsHtml = '';
@@ -601,8 +600,7 @@ function renderRisk(d) {
       var b = bt[lv];
       if (!b) return;
       var label = lv === '95pct' ? 'VaR95 回测' : 'VaR99 回测';
-      lightsHtml += '<span class="risk-light ' + (b.reject ? 'bad' : 'ok') + '" title="' +
-                    (b.conclusion || '') + '">' + label + (b.reject ? ' 不合格' : ' 合格') +
+      lightsHtml += '<span class="risk-light ' + (b.reject ? 'bad' : 'ok') + '" tabindex="0" data-tip="' + escH(b.conclusion || '') + '">' + label + (b.reject ? ' 不合格' : ' 合格') +
                     '（突破率 ' + (b.violation_rate * 100).toFixed(2) + '% / 预期 ' +
                     (b.expected_rate * 100).toFixed(2) + '%）</span> ';
     });
@@ -616,8 +614,8 @@ function renderRisk(d) {
       '<div class="risk-cards">' + (cardsHtml || '<span class="opt">暂无 VaR/ES 数据</span>') + '</div>' +
       '<div style="margin-bottom:8px;">' + lightsHtml + '</div>' +
       '<div class="risk-grid">' +
-      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">日收益分布 <span class="opt">（直方图 + 正态拟合，竖线为 VaR）</span></div><div id="chart-risk-dist" style="height:240px;"></div></div>' +
-      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">波动率状态 <span class="opt">（' + (volTxt.join('；') || '暂无') + '）</span></div><div id="chart-risk-vol" style="height:240px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">日收益分布 <button type="button" class="tip-trigger" data-tip="直方图展示日收益分布，曲线为正态拟合，竖线标记 VaR。" aria-label="收益分布说明">?</button></div><div id="chart-risk-dist" style="height:240px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">波动率状态 <button type="button" class="tip-trigger" data-tip="' + escH(volTxt.join('；') || '暂无波动率数据') + '" aria-label="波动率说明">?</button></div><div id="chart-risk-vol" style="height:240px;"></div></div>' +
       '</div>' +
       '<div class="chart-title" style="font-size:13px;margin-top:8px;">压力测试 <span class="opt" id="risk-stress-note"></span></div>' +
       '<div id="chart-risk-stress" style="height:220px;"></div>';

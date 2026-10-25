@@ -315,6 +315,7 @@ function cls(v){ return v == null ? 'flat' : (v > 0 ? 'pos' : (v < 0 ? 'neg' : '
 function dispCode(c){ return String(c == null ? '' : c).replace(/\.(SZ|SH|BJ)$/i, ''); }
 const STATUS_LABEL = {queued:'排队中', leased:'运行中', running:'运行中', uploading:'回传中', completed:'已完成', failed:'失败', expired:'超时', canceled:'已取消', done:'已完成', cancelled:'已取消'};
 </script>
+<script>if (window.LabUI && LabUI.helpTips) LabUI.helpTips();</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

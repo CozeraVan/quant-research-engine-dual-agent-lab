@@ -26,7 +26,7 @@
       <div class="metric-strip" id="ov-jobs"></div>
       <div class="metric-strip" id="ov-guests"></div>
       <div class="card">
-        <h2>Worker 资源 <span class="opt">（槽位占用 / 内存水位；在线 = 心跳 60 秒内）</span></h2>
+        <h2>Worker 资源 <button type="button" class="tip-trigger" data-tip="展示槽位占用和内存水位；心跳在 60 秒内视为在线。" aria-label="Worker资源说明">?</button></h2>
         <div id="ov-worker-res" class="muted">加载中…</div>
       </div>
       <div class="card">
@@ -48,12 +48,11 @@
 
     <div class="tab-pane hidden" id="pane-policies">
       <div class="card">
-        <h2>角色权限配置 <span class="opt">（改动即时生效；0 = 不限）</span></h2>
+        <h2>角色权限配置 <button type="button" class="tip-trigger" data-tip="改动即时生效，0 表示不限。未来新增付费等级可插入新角色行；admin 不受这些限制。" aria-label="角色权限说明">?</button></h2>
         <table class="tbl">
           <thead><tr><th>角色</th><th class="num">每日全量回测次数</th><th class="num">标的数上限</th><th class="num">区间天数上限</th><th class="num">因子数上限</th><th class="num">因子表数上限</th><th>更新时间</th><th>操作</th></tr></thead>
           <tbody id="policies-tbody"></tbody>
         </table>
-        <p class="muted" style="margin-top:10px">角色阶梯可扩展：未来新增付费等级（如 vip）只需在库中插入新行并在此配置；admin 角色不受以上限制。</p>
       </div>
     </div>
 
@@ -76,7 +75,7 @@
 
     <div class="tab-pane hidden" id="pane-feedback">
       <div class="card">
-        <h2>用户反馈 <span class="opt">（只读，最新 200 条）</span></h2>
+        <h2>用户反馈 <button type="button" class="tip-trigger" data-tip="只读列表，显示最新 200 条反馈。" aria-label="用户反馈说明">?</button></h2>
         <table class="tbl">
           <thead><tr><th class="num">ID</th><th>用户</th><th>内容</th><th>来源页面</th><th>联系方式</th><th>提交时间</th></tr></thead>
           <tbody id="feedback-tbody"></tbody>
@@ -87,7 +86,7 @@
 
     <div class="tab-pane hidden" id="pane-workers">
       <div class="card">
-        <h2>Worker 状态 <span class="opt">（近 3 分钟有心跳 = 在线）</span></h2>
+        <h2>Worker 状态 <button type="button" class="tip-trigger" data-tip="近 3 分钟有心跳的 Worker 视为在线。" aria-label="Worker状态说明">?</button></h2>
         <table class="tbl">
           <thead><tr><th>Worker</th><th>状态</th><th class="num">在跑任务</th><th>最近心跳</th><th>首次接入</th></tr></thead>
           <tbody id="workers-tbody"></tbody>
@@ -116,7 +115,7 @@
 
     <div class="tab-pane hidden" id="pane-showcase">
       <div class="card">
-        <h2>经典策略展示 <span class="opt">（/saas/showcase 公开只读页的白名单；移除不删任务本身）</span></h2>
+        <h2>经典策略展示 <button type="button" class="tip-trigger" data-tip="这里配置公开展示页白名单；移除展示不会删除原回测任务。" aria-label="经典策略展示说明">?</button></h2>
         <table class="tbl">
           <thead><tr><th class="num">任务ID</th><th>标题</th><th>副标题</th><th>策略</th><th class="num">排序</th><th>状态</th><th>日更至</th><th>操作</th></tr></thead>
           <tbody id="showcase-tbody"></tbody>

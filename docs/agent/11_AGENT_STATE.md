@@ -10,9 +10,13 @@ This file is the source of truth for single-agent workflow recovery.
 
 已修复并回填，不再属于待办。重要教训：所有关键小文件（FRM 等）必须显式设置回传优先级，不能依赖文件名字典序；全市场任务 20MB 上限会静默截断。本地产物 Windows 路径为 `\\wsl.localhost\Ubuntu-24.04\home\van\qre-outputs\gui-console\runs`；仓库 `outputs` 是指向 `/home/van/qre-outputs` 的软链接。
 
+### 2026-10-25 QRE-SAAS-HELP-COPY-002 DONE
+
+001 已回退。002 由 Kimi 完成：事件委托 + 单例提示框，动态节点无需 refresh；全面清理表单和结果页灰色备注。真实 Chromium 连续 3 次 hover、指标卡正文、移动 tap 与 375px 已验收；相关 230 passed，全量 2462 passed + 5 skipped，证据 `.tmp/help-copy-v2/`。已部署 ECS，`qre-saas` active；用户批准通过并允许本地 commit，不 push。
+
 ## Current Phase
 
-DONE（2026-10-24：QRE-SAAS-ACCESS-FALLBACK-FINAL-REVIEW 实现、回归与文档完成，228 passed；真实浏览器/实机验收未做）
+DONE（2026-10-25：QRE-SAAS-HELP-COPY-002 用户验收通过，本地提交，不 push）
 
 ## Current Task
 

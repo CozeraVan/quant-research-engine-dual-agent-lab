@@ -53,25 +53,23 @@
   </div>
 
   <div class="card entry-panel" id="entry-wizard">
-    <h3 style="font-size:16px;margin-bottom:4px;">自选因子交易：从因子库挑条件，自动生成策略</h3>
+    <h3 style="font-size:16px;margin-bottom:4px;">自选因子交易 <button type="button" class="tip-trigger" data-tip="条件行选因子：大类 → 子类 → 因子，右值可选另一因子或勾「固定值」填数值。入出场条件生成后可在预览中检查。" aria-label="自选因子交易说明">?</button></h3>
     <p class="opt" id="wz-factor-status" style="margin-bottom:12px">加载因子目录中…</p>
-    <h4 style="font-size:14px;margin:10px 0 8px;">入场条件 <span class="req">*</span> <span class="opt">（组内先组合、组间再组合；单组时即扁平行为）</span></h4>
+    <h4 style="font-size:14px;margin:10px 0 8px;">入场条件 <span class="req">*</span> <button type="button" class="tip-trigger" data-tip="组内先按 AND/OR 组合，组间再按所选方式组合；单组时仅使用组内条件。" aria-label="入场条件说明">?</button></h4>
     <div id="wz-entry" class="cond-groups"></div>
     <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
       <button class="btn-sm" data-addgroup="entry">+ 添加条件组</button>
-      <span class="opt">更复杂的逻辑组合，可切换到自然语言或策略代码直接描述</span>
     </div>
-    <h4 style="font-size:14px;margin:16px 0 8px;">出场条件 <span class="req">*</span></h4>
+    <h4 style="font-size:14px;margin:16px 0 8px;">出场条件 <span class="req">*</span> <button type="button" class="tip-trigger" data-tip="出场条件使用相同的组内、组间组合规则；任一生效条件都会触发出场信号。" aria-label="出场条件说明">?</button></h4>
     <div id="wz-exit" class="cond-groups"></div>
     <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
       <button class="btn-sm" data-addgroup="exit">+ 添加条件组</button>
-      <span class="opt">更复杂的逻辑组合，可切换到自然语言或策略代码入口直接描述</span>
     </div>
     <p class="opt" style="margin-top:14px"><a class="inl" href="/saas/factor-request">没有你要的因子？点此申请新因子 →</a></p>
   </div>
 
   <div class="card entry-panel" id="entry-yaml">
-    <h3 style="font-size:16px;margin-bottom:4px;">策略代码 <span class="opt">（编辑器在页面底部「策略代码预览」栏，可直接修改）</span></h3>
+    <h3 style="font-size:16px;margin-bottom:4px;">策略代码</h3>
     <p><button class="btn btn-ghost" id="btn-goto-preview">去底部编辑代码 ↓</button></p>
   </div>
 
@@ -80,10 +78,9 @@
     <button class="sec-toggle" id="param-toggle" style="margin-top:0">回测参数</button>
     <div class="sec-body" id="param-body"><div><div class="sec-inner">
     <div class="form-grid" style="margin-top:14px">
-      <label>策略名称 / ID <span class="req">*</span></label>
+      <label>策略名称 / ID <span class="req">*</span> <button type="button" class="tip-trigger" data-tip="仅允许字母、数字、下划线、连字符；留空自动生成。" aria-label="策略名称格式说明">?</button></label>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" id="p-sname" value="" placeholder="留空自动生成" style="width:280px">
-        <span class="opt">仅允许字母、数字、下划线、连字符</span>
       </span>
       <label>回测区间 <span class="req">*</span></label>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative" id="range-row">
@@ -108,10 +105,9 @@
         <select id="p-univ-key" style="max-width:260px"></select>
         <span id="p-univ-count" class="opt"></span>
       </span>
-      <label id="scope-random-label" style="display:none">随机数量 N</label>
+      <label id="scope-random-label" style="display:none">随机数量 N <button type="button" class="tip-trigger" data-tip="从全 A 股池随机抽取 1~2000 只股票；实际抽样在执行端进行。" aria-label="随机股票说明">?</button></label>
       <span id="scope-random-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="number" id="p-random-n" min="1" max="2000" value="500" style="width:120px">
-        <span class="opt">从全 A 股池随机抽 N 只（1~2000；抽样在执行端进行）</span>
       </span>
       <label id="scope-codes-label" style="display:none">股票代码</label>
       <span id="scope-codes-row" style="display:none;gap:8px;align-items:flex-start;flex-wrap:wrap">
@@ -159,7 +155,7 @@
     <button class="sec-toggle" id="pv-toggle" style="margin-top:0">策略代码预览</button>
     <div class="sec-body" id="pv-body"><div><div class="sec-inner">
       <div style="margin-top:14px">
-        <p class="opt" id="pv-note" style="margin:0 0 8px;font-size:12.5px">由系统自动生成，仅供预览，无需修改</p>
+        <span id="pv-note" hidden></span>
         <pre class="compiled-yaml pv" id="pv-view"></pre>
         <textarea id="yaml-editor" rows="18" style="display:none;width:100%;font-family:var(--mono);font-size:12.5px" placeholder="experiment:\n  name: my_strategy\nsignal:\n  entry: \"(close > open)\"\n  exit: \"(close < open)\"\n"></textarea>
       </div>
@@ -249,7 +245,7 @@ function syncPreviewEditPerm(entry){
   const isYaml = entry === 'yaml';
   $('#pv-view').style.display = isYaml ? 'none' : '';
   $('#yaml-editor').style.display = isYaml ? '' : 'none';
-  $('#pv-note').textContent = isYaml ? '可直接编辑下方策略代码' : '由系统自动生成，仅供预览，无需修改';
+  $('#pv-note').textContent = '';
   if (!isYaml) refreshPreview();
   if (isYaml) pvSetOpen(true);
 }
@@ -499,7 +495,7 @@ async function loadFactorCatalog(){
       }
     });
     catalogReady = true;
-    $('#wz-factor-status').textContent = '条件行选因子：大类 → 子类 → 因子，右值可选另一因子或勾「固定值」填数值。';
+    $('#wz-factor-status').style.display = 'none';
     prefill();
   } catch (e) {
     $('#wz-factor-status').innerHTML = '<span class="err">因子目录加载失败，可改用自然语言或 YAML 入口</span>';

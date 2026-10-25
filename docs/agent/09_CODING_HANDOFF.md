@@ -2,11 +2,17 @@
 
 ## Task ID
 
-QRE-SAAS-ACCESS-FALLBACK-FINAL-REVIEW（SaaS 访问兜底最终修复交接）
+QRE-SAAS-HELP-COPY-002（Kimi 重做全站备注与提示交互）
 
 ## Implementation Summary
 
-在既有公共无权卡、安全 next 回跳与有限轮询之上，补齐 job 四资源 fetch/JSON body 统一超时、取消及 epoch；symbol 长等待改为暂停；job/symbol 交互监听幂等；showcase 缺详情返回 `readonly` 并隐藏生成入口；new 将 expired 作为立即终态。后端 showcase POST 403 和私有任务匿名 401/他人 404 契约不变。
+`LabUI.helpTips()` 使用 document 事件委托与单例 `#qre-help-tip`，动态节点无需 refresh。桌面 mouseover 只 show、mouseout hide，focusin/out 支持键盘，touch/pen pointerup 切换；700ms 内忽略触摸后的兼容鼠标事件，滚动时跟随定位。样式为 `.tip-trigger` 与 `.tip-pop`，复用既有主题变量。
+
+new 删除重复组合说明、代码编辑器定位、预览备注和表单静态灰字；向导使用说明及入出场/ID/随机范围入提示。job/symbol 图表与风险说明入问号，收益/区间/VaR/ES 等口径入指标卡，磨损重复口径删除；symbols/records/dashboard/console/strategy 同步精简。权限、错误、动态状态、截断与免责声明保留。
+
+真实 Chromium 使用 8091 staging 既有 job 37 和 000001：桌面同一目标连续 3 次悬停均显示完整正文；移动首次 tap 显示、再次关闭，375px 无横向溢出；截图与结果在 `.tmp/help-copy-v2/`。未运行回测，未 commit/push。
+
+2026-10-25 应用户要求已部署 ECS 验收：仅 9 个 SaaS 模板和两个共享静态文件，覆盖前备份 `/tmp/qre-help-copy-v2-pre-20261025.tgz`；`qre-saas` active，关键文件哈希一致，公网资源 200 且含新组件。未重启 worker。
 
 提交检查脚本改为只扫描新增 diff 行，解决上下文函数名/测试 stub 误报；`tests/test_git_finalize_check.py` 在临时 git 仓库验证上下文放行和新增敏感赋值拒绝。
 

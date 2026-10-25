@@ -9,24 +9,24 @@
   <div class="metric-strip" id="sum-strip"></div>
 
   <div class="chart-box" id="box-equity" style="display:none">
-    <div class="chart-title">收益曲线 <span class="opt">（策略净值 vs 个股买入持有 vs 基准指数；拖动滑块缩放）</span></div>
+    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略净值、个股买入持有和基准指数；拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
     <div id="chart-equity" style="height:260px"></div>
     <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
   </div>
 
   <div class="chart-box" id="box-wear" style="display:none">
-    <div class="chart-title">交易磨损 <span class="opt">（该股本次回测全部真实订单/成交费用聚合）</span></div>
+    <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="聚合该股本次回测全部真实订单和成交费用。" aria-label="交易磨损说明">?</button></div>
     <div id="wear-body"></div>
   </div>
 
   <!-- FRM-SYMBOL：个股级风险分析（worker 生成详情时基于区间日收盘收益计算） -->
   <div class="chart-box" id="box-risk" style="display:none">
-    <div class="chart-title">风险分析（FRM） <span class="opt">（基于该股区间日收盘价收益，刻画个股自身风险特征；组合层风险见回测结果页）</span></div>
+    <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" data-tip="基于该股区间日收盘收益刻画自身风险；组合层风险见回测结果页。" aria-label="风险分析说明">?</button></div>
     <div id="risk-body"></div>
   </div>
 
   <div class="chart-box" id="box-kline" style="display:none">
-    <div class="chart-title">日 K 与买卖点 <span class="opt" id="kline-note"></span>
+    <div class="chart-title">日 K 与买卖点 <button type="button" class="tip-trigger" data-tip="红色三角为买入、绿色三角为卖出；拖动下方滑块缩放，悬停可查看订单详情。" aria-label="K线买卖点说明">?</button>
       <span class="fct-chips" id="kline-chips"></span>
       <button class="btn-sm" id="btn-kreplay" style="float:right">▶ 重播</button>
       <button class="btn-sm hidden" id="btn-kreplay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
@@ -66,8 +66,9 @@ const JOB_ID = {{ job_id }};
 const TS_CODE = {{ ts_code | tojson }};
 const $ = s => document.querySelector(s);
 function f2(v){ return v == null || v === '' ? '—' : Number(v).toFixed(2); }
-function card(label, value, klass){
-  return '<div class="metric-card"><div class="m-label">' + label + '</div><div class="m-value ' + (klass || '') + '">' + value + '</div></div>';
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function card(label, value, klass, tip){
+  return '<div class="metric-card"' + (tip ? ' tabindex="0" data-tip="' + esc(tip) + '"' : '') + '><div class="m-label">' + label + '</div><div class="m-value ' + (klass || '') + '">' + value + '</div></div>';
 }
 function table(elId, rows, columns){
   const el = document.getElementById(elId);
@@ -385,13 +386,13 @@ function renderRisk(d){
   const regimeTxt = {low: '低波动', mid: '中波动', high: '高波动'}[regime.latest] || '—';
   const annVol = ewma.volatility_forecast != null ? (ewma.volatility_forecast * Math.sqrt(252)) : null;
   let html = '<div class="metric-strip">' +
-    card('95% VaR / ES（历史法）', h95 ? pct(-h95.var) + ' / ' + pct(-h95.es) : '—', 'flat') +
-    card('99% VaR / ES（历史法）', h99 ? pct(-h99.var) + ' / ' + pct(-h99.es) : '—', 'flat') +
-    card('99% VaR（参数法）', p99 ? pct(-p99.var) : '—', 'flat') +
-    card('EWMA 年化波动率', annVol != null ? pct(annVol) : '—', 'flat') +
-    card('波动率状态', regimeTxt, regime.latest === 'high' ? 'neg' : 'flat') +
-    card('夏普比率', (perf.sharpe && perf.sharpe.sharpe != null) ? Number(perf.sharpe.sharpe).toFixed(2) : '—', 'flat') +
-    card('最好 / 最差单日', (dist.max != null ? pct(dist.max) : '—') + ' / ' + (dist.min != null ? pct(dist.min) : '—'), 'flat') +
+    card('95% VaR / ES（历史法）', h95 ? pct(-h95.var) + ' / ' + pct(-h95.es) : '—', 'flat', '历史模拟法：95% 单日损失分位阈值，以及超过该阈值的尾部平均损失。') +
+    card('99% VaR / ES（历史法）', h99 ? pct(-h99.var) + ' / ' + pct(-h99.es) : '—', 'flat', '历史模拟法：99% 单日损失分位阈值，以及超过该阈值的尾部平均损失。') +
+    card('99% VaR（参数法）', p99 ? pct(-p99.var) : '—', 'flat', '正态假设下，按收益均值和波动率估算的 99% 单日损失分位阈值。') +
+    card('EWMA 年化波动率', annVol != null ? pct(annVol) : '—', 'flat', '指数加权移动平均模型估计的日波动，乘 √252 年化。') +
+    card('波动率状态', regimeTxt, regime.latest === 'high' ? 'neg' : 'flat', '按历史波动水平划分为低、中、高状态。') +
+    card('夏普比率', (perf.sharpe && perf.sharpe.sharpe != null) ? Number(perf.sharpe.sharpe).toFixed(2) : '—', 'flat', '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
+    card('最好 / 最差单日', (dist.max != null ? pct(dist.max) : '—') + ' / ' + (dist.min != null ? pct(dist.min) : '—'), 'flat', '回测区间内最大和最小的单日收益。') +
     '</div>';
   const sc = ((r.stress || {}).scenarios) || {};
   const scList = Object.keys(sc).map(k => Object.assign({name: k}, sc[k])).filter(x => x.strategy_cumulative_return != null);
@@ -411,12 +412,12 @@ function renderSummary(s){
   // 与 lab 版同款的 7 指标卡：策略区间收益% vs 区间自然涨幅%，金额作辅助
   $('#sum-strip').innerHTML =
     card('股票', dispCode(s.ts_code) + ' ' + (s.name || ''), 'flat') +
-    card('策略区间收益', (s.total_ret_pct == null ? '—' : pct(s.total_ret_pct)) + '（' + f2(s.total_pnl) + ' 元）', cls(s.total_ret_pct == null ? s.total_pnl : s.total_ret_pct)) +
-    card('区间自然涨幅', s.bench_ret == null ? '—' : pct(s.bench_ret), s.bench_ret == null ? 'flat' : cls(s.bench_ret)) +
-    card('交易笔数', s.trades, 'flat') +
-    card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret)) +
-    card('胜率', pct(s.win_rate), cls(s.win_rate)) +
-    card('赚钱效应分位', s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%', s.percentile != null && s.percentile <= 0.05 ? 'pos' : 'flat');
+    card('策略区间收益', (s.total_ret_pct == null ? '—' : pct(s.total_ret_pct)) + '（' + f2(s.total_pnl) + ' 元）', cls(s.total_ret_pct == null ? s.total_pnl : s.total_ret_pct), '该股在本次回测区间的策略累计收益，括号内为净盈亏金额。') +
+    card('区间自然涨幅', s.bench_ret == null ? '—' : pct(s.bench_ret), s.bench_ret == null ? 'flat' : cls(s.bench_ret), '同一区间买入并持有该股的自然涨幅。') +
+    card('交易笔数', s.trades, 'flat', '该股已完成的完整买卖交易数量。') +
+    card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret), '全部完整交易单笔净收益的算术平均。') +
+    card('胜率', pct(s.win_rate), cls(s.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。') +
+    card('赚钱效应分位', s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%', s.percentile != null && s.percentile <= 0.05 ? 'pos' : 'flat', '该股在本策略全部交易个股中的盈利排名分位；前 5% 高亮。');
 }
 
 let equityResizeBound = false;
@@ -477,12 +478,12 @@ function renderEquity(d){
   function exposureCards(i0, i1, sRet){
     let held = 0;
     for (let i = i0; i <= i1; i++) if (heldMask[i]) held++;
-    if (!held) return '<div class="metric-card" title="' + exposureTip + '"><div class="m-label">持仓暴露度</div><div class="m-value flat">—</div></div>' +
-                      '<div class="metric-card" title="' + holdAnnualTip + '；本区间无持仓"><div class="m-label">持仓期年化收益</div><div class="m-value flat">—</div></div>';
+    if (!held) return card('持仓暴露度', '—', 'flat', exposureTip + '；本区间无持仓') +
+                      card('持仓期年化收益', '—', 'flat', holdAnnualTip + '；本区间无持仓');
     const expo = held / (i1 - i0 + 1);
     const ann = sRet == null ? null : Math.pow(1 + sRet, 252 / held) - 1;
-    return '<div class="metric-card" title="' + exposureTip + '"><div class="m-label">持仓暴露度</div><div class="m-value flat">' + (expo * 100).toFixed(2) + '%</div></div>' +
-           '<div class="metric-card" title="' + holdAnnualTip + '"><div class="m-label">持仓期年化收益</div><div class="m-value ' + cls(ann) + '">' + (ann == null ? '—' : pct(ann)) + '</div></div>';
+    return card('持仓暴露度', (expo * 100).toFixed(2) + '%', 'flat', exposureTip) +
+           card('持仓期年化收益', ann == null ? '—' : pct(ann), cls(ann), holdAnnualTip);
   }
   const benchCode = d.benchmarks && d.benchmarks['000001.SH'] ? '000001.SH' : (d.benchmarks ? Object.keys(d.benchmarks)[0] : null);
   function sliceRetPct(arr, i0, i1){
@@ -507,11 +508,11 @@ function renderEquity(d){
     const bRet = benchPct ? sliceRetPct(benchPct, i0, i1) : null;
     const excess = (sRet != null && hRet != null) ? sRet - hRet : null;
     $('#range-strip').innerHTML =
-      card('区间策略收益', pct(sRet), cls(sRet)) +
-      card('区间买入持有收益', pct(hRet), cls(hRet)) +
-      card('区间基准收益·' + (benchCode ? d.benchmarks[benchCode].name : '基准'), pct(bRet), cls(bRet)) +
-      card('区间超额·vs买入持有', pct(excess), cls(excess)) +
-      card('交易日数', i1 - i0 + 1, 'flat') +
+      card('区间策略收益', pct(sRet), cls(sRet), '当前缩放窗口内，策略首末净值之比 − 1。') +
+      card('区间买入持有收益', pct(hRet), cls(hRet), '当前缩放窗口内，买入并持有该股的收益。') +
+      card('区间基准收益·' + (benchCode ? d.benchmarks[benchCode].name : '基准'), pct(bRet), cls(bRet), '当前缩放窗口内，基准指数首末收盘价之比 − 1。') +
+      card('区间超额·vs买入持有', pct(excess), cls(excess), '当前缩放窗口内，策略收益 − 买入持有收益。') +
+      card('交易日数', i1 - i0 + 1, 'flat', '当前缩放窗口包含的交易日数量。') +
       exposureCards(i0, i1, sRet);
   }
   let raf = false;
@@ -540,7 +541,7 @@ function renderWear(d){
       '<div class="wb">' +
       '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(w.gross_pnl) + ' 元</span></div>' +
       '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(w.net_pnl) + ' 元</span></div>' +
-      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(w.total_cost) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：该股 ' + (w.trades || (d.trades || []).length) + ' 笔完整交易真实费用列聚合</div></div>';
+      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(w.total_cost) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div></div>';
     return;
   }
   if (!d.orders || !d.orders.length) return;
@@ -568,7 +569,7 @@ function renderWear(d){
     html += '<div class="wb">' +
       '<div class="wb-row"><span class="wb-label">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(gross) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(gross) + ' 元</span></div>' +
       '<div class="wb-row"><span class="wb-label">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(net) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(net) + ' 元</span></div>' +
-      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b>　·　口径：该股 ' + d.trades.length + ' 笔完整交易</div></div>';
+      '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div></div>';
   }
   $('#wear-body').innerHTML = html;
 }
@@ -619,7 +620,6 @@ function renderKline(d){
     return;  // 无 K 线数据：整块隐藏不留空壳
   }
   $('#box-kline').style.display = '';
-  $('#kline-note').textContent = '（买 ▲红 / 卖 ▼绿，hover 看下单详情；拖动下方滑块缩放）';
   const dates = d.kline.dates;
   const el = $('#chart-kline');
   // CR-2026-10-20：因子分组布局（均线 overlay 主图 / MACD 合并面板 / 其余独立面板），
