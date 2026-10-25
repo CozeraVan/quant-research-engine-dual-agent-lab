@@ -6,7 +6,7 @@ QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与
 
 ## Release Status
 
-IMPLEMENTED（2026-10-25，未 commit/push、未 ECS 部署、未跑真实回测）。全量 2651 passed + 5 skipped；真实 Chromium 10/10（证据 `.tmp/result-understanding/`）。ECS 部署需同步 app.py、base.html、job.html、symbol.html、help.html、replay.js、lab-theme.css 并重启 qre-saas（无 schema 变更）。
+RELEASED（2026-10-25，实现 `9fd3b3d` 已 push + ECS，未跑真实回测）。全量 2653 passed + 5 skipped；真实 Chromium 10/10。ECS 备份 `/tmp/qre-result-understanding-pre-20261025/`，公网帮助页/深链/个股 data_until 与文件 SHA256 验证通过，生产证据 `.tmp/result-understanding-production/`。
 
 ## Implementation Summary
 

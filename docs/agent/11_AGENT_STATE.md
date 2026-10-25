@@ -72,16 +72,20 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 实现 `a84a9a3` 已 commit/push 并部署 ECS。发布前全量复跑 2629 passed + 5 skipped；ECS 备份 `/tmp/qre-first-success-ux-pre-20261025/` 后仅同步 app.py、new.html、job.html、wait-mask.js、lab-theme.css 并重启 qre-saas，未重启 worker、未跑真实回测。公网五文件 SHA256 与仓库一致，新运行态/取消/恢复/ARIA 标记齐全；58 verified 200、74 匿名 401、Authing 302。生产证据 `.tmp/first-success-ux-production/`。
 
+### 2026-10-25 QRE-SAAS-RESULT-UNDERSTANDING RELEASED
+
+实现 `9fd3b3d` 已 push 并部署 ECS。全量 2653 passed + 5 skipped；ECS 备份 `/tmp/qre-result-understanding-pre-20261025/`，公网 `/saas/help` 200、七锚点齐全、58 个股详情返回 data_until=2026-10-09、74 匿名 401，文件 SHA256 与仓库一致。生产证据 `.tmp/result-understanding-production/`。DeepSeek 生产配置保持 `deepseek-flash`。
+
 ## Current Phase
 
-P1 第二切片（结果理解、集中帮助与数据/费用口径）IMPLEMENTED，待用户验收；下一阶段为移动端与可访问性（仅公网用户体验，不做压测或硬件工作）
+P1 第二切片 DONE；下一阶段为移动端与可访问性（仅公网用户体验，不做压测或硬件工作）
 
 ## Current Task
 
 见 `14_LAUNCH_ROADMAP.md` §11。**2026-10-25 用户最新范围约束：不做任何压力测试、深度性能测试、硬件扩容或硬件相关推进，只做公网用户直观可见、可感知的产品体验。** 当前顺序：
 1. ~~P0-2 权限加固~~ 已发布 `0799890`。
 2. ~~P1 首次成功路径首切片~~ 已发布 `a84a9a3`；NL A2/A3 仍仅作减少等待和重复编译的体验支撑，另行立项。
-3. ~~结果理解、集中帮助中心、数据截止与费用口径说明~~ 已实现（QRE-SAAS-RESULT-UNDERSTANDING，未 commit/push/未部署，等用户验收）。
+3. ~~结果理解、集中帮助中心、数据截止与费用口径说明~~ 已发布 `9fd3b3d`。
 4. 移动端与可访问性：375px 核心流程、键盘焦点、加载/空态/错误态、图表与弹窗。
 5. 默认私有的可撤销只读分享，再做经典策略及结果操作 UI 精修。
 6. 公测运营反馈与关键浏览器自动化，依据真实用户反馈继续修正公网体验。

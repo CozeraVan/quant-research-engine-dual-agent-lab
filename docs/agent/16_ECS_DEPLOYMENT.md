@@ -47,7 +47,7 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **P1 首次成功路径首切片已发布（2026-10-25，QRE-SAAS-FIRST-SUCCESS-UX-001，commit `a84a9a3`）**：new/job 展示队列位置、worker 离线、已等待与真实失败原因；游客/会员取消与失败恢复上线。仅同步 app.py、new.html、job.html、wait-mask.js、lab-theme.css 并重启 qre-saas，无 schema 变更、未重启 worker。公网五文件 SHA256 与仓库一致，58 verified 200、74 匿名 401、Authing 302。回滚备份 `/tmp/qre-first-success-ux-pre-20261025/`，生产证据 `.tmp/first-success-ux-production/`。
 
-**P1 结果理解切片已实现待发布（2026-10-25，QRE-SAAS-RESULT-UNDERSTANDING，未 commit/push/未部署 ECS）**：新增公开路由 `GET /saas/help`（使用说明集中帮助页，游客与登录用户均可访问，nginx 既有 `/saas/` 前缀段自动覆盖，无需改 nginx）；主导航新增「使用说明」入口。结果页/个股页各模块「说明 →」深链到帮助页对应锚点；`/api/results/<id>/symbols/<code>` 响应新增只读字段 `data_until`（取自 `results.data_until`，worker 回传 gzip 与本地 fallback 两条路径一致；gzip 产物与 worker 协议零改动，不回填）。**无 schema 变更、无新增表/API 写端点、未重启 worker、未跑真实回测**。部署时需同步：app.py、base.html、job.html、symbol.html、help.html（新文件）、replay.js、lab-theme.css，重启 qre-saas。详见 `05_PROGRESS.md` 同日条目与 `09_CODING_HANDOFF.md`。
+**P1 结果理解切片已发布（2026-10-25，QRE-SAAS-RESULT-UNDERSTANDING，commit `9fd3b3d`）**：公开 `/saas/help` 与主导航「使用说明」上线；结果页/个股页模块深链和 `/api/results/<id>/symbols/<code>` 的 `data_until` 已生效。已同步 app.py、base.html、job.html、symbol.html、help.html、replay.js、lab-theme.css 并重启 qre-saas，无 schema 变更、未重启 worker、未跑真实回测。公网 help 200、58 个股详情 data_until=2026-10-09、74 匿名 401，文件 SHA256 与仓库一致。回滚备份 `/tmp/qre-result-understanding-pre-20261025/`，生产证据 `.tmp/result-understanding-production/`。
 
 **NL DeepSeek V4.1 Flash 配置（2026-10-25）**：生产 `QRE_NL_LLM_BASE_URL=https://api.deepseek.com`，正确模型 ID 为 `QRE_NL_LLM_MODEL=deepseek-flash`（最新 V4.1 Flash；`deepseek-v4.1-flash` 不是可用 ID，真实编译 400）。已用 MACD 金叉死叉纯编译验证成功，未创建回测。改前 env 备份 `/etc/qre-saas.env.bak-deepseek-v41-20261025`（0600）。
 
