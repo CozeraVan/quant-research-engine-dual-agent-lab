@@ -10,6 +10,8 @@ QRE-SAAS-PARAMETER-TIPS-001（回测参数口径与单位提示）
 
 ## Release Status
 
+参数提示实现 commit `6291674` 本地完成（不 push）。ECS 仅同步 new.html，备份 `/tmp/qre-parameter-tips-pre-20261025.tgz`，`qre-saas` active，哈希一致，公网参数提示生效；未重启 worker。
+
 实现 commit `ec1fd13` 已 push。ECS 同步注册表、metadata、相关 Python 模块与 new.html，备份 `/tmp/qre-factor-registry-pre-20261025.tgz`，`qre-saas` active，哈希一致；公网因子 API 中文字段生效，真实 NL MACD 编译 ok 且 holding=0，未创建回测、未重启 worker。
 
 ## NL Holding Hotfix

@@ -1,3 +1,5 @@
+2026-10-25 QRE-SAAS-PARAMETER-TIPS-001 RELEASED：实现 commit `6291674` 本地完成（不 push）。ECS 仅同步 new.html，旧文件备份 `/tmp/qre-parameter-tips-pre-20261025.tgz`；`qre-saas` active，SHA256 一致，公网 new 200 且包含共享资金和 0.0003=0.03% 参数提示。未重启 worker、未运行回测。
+
 2026-10-25 QRE-SAAS-PARAMETER-TIPS-001 USER ACCEPTED：用户批准通过，允许本地 commit + ECS 部署，不 push。
 
 2026-10-25 QRE-SAAS-PARAMETER-TIPS-001 IMPLEMENTED（Kimi，未 commit/push/ECS）：为全部基础/高级回测参数 label 增加 `data-tip` 与键盘焦点，复用统一提示组件，无新增可见灰字。覆盖共享/批量资金、金额元、比例小数、0/留空不限、次日价格、止损止盈/移动止损、佣金/印花税/滑点及股票代码后缀说明；所有默认值和回测逻辑不变。新增 `tests/test_saas_parameter_tips.py` 先 RED 后 GREEN；真实 Chromium 桌面 1280 和移动 375 各 14 个高级参数逐项提示完整可见，零 JS error、零横向溢出，证据 `.tmp/parameter-tips/`。全量 2536 passed + 5 skipped；未运行真实回测。

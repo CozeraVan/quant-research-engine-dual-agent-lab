@@ -48,7 +48,7 @@ DONE（2026-10-25：QRE-SAAS-PARAMETER-TIPS-001 用户批准，本地 commit + E
 
 ## Current Task
 
-QRE-SAAS-PARAMETER-TIPS-001（2026-10-25）：全部基础/高级参数口径和单位提示已完成；桌面/移动各 14 项真实 Chromium 通过，全量 2536 passed + 5 skipped，未创建回测。用户批准本地 commit + ECS 部署，不 push；ECS 备份并同步 new.html，重启 `qre-saas`。
+QRE-SAAS-PARAMETER-TIPS-001（2026-10-25）：全部基础/高级参数口径和单位提示已完成；桌面/移动各 14 项真实 Chromium 通过，全量 2536 passed + 5 skipped，未创建回测。实现 `6291674` 本地提交（不 push）；ECS 已备份并同步 new.html，`qre-saas` active，公网参数提示生效，未重启 worker。
 
 DATA-REBUILT-2026-10-11 **数据侧已全部完成**（2026-10-12 10:45 链条收官）：
 - 分钟线入库 `public.stock_minute_1m` 4313 天全量（TimescaleDB 压缩已开）；WSL 侧 /home/van/mindata CSV（324G）待用户确认后删除
