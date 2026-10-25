@@ -76,6 +76,44 @@ def test_build_factor_groups_grouping_and_labels():
     assert "not_a_factor_table" not in {i["table"] for g in groups for i in g["items"]}
 
 
+# --- 因子语义注册表增量字段（QRE-GUI-FACTOR-REGISTRY-001） ---
+
+
+def test_build_factor_groups_includes_registry_display_fields():
+    """metadata 增量：zh / canonical / price_basis / aliases，label 契约不变。"""
+    groups = build_factor_groups(_tables_columns())
+    items = [i for g in groups for i in g["items"]]
+
+    for item in items:
+        assert "zh" in item and "canonical" in item
+        assert "price_basis" in item and "aliases" in item
+        # 旧 label 必须保留（旧数据/前端回退口径）
+        assert item["label"]
+
+    rsi = next(i for i in items if i["column"] == "rsi_14")
+    assert rsi["canonical"] == "factors.stock_daily_momentum_close.rsi_14"
+    assert rsi["price_basis"] == "close"
+    assert "相对强弱指标" in rsi["zh"]
+    assert "rsi" in rsi["aliases"]
+
+    ema = next(i for i in items if i["column"] == "ema_21")
+    assert ema["price_basis"] == "typical_price"
+    assert "典型价" in ema["label"]
+
+    market = next(i for i in items if i["column"] == "close")
+    assert market["canonical"] == "public.stock_daily.close"
+    assert market["zh"] == "收盘价"
+
+
+def test_build_factor_groups_zh_falls_back_to_none_for_unregistered():
+    """未维护中文名的列不伪造：zh 为 null，前端回退既有 label。"""
+    groups = build_factor_groups({"stock_daily_alpha191": ["alpha001"]})
+    item = groups[1]["items"][0]
+    assert item["zh"] is None
+    assert item["canonical"] == "factors.stock_daily_alpha191.alpha001"
+    assert "alpha001" in item["label"]
+
+
 # --- build_condition / combine_conditions ---
 
 

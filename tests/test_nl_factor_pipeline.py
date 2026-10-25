@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from quant_research_engine.gui.factor_catalog_llm import (
     catalog_column_lookup,
@@ -171,3 +172,187 @@ class TestLayer4FixupPrompt:
         text = _fixup_prompt("原始需求", "bad: yaml", hints)
         assert "factors.t.bad_col" in text and "good_col_1" in text
         assert "禁止编造列名" in text and "原始需求" in text
+
+
+class TestRegistryAliasResolution:
+    """因子语义注册表接入 NL 链路（QRE-GUI-FACTOR-REGISTRY-001）。
+
+    注册表精确别名取代旧子串替换的优先级；Prompt 只保留 canonical 目录和
+    少量常用示例，**不注入全量别名**。
+    """
+
+    ENV = TestLayer3RetryLoop.ENV
+
+    def _http(self, content):
+        def http_post(url, headers, payload, timeout):
+            return {"choices": [{"message": {"content": content}}]}
+
+        return http_post
+
+    def test_prompt_does_not_dump_full_aliases(self):
+        prompt = build_system_prompt()
+        # canonical 目录 + 少量常用示例仍在
+        assert "常用已落库列" in prompt and "factors.stock_daily_momentum_close" in prompt
+        # 全量别名（规则生成的中文参数写法）不得进 Prompt
+        assert "20日指数移动均线" not in prompt
+        assert "14日相对强弱指标" not in prompt
+        assert "MACD(12,26,9)" not in prompt
+        # Prompt 体积有界（不随因子库线性膨胀别名）
+        assert len(prompt) < 60000
+
+    def test_dea_chinese_name_resolves_to_macds(self, tmp_path):
+        yaml_text = GOOD_YAML.replace(
+            "factors.stock_daily_momentum_close.macds_12_26_9",
+            "factors.stock_daily_momentum_close.dea",
+        )
+        result = compile_nl(
+            "MACD 信号线上穿",
+            http_post=self._http(yaml_text),
+            column_lookup=lambda table: set(MACD_POOL) if "momentum_close" in table else set(),
+            queue_path=tmp_path / "q.json",
+            env=self.ENV,
+        )
+        assert result["ok"] is True, result
+        parsed = yaml.safe_load(result["yaml"])
+        assert parsed["data"]["factor_fields"]["macd_sig"] == (
+            "factors.stock_daily_momentum_close.macds_12_26_9"
+        )
+        assert result["corrections"][0]["via"] == "registry"
+        assert any("已自动纠正" in w and "dea→macds_12_26_9" in w for w in result["warnings"])
+        # 默认参数/价格口径提示要送到用户面前
+        assert any("未指定 MACD 参数" in w for w in result["warnings"])
+
+    def test_ambiguous_alias_returns_candidates(self, tmp_path):
+        # kdj 同时指向 K/D/J 三条线 → 歧义，只给 canonical 候选，不自动错配
+        yaml_text = GOOD_YAML.replace(
+            "factors.stock_daily_momentum_close.macds_12_26_9",
+            "factors.stock_daily_momentum_close.kdj",
+        )
+        result = compile_nl(
+            "x",
+            http_post=self._http(yaml_text),
+            column_lookup=lambda table: set(MACD_POOL) if "momentum_close" in table else set(),
+            queue_path=tmp_path / "q.json",
+            env=self.ENV,
+        )
+        assert result["ok"] is False
+        assert result["code"] == "missing_factors"
+        assert "kdj" in result["error"]
+        assert any("k_9_3" in s for s in result["suggestions"][0]["suggestions"])
+        assert "corrections" not in result
+
+    def test_price_basis_default_close_notice(self, tmp_path):
+        ema_yaml = """experiment:
+  name: t_ema
+  market_profile: ashare_daily_default
+  frequency: daily
+data:
+  market_fields: [open, high, low, close, pre_close, vol, amount]
+  factor_fields:
+    ma: factors.stock_daily_overlap_close.ema5
+universe:
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+signal:
+  entry: close > ma
+holding:
+  max_holding_days: 10
+evaluation:
+  forward_return_horizons: [1, 5]
+  quantiles: 5
+"""
+        result = compile_nl(
+            "x",
+            http_post=self._http(ema_yaml),
+            column_lookup=lambda table: (
+                {"ema_5", "ema_20"} if "overlap_close" in table else set(MACD_POOL)
+            ),
+            queue_path=tmp_path / "q.json",
+            env=self.ENV,
+        )
+        assert result["ok"] is True, result
+        parsed = yaml.safe_load(result["yaml"])
+        assert parsed["data"]["factor_fields"]["ma"] == "factors.stock_daily_overlap_close.ema_5"
+        # 同列多价格口径：默认 close 并提示
+        assert any("典型价" in w and "收盘价" in w for w in result["warnings"])
+
+
+# --- NL 小样本编译验证（固定样本 + stub LLM，不消耗真实模型额度） ---
+
+_SAMPLE_CASES = [
+    # (输入, 期望 status, 期望 canonical 或候选集合)
+    ("DEA", "unique", "factors.stock_daily_momentum_close.macds_12_26_9"),
+    ("信号线", "unique", "factors.stock_daily_momentum_close.macds_12_26_9"),
+    ("macd_signal", "unique", "factors.stock_daily_momentum_close.macds_12_26_9"),
+    ("MACD", "unique", "factors.stock_daily_momentum_close.macd_12_26_9"),
+    ("MACD柱", "unique", "factors.stock_daily_momentum_close.macdh_12_26_9"),
+    ("MACD(6,13,5)", "unique", "factors.stock_daily_momentum_close.macd_6_13_5"),
+    ("20日指数均线", "unique", "factors.stock_daily_overlap_close.ema_20"),
+    ("34日指数均线", "unique", "factors.stock_daily_overlap_typical_price.ema_34"),
+    ("RSI", "unique", "factors.stock_daily_momentum_close.rsi_14"),
+    ("布林带上轨", "unique", "factors.stock_daily_volatility_close.bbu_20_2_0_2_0"),
+    ("收盘价", "unique", "public.stock_daily.close"),
+]
+
+
+def test_nl_sample_matrix_resolves_deterministically():
+    from quant_research_engine.gui.factor_registry import load_registry
+
+    registry = load_registry()
+    for text, status, expected in _SAMPLE_CASES:
+        res = registry.resolve(text)
+        assert res.status == status, (text, res)
+        assert res.canonical == expected, (text, res.canonical, expected)
+
+
+def test_nl_sample_matrix_price_basis_and_ambiguity():
+    from quant_research_engine.gui.factor_registry import load_registry
+
+    registry = load_registry()
+    # 同列多价格口径：默认 close + 提示
+    res = registry.resolve("ema_5")
+    assert res.canonical == "factors.stock_daily_overlap_close.ema_5"
+    assert res.notice and "典型价" in res.notice
+    # 显式典型价
+    assert registry.resolve("ema_5", price_basis="typical_price").canonical == (
+        "factors.stock_daily_overlap_typical_price.ema_5"
+    )
+    # 其他歧义：只给候选
+    for text in ("布林带", "kdj", "dmi"):
+        res = registry.resolve(text)
+        assert res.status == "ambiguous", (text, res)
+        assert len(res.candidates) >= 2 and res.canonical is None, (text, res)
+    # 未知
+    assert registry.resolve("量子纠缠因子").status == "missing"
+
+
+def _stub_http(content):
+    def http_post(url, headers, payload, timeout):
+        return {"choices": [{"message": {"content": content}}]}
+
+    return http_post
+
+
+def test_nl_sample_compile_end_to_end_with_stub_llm(tmp_path):
+    """固定 NL 样本 → stub LLM 输出含别名写法 → 注册表纠正 → YAML 可用。"""
+    sample_yaml = GOOD_YAML.replace(
+        "factors.stock_daily_momentum_close.macds_12_26_9",
+        "factors.stock_daily_momentum_close.macd_signal_12_26_9",
+    )
+    result = compile_nl(
+        "MACD 金叉买入，死叉卖出",
+        http_post=_stub_http(sample_yaml),
+        column_lookup=lambda table: set(MACD_POOL) if "momentum_close" in table else set(),
+        queue_path=tmp_path / "q.json",
+        env=TestLayer3RetryLoop.ENV,
+    )
+    assert result["ok"] is True, result
+    parsed = yaml.safe_load(result["yaml"])
+    assert parsed["data"]["factor_fields"]["macd_sig"] == (
+        "factors.stock_daily_momentum_close.macds_12_26_9"
+    )
+    # canonical / 回测口径不变：仍是同一张表的同一列
+    assert parsed["signal"]["entry"] == "macd > macd_sig"
+    assert not (tmp_path / "q.json").exists()

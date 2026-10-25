@@ -1,3 +1,32 @@
+### 2026-10-25: NL 未说明持仓期限时统一 max_holding_days=0
+
+- Decision: `holding.max_holding_days` 是最长持仓天数，0=不限。NL 编译缺少 holding
+  或用户未说明期限时统一补 0，模型自行生成的 999 等值也覆盖；明确期限保留。
+  对已有天数用文本标量替换，避免 YAML dump 改变无关格式。该归一不进入回测执行。
+- Rationale: 真实模型常漏 holding 导致 invalid_yaml，或编造 999 破坏用户默认意图；
+  staging 五类先前失败策略修复后全部编译通过且因子 canonical 正确。
+- Owner: KIMI_CODE（用户直接指定默认值）
+
+### 2026-10-25: 新增版本化因子语义注册表，canonical 仍是唯一字段标识
+
+- Decision: 新建 `configs/factor_registry.json`（版本 1.0，895 个因子字段条目 +
+  `market_fields`/`tables`/`families`/`extra_aliases`）作为**单一因子语义来源**，
+  配只读加载层 `gui/factor_registry.py` 与生成器 `scripts/gen_factor_registry.py`
+  （规则生成 + 特殊人工维护）。展示（中文名/价格口径/别名）与 NL 解析共用同一份
+  注册表；`canonical schema.table.column` 仍是数据库、YAML、回测、因子申请的唯一
+  字段标识，**不改名、不迁移数据库**。
+- Rationale: 自选因子界面此前只有英文列名，中文用户无法识别；NL 链路靠 LLM 猜列名
+  （编造 `macd_signal_12_26_9`）与子串别名兜底，维护漂移且无法覆盖中文习惯名。统一
+  注册表后：①别名归一化（全角/大小写/分隔符/中文标点）确定性解析，LLM 不再猜；
+  ②`COMMON_FACTOR_TARGETS` 由注册表 core 条目派生，消除手写漂移；
+  ③防漂移校验（坏 canonical/悬空别名/漏注册新列）接入 `gen_factor_catalog_llm.py`
+  与 `sync_saas_metadata.py` 导出流程，新增字段未注册会被告警而非静默；
+  ④Prompt 不承载全量别名（只留 canonical 目录 + 25 条核心示例），提示词开销不膨胀。
+  价格口径显式保留：同列多口径默认 close 并提示，典型价/均价须用户明确指定；其他
+  歧义返回候选不自动错配。未维护中文名的列 `zh` 记 null（不伪造翻译），回退 canonical
+  并进覆盖报告。数据库标准字段、YAML、快照、隐藏 select、回测结果零改动。
+- Owner: KIMI_CODE
+
 ### 2026-10-25: 自选因子入口改三栏弹窗，select 降级为隐藏数据字段
 
 - Decision: 入口 2（自选因子交易）条件行的「大类 / 子类 / 因子」三个堆叠下拉，改为

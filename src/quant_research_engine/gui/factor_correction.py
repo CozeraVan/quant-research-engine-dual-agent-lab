@@ -13,8 +13,17 @@
 - ``suggest_similar_columns``：归一化编辑距离排序的 Top-N 候选。
 - ``correct_factor_fields``：对解析后的策略 mapping 做存在性校验 +
   自动纠正，返回纠正记录与未解决项（含候选）。
-- ``COMMON_FACTOR_TARGETS``：常用已落库因子列清单，用于报错提示与
-  NL 编译 prompt 注入（从源头减少编造）。
+- ``auto_fix_column``：保守自动纠正——注册表精确别名优先（中文名/DEA/参数
+  写法等，见 ``registry_resolve_column``），其次归一化后等价（大小写/下划线
+  差异，如 ``rsi14``→``rsi_14``）、唯一编辑距离 1 且与次优差距 ≥2、
+  或唯一前缀匹配；其余一律不动，宁给候选列表不可错配。
+- ``suggest_similar_columns``：归一化编辑距离排序的 Top-N 候选。
+- ``correct_factor_fields``：对解析后的策略 mapping 做存在性校验 +
+  自动纠正，返回纠正记录与未解决项（含候选）。
+- ``COMMON_FACTOR_TARGETS``：常用已落库因子列清单，由因子语义注册表派生
+  （``configs/factor_registry.json`` 的 core 条目），用于报错提示与 NL 编译
+  prompt 注入（只放少量示例，**不注入全量别名**——别名由注册表在编译前后
+  确定性解析）。
 """
 
 from __future__ import annotations
@@ -22,10 +31,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-# 常用已落库因子列（与 strategies/compiler._INDICATOR_CATALOG 命名约定一致：
-# factors.stock_daily_<类别>_<价格源>.<指标>_<周期>）。用于报错提示与 prompt 注入；
-# 真实存在性仍以 column_lookup 对照库内 schema 为准。
-COMMON_FACTOR_TARGETS: tuple[str, ...] = (
+TOP_N_SUGGESTIONS = 5
+
+# 跨表兜底搜索用的标准因子表（类别 × 价格源），来自编译器命名约定。
+_STANDARD_TABLE_SUFFIXES: tuple[str, ...] = (
+    "momentum_close",
+    "overlap_close",
+    "volatility_close",
+    "trend_close",
+    "volume_close",
+    "statistics_close",
+    "candle_close",
+    "performance_close",
+)
+
+# 因子语义注册表缺失/损坏时的兜底清单（正常路径由注册表派生）。
+_FALLBACK_COMMON_FACTOR_TARGETS: tuple[str, ...] = (
     "factors.stock_daily_momentum_close.rsi_14",
     "factors.stock_daily_momentum_close.rsi_6",
     "factors.stock_daily_overlap_close.sma_5",
@@ -35,16 +56,64 @@ COMMON_FACTOR_TARGETS: tuple[str, ...] = (
     "factors.stock_daily_overlap_close.ema_12",
     "factors.stock_daily_overlap_close.ema_26",
     "factors.stock_daily_momentum_close.macd_12_26_9",
-    "factors.stock_daily_momentum_close.macd_signal_12_26_9",
-    "factors.stock_daily_momentum_close.macd_histogram_12_26_9",
+    "factors.stock_daily_momentum_close.macds_12_26_9",
+    "factors.stock_daily_momentum_close.macdh_12_26_9",
     "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
     "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
     "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
-    "factors.stock_daily_volatility_close.atr_14",
+    "factors.stock_daily_volatility_close.atrr_14",
     "factors.stock_daily_trend_close.adx_14",
-    "factors.stock_daily_momentum_close.cci_14",
+    "factors.stock_daily_momentum_close.cci_14_0_015",
     "factors.stock_daily_volume_close.mfi_14",
 )
+
+
+def _derive_common_factor_targets() -> tuple[str, ...]:
+    """由因子语义注册表派生常用已落库因子清单（core 条目）。"""
+    try:
+        from quant_research_engine.gui.factor_registry import load_registry
+
+        targets = load_registry().common_factor_targets()
+    except (OSError, ValueError, KeyError):
+        return _FALLBACK_COMMON_FACTOR_TARGETS
+    return targets or _FALLBACK_COMMON_FACTOR_TARGETS
+
+
+COMMON_FACTOR_TARGETS: tuple[str, ...] = _derive_common_factor_targets()
+
+
+def registry_resolve_column(
+    column: str,
+    qualified_table: str,
+    column_lookup: Callable[[str], set[str]],
+) -> dict[str, Any]:
+    """因子语义注册表精确解析（优先于旧子串别名替换）。
+
+    ``column`` 已在 ``qualified_table`` 存在时不解析。返回
+    ``{"column": 替换列名|None, "notice": 提示|None, "candidates": [canonical...]}``：
+
+    - 唯一命中且落在**同一张表** → 给出替换列名与价格口径/参数默认提示；
+    - 唯一命中但落在别的表 → 只作为候选提示，不跨表自动改写；
+    - 歧义 → candidates，不猜；
+    - 未命中 → 空 candidates（交给既有编辑距离/子串兜底）。
+    """
+    from quant_research_engine.gui.factor_registry import load_registry
+
+    existing = column_lookup(qualified_table)
+    if column in existing:
+        return {"column": None, "notice": None, "candidates": []}
+    try:
+        resolution = load_registry().resolve(column)
+    except (OSError, ValueError):
+        return {"column": None, "notice": None, "candidates": []}
+    if resolution.status != "unique" or not resolution.canonical:
+        return {"column": None, "notice": None, "candidates": list(resolution.candidates)}
+    short = qualified_table.split("factors.", 1)[-1]
+    target_table, target_column = resolution.canonical.split(".", 2)[1:]
+    if target_table == short and target_column in existing:
+        return {"column": target_column, "notice": resolution.notice, "candidates": []}
+    return {"column": None, "notice": None, "candidates": [resolution.canonical]}
+
 
 TOP_N_SUGGESTIONS = 5
 
@@ -212,11 +281,15 @@ def correct_factor_fields(
 
     Returns:
       {
-        "corrections": [{"alias", "table", "from", "to"}, ...],   # 已自动替换
+        "corrections": [{"alias", "table", "from", "to", "via",
+                          "notice"?}, ...],   # 已自动替换
         "unresolved":  [{"alias", "table", "column",
                           "suggestions": [候选...],                 # Top-N
                           "suggestion_scope": "same_table"|"cross_table"|"none"}, ...],
       }
+
+    优先级：注册表精确别名（中文名/DEA/参数写法）→ 旧别名字典子串替换 →
+    归一化等价/编辑距离/前缀。歧义只给候选，不自动错配。
     """
     corrections: list[dict[str, str]] = []
     unresolved: list[dict[str, Any]] = []
@@ -238,16 +311,34 @@ def correct_factor_fields(
 
         same_table, pool_by_table = _candidate_pool(table, column_lookup)
         if same_table:
+            # 1) 因子语义注册表精确别名（含中文名与参数写法）
+            registry = registry_resolve_column(column, table, column_lookup)
+            if registry["column"] is not None:
+                fix = registry["column"]
+                factor_fields[alias] = f"{table}.{fix}"
+                record: dict[str, str] = {
+                    "alias": str(alias), "table": table, "from": column,
+                    "to": fix, "via": "registry",
+                }
+                if registry["notice"]:
+                    record["notice"] = registry["notice"]
+                corrections.append(record)
+                continue
+            # 2) 旧别名字典子串替换（兼容兜底）
             fix = auto_fix_column(column, same_table)
             if fix is not None:
                 factor_fields[alias] = f"{table}.{fix}"
                 corrections.append({"alias": str(alias), "table": table, "from": column, "to": fix})
                 continue
+            suggestions = suggest_similar_columns(column, same_table)
+            if registry["candidates"]:
+                # 注册表给出的 canonical 候选（精确消歧结果）优先，避免被编辑距离噪音稀释
+                suggestions = list(registry["candidates"])
             unresolved.append({
                 "alias": str(alias),
                 "table": table,
                 "column": column,
-                "suggestions": suggest_similar_columns(column, same_table),
+                "suggestions": suggestions,
                 "suggestion_scope": "same_table",
             })
         elif pool_by_table:
@@ -286,9 +377,13 @@ def correct_factor_fields(
 
 
 def format_corrections_note(corrections: list[dict[str, str]]) -> str:
-    """「已自动纠正 X→Y」的中文提示行。"""
+    """「已自动纠正 X→Y」的中文提示行 + 注册表消歧提示（价格口径/默认参数）。"""
     items = "、".join(f"{c['from']}→{c['to']}" for c in corrections)
-    return f"已自动纠正因子名（原名为 LLM 编造/笔误，库中不存在）：{items}"
+    note = f"已自动纠正因子名（原名为 LLM 编造/笔误，库中不存在）：{items}"
+    notices = [c["notice"] for c in corrections if c.get("notice")]
+    if notices:
+        note += "\n" + "\n".join(dict.fromkeys(notices))
+    return note
 
 
 def format_unresolved_hint(unresolved: list[dict[str, Any]]) -> str:

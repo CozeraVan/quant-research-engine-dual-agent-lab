@@ -84,7 +84,8 @@ def test_correct_factor_fields_fabricated_auto_fixed():
     mapping = _mapping_with("factors.stock_daily_momentum_close.rsi14")
     report = correct_factor_fields(mapping, lambda table: {"rsi_14", "rsi_6"})
     assert report["corrections"] == [
-        {"alias": "rsi", "table": "factors.stock_daily_momentum_close", "from": "rsi14", "to": "rsi_14"}
+        {"alias": "rsi", "table": "factors.stock_daily_momentum_close",
+         "from": "rsi14", "to": "rsi_14", "via": "registry"}
     ]
     assert mapping["data"]["factor_fields"]["rsi"] == "factors.stock_daily_momentum_close.rsi_14"
     assert report["unresolved"] == []
@@ -123,6 +124,91 @@ def test_format_hints_actionable_chinese():
         {"alias": "r", "table": "t", "column": "rsi_99", "suggestions": ["rsi_14"], "suggestion_scope": "same_table"}
     ])
     assert "库中相似候选" in hint and "rsi_14" in hint and "常用已落库因子" in hint
+
+
+# --- 因子语义注册表接入（QRE-GUI-FACTOR-REGISTRY-001） ---
+
+
+def test_common_factor_targets_derived_from_registry():
+    """COMMON_FACTOR_TARGETS 由注册表派生（消除手写漂移），且必须真实存在。"""
+    import json
+    from pathlib import Path
+
+    snapshot = json.loads(
+        (Path(__file__).resolve().parents[1] / "configs" / "factor_catalog_llm.json")
+        .read_text(encoding="utf-8")
+    )
+    assert COMMON_FACTOR_TARGETS
+    assert len(COMMON_FACTOR_TARGETS) <= 60  # prompt 只放少量常用示例，不全量别名
+    for target in COMMON_FACTOR_TARGETS:
+        table, column = target.split(".", 2)[1:]
+        assert column in snapshot.get(table, []), target
+
+
+def test_registry_alias_dea_beats_substring_and_records_notice():
+    """DEA/信号线等精确别名优先于子串替换，并带默认参数提示。"""
+    mapping = _mapping_with("factors.stock_daily_momentum_close.dea")
+    pool = {"macd_12_26_9", "macds_12_26_9", "macdh_12_26_9"}
+    report = correct_factor_fields(mapping, lambda table: set(pool))
+    assert report["corrections"][0]["to"] == "macds_12_26_9"
+    assert report["corrections"][0]["via"] == "registry"
+    assert report["corrections"][0]["notice"]
+    assert mapping["data"]["factor_fields"]["rsi"] == "factors.stock_daily_momentum_close.macds_12_26_9"
+    assert report["unresolved"] == []
+
+
+def test_registry_chinese_name_resolves_to_canonical():
+    """中文名（未指定周期）按族默认参数解析，并提示。"""
+    mapping = _mapping_with("factors.stock_daily_overlap_close.指数均线")
+    report = correct_factor_fields(
+        mapping, lambda table: {"ema_5", "ema_20", "sma_20"} if "overlap" in table else set()
+    )
+    assert report["corrections"][0]["to"] == "ema_20"
+    assert "未指定" in report["corrections"][0]["notice"]
+    assert mapping["data"]["factor_fields"]["rsi"] == "factors.stock_daily_overlap_close.ema_20"
+
+
+def test_registry_ambiguous_gives_candidates_not_guess():
+    """其他歧义（布林带上/中/下轨）返回候选，不自动错配。"""
+    mapping = _mapping_with("factors.stock_daily_volatility_close.布林带")
+    pool = {"bbu_20_2_0_2_0", "bbm_20_2_0_2_0", "bbl_20_2_0_2_0"}
+    report = correct_factor_fields(mapping, lambda table: set(pool))
+    assert report["corrections"] == []
+    assert len(report["unresolved"]) == 1
+    item = report["unresolved"][0]
+    assert item["column"] == "布林带"
+    assert set(item["suggestions"]) == {
+        "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+        "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+        "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+    }
+
+
+def test_registry_price_basis_default_close_with_notice():
+    """同名多价格口径：默认 close 并提示（typical_price 需明确指定）。"""
+    mapping = _mapping_with("factors.stock_daily_overlap_close.ema_5")
+    pool = {"ema_5", "ema_20"}
+
+    def lookup(table: str) -> set[str]:
+        return set(pool) if table.endswith("overlap_close") else set()
+
+    report = correct_factor_fields(mapping, lookup)
+    assert report["corrections"] == []  # 列已存在，不动
+    assert report["unresolved"] == []
+
+    mapping2 = _mapping_with("factors.stock_daily_overlap_close.ema5")
+    report2 = correct_factor_fields(mapping2, lookup)
+    assert report2["corrections"][0]["to"] == "ema_5"
+    assert "典型价" in report2["corrections"][0]["notice"]
+
+
+def test_legacy_substring_alias_still_works_as_fallback():
+    """旧 factor_aliases.json 子串替换保留为兼容兜底。"""
+    mapping = _mapping_with("factors.stock_daily_momentum_close.macd_signal_12_26_9")
+    pool = {"macd_12_26_9", "macds_12_26_9", "macdh_12_26_9"}
+    report = correct_factor_fields(mapping, lambda table: set(pool))
+    assert report["corrections"][0]["to"] == "macds_12_26_9"
+    assert mapping["data"]["factor_fields"]["rsi"] == "factors.stock_daily_momentum_close.macds_12_26_9"
 
 
 # --- prompt 注入真实因子目录 ---
@@ -195,7 +281,8 @@ def test_compile_nl_exact_factor_untouched(tmp_path):
     )
     assert result["ok"] is True
     assert "corrections" not in result
-    assert result["yaml"] == valid.rstrip("\n")  # 原样保留，未经 dump 重写
+    expected = valid.replace("max_holding_days: 5", "max_holding_days: 0")
+    assert result["yaml"] == expected.rstrip("\n")  # 仅默认持仓天数归一，其余原文保留
 
 
 def test_compile_nl_unmatchable_factor_returns_candidates(tmp_path):

@@ -2,6 +2,89 @@
 
 ## Task ID
 
+QRE-GUI-FACTOR-REGISTRY-001（因子语义注册表）
+
+## NL Holding Hotfix
+
+`gui/nl_compiler.py` 新增 `_with_default_holding`：缺 holding 补 0；描述无期限语义时覆盖模型编造天数为 0，明确期限保留；已有天数仅标量替换，其他 YAML 原文不动。staging 使用现有 OpenAI 兼容配置（凭证不入仓）后，真实 `/api/saas/nl/compile` 的 MACD/RSI/BOLL/KDJ/MA 五例全过且 holding=0，未创建回测。报告 `.tmp/factor-registry/nl-holding-default-report.json`。
+
+## Implementation Summary
+
+**注册表数据** `configs/factor_registry.json`（版本 1.0）：`market_fields`（7 个行情字段
+及中文别名）、`tables`（19 张 factors 表的类别/价格口径/列数）、`families`（200+ 族规则
+摘要：abbr/zh_base/default_output/default_params/param_order/aliases/族识别关键词）、
+`factors`（895 条目，每项 `table/column/canonical/category/price_basis/family/output/
+params/zh/aliases/common/core`）、`extra_aliases`（跨条目别名，如「布林带」→ 上/中/下轨
+三个 canonical，形成候选而非静默覆盖）。
+
+**生成器** `scripts/gen_factor_registry.py`：`FAMILY_RULES` 用列名正则 + 命名组解析参数
+（`ema_5`→{period:5}、`macd_12_26_9`→{fast,slow,signal}、`bbu_20_2_0_2_0`→4 参数），
+按 `zh_base` + `param_order`（或 `zh_params`，用于布林带/ALMA/PSAR 等参数串不美观的族）
+生成中文名；`_is_common`/`_is_default_params` 决定别名挂载范围——**族别名只挂在「常用 +
+默认参数」条目上**，避免全量别名进 JSON 与 Prompt；`MANUAL_ENTRIES` 人工补全财务与中文
+习惯名；`CORE_TARGETS`（25 条）打 `core` 标记供 Prompt 常用示例派生，缺失会在生成时告警。
+重新生成：`QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data .venv/bin/python
+scripts/gen_factor_registry.py`。
+
+**加载层** `gui/factor_registry.py`：`normalize_alias`（NFKC 全角转半角 → 小写 → 去空白/
+下划线/连字符/间隔号/中文标点 → 剥离首尾句读；保留括号与逗号以便 `MACD(12,26,9)` 唯一命中）。
+`FactorRegistry.resolve(text, price_basis=None)` 四级解析：①`_canonical_keys` 精确命中
+（`factors.t.c` 与 `t.c` 两种写法）；②`_market_keys` 行情字段单独识别（不混入
+factor_fields）；③`_alias_index` 归一化别名命中后用文本里的数字收窄；④`_family_from_text`
+族识别（关键词取 abbr/zh_base/规则显式声明的族识别词，最长优先，**剩余部分不得含英文字母**——
+否则 `macd_signal_12_26_9` 会被误判成 MACD 快线，应交回旧别名字典子串兜底）+ params 过滤
++ 族默认参数。`_finish` 收口：唯一命中→`_unique_result`（补「未指定参数→族默认值」提示）；
+显式 price_basis 过滤；仅价格口径不同（同 category 同 column）时按
+close→typical_price→average_price 取首个并生成 notice；其余返回 ambiguous + candidates。
+`validate_registry(snapshot)` 查坏 canonical 与悬空别名；`coverage_report(snapshot)` 出
+覆盖统计与未注册清单；`duplicate_aliases()` 列出别名的多目标（必须形成候选）。
+
+**展示链路** `gui/factor_wizard.py::registry_display_fields` + `build_factor_groups`：
+每个 item 追加 `zh/canonical/price_basis/aliases`（label 保留作旧数据回退）。
+`scripts/sync_saas_metadata.py` 复用同一函数并新增 `_report_registry`（校验 + 覆盖报告）。
+`gui/factor_catalog_llm.py` 新增 `registry_validation`/`registry_coverage`。
+
+**弹窗** `gui/saas/templates/new.html`：`loadFactorCatalog` 把 `it.zh/it.canonical/
+it.price_basis/it.aliases` 写进 `FACTOR_OPTIONS`；新增 `PRICE_BASIS_ZH`、`fpFactorLabel`
+（zh 优先，null 回退 label）、`fpBasisZh`、`fpItemText`（中文名 + （口径））、`fpSubLabel`
+（子类栏显示「大类(口径)」，数据键 sub 不变）、`fpSearchHaystack`（中文名/canonical/列名/
+别名/大类/子类小写拼接）。`fpButtonText`/`syncFactorPickerButton`/`fpRender` 全部改走
+`fpItemText`/`fpSubLabel`；`title` 改为「中文名（canonical）」作辅助对照。缺字段的旧
+metadata 下 `o.zh`/`o.basis` 为 undefined，文案自动回退旧形态。
+
+**NL 链路** `gui/factor_correction.py`：`COMMON_FACTOR_TARGETS` 改为
+`_derive_common_factor_targets()`（注册表 core 条目，异常时回退内置清单）；新增
+`registry_resolve_column(column, qualified_table, column_lookup)`——列已存在不解析；
+唯一命中且同表且列在候选池内才替换（带 notice），跨表只给候选不自动改写，歧义给
+candidates。`correct_factor_fields` 同表分支中**先注册表、后旧子串别名**，registry
+纠正记录带 `via: "registry"` 与可选 `notice`；`format_corrections_note` 末尾追加去重后的
+notice 行。`nl_compiler.build_system_prompt` 口径不变（canonical 目录 + 核心示例）。
+
+测试：`tests/test_factor_registry.py`（新增 40 项）、`tests/test_gui_factor_wizard.py`
+（+2）、`tests/test_saas_factor_picker.py`（+3，含注册表 fixture 的 Node VM 场景）、
+`tests/test_gui_saas_pages.py`（+1）、`tests/test_gui_factor_correction.py`（+6）、
+`tests/test_nl_factor_pipeline.py`（+6，含 11 条 NL 小样本矩阵与端到端 stub 编译）。
+
+**验证命令与结果**：
+- `uv run python -m pytest tests/test_factor_registry.py -q` → 40 passed
+- `uv run python -m pytest tests/test_gui_factor_wizard.py -q` → 38 passed
+- `uv run python -m pytest tests/test_saas_factor_picker.py -q` → 13 passed
+- `uv run python -m pytest tests/test_gui_saas_pages.py -q` → 74 passed
+- `uv run python -m pytest tests/test_gui_factor_correction.py tests/test_nl_factor_pipeline.py
+  tests/test_gui_nl_compiler.py tests/test_factor_registry.py -q` → 95 passed
+- `uv run python -m pytest tests/ -q --ignore=tests/data_test` → 2533 passed, 5 skipped
+- `bash scripts/check-progress-docs.sh && bash scripts/git-finalize-check.sh && git diff --check` → 通过
+- 真实 Chromium `.tmp/factor-registry/browser_audit.py` → 桌面 1280×900 与移动 375×812
+  各 13 项通过，零 JS error、零横向溢出
+
+**限制与后续**：未运行真实全量回测、未调用真实 LLM；未 commit、未 push、未部署 ECS。
+8081 lab 侧 `lab.html` 的自有向导副本未改（lab 侧冻结）。`deploy/saas/metadata.json`
+已在本地重新导出，部署 ECS 时需同步该文件与 `configs/factor_registry.json`。
+
+---
+
+## Task ID
+
 QRE-SAAS-FACTOR-PICKER-MODAL（自选因子三栏弹窗选择器）
 
 ## Implementation Summary

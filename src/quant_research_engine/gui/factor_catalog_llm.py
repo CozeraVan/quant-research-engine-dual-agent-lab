@@ -103,3 +103,38 @@ def catalog_column_lookup(path: Path | None = None) -> Any:
     tables = {f"factors.{t}": set(cols) for t, cols in data.items()}
     tables.setdefault("public.stock_daily", set())  # 行情列不进 factor_fields，空集即可
     return lambda table: tables.get(table, set())
+
+
+def _load_snapshot(path: Path | None = None) -> dict[str, list[str]] | None:
+    """读目录快照 JSON（{table: [columns]}）；缺失/损坏返回 None。"""
+    target = path or DEFAULT_CATALOG_JSON_PATH
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def registry_validation(path: Path | None = None) -> list[str]:
+    """因子语义注册表 ↔ 目录快照一致性校验（防漂移门禁）。
+
+    返回问题列表（空 = 通过）：注册条目指向不存在的字段、别名指向不存在字段。
+    Prompt 只承载 canonical 目录，**不注入全量别名**——别名在编译前后由
+    ``gui/factor_registry.py`` 确定性解析。
+    """
+    from quant_research_engine.gui.factor_registry import validate_registry
+
+    snapshot = _load_snapshot(path)
+    if snapshot is None:
+        return ["因子目录快照缺失，无法校验因子语义注册表"]
+    return validate_registry(snapshot)
+
+
+def registry_coverage(path: Path | None = None) -> dict[str, Any] | None:
+    """注册表覆盖报告（新增字段未注册时必须被看见，不静默放过）。"""
+    from quant_research_engine.gui.factor_registry import load_registry
+
+    snapshot = _load_snapshot(path)
+    if snapshot is None:
+        return None
+    return load_registry().coverage_report(snapshot)

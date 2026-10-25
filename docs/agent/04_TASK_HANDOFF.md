@@ -2,6 +2,55 @@
 
 ## Task ID
 
+QRE-GUI-FACTOR-REGISTRY-001（因子语义注册表：中文展示/搜索 + NL 确定性别名解析）
+
+## Current Status
+
+DONE（2026-10-25 用户批准 commit + push + ECS 部署；含 NL holding 默认 0 热修）
+
+## Task Note
+
+- 新增版本化注册表 `configs/factor_registry.json`（895 个因子字段条目 + market_fields +
+  tables + families + extra_aliases）与只读加载层
+  `src/quant_research_engine/gui/factor_registry.py`（`normalize_alias` /
+  `FactorRegistry.resolve` / `validate_registry` / `coverage_report`）。生成器
+  `scripts/gen_factor_registry.py` 采用「规则生成 + 特殊人工维护」：FAMILY_RULES 按列名
+  规律生成中文名/参数/别名，MANUAL_ENTRIES 人工补全财务与中文习惯名；未维护条目的 `zh`
+  为 null（**不伪造中文名**），展示回退 canonical 并进入覆盖报告。
+- canonical `schema.table.column`、YAML、回测、隐藏 select、条件快照、策略还原全部零改动。
+  `/api/saas/factors` 只增字段（`zh`/`canonical`/`price_basis`/`aliases`），旧数据缺字段时
+  前端回退既有 label。
+- 消歧规则：完整 canonical 精确命中 → 归一化别名唯一命中 → family+params 结构化匹配 →
+  同名多价格口径默认 close 并 notice（显式 typical_price/average_price 可选）→ 其他歧义
+  返回 candidates 不猜。MACD 三输出（DIF=macd / DEA·信号线=macds / 柱=macdh）不混淆。
+- 弹窗（`new.html`）按钮/三栏/搜索结果中文名为主 + 价格口径可见 + canonical 悬停对照；
+  搜索匹配中文名、canonical、列名、全部别名与大类/子类。LLM Prompt 只保留 canonical
+  目录与 25 条核心示例，**不注入全量别名**。
+- 文件：`configs/factor_registry.json`（新增）、`gui/factor_registry.py`（新增）、
+  `scripts/gen_factor_registry.py`（新增）、`gui/factor_wizard.py`、
+  `gui/factor_catalog_llm.py`、`gui/factor_correction.py`、`gui/saas/templates/new.html`、
+  `scripts/sync_saas_metadata.py`、`scripts/gen_factor_catalog_llm.py`、
+  `deploy/saas/metadata.json`（重新导出）；测试 `tests/test_factor_registry.py`（新增 40 项）、
+  `tests/test_gui_factor_wizard.py`、`tests/test_saas_factor_picker.py`、
+  `tests/test_gui_saas_pages.py`、`tests/test_gui_factor_correction.py`、
+  `tests/test_nl_factor_pipeline.py`。
+- 验证：注册表 40 passed；向导 38；弹窗 13；saas pages 74；纠错+NL+编译器+注册表 95 passed；
+  全量 `pytest tests/ --ignore=tests/data_test` → **2533 passed, 5 skipped**。
+  `gen_factor_catalog_llm.py` / `sync_saas_metadata.py` 均报告「注册表校验通过」。
+  真实 Chromium 8091 桌面 1280×900 与移动 375×812 各 13 项通过（中文按钮/三栏/搜索、
+  中文别名、英文别名、canonical 搜索、同名 close/典型价可区分、未注册回退、YAML 一致、
+  固定值、Esc、零 JS error、零横向溢出）；证据 `.tmp/factor-registry/`。
+- 覆盖统计：554/895 列有中文名（61.9%）；341 列未维护（Alpha191 191 + Alpha101 31 +
+  质量/成长 `_rank` 族 + 少量财务报告期字段），展示回退 canonical。
+- 边界：未运行真实全量回测；未调用真实 LLM（stub http_post + 内存 column_lookup）；
+  未 commit、未 push、未部署 ECS。
+
+---
+
+---
+
+## Task ID
+
 QRE-SAAS-FACTOR-PICKER-MODAL（自选因子三栏弹窗选择器）
 
 ## Current Status
@@ -34,6 +83,8 @@ DONE（2026-10-25 用户认可完成度并批准 commit + push）
 - ECS 既有未提交改动：11 个 SaaS 模板/静态文件与本地 HEAD 逐字节一致（上一任务
   help-copy 部署遗留，与本任务无关），无覆盖风险。
 - 边界：未运行真实全量回测，未 commit、未 push；等用户实机验收。
+
+---
 
 ---
 

@@ -496,7 +496,10 @@ async function loadFactorCatalog(){
         while (ALIAS_TARGET[alias] && ALIAS_TARGET[alias] !== it.table + '.' + it.column){ alias = it.column + '_' + i; i++; }
         if (group.group !== 'market') ALIAS_TARGET[alias] = it.table + '.' + it.column;
         KNOWN_COLS[it.column] = true;
-        FACTOR_OPTIONS.push({value: alias, label: it.label, group: group.label, _table: it.table});
+        // 注册表增量字段（QRE-GUI-FACTOR-REGISTRY-001）：中文名 / canonical 对照 /
+        // 价格口径 / 别名。缺字段时（旧 metadata）前端回退既有 label。
+        FACTOR_OPTIONS.push({value: alias, label: it.label, zh: it.zh, canonical: it.canonical,
+          basis: it.price_basis, aliases: it.aliases || [], group: group.label, _table: it.table});
       });
     });
     // 子类分段（表 >30 项按名称切段）
@@ -574,18 +577,41 @@ function setFactorSelectValue(wrap, v){ syncFactorSelect(wrap, v); wrap.querySel
 // usedFactors / YAML / 固定值 / 策略还原口径不变），按钮只显示当前因子并打开弹窗；
 // 弹窗复用 FACTOR_OPTIONS、factorGroups()、factorSubs() 与既有目录加载结果，不新增 API。
 let fpWrap = null, fpLastFocus = null, fpSel = {group: null, sub: null};
+// 价格口径中文名（与 factor_wizard.PRICE_COLUMN_LABELS 一致）：同名不同口径要可区分
+const PRICE_BASIS_ZH = {close: '收盘价', typical_price: '典型价', average_price: '均价'};
 function fpFactorSel(wrap){ return wrap.querySelectorAll('select')[2]; }
 function fpFactorOpt(v){ for (const o of FACTOR_OPTIONS){ if (o.value === v) return o; } return null; }
+// 中文名优先，未维护中文名（注册表 zh 为 null）回退既有 label，不显示空文案
+function fpFactorLabel(o){ return (o && (o.zh || o.label)) || ''; }
+function fpBasisZh(o){ return (o && o.basis && PRICE_BASIS_ZH[o.basis]) || ''; }
+function fpItemText(o){ const b = fpBasisZh(o); return b ? fpFactorLabel(o) + '（' + b + '）' : fpFactorLabel(o); }
+// 子类栏展示中文类别 + 价格口径（数据键 sub 不变，仍按表/分段分组）
+function fpSubLabel(sub){
+  let o = null;
+  for (const x of FACTOR_OPTIONS){ if (x.sub === sub){ o = x; break; } }
+  if (!o) return sub;
+  const b = fpBasisZh(o);
+  if (!b) return o._table === 'public.stock_daily' ? o.group : sub;
+  const range = sub.indexOf(' ') > 0 ? sub.slice(sub.indexOf(' ') + 1) : '';
+  const prefix = o.group + '(' + b + ')';
+  return range ? prefix + ' ' + range : prefix;
+}
+// 搜索匹配：中文名、canonical、列名、全部别名、族名（大类/子类）
+function fpSearchHaystack(o){
+  return [o.label, o.zh, o.value, o.canonical, o.column, o.group, o.sub,
+    (o.aliases || []).join(' ')].join(' ').toLowerCase();
+}
 function fpButtonText(v){
   const o = fpFactorOpt(v);
-  return o ? (o.group + ' / ' + o.sub + ' / ' + o.label) : '选择因子';
+  return o ? (o.group + ' / ' + fpSubLabel(o.sub) + ' / ' + fpItemText(o)) : '选择因子';
 }
 function syncFactorPickerButton(wrap){
   const btn = wrap.querySelector('.factor-select-btn');
   if (!btn) return;
   const v = fpFactorSel(wrap).value, o = fpFactorOpt(v);
   btn.textContent = fpButtonText(v);
-  btn.title = o ? (o.label + '（' + v + '）') : '点击从因子库选择因子';
+  // canonical 作辅助对照（悬停可见，不占主文案）
+  btn.title = o ? (fpItemText(o) + '（' + (o.canonical || v) + '）') : '点击从因子库选择因子';
 }
 function fpList(box, items, active, level){
   box.innerHTML = '';
@@ -607,16 +633,16 @@ function fpRender(){
     cols.hidden = false; res.hidden = true; empty.hidden = true;
     res.innerHTML = '';  // 切回三栏时清空搜索结果，避免隐藏残留节点进入焦点链
     fpList($('#fp-list-group'), factorGroups().map(g => ({value: g, label: g})), fpSel.group, 'group');
-    fpList($('#fp-list-sub'), fpSel.group ? factorSubs(fpSel.group).map(s => ({value: s, label: s})) : [], fpSel.sub, 'sub');
+    fpList($('#fp-list-sub'), fpSel.group ? factorSubs(fpSel.group).map(s => ({value: s, label: fpSubLabel(s)})) : [], fpSel.sub, 'sub');
     const cur = fpWrap ? fpFactorSel(fpWrap).value : '';
     const facs = FACTOR_OPTIONS.filter(o => (!fpSel.group || o.group === fpSel.group) && (!fpSel.sub || o.sub === fpSel.sub));
-    fpList($('#fp-list-factor'), facs.map(o => ({value: o.value, label: o.label})), cur, 'factor');
+    fpList($('#fp-list-factor'), facs.map(o => ({value: o.value, label: fpItemText(o)})), cur, 'factor');
     return;
   }
-  // 搜索：只读过滤当前弹窗显示，匹配 label/value/group/sub，结果带完整层级
-  const hits = FACTOR_OPTIONS.filter(o => (o.label + ' ' + o.value + ' ' + o.group + ' ' + o.sub).toLowerCase().indexOf(q) >= 0);
+  // 搜索：只读过滤当前弹窗显示，匹配中文名/别名/canonical/列名/大类/子类
+  const hits = FACTOR_OPTIONS.filter(o => fpSearchHaystack(o).indexOf(q) >= 0);
   cols.hidden = true; res.hidden = false; empty.hidden = hits.length > 0;
-  fpList(res, hits.map(o => ({value: o.value, label: o.group + ' / ' + o.sub + ' / ' + o.label})), null, 'factor');
+  fpList(res, hits.map(o => ({value: o.value, label: o.group + ' / ' + fpSubLabel(o.sub) + ' / ' + fpItemText(o)})), null, 'factor');
 }
 function fpPick(level, value){
   if (level === 'group'){ if (fpSel.group !== value){ fpSel.group = value; fpSel.sub = null; } fpRender(); return; }

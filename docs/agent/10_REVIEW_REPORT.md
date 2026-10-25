@@ -2,6 +2,100 @@
 
 ## Task ID
 
+QRE-GUI-FACTOR-REGISTRY-001（因子语义注册表）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（注册表与 holding 热修验证完成，全量 2534 passed + 5 skipped、真实 NL 五例全过；用户批准 commit + push + ECS 部署）
+
+## Holding Hotfix Review
+
+真实 NL 抽查确认别名链接正确，但模型漏 holding/编造 999 导致编译不稳定。默认 0 的归一已覆盖缺段与编造值，明确期限保留，YAML 原文格式回归通过。staging `/api/saas/nl/compile` 的 MACD/RSI/BOLL/KDJ/MA 五例均 ok 且 `max_holding_days: 0`，未运行回测；报告 `.tmp/factor-registry/nl-holding-default-report.json`。
+
+## Findings
+
+- **契约零改动是本任务唯一高风险面，已逐项核对**：canonical `schema.table.column`
+  未被改写（`configs/factor_registry.json` 只新增语义层，不动数据库列名）；YAML、
+  `usedFactors()`、`readGroup()`、`snapshotWzArea()`、固定值切换、策略还原、
+  price basis 归一全部未触。`/api/saas/factors` 只增 `zh/canonical/price_basis/aliases`
+  四个字段，`label` 保留，旧 metadata 缺字段时前端回退 label（Node VM 用无新字段的
+  旧 fixture 跑了全部既有弹窗用例，13 passed 证明回退路径未回归）。
+- **发现并修复三个真实缺陷**：①`stock_daily_momentum_average_price` 等表的
+  category/price_basis 曾因生成器循环变量泄漏而全部错记成最后一张表的属性，导致
+  `macds` 的消歧默认到了错误口径——改为从 `tables` 段读取；②`_family_from_text` 用全部
+  族别名全量当识别词，使 `macd_signal_12_26_9` 被误判成 MACD 快线（正确行为是交回旧别名字典
+  子串兜底）——改为识别词只取 abbr/zh_base/规则显式声明项，且识别词之外的剩余
+  部分不得含英文字母；③`alma`/`sqz`/`stc`/`psar` 等族的中文名把 `0_0_85` 这类下划线参数
+  渲染成 `0.0.85`，改用 `zh_params` 只显示主参数，参数细节留在 canonical。
+- **不伪造中文名**：未维护条目 `zh` 记 null（`build_factor_groups` 测试显式断言），
+  `coverage_report` 如实输出 554/895（61.9%）与 341 条未注册清单；`gen_factor_catalog_llm.py`
+  与 `sync_saas_metadata.py` 导出时都打印覆盖报告，漏注册不会静默。
+- **别名不膨胀 Prompt**：`COMMON_FACTOR_TARGETS` 由注册表 core 条目（25 条）派生，
+  测试断言 `20日指数移动均线`/`MACD(12,26,9)` 等规则生成别名不在 prompt 中且 prompt
+  < 60000 字符。
+- **歧义不猜**：`布林带`/`kdj`/`dmi` 均返回 candidates 且 canonical 为 None；
+  `registry_resolve_column` 只在本表内替换，跨表只给候选（不偷偷改表）。
+- **待用户复核的设计延伸**：族名未给参数时按该族默认周期处理并提示（MACD 12,26,9 为
+  设计批准项，EMA/SMA/RSI 等为同口径延伸）。若不接受，可把这些族的 `default_params`
+  置空并让裸族别名挂到全部常用条目上，即可改为返回候选。
+- Required Fixes：无。
+
+---
+
+
+## Archive: QRE-GUI-POOL-MOM-004（「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条）
+
+## Reviewer
+
+KIMI_CODE (single agent self-review, per R-AGENT-001)
+
+## Review Status
+
+PASS
+
+## Findings
+
+- **无前视**：历史日 T 的榜单字段全部来自 `WHERE trade_date = :d` 单行截面
+  （排名/共振/热力为组内截面计算）；post 列单独取 T 之后的数据且明确标注
+  「事后」；detail/members 以 end_date/trade_date 截断到 T。表本身
+  point-in-time（fwd_ret_w 只依赖 ≤T 数据），符合 R-QRE-003。
+- **post 口径**：∏(1+fwd_ret)−1 over (T, T+w]，与 M7 v2 文档口径一致；
+  不足 w 日或窗口含 None → NULL + 页面「未满窗口」注明（摘要条与列均有）。
+- **摘要统计**：加速度 None 的池不进 Top N（避免污染），但计入全体对照；
+  post 缺失各自剔除；全缺 → None 不炸（专项测试）。
+- **性能**：post 查询限定 T 后 20 个交易日（先 DISTINCT LIMIT 20 再区间
+  拉取），避免最早日期全表扫描；缓存键含 trade_date。
+- **范围**：pool_momentum.py / app.py（2 路由加参透传）/ admin.html /
+  测试文件；8081 零改动。
+- **偏差**：无 Required Fix。
+
+## Validation Evidence
+
+```
+uv run pytest -q → 1929 passed, 4 skipped（1918 + 11 净增）
+tests/test_gui_pool_momentum.py → 65 passed
+node --check admin.html script → 通过
+sudo -n systemctl restart qre-gui → active；curl /admin → 200
+真库 /api/admin/pool-momentum?trade_date=2025-09-05：
+  concept 加速度 Top10 post_5 均值 +0.19%（胜率 0.3）vs 全体 1064 池 +0.88%
+  state Top10 post_5 均值 +0.64%（胜率 0.9）vs 全体 14 池 +0.95%
+  2025-08-21：concept Top10 post_5 −1.92% vs 全体 −0.29%；Top1 赛马概念 post_20 +16.14%
+detail end_date=2025-09-05 → 序列正确截断；members trade_date 生效
+scripts/check-progress-docs.sh → passed；git diff --check → clean
+```
+
+## Required Fixes
+
+无。
+
+---
+
+## Task ID
+
 QRE-SAAS-FACTOR-PICKER-MODAL（自选因子三栏弹窗选择器）
 
 ## Reviewer
@@ -436,51 +530,6 @@ curl /api/admin/pool-momentum/detail?pool_type=state&pool_key=量比:突增 → 
 无。
 
 ---
-
-## Archive: QRE-GUI-POOL-MOM-004（「聚类动量」页 v3 历史回看：日期选择器 + 事后验证列 + 验证摘要条）
-
-## Reviewer
-
-KIMI_CODE (single agent self-review, per R-AGENT-001)
-
-## Review Status
-
-PASS
-
-## Findings
-
-- **无前视**：历史日 T 的榜单字段全部来自 `WHERE trade_date = :d` 单行截面
-  （排名/共振/热力为组内截面计算）；post 列单独取 T 之后的数据且明确标注
-  「事后」；detail/members 以 end_date/trade_date 截断到 T。表本身
-  point-in-time（fwd_ret_w 只依赖 ≤T 数据），符合 R-QRE-003。
-- **post 口径**：∏(1+fwd_ret)−1 over (T, T+w]，与 M7 v2 文档口径一致；
-  不足 w 日或窗口含 None → NULL + 页面「未满窗口」注明（摘要条与列均有）。
-- **摘要统计**：加速度 None 的池不进 Top N（避免污染），但计入全体对照；
-  post 缺失各自剔除；全缺 → None 不炸（专项测试）。
-- **性能**：post 查询限定 T 后 20 个交易日（先 DISTINCT LIMIT 20 再区间
-  拉取），避免最早日期全表扫描；缓存键含 trade_date。
-- **范围**：pool_momentum.py / app.py（2 路由加参透传）/ admin.html /
-  测试文件；8081 零改动。
-- **偏差**：无 Required Fix。
-
-## Validation Evidence
-
-```
-uv run pytest -q → 1929 passed, 4 skipped（1918 + 11 净增）
-tests/test_gui_pool_momentum.py → 65 passed
-node --check admin.html script → 通过
-sudo -n systemctl restart qre-gui → active；curl /admin → 200
-真库 /api/admin/pool-momentum?trade_date=2025-09-05：
-  concept 加速度 Top10 post_5 均值 +0.19%（胜率 0.3）vs 全体 1064 池 +0.88%
-  state Top10 post_5 均值 +0.64%（胜率 0.9）vs 全体 14 池 +0.95%
-  2025-08-21：concept Top10 post_5 −1.92% vs 全体 −0.29%；Top1 赛马概念 post_20 +16.14%
-detail end_date=2025-09-05 → 序列正确截断；members trade_date 生效
-scripts/check-progress-docs.sh → passed；git diff --check → clean
-```
-
-## Required Fixes
-
-无。
 
 ---
 

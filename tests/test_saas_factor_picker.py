@@ -185,11 +185,12 @@ def _wizard_source(page: str) -> str:
     return source
 
 
-def _run_picker_js(page: str, scenario: str) -> None:
+def _run_picker_js(page: str, scenario: str, groups: str = _FACTOR_GROUPS,
+                   var_name: str = "FACTOR_GROUPS") -> None:
     source = _wizard_source(page)
     script = (
         _DOM_HARNESS
-        + "\nconst FACTOR_GROUPS = " + _FACTOR_GROUPS + ";\n"
+        + "\nconst " + var_name + " = " + groups + ";\n"
         + "const source = " + json.dumps(source) + ";\n"
         + scenario
     )
@@ -512,3 +513,112 @@ class TestPickerInteraction:
         result = subprocess.run([_node(), "-e", script], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr or result.stdout
         assert "parse ok" in result.stdout
+
+
+# --- 因子语义注册表：中文展示 / 中英文搜索 / 同名口径（QRE-GUI-FACTOR-REGISTRY-001） ---
+
+_REGISTRY_FACTOR_GROUPS = json.dumps([
+    {"group": "均线/重叠", "label": "均线/重叠", "items": [
+        {"label": "均线/重叠(收盘价) · ema_5", "column": "ema_5",
+         "table": "factors.stock_daily_overlap_close", "zh": "指数移动均线(5)",
+         "canonical": "factors.stock_daily_overlap_close.ema_5", "price_basis": "close",
+         "aliases": ["ema_5", "EMA(5)", "5日指数移动均线", "ema", "指数均线"]},
+        {"label": "均线/重叠(典型价) · ema_5", "column": "ema_5",
+         "table": "factors.stock_daily_overlap_typical_price", "zh": "指数移动均线(5)",
+         "canonical": "factors.stock_daily_overlap_typical_price.ema_5", "price_basis": "typical_price",
+         "aliases": ["ema_5", "EMA(5)", "5日指数移动均线", "ema", "指数均线"]},
+        {"label": "均线/重叠(收盘价) · sma_20", "column": "sma_20",
+         "table": "factors.stock_daily_overlap_close", "zh": "简单移动均线(20)",
+         "canonical": "factors.stock_daily_overlap_close.sma_20", "price_basis": "close",
+         "aliases": ["sma_20", "SMA(20)", "20日简单移动均线", "sma", "均线"]},
+    ]},
+    {"group": "动量", "label": "动量", "items": [
+        {"label": "动量(收盘价) · macd_12_26_9", "column": "macd_12_26_9",
+         "table": "factors.stock_daily_momentum_close", "zh": "MACD 快线(12,26,9)",
+         "canonical": "factors.stock_daily_momentum_close.macd_12_26_9", "price_basis": "close",
+         "aliases": ["macd_12_26_9", "MACD(12,26,9)", "macd", "dif", "快线"]},
+        {"label": "动量(收盘价) · macds_12_26_9", "column": "macds_12_26_9",
+         "table": "factors.stock_daily_momentum_close", "zh": "MACD 信号线(12,26,9)",
+         "canonical": "factors.stock_daily_momentum_close.macds_12_26_9", "price_basis": "close",
+         "aliases": ["macds_12_26_9", "MACDS(12,26,9)", "dea", "信号线", "macd_signal"]},
+    ]},
+])
+
+
+class TestPickerRegistryDisplay:
+    """弹窗以中文名为主、显示价格口径、保留 canonical 辅助；中英文别名均可搜索。"""
+
+    def test_registry_display_functions_exist(self):
+        page = NEW_HTML.read_text()
+        for fn in ("function fpFactorLabel(", "function fpBasisZh(", "function fpItemText(",
+                   "function fpSubLabel(", "function fpSearchHaystack("):
+            assert fn in page, fn
+        assert "PRICE_BASIS_ZH" in page
+        # 展示字段来自注册表增量（zh / canonical / price_basis / aliases）
+        assert "zh: it.zh" in page
+        assert "canonical: it.canonical" in page
+        assert "basis: it.price_basis" in page
+        assert "aliases: it.aliases" in page
+
+    def test_registry_chinese_display_and_basis(self):
+        _run_picker_js(NEW_HTML.read_text(), r"""
+(async () => {
+  const h = createHarness(REGISTRY_GROUPS);
+  vm.runInContext(source, h.context);
+  await vm.runInContext('loadFactorCatalog()', h.context);
+  const doc = h.doc;
+  const wrap = doc.querySelector('#wz-entry .cond-group .wz-cond .wz-factsel');
+  const sel = wrap.querySelectorAll('select')[2];
+  const btn = wrap.querySelector('.factor-select-btn');
+  sel.value = 'ema_5_2';  // 同名第二候选的隐藏 select 值（典型价口径）
+  vm.runInContext("syncFactorSelect(document.querySelector('#wz-entry .cond-group .wz-cond .wz-factsel'), 'ema_5_2')", h.context);
+  // 中文名为主 + 价格口径可见 + canonical 辅助可对照
+  assert.equal(btn.textContent, '均线/重叠 / 均线/重叠(典型价) / 指数移动均线(5)（典型价）');
+  assert.ok(btn.title.indexOf('factors.stock_daily_overlap_typical_price.ema_5') >= 0, btn.title);
+
+  // 子类栏显示中文类别 + 价格口径（数据键 sub 不变）
+  btn.dispatchEvent({type: 'click'});
+  const subs = doc.getElementById('fp-list-sub').children.map(b => b.textContent);
+  assert.deepEqual(subs, ['均线/重叠(收盘价)', '均线/重叠(典型价)']);
+  const facs = doc.getElementById('fp-list-factor').children.map(b => b.textContent);
+  assert.deepEqual(facs, ['指数移动均线(5)（典型价）']);
+})().catch(error => { console.error(error); process.exit(1); });
+""", groups=_REGISTRY_FACTOR_GROUPS, var_name="REGISTRY_GROUPS")
+
+    def test_registry_search_matches_chinese_alias_and_canonical(self):
+        _run_picker_js(NEW_HTML.read_text(), r"""
+(async () => {
+  const h = createHarness(REGISTRY_GROUPS);
+  vm.runInContext(source, h.context);
+  await vm.runInContext('loadFactorCatalog()', h.context);
+  const doc = h.doc;
+  const wrap = doc.querySelector('#wz-entry .cond-group .wz-cond .wz-factsel');
+  const btn = wrap.querySelector('.factor-select-btn');
+  btn.dispatchEvent({type: 'click'});
+  const search = doc.getElementById('factor-picker-search');
+  const results = doc.getElementById('factor-picker-results');
+  const pick = (q) => { search.value = q; search.dispatchEvent({type: 'input'}); return results; };
+
+  // 中文别名「信号线」→ MACD 信号线
+  assert.deepEqual(pick('信号线').children.map(b => b.textContent),
+    ['动量 / 动量(收盘价) / MACD 信号线(12,26,9)（收盘价）']);
+  // 英文别名「dea」同样命中
+  assert.deepEqual(pick('dea').children.map(b => b.textContent),
+    ['动量 / 动量(收盘价) / MACD 信号线(12,26,9)（收盘价）']);
+  // canonical 可搜索（辅助对照）
+  assert.equal(pick('stock_daily_overlap_typical_price.ema_5').children.length, 1);
+  // 同名不同口径：中文名 + 口径可区分，且返回两个候选
+  assert.equal(pick('指数移动均线').children.length, 2);
+  assert.ok(pick('指数移动均线').children.map(b => b.textContent).join('|').indexOf('典型价') >= 0);
+  // 未注册中文名的条目不出现空文案（回退 label）
+  assert.equal(pick('不存在的因子').children.length, 0);
+
+  // 选中后仍写回隐藏 select（数据契约不变）
+  pick('信号线');
+  results.children[0].dispatchEvent({type: 'click'});
+  const sel = wrap.querySelectorAll('select')[2];
+  assert.equal(sel.value, 'macds_12_26_9');
+  assert.ok(vm.runInContext("readGroup('entry').expression", h.context).indexOf('macds_12_26_9') >= 0,
+    '隐藏 select 仍是唯一值来源：表达式左操作数取自 .wz-left');
+})().catch(error => { console.error(error); process.exit(1); });
+""", groups=_REGISTRY_FACTOR_GROUPS, var_name="REGISTRY_GROUPS")

@@ -17,6 +17,51 @@
 
 **完成度：177/202（88%）已入库验收** = Momentum 20 + Reversal 3 + Value 11 + Size 3 + Quality 59 + Growth 15 + Liquidity 35 + Risk 25 + Alpha101 31。剩余 25 个为原方案口径裁剪项（含 dividend_yield_3y_avg 等 2 个待 dividend 回填），明细见 §口径裁剪与原清单。P0-P7 全部面板表与通道B 均已接日更（P8 收口）；NL 目录快照（configs/factor_catalog_llm.*）已于 2026-10-19 同步纳入 P4/P5/P7 新表。
 
+## 0.2 因子语义注册表维护纪律（2026-10-25 新增，QRE-GUI-FACTOR-REGISTRY-001）
+
+`configs/factor_registry.json`（v1.0）是自选因子界面与 NL 解析的**单一因子语义来源**：
+中文名、价格口径、中英文别名、族与参数。canonical `schema.table.column` 仍是数据库、YAML、
+回测和因子申请的唯一字段标识，注册表**不改名、不迁移数据库**。
+
+**新增/变更因子列后的固定动作（缺一不可，漏项会被校验告警）**：
+
+1. 在 `scripts/gen_factor_registry.py` 的 `FAMILY_RULES` 补族规则（列名正则 + 命名组 +
+   `zh_base` + `param_order` + 常用别名）；无法用规律表达的特殊项进 `MANUAL_ENTRIES`。
+   **不要伪造中文翻译**——暂时维护不了的条目留空，`zh` 会记 null 并进覆盖报告。
+2. 重新生成快照与注册表：
+   ```bash
+   QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data .venv/bin/python scripts/gen_factor_catalog_llm.py
+   QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data .venv/bin/python scripts/gen_factor_registry.py
+   ```
+   前者会同时打印「因子语义注册表校验」与「注册表覆盖：N/M 列（x%）」——出现
+   `注册条目指向因子库不存在的字段` 或 `别名指向…不存在的字段` 必须修完再入库。
+3. 重新导出 SaaS metadata（弹窗与 `/api/saas/factors` 的数据源）：
+   ```bash
+   QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data .venv/bin/python scripts/sync_saas_metadata.py --out deploy/saas/metadata.json
+   ```
+4. 测试门禁：`uv run python -m pytest tests/test_factor_registry.py -q`（40 项，含
+   「注册表覆盖每个快照列」「当前快照无失效 canonical」）。新增列若未注册，会被
+   `coverage_report` 列出来但不会静默通过——要么补规则，要么在文档里说明为何不维护。
+
+**口径与消歧规则（改动前必读）**：
+
+- 价格口径：同列多口径未说明时默认 **close** 并输出 notice；典型价/均价必须由用户明确
+  指定。新增带价格后缀的表时保持 close → typical_price → average_price 优先级。
+- MACD 三输出不可混淆：DIF=`macd_*`、DEA/信号线=`macds_*`、柱=`macdh_*`；未给参数时
+  默认 (12,26,9) 并提示。
+- 其他歧义（同一别名指向多个不同字段）必须返回 candidates，**不得静默覆盖**；这类别名放
+  `EXTRA_ALIASES`（如「布林带」→ 上/中/下轨，「kdj」→ K/D/J）。
+- LLM Prompt **不注入全量别名**：只保留 canonical 目录 + `CORE_TARGETS`（25 条核心示例）。
+  要给 Prompt 加例子时改 `CORE_TARGETS`，不要把 `aliases` 全量塞进去。
+- 族别名只挂在「常用 + 默认参数」条目上（`_is_common` / `_is_default_params`），控制 JSON
+  体积与 Prompt 成本。
+
+**当前覆盖**：554/895 列有中文名（61.9%）。未维护 341 列 = Alpha191 191 + Alpha101 31
+（面板因子，展示用既有「Alpha191 · alphaNNN」label）+ quality/growth 的 `_rank` 族 +
+少量财务报告期/现金流明细字段。这些列在前端回退 canonical 展示，不影响任何 canonical、
+YAML 与回测口径。
+
+
 ## 0.1 下周恢复指引（2026-10-13 记录，已于 2026-10-18 执行完毕：P1-P3 验收通过、两仓库已提交、NL 目录已同步、P4 完成、P5 启动）
 
 1. **先检查 P1-P3 收尾**：三表续跑进程是否结束（`pgrep -af panel_factors`），各表最新交易日是否到 2026-10-12+；跑各表的 `*_verify.py` 验收（P1: earnings_to_price vs 1/pe_ttm 相关性>0.95 等，见因子规范）。

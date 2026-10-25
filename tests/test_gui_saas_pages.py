@@ -1605,6 +1605,27 @@ class TestSaasFactorsRoute:
         assert data["groups"][0]["group"] == "market"  # 首组行情字段
         assert any(g["label"] for g in data["groups"])
 
+    def test_items_carry_registry_display_fields(self, client, monkeypatch):
+        """因子语义注册表增量字段：zh / canonical / price_basis / aliases。"""
+        monkeypatch.setattr(
+            "quant_research_engine.gui.factor_wizard.load_factor_tables_columns",
+            lambda db_url=None: {"stock_daily_momentum_close": ["rsi_14"]},
+        )
+        data = client.get("/api/saas/factors", headers=AUTH).get_json()
+        items = [i for g in data["groups"] for i in g["items"]]
+        assert items
+        for item in items:
+            for key in ("label", "zh", "canonical", "price_basis", "aliases"):
+                assert key in item, (key, item)
+        rsi = next(i for i in items if i["column"] == "rsi_14")
+        assert rsi["canonical"] == "factors.stock_daily_momentum_close.rsi_14"
+        assert rsi["price_basis"] == "close"
+        assert "相对强弱指标" in rsi["zh"]
+        assert "rsi" in rsi["aliases"]
+        market = next(i for i in items if i["column"] == "close")
+        assert market["zh"] == "收盘价"
+        assert market["canonical"] == "public.stock_daily.close"
+
 
 class TestFactorPickerModal:
     """QRE-SAAS-FACTOR-PICKER-MODAL：渲染后的 new.html 必须带三栏弹窗与隐藏数据字段契约。"""

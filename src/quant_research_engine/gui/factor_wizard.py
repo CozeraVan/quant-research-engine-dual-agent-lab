@@ -161,18 +161,51 @@ def format_price_basis_note(remaps: list[dict[str, str]]) -> str:
     )
 
 
+def registry_display_fields(table: str, column: str) -> dict[str, Any]:
+    """因子语义注册表展示字段（QRE-GUI-FACTOR-REGISTRY-001）。
+
+    返回 ``{zh, canonical, price_basis, aliases}``：中文名、canonical 对照、
+    价格口径与别名。未注册条目 ``zh`` 为 None（前端回退既有 label，不伪造中文名）。
+    只读注册表 JSON，不访问数据库。
+    """
+    from quant_research_engine.gui.factor_registry import load_registry
+
+    info = load_registry().display(table, column)
+    if info is None:
+        return {
+            "zh": None,
+            "canonical": f"{table}.{column}",
+            "price_basis": None,
+            "aliases": [],
+        }
+    return {
+        "zh": info["zh"],
+        "canonical": info["canonical"],
+        "price_basis": info["price_basis"],
+        "aliases": list(info["aliases"]),
+    }
+
+
 def build_factor_groups(tables_columns: dict[str, list[str]]) -> list[dict[str, Any]]:
     """Group factor columns by category.
 
     ``tables_columns``: {table_name: [column, ...]}（不含 schema 前缀的 factors 表）。
     Returns [{group, label, items: [{table, column, label}]}, ...]，首组为行情字段。
+
+    每个 item 额外带注册表增量字段 ``zh`` / ``canonical`` / ``price_basis`` /
+    ``aliases``（``/api/saas/factors`` 契约只增不减，旧数据缺字段时前端回退 label）。
     """
     groups: list[dict[str, Any]] = [
         {
             "group": "market",
             "label": "行情字段",
             "items": [
-                {"table": "public.stock_daily", "column": field, "label": f"行情 · {field}"}
+                {
+                    "table": "public.stock_daily",
+                    "column": field,
+                    "label": f"行情 · {field}",
+                    **registry_display_fields("public.stock_daily", field),
+                }
                 for field in MARKET_FIELDS
             ],
         }
@@ -194,6 +227,7 @@ def build_factor_groups(tables_columns: dict[str, list[str]]) -> list[dict[str, 
                             "table": f"factors.{table}",
                             "column": column,
                             "label": f"{label_prefix} · {column}",
+                            **registry_display_fields(f"factors.{table}", column),
                         }
                     )
             continue
@@ -207,6 +241,7 @@ def build_factor_groups(tables_columns: dict[str, list[str]]) -> list[dict[str, 
                     "table": f"factors.{table}",
                     "column": column,
                     "label": f"{CATEGORY_LABELS.get(category, category)}({price_label}) · {column}",
+                    **registry_display_fields(f"factors.{table}", column),
                 }
             )
     for category in sorted(by_category):

@@ -419,6 +419,7 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 ## 变更记录
 
 - 2026-10-25（QRE-SAAS-FACTOR-PICKER-MODAL）新增 §3.14 自选因子三栏弹窗选择器：入口 2 条件行三个堆叠下拉改为「按钮 + 三栏弹窗 + 搜索」；`.wz-left`/`.wz-rfield` select 降级为隐藏数据字段（`.factor-picker-field select{display:none}`）但仍是唯一值来源，YAML/快照/固定值/策略还原/price basis 零改动；弹窗复用 `FACTOR_OPTIONS` 与既有目录加载，不新增 API 与依赖；Esc/遮罩/关闭按钮只关不改值、焦点进搜索并归还原按钮、Tab 焦点锁；样式复用既有 modal 与紫色主题变量，768px 三栏降单列 + 视口限高。改动集中在 `gui/saas/templates/new.html` 与 `static/lab-theme.css`（移动端规则随组件放 lab-theme.css，因 base.html 无同族竞争规则），8081 lab 侧零改动。
+- 2026-10-25（QRE-GUI-FACTOR-REGISTRY-001）§3.14 自选因子三栏弹窗选择器补充**中文优先展示规则**：因子按钮、三栏列表与搜索结果一律以注册表中文名（`zh`）为主文案，价格口径（收盘价/典型价/均价）以「（口径）」后缀同屏显示，canonical `schema.table.column` 放进按钮 `title` 作悬停辅助对照（不占主文案、不进列表正文）；注册表未维护中文名的条目 `zh` 为 null，前端回退既有 `label`，**不得显示空文案**。子类栏在原有表名/分段键之上显示「大类(口径)」（数据键不变，仅换展示文本），因此同名列的不同价格口径在按钮、子类栏与搜索结果中都可区分。搜索匹配范围扩展到中文名、canonical、列名、全部别名与大类/子类（小写包含匹配），空态与「切回三栏即清空搜索结果」的既有规则不变。样式零新增（无新色相、无新组件），仅 `gui/saas/templates/new.html` 与 `gui/factor_wizard.py` 的目录数据结构；8081 lab 侧零改动。
 - 2026-10-04（QRE-SAAS-WAIT-MASK + REPLAY-LAYOUT）新增 §3.12 长等待模态遮罩组件规则（禁 ESC/背板/全锁、z-95、两段式分流范式、keepMask 语义）；§3.11 补布局规则（倍速与播放同排、进度条置图表正下方 .rp-slider-row）。
 - 2026-10-04（QRE-SAAS-REPLAY-POLISH）§3.11 修订：重播改**接管模式**（接管原图表容器，禁第二模块，退出内存重建静态）+ 交互打磨硬规则（SVG 图标+文字标签、hover/focus-visible、150-300ms、prefers-reduced-motion 降级、36px 等高 8px 网格）。
 - 2026-10-04（QRE-SAAS-REPLAY-S1）新增 §3.11 回测重播组件规则：static/replay.js 共享组件（core 纯逻辑 + attach UI），[0,cursor] 截断渲染/rAF 节流/时序 T 与 T+1 相隔三条红线，.rp-* 控制条与事件流族（淡紫 tokens 无新色相），768px 断点折行，末帧指标=静态报告强一致性（Playwright 断言）。

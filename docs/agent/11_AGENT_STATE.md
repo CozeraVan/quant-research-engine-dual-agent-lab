@@ -6,6 +6,30 @@ This file is the source of truth for single-agent workflow recovery.
 
 自选因子条件行的三个堆叠下拉已改为「当前因子选择按钮 + 三栏弹窗 + 搜索」。`.wz-left`/`.wz-rfield` select 降级为隐藏数据字段但仍是唯一值来源，YAML、`usedFactors()`、`readGroup()`、`snapshotWzArea()`、固定值切换、策略还原、price basis 归一零改动；弹窗复用 `FACTOR_OPTIONS`/`factorGroups()`/`factorSubs()`，不新增 API 与依赖。TDD 先 RED 后 GREEN；真实 Chromium 桌面 1280 与移动 375 共 64/64 项通过（三级选择、搜索/清空/空态、连续三次开关、Esc/遮罩/关闭按钮、焦点返回与 Tab 焦点锁、按钮与 YAML 一致、固定值、条件增删、AND/OR、零 JS error、零横向溢出）。目标 10 passed、相关 242 passed、全量 2474 passed + 5 skipped；证据 `.tmp/factor-picker-modal/`。已部署 ECS（仅 new.html + lab-theme.css，重启 qre-saas，未重启 worker，未部署测试/文档），备份 `/tmp/qre-factor-picker-pre-20261025-124220/`，SHA256 与公网 200/弹窗标记已核对。**未 commit、未 push**，等用户实机验收后由用户批准提交。
 
+### 2026-10-25 QRE-NL-HOLDING-DEFAULT-001 IMPLEMENTED（待用户验收）
+
+真实 NL 抽查发现模型漏 holding/编造 999，非因子别名错误。已按用户要求统一未说明期限 `max_holding_days: 0`（不限），明确期限保留，其他 YAML 原文不动。staging 已配置真实 NL 编译（现有 OpenAI 兼容配置，凭证不入仓）；MACD/RSI/BOLL/KDJ/MA 五例均编译成功、holding=0、canonical 正确，未创建回测。全量 2534 passed + 5 skipped；未 commit/push/ECS。
+
+### 2026-10-25 QRE-GUI-FACTOR-REGISTRY-001 IMPLEMENTED（待用户验收）
+
+单一因子语义来源已落地：`configs/factor_registry.json`（v1.0，895 字段条目 + market_fields/
+tables/families/extra_aliases）+ 只读加载层 `gui/factor_registry.py` + 生成器
+`scripts/gen_factor_registry.py`（规则生成 + 特殊人工维护）。canonical/YAML/回测/隐藏 select/
+条件快照/策略还原零改动；`/api/saas/factors` 只增 `zh/canonical/price_basis/aliases`。
+弹窗按钮/三栏/搜索中文名为主 + 价格口径可见 + canonical 悬停对照；搜索匹配中文名/canonical/
+列名/全部别名。NL 解析四级：canonical 精确 → 归一化别名 → family+params → 同名多口径默认
+close 并 notice（显式 typical_price/average_price 可选），其他歧义返回 candidates 不猜；
+MACD 三输出不混淆（DIF=macd / DEA·信号线=macds / 柱=macdh）。`COMMON_FACTOR_TARGETS`
+由注册表 core 25 条派生，Prompt 不注入全量别名。防漂移校验接入
+`gen_factor_catalog_llm.py` 与 `sync_saas_metadata.py`（当前均「校验通过」）。覆盖
+554/895（61.9%），341 列未维护（Alpha191/Alpha101/`_rank` 族/少量财务报告期），展示回退
+canonical、不伪造中文名。TDD 四阶段 RED→GREEN；注册表 40 passed、向导 38、弹窗 13、
+saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromium 8091 桌面 1280
+与移动 375 各 13 项通过，零 JS error、零横向溢出，证据 `.tmp/factor-registry/`。
+`deploy/saas/metadata.json` 已本地重新导出（367052 bytes / 因子 902 项）。
+**未 commit、未 push、未部署 ECS、未跑真实全量回测、未调用真实 LLM**，等用户验收。
+待复核：族名未给参数按族默认周期处理并提示（MACD 12,26,9 为批准项，其余族为同口径延伸）。
+
 ### 2026-10-24 QRE-SAAS-ACCESS-FALLBACK-FINAL-REVIEW DONE
 
 已覆盖公共无权卡、next 安全回跳、job/symbol/records 有限轮询与重试、showcase 公开只读及 `can_generate` 业务 404。最终补齐 job 请求/响应体超时与 epoch、symbol 暂停语义、交互监听幂等、showcase readonly 和 new expired 终态；提交检查仅扫描新增行并有正反回归。相关测试 228 passed，未运行真实全量回测或真实浏览器自动化；实机矩阵留待部署后人工验收。
@@ -20,11 +44,11 @@ This file is the source of truth for single-agent workflow recovery.
 
 ## Current Phase
 
-DONE（2026-10-25：QRE-SAAS-FACTOR-PICKER-MODAL 用户认可并批准 commit + push）
+DONE（2026-10-25：用户批准因子注册表 + NL holding 默认 0，commit + push + ECS 部署）
 
 ## Current Task
 
-QRE-SAAS-FACTOR-PICKER-MODAL（2026-10-25）：已实现并部署 ECS 待验收。唯一待办 = 用户实机验收通过后批准本地 commit（不 push）。
+QRE-GUI-FACTOR-REGISTRY-001 + QRE-NL-HOLDING-DEFAULT-001（2026-10-25）：别名注册表和 holding 归一已完成；真实 Chromium 与真实 NL 五例通过，全量 2534 passed + 5 skipped，未创建回测。用户已批准 commit + push + ECS 部署；ECS 同步注册表、NL 编译器与 metadata 并重启 `qre-saas`。
 
 DATA-REBUILT-2026-10-11 **数据侧已全部完成**（2026-10-12 10:45 链条收官）：
 - 分钟线入库 `public.stock_minute_1m` 4313 天全量（TimescaleDB 压缩已开）；WSL 侧 /home/van/mindata CSV（324G）待用户确认后删除

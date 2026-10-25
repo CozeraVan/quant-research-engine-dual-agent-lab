@@ -70,7 +70,7 @@ DSL 结构（低层 StrategySpec）：
 - signal:
     entry: 布尔表达式（入场）
     exit: 布尔表达式（离场，可选）
-- holding: {max_holding_days: 整数}
+- holding: {max_holding_days: 整数；用户未说明时由系统统一设为 0（不限持仓天数）}
 - risk: {stop_loss_pct: 小数或 null, take_profit_pct: 小数或 null, trailing_stop_pct: 小数或 null}  # 用户没提就省略或 null
 - universe: {exclude_st: true, exclude_suspended: true, exclude_risk_warning: true, min_listing_days: 120}
 - evaluation: {forward_return_horizons: [1, 3, 5, 10, 20], quantiles: 5}
@@ -311,15 +311,42 @@ def _fixup_prompt(description: str, bad_yaml: str, hints: list[dict[str, Any]]) 
     return "\n".join(lines)
 
 
+def _with_default_holding(yaml_text: str, description: str) -> str:
+    """未明确持仓期限时统一为 0，覆盖模型自行补出的天数。"""
+    import re
+    import yaml as _yaml
+
+    mapping = _yaml.safe_load(yaml_text)
+    if not isinstance(mapping, dict):
+        return yaml_text
+    has_instruction = bool(re.search(
+        r"持仓|持有|持股|最长|最多|至多|不超过|不得超过|\d+\s*(?:个)?(?:交易日|天|日|周|月|年)后(?:卖出|离场|平仓)",
+        description or "",
+    ))
+    holding = mapping.get("holding")
+    if isinstance(holding, dict) and holding.get("max_holding_days") is not None and not has_instruction:
+        return re.sub(r"(?m)^(\s*max_holding_days\s*:\s*).*$", r"\g<1>0", yaml_text, count=1)
+    if holding is None:
+        mapping["holding"] = {"max_holding_days": 0}
+    elif isinstance(holding, dict) and holding.get("max_holding_days") is None:
+        holding["max_holding_days"] = 0
+    else:
+        return yaml_text
+    return _yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False)
+
+
 def _validate_and_correct(
     raw: str,
     lookup: Callable[[str], set[str]],
+    description: str,
 ) -> dict[str, Any]:
     """一次输出的处理：剥围栏 → YAML 校验 → factor_correction 纠错 → 缺失判定。
 
     返回 {ok, error?, yaml, mapping?, corrections, unresolved, missing}。
     """
-    yaml_text = strip_yaml_fence(raw)
+    yaml_text = _with_default_holding(strip_yaml_fence(raw), description)
+    import yaml as _yaml
+
     validation = validate_yaml(yaml_text)
     if not validation["valid"]:
         return {
@@ -327,8 +354,6 @@ def _validate_and_correct(
             "error": f"LLM 输出的 YAML 未通过策略规格校验：{validation['error']}。可编辑下方草稿修正后使用。",
             "code": "invalid_yaml", "corrections": [], "unresolved": [], "missing": [],
         }
-    import yaml as _yaml
-
     from quant_research_engine.gui.factor_correction import correct_factor_fields
 
     mapping = _yaml.safe_load(yaml_text)
@@ -395,9 +420,9 @@ def compile_nl(
             raw = call_llm(prompt, config, http_post=http_post)
         except Exception as exc:
             return {"ok": False, "code": "llm_error", "error": f"LLM 调用失败：{exc}"}
-        outcome = _validate_and_correct(raw, lookup) if lookup is not None else None
+        outcome = _validate_and_correct(raw, lookup, description) if lookup is not None else None
         if lookup is None:
-            yaml_text = strip_yaml_fence(raw)
+            yaml_text = _with_default_holding(strip_yaml_fence(raw), description)
             validation = validate_yaml(yaml_text)
             if not validation["valid"]:
                 return {

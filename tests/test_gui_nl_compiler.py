@@ -103,6 +103,37 @@ def test_compile_success_roundtrip_with_fence():
     assert "```" not in result["yaml"]
 
 
+def test_compile_defaults_missing_holding_to_unlimited_and_preserves_explicit_days():
+    without_holding = _VALID_YAML.replace("holding:\n  max_holding_days: 5\n", "")
+    result = compile_nl(
+        "RSI 超卖买入，超买卖出",
+        env=_llm_env(),
+        http_post=_http_ok(without_holding),
+        column_lookup=lambda table: {"rsi_14"},
+    )
+    assert result["ok"] is True
+    assert "holding:\n  max_holding_days: 0\n" in result["yaml"]
+
+    explicit = compile_nl(
+        "RSI 超卖买入，超买卖出，最长持仓 5 天",
+        env=_llm_env(),
+        http_post=_http_ok(_VALID_YAML),
+        column_lookup=lambda table: {"rsi_14"},
+    )
+    assert explicit["ok"] is True
+    assert "max_holding_days: 5" in explicit["yaml"]
+
+    invented = compile_nl(
+        "MACD 金叉买入，死叉卖出",
+        env=_llm_env(),
+        http_post=_http_ok(_VALID_YAML.replace("max_holding_days: 5", "max_holding_days: 999")),
+        column_lookup=lambda table: {"rsi_14"},
+    )
+    assert invented["ok"] is True
+    assert "max_holding_days: 0" in invented["yaml"]
+    assert "max_holding_days: 999" not in invented["yaml"]
+
+
 def test_compile_llm_http_error():
     def http_post(url, headers, payload, timeout):
         raise TimeoutError("timed out")
