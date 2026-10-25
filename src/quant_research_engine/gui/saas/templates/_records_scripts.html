@@ -184,6 +184,11 @@ async function load(){
           ? '<span class="opt">——</span>'
           : `<span class="${clsPnL(job.excess_return)}">${fmtPct(job.excess_return)}</span>`;
         const viewLink = done ? `<a class="view-link" href="/saas/jobs/${job.job_id}">查看结果 →</a>` : '';
+        // QRE-SAAS-RESULT-CONTRACT-001：私人历史结果照旧按原权限可见，只加口径标签
+        const contract = job.result_contract;
+        const contractBadge = (done && contract)
+          ? ' <span class="badge ' + (contract.verified ? 'ok' : 'fail') + '" tabindex="0" data-tip="' + escH(contract.tip || '') + '">' + escH(contract.label || '') + '</span>'
+          : '';
         const scBadge = job.showcase
           ? ' <a class="inl" href="/saas/showcase" style="font-size:12px" title="该策略已收录进经典策略展示页，每日收盘后持续跟踪更新">经典策略·跟踪中 →</a>'
           : '';
@@ -191,7 +196,7 @@ async function load(){
           + `<td class="opt">${range}</td>`
           + `<td style="text-align:right">${symbols}</td>`
           + `<td style="text-align:right">${excess}</td>`
-          + `<td><span class="badge ${badgeCls}">${status}</span></td>`
+          + `<td><span class="badge ${badgeCls}">${status}</span>${contractBadge}</td>`
           + `<td>${fmtTime(job.created_at)}</td>`
           + `<td style="text-align:right;white-space:nowrap">${viewLink} <button class="btn-sm btn-danger-outline" data-del="${job.job_id}">删除</button></td>`;
         if (done) tr.addEventListener('click', ev => {

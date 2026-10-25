@@ -138,6 +138,8 @@ smoke 参数派生规则（server 侧）：1 只固定标的（600519.SH）× �
 2. `POST .../result/files`（multipart，带 upload_token）：逐个上传产物文件。
 全部校验通过 → `completed`；缺文件/校验失败 → server 按可重试处理（回队或 fail）。
 
+**结果合同（QRE-SAAS-RESULT-CONTRACT-001，2026-10-25；协议不变）**：worker 请求体**不新增字段**。服务端在接收 `result/meta`（及旧单包 `/result`）时注入 `results.result_contract`：合同版本、`data_until`、两种收益口径（曲线=日收益累乘交集口径剔注入；总收益=初始资金加权）、验证状态。历史行该列为空，由应用层显式例外表归类（58/66 verified、74 未验证），不按时间推断。worker 与引擎零改动。
+
 ### 3.4 `POST /api/worker/jobs/<id>/fail`
 
 ```json

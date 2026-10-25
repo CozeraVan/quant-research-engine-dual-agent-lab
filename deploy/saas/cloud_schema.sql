@@ -170,10 +170,17 @@ CREATE TABLE IF NOT EXISTS results (
     chart_data  JSONB NOT NULL,                   -- 净值曲线/回撤/热力图/归因等前端直接可用
     artifacts   JSONB NOT NULL DEFAULT '[]',      -- [{kind:'excel',oss_key:...,size:...}]
     data_until  DATE,                             -- 数据截止日期（静态快照声明）
+    -- QRE-SAAS-RESULT-CONTRACT-001（P0-1B）：结果合同——版本 / data_until /
+    -- 两种收益口径（日收益累乘曲线 vs 初始资金加权总收益）/ 验证状态。
+    -- 新回传结果由 SaaS 接收层注入；历史行留空，按应用层显式例外表归类
+    -- （58/66 verified、74 未验证），禁止按时间猜测。
+    result_contract JSONB,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_results_user ON results (user_id, created_at DESC);
 ALTER TABLE results ALTER COLUMN user_id DROP NOT NULL;  -- QRE-SAAS-D1D2：游客结果行
+-- 老库幂等自愈（应用层亦懒 ALTER；ECS 上 results 表 owner 是 postgres，需 DBA apply）
+ALTER TABLE results ADD COLUMN IF NOT EXISTS result_contract JSONB;
 
 -- QRE-SAAS-ADMIN-E1E3（后台管理，2026-09-27）：
 -- users 加管理角色与账号状态（role/status 取值由应用层校验，与 tier CHECK 同表风格

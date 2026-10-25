@@ -2,6 +2,43 @@
 
 ## Task ID
 
+QRE-SAAS-RESULT-CONTRACT-001（P0-1B 结果合同版本、口径标签与旧结果隔离）
+
+## Current Status
+
+DONE（2026-10-25 用户接受未验证隔离规则并批准 commit + push + ECS 部署）
+
+## Task Note
+
+- **新结果带 `result_contract`**：版本 `2026-10-25.1`、`data_until`、两种收益口径
+  （曲线=日收益累乘交集口径剔注入；总收益=初始资金加权 Σfinal/Σinitial−1）、
+  验证状态。注入点在 worker 回传接收层（`api_result_meta` / `api_report_result_legacy`），
+  worker 与引擎零改动。
+- **历史不删不改**：`results.result_contract` 可空；历史行零 UPDATE，分类由
+  `LEGACY_RESULT_CONTRACTS` 显式例外表决定——58/66 verified（2026-10-19 修正后人工复核）、
+  74 unverified（price_basis 通过≠收益口径已验证）、其余历史默认未验证。
+  分类函数不接受时间入参（签名被测试锁死），不存在按当前日期动态猜新旧。
+- **公开展示**：`/api/saas/showcase` 与 showcase 公开只读通道只放行 verified；
+  74 从公开可见消失，但 showcase 白名单行、job、产物全部保留，管理台
+  `/api/saas/console/showcase` 仍可见并带未验证原因；属主本人照旧可见自己的 74。
+- **权限语义不变**：默认私有、游客 guest_key 归属、X-User-Id dev 后门、
+  `_require_completed_result` 的 401/404/409 分支均未改（未验证项对匿名/他人返回与
+  未挂白名单相同的响应，不泄露存在性）。
+- **页面**：`job.html` 合同徽标（已验证口径=绿 / 旧口径·未验证=红）+ data-tip 两种口径 +
+  合同版本与数据截止；`showcase.html` 页头与每行已验证徽标；`_records_scripts.html`
+  记录行合同标签。复用现有 badge/tip 组件，无新色相、无新 CSS。
+- **验证**：TDD 先 RED 后 GREEN（21 例新文件 + 2 例 JS harness）；相关 180 passed + 1 skipped；
+  全量 2559 passed + 5 skipped；真实 Chromium 桌面 1280 / 移动 375 各 3 页通过，
+  零 JS error、零横向溢出。证据与详细报告 `.tmp/result-contract/`。
+- **发布**：未 commit/push/部署。ECS 需 DBA apply `deploy/saas/cloud_schema.sql`
+  的 `results.result_contract` 列；worker 不改不动。
+
+---
+
+# Task Handoff
+
+## Task ID
+
 QRE-SAAS-PARAMETER-TIPS-001（回测参数口径与单位提示）
 
 ## Current Status

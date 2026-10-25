@@ -2,6 +2,50 @@
 
 ## Task ID
 
+QRE-SAAS-RESULT-CONTRACT-001（P0-1B）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（实现、全量回归与真实 Chromium 通过；用户接受未验证隔离规则并批准 commit + push + ECS 部署）
+
+## Self-Review Findings
+
+- **数值零改动已核对**：`api_result_meta` / `api_report_result_legacy` 的
+  summary / chart_data / artifacts / data_until 写入语句与原版逐字段一致，只在
+  INSERT 列与 ON CONFLICT 子句上追加 `result_contract`；58/66 的旧行不做任何 UPDATE，
+  测试断言其 `strategy_total_return` 仍为原值。
+- **分类不可被时间污染**：`resolve_result_contract(job_id, stored, data_until)`
+  无 created_at/now 入参；新增用例同时锁签名与「新播种无合同=未验证」。
+- **缺列方向安全**：`_ensure_result_contract_column` ALTER 失败 → 不写该列 →
+  读取按例外表解析，最坏情况是「新结果也按未验证处理」，不会把历史结果误放行成
+  verified（公开侧只可能更保守）。
+- **权限语义未变**：只改 `_load_job_public`（showcase 公开只读通道）加 verified 判定，
+  属主/游客/他人/匿名四条路径行为与改动前一致，未验证项对匿名/他人给出与未挂白名单
+  相同的 401/404。
+- **前端无新增设计资产**：徽标复用 `.badge.ok` / `.badge.fail`，提示复用
+  `data-tip` + `LabUI.helpTips`，未加 CSS、未加色相、未改 12_UI_STYLE_GUIDE 约定。
+- **遗留（不阻塞）**：管理台 `console.html` 未展示合同徽标（API 已带数据，留 P1 UI 精修）；
+  ECS 线上库需 DBA apply 新列；例外表暂只收录 58/66/74。
+
+## Verification Commands
+
+```
+.venv/bin/pytest tests/test_saas_result_contract.py -q          # 21 passed
+.venv/bin/pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py   tests/test_gui_saas_console.py tests/test_showcase_roller.py   tests/test_saas_help_copy.py tests/test_saas_parameter_tips.py -q   # 180 passed, 1 skipped
+.venv/bin/pytest tests/ -q --ignore=tests/data_test             # 2559 passed, 5 skipped
+PLAYWRIGHT_BROWSERS_PATH=.tmp/ms-playwright .tmp/browser-venv/bin/python   .tmp/result-contract/browser_audit.py                          # 1280/375 × 3 页全通过
+```
+
+---
+
+# Review Report
+
+## Task ID
+
 QRE-SAAS-PARAMETER-TIPS-001
 
 ## Reviewer

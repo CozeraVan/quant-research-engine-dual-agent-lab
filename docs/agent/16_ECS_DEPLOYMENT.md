@@ -126,6 +126,7 @@ ECS 侧专属待办（隶属阶段 C）：
   代理置空/QRE_MARKET_DB_URL 新密码；用户级 unit+env 退役为 ~/.config/*.retired；
   ECS workers 表 home-pc 僵尸行已清。收敛后端到端冒烟 job#35 completed(attempts=1)。
   **不要再并存第二套 worker。**
+- [ ] **apply `deploy/saas/cloud_schema.sql` 新列（P0-1B 前置，未执行）**：`ALTER TABLE results ADD COLUMN IF NOT EXISTS result_contract JSONB;`（QRE-SAAS-RESULT-CONTRACT-001）。`results` 表 owner 是 postgres，app 账号 ALTER 会 must be owner——必须 DBA/psql 以 postgres 身份执行；未 apply 时 SaaS 降级为不写该列、按应用层显式例外表解析（58/66 verified、74 未验证），服务可用但新结果不带合同版本。worker 无需改动、无需重启。
 - [ ] 结果产物磁盘水位监控（40GB ESSD，结果只留元数据+图表 JSON，大文件走 OSS）
 - [ ] 落地页页脚备案号占位替换为正式号：湘ICP备2026040383号-1（改 `deploy/landing/index.html` 后 scp 同步，见第 5 节）
 

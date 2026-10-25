@@ -36,6 +36,7 @@ from flask import Flask, g, jsonify, render_template, request, session
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
+from quant_research_engine.gui.saas.result_contract import build_result_contract, contract_view
 from quant_research_engine.gui.saas.symbol_norm import (
     normalize_ts_codes,
     resolve_ts_code,
@@ -461,6 +462,46 @@ def _ensure_worker_configs(engine: Engine) -> None:
                 "updated_by TEXT)"
             ))
     _WORKER_CONFIGS_ENSURED.add(key)
+
+
+# QRE-SAAS-RESULT-CONTRACT-001：结果合同列（P0-1B）。新回传结果写入
+# result_contract（版本/data_until/两种收益口径/验证状态）；历史行留空，按
+# result_contract.LEGACY_RESULT_CONTRACTS 显式例外表归类，不按时间猜测。
+_RESULT_CONTRACT_ENSURED: set[int] = set()
+_RESULT_CONTRACT_COL: dict[int, bool] = {}
+
+
+def _ensure_result_contract_column(engine: Engine) -> bool:
+    """尽力补齐 results.result_contract，返回该列当前是否可用。
+
+    ECS 老库 results 表 owner 是 postgres，app 账号 ALTER 会报 must be owner
+    （同 workers 表踩坑）：先查 information_schema，缺列才 ALTER；ALTER 失败
+    返回 False，调用方降级——不写该列，读取时按显式例外表解析（安全方向：
+    未知结果一律未验证，不会因缺列把历史结果误放行成 verified）。
+    """
+    key = id(engine)
+    if key in _RESULT_CONTRACT_ENSURED:
+        return _RESULT_CONTRACT_COL.get(key, False)
+    ok = False
+    try:
+        with engine.begin() as conn:
+            existing = {
+                r[0]
+                for r in conn.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'results' AND column_name = 'result_contract'"
+                    )
+                )
+            }
+            if not existing:
+                conn.execute(text("ALTER TABLE results ADD COLUMN IF NOT EXISTS result_contract JSONB"))
+            ok = True
+    except Exception:
+        ok = False
+    _RESULT_CONTRACT_ENSURED.add(key)
+    _RESULT_CONTRACT_COL[key] = ok
+    return ok
 
 
 # CR-2026-10-04 模块一：策略资产化——strategies 加 entry_mode/wizard_state
@@ -960,16 +1001,23 @@ def create_saas_app() -> Flask:
 
     @app.get("/api/saas/showcase")
     def api_showcase_list() -> Any:
-        """经典策略公开展示列表（无需登录）。返回白名单 job 的摘要指标。"""
+        """经典策略公开展示列表（无需登录）。返回白名单 job 的摘要指标。
+
+        QRE-SAAS-RESULT-CONTRACT-001：只公开**结果合同 verified** 的条目；
+        未验证条目仅从公开列表消失——showcase 白名单行、job 与产物一律不动
+        （管理台 /api/saas/console/showcase 仍可见并带未验证原因）。
+        """
         engine = _get_engine(app)
         _ensure_signal_tables(engine)
+        contract_col = (", r.result_contract AS result_result_contract"
+                        if _ensure_result_contract_column(engine) else "")
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
                     "SELECT sc.job_id, sc.title, sc.subtitle, sc.sort_order, "
                     "s.name AS strategy_name, j.created_at, j.params, "
-                    "r.summary, r.chart_data, r.data_until "
-                    "FROM showcase sc "
+                    "r.summary, r.chart_data, r.data_until" + contract_col +
+                    " FROM showcase sc "
                     "JOIN jobs j ON j.id = sc.job_id "
                     "JOIN strategies s ON s.id = j.strategy_id "
                     "LEFT JOIN results r ON r.job_id = j.id "
@@ -979,6 +1027,11 @@ def create_saas_app() -> Flask:
             ).mappings().all()
             items = []
             for row in rows:
+                # 显式合同 / 例外表判定；未验证直接跳过（不删白名单行、不删产物）
+                contract = contract_view(row["job_id"], row.get("result_result_contract"),
+                                         row["data_until"])
+                if not contract["verified"]:
+                    continue
                 metrics = ((row["chart_data"] or {}).get("metrics") or {})
                 summary = row["summary"] or {}
                 params = row["params"] or {}
@@ -1015,6 +1068,7 @@ def create_saas_app() -> Flask:
                     "data_until": data_until,
                     "tracking_since": tracking_since,
                     "tracking_days": len(daily_rows),
+                    "result_contract": dict(contract, data_until=data_until),
                 })
         return jsonify({"ok": True, "items": items})
 
@@ -2746,14 +2800,23 @@ def create_saas_app() -> Flask:
             chart_data = data.get("chart_data") or {}
             files = data.get("files") or []
             upload_token = secrets.token_urlsafe(24)
+            # QRE-SAAS-RESULT-CONTRACT-001：在 worker 回传接收层注入结果合同
+            # （版本 / data_until / 两种收益口径 / 验证状态），不改 worker 与引擎。
+            contract = build_result_contract(data_until=data.get("data_until"))
+            contract_cols = ", result_contract" if _ensure_result_contract_column(engine) else ""
+            contract_vals = ", CAST(:contract AS jsonb)" if contract_cols else ""
+            contract_set = (", result_contract = EXCLUDED.result_contract"
+                            if contract_cols else "")
             conn.execute(
                 text(
-                    "INSERT INTO results (job_id, user_id, summary, chart_data, artifacts, data_until) "
+                    "INSERT INTO results (job_id, user_id, summary, chart_data, artifacts, "
+                    "data_until" + contract_cols + ") "
                     "VALUES (:jid, :uid, CAST(:summary AS jsonb), CAST(:chart AS jsonb), "
-                    "CAST(:artifacts AS jsonb), :data_until) "
+                    "CAST(:artifacts AS jsonb), :data_until" + contract_vals + ") "
                     "ON CONFLICT (job_id) DO UPDATE SET "
                     "summary = EXCLUDED.summary, chart_data = EXCLUDED.chart_data, "
                     "artifacts = EXCLUDED.artifacts, data_until = EXCLUDED.data_until"
+                    + contract_set
                 ),
                 {
                     "jid": job_id,
@@ -2762,6 +2825,7 @@ def create_saas_app() -> Flask:
                     "chart": json.dumps(chart_data),
                     "artifacts": json.dumps(files),
                     "data_until": data.get("data_until"),
+                    "contract": json.dumps(contract),
                 },
             )
             if not files:
@@ -2918,14 +2982,22 @@ def create_saas_app() -> Flask:
             if job["status"] not in ("leased", "running", "uploading") or job["leased_by"] != worker_id:
                 return jsonify({"ok": False, "error": "任务非当前 worker 持有"}), 409
             if status in ("done", "completed"):
+                # QRE-SAAS-RESULT-CONTRACT-001：旧单包回传同样在接收层注入合同
+                contract = build_result_contract(data_until=data.get("data_until"))
+                contract_cols = ", result_contract" if _ensure_result_contract_column(engine) else ""
+                contract_vals = ", CAST(:contract AS jsonb)" if contract_cols else ""
+                contract_set = (", result_contract = EXCLUDED.result_contract"
+                                if contract_cols else "")
                 conn.execute(
                     text(
-                        "INSERT INTO results (job_id, user_id, summary, chart_data, artifacts, data_until) "
+                        "INSERT INTO results (job_id, user_id, summary, chart_data, artifacts, data_until"
+                        + contract_cols + ") "
                         "VALUES (:jid, :uid, CAST(:summary AS jsonb), CAST(:chart AS jsonb), "
-                        "CAST(:artifacts AS jsonb), :data_until) "
+                        "CAST(:artifacts AS jsonb), :data_until" + contract_vals + ") "
                         "ON CONFLICT (job_id) DO UPDATE SET "
                         "summary = EXCLUDED.summary, chart_data = EXCLUDED.chart_data, "
                         "artifacts = EXCLUDED.artifacts, data_until = EXCLUDED.data_until"
+                        + contract_set
                     ),
                     {
                         "jid": job_id, "uid": job["user_id"],
@@ -2933,6 +3005,7 @@ def create_saas_app() -> Flask:
                         "chart": json.dumps(data.get("chart_data") or {}),
                         "artifacts": json.dumps(data.get("artifacts") or []),
                         "data_until": data.get("data_until"),
+                        "contract": json.dumps(contract),
                     },
                 )
                 conn.execute(
@@ -2967,16 +3040,28 @@ def create_saas_app() -> Flask:
         "s.wizard_state AS strategy_wizard_state, s.created_at AS strategy_created_at"
     )
 
+    def _result_cols(engine: Engine) -> str:
+        """results 投影列；result_contract 列不可用（ECS 老库未 apply schema）时降级省略，
+        读取侧按显式例外表解析，缺列永不等于 verified。"""
+        cols = ("r.summary AS result_summary, r.chart_data AS result_chart_data, "
+                "r.artifacts AS result_artifacts, r.data_until AS result_data_until")
+        if _ensure_result_contract_column(engine):
+            cols += ", r.result_contract AS result_result_contract"
+        return cols
+
+    def _contract_of(row: Any) -> dict[str, Any]:
+        """行 → 合同视图（job_id + 已存合同；无列/无值时走显式例外表）。"""
+        return _jsonable(contract_view(row["id"], row.get("result_result_contract"),
+                                       row.get("result_data_until")))
+
     def _load_job_for_user(job_id: int, uid: int) -> Any:
         """取 job+strategy+result；非本人/不存在返回 None（不暴露存在性）。"""
         engine = _get_engine(app)
         with engine.connect() as conn:
             return conn.execute(
                 text(
-                    "SELECT j.*, " + _STRATEGY_COLS + ", "
-                    "r.summary AS result_summary, r.chart_data AS result_chart_data, "
-                    "r.artifacts AS result_artifacts, r.data_until AS result_data_until "
-                    "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "SELECT j.*, " + _STRATEGY_COLS + ", " + _result_cols(engine) +
+                    " FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
                     "LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE j.id = :id AND j.user_id = :uid"
                 ),
@@ -2989,10 +3074,8 @@ def create_saas_app() -> Flask:
         with engine.connect() as conn:
             return conn.execute(
                 text(
-                    "SELECT j.*, " + _STRATEGY_COLS + ", "
-                    "r.summary AS result_summary, r.chart_data AS result_chart_data, "
-                    "r.artifacts AS result_artifacts, r.data_until AS result_data_until "
-                    "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "SELECT j.*, " + _STRATEGY_COLS + ", " + _result_cols(engine) +
+                    " FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
                     "LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE j.id = :id AND j.user_id IS NULL AND j.guest_key = :gk"
                 ),
@@ -3000,21 +3083,23 @@ def create_saas_app() -> Flask:
             ).mappings().first()
 
     def _load_job_public(job_id: int) -> Any:
-        """showcase 公开只读通道：不看归属，仅当 job 在 showcase 白名单且激活时放行。
-        调用方需先查 showcase 表；此处只做取行。"""
+        """showcase 公开只读通道：不看归属，仅当 job 在 showcase 白名单且激活、
+        且结果合同为 verified 时放行（P0-1B）。调用方需先查 showcase 表；
+        此处只做取行。"""
         engine = _get_engine(app)
         with engine.connect() as conn:
-            return conn.execute(
+            row = conn.execute(
                 text(
-                    "SELECT j.*, " + _STRATEGY_COLS + ", "
-                    "r.summary AS result_summary, r.chart_data AS result_chart_data, "
-                    "r.artifacts AS result_artifacts, r.data_until AS result_data_until "
-                    "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "SELECT j.*, " + _STRATEGY_COLS + ", " + _result_cols(engine) +
+                    " FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
                     "LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE j.id = :id"
                 ),
                 {"id": job_id},
             ).mappings().first()
+        if row is not None and not _contract_of(row)["verified"]:
+            return None
+        return row
 
     def _is_showcase_job(job_id: int) -> bool:
         engine = _get_engine(app)
@@ -3048,7 +3133,9 @@ def create_saas_app() -> Flask:
 
     def _require_completed_result(job_id: int) -> Any:
         """返回 (row, error_response)。未完成 409；不存在/非本人 404。
-        showcase 白名单 job 对任何人放行只读（g.showcase_readonly=True）；
+        showcase 白名单 job 对任何人放行只读（g.showcase_readonly=True），
+        但 P0-1B 起仅当结果合同为 verified——未验证的经典策略不再公开可见
+        （白名单行/job/产物不动，本人仍按原权限可见）；
         复用此入口的写端点必须显式拒绝 showcase_readonly。"""
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
@@ -3088,11 +3175,14 @@ def create_saas_app() -> Flask:
         except ValueError:
             return jsonify({"ok": False, "error": "page/page_size 须为整数"}), 400
         with engine.connect() as conn:
+            contract_col = (", r.result_contract AS result_result_contract"
+                            if _ensure_result_contract_column(engine) else "")
             rows = conn.execute(
                 text(
                     "SELECT j.id, j.kind, j.status, j.created_at, j.params, "
-                    "s.name AS strategy_name, r.summary, r.chart_data, r.data_until "
-                    "FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "s.name AS strategy_name, r.summary, r.chart_data, r.data_until"
+                    + contract_col +
+                    " FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
                     "LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE j.user_id = :uid AND j.kind = 'full' "
                     "ORDER BY j.created_at DESC"
@@ -3134,6 +3224,9 @@ def create_saas_app() -> Flask:
                 "data_until": _jsonable(row["data_until"]),
                 "created_at": _jsonable(row["created_at"]),
                 "showcase": row["id"] in showcase_ids,
+                # QRE-SAAS-RESULT-CONTRACT-001：私人历史结果照旧按原权限可见，只加口径标签
+                "result_contract": _jsonable(contract_view(
+                    row["id"], row.get("result_result_contract"), row["data_until"])),
             })
         if sort == "excess_return":
             items.sort(key=lambda x: (x["excess_return"] is None, x["excess_return"]),
@@ -3186,7 +3279,9 @@ def create_saas_app() -> Flask:
                             "created_at": row["strategy_created_at"],
                         }),
                         "summary": _jsonable(row["result_summary"]),
-                        "data_until": _jsonable(row["result_data_until"])})
+                        "data_until": _jsonable(row["result_data_until"]),
+                        # QRE-SAAS-RESULT-CONTRACT-001：合同版本/口径/验证状态随摘要增量返回
+                        "result_contract": _contract_of(row)})
 
     @app.get("/api/results/<int:job_id>/chart-data")
     def api_result_chart_data(job_id: int) -> Any:
@@ -3597,25 +3692,39 @@ def create_saas_app() -> Flask:
     # --- N1b/N1c 权限管理：tier_policies 读改（角色→次数/标的/区间上限，阶梯留空可扩展） ---
     @app.get("/api/saas/console/showcase")
     def api_console_showcase_list() -> Any:
-        """QRE-SAAS-SHOWCASE 管理：全部条目（含未激活）+ 策略名/任务状态/日更进度。"""
+        """QRE-SAAS-SHOWCASE 管理：全部条目（含未激活）+ 策略名/任务状态/日更进度。
+
+        QRE-SAAS-RESULT-CONTRACT-001：每条带回 result_contract（版本/验证状态/原因），
+        让运营能看出哪些条目因未验证而被公开列表隐藏（条目本身不删）。
+        """
         engine = _get_engine(app)
         _, denied = _require_admin(app, engine)
         if denied is not None:
             return denied
         _ensure_signal_tables(engine)
+        contract_col = (", r.result_contract AS result_result_contract, r.data_until AS result_data_until"
+                        if _ensure_result_contract_column(engine) else "")
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
                     "SELECT sc.job_id, sc.title, sc.subtitle, sc.sort_order, sc.is_active, "
-                    "sc.created_at, s.name AS strategy_name, j.status AS job_status, "
-                    "(SELECT max(d.trade_date) FROM showcase_daily d WHERE d.job_id = sc.job_id) AS last_daily "
+                    "sc.created_at, s.name AS strategy_name, j.status AS job_status"
+                    + contract_col +
+                    ", (SELECT max(d.trade_date) FROM showcase_daily d WHERE d.job_id = sc.job_id) AS last_daily "
                     "FROM showcase sc "
                     "JOIN jobs j ON j.id = sc.job_id "
                     "JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = sc.job_id "
                     "ORDER BY sc.sort_order, sc.job_id"
                 )
             ).mappings().all()
-        return jsonify({"ok": True, "items": _jsonable([dict(r) for r in rows])})
+        items = []
+        for r in rows:
+            item = dict(r)
+            item["result_contract"] = contract_view(
+                r["job_id"], r.get("result_result_contract"), r.get("result_data_until"))
+            items.append(item)
+        return jsonify({"ok": True, "items": _jsonable(items)})
 
     @app.post("/api/saas/console/showcase")
     def api_console_showcase_add() -> Any:

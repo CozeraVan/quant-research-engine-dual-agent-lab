@@ -137,6 +137,7 @@ function createHarness(fetchImpl){
     setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
     clearTimeout(id){ timers.delete(id); },
     renderMeta(){}, renderStrategyInfo(){}, renderMetrics(){}, renderMain(){}, empty(){},
+    renderContract(){},
     initReplay(){}, initResultActions(){}, renderFees(){}, loadRisk(){}, renderRisk(){},
     renderAttribution(){ calls.attribution += 1; },
     mountReplay(){ return {destroy(){}}; },
@@ -325,6 +326,38 @@ async function settle(h){
   await vm.runInContext('load()', empty.context);
   assert.equal(empty.calls.requests.filter(r => r.url === '/api/saas/strategies').length, 1, '后续刷新不得重复初始化策略库');
   assert.equal(empty.calls.requests.filter(r => r.url === '/api/saas/factor-requests').length, 1);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_records_rows_carry_contract_label(self, client):
+        """QRE-SAAS-RESULT-CONTRACT-001：私人历史结果照可见，行内带口径验证标签。"""
+        html = client.get("/saas/").get_data(as_text=True)
+        _run_records_js(html, r"""
+(async () => {
+  const items = [
+    {job_id: 11, status: 'completed', strategy_name: '新结果', excess_return: 0.1,
+     result_contract: {verified: true, label: '已验证口径', version: '2026-10-25.1',
+                       tip: '收益曲线 = 日收益累乘；总收益率 = 初始资金加权总收益'}},
+    {job_id: 74, status: 'completed', strategy_name: '旧结果', excess_return: null,
+     result_contract: {verified: false, label: '旧口径·未验证', version: 'legacy',
+                       tip: '收益曲线 = 日收益累乘；总收益率 = 初始资金加权总收益'}},
+    {job_id: 12, status: 'running', strategy_name: '在跑'},
+  ];
+  const h = createRecordsHarness(async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    return recordsResponse(200, {ok: true, total: items.length, items});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('recordsInitialLoad.catch(() => {})', h.context);
+  const body = recordsText(h.elements['jobs-tbody']);
+  assert.ok(body.includes('已验证口径'), '已完成且已验证必须带正向标签');
+  assert.ok(body.includes('旧口径·未验证'), '历史未验证结果必须带警示标签');
+  assert.ok(body.includes('badge ok') && body.includes('badge fail'), '两种状态配色要可区分');
+  assert.ok(body.includes('data-tip="收益曲线 = 日收益累乘'), '标签必须挂口径说明');
+  assert.equal(h.calls.access, 0);
+  assert.equal(h.calls.failure, 0);
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
@@ -1283,6 +1316,35 @@ function pendingResponse(options){
             "tagResp.status === 404",
         ):
             assert marker in html
+
+    def test_job_contract_badge_labels_both_return_bases(self, client):
+        """QRE-SAAS-RESULT-CONTRACT-001：合同徽标可见标签 + data-tip 区分两种收益口径。"""
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        _run_job_js(html, r"(function renderMetrics\(m\)\{[\s\S]*?\n\})\nfunction renderMeta", r"""
+const h = createHarness(async () => response(200, {ok: true}));
+vm.runInContext(source, h.context);
+const cases = [
+  {verified: true, label: '已验证口径', version: '2026-10-25.1', data_until: '2026-02-27',
+   tip: '收益曲线 = 日收益累乘；总收益率 = 初始资金加权总收益', note: '已人工复核'},
+  {verified: false, label: '旧口径·未验证', version: 'legacy', data_until: null,
+   tip: '收益曲线 = 日收益累乘；总收益率 = 初始资金加权总收益', note: '历史结果未带结果合同'},
+];
+(async () => {
+  for (const c of cases){
+    vm.runInContext('renderContract(' + JSON.stringify(c) + ')', h.context);
+    const badge = h.elements['contract-badge'];
+    assert.equal(badge.className, 'badge ' + (c.verified ? 'ok' : 'fail'), '徽标配色随验证状态');
+    assert.equal(badge.textContent, c.label, '徽标文字必须可见可读');
+    assert.equal(badge['data-tip'], c.tip, '徽标挂 data-tip 走统一提示组件');
+    const note = h.elements['contract-note'].textContent;
+    assert.ok(note.includes(c.version), note);
+    assert.ok(note.includes(c.note), note);
+    assert.equal(h.elements['box-contract'].style.display, '', '有合同必须显示');
+  }
+  vm.runInContext('renderContract(null)', h.context);
+  assert.equal(h.elements['box-contract'].style.display, 'none', '无合同整块隐藏');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
 
     def test_job_completed_resource_failures_pause_after_three_rounds(self, client):
         html = client.get("/saas/jobs/1").get_data(as_text=True)

@@ -2,6 +2,14 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
+### 2026-10-25 QRE-SAAS-RESULT-CONTRACT-001 IMPLEMENTED（待用户验收）
+
+P0-1B 结果合同已落地。**单一权威** `src/quant_research_engine/gui/saas/result_contract.py`：合同版本 `2026-10-25.1`、两种收益口径文案（曲线=日收益累乘交集口径剔注入；总收益=初始资金加权 Σfinal/Σinitial−1）、验证状态、**显式例外表**（58/66 verified、74 unverified、其余历史默认未验证）；分类函数无时间入参（签名被测试锁死），不存在按当前日期动态猜新旧。**注入点在 worker 回传接收层**（`api_result_meta` / `api_report_result_legacy`），worker/引擎零改动；`results.result_contract` 可空 JSONB + 懒自愈 ALTER + `cloud_schema.sql` 同步。**API 只增字段**（`/api/results`、`/api/results/<id>/summary`、`/api/saas/showcase`、`/api/saas/console/showcase`）。**公开展示只放行 verified**：`/api/saas/showcase` 与 showcase 公开只读通道对 74 关闭（匿名/他人得到与未挂白名单相同的 401/404），但 showcase 白名单行、job、产物全部保留，属主本人照旧可见自己的 74；默认私有、游客 guest_key、dev 后门、409/404 语义均未变。**前端**复用 badge + data-tip：`job.html` 合同徽标（已验证口径=绿 / 旧口径·未验证=红）+ 合同版本与数据截止 + 两种口径提示；`showcase.html` 页头与每行已验证徽标；`_records_scripts.html` 记录行合同标签。TDD 先 RED 后 GREEN：新测试文件 21 例 + `test_gui_saas_pages.py` +2 例（含 harness `renderContract` stub 修复 3 例旧失败）；相关 180 passed + 1 skipped；**全量 `pytest tests/ --ignore=tests/data_test` → 2559 passed + 5 skipped**。真实 Chromium 桌面 1280 与移动 375 各 3 页通过（showcase 只列 verified 且 74 不公开、新结果/74 徽标与口径提示可见、零 JS error、零横向溢出），证据 `.tmp/result-contract/`。**未 commit、未 push、未部署 ECS、未跑真实回测、未回填历史数值**；ECS 需 DBA apply `cloud_schema.sql` 新列，worker 不改不动。详细报告 `.tmp/result-contract/report.md`。
+
+# Agent State
+
+This file is the source of truth for single-agent workflow recovery.
+
 ### 2026-10-25 QRE-SAAS-FACTOR-PICKER-MODAL DONE（待用户验收）
 
 自选因子条件行的三个堆叠下拉已改为「当前因子选择按钮 + 三栏弹窗 + 搜索」。`.wz-left`/`.wz-rfield` select 降级为隐藏数据字段但仍是唯一值来源，YAML、`usedFactors()`、`readGroup()`、`snapshotWzArea()`、固定值切换、策略还原、price basis 归一零改动；弹窗复用 `FACTOR_OPTIONS`/`factorGroups()`/`factorSubs()`，不新增 API 与依赖。TDD 先 RED 后 GREEN；真实 Chromium 桌面 1280 与移动 375 共 64/64 项通过（三级选择、搜索/清空/空态、连续三次开关、Esc/遮罩/关闭按钮、焦点返回与 Tab 焦点锁、按钮与 YAML 一致、固定值、条件增删、AND/OR、零 JS error、零横向溢出）。目标 10 passed、相关 242 passed、全量 2474 passed + 5 skipped；证据 `.tmp/factor-picker-modal/`。已部署 ECS（仅 new.html + lab-theme.css，重启 qre-saas，未重启 worker，未部署测试/文档），备份 `/tmp/qre-factor-picker-pre-20261025-124220/`，SHA256 与公网 200/弹窗标记已核对。**未 commit、未 push**，等用户实机验收后由用户批准提交。
@@ -44,11 +52,18 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 ## Current Phase
 
-DONE（2026-10-25：QRE-SAAS-PARAMETER-TIPS-001 用户批准，本地 commit + ECS 部署，不 push）
+IMPLEMENTING（2026-10-25：P0-1B 用户批准，commit + push + ECS 部署；下一步 P0-2 权限安全）
 
 ## Current Task
 
-QRE-SAAS-PARAMETER-TIPS-001（2026-10-25）：全部基础/高级参数口径和单位提示已完成；桌面/移动各 14 项真实 Chromium 通过，全量 2536 passed + 5 skipped，未创建回测。实现 `6291674` 本地提交（不 push）；ECS 已备份并同步 new.html，`qre-saas` active，公网参数提示生效，未重启 worker。
+见 `14_LAUNCH_ROADMAP.md` §11（公测）与 §11.7（未来整体上云）。顺序：
+1. P0-1 核查 price_basis 与收益口径，历史未验证结果隔离/打标，经典策略仅展示验证项。
+2. P0-2 测试账号核查、结果端点 IDOR、游客归属加固；主动分享 P1。
+3. P0-3 小样本后受控容量实测、worker 离线降级、磁盘/保留/备份恢复。
+4. P1 首次成功路径、NL A2/A3、帮助中心/只读分享、移动 Chromium 与运营指标。
+5. 20–50 人灰度，按成功率和 P95 反馈修正并测量驱动扩容。
+6. 未来整体上云：home PC 当前保持数据中心+主 worker；推广后迁移数据库/引擎/worker，重点为全量+增量迁移、云端对账、同 region 数据传输、影子运行与回滚。
+7. **第四入口外部 AI Agent API 最后**，方案见 `docs/superpowers/specs/2026-10-25-external-agent-api-brainstorm.md`，未启动。
 
 DATA-REBUILT-2026-10-11 **数据侧已全部完成**（2026-10-12 10:45 链条收官）：
 - 分钟线入库 `public.stock_minute_1m` 4313 天全量（TimescaleDB 压缩已开）；WSL 侧 /home/van/mindata CSV（324G）待用户确认后删除

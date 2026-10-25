@@ -2,6 +2,40 @@
 
 ## Task ID
 
+QRE-SAAS-RESULT-CONTRACT-001（P0-1B 结果合同版本、口径标签与旧结果隔离）
+
+## Implementation Summary
+
+新增 `src/quant_research_engine/gui/saas/result_contract.py`（结果合同唯一权威：版本
+`2026-10-25.1`、两种收益口径文案、验证状态、显式例外表 58/66=verified、74=unverified、
+其余历史默认未验证；分类函数无时间入参）。在 worker 回传接收层
+`app.py::api_result_meta` / `api_report_result_legacy` 注入 `result_contract`
+（`results.result_contract` JSONB 懒自愈列，`cloud_schema.sql` 同步）。API 只增字段：
+`/api/results/<id>/summary`、`/api/results`、`/api/saas/showcase`、
+`/api/saas/console/showcase`。`/api/saas/showcase` 与 showcase 公开只读通道
+（`_load_job_public`）只放行 verified；白名单行/job/产物不动，属主权限不变。
+前端复用 badge + data-tip：`job.html` 合同徽标与两种口径提示、`showcase.html`
+已验证徽标与口径说明、`_records_scripts.html` 记录行合同标签。
+
+**测试**：`tests/test_saas_result_contract.py` 21 例（RED→GREEN）+
+`tests/test_gui_saas_pages.py` +2 例（JS harness，含 `renderContract` stub 修复 3 例旧失败）；
+相关套件 180 passed + 1 skipped；全量 `pytest tests/ --ignore=tests/data_test`
+→ **2559 passed + 5 skipped**。真实 Chromium 桌面 1280 / 移动 375 各 3 页通过
+（专用临时库 + 8099 临时 staging，验收后已清理），证据 `.tmp/result-contract/`。
+
+## Release Status
+
+**未 commit / 未 push / 未部署 ECS / 未跑真实回测 / 未回填历史数值**，等主 Agent 与用户验收。
+ECS 上线需先由 DBA apply `deploy/saas/cloud_schema.sql`（app 账号非 owner，ALTER 会
+must be owner）；未 apply 也能启动（降级不写该列、按例外表解析，74 仍不公开）。
+worker 无需改动。详细报告 `.tmp/result-contract/report.md`。
+
+---
+
+# Coding Handoff
+
+## Task ID
+
 QRE-SAAS-PARAMETER-TIPS-001（回测参数口径与单位提示）
 
 ## Implementation Summary

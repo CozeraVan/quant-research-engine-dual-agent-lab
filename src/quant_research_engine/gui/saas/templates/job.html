@@ -17,6 +17,13 @@
   <div id="result-area" class="hidden">
     <div class="guest-strip" id="guest-result-note" style="display:none;border-radius:8px;margin-bottom:12px">游客结果次日清空 —— <a class="inl" href="/saas/login">注册后可永久保存记录 / 跑全市场回测 →</a></div>
 
+    <!-- QRE-SAAS-RESULT-CONTRACT-001（P0-1B）：结果合同可见标签——验证状态 + 数据截止；
+         曲线与总收益率是两种口径，徽标 data-tip 一次讲清，不让两者看似矛盾 -->
+    <div class="chart-box" id="box-contract" style="display:none;padding:12px 16px">
+      <span class="badge" id="contract-badge" tabindex="0" data-tip="" aria-label="结果合同验证状态说明">—</span>
+      <span class="opt" id="contract-note" style="margin-left:8px;font-size:12.5px"></span>
+    </div>
+
     <!-- QRE-SAAS-JOB-STRATEGY-CARD：策略信息折叠卡（默认折叠，一行摘要 = 策略名 + 入口类型 + 创建时间） -->
     <div class="chart-box" id="box-strategy" style="display:none">
       <button class="sec-toggle" id="stg-toggle" style="margin-top:0">策略信息　<span class="opt" id="stg-summary"></span></button>
@@ -26,7 +33,7 @@
     <div class="metric-strip" id="metric-strip"></div>
 
     <div class="chart-box" id="box-main">
-      <div class="chart-title">策略收益 vs 基准指数 <button type="button" class="tip-trigger" data-tip="累计收益率以全期起点为 0%；拖动下方滑块或图上滚轮缩放区间。" aria-label="收益曲线说明">?</button>
+      <div class="chart-title">策略收益 vs 基准指数 <button type="button" class="tip-trigger" data-tip="曲线为日收益累乘口径（交集口径、剔除新股注资）的累计收益率，起点 0%；与上方「总收益率」（初始资金加权）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
         <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button>
         <button class="btn-sm hidden" id="btn-replay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
       <div class="bench-bar" id="bench-bar">基准：</div>
@@ -141,12 +148,26 @@ function renderMetrics(m){
   const strip = document.getElementById('metric-strip');
   if (!m){ strip.innerHTML = ''; return; }
   strip.innerHTML =
-    card('总收益率', pct(m.total_return ?? m.strategy_total_return), cls(m.total_return ?? m.strategy_total_return), '回测区间内策略累计净收益，相对初始资金口径；批量全市场按资金加权汇总。') +
-    card('年化收益', pct(m.annual_return), cls(m.annual_return), '全期总收益按回测起止区间几何年化：(1+总收益)^(1/年数)−1') +
+    card('总收益率', pct(m.total_return ?? m.strategy_total_return), cls(m.total_return ?? m.strategy_total_return), '初始资金加权总收益：Σ期末权益/Σ初始资金−1，与成交净盈亏、profit_factor 直接勾稽；批量全市场按资金加权汇总。') +
+    card('年化收益', pct(m.annual_return), cls(m.annual_return), '由初始资金加权总收益按回测起止区间几何年化：(1+总收益)^(1/年数)−1') +
     card('超额收益·vs持有不动', pct(m.excess_return), cls(m.excess_return), '策略全期总收益 − 同期买入并持有这些股票的收益；负值 = 跑输持有不动') +
     card('夏普比率', (m.sharpe == null ? '—' : Number(m.sharpe).toFixed(2)), cls(m.sharpe), '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
     card('最大回撤', pct(m.max_drawdown), 'neg', '净值从历史高点到随后低点的最大跌幅。') +
     card('胜率', pct(m.win_rate), cls(m.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。');
+}
+// QRE-SAAS-RESULT-CONTRACT-001：结果合同徽标（版本 / 数据截止 / 两种收益口径 / 验证状态）
+function renderContract(c){
+  const box = document.getElementById('box-contract');
+  if (!box) return;
+  if (!c){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  const badge = document.getElementById('contract-badge');
+  badge.className = 'badge ' + (c.verified ? 'ok' : 'fail');
+  badge.textContent = c.label || (c.verified ? '已验证口径' : '旧口径·未验证');
+  badge.setAttribute('data-tip', c.tip || '');
+  document.getElementById('contract-note').textContent =
+    (c.note ? c.note + '　' : '') + '合同版本 ' + (c.version || '—') +
+    '　数据截止 ' + (c.data_until || '未声明');
 }
 function renderMeta(meta, dataUntil){
   const el = document.getElementById('meta-chips');
@@ -966,6 +987,7 @@ async function poll(){
     renderMeta(chart.meta, data.data_until);
     renderStrategyInfo(data.strategy);
     renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));
+    renderContract(data.result_contract);
     if (chart.dates && chart.equity) renderMain(chart);
     else empty('chart-main');
     initReplay(chart);

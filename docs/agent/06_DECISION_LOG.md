@@ -1,3 +1,33 @@
+### 2026-10-25: 结果合同版本、显式例外表与公开展示门禁（P0-1B）
+
+- Decision: 新增 `gui/saas/result_contract.py` 作为结果合同唯一权威：当前版本
+  `2026-10-25.1`，每条结果必须能回答「合同版本 / data_until / 两种收益口径 /
+  验证状态」。分类只认**显式存储合同**与**显式例外表** `LEGACY_RESULT_CONTRACTS`
+  （58/66→verified；74→unverified；其余历史结果默认未验证），
+  `resolve_result_contract` 不接受任何时间入参。
+- Rationale: 日收益累乘曲线与初始资金加权总收益并存且都可信（口径差非 bug），
+  但历史产物多数未经收益口径复核；按 created_at / 当前日期推断会让「新旧」随部署
+  时间漂移，且无法解释 58/66（已复核）与 74（仅 price_basis 通过）的差别。
+- Decision: 新结果在 **worker 回传接收层**（`api_result_meta` / `api_report_result_legacy`）
+  注入合同，不改 worker 与引擎；`results.result_contract` 为可空 JSONB，懒自愈 ALTER，
+  ECS 上由 DBA apply `cloud_schema.sql`（app 账号非 owner）。
+- Decision: 经典策略公开展示（列表 + showcase 公开只读通道）只放行 verified；
+  未验证项仅从公开可见消失，**不删白名单行 / job / 产物**，所有者本人仍按原权限可见。
+- Alternatives: ①按 created_at 划分新旧——否决，随部署漂移且无法表达 58/66 例外；
+  ②给 74 也标 verified——否决，price_basis 只读核查不等于收益口径已验证；
+  ③保留 74 公开详情页仅打标——否决（本次），公开通道语义应随验证状态收口；
+  ④回填历史 result_contract 值——否决，历史行零改动，判定走例外表即可。
+- Owner: KIMI_CODE（实施），待用户验收
+
+### 2026-10-25: 当前 home 数据中心，未来整体上云
+
+- Decision: 当前继续以 home PC 为数据中心和主测 worker；推广放量后把数据库、
+  回测引擎与 worker 全部上云。云迁移是独立重点项目，第四入口排在其后。
+- Rationale: 当前朋友测试负载低，无需过早迁移；未来瓶颈主要是数据全量+增量迁移、
+  worker/DB 传输和可信切换。现阶段保持配置化连接、worker 协议和自描述产物边界，
+  未来按快照迁移→watermark 追数→对账→小样本/影子→灰度→回滚窗口执行。
+- Owner: KIMI_CODE（用户确认方向）
+
 ### 2026-10-25: 回测参数说明复用统一提示组件
 
 - Decision: 基础/高级参数在 label 上以 `data-tip` 提供口径、单位、默认值和 0/留空
