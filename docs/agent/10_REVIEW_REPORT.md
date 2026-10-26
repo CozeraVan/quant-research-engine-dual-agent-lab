@@ -2,7 +2,28 @@
 
 ## Task ID
 
-QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
+QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-26，IMPLEMENTED 待用户验收；全量 2689 passed + 5 skipped，真实 Chromium 6/6；未 commit/push/ECS、未跑真实回测）
+
+## Self-Review Findings
+
+- 三处合同/新旧口径展示均已移除，模板中无 `contract-badge`、`contract-note`、`contractBadge` 或新旧标签残留；API、历史分类、showcase verified 与分享权限不变。
+- job/symbol 不再包含 `/saas/help#`，但 tip-trigger、曲线口径和费用/风险说明仍保留，未误删核心解释。
+- 帮助页桌面侧栏与 20px 标题、375px 双列静态导航经真实 Chromium computed style 验证；七锚点可跳转，零 JS error、零横向溢出，截图已复核。
+- TDD RED=9 项后转绿；相关 138 passed，全量 2689 passed + 5 skipped。无 schema/API/引擎/worker/数值改动，临时 staging/数据库已清理。
+
+## Required Fixes
+
+无。
+
+## Archive: QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
 
 ## Reviewer
 

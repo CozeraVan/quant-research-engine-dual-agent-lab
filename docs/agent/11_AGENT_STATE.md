@@ -2,6 +2,10 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
+### 2026-10-26 QRE-SAAS-UI-DECLUTTER-001 IMPLEMENTED（当前待验收）
+
+Kimi 按用户三项要求直接完成：①job/showcase/个人回测记录的结果合同、验证徽标、版本与新旧口径全部隐藏，系统内 `result_contract`、verified 门与分享权限不变；②job/symbol 所有 `/saas/help#...` 模块深链删除，tip-trigger 与曲线口径提示保留；③help 改 190px sticky 侧边栏目、20px 标题，≤760px 双列静态导航，并删除验证状态文案。TDD RED=9→相关 138 passed，全量 2689 passed + 5 skipped；真实 Chromium 6/6 零 JS error 零横溢，截图复核，证据 `.tmp/ui-declutter/`。仅 6 模板 + lab-theme.css + 4 测试文件改动，无 API/schema/引擎/worker/数值变化，未跑真实回测，未 commit/push/ECS。建议提交 `refactor(saas): 精简结果页口径展示与帮助导航`。小游戏/Steam 挂起；下一主线为经典策略按钮与结果操作卡 UI 精修。
+
 ### 2026-10-26 QRE-SAAS-READONLY-SHARE DONE（P1 第三切片已发布）
 
 用户批准 commit + push + ECS；实现 `08b4a27` 已推送并发布。最终全量 2688 passed + 5 skipped，真实 Chromium 12/12。ECS 备份 `/tmp/qre-readonly-share-pre-20261026/`，postgres apply `share_links`（owner=postgres）后同步六个文件，仅重启 qre-saas；未重启 worker、未跑真实回测。公网用临时哈希链接完成创建→匿名只读→撤销验证，job74 撤销 401；生产复核并修复“显式失效 share 在 showcase job 上回退公开通道”边界，job58 无参数 showcase=200、bogus/撤销 share=401，有效 share=200。临时链接全部删除，share_links=0。下一项：经典策略按钮与结果操作卡 UI 精修；移动端/App、压测性能、硬件与云迁移仍挂起。

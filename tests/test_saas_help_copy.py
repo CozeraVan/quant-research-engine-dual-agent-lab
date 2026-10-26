@@ -120,7 +120,7 @@ def test_result_pages_move_module_and_metric_notes_to_tips():
 
 
 def test_result_understanding_help_page_copy():
-    """QRE-SAAS-RESULT-UNDERSTANDING：集中帮助页 + 主导航入口 + 模块深链。"""
+    """集中帮助页使用侧边导航；结果页只保留悬停提示，不再重复深链。"""
     base = _template("base.html")
     assert 'href="/saas/help"' in base and 'data-nav="help"' in base
     assert "使用说明" in base
@@ -130,16 +130,15 @@ def test_result_understanding_help_page_copy():
         assert f'id="{anchor}"' in help_page, anchor
     assert "{{ daily_return_basis }}" in help_page
     assert "{{ total_return_basis }}" in help_page
+    assert 'class="help-layout"' in help_page
+    assert 'class="card help-side"' in help_page
+    assert "已验证口径" not in help_page and "旧口径·未验证" not in help_page
     # 不堆灰字：帮助页以表格/短句为主，不新增长篇辅助段落
     assert help_page.count('class="opt"') <= 3
     for page in ("job.html", "symbol.html"):
         body = _template(page)
-        for anchor in ("fees", "risk"):
-            assert f'href="/saas/help#{anchor}"' in body, (page, anchor)
-    assert 'href="/saas/help#contract"' in _template("job.html")
-    assert 'href="/saas/help#attribution"' in _template("job.html")
-    assert 'href="/saas/help#benchmark"' in _template("job.html")
-    assert 'href="/saas/help#benchmark"' in _template("symbol.html")
+        assert "/saas/help#" not in body
+        assert 'class="tip-trigger"' in body
 
 
 def test_wear_fee_and_bench_tips_present():

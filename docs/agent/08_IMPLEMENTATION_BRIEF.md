@@ -2,7 +2,24 @@
 
 ## Task ID
 
-QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
+QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
+
+## Created By
+
+KIMI_CODE 直接实施（2026-10-26，用户明确指定三项 UI 删减）
+
+## 目标与边界
+
+1. job/showcase/个人回测记录三处不显示结果合同、验证徽标、合同版本与新旧口径；`result_contract` 继续留在 API 和系统内部，showcase verified 公开门槛不得放宽。
+2. 删除 job/symbol 各模块的 `/saas/help#...` 说明链接，保留既有悬停提示；`renderContract` 只驱动曲线口径提示。
+3. `/saas/help` 顶部跳转为桌面 sticky 侧边栏目，卡片标题 20px；窄屏无横溢。帮助页不再展示验证状态或新旧口径。
+4. 仅改模板、`lab-theme.css` 与测试；不改 API/schema/引擎/worker/数值/权限，不跑真实回测。
+
+## 验证
+
+TDD 先 RED 后 GREEN；相关套件 + 全量测试；真实 Chromium 检查 job/symbol/showcase/profile/help 桌面与 help 375 的标签消失、侧边布局、字体、锚点、零 JS error 与零横向溢出。证据 `.tmp/ui-declutter/`。不自动 commit/push/ECS。
+
+## Archive: QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
 
 ## Created By
 

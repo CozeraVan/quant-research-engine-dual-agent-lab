@@ -80,14 +80,7 @@
   <div id="result-area" class="hidden">
     <div class="guest-strip" id="guest-result-note" style="display:none;border-radius:8px;margin-bottom:12px">游客结果次日清空 —— <a class="inl" href="/saas/login">注册后可永久保存记录 / 跑全市场回测 →</a></div>
 
-    <!-- QRE-SAAS-RESULT-CONTRACT-001（P0-1B）：结果合同可见标签——验证状态 + 数据截止；
-         曲线与总收益率是两种口径，徽标 data-tip 一次讲清，不让两者看似矛盾 -->
-    <div class="chart-box" id="box-contract" style="display:none;padding:12px 16px">
-      <span class="badge" id="contract-badge" tabindex="0" data-tip="" aria-label="结果合同验证状态说明">—</span>
-      <span class="opt" id="contract-note" style="margin-left:8px;font-size:12.5px"></span>
-      <a class="inl" href="/saas/help#contract" style="margin-left:8px;font-size:12.5px">说明 →</a>
-    </div>
-
+    <!-- 结果合同仅在系统内部用于权限与口径校验，不向用户展示新旧标签。 -->
     <!-- QRE-SAAS-JOB-STRATEGY-CARD：策略信息折叠卡（默认折叠，一行摘要 = 策略名 + 入口类型 + 创建时间） -->
     <div class="chart-box" id="box-strategy" style="display:none">
       <button class="sec-toggle" id="stg-toggle" style="margin-top:0">策略信息　<span class="opt" id="stg-summary"></span></button>
@@ -98,7 +91,6 @@
 
     <div class="chart-box" id="box-main">
       <div class="chart-title">策略收益 vs 基准指数 <button type="button" class="tip-trigger" id="curve-tip" data-tip="曲线为日收益累乘口径（交集口径、剔除新股注资）的累计收益率，起点 0%；与上方「总收益率」（初始资金加权）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
-        <a class="inl" href="/saas/help#benchmark" style="font-size:12.5px;font-weight:400">说明 →</a>
         <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button>
         <button class="btn-sm hidden" id="btn-replay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
       <div class="bench-bar" id="bench-bar">基准：</div>
@@ -114,21 +106,18 @@
 
     <!-- 交易磨损（chart-data.fees_summary；无则整块隐藏，C5 对齐 lab 版） -->
     <div class="chart-box" id="box-fees" style="display:none">
-      <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="佣金、印花税、过户费等，聚合自本次回测 round_trips 全量真实费用列。" aria-label="交易磨损说明">?</button>
-        <a class="inl" href="/saas/help#fees" style="font-size:12.5px;font-weight:400">说明 →</a></div>
+      <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="佣金、印花税、过户费等，聚合自本次回测 round_trips 全量真实费用列。" aria-label="交易磨损说明">?</button></div>
       <div id="fees-body"></div>
     </div>
 
     <!-- FRM 风险模块（risk-analysis；has_report=false 时整块隐藏） -->
     <div class="chart-box" id="box-risk" style="display:none">
-      <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" id="risk-tip" data-tip="基于策略日收益刻画波动、尾部损失和压力情景；损失以正数展示。" aria-label="风险分析说明">?</button>
-        <a class="inl" href="/saas/help#risk" style="font-size:12.5px;font-weight:400">说明 →</a></div>
+      <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" id="risk-tip" data-tip="基于策略日收益刻画波动、尾部损失和压力情景；损失以正数展示。" aria-label="风险分析说明">?</button></div>
       <div id="risk-body"><div class="chart-empty">风险数据加载中…</div></div>
     </div>
 
     <div class="chart-box" id="box-tags">
-      <div class="chart-title">赚钱板块归因 <button type="button" class="tip-trigger" data-tip="矩块面积表示盈亏规模；红赚绿亏，颜色越深金额越大。点击矩块或榜单行查看板块内个股。" aria-label="板块归因说明">?</button>
-        <a class="inl" href="/saas/help#attribution" style="font-size:12.5px;font-weight:400">说明 →</a></div>
+      <div class="chart-title">赚钱板块归因 <button type="button" class="tip-trigger" data-tip="矩块面积表示盈亏规模；红赚绿亏，颜色越深金额越大。点击矩块或榜单行查看板块内个股。" aria-label="板块归因说明">?</button></div>
       <div class="tag-tabs" id="tag-tabs">
         <button data-layer="A" class="active">行业板块</button>
         <button data-layer="B">概念关键词</button>
@@ -233,21 +222,9 @@ function renderMetrics(m){
     card('最大回撤', pct(m.max_drawdown), 'neg', '净值从历史高点到随后低点的最大跌幅。') +
     card('胜率', pct(m.win_rate), cls(m.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。');
 }
-// QRE-SAAS-RESULT-CONTRACT-001：结果合同徽标（版本 / 数据截止 / 两种收益口径 / 验证状态）
+// 结果合同只驱动曲线口径提示；验证状态与版本不进入用户界面。
 function renderContract(c){
-  const box = document.getElementById('box-contract');
-  if (!box) return;
-  if (!c){ box.style.display = 'none'; return; }
-  box.style.display = '';
-  const badge = document.getElementById('contract-badge');
-  badge.className = 'badge ' + (c.verified ? 'ok' : 'fail');
-  badge.textContent = c.label || (c.verified ? '已验证口径' : '旧口径·未验证');
-  badge.setAttribute('data-tip', c.tip || '');
-  document.getElementById('contract-note').textContent =
-    (c.note ? c.note + '　' : '') + '合同版本 ' + (c.version || '—') +
-    '　数据截止 ' + (c.data_until || '未声明');
-  // QRE-SAAS-RESULT-UNDERSTANDING：收益曲线 tip 与结果合同同源——合同口径文案
-  // 直接注入，避免两处措辞漂移；无合同时保留模板里的静态安全回退。
+  if (!c) return;
   const curveTip = document.getElementById('curve-tip');
   if (curveTip && c.daily_return_basis && c.total_return_basis){
     curveTip.setAttribute('data-tip',

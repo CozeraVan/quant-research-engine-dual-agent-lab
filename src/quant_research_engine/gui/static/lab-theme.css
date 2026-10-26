@@ -603,8 +603,18 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
   #factor-picker-modal .fp-item,#factor-picker-modal .fp-close,.factor-select-btn{transition:none}
 }
 
-/* ---- QRE-SAAS-RESULT-UNDERSTANDING：使用说明页锚点小节（避开 sticky 顶栏） ---- */
+/* ---- 使用说明页：桌面侧边栏目、大标题；窄屏转为顶部双列导航 ---- */
+.help-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;align-items:start}
+.help-side{position:sticky;top:76px;padding:10px}
+.help-content{min-width:0}
+.help-content .card h2{font-size:20px;line-height:1.4}
 .help-sec{scroll-margin-top:76px}
-.help-jump{display:flex;gap:8px;flex-wrap:wrap}
-.help-jump a{font-size:12.5px;color:var(--lav-deep);background:var(--tint);border:1px solid var(--tint-deep);border-radius:999px;padding:3px 12px;text-decoration:none;transition:all .2s var(--ease)}
-.help-jump a:hover{background:var(--lav);color:#fff;border-color:var(--lav)}
+.help-jump{display:flex;flex-direction:column;gap:4px}
+.help-jump a{font-size:13.5px;color:var(--lav-deep);background:transparent;border:1px solid transparent;border-radius:8px;padding:9px 12px;text-decoration:none;transition:all .2s var(--ease)}
+.help-jump a:hover{background:var(--tint);color:var(--lav-deep);border-color:var(--tint-deep)}
+@media(max-width:760px){
+  .help-layout{grid-template-columns:1fr}
+  .help-side{position:static}
+  .help-jump{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .help-jump a{text-align:center;padding:8px 6px}
+}

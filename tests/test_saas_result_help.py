@@ -1,10 +1,9 @@
-"""QRE-SAAS-RESULT-UNDERSTANDING：集中帮助页、模块精准深链、费用/基准口径提示、
-重播指标提示、symbol data_until 与 VaR/ES 损失正号呈现。
+"""集中帮助页侧边导航、结果页精简、费用/基准口径提示与个股数据展示。
 
 覆盖（先 RED 后 GREEN）：
-1. 公开 `/saas/help`（游客与登录用户均可访问）+ 七个锚点小节；
-2. 合同口径文案由 `result_contract` 常量同源注入（不复制权威口径）；
-3. job/symbol 各模块「说明 →」深链；`renderContract` 驱动收益曲线 tip；
+1. 公开 `/saas/help` + 七锚点、桌面侧边栏目与移动双列导航、20px 标题；
+2. 合同口径文案由 `result_contract` 常量同源注入，验证标签不进入用户界面；
+3. job/symbol 不显示模块「说明 →」深链，保留 tip-trigger 与曲线口径提示；
 4. 主指标卡仍为 6 张（盈亏比只在帮助页与重播解释）；
 5. 五类磨损卡 / 费率 chip / bench-bar / 重播指标 tip；
 6. symbol 两条 API 路径注入 `data_until`；VaR/ES 损失正号呈现。
@@ -208,21 +207,36 @@ class TestHelpPage:
         assert "日收益累乘（交集口径，剔除新股注资）" in html  # 即 DAILY_RETURN_BASIS 本身
 
 
-# ---------------------------------------------------------------- 结果页精准深链
+# ---------------------------------------------------------------- 帮助页布局与结果页精简
+
+
+class TestHelpLayout:
+    def test_side_navigation_and_larger_titles(self, client):
+        html = client.get("/saas/help").get_data(as_text=True)
+        assert 'class="help-layout"' in html
+        assert 'class="card help-side"' in html
+        assert 'class="help-content"' in html
+        assert 'aria-label="使用说明栏目"' in html
+        assert "结果页与个股页各模块标题旁" not in html
+        assert "已验证口径" not in html and "旧口径·未验证" not in html
+        css = (ROOT / "src/quant_research_engine/gui/static/lab-theme.css").read_text()
+        assert ".help-layout{display:grid;grid-template-columns:" in css
+        assert ".help-side{position:sticky" in css
+        assert ".help-jump{display:flex;flex-direction:column" in css
+        assert ".help-content .card h2{font-size:20px" in css
 
 
 class TestResultPageHelpLinks:
-    def test_job_page_module_links(self, client):
+    def test_job_page_removes_module_links_but_keeps_tips(self, client):
         html = client.get("/saas/jobs/1").get_data(as_text=True)
-        for anchor in ("contract", "benchmark", "fees", "risk", "attribution"):
-            assert f'href="/saas/help#{anchor}"' in html, anchor
+        assert "/saas/help#" not in html
+        assert 'class="tip-trigger"' in html
         assert 'id="curve-tip"' in html
 
-    def test_symbol_page_module_links(self, client):
+    def test_symbol_page_removes_module_links_but_keeps_tips(self, client):
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
-        for anchor in ("benchmark", "fees", "risk"):
-            assert f'href="/saas/help#{anchor}"' in html, anchor
-        assert "/saas/help#contract" in html  # 数据截止说明
+        assert "/saas/help#" not in html
+        assert 'class="tip-trigger"' in html
 
     def test_job_keeps_six_main_metric_cards(self, client):
         """主指标卡保持 6 张；盈亏比只在帮助页与重播解释，不进主指标卡。"""
@@ -240,12 +254,15 @@ class TestResultPageHelpLinks:
         assert "盈亏比" not in job  # 主指标卡不新增第七张
 
 
-# ---------------------------------------------------------------- 合同驱动曲线 tip
+# ---------------------------------------------------------------- 合同仅系统内保留并驱动曲线 tip
 
 
 class TestContractDrivenCurveTip:
-    def test_render_contract_updates_curve_tip_and_fallback(self, client):
+    def test_render_contract_updates_curve_tip_without_visible_badge(self, client):
         html = client.get("/saas/jobs/1").get_data(as_text=True)
+        assert 'id="box-contract"' not in html
+        assert 'id="contract-badge"' not in html
+        assert 'id="contract-note"' not in html
         _run_job_help_js(html, r"(function renderContract\(c\)\{[\s\S]*?\n\})", r"""
 const h = createJobHelpHarness();
 vm.runInContext(source, h.context);
@@ -258,12 +275,10 @@ vm.runInContext('renderContract(' + JSON.stringify(c) + ')', h.context);
 const tip = h.elements['curve-tip'].getAttribute('data-tip');
 assert.ok(tip.includes(c.daily_return_basis), '曲线 tip 必须用合同日收益口径：' + tip);
 assert.ok(tip.includes(c.total_return_basis), '曲线 tip 必须用合同总收益口径：' + tip);
-assert.equal(h.elements['box-contract'].style.display, '');
 // 无合同：曲线 tip 保留静态安全回退，不写空
 h.elements['curve-tip'].setAttribute('data-tip', '静态回退口径文案');
 vm.runInContext('renderContract(null)', h.context);
 assert.equal(h.elements['curve-tip'].getAttribute('data-tip'), '静态回退口径文案');
-assert.equal(h.elements['box-contract'].style.display, 'none');
 """)
 
 

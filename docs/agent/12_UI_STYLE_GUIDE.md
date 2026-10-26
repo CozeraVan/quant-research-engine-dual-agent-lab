@@ -94,6 +94,7 @@
 - 卡片 `.card` / `.panel`：白底、1px `--line` 边框、圆角 10px、`padding:20px 22px`、`--shadow-1`、卡片间距 20px（`lab-theme.css:47,384`）。
 - 图表卡 `.chart-box`：同卡片规范，`padding:16px 18px`（`lab-theme.css:192`）。
 - 响应式断点 960px：多列 grid 降为 2 列 / 1 列（`lab-theme.css:310-316`）。
+- 使用说明页（2026-10-26 用户批准方向）：桌面 `.help-layout` = 190px 侧栏 + 自适应内容，`.help-side` sticky top 76px；卡片 h2=20px。≤760px 侧栏转静态顶部双列导航，禁止横向溢出。结果页不重复堆「问号 + 说明链接」，仅保留问号悬停提示；结果合同与新旧口径标签不向用户展示。
 
 ### 2.2 栅格
 

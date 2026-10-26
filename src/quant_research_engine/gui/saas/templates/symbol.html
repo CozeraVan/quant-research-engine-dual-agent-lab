@@ -11,22 +11,19 @@
   <div class="metric-strip" id="sum-strip"></div>
 
   <div class="chart-box" id="box-equity" style="display:none">
-    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略净值、个股买入持有和基准指数；拖动滑块缩放区间。" aria-label="收益曲线说明">?</button>
-      <a class="inl" href="/saas/help#benchmark" style="font-size:12.5px;font-weight:400">说明 →</a></div>
+    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略净值、个股买入持有和基准指数；拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
     <div id="chart-equity" style="height:260px"></div>
     <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
   </div>
 
   <div class="chart-box" id="box-wear" style="display:none">
-    <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="聚合该股本次回测全部真实订单和成交费用。" aria-label="交易磨损说明">?</button>
-      <a class="inl" href="/saas/help#fees" style="font-size:12.5px;font-weight:400">说明 →</a></div>
+    <div class="chart-title">交易磨损 <button type="button" class="tip-trigger" data-tip="聚合该股本次回测全部真实订单和成交费用。" aria-label="交易磨损说明">?</button></div>
     <div id="wear-body"></div>
   </div>
 
   <!-- FRM-SYMBOL：个股级风险分析（worker 生成详情时基于区间日收盘收益计算） -->
   <div class="chart-box" id="box-risk" style="display:none">
-    <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" data-tip="基于该股区间日收盘收益刻画自身风险；组合层风险见回测结果页。损失以正数展示，数值越大风险越高。" aria-label="风险分析说明">?</button>
-      <a class="inl" href="/saas/help#risk" style="font-size:12.5px;font-weight:400">说明 →</a></div>
+    <div class="chart-title">风险分析（FRM） <button type="button" class="tip-trigger" data-tip="基于该股区间日收盘收益刻画自身风险；组合层风险见回测结果页。损失以正数展示，数值越大风险越高。" aria-label="风险分析说明">?</button></div>
     <div id="risk-body"></div>
   </div>
 
@@ -290,10 +287,8 @@ async function load(){
     if (d.trades && d.trades.length) $('#box-trades').style.display = '';
     if (d.orders && d.orders.length) $('#box-orders').style.display = '';
     if (d.failed_orders && d.failed_orders.length) $('#box-failed').style.display = '';
-    // QRE-SAAS-RESULT-UNDERSTANDING：头部展示任务级数据截止并链接口径说明；
-    // 缺字段显示「未声明」，不编日期
+    // 头部只展示任务级数据截止；缺字段显示「未声明」，不编日期。
     $('#sym-note').innerHTML = '数据截止 ' + (d.data_until ? esc(d.data_until) : '未声明') +
-      '　<a class="inl" href="/saas/help#contract">口径说明 →</a>' +
       (d.kline && d.kline.dates
         ? '　全量 ' + d.kline.dates.length + ' 个交易日'
         : '　K线/因子明细暂缺（该股详情产物未随任务回传）');

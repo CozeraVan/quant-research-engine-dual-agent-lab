@@ -5,8 +5,8 @@
 2. 历史结果按**显式版本映射与例外表**分类，绝不按 created_at / 当前时间动态猜测。
 3. 58/66 为 verified 例外，74 未验证（price_basis 核查通过 ≠ 收益口径已验证）。
 4. 经典策略公开展示只放行 verified；白名单行 / 任务 / 产物不删除。
-5. 私人历史结果权限语义不变（本人可见、他人 404、匿名 401）且带标签。
-6. 页面可见标签 + data-tip 区分「日收益累乘曲线」与「初始资金加权总收益」。
+5. 私人历史结果权限语义不变（本人可见、他人 404、匿名 401），API 仍携带合同。
+6. 页面不显示验证标签/版本；曲线与总收益口径仅保留原有悬停提示。
 """
 
 from __future__ import annotations
@@ -375,27 +375,27 @@ class TestShowcaseOnlyVerified:
         assert client.get("/api/results/58/summary").status_code == 401
 
 
-# ---------------------------------------------------------------- 前端：可见标签 + 口径提示
+# ---------------------------------------------------------------- 前端：合同留在系统内，口径提示保留
 
 
 class TestPageLabels:
-    def test_job_page_has_contract_badge_and_both_basis_tips(self, client):
+    def test_job_page_hides_contract_badge_but_keeps_basis_tips(self, client):
         html = client.get("/saas/jobs/1").get_data(as_text=True)
-        assert "contract-badge" in html
-        assert "contract-note" in html
-        # 曲线口径：日收益累乘
+        assert "contract-badge" not in html
+        assert "contract-note" not in html
+        assert 'id="box-contract"' not in html
+        # 曲线与总收益口径仍通过原有悬停提示解释
         assert "日收益累乘" in html
-        # 总收益口径：初始资金加权
         assert "初始资金加权" in html
-        # 徽标用 data-tip 复用统一提示组件
-        assert 'id="contract-badge"' in html and "data-tip" in html
 
-    def test_showcase_page_states_verified_only_and_basis(self, client):
+    def test_showcase_page_hides_contract_labels_and_versions(self, client):
         html = client.get("/saas/showcase").get_data(as_text=True)
-        assert "已验证口径" in html
-        assert "日收益累乘" in html
-        assert "初始资金加权" in html
+        assert "已验证口径" not in html
+        assert "旧口径·未验证" not in html
+        assert "合同版本" not in html
+        assert "result_contract" not in html
 
-    def test_records_list_renders_contract_label(self, client):
+    def test_records_list_hides_contract_label(self, client):
         html = client.get("/saas/").get_data(as_text=True)
-        assert "result_contract" in html
+        assert "contractBadge" not in html
+        assert "job.result_contract" not in html

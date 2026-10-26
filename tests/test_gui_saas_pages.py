@@ -332,8 +332,8 @@ async function settle(h){
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
-    def test_records_rows_carry_contract_label(self, client):
-        """QRE-SAAS-RESULT-CONTRACT-001：私人历史结果照可见，行内带口径验证标签。"""
+    def test_records_rows_hide_contract_label(self, client):
+        """结果合同仍可由 API 返回，但个人记录行只显示任务状态。"""
         html = client.get("/saas/").get_data(as_text=True)
         _run_records_js(html, r"""
 (async () => {
@@ -355,10 +355,9 @@ async function settle(h){
   vm.runInContext(source, h.context);
   await vm.runInContext('recordsInitialLoad.catch(() => {})', h.context);
   const body = recordsText(h.elements['jobs-tbody']);
-  assert.ok(body.includes('已验证口径'), '已完成且已验证必须带正向标签');
-  assert.ok(body.includes('旧口径·未验证'), '历史未验证结果必须带警示标签');
-  assert.ok(body.includes('badge ok') && body.includes('badge fail'), '两种状态配色要可区分');
-  assert.ok(body.includes('data-tip="收益曲线 = 日收益累乘'), '标签必须挂口径说明');
+  assert.ok(!body.includes('已验证口径'), '记录行不得显示合同验证标签');
+  assert.ok(!body.includes('旧口径·未验证'), '记录行不得显示新旧口径标签');
+  assert.ok(body.includes('badge ok') && body.includes('completed'), '任务状态徽章仍需保留');
   assert.equal(h.calls.access, 0);
   assert.equal(h.calls.failure, 0);
 })().catch(error => { console.error(error); process.exit(1); });
@@ -1465,8 +1464,8 @@ function pendingResponse(options){
         assert "已暂停自动刷新" in html
         assert "任务可能仍在运行" in html
 
-    def test_symbol_note_shows_data_until_with_contract_link(self, client):
-        """QRE-SAAS-RESULT-UNDERSTANDING：头部 sym-note 显示数据截止并链到口径说明。"""
+    def test_symbol_note_shows_data_until_without_contract_link(self, client):
+        """头部 sym-note 只显示数据截止，不再重复提供口径说明深链。"""
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
         _run_symbol_js(html, r"""
 (async () => {
@@ -1477,7 +1476,7 @@ function pendingResponse(options){
   await vm.runInContext('load()', withUntil.context);
   const note = withUntil.elements['sym-note'].innerHTML;
   assert.ok(note.includes('数据截止 2026-02-27'), note);
-  assert.ok(note.includes('/saas/help#contract'), note);
+  assert.ok(!note.includes('/saas/help#'), note);
   assert.ok(note.includes('全量 2 个交易日'), '既有交易日文案不得丢失：' + note);
 
   const missing = createSymbolHarness(async () => response(200, {ok: true,
@@ -1486,7 +1485,7 @@ function pendingResponse(options){
   await vm.runInContext('load()', missing.context);
   const note2 = missing.elements['sym-note'].innerHTML;
   assert.ok(note2.includes('数据截止 未声明'), '缺字段不编日期：' + note2);
-  assert.ok(note2.includes('/saas/help#contract'), note2);
+  assert.ok(!note2.includes('/saas/help#'), note2);
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
@@ -1918,34 +1917,14 @@ class TestJobPageRuntimeAndCancel:
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
-    def test_job_contract_badge_labels_both_return_bases(self, client):
-        """QRE-SAAS-RESULT-CONTRACT-001：合同徽标可见标签 + data-tip 区分两种收益口径。"""
+    def test_job_contract_badge_is_not_rendered(self, client):
+        """结果合同留在系统内，页面只保留两种收益口径的悬停提示。"""
         html = client.get("/saas/jobs/1").get_data(as_text=True)
-        _run_job_js(html, r"(function renderMetrics\(m\)\{[\s\S]*?\n\})\nfunction renderMeta", r"""
-const h = createHarness(async () => response(200, {ok: true}));
-vm.runInContext(source, h.context);
-const cases = [
-  {verified: true, label: '已验证口径', version: '2026-10-25.1', data_until: '2026-02-27',
-   tip: '收益曲线 = 日收益累乘；总收益率 = 初始资金加权总收益', note: '已人工复核'},
-  {verified: false, label: '旧口径·未验证', version: 'legacy', data_until: null,
-   tip: '收益曲线 = 日收益累乘；总收益率 = 初始资金加权总收益', note: '历史结果未带结果合同'},
-];
-(async () => {
-  for (const c of cases){
-    vm.runInContext('renderContract(' + JSON.stringify(c) + ')', h.context);
-    const badge = h.elements['contract-badge'];
-    assert.equal(badge.className, 'badge ' + (c.verified ? 'ok' : 'fail'), '徽标配色随验证状态');
-    assert.equal(badge.textContent, c.label, '徽标文字必须可见可读');
-    assert.equal(badge['data-tip'], c.tip, '徽标挂 data-tip 走统一提示组件');
-    const note = h.elements['contract-note'].textContent;
-    assert.ok(note.includes(c.version), note);
-    assert.ok(note.includes(c.note), note);
-    assert.equal(h.elements['box-contract'].style.display, '', '有合同必须显示');
-  }
-  vm.runInContext('renderContract(null)', h.context);
-  assert.equal(h.elements['box-contract'].style.display, 'none', '无合同整块隐藏');
-})().catch(error => { console.error(error); process.exit(1); });
-""")
+        assert 'id="box-contract"' not in html
+        assert 'id="contract-badge"' not in html
+        assert 'id="contract-note"' not in html
+        assert "日收益累乘" in html and "初始资金加权" in html
+        assert "function renderContract(c)" in html
 
     def test_job_completed_resource_failures_pause_after_three_rounds(self, client):
         html = client.get("/saas/jobs/1").get_data(as_text=True)

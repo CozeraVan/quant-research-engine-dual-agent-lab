@@ -6,12 +6,7 @@
     <h1>经典策略</h1>
     <p>经典量化策略在全 A 股、全历史区间的真实回测成绩，随每日数据更新持续跟踪。</p>
     <p style="font-size:13px"><span class="opt">只读展示 · 数据每日收盘后更新 · 过往表现不构成投资建议</span></p>
-    <!-- QRE-SAAS-RESULT-CONTRACT-001（P0-1B）：只公开展示结果合同为「已验证」的回测；
-         两种收益口径并存但不同（曲线日收益累乘 / 总收益率初始资金加权），一处讲清 -->
-    <p style="font-size:13px;margin-top:6px">
-      <span class="badge ok" tabindex="0" data-tip="收益曲线 = 日收益累乘（交集口径，剔除新股注资）；总收益率 = 初始资金加权总收益（Σ期末权益/Σ初始资金−1）。两者都已剔除新股注资，但加权方式不同，数值可以有差、方向应一致。">已验证口径</span>
-      <span class="opt" style="margin-left:8px">仅展示已通过收益口径验证的回测；未验证的历史结果不公开展示，但记录与产物仍保留。</span>
-    </p>
+    <!-- 公开 verified 判断只在服务端执行，页面不展示结果合同与验证标签。 -->
   </div>
   <div class="card">
     <table class="tbl" id="sc-table">
@@ -60,12 +55,8 @@ async function loadShowcase(){
     tbody.innerHTML = d.items.map(it => {
       const range = (it.date_start || '—') + ' ~ ' + (it.date_end || '—');
       const sub = it.subtitle ? '<div class="opt" style="font-size:12px;margin-top:2px">' + esc(it.subtitle) + '</div>' : '';
-      const c = it.result_contract || {};
-      const cBadge = '<span class="badge ok" tabindex="0" data-tip="' + esc(c.tip || '') + '">' + esc(c.label || '已验证口径') + '</span>';
-      const cMeta = '<div class="opt" style="font-size:12px;margin-top:3px">' + cBadge +
-        ' <span>合同版本 ' + esc(c.version || '—') + '</span></div>';
       return '<tr style="cursor:pointer" onclick="location.href=\'/saas/jobs/' + it.job_id + '\'">' +
-        '<td><strong>' + esc(it.title) + '</strong>' + sub + cMeta + '</td>' +
+        '<td><strong>' + esc(it.title) + '</strong>' + sub + '</td>' +
         '<td style="white-space:nowrap">' + esc(range) + '</td>' +
         '<td class="num ' + cls(it.total_return) + '" style="text-align:right">' + pct(it.total_return) + '</td>' +
         '<td class="num ' + cls(it.excess_return) + '" style="text-align:right">' + pct(it.excess_return) + '</td>' +
@@ -75,7 +66,7 @@ async function loadShowcase(){
         '<td style="white-space:nowrap">' + esc(it.data_until || '—') + '</td>' +
       '</tr>';
     }).join('');
-    document.getElementById('sc-hint').textContent = '点击任意策略查看完整回测详情（收益曲线 / 板块归因 / 风险指标，只读）。收益曲线为日收益累乘口径，总收益率为初始资金加权口径，两者数值可有差。';
+    document.getElementById('sc-hint').textContent = '点击任意策略查看完整回测详情（收益曲线 / 板块归因 / 风险指标，只读）。';
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="8" class="muted">加载失败，请刷新重试</td></tr>';
   }

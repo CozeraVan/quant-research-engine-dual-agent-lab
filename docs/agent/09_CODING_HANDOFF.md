@@ -2,7 +2,23 @@
 
 ## Task ID
 
-QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
+QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
+
+## Release Status
+
+IMPLEMENTED（2026-10-26，Kimi；待用户验收，未 commit/push/ECS，未跑真实回测）。相关 138 passed，全量 2689 passed + 5 skipped，真实 Chromium 6/6；证据 `.tmp/ui-declutter/`。
+
+## Implementation Summary
+
+- `_records_scripts.html`：删除 `contractBadge` 及拼接，任务状态 badge 保留；API 的 `job.result_contract` 不再被模板消费。
+- `showcase.html`：删除页头与行内验证徽标/合同版本，精简底部提示；公开 verified 过滤仍由服务端执行。
+- `job.html`：删除 `#box-contract` 全部 DOM 与渲染，删除四处模块帮助深链；`renderContract` 仅更新 `#curve-tip`。
+- `symbol.html`：删除收益/磨损/风险三处帮助深链与 `#sym-note` 口径链接，数据截止保留。
+- `help.html`：七锚点迁入 `.help-layout > .help-side + .help-content`；删除验证状态行与新旧口径文字，页头不再宣称结果页深链。
+- `lab-theme.css`：190px 桌面 sticky 侧栏、20px 卡片 h2；≤760px 单列布局 + 双列静态导航。
+- 测试：`test_saas_result_help.py`、`test_saas_help_copy.py`、`test_saas_result_contract.py`、`test_gui_saas_pages.py` 同步锁定新合同边界；后端 API 与权限用例原样通过。
+
+## Archive: QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
 
 ## Release Status
 

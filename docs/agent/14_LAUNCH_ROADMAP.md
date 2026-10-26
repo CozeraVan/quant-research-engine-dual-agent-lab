@@ -186,6 +186,7 @@
 2. **结果理解与分享**：补集中帮助中心/指标口径、数据截止与费用说明；默认私有前提下增加可撤销、可设有效期的只读分享链接。经典策略只展示验证过且可复现的内容。
    **首切片已发布（2026-10-25，QRE-SAAS-RESULT-UNDERSTANDING，commit `9fd3b3d`）**：公开 `/saas/help` 使用说明页（七锚点），合同文案同源；job/symbol 模块精准深链；五类磨损卡/费率/基准/重播提示补全；symbol 两路径注入 data_until，VaR/ES 统一损失正数；个股过户费重复显示已修。全量 2653 passed + 5 skipped，真实 Chromium 10/10，ECS 帮助页与个股 data_until 验证通过。剩余：默认私有的可撤销只读分享链接（P1 条目 6）。
    **只读分享已发布（2026-10-26，QRE-SAAS-READONLY-SHARE，commit `08b4a27`）**：`share_links` 只存完整 token 哈希（明文仅创建响应一次）；创建/列表/撤销三个 owner API；单 job 绑定公开只读通道（无效/过期/撤销/错 job 不降级，也不回退 showcase）；未验证结果可分享且徽标保留、showcase verified 门不变、游客不开放；job/profile 分享 UI 与「只读分享」chip。最终全量 2688 passed + 5 skipped，真实 Chromium 12/12；ECS schema 与公网创建→匿名只读→撤销验证通过，临时链接已清理。剩余：经典策略及结果操作 UI 精修。
+   **结果页精简已实现待验收（2026-10-26，QRE-SAAS-UI-DECLUTTER-001）**：job/showcase/个人记录不再展示结果合同与新旧口径，系统内部合同与 verified 权限不变；job/symbol 模块帮助深链删除，保留悬停提示；help 改桌面侧边栏目与 20px 标题，窄屏双列导航。全量 2689 passed + 5 skipped，真实 Chromium 6/6，未 commit/push/ECS。小游戏/Steam 仅保留想法并挂起。
 3. **[挂起] 移动端、App 端与可访问性深化**：用户 2026-10-25 明确暂时跳过；既有移动适配和 Chromium 测试资产保留，未来由用户明确重启。
 4. **运营反馈闭环**：管理台优先看编译失败率、回测成功率、排队时长、游客到注册转化、热门失败原因；意见反馈按类型分派，不先堆会员等级和付费功能。
 
