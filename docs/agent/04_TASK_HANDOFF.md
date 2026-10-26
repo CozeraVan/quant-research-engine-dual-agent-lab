@@ -2,7 +2,51 @@
 
 ## Task ID
 
-QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
+QRE-SAAS-SHARE-ABSOLUTE-URL（分享链接补全公网域名）
+
+## Current Status
+
+已部署待人工复验，未 commit/push（2026-10-26）
+
+## Task Note
+
+- **核查**：用户提供的链接实际在服务端和前端均有效（summary 200、readonly_kind=share、真实 Chromium 完整只读渲染），但创建响应只返回 `/saas/jobs/...` 相对路径，不能直接作为外部分享 URL。
+- **修复**：`api_share_link_create` 改为 `SAAS_PUBLIC_BASE_URL`（缺省回退 `request.url_root`）+ 任务分享路径；生产配置固定 `SAAS_PUBLIC_BASE_URL=https://www.aguhuice.com`，避免反代协议/Host 漂移。既有相对链接无需撤销，仍可使用。
+- **验证**：新增绝对 URL 回归，access_hardening 68 passed；全量 **2703 passed + 5 skipped**。生产真实创建返回完整 `https://www.aguhuice.com/saas/jobs/78?share=...`，公开页面 200，撤销 200；临时链接/session 清理，app.py 哈希一致。备份 `/tmp/qre-share-absolute-url-pre-20261026/`（含 app.py 与 0600 env 备份），未跑真实回测。
+
+## Task ID
+
+QRE-SAAS-SHARE-SEQUENCE-GRANT（分享创建 HTTP 500 权限热修）
+
+## Current Status
+
+已部署待人工复验，未 commit/push（2026-10-26）
+
+## Task Note
+
+- **根因**：生产 `share_links` 由 postgres 建表，应用角色 `aguhuice` 虽有表 CRUD 权限，但缺少 `share_links_id_seq` 的 USAGE，真实 POST `/api/saas/jobs/78/share-links` 因此连续 HTTP 500。此前直接 SQL 插入验证未覆盖应用角色序列权限。
+- **修复**：生产执行 `GRANT USAGE, SELECT ON SEQUENCE share_links_id_seq TO aguhuice`；`cloud_schema.sql` 增加角色存在时幂等 GRANT（表 CRUD + 序列），避免下次部署复发。
+- **附带 schema 完整性**：全量测试暴露新临时库 `showcase` 懒建表时序问题，将既有 `showcase`/`showcase_daily` 同构定义纳入权威 schema；生产仅 IF NOT EXISTS 跳过，不改业务行为。
+- **验证**：新增授权回归后 access_hardening 67 passed、相关 88 passed，最终全量 **2702 passed + 5 skipped**。生产用临时 session 调真实创建/撤销 API 均 HTTP 200，临时链接/session 清理，share_links=0；schema SHA256 一致，showcase/showcase_daily 存在且序列 USAGE=true。备份 `/tmp/qre-share-sequence-grant-pre-20261026/`。未跑真实回测，未 commit/push。
+
+## Task ID
+
+QRE-SAAS-CLASSIC-ACTIONS-UI（经典策略按钮与结果操作卡精修）
+
+## Current Status
+
+已部署待人工验收，未 commit/push（2026-10-26；R-DEPLOY-001 直接部署 ECS，用户人工验收通过后才提交）
+
+## Task Note
+
+- **经典策略页（showcase.html）**：页头第二行 `.opt` 只读/更新/风险备注删除，信息移入 H1 旁 `tip-trigger`（`data-tip="只读展示 · 数据每日收盘后更新 · 过往表现不构成投资建议。"`），主描述保留；表格下 `#sc-hint` 元素与 JS 赋值删除（行进详情已有实际交互）；底部「如何复现这些策略？」灰字长文卡改为精简 CTA——标题「复现经典策略」+ 问号提示（自然语言/自选因子可复现）+ `btn btn-primary`「新建同款策略」（链接仍 `/saas/new`）。策略自身 subtitle 是内容，保留不动。
+- **结果操作卡（job.html）**：`#box-actions` 与 `#box-share` 合并进外层 `chart-box hidden#result-actions-card`，标题「结果操作」+ 问号提示；两组改为内部 `result-action-group`，hidden 仍由各自初始化函数控制。`btn-save-lib`/`btn-signal-confirm` 升主按钮（移除 confirm 内联紫色），`btn-signal-open`/`btn-share` 为次按钮；`action-status`/`share-status` 改 `result-action-status` 正常可读状态文本。信号面板「T+1 参考/风险提示」灰字段落移入「扫描范围」标签旁问号提示；radio/select/ID/scope 值不变。新增空安全 `syncResultActionCard()`：任一组非 hidden 才显示外层，两组皆 hidden 则整体隐藏；`initResultActions()`/`initShareButton()` 每个显示/隐藏分支结束后调用；readonly 分支隐藏清单加入 `result-actions-card`。保存/信号/分享 API、状态回填、权限与事件绑定不变，不重复绑定（`actionsBound`/`shareBound` guard 保留）。
+- **样式（lab-theme.css）**：仅追加局部规则 `.result-action-group`/`.result-action-buttons`/`.result-action-status`/`.result-action-scope`/`.showcase-cta`，按钮 min-height 44px、gap 10px、inline-flex 居中；≤768px CTA 纵排全宽、操作按钮自适应居中；无新色相、无灰色小字备注样式、不动全站 `.btn-sm`。
+- **测试**（TDD 先 RED 后 GREEN，证据 `.tmp/classic-actions-ui/`）：RED=新文件 11 失败 + `test_saas_access_hardening.py` 2 失败（只读隐藏清单 marker 与 readonly harness）；GREEN=新 `tests/test_saas_classic_actions_ui.py` 12 例（静态断言：CTA/删除标记/原 ID 与契约/按钮层级/改动区域无 `.opt`/`syncResultActionCard` 分支调用/只读清单/CSS 局部规则；Node 可见性矩阵：保存+信号+分享、仅分享、游客、只读四形态 + 连续初始化与失败重试不重复绑定 + 空安全）；更新 3 处既有断言（access_hardening 只读清单字符串/known/循环 + share harness 的 sync 透传桩；`test_gui_saas_pages.py` 的 `if (jobData.readonly)` marker）。相关 10 文件 289 passed + access_hardening 66 passed；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2701 passed + 5 skipped**（基线 2689+5，零回归）。
+- **真实 Chromium**（`.tmp/browser-venv` + chromium，临时库 `qre_readonly_share_browser` + 8099 临时 staging，seed/worker 协议模拟 completed，未启动真实 worker、未跑真实回测）：9/9 通过、零 JS error、零横向溢出——showcase CTA（删除标记为零、主按钮 44px、两个问号 hover 完整说明）；登录结果页三操作按钮层级（44px×4）、信号面板三 scope radio 与 sector 二级行、confirm 端到端开启监控、分享模态打开/取消；375px 登录态 job/showcase 零横溢、按钮 44px；游客任务页与 showcase 只读（匿名）均整体隐藏结果操作卡。截图 7 张已复核，证据 `.tmp/classic-actions-ui/`（browser-evidence.json、red/green-evidence.txt、public-verification.txt）。
+- **发布**：核对 ECS 三文件与本地 HEAD 基线 SHA256 一致后，备份 `/tmp/qre-classic-actions-pre-20261026/`，scp 同步 `showcase.html`、`job.html`、`lab-theme.css`，仅重启 qre-saas（worker 未动）。公网验证：showcase 200 含「新建同款策略」主按钮与两个提示、删除标记为零、全页仅剩 subtitle 一处 `.opt`；job58 200 含 `result-actions-card`/`syncResultActionCard`/新按钮类与只读隐藏清单；`/static/lab-theme.css` 200 且 SHA256 与本地一致（`ffcc286b…`）；`/saas/`、`/saas/help`、`/saas/login`、`/saas/new`、symbols 两页均 200。未跑真实回测。**未 commit/push，待用户人工验收**；不通过则恢复 `/tmp/qre-classic-actions-pre-20261026/` 并重启 qre-saas。建议提交信息（仅验收通过后使用）：`refactor(saas): 精修经典策略与结果操作按钮`。
+
+## Archive: QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
 
 ## Current Status
 

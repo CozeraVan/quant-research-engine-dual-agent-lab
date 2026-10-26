@@ -2,7 +2,32 @@
 
 ## Task ID
 
-QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
+QRE-SAAS-CLASSIC-ACTIONS-UI（经典策略按钮与结果操作卡精修）
+
+## Created By
+
+KIMI_CODE 规划，Step 5 实施（2026-10-26，批准计划 `amadeus-cho-cannonball-cyborg.md`）
+
+## 目标与边界
+
+1. 经典策略页删除灰色长文/弱链接与重复提示，底部改为「复现经典策略」+「新建同款策略」主按钮，页头说明移入既有问号提示；策略 subtitle 保留。
+2. job 将 `#box-actions` 与 `#box-share` 合并进 `#result-actions-card`，保存=主按钮、信号/分享=次按钮；保留全部现有 ID、权限、事件绑定和 API。新增空安全 `syncResultActionCard()`，任一组可见才显示外层。
+3. 改动区域禁止 `.opt`、muted/faint 段落或灰色小字备注；解释统一 `tip-trigger + data-tip + LabUI.helpTips`。按钮至少 44px 高，375px 不横溢。
+4. 不改 API/schema/引擎/worker/数值/权限，不跑真实回测；TDD 先 RED 后 GREEN，临时 PG + Chromium 模拟任务验收。
+
+## 发布规则
+
+遵循 R-DEPLOY-001：测试后核对基线并备份 `/tmp/qre-classic-actions-pre-20261026/`，直接同步 `showcase.html`、`job.html`、`lab-theme.css` 到 ECS 并仅重启 qre-saas；公网验证后保留「已部署待人工验收，未 commit/push」。用户通过后才提交；不通过立即回滚。更新 04/05/09/10/11/14/16 与必要的 12 号 UI 文档。
+
+## 实施结果（2026-10-26，已部署待人工验收，未 commit/push）
+
+- **改动文件**：`src/quant_research_engine/gui/saas/templates/showcase.html`、`src/quant_research_engine/gui/saas/templates/job.html`、`src/quant_research_engine/gui/static/lab-theme.css`、`tests/test_saas_classic_actions_ui.py`（新）、`tests/test_saas_access_hardening.py`（3 处更新）、`tests/test_gui_saas_pages.py`（1 处 marker）。未改 API/schema/引擎/worker/数值/权限。
+- **TDD**：RED=新测试 11 失败 + access_hardening 2 失败；GREEN=新 12 passed、access_hardening 66 passed、相关 10 文件 289 passed、全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → **2701 passed + 5 skipped**（基线 2689+5 零回归）。证据 `.tmp/classic-actions-ui/red-evidence.txt`、`green-evidence.txt`、`full-tests.txt`。
+- **真实 Chromium**（临时库 `qre_readonly_share_browser` + 8099 staging，worker 协议模拟 completed，未跑真实回测）：9/9、零 JS error、零横溢；`browser-evidence.json` + 7 截图（showcase/job/signal-panel/guest/readonly 桌面 1280 + showcase/job 375）。
+- **发布**：ECS 三文件与 HEAD 基线 SHA256 一致 → 备份 `/tmp/qre-classic-actions-pre-20261026/` → scp 三文件 → 仅重启 qre-saas。公网：showcase/job58/`/static/lab-theme.css` 200 且新标记齐全、删除标记为零、CSS SHA256 与本地一致；`/saas/`、help、login、new、symbols 两页 200。证据 `public-verification.txt`。
+- **遗留**：`syncResultActionCard` 只在 init 两个入口同步；若未来新增第三种操作组需同步纳入数组。游客/只读整体隐藏已由 Node 矩阵 + 真实浏览器双重覆盖。
+
+## Archive: QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
 
 ## Created By
 

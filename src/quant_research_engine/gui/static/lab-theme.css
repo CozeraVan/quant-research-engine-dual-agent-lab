@@ -618,3 +618,25 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
   .help-jump{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
   .help-jump a{text-align:center;padding:8px 6px}
 }
+
+/* ---- 结果操作卡与经典策略 CTA（QRE-SAAS-CLASSIC-ACTIONS-UI，2026-10-26）----
+   job.html「下一步」与「分享结果」合并为 #result-actions-card；保存=主按钮、
+   信号/分享=次按钮、确认信号=主按钮；状态文本为正常可读文本（不用 .opt 灰字）。
+   showcase.html 底部卡改「复现经典策略」主按钮 CTA。仅新增局部规则，复用既有
+   token 与按钮体系，无新色相、无灰色小字备注样式。 */
+.result-action-group{margin-top:14px}
+.result-action-group:first-child{margin-top:0}
+.result-action-buttons{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.result-action-buttons .btn{min-height:44px}
+.result-action-status{font-size:13px;line-height:1.6;color:var(--ink)}
+.result-action-scope{font-size:13.5px;font-weight:500;color:var(--ink)}
+.showcase-cta{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.showcase-cta h2{margin-right:auto}
+.showcase-cta .btn{min-height:44px}
+@media(max-width:768px){
+  /* 窄屏：允许纵向排列/全宽，保持 ≥44px 触控高度，375px 不横溢 */
+  .showcase-cta{flex-direction:column;align-items:stretch}
+  .showcase-cta h2{margin-right:0}
+  .showcase-cta .btn{width:100%;justify-content:center}
+  .result-action-buttons .btn{flex:1 1 auto;justify-content:center}
+}

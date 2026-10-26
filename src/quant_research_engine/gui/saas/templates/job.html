@@ -136,37 +136,37 @@
       <span class="bl-arrow">→</span>
     </a>
 
-    <!-- QRE-SAAS-RESULT-ACTIONS（2026-10-05 用户拍板）：策略入库/交易信号改为结果页
-         显式触发——提交回测不再自动入库；游客隐藏（结果次日清空，无资产可存） -->
-    <div class="chart-box hidden" id="box-actions">
-      <div class="chart-title">下一步 <button type="button" class="tip-trigger" data-tip="满意的策略可保存到策略库；开启信号后会每日收盘扫描入出场条件，并同时保存策略。T+1 参考，不构成投资建议。" aria-label="后续操作说明">?</button></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn-sm" id="btn-save-lib">保存到我的策略库</button>
-        <button class="btn-sm" id="btn-signal-open">提示交易信号</button>
-        <span class="opt" id="action-status"></span>
-      </div>
-      <div id="signal-panel" class="hidden" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:12px">
-        <p class="opt" style="margin:0 0 8px">T+1 参考，不构成投资建议。扫描范围：</p>
-        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
-          <label class="radio-inline"><input type="radio" name="sig-scope" value="last_run_universe" checked> 本次测试范围</label>
-          <label class="radio-inline"><input type="radio" name="sig-scope" value="sector"> 指定板块</label>
-          <label class="radio-inline"><input type="radio" name="sig-scope" value="all_a"> 全范围股票</label>
-          <span id="sig-sector-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
-            <select id="sig-univ-group" style="width:auto"></select>
-            <select id="sig-univ-key" style="width:auto"></select>
-          </span>
-          <button class="btn-sm" id="btn-signal-confirm" style="background:var(--accent);color:#fff;border-color:var(--accent)">开启信号监控</button>
+    <!-- QRE-SAAS-RESULT-ACTIONS + QRE-SAAS-CLASSIC-ACTIONS-UI：「下一步」与「分享结果」
+         合并为统一「结果操作」卡；游客/showcase/分享视图由 syncResultActionCard 整体隐藏 -->
+    <div class="chart-box hidden" id="result-actions-card">
+      <div class="chart-title">结果操作 <button type="button" class="tip-trigger" data-tip="满意的策略可保存到策略库；开启信号后会每日收盘扫描入出场条件，并同时保存策略。分享链接只读、可撤销、可设有效期。T+1 参考，不构成投资建议。" aria-label="结果操作说明">?</button></div>
+      <div class="result-action-group hidden" id="box-actions">
+        <div class="result-action-buttons">
+          <button class="btn btn-primary" id="btn-save-lib">保存到我的策略库</button>
+          <button class="btn btn-ghost" id="btn-signal-open">提示交易信号</button>
+          <span class="result-action-status" id="action-status"></span>
+        </div>
+        <div id="signal-panel" class="hidden" style="margin-top:12px;border-top:1px dashed var(--line);padding-top:12px">
+          <div class="result-action-scope">扫描范围 <button type="button" class="tip-trigger" data-tip="T+1 参考，不构成投资建议：信号在信号日给出、最早成交日为次一交易日。扫描范围决定每日收盘后自动扫描的股票池，可随时在策略详情中调整。" aria-label="扫描范围说明">?</button></div>
+          <div class="result-action-buttons" style="margin-top:8px">
+            <label class="radio-inline"><input type="radio" name="sig-scope" value="last_run_universe" checked> 本次测试范围</label>
+            <label class="radio-inline"><input type="radio" name="sig-scope" value="sector"> 指定板块</label>
+            <label class="radio-inline"><input type="radio" name="sig-scope" value="all_a"> 全范围股票</label>
+            <span id="sig-sector-row" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="sig-univ-group" style="width:auto"></select>
+              <select id="sig-univ-key" style="width:auto"></select>
+            </span>
+          </div>
+          <div class="result-action-buttons" style="margin-top:10px">
+            <button class="btn btn-primary" id="btn-signal-confirm">开启信号监控</button>
+          </div>
         </div>
       </div>
-    </div>
-
-    <!-- P1 只读分享（QRE-SAAS-READONLY-SHARE）：登录用户分享自己的已完成结果；
-         游客/showcase/分享视图不显示（poll 内按 readonly 与登录态控制） -->
-    <div class="chart-box hidden" id="box-share">
-      <div class="chart-title">分享结果 <button type="button" class="tip-trigger" data-tip="生成一条只读链接：接收方无需登录即可查看本结果的策略定义与完整图表，不能修改或删除。默认私有，链接可设有效期并随时撤销。" aria-label="分享结果说明">?</button></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn-sm" id="btn-share">分享结果</button>
-        <span class="opt" id="share-status" style="font-size:12.5px"></span>
+      <div class="result-action-group hidden" id="box-share">
+        <div class="result-action-buttons">
+          <button class="btn btn-ghost" id="btn-share">分享结果</button>
+          <span class="result-action-status" id="share-status"></span>
+        </div>
       </div>
     </div>
 
@@ -1151,7 +1151,7 @@ async function poll(){
     if (data.readonly){
       // 经典策略只读展示（QRE-SAAS-SHOWCASE）/ 只读分享（QRE-SAAS-READONLY-SHARE）：
       // 隐藏全部操作入口与游客提示（含 base 全局游客条，避免误导匿名接收者）
-      ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip'].forEach(id => {
+      ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip', 'result-actions-card'].forEach(id => {
         const el = document.getElementById(id);
         if (el){ el.classList.add('hidden'); el.style.display = 'none'; }
       });
@@ -1276,17 +1276,29 @@ function mountReplay(d){
 }
 
 // --- 结果页操作卡（QRE-SAAS-RESULT-ACTIONS 2026-10-05）：保存入库 / 提示交易信号 ---
+// 结果操作外层卡可见性（QRE-SAAS-CLASSIC-ACTIONS-UI）：任一组非 hidden 才显示外层，
+// 两组皆 hidden（游客/只读/无 strategy）则整体隐藏；空安全（元素缺失时不动外层）。
+function syncResultActionCard(){
+  const outer = document.getElementById('result-actions-card');
+  if (!outer) return;
+  const visible = ['box-actions', 'box-share'].some(id => {
+    const el = document.getElementById(id);
+    return !!el && !el.classList.contains('hidden') && el.style.display !== 'none';
+  });
+  outer.classList.toggle('hidden', !visible);
+}
 async function initResultActions(jobData, chart){
-  if (jobData.readonly) return;
+  if (jobData.readonly){ syncResultActionCard(); return; }
   // 游客不显示（结果次日清空无资产可存，现有游客引导条已承担注册引导）
-  if (!SAAS_BYPASS && !saasToken()) return;
+  if (!SAAS_BYPASS && !saasToken()){ syncResultActionCard(); return; }
   const job = jobData.job || jobData;  // /api/saas/jobs/<id> 包 {ok, job}
   const sid = job.strategy_id;
-  if (!sid) return;
+  if (!sid){ syncResultActionCard(); return; }
   const box = document.getElementById('box-actions');
-  if (box.dataset.actionsBound === 'true') return;
+  if (box.dataset.actionsBound === 'true'){ syncResultActionCard(); return; }
   box.dataset.actionsBound = 'true';
   box.classList.remove('hidden');
+  syncResultActionCard();
   const saveBtn = document.getElementById('btn-save-lib');
   const statusEl = document.getElementById('action-status');
   // 已保存状态回填
@@ -1393,11 +1405,12 @@ function shareExpiryDays(){
 }
 function initShareButton(data){
   const box = document.getElementById('box-share');
-  if (!box) return;
+  if (!box){ syncResultActionCard(); return; }
   // 仅登录用户 + 已完成 + 非公开只读；游客/showcase/分享视图一律不出现入口
-  if (data && data.readonly){ box.classList.add('hidden'); return; }
-  if (!SAAS_BYPASS && !saasToken()){ box.classList.add('hidden'); return; }
+  if (data && data.readonly){ box.classList.add('hidden'); syncResultActionCard(); return; }
+  if (!SAAS_BYPASS && !saasToken()){ box.classList.add('hidden'); syncResultActionCard(); return; }
   box.classList.remove('hidden');
+  syncResultActionCard();
   if (box.dataset.shareBound === 'true') return;
   box.dataset.shareBound = 'true';
   document.getElementById('btn-share').addEventListener('click', () => setShareModal(true));

@@ -3,9 +3,8 @@
 {% block body %}
 <div class="wrap">
   <div class="page-head">
-    <h1>经典策略</h1>
+    <h1>经典策略 <button type="button" class="tip-trigger" data-tip="只读展示 · 数据每日收盘后更新 · 过往表现不构成投资建议。" aria-label="经典策略说明">?</button></h1>
     <p>经典量化策略在全 A 股、全历史区间的真实回测成绩，随每日数据更新持续跟踪。</p>
-    <p style="font-size:13px"><span class="opt">只读展示 · 数据每日收盘后更新 · 过往表现不构成投资建议</span></p>
     <!-- 公开 verified 判断只在服务端执行，页面不展示结果合同与验证标签。 -->
   </div>
   <div class="card">
@@ -21,16 +20,11 @@
       </tr></thead>
       <tbody id="sc-tbody"><tr><td colspan="8" class="muted">加载中…</td></tr></tbody>
     </table>
-    <p class="opt" id="sc-hint" style="margin-top:12px"></p>
   </div>
 
-  <div class="card">
-    <h2 style="font-size:15px">如何复现这些策略？</h2>
-    <p class="opt" style="font-size:13.5px;line-height:1.8">
-      以上策略均可用「新建策略」页的入口自由复现：均线、MACD 等经典因子已在因子库中，
-      用自然语言描述或自选因子组合即可生成同款策略，再按自己的区间与标的范围回测验证。
-      <a class="inl" href="/saas/new">立即试试 →</a>
-    </p>
+  <div class="card showcase-cta">
+    <h2 style="font-size:15px">复现经典策略 <button type="button" class="tip-trigger" data-tip="以上策略均可在「新建策略」页自由复现：用自然语言描述，或用自选因子组合生成同款策略，再按自己的区间与标的范围回测验证。" aria-label="复现经典策略说明">?</button></h2>
+    <a class="btn btn-primary" href="/saas/new">新建同款策略</a>
   </div>
 </div>
 {% endblock %}
@@ -66,7 +60,6 @@ async function loadShowcase(){
         '<td style="white-space:nowrap">' + esc(it.data_until || '—') + '</td>' +
       '</tr>';
     }).join('');
-    document.getElementById('sc-hint').textContent = '点击任意策略查看完整回测详情（收益曲线 / 板块归因 / 风险指标，只读）。';
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="8" class="muted">加载失败，请刷新重试</td></tr>';
   }

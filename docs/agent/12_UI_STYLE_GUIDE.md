@@ -135,7 +135,8 @@
 ### 3.2 表单控件（`lab-theme.css:63-72`）
 
 - `input/textarea/select`：1px `--line` 边、圆角 8px、padding 8px 12px、14px；hover 边变 `--lav-ink`；focus 紫边 + `box-shadow:0 0 0 3px rgba(103,80,164,.15)`（不用 outline）。
-- 必填星号 `.req` 红色常规字重（400，不加粗）；辅助说明 `.opt` 12.5px `--faint`。
+- 必填星号 `.req` 红色常规字重（400，不加粗）；辅助说明 `.opt` 12.5px `--faint`（**仅为既有遗留定义**）。
+- **新 UI 备注硬规则（2026-10-26 用户长期指令）**：新页面或 UI 改动不得新增任何形式的灰色小字号备注，包括 `.opt`、muted/faint 段落与灰色小字行内说明；必要解释统一使用 `tip-trigger` + `data-tip` + `LabUI.helpTips`，支持悬停、键盘聚焦与触摸，不在页面常驻重复说明。
 - 单选 `.radio-inline` / `.label-inline`：inline-flex、nowrap、`accent-color:var(--lav)`（原生 radio/checkbox 染紫）。
 
 ### 3.3 折叠区（`lab-theme.css:74-81,323-329`）
@@ -420,6 +421,7 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 ## 变更记录
 
+- 2026-10-26（QRE-SAAS-CLASSIC-ACTIONS-UI）新增结果操作卡与经典策略 CTA 两条局部规则族（无新色相/组件/动效，仅追加于 `lab-theme.css` 末尾）：**结果操作卡**——job「下一步」与「分享结果」合并为 `#result-actions-card`（标题「结果操作」+ 问号提示），内部两组 `.result-action-group`；按钮行 `.result-action-buttons`（flex、gap 10px、wrap、居中，`.btn` min-height 44px）；保存/确认信号=`btn btn-primary`、提示信号/分享=`btn btn-ghost`；`#action-status`/`#share-status` 类改 `.result-action-status`（13px `--ink` 正常可读状态文本，不用 `.opt` 灰字）；信号面板「T+1 参考/风险提示」移入「扫描范围」标签旁 `.tip-trigger`（`.result-action-scope`），radio/select/ID/scope 值不变；新增空安全 `syncResultActionCard()`（任一组非 hidden 才显示外层，游客/showcase/分享只读整体隐藏），init 两函数全分支同步、不重复绑定。**经典策略 CTA**——showcase 底部卡 `.showcase-cta`（flex wrap、h2 右推、主按钮 min-height 44px），页头备注移入 H1 旁问号提示。≤768px：CTA 纵排全宽、操作按钮 `flex:1 1 auto` 居中；375px 零横溢经真实 Chromium 验证。
 - 2026-10-25（QRE-SAAS-RESULT-UNDERSTANDING）新增 `static/lab-theme.css` 两条帮助页专用规则（无新色相/组件/动效）：`.help-sec{scroll-margin-top:76px}`（`/saas/help` 锚点小节避开 60px sticky 顶栏）与 `.help-jump`（页首锚点跳转胶囊，`--tint` 底 + `--tint-deep` 边 + hover 主紫反白，复用既有 token）。帮助页本体 `gui/saas/templates/help.html` 只用既有 `.page-head`/`.card`/`.tbl`/`.inl` 类；结果页各模块「说明 →」为 `.inl` 行内链接；SaaS 顶栏导航增至 5 项，`base.html` ≤400px 断点补 `header.topbar .mainnav{gap:0}`（lab-theme `.mainnav{gap:4px}` 后加载，须 `header.topbar` 前缀提优先级）+ logo 24px + 链接 11.5px，保证 375px 单行不折行。
 - 2026-10-25（QRE-SAAS-FACTOR-PICKER-MODAL）新增 §3.14 自选因子三栏弹窗选择器：入口 2 条件行三个堆叠下拉改为「按钮 + 三栏弹窗 + 搜索」；`.wz-left`/`.wz-rfield` select 降级为隐藏数据字段（`.factor-picker-field select{display:none}`）但仍是唯一值来源，YAML/快照/固定值/策略还原/price basis 零改动；弹窗复用 `FACTOR_OPTIONS` 与既有目录加载，不新增 API 与依赖；Esc/遮罩/关闭按钮只关不改值、焦点进搜索并归还原按钮、Tab 焦点锁；样式复用既有 modal 与紫色主题变量，768px 三栏降单列 + 视口限高。改动集中在 `gui/saas/templates/new.html` 与 `static/lab-theme.css`（移动端规则随组件放 lab-theme.css，因 base.html 无同族竞争规则），8081 lab 侧零改动。
 - 2026-10-25（QRE-GUI-FACTOR-REGISTRY-001）§3.14 自选因子三栏弹窗选择器补充**中文优先展示规则**：因子按钮、三栏列表与搜索结果一律以注册表中文名（`zh`）为主文案，价格口径（收盘价/典型价/均价）以「（口径）」后缀同屏显示，canonical `schema.table.column` 放进按钮 `title` 作悬停辅助对照（不占主文案、不进列表正文）；注册表未维护中文名的条目 `zh` 为 null，前端回退既有 `label`，**不得显示空文案**。子类栏在原有表名/分段键之上显示「大类(口径)」（数据键不变，仅换展示文本），因此同名列的不同价格口径在按钮、子类栏与搜索结果中都可区分。搜索匹配范围扩展到中文名、canonical、列名、全部别名与大类/子类（小写包含匹配），空态与「切回三栏即清空搜索结果」的既有规则不变。样式零新增（无新色相、无新组件），仅 `gui/saas/templates/new.html` 与 `gui/factor_wizard.py` 的目录数据结构；8081 lab 侧零改动。

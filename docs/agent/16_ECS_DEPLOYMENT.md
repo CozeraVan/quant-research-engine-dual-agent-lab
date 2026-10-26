@@ -53,6 +53,12 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **结果页 UI 精简已发布（2026-10-26，QRE-SAAS-UI-DECLUTTER-001，commit `8accb66`）**：同步 `_records_scripts.html`、help/job/showcase/symbol 四模板与 lab-theme.css（共六文件），仅重启 qre-saas。公网 job58/symbol58/showcase/profile/help 200，无合同标签、合同版本或 `/saas/help#` 深链；help 侧边栏目与 20px 标题生效，六文件 SHA256 与 HEAD 一致。回滚备份 `/tmp/qre-ui-declutter-pre-20261026/`，未重启 worker、未跑真实回测。
 
+**分享完整 URL 热修已部署（2026-10-26，QRE-SAAS-SHARE-ABSOLUTE-URL，待人工复验、未 commit/push）**：用户链接经 API 与 Chromium 验证实际有效，但创建响应只有相对路径。新增 `SAAS_PUBLIC_BASE_URL=https://www.aguhuice.com`，创建接口返回完整公网 URL（缺省回退 request.url_root）。生产创建/公开页面/撤销均 200，全量 2703 passed + 5 skipped，app.py 哈希一致。备份 `/tmp/qre-share-absolute-url-pre-20261026/`（app.py + 0600 env），未跑真实回测。
+
+**分享创建权限热修已部署（2026-10-26，QRE-SAAS-SHARE-SEQUENCE-GRANT，待人工复验、未 commit/push）**：生产日志确认 `share_links_id_seq` 缺 USAGE 导致 POST 分享 500；已授予 aguhuice 表 CRUD + 序列 USAGE/SELECT 并写入 `cloud_schema.sql` 幂等 DO 块。另将既有 showcase/showcase_daily 同构定义纳入权威 schema，消除新库懒建表时序依赖。真实创建/撤销 API 均 200，临时链接/session 清理，share_links=0；全量 2702 passed + 5 skipped，schema SHA256 一致。备份 `/tmp/qre-share-sequence-grant-pre-20261026/`，未跑真实回测。
+
+**经典策略与结果操作 UI 已发布（2026-10-26，QRE-SAAS-CLASSIC-ACTIONS-UI，已部署待人工验收、未 commit/push）**：核对 ECS 三文件与本地 HEAD 基线 SHA256 一致后，备份 `/tmp/qre-classic-actions-pre-20261026/`，仅同步 `showcase.html`、`job.html`、`lab-theme.css` 并重启 qre-saas（未重启 worker、未跑真实回测）。showcase：页头灰字备注移入 H1 旁问号提示，`#sc-hint` 与底部灰字长文/弱链接删除，改「复现经典策略」tip +「新建同款策略」主按钮（`/saas/new`），subtitle 保留。job：`#box-actions`/`#box-share` 合并进 `#result-actions-card`「结果操作」卡，保存/确认信号=主按钮、信号/分享=次按钮，状态文本去 `.opt`，信号 T+1 提示移入扫描范围问号；新增空安全 `syncResultActionCard()`（任一组可见才显示外层，游客/showcase/分享只读整体隐藏），原 ID/权限/事件绑定/API 不变。lab-theme.css 仅加局部规则（按钮 ≥44px、≤768px 纵排全宽、375px 不横溢）。测试：TDD RED→GREEN，新 `tests/test_saas_classic_actions_ui.py` 12 例 + 3 处既有断言更新，相关 10 文件 289 passed、全量 2701 passed + 5 skipped（零回归）；真实 Chromium 9/9 零 JS error 零横溢，证据 `.tmp/classic-actions-ui/`。公网：showcase/job58/`/static/lab-theme.css` 200，新标记齐全、删除标记为零、CSS SHA256 与本地一致，`/saas/`、help、login、new、symbols 两页 200。**未 commit/push，待用户人工验收；不通过立即恢复 `/tmp/qre-classic-actions-pre-20261026/` 并重启 qre-saas。**
+
 **NL DeepSeek V4.1 Flash 配置（2026-10-25）**：生产 `QRE_NL_LLM_BASE_URL=https://api.deepseek.com`，正确模型 ID 为 `QRE_NL_LLM_MODEL=deepseek-flash`（最新 V4.1 Flash；`deepseek-v4.1-flash` 不是可用 ID，真实编译 400）。已用 MACD 金叉死叉纯编译验证成功，未创建回测。改前 env 备份 `/etc/qre-saas.env.bak-deepseek-v41-20261025`（0600）。
 
 **元数据上云（2026-09-26）**：因子目录与板块/概念名单经
@@ -237,5 +243,5 @@ sudo -n systemctl restart qre-saas-worker && sudo -n journalctl -u qre-saas-work
 ## 6. 纪律
 
 - ECS 不落行情/因子明细（数据不出家门）；
-- 一切线上文件改动先在仓库 `deploy/` 下留版本再同步；
+- **先部署后验收再提交（2026-10-26 用户长期指令）**：代码/UI 改动先记录备份路径并直接同步 ECS，无需逐次询问部署批准；用户人工验收通过后再 commit/push，不通过立即恢复备份。文档-only 无需同步 ECS；
 - 8080 管理台永远留在本地，不随 SaaS 上线。

@@ -1,3 +1,17 @@
+### 2026-10-26: postgres-owner 新表必须同时授予表与序列权限
+
+- Decision: `share_links` 的 schema 幂等授予 aguhuice 表 CRUD 与 `share_links_id_seq` USAGE/SELECT；本地无该角色时跳过。showcase/showcase_daily 同构定义同时纳入权威 schema，新库不再依赖懒建表时序。
+- Rationale: postgres 建表后应用角色不是 owner，BIGSERIAL 插入需要表 INSERT 与序列 USAGE 两者；此前直接 SQL 验证未覆盖真实应用角色，导致首次用户创建分享 HTTP 500。
+- Verification: 生产真实创建/撤销 API 均 200；全量 2702 passed + 5 skipped；schema 幂等 apply 与 SHA256 一致。
+- Owner: KIMI_CODE；已部署待用户复验，未 commit/push。
+
+### 2026-10-26: 发布顺序与新 UI 备注规则（用户长期指令）
+
+- Decision: 所有 AI agent 的代码/UI 改动完成后直接备份并部署 ECS，不再逐次询问部署批准；用户人工验收通过后再 commit/push，不通过则恢复上一生产版本。文档-only 无需部署。对应 `02_LOCKED_REQUIREMENTS.md` R-DEPLOY-001。
+- Decision: 新页面和 UI 改动禁止新增任何形式的灰色小字号备注（含 `.opt`、muted/faint 段落与行内小字）；必要说明统一使用既有 `tip-trigger` + `data-tip` + `LabUI.helpTips`。对应 R-UI-001。
+- Rationale: 缩短部署往返，让线上人工验收成为 commit 门禁；持续收敛页面信息密度，避免备注与悬停提示重复。
+- Owner: KIMI_CODE 与所有实施 agent 每次交互严格执行。
+
 ### 2026-10-25: 游客归属从纯 IP 改为随机会话 Cookie + ECS 内置测试账号移除（P0-2）
 
 - Decision: 新游客结果归属 = 应用签发的随机 `qre_guest_sid` Cookie

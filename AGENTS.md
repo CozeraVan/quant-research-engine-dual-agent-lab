@@ -59,6 +59,8 @@ The markdown files under `docs/agent/` are the project's only authoritative long
     - `git status`
     - `git diff --name-only HEAD`
     - `scripts/check-progress-docs.sh` if available.
+12. Deployment-before-review (user standing instruction, 2026-10-26): after any code/UI change, back up the affected production files and deploy directly to ECS without asking for deployment approval. Do not commit or push until the user manually accepts the deployed result. If rejected, restore the previous production version immediately. Documentation-only changes need no ECS synchronization.
+13. UI notes (user standing instruction, 2026-10-26): new pages and UI changes must not introduce gray small-font note text in any form. Put necessary explanations into the existing `tip-trigger` + `data-tip` + `LabUI.helpTips` interaction; do not add `.opt`, muted/faint helper paragraphs, or small gray inline notes.
 
 ## Git Ownership Rule
 

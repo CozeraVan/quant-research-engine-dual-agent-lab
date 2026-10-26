@@ -2,7 +2,51 @@
 
 ## Task ID
 
-QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
+QRE-SAAS-SHARE-ABSOLUTE-URL（分享链接补全公网域名）
+
+## Release Status
+
+已部署待人工复验，未 commit/push（2026-10-26）。最终全量 2703 passed + 5 skipped；生产创建返回完整公网 URL，公开页面与撤销验证通过。
+
+## Implementation Summary
+
+- 先验证用户链接：summary=200、readonly_kind=share、Chromium 只读渲染无 JS error，排除 token 失效；实际缺陷为创建响应只有相对路径。
+- `app.py::api_share_link_create`：新增 `public_base_url = SAAS_PUBLIC_BASE_URL or request.url_root`，返回 `<base>/saas/jobs/<id>?share=<token>`；生产 env 固定 `SAAS_PUBLIC_BASE_URL=https://www.aguhuice.com`。
+- `tests/test_saas_access_hardening.py`：新增创建 URL 必须为绝对公网地址；access_hardening 68 passed，全量 2703 passed + 5 skipped。
+- ECS：备份 `/tmp/qre-share-absolute-url-pre-20261026/`（app.py 与 0600 env），同步 app.py + env 后仅重启 qre-saas。真实创建 URL 前缀正确、公开页面 200、撤销 200；临时 session/link 清理。未跑真实回测。
+
+## Task ID
+
+QRE-SAAS-SHARE-SEQUENCE-GRANT（分享创建 HTTP 500 权限热修）
+
+## Release Status
+
+已部署待人工复验，未 commit/push（2026-10-26）。最终全量 2702 passed + 5 skipped；生产真实创建/撤销 API 均 HTTP 200，schema 哈希一致，临时数据已清理。
+
+## Implementation Summary
+
+- 生产日志根因：`psycopg.errors.InsufficientPrivilege: permission denied for sequence share_links_id_seq`，不是结果操作卡或分享前端问题。
+- `deploy/saas/cloud_schema.sql`：在 `share_links` 索引后增加 DO 块，角色 `aguhuice` 存在时授予表 SELECT/INSERT/UPDATE/DELETE 与序列 USAGE/SELECT；角色不存在的本地临时库跳过，保持可重复 apply。
+- 同文件将既有 `showcase`/`showcase_daily` 定义纳入权威 schema，消除新库懒建表时序依赖；生产 IF NOT EXISTS 不改动既有表。
+- `tests/test_saas_access_hardening.py`：新增表+序列 GRANT 静态回归；access_hardening 67 passed、相关 88 passed、全量 2702 passed + 5 skipped。
+- ECS：备份 `/tmp/qre-share-sequence-grant-pre-20261026/`，生产 GRANT + 两次幂等 apply；真实 POST 创建与撤销均 200，临时链接/session 删除，share_links=0。未跑真实回测。
+
+## Task ID
+
+QRE-SAAS-CLASSIC-ACTIONS-UI（经典策略按钮与结果操作卡精修）
+
+## Release Status
+
+已部署待人工验收，未 commit/push（2026-10-26；R-DEPLOY-001）。相关 10 文件 289 passed + access_hardening 66 passed，全量 **2701 passed + 5 skipped**（基线 2689+5 零回归）；真实 Chromium 9/9 零 JS error 零横溢，证据 `.tmp/classic-actions-ui/`。ECS 三文件与 HEAD 基线一致，备份 `/tmp/qre-classic-actions-pre-20261026/` 后同步 `showcase.html`、`job.html`、`lab-theme.css` 并仅重启 qre-saas（worker 未动、未跑真实回测）；公网 showcase/job58/`/static/lab-theme.css` 200 且新标记齐全、删除标记为零、CSS SHA256 与本地一致。**待用户人工验收通过后才 commit/push；不完整恢复上述备份。**
+
+## Implementation Summary
+
+- `showcase.html`：页头 `.opt` 备注 → H1 旁 `tip-trigger`（data-tip 承载只读/更新/风险）；删 `#sc-hint` 元素与 `getElementById('sc-hint')` 赋值；底部卡改 `card showcase-cta`（「复现经典策略」+ 问号提示 + `btn btn-primary`「新建同款策略」→ `/saas/new`）；subtitle 渲染逻辑原样保留。
+- `job.html`：新增外层 `chart-box hidden#result-actions-card`（标题「结果操作」+ 问号提示）；`#box-actions`/`#box-share` 改 `result-action-group hidden` 内部组；保存/确认信号=`btn btn-primary`（移除 confirm 的 `background:var(--accent)` 内联），信号/分享=`btn btn-ghost`；`#action-status`/`#share-status` 类改 `result-action-status`；信号面板灰字「T+1 参考…扫描范围：」改「扫描范围」标签 + `tip-trigger`（data-tip 承载 T+1 与范围口径），radio/select/ID/scope 值不变；readonly 隐藏清单加 `result-actions-card`；新增 `syncResultActionCard()`（空安全、双组 or 判断、`classList.toggle('hidden', !visible)`），`initResultActions`/`initShareButton` 全分支（readonly/游客/无 sid/无 box/已绑定/显示）结束后调用；保存/信号/分享 API、状态回填、`actionsBound`/`shareBound` 防重绑不变。
+- `lab-theme.css`：文件末尾追加局部规则块（注释标记 `QRE-SAAS-CLASSIC-ACTIONS-UI`）：`.result-action-group`（首组无顶距）、`.result-action-buttons`（flex/gap 10px/wrap/居中）、`.result-action-buttons .btn` 与 `.showcase-cta .btn` `min-height:44px`、`.result-action-status`（13px `--ink` 可读状态文本）、`.result-action-scope`、`.showcase-cta`（flex wrap、h2 右推）；≤768px：CTA 纵排全宽、操作按钮 `flex:1 1 auto` 居中。无新色相、无 `--faint`、不动 `.btn-sm` 与其他页面。
+- 测试：新 `tests/test_saas_classic_actions_ui.py`（静态断言 + 两个 Node harness：完整脚本段可见性矩阵四形态/连续初始化/失败重试/单绑定；`syncResultActionCard` 单独抽取空安全跑 null document）；`tests/test_saas_access_hardening.py` 更新只读隐藏清单字符串、readonly harness `known` 与循环（加 `result-actions-card`）、share harness 增 `syncResultActionCard(){}` 透传桩（该 harness 只抽取分享段）；`tests/test_gui_saas_pages.py` 的 readonly marker 同步为新行。
+
+## Archive: QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
 
 ## Release Status
 

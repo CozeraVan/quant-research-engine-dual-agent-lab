@@ -2,6 +2,24 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
+### 2026-10-26 STANDING RULES（每次交互必须执行）
+
+1. **先部署后验收再提交**：任何 AI agent 的代码/UI 改动完成后，备份生产文件并直接部署 ECS，不再询问部署许可；用户人工验收通过后才 commit/push，不通过立即恢复上一版本。文档-only 无需同步 ECS。详见 `02_LOCKED_REQUIREMENTS.md` R-DEPLOY-001。
+2. **新 UI 禁止灰色小字备注**：任何新页面/UI 改动不得新增 `.opt`、muted/faint 辅助段落或灰色小字行内说明；必要解释统一使用 `tip-trigger` + `data-tip` + `LabUI.helpTips`。详见 R-UI-001。
+3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
+
+### 2026-10-26 QRE-SAAS-SHARE-ABSOLUTE-URL 已部署待人工复验，未 commit/push
+
+用户认为新建分享链接无效。核查其实际 summary=200、readonly_kind=share、真实 Chromium 只读渲染正常，token 与权限均有效；问题是创建响应只有相对路径。`api_share_link_create` 改为 `SAAS_PUBLIC_BASE_URL`（缺省 request.url_root）+ 分享路径，生产固定 `https://www.aguhuice.com`。新增绝对 URL 回归，access_hardening 68 passed，全量 2703 passed + 5 skipped。生产创建返回完整公网 URL、公开页面 200、撤销 200，临时数据清理，app.py 哈希一致。备份 `/tmp/qre-share-absolute-url-pre-20261026/`（app.py + 0600 env），未跑真实回测。既有相对链接仍有效，无需撤销。
+
+### 2026-10-26 QRE-SAAS-SHARE-SEQUENCE-GRANT 已部署待人工复验，未 commit/push
+
+用户点击分享结果报 HTTP 500。生产日志确认 `share_links_id_seq` 缺 USAGE（postgres 建表，aguhuice 表 CRUD 已有、序列权限遗漏）。生产 GRANT 后真实创建/撤销 API 均 200；`cloud_schema.sql` 写入角色存在时幂等表+序列 GRANT，新增静态回归。全量测试另暴露 showcase 新库懒建表时序问题，将既有 showcase/showcase_daily 同构定义纳入权威 schema，最终全量 2702 passed + 5 skipped。ECS 已 apply 并验证序列 USAGE=true、两表存在、schema SHA256 一致；临时 session/link 清理，share_links=0。备份 `/tmp/qre-share-sequence-grant-pre-20261026/`，未跑真实回测。请用户再次点击分享结果复验，通过前不提交。
+
+### 2026-10-26 QRE-SAAS-CLASSIC-ACTIONS-UI 已部署待人工验收，未 commit/push
+
+按批准计划 `amadeus-cho-cannonball-cyborg.md` 完成并直接部署 ECS（R-DEPLOY-001，未跑真实回测）：①showcase 删除页头灰字备注/`#sc-hint`/底部灰字长文与弱链接，页头信息移入 H1 旁问号提示，底部改「复现经典策略」tip +「新建同款策略」`btn-primary`（链接仍 `/saas/new`），subtitle 保留；②job 将 `#box-actions`/`#box-share` 合并进 `#result-actions-card`「结果操作」卡（标题 + 问号提示），保存/确认信号=主按钮、信号/分享=次按钮，`action-status`/`share-status` 改 `result-action-status`，信号面板 T+1 风险提示移入扫描范围问号提示；新增空安全 `syncResultActionCard()`（任一组可见才显示外层；游客/只读/无 strategy 整体隐藏），init 两函数全分支同步，不重复绑定；③lab-theme.css 仅加局部规则（按钮 ≥44px、≤768px 纵排/全宽、375px 不横溢）。TDD 先 RED（新 11 + access_hardening 2 失败）后 GREEN：新 `tests/test_saas_classic_actions_ui.py` 12 例（静态断言 + Node 可见性矩阵四形态/连续初始化/失败重试/空安全），3 处既有断言随行为更新；相关 10 文件 289 passed、access_hardening 66 passed、**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2701 passed + 5 skipped**（基线 2689+5 零回归）。真实 Chromium（临时库 `qre_readonly_share_browser` + 8099 临时 staging，worker 协议模拟 completed，未启动真实 worker/未跑真实回测）9/9 零 JS error 零横溢：showcase CTA 与删除标记、三操作按钮层级 44px、信号面板三 scope、confirm 端到端、分享模态、375px 登录态、游客与 showcase 只读整体隐藏；证据 `.tmp/classic-actions-ui/`（7 截图 + browser-evidence.json + red/green/public-verification）。ECS 三文件与 HEAD 基线 SHA256 一致，备份 `/tmp/qre-classic-actions-pre-20261026/` 后 scp 同步 `showcase.html`/`job.html`/`lab-theme.css`，仅重启 qre-saas（worker 未动）；公网 showcase 200（主按钮/删除标记为零/仅剩 subtitle 一处 `.opt`）、job58 200（新卡/sync/只读清单）、`/static/lab-theme.css` SHA256 与本地一致、`/saas/` help login new symbols 两页均 200。**未 commit/push，待用户人工验收；不通过立即恢复 `/tmp/qre-classic-actions-pre-20261026/` 并重启 qre-saas。** 验收通过后建议提交 `refactor(saas): 精修经典策略与结果操作按钮`。小游戏/Steam 继续挂起；下一主线：NL A2 持久限频与 A3 编译缓存，随后再做公测运营反馈与关键浏览器自动化。
+
 ### 2026-10-26 QRE-SAAS-UI-DECLUTTER-001 DONE（已发布）
 
 Kimi 按用户三项要求直接完成并发布 `8accb66`：①job/showcase/个人回测记录的结果合同、验证徽标、版本与新旧口径全部隐藏，系统内 `result_contract`、verified 门与分享权限不变；②job/symbol 所有 `/saas/help#...` 模块深链删除，tip-trigger 与曲线口径提示保留；③help 改 190px sticky 侧边栏目、20px 标题，≤760px 双列静态导航，并删除验证状态文案。相关 138 passed，全量 2689 passed + 5 skipped；真实 Chromium 6/6 零 JS error 零横溢，证据 `.tmp/ui-declutter/`。ECS 备份 `/tmp/qre-ui-declutter-pre-20261026/`，六文件哈希一致，公网五个页面 200 且删除标记为零。仅重启 qre-saas，未重启 worker、未跑真实回测。小游戏/Steam 挂起；下一主线为经典策略按钮与结果操作卡 UI 精修。

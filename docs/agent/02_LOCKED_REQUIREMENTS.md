@@ -166,6 +166,18 @@ Do not commit code until:
 - `10_REVIEW_REPORT.md` has no Required Fixes,
 - user approval or standing approval exists.
 
+## R-DEPLOY-001: 先部署 ECS，人工验收后再提交
+
+Status: LOCKED（用户长期指令，2026-10-26）
+
+任何 AI agent 的代码或 UI 改动完成后，无需再向用户询问部署许可：先备份受影响的生产文件并直接部署 ECS。用户人工验收通过后才允许 commit/push；验收不通过必须立即恢复上一生产版本。文档-only 改动无需同步 ECS。不得用该规则绕过测试、权限核查、schema 备份或生产验证。
+
+## R-UI-001: 新界面禁止灰色小字号备注
+
+Status: LOCKED（用户长期指令，2026-10-26）
+
+任何新页面或 UI 改动不得新增任何形式的灰色小字号备注文本，包括 `.opt`、muted/faint 辅助段落、灰色小字行内说明。必要解释统一复用既有 `tip-trigger` + `data-tip` + `LabUI.helpTips` 的悬停/聚焦提示形式。既有正文、表单值、状态与错误信息不属于备注，不得借规则删减。
+
 ## R-MEM-001: 内存红线——任何全市场计算必须分块，任何长跑子进程必须有内存配额
 
 Status: LOCKED

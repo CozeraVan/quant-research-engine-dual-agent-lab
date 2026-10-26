@@ -25,6 +25,7 @@ import re
 import subprocess
 import uuid
 from http.cookies import SimpleCookie
+from pathlib import Path
 
 import pytest
 
@@ -669,6 +670,12 @@ class TestShareLinkCreate:
         r = _create_share(client, jid, uid=1, payload={})
         assert r.status_code == 200 and r.get_json()["expires_at"]
 
+    def test_created_url_is_absolute_public_url(self, client, app):
+        app.config["SAAS_PUBLIC_BASE_URL"] = "https://www.aguhuice.com/"
+        jid = _completed_job(client)
+        body = _create_share(client, jid, uid=1).get_json()
+        assert body["url"].startswith(f"https://www.aguhuice.com/saas/jobs/{jid}?share=")
+
     def test_unverified_result_shareable_and_contract_kept(self, client, app):
         jid = _insert_unverified_job(app)
         r = _create_share(client, jid, uid=1)
@@ -694,6 +701,12 @@ class TestShareLinkCreate:
 
 class TestShareLinkStorage:
     """存储形态：DB 只有 64 位哈希；列表不回 hash/明文。"""
+
+    def test_cloud_schema_grants_table_and_sequence_to_app_role(self):
+        schema = (Path(__file__).resolve().parents[1] / "deploy/saas/cloud_schema.sql").read_text()
+        assert "GRANT SELECT, INSERT, UPDATE, DELETE ON share_links TO aguhuice;" in schema
+        # BIGSERIAL 的 id 还需要序列权限，否则生产创建分享会 HTTP 500。
+        assert "GRANT USAGE, SELECT ON SEQUENCE share_links_id_seq TO aguhuice;" in schema
 
     def test_columns_minimal(self, client, app):
         jid = _completed_job(client)
@@ -1009,7 +1022,7 @@ class TestShareUiMarkers:
             "back.textContent = '← 返回首页'",
             "shareUrl('/api/saas/jobs/' + JOB_ID + '/share-links')",
             "function initShareButton(data)",
-            "'box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip'",
+            "'box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip', 'result-actions-card'",
             "fmtShareTime(d.expires_at)",
             "LabUI.fmtLocalTime",
             "gs.classList.add('hidden'); gs.style.display = 'none';",
@@ -1066,6 +1079,9 @@ function createJobShareHarness(options){
     URLSearchParams, encodeURIComponent,
     navigator: options.navigator || {clipboard: null},
     saasToken(){ return options.token || ''; },
+    // syncResultActionCard 定义在更早的结果操作段（本 harness 抽取范围之外），
+    // 外层卡可见性矩阵由 test_saas_classic_actions_ui 的完整脚本段覆盖
+    syncResultActionCard(){},
     apiFetch(url, opts){ calls.requests.push({url, options: opts}); return options.fetchImpl(url, opts); },
     localStorage: {setItem(k, v){ calls.localStorageWrites.push([k, v]); }, getItem(){ return null; }},
     setTimeout(fn){ Promise.resolve().then(fn); return 1; }, clearTimeout(){},
@@ -1082,7 +1098,7 @@ function createReadonlyHarness(){
   const elements = {};
   const h1 = makeEl(), back = makeEl();
   back.attributes.href = '/saas/';
-  const known = ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip'];
+  const known = ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip', 'result-actions-card'];
   const document = {
     getElementById(id){
       if (known.indexOf(id) < 0) return null;
@@ -1262,8 +1278,8 @@ class TestJobShareJs:
       assert.equal(h.back.href, '/saas/showcase');
       assert.equal(h.back.textContent, '← 返回经典策略');
     }
-    // 操作入口与分享入口一并隐藏
-    for (const id of ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip']){
+    // 操作入口与分享入口（含合并后的外层结果操作卡）一并隐藏
+    for (const id of ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip', 'result-actions-card']){
       assert.ok(h.context.document.getElementById(id).classList.contains('hidden'), id);
     }
   }

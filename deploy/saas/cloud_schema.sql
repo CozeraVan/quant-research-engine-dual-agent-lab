@@ -261,6 +261,27 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at DESC);
 
+-- 经典策略公开白名单与增量日更：纳入权威 schema，避免新库依赖懒建表时序。
+CREATE TABLE IF NOT EXISTS showcase (
+    job_id     BIGINT PRIMARY KEY REFERENCES jobs(id),
+    title      TEXT NOT NULL,
+    subtitle   TEXT,
+    sort_order INT NOT NULL DEFAULT 0,
+    is_active  BOOL NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS showcase_daily (
+    job_id       BIGINT NOT NULL REFERENCES jobs(id),
+    trade_date   DATE NOT NULL,
+    daily_return DOUBLE PRECISION NOT NULL,
+    equity       DOUBLE PRECISION,
+    n_positions  INT,
+    n_entries    INT,
+    n_exits      INT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (job_id, trade_date)
+);
+
 -- QRE-SAAS-READONLY-SHARE（P1，2026-10-26）：登录用户把本人已完成结果分享为
 -- 可撤销的只读链接。token 用 secrets.token_urlsafe(32)，库中只存完整
 -- SHA-256(token + salt) 哈希（token_hash 64 位十六进制）；无明文/前缀/guest_key/
@@ -279,6 +300,15 @@ CREATE TABLE IF NOT EXISTS share_links (
 );
 CREATE INDEX IF NOT EXISTS idx_share_links_job ON share_links (job_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_share_links_owner ON share_links (owner_id, created_at DESC);
+-- postgres 建表时应用角色不是 owner：CRUD 与 BIGSERIAL 序列权限都必须显式授予。
+-- 角色不存在于本地临时库时跳过，保证测试库可重复 apply。
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON share_links TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE share_links_id_seq TO aguhuice;
+    END IF;
+END $$;
 
 -- QRE-AUTH-MEMBERSHIP（A2，2026-09-27，18 号设计文档 §3）：
 -- Authing 身份层接入。authing_id = OIDC sub（唯一，首登自动建档）；

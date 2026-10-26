@@ -3834,8 +3834,9 @@ def create_saas_app() -> Flask:
                      "VALUES (:h, :j, :o, :e) RETURNING id, expires_at"),
                 {"h": _share_token_hash(app, token), "j": job_id, "o": uid, "e": expires_at},
             ).mappings().first()
+        public_base_url = (_cfg(app, "SAAS_PUBLIC_BASE_URL", "") or request.url_root).rstrip("/")
         return jsonify({"ok": True, "id": link["id"],
-                        "url": f"/saas/jobs/{job_id}?share={token}",
+                        "url": f"{public_base_url}/saas/jobs/{job_id}?share={token}",
                         "expires_at": _jsonable(link["expires_at"])})
 
     @app.get("/api/saas/share-links")

@@ -2,7 +2,75 @@
 
 ## Task ID
 
-QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
+QRE-SAAS-SHARE-ABSOLUTE-URL（分享链接补全公网域名）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS + 已部署待人工复验，未 commit/push（2026-10-26）。最终全量 2703 passed + 5 skipped；生产完整 URL 创建、公开读取与撤销通过。
+
+## Self-Review Findings
+
+- 用户链接本身有效，未误删或撤销；先用 API 与真实 Chromium 证明只读通道正常，再修相对 URL 的展示/分发缺陷。
+- 公网 base 由显式 `SAAS_PUBLIC_BASE_URL` 配置，避免反代 scheme/Host 推断错误；本地无配置时保留 request.url_root 回退。
+- access_hardening 68 passed，全量 2703 passed + 5 skipped；生产创建返回 `https://www.aguhuice.com/...`，公开页面 200、撤销 200，临时数据清理。
+
+## Required Fixes
+
+无。
+
+## Task ID
+
+QRE-SAAS-SHARE-SEQUENCE-GRANT（分享创建 HTTP 500 权限热修）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS + 已部署待人工复验，未 commit/push（2026-10-26）。最终全量 2702 passed + 5 skipped；生产真实创建/撤销均 HTTP 200。
+
+## Self-Review Findings
+
+- 生产日志直接证明缺少序列 USAGE，表 CRUD 权限原本存在；未从前端或结果操作卡猜测修复。
+- schema GRANT 采用角色存在检查的幂等 DO 块，既修复 postgres-owner 生产库，也不破坏本地临时库 apply。
+- 全量测试另发现 showcase 新库缺表；补齐与既有应用层完全同构的 showcase/showcase_daily 后，先前失败用例与全量均通过（2702+5）。
+- 真实生产 API 创建/撤销均为 200，临时 session/link 清理，share_links=0；schema 哈希一致，未跑真实回测。
+
+## Required Fixes
+
+无。
+
+## Task ID
+
+QRE-SAAS-CLASSIC-ACTIONS-UI（经典策略按钮与结果操作卡精修）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS + 已部署待人工验收，未 commit/push（2026-10-26）。相关 10 文件 289 passed + access_hardening 66 passed，全量 **2701 passed + 5 skipped**（基线 2689+5，零回归）；真实 Chromium 9/9 零 JS error 零横向溢出；ECS 三文件与 HEAD 基线一致、备份 `/tmp/qre-classic-actions-pre-20261026/`、仅重启 qre-saas；公网验证通过。验收通过后才可 commit/push。
+
+## Self-Review Findings
+
+- **边界遵守**：未改 API/schema/引擎/worker/数值/权限；`box-actions`/`box-share`/`btn-save-lib`/`btn-signal-open`/`btn-signal-confirm`/`action-status`/`signal-panel`/`sig-univ-*`/`btn-share`/`share-status`/分享模态全部 ID 保留；保存/信号/分享三个 API 与状态回填、`actionsBound`/`shareBound` 防重绑不变；radio/select/scope 值不变。showcase subtitle 为内容保留。
+- **R-UI-001**：改动区域（外层结果操作卡内含两组与信号面板、showcase 页头与 CTA 卡）零 `.opt`/muted/`--faint`/小字号灰字；解释全部走 `tip-trigger + data-tip + LabUI.helpTips`（页头只读提示、CTA 复现提示、外层结果操作提示、扫描范围 T+1 提示共 4 处新增问号，真实浏览器 hover 均出完整文案）。showcase 全页仅剩 subtitle 一处 `.opt`（策略内容，计划明确保留）。
+- **可见性矩阵**（Node 完整脚本段 + 真实浏览器双证）：保存+信号+分享、仅分享（无 strategy_id）、游客、showcase 只读四形态外层卡显隐正确；连续两次 poll 与失败重试后 4 个按钮 click 监听均为 1；`syncResultActionCard` 对缺失元素不抛错。
+- **按钮层级与触控**：保存/确认信号=主按钮、信号/分享=次按钮（真实浏览器 computed class + 高度 44px×4 与 CTA 44px）；375px 零横溢、CTA 全宽纵排。
+- **回归**：P0-2/P0-1B/只读分享/帮助文案/参数提示/信号/首成功/等待遮罩/symbol 既有用例全保留（3 处既有断言随行为更新：只读隐藏清单、readonly harness、share 透传桩、readonly marker）；临时 staging 与临时库未清理（供复跑），生产零临时数据。
+- **检查脚本**：`scripts/check-progress-docs.sh` 通过、`git diff --check` clean；`scripts/git-finalize-check.sh` 的凭证扫描命中均为既有标识符 `saasToken()`（函数名含 token 子串，出现在本次改动的 init 分支行）与 CSS 注释「token 与按钮体系」——人工核对无真实凭证，按既往惯例未改产品代码规避扫描。
+
+## Required Fixes
+
+无。
+
+## Archive: QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
 
 ## Reviewer
 

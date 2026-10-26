@@ -1638,7 +1638,7 @@ function pendingResponse(options){
             "已暂停自动刷新",
             "clearPollTimer()",
             "pollInFlight",
-            "if (jobData.readonly) return;",
+            "if (jobData.readonly){ syncResultActionCard(); return; }",
             "tagResp.status === 404",
         ):
             assert marker in html
