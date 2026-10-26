@@ -6,7 +6,7 @@ QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
 
 ## Release Status
 
-IMPLEMENTED（2026-10-26，Kimi；待用户验收，未 commit/push/ECS，未跑真实回测）。相关 138 passed，全量 2689 passed + 5 skipped，真实 Chromium 6/6；证据 `.tmp/ui-declutter/`。
+RELEASED（2026-10-26，实现 `8accb66` 已 push + ECS，未跑真实回测）。相关 138 passed，全量 2689 passed + 5 skipped，真实 Chromium 6/6；证据 `.tmp/ui-declutter/`。ECS 备份 `/tmp/qre-ui-declutter-pre-20261026/`，六文件 SHA256 与 HEAD 一致；公网 job58/symbol58/showcase/profile/help 200，删除标记为零，侧边栏目与 20px 标题生效。
 
 ## Implementation Summary
 

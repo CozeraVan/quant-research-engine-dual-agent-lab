@@ -51,6 +51,8 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **P1 只读分享已发布（2026-10-26，QRE-SAAS-READONLY-SHARE，commit `08b4a27`）**：postgres 幂等 apply `share_links`（owner=postgres）后同步 app.py、四个结果/个人信息模板与 schema，仅重启 qre-saas。公网 job74 创建→匿名只读 200→撤销 401；job58 无参数 showcase=200、无效/撤销 share=401、有效 share=200，显式失效分享不会回退 showcase。临时链接已清理，share_links=0，未重启 worker、未跑真实回测。回滚备份 `/tmp/qre-readonly-share-pre-20261026/` 与 `/tmp/qre-readonly-share-showcase-hotfix-pre-20261026/`。
 
+**结果页 UI 精简已发布（2026-10-26，QRE-SAAS-UI-DECLUTTER-001，commit `8accb66`）**：同步 `_records_scripts.html`、help/job/showcase/symbol 四模板与 lab-theme.css（共六文件），仅重启 qre-saas。公网 job58/symbol58/showcase/profile/help 200，无合同标签、合同版本或 `/saas/help#` 深链；help 侧边栏目与 20px 标题生效，六文件 SHA256 与 HEAD 一致。回滚备份 `/tmp/qre-ui-declutter-pre-20261026/`，未重启 worker、未跑真实回测。
+
 **NL DeepSeek V4.1 Flash 配置（2026-10-25）**：生产 `QRE_NL_LLM_BASE_URL=https://api.deepseek.com`，正确模型 ID 为 `QRE_NL_LLM_MODEL=deepseek-flash`（最新 V4.1 Flash；`deepseek-v4.1-flash` 不是可用 ID，真实编译 400）。已用 MACD 金叉死叉纯编译验证成功，未创建回测。改前 env 备份 `/etc/qre-saas.env.bak-deepseek-v41-20261025`（0600）。
 
 **元数据上云（2026-09-26）**：因子目录与板块/概念名单经

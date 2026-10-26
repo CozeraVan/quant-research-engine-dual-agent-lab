@@ -2,9 +2,9 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
-### 2026-10-26 QRE-SAAS-UI-DECLUTTER-001 IMPLEMENTED（当前待验收）
+### 2026-10-26 QRE-SAAS-UI-DECLUTTER-001 DONE（已发布）
 
-Kimi 按用户三项要求直接完成：①job/showcase/个人回测记录的结果合同、验证徽标、版本与新旧口径全部隐藏，系统内 `result_contract`、verified 门与分享权限不变；②job/symbol 所有 `/saas/help#...` 模块深链删除，tip-trigger 与曲线口径提示保留；③help 改 190px sticky 侧边栏目、20px 标题，≤760px 双列静态导航，并删除验证状态文案。TDD RED=9→相关 138 passed，全量 2689 passed + 5 skipped；真实 Chromium 6/6 零 JS error 零横溢，截图复核，证据 `.tmp/ui-declutter/`。仅 6 模板 + lab-theme.css + 4 测试文件改动，无 API/schema/引擎/worker/数值变化，未跑真实回测，未 commit/push/ECS。建议提交 `refactor(saas): 精简结果页口径展示与帮助导航`。小游戏/Steam 挂起；下一主线为经典策略按钮与结果操作卡 UI 精修。
+Kimi 按用户三项要求直接完成并发布 `8accb66`：①job/showcase/个人回测记录的结果合同、验证徽标、版本与新旧口径全部隐藏，系统内 `result_contract`、verified 门与分享权限不变；②job/symbol 所有 `/saas/help#...` 模块深链删除，tip-trigger 与曲线口径提示保留；③help 改 190px sticky 侧边栏目、20px 标题，≤760px 双列静态导航，并删除验证状态文案。相关 138 passed，全量 2689 passed + 5 skipped；真实 Chromium 6/6 零 JS error 零横溢，证据 `.tmp/ui-declutter/`。ECS 备份 `/tmp/qre-ui-declutter-pre-20261026/`，六文件哈希一致，公网五个页面 200 且删除标记为零。仅重启 qre-saas，未重启 worker、未跑真实回测。小游戏/Steam 挂起；下一主线为经典策略按钮与结果操作卡 UI 精修。
 
 ### 2026-10-26 QRE-SAAS-READONLY-SHARE DONE（P1 第三切片已发布）
 

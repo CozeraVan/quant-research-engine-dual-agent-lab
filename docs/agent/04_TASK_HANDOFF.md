@@ -6,7 +6,7 @@ QRE-SAAS-UI-DECLUTTER-001（结果页口径展示与说明页导航精简）
 
 ## Current Status
 
-IMPLEMENTED（2026-10-26，Kimi 直接实施；待用户验收，未 commit/push/ECS，未跑真实回测）
+DONE（2026-10-26 用户批准提交并部署；实现 `8accb66` 已 push + ECS，未跑真实回测）
 
 ## Task Note
 
@@ -14,7 +14,7 @@ IMPLEMENTED（2026-10-26，Kimi 直接实施；待用户验收，未 commit/push
 - **重复说明入口删除**：job 的基准/费用/风险/归因及 symbol 的收益/费用/风险/数据截止处 `/saas/help#...` 链接全部移除；现有 `tip-trigger` 悬停说明保留，`renderContract` 仅继续驱动曲线口径提示。
 - **使用说明改版**：桌面为 190px sticky 侧边栏目，七锚点不变，卡片 h2 增至 20px；≤760px 转为静态顶部双列导航。帮助页删除验证状态/新旧口径文案，改「收益口径与数据截止」。
 - **验证**：TDD RED=9 项；相关 138 passed；全量 **2689 passed + 5 skipped**。真实 Chromium 6/6（job/symbol/showcase/profile/help 桌面 + help 375），零 JS error、零横向溢出，截图已复核，证据 `.tmp/ui-declutter/`。临时 staging 与临时库已清理。
-- **边界**：纯模板/CSS/测试改动，无 API/schema/引擎/worker/数值/权限改动，未跑真实回测。建议提交 `refactor(saas): 精简结果页口径展示与帮助导航`，commit/push/ECS 待用户批准。下一项回归主线：经典策略按钮与结果操作卡 UI 精修。
+- **发布**：实现 `8accb66` 已 push。ECS 备份 `/tmp/qre-ui-declutter-pre-20261026/` 后同步六个前端文件并仅重启 qre-saas；公网 job58/symbol58/showcase/profile/help 均 200，删除标记为零，help 侧栏与 20px 标题生效，六文件 SHA256 与 HEAD 一致。纯模板/CSS/测试改动，无 API/schema/引擎/worker/数值/权限改动，未跑真实回测。下一项回归主线：经典策略按钮与结果操作卡 UI 精修。
 
 ## Archive: QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与数据/费用口径）
 
