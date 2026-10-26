@@ -2,7 +2,24 @@
 
 ## Current Release
 
-DONE（2026-10-26 用户批准提交，实现 `e6f4f77` 已 push + ECS）：经典策略与结果操作卡精修、分享序列权限热修、分享完整公网 URL 热修均通过人工验收。最新全量 2703 passed + 5 skipped，生产创建/公开读取/撤销均验证通过。以下各任务保留实施与部署过程记录。
+DONE（2026-10-26 用户验收通过，QRE-SAAS-NL-A2A3 含管理台同步，已 commit/push + ECS）：持久限频与版本化编译缓存已发布，9090 管理台总览新增「自然语言编译」卡（限额直接读执行常量 GUEST_NL_DAILY_LIMIT/MEMBER_NL_MINUTE_LIMIT，计数读 nl_rate_limits/nl_compile_cache 真实行，R-ADMIN-001 同源）。游客每日 10 次改 PostgreSQL 原子计数（原 403/code=guest_nl_limit 不变），会员新增 6 次/分钟防突发（超限 429/code=nl_rate_limited/reset_seconds，每日仍不限），admin 不限；同输入编译结果缓存命中不再调用 LLM 也不占配额。发布前复核全量 2753 passed + 6 skipped；公网两次纯编译第一次 cache_hit=false、第二次 true 且 YAML 一致，未创建回测；公网 overview nl 字段与常量/表计数一致。以下各任务保留实施与部署过程记录。
+
+## Task ID
+
+QRE-SAAS-NL-A2A3（持久限频与版本化编译缓存）
+
+## Current Status
+
+DONE（2026-10-26 用户验收通过，已 commit/push + ECS）
+
+## Task Note
+
+- **Schema（deploy/saas/cloud_schema.sql，两表均无序列）**：`nl_rate_limits`（scope/subject_hash/window_start/hits/updated_at，PK (scope, subject_hash, window_start)）与 `nl_compile_cache`（cache_key PK/description/result JSONB/model/prompt_hash/cache_version/created_at/last_hit_at/hit_count + last_hit_at 索引）；按 share_links 模式在 `aguhuice` 角色存在时幂等 GRANT 两表 CRUD，本地无角色跳过。生产已由 postgres apply，两表与授权均核实。
+- **新模块 gui/saas/nl_compile_support.py**：`normalize_description`（NFKC+trim+空白折叠）、`build_cache_key`（规范化描述+model+规范化 base_url+完整 build_system_prompt 哈希+`NL_COMPILER_CACHE_VERSION="2026-10-26.1"`）、`consume_quota_on`（单条 INSERT … ON CONFLICT DO UPDATE … WHERE hits<limit RETURNING，原子不突破）、cache get/store/touch、`pg_advisory_xact_lock(hashtext(key))` 同 key 防重复 LLM（不同 key 不串行）、游客 subject 复用 `_guest_key(ip)`、会员 `sha256("nl:user:"+uid+salt)` 截断不落原始 IP。
+- **app.py 编排（/api/saas/nl/compile）**：快路径查缓存→同 key 咨询锁+复检→配额（admin 直接放行；游客 guest_daily=10 超限 403/code=guest_nl_limit 原文案；会员 member_minute=6 超限 429/code=nl_rate_limited+scope+reset_seconds）→compile_nl→仅 ok=true 写缓存→响应补 cache_hit。不改 gui/nl_compiler.py 编译/纠错/YAML 校验；not_configured 仍 503 且不缓存；`_guest_nl_hit` 文件计数保留为 DB 故障回退（会员 DB 故障 503 不放开）。
+- **管理台同步（R-ADMIN-001）**：`api_console_overview` 新增 `nl` 对象——guest_daily/member_minute 直接读当前执行常量（改动常量即时跟随，无第二套配置）、admin=不限、cache_version、rate_limit_rows/hits 与 cache_entries/hits 读两表真实行；console.html 总览在 Worker 资源卡前新增「自然语言编译」卡（metric 卡 + tip-trigger 解释，无灰色小字）。管理员鉴权不变（匿名 401/会员 403）。
+- **验证**：新 `tests/test_saas_nl_compile_cache.py` 23 passed + 1 skipped（本地无 aguhuice 角色跳过 grants 断言）；console 测试 +5（常量一致/常量改动跟随/两表计数/鉴权/页面卡）；相关 4 文件 206 passed；全量 **2731 passed + 6 skipped**（基线 2703+5 零回归）。临时 PG+8099 staging 真实 HTTP 与 Node harness 通过；公网两次纯编译第一次 cache_hit=false、第二次 true 且 YAML 逐字节一致，jobs 表 10→10 未建回测；公网 overview nl 字段与常量/表计数一致。证据 `.tmp/nl-a2a3/`、`.tmp/nl-console/`。
+- **遗留/注意**：编译缓存版本覆盖 prompt 与因子目录（完整 prompt 哈希），后处理变化须手动 bump；同会员同分钟的并发编译会按配额行锁自然串行（原子计数固有属性）；缓存表无自动清理（仅 last_hit_at 索引供未来统计）。
 
 ## Task ID
 

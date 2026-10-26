@@ -61,6 +61,12 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **经典策略与结果操作 UI 已发布（2026-10-26，QRE-SAAS-CLASSIC-ACTIONS-UI，已部署待人工验收、未 commit/push）**：核对 ECS 三文件与本地 HEAD 基线 SHA256 一致后，备份 `/tmp/qre-classic-actions-pre-20261026/`，仅同步 `showcase.html`、`job.html`、`lab-theme.css` 并重启 qre-saas（未重启 worker、未跑真实回测）。showcase：页头灰字备注移入 H1 旁问号提示，`#sc-hint` 与底部灰字长文/弱链接删除，改「复现经典策略」tip +「新建同款策略」主按钮（`/saas/new`），subtitle 保留。job：`#box-actions`/`#box-share` 合并进 `#result-actions-card`「结果操作」卡，保存/确认信号=主按钮、信号/分享=次按钮，状态文本去 `.opt`，信号 T+1 提示移入扫描范围问号；新增空安全 `syncResultActionCard()`（任一组可见才显示外层，游客/showcase/分享只读整体隐藏），原 ID/权限/事件绑定/API 不变。lab-theme.css 仅加局部规则（按钮 ≥44px、≤768px 纵排全宽、375px 不横溢）。测试：TDD RED→GREEN，新 `tests/test_saas_classic_actions_ui.py` 12 例 + 3 处既有断言更新，相关 10 文件 289 passed、全量 2701 passed + 5 skipped（零回归）；真实 Chromium 9/9 零 JS error 零横溢，证据 `.tmp/classic-actions-ui/`。公网：showcase/job58/`/static/lab-theme.css` 200，新标记齐全、删除标记为零、CSS SHA256 与本地一致，`/saas/`、help、login、new、symbols 两页 200。**未 commit/push，待用户人工验收；不通过立即恢复 `/tmp/qre-classic-actions-pre-20261026/` 并重启 qre-saas。**
 
+**NL A2/A3 已验收发布（2026-10-26，QRE-SAAS-NL-A2A3）**：用户批准通过，持久限频、版本化编译缓存与 9090 管理台同步已 commit/push；ECS 保持已部署版本，发布前全量复跑 2753 passed + 6 skipped，未跑真实回测。以下为部署过程记录。
+
+**NL 持久限频与编译缓存已部署（2026-10-26，QRE-SAAS-NL-A2A3，待人工验收、未 commit/push）**：postgres 幂等 apply `cloud_schema.sql` 新增 `nl_rate_limits`（scope/subject_hash/window_start/hits，PK 三元组；游客 guest_daily=10 保持 403/code=guest_nl_limit，会员 member_minute=6 超限 429/code=nl_rate_limited+reset_seconds 且每日仍不限，admin 不计）与 `nl_compile_cache`（cache_key PK/description/result JSONB/model/prompt_hash/cache_version/created_at/last_hit_at/hit_count + last_hit_at 索引；只存 ok=true 完整结果，无 API key）；两表无序列，aguhuice 表 CRUD 由 schema DO 块授予。同步 app.py、`gui/saas/nl_compile_support.py`（新）、cloud_schema.sql 后仅重启 qre-saas，未重启 worker、未跑真实回测。公网临时游客会话对经典 MACD 描述纯编译两次：第一次 cache_hit=false（真实调用 LLM）、第二次 cache_hit=true 且 YAML 一致，jobs 表 10→10 未创建回测；缓存行 model=deepseek-flash、hit_count=1，guest_daily hits=1（命中不占额度）。全量 2726 passed + 6 skipped。回滚备份 `/tmp/qre-nl-a2a3-pre-20261026/`（app.py + cloud_schema.sql），不通过立即恢复并重启 qre-saas。实现细节见 04/05/09，证据 `.tmp/nl-a2a3/`。
+
+**NL 管理台同步已部署（2026-10-26，QRE-SAAS-NL-A2A3 续，R-ADMIN-001，待人工验收）**：`api_console_overview` 新增 `nl` 对象（guest_daily/member_minute 读执行常量 `GUEST_NL_DAILY_LIMIT`/`MEMBER_NL_MINUTE_LIMIT`、admin=不限、cache_version、`nl_rate_limits`/`nl_compile_cache` 真实行数与 hits）；console.html 总览在 Worker 资源卡前新增「自然语言编译」卡（metric 卡 + tip-trigger，无灰色小字）。仅同步 app.py 与 console.html 并重启 qre-saas，无 schema 变更、未重启 worker、未跑真实回测。9090 隧道临时 admin session 验证 overview nl 字段与常量/表计数一致（匿名/错 token 401），临时账号与会话已清理。全量 2731 passed + 6 skipped。回滚备份 `/tmp/qre-nl-console-pre-20261026/`（app.py + console.html）。
+
 **NL DeepSeek V4.1 Flash 配置（2026-10-25）**：生产 `QRE_NL_LLM_BASE_URL=https://api.deepseek.com`，正确模型 ID 为 `QRE_NL_LLM_MODEL=deepseek-flash`（最新 V4.1 Flash；`deepseek-v4.1-flash` 不是可用 ID，真实编译 400）。已用 MACD 金叉死叉纯编译验证成功，未创建回测。改前 env 备份 `/etc/qre-saas.env.bak-deepseek-v41-20261025`（0600）。
 
 **元数据上云（2026-09-26）**：因子目录与板块/概念名单经
@@ -240,6 +246,28 @@ sudo -n systemctl restart qre-saas-worker && sudo -n journalctl -u qre-saas-work
 #   sudo -u postgres psql aguhuice -f /srv/aguhuice/qre/deploy/saas/cloud_schema.sql
 # 公网验证用专用测试任务走 创建→匿名只读→撤销，不跑真实回测，完成后清理测试链接/任务：
 #   sudo -u postgres psql aguhuice -c "SELECT id, job_id, owner_id, expires_at, revoked_at FROM share_links ORDER BY id;"
+
+# NL 持久限频与编译缓存（QRE-SAAS-NL-A2A3，2026-10-26，待人工验收）：
+#   nl_rate_limits（原子计数，跨 worker/重启；scope=guest_daily 游客 10/日、
+#     member_minute 会员 6/分钟，admin 不计）+ nl_compile_cache（只存 ok=true；
+#     key=规范化描述+model+base_url+完整 prompt 哈希+NL_COMPILER_CACHE_VERSION；
+#     命中不调 LLM 不占配额；不明文存 API key）。两表无序列，schema DO 块已授
+#   aguhuice CRUD。改 gui/saas/nl_compile_support.py 或 app.py 的 NL 路由后：
+#   scp 两文件 + cloud_schema.sql（若 schema 变，先 sudo -u postgres psql apply）→ 仅重启 qre-saas。
+#   编译缓存版本覆盖 prompt 文案与因子目录（完整 prompt 哈希）；编译后处理变化必须手动
+#   bump NL_COMPILER_CACHE_VERSION，否则旧结果会被继续命中。
+#   sudo -u postgres psql aguhuice -c "SELECT scope, window_start, hits FROM nl_rate_limits ORDER BY window_start DESC LIMIT 5;"
+#   sudo -u postgres psql aguhuice -c "SELECT description, model, cache_version, hit_count FROM nl_compile_cache ORDER BY created_at DESC LIMIT 5;"
+#   公网纯编译验证（不创建回测）：
+#   curl -s -X POST https://www.aguhuice.com/api/saas/nl/compile -H 'Content-Type: application/json' \
+#     -d '{"description":"当 MACD 指标出现金叉时买入，出现死叉时卖出，最多持仓 20 天"}'   # 第一次 cache_hit=false
+#   # 同一描述第二次应 cache_hit=true 且 yaml 与第一次一致
+#   管理台同步（R-ADMIN-001）：9090 总览「自然语言编译」卡读 overview 的 nl 对象
+#   （限额=执行常量、计数=两表真实行）。改 app.py 的 NL 路由/常量或 console.html 后：
+#   scp 两文件 → 仅重启 qre-saas；隧道内核验：
+#     curl -s http://127.0.0.1:9091/api/saas/console/overview -H "Authorization: Bearer <admin-token>"
+#   回滚：恢复 /tmp/qre-nl-a2a3-pre-20261026/（app.py+cloud_schema.sql）或
+#   /tmp/qre-nl-console-pre-20261026/（app.py+console.html）后 systemctl restart qre-saas
 ```
 
 ## 6. 纪律

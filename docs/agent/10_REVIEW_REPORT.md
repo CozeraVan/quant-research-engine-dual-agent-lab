@@ -2,7 +2,35 @@
 
 ## Current Release
 
-PASS + RELEASED（2026-10-26 用户批准提交，实现 `e6f4f77` 已 push + ECS）：经典策略/结果操作卡、分享序列权限、完整公网 URL 三项均通过人工验收。最终全量 2703 passed + 5 skipped，生产创建/公开读取/撤销均验证通过。以下保留各任务自审记录。
+PASS + RELEASED（2026-10-26 用户验收通过，QRE-SAAS-NL-A2A3 含管理台同步，已 commit/push + ECS）：持久限频、版本化编译缓存与 9090 管理台同步。发布前复核全量 2753 passed + 6 skipped；公网两次纯编译 cache_hit false→true、YAML 一致、未创建回测，overview nl 字段与执行常量/两表计数一致。以下保留各任务自审记录。
+
+## Task ID
+
+QRE-SAAS-NL-A2A3（持久限频与版本化编译缓存 + 管理台同步）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS + RELEASED（2026-10-26 用户验收通过，已 commit/push + ECS）。发布前复核全量 2753 passed + 6 skipped；生产两表/授权/文件哈希与服务状态核实，公网纯编译两次与管理台 overview 验证通过。
+
+## Self-Review Findings
+
+- 业务语义零漂移：游客每日 10 次与 403/code=guest_nl_limit 文案不变；会员「每日不限」保持，仅新增 6 次/分钟防突发（429/nl_rate_limited/reset_seconds）；admin 不限；`gui/nl_compiler.py` 编译/纠错/YAML 校验未改一行。
+- 缓存只存 ok=true 完整结果（yaml/warnings/corrections/fix_attempts 保真，无 cache_hit、无 API key）；失败/not_configured 不缓存；命中不调用 LLM 也不占配额，miss（含失败）才计数，无绕过路径。
+- 计数原子性：单条 INSERT … ON CONFLICT DO UPDATE … WHERE hits < limit RETURNING；16 并发游客请求实测 10×200 + 6×403；计数跨 app 实例/重启持久（PG 行）。
+- 同 key `pg_advisory_xact_lock(hashtext(key))`：3 并发同 key 只调用 1 次 LLM 且只消耗 1 次配额；不同会员不同 key 双 LLM 调用可同时进行（不串行）。
+- R-ADMIN-001 同源：管理台 overview 的 nl.guest_daily/member_minute 直接读执行常量（测试用 monkeypatch 改常量验证 API 即时跟随），计数读两表真实行；管理台展示与执行不可能脱节；管理员鉴权（匿名 401/会员 403）不变。
+- 权限与不泄露：游客 subject 复用既有 `_guest_key(ip)`（sha256(guest:ip:salt) 截断），会员 `sha256("nl:user:"+uid+salt)` 截断，均不落原始 IP；不公开缓存列表；DB 故障时游客回退既有文件计数、会员 503 fail-closed，不悄悄放开限流。
+- 连接池安全：配额与缓存同在锁事务单连接执行，消除「持锁再取连接」死锁；16 并发不再出现 QueuePool 超时。
+- UI 纪律：console 新卡仅用 metric-card + tip-trigger + title，无 `.opt`/灰色小字（Node harness 与静态断言双重锁定）。
+- 证据链完整：`.tmp/nl-a2a3/`（red=24 errors → green=23 passed+1 skipped、related、full、staging HTTP、public-verification）与 `.tmp/nl-console/`（red 4 failed → green 24 passed、related 206、full 2731+6、HTTP+Node harness、public-verification）。
+
+## Required Fixes
+
+无。待用户人工验收；不通过立即恢复 `/tmp/qre-nl-a2a3-pre-20261026/` 与 `/tmp/qre-nl-console-pre-20261026/` 并重启 qre-saas。
 
 ## Task ID
 

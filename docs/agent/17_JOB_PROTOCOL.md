@@ -280,3 +280,19 @@ leased/running/uploading 置 `cancel_requested`），异会话/无 Cookie 401（
 
 前端消费纪律（与本文档一致）：不虚构执行百分比或预计完成时间；排队/离线/已等待时间
 为全部可展示运行态；前台等待超时（new.html 80 轮）必须与策略失败区分。
+
+---
+
+## 9. NL 编译限频与缓存（QRE-SAAS-NL-A2A3，2026-10-26，不属于 job 协议）
+
+> `POST /api/saas/nl/compile` 是**同步编译端点**（LLM 调用，不创建 job、不进状态机），
+> 其配额与缓存落在 cloud_schema 两张独立表上，与本文档的 job/租约/取消语义无关：
+
+| 表 | 用途 | 口径 |
+|---|---|---|
+| `nl_rate_limits` | PG 原子编译计数（替代原 /tmp 文件计数，跨 worker/重启可靠） | `scope=guest_daily`（游客每日 10，超限 403/code=`guest_nl_limit`）/ `member_minute`（会员每分钟 6，超限 429/code=`nl_rate_limited`+`reset_seconds`；会员每日仍不限）；admin role 不计数。单条 `INSERT … ON CONFLICT DO UPDATE … WHERE hits < limit RETURNING`，并发不突破 |
+| `nl_compile_cache` | 相同输入复用已通过校验的编译结果 | key=规范化描述（NFKC+空白折叠）+ model + 规范化 base_url + 完整 `build_system_prompt()` 哈希 + `NL_COMPILER_CACHE_VERSION`；只存 `ok=true` 完整结果（无 API key）；命中不调用 LLM 也不占配额；同 key 用 `pg_advisory_xact_lock(hashtext(key))` 防并发重复调用，不同 key 不串行 |
+
+约束：不改 `gui/nl_compiler.py` 的编译/纠错/YAML 校验；失败与 `not_configured`（503）
+不缓存；缓存版本覆盖 Prompt 文案与因子目录，编译后处理变化须手动 bump。
+worker 与 job 状态机零改动。

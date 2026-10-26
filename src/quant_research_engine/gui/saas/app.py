@@ -38,6 +38,7 @@ from typing import Any
 from flask import Flask, g, jsonify, render_template, request, session
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
 
 from quant_research_engine.gui.saas.result_contract import (
     DAILY_RETURN_BASIS,
@@ -884,12 +885,17 @@ def _migrate_legacy_guest_jobs(app: Flask, engine: Engine, new_key: str) -> int:
 
 
 # 游客 NL 编译限流（QRE-SAAS-GUEST-NL）：LLM 调用有成本，游客单 IP 每日上限。
-# gunicorn 多 worker 下内存计数不可靠，用文件计数 + fcntl 锁兜底。
+# QRE-SAAS-NL-A2A3 起主路径为 PostgreSQL 原子计数（nl_rate_limits，跨 worker/重启
+# 可靠）；_guest_nl_hit 保留为无 DB 场景的本地回退，PG 故障时不得悄悄放开限流。
 GUEST_NL_DAILY_LIMIT = 10
+# 会员防突发（QRE-SAAS-NL-A2A3）：每日编译次数仍不限，仅 6 次/分钟；超限 429。
+MEMBER_NL_MINUTE_LIMIT = 6
 
 
 def _guest_nl_hit(app: Flask, ip: str) -> bool:
-    """游客 NL 编译计数：当日未超上限则计数 +1 返回 True，超限 False。"""
+    """游客 NL 编译计数（legacy 文件回退，QRE-SAAS-NL-A2A3）：当日未超上限则
+    计数 +1 返回 True，超限 False。仅在 PG 原子计数不可用（DB 故障/表缺失）时
+    使用，避免计数故障把限流悄悄放开。"""
     import fcntl
 
     path = Path(os.environ.get("QRE_GUEST_NL_COUNTER", "/tmp/qre-guest-nl-counter.json"))
@@ -1300,28 +1306,116 @@ def create_saas_app() -> Flask:
         return render_template("signals.html")
 
     # --- 复用既有 NL 编译 / 因子目录（同一编译函数 + factor_correction 纠错层，
-    #     LLM key 只存服务端环境变量；两个路由都要求登录） ---
+    #     LLM key 只存服务端环境变量）---
+    # QRE-SAAS-NL-A2A3：持久限频（nl_rate_limits 原子计数）+ 版本化编译缓存
+    # （nl_compile_cache）。编排在此，计数/缓存/key 细节在
+    # gui/saas/nl_compile_support.py；不改 nl_compiler 的编译/纠错/YAML 校验。
+    # 语义：缓存命中不调用 LLM 也不占配额；miss 才计数（失败同样计，防绕过）；
+    # 只缓存 ok=true 完整结果；not_configured 仍 503。
 
     @app.post("/api/saas/nl/compile")
     def api_saas_nl_compile() -> Any:
-        engine = _get_engine(app)
-        uid = _current_user_id(app, engine)
-        if uid is None:
-            # 游客开放 NL 编译（QRE-SAAS-GUEST-NL，2026-09-28）：配合游客单股回测流程；
-            # LLM 有调用成本，单 IP 每日限 GUEST_NL_DAILY_LIMIT 次（文件计数，跨 worker 可靠）。
-            if not _guest_nl_hit(app, _client_ip()):
-                return jsonify({"ok": False, "code": "guest_nl_limit",
-                                "error": f"游客每日可生成策略 {GUEST_NL_DAILY_LIMIT} 次（今日已用完）。注册会员不限次数"}), 403
-        from quant_research_engine.gui.nl_compiler import compile_nl
+        from quant_research_engine.gui import nl_compiler
+        from quant_research_engine.gui.saas import nl_compile_support as nls
 
+        engine = _get_engine(app)
+        try:
+            uid = _current_user_id(app, engine)
+        except SQLAlchemyError:
+            uid = None  # DB 抖动：按游客走文件回退计数（见下方 except 分支）
         data = request.get_json(silent=True) or {}
         description = (data.get("description") or "").strip()
         if not description:
             return jsonify({"ok": False, "code": "empty", "error": "请先用自然语言描述策略"}), 400
-        result = compile_nl(description)
+
+        config = nl_compiler.nl_config()
+        model = config["model"] if config else ""
+        base_url = config["base_url"] if config else ""
+        prompt = nl_compiler.build_system_prompt()
+        cache_key = nls.build_cache_key(
+            description=description, model=model, base_url=base_url,
+            prompt=prompt, cache_version=nls.NL_COMPILER_CACHE_VERSION,
+        )
+        prompt_hash = nls.prompt_fingerprint(prompt)
+
+        def _guest_limit_response():
+            return jsonify({"ok": False, "code": "guest_nl_limit",
+                            "error": f"游客每日可生成策略 {GUEST_NL_DAILY_LIMIT} 次（今日已用完）。注册会员不限次数"}), 403
+
+        def _member_limit_response():
+            return jsonify({"ok": False, "code": "nl_rate_limited",
+                            "scope": nls.SCOPE_MEMBER_MINUTE,
+                            "reset_seconds": nls.member_reset_seconds(),
+                            "error": f"编译太频繁了，请稍后再试（每分钟最多 {MEMBER_NL_MINUTE_LIMIT} 次）"}), 429
+
+        try:
+            db_ready = nls.ensure_nl_tables(engine)
+            # 快路径：不加锁查缓存（命中不调用 LLM、不占配额）
+            if config is not None and db_ready:
+                hit = nls.cache_lookup(engine, cache_key)
+                if hit is not None:
+                    return jsonify({**hit, "cache_hit": True})
+            is_admin = False
+            if uid is not None and db_ready:
+                with engine.connect() as conn:
+                    row = conn.execute(
+                        text("SELECT role FROM users WHERE id = :uid"), {"uid": uid}
+                    ).first()
+                is_admin = bool(row) and row.role == "admin"
+            # 同 key 事务级咨询锁：并发同 key 只调用一次 LLM，不同 key 不串行。
+            # 配额与写缓存同在锁事务内（每次请求只占一个连接，避免嵌套取连接
+            # 耗尽连接池）；正常返回即提交，编译失败同样计数。
+            with engine.begin() as conn:
+                nls.advisory_lock(conn, cache_key)
+                hit = nls.cache_get(conn, cache_key)
+                if hit is not None:
+                    nls.cache_touch(conn, cache_key)
+                    return jsonify({**hit, "cache_hit": True})
+                if not is_admin:
+                    if uid is None:
+                        # 游客：PG 原子计数（与锁同事务，编译失败也计数）；
+                        # DB 不可用回退既有文件计数
+                        if db_ready:
+                            allowed = nls.consume_quota_on(
+                                conn, nls.SCOPE_GUEST_DAILY,
+                                nls.guest_subject_hash(_guest_key(app, _client_ip())),
+                                nls.guest_window_start(), GUEST_NL_DAILY_LIMIT,
+                            ) is not None
+                        else:
+                            allowed = _guest_nl_hit(app, _client_ip())
+                        if not allowed:
+                            return _guest_limit_response()
+                    else:
+                        if not db_ready:
+                            return jsonify({"ok": False, "code": "rate_limit_unavailable",
+                                            "error": "服务暂时不可用，请稍后再试"}), 503
+                        hits = nls.consume_quota_on(
+                            conn, nls.SCOPE_MEMBER_MINUTE,
+                            nls.member_subject_hash(uid, _auth_salt(app)),
+                            nls.member_window_start(), MEMBER_NL_MINUTE_LIMIT,
+                        )
+                        if hits is None:
+                            return _member_limit_response()
+                result = nl_compiler.compile_nl(description)
+                if result.get("ok") and config is not None and db_ready:
+                    nls.cache_store(conn, cache_key, description=description,
+                                    result=result, model=model,
+                                    prompt_hash=prompt_hash,
+                                    cache_version=nls.NL_COMPILER_CACHE_VERSION)
+        except SQLAlchemyError:
+            # 计数/缓存故障不放开限流：游客回退文件计数，会员按不可用拒绝
+            if uid is None:
+                if not _guest_nl_hit(app, _client_ip()):
+                    return _guest_limit_response()
+                result = nl_compiler.compile_nl(description)
+                if result.get("code") == "not_configured":
+                    return jsonify(result), 503
+                return jsonify({**result, "cache_hit": False})
+            return jsonify({"ok": False, "code": "rate_limit_unavailable",
+                            "error": "服务暂时不可用，请稍后再试"}), 503
         if result.get("code") == "not_configured":
             return jsonify(result), 503
-        return jsonify(result)
+        return jsonify({**result, "cache_hit": False})
 
     @app.get("/api/saas/factors")
     def api_saas_factors() -> Any:
@@ -3917,6 +4011,8 @@ def create_saas_app() -> Flask:
         # 读连接的事务持有 workers 共享锁，嵌套调用会自我等待）
         _ensure_worker_status_columns(engine)
         _ensure_worker_configs(engine)  # R3 切片2：期望配置表同上
+        from quant_research_engine.gui.saas import nl_compile_support as _nls
+        _nls.ensure_nl_tables(engine)  # NL A2A3：两表懒自愈（须在开读连接前）
         with engine.connect() as conn:
             users = conn.execute(
                 text(
@@ -3985,6 +4081,16 @@ def create_saas_app() -> Flask:
             pending_factors = conn.execute(
                 text("SELECT count(*) FROM factor_requests WHERE status = 'pending'")
             ).scalar_one()
+            # QRE-SAAS-NL-A2A3 + R-ADMIN-001：管理台展示的 NL 限流/缓存口径必须与执行
+            # 同一权威来源——限额直接读当前执行常量，计数读两表真实行。
+            nl_rate = conn.execute(
+                text("SELECT count(*) AS rows, coalesce(sum(hits), 0) AS hits "
+                     "FROM nl_rate_limits")
+            ).mappings().one()
+            nl_cache = conn.execute(
+                text("SELECT count(*) AS entries, coalesce(sum(hit_count), 0) AS hits "
+                     "FROM nl_compile_cache")
+            ).mappings().one()
         desired_by_worker = {r["worker_id"]: _worker_config_view(r) for r in desired_rows}
         workers_detail = []
         for row in worker_rows:
@@ -4024,7 +4130,18 @@ def create_saas_app() -> Flask:
                         "quota": _jsonable(dict(quota)), "workers": _jsonable(dict(workers)),
                         "workers_detail": workers_detail,
                         "guests": _jsonable(dict(guests)),
-                        "pending_factor_requests": pending_factors, "server": server})
+                        "pending_factor_requests": pending_factors, "server": server,
+                        # R-ADMIN-001：NL 限流/缓存与执行同源（常量即当前生效值）
+                        "nl": {
+                            "guest_daily": GUEST_NL_DAILY_LIMIT,
+                            "member_minute": MEMBER_NL_MINUTE_LIMIT,
+                            "admin": "不限",
+                            "cache_version": _nls.NL_COMPILER_CACHE_VERSION,
+                            "rate_limit_rows": int(nl_rate["rows"]),
+                            "rate_limit_hits": int(nl_rate["hits"]),
+                            "cache_entries": int(nl_cache["entries"]),
+                            "cache_hits": int(nl_cache["hits"]),
+                        }})
 
     @app.get("/api/saas/console/users")
     def api_console_users() -> Any:

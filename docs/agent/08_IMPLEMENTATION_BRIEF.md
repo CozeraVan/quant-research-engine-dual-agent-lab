@@ -1,8 +1,24 @@
 # Implementation Brief
 
-## Task ID
+## Archive: QRE-SAAS-NL-A2A3（持久限频与版本化编译缓存）
 
-QRE-SAAS-CLASSIC-ACTIONS-UI（经典策略按钮与结果操作卡精修）
+## Created By
+
+KIMI_CODE 规划，Step 5 实施（2026-10-26，批准计划 `mister-terrific-echo-vision.md`）
+
+## 目标与边界
+
+1. `nl_rate_limits` 用 PostgreSQL 原子计数替代游客文件计数；游客仍每日 10 次且 403/code 不变，会员每日次数不限但 6 次/分钟防突发（超限 429），admin 不限。
+2. `nl_compile_cache` 以规范化描述 + model/base_url + 完整 prompt 哈希 + 编译缓存版本生成 key；同 key advisory lock 防并发重复调用。只缓存 ok=true 结果，命中不调用 LLM、不占配额，失败不缓存。
+3. 不改 `gui/nl_compiler.py` 的编译/纠错/YAML 校验，不运行真实回测，不公开缓存、不存 API key、不新增灰色小字备注。生产先 postgres apply schema 再发代码。
+4. 新支撑模块 `gui/saas/nl_compile_support.py` + app.py 编排 + schema + `tests/test_saas_nl_compile_cache.py`；TDD 先 RED 后 GREEN，覆盖缓存命中/版本失效/并发/限流持久化/恢复窗口/admin/失败不缓存。
+5. **R-ADMIN-001（用户补充）**：9090 总览必须展示 NL 真实生效权限（游客每日 10、会员每分钟 6、admin 不限）与缓存/限流计数，值直接来自执行常量与两张表，不复制第二套配置；完成可视化与公网核验后才允许 commit/push。
+
+## 发布规则
+
+遵循 R-DEPLOY-001：备份 `/tmp/qre-nl-a2a3-pre-20261026/`，直接部署并仅重启 qre-saas；用临时 session 对生产 MACD 描述纯编译两次，第二次 cache_hit=true 且 YAML 一致，不创建回测。更新 04/05/09/10/11/14/16/17，保留「已部署待人工验收，未 commit/push」。验收通过后才提交；不通过立即回滚。建议提交 `feat(saas): 增加持久编译限流与策略缓存`。
+
+## Archive: QRE-SAAS-CLASSIC-ACTIONS-UI（经典策略按钮与结果操作卡精修）
 
 ## Created By
 

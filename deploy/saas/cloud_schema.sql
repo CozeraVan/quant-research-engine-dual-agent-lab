@@ -310,6 +310,47 @@ BEGIN
     END IF;
 END $$;
 
+-- QRE-SAAS-NL-A2A3（2026-10-26）：持久限频与版本化编译缓存（两表均无序列）。
+-- nl_rate_limits：PG 原子计数替代 /tmp 文件计数，跨 worker/重启可靠。
+--   scope=guest_daily（游客每日 10 次，原 403/code=guest_nl_limit 不变）/
+--   member_minute（会员每分钟 6 次防突发，每日仍不限，超限 429）；admin 不计数。
+--   计数语义：单条 INSERT ... ON CONFLICT DO UPDATE ... WHERE hits < limit RETURNING，
+--   已达上限不递增，多 worker/并发不突破。
+CREATE TABLE IF NOT EXISTS nl_rate_limits (
+    scope        TEXT NOT NULL,
+    subject_hash TEXT NOT NULL,                  -- 不落原始 IP：guest=sha256(guest:ip:salt) 截断；member=sha256("nl:user:"+uid+salt) 截断
+    window_start TIMESTAMPTZ NOT NULL,           -- guest_daily=当日零点；member_minute=当前 UTC 分钟
+    hits         INT NOT NULL DEFAULT 0,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (scope, subject_hash, window_start)
+);
+-- nl_compile_cache：相同输入复用已通过校验的编译结果，命中不调用 LLM 也不占配额。
+--   cache_key = sha256(规范化描述 + model + 规范化 base_url + 完整 build_system_prompt
+--   哈希 + NL_COMPILER_CACHE_VERSION)，prompt 天然覆盖文案与因子目录变化，后处理
+--   变化须手动 bump 版本。只存 ok=true 的完整结果（result JSONB，不写 cache_hit）；
+--   失败/not_configured 不缓存；不明文存任何 API key。
+CREATE TABLE IF NOT EXISTS nl_compile_cache (
+    cache_key     TEXT PRIMARY KEY,
+    description   TEXT NOT NULL,                 -- 规范化后的描述（展示/排查用）
+    result        JSONB NOT NULL,                -- ok=true 的完整编译结果
+    model         TEXT NOT NULL,
+    prompt_hash   TEXT NOT NULL,                 -- 完整 system prompt 的 sha256
+    cache_version TEXT NOT NULL,                 -- 编译缓存版本（后处理变化手动 bump）
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_hit_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    hit_count     INT NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_nl_compile_cache_last_hit ON nl_compile_cache (last_hit_at);
+-- 同 share_links 模式：postgres 建表时应用角色不是 owner，CRUD 必须显式授予；
+-- 角色不存在于本地临时库时跳过，保证测试库可重复 apply。
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON nl_rate_limits TO aguhuice;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON nl_compile_cache TO aguhuice;
+    END IF;
+END $$;
+
 -- QRE-AUTH-MEMBERSHIP（A2，2026-09-27，18 号设计文档 §3）：
 -- Authing 身份层接入。authing_id = OIDC sub（唯一，首登自动建档）；
 -- avatar_url 同步 Authing 资料；member_since/member_expire_at 为会员制预留字段

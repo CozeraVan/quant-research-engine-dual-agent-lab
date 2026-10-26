@@ -394,3 +394,77 @@ class TestTierPolicies:
         html = client.get("/saas/console").get_data(as_text=True)
         assert 'data-tab="policies"' in html and "/api/saas/console/policies" in html
         assert 'id="ov-guests"' in html
+
+
+# --- QRE-SAAS-NL-A2A3 + R-ADMIN-001：管理台同步 NL 限流/缓存（真实生效口径） ---
+
+class TestNlCompileConsole:
+    """overview 的 nl 对象必须直接反映执行常量与两表真实计数（R-ADMIN-001：
+    管理台展示与执行使用同一权威来源，禁止第二套配置）。"""
+
+    def test_nl_limits_match_execution_constants(self, client, app):
+        from quant_research_engine.gui.saas import app as app_mod
+
+        headers, _ = _admin_headers(app)
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        nl = d["nl"]
+        assert nl["guest_daily"] == app_mod.GUEST_NL_DAILY_LIMIT
+        assert nl["member_minute"] == app_mod.MEMBER_NL_MINUTE_LIMIT
+        assert nl["admin"] == "不限"
+        assert nl["cache_version"]
+
+    def test_nl_limits_follow_constant_change(self, client, app, monkeypatch):
+        # 单一来源证明：改动执行常量，overview 立即跟随（无第二套配置）
+        from quant_research_engine.gui.saas import app as app_mod
+
+        headers, _ = _admin_headers(app)
+        monkeypatch.setattr(app_mod, "GUEST_NL_DAILY_LIMIT", 42)
+        monkeypatch.setattr(app_mod, "MEMBER_NL_MINUTE_LIMIT", 9)
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        assert d["nl"]["guest_daily"] == 42
+        assert d["nl"]["member_minute"] == 9
+
+    def test_nl_counts_from_tables(self, client, app):
+        headers, _ = _admin_headers(app)
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        assert d["nl"]["rate_limit_rows"] == 0
+        assert d["nl"]["rate_limit_hits"] == 0
+        assert d["nl"]["cache_entries"] == 0
+        assert d["nl"]["cache_hits"] == 0
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO nl_rate_limits (scope, subject_hash, window_start, hits) "
+                "VALUES ('guest_daily', 'g', now(), 3), ('member_minute', 'm', now(), 7)"))
+            conn.execute(text(
+                "INSERT INTO nl_compile_cache "
+                "(cache_key, description, result, model, prompt_hash, cache_version, hit_count) "
+                "VALUES ('k1', 'd', '{}'::jsonb, 'm', 'p', 'v', 5), "
+                "('k2', 'd', '{}'::jsonb, 'm', 'p', 'v', 2)"))
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        assert d["nl"]["rate_limit_rows"] == 2
+        assert d["nl"]["rate_limit_hits"] == 10
+        assert d["nl"]["cache_entries"] == 2
+        assert d["nl"]["cache_hits"] == 7
+
+    def test_nl_auth_gate_unchanged(self, client, app):
+        assert client.get("/api/saas/console/overview").status_code == 401
+        _make_user(app, "m@example.com")
+        assert client.get("/api/saas/console/overview",
+                          headers={"X-User-Id": "1"}).status_code == 403
+
+
+class TestConsolePageNlCard:
+    def test_nl_card_markers(self, client):
+        html = client.get("/saas/console").get_data(as_text=True)
+        assert 'id="ov-nl"' in html
+        assert "自然语言编译" in html
+        # 解释走 tip-trigger（R-UI-001：不新增灰色小字备注）
+        card = html.split('id="ov-nl"')[0].split('<div class="card">')[-1]
+        assert 'class="tip-trigger"' in card and "data-tip=" in card
+        assert 'class="opt"' not in card
+        # JS 渲染读取 overview 的 nl 字段
+        assert "d.nl" in html and "nl.cache_entries" in html
+        assert "nl.guest_daily" in html and "nl.member_minute" in html
+        # 卡片位于 Worker 资源卡之前
+        assert html.index('id="ov-nl"') < html.index('id="ov-worker-res"')

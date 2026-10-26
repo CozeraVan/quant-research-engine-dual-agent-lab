@@ -26,6 +26,10 @@
       <div class="metric-strip" id="ov-jobs"></div>
       <div class="metric-strip" id="ov-guests"></div>
       <div class="card">
+        <h2>自然语言编译 <button type="button" class="tip-trigger" data-tip="自然语言生成策略的限流与编译缓存：游客按 IP 每日限次（超限 403），会员每日不限、仅每分钟防突发（超限 429），管理员不限。相同输入命中缓存时直接复用已通过校验的 YAML，不调用大模型也不占配额；编译失败不缓存。缓存版本覆盖提示词与因子目录，后处理变化时手动升级。" aria-label="自然语言编译说明">?</button></h2>
+        <div class="metric-strip" id="ov-nl"></div>
+      </div>
+      <div class="card">
         <h2>Worker 资源 <button type="button" class="tip-trigger" data-tip="展示槽位占用和内存水位；心跳在 60 秒内视为在线。" aria-label="Worker资源说明">?</button></h2>
         <div id="ov-worker-res" class="muted">加载中…</div>
       </div>
@@ -225,6 +229,7 @@
                'R2 分级：轻=单股小范围走专属槽位，重=板块/全市场') + metric('运行中', j.running) +
         metric('Worker 在线', w.online + ' / ' + w.total, '在线 / 已接入总数') +
         metric('待审因子', d.pending_factor_requests);
+      renderNlCompile(d.nl || {});
       var sv = d.server || {};
       var disk = sv.disk ? ('产物盘 ' + (sv.disk.used / 1073741824).toFixed(1) + ' / ' + (sv.disk.total / 1073741824).toFixed(1) + ' GB') : '不可用';
       var load = sv.loadavg ? sv.loadavg.join(' / ') : '不可用';
@@ -232,6 +237,21 @@
         '系统负载（1/5/15 分钟）：' + esc(load) + '<br>' + esc(disk);
       renderWorkerResources(d.workers_detail || []);
     }).catch(function(){});
+  }
+
+  // --- QRE-SAAS-NL-A2A3 + R-ADMIN-001：自然语言编译限流/缓存（与执行同源） ---
+  function renderNlCompile(nl){
+    var el = document.getElementById('ov-nl');
+    if (!el) return;
+    function num(v){ return (v === null || v === undefined) ? '—' : v; }
+    el.innerHTML =
+      metric('游客每日编译', num(nl.guest_daily) + ' 次', '按 IP 计数，超限返回 403') +
+      metric('会员每分钟编译', num(nl.member_minute) + ' 次', '会员每日不限，仅每分钟防突发；超限返回 429') +
+      metric('管理员', nl.admin || '不限', 'admin 角色不占编译配额') +
+      metric('缓存版本', nl.cache_version || '—', '覆盖提示词与因子目录；编译后处理变化时手动升级，升级后旧缓存自动失效') +
+      metric('缓存条目', num(nl.cache_entries), '只缓存编译成功的结果；命中不调用大模型也不占配额') +
+      metric('缓存累计命中', num(nl.cache_hits), '所有缓存条目的累计命中次数') +
+      metric('限流计数', num(nl.rate_limit_rows) + ' 行 / ' + num(nl.rate_limit_hits) + ' 次', '当前各窗口内的计数行与累计编译次数');
   }
 
   // --- R3 切片1/2：Worker 资源（当前生效 vs 期望配置 + 调参表单） ---

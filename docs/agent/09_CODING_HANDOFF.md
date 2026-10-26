@@ -2,7 +2,25 @@
 
 ## Current Release
 
-RELEASED（2026-10-26 用户批准提交，实现 `e6f4f77` 已 push + ECS）：经典策略/结果操作卡、分享序列权限、完整公网 URL 三项均已验收。最终全量 2703 passed + 5 skipped；生产创建/公开读取/撤销均验证通过。以下保留各任务实施记录。
+RELEASED（2026-10-26 用户验收通过，QRE-SAAS-NL-A2A3 含管理台同步，已 commit/push + ECS）：持久限频与版本化编译缓存 + 9090 管理台「自然语言编译」卡发布。发布前复核全量 2753 passed + 6 skipped；公网两次纯编译 cache_hit false→true、YAML 一致、未创建回测，overview nl 字段与执行常量/两表计数一致。以下保留各任务实施记录。
+
+## Task ID
+
+QRE-SAAS-NL-A2A3（持久限频与版本化编译缓存 + 管理台同步）
+
+## Release Status
+
+RELEASED（2026-10-26 用户验收通过，已 commit/push + ECS）。发布前复核全量 2753 passed + 6 skipped；生产 postgres apply 两表 + aguhuice CRUD 授权核实，app.py/console.html SHA256 与本地一致，仅重启 qre-saas。
+
+## Implementation Summary
+
+- **Schema（deploy/saas/cloud_schema.sql）**：新增 `nl_rate_limits`（scope TEXT / subject_hash TEXT / window_start TIMESTAMPTZ / hits INT DEFAULT 0 / updated_at，PK (scope, subject_hash, window_start)）与 `nl_compile_cache`（cache_key PK / description / result JSONB / model / prompt_hash / cache_version / created_at / last_hit_at / hit_count，+ idx_nl_compile_cache_last_hit）。两表无序列；DO 块在 `aguhuice` 角色存在时幂等 GRANT 两表 SELECT/INSERT/UPDATE/DELETE，本地无角色跳过（share_links 同款模式）。应用层 `ensure_nl_tables` information_schema + 进程 guard 懒自愈（仅兜底本地/测试库，生产以 postgres apply 为准）。
+- **新模块 src/quant_research_engine/gui/saas/nl_compile_support.py**：`normalize_description`（NFKC + trim + 连续空白折叠）、`normalize_base_url`、`build_cache_key(description, model, base_url, prompt, cache_version)`（SHA256 覆盖五项）、`prompt_fingerprint`、`NL_COMPILER_CACHE_VERSION="2026-10-26.1"`、窗口助手（guest_daily=date.today()；member_minute=当前 UTC 分钟 + reset_seconds）、`guest_subject_hash`（复用 _guest_key）/`member_subject_hash`（sha256("nl:user:"+uid+salt)[:32]）、`consume_quota`/`consume_quota_on`（原子 upsert RETURNING）、`cache_lookup`（engine 级快路径，命中深拷贝 + 更新 last_hit_at/hit_count）、`cache_get`/`cache_touch`/`cache_store`（连接级，锁事务内）、`advisory_lock`（pg_advisory_xact_lock(hashtext(key))）。
+- **app.py 路由编排（/api/saas/nl/compile）**：空描述 400 → nl_config/build_system_prompt/构建 cache_key → 快路径缓存命中直接返回 cache_hit=true（不调 LLM 不占配额）→ `engine.begin()` 同 key 咨询锁 + 复检缓存 → 配额（admin 直接放行；游客 consume guest_daily=10，超限 403/code=guest_nl_limit 原文案；会员 consume member_minute=6，超限 429/code=nl_rate_limited+scope+reset_seconds）→ `compile_nl` → 仅 ok=true 且 config 可用时写缓存 → not_configured 返回 503。配额与缓存在同一锁事务（每请求仅占一个连接，避免嵌套取连接耗尽连接池；正常返回即提交，编译失败同样计数）。SQLAlchemyError 时游客回退 `_guest_nl_hit` 文件计数、会员 503 rate_limit_unavailable（不因故障放开限流）。
+- **管理台同步（R-ADMIN-001）**：`api_console_overview` 在读连接前 `ensure_nl_tables`，随后新增 `nl` 对象：guest_daily/member_minute 直接读路由闭包外的当前执行常量 `GUEST_NL_DAILY_LIMIT`/`MEMBER_NL_MINUTE_LIMIT`（改常量即时跟随，无第二套配置）、admin="不限"、cache_version、rate_limit_rows/rate_limit_hits 与 cache_entries/cache_hits 读两表真实行（sum 聚合）。console.html 总览在 Worker 资源卡前新增「自然语言编译」卡（`id="ov-nl"` metric-strip + h2 tip-trigger 解释），`loadOverview` 调 `renderNlCompile(d.nl)`：游客每日/会员每分钟/管理员/缓存版本/缓存条目/累计命中/限流计数七张 metric 卡，解释走 title/tip，无 `.opt` 灰字。管理员鉴权（_require_admin）不变。
+- **踩坑记录**：① SQLAlchemy 2.0 `engine.connect()` 退出不提交——锁事务必须用 `engine.begin()`，否则缓存写入被回滚；② 锁事务持有连接期间再取连接（consume 独立事务）会 Pool 死锁——配额改在锁事务内同连接执行；③ 同会员同分钟共享一行 nl_rate_limits，行锁会使该会员并发编译自然串行（原子计数固有属性，非缓存锁）；「不同 key 不串行」测试因此改用两个不同会员；④ Node harness 断言误把限额当 hits——限额来自常量（10/6），hits 来自两表（13），两者必须分开断言。
+- **测试**：`tests/test_saas_nl_compile_cache.py`（新，23 passed + 1 skipped）+ `tests/test_gui_saas_console.py` 新增 `TestNlCompileConsole`（常量一致/常量改动跟随/两表计数/鉴权不变）与 `TestConsolePageNlCard`（卡标记/tip-trigger/无 .opt/位于 Worker 卡前/JS 读 d.nl）。既有 NL/权限/分享测试零改动。
+- **部署**：ECS 基线核对一致 → 备份 `/tmp/qre-nl-a2a3-pre-20261026/`（app.py+schema）与 `/tmp/qre-nl-console-pre-20261026/`（app.py+console.html）→ postgres apply → scp 三文件（A2A3）与两文件（console）→ 仅重启 qre-saas（未重启 worker）。公网临时游客会话经典 MACD 描述纯编译两次 cache_hit false→true、YAML 一致、jobs 10→10；9090 隧道临时 admin session 验证 overview nl 字段与常量/表计数一致（临时账号与会话已清理）。
 
 ## Task ID
 

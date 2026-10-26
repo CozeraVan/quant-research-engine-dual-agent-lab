@@ -1,3 +1,9 @@
+### 2026-10-26: 权限改动必须同步 9090 管理后台
+
+- Decision: 权限、配额、限流或新权限模型的改动，在 commit/push 前必须完成 9090 可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。对应 R-ADMIN-001。
+- Rationale: 避免线上实际权限已变化而管理台不可见、不可核查，防止运营误判。
+- Owner: KIMI_CODE 与所有实施 agent；NL A2/A3 先补总览卡再验收提交。
+
 ### 2026-10-26: postgres-owner 新表必须同时授予表与序列权限
 
 - Decision: `share_links` 的 schema 幂等授予 aguhuice 表 CRUD 与 `share_links_id_seq` USAGE/SELECT；本地无该角色时跳过。showcase/showcase_daily 同构定义同时纳入权威 schema，新库不再依赖懒建表时序。

@@ -7,6 +7,11 @@ This file is the source of truth for single-agent workflow recovery.
 1. **先部署后验收再提交**：任何 AI agent 的代码/UI 改动完成后，备份生产文件并直接部署 ECS，不再询问部署许可；用户人工验收通过后才 commit/push，不通过立即恢复上一版本。文档-only 无需同步 ECS。详见 `02_LOCKED_REQUIREMENTS.md` R-DEPLOY-001。
 2. **新 UI 禁止灰色小字备注**：任何新页面/UI 改动不得新增 `.opt`、muted/faint 辅助段落或灰色小字行内说明；必要解释统一使用 `tip-trigger` + `data-tip` + `LabUI.helpTips`。详见 R-UI-001。
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
+4. **权限改动必须同步 9090**：权限/配额/限流变更在 commit/push 前必须完成管理台可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。详见 `02_LOCKED_REQUIREMENTS.md` R-ADMIN-001。
+
+### 2026-10-26 QRE-SAAS-NL-A2A3 已部署待人工验收，未 commit/push
+
+按批准计划 `mister-terrific-echo-vision.md` 完成 NL 持久限频（A2）与版本化编译缓存（A3）并直接部署 ECS（R-DEPLOY-001，未跑真实回测）。**Schema**：`cloud_schema.sql` 新增 `nl_rate_limits`（scope/subject_hash/window_start/hits/updated_at，PK 三元组；scope=guest_daily 游客每日 10 次 / member_minute 会员每分钟 6 次；admin 不计数）与 `nl_compile_cache`（cache_key PK/description/result JSONB/model/prompt_hash/cache_version/created_at/last_hit_at/hit_count + last_hit_at 索引）；两表无序列，按 share_links 模式角色存在时幂等 GRANT aguhuice CRUD；生产已 postgres apply 并核实表结构与授权。**新模块 gui/saas/nl_compile_support.py**：normalize_description（NFKC+trim+空白折叠）、build_cache_key（规范化描述+model+规范化 base_url+完整 build_system_prompt 哈希+NL_COMPILER_CACHE_VERSION="2026-10-26.1"）、consume_quota_on（单条 INSERT…ON CONFLICT DO UPDATE…WHERE hits<limit RETURNING 原子计数）、cache get/store/touch、pg_advisory_xact_lock(hashtext(key)) 同 key 防重复 LLM（不同 key 不串行）、游客 subject 复用 _guest_key(ip)、会员 sha256("nl:user:"+uid+salt) 截断不落原始 IP。**app.py 编排**：快路径缓存→同 key 咨询锁+复检→配额（游客超限 403/code=guest_nl_limit 原文案不变；会员超限 429/code=nl_rate_limited+scope+reset_seconds，每日仍不限；admin 放行）→compile_nl→仅 ok=true 写缓存→响应补 cache_hit；不改 nl_compiler 编译/纠错/YAML 校验，not_configured 仍 503 且不缓存，`_guest_nl_hit` 文件计数保留为 DB 故障回退（会员 503 fail-closed）。**测试**（TDD 先 RED 后 GREEN，证据 `.tmp/nl-a2a3/` 与 `.tmp/nl-console/`）：RED=24 errors（A2A3 表缺失）+ console 4 failed；GREEN=新 `tests/test_saas_nl_compile_cache.py` 23 passed + 1 skipped（本地无 aguhuice 角色跳过 grants 断言）；console +5 例（常量一致/改动跟随/两表计数/鉴权/页面卡）；相关 4 文件 206 passed；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2731 passed + 6 skipped**（基线 2703+5 零回归）。**临时 PG+8099 staging 真实 HTTP**（stub LLM，不触真实 DeepSeek、不跑回测）A2A3 10/10 + console 3/3（含 Node harness 渲染核验）。**ECS**：基线 SHA256 一致 → 备份 `/tmp/qre-nl-a2a3-pre-20261026/` 与 `/tmp/qre-nl-console-pre-20261026/` → postgres apply → scp app.py/nl_compile_support.py/cloud_schema.sql + app.py/console.html → 仅重启 qre-saas（active，worker 未动）。**公网验证**（临时游客会话，真实 DeepSeek）：经典 MACD 描述纯编译两次，第一次 cache_hit=false（真实调用 LLM），第二次 cache_hit=true 且 YAML 逐字节一致；jobs 表 10→10 未创建回测；缓存行无 API key、model=deepseek-flash、hit_count=1；guest_daily hits=1（命中未占额度）。**管理台同步（R-ADMIN-001）**：`api_console_overview` 新增 `nl` 对象（guest_daily/member_minute 直接读执行常量、admin=不限、cache_version、两表 rate_limit/cache 真实计数），console.html 总览在 Worker 资源卡前新增「自然语言编译」卡（metric 卡 + tip-trigger，无灰色小字）；9090 隧道临时 admin session 验证 overview nl 字段与常量/两表计数一致（匿名/错 token 401），临时 admin 与会话已清理、未输出 token。**踩坑**：①SQLAlchemy 2.0 `engine.connect()` 退出不提交，锁事务须用 `engine.begin()`；②持锁事务内再取连接（配额独立事务）会耗尽连接池死锁——配额改锁事务内同连接执行；③同会员同分钟共享配额行，行锁使该会员并发编译自然串行（原子计数固有属性），「不同 key 不串行」用例改用两个会员验证。**未解决/遗留**：缓存版本覆盖 prompt 与因子目录，后处理变化须手动 bump；同会员同分钟并发按行锁串行；缓存表无自动清理（仅索引）。**未 commit/push，待用户人工验收；不通过立即恢复 `/tmp/qre-nl-a2a3-pre-20261026/` 与 `/tmp/qre-nl-console-pre-20261026/` 并重启 qre-saas。** 验收通过后建议提交 `feat(saas): 增加持久编译限流与策略缓存`。下一主线：公测运营反馈与关键浏览器自动化；小游戏/Steam、移动端/App、压测性能、硬件上云继续挂起。
 
 ### 2026-10-26 QRE-SAAS-CLASSIC-ACTIONS-UI + SHARE-HOTFIXES DONE（用户验收发布）
 
@@ -112,18 +117,19 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 ## Current Phase
 
-P1 第三切片（默认私有的可撤销只读分享）IMPLEMENTED，待用户验收；验收通过并批准后再 commit/push 与 ECS 发布（发布前须 postgres apply `cloud_schema.sql` 新表 share_links）。移动端与 App 端按用户要求暂时跳过（挂起）。
+P1 公测体验推进中：**QRE-SAAS-NL-A2A3 已验收发布，下一项为公测运营反馈与关键浏览器自动化**（2026-10-26）。游戏继续由用户在 WSL 本地试玩，优化反馈另列，不与主线提交混合。移动端与 App 端按用户要求暂时跳过（挂起）。
 
 ## Current Task
 
 见 `14_LAUNCH_ROADMAP.md` §11。**2026-10-25 用户最新范围约束：不做任何压力测试、深度性能测试、硬件扩容或硬件相关推进，只做公网用户直观可见、可感知的产品体验。移动端、App 端与可访问性深化暂时挂起，不主动启动。** 当前顺序：
 1. ~~P0-2 权限加固~~ 已发布 `0799890`。
 2. ~~P1 首次成功路径首切片~~ 已发布 `a84a9a3`；NL A2/A3 仍仅作减少等待和重复编译的体验支撑，另行立项。
-3. ~~结果理解、集中帮助中心、数据截止与费用口径说明~~ 已发布 `9fd3b3d`。
+3. ~~结果理解、集中帮助、数据截止与费用口径说明~~ 已发布 `9fd3b3d`。
 4. [挂起] 移动端、App 端与可访问性深化（用户 2026-10-25 明确暂时跳过）。
-5. 默认私有的可撤销只读分享：**已实现待验收**（2026-10-26，未 commit/push/ECS；发布前 DBA apply share_links）。之后做经典策略及结果操作 UI 精修。
-6. 公测运营反馈与关键浏览器自动化，依据真实用户反馈继续修正公网体验。
-7. 容量实测、磁盘/备份演练、深度性能、硬件扩容和整体上云全部暂停，仅保留在长期 backlog；第四入口外部 AI Agent API 仍排最后。
+5. ~~默认私有的可撤销只读分享~~ 已发布 `08b4a27`；~~经典策略及结果操作 UI 精修~~ 已验收发布 `e6f4f77`。
+6. ~~NL A2 持久限频与 A3 编译缓存（含 9090 管理台同步）~~ 已验收发布（2026-10-26；发布前全量 2753 passed + 6 skipped）。
+7. **公测运营反馈与关键浏览器自动化，依据真实用户反馈继续修正公网体验。**
+8. 容量实测、磁盘/备份演练、深度性能、硬件扩容和整体上云全部暂停，仅保留在长期 backlog；第四入口外部 AI Agent API 仍排最后。
 
 DATA-REBUILT-2026-10-11 **数据侧已全部完成**（2026-10-12 10:45 链条收官）：
 - 分钟线入库 `public.stock_minute_1m` 4313 天全量（TimescaleDB 压缩已开）；WSL 侧 /home/van/mindata CSV（324G）待用户确认后删除

@@ -154,6 +154,8 @@
 
 **当前范围修订（2026-10-25 用户再次拍板，优先于本节其他顺序表述）**：现阶段不做任何压力测试、深度性能测试、硬件扩容或其他硬件相关推进，只聚焦公网中用户直观可见、可感知的产品体验。P0-3 的容量实测、磁盘/备份演练和 §11.4 扩容工作全部暂停；§11.7 整体上云仅保留长期方案，不启动。worker 离线时的明确排队/维护提示归入首次使用体验，不做容量或硬件调参。**移动端、App 端与可访问性深化按用户最新要求暂时跳过并挂起。** 当前顺序为：P0-2 权限加固验收发布 → 首次成功路径（NL 编译反馈、排队/等待/错误/重试、worker 离线提示）→ 结果理解与集中帮助 → 默认私有的可撤销只读分享 → 经典策略及结果操作 UI → NL A2/A3 → 公测运营反馈与关键浏览器自动化。NL A2/A3 仅作为减少等待、失败和重复编译的体验支撑，不扩展为性能工程。下文保留容量、云迁移、移动/App 和性能条目仅为完整 backlog，均不得在当前阶段主动启动。
 
+**NL A2/A3 已验收发布（2026-10-26，QRE-SAAS-NL-A2A3，已 commit/push + ECS）**：`nl_rate_limits`（PG 原子计数：游客 guest_daily=10 保持 403/code=guest_nl_limit；会员 member_minute=6 超限 429/code=nl_rate_limited+reset_seconds，每日仍不限；admin 不计）+ `nl_compile_cache`（规范化描述+model/base_url+完整 prompt 哈希+缓存版本生成 key；同 key 咨询锁防并发重复 LLM；只缓存 ok=true，命中不调 LLM 不占配额）。**R-ADMIN-001 管理台同步**：9090 总览「自然语言编译」卡直接读执行常量展示游客/会员/admin 限额与缓存条目/累计命中/限流计数（同源，无第二套配置）。发布前全量 2753 passed + 6 skipped；公网纯编译两次 cache_hit false→true、YAML 一致、未建回测；隧道临时 admin 验证 overview nl 字段与常量/表计数一致。详见 04/05/09/11。下一主线为公测运营反馈与关键浏览器自动化。
+
 ### 11.1 对 Step 5 全项目审查的复核意见
 
 主 Agent 认同其核心判断：日线引擎与数据底座已较成熟，当前主要风险是**数字可信度、公网权限与运维容量**，不是继续堆引擎功能。优先级作以下修正：
@@ -182,7 +184,8 @@
 ### 11.3 P1：公测首周用户体验与转化
 
 1. **首次成功路径**：自然语言输入→编译→小样本验证→结果。重点做 NL A2 持久配额、A3 编译缓存和明确错误/重试；展示队列位置、预计等待和可取消操作，避免重复提交。
-   **首切片已发布（2026-10-25，QRE-SAAS-FIRST-SUCCESS-UX-001，commit `a84a9a3`）**：队列位置、worker 在线/离线提示、已等待时间进入 new/job 两页；取消（含游客会话归属）与失败恢复（真实 error_message + 按原策略重跑）可用；单次轮询超时不误判失败、80 轮前台超时分流任务页、不自动提交全量。全量 2629 passed + 5 skipped，真实 Chromium 12/12，ECS 公网文件与权限回归通过。剩余：NL A2 持久限频与 A3 编译缓存（原 P1 条目 4 保留）。
+   **首切片已发布（2026-10-25，QRE-SAAS-FIRST-SUCCESS-UX-001，commit `a84a9a3`）**：队列位置、worker 在线/离线提示、已等待时间进入 new/job 两页；取消（含游客会话归属）与失败恢复（真实 error_message + 按原策略重跑）可用；单次轮询超时不误判失败、80 轮前台超时分流任务页、不自动提交全量。全量 2629 passed + 5 skipped，真实 Chromium 12/12，ECS 公网文件与权限回归通过。
+   **NL A2/A3 已部署待人工验收（2026-10-26，QRE-SAAS-NL-A2A3，未 commit/push）**：游客每日 10 次改 PG 原子计数（跨 worker/重启可靠，403/code 不变），会员 6 次/分钟防突发（429/nl_rate_limited/reset_seconds，每日仍不限），admin 不限；相同输入命中版本化编译缓存（key=规范化描述+model/base_url+完整 prompt 哈希+缓存版本），命中不调用 LLM 也不占配额，失败不缓存。管理台同步（R-ADMIN-001）：9090 总览「自然语言编译」卡展示真实生效限额与缓存/限流计数。全量 2731 passed + 6 skipped；公网纯编译两次 cache_hit false→true、YAML 一致、未创建回测。备份 `/tmp/qre-nl-a2a3-pre-20261026/` 与 `/tmp/qre-nl-console-pre-20261026/`；验收通过后才 commit/push。
 2. **结果理解与分享**：补集中帮助中心/指标口径、数据截止与费用说明；默认私有前提下增加可撤销、可设有效期的只读分享链接。经典策略只展示验证过且可复现的内容。
    **首切片已发布（2026-10-25，QRE-SAAS-RESULT-UNDERSTANDING，commit `9fd3b3d`）**：公开 `/saas/help` 使用说明页（七锚点），合同文案同源；job/symbol 模块精准深链；五类磨损卡/费率/基准/重播提示补全；symbol 两路径注入 data_until，VaR/ES 统一损失正数；个股过户费重复显示已修。全量 2653 passed + 5 skipped，真实 Chromium 10/10，ECS 帮助页与个股 data_until 验证通过。剩余：默认私有的可撤销只读分享链接（P1 条目 6）。
    **只读分享已发布（2026-10-26，QRE-SAAS-READONLY-SHARE，commit `08b4a27`）**：`share_links` 只存完整 token 哈希（明文仅创建响应一次）；创建/列表/撤销三个 owner API；单 job 绑定公开只读通道（无效/过期/撤销/错 job 不降级，也不回退 showcase）；未验证结果可分享且徽标保留、showcase verified 门不变、游客不开放；job/profile 分享 UI 与「只读分享」chip。最终全量 2688 passed + 5 skipped，真实 Chromium 12/12；ECS schema 与公网创建→匿名只读→撤销验证通过，临时链接已清理。剩余：经典策略及结果操作 UI 精修。
