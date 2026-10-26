@@ -14,10 +14,17 @@
       <h2>源文件 <span class="opt" id="sd-mode-label"></span></h2>
       <!-- nl 模式：原始自然语言（可改 + 重新编译） -->
       <div id="sd-src-nl" class="hidden">
+        <h4 style="font-size:14px;margin:0 0 8px">策略描述 <button type="button" class="tip-trigger" data-tip="重新编译会把描述发送给 DeepSeek（已配置的大模型），用于校验描述是否完整并生成策略代码；请勿填写个人隐私信息或密钥。乱码、纯数字或与交易无关的内容会被拒绝，描述不完整时会先请你确认。" aria-label="自然语言编译隐私与校验说明">?</button></h4>
         <textarea id="sd-nl-text" rows="5" style="width:100%"></textarea>
         <p class="opt" style="margin:6px 0">重新编译后，需保存修改才会生效。</p>
         <button class="btn-sm" id="sd-nl-recompile">重新编译</button>
         <span class="opt" id="sd-nl-status" style="margin-left:8px"></span>
+        <!-- QRE-SAAS-NL-A1：描述不完整时的确认区（确认=force 重发；reject 不可绕过） -->
+        <div id="sd-nl-review" class="hidden" style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span id="sd-nl-review-text"></span>
+          <button class="btn-sm" id="sd-nl-review-yes">仍要编译</button>
+          <button class="btn-sm" id="sd-nl-review-no">返回修改</button>
+        </div>
       </div>
       <!-- wizard 模式：快照条件组只读还原 + 跳转向导编辑 -->
       <div id="sd-src-wizard" class="hidden">
@@ -272,13 +279,27 @@
       location.href = '/saas/strategies/' + d.strategy_id;
     }).catch(function(){});
   });
-  document.getElementById('sd-nl-recompile').addEventListener('click', function(){
+  // QRE-SAAS-NL-A1：重新编译（force=true 仅用于 review 确认后重发）
+  function sdRecompile(force){
     var txt = document.getElementById('sd-nl-text').value.trim();
     var stEl = document.getElementById('sd-nl-status');
     if (!txt){ stEl.textContent = '请先输入策略描述'; return; }
     stEl.textContent = '编译中…';
-    apiFetch('/api/saas/nl/compile', {json: {description: txt}}).then(function(r){ return r.json(); }).then(function(d){
-      if (!d.ok || !d.yaml){ stEl.textContent = d.error || '编译失败'; return; }
+    document.getElementById('sd-nl-review').classList.add('hidden');
+    apiFetch('/api/saas/nl/compile', {json: {description: txt, force: !!force}}).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok || !d.yaml){
+        if (d.code === 'nl_input_review'){
+          stEl.textContent = '描述不太完整';
+          document.getElementById('sd-nl-review-text').textContent =
+            (d.reasons || []).join('；') + '（合法示例：' + (d.examples || []).join('；') + '）';
+          document.getElementById('sd-nl-review').classList.remove('hidden');
+          return;
+        }
+        stEl.textContent = (d.code === 'nl_input_rejected')
+          ? ((d.error || '无法识别为交易策略') + ((d.examples || []).length ? '；可以参考：' + d.examples.join('；') : ''))
+          : (d.error || '编译失败');
+        return;
+      }
       st.yaml = d.yaml;
       st.nl_text = txt;
       document.getElementById('sd-yaml-view').textContent = d.yaml;
@@ -286,7 +307,12 @@
       det.open = true;
       stEl.textContent = '已重新编译（点「保存修改」生效）';
     }).catch(function(){ stEl.textContent = '编译请求失败'; });
+  }
+  document.getElementById('sd-nl-recompile').addEventListener('click', function(){ sdRecompile(false); });
+  document.getElementById('sd-nl-review-no').addEventListener('click', function(){
+    document.getElementById('sd-nl-review').classList.add('hidden');
   });
+  document.getElementById('sd-nl-review-yes').addEventListener('click', function(){ sdRecompile(true); });
 })();
 </script>
 {% endblock %}

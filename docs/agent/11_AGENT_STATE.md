@@ -9,6 +9,26 @@ This file is the source of truth for single-agent workflow recovery.
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
 4. **权限改动必须同步 9090**：权限/配额/限流变更在 commit/push 前必须完成管理台可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。详见 `02_LOCKED_REQUIREMENTS.md` R-ADMIN-001。
 
+### 2026-10-26 QRE-SAAS-NL-A1 DONE（DeepSeek 裁判，用户验收发布）
+
+用户批准提交，自然语言规则前置校验与 DeepSeek 裁判已部署 ECS，本次以 `feat(saas): 增加自然语言输入校验与 DeepSeek 裁判` commit/push。最终专项 67 passed、全量 2840 passed + 6 skipped；真实 DeepSeek 分层 12 条评估 0 失败，生产缓存命中零裁判、裁判拒绝占配额、admin 同样裁判、force 与 DB 回退路径一致。游戏内容不纳入本提交。下一主线：P2 重播边界（同日聚合、orders 事件源、多因子副图页）；挂起任务放最后。
+
+### 2026-10-26 QRE-SAAS-NL-A1 复核修正（主 Agent 3 项 Required Fixes 已解决，实施过程）
+
+①领域语境门槛：`DOMAIN_WORDS`/`STRONG_TRADING_WORDS`/`_has_domain_context`——有入出场词但无股票/价格/指标/交易语境至少 review 不得 pass（修「我想买房，之后卖房」「今天买菜后卖给邻居」在无 Jev 生产直接放行）；54 条样本（含 4 条对抗）规则层 54/54，50 条合法样本零误杀。②strategy.html 重编译区隐私/校验 tip-trigger 与 new.html 同源；new.html review 模态补 role=dialog/aria-modal/aria-labelledby。③`force = data.get("force") is True`，字符串 "false"/"true" 不视为确认。TDD RED=8→GREEN；guard 60 passed；相关 6 文件 230 passed + 1 skipped；**全量 2833 passed + 6 skipped**；Chromium 6/6（对抗样本 review 模态；截图几何稳定后拍摄）。ECS 备份 `/tmp/qre-nl-a1-review1-pre-20261026/` 后同步四文件仅重启 qre-saas；公网两条对抗文本 422 review、force 字符串 422、合法 MACD cache_hit=true 不回归；9090 隧道两页 200 且新标记齐全。整任务回滚点仍为 `/tmp/qre-nl-a1-pre-20261026/`。**未 commit/push，待用户人工验收。**
+
+### 2026-10-26 QRE-SAAS-NL-A1 路径一致性复核修正已部署待人工验收，未 commit/push
+
+主 Agent 复核 2 个路径一致性 Required Fixes 已解决：①删除 admin 裁判豁免（`if not force`）——管理员不限编译配额，但与会员一样经过 DeepSeek 裁判（原绕过是未经要求的新权限差异）；②DB 故障回退路径仅 `not force` 时裁判（原无条件裁判导致 force 用户在 DB 故障时又被拦回），规则硬拒仍在最前不可绕过。回归：`test_admin_also_refereed`、DB 故障+force 跳过裁判/裁判拒绝拦截/乱码硬拒。TDD RED=2→GREEN；guard 67 passed；相关 6 文件 237 passed + 1 skipped；**全量 2840 passed + 6 skipped**；Chromium 7/7（裁判 prompt 未变，未重复真实评估）。ECS 备份 `/tmp/qre-nl-a1-deepseek-review1-pre-20261026/`（app.py）后仅重启 qre-saas；公网最小复核：MACD 缓存命中 200 零裁判零配额（配额 5→5）、乱码+force 仍 422、jobs/cache 不变、公网三页与 9090 隧道 200。**未 commit/push，待用户人工验收；不通过恢复 `/tmp/qre-nl-a1-deepseek-review1-pre-20261026/` 并重启 qre-saas。**
+
+### 2026-10-26 QRE-SAAS-NL-A1 DeepSeek 方向落地已部署待人工验收，未 commit/push
+
+用户明确暂不配置 Jev，改用现有 DeepSeek（`QRE_NL_LLM_*`）。**删除** Jev/TypeSafe 客户端、环境变量、requests 依赖与 `scripts/nl_jev_eval.py`（无死代码）；裁判复用 `nl_compiler.call_llm` 注入独立裁判 prompt（严格 JSON 三分类 strategy/not_strategy/unclear，无置信度不伪造），故障降级规则层。**编排**：规则层（reject 不可绕过/review 可 force）→ 缓存快路径+锁内复检（**命中零裁判**）→ 配额计数 → **DeepSeek 裁判**（仅 cache miss + 配额后；force 不再裁判；admin 豁免已于同日复核删除，见下条）→ 编译；裁判 not_strategy/unclear → 422 review（不硬拒）且占配额；DB 回退路径同序（`_referee_gate` helper）。缓存 key/YAML/配额数值不动；隐私 tip 改 DeepSeek 措辞。测试：TDD RED=29→GREEN，guard 67 passed，相关 6 文件 237 passed + 1 skipped，**全量 2840 passed + 6 skipped**；Chromium 7/7（新增裁判 review 场景）。真实评估：ECS 生产凭证跑 ≤12 条分层小样本，deepseek-flash 0 失败、延迟 533–1590ms、not_strategy 4/4、strategy 3/4。ECS 备份 `/tmp/qre-nl-a1-deepseek-pre-20261026/` 后同步四文件仅重启 qre-saas；公网计数 jobs 10→10、cache 3→4、events 5→7、guest 配额 3→5（裁判拦截占配额不写缓存；缓存命中零裁判）。**未 commit/push，待用户人工验收；不通过恢复 `/tmp/qre-nl-a1-deepseek-pre-20261026/` 四文件重启 qre-saas。** 建议提交 `feat(saas): 增加自然语言输入校验与 DeepSeek 裁判`。
+
+### 2026-10-26 QRE-SAAS-NL-A1 已部署待人工验收，未 commit/push
+
+NL 编译入口前置校验落地（规则层 + 可选 Jev 第二裁判）。**合同**：`POST /api/saas/nl/compile` 在 empty 检查后执行纯规则校验——reject=422 `nl_input_rejected`（<6 字符/无中英文字符/纯数字/乱码率≥40%/无交易语义且<16 字符）**不可绕过**；review=422 `nl_input_review`（缺入场 missing=entry/缺出场 missing=exit/无交易语义长文本）可由用户确认后 `force=true` 重发（**force 只豁免 review，reject 仍硬拒**）；pass=其余。guard 位于 prompt/缓存/配额/LLM 之前，不占配额、不写缓存、不调 LLM、不建 job。**Jev**：官方 `POST https://api.typesafe.ai/v1/systemone`（Bearer + Choice input_kind=strategy/not_strategy/unclear），`TYPESAFE_API_KEY` 环境读取、`QRE_NL_JEV_MODEL` 缺省 jev-latest、阈值 0.7，直接 requests 无 SDK；strategy 高置信维持结论、not_strategy 高置信/unclear/低置信只升级 review、未配置/超时/非 2xx/结构异常降级规则层；不记录策略文本与密钥。**未真实运行 Jev**（无凭证，评估标记 not_run_missing_credentials，未伪造）。测试：新 `tests/test_nl_input_guard.py` 48 passed；相关 6 文件 265 passed + 1 skipped；全量 **2821 passed + 6 skipped**（基线 2773+6 零回归）。真实 Chromium 5/5 零 JS error 零横溢（`.tmp/nl-input-guard/`）。ECS 备份 `/tmp/qre-nl-a1-pre-20261026/` 后 scp 四文件仅重启 qre-saas（无 schema 变更）；公网 reject/review/force/合法编译合同全部符合，jobs 10→10，nl_compile_events 2→4；9090 隧道两页 200。**未 commit/push，待用户人工验收；不通过恢复 `/tmp/qre-nl-a1-pre-20261026/` 并删除 nl_input_guard.py 重启 qre-saas。** 建议提交 `feat(saas): 增加自然语言输入前置校验与 Jev 可选裁判`。下一主线：按灰度反馈继续修正公网体验；小游戏暂停。
+
 ### 2026-10-26 QRE-SAAS-PUBLIC-BETA-OPS DONE（用户验收发布）
 
 用户批准提交，公测运营指标、反馈分类闭环与关键浏览器自动化资产已部署 ECS，本次以 `feat(saas): 新增公测运营指标与反馈分类闭环` commit/push。发布前聚焦 20 passed，全量 2773 passed + 6 skipped；游戏内容不纳入本提交。下一主线：P2 NL A1 输入校验与 Jev 小样本评估；小游戏、移动端/App、压测性能、硬件上云继续挂起。
@@ -125,7 +145,7 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 ## Current Phase
 
-P1 公测体验推进中：**QRE-SAAS-PUBLIC-BETA-OPS 已部署待人工验收，未 commit/push**（2026-10-26：9090「公测运营」tab + 反馈分类/状态闭环 + 关键浏览器自动化资产；生产热修 feedback_id_seq 授权）。下一项为按灰度公测反馈继续修正公网体验。游戏继续由用户在 WSL 本地试玩，优化反馈另列，不与主线提交混合。移动端与 App 端按用户要求暂时跳过（挂起）。
+P1 公测体验推进中：**QRE-SAAS-NL-A1（DeepSeek 方向）已部署待人工验收，未 commit/push**（2026-10-26：规则层前置校验 + DeepSeek 裁判，仅缓存 miss + 配额后运行；管理员与会员同样经过裁判）。下一项为按灰度公测反馈继续修正公网体验。游戏继续由用户在 WSL 本地试玩，优化反馈另列，不与主线提交混合。移动端与 App 端按用户要求暂时跳过（挂起）。
 
 ## Current Task
 

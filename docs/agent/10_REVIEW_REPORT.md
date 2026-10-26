@@ -2,6 +2,51 @@
 
 ## Task ID
 
+QRE-SAAS-NL-A1（自然语言输入前置校验与 DeepSeek 裁判评估）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS + RELEASED（2026-10-26 用户验收通过，已部署并发布）。最终专项 67 passed、全量 2840 passed + 6 skipped；真实 Chromium 7/7 零 JS error 零横溢；DeepSeek 分层 12 条评估 0 失败，生产缓存/配额/force/DB 回退路径复核符合合同。
+
+## Findings
+
+1. 规则层纯函数零 IO，位于 empty 检查后、prompt/缓存/配额/LLM 前；reject 不可绕过（force 也只豁免 review，服务端二次 rule_check 硬拒）；guard 不占配额、不写缓存、不调 LLM、不建 job——均有端点测试锁定。
+2. 经典输入不误杀：50 条中文人工标注样本规则层 50/50；网格「买一格/卖一格」与纯「股票」重复词经词表校准后各有回归锁定。
+3. Jev 为非单点第二裁判：官方 systemone 协议（Bearer + Choice），四种故障（未配置/超时/非 2xx/结构异常）全部降级规则层；Jev 只能把 pass 升级 review，从不硬拒；不记录策略文本与密钥。
+4. **Jev 未真实运行**：本地与生产均无 TYPESAFE_API_KEY，评估报告如实标记 not_run_missing_credentials——未声称 Jev 已验收；阈值 0.7 为默认值，真实校准待凭证（脚本已就绪）。
+5. 隐私合规：NL 入口 tip-trigger 明示文本会发给已配置的校验/编译服务商；零新增灰色小字（测试锁定新增区块无 `.opt`）。
+6. A2/A3 不回归：缓存命中路径生产实测 cache_hit=true；限额计数语义不变；相关缓存/限流套件全绿。
+
+## Required Fixes
+
+无。遗留（已记录 04/05）：Jev 阈值未经真实样本校准；guard 拦截量不计入运营事件表；规则层不做语义可达性判断。
+
+## 主 Agent 复核 Required Fixes（2026-10-26，均已解决）
+
+1. **领域语境门槛（已解决）**：原规则同时含买/卖即 pass，「我想买房，之后卖房」「今天买菜后卖给邻居」等非交易文本在无 Jev 的生产直接放行。修正：`DOMAIN_WORDS`（收盘价/开盘价/涨停/跌停/交易日/换手率/估值/基本面/涨跌幅/持仓/委托等）+ `STRONG_TRADING_WORDS`（金叉/死叉/止损/做多/突破等）+ `_has_domain_context`——有入出场词但无领域语境至少 review 不得 pass。50 条合法样本零误杀；54 条样本（+4 对抗）规则层 54/54；生产实测两条对抗文本均 422 `nl_input_review`。
+2. **UI 一致性与无障碍（已解决）**：strategy.html 重编译区增加与 new.html 同源的隐私/校验 tip-trigger；new.html review 模态补 role=dialog/aria-modal/aria-labelledby；截图改几何稳定后拍摄（nl-review-modal-1280.png 不再透明过渡态）。
+3. **force 严格布尔（已解决）**：`data.get("force") is True`；字符串 "false"/"true" 均不视为确认，回归 `test_force_on_reject_still_blocked` 锁定。
+- 复验：TDD RED=8 failed → GREEN；guard 60 passed；相关 6 文件 230 passed + 1 skipped；全量 **2833 passed + 6 skipped**；Chromium 6/6 零 JS error 零横溢；ECS 备份 `/tmp/qre-nl-a1-review1-pre-20261026/` 后同步四文件仅重启 qre-saas；公网对抗文本/force 字符串/合法 MACD 编译全部符合合同。
+
+## 方向变更落地记录（2026-10-26，Jev → DeepSeek，主 Agent 指令）
+
+- 删除 Jev/TypeSafe 客户端、环境变量、requests 依赖与 `scripts/nl_jev_eval.py`，无死代码残留；裁判复用 `QRE_NL_LLM_*` + `call_llm(system_prompt=…)`，独立裁判 prompt 严格 JSON 三分类，容错解析与故障降级完备，不伪造置信度。
+- 成本控制经生产计数验证：缓存命中零裁判（MACD 200 cache_hit=true，配额 +0）；cache miss 才裁判；裁判拒绝占配额 +1 且不编译、不写缓存、不记事件；合法新描述裁判+编译两阶段成功。
+- 测试：TDD RED=29 failed → GREEN；guard 67 passed；相关 6 文件 237 passed + 1 skipped；全量 **2840 passed + 6 skipped**；Chromium 7/7 零 JS error 零横溢。
+- 真实小样本评估（ECS 生产凭证，≤12 条）：deepseek-flash、0 失败、延迟 533–1590ms、not_strategy 4/4、strategy 3/4（1 unclear→review 软行为）；未跑全量、未跑真实回测。
+
+## 路径一致性 Required Fixes（2026-10-26，均已解决）
+
+1. **admin 裁判豁免（已解决）**：原 `if not is_admin and not force` 让管理员绕过裁判——未经用户要求的新权限差异、任务书未定义。修正：管理员仍不限配额，但与会员一样经过裁判；测试改为 `test_admin_also_refereed`（admin 裁判拒绝 422、连续拒绝不限流、force 后可编译）。
+2. **DB 回退路径 force 语义（已解决）**：原回退路径无条件裁判，force 用户在 DB 故障时又被拦回。修正：仅 `not force` 时裁判；规则硬拒仍在最前。回归：DB 故障+force 跳过裁判进入编译；DB 故障+裁判拒绝 422；DB 故障+force+乱码 422。
+- 复验：TDD RED=2 failed → GREEN；guard 67 passed；相关 6 文件 237 passed + 1 skipped；全量 **2840 passed + 6 skipped**；Chromium 7/7；ECS 备份 `/tmp/qre-nl-a1-deepseek-review1-pre-20261026/` 后仅重启 qre-saas；公网最小复核通过（缓存命中零裁判零配额、硬拒不可绕过）。
+
+## Task ID
+
 QRE-SAAS-PUBLIC-BETA-OPS（P1：公测运营反馈闭环与关键浏览器自动化）
 
 ## Reviewer

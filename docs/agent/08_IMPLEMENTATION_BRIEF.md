@@ -2,6 +2,51 @@
 
 ## Task ID
 
+QRE-SAAS-NL-A1（自然语言输入前置校验与 DeepSeek 裁判评估）
+
+## Created By
+
+KIMI_CODE 规划，Step 5 实施（2026-10-26；用户批准继续主线，小游戏暂停；用户随后明确不配置 Jev，改用现有 DeepSeek）
+
+## 目标与边界
+
+1. **规则层先于缓存、限流和 LLM**：在 `POST /api/saas/nl/compile` 空输入检查后执行纯函数校验；拒绝乱码/纯数字/过短或明显缺少入场、出场语义的输入，返回具体缺失项与合法示例。规则必须覆盖中英文常见交易词与 MACD 金叉/死叉等既有经典输入，不得把指标别名误判成乱码。
+2. **三级决策**：`pass` 进入既有 A2/A3；`reject` 返回 422 且不可强制绕过；`review` 返回 422、`code=nl_input_review` 与缺失/风险项，用户确认后以 JSON 布尔 `force=true` 重发，只有 review 可绕过。拒绝与确认均不得创建 job。
+3. **DeepSeek 替代 Jev，复用现有 `QRE_NL_LLM_*`**：删除 Jev/TypeSafe 适配、配置与评估资产，不新增任何密钥或 SDK。使用 `gui.nl_compiler.call_llm` 注入独立裁判 system prompt，要求严格 JSON 三分类 strategy/not_strategy/unclear；容错解析失败、超时与 HTTP 错误时降级规则层，不伪装裁判成功，不记录策略文本或密钥。
+4. **成本控制**：缓存命中直接返回，不调用裁判；缓存 miss 先在既有配额内计数，再调用 DeepSeek 裁判，通过后才调用编译，裁判拒绝也占一次配额，防止利用免费裁判刷 token。DB 故障回退路径同样先限流再裁判。force 只豁免 review，不绕过硬拒绝、缓存、配额或编译。
+5. **隐私与 UI**：自然语言入口用既有 tip-trigger 说明文本会发送给 DeepSeek 用于校验与编译；不新增灰色小字。复用 new.html 的等待遮罩和模态，确认后原样重发；不改变编译 YAML、缓存 key、配额数值、worker、引擎和结果。
+6. **小样本评估**：保留中文人工标注样本集，评估脚本改调现有 DeepSeek；自动测试全部 stub。真实评估只跑分层小样本（不超过 12 条），记录分类混淆、延迟和失败；不得伪造成本或准确率。规则全集可离线运行，DeepSeek 不跑全量 54 条。
+7. **验证与发布**：TDD 先 RED 后 GREEN；覆盖 pass/reject/review/force、DeepSeek 故障矩阵、缓存命中零裁判、裁判占配额、A2/A3 不回归、两个 NL 页面入口。运行相关套件和全量测试；真实 Chromium 验证拒绝、确认继续、成功编译。按 R-DEPLOY-001 备份后直接部署 ECS；用户验收后才 commit/push。不跑真实回测，不推进游戏、移动端、压测或硬件。
+
+## 实施结果（2026-10-26，用户验收通过，已部署并发布）
+
+- **改动文件**：`src/quant_research_engine/gui/saas/nl_input_guard.py`（新）、`src/quant_research_engine/gui/saas/app.py`、`src/quant_research_engine/gui/saas/templates/new.html`、`src/quant_research_engine/gui/saas/templates/strategy.html`、`configs/nl_input_guard_samples.json`（新，54 条人工标注）、`scripts/nl_deepseek_eval.py`（新）、`tests/test_nl_input_guard.py`（新，67 例）；更新 3 处既有用例输入（`test_gui_saas_pages.py` NL 路由 3 例、`test_saas_nl_compile_cache.py` 13 处、`test_saas_public_beta_ops.py` 4 处——合成短描述按新行为改为经典合法描述）。未改 schema/引擎/worker/配额数值/YAML 编译/缓存 key。
+- **规则层合同**（纯函数 `rule_check`，零 IO）：reject（422 `nl_input_rejected`，不可绕过）= strip 后 <6 字符 / 无中英文字符（纯数字符号）/ 纯数字 / 可识别字符占比 <60%（乱码）/ 无任何交易语义且 <16 字符；review（422 `nl_input_review`，可 force 绕过）= 缺少入场语义（missing=["entry"]）/ 缺少出场语义（missing=["exit"]）/ 无交易语义的长文本；pass=其余。词表覆盖中英文入场（买入/金叉/突破/buy/golden cross…）、出场（卖出/死叉/止损/sell/stop loss…）、指标（MACD/EMA/RSI/均线/布林/网格/股票…）。经典 MACD 金叉死叉、EMA 上穿买入下穿卖出、网格「买一格/卖一格」等均 pass（50 条人工标注样本 50/50 一致）。
+- **DeepSeek 裁判合同**（第二道防线，非单点；用户 2026-10-26 明确不配置 Jev/TypeSafe，改用现有 `QRE_NL_LLM_*` 通道）：复用 `gui.nl_compiler.call_llm(description, config, system_prompt=REFEREE_SYSTEM_PROMPT, timeout=30)`，独立裁判 prompt 要求严格 JSON 三分类（strategy/not_strategy/unclear；无置信度输出、不伪造校准结论）；去 fenced block + 截取 JSON 对象容错解析；异常/结构错误 → `llm_error`/`bad_structure` 降级规则层。strategy → 维持规则层结论；not_strategy/unclear → 升级 review（不硬拒）。**不记录策略文本、不读取/打印密钥。**
+- **端点编排**（`POST /api/saas/nl/compile`）：empty 检查后 → 规则层（`force=false` 走 evaluate_input；`force=true` 仍跑 rule_check 硬拒拦截——force 只豁免 review）→ 既有 prompt/缓存快路径/锁内复检 → 配额计数 → **DeepSeek 裁判（仅 cache miss + 配额计数后；管理员与会员同样经过裁判（无 admin 豁免）；force 已确认不再裁判）** → 通过才 compile_nl。裁判拒绝也占一次配额（防免费刷 token）；DB 故障回退路径同样先文件限流再裁判再编译（`_referee_gate` 小 helper 两条路径同源）。缓存命中零裁判；规则层不占配额、不写缓存。
+- **前端**：new.html 新增 `#nl-review-modal`（缺失项 + 合法示例 + 返回修改/仍要编译），`doNlCompile(force)` 处理 `nl_input_review`（弹模态）与 `nl_input_rejected`（结果区展示原因+示例，无模态）；NL 入口 h3 增加隐私 tip-trigger（文本会发给已配置的校验/编译服务商）。strategy.html 重编译改 `sdRecompile(force)` + 行内确认区 `#sd-nl-review`。零新增灰色小字。
+- **测试**（DeepSeek 方向重跑）：TDD RED=29 failed → GREEN；`tests/test_nl_input_guard.py` 67 passed（规则三态/领域语境/裁判 prompt 独立性与容错解析/故障降级/组合矩阵/reject 不可绕过/缓存命中零裁判/miss 裁判后才编译/裁判 review 占配额不编译/DB 回退路径同构/force 严格布尔/页面标记与无灰字）；`test_saas_nl_compile_cache.py` 与 `test_saas_public_beta_ops.py` 增加 autouse 裁判桩（不关心裁判的既有用例）；相关 6 文件 237 passed + 1 skipped；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2840 passed + 6 skipped**（基线 2833+6，+7 零回归）。证据 `.tmp/nl-input-guard/deepseek-{red,full-tests}.txt`。
+- **评估**：`configs/nl_input_guard_samples.json` 54 条人工标注 + `scripts/nl_deepseek_eval.py`（替代并删除 nl_jev_eval.py）；规则层全集 **54/54 与标注一致**；**DeepSeek 裁判真实小样本已运行**（ECS 生产凭证、分层 ≤12 条：deepseek-flash、0 失败、延迟 533–1590ms；混淆矩阵 not_strategy 4/4、strategy 3/4（1 unclear→review 软行为）、boundary 2/4——boundary 在生产已被规则层拦截、裁判看不到）。证据 `.tmp/nl-input-guard/deepseek-eval.json`。
+- **真实 Chromium**（临时库 + 8099 staging + stub LLM + worker 不启动，未跑回测）：5/5、零 JS error、零横向溢出——拒绝（原因+示例、无模态、YAML 不被改写）、review 模态→仍要编译→成功、直接成功、strategy 页重新编译 review→确认→已重新编译、375 不破版（含模态开启态）。证据 `.tmp/nl-input-guard/`（browser-evidence.json + 5 截图）。
+- **ECS 发布**：按 R-DEPLOY-001 多级备份（最终 `/tmp/qre-nl-a1-deepseek-review1-pre-20261026/`）→ 同步 nl_input_guard.py、app.py、new.html、strategy.html → 仅重启 qre-saas（active；worker 在家未动）；无 schema 变更、未 apply。生产复用既有 DeepSeek 配置，未配置 Jev，未索取/输出任何密钥。
+- **公网验证**（临时游客会话）：reject 422 `nl_input_rejected`（原因+4 示例）且 force 仍 422；review 422 `nl_input_review`（missing=["exit"]）；合法编译不回归——「MACD 金叉买入，死叉卖出」200 cache_hit=true（A2A3 缓存路径无损）、新合法描述 force 200 ok=true（真实 DeepSeek 编译一次）；jobs 表 10→10 未建任务；nl_compile_events 2→4（两条真实编译事件）；9090 隧道 `/saas/new` 与 `/saas/strategies/1` 200 且 A1 标记齐全；公网四页 200。
+- **遗留**：裁判无置信度输出、不做阈值校准结论（unclear 走 review 软确认不阻挡）；裁判拦截量不计入 nl_compile_events（未来可加 guard 维度）；规则层为文本语义判断，不做语义可达性。
+
+## 复核修正（2026-10-26，主 Agent 3 项 Required Fixes 已解决，重新部署待人工验收）
+
+1. **领域语境门槛**：原规则只要同时含买/卖即 pass，非交易文本（买房/买菜/买机票）在无裁判的生产直接放行。新增 `DOMAIN_WORDS`（收盘价/开盘价/涨停/跌停/交易日/换手率/估值/基本面/涨跌幅/持仓/委托/行情…）与 `STRONG_TRADING_WORDS`（金叉/死叉/止损/做多/突破/止盈…），`_has_domain_context` = 领域词 ∪ 指标词 ∪ 强交易词；**有入出场词但无领域语境 → review（不得 pass）**。50 条合法样本零误杀（新增收盘价/连续涨跌/开盘价涨停/换手率/估值等 domain 用例）；`configs/nl_input_guard_samples.json` 增至 54 条（+4 对抗样本），规则层 54/54。
+2. **UI**：strategy.html 重编译区增加与 new.html 同源的隐私/校验 tip-trigger；new.html review 模态补 `role="dialog"`/`aria-modal="true"`/`aria-labelledby`。
+3. **force 严格布尔**：`data.get("force") is True`——字符串 "false"/"true" 均不视为确认（回归 `test_force_on_reject_still_blocked`）。
+- TDD：RED=8 failed → GREEN；guard 60 passed；相关 6 文件 230 passed + 1 skipped；**全量 2833 passed + 6 skipped**（基线 2821+6 零回归）。Chromium 重跑 6/6（对抗样本 review 模态；`shot_stable` 几何稳定后截图，nl-review-modal-1280.png 不再截在透明过渡中）。ECS 备份 `/tmp/qre-nl-a1-review1-pre-20261026/` 后同步四文件仅重启 qre-saas；公网对抗文本 422 review、force 字符串 422、合法 MACD cache_hit=true 不回归。
+
+
+## 复核修正（2026-10-26，主 Agent 2 个路径一致性 Required Fixes 已解决，重新部署待人工验收）
+
+1. **删除 admin 裁判豁免**：原锁内路径 `if not is_admin and not force` 让管理员绕过 DeepSeek 裁判——未经用户要求的新权限差异、任务书未定义。修正：管理员仍**不限编译配额**，但与会员一样经过裁判（`if not force`）；同步删除注释、测试（`test_admin_skips_referee` → `test_admin_also_refereed`：admin 裁判拒绝 → 422 review、连续拒绝不限流、force 后可编译）与文档中的管理员特例。
+2. **DB 回退路径 force 语义一致**：原 `except SQLAlchemyError` 回退路径无条件调用 `_referee_gate()`，导致 `force=true` 用户在 DB 故障时又被裁判拦回，与正常路径不一致。修正：仅 `not force` 时裁判；规则硬拒仍在最前不可绕过。回归：DB 故障 + force=true → 跳过裁判进入编译；DB 故障 + 裁判拒绝 → 422 不编译；DB 故障 + force + 乱码 → 422 reject。
+- TDD：RED=2 failed → GREEN；guard 67 passed；相关 6 文件 237 passed + 1 skipped；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2840 passed + 6 skipped**（零回归）。真实 Chromium 复跑 7/7 零 JS error 零横溢。ECS 备份 `/tmp/qre-nl-a1-deepseek-review1-pre-20261026/`（app.py）后同步并仅重启 qre-saas；公网最小复核：合法 MACD 缓存命中 200（零裁判零配额，配额 5→5）、乱码 + force 仍 422、公网三页与 9090 隧道 200、jobs/cache 不变。裁判 prompt 未变，未重复真实 12 条评估。
+## Task ID
+
 QRE-SAAS-PUBLIC-BETA-OPS（P1：公测运营反馈闭环与关键浏览器自动化）
 
 ## Created By

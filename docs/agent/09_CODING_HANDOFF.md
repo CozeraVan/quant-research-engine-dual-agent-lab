@@ -2,6 +2,52 @@
 
 ## Task ID
 
+QRE-SAAS-NL-A1（自然语言输入前置校验与 DeepSeek 裁判评估）
+
+## Release Status
+
+RELEASED（2026-10-26 用户验收通过，已部署 ECS，本次 commit/push）。ECS 仅重启 qre-saas；未重启 worker、未跑真实回测；无 schema 变更。
+
+## Implementation Summary
+
+- `src/quant_research_engine/gui/saas/nl_input_guard.py`（新）：规则层 `rule_check`（纯函数三态 + 中文缺失项/合法示例）；Jev 客户端 `jev_config/build_jev/jev_classify`（官方 systemone、Bearer、Choice input_kind、四种故障降级）；`evaluate_input` 组合决策（规则硬拒短路 Jev；Jev 只升级 review 不硬拒；阈值随 JevConfig）。
+- `src/quant_research_engine/gui/saas/app.py`：`POST /api/saas/nl/compile` 在 empty 后插入 guard——`force=false` 走 evaluate_input；`force=true` 仍跑 rule_check 硬拒拦截（只豁免 review）；reject/review 均 422 带 reasons/missing/examples。
+- `src/quant_research_engine/gui/saas/templates/new.html`：`#nl-review-modal` + `doNlCompile(force)`；reject 结果区展示；NL 入口隐私 tip-trigger。
+- `src/quant_research_engine/gui/saas/templates/strategy.html`：`sdRecompile(force)` + `#sd-nl-review` 行内确认区。
+- `configs/nl_input_guard_samples.json`（新，50 条标注）+ `scripts/nl_jev_eval.py`（新，离线评估；Jev 仅在有凭证时真实运行）。
+- `tests/test_nl_input_guard.py`（新，48 例）；既有 3 个测试文件的合成输入更新为经典合法描述。
+
+## Verification
+
+- TDD：RED=collection error → GREEN=48 passed；相关 6 文件 265 passed + 1 skipped；全量 **2821 passed + 6 skipped**（基线 2773+6 零回归）。证据 `.tmp/nl-input-guard/{red,full-tests}-evidence.txt`。
+- 离线评估：规则层 50/50；Jev not_run_missing_credentials（无凭证，未伪造）。证据 `.tmp/nl-input-guard/jev-eval.json`。
+- 真实 Chromium（临时库 + 8099 staging + stub LLM + worker 不启动）：5/5、零 JS error、零横溢（1280 与 375）。证据 `.tmp/nl-input-guard/`（browser-evidence.json + 5 截图）。
+- ECS：备份 `/tmp/qre-nl-a1-pre-20261026/` → scp 四文件 → 仅重启 qre-saas；公网 reject/review/force/合法编译（cache_hit 与真实编译）全部符合合同，jobs 10→10，nl_compile_events 2→4；9090 隧道两页 200。证据 `.tmp/nl-input-guard/production-verification.txt`。
+
+## 复核修正（2026-10-26，主 Agent 3 项 Required Fixes 已解决）
+
+- `nl_input_guard.py`：新增 `DOMAIN_WORDS`/`STRONG_TRADING_WORDS` 与 `_has_domain_context`——有入出场词但无领域语境 → review（不得 pass）；对抗样本（买房/买菜/买机票/买水果）与 domain 用例（收盘价/涨跌/开盘价/涨停/换手率/估值）入测试与 `configs/nl_input_guard_samples.json`（54 条，规则层 54/54）。
+- `app.py`：`force = data.get("force") is True`（字符串不视为确认）。
+- `strategy.html`：sd-src-nl 区增加隐私/校验 tip-trigger（与 new.html 同源）。
+- `new.html`：review 模态补 role=dialog/aria-modal/aria-labelledby=nl-review-title。
+- 验证：TDD RED=8→GREEN；guard 60 passed；相关 6 文件 230 passed + 1 skipped；全量 **2833 passed + 6 skipped**；Chromium 6/6（截图改 `shot_stable` 几何稳定后拍摄）。ECS 备份 `/tmp/qre-nl-a1-review1-pre-20261026/` 后同步四文件仅重启 qre-saas；公网复核通过。
+
+## DeepSeek 方向落地（2026-10-26，用户明确暂不配置 Jev）
+
+- `nl_input_guard.py`：删除 Jev/TypeSafe 客户端、环境变量与 requests 依赖；新增 `REFEREE_SYSTEM_PROMPT`（独立裁判 prompt，严格 JSON 三分类）、`build_referee(config)`、`referee_classify(description, config, *, call_llm_fn=None)`（复用 `nl_compiler.call_llm`，`_parse_referee_label` 去 fenced block + 截取 JSON 对象 + 三分类校验；异常→llm_error、结构错→bad_structure，均降级）；`evaluate_input(description, referee=None)` 语义不变（裁判只升级 review 不硬拒）。
+- `app.py`：`_referee_gate()` 小 helper（config None/故障 → 放行；not_strategy/unclear → 422 `nl_input_review` + DeepSeek 原因）；锁内路径「配额后 + `not is_admin and not force`」调用；DB 故障回退路径「文件限流后」调用同一 helper（两路同源不漂移）。
+- `new.html`/`strategy.html`：隐私 tip 改为 DeepSeek 措辞。
+- `scripts/nl_deepseek_eval.py`（替代已删除的 nl_jev_eval.py）：规则层全集离线；裁判分层 ≤12 条真实调用，记录混淆/延迟/失败。
+- 验证：TDD RED=29→GREEN；guard 67 passed；相关 6 文件 237 passed + 1 skipped；全量 **2840 passed + 6 skipped**；Chromium 7/7（新增裁判 review 场景）。ECS 备份 `/tmp/qre-nl-a1-deepseek-pre-20261026/` 后同步四文件仅重启 qre-saas；公网计数证据 jobs 10→10 / cache 3→4 / events 5→7 / guest 配额 3→5。
+
+## 路径一致性复核修正（2026-10-26，2 项 Required Fixes）
+
+- `app.py`：锁内裁判门 `if not is_admin and not force` → `if not force`（删除 admin 豁免：管理员不限配额，但与会员一样经过 DeepSeek 裁判）；DB 故障回退路径 `_referee_gate()` 外包 `if not force:`（force 用户在回退路径跳过裁判，与正常路径一致；规则硬拒仍在最前不可绕过）。
+- 测试：`test_admin_skips_referee` → `test_admin_also_refereed`（admin 裁判拒绝 422、连续拒绝不限流、force 后可编译）；`test_db_fallback_still_referees` 增加 force 跳过裁判/乱码硬拒两断言。
+- 验证：TDD RED=2→GREEN；guard 67 passed；相关 6 文件 237 passed + 1 skipped；全量 **2840 passed + 6 skipped**；Chromium 7/7。ECS 备份 `/tmp/qre-nl-a1-deepseek-review1-pre-20261026/` 后同步 app.py 仅重启 qre-saas；公网最小复核（MACD 缓存命中零裁判零配额、乱码+force 仍 422）通过。
+
+## Task ID
+
 QRE-SAAS-PUBLIC-BETA-OPS（P1：公测运营反馈闭环与关键浏览器自动化）
 
 ## Release Status

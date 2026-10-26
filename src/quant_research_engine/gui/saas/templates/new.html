@@ -36,7 +36,7 @@
 
   <!-- 入口详情区（单面板随选切换） -->
   <div class="card entry-panel active" id="entry-nl">
-    <h3 style="font-size:16px;margin-bottom:10px;">用一句话描述你的策略</h3>
+    <h3 style="font-size:16px;margin-bottom:10px;">用一句话描述你的策略 <button type="button" class="tip-trigger" data-tip="你输入的描述会发送给 DeepSeek（已配置的大模型），用于校验描述是否完整并生成策略代码；请勿填写个人隐私信息或密钥。明显的乱码、纯数字或与交易无关的内容会被直接拒绝，描述不完整时会先请你确认再编译。" aria-label="自然语言编译隐私与校验说明">?</button></h3>
     <textarea id="nl-text" rows="4" style="width:100%" placeholder="在此描述你的交易想法，最少包含买入条件以及卖出条件，然后点击下方生成策略按钮。"></textarea>
     <div class="chip-row">
       <span class="opt">没思路？点一个示例填入：</span>
@@ -212,6 +212,20 @@
         <button class="btn btn-primary" id="btn-factor-submit">提交因子需求</button>
       </div>
       <p id="factor-modal-status" class="opt" style="margin-top:8px"></p>
+    </div>
+  </div>
+
+  <!-- QRE-SAAS-NL-A1：输入前置校验 review 确认模态（确认后 force 重发；
+       reject 不可绕过，只在结果区展示原因与示例） -->
+  <div class="modal-mask" id="nl-review-modal" role="dialog" aria-modal="true" aria-labelledby="nl-review-title">
+    <div class="modal">
+      <h3 id="nl-review-title">这条描述还不太完整</h3>
+      <p id="nl-review-reasons"></p>
+      <p id="nl-review-examples"></p>
+      <div class="m-actions">
+        <button class="btn btn-ghost" id="nl-review-cancel">返回修改</button>
+        <button class="btn btn-primary" id="nl-review-yes">仍要编译</button>
+      </div>
     </div>
   </div>
 
@@ -399,7 +413,7 @@ function paramSetOpen(open){
 
 // ---------- 入口 1：自然语言 → /api/saas/nl/compile ----------
 $$('.nl-ex').forEach(c => c.addEventListener('click', () => { $('#nl-text').value = c.textContent.trim(); $('#nl-text').focus(); }));
-async function doNlCompile(){
+async function doNlCompile(force){
   const txt = $('#nl-text').value.trim(), st = $('#nl-status'), box = $('#nl-result');
   if (!txt){ toastNote(st, '请先用自然语言描述策略', true); $('#nl-text').focus(); return; }
   box.className = 'result-box'; box.style.display = 'none';
@@ -414,7 +428,8 @@ async function doNlCompile(){
     st.textContent = '编译中（大模型生成策略代码，通常 10-40 秒）… 已用时 ' + Math.round((Date.now() - t0) / 1000) + ' 秒';
   }, 1000);
   try {
-    const resp = await apiFetch('/api/saas/nl/compile', {json: {description: txt}});
+    // QRE-SAAS-NL-A1：force=true 仅用于 review 确认后重发（reject 服务端仍拦截）
+    const resp = await apiFetch('/api/saas/nl/compile', {json: {description: txt, force: !!force}});
     let d;
     try { d = await resp.json(); }
     catch (_e) { d = { ok: false, error: '服务异常（HTTP ' + resp.status + '），请稍后重试；若持续出现请联系管理员' }; }
@@ -428,12 +443,24 @@ async function doNlCompile(){
         ((d.warnings || []).map(w => '<br><span class="opt">' + esc(w) + '</span>').join(''));
       pvSetOpen(true);
       $('#preview-card').scrollIntoView({behavior: 'smooth', block: 'center'});
+    } else if (d.code === 'nl_input_review'){
+      // 描述不完整：弹确认模态，用户确认后 force 重发（finally 会收起遮罩）
+      st.textContent = '等待确认';
+      $('#nl-review-reasons').textContent = (d.reasons || []).join('；') || '请补充更完整的策略描述';
+      $('#nl-review-examples').textContent = (d.examples || []).length
+        ? '合法示例：' + d.examples.join('；') : '';
+      $('#nl-review-modal').classList.add('show');
     } else {
       st.textContent = '编译失败';
       box.className = 'result-box err'; box.style.display = 'block';
-      box.innerHTML = esc(d.error || '未知错误');
-      if (d.code === 'missing_factors' && (d.missing_factors || []).length) openFactorModal(d.missing_factors);
-      if (d.yaml) box.innerHTML += '<p class="opt">可编辑草稿（修正后可粘贴到预览栏编辑器）：</p><pre class="compiled-yaml">' + esc(d.yaml) + '</pre>';
+      if (d.code === 'nl_input_rejected'){
+        box.innerHTML = esc(d.error || '无法把这条描述识别为交易策略') +
+          ((d.examples || []).length ? '<br>可以参考：' + d.examples.map(esc).join('；') : '');
+      } else {
+        box.innerHTML = esc(d.error || '未知错误');
+        if (d.code === 'missing_factors' && (d.missing_factors || []).length) openFactorModal(d.missing_factors);
+        if (d.yaml) box.innerHTML += '<p class="opt">可编辑草稿（修正后可粘贴到预览栏编辑器）：</p><pre class="compiled-yaml">' + esc(d.yaml) + '</pre>';
+      }
     }
   } catch (e) {
     if (e.message !== 'unauthorized'){ st.textContent = '错误'; box.className = 'result-box err'; box.style.display = 'block'; box.textContent = String(e); }
@@ -443,6 +470,13 @@ async function doNlCompile(){
     LabUI.waitMask.hide();
   }
 }
+// QRE-SAAS-NL-A1：review 确认模态（确认=force 重发；取消=返回修改）
+$('#nl-review-cancel').addEventListener('click', () => $('#nl-review-modal').classList.remove('show'));
+$('#nl-review-modal').addEventListener('click', function(e){ if (e.target === this) this.classList.remove('show'); });
+$('#nl-review-yes').addEventListener('click', function(){
+  $('#nl-review-modal').classList.remove('show');
+  doNlCompile(true);
+});
 $('#nl-compile').addEventListener('click', () => { if (guardGuest('compile')) return; doNlCompile(); });
 
 // 随机抽 1 只 A 股填入代码框（QRE-SAAS-GUEST-RANDOM-SYMBOL；对所有用户可用）

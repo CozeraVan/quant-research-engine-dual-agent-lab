@@ -88,6 +88,15 @@ def client(app):
 
 
 @pytest.fixture(autouse=True)
+def _referee_pass(monkeypatch):
+    """QRE-SAAS-NL-A1：本文件验证缓存/限流语义，不关心裁判——桩成 strategy
+    放行（裁判自身行为由 tests/test_nl_input_guard.py 覆盖）。"""
+    from quant_research_engine.gui.saas import nl_input_guard
+    monkeypatch.setattr(nl_input_guard, "referee_classify",
+                        lambda d, c, **kw: {"ok": True, "label": "strategy"})
+
+
+@pytest.fixture(autouse=True)
 def _clean(app, saas_db):
     from sqlalchemy import text
 
@@ -194,8 +203,8 @@ class TestCacheHit:
 
     def test_different_description_miss(self, client, app, llm):
         _member(app)
-        _compile(client, "MACD 金叉买入", MEMBER)
-        resp = _compile(client, "RSI 低于 30 买入", MEMBER)
+        _compile(client, "MACD 金叉买入，死叉卖出", MEMBER)
+        resp = _compile(client, "RSI 低于 30 买入，高于 70 卖出", MEMBER)
         assert resp.get_json()["cache_hit"] is False
         assert len(llm.calls) == 2
         assert len(_cache_rows(app)) == 2
@@ -252,13 +261,13 @@ class TestResultFidelity:
             lambda db_url=None: (lambda table: {"rsi_14"}
                                  if table == "factors.stock_daily_overlap_close" else set()),
         )
-        first = _compile(client, "RSI14 低于 30 买入", MEMBER)
+        first = _compile(client, "RSI14 低于 30 买入，高于 70 卖出", MEMBER)
         assert first.status_code == 200
         body = first.get_json()
         assert body["ok"] and body["yaml"]
         assert body.get("corrections"), "应保留自动纠正记录"
         assert body.get("warnings"), "应保留 warnings"
-        second = _compile(client, "RSI14 低于 30 买入", MEMBER)
+        second = _compile(client, "RSI14 低于 30 买入，高于 70 卖出", MEMBER)
         assert second.get_json()["cache_hit"] is True
         for key in ("yaml", "warnings", "corrections"):
             assert second.get_json()[key] == body[key]
@@ -278,10 +287,10 @@ class TestResultFidelity:
                                 "warnings": ["w"], "corrections": [{"alias": "a"}],
                                 "fix_attempts": 2,
                             })
-        first = _compile(client, "MACD 金叉买入", MEMBER)
+        first = _compile(client, "MACD 金叉买入，死叉卖出", MEMBER)
         body = first.get_json()
         assert body["cache_hit"] is False and body["fix_attempts"] == 2
-        second = _compile(client, "MACD 金叉买入", MEMBER)
+        second = _compile(client, "MACD 金叉买入，死叉卖出", MEMBER)
         hit = second.get_json()
         assert hit["cache_hit"] is True
         assert hit["fix_attempts"] == 2 and hit["corrections"] == [{"alias": "a"}]
@@ -292,11 +301,11 @@ class TestFailureNotCached:
     def test_llm_error_not_cached_and_counts_each_miss(self, client, app, llm):
         _member(app)
         llm.exc = RuntimeError("boom")
-        first = _compile(client, "MACD 金叉买入", MEMBER)
+        first = _compile(client, "MACD 金叉买入，死叉卖出", MEMBER)
         assert first.status_code == 200  # 业务体错误，HTTP 仍 200（既有语义）
         assert first.get_json()["code"] == "llm_error"
         assert _cache_rows(app) == []
-        second = _compile(client, "MACD 金叉买入", MEMBER)
+        second = _compile(client, "MACD 金叉买入，死叉卖出", MEMBER)
         assert second.get_json()["code"] == "llm_error"
         assert len(llm.calls) == 2
         rows = _rate_rows(app, "member_minute")
@@ -306,7 +315,7 @@ class TestFailureNotCached:
         _member(app)
         for var in ("QRE_NL_LLM_BASE_URL", "QRE_NL_LLM_API_KEY", "QRE_NL_LLM_MODEL"):
             monkeypatch.delenv(var, raising=False)
-        resp = _compile(client, "MACD 金叉买入", MEMBER)
+        resp = _compile(client, "MACD 金叉买入，死叉卖出", MEMBER)
         assert resp.status_code == 503
         assert resp.get_json()["code"] == "not_configured"
         assert _cache_rows(app) == []
@@ -367,8 +376,8 @@ class TestConcurrency:
             done.append(desc)
             release.set()
 
-        t1 = threading.Thread(target=worker, args=("MACD 金叉买入", 1))
-        t2 = threading.Thread(target=worker, args=("RSI 低于 30 买入", 2))
+        t1 = threading.Thread(target=worker, args=("MACD 金叉买入，死叉卖出", 1))
+        t2 = threading.Thread(target=worker, args=("RSI 低于 30 买入，高于 70 卖出", 2))
         t1.start()
         t2.start()
         entered.wait(timeout=15)
@@ -382,9 +391,9 @@ class TestConcurrency:
 class TestGuestLimit:
     def test_11th_request_403_code_unchanged(self, client, app, llm):
         for i in range(10):
-            resp = _compile(client, f"策略描述 {i}", )
+            resp = _compile(client, f"MACD 金叉买入，死叉卖出 变体{i}", )
             assert resp.status_code == 200, i
-        resp = _compile(client, "策略描述 10")
+        resp = _compile(client, "MACD 金叉买入，死叉卖出 变体10")
         assert resp.status_code == 403
         assert resp.get_json()["code"] == "guest_nl_limit"
         rows = _rate_rows(app, "guest_daily")
@@ -392,12 +401,12 @@ class TestGuestLimit:
 
     def test_count_survives_new_app_instance(self, client, app, saas_db, llm):
         for i in range(10):
-            assert _compile(client, f"游客策略 {i}").status_code == 200
+            assert _compile(client, f"MACD 金叉买入，死叉卖出 游客{i}").status_code == 200
         engine = app.extensions.get("saas_engine")
         engine.dispose()
         app2 = _make_app(saas_db)  # 模拟重启：新 app + 新 engine
         try:
-            resp = _compile(app2.test_client(), "游客策略 10")
+            resp = _compile(app2.test_client(), "MACD 金叉买入，死叉卖出 游客10")
             assert resp.status_code == 403
             assert resp.get_json()["code"] == "guest_nl_limit"
         finally:
@@ -410,7 +419,7 @@ class TestGuestLimit:
         lock = threading.Lock()
 
         def worker(i):
-            resp = _compile(client, f"并发游客策略 {i}")
+            resp = _compile(client, f"MACD 金叉买入，死叉卖出 并发{i}")
             with lock:
                 codes.append(resp.status_code)
 
@@ -436,9 +445,9 @@ class TestMemberLimit:
     def test_7th_per_minute_429_and_next_minute(self, client, app, llm):
         _member(app)
         for i in range(6):
-            resp = _compile(client, f"会员策略 {i}", MEMBER)
+            resp = _compile(client, f"MACD 金叉买入，死叉卖出 会员{i}", MEMBER)
             assert resp.status_code == 200, i
-        resp = _compile(client, "会员策略 6", MEMBER)
+        resp = _compile(client, "MACD 金叉买入，死叉卖出 会员6", MEMBER)
         assert resp.status_code == 429
         body = resp.get_json()
         assert body["code"] == "nl_rate_limited"
@@ -453,7 +462,7 @@ class TestMemberLimit:
             conn.execute(text("UPDATE nl_rate_limits SET window_start = "
                               "window_start - interval '1 minute' "
                               "WHERE scope = 'member_minute'"))
-        resp = _compile(client, "会员策略 7", MEMBER)
+        resp = _compile(client, "MACD 金叉买入，死叉卖出 会员7", MEMBER)
         assert resp.status_code == 200
 
     def test_daily_unlimited_across_minutes(self, client, app, llm):
@@ -466,14 +475,14 @@ class TestMemberLimit:
 
         _member(app)
         for i in range(6):
-            assert _compile(client, f"跨分钟策略 {i}", MEMBER).status_code == 200
+            assert _compile(client, f"MACD 金叉买入，死叉卖出 跨分钟{i}", MEMBER).status_code == 200
         # 手动把窗口滚动到上一分钟，模拟时间流逝（不 sleep）
         with _get_engine(app).begin() as conn:
             conn.execute(text("UPDATE nl_rate_limits SET window_start = "
                               "window_start - interval '1 minute' "
                               "WHERE scope = 'member_minute'"))
         for i in range(6, 12):
-            assert _compile(client, f"跨分钟策略 {i}", MEMBER).status_code == 200
+            assert _compile(client, f"MACD 金叉买入，死叉卖出 跨分钟{i}", MEMBER).status_code == 200
         rows = _rate_rows(app, "member_minute")
         assert len(rows) == 2 and all(r["hits"] <= 6 for r in rows)
 
@@ -487,7 +496,7 @@ class TestMemberLimit:
     def test_admin_unlimited(self, client, app, llm):
         _member(app, uid=2, role="admin")
         for i in range(15):
-            resp = _compile(client, f"管理员策略 {i}", ADMIN)
+            resp = _compile(client, f"MACD 金叉买入，死叉卖出 管理员{i}", ADMIN)
             assert resp.status_code == 200, i
         assert _rate_rows(app) == []
 

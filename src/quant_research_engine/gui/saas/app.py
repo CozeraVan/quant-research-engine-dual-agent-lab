@@ -46,7 +46,7 @@ from quant_research_engine.gui.saas.result_contract import (
     build_result_contract,
     contract_view,
 )
-from quant_research_engine.gui.saas import ops_support
+from quant_research_engine.gui.saas import nl_input_guard, ops_support
 from quant_research_engine.gui.saas.symbol_norm import (
     normalize_ts_codes,
     resolve_ts_code,
@@ -1328,6 +1328,43 @@ def create_saas_app() -> Flask:
         description = (data.get("description") or "").strip()
         if not description:
             return jsonify({"ok": False, "code": "empty", "error": "请先用自然语言描述策略"}), 400
+        # QRE-SAAS-NL-A1：输入前置校验（纯规则层），位于 prompt/缓存/配额/LLM
+        # 之前。reject=422 不可绕过；review=422 code=nl_input_review，用户确认后
+        # 以 force=true 重发（仅 review 可绕过）。规则层不消耗配额、不写缓存、
+        # 不调用 LLM；DeepSeek 裁判只在缓存 miss + 配额计数后运行（见下方
+        # _referee_gate），本段只做规则层。force 只认 JSON 布尔 true。
+        force = data.get("force") is True
+        if force:
+            # force 只豁免 review：硬拒仍按规则层拦截（裁判结论本就不可硬拒，
+            # 无需重复调用裁判）
+            rule = nl_input_guard.rule_check(description)
+            if rule["decision"] == nl_input_guard.DECISION_REJECT:
+                return jsonify({
+                    "ok": False, "code": "nl_input_rejected",
+                    "error": "暂无法把这条描述识别为交易策略（{}）。可参考下方示例后重写。".format(
+                        "；".join(rule["reasons"]) or "不符合策略描述要求"),
+                    "reasons": rule["reasons"],
+                    "examples": rule["examples"],
+                }), 422
+        else:
+            guard_result = nl_input_guard.evaluate_input(description)
+            if guard_result["decision"] == nl_input_guard.DECISION_REJECT:
+                return jsonify({
+                    "ok": False, "code": "nl_input_rejected",
+                    "error": "暂无法把这条描述识别为交易策略（{}）。可参考下方示例后重写。".format(
+                        "；".join(guard_result["reasons"]) or "不符合策略描述要求"),
+                    "reasons": guard_result["reasons"],
+                    "examples": guard_result["examples"],
+                }), 422
+            if guard_result["decision"] == nl_input_guard.DECISION_REVIEW:
+                return jsonify({
+                    "ok": False, "code": "nl_input_review",
+                    "error": "这条描述还不太完整，确认仍要编译吗？",
+                    "reasons": guard_result["reasons"],
+                    "missing": guard_result["missing"],
+                    "examples": guard_result["examples"],
+                    "force_hint": True,
+                }), 422
 
         config = nl_compiler.nl_config()
         model = config["model"] if config else ""
@@ -1348,6 +1385,31 @@ def create_saas_app() -> Flask:
                             "scope": nls.SCOPE_MEMBER_MINUTE,
                             "reset_seconds": nls.member_reset_seconds(),
                             "error": f"编译太频繁了，请稍后再试（每分钟最多 {MEMBER_NL_MINUTE_LIMIT} 次）"}), 429
+
+        # QRE-SAAS-NL-A1（DeepSeek 裁判）：缓存 miss 且配额计数后的裁判门。
+        # 复用现有 QRE_NL_LLM_* 通道与独立裁判 prompt；通过才编译，裁判认为
+        # 非策略/不明确 → 422 review（不硬拒；配额已计，防免费刷 token）；
+        # 裁判故障/未配置 → 降级继续编译（不伪装裁判成功）。管理员与会员同样
+        # 经过裁判（无 admin 豁免；admin 仅不限配额）。force=true 的用户已确认，
+        # 调用方跳过本门。
+        def _referee_gate():
+            if config is None:
+                return None
+            try:
+                verdict = nl_input_guard.referee_classify(description, config)
+            except Exception:
+                return None
+            if verdict.get("ok") and verdict.get("label") in ("not_strategy", "unclear"):
+                reason = ("DeepSeek 校验认为这条描述与交易策略无关，请确认后继续"
+                          if verdict["label"] == "not_strategy" else
+                          "DeepSeek 校验无法确定这是否是交易策略，请补充具体规则或确认后继续")
+                return jsonify({
+                    "ok": False, "code": "nl_input_review",
+                    "error": "DeepSeek 校验认为这条描述不太像完整的交易策略，确认仍要编译吗？",
+                    "reasons": [reason], "missing": [],
+                    "examples": nl_input_guard.LEGAL_EXAMPLES, "force_hint": True,
+                }), 422
+            return None
 
         try:
             db_ready = nls.ensure_nl_tables(engine)
@@ -1412,6 +1474,13 @@ def create_saas_app() -> Flask:
                         )
                         if hits is None:
                             return _member_limit_response()
+                # QRE-SAAS-NL-A1：DeepSeek 裁判（仅 cache miss + 配额计数后；
+                # force=true 的用户已确认，不再裁判）。管理员不限配额，但与会员
+                # 一样经过裁判（无 admin 豁免）。通过才编译，否则 422 review。
+                if not force:
+                    gate = _referee_gate()
+                    if gate is not None:
+                        return gate
                 result = nl_compiler.compile_nl(description)
                 if result.get("ok") and config is not None and db_ready:
                     nls.cache_store(conn, cache_key, description=description,
@@ -1431,6 +1500,12 @@ def create_saas_app() -> Flask:
             if uid is None:
                 if not _guest_nl_hit(app, _client_ip()):
                     return _guest_limit_response()
+                # QRE-SAAS-NL-A1：DB 故障回退路径同样先既有文件限流，再裁判，再编译；
+                # force=true 与正常路径语义一致（跳过裁判），规则硬拒已在最前拦截
+                if not force:
+                    gate = _referee_gate()
+                    if gate is not None:
+                        return gate
                 result = nl_compiler.compile_nl(description)
                 # 运营事件尽力补记（DB 故障回退路径，静默降级）
                 ops_support.record_nl_event(

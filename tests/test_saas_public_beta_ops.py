@@ -79,6 +79,15 @@ def client(app):
 
 
 @pytest.fixture(autouse=True)
+def _referee_pass(monkeypatch):
+    """QRE-SAAS-NL-A1：本文件验证运营事件/配额口径，不关心裁判——桩成 strategy
+    放行（裁判自身行为由 tests/test_nl_input_guard.py 覆盖）。"""
+    from quant_research_engine.gui.saas import nl_input_guard
+    monkeypatch.setattr(nl_input_guard, "referee_classify",
+                        lambda d, c, **kw: {"ok": True, "label": "strategy"})
+
+
+@pytest.fixture(autouse=True)
 def _clean(app):
     from quant_research_engine.gui.saas.app import _get_engine
     with _get_engine(app).begin() as conn:
@@ -155,7 +164,7 @@ class TestNlCompileEvents:
 
     def test_failure_event_class(self, client, app, llm):
         llm.exc = RuntimeError("boom")
-        resp = client.post("/api/saas/nl/compile", json={"description": "随便一个策略"})
+        resp = client.post("/api/saas/nl/compile", json={"description": "MACD 金叉买入，死叉卖出"})
         assert resp.status_code == 200 and resp.get_json()["ok"] is False
         events = _nl_events(app)
         assert len(events) == 1
@@ -164,7 +173,7 @@ class TestNlCompileEvents:
 
     def test_member_scope(self, client, app, llm):
         _make_member(app)
-        resp = client.post("/api/saas/nl/compile", json={"description": "RSI 低于 30 买入"},
+        resp = client.post("/api/saas/nl/compile", json={"description": "RSI 低于 30 买入，高于 70 卖出"},
                            headers=AUTH)
         assert resp.status_code == 200
         events = _nl_events(app)
@@ -174,8 +183,8 @@ class TestNlCompileEvents:
         # 游客 10 次编译机会：前 10 次各记 1 条事件，第 11 次 403 不记（不是编译尝试）
         for i in range(10):
             assert client.post("/api/saas/nl/compile",
-                               json={"description": f"游客策略 {i}"}).status_code == 200
-        over = client.post("/api/saas/nl/compile", json={"description": "游客策略 10"})
+                               json={"description": f"MACD 金叉买入，死叉卖出 游客{i}"}).status_code == 200
+        over = client.post("/api/saas/nl/compile", json={"description": "MACD 金叉买入，死叉卖出 游客10"})
         assert over.status_code == 403 and over.get_json()["code"] == "guest_nl_limit"
         assert len(_nl_events(app)) == 10
 

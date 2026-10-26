@@ -2191,12 +2191,16 @@ class TestSaasNlCompileRoute:
         for var in ("QRE_NL_LLM_BASE_URL", "QRE_NL_LLM_API_KEY", "QRE_NL_LLM_MODEL"):
             monkeypatch.delenv(var, raising=False)
         # 游客（无 AUTH 头）不再 401：走到编译逻辑，LLM 未配置 → 503
-        assert client.post("/api/saas/nl/compile", json={"description": "x"}).status_code == 503
+        # QRE-SAAS-NL-A1：输入须先过前置校验，"x" 属过短（422），改用经典合法描述
+        assert client.post("/api/saas/nl/compile",
+                           json={"description": "MACD 金叉买入，死叉卖出"}).status_code == 503
         from quant_research_engine.gui.saas import app as saas_app
 
         for _ in range(saas_app.GUEST_NL_DAILY_LIMIT - 1):
-            client.post("/api/saas/nl/compile", json={"description": "x"})
-        resp = client.post("/api/saas/nl/compile", json={"description": "x"})
+            client.post("/api/saas/nl/compile",
+                        json={"description": "MACD 金叉买入，死叉卖出"})
+        resp = client.post("/api/saas/nl/compile",
+                           json={"description": "MACD 金叉买入，死叉卖出"})
         assert resp.status_code == 403
         assert resp.get_json()["code"] == "guest_nl_limit"
 
@@ -2217,7 +2221,7 @@ class TestSaasNlCompileRoute:
             lambda db_url=None: None,  # DB 不可用 → 跳过因子存在性检查
         )
         resp = client.post("/api/saas/nl/compile",
-                           json={"description": "收盘价大于 0 买入"}, headers=AUTH)
+                           json={"description": "收盘价大于 0 买入，小于 0 卖出"}, headers=AUTH)
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["ok"] and "entry" in data["yaml"]
@@ -2225,7 +2229,8 @@ class TestSaasNlCompileRoute:
     def test_not_configured_503(self, client, monkeypatch):
         for var in ("QRE_NL_LLM_BASE_URL", "QRE_NL_LLM_API_KEY", "QRE_NL_LLM_MODEL"):
             monkeypatch.delenv(var, raising=False)
-        resp = client.post("/api/saas/nl/compile", json={"description": "x"}, headers=AUTH)
+        resp = client.post("/api/saas/nl/compile",
+                           json={"description": "MACD 金叉买入，死叉卖出"}, headers=AUTH)
         assert resp.status_code == 503
         assert resp.get_json()["code"] == "not_configured"
 

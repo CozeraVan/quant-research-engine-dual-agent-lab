@@ -1,0 +1,276 @@
+{
+  "version": "2026-10-26.2",
+  "description": "QRE-SAAS-NL-A1 中文人工标注小样本：label=strategy 应为可执行策略描述（期望 pass）；not_strategy 应被拒（期望非 pass）；boundary 为不完整/模糊表述（期望 review，可人工确认后继续）。供 scripts/nl_jev_eval.py 离线评估规则层与 Jev。",
+  "samples": [
+    {
+      "text": "MACD 金叉买入，死叉卖出",
+      "label": "strategy",
+      "note": "经典双条件"
+    },
+    {
+      "text": "MACD 金叉死叉",
+      "label": "strategy",
+      "note": "省略主语的经典表述"
+    },
+    {
+      "text": "EMA 上穿 20 日均线时买入，下穿时卖出",
+      "label": "strategy",
+      "note": "均线交叉"
+    },
+    {
+      "text": "5 日均线上穿 200 日均线买入，下穿卖出，止损 8%",
+      "label": "strategy",
+      "note": "双均线+止损"
+    },
+    {
+      "text": "20 日均线上穿 60 日均线买入，下穿卖出，止损 8%",
+      "label": "strategy",
+      "note": "双均线"
+    },
+    {
+      "text": "RSI 低于 30 买入，高于 70 卖出",
+      "label": "strategy",
+      "note": "RSI 区间"
+    },
+    {
+      "text": "KDJ 低于 20 买入，高于 80 卖出",
+      "label": "strategy",
+      "note": "KDJ"
+    },
+    {
+      "text": "布林带下轨买入，上轨卖出",
+      "label": "strategy",
+      "note": "布林带"
+    },
+    {
+      "text": "收盘价突破 20 日高点买入，跌破 10 日低点卖出",
+      "label": "strategy",
+      "note": "通道突破"
+    },
+    {
+      "text": "收盘价大于 10 元买入，小于 8 元卖出",
+      "label": "strategy",
+      "note": "价格阈值"
+    },
+    {
+      "text": "当 OBV 上升且收盘价上涨时买入，OBV 下降时卖出",
+      "label": "strategy",
+      "note": "量价配合"
+    },
+    {
+      "text": "成交量放大到 5 日均量 2 倍且收阳线时买入，次日收盘卖出",
+      "label": "strategy",
+      "note": "放量"
+    },
+    {
+      "text": "MACD 柱状线由负转正买入，由正转负卖出",
+      "label": "strategy",
+      "note": "MACD 柱"
+    },
+    {
+      "text": "均线多头排列时入场，空头排列时离场",
+      "label": "strategy",
+      "note": "趋势排列"
+    },
+    {
+      "text": "股价回踩 60 日均线不破且出现下影线时买入，跌破 60 日均线止损",
+      "label": "strategy",
+      "note": "回踩"
+    },
+    {
+      "text": "海龟交易法则：突破 20 日高点买入，跌破 10 日低点卖出",
+      "label": "strategy",
+      "note": " named 策略"
+    },
+    {
+      "text": "buy when EMA crosses above SMA, sell when it crosses below",
+      "label": "strategy",
+      "note": "英文"
+    },
+    {
+      "text": "RSI below 30 buy, above 70 sell",
+      "label": "strategy",
+      "note": "英文"
+    },
+    {
+      "text": "金叉买死叉卖",
+      "label": "strategy",
+      "note": "极简中文"
+    },
+    {
+      "text": "开盘价高于昨日收盘价 2% 买入，尾盘 14:50 卖出",
+      "label": "strategy",
+      "note": "日内时点"
+    },
+    {
+      "text": "连续 3 天上涨后买入，连续 2 天下跌后卖出",
+      "label": "strategy",
+      "note": "连续形态"
+    },
+    {
+      "text": "换手率超过 10% 且涨幅超过 5% 时买入，换手率低于 2% 时卖出",
+      "label": "strategy",
+      "note": "换手率"
+    },
+    {
+      "text": "当 CCI 上穿 100 时做多，下穿 -100 时平仓",
+      "label": "strategy",
+      "note": "CCI"
+    },
+    {
+      "text": "涨停后次日开盘价买入，第三日收盘卖出",
+      "label": "strategy",
+      "note": "涨停博弈"
+    },
+    {
+      "text": "当 rsi 低于 30 时买入",
+      "label": "boundary",
+      "note": "缺出场条件"
+    },
+    {
+      "text": "跌破 10 日低点就卖出",
+      "label": "boundary",
+      "note": "缺入场条件"
+    },
+    {
+      "text": "帮我写一个能赚钱的量化交易策略，越详细越好，最好带上参数说明和风险控制的完整方案，谢谢",
+      "label": "boundary",
+      "note": "无具体规则的长文本"
+    },
+    {
+      "text": "想要一个稳一点的策略，尽量少亏钱",
+      "label": "boundary",
+      "note": "只有诉求没有规则"
+    },
+    {
+      "text": "用机器学习预测涨跌，预测涨就买，预测跌就卖",
+      "label": "boundary",
+      "note": "含买卖语义但无显式市场语境（领域门槛），review 可确认后继续"
+    },
+    {
+      "text": "网格交易，每跌 2% 买一格，每涨 2% 卖一格",
+      "label": "strategy",
+      "note": "网格（有买卖语义）"
+    },
+    {
+      "text": "macd golden cross",
+      "label": "boundary",
+      "note": "英文只有金叉无卖点"
+    },
+    {
+      "text": "123456",
+      "label": "not_strategy",
+      "note": "纯数字"
+    },
+    {
+      "text": "20240101",
+      "label": "not_strategy",
+      "note": "纯数字日期"
+    },
+    {
+      "text": "！！！！？？",
+      "label": "not_strategy",
+      "note": "纯标点"
+    },
+    {
+      "text": "🙂🙂🙂🙂🙂🙂",
+      "label": "not_strategy",
+      "note": "纯表情"
+    },
+    {
+      "text": "?????",
+      "label": "not_strategy",
+      "note": "纯问号"
+    },
+    {
+      "text": "abc",
+      "label": "not_strategy",
+      "note": "过短"
+    },
+    {
+      "text": "买",
+      "label": "not_strategy",
+      "note": "过短"
+    },
+    {
+      "text": "asdfghjkl",
+      "label": "not_strategy",
+      "note": "随机字母"
+    },
+    {
+      "text": "今天天气不错啊哈哈哈",
+      "label": "not_strategy",
+      "note": "闲聊"
+    },
+    {
+      "text": "你好，请问怎么注册账号",
+      "label": "not_strategy",
+      "note": "客服问题"
+    },
+    {
+      "text": "这个策略之前的收益怎么样",
+      "label": "not_strategy",
+      "note": "询问而非描述"
+    },
+    {
+      "text": "策略策略🙂🙂🙂🙂🙂🙂🙂🙂🙂",
+      "label": "not_strategy",
+      "note": "乱码混合"
+    },
+    {
+      "text": "aaaaa bbbbb ccccc",
+      "label": "not_strategy",
+      "note": "无意义字母串"
+    },
+    {
+      "text": "测试一下这个功能能不能用",
+      "label": "not_strategy",
+      "note": "测试闲聊"
+    },
+    {
+      "text": "1+1=2",
+      "label": "not_strategy",
+      "note": "算式"
+    },
+    {
+      "text": "什么时候发财",
+      "label": "not_strategy",
+      "note": "无关提问"
+    },
+    {
+      "text": "；；；。。。、、、",
+      "label": "not_strategy",
+      "note": "中文标点堆叠"
+    },
+    {
+      "text": "股票股票股票股票",
+      "label": "boundary",
+      "note": "有交易词但无规则（长文本）"
+    },
+    {
+      "text": "我想回测一下我的想法，看看效果如何，帮我跑个历史数据看看收益曲线和最大回撤，还有夏普比率这些指标",
+      "label": "boundary",
+      "note": "长文本含回测词无规则"
+    },
+    {
+      "text": "我想买房，之后卖房",
+      "label": "not_strategy",
+      "note": "通用买卖动词+房产语境，非股票策略"
+    },
+    {
+      "text": "今天买菜后卖给邻居",
+      "label": "not_strategy",
+      "note": "通用买卖动词+生活语境，非股票策略"
+    },
+    {
+      "text": "买一张机票然后卖掉",
+      "label": "not_strategy",
+      "note": "通用买卖动词+差旅语境，非股票策略"
+    },
+    {
+      "text": "买入一些水果再卖出去",
+      "label": "not_strategy",
+      "note": "通用买卖动词+商品语境，非股票策略"
+    }
+  ]
+}

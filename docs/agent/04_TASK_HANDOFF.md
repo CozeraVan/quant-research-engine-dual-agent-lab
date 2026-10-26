@@ -2,6 +2,35 @@
 
 ## Task ID
 
+QRE-SAAS-NL-A1（自然语言输入前置校验与 DeepSeek 裁判评估）
+
+## Current Status
+
+DONE（2026-10-26 用户验收通过，DeepSeek 裁判已部署 ECS，本次 commit/push 发布）
+
+## Direction Change
+
+- 删除 Jev/TypeSafe 适配和配置，复用现有 `QRE_NL_LLM_*` 与 `call_llm`，不需要也不读取新密钥。
+- DeepSeek 裁判只在缓存 miss 后运行，先占既有编译配额再裁判，通过后才编译；缓存命中零裁判，拒绝也占配额，防止免费刷 token。
+- 真实 DeepSeek 评估只跑不超过 12 条分层样本，不跑全量样本或真实回测。
+
+## Task Note
+
+- **规则层**（`gui/saas/nl_input_guard.py` 纯函数，零 IO，位于 empty 检查后、prompt/缓存/配额/LLM 前）：reject（422 `nl_input_rejected`，**不可绕过**）= <6 字符 / 无中英文字符 / 纯数字 / 乱码率≥40% / 无交易语义且 <16 字符；review（422 `nl_input_review`，**可 force 绕过**）= 缺入场（missing=entry）/ 缺出场（missing=exit）/ 无交易语义长文本；pass=其余。词表覆盖中英文常见交易词与 MACD/EMA/RSI/均线/布林/网格等指标别名；经典「MACD 金叉买入，死叉卖出」「EMA 上穿 20 日均线时买入，下穿卖出」「网格交易每跌 2% 买一格」均 pass；50 条人工标注样本规则层 50/50。
+- **DeepSeek 裁判**（第二道防线，非单点；用户明确不配置 Jev，改用现有 `QRE_NL_LLM_*`）：复用 `nl_compiler.call_llm` 注入独立裁判 system prompt，严格 JSON 三分类 strategy/not_strategy/unclear（无置信度、不伪造校准结论）；fenced/prose 容错解析，异常/超时/结构错误降级规则层。strategy 维持结论；not_strategy/unclear 升级 review（不硬拒）。**只在 cache miss + 配额计数后运行；缓存命中零裁判；裁判拒绝也占配额；管理员与会员同样经过裁判（admin 仅不限配额）；force 已确认不再裁判（两条路径一致）；DB 故障回退路径同样先限流、非 force 再裁判。** 不记录策略文本、不读取/打印密钥。
+- **端点**：`force=true` 仅豁免 review——reject 仍按规则层硬拒；规则层不占配额、不写缓存、不调 LLM；裁判在 cache miss + 配额后运行，拒绝也占配额、不编译不写缓存；A2/A3 缓存命中与限流语义零回归。
+- **前端**：new.html `#nl-review-modal`（缺失项+合法示例+返回修改/仍要编译）+ `doNlCompile(force)`；reject 在结果区展示原因与示例（无模态）；NL 入口 h3 隐私 tip-trigger。strategy.html 重编译 `sdRecompile(force)` + 行内确认区。零新增灰色小字。
+- **测试**：TDD RED→GREEN；新 `tests/test_nl_input_guard.py` 48 passed；相关 6 文件 265 passed + 1 skipped；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2821 passed + 6 skipped**（基线 2773+6 零回归）；3 个既有测试文件的合成输入按新行为更新为经典合法描述。证据 `.tmp/nl-input-guard/`。
+- **评估资产**：`configs/nl_input_guard_samples.json`（54 条中文人工标注）+ `scripts/nl_deepseek_eval.py`（规则层全集离线 54/54；DeepSeek 裁判只跑 ≤12 条分层小样本，真实调用记录混淆/延迟/失败）。**裁判真实小样本已在 ECS 运行**：deepseek-flash、0 失败、延迟 533–1590ms、not_strategy 4/4、strategy 3/4（1 unclear→review）。
+- **真实 Chromium**（临时库+8099 staging+stub LLM，未跑回测）：5/5 零 JS error 零横溢——拒绝、review 确认后 force 编译成功、直接成功、strategy 页重新编译闭环、375 不破版（含模态态）。证据 `.tmp/nl-input-guard/`（browser-evidence.json + 5 截图）。
+- **主 Agent 复核 3 项 Required Fixes 已解决并重新部署**（2026-10-26）：①领域语境门槛——新增 DOMAIN_WORDS/STRONG_TRADING_WORDS 与 `_has_domain_context`：有入出场词但无股票/价格/指标/交易语境至少 review 不得 pass（修「我想买房，之后卖房」「今天买菜后卖给邻居」在无 Jev 生产直接放行）；50 条合法样本零误杀，54 条样本（含 4 条对抗）规则层 54/54。②strategy.html 重编译区增加同源隐私 tip-trigger；new.html review 模态补 role=dialog/aria-modal/aria-labelledby。③`force` 只认 JSON 布尔 true（`data.get("force") is True`），字符串 "false"/"true" 不视为确认。TDD RED=8→GREEN，guard 测试 60 passed，相关 6 文件 230 passed + 1 skipped，全量 **2833 passed + 6 skipped**；Chromium 重跑 6/6（新增对抗样本用例；截图改几何稳定后拍摄）。备份 `/tmp/qre-nl-a1-review1-pre-20261026/` 后同步四文件仅重启 qre-saas；公网两条对抗文本 422 review、force 字符串 422、合法 MACD cache_hit=true 不回归。
+- **ECS**：三文件与 HEAD 基线 SHA256 一致 → 备份 `/tmp/qre-nl-a1-pre-20261026/` → scp 四文件（app.py/nl_input_guard.py/new.html/strategy.html）→ 仅重启 qre-saas（worker 在家未动）；无 schema 变更。公网：reject/review/force/合法编译（cache_hit=true 与真实编译各一）全部符合合同，jobs 10→10，nl_compile_events 2→4；9090 隧道两页 200 且 A1 标记齐全；公网四页 200。
+- **主 Agent 复核 2 个路径一致性 Required Fixes 已解决并重新部署**（2026-10-26）：①删除 admin 裁判豁免——管理员不限配额但与会员一样经过 DeepSeek 裁判（原 `not is_admin` 绕过是未经要求的新权限差异）；②DB 故障回退路径改为仅 `not force` 时裁判（原无条件裁判导致 force 用户在 DB 故障时又被拦回，与正常路径不一致）；规则硬拒仍在最前不可绕过。回归：`test_admin_also_refereed`、DB 故障 + force 跳过裁判/裁判拒绝拦截/乱码硬拒。TDD RED=2→GREEN；guard 67 passed；相关 6 文件 237 passed + 1 skipped；**全量 2840 passed + 6 skipped**；Chromium 7/7。ECS 备份 `/tmp/qre-nl-a1-deepseek-review1-pre-20261026/`（app.py）后同步仅重启 qre-saas；公网最小复核：MACD 缓存命中 200 零裁判零配额（配额 5→5）、乱码+force 仍 422、公网三页与 9090 隧道 200。
+- **DeepSeek 方向变更落地**（2026-10-26，用户明确暂不配置 Jev）：删除 Jev/TypeSafe 客户端、环境变量、requests 依赖与 `scripts/nl_jev_eval.py`（无死代码）；裁判改复用 `QRE_NL_LLM_*` + `call_llm(system_prompt=…)`；编排改为「规则层 → 缓存快路径/锁内复检 → 配额 → 裁判 → 编译」，缓存命中零裁判、裁判拒绝占配额。测试 67 passed、相关 6 文件 237 passed + 1 skipped、**全量 2840 passed + 6 skipped**；Chromium 7/7（新增裁判 review 场景）；ECS 备份 `/tmp/qre-nl-a1-deepseek-pre-20261026/` 后同步四文件仅重启 qre-saas。公网：规则拒绝/review 不占配额；非策略描述 cache miss 时 DeepSeek 裁判拦截（422 review、配额 +1、缓存不写、events 不记）；合法 MACD cache hit 零裁判；新合法描述裁判+编译两阶段成功。计数证据：jobs 10→10、cache 3→4、events 5→7、guest 配额 3→5。
+- **遗留**：裁判无置信度输出、不做阈值校准结论；裁判拦截量不计入运营事件表；规则层不做语义可达性判断。**未 commit/push，待用户人工验收；不通过恢复 `/tmp/qre-nl-a1-deepseek-pre-20261026/` 四文件并重启 qre-saas。** 建议提交 `feat(saas): 增加自然语言输入校验与 DeepSeek 裁判`。
+
+## Task ID
+
 QRE-SAAS-PUBLIC-BETA-OPS（P1：公测运营反馈闭环与关键浏览器自动化）
 
 ## Current Status

@@ -1,3 +1,17 @@
+### 2026-10-26: NL 输入裁判由 Jev 改为 DeepSeek，且只在缓存 miss + 配额后运行
+
+- Decision: 用户明确暂不配置 Jev/TypeSafe；第二裁判改用现有 `QRE_NL_LLM_*` DeepSeek 通道（`nl_compiler.call_llm` 注入独立裁判 system prompt，严格 JSON 三分类，无置信度输出）。编排：规则层 → 缓存快路径/锁内复检 → 配额计数 → 裁判 → 编译；缓存命中零裁判；裁判拒绝（not_strategy/unclear → review 不硬拒）也占一次配额；force 已确认场景不裁判，admin 与会员同样裁判（admin 仅不限配额）；DB 故障回退路径同序。删除 Jev 客户端/环境变量/requests 依赖与评估脚本，不留死代码。
+- Rationale: 不新增凭证与 SDK；裁判放在配额后防止免费刷 token；概率裁判不硬拒，避免误杀合法策略；缓存命中不裁判控制成本。
+- Verification: 新测试 67 passed；全量 2840 passed + 6 skipped；ECS 真实小样本评估 not_strategy 4/4、0 失败；生产计数证据（裁判拦截占配额 +1、缓存不写；缓存命中零裁判零配额）。
+- Owner: KIMI_CODE；2026-10-26 用户验收通过，已发布。
+
+### 2026-10-26: NL 输入前置校验三态与 Jev 非单点裁判（QRE-SAAS-NL-A1，已被上方 DeepSeek 条目替代）
+
+- Decision: `POST /api/saas/nl/compile` 在 empty 检查后执行纯规则校验：reject（乱码/纯数字/过短/无交易语义短文本）=422 `nl_input_rejected` 不可绕过；review（缺入场/缺出场/无交易语义长文本）=422 `nl_input_review`，用户确认后 `force=true` 重发（force 只豁免 review，服务端对 force 请求仍跑规则层硬拒）。Jev（TypeSafe systemone）为可选第二裁判：只升级 pass→review，从不硬拒；未配置/超时/非 2xx/结构异常一律降级规则层；不记录策略文本与 API key。guard 位于 prompt/缓存/配额/LLM 之前，不占配额、不写缓存、不调 LLM。
+- Rationale: 防随意输入刷 token 与无效编译，同时内测期不阻挡边界输入（可确认继续）；概率裁判不承担不可绕过拦截，避免误杀合法策略。
+- Verification: 新 `tests/test_nl_input_guard.py` 48 passed；全量 2821 passed + 6 skipped；50 条人工标注样本规则层 50/50；生产 reject/review/force/合法编译合同全部符合。Jev 未真实运行（无凭证，未伪造评估）。
+- Owner: KIMI_CODE；已部署待用户验收，未 commit/push。
+
 ### 2026-10-26: 公测运营指标的数据来源与隐私边界（QRE-SAAS-PUBLIC-BETA-OPS）
 
 - Decision: 9090「公测运营」tab 指标只读权威表聚合；新增最小事件表 `nl_compile_events`（ok/cache_hit/error_class/scope/created_at）承载 NL 编译成功率/缓存命中/失败原因，**不存策略文本、API key、原始 IP**，自功能上线起统计、不回填；回测指标取 jobs（kind='full'，smoke 与 canceled 不计入）；转化为游客独立会话（guest_key 去重，仅覆盖提交过任务的游客）与新增注册的总量比，不做个体级归因；分母为 0 一律 null（前端「—」）。
