@@ -1,5 +1,9 @@
 # Task Handoff
 
+## Current Release
+
+DONE（2026-10-26 用户批准提交，实现 `e6f4f77` 已 push + ECS）：经典策略与结果操作卡精修、分享序列权限热修、分享完整公网 URL 热修均通过人工验收。最新全量 2703 passed + 5 skipped，生产创建/公开读取/撤销均验证通过。以下各任务保留实施与部署过程记录。
+
 ## Task ID
 
 QRE-SAAS-SHARE-ABSOLUTE-URL（分享链接补全公网域名）

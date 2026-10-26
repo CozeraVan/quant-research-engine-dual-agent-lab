@@ -8,6 +8,10 @@ This file is the source of truth for single-agent workflow recovery.
 2. **新 UI 禁止灰色小字备注**：任何新页面/UI 改动不得新增 `.opt`、muted/faint 辅助段落或灰色小字行内说明；必要解释统一使用 `tip-trigger` + `data-tip` + `LabUI.helpTips`。详见 R-UI-001。
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
 
+### 2026-10-26 QRE-SAAS-CLASSIC-ACTIONS-UI + SHARE-HOTFIXES DONE（用户验收发布）
+
+用户批准提交，实现 `e6f4f77` 已 push + ECS。经典策略与结果操作卡精修、分享序列权限热修、分享完整公网 URL 热修均验收通过。最终全量 2703 passed + 5 skipped；生产创建返回完整公网 URL，公开页面与撤销均 200，临时数据清理，app.py/schema/模板/CSS 均已部署。以下同任务实施记录保留作历史。下一主线：NL A2 持久限频与 A3 编译缓存，随后公测运营反馈与关键浏览器自动化。
+
 ### 2026-10-26 QRE-SAAS-SHARE-ABSOLUTE-URL 已部署待人工复验，未 commit/push
 
 用户认为新建分享链接无效。核查其实际 summary=200、readonly_kind=share、真实 Chromium 只读渲染正常，token 与权限均有效；问题是创建响应只有相对路径。`api_share_link_create` 改为 `SAAS_PUBLIC_BASE_URL`（缺省 request.url_root）+ 分享路径，生产固定 `https://www.aguhuice.com`。新增绝对 URL 回归，access_hardening 68 passed，全量 2703 passed + 5 skipped。生产创建返回完整公网 URL、公开页面 200、撤销 200，临时数据清理，app.py 哈希一致。备份 `/tmp/qre-share-absolute-url-pre-20261026/`（app.py + 0600 env），未跑真实回测。既有相对链接仍有效，无需撤销。

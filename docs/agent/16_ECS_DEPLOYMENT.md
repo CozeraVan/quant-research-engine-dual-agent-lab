@@ -53,6 +53,8 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **结果页 UI 精简已发布（2026-10-26，QRE-SAAS-UI-DECLUTTER-001，commit `8accb66`）**：同步 `_records_scripts.html`、help/job/showcase/symbol 四模板与 lab-theme.css（共六文件），仅重启 qre-saas。公网 job58/symbol58/showcase/profile/help 200，无合同标签、合同版本或 `/saas/help#` 深链；help 侧边栏目与 20px 标题生效，六文件 SHA256 与 HEAD 一致。回滚备份 `/tmp/qre-ui-declutter-pre-20261026/`，未重启 worker、未跑真实回测。
 
+**经典策略与分享热修已验收发布（2026-10-26，commit `e6f4f77`）**：经典策略与结果操作卡精修、分享序列权限热修、分享完整公网 URL 热修均通过用户验收并已 push。最终全量 2703 passed + 5 skipped；生产创建返回完整公网 URL、公开页面与撤销均 200。备份分别为 `/tmp/qre-classic-actions-pre-20261026/`、`/tmp/qre-share-sequence-grant-pre-20261026/`、`/tmp/qre-share-absolute-url-pre-20261026/`。未跑真实回测。以下为实施过程记录。
+
 **分享完整 URL 热修已部署（2026-10-26，QRE-SAAS-SHARE-ABSOLUTE-URL，待人工复验、未 commit/push）**：用户链接经 API 与 Chromium 验证实际有效，但创建响应只有相对路径。新增 `SAAS_PUBLIC_BASE_URL=https://www.aguhuice.com`，创建接口返回完整公网 URL（缺省回退 request.url_root）。生产创建/公开页面/撤销均 200，全量 2703 passed + 5 skipped，app.py 哈希一致。备份 `/tmp/qre-share-absolute-url-pre-20261026/`（app.py + 0600 env），未跑真实回测。
 
 **分享创建权限热修已部署（2026-10-26，QRE-SAAS-SHARE-SEQUENCE-GRANT，待人工复验、未 commit/push）**：生产日志确认 `share_links_id_seq` 缺 USAGE 导致 POST 分享 500；已授予 aguhuice 表 CRUD + 序列 USAGE/SELECT 并写入 `cloud_schema.sql` 幂等 DO 块。另将既有 showcase/showcase_daily 同构定义纳入权威 schema，消除新库懒建表时序依赖。真实创建/撤销 API 均 200，临时链接/session 清理，share_links=0；全量 2702 passed + 5 skipped，schema SHA256 一致。备份 `/tmp/qre-share-sequence-grant-pre-20261026/`，未跑真实回测。

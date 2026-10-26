@@ -1,5 +1,9 @@
 # Review Report
 
+## Current Release
+
+PASS + RELEASED（2026-10-26 用户批准提交，实现 `e6f4f77` 已 push + ECS）：经典策略/结果操作卡、分享序列权限、完整公网 URL 三项均通过人工验收。最终全量 2703 passed + 5 skipped，生产创建/公开读取/撤销均验证通过。以下保留各任务自审记录。
+
 ## Task ID
 
 QRE-SAAS-SHARE-ABSOLUTE-URL（分享链接补全公网域名）
