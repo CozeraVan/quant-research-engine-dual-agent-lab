@@ -1450,3 +1450,19 @@ No open questions remain.
 - Alternatives: 继续 P0-3 容量实测或提前云迁移——当前均否决，不删除长期条目，未来由用户明确重启。
 - Impact: `14_LAUNCH_ROADMAP.md` §11 顶部范围修订为当前最高优先级；worker 离线提示归入首次使用体验，不延伸为容量调参；第四入口仍排最后。
 - Owner: KIMI_CODE（用户 2026-10-25 拍板）
+
+### 2026-10-25: 移动端与 App 端暂时跳过
+
+- Decision: 移动端、App 端与可访问性深化从当前 P1 顺序移出并挂起；下一项改为默认私有的可撤销只读分享。
+- Reason: 用户明确现阶段暂时不做移动端和 App 端，希望把公网工作集中在其他可见功能。
+- Alternatives: 继续移动端与可访问性专项——当前否决；已有移动适配和测试资产保留，未来由用户明确重启。
+- Impact: `11_AGENT_STATE.md` 与 `14_LAUNCH_ROADMAP.md` 当前顺序已同步；不删除移动/App backlog，不改变既有页面或代码。
+- Owner: KIMI_CODE（用户 2026-10-25 拍板）
+
+### 2026-10-26: P1 只读分享采用「哈希令牌 + 单 job 绑定 + 可撤销」方案
+
+- Decision: 登录用户可把本人已完成结果分享为只读链接（QRE-SAAS-READONLY-SHARE）：新增 `share_links` 表只存完整 SHA-256(token + 现有 salt) 哈希，`secrets.token_urlsafe(32)` 明文仅在创建响应出现一次；链接绑定单个 completed job，不依赖登录或游客会话即可读；有效期只接受 1/7/30 天或永久（默认 7 天），撤销立即生效。
+- Reason: 默认私有是红线； bearer 式链接必须可撤销、可过期，且不能给「持有链接的人」任何超出该 job 结果 GET 的能力；数据库不存明文可将库内泄露降到「只有哈希」。
+- Alternatives: ①账号级通行证——否决（一个链接看到全部结果，撤销粒度过粗）；②仅存 token 前缀——否决（前缀+爆破空间仍可枚举，完整哈希无此问题）；③游客也可分享——否决（游客结果次日清空、无 owner 主体，分享无意义且扩大暴露面）；④未验证结果禁止分享——否决（用户明确 owner 可主动分享，合同徽标保留即可区分）。
+- Impact: `cloud_schema.sql` 新增 share_links（生产须 postgres 先 apply）；`_require_completed_result` 增加 share 公开只读通道，与 showcase verified 通道并存且 `readonly_kind` 区分；无效/过期/撤销/错 job token 一律不降级授权（匿名 401、登录他人 404，错误体与不存在一致）；游客清理 jobs 逻辑不变（CASCADE 清理孤儿分享）；`SAAS_AUTH_SALT` 轮换会使历史分享链接全部失效（预期安全行为）。
+- Owner: KIMI_CODE（用户 2026-10-26 批准计划 superman-hellcat-crystal）

@@ -2,7 +2,37 @@
 
 ## Task ID
 
-QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与数据/费用口径）
+QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
+
+## Created By
+
+KIMI_CODE 布置，Step 5 实施（2026-10-26，用户批准计划 superman-hellcat-crystal）
+
+## 目标
+
+让登录用户把自己的已完成回测结果分享给他人只读查看，同时保持默认私有、链接可撤销、可设有效期、明文令牌只显示一次：
+
+1. **最小 schema**：`share_links`（token_hash 唯一 / job_id ON DELETE CASCADE / owner_id / expires_at / revoked_at / created_at + 两个索引）；不要 token 明文/前缀、guest_key、last_used_at。应用层按现有 information_schema + 进程 guard 懒自愈建表；生产发布前必须由 postgres 幂等 apply `cloud_schema.sql`，避免表 owner/权限问题。
+2. **令牌生命周期**：`secrets.token_urlsafe(32)`；库中只存完整 SHA-256(token + 现有 salt) 哈希；明文仅出现在创建响应。创建 URL `/saas/jobs/<job_id>?share=<token>`；校验只允许未撤销、未过期且 job_id 一致的记录。
+3. **所有者管理 API**：创建（登录+本人+completed；游客 401、他人/不存在 404、未完成 409；有效期只接受 1/7/30/0 天，默认 7，服务端算 expires_at）；列表（仅本人最近 50 条，状态 active/expired/revoked，不回 hash/token）；撤销（仅创建者，重复/他人/不存在统一 404，立即失效）。
+4. **公开只读通道**：`_require_completed_result` 在有效 `?share=` 时按 token 对应 job 放行只读（readonly_kind=share），不依赖登录或游客会话；无效/过期/撤销/错 job 不降级授权（匿名 401、登录他人 404，错误体与既有语义一致，不泄露任务或链接状态）。范围仅现有结果 GET；不开放 jobs/results 列表、用户策略 API 或 worker/console；generate 对 showcase 和 share 都 403；其余写端点仍只认原归属。
+5. **未验证与 showcase 边界**：未验证历史结果允许所有者主动分享，合同徽标「旧口径·未验证」必须保留；showcase 仍只允许 verified；游客不能创建分享。
+6. **UI**：job 页登录+completed+非公开只读显示「分享结果」（自定义模态选有效期、成功后代只读 input + 复制、明确只显示一次、不写 localStorage）；profile「我的分享」列表与撤销二次确认；分享视图 chip「只读分享」+ 中性返回文案，与 showcase 区分；隐藏取消/保存/信号/重跑/游客引导。
+
+## 实施边界
+
+- 不改回测引擎、worker 执行逻辑、结果数值、配额、NL A2/A3、策略库、默认私有语义；不跑真实回测；不做压测/性能/硬件；不做移动/App 专项（仅保持 375 不破版）；不 commit/push/部署 ECS。
+- 游客每日清理 jobs 逻辑不改（CASCADE 自动清理孤儿分享）；showcase verified 门与 P0-2 游客隔离语义零变化。
+- 复用既有自定义模态/淡紫组件与 Clipboard API，不新增依赖、不新增长篇灰字。
+
+## Validation
+
+- TDD 先 RED 后 GREEN：重点扩展 `tests/test_saas_access_hardening.py`（fixture 清理纳入 share_links），覆盖创建准入/存储形态/全端点绑定/过期/撤销/写保护/CASCADE/未验证/showcase 不变 + 前端 Node harness（job 分享流、只读文案分流、profile 列表与撤销、token 传播、localStorage 零痕迹）；`tests/test_gui_saas_pages.py` 三个既有 Node harness 补 shareUrl/shareSuffix/initShareButton 透传桩。
+- 相关 22 个文件 655 passed；全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q`（2687 passed + 5 skipped，基线 2651+5，零回归）。
+- 真实 Chromium（临时 PG + 8099 staging + seed/worker 协议模拟，不启动真实 worker/回测）：登录创建复制→匿名只读渲染→异 job/过期/撤销拒绝→profile 撤销二次确认；URL 不写 localStorage；零 JS error、零横向溢出；证据 `.tmp/readonly-share/`。
+- `scripts/check-progress-docs.sh`、`scripts/git-finalize-check.sh`、`git diff --check` 通过；凭证扫描命中项均为 token 字段名/测试 dummy，人工核对无真实凭证；更新 04/05/06/08/09/10/11/14/16/17/19。
+
+## Archive: QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与数据/费用口径）
 
 ## Created By
 

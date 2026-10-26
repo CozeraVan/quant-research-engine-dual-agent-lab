@@ -30,7 +30,7 @@ import re
 import secrets
 import smtplib
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
@@ -214,6 +214,12 @@ def _auth_salt(app: Flask) -> str:
 
 def _code_hash(code: str, target: str, salt: str) -> str:
     return hashlib.sha256(f"{code}:{target}:{salt}".encode()).hexdigest()
+
+
+def _share_token_hash(app: Flask, token: str) -> str:
+    """P1 只读分享令牌哈希：完整 SHA-256（域分离前缀 + token + 现有 salt），
+    64 位十六进制入库；明文 token 只在创建响应出现一次，任何接口不回显。"""
+    return hashlib.sha256(f"share:{token}:{_auth_salt(app)}".encode()).hexdigest()
 
 
 def _dev_auth_enabled(app: Flask) -> bool:
@@ -509,6 +515,48 @@ def _ensure_result_contract_column(engine: Engine) -> bool:
         ok = False
     _RESULT_CONTRACT_ENSURED.add(key)
     _RESULT_CONTRACT_COL[key] = ok
+    return ok
+
+
+# QRE-SAAS-READONLY-SHARE（P1）：share_links 懒自愈。先查 information_schema
+# 再 CREATE（同 _ensure_worker_configs 的 owner 踩坑：ECS 上表由 postgres apply
+# cloud_schema.sql 创建，app 账号 CREATE 会 500）；CREATE 失败返回 False，
+# 调用方降级为「分享通道不可用」——不报错、不降级授权，与表不存在时语义一致。
+_SHARE_LINKS_ENSURED: set[int] = set()
+_SHARE_LINKS_OK: dict[int, bool] = {}
+
+
+def _ensure_share_links(engine: Engine) -> bool:
+    key = id(engine)
+    if key in _SHARE_LINKS_ENSURED:
+        return _SHARE_LINKS_OK.get(key, False)
+    ok = True
+    try:
+        with engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'share_links'")
+            ).first() is not None
+            if not exists:
+                conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS share_links ("
+                    "id BIGSERIAL PRIMARY KEY, "
+                    "token_hash TEXT NOT NULL UNIQUE, "
+                    "job_id BIGINT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, "
+                    "owner_id BIGINT NOT NULL REFERENCES users(id), "
+                    "expires_at TIMESTAMPTZ, "
+                    "revoked_at TIMESTAMPTZ, "
+                    "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+                ))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_share_links_job "
+                    "ON share_links (job_id, created_at DESC)"))
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_share_links_owner "
+                    "ON share_links (owner_id, created_at DESC)"))
+    except Exception:
+        ok = False
+    _SHARE_LINKS_ENSURED.add(key)
+    _SHARE_LINKS_OK[key] = ok
     return ok
 
 
@@ -3282,6 +3330,44 @@ def create_saas_app() -> Flask:
                 {"id": job_id},
             ).first() is not None
 
+    def _load_job_for_share(job_id: int, token: str) -> Any:
+        """P1 只读分享通道（QRE-SAAS-READONLY-SHARE）：token 哈希命中、未撤销、
+        未过期且绑定本 job 时返回行（不看登录/游客会话；未验证结果同样放行，
+        合同徽标由 summary 原样返回）。其余一切情况返回 None——调用方按原有
+        匿名 401 / 登录他人 404 语义继续，不降级、不泄露链接状态。"""
+        engine = _get_engine(app)
+        if not _ensure_share_links(engine):
+            return None
+        with engine.connect() as conn:
+            link = conn.execute(
+                text("SELECT job_id FROM share_links "
+                     "WHERE token_hash = :h AND revoked_at IS NULL "
+                     "AND (expires_at IS NULL OR expires_at > now())"),
+                {"h": _share_token_hash(app, token)},
+            ).mappings().first()
+            if link is None or int(link["job_id"]) != int(job_id):
+                return None
+            return conn.execute(
+                text(
+                    "SELECT j.*, " + _STRATEGY_COLS + ", " + _result_cols(engine) +
+                    " FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
+                    "WHERE j.id = :id"
+                ),
+                {"id": job_id},
+            ).mappings().first()
+
+    def _public_readonly_kind() -> str | None:
+        """当前请求的公开只读通道：share / showcase / None（本人与游客正常访问）。"""
+        if getattr(g, "share_readonly", False):
+            return "share"
+        if getattr(g, "showcase_readonly", False):
+            return "showcase"
+        return None
+
+    def _is_public_readonly() -> bool:
+        return _public_readonly_kind() is not None
+
     def _result_record(row: Any) -> dict[str, Any]:
         """把 job 行构造成 lab_result.py 认识的 run record（复用 8081 解析函数的关键）：
         output_dir 指向上传目录 job_<id>/（产物同名同格式），_find_output_file 走 rglob。"""
@@ -3309,29 +3395,40 @@ def create_saas_app() -> Flask:
         但 P0-1B 起仅当结果合同为 verified——未验证的经典策略不再公开可见
         （白名单行/job/产物不动，本人仍按原权限可见）；
         复用此入口的写端点必须显式拒绝 showcase_readonly。
+        P1 只读分享（QRE-SAAS-READONLY-SHARE）：?share=<token> 有效时按 token
+        对应 job 放行只读（g.share_readonly=True，readonly_kind="share"），不依赖
+        登录或游客会话；无效/过期/撤销/错 job 一律不降级——匿名仍 401、登录他人
+        仍 404，错误体与既有语义逐字节一致。
         游客按会话 Cookie 归属（QRE-SAAS-ACCESS-HARDENING-001）：匿名且不匹配
         时 401（与不存在一致，不泄露存在性），Cookie 缺失时顺手签发。"""
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
         guest_sid: str | None = None
-        if uid is None:
-            guest_key, guest_sid = _guest_identity(app)
-            row = _load_job_for_guest(job_id, guest_key)
-            if row is None:
-                if _is_showcase_job(job_id):
-                    row = _load_job_public(job_id)
-                    g.showcase_readonly = row is not None
+        row = None
+        share_token = (request.args.get("share") or "").strip()
+        if share_token:
+            row = _load_job_for_share(job_id, share_token)
+            if row is not None:
+                g.share_readonly = True
+        if row is None:
+            if uid is None:
+                guest_key, guest_sid = _guest_identity(app)
+                row = _load_job_for_guest(job_id, guest_key)
                 if row is None:
-                    return None, _with_guest_cookie(
-                        app, (jsonify({"ok": False, "error": "未登录"}), 401), guest_sid)
-        else:
-            row = _load_job_for_user(job_id, uid)
-            if row is None:
-                if _is_showcase_job(job_id):
-                    row = _load_job_public(job_id)
-                    g.showcase_readonly = row is not None
+                    if _is_showcase_job(job_id):
+                        row = _load_job_public(job_id)
+                        g.showcase_readonly = row is not None
+                    if row is None:
+                        return None, _with_guest_cookie(
+                            app, (jsonify({"ok": False, "error": "未登录"}), 401), guest_sid)
+            else:
+                row = _load_job_for_user(job_id, uid)
                 if row is None:
-                    return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
+                    if _is_showcase_job(job_id):
+                        row = _load_job_public(job_id)
+                        g.showcase_readonly = row is not None
+                    if row is None:
+                        return None, (jsonify({"ok": False, "error": "任务不存在"}), 404)
         if row["status"] != "completed":
             # QRE-SAAS-FIRST-SUCCESS-UX-001：未完成时把排队位置、worker 在线布尔、
             # 真实失败原因与策略 ID 一并返回（仅本任务所有者/既有合法只读调用方
@@ -3460,7 +3557,8 @@ def create_saas_app() -> Flask:
         if err:
             return err
         return jsonify({"ok": True, "job_id": job_id,
-                        "readonly": bool(getattr(g, "showcase_readonly", False)),
+                        "readonly": _is_public_readonly(),
+                        "readonly_kind": _public_readonly_kind(),
                         "strategy_id": row["strategy_id"],
                         "strategy_name": row["strategy_name"],
                         "strategy": _jsonable({
@@ -3611,7 +3709,8 @@ def create_saas_app() -> Flask:
             # 产物未回传（批量截断）不等于无交易：提示可按需生成，由前端出按钮
             return jsonify({"ok": False, "error": "该股详情产物未随任务回传",
                             "can_generate": True,
-                            "readonly": bool(getattr(g, "showcase_readonly", False))}), 404
+                            "readonly": _is_public_readonly(),
+                            "readonly_kind": _public_readonly_kind()}), 404
         data["data_until"] = _jsonable(row["result_data_until"])
         return jsonify(_jsonable(data))
 
@@ -3634,8 +3733,11 @@ def create_saas_app() -> Flask:
         row, err = _require_completed_result(job_id)
         if err:
             return err
-        if getattr(g, "showcase_readonly", False):
-            return jsonify({"ok": False, "error": "经典策略为只读展示"}), 403
+        if _is_public_readonly():
+            kind = _public_readonly_kind()
+            message = ("经典策略为只读展示" if kind == "showcase"
+                       else "分享链接为只读，不支持按需生成")
+            return jsonify({"ok": False, "error": message}), 403
         try:
             code = resolve_ts_code(ts_code, [])
         except ValueError as exc:
@@ -3692,6 +3794,107 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": True, "status": "none"})
         return jsonify({"ok": True, "status": gen["status"], "gen_job_id": gen["id"],
                         "error": gen["error_message"] if gen["status"] == "failed" else None})
+
+    # --- P1 只读分享（QRE-SAAS-READONLY-SHARE）：可撤销、可设有效期的结果分享链接 ---
+    # 默认私有不变：仅登录 owner 可创建/列表/撤销；游客不开放；链接绑定单个
+    # completed job；token 明文只在创建响应出现一次，库中只有完整哈希。
+
+    SHARE_EXPIRY_DAYS = (1, 7, 30, 0)  # 0=永久；默认 7
+
+    @app.post("/api/saas/jobs/<int:job_id>/share-links")
+    def api_share_link_create(job_id: int) -> Any:
+        """创建只读分享链接：登录 + 本人 + status=completed。
+        游客 401；他人/不存在 404；未完成 409。有效期只接受 1/7/30/0 天
+        （0=永久），服务端计算 expires_at，不接受任意时间。
+        返回 {ok,id,url,expires_at}——唯一返回明文 token 的响应。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        row = _load_job_for_user(job_id, uid)
+        if row is None:
+            return jsonify({"ok": False, "error": "任务不存在"}), 404
+        if row["status"] != "completed":
+            return jsonify({"ok": False, "error": f"任务未完成（{row['status']}）"}), 409
+        data = request.get_json(silent=True) or {}
+        raw_days = data.get("expires_days", 7)
+        # 只接受整数 allowlist（拒绝字符串/浮点/布尔，避免 1.5→1 这类静默取整）
+        if (isinstance(raw_days, bool) or not isinstance(raw_days, int)
+                or raw_days not in SHARE_EXPIRY_DAYS):
+            return jsonify({"ok": False, "error": "有效期只支持 1/7/30 天或 0（永久）"}), 400
+        days = raw_days
+        if not _ensure_share_links(engine):
+            return jsonify({"ok": False, "error": "分享功能暂不可用，请联系管理员"}), 503
+        token = secrets.token_urlsafe(32)
+        expires_at = (None if days == 0
+                      else datetime.now(timezone.utc) + timedelta(days=days))
+        with engine.begin() as conn:
+            link = conn.execute(
+                text("INSERT INTO share_links (token_hash, job_id, owner_id, expires_at) "
+                     "VALUES (:h, :j, :o, :e) RETURNING id, expires_at"),
+                {"h": _share_token_hash(app, token), "j": job_id, "o": uid, "e": expires_at},
+            ).mappings().first()
+        return jsonify({"ok": True, "id": link["id"],
+                        "url": f"/saas/jobs/{job_id}?share={token}",
+                        "expires_at": _jsonable(link["expires_at"])})
+
+    @app.get("/api/saas/share-links")
+    def api_share_links_list() -> Any:
+        """我的分享（仅当前用户，最近 50 条）：id/job_id/策略名/created_at/
+        expires_at/revoked_at/status（active/expired/revoked）。
+        不回 token_hash 或明文——链接只在创建时可见一次。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        if not _ensure_share_links(engine):
+            return jsonify({"ok": False, "items": []})
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT sl.id, sl.job_id, sl.created_at, sl.expires_at, sl.revoked_at, "
+                     "s.name AS strategy_name "
+                     "FROM share_links sl JOIN jobs j ON j.id = sl.job_id "
+                     "LEFT JOIN strategies s ON s.id = j.strategy_id "
+                     "WHERE sl.owner_id = :uid "
+                     "ORDER BY sl.created_at DESC, sl.id DESC LIMIT 50"),
+                {"uid": uid},
+            ).mappings().all()
+        now = datetime.now(timezone.utc)
+        items = []
+        for r in rows:
+            revoked = r["revoked_at"] is not None
+            expired = (not revoked and r["expires_at"] is not None
+                       and r["expires_at"] <= now)
+            items.append({
+                "id": r["id"], "job_id": r["job_id"],
+                "strategy_name": r["strategy_name"],
+                "created_at": _jsonable(r["created_at"]),
+                "expires_at": _jsonable(r["expires_at"]),
+                "revoked_at": _jsonable(r["revoked_at"]),
+                "status": "revoked" if revoked else ("expired" if expired else "active"),
+            })
+        return jsonify({"ok": True, "items": items})
+
+    @app.post("/api/saas/share-links/<int:link_id>/revoke")
+    def api_share_link_revoke(link_id: int) -> Any:
+        """撤销分享：仅创建者可撤销；重复撤销、他人或不存在统一 404；
+        成功置 revoked_at=now()，立即失效。"""
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        if not _ensure_share_links(engine):
+            return jsonify({"ok": False, "error": "分享不存在"}), 404
+        with engine.begin() as conn:
+            row = conn.execute(
+                text("UPDATE share_links SET revoked_at = now() "
+                     "WHERE id = :id AND owner_id = :uid AND revoked_at IS NULL "
+                     "RETURNING id"),
+                {"id": link_id, "uid": uid},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "分享不存在"}), 404
+        return jsonify({"ok": True, "id": link_id, "revoked": True})
 
     # --- 后台管理（QRE-SAAS-ADMIN-E1E3，15 号文档 E 阶段） ---
     # 路由前缀用 /saas/console（不用 /admin 字样：SaaS 页面禁链纪律含 HTML/JS 注释，

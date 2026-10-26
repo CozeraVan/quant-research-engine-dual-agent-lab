@@ -1,10 +1,12 @@
 {% extends "base.html" %}
+{# P1 只读分享（QRE-SAAS-READONLY-SHARE）：分享视图的返回链接保留 token #}
+{% set share_qs = '?share=' ~ request.args.get('share') if request.args.get('share') else '' %}
 {% block title %}个股回测详情 · A股回测台{% endblock %}
 {% block body %}
 <div class="wrap">
   <div class="page-head" style="margin-bottom:4px">
     <h1 style="font-size:22px" id="sym-title">个股回测详情 <span class="opt">@ 任务 #{{ job_id }}</span></h1>
-    <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}/symbols">← 个股明细列表</a>　<a class="inl" href="/saas/jobs/{{ job_id }}">回测结果</a>　<span class="opt" id="sym-note"></span></p>
+    <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}/symbols{{ share_qs }}">← 个股明细列表</a>　<a class="inl" href="/saas/jobs/{{ job_id }}{{ share_qs }}">回测结果</a>　<span class="opt" id="sym-note"></span></p>
   </div>
   <div class="metric-strip" id="sum-strip"></div>
 
@@ -65,8 +67,19 @@
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 // QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；
 // 股票代码一律不显示交易所后缀（dispCode，见 base.html）。
+// P1 只读分享（QRE-SAAS-READONLY-SHARE）：分享视图带 token 访问结果 API 与导航
 const JOB_ID = {{ job_id }};
 const TS_CODE = {{ ts_code | tojson }};
+const SHARE_TOKEN = (function(){
+  try { return new URLSearchParams(location.search).get('share') || ''; } catch (e) { return ''; }
+})();
+// 分享视图：隐藏 base 全局游客条（匿名接收者不是“游客模式”引导对象）
+if (SHARE_TOKEN){
+  const gs = document.getElementById('guest-strip');
+  if (gs){ gs.classList.add('hidden'); gs.style.display = 'none'; }
+}
+function shareUrl(url){ return SHARE_TOKEN ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + 'share=' + encodeURIComponent(SHARE_TOKEN)) : url; }
+function shareSuffix(){ return SHARE_TOKEN ? ('?share=' + encodeURIComponent(SHARE_TOKEN)) : ''; }
 const $ = s => document.querySelector(s);
 function f2(v){ return v == null || v === '' ? '—' : Number(v).toFixed(2); }
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -226,13 +239,13 @@ async function load(){
   symbolActiveSince = null;
   restoreSymbolContent();
   try {
-    const result = await symbolRequestJsonWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`, {redirectOn401:false}, controller, async resp => {
+    const result = await symbolRequestJsonWithTimeout(shareUrl(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}`), {redirectOn401:false}, controller, async resp => {
       if (resp.status === 401) return {resp, access: true};
       if (resp.status === 404){
         try {
           const data = await resp.json();
           return data && data.can_generate
-            ? {resp, generate: !data.readonly, readonly: !!data.readonly}
+            ? {resp, generate: !data.readonly, readonly: !!data.readonly, readonlyKind: data.readonly_kind}
             : {resp, access: true};
         } catch (error) {
           if (error && error.name === 'AbortError') throw error;
@@ -245,7 +258,9 @@ async function load(){
     if (result.access){ showSymbolAccess(); return; }
     if (result.readonly){
       restoreSymbolContent();
-      $('#sym-note').textContent = '公开经典策略未提供该股详情。';
+      $('#sym-note').textContent = result.readonlyKind === 'share'
+        ? '该分享未提供该股详情。'
+        : '公开经典策略未提供该股详情。';
       return;
     }
     if (result.generate){ showGenerate(); return; }
@@ -348,7 +363,7 @@ async function pollGen(){
   if (symbolActiveSince === null) symbolActiveSince = Date.now();
   restoreSymbolContent();
   try {
-    const result = await symbolRequestJsonWithTimeout(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`, {redirectOn401:false}, controller, async r => {
+    const result = await symbolRequestJsonWithTimeout(shareUrl(`/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/gen-status`), {redirectOn401:false}, controller, async r => {
       if (r.status === 401 || r.status === 404) return {r, access: true};
       return {r, data: await r.json()};
     });

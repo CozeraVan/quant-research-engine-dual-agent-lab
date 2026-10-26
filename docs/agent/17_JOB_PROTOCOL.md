@@ -78,6 +78,12 @@ queued ──claim──▶ leased ──首个心跳──▶ running ──res
 派生关系：`smoke` job completed 且带 `derive_full` 参数时，server 端自动创建对应
 `full` job（同 strategy + params 去掉 smoke 截断），`parent_job_id` 记录来源（可加列）。
 
+关联表 `share_links`（QRE-SAAS-READONLY-SHARE，2026-10-26）：只读分享链接，`job_id
+REFERENCES jobs(id) ON DELETE CASCADE`（删 job 无孤儿，游客每日清理逻辑不变）、
+`owner_id REFERENCES users(id)`（仅登录 owner 可创建/撤销；游客不开放）、`expires_at`
+NULL=永久、`revoked_at` 撤销即失效、`token_hash` 只存完整 SHA-256(token+salt)（明文仅
+创建响应一次）。分享通道只放行该 job 的结果 GET，不改 §1 状态机与 §3 worker 协议。
+
 ### 2.1 params_json 字段（与现有 /api/run 对齐）
 
 | 字段 | 类型 | 说明 |

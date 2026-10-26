@@ -219,6 +219,15 @@ bash deploy/saas/worker-tune.sh --light-slots 2 --heavy-slots 3 \
 ssh -i ~/.ssh/aguhuice_ed25519 root@47.119.127.40 \
   "sudo -u postgres psql aguhuice -c \"SELECT name, last_heartbeat_at, status_at, status FROM workers;\""
 sudo -n systemctl restart qre-saas-worker && sudo -n journalctl -u qre-saas-worker -n 30 --no-pager  # 本机 worker 重启/查日志（唯一 worker：系统级 qre-saas-worker，2026-10-03 收敛）
+
+# 只读分享（QRE-SAAS-READONLY-SHARE，2026-10-26 IMPLEMENTED 待发布）：新增 share_links 表
+# （token_hash 完整哈希/job_id ON DELETE CASCADE/owner_id/expires_at/revoked_at/created_at）。
+# ⚠️ 与 results.result_contract 同款 owner 踩坑：app 账号 CREATE TABLE 会报 must be owner，
+# 懒自愈 therefore 只兜底本地/测试库；**生产发布顺序 = 先备份 → postgres apply → 同步代码 →
+# 重启 qre-saas**；未 apply 时分享创建返回 503、读取按无效 token（不放权）：
+#   sudo -u postgres psql aguhuice -f /srv/aguhuice/qre/deploy/saas/cloud_schema.sql
+# 公网验证用专用测试任务走 创建→匿名只读→撤销，不跑真实回测，完成后清理测试链接/任务：
+#   sudo -u postgres psql aguhuice -c "SELECT id, job_id, owner_id, expires_at, revoked_at FROM share_links ORDER BY id;"
 ```
 
 ## 6. 纪律

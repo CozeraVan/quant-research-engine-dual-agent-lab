@@ -42,6 +42,41 @@
     </div>
   </div>
 
+  <!-- P1 只读分享（QRE-SAAS-READONLY-SHARE）：创建模态（有效期 allowlist，默认 7 天） -->
+  <div class="modal-mask" id="share-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
+      <h3 id="share-modal-title">分享结果</h3>
+      <p id="share-modal-text">接收方无需登录即可在有效期内<strong>只读</strong>查看本结果的策略定义与完整图表，不能修改或删除。链接仅创建时显示一次，可随时在「个人信息 · 我的分享」撤销。</p>
+      <div style="margin:10px 0;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+        <span class="opt" style="font-size:12.5px">有效期：</span>
+        <label class="radio-inline"><input type="radio" id="share-exp-1" name="share-expiry" value="1"> 1 天</label>
+        <label class="radio-inline"><input type="radio" id="share-exp-7" name="share-expiry" value="7" checked> 7 天</label>
+        <label class="radio-inline"><input type="radio" id="share-exp-30" name="share-expiry" value="30"> 30 天</label>
+        <label class="radio-inline"><input type="radio" id="share-exp-0" name="share-expiry" value="0"> 永久</label>
+      </div>
+      <div class="m-actions">
+        <button type="button" class="btn btn-ghost" id="share-modal-no">取消</button>
+        <button type="button" class="btn btn-primary" id="share-modal-yes">创建链接</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 创建成功：完整链接只读 input + 复制（只显示一次；不写 localStorage、不进列表 API） -->
+  <div class="modal-mask" id="share-link-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="share-link-modal-title">
+      <h3 id="share-link-modal-title">只读分享链接</h3>
+      <p class="opt" id="share-link-note" style="font-size:12.5px;margin:0 0 10px"></p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="share-link-input" type="text" readonly aria-label="只读分享链接"
+               style="flex:1;min-width:0;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--tint,#F1EDF8)">
+        <button type="button" class="btn-sm" id="btn-copy-share">复制</button>
+      </div>
+      <div class="m-actions">
+        <button type="button" class="btn btn-primary" id="share-link-done">完成</button>
+      </div>
+    </div>
+  </div>
+
   <div id="result-area" class="hidden">
     <div class="guest-strip" id="guest-result-note" style="display:none;border-radius:8px;margin-bottom:12px">游客结果次日清空 —— <a class="inl" href="/saas/login">注册后可永久保存记录 / 跑全市场回测 →</a></div>
 
@@ -133,6 +168,16 @@
           </span>
           <button class="btn-sm" id="btn-signal-confirm" style="background:var(--accent);color:#fff;border-color:var(--accent)">开启信号监控</button>
         </div>
+      </div>
+    </div>
+
+    <!-- P1 只读分享（QRE-SAAS-READONLY-SHARE）：登录用户分享自己的已完成结果；
+         游客/showcase/分享视图不显示（poll 内按 readonly 与登录态控制） -->
+    <div class="chart-box hidden" id="box-share">
+      <div class="chart-title">分享结果 <button type="button" class="tip-trigger" data-tip="生成一条只读链接：接收方无需登录即可查看本结果的策略定义与完整图表，不能修改或删除。默认私有，链接可设有效期并随时撤销。" aria-label="分享结果说明">?</button></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn-sm" id="btn-share">分享结果</button>
+        <span class="opt" id="share-status" style="font-size:12.5px"></span>
       </div>
     </div>
 
@@ -630,7 +675,7 @@ async function loadRisk(){
   const box = document.getElementById('box-risk');
   const body = document.getElementById('risk-body');
   try {
-    const d = await jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/risk-analysis', {redirectOn401:false}, controller, async resp => {
+    const d = await jobRequestJsonWithTimeout(shareUrl('/api/results/' + JOB_ID + '/risk-analysis'), {redirectOn401:false}, controller, async resp => {
       if (!resp.ok) throw pollHttpError(resp);
       return resp.json();
     });
@@ -1079,7 +1124,7 @@ async function poll(){
   restoreJobContent();
   let summaryLoaded = false;
   try {
-    const result = await jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/summary', {redirectOn401:false}, controller, async resp => {
+    const result = await jobRequestJsonWithTimeout(shareUrl('/api/results/' + JOB_ID + '/summary'), {redirectOn401:false}, controller, async resp => {
       if (resp.status === 401 || resp.status === 404) throw pollHttpError(resp);
       if (resp.status !== 409 && !resp.ok) throw pollHttpError(resp);
       return {resp, data: await resp.json()};
@@ -1127,8 +1172,9 @@ async function poll(){
     document.getElementById('btn-cancel-job').disabled = true;
     document.getElementById('result-area').classList.remove('hidden');
     if (data.readonly){
-      // 经典策略只读展示（QRE-SAAS-SHOWCASE）：隐藏全部操作入口与游客提示
-      ['box-actions', 'download-card', 'guest-result-note', 'guest-note'].forEach(id => {
+      // 经典策略只读展示（QRE-SAAS-SHOWCASE）/ 只读分享（QRE-SAAS-READONLY-SHARE）：
+      // 隐藏全部操作入口与游客提示（含 base 全局游客条，避免误导匿名接收者）
+      ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip'].forEach(id => {
         const el = document.getElementById(id);
         if (el){ el.classList.add('hidden'); el.style.display = 'none'; }
       });
@@ -1138,19 +1184,23 @@ async function poll(){
         chip.id = 'readonly-chip';
         chip.className = 'opt';
         chip.style.cssText = 'font-size:12.5px;margin-left:8px';
-        chip.textContent = '经典策略展示 · 只读';
+        chip.textContent = data.readonly_kind === 'share' ? '只读分享' : '经典策略展示 · 只读';
         h1.appendChild(chip);
       }
       const back = document.querySelector('a[href="/saas/"]');
-      if (back){ back.href = '/saas/showcase'; back.textContent = '← 返回经典策略'; }
+      if (data.readonly_kind === 'share'){
+        // 分享视图：返回公开首页的中性文案（不暴露所有者账号/列表）
+        if (back){ back.href = '/saas/'; back.textContent = '← 返回首页'; }
+      } else if (back){ back.href = '/saas/showcase'; back.textContent = '← 返回经典策略'; }
     }
+    initShareButton(data);
     const [chartResult, tagResult] = await Promise.all([
-      jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/chart-data', {redirectOn401:false}, controller, async chartResp => {
+      jobRequestJsonWithTimeout(shareUrl('/api/results/' + JOB_ID + '/chart-data'), {redirectOn401:false}, controller, async chartResp => {
         if (chartResp.status === 401) throw pollHttpError(chartResp);
         if (!chartResp.ok) throw pollHttpError(chartResp);
         return (await chartResp.json()) || {};
       }),
-      jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/tag-analysis', {redirectOn401:false}, controller, async tagResp => {
+      jobRequestJsonWithTimeout(shareUrl('/api/results/' + JOB_ID + '/tag-analysis'), {redirectOn401:false}, controller, async tagResp => {
         if (tagResp.status === 401) throw pollHttpError(tagResp);
         if (tagResp.status === 404) return null;
         if (!tagResp.ok) throw pollHttpError(tagResp);
@@ -1173,7 +1223,7 @@ async function poll(){
     if (!data.readonly && !SAAS_BYPASS && !saasToken()) document.getElementById('guest-result-note').style.display = 'block';
     renderAttribution(tag && tag.layers ? tag : (chart.tag_analysis || null));
     renderFees(chart.fees_summary || null, chart.meta || null);
-    document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols';
+    document.getElementById('big-symbols').href = '/saas/jobs/' + JOB_ID + '/symbols' + shareSuffix();
     consecutiveErrors = 0;
     loadRisk();
   } catch (error) {
@@ -1332,6 +1382,94 @@ async function initResultActions(jobData, chart){
       } else { cfm.disabled = false; statusEl.textContent = d.error || '开启失败'; }
     } catch (e) { cfm.disabled = false; }
   });
+}
+
+// --- P1 只读分享（QRE-SAAS-READONLY-SHARE）：登录用户分享自己的已完成结果；
+//       链接只读、可撤销、可设有效期；明文 token 只在创建响应出现一次，
+//       不写 localStorage、不进列表 API；游客/showcase/分享视图无入口 ---
+const SHARE_TOKEN = (function(){
+  try { return new URLSearchParams(location.search).get('share') || ''; } catch (e) { return ''; }
+})();
+// 分享视图：base 全局游客条对匿名接收者是误导，解析时即隐藏（readonly 分支再兜底一次）
+if (SHARE_TOKEN){
+  const gs = document.getElementById('guest-strip');
+  if (gs){ gs.classList.add('hidden'); gs.style.display = 'none'; }
+}
+function shareUrl(url){ return SHARE_TOKEN ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + 'share=' + encodeURIComponent(SHARE_TOKEN)) : url; }
+function shareSuffix(){ return SHARE_TOKEN ? ('?share=' + encodeURIComponent(SHARE_TOKEN)) : ''; }
+// 分享时间统一走全站 LabUI.fmtLocalTime（UTC ISO → 本地 YYYY-MM-DD HH:mm，无微秒）；
+// LabUI 缺失时回退原值（不编日期）
+function fmtShareTime(iso){
+  if (!iso) return '';
+  return (typeof LabUI !== 'undefined' && LabUI && LabUI.fmtLocalTime)
+    ? LabUI.fmtLocalTime(iso) : String(iso);
+}
+function setShareModal(open){ document.getElementById('share-modal').classList.toggle('show', !!open); }
+function setShareLinkModal(open){ document.getElementById('share-link-modal').classList.toggle('show', !!open); }
+function shareExpiryDays(){
+  const ids = ['share-exp-1', 'share-exp-7', 'share-exp-30', 'share-exp-0'];
+  for (const id of ids){
+    const el = document.getElementById(id);
+    if (el && el.checked) return Number(el.value);
+  }
+  return 7;
+}
+function initShareButton(data){
+  const box = document.getElementById('box-share');
+  if (!box) return;
+  // 仅登录用户 + 已完成 + 非公开只读；游客/showcase/分享视图一律不出现入口
+  if (data && data.readonly){ box.classList.add('hidden'); return; }
+  if (!SAAS_BYPASS && !saasToken()){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  if (box.dataset.shareBound === 'true') return;
+  box.dataset.shareBound = 'true';
+  document.getElementById('btn-share').addEventListener('click', () => setShareModal(true));
+  document.getElementById('share-modal-no').addEventListener('click', () => setShareModal(false));
+  document.getElementById('share-modal').addEventListener('click', function(e){ if (e.target === this) setShareModal(false); });
+  document.getElementById('share-modal-yes').addEventListener('click', createShareLink);
+  document.getElementById('share-link-done').addEventListener('click', () => setShareLinkModal(false));
+  document.getElementById('btn-copy-share').addEventListener('click', copyShareLink);
+}
+async function createShareLink(){
+  const btn = document.getElementById('btn-share');
+  const status = document.getElementById('share-status');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  status.textContent = '正在创建链接…';
+  try {
+    const resp = await apiFetch(shareUrl('/api/saas/jobs/' + JOB_ID + '/share-links'),
+      {method: 'POST', json: {expires_days: shareExpiryDays()}, redirectOn401: false});
+    const d = await resp.json().catch(() => null);
+    if (!resp.ok || !d || !d.ok) throw new Error((d && d.error) || ('创建失败（HTTP ' + resp.status + '）'));
+    setShareModal(false);
+    const input = document.getElementById('share-link-input');
+    input.value = d.url || '';
+    document.getElementById('share-link-note').textContent = d.expires_at
+      ? ('有效期至 ' + fmtShareTime(d.expires_at) + '。链接只显示一次，关闭后不能再次查看；可随时在「个人信息 · 我的分享」撤销。')
+      : '永久有效。链接只显示一次，关闭后不能再次查看；可随时在「个人信息 · 我的分享」撤销。';
+    setShareLinkModal(true);
+    status.textContent = '链接已创建，仅本次显示';
+  } catch (e) {
+    status.textContent = (e && e.status === 401)
+      ? '会话已失效，刷新页面后重试'
+      : (e.message || '创建失败，请稍后重试');
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function copyShareLink(){
+  const input = document.getElementById('share-link-input');
+  const btn = document.getElementById('btn-copy-share');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(input.value);
+      btn.textContent = '已复制 ✓';
+      return;
+    }
+  } catch (e) { /* 回退：选中文本由用户手动复制 */ }
+  input.focus();
+  input.select();
+  btn.textContent = '已选中，请手动复制';
 }
 
 if (new URLSearchParams(location.search).get('guest') === '1'){

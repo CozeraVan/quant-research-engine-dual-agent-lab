@@ -7,13 +7,21 @@
    一次性迁移到新会话；迁移后旧 key 不再作为新任务归属、也不再可访问。
 3. 全部面向用户的 job/result/symbol GET 端点 IDOR 矩阵：匿名 / 其他用户 /
    本人 / 不存在 / 公开 verified；401/404 语义统一，不泄露任务存在性。
-4. 默认私有、worker token、结果合同与 showcase verified 公开语义不变；
-   主动分享不做（P1）。
+4. 默认私有、worker token、结果合同与 showcase verified 公开语义不变。
+
+QRE-SAAS-READONLY-SHARE（P1）：登录用户可把本人已完成结果分享为可撤销的
+只读链接（share_links：只存完整 token 哈希，明文仅创建响应一次）。覆盖：
+创建准入（游客 401/他人不存在 404/未完成 409/有效期 allowlist/未验证可分享）、
+存储（仅 64 位哈希、列表不回 hash/token）、公开只读通道（有效 token 匿名
+可读允许的结果 GET、readonly_kind=share、异 job 不降级、不开放列表/策略/
+worker/console）、失效（过期/撤销/错 token 与不存在同体）、写保护
+（generate 403、delete/cancel/save/watch 原权限）、CASCADE 与前端 Node。
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import uuid
 from http.cookies import SimpleCookie
@@ -96,8 +104,8 @@ def _clean(app):
 
     engine = _get_engine(app)
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE results, jobs, strategies, users, sessions, sms_codes "
-                          "RESTART IDENTITY CASCADE"))
+        conn.execute(text("TRUNCATE results, jobs, strategies, users, sessions, sms_codes, "
+                          "share_links RESTART IDENTITY CASCADE"))
 
 
 def _guest_submit(client, ip=IP_A, codes=("000001.SZ",), start="2025-01-01",
@@ -539,3 +547,861 @@ class TestGuestNlLimitStaysIpBased:
         assert app_mod._guest_nl_hit(app, IP_A) is True
         assert app_mod._guest_nl_hit(app, IP_A) is False   # 同 IP 超限
         assert app_mod._guest_nl_hit(app, IP_B) is True     # 异 IP 独立计数
+
+
+# --- QRE-SAAS-READONLY-SHARE（P1）：可撤销只读分享 ---
+
+SHARE_CREATE_URL = "/api/saas/jobs/{jid}/share-links"
+SHARE_LIST_URL = "/api/saas/share-links"
+
+
+def _create_share(client, job_id, days=7, uid=None, payload=None):
+    body = {"expires_days": days} if payload is None else payload
+    headers = {"X-User-Id": str(uid)} if uid is not None else {}
+    return client.post(SHARE_CREATE_URL.format(jid=job_id), json=body, headers=headers)
+
+
+def _share_token_of(resp) -> str:
+    url = resp.get_json()["url"]
+    assert "?share=" in url, f"创建响应必须带明文 token URL: {url}"
+    return url.split("?share=", 1)[1]
+
+
+def _share_rows(app):
+    from sqlalchemy import text
+
+    from quant_research_engine.gui.saas.app import _get_engine
+
+    with _get_engine(app).connect() as conn:
+        return [dict(r) for r in conn.execute(text(
+            "SELECT * FROM share_links ORDER BY id")).mappings().all()]
+
+
+def _share_columns(app):
+    from sqlalchemy import text
+
+    from quant_research_engine.gui.saas.app import _get_engine
+
+    with _get_engine(app).connect() as conn:
+        return {r[0] for r in conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = 'share_links'"))}
+
+
+def _insert_unverified_job(app, uid=1):
+    """直接插一条本人 completed 任务但无 result_contract（未验证口径）。"""
+    from sqlalchemy import text
+
+    from quant_research_engine.gui.saas.app import _get_engine
+
+    engine = _get_engine(app)
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO users (id, tier, role) VALUES (:u, 'member', 'user') "
+                          "ON CONFLICT (id) DO NOTHING"), {"u": uid})
+        sid = conn.execute(
+            text("INSERT INTO strategies (user_id, name, yaml) VALUES (:u, 'unverified', 'y') RETURNING id"),
+            {"u": uid},
+        ).scalar_one()
+        jid = conn.execute(
+            text("INSERT INTO jobs (user_id, strategy_id, kind, status, params) "
+                 "VALUES (:u, :sid, 'full', 'completed', CAST(:p AS jsonb)) RETURNING id"),
+            {"u": uid, "sid": sid, "p": json.dumps({"start": "2026-01-01", "end": "2026-03-01"})},
+        ).scalar_one()
+        conn.execute(
+            text("INSERT INTO results (job_id, user_id, summary, chart_data, data_until) "
+                 "VALUES (:j, :u, CAST(:s AS jsonb), CAST(:c AS jsonb), '2026-02-27')"),
+            {"j": jid, "u": uid, "s": json.dumps({"strategy_total_return": 0.1}),
+             "c": json.dumps({"metrics": {"excess_return": 0.02}})})
+    return jid
+
+
+def _set_share_expires(app, link_id, delta_sql):
+    from sqlalchemy import text
+
+    from quant_research_engine.gui.saas.app import _get_engine
+
+    with _get_engine(app).begin() as conn:
+        conn.execute(
+            text("UPDATE share_links SET expires_at = now() + " + delta_sql + " WHERE id = :i"),
+            {"i": link_id})
+
+
+class TestShareLinkCreate:
+    """创建准入：游客 401、他人/不存在 404、未完成 409、有效期 allowlist。"""
+
+    def test_guest_cannot_create(self, client):
+        jid = _guest_submit(client).get_json()["job_id"]
+        resp = _create_share(client, jid)  # 无登录态
+        assert resp.status_code == 401
+        assert resp.get_json() == {"ok": False, "error": "未登录"}
+
+    def test_other_and_missing_404(self, client):
+        jid = _completed_job(client)
+        other = _create_share(client, jid, uid=2)
+        assert other.status_code == 404
+        missing = _create_share(client, jid + 9999, uid=2)
+        assert missing.status_code == 404
+        assert missing.get_json() == other.get_json()
+
+    def test_incomplete_409(self, client):
+        resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full",
+                                              "params": {"start": "2026-01-01", "end": "2026-03-01"}},
+                           headers={"X-User-Id": "1"})
+        jid = resp.get_json()["job_id"]
+        r = _create_share(client, jid, uid=1)
+        assert r.status_code == 409
+
+    def test_expires_allowlist(self, client):
+        jid = _completed_job(client)
+        for days in (1, 7, 30, 0):
+            r = _create_share(client, jid, days=days, uid=1)
+            assert r.status_code == 200, days
+            body = r.get_json()
+            assert body["ok"] is True and body["id"] and "?share=" in body["url"]
+            if days == 0:
+                assert body["expires_at"] is None
+            else:
+                assert body["expires_at"]
+        for bad in (3, 365, -1, "abc", None, 1.5):
+            r = _create_share(client, jid, uid=1, payload={"expires_days": bad})
+            assert r.status_code == 400, bad
+        # 缺省默认 7 天
+        r = _create_share(client, jid, uid=1, payload={})
+        assert r.status_code == 200 and r.get_json()["expires_at"]
+
+    def test_unverified_result_shareable_and_contract_kept(self, client, app):
+        jid = _insert_unverified_job(app)
+        r = _create_share(client, jid, uid=1)
+        assert r.status_code == 200
+        token = _share_token_of(r)
+        anon = app.test_client()
+        summary = anon.get(f"/api/results/{jid}/summary?share={token}")
+        assert summary.status_code == 200
+        contract = summary.get_json()["result_contract"]
+        assert contract["verified"] is False, "未验证徽标不得因分享被隐藏"
+        assert contract["label"] == "旧口径·未验证"
+
+    def test_response_is_only_plaintext_token_surface(self, client, app):
+        jid = _completed_job(client)
+        r = _create_share(client, jid, uid=1)
+        body = r.get_json()
+        assert set(body) >= {"ok", "id", "url", "expires_at"}
+        assert "token_hash" not in body and "token" not in body
+        rows = _share_rows(app)
+        assert len(rows) == 1
+        assert rows[0]["token_hash"] not in json.dumps(body)
+
+
+class TestShareLinkStorage:
+    """存储形态：DB 只有 64 位哈希；列表不回 hash/明文。"""
+
+    def test_columns_minimal(self, client, app):
+        jid = _completed_job(client)
+        _create_share(client, jid, uid=1)
+        cols = _share_columns(app)
+        assert cols == {"id", "token_hash", "job_id", "owner_id",
+                        "expires_at", "revoked_at", "created_at"}, cols
+
+    def test_only_full_hash_stored(self, client, app):
+        import hashlib
+        import re as _re
+
+        from quant_research_engine.gui.saas.app import _auth_salt
+
+        jid = _completed_job(client)
+        r1 = _create_share(client, jid, uid=1)
+        t1 = _share_token_of(r1)
+        r2 = _create_share(client, jid, uid=1)
+        t2 = _share_token_of(r2)
+        rows = _share_rows(app)
+        assert len(rows) == 2
+        for row in rows:
+            assert _re.fullmatch(r"[0-9a-f]{64}", row["token_hash"]), row["token_hash"]
+        hashes = {row["token_hash"] for row in rows}
+        assert hashes == {
+            hashlib.sha256(f"share:{t1}:{_auth_salt(app)}".encode()).hexdigest(),
+            hashlib.sha256(f"share:{t2}:{_auth_salt(app)}".encode()).hexdigest(),
+        }
+        # 明文不出现在任何存储字段
+        blob = json.dumps(rows, default=str)
+        assert t1 not in blob and t2 not in blob
+
+    def test_list_hides_token_and_scoped(self, client, app):
+        jid = _completed_job(client)
+        _create_share(client, jid, uid=1)
+        _completed_job(client, uid=2, name="u2")
+        r = client.get(SHARE_LIST_URL, headers={"X-User-Id": "1"})
+        assert r.status_code == 200
+        items = r.get_json()["items"]
+        assert len(items) == 1
+        item = items[0]
+        assert set(item) == {"id", "job_id", "strategy_name", "created_at",
+                             "expires_at", "revoked_at", "status"}, item
+        assert item["job_id"] == jid and item["status"] == "active"
+        assert "token_hash" not in item
+        other = client.get(SHARE_LIST_URL, headers={"X-User-Id": "2"})
+        assert other.get_json()["items"] == []
+        assert client.get(SHARE_LIST_URL).status_code == 401
+
+    def test_status_transitions(self, client, app):
+        jid = _completed_job(client)
+        created = _create_share(client, jid, uid=1).get_json()
+        _set_share_expires(app, created["id"], "interval '-1 day'")
+        items = client.get(SHARE_LIST_URL, headers={"X-User-Id": "1"}).get_json()["items"]
+        assert items[0]["status"] == "expired"
+        assert client.post(f"/api/saas/share-links/{created['id']}/revoke",
+                           headers={"X-User-Id": "1"}).status_code == 200
+        items = client.get(SHARE_LIST_URL, headers={"X-User-Id": "1"}).get_json()["items"]
+        assert items[0]["status"] == "revoked" and items[0]["revoked_at"]
+
+
+class TestShareLinkRevoke:
+    """撤销：仅创建者；重复/他人/不存在统一 404；立即失效。"""
+
+    def test_revoke_invalidates_immediately(self, client, app):
+        jid = _completed_job(client)
+        token = _share_token_of(_create_share(client, jid, uid=1))
+        link_id = _share_rows(app)[0]["id"]
+        anon = app.test_client()
+        assert anon.get(f"/api/results/{jid}/summary?share={token}").status_code == 200
+        assert client.post(f"/api/saas/share-links/{link_id}/revoke",
+                           headers={"X-User-Id": "1"}).status_code == 200
+        after = anon.get(f"/api/results/{jid}/summary?share={token}")
+        assert after.status_code == 401
+        # 与"错误 token"响应逐字节一致（不泄露链接状态）
+        wrong = anon.get(f"/api/results/{jid}/summary?share=nope")
+        assert after.get_json() == wrong.get_json()
+
+    def test_repeat_and_other_and_missing_404(self, client, app):
+        jid = _completed_job(client)
+        _create_share(client, jid, uid=1)
+        link_id = _share_rows(app)[0]["id"]
+        first = client.post(f"/api/saas/share-links/{link_id}/revoke",
+                            headers={"X-User-Id": "1"})
+        assert first.status_code == 200
+        assert client.post(f"/api/saas/share-links/{link_id}/revoke",
+                           headers={"X-User-Id": "1"}).status_code == 404
+        assert client.post(f"/api/saas/share-links/{link_id}/revoke",
+                           headers={"X-User-Id": "2"}).status_code == 404
+        assert client.post("/api/saas/share-links/999999/revoke",
+                           headers={"X-User-Id": "1"}).status_code == 404
+        assert client.post(f"/api/saas/share-links/{link_id}/revoke").status_code == 401
+
+
+class TestShareLinkReadChannel:
+    """公开只读通道：有效 token 匿名可读；异 job 不降级；列表/写表面不开放。"""
+
+    def test_valid_token_anonymous_reads(self, client, app):
+        jid = _completed_job(client)
+        token = _share_token_of(_create_share(client, jid, uid=1))
+        anon = app.test_client()
+        for path in RESULT_GET_ENDPOINTS:
+            url = path.format(jid=jid) + f"?share={token}"
+            resp = anon.get(url)
+            assert resp.status_code == OWNER_OK[path], url
+            if path.endswith("/summary"):
+                body = resp.get_json()
+                assert body["readonly"] is True
+                assert body["readonly_kind"] == "share"
+
+    def test_valid_token_other_logged_in_reads(self, client, app):
+        jid = _completed_job(client)
+        token = _share_token_of(_create_share(client, jid, uid=1))
+        resp = client.get(f"/api/results/{jid}/summary?share={token}",
+                          headers={"X-User-Id": "2"})
+        assert resp.status_code == 200
+        assert resp.get_json()["readonly_kind"] == "share"
+
+    def test_owner_normal_access_has_no_readonly_mark(self, client):
+        jid = _completed_job(client)
+        body = client.get(f"/api/results/{jid}/summary",
+                          headers={"X-User-Id": "1"}).get_json()
+        assert body["readonly"] is False
+        assert body.get("readonly_kind") is None
+
+    def test_job_a_token_on_job_b_denied(self, client, app):
+        jid_a = _completed_job(client, name="a")
+        jid_b = _completed_job(client, name="b")
+        token = _share_token_of(_create_share(client, jid_a, uid=1))
+        anon = app.test_client()
+        for path in RESULT_GET_ENDPOINTS:
+            url = path.format(jid=jid_b) + f"?share={token}"
+            assert anon.get(url).status_code == 401, url
+            other = client.get(url, headers={"X-User-Id": "2"})
+            assert other.status_code == 404, url
+
+    def test_invalid_token_does_not_degrade(self, client, app):
+        jid = _completed_job(client)
+        _create_share(client, jid, uid=1)
+        anon = app.test_client()
+        plain = anon.get(f"/api/results/{jid}/summary")
+        bad = anon.get(f"/api/results/{jid}/summary?share=bogus-token")
+        assert plain.status_code == 401 and bad.status_code == 401
+        assert bad.get_json() == plain.get_json()
+        other_plain = client.get(f"/api/results/{jid}/summary", headers={"X-User-Id": "2"})
+        other_bad = client.get(f"/api/results/{jid}/summary?share=bogus-token",
+                               headers={"X-User-Id": "2"})
+        assert other_plain.status_code == 404 and other_bad.status_code == 404
+        assert other_bad.get_json() == other_plain.get_json()
+
+    def test_expired_token_denied_like_missing(self, client, app):
+        jid = _completed_job(client)
+        created = _create_share(client, jid, uid=1).get_json()
+        token = _share_token_of(_create_share(client, jid, days=1, uid=1))
+        _set_share_expires(app, created["id"], "interval '-1 minute'")
+        # 注意：上面创建的第二个链接也置过去（同 job 两条，取最新一条过期）
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _get_engine
+
+        with _get_engine(app).begin() as conn:
+            conn.execute(text("UPDATE share_links SET expires_at = now() - interval '1 day'"))
+        anon = app.test_client()
+        resp = anon.get(f"/api/results/{jid}/summary?share={token}")
+        assert resp.status_code == 401
+        assert resp.get_json() == anon.get(f"/api/results/{jid}/summary").get_json()
+
+    def test_no_list_or_admin_surface_opened(self, client, app):
+        jid = _completed_job(client)
+        token = _share_token_of(_create_share(client, jid, uid=1))
+        anon = app.test_client()
+        for url in ("/api/results", "/api/jobs", "/api/saas/strategies",
+                    "/api/saas/share-links", "/api/saas/signals", "/api/saas/me",
+                    "/api/saas/console/overview", "/api/saas/console/users"):
+            assert anon.get(url + f"?share={token}").status_code == 401, url
+        assert anon.post("/api/worker/jobs/claim", json={"worker_id": "w"}).status_code == 401
+        assert anon.post("/api/worker/jobs/claim", json={"worker_id": "w"},
+                         headers={"X-Worker-Token": "wrong"}).status_code == 401
+
+    def test_write_surfaces_still_denied(self, client, app):
+        jid = _completed_job(client)
+        token = _share_token_of(_create_share(client, jid, uid=1))
+        anon = app.test_client()
+        qs = f"?share={token}"
+        gen = anon.post(f"/api/results/{jid}/symbols/000001/generate" + qs)
+        assert gen.status_code == 403
+        assert "只读" in gen.get_json()["error"]
+        assert anon.delete(f"/api/results/{jid}" + qs).status_code == 404
+        assert anon.post(f"/api/saas/jobs/{jid}/cancel" + qs).status_code == 401
+        assert anon.post(f"/api/saas/share-links/1/revoke" + qs).status_code == 401
+        # 他人登录态同样不能借分享链接写
+        assert client.post(f"/api/results/{jid}/symbols/000001/generate" + qs,
+                           headers={"X-User-Id": "2"}).status_code == 403
+        assert client.delete(f"/api/results/{jid}" + qs,
+                             headers={"X-User-Id": "2"}).status_code == 404
+        assert client.post(f"/api/saas/jobs/{jid}/cancel" + qs,
+                           headers={"X-User-Id": "2"}).status_code == 404
+
+    def test_share_and_showcase_kinds_distinct(self, client, app):
+        jid = _completed_job(client)
+        _pin_showcase(app, jid)
+        token = _share_token_of(_create_share(client, jid, uid=1))
+        anon = app.test_client()
+        showcase = anon.get(f"/api/results/{jid}/summary").get_json()
+        assert showcase["readonly_kind"] == "showcase"
+        share = anon.get(f"/api/results/{jid}/summary?share={token}").get_json()
+        assert share["readonly_kind"] == "share"
+        # 分享视图的 generate 同样 403（showcase 文案不变）
+        sc = anon.post(f"/api/results/{jid}/symbols/000001/generate")
+        assert sc.status_code == 403 and sc.get_json()["error"] == "经典策略为只读展示"
+
+
+class TestShareLinkCascade:
+    """级联与游客边界。"""
+
+    def test_delete_job_removes_share_links(self, client, app):
+        jid = _completed_job(client)
+        token = _share_token_of(_create_share(client, jid, uid=1))
+        assert len(_share_rows(app)) == 1
+        assert client.delete(f"/api/results/{jid}",
+                             headers={"X-User-Id": "1"}).status_code == 200
+        assert _share_rows(app) == []
+        anon = app.test_client()
+        assert anon.get(f"/api/results/{jid}/summary?share={token}").status_code == 401
+
+    def test_guest_session_cannot_create_share(self, client):
+        jid = _guest_submit(client).get_json()["job_id"]
+        resp = client.post(SHARE_CREATE_URL.format(jid=jid), json={"expires_days": 7})
+        assert resp.status_code == 401
+
+
+def _node() -> str:
+    import shutil
+    from pathlib import Path
+
+    node = shutil.which("node")
+    if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
+        node = "/home/van/codex-local/node-v22/bin/node"
+    if not node:
+        pytest.skip("node 不可用")
+    return node
+
+
+def _run_node(script: str) -> None:
+    import subprocess
+
+    result = subprocess.run([_node(), "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def _job_share_source(html: str) -> str:
+    match = re.search(r"(// --- P1 只读分享[\s\S]*?)\nif \(new URLSearchParams", html)
+    assert match, "未找到 job.html 分享脚本段"
+    return match.group(1)
+
+
+def _job_readonly_branch(html: str) -> str:
+    match = re.search(r"(    if \(data\.readonly\)\{[\s\S]*?\n    \})\n    initShareButton\(data\);", html)
+    assert match, "未找到 job.html 只读分支"
+    return match.group(1)
+
+
+def _profile_share_source(html: str) -> str:
+    match = re.search(r"(// --- P1 只读分享[\s\S]*?)\nbindShareRevoke\(\);", html)
+    assert match, "未找到 profile.html 分享脚本段"
+    return match.group(1)
+
+
+_EL_FACTORY = r"""
+function makeEl(){
+  const e = {
+    children: [], childNodes: [], style: {}, className: '', _text: '', innerHTML: '',
+    disabled: false, dataset: {}, listeners: {}, classes: new Set(), value: '', checked: false,
+    attributes: {},
+    setAttribute(n, v){ this.attributes[n] = String(v); },
+    getAttribute(n){ return this.attributes[n]; },
+    appendChild(...n){ this.children.push(...n); this.childNodes.push(...n); return n[n.length - 1]; },
+    replaceChildren(...n){ this.children = [...n]; this.childNodes = [...n]; },
+    addEventListener(t, fn){ (this.listeners[t] ||= []).push(fn); },
+    querySelectorAll(){ return []; },
+    focus(){}, select(){},
+  };
+  Object.defineProperty(e, 'textContent', {get(){ return e._text; }, set(v){ e._text = v; }});
+  e.classList = {
+    add(c){ e.classes.add(c); },
+    remove(c){ e.classes.delete(c); },
+    toggle(c, on){ if (on === undefined) on = !e.classes.has(c); if (on) e.classes.add(c); else e.classes.delete(c); },
+    contains(c){ return e.classes.has(c); },
+  };
+  return e;
+}
+"""
+
+
+class TestShareUiMarkers:
+    """job/profile 分享 UI 结构标记（不依赖 Node）。"""
+
+    def test_job_share_markup(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        for marker in (
+            'id="box-share"', 'id="btn-share"', 'id="share-modal"', 'id="share-modal-no"',
+            'id="share-modal-yes"', 'id="share-exp-1"', 'id="share-exp-7"', 'id="share-exp-30"',
+            'id="share-exp-0"', 'id="share-link-modal"', 'id="share-link-input"',
+            'id="btn-copy-share"', 'id="share-link-done"', 'id="share-status"',
+            "data.readonly_kind === 'share' ? '只读分享'",
+            "back.textContent = '← 返回首页'",
+            "shareUrl('/api/saas/jobs/' + JOB_ID + '/share-links')",
+            "function initShareButton(data)",
+            "'box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip'",
+            "fmtShareTime(d.expires_at)",
+            "LabUI.fmtLocalTime",
+            "gs.classList.add('hidden'); gs.style.display = 'none';",
+        ):
+            assert marker in html, marker
+        # 明文链接绝不写 localStorage
+        assert "localStorage.setItem" not in _job_share_source(html)
+
+    def test_profile_share_markup(self, client):
+        html = client.get("/saas/profile").get_data(as_text=True)
+        for marker in (
+            'id="share-card"', 'id="share-list"', 'id="share-revoke-modal"',
+            'id="share-revoke-no"', 'id="share-revoke-yes"',
+            "'/api/saas/share-links'", "'/api/saas/share-links/' + shareRevokeTarget + '/revoke'",
+            "const SHARE_STATUS_LABEL = {active: '有效', expired: '已过期', revoked: '已撤销'}",
+            "it.status === 'active'",
+        ):
+            assert marker in html, marker
+        assert "localStorage" not in _profile_share_source(html)
+
+    def test_share_token_propagates_to_result_calls(self, client):
+        """分享视图下 job/symbols/symbol 三页的结果 API 与导航都带 token。"""
+        for path in ("/saas/jobs/1", "/saas/jobs/1/symbols", "/saas/jobs/1/symbols/000001"):
+            html = client.get(path).get_data(as_text=True)
+            assert "shareUrl(" in html or "shareSuffix()" in html, path
+            assert "new URLSearchParams(location.search).get('share')" in html, path
+
+
+_JOB_SHARE_HARNESS = (
+    _EL_FACTORY
+    + r"""
+function realFmtLocalTime(iso){  // 与 static/lab-ui.js LabUI.fmtLocalTime 同实现
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const p = n => ('0' + n).slice(-2);
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+    + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function createJobShareHarness(options){
+  const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = makeEl()); }});
+  const calls = {requests: [], clipboard: [], localStorageWrites: []};
+  const document = {
+    getElementById(id){ return elements[id]; },
+    querySelector(){ return null; },
+    querySelectorAll(){ return []; },
+    createElement(){ return makeEl(); },
+  };
+  const labui = options.labui === null ? {} : {LabUI: options.labui || {fmtLocalTime: realFmtLocalTime}};
+  const context = vm.createContext(Object.assign({
+    console, document, JOB_ID: 7,
+    SAAS_BYPASS: !!options.bypass,
+    location: {search: options.search || ''},
+    URLSearchParams, encodeURIComponent,
+    navigator: options.navigator || {clipboard: null},
+    saasToken(){ return options.token || ''; },
+    apiFetch(url, opts){ calls.requests.push({url, options: opts}); return options.fetchImpl(url, opts); },
+    localStorage: {setItem(k, v){ calls.localStorageWrites.push([k, v]); }, getItem(){ return null; }},
+    setTimeout(fn){ Promise.resolve().then(fn); return 1; }, clearTimeout(){},
+  }, labui));
+  return {context, calls, elements};
+}
+"""
+)
+
+_JOB_READONLY_HARNESS = (
+    _EL_FACTORY
+    + r"""
+function createReadonlyHarness(){
+  const elements = {};
+  const h1 = makeEl(), back = makeEl();
+  back.attributes.href = '/saas/';
+  const known = ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip'];
+  const document = {
+    getElementById(id){
+      if (known.indexOf(id) < 0) return null;
+      return elements[id] || (elements[id] = makeEl());
+    },
+    querySelector(sel){ return sel === 'h1' ? h1 : (sel === 'a[href="/saas/"]' ? back : null); },
+    createElement(){ return makeEl(); },
+  };
+  const context = vm.createContext({console, document});
+  return {context, h1, back};
+}
+"""
+)
+
+_PROFILE_SHARE_HARNESS = (
+    _EL_FACTORY
+    + r"""
+function realFmtLocalTime(iso){  // 与 static/lab-ui.js LabUI.fmtLocalTime 同实现
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const p = n => ('0' + n).slice(-2);
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+    + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function createProfileShareHarness(options){
+  const elements = new Proxy({}, {get(obj, key){ return obj[key] || (obj[key] = makeEl()); }});
+  const listBox = elements['share-list'];
+  // 与真实 DOM 一致：innerHTML 不变则 querySelectorAll 返回同一批按钮
+  // （重渲染后才换新元素），否则监听会丢
+  let qsaCache = {html: null, buttons: []};
+  listBox.querySelectorAll = function(sel){
+    if (sel !== '[data-share-revoke]') return [];
+    const html = String(this.innerHTML);
+    if (qsaCache.html !== html){
+      const ids = [...html.matchAll(/data-share-revoke="(\d+)"/g)].map(m => Number(m[1]));
+      qsaCache = {html, buttons: ids.map(id => {
+        const b = makeEl();
+        b.setAttribute('data-share-revoke', id);
+        return b;
+      })};
+    }
+    return qsaCache.buttons;
+  };
+  const calls = {requests: []};
+  const document = {getElementById(id){ return elements[id]; }};
+  const labui = options.labui === null ? {} : {LabUI: options.labui || {fmtLocalTime: realFmtLocalTime}};
+  const context = vm.createContext(Object.assign({
+    console, document,
+    escH(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); },
+    apiFetch(url, opts){ calls.requests.push({url, options: opts}); return options.fetchImpl(url, opts); },
+  }, labui));
+  return {context, calls, elements, listBox};
+}
+"""
+)
+
+
+class TestJobShareJs:
+    """Node harness：job.html 分享按钮/模态/一次性链接/只读分享文案分流。"""
+
+    def _run(self, html, scenario):
+        import json as _json
+
+        source = _job_share_source(html)
+        _run_node(_JOB_SHARE_HARNESS + "\nconst source = " + _json.dumps(source)
+                  + ";\n" + scenario)
+
+    def test_guest_and_readonly_hide_share_button(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(function(){
+  const fetchImpl = async () => { throw new Error('不应发请求'); };
+  for (const options of [
+    {token: '', bypass: false, fetchImpl},          // 游客
+    {token: 'tok', bypass: false, fetchImpl, readonly: true},  // 公开只读
+  ]){
+    const h = createJobShareHarness(options);
+    vm.runInContext(source, h.context);
+    vm.runInContext('initShareButton(' + JSON.stringify({readonly: !!options.readonly}) + ')', h.context);
+    assert.ok(h.elements['box-share'].classList.contains('hidden'), '游客/只读不得显示分享入口');
+    assert.equal(h.calls.requests.length, 0);
+  }
+})();
+""")
+
+    def test_logged_in_owner_sees_button_and_creates_once(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const created = [];
+  const h = createJobShareHarness({
+    bypass: true, fetchImpl: async (url, opts) => {
+      created.push({url, options: opts});
+      return {status: 200, ok: true, json: async () => ({ok: true, id: 9,
+        url: '/saas/jobs/7?share=plain-token-xyz', expires_at: '2026-11-02T00:00:00+00:00'})};
+    },
+  });
+  vm.runInContext(source, h.context);
+  vm.runInContext('initShareButton({readonly: false})', h.context);
+  assert.ok(!h.elements['box-share'].classList.contains('hidden'), '登录已完成必须显示分享入口');
+  // 打开模态 → 默认 7 天 → 创建
+  h.elements['share-exp-7'].checked = true; h.elements['share-exp-7'].value = '7';
+  await h.elements['btn-share'].listeners.click[0]();
+  assert.ok(h.elements['share-modal'].classList.contains('show'));
+  await h.elements['share-modal-yes'].listeners.click[0]();
+  assert.equal(created.length, 1);
+  assert.equal(created[0].url, '/api/saas/jobs/7/share-links');
+  assert.deepEqual(created[0].options.json, {expires_days: 7});
+  // 链接只读 input 一次性展示；不写 localStorage
+  assert.equal(h.elements['share-link-input'].value, '/saas/jobs/7?share=plain-token-xyz');
+  assert.ok(h.elements['share-link-modal'].classList.contains('show'));
+  assert.match(h.elements['share-link-note'].textContent, /只显示一次/);
+  // 有效期走 LabUI.fmtLocalTime：本地 YYYY-MM-DD HH:mm，无 ISO 微秒
+  assert.match(h.elements['share-link-note'].textContent,
+    /有效期至 \d{4}-\d{2}-\d{2} \d{2}:\d{2}。/);
+  assert.ok(!/T\d{2}:\d{2}:\d{2}/.test(h.elements['share-link-note'].textContent),
+    '不得直接展示 ISO 时间: ' + h.elements['share-link-note'].textContent);
+  assert.ok(!/\.\d{6}/.test(h.elements['share-link-note'].textContent),
+    '不得展示微秒: ' + h.elements['share-link-note'].textContent);
+  assert.equal(h.calls.localStorageWrites.length, 0, '分享链接不得写 localStorage');
+  // 有效期选择被服务端 allowlist 校验（1/7/30/0）
+  h.elements['share-exp-7'].checked = false;  // 真实浏览器同组单选互斥
+  h.elements['share-exp-30'].checked = true; h.elements['share-exp-30'].value = '30';
+  await h.elements['share-modal-yes'].listeners.click[0]();
+  assert.deepEqual(created[1].options.json, {expires_days: 30});
+  // 复制：Clipboard API 成功路径
+  const clip = [];
+  const h2 = createJobShareHarness({
+    bypass: true, navigator: {clipboard: {writeText: async t => clip.push(t)}},
+    fetchImpl: async () => ({status: 200, ok: true, json: async () => ({ok: true, id: 1, url: '/saas/jobs/7?share=t'})}),
+  });
+  vm.runInContext(source, h2.context);
+  vm.runInContext('initShareButton({readonly: false})', h2.context);
+  h2.elements['share-exp-7'].checked = true; h2.elements['share-exp-7'].value = '7';
+  await h2.elements['btn-share'].listeners.click[0]();
+  await h2.elements['share-modal-yes'].listeners.click[0]();
+  await h2.elements['btn-copy-share'].listeners.click[0]();
+  await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(clip, ['/saas/jobs/7?share=t']);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_share_view_url_carries_token(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(function(){
+  const h = createJobShareHarness({bypass: true, search: '?share=tok-123', fetchImpl: async () => ({})});
+  vm.runInContext(source, h.context);
+  assert.equal(vm.runInContext("shareUrl('/api/results/7/summary')", h.context), '/api/results/7/summary?share=tok-123');
+  assert.equal(vm.runInContext("shareUrl('/api/results/7/summary?x=1')", h.context), '/api/results/7/summary?x=1&share=tok-123');
+  assert.equal(vm.runInContext("shareSuffix()", h.context), '?share=tok-123');
+  const plain = createJobShareHarness({bypass: true, search: '', fetchImpl: async () => ({})});
+  vm.runInContext(source, plain.context);
+  assert.equal(vm.runInContext("shareUrl('/api/results/7/summary')", plain.context), '/api/results/7/summary');
+})();
+""")
+
+    def test_readonly_chip_and_back_copy_split(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        branch = _job_readonly_branch(html)
+        import json as _json
+
+        _run_node(_JOB_READONLY_HARNESS + "\nconst source = " + _json.dumps(branch) + ";\n" + r"""
+(function(){
+  for (const kind of ['share', 'showcase']){
+    const h = createReadonlyHarness();
+    vm.runInContext('const data = {readonly: true, readonly_kind: ' + JSON.stringify(kind) + '};', h.context);
+    vm.runInContext(source, h.context);
+    const chip = h.h1.children[0];
+    assert.ok(chip, kind + ' 必须插入只读 chip');
+    assert.equal(chip.textContent, kind === 'share' ? '只读分享' : '经典策略展示 · 只读');
+    if (kind === 'share'){
+      assert.equal(h.back.href, '/saas/');
+      assert.equal(h.back.textContent, '← 返回首页');
+    } else {
+      assert.equal(h.back.href, '/saas/showcase');
+      assert.equal(h.back.textContent, '← 返回经典策略');
+    }
+    // 操作入口与分享入口一并隐藏
+    for (const id of ['box-actions', 'download-card', 'guest-result-note', 'guest-note', 'box-share', 'guest-strip']){
+      assert.ok(h.context.document.getElementById(id).classList.contains('hidden'), id);
+    }
+  }
+})();
+""")
+
+    def test_expiry_note_fallback_and_permanent(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  // LabUI 缺失：回退原值（不编日期），仍带「只显示一次」
+  const noLab = createJobShareHarness({
+    bypass: true, labui: null,
+    fetchImpl: async () => ({status: 200, ok: true, json: async () => ({ok: true, id: 1,
+      url: '/saas/jobs/7?share=t', expires_at: '2026-11-02T00:00:00+00:00'})}),
+  });
+  vm.runInContext(source, noLab.context);
+  vm.runInContext('initShareButton({readonly: false})', noLab.context);
+  await noLab.elements['btn-share'].listeners.click[0]();
+  await noLab.elements['share-modal-yes'].listeners.click[0]();
+  assert.match(noLab.elements['share-link-note'].textContent,
+    /有效期至 2026-11-02T00:00:00\+00:00/);
+  // 永久（expires_at=null）：明确「永久有效」
+  const perm = createJobShareHarness({
+    bypass: true,
+    fetchImpl: async () => ({status: 200, ok: true, json: async () => ({ok: true, id: 2,
+      url: '/saas/jobs/7?share=t', expires_at: null})}),
+  });
+  vm.runInContext(source, perm.context);
+  vm.runInContext('initShareButton({readonly: false})', perm.context);
+  await perm.elements['btn-share'].listeners.click[0]();
+  await perm.elements['share-modal-yes'].listeners.click[0]();
+  assert.match(perm.elements['share-link-note'].textContent, /^永久有效。/);
+  assert.match(perm.elements['share-link-note'].textContent, /只显示一次/);
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_create_failure_surfaces_error(self, client):
+        html = client.get("/saas/jobs/1").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const h = createJobShareHarness({
+    bypass: true,
+    fetchImpl: async () => ({status: 409, ok: false, json: async () => ({ok: false, error: '任务未完成（queued）'})}),
+  });
+  vm.runInContext(source, h.context);
+  vm.runInContext('initShareButton({readonly: false})', h.context);
+  await h.elements['btn-share'].listeners.click[0]();
+  await h.elements['share-modal-yes'].listeners.click[0]();
+  assert.equal(h.elements['share-status'].textContent, '任务未完成（queued）');
+  assert.ok(!h.elements['share-link-modal'].classList.contains('show'), '失败不得展示链接');
+  assert.equal(h.elements['btn-share'].disabled, false, '失败后必须允许重试');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+
+class TestProfileShareJs:
+    """Node harness：profile 我的分享列表/状态/撤销二次确认。"""
+
+    def _run(self, html, scenario):
+        import json as _json
+
+        source = _profile_share_source(html)
+        _run_node(_PROFILE_SHARE_HARNESS + "\nconst source = " + _json.dumps(source)
+                  + ";\n" + scenario)
+
+    def test_list_renders_status_and_hides_token(self, client):
+        html = client.get("/saas/profile").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const items = [
+    {id: 1, job_id: 11, strategy_name: 'alpha', created_at: '2026-10-26T01:00:00+00:00',
+     expires_at: '2026-11-02T01:00:00+00:00', revoked_at: null, status: 'active'},
+    {id: 2, job_id: 12, strategy_name: 'beta', created_at: '2026-10-20T01:00:00+00:00',
+     expires_at: '2026-10-21T01:00:00+00:00', revoked_at: null, status: 'expired'},
+    {id: 3, job_id: 13, strategy_name: 'gamma', created_at: '2026-10-19T01:00:00+00:00',
+     expires_at: null, revoked_at: '2026-10-25T01:00:00+00:00', status: 'revoked'},
+    {id: 4, job_id: 14, strategy_name: 'delta', created_at: '2026-10-18T01:00:00+00:00',
+     expires_at: null, revoked_at: null, status: 'active'},
+  ];
+  const h = createProfileShareHarness({
+    fetchImpl: async url => {
+      assert.equal(url, '/api/saas/share-links');
+      return {status: 200, ok: true, json: async () => ({ok: true, items})};
+    },
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('loadShares()', h.context);
+  assert.ok(!h.elements['share-card'].classList.contains('hidden'));
+  const body = h.listBox.innerHTML;
+  assert.ok(body.includes('#11') && body.includes('alpha'), body);
+  // 创建时间与有效期走 LabUI.fmtLocalTime：本地 YYYY-MM-DD HH:mm，无 ISO 微秒
+  assert.match(body, /\d{4}-\d{2}-\d{2} \d{2}:\d{2}/, body);
+  assert.ok(!/T\d{2}:\d{2}:\d{2}/.test(body), '列表不得直接展示 ISO 时间: ' + body);
+  assert.ok(!/\.\d{6}/.test(body), '列表不得展示微秒: ' + body);
+  assert.ok(body.includes('已撤销'), body);
+  assert.ok(body.includes('永久有效'), body);
+  assert.ok(!body.includes('token_hash') && !body.includes('share='), '列表不得出现令牌痕迹');
+  // 仅 active 行有撤销按钮；revoked/expired 不提供撤销
+  const buttons = [...body.matchAll(/data-share-revoke="(\d+)"/g)].map(m => Number(m[1]));
+  assert.deepEqual(buttons, [1, 4], '仅 active 行有撤销按钮');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_revoke_flow_with_confirm(self, client):
+        html = client.get("/saas/profile").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  let revoked = null, lists = 0;
+  const h = createProfileShareHarness({
+    fetchImpl: async (url, opts) => {
+      if (url === '/api/saas/share-links'){ lists += 1; return {status: 200, ok: true, json: async () => ({ok: true, items: [
+        {id: 5, job_id: 21, strategy_name: 'alpha', created_at: '2026-10-26T01:00:00+00:00',
+         expires_at: null, revoked_at: null, status: 'active'}]})}; }
+      if (url.endsWith('/revoke')){ revoked = url; return {status: 200, ok: true, json: async () => ({ok: true})}; }
+      throw new Error('unexpected ' + url);
+    },
+  });
+  vm.runInContext(source, h.context);
+  vm.runInContext('bindShareRevoke()', h.context);
+  await vm.runInContext('loadShares()', h.context);
+  const btn = h.listBox.querySelectorAll('[data-share-revoke]')[0];
+  await btn.listeners.click[0]();
+  assert.ok(h.elements['share-revoke-modal'].classList.contains('show'), '撤销必须二次确认');
+  assert.equal(revoked, null, '确认前不得撤销');
+  await h.elements['share-revoke-no'].listeners.click[0]();
+  assert.ok(!h.elements['share-revoke-modal'].classList.contains('show'));
+  assert.equal(revoked, null, '取消后不得撤销');
+  await btn.listeners.click[0]();
+  await h.elements['share-revoke-yes'].listeners.click[0]();
+  assert.equal(revoked, '/api/saas/share-links/5/revoke');
+  assert.ok(!h.elements['share-revoke-modal'].classList.contains('show'));
+  assert.ok(lists >= 2, '撤销后必须刷新列表');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_guest_hides_card(self, client):
+        html = client.get("/saas/profile").get_data(as_text=True)
+        self._run(html, r"""
+(async () => {
+  const h = createProfileShareHarness({
+    fetchImpl: async () => { const e = new Error('unauthorized'); e.status = 401; throw e; },
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('loadShares()', h.context);
+  assert.ok(h.elements['share-card'].classList.contains('hidden'), '未登录不展示我的分享');
+})().catch(error => { console.error(error); process.exit(1); });
+""")

@@ -2,6 +2,10 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
+### 2026-10-26 QRE-SAAS-READONLY-SHARE IMPLEMENTED（P1 第三切片：默认私有的可撤销只读分享，待用户验收）
+
+只读分享已落地。**范围铁律**：不改回测引擎、worker 执行逻辑、结果数值、配额、NL A2/A3、策略库与默认私有语义；不跑真实回测；不做压测/性能/硬件；不做移动/App 专项（仅 375 验证不破版）；未 commit/push、未部署 ECS。**Schema**：`cloud_schema.sql` 新增 `share_links`（id/token_hash UNIQUE/job_id ON DELETE CASCADE/owner_id/expires_at/revoked_at/created_at + 两索引；无明文/前缀/guest_key/last_used）；应用层 `_ensure_share_links` information_schema + 进程 guard 懒自愈，CREATE 失败按「分享不可用」降级（不报错、不放权）；**生产须先由 postgres 幂等 apply `cloud_schema.sql` 再发代码**（owner 踩坑同 results.result_contract）。**令牌**：`secrets.token_urlsafe(32)`；库中只存完整 `sha256("share:"+token+SAAS_AUTH_SALT)`；明文仅创建响应一次；URL `/saas/jobs/<id>?share=<token>`；校验=未撤销+未过期+job 一致。**API**：`POST /api/saas/jobs/<id>/share-links`（登录+本人+completed；游客 401、他人/不存在 404、未完成 409；有效期整数 1/7/30/0 默认 7）；`GET /api/saas/share-links`（仅本人 50 条，状态 active/expired/revoked，不回 hash/token）；`POST /api/saas/share-links/<id>/revoke`（仅创建者，重复/他人/不存在 404，立即失效）。**公开只读通道**：`_require_completed_result` 有效 `?share=` 绑定单 job 放行（`readonly_kind="share"`，不看登录/游客会话；未验证结果同样放行、徽标保留）；无效/过期/撤销/错 job 不降级（匿名 401、登录他人 404，错误体与不存在逐字节一致）；范围仅 7 个结果 GET，不开放 jobs/results 列表、策略/信号/me/console/worker；generate 对 share/showcase 都 403；写端点原权限。**前端**：job.html 分享卡+自定义模态+只读 input+复制（Clipboard API 回退手动选择）+「只显示一次」+不写 localStorage；分享视图 chip「只读分享」+「← 返回首页」，showcase 仍「经典策略展示 · 只读」+「← 返回经典策略」；取消/保存/信号/下载/游客引导全隐藏；profile「我的分享」+撤销二次确认；symbols/symbol token 随行。**测试**（TDD 先 RED 后 GREEN，证据 `.tmp/readonly-share/`）：RED=65 errors；GREEN=`test_saas_access_hardening.py` 65 passed（P0-2 31 例零回归 + 新增 34 后端 + 10 前端 Node）；`test_gui_saas_pages.py` 三 harness 加透传桩；相关 22 文件 655 passed；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2688 passed + 5 skipped**（基线 2651+5，零回归）。**真实 Chromium**（`.tmp/browser-venv`+chromium，临时库 `qre_readonly_share_browser`+8099 临时 staging，seed/worker 协议模拟，未启动真实 worker/回测）：12/12 通过、零 JS error、零横溢——创建+复制+localStorage 零痕迹；游客无入口；匿名只读全渲染（chip/返回/徽标/无操作入口）与个股两页；异 job/过期/撤销统一无权；撤销二次确认；未验证徽标保留；375 零横溢。**踩坑与修复**：①`_ensure_share_links` 失败后不能永久报可用——拆「已尝试/可用」两状态；②`int(1.5)` 静默取整——allowlist 改严格 isinstance；③审计脚本三处（相对 URL 补 BASE、异 job 断言须匿名上下文、撤销行按 job_id 定位）。**主 Agent 截图复核 2 项 Required Fixes 已聚焦修正**：①公开只读页（share 与 showcase）隐藏 base 全局游客条 `#guest-strip`（分享视图解析时即隐藏，symbols/symbol 同步；base 逻辑与无权页零改动）；②创建 modal 与 profile 我的分享的时间统一走 `LabUI.fmtLocalTime`（本地 YYYY-MM-DD HH:mm，无微秒；缺失回退原值；NULL=永久）。复跑 access_hardening 66 passed、相关 23 文件 656 passed、真实 Chromium 12/12（新增 showcase 游客条用例，share-job-1280.png 顶部已无游客条）。**未解决/遗留**：链接为持有即读（bearer 语义，只能整体撤销）、无访问审计、单 job 可多条链接、salt 轮换使历史链接失效（预期）。建议提交 `feat(saas): 增加可撤销的只读结果分享`，commit/push/ECS 待用户批准。详细报告 `.tmp/readonly-share/report.md`（04/08/09/10 同节）。
+
 ### 2026-10-25 QRE-SAAS-RESULT-UNDERSTANDING IMPLEMENTED（P1 第二切片，待用户验收）
 
 结果理解与集中帮助已落地。**范围铁律**：不改 schema、收益/风险/费用数值、回测引擎、worker 执行逻辑、配额、NL A2/A3；不跑真实回测；不做压测/性能/硬件；未 commit/push、未部署 ECS。**新增公开帮助页** `GET /saas/help` + `gui/saas/templates/help.html`（游客与登录用户均可访问，无新增 API/表）：七锚点小节 contract/metrics/benchmark/fees/risk/attribution/replay，表格化极简可扫描；两种收益口径由 `result_contract` 常量同源注入；主导航「使用说明」入口沿用 active 与移动样式；`lab-theme.css` 仅加 `.help-sec`/`.help-jump`。**结果页深链 + 合同同源**：job/symbol 模块标题「说明 →」跳对应锚点，个股数据截止链 `#contract`；`renderContract` 用合同口径更新 `#curve-tip`，无合同保留静态回退；**主指标卡保持 6 张**（`renderMetrics` 6 个 card 被测试锁定），盈亏比只在帮助页与重播解释。**口径提示**（全部复用 `LabUI.helpTips` 事件委托）：job/symbol 五类磨损卡卡级 tip + 毛/净标签 tip、job 费率 chip 默认/自定义 tip、`bench-bar` 基准含义 tip、`replay.js` 盈亏比/暴露度/当前持仓 tip；费率与风险数值零改动。**symbol 数据截止与符号统一**：`api_result_symbol_detail` 两路径注入 `data_until`（不改 gzip 产物、不回填）；`#sym-note` 显示数据截止 + 口径链接（缺字段「未声明」）；VaR/ES 改损失正数展示（仅显示符号，风险原值与计算不动）。**测试**（TDD 先 RED 后 GREEN，证据 `.tmp/result-understanding/`）：RED=19 失败；GREEN=新 `tests/test_saas_result_help.py` 17 例 + help_copy +2 + symbol_ux +2 + pages +1；相关 502 passed；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2651 passed + 5 skipped**（基线 2629+5，零回归）；P0-2 权限与 P0-1B 结果合同语义回归全保留。**真实 Chromium**（`.tmp/browser-venv`+chromium-1248，临时库 `qre_result_help_browser`+8099 临时 staging，seed/worker 协议模拟，未启动真实 worker/回测）：10/10 通过、零 JS error、零横向溢出——帮助页七锚点+跳转+导航 active；模块深链全部到达正确小节；磨损五卡+费率 chip+毛净标签连续 hover/focus 完整说明；重播三卡 tip；symbol 真实 data_until 且 VaR/ES 与 job 同号（2.13%/3.05% 正数）；移动 375 登录态三页零横溢、导航单行（末项 368≤375）、tap 出完整说明。**踩坑与修复**：①移动模拟下内容过宽会撑大 innerWidth（布局视口扩展），溢出断言必须对比固定视口宽——据此发现并修掉真实缺陷：第 5 个导航项使 375px 登录态顶栏溢出 14px（lab-theme `.mainnav{gap:4px}` 后加载压制 base 内联规则），≤400px 断点补 `header.topbar .mainnav{gap:0}`+logo 24px+11.5px；②worker 认领正确路径是 `/api/worker/jobs/claim`（`/api/worker/jobs/lease` 不存在）；③页面 raw fetch 不带 Bearer，登录态提交须显式加 Authorization 头。**未解决/遗留**：帮助页为文字口径页，不含图表（符合极简定位）；例外表演进、console 展示列仍未做（既有范围外）。建议提交信息 `feat(saas): 增加结果指标帮助与费用口径说明`，commit/push/ECS 待用户批准。详细报告 `.tmp/result-understanding/`（09 号文档同节）。
@@ -78,16 +82,16 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 ## Current Phase
 
-P1 第二切片 DONE；下一阶段为移动端与可访问性（仅公网用户体验，不做压测或硬件工作）
+P1 第三切片（默认私有的可撤销只读分享）IMPLEMENTED，待用户验收；验收通过并批准后再 commit/push 与 ECS 发布（发布前须 postgres apply `cloud_schema.sql` 新表 share_links）。移动端与 App 端按用户要求暂时跳过（挂起）。
 
 ## Current Task
 
-见 `14_LAUNCH_ROADMAP.md` §11。**2026-10-25 用户最新范围约束：不做任何压力测试、深度性能测试、硬件扩容或硬件相关推进，只做公网用户直观可见、可感知的产品体验。** 当前顺序：
+见 `14_LAUNCH_ROADMAP.md` §11。**2026-10-25 用户最新范围约束：不做任何压力测试、深度性能测试、硬件扩容或硬件相关推进，只做公网用户直观可见、可感知的产品体验。移动端、App 端与可访问性深化暂时挂起，不主动启动。** 当前顺序：
 1. ~~P0-2 权限加固~~ 已发布 `0799890`。
 2. ~~P1 首次成功路径首切片~~ 已发布 `a84a9a3`；NL A2/A3 仍仅作减少等待和重复编译的体验支撑，另行立项。
 3. ~~结果理解、集中帮助中心、数据截止与费用口径说明~~ 已发布 `9fd3b3d`。
-4. 移动端与可访问性：375px 核心流程、键盘焦点、加载/空态/错误态、图表与弹窗。
-5. 默认私有的可撤销只读分享，再做经典策略及结果操作 UI 精修。
+4. [挂起] 移动端、App 端与可访问性深化（用户 2026-10-25 明确暂时跳过）。
+5. 默认私有的可撤销只读分享：**已实现待验收**（2026-10-26，未 commit/push/ECS；发布前 DBA apply share_links）。之后做经典策略及结果操作 UI 精修。
 6. 公测运营反馈与关键浏览器自动化，依据真实用户反馈继续修正公网体验。
 7. 容量实测、磁盘/备份演练、深度性能、硬件扩容和整体上云全部暂停，仅保留在长期 backlog；第四入口外部 AI Agent API 仍排最后。
 

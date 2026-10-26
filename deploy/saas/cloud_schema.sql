@@ -261,6 +261,25 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at DESC);
 
+-- QRE-SAAS-READONLY-SHARE（P1，2026-10-26）：登录用户把本人已完成结果分享为
+-- 可撤销的只读链接。token 用 secrets.token_urlsafe(32)，库中只存完整
+-- SHA-256(token + salt) 哈希（token_hash 64 位十六进制）；无明文/前缀/guest_key/
+-- last_used 字段，明文只在创建响应出现一次。job 删除由 CASCADE 清理孤儿分享
+-- （游客每日清理 jobs 时自动生效，无需改清理逻辑）。
+-- 应用层按 information_schema + 进程 guard 懒自愈建表；生产发布前必须由
+-- postgres 幂等 apply 本文件，避免表 owner/权限问题（同 results.result_contract）。
+CREATE TABLE IF NOT EXISTS share_links (
+    id         BIGSERIAL PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,                -- 完整 sha256(token+salt)，不明文
+    job_id     BIGINT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    owner_id   BIGINT NOT NULL REFERENCES users(id),
+    expires_at TIMESTAMPTZ,                         -- NULL=永久；仅接受 1/7/30 天或 NULL
+    revoked_at TIMESTAMPTZ,                         -- 撤销后立即失效
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_share_links_job ON share_links (job_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_share_links_owner ON share_links (owner_id, created_at DESC);
+
 -- QRE-AUTH-MEMBERSHIP（A2，2026-09-27，18 号设计文档 §3）：
 -- Authing 身份层接入。authing_id = OIDC sub（唯一，首登自动建档）；
 -- avatar_url 同步 Authing 资料；member_since/member_expire_at 为会员制预留字段

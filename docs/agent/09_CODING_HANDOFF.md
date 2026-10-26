@@ -2,7 +2,63 @@
 
 ## Task ID
 
-QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与数据/费用口径）
+QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
+
+## Release Status
+
+IMPLEMENTED（2026-10-26，待用户验收；未 commit/push、未部署 ECS、未跑真实回测）。全量 2687 passed + 5 skipped；真实 Chromium 11/11。**生产发布前必须由 postgres 幂等 apply `cloud_schema.sql`（share_links 归 postgres）再同步代码重启 qre-saas**；证据 `.tmp/readonly-share/`。
+
+## Implementation Summary
+
+### Schema 与自愈（deploy/saas/cloud_schema.sql、src/quant_research_engine/gui/saas/app.py）
+
+| 符号 | 行为 |
+|---|---|
+| `share_links`（新表） | `id BIGSERIAL PK` / `token_hash TEXT NOT NULL UNIQUE`（64 位十六进制完整哈希）/ `job_id BIGINT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE` / `owner_id BIGINT NOT NULL REFERENCES users(id)` / `expires_at TIMESTAMPTZ`（NULL=永久）/ `revoked_at TIMESTAMPTZ` / `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`；索引 `(job_id, created_at DESC)`、`(owner_id, created_at DESC)`；无明文/前缀/guest_key/last_used |
+| `_share_token_hash(app, token)` | `sha256("share:"+token+_auth_salt(app))` 完整十六进制；域分离前缀，复用现有 salt |
+| `_ensure_share_links(engine)` | information_schema 先查再 CREATE + 进程 guard（`_SHARE_LINKS_ENSURED`/`_SHARE_LINKS_OK`）；CREATE 失败（ECS owner 踩坑）返回 False，调用方按「分享不可用」降级，不报错、不降级授权 |
+| import | `datetime` 增加 `timedelta`/`timezone` |
+
+### API（app.py，位于结果系统之后、后台管理之前）
+
+| 端点 | 行为 |
+|---|---|
+| `POST /api/saas/jobs/<id>/share-links`（新） | 登录 + `_load_job_for_user` 本人 + status=completed；游客 401、他人/不存在 404、未完成 409；`expires_days` 只接受整数 1/7/30/0（默认 7，拒绝字符串/浮点/布尔无静默取整）；`secrets.token_urlsafe(32)`；返回 `{ok,id,url,expires_at}`——唯一明文 token 响应；表不可用 503 |
+| `GET /api/saas/share-links`（新） | 仅当前用户最近 50 条（created_at DESC）；返回 id/job_id/strategy_name/created_at/expires_at/revoked_at/status（revoked＞expired＞active 判定）；不回 token_hash/明文；未登录 401 |
+| `POST /api/saas/share-links/<id>/revoke`（新） | `UPDATE ... WHERE id AND owner_id AND revoked_at IS NULL RETURNING id`；仅创建者；重复/他人/不存在统一 404；未登录 401 |
+| `_load_job_for_share(job_id, token)`（新） | token_hash 命中且未撤销、未过期且 job_id 一致才返回 job+strategy+result 行；其余一切返回 None（不降级、不泄露）；表不可用返回 None |
+| `_public_readonly_kind()` / `_is_public_readonly()`（新） | share＞showcase＞None；替代原先散落的 `getattr(g, "showcase_readonly", ...)` |
+| `_require_completed_result` | 开头解析 `?share=`：有效则置 `g.share_readonly` 直接放行（不看登录/游客会话）；无效则走原有匿名 401 / 登录他人 404 分支，错误体逐字节不变 |
+| `api_result_summary` | `readonly` 改 `_is_public_readonly()`，新增 `readonly_kind` |
+| `api_result_symbol_detail` 404 体 | 同样回带 `readonly`/`readonly_kind`（前端据此区分文案） |
+| `api_symbol_detail_generate` | `_is_public_readonly()` 即 403；share 文案「分享链接为只读，不支持按需生成」，showcase 文案「经典策略为只读展示」不变 |
+
+### 前端模板（templates/job.html、profile.html、symbols.html、symbol.html）
+
+- `job.html`：新增 `#box-share`（分享结果卡，默认 hidden）、`#share-modal`（有效期单选 1/7/30/0，默认 7）、`#share-link-modal`（只读 input + 复制 + 「只显示一次」说明）；分享脚本段 `SHARE_TOKEN`/`shareUrl`/`shareSuffix`/`initShareButton`/`createShareLink`/`copyShareLink`（Clipboard API，失败回退 focus+select 手动复制）；poll() 的四个结果 API 与 `#big-symbols` 链接经 `shareUrl`/`shareSuffix`；readonly 分支按 `readonly_kind` 分流 chip（只读分享 / 经典策略展示 · 只读）与返回链接（`/saas/` 首页 / `/saas/showcase`），隐藏清单加入 `box-share`；completed 非只读且登录时 `initShareButton(data)` 显示入口。
+- `profile.html`：新增 `#share-card`（我的分享表：任务/策略/创建时间/有效期/状态/撤销按钮，仅 active 行有撤销）与 `#share-revoke-modal`（二次确认）；`loadShares`/`renderShares`/`bindShareRevoke`；records include 移到分享段之前（保证 Node harness 可单独抽取分享段）；未登录（401）隐藏卡片。
+- `symbols.html`/`symbol.html`：`SHARE_TOKEN`/`shareUrl`/`shareSuffix`；symbols 列表 API 与行内跳转、symbol 详情与 gen-status API 带 token；返回链接经 Jinja `share_qs` 保留 token；分享视图缺产物文案「该分享未提供该股详情。」（showcase 不变）。
+
+### 测试
+
+- `tests/test_saas_access_hardening.py`（+34 例，fixture TRUNCATE 纳入 share_links）：创建准入（游客 401/他人不存在 404 同体/未完成 409/allowlist 含 1.5 与字符串拒绝/缺省 7 天/未验证可分享且合同 verified=false/响应即唯一明文面）、存储（列最小集/仅 64 位 sha256(token+salt)/两条 hash 不同/明文不入库/列表字段与 scoped/状态机）、撤销（立即生效且与错 token 同体/重复他人不存在 404/未登录 401）、读取通道（有效 token 匿名与他人登录全端点 OWNER_OK/readonly_kind=share/本人正常访问无标记/异 job 全拒/无效不降级同体/过期同体/列表与 console 与 worker 不开放/写保护 generate 403+delete/cancel/revoke 原权限/share 与 showcase kind 区分）、CASCADE（删 job 无孤儿）、游客不能创建。
+- `tests/test_saas_access_hardening.py` 前端 Node（+10 例，自建 `_EL_FACTORY` + job/share/readonly/profile 三个 harness）：分享/经典文案分流、游客与公开视图无入口、创建只显示一次且 localStorage 零痕迹、有效期传参、复制两条路径、失败可重试、token 传播、profile 列表状态与撤销二次确认与未登录隐藏。
+- `tests/test_gui_saas_pages.py`：三个既有 Node harness 增加 `shareUrl/shareSuffix/initShareButton` 透传桩（token 传播由专用 harness 覆盖）；`test_job_polling_access_and_readonly_guards` marker 更新为 shareUrl 包裹形式。
+
+### 主 Agent 复核记录（2026-10-26）
+
+1. `_ensure_share_links` 首次失败后不能永远返回 True：拆 `_SHARE_LINKS_ENSURED`（已尝试）与 `_SHARE_LINKS_OK`（可用性）两个字典，失败后每次仍返回 False（分享创建 503、读取按无效 token）。
+2. 有效期 allowlist 拒绝 `1.5`：`int(1.5)` 会静默取整成 1，改为严格 `isinstance(int)` 且非 bool。
+3. 过期测试最初误把「最新一条」当目标：直接 `UPDATE share_links SET expires_at = now() - interval '1 day'` 全表置过期，语义更直白。
+4. 浏览器审计三处修正（均为审计脚本问题，非产品缺陷）：API 返回相对 URL 需补 BASE；异 job token 断言必须用匿名上下文（登录所有者看自己任务本就 200）；撤销要按 `#{job_id}` 定位行（列表按创建时间倒序，first 行是另一条链接）。
+
+### 主 Agent 截图复核 Required Fixes（2026-10-26，2 项聚焦修正）
+
+1. **公开只读页全局游客条未隐藏**：分享页顶部仍显示 base.html 的 `#guest-strip`（「游客模式…注册/登录」），与报告「游客引导全部隐藏」不符且误导匿名接收者。修正：job.html 公开只读分支隐藏清单加入 `guest-strip`（showcase 与 share 都适用）；分享视图在脚本解析时（`SHARE_TOKEN` 存在）即隐藏，消除摘要返回前的闪现；`symbols.html`/`symbol.html` 分享视图同样解析时隐藏。base 的游客条显示 IIFE 先于页面 scripts 执行、只按登录态显示，本次零改动；撤销/无权页不改变 base 行为。回归：marker 断言隐藏清单含 `guest-strip`；Node readonly harness 的 known 元素表加入 `guest-strip` 并在 share/showcase 两 kind 断言 hidden；真实 Chromium 以 `getComputedStyle` 断言 share 桌面/移动/showcase 三处 `display=none`（新增 showcase 夹具用例 + `showcase-job-1280.png`）。
+2. **分享时间直接展示 ISO 微秒**：创建成功 modal 与 profile「我的分享」的创建时间/有效期原样输出 `2026-10-27T00:35:53.414386+08:00`。修正：新增 `fmtShareTime`，统一走全站既有 `LabUI.fmtLocalTime`（`static/lab-ui.js`：UTC ISO → 本地 `YYYY-MM-DD HH:mm`，无微秒；与 console/signals/strategy 等页同口径），LabUI 缺失时回退原值（不编日期），`expires_at` NULL 仍为「永久有效」。回归：job/profile 两个 Node harness 注入与 lab-ui.js 同实现的 LabUI 桩，断言 modal 与列表匹配 `/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/` 且不含 `T\d{2}:\d{2}:\d{2}` 与 `\.\d{6}`；新增 LabUI 缺失回退与「永久有效」用例；列表夹具补 active+`expires_at=null` 行（撤销按钮预期改 [1,4]）；浏览器同步断言并截图复核。
+3. 额外清理：创建分享 docstring「本本人」→「本人」。复跑：access_hardening 66 passed、相关 23 文件 656 passed、真实 Chromium 12/12；未 commit/push/ECS、未跑真实回测、无格式化 churn。
+
+## Archive: QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片：结果理解、集中帮助与数据/费用口径）
 
 ## Release Status
 

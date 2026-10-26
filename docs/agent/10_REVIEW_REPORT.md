@@ -2,7 +2,45 @@
 
 ## Task ID
 
-QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片）
+QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-26，IMPLEMENTED 待用户验收；全量 2687 passed + 5 skipped、真实 Chromium 11/11 零 JS error 零横溢；未 commit/push、未部署 ECS、未跑真实回测）
+
+## Self-Review Findings
+
+- **范围铁律逐条核对**：回测引擎、worker 执行逻辑、结果数值、配额、NL A2/A3、策略库、默认私有语义均未触碰；未启动真实 worker、未跑任何回测（浏览器任务由 seed + 真实 POST /api/jobs + worker 协议端点 claim/result/meta 模拟）；无压测/性能/硬件/移动 App 专项内容（仅 375 验证不破版）。
+- **Schema 最小化已核对**：`share_links` 列集 = id/token_hash/job_id/owner_id/expires_at/revoked_at/created_at（测试以 information_schema 精确集合锁定）；无明文/前缀/guest_key/last_used；`job_id ON DELETE CASCADE`，游客每日清理 jobs 逻辑零改动即无孤儿（测试删 job 后 share_links 为空）。
+- **令牌只存哈希已核对**：`token_hash` 为 64 位十六进制且等于 `sha256("share:"+token+salt)`（测试逐字重算）；两条链接 hash 不同；明文只出现在创建响应（测试断言响应无 token_hash 字段、DB 行序列化不含明文）；列表响应字段集锁定、无 token 痕迹。
+- **不降级授权已核对**：无效/过期/撤销/错 job token 一律走原有匿名 401 / 登录他人 404 分支，错误体与「不存在/他人」逐字节一致（测试 deepEqual 锁定）；`_ensure_share_links` 失败（生产未 apply schema）时读取侧按无效 token 处理、创建侧 503，不放宽任何访问。
+- **公开只读范围已核对**：分享通道只放行现有 7 个结果 GET；`/api/results`、`/api/jobs*`、`/api/saas/strategies|signals|me|share-links`、console、worker 在带 share token 的匿名请求下全部 401（测试逐一锁定）；generate 对 share/showcase 都 403（文案区分，showcase 原文不变）；delete/cancel/save/watch 仍按原归属。
+- **未验证与 showcase 边界已核对**：未验证结果（无 result_contract）可被 owner 分享，summary 的 `result_contract.verified=false`、`label=旧口径·未验证` 原样返回（API 测试 + 浏览器徽标截图）；showcase verified 门零变化（`test_showcase_verified_public_readonly`/`test_showcase_unverified_not_public` 原样通过）；游客创建 401。
+- **前端纪律已核对**：分享链接不写 localStorage（Node harness 计数器 + 浏览器 `Object.entries(localStorage)` 双重锁定）；一次性链接只在创建模态出现；复制走 Clipboard API 失败回退手动选择；分享视图隐藏取消/保存/信号/下载/游客引导，chip 与返回文案按 readonly_kind 分流（showcase 文案回归锁定）；profile 撤销二次确认且 revoked/expired 无撤销按钮。
+- **测试卫生**：RED 先于实现（65 errors：fixture TRUNCATE share_links 即失败）；全量 2687 passed + 5 skipped（基线 2651+5，+36 新例，零回归）；`test_gui_saas_pages.py` 三个既有 harness 只加透传桩（token 传播由专用 harness 覆盖），未改任何既有断言语义。
+
+## Required Fixes
+
+无。
+
+## 复核修正记录（2026-10-26，自查发现并已在实现中修正）
+
+1. `_ensure_share_links` 首次 CREATE 失败后不能永久返回可用：拆「已尝试」与「可用」两个进程级状态，失败后持续返回 False（分享创建 503、读取按无效 token），避免生产未 apply schema 时误放行。
+2. 有效期 allowlist 严格化：拒绝 `1.5`/`"7"`/布尔（`int()` 静默取整会把 1.5 变 1），只接受整数 1/7/30/0。
+3. 过期用例改为全表置过去时间，避免「取最新一条」的歧义。
+4. 浏览器审计三处脚本问题（非产品缺陷）：相对 URL 补 BASE 前缀；异 job token 断言改用匿名上下文（登录所有者访问本人任务本就 200，不构成越权）；撤销按 `#{job_id}` 定位行（列表倒序，first 行是另一条链接）。
+
+## 主 Agent 截图复核 Required Fixes（2026-10-26，2 项，已聚焦修正并补回归）
+
+1. **公开只读页全局游客条未隐藏**：分享页顶部仍显示 base.html 的 `#guest-strip`（「游客模式…注册/登录」），与「游客引导全部隐藏」的报告表述不符，且对匿名接收者是误导。已修正：job.html 公开只读分支隐藏清单加入 `guest-strip`（showcase 与 share 都适用）；分享视图在脚本解析时（`SHARE_TOKEN` 存在）即隐藏，消除摘要返回前的闪现；`symbols.html`/`symbol.html` 分享视图同样处理；base 游客条逻辑与撤销/无权页行为零改动。回归：Node readonly harness 两 kind 断言 `guest-strip` hidden + marker；真实 Chromium 以 `getComputedStyle` 断言 share 桌面/移动/showcase 三处 `display=none`（新增 showcase 用例与截图）。
+2. **分享时间直接展示 ISO 微秒**：创建成功 modal 与 profile「我的分享」原样输出 `2026-10-27T00:35:53.414386+08:00`，不符合全站时间显示。已修正：新增 `fmtShareTime` 统一走既有 `LabUI.fmtLocalTime`（本地 `YYYY-MM-DD HH:mm`，无微秒），LabUI 缺失回退原值（不编日期），NULL=永久。回归：两个 Node harness 注入与 lab-ui.js 同实现的 LabUI 桩，断言本地可读格式且不含 ISO/微秒；新增缺失回退与「永久有效」用例；浏览器同步断言并截图复核（modal「有效期至 2026-10-27 00:57」、profile「2026-10-26 00:57」）。
+3. 复跑：`test_saas_access_hardening.py` 66 passed、相关 23 文件 656 passed、真实 Chromium 12/12 零 JS error 零横溢；`share-job-1280.png` 顶部已无游客条。未 commit/push/ECS、未跑真实回测、无格式化 churn。
+
+## Archive: QRE-SAAS-RESULT-UNDERSTANDING（P1 第二切片）
 
 ## Reviewer
 

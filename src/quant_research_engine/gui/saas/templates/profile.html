@@ -26,6 +26,25 @@
     </div>
   </div>
 
+  <!-- P1 只读分享（QRE-SAAS-READONLY-SHARE）：我的分享列表与撤销（仅登录可见） -->
+  <div class="card hidden" id="share-card">
+    <h2>我的分享</h2>
+    <p class="opt" style="font-size:12.5px;margin:0 0 10px">分享链接只读、可撤销；接收方无需登录即可在有效期内查看对应结果。链接只在创建时显示一次。</p>
+    <div id="share-list"><div class="chart-empty">加载中…</div></div>
+  </div>
+
+  <!-- 撤销分享二次确认（复用既有自定义模态，不用原生 confirm） -->
+  <div class="modal-mask" id="share-revoke-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="share-revoke-title">
+      <h3 id="share-revoke-title">撤销分享</h3>
+      <p id="share-revoke-text">撤销后该链接立即失效，已收到链接的人将无法再查看该结果。确认撤销？</p>
+      <div class="m-actions">
+        <button type="button" class="btn btn-ghost" id="share-revoke-no">取消</button>
+        <button type="button" class="btn btn-primary" id="share-revoke-yes" style="background:var(--up);border-color:var(--up)">确认撤销</button>
+      </div>
+    </div>
+  </div>
+
   <div class="page-head" style="margin-top:6px">
     <h1 style="font-size:16px">回测记录 <span class="opt" id="user-label" style="font-family:var(--sans);font-size:13px"></span></h1>
   </div>
@@ -86,6 +105,89 @@ async function loadProfile(){
   }
 }
 {% include "_records_scripts.html" %}
+// --- P1 只读分享（QRE-SAAS-READONLY-SHARE）：我的分享列表与撤销 ---
+const SHARE_STATUS_LABEL = {active: '有效', expired: '已过期', revoked: '已撤销'};
+let shareRevokeTarget = null;
+function setShareRevokeModal(open){
+  document.getElementById('share-revoke-modal').classList.toggle('show', !!open);
+}
+function shareExpiresText(item){
+  if (item.status === 'revoked') return '已撤销';
+  if (!item.expires_at) return '永久有效';
+  return '有效期至 ' + fmtShareTime(item.expires_at);
+}
+// 分享时间统一走全站 LabUI.fmtLocalTime（UTC ISO → 本地 YYYY-MM-DD HH:mm，无微秒）；
+// LabUI 缺失时回退原值（不编日期）
+function fmtShareTime(iso){
+  if (!iso) return '';
+  return (typeof LabUI !== 'undefined' && LabUI && LabUI.fmtLocalTime)
+    ? LabUI.fmtLocalTime(iso) : String(iso);
+}
+function renderShares(items){
+  const box = document.getElementById('share-list');
+  if (!items.length){
+    box.innerHTML = '<div class="chart-empty">还没有分享链接</div>';
+    return;
+  }
+  box.innerHTML = '<div style="overflow:auto"><table class="tbl"><thead><tr>'
+    + '<th>任务</th><th>策略</th><th>创建时间</th><th>有效期</th><th>状态</th><th></th></tr></thead><tbody>'
+    + items.map(it => '<tr>'
+      + '<td>#' + it.job_id + '</td>'
+      + '<td>' + escH(it.strategy_name || '—') + '</td>'
+      + '<td>' + escH(fmtShareTime(it.created_at)) + '</td>'
+      + '<td>' + escH(shareExpiresText(it)) + '</td>'
+      + '<td>' + escH(SHARE_STATUS_LABEL[it.status] || it.status) + '</td>'
+      + '<td>' + (it.status === 'active'
+        ? '<button class="btn-sm" data-share-revoke="' + it.id + '">撤销</button>' : '') + '</td>'
+      + '</tr>').join('')
+    + '</tbody></table></div>';
+  Array.prototype.slice.call(box.querySelectorAll('[data-share-revoke]')).forEach(btn => {
+    btn.addEventListener('click', () => {
+      shareRevokeTarget = Number(btn.getAttribute('data-share-revoke'));
+      setShareRevokeModal(true);
+    });
+  });
+}
+async function loadShares(){
+  const card = document.getElementById('share-card');
+  try {
+    const r = await apiFetch('/api/saas/share-links', {redirectOn401: false});
+    if (r.status === 401){ card.classList.add('hidden'); return; }
+    const d = await r.json();
+    if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || ('HTTP ' + r.status));
+    card.classList.remove('hidden');
+    renderShares(d.items || []);
+  } catch (e) {
+    if (e && e.status === 401){ card.classList.add('hidden'); return; }
+    card.classList.remove('hidden');
+    document.getElementById('share-list').innerHTML =
+      '<div class="chart-empty">分享列表加载失败，请稍后重试</div>';
+  }
+}
+function bindShareRevoke(){
+  document.getElementById('share-revoke-no').addEventListener('click', () => setShareRevokeModal(false));
+  document.getElementById('share-revoke-modal').addEventListener('click', function(e){ if (e.target === this) setShareRevokeModal(false); });
+  document.getElementById('share-revoke-yes').addEventListener('click', async () => {
+    if (shareRevokeTarget === null) return;
+    const btn = document.getElementById('share-revoke-yes');
+    btn.disabled = true;
+    try {
+      const r = await apiFetch('/api/saas/share-links/' + shareRevokeTarget + '/revoke', {json: {}});
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || ('撤销失败（HTTP ' + r.status + '）'));
+      setShareRevokeModal(false);
+      shareRevokeTarget = null;
+      loadShares();
+    } catch (e) {
+      document.getElementById('share-revoke-text').textContent =
+        ((e && e.message) || '撤销失败，请稍后重试') + '，请重试或取消。';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+bindShareRevoke();
 loadProfile();
+loadShares();
 </script>
 {% endblock %}

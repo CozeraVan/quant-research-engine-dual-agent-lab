@@ -129,6 +129,9 @@ function createHarness(fetchImpl){
     MAX_ACTIVE_WAIT_MS: 300000,
     Date: {now(){ return now; }},
     location: {search: ''}, URLSearchParams,
+    // P1 只读分享：URL 无 share token 时透传（token 传播由
+    // test_saas_access_hardening 的专用 harness 覆盖）
+    shareUrl(url){ return url; }, shareSuffix(){ return ''; }, initShareButton(){},
     requestAnimationFrame(fn){ return fn(); },
     saasToken(){ return 'token'; },
     apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
@@ -1026,6 +1029,9 @@ function createSymbolHarness(fetchImpl){
     console, document, window, JOB_ID: 1, TS_CODE: '000001.SZ', STATUS_LABEL: {}, AbortController,
     Date: {now(){ return now; }},
     $(selector){ return document.querySelector(selector); },
+    // P1 只读分享：URL 无 share token 时透传（token 传播由
+    // test_saas_access_hardening 的专用 harness 覆盖）
+    shareUrl(url){ return url; }, shareSuffix(){ return ''; },
     apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },
     showAccessFallback(target){ calls.access += 1; target.replaceChildren(symbolEl()); },
     showLoadFailure(target, retry){ calls.failure += 1; calls.retry = retry; target.replaceChildren(symbolEl()); },
@@ -1627,7 +1633,7 @@ function pendingResponse(options){
             "const POLL_INTERVAL_MS = 5000;",
             "const MAX_CONSECUTIVE_ERRORS = 3;",
             "const MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;",
-            "jobRequestJsonWithTimeout('/api/results/' + JOB_ID + '/summary', {redirectOn401:false}",
+            "jobRequestJsonWithTimeout(shareUrl('/api/results/' + JOB_ID + '/summary'), {redirectOn401:false}",
             "showAccessFallback(document.querySelector('.container'))",
             "showLoadFailure(document.querySelector('.container'), retryPoll)",
             "已暂停自动刷新",
@@ -1695,6 +1701,9 @@ function createJobRuntimeHarness(fetchImpl, opts){
     MAX_ACTIVE_WAIT_MS: 300000,
     Date: {now(){ return now; }},
     location: {search: ''}, URLSearchParams,
+    // P1 只读分享：URL 无 share token 时透传（token 传播由
+    // test_saas_access_hardening 的专用 harness 覆盖）
+    shareUrl(url){ return url; }, shareSuffix(){ return ''; }, initShareButton(){},
     requestAnimationFrame(fn){ return fn(); },
     saasToken(){ return opts.token === undefined ? 'token' : opts.token; },
     apiFetch(url, options){ calls.requests.push({url, options}); return fetchImpl(url, options); },

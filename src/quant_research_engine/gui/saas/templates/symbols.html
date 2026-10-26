@@ -1,11 +1,13 @@
 {% extends "base.html" %}
+{# P1 只读分享（QRE-SAAS-READONLY-SHARE）：分享视图的返回链接保留 token #}
+{% set share_qs = '?share=' ~ request.args.get('share') if request.args.get('share') else '' %}
 {% block title %}个股回测明细 · A股回测台{% endblock %}
 {% block body %}
 <div class="wrap">
   <div class="page-head" style="margin-bottom:14px">
     <h1 style="font-size:22px">个股回测明细 <span class="opt">任务 #{{ job_id }}</span> <button type="button" class="tip-trigger" data-tip="聚合自赚钱效应归因，仅包含本任务实际交易的个股。" aria-label="个股明细口径">?</button></h1>
     <p class="opt" style="margin-top:6px">点列头排序，点行进详情；输入完整代码回车直跳。</p>
-    <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}">← 返回回测结果</a></p>
+    <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}{{ share_qs }}">← 返回回测结果</a></p>
   </div>
   <div class="card">
     <div class="table-tools">
@@ -36,6 +38,17 @@
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 const JOB_ID = {{ job_id }};
+// P1 只读分享（QRE-SAAS-READONLY-SHARE）：分享视图带 token 访问结果 API 与导航
+const SHARE_TOKEN = (function(){
+  try { return new URLSearchParams(location.search).get('share') || ''; } catch (e) { return ''; }
+})();
+// 分享视图：隐藏 base 全局游客条（匿名接收者不是“游客模式”引导对象）
+if (SHARE_TOKEN){
+  const gs = document.getElementById('guest-strip');
+  if (gs){ gs.classList.add('hidden'); gs.style.display = 'none'; }
+}
+function shareUrl(url){ return SHARE_TOKEN ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + 'share=' + encodeURIComponent(SHARE_TOKEN)) : url; }
+function shareSuffix(){ return SHARE_TOKEN ? ('?share=' + encodeURIComponent(SHARE_TOKEN)) : ''; }
 const $ = s => document.querySelector(s);
 const $$ = s => Array.prototype.slice.call(document.querySelectorAll(s));
 function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -43,7 +56,7 @@ let ALL = [];
 let sort = {k: 'total_pnl', dir: -1};
 
 async function load(){
-  const resp = await apiFetch(`/api/results/${JOB_ID}/symbols`);
+  const resp = await apiFetch(shareUrl(`/api/results/${JOB_ID}/symbols`));
   const d = await resp.json();
   if (!resp.ok || !d.ok){ $('#syms-hint').textContent = d.error || ('加载失败 HTTP ' + resp.status); return; }
   ALL = d.symbols || [];
@@ -75,7 +88,7 @@ function render(){
   $('#syms-hint').textContent = `共 ${rows.length} 只` + (kw ? '（已筛选）' : '');
   $$('#sym-table tr[data-code]').forEach(tr => tr.addEventListener('click', () => gotoSymbol(tr.dataset.code)));
 }
-function gotoSymbol(code){ location.href = `/saas/jobs/${JOB_ID}/symbols/${encodeURIComponent(dispCode(code))}`; }
+function gotoSymbol(code){ location.href = `/saas/jobs/${JOB_ID}/symbols/${encodeURIComponent(dispCode(code))}` + shareSuffix(); }
 $$('#sym-table th.sortable').forEach(th => th.addEventListener('click', () => {
   const k = th.dataset.k;
   if (sort.k === k) sort.dir = -sort.dir;
