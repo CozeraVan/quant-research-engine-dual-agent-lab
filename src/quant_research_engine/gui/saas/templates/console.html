@@ -12,6 +12,7 @@
   <div id="console" class="hidden">
     <div class="tabs">
       <button class="tab active" data-tab="overview">总览</button>
+      <button class="tab" data-tab="ops">公测运营</button>
       <button class="tab" data-tab="users">用户</button>
       <button class="tab" data-tab="policies">权限</button>
       <button class="tab" data-tab="factors">因子审核</button>
@@ -19,6 +20,36 @@
       <button class="tab" data-tab="workers">Worker</button>
       <button class="tab" data-tab="jobs">任务</button>
       <button class="tab" data-tab="showcase">经典策略</button>
+    </div>
+
+    <div class="tab-pane hidden" id="pane-ops">
+      <div class="card">
+        <h2>公测运营 <button type="button" class="tip-trigger" data-tip="指标全部来自权威数据：自然语言编译读编译事件表（自该功能上线起统计，之前无历史）；回测读任务表（仅正式回测，内部小样本试算与用户主动取消不计入成功率）；游客与新增注册是两个独立计数（游客仅统计提交过任务的独立会话，未提交任务的访客不可见），二者无关联，不计算转化率。时间窗口按北京时间自然日划分。比率为空表示分母为零，显示「—」。" aria-label="公测运营说明">?</button></h2>
+        <div class="ops-win" id="ops-window">
+          <button type="button" data-win="today" class="active">今日</button>
+          <button type="button" data-win="7d">近 7 天</button>
+          <button type="button" data-win="30d">近 30 天</button>
+          <button type="button" data-win="all">累计</button>
+        </div>
+        <h3>自然语言编译</h3>
+        <div class="metric-strip" id="ops-nl"></div>
+        <table class="tbl">
+          <thead><tr><th>编译失败原因</th><th class="num">次数</th></tr></thead>
+          <tbody id="ops-nl-fail"></tbody>
+        </table>
+        <div class="chart-empty hidden" id="ops-nl-fail-empty">窗口内没有编译失败</div>
+        <h3>回测（正式任务）</h3>
+        <div class="metric-strip" id="ops-bt"></div>
+        <table class="tbl">
+          <thead><tr><th>回测失败原因</th><th class="num">次数</th></tr></thead>
+          <tbody id="ops-bt-fail"></tbody>
+        </table>
+        <div class="chart-empty hidden" id="ops-bt-fail-empty">窗口内没有回测失败</div>
+        <h3>游客到注册转化</h3>
+        <div class="metric-strip" id="ops-conv"></div>
+        <h3>意见反馈</h3>
+        <div class="metric-strip" id="ops-fb"></div>
+      </div>
     </div>
 
     <div class="tab-pane" id="pane-overview">
@@ -79,9 +110,22 @@
 
     <div class="tab-pane hidden" id="pane-feedback">
       <div class="card">
-        <h2>用户反馈 <button type="button" class="tip-trigger" data-tip="只读列表，显示最新 200 条反馈。" aria-label="用户反馈说明">?</button></h2>
+        <h2>用户反馈 <button type="button" class="tip-trigger" data-tip="按类型与处理状态筛选；状态流转只影响处理进度，不删除反馈。类型与提交端 allowlist 一致。" aria-label="用户反馈说明">?</button></h2>
+        <div class="ops-win" id="feedback-filter">
+          <button type="button" data-cat="" class="active">全部类型</button>
+          <button type="button" data-cat="bug">问题缺陷</button>
+          <button type="button" data-cat="experience">体验建议</button>
+          <button type="button" data-cat="factor">因子需求</button>
+          <button type="button" data-cat="other">其他</button>
+          <span class="ops-win-sep"></span>
+          <button type="button" data-st="" class="active">全部状态</button>
+          <button type="button" data-st="open">待处理</button>
+          <button type="button" data-st="doing">处理中</button>
+          <button type="button" data-st="done">已解决</button>
+          <button type="button" data-st="closed">已关闭</button>
+        </div>
         <table class="tbl">
-          <thead><tr><th class="num">ID</th><th>用户</th><th>内容</th><th>来源页面</th><th>联系方式</th><th>提交时间</th></tr></thead>
+          <thead><tr><th class="num">ID</th><th>用户</th><th>类型</th><th>状态</th><th>内容</th><th>来源页面</th><th>联系方式</th><th>提交时间</th><th>处理</th></tr></thead>
           <tbody id="feedback-tbody"></tbody>
         </table>
         <div class="chart-empty hidden" id="feedback-empty">暂无反馈</div>
@@ -172,12 +216,29 @@
   .wres-cmd { margin-top:6px; font-size:12px; color:#8a84a0; }
   .wres-cmd code { background:#f4f0fb; padding:2px 6px; border-radius:4px; user-select:all; }
   .wres-form { margin-top:8px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  /* QRE-SAAS-PUBLIC-BETA-OPS：公测运营窗口切换 + 反馈筛选条 */
+  .ops-win { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:12px; }
+  .ops-win button { border:1px solid var(--line, #e5e0f0); background:#fff; color:#5b5570;
+    border-radius:8px; padding:6px 12px; font-size:13px; cursor:pointer; min-height:32px; }
+  .ops-win button.active { background:#6750A4; border-color:#6750A4; color:#fff; }
+  .ops-win-sep { width:1px; height:20px; background:#e5e0f0; margin:0 6px; }
+  #pane-ops h3 { margin:16px 0 8px; font-size:15px; }
+  .fb-st { display:flex; flex-wrap:wrap; gap:4px; }
+  /* 管理台 9 个 tab 在窄屏允许折行（375 不破版；仅本页规则，不动共享 lab-theme） */
+  @media (max-width:768px){
+    .tabs{flex-wrap:wrap;row-gap:6px}
+    .tabs .tab{padding:8px 12px}
+  }
 </style>
 <script>
 (function(){
   requireLogin();
-  var panes = {overview:'pane-overview', users:'pane-users', policies:'pane-policies', factors:'pane-factors', feedback:'pane-feedback', workers:'pane-workers', jobs:'pane-jobs', showcase:'pane-showcase'};
-  var factorSt = 'pending', jobSt = 'failed';
+  var panes = {overview:'pane-overview', ops:'pane-ops', users:'pane-users', policies:'pane-policies', factors:'pane-factors', feedback:'pane-feedback', workers:'pane-workers', jobs:'pane-jobs', showcase:'pane-showcase'};
+  var factorSt = 'pending', jobSt = 'failed', opsWin = 'today', fbCat = '', fbSt = '';
+  var CAT_LABELS = {bug:'问题缺陷', experience:'体验建议', factor:'因子需求', other:'其他'};
+  var ST_LABELS = {open:'待处理', doing:'处理中', done:'已解决', closed:'已关闭'};
+  var NL_ERR_LABELS = {llm_error:'大模型调用失败', invalid_yaml:'YAML 校验未过', missing_factors:'缺少因子', not_configured:'编译服务未配置', unknown:'未分类'};
+  var JOB_ERR_LABELS = {strategy_compile_error:'策略编译错误', data_missing:'数据缺失', engine_error:'引擎错误', system_error:'系统错误', canceled:'已取消', unclassified:'未分类'};
 
   function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }
   function fmt(t){ return t ? LabUI.fmtLocalTime(t) : '—'; }
@@ -203,7 +264,7 @@
       btn.classList.add('active');
       Object.keys(panes).forEach(function(k){ document.getElementById(panes[k]).classList.add('hidden'); });
       document.getElementById(panes[btn.dataset.tab]).classList.remove('hidden');
-      ({overview: loadOverview, users: loadUsers, policies: loadPolicies, factors: loadFactorRequests, feedback: loadFeedback, workers: loadWorkers, jobs: loadJobs, showcase: loadShowcase})[btn.dataset.tab]();
+      ({overview: loadOverview, ops: loadOps, users: loadUsers, policies: loadPolicies, factors: loadFactorRequests, feedback: loadFeedback, workers: loadWorkers, jobs: loadJobs, showcase: loadShowcase})[btn.dataset.tab]();
     });
   });
 
@@ -252,6 +313,63 @@
       metric('缓存条目', num(nl.cache_entries), '只缓存编译成功的结果；命中不调用大模型也不占配额') +
       metric('缓存累计命中', num(nl.cache_hits), '所有缓存条目的累计命中次数') +
       metric('限流计数', num(nl.rate_limit_rows) + ' 行 / ' + num(nl.rate_limit_hits) + ' 次', '当前各窗口内的计数行与累计编译次数');
+  }
+
+  // --- QRE-SAAS-PUBLIC-BETA-OPS：公测运营指标（窗口切换 + 权威库聚合） ---
+  function pct(v){ return (v === null || v === undefined) ? '—' : (v * 100).toFixed(1) + '%'; }
+  function dur(v){
+    if (v === null || v === undefined) return '—';
+    if (v >= 60) return Math.floor(v / 60) + ' 分 ' + Math.round(v % 60) + ' 秒';
+    return Math.round(v) + ' 秒';
+  }
+  function dayOf(iso){ return iso ? iso.slice(0, 10) : null; }
+  document.getElementById('ops-window').addEventListener('click', function(ev){
+    if (!ev.target.dataset.win) return;
+    opsWin = ev.target.dataset.win;
+    document.querySelectorAll('#ops-window button').forEach(function(b){ b.classList.toggle('active', b === ev.target); });
+    loadOps();
+  });
+  function loadOps(){
+    apiFetch('/api/saas/console/ops?window=' + opsWin).then(function(r){ return r.json(); }).then(function(d){
+      if (!d.ok) return;
+      var o = d.ops, nl = o.nl, bt = o.backtest, cv = o.conversion, fb = o.feedback;
+      var first = dayOf(nl.first_event_at);
+      document.getElementById('ops-nl').innerHTML =
+        metric('编译次数', nl.total, '窗口内全部编译请求（含缓存命中；超限拒绝不计入）') +
+        metric('成功率', pct(nl.success_rate), '编译成功 / 编译次数；分母为零显示「—」') +
+        metric('缓存命中率', pct(nl.cache_hit_rate), '缓存命中 / 编译次数；命中不调用大模型也不占配额') +
+        metric('失败次数', nl.failed) +
+        metric('统计起点', first || '—', '编译事件自该功能上线起记录，上线前无历史，不回填');
+      document.getElementById('ops-bt').innerHTML =
+        metric('正式回测', bt.total, '仅 kind=full；内部小样本试算不计入') +
+        metric('成功率', pct(bt.success_rate), '完成 / (完成 + 失败超时)；用户主动取消不计入分母') +
+        metric('平均排队', dur(bt.avg_queue_seconds), '提交到开始执行的平均等待（认领+排队）') +
+        metric('平均执行', dur(bt.avg_run_seconds), '开始到回传完成的平均执行时长');
+      var cv = o.conversion;
+      document.getElementById('ops-conv').innerHTML =
+        metric('游客独立会话', cv.guest_sessions, '提交过任务的游客会话去重（guest_key）；未提交任务的访客不可见') +
+        metric('新增注册', cv.new_users, '窗口内新注册用户数') +
+        metric('转化率', '—', '需要游客会话与注册账号关联后才能计算真实转化率；当前两个计数之间无关联，不计算比率');
+      var fbCats = fb.by_category || {}, fbSts = fb.by_status || {};
+      document.getElementById('ops-fb').innerHTML =
+        metric('反馈总数', fb.total) +
+        metric('问题缺陷', fbCats.bug || 0) + metric('体验建议', fbCats.experience || 0) +
+        metric('因子需求', fbCats.factor || 0) + metric('其他', fbCats.other || 0) +
+        metric('待处理', fbSts.open || 0) + metric('处理中', fbSts.doing || 0) +
+        metric('已解决', fbSts.done || 0) + metric('已关闭', fbSts.closed || 0);
+      function failRows(list, labels){
+        return list.map(function(f){
+          return '<tr><td>' + esc(labels[f.error_class] || f.error_class) + '</td>' +
+            '<td class="num">' + f.count + '</td></tr>';
+        }).join('');
+      }
+      var nlFail = failRows(nl.top_failures || [], NL_ERR_LABELS);
+      document.getElementById('ops-nl-fail').innerHTML = nlFail;
+      document.getElementById('ops-nl-fail-empty').classList.toggle('hidden', nlFail !== '');
+      var btFail = failRows(bt.top_failures || [], JOB_ERR_LABELS);
+      document.getElementById('ops-bt-fail').innerHTML = btFail;
+      document.getElementById('ops-bt-fail-empty').classList.toggle('hidden', btFail !== '');
+    }).catch(function(){});
   }
 
   // --- R3 切片1/2：Worker 资源（当前生效 vs 期望配置 + 调参表单） ---
@@ -451,18 +569,56 @@
       }).catch(function(){});
   });
 
-  // --- 反馈（只读） ---
+  // --- 反馈（QRE-SAAS-PUBLIC-BETA-OPS：类型/状态筛选 + 处理状态流转） ---
+  document.getElementById('feedback-filter').addEventListener('click', function(ev){
+    var ds = ev.target.dataset || {};
+    var cat = ds.cat, st = ds.st;
+    if (cat === undefined && st === undefined) return;
+    if (cat !== undefined){
+      fbCat = cat;
+      document.querySelectorAll('#feedback-filter button[data-cat]').forEach(function(b){ b.classList.toggle('active', b === ev.target); });
+    } else {
+      fbSt = st;
+      document.querySelectorAll('#feedback-filter button[data-st]').forEach(function(b){ b.classList.toggle('active', b === ev.target); });
+    }
+    loadFeedback();
+  });
+  var FB_NEXT = {
+    open: [['doing','处理中'],['done','已解决'],['closed','已关闭']],
+    doing: [['done','已解决'],['closed','已关闭'],['open','退回待处理']],
+    done: [['open','重新打开']],
+    closed: [['open','重新打开']]
+  };
   function loadFeedback(){
-    apiFetch('/api/saas/console/feedback').then(function(r){ return r.json(); }).then(function(d){
+    var q = '?';
+    if (fbCat) q += 'category=' + fbCat + '&';
+    if (fbSt) q += 'status=' + fbSt;
+    apiFetch('/api/saas/console/feedback' + q).then(function(r){ return r.json(); }).then(function(d){
       if (!d.ok) return;
       document.getElementById('feedback-empty').classList.toggle('hidden', d.feedback.length > 0);
       document.getElementById('feedback-tbody').innerHTML = d.feedback.map(function(f){
+        var st = f.status || 'open';
+        var badgeCls = st === 'done' ? 'ok' : (st === 'closed' ? '' : (st === 'doing' ? 'run' : 'fail'));
+        var ops = (FB_NEXT[st] || []).map(function(p){
+          return '<button class="btn-sm" data-fbst="' + p[0] + '" data-fid="' + f.id + '">' + p[1] + '</button>';
+        }).join(' ') || '—';
         return '<tr><td class="num">' + f.id + '</td><td>' + esc(f.user_email || f.user_phone || ('#' + f.user_id)) + '</td><td>' +
+          esc(CAT_LABELS[f.category] || f.category || '其他') + '</td><td>' +
+          '<span class="badge ' + badgeCls + '">' + esc(ST_LABELS[st] || st) + '</span></td><td>' +
           esc(f.content) + '</td><td>' + esc(f.page || '—') + '</td><td>' + esc(f.contact || '—') + '</td><td>' +
-          fmt(f.created_at) + '</td></tr>';
+          fmt(f.created_at) + '</td><td><div class="fb-st">' + ops + '</div></td></tr>';
       }).join('');
     }).catch(function(){});
   }
+  document.getElementById('feedback-tbody').addEventListener('click', function(ev){
+    var st = ev.target.dataset && ev.target.dataset.fbst;
+    if (!st) return;
+    apiFetch('/api/saas/console/feedback/' + ev.target.dataset.fid + '/status',
+      {json: {status: st}})
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d.ok){ alert(d.error || '操作失败'); } loadFeedback();
+      }).catch(function(){});
+  });
 
   // --- E3 Worker ---
   function loadWorkers(){

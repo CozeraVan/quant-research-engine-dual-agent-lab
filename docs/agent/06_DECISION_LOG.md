@@ -1,3 +1,17 @@
+### 2026-10-26: 公测运营指标的数据来源与隐私边界（QRE-SAAS-PUBLIC-BETA-OPS）
+
+- Decision: 9090「公测运营」tab 指标只读权威表聚合；新增最小事件表 `nl_compile_events`（ok/cache_hit/error_class/scope/created_at）承载 NL 编译成功率/缓存命中/失败原因，**不存策略文本、API key、原始 IP**，自功能上线起统计、不回填；回测指标取 jobs（kind='full'，smoke 与 canceled 不计入）；转化为游客独立会话（guest_key 去重，仅覆盖提交过任务的游客）与新增注册的总量比，不做个体级归因；分母为 0 一律 null（前端「—」）。
+- Rationale: §11.3 要求运营指标真实可解释；宁可显示「暂未接入/—」也不编造历史（P0 放行规则同精神）。
+- Verification: 新 `tests/test_saas_public_beta_ops.py` 17 passed；全量 2770 passed + 6 skipped；生产编译后 ops all 窗口 nl.total=2/first_event_at=2026-10-26。
+- Owner: KIMI_CODE；2026-10-26 用户验收通过，已发布。
+
+### 2026-10-26: 反馈分类与处理状态为最小闭环（不建工单系统）
+
+- Decision: feedback 增 `category`（bug/experience/factor/other）与 `status`（open/doing/done/closed）；提交端 allowlist、管理台筛选 + 状态流转端点；保留用户隔离、每日 20 条上限、admin 鉴权；不做备注/指派/SLA 等工单能力。
+- Rationale: 公测首周按类型分派反馈即可，复杂工单系统超出当前范围（§11.3 条目 4）。
+- Verification: 流转权限矩阵（匿名 401/会员 403/admin 200/非法 400/不存在 404）单测锁定；生产临时会话端到端验证后清理。
+- Owner: KIMI_CODE；2026-10-26 用户验收通过，已发布。
+
 ### 2026-10-26: 权限改动必须同步 9090 管理后台
 
 - Decision: 权限、配额、限流或新权限模型的改动，在 commit/push 前必须完成 9090 可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。对应 R-ADMIN-001。

@@ -1,5 +1,47 @@
 # Implementation Brief
 
+## Task ID
+
+QRE-SAAS-PUBLIC-BETA-OPS（P1：公测运营反馈闭环与关键浏览器自动化）
+
+## Created By
+
+KIMI_CODE（2026-10-26；依据 `14_LAUNCH_ROADMAP.md` §11.3 条目 4「运营反馈闭环」）
+
+## 目标与边界
+
+1. **9090 管理台新增「公测运营」tab（GET /api/saas/console/ops，admin 门禁不变）**，指标全部来自权威库/执行路径，明确时间窗口、分母与空数据口径，不编造历史：
+   - NL 编译：成功率、缓存命中率、热门失败原因。新增最小隐私安全事件表 `nl_compile_events`（ok/cache_hit/error_class/scope/created_at；**不存策略文本、API key、原始 IP**）；**自本功能上线起统计**，上线前显示「—」。
+   - 回测（kind='full'，smoke 内部试算不计入）：成功率、平均排队时长（started_at−created_at）、平均执行时长（finished_at−started_at）、热门失败原因（error_class 分组）。jobs 表有全量历史，窗口 今日/近7天/近30天/累计 均为真实值。
+   - 游客到注册转化：游客独立会话数（jobs.guest_key 去重，**仅统计提交过任务的游客，未提交访客不可见——口径明示**）与当日/窗口新增注册（users.created_at）两个**独立计数**。二者无跨会话关联：**不计算转化率**（ratio=null + measurement=unlinked；未关联总量的比可超过 100%，是误导），未来做真实转化须先建会话关联记录，本切片只做诚实降级、不扩展用户追踪 schema。
+   - 空数据口径：分母为 0 时比率返回 null，前端显示「—」。时间窗口 today 按 **Asia/Shanghai 自然日**（A 股运营口径；UTC 零点会漏当日凌晨 8 小时），7d/30d/all 为滚动窗口/不限。
+2. **意见反馈分类与处理状态闭环（最小可用，不建工单系统）**：`feedback` 新增 `category`（bug/experience/factor/other，默认 other，提交端 allowlist 校验）与 `status`（open/doing/done/closed，默认 open）。提交页加类型选择、本人列表透出类型/状态；管理台反馈 tab 支持按类型/状态筛选与状态流转（POST /api/saas/console/feedback/<id>/status，仅 admin，非法状态 400、不存在 404）。保留既有用户隔离、每日 20 条上限、管理员鉴权。
+3. **关键浏览器自动化**：可重复执行资产落 `deploy/saas/public-beta-audit/`（seed.py + browser_audit.py + run_audit.sh，复用 `.tmp/browser-venv` Playwright 与 `.tmp/ms-playwright` Chromium；Playwright 仅测试工具，不进生产依赖）。场景覆盖：游客/登录、新建页、NL 编译 stub、任务等待/失败恢复、结果只读与权限、反馈分类、管理台运营指标；桌面 1280 与 375 只验证不破版；不启动真实 worker、不跑真实回测，任务状态经 seed/worker 协议模拟。
+4. **Schema 由 postgres 幂等 apply**（`nl_compile_events` 建表 + feedback 两列 DO 块；ECS 表 owner 是 postgres，应用层懒自愈只兜底本地/测试库）；发布仅同步 app.py、console.html、feedback.html、cloud_schema.sql 并重启 qre-saas，不重启 worker。
+5. TDD 先 RED 后 GREEN：新 `tests/test_saas_public_beta_ops.py`；相关套件 + 全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` 必须通过。证据落 `.tmp/public-beta-ops/`。
+6. 遵守 R-UI-001（无灰色小字备注，解释用 tip-trigger+data-tip+LabUI.helpTips）、R-ADMIN-001（运营指标展示与执行/库同源）、R-DEPLOY-001（先部署后验收再提交）。
+
+## 验证
+
+- 单测：事件记录（成功/失败/缓存命中/scope、无文本无 IP）、ops 窗口与比率/排队/失败分组/转化口径与空数据 null、反馈分类 allowlist 与状态流转权限矩阵、页面标记（ops tab、反馈筛选与状态列、feedback.html 分类控件）。
+- 真实 Chromium（临时 PG + 8099 staging + stub LLM + worker 协议模拟）：上述 7 类场景零 JS error、零横向溢出（1280 与 375）。
+- ECS：备份 → postgres apply schema → scp 四文件 → 仅重启 qre-saas → 9090 隧道验证 ops API/tab 与反馈流转；公网临时数据彻底清理，不输出凭证。保留「已部署待用户验收，未 commit/push」。
+
+## 实施结果（2026-10-26，用户验收通过，已部署并发布）
+
+- **改动文件**：`src/quant_research_engine/gui/saas/ops_support.py`（新）、`src/quant_research_engine/gui/saas/app.py`、`src/quant_research_engine/gui/saas/templates/console.html`、`src/quant_research_engine/gui/saas/templates/feedback.html`、`deploy/saas/cloud_schema.sql`、`deploy/saas/public-beta-audit/{seed.py,browser_audit.py,run_audit.sh}`（新）、`tests/test_saas_public_beta_ops.py`（新）。未改引擎/worker/数值/配额/NL A2A3 语义。
+- **TDD**：RED=17 errors（对 HEAD 基线 stash 实现）；GREEN=17 passed；相关 5 文件 227 passed + 1 skipped；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2770 passed + 6 skipped**（基线 2753+6 零回归）。证据 `.tmp/public-beta-ops/{red,green,full-tests}-evidence.txt`。
+- **真实 Chromium**（临时库 + 8099 staging + stub LLM + worker 协议模拟，未启动真实 worker/回测）：9/9、零 JS error、零横溢；`browser-evidence.json` + 11 截图（含 375 两张）。
+- **生产缺陷热修**：`feedback_id_seq` 缺 USAGE → 登录用户提交反馈 500（feedback 特性此前从未部署 ECS，首次上线暴露；同 share_links 序列坑）。生产 GRANT USAGE, SELECT；schema 增加角色存在时幂等 DO 块（含序列存在性检查）。
+- **发布**：ECS 四文件与 HEAD 基线 SHA256 一致 → 备份 `/tmp/qre-public-beta-ops-pre-20261026/` → scp 五文件 → postgres 幂等 apply → 仅重启 qre-saas（active，worker 在家未动）。生产 ops 鉴权三态、空口径诚实（编译前 nl.total=0/first_event_at=None）、反馈闭环、游客真实 DeepSeek 编译两次 cache_hit false→true（A2A3 无回归）、ops all 窗口 nl.total=2/first_event_at=2026-10-26；临时数据清理（temp_users=0/feedback=0）；9090 隧道 console 200 含 ops 标记、ops API 无 token 401；公网 /saas/、login、new、feedback、help 200，/saas/console 仍 404。证据 `production-verification.txt`。
+- **遗留**：NL 指标自功能上线起统计（上线前无历史，不回填）；游客访客口径仅覆盖提交过任务的独立会话；转化率不计算（需会话关联）；反馈状态无备注字段；`nl_compile_events` 无自动清理（仅索引）。
+
+## 复核修正（2026-10-26，主 Agent 2 项 Required Fixes 已解决，重新部署待人工验收）
+
+1. **转化比率误导**：`compute_ops` 不再计算 new_users/guest_sessions 之比（生产实测「注册 / 游客 300.0%」）；返回 `ratio=None` + `measurement="unlinked"`；console 卡改「转化率 —」，保留两个真实计数；未扩展用户追踪 schema。回归 `test_conversion_ratio_never_computed`。
+2. **今日边界**：`window_start('today')` 改上海当日零点（`_now_shanghai()` + `ZoneInfo("Asia/Shanghai")`，转 UTC 比较）；7d/30d/all 不变。回归 `test_today_start_is_shanghai_midnight` + DB 级 `test_today_window_includes_shanghai_early_morning`。
+- TDD：RED=4 failed → GREEN；ops 测试 20 passed；相关 3 文件 135 passed；**全量 2772 passed + 6 skipped**（1 例已知 flake 复跑通过）。Chromium 重跑 9/9 零 JS error 零横溢（console-ops-1280/375 确认无伪转化率）。ECS 备份 `/tmp/qre-public-beta-ops-review1-pre-20261026/` 后仅同步 ops_support.py + console.html 并重启 qre-saas（无 schema 变更）。
+
 ## Archive: QRE-SAAS-NL-A2A3（持久限频与版本化编译缓存）
 
 ## Created By

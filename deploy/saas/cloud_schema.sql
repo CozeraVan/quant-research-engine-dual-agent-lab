@@ -257,9 +257,28 @@ CREATE TABLE IF NOT EXISTS feedback (
     content    TEXT NOT NULL,                     -- 反馈/改进建议正文
     page       TEXT,                              -- 提交来源页面路径（可空）
     contact    TEXT,                              -- 用户自愿留的联系方式（可空）
+    -- QRE-SAAS-PUBLIC-BETA-OPS（2026-10-26）：分类与处理状态（最小闭环，不建工单系统）。
+    -- category=bug/experience/factor/other（提交端 allowlist，缺省 other）；
+    -- status=open/doing/done/closed（管理台流转，缺省 open）。
+    category   TEXT NOT NULL DEFAULT 'other',
+    status     TEXT NOT NULL DEFAULT 'open',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- 老库自愈（应用层 ensure 同步；app 账号非 owner 的库由 postgres apply 本文件）
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'other';
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open';
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at DESC);
+-- postgres 建表时应用角色不是 owner：BIGSERIAL 序列权限必须显式授予。
+-- 2026-10-26 生产实测：feedback_id_seq 缺 USAGE → 登录用户提交反馈 500
+-- （同 share_links_id_seq 坑；feedback 特性此前未部署过 ECS，首次上线暴露）。
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice')
+       AND EXISTS (SELECT 1 FROM information_schema.sequences
+                   WHERE sequence_schema = 'public' AND sequence_name = 'feedback_id_seq') THEN
+        GRANT USAGE, SELECT ON SEQUENCE feedback_id_seq TO aguhuice;
+    END IF;
+END $$;
 
 -- 经典策略公开白名单与增量日更：纳入权威 schema，避免新库依赖懒建表时序。
 CREATE TABLE IF NOT EXISTS showcase (
@@ -348,6 +367,28 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
         GRANT SELECT, INSERT, UPDATE, DELETE ON nl_rate_limits TO aguhuice;
         GRANT SELECT, INSERT, UPDATE, DELETE ON nl_compile_cache TO aguhuice;
+    END IF;
+END $$;
+
+-- QRE-SAAS-PUBLIC-BETA-OPS（2026-10-26）：NL 编译事件（公测运营指标数据源）。
+-- 最小隐私安全事件表：只存结果元数据——成败、是否缓存命中、失败分类、主体类型，
+-- 不存策略文本/描述、不存 API key、不存原始 IP。自本表上线起统计，上线前无历史
+-- （管理台对应指标显示「—」，不回填、不估算）。
+CREATE TABLE IF NOT EXISTS nl_compile_events (
+    id          BIGSERIAL PRIMARY KEY,
+    ok          BOOLEAN NOT NULL,
+    cache_hit   BOOLEAN NOT NULL DEFAULT false,
+    error_class TEXT,                             -- llm_error/invalid_yaml/missing_factors/not_configured；成功为 NULL
+    scope       TEXT NOT NULL DEFAULT 'guest',    -- guest=游客 / member=会员 / admin=管理员
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_nl_compile_events_created ON nl_compile_events (created_at DESC);
+-- postgres 建表时应用角色不是 owner：CRUD 与序列权限显式授予（角色不存在则跳过）。
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON nl_compile_events TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE nl_compile_events_id_seq TO aguhuice;
     END IF;
 END $$;
 

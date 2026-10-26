@@ -14,6 +14,15 @@
 
   <div class="card hidden" id="fb-form-card">
     <div class="form-grid">
+      <label>反馈类型 <span class="req">*</span></label>
+      <span>
+        <select id="fb-category">
+          <option value="bug">问题缺陷</option>
+          <option value="experience" selected>体验建议</option>
+          <option value="factor">因子需求</option>
+          <option value="other">其他</option>
+        </select>
+      </span>
       <label>反馈内容 <span class="req">*</span></label>
       <span>
         <textarea id="fb-content" rows="5" maxlength="2000" placeholder="问题现象 / 改进建议 / 想要的功能（最多 2000 字）"></textarea>
@@ -32,7 +41,7 @@
   <div class="card hidden" id="fb-history-card">
     <h2>我的反馈 <span class="opt" id="fb-count"></span></h2>
     <table class="tbl">
-      <thead><tr><th>内容</th><th>来源页面</th><th>提交时间</th></tr></thead>
+      <thead><tr><th>类型</th><th>状态</th><th>内容</th><th>来源页面</th><th>提交时间</th></tr></thead>
       <tbody id="fb-tbody"></tbody>
     </table>
     <div class="chart-empty hidden" id="fb-empty">还没有提交过反馈</div>
@@ -43,6 +52,8 @@
 <script>
 (function(){
   function esc(s){ var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+  var CAT_LABELS = {bug:'问题缺陷', experience:'体验建议', factor:'因子需求', other:'其他'};
+  var ST_LABELS = {open:'待处理', doing:'处理中', done:'已解决', closed:'已关闭'};
   var loggedIn = SAAS_BYPASS || !!saasToken();
   if (!loggedIn){
     document.getElementById('fb-login').classList.remove('hidden');
@@ -57,7 +68,9 @@
       document.getElementById('fb-count').textContent = '共 ' + d.feedback.length + ' 条';
       document.getElementById('fb-empty').classList.toggle('hidden', d.feedback.length > 0);
       document.getElementById('fb-tbody').innerHTML = d.feedback.map(function(f){
-        return '<tr><td>' + esc(f.content) + '</td><td>' + esc(f.page || '—') + '</td><td>' +
+        return '<tr><td>' + esc(CAT_LABELS[f.category] || f.category || '其他') + '</td><td>' +
+          esc(ST_LABELS[f.status] || f.status || '待处理') + '</td><td>' + esc(f.content) + '</td><td>' +
+          esc(f.page || '—') + '</td><td>' +
           (f.created_at ? LabUI.fmtLocalTime(f.created_at) : '—') + '</td></tr>';
       }).join('');
     }).catch(function(){});
@@ -70,6 +83,7 @@
     if (!content){ st.textContent = '请先填写反馈内容'; return; }
     var btn = this; btn.disabled = true; st.textContent = '提交中…';
     apiFetch('/api/saas/feedback', {json: {
+      category: document.getElementById('fb-category').value,
       content: content,
       contact: document.getElementById('fb-contact').value.trim(),
       page: document.referrer && document.referrer.indexOf(location.origin) === 0

@@ -193,6 +193,7 @@
    **经典策略与结果操作 UI 已发布（2026-10-26，QRE-SAAS-CLASSIC-ACTIONS-UI，已部署待人工验收、未 commit/push）**：showcase 底部灰字长文改「复现经典策略」问号提示 +「新建同款策略」主按钮，页头备注与 `#sc-hint` 删除；job「下一步」与「分享结果」合并为「结果操作」卡（保存/确认信号=主按钮、信号/分享=次按钮，状态文本去灰字，信号 T+1 提示移入问号），新增 `syncResultActionCard()` 按组可见性控制外层（游客/只读整体隐藏）；按钮 ≥44px、375px 不横溢。TDD RED→GREEN（新 12 例 + 既有断言更新），全量 2701 passed + 5 skipped，真实 Chromium 9/9；ECS 备份 `/tmp/qre-classic-actions-pre-20261026/` 后同步三文件仅重启 qre-saas，公网验证通过。验收通过后才 commit/push。
 3. **[挂起] 移动端、App 端与可访问性深化**：用户 2026-10-25 明确暂时跳过；既有移动适配和 Chromium 测试资产保留，未来由用户明确重启。
 4. **运营反馈闭环**：管理台优先看编译失败率、回测成功率、排队时长、游客到注册转化、热门失败原因；意见反馈按类型分派，不先堆会员等级和付费功能。
+   **已部署待人工验收（2026-10-26，QRE-SAAS-PUBLIC-BETA-OPS，未 commit/push）**：9090 管理台新增「公测运营」tab（`GET /api/saas/console/ops`，窗口 today/7d/30d/all，admin 门禁不变）——NL 编译次数/成功率/缓存命中率/失败原因 Top5/统计起点（新表 `nl_compile_events`，只存 ok/cache_hit/error_class/scope/created_at，不存策略文本/API key/原始 IP，**自功能上线起统计、上线前显示「—」**，超限拒绝不计入分母）；回测（kind='full'，smoke 与用户主动取消不计入）成功率/平均排队/平均执行/失败原因 Top5；游客到注册转化（游客独立会话=guest_key 去重——仅覆盖提交过任务的游客；新增注册=users.created_at；**二者无关联，不计算转化率**——ratio=null + measurement=unlinked，未扩展用户追踪 schema）；反馈按类型/状态计数；分母为 0 一律 null→「—」。**时间窗口 today 按 Asia/Shanghai 自然日**（`_now_shanghai()` + zoneinfo；原 UTC 零点漏当日凌晨 8 小时）。**反馈分类闭环（最小可用，不建工单系统）**：feedback 增 category（bug/experience/factor/other）/status（open/doing/done/closed），提交 allowlist、console 筛选与状态流转端点，用户隔离/每日 20 条/admin 鉴权全保留。**关键浏览器自动化**：可重复执行资产落 `deploy/saas/public-beta-audit/`（seed/browser_audit/run_audit；复用 `.tmp/browser-venv` Playwright + `.tmp/ms-playwright` Chromium，未进生产依赖；stub LLM + worker 协议模拟，不跑真实回测），覆盖游客/登录、新建页、NL 编译 stub、任务等待/失败恢复、结果只读与权限、反馈分类、管理台运营指标；真实 Chromium 9/9 零 JS error 零横溢（1280 与 375）。**主 Agent 复核 2 项 Required Fixes 已解决并重新部署**（2026-10-26）：①转化比率误导——不计算 new_users/guest_sessions 之比（生产实测 300.0%），API ratio=null + measurement=unlinked，console 卡改「转化率 —」；②today 窗口改上海自然日。新回归 3 例，TDD RED=4→GREEN，ops 测试 20 passed，全量 **2772 passed + 6 skipped**（1 例已知 flake 复跑通过）；Chromium 重跑 9/9，console-ops-1280/375 确认无伪转化率；备份 `/tmp/qre-public-beta-ops-review1-pre-20261026/` 后仅同步 ops_support.py + console.html 并重启 qre-saas（无 schema 变更）。生产热修 `feedback_id_seq` 缺 USAGE（提交反馈 500；该特性此前未部署过 ECS）。全量 2770 passed + 6 skipped；生产临时会话验证后彻底清理，9090 隧道与公网页面核验通过。**未 commit/push，待用户人工验收。** 详见 04/05/09/11。
 
 ### 11.4 扩容方案（测量驱动，先韧性后硬件）
 
@@ -250,7 +251,8 @@
 5. 首次成功路径与帮助中心。（等待状态/离线提示/取消/失败恢复已发布：`a84a9a3`；结果理解与集中帮助已发布：`9fd3b3d`；移动端/App 与可访问性深化挂起）
 6. ~~默认私有的可撤销只读分享~~ ✅ 已发布（2026-10-26，`08b4a27`，schema 与公网撤销链路验证通过）。
 7. ~~经典策略按钮与结果操作卡 UI 精修~~ ✅ 已验收发布（2026-10-26，`e6f4f77`；含分享序列权限与完整 URL 热修）。
-8. 公测运营指标与关键浏览器自动化。
+8. ~~公测运营指标与关键浏览器自动化~~ ✅ 已验收发布（2026-10-26，QRE-SAAS-PUBLIC-BETA-OPS）。
+   9090「公测运营」tab（NL 编译成功率/缓存命中/失败原因、回测成功率/排队/执行/失败原因、游客独立会话与新增注册两个独立计数——**不计算转化率**、反馈分类计数；today 窗口按 Asia/Shanghai 自然日；事件表自上线起统计，空口径「—」）+ 反馈分类/状态最小闭环 + `deploy/saas/public-beta-audit/` 可重复浏览器验收资产（真实 Chromium 9/9）。下一项：P2 NL A1 输入校验与 Jev 小样本评估。
 
 #### P2（随后按优先级立项）
 9. 未来整体上云与数据迁移方案（§11.7）。

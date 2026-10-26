@@ -46,6 +46,7 @@ from quant_research_engine.gui.saas.result_contract import (
     build_result_contract,
     contract_view,
 )
+from quant_research_engine.gui.saas import ops_support
 from quant_research_engine.gui.saas.symbol_norm import (
     normalize_ts_codes,
     resolve_ts_code,
@@ -1350,11 +1351,9 @@ def create_saas_app() -> Flask:
 
         try:
             db_ready = nls.ensure_nl_tables(engine)
-            # 快路径：不加锁查缓存（命中不调用 LLM、不占配额）
-            if config is not None and db_ready:
-                hit = nls.cache_lookup(engine, cache_key)
-                if hit is not None:
-                    return jsonify({**hit, "cache_hit": True})
+            # 主体类型（游客/会员/admin）先判定：运营事件与配额豁免同源。
+            # 游客跳过角色查询；会员/admin 一次主键查询（缓存命中路径也多这一跳，
+            # 保证运营事件 scope 准确）。
             is_admin = False
             if uid is not None and db_ready:
                 with engine.connect() as conn:
@@ -1362,6 +1361,19 @@ def create_saas_app() -> Flask:
                         text("SELECT role FROM users WHERE id = :uid"), {"uid": uid}
                     ).first()
                 is_admin = bool(row) and row.role == "admin"
+            nl_scope = "admin" if is_admin else ("member" if uid is not None else "guest")
+            # QRE-SAAS-PUBLIC-BETA-OPS：运营事件表就绪标志（缺表时锁事务内不写事件，
+            # 避免失败语句毒化锁事务；表由 postgres apply / 懒自愈保证存在）
+            ops_ready = ops_support.ensure_ops_tables(engine)
+            # 快路径：不加锁查缓存（命中不调用 LLM、不占配额）
+            if config is not None and db_ready:
+                hit = nls.cache_lookup(engine, cache_key)
+                if hit is not None:
+                    # QRE-SAAS-PUBLIC-BETA-OPS：运营事件（尽力，失败不影响响应）
+                    if ops_ready:
+                        ops_support.record_nl_event(engine, ok=True, cache_hit=True,
+                                                    error_class=None, scope=nl_scope)
+                    return jsonify({**hit, "cache_hit": True})
             # 同 key 事务级咨询锁：并发同 key 只调用一次 LLM，不同 key 不串行。
             # 配额与写缓存同在锁事务内（每次请求只占一个连接，避免嵌套取连接
             # 耗尽连接池）；正常返回即提交，编译失败同样计数。
@@ -1370,6 +1382,10 @@ def create_saas_app() -> Flask:
                 hit = nls.cache_get(conn, cache_key)
                 if hit is not None:
                     nls.cache_touch(conn, cache_key)
+                    # 运营事件与缓存命中同在锁事务内（同连接，避免嵌套取连接）
+                    if ops_ready:
+                        ops_support.record_nl_event_on(conn, ok=True, cache_hit=True,
+                                                       error_class=None, scope=nl_scope)
                     return jsonify({**hit, "cache_hit": True})
                 if not is_admin:
                     if uid is None:
@@ -1402,12 +1418,26 @@ def create_saas_app() -> Flask:
                                     result=result, model=model,
                                     prompt_hash=prompt_hash,
                                     cache_version=nls.NL_COMPILER_CACHE_VERSION)
+                # QRE-SAAS-PUBLIC-BETA-OPS：编译结果事件（与配额/缓存同事务；
+                # 超限拒绝不计入——那不是编译尝试）。失败分类取 compile_nl 的 code。
+                if ops_ready:
+                    ops_support.record_nl_event_on(
+                        conn, ok=bool(result.get("ok")), cache_hit=False,
+                        error_class=None if result.get("ok") else str(result.get("code") or "unknown"),
+                        scope=nl_scope,
+                    )
         except SQLAlchemyError:
             # 计数/缓存故障不放开限流：游客回退文件计数，会员按不可用拒绝
             if uid is None:
                 if not _guest_nl_hit(app, _client_ip()):
                     return _guest_limit_response()
                 result = nl_compiler.compile_nl(description)
+                # 运营事件尽力补记（DB 故障回退路径，静默降级）
+                ops_support.record_nl_event(
+                    engine, ok=bool(result.get("ok")), cache_hit=False,
+                    error_class=None if result.get("ok") else str(result.get("code") or "unknown"),
+                    scope="guest",
+                )
                 if result.get("code") == "not_configured":
                     return jsonify(result), 503
                 return jsonify({**result, "cache_hit": False})
@@ -2000,7 +2030,9 @@ def create_saas_app() -> Flask:
         return jsonify({"ok": True, "requests": [_jsonable(dict(r)) for r in rows]})
 
     # --- 内测意见反馈（QRE-SAAS-FEEDBACK-FACTOR-REQ）：仅登录用户提交
-    #     （游客不可提交，决策见 06 日志）；管理台只读查看 ---
+    #     （游客不可提交，决策见 06 日志）；管理台只读查看。
+    #     QRE-SAAS-PUBLIC-BETA-OPS：分类（category）与处理状态（status）最小闭环，
+    #     allowlist 与 ops_support 单一权威同源；不建工单系统。 ---
     FEEDBACK_DAILY_LIMIT = 20  # 单用户每日反馈上限（防滥用，内测口径）
 
     @app.post("/api/saas/feedback")
@@ -2017,6 +2049,11 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "反馈内容过长（最多 2000 字）"}), 400
         page = str(data.get("page") or "").strip()[:200] or None
         contact = str(data.get("contact") or "").strip()[:200] or None
+        category = str(data.get("category") or "other").strip()
+        if category not in ops_support.FEEDBACK_CATEGORIES:
+            return jsonify({"ok": False, "error": "反馈类型无效"}), 400
+        # 分类/状态列懒自愈（本地/测试库；生产由 postgres apply cloud_schema.sql）
+        ops_ready = ops_support.ensure_ops_tables(engine)
         with engine.begin() as conn:
             # dev 后门（SAAS_DEV_AUTH=1）用户可能不存在：自动建行（同 jobs 路由）
             conn.execute(
@@ -2032,13 +2069,24 @@ def create_saas_app() -> Flask:
             ).scalar_one()
             if used >= FEEDBACK_DAILY_LIMIT:
                 return jsonify({"ok": False, "error": "今日反馈提交次数已达上限，请明天再来"}), 429
-            fid = conn.execute(
-                text(
-                    "INSERT INTO feedback (user_id, content, page, contact) "
-                    "VALUES (:uid, :content, :page, :contact) RETURNING id"
-                ),
-                {"uid": uid, "content": content, "page": page, "contact": contact},
-            ).scalar_one()
+            if ops_ready:
+                fid = conn.execute(
+                    text(
+                        "INSERT INTO feedback (user_id, content, page, contact, category) "
+                        "VALUES (:uid, :content, :page, :contact, :category) RETURNING id"
+                    ),
+                    {"uid": uid, "content": content, "page": page, "contact": contact,
+                     "category": category},
+                ).scalar_one()
+            else:
+                # 列缺失（旧库未 apply）：按既有形态降级入库，不报错、不丢反馈
+                fid = conn.execute(
+                    text(
+                        "INSERT INTO feedback (user_id, content, page, contact) "
+                        "VALUES (:uid, :content, :page, :contact) RETURNING id"
+                    ),
+                    {"uid": uid, "content": content, "page": page, "contact": contact},
+                ).scalar_one()
         return jsonify({"ok": True, "id": fid})
 
     @app.get("/api/saas/feedback")
@@ -2047,10 +2095,13 @@ def create_saas_app() -> Flask:
         uid = _current_user_id(app, engine)
         if uid is None:
             return jsonify({"ok": False, "error": "未登录"}), 401
+        ops_ready = ops_support.ensure_ops_tables(engine)
+        cols = ("id, content, page, created_at" if not ops_ready else
+                "id, content, page, category, status, created_at")
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT id, content, page, created_at FROM feedback "
+                    f"SELECT {cols} FROM feedback "
                     "WHERE user_id = :uid ORDER BY created_at DESC LIMIT 50"
                 ),
                 {"uid": uid},
@@ -4449,21 +4500,83 @@ def create_saas_app() -> Flask:
 
     @app.get("/api/saas/console/feedback")
     def api_console_feedback() -> Any:
-        """反馈列表（QRE-SAAS-FEEDBACK-FACTOR-REQ）：只读，最新 200 条。"""
+        """反馈列表（QRE-SAAS-FEEDBACK-FACTOR-REQ）：最新 200 条。
+        QRE-SAAS-PUBLIC-BETA-OPS：支持 ?category=bug/experience/factor/other 与
+        ?status=open/doing/done/closed 筛选（分派闭环）；列形态随 ops 表就绪降级。"""
         engine = _get_engine(app)
         _, denied = _require_admin(app, engine)
         if denied is not None:
             return denied
+        category = str(request.args.get("category") or "").strip()
+        status = str(request.args.get("status") or "").strip()
+        if category and category not in ops_support.FEEDBACK_CATEGORIES:
+            return jsonify({"ok": False, "error": "category 无效"}), 400
+        if status and status not in ops_support.FEEDBACK_STATUSES:
+            return jsonify({"ok": False, "error": "status 无效"}), 400
+        ops_ready = ops_support.ensure_ops_tables(engine)
+        cols = ("f.id, f.user_id, u.email AS user_email, u.phone AS user_phone, "
+                "f.content, f.page, f.contact, f.created_at" if not ops_ready else
+                "f.id, f.user_id, u.email AS user_email, u.phone AS user_phone, "
+                "f.content, f.page, f.contact, f.category, f.status, f.created_at")
+        sql = (f"SELECT {cols} FROM feedback f "
+               "LEFT JOIN users u ON u.id = f.user_id")
+        params: dict[str, Any] = {}
+        where: list[str] = []
+        if category:
+            where.append("f.category = :cat")
+            params["cat"] = category
+        if status:
+            where.append("f.status = :st")
+            params["st"] = status
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY f.created_at DESC LIMIT 200"
         with engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT f.id, f.user_id, u.email AS user_email, u.phone AS user_phone, "
-                    "f.content, f.page, f.contact, f.created_at "
-                    "FROM feedback f LEFT JOIN users u ON u.id = f.user_id "
-                    "ORDER BY f.created_at DESC LIMIT 200"
-                )
-            ).mappings().all()
+            rows = conn.execute(text(sql), params).mappings().all()
         return jsonify({"ok": True, "feedback": [_jsonable(dict(r)) for r in rows]})
+
+    @app.post("/api/saas/console/feedback/<int:feedback_id>/status")
+    def api_console_feedback_status(feedback_id: int) -> Any:
+        """反馈处理状态流转（QRE-SAAS-PUBLIC-BETA-OPS）：仅 admin；
+        status ∈ open/doing/done/closed；不存在 404（不泄露存在性差异）。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        data = request.get_json(silent=True) or {}
+        status = str(data.get("status") or "").strip()
+        if status not in ops_support.FEEDBACK_STATUSES:
+            return jsonify({"ok": False, "error": "status 无效"}), 400
+        if not ops_support.ensure_ops_tables(engine):
+            return jsonify({"ok": False, "error": "反馈状态字段不可用"}), 503
+        with engine.begin() as conn:
+            row = conn.execute(
+                text("UPDATE feedback SET status = :st WHERE id = :id RETURNING id"),
+                {"st": status, "id": feedback_id},
+            ).first()
+        if row is None:
+            return jsonify({"ok": False, "error": "反馈不存在"}), 404
+        return jsonify({"ok": True, "id": feedback_id, "status": status})
+
+    @app.get("/api/saas/console/ops")
+    def api_console_ops() -> Any:
+        """公测运营指标（QRE-SAAS-PUBLIC-BETA-OPS）：窗口 today/7d/30d/all。
+        指标全部来自权威表（nl_compile_events / jobs / users / feedback），
+        空数据比率返回 null（前端显示「—」），不编造历史。"""
+        engine = _get_engine(app)
+        _, denied = _require_admin(app, engine)
+        if denied is not None:
+            return denied
+        window = str(request.args.get("window") or "today").strip()
+        if window not in ops_support.OPS_WINDOWS:
+            return jsonify({"ok": False, "error": "window 须为 today/7d/30d/all"}), 400
+        ops_support.ensure_ops_tables(engine)
+        with engine.connect() as conn:
+            ops = ops_support.compute_ops(conn, window)
+        return jsonify({"ok": True, "ops": _jsonable(ops),
+                        "categories": ops_support.FEEDBACK_CATEGORY_LABELS,
+                        "statuses": ops_support.FEEDBACK_STATUS_LABELS,
+                        "window_labels": ops_support.OPS_WINDOW_LABELS})
 
     @app.get("/api/saas/console/workers")
     def api_console_workers() -> Any:

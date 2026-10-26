@@ -1,5 +1,30 @@
 # Coding Handoff
 
+## Task ID
+
+QRE-SAAS-PUBLIC-BETA-OPS（P1：公测运营反馈闭环与关键浏览器自动化）
+
+## Release Status
+
+RELEASED（2026-10-26 用户验收通过，已部署 ECS，本次 commit/push）。ECS 仅重启 qre-saas；未重启 worker、未跑真实回测。
+
+## Implementation Summary
+
+- `src/quant_research_engine/gui/saas/ops_support.py`（新）：反馈分类/状态 allowlist 与窗口定义（单一权威）；`ensure_ops_tables`（nl_compile_events 建表 + feedback 两列，information_schema 先查，失败降级 False）；`record_nl_event_on/record_nl_event`（同连接/独立短事务，尽力而降）；`compute_ops`（窗口内 NL/回测/转化/反馈聚合，比率分母为 0 返回 None，不估算）。**复核修正**：`window_start` today 按 Asia/Shanghai 自然日（`_now_shanghai()` + zoneinfo）；conversion 只回两个独立计数（ratio=None + measurement=unlinked，不计算未关联总量的比）。
+- `src/quant_research_engine/gui/saas/app.py`：NL 编译四终态事件记录（超限不计入、scope 由提前判定的 is_admin 同源给出、ops_ready 门防锁事务毒化）；反馈创建/列表/console 筛选的分类与状态；`POST /api/saas/console/feedback/<id>/status`；`GET /api/saas/console/ops`。
+- `src/quant_research_engine/gui/saas/templates/console.html`：「公测运营」tab（窗口切换 + 四区指标 + 两张失败原因表 + tip 口径说明）；反馈 tab 类型/状态筛选、类型/状态列、状态流转按钮；≤768px tab 折行（375 不破版）。
+- `src/quant_research_engine/gui/saas/templates/feedback.html`：提交类型选择；历史表类型/状态列。
+- `deploy/saas/cloud_schema.sql`：nl_compile_events + feedback 两列 + feedback_id_seq 幂等授权。
+- `deploy/saas/public-beta-audit/`（新，可重复执行资产）：seed.py / browser_audit.py / run_audit.sh。
+- `tests/test_saas_public_beta_ops.py`（新，20 例：17 例首版 + 3 例复核修正回归）。
+
+## Verification
+
+- TDD：RED=17 errors（HEAD 基线）；GREEN=17 passed；相关 5 文件 227 passed + 1 skipped；全量 2770 passed + 6 skipped（基线 2753+6 零回归）。证据 `.tmp/public-beta-ops/{red,green,full-tests}-evidence.txt`。
+- **复核修正（主 Agent 2 项 Required Fixes）**：TDD RED=4 failed（转化比率 ×2 + 上海日界 ×2）→ GREEN；ops 测试 20 passed；相关 3 文件 135 passed；全量 **2772 passed + 6 skipped**（1 例已知 flake `test_gui_risk_report.py::test_post_starts_job_and_poll` 首跑偶发失败，单独与全文件复跑 passed）。证据 `.tmp/public-beta-ops/review1-{red,audit-run,full-tests}.txt`。
+- 真实 Chromium（临时库 + 8099 staging + stub LLM + worker 协议模拟，未启动真实 worker/回测）：9/9、零 JS error、零横溢（1280 与 375）；复核后重跑 9/9，`console-ops-1280.png` 与 `console-ops-375.png` 确认「转化率 —」、无 300% 伪比率、tab 折行正常。证据 `.tmp/public-beta-ops/`（browser-evidence.json + 11 截图 + audit-run.txt）。
+- ECS：整任务回滚点 `/tmp/qre-public-beta-ops-pre-20261026/`；本轮修改前备份 `/tmp/qre-public-beta-ops-review1-pre-20261026/`；仅同步 ops_support.py + console.html（无 schema 变更）并重启 qre-saas；生产 API/隧道/公页验证与临时数据清理见 `.tmp/public-beta-ops/production-verification.txt`。
+
 ## Current Release
 
 RELEASED（2026-10-26 用户验收通过，QRE-SAAS-NL-A2A3 含管理台同步，已 commit/push + ECS）：持久限频与版本化编译缓存 + 9090 管理台「自然语言编译」卡发布。发布前复核全量 2753 passed + 6 skipped；公网两次纯编译 cache_hit false→true、YAML 一致、未创建回测，overview nl 字段与执行常量/两表计数一致。以下保留各任务实施记录。

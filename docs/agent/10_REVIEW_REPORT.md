@@ -1,5 +1,34 @@
 # Review Report
 
+## Task ID
+
+QRE-SAAS-PUBLIC-BETA-OPS（P1：公测运营反馈闭环与关键浏览器自动化）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS + RELEASED（2026-10-26 用户验收通过，已部署并发布）。Step 5 全量 2772 passed + 6 skipped；主 Agent 最终全量复核 **2773 passed + 6 skipped**。真实 Chromium 9/9 零 JS error 零横溢；生产 API/隧道/公网验证通过，临时数据已清理。
+
+## 主 Agent 复核 Required Fixes（2026-10-26，均已解决）
+
+1. **转化比率误导（已解决）**：原 `conversion.ratio = new_users / guest_sessions` 是两个未关联总量的比，不是游客到注册转化率，生产实测出现「注册 / 游客 300.0%」。修正：`compute_ops` 不再计算该比率（`ratio=None` + `measurement="unlinked"` 明示需会话关联、当前不计算）；console 第三张卡改为「转化率 —」（title 说明关联前置条件），保留游客独立会话/新增注册两个真实计数；**未扩展任何用户追踪 schema**（诚实降级）。测试：`test_conversion_ratio_never_computed`（两边均有计数时 ratio 必须为 None）+ `test_metrics_math` 断言更新；浏览器审计新增断言（转化区不得含 `%`、旧标签「注册 / 游客」不得出现）。
+2. **今日边界（已解决）**：`window_start('today')` 原按 UTC 零点（UTC 00:00=上海 08:00，漏当日凌晨 8 小时）。修正：新增 `_now_shanghai()` 助手（可 monkeypatch）+ `SHANGHAI=ZoneInfo("Asia/Shanghai")`，today=上海当日零点转 UTC；7d/30d/all 语义不变。测试：`test_today_start_is_shanghai_midnight`（上海 00:30→UTC 16:00 前一日，且不等于 UTC 零点）+ `test_today_window_includes_shanghai_early_morning`（DB 级：上海当日 07:00 产生的任务计入 today，UTC 口径会漏）。
+
+## Findings
+
+1. 指标口径全部来自权威表（nl_compile_events / jobs / users / feedback），空数据返回 null 由前端显示「—」；NL 指标明确「自功能上线起统计」，未回填、未编造历史——符合 §11.3 与 P0 放行规则。
+2. 隐私：事件表不存策略文本/API key/原始 IP（列集合被测试锁定）；游客 scope 不落 IP。
+3. 生产暴露并热修 feedback_id_seq 缺 USAGE（提交反馈 500）；schema 增加幂等授权 DO 块，回归覆盖 schema 幂等 apply。
+4. 浏览器自动化资产落 `deploy/saas/public-beta-audit/` 可重复执行；Playwright 仅在测试 venv，未进生产依赖。
+5. 既有用户隔离、每日 20 条上限、admin 鉴权、A2A3 限额/缓存语义零回归（生产真实编译两次 cache_hit false→true 复核）。
+
+## Required Fixes
+
+无（上述两项已解决并复验）。
+
 ## Current Release
 
 PASS + RELEASED（2026-10-26 用户验收通过，QRE-SAAS-NL-A2A3 含管理台同步，已 commit/push + ECS）：持久限频、版本化编译缓存与 9090 管理台同步。发布前复核全量 2753 passed + 6 skipped；公网两次纯编译 cache_hit false→true、YAML 一致、未创建回测，overview nl 字段与执行常量/两表计数一致。以下保留各任务自审记录。
