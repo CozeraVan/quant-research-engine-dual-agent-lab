@@ -21,19 +21,19 @@ QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
 
 ## Current Status
 
-IMPLEMENTED（2026-10-26，待用户验收；未 commit/push、未部署 ECS、未跑真实回测）
+DONE（2026-10-26 用户批准提交、推送与 ECS；实现 `08b4a27` 已发布，未跑真实回测）
 
 ## Task Note
 
-- **范围铁律**：严格按批准计划实施；不改回测引擎/worker 执行逻辑/结果数值/配额/NL A2/A3；不跑真实回测；不做压测/性能/硬件；不做移动/App 专项（仅 375 验证不破版）；未 commit/push/ECS。移动端/App 挂起决策（06 同日条目）保留不动。
-- **Schema**：`deploy/saas/cloud_schema.sql` 新增 `share_links`（token_hash 唯一 64 位哈希 / job_id ON DELETE CASCADE / owner_id / expires_at / revoked_at / created_at + 两个索引），无明文/前缀/guest_key/last_used；应用层 `_ensure_share_links` information_schema + 进程 guard 懒自愈，CREATE 失败按「分享不可用」安全降级；**生产须先由 postgres 幂等 apply 再发代码**。
+- **范围铁律**：严格按批准计划实施；不改回测引擎/worker 执行逻辑/结果数值/配额/NL A2/A3；未跑真实回测；未做压测/性能/硬件；未做移动/App 专项（仅 375 验证不破版）。移动端/App 挂起决策（06 同日条目）保留不动。
+- **Schema**：`deploy/saas/cloud_schema.sql` 新增 `share_links`（token_hash 唯一 64 位哈希 / job_id ON DELETE CASCADE / owner_id / expires_at / revoked_at / created_at + 两个索引），无明文/前缀/guest_key/last_used；应用层 `_ensure_share_links` information_schema + 进程 guard 懒自愈，CREATE 失败按「分享不可用」安全降级；生产已由 postgres 幂等 apply，表 owner=postgres。
 - **令牌**：`secrets.token_urlsafe(32)`；库中只存完整 `sha256("share:"+token+SAAS_AUTH_SALT)`；明文只在创建响应出现一次；创建 URL `/saas/jobs/<job_id>?share=<token>`；校验只允许未撤销、未过期且 job 一致的记录。
 - **API**：`POST /api/saas/jobs/<id>/share-links`（登录+本人+completed；游客 401、他人/不存在 404、未完成 409；有效期只接受 1/7/30/0 天，默认 7）；`GET /api/saas/share-links`（仅本人最近 50 条，不回 hash/token）；`POST /api/saas/share-links/<id>/revoke`（仅创建者，重复/他人/不存在统一 404，立即失效）。
-- **公开只读通道**：`_require_completed_result` 识别有效 `?share=` 绑定单 job 放行（`readonly_kind="share"`），不依赖登录/游客会话；无效/过期/撤销/错 job 不降级（匿名 401、登录他人 404，错误体与不存在逐字节一致）；范围仅现有结果 GET（summary/chart-data/tag-analysis/risk-analysis/symbols/symbol 详情/gen-status），不开放 jobs/results 列表、策略/worker/console；generate 对 share/showcase 都 403；写端点仍按原归属。
+- **公开只读通道**：`_require_completed_result` 识别有效 `?share=` 绑定单 job 放行（`readonly_kind="share"`），不依赖登录/游客会话；无效/过期/撤销/错 job 不降级（匿名 401、登录他人 404，错误体与不存在逐字节一致），也不得回退 showcase；范围仅现有结果 GET，不开放 jobs/results 列表、策略/worker/console；generate 对 share/showcase 都 403；写端点仍按原归属。
 - **未验证与 showcase**：未验证结果允许 owner 主动分享且合同徽标「旧口径·未验证」原样保留；showcase verified 门不变；游客不能创建分享。
 - **前端**：job.html 登录+completed+非只读显示「分享结果」（自定义模态选有效期、只读 input+复制、只显示一次、不写 localStorage）；分享视图 chip「只读分享」+「← 返回首页」，showcase 仍「经典策略展示 · 只读」+「← 返回经典策略」；取消/保存/信号/下载/游客引导全部隐藏；profile「我的分享」列表与撤销二次确认；symbols/symbol 页 token 随 API 与导航传播。
-- **验证**：TDD 先 RED（65 errors）后 GREEN（65 passed）；相关 22 文件 655 passed；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2687 passed + 5 skipped**（基线 2651+5，+36 新例，零回归）；真实 Chromium 11/11（临时库 `qre_readonly_share_browser` + 8099 staging，seed/worker 协议模拟，零 JS error、零横溢），证据 `.tmp/readonly-share/`。
-- **发布要求**：先备份 → postgres apply `cloud_schema.sql`（share_links 归 postgres）→ 同步代码 → 重启 qre-saas；公网用专用测试任务验证创建→匿名只读→撤销后清理。建议提交 `feat(saas): 增加可撤销的只读结果分享`，待用户批准。
+- **验证**：TDD 先 RED 后 GREEN；最终全量 **2688 passed + 5 skipped**；真实 Chromium 12/12 零 JS error、零横溢，证据 `.tmp/readonly-share/`。
+- **生产发布**：实现 `08b4a27` 已 push。ECS 备份 `/tmp/qre-readonly-share-pre-20261026/`，postgres apply schema 后同步六个文件并仅重启 qre-saas。公网用 job74 验证有效分享 200/readonly_kind=share、撤销 401；用 job58 复核显式无效或撤销分享参数不得回退 showcase（401），无参数 showcase 仍 200。临时链接已删除，share_links=0，未跑真实回测。下一项：经典策略按钮与结果操作卡 UI 精修。
 
 ## Archive: QRE-SAAS-FIRST-SUCCESS-UX-001（P1 首切片：等待状态、离线提示与失败恢复）
 

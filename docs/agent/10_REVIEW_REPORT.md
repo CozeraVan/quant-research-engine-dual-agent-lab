@@ -10,7 +10,7 @@ KIMI_CODE（single agent self-review）
 
 ## Review Status
 
-PASS（2026-10-26，IMPLEMENTED 待用户验收；全量 2687 passed + 5 skipped、真实 Chromium 11/11 零 JS error 零横溢；未 commit/push、未部署 ECS、未跑真实回测）
+PASS + RELEASED（2026-10-26 用户批准提交并部署；实现 `08b4a27` 已发布；最终全量 2688 passed + 5 skipped、真实 Chromium 12/12；未跑真实回测）。生产复核新增 showcase 边界回归：显式无效/撤销 share 不得回退公开 showcase，无参数 showcase 保持公开；公网 job58/74 验证通过，临时链接已清理。
 
 ## Self-Review Findings
 

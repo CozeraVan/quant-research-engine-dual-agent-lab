@@ -3415,7 +3415,7 @@ def create_saas_app() -> Flask:
                 guest_key, guest_sid = _guest_identity(app)
                 row = _load_job_for_guest(job_id, guest_key)
                 if row is None:
-                    if _is_showcase_job(job_id):
+                    if not share_token and _is_showcase_job(job_id):
                         row = _load_job_public(job_id)
                         g.showcase_readonly = row is not None
                     if row is None:
@@ -3424,7 +3424,7 @@ def create_saas_app() -> Flask:
             else:
                 row = _load_job_for_user(job_id, uid)
                 if row is None:
-                    if _is_showcase_job(job_id):
+                    if not share_token and _is_showcase_job(job_id):
                         row = _load_job_public(job_id)
                         g.showcase_readonly = row is not None
                     if row is None:

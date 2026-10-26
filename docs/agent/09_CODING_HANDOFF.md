@@ -6,7 +6,7 @@ QRE-SAAS-READONLY-SHARE（P1：默认私有的可撤销只读分享）
 
 ## Release Status
 
-IMPLEMENTED（2026-10-26，待用户验收；未 commit/push、未部署 ECS、未跑真实回测）。全量 2687 passed + 5 skipped；真实 Chromium 11/11。**生产发布前必须由 postgres 幂等 apply `cloud_schema.sql`（share_links 归 postgres）再同步代码重启 qre-saas**；证据 `.tmp/readonly-share/`。
+RELEASED（2026-10-26，实现 `08b4a27` 已 push + ECS，未跑真实回测）。最终全量 2688 passed + 5 skipped；真实 Chromium 12/12。生产由 postgres apply `share_links` 后发布；公网创建→匿名只读→撤销通过。生产复核补一项 showcase 边界：显式无效/撤销 share 参数不得回退公开 showcase（两处 fallback 增加 `not share_token`），无参数 showcase 入口不变；job58/74 生产验证均通过，临时链接已清理。证据 `.tmp/readonly-share/`。
 
 ## Implementation Summary
 

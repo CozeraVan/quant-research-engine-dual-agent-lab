@@ -49,6 +49,8 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **P1 结果理解切片已发布（2026-10-25，QRE-SAAS-RESULT-UNDERSTANDING，commit `9fd3b3d`）**：公开 `/saas/help` 与主导航「使用说明」上线；结果页/个股页模块深链和 `/api/results/<id>/symbols/<code>` 的 `data_until` 已生效。已同步 app.py、base.html、job.html、symbol.html、help.html、replay.js、lab-theme.css 并重启 qre-saas，无 schema 变更、未重启 worker、未跑真实回测。公网 help 200、58 个股详情 data_until=2026-10-09、74 匿名 401，文件 SHA256 与仓库一致。回滚备份 `/tmp/qre-result-understanding-pre-20261025/`，生产证据 `.tmp/result-understanding-production/`。
 
+**P1 只读分享已发布（2026-10-26，QRE-SAAS-READONLY-SHARE，commit `08b4a27`）**：postgres 幂等 apply `share_links`（owner=postgres）后同步 app.py、四个结果/个人信息模板与 schema，仅重启 qre-saas。公网 job74 创建→匿名只读 200→撤销 401；job58 无参数 showcase=200、无效/撤销 share=401、有效 share=200，显式失效分享不会回退 showcase。临时链接已清理，share_links=0，未重启 worker、未跑真实回测。回滚备份 `/tmp/qre-readonly-share-pre-20261026/` 与 `/tmp/qre-readonly-share-showcase-hotfix-pre-20261026/`。
+
 **NL DeepSeek V4.1 Flash 配置（2026-10-25）**：生产 `QRE_NL_LLM_BASE_URL=https://api.deepseek.com`，正确模型 ID 为 `QRE_NL_LLM_MODEL=deepseek-flash`（最新 V4.1 Flash；`deepseek-v4.1-flash` 不是可用 ID，真实编译 400）。已用 MACD 金叉死叉纯编译验证成功，未创建回测。改前 env 备份 `/etc/qre-saas.env.bak-deepseek-v41-20261025`（0600）。
 
 **元数据上云（2026-09-26）**：因子目录与板块/概念名单经
@@ -220,7 +222,7 @@ ssh -i ~/.ssh/aguhuice_ed25519 root@47.119.127.40 \
   "sudo -u postgres psql aguhuice -c \"SELECT name, last_heartbeat_at, status_at, status FROM workers;\""
 sudo -n systemctl restart qre-saas-worker && sudo -n journalctl -u qre-saas-worker -n 30 --no-pager  # 本机 worker 重启/查日志（唯一 worker：系统级 qre-saas-worker，2026-10-03 收敛）
 
-# 只读分享（QRE-SAAS-READONLY-SHARE，2026-10-26 IMPLEMENTED 待发布）：新增 share_links 表
+# 只读分享（QRE-SAAS-READONLY-SHARE，2026-10-26 RELEASED）：新增 share_links 表
 # （token_hash 完整哈希/job_id ON DELETE CASCADE/owner_id/expires_at/revoked_at/created_at）。
 # ⚠️ 与 results.result_contract 同款 owner 踩坑：app 账号 CREATE TABLE 会报 must be owner，
 # 懒自愈 therefore 只兜底本地/测试库；**生产发布顺序 = 先备份 → postgres apply → 同步代码 →

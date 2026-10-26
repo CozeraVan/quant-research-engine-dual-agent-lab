@@ -895,7 +895,8 @@ class TestShareLinkReadChannel:
     def test_share_and_showcase_kinds_distinct(self, client, app):
         jid = _completed_job(client)
         _pin_showcase(app, jid)
-        token = _share_token_of(_create_share(client, jid, uid=1))
+        created = _create_share(client, jid, uid=1).get_json()
+        token = created["url"].split("?share=", 1)[1]
         anon = app.test_client()
         showcase = anon.get(f"/api/results/{jid}/summary").get_json()
         assert showcase["readonly_kind"] == "showcase"
@@ -904,6 +905,12 @@ class TestShareLinkReadChannel:
         # 分享视图的 generate 同样 403（showcase 文案不变）
         sc = anon.post(f"/api/results/{jid}/symbols/000001/generate")
         assert sc.status_code == 403 and sc.get_json()["error"] == "经典策略为只读展示"
+        # 显式分享参数失效时不得回退 showcase；无参数公开入口保持不变。
+        assert anon.get(f"/api/results/{jid}/summary?share=bogus").status_code == 401
+        assert client.post(f"/api/saas/share-links/{created['id']}/revoke",
+                           headers={"X-User-Id": "1"}).status_code == 200
+        assert anon.get(f"/api/results/{jid}/summary?share={token}").status_code == 401
+        assert anon.get(f"/api/results/{jid}/summary").status_code == 200
 
 
 class TestShareLinkCascade:

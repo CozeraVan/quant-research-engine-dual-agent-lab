@@ -185,7 +185,7 @@
    **首切片已发布（2026-10-25，QRE-SAAS-FIRST-SUCCESS-UX-001，commit `a84a9a3`）**：队列位置、worker 在线/离线提示、已等待时间进入 new/job 两页；取消（含游客会话归属）与失败恢复（真实 error_message + 按原策略重跑）可用；单次轮询超时不误判失败、80 轮前台超时分流任务页、不自动提交全量。全量 2629 passed + 5 skipped，真实 Chromium 12/12，ECS 公网文件与权限回归通过。剩余：NL A2 持久限频与 A3 编译缓存（原 P1 条目 4 保留）。
 2. **结果理解与分享**：补集中帮助中心/指标口径、数据截止与费用说明；默认私有前提下增加可撤销、可设有效期的只读分享链接。经典策略只展示验证过且可复现的内容。
    **首切片已发布（2026-10-25，QRE-SAAS-RESULT-UNDERSTANDING，commit `9fd3b3d`）**：公开 `/saas/help` 使用说明页（七锚点），合同文案同源；job/symbol 模块精准深链；五类磨损卡/费率/基准/重播提示补全；symbol 两路径注入 data_until，VaR/ES 统一损失正数；个股过户费重复显示已修。全量 2653 passed + 5 skipped，真实 Chromium 10/10，ECS 帮助页与个股 data_until 验证通过。剩余：默认私有的可撤销只读分享链接（P1 条目 6）。
-   **只读分享已实现（2026-10-26，QRE-SAAS-READONLY-SHARE，IMPLEMENTED 待用户验收，未 commit/push/ECS）**：`share_links` 表只存完整 token 哈希（明文仅创建响应一次）；创建/列表/撤销三个 owner API；`_require_completed_result` 增加单 job 绑定的公开只读通道（`readonly_kind=share`，无效/过期/撤销/错 job 不降级，范围仅结果 GET）；未验证结果可分享且徽标保留、showcase verified 门不变、游客不开放；job/profile 分享 UI 与「只读分享」chip。全量 2687 passed + 5 skipped，真实 Chromium 11/11。**发布前须 postgres apply `cloud_schema.sql`（share_links）再同步代码重启 qre-saas**。剩余：经典策略及结果操作 UI 精修。
+   **只读分享已发布（2026-10-26，QRE-SAAS-READONLY-SHARE，commit `08b4a27`）**：`share_links` 只存完整 token 哈希（明文仅创建响应一次）；创建/列表/撤销三个 owner API；单 job 绑定公开只读通道（无效/过期/撤销/错 job 不降级，也不回退 showcase）；未验证结果可分享且徽标保留、showcase verified 门不变、游客不开放；job/profile 分享 UI 与「只读分享」chip。最终全量 2688 passed + 5 skipped，真实 Chromium 12/12；ECS schema 与公网创建→匿名只读→撤销验证通过，临时链接已清理。剩余：经典策略及结果操作 UI 精修。
 3. **[挂起] 移动端、App 端与可访问性深化**：用户 2026-10-25 明确暂时跳过；既有移动适配和 Chromium 测试资产保留，未来由用户明确重启。
 4. **运营反馈闭环**：管理台优先看编译失败率、回测成功率、排队时长、游客到注册转化、热门失败原因；意见反馈按类型分派，不先堆会员等级和付费功能。
 
@@ -243,7 +243,7 @@
 #### P1（公测首周）
 4. NL A2 持久限频与 A3 编译缓存。
 5. 首次成功路径与帮助中心。（等待状态/离线提示/取消/失败恢复已发布：`a84a9a3`；结果理解与集中帮助已发布：`9fd3b3d`；移动端/App 与可访问性深化挂起）
-6. 默认私有的可撤销只读分享（2026-10-26 已实现待验收；发布前 DBA apply share_links）。
+6. ~~默认私有的可撤销只读分享~~ ✅ 已发布（2026-10-26，`08b4a27`，schema 与公网撤销链路验证通过）。
 7. 经典策略按钮与结果操作卡 UI 精修。
 8. 公测运营指标与关键浏览器自动化。
 
