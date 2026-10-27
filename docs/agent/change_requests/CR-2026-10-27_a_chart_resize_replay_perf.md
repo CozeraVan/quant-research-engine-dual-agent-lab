@@ -132,3 +132,11 @@ uv run pytest tests/ -q
 ### 全量回归
 
 `uv run pytest tests/ -q` → `2914 passed, 24 skipped, 4 warnings in 170.23s`（exit 0）。上一轮同仓基线为 `2909 passed, 24 skipped, 4 warnings`，差值 5 即本轮新增的 `tests/test_saas_chart_a_fix.py`。执行日志：`.tmp/a-replay-perf/pytest-full.log`。
+
+## 遗留修补记录（2026-10-27）
+
+- `job.html`：`mainChart` 的 window resize 回调增加 `isDisposed()` 守卫，避免对已 dispose 实例 resize 产生 console 警告。
+- `replay.js`：新增纯函数 `windowDisplayData(data,start,end,zeroBase)`；`zeroBase=true` 时以窗口内首个非空值为基线，让策略/基准累计收益曲线在可视左端回到 0。指标仍基于全量 `raw`，数值不变。
+- `job.html` 重播的“策略”和“基准”系列设置 `zeroBase: true`；回撤系列不设，避免把回撤曲线平移成“变化量”而误导风险。
+- 测试：`tests/test_saas_chart_a_fix.py` 新增 3 例；该文件 8 passed；相关 130 passed；全量 `2917 passed, 24 skipped, 4 warnings`。
+- 生产：ECS 同步 `job.html` + `replay.js`，qre-saas active；`/saas/jobs/58` 200，生产 replay.js 含 `windowDisplayData`，job58 页面含 `mainChart.isDisposed` 守卫。未 commit/push。

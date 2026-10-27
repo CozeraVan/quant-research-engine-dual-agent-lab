@@ -389,7 +389,11 @@ function renderMain(d){
   updateRangeStrip();
   if (!mainResizeBound){
     mainResizeBound = true;
-    window.addEventListener('resize', () => mainChart && mainChart.resize());
+    window.addEventListener('resize', () => {
+      if (!mainChart) return;
+      if (typeof mainChart.isDisposed === 'function' && mainChart.isDisposed()) return;
+      mainChart.resize();
+    });
   }
 }
 function applyBench(){
@@ -1264,9 +1268,9 @@ function mountReplay(d){
     if (t.exit_date) events.push({date: t.exit_date, kind: 'exit', sym: t.symbol, symbol: t.symbol,
       qty: t.quantity, price: t.exit_price, pnl: t.net_return});
   });
-  const series = [{name: '策略', id: 'strategy', color: '#2563eb', data: stratRet(d), raw: d.equity, grid: 0, mark: true, width: 2}];
+  const series = [{name: '策略', id: 'strategy', color: '#2563eb', data: stratRet(d), raw: d.equity, grid: 0, mark: true, width: 2, zeroBase: true}];
   if (benchCode) series.push({name: '基准·' + benches[benchCode].name, id: 'bench', color: '#f59e0b',
-    dashed: true, data: toRet(benches[benchCode].closes), grid: 0});
+    dashed: true, data: toRet(benches[benchCode].closes), grid: 0, zeroBase: true});
   if (hasDD) series.push({name: '回撤', id: 'dd', color: '#d43030', data: dd, grid: 1, area: true, width: 1});
   return QREReplay.attach(document.getElementById('replay-bar-slot'), {
     dates: dates,

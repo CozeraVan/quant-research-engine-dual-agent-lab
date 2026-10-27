@@ -1458,3 +1458,22 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - **性能实测**：4000 点合成数据，同步每帧 39.1ms→9.5ms，rAF 45.8ms→16.8ms，console 无错误。
 - **发布**：ECS 同步两文件并重启 qre-saas；`/saas/jobs/58`、`/static/replay.js` 200，生产 replay.js 含 `visibleWindow`。未 commit/push。
 - **遗留**：`job.html` 仍有已 dispose `mainChart` resize 警告；重播曲线左端不再固定 0，需用户确认。
+
+## 2026-10-27 A 路遗留修补
+
+- `job.html`：window resize 回调增加 `mainChart.isDisposed()` 守卫。
+- `replay.js`：新增 `windowDisplayData()`；策略/基准累计收益在重播可见窗口内以首个非空值为基线，左端回到 0；`frameMetrics` 仍用全量 raw。
+- 回撤系列不设 `zeroBase`，避免把回撤平移成变化量。
+- 测试：`tests/test_saas_chart_a_fix.py` 8 passed；相关 130 passed；全量 2917 passed/24 skipped。
+- 生产已部署并验证。未 commit/push。
+
+## 2026-10-27 静态 K 线 TV 化首片
+
+用户选择“ECharts 深度 TV 化”。DeepSeek 实施，Kimi 复核并部署。
+
+- **布局**：`symbol.html` 静态 K 线改为左侧工具栏 + 顶部 OHLC/量/因子信息区 + 右侧价格标尺 + 底部时间轴；x 轴全联动。
+- **交互**：放大/缩小/重置/成交量/因子面板开关；滚轮/拖拽由 ECharts dataZoom 承担；按钮只动可见窗口，不改数据。
+- **合同保持**：`QREFactorLayout.plan()`/chip 三态、EMA overlay、MACD 同副图、红涨绿跌、Night Mode 均不变。
+- **测试**：新增 `tests/test_saas_static_kline_tv.py` 10 例；相关 159 passed；全量 2927 passed/24 skipped。
+- **浏览器/生产**：1280/375 截图已由主 Agent 目视确认；ECS job58 个股页 200 且包含 `kline-tools`。未 commit/push。
+- **遗留**：重播界面未 TV 化；移动端信息密度高；面板全关分支仅单测覆盖。

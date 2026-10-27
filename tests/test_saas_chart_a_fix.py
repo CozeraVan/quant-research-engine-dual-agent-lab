@@ -23,6 +23,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 REPLAY_JS = (REPO / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
 SYMBOL_TPL = (REPO / "src/quant_research_engine/gui/saas/templates/symbol.html").read_text(encoding="utf-8")
+JOB_TPL = (REPO / "src/quant_research_engine/gui/saas/templates/job.html").read_text(encoding="utf-8")
 
 
 def _node(script: str) -> None:
@@ -366,6 +367,7 @@ def _render_kline_source() -> str:
 
 
 class TestSymbolKlineResize:
+
     def test_resize_observer(self):
         _node(_RENDER_KLINE_STUBS
                + _RENDER_KLINE_OBSERVER_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source())))
@@ -373,3 +375,56 @@ class TestSymbolKlineResize:
     def test_window_resize_fallback(self):
         _node(_RENDER_KLINE_STUBS
                + _RENDER_KLINE_FALLBACK_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source())))
+
+
+# ---------------------------------------------------------------- 窗口基线
+_WINDOW_DISPLAY_SCENARIO = r"""
+const h = createHarness();
+const source = %SOURCE%;
+vm.runInContext(source, h.context);
+const core = h.context.window.QREReplay.core;
+assert.ok(typeof core.windowDisplayData === 'function', 'core.windowDisplayData 必须存在');
+const wdd = core.windowDisplayData;
+assert.deepEqual(wdd([1, 2, 3], 0, 2, false), [1, 2], 'zeroBase=false 原样切片');
+assert.deepEqual(wdd([10, 12, 15], 1, 3, true), [0, 3], 'zeroBase 以窗口内首个非空值为基线');
+assert.deepEqual(wdd([null, 10, 13], 0, 3, true), [null, 0, 3], '缺失值保持 null');
+assert.deepEqual(wdd([], 0, 0, true), [], '空窗口安全');
+console.log('window-display-ok');
+"""
+
+_ZERO_BASE_RENDER_SCENARIO = r"""
+const h = createHarness();
+const source = %SOURCE%;
+vm.runInContext(source, h.context);
+const QREReplay = h.context.window.QREReplay;
+const N = 400;
+const real = [];
+for (let i = 0; i < N; i += 1) real.push(new Date(Date.UTC(2020, 0, 1) + i * 86400000).toISOString().slice(0, 10));
+const equity = real.map(function (_, i) { return 100 + i; });
+QREReplay.attach(h.mount(), {
+  dates: real,
+  series: [{name: '策略', id: 's', data: equity, raw: equity, zeroBase: true}],
+  initialCursor: 250,
+});
+const opt = h.setOptions[h.setOptions.length - 1];
+const data = opt.series[0].data;
+assert.equal(data.length, 240, 'zeroBase 不改变窗口长度');
+assert.equal(data[0], 0, '窗口左端回到 0');
+assert.equal(data[data.length - 1], equity[250] - equity[11], '窗口内数值相对基线正确');
+console.log('zero-base-render-ok');
+"""
+
+
+class TestWindowDisplayData:
+    def test_pure_contract(self):
+        _node(_HARNESS + _WINDOW_DISPLAY_SCENARIO.replace("%SOURCE%", json.dumps(REPLAY_JS)))
+
+    def test_zero_base_render(self):
+        _node(_HARNESS + _ZERO_BASE_RENDER_SCENARIO.replace("%SOURCE%", json.dumps(REPLAY_JS)))
+
+
+class TestJobChartLeftovers:
+    def test_main_resize_guard_and_zero_base(self):
+        assert "if (typeof mainChart.isDisposed === 'function' && mainChart.isDisposed()) return;" in JOB_TPL
+        assert "mainChart && mainChart.resize()" not in JOB_TPL
+        assert JOB_TPL.count("zeroBase: true") >= 2

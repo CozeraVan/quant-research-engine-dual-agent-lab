@@ -2666,3 +2666,17 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 性能：4000 点重放同步每帧 39.1→9.5ms，rAF 45.8→16.8ms。
 - 生产：qre-saas active，job58/static replay 200，生产 replay.js 含 `visibleWindow`。
 - 待用户确认：重播曲线左端不再固定 0；`job.html` 旧 dispose resize 警告遗留。
+
+## 2026-10-27 A 路遗留修补交接
+
+- `job.html` resize 已加 dispose 守卫；重播策略/基准系列新增 `zeroBase`，左端回到 0，指标仍全量口径。
+- 测试：相关 130 passed；全量 2917 passed/24 skipped。
+- 生产已部署，`/saas/jobs/58` 200，生产 replay.js 含 `windowDisplayData`，job 页面含 dispose 守卫。未 commit/push。
+
+## 2026-10-27 静态 K 线 TV 化首片交接
+
+- DeepSeek 实施，Kimi 复核并部署；范围仅 `symbol.html` + 新测试。
+- 交付：左侧工具栏、顶部 OHLC/因子信息区、右侧价格标尺、底部时间轴、缩放/重置、量/因子开关；因子合同与 Night Mode 不变。
+- 测试：新增 10 例；相关 159 passed；全量 2927 passed/24 skipped。
+- 生产：job58 个股页 200 且包含 `kline-tools`；未 commit/push。
+- 遗留：重播界面未 TV 化；移动端信息密度仍高；面板全关的隐藏格分支未在浏览器触发。

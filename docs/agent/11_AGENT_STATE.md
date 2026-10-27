@@ -1054,6 +1054,8 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 - SaaS FRM 日收益直方图修复已部署 ECS：job 58/66 现返回 40 箱直方图；全量 `2909 passed, 24 skipped, 4 warnings`；未 commit/push。
 - TradingView 化 Spike 完成：推荐 A 增强 ECharts 为主、B Lightweight Charts 受控试点、C 自研不做；B 的 attribution 为硬阻塞。等待用户决定下一阶段实施范围。
 - TradingView 化 A 路首片已部署：ResizeObserver + 重播 240 点视口裁剪；4000 点 rAF 45.8→16.8ms；全量 2914 passed/24 skipped + 1 环境性 teardown error；未 commit/push。
+- A 路遗留已修补并部署：job dispose resize 守卫 + 重播策略/基准左端回 0；全量 2917 passed/24 skipped；未 commit/push。
+- 静态 K 线 TV 化首片已部署：左侧工具栏、顶部 OHLC/因子信息区、右侧价格标尺；全量 2927 passed/24 skipped；未 commit/push。
 - 《我不是股神》WSL 本地实现已获用户批准提交：价格型因子与游戏 OHLC 口径对齐、一体化交易终端、回合制与审计字段；仅本地 8092，不部署 ECS。
 - 下一主线候选：P2 会员分层、付费权益与微信信号推送；用户 2026-10-27 明确暂缓推进。
 

@@ -1827,6 +1827,50 @@ git diff --check：clean
 scripts/check-progress-docs.sh：passed
 ```
 
+## 2026-10-27 静态 K 线 TV 化首片主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 首片范围控制在 `symbol.html`，没有引入新依赖、Lightweight Charts、画线工具或第二套 K 线模块。
+- 因子 display 合同、Night Mode、红涨绿跌、防未来数据规则保持；进入重播前禁用工具栏并清空信息区。
+- 主 Agent 已目视 1280/375 截图：桌面为左工具栏 + 顶部 OHLC + 右标尺 + 量/因子副图；移动端无横向溢出，信息密度高但可接受。
+- Required Fixes：无。遗留：重播界面未 TV 化；面板全关的隐藏格分支未在浏览器触发。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_saas_static_kline_tv.py tests/test_saas_chart_a_fix.py tests/test_saas_replay_boundaries.py tests/test_gui_saas_pages.py tests/test_saas_night_mode.py tests/test_factor_display_contract.py -q → 159 passed
+uv run pytest tests/ -q → 2927 passed, 24 skipped, 4 warnings
+.tmp/static-kline-tv/1280.png、375.png → 主 Agent 目视确认
+ECS deploy → qre-saas active; job58 symbol page 200 and contains id="kline-tools"
+```
+
+## 2026-10-27 A 路遗留修补主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- dispose 守卫修复针对真实 console 警告根因：回调不再持有可能已销毁的 `mainChart`。
+- 左端基线修复只影响显示层：`zeroBase` 让策略/基准在可见窗口内相对基线显示，指标仍基于全量 raw，不改变收益/回撤/胜率数值。
+- 回撤系列不设 `zeroBase`，避免把回撤曲线误平移成“变化量”。
+- Required Fixes：无。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_saas_chart_a_fix.py -q → 8 passed
+uv run pytest tests/test_saas_chart_a_fix.py tests/test_saas_replay_boundaries.py tests/test_gui_saas_pages.py tests/test_saas_night_mode.py -q → 130 passed
+uv run pytest tests/ -q → 2917 passed, 24 skipped, 4 warnings
+ECS deploy → qre-saas active; /saas/jobs/58 200; replay.js contains windowDisplayData; job page contains mainChart.isDisposed
+```
+
 ## 2026-10-27 A 路图表修复主 Agent 自审
 
 ### Review Status

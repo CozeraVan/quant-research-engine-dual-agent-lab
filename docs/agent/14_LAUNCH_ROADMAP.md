@@ -267,7 +267,7 @@
 17. [挂起] 深度性能与压力测试（用户明确当前不做硬件/压测推进）。
 18. ~~M10.4 ML 聚类首个分析切片 + 参数敏感性工具化。~~ **DONE（2026-10-27，DeepSeek 实施/Kimi 复核，未 commit/push）**：DBSCAN + noise、90/99/99.9 tier 保留、可选 sklearn 降级、CLI/四类产物/manifest 合同完成；新增可选 `--eps-grid` sensitivity，默认产物合同不变。真实 fit 只读分析 81 策略，默认 41 insufficient/40 all_noise；eps=1.5/2.0 分别 2/5 策略成簇。ML 相关 165 passed、全量 2906 passed + 24 skipped；未跑新回测。后续 UI/元数据扩展另行立项。
 19. 会员分层、付费权益与微信信号推送（用户 2026-10-27 明确暂缓）。
-23. TradingView 化：图表内核 Spike 已完成，推荐 A 增强 ECharts 为主 + B Lightweight Charts 受控试点；A 路首片（ResizeObserver + 重播视口裁剪）已部署待验收，未 commit/push。
+23. TradingView 化：图表内核 Spike 已完成，推荐 A 增强 ECharts 为主 + B Lightweight Charts 受控试点；静态 K 线 TV 化首片已部署待验收，未 commit/push。
 
 #### 挂起（保留，不删除）
 20. 分时因子与引擎分时适配，等可靠数据源与独立立项重启。

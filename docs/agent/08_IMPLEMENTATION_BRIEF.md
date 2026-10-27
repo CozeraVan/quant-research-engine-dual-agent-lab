@@ -2,6 +2,37 @@
 
 ## Task ID
 
+QRE-TV-STATIC-KLINE-LAYOUT（静态 K 线 ECharts 深度 TV 化首片）
+
+## Created By
+
+KIMI_CODE 统筹（2026-10-27）；DeepSeek 实施，Kimi 复核。CR：`docs/agent/change_requests/CR-2026-10-27_static_kline_tv_layout.md`。
+
+## 目标与边界
+
+1. 只把 `symbol.html` 静态 K 线提升到 TradingView 式工作区：右侧价格标尺、十字光标 OHLC/图例、缩放/平移/重置、左侧紧凑工具栏；因子 display 合同和 Night Mode 不变。
+2. 不做画线工具、重播 TV 化、多股对比、实时流；不引入 Lightweight Charts 或任何新依赖。
+3. 当前工作区有未提交的 A 路遗留修补，必须在其基础上继续，不得 revert/format/混入无关改动。
+4. TDD 先 RED 后 GREEN；测试通过后由主 Agent 部署 ECS；用户验收前不 commit/push。
+
+## 验证
+
+```bash
+uv run pytest tests/test_saas_chart_a_fix.py tests/test_saas_replay_boundaries.py tests/test_gui_saas_pages.py tests/test_saas_night_mode.py -q
+uv run pytest tests/ -q
+```
+
+## 静态 K 线 TV 化首片结果（2026-10-27，已部署待用户验收）
+
+- `symbol.html` 静态 K 线改为 TV 式工作区：左侧紧凑工具栏、顶部 OHLC/量/因子信息区、右侧价格标尺、底部时间轴、x 轴全联动。
+- 工具栏：放大/缩小/重置/成交量/因子面板，内联 SVG + aria + data-tip，44px，375px 不破版。
+- 因子 display 合同不变：EMA/BOLL overlay 主图，MACD 同副图，chip 状态继续生效；Night Mode 与红涨绿跌不变。
+- 测试：新增 `tests/test_saas_static_kline_tv.py` 10 例；相关 159 passed；全量 `2927 passed, 24 skipped, 4 warnings`。
+- 浏览器证据：`.tmp/static-kline-tv/1280.png`、`375.png`；主 Agent 已目视确认桌面/移动布局，零 JS error、无横向溢出。
+- 生产：ECS 同步 `symbol.html`，qre-saas active；job58 个股页 200 且包含 `kline-tools`。未 commit/push。
+
+## Task ID
+
 QRE-TV-CHART-A-FIX（A 路图表修复：ResizeObserver + 重播视口裁剪）
 
 ## Created By

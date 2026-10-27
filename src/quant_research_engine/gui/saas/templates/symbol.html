@@ -3,6 +3,26 @@
 {% set share_qs = '?share=' ~ request.args.get('share') if request.args.get('share') else '' %}
 {% block title %}个股回测详情 · A股回测台{% endblock %}
 {% block body %}
+<style>
+  .kline-tv{display:flex;gap:8px;align-items:stretch}
+  .kline-tools{display:flex;flex-direction:column;gap:6px;flex:none}
+  .kline-tools .kline-tool{width:44px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;font-size:11px;line-height:1;white-space:nowrap;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;cursor:pointer}
+  .kline-tool svg{width:18px;height:18px}
+  .kline-tool:hover{border-color:var(--lav);color:var(--lav-deep)}
+  .kline-tool[aria-pressed="false"]{opacity:.55}
+  .kline-tool:disabled{opacity:.4;cursor:not-allowed}
+  .kline-tool:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
+  .kline-main{flex:1;min-width:0}
+  .kline-ohlc{margin:0 0 4px;font-size:12px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+  .kline-ohlc b{font-weight:600}
+  .kline-ohlc .up{color:var(--pos)}
+  .kline-ohlc .down{color:var(--neg)}
+  .kline-ohlc .k-dim{color:var(--muted)}
+  @media(max-width:640px){
+    .kline-tools .kline-tool span{display:none}
+    .wrap{padding-left:12px;padding-right:12px}
+  }
+</style>
 <div class="wrap">
   <div class="page-head" style="margin-bottom:4px">
     <h1 style="font-size:22px" id="sym-title">个股回测详情 <span class="opt">@ 任务 #{{ job_id }}</span></h1>
@@ -35,7 +55,29 @@
     <!-- K线级重播（CR-2026-10-04 切片2 + 接管模式 2026-10-04 用户拍板：接管原 K线容器，
          不新建第二模块；退出后恢复静态全量渲染）。时序红线同切片1。 -->
     <div id="kreplay-bar-slot"></div>
-    <div id="chart-kline" style="height:460px"></div>
+    <div class="kline-tv">
+      <div class="kline-tools" id="kline-tools" role="toolbar" aria-label="K线工具栏">
+        <button type="button" class="kline-tool" id="kt-zoom-in" aria-label="放大" data-tip="放大可见区间（滚轮亦可缩放）">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><line x1="13.2" y1="13.2" x2="17" y2="17"/><line x1="6.6" y1="9" x2="11.4" y2="9"/><line x1="9" y1="6.6" x2="9" y2="11.4"/></svg><span>放大</span>
+        </button>
+        <button type="button" class="kline-tool" id="kt-zoom-out" aria-label="缩小" data-tip="缩小可见区间（滚轮亦可缩放）">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><line x1="13.2" y1="13.2" x2="17" y2="17"/><line x1="6.6" y1="9" x2="11.4" y2="9"/></svg><span>缩小</span>
+        </button>
+        <button type="button" class="kline-tool" id="kt-reset" aria-label="重置" data-tip="重置为全部区间并恢复量与因子面板">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-2.2-4.6"/><polyline points="16.4,2.6 16.4,6.2 12.8,6.2"/></svg><span>重置</span>
+        </button>
+        <button type="button" class="kline-tool" id="kt-vol" aria-label="成交量" aria-pressed="true" data-tip="显示或隐藏成交量面板">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"><line x1="4" y1="13" x2="4" y2="16"/><line x1="8" y1="8" x2="8" y2="16"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="16" y1="5" x2="16" y2="16"/></svg><span>量</span>
+        </button>
+        <button type="button" class="kline-tool" id="kt-fct" aria-label="因子面板" aria-pressed="true" data-tip="显示或隐藏因子面板与均线叠加">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,14 7,9 11,12 17,5"/></svg><span>因子</span>
+        </button>
+      </div>
+      <div class="kline-main">
+        <div class="kline-ohlc" id="kline-ohlc" aria-live="polite"></div>
+        <div id="chart-kline" style="height:460px"></div>
+      </div>
+    </div>
     <div class="metric-strip rp-metrics hidden" id="kreplay-info"></div>
     <div class="hidden" id="kreplay-events" style="max-height:200px;overflow:auto"></div>
   </div>
@@ -647,6 +689,216 @@ let klineResizeBound = false;
 let symbolKlineChart = null;
 let klineResizeObserver = null;
 let klineObserved = false;
+// --- TV 化静态 K 线（CR-2026-10-27）：顶部信息区 + 左侧工具栏 + 右侧价格标尺 ---
+const KLINE_TOOL_KINDS = ['zoom-in', 'zoom-out', 'reset', 'vol', 'fct'];
+const KLINE_TOOL_VIS = { vol: true, fct: true };
+const klineToolState = { chart: null, data: null, plan: null, bound: false };
+function klineNum(v){
+  return (v == null || v === '' || !isFinite(Number(v))) ? '—' : Number(v).toFixed(2);
+}
+function klineText(v){
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// 信息区只读当日已发生的行情：涨跌幅相对前一交易日收盘，首根无前收盘则缺失
+function klineInfoHTML(d, plan, i){
+  const dates = (d && d.kline && d.kline.dates) || [];
+  const ohlc = (d && d.kline && d.kline.ohlc) || [];
+  const vols = (d && d.kline && d.kline.vols) || [];
+  if (i == null || i < 0 || i >= dates.length || !ohlc[i]) return '<span class="k-dim">—</span>';
+  const k = ohlc[i];
+  const parts = ['<b>' + klineText(dates[i]) + '</b>', '开 ' + klineNum(k[0]), '高 ' + klineNum(k[3]),
+    '低 ' + klineNum(k[2]), '收 ' + klineNum(k[1])];
+  const base = i > 0 && ohlc[i - 1] ? Number(ohlc[i - 1][1]) : NaN;
+  if (isFinite(base) && base !== 0 && isFinite(Number(k[1]))){
+    const pct = (Number(k[1]) / base - 1) * 100;
+    parts.push('<span class="' + (pct >= 0 ? 'up' : 'down') + '">涨跌 ' + pct.toFixed(2) + '%</span>');
+  } else {
+    parts.push('<span class="k-dim">涨跌 —</span>');
+  }
+  parts.push('量 ' + (vols[i] == null || vols[i] === '' || !isFinite(Number(vols[i]))
+    ? '—' : (Number(vols[i]) / 10000).toFixed(2) + ' 万'));
+  ((plan && plan.overlays) || []).forEach(o => {
+    parts.push(klineText(o.name) + ' ' + klineNum(o.f && o.f.values ? o.f.values[i] : null));
+  });
+  ((plan && plan.panes) || []).forEach(p => {
+    (p.series || []).forEach(s => { parts.push(klineText(s.name) + ' ' + klineNum(s.values ? s.values[i] : null)); });
+  });
+  return parts.join(' · ');
+}
+function klineSetInfo(html){
+  const el = $('#kline-ohlc');
+  if (!el || !('innerHTML' in el)) return;
+  el.innerHTML = html;
+}
+function klineInfoIndex(d, value){
+  const dates = (d && d.kline && d.kline.dates) || [];
+  if (value == null) return dates.length - 1;
+  if (typeof value === 'number'){
+    const i = Math.floor(value);
+    return (i >= 0 && i < dates.length) ? i : dates.length - 1;
+  }
+  const j = dates.indexOf(String(value));
+  return j >= 0 ? j : dates.length - 1;
+}
+// 无悬停时回末根；移出图表同样回末根（不留悬浮态）
+function bindKlineInfo(chart, d, plan){
+  const last = ((d && d.kline && d.kline.dates) || []).length - 1;
+  klineSetInfo(klineInfoHTML(d, plan, last));
+  if (!chart || typeof chart.on !== 'function') return;
+  chart.on('updateAxisPointer', ev => {
+    const ax = (ev && ev.axesInfo && ev.axesInfo[0]) || null;
+    klineSetInfo(klineInfoHTML(d, plan, klineInfoIndex(d, ax ? ax.value : null)));
+  });
+  chart.on('globalout', () => { klineSetInfo(klineInfoHTML(d, plan, last)); });
+}
+function klineZoomSpan(chart){
+  if (!chart || typeof chart.getOption !== 'function') return { start: 0, end: 100 };
+  const dz = (chart.getOption() || {}).dataZoom;
+  const d0 = (dz && dz[0]) || {};
+  return {
+    start: typeof d0.start === 'number' ? d0.start : 0,
+    end: typeof d0.end === 'number' ? d0.end : 100,
+  };
+}
+function klineClampSpan(s){ return Math.min(100, Math.max(2, s)); }
+// 缩放只动 dataZoom 窗口，不改数据、不新增/销毁实例
+function klineZoom(chart, factor){
+  if (!chart || typeof chart.getOption !== 'function' || typeof chart.dispatchAction !== 'function') return;
+  const cur = klineZoomSpan(chart);
+  const mid = (cur.start + cur.end) / 2;
+  const span = klineClampSpan((cur.end - cur.start) * factor);
+  let start = mid - span / 2, end = mid + span / 2;
+  if (start < 0){ start = 0; end = span; }
+  if (end > 100){ end = 100; start = 100 - span; }
+  chart.dispatchAction({ type: 'dataZoom', start: start, end: end });
+}
+function klineResetZoom(chart){
+  if (!chart || typeof chart.dispatchAction !== 'function') return;
+  chart.dispatchAction({ type: 'dataZoom', start: 0, end: 100 });
+}
+// 网格：右侧留白给价格标尺；隐藏格收成 1px 不占位但保留索引（轴与系列索引不变）
+function klineGridSpec(showVol, paneCount, showFct){
+  const n = paneCount || 0;
+  const fOn = !!showFct && n > 0;
+  const hide = { left: 16, right: 56, top: 0, height: 1 };
+  const grids = [{ left: 16, right: 56, top: 30,
+    height: fOn ? (showVol ? '42%' : '50%') : (showVol ? '58%' : '78%') }];
+  if (!showVol) grids.push(Object.assign({}, hide));
+  else if (fOn) grids.push({ left: 16, right: 56, top: '53%', height: '10%' });
+  else grids.push({ left: 16, right: 56, top: '74%', height: '14%' });
+  const fTop = (fOn && showVol) ? 66 : 58;
+  const fBottom = 93;
+  const step = n ? (fBottom - fTop) / n : 0;
+  for (let i = 0; i < n; i++){
+    grids.push(fOn
+      ? { left: 16, right: 56, top: (fTop + i * step) + '%', height: (step * 0.75) + '%' }
+      : Object.assign({}, hide));
+  }
+  return grids;
+}
+// 时间轴只挂在最后一个可见格上（面板全关时上移到量/主图）
+function klineAxisLabelIndex(paneCount, showVol, showFct){
+  const n = paneCount || 0;
+  if (showFct && n > 0) return 1 + n;
+  if (showVol) return 1;
+  return 0;
+}
+function klineLegendSelected(plan){
+  const sel = { '成交量': !!KLINE_TOOL_VIS.vol };
+  const fOn = !!KLINE_TOOL_VIS.fct;
+  ((plan && plan.overlays) || []).forEach(o => { sel[o.name] = fOn; });
+  ((plan && plan.panes) || []).forEach(p => (p.series || []).forEach(s => { sel[s.name] = fOn; }));
+  return sel;
+}
+function klineToolBtn(kind){
+  const btn = $('#kt-' + kind);
+  return (btn && typeof btn.addEventListener === 'function') ? btn : null;
+}
+function klineSetPressed(btn, on){
+  if (btn && typeof btn.setAttribute === 'function') btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+function setKlineToolsEnabled(on){
+  KLINE_TOOL_KINDS.forEach(kind => {
+    const btn = klineToolBtn(kind);
+    if (!btn) return;
+    btn.disabled = !on;
+    if (typeof btn.setAttribute === 'function') btn.setAttribute('aria-disabled', on ? 'false' : 'true');
+  });
+  if (!on) klineSetInfo('');
+}
+function klineSyncPressed(){
+  const st = klineToolState;
+  const plan = st.plan;
+  const hasFct = !!plan && (((plan.panes || []).length > 0) || ((plan.overlays || []).length > 0));
+  const vol = klineToolBtn('vol'), fct = klineToolBtn('fct');
+  if (vol){ vol.disabled = !st.chart; klineSetPressed(vol, !!KLINE_TOOL_VIS.vol); }
+  if (fct){ fct.disabled = !st.chart || !hasFct; klineSetPressed(fct, !!KLINE_TOOL_VIS.fct); }
+}
+// 量/因子开关只改布局与图例可见性，不重建实例、不动数据
+function klineApplyLayout(chart, plan){
+  if (!chart || typeof chart.setOption !== 'function') return;
+  const panes = (plan && plan.panes) || [];
+  const n = panes.length;
+  const vol = !!KLINE_TOOL_VIS.vol, fct = !!KLINE_TOOL_VIS.fct;
+  const fOn = fct && n > 0;
+  const grids = klineGridSpec(vol, n, fct);
+  const labelIdx = klineAxisLabelIndex(n, vol, fct);
+  const dates = (klineToolState.data && klineToolState.data.kline && klineToolState.data.kline.dates) || [];
+  const xAxis = grids.map((g, i) => ({
+    type: 'category', data: dates, gridIndex: i, axisLabel: { show: i === labelIdx },
+  }));
+  const yAxis = grids.map((g, i) => {
+    if (i === 0) return { type: 'value', gridIndex: 0, scale: true, position: 'right' };
+    if (i === 1) return { type: 'value', gridIndex: 1, show: vol, position: 'right', name: '量',
+      axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } };
+    const p = panes[i - 2] || { name: '' };
+    return { type: 'value', gridIndex: i, show: fOn, scale: true, position: 'right',
+      name: p.name, nameTextStyle: { fontSize: 10 } };
+  });
+  chart.setOption({ grid: grids, xAxis: xAxis, yAxis: yAxis });
+  if (typeof chart.dispatchAction !== 'function') return;
+  const sel = klineLegendSelected(plan);
+  Object.keys(sel).forEach(name => {
+    chart.dispatchAction({ type: sel[name] ? 'legendSelect' : 'legendUnSelect', name: name });
+  });
+}
+function bindKlineTools(chart, d, plan){
+  klineToolState.chart = chart;
+  klineToolState.data = d;
+  klineToolState.plan = plan;
+  klineSyncPressed();
+  if (klineToolState.bound) return;  // 只绑一次；处理器读 klineToolState，重渲染后自动指向新实例
+  const handlers = {
+    'zoom-in': () => klineZoom(klineToolState.chart, 0.7),
+    'zoom-out': () => klineZoom(klineToolState.chart, 1.4),
+    'reset': () => {
+      KLINE_TOOL_VIS.vol = true;
+      KLINE_TOOL_VIS.fct = true;
+      klineApplyLayout(klineToolState.chart, klineToolState.plan);
+      klineResetZoom(klineToolState.chart);
+      klineSyncPressed();
+    },
+    'vol': () => {
+      KLINE_TOOL_VIS.vol = !KLINE_TOOL_VIS.vol;
+      klineApplyLayout(klineToolState.chart, klineToolState.plan);
+      klineSyncPressed();
+    },
+    'fct': () => {
+      KLINE_TOOL_VIS.fct = !KLINE_TOOL_VIS.fct;
+      klineApplyLayout(klineToolState.chart, klineToolState.plan);
+      klineSyncPressed();
+    },
+  };
+  let boundAny = false;
+  KLINE_TOOL_KINDS.forEach(kind => {
+    const btn = klineToolBtn(kind);
+    if (!btn) return;
+    btn.addEventListener('click', handlers[kind]);
+    boundAny = true;
+  });
+  if (boundAny) klineToolState.bound = true;
+}
 // 只对当前存活的图表实例做 resize（重播接管同一容器后，以 getInstanceByDom 取到的是新实例）
 function klineResize(el){
   const inst = echarts.getInstanceByDom(el);
@@ -720,23 +972,21 @@ function renderKline(d){
       symbol: 'triangle', symbolRotate: 180, symbolSize: 10, itemStyle: { color: '#1a9e4b' },
       tooltip: { formatter: p => p.data.tip } });
   }
-  const grids = !hasF
-    ? [{ left: 60, right: 20, top: 30, height: '58%' }, { left: 60, right: 20, top: '74%', height: '14%' }]
-    : [{ left: 60, right: 20, top: 30, height: '42%' }, { left: 60, right: 20, top: '53%', height: '10%' }];
-  const xAxis = [
-    { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
-    { type: 'category', data: dates, gridIndex: 1, axisLabel: { show: hasF ? false : true } },
-  ];
+  // 布局与工具栏开关共用一套规格：右侧留白给价格标尺，时间轴只挂最后一个可见格
+  const grids = klineGridSpec(KLINE_TOOL_VIS.vol, panes.length, KLINE_TOOL_VIS.fct);
+  const labelIdx = klineAxisLabelIndex(panes.length, KLINE_TOOL_VIS.vol, KLINE_TOOL_VIS.fct);
+  const xAxis = grids.map((g, i) => ({
+    type: 'category', data: dates, gridIndex: i, axisLabel: { show: i === labelIdx },
+  }));
   const yAxis = [
-    { type: 'value', gridIndex: 0, scale: true },
-    { type: 'value', gridIndex: 1, name: '量', axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
+    { type: 'value', gridIndex: 0, scale: true, position: 'right' },
+    { type: 'value', gridIndex: 1, show: KLINE_TOOL_VIS.vol, position: 'right', name: '量',
+      axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
   ];
   if (hasF){
-    const fTop = 66, fBottom = 93, fStep = (fBottom - fTop) / panes.length;
     panes.forEach((p, i) => {
-      grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
-      xAxis.push({ type: 'category', data: dates, gridIndex: 2 + i, axisLabel: { show: false } });
-      yAxis.push({ type: 'value', gridIndex: 2 + i, scale: true, name: p.name, nameTextStyle: { fontSize: 10 } });
+      yAxis.push({ type: 'value', gridIndex: 2 + i, show: KLINE_TOOL_VIS.fct, scale: true,
+        position: 'right', name: p.name, nameTextStyle: { fontSize: 10 } });
       let markLine = null;
       if (p.thresholds && p.thresholds.length){
         markLine = { silent: true, symbol: 'none',
@@ -757,18 +1007,21 @@ function renderKline(d){
     });
   }
   const zoomX = xAxis.map((_, i) => i);
-  const legendData = ['K线', '买入', '卖出']
+  const legendData = ['K线', '成交量', '买入', '卖出']
     .concat(plan.overlays.map(o => o.name))
     .concat(panes.reduce((acc, p) => acc.concat(p.series.map(s => s.name)), []));
   chart.setOption({
     animation: false,
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } },
-    legend: { data: legendData, top: 0 },
+    legend: { data: legendData, selected: klineLegendSelected(plan), top: 0 },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
     grid: grids, xAxis, yAxis,
-    dataZoom: [{ type: 'inside', xAxisIndex: zoomX }, { type: 'slider', xAxisIndex: zoomX, bottom: 6, height: 22 }],
+    dataZoom: [{ type: 'inside', xAxisIndex: zoomX }, { type: 'slider', xAxisIndex: zoomX, bottom: 4, height: 18 }],
     series,
   });
+  setKlineToolsEnabled(true);
+  bindKlineInfo(chart, d, plan);
+  bindKlineTools(chart, d, plan);
 }
 // --- K线级重播（CR-2026-10-04 切片2 + 接管模式：接管原 K线容器，退出恢复静态） ---
 let kreplayCtl = null, klineData = null;
@@ -784,6 +1037,8 @@ function initKlineReplay(d){
     $('#btn-kreplay-exit').classList.remove('hidden');
     $('#kreplay-info').classList.remove('hidden');
     $('#kreplay-events').classList.remove('hidden');
+    // 接管前先停用工具栏并清空信息区：重播帧不得让静态信息条停留在未来数据上
+    setKlineToolsEnabled(false);
     // 接管原 K线容器：重播帧直接渲染进 #chart-kline（原静态实例由组件销毁）
     kreplayCtl = mountKlineReplay(klineData);
     $('#kreplay-info').insertAdjacentHTML('beforebegin',

@@ -3641,3 +3641,16 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 重播：`visibleWindow()` 纯函数导出到 core；渲染只发可见窗口；事件标记过滤窗口；自建容器才绑 window.resize，destroy 解绑；接管模式不重复绑。
 - 主 Agent 复核：diff 范围仅两文件+测试；相关 127 passed；全量 2914 passed/24 skipped + 1 环境性 PG teardown error，目标文件复跑 21 passed；性能证据 `.tmp/a-replay-perf/result.json`。
 - 发布：ECS 仅同步两文件，MainPID 498885；生产 `/saas/jobs/58`、`/static/replay.js` 200，replay.js 含 `visibleWindow`。未 commit/push。
+
+## 2026-10-27 A 路遗留修补实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/job.html`、`src/quant_research_engine/gui/static/replay.js`、`tests/test_saas_chart_a_fix.py`。
+- `replay.js` 新增 `windowDisplayData()` 并导出 core；renderFrame 对 `zeroBase` 系列按窗口基线平移。
+- `job.html` 策略/基准系列设 `zeroBase: true`；mainChart resize 加 dispose 守卫。
+- 主 Agent 复核：相关 130 passed；全量 2917 passed/24 skipped；生产部署后 job58/replay.js 200 且包含新标记。未 commit/push。
+
+## 2026-10-27 静态 K 线 TV 化首片实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_saas_static_kline_tv.py`、CR 实现记录。
+- 新增左侧工具栏、`#kline-ohlc` 信息区、右侧价格标尺、动态 grid/xAxis/yAxis、量/因子开关与缩放重置；重播进入前禁用工具栏并清空信息区。
+- 主 Agent 复核：diff 仅 `symbol.html` + 新测试；相关 159 passed；全量 2927 passed/24 skipped；截图 1280/375 已目视确认；生产 job58 个股页 200 且包含 `kline-tools`。未 commit/push。

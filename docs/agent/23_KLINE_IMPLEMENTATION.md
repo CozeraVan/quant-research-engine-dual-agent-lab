@@ -323,6 +323,8 @@ open 时：
 - B 路硬阻塞：attribution 合规未决，且可能与 UI 外部品牌/配色纪律冲突；未解决不得上生产。
 - 详细评分、迁移路径、风险、回滚与验收见 `change_requests/CR-2026-10-27_tv_chart_core_spike.md`。
 - A 路首片已实施：`symbol.html` 单例 ResizeObserver；`replay.js` `visibleWindow()` 默认 240 点视口裁剪；4000 点 rAF 45.8→16.8ms。遗留 `job.html` dispose resize 警告与重播左端不固定 0 的口径变化。
+- A 路遗留已修补：`job.html` dispose resize 守卫；`replay.js` `windowDisplayData(zeroBase)` 让策略/基准左端回 0，指标仍全量口径。
+- 静态 K 线 TV 化首片已实施：`symbol.html` 左侧工具栏、顶部 OHLC/因子信息区、右侧价格标尺、底部时间轴；因子合同与 Night Mode 不变。重播界面尚未 TV 化。
 
 ## 11. 后续阅读顺序（给 DeepSeek）
 1. `gui/saas/templates/symbol.html`：SaaS 静态图与个股重播。

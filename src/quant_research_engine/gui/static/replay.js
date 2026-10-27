@@ -131,10 +131,24 @@
     return { start: start, end: end };
   }
 
+  // 窗口显示数据：默认原样切片；zeroBase=true 时以窗口内首个非空值为基线，
+  // 让“累计收益/基准”这类序列在可视左端回到 0（指标仍按全量 raw 计算，不失真）。
+  function windowDisplayData(data, start, end, zeroBase) {
+    var out = (data || []).slice(start, end);
+    if (!zeroBase || !out.length) return out;
+    var base = null;
+    for (var i = 0; i < out.length; i += 1) {
+      if (out[i] != null) { base = out[i]; break; }
+    }
+    if (base == null) return out;
+    return out.map(function (v) { return v == null ? null : v - base; });
+  }
+
   QREReplay.core = {
     indexDates: indexDates, binEvents: binEvents,
     positionCounts: positionCounts, nextEventfulCursor: nextEventfulCursor,
     frameMetrics: frameMetrics, visibleWindow: visibleWindow,
+    windowDisplayData: windowDisplayData,
   };
 
   /* ---------- UI 装配 ---------- */
@@ -267,7 +281,7 @@
         var series = (opts.series || []).map(function (s) {
           var base = {
             name: s.name, id: s.id, type: s.type || "line",
-            data: s.data.slice(s0, c0),
+            data: windowDisplayData(s.data, s0, c0, s.zeroBase),
             showSymbol: false, color: s.color,
             lineStyle: { width: s.width || (s.dashed ? 1.5 : 2), type: s.dashed ? "dashed" : "solid" },
             areaStyle: s.area ? { opacity: 0.3 } : undefined,
