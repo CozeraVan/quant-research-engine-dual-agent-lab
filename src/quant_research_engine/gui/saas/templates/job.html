@@ -258,6 +258,7 @@ function renderMain(d){
   const dd = (d.drawdown_pct || []).map(v => v == null ? null : v * 100);
   const hasDD = dd.some(v => v != null);
   mainChart = echarts.init(document.getElementById('chart-main'));
+  if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(mainChart);
   const series = [{
     name: '策略', id: 'strategy', type: 'line', data: stratRet(d),
     showSymbol: false, lineStyle: {width: 2}, color: '#2563eb',
@@ -450,6 +451,7 @@ function renderTagChart(){
   el.style.height = '420px';
   if (!tagChart){
     tagChart = echarts.init(el);
+    if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(tagChart);
     tagChart.getZr().on('click', e => {  // 点空白收起
       if (!e.target){ curTag = null; document.getElementById('tag-detail').innerHTML = ''; }
     });
@@ -741,6 +743,7 @@ function renderRiskDist(d) {
     if (ve['99pct'] && ve['99pct'].var != null) marks.push({ xAxis: -ve['99pct'].var, label: { formatter: 'VaR99' }, lineStyle: { color: '#8b0000', type: 'dashed' } });
     var c = echarts.init(el);
     riskCharts.push(c);
+    if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(c);
     c.setOption({
       animation: false,
       tooltip: { trigger: 'axis',
@@ -765,6 +768,7 @@ function renderRiskVol(d) {
     var names = { low: '低波动', mid: '中波动', high: '高波动' };
     var c = echarts.init(el);
     riskCharts.push(c);
+    if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(c);
     c.setOption({
       animation: false,
       tooltip: {},
@@ -791,6 +795,7 @@ function renderRiskStress(d) {
     }
     var c = echarts.init(el);
     riskCharts.push(c);
+    if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(c);
     c.setOption({
       animation: false,
       tooltip: { trigger: 'axis', valueFormatter: function(v) { return v == null ? '—' : (v * 100).toFixed(2) + '%'; } },
@@ -1248,11 +1253,16 @@ function mountReplay(d){
   const benches = d.benchmarks || {};
   const benchCode = curBench && benches[curBench] ? curBench : Object.keys(benches)[0];
   const trips = (d.trades && d.trades.points) || [];
-  // 成交事件（信号日 T=成交日前一交易日，由组件在图上相隔标记）
+  // 成交事件（信号日 T=成交日前一交易日，由组件在图上相隔标记）。
+  // QRE-SAAS-REPLAY-BOUNDARIES：sym=真实标的（聚合去重计数）；round trips 点
+  // 自带 quantity/entry_price/exit_price 时补足事件价量（2026-10-26 起新 run；
+  // 旧产物缺字段则不下发，chip 退回纯标的，不造值）。
   const events = [];
   trips.forEach(t => {
-    events.push({date: t.entry_date, kind: 'entry', symbol: t.symbol});
-    if (t.exit_date) events.push({date: t.exit_date, kind: 'exit', symbol: t.symbol, pnl: t.net_return});
+    events.push({date: t.entry_date, kind: 'entry', sym: t.symbol, symbol: t.symbol,
+      qty: t.quantity, price: t.entry_price});
+    if (t.exit_date) events.push({date: t.exit_date, kind: 'exit', sym: t.symbol, symbol: t.symbol,
+      qty: t.quantity, price: t.exit_price, pnl: t.net_return});
   });
   const series = [{name: '策略', id: 'strategy', color: '#2563eb', data: stratRet(d), raw: d.equity, grid: 0, mark: true, width: 2}];
   if (benchCode) series.push({name: '基准·' + benches[benchCode].name, id: 'bench', color: '#f59e0b',

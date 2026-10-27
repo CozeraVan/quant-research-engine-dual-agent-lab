@@ -1,7 +1,7 @@
 # 20_DATA_DICTIONARY_DAILY_MINUTE.md — 行情数据字典（日线 / 分钟线）
 
 > 单一权威文档：任何 agent 处理行情数据（读取、入库、因子计算、回测）前必须先读本文。
-> 最后更新：2026-10-18（分钟线 CSV 定时入库工作流上线，见 3.6）
+> 最后更新：2026-10-27（QRE-DATA-CLEANUP-AUDIT 只读盘点：qfq_legacy 已不存在、分钟线压缩缺口 140GB、mindata 已空、分钟线落后日线 10 天；新增 §7 遗留数据盘点）
 
 ---
 
@@ -35,6 +35,11 @@
 - 旧口径：`ts.pro_bar(adj='qfq')` 前复权价且自愈机制失效（混合锚点），详见 `change_requests/CR-2026-10-11_stock_daily_qfq.md`。
 - **现行口径（方案A，已生效）**：表内 OHLC 为**原始价**，`adj_factor` 列随行；复权在读取层做（indicators `IND_PRICE_BASIS=raw` / QRE `QRE_PRICE_BASIS=raw`，价格列×adj_factor=后复权；K线展示锚定最新价=前复权@today，与东财一致）。因子 10 表 + alpha191 已于 2026-10-12 按新口径全历史重算完成并抽查通过。
 - 旧表保留为 `public.stock_daily_qfq_legacy`（回滚用，方案A验收后删除）。
+  **⚠️ 2026-10-27 更新（QRE-DATA-CLEANUP-AUDIT）：该表已不存在**——全库所有 schema 搜 `%legacy%`/`%qfq%` 返回 0 条，
+  本地也没有 `tushare_data` 的 dump（`~/quant-workspace/backups/ecs-aguhuice/` 只有 ECS 上 aguhuice SaaS 库的 dump）。
+  **即「回滚到 qfq 口径」这个选项已永久失去且不可恢复。** 新口径自 2026-10-12 起生产生效、因子 10 表 + alpha191
+  已按新口径全历史重算并抽查通过，生产回测一直跑在新口径上；但今后不得再声称存在 qfq 回滚路径。
+  若用户要求重建应急档，只能从 tushare 重新拉一批 qfq 历史另存新表（不要再用 `qfq_legacy` 这个名字）。
 - **坑：表重建 RENAME 后 PostgreSQL 表级 GRANT 不随迁**——2026-10-11 换名后 `qre_worker_ro` 失去 SELECT 致 job 56 冒烟失败。今后任何表重建/换名必须随迁 `GRANT SELECT ON ... TO qre_worker_ro`（及其他只读角色）。
 
 ## 3. 分钟线行情：`public.stock_minute_1m`（2026-10-11 全量入库完成）
@@ -42,6 +47,12 @@
 ### 3.1 数据源
 
 - 本地 CSV：`/home/van/mindata/`（**2009-01-05 → 2026-10-09，4313 个交易日，324GB，预估约 30+ 亿行**）
+  **⚠️ 2026-10-27 更新（QRE-DATA-CLEANUP-AUDIT）：该目录已空**——0 个文件、24 KB（只剩 `mindata/` 与
+  `mindata/2026/` 两个空目录 inode）。历史 CSV 已全部不在，**源数据不可恢复**；今后若发现数据缺口，
+  唯一补救是回原始数据商重新下载，不要再假设「CSV 还在、可以重跑」。删除轨迹：日志
+  `quant_ts/logs/minute_import.log` 只记录了 5 个文件（20261012–1016）走「先校验 `rows_csv==rows_db`
+  再删除」（2026-10-18 17:06）；`import_minute_csv.py` 无任何删除代码，4308 个历史 CSV 属脚本外删除
+  （`mindata/` mtime 2026-10-11 23:19 晚于审计最后写入 20:10，顺序正确但无审计轨迹）。
 - 文件组织：按年目录、按日一个 CSV（`2009_…/1min/YYYYMMDD_….csv` … `2026/YYYYMMDD_….csv`），含全市场股票；中文表头带 BOM，全年份格式一致（已抽查 2009/2013/2017/2021）
 - CSV 列：`证券代码, 证券名称, 交易日期, 分钟时间, 开盘价（元）, 最高价（元）, 最低价（元）, 收盘价（元）, 成交量, 成交额, 复权因子`
 - **价格为不复权原始价**（经 tushare `daily` API 逐年裁决验证：2010/2013/2015/2020/2023/2026 末 bar 收盘与 API 原始价逐年吻合，2026-10-09 全市场 5559 只 100% 一致；量额换算后与日线 1:1 精确吻合）
@@ -84,6 +95,18 @@
 - 压缩脚本：`quant_ts/compress_minute_chunks.sh`（未压缩 chunk 大到小逐个 compress_chunk，日志 logs/minute_compress.log）。
 - 规则：**T-7 之前的 chunk 必须处于压缩态**；新入库先落未压缩 chunk（压缩 chunk 不支持 ON CONFLICT 写入），定期压缩旧 chunk。
 - 事故记录：2026-10-11 17:15 磁盘 100% 导致 PG PANIC 两次（WAL 写不进去）。教训：大批量入库前必须先看 `df -h /` 余量，本机 PG 与数据同盘（sdd 1TB）。
+- **⚠️ 2026-10-27 压缩缺口（QRE-DATA-CLEANUP-AUDIT 实测）**：当前 922 个 chunk 中 **708 个已压缩 = 396 MB**，
+  **214 个未压缩 = 140 GB**（压缩比约 350:1）。其中 **213 个 `range_end` 早于 T-7 却仍未压缩，合计 140 GB**，
+  覆盖 2022-09-01 → 2026-10-08（2022:18 个/11G、2023:52/33G、2024:52/34G、2025:51/35G、2026:40/27G）
+  ——**违反上一行的 T-7 规则**。`minute_compress.log` 结尾写「2026-10-11 17:55:09 压缩完毕 707 chunks」，
+  但未压缩 chunk 的内部 ID（如 2022-09-01 = `_hyper_67_56121_chunk`）明显高于已压缩集合（`_hyper_67_45526` 等），
+  说明它们是那次压缩**之后**才创建、之后再没跑过压缩。**定期跑 `compress_minute_chunks.sh` 必须纳入例行**，
+  预计重跑可回收约 139 GB。核查 SQL：
+  ```sql
+  select count(*), pg_size_pretty(sum(pg_relation_size(format('%I.%I',chunk_schema,chunk_name))::bigint))
+  from timescaledb_information.chunks
+  where hypertable_name='stock_minute_1m' and not is_compressed and range_end < (now()-interval '7 days');
+  ```
 
 ### 3.5 已知注意事项
 
@@ -96,10 +119,19 @@
 - **脚本**：`quant_ts/minute_csv_daily_ingest.py`（复用 `import_minute_csv.import_one` 的解析/换算/ON CONFLICT 口径，不另造轮子）。
 - **定时器**：systemd `minute-csv-ingest.timer` / `minute-csv-ingest.service`，**Mon..Fri 17:20**（避开 16:30 日线同步、16:40 因子日更），`Persistent=true`，User=van，`uv run` 于 `quant_ts/`。
 - **流程**：扫描 `/home/van/mindata/**/*.csv` → 审计表已完成的日期跳过解析直接进校验（幂等断点续跑）→ 新日期逐文件串行入库（单文件单事务，避免长事务）→ **校验：CSV 数据行数 == stock_minute_1m 该 trade_date 实时行数** → 通过才更新 `stock_minute_1m_audit` 并**删除对应 CSV**；失败保留 CSV、日志标 ERROR、进程 exit 1。
-- **日志**：`quant_ts/logs/minute_daily_ingest.log`（另 journalctl -u minute-csv-ingest.service）。
+- **日志**：`quant_ts/logs/minute_import.log`（另 journalctl -u minute-csv-ingest.service）。
+  ⚠️ 本文档此前写作 `minute_daily_ingest.log`，**该文件不存在**，实际日志就是 `minute_import.log`（与全量入库共用一个文件，靠时间戳区分）。
 - **手动入口**：`uv run python minute_csv_daily_ingest.py`；`--force` 强制重入库（验证幂等用，ON CONFLICT DO NOTHING 保证行数不增）；`--keep-csv` 校验后保留 CSV。
 - **失败处理**：校验不一致（rows_csv ≠ rows_db）或单文件异常 → 该文件不入审计、不删除，下个周期自动重试；排查看日志中 ❌ 行。
 - 首跑验证（2026-10-18）：`mindata/2026/` 5 个文件（20261012–20261016）共 6,769,394 行，强制重跑行数不变（幂等通过），校验全过后 5 个 CSV 已删除。
+- **⚠️ 2026-10-27 数据新鲜度缺口（QRE-DATA-CLEANUP-AUDIT 实测）**：`stock_minute_1m` 最新交易日 **2026-10-16**，
+  而 `stock_daily` 最新 **2026-10-26**——分钟线**落后日线 10 天**。`minute-csv-ingest.timer` 自 10-18 起
+  每天「扫描到 CSV 0 个」，即用户未再往 `mindata` 拷新 CSV。需用户确认是「有意暂停分钟线」还是「漏拷数据」。
+- **⚠️ 审计表现状（2026-10-27 核查）**：`stock_minute_1m_audit` 4318 行（2009-01-05 → 2026-10-16），
+  `done_at` 分布 = 2026-10-11 的 4313 条 + 2026-10-18 的 5 条；**全部 `rows_csv == rows_db`（0 条不一致）**；
+  审计日期与 `stock_minute_1m` 实际日期**双向差集均为 0**；抽查 8 个日期（含 10-11 磁盘打满失败的
+  2022-08-22/25/29）审计 `rows_db` 与实时行数 **8/8 MATCH**。**「已入库」不等于「源 CSV 可删」**——
+  本轮删掉的源文件已不可恢复，上述一致性只能证明 DB 内完整，不能作为删除源数据的依据。
 
 ## 4. 因子表速览（`factors` schema，11 表约 490 列）
 
@@ -120,3 +152,56 @@
 2. 量=手、额=千元（tushare 口径），跨表计算前先核对单位。
 3. 财务数据 join 必须用 `ann_date <= 交易日` 做 PIT 对齐，禁止用报告期直接对齐。
 4. 新行情表一律 TimescaleDB hypertable + 7 天 chunk + `(ts_code, 时间列)` 主键。
+5. **禁止声称存在 qfq 回滚路径**——`stock_daily_qfq_legacy` 已不存在（见 2.1）。
+6. **大批量写入/压缩前先 `df -h /`**；T-7 之前的 chunk 必须处于压缩态，压缩要纳入例行（见 3.4）。
+7. **禁止以「已入库」为由删除源数据**——`/home/van/mindata` 的源 CSV 已空且不可恢复（见 3.1）。
+
+## 7. 遗留数据盘点与清理（2026-10-27）
+
+> 当前执行状态：用户批准后，QRE-DATA-CLEANUP-EXECUTION 已完成。以下为历史盘点快照，不能再把其中的“待确认/可删候选”理解为数据仍存在。
+
+**本轮结果**：删除 `akshare_data`、`aguhuice_test`、`quant_hub`、`aguhuice_local` 及指定旧回测/实验产物；`qre-outputs` 27G→536M，磁盘可用 386G→418G。留档 `/home/van/quant-workspace/backups/local-cleanup-20261027/`：aguhuice_local 全量 dump、akshare 结构+行数（本体不可恢复）、旧文件 manifest。保留 refresh 活配置、saas_uploads、market_risk、video_packages 和两个待验收 staging 库。8080/8092 HTTP 200；8081 staging 重用前需重建/替换 aguhuice_local。新增 20261019/20/21 三份分钟 CSV 只读检查通过，三日 pending，等待 2026-10-27 17:20 CST timer 自动入库、校验并删除 CSV；未手动入库、未清洗、未压缩。M10.4 依赖已批准且 `.venv-ml` 已具备 scikit-learn / pandas / numpy。
+
+### 7.1 历史本机数据库清单（清理前只读快照）
+
+| 库 | 大小 | 内容 | 判定 |
+|---|---|---|---|
+| `tushare_data` | 513 GB | 行情主库（`public.stock_daily` 1488 万行 / `stock_minute_1m` 约 36.4 亿行 / `fund_daily` 306 万行 / `stock_holder_number` 42.9 万行 / `stock_daily_raw_audit` 4149 行） | **主库，勿动** |
+| `akshare_data` | **5.8 GB** | `stock_ticks` 36,147,932 行，2026-04-07 → 04-24，10 个分区 | **高风险待确认**：`AK_DB_URL` 仅在 `quant_ts/config.py` 定义、全仓无消费者，4 月 tick 实验遗留 |
+| `aguhuice_local` | 8.9 MB | 3 users / 15 jobs（2026-09-27 → 10-05） | 可删候选（陈旧本地测试数据） |
+| `qre_factor_display` | 8.7 MB | 1 user / 1 completed job | 上一任务 staging，待 QRE-FACTOR-DISPLAY-CONTRACT 验收后再删 |
+| `qre_readonly_share_browser` | 8.7 MB | 1 user / 3 completed jobs | 上一任务 staging，验收后再删 |
+| `aguhuice_test` | 7.5 MB | **0 张表** | 可删候选（空壳） |
+| `quant_hub` | 10 MB | **0 张 public 表** | 可删候选（空壳） |
+
+任务书曾提到的 `qre_saas` / `dbg` **两个库都不存在**（早已不在）。
+
+### 7.2 文件系统遗留（`/home/van/qre-outputs` 27G，仓库 `outputs` 符号链接指向它）
+
+| 路径 | 大小 | 最后写入 | 判定 |
+|---|---|---|---|
+| `refresh/incremental` | **17 G** | 2026-08-02 | 陈旧产物，可删候选；**但同目录 `registry.json`/`state.json`/`delta/` 是 KB 级活配置，被 `gui/refresh_registry.py` 引用，绝不能整目录删** |
+| `gui-console/runs` | **5.4 G** | 2026-08-20 | 陈旧 run 产物（`worker/runner.py` 以此为 runs 根） |
+| `backtests` | 4.3 G | 2026-08-18 | 陈旧 |
+| `gui-run` | 442 M | 2026-09-13 | 陈旧 |
+| 约 20 个 `*_check`/`*_smoke` 目录 | 合计小 | 2026-05 ~ 07 | 旧实验产物 |
+| `saas_uploads` | — | **今天** | **活跃，勿动**（job_38 今日仍在写） |
+| `market_risk` | 262 M | 2026-10-26 | **活跃，勿动** |
+| `video_packages` | 233 M | 2026-10-24 | 近期活跃，勿动 |
+
+QRE 仓库 `.tmp` 874M：`ms-playwright` 681M + `browser-venv` 142M 是浏览器审计工具链（要留），其余约 60M 是各任务证据。
+
+### 7.3 决策状态
+
+1. `stock_daily_qfq_legacy` 已消失：仍待用户决定接受无 qfq 回滚，或从 tushare 重拉应急档（另起新名）。
+2. 分钟 chunk 压缩：用户本轮要求暂停分钟数据清洗/整理，未重跑 `compress_minute_chunks.sh`。
+3. 分钟 CSV：用户已补入 20261019/20/21 三日；只读检查通过，等待 timer 自动入库，未手动触发。
+4. ~~删除 `akshare_data`~~：已批准并执行；仅留结构与行数，本体不可恢复。
+5. ~~删除 `aguhuice_test` / `quant_hub` / `aguhuice_local`~~：已批准并执行；aguhuice_local 有全量 dump。
+6. ~~清理指定旧回测/实验产物~~：已批准并执行；refresh 活配置和活跃目录均保留。
+7. 两个上一任务 staging 库继续保留，待各自任务验收后再删。
+
+### 7.4 备份缺口（重要）
+
+- 本地**没有 `tushare_data` 的 pg_dump**（`~/quant-workspace/backups/ecs-aguhuice/` 只有 ECS 上 aguhuice SaaS 库的 dump）。
+- 因此 513 GB 主库目前**只有 TimescaleDB 自身 + 磁盘这一层保护**，没有逻辑备份。建议用户决定是否建立定期 dump 策略（可参考 `deploy/saas/pull-ecs-backup.sh` 的模式做本地版）。

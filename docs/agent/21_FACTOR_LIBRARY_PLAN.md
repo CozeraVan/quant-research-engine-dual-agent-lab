@@ -42,6 +42,16 @@
 4. 测试门禁：`uv run python -m pytest tests/test_factor_registry.py -q`（40 项，含
    「注册表覆盖每个快照列」「当前快照无失效 canonical」）。新增列若未注册，会被
    `coverage_report` 列出来但不会静默通过——要么补规则，要么在文档里说明为何不维护。
+5. **中文显示名覆盖维护（2026-10-27 新增，QRE-FACTOR-ZH-COVERAGE）**：族规则/手工条目
+   未命中的列，按表查 `ALPHA191_ZH`（`stock_daily_alpha191`）/ `ALPHA101_ZH`
+   （`stock_daily_alpha101`）/ `FINANCIAL_ZH`（quality/growth/`_pit_financial_panel`/
+   candle/value 共用的按列名字典）补中文名；字典在 `gen_factor_registry.py` 模块级，
+   由 `_coverage_zh(table, column)` 在 `build_registry()` 的 `if manual.get("zh")` 之后以
+   `elif not entry["zh"]` 挂载——**只补空、不改名**。命名必须能指回公式/官方定义来源
+   （indicators_tushare 的 formulas.py / panel_factors 源码、`change_requests/factor_specs_*.md`
+   的官方 486 文档表达式表、Tushare 标准字段语义），指不回来源的列保留 `zh=null` 并写进
+   覆盖报告，**禁止为凑覆盖率伪造翻译、禁止英文列名冒充中文名**
+   （`tests/test_factor_display_contract.py::test_no_fabricated_zh` 有断言兜底）。
 
 **口径与消歧规则（改动前必读）**：
 
@@ -55,11 +65,58 @@
   要给 Prompt 加例子时改 `CORE_TARGETS`，不要把 `aliases` 全量塞进去。
 - 族别名只挂在「常用 + 默认参数」条目上（`_is_common` / `_is_default_params`），控制 JSON
   体积与 Prompt 成本。
+- **`_rank` 列命名**：quality/growth 的 `xxx_rank` 是同名计算项的截面排名（双列并存），
+  中文名统一取 `xxx` 的中文名 + 「·排名」后缀；`_rank` 列不新增别名。
+- **三处实现与官方文本不一致、按真实实现命名的条目**（后续维护勿"修正"回官方文本）：
+  `gpm_q`（官方描述与 `gpm_ttm` 相同、实现为同一 TTM 口径）→「毛利率(TTM口径)」；
+  `ar_ap_to_revenue`（新准则后 `adv_receipts` 大面积 NULL，实现用 `contract_liab` 兜底并减
+  预付款项）→「预收预付净额/营业收入(TTM)」；`npm_tsh`（官方表达式写 Equity 均值疑笔误，
+  按官方语义取归母净利润/平均总股本）→「归母净利润/平均总股本」。
 
-**当前覆盖**：554/895 列有中文名（61.9%）。未维护 341 列 = Alpha191 191 + Alpha101 31
-（面板因子，展示用既有「Alpha191 · alphaNNN」label）+ quality/growth 的 `_rank` 族 +
-少量财务报告期/现金流明细字段。这些列在前端回退 canonical 展示，不影响任何 canonical、
-YAML 与回测口径。
+**当前覆盖**：**895/895 列有中文名（100%）**（2026-10-27 QRE-FACTOR-ZH-COVERAGE 维护完成，
+此前为 554/895）。维护明细：Alpha191 191 列（`ALPHA191_ZH`，逐条对照
+`indicators_tushare/alpha191/formulas.py` docstring 的 GTJA191 标准编号口径）、Alpha101 31 列
+（`ALPHA101_ZH`，逐条对照官方 486 文档表达式表 `change_requests/factor_specs_p4p5p7.md` §三）、
+quality 87 + growth 16（`FINANCIAL_ZH`，逐条对照 `panel_factors/quality.py::compute_all`、
+`panel_factors/growth.py` results 与 `change_requests/factor_specs_p1p3.md` §三/§四）、
+`_pit_financial_panel` 14 列（Tushare 标准字段语义 + `panel_factors/pit_panel.py` FAMILIES：
+inc=利润表/bs=资产负债表/cf=现金流量表/fi=财务指标，流量列 `_ttm` 后缀）、candle 1
+（`cdl_doji_10_0_1` = ta.cdl_doji 十字星形态）、value 1（`etp5_rank`，与既有 `etp5`
+「五年盈利价格比」同源）。**未维护 0 列**，无遗留 null。前端不再有回退 canonical 展示的
+因子列；canonical、YAML 与回测口径不变。
+
+## 0.3 呈现属性统一协议（2026-10-27，QRE-FACTOR-DISPLAY-CONTRACT）
+
+除语义名和别名外，每个 canonical 还必须带 `display` 数据成员：`chart_type`、`panel_id`、`role`、`series_type`、`axis`、`precision`、`color`、`price_basis`、`render_order`。`gen_factor_registry.py` 负责生成和校验；`gui/factor_registry.py` 负责加载和失效/冲突检查；`factor-layout.js`、SaaS metadata、symbol 静态图和 replay 统一消费。
+
+- EMA/均线/BOLL/轨道类必须 overlay；MACD/PPO/PVO 同参数 DIF+DEA+HIST 同副图；KDJ/STOCH 等家族同副图；RSI、风险、流动性、Alpha 独立副图。
+- `panel_id` 必须含价格口径，禁止同列不同口径共用面板或缓存键。无 display 的旧数据才允许启发式回退。
+- 验收：`tests/test_factor_display_contract.py` 19 例 + 注册表 40 例通过，全量 2890 passed + 6 skipped；真实 Chromium 验证 replay 和夜间切换、375 无横溢。ECS 备份 `/tmp/qre-factor-display-pre-20261027/`，仅重启 qre-saas，未跑真实回测，未 commit/push。
+
+
+## 0.4 中文显示名全覆盖（2026-10-27，QRE-FACTOR-ZH-COVERAGE）
+
+§0.2 记录的 341 列未维护条目已全部按真实公式/官方定义维护完毕，**未维护 0 列**：
+
+| 表 | 列数 | 命名依据 |
+|---|---|---|
+| `stock_daily_alpha191` | 191 | `indicators_tushare/alpha191/formulas.py` 每个 docstring（GTJA191 标准编号口径；DolphinDB 实现口径与 `errata_*.md` 注释一并核对） |
+| `stock_daily_alpha101` | 31 | 官方 486 文档表达式表（`change_requests/factor_specs_p4p5p7.md` §三，编号非连续） |
+| `stock_daily_quality` | 87 | `panel_factors/quality.py::compute_all` + `change_requests/factor_specs_p1p3.md` §四表达式表 |
+| `stock_daily_growth` | 16 | `panel_factors/growth.py` results 段 + `factor_specs_p1p3.md` §三 |
+| `_pit_financial_panel` | 14 | `panel_factors/pit_panel.py` FAMILIES + Tushare 标准字段语义（流量列 `_ttm` 后缀） |
+| `stock_daily_candle_close` | 1 | `factors/candle_factors.py` 的 `ta.cdl_doji` 十字星形态 |
+| `stock_daily_value` | 1 | 与既有 `etp5`「五年盈利价格比」同源的 `_rank` 列 |
+
+- 覆盖 554 → **895/895（100%）**；`deploy/saas/metadata.json` 902/902 项带 zh，前端因子
+  弹窗不再有回退 canonical 展示的列。
+- 实现：`gen_factor_registry.py` 的 `ALPHA191_ZH`/`ALPHA101_ZH`/`FINANCIAL_ZH` + `_coverage_zh()`，
+  `elif not entry["zh"]` 只补空。零漂移核验：除 zh 外逐字段 0 差异，0 条覆盖既有条目；
+  canonical、display 合同、别名解析、common/core 全不变。
+- 验证：注册表/呈现/相关 10 文件 321 passed，全量 **2890 passed + 6 skipped**；真实 Chromium
+  本地 staging + 生产各一遍（三栏弹窗全中文名、中文搜索命中、英文列名兼容、零 JS error），
+  证据 `.tmp/factor-zh-coverage/`。ECS 备份 `/tmp/qre-factor-zh-pre-20261027/`，仅重启
+  qre-saas。未 commit/push、未跑真实回测。
 
 
 ## 0.1 下周恢复指引（2026-10-13 记录，已于 2026-10-18 执行完毕：P1-P3 验收通过、两仓库已提交、NL 目录已同步、P4 完成、P5 启动）

@@ -172,14 +172,20 @@ def _trade_points(record: dict[str, Any]) -> dict[str, Any] | None:
         exit_ = (r.get("exit_date") or "").strip()
         ret = _f(r.get("net_return"))
         if entry and exit_ and ret is not None:
-            points.append(
-                {
-                    "symbol": (r.get("symbol") or "").strip(),
-                    "entry_date": entry,
-                    "exit_date": exit_,
-                    "net_return": ret,
-                }
-            )
+            point = {
+                "symbol": (r.get("symbol") or "").strip(),
+                "entry_date": entry,
+                "exit_date": exit_,
+                "net_return": ret,
+            }
+            # QRE-SAAS-REPLAY-BOUNDARIES：round_trips.csv 本就写入价量列时补足到
+            # 散点（重播事件源与 chip 文案用）；缺列不加键（不造值），旧产物自然
+            # 降级为纯标的。仅对新生成的 run 生效，不回填历史。
+            for key in ("quantity", "entry_price", "exit_price"):
+                value = _f(r.get(key))
+                if value is not None:
+                    point[key] = value
+            points.append(point)
     if not points:
         return None
     sampled = len(points) > TRADE_SCATTER_LIMIT
@@ -816,6 +822,22 @@ def _macd_hist_candidates(specs: dict[str, tuple[str, str]]) -> list[tuple[str, 
     return out
 
 
+def _panel_display(table: str, column: str) -> dict[str, Any] | None:
+    """QRE-FACTOR-DISPLAY-CONTRACT：因子列 → 呈现合同（注册表单一来源）。
+
+    返回 display dict（chart_type/panel_id/role/series_type/axis/precision/
+    color/price_basis/render_order）；未注册或旧注册表无 display 返回 None
+    （前端走启发式回退）。纯读本地 JSON，不访问数据库。
+    """
+    from quant_research_engine.gui.factor_registry import load_registry
+
+    info = load_registry().display(table, column)
+    if info is None:
+        return None
+    disp = info.get("display")
+    return dict(disp) if isinstance(disp, dict) else None
+
+
 def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str]) -> tuple[list[dict[str, Any]] | None, str | None]:
     """按 K 线日期对齐拉取策略因子序列（含出入场阈值）。失败降级 (None, note)。
 
@@ -884,12 +906,15 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
     for name in specs:
         series = [round(raw[name][d], 4) if d in raw[name] else None for d in dates]
         if any(v is not None for v in series):
+            table, col = specs[name]
             panels.append({
                 "name": name,
-                "col": specs[name][1],
-                "table": specs[name][0],
+                "col": col,
+                "table": table,
                 "values": series,
                 "thresholds": _factor_thresholds(name, entry, exit_),
+                # QRE-FACTOR-DISPLAY-CONTRACT：呈现合同随面板下发（未注册为 None）
+                "display": _panel_display(table, col),
             })
     for table, hist in hist_specs:
         key = ("MACD柱", hist)
@@ -897,7 +922,8 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
             continue
         series = [round(raw[key][d], 4) if d in raw[key] else None for d in dates]
         if any(v is not None for v in series):
-            panels.append({"name": "MACD柱", "col": hist, "table": table, "values": series, "thresholds": []})
+            panels.append({"name": "MACD柱", "col": hist, "table": table, "values": series,
+                           "thresholds": [], "display": _panel_display(table, hist)})
     if not panels:
         return None, "该股区间无因子数据"
     return panels, None

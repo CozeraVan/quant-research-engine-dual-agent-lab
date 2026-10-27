@@ -164,9 +164,11 @@ def format_price_basis_note(remaps: list[dict[str, str]]) -> str:
 def registry_display_fields(table: str, column: str) -> dict[str, Any]:
     """因子语义注册表展示字段（QRE-GUI-FACTOR-REGISTRY-001）。
 
-    返回 ``{zh, canonical, price_basis, aliases}``：中文名、canonical 对照、
-    价格口径与别名。未注册条目 ``zh`` 为 None（前端回退既有 label，不伪造中文名）。
-    只读注册表 JSON，不访问数据库。
+    返回 ``{zh, canonical, price_basis, aliases, display}``：中文名、canonical
+    对照、价格口径、别名与呈现合同（QRE-FACTOR-DISPLAY-CONTRACT：
+    chart_type/panel_id/role/series_type/axis/precision/color/price_basis/
+    render_order）。未注册条目 ``zh`` 为 None（前端回退既有 label，不伪造中文名），
+    ``display`` 为 None（页面走启发式回退）。只读注册表 JSON，不访问数据库。
     """
     from quant_research_engine.gui.factor_registry import load_registry
 
@@ -177,12 +179,15 @@ def registry_display_fields(table: str, column: str) -> dict[str, Any]:
             "canonical": f"{table}.{column}",
             "price_basis": None,
             "aliases": [],
+            "display": None,
         }
+    disp = info.get("display")
     return {
         "zh": info["zh"],
         "canonical": info["canonical"],
         "price_basis": info["price_basis"],
         "aliases": list(info["aliases"]),
+        "display": dict(disp) if isinstance(disp, dict) else None,
     }
 
 

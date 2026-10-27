@@ -238,6 +238,13 @@
   按钮 `min-height:44px`（命中 §10 点击目标）且允许折行（`white-space:normal`）。
   真实 Chromium 375px 硬门槛：无页面横向溢出、无 JS error。
 
+### 3.15 因子呈现属性统一协议（QRE-FACTOR-DISPLAY-CONTRACT，2026-10-27）
+
+- `configs/factor_registry.json` 是因子呈现的唯一权威：除中文名/别名外，每个 canonical 必须有 `display.chart_type/panel_id/role/series_type/axis/precision/color/price_basis/render_order`；`gen_factor_registry.py` 负责生成与校验，页面不得各自猜指标类型。
+- EMA/均线/BOLL/轨道类一律 overlay K 线主图；MACD/PPO/PVO 同参数 DIF+DEA+HIST 同副图；KDJ/STOCH 等家族同副图；RSI、风险、流动性与 Alpha 默认独立副图。`panel_id` 必须含价格口径，同列不同口径不得共用键。
+- `factor-layout.js` 优先消费显式 display；只有旧注册表/旧产物缺 display 时才使用启发式回退。SaaS 因子目录、symbol 静态图与重播必须同源，禁止把 EMA 错放到独立指标 DIV。
+- 呈现协议与夜间模式正交：主题切换只改颜色，不改 panel/role/series 或数据。修改图表时必须回归 EMA overlay、MACD 同面板、不同口径不串键与 375 无横溢。
+
 ---
 
 ## 4. 图表规范（ECharts）
@@ -419,8 +426,55 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 ---
 
+## 11. 夜间模式（QRE-SAAS-NIGHT-MODE，2026-10-27）
+
+适用范围：全部 SaaS 公网页面（new/records/job/symbol/login/login_callback/help/profile/feedback/factor-request）与 9090 console 管理台，共用同一套开关。**浅色主题的 tokens、配色、字体、排版、间距、布局、组件形状、动效、文案、数据一律不变**；lab 侧 8080/8081 页面不引入本机制。
+
+### 11.1 夜间 tokens（`static/night-mode.css:6-23`，`[data-theme="dark"]` 覆盖）
+
+| Token（任务名） | 色值 | 落地变量名 | 用途 |
+|---|---|---|---|
+| bg | `#17153B` | `--bg` / `--paper` | 页面底色、顶栏、滚动条轨道 |
+| card | `#2E236C` | `--card` / `--panel` | 卡片/面板/图表容器 |
+| line | `#433D8B` | `--line` / `--tint-deep` | 边框、分隔线、滚动条滑块 |
+| text | `#F1EDF8` | `--text` / `--ink` | 正文、标题 |
+| muted | `#C8ACD6` | `--muted` / `--grey` / `--faint` | 次要文字、坐标轴、占位 |
+| accent | `#7E60BF` | `--accent` | 夜间交互主色（次按钮 hover/focus 辅助） |
+| accent-deep | `#C8ACD6` | `--accent-deep` / `--lav-deep` | 链接、强调文字、可读性优先的强调色 |
+| accent-soft | `#2E236C` | `--accent-soft` | 淡紫底替代（与 card 同值，夜间不再叠加第三层紫） |
+
+派生覆盖（同样只在夜间生效）：`--lav:#9B84D8`（主紫按钮/主曲线在深底上提亮）、`--lav-ink:#A99BD8`；`--tint:#3A3170`（折叠头/chip/行 hover 底，比 card 亮一档）；`--field:#241E52`（输入框/`option`/代码块底，比 card 暗一档）；`--up:#FF7A7A` / `--up-soft:#3A2030` / `--up-deep:#FF9B9B` 与 `--down:#4FD69A` / `--down-soft:#17342A`（红涨绿跌**只提亮不改色相**，见 §11.3）；`--shadow-1/--shadow-2` 改纯黑半透明（深底上紫相阴影不可见）。
+
+### 11.2 生效机制
+
+- **浅色不动原则**：`night-mode.css` 所有规则都带 `:root[data-theme="dark"]` 前缀，浅色下零命中；`night-mode.js` 在浅色下除写 `data-theme="light"` 外不改任何既有配置。base.html 的浅色 `:root` token 块未改一行（`git diff` 复核）。
+- **优先级**：模板内联 `<style>` 在 `lab-theme.css` 之前、`night-mode.css` 在两者之后加载，且夜间规则带属性前缀，天然压过同族裸类名规则——不需要给既有选择器加 `!important`（`#guest-note` 是唯一例外，见 §11.5）。
+- **防首帧闪白（FOUC）**：`base.html` / `login_callback.html` 在 `<head>` 的 `theme-color` meta 之后放内联脚本，同步读 `localStorage('qre-theme')`（非法值忽略）→ 无存储值时读 `prefers-color-scheme` → 立即写 `documentElement.dataset.theme`，早于样式表渲染首帧。
+- **持久化与系统偏好**：键名 `qre-theme`，值仅 `dark` / `light`。用户未点过开关时**不写** localStorage，跟随系统偏好（`matchMedia('(prefers-color-scheme: dark)')` 的 `change` 事件也跟随）；点过之后以存储值为准。
+- **meta theme-color**：浅色 `#4A3C78`、夜间 `#17153B`，随主题切换同步改 `content`（移动端浏览器地址栏/状态栏一致）。
+- **切换按钮**：`.tt-btn`（顶栏 `</nav>` 前，`type="button"`，带可见文字「夜间模式/日间模式」+ `aria-pressed` + `aria-label="…（切换配色）"`）；login_callback 等无顶栏页面用 `.tt-btn.tt-float`（右下角浮动，≤768px 收 12px）。JS API：`window.QRETheme = {current, set, toggle, themeChart}`，切换时派发 `qre:themechange` 事件。
+- **移动端**：开关不额外占行，375px 无横溢（审计脚本逐页验）；按钮点击目标与 §10 的 44px 规则一致。
+
+### 11.3 红涨绿跌（夜间）
+
+红绿语义不变、**色相不变，仅提亮保证深底可读**：涨/赚/买 `#C93A3A → #FF7A7A`，跌/亏/卖 `#1E8E5A → #4FD69A`（浅底/徽章底同步改 `#3A2030` / `#17342A`）。图表内散点、K 线阴阳、treemap 红绿插值、回撤面积等由 `themeChart` 的浅色 patch 只做**中性色替换**，红绿系列色不动（见 §11.4）。禁止在夜间引入第四种色相或把红绿对调。
+
+### 11.4 ECharts 接入约定（`night-mode.js` `themeChart`）
+
+- 接入方式：图表 `echarts.init(el)` 后包一层 `QRETheme.themeChart(chart)`——它把实例的 `setOption` 记在 `__qreOrigSetOption` 上并替换为「每次调用先注入主题 patch、再调原方法」，因此**每次重绘（含重播逐帧 setOption）都自动带上夜间配色**，页面无需在每次渲染时判断主题。现有接入点：job.html 主图/标签 treemap/风险子图、symbol.html 两图、`replay.js` 重播实例。
+- patch 范围（`applyNeutral`）：`backgroundColor` 恒设；仅深合并**已存在**的 `textStyle` / `legend` / `tooltip` / `xAxis` / `yAxis`（缺省字段不凭空造，避免改变浅色布局）。夜间取值：背景 `#17153B`（透明容器则保持 `transparent`）、轴线与轴线 `#C8ACD6`、轴标签/图例 `#C8ACD6`、tooltip 底 `#2E236C` + 边 `#433D8B` + 字 `#F1EDF8`。
+- **只改色不重算**：不碰 `series` 的坐标、数值、轴区间、grid 尺寸、`dataZoom`——主题切换不得引起布局抖动或数据变化；切回浅色时恢复 ECharts 默认轴色 `#6E7079`。
+- treemap 无坐标轴（`axis` 恒空），审计判据按「含笛卡尔系序列才断言轴色」处理。
+
+### 11.5 已知刻意保留项
+
+- `#guest-note`（游客提示条）：夜间保留深色告警样式（边 `#B4761F`、底 `#3D3118`），属「提醒」语义色，不并入紫系；这是唯一带 `!important` 的夜间规则（`night-mode.css:265`）。
+
+---
+
 ## 变更记录
 
+- 2026-10-27（QRE-SAAS-NIGHT-MODE）新增 §11 夜间模式规范：SaaS 全部页面（含 9090 管理台）追加可切换深色主题，**浅色 token/配色/视觉/排版/文案/数据零改动**，唯一新增交互是顶栏 `.tt-btn` 主题切换按钮。实现为三个新/改文件：`static/night-mode.css`（深色 token 覆盖 + 组件族深色规则，仅 `[data-theme="dark"]` 作用域）、`static/night-mode.js`（`QRETheme`：浅色不写 storage、`prefers-color-scheme` 跟随、手动选择落 `localStorage('qre-theme')`、`meta[name=theme-color]` 同步、`themeChart` 图表配色注入）、`saas/templates/base.html` 4 处挂载（防 FOUC 内联脚本 + css + js + 按钮）。夜间色板固定 8 token（bg `#17153B`/card `#2E236C`/line `#433D8B`/text `#F1EDF8`/muted `#C8ACD6`/accent `#7E60BF`/accent-deep `#C8ACD6`/accent-soft `#2E236C`）；红涨绿跌只提亮不断语义；ECharts 每次 `setOption` 前注入背景/轴/文字/tooltip/品牌紫，不重算布局与数据；375px 零横溢、按钮带文字与 `aria-pressed`。`#guest-note` 深色告警（`#B4761F` 字 / `#3D3118` 底）刻意保留。
 - 2026-10-26（QRE-SAAS-CLASSIC-ACTIONS-UI）新增结果操作卡与经典策略 CTA 两条局部规则族（无新色相/组件/动效，仅追加于 `lab-theme.css` 末尾）：**结果操作卡**——job「下一步」与「分享结果」合并为 `#result-actions-card`（标题「结果操作」+ 问号提示），内部两组 `.result-action-group`；按钮行 `.result-action-buttons`（flex、gap 10px、wrap、居中，`.btn` min-height 44px）；保存/确认信号=`btn btn-primary`、提示信号/分享=`btn btn-ghost`；`#action-status`/`#share-status` 类改 `.result-action-status`（13px `--ink` 正常可读状态文本，不用 `.opt` 灰字）；信号面板「T+1 参考/风险提示」移入「扫描范围」标签旁 `.tip-trigger`（`.result-action-scope`），radio/select/ID/scope 值不变；新增空安全 `syncResultActionCard()`（任一组非 hidden 才显示外层，游客/showcase/分享只读整体隐藏），init 两函数全分支同步、不重复绑定。**经典策略 CTA**——showcase 底部卡 `.showcase-cta`（flex wrap、h2 右推、主按钮 min-height 44px），页头备注移入 H1 旁问号提示。≤768px：CTA 纵排全宽、操作按钮 `flex:1 1 auto` 居中；375px 零横溢经真实 Chromium 验证。
 - 2026-10-25（QRE-SAAS-RESULT-UNDERSTANDING）新增 `static/lab-theme.css` 两条帮助页专用规则（无新色相/组件/动效）：`.help-sec{scroll-margin-top:76px}`（`/saas/help` 锚点小节避开 60px sticky 顶栏）与 `.help-jump`（页首锚点跳转胶囊，`--tint` 底 + `--tint-deep` 边 + hover 主紫反白，复用既有 token）。帮助页本体 `gui/saas/templates/help.html` 只用既有 `.page-head`/`.card`/`.tbl`/`.inl` 类；结果页各模块「说明 →」为 `.inl` 行内链接；SaaS 顶栏导航增至 5 项，`base.html` ≤400px 断点补 `header.topbar .mainnav{gap:0}`（lab-theme `.mainnav{gap:4px}` 后加载，须 `header.topbar` 前缀提优先级）+ logo 24px + 链接 11.5px，保证 375px 单行不折行。
 - 2026-10-25（QRE-SAAS-FACTOR-PICKER-MODAL）新增 §3.14 自选因子三栏弹窗选择器：入口 2 条件行三个堆叠下拉改为「按钮 + 三栏弹窗 + 搜索」；`.wz-left`/`.wz-rfield` select 降级为隐藏数据字段（`.factor-picker-field select{display:none}`）但仍是唯一值来源，YAML/快照/固定值/策略还原/price basis 零改动；弹窗复用 `FACTOR_OPTIONS` 与既有目录加载，不新增 API 与依赖；Esc/遮罩/关闭按钮只关不改值、焦点进搜索并归还原按钮、Tab 焦点锁；样式复用既有 modal 与紫色主题变量，768px 三栏降单列 + 视口限高。改动集中在 `gui/saas/templates/new.html` 与 `static/lab-theme.css`（移动端规则随组件放 lab-theme.css，因 base.html 无同族竞争规则），8081 lab 侧零改动。

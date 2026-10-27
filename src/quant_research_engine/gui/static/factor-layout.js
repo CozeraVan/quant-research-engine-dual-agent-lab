@@ -78,95 +78,122 @@
     return null;
   }
 
+  // 面板标签：合同 panel_id 前缀 → 人读组名（pane: 前缀为独立面板，用因子名）
+  var PANEL_LABELS = {macd: "MACD", ppo: "PPO", pvo: "PVO", kdj: "KDJ", stoch: "STOCH",
+    stochrsi: "STOCHRSI", aroon: "AROON", vortex: "VORTEX", tsi: "TSI", rvgi: "RVGI",
+    fisher: "FISHER"};
+  function panelLabel(panelId, f) {
+    var prefix = String(panelId || "").split(":")[0];
+    if (prefix === "pane") return f.name || fkey(f) || "";
+    return PANEL_LABELS[prefix] || prefix.toUpperCase();
+  }
+
+  // QRE-FACTOR-DISPLAY-CONTRACT：plan 只消费注册表 display 合同；
+  // 无 display 的旧数据走下方启发式回退（与 2026-10-20 版行为一致），
+  // 显式属性永不被启发式覆盖。
   function plan(factors, states) {
     factors = factors || [];
     states = states || {};
-    var used = {}, groups = [];
 
-    // 预索引全部因子键（col/name 小写），供"s 信号线对"探测 sibling
+    // 预索引全部因子键（旧启发式的"s 信号线对"探测用）
     var allKeys = {};
     factors.forEach(function (f) {
       if (f.col) allKeys[String(f.col).toLowerCase()] = true;
       if (f.name) allKeys[String(f.name).toLowerCase()] = true;
     });
 
-    // 1) 家族归组：MACD/PPO/PVO 三元组、KDJ、STOCH、AROON、VORTEX、s 信号线对
-    var buckets = {};
+    // 1) 归组：display 合同优先，旧数据才启发式
+    var groups = [];   // {key, kind, label, order, members:[{f, role, seriesType, color, precision, order}]}
+    var byKey = {};
     factors.forEach(function (f, i) {
-      if (isOverlay(f)) return;  // overlay 优先，不进家族
-      var r = familyOf(f, allKeys);
-      if (!r) return;
-      var bkey = r.fam === "triple" ? (r.base + "_" + r.suffix) : r.gkey;
-      if (!buckets[bkey]) buckets[bkey] = { key: bkey, fam: r.fam, label: r.label, roles: {}, order: i };
-      if (!buckets[bkey].roles[r.role]) buckets[bkey].roles[r.role] = { f: f, idx: i };
-    });
-    Object.keys(buckets).forEach(function (bkey) {
-      var b = buckets[bkey];
-      if (b.fam === "triple") {
-        if (!(b.roles.dif && b.roles.dea)) return;  // 只有单线不成组，落到独立面板
-        ["dif", "dea", "hist"].forEach(function (r) { if (b.roles[r]) used[b.roles[r].idx] = true; });
-        groups.push({ key: bkey, label: b.label, kind: "macd", roles: b.roles,
-                      defaultState: "pane", allowed: ["pane", "hidden"], order: b.order });
+      var disp = (f.display && f.display.chart_type) ? f.display : null;
+      var kind, key, label, role, st, color, precision, order;
+      if (disp) {
+        kind = disp.chart_type === "overlay" ? "overlay" : "pane";
+        if (kind === "overlay") {
+          key = fkey(f) || ("f" + i);
+          label = f.name || key;
+        } else {
+          key = String(disp.panel_id);
+          label = panelLabel(disp.panel_id, f);
+        }
+        role = disp.role || "line";
+        st = disp.series_type === "bar" ? "bar" : "line";
+        color = disp.color || null;
+        precision = typeof disp.precision === "number" ? disp.precision : null;
+        order = typeof disp.render_order === "number" ? disp.render_order : 0;
       } else {
-        var members = Object.keys(b.roles).map(function (r) { return b.roles[r]; });
-        if (members.length < 2) return;  // 单线不成组
-        members.forEach(function (mb) { used[mb.idx] = true; });
-        groups.push({ key: bkey, label: b.label, kind: "family", members: members,
-                      defaultState: "pane", allowed: ["pane", "hidden"], order: b.order });
+        // ---- 旧数据启发式回退（2026-10-20 原逻辑，逐行保留） ----
+        if (isOverlay(f)) {
+          kind = "overlay";
+          key = fkey(f) || ("f" + i);
+          label = f.name;
+          role = "line"; st = "line"; color = null; precision = null; order = i;
+        } else {
+          var r = familyOf(f, allKeys);
+          if (!r) {
+            kind = "pane";
+            key = fkey(f) || ("f" + i);
+            label = f.name;
+            role = "line"; st = "line"; color = null; precision = null; order = i;
+          } else {
+            kind = "pane";
+            var bkey = r.fam === "triple" ? (r.base + "_" + r.suffix) : r.gkey;
+            key = bkey;
+            label = r.label;
+            role = r.fam === "triple"
+              ? (r.role === "dif" ? "main" : (r.role === "hist" ? "hist" : "signal"))
+              : (r.role || "line");
+            st = (r.fam === "triple" && r.role === "hist") ? "bar" : "line";
+            color = null; precision = null; order = i;
+          }
+        }
       }
+      var g = byKey[key];
+      if (!g) {
+        g = {key: key, kind: kind, label: label, order: order, members: []};
+        byKey[key] = g;
+        groups.push(g);
+      }
+      g.members.push({f: f, role: role, seriesType: st, color: color,
+                      precision: precision, order: order});
+    });
+    groups.sort(function (a, b) {
+      return (a.order - b.order) || (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0));
     });
 
-    // 2) overlay 启发式；3) 其余独立面板
-    factors.forEach(function (f, i) {
-      if (used[i]) return;
-      var disp = f.display || null;  // display 元数据接口预留（本期后端不下发）
-      var kind = (disp && disp.chart_type) || (isOverlay(f) ? "overlay" : "pane");
-      var key = fkey(f) || ("f" + i);
-      if (kind === "overlay") {
-        groups.push({ key: key, label: f.name, kind: "overlay", member: { f: f, idx: i },
-                      defaultState: "overlay", allowed: ["overlay", "pane", "hidden"], order: i });
-      } else {
-        groups.push({ key: key, label: f.name, kind: "pane", member: { f: f, idx: i },
-                      defaultState: "pane", allowed: ["pane", "hidden"], order: i });
-      }
-    });
-    groups.sort(function (a, b) { return a.order - b.order; });
-
-    var chips = [], overlays = [], panes = [], oi = 0;
+    // 2) 装配：chips / overlays / panes（overlay 组可被 chip 切到 pane）
+    var chips = [], overlays = [], panes = [], oi = 0, mi = 0;
     groups.forEach(function (g) {
-      var st = g.allowed.indexOf(states[g.key]) >= 0 ? states[g.key] : g.defaultState;
-      chips.push({ key: g.key, label: g.label, kind: g.kind, state: st, states: g.allowed });
+      var allowed = g.kind === "overlay" ? ["overlay", "pane", "hidden"] : ["pane", "hidden"];
+      var st = allowed.indexOf(states[g.key]) >= 0 ? states[g.key]
+        : (g.kind === "overlay" ? "overlay" : "pane");
+      chips.push({key: g.key, label: g.label, kind: g.kind, state: st, states: allowed});
       if (st === "hidden") return;
+      var members = g.members.slice().sort(function (a, b) { return a.order - b.order; });
       if (st === "overlay") {
-        overlays.push({ f: g.member.f, name: g.member.f.name, color: COLORS.overlay[oi++ % COLORS.overlay.length] });
+        members.forEach(function (m) {
+          overlays.push({f: m.f, name: m.f.name,
+            color: m.color || COLORS.overlay[oi++ % COLORS.overlay.length]});
+        });
         return;
       }
-      if (g.kind === "macd") {
-        var series = [];
-        if (g.roles.dif) series.push({ name: "DIF", type: "line", values: g.roles.dif.f.values, color: COLORS.dif });
-        if (g.roles.dea) series.push({ name: "DEA", type: "line", values: g.roles.dea.f.values, color: COLORS.dea });
-        if (g.roles.hist) series.push({ name: "HIST", type: "bar", values: g.roles.hist.f.values, hist: true });
-        var ths = [];
-        ["dif", "dea", "hist"].forEach(function (r) {
-          var f = g.roles[r] && g.roles[r].f;
-          if (f && f.thresholds) ths = ths.concat(f.thresholds);
-        });
-        panes.push({ key: g.key, name: g.label, thresholds: ths, series: series });
-      } else if (g.kind === "family") {
-        var ci = 0, fseries = [], fths = [];
-        g.members.forEach(function (mb) {
-          if (mb.f.thresholds) fths = fths.concat(mb.f.thresholds);
-          fseries.push({ name: mb.f.name, type: "line", values: mb.f.values,
-                         color: COLORS.multi[ci++ % COLORS.multi.length] });
-        });
-        panes.push({ key: g.key, name: g.label, thresholds: fths, series: fseries });
-      } else {
-        var f = g.member.f;
-        panes.push({ key: g.key, name: f.name, thresholds: f.thresholds || [],
-                     series: [{ name: f.name, type: "line", values: f.values, color: COLORS.pane }] });
-      }
+      // pane 渲染（含 overlay 组被切到 pane 的情形）
+      var thresholds = [];
+      var series = members.map(function (m) {
+        if (m.f.thresholds) thresholds = thresholds.concat(m.f.thresholds);
+        var sc = {
+          name: m.f.name, type: m.seriesType === "bar" ? "bar" : "line",
+          values: m.f.values,
+          color: m.color || (m.seriesType === "bar" ? null : COLORS.pane),
+        };
+        if (m.seriesType === "bar") sc.hist = true;
+        if (m.precision != null) sc.precision = m.precision;
+        return sc;
+      });
+      panes.push({key: g.key, name: g.label, thresholds: thresholds, series: series});
     });
-    return { chips: chips, overlays: overlays, panes: panes, paneCount: panes.length };
+    return {chips: chips, overlays: overlays, panes: panes, paneCount: panes.length};
   }
 
   window.QREFactorLayout = { plan: plan, COLORS: COLORS };

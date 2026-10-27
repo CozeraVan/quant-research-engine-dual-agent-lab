@@ -6,11 +6,14 @@
 #
 # 手动执行：./deploy/saas/pull-ecs-backup.sh
 # 本地目标目录：~/quant-workspace/backups/ecs-aguhuice/
+#
+# QRE-ECS-SSH-HARDENING（2026-10-27）：root 直连已禁（PermitRootLogin no），
+# 默认走 deploy 用户拉取（/srv/aguhuice/backups 为 0644，deploy 可读）。
 set -euo pipefail
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 KEY="${SSH_KEY:-$HOME/.ssh/aguhuice_ed25519}"
-HOST="${ECS_HOST:-root@47.119.127.40}"
+HOST="${ECS_HOST:-deploy@47.119.127.40}"
 DEST="${BACKUP_DIR:-$HOME/quant-workspace/backups/ecs-aguhuice}"
 mkdir -p "$DEST"
 

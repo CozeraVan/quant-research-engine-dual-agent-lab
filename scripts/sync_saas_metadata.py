@@ -13,8 +13,11 @@
 用法（本地，因子库更新后再跑一次并 scp）：
   .venv/bin/python scripts/sync_saas_metadata.py \
       --out deploy/saas/metadata.json
-  scp -i ~/.ssh/aguhuice_ed25519 deploy/saas/metadata.json \
-      root@47.119.127.40:/srv/aguhuice/qre/deploy/saas/metadata.json
+  ./deploy/saas/deploy-ecs.sh deploy/saas/metadata.json
+
+QRE-ECS-SSH-HARDENING（2026-10-27）起 root 直连已禁，scp 一律走 deploy 用户；
+部署用 `deploy/saas/deploy-ecs.sh`（scp 到 /tmp → sudo install 到业务路径 →
+sudo systemctl restart qre-saas → 校验），不要再写 `root@47.119.127.40`。
 """
 
 from __future__ import annotations

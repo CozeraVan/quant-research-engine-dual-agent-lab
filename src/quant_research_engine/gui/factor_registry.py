@@ -38,6 +38,17 @@ PRICE_BASIS_ZH = {
 _CANONICAL_PREFIX = "factors."
 _MARKET_TABLE = "public.stock_daily"
 
+# QRE-FACTOR-DISPLAY-CONTRACT：呈现合同合法值与行情字段默认合同
+DISPLAY_CHART_TYPES = ("overlay", "pane")
+DISPLAY_SERIES_TYPES = ("line", "bar")
+DISPLAY_AXES = ("price", "value")
+DISPLAY_ROLES = ("main", "signal", "hist", "k", "d", "j", "up", "down", "line", "band")
+_MARKET_FIELD_DISPLAY = {
+    "chart_type": "overlay", "panel_id": None, "role": "line",
+    "series_type": "line", "axis": "price", "precision": 2,
+    "color": "#6750A4", "price_basis": None, "render_order": 0,
+}
+
 # 归一化要剔除的字符：空白、下划线、连字符、间隔号与中文特有标点。
 # 逗号/括号/小数点保留——参数写法（MACD(12,26,9)）依赖它们唯一命中；
 # 句读只从首尾剥离，避免 "…均线。" 这类尾缀挡住命中。
@@ -125,6 +136,10 @@ class FactorEntry:
     aliases: tuple[str, ...]
     common: bool
     core: bool = False
+    # QRE-FACTOR-DISPLAY-CONTRACT：呈现合同（chart_type/panel_id/role/
+    # series_type/axis/precision/color/price_basis/render_order）。旧注册表
+    # （无 display 键）为 None，页面走启发式回退。
+    display: dict[str, Any] | None = None
 
 
 @dataclass
@@ -162,6 +177,7 @@ class FactorRegistry:
                 params={},
                 aliases=tuple(info.get("aliases") or ()),
                 common=True,
+                display=dict(_MARKET_FIELD_DISPLAY),
             )
         self._entries: dict[str, FactorEntry] = {}
         for raw in data.get("factors") or []:
@@ -178,6 +194,7 @@ class FactorRegistry:
                 aliases=tuple(raw.get("aliases") or ()),
                 common=bool(raw.get("common")),
                 core=bool(raw.get("core")),
+                display=dict(raw["display"]) if isinstance(raw.get("display"), dict) else None,
             )
             self._entries[entry.canonical] = entry
         self.tables: dict[str, dict[str, Any]] = dict(data.get("tables") or {})
@@ -297,6 +314,7 @@ class FactorRegistry:
                     "aliases": list(entry.aliases),
                     "common": True,
                     "core": True,
+                    "display": dict(entry.display) if entry.display else None,
                 }
             return None
         entry = self._entries.get(f"{_CANONICAL_PREFIX}{short}.{column}")
@@ -311,6 +329,7 @@ class FactorRegistry:
             "output": entry.output,
             "aliases": list(entry.aliases),
             "common": entry.common,
+            "display": dict(entry.display) if entry.display else None,
         }
 
     def common_factor_targets(self) -> tuple[str, ...]:
@@ -590,6 +609,77 @@ def load_registry(path: str | Path | None = None) -> FactorRegistry:
     return registry
 
 
+def validate_display(registry: FactorRegistry) -> list[str]:
+    """QRE-FACTOR-DISPLAY-CONTRACT：display 合同校验（合法/无冲突/无失效引用）。
+
+    - 每个条目都有 display，枚举值合法（chart_type/series_type/axis/role）；
+    - overlay ⇔ panel_id 为 None 且价格轴；pane ⇔ panel_id 非空且数值轴；
+    - panel_id 形如 ``group:table:params:basis`` / ``pane:table:column:basis``，
+      且 basis 与条目 price_basis 一致（同列不同口径不串键）；
+    - 同一 panel_id 下的条目必须同表同口径同 chart_type（无冲突）；
+    - 旧注册表（无 display）整体报一条，提示重新生成——不静默放行。
+    """
+    issues: list[str] = []
+    by_panel: dict[str, set[tuple[str, str | None, str]]] = {}
+    missing = 0
+    for canonical, entry in registry.entries.items():
+        disp = entry.display
+        if not disp:
+            missing += 1
+            continue
+        chart_type = disp.get("chart_type")
+        panel_id = disp.get("panel_id")
+        if chart_type not in DISPLAY_CHART_TYPES:
+            issues.append(f"display.chart_type 非法: {canonical} -> {chart_type!r}")
+            continue
+        if disp.get("series_type") not in DISPLAY_SERIES_TYPES:
+            issues.append(f"display.series_type 非法: {canonical} -> {disp.get('series_type')!r}")
+        if disp.get("axis") not in DISPLAY_AXES:
+            issues.append(f"display.axis 非法: {canonical} -> {disp.get('axis')!r}")
+        if disp.get("role") not in DISPLAY_ROLES:
+            issues.append(f"display.role 非法: {canonical} -> {disp.get('role')!r}")
+        precision = disp.get("precision")
+        if not isinstance(precision, int) or isinstance(precision, bool) or precision < 0:
+            issues.append(f"display.precision 非法: {canonical} -> {precision!r}")
+        render_order = disp.get("render_order")
+        if not isinstance(render_order, int) or isinstance(render_order, bool) or render_order < 0:
+            issues.append(f"display.render_order 非法: {canonical} -> {render_order!r}")
+        color = disp.get("color")
+        if not (isinstance(color, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", color)):
+            issues.append(f"display.color 非法: {canonical} -> {color!r}")
+        if chart_type == "overlay":
+            if panel_id is not None:
+                issues.append(f"overlay 不得有 panel_id: {canonical}")
+            if disp.get("axis") != "price":
+                issues.append(f"overlay 必须价格轴: {canonical}")
+            continue
+        if not panel_id or not isinstance(panel_id, str):
+            issues.append(f"pane 必须有 panel_id: {canonical}")
+            continue
+        parts = panel_id.split(":")
+        if len(parts) != 4:
+            issues.append(f"panel_id 形如 group:table:params:basis: {canonical} -> {panel_id}")
+            continue
+        group, _table, _params, basis = parts
+        if not group or not _table:
+            issues.append(f"panel_id 组/表为空: {canonical} -> {panel_id}")
+        expected_basis = entry.price_basis or "na"
+        if basis != expected_basis:
+            issues.append(
+                f"panel_id 口径与条目不一致: {canonical} -> {panel_id}（期望 …:{expected_basis}）")
+        if disp.get("axis") != "value":
+            issues.append(f"pane 必须数值轴: {canonical}")
+        by_panel.setdefault(panel_id, set()).add(
+            (entry.table, entry.price_basis, chart_type))
+    for panel_id, members in by_panel.items():
+        if len(members) > 1:
+            issues.append(f"panel_id 跨表/跨口径/跨类型冲突: {panel_id} -> {sorted(members)}")
+    if missing:
+        issues.append(
+            f"{missing} 个条目缺 display 合同（请用 scripts/gen_factor_registry.py 重新生成）")
+    return issues
+
+
 def validate_registry(
     snapshot: dict[str, list[str]],
     registry: FactorRegistry | None = None,
@@ -598,6 +688,7 @@ def validate_registry(
 
     ``snapshot``: ``{table: [columns]}``（不含 schema 前缀，与
     ``configs/factor_catalog_llm.json`` 同构）。返回问题列表，空列表 = 通过。
+    QRE-FACTOR-DISPLAY-CONTRACT：display 合同校验并入本门禁。
     """
     reg = registry if registry is not None else load_registry()
     issues: list[str] = []
@@ -622,6 +713,7 @@ def validate_registry(
                 issues.append(f"别名「{alias}」指向注册表不存在的字段：{canonical}")
             elif canonical not in known:
                 issues.append(f"别名「{alias}」指向因子库不存在的字段：{canonical}")
+    issues.extend(validate_display(registry))
     return issues
 
 

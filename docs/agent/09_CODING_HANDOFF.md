@@ -2,6 +2,180 @@
 
 ## Task ID
 
+QRE-DATA-CLEANUP-EXECUTION（用户批准的遗留数据清理与分钟 CSV 只读检查）
+
+## Release Status
+
+DONE（2026-10-27）。四库和指定旧回测产物已删除，留档在 `/home/van/quant-workspace/backups/local-cleanup-20261027/`。活跃目录与两个待验收 staging 库保留；`qre-outputs` 27G→536M，磁盘可用 386G→418G，8080/8092 HTTP 200。8081 staging 重用前需重建/替换 aguhuice_local。三份新分钟 CSV 仅只读检查，等待 17:20 timer 自动入库；未清洗、未压缩、未手动入库。M10.4 依赖环境已存在，无重复安装。未 commit/push。
+
+## 历史盘点摘要（只读阶段）
+
+**三项高风险（待用户决定，均未动手）**：
+
+1. **`public.stock_daily_qfq_legacy` 已不存在**。全库所有 schema `ilike '%legacy%' or ilike '%qfq%'` → 0 条；本地无 `tushare_data` dump（`~/quant-workspace/backups/ecs-aguhuice/` 只有 ECS aguhuice SaaS 库 dump）⇒ 2026-10-12 方案A（qfq → 原始价+adj_factor）的**回滚能力已永久失去且不可恢复**。新口径自 10-12 生产生效、因子已全历史重算，但该选项不再存在。
+2. **分钟线压缩缺口 140 GB**。`stock_minute_1m` 922 chunk：708 已压缩 = **396 MB**，214 未压缩 = **140 GB**（压缩比约 350:1）。其中 **213 个 `range_end` 早于 T-7 仍未压缩**，覆盖 2022-09-01 → 2026-10-08（2022:18/11G、2023:52/33G、2024:52/34G、2025:51/35G、2026:40/27G），违反 20 §3.4 规则。`minute_compress.log` 称 10-11 已压 707 个，但未压缩 chunk 内部 ID（2022-09-01 = `_hyper_67_56121_chunk`）高于已压缩集合（`_hyper_67_45526` 等）⇒ 那些 chunk 是压缩后新建、再未压。重跑 `quant_ts/compress_minute_chunks.sh`（幂等，已跑通过一次）预计回收 ~139 GB。
+3. **分钟线落后日线 10 天**：`stock_minute_1m` 最新 2026-10-16 vs `stock_daily` 2026-10-26。`minute-csv-ingest.timer` 自 10-18 起每天「扫描到 CSV 0 个」⇒ 用户未再拷新 CSV。需确认暂停还是漏拷。
+
+**「已入库」≠「可安全删除」核查结论**：`/home/van/mindata` **已空**（0 文件 / 24 KB / 仅剩 `mindata/` 与 `mindata/2026/` 两个空目录 inode）。日志只记录 5 个 CSV（20261012–1016，2026-10-18 17:06）走过「先校验 `rows_csv==rows_db` 再删除」；`import_minute_csv.py` **无任何 unlink/remove/rmtree 代码** ⇒ 4308 个历史 CSV 属脚本外删除（`mindata/` mtime 2026-10-11 23:19 晚于审计最后写入 20:10，顺序对但无轨迹）。数据侧已验证完整：审计 4318 条全部 `rows_csv==rows_db`（0 不一致）、审计日期与表日期双向差集均 0、抽查 8 个日期（含磁盘打满失败的 2022-08-22/25/29）`rows_db` vs 实时行数 **8/8 MATCH**。**源 CSV 不可恢复，今后发现缺口只能回原始数据商重新下载。**
+
+**可删候选（待确认，未动）**：`aguhuice_test`(7.5MB,0 表)、`quant_hub`(10MB,0 public 表)、`aguhuice_local`(8.9MB,3 users/15 jobs,9-27→10-05)；`qre-outputs/refresh/incremental` 17G(8-02)、`gui-console/runs` 5.4G(8-20)、`backtests` 4.3G(8-18)、`gui-run` 442M(9-13) 及约 20 个 7 月 `*_check` 目录。任务书提到的 `qre_saas`/`dbg` **均不存在**。
+
+**勿动**：`refresh/registry.json`/`state.json`/`delta/`（KB 级活配置，`gui/refresh_registry.py` 引用，绝不能随 17G 一起删）；`saas_uploads`（今日仍在写）、`market_risk`(10-26)、`video_packages`(10-24)；`.tmp/ms-playwright` 681M + `.tmp/browser-venv` 142M（浏览器审计工具链）；两个上一任务 staging 库（各自任务验收后再删）。
+
+**高风险单项**：`akshare_data` 5.8GB——`stock_ticks` 36,147,932 行 / 2026-04-07→04-24 / 10 分区；`AK_DB_URL` 仅 `quant_ts/config.py` 定义、全仓无消费者。
+
+**备份缺口**：本地无 `tushare_data` 逻辑备份，513GB 主库只有磁盘+TimescaleDB 自身保护。
+
+## Verification（全部只读实跑）
+
+```sql
+-- 审计一致性：0 行
+select trade_date, rows_csv, rows_db from public.stock_minute_1m_audit where rows_csv is distinct from rows_db;
+-- 审计 vs 实际表双向差集：各 0 行
+select trade_date from public.stock_minute_1m_audit except select distinct trade_date from public.stock_minute_1m;
+select distinct trade_date from public.stock_minute_1m except select trade_date from public.stock_minute_1m_audit;
+-- 单日实时行数比对（含磁盘打满重试日期）：8/8 MATCH
+select count(*) from public.stock_minute_1m where trade_date='2022-08-25';  -- 1180224 = 审计 rows_db
+-- 压缩缺口：213 | 140 GB
+select count(*), pg_size_pretty(sum(pg_relation_size(format('%I.%I',chunk_schema,chunk_name))::bigint))
+from timescaledb_information.chunks
+where hypertable_name='stock_minute_1m' and not is_compressed and range_end < (now()-interval '7 days');
+-- 压缩 vs 未压缩总量：708 chunks=396MB / 214 chunks=140GB
+select is_compressed, count(*), pg_size_pretty(sum(pg_relation_size(format('%I.%I',chunk_schema,chunk_name))::bigint))
+from timescaledb_information.chunks where hypertable_name='stock_minute_1m' group by 1;
+-- 遗留表搜索：0 行
+select table_schema||'.'||table_name from information_schema.tables where table_name ilike '%legacy%' or table_name ilike '%qfq%';
+-- 审计完成时间（对比 mindata mtime）：2026-10-11 20:10:20 vs mindata mtime 2026-10-11 23:19:18
+select max(done_at) from public.stock_minute_1m_audit where done_at::date='2026-10-11';
+```
+辅助命令：`du -sh /home/van/mindata`（24K）、`find /home/van/mindata -type f | wc -l`（0）、
+`journalctl -u minute-csv-ingest.service`（10-18 起每天「扫描到 CSV 0 个」）、
+`systemctl status minute-csv-ingest.timer`（enabled/active，Mon–Fri 17:20，`Persistent=true`）、
+`stat -c '%n %y' /home/van/mindata /home/van/mindata/2026`、`df -h /`（1007G/570G used/386G avail, 60%）。
+
+**测试**：无代码改动，无需回归；`scripts/check-progress-docs.sh` 通过。
+
+## Next Step（等用户逐项确认后再立项，本轮不做）
+
+见 04 号文档「待用户确认清单」7 项与 20 号文档 §7.3。任何清理动作执行前必须：①用户明确确认该项；②对库操作先 `pg_dump` 或至少记录表结构+行数；③对文件操作先 `du`+`find` 留档；④分钟线压缩属例行运维，可直接跑但建议仍先知会用户。
+
+# Coding Handoff
+
+## Task ID
+
+QRE-ECS-SSH-HARDENING（root SSH 与部署发布纪律加固）
+
+## Release Status
+
+已生效待人工验收，未 commit/push（2026-10-27）。生产变更：`/etc/ssh/sshd_config.d/99-qre-hardening.conf`（新）+ `99-aguhuice-hardening.conf` 一行（`PermitRootLogin prohibit-password` → `no`）+ `/etc/sudoers.d/90-qre-deploy`（新）+ `/etc/sudoers.d/deploy` 权限 0644 → 0440。**无 schema 变更、未重启 worker、未跑真实回测。** root 直连已拒，deploy+sudo 为唯一入口。
+
+## Implementation Summary
+
+- **审计（改 SSH 前，顺序未倒置）**：deploy 密钥登录 uid=1000（公钥指纹 `SHA256:ghZ0NGRMwpXkAk6CrAnmDILAxRYhJ3lhLCUntkLPooE` 与本机一致）；`sudo -n` → uid=0；`/srv/aguhuice/qre/configs/factor_registry.json` 与 `deploy/saas/metadata.json` 可读；`/tmp → sudo -n install → sudo -n rm` 部署链干跑成功；deploy 自建隧道 9091 → `/saas/new` 200、`/api/saas/factors` 902/902 带 zh。既有会话全程未断。
+- **审计抓出的锁死风险**：`passwd -S deploy` = `L`（密码锁定），`/etc/sudoers.d/deploy` 只放通 `/usr/bin/systemctl` 与 `/usr/bin/docker`——`sudo -n` 当时实际不可用。直接禁 root 会同时失去装文件、PG 备份恢复、证书、防火墙能力。修法：新增 `/etc/sudoers.d/90-qre-deploy` = `deploy ALL=(ALL:ALL) NOPASSWD: ALL`（0440 root:root，`visudo -c` 全绿）；顺带修 `sudoers.d/deploy` 0640→0440（原 0644 被 `visudo -c` 报 bad permissions）。
+- **`/etc/ssh/sshd_config.d/99-qre-hardening.conf`（新，实际内容）**：
+  ```
+  # QRE-ECS-SSH-HARDENING（2026-10-27）
+  # 独立加固 drop-in：禁 root 直连、禁密码与键盘交互认证、仅公钥登录。
+  # AllowTcpForwarding 保持可用——9090 SaaS 管理台经 SSH 隧道访问（admin-tunnel.sh），
+  # 关闭会直接把管理台变成不可达。
+  # 其他 sshd 项一律不动。回滚：删除本文件后 `systemctl reload ssh`（不断会话）。
+  PermitRootLogin no
+  PasswordAuthentication no
+  KbdInteractiveAuthentication no
+  PubkeyAuthentication yes
+  AllowTcpForwarding yes
+  ```
+- **为什么必须改 `99-aguhuice-hardening.conf` 一行**：sshd 对同一关键字取**先出现者**，`Include /etc/ssh/sshd_config.d/*.conf` 按字典序展开，`99-aguhuice-hardening.conf` < `99-qre-hardening.conf`。实测：只留新文件 → `permitrootlogin no`；两文件并存 → 回退 `without-password`。故该文件 `PermitRootLogin prohibit-password` → `no`，另两行（`PasswordAuthentication no`/`PubkeyAuthentication yes`）原样未动。
+- **生效流程**：`sshd -t` 通过 → `systemctl reload ssh`（非 restart，既有会话/隧道不断）。`sshd -T` 复核：`permitrootlogin no`/`passwordauthentication no`/`kbdinteractiveauthentication no`/`pubkeyauthentication yes`/`permitemptypasswords no`/`allowtcpforwarding yes`。
+- **`deploy/saas/deploy-ecs.sh`（新，0755）**：deploy+sudo 唯一部署入口。拒绝绝对路径 → 本地按仓库相对路径解析 → scp 到 `/tmp/qre-deploy-<STAMP>/`（先按相对路径远程 `mkdir -p`，scp 不自建嵌套目录）→ 生成远程脚本 `sudo -n bash` 执行：`mkdir -p` 业务/备份目录 → 已存在文件先 `cp -a` 到 `/tmp/qre-deploy-<STAMP>.bak/` → `install -o deploy -g deploy -m 0644` → `rm -rf` 临时目录 → `sudo -n systemctl restart qre-saas`（仅此单位）→ `systemctl is-active` + `curl` 应用层校验。带 `--dry-run`。两个已修真 bug：①scp 远程嵌套目录；②内联 `bash -c` 字符串二次转义（改为远程脚本文件 + 路径本地展开写死）。
+- **`deploy/saas/admin-tunnel.sh`**：`HOST` 默认 `root@` → `deploy@47.119.127.40`，注释说明 root 已禁、TCP 转发为此保留。**`deploy/saas/pull-ecs-backup.sh`**：`HOST` 默认同样改 `deploy@`（`/srv/aguhuice/backups` 为 0644，deploy 可读，已实测能 `head` 最新 dump）。**`scripts/sync_saas_metadata.py`**：用法注释的 `scp ... root@...` 改为指向 `./deploy/saas/deploy-ecs.sh` 并注明禁 root。
+
+## Verification
+
+- **root 拒绝**：`ssh root@47.119.127.40` → `Permission denied (publickey)`。
+- **deploy 全通**：新连接 uid=1000；`sudo -n id -un` = root；`sudo -n systemctl is-active` qre-saas=active / qre-worker=inactive / nginx=active / ssh=active；业务文件可读；`sudo -n fail2ban-client status sshd` 正常（Currently banned 0 / Total banned 1）。
+- **9090 隧道保留**：`sshd -T` `allowtcpforwarding yes`；reload 后既有 root 隧道仍 200；deploy 新建 9092 → `/saas/new` 200(103937B)、`/saas/console` 200；`admin-tunnel.sh`（deploy@）起 9090 → 同两项 200。陈旧 root 隧道已停，现网无 root 会话（`ps` 确认隧道进程为 `deploy@`）。
+- **deploy-ecs.sh 真实端到端**：用与生产 SHA256 相同的 `deploy/saas/metadata.json`（`29045e2485…`）实跑 → scp/installed/active/MainPID 493988/api 200//saas/new 200 四步全过，跑完生产 SHA256 仍 `29045e2485…`（字节未变）。dry-run、`--dry-run` 两文件、拒绝绝对路径（rc=2）均验证。
+- **测试**：无 `src/` 改动、无测试引用这三个脚本；`bash -n` 三脚本全过；**全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → 2890 passed + 6 skipped**（基线一致，零回归）。
+- **备份/回滚**：`/tmp/qre-ssh-hardening-pre-20261027/`（`etc/ssh/sshd_config`、`etc/ssh/sshd_config.d/99-aguhuice-hardening.conf`、`etc/sudoers.d/deploy` 原样副本）。回滚：`sudo rm /etc/ssh/sshd_config.d/99-qre-hardening.conf` + 把 `99-aguhuice-hardening.conf` 的 `PermitRootLogin` 改回 `prohibit-password` → `sudo systemctl reload ssh`；`sudo rm /etc/sudoers.d/90-qre-deploy`。两步均不断业务。云控制台 VNC 救援见 `16_ECS_DEPLOYMENT.md` §6。
+
+# Coding Handoff
+
+## Task ID
+
+QRE-FACTOR-ZH-COVERAGE（剩余 341 列中文显示名维护）
+
+## Release Status
+
+已部署待人工验收，未 commit/push（2026-10-27）。ECS 仅重启 qre-saas（新 MainPID 491196），未重启 worker、未跑真实回测、无 schema 变更。
+
+## Implementation Summary
+
+- `scripts/gen_factor_registry.py`：新增三个模块级字典 `ALPHA191_ZH`(191) / `ALPHA101_ZH`(31) / `FINANCIAL_ZH`(119，含 quality 87 + growth 16 + `_pit_financial_panel` 14 + candle 1 + value 1) 与 `_coverage_zh(table, column)`；在 `build_registry()` 的 `if manual.get("zh"): entry["zh"] = manual["zh"]` 之后以 `elif not entry["zh"]:` 挂载——**只补空、不改名**。未改 FAMILY_RULES / MANUAL_ENTRIES / EXTRA_ALIASES / 别名生成 / common / core / display 任何逻辑。
+- 命名依据：alpha191 逐条对照 `indicators_tushare/alpha191/formulas.py` 的 191 个 docstring（GTJA191 编号口径，DolphinDB 实现口径与 errata 注释一并核对）；alpha101 逐条对照官方 486 文档表达式表（`change_requests/factor_specs_p4p5p7.md` §三）；quality/growth 逐条对照 `panel_factors/quality.py::compute_all`、`panel_factors/growth.py` results 与 `change_requests/factor_specs_p1p3.md` §三/§四；`_pit_financial_panel` 按 `panel_factors/pit_panel.py` FAMILIES（inc/bs/cf/fi）+ Tushare 标准字段语义；`cdl_doji_10_0_1` = `factors/candle_factors.py` 的 ta.cdl_doji。
+- `_rank` 列统一「·排名」后缀（同名计算项的截面排名，双列并存）；三处口径注记见 04/21 号文档（`gpm_q`、`ar_ap_to_revenue`、`npm_tsh`）。
+- 重新生成 `configs/factor_registry.json` 与 `deploy/saas/metadata.json`（`.venv/bin/python scripts/gen_factor_registry.py --out configs/factor_registry.json --snapshot configs/factor_catalog_llm.json`，再 `QRE_MARKET_DB_URL=postgresql+psycopg:///tushare_data .venv/bin/python scripts/sync_saas_metadata.py --out deploy/saas/metadata.json`）。生成器自校验通过（无失效 canonical / 悬空别名 / display 告警），覆盖报告 895/895、未维护 0 列。
+
+## Verification
+
+- 注册表/呈现/相关 10 文件（`test_factor_registry`、`test_factor_display_contract`、`test_gui_factor_wizard`、`test_gui_lab_result`、`test_saas_factor_picker`、`test_gui_saas_pages`、`test_nl_factor_pipeline`、`test_gui_nl_compiler`、`test_saas_replay_boundaries`、`test_saas_night_mode`）：**321 passed**。
+- 全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → **2890 passed + 6 skipped**（与基线一致，零回归）。
+- 零漂移：重新生成前后逐字段比对，除 zh 外 **0 处差异**；341 条 null→中文名，0 条覆盖既有条目。与生产旧版（554 zh）比对同样只有 341 处 zh 差异，display 合同未回归。
+- 两处测试随覆盖状态更新（契约未放宽）：`tests/test_factor_display_contract.py::test_no_fabricated_zh` 由「应有 null 列」改为「不得空串 / 不得英文列名冒充 + 覆盖须 100%」；`tests/test_gui_factor_wizard.py::test_build_factor_groups_zh_falls_back_to_none_for_unregistered` 改用未注册列 `alpha999_unregistered` 验回退，并补断言 `alpha001` 已带中文名。
+- 真实 Chromium（本地 staging 8099 + 生产 SSH 隧道 9090 各一遍）：`/api/saas/factors` 902/902 带 zh 且无英文列名冒充；`/saas/new` → 自选因子交易 → 因子弹窗三栏逐级进「Alpha191 量价因子」，因子列 30 条全中文名；中文搜索命中（毛利率 13 / 十字星 1 / 五年盈利价格比 2 / 产权比率年度变化 2）；英文列名搜索仍可用；无匹配走空态；零 JS error。脚本与截图 `.tmp/factor-zh-coverage/`。
+- ECS：备份 `/tmp/qre-factor-zh-pre-20261027/`（configs/factor_registry.json + deploy/saas/metadata.json）→ scp 两文件 → 仅重启 qre-saas；两文件生产 SHA256 与本地逐一相等。应用层验证（ECS 上 `curl -H "Host: www.aguhuice.com" http://127.0.0.1:8090/...`）：`/api/saas/factors` 902/902 带 zh，`/saas/new`、`/saas/`、`/saas/help`、`/saas/login` 均 200。未跑真实回测、未 commit/push。
+
+## Task ID
+
+QRE-SAAS-NIGHT-MODE（保留原色板，仅新增夜间模式）
+
+## Release Status
+
+已部署待人工验收，未 commit/push（2026-10-27）。ECS 仅重启 qre-saas（MainPID 487122），未重启 worker、未跑真实回测、无 schema 变更。
+
+## Implementation Summary
+
+- `gui/static/night-mode.css`（新，270 行）：`html[data-theme="dark"]` 下 8 个夜间 token（bg `#17153B`／card `#2E236C`／line `#433D8B`／text `#F1EDF8`／muted `#C8ACD6`／accent `#7E60BF`／accent-deep `#C8ACD6`／accent-soft `#2E236C`）+ 组件映射（卡片、表格、表单、按钮、开关、模态、tooltip、滚动条、焦点环）；浅色部分不新增覆盖规则，`#guest-note` 告警色保留。
+- `gui/static/night-mode.js`（新，275 行）：`QRETheme` 三态解析（`localStorage('qre-theme')` → `prefers-color-scheme`）、切换按钮状态与 aria、meta theme-color 同步、系统偏好变更监听、`themeChart(chart)` 递归改写 ECharts option 的背景/坐标轴/文字/tooltip/系列边界色与品牌紫，保留红涨绿跌配色与全部数据。
+- `gui/static/replay.js`：图表 option 组装后调用 `QRETheme.themeChart`（无 `QRETheme` 时安全跳过），不改重播逻辑。
+- `gui/saas/templates/base.html`：`<head>` 内 meta theme-color、首帧内联防闪脚本、`night-mode.css`/`night-mode.js` 引入，顶栏主题按钮（文字 + aria）。
+- `gui/saas/templates/login_callback.html`：独立页补 meta、内联防闪脚本、深色 `:root` 兜底样式、css/js 引入，主题按钮用 `tt-btn tt-float` 浮动变体。
+- `gui/saas/templates/job.html`、`symbol.html`：图表创建后调用 `QRETheme.themeChart`（与 Step 5 在途改动分层，仅追加主题挂钩）。
+- `tests/test_saas_night_mode.py`（新，24 例）：token 集与无旧主紫残留、模板标记计数、三态解析与 localStorage、themeChart 不改数据、按钮 a11y、375 无横溢相关静态断言。
+
+## Verification
+
+- 专项 `tests/test_saas_night_mode.py`：24 passed；相关 6 文件 148 passed；全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → **2871 passed + 6 skipped**（与基线一致，零回归）。
+- 浏览器审计（真实 Chromium，`.tmp/browser-venv`）：`138 ok / 0 FAILURES`，exit 0；覆盖 12+ 页面 × 浅/夜 × 1280/1000/375、点击切换、reload 持久、系统偏好、无白底卡片/白按钮、正文与按钮焦点对比度、375 不横溢；截图与 `audit.log` 在 `.tmp/night-mode/`。
+- 两次判据修正（工具层，非产品放宽）：①`<details>` 关闭时 `content-visibility:hidden` 使 `getBoundingClientRect` 非零并读到过期浅色值（login 4 项失败全在折叠区）→ 先展开再断言；②job `tagChart` 是 treemap 无笛卡尔轴 → 仅对含笛卡尔系序列断言轴色，浅色轴色取 ECharts 默认 `#6E7079`。
+- ECS：5 文件与生产基线 diff 仅夜间模式行 → 备份 `/tmp/qre-night-mode-pre-20261027/` → scp 7 文件（SHA256 与本地逐一相等）→ 仅重启 qre-saas；应用层 7 条 URL 全 200（见 `04_TASK_HANDOFF.md` 实施结果），`/saas/console` 68285B 主题标记齐全。
+- 未验证项：`www.aghuice.com` 真域名 TLS 路径（本机与 ECS 均无 DNS，本地代理对该域名 `SSL_ERROR_SYSCALL`），故验证止于 ECS 本地 `Host` 头 8090 应用层；TLS/nginx 未改动。
+
+## Task ID
+
+QRE-SAAS-REPLAY-BOUNDARIES（P2：重播边界核验与补强）
+
+## Release Status
+
+已部署待人工验收，未 commit/push（2026-10-27）。ECS 仅重启 qre-saas；未重启 worker、未跑真实回测、无 schema 变更。
+
+## Implementation Summary
+
+- `gui/static/replay.js`：`popEvents` 增加 `evChipText`（chip 文案统一：symbol + qty 股@price + pnl，缺字段不拼装）与 `aggHead`（按 `ev.sym` 去重计「只」；事件数 > 标的数时披露「（M 笔）」；明细展开列全部事件）。阈值触发仍按事件数 >5（视觉密度）。
+- `gui/saas/templates/symbol.html`：`mountKlineReplay` 事件结构改 `sym/symbol/qty/price`（orders 优先、空 orders 才 round trips 兜底；缺字段不下发）。
+- `gui/saas/templates/job.html`：`mountReplay` 事件带 `sym` 与 round trips 价量（旧产物缺字段则不下发）。
+- `gui/lab_result.py`：`_trade_points` 在 CSV 有 quantity/entry_price/exit_price 列时补足到散点（`_f` 解析；缺列不加键；仅新 run 生效）。
+- `tests/test_saas_replay_boundaries.py`（新，7 例）：replay.js/factor-layout.js 真实文件 vm 加载 + 模板函数抽取 + _trade_points 三态。
+
+## Verification
+
+- TDD：RED=5 failed → GREEN=7 passed；相关 6 文件 188 passed；全量 **2863 passed + 6 skipped**。证据 `.tmp/replay-boundaries/{red,green,full-tests}-evidence.txt`。
+- 真实 Chromium（临时库 + 8099 staging + seed/worker 协议模拟）：10/10、零 JS error、零横溢（1280 与 375）。证据 `.tmp/replay-boundaries/`（browser-evidence.json + 8 截图）。
+- ECS：备份 `/tmp/qre-replay-boundaries-pre-20261026/` → scp 四文件 → 仅重启 qre-saas；公网匿名 job58 重播全程零 JS error。证据 `production-verification.txt`。
+
+## Task ID
+
 QRE-SAAS-NL-A1（自然语言输入前置校验与 DeepSeek 裁判评估）
 
 ## Release Status
@@ -70,6 +244,23 @@ RELEASED（2026-10-26 用户验收通过，已部署 ECS，本次 commit/push）
 - **复核修正（主 Agent 2 项 Required Fixes）**：TDD RED=4 failed（转化比率 ×2 + 上海日界 ×2）→ GREEN；ops 测试 20 passed；相关 3 文件 135 passed；全量 **2772 passed + 6 skipped**（1 例已知 flake `test_gui_risk_report.py::test_post_starts_job_and_poll` 首跑偶发失败，单独与全文件复跑 passed）。证据 `.tmp/public-beta-ops/review1-{red,audit-run,full-tests}.txt`。
 - 真实 Chromium（临时库 + 8099 staging + stub LLM + worker 协议模拟，未启动真实 worker/回测）：9/9、零 JS error、零横溢（1280 与 375）；复核后重跑 9/9，`console-ops-1280.png` 与 `console-ops-375.png` 确认「转化率 —」、无 300% 伪比率、tab 折行正常。证据 `.tmp/public-beta-ops/`（browser-evidence.json + 11 截图 + audit-run.txt）。
 - ECS：整任务回滚点 `/tmp/qre-public-beta-ops-pre-20261026/`；本轮修改前备份 `/tmp/qre-public-beta-ops-review1-pre-20261026/`；仅同步 ops_support.py + console.html（无 schema 变更）并重启 qre-saas；生产 API/隧道/公页验证与临时数据清理见 `.tmp/public-beta-ops/production-verification.txt`。
+
+## Task ID
+
+TRADING-GAME-V1-CORE（《我不是股神》WSL 可玩 Demo 首切片）
+
+## Release Status
+
+WSL 可玩 Demo 已跑通，未部署 ECS、未 commit/push（2026-10-26）。专项 22 passed，全量 2753 passed + 6 skipped；真实 Chromium 开盘买入通过，证据 `.tmp/trading-game/`。
+
+## Implementation Summary
+
+- `game/engine.py`：纯订单/成交/现金/持仓/费用状态机，复用 core.models 与 AShareMarketProfile。
+- `game/session.py`：随机窗口与匿名 session，开盘/收盘两阶段，open 先行、完整 K 线收盘后可见；订单/权益代理。
+- `game/data.py`：原始价+adj_factor 前复权、候选抽样、因子按日对齐；Timestamp 标准化和逻辑列名归一；ema_250 替代库内不存在的 ema_200。
+- `game/web.py`：内存 session 注册与创建/推进/下单/收盘/结果 API，owner Cookie 隔离，匿名响应不含真实 symbol/date/未来数据。
+- `game/templates/game.html`：淡紫 K 线/成交量/指标/交易/账户/记录；下单与收盘防竞速。
+- 测试：专项 22 passed、全量 2753 passed + 6 skipped；真实 DB 抽样、真实 Chromium 开盘买入、1280/375 无横溢/无 JS error。未部署 ECS、未做公网中继、未 commit/push。
 
 ## Current Release
 
@@ -3361,3 +3552,36 @@ uv run pytest tests/test_worker.py tests/test_gui_saas.py tests/test_gui_risk_re
 ```
 
 部署后需重启本机 `qre-saas-worker` 才会对后续任务生效。
+
+## 2026-10-27 M10.4 + 游戏修复实施交接
+
+### M10.4（DONE，未部署/未提交）
+
+实现文件：`src/quant_research_engine/analysis/ml_cluster.py`、`scripts/strategy_fit_ml_report.py`、`tests/test_strategy_fit_ml.py`；共享报告合同仅在 `portfolio/report_manifest.py` 增加 kind 与 4 个 role 的必需列。CR：`docs/agent/change_requests/CR-2026-10-27_m10_4_ml_cluster.md`。
+
+CLI：
+
+```bash
+.venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir outputs/strategy_fit/f365c8a07b33
+```
+
+注意 `.venv-ml` 没有 pytest；测试使用主环境 `uv run`，通过 `PYTHONPATH=.venv-ml/lib/python3.13/site-packages` 影子加载 sklearn，未安装新依赖。主 Agent 复核命令与结果：
+
+```bash
+PYTHONPATH=.venv-ml/lib/python3.13/site-packages uv run pytest tests/test_strategy_fit_ml.py tests/test_strategy_fit.py tests/test_portfolio_report_manifest.py -q
+# 158 passed
+uv run pytest tests/test_strategy_fit_ml.py tests/test_strategy_fit.py tests/test_portfolio_report_manifest.py tests/test_cli.py -q
+# 469 passed, 14 skipped
+PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_engine.portfolio.report_manifest import ReportManifest; m=ReportManifest.from_path(Path("outputs/strategy_fit_ml/f365c8a07b33/ml_cluster_manifest.json")); print(m.validate_contents())'
+# []
+```
+
+默认真实结果为 41 insufficient + 40 all_noise；eps=2.0 的敏感性记录见 CR。未运行任何回测。
+
+### 游戏（本地实现完成，待用户试玩）
+
+在当前 `game/` 基线修复价格型因子与游戏 OHLC 的复权口径错位，新增独立重算审计，并重做一体化交易终端。不要使用 `.tmp/trading-game-v11-rejected/` 否决版。主 Agent 已重跑 `28 passed`、8092 HTTP 200 并查看三尺寸截图。`ema_250` 上游 11 点异常留待独立数据处理，不在本轮全库重算。
+
+### 全仓已知红灯
+
+最新全仓为 `2902 passed, 20 skipped, 1 failed`；失败测试硬编码读取已批准清理的外部 run YAML。后续单独改为自包含 `tmp_path` 夹具，不恢复旧回测产物。

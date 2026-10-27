@@ -48,6 +48,108 @@ PRICE_BASIS_ZH = {
 }
 
 # ---------------------------------------------------------------------------
+# 呈现合同（QRE-FACTOR-DISPLAY-CONTRACT，2026-10-27）
+# ---------------------------------------------------------------------------
+# 每个 canonical 固化 display 数据成员：chart_type / panel_id / role /
+# series_type / axis / precision / color / price_basis / render_order。
+# 页面（SaaS 目录 / symbol 静态图 / replay / factor-layout.js）只消费合同；
+# 启发式仅旧数据回退。canonical 仍是唯一字段标识，本协议不改名。
+
+# 均线/价格类族 → overlay 主图（与 factor-layout.js OVERLAY_RE 同族）
+OVERLAY_MA_FAMILIES = {
+    "ema", "sma", "wma", "dema", "tema", "hma", "kama", "alma", "fwma", "pwma",
+    "sinwma", "swma", "zl_ema", "zlma", "trima", "jma", "vidya", "rma",
+    "midpoint", "midprice", "wcp", "vwap_d", "hl2", "hlc3", "ohlc4",
+}
+# 轨道/区间类族 → overlay 主图（价格轨道）
+OVERLAY_BAND_FAMILIES = {
+    "bbl", "bbm", "bbu", "bbb", "dcl", "dcm", "dcu", "kcl", "kcb", "kcu",
+    "kcbe", "kcle", "kcue", "accbl", "accbm", "accbu", "psarl", "psars",
+    "supert",
+}
+# MACD/PPO/PVO 三元组：同表同参数同副图（family → (group, 固定 role)）
+TRIPLE_FAMILY_MAP = {
+    "macd": ("macd", None), "macds": ("macd", "signal"), "macdh": ("macd", "hist"),
+    "ppo": ("ppo", "main"), "ppos": ("ppo", "signal"), "ppoh": ("ppo", "hist"),
+    "pvo": ("pvo", "main"), "pvos": ("pvo", "signal"), "pvoh": ("pvo", "hist"),
+}
+TRIPLE_OUTPUT_ROLE = {"dif": "main", "signal": "signal", "hist": "hist"}
+# 其他家族同副图（family → (group, role)）
+FAMILY_PANEL_MAP = {
+    "kdj_k": ("kdj", "k"), "kdj_d": ("kdj", "d"), "kdj_j": ("kdj", "j"),
+    "stochk": ("stoch", "k"), "stochd": ("stoch", "d"), "stochh": ("stoch", "hist"),
+    "stochrsik": ("stochrsi", "k"), "stochrsid": ("stochrsi", "d"),
+    "aroond": ("aroon", "down"), "aroonu": ("aroon", "up"),
+    "vtxp": ("vortex", "up"), "vtxm": ("vortex", "down"),
+    "tsi": ("tsi", "main"), "tsis": ("tsi", "signal"),
+    "rvgi": ("rvgi", "main"), "rvgis": ("rvgi", "signal"),
+    "fishert": ("fisher", "main"), "fisherts": ("fisher", "signal"),
+}
+DISPLAY_ROLES = {"main", "signal", "hist", "k", "d", "j", "up", "down", "line", "band"}
+ROLE_ORDER = {"main": 0, "k": 0, "up": 0, "signal": 1, "d": 1, "down": 1, "hist": 2, "j": 2}
+OVERLAY_COLOR_CYCLE = ["#E8A33D", "#2A9D8F", "#6750A4"]  # 与 factor-layout.js 一致
+TRIPLE_COLORS = {"main": "#6750A4", "signal": "#E8A33D", "hist": "#6750A4"}
+MULTI_COLOR_CYCLE = ["#6750A4", "#E8A33D", "#2A9D8F"]   # 与 factor-layout.js 一致
+DEFAULT_PANE_COLOR = "#6750A4"
+
+
+def _params_suffix(params: dict[str, Any]) -> str:
+    return "_".join(str(v) for v in params.values()) if params else ""
+
+
+def _display_precision(table: str) -> int:
+    return 4 if "alpha" in table else 2
+
+
+def _display_for(*, table: str, column: str, family: str | None, output: str | None,
+                 params: dict[str, Any], price_basis: str | None,
+                 overlay_index: int) -> dict[str, Any]:
+    """canonical → display 合同（安全默认 + 显式族规则）。"""
+    basis = price_basis or "na"
+    precision = _display_precision(table)
+    if (family in OVERLAY_MA_FAMILIES or family in OVERLAY_BAND_FAMILIES
+            or table.startswith("stock_daily_overlap")):
+        role = "band" if family in OVERLAY_BAND_FAMILIES else "line"
+        return {
+            "chart_type": "overlay", "panel_id": None, "role": role,
+            "series_type": "line", "axis": "price", "precision": precision,
+            "color": OVERLAY_COLOR_CYCLE[overlay_index % len(OVERLAY_COLOR_CYCLE)],
+            "price_basis": price_basis, "render_order": overlay_index,
+        }
+    if family in TRIPLE_FAMILY_MAP:
+        group, fixed_role = TRIPLE_FAMILY_MAP[family]
+        role = fixed_role or TRIPLE_OUTPUT_ROLE.get(output or "", "main")
+        return {
+            "chart_type": "pane",
+            "panel_id": f"{group}:{table}:{_params_suffix(params)}:{basis}",
+            "role": role,
+            "series_type": "bar" if role == "hist" else "line",
+            "axis": "value", "precision": precision,
+            "color": TRIPLE_COLORS[role], "price_basis": price_basis,
+            "render_order": ROLE_ORDER.get(role, 0),
+        }
+    if family in FAMILY_PANEL_MAP:
+        group, role = FAMILY_PANEL_MAP[family]
+        order = ROLE_ORDER.get(role, 0)
+        return {
+            "chart_type": "pane",
+            "panel_id": f"{group}:{table}:{_params_suffix(params)}:{basis}",
+            "role": role,
+            "series_type": "bar" if role == "hist" else "line",
+            "axis": "value", "precision": precision,
+            "color": MULTI_COLOR_CYCLE[order % len(MULTI_COLOR_CYCLE)],
+            "price_basis": price_basis, "render_order": order,
+        }
+    # 独立副图（RSI/风险/流动性/Alpha/其余全部）：panel_id 含表名列与价格口径
+    return {
+        "chart_type": "pane",
+        "panel_id": f"pane:{table}:{column}:{basis}",
+        "role": "line", "series_type": "line", "axis": "value",
+        "precision": precision, "color": DEFAULT_PANE_COLOR,
+        "price_basis": price_basis, "render_order": 0,
+    }
+
+# ---------------------------------------------------------------------------
 # 行情字段（不进 factor_fields，由 market_fields 单独识别）
 # ---------------------------------------------------------------------------
 
@@ -1029,6 +1131,376 @@ EXTRA_ALIASES: dict[str, list[str]] = {
 }
 
 
+# QRE-FACTOR-ZH-COVERAGE：按公式/官方定义维护的中文显示名。
+# 只补 registry 中 zh 为空的条目（查表覆盖），不改名既有条目、不改别名与
+# common/core 判定；命名依据 indicators_tushare 真实公式与官方 486 文档
+# （docs/agent/change_requests/factor_specs_p1p3.md、factor_specs_p4p5p7.md）。
+ALPHA191_ZH: dict[str, str] = {
+    "alpha001": "量能变动与日内收益相关性（反向）",
+    "alpha002": "收盘位置变化（反向）",
+    "alpha003": "6日涨势强度累计",
+    "alpha004": "均线带宽突破信号",
+    "alpha005": "量高价时序秩相关峰值（反向）",
+    "alpha006": "加权价变动方向（反向）",
+    "alpha007": "VWAP偏离3日极值乘量变动",
+    "alpha008": "混合价位4日变动（反向）",
+    "alpha009": "中间价变动乘波幅平滑",
+    "alpha010": "下跌波动/收盘平方5日峰值排名",
+    "alpha011": "6日量价位置累计",
+    "alpha012": "开盘偏离VWAP排名乘收盘偏离",
+    "alpha013": "高低几何均价减VWAP",
+    "alpha014": "5日价格变动",
+    "alpha015": "开盘跳空幅度",
+    "alpha016": "量VWAP排名相关5日峰值（反向）",
+    "alpha017": "VWAP15日高点排名与5日价格变动幂次",
+    "alpha018": "5日涨跌幅",
+    "alpha019": "5日累计涨跌幅（条件）",
+    "alpha020": "6日涨跌幅百分比",
+    "alpha021": "6日收盘趋势斜率",
+    "alpha022": "收盘偏离6日均值变化平滑",
+    "alpha023": "上行日波动占比",
+    "alpha024": "5日价格变动平滑",
+    "alpha025": "7日量价变动排名乘长期收益",
+    "alpha026": "7日均值偏离加长窗量价相关",
+    "alpha027": "3/6日变动加权平滑",
+    "alpha028": "9日RSV三重平滑",
+    "alpha029": "6日涨跌幅乘成交量",
+    "alpha030": "市场回归残差平方平滑（近似）",
+    "alpha031": "收盘偏离12日均值百分比",
+    "alpha032": "高价排名与量排名3日相关累计（反向）",
+    "alpha033": "5日低点回升×长期动量排名×量时序秩",
+    "alpha034": "12日均值比收盘",
+    "alpha035": "开盘变动与量价相关排名小值（反向）",
+    "alpha036": "量VWAP排名6日相关2日累计",
+    "alpha037": "5日开盘收益积10日变动（反向）",
+    "alpha038": "20日高点突破信号",
+    "alpha039": "收盘变动排名与混合价量相关差（反向）",
+    "alpha040": "26日上涨/下跌量比",
+    "alpha041": "VWAP 3日变动5日峰值排名（反向）",
+    "alpha042": "高价10日波动排名乘高价量相关（反向）",
+    "alpha043": "6日带符号成交量累计",
+    "alpha044": "低价量相关与VWAP变动时序秩和",
+    "alpha045": "混合价1日变动排名乘VWAP长量相关",
+    "alpha046": "多周期均线均值比收盘",
+    "alpha047": "6日RSV 9日平滑",
+    "alpha048": "3日连续同向天数排名乘短期量占比（反向）",
+    "alpha049": "12日高低振幅占振幅和比（下行）",
+    "alpha050": "12日高低振幅差比（下减上）",
+    "alpha051": "12日高低振幅占振幅和比（上行）",
+    "alpha052": "26日上行/下行典型价振幅比",
+    "alpha053": "12日上涨天数占比",
+    "alpha054": "日内波动+阴阳+开收相关复合（反向）",
+    "alpha055": "20日多空力量累计",
+    "alpha056": "开盘12日低点排名与量价相关幂次条件",
+    "alpha057": "9日RSV 3日平滑",
+    "alpha058": "20日上涨天数占比",
+    "alpha059": "20日涨势强度累计",
+    "alpha060": "20日量价位置累计",
+    "alpha061": "VWAP变动与低价量相关排名大值（反向）",
+    "alpha062": "高价与量排名5日相关（反向）",
+    "alpha063": "6日上涨占比",
+    "alpha064": "VWAP量与收盘量相关排名大值（反向）",
+    "alpha065": "6日均值比收盘",
+    "alpha066": "收盘偏离6日均值百分比",
+    "alpha067": "24日上涨占比",
+    "alpha068": "中间价变动乘波幅除量平滑",
+    "alpha069": "20日DTM/DBM多空比",
+    "alpha070": "6日成交额标准差",
+    "alpha071": "收盘偏离24日均值百分比",
+    "alpha072": "6日RSV 15日平滑",
+    "alpha073": "收盘量相关双重衰减时序秩",
+    "alpha074": "混合价量相关与VWAP量相关排名和",
+    "alpha075": "50日个股涨指数跌天数占比",
+    "alpha076": "20日单位量波动",
+    "alpha077": "混合高价与VWAP差衰减排名小值",
+    "alpha078": "典型价偏离12日均值",
+    "alpha079": "12日上涨占比",
+    "alpha080": "5日成交量变动百分比",
+    "alpha081": "21日成交量SMA",
+    "alpha082": "6日RSV 20日平滑",
+    "alpha083": "高价排名与量排名5日协方差（反向）",
+    "alpha084": "20日带符号成交量累计",
+    "alpha085": "20日量比时序秩乘7日跌势时序秩",
+    "alpha086": "20/10日前收盘差条件信号",
+    "alpha087": "VWAP变动与低价开盘偏离衰减复合（反向）",
+    "alpha088": "20日涨跌幅百分比",
+    "alpha089": "13/27日SMA差二次平滑",
+    "alpha090": "VWAP量排名5日相关（反向）",
+    "alpha091": "收盘5日高点排名乘均量低价相关（反向）",
+    "alpha092": "混合价变动与长量价相关衰减排名大值（反向）",
+    "alpha093": "20日开盘下行振幅累计",
+    "alpha094": "30日带符号成交量累计",
+    "alpha095": "20日成交额标准差",
+    "alpha096": "9日RSV双重3日平滑",
+    "alpha097": "10日成交量标准差",
+    "alpha098": "100日长期均线变动条件",
+    "alpha099": "收盘排名与量排名5日协方差（反向）",
+    "alpha100": "20日成交量标准差",
+    "alpha101": "收盘长均量相关与混合价量相关排名比较（反向）",
+    "alpha102": "6日成交量上涨占比",
+    "alpha103": "20日低点出现时间倒数",
+    "alpha104": "高价量相关变动乘收盘波动（反向）",
+    "alpha105": "开盘排名与量排名10日相关（反向）",
+    "alpha106": "20日价格变动",
+    "alpha107": "开盘相对前日高收低排名积（反向）",
+    "alpha108": "高价2日高点排名与VWAP长量相关幂次（反向）",
+    "alpha109": "10日波幅SMA比",
+    "alpha110": "20日上行/下行振幅比",
+    "alpha111": "11日收盘位置乘量平滑",
+    "alpha112": "12日涨跌幅力量比",
+    "alpha113": "20日均价排名乘收盘短期量相关（反向）",
+    "alpha114": "波幅比延迟2日排名乘量排名",
+    "alpha115": "混合价量相关排名与价量时序秩相关幂次",
+    "alpha116": "20日收盘趋势斜率",
+    "alpha117": "32日量时序秩乘价位区间时序秩补数",
+    "alpha118": "20日上行/下行开盘振幅比",
+    "alpha119": "VWAP量相关与开盘量相关衰减排名差",
+    "alpha120": "VWAP偏离收盘排名比",
+    "alpha121": "VWAP 12日低点排名与量价相关条件",
+    "alpha122": "对数收盘三重13日SMA",
+    "alpha123": "中间价与均量60日相关20日累计9日",
+    "alpha124": "收盘减VWAP除30日高点排名衰减",
+    "alpha125": "VWAP与均量80日相关17日衰减20日",
+    "alpha126": "典型价（高低收均值）",
+    "alpha127": "12日高点偏离平方均值开方",
+    "alpha128": "典型价上涨累计占比",
+    "alpha129": "12日下跌幅度累计",
+    "alpha130": "中间价与均量40日相关9日衰减10日",
+    "alpha131": "VWAP变动排名与收盘长量相关时序秩幂次",
+    "alpha132": "20日成交额均值",
+    "alpha133": "20日高低点出现时间差",
+    "alpha134": "12日涨跌幅乘成交量",
+    "alpha135": "20日平滑的20日收益率延迟",
+    "alpha136": "3日收益变动排名乘开盘量相关（反向）",
+    "alpha137": "日内多空力量（16倍）",
+    "alpha138": "混合低价变动与低价量相关衰减排名差（反向）",
+    "alpha139": "开盘与量10日相关（反向）",
+    "alpha140": "开低高收排名差衰减8日排名小值",
+    "alpha141": "高价排名与均量15日相关9日（反向）",
+    "alpha142": "收盘时序秩·二阶变动·量比时序秩（反向）",
+    "alpha143": "条件涨跌幅乘累计",
+    "alpha144": "20日下跌日单位额波动",
+    "alpha145": "9/26/12日均量差百分比",
+    "alpha146": "20日收益相对61日均值偏离比60日平方均值",
+    "alpha147": "12日均值趋势斜率",
+    "alpha148": "开盘与均量60日相关6日累计排名",
+    "alpha149": "熊市beta（252日）",
+    "alpha150": "典型价乘成交量",
+    "alpha151": "20日价格变动平滑",
+    "alpha152": "多重SMA复合（12日）",
+    "alpha153": "多周期均线均值",
+    "alpha154": "VWAP 16日低点与长量相关条件",
+    "alpha155": "13/27日量SMA差二次平滑",
+    "alpha156": "VWAP与混合低价变动衰减排名大值（反向）",
+    "alpha157": "嵌套排名乘积与延迟收益时序秩小值",
+    "alpha158": "高低相对15日SMA差比收盘",
+    "alpha159": "三周期摆动合成",
+    "alpha160": "下行日20日波动平滑",
+    "alpha161": "12日真实波幅均值",
+    "alpha162": "RSI12 12日区间分位",
+    "alpha163": "负收益乘量乘VWAP乘上行振幅排名",
+    "alpha164": "上涨日倒数平滑",
+    "alpha165": "48日累计偏离极值差除标准差",
+    "alpha166": "20日收益偏离放大（负）",
+    "alpha167": "12日上涨幅度累计",
+    "alpha168": "成交量相对20日均值（反向）",
+    "alpha169": "9日价差SMA延迟12日平滑",
+    "alpha170": "收盘倒数排名乘量比20日均值",
+    "alpha171": "开盘^5加权价差（反向）",
+    "alpha172": "14日多空力量均衡度",
+    "alpha173": "13日SMA双重平滑",
+    "alpha174": "上行日20日波动平滑",
+    "alpha175": "6日真实波幅均值",
+    "alpha176": "12日RSV排名与量排名相关",
+    "alpha177": "20日高点出现时间倒数",
+    "alpha178": "1日涨跌幅乘成交量",
+    "alpha179": "VWAP量相关与低价量相关排名积",
+    "alpha180": "成交量大于20日均值标记",
+    "alpha181": "20日个股相对指数收益偏离平方和",
+    "alpha182": "20日顺势天数占比",
+    "alpha183": "24日累计偏离极值差除标准差",
+    "alpha184": "前日开收与收盘200日相关排名加开收排名",
+    "alpha185": "开盘收盘比平方排名（反向）",
+    "alpha186": "ADX6与其6日延迟均值",
+    "alpha187": "20日开盘上行振幅累计",
+    "alpha188": "11日波幅偏离百分比",
+    "alpha189": "6日收盘偏离绝对均值",
+    "alpha190": "20日收益左尾对数似然",
+    "alpha191": "均量与低价相关加中间价减收盘",
+}
+
+ALPHA101_ZH: dict[str, str] = {
+    "alpha101_1": "下跌波动/收盘平方峰值时序参数排名",
+    "alpha101_2": "量能变动与日内收益相关性（反向）",
+    "alpha101_3": "开盘排名与量排名相关性（反向）",
+    "alpha101_4": "低价排名9日时序秩（反向）",
+    "alpha101_5": "开盘偏离VWAP排名乘收盘偏离绝对值（反向）",
+    "alpha101_6": "开盘与量相关性（反向）",
+    "alpha101_7": "放量时7日变动的60日时序秩（反向）",
+    "alpha101_8": "5日开盘收益积10日变动（反向）",
+    "alpha101_9": "5日价格变动条件累积",
+    "alpha101_10": "4日价格变动条件累积排名",
+    "alpha101_11": "VWAP偏离3日极值排名和乘量变动",
+    "alpha101_12": "量变动符号乘价格变动（反向）",
+    "alpha101_13": "收盘排名与量排名5日协方差（反向）",
+    "alpha101_14": "3日收益变动排名乘开盘量相关（反向）",
+    "alpha101_15": "高价排名与量排名3日相关3日累计（反向）",
+    "alpha101_16": "高价排名与量排名5日协方差（反向）",
+    "alpha101_17": "收盘10日时序秩·二阶变动·量比时序秩（反向）",
+    "alpha101_18": "日内波幅+阴阳+开收相关复合（反向）",
+    "alpha101_19": "7日动向符号乘长期收益排名与量价相关复合（反向）",
+    "alpha101_20": "开盘相对前日高收低排名积（反向）",
+    "alpha101_22": "高价量相关变动乘收盘波动（反向）",
+    "alpha101_23": "20日高点突破信号",
+    "alpha101_25": "收益乘量乘VWAP乘上行振幅（反向）",
+    "alpha101_33": "开盘收盘比（反向）",
+    "alpha101_34": "短长波动比与价格变动复合",
+    "alpha101_41": "高低几何均价减VWAP",
+    "alpha101_52": "5日低点回升×长期动量排名×量时序秩",
+    "alpha101_53": "9日收盘位置变化（反向）",
+    "alpha101_54": "开收位置五次幂比（反向）",
+    "alpha101_57": "收盘偏离VWAP除30日高点排名衰减",
+    "alpha101_101": "日内阴阳位置",
+}
+
+# quality / growth / _pit_financial_panel / candle / value：依据 compute_all 真实公式、
+# 官方 486 文档表达式与 Tushare 标准字段语义。`_rank` 列为同名计算项的截面排名。
+FINANCIAL_ZH: dict[str, str] = {
+    # ---- quality（计算项 + 同名 _rank 截面排名）----
+    "roe_ttm_lag63d": "净资产收益率(TTM，滞后63交易日)",
+    "roe_y": "净资产收益率(年度)",
+    "eps_ttm_rank": "每股收益(TTM)·排名",
+    "financial_leverage_rank": "财务杠杆·排名",
+    "gpm_ttm_rank": "毛利率(TTM)·排名",
+    "icr_rank": "利息保障倍数·排名",
+    "income_tax_yoy": "所得税费用(TTM)同比增长率",
+    "income_tax_yoy_rank": "所得税费用(TTM)同比增长率·排名",
+    "np_to_inventory_yoy": "净利润存货比同比",
+    "np_to_inventory_yoy_rank": "净利润存货比同比·排名",
+    "npm_q": "净利率(单季)",
+    "npm_q_rank": "净利率(单季)·排名",
+    "ar_ap_to_revenue": "预收预付净额/营业收入(TTM)",
+    "ar_ap_to_revenue_rank": "预收预付净额/营业收入(TTM)·排名",
+    "asset_turnover_rank": "总资产周转率·排名",
+    "delta_current_ratio": "流动比率年度变化",
+    "delta_current_ratio_rank": "流动比率年度变化·排名",
+    "delta_de": "产权比率年度变化",
+    "delta_de_rank": "产权比率年度变化·排名",
+    "gpm_q": "毛利率(TTM口径)",
+    "gpm_q_rank": "毛利率(TTM口径)·排名",
+    "cash_profit_ratio": "现金利润偏离比",
+    "cash_profit_ratio_rank": "现金利润偏离比·排名",
+    "delta_opm": "营业利润率年度变化",
+    "delta_opm_rank": "营业利润率年度变化·排名",
+    "eps_q_rank": "每股收益(单季)·排名",
+    "eps_y_rank": "每股收益(年度)·排名",
+    "delta_npm": "净利率年度变化",
+    "delta_npm_rank": "净利率年度变化·排名",
+    "market_value_leverage_rank": "市值杠杆·排名",
+    "npm_y": "净利率(年度)",
+    "npm_y_rank": "净利率(年度)·排名",
+    "opm_y": "营业利润率(年度)",
+    "opm_y_rank": "营业利润率(年度)·排名",
+    "delta_gpm": "毛利率年度变化",
+    "delta_gpm_rank": "毛利率年度变化·排名",
+    "gpm_y": "毛利率(年度)",
+    "gpm_y_rank": "毛利率(年度)·排名",
+    "np_to_total_expenses_yoy": "净利润三费比同比",
+    "np_to_total_expenses_yoy_rank": "净利润三费比同比·排名",
+    "np_to_deferred_tax_yoy": "净利润递延所得税资产比同比",
+    "np_to_deferred_tax_yoy_rank": "净利润递延所得税资产比同比·排名",
+    "roa_q": "总资产收益率(单季)",
+    "roa_q_rank": "总资产收益率(单季)·排名",
+    "gpm_qoq": "毛利率环比变动",
+    "gpm_qoq_rank": "毛利率环比变动·排名",
+    "delta_inventory_turnover": "存货周转率年度变化",
+    "delta_inventory_turnover_rank": "存货周转率年度变化·排名",
+    "delta_roa": "总资产收益率年度变化",
+    "delta_roa_rank": "总资产收益率年度变化·排名",
+    "fixed_asset_turnover_rank": "固定资产周转率·排名",
+    "npm_ttm_rank": "净利率(TTM)·排名",
+    "opm_ttm_rank": "营业利润率(TTM)·排名",
+    "receivable_turnover_rank": "应收账款周转率·排名",
+    "cfcr_rank": "现金流动负债比·排名",
+    "delta_cash_ratio": "现金比率年度变化",
+    "delta_cash_ratio_rank": "现金比率年度变化·排名",
+    "lra_yoy": "长期应收款同比增长率",
+    "lra_yoy_rank": "长期应收款同比增长率·排名",
+    "np_to_fixed_assets_yoy": "净利润固定资产比同比",
+    "np_to_fixed_assets_yoy_rank": "净利润固定资产比同比·排名",
+    "np_to_salary_yoy": "净利润职工薪酬比同比",
+    "np_to_salary_yoy_rank": "净利润职工薪酬比同比·排名",
+    "npm_q_qoq": "净利率(单季)环比变化",
+    "npm_q_qoq_rank": "净利率(单季)环比变化·排名",
+    "npm_tsh": "归母净利润/平均总股本",
+    "npm_tsh_rank": "归母净利润/平均总股本·排名",
+    "npm_ttm_qoq": "净利率(TTM)环比变化",
+    "npm_ttm_qoq_rank": "净利率(TTM)环比变化·排名",
+    "cash_ratio_rank": "现金比率·排名",
+    "delta_asset_turnover": "总资产周转率年度变化",
+    "delta_asset_turnover_rank": "总资产周转率年度变化·排名",
+    "delta_quick_ratio": "速动比率年度变化",
+    "delta_quick_ratio_rank": "速动比率年度变化·排名",
+    "delta_roe": "净资产收益率年度变化",
+    "delta_roe_rank": "净资产收益率年度变化·排名",
+    "inventory_turnover_rank": "存货周转率·排名",
+    "roa_ttm_rank": "总资产收益率(TTM)·排名",
+    "tax_surcharge_yoy": "税金及附加(TTM)同比增长率",
+    "tax_surcharge_yoy_rank": "税金及附加(TTM)同比增长率·排名",
+    "equity_turnover_rank": "权益周转率·排名",
+    "expenses_to_equity_yoy": "三费权益比同比",
+    "expenses_to_equity_yoy_rank": "三费权益比同比·排名",
+    "roa_y": "总资产收益率(年度)",
+    "roa_y_rank": "总资产收益率(年度)·排名",
+    "opt_tpro": "营业利润/利润总额",
+    "opt_tpro_rank": "营业利润/利润总额·排名",
+    # ---- growth（计算项 + 同名 _rank 截面排名）----
+    "sa": "每股收入增长加速度",
+    "pa": "总资产收益率增长加速度",
+    "eaa": "每股收益增长加速度",
+    "eap": "每股收益增长价格标准化加速度",
+    "np_ttm_qoq_rank": "净利润TTM环比·排名",
+    "yoy_ocf_rank": "经营现金流同比增长率·排名",
+    "sa_rank": "每股收入增长加速度·排名",
+    "gross_margin_qoq_rank": "毛利率环比变动·排名",
+    "pa_rank": "总资产收益率增长加速度·排名",
+    "yoy_roa_rank": "ROA 同比增长率·排名",
+    "yoy_net_asset_rank": "净资产同比增长率·排名",
+    "yoy_roe_rank": "ROE 同比增长率·排名",
+    "yoy_total_asset_rank": "总资产同比增长率·排名",
+    "eaa_rank": "每股收益增长加速度·排名",
+    "eap_rank": "每股收益增长价格标准化加速度·排名",
+    "asset_growth_qoq_rank": "总资产环比增长率·排名",
+    # ---- _pit_financial_panel（Tushare 标准字段）----
+    "inc_end_date": "利润表报告期",
+    "inc_ann_date": "利润表公告日",
+    "bs_end_date": "资产负债表报告期",
+    "bs_ann_date": "资产负债表公告日",
+    "cf_end_date": "现金流量表报告期",
+    "cf_ann_date": "现金流量表公告日",
+    "fi_end_date": "财务指标报告期",
+    "fi_ann_date": "财务指标公告日",
+    "adv_receipts": "预收款项",
+    "bond_payable": "应付债券",
+    "c_pay_acq_const_fiolta_ttm": "购建固定资产等支付的现金(TTM)",
+    "c_paid_to_for_empl_ttm": "支付给职工的现金(TTM)",
+    "stot_inflows_inv_act": "投资活动现金流入小计",
+    "stot_inflows_inv_act_ttm": "投资活动现金流入小计(TTM)",
+    # ---- candle / value ----
+    "cdl_doji_10_0_1": "CDLDOJI十字星形态",
+    "etp5_rank": "五年盈利价格比·排名",
+}
+
+
+def _coverage_zh(table: str, column: str) -> str | None:
+    """按表取中文显示名覆盖（仅用于补空，不覆盖既有条目）。"""
+    if table == "stock_daily_alpha191":
+        return ALPHA191_ZH.get(column)
+    if table == "stock_daily_alpha101":
+        return ALPHA101_ZH.get(column)
+    return FINANCIAL_ZH.get(column)
+
+
 def _fmt_params(template: str, params: dict[str, Any]) -> str:
     out = template
     for key, value in params.items():
@@ -1151,6 +1623,21 @@ def build_registry(tables_columns: dict[str, list[str]]) -> dict[str, Any]:
             "columns": len(tables_columns[table]),
         }
 
+    # overlay 序号预计算（同表内按列名排序，颜色/渲染序稳定且与策略引用无关）
+    overlay_index: dict[tuple[str, str], int] = {}
+    for table in sorted(tables_columns):
+        idx = 0
+        for column in sorted(tables_columns[table]):
+            family = None
+            for rule, regex in compiled:
+                if regex.match(column):
+                    family = rule["family"]
+                    break
+            if (family in OVERLAY_MA_FAMILIES or family in OVERLAY_BAND_FAMILIES
+                    or table.startswith("stock_daily_overlap")):
+                overlay_index[(table, column)] = idx
+                idx += 1
+
     factors: list[dict[str, Any]] = []
     for table in sorted(tables_columns):
         for column in tables_columns[table]:
@@ -1195,6 +1682,18 @@ def build_registry(tables_columns: dict[str, list[str]]) -> dict[str, Any]:
             entry["core"] = entry["canonical"] in _CORE_SET
             if manual.get("zh"):
                 entry["zh"] = manual["zh"]
+            elif not entry["zh"]:
+                # QRE-FACTOR-ZH-COVERAGE：族规则/手工条目未命中的列，按公式与
+                # 官方定义查表补中文显示名（查不到仍为 null，不伪造）。
+                entry["zh"] = _coverage_zh(table, column)
+            # QRE-FACTOR-DISPLAY-CONTRACT：呈现属性作为因子数据成员（页面只消费，
+            # 不各自猜指标）；安全默认 + 显式族规则，与因子库列一一对应。
+            entry["display"] = _display_for(
+                table=table, column=column, family=entry["family"],
+                output=entry["output"], params=entry["params"],
+                price_basis=tables[table]["price_basis"],
+                overlay_index=overlay_index.get((table, column), 0),
+            )
             # 别名：列名本身 + 参数写法（全部条目）；族别名只挂在「常用 + 默认参数」
             # 条目上，避免把全量别名塞进 JSON 与 LLM Prompt。
             aliases: list[str] = [column]
@@ -1253,9 +1752,21 @@ def main() -> int:
     )
     if missing_core:
         print(f"[WARN] CORE_TARGETS 中有 {len(missing_core)} 条不在因子库：{missing_core}")
+    # QRE-FACTOR-DISPLAY-CONTRACT：display 自校验（单一门禁见 factor_registry.validate）
+    try:
+        from quant_research_engine.gui.factor_registry import FactorRegistry
+
+        issues = FactorRegistry(registry).validate(data)
+        for issue in issues:
+            print(f"[WARN] display 校验：{issue}")
+    except Exception as exc:  # 校验失败不阻塞生成，但必须显式告警
+        print(f"[WARN] display 校验器不可用：{exc}")
+    overlays = sum(1 for f in registry["factors"] if f["display"]["chart_type"] == "overlay")
+    panels = len(registry["factors"]) - overlays
     print(
         f"已生成 {out}：{len(registry['factors'])} 个字段"
-        f"（中文名 {with_zh} / 常用 {common} / 核心示例 {core}）"
+        f"（中文名 {with_zh} / 常用 {common} / 核心示例 {core}；"
+        f"display overlay {overlays} / pane {panels}）"
     )
     return 0
 

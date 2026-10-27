@@ -209,6 +209,7 @@
       if (oldInst) oldInst.dispose();
     }
     var chart = echarts.init(chartEl);
+    if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(chart);
 
     /* 进度条：从控制排移出，放在图表正下方一行（视觉上从属于图表；2026-10-04 布局调整） */
     var sliderRow = h("div", "rp-slider-row");
@@ -342,7 +343,27 @@
       }
     }
 
-    /* 事件流：按日弹入；同日同类 >5 聚合可展开 */
+    /* 事件流：按日弹入；同日同类 >5 聚合可展开。
+       聚合口径（QRE-SAAS-REPLAY-BOUNDARIES）：头部按**去重标的**计「只」——
+       同一标的同日常有多笔（分笔委托/同日往返），事件数大于标的数时披露
+       「（M 笔）」，明细展开列全部事件，计数与可见文案一致。 */
+    function evChipText(ev) {
+      var s = ev.symbol || "";
+      if (ev.qty != null) s += " " + ev.qty + " 股";
+      if (ev.price != null) s += "@" + Number(ev.price).toFixed(2);
+      if (ev.pnl != null) s += " " + pct(ev.pnl);
+      return s;
+    }
+    function aggHead(label, list) {
+      var seen = {}, symCount = 0;
+      list.forEach(function (ev) {
+        var k = ev.sym != null ? ev.sym : (ev.symbol || "");
+        if (!seen[k]) { seen[k] = true; symCount += 1; }
+      });
+      var head = "当日" + label + " " + symCount + " 只";
+      if (list.length > symCount) head += "（" + list.length + " 笔）";
+      return head;
+    }
     function popEvents() {
       if (!eventsEl) return;
       bins.days.forEach(function (d) {
@@ -358,23 +379,23 @@
           if (!list.length) return;
           if (list.length <= 5) {
             list.forEach(function (ev) {
-              var chip = h("span", "rp-ev-chip", (ev.symbol || "") +
-                (ev.pnl != null ? " " + pct(ev.pnl) : ""));
+              var chip = h("span", "rp-ev-chip", evChipText(ev));
               chip.style.borderColor = color;
               row.appendChild(chip);
             });
           } else {
-            var agg = h("button", "rp-ev-chip rp-ev-agg", "当日" + label + " " + list.length + " 只 ▸");
+            var head = aggHead(label, list);
+            var agg = h("button", "rp-ev-chip rp-ev-agg", head + " ▸");
             agg.style.borderColor = color;
             agg.addEventListener("click", function () {
-              if (agg._open) { agg.nextSibling.remove(); agg._open = false; agg.textContent = "当日" + label + " " + list.length + " 只 ▸"; return; }
+              if (agg._open) { agg.nextSibling.remove(); agg._open = false; agg.textContent = head + " ▸"; return; }
               var det = h("div", "rp-ev-det");
               list.forEach(function (ev) {
-                det.appendChild(h("span", "rp-ev-chip", (ev.symbol || "") + (ev.pnl != null ? " " + pct(ev.pnl) : "")));
+                det.appendChild(h("span", "rp-ev-chip", evChipText(ev)));
               });
               row.insertBefore(det, agg.nextSibling);
               agg._open = true;
-              agg.textContent = "当日" + label + " " + list.length + " 只 ▾";
+              agg.textContent = head + " ▾";
             });
             row.appendChild(agg);
           }

@@ -9,13 +9,43 @@ This file is the source of truth for single-agent workflow recovery.
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
 4. **权限改动必须同步 9090**：权限/配额/限流变更在 commit/push 前必须完成管理台可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。详见 `02_LOCKED_REQUIREMENTS.md` R-ADMIN-001。
 
+### 2026-10-27 QRE-FACTOR-ZH-COVERAGE 已部署待人工验收，未 commit/push
+
+剩余 341 列中文显示名维护完成，**341/341 全部维护、未维护 0 列**，中文名覆盖 **554 → 895/895（100%）**，`deploy/saas/metadata.json` 902/902 项带 zh。**命名依据（无一条凭感觉翻译）**：alpha191 191 条逐条对照 `indicators_tushare/alpha191/formulas.py` docstring（GTJA191 编号口径 + DolphinDB 实现口径与 errata 注释）；alpha101 31 条逐条对照官方 486 文档表达式表（`change_requests/factor_specs_p4p5p7.md` §三）；quality 87 / growth 16 逐条对照 `panel_factors/quality.py::compute_all`、`panel_factors/growth.py` results 与 `change_requests/factor_specs_p1p3.md` §三/§四；`_pit_financial_panel` 14 列按 `panel_factors/pit_panel.py` FAMILIES（inc=利润表/bs=资产负债表/cf=现金流量表/fi=财务指标，流量列 `_ttm` 后缀）+ Tushare 标准字段语义；`cdl_doji_10_0_1` = `factors/candle_factors.py` 的 ta.cdl_doji 十字星；`etp5_rank` 与既有 `etp5` 同源。**实现**：`scripts/gen_factor_registry.py` 新增 `ALPHA191_ZH`(191)/`ALPHA101_ZH`(31)/`FINANCIAL_ZH`(119) 与 `_coverage_zh(table, column)`，在 `build_registry()` 的 `if manual.get("zh")` 后以 `elif not entry["zh"]` 挂载——只补空不改名；FAMILY_RULES/MANUAL_ENTRIES/别名/common/core/display 逻辑零改动。`_rank` 列统一「·排名」后缀，未新增别名。**三处口径注记**：`gpm_q` 实现与 `gpm_ttm` 同为 TTM 口径 → 「毛利率(TTM口径)」；`ar_ap_to_revenue` 含 contract_liab 兜底并扣预付款项 → 「预收预付净额/营业收入(TTM)」；`npm_tsh` 按官方语义（非笔误文本）→ 「归母净利润/平均总股本」。**零漂移**：重新生成前后逐字段比对，除 zh 外 0 差异；341 条 null→中文名、0 条覆盖既有条目；与生产旧版（554 zh）比对同样只有 341 处 zh 差异，display 合同未回归。**测试**：注册表/呈现/相关 10 文件 321 passed；**全量 2890 passed + 6 skipped**（与基线一致）；两处测试随覆盖状态更新但契约更严（`test_no_fabricated_zh` 改为「不得空串/不得英文列名冒充 + 覆盖须 100%」；`test_build_factor_groups_zh_falls_back_to_none_for_unregistered` 改用未注册列 `alpha999_unregistered` 验回退）。**真实浏览器（本地 staging 8099 + 生产 SSH 隧道 9090 各一遍）**：902/902 带 zh 且无英文列名冒充；`/saas/new` → 自选因子交易 → 因子弹窗三栏逐级进「Alpha191 量价因子」因子列 30 条全中文名；中文搜索命中（毛利率 13 / 十字星 1 / 五年盈利价格比 2 / 产权比率年度变化 2）；英文列名搜索仍可用；空态正常；零 JS error；证据 `.tmp/factor-zh-coverage/`。**ECS（R-DEPLOY-001）**：核对生产两文件 SHA256 与上一轮基线一致并拉回本地逐字段比对 → 备份 `/tmp/qre-factor-zh-pre-20261027/`（configs/factor_registry.json + deploy/saas/metadata.json）→ scp 两文件并改回 deploy 属主 → **仅重启 qre-saas（新 MainPID 491196）**，`qre-worker` inactive 未触碰 → 两文件生产 SHA256 与本地逐一相等；generator 为开发工具不同步生产。应用层验证（ECS 上 `curl -H "Host: www.aguhuice.com" http://127.0.0.1:8090/...`）：`/api/saas/factors` 902/902 带 zh，`/saas/new`、`/saas/`、`/saas/help`、`/saas/login` 均 200。**未 commit/push、未跑真实回测、未碰游戏与 8092；不通过恢复 `/tmp/qre-factor-zh-pre-20261027/` 两文件重启 qre-saas。** 建议提交 `feat(factors): 维护剩余 341 列中文显示名`。
+
+### 2026-10-27 QRE-DATA-CLEANUP-EXECUTION DONE，未 commit/push
+
+用户批准后删除 `akshare_data`、`aguhuice_test`、`quant_hub`、`aguhuice_local` 和指定旧回测/实验产物；`qre-outputs` 27G→536M，磁盘可用 386G→418G。留档 `/home/van/quant-workspace/backups/local-cleanup-20261027/`：aguhuice_local 全量 dump、akshare 结构+行数（本体不可恢复）、旧文件 manifest。`refresh` 活配置、`saas_uploads`、`market_risk`、`video_packages` 及两个待验收 staging 库保留。8080/8092 HTTP 200；8081 staging 下次使用前必须重建/替换 aguhuice_local。新增 20261019/20/21 三份分钟 CSV 只读检查通过，审计和分钟表仍至 10-16、三日 pending；timer enabled/active，2026-10-27 17:20 CST 自动入库、校验、删 CSV。本轮未手动入库、未清洗、未压缩。M10.4 依赖已批准且 `.venv-ml` 已有 scikit-learn 1.9.0 / pandas 3.0.5 / numpy 2.5.1，未重复安装。
+
+### 2026-10-27 QRE-DATA-CLEANUP-AUDIT 历史只读盘点（当时未清理任何文件/表/库）
+
+**任务书两项前提与事实不符（已如实记录）**：`/home/van/mindata` **已空**（0 文件/24KB，只剩 `mindata/` 与 `mindata/2026/` 两个空目录 inode）；任务书提到的 `qre_saas`/`dbg` **均不存在**。**三项高风险（待用户决定，均未动手）**：①`public.stock_daily_qfq_legacy` **已不存在**（全 schema 搜 `%legacy%`/`%qfq%`=0 条），本地无 `tushare_data` dump ⇒ 方案A（qfq→原始价+adj_factor）**回滚能力永久失去且不可恢复**；②**分钟线压缩缺口 140GB**——922 chunk 中 708 已压缩仅 396MB、214 未压缩 140GB（压缩比 350:1），其中 **213 个早于 T-7 未压缩**（2022-09-01→2026-10-08），违反 20 §3.4；未压缩 chunk 内部 ID 高于已压缩集合，说明是 10-11 那次压缩后新建、再未压；重跑 `compress_minute_chunks.sh` 预计回收 ~139GB；③**分钟线落后日线 10 天**（分钟 2026-10-16 vs 日线 2026-10-26），定时器每天空转。**「已入库」≠「可安全删除」实证**：日志只记录 5 个 CSV 走过先校验后删除；`import_minute_csv.py` 无删除代码 ⇒ 4308 个历史 CSV 属脚本外删除（`mindata/` mtime 23:19 晚于审计最后写入 20:10，顺序对但无轨迹）；数据侧完整（审计 4318 条全 `rows_csv==rows_db`、双向差集 0、抽查 8 日期含磁盘打满重试的 2022-08-22/25/29 → 8/8 MATCH），**但源 CSV 不可恢复**。**可删候选（待确认）**：`aguhuice_test`(7.5MB,0 表)、`quant_hub`(10MB,0 public 表)、`aguhuice_local`(8.9MB,3 users/15 jobs)、`qre-outputs/refresh/incremental` 17G、`gui-console/runs` 5.4G、`backtests` 4.3G、`gui-run` 442M 及约 20 个 7 月 `*_check` 目录。**勿动**：`refresh/registry.json`/`state.json`/`delta/`（活配置）、`saas_uploads`、`market_risk`、`video_packages`、`.tmp/ms-playwright`+`.tmp/browser-venv`、两个上一任务 staging 库。**高风险单项**：`akshare_data` 5.8GB（4 月 tick、无消费者）。**备份缺口**：本地无 `tushare_data` 逻辑备份。**文档修正**：20 §3.6 日志名 `minute_daily_ingest.log` → 实际 `minute_import.log`；20 新增 §7 盘点与 7 项待确认清单、§6 新增 3 条硬规则。**未 commit/push、未跑真实回测、未碰生产/WSL 数据与游戏。** 建议提交 `docs(data): 盘点遗留数据并修正数据字典（qfq_legacy 已失、分钟线压缩缺口）`。
+
+### 2026-10-27 QRE-ECS-SSH-HARDENING 已生效待人工验收，未 commit/push
+
+
+root SSH 直连已禁，deploy+sudo 为唯一运维入口。**审计先行且抓出锁死风险**：`deploy` 密码锁定（`L`）且 sudoers 仅放通 `systemctl`/`docker` ⇒ `sudo -n` 改动前不可用；直接禁 root 会失去文件安装、PG 备份恢复、证书、防火墙能力。先补 `/etc/sudoers.d/90-qre-deploy`（`deploy ALL=(ALL:ALL) NOPASSWD: ALL`，0440，`visudo -c` 全绿）并修 `sudoers.d/deploy` 0644→0440，之后才动 sshd。deploy 五项实证（改 SSH 前）：密钥登录 uid=1000、`sudo -n`→uid=0、业务文件可读、`/tmp→sudo install→sudo rm` 链干跑成功、deploy 隧道 9091 应用层 200 且 factors 902/902 带 zh。**sshd**：新增 `/etc/ssh/sshd_config.d/99-qre-hardening.conf`（`PermitRootLogin no`/`PasswordAuthentication no`/`KbdInteractiveAuthentication no`/`PubkeyAuthentication yes`/`AllowTcpForwarding yes`，TCP 转发显式保留供 9090 隧道）。**机制记录（防误判）**：sshd 同关键字取先出现者、drop-in 按字典序展开，`99-aguhuice-hardening.conf` 排在前，其 `PermitRootLogin prohibit-password` 会遮蔽新文件的 `no`（实测证明），故该行改 `no`（另两行未动）。`sshd -t` 通过 → `systemctl reload ssh`（不断会话）。**验证**：root 新连接 `Permission denied (publickey)`；既有 root 隧道 reload 后仍 200；deploy 新连接/`sudo -n`/qre-saas active/qre-worker inactive/nginx/ssh 全过；deploy 隧道 9092 与 `admin-tunnel.sh`(deploy@) 起的 9090 均 `/saas/new` 200、`/saas/console` 200；`sudo -n fail2ban-client status sshd` 正常；陈旧 root 隧道已停，现网无 root 会话。**脚本**：新增 `deploy/saas/deploy-ecs.sh`（deploy+sudo 唯一部署入口，`--dry-run`，自带 /tmp 回滚副本，只重启 qre-saas），已用与生产 SHA256 相同的 metadata.json **真实端到端跑通**（MainPID 493988、api 200、生产字节未变），并修掉两个真 bug（scp 远程嵌套目录、内联 `bash -c` 二次转义）；`admin-tunnel.sh`/`pull-ecs-backup.sh` 默认改 `deploy@`；`sync_saas_metadata.py` 注释同步。**测试**：无 `src/` 改动、无测试引用这三脚本；`bash -n` 全过；**全量 2890 passed + 6 skipped**（零回归）。**备份/回滚/救援**：`/tmp/qre-ssh-hardening-pre-20261027/`；回滚两步（删 99-qre-hardening.conf + 改回 prohibit-password → reload ssh；删 90-qre-deploy）均不断业务；云控制台 VNC 救援见 `16_ECS_DEPLOYMENT.md` §6。**未 commit/push、未跑真实回测、未碰 WSL 数据库/worker/因子/UI/游戏。** 建议提交 `chore(ecs): 禁 root 直连并落地 deploy+sudo 部署纪律`。
+
 ### 2026-10-26 QRE-SAAS-NL-A1 DONE（DeepSeek 裁判，用户验收发布）
+
 
 用户批准提交，自然语言规则前置校验与 DeepSeek 裁判已部署 ECS，本次以 `feat(saas): 增加自然语言输入校验与 DeepSeek 裁判` commit/push。最终专项 67 passed、全量 2840 passed + 6 skipped；真实 DeepSeek 分层 12 条评估 0 失败，生产缓存命中零裁判、裁判拒绝占配额、admin 同样裁判、force 与 DB 回退路径一致。游戏内容不纳入本提交。下一主线：P2 重播边界（同日聚合、orders 事件源、多因子副图页）；挂起任务放最后。
 
 ### 2026-10-26 QRE-SAAS-NL-A1 复核修正（主 Agent 3 项 Required Fixes 已解决，实施过程）
 
 ①领域语境门槛：`DOMAIN_WORDS`/`STRONG_TRADING_WORDS`/`_has_domain_context`——有入出场词但无股票/价格/指标/交易语境至少 review 不得 pass（修「我想买房，之后卖房」「今天买菜后卖给邻居」在无 Jev 生产直接放行）；54 条样本（含 4 条对抗）规则层 54/54，50 条合法样本零误杀。②strategy.html 重编译区隐私/校验 tip-trigger 与 new.html 同源；new.html review 模态补 role=dialog/aria-modal/aria-labelledby。③`force = data.get("force") is True`，字符串 "false"/"true" 不视为确认。TDD RED=8→GREEN；guard 60 passed；相关 6 文件 230 passed + 1 skipped；**全量 2833 passed + 6 skipped**；Chromium 6/6（对抗样本 review 模态；截图几何稳定后拍摄）。ECS 备份 `/tmp/qre-nl-a1-review1-pre-20261026/` 后同步四文件仅重启 qre-saas；公网两条对抗文本 422 review、force 字符串 422、合法 MACD cache_hit=true 不回归；9090 隧道两页 200 且新标记齐全。整任务回滚点仍为 `/tmp/qre-nl-a1-pre-20261026/`。**未 commit/push，待用户人工验收。**
+
+### 2026-10-27 QRE-FACTOR-DISPLAY-CONTRACT 已部署待人工验收，未 commit/push
+
+Step 5 实现，Kimi 复核与部署收尾：canonical 注册表新增完整 display 数据成员（chart_type/panel_id/role/series_type/axis/precision/color/price_basis/render_order），所有页面统一消费；EMA/BOLL 必须 overlay，MACD/PPO/PVO 同副图，panel_id 含价格口径。专项与注册表 59 passed，全量 2890 passed + 6 skipped；真实 Chromium 验证 replay 与夜间切换、375 无横溢。Step 5 两次 2 小时超时后由 Kimi 完成验证部署；ECS 备份 `/tmp/qre-factor-display-pre-20261027/`，仅重启 qre-saas，未跑真实回测、未 commit/push。建议提交 `feat(factors): 统一因子呈现属性与图表合同`。
+
+### 2026-10-27 QRE-SAAS-NIGHT-MODE 已部署待人工验收，未 commit/push
+
+SaaS 全部页面（含 9090 console）新增夜间模式，浅色 token/配色/视觉/排版/文案/数据零变化，唯一新增交互是主题切换按钮（文字 + aria），红涨绿跌保留。7 个产品文件：新增 `gui/static/night-mode.css`（270 行，`html[data-theme="dark"]` 作用域下 8 token：bg `#17153B`/card `#2E236C`/line `#433D8B`/text `#F1EDF8`/muted `#C8ACD6`/accent `#7E60BF`/accent-deep `#C8ACD6`/accent-soft `#2E236C`）与 `night-mode.js`（275 行，`QRETheme` 三态 + `localStorage('qre-theme')` + `prefers-color-scheme` 跟随 + meta theme-color 同步 + `themeChart`）；`static/replay.js` 加图表主题挂钩；`saas/templates/base.html`、`login_callback.html`（内联防闪 + `tt-btn tt-float` 浮动按钮 + 深色 `:root` 兜底）、`job.html`、`symbol.html`。默认跟随系统偏好、手动选择后持久；首帧内联脚本防 FOUC；ECharts 背景/轴/文字/tooltip/系列色随主题改、保留红绿与数据、切换不重算不重排；`#guest-note` 深色告警（`#B4761F`/`#3D3118`）刻意保留；8080/8081 未改。测试：新 `tests/test_saas_night_mode.py` 24 passed，相关 6 文件 148 passed，**全量 2871 passed + 6 skipped**（与基线一致）；真实 Chromium 审计 **138 ok / 0 FAILURES**（exit 0，浅/夜 × 1280/1000/375、切换、reload 持久、系统偏好、无白底岛屿、正文与按钮焦点可读、375 不横溢）；两处判据修正为工具层修正（`<details>` 关闭时 `content-visibility:hidden` 读到过期值 → 先展开再断言；job `tagChart` 为 treemap 无笛卡尔轴 → 仅对含笛卡尔系序列断言轴色）。ECS：5 文件与生产基线 diff 仅夜间模式行 → 备份 `/tmp/qre-night-mode-pre-20261027/` → scp 7 文件（SHA256 与本地逐一相等）→ **仅重启 qre-saas（MainPID 487122）**，worker 未触碰、无 schema 变更；应用层（`Host: www.aghuice.com` → `127.0.0.1:8090`，因域名 DNS/代理不可达，TLS/nginx 未改）new//saas//help/login/console 与 css/js 全 200 且标记齐全。**未 commit/push，待用户人工验收；不通过恢复 `/tmp/qre-night-mode-pre-20261027/` 七文件重启 qre-saas。** 建议提交 `feat(saas): 新增夜间模式（浅色不变）`。
+
+### 2026-10-27 QRE-SAAS-REPLAY-BOUNDARIES 已部署待人工验收，未 commit/push
+
+重播边界核验完成（先证明再修，只改 4 个文件）。**核验已完整（零改动）**：展开/收起、seek 回退、重播重置、重复初始化、markPoints 无未来事件、symbol orders 优先+兜底、多因子 overlay/MACD 同面板/chip 三态/动态 grid·height/接管退出/末帧与静态一致——补 7 例回归锁定。**修复 1**：replay.js 聚合头部原按事件数计「只」（symbol 6 笔同日买单误显示「6 只」）→ `aggHead` 按 sym 去重计「只」+「（M 笔）」披露，`evChipText` 统一 chip 文案（缺字段不拼装）。**修复 2**：`lab_result._trade_points` 在 round_trips.csv 有价量列时补足 quantity/entry_price/exit_price（缺列不加键、仅新 run 生效、不回填）；job/symbol 事件带 sym+价量；旧产物降级纯标的 chip。测试：TDD RED=5→GREEN，新 7 例，相关 6 文件 188 passed，**全量 2863 passed + 6 skipped**；Chromium 10/10 零 JS error 零横溢（job「当日入场 5 只（6 笔）」+6 笔价量明细；symbol「1 只（6 笔）」+末帧 478.00 强一致；375 不破版）。ECS 备份 `/tmp/qre-replay-boundaries-pre-20261026/` 后 scp 四文件仅重启 qre-saas；无 schema 变更。公网匿名 job58 重播全程零 JS error。**未 commit/push，待用户人工验收；不通过恢复 `/tmp/qre-replay-boundaries-pre-20261026/` 四文件重启 qre-saas。** 建议提交 `fix(saas): 修正重播同日聚合计数并补足事件价量`。
 
 ### 2026-10-26 QRE-SAAS-NL-A1 路径一致性复核修正已部署待人工验收，未 commit/push
 
@@ -36,6 +66,14 @@ NL 编译入口前置校验落地（规则层 + 可选 Jev 第二裁判）。**�
 ### 2026-10-26 QRE-SAAS-PUBLIC-BETA-OPS 实施与验收过程
 
 按批准计划完成 §11.3 条目 4「运营反馈闭环」：9090 管理台新增「公测运营」tab（`GET /api/saas/console/ops`，窗口 today/7d/30d/all，admin 门禁不变）——NL 编译次数/成功率/缓存命中率/失败原因 Top5/统计起点（新表 `nl_compile_events`，只存 ok/cache_hit/error_class/scope/created_at，**不存策略文本/API key/原始 IP**，自功能上线起统计、上线前显示「—」）；回测（kind='full'，smoke 与 canceled 不计入）成功率/平均排队/平均执行/失败原因 Top5；游客到注册转化（游客独立会话=guest_key 去重——仅覆盖提交过任务的游客、未提交访客不可见；新增注册=users.created_at；**二者无关联，不计算转化率**——ratio=null + measurement=unlinked，未扩展用户追踪 schema）；反馈按类型/状态计数；分母为 0 → null → 「—」，不编造历史；**today 窗口按 Asia/Shanghai 自然日**。**反馈分类闭环（最小可用）**：feedback 增 category（bug/experience/factor/other，缺省 other）/status（open/doing/done/closed，缺省 open）；提交 allowlist、本人列表透出、console 筛选 + `POST /api/saas/console/feedback/<id>/status` 流转；用户隔离/每日 20 条/admin 鉴权全保留。**NL 编译事件**在四个终态记录（超限 403/429 不计入）。**测试**：TDD RED=17 errors → GREEN；新 `tests/test_saas_public_beta_ops.py` 17 passed；相关 5 文件 227 passed + 1 skipped；**全量 2770 passed + 6 skipped**（基线 2753+6 零回归）。**浏览器自动化资产**（可重复执行）：`deploy/saas/public-beta-audit/`（seed/browser_audit/run_audit，复用 `.tmp/browser-venv` Playwright + `.tmp/ms-playwright` Chromium，未进生产依赖）；真实 Chromium 9/9 零 JS error 零横溢（游客/登录、新建页、NL 编译 stub、任务等待/失败恢复、结果只读与权限、反馈分类、管理台运营指标、375 不破版），证据 `.tmp/public-beta-ops/`。**生产缺陷热修**：feedback_id_seq 缺 USAGE → 提交反馈 500（该特性此前从未部署 ECS；同 share_links 序列坑），已 GRANT 并写入 schema 幂等 DO 块。**ECS**：四文件与 HEAD 基线 SHA256 一致 → 备份 `/tmp/qre-public-beta-ops-pre-20261026/` → postgres apply → scp 五文件 → 仅重启 qre-saas（worker 在家未动）。**生产验证**：临时 admin/member 会话完成 ops 鉴权三态/空口径/反馈闭环；游客真实 DeepSeek 编译两次 cache_hit false→true 且 YAML 一致（A2A3 无回归）；ops all 窗口 nl.total=2/first_event_at=2026-10-26；临时数据清理后 temp_users=0/feedback=0、真实 sessions 未动；9090 隧道 console 200 含 ops 标记、ops API 无 token 401；公网五页 200、/saas/console 仍 404。**未 commit/push，待用户人工验收；不通过恢复 `/tmp/qre-public-beta-ops-pre-20261026/` 并重启 qre-saas。** 建议提交 `feat(saas): 新增公测运营指标与反馈分类闭环`。下一主线：按灰度反馈继续修正公网体验；小游戏/Steam、移动端/App、压测性能、硬件上云继续挂起。
+
+### 2026-10-26 TRADING-GAME-V1-CORE WSL 可玩 Demo 已跑通（未 ECS/未 commit/push）
+
+Kimi 完成 `game/engine.py`、`session.py`、`data.py`、`web.py`、`templates/game.html`：纯交易状态机、随机窗口、匿名逐日揭盲、前复权与现有因子、最小 Web API 和可玩页面。开盘只显示 open，收盘才显示完整 K 线/指标；真实代码/日期/未来数据不下发。复用 core.models、AShareMarketProfile、现有因子和淡紫 UI，ema_250 替代库内不存在的 ema_200。专项 22 passed，全量 2753 passed + 6 skipped；真实 DB 抽样和真实 Chromium 开盘买入通过，1280/375 无横溢/无 JS error，证据 `.tmp/trading-game/`。试玩 `http://127.0.0.1:8092/game`。后续持久化与公网中继另做；不做美术/分时/财报/杠杆/扰动/Steam。主线 9090 NL 可视化已完成并仍待用户验收提交。
+
+### 2026-10-26 TRADING-GAME-V1 长期文档已立项（Kimi 负责，WSL Demo）
+
+用户批准双轨并行：Step 5 继续主线 backlog，Kimi 负责《我不是股神》。长期权威文档为 `docs/agent/22_TRADING_GAME.md`，已写明 V1 随机股票/随机窗口、匿名逐日揭盲、真实前复权数据、限价成交、T+1/整数手/费用、总权益结束条件、复用边界、WSL 环境、公网中继、测试矩阵、Token/工期估算和未来独立化边界。Demo 不做专门美术、分时、财报、杠杆、数据扰动、排行榜或 Steam；先完成 WSL 可玩一局，再考虑公网。主线 9090 NL 可视化仍由 Step 5 推进，A2/A3 未 commit/push。
 
 ### 2026-10-26 QRE-SAAS-NL-A2A3 已部署待人工验收，未 commit/push
 
@@ -145,7 +183,7 @@ saas pages 74、组合回归 95、全量 2533 passed + 5 skipped。真实 Chromi
 
 ## Current Phase
 
-P1 公测体验推进中：**QRE-SAAS-NL-A1（DeepSeek 方向）已部署待人工验收，未 commit/push**（2026-10-26：规则层前置校验 + DeepSeek 裁判，仅缓存 miss + 配额后运行；管理员与会员同样经过裁判）。下一项为按灰度公测反馈继续修正公网体验。游戏继续由用户在 WSL 本地试玩，优化反馈另列，不与主线提交混合。移动端与 App 端按用户要求暂时跳过（挂起）。
+P3 数据治理盘点中：**QRE-DATA-CLEANUP-AUDIT 只读盘点完成，未清理任何文件/表/库**（2026-10-27；3 项高风险 + 7 项待用户确认）。当日 QRE-ECS-SSH-HARDENING 已生效待人工验收（root 直连已禁），QRE-FACTOR-ZH-COVERAGE 已部署待人工验收（341 列中文名全覆盖）。下一项：按用户对数据清理各项的决策逐项立项。游戏继续由用户在 WSL 本地试玩，优化反馈另列，不与主线提交混合。移动端与 App 端按用户要求暂时跳过（挂起）。
 
 ## Current Task
 
@@ -1003,8 +1041,23 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 1. ~~CR-0002/0003 slices~~ — ALL DONE through M10.3 (commits `24699ce`/`c86441b`/`d514c4c`/`a16d6c5`/`24c284d`/`1345471`).
 2. **Trigger full-scale full-history batch?** (~3h estimate, `outputs/full_history_pilot/feasibility.md`) — ready when you are.
 3. ~~Upstream factor computation~~ — DONE (QRE-UPSTREAM-FACTOR-DELIVERY-001): backfill 5,544 stocks/0 failed; queue 7/7 fulfilled; 5/5 strategies unblocked; daily timer covers new columns from tomorrow. Full 111-strategy re-run (incl. formerly-shelved 5) is now a user decision alongside the full-history trigger.
-4. M10.4 ML clustering — needs separate dependency approval (5070 Ti noted).
+4. ~~M10.4 ML clustering dependency/first slice~~ — DONE (2026-10-27)：隔离 sklearn 环境、DBSCAN/noise、CLI、manifest 与真实只读产物均已复核；后续 UI/元数据扩展另行立项。
 5. Follow-up micro-slices (optional): groupby-aware signal evaluation; runner-level cross-strategy frame caching (frame load ~17s is now the dominant cost). ~~Preflight UndefinedColumn robustness~~ — DONE. ~~Trailing stop~~ — DONE. ~~Cross-symbol analytics (≤30s)~~ — DONE, target MET at 25.852s.
+
+## 2026-10-27 Current State
+
+- Phase：`USER_DIRECTED`（M10.4 首片与游戏本地修复均已自审；等待用户试玩游戏并决定下一项，不自动 commit/push）。
+- Night Mode、重播边界、因子呈现合同、341 中文名、SSH 加固五项已获用户验收通过。
+- 游戏：8092 本地可试玩，28 项专项通过；待用户验收。`ema_250` 上游 11 点异常未修。
+- M10.4：真实 manifest 校验通过；ML 相关 158 passed，主环境相关 469 passed + 14 skipped。默认聚类结果保守（41 insufficient/40 all_noise），未跑回测。
+- 全仓：2902 passed + 20 skipped + 1 failed；唯一失败是已清理外部 run YAML 的硬编码测试夹具，后续改自包含，不恢复旧产物。
+- 下一主线候选：P2 会员分层、付费权益与微信信号推送；须先与用户对齐范围。
+
+### 主模型切换交接预案（2026-10-27）
+
+用户考虑将 Step 5 切为主模型、DeepSeek 保持 subagent。该调整只改变规划/实施/评审分工，不改变代码、数据库、产物、定时任务或部署架构；模型能力差异只影响后续工作质量与风格。CLI 对话上下文不会自动完整转移，因此 `docs/agent/` 仍是唯一权威记忆，新主模型接手前必须阅读根 `AGENTS.md` 及其中文档并核对 `git status`、后台任务和当前生产状态。
+
+当前边界：游戏 `src/quant_research_engine/game/`、游戏专项测试、`22_TRADING_GAME.md` 与游戏 CR 保留本地未提交，等用户试玩反馈；其余已验收改动由用户批准提交与部署。Step 5 主接手后不得误把游戏局部文件混入提交，不得恢复已删除回测产物，也不得把全仓唯一外部 YAML 夹具失败误报为全绿。DeepSeek 任务必须由主模型给出明确文件边界并独立复核。
 
 ## Quick Batch In Flight
 

@@ -1,0 +1,270 @@
+/* QRE-SAAS-NIGHT-MODE：SaaS 页面夜间模式。
+   浅色主题（lab-theme.css + 各模板内联样式）完全不动，本文件仅在
+   <html data-theme="dark"> 时生效；所有规则带 :root[data-theme="dark"] 前缀，
+   保证优先级高于后加载的模板内联样式。 */
+
+/* ---------- 1. 色板（夜间 token 覆盖） ---------- */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#17153B;--paper:#17153B;
+  --card:#2E236C;--panel:#2E236C;
+  --line:#433D8B;--tint:#3A3170;--tint-deep:#433D8B;
+  --text:#F1EDF8;--ink:#F1EDF8;
+  --muted:#C8ACD6;--grey:#C8ACD6;--faint:#C8ACD6;
+  --accent:#7E60BF;--accent-deep:#C8ACD6;--accent-soft:#2E236C;
+  --lav:#9B84D8;--lav-deep:#C8ACD6;--lav-ink:#A99BD8;
+  --up:#FF7A7A;--up-soft:#3A2030;--up-deep:#FF9B9B;
+  --down:#4FD69A;--down-soft:#17342A;
+  --pos:#FF7A7A;--neg:#4FD69A;--err:#FF9B9B;
+  --field:#241E52;
+  --shadow-1:0 1px 3px rgba(0,0,0,.35);
+  --shadow-2:0 8px 28px rgba(0,0,0,.55);
+}
+
+/* ---------- 2. 版面与文字 ---------- */
+:root[data-theme="dark"] body{background:var(--bg);color:var(--text)}
+:root[data-theme="dark"] a{color:var(--accent-deep)}
+:root[data-theme="dark"] a:hover{color:#F1EDF8}
+:root[data-theme="dark"] ::selection{background:#433D8B;color:#F1EDF8}
+:root[data-theme="dark"] header.topbar{background:#17153B;border-bottom:1px solid #433D8B}
+:root[data-theme="dark"] ::-webkit-scrollbar{width:10px;height:10px}
+:root[data-theme="dark"] ::-webkit-scrollbar-track{background:#17153B}
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#433D8B;border-radius:5px}
+
+/* ---------- 3. 卡片 / 面板 / 容器 ---------- */
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .chart-box,
+:root[data-theme="dark"] .metric,
+:root[data-theme="dark"] .metric-card,
+:root[data-theme="dark"] .metric-strip .metric-card,
+:root[data-theme="dark"] .big-link,
+:root[data-theme="dark"] .entry-card,
+:root[data-theme="dark"] .modal,
+:root[data-theme="dark"] .cal-pop,
+:root[data-theme="dark"] .wm-card,
+:root[data-theme="dark"] .fp-col,
+:root[data-theme="dark"] #factor-picker-modal .fp-col,
+:root[data-theme="dark"] .tc-card,
+:root[data-theme="dark"] .wear-card{background:var(--card)}
+
+:root[data-theme="dark"] #metric-strip .metric-card,
+:root[data-theme="dark"] #sum-strip .metric-card,
+:root[data-theme="dark"] #range-strip .metric-card,
+:root[data-theme="dark"] .range-strip .metric{background:var(--tint);border-color:var(--tint-deep)}
+
+:root[data-theme="dark"] .risk-cards .metric,
+:root[data-theme="dark"] .risk-cards .metric-card{background:var(--card);border-color:#7A3A44}
+
+/* ---------- 4. 表单控件 ---------- */
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] input[type=text],
+:root[data-theme="dark"] input[type=number],
+:root[data-theme="dark"] #factor-picker-modal .fp-search{background:var(--field);color:var(--text);border-color:var(--line)}
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder{color:#A99BD8;opacity:1}
+:root[data-theme="dark"] option{background:var(--field);color:var(--text)}
+:root[data-theme="dark"] input:focus,
+:root[data-theme="dark"] textarea:focus,
+:root[data-theme="dark"] select:focus{border-color:var(--lav);box-shadow:0 0 0 3px rgba(126,96,191,.35)}
+:root[data-theme="dark"] input[type=checkbox],
+:root[data-theme="dark"] input[type=radio]{accent-color:var(--accent)}
+:root[data-theme="dark"] label{color:var(--muted)}
+
+/* ---------- 5. 按钮 ---------- */
+/* 实心紫底按钮统一 #7E60BF + 白字（悬停略亮） */
+:root[data-theme="dark"] .btn-primary,
+:root[data-theme="dark"] .btn.primary,
+:root[data-theme="dark"] .btn-sm.on,
+:root[data-theme="dark"] .entry-card.selected .entry-tag,
+:root[data-theme="dark"] .entry-card.selected .entry-check,
+:root[data-theme="dark"] .comb-divider .comb-toggle,
+:root[data-theme="dark"] .seg-btn.active,
+:root[data-theme="dark"] .cal-day.sel,
+:root[data-theme="dark"] .cal-cell.sel,
+:root[data-theme="dark"] .tabs .tab.active,
+:root[data-theme="dark"] .view-link:hover,
+:root[data-theme="dark"] .rp-play,
+:root[data-theme="dark"] .wm-btn.primary,
+:root[data-theme="dark"] .fct-chip.st-overlay,
+:root[data-theme="dark"] #factor-picker-modal .fp-item.sel,
+:root[data-theme="dark"] .sidenav a:hover,
+:root[data-theme="dark"] .sidenav a.active,
+:root[data-theme="dark"] .bench-bar button.active,
+:root[data-theme="dark"] .tag-tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+:root[data-theme="dark"] .btn-primary:hover,
+:root[data-theme="dark"] .comb-divider .comb-toggle:hover,
+:root[data-theme="dark"] .cal-day.sel:hover,
+:root[data-theme="dark"] .cal-cell.sel:hover,
+:root[data-theme="dark"] .rp-play:hover,
+:root[data-theme="dark"] .wm-btn.primary:hover,
+:root[data-theme="dark"] .sidenav a:hover,
+:root[data-theme="dark"] .sidenav a.active,
+:root[data-theme="dark"] .view-link:hover{background:#8F73C9;border-color:#8F73C9}
+
+/* 浅底按钮 -> 深色面板 */
+:root[data-theme="dark"] .btn-ghost,
+:root[data-theme="dark"] .btn.ghost,
+:root[data-theme="dark"] .btn.secondary,
+:root[data-theme="dark"] .btn-sm,
+:root[data-theme="dark"] .chip:hover,
+:root[data-theme="dark"] .cond-group .cond-row,
+:root[data-theme="dark"] .comb-toggle,
+:root[data-theme="dark"] .meta-chips .chip2,
+:root[data-theme="dark"] .seg-btn,
+:root[data-theme="dark"] .date-input,
+:root[data-theme="dark"] .cal-nav,
+:root[data-theme="dark"] .nl-example:hover,
+:root[data-theme="dark"] .view-link,
+:root[data-theme="dark"] .rp-btn,
+:root[data-theme="dark"] .rp-sel,
+:root[data-theme="dark"] .rp-ev-chip,
+:root[data-theme="dark"] .wm-btn,
+:root[data-theme="dark"] .fct-chip,
+:root[data-theme="dark"] .fct-chip.st-hidden,
+:root[data-theme="dark"] .tip-trigger,
+:root[data-theme="dark"] .factor-select-btn,
+:root[data-theme="dark"] #factor-picker-modal .fp-close{background:var(--card);border-color:var(--line);color:var(--muted)}
+
+:root[data-theme="dark"] .btn-ghost{color:var(--accent-deep)}
+:root[data-theme="dark"] .btn-danger{background:var(--card);color:var(--up);border-color:#7A3A44}
+:root[data-theme="dark"] .btn-danger:hover{background:var(--up-soft);border-color:var(--up)}
+:root[data-theme="dark"] .btn-sm{color:var(--muted);border-color:#433D8B}
+:root[data-theme="dark"] .btn-sm:hover{background:var(--tint);color:var(--accent-deep);border-color:var(--lav)}
+:root[data-theme="dark"] .bench-bar button,
+:root[data-theme="dark"] .tag-tabs button{border-color:#433D8B;background:var(--card);color:var(--text)}
+:root[data-theme="dark"] .bench-bar button:hover,
+:root[data-theme="dark"] .tag-tabs button:hover{border-color:var(--lav);background:var(--tint);color:var(--accent-deep)}
+:root[data-theme="dark"] .view-link{color:var(--accent-deep)}
+:root[data-theme="dark"] .rp-btn{color:var(--text)}
+:root[data-theme="dark"] .rp-btn:hover,
+:root[data-theme="dark"] .wm-btn:hover,
+:root[data-theme="dark"] .cal-nav:hover,
+:root[data-theme="dark"] .tip-trigger:hover,
+:root[data-theme="dark"] #factor-picker-modal .fp-close:hover{background:var(--tint);border-color:var(--lav);color:var(--accent-deep)}
+:root[data-theme="dark"] #factor-picker-modal .fp-item{color:var(--text)}
+:root[data-theme="dark"] #factor-picker-modal .fp-item:hover{background:var(--tint);color:var(--accent-deep)}
+:root[data-theme="dark"] #factor-picker-modal .fp-col h4{background:var(--tint);color:var(--muted);border-color:var(--line)}
+:root[data-theme="dark"] #factor-picker-modal .fp-empty,
+:root[data-theme="dark"] #factor-picker-modal .fp-hint{color:var(--muted)}
+
+/* ---------- 6. 标签 / 徽标 / 提示 ---------- */
+:root[data-theme="dark"] .badge.queued{background:#3D3118;color:#F2C96A}
+:root[data-theme="dark"] .badge.leased,
+:root[data-theme="dark"] .badge.running{background:#26305A;color:#A9C0FF}
+:root[data-theme="dark"] .badge.done,
+:root[data-theme="dark"] .badge.ok{background:var(--down-soft);color:var(--down);border-color:#2F6B50}
+:root[data-theme="dark"] .badge.failed,
+:root[data-theme="dark"] .badge.cancelled,
+:root[data-theme="dark"] .badge.fail{background:var(--up-soft);color:var(--up);border-color:#7A3A44}
+:root[data-theme="dark"] .badge.run{background:var(--tint);color:var(--accent-deep);border-color:var(--tint-deep)}
+
+:root[data-theme="dark"] .chip{background:var(--tint);border-color:var(--line);color:var(--muted)}
+:root[data-theme="dark"] .chip:hover{color:var(--accent-deep);border-color:var(--lav)}
+:root[data-theme="dark"] .meta-chips .chip{background:var(--tint);color:var(--muted);border-color:var(--line)}
+:root[data-theme="dark"] .meta-chips .chip b{color:var(--text)}
+:root[data-theme="dark"] .entry-tag{background:var(--tint);color:var(--accent-deep)}
+:root[data-theme="dark"] .entry-card.selected h3,
+:root[data-theme="dark"] .entry-card.selected p{color:var(--accent-deep)}
+:root[data-theme="dark"] .sec-toggle,
+:root[data-theme="dark"] .section-toggle,
+:root[data-theme="dark"] .guest-strip{background:var(--tint);color:var(--accent-deep);border-color:var(--tint-deep)}
+:root[data-theme="dark"] .sec-toggle:hover,
+:root[data-theme="dark"] .section-toggle:hover{background:var(--tint-deep)}
+:root[data-theme="dark"] .condition-item,
+:root[data-theme="dark"] .cond-row{background:var(--paper);border-color:var(--line)}
+:root[data-theme="dark"] .cond-group{background:var(--tint);border-color:var(--lav-ink)}
+:root[data-theme="dark"] .tag-rank tr.tag-row:hover{background:var(--tint)}
+:root[data-theme="dark"] .sym-row:hover,
+:root[data-theme="dark"] .tbl tbody tr:hover,
+:root[data-theme="dark"] .syms-table tbody tr:hover,
+:root[data-theme="dark"] .detail-table tbody tr:hover{background:var(--tint)}
+
+/* 提示框：浅色主题是"深底白字"，夜间改为深紫底浅字（不能用 var(--ink) 反白） */
+:root[data-theme="dark"] #toast,
+:root[data-theme="dark"] .tip-pop{background:#2E236C;color:var(--text);border:1px solid #433D8B}
+:root[data-theme="dark"] .chart-tip{background:#2E236C;color:var(--text);border:1px solid #433D8B;box-shadow:var(--shadow-2)}
+:root[data-theme="dark"] .tt-d{color:#C8ACD6}
+
+/* ---------- 7. 表格 / 文本 ---------- */
+:root[data-theme="dark"] th,
+:root[data-theme="dark"] td{border-bottom-color:#433D8B}
+:root[data-theme="dark"] th{color:var(--muted)}
+:root[data-theme="dark"] .tbl td,
+:root[data-theme="dark"] .detail-table td{border-bottom-color:#3A3170}
+:root[data-theme="dark"] .flat{color:var(--muted)}
+:root[data-theme="dark"] .chart-empty{color:var(--muted)}
+:root[data-theme="dark"] .result-box.ok{background:var(--down-soft);border-color:#2F6B50;color:var(--down)}
+:root[data-theme="dark"] .result-box.err{background:var(--up-soft);border-color:#7A3A44;color:var(--up-deep)}
+:root[data-theme="dark"] .risk-light.ok{background:var(--down-soft);color:var(--down);border-color:#2F6B50}
+:root[data-theme="dark"] .risk-light.bad{background:var(--up-soft);color:var(--up);border-color:#7A3A44}
+:root[data-theme="dark"] .cal-day{color:var(--text)}
+:root[data-theme="dark"] .cal-cell{color:var(--text)}
+:root[data-theme="dark"] .cal-day:hover:not(:disabled),
+:root[data-theme="dark"] .cal-cell:hover:not(:disabled){background:var(--tint-deep)}
+:root[data-theme="dark"] .cal-day.in-range,
+:root[data-theme="dark"] .cal-cell.in-range{background:var(--tint)}
+:root[data-theme="dark"] .cal-day:disabled,
+:root[data-theme="dark"] .cal-cell:disabled{color:#6E6690}
+:root[data-theme="dark"] .cal-title{color:var(--accent-deep)}
+:root[data-theme="dark"] .cal-title:hover{background:var(--tint);color:#F1EDF8}
+
+/* ---------- 8. 图表容器 / 缩放条 ---------- */
+:root[data-theme="dark"] .zoom-track .rail,
+:root[data-theme="dark"] .wb-track{background:#433D8B}
+:root[data-theme="dark"] .zoom-track .fill{background:var(--accent)}
+:root[data-theme="dark"] .tm-cell{border-color:#17153B}
+
+/* ---------- 9. 浮层 / 遮罩 ---------- */
+:root[data-theme="dark"] .modal-mask{background:rgba(6,5,18,.68)}
+:root[data-theme="dark"] .wm-mask{background:rgba(6,5,18,.72)}
+:root[data-theme="dark"] .wm-spin{border-color:#433D8B;border-top-color:var(--accent)}
+
+/* ---------- 10. 管理台（console.html 内联块） ---------- */
+:root[data-theme="dark"] .wres-dot.off{background:#6E6690}
+:root[data-theme="dark"] .wres-meta,
+:root[data-theme="dark"] .wres-slot-label,
+:root[data-theme="dark"] .wres-cmd,
+:root[data-theme="dark"] .wres-cfg{color:var(--muted)}
+:root[data-theme="dark"] .wres-membar{background:var(--tint)}
+:root[data-theme="dark"] .wres-membar > i{background:var(--lav)}
+:root[data-theme="dark"] .wres-slot{background:var(--tint);color:var(--muted);border-color:var(--line)}
+:root[data-theme="dark"] .wres-slot.busy{background:var(--accent);color:#fff;border-color:var(--accent)}
+:root[data-theme="dark"] .wres-cfgrow.mismatch{background:#3D3118;border-left-color:#D98A1F}
+:root[data-theme="dark"] .wres-cfg.diff{color:#F2C96A}
+:root[data-theme="dark"] .wres-cmd code{background:var(--field);color:var(--text)}
+:root[data-theme="dark"] .ops-win button{background:var(--card);color:var(--muted);border-color:var(--line)}
+:root[data-theme="dark"] .ops-win button:hover{border-color:var(--lav);color:var(--text)}
+:root[data-theme="dark"] .ops-win button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .ops-win-sep{background:#433D8B}
+
+/* ---------- 11. 主题切换按钮 ---------- */
+.tt-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  margin-left:20px;padding:5px 14px;min-height:32px;
+  border:1px solid rgba(255,255,255,.35);border-radius:999px;background:none;
+  color:#fff;font-family:inherit;font-size:13px;line-height:1.2;cursor:pointer;
+  white-space:nowrap;transition:background .2s var(--ease),border-color .2s var(--ease)}
+.tt-btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.65)}
+.tt-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+/* 无顶部导航的页面（如登录回调）：右下角浮动 */
+.tt-btn.tt-float{position:fixed;right:14px;bottom:14px;z-index:70;margin-left:0;
+  background:#4A3C78;border-color:rgba(255,255,255,.5);box-shadow:0 4px 14px rgba(0,0,0,.25)}
+:root[data-theme="dark"] .tt-btn.tt-float{background:#2E236C;border-color:#433D8B;color:#F1EDF8}
+/* 窄屏：脱离顶栏改为右下角浮动胶囊，保证 375px 不挤出横向滚动 */
+@media (max-width:960px){
+  .tt-btn{position:fixed;right:12px;bottom:12px;z-index:70;margin-left:0;
+    background:#4A3C78;border-color:rgba(255,255,255,.5);box-shadow:0 4px 14px rgba(0,0,0,.25)}
+  :root[data-theme="dark"] .tt-btn{background:#2E236C;border-color:#433D8B;color:#F1EDF8}
+  .tt-btn.tt-float{right:12px;bottom:12px}
+}
+/* ---------- 12. 模板内联固定色兜底 ---------- */
+/* job 页游客提示条（内联 #d97706 / #fef9ec） */
+:root[data-theme="dark"] #guest-note{border-color:#B4761F!important;background:#3D3118!important;color:var(--text)}
+/* 交易磨损条（模板内联 background:#8B7FBE / #6750A4） */
+:root[data-theme="dark"] [style*="#8B7FBE"]{background:#A78BE0!important}
+:root[data-theme="dark"] [style*="#8b7fbe"]{background:#A78BE0!important}
+:root[data-theme="dark"] [style*="#6750A4"]{background:#9B84D8!important}
+:root[data-theme="dark"] [style*="#6750a4"]{background:#9B84D8!important}

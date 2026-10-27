@@ -474,6 +474,7 @@ function renderEquity(d){
   });
   const chart = echarts.init($('#chart-equity'));
   symbolEquityChart = chart;
+  if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(chart);
   chart.setOption({
     animation: false,
     legend: {top: 0, textStyle: {fontSize: 11}, selected: legendSelected},
@@ -664,6 +665,7 @@ function renderKline(d){
   if (oldInst) oldInst.dispose();  // chip 切换重渲染前销毁旧实例
   const chart = echarts.init(el);
   symbolKlineChart = chart;
+  if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(chart);
   const series = [
     { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
       itemStyle: { color: '#C93A3A', color0: '#1E8E5A', borderColor: '#C93A3A', borderColor0: '#1E8E5A' } },
@@ -788,18 +790,23 @@ function mountKlineReplay(d){
   const twoYearsAgo = (() => { const dt = new Date(dates[n - 1]); dt.setFullYear(dt.getFullYear() - 2); return dt.toISOString().slice(0, 10); })();
   let startIdx = 0;
   for (let i = 0; i < n; i++) if (dates[i] >= twoYearsAgo){ startIdx = i; break; }
-  // 事件：优先 orders（含真实下单价量），否则 round trips 兜底
+  // 事件：优先 orders（含真实下单价量），否则 round trips 兜底。
+  // QRE-SAAS-REPLAY-BOUNDARIES：sym=真实标的（聚合「只」计数去重用），
+  // symbol=chip 首段（买/卖），qty/price 缺省不下发（组件侧不造值）。
+  const symCode = (d.summary && d.summary.ts_code) || '';
   const events = [];
   if (d.orders && d.orders.length){
     d.orders.forEach(o => events.push({
       date: o.trade_date, kind: o.side === 'buy' ? 'entry' : 'exit',
-      symbol: (o.side === 'buy' ? '买' : '卖') + f2(o.quantity) + '股@' + f2(o.price), price: o.price,
+      sym: symCode, symbol: (o.side === 'buy' ? '买' : '卖'),
+      qty: o.quantity, price: o.price,
     }));
   } else {
     trips.forEach(t => {
-      events.push({date: t.entry_date, kind: 'entry', symbol: '买 ' + f2(t.quantity) + '股@' + f2(t.entry_price), price: t.entry_price});
-      if (t.exit_date) events.push({date: t.exit_date, kind: 'exit',
-        symbol: '卖@' + f2(t.exit_price), price: t.exit_price, pnl: t.net_return});
+      events.push({date: t.entry_date, kind: 'entry', sym: symCode, symbol: '买',
+        qty: t.quantity, price: t.entry_price});
+      if (t.exit_date) events.push({date: t.exit_date, kind: 'exit', sym: symCode, symbol: '卖',
+        qty: t.quantity, price: t.exit_price, pnl: t.net_return});
     });
   }
   // 序列：K线 + 成交量 + 因子副图（组件 extra 透传任意 series 配置）

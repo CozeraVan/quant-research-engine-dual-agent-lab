@@ -258,20 +258,27 @@
 9. 未来整体上云与数据迁移方案（§11.7）。
 10. ~~NL A1 输入校验与裁判评估~~ ✅ 已验收发布（2026-10-26，QRE-SAAS-NL-A1，DeepSeek 方向）。
    NL 编译入口规则层前置校验 + DeepSeek 第二裁判；缓存命中零裁判，裁判只在 cache miss + 配额计数后运行，拒绝也占配额；admin 同样裁判，force 与 DB 回退路径一致。54 条人工标注样本规则层 54/54；DeepSeek 分层 12 条评估 0 失败；全量 2840 passed + 6 skipped；Chromium 7/7。下一项：重播边界；挂起任务放最后。
-11. 重播边界：同日聚合、orders 事件源、多因子副图页。
-12. 剩余 341 列中文显示名维护。
-13. root SSH 与部署发布纪律加固。
-14. mindata CSV 与遗留数据清理确认（先核查，禁止直接删除）。
-15. 全量策略库批次是否再跑（必须由用户决策，先小样本）。
-16. 深度性能与压力测试。
-17. M10.4 ML 聚类（需 scikit-learn 依赖批准）。
-18. 会员分层、付费权益与微信信号推送。
+11. ~~重播边界：同日聚合、orders 事件源、多因子副图页。~~ **已验收通过（2026-10-27，QRE-SAAS-REPLAY-BOUNDARIES）**：展开/收起、seek、重播、重入、orders 优先、多因子布局完整；同日聚合按 sym 去重计「只」并披露笔数，job 事件价量由 round_trips 补足。原实施验证为全量 2863 passed + 6 skipped、Chromium 10/10、公网匿名 job58 重播零 JS error。
+12. ~~夜间模式：SaaS 全部页面（含 9090 console）新增夜间主题。~~ **已验收通过（2026-10-27，QRE-SAAS-NIGHT-MODE）**：浅色设计不变，夜间 8 token、红涨绿跌、系统偏好/手动持久化、防 FOUC 与 ECharts 主题联动均已上线；原实施验证为专项 24 passed、Chromium 138 ok/0 FAILURES。
+13. ~~因子注册表固化别名与呈现属性。~~ **已验收通过（2026-10-27，QRE-FACTOR-DISPLAY-CONTRACT）**：canonical display 固化 chart_type/panel_id/role/series_type/axis/precision/color/price_basis/render_order；EMA/BOLL overlay、MACD/PPO/PVO 同副图，后续页面与游戏必须复用该合同。
+14. ~~剩余 341 列中文显示名维护。~~ **已验收通过（2026-10-27，QRE-FACTOR-ZH-COVERAGE）**：341/341 维护完毕，中文名覆盖 895/895，metadata 902/902 项带 zh；除 zh 外注册表零漂移。
+15. ~~root SSH 与部署发布纪律加固。~~ **已验收通过（2026-10-27，QRE-ECS-SSH-HARDENING）**：root 直连禁用、deploy+sudo 可用、显式保留管理台隧道；唯一部署入口与默认 deploy 用户已生效。
+16. ~~mindata CSV 与遗留数据清理。~~ **DONE（2026-10-27，QRE-DATA-CLEANUP-EXECUTION）**：用户批准后删除 `akshare_data`、`aguhuice_test`、`quant_hub`、`aguhuice_local` 和指定旧回测/实验产物；`qre-outputs` 27G→536M，磁盘可用 386G→418G。留档 `/home/van/quant-workspace/backups/local-cleanup-20261027/`；活跃目录和两个待验收 staging 库保留。8081 staging 重用前需重建/换库。新增 20261019/20/21 三份分钟 CSV 只读核验通过，等待 17:20 timer 自动入库；分钟清洗/压缩按用户要求暂停。未 commit/push。
+17. [挂起] 深度性能与压力测试（用户明确当前不做硬件/压测推进）。
+18. ~~M10.4 ML 聚类首个分析切片。~~ **DONE（2026-10-27，Step 5 实施/Kimi 复核，未 commit/push）**：DBSCAN + noise、90/99/99.9 tier 保留、可选 sklearn 降级、CLI/四类产物/manifest 合同完成；真实 fit 只读分析 81 策略，默认 41 insufficient/40 all_noise，eps=2.0 敏感性试运行 5 策略成簇。ML 相关 158 passed、主环境相关 469 passed + 14 skipped、真实 manifest 无 issue；未跑新回测。后续 UI/元数据扩展另行立项。
+19. 会员分层、付费权益与微信信号推送（下一主线候选，先对齐颗粒度）。
 
 #### 挂起（保留，不删除）
-19. 分时因子与引擎分时适配，等可靠数据源与独立立项重启。
-20. 视频数据包 #78 三方案复盘，等视频产出后评估。
+20. 分时因子与引擎分时适配，等可靠数据源与独立立项重启。
+21. 视频数据包 #78 三方案复盘，等视频产出后评估。
 
 #### 最后
-21. 第四入口外部 AI Agent API，见 `docs/superpowers/specs/2026-10-25-external-agent-api-brainstorm.md`。
+22. 第四入口外部 AI Agent API，见 `docs/superpowers/specs/2026-10-25-external-agent-api-brainstorm.md`。
 
 **已核实完成，不再误列旧待办**：买卖价格选项、NL holding 默认 0、全站说明与参数提示、因子三级弹窗、因子中文注册表、Tushare P0–P8、ECS 上线与基础 SEO、信号板块选择、price_basis 核查（P0-1A）、结果合同与旧结果隔离（P0-1B，待用户验收 + ECS apply 新列）。
+
+### 11.9 并行项目：《我不是股神》（2026-10-26 启动）
+
+唯一长期设计与实施文档为 `docs/agent/22_TRADING_GAME.md`。V1 复用现有 UI/指标/费用/结果组件，不做专门美术、分时、财报、杠杆、扰动、排行榜或 Steam。公网中继和独立化后续单独立项。
+
+**WSL Demo 与本轮修复（2026-10-27，待用户试玩，未 ECS/未 commit/push）**：交易状态机、随机窗口、匿名揭盲、前复权、限价成交、T+1/整数手/费用已具备。DeepSeek 在当前 `game/` 基线修复 OHLC 与因子的复权口径错位，价格型因子按 `value / qfq_anchor` 对齐，非价格因子不换算；页面重做为主 K 线/成交量/MACD/RSI 一体化终端，右侧集中操作。主 Agent 复核游戏专项 28 passed、8092 HTTP 200 并查看桌面/移动截图。入口 `http://127.0.0.1:8092/game`。上游 `ema_250` 尚有 2026-10-12…2026-10-26 共 11 点独立重算异常（max_abs=0.287911），另立数据修复项，不全库重算、不部署 ECS。

@@ -2,6 +2,168 @@
 
 ## Task ID
 
+QRE-DATA-CLEANUP-EXECUTION（用户批准的遗留数据清理与分钟 CSV 只读检查）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-27）。仅执行用户明确批准的删除；四库已不存在，指定旧产物已删除，活跃配置/目录与待验收 staging 库均在。8080/8092 HTTP 200。备份与文件清单位于 `/home/van/quant-workspace/backups/local-cleanup-20261027/`；akshare 本体无备份，属用户批准的不可逆删除。三份分钟 CSV 表头匹配、三日 pending、timer 正常，未手动入库/清洗/压缩。Required Fixes：无。8081 staging 配置仍指向已删除库，重用前必须重建/换库。未 commit/push。
+
+## 历史只读盘点 Findings
+
+1. **任务书的两项前提与事实不符，已如实记录而非照抄文档**：①`/home/van/mindata` 已空（0 文件/24KB），无「残留 CSV」可盘；②`qre_saas`/`dbg` 两个测试库**均不存在**。同时发现文档声称应保留的 `stock_daily_qfq_legacy` **也已不存在**。
+2. **「已入库 ≠ 可安全删除」做了实证而非断言**：审计 4318 条全部 `rows_csv==rows_db`、审计日期与表日期双向差集 0、抽查 8 个日期（含磁盘打满重试的 2022-08-22/25/29）审计 `rows_db` 与实时行数 8/8 MATCH。但同时证明删除是无日志的脚本外行为（`import_minute_csv.py` 无删除代码），且**源 CSV 已不可恢复**——所以这条结论的正确表述是「DB 内完整，但不得再假设可以重跑源数据」。
+3. **新发现 140GB 可回收空间且低风险**：213 个早于 T-7 的 chunk 未压缩（140GB，2022-09-01→2026-10-08），违反 20 §3.4 自有规则；压缩比实测 350:1（708 chunk 压缩后仅 396MB）。重跑既有脚本即可，属本轮最大收益项。
+4. **发现数据新鲜度缺口**：分钟线 2026-10-16 vs 日线 2026-10-26，差 10 天；定时器每天空转。这不是清理问题，但属于「日更依赖」核查的必然产出，已单列待确认。
+5. **发现备份缺口**：本地无 `tushare_data` 逻辑备份，513GB 主库仅靠磁盘+TimescaleDB 自身保护；而 qfq_legacy 的消失正说明「没有逻辑备份」的代价已经发生过一次。
+6. **边界合规**：只读；对 `akshare_data` 等未连接服务的库也未做任何 DROP；两个上一任务 staging 库明确标注「待各自任务验收后再删」，不越权。
+
+## Required Fixes
+
+无。
+
+## Deliberate Decisions（需用户知情）
+
+- **未把 `akshare_data`（5.8GB）直接判为可删**：虽然 `AK_DB_URL` 全仓无消费者、数据是 4 月 tick 实验，但删库不可逆，列为高风险待确认而非可删候选。
+- **未把 `qre-outputs/refresh` 整目录列为可删**：17G 的 `incremental/` 是陈旧产物，但同目录 `registry.json`/`state.json`/`delta/` 是被 `gui/refresh_registry.py` 引用的活配置，只能细粒度清理。
+- **两个上一任务 staging 库不删**：`qre_factor_display`/`qre_readonly_share_browser` 对应任务仍在待验收，删了会毁掉回滚/复验环境。
+
+## Suggested Follow-up
+
+用户确认后按优先级：①跑分钟线压缩（回收 ~139GB，例行运维）；②决定 qfq_legacy 是否重建应急档；③决定分钟线是否恢复；④清理空壳库与陈旧产物；⑤建立 `tushare_data` 定期 dump 策略。
+
+# Review Report
+
+## Task ID
+
+QRE-ECS-SSH-HARDENING（root SSH 与部署发布纪律加固）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-27，已生效待人工验收，未 commit/push）。审计先行且审计即抓出锁死风险；root 新连接已实证拒绝；deploy+sudo 全链路与 9090 隧道实证可用；全量 2890 passed + 6 skipped。
+
+## Findings
+
+1. **顺序正确且必要**：先证明 deploy 密钥登录/`sudo -n`/业务文件可读/部署链/隧道五项，再动 sshd；全程未断会话，reload（非 restart）。
+2. **审计发现的真实缺口比任务书假设的更严重**：`deploy` 密码锁定（`L`）+ sudoers 仅放通 `systemctl`/`docker` ⇒ `sudo -n` 改动前**不可用**。若按原计划直接禁 root，服务器将失去文件安装、PG 备份恢复、证书与防火墙能力。已在禁 root 前补 `/etc/sudoers.d/90-qre-deploy`（NOPASSWD ALL）并修掉 `sudoers.d/deploy` 0644 权限隐患，`visudo -c` 全绿。
+3. **「仅新增独立 drop-in」在物理上不足以禁 root**：sshd 同关键字取先出现者，drop-in 按字典序展开，`99-aguhuice-hardening.conf` 排在前，其 `PermitRootLogin prohibit-password` 会遮蔽新文件的 `no`。已实测证明该机制，并只改这一行、其余两行原样。这一点必须在评审记录里写明，否则后续接手者会误以为「新文件已足够」而回滚时改错文件。
+4. **9090 TCP 转发按预期保留**：`allowtcpforwarding yes` 显式写入；deploy 隧道 9092 与 `admin-tunnel.sh`（deploy@）起的 9090 均 `/saas/new` 200、`/saas/console` 200；陈旧 root 隧道已停，现网无 root 会话。
+5. **部署脚本不是纸面纪律**：`deploy/saas/deploy-ecs.sh` 已用与生产 SHA256 相同的文件真实端到端跑通（四步全过、生产字节未变），并在此过程中修掉两个真 bug（scp 远程嵌套目录；内联 `bash -c` 二次转义）。`admin-tunnel.sh`/`pull-ecs-backup.sh` 默认 `deploy@`，`sync_saas_metadata.py` 注释同步。
+6. **范围合规**：无 `src/` 改动、无 schema 变更、worker 仍 inactive 在家、未跑真实回测、未碰 WSL 数据库/因子/UI/游戏；无测试引用这三个脚本，全量测试零回归。
+
+## Required Fixes
+
+无。
+
+## Deliberate Tradeoff（需用户知情，非缺陷）
+
+- `/etc/sudoers.d/90-qre-deploy` 给的是 **NOPASSWD: ALL**，不是收窄的命令白名单。理由：单运维账号 + 仅密钥认证（无密码认证、无 root 直连、fail2ban 防护），SSH 公钥即安全边界；收窄白名单在事故中遇到未列命令时会把人逼去云控制台，而云控制台按设计只应是最后手段。若用户希望收紧，可改为显式命令集（`systemctl`/`install`/`cp`/`psql`/`pg_dump`/`pg_restore`/`certbot`/`ufw`/`journalctl`/`nginx` 等），但需同步更新 `deploy-ecs.sh` 与 `16_ECS_DEPLOYMENT.md` §5 运维速查里的每一条命令。
+- 未删除既有 `/etc/sudoers.d/deploy`（其 systemctl/docker 授权已被新文件完全覆盖，留着无害且少一次破坏性变更）。
+
+## Suggested Follow-up
+
+- 用户人工验收后按 `chore(ecs): 禁 root 直连并落地 deploy+sudo 部署纪律` 提交；不认可则按 `16_ECS_DEPLOYMENT.md` §6 两步回滚（均不断业务）。
+- 后续可选收紧项：sudoers 命令白名单化、`/etc/qre-saas.env`（0600 root）读取路径审计、deploy 登录公告栏（Banner）提示「仅 deploy+sudo」。
+
+# Review Report
+
+## Task ID
+
+QRE-FACTOR-ZH-COVERAGE（剩余 341 列中文显示名维护）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-27，已部署待人工验收，未 commit/push）。注册表/呈现/相关 10 文件 321 passed，全量 2890 passed + 6 skipped；真实 Chromium 本地 staging 与生产各验一遍；ECS 备份并仅重启 qre-saas。
+
+## Findings
+
+1. **覆盖完整且可溯源**：341/341 全部维护，中文名覆盖 895/895（100%），metadata 902/902 项带 zh；未维护 0 列，覆盖报告中无遗留条目。每条命名都能指回公式/官方定义来源（alpha191 docstring、官方 486 表达式表、quality/growth `compute_all`/results、Tushare 标准字段语义），无一条凭列名猜译，无英文列名冒充中文名（有测试锁定）。
+2. **最小侵入、零漂移**：生成器只在 `if manual.get("zh")` 后追加 `elif not entry["zh"]` 查表补空；逐字段比对证明除 zh 外 0 差异，341 条 null→中文名、0 条覆盖既有条目。canonical、display 图表合同、别名解析、common/core、tables/families/extra_aliases 全部原样，与生产旧版比对同样只有 341 处 zh 差异。
+3. **口径诚实**：`gpm_q`（实现与 gpm_ttm 同为 TTM 口径）、`ar_ap_to_revenue`（contract_liab 兜底并扣预付款项）、`npm_tsh`（按官方语义而非笔误文本）三处按真实实现命名并在 04/21 号文档注记；`_rank` 列统一「·排名」后缀，未新增别名。
+4. **测试随状态更新但契约未放宽**：`test_no_fabricated_zh` 由「应有 null 列」改为「不得空串/不得英文列名冒充 + 覆盖须 100%」（更严）；`test_build_factor_groups_zh_falls_back_to_none_for_unregistered` 改用未注册列验回退并补 `alpha001` 中文名断言。
+5. **真实浏览器双环境通过**：本地 staging 与生产（SSH 隧道）均确认三栏弹窗因子列全中文名、中文搜索命中、英文列名搜索兼容、空态正常、零 JS error。
+6. **部署合规（R-DEPLOY-001）**：核对生产两文件 SHA256 与上一轮基线一致并拉回本地逐字段比对后才动手；备份 `/tmp/qre-factor-zh-pre-20261027/`，仅 scp 两文件并**仅重启 qre-saas**（worker 在家未动），生产 SHA256 与本地逐一相等；未跑真实回测、未碰游戏与 8092。
+
+## Required Fixes
+
+无。
+
+## Suggested Follow-up
+
+- 用户人工验收后按 `feat(factors): 维护剩余 341 列中文显示名` 提交；验收不通过恢复 `/tmp/qre-factor-zh-pre-20261027/` 两文件并重启 qre-saas。
+- 后续新增因子列时，中文名应同时进 `ALPHA191_ZH`/`ALPHA101_ZH`/`FINANCIAL_ZH`（或 FAMILY_RULES/MANUAL_ENTRIES），`test_no_fabricated_zh` 的 100% 覆盖断言会兜住漏维护。
+
+## Task ID
+
+QRE-SAAS-NIGHT-MODE（保留原色板，仅新增夜间模式）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-27，已部署待人工验收，未 commit/push）。全量 2871 passed + 6 skipped 与基线一致；专项 24 passed；真实 Chromium 审计 138 ok / 0 FAILURES（exit 0）；ECS 7 文件 SHA256 与本地相等、仅重启 qre-saas、应用层 7 条 URL 全 200。
+
+## Findings
+
+1. **浅色零变化**：`night-mode.css` 只写 `html[data-theme="dark"]` 作用域覆盖，不新增任何浅色规则；审计逐页比对 12+ 页面的浅色计算样式与改动前基线，字体/字号/行高/间距/圆角/阴影/文案/数据未变。三个浅色候选版未进入生产（8093–8095 已关闭，半成品缓存已删）。
+2. **无白底岛屿**：卡片、表格、表单、按钮、模态、tooltip、滚动条全部映射到夜间 token；审计逐页统计浅色背景节点数=0，浅色按钮=0。`#guest-note` 深色告警（`#B4761F`/`#3D3118`）刻意保留——告警语义而非主题色，属有意例外并在报告中标明。
+3. **可读性**：正文 `#F1EDF8` on `#17153B`、muted `#C8ACD6`、按钮 `#7E60BF` 上的文字与焦点环均过对比度断言；未新增灰色小字（R-UI-001）。
+4. **首帧无闪烁**：`base.html` 与 `login_callback.html` 均在 `<head>` 内联 `localStorage` 读取 + `data-theme` 落位，先于样式表生效；reload 与直接深链两条路径审计无 FOUC。
+5. **图表随主题、数据不动**：`themeChart` 只改颜色字段，不触碰 series.data/axis 刻度/grid；红涨绿跌保留（只提亮不改色相）；切换前后序列长度与末值一致性断言通过。
+6. **判据修正说明（工具层，非产品放宽）**：①`<details>` 关闭时 `content-visibility:hidden` 使 `getBoundingClientRect` 非零且读到过期浅色值（login 的 4 项失败全落在折叠区）→ 改为先展开再断言；②job `tagChart` 为 treemap 无笛卡尔轴 → 只对含笛卡尔系序列断言轴色，浅色轴色取 ECharts 默认 `#6E7079`。两处均提升判据严格度，未删除任何检查项。
+7. **收敛范围**：仅 7 个产品文件（2 新增 + 5 修改）；8080/8081 未改；Step 5 replay 与 Kimi 游戏在途改动未被覆盖或格式化（`git diff HEAD` 复核）。9090 console 经 8090 隧道访问，主题标记在位（68285B，css=1/js=1/btn=1）。
+
+## Required Fixes
+
+无。
+
+## Verification
+
+- `tests/test_saas_night_mode.py`：24 passed；相关 6 文件 148 passed；全量 `.venv/bin/pytest tests/ --ignore=tests/data_test -q` → **2871 passed + 6 skipped**（零回归）。
+- 浏览器审计：`138 ok / 0 FAILURES`，exit 0（浅/夜 × 1280/1000/375、切换、reload 持久、系统偏好、375 不横溢）；截图 `shot_<page>_<light|dark>_<width>.png` 与 `audit.log` 在 `.tmp/night-mode/`。
+- ECS：5 文件与生产基线 diff 仅夜间模式行 → 备份 `/tmp/qre-night-mode-pre-20261027/` → scp 7 文件（css `46e328c5…`、js `7494cb69…`、replay.js `b1f1d75e…`、base `2e2f6f45…`、login_callback `17f82698…`、job `a8ffc35e…`、symbol `1e8ebd44…`，与本地逐一相等）→ 仅重启 `qre-saas`（MainPID 487122），`qre-worker` 未触碰。
+- 应用层（`Host: www.aghuice.com` → `127.0.0.1:8090`，TLS/nginx 未改）：new 200/103937B、`/saas/` 200/45033B、help 200/31830B、login 200/27552B、night-mode.css 200/15250B、night-mode.js 200/8469B、console 200/68285B；标记计数 new（css=1/js=1/btn=1/内联主题=1/theme-color=2）、login（css=1/js=1/btn=1）、console（css=1/js=1/btn=1）。
+- 未验证：`www.aghuice.com` 真域名 TLS 路径（本机与 ECS 均无 DNS，本地代理 7897 对该域名 `SSL_ERROR_SYSCALL`，同代理 example.com 200）；因此本轮「公网」结论仅覆盖应用层，未覆盖 TLS/nginx。
+
+## Task ID
+
+QRE-SAAS-REPLAY-BOUNDARIES（P2：重播边界核验与补强）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-27，已部署待人工验收，未 commit/push）。全量 2863 passed + 6 skipped 零回归；真实 Chromium 10/10 零 JS error 零横溢；公网匿名 job58 重播验证通过。
+
+## Findings
+
+1. 核验先行：展开/收起、seek、重播、重入、markPoints、orders 优先、多因子布局等既有路径经测试证明完整，未重复造轮子（factor-layout 7 例首跑即绿）。
+2. 聚合计数口径修复经生产计数级验证：「当日入场 5 只（6 笔）」= 5 个去重标的 + 6 笔事件，明细 6 条，计数与文案一致。
+3. 价量补足不造值：`_trade_points` 缺列不加键；symbol/job 事件缺字段不下发；旧产物公网实测降级为纯标的 chip。
+4. 末帧强一致：symbol 页末帧「已实现盈亏累计 478.00」== 静态口径（seed 勾稽）。
+5. 范围铁律遵守：未改 schema/worker/引擎/API/配额；未跑真实回测；未做性能/压测/移动专项；游戏文件未动。
+
+## Required Fixes
+
+无。遗留：价量补足仅对新 run 生效；事件流无虚拟滚动（既有取舍）。
+
+## Task ID
+
 QRE-SAAS-NL-A1（自然语言输入前置校验与 DeepSeek 裁判评估）
 
 ## Reviewer
@@ -73,6 +235,29 @@ PASS + RELEASED（2026-10-26 用户验收通过，已部署并发布）。Step 5
 ## Required Fixes
 
 无（上述两项已解决并复验）。
+
+## Task ID
+
+TRADING-GAME-V1-CORE（《我不是股神》WSL 可玩 Demo 首切片）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-26，WSL 可玩 Demo 已跑通，未 ECS/未 commit/push）。专项 22 passed，全量 2753 passed + 6 skipped；真实 Chromium 开盘买入与指标曲线正常，1280/375 无横溢/无 JS error。
+
+## Self-Review Findings
+
+- 游戏与回测引擎分离，复用 core.models/AShareMarketProfile/现有因子/现有 UI，不复制费率与回测流程。
+- 开盘只显示 open，收盘才显示完整 K 线与当日指标；真实 symbol/date/未来行情不下发，owner Cookie 隔离。
+- 限价成交、T+1、整数手、费用与总权益均有专项测试；下单与收盘竞速已修复并真实浏览器验证。
+- 真实数据库抽样通过；ema_250 替代库内不存在的 ema_200；未做公网中继、未做美术/分时/财报/杠杆/扰动/Steam。
+
+## Required Fixes
+
+无。
 
 ## Current Release
 
@@ -1617,3 +1802,27 @@ git diff --check → clean
 - showcase 只读不展示无效生成入口；new expired 不再无意义轮询。
 - 最终相关回归（含提交检查脚本 2 例）228 passed；无 Required Fixes。真实浏览器矩阵未自动化，部署后由用户实机抽查。
 - `git-finalize-check.sh` 只扫描新增 diff 行，不再把未修改上下文中的函数名或测试 stub 判为密钥；新增敏感赋值拒绝路径有回归测试。
+
+## 2026-10-27 M10.4 与游戏修复主 Agent 自审
+
+### Review Status
+
+PASS（本轮实现切片）；游戏仍需用户试玩验收，未部署 ECS、未 commit/push。
+
+### Findings
+
+- M10.4 符合 CR：只读 M10.1 产物，未跑回测；保留 tier/超额门控，DBSCAN 不预设簇数，noise/insufficient 语义明确，sklearn 可选依赖隔离。manifest kind 与产物角色已注册，真实产物 `validate_contents()=[]`。
+- 默认真实数据没有稳定成簇：41 insufficient、40 all_noise；eps=2.0 仅作为参数敏感性证据，不能宣称已发现稳健板块规律。
+- 游戏修复针对真实根因（前复权 OHLC vs 后复权因子），不是仅移动 div；主 Agent 已查看桌面/移动截图并重跑 28 项专项。`ema_250` 11 个上游异常点被明确保留为遗留，不由展示层掩盖。
+- Required Fixes：本轮无。后续独立测试债：`test_showcase_roller.py::TestParams::test_build_roll_params_holding_override` 应改自包含夹具；游戏上游 `ema_250` 异常另立数据修复项。
+
+### Validation Evidence
+
+```text
+游戏专项：28 passed；127.0.0.1:8092/game → HTTP 200
+ML 影子环境相关：158 passed
+主环境相关：469 passed, 14 skipped
+真实 ML manifest：issues=[]
+git diff --check：clean
+全仓：2902 passed, 20 skipped, 1 failed（已批准清理导致的外部 YAML 夹具缺失）
+```

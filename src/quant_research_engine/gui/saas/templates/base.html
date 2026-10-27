@@ -17,6 +17,10 @@
 <meta property="og:image" content="https://www.aguhuice.com/static/logo-horizontal-2x.png">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#4A3C78">
+<!-- 夜间模式：首帧防闪白（QRE-SAAS-NIGHT） -->
+<script>
+(function(){try{var t=localStorage.getItem('qre-theme');if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="theme-color"]');if(m){m.setAttribute('content',t==='dark'?'#17153B':'#4A3C78');}}catch(e){}})();
+</script>
 <link rel="icon" href="/static/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
@@ -178,8 +182,10 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 }
 </style>
 <link rel="stylesheet" href="/static/lab-theme.css?v={{ asset_v }}">
+<link rel="stylesheet" href="/static/night-mode.css?v={{ asset_v }}">
 <script src="/static/lab-ui.js?v={{ asset_v }}"></script>
 <script src="/static/wait-mask.js?v={{ asset_v }}"></script>
+<script src="/static/night-mode.js?v={{ asset_v }}"></script>
 </head>
 <body>
 <header class="topbar">
@@ -190,6 +196,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
     <a href="/saas/help" data-nav="help">使用说明</a>
     <a href="/saas/profile" data-nav="records" id="nav-profile" style="display:none;position:relative"><span id="nav-records-dot" style="display:none;position:absolute;top:2px;right:-8px;width:8px;height:8px;border-radius:50%;background:#E5534B"></span>个人信息</a>
     <a href="/saas/login" data-nav="login" id="nav-login">登录 / 注册</a>
+    <button type="button" class="tt-btn" aria-pressed="false" aria-label="夜间模式（切换配色）">夜间模式</button>
   </nav>
 </header>
 <div class="app-shell">

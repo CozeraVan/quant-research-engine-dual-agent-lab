@@ -106,12 +106,15 @@ def test_build_factor_groups_includes_registry_display_fields():
 
 
 def test_build_factor_groups_zh_falls_back_to_none_for_unregistered():
-    """未维护中文名的列不伪造：zh 为 null，前端回退既有 label。"""
-    groups = build_factor_groups({"stock_daily_alpha191": ["alpha001"]})
-    item = groups[1]["items"][0]
-    assert item["zh"] is None
-    assert item["canonical"] == "factors.stock_daily_alpha191.alpha001"
-    assert "alpha001" in item["label"]
+    """未注册列不伪造中文名：zh 为 null，前端回退既有 label。"""
+    groups = build_factor_groups({"stock_daily_alpha191": ["alpha001", "alpha999_unregistered"]})
+    items = {i["column"]: i for i in groups[1]["items"]}
+    assert items["alpha999_unregistered"]["zh"] is None
+    assert items["alpha999_unregistered"]["canonical"] == "factors.stock_daily_alpha191.alpha999_unregistered"
+    assert "alpha999_unregistered" in items["alpha999_unregistered"]["label"]
+    # 已维护列带中文名（QRE-FACTOR-ZH-COVERAGE）
+    assert items["alpha001"]["zh"] == "量能变动与日内收益相关性（反向）"
+    assert items["alpha001"]["canonical"] == "factors.stock_daily_alpha191.alpha001"
 
 
 # --- build_condition / combine_conditions ---

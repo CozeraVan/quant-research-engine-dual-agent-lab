@@ -4,8 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>登录中 · A股回测台</title>
+<meta name="theme-color" content="#4A3C78">
+<script>
+(function(){try{var t=localStorage.getItem('qre-theme');if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="theme-color"]');if(m){m.setAttribute('content',t==='dark'?'#17153B':'#4A3C78');}}catch(e){}})();
+</script>
 <style>
 :root{--bg:#FAF9FC;--card:#fff;--line:#E4DFEE;--text:#241F2E;--muted:#9A93A6;--accent:#6750A4;--err:#C93A3A}
+:root[data-theme="dark"]{--bg:#17153B;--card:#2E236C;--line:#433D8B;--text:#F1EDF8;--muted:#C8ACD6;--accent:#7E60BF;--err:#FF7A7A}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:"Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 .wrap{max-width:420px;margin:12vh auto;padding:0 16px}
@@ -14,6 +19,8 @@ body{font-family:"Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sa
 .err{color:var(--err)}
 a.btn{display:inline-block;margin-top:16px;background:var(--accent);color:#fff;border-radius:8px;padding:9px 22px;text-decoration:none}
 </style>
+<link rel="stylesheet" href="/static/night-mode.css?v={{ asset_v }}">
+<script src="/static/night-mode.js?v={{ asset_v }}"></script>
 </head>
 <body>
 <div class="wrap"><div class="card">
@@ -26,6 +33,7 @@ a.btn{display:inline-block;margin-top:16px;background:var(--accent);color:#fff;b
   <p class="msg">正在进入工作台…</p>
   {% endif %}
 </div></div>
+<button type="button" class="tt-btn tt-float" aria-pressed="false" aria-label="夜间模式（切换配色）">夜间模式</button>
 {% if token %}
 <script>
 localStorage.setItem('saas_token', {{ token | tojson }});
