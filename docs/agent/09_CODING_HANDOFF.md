@@ -3678,6 +3678,18 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - `replay.js` 只加可选透传：`yAxes[].position/formatter`、`opts.axisPointer`、`opts.axisLabelIndex`；默认路径不传即原输出。
 - 主 Agent 复核：相关 141 passed；全量 2936 passed/24 skipped；`.tmp/replay-tv/` 33/33，截图已目视确认；ECS 部署后 job58/symbol/replay.js 200。未 commit/push。
 
+## 2026-10-27 重播遗留清理实施交接
+
+- 改动：`src/quant_research_engine/gui/static/replay.js`、`src/quant_research_engine/gui/saas/templates/symbol.html`、多个既有测试 harness、CR 实现记录。
+- 新增 `formatTooltipValue()`、`klineHeightForPanes()`；K 线重播 `tooltipPercent:false`，成交量 series 级万手 formatter；静态/重播高度共用。
+- 主 Agent 复核：相关 120 passed；全量 2946 passed/24 skipped；ECS 部署后 job58/920832/replay.js 200。未 commit/push。
+
+## 2026-10-27 重播灰字备注清理实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_saas_replay_tv.py`。
+- `#btn-kreplay` 增加 `data-tip`；删除 `#kreplay-note` 动态插入与 remove 逻辑。
+- 主 Agent 复核：相关 122 passed；全量 2948 passed/24 skipped；生产旧 note 0、data-tip 1。未 commit/push。
+
 ## 2026-10-27 持仓期年化分母修复实施交接
 
 - 改动：`src/quant_research_engine/gui/static/lab-ui.js`、`src/quant_research_engine/gui/saas/templates/job.html`、`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_lab_ui_holding_days.py`。
@@ -3690,3 +3702,21 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 改动：`src/quant_research_engine/gui/lab_result.py`、`src/quant_research_engine/gui/saas/templates/job.html`、`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_lab_ui_holding_days.py`。
 - `lab_result` 年化收益加 `base > 0` 与 `TypeError` 保护；前端区间收益/年化/基准收益加除零与负基数保护。
 - 主 Agent 复核：相关 193 passed；全量 2940 passed/24 skipped；ECS 部署后 job58/920832 200 且包含新保护。未 commit/push。
+
+## 2026-10-27 重播灰字备注清理实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_saas_replay_tv.py`。
+- `#btn-kreplay` 增加 `data-tip`；删除 `#kreplay-note` 动态插入与 remove 逻辑。
+- 主 Agent 复核：相关 122 passed；全量 2948 passed/24 skipped；生产旧 note 0、data-tip 1。未 commit/push。
+
+## 2026-10-27 历史旧个股详情刷新实施交接
+
+- 改动：`src/quant_research_engine/gui/lab_result.py`、`src/quant_research_engine/gui/saas/app.py`、`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_gui_saas.py`、`tests/test_gui_saas_pages.py`、CR 实现记录。
+- 新增 `factor_basis` 标记与 `generate?refresh=1`；前端旧详情刷新入口；只读详情 200 增加 `readonly/readonly_kind` 并隐藏入口。
+- 主 Agent 复核：相关 263 passed；全量 2956 passed/24 skipped；ECS 部署后 job58/920832/showcase readonly 验证通过。未 commit/push。
+
+## 2026-10-27 K 线画线工具首片实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_saas_static_kline_tv.py`、`tests/test_saas_replay_tv.py`、CR 实现记录。
+- 新增 `klinePixelToPoint()`、`klineDrawingSeries()`、`klineDrawApply()` 等；画线按钮纳入 `KLINE_TOOL_KINDS`，重播禁用自动覆盖。
+- 主 Agent 复核：相关 131 passed；全量 2961 passed/24 skipped + 1 已知 timing flake，目标文件复跑通过；ECS 部署后生产入口存在。未 commit/push。

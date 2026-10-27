@@ -1509,6 +1509,27 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - **浏览器/生产**：`.tmp/replay-tv/` 33/33 通过，1280/375 截图已目视确认；ECS job58 个股页 200，replay.js 含 `opts.axisPointer`。未 commit/push。
 - **遗留**：重播 tooltip 仍统一加 `%`；重播容器高度未与静态归一；375 信息区仍 ellipsis。
 
+## 2026-10-27 重播遗留清理
+
+Step 5 实施，Kimi 复核并部署。
+
+- **tooltip 口径**：`replay.js` 新增 `formatTooltipValue()`；K 线重播传 `tooltipPercent:false`，价格/因子按原值，成交量按万，candlestick 显示 OHLC；`job.html` 默认路径仍保持 `%`。
+- **高度统一**：静态 `renderKline()` 与重播 `mountKlineReplay()` 共用 `QREReplay.klineHeightForPanes()`。
+- **375 信息区**：窄屏 `.kline-ohlc` 换行显示，不截关键 OHLC/因子值。
+- **测试**：相关 120 passed；全量 `2946 passed, 24 skipped, 4 warnings`。
+- **生产**：ECS 同步 `replay.js` + `symbol.html`；job58/920832 200 且包含新 helper。未 commit/push。
+- **遗留**：`#kreplay-note` 旧 `.opt` 灰字备注仍未清理。
+
+## 2026-10-27 重播灰字备注清理
+
+Step 5 实施，Kimi 复核并部署。
+
+- 删除 `initKlineReplay()` 动态插入的 `#kreplay-note` 段落及退出时 remove 逻辑。
+- 将「信/入/出/T+1/毛口径/不构成投资建议」等必要口径迁移到 `#btn-kreplay` 的 `data-tip`，复用 `LabUI.helpTips`。
+- 页面其它既有 `.opt` 未动；无新增灰字备注。
+- 测试：新增 2 例；相关 122 passed；全量 `2948 passed, 24 skipped, 4 warnings`。
+- 生产：job58/920832 200，旧 `kreplay-note` 计数 0，按钮 `data-tip` 存在。未 commit/push。
+
 ## 2026-10-27 持仓期年化收益稀疏日期爆表修复
 
 用户报告 job58 920832.BJ“持仓期年化收益”为 `3.576778280587912e+35%`。实测该股 equity 日期稀疏：2016 年只有 7 个条目，前端却把“条目数”当年化分母，三重持仓被压成 6 天，`(1+5.2935)^(252/6)` 爆表。
@@ -1531,3 +1552,33 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - **排查结论**：`replay.js` 的 `totalRet` 已检查首值非 0，`sharpe` 已检查 `sd > 0`；`avg_hold_days` 已检查 `hold_n`。未发现其它同类爆表点。
 - **测试**：`tests/test_lab_ui_holding_days.py` 增加除零/负基数源码合同；相关 193 passed；全量 `2940 passed, 24 skipped, 4 warnings`。
 - **生产**：ECS 同步 `lab_result.py` + `job.html` + `symbol.html`；job58/920832 页面 200 且包含新保护。未 commit/push。
+
+## 2026-10-27 重播灰字备注清理
+
+Step 5 实施，Kimi 复核并部署。
+
+- 删除 `initKlineReplay()` 动态插入的 `#kreplay-note` 灰字段落；必要口径迁到 `#btn-kreplay` 的 `data-tip`。
+- 页面其它既有 `.opt` 未动；无新增灰字备注。
+- 测试：相关 122 passed；全量 `2948 passed, 24 skipped, 4 warnings`。
+- 生产：job58/920832 200，旧 note 0，按钮 data-tip 存在。未 commit/push。
+
+## 2026-10-27 历史旧个股详情按需刷新
+
+Step 5 实施，Kimi 复核并部署。
+
+- `build_lab_symbol_detail()` 新产物带 `factor_basis=qfq_anchor_v1`；旧产物缺该标记。
+- `POST /api/results/<job>/symbols/<code>/generate?refresh=1` 即使产物已存在也重建；缺省 refresh 保持幂等 ready。
+- 前端旧产物显示“刷新详情”，轮询 gen-status，ready 后重载；主 Agent 追加 showcase/分享只读详情返回 readonly 标记并隐藏入口。
+- 测试：相关 263 passed；全量 `2956 passed, 24 skipped, 4 warnings`。
+- 生产：job58/920832 200；showcase 详情 `readonly=true`；前端含只读守卫。未 commit/push。
+
+## 2026-10-27 K 线画线工具首片
+
+Step 5 实施，Kimi 复核并部署。
+
+- 左侧工具栏新增趋势线、水平线、清除画线；只作用于静态 K 线，重播接管禁用。
+- 画线坐标来自真实 K 线日期/价格；越界/缺失降级，不造点、不泄露未来数据。
+- 颜色复用既有因子 token，无第四色相；Night Mode 不回归。
+- 测试：相关 131 passed；全量 `2961 passed, 24 skipped, 1 failed`（已知 timing flake，目标文件复跑 24 passed）。
+- 生产：job58/920832 200，趋势/水平入口存在。未 commit/push。
+- 遗留：画线不持久化；未跑浏览器实机。

@@ -2,6 +2,89 @@
 
 ## Task ID
 
+QRE-TV-KLINE-DRAWING-SLICE1（K 线画线工具子集首片）
+
+## Created By
+
+KIMI_CODE 统筹（2026-10-27）；Step 5 实施，Kimi 复核。CR：`docs/agent/change_requests/CR-2026-10-27_kline_drawing_tools_slice1.md`。
+
+## 目标与边界
+
+1. 只在个股静态 K 线加最小画线能力：趋势线、水平线、清除；不做 Fibonacci/射线/矩形/持久化。
+2. 画线不得进入重播，不得泄露未来数据，不得改变因子/Night Mode/重播现有行为。
+3. 只改 `symbol.html` 及必要测试；不改 replay/job/游戏/worker/引擎/schema。
+4. TDD 先 RED 后 GREEN；测试通过后由主 Agent 部署 ECS；未 commit/push。
+
+## 验证
+
+```bash
+uv run pytest tests/test_saas_static_kline_tv.py tests/test_saas_replay_tv.py tests/test_saas_replay_boundaries.py tests/test_gui_saas_pages.py -q
+uv run pytest tests/ -q
+```
+
+## 画线首片结果（2026-10-27，已部署待用户验收）
+
+- `symbol.html` 左侧工具栏新增趋势线、水平线、清除画线；仅作用于静态 K 线，重播接管时禁用并取消未落点。
+- 画线坐标由 `klinePixelToPoint()` 从真实 K 线日期/价格转换，越界或缺失降级不造点；画线 apply 使用 `replaceMerge`，不动 K 线/量/因子数据。
+- 测试：相关 131 passed；全量 `2961 passed, 24 skipped, 1 failed`，失败为已知 `test_gui_risk_report` timing flake，单文件复跑 24 passed。
+- 生产：ECS 同步 `symbol.html`，job58/920832 200，页面含趋势/水平线入口。未 commit/push。
+- 遗留：画线不持久化，刷新丢失；未跑浏览器实机。
+
+## Task ID
+
+QRE-SAAS-SYMBOL-DETAIL-REFRESH（历史旧个股详情按需刷新）
+
+## Created By
+
+KIMI_CODE 统筹（2026-10-27）；Step 5 实施，Kimi 复核。CR：`docs/agent/change_requests/CR-2026-10-27_symbol_detail_refresh.md`。
+
+## 目标与边界
+
+1. 给个股详情加 `factor_basis` 标记；旧产物前端显示“刷新详情”，调用 `generate?refresh=1` 重算并重载。
+2. 不改 worker/引擎/schema/游戏/因子注册表；不批量刷新，不跑回测。
+3. 只改 `lab_result.py`、`saas/app.py`、`symbol.html` 及必要测试；不新增灰字备注。
+4. TDD 先 RED 后 GREEN；测试通过后由主 Agent 部署 ECS；未 commit/push。
+
+## 验证
+
+```bash
+uv run pytest tests/test_gui_lab_result.py tests/test_gui_saas.py tests/test_saas_symbol_ux.py tests/test_gui_saas_pages.py -q
+uv run pytest tests/ -q
+```
+
+## Task ID
+
+QRE-TV-REPLAY-CLEANUP（重播遗留清理：tooltip 口径、高度与 375 信息区）
+
+## Created By
+
+KIMI_CODE 统筹（2026-10-27）；Step 5 实施，Kimi 复核。CR：`docs/agent/change_requests/CR-2026-10-27_replay_tooltip_cleanup.md`。
+
+## 目标与边界
+
+1. 修重播 tooltip 统一加 `%` 导致的价格/成交量/因子单位错误；candlestick 数组值不得出现 `NaN%`。
+2. `job.html` 收益曲线重播保持原百分比口径，不回归。
+3. 静态 K 线与重播高度公式统一；375 信息区不截断且不横向溢出。
+4. 只改 `replay.js`、`symbol.html` 及必要测试；不改 job/游戏/worker/引擎/schema/因子注册表。
+5. TDD 先 RED 后 GREEN；测试通过后由主 Agent 部署 ECS；用户验收前不 commit/push。
+
+## 验证
+
+```bash
+uv run pytest tests/test_saas_replay_tv.py tests/test_saas_replay_boundaries.py tests/test_saas_static_kline_tv.py tests/test_gui_saas_pages.py -q
+uv run pytest tests/ -q
+```
+
+## 重播遗留清理结果（2026-10-27，已部署待用户验收）
+
+- `replay.js` 新增 `formatTooltipValue()` 与 `klineHeightForPanes()`；K 线重播传 `tooltipPercent:false`，价格/成交量/因子不再统一加 `%`；candlestick 数组值显示 OHLC，不再 `NaN%`。
+- `symbol.html` 静态与重播共用高度 helper；成交量 series 级 tooltip 显示万手；640 断点信息区换行不截断。
+- 测试：相关 120 passed；全量 `2946 passed, 24 skipped, 4 warnings`。
+- 生产：ECS 同步 `replay.js` + `symbol.html`，qre-saas active；job58/920832 页面 200，replay.js 含 `formatTooltipValue`。未 commit/push。
+- 遗留：`#kreplay-note` 旧 `.opt` 灰字备注仍未清理；建议后续切片处理。
+
+## Task ID
+
 QRE-TV-KLINE-REPLAY-LAYOUT（K 线重播 TV 化首片）
 
 ## Created By

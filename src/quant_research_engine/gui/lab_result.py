@@ -54,6 +54,10 @@ BENCHMARKS: list[tuple[str, str]] = [
 # 买卖点散点上限：超过时按 |net_return| 保留 top N 并标注 sampled
 TRADE_SCATTER_LIMIT = 500
 
+# QRE-SAAS-SYMBOL-DETAIL-REFRESH：个股详情口径标记——价格型因子已按 K 线前复权
+# 锚点换算（与 K 线同尺度）。历史旧产物缺该字段；值变更时同步改此处与前端判断。
+FACTOR_BASIS_QFQ_ANCHOR_V1 = "qfq_anchor_v1"
+
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as f:
@@ -1114,6 +1118,10 @@ def build_lab_symbol_detail(
     data["summary"]["total_ret_pct"] = (
         round(vals[-1] / vals[0] - 1, 6) if len(vals) >= 2 and vals[0] else None
     )
+    # QRE-SAAS-SYMBOL-DETAIL-REFRESH：口径标记——价格型因子已按 K 线前复权锚点
+    # 换算（与 K 线同尺度）。历史旧产物无此字段，前端据此显示按需刷新入口；
+    # worker _execute_symbol_detail 经同一函数生成，新产物自动携带。
+    data["factor_basis"] = FACTOR_BASIS_QFQ_ANCHOR_V1
     return data
 
 

@@ -27,6 +27,7 @@ REPO = Path(__file__).resolve().parents[1]
 SYMBOL_TPL = (
     REPO / "src/quant_research_engine/gui/saas/templates/symbol.html"
 ).read_text(encoding="utf-8")
+REPLAY_JS = (REPO / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
 
 
 def _node(script: str) -> None:
@@ -62,6 +63,24 @@ def _render_kline_source() -> str:
     )
     assert match, "未找到 renderKline 及其声明"
     return match.group(1)
+
+
+def _media_block(query: str = "max-width:640px") -> str:
+    """抽取 @media(query){...} 块内容（花括号配平，块内还有嵌套规则）。"""
+    i = SYMBOL_TPL.find("@media(" + query + ")")
+    assert i >= 0, f"缺少 {query} 断点"
+    j = SYMBOL_TPL.find("{", i)
+    depth, k = 0, j
+    while k < len(SYMBOL_TPL):
+        ch = SYMBOL_TPL[k]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return SYMBOL_TPL[j + 1 : k]
+        k += 1
+    raise AssertionError("media 块花括号不配平")
 
 
 # ---------------------------------------------------------------- 源码合同
@@ -105,6 +124,47 @@ class TestSourceContract:
         assert "color: '#C93A3A', color0: '#1E8E5A'" in _render_kline_source()
         assert "color: '#d43030'" in _render_kline_source()
         assert "color: '#1a9e4b'" in _render_kline_source()
+
+    def test_narrow_info_bar_no_truncation(self):
+        """375 信息区：窄屏 .kline-ohlc 必须换行显示完整 OHLC/因子，不得 ellipsis 截断。"""
+        block = _media_block()
+        match = re.search(r"\.kline-ohlc\{([^}]*)\}", block)
+        assert match, "窄屏断点必须覆盖 .kline-ohlc"
+        rule = match.group(1).replace(" ", "")
+        assert "white-space:normal" in rule, "窄屏信息区必须允许换行"
+        assert "ellipsis" not in rule, "窄屏不得用 ellipsis 截断 OHLC/因子值"
+        # 不横向溢出：主容器保留 min-width:0（flex 收缩），不断言固定宽度
+        assert "min-width:0" in SYMBOL_TPL.replace(" ", ""), "kline-main 需 min-width:0 防溢出"
+        # R-UI-001：不新增灰色小字备注（断点内不得引入 muted 文案规则）
+        assert "var(--muted)" not in block, "不得借断点新增灰色小字备注"
+
+    def test_drawing_tools_dom(self):
+        """CR-2026-10-27 画线首片：趋势线/水平线/清除入口，样式与 aria/data-tip 合规。"""
+        html = SYMBOL_TPL
+        for kind, label in (("trend", "趋势线"), ("horizontal", "水平线"), ("clear", "清除画线")):
+            button = re.search(r"<button[^>]*id=\"kt-%s\"[^>]*>" % kind, html)
+            assert button, f"缺少画线按钮 kt-{kind}"
+            tag = button.group(0)
+            assert 'class="kline-tool"' in tag, f"kt-{kind} 必须复用 .kline-tool 样式"
+            assert f'aria-label="{label}"' in tag, f"kt-{kind} 缺少 aria-label"
+            assert "data-tip=" in tag, f"kt-{kind} 缺少 data-tip"
+        assert html.count("<svg") >= 8, "8 个工具按钮均需内联 SVG 图标"
+        # 工具栏区块不得出现灰色小字备注（R-UI-001）
+        block = _tool_helpers()
+        assert ".opt" not in block and "font-size:12px" not in block, "工具栏不得新增灰字备注"
+
+    def test_drawing_helpers_declared(self):
+        block = _kline_block()
+        for fn in ("klinePixelToPoint", "klineDrawingSeries", "klineDrawToggleMode",
+                   "klineDrawClear", "klineDrawApply", "klineDrawCancelMode"):
+            assert f"function {fn}(" in block, f"缺少画线 helper: {fn}"
+
+    def test_drawing_colors_use_existing_tokens(self):
+        block = _kline_block()
+        for token in ("#6750A4", "#8B7FBE"):
+            assert token in block, f"画线颜色应复用既有 token: {token}"
+        for bad in ("#FF0000", "#00FF00", "#0000FF", "rgb(255"):
+            assert bad not in block, f"不得引入第四色相: {bad}"
 
     def test_right_axis_and_padding(self):
         block = _render_kline_source()
@@ -168,6 +228,14 @@ function makeChart(){
       if (a.type === 'legendSelect') this.legend[a.name] = true;
       if (a.type === 'legendUnSelect') this.legend[a.name] = false;
     },
+    // CR-2026-10-27 画线首片：像素→坐标转换与 zrender 点击（测试可注入 __pixel）
+    convertFromPixel(finder, px){ return this.__pixel || null; },
+    getZr(){
+      if (!this.__zr) {
+        this.__zr = { on(ev, fn){ (zrHandlers[ev] = zrHandlers[ev] || []).push(fn); } };
+      }
+      return this.__zr;
+    },
     resize(){},
     dispose(){ this.disposed = true; },
     isDisposed(){ return this.disposed; },
@@ -175,6 +243,7 @@ function makeChart(){
   };
 }
 
+const zrHandlers = {};
 function makeHarness(plan){
   const els = {}, winListeners = {}, charts = [];
   function q(sel){ if (!els[sel]) els[sel] = makeEl(sel); return els[sel]; }
@@ -200,7 +269,7 @@ function makeHarness(plan){
     requestAnimationFrame(fn){ return fn(); },
   };
   ctx.$ = q;
-  return { ctx: vm.createContext(ctx), els: els, wins: winListeners, charts: charts };
+  return { ctx: vm.createContext(ctx), els: els, wins: winListeners, charts: charts, zrHandlers: zrHandlers };
 }
 """
 
@@ -234,6 +303,8 @@ _FACTOR_PLAN_JSON = json.dumps({
 _MAIN_SCENARIO = r"""
 const h = makeHarness(null);
 const source = %SOURCE%;
+// symbol.html 真实依赖 replay.js（共享高度 helper QREReplay.klineHeightForPanes）
+vm.runInContext(%REPLAY% + '\nglobalThis.QREReplay = window.QREReplay;', h.ctx);
 vm.runInContext(source, h.ctx);
 const d = %DATA%;
 vm.runInContext('renderKline(' + JSON.stringify(d) + ')', h.ctx);
@@ -340,6 +411,8 @@ console.log('static-kline-main-ok');
 _FACTOR_SCENARIO = r"""
 const h = makeHarness(%PLAN%);
 const source = %SOURCE%;
+// symbol.html 真实依赖 replay.js（共享高度 helper QREReplay.klineHeightForPanes）
+vm.runInContext(%REPLAY% + '\nglobalThis.QREReplay = window.QREReplay;', h.ctx);
 vm.runInContext(source, h.ctx);
 const d = %DATA%;
 vm.runInContext('renderKline(' + JSON.stringify(d) + ')', h.ctx);
@@ -391,6 +464,7 @@ class TestStaticKlineBehavior:
             + _MAIN_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
             .replace("%DATA%", json.dumps(_MAIN_DATA))
             .replace("%EMPTY_BAR%", json.dumps(_EMPTY_BAR_DATA))
+            .replace("%REPLAY%", json.dumps(REPLAY_JS))
         )
         _node(script)
 
@@ -400,5 +474,161 @@ class TestStaticKlineBehavior:
             + _FACTOR_SCENARIO.replace("%PLAN%", _FACTOR_PLAN_JSON)
             .replace("%SOURCE%", json.dumps(_render_kline_source()))
             .replace("%DATA%", json.dumps(_MAIN_DATA))
+            .replace("%REPLAY%", json.dumps(REPLAY_JS))
         )
         _node(script)
+
+# ---------------------------------------------------------------- 画线首片（CR-2026-10-27）
+_DRAW_BLOCK = json.dumps(_kline_block())
+
+_DRAW_PIXEL_SCENARIO = r"""
+const h = makeHarness(null);
+const source = %DRAW_BLOCK%;
+vm.runInContext(source, h.ctx);
+const dates = ['2024-01-02', '2024-01-03', '2024-01-04'];
+// 正常转换：像素 → 真实日期/价格（类别轴取整到最近一根）
+const p1 = vm.runInContext('klinePixelToPoint(null, [10, 20], ' + JSON.stringify(dates) + ')', h.ctx);
+assert.equal(p1, null, '无图表实例必须降级 null（不造点）');
+const fake = { convertFromPixel(){ return [1.2, 11.55]; } };
+Object.assign(h.ctx, { fake: fake });
+const p2 = JSON.parse(JSON.stringify(vm.runInContext('klinePixelToPoint(fake, [10, 20], ' + JSON.stringify(dates) + ')', h.ctx)));
+assert.deepEqual(p2, { index: 1, date: '2024-01-03', price: 11.55 }, '像素坐标转换为真实日期/价格');
+// 越界索引（窗口外/未来）→ null
+const out = { convertFromPixel(){ return [5, 11.5]; } };
+Object.assign(h.ctx, { out: out });
+assert.equal(vm.runInContext('klinePixelToPoint(out, [1, 1], ' + JSON.stringify(dates) + ')', h.ctx), null, '越界索引不得造点');
+// 非有限价格 → null
+const nanPrice = { convertFromPixel(){ return [1, NaN]; } };
+Object.assign(h.ctx, { nanPrice: nanPrice });
+assert.equal(vm.runInContext('klinePixelToPoint(nanPrice, [1, 1], ' + JSON.stringify(dates) + ')', h.ctx), null, '缺失价格不得造点');
+// 转换抛错 → null
+const broken = { convertFromPixel(){ throw new Error('x'); } };
+Object.assign(h.ctx, { broken: broken });
+assert.equal(vm.runInContext('klinePixelToPoint(broken, [1, 1], ' + JSON.stringify(dates) + ')', h.ctx), null, '转换异常必须降级');
+// 空日期轴 → null
+assert.equal(vm.runInContext('klinePixelToPoint(fake, [1, 1], [])', h.ctx), null, '无日期轴不得造点');
+// 缺 convertFromPixel 的图表 → null
+const noConv = {};
+Object.assign(h.ctx, { noConv: noConv });
+assert.equal(vm.runInContext('klinePixelToPoint(noConv, [1, 1], ' + JSON.stringify(dates) + ')', h.ctx), null, '缺转换能力必须降级');
+console.log('draw-pixel-ok');
+"""
+
+_DRAW_SERIES_SCENARIO = r"""
+const h = makeHarness(null);
+const source = %DRAW_BLOCK%;
+vm.runInContext(source, h.ctx);
+const dates = ['2024-01-02', '2024-01-03', '2024-01-04'];
+// 空/非法输入 → 空数组
+assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext('klineDrawingSeries([], ' + JSON.stringify(dates) + ')', h.ctx))), []);
+assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext('klineDrawingSeries(null, ' + JSON.stringify(dates) + ')', h.ctx))), []);
+// 水平线：跨首末真实日期，价格为点击真实价格
+const hs = JSON.parse(JSON.stringify(vm.runInContext('klineDrawingSeries([{kind: "horizontal", price: 11.5}], ' + JSON.stringify(dates) + ')', h.ctx)));
+assert.equal(hs.length, 1);
+assert.equal(hs[0].type, 'line');
+assert.equal(hs[0].xAxisIndex, 0);
+assert.equal(hs[0].yAxisIndex, 0);
+assert.deepEqual(hs[0].data, [['2024-01-02', 11.5], ['2024-01-04', 11.5]], '水平线按真实首末日期与价格生成');
+// 趋势线：两个真实点
+const ts = JSON.parse(JSON.stringify(vm.runInContext('klineDrawingSeries([{kind: "trend", from: {date: "2024-01-02", price: 10}, to: {date: "2024-01-04", price: 12}}], ' + JSON.stringify(dates) + ')', h.ctx)));
+assert.equal(ts.length, 1);
+assert.deepEqual(ts[0].data, [['2024-01-02', 10], ['2024-01-04', 12]], '趋势线按两次点击的真实坐标生成');
+// 缺价格/缺日期的画线跳过，不造点
+const mixed = JSON.parse(JSON.stringify(vm.runInContext('klineDrawingSeries([{kind: "horizontal", price: NaN}, {kind: "trend", from: {date: "2024-01-02", price: 1}, to: null}], ' + JSON.stringify(dates) + ')', h.ctx)));
+assert.equal(mixed.length, 0, '缺字段画线必须跳过');
+console.log('draw-series-ok');
+"""
+
+_DRAW_FLOW_SCENARIO = r"""
+const h = makeHarness(null);
+const source = %DRAW_BLOCK%;
+// symbol.html 真实依赖 replay.js（共享高度 helper QREReplay.klineHeightForPanes）
+vm.runInContext(%REPLAY% + '\nglobalThis.QREReplay = window.QREReplay;', h.ctx);
+vm.runInContext(source, h.ctx);
+const d = %DATA%;
+vm.runInContext('renderKline(' + JSON.stringify(d) + ')', h.ctx);
+const chart = h.charts[h.charts.length - 1];
+const dates = d.kline.dates;
+
+// 水平线：一次点击确定价格
+h.els['#kt-horizontal'].click();
+assert.equal(vm.runInContext('klineDrawState.mode', h.ctx), 'horizontal', '进入水平线模式');
+assert.equal(h.els['#kt-horizontal'].attrs['aria-pressed'], 'true', '模式按钮 aria-pressed');
+chart.__pixel = [1, 11.5];
+h.zrHandlers.click[0]({ offsetX: 10, offsetY: 20 });
+assert.equal(vm.runInContext('klineDrawState.lines.length', h.ctx), 1, '点击后生成一条水平线');
+assert.equal(vm.runInContext('klineDrawState.mode', h.ctx), null, '水平线一次点击后退出模式');
+assert.equal(vm.runInContext('klineDrawState.lines[0].price', h.ctx), 11.5, '价格来自真实坐标转换');
+assert.equal(vm.runInContext('klineDrawState.lines[0].date', h.ctx), dates[1], '日期来自真实坐标转换');
+const lastOpt = chart.options[chart.options.length - 1];
+const drawSeries = lastOpt.series.filter(s => s.name === '画线·水平');
+assert.equal(drawSeries.length, 1, '画线进入 ECharts series');
+assert.deepEqual(JSON.parse(JSON.stringify(drawSeries[0].data)), [[dates[0], 11.5], [dates[2], 11.5]], '水平线按真实首末日期渲染');
+assert.ok(lastOpt.series.some(s => s.name === 'K线'), '基础 K 线序列不被画线替换');
+
+// 像素无法转换时降级：不造点
+h.els['#kt-horizontal'].click();
+chart.__pixel = [9, 11.5];  // 越界索引
+h.zrHandlers.click[0]({ offsetX: 1, offsetY: 1 });
+assert.equal(vm.runInContext('klineDrawState.lines.length', h.ctx), 1, '无法转换不得造点');
+assert.equal(vm.runInContext('klineDrawState.mode', h.ctx), 'horizontal', '降级后保持模式可重试');
+
+// 趋势线：两次点击确定起点/终点
+h.els['#kt-horizontal'].click();  // 再点一次取消水平线模式
+assert.equal(vm.runInContext('klineDrawState.mode', h.ctx), null, '再次点击工具取消模式');
+h.els['#kt-trend'].click();
+chart.__pixel = [0, 10.0];
+h.zrHandlers.click[0]({ offsetX: 1, offsetY: 1 });
+assert.equal(vm.runInContext('klineDrawState.pending && klineDrawState.pending.date', h.ctx), dates[0], '第一次点击记起点');
+chart.__pixel = [2, 12.0];
+h.zrHandlers.click[0]({ offsetX: 2, offsetY: 2 });
+assert.equal(vm.runInContext('klineDrawState.lines.length', h.ctx), 2, '第二次点击生成趋势线');
+assert.equal(vm.runInContext('klineDrawState.mode', h.ctx), null, '趋势线完成后退出模式');
+const trend = JSON.parse(JSON.stringify(vm.runInContext('klineDrawState.lines[1]', h.ctx)));
+assert.equal(trend.kind, 'trend');
+assert.equal(trend.from.date, dates[0]);
+assert.equal(trend.to.date, dates[2]);
+const trendOpt = chart.options[chart.options.length - 1];
+const trendSeries = trendOpt.series.filter(s => s.name === '画线·趋势');
+assert.deepEqual(JSON.parse(JSON.stringify(trendSeries[0].data)), [[dates[0], 10], [dates[2], 12]], '趋势线两个真实点');
+
+// Esc 取消：进行中的趋势线不落点
+h.els['#kt-trend'].click();
+chart.__pixel = [1, 11.0];
+h.zrHandlers.click[0]({ offsetX: 1, offsetY: 1 });
+vm.runInContext('klineDrawOnKeydown({key: "Escape"})', h.ctx);
+assert.equal(vm.runInContext('klineDrawState.mode', h.ctx), null, 'Esc 取消模式');
+assert.equal(vm.runInContext('klineDrawState.pending', h.ctx), null, 'Esc 清掉未落点起点');
+assert.equal(vm.runInContext('klineDrawState.lines.length', h.ctx), 2, 'Esc 不产生新画线');
+
+// 清除画线：清空全部并回到基础序列
+h.els['#kt-clear'].click();
+assert.equal(vm.runInContext('klineDrawState.lines.length', h.ctx), 0, '清除全部画线');
+const cleared = chart.options[chart.options.length - 1];
+assert.ok(!cleared.series.some(s => String(s.name).indexOf('画线') === 0), '清除后无画线序列');
+assert.ok(cleared.series.some(s => s.name === 'K线'), '清除后基础序列仍在');
+
+// 非画线按键不影响模式
+h.els['#kt-trend'].click();
+vm.runInContext('klineDrawOnKeydown({key: "a"})', h.ctx);
+assert.equal(vm.runInContext('klineDrawState.mode', h.ctx), 'trend', '非 Esc 按键不取消');
+console.log('draw-flow-ok');
+"""
+
+
+class TestKlineDrawing:
+    """CR-2026-10-27 画线首片：像素→真实坐标、配置生成、交互流、清除。"""
+
+    def test_pixel_to_point_real_coordinates(self):
+        _node(_HARNESS + _DRAW_PIXEL_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK))
+
+    def test_drawing_series_configs(self):
+        _node(_HARNESS + _DRAW_SERIES_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK))
+
+    def test_drawing_click_flow(self):
+        _node(
+            _HARNESS
+            + _DRAW_FLOW_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK)
+            .replace("%DATA%", json.dumps(_MAIN_DATA))
+            .replace("%REPLAY%", json.dumps(REPLAY_JS))
+        )

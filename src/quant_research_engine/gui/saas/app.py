@@ -3929,6 +3929,9 @@ def create_saas_app() -> Flask:
                 else:
                     data["benchmarks"] = None
                 data["data_until"] = _jsonable(row["result_data_until"])
+                # 公开只读通道标记：前端据此隐藏“刷新详情”等写入口
+                data["readonly"] = _is_public_readonly()
+                data["readonly_kind"] = _public_readonly_kind()
                 return jsonify(_jsonable(data))
         from quant_research_engine.gui.lab_result import build_lab_symbol_detail
 
@@ -3940,6 +3943,8 @@ def create_saas_app() -> Flask:
                             "readonly": _is_public_readonly(),
                             "readonly_kind": _public_readonly_kind()}), 404
         data["data_until"] = _jsonable(row["result_data_until"])
+        data["readonly"] = _is_public_readonly()
+        data["readonly_kind"] = _public_readonly_kind()
         return jsonify(_jsonable(data))
 
     def _symbol_detail_ready(job_id: int, code: str) -> bool:
@@ -3957,7 +3962,9 @@ def create_saas_app() -> Flask:
     def api_symbol_detail_generate(job_id: int, ts_code: str) -> Any:
         """按需生成个股详情（QRE-SAAS-SYMBOL-ONDEMAND）：创建 kind=symbol_detail
         轻量任务，worker 本地用行情库补生成该股详情 gzip 回传，ECS 落父 job 目录。
-        幂等：产物已存在直接 ready；同 (父job, 股票) 有未完结任务则复用。"""
+        幂等：产物已存在直接 ready；同 (父job, 股票) 有未完结任务则复用。
+        QRE-SAAS-SYMBOL-DETAIL-REFRESH：``refresh=1`` 时即使产物已存在也重建
+        任务（历史旧口径详情按需刷新）；缺省时保持上述幂等 ready 行为。"""
         row, err = _require_completed_result(job_id)
         if err:
             return err
@@ -3970,7 +3977,8 @@ def create_saas_app() -> Flask:
             code = resolve_ts_code(ts_code, [])
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
-        if _symbol_detail_ready(job_id, code):
+        refresh = str(request.args.get("refresh") or "").strip().lower() in {"1", "true", "yes"}
+        if _symbol_detail_ready(job_id, code) and not refresh:
             return jsonify({"ok": True, "status": "ready"})
         run_id = ((row.get("result_summary") or {}).get("run_id")) if isinstance(row.get("result_summary"), dict) else None
         if not run_id:

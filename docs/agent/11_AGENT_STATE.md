@@ -1061,6 +1061,10 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 - K 线重播 TV 化首片已部署：重播右侧标尺、底部时间轴、x 联动、顶部信息区随帧更新；全量 2936 passed/24 skipped；未 commit/push。
 - 持仓期年化分母修复已部署：稀疏 equity 日期不再把年化分母压成条目数；920832.BJ 从 e+35 修正为约 75064.63%；全量 2939 passed/24 skipped；未 commit/push。
 - 同类指标防护加固已部署：年化/区间收益/基准收益除零与负基数保护；全量 2940 passed/24 skipped；未 commit/push。
+- 重播遗留清理已部署：tooltip 单位、高度 helper、375 信息区换行；全量 2946 passed/24 skipped；未 commit/push。
+- 重播灰字备注清理已部署：`#kreplay-note` 迁到 `#btn-kreplay` data-tip；全量 2948 passed/24 skipped；未 commit/push。
+- 历史旧个股详情按需刷新已部署：新详情带 `factor_basis`，旧详情可 `refresh=1` 重算；只读详情隐藏刷新入口；全量 2956 passed/24 skipped；未 commit/push。
+- K 线画线工具首片已部署：趋势线/水平线/清除；只作用于静态 K 线，画线坐标来自真实 K 线；全量 2961 passed/24 skipped + 1 已知 timing flake；未 commit/push。
 - 《我不是股神》WSL 本地实现已获用户批准提交：价格型因子与游戏 OHLC 口径对齐、一体化交易终端、回合制与审计字段；仅本地 8092，不部署 ECS。
 - 下一主线候选：P2 会员分层、付费权益与微信信号推送；用户 2026-10-27 明确暂缓推进。
 

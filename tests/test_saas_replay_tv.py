@@ -49,6 +49,12 @@ def _mount_body() -> str:
     return match.group(0)
 
 
+def _init_kline_replay_body() -> str:
+    match = re.search(r"function initKlineReplay\(d\)\{[\s\S]*?\n\}", SYMBOL_TPL)
+    assert match, "未找到 initKlineReplay"
+    return match.group(0)
+
+
 def _symbol_source() -> str:
     """K 线静态 helper + renderKline + initKlineReplay + mountKlineReplay 全量抽取。
 
@@ -280,8 +286,15 @@ const h = makeHarness();
 const source = %SOURCE%;
 vm.runInContext(source + '\nglobalThis.__initKlineReplay = initKlineReplay;', h.ctx);
 vm.runInContext('__initKlineReplay(' + JSON.stringify(DETAIL) + ')', h.ctx);
+// CR-2026-10-27 画线首片：进入重播前若处于画线模式，接管必须取消并禁用按钮
+vm.runInContext("klineDrawState.mode = 'trend'; klineDrawState.pending = {date: '2024-01-02', price: 10, index: 0};", h.ctx);
 h.get('btn-kreplay').click();
 assert.equal(h.charts.length, 1, '进入重播接管静态实例');
+assert.equal(vm.runInContext('klineDrawState.mode', h.ctx), null, '重播接管取消画线模式');
+assert.equal(vm.runInContext('klineDrawState.pending', h.ctx), null, '重播接管清掉未落点起点');
+assert.equal(h.get('kt-trend').disabled, true, '重播中禁用画线按钮');
+assert.equal(h.get('kt-horizontal').disabled, true, '重播中禁用水平线按钮');
+assert.equal(h.get('kt-clear').disabled, true, '重播中禁用清除按钮');
 assert.ok(h.get('kline-ohlc').innerHTML.indexOf('2024-01-02') >= 0, '重播帧写入顶部信息区');
 h.get('btn-kreplay-exit').click();
 assert.ok(h.charts[0].disposed, '退出重播销毁重播实例（destroy(keepDom)）');
@@ -293,7 +306,13 @@ assert.ok(staticOpt.yAxis.every(y => y.position === 'right'), '静态 TV 右侧�
 assert.ok(h.get('kline-ohlc').innerHTML.indexOf('2024-01-09') >= 0, '信息区回静态末根');
 assert.equal(h.get('kt-vol').disabled, false, '工具栏复原');
 assert.equal(h.get('kt-vol').attrs['aria-pressed'], 'true', '量按钮 aria-pressed 复原');
+assert.equal(h.get('kt-trend').disabled, false, '退出重播恢复画线按钮');
+// 画线不进入重播帧：重播 option 无画线序列
+const replayOpt = h.charts[0].options[h.charts[0].options.length - 1];
+assert.ok(!replayOpt.series.some(s => String(s.name).indexOf('画线') === 0), '画线不得进入重播帧');
 assert.ok(h.get('kreplay-info').classList, '信息卡容器保留');
+// 高度：静态重建走同一 helper（1 副图 → 580px）
+assert.equal(h.get('chart-kline').style.height, '580px', '静态重建高度与重播一致');
 console.log('replay-tv-exit-ok');
 """
 
@@ -315,6 +334,9 @@ assert.equal(opt.yAxis[0].position, undefined, 'job 默认不加 position');
 assert.equal(opt.yAxis[0].axisLabel.formatter, '{value}%', 'job 默认收益率口径');
 assert.equal('axisPointer' in opt, false, 'job 默认不加 axisPointer');
 assert.equal(opt.grid[0].right, 20, 'job 默认 grid 不变');
+// CR-2026-10-27 清理：job 默认路径 tooltip 仍统一加 %（标量口径逐字节不变）
+assert.equal(opt.tooltip.valueFormatter(5.2), '5.20%', 'job 默认 tooltip 百分比口径');
+assert.equal(opt.tooltip.valueFormatter(null), '—', 'job 默认 tooltip 缺失值');
 console.log('replay-job-default-ok');
 """
 
@@ -329,6 +351,57 @@ def _harness(detail: str = "null") -> str:
 
 def _run(scenario: str, detail: str = "null") -> None:
     _node(_harness(detail) + scenario)
+
+
+# ---------------------------------------------------------------- tooltip 口径清理（CR-2026-10-27）
+_TOOLTIP_SCENARIO = r"""
+const h = makeHarness();
+const source = %SOURCE%;
+vm.runInContext(source + '\nglobalThis.__mountKlineReplay = mountKlineReplay;', h.ctx);
+const ctl = vm.runInContext('__mountKlineReplay(' + JSON.stringify(DETAIL) + ')', h.ctx);
+const chart = h.charts[h.charts.length - 1];
+const opt = chart.options[chart.options.length - 1];
+
+// 1) K 线重播 tooltip 不得统一加 %
+assert.equal(opt.tooltip.valueFormatter(19.7), '19.70', '价格/因子不得加 %');
+assert.equal(opt.tooltip.valueFormatter(0.15), '0.15', '因子按原值');
+assert.equal(opt.tooltip.valueFormatter(null), '—', '缺失值');
+
+// 2) candlestick 数组值：显示 OHLC，不得出现 NaN%
+const k = opt.tooltip.valueFormatter([10.0, 10.5, 9.9, 10.6]);
+assert.ok(k.indexOf('NaN') < 0 && k.indexOf('%') < 0, 'candlestick 值不得出现 NaN/%');
+assert.ok(k.indexOf('开') >= 0 && k.indexOf('收') >= 0 && k.indexOf('低') >= 0 && k.indexOf('高') >= 0, 'K 线显示 OHLC 标签');
+assert.ok(k.indexOf('10.00') >= 0 && k.indexOf('10.50') >= 0 && k.indexOf('9.90') >= 0 && k.indexOf('10.60') >= 0, 'K 线 OHLC 数值完整');
+
+// 3) 成交量：series 级 valueFormatter 显示万手（优先于全局）
+const vol = opt.series[1];
+assert.equal(vol.name, '成交量');
+assert.equal(typeof vol.tooltip.valueFormatter, 'function', '成交量 series 需自带 tooltip formatter');
+assert.equal(vol.tooltip.valueFormatter(200000), '20.00 万', '成交量按万显示');
+
+// 4) 因子线序列走全局原值口径
+const ema = opt.series.filter(s => s.name === 'EMA5')[0];
+assert.equal(opt.tooltip.valueFormatter(11.2), '11.20', '因子原值');
+assert.ok(ema, 'EMA5 overlay 序列存在');
+
+console.log('replay-tooltip-ok');
+"""
+
+_HEIGHT_SCENARIO = r"""
+const h = makeHarness();
+const source = %SOURCE%;
+vm.runInContext(source + '\nglobalThis.__mountKlineReplay = mountKlineReplay;', h.ctx);
+const QREReplay = h.ctx.window.QREReplay;
+// 1) 共享 helper 公式：无副图 460，有副图 420 + panes*160
+assert.equal(QREReplay.klineHeightForPanes(0), 460, '无副图 460px');
+assert.equal(QREReplay.klineHeightForPanes(1), 580, '1 副图 580px');
+assert.equal(QREReplay.klineHeightForPanes(3), 900, '3 副图 900px');
+assert.equal(QREReplay.core.klineHeightForPanes(0), 460, 'core 也暴露同一 helper');
+// 2) 重播容器用同一公式（DETAIL：1 个 MACD 合并副图 → 580px）
+const ctl = vm.runInContext('__mountKlineReplay(' + JSON.stringify(DETAIL) + ')', h.ctx);
+assert.equal(h.get('chart-kline').style.height, '580px', '重播容器高度走共享 helper');
+console.log('replay-height-ok');
+"""
 
 
 class TestReplayFrameLayout:
@@ -346,3 +419,58 @@ class TestReplayFrameLayout:
 
     def test_job_default_path_unchanged(self):
         _run(_JOB_DEFAULT_SCENARIO)
+
+
+# ---------------------------------------------------------------- tooltip 口径与高度（CR-2026-10-27 清理）
+class TestTooltipUnitCleanup:
+    """重播 tooltip 按序列类型显示单位，不再统一加 %。"""
+
+    def test_kline_replay_tooltip_units(self):
+        _run(
+            _TOOLTIP_SCENARIO.replace("%SOURCE%", json.dumps(_symbol_source())),
+            json.dumps(_DETAIL, ensure_ascii=False),
+        )
+
+    def test_replay_tooltip_percent_switch(self):
+        assert "tooltipPercent" in REPLAY_JS, "replay.js 需支持 tooltipPercent 开关"
+        body = _mount_body()
+        assert "tooltipPercent: false" in body, "K 线重播必须显式关闭百分比口径"
+
+    def test_volume_series_has_own_formatter(self):
+        body = _mount_body()
+        assert "valueFormatter" in body, "成交量 series 需自带万手 formatter"
+        assert "10000" in body, "成交量按万换算"
+
+    def test_height_helper_shared(self):
+        assert "klineHeightForPanes" in REPLAY_JS, "replay.js 需提供共享高度 helper"
+        body = _symbol_source()
+        assert body.count("klineHeightForPanes(") >= 2, (
+            "静态 renderKline 与重播 mountKlineReplay 必须共用同一 helper"
+        )
+        assert "420 + panes.length * 160" not in SYMBOL_TPL, "symbol.html 不得再保留内联高度公式"
+        assert "460px" not in _mount_body(), "重播不得再写死 460px"
+
+    def test_replay_height_matches_static_formula(self):
+        _run(
+            _HEIGHT_SCENARIO.replace("%SOURCE%", json.dumps(_symbol_source())),
+            json.dumps(_DETAIL, ensure_ascii=False),
+        )
+
+
+# ---------------------------------------------------------------- 重播灰字备注清理（R-UI-001）
+class TestReplayNoteCleanup:
+    """R-UI-001：K 线重播不得带 .opt 灰字备注；必要口径迁到 #btn-kreplay data-tip。"""
+
+    def test_no_gray_note_in_kline_replay(self):
+        assert "kreplay-note" not in SYMBOL_TPL, "不得再动态插入 kreplay-note 灰字备注"
+        body = _init_kline_replay_body()
+        assert 'class="opt"' not in body, "initKlineReplay 不得插入 .opt 灰字备注"
+        assert "insertAdjacentHTML" not in body, "重播入口不得再动态插备注段落"
+
+    def test_btn_kreplay_carries_data_tip(self):
+        match = re.search(r"<button[^>]*id=\"btn-kreplay\"[^>]*>", SYMBOL_TPL)
+        assert match, "未找到 #btn-kreplay 按钮"
+        button = match.group(0)
+        assert "data-tip=" in button, "必要口径必须迁到 data-tip（LabUI.helpTips 机制）"
+        for key in ("信", "入/出", "信号日", "T+1", "毛口径", "不构成投资建议"):
+            assert key in button, f"data-tip 缺少关键口径: {key}"

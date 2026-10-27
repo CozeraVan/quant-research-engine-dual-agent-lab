@@ -16,6 +16,9 @@
  *     metricsEl, eventsEl,              // 指标面板 / 事件流容器（可选）
  *     staticMetrics: {total_ret},       // 静态报告值（末帧一致性校验用，可选）
  *     onFrame(cursor),                  // 帧回调（可选）
+ *     tooltipPercent: false,            // 可选：关闭统一 %（K线重播；默认 true=job 口径）
+ *     tooltipUnit: '万',                // 可选：tooltip 标量单位；series 级
+ *                                       // extra.tooltip.valueFormatter 优先（如成交量万手）
  *   });
  */
 (function () {
@@ -131,6 +134,32 @@
     return { start: start, end: end };
   }
 
+  // tooltip 值格式化（CR-2026-10-27 清理）：按 unit 声明显示，默认不加任何单位。
+  // - 数组（candlestick [开,收,低,高]）显示 OHLC，绝不把数组转成 NaN；
+  // - unit 为函数/series 级 formatter 时优先（如成交量万手）；
+  // - unit 为 'percent' 时才加 %（job 收益曲线默认路径）。
+  function formatTooltipValue(v, unit) {
+    if (v == null) return "—";
+    if (Array.isArray(v)) {
+      var parts = v.map(function (x) { return x == null ? "—" : Number(x).toFixed(2); });
+      if (parts.length === 4) {
+        return "开 " + parts[0] + " · 收 " + parts[1] + " · 低 " + parts[2] + " · 高 " + parts[3];
+      }
+      return parts.join(" / ");
+    }
+    if (typeof unit === "function") return unit(v);
+    if (unit === "percent") return Number(v).toFixed(2) + "%";
+    if (unit) return Number(v).toFixed(2) + " " + unit;
+    return Number(v).toFixed(2);
+  }
+
+  // K 线容器高度（CR-2026-10-27 清理）：静态 renderKline 与重播 mountKlineReplay
+  // 共用同一公式，避免两处漂移。无副图 460px；有副图 420 + panes*160。
+  function klineHeightForPanes(paneCount) {
+    var n = Math.max(0, Math.floor(Number(paneCount) || 0));
+    return n > 0 ? 420 + n * 160 : 460;
+  }
+
   // 窗口显示数据：默认原样切片；zeroBase=true 时以窗口内首个非空值为基线，
   // 让“累计收益/基准”这类序列在可视左端回到 0（指标仍按全量 raw 计算，不失真）。
   function windowDisplayData(data, start, end, zeroBase) {
@@ -149,7 +178,10 @@
     positionCounts: positionCounts, nextEventfulCursor: nextEventfulCursor,
     frameMetrics: frameMetrics, visibleWindow: visibleWindow,
     windowDisplayData: windowDisplayData,
+    formatTooltipValue: formatTooltipValue, klineHeightForPanes: klineHeightForPanes,
   };
+  // 页面级复用出口（symbol.html 静态/重播共用高度公式）
+  QREReplay.klineHeightForPanes = klineHeightForPanes;
 
   /* ---------- UI 装配 ---------- */
 
@@ -293,9 +325,15 @@
         });
         var gridCount = (opts.grids || []).length;
         var labelIdx = opts.axisLabelIndex == null ? gridCount - 1 : opts.axisLabelIndex;
+        // tooltip 口径（CR-2026-10-27 清理）：默认保持 job 收益曲线百分比口径
+        // （逐字节不变）；K 线重播传 tooltipPercent:false，价格/成交量/因子不再
+        // 统一加 %——数组（candlestick）显示 OHLC，标量按序列级 unit/函数。
+        var tooltipValueFormatter = opts.tooltipPercent === false
+          ? function (v) { return formatTooltipValue(v, opts.tooltipUnit); }
+          : function (v) { return v == null ? "—" : Number(v).toFixed(2) + "%"; };
         var option = {
           animation: false,
-          tooltip: { trigger: "axis", valueFormatter: function (v) { return v == null ? "—" : Number(v).toFixed(2) + "%"; } },
+          tooltip: { trigger: "axis", valueFormatter: tooltipValueFormatter },
           legend: { top: 0, data: (opts.series || []).filter(function (s) { return !s.grid; }).map(function (s) { return s.name; }) },
           grid: opts.grids || [{ left: 55, right: 20, top: 30, height: "68%" }],
           xAxis: (opts.grids || [{}]).map(function (g, gi) {

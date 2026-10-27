@@ -484,10 +484,14 @@ const document = {getElementById(id){ return elements[id] || (elements[id] = el(
   createElement(){ return el(); }, querySelector(){ return null; }};
 const layoutCtx = vm.createContext({console, window: {}});
 vm.runInContext(%LAYOUT%, layoutCtx);
+// CR-2026-10-27：真实 replay.js（共享高度 helper），不在桩里复制公式
+const replayCtx = vm.createContext({console, window: {}});
+vm.runInContext(%REPLAY%, replayCtx);
 const context = vm.createContext({console, document,
   window: {addEventListener(){}},
   $ (s){ return document.getElementById(String(s).replace('#', '')); },
-  QREReplay: {attach(mountEl, opts){ harness.attached = opts; return {destroy(){}}; }},
+  QREReplay: {attach(mountEl, opts){ harness.attached = opts; return {destroy(){}}; },
+    klineHeightForPanes: replayCtx.window.QREReplay.klineHeightForPanes},
   QREFactorLayout: layoutCtx.window.QREFactorLayout,
   card(){ return ''; }, cls(){ return ''; }, f2(v){ return v == null ? '\u2014' : Number(v).toFixed(2); },
   chipStates(){ return {}; },
@@ -525,4 +529,6 @@ console.log('symbol-display-ok');
 """
         _node(scenario
               .replace("%LAYOUT%", json.dumps(layout))
+              .replace("%REPLAY%", json.dumps(
+                  (ROOT / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")))
               .replace("%SOURCE%", json.dumps(source)))

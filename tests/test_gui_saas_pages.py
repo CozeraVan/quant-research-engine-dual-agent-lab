@@ -1054,6 +1054,9 @@ function createSymbolHarness(fetchImpl){
     generateButton(){
       return elements['sym-note'].children.find(node => node.id === 'btn-gen') || null;
     },
+    refreshButton(){
+      return elements['sym-note'].children.find(node => node.id === 'btn-refresh-detail') || null;
+    },
   };
 }
 """
@@ -1067,7 +1070,15 @@ def _run_symbol_script_js(html: str, source_pattern: str, scenario: str) -> None
         node = "/home/van/codex-local/node-v22/bin/node"
     if not node:
         pytest.skip("node 不可用")
-    script = _SYMBOL_JS_HARNESS + "\nconst source = " + json.dumps(match.group(1)) + ";\n" + scenario
+    replay_js = (Path(__file__).resolve().parents[1]
+                 / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
+    script = (
+        _SYMBOL_JS_HARNESS
+        + "\nconst source = " + json.dumps(match.group(1)) + ";"
+        # CR-2026-10-27：symbol.html 真实依赖 replay.js（共享高度 helper）；场景可按需预加载
+        + "\nconst REPLAY_SRC = " + json.dumps(replay_js) + ";"
+        + scenario
+    )
     result = subprocess.run([node, "-e", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr or result.stdout
 
@@ -1126,6 +1137,74 @@ class TestPages:
     assert.equal(h.calls.failure, 1);
     assert.equal(typeof h.calls.retry, 'function');
   }
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_detail_refresh_entry_for_legacy_payload(self, client):
+        """QRE-SAAS-SYMBOL-DETAIL-REFRESH：旧口径详情（缺 factor_basis）显示
+        「刷新详情」入口 → generate?refresh=1 → 轮询 gen-status → ready 重载；
+        新口径产物不再显示入口。"""
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const requests = [];
+  let detailCalls = 0;
+  const h = createSymbolHarness(async url => {
+    requests.push(url);
+    if (url.endsWith('/generate?refresh=1')) return response(200, {ok: true, status: 'queued', gen_job_id: 7});
+    if (url.endsWith('/gen-status')) return response(200, {ok: true, status: 'ready'});
+    detailCalls += 1;
+    // 首次：旧口径产物（缺 factor_basis）；刷新后：新口径
+    return response(200, detailCalls === 1
+      ? {ok: true, summary: {name: 'legacy'}, trades: [], orders: [], failed_orders: []}
+      : {ok: true, factor_basis: 'qfq_anchor_v1', summary: {name: 'fresh'},
+         trades: [], orders: [], failed_orders: []});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('load()', h.context);
+  const btn = h.refreshButton();
+  assert.ok(btn, '缺 factor_basis 的旧详情必须显示刷新入口');
+  assert.equal(btn.textContent, '刷新详情');
+  assert.equal(btn.className, 'btn-sm', '刷新入口用既有按钮样式');
+
+  await btn.listeners.click();
+  assert.ok(requests.some(u => u.endsWith('/generate?refresh=1')), '必须调用 refresh=1：' + requests.join(','));
+  assert.ok(requests.some(u => u.endsWith('/gen-status')), '必须轮询 gen-status');
+  assert.equal(h.calls.summaries.map(s => s.name).pop(), 'fresh', 'ready 后必须重载详情');
+  assert.equal(h.refreshButton(), null, '新口径产物不再显示刷新入口');
+  assert.equal(h.timers.size, 0, 'ready 后不得留下轮询 timer');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_detail_no_refresh_entry_for_new_payload(self, client):
+        """新口径产物（factor_basis=qfq_anchor_v1）不得显示刷新入口。"""
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const h = createSymbolHarness(async () => response(200, {
+    ok: true, factor_basis: 'qfq_anchor_v1', summary: {name: 'fresh'},
+    trades: [], orders: [], failed_orders: [],
+  }));
+  vm.runInContext(source, h.context);
+  await vm.runInContext('load()', h.context);
+  assert.equal(h.refreshButton(), null, '新口径产物不显示刷新入口');
+  assert.equal(h.calls.requests.length, 1, '不得发起任何生成/轮询请求');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_symbol_detail_readonly_hides_refresh_entry(self, client):
+        """公开只读详情即使缺 factor_basis，也不得显示刷新入口。"""
+        html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
+        _run_symbol_js(html, r"""
+(async () => {
+  const h = createSymbolHarness(async () => response(200, {
+    ok: true, readonly: true, readonly_kind: 'showcase',
+    summary: {name: 'legacy'}, trades: [], orders: [], failed_orders: [],
+  }));
+  vm.runInContext(source, h.context);
+  await vm.runInContext('load()', h.context);
+  assert.equal(h.refreshButton(), null, 'showcase/分享只读不得显示刷新入口');
+  assert.equal(h.calls.requests.length, 1, '只读视图不得发起生成/轮询请求');
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
@@ -1514,6 +1593,8 @@ function pendingResponse(options){
     getOption(){ return {dataZoom: [{start: 0, end: 100}]}; },
   }; }};
   h.context.card = () => ''; h.context.pct = () => ''; h.context.cls = () => '';
+  // CR-2026-10-27：renderKline 走 replay.js 共享高度 helper，先加载真实 replay.js
+  vm.runInContext(REPLAY_SRC + '\nglobalThis.QREReplay = window.QREReplay;', h.context);
   vm.runInContext(source, h.context);
   const data = {equity: {dates: ['2026-01-01'], values: [1]}, trades: []};
   vm.runInContext('renderEquity(' + JSON.stringify(data) + ')', h.context);
@@ -1531,6 +1612,8 @@ function pendingResponse(options){
   h.context.QREFactorLayout = {plan(){ return {chips: [], panes: [], overlays: []}; }};
   h.context.chipStates = () => ({});
   h.context.renderFactorChips = () => {};
+  // CR-2026-10-27：renderKline 走 replay.js 共享高度 helper，先加载真实 replay.js
+  vm.runInContext(REPLAY_SRC + '\nglobalThis.QREReplay = window.QREReplay;', h.context);
   vm.runInContext(source, h.context);
   const data = {kline: {dates: ['2026-01-01'], ohlc: [[1, 1, 1, 1]], vols: [1]}, factors: [], orders: []};
   vm.runInContext('renderKline(' + JSON.stringify(data) + ')', h.context);

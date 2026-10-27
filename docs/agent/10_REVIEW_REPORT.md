@@ -2070,3 +2070,83 @@ uv run pytest tests/test_lab_ui_holding_days.py tests/test_gui_saas_pages.py tes
 uv run pytest tests/ -q → 2940 passed, 24 skipped, 4 warnings
 ECS deploy → qre-saas active; /saas/jobs/58 200; /saas/jobs/58/symbols/920832.BJ 200; guards present
 ```
+
+## 2026-10-27 重播遗留清理主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 修复针对真实遗留：tooltip 统一 `%`、数组 candlestick 格式化、高度公式重复、窄屏信息截断。
+- 默认路径保持 job 收益曲线 `%` 口径，避免回归。
+- Required Fixes：无。遗留：`#kreplay-note` 旧灰字备注未清理；浏览器实机未由 Step 5 跑，主 Agent 已部署并做 HTTP/静态标记验证，视觉需用户试玩确认。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_saas_replay_tv.py tests/test_saas_replay_boundaries.py tests/test_saas_static_kline_tv.py tests/test_gui_saas_pages.py -q → 120 passed
+uv run pytest tests/ -q → 2946 passed, 24 skipped, 4 warnings
+ECS deploy → qre-saas active; /saas/jobs/58/symbols/920832.BJ 200; /static/replay.js contains formatTooltipValue
+```
+
+## 2026-10-27 重播灰字备注清理主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 只处理 `#kreplay-note` 一处重播遗留，未借机删其它既有 `.opt`；必要口径通过既有 `data-tip` 机制保留。
+- Required Fixes：无。遗留：tooltip 文案较长，375 下会占多行；如需精简另立小 CR。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_saas_replay_tv.py tests/test_saas_replay_boundaries.py tests/test_saas_static_kline_tv.py tests/test_gui_saas_pages.py -q → 122 passed
+uv run pytest tests/ -q → 2948 passed, 24 skipped, 4 warnings
+ECS deploy → qre-saas active; /saas/jobs/58/symbols/920832.BJ 200; kreplay-note=0; btn-kreplay data-tip=1
+```
+
+## 2026-10-27 历史旧个股详情刷新主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 旧 gzip 产物不再只能靠缺失生成才能刷新；`refresh=1` 明确绕过 ready，worker 已支持覆盖。
+- 只读详情 200 现在带 readonly 标记，showcase/分享不会出现“刷新详情”假入口。
+- Required Fixes：无。遗留：未跑浏览器实机；旧产物需用户按需点击刷新，不批量回填。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_gui_saas.py tests/test_gui_saas_pages.py tests/test_gui_lab_result.py tests/test_saas_symbol_ux.py -q → 263 passed
+uv run pytest tests/ -q → 2956 passed, 24 skipped, 4 warnings
+ECS deploy → qre-saas active; /saas/jobs/58/symbols/920832.BJ 200; detail readonly=true; front-end guard present
+```
+
+## 2026-10-27 K 线画线工具首片主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 画线首片范围控制在静态 K 线，未进入重播、未改因子/重播/Night Mode 合同。
+- 像素坐标转换为真实 K 线日期/价格，缺失/越界降级，不造点。
+- Required Fixes：无。遗留：画线不持久化；未跑浏览器实机，需用户试玩确认两点点击与 Esc 取消。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_saas_static_kline_tv.py tests/test_saas_replay_tv.py tests/test_saas_replay_boundaries.py tests/test_gui_saas_pages.py -q → 131 passed
+uv run pytest tests/ -q → 2961 passed, 24 skipped, 1 failed（known timing flake）
+uv run pytest tests/test_gui_risk_report.py -q → 24 passed
+ECS deploy → qre-saas active; /saas/jobs/58/symbols/920832.BJ 200; kt-trend/kt-horizontal present
+```

@@ -8,8 +8,10 @@ deploy/saas/cloud_schema.sql；tearDown 关闭 engine 连接后 drop 库。
 
 from __future__ import annotations
 
+import gzip
 import subprocess
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -1316,3 +1318,101 @@ class TestShowcaseBadgeInRecords:
         items = client.get("/api/results", headers={"X-User-Id": "1"}).get_json()["items"]
         flags = {i["job_id"]: i["showcase"] for i in items}
         assert flags[j_show] is True and flags[j_plain] is False
+
+
+class TestSymbolDetailRefresh:
+    """QRE-SAAS-SYMBOL-DETAIL-REFRESH：generate 支持 refresh=1 绕过 ready
+    重建刷新任务；缺省时保持幂等 ready；未完结同标任务继续复用。"""
+
+    def _completed_job(self, client, name="refresh"):
+        resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": name,
+                                              "params": {"start": "2026-01-01", "end": "2026-03-01"}},
+                           headers={"X-User-Id": "1"})
+        job_id = resp.get_json()["job_id"]
+        client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                    json={"worker_id": "w1",
+                          "summary": {"strategy_total_return": 0.2, "win_rate": 0.5,
+                                      "max_drawdown": -0.1, "total_trade_count": 5,
+                                      "run_id": "20260101T000000000001"},
+                          "chart_data": {"metrics": {"excess_return": 0.05}},
+                          "data_until": "2026-02-27", "files": []},
+                    headers=WORKER_HEADERS)
+        return job_id
+
+    def _ready_artifact(self, app, job_id, code="000001.SZ"):
+        detail_dir = Path(app.config["SAAS_UPLOAD_DIR"]) / f"job_{job_id}" / "_symbol_details"
+        detail_dir.mkdir(parents=True, exist_ok=True)
+        (detail_dir / f"{code}.json.gz").write_bytes(gzip.compress(b'{"ok": true}'))
+
+    @pytest.fixture(autouse=True)
+    def _upload_dir(self, app, tmp_path):
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path)
+
+    def _gen_count(self, app):
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _get_engine
+        with _get_engine(app).connect() as conn:
+            return conn.execute(text("SELECT count(*) FROM jobs WHERE kind='symbol_detail'")).scalar_one()
+
+    def test_refresh_bypasses_ready_and_reuses_pending(self, client, app):
+        job_id = self._completed_job(client)
+        self._ready_artifact(app, job_id)
+        headers = {"X-User-Id": "1"}
+
+        # 缺省 refresh：产物已就位 → 幂等 ready，不建任务（既有行为不回归）
+        resp = client.post(f"/api/results/{job_id}/symbols/000001/generate", headers=headers)
+        assert resp.status_code == 200
+        assert resp.get_json() == {"ok": True, "status": "ready"}
+        assert self._gen_count(app) == 0
+
+        # refresh=1：即使 ready 也创建刷新任务
+        resp = client.post(f"/api/results/{job_id}/symbols/000001/generate?refresh=1", headers=headers)
+        body = resp.get_json()
+        assert resp.status_code == 200 and body["ok"] is True
+        assert body["status"] == "queued"
+        gen_id = body["gen_job_id"]
+        assert self._gen_count(app) == 1
+
+        # 未完结同标任务继续复用，不重复建
+        resp = client.post(f"/api/results/{job_id}/symbols/000001/generate?refresh=1", headers=headers)
+        body = resp.get_json()
+        assert body["gen_job_id"] == gen_id
+        assert self._gen_count(app) == 1
+
+    def test_refresh_without_artifact_still_creates(self, client, app):
+        job_id = self._completed_job(client)
+        headers = {"X-User-Id": "1"}
+        resp = client.post(f"/api/results/{job_id}/symbols/000001/generate?refresh=1", headers=headers)
+        body = resp.get_json()
+        assert resp.status_code == 200 and body["status"] == "queued"
+        assert self._gen_count(app) == 1
+
+    def test_default_generate_without_artifact_unchanged(self, client, app):
+        job_id = self._completed_job(client)
+        headers = {"X-User-Id": "1"}
+        resp = client.post(f"/api/results/{job_id}/symbols/000001/generate", headers=headers)
+        body = resp.get_json()
+        assert resp.status_code == 200 and body["status"] == "queued"
+        assert self._gen_count(app) == 1
+
+    def test_showcase_detail_marks_readonly(self, client, app):
+        """showcase 只读详情 200 必须带 readonly 标记，前端据此隐藏刷新入口。"""
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _ensure_signal_tables, _get_engine
+
+        job_id = self._completed_job(client)
+        self._ready_artifact(app, job_id)
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        with engine.begin() as conn:
+            conn.execute(text("INSERT INTO showcase (job_id, title, sort_order, is_active) "
+                              "VALUES (:id, '经典', 1, true)"), {"id": job_id})
+
+        detail = client.get(f"/api/results/{job_id}/symbols/000001")
+        assert detail.status_code == 200
+        body = detail.get_json()
+        assert body["readonly"] is True
+        assert body["readonly_kind"] == "showcase"

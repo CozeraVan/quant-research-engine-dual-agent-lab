@@ -527,6 +527,15 @@ def test_symbol_detail_404(lab_client):
     assert lab_client.get("/lab/runs/ghost/symbol/000001.SZ").status_code == 404
 
 
+def test_symbol_detail_factor_basis_marker(lab_client):
+    """QRE-SAAS-SYMBOL-DETAIL-REFRESH：新口径详情必须带 factor_basis 标记
+    （价格型因子已按 K 线前复权锚点换算）；历史旧产物缺该字段，前端据此
+    显示按需刷新入口。"""
+    d = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
+    assert d["ok"] is True
+    assert d["factor_basis"] == "qfq_anchor_v1"
+
+
 def test_symbol_detail_fallback_round_trips(monkeypatch, tmp_path):
     """无个股产物目录：trades 退到 round_trips 过滤，orders/equity 为 None。"""
     import shutil

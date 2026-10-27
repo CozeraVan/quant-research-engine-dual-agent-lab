@@ -2690,3 +2690,34 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 浏览器：`.tmp/replay-tv/` 33/33 通过，1280/375 已由主 Agent 目视确认。
 - 生产：job58 个股页 200，`/static/replay.js` 含 `opts.axisPointer`。未 commit/push。
 - 遗留：重播 tooltip 仍统一加 `%`；重播容器高度未与静态 460px 归一；375 信息区仍 ellipsis。
+
+## 2026-10-27 重播遗留清理交接
+
+- Step 5 实施，Kimi 复核并部署；范围仅 `replay.js` + `symbol.html` + 测试。
+- tooltip：新增 `formatTooltipValue()`；K 线重播关闭统一 `%`，价格/因子按原值，成交量按万，candlestick 显示 OHLC；job 默认路径仍 `%`。
+- 高度：静态/重播共用 `klineHeightForPanes()`。
+- 375：`.kline-ohlc` 窄屏换行，不截断 OHLC/因子值。
+- 测试：相关 120 passed；全量 `2946 passed, 24 skipped, 4 warnings`。
+- 生产：job58/920832 200，replay.js 含 `formatTooltipValue`。未 commit/push。
+- 遗留：`#kreplay-note` 旧灰字备注未清。
+
+## 2026-10-27 重播灰字备注清理交接
+
+- Step 5 实施，Kimi 复核并部署；`#kreplay-note` 动态段落删除，必要口径迁到 `#btn-kreplay` `data-tip`。
+- 测试：相关 122 passed；全量 `2948 passed, 24 skipped, 4 warnings`。
+- 生产：job58/920832 200，旧 note 0，按钮 data-tip 1。未 commit/push。
+
+## 2026-10-27 历史旧个股详情按需刷新交接
+
+- Step 5 实施，Kimi 复核并部署；新增 `factor_basis=qfq_anchor_v1` 标记，旧详情显示“刷新详情”，调用 `generate?refresh=1` 重算。
+- 主 Agent 追加修正：showcase/分享只读详情 200 也返回 `readonly/readonly_kind`，前端只读视图不显示刷新入口。
+- 测试：相关 263 passed；全量 `2956 passed, 24 skipped, 4 warnings`。
+- 生产：job58/920832 200；showcase 详情返回 `readonly=true`；前端含只读刷新守卫。未 commit/push。
+
+## 2026-10-27 K 线画线工具首片交接
+
+- Step 5 实施，Kimi 复核并部署；范围仅 `symbol.html` + 测试。
+- 新增趋势线/水平线/清除画线；像素坐标转真实日期价格，降级不造点；重播禁用画线。
+- 测试：相关 131 passed；全量 `2961 passed, 24 skipped, 1 failed`（已知 timing flake，目标文件复跑 24 passed）。
+- 生产：job58/920832 200，趋势/水平入口存在。未 commit/push。
+- 遗留：画线不持久化；未跑浏览器实机。

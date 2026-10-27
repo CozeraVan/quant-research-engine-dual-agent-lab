@@ -299,6 +299,8 @@ function makeHarness(opts){
 _RENDER_KLINE_OBSERVER_SCENARIO = r"""
 const h = makeHarness({observer: true});
 const source = %SOURCE%;
+// CR-2026-10-27：renderKline 走 replay.js 共享高度 helper
+vm.runInContext(%REPLAY% + '\nglobalThis.QREReplay = window.QREReplay;', h.ctx);
 vm.runInContext(source, h.ctx);
 const d = {
   kline: { dates: ['2024-01-02', '2024-01-03'], ohlc: [[1, 2, 3, 4], [1, 2, 3, 4]], vols: [10, 20] },
@@ -340,6 +342,7 @@ console.log('observer-ok');
 _RENDER_KLINE_FALLBACK_SCENARIO = r"""
 const h = makeHarness({observer: false});
 const source = %SOURCE%;
+vm.runInContext(%REPLAY% + '\nglobalThis.QREReplay = window.QREReplay;', h.ctx);
 vm.runInContext(source, h.ctx);
 const d = {
   kline: { dates: ['2024-01-02', '2024-01-03'], ohlc: [[1, 2, 3, 4], [1, 2, 3, 4]], vols: [10, 20] },
@@ -370,11 +373,13 @@ class TestSymbolKlineResize:
 
     def test_resize_observer(self):
         _node(_RENDER_KLINE_STUBS
-               + _RENDER_KLINE_OBSERVER_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source())))
+               + _RENDER_KLINE_OBSERVER_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
+               .replace("%REPLAY%", json.dumps(REPLAY_JS)))
 
     def test_window_resize_fallback(self):
         _node(_RENDER_KLINE_STUBS
-               + _RENDER_KLINE_FALLBACK_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source())))
+               + _RENDER_KLINE_FALLBACK_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
+               .replace("%REPLAY%", json.dumps(REPLAY_JS)))
 
 
 # ---------------------------------------------------------------- 窗口基线

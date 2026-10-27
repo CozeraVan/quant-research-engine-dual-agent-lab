@@ -350,8 +350,11 @@ class TestFactorLayoutPlan:
 _SYMBOL_EVENT_SCENARIO = r"""
 const h = createReplayHarness();
 vm.runInContext(%FACTOR%, h.context);   // 真实 QREFactorLayout
+vm.runInContext(%REPLAY%, h.context);   // 真实 replay.js（共享高度 helper / tooltip 口径）
 const QREReplay = {
   attach(mountEl, opts){ h.attached = opts; return {destroy(){}}; },
+  // CR-2026-10-27：高度公式单一来源——直接用真实 replay.js 的 helper，不在桩里复制公式
+  klineHeightForPanes: h.context.window.QREReplay.klineHeightForPanes,
 };
 h.attached = null;
 const context = vm.createContext({
@@ -422,6 +425,11 @@ h.attached = null;
 vm.runInContext('mountKlineReplay(' + JSON.stringify(detail) + ')', context);
 assert.equal(h.attached.chartEl, h.document.getElementById('chart-kline'), '重播接管原 K 线容器');
 assert.equal(h.attached.series.filter(s => s.grid === 0 && s.mark).length, 1, 'K 线主图唯一（无第二套）');
+// CR-2026-10-27：重播显式关闭统一 % 口径；容器高度走共享 helper（无副图 460px）
+assert.equal(h.attached.tooltipPercent, false, 'K 线重播不得统一加 %');
+assert.equal(h.document.getElementById('chart-kline').style.height, '460px', '高度走共享 helper');
+const volSeries = h.attached.series.filter(s => s.name === '成交量')[0];
+assert.equal(volSeries.extra.tooltip.valueFormatter(200000), '20.00 万', '成交量 tooltip 按万');
 const gridCount = h.attached.grids.length;
 h.attached = null;
 const detailFactors = JSON.parse(JSON.stringify(detail));
@@ -452,6 +460,7 @@ class TestSymbolReplayEventSource:
         source = _extract(html, r"(let klineResizeBound = false;[\s\S]*?\n\})\nload\(\);", "mountKlineReplay")
         _node(_REPLAY_HARNESS
                + _SYMBOL_EVENT_SCENARIO.replace("%FACTOR%", json.dumps(FACTOR_LAYOUT_JS))
+                                       .replace("%REPLAY%", json.dumps(REPLAY_JS))
                                        .replace("%SOURCE%", json.dumps(source)))
 
 
