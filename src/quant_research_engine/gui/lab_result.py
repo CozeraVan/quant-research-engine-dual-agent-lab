@@ -600,9 +600,9 @@ def _fetch_symbol_range_returns(
 ) -> dict[str, float] | None:
     """批量查 public.stock_daily，算每股区间等权买入持有收益（末收/首收 - 1）。
 
-    一次 IN 查询取全部 ts_code 区间内 (trade_date, close)，按 ts_code 分组在
-    Python 里取首末收盘。任一个股区间内不足 2 个交易日则跳过。
-    DB 失败 / 无起止日期 / 无数据 → None（降级，不报错）。
+    收益按 hfq 口径（close × adj_factor）计算，跨除权/分红连续；一次 IN 查询取
+    全部 ts_code 区间内 (trade_date, hfq_close)，按 ts_code 分组在 Python 里取首末。
+    任一个股区间内不足 2 个交易日则跳过。DB 失败 / 无起止日期 / 无数据 → None。
     """
     if not symbols or not start or not end:
         return None
@@ -617,9 +617,9 @@ def _fetch_symbol_range_returns(
         except Exception:
             store = _store(DEFAULT_DB_URL)
         with store.market_engine.begin() as conn:
-            import os as _os
-            _raw = _os.environ.get("QRE_PRICE_BASIS", "qfq") == "raw"
-            _close_expr = "close * adj_factor" if _raw else "close"
+            # 买入持有收益必须用 hfq 口径（close × adj_factor）：跨除权/分红连续，
+            # 与因子层、引擎 raw 模式同源；不要依赖 QRE_PRICE_BASIS 环境变量。
+            _close_expr = "close * adj_factor"
             rows = conn.execute(
                 text(
                     f"SELECT ts_code, trade_date, {_close_expr} FROM public.stock_daily "
@@ -709,7 +709,12 @@ def _symbol_output_dir(record: dict[str, Any], ts_code: str) -> Path | None:
 
 
 def _fetch_stock_daily(ts_code: str, start: str | None, end: str | None) -> tuple[dict[str, Any] | None, str | None]:
-    """DB public.stock_daily 日 K（OHLC + vol），按 run 起止取。失败降级 (None, note)。"""
+    """DB public.stock_daily 日 K（OHLC + vol），按 run 起止取。
+
+    GUI 详情统一按“前复权@最新”展示：``price * adj_factor / latest_adj_factor``。
+    因子表是 hfq 口径，价格型因子在 `_fetch_factor_panels()` 里会除以同一锚点，
+    保证 EMA/BOLL/MACD 等能和 K 线同尺度叠加。
+    """
     try:
         from sqlalchemy import text
 
@@ -721,25 +726,16 @@ def _fetch_stock_daily(ts_code: str, start: str | None, end: str | None) -> tupl
         except Exception:
             store = _store(DEFAULT_DB_URL)
         with store.market_engine.begin() as conn:
-            import os as _os
-            if _os.environ.get("QRE_PRICE_BASIS", "qfq") == "raw":
-                # 方案A：K线展示锚定最新价（原始价 × fac/fac_latest = 前复权@最新）
-                _sql = (
-                    "SELECT trade_date, "
-                    "open * adj_factor / latest_fac, high * adj_factor / latest_fac, "
-                    "low * adj_factor / latest_fac, close * adj_factor / latest_fac, vol "
-                    "FROM public.stock_daily s "
-                    "JOIN (SELECT adj_factor AS latest_fac FROM public.stock_daily "
-                    "      WHERE ts_code = :c ORDER BY trade_date DESC LIMIT 1) t ON true "
-                    "WHERE ts_code = :c AND (CAST(:d0 AS date) IS NULL OR trade_date >= CAST(:d0 AS date)) "
-                    "AND (CAST(:d1 AS date) IS NULL OR trade_date <= CAST(:d1 AS date)) ORDER BY trade_date"
-                )
-            else:
-                _sql = (
-                    "SELECT trade_date, open, high, low, close, vol FROM public.stock_daily "
-                    "WHERE ts_code = :c AND (CAST(:d0 AS date) IS NULL OR trade_date >= CAST(:d0 AS date)) "
-                    "AND (CAST(:d1 AS date) IS NULL OR trade_date <= CAST(:d1 AS date)) ORDER BY trade_date"
-                )
+            _sql = (
+                "SELECT trade_date, "
+                "open * adj_factor / latest_fac, high * adj_factor / latest_fac, "
+                "low * adj_factor / latest_fac, close * adj_factor / latest_fac, vol "
+                "FROM public.stock_daily s "
+                "JOIN (SELECT adj_factor AS latest_fac FROM public.stock_daily "
+                "      WHERE ts_code = :c ORDER BY trade_date DESC LIMIT 1) t ON true "
+                "WHERE ts_code = :c AND (CAST(:d0 AS date) IS NULL OR trade_date >= CAST(:d0 AS date)) "
+                "AND (CAST(:d1 AS date) IS NULL OR trade_date <= CAST(:d1 AS date)) ORDER BY trade_date"
+            )
             rows = conn.execute(
                 text(_sql),
                 {"c": ts_code, "d0": start or None, "d1": end or None},
@@ -838,12 +834,48 @@ def _panel_display(table: str, column: str) -> dict[str, Any] | None:
     return dict(disp) if isinstance(disp, dict) else None
 
 
+def _factor_is_price_scaled(table: str, column: str) -> bool:
+    """该因子列输出是否与价格同尺度（呈现层需除以 K 线前复权锚点）。
+
+    分类单一来源：`gui.factor_registry.is_price_scaled`（游戏同源）。未注册
+    列保守返回 False——不猜尺度，避免把无量纲指标也除出错。
+    """
+    from quant_research_engine.gui.factor_registry import is_price_scaled, load_registry
+
+    info = load_registry().display(table, column)
+    if info is None:
+        return False
+    entry = load_registry().entry(info["canonical"])
+    return is_price_scaled(entry.family if entry else None, column)
+
+
+def _latest_adj_factor(conn: Any, ts_code: str) -> float | None:
+    """该股最新 adj_factor（K 线前复权锚点）；缺失返回 None（不换算）。"""
+    from sqlalchemy import text
+
+    row = conn.execute(
+        text("SELECT adj_factor FROM public.stock_daily "
+             "WHERE ts_code = :c AND adj_factor IS NOT NULL AND adj_factor > 0 "
+             "ORDER BY trade_date DESC LIMIT 1"),
+        {"c": ts_code},
+    ).fetchone()
+    if not row or row[0] is None:
+        return None
+    try:
+        return float(row[0])
+    except (TypeError, ValueError):
+        return None
+
+
 def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str]) -> tuple[list[dict[str, Any]] | None, str | None]:
     """按 K 线日期对齐拉取策略因子序列（含出入场阈值）。失败降级 (None, note)。
 
     每个 panel 带 ``col``（真实因子列名）供前端分组启发式；策略同时引用
     macd_<P>/macds_<P> 且表内存在 macdh_<P> 时自动补查 MACD 柱 panel（name=MACD柱），
     补全失败静默跳过（每股至多一次 information_schema 查询，且仅当检测到 macd 对时）。
+
+    呈现口径：因子表是 hfq，K 线是前复权@最新。价格型因子（EMA/BOLL/MACD 等）
+    会除以该股最新 ``adj_factor``；无量纲因子（RSI 等）不换算。引擎回测仍用 hfq。
     """
     specs, entry, exit_ = _strategy_factor_specs(record)
     if not specs or not dates:
@@ -860,6 +892,8 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
             store = _store(DEFAULT_DB_URL)
         hist_specs: list[tuple[str, str]] = []  # [(table, hist_col)] 已确认存在的补查列
         with store.market_engine.begin() as conn:
+            # K 线前复权锚点：价格型因子从 hfq 换算到 K 线同尺度（引擎仍用 hfq，不变）
+            anchor = _latest_adj_factor(conn, ts_code)
             candidates = _macd_hist_candidates(specs)
             if candidates:
                 try:  # 列存在性探测失败整体降级：不补 HIST，不影响原 panel
@@ -904,15 +938,23 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
         return None, f"因子数据不可用（{exc}）"
     panels = []
     for name in specs:
-        series = [round(raw[name][d], 4) if d in raw[name] else None for d in dates]
+        table, col = specs[name]
+        scaled = _factor_is_price_scaled(table, col) and anchor is not None and anchor > 0
+        series = [
+            round(raw[name][d] / anchor, 4) if scaled and d in raw[name]
+            else (round(raw[name][d], 4) if d in raw[name] else None)
+            for d in dates
+        ]
         if any(v is not None for v in series):
-            table, col = specs[name]
+            thresholds = _factor_thresholds(name, entry, exit_)
+            if scaled and thresholds:
+                thresholds = [round(t / anchor, 4) for t in thresholds]
             panels.append({
                 "name": name,
                 "col": col,
                 "table": table,
                 "values": series,
-                "thresholds": _factor_thresholds(name, entry, exit_),
+                "thresholds": thresholds,
                 # QRE-FACTOR-DISPLAY-CONTRACT：呈现合同随面板下发（未注册为 None）
                 "display": _panel_display(table, col),
             })
@@ -920,7 +962,12 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
         key = ("MACD柱", hist)
         if key not in raw:
             continue
-        series = [round(raw[key][d], 4) if d in raw[key] else None for d in dates]
+        scaled = _factor_is_price_scaled(table, hist) and anchor is not None and anchor > 0
+        series = [
+            round(raw[key][d] / anchor, 4) if scaled and d in raw[key]
+            else (round(raw[key][d], 4) if d in raw[key] else None)
+            for d in dates
+        ]
         if any(v is not None for v in series):
             panels.append({"name": "MACD柱", "col": hist, "table": table, "values": series,
                            "thresholds": [], "display": _panel_display(table, hist)})

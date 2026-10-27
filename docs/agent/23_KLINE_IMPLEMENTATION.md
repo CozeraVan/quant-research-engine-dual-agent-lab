@@ -326,6 +326,7 @@ open 时：
 - A 路遗留已修补：`job.html` dispose resize 守卫；`replay.js` `windowDisplayData(zeroBase)` 让策略/基准左端回 0，指标仍全量口径。
 - 静态 K 线 TV 化首片已实施：`symbol.html` 左侧工具栏、顶部 OHLC/因子信息区、右侧价格标尺、底部时间轴；因子合同与 Night Mode 不变。重播界面尚未 TV 化。
 - MACD 旧别名修复：`factor-layout.js` 启发式回退现在识别 `macd_dif/macd_dea/macd_hist/macd_signal/macd_histogram`，旧无 display 产物也会合并成一个 MACD 副图。
+- 复权口径修复：因子表/引擎是 hfq，K 线详情是前复权@最新；`lab_result` 现在对价格型因子除以最新 `adj_factor`，买入持有收益恒 hfq。分类单一来源 `gui.factor_registry.is_price_scaled()`，游戏共用。
 
 ## 11. 后续阅读顺序（给 DeepSeek）
 1. `gui/saas/templates/symbol.html`：SaaS 静态图与个股重播。

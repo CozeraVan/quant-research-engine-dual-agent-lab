@@ -3662,3 +3662,11 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 修复：`familyOf()` 新增 MACD 类别名正则，归一到同一 `triple` 家族；支持 `dif/dea/signal/hist/histogram` 与可选参数后缀；带参后缀不与裸别名串键。
 - 主 Agent 复核：`tests/test_factor_display_contract.py` 19 passed；相关 182 passed；全量 `2926 passed, 24 skipped, 1 failed`，失败为已知 risk report timing flake，单文件复跑 24 passed。
 - 发布：ECS 同步 `factor-layout.js`，qre-saas active；`/static/factor-layout.js` 200 且包含新别名规则。未 commit/push。
+
+## 2026-10-27 因子呈现复权口径系统性修复实施交接
+
+- 改动：`src/quant_research_engine/gui/factor_registry.py`、`src/quant_research_engine/gui/lab_result.py`、`src/quant_research_engine/game/factors.py`、`tests/test_gui_lab_result.py`、CR 新文件。
+- 新增共享 `PRICE_SCALED_FAMILIES` / `NON_PRICE_FAMILIES` / `MIXED_FAMILY_PRICE_PREFIXES` / `is_price_scaled()`；游戏改为复用同一分类，删除重复表。
+- `lab_result._fetch_factor_panels()` 查询最新 adj_factor，价格型因子和阈值除以锚点；无量纲因子不换算。
+- `lab_result._fetch_stock_daily()` 统一前复权@最新；`_fetch_symbol_range_returns()` 恒 hfq，不再依赖 `QRE_PRICE_BASIS`。
+- 主 Agent 复核：相关 107 passed；全量 2930 passed/24 skipped；ECS 部署后页面/API 200。未 commit/push。

@@ -1515,6 +1515,14 @@ No open questions remain.
 - Impact: `cloud_schema.sql` 新增 share_links（生产须 postgres 先 apply）；`_require_completed_result` 增加 share 公开只读通道，与 showcase verified 通道并存且 `readonly_kind` 区分；无效/过期/撤销/错 job token 一律不降级授权（匿名 401、登录他人 404，错误体与不存在一致）；游客清理 jobs 逻辑不变（CASCADE 清理孤儿分享）；`SAAS_AUTH_SALT` 轮换会使历史分享链接全部失效（预期安全行为）。
 - Owner: KIMI_CODE（用户 2026-10-26 批准计划 superman-hellcat-crystal）
 
+### 2026-10-27: 因子呈现复权口径分离（GUI 换算，引擎不变）
+
+- Decision: 因子表与引擎 raw 模式保持 hfq（原始价 × adj_factor）；GUI K 线详情保持前复权@最新。新增 `gui.factor_registry.is_price_scaled()` 作为价格型/无量纲因子分类单一来源，GUI 呈现层把价格型因子和阈值除以最新 `adj_factor`，买入持有收益恒用 hfq。
+- Reason: 实测 EMA/BOLL/MACD 直接叠到前复权 K 线会差 `latest_adj_factor` 倍；引擎侧价格列在 raw 模式已 ×adj_factor，与因子同口径，改引擎会破坏回测语义。
+- Alternatives: 把因子表整体改成前复权@最新——否决（同一列不同历史锚点会随时间变化，破坏 PIT 与回测复现）；GUI 不改——否决（用户可见指标必然错位）。
+- Impact: 新生成个股详情/新 run 的因子与 K 线同尺度；历史旧 gzip 产物可能仍未换算，不批量回填。证据见 `change_requests/CR-2026-10-27_factor_price_scale_presentation.md`。
+- Owner: KIMI_CODE（用户 2026-10-27 要求彻底排查）
+
 ### 2026-10-27: TradingView 化图表内核选型（Spike 结论）
 
 - Decision: TradingView 化第一阶段采用“**A 增强 ECharts 为主 + B Lightweight Charts 受控试点**”；C 自研 Canvas/WebGL 不进第一阶段。B 仅限 `symbol.html` K 线区，`job.html` 的非 K 线图表不换内核。

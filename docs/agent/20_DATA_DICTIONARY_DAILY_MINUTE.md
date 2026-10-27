@@ -149,6 +149,7 @@
 ## 6. 给其他 agent 的硬规则
 
 1. 价格一律**原始不复权价 + adj_factor 列**，复权在因子计算/回测时做，禁止入库前锁死口径。
+2. **呈现口径分离**：因子表与引擎 raw 模式是 hfq（原始价 × adj_factor）；GUI K 线详情是前复权@最新（原始价 × adj_factor / latest_adj_factor）。GUI 呈现层必须用 `gui.factor_registry.is_price_scaled()` 把价格型因子/阈值除以最新 adj_factor；无量纲因子不换算。买入持有收益恒用 hfq。
 2. 量=手、额=千元（tushare 口径），跨表计算前先核对单位。
 3. 财务数据 join 必须用 `ann_date <= 交易日` 做 PIT 对齐，禁止用报告期直接对齐。
 4. 新行情表一律 TimescaleDB hypertable + 7 天 chunk + `(ts_code, 时间列)` 主键。

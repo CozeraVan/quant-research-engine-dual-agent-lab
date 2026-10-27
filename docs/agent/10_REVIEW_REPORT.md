@@ -1986,3 +1986,24 @@ uv run pytest tests/ -q → 2926 passed, 24 skipped, 1 failed（known timing fla
 uv run pytest tests/test_gui_risk_report.py -q → 24 passed
 ECS deploy → qre-saas active; /static/factor-layout.js 200 and contains alias rule
 ```
+
+## 2026-10-27 因子呈现复权口径系统性修复主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 根因不是注册表缺失，而是 GUI K 线前复权@最新与因子表 hfq 的尺度差；引擎侧因 raw 模式同样 ×adj_factor，信号与因子同口径，不应改动。
+- 修复只在呈现层换算价格型因子，并建立 GUI/游戏共用分类，避免家族表两处漂移。
+- 买入持有收益改为恒 hfq，消除环境变量导致的口径不确定性。
+- Required Fixes：无。遗留：历史旧 gzip 个股详情可能仍未换算；不批量回填。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_gui_lab_result.py tests/test_factor_registry.py tests/test_trading_game_price_basis.py tests/test_trading_game_factors.py -q → 107 passed
+uv run pytest tests/ -q → 2930 passed, 24 skipped, 4 warnings
+ECS deploy → qre-saas active; /saas/jobs/58 200; /saas/jobs/58/symbols/920556.BJ 200; /api/saas/factors 200
+```

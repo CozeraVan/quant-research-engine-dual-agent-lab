@@ -35,6 +35,41 @@ PRICE_BASIS_ZH = {
     "average_price": "均价",
 }
 
+# ---------------------------------------------------------------------------
+# 因子输出尺度分类（GUI 呈现层与游戏共用，2026-10-27）
+# ---------------------------------------------------------------------------
+# 因子表按 hfq（原始价 × adj_factor）落库；K 线详情按“前复权@最新”展示。
+# 输出与价格同尺度的因子在呈现层必须除以最新 adj_factor，否则 EMA/BOLL/MACD
+# 等会与 K 线差 adj_factor 倍。引擎侧 raw 模式同样把价格列 × adj_factor，
+# 与因子同口径，因此本分类只用于 GUI/游戏呈现，不改变回测语义。
+PRICE_SCALED_FAMILIES = frozenset(
+    "ldecay wcp hlc3 vwap_d ohlc4 ha hl2 midpoint midprice tema zl_ema pbo fwma jma dema "
+    "hma bbm alma linreg agl wma ema vwma kama bbl its superts bbu sma agt swma trima pwma "
+    "dcl llv rma t3 supertl dcm sinwma hhv kcbe kcb hilos hilol kcu kcue agj kcle kcl accbm "
+    "dd accbu iks accbl hilo dcu ht_tl cksps median qtl ckspl supert ics isa isb vidya "
+    "tos_stdevall atr stdev mad high_low dpo slope macd macds macdh macd_cn apo mom".split()
+)
+# 已实测无量纲（0–100 / 0–1 / 比值 / 计数 / 对数 / 量额）的族，显式记录以便排查。
+NON_PRICE_FAMILIES = frozenset(
+    "log_price dd_log dd_pct size float_size pdist price_dist bbb bb_width rsi".split()
+)
+# 同一族内混合口径：只有下列列前缀是价格（psaraf/psarr 是加速度与比率，zigzag 全为 NaN）。
+MIXED_FAMILY_PRICE_PREFIXES = {"psar": ("psarl_", "psars_"), "zigzag": ()}
+
+
+def is_price_scaled(family: str | None, column: str | None = None) -> bool:
+    """该列输出是否与价格同尺度（呈现层需要除以 K 线复权锚点）。
+
+    未知族保守返回 False；混合族按列前缀判断；NON_PRICE_FAMILIES 显式优先。
+    """
+    if family in NON_PRICE_FAMILIES:
+        return False
+    if family in MIXED_FAMILY_PRICE_PREFIXES:
+        if not column:
+            return False
+        return any(column.startswith(prefix) for prefix in MIXED_FAMILY_PRICE_PREFIXES[family])
+    return family in PRICE_SCALED_FAMILIES
+
 _CANONICAL_PREFIX = "factors."
 _MARKET_TABLE = "public.stock_daily"
 
@@ -539,7 +574,6 @@ class FactorRegistry:
                             f"「{raw}」在因子库中同时存在{'、'.join(others)}等口径，"
                             f"已默认取{chosen}（{entry.canonical}）；如需其他口径请明确说明。"
                         )
-                    return self._unique_result(raw, entry.canonical, notices)
                     return self._unique_result(raw, entry.canonical, notices)
 
         return Resolution(

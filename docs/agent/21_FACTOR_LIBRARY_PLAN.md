@@ -92,6 +92,7 @@ inc=利润表/bs=资产负债表/cf=现金流量表/fi=财务指标，流量列 
 - EMA/均线/BOLL/轨道类必须 overlay；MACD/PPO/PVO 同参数 DIF+DEA+HIST 同副图；KDJ/STOCH 等家族同副图；RSI、风险、流动性、Alpha 独立副图。
 - `panel_id` 必须含价格口径，禁止同列不同口径共用面板或缓存键。无 display 的旧数据才允许启发式回退，显式 display 不得被启发式覆盖。
 - 旧无 display 产物常见别名为 `macd_dif` / `macd_dea` / `macd_hist` / `macd_signal` / `macd_histogram`；启发式回退必须归一到同一 MACD 家族，否则 DIF/DEA/HIST 会被拆成多个副图（2026-10-27 修复）。
+- **复权呈现口径（2026-10-27）**：因子表/引擎 raw 是 hfq，K 线详情是前复权@最新。`lab_result` 对价格型因子和阈值除以最新 `adj_factor`；分类单一来源 `gui.factor_registry.is_price_scaled()`，游戏共用。未注册列不猜尺度。
 - 验收：`tests/test_factor_display_contract.py` 19 例 + 注册表 40 例通过，全量 2890 passed + 6 skipped；真实 Chromium 验证 replay 和夜间切换、375 无横溢。ECS 备份 `/tmp/qre-factor-display-pre-20261027/`，仅重启 qre-saas，未跑真实回测，未 commit/push。
 
 

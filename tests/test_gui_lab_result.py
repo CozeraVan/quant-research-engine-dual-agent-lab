@@ -805,6 +805,9 @@ class _FakeRes:
     def first(self):
         return self._rows[0] if self._rows else None
 
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
 
 def _fake_factor_store(monkeypatch, values, existing_cols):
     """构造假 store：information_schema 按 existing_cols 应答，因子查询按 values 应答。"""
@@ -815,6 +818,8 @@ def _fake_factor_store(monkeypatch, values, existing_cols):
             sql = str(stmt)
             if "information_schema.columns" in sql:
                 return _FakeRes([(1,)] if params.get("c") in existing_cols else [])
+            if "SELECT adj_factor FROM public.stock_daily" in sql:
+                return _FakeRes([(142.0,)])
             col = _re.search(r'"(\w+)" FROM', sql).group(1)
             return _FakeRes([(d, values[col]) for d in ("2024-01-02", "2024-01-03") if col in values])
 
@@ -860,6 +865,82 @@ def test_fetch_factor_panels_col_and_macdh_backfill(monkeypatch, tmp_path):
     assert panels[0]["values"] == [1.0, 1.0] and panels[0]["thresholds"] == [0.0, 0.0]
 
 
+def test_fetch_symbol_range_returns_uses_hfq(monkeypatch):
+    """买入持有收益必须 hfq 口径，且不依赖 QRE_PRICE_BASIS 环境变量。"""
+    import os
+
+    from quant_research_engine.gui.lab_result import _fetch_symbol_range_returns
+
+    captured = {}
+
+    class _Res:
+        def fetchall(self):
+            return [
+                ("000001.SZ", "2024-01-02", 100.0),
+                ("000001.SZ", "2024-01-03", 150.0),
+            ]
+
+    class _Conn:
+        def execute(self, stmt, params=None):
+            captured["sql"] = str(stmt)
+            return _Res()
+
+    class _Begin:
+        def __enter__(self):
+            return _Conn()
+
+        def __exit__(self, *a):
+            return False
+
+    class _Engine:
+        def begin(self):
+            return _Begin()
+
+    class _Store:
+        market_engine = _Engine()
+
+    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda *a, **k: _Store())
+    monkeypatch.delenv("QRE_PRICE_BASIS", raising=False)
+
+    rets = _fetch_symbol_range_returns(["000001.SZ"], "2024-01-02", "2024-01-03")
+    assert "close * adj_factor" in captured["sql"]
+    assert "QRE_PRICE_BASIS" not in captured["sql"]
+    assert rets == {"000001.SZ": 0.5}
+    assert os.environ.get("QRE_PRICE_BASIS") in (None, "")
+def test_factor_is_price_scaled_pure():
+    """价格型/无量纲因子分类（GUI 与游戏同源）；未注册列不猜尺度。"""
+    from quant_research_engine.gui.lab_result import _factor_is_price_scaled
+
+    assert _factor_is_price_scaled("factors.stock_daily_overlap_close", "ema_5") is True
+    assert _factor_is_price_scaled("factors.stock_daily_momentum_close", "macd_12_26_9") is True
+    assert _factor_is_price_scaled("factors.stock_daily_momentum_close", "rsi_14") is False
+    assert _factor_is_price_scaled("factors.unregistered_table", "whatever") is False
+
+
+def test_fetch_factor_panels_price_scaled_to_kline(monkeypatch, tmp_path):
+    """价格型因子按最新 adj_factor 换算到 K 线前复权口径；无量纲因子不换算。"""
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+    run_dir = tmp_path / "runs" / "r1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "strategy.yaml").write_text(
+        "data:\n  factor_fields:\n"
+        "    ema: factors.stock_daily_overlap_close.ema_5\n"
+        "    rsi: factors.stock_daily_momentum_close.rsi_14\n"
+        "signal:\n  entry: ema > 142\n  exit: rsi < 30\n",
+        encoding="utf-8",
+    )
+    values = {"ema_5": 142.0, "rsi_14": 56.0}
+    _fake_factor_store(monkeypatch, values, existing_cols=set())
+
+    from quant_research_engine.gui.lab_result import _fetch_factor_panels
+
+    panels, note = _fetch_factor_panels({"run_id": "r1"}, "000001.SZ", ["2024-01-02", "2024-01-03"])
+    assert note is None
+    by_name = {p["name"]: p for p in panels}
+    assert by_name["ema"]["values"] == [1.0, 1.0]
+    assert by_name["ema"]["thresholds"] == [1.0]
+    assert by_name["rsi"]["values"] == [56.0, 56.0]
+    assert by_name["rsi"]["thresholds"] == [30.0]
 def test_fetch_factor_panels_macdh_missing_column(monkeypatch, tmp_path):
     """macdh 列不存在 / 只引用 macd 单线：不补 panel，原功能不受影响。"""
     monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")

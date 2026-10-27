@@ -5,7 +5,10 @@ from __future__ import annotations
 import re
 
 from quant_research_engine.game.engine import GameRuleError
-from quant_research_engine.gui.factor_registry import FactorRegistry, load_registry
+from quant_research_engine.gui.factor_registry import (
+    FactorRegistry, MIXED_FAMILY_PRICE_PREFIXES, NON_PRICE_FAMILIES,
+    PRICE_SCALED_FAMILIES, is_price_scaled, load_registry,
+)
 
 TECHNICAL_CATEGORIES = (
     "overlap", "momentum", "volatility", "volume", "trend",
@@ -33,20 +36,9 @@ DEFAULT_CANONICALS = (
 )
 # 因子表按 hfq 口径（原始价 × adj_factor）落库，游戏 K 线按固定锚点前复权；
 # 下列族的输出是价格或价格差，必须除以会话锚点才能与 K 线同尺度。
+# 分类单一来源：gui.factor_registry（GUI 呈现层与游戏共用，避免两处漂移）。
 # 证据：.tmp/trading-game-terminal/scan_all_families*.csv、verify_*.txt。
-PRICE_SCALED_FAMILIES = frozenset(
-    "ldecay wcp hlc3 vwap_d ohlc4 ha hl2 midpoint midprice tema zl_ema pbo fwma jma dema "
-    "hma bbm alma linreg agl wma ema vwma kama bbl its superts bbu sma agt swma trima pwma "
-    "dcl llv rma t3 supertl dcm sinwma hhv kcbe kcb hilos hilol kcu kcue agj kcle kcl accbm "
-    "dd accbu iks accbl hilo dcu ht_tl cksps median qtl ckspl supert ics isa isb vidya "
-    "tos_stdevall atr stdev mad high_low dpo slope macd macds macdh macd_cn apo mom".split()
-)
-# 已实测无量纲（0–100 / 0–1 / 比值 / 计数 / 对数 / 量额）的族，显式记录以便排查。
-NON_PRICE_FAMILIES = frozenset(
-    "log_price dd_log dd_pct size float_size pdist price_dist bbb bb_width rsi".split()
-)
 # 同一族内混合口径：只有下列列前缀是价格（psaraf/psarr 是加速度与比率，zigzag 全为 NaN）。
-MIXED_FAMILY_PRICE_PREFIXES = {"psar": ("psarl_", "psars_"), "zigzag": ()}
 _OVERLAY_RE = re.compile(
     r"^(?:ema|ma|sma|wma|dema|tema|hma|kama|alma|rma|trima|jma|vidya|swma|fwma|pwma|"
     r"sinwma|zl_ema|zlma)_?\d*$"
@@ -94,15 +86,6 @@ def factor_catalog(registry: FactorRegistry | None = None) -> list[dict]:
     order = {name: index for index, name in enumerate(GROUP_ORDER)}
     result.sort(key=lambda item: (order[item["group"]], item["label"], item["canonical"]))
     return result
-
-
-def is_price_scaled(family: str | None, column: str | None = None) -> bool:
-    """该列输出是否与价格同尺度（需要除以会话锚点）。未知族保守返回 False。"""
-    if family in MIXED_FAMILY_PRICE_PREFIXES:
-        if not column:
-            return False
-        return any(column.startswith(prefix) for prefix in MIXED_FAMILY_PRICE_PREFIXES[family])
-    return family in PRICE_SCALED_FAMILIES
 
 
 def price_scaled_canonicals(canonicals) -> dict[str, bool]:

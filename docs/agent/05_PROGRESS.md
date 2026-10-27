@@ -1487,3 +1487,13 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - **测试**：新增 `tests/test_saas_static_kline_tv.py` 10 例；相关 159 passed；全量 2927 passed/24 skipped。
 - **浏览器/生产**：1280/375 截图已由主 Agent 目视确认；ECS job58 个股页 200 且包含 `kline-tools`。未 commit/push。
 - **遗留**：重播界面未 TV 化；移动端信息密度高；面板全关分支仅单测覆盖。
+
+## 2026-10-27 因子呈现复权口径系统性排查与修复
+
+用户要求彻底排查 K 线/技术指标呈现问题。结论：注册表层健康（895/895、display 0 issue），但 GUI 呈现层存在复权口径错位。
+
+- **根因**：因子表与引擎 raw 模式都是 hfq（原始价 × adj_factor）；GUI K 线详情是前复权@最新。价格型因子直接叠加会差 `latest_adj_factor` 倍。实测 000001.SZ `ema_5=1616.44` vs K 线 11.47，adj=142.0699。
+- **修复**：新增共享分类 `gui.factor_registry.is_price_scaled()`；`lab_result._fetch_factor_panels()` 对价格型因子和阈值除以最新 adj_factor；`_fetch_stock_daily()` 统一前复权@最新；`_fetch_symbol_range_returns()` 恒用 hfq。引擎回测语义不变。
+- **测试**：新增价格尺度分类、因子换算、阈值换算、买入持有 hfq 用例；相关 107 passed；全量 `2930 passed, 24 skipped, 4 warnings`。
+- **生产**：ECS 同步 `lab_result.py` + `factor_registry.py`，qre-saas active；job58/symbol/factors API 200。
+- **遗留**：历史旧 gzip 个股详情可能仍未换算；需要时按个股重新生成，不批量回填。详见 `change_requests/CR-2026-10-27_factor_price_scale_presentation.md`。
