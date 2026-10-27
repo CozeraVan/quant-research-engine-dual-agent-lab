@@ -2,6 +2,75 @@
 
 ## Task ID
 
+QRE-SAAS-FRM-HISTOGRAM-CUMRET（经典策略 FRM 日收益分布无数据修复）
+
+## Created By
+
+KIMI_CODE（2026-10-27；用户要求检查经典策略 FRM 结构并修复日收益分析无数据）
+
+## 目标与边界
+
+1. 只修 SaaS `/api/results/<job_id>/risk-analysis` 的“日收益分布/直方图”数据缺失，不改 FRM 指标计算、风险报告、收益曲线口径或页面结构。
+2. 直方图数据源必须与 risk_report 的日收益口径一致：使用 `result_chart_data.cumret` 差分还原日收益；禁止使用 `total_equity.pct_change`（会引入新股注资跳变），禁止把 per-symbol `equity_curve.csv` 误当组合级曲线。
+3. 无 risk_report、无 cumret、cumret 过短或 mean/std 缺失时，`histogram` 保持 `None`，前端继续显示“暂无分布数据”，不造数据。
+4. 不跑回测、不改数据库/worker/引擎/游戏；按 R-DEPLOY-001 先部署 ECS 并验证，再等待用户验收；未 commit/push。
+
+## 验证
+
+```bash
+uv run pytest tests/test_gui_lab_result.py tests/test_gui_saas.py tests/test_saas_access_hardening.py -q
+uv run pytest tests/ -q
+./deploy/saas/deploy-ecs.sh src/quant_research_engine/gui/lab_result.py src/quant_research_engine/gui/saas/app.py
+# 生产只读验证：/api/results/58|66/risk-analysis 的 histogram 40 箱、点数 = n_obs
+```
+
+## Task ID
+
+QRE-WEEK-TESTDEBT-ML-SENSITIVITY（工程收口 + M10.4 参数敏感性工具化）
+
+## Created By
+
+KIMI_CODE 统筹（2026-10-27）；DeepSeek 实施，Kimi 复核。用户 2026-10-27 选择本周主线：工程收口 + ML 工具化。
+
+## 目标与边界
+
+1. **工程收口**：修掉全仓唯一红灯 `tests/test_showcase_roller.py::TestParams::test_build_roll_params_holding_override`。根因是该测试硬编码读取已按用户批准删除的外部产物 `/home/van/qre-outputs/gui-console/runs/20261011T135434249768/strategy.yaml`。必须改为自包含 YAML/夹具，禁止恢复已删除数据，禁止放宽原断言语义。
+2. **M10.4 参数敏感性工具化**：在现有只读 ML 报告基础上增加确定性 sensitivity 能力，回答默认 `eps=1.0` 的“无成簇”是否对参数敏感。默认行为与既有产物合同不变；不新增公网 UI、不新增主环境依赖、不重算统计、不跑任何回测。
+3. **游戏边界**：不碰 `src/quant_research_engine/game/`、游戏测试、`docs/agent/22_TRADING_GAME.md` 与游戏 CR；这些保持本地未提交，等用户试玩反馈。
+4. **流程边界**：DeepSeek 不改共享进度文档（04/05/09/10/11/14 等），由主 Agent 统一回写；不部署 ECS、不 commit/push；不得修复无关架构或恢复旧数据。
+
+## 实施要求
+
+### A. 测试债务修复
+
+- 用 `tmp_path` 或模块内最小 YAML 复现 job#58 的 holding 语义：YAML `holding.max_holding_days=20`；`params.max_holding_days=None` → 20；显式 `0` → 0；`mode=shared` 仍按现有逻辑报错。
+- 顺带搜索非 slow 测试中其它硬编码 `qre-outputs/gui-console/runs/...` 路径；凡因本轮清理失效的，改为自包含或明确 skip，不静默删除覆盖。
+- 验证：`uv run pytest tests/test_showcase_roller.py -q` 与全量 `uv run pytest tests/ -q` 必须记录真实结果。
+
+### B. M10.4 sensitivity
+
+- CLI 增加可选的参数网格（建议 `--eps-grid`，默认关闭；默认输出与当前完全一致），对同一 fit 产物逐组合运行并输出 sensitivity 摘要：策略状态计数、成簇策略数、noise 股票数、参数组合。
+- 输出物必须确定、可审计；不得覆盖默认 `ml_cluster_*` 主产物。manifest 或 sensitivity 文件需记录参数、随机种子、输入目录和 scikit-learn 版本。
+- 测试覆盖：默认不开启时行为不变；网格输出确定；空/不足样本安全；主环境无 sklearn 降级不变。
+- 真实数据只读验证使用既有 `outputs/strategy_fit/f365c8a07b33`；证据可放 `.tmp/`，不跑回测。
+
+## 验证命令（最低要求）
+
+```bash
+uv run pytest tests/test_showcase_roller.py -q
+uv run pytest tests/ -q
+PYTHONPATH=.venv-ml/lib/python3.13/site-packages uv run pytest tests/test_strategy_fit_ml.py tests/test_strategy_fit.py tests/test_portfolio_report_manifest.py -q
+.venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir outputs/strategy_fit/f365c8a07b33 --eps-grid 1.0,1.5,2.0
+```
+
+## 完成定义
+
+- 全仓测试不再存在本轮已知外部产物失败；如有其它失败必须如实报告，不得伪报全绿。
+- M10.4 默认合同不变，sensitivity 输出可复现；真实 fit 的默认/敏感性差异被明确记录。
+- 共享文档由主 Agent 在复核后统一更新。
+
+## Task ID
+
 QRE-PARALLEL-GAME-TERMINAL-AND-M10-4（DeepSeek 游戏修复 + Step 5 ML 聚类首片）
 
 ## Created By

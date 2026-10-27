@@ -265,7 +265,7 @@
 15. ~~root SSH 与部署发布纪律加固。~~ **已验收通过（2026-10-27，QRE-ECS-SSH-HARDENING）**：root 直连禁用、deploy+sudo 可用、显式保留管理台隧道；唯一部署入口与默认 deploy 用户已生效。
 16. ~~mindata CSV 与遗留数据清理。~~ **DONE（2026-10-27，QRE-DATA-CLEANUP-EXECUTION）**：用户批准后删除 `akshare_data`、`aguhuice_test`、`quant_hub`、`aguhuice_local` 和指定旧回测/实验产物；`qre-outputs` 27G→536M，磁盘可用 386G→418G。留档 `/home/van/quant-workspace/backups/local-cleanup-20261027/`；活跃目录和两个待验收 staging 库保留。8081 staging 重用前需重建/换库。新增 20261019/20/21 三份分钟 CSV 只读核验通过，等待 17:20 timer 自动入库；分钟清洗/压缩按用户要求暂停。未 commit/push。
 17. [挂起] 深度性能与压力测试（用户明确当前不做硬件/压测推进）。
-18. ~~M10.4 ML 聚类首个分析切片。~~ **DONE（2026-10-27，Step 5 实施/Kimi 复核，未 commit/push）**：DBSCAN + noise、90/99/99.9 tier 保留、可选 sklearn 降级、CLI/四类产物/manifest 合同完成；真实 fit 只读分析 81 策略，默认 41 insufficient/40 all_noise，eps=2.0 敏感性试运行 5 策略成簇。ML 相关 158 passed、主环境相关 469 passed + 14 skipped、真实 manifest 无 issue；未跑新回测。后续 UI/元数据扩展另行立项。
+18. ~~M10.4 ML 聚类首个分析切片 + 参数敏感性工具化。~~ **DONE（2026-10-27，DeepSeek 实施/Kimi 复核，未 commit/push）**：DBSCAN + noise、90/99/99.9 tier 保留、可选 sklearn 降级、CLI/四类产物/manifest 合同完成；新增可选 `--eps-grid` sensitivity，默认产物合同不变。真实 fit 只读分析 81 策略，默认 41 insufficient/40 all_noise；eps=1.5/2.0 分别 2/5 策略成簇。ML 相关 165 passed、全量 2906 passed + 24 skipped；未跑新回测。后续 UI/元数据扩展另行立项。
 19. 会员分层、付费权益与微信信号推送（下一主线候选，先对齐颗粒度）。
 
 #### 挂起（保留，不删除）

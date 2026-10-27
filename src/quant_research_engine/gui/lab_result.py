@@ -1146,6 +1146,56 @@ def histogram_normal_data(
     return {"edges": edges, "counts": counts, "normal": normal}
 
 
+def daily_returns_from_cumret(cumret: list[Any] | None) -> list[float]:
+    """累计收益率序列 → 日收益序列（SaaS FRM 直方图数据源）。
+
+    SaaS 的 ``result_chart_data.cumret`` 是组合级“交集口径日收益累乘”的累计值，
+    已剔除新股注资；日收益必须由相邻累计值还原，不能直接用 ``equity`` 的
+    ``pct_change``（会重新引入注资跳变）。缺口/非有限值处重新起算，不造连续收益。
+    """
+    import math
+
+    returns: list[float] = []
+    prev: float | None = None
+    for raw in cumret or []:
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            prev = None
+            continue
+        if not math.isfinite(value):
+            prev = None
+            continue
+        if prev is not None:
+            denominator = 1.0 + prev
+            if denominator != 0:
+                returns.append((1.0 + value) / denominator - 1.0)
+        prev = value
+    return returns
+
+
+def histogram_from_cumret(
+    cumret: list[Any] | None,
+    mean: Any,
+    std: Any,
+    n_bins: int = HISTOGRAM_BINS,
+) -> dict[str, Any] | None:
+    """cumret + risk report 的 mean/std → 前端就绪直方图；退化输入返回 None。"""
+    import math
+
+    try:
+        mean_f = float(mean)
+        std_f = float(std)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(mean_f) or not math.isfinite(std_f):
+        return None
+    returns = daily_returns_from_cumret(cumret)
+    if len(returns) < 2:
+        return None
+    return histogram_normal_data(returns, mean_f, std_f, n_bins)
+
+
 def build_lab_risk_view(report: dict[str, Any]) -> dict[str, Any]:
     """纯函数：risk_report.json → 前端图表就绪视图（缺节一律 None/空，不抛错）。"""
     meta = report.get("meta") or {}

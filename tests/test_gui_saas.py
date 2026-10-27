@@ -560,7 +560,8 @@ class TestResultsApi:
         job_id = resp.get_json()["job_id"]
         client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
         chart = {"metrics": {"excess_return": excess}, "dates": ["2026-01-05"],
-                 "equity": [1.0], "tag_analysis": {"ok": True, "layers": {"A": [
+                 "equity": [1.0], "cumret": [0.0, 0.01, 0.02],
+                 "tag_analysis": {"ok": True, "layers": {"A": [
                      {"tag": "银行", "total_pnl": 100.0, "trades": 2, "win_rate": 0.5,
                       "avg_ret": 0.01, "symbols_total": 1, "symbols_truncated": False,
                       "symbols": [{"ts_code": "000001.SZ", "name": "平安银行", "total_pnl": 100.0,
@@ -660,6 +661,28 @@ class TestResultsApi:
         assert d404.status_code == 404
         d400 = client.get(f"/api/results/{job_id}/symbols/999999.XH", headers=h)
         assert d400.status_code == 400
+
+    def test_risk_analysis_histogram_from_chart_cumret(self, client, app, tmp_path):
+        """SaaS FRM：有 risk_report 时，日收益直方图从 chart_data.cumret 还原。
+
+        经典策略的 SaaS 产物通常没有组合级 equity_curve.csv，但 result_chart_data
+        已带交集口径 cumret；直方图必须由 cumret 差分得到，不能直接用 per-symbol
+        total_equity（会误取单股曲线或重新引入新股注资跳变）。
+        """
+        import json as _json
+
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path / "uploads")
+        job_id = self._completed_job(client, app, tmp_path)
+        job_dir = tmp_path / "uploads" / f"job_{job_id}"
+        job_dir.mkdir(parents=True, exist_ok=True)
+        (job_dir / "risk_report.json").write_text(_json.dumps({
+            "meta": {"n_obs": 2, "annualization_factor": 252},
+            "distribution": {"mean": 0.01, "std": 0.005, "min": 0.0, "max": 0.02},
+        }), encoding="utf-8")
+        ra = client.get(f"/api/results/{job_id}/risk-analysis", headers={"X-User-Id": "1"}).get_json()
+        assert ra["ok"] is True and ra["has_report"] is True and ra["n_obs"] == 2
+        assert ra["histogram"] is not None
+        assert sum(ra["histogram"]["counts"]) == 2  # cumret 3 点 → 2 个日收益
 
     def test_detail_strategy_info_modes(self, client, app, tmp_path):
         """QRE-SAAS-JOB-STRATEGY-CARD：NL 入口的原文与 entry_mode 随 summary 返回。"""

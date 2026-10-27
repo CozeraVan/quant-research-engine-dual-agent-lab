@@ -177,7 +177,7 @@
 | M10.1 | Strategy-fit clustering & noise filtering (F3 phase 1, enrichment analysis) | DONE | KIMI_CODE | commits `d514c4c` (significance tiers + meta-test + enrichment + BH-FDR) + `ed2b304` (v1.1 monthly artifact + stability metric); real-batch finding recorded (no strategy passes 90% meta tier in 2024) | Preserve |
 | M10.2 | Unified runtime parameter overrides + backtest-time universe filter (F1a) | DONE | KIMI_CODE | commits `a16d6c5` (cost overrides + universe filter) + `24c284d` (stop_loss/take_profit) + `77b8897` (trailing stop); dual-engine equality throughout | Preserve |
 | M10.3 | Continuous strategy refresh — idempotent re-run (F2) | DONE | KIMI_CODE | commit `1345471`; watermark + state + delta report + systemd units (documented, not installed); small-sample e2e passed | Preserve; timer install is a user decision |
-| M10.4 | ML clustering phase 2 (F3 phase 2, optional) | DONE (first analysis slice) | KIMI_CODE / STEP5 | 2026-10-27 DBSCAN + noise CLI/manifest/tests; real fit read-only; 158 ML-env + 469 main-env related tests passed; default 41 insufficient/40 all_noise | UI/metadata expansion needs a separate slice; no new backtests |
+| M10.4 | ML clustering phase 2 (F3 phase 2, optional) | DONE (first analysis slice + sensitivity) | KIMI_CODE / STEP5 / DEEPSEEK | 2026-10-27 DBSCAN + noise CLI/manifest/tests; real fit read-only; 165 ML-env related tests passed; full suite 2906 passed/24 skipped; eps sensitivity: 1.0=0 clustered, 1.5=2, 2.0=5 | UI/metadata expansion needs a separate slice; no new backtests |
 
 ## Milestone 11: SaaS MVP 上线（CR-0004，8081=staging / ECS=prod）
 

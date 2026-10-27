@@ -82,3 +82,42 @@ noise 行 cluster=-1，insufficient 行 cluster 为空）、`ml_cluster_report.m
   issues == []（另有用例覆盖缺列/缺文件负路径）。
 - 真实 fit 产物中多数策略显著股票过少，ML 结论以 insufficient/all_noise 为主，
   属预期（不伪造聚类）；UI 接入点见交付说明。
+
+## 实现记录（2026-10-27，参数敏感性工具化切片）
+
+### 变更
+
+- `src/quant_research_engine/analysis/ml_cluster.py`：新增纯函数
+  `parse_eps_grid()`（逗号分隔浮点解析，空值报错）、`analyze_eps_grid()`
+  （对同一批 M10.1 显著股票逐 eps 复跑 `analyze_fit_stocks`，不重算统计、
+  不跑回测；每个 eps 输出策略数、成簇策略数、ok 簇数、显著股票数、
+  noise 股票数及各状态计数）、`write_eps_sensitivity()`（写
+  `ml_cluster_sensitivity.csv` / `ml_cluster_sensitivity_strategies.csv` /
+  `ml_cluster_sensitivity.json`，kind=`strategy_fit_ml_cluster_sensitivity`，
+  记录 fit_dir、eps_grid、基础 config、scikit-learn 版本、确定性说明；
+  文件不含时间戳，重复运行字节级一致）。
+- `scripts/strategy_fit_ml_report.py`：新增可选 `--eps-grid`（默认 `None`＝关闭）。
+  不传时主产物（4 个 `ml_cluster_*` 文件）与 manifest 合同完全不变；
+  传入时在主产物之外另写 `ml_cluster_sensitivity_*`，不覆盖、不登记进主 manifest。
+- `tests/test_strategy_fit_ml.py`：新增 7 个用例——`parse_eps_grid` 解析与
+  非法输入、默认关闭时 4 产物/角色/无 sensitivity 文件、网格两次运行三份
+  文件字节相等且主 manifest 仍只声明 4 个 role、单 eps 结论与默认 eps=1.0
+  一致、空输入与全部 insufficient 输入的安全计数、空网格 CLI exit 2 且不写目录、
+  无 sklearn 时带 `--eps-grid` 仍 exit 2 且不写 sensitivity。
+
+### 验证（真实输出摘要）
+
+- `uv run pytest tests/test_showcase_roller.py -q` → 14 passed, 1 skipped。
+- `uv run pytest tests/ -q` → 见本轮主 Agent 汇总（本切片新增/修改用例全绿）。
+- `PYTHONPATH=.venv-ml/lib/python3.13/site-packages uv run pytest
+  tests/test_strategy_fit_ml.py tests/test_strategy_fit.py tests/test_portfolio_report_manifest.py -q`
+  → 165 passed。
+- `.venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir outputs/strategy_fit/f365c8a07b33 --eps-grid 1.0,1.5,2.0`
+  → eps=1.0: 0 成簇 / 490 noise / 41 insufficient；eps=1.5: 2 成簇、5 簇 /
+  451 noise；eps=2.0: 5 成簇、12 簇 / 396 noise（与本文档早期记录一致）。
+  主产物 `ml_cluster_stocks.csv`、`ml_cluster_clusters.csv` 运行前后 md5 不变。
+
+### 遗留
+
+- 真实 fit 产物 41/81 策略显著股票 < 5，任何 eps 都只能是 insufficient；
+  网格只对样本充足的 40 个策略给出结论，不改变该事实。

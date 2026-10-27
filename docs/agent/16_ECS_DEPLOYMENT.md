@@ -396,6 +396,13 @@ sudo -n rm /etc/sudoers.d/90-qre-deploy
 
 **风险提示**：本机私钥 `~/.ssh/aguhuice_ed25519` 是唯一凭据（密码认证已禁、root 已禁）。丢钥匙 = 只能走云控制台 VNC。请确认该私钥有可靠备份。
 
+## 9. 2026-10-27 SaaS FRM 日收益直方图修复发布记录
+
+- 任务：`QRE-SAAS-FRM-HISTOGRAM-CUMRET`。生产仅同步 `src/quant_research_engine/gui/lab_result.py` 与 `src/quant_research_engine/gui/saas/app.py`，未改 schema、未重启 worker、未跑回测。
+- 部署：`./deploy/saas/deploy-ecs.sh src/quant_research_engine/gui/lab_result.py src/quant_research_engine/gui/saas/app.py` → qre-saas active，MainPID 498077。回滚副本 `deploy@47.119.127.40:/tmp/qre-deploy-20261027T053632Z.bak`。
+- 验证：`/api/results/58/risk-analysis` 与 `/api/results/66/risk-analysis` 均 `has_report=true`，`histogram` 40 箱，点数分别 4068/4069，与 `n_obs` 一致。
+- 状态：已部署待用户验收，未 commit/push。
+
 ## 8. 本地（WSL）数据备份缺口 —— 与 ECS 备份纪律相关，必读
 
 > 2026-10-27 QRE-DATA-CLEANUP-AUDIT 只读盘点发现，记在这里因为它直接决定「出事能不能恢复」。

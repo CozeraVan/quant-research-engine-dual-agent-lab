@@ -972,6 +972,31 @@ def test_histogram_normal_data_pure():
     assert histogram_normal_data([0.01, 0.01, 0.01], 0.01, 0.001) is None  # 无离散度
 
 
+def test_daily_returns_from_cumret_pure():
+    """SaaS FRM 直方图数据源：cumret → 日收益；缺口/非有限值安全跳过。"""
+    from quant_research_engine.gui.lab_result import daily_returns_from_cumret
+
+    assert daily_returns_from_cumret([]) == []
+    assert daily_returns_from_cumret(None) == []
+    assert daily_returns_from_cumret([0.0]) == []
+    # (1+c_t)/(1+c_{t-1})-1，避免用 total_equity 的注资跳变
+    assert daily_returns_from_cumret([0.0, 0.01, 0.0201]) == pytest.approx([0.01, 0.01])
+    # 缺口/非有限值后重新起算，不把不相邻两天当作连续收益
+    assert daily_returns_from_cumret([0.0, 0.01, None, 0.02]) == pytest.approx([0.01])
+    assert daily_returns_from_cumret([0.0, float("nan"), 0.01, 0.0201]) == pytest.approx([0.01])
+
+
+def test_histogram_from_cumret_pure():
+    """cumret + risk report 的 mean/std → 直方图；退化输入返回 None。"""
+    from quant_research_engine.gui.lab_result import histogram_from_cumret
+
+    h = histogram_from_cumret([0.0, 0.01, 0.015, 0.03], 0.01, 0.01, n_bins=4)
+    assert h is not None and sum(h["counts"]) == 3
+    assert histogram_from_cumret([0.0], 0.0, 0.01) is None
+    assert histogram_from_cumret([0.0, 0.01], None, 0.01) is None
+    assert histogram_from_cumret([0.0, 0.01], 0.0, 0.0) is None
+
+
 def _write_risk_report(tmp_path: Path) -> None:
     """最小 risk_report.json：覆盖五个图表节的典型结构。"""
     report = {

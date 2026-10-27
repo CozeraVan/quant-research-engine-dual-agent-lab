@@ -304,6 +304,21 @@ class TestAggregatePortfolio:
 # ---------------------------------------------------------------------------
 
 
+HOLDING_OVERRIDE_YAML = """\
+experiment:
+  name: test_holding_override
+data:
+  market_fields: [open, high, low, close, pre_close, vol, amount]
+signal:
+  entry: "(mom > mom.shift(1))"
+  exit: "(mom < mom.shift(1))"
+evaluation:
+  forward_return_horizons: [1, 3, 5]
+holding:
+  max_holding_days: 20
+"""
+
+
 class TestParams:
     def test_profile_overrides_match_gui_semantics(self) -> None:
         profile = sr._build_profile({"commission_rate": 0.001, "min_commission": 8,
@@ -319,9 +334,10 @@ class TestParams:
         with pytest.raises(ValueError):
             sr._resolve_price_columns("bad", None)
 
-    def test_build_roll_params_holding_override(self) -> None:
-        yaml_text = (Path("/home/van/qre-outputs/gui-console/runs/20261011T135434249768/strategy.yaml")
-                     .read_text(encoding="utf-8"))
+    def test_build_roll_params_holding_override(self, tmp_path: Path) -> None:
+        yaml_path = tmp_path / "strategy.yaml"
+        yaml_path.write_text(HOLDING_OVERRIDE_YAML, encoding="utf-8")
+        yaml_text = yaml_path.read_text(encoding="utf-8")
         job = {"job_id": 58, "yaml": yaml_text,
                "params": {"mode": "batch", "initial_cash": 100000, "max_holding_days": None}}
         roll, market_fields, spec, profile = sr.build_roll_params(job)

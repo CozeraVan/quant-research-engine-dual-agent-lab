@@ -1803,6 +1803,54 @@ git diff --check → clean
 - 最终相关回归（含提交检查脚本 2 例）228 passed；无 Required Fixes。真实浏览器矩阵未自动化，部署后由用户实机抽查。
 - `git-finalize-check.sh` 只扫描新增 diff 行，不再把未修改上下文中的函数名或测试 stub 判为密钥；新增敏感赋值拒绝路径有回归测试。
 
+## 2026-10-27 工程收口 + M10.4 sensitivity 主 Agent 自审
+
+### Review Status
+
+PASS（本轮切片；未部署 ECS、未 commit/push、未跑回测、未碰游戏）
+
+### Findings
+
+- 测试修复针对真实根因：删除外部产物依赖，不恢复数据，不断言弱化；`tmp_path` + 模块内最小 YAML 可复现原三态语义。
+- M10.4 sensitivity 保持默认合同：不传 `--eps-grid` 时主产物/manifest/默认结论不变；传入时单独输出且可字节级复现。
+- 真实 fit 的敏感性结论被明确记录：默认 eps=1.0 无成簇，eps=1.5/2.0 才出现 2/5 个成簇策略；不能把默认保守结果当作唯一真相，也不能把敏感性结果当作稳健结论。
+- Required Fixes：无。遗留：41/81 策略显著股票不足，属数据样本事实；游戏仍等用户试玩。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_showcase_roller.py -q → 14 passed, 1 skipped
+uv run pytest tests/ -q → 2906 passed, 24 skipped, 4 warnings
+PYTHONPATH=.venv-ml/lib/python3.13/site-packages uv run pytest tests/test_strategy_fit_ml.py tests/test_strategy_fit.py tests/test_portfolio_report_manifest.py -q → 165 passed
+.venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir outputs/strategy_fit/f365c8a07b33 --eps-grid 1.0,1.5,2.0 → clustered 0/2/5; noise 490/451/396
+git diff --check：clean
+scripts/check-progress-docs.sh：passed
+```
+
+## 2026-10-27 SaaS FRM 日收益直方图修复主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 根因是 SaaS 与 8081 的 FRM 视图组装不一致：SaaS 漏掉直方图日收益序列，不是风险报告缺失，也不是前端图表组件失败。
+- 修复选择 `chart_data.cumret` 差分而非 `total_equity.pct_change`，避免新股注资跳变；也不用 per-symbol `equity_curve.csv`，避免误取单股曲线。
+- 生产验证覆盖真实经典策略 job 58/66，直方图点数与 `n_obs` 一致，不是仅合成测试通过。
+- Required Fixes：无。遗留：无报告/无 cumret 时继续显示“暂无分布数据”，符合不造数据原则。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_gui_lab_result.py tests/test_gui_saas.py tests/test_saas_access_hardening.py -q → 189 passed
+uv run pytest tests/ -q → 2909 passed, 24 skipped, 4 warnings
+ECS deploy → qre-saas active, MainPID 498077
+GET /api/results/58/risk-analysis → histogram 40 bins, 4068 points
+GET /api/results/66/risk-analysis → histogram 40 bins, 4069 points
+git diff --check：clean
+```
+
 ## 2026-10-27 M10.4 与游戏修复主 Agent 自审
 
 ### Review Status
@@ -1814,7 +1862,7 @@ PASS（本轮实现切片）；游戏仍需用户试玩验收，未部署 ECS、
 - M10.4 符合 CR：只读 M10.1 产物，未跑回测；保留 tier/超额门控，DBSCAN 不预设簇数，noise/insufficient 语义明确，sklearn 可选依赖隔离。manifest kind 与产物角色已注册，真实产物 `validate_contents()=[]`。
 - 默认真实数据没有稳定成簇：41 insufficient、40 all_noise；eps=2.0 仅作为参数敏感性证据，不能宣称已发现稳健板块规律。
 - 游戏修复针对真实根因（前复权 OHLC vs 后复权因子），不是仅移动 div；主 Agent 已查看桌面/移动截图并重跑 28 项专项。`ema_250` 11 个上游异常点被明确保留为遗留，不由展示层掩盖。
-- Required Fixes：本轮无。后续独立测试债：`test_showcase_roller.py::TestParams::test_build_roll_params_holding_override` 应改自包含夹具；游戏上游 `ema_250` 异常另立数据修复项。
+- Required Fixes：本轮无。当时记录的 `test_showcase_roller` 外部夹具测试债已在同日后续“工程收口”切片修复；游戏上游 `ema_250` 异常仍待独立数据修复。
 
 ### Validation Evidence
 

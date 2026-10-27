@@ -529,3 +529,179 @@ def test_cli_happy_path(tmp_path, monkeypatch, capsys):
     assert manifest["kind"] == MANIFEST_KIND
     assert manifest["strategies"][0]["status"] == STATUS_OK
     assert "noise" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# optional eps-grid sensitivity (opt-in; defaults stay byte-compatible)
+# ---------------------------------------------------------------------------
+
+CLI_PATH = Path(__file__).resolve().parent.parent / "scripts" / "strategy_fit_ml_report.py"
+SENSITIVITY_FILES = (
+    "ml_cluster_sensitivity.csv",
+    "ml_cluster_sensitivity_strategies.csv",
+    "ml_cluster_sensitivity.json",
+)
+MAIN_FILES = (
+    "ml_cluster_stocks.csv",
+    "ml_cluster_clusters.csv",
+    "ml_cluster_report.md",
+    "ml_cluster_manifest.json",
+)
+
+
+def _run_cli(monkeypatch, argv):
+    import importlib.util
+
+    monkeypatch.setattr(sys, "argv", ["strategy_fit_ml_report.py", *argv])
+    spec = importlib.util.spec_from_file_location("strategy_fit_ml_report", CLI_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.main()
+
+
+def _manifest_without_timestamp(path: Path) -> dict:
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest.pop("generated_at", None)
+    return manifest
+
+
+def test_parse_eps_grid():
+    from quant_research_engine.analysis.ml_cluster import parse_eps_grid
+
+    assert parse_eps_grid(None) is None
+    assert parse_eps_grid("1.0, 1.5,2.0") == [1.0, 1.5, 2.0]
+    with pytest.raises(ValueError, match="empty"):
+        parse_eps_grid("1.0,,2.0")
+    with pytest.raises(ValueError):
+        parse_eps_grid("not-a-number")
+
+
+@requires_sklearn
+def test_eps_grid_default_off_keeps_main_contract(tmp_path, monkeypatch, capsys):
+    """Without --eps-grid: four main artifacts, unchanged manifest file roles, no sensitivity files."""
+    fit_dir = _write_fit_dir(tmp_path, _two_groups_frame())
+    out_a = tmp_path / "ml_a"
+    out_b = tmp_path / "ml_b"
+    assert _run_cli(monkeypatch, ["--fit-dir", str(fit_dir), "--output-dir", str(out_a)]) == 0
+    assert _run_cli(monkeypatch, ["--fit-dir", str(fit_dir), "--output-dir", str(out_b)]) == 0
+    out = capsys.readouterr().out
+    assert "EPS sensitivity" not in out
+
+    for directory in (out_a, out_b):
+        assert sorted(p.name for p in directory.iterdir()) == sorted(MAIN_FILES)
+        assert not any((directory / name).exists() for name in SENSITIVITY_FILES)
+        manifest = _manifest_without_timestamp(directory / "ml_cluster_manifest.json")
+        assert [entry["role"] for entry in manifest["files"]] == list(
+            ["ml_cluster_stocks", "ml_cluster_clusters", "ml_cluster_report", "ml_cluster_manifest"]
+        )
+        assert "sensitivity" not in manifest
+
+    # main payloads are reproducible run to run (only generated_at may differ)
+    assert (out_a / "ml_cluster_stocks.csv").read_bytes() == (out_b / "ml_cluster_stocks.csv").read_bytes()
+    assert (out_a / "ml_cluster_clusters.csv").read_bytes() == (out_b / "ml_cluster_clusters.csv").read_bytes()
+
+
+@requires_sklearn
+def test_eps_grid_is_deterministic_and_separate_from_main_outputs(tmp_path, monkeypatch, capsys):
+    fit_dir = _write_fit_dir(tmp_path, _two_groups_frame())
+    out_a = tmp_path / "ml_grid_a"
+    out_b = tmp_path / "ml_grid_b"
+    for out in (out_a, out_b):
+        assert _run_cli(monkeypatch, [
+            "--fit-dir", str(fit_dir), "--output-dir", str(out),
+            "--eps-grid", "1.0,1.5,2.0",
+        ]) == 0
+    assert "EPS sensitivity" in capsys.readouterr().out
+
+    for directory in (out_a, out_b):
+        for name in MAIN_FILES:
+            assert (directory / name).exists()
+        for name in SENSITIVITY_FILES:
+            assert (directory / name).exists()
+        # main manifest still declares only the four primary artifacts
+        manifest = _manifest_without_timestamp(directory / "ml_cluster_manifest.json")
+        assert len(manifest["files"]) == 4
+
+    for name in SENSITIVITY_FILES:
+        assert (out_a / name).read_bytes() == (out_b / name).read_bytes()
+
+    summary = pd.read_csv(out_a / "ml_cluster_sensitivity.csv")
+    assert list(summary["eps"]) == [1.0, 1.5, 2.0]
+    assert set(summary["n_strategies"]) == {1}
+    manifest = json.loads((out_a / "ml_cluster_sensitivity.json").read_text(encoding="utf-8"))
+    assert manifest["kind"] == "strategy_fit_ml_cluster_sensitivity"
+    assert manifest["eps_grid"] == [1.0, 1.5, 2.0]
+    assert manifest["config"]["random_state"] == 42
+    assert manifest["model"]["version"]
+
+
+@requires_sklearn
+def test_eps_grid_single_value_matches_default_eps(tmp_path):
+    from quant_research_engine.analysis.ml_cluster import analyze_eps_grid
+
+    fit_dir = _write_fit_dir(tmp_path, _two_groups_frame())
+    stocks = load_fit_stocks(fit_dir)
+    config = MlClusterConfig()
+
+    stocks_df, _clusters_df, status_rows = analyze_fit_stocks(stocks, None, config)
+    summary_rows, detail_df = analyze_eps_grid(stocks, None, config, [config.eps])
+
+    assert len(summary_rows) == 1
+    row = summary_rows[0]
+    assert row["eps"] == config.eps
+    assert row["n_strategies"] == len(status_rows)
+    assert row["n_stocks"] == len(stocks_df)
+    assert row["n_noise_stocks"] == int(stocks_df["is_noise"].sum())
+    assert len(detail_df) == len(status_rows)
+    assert set(detail_df["eps"]) == {config.eps}
+    assert list(detail_df["strategy_id"]) == [r["strategy_id"] for r in status_rows]
+
+
+@requires_sklearn
+def test_eps_grid_handles_empty_and_insufficient_input():
+    from quant_research_engine.analysis.ml_cluster import analyze_eps_grid
+
+    config = MlClusterConfig()
+    empty_summary, empty_detail = analyze_eps_grid(
+        pd.DataFrame(columns=FIT_COLUMNS), None, config, [1.0, 2.0]
+    )
+    assert len(empty_summary) == 2
+    for row in empty_summary:
+        assert row["n_strategies"] == 0
+        assert row["n_clustered_strategies"] == 0
+        assert row["n_clusters"] == 0
+        assert row["n_stocks"] == 0
+        assert row["n_noise_stocks"] == 0
+        assert row["status_insufficient"] == 0
+    assert empty_detail.empty
+
+    tiny = pd.DataFrame([_stock_row("tiny", f"00000{i}.SZ") for i in range(3)], columns=FIT_COLUMNS)
+    summary_rows, _detail = analyze_eps_grid(tiny, None, config, [1.0, 2.0])
+    for row in summary_rows:
+        assert row["n_strategies"] == 1
+        assert row["status_insufficient"] == 1
+        assert row["n_clustered_strategies"] == 0
+        assert row["n_noise_stocks"] == 0
+
+
+def test_cli_rejects_empty_eps_grid(tmp_path, monkeypatch):
+    fit_dir = _write_fit_dir(tmp_path, _two_groups_frame(), name="fit-empty-grid")
+    out = tmp_path / "ml_out"
+    with pytest.raises(SystemExit) as excinfo:
+        _run_cli(monkeypatch, [
+            "--fit-dir", str(fit_dir), "--output-dir", str(out), "--eps-grid", "",
+        ])
+    assert excinfo.value.code == 2
+    assert not out.exists()
+
+
+def test_cli_degrades_without_sklearn_with_eps_grid(tmp_path, monkeypatch, capsys):
+    _block_sklearn(monkeypatch)
+    fit_dir = _write_fit_dir(tmp_path, _two_groups_frame())
+    out = tmp_path / "ml_out"
+    code = _run_cli(monkeypatch, [
+        "--fit-dir", str(fit_dir), "--output-dir", str(out), "--eps-grid", "1.0,2.0",
+    ])
+    assert code == 2
+    assert "scikit-learn" in capsys.readouterr().err
+    assert not out.exists()

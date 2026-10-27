@@ -3585,3 +3585,43 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 ### 全仓已知红灯
 
 最新全仓为 `2902 passed, 20 skipped, 1 failed`；失败测试硬编码读取已批准清理的外部 run YAML。后续单独改为自包含 `tmp_path` 夹具，不恢复旧回测产物。
+
+## 2026-10-27 工程收口 + M10.4 sensitivity 实施交接
+
+### 测试债务
+- `tests/test_showcase_roller.py`：新增 `HOLDING_OVERRIDE_YAML` 最小合法 YAML；`test_build_roll_params_holding_override` 使用 `tmp_path`，不再依赖 `/home/van/qre-outputs/...`。slow E2E 的 `JOB74_YAML` 仍存在但默认 skip，未改。
+- 验证：`uv run pytest tests/test_showcase_roller.py -q` → 14 passed, 1 skipped。
+
+### M10.4 sensitivity
+
+- `src/quant_research_engine/analysis/ml_cluster.py`：`SENSITIVITY_KIND`、`STATUS_CHOICES`、`parse_eps_grid()`、`analyze_eps_grid()`、`write_eps_sensitivity()`。
+- `scripts/strategy_fit_ml_report.py`：可选 `--eps-grid`；默认 `None`。非法/空网格 exit 2，不写 sensitivity。
+- 输出：`ml_cluster_sensitivity.csv`、`ml_cluster_sensitivity_strategies.csv`、`ml_cluster_sensitivity.json`；不覆盖主产物，不登记进主 manifest，重复运行字节级一致。
+- 验证：`PYTHONPATH=.venv-ml/lib/python3.13/site-packages uv run pytest tests/test_strategy_fit_ml.py tests/test_strategy_fit.py tests/test_portfolio_report_manifest.py -q` → 165 passed。
+- 真实只读：`.venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir outputs/strategy_fit/f365c8a07b33 --eps-grid 1.0,1.5,2.0` → eps=1.0/1.5/2.0 成簇策略 0/2/5，noise 490/451/396。
+
+### 主 Agent 复核
+
+- 全量 `uv run pytest tests/ -q` → `2906 passed, 24 skipped, 4 warnings`；`git diff --check` clean；`scripts/check-progress-docs.sh` passed。
+- 未部署 ECS、未 commit/push、未跑回测、未碰游戏与共享文档由主 Agent 已统一回写。
+
+## 2026-10-27 SaaS FRM 日收益直方图修复实施交接
+
+### 根因
+
+- SaaS `/api/results/<id>/risk-analysis` 只调用 `build_lab_risk_view(report)`，没有像 8081 `build_lab_risk_analysis()` 一样补 `histogram`；因此经典策略即使有 `risk_report.json`，前端“日收益分布”也因 `d.histogram` 缺失而显示“暂无分布数据”。
+- 生产实测（修复前）：job 58/66 `has_report=true`、`n_obs=4068/4069`，但响应没有 `histogram` 键。
+- 不能直接复用 `extract_strategy_returns()`：经典策略 SaaS 上传目录只有 per-symbol `equity_curve.csv`，没有组合级文件；这些文件也没有 `symbol` 列，可能被误选为组合曲线，且 `total_equity.pct_change` 会重新引入新股注资跳变。
+
+### 修复
+
+- `src/quant_research_engine/gui/lab_result.py`：新增纯函数 `daily_returns_from_cumret()` 与 `histogram_from_cumret()`。日收益由 `result_chart_data.cumret` 相邻累计值 `(1+c_t)/(1+c_{t-1})-1` 还原；缺口/非有限值重新起算，不造连续收益。
+- `src/quant_research_engine/gui/saas/app.py`：`api_result_risk_analysis()` 在 `has_report=true` 时用 `dist.mean/std + chart_data.cumret` 生成 `histogram`；无报告/无 cumret/退化输入时保持 `None`。
+- 测试：`tests/test_gui_lab_result.py` 新增 2 个纯函数用例；`tests/test_gui_saas.py` 新增 SaaS 端点直方图用例，并给 `_completed_job` 增加 `cumret`。TDD 先 RED 后 GREEN。
+
+### 验证与发布
+
+- `uv run pytest tests/test_gui_lab_result.py tests/test_gui_saas.py tests/test_saas_access_hardening.py -q` → 189 passed。
+- `uv run pytest tests/ -q` → `2909 passed, 24 skipped, 4 warnings`。
+- ECS：备份后同步 `lab_result.py` + `saas/app.py`，仅重启 qre-saas（MainPID 498077）。生产实测 job 58/66 `histogram` 均为 40 箱、点数分别 4068/4069，与 `n_obs` 一致。
+- 未 commit/push、未跑回测、未改 schema/worker/引擎/游戏。

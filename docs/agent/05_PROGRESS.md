@@ -1419,3 +1419,21 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - 真实产物 `outputs/strategy_fit_ml/f365c8a07b33/`：默认 eps=1.0，81 策略中 41 insufficient、40 all_noise、0 成簇；585 显著股票 tier 90/99/99.9=560/24/1 保留。Step 5 的 eps=2.0 敏感性试运行有 5 策略成簇；默认保持保守，不把噪声包装成结论。
 - 主 Agent  fresh 验证：`PYTHONPATH=.venv-ml/lib/python3.13/site-packages uv run pytest tests/test_strategy_fit_ml.py tests/test_strategy_fit.py tests/test_portfolio_report_manifest.py -q` → `158 passed`；主环境相关回归 → `469 passed, 14 skipped`；真实 manifest `validate_contents()=[]`。
 - 全仓 `uv run pytest tests/ -q` → `2902 passed, 20 skipped, 1 failed`。唯一失败为 `test_showcase_roller.py::TestParams::test_build_roll_params_holding_override` 读取已批准删除的 `/home/van/qre-outputs/gui-console/runs/20261011T135434249768/strategy.yaml`；不恢复已删除数据，后续改成 `tmp_path` 自包含 YAML 夹具。
+
+## 2026-10-27 工程收口与 M10.4 参数敏感性
+
+用户本周主线选定为“工程收口 + ML 工具化”，由 DeepSeek 实施、Kimi 复核。未部署 ECS、未 commit/push、未跑回测、未碰游戏。
+
+- **测试债务修复**：`tests/test_showcase_roller.py` 新增模块级最小合法 YAML，`test_build_roll_params_holding_override` 改 `tmp_path` 读写；原三条断言不变（YAML holding=20、params 缺省=20、显式 0=0、`mode=shared` 抛错）。全仓扫描后仅剩 slow E2E 的 `JOB74_YAML` 外部路径，默认 skip，按边界保留。
+- **M10.4 sensitivity**：`analysis/ml_cluster.py` 新增 `parse_eps_grid()`、`analyze_eps_grid()`、`write_eps_sensitivity()`；CLI 增加可选 `--eps-grid`，默认关闭。不传时 4 个主产物、manifest role 与默认结论完全不变；传入时另写 sensitivity 三件套，不覆盖主产物、不进主 manifest，文件无时间戳、重复运行字节级一致。
+- **真实只读结果**：`outputs/strategy_fit/f365c8a07b33` 上 eps=1.0 → 0 成簇、490 noise、41 insufficient/40 all_noise；eps=1.5 → 2 成簇、5 簇、451 noise；eps=2.0 → 5 成簇、12 簇、396 noise。41/81 策略显著股票 < 5 是样本事实，网格不伪造结论。
+- **验证**：`tests/test_showcase_roller.py` 14 passed/1 skipped；全量 `2906 passed, 24 skipped, 4 warnings`；ML 影子环境相关 `165 passed`；真实 CLI 网格输出与 agent 报告一致；`git diff --check` clean。
+
+## 2026-10-27 经典策略 FRM 日收益分布修复
+
+用户反馈经典策略 FRM 有结构但“日收益分析”无数据。生产实测 job 58/66 `has_report=true`、`n_obs=4068/4069`，但 `/api/results/<id>/risk-analysis` 响应没有 `histogram`。
+
+- **根因**：SaaS 端点只调用 `build_lab_risk_view(report)`，没有补直方图；8081 `build_lab_risk_analysis()` 会额外从产物提日收益，SaaS 漏接。且经典策略 SaaS 上传目录没有组合级 `equity_curve.csv`，只有 per-symbol 文件，不能直接复用 `extract_strategy_returns()`。
+- **修复**：`lab_result.py` 新增 `daily_returns_from_cumret()` 和 `histogram_from_cumret()`；SaaS 端点用 `result_chart_data.cumret` 差分还原日收益，再按 risk report 的 mean/std 生成 40 箱直方图。cumret 是交集口径累计收益，已剔除新股注资，避免 `total_equity.pct_change` 的注资跳变。
+- **测试**：TDD 先 RED 后 GREEN；新增 2 个纯函数用例和 1 个 SaaS 端点用例。相关 189 passed；全量 `2909 passed, 24 skipped, 4 warnings`。
+- **发布**：ECS 备份后同步 `lab_result.py` + `saas/app.py`，仅重启 qre-saas（MainPID 498077）。生产 job 58/66 现均返回 40 箱直方图，点数 4068/4069，与 `n_obs` 一致。未 commit/push、未跑回测。

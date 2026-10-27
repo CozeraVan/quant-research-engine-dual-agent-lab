@@ -15,6 +15,12 @@ Usage:
   .venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir outputs/strategy_fit/f365c8a07b33
   .venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir <dir> --eps 1.5 --min-samples 4
   .venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir <dir> --metadata-csv meta.csv --pool-only
+  .venv-ml/bin/python scripts/strategy_fit_ml_report.py --fit-dir <dir> --eps-grid 1.0,1.5,2.0
+
+``--eps-grid`` is opt-in: it re-clusters the same fit rows once per eps and
+writes ``ml_cluster_sensitivity.csv`` / ``ml_cluster_sensitivity_strategies.csv``
+/ ``ml_cluster_sensitivity.json`` next to the main artifacts. Without the flag
+the main outputs and manifest are byte-for-byte unchanged.
 """
 
 from __future__ import annotations
@@ -51,18 +57,31 @@ def main() -> int:
                         help="Minimum members for a cluster to be reported (default: 3)")
     parser.add_argument("--random-state", type=int, default=42,
                         help="Random seed recorded in the manifest for the reproducibility contract (default: 42)")
+    parser.add_argument("--eps-grid",
+                        help="Opt-in sensitivity sweep: comma-separated eps values "
+                             "(e.g. 1.0,1.5,2.0) re-clustered on the same fit rows; writes "
+                             "ml_cluster_sensitivity_* files without touching the main artifacts")
     parser.add_argument("--pool-only", action="store_true",
                         help="Cluster only the in_pool stocks (binomial p <= pool tier) instead of all significant stocks")
     args = parser.parse_args()
 
     from quant_research_engine.analysis.ml_cluster import (
+        STATUS_CHOICES,
         MlClusterConfig,
+        analyze_eps_grid,
         analyze_fit_stocks,
         load_fit_stocks,
         load_metadata_csv,
         ml_cluster_available,
+        parse_eps_grid,
+        write_eps_sensitivity,
         write_ml_outputs,
     )
+
+    try:
+        eps_grid = parse_eps_grid(args.eps_grid)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if not ml_cluster_available():
         print(
@@ -108,6 +127,31 @@ def main() -> int:
     print(f"  significant stocks clustered: {len(stocks_df)}; noise: {n_noise}")
     print(f"  output: {output_dir}")
     print(f"  manifest: {paths['ml_cluster_manifest']}")
+
+    if eps_grid:
+        summary_rows, detail_df = analyze_eps_grid(stocks, metadata, config, eps_grid)
+        sensitivity_paths = write_eps_sensitivity(
+            output_dir,
+            summary_rows,
+            detail_df,
+            fit_dir=args.fit_dir,
+            config=config,
+            eps_values=eps_grid,
+        )
+        print("\nEPS sensitivity (M10.4)")
+        for row in summary_rows:
+            counts = {
+                status: row[f"status_{status}"]
+                for status in STATUS_CHOICES
+                if row[f"status_{status}"]
+            }
+            print(
+                f"  eps={row['eps']:.4g}: strategies={row['n_strategies']}; "
+                f"clustered={row['n_clustered_strategies']}; clusters={row['n_clusters']}; "
+                f"noise={row['n_noise_stocks']}; statuses={counts}"
+            )
+        print(f"  sensitivity: {sensitivity_paths['ml_cluster_sensitivity']}")
+        print(f"  sensitivity manifest: {sensitivity_paths['ml_cluster_sensitivity_manifest']}")
     return 0
 
 

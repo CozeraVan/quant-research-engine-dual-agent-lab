@@ -2634,3 +2634,19 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 真实只读产物：`outputs/strategy_fit_ml/f365c8a07b33/`；默认 eps=1.0 下 81 策略为 41 insufficient、40 all_noise，未伪造聚类结论；Step 5 的 eps=2.0 敏感性试运行有 5 策略成簇，说明结果对参数敏感。全程未跑新回测。
 - 验证：ML 影子环境相关 `158 passed`；主环境相关 `469 passed, 14 skipped`；游戏 `28 passed`；`git diff --check` clean。全仓最新结果为 `2902 passed, 20 skipped, 1 failed`，唯一失败是 `test_showcase_roller.py::TestParams::test_build_roll_params_holding_override` 仍读取已按用户批准删除的外部 `qre-outputs/.../strategy.yaml`，不是本轮 ML/游戏断言失败，后续应把该测试改为自包含夹具。
 - 下一步：用户试玩游戏；M10.4 的 UI/元数据扩展另行立项；主线下一项为 P2 会员分层、付费权益与微信信号推送，先对齐颗粒度再实施。
+
+## 2026-10-27 工程收口 + M10.4 敏感性交接
+
+- 用户选定本周主线：工程收口 + ML 工具化。DeepSeek 实施，Kimi 复核，未部署 ECS、未 commit/push、未碰游戏。
+- 全仓唯一已知红灯已修复：`test_build_roll_params_holding_override` 原依赖已批准删除的外部 run YAML，现改为模块内最小 YAML + `tmp_path`，断言语义未弱化。
+- M10.4 新增可选 `--eps-grid`：默认关闭时主产物与 manifest 合同不变；开启后输出 `ml_cluster_sensitivity.csv`、`ml_cluster_sensitivity_strategies.csv`、`ml_cluster_sensitivity.json`，不覆盖主产物，不登记进主 manifest。
+- 真实只读敏感性：eps=1.0 → 0 成簇/490 noise；eps=1.5 → 2 成簇/5 簇/451 noise；eps=2.0 → 5 成簇/12 簇/396 noise。默认保守结论对参数敏感，后续 UI 必须标注筛查证据。
+- 验证：`tests/test_showcase_roller.py` 14 passed/1 skipped；全量 `2906 passed, 24 skipped, 4 warnings`；ML 影子环境相关 `165 passed`；`git diff --check` clean。
+- 遗留：41/81 策略显著股票 < 5，任何 eps 都 insufficient；网格只改善参数敏感性可见性，不改变样本不足事实。
+
+## 2026-10-27 经典策略 FRM 日收益分布修复交接
+
+- 根因：SaaS `risk-analysis` 端点只转 risk_report 视图，未生成直方图所需日收益序列；8081 有该逻辑，SaaS 漏接。生产 job 58/66 修复前 `has_report=true` 但响应无 `histogram`。
+- 修复：新增 `daily_returns_from_cumret()` / `histogram_from_cumret()`，SaaS 端点用 `chart_data.cumret` 差分还原日收益；不用 `total_equity.pct_change`，不误用 per-symbol 曲线。
+- 验证：相关 189 passed；全量 `2909 passed, 24 skipped, 4 warnings`；ECS 已部署，job 58/66 直方图 40 箱、点数 = n_obs。
+- 状态：已部署待用户验收，未 commit/push。

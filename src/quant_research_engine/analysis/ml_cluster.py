@@ -21,13 +21,17 @@ Design contract:
   reproducibility contract.
 - All tier/gate semantics are reused verbatim from M10.1
   (``strategy_fit.TIER_LABELS``, ``DIMENSIONS``); nothing is recomputed here.
+- The optional eps sensitivity sweep (``analyze_eps_grid``) re-clusters the
+  same fit rows once per eps. It is opt-in and writes only
+  ``ml_cluster_sensitivity_*`` files, so the default artifacts and manifest
+  stay unchanged.
 """
 
 from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -70,6 +74,15 @@ STATUS_ALL_NOISE = "all_noise"
 STATUS_SMALL_CLUSTERS = "small_clusters_only"
 STATUS_INSUFFICIENT = "insufficient"
 NOISE_LABEL = -1
+
+SENSITIVITY_KIND = "strategy_fit_ml_cluster_sensitivity"
+STATUS_CHOICES = (
+    STATUS_OK,
+    STATUS_SINGLE_CLUSTER,
+    STATUS_ALL_NOISE,
+    STATUS_SMALL_CLUSTERS,
+    STATUS_INSUFFICIENT,
+)
 
 
 def _as_bool(value: Any) -> bool:
@@ -635,6 +648,115 @@ def write_ml_outputs(
         ],
     }
     paths["ml_cluster_manifest"].write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return paths
+
+
+def parse_eps_grid(raw: str | None) -> list[float] | None:
+    """Parse a comma-separated ``--eps-grid`` value; ``None`` keeps the default off."""
+    if raw is None:
+        return None
+    values: list[float] = []
+    for chunk in raw.split(","):
+        token = chunk.strip()
+        if not token:
+            raise ValueError("--eps-grid contains an empty value")
+        values.append(float(token))
+    if not values:
+        raise ValueError("--eps-grid must contain at least one eps value")
+    return values
+
+
+def analyze_eps_grid(
+    stocks: pd.DataFrame,
+    metadata: pd.DataFrame | None,
+    config: MlClusterConfig,
+    eps_values: list[float],
+) -> tuple[list[dict[str, Any]], pd.DataFrame]:
+    """Re-cluster the same fit rows once per eps; no statistics are recomputed.
+
+    Returns (summary_rows, per_strategy_rows). The summary carries one row per
+    eps with status counts, clustered-strategy count and total noise stocks.
+    """
+    summary_rows: list[dict[str, Any]] = []
+    detail_frames: list[pd.DataFrame] = []
+    for eps in eps_values:
+        combo = replace(config, eps=eps)
+        stocks_df, clusters_df, status_rows = analyze_fit_stocks(stocks, metadata, combo)
+        counts = {status: 0 for status in STATUS_CHOICES}
+        for row in status_rows:
+            counts[row["status"]] = counts.get(row["status"], 0) + 1
+        n_noise = (
+            int(stocks_df["is_noise"].sum())
+            if not stocks_df.empty and "is_noise" in stocks_df.columns
+            else 0
+        )
+        summary_rows.append(
+            {
+                "eps": float(eps),
+                "n_strategies": len(status_rows),
+                "n_clustered_strategies": sum(1 for row in status_rows if row["n_clusters"] > 0),
+                "n_clusters": sum(int(row["n_clusters"]) for row in status_rows),
+                "n_stocks": len(stocks_df),
+                "n_noise_stocks": n_noise,
+                **{f"status_{status}": counts[status] for status in STATUS_CHOICES},
+            }
+        )
+        if status_rows:
+            detail = pd.DataFrame(status_rows)
+            detail.insert(0, "eps", float(eps))
+            detail_frames.append(detail)
+    detail_df = (
+        pd.concat(detail_frames, ignore_index=True) if detail_frames else pd.DataFrame()
+    )
+    return summary_rows, detail_df
+
+
+def write_eps_sensitivity(
+    output_dir: Path,
+    summary_rows: list[dict[str, Any]],
+    detail_df: pd.DataFrame,
+    *,
+    fit_dir: Path,
+    config: MlClusterConfig,
+    eps_values: list[float],
+) -> dict[str, Path]:
+    """Write deterministic sensitivity files; the four ml_cluster_* artifacts stay untouched."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    paths: dict[str, Path] = {
+        "ml_cluster_sensitivity": output_dir / "ml_cluster_sensitivity.csv",
+        "ml_cluster_sensitivity_strategies": output_dir / "ml_cluster_sensitivity_strategies.csv",
+        "ml_cluster_sensitivity_manifest": output_dir / "ml_cluster_sensitivity.json",
+    }
+    pd.DataFrame(summary_rows).to_csv(paths["ml_cluster_sensitivity"], index=False)
+    detail_df.to_csv(paths["ml_cluster_sensitivity_strategies"], index=False)
+
+    manifest = {
+        "schema_version": 1,
+        "kind": SENSITIVITY_KIND,
+        "fit_dir": str(fit_dir),
+        "eps_grid": [float(eps) for eps in eps_values],
+        "model": {
+            "library": "scikit-learn",
+            "version": _sklearn_version(),
+            "algorithm": ALGORITHM,
+        },
+        "config": config.to_manifest(),
+        "python": sys.version.split()[0],
+        "determinism": (
+            "same fit_dir rows as the main run; one DBSCAN pass per eps on the "
+            "identically sorted/standardized matrix; files carry no timestamp so "
+            "repeated runs are byte-identical for the same input and environment"
+        ),
+        "combos": summary_rows,
+        "files": [
+            {"key": key, "path": path.name, "filename": path.name, "role": key}
+            for key, path in paths.items()
+        ],
+    }
+    paths["ml_cluster_sensitivity_manifest"].write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
     )
     return paths

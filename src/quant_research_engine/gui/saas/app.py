@@ -3820,11 +3820,11 @@ def create_saas_app() -> Flask:
         row, err = _require_completed_result(job_id)
         if err:
             return err
-        from quant_research_engine.gui.lab_result import build_lab_risk_view
+        from quant_research_engine.gui.lab_result import build_lab_risk_view, histogram_from_cumret
 
         job_dir = Path(_result_record(row)["output_dir"])
         report_path = job_dir / "risk_report.json"
-        data: dict[str, Any] = {"ok": True, "job_id": job_id, "has_report": False}
+        data: dict[str, Any] = {"ok": True, "job_id": job_id, "has_report": False, "histogram": None}
         if report_path.exists():
             try:
                 report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -3833,6 +3833,14 @@ def create_saas_app() -> Flask:
             if isinstance(report, dict):
                 data["has_report"] = True
                 data.update(build_lab_risk_view(report))
+                # 直方图需要日收益原始序列：SaaS 产物通常没有组合级 equity_curve.csv，
+                # 但 chart_data.cumret 是同一交集口径的累计收益，由其差分还原日收益；
+                # 不用 total_equity.pct_change（会引入新股注资跳变或误取单股曲线）。
+                dist = data.get("dist") or {}
+                cumret = (row["result_chart_data"] or {}).get("cumret")
+                data["histogram"] = histogram_from_cumret(
+                    cumret, dist.get("mean"), dist.get("std")
+                )
         return jsonify(_jsonable(data))
 
     @app.get("/api/results/<int:job_id>/symbols")

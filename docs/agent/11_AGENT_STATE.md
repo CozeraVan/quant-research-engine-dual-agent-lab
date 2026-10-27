@@ -1046,12 +1046,13 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 
 ## 2026-10-27 Current State
 
-- Phase：`USER_DIRECTED`（M10.4 首片与游戏本地修复均已自审；等待用户试玩游戏并决定下一项，不自动 commit/push）。
+- Phase：`USER_DIRECTED`（本周“工程收口 + M10.4 sensitivity”已由 DeepSeek 实施、Kimi 复核；等待用户验收，未 commit/push）。
 - Night Mode、重播边界、因子呈现合同、341 中文名、SSH 加固五项已获用户验收通过。
 - 游戏：8092 本地可试玩，28 项专项通过；待用户验收。`ema_250` 上游 11 点异常未修。
-- M10.4：真实 manifest 校验通过；ML 相关 158 passed，主环境相关 469 passed + 14 skipped。默认聚类结果保守（41 insufficient/40 all_noise），未跑回测。
-- 全仓：2902 passed + 20 skipped + 1 failed；唯一失败是已清理外部 run YAML 的硬编码测试夹具，后续改自包含，不恢复旧产物。
-- 下一主线候选：P2 会员分层、付费权益与微信信号推送；须先与用户对齐范围。
+- M10.4：真实 manifest 校验通过；新增 `--eps-grid` sensitivity，默认真实拟合 eps=1.0/1.5/2.0 成簇策略 0/2/5，noise 490/451/396；未跑回测。
+- 全仓：`2906 passed, 24 skipped, 4 warnings`；此前唯一外部 YAML 夹具失败已修复，未恢复旧产物。
+- SaaS FRM 日收益直方图修复已部署 ECS：job 58/66 现返回 40 箱直方图；全量 `2909 passed, 24 skipped, 4 warnings`；未 commit/push。
+- 下一主线候选：P2 会员分层、付费权益与微信信号推送；用户 2026-10-27 明确暂缓推进。
 
 ### 主模型切换交接预案（2026-10-27）
 
