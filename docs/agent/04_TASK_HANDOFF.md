@@ -2736,3 +2736,12 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 附带修掉测试盲区：harness 的 `children` 改为 HTMLCollection 形态，此类 bug 以后可被测出。
 - 测试：`test_gui_saas_pages.py` 94 passed；全量 `2960 passed, 24 skipped`。
 - 生产：ECS 已部署，真实 DOM + 真实 job#78 产物端到端验证通过。未 commit/push。
+
+## 2026-10-28 指标设置与面板管理交接
+
+- A 路增量 append 经实测论证不做：单帧 setOption 2.03ms / p95 2.8ms，相对 16.7ms 预算余量 8×。
+- 新增「指标」工具栏入口与模态面板：因子呈现方式集中切换、副图排序、单独收起、恢复默认。
+- `factor-layout.js::plan()` 第三参 `paneOrder` 可选，缺省行为不变；静态图与重播共用同一顺序。
+- 边界：只管理详情产物内已有因子；任意指标取数需另立项（ECS 无行情库）。
+- 测试：相关 162 passed；全量 `2964 passed, 24 skipped`。
+- 生产：ECS 已部署并真实浏览器验证通过。未 commit/push。

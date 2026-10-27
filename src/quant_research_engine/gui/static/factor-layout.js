@@ -100,7 +100,14 @@
   // QRE-FACTOR-DISPLAY-CONTRACT：plan 只消费注册表 display 合同；
   // 无 display 的旧数据走下方启发式回退（与 2026-10-20 版行为一致），
   // 显式属性永不被启发式覆盖。
-  function plan(factors, states) {
+  //
+  // 第三参 paneOrder（CR-2026-10-28 指标设置与面板管理）：可选的副图排序键数组，
+  // 元素为 group key。语义：
+  //   - 缺省/空数组/null/非数组 → 完全按分组顺序（与旧行为逐字节一致）；
+  //   - 列出的键按给定顺序前置，未列出的键保持相对顺序置后；
+  //   - 未知键、非字符串、重复键一律忽略（去重），不得丢面板或重复；
+  //   - 只影响 panes 顺序，不动 overlays / chips / paneCount。
+  function plan(factors, states, paneOrder) {
     factors = factors || [];
     states = states || {};
 
@@ -202,6 +209,22 @@
       });
       panes.push({key: g.key, name: g.label, thresholds: thresholds, series: series});
     });
+    // paneOrder：副图排序（CR-2026-10-28）。缺省/非法输入保持分组顺序；
+    // 列出的键前置（去重、忽略未知/非字符串），未列出的键保持相对顺序置后。
+    if (Object.prototype.toString.call(paneOrder) === "[object Array]" && paneOrder.length) {
+      var rank = {};
+      paneOrder.forEach(function (k, i) {
+        if (typeof k !== "string" || !k || rank[k] != null) return;
+        rank[k] = i;
+      });
+      panes.sort(function (a, b) {
+        var ra = rank[a.key], rb = rank[b.key];
+        if (ra == null && rb == null) return 0;              // 都未列出：稳定保持原序
+        if (ra == null) return 1;                            // 未列出置后
+        if (rb == null) return -1;
+        return ra - rb;
+      });
+    }
     return {chips: chips, overlays: overlays, panes: panes, paneCount: panes.length};
   }
 

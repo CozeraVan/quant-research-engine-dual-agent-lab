@@ -400,6 +400,44 @@ assert.equal(p.paneCount, 1, 'overlay chip 可切 pane');
 // 8) precision 透传
 p = plan([f('RSI14', 'rsi_14', Object.assign(D('pane', 'pane:t:rsi_14:close', 'line'), {precision: 4}))], {});
 assert.equal(p.panes[0].series[0].precision, 4, 'precision 透传到系列');
+
+// 9) 面板顺序第三参 paneOrder（CR-2026-10-28 指标设置与面板管理）
+// 注：断言跑在 vm realm 里，跨 realm 数组的 prototype 不同，deepStrictEqual 会误判，
+// 因此统一用 JSON 字符串比较。
+const PANES = [
+  f('RSI14', 'rsi_14', D('pane', 'pane:t:rsi_14:close', 'line')),
+  f('MACD', 'macd_12_26_9', D('pane', 'macd:t:12_26_9:close', 'main')),
+  f('KDJ', 'k_9_3', D('pane', 'kdj:t:9_3:close', 'k')),
+];
+const paneKeys = pl => JSON.stringify(pl.panes.map(pa => pa.key));
+// 三个因子 render_order 同为 0，分组排序按 key 字典序——这是既有行为，
+// 缺省 paneOrder 必须逐字节保持它（不得被本次改动改变）。
+const DEFAULT_ORDER = '["kdj:t:9_3:close","macd:t:12_26_9:close","pane:t:rsi_14:close"]';
+// 9a) 缺省第三参：行为与现状一致
+assert.equal(paneKeys(plan(PANES, {})), DEFAULT_ORDER, '缺省 paneOrder 不得改变既有顺序');
+// 9b) 显式排序：按给定键重排，未列出的保持相对顺序置后
+assert.equal(paneKeys(plan(PANES, {}, ['kdj:t:9_3:close', 'pane:t:rsi_14:close'])),
+  '["kdj:t:9_3:close","pane:t:rsi_14:close","macd:t:12_26_9:close"]',
+  'paneOrder 必须重排副图');
+// 9c) 未知键/空数组/null：不得抛错，也不得改变顺序
+assert.equal(paneKeys(plan(PANES, {}, [])), DEFAULT_ORDER, '空数组不改顺序');
+assert.equal(paneKeys(plan(PANES, {}, null)), DEFAULT_ORDER, 'null 不改顺序');
+assert.equal(paneKeys(plan(PANES, {}, ['nope', 123, null])), DEFAULT_ORDER, '未知/非法键被忽略');
+// 9d) 重复键：去重后仍稳定，不得丢面板或重复
+assert.equal(paneKeys(plan(PANES, {}, ['kdj:t:9_3:close', 'kdj:t:9_3:close'])),
+  DEFAULT_ORDER, '重复键去重');
+// 9e) 只影响副图顺序，不动 overlay 与 chips
+p = plan(PANES.concat([f('EMA5', 'ema_5', D('overlay', null, 'line', 'line', '#E8A33D', 0))]), {},
+  ['kdj:t:9_3:close']);
+assert.equal(p.overlays.length, 1, 'paneOrder 不得影响 overlay');
+assert.equal(p.chips.length, 4, 'paneOrder 不得影响 chips');
+assert.equal(p.paneCount, 3, 'paneCount 不变');
+assert.equal(p.panes[0].key, 'kdj:t:9_3:close', '重排后第一个副图');
+// 9f) hidden 面板不参与排序（本来就不在 panes 里）
+// chip 状态按 group key 索引（有 display 时即 panel_id），不是因子列名
+p = plan(PANES, {'pane:t:rsi_14:close': 'hidden'}, ['kdj:t:9_3:close', 'pane:t:rsi_14:close']);
+assert.equal(paneKeys(p), '["kdj:t:9_3:close","macd:t:12_26_9:close"]', 'hidden 面板不参与排序');
+assert.equal(p.chips.filter(c => c.state === 'hidden').length, 1, 'RSI chip 记为 hidden');
 console.log('layout-display-ok');
 """
 

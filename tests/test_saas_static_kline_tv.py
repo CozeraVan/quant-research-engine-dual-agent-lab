@@ -179,7 +179,8 @@ class TestSourceContract:
 
     def test_factor_contract_kept(self):
         block = _render_kline_source()
-        assert "QREFactorLayout.plan(factors, chipStates())" in block
+        assert "QREFactorLayout.plan(factors, chipStates(), paneOrder())" in block, \
+            "renderKline 必须把副图顺序作为 plan 第三参"
         assert "renderFactorChips(plan, d)" in block
         assert "yAxisIndex: 0" in block
         assert "xAxisIndex: 'all'" in block
@@ -263,11 +264,27 @@ function makeHarness(plan){
       COLORS: { histUp: '#C93A3A', histDown: '#1E8E5A' },
     },
     QRETheme: { themeChart(){} },
+    // CR-2026-10-28：renderKline 读 paneOrder()，harness 必须提供 localStorage
+    // CR-2026-10-28：renderKline 读 paneOrder()，harness 提供可用的内存 localStorage
+    localStorage: (function () {
+      const store = {};
+      return {
+        getItem(k){ return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; },
+        setItem(k, v){ store[k] = String(v); },
+        removeItem(k){ delete store[k]; },
+      };
+    })(),
     chipStates(){ return {}; },
+    // CR-2026-10-28：setChipState 声明在 chip 区（kline 块之外），由 harness 提供
+    setChipState(key, st){
+      const ls = h0 && h0.localStorage;
+      if (ls) ls.setItem('qre_fct_' + key, st);
+    },
     renderFactorChips(){},
     f2(v){ return Number(v).toFixed(2); },
     requestAnimationFrame(fn){ return fn(); },
   };
+  const h0 = { get localStorage(){ return ctx.localStorage; } };
   ctx.$ = q;
   return { ctx: vm.createContext(ctx), els: els, wins: winListeners, charts: charts, zrHandlers: zrHandlers };
 }
@@ -632,3 +649,114 @@ class TestKlineDrawing:
             .replace("%DATA%", json.dumps(_MAIN_DATA))
             .replace("%REPLAY%", json.dumps(REPLAY_JS))
         )
+
+
+# --------------------------------------------- 指标设置与面板管理（CR-2026-10-28）
+_IND_SCENARIO = r"""
+const h = makeHarness(null);
+const source = %SOURCE%;
+vm.runInContext(%REPLAY% + '\nglobalThis.QREReplay = window.QREReplay;', h.ctx);
+vm.runInContext(source, h.ctx);
+
+// 1) paneOrder 持久化：读 → 写 → 非法值降级
+assert.equal(vm.runInContext('JSON.stringify(paneOrder())', h.ctx), '[]', '缺省为空数组');
+vm.runInContext('setPaneOrder(["macd", "rsi"])', h.ctx);
+assert.equal(vm.runInContext('paneOrder()', h.ctx).join(','), 'macd,rsi', '写入后可读回');
+vm.runInContext('setPaneOrder(["macd", 123, null, "", "macd", "rsi"])', h.ctx);
+assert.equal(vm.runInContext('paneOrder()', h.ctx).join(','), 'macd,rsi', '非字符串/空串/重复键被过滤');
+// localStorage 不可用 / 内容损坏 → 空数组，不抛错
+Object.assign(h.ctx, { localStorage: { getItem(){ throw new Error('blocked'); },
+  setItem(){ throw new Error('blocked'); }, removeItem(){} } });
+assert.equal(vm.runInContext('JSON.stringify(paneOrder())', h.ctx), '[]', 'localStorage 抛错时降级空数组');
+vm.runInContext('setPaneOrder(["x"])', h.ctx);
+Object.assign(h.ctx, { localStorage: { getItem(){ return '{bad json'; },
+  setItem(){}, removeItem(){} } });
+assert.equal(vm.runInContext('JSON.stringify(paneOrder())', h.ctx), '[]', '损坏 JSON 降级空数组');
+
+// 2) movePane：按当前可见副图键上移/下移，越界不动
+const store = {};
+Object.assign(h.ctx, { localStorage: { getItem(k){ return store[k] == null ? null : store[k]; },
+  setItem(k, v){ store[k] = String(v); }, removeItem(k){ delete store[k]; } } });
+// stub 必须遵守 paneOrder（否则测的是假顺序）：列出的前置，未列出的按 a/b/c 相对序置后
+const ALL_KEYS = ['a', 'b', 'c'];
+Object.assign(h.ctx, { QREFactorLayout: Object.assign(Object.create(null), {
+  plan(factors, states, order){
+    const ord = (order || []).filter(k => ALL_KEYS.indexOf(k) >= 0);
+    const rest = ALL_KEYS.filter(k => ord.indexOf(k) < 0);
+    const keys = ord.concat(rest);
+    return { panes: keys.map(k => ({key: k})), chips: keys.map(k => ({key: k})) };
+  }, COLORS: {},
+}) });
+vm.runInContext('setPaneOrder(["a", "b", "c"])', h.ctx);
+vm.runInContext('movePane("c", -1)', h.ctx);
+assert.equal(vm.runInContext('paneOrder()', h.ctx).join(','), 'a,c,b', 'c 上移一位');
+vm.runInContext('movePane("a", -1)', h.ctx);
+assert.equal(vm.runInContext('paneOrder()', h.ctx).join(','), 'a,c,b', '已在首位：越界不动');
+vm.runInContext('movePane("c", 1)', h.ctx);
+assert.equal(vm.runInContext('paneOrder()', h.ctx).join(','), 'a,b,c', 'c 下移一位');
+vm.runInContext('movePane("c", 1)', h.ctx);
+assert.equal(vm.runInContext('paneOrder()', h.ctx).join(','), 'a,b,c', '已在末位：越界不动');
+vm.runInContext('movePane("a", 1)', h.ctx);
+assert.equal(vm.runInContext('paneOrder()', h.ctx).join(','), 'b,a,c', 'a 下移一位');
+vm.runInContext('movePane("nope", -1)', h.ctx);
+assert.equal(vm.runInContext('paneOrder()', h.ctx).join(','), 'b,a,c', '未知键不动');
+
+// 3) hidePane：把该面板所有 chip 置 hidden（MACD 三线同键只写一次）
+store['qre_fct_a'] = 'pane';
+assert.equal(vm.runInContext('hidePane("a")', h.ctx), true, '存在的面板键必须返回 true');
+assert.equal(store['qre_fct_a'], 'hidden', 'hidePane 必须写 hidden');
+assert.equal(vm.runInContext('hidePane("nope")', h.ctx), false, '未知键不得写入');
+
+// 4) renderKline 必须把 paneOrder 透传给 plan（第三参）
+const seen = [];
+Object.assign(h.ctx, { QREFactorLayout: Object.assign(Object.create(null), {
+  plan(factors, states, order){ seen.push(order && order.slice ? order.slice() : order);
+    return { chips: [], overlays: [], panes: [] }; },
+  COLORS: { histUp: '#C93A3A', histDown: '#1E8E5A' },
+}) });
+vm.runInContext('setPaneOrder(["macd"])', h.ctx);
+const d = {kline: {dates: ['2024-01-02'], ohlc: [[1, 1, 1, 1]], vols: [1]}, factors: [], orders: []};
+vm.runInContext('renderKline(' + JSON.stringify(d) + ')', h.ctx);
+assert.equal(seen.length, 1, 'renderKline 必须调用一次 plan');
+assert.equal(seen[0].join(','), 'macd', 'paneOrder 必须作为 plan 第三参透传');
+console.log('ind-flow-ok');
+"""
+
+_IND_SOURCE_CONTRACT = r"""
+const assert = require('node:assert/strict');
+const html = %HTML%;
+// 工具栏入口：复用 .kline-tool 样式与 aria/data-tip 约定（R-UI-001：无灰字备注）
+const btn = html.match(/<button[^>]*id="kt-ind"[^>]*>/);
+assert.ok(btn, '缺少指标设置按钮 kt-ind');
+assert.ok(btn[0].indexOf('class="kline-tool"') >= 0, 'kt-ind 必须复用 .kline-tool');
+assert.ok(btn[0].indexOf('aria-label="指标"') >= 0, 'kt-ind 缺 aria-label');
+assert.ok(btn[0].indexOf('data-tip=') >= 0, 'kt-ind 缺 data-tip');
+assert.ok(html.indexOf('<svg') >= 0, '需要内联 SVG 图标');
+// helper 声明
+for (const fn of ['paneOrder', 'setPaneOrder', 'movePane', 'hidePane', 'klineIndicatorDialog']) {
+  assert.ok(html.indexOf('function ' + fn + '(') >= 0, '缺少 helper: ' + fn);
+}
+// plan 第三参透传
+assert.ok(html.indexOf('QREFactorLayout.plan(factors, chipStates(), paneOrder())') >= 0,
+  'renderKline 必须把 paneOrder 作为 plan 第三参');
+// 工具栏禁用集合包含 ind（重播时防未来数据）
+assert.ok(/KLINE_TOOL_KINDS\s*=\s*\[[^\]]*'ind'[^\]]*\]/.test(html), 'KLINE_TOOL_KINDS 必须包含 ind');
+// R-UI-001：指标面板不得新增灰色小字备注
+const mask = html.indexOf('.ind-mask');
+assert.ok(mask >= 0, '缺少指标面板样式 .ind-mask');
+const css = html.slice(mask, mask + 1600);
+assert.ok(css.indexOf('var(--card)') >= 0 && css.indexOf('var(--line)') >= 0, '指标面板必须复用主题 token');
+assert.ok(css.indexOf('.opt') < 0, '指标面板不得引入 .opt 灰字备注');
+console.log('ind-contract-ok');
+"""
+
+
+class TestIndicatorSettings:
+    """CR-2026-10-28 指标设置与面板管理：持久化、排序、收起、DOM 合同。"""
+
+    def test_source_contract(self):
+        _node(_IND_SOURCE_CONTRACT.replace("%HTML%", json.dumps(SYMBOL_TPL)))
+
+    def test_pane_order_and_management_flow(self):
+        _node(_HARNESS + _IND_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
+              .replace("%REPLAY%", json.dumps(REPLAY_JS)))

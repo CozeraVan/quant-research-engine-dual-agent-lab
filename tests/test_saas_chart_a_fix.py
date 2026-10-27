@@ -433,3 +433,52 @@ class TestJobChartLeftovers:
         assert "if (typeof mainChart.isDisposed === 'function' && mainChart.isDisposed()) return;" in JOB_TPL
         assert "mainChart && mainChart.resize()" not in JOB_TPL
         assert JOB_TPL.count("zeroBase: true") >= 2
+
+# --------------------------------------------- DOM 集合误用防护（2026-10-28 回归）
+# 线上故障根因：`Element.children` 是 HTMLCollection，没有 Array 的 some/find/map，
+# 直接调用在浏览器里抛 TypeError，被页面 catch 吞成「加载失败，请稍后重试」。
+# Node harness 用普通数组冒充 children 时会把它测成绿灯，故加源码级合同：
+# 任何模板/静态 JS 不得对 `.children` / `childNodes` 直接调 Array 方法。
+_ARRAY_METHODS = ("some", "find", "findIndex", "map", "filter", "reduce", "reduceRight",
+                  "forEach", "slice", "indexOf", "lastIndexOf", "every", "flatMap", "concat")
+_DOM_COLLECTIONS = ("children", "childNodes")
+_TEMPLATE_GLOBS = (
+    "src/quant_research_engine/gui/saas/templates/*.html",
+    "src/quant_research_engine/gui/templates/*.html",
+    "src/quant_research_engine/game/templates/*.html",
+)
+_STATIC_JS_GLOBS = (
+    "src/quant_research_engine/gui/static/lab-ui.js",
+    "src/quant_research_engine/gui/static/factor-layout.js",
+    "src/quant_research_engine/gui/static/replay.js",
+    "src/quant_research_engine/gui/static/night-mode.js",
+)
+
+
+def _dom_collection_misuse(text: str) -> list[str]:
+    hits: list[str] = []
+    for coll in _DOM_COLLECTIONS:
+        for method in _ARRAY_METHODS:
+            # 允许 Array.prototype.<m>.call(host.children, ...) 这种显式借用
+            pattern = re.compile(rf"\.{coll}\s*\.\s*{method}\s*\(")
+            for m in pattern.finditer(text):
+                line = text.count("\n", 0, m.start()) + 1
+                hits.append(f"line {line}: .{coll}.{method}(")
+    return hits
+
+
+class TestDomCollectionMisuse:
+    def test_no_array_methods_on_dom_collections(self):
+        """模板与共享静态 JS 不得对 DOM 集合直接调 Array 方法。"""
+        offenders: list[str] = []
+        for pattern in _TEMPLATE_GLOBS + _STATIC_JS_GLOBS:
+            for path in sorted(REPO.glob(pattern)):
+                text = path.read_text(encoding="utf-8")
+                for hit in _dom_collection_misuse(text):
+                    offenders.append(f"{path.relative_to(REPO)}:{hit}")
+        assert not offenders, "DOM 集合被当作数组使用（浏览器必抛 TypeError）：\n" + "\n".join(offenders)
+
+    def test_symbol_refresh_dedup_borrows_array_prototype(self):
+        """刷新入口去重必须显式借用 Array.prototype（HTMLCollection 无 some）。"""
+        assert "Array.prototype.some.call(host.children" in SYMBOL_TPL
+        assert ".children || []).some(" not in SYMBOL_TPL

@@ -18,6 +18,19 @@
   .kline-ohlc .up{color:var(--pos)}
   .kline-ohlc .down{color:var(--neg)}
   .kline-ohlc .k-dim{color:var(--muted)}
+  /* CR-2026-10-28 指标设置与面板管理：模态复用主题 token，不引入第四色相 */
+  .ind-mask{position:fixed;inset:0;background:rgba(36,31,46,.45);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
+  .ind-dialog{width:min(560px,100%);max-height:min(76vh,640px);display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(36,31,46,.22)}
+  .ind-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .ind-head h3{margin:0;font-size:15px}
+  .ind-body{overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:14px}
+  .ind-sec{display:flex;flex-direction:column;gap:6px}
+  .ind-sec-t{font-size:12px;font-weight:600;color:var(--lav-deep)}
+  .ind-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px}
+  .ind-row .nm{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ind-row .st{font-size:12px;color:var(--lav-deep);min-width:56px;text-align:right}
+  .ind-act{display:flex;gap:4px}
+  .ind-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
   @media(max-width:640px){
     .kline-tools .kline-tool span{display:none}
     .wrap{padding-left:12px;padding-right:12px}
@@ -83,6 +96,10 @@
         </button>
         <button type="button" class="kline-tool" id="kt-clear" aria-label="清除画线" data-tip="清除全部画线">
           <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="16" y2="6"/><path d="M7 6l1 9h4l1-9"/><line x1="8.5" y1="9" x2="8.5" y2="12"/><line x1="11.5" y1="9" x2="11.5" y2="12"/></svg><span>清除</span>
+        </button>
+        <!-- 指标设置与面板管理（CR-2026-10-28）：集中切换因子呈现方式、调整副图顺序 -->
+        <button type="button" class="kline-tool" id="kt-ind" aria-label="指标" data-tip="指标设置：切换因子呈现方式、调整副图顺序、单独收起副图">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3.5" y1="5.5" x2="16.5" y2="5.5"/><line x1="3.5" y1="10" x2="16.5" y2="10"/><line x1="3.5" y1="14.5" x2="16.5" y2="14.5"/><circle cx="7" cy="5.5" r="1.9"/><circle cx="13" cy="10" r="1.9"/><circle cx="6" cy="14.5" r="1.9"/></svg><span>指标</span>
         </button>
       </div>
       <div class="kline-main">
@@ -417,8 +434,9 @@ function showSymbolDetailRefresh(){
   if (!host) return;
   // 去重：不依赖 getElementById（避免重复入口）；load 每次重写 innerHTML 本就会清掉旧按钮。
   // QRE-SAAS-SYMBOL-DETAIL-REFRESH：Element.children 是 HTMLCollection，没有 Array 的
-  // some/find——直接 `.children.some(...)` 在浏览器里必抛 TypeError，被 load() 的 catch
-  // 吞掉后整页显示「加载失败，请稍后重试」（job#78 等非只读旧详情全灭的根因）。
+  // some/find——对它直接调 some 在浏览器里必抛 TypeError，被 load() 的 catch 吞掉后整页
+  // 显示「加载失败，请稍后重试」（job#78 等非只读旧详情全灭的根因）。必须显式借用
+  // Array.prototype；源码级合同见 tests/test_saas_chart_a_fix.py::TestDomCollectionMisuse。
   const exists = Array.prototype.some.call(host.children || [],
     function (n) { return n && n.id === 'btn-refresh-detail'; });
   if (exists) return;
@@ -773,7 +791,7 @@ let symbolKlineChart = null;
 let klineResizeObserver = null;
 let klineObserved = false;
 // --- TV 化静态 K 线（CR-2026-10-27）：顶部信息区 + 左侧工具栏 + 右侧价格标尺 ---
-const KLINE_TOOL_KINDS = ['zoom-in', 'zoom-out', 'reset', 'vol', 'fct', 'trend', 'horizontal', 'clear'];
+const KLINE_TOOL_KINDS = ['zoom-in', 'zoom-out', 'reset', 'vol', 'fct', 'trend', 'horizontal', 'clear', 'ind'];
 const KLINE_TOOL_VIS = { vol: true, fct: true };
 const klineToolState = { chart: null, data: null, plan: null, bound: false, baseSeries: null };
 // 画线首片状态（CR-2026-10-27）：mode=trend/horizontal/null；pending=趋势线未落点起点
@@ -996,6 +1014,8 @@ function bindKlineTools(chart, d, plan){
     'trend': () => klineDrawToggleMode('trend'),
     'horizontal': () => klineDrawToggleMode('horizontal'),
     'clear': () => klineDrawClear(),
+    // 指标设置与面板管理（CR-2026-10-28）
+    'ind': () => klineIndicatorDialog(),
   };
   let boundAny = false;
   KLINE_TOOL_KINDS.forEach(kind => {
@@ -1025,6 +1045,214 @@ function bindKlineResize(el){
     window.addEventListener('resize', function(){ const box = $('#chart-kline'); if (box) klineResize(box); });
   }
 }
+// 指标设置与面板管理（CR-2026-10-28）：当前详情产物，供 movePane/hidePane 取因子集合
+let klineDetail = null;
+// --- 副图顺序（CR-2026-10-28 指标设置与面板管理）：单一 localStorage 键存 JSON 数组。
+// 与 chip 状态同源同生命周期：非法输入一律降级空数组，绝不抛错打断渲染。
+const PANE_ORDER_LS_KEY = 'qre_pane_order';
+function paneOrder(){
+  try {
+    const raw = localStorage.getItem(PANE_ORDER_LS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const seen = {};
+    return arr.filter(function (k) {
+      if (typeof k !== 'string' || !k || seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+  } catch (e) { return []; }  // 隐私模式 / 损坏 JSON：按分组顺序渲染
+}
+function setPaneOrder(keys){
+  try {
+    const seen = {};
+    localStorage.setItem(PANE_ORDER_LS_KEY, JSON.stringify((keys || []).filter(function (k) {
+      if (typeof k !== 'string' || !k || seen[k]) return false;
+      seen[k] = true;
+      return true;
+    })));
+  } catch (e) {}
+}
+// 按当前可见副图把 key 上移/下移一位；越界或未知键不动（不抛错）
+function movePane(key, delta){
+  const plan = QREFactorLayout.plan(klineDetail && klineDetail.factors || [], chipStates(), paneOrder());
+  const keys = plan.panes.map(p => p.key);
+  const i = keys.indexOf(key);
+  if (i < 0) return false;
+  const j = i + (Number(delta) || 0);
+  if (j < 0 || j >= keys.length) return false;
+  keys.splice(j, 0, keys.splice(i, 1)[0]);
+  setPaneOrder(keys);
+  return true;
+}
+// 收起整个副图：该面板下所有 chip 置 hidden（MACD 等多线面板同键，天然只写一次）
+function hidePane(key){
+  const plan = QREFactorLayout.plan(klineDetail && klineDetail.factors || [], chipStates(), paneOrder());
+  const hit = (plan.chips || []).some(c => c.key === key);
+  if (!hit) return false;
+  setChipState(key, 'hidden');
+  return true;
+}
+// 变更后统一重挂：重播中按新布局重挂重播（防未来数据语义不变），否则重建静态图
+function klineRerenderAfterSetting(){
+  if (kreplayCtl){
+    kreplayCtl.destroy(true);
+    kreplayCtl = mountKlineReplay(klineData);
+  } else if (klineDetail){
+    renderKline(klineDetail);
+  }
+}
+// --- 指标设置与面板管理（CR-2026-10-28）：集中切换因子呈现方式 + 调整副图顺序 ---
+// 只管理本策略详情产物内已有的因子：ECS 无行情库，任意指标取数需另立项。
+const IND_STATE_LABEL = {overlay: '叠加K线', pane: '独立面板', hidden: '隐藏'};
+let klineIndMask = null;
+function klineIndClose(){
+  if (klineIndMask && klineIndMask.parentNode) klineIndMask.parentNode.removeChild(klineIndMask);
+  klineIndMask = null;
+}
+function klineIndBtn(text, tip, onClick){
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'btn-sm';
+  b.textContent = text;
+  b.dataset.tip = tip;
+  b.addEventListener('click', onClick);
+  return b;
+}
+function klineIndicatorDialog(){
+  klineIndClose();
+  const plan = QREFactorLayout.plan(klineDetail && klineDetail.factors || [], chipStates(), paneOrder());
+  const mask = document.createElement('div');
+  mask.className = 'ind-mask';
+  const dialog = document.createElement('div');
+  dialog.className = 'ind-dialog';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'ind-title');
+
+  const head = document.createElement('div');
+  head.className = 'ind-head';
+  const title = document.createElement('h3');
+  title.id = 'ind-title';
+  title.textContent = '指标设置';
+  const close = klineIndBtn('关闭', '关闭面板（Esc 亦可）', klineIndClose);
+  head.appendChild(title);
+  head.appendChild(close);
+
+  const body = document.createElement('div');
+  body.className = 'ind-body';
+
+  // 指标：本策略全部因子的呈现方式（复用 chip 三态，不新建状态源）
+  const secInd = document.createElement('div');
+  secInd.className = 'ind-sec';
+  const tInd = document.createElement('div');
+  tInd.className = 'ind-sec-t';
+  tInd.textContent = '指标';
+  secInd.appendChild(tInd);
+  (plan.chips || []).forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'ind-row';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = c.label;
+    const st = document.createElement('span');
+    st.className = 'st';
+    st.textContent = IND_STATE_LABEL[c.state] || c.state;
+    const act = document.createElement('span');
+    act.className = 'ind-act';
+    act.appendChild(klineIndBtn('切换',
+      c.states.length > 2 ? '循环切换：叠加K线 → 独立面板 → 隐藏' : '循环切换：独立面板 → 隐藏',
+      () => {
+        const next = c.states[(c.states.indexOf(c.state) + 1) % c.states.length];
+        setChipState(c.key, next);
+        klineIndicatorDialog();
+        klineRerenderAfterSetting();
+      }));
+    row.appendChild(nm); row.appendChild(st); row.appendChild(act);
+    secInd.appendChild(row);
+  });
+  if (!(plan.chips || []).length){
+    const empty = document.createElement('div');
+    empty.className = 'ind-row';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = '该策略未使用因子';
+    empty.appendChild(nm);
+    secInd.appendChild(empty);
+  }
+  body.appendChild(secInd);
+
+  // 面板：副图顺序与单独收起
+  const secPane = document.createElement('div');
+  secPane.className = 'ind-sec';
+  const tPane = document.createElement('div');
+  tPane.className = 'ind-sec-t';
+  tPane.textContent = '面板';
+  secPane.appendChild(tPane);
+  (plan.panes || []).forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'ind-row';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = p.name || p.key;
+    const st = document.createElement('span');
+    st.className = 'st';
+    st.textContent = (i + 1) + ' / ' + plan.panes.length;
+    const act = document.createElement('span');
+    act.className = 'ind-act';
+    act.appendChild(klineIndBtn('上移', '把该副图上移一位', () => {
+      if (movePane(p.key, -1)){ klineIndicatorDialog(); klineRerenderAfterSetting(); }
+    }));
+    act.appendChild(klineIndBtn('下移', '把该副图下移一位', () => {
+      if (movePane(p.key, 1)){ klineIndicatorDialog(); klineRerenderAfterSetting(); }
+    }));
+    act.appendChild(klineIndBtn('收起', '隐藏该副图的全部因子', () => {
+      if (hidePane(p.key)){ klineIndicatorDialog(); klineRerenderAfterSetting(); }
+    }));
+    row.appendChild(nm); row.appendChild(st); row.appendChild(act);
+    secPane.appendChild(row);
+  });
+  if (!(plan.panes || []).length){
+    const empty = document.createElement('div');
+    empty.className = 'ind-row';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = '当前没有独立副图';
+    empty.appendChild(nm);
+    secPane.appendChild(empty);
+  }
+  body.appendChild(secPane);
+
+  const foot = document.createElement('div');
+  foot.className = 'ind-foot';
+  const reset = klineIndBtn('恢复默认', '清空全部指标与面板偏好，按策略默认呈现', () => {
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.indexOf(FCT_LS_PREFIX) === 0 || k === PANE_ORDER_LS_KEY)
+        .forEach(k => localStorage.removeItem(k));
+    } catch (e) { /* 隐私模式：内存中重渲染即可 */ }
+    klineIndicatorDialog();
+    klineRerenderAfterSetting();
+  });
+  foot.appendChild(reset);
+  foot.appendChild(close.cloneNode(true));
+
+  dialog.appendChild(head);
+  dialog.appendChild(body);
+  dialog.appendChild(foot);
+  mask.appendChild(dialog);
+  // 遮罩点击关闭（点对话框内部不关）
+  mask.addEventListener('click', ev => { if (ev.target === mask) klineIndClose(); });
+  document.body.appendChild(mask);
+  klineIndMask = mask;
+  const onKey = ev => {
+    if (ev && ev.key === 'Escape'){ klineIndClose(); document.removeEventListener('keydown', onKey); }
+  };
+  document.addEventListener('keydown', onKey);
+  const first = dialog.querySelector('button');
+  if (first && typeof first.focus === 'function') first.focus();
+}
 function renderKline(d){
   if (!d.kline || !d.kline.dates || !d.kline.dates.length){
     $('#box-kline').style.display = 'none';
@@ -1036,7 +1264,8 @@ function renderKline(d){
   // CR-2026-10-20：因子分组布局（均线 overlay 主图 / MACD 合并面板 / 其余独立面板），
   // chip 状态存 localStorage；面板数自适应容器高度（overlay 不占面板）
   const factors = d.factors || [];
-  const plan = QREFactorLayout.plan(factors, chipStates());
+  klineDetail = d;  // 指标设置/面板管理需要当前因子集合
+  const plan = QREFactorLayout.plan(factors, chipStates(), paneOrder());
   renderFactorChips(plan, d);
   const panes = plan.panes;
   const hasF = panes.length > 0;
@@ -1316,7 +1545,8 @@ function mountKlineReplay(d){
                // CR-2026-10-27：成交量 tooltip 按万显示（series 级优先于全局原值口径）
                tooltip: { valueFormatter: v => (v == null ? '—' : (Number(v) / 10000).toFixed(2) + ' 万') } } },
   ];
-  const plan = QREFactorLayout.plan(factors, chipStates());
+  klineDetail = d;  // 指标设置/面板管理需要当前因子集合
+  const plan = QREFactorLayout.plan(factors, chipStates(), paneOrder());
   const panes = plan.panes;
   const kEl = $('#chart-kline');
   kEl.style.height = QREReplay.klineHeightForPanes(panes.length) + 'px';

@@ -3737,3 +3737,12 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - harness `symbolEl()` 的 `children` 改为 `htmlCollectionView()` 的 HTMLCollection 形态（内部 `_children` 维护），新增 `childById()`；`test_symbol_detail_refresh_entry_for_legacy_payload` 增加 `calls.failure === 0` 断言。
 - 主 Agent 复核：harness 改完先 RED 复现线上，源码修复后 GREEN；`test_gui_saas_pages.py` 94 passed；全量 2960 passed/24 skipped。
 - 生产：真实 DOM 验证 + 真实 job#78 产物端到端 `load()` 0 失败；job58/66 回归通过。未 commit/push。
+
+## 2026-10-28 指标设置与面板管理实施交接
+
+- 改动：`src/quant_research_engine/gui/static/factor-layout.js`、`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_factor_display_contract.py`、`tests/test_saas_static_kline_tv.py`、CR 实现记录。
+- `plan()` 新增可选第三参 `paneOrder`；`symbol.html` 新增 `kt-ind` 按钮、指标设置模态、`paneOrder/setPaneOrder/movePane/hidePane` 与 `klineIndicatorDialog`。
+- 副图顺序持久化 `qre_pane_order`（单一 JSON 数组键），非法输入降级空数组。
+- 主 Agent 复核：`plan()` 第三参 6 组断言 + DOM 合同 + harness 交互流；相关 162 passed；全量 2964 passed/24 skipped。
+- 生产：真实浏览器验证通过（MainPID 512078）；过程教训——机械移动函数区块时误删 `renderFactorChips` 的 `const slot`，VM 单测全绿但生产炸，已补真实页面渲染验证。
+- 未 commit/push。

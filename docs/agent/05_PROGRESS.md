@@ -1618,3 +1618,25 @@ Kimi 实施并部署。
 - **测试**：harness 改完先 RED（复现线上），源码修复后 GREEN；`test_gui_saas_pages.py` 94 passed；全量 `2960 passed, 24 skipped`。
 - **生产**：真实 DOM 验证 `children` 为 HTMLCollection 且函数不再抛错、幂等；用真实 job#78 产物端到端跑 `load()` → 0 次加载失败、K 线正常渲染；job58/66 回归通过。
 - 详见 `docs/agent/change_requests/CR-2026-10-28_symbol_detail_refresh_htmlcollection.md`。
+
+## 2026-10-28 TradingView 化：A 路性能核查 + 指标设置与面板管理
+
+Kimi 实施并部署。
+
+- **A 路增量 append 结论（实测后不做）**：用真实生产文件做受控基准
+  （`.tmp/replay-bench/bench.py`，Playwright route 指向仓库真实 echarts/replay.js，
+  4000 点 / 3 grid / 6 series / 200 帧）：单帧 `setOption` 均值 2.03ms、p95 2.8ms，
+  `windowDisplayData` 0.022ms/帧、`frameMetrics` 0.007ms/帧。Spike 记录的 40.7ms/帧
+  是 `visibleWindow` 视口裁剪上线前的全量重绘口径；裁剪后总成本 ~2ms，相对 16.7ms
+  预算有 8× 余量。增量 append 可得收益 ≤2ms/帧却要改重播热路径，风险收益比不成立。
+- **指标设置与面板管理**：工具栏新增「指标」入口 → 模态面板集中切换因子呈现方式
+  （叠加K线/独立面板/隐藏）、副图上移下移、单独收起、恢复默认；副图顺序持久化在
+  单一 localStorage 键 `qre_pane_order`。
+- `factor-layout.js::plan()` 新增可选第三参 `paneOrder`，缺省行为逐字节不变；
+  静态图与重播共用同一副图顺序。
+- **边界**：只管理详情产物内已有因子（ECS 无行情库，任意指标取数需另立项）。
+- **测试**：`plan()` 第三参 6 组断言 + 源码 DOM 合同 + Node harness 交互流；
+  相关 162 passed；全量 `2964 passed, 24 skipped`。
+- **生产**：真实浏览器验证面板开合、切换、收起、恢复默认、Esc 关闭，零报错；
+  job58/66 回归通过。MainPID 512078，回滚副本 `/tmp/qre-deploy-20261027T175206Z.bak`。
+- 详见 `docs/agent/change_requests/CR-2026-10-28_indicator_settings_panel_management.md`。
