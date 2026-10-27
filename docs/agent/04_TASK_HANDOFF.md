@@ -2680,3 +2680,13 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 测试：新增 10 例；相关 159 passed；全量 2927 passed/24 skipped。
 - 生产：job58 个股页 200 且包含 `kline-tools`；未 commit/push。
 - 遗留：重播界面未 TV 化；移动端信息密度仍高；面板全关的隐藏格分支未在浏览器触发。
+
+## 2026-10-27 K 线重播 TV 化首片交接
+
+- DeepSeek 实施，Kimi 复核并部署；范围仅 `symbol.html` + `replay.js` 最小可选透传 + 新测试。
+- 重播布局复用静态 TV 规格：右侧标尺、底部时间轴、x 轴全联动；顶部信息区随当前帧更新 OHLC/量/涨跌/因子值。
+- `replay.js` 仅新增可选 `yAxes[].position/formatter`、`opts.axisPointer`、`axisLabelIndex`；`job.html` 默认路径输出不变。
+- 测试：新增 6 例；相关 141 passed；全量 `2936 passed, 24 skipped, 4 warnings`。
+- 浏览器：`.tmp/replay-tv/` 33/33 通过，1280/375 已由主 Agent 目视确认。
+- 生产：job58 个股页 200，`/static/replay.js` 含 `opts.axisPointer`。未 commit/push。
+- 遗留：重播 tooltip 仍统一加 `%`；重播容器高度未与静态 460px 归一；375 信息区仍 ellipsis。

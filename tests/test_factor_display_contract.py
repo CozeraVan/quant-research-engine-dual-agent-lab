@@ -461,7 +461,7 @@ class TestPanelsAndMetadata:
         且不新建第二套 K 线模块（接管原容器）。"""
         client = app.test_client()
         html = client.get("/saas/jobs/1/symbols/000001").get_data(as_text=True)
-        match = re.search(r"(function mountKlineReplay\(d\)\{[\s\S]*?\n\})\nload\(\);", html, re.S)
+        match = re.search(r"(let klineResizeBound = false;[\s\S]*?\n\})\nload\(\);", html, re.S)
         assert match, "未找到 mountKlineReplay"
         source = match.group(1)
         layout = (ROOT / "src/quant_research_engine/gui/static/factor-layout.js").read_text(encoding="utf-8")

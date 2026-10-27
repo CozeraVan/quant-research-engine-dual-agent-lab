@@ -1094,16 +1094,18 @@ function mountKlineReplay(d){
   const panes = plan.panes;
   const kEl = $('#chart-kline');
   kEl.style.height = panes.length ? (420 + panes.length * 160) + 'px' : '460px';
-  const grids = [{ left: 60, right: 20, top: 30, height: panes.length ? '40%' : '56%' },
-                 { left: 60, right: 20, top: panes.length ? '48%' : '72%', height: '10%' }];
-  const yAxes = [{ name: '', pct: false }, { name: '量', pct: false }];
+  // CR-2026-10-27：布局复用静态 TV 规格（右侧 56 留白给价格标尺、时间轴只挂末格）
+  const grids = klineGridSpec(true, panes.length, true);
+  const labelIdx = klineAxisLabelIndex(panes.length, true, true);
+  const yAxes = [
+    { name: '', pct: false, position: 'right', scale: true },
+    { name: '量', pct: false, position: 'right', formatter: v => (v / 10000).toFixed(0) + '万' },
+  ];
   plan.overlays.forEach(o => {
     series.push({ name: o.name, type: 'line', data: o.f.values, grid: 0, color: o.color, width: 1.2 });
   });
-  const fTop = 62, fBottom = 93, fStep = panes.length ? (fBottom - fTop) / panes.length : 0;
   panes.forEach((p, i) => {
-    grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
-    yAxes.push({ name: p.name, pct: false });
+    yAxes.push({ name: p.name, pct: false, position: 'right', scale: true });
     p.series.forEach(s => {
       const cfg = { name: s.name, type: s.type || 'line', data: s.values, grid: 2 + i,
                     color: s.color || '#6750A4', width: 1.2 };
@@ -1143,9 +1145,13 @@ function mountKlineReplay(d){
     dates, series, grids, yAxes,
     events, roundTrips: trips,
     initialCursor: startIdx,
+    // x 轴全联动：跨主图/量/因子格的十字光标与时间轴对齐；时间轴只挂最后一个可见格
+    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    axisLabelIndex: labelIdx,
     chartEl: $('#chart-kline'),  // 接管原容器
     eventsEl: $('#kreplay-events'),
-    onFrame: (cursor) => infoFrame(cursor),
+    // 顶部信息区与侧边卡片共用当前帧口径：只回放已发生的行情
+    onFrame: (cursor) => { infoFrame(cursor); klineSetInfo(klineInfoHTML(d, plan, cursor)); },
   });
 }
 load();

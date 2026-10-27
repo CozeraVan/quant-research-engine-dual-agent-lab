@@ -1497,3 +1497,14 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - **测试**：新增价格尺度分类、因子换算、阈值换算、买入持有 hfq 用例；相关 107 passed；全量 `2930 passed, 24 skipped, 4 warnings`。
 - **生产**：ECS 同步 `lab_result.py` + `factor_registry.py`，qre-saas active；job58/symbol/factors API 200。
 - **遗留**：历史旧 gzip 个股详情可能仍未换算；需要时按个股重新生成，不批量回填。详见 `change_requests/CR-2026-10-27_factor_price_scale_presentation.md`。
+
+## 2026-10-27 K 线重播 TV 化首片
+
+用户选择下一步“重播界面 TV 化”。DeepSeek 实施，Kimi 复核并部署。
+
+- **布局对齐**：`mountKlineReplay()` 复用静态 TV 规格 `klineGridSpec()` / `klineAxisLabelIndex()`；主图/量/因子副图全部右侧标尺，底部单时间轴，x 轴全联动。
+- **信息区**：重播 `onFrame` 同时更新侧边交易卡片和顶部 `#kline-ohlc`；只显示当前帧及以前，缺失 `—`。
+- **replay.js 最小增量**：可选 `yAxes[].position/formatter`、`opts.axisPointer`、`axisLabelIndex`；不传时 job 收益曲线重播输出不变。
+- **测试**：新增 `tests/test_saas_replay_tv.py` 6 例；相关 141 passed；全量 `2936 passed, 24 skipped, 4 warnings`。
+- **浏览器/生产**：`.tmp/replay-tv/` 33/33 通过，1280/375 截图已目视确认；ECS job58 个股页 200，replay.js 含 `opts.axisPointer`。未 commit/push。
+- **遗留**：重播 tooltip 仍统一加 `%`；重播容器高度未与静态归一；375 信息区仍 ellipsis。

@@ -1058,6 +1058,7 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 - 静态 K 线 TV 化首片已部署：左侧工具栏、顶部 OHLC/因子信息区、右侧价格标尺；全量 2927 passed/24 skipped；未 commit/push。
 - MACD 旧别名拆面板已修复并部署：`macd_dif/macd_dea/macd_hist` 现在合并成一个 MACD 副图；全量 2926 passed/24 skipped + 1 已知 timing flake；未 commit/push。
 - 因子呈现复权口径系统性修复已部署：价格型因子按最新 adj_factor 换算到 K 线前复权口径，引擎语义不变；全量 2930 passed/24 skipped；未 commit/push。
+- K 线重播 TV 化首片已部署：重播右侧标尺、底部时间轴、x 联动、顶部信息区随帧更新；全量 2936 passed/24 skipped；未 commit/push。
 - 《我不是股神》WSL 本地实现已获用户批准提交：价格型因子与游戏 OHLC 口径对齐、一体化交易终端、回合制与审计字段；仅本地 8092，不部署 ECS。
 - 下一主线候选：P2 会员分层、付费权益与微信信号推送；用户 2026-10-27 明确暂缓推进。
 

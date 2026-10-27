@@ -2007,3 +2007,25 @@ uv run pytest tests/test_gui_lab_result.py tests/test_factor_registry.py tests/t
 uv run pytest tests/ -q → 2930 passed, 24 skipped, 4 warnings
 ECS deploy → qre-saas active; /saas/jobs/58 200; /saas/jobs/58/symbols/920556.BJ 200; /api/saas/factors 200
 ```
+
+## 2026-10-27 K 线重播 TV 化首片主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 重播复用静态 TV helper，没有形成第二套布局口径；`replay.js` 的改动全部是可选透传，默认路径不影响 job 收益曲线重播。
+- 两个既有测试只改抽取正则、断言未动，原因是 `mountKlineReplay` 现在依赖页面级 helper；这是有意的架构选择，避免重复实现 grid。
+- 防未来数据保持：首帧只含 cursor+1 根，信息区不显示未来日期；退出恢复静态视图。
+- Required Fixes：无。遗留：重播 tooltip 仍统一加 `%`；重播容器高度未与静态归一。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_saas_replay_tv.py tests/test_saas_replay_boundaries.py tests/test_saas_static_kline_tv.py tests/test_saas_chart_a_fix.py tests/test_gui_saas_pages.py tests/test_factor_display_contract.py -q → 141 passed
+uv run pytest tests/ -q → 2936 passed, 24 skipped, 4 warnings
+.tmp/replay-tv/check.py → 33/33, console=[]
+ECS deploy → qre-saas active; /saas/jobs/58/symbols/920556.BJ 200; /static/replay.js contains opts.axisPointer
+```

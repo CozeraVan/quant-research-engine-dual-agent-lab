@@ -325,6 +325,7 @@ open 时：
 - A 路首片已实施：`symbol.html` 单例 ResizeObserver；`replay.js` `visibleWindow()` 默认 240 点视口裁剪；4000 点 rAF 45.8→16.8ms。遗留 `job.html` dispose resize 警告与重播左端不固定 0 的口径变化。
 - A 路遗留已修补：`job.html` dispose resize 守卫；`replay.js` `windowDisplayData(zeroBase)` 让策略/基准左端回 0，指标仍全量口径。
 - 静态 K 线 TV 化首片已实施：`symbol.html` 左侧工具栏、顶部 OHLC/因子信息区、右侧价格标尺、底部时间轴；因子合同与 Night Mode 不变。重播界面尚未 TV 化。
+- K 线重播 TV 化首片已实施：`mountKlineReplay()` 复用静态 TV 布局与顶部信息区；`replay.js` 仅可选透传右置标尺/axisPointer，默认 job 路径不变。遗留重播 tooltip `%` 口径与容器高度归一。
 - MACD 旧别名修复：`factor-layout.js` 启发式回退现在识别 `macd_dif/macd_dea/macd_hist/macd_signal/macd_histogram`，旧无 display 产物也会合并成一个 MACD 副图。
 - 复权口径修复：因子表/引擎是 hfq，K 线详情是前复权@最新；`lab_result` 现在对价格型因子除以最新 `adj_factor`，买入持有收益恒 hfq。分类单一来源 `gui.factor_registry.is_price_scaled()`，游戏共用。
 

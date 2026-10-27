@@ -3670,3 +3670,10 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - `lab_result._fetch_factor_panels()` 查询最新 adj_factor，价格型因子和阈值除以锚点；无量纲因子不换算。
 - `lab_result._fetch_stock_daily()` 统一前复权@最新；`_fetch_symbol_range_returns()` 恒 hfq，不再依赖 `QRE_PRICE_BASIS`。
 - 主 Agent 复核：相关 107 passed；全量 2930 passed/24 skipped；ECS 部署后页面/API 200。未 commit/push。
+
+## 2026-10-27 K 线重播 TV 化首片实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`src/quant_research_engine/gui/static/replay.js`、`tests/test_saas_replay_tv.py`、两个既有测试的抽取正则、CR 实现记录。
+- `mountKlineReplay()` 复用静态 helper：`klineGridSpec`、`klineAxisLabelIndex`、`klineInfoHTML`、`klineSetInfo`；yAxes 右置并可带 formatter。
+- `replay.js` 只加可选透传：`yAxes[].position/formatter`、`opts.axisPointer`、`opts.axisLabelIndex`；默认路径不传即原输出。
+- 主 Agent 复核：相关 141 passed；全量 2936 passed/24 skipped；`.tmp/replay-tv/` 33/33，截图已目视确认；ECS 部署后 job58/symbol/replay.js 200。未 commit/push。

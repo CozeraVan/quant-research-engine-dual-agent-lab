@@ -449,7 +449,7 @@ def _extract(html: str, pattern: str, what: str) -> str:
 class TestSymbolReplayEventSource:
     def test_orders_priority_and_factor_layout(self, client):
         html = client.get("/saas/jobs/1/symbols/000001").get_data(as_text=True)
-        source = _extract(html, r"(function mountKlineReplay\(d\)\{[\s\S]*?\n\})\nload\(\);", "mountKlineReplay")
+        source = _extract(html, r"(let klineResizeBound = false;[\s\S]*?\n\})\nload\(\);", "mountKlineReplay")
         _node(_REPLAY_HARNESS
                + _SYMBOL_EVENT_SCENARIO.replace("%FACTOR%", json.dumps(FACTOR_LAYOUT_JS))
                                        .replace("%SOURCE%", json.dumps(source)))

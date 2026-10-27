@@ -291,21 +291,31 @@
           // 切片2：K线/成交量/散点等任意 ECharts series 透传（extra 覆盖默认键）
           return Object.assign(base, s.extra || {});
         });
-        chart.setOption({
+        var gridCount = (opts.grids || []).length;
+        var labelIdx = opts.axisLabelIndex == null ? gridCount - 1 : opts.axisLabelIndex;
+        var option = {
           animation: false,
           tooltip: { trigger: "axis", valueFormatter: function (v) { return v == null ? "—" : Number(v).toFixed(2) + "%"; } },
           legend: { top: 0, data: (opts.series || []).filter(function (s) { return !s.grid; }).map(function (s) { return s.name; }) },
           grid: opts.grids || [{ left: 55, right: 20, top: 30, height: "68%" }],
           xAxis: (opts.grids || [{}]).map(function (g, gi) {
-            return { type: "category", data: xData, gridIndex: gi, axisLabel: { show: gi === (opts.grids || []).length - 1 } };
+            return { type: "category", data: xData, gridIndex: gi, axisLabel: { show: gi === labelIdx } };
           }),
           yAxis: (opts.yAxes || [{ name: "累计收益率%" }]).map(function (y, yi) {
             // 默认按收益率口径加 %（切片1）；切片2 传 pct:false（价格/量/因子轴）
-            return { type: "value", gridIndex: yi, name: y.name, max: y.max, scale: y.scale !== false,
-                     axisLabel: y.pct === false ? undefined : { formatter: "{value}%" } };
+            var ya = { type: "value", gridIndex: yi, name: y.name, max: y.max, scale: y.scale !== false,
+                       axisLabel: y.pct === false
+                         ? (y.formatter ? { formatter: y.formatter } : undefined)
+                         : { formatter: "{value}%" } };
+            // 可选：右侧标尺（K线重播与静态 TV 对齐）；job 默认路径不传则省略
+            if (y.position) ya.position = y.position;
+            return ya;
           }),
           series: series,
-        }, { replaceMerge: ["xAxis", "series"] });
+        };
+        // 可选：跨格 x 轴联动；job 默认路径不传则不加（保持原有输出）
+        if (opts.axisPointer) option.axisPointer = opts.axisPointer;
+        chart.setOption(option, { replaceMerge: ["xAxis", "series"] });
         slider.value = cursor;
         cur.textContent = (cursor + 1) + " / " + n;
         var m = frameMetrics(dates, (opts.series || [])[0] ? (opts.series[0].raw || []) : [], positions, opts.roundTrips, cursor);

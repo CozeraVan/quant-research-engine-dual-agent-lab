@@ -2,6 +2,37 @@
 
 ## Task ID
 
+QRE-TV-KLINE-REPLAY-LAYOUT（K 线重播 TV 化首片）
+
+## Created By
+
+KIMI_CODE 统筹（2026-10-27）；DeepSeek 实施，Kimi 复核。CR：`docs/agent/change_requests/CR-2026-10-27_kline_replay_tv_layout.md`。
+
+## 目标与边界
+
+1. 只把个股 K 线重播界面对齐静态 TV 化：右侧标尺、底部时间轴、x 联动、顶部 OHLC/因子信息区；不新造第二套 K 线模块。
+2. 不改防未来数据规则、`frameMetrics` 全量口径、Night Mode、因子 display 合同。
+3. 只改 `symbol.html` 与必要 `replay.js` 最小增量；不改 job/lab/游戏/worker/引擎/schema。
+4. TDD 先 RED 后 GREEN；测试通过后由主 Agent 部署 ECS；用户验收前不 commit/push。
+
+## 验证
+
+```bash
+uv run pytest tests/test_saas_replay_boundaries.py tests/test_saas_static_kline_tv.py tests/test_saas_chart_a_fix.py tests/test_gui_saas_pages.py -q
+uv run pytest tests/ -q
+```
+
+## 重播 TV 化首片结果（2026-10-27，已部署待用户验收）
+
+- `mountKlineReplay()` 复用静态 TV 布局：右侧标尺、底部时间轴、x 轴全联动；顶部 `#kline-ohlc` 随当前帧更新。
+- `replay.js` 仅新增可选透传：`yAxes[].position/formatter`、`opts.axisPointer`、`opts.axisLabelIndex`；`job.html` 默认路径输出不变。
+- 测试：新增 `tests/test_saas_replay_tv.py` 6 例；相关 141 passed；全量 `2936 passed, 24 skipped, 4 warnings`。
+- 浏览器：`.tmp/replay-tv/` 33/33，1280/375 主 Agent 已目视确认。
+- 生产：ECS 同步 `symbol.html` + `replay.js`，qre-saas active；job58 个股页 200，replay.js 含 `opts.axisPointer`。未 commit/push。
+- 遗留：重播 tooltip 仍统一加 `%`；重播容器高度未与静态 460px 归一。
+
+## Task ID
+
 QRE-TV-STATIC-KLINE-LAYOUT（静态 K 线 ECharts 深度 TV 化首片）
 
 ## Created By
