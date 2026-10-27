@@ -1514,3 +1514,11 @@ No open questions remain.
 - Alternatives: ①账号级通行证——否决（一个链接看到全部结果，撤销粒度过粗）；②仅存 token 前缀——否决（前缀+爆破空间仍可枚举，完整哈希无此问题）；③游客也可分享——否决（游客结果次日清空、无 owner 主体，分享无意义且扩大暴露面）；④未验证结果禁止分享——否决（用户明确 owner 可主动分享，合同徽标保留即可区分）。
 - Impact: `cloud_schema.sql` 新增 share_links（生产须 postgres 先 apply）；`_require_completed_result` 增加 share 公开只读通道，与 showcase verified 通道并存且 `readonly_kind` 区分；无效/过期/撤销/错 job token 一律不降级授权（匿名 401、登录他人 404，错误体与不存在一致）；游客清理 jobs 逻辑不变（CASCADE 清理孤儿分享）；`SAAS_AUTH_SALT` 轮换会使历史分享链接全部失效（预期安全行为）。
 - Owner: KIMI_CODE（用户 2026-10-26 批准计划 superman-hellcat-crystal）
+
+### 2026-10-27: TradingView 化图表内核选型（Spike 结论）
+
+- Decision: TradingView 化第一阶段采用“**A 增强 ECharts 为主 + B Lightweight Charts 受控试点**”；C 自研 Canvas/WebGL 不进第一阶段。B 仅限 `symbol.html` K 线区，`job.html` 的非 K 线图表不换内核。
+- Reason: 全站 K 线只有 2 处，B 的收益集中在重播帧率（同 4000 点合成数据实测：A rAF 40–41ms/帧，B 17.5–17.9ms/帧）；A 已具备因子 display 合同、重播纯逻辑 core、Night Mode 和测试资产，迁移风险最低。C 无压倒性收益且维护成本最高。
+- Alternatives: 全站直接替换 LWC——否决（收益面窄、主题机制需重写、attribution 未决）；自研内核——否决（20–40+ 人日，无实测优势）。
+- Impact: 先实施 A 路两个低风险修复：`symbol.html` 补 ResizeObserver、重播由每帧全量 `replaceMerge` 改增量更新。B 试点前必须先解决 attribution 合规及与 UI 外部品牌/配色纪律的冲突。证据见 `change_requests/CR-2026-10-27_tv_chart_core_spike.md`。
+- Owner: KIMI_CODE（用户 2026-10-27 选择 Spike 范围；具体实施范围待用户批准）

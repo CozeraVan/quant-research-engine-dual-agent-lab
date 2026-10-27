@@ -1437,3 +1437,24 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - **修复**：`lab_result.py` 新增 `daily_returns_from_cumret()` 和 `histogram_from_cumret()`；SaaS 端点用 `result_chart_data.cumret` 差分还原日收益，再按 risk report 的 mean/std 生成 40 箱直方图。cumret 是交集口径累计收益，已剔除新股注资，避免 `total_equity.pct_change` 的注资跳变。
 - **测试**：TDD 先 RED 后 GREEN；新增 2 个纯函数用例和 1 个 SaaS 端点用例。相关 189 passed；全量 `2909 passed, 24 skipped, 4 warnings`。
 - **发布**：ECS 备份后同步 `lab_result.py` + `saas/app.py`，仅重启 qre-saas（MainPID 498077）。生产 job 58/66 现均返回 40 箱直方图，点数 4068/4069，与 `n_obs` 一致。未 commit/push、未跑回测。
+
+## 2026-10-27 TradingView 化图表内核 Spike
+
+用户选定第一阶段为“共享图表内核 Spike”。DeepSeek 完成，Kimi 复核文档与代码边界：生产代码零改动，证据在 `.tmp/tv-chart-spike/`，结论写在 CR。
+
+- **推荐**：A 增强 ECharts 为主；B Lightweight Charts 5.2.1 仅在 `symbol.html` K 线区受控试点；C 自研不做。
+- **理由**：全站 K 线只有 2 处，B 收益集中在重播；A 已有因子合同、重播 core、Night Mode 和测试资产。A 的痛点是 ResizeObserver 缺失和重播全量 setOption。
+- **硬阻塞**：B 的 attribution 要求未决，且可能与 UI 外部品牌/配色纪律冲突；未解决不上生产。
+- **验证**：`node --check demo.js` OK；B 路浏览器实测零 console 错误、375 无横向溢出；A/B 同数据基准显示 B 重播约 2.3× rAF 提升；全量测试 2909 passed + 24 skipped（无生产改动）。
+- **下一步**：待用户批准 A 路修复切片和是否并行 B 试点。
+
+## 2026-10-27 A 路图表修复
+
+用户选择“只做 A 路修复切片”。DeepSeek 实施，Kimi 复核并部署。
+
+- **ResizeObserver**：`symbol.html` 用单例 observer 观察 K 线容器，回调通过 `echarts.getInstanceByDom` 取当前实例；重播接管后自动指向新实例；不支持时回退 window.resize。
+- **重播视口裁剪**：`replay.js` 新增 `visibleWindow()`，默认渲染最近 240 点；未来数据不进 ECharts；`frameMetrics` 仍按全量序列计算，末帧指标不变。
+- **测试**：TDD 先 RED 后 GREEN；新增 `tests/test_saas_chart_a_fix.py` 5 例；相关 127 passed；全量 2914 passed/24 skipped，另有 1 个 PostgreSQL teardown 环境性 error，单独复跑通过。
+- **性能实测**：4000 点合成数据，同步每帧 39.1ms→9.5ms，rAF 45.8ms→16.8ms，console 无错误。
+- **发布**：ECS 同步两文件并重启 qre-saas；`/saas/jobs/58`、`/static/replay.js` 200，生产 replay.js 含 `visibleWindow`。未 commit/push。
+- **遗留**：`job.html` 仍有已 dispose `mainChart` resize 警告；重播曲线左端不再固定 0，需用户确认。

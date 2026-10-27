@@ -118,10 +118,23 @@
     };
   }
 
+  // 可见窗口：右端固定在 cursor（含），左端回看 size 根。
+  // 长序列只渲染窗口内数据（QRE-TV-CHART-A-FIX：4000 点全量逐帧重绘的卡顿根因）；
+  // size <= 0 视为全量（start 恒为 0），窗口未满时自然从头开始。
+  var DEFAULT_WINDOW = 240;
+  function visibleWindow(cursor, n, size) {
+    if (!(n > 0)) return { start: 0, end: 0 };
+    var c = Math.max(0, Math.min(cursor, n - 1));
+    var end = c + 1;
+    var win = Math.max(0, Math.floor(size == null ? DEFAULT_WINDOW : Number(size) || 0));
+    var start = win > 0 ? Math.max(0, end - win) : 0;
+    return { start: start, end: end };
+  }
+
   QREReplay.core = {
     indexDates: indexDates, binEvents: binEvents,
     positionCounts: positionCounts, nextEventfulCursor: nextEventfulCursor,
-    frameMetrics: frameMetrics,
+    frameMetrics: frameMetrics, visibleWindow: visibleWindow,
   };
 
   /* ---------- UI 装配 ---------- */
@@ -237,19 +250,24 @@
       });
     }
 
-    /* 序列截断渲染（rAF 节流） */
+    /* 序列截断渲染（rAF 节流）：只渲染可见窗口 [start, cursor]，
+       窗口外（含未来）数据不进 ECharts；指标仍按全量序列计算。 */
+    var winSize = Math.max(1, Number(opts.windowSize) || DEFAULT_WINDOW);
+    var viewStart = 0;
     var rafPending = false;
     function renderFrame() {
       if (rafPending) return;
       rafPending = true;
       requestAnimationFrame(function () {
         rafPending = false;
-        var c0 = cursor + 1;
-        var xData = dates.slice(0, c0);
+        var win = visibleWindow(cursor, n, winSize);
+        viewStart = win.start;
+        var s0 = win.start, c0 = win.end;
+        var xData = dates.slice(s0, c0);
         var series = (opts.series || []).map(function (s) {
           var base = {
             name: s.name, id: s.id, type: s.type || "line",
-            data: s.data.slice(0, c0),
+            data: s.data.slice(s0, c0),
             showSymbol: false, color: s.color,
             lineStyle: { width: s.width || (s.dashed ? 1.5 : 2), type: s.dashed ? "dashed" : "solid" },
             areaStyle: s.area ? { opacity: 0.3 } : undefined,
@@ -285,6 +303,7 @@
 
     // 事件标记：信号日 T（成交日前一交易日，空心浅色）+ 成交日 T+1（实心）。
     // ev.price 存在时以事件真实成交价定位（K线买卖点口径），否则用该帧序列值。
+    // 只标记可见窗口内的事件（窗口外日期不在 xAxis 上，且不得泄露未来）。
     function markPoints(s) {
       var pts = [];
       function yAt(i) {
@@ -293,7 +312,7 @@
       }
       bins.days.forEach(function (d) {
         var i = dateIdx[d];
-        if (i == null || i > cursor) return;
+        if (i == null || i > cursor || i < viewStart) return;
         bins.byDate[d].forEach(function (ev) {
           pts.push({
             coord: [d, (ev.price != null ? ev.price : yAt(i))],
@@ -301,7 +320,7 @@
             itemStyle: { color: ev.kind === "entry" ? "#d43030" : "#1a9e4b" },
           });
           // 信号日 T = 成交日前一交易日（时序红线：相隔呈现，不神化策略时序）
-          if (i > 0 && yAt(i - 1) != null) {
+          if (i > 0 && i - 1 >= viewStart && yAt(i - 1) != null) {
             pts.push({
               coord: [dates[i - 1], yAt(i - 1)], value: "信",
               symbol: "circle", symbolSize: 5,
@@ -451,7 +470,9 @@
       pause();
       seek(nextEventfulCursor(cursor, eventFlag, positions, n));
     });
-    window.addEventListener("resize", function () { chart.resize(); });
+    // 自建容器才拥有窗口重排职责；接管模式下容器尺寸由宿主页面负责（避免与宿主双重绑定）
+    var onWindowResize = function () { chart.resize(); };
+    if (ownChartEl) window.addEventListener("resize", onWindowResize);
 
     setPlayBtn();
     renderFrame();
@@ -467,6 +488,7 @@
       // keepDom=true（接管模式退出）：只撤控制条与日历，保留图表容器由调用方重建静态图
       destroy: function (keepDom) {
         pause();
+        if (ownChartEl && window.removeEventListener) window.removeEventListener("resize", onWindowResize);
         chart.dispose();
         bar.remove();
         sliderRow.remove();

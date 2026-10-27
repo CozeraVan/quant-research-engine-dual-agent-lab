@@ -3625,3 +3625,19 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - `uv run pytest tests/ -q` → `2909 passed, 24 skipped, 4 warnings`。
 - ECS：备份后同步 `lab_result.py` + `saas/app.py`，仅重启 qre-saas（MainPID 498077）。生产实测 job 58/66 `histogram` 均为 40 箱、点数分别 4068/4069，与 `n_obs` 一致。
 - 未 commit/push、未跑回测、未改 schema/worker/引擎/游戏。
+
+## 2026-10-27 TradingView 化 Spike 实施交接
+
+- 交付：`docs/agent/change_requests/CR-2026-10-27_tv_chart_core_spike.md` 追加 §0–§10；`.tmp/tv-chart-spike/` 产生 B 路原型、A/B 同数据基准、playwright 验证与截图。
+- 生产改动：零。未新增生产依赖，未改 `pyproject.toml`/`package.json`，未抓取 TradingView 站点资产，仅从 npm 隔离获取 lightweight-charts 5.2.1 并记录 Apache-2.0/shasum。
+- 结论：A 42/50、B 37/50、C 24/50；推荐 A 主力 + B 受控试点；B 的 attribution 为硬阻塞。
+- 主 Agent 复核：CR 与 `.tmp` 产物存在，`node --check` 通过，`git diff --name-only HEAD` 只有 brief 文档，无 `src/`、测试、模板、静态资源改动。
+- 未部署 ECS（无生产代码改动）、未 commit/push。
+
+## 2026-10-27 A 路图表修复实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`src/quant_research_engine/gui/static/replay.js`、`tests/test_saas_chart_a_fix.py`、CR 实现记录。
+- ResizeObserver：单例 + `klineObserved` 去重；无 observer 时 window.resize 兜底；删除旧的对已 dispose 实例 resize 绑定。
+- 重播：`visibleWindow()` 纯函数导出到 core；渲染只发可见窗口；事件标记过滤窗口；自建容器才绑 window.resize，destroy 解绑；接管模式不重复绑。
+- 主 Agent 复核：diff 范围仅两文件+测试；相关 127 passed；全量 2914 passed/24 skipped + 1 环境性 PG teardown error，目标文件复跑 21 passed；性能证据 `.tmp/a-replay-perf/result.json`。
+- 发布：ECS 仅同步两文件，MainPID 498885；生产 `/saas/jobs/58`、`/static/replay.js` 200，replay.js 含 `visibleWindow`。未 commit/push。

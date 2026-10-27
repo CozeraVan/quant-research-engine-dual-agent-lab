@@ -2650,3 +2650,19 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 修复：新增 `daily_returns_from_cumret()` / `histogram_from_cumret()`，SaaS 端点用 `chart_data.cumret` 差分还原日收益；不用 `total_equity.pct_change`，不误用 per-symbol 曲线。
 - 验证：相关 189 passed；全量 `2909 passed, 24 skipped, 4 warnings`；ECS 已部署，job 58/66 直方图 40 箱、点数 = n_obs。
 - 状态：已部署待用户验收，未 commit/push。
+
+## 2026-10-27 TradingView 化 Spike 交接
+
+- DeepSeek 完成共享图表内核选型 Spike，生产代码零改动；CR：`docs/agent/change_requests/CR-2026-10-27_tv_chart_core_spike.md`。
+- 推荐 A（增强 ECharts）做第一阶段主力，B（Lightweight Charts 5.2.1）仅在 `symbol.html` K 线区受控试点，C 自研不进第一阶段。
+- 实测：4000 点重播 A rAF 40–41ms/帧，B 17.5–17.9ms/帧；375 下 B 无横向溢出。B 的 attribution 合规是硬阻塞。
+- 下一项待用户批准：A 路先修 ResizeObserver + 重播增量更新；B 路是否并行试点由用户决定。
+
+## 2026-10-27 A 路图表修复交接
+
+- DeepSeek 完成 A 路两个痛点修复，Kimi 复核并部署 ECS；未 commit/push。
+- 改动：`symbol.html` 单例 ResizeObserver + 当前实例 resize；`replay.js` 可见窗口裁剪（默认 240 点）+ 事件窗口过滤 + resize 归属解绑。
+- 测试：新增 5 例；相关 127 passed；全量 2914 passed/24 skipped，另有 1 个 PG teardown 环境性 error，目标文件复跑 21 passed。
+- 性能：4000 点重放同步每帧 39.1→9.5ms，rAF 45.8→16.8ms。
+- 生产：qre-saas active，job58/static replay 200，生产 replay.js 含 `visibleWindow`。
+- 待用户确认：重播曲线左端不再固定 0；`job.html` 旧 dispose resize 警告遗留。

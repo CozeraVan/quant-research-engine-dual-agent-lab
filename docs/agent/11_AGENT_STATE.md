@@ -1052,6 +1052,8 @@ benchmark: backtest stage 1718.9s → 40.2s (42.8×)
 - M10.4：真实 manifest 校验通过；新增 `--eps-grid` sensitivity，默认真实拟合 eps=1.0/1.5/2.0 成簇策略 0/2/5，noise 490/451/396；未跑回测。
 - 全仓：`2906 passed, 24 skipped, 4 warnings`；此前唯一外部 YAML 夹具失败已修复，未恢复旧产物。
 - SaaS FRM 日收益直方图修复已部署 ECS：job 58/66 现返回 40 箱直方图；全量 `2909 passed, 24 skipped, 4 warnings`；未 commit/push。
+- TradingView 化 Spike 完成：推荐 A 增强 ECharts 为主、B Lightweight Charts 受控试点、C 自研不做；B 的 attribution 为硬阻塞。等待用户决定下一阶段实施范围。
+- TradingView 化 A 路首片已部署：ResizeObserver + 重播 240 点视口裁剪；4000 点 rAF 45.8→16.8ms；全量 2914 passed/24 skipped + 1 环境性 teardown error；未 commit/push。
 - 下一主线候选：P2 会员分层、付费权益与微信信号推送；用户 2026-10-27 明确暂缓推进。
 
 ### 主模型切换交接预案（2026-10-27）

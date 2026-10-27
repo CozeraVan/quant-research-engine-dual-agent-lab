@@ -1827,6 +1827,51 @@ git diff --check：clean
 scripts/check-progress-docs.sh：passed
 ```
 
+## 2026-10-27 A 路图表修复主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 修复针对 Spike 定位的两个真实痛点，没有引入新依赖或第二套图表内核。
+- 防未来数据红线保持：重播只渲染 `[visibleStart, cursor]`，指标仍按全量计算。
+- 全量套件 2914 passed/24 skipped；1 个 PostgreSQL teardown 环境性 error 已单独复跑目标文件确认通过，不作为代码失败。
+- Required Fixes：无。遗留：`job.html` 已 dispose `mainChart` resize 警告；重播曲线左端不再固定 0，需用户确认。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_saas_chart_a_fix.py tests/test_saas_replay_boundaries.py tests/test_gui_saas_pages.py tests/test_saas_night_mode.py -q → 127 passed
+uv run pytest tests/ -q → 2914 passed, 24 skipped, 4 warnings, 1 environmental teardown error
+uv run pytest tests/test_saas_result_contract.py -q → 21 passed
+.tmp/a-replay-perf/result.json → window perFrame 9.5ms/raf 16.8ms; full perFrame 39.1ms/raf 45.8ms
+ECS deploy → qre-saas active; /saas/jobs/58 200; /static/replay.js 200 and contains visibleWindow
+```
+
+## 2026-10-27 TradingView 化 Spike 主 Agent 自审
+
+### Review Status
+
+PASS（选型 Spike；无生产代码改动，未部署/未 commit）
+
+### Findings
+
+- Spike 覆盖了任务书要求的十项评估，且有本机实测数据，不是空泛架构比较。
+- 推荐路线保留了硬约束：因子 display 合同只消费 `QREFactorLayout.plan()`；重播继续复用 `replay.js` 纯逻辑 core；Night Mode 不新增第二套主题状态；375 断言已形成可复用测法。
+- B 路 attribution 被明确列为硬阻塞，没有在产品文档里弱化。
+- Required Fixes：无。遗留：未测真实行情、10k+ 点、Safari/iOS/低端安卓；这些已如实写进 CR §9。
+
+### Validation Evidence
+
+```text
+node --check .tmp/tv-chart-spike/demo.js → OK
+.tmp/browser-venv/bin/python .tmp/tv-chart-spike/verify.py → EXIT=0, console=[]
+A/B 4000-point replay benchmark → A rAF 40–41ms/frame; B rAF 17.5–17.9ms/frame
+git diff --name-only HEAD → docs/agent/08_IMPLEMENTATION_BRIEF.md only（Spike 期间生产代码零改动）
+```
+
 ## 2026-10-27 SaaS FRM 日收益直方图修复主 Agent 自审
 
 ### Review Status

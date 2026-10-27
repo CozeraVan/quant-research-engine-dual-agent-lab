@@ -316,8 +316,15 @@ open 时：
 - `.tmp/night-mode/`：SaaS 多页面浅/夜审计，不覆盖本地 lab 或游戏页。
 - `.tmp/trading-game-v11-kimi/`：真实回合制游戏流程与移动视口。
 
-## 10. 后续阅读顺序（给 DeepSeek）
+## 10. TradingView 化 Spike 结论（2026-10-27）
 
+- 选型结论：**A 增强 ECharts 为主，B Lightweight Charts 5.2.1 仅在 `symbol.html` K 线区受控试点，C 自研不做**。
+- A 路当前两个真实痛点：`symbol.html` 只有 `window.resize`、缺 `ResizeObserver`；`replay.js` 每帧全量 `replaceMerge:['xAxis','series']`。第一阶段应优先做增量更新与视口裁剪。
+- B 路硬阻塞：attribution 合规未决，且可能与 UI 外部品牌/配色纪律冲突；未解决不得上生产。
+- 详细评分、迁移路径、风险、回滚与验收见 `change_requests/CR-2026-10-27_tv_chart_core_spike.md`。
+- A 路首片已实施：`symbol.html` 单例 ResizeObserver；`replay.js` `visibleWindow()` 默认 240 点视口裁剪；4000 点 rAF 45.8→16.8ms。遗留 `job.html` dispose resize 警告与重播左端不固定 0 的口径变化。
+
+## 11. 后续阅读顺序（给 DeepSeek）
 1. `gui/saas/templates/symbol.html`：SaaS 静态图与个股重播。
 2. `gui/templates/lab_symbol.html`：本地 lab 独立静态个股页及其功能边界。
 3. `gui/static/replay.js`：通用重播核心。

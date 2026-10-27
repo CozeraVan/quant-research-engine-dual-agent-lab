@@ -2,6 +2,66 @@
 
 ## Task ID
 
+QRE-TV-CHART-A-FIX（A 路图表修复：ResizeObserver + 重播视口裁剪）
+
+## Created By
+
+KIMI_CODE 统筹（2026-10-27）；DeepSeek 实施，Kimi 复核。CR：`docs/agent/change_requests/CR-2026-10-27_a_chart_resize_replay_perf.md`。
+
+## 目标与边界
+
+1. 只修 A 路两个痛点：`symbol.html` 补 `ResizeObserver`；`replay.js` 重播改可见窗口裁剪，降低 4000 点全期重放帧耗时。
+2. 不改变数据合同、因子 display 合同、Night Mode、重播 core 口径与末帧指标一致性；不引入 Lightweight Charts 或任何新依赖。
+3. 只改 `symbol.html`、`replay.js` 及必要测试；不动 job/lab/游戏/worker/引擎/schema。
+4. TDD 先 RED 后 GREEN；测试通过后按 R-DEPLOY-001 部署 ECS；用户验收前不 commit/push。
+
+## 验证
+
+```bash
+uv run pytest tests/test_saas_replay_boundaries.py tests/test_gui_saas_pages.py tests/test_saas_night_mode.py -q
+uv run pytest tests/ -q
+```
+
+## A 路修复结果（2026-10-27，已部署待用户验收）
+
+- `symbol.html`：新增单例 `ResizeObserver`，回调经 `echarts.getInstanceByDom(el)` 取当前实例；无 `ResizeObserver` 时回退 `window.resize`；移除对已 dispose 实例的旧 resize 绑定。
+- `replay.js`：新增 `QREReplay.core.visibleWindow()`，重播默认只渲染最近 240 点；首帧/后退/seek 重建；事件标记过滤可见窗口；`frameMetrics` 仍全量口径。
+- 测试：新增 `tests/test_saas_chart_a_fix.py` 5 例；相关 127 passed；全量 `2914 passed, 24 skipped`，另有 1 个 PostgreSQL teardown 环境性 error，单独复跑 `test_saas_result_contract.py` 21 passed。
+- 性能：4000 点重播同步每帧 39.1ms → 9.5ms，rAF 45.8ms → 16.8ms。
+- 发布：ECS 仅同步 `symbol.html` + `replay.js`，qre-saas active；`/saas/jobs/58`、`/static/replay.js` 200，生产 replay.js 含 `visibleWindow`。未 commit/push。
+- 遗留：`job.html` 对已 dispose `mainChart` 的 resize 警告按范围未修；重播曲线左端不再固定 0 的口径变化需用户确认。
+
+## Task ID
+
+QRE-TV-CHART-CORE-SPIKE（TradingView 化第一阶段：共享图表内核选型）
+
+## Created By
+
+KIMI_CODE 统筹（2026-10-27）；DeepSeek 实施 Spike，Kimi 复核。CR：`docs/agent/change_requests/CR-2026-10-27_tv_chart_core_spike.md`。
+
+## 目标与边界
+
+1. 只做选型 Spike：比较“增强 ECharts / Lightweight Charts / 自研 Canvas”三条路线，输出推荐路线、迁移路径、风险与回滚策略。
+2. 必须基于当前真实代码与长期文档评估，覆盖 K 线交互、因子显示合同、重播防未来数据、Night Mode、移动 375、性能与可维护性。
+3. 不修改生产代码/模板/测试/schema/worker/引擎/游戏；不新增生产依赖；不抓取 TradingView 资产；不 hook pine-facade；不接入实时流。
+4. 不跑回测、不部署 ECS、不 commit/push。共享进度文档由主 Agent 统一回写。
+
+## 验证
+
+```bash
+node --check <spike js>           # 如产生隔离原型
+uv run pytest tests/ -q           # 仅确认 Spike 未碰生产代码；如无生产改动可记录基线
+```
+
+## Spike 结论（2026-10-27，待用户决定下一阶段）
+
+- 推荐：**A 增强 ECharts 为第一阶段主力**；**B Lightweight Charts 仅做 `symbol.html` K 线区受控试点**；**C 自研内核不进第一阶段**。
+- 关键证据：全站 K 线只有 2 处，B 的收益集中在重播；同 4000 点合成数据下，A rAF 40–41ms/帧（约 24fps），B 17.5–17.9ms/帧（贴 vsync）。A 现有痛点为缺 ResizeObserver、重播每帧全量 `replaceMerge`。
+- B 硬阻塞：Lightweight Charts 5.2.1 的 attribution 要求未决，且与当前 UI“不引入外部品牌/第四色相”纪律冲突；产品/法务未结论前不上生产。
+- 详细评分、迁移路径、风险与回滚见 `docs/agent/change_requests/CR-2026-10-27_tv_chart_core_spike.md`。
+
+## Task ID
+
 QRE-SAAS-FRM-HISTOGRAM-CUMRET（经典策略 FRM 日收益分布无数据修复）
 
 ## Created By

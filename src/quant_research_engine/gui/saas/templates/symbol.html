@@ -645,6 +645,27 @@ function renderFactorChips(plan, d){
 
 let klineResizeBound = false;
 let symbolKlineChart = null;
+let klineResizeObserver = null;
+let klineObserved = false;
+// 只对当前存活的图表实例做 resize（重播接管同一容器后，以 getInstanceByDom 取到的是新实例）
+function klineResize(el){
+  const inst = echarts.getInstanceByDom(el);
+  if (!inst) return;
+  if (typeof inst.isDisposed === 'function' && inst.isDisposed()) return;
+  inst.resize();
+}
+// 单例绑定：优先 ResizeObserver 跟随容器尺寸变化（含面板高度变化），无则退回 window.resize
+function bindKlineResize(el){
+  if (typeof ResizeObserver === 'function'){
+    if (!klineResizeObserver) klineResizeObserver = new ResizeObserver(function(){ klineResize(el); });
+    if (!klineObserved){ klineResizeObserver.observe(el); klineObserved = true; }
+    return;
+  }
+  if (!klineResizeBound){
+    klineResizeBound = true;
+    window.addEventListener('resize', function(){ const box = $('#chart-kline'); if (box) klineResize(box); });
+  }
+}
 function renderKline(d){
   if (!d.kline || !d.kline.dates || !d.kline.dates.length){
     $('#box-kline').style.display = 'none';
@@ -665,6 +686,7 @@ function renderKline(d){
   if (oldInst) oldInst.dispose();  // chip 切换重渲染前销毁旧实例
   const chart = echarts.init(el);
   symbolKlineChart = chart;
+  bindKlineResize(el);
   if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(chart);
   const series = [
     { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
@@ -747,10 +769,6 @@ function renderKline(d){
     dataZoom: [{ type: 'inside', xAxisIndex: zoomX }, { type: 'slider', xAxisIndex: zoomX, bottom: 6, height: 22 }],
     series,
   });
-  if (!klineResizeBound){
-    klineResizeBound = true;
-    window.addEventListener('resize', () => symbolKlineChart && symbolKlineChart.resize());
-  }
 }
 // --- K线级重播（CR-2026-10-04 切片2 + 接管模式：接管原 K线容器，退出恢复静态） ---
 let kreplayCtl = null, klineData = null;
