@@ -370,6 +370,26 @@ assert.equal(p.overlays.length, 1, '旧数据 EMA 仍 overlay');
 assert.equal(p.paneCount, 1, '旧数据 MACD 仍合并');
 assert.equal(p.panes[0].series.length, 3);
 
+// 6b) 旧产物别名 macd_dif/macd_dea/macd_hist 且无 display：也必须合并成一个 MACD 副图
+p = plan([
+  f('macd_dif', 'macd_dif'),
+  f('macd_dea', 'macd_dea'),
+  f('macd_hist', 'macd_hist'),
+], {});
+assert.equal(p.paneCount, 1, '旧别名 MACD 必须同副图');
+assert.equal(p.panes[0].series.length, 3, 'DIF+DEA+HIST');
+assert.ok(p.panes[0].series.some(s => s.hist), 'HIST 为柱');
+assert.equal(p.chips.length, 1, '旧别名 MACD 一个 chip');
+
+// 6c) 带参数后缀的别名同样按参数组合流，不与裸 macd_dif 串键
+p = plan([
+  f('macd_dif_12_26_9', 'macd_dif_12_26_9'),
+  f('macd_dea_12_26_9', 'macd_dea_12_26_9'),
+  f('macd_hist_12_26_9', 'macd_hist_12_26_9'),
+  f('macd_dif', 'macd_dif'),
+], {});
+assert.equal(p.paneCount, 2, '不同参数后缀必须不同副图');
+
 // 7) chip 三态与 hidden
 p = plan([f('EMA5', 'ema_5', D('overlay', null, 'line', 'line', '#E8A33D', 0))], {ema_5: 'hidden'});
 assert.equal(p.overlays.length, 0, 'hidden 不渲染');

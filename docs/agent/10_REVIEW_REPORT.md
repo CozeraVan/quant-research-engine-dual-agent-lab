@@ -1963,3 +1963,26 @@ ML 影子环境相关：158 passed
 git diff --check：clean
 全仓：2902 passed, 20 skipped, 1 failed（已批准清理导致的外部 YAML 夹具缺失）
 ```
+
+## 2026-10-27 MACD 旧别名拆面板修复主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 根因是旧产物/别名字符串没有 display 合同，启发式回退不识 `macd_dif/macd_dea/macd_hist`，不是 ECharts 坐标系本身拆分了系列。
+- 修复只在分组层把别名归一到同一 MACD 家族；渲染层仍是一个 pane、一个右标尺，DIF/DEA 为线、HIST 为柱。
+- 生产接口实测旧 job58 factors 为三个别名且 display 为空，复现路径真实；不是只补合成测试。
+- Required Fixes：无。遗留：重播界面尚未 TV 化；更完整的技术指标 TV 化（Zero Line、面板快捷键、指标设置弹层）后续切片。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_factor_display_contract.py -q → 19 passed
+uv run pytest tests/test_factor_display_contract.py tests/test_saas_static_kline_tv.py tests/test_saas_replay_boundaries.py tests/test_gui_lab_result.py tests/test_gui_saas_pages.py -q → 182 passed
+uv run pytest tests/ -q → 2926 passed, 24 skipped, 1 failed（known timing flake）
+uv run pytest tests/test_gui_risk_report.py -q → 24 passed
+ECS deploy → qre-saas active; /static/factor-layout.js 200 and contains alias rule
+```

@@ -3654,3 +3654,11 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_saas_static_kline_tv.py`、CR 实现记录。
 - 新增左侧工具栏、`#kline-ohlc` 信息区、右侧价格标尺、动态 grid/xAxis/yAxis、量/因子开关与缩放重置；重播进入前禁用工具栏并清空信息区。
 - 主 Agent 复核：diff 仅 `symbol.html` + 新测试；相关 159 passed；全量 2927 passed/24 skipped；截图 1280/375 已目视确认；生产 job58 个股页 200 且包含 `kline-tools`。未 commit/push。
+
+## 2026-10-27 MACD 旧别名拆面板修复实施交接
+
+- 改动：`src/quant_research_engine/gui/static/factor-layout.js`、`tests/test_factor_display_contract.py`。
+- 根因：旧产物因子名为 `macd_dif/macd_dea/macd_hist` 且无 `display`，旧启发式不识别，导致 MACD 三线被拆成三个副图。
+- 修复：`familyOf()` 新增 MACD 类别名正则，归一到同一 `triple` 家族；支持 `dif/dea/signal/hist/histogram` 与可选参数后缀；带参后缀不与裸别名串键。
+- 主 Agent 复核：`tests/test_factor_display_contract.py` 19 passed；相关 182 passed；全量 `2926 passed, 24 skipped, 1 failed`，失败为已知 risk report timing flake，单文件复跑 24 passed。
+- 发布：ECS 同步 `factor-layout.js`，qre-saas active；`/static/factor-layout.js` 200 且包含新别名规则。未 commit/push。

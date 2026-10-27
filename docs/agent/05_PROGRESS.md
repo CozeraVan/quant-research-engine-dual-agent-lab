@@ -1467,6 +1467,16 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - 测试：`tests/test_saas_chart_a_fix.py` 8 passed；相关 130 passed；全量 2917 passed/24 skipped。
 - 生产已部署并验证。未 commit/push。
 
+## 2026-10-27 MACD 旧别名因子拆面板修复
+
+用户报告 MACD 的 DIF/DEA/HIST 仍像各自坐标系。生产 job58 个股详情接口实测：旧产物因子名为 `macd_dif` / `macd_dea` / `macd_hist`，且 `col/display` 为空；旧启发式只认识 `macd_12_26_9/macds/macdh`，于是把它们拆成三个副图。
+
+- **根因**：`factor-layout.js` 的 `familyOf()` 对无 display 旧数据回退时，未识别 `macd_dif/macd_dea/macd_hist/macd_signal/macd_histogram` 这类别名。
+- **修复**：新增 MACD 类别名正则，归一到同一 `triple` 家族；`dif/dea/signal/hist/histogram` 映射到 `main/signal/hist`，支持可选参数后缀；带参数后缀的别名按后缀分组，不与裸别名串键。
+- **测试**：`tests/test_factor_display_contract.py` 新增旧别名合并、HIST 为柱、单 chip、参数后缀不串键用例；该文件 19 passed，相关 182 passed。
+- **全量**：`2926 passed, 24 skipped, 1 failed`；失败为已知 `test_gui_risk_report` timing flake，单文件复跑 24 passed。
+- **生产**：ECS 同步 `factor-layout.js` 并重启 qre-saas；`/static/factor-layout.js` 200 且包含新别名规则。未 commit/push。
+
 ## 2026-10-27 静态 K 线 TV 化首片
 
 用户选择“ECharts 深度 TV 化”。DeepSeek 实施，Kimi 复核并部署。

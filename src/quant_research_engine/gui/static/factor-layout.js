@@ -47,6 +47,15 @@
     var keys = [f.col || "", f.name || ""];
     for (var k = 0; k < keys.length; k++) {
       var low = String(keys[k]).toLowerCase(), m;
+      // MACD 类别名：macd_dif / macd_dea / macd_signal / macd_hist / macd_histogram
+      //（旧产物/部分策略会直接使用这些名字且无 display，必须与 macd/macds/macdh 同组合流）
+      m = /^(macd|ppo|pvo)[\s_-](dif|dea|signal|hist|histogram)([\s_-].*)?$/.exec(low);
+      if (m) {
+        var roleAlias = m[2] === "dea" || m[2] === "signal" ? "dea"
+          : (m[2] === "hist" || m[2] === "histogram" ? "hist" : "dif");
+        var suffixAlias = m[3] ? String(m[3]).replace(/^[\s_-]+/, "") : "";
+        return { fam: "triple", base: m[1], role: roleAlias, suffix: suffixAlias, label: m[1].toUpperCase() };
+      }
       // MACD 类：macd/ppo/pvo + 可选 s/h + 参数后缀
       m = /^(macd|ppo|pvo)(s|h)?_(.+)$/.exec(low);
       if (m) return { fam: "triple", base: m[1], role: m[2] === "s" ? "dea" : (m[2] === "h" ? "hist" : "dif"), suffix: m[3], label: m[1].toUpperCase() };
