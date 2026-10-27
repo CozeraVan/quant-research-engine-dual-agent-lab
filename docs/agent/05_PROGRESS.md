@@ -1508,3 +1508,26 @@ Night Mode、重播边界、因子呈现合同、341 列中文名、SSH 加固�
 - **测试**：新增 `tests/test_saas_replay_tv.py` 6 例；相关 141 passed；全量 `2936 passed, 24 skipped, 4 warnings`。
 - **浏览器/生产**：`.tmp/replay-tv/` 33/33 通过，1280/375 截图已目视确认；ECS job58 个股页 200，replay.js 含 `opts.axisPointer`。未 commit/push。
 - **遗留**：重播 tooltip 仍统一加 `%`；重播容器高度未与静态归一；375 信息区仍 ellipsis。
+
+## 2026-10-27 持仓期年化收益稀疏日期爆表修复
+
+用户报告 job58 920832.BJ“持仓期年化收益”为 `3.576778280587912e+35%`。实测该股 equity 日期稀疏：2016 年只有 7 个条目，前端却把“条目数”当年化分母，三重持仓被压成 6 天，`(1+5.2935)^(252/6)` 爆表。
+
+- **根因**：`heldMask` 按 equity 日期索引计数，假设日期连续；稀疏日期/停牌/数据缺口下分母严重偏小。
+- **修复**：新增 `LabUI.tradingDaysHeldInRange()`，按 entry→exit 自然日并集计算持仓交易日（剔周末近似），可见区间外不计入；SaaS job/symbol 区间卡改用该分母，年化公式改为 `252 / heldDays`。
+- **结果**：920832.BJ 全区间分母从 6 修正为 70，年化从 e+35 修正为约 `75064.63%`（529% 收益 / 70 持仓交易日的数学结果，仍极端但不再虚假爆表）。
+- **测试**：新增 `tests/test_lab_ui_holding_days.py` 3 例；相关 192 passed；全量 `2939 passed, 24 skipped, 4 warnings`。
+- **生产**：ECS 同步 `lab-ui.js` + `job.html` + `symbol.html`；job58/920832 页面 200 且包含 `252 / heldDays`。未 commit/push。
+
+## 2026-10-27 同类年化/区间收益除零与爆表风险加固
+
+承接上一项 bug，继续排查同类“分母/基数不安全”的指标：
+
+- **已加固**：
+  - `lab_result.py` 年化收益：`1+总收益 <= 0` 直接降级 `None`，并捕获 `TypeError`，避免本金亏光时复数/异常。
+  - SaaS `job.html` / `symbol.html` 区间收益：首值为 0/缺失不再除零；累计收益%序列 `-100%` 不再除零。
+  - 持仓期年化：`1+区间收益 <= 0` 时降级 `None`，避免负基数分数指数产生 `NaN`。
+  - symbol 基准收益：基准首价为 0 时降级 `null`。
+- **排查结论**：`replay.js` 的 `totalRet` 已检查首值非 0，`sharpe` 已检查 `sd > 0`；`avg_hold_days` 已检查 `hold_n`。未发现其它同类爆表点。
+- **测试**：`tests/test_lab_ui_holding_days.py` 增加除零/负基数源码合同；相关 193 passed；全量 `2940 passed, 24 skipped, 4 warnings`。
+- **生产**：ECS 同步 `lab_result.py` + `job.html` + `symbol.html`；job58/920832 页面 200 且包含新保护。未 commit/push。

@@ -2029,3 +2029,44 @@ uv run pytest tests/ -q → 2936 passed, 24 skipped, 4 warnings
 .tmp/replay-tv/check.py → 33/33, console=[]
 ECS deploy → qre-saas active; /saas/jobs/58/symbols/920556.BJ 200; /static/replay.js contains opts.axisPointer
 ```
+
+## 2026-10-27 持仓期年化分母修复主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 旧值是前端指标缺陷，不是回测收益数据错误：920832.BJ 的 3 笔交易、529% 区间收益本身存在，但年化分母被稀疏 equity 日期压成 6 天。
+- 修复把分母改为实际持仓自然日并集（剔周末近似），920832.BJ 全区间从 6 天修正为 70 天，年化从 e+35 变为约 75064.63%。
+- Required Fixes：无。遗留：极端持仓年化在数学上仍可能很大；如产品需要，可后续加“持仓天数过低则不年化”的展示规则。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_lab_ui_holding_days.py -q → 3 passed
+uv run pytest tests/test_lab_ui_holding_days.py tests/test_gui_saas_pages.py tests/test_saas_symbol_ux.py tests/test_gui_lab_result.py -q → 192 passed
+uv run pytest tests/ -q → 2939 passed, 24 skipped, 4 warnings
+ECS deploy → qre-saas active; /saas/jobs/58/symbols/920832.BJ 200; page contains 252 / heldDays
+```
+
+## 2026-10-27 同类指标防护加固主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 排查范围覆盖前端年化、区间收益、基准收益、重播指标与平均持仓天数；发现并修复的是“除零/负基数/稀疏分母”同类风险，不是收益数据错误。
+- 修复全部是降级为 `None`/`—`，不改变正常数值路径。
+- Required Fixes：无。遗留：极端但有限的年化值仍会显示；如需产品规则可后续加“持仓天数过低不年化”。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_lab_ui_holding_days.py tests/test_gui_saas_pages.py tests/test_saas_symbol_ux.py tests/test_gui_lab_result.py -q → 193 passed
+uv run pytest tests/ -q → 2940 passed, 24 skipped, 4 warnings
+ECS deploy → qre-saas active; /saas/jobs/58 200; /saas/jobs/58/symbols/920832.BJ 200; guards present
+```

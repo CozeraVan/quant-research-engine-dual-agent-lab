@@ -3677,3 +3677,16 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - `mountKlineReplay()` 复用静态 helper：`klineGridSpec`、`klineAxisLabelIndex`、`klineInfoHTML`、`klineSetInfo`；yAxes 右置并可带 formatter。
 - `replay.js` 只加可选透传：`yAxes[].position/formatter`、`opts.axisPointer`、`opts.axisLabelIndex`；默认路径不传即原输出。
 - 主 Agent 复核：相关 141 passed；全量 2936 passed/24 skipped；`.tmp/replay-tv/` 33/33，截图已目视确认；ECS 部署后 job58/symbol/replay.js 200。未 commit/push。
+
+## 2026-10-27 持仓期年化分母修复实施交接
+
+- 改动：`src/quant_research_engine/gui/static/lab-ui.js`、`src/quant_research_engine/gui/saas/templates/job.html`、`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_lab_ui_holding_days.py`。
+- 新增 `LabUI.tradingDaysHeldInRange(dates, dateIdx, trades, i0, i1)`：按 entry→exit 自然日并集剔周末计数，区间裁剪、无退出/越界安全。
+- job/symbol 的 `exposureCards()` 用 `heldDays` 作为年化分母；曝光度仍按区间内有持仓的 equity 条目数计算。
+- 主 Agent 复核：新测试 3 passed；相关 192 passed；全量 2939 passed/24 skipped；ECS 部署后生产页面包含 `252 / heldDays`。未 commit/push。
+
+## 2026-10-27 同类指标防护加固实施交接
+
+- 改动：`src/quant_research_engine/gui/lab_result.py`、`src/quant_research_engine/gui/saas/templates/job.html`、`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_lab_ui_holding_days.py`。
+- `lab_result` 年化收益加 `base > 0` 与 `TypeError` 保护；前端区间收益/年化/基准收益加除零与负基数保护。
+- 主 Agent 复核：相关 193 passed；全量 2940 passed/24 skipped；ECS 部署后 job58/920832 200 且包含新保护。未 commit/push。

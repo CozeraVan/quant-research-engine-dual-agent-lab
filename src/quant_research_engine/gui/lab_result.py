@@ -297,8 +297,12 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
                 d0 = _date.fromisoformat(str(date_start))
                 d1 = _date.fromisoformat(str(date_end))
                 years = max((d1 - d0).days / 365.25, 1 / 365.25)
-                metrics["annual_return"] = round((1 + total) ** (1 / years) - 1, 6)
-            except (ValueError, OverflowError, ZeroDivisionError):
+                base = 1 + float(total)
+                # 本金亏光/超额亏损时年化无实数意义，降级 None，避免复数/爆表
+                metrics["annual_return"] = (
+                    round(base ** (1 / years) - 1, 6) if base > 0 else None
+                )
+            except (ValueError, OverflowError, ZeroDivisionError, TypeError):
                 metrics["annual_return"] = None
     data["metrics"] = metrics or None
 

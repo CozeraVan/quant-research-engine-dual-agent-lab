@@ -292,5 +292,35 @@
     }, true);
   };
 
+  /* ==================== 持仓交易日（年化分母，2026-10-27） ==================== */
+  /* 说明：equity_curve 的日期可能稀疏（停牌/无成交/数据缺口），不能把“条目数”当持仓
+     天数，否则年化指数会爆表。这里按 entry→exit 的自然日并集计算，剔周末近似交易日；
+     节假日未剔（前端无日历），但已足够避免 e+35 这类假值。可见区间外不计入。 */
+  LabUI.tradingDaysHeldInRange = function (dates, dateIdx, trades, i0, i1) {
+    if (!Array.isArray(dates) || !dates.length || !Array.isArray(trades) || !trades.length) return 0;
+    var seen = {}, count = 0;
+    function addDay(d) {
+      var key = isoD(d);
+      if (seen[key]) return;
+      seen[key] = 1;
+      var day = d.getDay();
+      if (day !== 0 && day !== 6) count += 1;
+    }
+    trades.forEach(function (t) {
+      if (!t || !t.entry_date) return;
+      var a = dateIdx ? dateIdx[t.entry_date] : null;
+      var b = t.exit_date && dateIdx ? dateIdx[t.exit_date] : null;
+      if (a == null) return;
+      if (b == null) b = a;
+      if (b < a) { var tmp = a; a = b; b = tmp; }
+      var s = dates[Math.max(a, i0)], e = dates[Math.min(b, i1)];
+      if (!s || !e) return;
+      var cur = parseD(s), end = parseD(e);
+      if (!cur || !end) return;
+      while (cur <= end) { addDay(cur); cur.setDate(cur.getDate() + 1); }
+    });
+    return count;
+  };
+
   window.LabUI = LabUI;
 })();
