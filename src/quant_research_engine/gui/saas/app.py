@@ -289,13 +289,18 @@ def _require_admin(app: Flask, engine: Engine) -> tuple[int | None, Any]:
 
 
 def _jsonable(value: Any) -> Any:
-    if isinstance(value, (datetime, date)):
-        return value.isoformat()
-    if isinstance(value, dict):
-        return {k: _jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(v) for v in value]
-    return value
+    """SaaS 统一 JSON 出口：datetime → ISO；非有限浮点（NaN/±Inf）→ None。
+
+    非有限浮点必须降级：Flask 底层 ``json.dumps`` 默认 ``allow_nan=True``，
+    会把 NaN 写成裸 ``NaN`` token——不是合法 JSON，浏览器 ``resp.json()``
+    抛 ``SyntaxError``，前端只剩「加载失败，请稍后重试」。因子 warm-up 段在
+    PG 存的是 ``double precision NaN`` 而非 NULL，会经因子序列一路带进历史
+    gzip 产物（2026-10-28 线上 job_58 多只 301xxx.SZ 个股详情即此根因）。
+    实现在 ``lab_result.json_safe``（与 lab 路由、worker 写产物同源，防漂移）。
+    """
+    from quant_research_engine.gui.lab_result import json_safe
+
+    return json_safe(value)
 
 
 # 状态机与字段对齐 docs/agent/17_JOB_PROTOCOL.md（QRE-JOB-API / A2）

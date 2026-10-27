@@ -2721,3 +2721,18 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 测试：相关 131 passed；全量 `2961 passed, 24 skipped, 1 failed`（已知 timing flake，目标文件复跑 24 passed）。
 - 生产：job58/920832 200，趋势/水平入口存在。未 commit/push。
 - 遗留：画线不持久化；未跑浏览器实机。
+
+## 2026-10-28 个股详情加载失败修复交接
+
+- 根因：历史 gzip 产物因子序列含裸 `NaN`（PG 存 NaN 非 NULL），SaaS 读取出口 `_jsonable` 不过滤非有限浮点，Flask 写出非法 JSON，浏览器 `resp.json()` 抛 SyntaxError → 页面显示「加载失败，请稍后重试」。
+- 修复：`lab_result.json_safe()` 成为唯一实现，lab 路由 / SaaS `_jsonable` / worker `_json_sanitize` 三处共用；`_fetch_factor_panels` 加 `math.isfinite` 过滤。
+- 测试：相关 152 passed；全量 `2960 passed, 24 skipped`。
+- 生产：ECS 已部署并验证通过（4 只原失败/正常样本 + 160 只严格 JSON 扫描 bad=0）。未 commit/push。
+- 遗留：无。历史产物不重写（读取出口已覆盖）。
+
+## 2026-10-28 job#78 个股详情刷新入口修复交接
+
+- 根因：`showSymbolDetailRefresh()` 对 `Element.children`（HTMLCollection）调 `.some()`，浏览器抛 TypeError，被 catch 吞成「加载失败」。触发条件＝私人 job + 缺 `factor_basis` 的旧产物；showcase 只读路径被跳过，故此前只验只读页面未暴露。
+- 附带修掉测试盲区：harness 的 `children` 改为 HTMLCollection 形态，此类 bug 以后可被测出。
+- 测试：`test_gui_saas_pages.py` 94 passed；全量 `2960 passed, 24 skipped`。
+- 生产：ECS 已部署，真实 DOM + 真实 job#78 产物端到端验证通过。未 commit/push。

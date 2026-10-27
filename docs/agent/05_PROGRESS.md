@@ -1582,3 +1582,39 @@ Step 5 实施，Kimi 复核并部署。
 - 测试：相关 131 passed；全量 `2961 passed, 24 skipped, 1 failed`（已知 timing flake，目标文件复跑 24 passed）。
 - 生产：job58/920832 200，趋势/水平入口存在。未 commit/push。
 - 遗留：画线不持久化；未跑浏览器实机。
+
+## 2026-10-28 个股详情加载失败修复：JSON 出口非有限浮点硬化
+
+Kimi 实施并部署。
+
+- **根因**：`job_58/_symbol_details/301308.SZ.json.gz` 因子序列含裸 `NaN`
+  （MACD warm-up 段在 PG 存 `double precision NaN` 而非 NULL）。SaaS 读取出口
+  `_jsonable` 不过滤非有限浮点，Flask `json.dumps` 默认 `allow_nan=True` 把
+  NaN 原样写进响应体 → 非法 JSON → 浏览器 `resp.json()` 抛 `SyntaxError`
+  → `symbol.html` catch 显示「加载失败，请稍后重试」。
+- 同类问题 2026-10-12 只在 worker 写产物侧修过（`_json_sanitize`），
+  **读取出口与历史产物不在保护范围**，故复发。job58 抽样 40 只中 8 只失败
+  （全部 301xxx.SZ / 001309.SZ，上市晚、warm-up NaN 占比高）。
+- **修复**：`lab_result.json_safe()` 成为唯一实现（datetime→ISO、NaN/±Inf→None），
+  lab 路由 / SaaS `_jsonable` / worker `_json_sanitize` 三处共用；
+  `_fetch_factor_panels` 因子查询加 `math.isfinite` 过滤，DB NaN 按缺口处理。
+- **测试**：新增 `tests/test_json_finite_contract.py` + SaaS/lab 两处回归；
+  相关 152 passed；全量 `2960 passed, 24 skipped`。
+  存量失败 `test_saas_public_beta_ops.py::TestConsoleOps` 2 例已在 pristine
+  HEAD worktree 复现，与本次无关（window=today 口径）。
+- **生产**：ECS 同步 `app.py` + `lab_result.py`；原始 API `NaN` token 归零；
+  无头 Chromium 验证 job58 的 301308/001309/301018/920832.BJ 全部正常渲染；
+  job58 + job66 各 80 只严格 JSON 扫描 bad=0。未 commit/push。
+- 详见 `docs/agent/change_requests/CR-2026-10-28_symbol_detail_json_finite.md`。
+
+## 2026-10-28 job#78 个股详情仍失败：刷新入口 HTMLCollection 误用
+
+Kimi 实施并部署。
+
+- **根因**：`showSymbolDetailRefresh()` 用 `(host.children || []).some(...)` 去重。真实 DOM 的 `Element.children` 是 `HTMLCollection`，没有 Array 的 `some`/`find`，浏览器必抛 `TypeError`，被 `load()` 的 catch 吞掉 → 整页「加载失败，请稍后重试」。
+- **触发条件**：`factor_basis !== 'qfq_anchor_v1' && !readonly`，即「私人 job + 2026-10-27 前写入的旧产物」。经典策略 58/66/74 是 showcase 只读，入口被跳过，所以上一轮只验只读页面没暴露。
+- **测试盲区**：`_SYMBOL_JS_HARNESS` 用普通数组冒充 `element.children`（数组有 `some`），把线上必抛的写法测成绿灯。已把 harness 的 `children` 改为 HTMLCollection 形态（`length`+索引+`item`，无数组方法）。
+- **修复**：`Array.prototype.some.call(host.children || [], fn)`；harness 同步 DOM 化并新增 `childById()`；legacy 测试加 `calls.failure === 0` 断言。
+- **测试**：harness 改完先 RED（复现线上），源码修复后 GREEN；`test_gui_saas_pages.py` 94 passed；全量 `2960 passed, 24 skipped`。
+- **生产**：真实 DOM 验证 `children` 为 HTMLCollection 且函数不再抛错、幂等；用真实 job#78 产物端到端跑 `load()` → 0 次加载失败、K 线正常渲染；job58/66 回归通过。
+- 详见 `docs/agent/change_requests/CR-2026-10-28_symbol_detail_refresh_htmlcollection.md`。

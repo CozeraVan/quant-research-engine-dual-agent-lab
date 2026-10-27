@@ -9,6 +9,7 @@ deploy/saas/cloud_schema.sql；tearDown 关闭 engine 连接后 drop 库。
 from __future__ import annotations
 
 import gzip
+import json
 import subprocess
 import uuid
 from pathlib import Path
@@ -1416,3 +1417,67 @@ class TestSymbolDetailRefresh:
         body = detail.get_json()
         assert body["readonly"] is True
         assert body["readonly_kind"] == "showcase"
+
+
+class TestSymbolDetailJsonFinite:
+    """个股详情出口必须是严格 JSON：历史产物带 NaN 也不得让页面卡「加载失败」。
+
+    回归 2026-10-28 线上故障：job_58 多只 301xxx.SZ 的因子 warm-up 段在 PG 存
+    的是 double precision NaN，旧产物（_json_sanitize 上线前写入）把裸 NaN 落进
+    gzip；云端读取出口不过滤非有限浮点，Flask 直接吐非法 JSON，浏览器
+    resp.json() 抛 SyntaxError → symbol.html 显示「加载失败，请稍后重试」。
+    """
+
+    def _completed_job(self, client, name="finite"):
+        resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": name,
+                                              "params": {"start": "2026-01-01", "end": "2026-03-01"}},
+                           headers={"X-User-Id": "1"})
+        job_id = resp.get_json()["job_id"]
+        client.post("/api/worker/jobs/claim", json={"worker_id": "w1"}, headers=WORKER_HEADERS)
+        client.post(f"/api/worker/jobs/{job_id}/result/meta",
+                    json={"worker_id": "w1",
+                          "summary": {"strategy_total_return": 0.2, "win_rate": 0.5,
+                                      "max_drawdown": -0.1, "total_trade_count": 5,
+                                      "run_id": "20260101T000000000001"},
+                          "chart_data": {"metrics": {"excess_return": 0.05}},
+                          "data_until": "2026-02-27", "files": []},
+                    headers=WORKER_HEADERS)
+        return job_id
+
+    @pytest.fixture(autouse=True)
+    def _upload_dir(self, app, tmp_path):
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path)
+
+    def test_artifact_with_nan_yields_strict_json(self, client, app):
+        """带 NaN 的历史产物：响应体无裸 NaN token，且可按 ECMA-404 严格解析。"""
+        job_id = self._completed_job(client)
+        detail_dir = Path(app.config["SAAS_UPLOAD_DIR"]) / f"job_{job_id}" / "_symbol_details"
+        detail_dir.mkdir(parents=True, exist_ok=True)
+        # json.dumps 默认 allow_nan=True：复刻旧 worker 写出的带毒产物
+        blob = json.dumps({
+            "ok": True,
+            "summary": {"ts_code": "301308.SZ", "total_ret_pct": 0.05},
+            "factors": [
+                {"name": "macd_dif", "col": "macd_12_26_9",
+                 "values": [float("nan"), float("nan"), 1.5]},
+                {"name": "macd_dea", "col": "macds_12_26_9",
+                 "values": [float("nan"), 0.4, 0.6]},
+            ],
+            "kline": {"dates": ["2024-01-02", "2024-01-03", "2024-01-04"],
+                      "ohlc": [[10, 11, 9, 12], [11, 12, 10, 13], [12, 13, 11, 14]],
+                      "vols": [100, 200, 300]},
+        }, ensure_ascii=False).encode("utf-8")
+        (detail_dir / "301308.SZ.json.gz").write_bytes(gzip.compress(blob))
+
+        resp = client.get(f"/api/results/{job_id}/symbols/301308.SZ",
+                          headers={"X-User-Id": "1"})
+        assert resp.status_code == 200
+        text = resp.get_data(as_text=True)
+        assert "NaN" not in text, "响应体含裸 NaN token：浏览器 resp.json() 必炸"
+        body = json.loads(text, parse_constant=lambda c: (_ for _ in ()).throw(
+            AssertionError(f"非法 JSON token: {c}")))
+        assert body["ok"] is True
+        # NaN 降级为 null（前端按缺口渲染），其余数据原样保留
+        assert body["factors"][0]["values"] == [None, None, 1.5]
+        assert body["factors"][1]["values"] == [None, 0.4, 0.6]
+        assert body["summary"]["total_ret_pct"] == 0.05

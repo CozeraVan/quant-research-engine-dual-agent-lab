@@ -415,8 +415,12 @@ function showSymbolDetailRefresh(){
   if (typeof SHARE_TOKEN !== 'undefined' && SHARE_TOKEN) return;
   const host = $('#sym-note');
   if (!host) return;
-  // 去重：不依赖 getElementById（避免重复入口）；load 每次重写 innerHTML 本就会清掉旧按钮
-  const exists = (host.children || []).some(function (n) { return n && n.id === 'btn-refresh-detail'; });
+  // 去重：不依赖 getElementById（避免重复入口）；load 每次重写 innerHTML 本就会清掉旧按钮。
+  // QRE-SAAS-SYMBOL-DETAIL-REFRESH：Element.children 是 HTMLCollection，没有 Array 的
+  // some/find——直接 `.children.some(...)` 在浏览器里必抛 TypeError，被 load() 的 catch
+  // 吞掉后整页显示「加载失败，请稍后重试」（job#78 等非只读旧详情全灭的根因）。
+  const exists = Array.prototype.some.call(host.children || [],
+    function (n) { return n && n.id === 'btn-refresh-detail'; });
   if (exists) return;
   const btn = document.createElement('button');
   btn.type = 'button';

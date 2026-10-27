@@ -3720,3 +3720,20 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_saas_static_kline_tv.py`、`tests/test_saas_replay_tv.py`、CR 实现记录。
 - 新增 `klinePixelToPoint()`、`klineDrawingSeries()`、`klineDrawApply()` 等；画线按钮纳入 `KLINE_TOOL_KINDS`，重播禁用自动覆盖。
 - 主 Agent 复核：相关 131 passed；全量 2961 passed/24 skipped + 1 已知 timing flake，目标文件复跑通过；ECS 部署后生产入口存在。未 commit/push。
+
+## 2026-10-28 个股详情加载失败修复实施交接
+
+- 改动：`src/quant_research_engine/gui/lab_result.py`、`src/quant_research_engine/gui/saas/app.py`、`src/quant_research_engine/worker/runner.py`、`tests/test_json_finite_contract.py`、`tests/test_gui_saas.py`、`tests/test_gui_lab_result.py`、CR 新建。
+- 新增 `lab_result.json_safe()`：递归归一化（datetime/date→ISO、NaN/±Inf→None），三处出口唯一实现。
+- `_jsonable()`（SaaS 全量 JSON 出口）与 `_json_sanitize()`（worker 写产物）均委托 `json_safe`；lab 详情路由 `jsonify(json_safe(data))`。
+- `_fetch_factor_panels()` 两处因子查询加 `math.isfinite` 过滤，DB NaN 按缺口处理，新产物自身干净。
+- 主 Agent 复核：新增/回归 4 passed；相关 152 passed；全量 2960 passed/24 skipped（2 例存量 ConsoleOps 失败已在 pristine HEAD 复现，与本次无关）。
+- 生产：ECS 同步 `app.py` + `lab_result.py`；原始 API NaN token 归零；无头 Chromium 验证 job58 的 301308/001309/301018/920832.BJ 全部正常；job58+job66 各 80 只严格 JSON 扫描 bad=0。未 commit/push。
+
+## 2026-10-28 job#78 个股详情刷新入口修复实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`、`tests/test_gui_saas_pages.py`、CR 新建。
+- `showSymbolDetailRefresh()` 去重由 `(host.children || []).some(...)` 改为 `Array.prototype.some.call(host.children || [], ...)`——HTMLCollection 没有 Array 方法，原写法在浏览器必抛 TypeError 并被 `load()` catch 吞成整页失败。
+- harness `symbolEl()` 的 `children` 改为 `htmlCollectionView()` 的 HTMLCollection 形态（内部 `_children` 维护），新增 `childById()`；`test_symbol_detail_refresh_entry_for_legacy_payload` 增加 `calls.failure === 0` 断言。
+- 主 Agent 复核：harness 改完先 RED 复现线上，源码修复后 GREEN；`test_gui_saas_pages.py` 94 passed；全量 2960 passed/24 skipped。
+- 生产：真实 DOM 验证 + 真实 job#78 产物端到端 `load()` 0 失败；job58/66 回归通过。未 commit/push。

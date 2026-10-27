@@ -983,6 +983,22 @@ def test_symbol_detail_total_ret_pct(lab_client):
         assert d["summary"]["total_ret_pct"] is None
 
 
+def test_lab_symbol_detail_response_is_strict_json(lab_client):
+    """8081 个股详情出口必须是严格 JSON：非有限浮点不得吐成裸 NaN/Infinity token。
+
+    与 SaaS 侧同源故障（tests/test_json_finite_contract.py）：因子 warm-up 段在
+    PG 存的是 NaN 而非 NULL，一旦漏过出口过滤，浏览器 resp.json() 直接抛
+    SyntaxError，页面只能显示「加载失败，请稍后重试」。
+    """
+    resp = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail")
+    assert resp.status_code == 200
+    text = resp.get_data(as_text=True)
+    assert "NaN" not in text and "Infinity" not in text
+    body = json.loads(text, parse_constant=lambda c: (_ for _ in ()).throw(
+        AssertionError(f"非法 JSON token: {c}")))
+    assert body["ok"] is True
+
+
 def test_symbol_detail_bench_ret(lab_client, monkeypatch):
     """个股详情 summary 带 bench_ret（区间买入持有自然收益）；缺数据降级 None。"""
     from quant_research_engine.gui import lab_result

@@ -99,18 +99,16 @@ def fill_guest_codes(codes: list[str], auto_fill: int | None,
 
 
 def _json_sanitize(obj: Any) -> Any:
-    """递归把 NaN/Inf（含 numpy 浮点）替换为 None——json.dumps 默认把 NaN 写成
-    裸 NaN token，是非法 JSON，浏览器 resp.json() 会抛 SyntaxError
-    （symbol_detail 页面卡「加载中」的根因，2026-10-12）。"""
-    import math
+    """写产物前的 JSON 归一化：NaN/Inf → None，datetime → ISO 串。
 
-    if isinstance(obj, float):
-        return obj if math.isfinite(obj) else None
-    if isinstance(obj, dict):
-        return {k: _json_sanitize(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_json_sanitize(v) for v in obj]
-    return obj
+    json.dumps 默认把 NaN 写成裸 NaN token，是非法 JSON，浏览器 resp.json()
+    会抛 SyntaxError（symbol_detail 页面卡「加载中」的根因，2026-10-12）。
+    实现统一走 lab_result.json_safe：云端读取出口（SaaS _jsonable）与 lab 路由
+    同源，避免「写时干净、读时带毒」——2026-10-28 job_58 多只 301xxx.SZ 个股
+    详情加载失败即因只守住了写产物一刻。"""
+    from quant_research_engine.gui.lab_result import json_safe
+
+    return json_safe(obj)
 
 
 def _execute_symbol_detail(job: dict[str, Any]) -> dict[str, Any]:

@@ -31,9 +31,10 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import os
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +58,31 @@ TRADE_SCATTER_LIMIT = 500
 # QRE-SAAS-SYMBOL-DETAIL-REFRESH：个股详情口径标记——价格型因子已按 K 线前复权
 # 锚点换算（与 K 线同尺度）。历史旧产物缺该字段；值变更时同步改此处与前端判断。
 FACTOR_BASIS_QFQ_ANCHOR_V1 = "qfq_anchor_v1"
+
+
+def json_safe(value: Any) -> Any:
+    """递归归一化 JSON 出口值——datetime/date → ISO 串，NaN/±Inf → None。
+
+    ``json.dumps`` 默认 ``allow_nan=True``，会把浮点 NaN 写成裸 ``NaN`` token：
+    这不是合法 JSON（ECMA-404），浏览器 ``resp.json()`` 抛 ``SyntaxError``，
+    前端只能显示「加载失败，请稍后重试」。因子库 warm-up 段在 PG 里存的是
+    ``double precision NaN`` 而非 NULL（MACD/EMA 前若干根无值），因此 NaN 会
+    经因子序列一路带进产物与响应体。
+
+    lab 路由、SaaS ``_jsonable`` 与 worker 写产物三处共用本函数，避免各写一份
+    再漂移（worker 侧 2026-10-12 的 ``_json_sanitize`` 只覆盖「写产物」一刻，
+    历史产物与云端读取出口都在保护范围之外，2026-10-28 job_58 多只 301xxx.SZ
+    个股详情加载失败即由此触发）。
+    """
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe(v) for v in value]
+    return value
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -929,7 +955,15 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
                     ),
                     {"c": ts_code, "d0": dates[0], "d1": dates[-1]},
                 ).fetchall()
-                raw[name] = {str(r[0]): float(r[1]) for r in rows if r[1] is not None}
+                # QRE-SAAS-SYMBOL-JSON-FINITE：因子 warm-up 段在 PG 存的是
+                # double precision NaN 而非 NULL，`is not None` 漏放它进 raw，
+                # 序列就带 NaN → 产物/响应体出现裸 NaN token（非法 JSON）。
+                # 非有限值一律当作缺口（与 None 同语义），由前端断线渲染。
+                raw[name] = {
+                    str(r[0]): float(r[1])
+                    for r in rows
+                    if r[1] is not None and math.isfinite(float(r[1]))
+                }
             for table, hist in hist_specs:
                 try:
                     rows = conn.execute(
@@ -939,7 +973,11 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
                         ),
                         {"c": ts_code, "d0": dates[0], "d1": dates[-1]},
                     ).fetchall()
-                    raw[("MACD柱", hist)] = {str(r[0]): float(r[1]) for r in rows if r[1] is not None}
+                    raw[("MACD柱", hist)] = {
+                        str(r[0]): float(r[1])
+                        for r in rows
+                        if r[1] is not None and math.isfinite(float(r[1]))
+                    }
                 except Exception:
                     pass  # 单列补查失败静默跳过
     except Exception as exc:
@@ -1565,4 +1603,7 @@ def register_lab_result_routes(app: Flask) -> None:
         data = build_lab_symbol_detail(record, ts_code)
         if data is None:
             return jsonify({"ok": False, "error": f"{ts_code} 在该 run 中无交易"}), 404
-        return jsonify(data)
+        # QRE-SAAS-SYMBOL-JSON-FINITE：因子/净值序列可能含 NaN（因子 warm-up 段
+        # 在 PG 存的是 NaN 而非 NULL），必须过 json_safe 再出口，否则浏览器
+        # resp.json() 抛 SyntaxError，页面只剩「加载失败，请稍后重试」。
+        return jsonify(json_safe(data))

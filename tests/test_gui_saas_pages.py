@@ -970,15 +970,24 @@ const context = vm.createContext({
 _SYMBOL_JS_HARNESS = r"""
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
+// QRE-SAAS-SYMBOL-DETAIL-REFRESH：真实 DOM 的 Element.children 是 HTMLCollection
+// ——有 length/索引/item，但没有 Array 的 some/find/map/forEach。早期 harness 用
+// 普通数组冒充，导致 `host.children.some(...)` 这种线上必抛 TypeError 的写法被测出
+// 绿灯（job#78 等非只读旧详情全部「加载失败」的根因）。这里按 DOM 语义模拟。
+function htmlCollectionView(items){
+  const coll = {length: items.length, item(i){ return this[i] == null ? null : this[i]; }};
+  items.forEach((n, i) => { coll[i] = n; });
+  return coll;
+}
 function symbolEl(){
-  return {
-    id: '', children: [], childNodes: [], style: {}, className: '', _textContent: '', innerHTML: '',
+  const el = {
+    id: '', _children: [], childNodes: [], style: {}, className: '', _textContent: '', innerHTML: '',
     get textContent(){ return this._textContent; },
-    set textContent(value){ this._textContent = value; this.children = []; this.childNodes = []; },
+    set textContent(value){ this._textContent = value; this._children = []; this.childNodes = []; },
     disabled: false, type: '', listeners: {}, listenerCounts: {}, dataset: {},
     classList: {add(){}, remove(){}, contains(){ return false; }},
-    appendChild(...nodes){ this.children.push(...nodes); this.childNodes.push(...nodes); },
-    replaceChildren(...nodes){ this.children = [...nodes]; this.childNodes = [...nodes]; },
+    appendChild(...nodes){ this._children.push(...nodes); this.childNodes.push(...nodes); },
+    replaceChildren(...nodes){ this._children = [...nodes]; this.childNodes = [...nodes]; },
     addEventListener(type, fn){
       this.listeners[type] = fn;
       this.listenerCounts[type] = (this.listenerCounts[type] || 0) + 1;
@@ -986,6 +995,11 @@ function symbolEl(){
     insertAdjacentHTML(){},
     remove(){},
   };
+  Object.defineProperty(el, 'children', {get(){ return htmlCollectionView(el._children); }});
+  return el;
+}
+function childById(host, id){
+  return Array.prototype.find.call(host.children || [], node => node && node.id === id) || null;
 }
 function response(status, data, jsonError){
   return {status, ok: status >= 200 && status < 300, json: async () => {
@@ -1052,10 +1066,10 @@ function createSymbolHarness(fetchImpl){
       return entry[1].fn();
     },
     generateButton(){
-      return elements['sym-note'].children.find(node => node.id === 'btn-gen') || null;
+      return childById(elements['sym-note'], 'btn-gen');
     },
     refreshButton(){
-      return elements['sym-note'].children.find(node => node.id === 'btn-refresh-detail') || null;
+      return childById(elements['sym-note'], 'btn-refresh-detail');
     },
   };
 }
@@ -1162,6 +1176,10 @@ class TestPages:
   });
   vm.runInContext(source, h.context);
   await vm.runInContext('load()', h.context);
+  // QRE-SAAS-SYMBOL-DETAIL-REFRESH：非只读旧详情是线上主力路径（私人 job 产物均无
+  // factor_basis）。入口逻辑一旦抛错会被 load() 的 catch 吞成「加载失败，请稍后重试」，
+  // 必须显式断言没有走失败分支。
+  assert.equal(h.calls.failure, 0, '旧口径非只读详情不得整页加载失败');
   const btn = h.refreshButton();
   assert.ok(btn, '缺 factor_basis 的旧详情必须显示刷新入口');
   assert.equal(btn.textContent, '刷新详情');
