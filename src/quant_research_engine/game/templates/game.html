@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>我不是股神 · 匿名日线模拟交易</title>
+<link rel="stylesheet" href="/static/lab-theme.css">
+<style>
+html,body{height:100%}
+.wrap.game-shell{max-width:none;padding:12px 16px 14px}
+.game-shell #game-start{max-width:560px;margin:0 auto}
+#game-main{height:calc(100dvh - 26px);min-height:520px;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
+.term-bar{display:flex;align-items:center;gap:12px;min-height:46px;padding:5px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-1)}
+.term-id{display:flex;align-items:baseline;gap:8px;font-family:var(--serif);font-size:16px;font-weight:700;white-space:nowrap}
+.term-id .code{font-family:var(--sans);font-size:13px;font-weight:500;color:var(--grey);font-variant-numeric:tabular-nums}
+#phase{font-size:13px;font-weight:600;color:var(--lav-deep);white-space:nowrap;font-variant-numeric:tabular-nums}
+.term-bar .spacer{flex:1}
+#finish-note{color:var(--lav-deep);font-weight:700;font-size:13px;white-space:nowrap}
+.term-tools{display:flex;align-items:center;gap:6px}
+.term-tools .btn{min-height:34px;padding:5px 16px}
+.term-body{display:grid;grid-template-columns:minmax(0,1fr) 322px;gap:10px;min-height:0}
+.term-chart{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-1);padding:6px 6px 2px;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#kline{flex:1;min-height:0;width:100%}
+.term-side{display:flex;flex-direction:column;gap:8px;min-height:0;overflow-y:auto}
+.side-card{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-1);padding:8px 12px;margin:0}
+.side-card h2{font-size:13px;font-weight:600;color:var(--lav-deep);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.side-card h2 .tip-trigger{width:20px;height:20px;margin-left:auto}
+.game-actions{display:flex;gap:8px}
+.game-actions .btn{flex:1;min-height:36px;padding:6px 10px}
+#order-form{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#order-form label{display:flex;flex-direction:column;gap:3px;font-size:13px}
+#order-form .wide{grid-column:1/-1}
+#order-form input,#order-form select{height:34px;min-width:0;padding:4px 9px}
+#round-info{margin-top:6px}
+#order-pending{font-size:13px;margin-top:6px;min-height:16px;font-variant-numeric:tabular-nums}
+#order-error{color:var(--up);font-size:13px;min-height:16px}
+.side-card .kv-grid{grid-template-columns:1fr 1fr;gap:4px 10px;font-size:13px}
+.kv-grid span:nth-child(odd){color:var(--grey)}
+.kv-grid span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+#account{grid-template-columns:repeat(2,1fr);gap:5px}
+#account .metric-card{padding:5px 8px}
+#account .m-label{font-size:11.5px}
+#account .m-value{font-size:16px;margin-top:0}
+.trades-wrap{max-height:136px;overflow-y:auto}
+.trade-table{width:100%;font-size:12.5px;table-layout:fixed}
+.trade-table th,.trade-table td{padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trade-table th{position:sticky;top:0;background:#fff;font-size:12px;padding:4px 6px;z-index:1}
+.trade-table thead tr{border-bottom:1px solid var(--line)}
+#factor-dialog{width:min(560px,94vw);max-height:80vh;padding:0;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-2);background:var(--panel);color:var(--ink)}
+#factor-dialog::backdrop{background:rgba(36,31,46,.36)}
+.fd-wrap{display:flex;flex-direction:column;max-height:80vh;padding:12px 14px;gap:8px}
+.fd-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fd-head h2{font-size:15px;font-weight:600;color:var(--lav-deep);display:flex;align-items:center}
+#factor-search{height:38px;width:100%}
+#factor-groups{flex:1;min-height:0;overflow-y:auto;border-top:1px solid var(--line)}
+.factor-group summary{cursor:pointer;padding:7px 2px;color:var(--lav-deep);font-weight:600;font-size:13.5px}
+.factor-item{display:flex;gap:7px;align-items:center;padding:3px 0 3px 14px;font-size:13px;cursor:pointer}
+.factor-item input{accent-color:var(--lav);flex:none}.factor-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fd-foot{display:flex;align-items:center;gap:10px}
+#factor-status{flex:1;color:var(--lav-deep);font-size:13px;min-height:18px}
+.hidden{display:none!important}
+@media(max-width:980px){.term-body{grid-template-columns:minmax(0,1fr) 300px}}
+@media(max-width:860px){
+  #game-main{height:auto;min-height:0}
+  body.playing{overflow-y:auto}
+  .term-body{grid-template-columns:1fr}
+  .term-chart{height:64dvh;min-height:400px}
+  .term-side{display:grid;grid-template-columns:1fr 1fr;overflow:visible}
+}
+@media(max-width:620px){
+  .game-shell{padding:8px 10px 10px}
+  #game-main{height:auto;gap:8px}
+  .term-side{grid-template-columns:1fr}
+  .term-chart{height:62dvh;min-height:360px}
+  .term-bar{flex-wrap:wrap;gap:6px 10px;padding:6px 10px}
+  .side-card .kv-grid{font-size:12.5px}
+  #factor-dialog{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0}
+  .fd-wrap{max-height:100dvh;height:100dvh}
+}
+</style>
+</head>
+<body>
+<div class="wrap game-shell">
+  <div class="card" id="game-start">
+    <button class="btn btn-primary" id="btn-new">开始随机一局</button>
+    <button type="button" class="tip-trigger" data-tip="随机匿名股票与历史窗口。每个回合先决策，再收束一根 K 线；真实限价成交、T+1 与交易费用。" aria-label="游戏规则">?</button>
+    <span id="start-status" role="status"></span>
+  </div>
+  <div id="game-main" class="hidden">
+    <div class="term-bar">
+      <div class="term-id"><span id="stock-title">B</span></div>
+      <div id="phase" role="status"></div>
+      <div class="spacer"></div>
+      <div id="finish-note" class="hidden"></div>
+      <div class="term-tools">
+        <button class="btn btn-ghost" id="btn-factors" type="button">指标</button>
+        <button type="button" class="tip-trigger" data-tip="均线与布林带叠加在主图，MACD 等指标进入下方副图。决策时主图显示委托区间、次日开盘与委托价；拖动下方滑块缩放，双击返回默认视口。" aria-label="图表规则">?</button>
+      </div>
+    </div>
+    <div class="term-body game-layout">
+      <section class="term-chart">
+        <div id="kline"></div>
+      </section>
+      <aside class="term-side game-side">
+        <section class="side-card">
+          <h2>回合</h2>
+          <div class="game-actions">
+            <button class="btn btn-ghost" id="btn-advance">进入下一回合</button>
+            <button class="btn btn-primary" id="btn-settle">播放并结算</button>
+          </div>
+          <div id="round-info"></div>
+        </section>
+        <section class="side-card">
+          <h2>委托 <button type="button" class="tip-trigger" data-tip="仅决策阶段可委托或撤单。价格在前收 ±10% 内，触及委托价成交；未触及不成交。买入后 T+1 可卖。" aria-label="交易规则">?</button></h2>
+          <form id="order-form">
+            <label>方向<select id="order-side"><option value="buy">买入</option><option value="sell">卖出</option></select></label>
+            <label>数量（股）<input id="order-quantity" type="number" step="100" min="100" value="100" required></label>
+            <label class="wide">委托价<input id="order-price" type="number" step="0.01" min="0.01" required></label>
+            <div class="game-actions wide">
+              <button class="btn btn-primary" id="btn-order" type="submit">提交委托</button>
+              <button class="btn btn-ghost" id="btn-cancel" type="button">撤销委托</button>
+            </div>
+          </form>
+          <div id="order-pending"></div>
+          <div id="order-error" role="alert"></div>
+        </section>
+        <section class="side-card">
+          <h2>账户</h2>
+          <div id="account" class="metric-strip"></div>
+        </section>
+        <section class="side-card">
+          <h2>成交记录</h2>
+          <div class="trades-wrap">
+            <table class="tbl trade-table"><thead><tr><th>方向</th><th class="num">成交价</th><th class="num">数量</th><th class="num">费用</th></tr></thead><tbody id="trades"></tbody></table>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</div>
+<dialog id="factor-dialog">
+  <div class="fd-wrap">
+    <div class="fd-head">
+      <h2>技术因子 <button type="button" class="tip-trigger" data-tip="目录只含技术因子，勾选后懒加载。同名不同价格口径也可独立使用；均线叠加 K 线，MACD 等同副图。" aria-label="因子规则">?</button></h2>
+      <button class="btn btn-ghost" id="fd-close" type="button">关闭</button>
+    </div>
+    <input id="factor-search" type="search" placeholder="搜索中文名、列名或 canonical" aria-label="搜索技术因子">
+    <div id="factor-groups"></div>
+    <div class="fd-foot"><div id="factor-status" role="status"></div></div>
+  </div>
+</dialog>
+<script src="/static/echarts.min.js"></script>
+<script src="/static/lab-ui.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const MACD = [
+    'factors.stock_daily_momentum_close.macd_12_26_9',
+    'factors.stock_daily_momentum_close.macds_12_26_9',
+    'factors.stock_daily_momentum_close.macdh_12_26_9'
+  ];
+  let state = null, chart = null, catalog = new Map(), catalogGroups = [];
+  let busy = false, lastCursor = null, lastPhase = null, resizeFrame = 0;
+  const money = v => Number(v).toLocaleString('zh-CN', {maximumFractionDigits: 2});
+  const price = v => Number(v).toFixed(2);
+  const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const sessionUrl = path => '/game/api/sessions/' + state.id + path;
+
+  async function api(path, options){
+    const response = await fetch(path, Object.assign({headers: {'Content-Type': 'application/json'}}, options || {}));
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    return data;
+  }
+  function saveSession(){
+    try { if (state) localStorage.setItem('qre_game_session', state.id); } catch (_) {}
+  }
+  function setState(next){
+    state = next;
+    saveSession();
+    $('game-start').classList.add('hidden');
+    $('game-main').classList.remove('hidden');
+    document.body.classList.add('playing');
+    $('start-status').textContent = '';
+    renderControls(); renderRound(); renderAccount(); renderTrades(); renderChart(); syncFactorChecks();
+    lastCursor = state.cursor; lastPhase = state.phase;
+  }
+  async function withBusy(work){
+    if (busy) return;
+    busy = true; renderControls();
+    try { return await work(); }
+    finally { busy = false; renderControls(); }
+  }
+  function renderControls(){
+    if (!state) return;
+    const open = state.phase === 'open';
+    $('stock-title').textContent = state.display_name + ' · ' + state.display_code;
+    const day = Math.max(1, state.cursor - state.warmup_bars + 1);
+    $('phase').textContent = (open ? '决策阶段' : '结算阶段') + ' · 第 ' + day + ' / ' + state.game_bars + ' 个交易日';
+    $('btn-advance').disabled = busy || open || state.finished;
+    $('btn-settle').disabled = busy || !open || state.finished;
+    $('btn-factors').disabled = busy;
+    ['order-side', 'order-quantity', 'order-price', 'btn-order'].forEach(id => { $(id).disabled = busy || !open || state.finished; });
+    $('btn-cancel').disabled = busy || !open || state.finished || !state.pending_order;
+    document.querySelectorAll('#factor-groups input').forEach(input => { input.disabled = busy; });
+    $('finish-note').classList.toggle('hidden', !state.finished);
+    $('finish-note').textContent = state.finished ? '本局结束 · 最终权益 ' + money(state.account.equity) : '';
+    const pending = state.pending_order;
+    $('order-pending').textContent = pending
+      ? '待成交 ' + (pending.side === 'buy' ? '买入' : '卖出') + ' ' + pending.quantity + ' 股 @ ' + price(pending.price)
+      : (open ? '当前无委托' : '');
+    const decision = state.decision || {};
+    if (open && decision.next_open != null && (lastCursor !== state.cursor || lastPhase !== 'open')){
+      $('order-price').value = price(decision.next_open);
+      $('order-price').min = price(decision.limit_lower);
+      $('order-price').max = price(decision.limit_upper);
+    }
+  }
+  function kv(label, value){ return '<span>' + esc(label) + '</span><span>' + esc(value) + '</span>'; }
+  function renderRound(){
+    const body = $('round-info');
+    if (state.phase === 'open'){
+      const d = state.decision;
+      body.innerHTML = '<div class="kv-grid">' +
+        kv('前收盘价', price(d.previous_close)) + kv('次日开盘价', price(d.next_open)) +
+        kv('委托下限', price(d.limit_lower)) + kv('委托上限', price(d.limit_upper)) +
+        kv('本回合', '可委托或空仓') + kv('结算', '播放后收束一根') + '</div>';
+      return;
+    }
+    const s = state.settlement;
+    if (!s){ body.innerHTML = '<div class="kv-grid">' + kv('预热状态', '已完成') + kv('下一步', '进入第一回合') + '</div>'; return; }
+    const rows = [kv('开盘价', price(s.open)), kv('最高价', price(s.high)),
+      kv('最低价', price(s.low)), kv('收盘价', price(s.close)), kv('成交量', money(s.volume))];
+    if (s.fill) rows.push(kv('成交结果', (s.fill.side === 'buy' ? '买入' : '卖出') + ' ' + s.fill.quantity + ' 股 @ ' + price(s.fill.price)), kv('交易费用', money(s.fill.cost)));
+    else rows.push(kv('成交结果', s.unfilled === 'no_order' ? '本回合空仓' : '未成交（' + s.unfilled + '）'));
+    rows.push(kv('当日状态', '已停止交易'));
+    body.innerHTML = '<div class="kv-grid">' + rows.join('') + '</div>';
+  }
+  function metric(label, value){ return '<div class="metric-card"><div class="m-label">' + esc(label) + '</div><div class="m-value">' + esc(value) + '</div></div>'; }
+  function renderAccount(){
+    const a = state.account;
+    $('account').innerHTML = metric('总权益', money(a.equity)) + metric('现金', money(a.cash)) +
+      metric('持仓', a.quantity + ' 股') + metric('可卖', a.sellable + ' 股') + metric('交易磨损', money(a.total_cost));
+  }
+  function renderTrades(){
+    $('trades').innerHTML = state.trades.length ? state.trades.map(t =>
+      '<tr><td>' + (t.side === 'buy' ? '买入' : '卖出') + '</td><td class="num">' + price(t.price) + '</td><td class="num">' + t.quantity + '</td><td class="num">' + money(t.cost) + '</td></tr>'
+    ).join('') : '<tr><td colspan="4">暂无成交</td></tr>';
+  }
+  function factorLabel(meta){
+    const suffix = meta.price_basis && meta.price_basis !== 'close' ? '（' + meta.price_basis + '）' : '';
+    return meta.label + suffix;
+  }
+  function chartModel(){
+    const selected = new Set(state.selected || []);
+    const overlays = [], panes = [];
+    selected.forEach(canonical => {
+      const meta = catalog.get(canonical);
+      if (!meta) return;
+      const item = {canonical, name: factorLabel(meta), table: meta.table,
+        values: state.history.map(row => row.factors && row.factors[canonical] != null ? row.factors[canonical] : null)};
+      if (meta.is_overlay) overlays.push(item);
+    });
+    const macdItems = MACD.filter(canonical => selected.has(canonical)).map(canonical => {
+      const meta = catalog.get(canonical);
+      return {canonical, values: state.history.map(row => row.factors && row.factors[canonical] != null ? row.factors[canonical] : null)};
+    });
+    if (macdItems.length){
+      panes.push({name: 'MACD', series: macdItems.map((item, index) => ({
+        name: ['DIF', 'DEA', 'HIST'][MACD.indexOf(item.canonical)],
+        type: item.canonical === MACD[2] ? 'bar' : 'line', values: item.values,
+        color: ['#6750A4', '#B7A6E8', '#8B7FBE'][MACD.indexOf(item.canonical)]
+      }))});
+    }
+    selected.forEach(canonical => {
+      const meta = catalog.get(canonical);
+      if (!meta || meta.is_overlay || MACD.includes(canonical)) return;
+      panes.push({name: factorLabel(meta), series: [{name: factorLabel(meta), type: 'line', color: '#6750A4',
+        values: state.history.map(row => row.factors && row.factors[canonical] != null ? row.factors[canonical] : null)}]});
+    });
+    return {overlays, panes};
+  }
+  function chartLayout(paneCount){
+    const box = $('kline');
+    const narrow = window.innerWidth < 700;
+    const totalH = Math.max(300, box.clientHeight || 480);
+    const left = narrow ? 44 : 58, right = narrow ? 8 : 14;
+    const topPad = 22, sliderH = 16, gap = 6;
+    const avail = Math.max(260, totalH - topPad - sliderH - 4);
+    let paneH = 0;
+    if (paneCount) paneH = Math.max(narrow ? 84 : 96, Math.floor(((avail - gap * (paneCount + 1)) * 0.24) / paneCount));
+    const bodyH = Math.max(170, avail - gap * (paneCount + 1) - paneH * paneCount);
+    const volH = Math.max(46, Math.round(bodyH * (paneCount ? 0.18 : 0.22)));
+    const kH = Math.max(120, bodyH - volH);
+    const grids = [{left: left, right: right, top: topPad, height: kH}];
+    let cursor = topPad + kH + gap;
+    grids.push({left: left, right: right, top: cursor, height: volH});
+    cursor += volH + gap;
+    for (let index = 0; index < paneCount; index += 1){
+      grids.push({left: left, right: right, top: cursor, height: paneH});
+      cursor += paneH + gap;
+    }
+    return {grids: grids, sliderH: sliderH};
+  }
+  function renderChart(){
+    if (!chart) chart = echarts.init($('kline'));
+    const history = state.history || [];
+    const dates = history.map(row => 'T' + row.t);
+    const candles = history.filter(row => [row.open, row.close, row.low, row.high].every(v => v != null))
+      .map(row => ({value: [row.open, row.close, row.low, row.high], name: 'T' + row.t,
+        itemStyle: {color: row.close >= row.open ? '#C93A3A' : '#1E8E5A', color0: row.close >= row.open ? '#1E8E5A' : '#C93A3A',
+          borderColor: row.close >= row.open ? '#C93A3A' : '#1E8E5A', borderColor0: row.close >= row.open ? '#1E8E5A' : '#C93A3A'}}));
+    const volumes = history.filter(row => row.close != null).map(row => ({value: row.volume,
+      itemStyle: {color: row.close >= row.open ? '#C93A3A' : '#1E8E5A'}}));
+    const model = chartModel(), paneCount = model.panes.length;
+    const layout = chartLayout(paneCount), grids = layout.grids;
+    const xAxis = grids.map((grid, index) => ({type: 'category', data: dates, gridIndex: index,
+      axisLabel: {show: index === grids.length - 1, fontSize: 10}, axisTick: {show: index === grids.length - 1}}));
+    const yAxis = grids.map((grid, index) => ({type: 'value', gridIndex: index, scale: true, splitNumber: 4,
+      axisLabel: {fontSize: 10},
+      name: index >= 2 ? model.panes[index - 2].name : '', nameTextStyle: {fontSize: 10}}));
+    const series = [{name: 'K线', type: 'candlestick', data: candles, xAxisIndex: 0, yAxisIndex: 0},
+      {name: '成交量', type: 'bar', data: volumes, xAxisIndex: 1, yAxisIndex: 1, itemStyle: {color: '#B7A6E8'}}];
+    model.overlays.forEach((factor, index) => series.push({name: factor.name, type: 'line', data: factor.values,
+      xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: {width: 1.4}, color: ['#6750A4', '#B7A6E8', '#4A3A78', '#9A93A6'][index % 4]}));
+    model.panes.forEach((pane, paneIndex) => pane.series.forEach(s => series.push({name: s.name, type: s.type,
+      data: s.values, xAxisIndex: paneIndex + 2, yAxisIndex: paneIndex + 2, showSymbol: false,
+      color: s.color, lineStyle: {width: 1.2, color: s.color}, itemStyle: {color: s.color}})));
+    const d = state.decision || {};
+    if (state.phase === 'open' && d.next_open != null){
+      series[0].markArea = {silent: true, itemStyle: {color: 'rgba(103,80,164,.08)'}, data: [[{yAxis: d.limit_lower}, {yAxis: d.limit_upper}]]};
+      const lines = [{yAxis: d.previous_close, name: '前收'}, {yAxis: d.next_open, name: '次日开盘'}];
+      if (state.pending_order) lines.push({yAxis: state.pending_order.price, name: '委托价'});
+      series[0].markLine = {silent: true, symbol: 'none', lineStyle: {type: 'dashed', width: 1}, label: {fontSize: 10, formatter: p => p.name || ''}, data: lines};
+    }
+    chart.clear();
+    chart.setOption({animation: false, tooltip: {trigger: 'axis'}, legend: {top: 0, type: 'scroll', textStyle: {fontSize: 11}},
+      grid: grids, xAxis, yAxis, series,
+      dataZoom: [{type: 'inside', xAxisIndex: grids.map((_, i) => i), start: Math.max(0, 100 - 240 / Math.max(1, dates.length) * 100), end: 100},
+        {type: 'slider', xAxisIndex: grids.map((_, i) => i), bottom: 0, height: layout.sliderH, showDetail: false}]
+    });
+    chart.resize();
+  }
+  function renderFactorGroups(){
+    $('factor-groups').innerHTML = catalogGroups.map((group, groupIndex) =>
+      '<details class="factor-group"' + (groupIndex === 0 ? ' open' : '') + '><summary>' + esc(group.label) + '（' + group.factors.length + '）</summary>' +
+      group.factors.map(f => '<label class="factor-item" data-search="' + esc((f.label + ' ' + f.column + ' ' + f.canonical).toLowerCase()) + '">' +
+        '<input type="checkbox" data-canonical="' + esc(f.canonical) + '"><span title="' + esc(f.canonical) + '">' + esc(factorLabel(f)) + '</span></label>').join('') + '</details>'
+    ).join('');
+    syncFactorChecks();
+  }
+  function syncFactorChecks(){
+    if (!state) return;
+    const selected = new Set(state.selected || []);
+    document.querySelectorAll('#factor-groups input[data-canonical]').forEach(input => { input.checked = selected.has(input.dataset.canonical); });
+  }
+  function filterFactors(){
+    const query = $('factor-search').value.trim().toLowerCase();
+    document.querySelectorAll('#factor-groups .factor-group').forEach((group, index) => {
+      let visible = 0;
+      group.querySelectorAll('.factor-item').forEach(item => {
+        const hit = !query || (item.dataset.search || '').includes(query);
+        item.classList.toggle('hidden', !hit);
+        if (hit) visible += 1;
+      });
+      group.classList.toggle('hidden', visible === 0);
+      group.open = query ? visible > 0 : index === 0;
+    });
+  }
+  async function applyFactors(){
+    const selected = Array.from(document.querySelectorAll('#factor-groups input[data-canonical]:checked')).map(input => input.dataset.canonical);
+    $('factor-status').textContent = '正在加载所选因子…';
+    try {
+      await withBusy(async () => setState(await api(sessionUrl('/factors'), {method: 'POST', body: JSON.stringify({canonicals: selected})})));
+      $('factor-status').textContent = '';
+    } catch (error) { $('factor-status').textContent = error.message; syncFactorChecks(); }
+  }
+  function openFactors(){
+    const dialog = $('factor-dialog');
+    filterFactors();
+    if (typeof dialog.showModal === 'function'){ if (!dialog.open) dialog.showModal(); }
+    else { dialog.setAttribute('open', ''); }
+  }
+  function closeFactors(){
+    const dialog = $('factor-dialog');
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  }
+  async function startGame(){
+    $('start-status').textContent = '正在抽取随机股票与历史窗口…';
+    $('btn-new').disabled = true;
+    try { await withBusy(async () => setState(await api('/game/api/sessions', {method: 'POST'}))); }
+    catch (error) { $('start-status').textContent = error.message; $('btn-new').disabled = false; }
+  }
+  async function advance(){
+    try { await withBusy(async () => setState(await api(sessionUrl('/advance'), {method: 'POST'}))); $('order-error').textContent = ''; }
+    catch (error) { $('order-error').textContent = error.message; }
+  }
+  async function closeDay(){
+    try { await withBusy(async () => setState(await api(sessionUrl('/close'), {method: 'POST'}))); $('order-error').textContent = ''; }
+    catch (error) { $('order-error').textContent = error.message; }
+  }
+  async function restore(){
+    let id = null;
+    try { id = localStorage.getItem('qre_game_session'); } catch (_) {}
+    if (!id) return;
+    try { state = await api('/game/api/sessions/' + id); setState(state); }
+    catch (_) { try { localStorage.removeItem('qre_game_session'); } catch (_) {} }
+  }
+  $('btn-new').addEventListener('click', startGame);
+  $('btn-advance').addEventListener('click', advance);
+  $('btn-settle').addEventListener('click', closeDay);
+  $('btn-factors').addEventListener('click', openFactors);
+  $('fd-close').addEventListener('click', closeFactors);
+  $('btn-cancel').addEventListener('click', async () => {
+    try { await withBusy(async () => setState(await api(sessionUrl('/cancel'), {method: 'POST'}))); }
+    catch (error) { $('order-error').textContent = error.message; }
+  });
+  $('order-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    $('order-error').textContent = '';
+    try {
+      await withBusy(async () => setState(await api(sessionUrl('/orders'), {method: 'POST', body: JSON.stringify({
+        side: $('order-side').value, price: Number($('order-price').value), quantity: Number($('order-quantity').value)
+      })})));
+    } catch (error) { $('order-error').textContent = error.message; }
+  });
+  $('factor-groups').addEventListener('change', event => { if (event.target.matches('input[data-canonical]')) applyFactors(); });
+  $('factor-search').addEventListener('input', filterFactors);
+  window.addEventListener('resize', () => {
+    if (!state) return;
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => { if (chart) renderChart(); });
+  });
+  if (window.LabUI && LabUI.helpTips) LabUI.helpTips();
+  Promise.all([restore(), (async () => {
+    try {
+      const data = await api('/game/api/factors');
+      catalogGroups = data.groups || [];
+      catalogGroups.forEach(group => group.factors.forEach(f => catalog.set(f.canonical, f)));
+      renderFactorGroups(); filterFactors(); if (state) renderChart();
+    } catch (error) { $('factor-status').textContent = '因子目录加载失败：' + error.message; }
+  })()]);
+})();
+</script>
+</body>
+</html>
