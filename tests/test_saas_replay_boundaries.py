@@ -388,6 +388,10 @@ const context = vm.createContext({
   cls(){ return ''; },
   f2(v){ return v == null || v === '' ? '—' : Number(v).toFixed(2); },
   chipStates(){ return {}; },
+      // QRE-KLINE-PARAM-GRID（T5）：与 symbol.html::klinePlanFactors 同签名；
+      // harness 无参数选择，等价于原样返回。参数应用逻辑由
+      // tests/test_kline_param_grid.py 覆盖。
+      klinePlanFactors(d){ return (d && d.factors) || []; },
   requestAnimationFrame(fn){ return fn(); },
 });
 const source = %SOURCE%;

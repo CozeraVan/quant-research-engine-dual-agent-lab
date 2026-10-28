@@ -22,6 +22,10 @@
  *     markLineFor(series, idx, startIdx) // 可选：按当前帧生成末价标签（T2；
  *                                       // idx/startIdx 均为**可见窗口内**下标，不得越到未来）
  *   });
+ *
+ * 键盘（QRE-TV-REPLAY-KEYS，T3）：空格 = 播放/暂停，← = 单步后退，→ = 单步前进。
+ * 焦点在表单控件/按钮/链接/可编辑区/对话框/日历浮层内时不劫持（交还原生行为）。
+ * 后退与前进都复用 seek(cursor±1)，不另造渲染路径。
  */
 (function () {
   "use strict";
@@ -163,6 +167,18 @@
     return n > 0 ? 480 + n * 160 : 520;
   }
 
+  // QRE-TV-REPLAY-KEYS（T3）：键盘不得劫持的这些焦点区。表单控件（起始日输入框、
+  // 速度下拉、进度条滑块）、按钮与链接（空格/回车会触发它们自己的动作）、可编辑区、
+  // 模态对话框与日历浮层——焦点落在里面时一律交还原生行为。
+  // 日历浮层有两个类名：replay.js 自建的是 `.rp-calpop`，lab 页复用 LabUI 时是
+  // `.cal-pop`，两个都拦。
+  var KEY_BLOCK_SELECTOR = "input, select, textarea, button, a, "
+    + '[contenteditable="true"], [role="dialog"], .ind-mask, .cal-pop, .rp-calpop, .rp-bar';
+  function keyTargetBlocked(el) {
+    if (!el || typeof el.closest !== "function") return false;
+    return !!el.closest(KEY_BLOCK_SELECTOR);
+  }
+
   // 窗口显示数据：默认原样切片；zeroBase=true 时以窗口内首个非空值为基线，
   // 让“累计收益/基准”这类序列在可视左端回到 0（指标仍按全量 raw 计算，不失真）。
   function windowDisplayData(data, start, end, zeroBase) {
@@ -182,6 +198,7 @@
     frameMetrics: frameMetrics, visibleWindow: visibleWindow,
     windowDisplayData: windowDisplayData,
     formatTooltipValue: formatTooltipValue, klineHeightForPanes: klineHeightForPanes,
+    keyTargetBlocked: keyTargetBlocked, KEY_BLOCK_SELECTOR: KEY_BLOCK_SELECTOR,
   };
   // 页面级复用出口（symbol.html 静态/重播共用高度公式）
   QREReplay.klineHeightForPanes = klineHeightForPanes;
@@ -202,6 +219,7 @@
     play: "M8 5v14l11-7z",
     pause: "M6 5h4v14H6zM14 5h4v14h-4z",
     step: "M6 5l8 7-8 7V5zM15 5h3v14h-3z",
+    stepBack: "M14 5l-8 7 8 7V5zM5 5h3v14H5z",
     skip: "M4 5l7 7-7 7V5zM12 5l7 7-7 7V5z",
   };
   function icon(name) {
@@ -226,10 +244,17 @@
     var bar = h("div", "rp-bar");
     var btnPlay = h("button", "rp-btn rp-play");
     btnPlay.setAttribute("aria-label", "播放 / 暂停");
-    btnPlay.title = "播放 / 暂停";
+    btnPlay.title = "播放 / 暂停（空格键）";
+    // QRE-TV-REPLAY-KEYS（T3）：单步后退与前进成对；后退复用 seek(cursor-1)，
+    // 不另造一条渲染路径（时序红线只有一条）
+    var btnBack = h("button", "rp-btn");
+    btnBack.innerHTML = icon("stepBack") + "<span>后退</span>";
+    btnBack.title = "单步后退一帧（← 键）";
+    btnBack.setAttribute("aria-label", "单步后退");
     var btnStep = h("button", "rp-btn");
     btnStep.innerHTML = icon("step") + "<span>单步</span>";
-    btnStep.title = "单步推进一帧";
+    btnStep.title = "单步推进一帧（→ 键）";
+    btnStep.setAttribute("aria-label", "单步前进");
     var speedSel = h("select", "rp-sel");
     speedSel.setAttribute("aria-label", "播放速度");
     speedSel.title = "播放速度（每帧追加 K 线根数）";
@@ -253,7 +278,8 @@
        辅助组 [起始日/快进] 允许折行——不依赖 flex-wrap 的宽度运气。
        （根因：base.html 全局 select{width:100%} 曾使速度档独占整行） */
     var groupMain = h("div", "rp-group rp-group-main");
-    groupMain.appendChild(btnPlay); groupMain.appendChild(btnStep); groupMain.appendChild(speedSel);
+    groupMain.appendChild(btnPlay); groupMain.appendChild(btnBack);
+    groupMain.appendChild(btnStep); groupMain.appendChild(speedSel);
     var groupAux = h("div", "rp-group rp-group-aux");
     groupAux.appendChild(h("span", "rp-lbl", "起始日"));
     groupAux.appendChild(startInput); groupAux.appendChild(btnSkip); groupAux.appendChild(cur);
@@ -511,6 +537,12 @@
       cursor = Math.min(n - 1, cursor + speed);
       renderFrame();
     }
+    // 后退：复用 seek(cursor-1)（与进度条/日历同一出口，不另造渲染路径）
+    function stepBack() {
+      pause();
+      if (cursor <= 0) { seek(0); return; }
+      seek(cursor - 1);
+    }
     function setPlayBtn() {
       // 播放中状态切换即时生效，图标过渡由 CSS .rp-ic 处理
       btnPlay.innerHTML = icon(playing ? "pause" : "play") + "<span>" + (playing ? "暂停" : "播放") + "</span>";
@@ -545,6 +577,7 @@
     }
 
     btnPlay.addEventListener("click", function () { playing ? pause() : play(); });
+    btnBack.addEventListener("click", stepBack);
     btnStep.addEventListener("click", function () { pause(); frame(); });
     speedSel.addEventListener("change", function () { speed = Number(speedSel.value); });
     slider.addEventListener("input", function () { pause(); seek(Number(slider.value)); });
@@ -552,6 +585,30 @@
       pause();
       seek(nextEventfulCursor(cursor, eventFlag, positions, n));
     });
+
+    /* QRE-TV-REPLAY-KEYS（T3）：键盘快捷键。空格 = 播放/暂停，←/→ = 单步后退/前进。
+       硬规则：不得劫持输入框与模态焦点——焦点在表单控件/按钮/链接/可编辑区、
+       或落在对话框与日历浮层内时，一律交还原生行为（否则在起始日输入框里按空格
+       会切换播放、在速度下拉里按 ← 会同时改速度和步进）。 */
+    function onKey(ev) {
+      if (!ev || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      if (keyTargetBlocked(ev.target)) return;
+      var k = ev.key;
+      if (k === " " || k === "Spacebar") {
+        if (ev.repeat) return;               // 长按不得连续切换播放态
+        ev.preventDefault();
+        playing ? pause() : play();
+      } else if (k === "ArrowLeft") {
+        ev.preventDefault();
+        stepBack();
+      } else if (k === "ArrowRight") {
+        ev.preventDefault();
+        pause(); frame();
+      }
+    }
+    if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("keydown", onKey);
+    }
     // 自建容器才拥有窗口重排职责；接管模式下容器尺寸由宿主页面负责（避免与宿主双重绑定）
     var onWindowResize = function () { chart.resize(); };
     if (ownChartEl) window.addEventListener("resize", onWindowResize);
@@ -561,6 +618,7 @@
 
     return {
       play: play, pause: pause, seek: seek, seekDate: seekDate,
+      stepBack: stepBack, stepForward: function () { pause(); frame(); },
       skipFlat: function () { seek(nextEventfulCursor(cursor, eventFlag, positions, n)); },
       getCursor: function () { return cursor; },
       isPlaying: function () { return playing; },
@@ -570,6 +628,9 @@
       // keepDom=true（接管模式退出）：只撤控制条与日历，保留图表容器由调用方重建静态图
       destroy: function (keepDom) {
         pause();
+        if (typeof document !== "undefined" && document.removeEventListener) {
+          document.removeEventListener("keydown", onKey);
+        }
         if (ownChartEl && window.removeEventListener) window.removeEventListener("resize", onWindowResize);
         chart.dispose();
         bar.remove();

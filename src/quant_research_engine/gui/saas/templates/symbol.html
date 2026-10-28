@@ -107,14 +107,15 @@
         <button type="button" class="kline-tool" id="kt-pscale" aria-label="价格轴模式" data-tip="价格轴模式：普通 → 对数 → 百分比（以可见区间第一根收盘为基准）→ 指数化（第一根收盘 = 100）">
           <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"><line x1="14" y1="3" x2="14" y2="17"/><line x1="9.5" y1="6" x2="14" y2="6"/><line x1="9.5" y1="10" x2="14" y2="10"/><line x1="9.5" y1="14" x2="14" y2="14"/><polyline points="3,15 6.5,9.5 9,12 11.5,6"/></svg><span id="kt-pscale-label">价格</span>
         </button>
-        <!-- 画线工具子集首片（CR-2026-10-27）：趋势线/水平线/清除，只作用于静态 K 线 -->
-        <button type="button" class="kline-tool" id="kt-trend" aria-label="趋势线" data-tip="趋势线：点击两次确定起点与终点，Esc 取消">
+        <!-- 画线工具子集首片（CR-2026-10-27）：趋势线/水平线/清除，只作用于静态 K 线；
+             T4 补完端点拖拽 / 整体拖动 / 单线 Delete / 光标反馈 / 持久化 -->
+        <button type="button" class="kline-tool" id="kt-trend" aria-label="趋势线" data-tip="趋势线：点击两次确定起点与终点；落线后可拖动端点或整体移动，Delete 删除选中">
           <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"><line x1="4" y1="15.5" x2="15.5" y2="4.5"/><circle cx="4" cy="15.5" r="1.7"/><circle cx="15.5" cy="4.5" r="1.7"/></svg><span>趋势</span>
         </button>
-        <button type="button" class="kline-tool" id="kt-horizontal" aria-label="水平线" data-tip="水平线：点击一次确定价格">
+        <button type="button" class="kline-tool" id="kt-horizontal" aria-label="水平线" data-tip="水平线：点击一次确定价格；落线后可上下拖动，Delete 删除选中">
           <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"><line x1="3.5" y1="10" x2="16.5" y2="10"/><circle cx="10" cy="10" r="1.7"/></svg><span>水平</span>
         </button>
-        <button type="button" class="kline-tool" id="kt-clear" aria-label="清除画线" data-tip="清除全部画线">
+        <button type="button" class="kline-tool" id="kt-clear" aria-label="清除画线" data-tip="清除全部画线（刷新后仍在，已按标的隔离保存）">
           <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="16" y2="6"/><path d="M7 6l1 9h4l1-9"/><line x1="8.5" y1="9" x2="8.5" y2="12"/><line x1="11.5" y1="9" x2="11.5" y2="12"/></svg><span>清除</span>
         </button>
         <!-- 指标设置与面板管理（CR-2026-10-28）：集中切换因子呈现方式、调整副图顺序 -->
@@ -724,7 +725,7 @@ function renderKlineLwc(d){
   const el = $('#chart-kline');
   klineDisposeEngines();  // 双引擎互斥：先清 ECharts 与 LWC 两边，再建新实例
   klineDetail = d;
-  const plan = QREFactorLayout.plan(d.factors || [], chipStates(), paneOrder());
+  const plan = QREFactorLayout.plan(klinePlanFactors(d), chipStates(), paneOrder());
   el.style.height = QRELwcAdapter.klineHeight(plan.panes.length) + 'px';
   const t = QRELwcAdapter.theme(klineIsDark());
   const LWC = window.LightweightCharts;
@@ -1127,6 +1128,39 @@ function renderWear(d){
 
 // --- 因子 chip 三态（CR-2026-10-20）：叠加K线 → 独立面板 → 隐藏，localStorage 记忆 ---
 const FCT_LS_PREFIX = 'qre_fct_';
+// QRE-KLINE-PARAM-GRID（T5）：指标参数选择。因子表是宽表、多参数组已算好入库，
+// 前端只做「切列」——按 family 记住用户选的 params，过滤因子集合后交既有 plan()。
+// 没有多参数组的产物这个键不存在，行为与改动前逐字节一致。
+const PARAM_LS_KEY = 'qre.kline.params';
+function paramChoices(){
+  try {
+    const raw = localStorage.getItem(PARAM_LS_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+    const out = {};
+    Object.keys(obj).forEach(function (k) {
+      if (typeof obj[k] === 'string' && obj[k]) out[k] = obj[k];
+    });
+    return out;
+  } catch (e) { return {}; }   // 隐私模式 / 损坏 JSON：按策略默认参数
+}
+function setParamChoice(family, params){
+  let obj = {};
+  try {
+    obj = JSON.parse(localStorage.getItem(PARAM_LS_KEY) || '{}') || {};
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) obj = {};
+  } catch (e) { obj = {}; }
+  if (params == null || params === '') delete obj[family];
+  else obj[family] = params;
+  try { localStorage.setItem(PARAM_LS_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+// plan() 的入参因子集合：应用参数选择（无选择时原样返回）
+function klinePlanFactors(d){
+  const factors = (d && d.factors) || [];
+  if (typeof QREFactorLayout === 'undefined' || !QREFactorLayout.applyParamChoices) return factors;
+  return QREFactorLayout.applyParamChoices(factors, paramChoices());
+}
 function chipStates(){
   const s = {};
   try {
@@ -1173,8 +1207,12 @@ const KLINE_TOOL_VIS = { vol: true, fct: true };
 // 价格轴模式（T2）：0 普通 / 1 对数 / 2 百分比 / 3 指数化，localStorage 持久化
 let klinePriceMode = (typeof QREPriceScale !== 'undefined') ? QREPriceScale.readMode() : 0;
 const klineToolState = { chart: null, data: null, plan: null, bound: false, baseSeries: null };
-// 画线首片状态（CR-2026-10-27）：mode=trend/horizontal/null；pending=趋势线未落点起点
-const klineDrawState = { mode: null, pending: null, lines: [] };
+// 画线状态（CR-2026-10-27 首片；T4 补完交互）：
+//   mode = trend/horizontal/null；pending = 趋势线未落点起点；
+//   lines = 已落画线（localStorage 持久化，按标的隔离）；
+//   selected = 当前选中画线（Delete 删它）；drag = 拖动中的 {kind, target, grabI, grabP}
+const klineDrawState = { mode: null, pending: null, selected: null, drag: null,
+  lines: (typeof klineDrawLoad === 'function') ? klineDrawLoad() : [] };
 function klineNum(v){
   return (v == null || v === '' || !isFinite(Number(v))) ? '—' : Number(v).toFixed(2);
 }
@@ -1545,6 +1583,13 @@ function bindKlineTools(chart, d, plan){
     if (zr && typeof zr.on === 'function' && !zr.__klineDrawBound){
       zr.__klineDrawBound = true;
       zr.on('click', klineDrawHandleClick);
+      // QRE-TV-DRAW-INTERACT（T4）：端点拖拽 / 整体拖动 / 光标反馈
+      zr.on('mousedown', klineDrawHandleMouseDown);
+      zr.on('mousemove', klineDrawHandleMouseMove);
+      zr.on('mouseup', klineDrawHandleMouseUp);
+      zr.on('globalout', function () {
+        if (typeof zr.setCursorStyle === 'function') zr.setCursorStyle('default');
+      });
     }
   }
   if (klineToolState.bound) return;  // 只绑一次；处理器读 klineToolState，重渲染后自动指向新实例
@@ -1639,7 +1684,7 @@ function setPaneOrder(keys){
 }
 // 按当前可见副图把 key 上移/下移一位；越界或未知键不动（不抛错）
 function movePane(key, delta){
-  const plan = QREFactorLayout.plan(klineDetail && klineDetail.factors || [], chipStates(), paneOrder());
+  const plan = QREFactorLayout.plan(klinePlanFactors(klineDetail), chipStates(), paneOrder());
   const keys = plan.panes.map(p => p.key);
   const i = keys.indexOf(key);
   if (i < 0) return false;
@@ -1651,7 +1696,7 @@ function movePane(key, delta){
 }
 // 收起整个副图：该面板下所有 chip 置 hidden（MACD 等多线面板同键，天然只写一次）
 function hidePane(key){
-  const plan = QREFactorLayout.plan(klineDetail && klineDetail.factors || [], chipStates(), paneOrder());
+  const plan = QREFactorLayout.plan(klinePlanFactors(klineDetail), chipStates(), paneOrder());
   const hit = (plan.chips || []).some(c => c.key === key);
   if (!hit) return false;
   setChipState(key, 'hidden');
@@ -1687,7 +1732,7 @@ function klineIndBtn(text, tip, onClick){
 }
 function klineIndicatorDialog(){
   klineIndClose();
-  const plan = QREFactorLayout.plan(klineDetail && klineDetail.factors || [], chipStates(), paneOrder());
+  const plan = QREFactorLayout.plan(klinePlanFactors(klineDetail), chipStates(), paneOrder());
   const mask = document.createElement('div');
   mask.className = 'ind-mask';
   const dialog = document.createElement('div');
@@ -1748,6 +1793,54 @@ function klineIndicatorDialog(){
   }
   body.appendChild(secInd);
 
+  // 参数（QRE-KLINE-PARAM-GRID，T5）：同一指标的多个参数组切换。
+  // 只列**本产物内已有**的参数组（宽表已算好入库，前端只切列、不重算）；
+  // 只有一个组的家族不展示——给了选择器也没得选。
+  const secParam = document.createElement('div');
+  secParam.className = 'ind-sec';
+  const tParam = document.createElement('div');
+  tParam.className = 'ind-sec-t';
+  tParam.textContent = '参数';
+  secParam.appendChild(tParam);
+  const fams = (typeof QREFactorLayout !== 'undefined' && QREFactorLayout.paramVariants)
+    ? QREFactorLayout.paramVariants((klineDetail && klineDetail.factors) || []).filter(f => f.variants.length >= 2)
+    : [];
+  const choices = paramChoices();
+  fams.forEach(fam => {
+    const row = document.createElement('div');
+    row.className = 'ind-row';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = fam.label + '（' + fam.variants.length + ' 组参数）';
+    const act = document.createElement('span');
+    act.className = 'ind-act';
+    fam.variants.forEach(v => {
+      const on = (choices[fam.family] == null && v === fam.variants[0])
+        || choices[fam.family] === v.params;
+      const b = klineIndBtn(v.params, '切换到 ' + fam.label + ' 参数 ' + v.params
+        + '（该组已预计算，切换只换列、不重算）', () => {
+          setParamChoice(fam.family, v.params);
+          klineIndicatorDialog();
+          klineRerenderAfterSetting();
+        });
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (on) b.style.borderColor = 'var(--lav)';
+      act.appendChild(b);
+    });
+    row.appendChild(nm); row.appendChild(act);
+    secParam.appendChild(row);
+  });
+  if (!fams.length){
+    const empty = document.createElement('div');
+    empty.className = 'ind-row';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = '该策略的指标只有一组参数';
+    empty.appendChild(nm);
+    secParam.appendChild(empty);
+  }
+  body.appendChild(secParam);
+
   // 面板：副图顺序与单独收起
   const secPane = document.createElement('div');
   secPane.className = 'ind-sec';
@@ -1797,7 +1890,8 @@ function klineIndicatorDialog(){
   const reset = klineIndBtn('恢复默认', '清空全部指标与面板偏好，按策略默认呈现', () => {
     try {
       Object.keys(localStorage)
-        .filter(k => k.indexOf(FCT_LS_PREFIX) === 0 || k === PANE_ORDER_LS_KEY)
+        .filter(k => k.indexOf(FCT_LS_PREFIX) === 0 || k === PANE_ORDER_LS_KEY
+          || k === PARAM_LS_KEY)
         .forEach(k => localStorage.removeItem(k));
     } catch (e) { /* 隐私模式：内存中重渲染即可 */ }
     klineIndicatorDialog();
@@ -1850,7 +1944,7 @@ function renderKline(d){
   const el = $('#chart-kline');
   // CR-2026-10-20：因子分组布局（均线 overlay 主图 / MACD 合并面板 / 其余独立面板），
   // chip 状态存 localStorage；面板数自适应容器高度（overlay 不占面板）
-  const factors = d.factors || [];
+  const factors = klinePlanFactors(d);   // QRE-KLINE-PARAM-GRID（T5）：应用参数选择
   klineDetail = d;  // 指标设置/面板管理需要当前因子集合
   const plan = QREFactorLayout.plan(factors, chipStates(), paneOrder());
   renderFactorChips(plan, d);
@@ -1931,9 +2025,18 @@ function renderKline(d){
   if (klineDrawState.lines.length) klineDrawApply();
 }
 // --- K 线画线工具子集首片（CR-2026-10-27）：趋势线/水平线/清除，只作用于静态 K 线 ---
+// QRE-TV-DRAW-INTERACT（T4，CR-2026-10-29）：补完五项交互——端点拖拽 / 整体拖动 /
+// 单线 Delete / 光标反馈 / localStorage 持久化。几何原语与参考实现一致（distToSeg、
+// 端点半径 7px、线身 6px、水平线横向 5px），变量映射用 convertFromPixel/convertToPixel。
 // 颜色复用既有因子 overlay token：不引入第四色相，Night Mode 与因子线同可读性
 const KLINE_DRAW_TREND_COLOR = '#6750A4';
 const KLINE_DRAW_HORIZONTAL_COLOR = '#8B7FBE';
+const KLINE_DRAW_LS_KEY = 'qre.kline.drawings';
+// 选中态：端点圆点 + 虚线加粗（不引新色相）
+const KLINE_DRAW_HANDLE_SIZE = 6;
+const KLINE_DRAW_HIT_ENDPOINT = 7;   // 端点命中半径（px）
+const KLINE_DRAW_HIT_BODY = 6;       // 趋势线线身命中距离（px）
+const KLINE_DRAW_HIT_LEVEL = 5;      // 水平线横向命中距离（px）
 // 像素 → 真实 K 线坐标：类别轴取整到最近一根；越界（窗口外）/缺失/异常一律降级
 // null——不造点、不泄露未来数据
 function klinePixelToPoint(chart, pixel, dates){
@@ -1950,46 +2053,273 @@ function klinePixelToPoint(chart, pixel, dates){
   if (!isFinite(price)) return null;
   return { index: idx, date: dates[idx], price: price };
 }
+// 真实坐标 → 像素（拖拽命中判定用；与 klinePixelToPoint 互为逆运算）
+function klinePointToPixel(chart, point){
+  if (!chart || typeof chart.convertToPixel !== 'function' || !point) return null;
+  let px = null;
+  try {
+    px = chart.convertToPixel({ gridIndex: 0 },
+      [Number(point.index), Number(point.price)]);
+  } catch (e) { return null; }
+  if (!px || !isFinite(Number(px[0])) || !isFinite(Number(px[1]))) return null;
+  return [Number(px[0]), Number(px[1])];
+}
+// 点到线段距离（命中判定的几何原语，原样复制自参考实现）
+function klineDistToSeg(px, py, x1, y1, x2, y2){
+  const dx = x2 - x1, dy = y2 - y1;
+  const L = dx * dx + dy * dy;
+  let t = L ? ((px - x1) * dx + (py - y1) * dy) / L : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cx = x1 + t * dx, cy = y1 + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+// 一条画线的全部端点（水平线 1 个、趋势线 2 个）
+function klineDrawPoints(ln){
+  if (!ln) return [];
+  if (ln.kind === 'horizontal'){
+    return (ln.index == null || ln.price == null) ? [] : [ln];
+  }
+  if (ln.kind === 'trend' && ln.from && ln.to) return [ln.from, ln.to];
+  return [];
+}
+// 画线合法性（持久化读回时过滤脏数据）
+function klineDrawValid(ln){
+  if (!ln || typeof ln !== 'object') return false;
+  if (ln.kind === 'horizontal') return isFinite(Number(ln.price));
+  if (ln.kind === 'trend'){
+    return !!(ln.from && ln.to && ln.from.date != null && ln.to.date != null
+      && isFinite(Number(ln.from.price)) && isFinite(Number(ln.to.price))
+      && isFinite(Number(ln.from.index)) && isFinite(Number(ln.to.index)));
+  }
+  return false;
+}
+// 持久化：qre.kline.drawings = {ts_code, lines}。按标的隔离——画线锚在日期+价格上，
+// 换一只股票还显示上一只的线只会造成误读。
+function klineDrawLoad(){
+  try {
+    const raw = localStorage.getItem(KLINE_DRAW_LS_KEY);
+    if (!raw) return [];
+    const obj = JSON.parse(raw);
+    const lines = (obj && typeof obj === 'object' && !Array.isArray(obj)) ? obj.lines : obj;
+    if (!Array.isArray(lines)) return [];
+    const ts = (typeof TS_CODE !== 'undefined') ? String(TS_CODE || '') : '';
+    if (obj && typeof obj === 'object' && !Array.isArray(obj) && obj.ts_code && ts
+        && String(obj.ts_code) !== ts) return [];
+    return lines.filter(klineDrawValid);
+  } catch (e) { return []; }
+}
+function klineDrawPersist(){
+  try {
+    const ts = (typeof TS_CODE !== 'undefined') ? String(TS_CODE || '') : '';
+    localStorage.setItem(KLINE_DRAW_LS_KEY,
+      JSON.stringify({ ts_code: ts, lines: klineDrawState.lines }));
+  } catch (e) { /* 隐私模式：仅本次会话生效 */ }
+}
 // 画线数据 → ECharts series：水平线跨真实首末日期；趋势线两个真实点；缺字段跳过
 function klineDrawingSeries(lines, dates){
   if (!lines || !lines.length || !dates || !dates.length) return [];
   const out = [];
+  const selected = klineDrawState.selected;
   lines.forEach(function (ln){
     if (!ln) return;
+    const isSel = (ln === selected);
     if (ln.kind === 'horizontal'){
       const p = Number(ln.price);
       if (!isFinite(p)) return;
-      out.push({ name: '画线·水平', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+      const cfg = { name: '画线·水平', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
         data: [[dates[0], p], [dates[dates.length - 1], p]],
         showSymbol: false, silent: true, tooltip: { show: false }, z: 5,
-        lineStyle: { color: KLINE_DRAW_HORIZONTAL_COLOR, width: 1.2, type: 'solid' } });
+        lineStyle: { color: KLINE_DRAW_HORIZONTAL_COLOR, width: 1.2, type: 'solid' } };
+      if (isSel){
+        cfg.lineStyle = { color: KLINE_DRAW_HORIZONTAL_COLOR, width: 1.6, type: 'dashed' };
+        cfg.markPoint = { silent: true, symbol: 'circle', symbolSize: KLINE_DRAW_HANDLE_SIZE,
+          itemStyle: { color: KLINE_DRAW_HORIZONTAL_COLOR, borderColor: '#FFFFFF', borderWidth: 1 },
+          data: [{ coord: [dates[0], p] }, { coord: [dates[dates.length - 1], p] }] };
+      }
+      out.push(cfg);
     } else if (ln.kind === 'trend'){
       const a = ln.from, b = ln.to;
       if (!a || !b || a.date == null || b.date == null) return;
       const pa = Number(a.price), pb = Number(b.price);
       if (!isFinite(pa) || !isFinite(pb)) return;
-      out.push({ name: '画线·趋势', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+      const cfg = { name: '画线·趋势', type: 'line', xAxisIndex: 0, yAxisIndex: 0,
         data: [[a.date, pa], [b.date, pb]],
         showSymbol: false, silent: true, tooltip: { show: false }, z: 5,
-        lineStyle: { color: KLINE_DRAW_TREND_COLOR, width: 1.2, type: 'solid' } });
+        lineStyle: { color: KLINE_DRAW_TREND_COLOR, width: 1.2, type: 'solid' } };
+      if (isSel){
+        cfg.lineStyle = { color: KLINE_DRAW_TREND_COLOR, width: 1.6, type: 'dashed' };
+        cfg.markPoint = { silent: true, symbol: 'circle', symbolSize: KLINE_DRAW_HANDLE_SIZE,
+          itemStyle: { color: KLINE_DRAW_TREND_COLOR, borderColor: '#FFFFFF', borderWidth: 1 },
+          data: [{ coord: [a.date, pa] }, { coord: [b.date, pb] }] };
+      }
+      out.push(cfg);
     }
   });
   return out;
 }
-// 基础序列 + 画线整体替换合并（画线增删不重复追加，K 线/量/因子数据原样）
+// 基础序列 + 画线整体替换合并（画线增删不重复追加，K 线/量/因子数据原样）。
+// 拖动时 mousemove 频率高，用 rAF 合帧：待执行帧读取**最新**状态，不会用到旧数据。
+let klineDrawRafId = 0;
 function klineDrawApply(){
   const st = klineToolState;
-  const chart = st.chart;
+  if (!st || typeof st !== 'object') return;
+  const run = function(){
+    klineDrawRafId = 0;
+    const chart = klineToolState.chart;
+    if (!chart || typeof chart.setOption !== 'function') return;
+    if (typeof chart.isDisposed === 'function' && chart.isDisposed()) return;
+    const dates = (klineToolState.data && klineToolState.data.kline
+      && klineToolState.data.kline.dates) || [];
+    const base = klineToolState.baseSeries || [];
+    const drawings = klineDrawingSeries(klineDrawState.lines, dates);
+    chart.setOption({ series: base.concat(drawings) }, { replaceMerge: ['series'] });
+  };
+  if (typeof requestAnimationFrame === 'function'){
+    if (klineDrawRafId) return;              // 本帧已有待执行任务
+    klineDrawRafId = requestAnimationFrame(run);
+  } else {
+    run();
+  }
+}
+// 命中测试：给定像素，返回 {line, kind} 或 null。顺序与参考实现一致——后画的优先，
+// 同一线内端点优先于线身。
+function klineDrawHitTest(chart, pixel){
+  const st = klineDrawState;
+  const d = klineToolState.data;
+  if (!chart || !d || !d.kline || !pixel) return null;
+  const x = Number(pixel[0]), y = Number(pixel[1]);
+  if (!isFinite(x) || !isFinite(y)) return null;
+  for (let k = st.lines.length - 1; k >= 0; k--){
+    const ln = st.lines[k];
+    const pts = klineDrawPoints(ln);
+    if (!pts.length) continue;
+    const pxs = pts.map(function (p) { return klinePointToPixel(chart, p); });
+    if (pxs.some(function (p) { return !p; })) continue;
+    for (let i = 0; i < pxs.length; i++){
+      if (Math.hypot(x - pxs[i][0], y - pxs[i][1]) < KLINE_DRAW_HIT_ENDPOINT){
+        return { line: ln, kind: 'pt' + i };
+      }
+    }
+    if (ln.kind === 'trend'){
+      if (klineDistToSeg(x, y, pxs[0][0], pxs[0][1], pxs[1][0], pxs[1][1]) < KLINE_DRAW_HIT_BODY){
+        return { line: ln, kind: 'move' };
+      }
+    } else if (Math.abs(y - pxs[0][1]) < KLINE_DRAW_HIT_LEVEL){
+      return { line: ln, kind: 'move' };
+    }
+  }
+  return null;
+}
+// 拖动进行中：临时关掉 inside dataZoom 的鼠标平移，否则拖画线会同时平移图表
+function klineDrawSuppressPan(on){
+  const chart = klineToolState.chart;
   if (!chart || typeof chart.setOption !== 'function') return;
-  const dates = (st.data && st.data.kline && st.data.kline.dates) || [];
-  const base = st.baseSeries || [];
-  const drawings = klineDrawingSeries(klineDrawState.lines, dates);
-  chart.setOption({ series: base.concat(drawings) }, { replaceMerge: ['series'] });
+  try {
+    chart.setOption({ dataZoom: [{ type: 'inside', moveOnMouseMove: !on, zoomOnMouseWheel: true }] });
+  } catch (e) { /* 忽略：不影响拖拽本身 */ }
+}
+// mousedown：选择模式——先端点，再线身；都没命中则留给 ECharts 平移
+function klineDrawHandleMouseDown(ev){
+  const st = klineDrawState;
+  if (st.mode) return;                       // 画线模式中：点击=落点，不进入拖拽
+  const chart = klineToolState.chart;
+  const d = klineToolState.data;
+  if (!chart || !d || !d.kline) return;
+  const px = klineEventPixel(ev);
+  if (!px) return;
+  const hit = klineDrawHitTest(chart, px);
+  st.drag = null;
+  if (!hit){ if (st.selected){ st.selected = null; klineDrawApply(); } return; }
+  st.selected = hit.line;
+  if (hit.kind === 'move'){
+    const grab = klinePixelToPoint(chart, px, d.kline.dates);
+    if (!grab) return;
+    st.drag = { kind: 'move', target: hit.line, grabI: grab.index, grabP: grab.price };
+  } else {
+    st.drag = { kind: hit.kind, target: hit.line };
+  }
+  klineDrawSuppressPan(true);
+  klineDrawApply();
+  klineSetInfo('已选中画线：拖动端点或整体移动，Delete 删除，Esc 取消选中');
+}
+// mousemove：拖动分支 + 光标反馈
+function klineDrawHandleMouseMove(ev){
+  const st = klineDrawState;
+  const chart = klineToolState.chart;
+  if (!chart) return;
+  const px = klineEventPixel(ev);
+  // 光标反馈：命中画线时 pointer，否则 crosshair（不引新样式，只改 zrender 光标）
+  const zr = (typeof chart.getZr === 'function') ? chart.getZr() : null;
+  if (zr && typeof zr.setCursorStyle === 'function'){
+    const hover = !st.mode && px && klineDrawHitTest(chart, px);
+    zr.setCursorStyle(st.mode ? 'crosshair' : (hover ? 'pointer' : 'crosshair'));
+  }
+  if (!st.drag) return;
+  const d = klineToolState.data;
+  if (!d || !d.kline) return;
+  const p = klinePixelToPoint(chart, px, d.kline.dates);
+  if (!p) return;
+  const ln = st.drag.target;
+  const dates = d.kline.dates;
+  if (st.drag.kind === 'move'){
+    const di = p.index - st.drag.grabI, dp = p.price - st.drag.grabP;
+    if (ln.kind === 'trend'){
+      ln.from.index = clampIdx(ln.from.index + di, dates.length);
+      ln.from.price = ln.from.price + dp;
+      ln.from.date = dates[ln.from.index];
+      ln.to.index = clampIdx(ln.to.index + di, dates.length);
+      ln.to.price = ln.to.price + dp;
+      ln.to.date = dates[ln.to.index];
+    } else {
+      ln.index = p.index; ln.date = dates[p.index]; ln.price = ln.price + dp;
+    }
+    st.drag.grabI = p.index; st.drag.grabP = p.price;
+  } else {
+    const which = (st.drag.kind === 'pt0') ? 'from' : 'to';
+    ln[which].index = p.index; ln[which].price = p.price; ln[which].date = dates[p.index];
+  }
+  klineDrawApply();
+}
+function clampIdx(i, n){ return Math.max(0, Math.min(n - 1, Math.floor(Number(i) || 0))); }
+// mouseup：结束拖动（保留选中态）
+function klineDrawHandleMouseUp(){
+  const st = klineDrawState;
+  if (!st.drag) return;
+  st.drag = null;
+  klineDrawSuppressPan(false);
+  klineDrawPersist();
+  klineSetInfo('已移动画线（Delete 删除，Esc 取消选中）');
+}
+// zrender 事件像素：offsetX/Y 优先，缺省回落 zrX/zrY
+function klineEventPixel(ev){
+  if (!ev) return null;
+  const x = (ev.offsetX != null && isFinite(Number(ev.offsetX))) ? Number(ev.offsetX)
+    : (ev.zrX != null ? Number(ev.zrX) : null);
+  const y = (ev.offsetY != null && isFinite(Number(ev.offsetY))) ? Number(ev.offsetY)
+    : (ev.zrY != null ? Number(ev.zrY) : null);
+  if (x == null || y == null || !isFinite(x) || !isFinite(y)) return null;
+  return [x, y];
+}
+// 单线 Delete：只删选中，不动其它画线
+function klineDrawDeleteSelected(){
+  const st = klineDrawState;
+  if (!st.selected) return;
+  const left = st.lines.filter(function (l) { return l !== st.selected; }).length;
+  st.lines = st.lines.filter(function (l) { return l !== st.selected; });
+  st.selected = null;
+  st.drag = null;
+  klineDrawSuppressPan(false);
+  klineDrawPersist();
+  klineDrawApply();
+  klineSetInfo('已删除选中画线（剩余 ' + left + ' 条）');
 }
 // 取消模式（Esc / 再点工具 / 重播接管共用）：只清模式与未落点，不动已落画线
 function klineDrawCancelMode(){
   klineDrawState.mode = null;
   klineDrawState.pending = null;
+  klineDrawState.selected = null;
+  klineDrawState.drag = null;
+  klineDrawSuppressPan(false);
   ['trend', 'horizontal'].forEach(function (kind){
     const b = klineToolBtn(kind);
     if (b) klineSetPressed(b, false);
@@ -2010,6 +2340,9 @@ function klineDrawToggleMode(kind){
 }
 function klineDrawClear(){
   klineDrawState.lines = [];
+  klineDrawState.selected = null;
+  klineDrawState.drag = null;
+  klineDrawPersist();
   klineDrawApply();
   klineSetInfo('已清除全部画线');
 }
@@ -2026,6 +2359,7 @@ function klineDrawHandleClick(ev){
     klineDrawState.lines.push({ kind: 'horizontal', price: point.price, date: point.date, index: point.index });
     klineDrawCancelMode();
     klineSetInfo('');
+    klineDrawPersist();
     klineDrawApply();
     return;
   }
@@ -2033,10 +2367,28 @@ function klineDrawHandleClick(ev){
   klineDrawState.lines.push({ kind: 'trend', from: st.pending, to: point });
   klineDrawCancelMode();
   klineSetInfo('');
+  klineDrawPersist();
   klineDrawApply();
 }
 function klineDrawOnKeydown(ev){
-  if (ev && ev.key === 'Escape' && klineDrawState.mode) klineDrawCancelMode();
+  if (!ev) return;
+  if (ev.key === 'Escape'){
+    if (klineDrawState.mode || klineDrawState.selected || klineDrawState.drag){
+      klineDrawCancelMode();
+      klineDrawApply();
+      klineSetInfo('');
+    }
+    return;
+  }
+  // 单线 Delete：只删选中，不动其它画线。焦点在输入框/可编辑区时不劫持。
+  if (ev.key === 'Delete' || ev.key === 'Backspace'){
+    const t = ev.target;
+    if (t && typeof t.closest === 'function'
+        && t.closest('input, select, textarea, [contenteditable="true"]')) return;
+    if (!klineDrawState.selected) return;
+    ev.preventDefault();
+    klineDrawDeleteSelected();
+  }
 }
 let klineDrawKeyBound = false;
 function klineBindDrawKeys(){
@@ -2084,7 +2436,7 @@ function initKlineReplay(d){
 function mountKlineReplay(d){
   const dates = d.kline.dates, ohlc = d.kline.ohlc, vols = d.kline.vols;
   const n = dates.length;
-  const factors = d.factors || [];
+  const factors = klinePlanFactors(d);   // QRE-KLINE-PARAM-GRID（T5）：与静态图同一套参数
   const trips = d.trades || [];
   // 默认近 2 年起播（全期可经起始日/进度条回看）
   const twoYearsAgo = (() => { const dt = new Date(dates[n - 1]); dt.setFullYear(dt.getFullYear() - 2); return dt.toISOString().slice(0, 10); })();

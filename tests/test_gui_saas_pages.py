@@ -300,7 +300,16 @@ def _run_records_js(html: str, scenario: str) -> None:
     if not node:
         pytest.skip("node 不可用")
     script = _RECORDS_JS_HARNESS + "\nconst source = " + json.dumps(source) + ";\n" + scenario
-    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    # 写临时文件而不是 `node -e`：harness 注入真实 symbol.html + 真实静态源码，
+    # 超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 会直接 OSError
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as _fh:
+        _fh.write(script)
+        _path = _fh.name
+    try:
+        result = subprocess.run([node, _path], capture_output=True, text=True)
+    finally:
+        os.unlink(_path)
     assert result.returncode == 0, result.stderr or result.stdout
 
 
@@ -709,7 +718,16 @@ function response(status, data){
 })().catch(error => { console.error(error); process.exit(1); });
 """
         script = harness + "\nconst source = " + json.dumps(match.group(1)) + ";\nvm.runInContext(source, context);\n" + scenario
-        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        # 写临时文件而不是 `node -e`：harness 注入真实 symbol.html + 真实静态源码，
+        # 超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 会直接 OSError
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as _fh:
+            _fh.write(script)
+            _path = _fh.name
+        try:
+            result = subprocess.run([node, _path], capture_output=True, text=True)
+        finally:
+            os.unlink(_path)
         assert result.returncode == 0, result.stderr or result.stdout
 
 
@@ -766,7 +784,16 @@ class TestNewPageWaitStates:
             pytest.skip("node 不可用")
         script = (_NEW_WAIT_HARNESS + "\nconst source = " + json.dumps(match.group(1))
                   + ";\n" + scenario)
-        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        # 写临时文件而不是 `node -e`：harness 注入真实 symbol.html + 真实静态源码，
+        # 超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 会直接 OSError
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as _fh:
+            _fh.write(script)
+            _path = _fh.name
+        try:
+            result = subprocess.run([node, _path], capture_output=True, text=True)
+        finally:
+            os.unlink(_path)
         assert result.returncode == 0, result.stderr or result.stdout
 
     def test_wait_copy_markers_present(self, client):
@@ -942,7 +969,16 @@ const context = vm.createContext({
 """
         script = (harness + "\nconst source = "
                   + json.dumps(fail_src.group(1) + "\n" + stop_src.group(1)) + ";\n" + scenario)
-        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        # 写临时文件而不是 `node -e`：harness 注入真实 symbol.html + 真实静态源码，
+        # 超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 会直接 OSError
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as _fh:
+            _fh.write(script)
+            _path = _fh.name
+        try:
+            result = subprocess.run([node, _path], capture_output=True, text=True)
+        finally:
+            os.unlink(_path)
         assert result.returncode == 0, result.stderr or result.stdout
 
     def test_create_job_submit_timeout_message(self, client):
@@ -997,7 +1033,16 @@ const context = vm.createContext({
 })().catch(error => { console.error(error); process.exit(1); });
 """
         script = harness + "\nconst source = " + json.dumps(match.group(1)) + ";\n" + scenario
-        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        # 写临时文件而不是 `node -e`：harness 注入真实 symbol.html + 真实静态源码，
+        # 超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 会直接 OSError
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as _fh:
+            _fh.write(script)
+            _path = _fh.name
+        try:
+            result = subprocess.run([node, _path], capture_output=True, text=True)
+        finally:
+            os.unlink(_path)
         assert result.returncode == 0, result.stderr or result.stdout
 
 
@@ -1144,7 +1189,16 @@ def _run_symbol_script_js(
         + "\nconst FACTOR_SRC = " + json.dumps(factor_js) + ";"
         + scenario
     )
-    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    # 写临时文件而不是 `node -e`：harness 注入真实 symbol.html + 真实静态源码，
+    # 超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 会直接 OSError
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as _fh:
+        _fh.write(script)
+        _path = _fh.name
+    try:
+        result = subprocess.run([node, _path], capture_output=True, text=True)
+    finally:
+        os.unlink(_path)
     assert result.returncode == 0, result.stderr or result.stdout
 
 
@@ -1692,6 +1746,8 @@ function pendingResponse(options){
   vm.runInContext(FACTOR_SRC, h.context);
   h.context.QREFactorLayout = h.context.window.QREFactorLayout;
   h.context.chipStates = () => ({});
+  // QRE-KLINE-PARAM-GRID（T5）：与 symbol.html 同签名，无参数选择时原样返回
+  h.context.klinePlanFactors = (d) => (d && d.factors) || [];
   h.context.renderFactorChips = () => {};
   // CR-2026-10-27：renderKline 走 replay.js 共享高度 helper，先加载真实 replay.js
   vm.runInContext(REPLAY_SRC + '\nglobalThis.QREReplay = window.QREReplay;', h.context);
@@ -1915,7 +1971,16 @@ class TestJobPageRuntimeAndCancel:
             pytest.skip("node 不可用")
         script = (_JOB_RUNTIME_HARNESS + "\nconst source = " + json.dumps(match.group(1))
                   + ";\n" + scenario)
-        result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        # 写临时文件而不是 `node -e`：harness 注入真实 symbol.html + 真实静态源码，
+        # 超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 会直接 OSError
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as _fh:
+            _fh.write(script)
+            _path = _fh.name
+        try:
+            result = subprocess.run([node, _path], capture_output=True, text=True)
+        finally:
+            os.unlink(_path)
         assert result.returncode == 0, result.stderr or result.stdout
 
     def test_runtime_markers_present(self, client):

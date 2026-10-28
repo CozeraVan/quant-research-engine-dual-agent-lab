@@ -282,6 +282,10 @@ function makeHarness(opts){
   // QRE-KLINE-PANE-OPTION：QREFactorLayout 由真实 factor-layout.js 注入（见场景脚本），
   // 此处不设桩，避免桩缺少 plan/panesToOption 与生产分叉。
     chipStates(){ return {}; },
+      // QRE-KLINE-PARAM-GRID（T5）：与 symbol.html::klinePlanFactors 同签名；
+      // harness 无参数选择，等价于原样返回。参数应用逻辑由
+      // tests/test_kline_param_grid.py 覆盖。
+      klinePlanFactors(d){ return (d && d.factors) || []; },
     renderFactorChips(){},
     f2(v){ return Number(v).toFixed(2); },
     document: { querySelector(){ return null; } },

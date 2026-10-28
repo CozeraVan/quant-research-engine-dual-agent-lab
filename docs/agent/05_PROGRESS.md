@@ -2171,3 +2171,48 @@ C 还改了 `style.css` 的 1200 断点、`base.html` `.container` 1100、8081 `
 `flex:1 1 45%` 落在 `card-class.css` 640px 断点而非 lab-theme 960px。
 
 未 commit / 未 push / 未部署 ECS（按派单约束；`AGENTS.md` 规则 12 的「先部署后验收」留给主线执行）。
+## 2026-10-29 专业价格格式化框架（QRE-PRICE-SCALE / TV_ROUND2 T2），未 commit/push
+
+T2 落地：`priceScaleMode` 0 普通 / 1 对数 / 2 百分比（以可见区间首根为基准）/ 3 指数化；
+自动精度 = minMove（A 股 0.01→2 位，minMove 缺省才按数据推断——qfq 复权价带 4~6 位小数
+时不得抬高轴精度，否则轴宽随复权因子跳）；轴宽恒定（固定小数位 + 千分位 + 标签左对齐
+固定 margin + 右留白按**全量数据极值**预算）；刻度 1-2-5 密度；末价标签带背景块；
+十字光标 1px 虚线 + 标签背景块；图例圆点 + 名称 + 当前值；类别轴不画竖网格线；
+蜡烛实体宽 0.7×间距。
+
+**新增共享静态层 `static/price-scale.js`（`window.QREPriceScale`）**：纯函数层
+（Node vm 可测）+ ECharts 规格构造函数，symbol.html 静态图与重播共用同一套出口，
+`game.html` 不引入（游戏无价格轴模式入口）。`factor-layout.js` 增量：
+`paneYAxes` 支持 `spec.paneAxisLabel`、`panesToOption` 的 xAxis 默认不画竖网格线、
+`plan()` 的 pane 增 `precision`——T1 的索引单一出口未被破坏。
+`symbol.html` 工具栏新增 `kt-pscale`（循环 4 模式，标签显示当前模式短名），
+`renderKline` / `klineApplyLayout` / `mountKlineReplay` 三处统一走
+`klineHeadYAxes / klinePaneAxisLabel / klineLastPriceMarkLine / klineLegendSpec /
+klineCrosshairSpec`，消掉 `klineApplyLayout` 里原先手写的 `panes[i-2]` 轴拼装。
+`replay.js` 的 yAxis 支持调用方下发 `axisLabel`（对象或**函数(可见窗口起点)**→对象，
+百分比/指数化基准 = 当前帧首根收盘），未下发时逐字节保持 job 默认口径；
+新增 `opts.markLineFor(series, idx, startIdx)`，重播末价标签**只挂当前帧最后一根**
+（防未来数据红线不破）。
+
+**测试**：新 `tests/test_price_scale.py` 15 passed（含与 Python 等价实现逐值交叉验证
+1-2-5 刻度、跨 3 个数量级 × 3 模式 × 4 种窗口长度的轴宽上界、隐私模式不炸）；
+**RED 验证 6 条变异**（minMove 精度恒 2 / 1-2-5 退化为 10 阶梯 / margin 6→0 /
+百分比公式错 / 末价标签去背景 / 类别轴画竖线）分别 3~5 failed；全量
+`3098 passed, 24 skipped`。`tests/test_saas_static_kline_tv.py` 的 harness 增注
+**真实 price-scale.js 源码**（避免桩与生产漂移）；`tests/test_gui_saas_pages.py` 与
+`tests/test_saas_replay_boundaries.py` 的 `node -e` 改临时文件（harness 注入真实源码后
+超过 Linux 单参数上限 MAX_ARG_STRLEN 128KB）。
+
+**真实浏览器**（`.tmp/perf-browser/t2_verify.py`，Chromium + echarts 5.6.1 + 真实模板，
+数据价格跨 3 个数量级 0.5→5000）：三档窗口右轴标签**左边缘像素恒为 1244**、
+`maxLabelRight 1277.64 < chartW 1298`、蜡烛实体宽/间距 = 0.725/0.728、末价标签挂
+105.27 带背景块、4 种 mode 循环截图（`t2-mode-{0,1,2,3}.png`）、mode 持久化读回一致、
+副图轴精度一致（MACD 4 位 / RSI14 2 位）——顺手修掉 TV_ROUND2 §2.4 记录的
+「同一根轴上 3 与 0.00 混排」。
+
+**两处有意偏离任务书 §4（已在 CR §5 记录，需用户/逆向侧确认）**：① 蜡烛涨跌色保持
+A 股红涨绿跌 `#C93A3A`/`#1E8E5A`，未改 TV 的 `#26a69a`/`#ef5350`（全站涨跌语义统一）；
+② 画布/面板底色交给项目主题层（浅色 + 夜间模式），未硬编码 `#131722`/`#1e222d`。
+顶 8px / 底 26px 两项留白为近似（未改既有布局，避免牵连重播与游戏页）。
+CR：`docs/agent/change_requests/CR-2026-10-29_price_scale_framework.md`。
+未 commit / 未 push / 未部署 ECS（按派单约束）。

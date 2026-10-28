@@ -423,11 +423,131 @@
     return { grid: grid, xAxis: xAxis, yAxis: yAxis, series: series, paneBase: base };
   }
 
+  // ────────────────────────────────────────────────────────────────────────
+  // QRE-KLINE-PARAM-GRID（T5，2026-10-29）：指标参数变体识别与切换。
+  //
+  // 背景：因子表是宽表，同一指标的多个参数组**已经算好入库**
+  // （如 macd_12_26_9 / macd_15_35_10 / macd_24_52_18 / macd_6_13_5，
+  //   rsi_2/6/7/9/12/14/21/24/28），只是 symbol 产物只下发策略用到的那组。
+  // 前端因此只需要「切列」：识别 family + params，按用户选择过滤因子集合，
+  // 再交给既有 plan() 归组。不重算、不连库、不改后端。
+  //
+  // 硬规则：
+  // - 只有一个参数组（或没有参数化因子）时，applyParamChoices 必须**逐字节**
+  //   返回入参（存量产物零影响）；
+  // - 非法/未知选择一律忽略，不得丢面板；
+  // - 不改复权口径：只切换预计算列，不重新计算任何值。
+  // ────────────────────────────────────────────────────────────────────────
+
+  // family 别名归一：sma 与 ma 同族；boll 的上中下轨道列同族
+  var PARAM_FAMILY_ALIAS = { sma: "ma", bbl: "boll", bbm: "boll", bbu: "boll" };
+  // MACD/PPO/PVO 三元组的旧列名（macd_dif / macd_dea / macd_hist，无参数后缀）
+  var TRIPLE_ALIAS_RE = /^(macd|ppo|pvo)[\s_-](dif|dea|signal|hist|histogram)([\s_-].*)?$/;
+  // 通用：<family>_<params>，params 是一到多组数字（rsi_14 / kdj_9_3 / boll_20_2）
+  var PARAM_RE = /^([a-z][a-z0-9]*?)_(\d+(?:_\d+)*)$/;
+
+  function _familyOf(raw) {
+    var f = String(raw || "").toLowerCase();
+    var alias = PARAM_FAMILY_ALIAS[f] || f;
+    // MACD/PPO/PVO 三元组的 s/h 后缀（macds/macdh）归到主家族
+    var m = /^(macd|ppo|pvo)(s|h)$/.exec(alias);
+    if (m) return m[1];
+    return alias;
+  }
+
+  /** 单个因子的 {family, params, role}；非参数化因子返回 null。 */
+  function paramKeyOf(f) {
+    var keys = [f && f.col, f && f.name];
+    for (var i = 0; i < keys.length; i++) {
+      var low = String(keys[i] || "").toLowerCase();
+      if (!low) continue;
+      var m = TRIPLE_ALIAS_RE.exec(low);
+      if (m) {
+        return { family: m[1], params: m[3] ? String(m[3]).replace(/^[\s_-]+/, "") : "",
+                 role: "alias" };
+      }
+      m = PARAM_RE.exec(low);
+      if (m) {
+        var fam = _familyOf(m[1]);
+        var params = m[2];
+        // boll 轨道列的参数形如 20_2_0_2_0（多退一位 std），只取前两组
+        if (fam === "boll") {
+          var parts = params.split("_");
+          params = parts.slice(0, 2).join("_");
+        }
+        return { family: fam, params: params, role: "param" };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 参数变体清单（按首次出现顺序）。
+   * @returns {Array<{family, label, variants: Array<{params, label, cols, count}>}>}
+   *   只有一个变体的家族也返回——由调用方决定是否展示（≥2 才值得给选择器）。
+   */
+  function paramVariants(factors) {
+    factors = factors || [];
+    var order = [], byFam = {};
+    factors.forEach(function (f) {
+      var k = paramKeyOf(f);
+      if (!k) return;
+      var fam = byFam[k.family];
+      if (!fam) {
+        fam = { family: k.family, label: k.family.toUpperCase(), variants: [], _seen: {} };
+        byFam[k.family] = fam;
+        order.push(fam);
+      }
+      var v = fam._seen[k.params];
+      if (!v) {
+        v = { params: k.params, label: k.params || "默认", cols: [], count: 0 };
+        fam._seen[k.params] = v;
+        fam.variants.push(v);
+      }
+      v.cols.push(f.col || f.name || "");
+      v.count += 1;
+    });
+    order.forEach(function (fam) { delete fam._seen; });
+    return order;
+  }
+
+  /**
+   * 按用户选择过滤因子集合。choices = {family: params}。
+   * 没有选择 / 选择非法 / 该家族只有一个变体 → 该家族全部保留。
+   * 整体无选择时**原样返回入参对象**（逐字节不变）。
+   */
+  function applyParamChoices(factors, choices) {
+    factors = factors || [];
+    if (!choices || typeof choices !== "object") return factors;
+    var fams = paramVariants(factors);
+    if (!fams.length) return factors;
+    var keep = null;
+    fams.forEach(function (fam) {
+      if (fam.variants.length < 2) return;          // 只有一个组：无需选择
+      var want = choices[fam.family];
+      if (typeof want !== "string" || !want) return;
+      var hit = null;
+      fam.variants.forEach(function (v) { if (v.params === want) hit = v; });
+      if (!hit) return;                              // 未知参数：忽略
+      if (!keep) keep = {};
+      keep[fam.family] = {};
+      hit.cols.forEach(function (c) { keep[fam.family][c] = true; });
+    });
+    if (!keep) return factors;
+    return factors.filter(function (f) {
+      var k = paramKeyOf(f);
+      if (!k || !keep[k.family]) return true;       // 非参数化因子全部保留
+      return !!keep[k.family][f.col || f.name || ""];
+    });
+  }
+
   window.QREFactorLayout = {
     plan: plan, COLORS: COLORS,
     paneGrids: paneGrids, axisLabelIndex: axisLabelIndex,
     paneYAxes: paneYAxes, paneSeries: paneSeries, panesToOption: panesToOption,
     paneGridIndex: paneGridIndex,
     assertPaneInvariant: _assertPaneInvariant,
+    paramKeyOf: paramKeyOf, paramVariants: paramVariants,
+    applyParamChoices: applyParamChoices,
   };
 })();

@@ -4030,3 +4030,64 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 `.tmp/equity-browser/b_verify.py`。注意 b_verify 读的是**已渲染 HTML**，改模板后必须先重渲染。
 
 全量：`3083 passed, 24 skipped, 0 failed` in 153.72s。未 commit/push、未部署 ECS。
+## 2026-10-29 TV_ROUND2 T2：专业价格格式化框架（子 agent step5）
+
+**新增共享静态层** `src/quant_research_engine/gui/static/price-scale.js`
+（`window.QREPriceScale`）。这是价格轴格式化的**唯一出口**，symbol.html 静态图与
+重播共用；`game.html` 不引入（游戏没有价格轴模式入口，只受
+`panesToOption` 的 xAxis `splitLine:{show:false}` 影响，行为等价）。
+
+关键设计决策（后续改动前必读，否则容易踩回同一些坑）：
+
+1. **minMove 是精度的权威，不是数据小数位。** `autoPrecision(minMove, values)` 在
+   minMove 有效时直接返回 `precisionFromMinMove(minMove)`，忽略数据小数位。理由：
+   qfq 复权价常带 4~6 位小数，若让数据抬高精度，轴宽会随复权因子跳动——这正是
+   T2 要修的"轴宽不跳动"。只有 minMove 缺省（因子副图）才走 `inferPrecision`。
+2. **轴宽恒定靠三件事叠加**：固定小数位 + 千分位 + `axisLabel{align:'left', margin:6}`
+   （标签左边缘像素恒定）+ `grid.right` 按**全量数据极值**预算（`klineAxisRightPx`，
+   下限 56）。任何一项退回"按可见窗口算"都会让宽度跳。
+3. **`legendSpec` 的 `textStyle.color` 只在显式给值时写入。** 传 `undefined` 会覆盖
+   ECharts 主题默认色，导致图例文字 `fillStyle` 失效、整段不可见（本次实测踩到，
+   截图只剩圆点）。同类"传 undefined 覆盖默认"的坑在 axisLabel 已用
+   `if (o.color) spec.color = o.color` 防住。
+4. **百分比/指数化的基准必须是函数**（`base: () => …`），不能是快照数：可见区间首根
+   随 dataZoom 变化，formatter 每次渲染都要重新取。静态图走
+   `klinePriceBase()`（读 dataZoom 的 startValue/start），重播走
+   `axisLabel(s0)` 的形式由 replay.js 在每帧构建 option 时调用。
+5. **重播末价标签必须按当前帧生成**：`opts.markLineFor(series, idx, startIdx)`，
+   idx/startIdx 都是可见窗口内下标。写死"全量最后一根"会泄露未来数据（时序红线）。
+6. **`replay.js` 的 `axisLabelOf(y, startIdx)`** 在调用方未下发 `axisLabel` 时逐字节
+   保持原口径（`%` 或 `formatter`），job 页默认路径零变化——改这里必须保持这一点。
+7. **`klineApplyLayout` 不许再手写 `panes[i-2]`**：已改为走
+   `QREFactorLayout.panesToOption` + `klineHeadYAxes` + `klinePaneAxisLabel`。
+   T1 立的不变式（业务页不手写 pane 索引）在这里同样生效。
+
+测试与验证：
+
+- `tests/test_price_scale.py`（15 例）：minMove→精度（含 2.5→1 这类非 10 幂用例）、
+  二进制尾差不放大精度、1-2-5 阶梯 + **与 Python 等价实现逐值交叉验证**、4 模式
+  格式化、跨 3 个数量级 × 3 模式 × 4 种窗口长度的轴宽上界、log 回落 value、
+  末价标签/十字光标/图例/类别轴规格、mode 持久化 + 隐私模式不炸、源码合同。
+- **RED 验证**（6 条变异真实源码，分别 3~5 failed）：见 CR §4.1。
+- **真实浏览器**：`.tmp/perf-browser/t2_verify.py`（Chromium + echarts 5.6.1 + 真实
+  模板，数据价格跨 3 个数量级）。截图 `.tmp/perf-browser/t2-mode-{0,1,2,3}.png`、
+  `t2-magnitude-3orders.png`，机器可读 `.tmp/perf-browser/t2_result.json`。
+  改模板后必须先重跑 `.venv/bin/python .tmp/perf-browser/verify.py` 再跑 verify 脚本。
+- 全量：`3098 passed, 24 skipped`。
+
+**测试 harness 的两个坑（本轮踩到并已修）**：
+
+- `tests/test_saas_static_kline_tv.py` 的 `_HARNESS` 现在同时注入**真实**
+  `factor-layout.js` 与 `price-scale.js`（`%FACTOR_LAYOUT%` / `%PRICE_SCALE%`）。
+  新增静态层时若 renderKline 依赖它，必须同步注入，否则 VM 全绿、生产 ReferenceError。
+- `tests/test_gui_saas_pages.py` 的 `_run_job_js` 与 `tests/test_saas_replay_boundaries.py`
+  的 `_node` 原用 `node -e`，harness 注入真实源码后脚本超过 Linux 单参数上限
+  MAX_ARG_STRLEN(128KB)，报 `OSError: Argument list too long`。两处都已改临时文件。
+  **新增/放大 harness 时优先直接写临时文件。**
+
+**本地测试环境的一个已知兼容问题（与产品无关）**：同一 context 里第二个页面导航到
+symbol URL 时，Chromium 会拿到缺了 `{% block body %}` 内容的文档（服务端 curl 三次
+复测均完整 140280B）。因此 `t2_verify.py` 的 mode 持久化断言改用"同页读
+localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
+
+未 commit / 未 push / 未部署 ECS。CR：`docs/agent/change_requests/CR-2026-10-29_price_scale_framework.md`。

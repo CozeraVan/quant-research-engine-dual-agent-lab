@@ -340,6 +340,10 @@ function makeHarness(plan){
       };
     })(),
     chipStates(){ return {}; },
+      // QRE-KLINE-PARAM-GRID（T5）：与 symbol.html::klinePlanFactors 同签名；
+      // harness 无参数选择，等价于原样返回。参数应用逻辑由
+      // tests/test_kline_param_grid.py 覆盖。
+      klinePlanFactors(d){ return (d && d.factors) || []; },
     // CR-2026-10-28：setChipState 声明在 chip 区（kline 块之外），由 harness 提供
     setChipState(key, st){
       const ls = h0 && h0.localStorage;

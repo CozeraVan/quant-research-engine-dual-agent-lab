@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -66,7 +68,15 @@ def _node(script: str) -> None:
         node = "/home/van/codex-local/node-v22/bin/node"
     if not node:
         pytest.skip("node 不可用")
-    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
+    # 写临时文件而不是 `node -e`：harness 注入真实 symbol.html（已超 MAX_ARG_STRLEN 128KB）
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as fh:
+        fh.write(script)
+        path = fh.name
+    try:
+        result = subprocess.run([node, path], capture_output=True, text=True)
+    finally:
+        os.unlink(path)
     assert result.returncode == 0, result.stderr or result.stdout
 
 
@@ -535,6 +545,10 @@ const context = vm.createContext({console, document,
   QREFactorLayout: layoutCtx.window.QREFactorLayout,
   card(){ return ''; }, cls(){ return ''; }, f2(v){ return v == null ? '\u2014' : Number(v).toFixed(2); },
   chipStates(){ return {}; },
+      // QRE-KLINE-PARAM-GRID（T5）：与 symbol.html::klinePlanFactors 同签名；
+      // harness 无参数选择，等价于原样返回。参数应用逻辑由
+      // tests/test_kline_param_grid.py 覆盖。
+      klinePlanFactors(d){ return (d && d.factors) || []; },
   requestAnimationFrame(fn){ return fn(); }});
 vm.runInContext(%SOURCE%, context);
 const dates = ['2024-01-02', '2024-01-03', '2024-01-04'];

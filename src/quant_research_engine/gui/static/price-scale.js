@@ -353,6 +353,10 @@
   // 图例：左上单行，圆点 + 名称 + 当前值，可点击切换
   function legendSpec(o) {
     o = o || {};
+    // textStyle.color 只在调用方显式给值时写入：传 undefined 会覆盖 ECharts 的
+    // 主题默认色，导致图例文字 fillStyle 失效、整段不可见
+    var textStyle = { fontSize: o.fontSize == null ? 11 : o.fontSize };
+    if (o.textColor) textStyle.color = o.textColor;
     var spec = {
       data: o.data || [],
       top: o.top == null ? 0 : o.top,
@@ -361,7 +365,7 @@
       itemWidth: 8,
       itemHeight: 8,
       itemGap: o.itemGap == null ? 12 : o.itemGap,
-      textStyle: { fontSize: 11, color: o.textColor },
+      textStyle: textStyle,
       formatter: typeof o.formatter === "function" ? o.formatter : undefined,
     };
     if (o.selected) spec.selected = o.selected;

@@ -218,7 +218,42 @@ LWC 的 `addPane()` 生命周期管理确实是持续成本。已按此调整 T6
 
 ### T2 · P0 · 专业价格格式化框架
 
-- 验收结果：**待实施**
+- **验收结果：通过**（2026-10-29）
+- 改动文件：
+  - `src/quant_research_engine/gui/static/price-scale.js`（**新建**，`window.QREPriceScale`：
+    4 种 `priceScaleMode` / minMove 自动精度 / 1-2-5 刻度 / 恒定轴宽 / 末价标签 /
+    十字光标 / 图例规格 / mode 持久化）
+  - `src/quant_research_engine/gui/static/factor-layout.js`（`paneYAxes` 增
+    `spec.paneAxisLabel`；`panesToOption` 的 xAxis 默认不画竖网格线；`plan()` 的 pane
+    增 `precision`）
+  - `src/quant_research_engine/gui/static/replay.js`（yAxis 支持调用方下发
+    `axisLabel`（对象或函数）；新增 `opts.markLineFor`；xAxis 不画竖网格线）
+  - `src/quant_research_engine/gui/saas/templates/symbol.html`（引入 price-scale.js；
+    工具栏新增 `kt-pscale`；`renderKline` / `klineApplyLayout` / `mountKlineReplay`
+    三处的价格轴、末价标签、图例、十字光标统一走共享出口）
+  - `tests/test_price_scale.py`（新建 15 例，含与 Python 等价实现交叉验证 1-2-5 刻度）
+  - `tests/test_saas_static_kline_tv.py`（harness 增注真实 price-scale.js；
+    `test_right_axis_and_padding` 改为断言共享出口而非数字面量）
+  - `tests/test_saas_replay_tv.py`（重播 grid 规格断言改为 `klineGrids`）
+  - `tests/test_gui_saas_pages.py` / `tests/test_saas_replay_boundaries.py`
+    （`node -e` 改临时文件：harness 注入真实源码后超过 MAX_ARG_STRLEN 128KB）
+  - `.tmp/perf-browser/t2_verify.py`（新建，真实浏览器验证脚本）
+  - `docs/agent/change_requests/CR-2026-10-29_price_scale_framework.md`（新建）
+- 测试：`tests/test_price_scale.py` 15 passed；**RED 验证** 6 条变异（minMove 精度恒 2 /
+  1-2-5 退化为 10 阶梯 / margin 6→0 / 百分比公式错 / 末价标签去背景 / 类别轴画竖线）
+  分别 3~5 failed；全量 `3098 passed, 24 skipped`。
+- 真实浏览器：Chromium + echarts 5.6.1 + 真实模板，数据价格跨 3 个数量级（0.5→5000）。
+  实测 `position=right`、`axisLabel{width:46,margin:6,align:left}`、三档窗口右轴标签
+  **左边缘像素恒为 1244**、`maxLabelRight 1277.64 < chartW 1298`、蜡烛实体宽/间距
+  = 0.725/0.728、末价标签挂末根收盘 105.27 且带背景块、十字光标 1px 虚线 + 标签背景、
+  图例圆点+名称+当前值（`EMA12 101.00`）、4 种 mode 循环截图
+  （`.tmp/perf-browser/t2-mode-{0,1,2,3}.png` + `t2-magnitude-3orders.png`）、
+  mode 持久化 `localStorage['qre.kline.priceScaleMode']` 读回一致、
+  副图轴精度一致（MACD 4 位 / RSI14 2 位，修掉"同一根轴 3 与 0.00 混排"）。
+- **偏离任务书 §4 两处（有意决策，需确认）**：① 蜡烛涨跌色保持 A 股红涨绿跌
+  `#C93A3A`/`#1E8E5A`，未改 TV 的 `#26a69a`/`#ef5350`（全站涨跌语义统一）；
+  ② 画布/面板底色交给项目主题层（浅色 + 夜间模式），未硬编码 `#131722`/`#1e222d`。
+  顶 8px / 底 26px 两项留白为近似（未改既有布局）。详见 CR 文档 §5。
 
 ### T3 · P1 · 回放单步后退 + 键盘
 
