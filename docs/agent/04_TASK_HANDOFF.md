@@ -2876,3 +2876,15 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
   就会炸；一律写临时文件跑。已在本文件 `_node()` 修掉，其他文件的 `_node` 若也要嵌
   整模板需同样处理。
 - 全量 `3033 passed, 24 skipped`。未 commit/push。
+
+## 2026-10-29 压力测试轴标签修复交接
+
+- 改 `src/quant_research_engine/gui/templates/lab_result.html`（8081）与
+  `src/quant_research_engine/gui/saas/templates/job.html`（SaaS）两处 `renderRiskStress`：
+  xAxis 加 `axisLabel:{interval:0, hideOverlap:false}` + 标签取 `description.split('：')[0]`；
+  tooltip 改自定义 formatter 输出完整描述 + n_days + 两 series 百分比。
+- 新增 `tests/test_gui_risk_report.py::TestStressAxisLabels` 3 例（RED 验证通过）。
+- **教训（ECharts 通用坑）**：category 轴不配 `axisLabel.interval` 时默认 `'auto'`，
+  标签测得重叠会隔一个藏一个——图表"少了数据"很可能只是轴标签被藏，先查 interval。
+  本项目其它 category 轴图表（如归因 treemap 外的柱状图）若也有此风险应一并排查。
+- 全量 `3036 passed, 24 skipped`。未 commit/push。

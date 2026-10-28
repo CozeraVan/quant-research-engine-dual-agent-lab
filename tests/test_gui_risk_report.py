@@ -14,6 +14,8 @@ import pytest
 
 from quant_research_engine.gui import risk_report as rr
 
+REPO = Path(__file__).resolve().parents[1]
+
 
 @pytest.fixture()
 def fake_run(tmp_path):
@@ -281,6 +283,57 @@ class TestRunDetailTemplate:
         assert resp.status_code == 200
         html = resp.data.decode("utf-8")
         assert 'id="btn-risk-report"' not in html
+
+
+class TestStressAxisLabels:
+    """QRE-RISK-STRESS-LABELS：压力测试图的 4 个历史情景轴标签必须全部显示。
+
+    2026-10-29 用户报：「FRM 模块中，有两组数据底座表没有显示
+    '2018 单边熊市' '2024 小微盘流动性危机'」。
+
+    根因：ECharts category 轴 `axisLabel.interval` 默认 `'auto'`，标签测得会重叠时
+    **每隔一个隐藏一个**。4 个情景里第 2、4 个的轴标签被藏（柱和数据其实都在），
+    用户看到的就是"两组没有显示"。
+
+    修复：`interval: 0` + `hideOverlap: false` 强制全显；轴标签另取冒号前的短名
+    （"2015 股灾"而非"2015 股灾：千股跌停 + 流动性枯竭"），完整描述交给 tooltip。
+
+    两处渲染（8081 lab_result.html 与 SaaS job.html）都必须修。
+    """
+
+    TEMPLATES = [
+        REPO / "src/quant_research_engine/gui/templates/lab_result.html",
+        REPO / "src/quant_research_engine/gui/saas/templates/job.html",
+    ]
+
+    def test_both_templates_force_all_axis_labels(self):
+        for path in self.TEMPLATES:
+            html = path.read_text(encoding="utf-8")
+            assert path.exists(), f"缺模板 {path}"
+            assert "axisLabel: { interval: 0, hideOverlap: false }" in html, (
+                f"{path.name} 必须强制显示全部轴标签（interval:0 + hideOverlap:false）"
+            )
+            # 不得再退回默认 auto
+            assert "interval: 'auto'" not in html, f"{path.name} 不得显式写 auto"
+
+    def test_axis_label_uses_short_name_before_colon(self):
+        """轴标签取冒号前短名，完整描述由 tooltip 给出（避免长标签互相挤）。"""
+        for path in self.TEMPLATES:
+            html = path.read_text(encoding="utf-8")
+            assert "split('、')[0]" in html or "split('：')[0]" in html, (
+                f"{path.name} 轴标签必须取冒号前短名"
+            )
+
+    def test_tooltip_shows_full_description_and_n_days(self):
+        """轴标签缩短后，tooltip 必须补回完整描述与交易日数，信息不能丢。"""
+        for path in self.TEMPLATES:
+            html = path.read_text(encoding="utf-8")
+            i = html.index("function renderRiskStress")
+            block = html[i:i + 2600]
+            assert "sc.description || sc.name" in block, (
+                f"{path.name} tooltip 必须显示完整描述"
+            )
+            assert "n_days" in block, f"{path.name} tooltip 必须显示交易日数"
 
 
 # --- R7：组合与衍生品风险（portfolio 扩展节 + 可选闸判据） ---

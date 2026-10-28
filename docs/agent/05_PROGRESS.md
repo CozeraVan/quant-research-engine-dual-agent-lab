@@ -2006,3 +2006,23 @@ build_lab_chart_data(metrics)` 与 `extract_run_summary → SUMMARY_METRIC_FIELD
 
 测试全绿；全量 `3033 passed, 24 skipped`。CR：`CR-2026-10-29_avg_holding_tooltip_and_argmax.md`。
 未 commit/push。
+
+## 2026-10-29 修复 FRM 压力测试图两个情景轴标签不显示，未 commit/push
+
+用户报「FRM 模块中，有两组数据底座表没有显示 2018 单边熊市 / 2024 小微盘流动性危机」。
+
+**先排除后端**：生产 job 58 的 risk_report.json 四个情景数据都在，build_lab_risk_view
+转换后也是 4 条、skipped 为空。**真因在 ECharts**：renderRiskStress 的 xAxis 没配
+axisLabel，category 轴默认 `interval:'auto'`，测量到标签会重叠就**每隔一个隐藏一个**——
+4 个情景只画第 1、3 个的轴标签，第 2、4 个只剩光柱。用户说"底座表没有显示"很准确，
+缺的正是柱子底下的轴标签。
+
+修复（lab_result.html 与 job.html 两处同改）：① `axisLabel:{interval:0, hideOverlap:false}`
+强制全显；② 轴标签取冒号前短名（"2015 股灾"而非"2015 股灾：千股跌停+流动性枯竭"），
+4 个短标签不再触发重叠判断；③ tooltip 自定义 formatter 补回完整 description + n_days +
+两个 series 百分比，信息不丢失。
+
+测试：新增 `TestStressAxisLabels` 3 例（RED 验证通过）；`test_gui_risk_report.py` 27 passed；
+全量 `3036 passed, 24 skipped`。真实浏览器用生产 job 58 数据断言 n==4 / interval==0 /
+hideOverlap==false / 短名 / series 各 4 点，截图 `.tmp/perf-browser/stress.png`
+确认 4 个情景标签全部显示。CR：`CR-2026-10-29_risk_stress_axis_labels.md`。未 commit/push。

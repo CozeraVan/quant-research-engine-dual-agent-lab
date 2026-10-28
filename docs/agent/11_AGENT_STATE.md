@@ -1433,3 +1433,16 @@ token / night-mode / card-fx / 模板不动。
 
 全量 `3033 passed, 24 skipped`。CR：`CR-2026-10-29_avg_holding_tooltip_and_argmax.md`。
 未 commit/push。
+
+### 2026-10-29 RISK-STRESS-LABELS 已实施待人工验收，未 commit/push
+
+用户报 FRM 压力测试缺 "2018 单边熊市" "2024 小微盘流动性危机" 两组。**根因是 ECharts
+category 轴 `interval:'auto'` 的隔项隐藏**，不是数据缺失——后端 4 个情景数据俱全，
+只是第 2、4 个的轴标签被藏，只剩光柱。
+
+修复：`interval:0` + `hideOverlap:false` 强制全显；轴标签取冒号前短名；
+tooltip 补回完整描述 + n_days。lab_result.html 与 job.html 两处同改。
+
+测试 `TestStressAxisLabels` 3 例（RED 验证通过）；全量 `3036 passed, 24 skipped`；
+真实浏览器用生产 job 58 数据验证 4 情景全显示，截图 `.tmp/perf-browser/stress.png`。
+CR：`CR-2026-10-29_risk_stress_axis_labels.md`。未 commit/push。

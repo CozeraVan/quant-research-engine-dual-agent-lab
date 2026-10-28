@@ -634,10 +634,32 @@
     riskCharts.push(c);
     c.setOption({
       animation: false,
-      tooltip: { trigger: 'axis', valueFormatter: function(v) { return v == null ? '—' : (v * 100).toFixed(2) + '%'; } },
+      tooltip: { trigger: 'axis',
+                 formatter: function(params) {
+                   if (!params || !params.length) return '';
+                   var i = params[0].dataIndex;
+                   var sc = st.scenarios[i] || {};
+                   var head = '<b>' + (sc.description || sc.name || '') + '</b>'
+                     + (sc.n_days != null ? '（' + sc.n_days + ' 个交易日）' : '');
+                   var rows = params.map(function(p) {
+                     return p.marker + ' ' + p.seriesName + '：'
+                       + (p.value == null ? '—' : (p.value * 100).toFixed(2) + '%');
+                   });
+                   return head + '<br/>' + rows.join('<br/>');
+                 } },
       legend: { data: ['区间累计损失', '窗口最大回撤'], top: 0 },
       grid: { left: 50, right: 15, top: 30, bottom: 25 },
-      xAxis: { type: 'category', data: st.scenarios.map(function(s) { return s.description; }) },
+      // QRE-RISK-STRESS-LABELS：必须 interval:0 + hideOverlap:false。
+      // ECharts category 轴 axisLabel.interval 默认 'auto'，标签测得会重叠时就
+      // 每隔一个隐藏一个——4 个情景只显示第 1、3 个的轴标签，用户看到的就是
+      // "2018 单边熊市 / 2024 小微盘流动性危机 两组没有显示"（柱其实都在）。
+      // 轴标签另取冒号前的短名（"2015 股灾"而非"2015 股灾：千股跌停+流动性枯竭"），
+      // 完整描述由 tooltip 的 formatter 给出，避免长标签互相挤。
+      xAxis: { type: 'category',
+               data: st.scenarios.map(function(s) {
+                 return String(s.description || s.name || '').split('：')[0];
+               }),
+               axisLabel: { interval: 0, hideOverlap: false } },
       yAxis: { type: 'value', name: '损失%', axisLabel: { formatter: function(v) { return (v * 100).toFixed(0) + '%'; } } },
       series: [
         { name: '区间累计损失', type: 'bar', data: st.scenarios.map(function(s) { return s.cum_loss; }), itemStyle: { color: '#d43030' } },

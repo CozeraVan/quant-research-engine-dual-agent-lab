@@ -3901,3 +3901,15 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - `test_gui_lab_result.py` 新用例同时断言「旧产物缺字段 → None 而非 0」（不编数）。
 - `_node()` 改临时文件的写法可复用到其它会嵌整模板的 harness。
 - 未 commit/push。
+
+## 2026-10-29 压力测试轴标签修复实施交接
+
+- 两处 `renderRiskStress` 的 xAxis 现为：
+  `xAxis: { type:'category', data: st.scenarios.map(s => String(s.description||s.name||'').split('、')[0]),
+            axisLabel: { interval: 0, hideOverlap: false } }`
+  （测试用正则匹配 `axisLabel: { interval: 0, hideOverlap: false }` 与 `split('：')[0]`，
+  改写法要同步改测试。）
+- tooltip 换成 formatter 函数：head = 完整 description + （n_days 个交易日），
+  body = 每个 param 的 marker + seriesName + 百分比。**不要再退回 valueFormatter**——
+  轴标签缩短后完整描述只靠 tooltip 传递。
+- 未 commit/push。
