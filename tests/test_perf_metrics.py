@@ -589,12 +589,15 @@ class TestMetricStripStyleContract:
         )
 
     def test_summary_and_ra_strips_use_wider_basis(self):
-        """简介条与风险调整收益条卡少字号大，min 250px → 8 卡呈 4+4、3 卡撑满整行。"""
+        """简介条与风险调整收益条卡少字号大，min 280px → 8 卡呈 4+4、3 卡撑满整行。
+
+        CR-2026-10-29 C3.5：容器加宽到 1600px 后同步放大（250→280px，15→16.5px）。
+        """
         m = re.search(r"#sum-strip \.metric-card,\s*\n#ra-strip \.metric-card \{([^}]*)\}",
                       self.CARD_CSS)
         assert m, "未找到简介/风险调整收益条规则"
-        assert "flex: 1 1 250px" in m.group(1), "简介与 ra 条必须 min 250px"
-        assert "font-size: 15px" in self.CARD_CSS, "两条的 m-value 必须 15px"
+        assert "flex: 1 1 280px" in m.group(1), "简介与 ra 条必须 min 280px（C3.5）"
+        assert "font-size: 16.5px" in self.CARD_CSS, "两条的 m-value 必须 16.5px"
 
     def test_no_leftover_grid_rules_for_these_strips(self):
         """旧的 grid-template-columns 规则必须删掉——flex 容器上它们是死代码，

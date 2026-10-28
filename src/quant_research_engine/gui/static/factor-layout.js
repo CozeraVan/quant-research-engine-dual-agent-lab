@@ -228,5 +228,185 @@
     return {chips: chips, overlays: overlays, panes: panes, paneCount: panes.length};
   }
 
-  window.QREFactorLayout = { plan: plan, COLORS: COLORS };
+  // ────────────────────────────────────────────────────────────────────────
+  // QRE-KLINE-PANE-OPTION（T1，2026-10-29）：因子 pane → ECharts option 的唯一出口。
+  //
+  // 历史：symbol.html::renderKline、symbol.html::mountKlineReplay、
+  // game.html::renderChart 三处各写一份 `2 + i` / `paneIndex + 2`，索引规则三倍
+  // 维护；ECharts 的 yAxisIndex 是**全局 yAxis 数组下标**（不是 grid 内局部下标），
+  // 一旦某个 pane 多插轴整体就错位——用户报的"MACD 的 dea/dif/hist 各自坐标系"
+  // 正是这类错位的表现（TV_ROUND2 §3 判据证实本次是视觉错觉，但机制成立）。
+  //
+  // 硬规则：业务页不许再手写 pane 索引，一律走 panesToOption / paneSeries /
+  // paneYAxes；索引用由本文件生成，并自带不变式校验（炸在开发期，不 silent 错位）。
+  // ────────────────────────────────────────────────────────────────────────
+
+  /** pane 布局（grid 位置/高度）。与 symbol.html 原 klineGridSpec 逐字节同逻辑。 */
+  function paneGrids(paneCount, opts) {
+    opts = opts || {};
+    var showVol = opts.showVol !== false;
+    var showFct = opts.showFct !== false;
+    var n = paneCount || 0;
+    var fOn = !!showFct && n > 0;
+    var hide = { left: 16, right: 56, top: 0, height: 1 };
+    var grids = [{ left: 16, right: 56, top: 30,
+      height: fOn ? (showVol ? '42%' : '50%') : (showVol ? '58%' : '78%') }];
+    if (!showVol) grids.push(Object.assign({}, hide));
+    else if (fOn) grids.push({ left: 16, right: 56, top: '53%', height: '10%' });
+    else grids.push({ left: 16, right: 56, top: '74%', height: '14%' });
+    var fTop = (fOn && showVol) ? 66 : 58;
+    var fBottom = 93;
+    var step = n ? (fBottom - fTop) / n : 0;
+    for (var i = 0; i < n; i++) {
+      grids.push(fOn
+        ? { left: 16, right: 56, top: (fTop + i * step) + '%', height: (step * 0.75) + '%' }
+        : Object.assign({}, hide));
+    }
+    return grids;
+  }
+
+  /** 时间轴只挂最后一个可见格（面板全关时上移到量/主图）。 */
+  function axisLabelIndex(paneCount, opts) {
+    opts = opts || {};
+    var showVol = opts.showVol !== false;
+    var showFct = opts.showFct !== false;
+    var n = paneCount || 0;
+    if (showFct && n > 0) return 1 + n;
+    if (showVol) return 1;
+    return 0;
+  }
+
+  /** 校验 pane 索引不变式：yAxis.length === grid.length 且逐 pane 一一对应。 */
+  function _assertPaneInvariant(grid, yAxis, paneBase, panes) {
+    var n = (panes || []).length;
+    if (yAxis.length !== grid.length) {
+      throw new Error('QRE-KLINE-PANE-OPTION: yAxis.length(' + yAxis.length
+        + ') !== grid.length(' + grid.length + ')——pane 索引错位');
+    }
+    for (var i = 0; i < n; i++) {
+      var ax = yAxis[paneBase + i];
+      if (!ax || ax.gridIndex !== paneBase + i) {
+        throw new Error('QRE-KLINE-PANE-OPTION: pane ' + i + ' 的 yAxis.gridIndex 应为 '
+          + (paneBase + i) + '，实际 ' + (ax && ax.gridIndex));
+      }
+    }
+  }
+
+  /**
+   * 因子 pane 的 yAxis 声明（索引内部生成）。
+   * @returns {Array} 长度 = panes.length，第 i 个的 gridIndex = paneBase + i
+   */
+  function paneYAxes(panes, spec) {
+    spec = spec || {};
+    var base = spec.paneBase == null ? 2 : spec.paneBase;
+    var show = spec.showFct !== false;
+    return (panes || []).map(function (p, i) {
+      if (spec.style === 'replay') {
+        // 重播规格：replay.js 消费 {name, pct, position, scale, formatter}
+        return { name: p.name, pct: false, position: 'right', scale: true };
+      }
+      return { type: 'value', gridIndex: base + i, show: show, scale: true,
+               position: 'right', name: p.name, nameTextStyle: { fontSize: 10 } };
+    });
+  }
+
+  /** pane 的 grid 下标序列（重播/游戏页只需要下标，不需要整套 ECharts option）。 */
+  function paneGridIndex(paneCount, paneBase) {
+    var base = paneBase == null ? 2 : paneBase;
+    var out = [];
+    for (var i = 0; i < (paneCount || 0); i++) out.push(base + i);
+    return out;
+  }
+
+  /**
+   * 因子 pane 的 series 声明（索引内部生成）。
+   * @returns {Array} 每项 {name,type,xAxisIndex,yAxisIndex,data,...}
+   */
+  function paneSeries(panes, spec) {
+    spec = spec || {};
+    var base = spec.paneBase == null ? 2 : spec.paneBase;
+    var up = (spec.histColors || {}).up || COLORS.histUp;
+    var down = (spec.histColors || {}).down || COLORS.histDown;
+    var out = [];
+    (panes || []).forEach(function (p, i) {
+      var gi = base + i;
+      var markLine = null;
+      if (p.thresholds && p.thresholds.length) {
+        markLine = { silent: true, symbol: 'none',
+          lineStyle: { type: 'dashed', color: '#8B7FBE' },
+          label: { formatter: function (pp) { return Number(pp.value).toFixed(2); }, fontSize: 10 },
+          data: p.thresholds.map(function (v) { return { yAxis: v }; }) };
+      }
+      p.series.forEach(function (s) {
+        var isHist = !!s.hist || s.type === 'bar';
+        if (spec.style === 'replay') {
+          // 重播规格：replay.js 把 s.grid 同时用作 xAxisIndex/yAxisIndex
+          var cfg = { name: s.name, type: s.type || 'line', data: s.values, grid: gi,
+                      color: s.color || '#6750A4', width: 1.2 };
+          if (isHist) {
+            cfg.color = undefined;
+            cfg.extra = { itemStyle: { color: function (pp) {
+              return (Number(pp.value) >= 0 ? up : down); } } };
+          }
+          out.push(cfg);
+          return;
+        }
+        if (isHist) {  // MACD 柱：正红负绿（与 K 线涨跌同色）
+          out.push({ name: s.name, type: 'bar', xAxisIndex: gi, yAxisIndex: gi, data: s.values,
+                     itemStyle: { color: function (pp) {
+                       return (Number(pp.value) >= 0 ? up : down); } } });
+        } else {
+          out.push({ name: s.name, type: 'line', xAxisIndex: gi, yAxisIndex: gi, data: s.values,
+                     showSymbol: false, lineStyle: { width: 1.2 }, color: s.color, markLine: markLine });
+          markLine = null;  // 阈值线只挂同面板第一条线，避免重复
+        }
+      });
+    });
+    return out;
+  }
+
+  /**
+   * 主入口：因子 pane → 完整 ECharts option 的 grid/xAxis/yAxis/series。
+   *
+   * @param {Array}  spec.panes      plan().panes
+   * @param {Object} spec            {
+   *   paneBase: 2,                  // pane 前已有几个 grid（主图 + 量）
+   *   grids: [...],                 // paneGrids() 生成
+   *   dates: [...],                 // x 类目；缺省则不产 xAxis
+   *   axisLabelIndex: 1+n,          // 时间轴挂哪个 grid
+   *   showFct: true,
+   *   headYAxes: [...],             // 前 paneBase 个 yAxis（主图/量），原样透传
+   *   xAxisExtra: {},               // 合并进每个 xAxis
+   *   histColors: {up, down}
+   * }
+   * @returns {{grid, xAxis, yAxis, series, paneBase}}
+   */
+  function panesToOption(panes, spec) {
+    spec = spec || {};
+    panes = panes || [];
+    var base = spec.paneBase == null ? 2 : spec.paneBase;
+    var grid = spec.grids || paneGrids(panes.length, spec);
+    var yAxis = (spec.headYAxes || []).concat(paneYAxes(panes, spec));
+    if (spec.style !== 'replay') _assertPaneInvariant(grid, yAxis, base, panes);
+    var series = paneSeries(panes, spec);
+    var xAxis = null;
+    if (spec.dates) {
+      var labelIdx = spec.axisLabelIndex == null ? axisLabelIndex(panes.length, spec) : spec.axisLabelIndex;
+      xAxis = grid.map(function (g, i) {
+        var ax = { type: 'category', data: spec.dates, gridIndex: i,
+                   axisLabel: { show: i === labelIdx } };
+        if (spec.xAxisExtra) Object.keys(spec.xAxisExtra).forEach(function (k) { ax[k] = spec.xAxisExtra[k]; });
+        return ax;
+      });
+    }
+    return { grid: grid, xAxis: xAxis, yAxis: yAxis, series: series, paneBase: base };
+  }
+
+  window.QREFactorLayout = {
+    plan: plan, COLORS: COLORS,
+    paneGrids: paneGrids, axisLabelIndex: axisLabelIndex,
+    paneYAxes: paneYAxes, paneSeries: paneSeries, panesToOption: panesToOption,
+    paneGridIndex: paneGridIndex,
+    assertPaneInvariant: _assertPaneInvariant,
+  };
 })();

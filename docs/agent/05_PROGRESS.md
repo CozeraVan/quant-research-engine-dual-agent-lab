@@ -2054,3 +2054,81 @@ C. 全局尺寸——`.wrap`/`.topbar-inner` 1280→1600px 且两侧 padding 与
 
 测试：`test_risk_report.py` + `test_gui_risk_report.py` 56 passed；
 全量 `3036 passed, 24 skipped`。未 commit/push。
+
+### 2026-10-29 A 项：波动率状态展示改造（DeepSeek 任务书 A，未 commit/push）
+
+FRM「波动率状态」原先打印 `当前波动状态 mid` + 三个恒等计数。现在：
+`build_lab_risk_view()` 透传 `regime_thresholds`（1 行），新增共享文案模块
+`static/vol-regime.js`（`QREVolRegime.describe/tipText`），job.html 与 lab_result.html
+同改——有阈值时显示「当前：中波动（年化 18.3%–20.2% 为中档；≥20.2% 为高，<18.3% 为低）」，
+无阈值的旧产物退化为「当前：中波动」，不出现 undefined/NaN。计数降级到 hover tip。
+lab_result 侧原 `.opt` 灰字一并去掉（规则 13）。
+
+新增 `tests/test_vol_regime.py` 13 例；三文件联跑 134 passed；全量 3046 passed /
+3 failed（1 条本次漏注入已修，另 2 条 `test_saas_public_beta_ops` 为跨零点既有 flake）。
+浏览器实测四视口断言通过，截图 `.tmp/vol-browser/`。
+CR：`CR-2026-10-29_A_vol_regime_display.md`。
+
+### 2026-10-29 C 项：全局尺寸与信息密度（DeepSeek 任务书 C，未 commit/push）
+
+版心与密度统一放大，解决「1440 屏只占中间一条、字小图扁」的观感问题：
+
+- `saas/templates/base.html`：`.wrap` / `.topbar-inner` / `.container` 三处上限统一
+  改为 `max-width: 1600px`，左右 padding `20px`；`body` 基准字号 `15px → 16px`。
+- `static/lab-theme.css`：`.chart-box` padding `22px 24px`（窄屏 `28px`）、
+  `.card` padding `26px 28px`（窄屏 `28px`）、栅格 `gap: 10px → 14px`、
+  `.m-value` 字号 `18px → 20px`、数值行 `16.5px`；
+  窄屏 `.app-shell .wrap` 收 `12px`，顶栏 ≤400px 时字号 `10px → 12px`。
+- 图表整体加高 60px（`#chart-equity` / `#chart-risk-vol` / `#chart-risk-stress` /
+  `#chart-tags` 的运行时高度）。
+- K 线：`klineHeight(n) = 520`（单窗格）/ `= 480 + n*160`（多窗格），
+  `klineGridSpec` 的 `left: 55 → 68`，与 A/B 两处新的左侧留白对齐。
+
+测试：`test_perf_metrics.py` 的 strip 断言改为 `flex: 1 1 280px` / `font-size: 16.5px`；
+`test_lwc_kline_adapter.py` 的高度断言改为 `520 / 640 / 960`。
+两文件联跑 `31 passed`。
+
+浏览器实测（Playwright，四视口 375/1440/1920/2560 × 各页，60 次加载）：
+`ALL OK 60 runs`、`FAILS: 0`、`ERRORS: 无`，几何断言
+375 `boxL=0 / brandL=12`、1440 `0/20`、1920 `160/180`、2560 `480/500`；
+`chart-main` h480/L68、`chart-risk-vol` h300/L55、`chart-risk-stress` h280/L60。
+截图 61 张在 `.tmp/size-browser/screenshots/`，日志 `.tmp/size-browser/run_b.log`。
+CR：`CR-2026-10-29_C_global_size.md`。未 commit/push。
+
+### 2026-10-29 B 项：收益对比图统一（DeepSeek 任务书 B，未 commit/push）
+
+净值图/回撤/基准对比原本在 job 页与 symbol 页各写一套，且 symbol 页用双 Y 轴 +
+「净值(元)」，与任务书要求的三行式（收益% / 回撤 / 基准）不一致。现在：
+
+- 新增 `static/equity-chart.js`（243 行），唯一出口：`BENCH_COLORS`、
+  `STRATEGY_COLOR`、`DD_COLOR`、`toPct`、`drawdownPct`、`benchPct`、`benchColor`、
+  `legendSelectedFor`、`option`、`replaySpec`。
+- 配色：策略线 `#6750A4`（策略紫，任务书写蓝但 12 号规范禁蓝，改紫）；
+  回撤 `#d43030`；基准 000001.SH `#B7A6E8`、000300.SH `#2A9D8F`、
+  399001.SZ `#E8A33D`、000905.SH `#4A3A78`、399006.SZ `#9A93A6`、
+  000852.SH `#6750A4`，再按 `PALETTE` 循环。
+- 网格：有回撤时主图 `top:30, height:'52%'` + 回撤 `top:'70%', height:'16%'`；
+  无回撤时主图 `height:'72%'`，左 `68` / 右 `20`（原来是 18% 与 70/60，改窄改宽各一处）。
+- 线型：策略实线 2px；基准与买入持有虚线 1.2px；回撤面积 `opacity 0.3`、边框 1px。
+  买入持有与策略/中证1000 撞色时靠虚实与线宽区分，不加新色（禁蓝橙约束下无色可用）。
+- `replaySpec()` 返回 `{series, grids, yAxes, hasDD, legendSelected}`，
+  `job.html` 的 `mountReplay` 改为消费它；`symbol.html` 的 `renderEquity` 重写，
+  删掉双 Y 轴与「净值(元)」，回撤改走 `QREEquityChart.drawdownPct(eq.values)`；
+  `replay.js` 的 `legend` 增加 `selected`，与 `legendSelectedFor()` 同源。
+- `option()` 的图例由 series 反推，无数据的基准不会进图例。
+
+测试：新增 `tests/test_equity_chart.py` 23 例（`23 passed`）；RED 原文已落在 CR §5
+（`symbol.html 未计算回撤`）。`test_saas_chart_a_fix.py` 10 passed
+（模板契约从「字面 `zeroBase` ≥2」改为「走 `replaySpec(` + 共享层有两处 `zeroBase`」）。
+CR：`CR-2026-10-29_B_equity_chart.md`。未 commit/push。
+
+### 2026-10-29 全量测试（A+B+C 合并后）
+
+`uv run pytest tests/ -q` → `1 failed, 3082 passed, 24 skipped, 4 warnings in 152.19s`
+（日志 `.tmp/full_pytest_c.log`）。唯一失败是
+`tests/test_trading_game_web.py::test_template_has_turn_based_layout_without_autoplay_or_shared_chips`，
+由并行任务 T1（`QRE-KLINE-PANE-OPTION`）在 `game/templates/game.html` 引入
+`/static/factor-layout.js` 与 `QREFactorLayout.panesToOption` 触发，**不是 A/B/C 的回归**；
+该断言表达「游戏页不共享 SaaS factor 逻辑」的契约，是否放宽应由 T1 决定。
+交接时的基线是 `2 failed, 3047 passed`（两条 `test_saas_public_beta_ops`
+跨零点 flake），本轮这两条已自行转绿。

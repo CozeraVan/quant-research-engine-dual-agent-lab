@@ -133,7 +133,13 @@
 
 - `prepareEncodeMessage(e,t){return JSON.stringify({m:e,p:t})}` —— 不适用
 - `message-pipe` 传输层 —— 不适用
-- ws `~m~<len>~m~` 分帧（逆向报告实测 200+ chunk 命中 0，未定）—— 不适用
+- ws `~m~<len>~m~` 分帧 —— 不适用。
+  **2026-10-29 更正**：逆向侧已确认分帧为 `~m~<len>~m~`（证据：
+  `tv-recon/allchunks/41793.29a2aa4ce1c29ee9eec5.js` 的 `WSBackendConnection`，
+  `~m~` 常量 + `_encode`/`_decode` + `~h~` 心跳 + `~j~` JSON；datafeed 跑在此通道上，
+  见 `bundles/66286…js` 的 `new TVChartApi(window.WSBackendConnection)`）。
+  我方原文"实测 200+ chunk 命中 0，未定"引用了逆向侧当时的错误结论（只扫了 201/608
+  个 chunk），**作废**。分帧事实已定，但与本项目无关（我们不接 tradingview.com）。
 
 我方数据链路：tushare → pgsql（TimescaleDB hypertable）→ 因子计算/日更 → SaaS API → 前端。
 

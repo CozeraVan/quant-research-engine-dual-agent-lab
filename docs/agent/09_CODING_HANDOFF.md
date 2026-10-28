@@ -3923,3 +3923,84 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - counts **保留不删**：数据是对的，只是展示不携带信息；是否降级到 hover tip
   由前端决定（已写进 DeepSeek 任务书 A3）。
 - 未 commit/push。
+
+## 2026-10-29 A 项 波动率状态展示（vol-regime.js）
+
+- 文案唯一来源是 `src/quant_research_engine/gui/static/vol-regime.js`
+  （`window.QREVolRegime = {label, describe, tipText}`）。**两个模板里不要再各自拼
+  volTxt 字符串**，改文案只改这一个文件。
+- `describe()` 里的 `var lo = th && num(th.low_below) ? ... : null;` 守卫**必须保留**：
+  老 job 的 risk view 没有 `regime_thresholds`，去掉守卫会抛
+  `TypeError: Cannot read properties of undefined (reading 'low_below')`
+  （`test_vol_regime.py::test_old_artifact_without_thresholds_degrades` 会抓）。
+- 视图侧 `build_lab_risk_view()` 多透传一个 `regime_thresholds`（= report 里的
+  `volatility.regime.thresholds_annual`）。若以后 report 换字段名，这里要同步。
+- `tests/test_gui_saas_pages.py` 的 JS 沙箱现在会真实 `vm.runInContext` 加载
+  `vol-regime.js`，新增调用它的内联脚本时 context 里必须已有 `QREVolRegime`。
+- 状态行 DOM：`<div class="risk-vol-state" id="chart-risk-vol-state">`，
+  `renderRiskVol()` 里写 `textContent`，无文案时 `display:none`。
+- 验证脚本：`.tmp/vol-browser/a_verify.py`（无参造数据 / `browser` 跑 Playwright）。
+  静态服务器没映射的路由会 404，脚本只断言 `pageerror` 与带 undefined/NaN 的 console。
+- 未 commit/push。
+
+### 2026-10-29 B 项 EQUITY-CHART 与 C 项 GLOBAL-SIZE 已实施，未 commit/push
+
+**C 项（全局尺寸）**接手要点：
+
+- 版心上限三处必须同时改，否则窄的一处会把宽的一处盖掉：
+  `saas/templates/base.html` 的 `.wrap`、`.topbar-inner`、`.container` 都是
+  `max-width: 1600px` + `padding: 20px`。注意 `.topbar-inner` 在 lab 页实际是
+  死代码（lab 模板没有包裹层），改它只是防未来回归。
+- 字号/边距常量集中在 `static/lab-theme.css`：`.chart-box` `22px 24px`、
+  `.card` `26px 28px`、栅格 `gap: 14px`、`.m-value` `20px`、数值行 `16.5px`、
+  `body` 基准 `16px`。散了就回到「各页不一致」的老问题。
+- 图表高度是**运行时由 JS 写入**的（`#chart-equity` / `#chart-risk-vol` /
+  `#chart-risk-stress` / `#chart-tags`），改高度要去 JS，不要在 CSS 里找。
+  本轮统一 +60px。
+- K 线高度公式 `klineHeight(n) = n ? 480 + n*160 : 520`（`kline-lwc.js`），
+  `klineGridSpec` 左留白 `68`。`test_lwc_kline_adapter.py` 断言 `520/640/960`。
+- `.chart-title` 实际字号是 14.5px（13px 只出现在个别模板内联样式里）；
+  `flex: 1 1 45%` 只存在于 `card-class.css`——读任务书时注意这些描述与现实不符的地方。
+- 改完模板必须重跑浏览器脚本：静态服务器有快照，**`prepare.py` 必须用
+  `uv run python`** 跑，用系统 python3 会静默沿用旧快照（C 轮踩过，得到假验收）。
+- 验收脚本与产物：`.tmp/size-browser/run_b.log`（`ALL OK 60 runs`）、
+  `screenshots/`（61 张）。本工具链没有 ReadMediaFile，视觉复核只能靠 DOM/几何断言。
+
+**B 项（收益对比图）**接手要点：
+
+- 唯一出口 `src/quant_research_engine/gui/static/equity-chart.js`：
+  `option()` 出完整 ECharts 配置，`replaySpec()` 出重播用的
+  `{series, grids, yAxes, hasDD, legendSelected}`。**两个页面都必须走这里**，
+  不要在新模板里再手搓 series/grid——symbol 页曾经就是自己一套，才出现双 Y 轴。
+- 配色常量：策略 `STRATEGY_COLOR='#6750A4'`、回撤 `DD_COLOR='#d43030'`，
+  基准在 `BENCH_COLORS` 里按代码索引，未登记的走 `PALETTE` 循环。
+  任务书要求策略用蓝，但 `12_UI_STYLE_GUIDE.md` 禁蓝，改用策略紫；
+  买入持有与策略/中证1000 同色，靠 `dashed` + 线宽 1.2 区分，**不要再加新色**。
+- 网格：有回撤 `[{top:30,height:'52%'},{top:'70%',height:'16%'}]`，无回撤
+  `[{top:30,height:'72%'}]`，左 `68` 右 `20`。回撤高度取 16%（原 18%），
+  给主图多让出两个百分点。
+- 回撤计算只在这里做：`drawdownPct(values)`，输入是净值序列，输出负百分比。
+  `symbol.html` 里已改为 `drawdownPct: QREEquityChart.drawdownPct(eq.values)`，
+  `test_equity_chart.py::TestTemplateContract` 会断言这行存在。
+- `legend` 的 `selected` 由 `legendSelectedFor()` 生成，`replay.js` 已接入；
+  `option()` 的图例从 series 反推，**没有数据的基准不会出现在图例里**，
+  这是有意的（否则点开空基准）。重播时 `mountReplay` 重建图表会让图例回到
+  「只开上证」的默认态，属已知行为。
+- 测试：`tests/test_equity_chart.py`（23 例）、`tests/test_saas_chart_a_fix.py`（10 例，
+  模板契约改为「模板调用 `replaySpec(` + 共享层 `zeroBase` ≥2」）。
+- CR：`CR-2026-10-29_A_vol_regime_display.md`、`CR-2026-10-29_C_global_size.md`、
+  `CR-2026-10-29_B_equity_chart.md`。
+
+**与并行任务 T1 的交叉（重要）**：本轮 T1（`QRE-KLINE-PANE-OPTION`）在同一工作树
+实时编辑 `factor-layout.js` / `symbol.html` / `game.html` / `test_saas_static_kline_tv.py`。
+为让测试跑绿，做了 6 处**适配而非功能改动**：`test_gui_saas_pages.py` 的 kline 场景
+注入真实 `factor-layout.js`；`test_saas_replay_tv.py` 的 `position:'right'` 计数放宽并加
+`panesToOption` 断言；job replay harness 补 `openBenches: null` 并注入 `equity-chart.js`；
+`test_saas_chart_a_fix.py` 的 `QREFactorLayout` 桩改为基于真源码；
+`test_saas_static_kline_tv.py` 的两处桩改为 `Object.assign(Object.create(null), __QFL__, {...})`
+继承真实实现。T1 在 `game.html` 引入 `factor-layout.js` 使
+`test_trading_game_web` 的「游戏页不共享 factor 逻辑」断言变红，本轮未改该契约，
+留给 T1 决定。
+
+全量：`1 failed, 3082 passed, 24 skipped in 152.19s`（`.tmp/full_pytest_c.log`），
+唯一失败即上述 T1 遗留。未 commit/push。

@@ -30,7 +30,7 @@
 
 <div class="chart-box">
   <div class="chart-title">收益曲线 <span class="opt">（策略净值 vs 个股买入持有 vs 基准指数；拖动滑块缩放）</span></div>
-  <div id="chart-equity" style="height:260px;"></div>
+  <div id="chart-equity" style="height:320px;"></div>
   <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
 </div>
 
@@ -41,7 +41,7 @@
 
 <div class="chart-box">
   <div class="chart-title">日 K 与买卖点 <span class="opt">（买 ▲红 / 卖 ▼绿，hover 看下单详情；拖动下方滑块缩放）</span></div>
-  <div id="chart-kline" style="height:460px;"></div>
+  <div id="chart-kline" style="height:520px;"></div>
 </div>
 
 <div class="chart-box">
@@ -230,12 +230,12 @@
       // grid 数 = 2（K线+量）+ 面板个数，索引与 series/xAxis/yAxis 一一对应
       var grids;
       if (!hasF) {
-        grids = [{ left: 60, right: 20, top: 30, height: '58%' }, { left: 60, right: 20, top: '74%', height: '14%' }];
+        grids = [{ left: 68, right: 20, top: 30, height: '58%' }, { left: 68, right: 20, top: '74%', height: '14%' }];
       } else {
-        grids = [{ left: 60, right: 20, top: 30, height: '42%' }, { left: 60, right: 20, top: '53%', height: '10%' }];
+        grids = [{ left: 68, right: 20, top: 30, height: '42%' }, { left: 68, right: 20, top: '53%', height: '10%' }];
         var fTop = 66, fBottom = 93, fStep = (fBottom - fTop) / panes.length;
         panes.forEach(function(p, i) {
-          grids.push({ left: 60, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
+          grids.push({ left: 68, right: 20, top: (fTop + i * fStep) + '%', height: (fStep * 0.75) + '%' });
         });
       }
       var xAxis = [

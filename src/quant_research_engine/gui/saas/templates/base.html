@@ -45,7 +45,7 @@
 :root{--bg:#FAF9FC;--card:#fff;--line:#E4DFEE;--text:#241F2E;--muted:#9A93A6;--accent:#6750A4;--pos:#C93A3A;--neg:#1E8E5A}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:14px}
-.container{max-width:1100px;margin:0 auto;padding:16px}
+.container{max-width:1600px;margin:0 auto;padding:20px}
 h1{font-size:18px;margin:8px 0 14px}
 h2{font-size:15px;margin:0 0 10px}
 a{color:var(--accent);text-decoration:none}
@@ -94,7 +94,8 @@ header.topbar .mainnav a.active{color:#fff;background:none;font-weight:600}
    本样式块之后加载，须用 header.topbar 前缀提优先级才能压住），
    保证 375px 单行不折行、不撑宽页面 */
 @media (max-width:400px){
-  header.topbar{padding:0 10px}
+  /* 左右留白与内容列统一为 12px（lab-theme .wrap/.container），品牌左缘才对得齐 */
+  header.topbar{padding:0 12px}
   header.topbar .brand img{height:24px !important}
   header.topbar .mainnav{gap:0}
   header.topbar .mainnav a{font-size:11.5px;margin-left:6px}
@@ -114,10 +115,10 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 .tab{padding:8px 18px;cursor:pointer;font-size:14px;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
 /* 指标卡 / 信息条（lab_result 同款） */
-.metric-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.metric-card{flex:1;min-width:110px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;text-align:center}
-.metric-card .m-label{font-size:12px;color:var(--muted)}
-.metric-card .m-value{font-size:18px;font-weight:600;margin-top:2px}
+.metric-strip{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.metric-card{flex:1;min-width:110px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 18px;text-align:center}
+.metric-card .m-label{font-size:13px;color:var(--muted)}
+.metric-card .m-value{font-size:20px;font-weight:600;margin-top:2px}
 /* QRE-SAAS-CARD-CLASS：小数据卡的背景/边框/数值色/flex 布局已全部迁到
    static/card-class.css（在 lab-theme/night-mode 之后加载，是这类卡的唯一权威）。
    这里只留 .metric-strip / .metric-card 的基类兜底——card-class.css 未加载时

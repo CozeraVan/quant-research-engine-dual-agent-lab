@@ -1459,3 +1459,44 @@ C 全局尺寸（wrap 1280→1600、body 15→16px、div 间距与内边距全�
 建议顺序 A→C→B。DeepSeek 不 commit/push，完成后 Kimi 复核。
 
 测试：相关 56 passed；全量 `3036 passed, 24 skipped`。未 commit/push。
+
+### 2026-10-29 A 项 VOL-REGIME-DISPLAY 已实施待人工验收，未 commit/push
+
+DeepSeek UI/UX 任务书 §A 的第一项完成。FRM 波动率状态不再打印英文枚举与无意义计数：
+GUI 视图透传 `regime_thresholds`（`lab_result.py` 1 行），新增共享模块
+`static/vol-regime.js`，job.html / lab_result.html 同改，状态行显示三档年化边界，
+计数降级到 hover tip。旧产物（无阈值）优雅退化。
+
+测试：`test_vol_regime.py` 13 例；三文件联跑 134 passed；全量 3046 passed / 3 failed
+（1 条本次漏注入已修；2 条 `test_saas_public_beta_ops` 为 00:0x 跨日 flake）。
+浏览器实测（1440/375 两视口 + 旧产物 + lab 页）全部断言通过，截图 `.tmp/vol-browser/`。
+下一步：C 项（全局尺寸），再 B 项（收益对比图统一）。
+CR：`CR-2026-10-29_A_vol_regime_display.md`。未 commit/push。
+
+### 2026-10-29 C+B 项已实施待人工验收，未 commit/push
+
+`TASK-2026-10-29_deepseek_uiux.md` 的 A→C→B 三项代码全部落地，A 已于上段记录。
+
+**C 全局尺寸**：版心 `1600px`（`.wrap`/`.topbar-inner`/`.container` 同改，padding 20px），
+`body` 16px，`.chart-box` / `.card` padding 加大、栅格 gap 14px、数值 20px/16.5px，
+图表统一 +60px，K 线 `520 / 480+n*160`、grid left 68，窄屏 12px 与顶栏 12px。
+浏览器 60 次加载 `ALL OK`、0 失败、0 pageerror，截图 61 张（`.tmp/size-browser/`）。
+CR：`CR-2026-10-29_C_global_size.md`。
+
+**B 收益对比图**：新增 `static/equity-chart.js`（243 行）作为 job/symbol 两页唯一出口，
+策略紫 `#6750A4` + 回撤 `#d43030` + 六基准色，主图/回撤 52%+16%（无回撤 72%），
+策略实线 2px、基准虚线 1.2px。symbol 页删双 Y 轴与「净值(元)」。
+`tests/test_equity_chart.py` 23 passed；`test_saas_chart_a_fix.py` 10 passed。
+CR：`CR-2026-10-29_B_equity_chart.md`。
+
+**当前测试态**：全量 `1 failed, 3082 passed, 24 skipped in 152.19s`
+（`.tmp/full_pytest_c.log`）。唯一失败 `test_trading_game_web.py::
+test_template_has_turn_based_layout_without_autoplay_or_shared_chips` 归因于并行任务
+T1 在 `game/templates/game.html` 引入 `/static/factor-layout.js`，与 A/B/C 无关；
+该断言是「游戏页不共享 SaaS factor 逻辑」的契约，需 T1/产品决定是否放宽。
+交接基线 `2 failed, 3047 passed` 中的两条 `test_saas_public_beta_ops` 跨零点 flake
+本轮已自行转绿。
+
+**待人工验收**：四个视口的视觉观感（本工具链无 ReadMediaFile，只有 DOM/几何断言）；
+B 项策略线用紫而任务书写蓝是否符合预期；`game.html` 那条约定的取舍。
+未 commit/push。

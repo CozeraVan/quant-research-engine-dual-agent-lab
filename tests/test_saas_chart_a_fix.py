@@ -24,6 +24,8 @@ REPO = Path(__file__).resolve().parents[1]
 REPLAY_JS = (REPO / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
 SYMBOL_TPL = (REPO / "src/quant_research_engine/gui/saas/templates/symbol.html").read_text(encoding="utf-8")
 JOB_TPL = (REPO / "src/quant_research_engine/gui/saas/templates/job.html").read_text(encoding="utf-8")
+FACTOR_JS = (REPO / "src/quant_research_engine/gui/static/factor-layout.js").read_text(encoding="utf-8")
+EQUITY_JS = (REPO / "src/quant_research_engine/gui/static/equity-chart.js").read_text(encoding="utf-8")
 
 
 def _node(script: str) -> None:
@@ -277,7 +279,8 @@ function makeHarness(opts){
   const ctx = {
     console, chart, $, echarts, dom,
     window: { addEventListener(type, fn){ (listeners[type] ||= []).push(fn); wins.push(type); } },
-    QREFactorLayout: { plan(){ return { panes: [], overlays: [] }; }, COLORS: {} },
+  // QRE-KLINE-PANE-OPTION：QREFactorLayout 由真实 factor-layout.js 注入（见场景脚本），
+  // 此处不设桩，避免桩缺少 plan/panesToOption 与生产分叉。
     chipStates(){ return {}; },
     renderFactorChips(){},
     f2(v){ return Number(v).toFixed(2); },
@@ -299,6 +302,9 @@ function makeHarness(opts){
 _RENDER_KLINE_OBSERVER_SCENARIO = r"""
 const h = makeHarness({observer: true});
 const source = %SOURCE%;
+// QRE-KLINE-PANE-OPTION：注入真实 factor-layout.js（renderKline 经 QREFactorLayout.plan 取副图索引）
+vm.runInContext(%FACTOR%, h.ctx);
+h.ctx.QREFactorLayout = h.ctx.window.QREFactorLayout;
 // CR-2026-10-27：renderKline 走 replay.js 共享高度 helper
 vm.runInContext(%REPLAY% + '\nglobalThis.QREReplay = window.QREReplay;', h.ctx);
 vm.runInContext(source, h.ctx);
@@ -342,6 +348,9 @@ console.log('observer-ok');
 _RENDER_KLINE_FALLBACK_SCENARIO = r"""
 const h = makeHarness({observer: false});
 const source = %SOURCE%;
+// QRE-KLINE-PANE-OPTION：注入真实 factor-layout.js
+vm.runInContext(%FACTOR%, h.ctx);
+h.ctx.QREFactorLayout = h.ctx.window.QREFactorLayout;
 vm.runInContext(%REPLAY% + '\nglobalThis.QREReplay = window.QREReplay;', h.ctx);
 vm.runInContext(source, h.ctx);
 const d = {
@@ -389,12 +398,14 @@ class TestSymbolKlineResize:
     def test_resize_observer(self):
         _node(_RENDER_KLINE_STUBS
                + _RENDER_KLINE_OBSERVER_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
-               .replace("%REPLAY%", json.dumps(REPLAY_JS)))
+               .replace("%REPLAY%", json.dumps(REPLAY_JS))
+               .replace("%FACTOR%", json.dumps(FACTOR_JS)))
 
     def test_window_resize_fallback(self):
         _node(_RENDER_KLINE_STUBS
                + _RENDER_KLINE_FALLBACK_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
-               .replace("%REPLAY%", json.dumps(REPLAY_JS)))
+               .replace("%REPLAY%", json.dumps(REPLAY_JS))
+               .replace("%FACTOR%", json.dumps(FACTOR_JS)))
 
 
 # ---------------------------------------------------------------- 窗口基线
@@ -447,7 +458,10 @@ class TestJobChartLeftovers:
     def test_main_resize_guard_and_zero_base(self):
         assert "if (typeof mainChart.isDisposed === 'function' && mainChart.isDisposed()) return;" in JOB_TPL
         assert "mainChart && mainChart.resize()" not in JOB_TPL
-        assert JOB_TPL.count("zeroBase: true") >= 2
+        # CR-2026-10-29 B：归一化基准系列改由 QREEquityChart.replaySpec 统一产出，
+        # job 模板不再手写 zeroBase（断言随之落到两侧：模板走 replaySpec + 共享层有两处 zeroBase）
+        assert "QREEquityChart.replaySpec(" in JOB_TPL
+        assert EQUITY_JS.count("zeroBase: true") >= 2
 
 # --------------------------------------------- DOM 集合误用防护（2026-10-28 回归）
 # 线上故障根因：`Element.children` 是 HTMLCollection，没有 Array 的 some/find/map，

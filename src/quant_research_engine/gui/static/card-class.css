@@ -55,7 +55,7 @@
   border: 1px solid var(--glass-line);
   border-radius: var(--card-radius);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
-  padding: 12px 14px;
+  padding: 16px 18px;
   -webkit-backdrop-filter: blur(28px) saturate(140%);
   backdrop-filter: blur(28px) saturate(140%);
 }
@@ -81,26 +81,26 @@
 #kreplay-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 14px;
 }
 /* 密集条（7 卡左右）：min 130px → 一行并排。
-   130px 是实测值：job 页 .container 约 1000px，7×150+6×10=1110 放不下会退化成
-   6+1 孤行；7×130+6×10=970 才放得下。 */
+   130px 是实测值：窄屏容器（约 1000px）下 7×130+6×14=994 才放得下；
+   再大就会退化成 6+1 孤行。 */
 #metric-strip .metric-card,
 #range-strip .metric-card,
 #replay-metrics .metric-card,
 #kreplay-info .metric-card {
   flex: 1 1 130px;
 }
-/* 简介条与风险调整收益条（卡少、字号大）：min 250px → 8 卡呈 4+4、3 卡撑满整行 */
+/* 简介条与风险调整收益条（卡少、字号大）：min 280px → 8 卡呈 4+4、3 卡撑满整行 */
 #sum-strip .metric-card,
 #ra-strip .metric-card {
-  flex: 1 1 250px;
-  padding: 10px 14px;
+  flex: 1 1 280px;
+  padding: 16px 18px;
 }
 #sum-strip .metric-card .m-value,
 #ra-strip .metric-card .m-value {
-  font-size: 15px;
+  font-size: 16.5px;
 }
 
 /* ---- 磨损条毛/净收益值：盈亏红/绿 ----
@@ -128,10 +128,10 @@
   #range-strip .metric-card,
   #replay-metrics .metric-card,
   #kreplay-info .metric-card {
-    flex: 1 1 45%;
+    flex: 1 1 100%;
   }
   #sum-strip .metric-card,
   #ra-strip .metric-card {
-    flex: 1 1 45%;
+    flex: 1 1 100%;
   }
 }

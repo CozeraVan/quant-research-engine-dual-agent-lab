@@ -27,14 +27,14 @@
   --shadow-2:0 8px 28px rgba(74,58,120,.14);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased;max-width:none;margin:0;padding:0}
 button{font-family:inherit;cursor:pointer}
 input,textarea,select{font-family:inherit;font-size:14px;color:var(--ink)}
 ::selection{background:var(--tint-deep)}
 :focus-visible{outline:2px solid var(--lav);outline-offset:2px;border-radius:4px}
 
 .topbar{position:sticky;top:0;z-index:40;background:rgba(250,249,252,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.topbar-inner{max-width:1280px;margin:0 auto;padding:0 32px;height:60px;display:flex;align-items:center;gap:24px}
+.topbar-inner{max-width:1600px;margin:0 auto;padding:0 20px;height:60px;display:flex;align-items:center;gap:24px}
 .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--ink);cursor:pointer;background:none;border:none}
 .brand-mark{width:30px;height:30px;border-radius:8px;background:var(--lav);position:relative;flex:none;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
 .brand:hover .brand-mark{transform:rotate(-8deg)}
@@ -46,15 +46,15 @@ input,textarea,select{font-family:inherit;font-size:14px;color:var(--ink)}
 .mainnav a:hover{color:var(--lav-deep);background:var(--tint)}
 .mainnav a.active{color:#fff;background:var(--lav);font-weight:500}
 
-.wrap{max-width:1280px;margin:0 auto;padding:32px 32px 80px}
+.wrap{max-width:1600px;margin:0 auto;padding:20px 20px 80px}
 .view{display:none}
 .view.active{display:block;animation:viewIn .45s var(--ease)}
 @keyframes viewIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
 .page-head h1{font-family:var(--serif);font-weight:900;font-size:30px;line-height:1.3}
-.page-head p{margin-top:8px;color:var(--grey);font-size:14.5px;max-width:46em}
-.card{background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:20px 22px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);margin-bottom:20px;-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
+.page-head p{margin-top:8px;color:var(--grey);font-size:15.5px;max-width:46em}
+.card{background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:26px 28px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);margin-bottom:28px;-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
 
 .btn{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:9px 22px;font-size:14px;font-weight:500;border:1px solid transparent;position:relative;overflow:hidden;transition:transform .18s var(--ease),box-shadow .25s var(--ease),background .2s var(--ease),border-color .2s}
 .btn:active{transform:scale(.97)}
@@ -171,8 +171,8 @@ a.inl:hover{color:var(--lav-deep)}
 
 /* 表格 */
 .table-tools{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
-table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
-.tbl th{text-align:left;color:var(--grey);font-weight:500;font-size:12.5px;padding:8px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
+.tbl th{text-align:left;color:var(--grey);font-weight:500;font-size:13.5px;padding:8px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
 .tbl th.sortable{cursor:pointer;user-select:none;transition:color .2s}
 .tbl th.sortable:hover{color:var(--lav)}
 .tbl td{padding:10px 12px;border-bottom:1px solid #F2EFF7}
@@ -196,16 +196,17 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .meta-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
 .meta-chips .chip2{font-size:12px;color:var(--grey);background:#fff;border:1px solid var(--line);border-radius:999px;padding:3px 11px;white-space:nowrap}
 .meta-chips .chip2 b{color:var(--ink);font-weight:600}
-.metric-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
+.metric-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:22px}
 .metric{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center;transition:transform .2s var(--ease),box-shadow .25s var(--ease)}
 .metric:hover{transform:translateY(-2px);box-shadow:var(--shadow-1)}
-.metric .m-label{font-size:12px;color:var(--faint)}
+.metric .m-label{font-size:13px;color:var(--faint)}
 .metric .m-value{font-family:var(--serif);font-size:20px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
-.chart-box{background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:16px 18px;margin-bottom:20px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
-.chart-title{font-size:14.5px;font-weight:600;margin-bottom:6px}
+.chart-box{background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:22px 24px;margin-bottom:28px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
+.chart-title{font-size:15.5px;font-weight:600;margin-bottom:6px}
 .chart-title .opt{font-weight:400}
-.bench-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;font-size:13px;color:var(--grey)}
-.seg-btn{padding:3px 14px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:12.5px;color:var(--grey);transition:all .2s var(--ease)}
+.risk-vol-state{font-size:14px;font-weight:600;margin:0 0 6px}
+.bench-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;font-size:14px;color:var(--grey)}
+.seg-btn{padding:3px 14px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:13.5px;color:var(--grey);transition:all .2s var(--ease)}
 .seg-btn:hover{border-color:var(--lav);color:var(--lav-deep);transform:translateY(-1px)}
 .seg-btn.active{background:var(--lav);color:#fff;border-color:var(--lav)}
 .range-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px}
@@ -238,7 +239,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .detail-head{font-size:12.5px;color:var(--grey);margin-bottom:6px}
 
 /* 风险模块 */
-.risk-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}
+.risk-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:10px}
 .risk-cards .metric{border-color:#F0CACA;background:#FFFBFB}
 .risk-light{display:inline-block;padding:3px 13px;border-radius:999px;font-size:12px;font-weight:600;margin-right:8px;transition:transform .2s}
 .risk-light:hover{transform:translateY(-1px)}
@@ -268,7 +269,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 
 /* 交易磨损 */
-.wear-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:6px}
+.wear-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:6px}
 .wear-cards .metric .m-value{color:var(--lav-deep)}
 .wb{margin-top:14px;border-top:1px dashed var(--line);padding-top:14px}
 .wb-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px}
@@ -335,6 +336,19 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
   .range-strip{grid-template-columns:repeat(2,1fr)}
   .treemap-wrap{height:520px}
 }
+/* 移动端（≤768px，登记 12 号文档 §10）：交易磨损 5 列卡降 2 列、磨损条三段收缩。
+   5 列 + grid 1fr 的 min-content 下限会把 #fees-body 撑到 651px（375 视口横向溢出）；
+   SaaS base.html 有同值的 .chart-box 规则，lab 页只加载本文件，故在此补齐。 */
+@media(max-width:768px){
+  /* 窄屏内容列内边距收到 12px，与 SaaS base 的 .container{padding:12px}、
+     顶栏 ≤960px 的 12px 对齐（否则品牌左缘与内容列错开 2–10px）。
+     只作用于 SaaS（.app-shell 内），lab 页顶栏是 20px，保持 .wrap 20px 不动。 */
+  .app-shell .wrap{padding:20px 12px 60px}
+  .chart-box .wear-cards{grid-template-columns:repeat(2,1fr)}
+  .chart-box .wb-row{display:grid;grid-template-columns:96px 1fr auto;gap:8px}
+  .chart-box .wb-label{width:auto;text-align:left}
+  .chart-box .wb-val{width:auto;max-width:140px;font-size:11px}
+}
 /* ---- 母板特有类映射到设计稿视觉（lab.html 既有 JS 依赖的类名） ---- */
 .tabs{display:flex;gap:4px;margin-bottom:18px}
 .tabs .tab{border:none;background:none;padding:8px 16px;border-radius:999px;font-size:14px;color:var(--grey);cursor:pointer;transition:color .2s var(--ease),background .2s var(--ease);font-family:inherit}
@@ -384,25 +398,26 @@ table.tbl th:first-child,table.tbl td:first-child{text-align:left}
 .risk-light:hover{transform:translateY(-1px)}
 .risk-light.ok{background:var(--down-soft);color:var(--down);border:1px solid #BFE3D0}
 .risk-light.bad{background:var(--up-soft);color:var(--up);border:1px solid #F0CACA}
-.risk-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}
+.risk-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:10px}
 .risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}
 .sub-title{font-size:13px;font-weight:600;margin-bottom:4px}
-.detail-table{width:100%;border-collapse:collapse;font-size:12.5px}
-.detail-table th{color:var(--grey);font-weight:500;font-size:12px;padding:6px 10px;border-bottom:2px solid var(--line);text-align:right}
+.detail-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.detail-table th{color:var(--grey);font-weight:500;font-size:13px;padding:6px 10px;border-bottom:2px solid var(--line);text-align:right}
 .detail-table td{padding:6px 10px;border-bottom:1px solid #F2EFF7;text-align:right;font-variant-numeric:tabular-nums}
 .detail-table th:first-child,.detail-table td:first-child{text-align:left}
 .table-wrap{max-height:360px;overflow:auto;max-width:100%}
 @media(max-width:960px){.risk-cards{grid-template-columns:1fr 1fr}.risk-grid{grid-template-columns:1fr}}
 
 /* ---- style.css 遗留规则纠偏（8081 lab 页面专用；逐项对齐 18080 定稿，QRE-LAB-UI-LANDING-R4） ---- */
-/* 页面容器：style.css main 1200px/12px → 定稿 wrap 1280px/32px */
-main{max-width:1280px;margin:0 auto;padding:32px 32px 80px}
-/* 顶栏：sticky 60px 高通栏（定稿 topbar-inner 版式；8081 无 inner 包裹层，直接作用于 header） */
-.topbar{position:sticky;top:0;z-index:40;height:60px;display:flex;align-items:center;gap:24px;padding:0 32px;margin-bottom:0}
+/* 页面容器：style.css main 1200px/12px → 定稿 wrap 1600px/20px（宽屏铺满；CR-2026-10-29 C 项） */
+main{max-width:1600px;margin:0 auto;padding:20px 20px 80px}
+/* 顶栏：sticky 60px 高通栏（定稿 topbar-inner 版式；8081 无 inner 包裹层，直接作用于 header）
+   padding 随内容列居中：任何视口下 brand 左边界 = 居中内容左边界 */
+.topbar{position:sticky;top:0;z-index:40;height:60px;display:flex;align-items:center;gap:24px;padding:0 max(20px,calc((100% - 1600px)/2 + 20px));margin-bottom:0}
 .topbar nav{display:flex;gap:4px;margin-left:auto}
 .topbar nav a{font-size:14px}
-/* 卡片：style.css .panel 12px → 定稿 card 20px 22px、间距 20px */
-.panel{padding:20px 22px;margin-bottom:20px}
+/* 卡片：style.css .panel 12px → 定稿 card 26px 28px、间距 28px */
+.panel{padding:26px 28px;margin-bottom:28px}
 .panel h2{margin-bottom:14px}
 /* 标题：清掉 style.css 的 h 边距（定稿 * 零边距，间距由容器控制） */
 h1,h2,h3{margin-bottom:0}
@@ -419,12 +434,12 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 .tbl tbody tr:nth-child(even),.syms-table tbody tr:nth-child(even),.detail-table tbody tr:nth-child(even){background:transparent}
 .tbl tbody tr:hover,.syms-table tbody tr:hover,.detail-table tbody tr:hover{background:var(--tint)}
 /* 指标卡：母板类名 .metric-card → 定稿 .metric 视觉（白卡/圆角 10/衬线大数字/hover 微浮） */
-.metric-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.metric-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
 .metric-strip .metric-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center;transition:transform .2s var(--ease),box-shadow .25s var(--ease)}
 /* hover 微浮已合并进 .metric-card.fx-tilt 的 transform（见下方倾斜规则），
    此处只留投影，避免两条 transform 规则互相覆盖 */
 .metric-strip .metric-card:hover{box-shadow:var(--shadow-1)}
-.metric-card .m-label{font-size:12px;color:var(--faint)}
+.metric-card .m-label{font-size:13px;color:var(--faint)}
 .metric-card .m-value{font-family:var(--serif);font-weight:700;font-size:20px}
 /* 风险区卡片底色保持淡红边框（母板语义） */
 .risk-cards .metric-card{border-color:#F0CACA;background:#FFFBFB}

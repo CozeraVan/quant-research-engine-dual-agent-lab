@@ -86,7 +86,12 @@ class TestSourceContract:
         assert "left: 60" not in body and "right: 20" not in body, (
             "不得保留旧的左侧大边距 grid"
         )
-        assert body.count("position: 'right'") >= 3, "主图/量/因子副图都要右侧标尺"
+        # QRE-KLINE-PANE-OPTION（T1）：因子副图 yAxes 改由 factor-layout.panesToOption
+        # 生成（其 paneYAxes 对 replay 规格固定 position:'right'），模板内只剩主图/量两轴。
+        assert body.count("position: 'right'") >= 2, "主图/量右侧标尺"
+        assert "panesToOption(panes, {" in body and "paneBase: 2" in body, (
+            "因子副图 yAxes 走共享出口（索引与 position 由 paneYAxes 生成）"
+        )
 
     def test_replay_info_uses_static_info_bar(self):
         body = _mount_body()
@@ -325,8 +330,8 @@ assert.equal(h.get('kt-trend').disabled, false, '退出重播恢复画线按钮'
 const replayOpt = h.charts[0].options[h.charts[0].options.length - 1];
 assert.ok(!replayOpt.series.some(s => String(s.name).indexOf('画线') === 0), '画线不得进入重播帧');
 assert.ok(h.get('kreplay-info').classList, '信息卡容器保留');
-// 高度：静态重建走同一 helper（1 副图 → 580px）
-assert.equal(h.get('chart-kline').style.height, '580px', '静态重建高度与重播一致');
+// 高度：静态重建走同一 helper（1 副图 → 640px）
+assert.equal(h.get('chart-kline').style.height, '640px', '静态重建高度与重播一致');
 console.log('replay-tv-exit-ok');
 """
 
@@ -406,14 +411,14 @@ const h = makeHarness();
 const source = %SOURCE%;
 vm.runInContext(source + '\nglobalThis.__mountKlineReplay = mountKlineReplay;', h.ctx);
 const QREReplay = h.ctx.window.QREReplay;
-// 1) 共享 helper 公式：无副图 460，有副图 420 + panes*160
-assert.equal(QREReplay.klineHeightForPanes(0), 460, '无副图 460px');
-assert.equal(QREReplay.klineHeightForPanes(1), 580, '1 副图 580px');
-assert.equal(QREReplay.klineHeightForPanes(3), 900, '3 副图 900px');
-assert.equal(QREReplay.core.klineHeightForPanes(0), 460, 'core 也暴露同一 helper');
-// 2) 重播容器用同一公式（DETAIL：1 个 MACD 合并副图 → 580px）
+// 1) 共享 helper 公式：无副图 520，有副图 480 + panes*160（CR-2026-10-29 整体 +60px）
+assert.equal(QREReplay.klineHeightForPanes(0), 520, '无副图 520px');
+assert.equal(QREReplay.klineHeightForPanes(1), 640, '1 副图 640px');
+assert.equal(QREReplay.klineHeightForPanes(3), 960, '3 副图 960px');
+assert.equal(QREReplay.core.klineHeightForPanes(0), 520, 'core 也暴露同一 helper');
+// 2) 重播容器用同一公式（DETAIL：1 个 MACD 合并副图 → 640px）
 const ctl = vm.runInContext('__mountKlineReplay(' + JSON.stringify(DETAIL) + ')', h.ctx);
-assert.equal(h.get('chart-kline').style.height, '580px', '重播容器高度走共享 helper');
+assert.equal(h.get('chart-kline').style.height, '640px', '重播容器高度走共享 helper');
 console.log('replay-height-ok');
 """
 
@@ -462,7 +467,7 @@ class TestTooltipUnitCleanup:
             "静态 renderKline 与重播 mountKlineReplay 必须共用同一 helper"
         )
         assert "420 + panes.length * 160" not in SYMBOL_TPL, "symbol.html 不得再保留内联高度公式"
-        assert "460px" not in _mount_body(), "重播不得再写死 460px"
+        assert "520px" not in _mount_body(), "重播不得再写死 K 线高度"
 
     def test_replay_height_matches_static_formula(self):
         _run(

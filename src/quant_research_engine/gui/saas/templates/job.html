@@ -101,7 +101,7 @@
            时序红线：「信」= 信号日 T（成交日前一交易日），「入/出」= T+1 成交日；
            历史回测为模拟成交，不构成投资建议。 -->
       <div id="replay-bar-slot"></div>
-      <div id="chart-main" style="height:420px"></div>
+      <div id="chart-main" style="height:480px"></div>
       <div class="metric-strip rp-metrics hidden" id="replay-metrics"></div>
       <div class="hidden" id="replay-events" style="max-height:220px;overflow:auto"></div>
       <div class="metric-strip" id="range-strip" style="margin-top:10px"></div>
@@ -126,7 +126,7 @@
         <button data-layer="B">概念关键词</button>
         <button data-layer="C">技术标签</button>
       </div>
-      <div id="chart-tags" style="height:420px"></div>
+      <div id="chart-tags" style="height:480px"></div>
       <div id="tag-note" class="opt" style="font-size:12px"></div>
       <div class="tag-rank" id="tag-rank"></div>
       <div id="tag-detail" style="margin-top:10px"></div>
@@ -181,6 +181,9 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/echarts.min.js?v={{ asset_v }}"></script>
+<script src="/static/vol-regime.js?v={{ asset_v }}"></script>
+{# QRE-EQUITY-CHART：收益曲线（策略/各基准/买入持有/回撤）的唯一构造来源，纯函数 #}
+<script src="/static/equity-chart.js?v={{ asset_v }}"></script>
 <script src="/static/replay.js?v={{ asset_v }}"></script>
 {# QRE-PERF-METRICS-CONTRACT：α/β/IR 与持股周期的共享纯函数层（公式与 risk/performance.py 对齐） #}
 <script src="/static/perf-metrics.js?v={{ asset_v }}"></script>
@@ -214,7 +217,7 @@ function stratRet(d){
   return toRet(d.equity || []);
 }
 
-let mainChart = null, DATA = null, curBench = '';
+let mainChart = null, DATA = null, curBench = '', openBenches = null;
 let mainResizeBound = false;
 function renderMetrics(m){
   const strip = document.getElementById('metric-strip');
@@ -306,62 +309,70 @@ function renderMain(d){
   DATA = d;
   const dates = d.dates;
   const dd = (d.drawdown_pct || []).map(v => v == null ? null : v * 100);
-  const hasDD = dd.some(v => v != null);
+  const benches = d.benchmarks || {};
   mainChart = echarts.init(document.getElementById('chart-main'));
   if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(mainChart);
-  const series = [{
-    name: '策略', id: 'strategy', type: 'line', data: stratRet(d),
-    showSymbol: false, lineStyle: {width: 2}, color: '#2563eb',
-  }];
-  if (hasDD) series.push({
-    name: '回撤', id: 'dd', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dd,
-    showSymbol: false, areaStyle: {opacity: 0.35}, lineStyle: {width: 1}, color: '#d43030',
-  });
-  mainChart.setOption({
-    animation: false,
-    tooltip: {trigger: 'axis', axisPointer: {link: [{xAxisIndex: 'all'}]},
-              valueFormatter: v => v == null ? '—' : Number(v).toFixed(2) + '%'},
-    legend: {data: ['策略', '基准', '回撤'], top: 0},
-    grid: hasDD
-      ? [{left: 55, right: 20, top: 30, height: '52%'}, {left: 55, right: 20, top: '70%', height: '16%'}]
-      : [{left: 55, right: 20, top: 30, height: '72%'}],
-    xAxis: hasDD
-      ? [{type: 'category', data: dates, gridIndex: 0, axisLabel: {show: false}},
-         {type: 'category', data: dates, gridIndex: 1}]
-      : [{type: 'category', data: dates, gridIndex: 0}],
-    yAxis: hasDD
-      ? [{type: 'value', gridIndex: 0, name: '累计收益率%', axisLabel: {formatter: '{value}%'}},
-         {type: 'value', gridIndex: 1, name: '回撤%', max: 0, axisLabel: {formatter: '{value}%'}}]
-      : [{type: 'value', gridIndex: 0, name: '累计收益率%', axisLabel: {formatter: '{value}%'} }],
-    dataZoom: [
-      {type: 'inside', xAxisIndex: hasDD ? [0, 1] : [0]},
-      {type: 'slider', xAxisIndex: hasDD ? [0, 1] : [0], bottom: 6, height: 22},
-    ],
-    series,
-  });
+  // QRE-EQUITY-CHART：曲线与图表选项由共享纯函数层统一构造（与 symbol 页同源）
+  mainChart.setOption(QREEquityChart.option({
+    dates: dates,
+    strategyPct: stratRet(d),
+    benches: benches,
+    benchmarks: benches,
+    drawdownPct: dd,
+  }));
+  // 基准多选：按钮态与 ECharts 图例双向同步，全部关闭 = 只看策略
   const bar = document.getElementById('bench-bar');
-  const benches = d.benchmarks || {};
   const codes = Object.keys(benches);
   // QRE-SAAS-RESULT-UNDERSTANDING：基准含义提示（无基准时保留既有说明）
-  bar.innerHTML = '<span class="opt" tabindex="0" data-tip="基准是用于对照的指数（默认上证指数）：与基准对比才能看出策略是否跑赢大盘；可切换不同基准，切到「无基准」时只看策略自身表现。">基准：</span>';
+  bar.innerHTML = '<span tabindex="0" data-tip="基准是用于对照的指数（默认上证指数）：与基准对比才能看出策略是否跑赢大盘；可多选不同基准，全部关闭时只看策略自身表现。">基准：</span>';
   if (!codes.length){
     bar.innerHTML += '<span class="opt">' + (d.benchmark_note || '暂无数据') + '</span>';
   } else {
-    codes.forEach((code, i) => {
+    const initial = QREEquityChart.legendSelectedFor(benches, null);
+    const open = new Set();
+    const btns = {};
+    function benchName(code){ return benches[code].name || code; }
+    function syncCurBench(){
+      openBenches = codes.filter(c => open.has(c));
+      curBench = openBenches[0] || '';
+    }
+    function syncButton(code, on){
+      if (!btns[code]) return;
+      btns[code].classList.toggle('active', on);
+      btns[code].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    codes.forEach(code => {
       const btn = document.createElement('button');
-      btn.textContent = benches[code].name;
+      btn.type = 'button';
+      btn.textContent = benchName(code);
       btn.dataset.code = code;
-      if (i === 0){ btn.className = 'active'; curBench = code; }
+      const on = initial[benchName(code)] !== false;
+      if (on) open.add(code);
+      syncButton(code, on);
       btn.addEventListener('click', () => {
-        curBench = code;
-        bar.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.code === code));
-        applyBench();
-        if (mainChart) mainChart.dispatchAction({type: 'dataZoom', start: 0, end: 100});
-        else updateRangeStrip();
+        const next = !open.has(code);
+        if (next) open.add(code); else open.delete(code);
+        syncButton(code, next);
+        if (mainChart) mainChart.dispatchAction({type: 'legendToggleSelect', name: benchName(code)});
+        syncCurBench();
+        updateRangeStrip();
       });
+      btns[code] = btn;
       bar.appendChild(btn);
     });
-    applyBench();
+    // 图例点击（含图例上的策略/回撤）→ 回写按钮态；只关心基准名
+    mainChart.on('legendselectchanged', ev => {
+      const sel = ev.selected || {};
+      codes.forEach(code => {
+        const name = benchName(code);
+        if (sel[name] == null) return;
+        if (sel[name]) open.add(code); else open.delete(code);
+        syncButton(code, sel[name]);
+      });
+      syncCurBench();
+      updateRangeStrip();
+    });
+    syncCurBench();
   }
   // 区间信息卡（QRE-SAAS-DETAIL-UI：与 lab 版同款，随滑块缩放实时重算）
   // QRE-SAAS-EXPOSURE-METRICS：持仓暴露度/持仓期年化——由 round trips 的
@@ -457,15 +468,7 @@ function renderMain(d){
     });
   }
 }
-function applyBench(){
-  if (!mainChart || !DATA) return;
-  const benches = DATA.benchmarks || {};
-  const ret = curBench && benches[curBench] ? toRet(benches[curBench].closes) : [];
-  mainChart.setOption({series: [{
-    name: '基准', id: 'bench', type: 'line', data: ret,
-    showSymbol: false, lineStyle: {width: 1.5, type: 'dashed'}, color: '#f59e0b',
-  }]});
-}
+
 
 // --- 赚钱板块归因（tag_analysis，数据为回传截断版：板块聚合全量 + 个股前/后各 50） ---
 let tagChart = null, tagData = null, curLayer = 'A', curTag = null;
@@ -513,7 +516,7 @@ function renderTagChart(){
   const tmPnls = tmItems.map(t => t.total_pnl);
   const minPnl = Math.min.apply(null, tmPnls), maxPnl = Math.max.apply(null, tmPnls);
   const el = document.getElementById('chart-tags');
-  el.style.height = '420px';
+  el.style.height = '480px';
   if (!tagChart){
     tagChart = echarts.init(el);
     if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(tagChart);
@@ -771,20 +774,17 @@ function renderRisk(d) {
                     (b.expected_rate * 100).toFixed(2) + '%）</span> ';
     });
     var vol = d.volatility || {};
-    var volTxt = [];
-    if (vol.ewma_annual != null) volTxt.push('EWMA 年化波动 ' + (vol.ewma_annual * 100).toFixed(2) + '%');
-    if (vol.garch_annual != null) volTxt.push('GARCH 年化波动 ' + (vol.garch_annual * 100).toFixed(2) + '%');
-    if (vol.latest_regime) volTxt.push('当前波动状态 ' + vol.latest_regime);
+    var volTxt = QREVolRegime.tipText(vol);
 
     body.innerHTML =
       '<div class="risk-cards">' + (cardsHtml || '<span class="opt">暂无 VaR/ES 数据</span>') + '</div>' +
       '<div style="margin-bottom:8px;">' + lightsHtml + '</div>' +
       '<div class="risk-grid">' +
-      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">日收益分布 <button type="button" class="tip-trigger" data-tip="直方图展示日收益分布，曲线为正态拟合，竖线标记 VaR。" aria-label="收益分布说明">?</button></div><div id="chart-risk-dist" style="height:240px;"></div></div>' +
-      '  <div class="risk-col"><div class="chart-title" style="font-size:13px;">波动率状态 <button type="button" class="tip-trigger" data-tip="' + escH(volTxt.join('；') || '暂无波动率数据') + '" aria-label="波动率说明">?</button></div><div id="chart-risk-vol" style="height:240px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:14px;">日收益分布 <button type="button" class="tip-trigger" data-tip="直方图展示日收益分布，曲线为正态拟合，竖线标记 VaR。" aria-label="收益分布说明">?</button></div><div id="chart-risk-dist" style="height:300px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:14px;">波动率状态 <button type="button" class="tip-trigger" data-tip="' + escH(volTxt || '暂无波动率数据') + '" aria-label="波动率说明">?</button></div><div class="risk-vol-state" id="chart-risk-vol-state"></div><div id="chart-risk-vol" style="height:300px;"></div></div>' +
       '</div>' +
-      '<div class="chart-title" style="font-size:13px;margin-top:8px;">压力测试 <span class="opt" id="risk-stress-note"></span></div>' +
-      '<div id="chart-risk-stress" style="height:220px;"></div>';
+      '<div class="chart-title" style="font-size:14px;margin-top:8px;">压力测试 <span class="opt" id="risk-stress-note"></span></div>' +
+      '<div id="chart-risk-stress" style="height:280px;"></div>';
 
     renderRiskDist(d);
     renderRiskVol(d);
@@ -813,7 +813,7 @@ function renderRiskDist(d) {
       animation: false,
       tooltip: { trigger: 'axis',
                  valueFormatter: function(v) { return typeof v === 'number' && Math.abs(v) < 1 ? (v * 100).toFixed(2) + '%' : v; } },
-      grid: { left: 45, right: 15, top: 25, bottom: 25 },
+      grid: { left: 55, right: 15, top: 25, bottom: 25 },
       xAxis: { type: 'value', name: '日收益', axisLabel: { formatter: function(v) { return (v * 100).toFixed(1) + '%'; } } },
       yAxis: { type: 'value', name: '天数' },
       series: [
@@ -828,6 +828,9 @@ function renderRiskVol(d) {
     var el = document.getElementById('chart-risk-vol');
     var vol = d.volatility || {};
     var rc = vol.regime_counts;
+    var stateEl = document.getElementById('chart-risk-vol-state');
+    var stateTxt = QREVolRegime.describe(vol);
+    if (stateEl) { stateEl.textContent = stateTxt; stateEl.style.display = stateTxt ? '' : 'none'; }
     if (!rc) { el.innerHTML = '<div class="chart-empty">暂无波动率数据</div>'; el.style.height = 'auto'; return; }
     var order = ['low', 'mid', 'high'];
     var names = { low: '低波动', mid: '中波动', high: '高波动' };
@@ -837,7 +840,7 @@ function renderRiskVol(d) {
     c.setOption({
       animation: false,
       tooltip: {},
-      grid: { left: 45, right: 15, top: 25, bottom: 25 },
+      grid: { left: 55, right: 15, top: 25, bottom: 25 },
       xAxis: { type: 'category', data: order.map(function(k) { return names[k]; }) },
       yAxis: { type: 'value', name: '天数' },
       series: [{
@@ -877,7 +880,7 @@ function renderRiskStress(d) {
                    return head + '<br/>' + rows.join('<br/>');
                  } },
       legend: { data: ['区间累计损失', '窗口最大回撤'], top: 0 },
-      grid: { left: 50, right: 15, top: 30, bottom: 25 },
+      grid: { left: 60, right: 15, top: 30, bottom: 25 },
       // QRE-RISK-STRESS-LABELS：必须 interval:0 + hideOverlap:false。
       // ECharts category 轴 axisLabel.interval 默认 'auto'，标签测得会重叠时就
       // 每隔一个隐藏一个——4 个情景只显示第 1、3 个的轴标签，用户看到的就是
@@ -1339,9 +1342,7 @@ function initReplay(d){
 function mountReplay(d){
   const dates = d.dates;
   const dd = (d.drawdown_pct || []).map(v => v == null ? null : v * 100);
-  const hasDD = dd.some(v => v != null);
   const benches = d.benchmarks || {};
-  const benchCode = curBench && benches[curBench] ? curBench : Object.keys(benches)[0];
   const trips = (d.trades && d.trades.points) || [];
   // 成交事件（信号日 T=成交日前一交易日，由组件在图上相隔标记）。
   // QRE-SAAS-REPLAY-BOUNDARIES：sym=真实标的（聚合去重计数）；round trips 点
@@ -1354,19 +1355,19 @@ function mountReplay(d){
     if (t.exit_date) events.push({date: t.exit_date, kind: 'exit', sym: t.symbol, symbol: t.symbol,
       qty: t.quantity, price: t.exit_price, pnl: t.net_return});
   });
-  const series = [{name: '策略', id: 'strategy', color: '#2563eb', data: stratRet(d), raw: d.equity, grid: 0, mark: true, width: 2, zeroBase: true}];
-  if (benchCode) series.push({name: '基准·' + benches[benchCode].name, id: 'bench', color: '#f59e0b',
-    dashed: true, data: toRet(benches[benchCode].closes), grid: 0, zeroBase: true});
-  if (hasDD) series.push({name: '回撤', id: 'dd', color: '#d43030', data: dd, grid: 1, area: true, width: 1});
+  // 序列/网格/图例与静态图同源（equity-chart.js），避免重播前后两套口径
+  const spec = QREEquityChart.replaySpec({
+    strategyPct: stratRet(d), strategyRaw: d.equity,
+    benches: benches, benchmarks: benches, drawdownPct: dd,
+    openCodes: openBenches,
+  });
   return QREReplay.attach(document.getElementById('replay-bar-slot'), {
     dates: dates,
-    series: series,
-    grids: hasDD
-      ? [{left: 55, right: 20, top: 30, height: '52%'}, {left: 55, right: 20, top: '70%', height: '18%'}]
-      : [{left: 55, right: 20, top: 30, height: '68%'}],
-    yAxes: hasDD
-      ? [{name: '累计收益率%'}, {name: '回撤%', max: 0}]
-      : [{name: '累计收益率%'}],
+    series: spec.series,
+    grids: spec.grids,
+    yAxes: spec.yAxes,
+    legendSelected: spec.legendSelected,
+    axisPointer: {link: [{xAxisIndex: 'all'}]},
     events: events,
     roundTrips: trips,
     chartEl: document.getElementById('chart-main'),  // 接管原容器

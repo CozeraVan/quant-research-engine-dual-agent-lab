@@ -150,6 +150,9 @@ html,body{height:100%}
   </div>
 </dialog>
 <script src="/static/echarts.min.js"></script>
+{# QRE-KLINE-PANE-OPTION（T1）：因子 pane → ECharts option 的共享出口，
+   索引由 QREFactorLayout 内部生成，避免三处副本各写一份 2+i 而错位 #}
+<script src="/static/factor-layout.js"></script>
 <script src="/static/lab-ui.js"></script>
 <script>
 (function(){
@@ -316,16 +319,24 @@ html,body{height:100%}
     const layout = chartLayout(paneCount), grids = layout.grids;
     const xAxis = grids.map((grid, index) => ({type: 'category', data: dates, gridIndex: index,
       axisLabel: {show: index === grids.length - 1, fontSize: 10}, axisTick: {show: index === grids.length - 1}}));
-    const yAxis = grids.map((grid, index) => ({type: 'value', gridIndex: index, scale: true, splitNumber: 4,
-      axisLabel: {fontSize: 10},
-      name: index >= 2 ? model.panes[index - 2].name : '', nameTextStyle: {fontSize: 10}}));
+    // QRE-KLINE-PANE-OPTION（T1）：pane 的 yAxis/series 走共享出口，索引由
+    // QREFactorLayout 内部生成并校验不变式——不再手写 paneIndex + 2。
+    const _gpo = QREFactorLayout.panesToOption(model.panes, {
+      paneBase: 2, grids, showFct: true,
+      headYAxes: [
+        {type: 'value', gridIndex: 0, scale: true, splitNumber: 4, axisLabel: {fontSize: 10}, name: '', nameTextStyle: {fontSize: 10}},
+        {type: 'value', gridIndex: 1, scale: true, splitNumber: 4, axisLabel: {fontSize: 10}, name: '', nameTextStyle: {fontSize: 10}},
+      ],
+      // 保留游戏原视觉：HIST 柱固定 #8B7FBE（原实现即如此），
+      // 本轮只做结构统一（索引单一来源），不改游戏配色
+      histColors: {up: '#8B7FBE', down: '#8B7FBE'},
+    });
+    const yAxis = _gpo.yAxis;
     const series = [{name: 'K线', type: 'candlestick', data: candles, xAxisIndex: 0, yAxisIndex: 0},
       {name: '成交量', type: 'bar', data: volumes, xAxisIndex: 1, yAxisIndex: 1, itemStyle: {color: '#B7A6E8'}}];
     model.overlays.forEach((factor, index) => series.push({name: factor.name, type: 'line', data: factor.values,
       xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: {width: 1.4}, color: ['#6750A4', '#B7A6E8', '#4A3A78', '#9A93A6'][index % 4]}));
-    model.panes.forEach((pane, paneIndex) => pane.series.forEach(s => series.push({name: s.name, type: s.type,
-      data: s.values, xAxisIndex: paneIndex + 2, yAxisIndex: paneIndex + 2, showSymbol: false,
-      color: s.color, lineStyle: {width: 1.2, color: s.color}, itemStyle: {color: s.color}})));
+    _gpo.series.forEach(s => series.push(s));
     const d = state.decision || {};
     if (state.phase === 'open' && d.next_open != null){
       series[0].markArea = {silent: true, itemStyle: {color: 'rgba(103,80,164,.08)'}, data: [[{yAxis: d.limit_lower}, {yAxis: d.limit_upper}]]};

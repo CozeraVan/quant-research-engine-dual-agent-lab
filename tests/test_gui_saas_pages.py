@@ -19,6 +19,8 @@ import pytest
 from quant_research_engine.gui.saas import create_saas_app
 
 WORKER_TOKEN = "t"
+_VOL_REGIME_JS = (Path(__file__).resolve().parents[1]
+                  / "src/quant_research_engine/gui/static/vol-regime.js")
 VALID_YAML = (
     "experiment:\n  name: t\ndata:\n  market_fields: [close]\n"
     "signal:\n  entry: close > 0\n"
@@ -101,6 +103,18 @@ function jobPendingBody(status, onBody){
 function jobPendingFetch(options){
   return new Promise(() => {});
 }
+let volRegimeLoaded = null;
+function loadVolRegime(){
+  // 生产页面由 /static/vol-regime.js 提供 QREVolRegime（见 job.html head），抽取区内联脚本
+  // 直接调用它，因此这里按同一份真实源码注入，避免打桩后与线上行为分叉。
+  if (volRegimeLoaded) return volRegimeLoaded;
+  const sandbox = {};
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(VOL_REGIME_SRC, sandbox);
+  volRegimeLoaded = sandbox.QREVolRegime;
+  return volRegimeLoaded;
+}
 function createHarness(fetchImpl){
   const root = el();
   root.childNodes = [el()];
@@ -127,6 +141,7 @@ function createHarness(fetchImpl){
   const context = vm.createContext({
     console, document, window, JOB_ID: 1, STATUS_LABEL: {}, SAAS_BYPASS: false, AbortController,
     MAX_ACTIVE_WAIT_MS: 300000,
+    QREVolRegime: loadVolRegime(),
     Date: {now(){ return now; }},
     location: {search: ''}, URLSearchParams,
     // CR-2026-10-28 B 路：renderKlineDispatch 读 klineEngine()，需要 localStorage
@@ -179,7 +194,9 @@ def _run_job_js(html: str, source_pattern: str, scenario: str, prefix_pattern: s
         node = "/home/van/codex-local/node-v22/bin/node"
     if not node:
         pytest.skip("node 不可用")
-    script = _JOB_JS_HARNESS + "\nconst source = " + json.dumps(source) + ";\n" + scenario
+    script = (_JOB_JS_HARNESS
+              + "\nconst VOL_REGIME_SRC = " + json.dumps(_VOL_REGIME_JS.read_text(encoding="utf-8")) + ";"
+              + "\nconst source = " + json.dumps(source) + ";\n" + scenario)
     result = subprocess.run([node, "-e", script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr or result.stdout
 
@@ -1105,11 +1122,15 @@ def _run_symbol_script_js(
         pytest.skip("node 不可用")
     replay_js = (Path(__file__).resolve().parents[1]
                  / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
+    factor_js = (Path(__file__).resolve().parents[1]
+                 / "src/quant_research_engine/gui/static/factor-layout.js").read_text(encoding="utf-8")
     script = (
         _SYMBOL_JS_HARNESS
         + "\nconst source = " + json.dumps((prefix.group(1) if prefix else "") + match.group(1)) + ";"
         # CR-2026-10-27：symbol.html 真实依赖 replay.js（共享高度 helper）；场景可按需预加载
         + "\nconst REPLAY_SRC = " + json.dumps(replay_js) + ";"
+        # QRE-KLINE-PANE-OPTION：renderKline 依赖 factor-layout.js（pane 索引唯一出口）
+        + "\nconst FACTOR_SRC = " + json.dumps(factor_js) + ";"
         + scenario
     )
     result = subprocess.run([node, "-e", script], capture_output=True, text=True)
@@ -1622,7 +1643,7 @@ function pendingResponse(options){
 
     def test_symbol_equity_and_kline_resize_listeners_do_not_accumulate(self, client):
         html = client.get("/saas/jobs/1/symbols/000001.SZ").get_data(as_text=True)
-        _run_symbol_script_js(html, r"(let equityResizeBound[\s\S]*?)(?=\nfunction renderWear)", r"""
+        _run_symbol_script_js(html, r"(let equityResizeBound[\s\S]*?)(?=\n\nfunction renderWear)", r"""
 (async () => {
   const h = createSymbolHarness(async () => response(200, {ok: true}));
   h.context.echarts = {init(){ return {
@@ -1630,13 +1651,19 @@ function pendingResponse(options){
     getOption(){ return {dataZoom: [{start: 0, end: 100}]}; },
   }; }};
   h.context.card = () => ''; h.context.pct = () => ''; h.context.cls = () => '';
+  // QRE-EQUITY-CHART：收益曲线选项/归一化由共享静态层构造，真实行为见
+  // tests/test_equity_chart.py；本用例只验证 resize 监听不累积，故打桩。
+  h.context.QREEquityChart = {
+    option(){ return {}; }, toPct(){ return []; }, drawdownPct(){ return []; },
+    benchPct(){ return []; }, legendSelectedFor(){ return {}; },
+  };
   // CR-2026-10-27：renderKline 走 replay.js 共享高度 helper，先加载真实 replay.js
   vm.runInContext(REPLAY_SRC + '\nglobalThis.QREReplay = window.QREReplay;', h.context);
   vm.runInContext(source, h.context);
   const data = {equity: {dates: ['2026-01-01'], values: [1]}, trades: []};
   vm.runInContext('renderEquity(' + JSON.stringify(data) + ')', h.context);
   vm.runInContext('renderEquity(' + JSON.stringify(data) + ')', h.context);
-  assert.equal((h.windowListeners.resize || []).length, 1, '收益图重复渲染不得累积 resize');
+  assert.equal((h.windowListeners.resize || []).length, 1, '收益图重复渲染不得累积 resize：' + (h.windowListeners.resize || []).length);
 })().catch(error => { console.error(error); process.exit(1); });
 """)
         _run_symbol_script_js(
@@ -1649,7 +1676,10 @@ function pendingResponse(options){
     init(){ return {setOption(){}, resize(){}}; },
     getInstanceByDom(){ return null; },
   };
-  h.context.QREFactorLayout = {plan(){ return {chips: [], panes: [], overlays: []}; }};
+  // QRE-KLINE-PANE-OPTION：pane 索引由 factor-layout.js 统一生成，这里加载真实源码
+  // （不打桩），避免 harness 与线上 API 分叉
+  vm.runInContext(FACTOR_SRC, h.context);
+  h.context.QREFactorLayout = h.context.window.QREFactorLayout;
   h.context.chipStates = () => ({});
   h.context.renderFactorChips = () => {};
   // CR-2026-10-27：renderKline 走 replay.js 共享高度 helper，先加载真实 replay.js
@@ -2262,13 +2292,16 @@ async function assertSinglePost(h){
 
     def test_job_main_and_risk_resize_listeners_do_not_accumulate(self, client):
         html = client.get("/saas/jobs/1").get_data(as_text=True)
-        _run_job_js(html, r"(let mainChart[\s\S]*?function renderMain[\s\S]*?\n\})(?=\nfunction applyBench)", r"""
+        _run_job_js(html, r"(let mainChart[\s\S]*?function renderMain[\s\S]*?\n\})(?=\n{3}// --- 赚钱板块归因)", r"""
 (async () => {
   const h = createHarness(async () => response(200, {ok: true}));
   h.context.echarts = {init(){ return {
     setOption(){}, on(){}, resize(){}, dispatchAction(){},
     getOption(){ return {dataZoom: [{start: 0, end: 100}]}; },
   }; }};
+  // QRE-EQUITY-CHART：主图选项/图例默认态由共享静态层构造，真实行为见
+  // tests/test_equity_chart.py；本用例只验证 resize 监听不累积，故打桩。
+  h.context.QREEquityChart = {option(){ return {}; }, legendSelectedFor(){ return {}; }};
   h.context.pct = () => ''; h.context.cls = () => ''; h.context.stratRet = () => [];
   h.context.card = () => '';
   vm.runInContext(source, h.context);

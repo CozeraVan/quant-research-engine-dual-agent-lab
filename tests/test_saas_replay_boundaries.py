@@ -29,6 +29,9 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 REPLAY_JS = (REPO / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
 FACTOR_LAYOUT_JS = (REPO / "src/quant_research_engine/gui/static/factor-layout.js").read_text(encoding="utf-8")
+# QRE-EQUITY-CHART：job.html 的 mountReplay 由共享静态层构造 series/grids，
+# 与线上同源注入真实源码（与 loadVolRegime 同一思路），避免打桩后与实现分叉。
+EQ_JS = (REPO / "src/quant_research_engine/gui/static/equity-chart.js").read_text(encoding="utf-8")
 
 from quant_research_engine.gui.saas import create_saas_app  # noqa: E402
 
@@ -134,6 +137,8 @@ function createReplayHarness(){
     setInterval(fn){ intervals.push(fn); return intervals.length; },
     clearInterval(){},
   });
+  vm.runInContext(%EQ_SRC%, context);
+  context.QREEquityChart = context.window.QREEquityChart;
   return {
     context, elements, setOptions, intervals,
     el, document,
@@ -158,7 +163,7 @@ function chips(row){
   });
   return out;
 }
-"""
+""".replace("%EQ_SRC%", json.dumps(EQ_JS))
 
 # 数据：5 个交易日；第 2 日 6 笔入场（5 个去重标的，000001 两笔）+ 2 笔出场
 _REPLAY_SCENARIO = r"""
@@ -429,9 +434,9 @@ h.attached = null;
 vm.runInContext('mountKlineReplay(' + JSON.stringify(detail) + ')', context);
 assert.equal(h.attached.chartEl, h.document.getElementById('chart-kline'), '重播接管原 K 线容器');
 assert.equal(h.attached.series.filter(s => s.grid === 0 && s.mark).length, 1, 'K 线主图唯一（无第二套）');
-// CR-2026-10-27：重播显式关闭统一 % 口径；容器高度走共享 helper（无副图 460px）
+// CR-2026-10-27：重播显式关闭统一 % 口径；容器高度走共享 helper（无副图 520px）
 assert.equal(h.attached.tooltipPercent, false, 'K 线重播不得统一加 %');
-assert.equal(h.document.getElementById('chart-kline').style.height, '460px', '高度走共享 helper');
+assert.equal(h.document.getElementById('chart-kline').style.height, '520px', '高度走共享 helper');
 const volSeries = h.attached.series.filter(s => s.name === '成交量')[0];
 assert.equal(volSeries.extra.tooltip.valueFormatter(200000), '20.00 万', '成交量 tooltip 按万');
 const gridCount = h.attached.grids.length;
@@ -480,10 +485,13 @@ const context = vm.createContext({
   window: { addEventListener(){} },
   QREReplay: { attach(mountEl, opts){ h.attached = opts; return {destroy(){}}; } },
   curBench: null,
+  openBenches: null,
   stratRet(){ return []; },
   toRet(){ return []; },
   requestAnimationFrame(fn){ return fn(); },
 });
+vm.runInContext(%EQ_SRC%, context);
+context.QREEquityChart = context.window.QREEquityChart;
 const source = %SOURCE%;
 vm.runInContext(source, context);
 
@@ -517,7 +525,8 @@ class TestJobReplayEventSource:
         html = client.get("/saas/jobs/1").get_data(as_text=True)
         source = _extract(html, r"(function mountReplay\(d\)\{[\s\S]*?\n\})\n", "mountReplay")
         _node(_REPLAY_HARNESS
-               + _JOB_EVENT_SCENARIO.replace("%SOURCE%", json.dumps(source)))
+               + _JOB_EVENT_SCENARIO.replace("%SOURCE%", json.dumps(source))
+                                   .replace("%EQ_SRC%", json.dumps(EQ_JS)))
 
 
 # ---------------------------------------------------------------- _trade_points  enrichment

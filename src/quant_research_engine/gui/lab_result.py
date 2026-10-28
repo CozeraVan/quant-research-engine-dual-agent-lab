@@ -1346,6 +1346,7 @@ def build_lab_risk_view(report: dict[str, Any]) -> dict[str, Any]:
         "garch_annual": round(garch_sig * ann ** 0.5, 6) if isinstance(garch_sig, (int, float)) else None,
         "regime_counts": regime.get("counts") or None,
         "latest_regime": regime.get("latest"),
+        "regime_thresholds": regime.get("thresholds_annual"),
     } if vol else None
 
     # 压力测试：窗口内覆盖不足的情景（带 error）归入 skipped

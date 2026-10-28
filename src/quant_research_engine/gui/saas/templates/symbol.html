@@ -61,8 +61,9 @@
   <div class="metric-strip" id="ra-strip" style="display:none"></div>
 
   <div class="chart-box" id="box-equity" style="display:none">
-    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略净值、个股买入持有和基准指数；拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
-    <div id="chart-equity" style="height:260px"></div>
+    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略、个股买入持有和基准指数；基准可多选，拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
+    <div class="bench-bar" id="bench-bar">基准：</div>
+    <div id="chart-equity" style="height:320px"></div>
     <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
   </div>
 
@@ -121,7 +122,7 @@
         <div class="kline-ohlc" id="kline-ohlc" aria-live="polite"></div>
         {# CR-2026-10-28 B 路：LWC 无图例，需要 DOM 图例；echarts 路径下由 JS 隐藏 #}
         <div class="kline-legend" id="kline-legend" role="group" aria-label="图表元素显示开关" style="display:none"></div>
-        <div id="chart-kline" style="height:460px"></div>
+        <div id="chart-kline" style="height:520px"></div>
         {# attribution 行：品牌水印 + TradingView 链接（Apache-2.0 合规） #}
         <div class="kline-attrib" id="kline-attrib" style="display:none">
           <img class="kline-attrib-mark" src="/static/chart-core/vendor/brand-mark-color.png" alt="" aria-hidden="true" draggable="false">
@@ -158,6 +159,8 @@
 <script src="/static/chart-core/kline-lwc.js?v={{ asset_v }}"></script>
 {# QRE-PERF-METRICS-CONTRACT：α/β/IR 与持股周期的共享纯函数层（公式与 risk/performance.py 对齐） #}
 <script src="/static/perf-metrics.js?v={{ asset_v }}"></script>
+{# QRE-EQUITY-CHART：收益曲线（策略/各基准/买入持有/回撤）的唯一构造来源，纯函数 #}
+<script src="/static/equity-chart.js?v={{ asset_v }}"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 // QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；
@@ -921,33 +924,76 @@ function renderEquity(d){
     if (k0 == null) k0 = c;
     return (c / k0 - 1) * 100;
   });
-  const series = [{ name: '策略净值(元)', type: 'line', data: eq.values, showSymbol: false, lineStyle: {width: 1.5}, color: '#6750A4' }];
-  if (holdPct.some(v => v != null)) series.push({ name: '买入持有该股%', type: 'line', yAxisIndex: 1, data: holdPct, showSymbol: false, lineStyle: {width: 1.2, type: 'dashed'}, color: '#9A93A6' });
-  if (d.benchmarks) Object.keys(d.benchmarks).forEach(code => {
-    const b = d.benchmarks[code];
-    let b0 = null;
-    const bpct = b.closes.map(c => { if (c == null) return null; if (b0 == null) b0 = c; return (c / b0 - 1) * 100; });
-    series.push({ name: b.name + '%', type: 'line', yAxisIndex: 1, data: bpct, showSymbol: false, lineStyle: {width: 1}, color: '#B7A6E8' });
-  });
-  // 基准默认只显示上证指数，其余经图例点开
-  const legendSelected = {};
-  series.forEach(s => {
-    const isBench = s.name.slice(-1) === '%' && s.name !== '买入持有该股%';
-    if (isBench && s.name.indexOf('上证指数') !== 0) legendSelected[s.name] = false;
+  // QRE-EQUITY-CHART：策略%/各基准%/买入持有%/回撤% 统一由共享纯函数层构造
+  // （与 job 页同源：单 y 轴「累计收益率%」、轴联动、回撤副网格）
+  const benches = d.benchmarks || {};
+  const benchPc = {};
+  Object.keys(benches).forEach(code => {
+    const b = benches[code] || {};
+    benchPc[code] = Array.isArray(b.pct) ? b.pct
+      : QREEquityChart.benchPct(b.closes || b.values || []);
   });
   const chart = echarts.init($('#chart-equity'));
   symbolEquityChart = chart;
   if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(chart);
-  chart.setOption({
-    animation: false,
-    legend: {top: 0, textStyle: {fontSize: 11}, selected: legendSelected},
-    tooltip: {trigger: 'axis', valueFormatter: v => v == null ? '—' : Number(v).toFixed(2)},
-    grid: {left: 70, right: 60, top: 26, bottom: 45},
-    xAxis: {type: 'category', data: dates},
-    yAxis: [{type: 'value', scale: true, name: '净值(元)'}, {type: 'value', scale: true, name: '累计收益%', axisLabel: {formatter: '{value}%'}}],
-    dataZoom: [{type: 'inside'}, {type: 'slider', bottom: 6, height: 18}],
-    series,
-  });
+  chart.setOption(QREEquityChart.option({
+    dates: dates,
+    strategyPct: QREEquityChart.toPct(eq.values),
+    benches: benches,
+    benchmarks: benches,
+    holdPct: holdPct,
+    drawdownPct: QREEquityChart.drawdownPct(eq.values),
+  }));
+  // 基准多选：按钮态与 ECharts 图例双向同步，全部关闭 = 只看策略；
+  // 区间卡的基准收益跟随第一个开启的基准（curBench）
+  let curBench = '';
+  const bar = $('#bench-bar');
+  const codes = Object.keys(benches);
+  bar.innerHTML = '<span tabindex="0" data-tip="基准是用于对照的指数（默认上证指数）：与基准对比才能看出策略是否跑赢大盘；可多选不同基准，全部关闭时只看策略自身表现。">基准：</span>';
+  if (!codes.length){
+    bar.innerHTML += '<span>' + (d.benchmark_note || '暂无数据') + '</span>';
+  } else {
+    const initial = QREEquityChart.legendSelectedFor(benches, null);
+    const open = new Set();
+    const btns = {};
+    const benchName = code => benches[code].name || code;
+    function syncButton(code, on){
+      if (!btns[code]) return;
+      btns[code].classList.toggle('active', on);
+      btns[code].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    codes.forEach(code => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = benchName(code);
+      btn.dataset.code = code;
+      const on = initial[benchName(code)] !== false;
+      if (on) open.add(code);
+      syncButton(code, on);
+      btn.addEventListener('click', () => {
+        const next = !open.has(code);
+        if (next) open.add(code); else open.delete(code);
+        syncButton(code, next);
+        chart.dispatchAction({type: 'legendToggleSelect', name: benchName(code)});
+        curBench = codes.filter(c => open.has(c))[0] || '';
+        updateStrip();
+      });
+      btns[code] = btn;
+      bar.appendChild(btn);
+    });
+    chart.on('legendselectchanged', ev => {
+      const sel = ev.selected || {};
+      codes.forEach(code => {
+        const name = benchName(code);
+        if (sel[name] == null) return;
+        if (sel[name]) open.add(code); else open.delete(code);
+        syncButton(code, sel[name]);
+      });
+      curBench = codes.filter(c => open.has(c))[0] || '';
+      updateStrip();
+    });
+    curBench = codes.filter(c => open.has(c))[0] || '';
+  }
   // 区间信息卡（与 lab 版同口径，随滑块 rAF 节流重算）
   // QRE-SAAS-EXPOSURE-METRICS：持仓暴露度/持仓期年化——round trips 展开成
   // 逐日持仓掩码（同日多笔按 1 天计），随区间联动；无持仓区间显示「—」
@@ -980,7 +1026,6 @@ function renderEquity(d){
            card('持仓期年化收益', ann == null ? '—' : pct(ann),
                 ann == null ? 'flat' : cls(ann), holdAnnualTip + annNote);
   }
-  const benchCode = d.benchmarks && d.benchmarks['000001.SH'] ? '000001.SH' : (d.benchmarks ? Object.keys(d.benchmarks)[0] : null);
   function sliceRetPct(arr, i0, i1){
     let a = null, b = null;
     for (let i = i0; i <= i1; i++) if (arr[i] != null){ if (a === null) a = arr[i]; b = arr[i]; }
@@ -988,15 +1033,6 @@ function renderEquity(d){
     const baseA = 1 + a / 100;
     if (baseA === 0) return null;  // -100% 本金归零 → 区间收益无意义
     return (1 + b / 100) / baseA - 1;
-  }
-  let benchPct = null;
-  if (benchCode){
-    const bcs = d.benchmarks[benchCode].closes; let b0 = null;
-    benchPct = bcs.map(c => {
-      if (c == null) return null;
-      if (b0 === null) { b0 = c; return 0; }
-      return b0 ? (c / b0 - 1) * 100 : null;  // 基准首价为 0 → 不制造 Infinity
-    });
   }
   function updateStrip(){
     const dz = chart.getOption().dataZoom[0];
@@ -1006,12 +1042,12 @@ function renderEquity(d){
     const ev = eq.values.slice(i0, i1 + 1).filter(v => v != null);
     const sRet = (ev.length >= 2 && ev[0]) ? ev[ev.length - 1] / ev[0] - 1 : null;
     const hRet = sliceRetPct(holdPct, i0, i1);
-    const bRet = benchPct ? sliceRetPct(benchPct, i0, i1) : null;
+    const bRet = (curBench && benchPc[curBench]) ? sliceRetPct(benchPc[curBench], i0, i1) : null;
     const excess = (sRet != null && hRet != null) ? sRet - hRet : null;
     $('#range-strip').innerHTML =
       card('区间策略收益', pct(sRet), cls(sRet), '当前缩放窗口内，策略首末净值之比 − 1。') +
       card('区间买入持有收益', pct(hRet), cls(hRet), '当前缩放窗口内，买入并持有该股的收益。') +
-      card('区间基准收益·' + (benchCode ? d.benchmarks[benchCode].name : '基准'), pct(bRet), cls(bRet), '当前缩放窗口内，基准指数首末收盘价之比 − 1。') +
+      card('区间基准收益·' + (curBench ? benches[curBench].name : '基准'), pct(bRet), cls(bRet), '当前缩放窗口内，基准指数首末收盘价之比 − 1。') +
       card('区间超额·vs买入持有', pct(excess), cls(excess), '当前缩放窗口内，策略收益 − 买入持有收益。') +
       card('交易日数', i1 - i0 + 1, 'flat', '当前缩放窗口包含的交易日数量。') +
       exposureCards(i0, i1, sRet);
@@ -1666,40 +1702,25 @@ function renderKline(d){
       symbol: 'triangle', symbolRotate: 180, symbolSize: 10, itemStyle: { color: '#1a9e4b' },
       tooltip: { formatter: p => p.data.tip } });
   }
-  // 布局与工具栏开关共用一套规格：右侧留白给价格标尺，时间轴只挂最后一个可见格
-  const grids = klineGridSpec(KLINE_TOOL_VIS.vol, panes.length, KLINE_TOOL_VIS.fct);
-  const labelIdx = klineAxisLabelIndex(panes.length, KLINE_TOOL_VIS.vol, KLINE_TOOL_VIS.fct);
-  const xAxis = grids.map((g, i) => ({
-    type: 'category', data: dates, gridIndex: i, axisLabel: { show: i === labelIdx },
-  }));
-  const yAxis = [
-    { type: 'value', gridIndex: 0, scale: true, position: 'right' },
-    { type: 'value', gridIndex: 1, show: KLINE_TOOL_VIS.vol, position: 'right', name: '量',
-      axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
-  ];
-  if (hasF){
-    panes.forEach((p, i) => {
-      yAxis.push({ type: 'value', gridIndex: 2 + i, show: KLINE_TOOL_VIS.fct, scale: true,
-        position: 'right', name: p.name, nameTextStyle: { fontSize: 10 } });
-      let markLine = null;
-      if (p.thresholds && p.thresholds.length){
-        markLine = { silent: true, symbol: 'none',
-          lineStyle: { type: 'dashed', color: '#8B7FBE' },
-          label: { formatter: pp => Number(pp.value).toFixed(2), fontSize: 10 },
-          data: p.thresholds.map(v => ({ yAxis: v })) };
-      }
-      p.series.forEach(s => {
-        if (s.hist){  // MACD 柱：正红负绿（与 K 线涨跌同色）
-          series.push({ name: s.name, type: 'bar', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: s.values,
-            itemStyle: { color: pp => (Number(pp.value) >= 0 ? QREFactorLayout.COLORS.histUp : QREFactorLayout.COLORS.histDown) } });
-        } else {
-          series.push({ name: s.name, type: 'line', xAxisIndex: 2 + i, yAxisIndex: 2 + i, data: s.values,
-            showSymbol: false, lineStyle: { width: 1.2 }, color: s.color, markLine });
-          markLine = null;  // 阈值线只挂同面板第一条线，避免重复
-        }
-      });
-    });
-  }
+  // QRE-KLINE-PANE-OPTION（T1）：pane 的 grid/xAxis/yAxis/series 一律走共享出口，
+  // 索引由 QREFactorLayout 内部生成并校验不变式——业务页不再手写 2+i。
+  const _vis = { showVol: KLINE_TOOL_VIS.vol, showFct: KLINE_TOOL_VIS.fct };
+  const _po = QREFactorLayout.panesToOption(panes, {
+    paneBase: 2,
+    grids: klineGridSpec(KLINE_TOOL_VIS.vol, panes.length, KLINE_TOOL_VIS.fct),
+    dates,
+    axisLabelIndex: klineAxisLabelIndex(panes.length, KLINE_TOOL_VIS.vol, KLINE_TOOL_VIS.fct),
+    showFct: KLINE_TOOL_VIS.fct,
+    headYAxes: [
+      { type: 'value', gridIndex: 0, scale: true, position: 'right' },
+      { type: 'value', gridIndex: 1, show: KLINE_TOOL_VIS.vol, position: 'right', name: '量',
+        axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
+    ],
+    histColors: { up: QREFactorLayout.COLORS.histUp, down: QREFactorLayout.COLORS.histDown },
+  });
+  const grids = _po.grid, xAxis = _po.xAxis, yAxis = _po.yAxis;
+  // pane 序列接在主图/量/买卖点之后（顺序与原实现一致）
+  (hasF ? _po.series : []).forEach(s => series.push(s));
   const zoomX = xAxis.map((_, i) => i);
   const legendData = ['K线', '成交量', '买入', '卖出']
     .concat(plan.overlays.map(o => o.name))
@@ -1917,27 +1938,23 @@ function mountKlineReplay(d){
   const kEl = $('#chart-kline');
   kEl.style.height = QREReplay.klineHeightForPanes(panes.length) + 'px';
   // CR-2026-10-27：布局复用静态 TV 规格（右侧 56 留白给价格标尺、时间轴只挂末格）
+  // QRE-KLINE-PANE-OPTION（T1）：pane 的 yAxes/series 也走共享出口（replay 规格），
+  // grid 下标由 QREFactorLayout 内部生成，业务页不再手写 2+i。
   const grids = klineGridSpec(true, panes.length, true);
   const labelIdx = klineAxisLabelIndex(panes.length, true, true);
-  const yAxes = [
-    { name: '', pct: false, position: 'right', scale: true },
-    { name: '量', pct: false, position: 'right', formatter: v => (v / 10000).toFixed(0) + '万' },
-  ];
+  const _rpo = QREFactorLayout.panesToOption(panes, {
+    paneBase: 2, grids, style: 'replay', showFct: true,
+    headYAxes: [
+      { name: '', pct: false, position: 'right', scale: true },
+      { name: '量', pct: false, position: 'right', formatter: v => (v / 10000).toFixed(0) + '万' },
+    ],
+    histColors: { up: QREFactorLayout.COLORS.histUp, down: QREFactorLayout.COLORS.histDown },
+  });
+  const yAxes = _rpo.yAxis;
   plan.overlays.forEach(o => {
     series.push({ name: o.name, type: 'line', data: o.f.values, grid: 0, color: o.color, width: 1.2 });
   });
-  panes.forEach((p, i) => {
-    yAxes.push({ name: p.name, pct: false, position: 'right', scale: true });
-    p.series.forEach(s => {
-      const cfg = { name: s.name, type: s.type || 'line', data: s.values, grid: 2 + i,
-                    color: s.color || '#6750A4', width: 1.2 };
-      if (s.hist){  // MACD 柱：正红负绿（与 K 线涨跌同色；extra 透传覆盖组件默认 itemStyle）
-        cfg.color = undefined;
-        cfg.extra = { itemStyle: { color: pp => (Number(pp.value) >= 0 ? QREFactorLayout.COLORS.histUp : QREFactorLayout.COLORS.histDown) } };
-      }
-      series.push(cfg);
-    });
-  });
+  _rpo.series.forEach(s => series.push(s));
   // 侧边信息卡：当前帧 OHLC/因子值/持仓与浮动盈亏（毛口径）
   const dateIdx = {}; dates.forEach((dt, i) => { dateIdx[dt] = i; });
   function infoFrame(cursor){

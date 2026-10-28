@@ -153,11 +153,12 @@
     return Number(v).toFixed(2);
   }
 
-  // K 线容器高度（CR-2026-10-27 清理）：静态 renderKline 与重播 mountKlineReplay
-  // 共用同一公式，避免两处漂移。无副图 460px；有副图 420 + panes*160。
+  // K 线容器高度（CR-2026-10-27 清理；CR-2026-10-29 C3.1 整体 +60px）：静态
+  // renderKline 与重播 mountKlineReplay 共用同一公式，避免两处漂移。
+  // 无副图 520px；有副图 480 + panes*160。
   function klineHeightForPanes(paneCount) {
     var n = Math.max(0, Math.floor(Number(paneCount) || 0));
-    return n > 0 ? 420 + n * 160 : 460;
+    return n > 0 ? 480 + n * 160 : 520;
   }
 
   // 窗口显示数据：默认原样切片；zeroBase=true 时以窗口内首个非空值为基线，
@@ -334,7 +335,7 @@
         var option = {
           animation: false,
           tooltip: { trigger: "axis", valueFormatter: tooltipValueFormatter },
-          legend: { top: 0, data: (opts.series || []).filter(function (s) { return !s.grid; }).map(function (s) { return s.name; }) },
+          legend: { top: 0, data: (opts.series || []).filter(function (s) { return !s.grid; }).map(function (s) { return s.name; }), selected: opts.legendSelected || undefined },
           grid: opts.grids || [{ left: 55, right: 20, top: 30, height: "68%" }],
           xAxis: (opts.grids || [{}]).map(function (g, gi) {
             return { type: "category", data: xData, gridIndex: gi, axisLabel: { show: gi === labelIdx } };

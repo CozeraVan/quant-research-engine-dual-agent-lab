@@ -179,10 +179,10 @@
     return s.length ? s[0] : null;
   }
 
-  /* ---------- 高度（与 replay.js::klineHeightForPanes 同源） ---------- */
+  /* ---------- 高度（与 replay.js::klineHeightForPanes 同源，CR-2026-10-29 整体 +60px） ---------- */
   function klineHeight(paneCount) {
     var n = Math.max(0, Math.floor(Number(paneCount) || 0));
-    return n > 0 ? 420 + n * 160 : 460;
+    return n > 0 ? 480 + n * 160 : 520;
   }
 
   window.QRELwcAdapter = {

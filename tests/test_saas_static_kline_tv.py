@@ -30,6 +30,11 @@ SYMBOL_TPL = (
     REPO / "src/quant_research_engine/gui/saas/templates/symbol.html"
 ).read_text(encoding="utf-8")
 REPLAY_JS = (REPO / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
+# QRE-KLINE-PANE-OPTION：harness 的 QREFactorLayout 桩直接跑真实源码，
+# 避免桩与生产实现漂移（本项目已多次因桩窄于依赖而 VM 全绿、生产炸）
+FACTOR_LAYOUT_JS = (
+    REPO / "src/quant_research_engine/gui/static/factor-layout.js"
+).read_text(encoding="utf-8")
 
 
 def _node(script: str) -> None:
@@ -242,6 +247,10 @@ class TestSourceContract:
 _HARNESS = r"""
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
+// 真实 factor-layout.js（window  Shim 后自挂到 globalThis）
+globalThis.window = globalThis;
+%FACTOR_LAYOUT%
+const __QFL__ = globalThis.QREFactorLayout;
 
 function makeEl(sel){
   const e = {
@@ -302,10 +311,10 @@ function makeHarness(plan){
         return live.length ? live[live.length - 1] : null;
       },
     },
-    QREFactorLayout: {
+    // plan 仍用测试夹具（各用例注入）；pane 映射函数一律用真实实现
+    QREFactorLayout: Object.assign({}, __QFL__, {
       plan(){ return plan || { chips: [], panes: [], overlays: [] }; },
-      COLORS: { histUp: '#C93A3A', histDown: '#1E8E5A' },
-    },
+    }),
     QRETheme: { themeChart(){} },
     // CR-2026-10-28：renderKline 读 paneOrder()，harness 必须提供 localStorage
     // CR-2026-10-28：renderKline 读 paneOrder()，harness 提供可用的内存 localStorage
@@ -333,6 +342,13 @@ function makeHarness(plan){
 }
 """
 
+# QRE-KLINE-PANE-OPTION：定义处即注入真实 factor-layout.js，所有使用点自动生效
+# （避免漏替换导致 ReferenceError: __FACTOR_LAYOUT__ is not defined）
+# 注意：必须注入**原始源码**（不是 json.dumps 的字符串字面量，那不会执行）
+_HARNESS = _HARNESS.replace("%FACTOR_LAYOUT%", FACTOR_LAYOUT_JS)
+# QRE-KLINE-PANE-OPTION：定义处即注入真实 factor-layout.js，
+# 所有使用点自动生效（避免漏替换导致 ReferenceError）
+_HARNESS = _HARNESS
 _MAIN_DATA = {
     "kline": {
         "dates": ["2024-01-02", "2024-01-03", "2024-01-04"],
@@ -520,22 +536,20 @@ class TestStaticKlineBehavior:
 
     def test_info_and_tools(self):
         script = (
-            _HARNESS
-            + _MAIN_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
+            _HARNESS            + _MAIN_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
             .replace("%DATA%", json.dumps(_MAIN_DATA))
             .replace("%EMPTY_BAR%", json.dumps(_EMPTY_BAR_DATA))
             .replace("%REPLAY%", json.dumps(REPLAY_JS))
-        )
+                    )
         _node(script)
 
     def test_factor_panes(self):
         script = (
-            _HARNESS
-            + _FACTOR_SCENARIO.replace("%PLAN%", _FACTOR_PLAN_JSON)
+            _HARNESS            + _FACTOR_SCENARIO.replace("%PLAN%", _FACTOR_PLAN_JSON)
             .replace("%SOURCE%", json.dumps(_render_kline_source()))
             .replace("%DATA%", json.dumps(_MAIN_DATA))
             .replace("%REPLAY%", json.dumps(REPLAY_JS))
-        )
+                    )
         _node(script)
 
 # ---------------------------------------------------------------- 画线首片（CR-2026-10-27）
@@ -680,18 +694,17 @@ class TestKlineDrawing:
     """CR-2026-10-27 画线首片：像素→真实坐标、配置生成、交互流、清除。"""
 
     def test_pixel_to_point_real_coordinates(self):
-        _node(_HARNESS + _DRAW_PIXEL_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK))
+        _node(_HARNESS         + _DRAW_PIXEL_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK))
 
     def test_drawing_series_configs(self):
-        _node(_HARNESS + _DRAW_SERIES_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK))
+        _node(_HARNESS         + _DRAW_SERIES_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK))
 
     def test_drawing_click_flow(self):
         _node(
-            _HARNESS
-            + _DRAW_FLOW_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK)
+            _HARNESS            + _DRAW_FLOW_SCENARIO.replace("%DRAW_BLOCK%", _DRAW_BLOCK)
             .replace("%DATA%", json.dumps(_MAIN_DATA))
             .replace("%REPLAY%", json.dumps(REPLAY_JS))
-        )
+                    )
 
 
 # --------------------------------------------- 指标设置与面板管理（CR-2026-10-28）
@@ -722,7 +735,7 @@ Object.assign(h.ctx, { localStorage: { getItem(k){ return store[k] == null ? nul
   setItem(k, v){ store[k] = String(v); }, removeItem(k){ delete store[k]; } } });
 // stub 必须遵守 paneOrder（否则测的是假顺序）：列出的前置，未列出的按 a/b/c 相对序置后
 const ALL_KEYS = ['a', 'b', 'c'];
-Object.assign(h.ctx, { QREFactorLayout: Object.assign(Object.create(null), {
+Object.assign(h.ctx, { QREFactorLayout: Object.assign(Object.create(null), __QFL__, {
   plan(factors, states, order){
     const ord = (order || []).filter(k => ALL_KEYS.indexOf(k) >= 0);
     const rest = ALL_KEYS.filter(k => ord.indexOf(k) < 0);
@@ -752,7 +765,7 @@ assert.equal(vm.runInContext('hidePane("nope")', h.ctx), false, '未知键不得
 
 // 4) renderKline 必须把 paneOrder 透传给 plan（第三参）
 const seen = [];
-Object.assign(h.ctx, { QREFactorLayout: Object.assign(Object.create(null), {
+Object.assign(h.ctx, { QREFactorLayout: Object.assign(Object.create(null), __QFL__, {
   plan(factors, states, order){ seen.push(order && order.slice ? order.slice() : order);
     return { chips: [], overlays: [], panes: [] }; },
   COLORS: { histUp: '#C93A3A', histDown: '#1E8E5A' },
@@ -801,5 +814,6 @@ class TestIndicatorSettings:
         _node(_IND_SOURCE_CONTRACT.replace("%HTML%", json.dumps(SYMBOL_TPL)))
 
     def test_pane_order_and_management_flow(self):
-        _node(_HARNESS + _IND_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
-              .replace("%REPLAY%", json.dumps(REPLAY_JS)))
+        _node(_HARNESS               + _IND_SCENARIO.replace("%SOURCE%", json.dumps(_render_kline_source()))
+              .replace("%REPLAY%", json.dumps(REPLAY_JS))
+            )

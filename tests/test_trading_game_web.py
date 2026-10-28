@@ -112,5 +112,13 @@ def test_template_has_turn_based_layout_without_autoplay_or_shared_chips():
                    "factor-groups", "order-price"):
         assert marker in template
     assert "setInterval" not in template
-    assert "factor-layout.js" not in template
+    # QRE-KLINE-PANE-OPTION（T1，2026-10-29）：游戏现在**故意**引入共享
+    # factor-layout.js——为了让 pane 的 grid/yAxisIndex 与 symbol.html、
+    # replay.js 单一来源（原先三处各写一份 2+i，错位 bug 复发多次）。
+    # 但游戏仍不得使用共享的 **chip UI / plan()**：它有自己的因子选择与分组，
+    # 只用 panesToOption 这一层纯映射。
+    assert "factor-layout.js" in template, "游戏必须引入共享 pane 映射层"
+    assert "QREFactorLayout.panesToOption(" in template, "游戏必须走 panesToOption"
+    assert "QREFactorLayout.plan(" not in template, "游戏不得使用共享 chip/plan UI"
+    assert "fct-chip" not in template, "游戏不得复用 SaaS 的 chip 组件"
     assert "$('game-start').classList.add('hidden')" in template

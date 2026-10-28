@@ -187,9 +187,10 @@ assert.equal(light.dif, '#6750A4'); assert.equal(dark.dif, '#9B84D8', '暗色紫
 assert.equal(light.dea, '#E8A33D'); assert.equal(dark.dea, '#E8A33D', 'DEA 两主题一致');
 assert.equal(light.threshold, '#8B7FBE'); assert.equal(dark.threshold, '#A78BE0');
 
-assert.equal(A.klineHeight(0), 460, '无副图 460');
-assert.equal(A.klineHeight(1), 580, '1 副图 420+160');
-assert.equal(A.klineHeight(3), 900, '3 副图 420+480');
+// CR-2026-10-29 C3.2：与 replay.js::klineHeightForPanes 同源，整体 +60px
+assert.equal(A.klineHeight(0), 520, '无副图 520');
+assert.equal(A.klineHeight(1), 640, '1 副图 480+160');
+assert.equal(A.klineHeight(3), 960, '3 副图 480+480');
 console.log('theme-height-ok');
 """.replace("DETAIL()", json.dumps(DETAIL)))
 
