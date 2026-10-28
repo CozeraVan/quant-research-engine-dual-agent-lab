@@ -1,0 +1,120 @@
+/* ============================================================================
+   QRE-SAAS-CARD-CLASS — 小数据卡统一样式（2026-10-29）
+   ----------------------------------------------------------------------------
+   「一类卡」的定义：回测详情 / 个股详情里所有**单值小卡**，一律由 `.metric-card`
+   渲染，分布在以下位置——
+
+     回测结果页（job.html）
+       · #metric-strip            主指标条（总收益率/年化/夏普/回撤/胜率/平均持股周期）
+       · #ra-strip                风险调整收益条（α / β / 信息比率）
+       · #range-strip             区间信息条（区间策略收益/暴露度/持仓年化…）
+       · #replay-metrics          重播指标条
+       · #fees-body > .wear-cards 交易磨损（佣金/印花税/过户费/总磨损/磨损比率）
+       · #risk-body  > .risk-cards 风险分析（VaR/ES）
+     个股回测详情（symbol.html）
+       · #sum-strip               个股简介条（股票/区间收益/笔数/胜率/平均持股周期…）
+       · #ra-strip                风险调整收益条（α / β / 信息比率）
+       · #range-strip             区间信息条
+       · #kreplay-info            重播指标条
+       · #wear-body > .wear-cards 交易磨损
+       · #risk-body               风险分析（.metric-strip 直接包 .metric-card）
+
+   统一规则（用户 2026-10-29 定稿）：
+     · 卡片     白底 + 紫框（--lav）
+     · 中性数值 紫字（--lav-deep）——日期、暴露度、笔数、持股周期、β、磨损金额…
+     · 盈亏数值 红 / 绿（--pos 红涨 / --neg 绿跌，A 股口径）——由 .pos / .neg 类驱动
+     · 布局     flex-wrap + flex-grow，每行必然填满（末行拉宽），窄屏自然换行
+
+   **为什么单独一个文件**：这类卡原先的规则散在三处——base.html 内联（白底）、
+   lab-theme.css（`.metric-strip .metric-card` 白底 + `.risk-cards .metric-card`
+   粉底粉框）、以及各模板的 ID 覆盖，于是出现白/紫/粉混搭。
+   本文件在 lab-theme.css 与 night-mode.css **之后**加载，同特异性后者让位，
+   因此这一处就是这类卡的唯一权威。**未来改这类卡的风格只改本文件**，
+   不要去模板或 lab-theme 里补零散规则；新增小卡条时只需把新容器 ID 加进
+   下面的 flex 规则（背景/边框/数值色由基类自动继承，无需再写）。
+   ============================================================================ */
+
+/* ---- 基类：白底 + 紫框（用容器类选择器把特异性提到与 lab-theme 同级，
+       靠"后加载"胜出；裸 .metric-card 作为其它容器的兜底） ---- */
+.metric-strip .metric-card,
+.wear-cards .metric-card,
+.risk-cards .metric-card,
+.metric-card {
+  background: #fff;
+  border: 1px solid var(--lav);
+  border-radius: 10px;
+}
+
+/* ---- 数值色：中性默认紫；盈亏走 .pos(红) / .neg(绿) ---- */
+.metric-card .m-value {
+  color: var(--lav-deep);
+}
+/* .pos/.neg 在 base.html 是 0,1,0，会被上面的 0,2,0 压住，这里显式提级 */
+.metric-card .m-value.pos {
+  color: var(--pos);
+}
+.metric-card .m-value.neg {
+  color: var(--neg);
+}
+
+/* ---- 布局：六条小卡条 flex 自适应均分整行 ---- */
+#metric-strip,
+#sum-strip,
+#range-strip,
+#ra-strip,
+#replay-metrics,
+#kreplay-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+/* 密集条（7 卡左右）：min 130px → 一行并排。
+   130px 是实测值：job 页 .container 约 1000px，7×150+6×10=1110 放不下会退化成
+   6+1 孤行；7×130+6×10=970 才放得下。 */
+#metric-strip .metric-card,
+#range-strip .metric-card,
+#replay-metrics .metric-card,
+#kreplay-info .metric-card {
+  flex: 1 1 130px;
+}
+/* 简介条与风险调整收益条（卡少、字号大）：min 250px → 8 卡呈 4+4、3 卡撑满整行 */
+#sum-strip .metric-card,
+#ra-strip .metric-card {
+  flex: 1 1 250px;
+  padding: 10px 14px;
+}
+#sum-strip .metric-card .m-value,
+#ra-strip .metric-card .m-value {
+  font-size: 15px;
+}
+
+/* ---- 磨损条毛/净收益值：盈亏红/绿 ----
+   lab-theme 的 `.wb-val{color:var(--ink)}` 与 base 的 `.pos{color:var(--pos)}` 同为
+   0,1,0 且 lab-theme 后加载会赢；这里用 0,2,0 显式提级。 */
+.wb-val.pos {
+  color: var(--pos);
+}
+.wb-val.neg {
+  color: var(--neg);
+}
+
+/* ---- 磨损/风险条：lab-theme 的 `.risk-cards .metric-card` 是粉底粉框
+       （#FFFBFB / #F0CACA），这里统一收回白底紫框 ---- */
+.wear-cards .metric-card,
+.risk-cards .metric-card {
+  background: #fff;
+  border-color: var(--lav);
+}
+
+@media (max-width: 960px) {
+  #metric-strip .metric-card,
+  #range-strip .metric-card,
+  #replay-metrics .metric-card,
+  #kreplay-info .metric-card {
+    flex: 1 1 45%;
+  }
+  #sum-strip .metric-card,
+  #ra-strip .metric-card {
+    flex: 1 1 45%;
+  }
+}

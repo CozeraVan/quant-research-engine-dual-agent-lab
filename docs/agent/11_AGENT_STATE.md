@@ -1375,3 +1375,25 @@ TradingView 视图下图例两个 bug 已修。**根因**：① `setChipState(ke
 背景全 `rgb(241,237,248)`、行内等宽、非末行填满、无溢出，symbol 1440 呈 4+4+3；
 α/β/IR、平均持股周期、LWC 图例往返复验均未被破坏；零 pageerror。
 CR：`CR-2026-10-28_card_unify.md`。未 commit/push。
+
+### 2026-10-29 CARD-CLASS 已实施待人工验收，未 commit/push
+
+用户推翻上轮紫底设计，定稿「白底紫框 + 中性紫/盈亏红绿」，并要求四类小卡统一为一类。
+
+**根因**：这类卡一律由 `.metric-card` 渲染，但样式散在三处——base 内联（白底灰框 +
+上轮六条指标条紫底）、lab-theme（`.metric-strip .metric-card` 白底 +
+`.risk-cards .metric-card` **粉底粉框**）、两个模板 `wc()` 的**内联强制色**。
+上轮只并了六条指标条，漏了 `.wear-cards`/`.risk-cards` → 白/紫/粉混搭。
+
+**修复**：新建 `static/card-class.css` 作为**唯一权威**（在 lab/night 之后加载，
+同特异性后加载胜出——压住 lab-theme 粉底粉框的唯一机制）；基类用容器类选择器提特异性；
+`.pos`/`.neg` 必须 0,3,0 提级否则被基类压住；删 base 内联旧规则与 `wc()` 内联色；
+磨损条毛/净收益 6 处按盈亏上色。
+
+**硬规则（写进 12_UI_STYLE_GUIDE §3.18）**：改这类卡只改 card-class.css；
+新增小卡条只把容器 ID 加进它的 flex 规则；禁止内联强制色；禁止 ID 级背景覆盖。
+
+测试 `TestMetricStripStyleContract` 8 例（RED 两次）；`test_perf_metrics.py` 18 passed；
+全量 `3032 passed, 24 skipped`。真实浏览器 job/symbol × 1440/1024/375 + 磨损/风险条全通过
+（job 风险 4 卡全绿——VaR/ES 是损失）；α/β/IR、平均持股周期、LWC 图例复验一致；零 pageerror。
+CR：`CR-2026-10-29_card_class.md`。未 commit/push。

@@ -1928,3 +1928,35 @@ ECS 无行情库，后端补算对 1013 个存量产物不可行；前端从快�
 **测试环境注记**：全量套件在随机顺序下约 1/3 概率挂一个**随机不同**的测试（setup error，
 如 `test_worker_config_mismatch` / `test_guest_cancel_issues_cookie_when_missing`），
 `-p no:randomly` 确定性顺序下 6/6 全绿，单独跑也全过——既有测试隔离 flake，与本次改动无关。
+
+## 2026-10-29 小数据卡统一「白底紫框」，未 commit/push
+
+用户定稿：取消所有紫底小卡 → 白底 + 紫框；中性数据（日期/暴露度/笔数/持股周期/β/磨损
+金额）紫字，盈亏数据红涨绿跌。并要求把「顶部小 div / 重播小 div / 交易磨损 / 风险分析」
+四类统一作为一类，便于未来统一改风格。
+
+**根因：规则散在三处，改一处漏两处。** 这类卡一律由 `.metric-card` 渲染，但样式分散在
+base.html 内联（白底灰框 + 上轮加的六条指标条紫底）、lab-theme.css
+（`.metric-strip .metric-card` 白底 + `.risk-cards .metric-card` **粉底粉框**）、
+以及两个模板 `wc()` 的**内联强制色**。上一轮只并了六条指标条，漏了 `.wear-cards` 与
+`.risk-cards` → 用户看到的白/紫/粉混搭。
+
+**修复**：新建 `static/card-class.css` 作为这类卡的**唯一权威**（在 lab/night 之后加载，
+同特异性后加载胜出——这是能压住 lab-theme 粉底粉框的唯一机制）。文件头注释写死「一类卡」
+的定义与全部落点；基类规则用容器类选择器（`.metric-strip/.wear-cards/.risk-cards
+.metric-card`）把特异性提到与 lab-theme 同级。删掉 base 内联里上轮的紫底+flex 规则、
+两个 `wc()` 的内联强制色，并给磨损条毛/净收益值按盈亏上色（6 处）。
+
+**关键细节**：`.pos`/`.neg` 在 base 是 0,1,0，会被 0,2,0 的 `.metric-card .m-value`
+压住 → 必须在 card-class.css 里用 0,3,0 显式提级，否则盈亏不再是红绿（RED 专门测这条）。
+另外 `--lav-deep` 是 `#4A3A78` = rgb(74,**58**,120)，我期望值一度手写成 rgb(74,60,120)
+被断言抓到——这类期望值必须用真实计算值。
+
+测试：`TestMetricStripStyleContract` 重写为 8 例（含加载顺序、base 不得再覆盖、
+磨损/风险不得漏、数值色提级、密集条 130px、禁内联强制色），**RED 验证两次**；
+`test_perf_metrics.py` 18 passed；全量 `3032 passed, 24 skipped`。
+真实浏览器（fixture 补 wear/risk/fees 数据）：job/symbol × 1440/1024/375 六组合 +
+job 磨损 5 卡 + job 风险 4 卡（全绿，VaR/ES 是损失）+ symbol 磨损 5 卡 + symbol 风险 7 卡，
+全部白底紫框、数值色三分、行内等宽、非末行填满、无溢出；α/β/IR 与平均持股周期复验一致；
+LWC 图例往返复验通过；零 pageerror。截图 `.tmp/perf-browser/symbol-cards.png`。
+规范写入 `12_UI_STYLE_GUIDE.md` §3.18。CR：`CR-2026-10-29_card_class.md`。未 commit/push。

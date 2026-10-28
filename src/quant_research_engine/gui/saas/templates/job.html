@@ -668,7 +668,7 @@ function renderFees(fees, meta){
   // QRE-SAAS-RESULT-UNDERSTANDING：五类磨损卡卡级口径提示（复用 LabUI.helpTips
   // 事件委托，动态重绘无需 refresh；桌面 hover / 键盘 focus / 移动 tap 均可用）
   const wc = (label, val, tip) => '<div class="metric-card"' + (tip ? ' tabindex="0" data-tip="' + escH(tip) + '"' : '') +
-    '><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+    '><div class="m-label">' + label + '</div><div class="m-value">' + val + '</div></div>';
   const TIP_COMMISSION = '按成交金额乘以佣金率双向收取的佣金合计，受每笔最低佣金约束。';
   const TIP_STAMP = '仅卖出成交按金额收取的印花税合计；买入不收印花税。';
   const TIP_OTHER = '过户费，以及总费用扣除佣金与印花税后的残差（含滑点等其他成本）。';
@@ -696,8 +696,8 @@ function renderFees(fees, meta){
       wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%', TIP_RATIO) +
     '</div>' +
     '<div class="wb">' +
-      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + escH(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + num(fees.gross_pnl) + ' 元</span></div>' +
-      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + escH(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + num(fees.net_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + escH(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val ' + (fees.gross_pnl >= 0 ? 'pos' : 'neg') + '">' + num(fees.gross_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + escH(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(fees.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val ' + (fees.net_pnl >= 0 ? 'pos' : 'neg') + '">' + num(fees.net_pnl) + ' 元</span></div>' +
       '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + num(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div>' +
     '</div>';
 }

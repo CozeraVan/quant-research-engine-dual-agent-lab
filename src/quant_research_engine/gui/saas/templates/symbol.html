@@ -1034,7 +1034,7 @@ function renderWear(d){
   const TIP_GROSS = '毛收益：未扣除任何交易费用的盈亏。';
   const TIP_NET = '净收益：扣除全部交易磨损后实际落袋的盈亏。';
   const wc = (label, val, tip) => '<div class="metric-card"' + (tip ? ' tabindex="0" data-tip="' + esc(tip) + '"' : '') +
-    '><div class="m-label">' + label + '</div><div class="m-value flat" style="color:var(--lav-deep)">' + val + '</div></div>';
+    '><div class="m-label">' + label + '</div><div class="m-value">' + val + '</div></div>';
   const w = d.wear;
   if (w){
     $('#box-wear').style.display = '';
@@ -1047,8 +1047,8 @@ function renderWear(d){
       wc('总磨损', f2(w.total_cost) + ' 元', TIP_TOTAL) +
       wc('磨损 / 投入本金', ratio == null ? '—' : (ratio * 100).toFixed(3) + '%', TIP_RATIO) + '</div>' +
       '<div class="wb">' +
-      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(w.gross_pnl) + ' 元</span></div>' +
-      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(w.net_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.gross_pnl) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val ' + (w.gross_pnl >= 0 ? 'pos' : 'neg') + '">' + f2(w.gross_pnl) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(w.net_pnl) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val ' + (w.net_pnl >= 0 ? 'pos' : 'neg') + '">' + f2(w.net_pnl) + ' 元</span></div>' +
       '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(w.total_cost) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div></div>';
     return;
   }
@@ -1074,8 +1074,8 @@ function renderWear(d){
     const maxV = Math.max(Math.abs(gross), Math.abs(net), 1);
     const eaten = gross > 0 ? wear / gross : null;
     html += '<div class="wb">' +
-      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(gross) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val">' + f2(gross) + ' 元</span></div>' +
-      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(net) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val">' + f2(net) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_GROSS) + '">毛收益（未扣费）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(gross) / maxV * 100).toFixed(1) + '%;background:#8B7FBE"></div></div><span class="wb-val ' + (gross >= 0 ? 'pos' : 'neg') + '">' + f2(gross) + ' 元</span></div>' +
+      '<div class="wb-row"><span class="wb-label" tabindex="0" data-tip="' + esc(TIP_NET) + '">净收益（扣除磨损）</span><div class="wb-track"><div class="wb-bar" style="width:' + (Math.abs(net) / maxV * 100).toFixed(1) + '%;background:#6750A4"></div></div><span class="wb-val ' + (net >= 0 ? 'pos' : 'neg') + '">' + f2(net) + ' 元</span></div>' +
       '<div class="wb-note">磨损吃掉毛收益 <b style="color:var(--lav-deep)">' + f2(wear) + ' 元' + (eaten != null ? '（' + (eaten * 100).toFixed(2) + '%）' : '') + '</b></div></div>';
   }
   $('#wear-body').innerHTML = html;

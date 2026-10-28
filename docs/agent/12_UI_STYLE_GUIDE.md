@@ -257,6 +257,37 @@
 - CSS 数学函数里的角度必须包 `calc()`；`clamp()` 钳的是度值时注意别把 3.98° 钳成 1°（应钳位移/百分比，不在角度上钳）。
 - 性能：单委托 `pointermove` + rAF 簿记成本 ≈0ms；剩余成本来自无 GPU 环境下浏览器对 `blur(28px)` 的软件重采样（关掉 `backdrop-filter` 即回 60fps）。详情见 `13_UI_PERF_NOTES.md`。
 - `.help-side{position:sticky}` 必须写在玻璃卡族规则**之后**（同特异性后声明胜出）。
+### 3.18 小数据卡一类（QRE-SAAS-CARD-CLASS，2026-10-29 用户定稿）
+
+**唯一样式权威 = `static/card-class.css`**（在 lab-theme / night-mode 之后加载，同特异性
+后加载胜出）。改这类卡只改这一个文件，禁止在模板内联或 lab-theme 里补规则。
+
+「一类卡」= 详情页所有单值小卡，一律由 `.metric-card` 渲染：
+
+| 页面 | 容器 |
+|---|---|
+| 回测结果页 job.html | `#metric-strip` 主指标条 / `#ra-strip` 风险调整收益 / `#range-strip` 区间条 / `#replay-metrics` 重播条 / `#fees-body > .wear-cards` 交易磨损 / `#risk-body > .risk-cards` 风险分析 |
+| 个股详情 symbol.html | `#sum-strip` 简介条 / `#ra-strip` / `#range-strip` / `#kreplay-info` 重播条 / `#wear-body > .wear-cards` 交易磨损 / `#risk-body` 风险分析 |
+
+硬规则：
+
+1. **卡片**：白底 `#fff` + 紫框 `1px solid var(--lav)`（#6750A4），圆角 10px。
+   **不得再用紫底/粉底**——lab-theme 的 `.risk-cards .metric-card` 粉底粉框已被显式收回。
+2. **数值色三分**：
+   - 中性（日期/暴露度/笔数/持股周期/β/磨损金额/…）→ `var(--lav-deep)` 紫，由
+     `.metric-card .m-value` 默认给出；
+   - 盈利 → `var(--pos)` 红；亏损 → `var(--neg)` 绿（A 股红涨绿跌）。
+   - `.pos`/`.neg` 在 base 是 0,1,0，**必须**在 card-class.css 里用
+     `.metric-card .m-value.pos`（0,3,0）提级，否则被基类压住、盈亏不再红绿。
+   - 磨损条毛/净收益值 `.wb-val` 同理（`.wb-val.pos` / `.wb-val.neg`）。
+3. **禁止内联 style 强制颜色**：内联压过一切 CSS，是统一风格最大的漏洞
+   （`test_wear_renderers_do_not_force_inline_color` 会抓）。
+4. **布局**：`display:flex;flex-wrap:wrap` + `flex-grow`，每行必然填满（末行拉宽）。
+   两档 min：密集条（指标/区间/重播，7 卡左右）**130px**（job `.container` ~1000px，
+   150px 会退化成 6+1 孤行）；简介条与 `#ra-strip` **250px**（8 卡 4+4、3 卡撑满整行）。
+5. **新增小卡条**：只需把容器 ID 加进 card-class.css 的 flex 规则；
+   背景/边框/数值色由基类自动继承，**不要**再写 ID 级背景覆盖。
+
 - **K 线容器双引擎互斥（QRE-SAAS-KLINE-ENGINE-EXCLUSIVE，2026-10-28）**：`#chart-kline` 同时只能挂一个图表引擎实例（ECharts 或 TradingView Lightweight Charts）。**任何往该容器挂图表的路径，挂载前必须调 `klineDisposeEngines()`**（echarts `getInstanceByDom`+`dispose` → 兜底清空容器 → `symbolKlineChart=null` → `lwcDispose()`），不得只清自己那一侧。只清一侧的后果是旧 canvas 残留、双图叠加（实测容器 `scrollHeight` 翻倍）。现有三个调用点：`renderKline()`、`renderKlineLwc()`、引擎开关处理器。新增第四条 K 线渲染路径时同步接上。
 
 ### 3.17 使用说明侧边栏玻璃胶囊当前项（QRE-SAAS-HELP-SIDEBAR-GLASS-PILL，2026-10-28）
@@ -500,6 +531,16 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 ## 变更记录
 
+## 变更记录
+
+- 2026-10-29（QRE-SAAS-CARD-CLASS）新增 §3.18 小数据卡一类规范，并新建
+  `static/card-class.css` 作为这类卡的**唯一样式权威**（在 lab/night 之后加载）。
+  用户定稿：取消所有紫底小卡 → 白底 + 紫框；中性数值紫、盈亏红（`--pos`）绿（`--neg`）。
+  覆盖 job/symbol 两页的指标条/简介条/区间条/风险调整收益条/重播条/交易磨损/风险分析。
+  同时删掉 base.html 内联里上一轮的紫底+flex 规则、两个模板 `wc()` 的内联强制色，
+  并给磨损条毛/净收益值按盈亏上色。测试 `TestMetricStripStyleContract` 8 例
+  （RED 验证两次）；全量 3032 passed；真实浏览器 job/symbol × 3 视口 + 磨损/风险条全通过。
+  详见 `change_requests/CR-2026-10-29_card_class.md`。
 - 2026-10-28（QRE-SAAS-KLINE-ENGINE-EXCLUSIVE）§3.16 追加 K 线容器双引擎互斥硬规则：`#chart-kline` 同时只能挂一个引擎实例，任何挂载路径挂载前必须调 `klineDisposeEngines()`（`symbol.html` 新增，紧邻 `lwcDispose`），不得只清自己那一侧。三个既有调用点（`renderKline`/`renderKlineLwc`/引擎开关）全部改走它。证据见 `change_requests/CR-2026-10-28_kline_engine_exclusive.md`。
 - 2026-10-28（QRE-SAAS-CARD-FROSTED-GLASS + HELP-SIDEBAR-GLASS-PILL）新增 §3.16 全站卡片玻璃质感/光标光斑/小卡 3D 倾斜与 §3.17 使用说明侧边栏玻璃胶囊，§5 动效表补两行。核心硬规则：**光斑宿主走最外层玻璃卡、倾斜宿主走光标下的小卡（不向上爬）**；小卡 `perspective:260px`（170×77 卡上 1000px 的 4° 只有 0.4px 位移，看不见）；图表卡（含 `canvas`）一律不倾斜；`--card-radius` 为新 token 不动 `--radius`；`background` 简写会重置 `background-image`（玻璃底必须拆写）；负 z-index 装饰层且不出血到视口外。三版竞稿后取 Kimi V3（rAF 弹簧 + 速度投影拉伸 + 闭式回弹）。改动文件：`static/card-fx.js`（新）、`static/help-nav.js`（新）、`static/lab-theme.css`、`static/night-mode.css`、`saas/templates/base.html`（仅加一行 script）、`saas/templates/help.html`。零新色相、零外部依赖、夜间生效、375px 零横溢经真实 Chromium 验证。
 - 2026-10-27（QRE-SAAS-NIGHT-MODE）新增 §11 夜间模式规范：SaaS 全部页面（含 9090 管理台）追加可切换深色主题，**浅色 token/配色/视觉/排版/文案/数据零改动**，唯一新增交互是顶栏 `.tt-btn` 主题切换按钮。实现为三个新/改文件：`static/night-mode.css`（深色 token 覆盖 + 组件族深色规则，仅 `[data-theme="dark"]` 作用域）、`static/night-mode.js`（`QRETheme`：浅色不写 storage、`prefers-color-scheme` 跟随、手动选择落 `localStorage('qre-theme')`、`meta[name=theme-color]` 同步、`themeChart` 图表配色注入）、`saas/templates/base.html` 4 处挂载（防 FOUC 内联脚本 + css + js + 按钮）。夜间色板固定 8 token（bg `#17153B`/card `#2E236C`/line `#433D8B`/text `#F1EDF8`/muted `#C8ACD6`/accent `#7E60BF`/accent-deep `#C8ACD6`/accent-soft `#2E236C`）；红涨绿跌只提亮不断语义；ECharts 每次 `setOption` 前注入背景/轴/文字/tooltip/品牌紫，不重算布局与数据；375px 零横溢、按钮带文字与 `aria-pressed`。`#guest-note` 深色告警（`#B4761F` 字 / `#3D3118` 底）刻意保留。

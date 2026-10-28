@@ -2834,3 +2834,18 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 效果：symbol 1440 呈 4+4+3 全紫底；job 指标条 7 卡一行；375px 正常换行；无半空行、无白底卡。
 - 测试：`test_perf_metrics.py` 14 passed（RED 验证通过）；全量 `3028 passed, 24 skipped`。
 - 真实浏览器端到端通过，截图 `.tmp/perf-browser/symbol-cards.png`。CR 已建。未 commit/push。
+
+## 2026-10-29 小数据卡统一「白底紫框」交接
+
+- 新增 `src/quant_research_engine/gui/static/card-class.css`（**这类卡的唯一样式权威**，
+  在 lab/night 之后加载）；改 `base.html`（加 link + 删上轮紫底/flex 规则）、
+  `job.html`、`symbol.html`（去 `wc()` 内联强制色 + 磨损条毛/净收益按盈亏上色 6 处）、
+  `tests/test_perf_metrics.py`（`TestMetricStripStyleContract` 重写为 8 例）、CR 新建。
+- 覆盖四类：指标条/简介条/区间条/风险调整收益条/重播条/交易磨损/风险分析（job+symbol 两页）。
+- 规则：白底 `#fff` + 紫框 `var(--lav)`；中性值 `--lav-deep` 紫，盈亏 `--pos` 红 / `--neg` 绿；
+  flex-wrap + flex-grow 每行填满；密集条 min 130px、简介/ra 条 min 250px。
+- **未来改这类卡只改 card-class.css**；新增小卡条只把容器 ID 加进它的 flex 规则，
+  不要再写 ID 级背景覆盖、不要内联强制色（测试会抓）。
+- 测试 8 例 RED 验证两次；`test_perf_metrics.py` 18 passed；全量 `3032 passed, 24 skipped`。
+- 真实浏览器六视口组合 + 磨损/风险条全通过，截图 `.tmp/perf-browser/symbol-cards.png`。
+- 未 commit/push。

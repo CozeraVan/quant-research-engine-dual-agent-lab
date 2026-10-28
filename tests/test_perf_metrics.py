@@ -450,52 +450,95 @@ console.log('ra-symbol-ok');
 
 # ---------------------------------------------------------------- 小卡条样式契约
 class TestMetricStripStyleContract:
-    """QRE-SAAS-CARD-UNIFY：详情页小卡条必须统一紫底 + flex 自适应均分整行。
+    """QRE-SAAS-CARD-CLASS：小数据卡必须统一「白底 + 紫框」，数值色三分（中性紫/红/绿）。
 
-    2026-10-28 用户实测：α/β/IR 新卡是白底，混在紫底卡旁边；且 3 张卡只占半行
-    （落入 lab-theme 的 `.metric-strip{display:grid;repeat(6,1fr)}` + base 的
-    `.metric-card{background:#fff}`）。这里用源码合同锁死统一后的规则，
-    防止后续加新条时又漏出白底卡或半空行。
+    2026-10-29 用户定稿：取消所有紫底小卡，统一白底紫框；中性数据（日期/暴露度/
+    笔数/持股周期/β/磨损金额）紫字，盈亏数据红涨绿跌。
+
+    历史坑（本类测试存在的原因）：
+    · 2026-10-28 第一版只把六条指标条并进紫底名单，漏了交易磨损(.wear-cards)与
+      风险分析(.risk-cards)，后者还吃着 lab-theme 的粉底粉框 → 白/紫/粉混搭；
+    · 规则散在 base.html 内联 + lab-theme.css + 模板 ID 覆盖三处，改一处漏两处。
+    现收敛到独立文件 static/card-class.css（在 lab/night 之后加载，同特异性后加载胜出），
+    是这类卡的唯一权威。
     """
 
     BASE = (REPO / "src/quant_research_engine/gui/saas/templates/base.html").read_text(
         encoding="utf-8"
     )
-    # 详情页全部小卡条（job/symbol 两页）
+    CARD_CSS = (REPO / "src/quant_research_engine/gui/static/card-class.css").read_text(
+        encoding="utf-8"
+    )
+    # 详情页全部小卡容器（job/symbol 两页）
     ALL_STRIPS = ["#metric-strip", "#sum-strip", "#range-strip", "#ra-strip",
                   "#replay-metrics", "#kreplay-info"]
 
-    def _flex_rule(self) -> str:
-        m = re.search(
-            r"#metric-strip,#sum-strip,#range-strip,#ra-strip,"
-            r"#replay-metrics,#kreplay-info\{([^}]*)\}",
-            self.BASE,
+    def test_card_class_css_is_loaded_last(self):
+        """card-class.css 必须在 lab-theme / night-mode 之后加载——
+        同特异性下后加载才胜出，这是它能压住 lab-theme 粉底粉框的唯一原因。"""
+        i_lab = self.BASE.index('href="/static/lab-theme.css')
+        i_night = self.BASE.index('href="/static/night-mode.css')
+        i_card = self.BASE.index('href="/static/card-class.css')
+        assert i_lab < i_night < i_card, (
+            "加载顺序必须是 lab-theme → night-mode → card-class"
         )
-        assert m, "未找到小卡条统一 flex 规则"
-        return m.group(1)
 
-    def _purple_rule(self) -> str:
-        m = re.search(
-            r"#metric-strip \.metric-card,#sum-strip \.metric-card,#range-strip \.metric-card,\s*\n"
-            r"#ra-strip \.metric-card,#replay-metrics \.metric-card,"
-            r"#kreplay-info \.metric-card\{([^}]*)\}",
-            self.BASE,
-        )
-        assert m, "未找到小卡条统一紫底规则"
-        return m.group(1)
+    def test_base_no_longer_overrides_card_background(self):
+        """base.html 内联不得再写小卡的背景/边框/flex 规则——
+        唯一权威在 card-class.css，留着会再次出现"改一处漏两处"。"""
+        inline = self.BASE[self.BASE.index("<style>"):self.BASE.index("</style>")]
+        # 只挑出「选择器里含 .metric-card」的规则——base 里 .sidenav/.wb-track 等
+        # 非卡片元素本来就用 --tint，那些不在本类测试范围内。
+        card_rules = [
+            m.group(0)
+            for m in re.finditer(r"[^{}]*\.metric-card[^{}]*\{[^}]*\}", inline)
+        ]
+        assert card_rules, "base 内联应保留 .metric-card 基类兜底"
+        for rule in card_rules:
+            assert "var(--tint" not in rule, (
+                f"base 内联的 .metric-card 规则不得再用 --tint 紫底: {rule[:120]}"
+            )
+            assert not re.search(r"#[a-z-]+-strip \.metric-card", rule), (
+                f"base 内联不得按小卡条 ID 覆盖样式: {rule[:120]}"
+            )
 
-    def test_all_strips_share_flex_and_purple(self):
-        """六条小卡条必须同在一个 flex 规则和一个紫底规则里，不允许有漏网的。"""
-        flex = self._flex_rule()
-        assert "display:flex" in flex and "flex-wrap:wrap" in flex, (
-            "小卡条必须 flex + wrap，否则会出现半空行"
+    def test_all_cards_white_bg_purple_border(self):
+        """所有小卡（含磨损/风险）必须白底 + 紫框(--lav #6750A4)。"""
+        # 基类规则：用容器类选择器把特异性提到与 lab-theme 同级，靠后加载胜出
+        assert ".metric-strip .metric-card," in self.CARD_CSS
+        assert ".wear-cards .metric-card," in self.CARD_CSS
+        assert ".risk-cards .metric-card," in self.CARD_CSS
+        base_rule = re.search(
+            r"\.metric-strip \.metric-card,\s*\n\.wear-cards \.metric-card,\s*\n"
+            r"\.risk-cards \.metric-card,\s*\n\.metric-card \{([^}]*)\}",
+            self.CARD_CSS,
         )
-        purple = self._purple_rule()
-        assert "var(--tint" in purple, "小卡条必须用 --tint 紫底"
-        assert "var(--tint-deep" in purple, "小卡条描边必须用 --tint-deep"
-        # 规则里必须显式列出全部六条（漏一条 = 该条回落白底）
-        for sid in self.ALL_STRIPS:
-            assert sid.lstrip("#") in self.BASE, f"{sid} 未出现在统一规则中"
+        assert base_rule, "未找到小卡基类规则（白底紫框）"
+        rule = base_rule.group(1)
+        assert "background: #fff" in rule, "必须白底"
+        assert "border: 1px solid var(--lav)" in rule, "必须紫框"
+        # 磨损/风险条：lab-theme 的粉底粉框必须被显式收回
+        override = re.search(
+            r"\.wear-cards \.metric-card,\s*\n\.risk-cards \.metric-card \{([^}]*)\}",
+            self.CARD_CSS,
+        )
+        assert override, "未找到磨损/风险条的收回规则"
+        assert "background: #fff" in override.group(1), "磨损/风险条必须收回白底"
+        assert "border-color: var(--lav)" in override.group(1), "磨损/风险条必须收回紫框"
+
+    def test_value_colors_neutral_purple_pnl_red_green(self):
+        """数值色：中性默认 --lav-deep；盈亏 .pos 红 / .neg 绿（且必须提级压过基类）。"""
+        assert ".metric-card .m-value {" in self.CARD_CSS
+        assert "color: var(--lav-deep)" in self.CARD_CSS, "中性数值必须紫"
+        # .pos/.neg 在 base 是 0,1,0，会被 0,2,0 的 .metric-card .m-value 压住，
+        # 必须在 card-class.css 里用 0,3,0 显式提级
+        assert ".metric-card .m-value.pos {" in self.CARD_CSS
+        assert "color: var(--pos)" in self.CARD_CSS, "盈利必须红"
+        assert ".metric-card .m-value.neg {" in self.CARD_CSS
+        assert "color: var(--neg)" in self.CARD_CSS, "亏损必须绿"
+        # 磨损条毛/净收益值同理（lab-theme 的 .wb-val 同特异性但先加载）
+        assert ".wb-val.pos {" in self.CARD_CSS
+        assert ".wb-val.neg {" in self.CARD_CSS
 
     def test_dense_strips_fit_seven_in_one_row(self):
         """密集条（7 卡左右）min 必须 ≤130px，否则 job 指标条会退化成 6+1 孤行。
@@ -504,29 +547,42 @@ class TestMetricStripStyleContract:
         7×130+6×10=970 放得下 → 一行并排。
         """
         m = re.search(
-            r"#metric-strip \.metric-card,#range-strip \.metric-card,\s*\n"
-            r"#replay-metrics \.metric-card,#kreplay-info \.metric-card\{([^}]*)\}",
-            self.BASE,
+            r"#metric-strip \.metric-card,\s*\n#range-strip \.metric-card,\s*\n"
+            r"#replay-metrics \.metric-card,\s*\n#kreplay-info \.metric-card \{([^}]*)\}",
+            self.CARD_CSS,
         )
         assert m, "未找到密集条 flex 规则"
-        basis = re.search(r"flex:1 1 (\d+)px", m.group(1))
-        assert basis, "密集条必须写 flex:1 1 <N>px"
+        basis = re.search(r"flex: 1 1 (\d+)px", m.group(1))
+        assert basis, "密集条必须写 flex: 1 1 <N>px"
         assert int(basis.group(1)) <= 130, (
             f"密集条 min {basis.group(1)}px 过大，7 卡会换行成孤行"
         )
 
     def test_summary_and_ra_strips_use_wider_basis(self):
         """简介条与风险调整收益条卡少字号大，min 250px → 8 卡呈 4+4、3 卡撑满整行。"""
-        m = re.search(r"#sum-strip \.metric-card,#ra-strip \.metric-card\{([^}]*)\}",
-                      self.BASE)
+        m = re.search(r"#sum-strip \.metric-card,\s*\n#ra-strip \.metric-card \{([^}]*)\}",
+                      self.CARD_CSS)
         assert m, "未找到简介/风险调整收益条规则"
-        assert "flex:1 1 250px" in m.group(1), "简介与 ra 条必须 min 250px"
-        assert "font-size:15px" in self.BASE, "两条的 m-value 必须 15px"
+        assert "flex: 1 1 250px" in m.group(1), "简介与 ra 条必须 min 250px"
+        assert "font-size: 15px" in self.CARD_CSS, "两条的 m-value 必须 15px"
 
     def test_no_leftover_grid_rules_for_these_strips(self):
         """旧的 grid-template-columns 规则必须删掉——flex 容器上它们是死代码，
         留着会误导后来者以为还在用 grid。"""
         for sid in self.ALL_STRIPS:
-            assert f"{sid}{{grid-template-columns" not in self.BASE.replace(" ", ""), (
+            assert f"{sid}{{grid-template-columns" not in self.CARD_CSS.replace(" ", ""), (
                 f"{sid} 不得再写 grid-template-columns（已改 flex）"
             )
+
+    def test_wear_renderers_do_not_force_inline_color(self):
+        """两个模板的磨损卡渲染函数不得再用内联 style 强制颜色——
+        内联样式压过一切 CSS，是"统一风格"最大的漏洞。"""
+        for name in ("job", "symbol"):
+            tpl = (REPO / f"src/quant_research_engine/gui/saas/templates/{name}.html").read_text(
+                encoding="utf-8"
+            )
+            assert 'm-value flat" style="color:var(--lav-deep)"' not in tpl, (
+                f"{name}.html 的磨损卡不得内联强制紫色"
+            )
+            # 毛/净收益必须按盈亏上色
+            assert "wb-val ' + (" in tpl, f"{name}.html 磨损条盈亏值未上色"

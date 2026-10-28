@@ -3857,3 +3857,22 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 真实浏览器（job/symbol × 3 视口）全通过；`.tmp/perf-browser/verify.py` 可复跑
   （先 `.venv/bin/python` 渲染，再 `.tmp/browser-venv/bin/python ... browser`）。
 - 未 commit/push。
+
+## 2026-10-29 小数据卡统一实施交接
+
+- 新增文件 `static/card-class.css`（必须随部署上传；URL `/static/card-class.css`）。
+  base.html 在 night-mode.css 之后加 `<link>`——**加载顺序是硬要求**，
+  同特异性下后加载才胜出，这是压住 lab-theme `.risk-cards .metric-card` 粉底粉框的唯一机制。
+- 基类规则用容器类选择器把特异性提到与 lab-theme 同级：
+  `.metric-strip .metric-card, .wear-cards .metric-card, .risk-cards .metric-card,
+  .metric-card{background:#fff;border:1px solid var(--lav);border-radius:10px}`。
+- 数值色提级是必须的：`.metric-card .m-value.pos`（0,3,0）否则被
+  `.metric-card .m-value`（0,2,0）压住，盈亏不再红绿。`.wb-val.pos/.neg` 同理。
+- 模板改动：两个 `wc()` 去掉 `style="color:var(--lav-deep)"` 内联；磨损条毛/净收益
+  6 处 `.wb-val` 加 `pos/neg` 类（job 2 处 fees + symbol 4 处：wear 块 2 + 回退块 2）。
+- 测试：`TestMetricStripStyleContract` 8 例，RED 两次（删 `.wear-cards` 选择器 → 红；
+  删 `.m-value.pos` 提级 → 红）。全量 `3032 passed, 24 skipped`。
+- 真实浏览器：`.tmp/perf-browser/verify.py`（先 `.venv/bin/python` 渲染，再
+  `.tmp/browser-venv/bin/python ... browser`）；fixture 需含 wear/risk/fees_summary/
+  risk_analysis（**risk-analysis 必须带 `has_report: true`**，否则 loadRisk 整块隐藏）。
+- 未 commit/push。

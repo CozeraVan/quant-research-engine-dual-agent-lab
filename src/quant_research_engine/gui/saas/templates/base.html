@@ -118,29 +118,10 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 .metric-card{flex:1;min-width:110px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;text-align:center}
 .metric-card .m-label{font-size:12px;color:var(--muted)}
 .metric-card .m-value{font-size:18px;font-weight:600;margin-top:2px}
-/* QRE-SAAS-DETAIL-CARD-UI：总结性卡片淡紫底（lab 版主题 token --tint / --tint-deep）。
-   QRE-SAAS-CARD-UNIFY（2026-10-28）：**详情页所有小卡条统一紫底 + flex 自适应均分整行**。
-   原来只有 #metric-strip/#sum-strip/#range-strip 进了紫底名单，后加的 #ra-strip（α/β/IR）
-   与两个重播条（#replay-metrics/#kreplay-info）落入 lab-theme 的
-   `.metric-strip{display:grid;repeat(6,1fr)}` + base 的 `.metric-card{background:#fff}`，
-   于是出现「白底卡混在紫底卡旁边」+「3 张卡只占半行、剩 3 个空轨道」。
-   现改为一套 flex 规则：紫底 + flex-wrap + flex-grow，每行必然填满，窄屏自然换行。
-   - 密集条（指标/区间/重播，7 卡左右）min 130px → 一行并排（7×130+6×10=970，
-     容得下 job 页 ~1000px 的 .container；150px 会退化成 6+1 孤行）；
-   - 简介条与风险调整收益条（卡少、字号大）min 250px → 8 卡呈 4+4，3 卡撑满整行。 */
-#metric-strip,#sum-strip,#range-strip,#ra-strip,#replay-metrics,#kreplay-info{display:flex;flex-wrap:wrap;gap:10px}
-#metric-strip .metric-card,#sum-strip .metric-card,#range-strip .metric-card,
-#ra-strip .metric-card,#replay-metrics .metric-card,#kreplay-info .metric-card{
-  background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)}
-#metric-strip .metric-card,#range-strip .metric-card,
-#replay-metrics .metric-card,#kreplay-info .metric-card{flex:1 1 130px}
-#sum-strip .metric-card,#ra-strip .metric-card{flex:1 1 250px;padding:10px 14px}
-#sum-strip .metric-card .m-value,#ra-strip .metric-card .m-value{font-size:15px}
-@media(max-width:960px){
-  #metric-strip .metric-card,#range-strip .metric-card,
-  #replay-metrics .metric-card,#kreplay-info .metric-card{flex:1 1 45%}
-  #sum-strip .metric-card,#ra-strip .metric-card{flex:1 1 45%}
-}
+/* QRE-SAAS-CARD-CLASS：小数据卡的背景/边框/数值色/flex 布局已全部迁到
+   static/card-class.css（在 lab-theme/night-mode 之后加载，是这类卡的唯一权威）。
+   这里只留 .metric-strip / .metric-card 的基类兜底——card-class.css 未加载时
+   页面仍可用，只是退回白底灰框。新增小卡条不要去这里补规则，改 card-class.css。 */
 .pos{color:var(--pos)}.neg{color:var(--neg)}.flat{color:#333}
 .pct-hi{color:var(--up);font-weight:700}
 .meta-chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
@@ -196,6 +177,9 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:13px
 </style>
 <link rel="stylesheet" href="/static/lab-theme.css?v={{ asset_v }}">
 <link rel="stylesheet" href="/static/night-mode.css?v={{ asset_v }}">
+{# QRE-SAAS-CARD-CLASS：小数据卡统一样式（白底紫框），必须在 lab/night 之后加载，
+   同特异性靠"后加载"胜出；这类卡的唯一权威就在这个文件里 #}
+<link rel="stylesheet" href="/static/card-class.css?v={{ asset_v }}">
 <script src="/static/lab-ui.js?v={{ asset_v }}"></script>
 <script src="/static/wait-mask.js?v={{ asset_v }}"></script>
 <script src="/static/night-mode.js?v={{ asset_v }}"></script>
