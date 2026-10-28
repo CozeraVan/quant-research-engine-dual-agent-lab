@@ -251,7 +251,7 @@ function createHarness(options){
     setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
     clearTimeout(id){ timers.delete(id); },
     renderMeta(){}, renderStrategyInfo(){}, renderMetrics(){}, renderMain(){}, empty(){},
-    renderContract(){}, initReplay(){}, renderFees(){}, loadRisk(){}, renderRisk(){},
+    renderContract(){}, renderRiskAdjusted(){}, initReplay(){}, renderFees(){}, loadRisk(){}, renderRisk(){},
     renderAttribution(){}, mountReplay(){ return {destroy(){}}; },
   });
   return {context, calls, elements, timers, windowListeners};

@@ -2803,3 +2803,26 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
   全量 `3011 passed, 24 skipped`。
 - 真实浏览器复现旧 bug 并验证修复；已部署 ECS（MainPID 542952）。CR：`CR-2026-10-28_kline_engine_exclusive.md`。
 - 未 commit/push。
+
+## 2026-10-28 平均持股周期 + 风险调整收益交接
+
+- 新增 `static/perf-metrics.js`（`QREPerfMetrics`）、`tests/test_perf_metrics.py`、
+  `docs/agent/24_PERF_METRICS_CONTRACT.md`、CR。
+- 改 `job.html` / `symbol.html`（各加一张持股周期卡 + 一个 `#ra-strip`；symbol 交易表加持股周期列）、
+  `gui/engine.py::SUMMARY_METRIC_FIELDS`、`gui/lab_result.py` chart_data metrics。
+- 基准规则：策略级 = 第一个 closes 非空的指数；个股级 = 区间买入持有该股（kline 收盘按 equity 日期对齐）。
+- 测试 10 例（含 JS/Python 交叉验证 1e-9 + 两次 RED）；3 个 Node harness 补 `renderRiskAdjusted` 桩；
+  `test_job_keeps_six_main_metric_cards` 按本意改写为 7 张。全量 `3018 passed, 24 skipped`。
+- 已知限制：存量 job 交易数 >500 且 DB 无新键 → 平均持股周期显示「—」；新回测全部有值。
+  存量 symbol 的持股周期与 α/β/IR 立即可用。
+- 未 commit/push。
+
+## 2026-10-28 LWC 图例开关修复交接
+
+- 只改 `symbol.html::lwcRenderLegend`；ECharts 路径 / renderFactorChips / factor-layout.js /
+  指标设置模态均未动。
+- 两 bug：restore 态回读自身导致 `__vol__`/`__marks__` 死锁；图例从 overlays/panes 建导致
+  隐藏组没有 pill。修复 = `restore` 参 + 点击实时读状态 + 图例改从 `plan.chips` 建。
+- 测试 `TestLwcLegendToggle` 3 例（RED 验证通过）；`test_lwc_kline_adapter.py` 13 passed；
+  全量 `3024 passed, 24 skipped`。真实浏览器端到端通过。CR 已建。
+- 未 commit/push。

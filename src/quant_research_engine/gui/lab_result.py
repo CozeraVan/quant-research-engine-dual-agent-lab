@@ -319,6 +319,11 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
             "win_rate": perf.get("win_rate"),
             "date_start": date_start,
             "date_end": date_end,
+            # QRE-PERF-METRICS-CONTRACT：平均持股周期（自然日）。前端 job.html 优先取此处，
+            # 旧产物无键时回退 chart_data.trades.points 现算（未采样时）。
+            "avg_holding_days": perf.get("average_bars_in_trade"),
+            "avg_holding_days_win": perf.get("average_bars_in_winning_trades"),
+            "avg_holding_days_lose": perf.get("average_bars_in_losing_trades"),
         }
         if isinstance(total, (int, float)) and date_start and date_end:
             try:

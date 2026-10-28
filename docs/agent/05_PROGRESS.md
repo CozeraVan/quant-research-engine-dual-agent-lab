@@ -1862,3 +1862,41 @@ scrollHeight 400→**800**（高度翻倍）；修复后恒 1 个、8 轮反复�
 已做 RED 验证（改回"只清 LWC"立即失败）；四个既有 harness 抽取区同步扩展并补 DOM 桩。
 全量 `3011 passed, 24 skipped`。CR：`change_requests/CR-2026-10-28_kline_engine_exclusive.md`。
 已部署 ECS（MainPID 542952）。未 commit/push。
+
+## 2026-10-28 平均持股周期 + 风险调整收益（α/β/IR）已实施，未 commit/push
+
+用户三项需求全部落地。**核心决策：前端算而不是后端算**——本地 run 产物已清空、
+ECS 无行情库，后端补算对 1013 个存量产物不可行；前端从快照内已有数据现算
+（job 用 `benchmarks`，symbol 用 `kline` 买入持有），**存量产物零重跑立即显示**。
+
+- 新增 `static/perf-metrics.js`（`window.QREPerfMetrics` 纯函数层），公式与
+  `risk/performance.py` 逐条对应，常量与 `risk/constants.py` 一致（rf=3%、ann=252）
+- `job.html`：`#metric-strip` 加第 7 张「平均持股周期」；新增 `#ra-strip` 显示 α(年化)/β/IR，
+  基准 = 第一个 closes 非空的指数
+- `symbol.html`：`#sum-strip` 加「平均持股周期」；交易明细表加「持股周期」列（逐笔自然日）；
+  新增 `#ra-strip`，**基准 = 区间买入持有该股**（symbol 快照不带指数序列，但 kline 一定有）
+- 后端最小改动：`SUMMARY_METRIC_FIELDS` + chart_data metrics 加三项持股周期
+- **Sharpe 不重复**：两处均已有引擎口径夏普且已验收，避免同页两个口径混淆
+- 测试：新增 `tests/test_perf_metrics.py` 10 例（**JS 与 Python 交叉验证容差 1e-9** +
+  边界降级 + 源码合同 + 渲染行为），两次 RED 验证；全量 `3018 passed, 24 skipped`
+- 口径合同新建 `docs/agent/24_PERF_METRICS_CONTRACT.md`（唯一权威，改指标前必读）
+- 踩坑已固化：夹具序列必须按 JS 实际看到的序列算（差一个元素 Sharpe 差 2.6%）；
+  vm harness 的 `window` 必须 `sandbox.window = sandbox` 才是浏览器同构；
+  harness 抽取区窄于依赖会静默吞错（本轮 4 测试同时红）
+- CR：`change_requests/CR-2026-10-28_holding_period_and_risk_adjusted.md`。未 commit/push。
+
+## 2026-10-28 LWC 图例开关两个 bug 已修复，未 commit/push
+
+用户实测 TradingView 视图下：成交量/买卖点只能藏不能回；技术因子藏了之后选项从图例消失。
+根因两处（`symbol.html::lwcRenderLegend`）：① restore 态回读自身——`states[key] || 'pane'`
+在已隐藏时取到的就是 'hidden'，又写回 hidden，死锁；② 图例从 `plan.overlays`/`plan.panes`
+建，而 `plan()` 对隐藏组直接 return 不入这两个数组，于是没有 pill 可点。
+
+修复：`pill()` 加 `restore` 参；点击**实时读状态**而非闭包捕获的 `on`（防支路不重建图例时卡死）；
+图例改从 `plan.chips` 建（与 ECharts 路径 `renderFactorChips` 同源）；副图行判据改为
+「有 pane 类 chip」。overlay pill key 由 `o.f.col || o.f.name` 改为 `c.key`（`fkey(f)` 等价）。
+
+测试：新增 `TestLwcLegendToggle` 3 例（源码合同 + Node vm 往返 + 陈旧 pill 往返），
+**RED 验证通过**（改回旧写法 3 例全红）；`test_lwc_kline_adapter.py` 13 passed；
+全量 `3024 passed, 24 skipped`。真实浏览器端到端：5 个 pill、成交量/EMA5/MACD 均能往返、
+隐藏后 pill 不消失、零 pageerror。CR：`CR-2026-10-28_lwc_legend_toggle.md`。未 commit/push。

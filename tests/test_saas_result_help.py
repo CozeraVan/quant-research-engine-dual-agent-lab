@@ -239,13 +239,18 @@ class TestResultPageHelpLinks:
         assert 'class="tip-trigger"' in html
 
     def test_job_keeps_six_main_metric_cards(self, client):
-        """主指标卡保持 6 张；盈亏比只在帮助页与重播解释，不进主指标卡。"""
+        """QRE-PERF-METRICS-CONTRACT：主指标卡 6 → 7 张（新增「平均持股周期」）。
+
+        原契约的本意是「盈亏比不得混进主指标卡」，不是死守 6 这个数字；
+        持股周期是用户点名要的第七张，故按新契约锁定张数与排除项。
+        """
         html = client.get("/saas/jobs/1").get_data(as_text=True)
         match = re.search(r"function renderMetrics\(m\)\{[\s\S]*?\n\}", html, re.S)
         assert match
         body = match.group(0)
-        assert body.count("card('") == 6, body
-        assert "盈亏比" not in body
+        assert body.count("card('") == 7, body
+        assert "盈亏比" not in body, "盈亏比仍只在帮助页与重播解释，不进主指标卡"
+        assert "平均持股周期" in body, "第七张必须是平均持股周期"
 
     def test_replay_explains_profit_loss_ratio_only(self):
         replay = (ROOT / "src/quant_research_engine/gui/static/replay.js").read_text()

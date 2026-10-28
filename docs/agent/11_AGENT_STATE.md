@@ -1316,3 +1316,45 @@ CR：`docs/agent/change_requests/CR-2026-10-28_kline_engine_exclusive.md`。
 Q3 作图边界（我方建议只补 demo 已有三项，不扩工具种类）。
 结构性原因已记录：`symbol.html` / `replay.js` / `game.html` 三处各自拼 grid/yAxisIndex，
 只有 `plan()` 归组共享——display 合同统一了归组但没统一 option 组装。
+
+### 2026-10-28 PERF-METRICS-CONTRACT 已实施待人工验收，未 commit/push
+
+三项需求（策略/个股平均持股周期 + 逐笔持股周期列 + α/β/IR）全部落地。
+
+**核心决策：前端算**。本地 run 产物已清空 + ECS 无行情库 → 后端补算对存量产物不可行；
+前端从快照内已有数据现算（job 用 `benchmarks`，symbol 用 `kline` 买入持有），
+**1013 个存量产物零重跑立即显示**。代价是 JS/Python 双实现，
+用 `tests/test_perf_metrics.py` 的交叉验证锁死（容差 1e-9，两次 RED 验证）。
+
+**口径合同 = `docs/agent/24_PERF_METRICS_CONTRACT.md`（唯一权威，必读）**：
+rf=3%、ann=252；Sharpe/β/IR/Jensen's α 公式与 `risk/performance.py` 逐条对应；
+基准规则（策略级=第一个非空 closes 指数，个股级=区间买入持有该股）；
+Sharpe 不重复展示（两处已有引擎口径）。
+
+**展示**：job `#metric-strip` 第 7 张「平均持股周期」+ `#ra-strip`（α/β/IR）；
+symbol `#sum-strip` 加「平均持股周期」+ 交易表「持股周期」列 + `#ra-strip`（α/β/IR）。
+三项全 null → 整块隐藏，不留空壳。
+
+**已知限制（已告知用户）**：存量 job 交易数 >500 且 DB `results.summary` 无新键 →
+平均持股周期显示「—」（新回测全部有值）；存量 symbol 的持股周期与 α/β/IR 立即可用；
+前端 α/β/IR 与后端 `risk_report.json` 口径不同（净值曲线差分 vs 引擎日收益序列），
+数值可有差、方向应一致，已在 tooltip 与 24 号文档声明。
+
+测试：`test_perf_metrics.py` 10 passed；相关 5 文件 154 passed；全量 `3018 passed, 24 skipped`。
+CR：`change_requests/CR-2026-10-28_holding_period_and_risk_adjusted.md`。未 commit/push。
+
+### 2026-10-28 LWC-LEGEND-TOGGLE 已部署待人工验收，未 commit/push
+
+TradingView 视图下图例两个 bug 已修。**根因**：① `setChipState(key, on ? 'hidden' : (states[key] || 'pane'))`
+在已隐藏时 `states[key]` 就是 'hidden'，又写回 hidden → `__vol__`/`__marks__` 死锁；
+② 图例从 `plan.overlays`/`plan.panes` 建，而 `plan()` 对隐藏组 `return` 不入这两数组 →
+因子一藏连 pill 都没有。**修复**：`pill()` 加 `restore` 参 + 点击**实时读状态**（不用闭包 `on`，
+防支路不重建图例时卡死）+ 图例改从 `plan.chips` 建（与 ECharts 路径 `renderFactorChips` 同源）。
+
+**这是 LWC 专属回归**：ECharts 路径的 chip 本来就正确（`plan.chips` + 循环取模），
+所以只有切到 TradingView 视图才暴露。教训：**双引擎下同一交互有两条实现，改一条必须回归另一条**。
+
+测试 `TestLwcLegendToggle` 3 例（含 RED 验证）；`test_lwc_kline_adapter.py` 13 passed；
+全量 `3024 passed, 24 skipped`。真实浏览器：5 pill、成交量/EMA5/MACD 往返全通、
+隐藏后 pill 不消失、零 pageerror。CR：`CR-2026-10-28_lwc_legend_toggle.md`。
+已部署 ECS。未 commit/push。

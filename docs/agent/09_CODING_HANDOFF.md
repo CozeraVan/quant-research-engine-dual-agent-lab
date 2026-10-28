@@ -3799,3 +3799,35 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
   scrollHeight 800（叠加 + 高度翻倍）；修复后恒 1 个，8 轮切换零 pageerror。
   证据 `.tmp/engine-excl/`。已部署 ECS（MainPID 542952，回滚副本 `/tmp/qre-deploy-20261028T115036Z.bak`）。
 - 未 commit/push。
+
+## 2026-10-28 平均持股周期 + 风险调整收益实施交接
+
+- 改动：新增 `static/perf-metrics.js`、`tests/test_perf_metrics.py`、`docs/agent/24_PERF_METRICS_CONTRACT.md`、
+  CR；改 `saas/templates/job.html`、`saas/templates/symbol.html`、`gui/engine.py`、`gui/lab_result.py`、
+  `tests/test_gui_saas_pages.py`（3 处 harness 补桩）、`tests/test_saas_classic_actions_ui.py`（1 处）、
+  `tests/test_saas_result_help.py`（主指标卡 6→7 契约改写）。
+- `renderRiskAdjusted` 是唯一新增渲染入口，job 与 symbol 各一份（基准不同），
+  都在 `#ra-strip`，三项全 null → `display:none` + 清空 innerHTML。
+- `avgHoldingDays` / `holdingDaysOf` 口径 = 自然日，与 `round_trips.holding_days` 逐值一致（已实证）。
+- 后端只加键不改逻辑：`SUMMARY_METRIC_FIELDS` 三项 + chart_data metrics 三项。
+- 测试：`test_perf_metrics.py` 10 passed；相关 5 文件 154 passed；全量 `3018 passed, 24 skipped`。
+- RED 两次：β 分母写错 → 交叉验证红；不跳空 closes 基准 → 渲染测试红。
+- 未 commit/push。
+
+- 真实浏览器端到端已验（`.tmp/perf-browser/verify.py`，Chromium + 路由拦截 fixture）：
+  job 7 卡 + α=12.00%/β=0.89/IR=0.78（**与 Python performance_summary 完全一致**）；
+  symbol 平均持股周期 48.7 天 + 交易表逐笔 31/35/80/—；全 null 隐藏且清空；
+  375px 无横溢；零 pageerror/console error。
+
+## 2026-10-28 LWC 图例开关修复实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`（仅 `lwcRenderLegend`）、
+  `tests/test_lwc_kline_adapter.py`（新增 `TestLwcLegendToggle` 3 例）、CR 新建。
+- `pill(label, color, key, isStatic, restore)`；点击 `setChipState(key, hiddenNow ? restore : 'hidden')`，
+  `hiddenNow` 由 `chipStates()[key] === 'hidden'` 实时得出（不用闭包的 `on`）。
+- 图例数据源 `plan.chips`（含隐藏组）；副图行 `paneChips.length` 判显隐。
+- restore 值：`__vol__`/`__marks__` → `'on'`；overlay chip → `c.states[0]`（'overlay'）；
+  pane chip → `c.states[0]`（'pane'）。
+- overlay pill key 用 `c.key`（`fkey(f) === f.col || f.name`，与原 `o.f.col || o.f.name` 等价）。
+- RED：改回旧写法 3 例全红。全量 `3024 passed, 24 skipped`。真实浏览器（Chromium + LWC 引擎）
+  5 pill、三类往返全通、隐藏后 pill 不消失、零 pageerror。未 commit/push。

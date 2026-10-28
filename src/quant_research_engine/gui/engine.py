@@ -891,6 +891,12 @@ SUMMARY_METRIC_FIELDS: list[tuple[str, str, bool]] = [
     ("excess_return_vs_buy_hold", "超额收益(对买入持有)", True),
     ("max_drawdown", "最大回撤", True),
     ("profit_factor", "盈亏比", False),
+    # QRE-PERF-METRICS-CONTRACT：平均持股周期（自然日，与 round_trips.holding_days 同口径）。
+    # 全量口径来自 strategy_performance.json；前端 job.html 的「平均持股周期」卡优先用它，
+    # 旧产物无该键时回退用 chart_data.trades.points 现算（未采样时）。
+    ("average_bars_in_trade", "平均持股周期", False),
+    ("average_bars_in_winning_trades", "盈利交易平均持股周期", False),
+    ("average_bars_in_losing_trades", "亏损交易平均持股周期", False),
 ]
 
 

@@ -89,6 +89,9 @@
 
     <div class="metric-strip" id="metric-strip"></div>
 
+    {# QRE-PERF-METRICS-CONTRACT：风险调整收益（α/β/IR）。全 null 时 JS 整块隐藏，不留空壳 #}
+    <div class="metric-strip" id="ra-strip" style="display:none"></div>
+
     <div class="chart-box" id="box-main">
       <div class="chart-title">策略收益 vs 基准指数 <button type="button" class="tip-trigger" id="curve-tip" data-tip="曲线为日收益累乘口径（交集口径、剔除新股注资）的累计收益率，起点 0%；与上方「总收益率」（初始资金加权）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
         <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button>
@@ -179,6 +182,8 @@
 {% block scripts %}
 <script src="/static/echarts.min.js?v={{ asset_v }}"></script>
 <script src="/static/replay.js?v={{ asset_v }}"></script>
+{# QRE-PERF-METRICS-CONTRACT：α/β/IR 与持股周期的共享纯函数层（公式与 risk/performance.py 对齐） #}
+<script src="/static/perf-metrics.js?v={{ asset_v }}"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（随机会话 Cookie 派生 guest_key，API 侧鉴权），不强制登录
 const JOB_ID = {{ job_id }};
@@ -214,13 +219,52 @@ let mainResizeBound = false;
 function renderMetrics(m){
   const strip = document.getElementById('metric-strip');
   if (!m){ strip.innerHTML = ''; return; }
+  // 平均持股周期：优先后端 strategy_performance.json 的 average_bars_in_trade（全量口径）；
+  // 旧产物无该键且交易未采样（≤500 笔）时，回退用 chart_data.trades.points 现算。
+  // 两者都为 null 显示「—」，不编 0。口径 = 自然日（与 round_trips.holding_days 一致）。
+  const holdDays = (m.avg_holding_days != null) ? m.avg_holding_days
+    : ((typeof QREPerfMetrics !== 'undefined' && window.__jobTrades && !window.__jobTrades.sampled)
+        ? QREPerfMetrics.avgHoldingDays(window.__jobTrades.points) : null);
   strip.innerHTML =
     card('总收益率', pct(m.total_return ?? m.strategy_total_return), cls(m.total_return ?? m.strategy_total_return), '初始资金加权总收益：Σ期末权益/Σ初始资金−1，与成交净盈亏、profit_factor 直接勾稽；批量全市场按资金加权汇总。') +
     card('年化收益', pct(m.annual_return), cls(m.annual_return), '由初始资金加权总收益按回测起止区间几何年化：(1+总收益)^(1/年数)−1') +
     card('超额收益·vs持有不动', pct(m.excess_return), cls(m.excess_return), '策略全期总收益 − 同期买入并持有这些股票的收益；负值 = 跑输持有不动') +
     card('夏普比率', (m.sharpe == null ? '—' : Number(m.sharpe).toFixed(2)), cls(m.sharpe), '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
     card('最大回撤', pct(m.max_drawdown), 'neg', '净值从历史高点到随后低点的最大跌幅。') +
-    card('胜率', pct(m.win_rate), cls(m.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。');
+    card('胜率', pct(m.win_rate), cls(m.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。') +
+    card('平均持股周期', holdDays == null ? '—' : Number(holdDays).toFixed(1) + ' 天',
+         'flat', '全部完整交易从买入到卖出的平均持有天数（自然日，与 round_trips.holding_days 同口径）。数据来自本次回测的成交记录。');
+}
+// QRE-PERF-METRICS-CONTRACT：风险调整收益（α/β/IR）。
+// 前端算而非后端算，是为了让存量产物立即显示——chart_data 快照里已有 equity +
+// benchmarks，无需重跑（本地 run 产物已清空、ECS 无行情库，后端补算不可行）。
+// 口径：按**净值曲线差分**的日收益 vs 基准指数，与页面曲线同源、可自行复算；
+// 与 risk_report.json 的 performance 节（引擎日收益序列）输入不同，数值可有差。
+// 三项全 null → 整块隐藏。Sharpe 不在此重复：上方指标条已有引擎口径「夏普比率」。
+function renderRiskAdjusted(d){
+  const strip = document.getElementById('ra-strip');
+  if (!strip) return;
+  if (typeof QREPerfMetrics === 'undefined'){ strip.style.display = 'none'; return; }
+  let bench = null;
+  const bs = d.benchmarks || {};
+  for (const code of Object.keys(bs)){
+    const b = bs[code] || {};
+    if (b.closes && b.closes.length){ bench = b; break; }
+  }
+  const ra = (d.equity && d.equity.length && bench)
+    ? QREPerfMetrics.riskAdjusted({equity: d.equity, dates: d.dates, benchmark: bench}) : null;
+  const vals = ra ? [ra.alpha_annual, ra.beta, ra.ir] : [];
+  if (!ra || vals.every(v => v == null)){ strip.style.display = 'none'; strip.innerHTML = ''; return; }
+  const benchName = bench.name || '基准指数';
+  const tipBase = '按净值曲线差分的日收益与' + benchName + '计算，与上方曲线同源；rf=3%、年化 252 日。';
+  strip.style.display = '';
+  strip.innerHTML =
+    card('α（年化）', ra.alpha_annual == null ? '—' : pct(ra.alpha_annual), cls(ra.alpha_annual),
+         'Jensen\'s α：策略超额收益对基准回归的截距，年化 = 日频截距 × 252。' + tipBase) +
+    card('β', ra.beta == null ? '—' : Number(ra.beta).toFixed(2), 'flat',
+         '策略日收益对' + benchName + '日收益的回归斜率；>1 波动大于基准，<1 更防御。' + tipBase) +
+    card('信息比率', ra.ir == null ? '—' : Number(ra.ir).toFixed(2), cls(ra.ir),
+         '平均主动收益 ÷ 跟踪误差（主动收益的标准差），再乘 √252；衡量每承担一份偏离风险换来多少超额。' + tipBase);
 }
 // 结果合同只驱动曲线口径提示；验证状态与版本不进入用户界面。
 function renderContract(c){
@@ -1210,7 +1254,10 @@ async function poll(){
     document.getElementById('brief-text').textContent = brief.name ? ('策略：' + brief.name) : (data.strategy_name ? ('策略：' + data.strategy_name) : '');
     renderMeta(chart.meta, data.data_until);
     renderStrategyInfo(data.strategy);
+    // 平均持股周期的前端回退源：chart_data.trades（>500 笔时 sampled，此时只信后端值）
+    window.__jobTrades = chart.trades || null;
     renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));
+    renderRiskAdjusted(chart);
     renderContract(data.result_contract);
     if (chart.dates && chart.equity) renderMain(chart);
     else empty('chart-main');

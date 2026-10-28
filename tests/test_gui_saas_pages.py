@@ -143,6 +143,10 @@ function createHarness(fetchImpl){
     clearTimeout(id){ timers.delete(id); },
     renderMeta(){}, renderStrategyInfo(){}, renderMetrics(){}, renderMain(){}, empty(){},
     renderContract(){},
+    // QRE-PERF-METRICS-CONTRACT：renderRiskAdjusted 定义在本抽取区（const ACTIVE →
+    // // --- 回测重播）之外，与 renderMetrics 等同规格打桩；其真实行为由
+    // test_perf_metrics.py 的 TestRiskAdjustedRendering 单独覆盖。
+    renderRiskAdjusted(){},
     initReplay(){}, initResultActions(){}, renderFees(){}, loadRisk(){}, renderRisk(){},
     renderAttribution(){ calls.attribution += 1; },
     mountReplay(){ return {destroy(){}}; },
@@ -1053,7 +1057,7 @@ function createSymbolHarness(fetchImpl){
     pauseSymbolActivePolling(){ calls.pause.push({}); },
     setTimeout(fn, delay){ const id = nextTimer++; timers.set(id, {fn, at: now + delay}); return id; },
     clearTimeout(id){ timers.delete(id); },
-    renderSummary(summary){ calls.summaries.push(summary); }, renderEquity(){}, renderWear(){}, renderRisk(){}, renderKline(){},
+    renderSummary(summary){ calls.summaries.push(summary); }, renderEquity(){}, renderWear(){}, renderRisk(){}, renderRiskAdjusted(){}, renderKline(){},
     initKlineReplay(){ calls.replay += 1; }, table(){}, pct(){ return ''; },
     esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
   });
@@ -1833,6 +1837,10 @@ function createJobRuntimeHarness(fetchImpl, opts){
     clearTimeout(id){ timers.delete(id); },
     renderMeta(){}, renderStrategyInfo(){}, renderMetrics(){}, renderMain(){}, empty(){},
     renderContract(){},
+    // QRE-PERF-METRICS-CONTRACT：renderRiskAdjusted 定义在本抽取区（const ACTIVE →
+    // // --- 回测重播）之外，与 renderMetrics 等同规格打桩；其真实行为由
+    // test_perf_metrics.py 的 TestRiskAdjustedRendering 单独覆盖。
+    renderRiskAdjusted(){},
     initReplay(){}, initResultActions(){}, renderFees(){}, loadRisk(){}, renderRisk(){},
     renderAttribution(){ calls.attribution += 1; },
     mountReplay(){ return {destroy(){}}; },
