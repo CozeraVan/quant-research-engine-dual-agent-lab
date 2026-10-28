@@ -2745,3 +2745,11 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 边界：只管理详情产物内已有因子；任意指标取数需另立项（ECS 无行情库）。
 - 测试：相关 162 passed；全量 `2964 passed, 24 skipped`。
 - 生产：ECS 已部署并真实浏览器验证通过。未 commit/push。
+
+## 2026-10-28 B 路 LWC 试点阶段 0–2 交接
+
+- attribution 决断：文本链接 + 品牌水印；LWC 5.2.1 vendored + LICENSE 随包；禁 CDN。
+- `QRELwcAdapter` 纯函数适配层 + `renderKlineLwc()` + 引擎开关（默认 echarts，ECharts 路径保留作回滚）。
+- API 三处实测校正已写入 23 号文档与 CR，后续实现不得再凭记忆。
+- 阶段 3（重播 LWC adapter）未做；重播进入前销毁 LWC 实例。
+- 测试：全量 `2972 passed, 24 skipped`；生产真实浏览器验证通过。未 commit/push。

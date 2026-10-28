@@ -61,7 +61,9 @@ def _symbol_source() -> str:
     `mountKlineReplay` 现在复用 `klineGridSpec/klineAxisLabelIndex/klineInfoHTML/klineSetInfo`，
     必须连同其定义一起注入 vm；这些函数体内的 DOM/echarts 只在调用时求值，定义阶段安全。
     """
-    match = re.search(r"(let klineResizeBound = false;[\s\S]*?\n\})\nload\(\);", SYMBOL_TPL)
+    # 末段允许出现 load() 之前的其它语句（如 qre:themechange 监听），
+    # 只要锚点是「klineResizeBound 起 → load() 前」即可。
+    match = re.search(r"(let klineResizeBound = false;[\s\S]*?)\nload\(\);", SYMBOL_TPL)
     assert match, "未找到 K 线/重播源码块"
     return match.group(1)
 
@@ -162,6 +164,9 @@ function makeHarness(){
     createElement(){ return makeEl('el'); },
     getElementById(id){ return get(id); },
     querySelector(sel){ return get(String(sel).replace(/^#/, '')); },
+    // CR-2026-10-28 B 路：symbol.html 末尾注册 qre:themechange 监听（night-mode.js
+    // 的 CustomEvent 不开 bubbles，必须监听 document）
+    addEventListener(){}, removeEventListener(){},
   };
   const ctx = {
     console: console, document,

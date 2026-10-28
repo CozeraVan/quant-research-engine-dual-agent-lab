@@ -499,7 +499,7 @@ class TestPanelsAndMetadata:
         且不新建第二套 K 线模块（接管原容器）。"""
         client = app.test_client()
         html = client.get("/saas/jobs/1/symbols/000001").get_data(as_text=True)
-        match = re.search(r"(let klineResizeBound = false;[\s\S]*?\n\})\nload\(\);", html, re.S)
+        match = re.search(r"(let klineResizeBound = false;[\s\S]*?)\nload\(\);", html, re.S)
         assert match, "未找到 mountKlineReplay"
         source = match.group(1)
         layout = (ROOT / "src/quant_research_engine/gui/static/factor-layout.js").read_text(encoding="utf-8")
@@ -519,7 +519,9 @@ function el(){
 const harness = {attached: null};
 const elements = {};
 const document = {getElementById(id){ return elements[id] || (elements[id] = el()); },
-  createElement(){ return el(); }, querySelector(){ return null; }};
+  createElement(){ return el(); }, querySelector(){ return null; },
+  // CR-2026-10-28 B 路：symbol.html 末尾注册 qre:themechange 监听
+  addEventListener(){}, removeEventListener(){}};
 const layoutCtx = vm.createContext({console, window: {}});
 vm.runInContext(%LAYOUT%, layoutCtx);
 // CR-2026-10-27：真实 replay.js（共享高度 helper），不在桩里复制公式

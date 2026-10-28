@@ -1640,3 +1640,15 @@ Kimi 实施并部署。
 - **生产**：真实浏览器验证面板开合、切换、收起、恢复默认、Esc 关闭，零报错；
   job58/66 回归通过。MainPID 512078，回滚副本 `/tmp/qre-deploy-20261027T175206Z.bak`。
 - 详见 `docs/agent/change_requests/CR-2026-10-28_indicator_settings_panel_management.md`。
+
+## 2026-10-28 TradingView 化 B 路：LWC 受控试点阶段 0–2 首片
+
+Kimi 实施，DeepSeek 出设计规格。
+
+- **阶段 0 决断**：attribution 保留 LWC 默认文本链接 + 自绘品牌水印（`attributionLogo:false`）；LWC 5.2.1 vendored 进 `static/chart-core/vendor/`（禁 CDN），LICENSE 随包分发；版本锁死 sha256 `e21cc5ca…`。
+- **阶段 1**：`static/chart-core/kline-lwc.js` 的 `QRELwcAdapter` 纯函数适配层（OHLC 重排/日期去重升序/null 空点/成交量/overlay/histogram 逐点色/marker/阈值线/主题双套/高度公式），不碰 DOM，Node 可直接断言。
+- **阶段 2**：`symbol.html` 新增 `renderKlineLwc()`、引擎开关（`qre.kline.engine`，默认 `echarts`）、DOM 图例 `#kline-legend`、attribution 行 `#kline-attrib`；ECharts 路径逐字节保留作回滚。
+- **API 校正（实测）**：standalone 无 `addCandlestickSeries`，必须 `addSeries(LWC.CandlestickSeries, opts)`；`createChart` 用 `autoSize:true`（固定 width 会 375 溢出）；`qre:themechange` 是 non-bubbling，必须监听 `document`；`createSeriesMarkers` 首参必须是 series。
+- **阶段 3 未做**：重播仍走 ECharts，进入重播前 `lwcDispose()` 防同容器双 canvas。
+- **测试**：新增 `tests/test_lwc_kline_adapter.py`；四个 harness 补 `localStorage`/`document.addEventListener`/`setChipState`；三处抽取正则放宽；`test_no_forbidden_deps` 改为禁 CDN/绝对 URL 资源；相关 132 passed；全量 `2972 passed, 24 skipped`。
+- **生产**：真实浏览器验证蜡烛/量/MACD 副图/阈值线/买卖 marker/图例/信息区/attribution/主题换肤/切回 echarts/重播进出/375 不溢出，全程零报错。MainPID 518848，回滚副本 `/tmp/qre-deploy-20261028T015314Z.bak`。

@@ -173,9 +173,24 @@ class TestSourceContract:
         assert "position: 'right'" in SYMBOL_TPL
 
     def test_no_forbidden_deps(self):
+        """禁的是 CDN/外部**资源**依赖；LWC 是 vendored 本地文件，允许引用其全局名。
+        attribution 外链（<a href>）是 Apache-2.0 合规要求，不算资源依赖。"""
         html = SYMBOL_TPL
-        for bad in ("cdn.", "unpkg", "jsdelivr", "LightweightCharts"):
+        for bad in ("cdn.", "unpkg", "jsdelivr"):
             assert bad not in html, "不得引入外部依赖: %s" % bad
+        # 资源加载（script src / link href）一律站内相对路径，不得走绝对 URL
+        for m in re.finditer(r'<(?:script|link)\b[^>]*?(?:src|href)="([^"]*)"', html):
+            url = m.group(1)
+            assert not url.startswith(("http://", "https://", "//")), (
+                "资源必须站内相对路径，不得走 CDN: " + url)
+        # 凡是以路径形式出现的 LightweightCharts，必须指向 vendored 目录；
+        # `window.LightweightCharts` 这类全局名引用是允许的（库已本地加载）
+        for m in re.finditer(r"[\w./-]*LightweightCharts[\w./-]*", html):
+            token = m.group(0)
+            if "/" not in token:
+                continue
+            assert token.startswith("/static/chart-core/vendor/"), (
+                "LightweightCharts 资源必须走 vendored 本地路径: " + token)
 
     def test_factor_contract_kept(self):
         block = _render_kline_source()

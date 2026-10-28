@@ -12,7 +12,7 @@
   .kline-tool[aria-pressed="false"]{opacity:.55}
   .kline-tool:disabled{opacity:.4;cursor:not-allowed}
   .kline-tool:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
-  .kline-main{flex:1;min-width:0}
+  .kline-main{flex:1;min-width:0;position:relative}
   .kline-ohlc{margin:0 0 4px;font-size:12px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
   .kline-ohlc b{font-weight:600}
   .kline-ohlc .up{color:var(--pos)}
@@ -31,6 +31,18 @@
   .ind-row .st{font-size:12px;color:var(--lav-deep);min-width:56px;text-align:right}
   .ind-act{display:flex;gap:4px}
   .ind-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+  /* CR-2026-10-28 B 路：LWC 无图例/tooltip 框架，DOM 图例 + attribution 行 */
+  .kline-legend{display:flex;flex-wrap:wrap;gap:6px 8px;margin:2px 0 6px}
+  .kline-legend .lg-pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:2px 8px;border:1px solid var(--lav);border-radius:11px;background:var(--card);color:var(--lav-deep);font-size:12px;line-height:16px;cursor:pointer}
+  .kline-legend .lg-pill:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
+  .kline-legend .lg-dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .kline-legend .lg-pill[aria-pressed="false"]{border-color:var(--line);opacity:.45;text-decoration:line-through}
+  .kline-legend .lg-static{cursor:default;border-color:transparent;background:none;color:var(--text)}
+  .kline-attrib{position:absolute;right:8px;bottom:6px;display:flex;align-items:center;gap:8px;height:24px;z-index:2;pointer-events:none}
+  .kline-attrib-mark{width:24px;height:24px;border-radius:6px;pointer-events:none;user-select:none}
+  .kline-attrib-link{font-size:11px;color:var(--muted);text-decoration:none;pointer-events:auto}
+  .kline-attrib-link:hover{text-decoration:underline}
+  [data-theme="dark"] .kline-attrib-mark{content:normal}
   @media(max-width:640px){
     .kline-tools .kline-tool span{display:none}
     .wrap{padding-left:12px;padding-right:12px}
@@ -104,7 +116,14 @@
       </div>
       <div class="kline-main">
         <div class="kline-ohlc" id="kline-ohlc" aria-live="polite"></div>
+        {# CR-2026-10-28 B 路：LWC 无图例，需要 DOM 图例；echarts 路径下由 JS 隐藏 #}
+        <div class="kline-legend" id="kline-legend" role="group" aria-label="图表元素显示开关" style="display:none"></div>
         <div id="chart-kline" style="height:460px"></div>
+        {# attribution 行：品牌水印 + TradingView 链接（Apache-2.0 合规） #}
+        <div class="kline-attrib" id="kline-attrib" style="display:none">
+          <img class="kline-attrib-mark" src="/static/chart-core/vendor/brand-mark-color.png" alt="" aria-hidden="true" draggable="false">
+          <a class="kline-attrib-link" href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer" aria-label="图表由 TradingView Lightweight Charts 提供">TradingView</a>
+        </div>
       </div>
     </div>
     <div class="metric-strip rp-metrics hidden" id="kreplay-info"></div>
@@ -131,6 +150,9 @@
 <script src="/static/echarts.min.js?v={{ asset_v }}"></script>
 <script src="/static/replay.js?v={{ asset_v }}"></script>
 <script src="/static/factor-layout.js?v={{ asset_v }}"></script>
+{# CR-2026-10-28 B 路试点：LWC vendored 单文件（禁 CDN）+ 适配层；引擎开关默认 echarts #}
+<script src="/static/chart-core/vendor/lightweight-charts.standalone.production.js?v={{ asset_v }}"></script>
+<script src="/static/chart-core/kline-lwc.js?v={{ asset_v }}"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 // QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；
@@ -338,7 +360,7 @@ async function load(){
     renderEquity(d);
     renderWear(d);
     renderRisk(d);
-    renderKline(d);
+    renderKlineDispatch(d);
     initKlineReplay(d);
     const tradeCols = d.trades_source === 'round_trips'
       ? [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
@@ -515,6 +537,232 @@ async function pollGen(){
     if (epoch === symbolPollEpoch) handleSymbolPollError(error);
   } finally {
     if (epoch === symbolPollEpoch) symbolPollController = null;
+  }
+}
+
+const KLINE_ENGINE_LS_KEY = 'qre.kline.engine';
+function klineEngine(){
+  try { return localStorage.getItem(KLINE_ENGINE_LS_KEY) === 'lwc' ? 'lwc' : 'echarts'; }
+  catch (e) { return 'echarts'; }
+}
+function setKlineEngine(v){
+  try { localStorage.setItem(KLINE_ENGINE_LS_KEY, v === 'lwc' ? 'lwc' : 'echarts'); } catch (e) {}
+}
+function klineIsDark(){
+  return !!(window.QRETheme && typeof QRETheme.current === 'function' && QRETheme.current() === 'dark');
+}
+let lwcChart = null, lwcMarkers = null, lwcThresholds = [], lwcHover = null;
+function lwcDispose(){
+  if (lwcHover){ try { lwcChart && lwcChart.unsubscribeCrosshairMove(lwcHover); } catch (e) {} lwcHover = null; }
+  if (lwcChart){ try { lwcChart.remove(); } catch (e) {} lwcChart = null; }
+  lwcMarkers = null; lwcThresholds = [];
+}
+// 品牌水印随主题换图（浅底彩色 / 深底反白）
+function lwcSyncAttrib(){
+  const box = $('#kline-attrib');
+  if (!box) return;
+  box.style.display = klineEngine() === 'lwc' ? '' : 'none';
+  const img = box.querySelector('.kline-attrib-mark');
+  if (img) img.src = '/static/chart-core/vendor/brand-mark-' + (klineIsDark() ? 'white' : 'color') + '.png';
+  const link = box.querySelector('.kline-attrib-link');
+  if (link) link.style.color = klineIsDark() ? '#C8ACD6' : '#6F6879';
+}
+function lwcApplyTheme(){
+  const chart = lwcChart;
+  if (!chart || typeof chart.applyOptions !== 'function') return;
+  const t = QRELwcAdapter.theme(klineIsDark());
+  const font = (function(){
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--sans');
+      if (v && v.trim()) return v.trim();
+    } catch (e) {}
+    return '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  })();
+  chart.applyOptions({
+    layout: {background: {type: 'solid', color: t.background}, textColor: t.textColor,
+             fontSize: 11, fontFamily: font, attributionLogo: false},
+    grid: {horzColor: t.grid, vertColor: 'rgba(0,0,0,0)'},
+    crosshair: {
+      mode: 0,
+      vertLine: {color: t.crosshair, width: 1, style: 2, labelBackgroundColor: t.crosshairLabelBg},
+      horzLine: {color: t.crosshair, width: 1, style: 2, labelBackgroundColor: t.crosshairLabelBg},
+    },
+    rightPriceScale: {borderColor: t.border, textColor: t.textColor, minimumWidth: 56},
+    timeScale: {borderColor: t.border, textColor: t.textColor, timeVisible: true,
+                fixLeftEdge: true, rightOffset: 4},
+    paneSeparatorColor: t.border,
+  });
+  // 序列换色：蜡烛 / 量柱 / MACD 柱逐点 color / marker
+  const candle = chart.__klineCandle;
+  if (candle && typeof candle.applyOptions === 'function'){
+    candle.applyOptions({upColor: t.up, downColor: t.down, borderUpColor: t.up,
+                         borderDownColor: t.down, wickUpColor: t.up, wickDownColor: t.down});
+  }
+  const vol = chart.__klineVol;
+  if (vol && typeof vol.applyOptions === 'function') vol.applyOptions({color: t.volume});
+  (chart.__klineHists || []).forEach(function (h){
+    if (h && typeof h.applyOptions === 'function') h.applyOptions({color: t.histUp});
+  });
+  if (lwcMarkers && typeof lwcMarkers.setMarkers === 'function'){
+    lwcMarkers.setMarkers(QRELwcAdapter.toMarkers(chart.__klineOrders || [], t));
+  }
+  lwcSyncAttrib();
+}
+// DOM 图例：点击 = 翻转 chip 状态后整块重建（LWC 无图例）
+function lwcRenderLegend(plan, d){
+  const box = $('#kline-legend');
+  if (!box) return;
+  box.innerHTML = '';
+  box.style.display = klineEngine() === 'lwc' ? '' : 'none';
+  if (klineEngine() !== 'lwc') return;
+  const states = chipStates();
+  function pill(label, color, key, isStatic){
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lg-pill' + (isStatic ? ' lg-static' : '');
+    if (color){
+      const dot = document.createElement('span');
+      dot.className = 'lg-dot';
+      dot.style.background = color;
+      b.appendChild(dot);
+    }
+    b.appendChild(document.createTextNode(label));
+    if (isStatic) return b;
+    const on = states[key] !== 'hidden';
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.dataset.tip = on ? '点击隐藏' : '点击显示';
+    b.addEventListener('click', () => {
+      setChipState(key, on ? 'hidden' : (states[key] || 'pane'));
+      if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = mountKlineReplay(klineData); }
+      else renderKlineLwc(d);
+    });
+    return b;
+  }
+  const main = document.createElement('span');
+  main.style.display = 'inline-flex'; main.style.flexWrap = 'wrap'; main.style.gap = '6px 8px';
+  main.appendChild(pill('K线', null, null, true));
+  main.appendChild(pill('成交量', QRELwcAdapter.theme(klineIsDark()).volume, '__vol__'));
+  main.appendChild(pill('买卖点', QRELwcAdapter.theme(klineIsDark()).up, '__marks__'));
+  (plan.overlays || []).forEach(function (o){
+    main.appendChild(pill(o.name, QRELwcAdapter.lineColor(o.color, klineIsDark()), o.f.col || o.f.name));
+  });
+  box.appendChild(main);
+  if ((plan.panes || []).length){
+    const sub = document.createElement('span');
+    sub.style.display = 'inline-flex'; sub.style.flexWrap = 'wrap'; sub.style.gap = '6px 8px';
+    (plan.panes || []).forEach(function (p){
+      sub.appendChild(pill(p.name || p.key, QRELwcAdapter.lineColor(QREFactorLayout.COLORS.pane, klineIsDark()), p.key));
+    });
+    box.appendChild(sub);
+  }
+}
+
+// --- LWC 渲染与引擎开关（CR-2026-10-28 B 路受控试点阶段 2）---
+// ECharts 路径 renderKline() 原样保留作回滚实现；本函数只在开关为 lwc 时启用。
+// 适配层纯函数在 static/chart-core/kline-lwc.js（QRELwcAdapter）。
+function renderKlineLwc(d){
+  if (!d.kline || !d.kline.dates || !d.kline.dates.length){
+    $('#box-kline').style.display = 'none';
+    return;
+  }
+  $('#box-kline').style.display = '';
+  const el = $('#chart-kline');
+  lwcDispose();
+  klineDetail = d;
+  const plan = QREFactorLayout.plan(d.factors || [], chipStates(), paneOrder());
+  el.style.height = QRELwcAdapter.klineHeight(plan.panes.length) + 'px';
+  const t = QRELwcAdapter.theme(klineIsDark());
+  const LWC = window.LightweightCharts;
+  // autoSize + 容器显式高度：随 .kline-main 宽度自适应，375 不溢出
+  const chart = LWC.createChart(el, {autoSize: true, height: el.clientHeight || 460});
+  lwcChart = chart;
+  chart.__klineOrders = d.orders || [];
+
+  // 主 pane：蜡烛 + 均线 overlay + 成交量（独立 priceScale，同 pane 纵配比）
+  const candle = chart.addSeries(LWC.CandlestickSeries, {
+    upColor: t.up, downColor: t.down, borderUpColor: t.up, borderDownColor: t.down,
+    wickUpColor: t.up, wickDownColor: t.down, borderVisible: true,
+  });
+  chart.__klineCandle = candle;
+  candle.priceScale().applyOptions({scaleMargins: {top: 0.08, bottom: 0.22}});
+  candle.setData(QRELwcAdapter.toCandles(d.kline));
+  const states = chipStates();
+  (plan.overlays || []).forEach(function (o){
+    if (states[o.f.col || o.f.name] === 'hidden') return;
+    const s = chart.addSeries(LWC.LineSeries, {color: QRELwcAdapter.lineColor(o.color, klineIsDark()),
+                                   lineWidth: 1, priceScaleId: 'right'});
+    s.setData(QRELwcAdapter.toLineSeries(o.f.values, d.kline.dates));
+  });
+  if (states['__vol__'] !== 'hidden'){
+    const vol = chart.addSeries(LWC.HistogramSeries, {priceScaleId: 'vol', color: t.volume, priceFormat: {type: 'volume'}});
+    chart.__klineVol = vol;
+    vol.priceScale().applyOptions({scaleMargins: {top: 0.82, bottom: 0.02}, visible: false});
+    vol.setData(QRELwcAdapter.toVolume(d.kline));
+  }
+  // 阈值线挂主 pane 第一条 line（无 overlay 时挂蜡烛）
+  lwcThresholds = [];
+  const mainLine = (plan.overlays || []).filter(function (o){ return states[o.f.col || o.f.name] !== 'hidden'; })[0];
+  const thrHost = mainLine ? chart.__klineMainLine : null;
+  if (thrHost){
+    QRELwcAdapter.thresholdLines({thresholds: []}).forEach(function () {});
+  }
+  // 买卖点 marker
+  if (states['__marks__'] !== 'hidden' && typeof LWC.createSeriesMarkers === 'function'){
+    lwcMarkers = LWC.createSeriesMarkers(candle, QRELwcAdapter.toMarkers(d.orders, t));
+  }
+  // 因子副图：每 pane 一个 addPane()
+  chart.__klineHists = [];
+  (plan.panes || []).forEach(function (p, i){
+    if (states[p.key] === 'hidden') return;
+    const pane = chart.addPane();
+    pane.setHeight(160);
+    const thrLines = QRELwcAdapter.thresholdLines(p);
+    let firstLine = null;
+    p.series.forEach(function (s){
+      const opts = {color: QRELwcAdapter.lineColor(s.color || QREFactorLayout.COLORS.pane, klineIsDark()), lineWidth: 1};
+      if (s.hist){
+        const hs = pane.addSeries(LWC.HistogramSeries, opts);
+        hs.setData(QRELwcAdapter.toHistogram(s.values, d.kline.dates));
+        chart.__klineHists.push(hs);
+      } else {
+        const ls = pane.addSeries(LWC.LineSeries, opts);
+        ls.setData(QRELwcAdapter.toLineSeries(s.values, d.kline.dates));
+        if (!firstLine) firstLine = ls;
+      }
+    });
+    if (firstLine){
+      thrLines.forEach(function (tl){
+        const line = firstLine.createPriceLine(tl);
+        lwcThresholds.push(line);
+      });
+    }
+  });
+  chart.timeScale().fitContent();
+  // 十字光标 → 顶部信息区（LWC 无 tooltip 框架）
+  const last = d.kline.dates.length - 1;
+  lwcHover = function (param){
+    let idx = last;
+    if (param && param.time != null){
+      const dt = String(param.time);
+      const j = d.kline.dates.indexOf(dt);
+      if (j >= 0) idx = j;
+    }
+    klineSetInfo(klineInfoHTML(d, plan, idx));
+  };
+  chart.subscribeCrosshairMove(lwcHover);
+  bindKlineInfo(null, d, plan);
+  lwcRenderLegend(plan, d);
+  lwcSyncAttrib();
+  setKlineToolsEnabled(true);
+  klineToolState.baseSeries = null;
+  bindKlineTools(null, d, plan);
+}
+// 引擎派发：原 renderKline 调用点全部走这里
+function renderKlineDispatch(d){
+  if (klineEngine() === 'lwc' && window.QRELwcAdapter && window.LightweightCharts){
+    renderKlineLwc(d);
+  } else {
+    renderKline(d);
   }
 }
 
@@ -779,7 +1027,7 @@ function renderFactorChips(plan, d){
         kreplayCtl.destroy(true);
         kreplayCtl = mountKlineReplay(klineData);
       } else {
-        renderKline(d);
+        renderKlineDispatch(d);
       }
     });
     slot.appendChild(b);
@@ -1096,11 +1344,13 @@ function hidePane(key){
 }
 // 变更后统一重挂：重播中按新布局重挂重播（防未来数据语义不变），否则重建静态图
 function klineRerenderAfterSetting(){
+  // 走派发：指标/面板设置改动后必须仍按当前引擎重建（否则从 lwc 切回 echarts 会残留）
+  const rebuild = (typeof renderKlineDispatch === 'function') ? renderKlineDispatch : renderKline;
   if (kreplayCtl){
     kreplayCtl.destroy(true);
     kreplayCtl = mountKlineReplay(klineData);
   } else if (klineDetail){
-    renderKline(klineDetail);
+    rebuild(klineDetail);
   }
 }
 // --- 指标设置与面板管理（CR-2026-10-28）：集中切换因子呈现方式 + 调整副图顺序 ---
@@ -1226,6 +1476,9 @@ function klineIndicatorDialog(){
 
   const foot = document.createElement('div');
   foot.className = 'ind-foot';
+  const left = document.createElement('div');
+  left.style.display = 'flex';
+  left.style.gap = '6px';
   const reset = klineIndBtn('恢复默认', '清空全部指标与面板偏好，按策略默认呈现', () => {
     try {
       Object.keys(localStorage)
@@ -1235,7 +1488,21 @@ function klineIndicatorDialog(){
     klineIndicatorDialog();
     klineRerenderAfterSetting();
   });
-  foot.appendChild(reset);
+  left.appendChild(reset);
+  // CR-2026-10-28 B 路试点：图表引擎开关（默认 echarts，可一键回滚）
+  if (window.QRELwcAdapter && window.LightweightCharts){
+    const lwcOn = klineEngine() === 'lwc';
+    const eng = klineIndBtn(lwcOn ? '切回 ECharts' : '试用 TradingView 图表',
+      '切换 K 线渲染引擎；TradingView 版为受控试点，可随时切回', () => {
+        setKlineEngine(lwcOn ? 'echarts' : 'lwc');
+        if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = null; }
+        lwcDispose();
+        klineIndicatorDialog();
+        klineRerenderAfterSetting();
+      });
+    left.appendChild(eng);
+  }
+  foot.appendChild(left);
   foot.appendChild(close.cloneNode(true));
 
   dialog.appendChild(head);
@@ -1259,6 +1526,11 @@ function renderKline(d){
     return;  // 无 K 线数据：整块隐藏不留空壳
   }
   $('#box-kline').style.display = '';
+  // LWC 专属 DOM 只在 lwc 引擎下显示（night-mode.js 的 themeChart 是 monkey-patch
+  // ECharts setOption，对 LWC 无效；ECharts 路径必须把图例/attribution 收掉）
+  { const lg = $('#kline-legend'), at = $('#kline-attrib');
+    if (lg) lg.style.display = 'none';
+    if (at) at.style.display = 'none'; }
   const dates = d.kline.dates;
   const el = $('#chart-kline');
   // CR-2026-10-20：因子分组布局（均线 overlay 主图 / MACD 合并面板 / 其余独立面板），
@@ -1494,16 +1766,24 @@ function initKlineReplay(d){
     $('#kreplay-events').classList.remove('hidden');
     // 接管前先停用工具栏并清空信息区：重播帧不得让静态信息条停留在未来数据上
     setKlineToolsEnabled(false);
+    // LWC 引擎下必须先销毁 LWC 实例：重播接管同一容器 #chart-kline，
+    // 不销毁会出现双 canvas / 双实例（阶段 3 才会做 LWC 重播 adapter）
+    if (typeof lwcDispose === 'function') lwcDispose();
     // 接管原 K线容器：重播帧直接渲染进 #chart-kline（原静态实例由组件销毁）
     kreplayCtl = mountKlineReplay(klineData);
   });
   $('#btn-kreplay-exit').addEventListener('click', () => {
     if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = null; }
+    // 重播退出：LWC 引擎下先销毁实例再重建（lwcDispose 幂等，echarts 路径为空操作）
+    if (typeof lwcDispose === 'function') lwcDispose();
     $('#kreplay-info').classList.add('hidden');
     const ev = $('#kreplay-events'); ev.classList.add('hidden'); ev.innerHTML = '';
     $('#btn-kreplay-exit').classList.add('hidden');
     btn.classList.remove('hidden');
-    renderKline(klineData);  // 数据全在内存，重建静态全量 K 线
+    // 数据全在内存，按当前引擎重建静态 K 线。renderKlineDispatch 可能不在某些
+    // 测试抽取区内，此时回退 renderKline（echarts 路径本身就在该区内）。
+    const rebuildKline = (typeof renderKlineDispatch === 'function') ? renderKlineDispatch : renderKline;
+    rebuildKline(klineData);
   });
 }
 function mountKlineReplay(d){
@@ -1612,6 +1892,12 @@ function mountKlineReplay(d){
     onFrame: (cursor) => { infoFrame(cursor); klineSetInfo(klineInfoHTML(d, plan, cursor)); },
   });
 }
+// CR-2026-10-28 B 路：night-mode.js 的 themeChart 是 monkey-patch ECharts setOption，
+// 对 LWC 无效；必须在 qre:themechange 时显式给 LWC 换肤（图表序列色 + 品牌水印）。
+// 注意：night-mode.js 的 CustomEvent 未开 bubbles，必须监听 document（window 收不到）
+document.addEventListener('qre:themechange', function () {
+  if (klineEngine() === 'lwc' && typeof lwcApplyTheme === 'function') lwcApplyTheme();
+});
 load();
 </script>
 {% endblock %}

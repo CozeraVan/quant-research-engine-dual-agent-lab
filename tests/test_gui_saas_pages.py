@@ -129,6 +129,8 @@ function createHarness(fetchImpl){
     MAX_ACTIVE_WAIT_MS: 300000,
     Date: {now(){ return now; }},
     location: {search: ''}, URLSearchParams,
+    // CR-2026-10-28 B 路：renderKlineDispatch 读 klineEngine()，需要 localStorage
+    localStorage: { getItem(){ return null; }, setItem(){}, removeItem(){} },
     // P1 只读分享：URL 无 share token 时透传（token 传播由
     // test_saas_access_hardening 的专用 harness 覆盖）
     shareUrl(url){ return url; }, shareSuffix(){ return ''; }, initShareButton(){},

@@ -331,6 +331,9 @@ open 时：
 - 复权口径修复：因子表/引擎是 hfq，K 线详情是前复权@最新；`lab_result` 现在对价格型因子除以最新 `adj_factor`，买入持有收益恒 hfq。分类单一来源 `gui.factor_registry.is_price_scaled()`，游戏共用。
 - 旧详情刷新：新详情带 `factor_basis=qfq_anchor_v1`；旧 gzip 产物前端显示“刷新详情”，经 `generate?refresh=1` 按需重算；showcase/分享只读不显示入口。
 - 画线工具首片：静态 K 线支持趋势线/水平线/清除；像素坐标经 `klinePixelToPoint()` 转为真实日期/价格，画线不进入重播。
+- 指标设置与面板管理：`factor-layout.js::plan()` 新增可选第三参 `paneOrder`；`symbol.html` 新增「指标」模态，可集中切换因子呈现方式、调整副图顺序、单独收起。
+- B 路 LWC 试点阶段 0–2 首片已落地：attribution 决策完成（保留文本链接 + 品牌水印），LWC 5.2.1 vendored 进 `static/chart-core/vendor/`；`QRELwcAdapter` 纯函数适配层 + `renderKlineLwc()`；引擎开关 `localStorage['qre.kline.engine']` 默认 `echarts`，ECharts 路径逐字节保留作回滚。**阶段 3（重播 LWC adapter）未做**——重播仍走 ECharts，进入重播前会销毁 LWC 实例。详见 `change_requests/CR-2026-10-28_lwc_kline_pilot.md`。
+- API 校正（实测）：standalone 构建无 `addCandlestickSeries`，必须 `addSeries(LWC.CandlestickSeries, opts)`；`createChart` 用 `autoSize:true`；`qre:themechange` 是 non-bubbling CustomEvent，必须监听 `document`。
 
 ## 11. 后续阅读顺序（给 DeepSeek）
 1. `gui/saas/templates/symbol.html`：SaaS 静态图与个股重播。

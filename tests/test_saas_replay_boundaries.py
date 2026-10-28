@@ -116,6 +116,8 @@ function createReplayHarness(){
   const document = {
     createElement(){ return el(); },
     getElementById(id){ return elements[id] || (elements[id] = el()); },
+    // CR-2026-10-28 B 路：symbol.html 末尾注册 qre:themechange 监听
+    addEventListener(){}, removeEventListener(){},
   };
   const setOptions = [];
   const echarts = {
@@ -359,7 +361,9 @@ const QREReplay = {
 h.attached = null;
 const context = vm.createContext({
   console,
-  document: { getElementById(id){ return h.document.getElementById(id); }, createElement(){ return h.el(); }, querySelector(){ return null; } },
+  document: { getElementById(id){ return h.document.getElementById(id); }, createElement(){ return h.el(); }, querySelector(){ return null; },
+    // CR-2026-10-28 B 路：symbol.html 末尾注册 qre:themechange 监听
+    addEventListener(){}, removeEventListener(){} },
   window: { addEventListener(){} },
   $ (selector){ return h.document.getElementById(String(selector).replace('#', '')); },
   QREReplay, QREFactorLayout: h.context.window.QREFactorLayout,
@@ -457,7 +461,7 @@ def _extract(html: str, pattern: str, what: str) -> str:
 class TestSymbolReplayEventSource:
     def test_orders_priority_and_factor_layout(self, client):
         html = client.get("/saas/jobs/1/symbols/000001").get_data(as_text=True)
-        source = _extract(html, r"(let klineResizeBound = false;[\s\S]*?\n\})\nload\(\);", "mountKlineReplay")
+        source = _extract(html, r"(let klineResizeBound = false;[\s\S]*?)\nload\(\);", "mountKlineReplay")
         _node(_REPLAY_HARNESS
                + _SYMBOL_EVENT_SCENARIO.replace("%FACTOR%", json.dumps(FACTOR_LAYOUT_JS))
                                        .replace("%REPLAY%", json.dumps(REPLAY_JS))
@@ -470,7 +474,9 @@ const h = createReplayHarness();
 h.attached = null;
 const context = vm.createContext({
   console,
-  document: { getElementById(id){ return h.document.getElementById(id); }, createElement(){ return h.el(); } },
+  document: { getElementById(id){ return h.document.getElementById(id); }, createElement(){ return h.el(); },
+    // CR-2026-10-28 B 路：symbol.html 末尾注册 qre:themechange 监听
+    addEventListener(){}, removeEventListener(){} },
   window: { addEventListener(){} },
   QREReplay: { attach(mountEl, opts){ h.attached = opts; return {destroy(){}}; } },
   curBench: null,
