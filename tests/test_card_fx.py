@@ -185,15 +185,18 @@ def test_tilt_rules_and_canvas_exclusion():
     # 移动中关过渡 → 跟手；移出后移除 .fx-live 并归零 → 平滑复原
     assert ".fx-tilt.fx-live{transition:none}" in css
     # 倾斜只对并列小卡（CR-2026-10-28 用户反馈后收窄）
-    assert ".metric-card.fx-tilt{" in css, "倾斜必须只挂在 .metric-card 上"
+    assert ".metric-card.fx-tilt{" in css, "倾斜必须挂在并列小卡上"
+    assert ".entry-card.fx-tilt{" in css, "新建策略三入口也必须挂倾斜"
     assert "translateY(-2px)" in css, "hover 微浮应合并进小卡倾斜的 transform"
+    # 入口卡的 hover 抬起已换成 3D 晃动，不得再留 translateY(-4px)
+    assert "translateY(-4px)" not in css, "入口卡 hover 抬起应被倾斜取代"
     # 小卡透视必须近（170x77 的卡在 1000px 透视下 4° 只有 0.4px 位移，看不见）
     mcard = css[css.index(".metric-card.fx-tilt{"):]
     mcard = mcard[: mcard.index("}")]
     assert "perspective(260px)" in mcard, f"小卡倾斜必须用近透视，实际 {mcard[:80]}"
     js0 = _fx()
     TILT_JS_SEL = js0.split('TILT_SEL = ')[1].split(';')[0].strip()
-    assert TILT_JS_SEL == "'.metric-card'", f"JS TILT_SEL 必须收窄为 .metric-card，实际 {TILT_JS_SEL}"
+    assert TILT_JS_SEL == "'.metric-card,.entry-card'", f"JS TILT_SEL 应为小卡+三入口，实际 {TILT_JS_SEL}"
     # 使用说明侧边栏 sticky 必须赢过玻璃卡族的 position:relative
     assert ".help-side{position:sticky;top:76px}" in css, "侧边栏 sticky 被玻璃族覆盖"
     # 侧边栏 sticky 规则必须排在玻璃卡族之后（同特异性后声明胜出）；
@@ -207,7 +210,11 @@ def test_tilt_rules_and_canvas_exclusion():
     assert "querySelector('canvas')" in js
     assert "eligibleForTilt" in js
     # 图表卡（含 canvas）不挂 transform → 计算样式为 none
-    assert "classList.toggle('fx-tilt', tiltable)" in js
+    assert "eligibleForTilt" in js
+    # 光斑宿主与倾斜宿主必须解耦：倾斜只挂光标下的小卡，不向上爬到大卡
+    assert "outermost(hit)" in js, "光斑仍走最外层"
+    assert "hit.matches(TILT_SEL)" in js, "倾斜必须取光标下的小卡，不得向上爬"
+    assert "state.tilt" in js and "state.card" in js, "光斑与倾斜宿主必须分开存"
 
 
 def test_nested_cards_drive_outermost_only():
@@ -215,7 +222,7 @@ def test_nested_cards_drive_outermost_only():
     assert "function outermost(card)" in js
     assert "cur.parentElement.closest(CARD_SEL)" in js
     # 倾斜只对并列小卡；大卡/图表卡不参与，避免 transform 叠加与画布发糊
-    assert "TILT_SEL = '.metric-card'" in js
+    assert "TILT_SEL = '.metric-card,.entry-card'" in js
 
 
 # ---------------------------------------------------------------- 降级与可访问性
@@ -411,6 +418,6 @@ assert.equal(fx.eligibleForTilt(fake('.chart-box', null, false)), false, '图表
 assert.equal(fx.eligibleForTilt(fake('.panel', null, false)), false, '面板不倾斜');
 assert.equal(fx.eligibleForTilt(fake('.big-link', null, false)), false, '入口卡不倾斜');
 assert.equal(fx.eligibleForTilt(fake('.metric', null, false)), false, '.metric 不在倾斜族');
-assert.equal(fx.eligibleForTilt(fake('.entry-card', null, false)), false, '入口卡不叠倾斜');
+assert.equal(fx.eligibleForTilt(fake('.entry-card', null, false)), true, '新建策略三入口可倾斜');
 """
     _run(script)

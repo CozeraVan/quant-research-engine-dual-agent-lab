@@ -1803,3 +1803,18 @@ rotateY -2.39°），但 `.metric-card` 只有 170x77px，`perspective(1000px)` 
 生产实测：右缘悬停左缘 -2.1px / rotateY -2.39°；左下悬停左缘 +0.9px /
 rotateY +2.27°（方向跟随光标）；中心 0°；大卡仍 transform:none。
 测试 18 passed；全量 `3006 passed, 24 skipped`。生产 MainPID 529949。
+
+## 2026-10-28 倾斜覆盖补全：光斑/倾斜宿主解耦 + 三入口换晃动
+
+- **根因**：`flush()` 把光斑和倾斜都 `outermost()` 到最外层玻璃卡；小卡都包在
+  `.chart-box` 里（`#wear-body`/`#range-strip`/`#risk-body`/`#box-risk`），
+  爬到 `.chart-box` 后它已不在 `TILT_SEL` → 小卡既不亮也不倾。只有挂在 `.wrap`
+  下的 `.metric-strip` 小卡能倾。
+- **修复**：`state.card`（光斑）走最外层；`state.tilt`（倾斜）取光标正下方的
+  `hit.matches(TILT_SEL)` 小卡，不向上爬；`--rx/--ry` 按小卡自身 rect 算。
+- **三入口**：`TILT_SEL` 加 `.entry-card`，删掉 `hover{translateY(-4px)}`，
+  改为 `.entry-card.fx-tilt`（perspective 520px，宽卡避免畸变）。
+- 实测 8 组小卡全部 tilt=True（左缘 -1.6~-5.4px、rotateY -2.15°），
+  大卡回归确认不倾仅光斑；小卡自身光斑 0 是预期（宿主在大卡）。
+- 测试 18 passed；全量 `3006 passed, 24 skipped`。生产 MainPID 530451，
+  回滚副本 `/tmp/qre-deploy-20261028T101613Z.bak`。

@@ -17,12 +17,12 @@
 
   var TILT_MAX = 4;                                       // 倾斜上限（度），CSS clamp 同步兜底
   var CARD_SEL = '.card,.chart-box,.panel,.big-link,.metric,.metric-card,.entry-card';
-  // 可倾斜卡族（CR-2026-10-28 收窄）：只对「并列小卡」倾斜——.metric-card
-  // （总收益率/年化收益/超额收益/夏普、交易磨损五联卡、风险指标卡）。
-  // 装小卡的大卡（.card/.chart-box/.panel/.big-link）与图表卡恒不倾斜：
-  // 大卡内是 ECharts/LWC 画布，rotateX/rotateY 会让画布发糊、文字发虚，
-  // 且用户反馈「倾斜不应作用于所有 div」。CSS 侧 .metric-card.fx-tilt 同源双保险。
-  var TILT_SEL = '.metric-card';
+  // 可倾斜卡族（CR-2026-10-28 收窄）：只对「并列小卡」与「新建策略三入口」倾斜——
+  // .metric-card（总收益率/年化收益/超额收益/夏普、交易磨损五联卡、FRM 风险卡、
+  // 区间策略收益条）与 .entry-card。装小卡的大卡（.card/.chart-box/.panel/.big-link）
+  // 与图表卡恒不倾斜：大卡内是 ECharts/LWC 画布，rotateX/rotateY 会让画布发糊、
+  // 文字发虚，且用户反馈「倾斜不应作用于所有 div」。CSS 侧同源规则双保险。
+  var TILT_SEL = '.metric-card,.entry-card';   // 并列小卡 + 新建策略三入口
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -67,33 +67,41 @@
     return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }
 
-  var state = { card: null, rect: null, raf: 0, event: null, mx: '', my: '', rx: '', ry: '' };
+  /* state.card  = 光斑宿主（最外层玻璃卡；嵌套内层不重复亮）
+     state.tilt  = 倾斜宿主（光标下的可倾斜小卡；与外层可能是同一个元素）
+     两者解耦（CR-2026-10-28 用户反馈）：小卡包在 .chart-box 里时，光斑应由大卡
+     统一负责（否则小卡的光斑会被大卡的玻璃底色截断），而倾斜必须落在小卡上——
+     此前 outermost() 把两者都提到最外层，导致 .chart-box 内的 .metric-card
+     （交易磨损五联卡、区间策略收益条、FRM 风险卡）既不亮也不倾。 */
+  var state = { card: null, tilt: null, rect: null, trect: null, raf: 0, event: null,
+                mx: '', my: '', rx: '', ry: '' };
 
   function reset() {
-    var card = state.card;
-    state.card = null;
-    state.rect = null;
+    var card = state.card, tilt = state.tilt;
+    state.card = null; state.tilt = null;
+    state.rect = null; state.trect = null;
     state.mx = state.my = state.rx = state.ry = '';
-    if (!card) return;
-    // 先恢复 transition 再归零变量：同一帧内「after」样式带 transition → 平滑复原
-    card.classList.remove('fx-live');
-    card.style.setProperty('--rx', '0');
-    card.style.setProperty('--ry', '0');
-    card.classList.remove('fx-on');
+    if (tilt) {
+      // 先恢复 transition 再归零变量：同一帧内「after」样式带 transition → 平滑复原
+      tilt.classList.remove('fx-live');
+      tilt.style.setProperty('--rx', '0');
+      tilt.style.setProperty('--ry', '0');
+      tilt.classList.remove('fx-tilt');
+    }
+    if (card) card.classList.remove('fx-on');
   }
 
-  function enter(card) {
+  function enter(card, tiltEl) {
     reset();
     if (!card) return;
     state.card = card;
     state.rect = card.getBoundingClientRect();
     card.classList.add('fx-on');
-    var tiltable = eligibleForTilt(card);
-    card.classList.toggle('fx-tilt', tiltable);
-    card.classList.add('fx-live');
-    if (!tiltable) {
-      card.style.setProperty('--rx', '0');
-      card.style.setProperty('--ry', '0');
+    var tiltable = !!tiltEl && eligibleForTilt(tiltEl);
+    if (tiltable) {
+      state.tilt = tiltEl;
+      state.trect = tiltEl.getBoundingClientRect();
+      tiltEl.classList.add('fx-tilt', 'fx-live');
     }
   }
 
@@ -104,9 +112,12 @@
     if (!e) return;
     if (prefersReduced()) { reset(); return; }
     var target = e.target;
-    var card = (target && target.closest) ? target.closest(CARD_SEL) : null;
-    if (card) card = outermost(card);
-    if (card !== state.card) enter(card);
+    // 光斑宿主：最外层玻璃卡（嵌套内层不重复亮）
+    var hit = (target && target.closest) ? target.closest(CARD_SEL) : null;
+    var card = hit ? outermost(hit) : null;
+    // 倾斜宿主：光标正下方那张可倾斜小卡（不向上爬——爬上去就落到大卡上了）
+    var tiltEl = (hit && hit.matches && hit.matches(TILT_SEL)) ? hit : null;
+    if (card !== state.card || tiltEl !== state.tilt) enter(card, tiltEl);
     var el = state.card;
     if (!el) return;
     if (!state.rect) state.rect = el.getBoundingClientRect();
@@ -119,12 +130,15 @@
     var my = s.my.toFixed(2) + '%';
     if (mx !== state.mx) { el.style.setProperty('--mx', mx); state.mx = mx; }
     if (my !== state.my) { el.style.setProperty('--my', my); state.my = my; }
-    if (el.classList.contains('fx-tilt')) {
-      var t = tilt(r.width, r.height, x, y);
-      var rx = t.rx.toFixed(2);
-      var ry = t.ry.toFixed(2);
-      if (rx !== state.rx) { el.style.setProperty('--rx', rx); state.rx = rx; }
-      if (ry !== state.ry) { el.style.setProperty('--ry', ry); state.ry = ry; }
+    var t = state.tilt;
+    if (t) {
+      if (!state.trect) state.trect = t.getBoundingClientRect();
+      var tr = state.trect;
+      var ti = tilt(tr.width, tr.height, e.clientX - tr.left, e.clientY - tr.top);
+      var rx = ti.rx.toFixed(2);
+      var ry = ti.ry.toFixed(2);
+      if (rx !== state.rx) { t.style.setProperty('--rx', rx); state.rx = rx; }
+      if (ry !== state.ry) { t.style.setProperty('--ry', ry); state.ry = ry; }
     }
   }
 

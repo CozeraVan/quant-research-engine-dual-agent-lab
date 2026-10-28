@@ -428,3 +428,44 @@ CSS 侧同步加 `.metric-card.fx-tilt{...translateY(-2px)}` 做双保险，并�
 **实测（生产）**：右缘悬停 左缘 -2.1px / rotateY -2.39° / rotateX -1.98°；
 左下悬停 左缘 +0.9px / rotateY +2.27°（方向正确跟随光标）；中心 0°（正确）；
 大卡 `.chart-box` 仍 `transform:none`、光斑正常。
+
+
+### 4. 倾斜未覆盖 .chart-box 内的小卡 + 三入口仍是「抬起」
+
+用户反馈「区间策略收益」同级别小卡、交易磨损小卡、FRM 小卡、个股详情同类小卡
+都没有 3D 晃动；并要求把新建策略三入口的「抬起」换成这种晃动。
+
+**根因（光斑与倾斜宿主耦合）**：`flush()` 里 `closest(CARD_SEL)` 之后直接
+`outermost(card)`，把**光斑和倾斜都提到最外层玻璃卡**。小卡（`.metric-card`）
+都包在 `.chart-box` 里（`#wear-body`/`#range-strip`/`#risk-body`/`#box-risk`），
+`outermost()` 一路爬到 `.chart-box`——而 `.chart-box` 已不在 `TILT_SEL`，
+于是这些小卡既不亮也不倾。只有直接挂在 `.wrap` 下的 `.metric-strip` 小卡能倾。
+
+**修复（解耦两个宿主）**：
+- `state.card`（光斑）= 最外层玻璃卡 `outermost(hit)`——嵌套内层不重复亮，
+  且大卡的玻璃底色不会截断小卡光斑；
+- `state.tilt`（倾斜）= **光标正下方**那张 `hit.matches(TILT_SEL)` 的小卡，
+  不向上爬；`--rx/--ry` 按小卡自己的 rect 计算。
+- `enter(card, tiltEl)` / `reset()` 同步改为分别摘挂两个宿主的 class。
+
+**新建策略三入口**：`TILT_SEL` 加 `.entry-card`；删掉
+`.entry-card:hover{transform:translateY(-4px)}`（transform 只由
+`.entry-card.fx-tilt` 一条规则负责，避免互相覆盖）；入口卡约 395px 宽，
+perspective 取 520px（小卡 260px 那档在宽卡上畸变明显）。
+
+**实测（生产，全部 tilt=True）**：
+
+| 位置 | 选择器 | 左缘位移 | rotateY |
+| --- | --- | --- | --- |
+| job 汇总小卡 | `.metric-strip .metric-card` | -1.6px | -2.15° |
+| job 交易磨损 | `.wear-cards .metric-card` | -2.6px | -2.15° |
+| job FRM 风险 | `.risk-cards .metric-card` | -4.1px | -2.15° |
+| job 区间策略收益条 | `#range-strip .metric-card` | -1.6px | -2.15° |
+| sym 汇总小卡 | `.metric-strip .metric-card` | -1.8px | -2.15° |
+| sym 交易磨损 | `.wear-cards .metric-card` | -3.4px | -2.15° |
+| sym 区间策略收益条 | `#range-strip .metric-card` | -1.8px | -2.15° |
+| new 三入口 | `.entry-card` | -5.4px | -2.15° |
+| job/sym 大卡（回归） | `.chart-box` | 0px | 0°（不倾，仅光斑） |
+
+小卡的 `::before` 光斑 opacity 为 0 是**预期**——光斑宿主已改为最外层大卡
+（实测大卡带 `.fx-on`）。
