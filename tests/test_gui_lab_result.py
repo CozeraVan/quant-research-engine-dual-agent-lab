@@ -1374,3 +1374,109 @@ def test_lab_runs_routes_admin_absent():
     rules = {r.rule for r in create_app().url_map.iter_rules()}
     assert "/api/lab/runs" not in rules
     assert "/api/lab/runs/<run_id>/delete" not in rules
+
+
+# ---------------------------------------------------------------- 前复权锚点日期
+class TestQfqAnchorDate:
+    """QRE-FACTOR-QFQ-ANCHOR-DATE：锚点必须取 K 线最后交易日，不能取全局最新日。
+
+    历史 bug：``_latest_adj_factor`` 无条件 ``ORDER BY trade_date DESC LIMIT 1``。
+    回测区间结束后若发生除权，adj_factor 变化 → 价格型因子被除错倍数 →
+    EMA 与 K 线大幅偏离（600330 类问题）。600330.SH 实测：区间末日 2026-10-20
+    的 adj 与全局最新日 2026-10-27 的 adj 虽同为 5.0639，但除权落在区间之后时
+    两者就会分叉。
+    """
+
+    def test_anchor_uses_as_of_date(self, monkeypatch):
+        from quant_research_engine.gui import lab_result
+
+        captured = {}
+
+        class _Res:
+            def __init__(self, v):
+                self._v = v
+
+            def fetchone(self):
+                return (self._v,)
+
+        class _Conn:
+            def execute(self, stmt, params=None):
+                captured["sql"] = str(stmt)
+                captured["params"] = dict(params or {})
+                # 区间内锚点 vs 全局最新：故意返回不同值以验证传参
+                if captured["params"].get("d"):
+                    return _Res(4.02)
+                return _Res(5.0639)
+
+        got = lab_result._latest_adj_factor(_Conn(), "600330.SH", "2026-10-20")
+        assert got == 4.02, "传了 as_of 必须按区间内锚点取"
+        assert "trade_date <= :d" in captured["sql"], "SQL 必须带日期上界"
+        assert captured["params"]["d"] == "2026-10-20"
+
+        got2 = lab_result._latest_adj_factor(_Conn(), "600330.SH")
+        assert got2 == 5.0639, "缺省 as_of 才退回全局最新"
+
+    def test_fetch_factor_panels_passes_kline_last_date(self, monkeypatch, tmp_path):
+        """_fetch_factor_panels 必须把 K 线最后交易日传给锚点查询。"""
+        seen = {}
+
+        monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+        run_dir = tmp_path / "runs" / "r1"
+        run_dir.mkdir(parents=True)
+        (run_dir / "strategy.yaml").write_text(
+            "data:\n  factor_fields:\n"
+            "    ema: factors.stock_daily_overlap_close.ema_5\n"
+            "signal:\n  entry: ema > 1\n  exit: ema < 0\n",
+            encoding="utf-8",
+        )
+
+        from quant_research_engine.gui import lab_result
+
+        real_anchor = lab_result._latest_adj_factor
+
+        def spy(conn, ts_code, as_of=None):
+            seen["as_of"] = as_of
+            return real_anchor(conn, ts_code, as_of)
+
+        monkeypatch.setattr(lab_result, "_latest_adj_factor", spy)
+
+        # 复用现有 fake store 思路：只需要锚点查询被拦截即可
+        class _Res:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def fetchall(self):
+                return self._rows
+
+            def first(self):
+                return self._rows[0] if self._rows else None
+
+        class _Conn:
+            def execute(self, stmt, params=None):
+                sql = str(stmt)
+                if "information_schema.columns" in sql:
+                    return _Res([])
+                if "SELECT adj_factor" in sql:
+                    return _Res([(5.0639,)])
+                return _Res([("2024-01-02", 10.0), ("2024-01-03", 11.0)])
+
+        class _Begin:
+            def __enter__(self):
+                return _Conn()
+
+            def __exit__(self, *a):
+                return False
+
+        class _Engine:
+            def begin(self):
+                return _Begin()
+
+        class _Store:
+            market_engine = _Engine()
+
+        monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda *a, **k: _Store())
+
+        dates = ["2024-01-02", "2024-01-03", "2024-01-04"]
+        lab_result._fetch_factor_panels({"run_id": "r1"}, "600330.SH", dates)
+        assert seen.get("as_of") == "2024-01-04", (
+            f"锚点日期必须是 K 线最后交易日，实际 {seen.get('as_of')}")

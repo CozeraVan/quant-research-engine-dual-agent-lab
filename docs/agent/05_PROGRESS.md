@@ -1818,3 +1818,26 @@ rotateY +2.27°（方向跟随光标）；中心 0°；大卡仍 transform:none�
   大卡回归确认不倾仅光斑；小卡自身光斑 0 是预期（宿主在大卡）。
 - 测试 18 passed；全量 `3006 passed, 24 skipped`。生产 MainPID 530451，
   回滚副本 `/tmp/qre-deploy-20261028T101613Z.bak`。
+
+## 2026-10-28 因子前复权锚点按 K 线末日：600330 EMA 偏离根因修复
+
+用户第三次报同一类问题（"每次治标不治本"），本次定位到三层根因并全部收口：
+
+1. **固有口径差**：因子表是 hfq（raw × adj_factor），K 线详情是 qfq@K线末日。
+   价格型因子必须除以「K 线最后交易日」的 adj_factor 才同尺度，该换算只存在于
+   实时生成路径 `lab_result._fetch_factor_panels`。
+2. **快照永不失效**：SaaS API 优先下发 worker 回传的 gzip 快照 → 1013/1013 个
+   存量产物全是旧口径。600330 实测 `ema_5=113.26` vs qfq 收盘 `21.97`（5.0637 倍），
+   且比值全历史恒定，证明是纯 hfq 尺度而非计算错误。
+3. **锚点取错日**：`_latest_adj_factor` 原来无条件取全局最新日；区间结束后若再除权，
+   锚点与 K 线所用锚点不一致 → 因子被除错倍数。这才是"修了又坏"的原因。
+
+实证：用产物自身 qfq K 线重算，`ema_hfq/adj(latest)` 与 qfq 收盘价比值
+0.9883–1.1020（正是 EMA5 滞后该有的样子）；rescale 后比值 1.0000。
+40 个随机产物校验：EMA 比值中位数 2.677 → 1.0001，MACD 1.434 → 0.9999。
+
+修复：`_latest_adj_factor` 加 `as_of`（传 K 线最后交易日）+ 回归测试 2 例；
+1013 个存量产物按正确锚点 rescale 后回传 ECS（线上复扫 100% 新口径）；
+app.py 对缺 `factor_basis` 的产物一律拒发（走 404 + 前端生成按钮）。
+CR：`change_requests/CR-2026-10-28_factor_qfq_anchor.md`。
+测试：全量 `3009 passed, 24 skipped`。未 commit/push。

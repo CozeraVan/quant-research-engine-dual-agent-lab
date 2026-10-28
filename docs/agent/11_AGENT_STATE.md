@@ -1241,3 +1241,34 @@ risk 节含 NaN（如 GARCH 拟合失败/零方差 sharpe），`json.dumps` 默�
 - 既有约束全部保持：无新增灰字（R-UI-001）、无外部依赖、夜间生效、reduced-motion 降级、焦点环不遮挡、图表卡不倾斜不发糊。
 - 测试 `tests/test_card_fx.py` 18 例；全量 `3006 passed, 24 skipped`。
 - 生产已部署，`.tmp/card-fx/` 有截图与 `report.json`。CR：`docs/agent/change_requests/CR-2026-10-28_card_frosted_glass.md`。
+
+### 2026-10-28 FACTOR-QFQ-ANCHOR 已部署待人工验收，未 commit/push
+
+600330 EMA 与 K 线偏离的**根因**修复（用户第三次报同类问题，明确要求"治本"）。
+
+**三层根因**：① 因子表 hfq（raw × adj_factor）vs K 线 qfq@K线末日 的固有口径差，
+价格型因子必须除以 K 线最后交易日的 adj_factor，该换算只在实时生成路径存在；
+② SaaS API 优先下发 worker gzip 快照且永不失效 → 1013/1013 个存量产物全是旧口径
+（线上复扫 `factor_basis` 缺失率 100%）；③ `_latest_adj_factor` 原来无条件取全局最新日，
+区间结束后再除权就除错倍数——**这才是"修了又坏"的真因**。
+
+**实证**：600330 `ema_5=113.26` vs qfq 收盘 `21.97`（5.0637 倍），比值全历史恒定；
+用产物自身 qfq K 线重算，`ema_hfq/adj(latest)` 与收盘价比值 0.9883–1.1020（EMA5 滞后该有的样子），
+rescale 后 1.0000。40 个随机产物：EMA 比值中位数 2.677 → 1.0001，MACD 1.434 → 0.9999。
+
+**修复**：`_latest_adj_factor(conn, ts_code, as_of)` 加 `as_of` + SQL `AND trade_date <= :d`，
+调用点传 `dates[-1]`；回归测试 `TestQfqAnchorDate` 2 例。1013 个存量产物 rescale 后回传 ECS
+（线上复扫 100% 新口径）。app.py 对缺 `factor_basis` 的产物一律拒发 → 404 + 前端生成按钮
+（宁可让用户点一下，不 silent 展示错尺度数据）。测试夹具 3 个文件补 `factor_basis`。
+
+**环境约束备忘（决定了补救方式）**：ECS 无行情库 → 不能重算因子只能改快照；本地 run 产物已清空
+（`outputs/gui-console/runs` 空、无 `status.json`）→ worker `_execute_symbol_detail` 不可用，
+"刷新详情"按钮对存量 job 实际无效。
+
+**测试**：全量 `3009 passed, 24 skipped`。CR：`change_requests/CR-2026-10-28_factor_qfq_anchor.md`。
+**未 commit/push**，建议提交 `fix(data): 因子前复权锚点按K线末日，补救1013个存量产物并拒发旧口径快照`。
+
+### 下一阶段重心（用户 2026-10-28 指定，接在本次验收后）
+
+因子库因子的**别名、呈现方式、复权口径**要固化为因子的元数据属性（类似 C++ 数据成员），
+不再每次调用 K 线/因子时临时判断——目标是"未来不想一而再再而三去解决 K 线和技术指标的呈现问题"。

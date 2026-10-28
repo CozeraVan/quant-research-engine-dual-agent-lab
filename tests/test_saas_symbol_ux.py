@@ -179,6 +179,9 @@ class TestSymbolDetailFromUpload:
     def _detail_payload(self):
         return {
             "ok": True,
+            # QRE-FACTOR-QFQ-ANCHOR-DATE：现行产物必须带口径标记，否则 API 视为
+            # 「口径未知」的旧快照而不下发（防止 EMA 等按 hfq 与 qfq K 线并列）
+            "factor_basis": "qfq_anchor_v1",
             "summary": {"ts_code": "000001.SZ", "name": "平安银行", "total_pnl": 123.4,
                         "trades": 2, "avg_ret": 0.01, "win_rate": 0.5, "percentile": 0.1,
                         "bench_ret": 0.02, "total_ret_pct": 0.03},
@@ -271,7 +274,8 @@ class TestSymbolDetailDataUntil:
         )
         assert done.get_json()["status"] == "completed"
         self._write_detail(app, job_id, "000001.SZ", {
-            "ok": True, "summary": {"ts_code": "000001.SZ", "name": "平安银行"},
+            "ok": True, "factor_basis": "qfq_anchor_v1",
+            "summary": {"ts_code": "000001.SZ", "name": "平安银行"},
             "trades": [], "orders": [], "failed_orders": []})
         d = client.get(f"/api/results/{job_id}/symbols/000001",
                        headers={"X-User-Id": "1"}).get_json()

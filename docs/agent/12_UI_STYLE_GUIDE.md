@@ -245,6 +245,28 @@
 - `factor-layout.js` 优先消费显式 display；只有旧注册表/旧产物缺 display 时才使用启发式回退。SaaS 因子目录、symbol 静态图与重播必须同源，禁止把 EMA 错放到独立指标 DIV。
 - 呈现协议与夜间模式正交：主题切换只改颜色，不改 panel/role/series 或数据。修改图表时必须回归 EMA overlay、MACD 同面板、不同口径不串键与 375 无横溢。
 
+### 3.16 全站卡片玻璃质感 + 光标光斑 + 并列小卡 3D 倾斜（QRE-SAAS-CARD-FROSTED-GLASS，2026-10-28）
+
+- 单一实现文件 `static/card-fx.js`（`window.QRECardFx`：纯函数 + `init()`，带 `typeof document` 守卫供 Node vm 断言）；`base.html` 只加一行 `<script>`，**不改任何业务模板结构**。
+- **玻璃卡族**（`.card` 及同族容器）：`backdrop-filter:blur(28px) saturate(140%)` + 48% 白底 + 1px 半透明白描边 + 顶部 `inset` 细高光 + 圆角 `--card-radius`（24px，**新增 token，不动 `--radius`**）+ 两层大而柔的投影。底色必须拆成 `background-color` + `background-image`——`background` 简写会重置 `background-image`。
+- **背景装饰层** `body::before`（fixed / `pointer-events:none` / `z-index:-1` / 四团品牌紫径向渐变）。用负 z-index 免去给 `.wrap`/`.container` 提层级，也不碰 `.topbar{z-index:40}` 与既有浮层。装饰必须控制在视口内，出血到视口外会导致卡片中心采不到紫色。
+- **光标光斑**：卡内 `::before` 放径向渐变（`z-index:-1` + 父级 `isolation:isolate`，压在文字之下**不影响对比度**）；描边环 `::after` 用 `mask-composite:exclude` 只留 1px。
+- **3D 倾斜**：`.fx-tilt` ≤4°，`--rx/--ry` 由光标在小卡自身 rect 内的位置算出。**宿主解耦是硬规则**：光斑宿主走 `outermost(hit)`（最外层玻璃卡），倾斜宿主取光标正下方 `hit.matches(TILT_SEL)` 的小卡，**不向上爬**——否则 `.chart-box` 内的 `#wear-body`/`#range-strip`/`#risk-body`/`#box-risk` 小卡爬到 `.chart-box` 后不在 `TILT_SEL`，既不亮也不倾。
+- `TILT_SEL = '.metric-card,.entry-card'`。JS 挂载条件含 `!querySelector('canvas')` 且非嵌套内层 → **图表卡 computed `transform` 恒为 `none`**（不倾、不发糊）。三入口 `.entry-card` 用 `perspective:520px`（宽卡避免畸变），并**删掉原 `hover{translateY(-4px)}`**，改为倾斜接管。
+- **小卡透视距离 260px**：`.metric-card` 只有 170×77px，`perspective(1000px)` 下 4° 的水平位移仅 0.4px（几何上看不见）；260px 同角度位移放大 6 倍。通用 `.fx-tilt` 保持 1000px。
+- CSS 数学函数里的角度必须包 `calc()`；`clamp()` 钳的是度值时注意别把 3.98° 钳成 1°（应钳位移/百分比，不在角度上钳）。
+- 性能：单委托 `pointermove` + rAF 簿记成本 ≈0ms；剩余成本来自无 GPU 环境下浏览器对 `blur(28px)` 的软件重采样（关掉 `backdrop-filter` 即回 60fps）。详情见 `13_UI_PERF_NOTES.md`。
+- `.help-side{position:sticky}` 必须写在玻璃卡族规则**之后**（同特异性后声明胜出）。
+
+### 3.17 使用说明侧边栏玻璃胶囊当前项（QRE-SAAS-HELP-SIDEBAR-GLASS-PILL，2026-10-28）
+
+- 实现：`static/help-nav.js`（`window.QREHelpNav`：纯函数 `clamp/round/direction/stretchScale/transform3/transformFor/motionKeyframes` + `init()`）；`help.html` nav 内单个 `<span class="help-pill" aria-hidden="true">`；样式在 `lab-theme.css` 追加，夜间在 `night-mode.css` 末尾覆盖 4 个 token。
+- 动画用 `Element.animate` 播 5 帧关键帧（外层 `easing:'linear'`，每帧自带 easing，避免二次平滑）：0%(起点 1) → 46%(路程 55% 处 `scaleY=stretch`) → 72%(终点压扁) → 88%(终点过冲) → 100%(1)；前段 `cubic-bezier(.22,1,.36,1)`、后段 `cubic-bezier(.34,1.56,.64,1)`；`transform-origin` 按上移/下移切 `bottom center`/`top center`，保证朝移动方向拉伸；`stretchScale(dy,h)=1+clamp(|dy|/h*0.09,0,0.18)`。
+- 玻璃五层叠成：半透明紫底 `.13` + 顶部受光渐变 + `::before` 配 `mask-composite:exclude` 的 1px 渐变描边环（顶 100% 白→两侧 32% 紫→底 16% 紫）+ 顶部 1px 高光与底部 1px 压深 + 接触影/环境投影；`@supports not (backdrop-filter)` 降级为不透明 `--tint`。
+- 功能：`IntersectionObserver` 追踪七个 `.help-sec`；点击锚点立即移胶囊 + 平滑滚动；带 hash 打开正确定位；resize 重算不播动画；`aria-current="true"` 写当前项；`:focus-visible` 焦点环。
+- **竞稿终版（Kimi V3）**：位移改 **rAF 弹簧数值积分**（半隐式欧拉，子步 1/240s），角速度恒定 12.25 rad/s、**阻尼比随距离 0.62→0.80 自适应**，绝对过冲稳定 3~6px，连点中断从当前速度续滑。拉伸改由**速度在移动方向上的投影**导出（`|投影|/1500` 归一，上限 12%），朝目标飞是拉伸、过冲回冲时投影转负自动翻成压扁，并按主轴做**体积补偿**（垂直轴反向收窄 34%），`transform-origin` 固定 `center`；到位另有一条**闭式阻尼振荡** `amp·sin(ω_d t)·e^{-ζωt}` 补压扁，相位锁在积分器**实测穿过目标那一帧**，幅度按距离给（有下限）。
+- 辅助视觉：当前项 `--lav-deep`/600；hover 只作用于非当前项且不画描边；`#hash` 打开先锁 1.5s；滚动监听 rAF 节流。
+
 ---
 
 ## 4. 图表规范（ECharts）
@@ -281,6 +303,9 @@
 | 折叠区 | grid-template-rows 0fr↔1fr，0.35s |
 | PCB 脉冲 | dashoffset 300→0 1.5s 线性无限；切换通电闪 0.5s 一次 |
 | 磨损条生长 | width 0.6s |
+
+| 卡片倾斜/光斑 | `static/card-fx.js` 单委托 pointermove + rAF；≤4°；reduced-motion 关闭 |
+| 侧边栏胶囊 | rAF 弹簧积分（12.25 rad/s，阻尼比 0.62→0.80 自适应） |
 
 **硬规则**：
 - `prefers-reduced-motion` 下所有 animation/transition 压到 0.01ms；PCB 脉冲与通电闪烁单独关闭，但**保留点亮/熄灭的静态区分**（`lab-theme.css:43,158`）。
@@ -474,6 +499,7 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 ## 变更记录
 
+- 2026-10-28（QRE-SAAS-CARD-FROSTED-GLASS + HELP-SIDEBAR-GLASS-PILL）新增 §3.16 全站卡片玻璃质感/光标光斑/小卡 3D 倾斜与 §3.17 使用说明侧边栏玻璃胶囊，§5 动效表补两行。核心硬规则：**光斑宿主走最外层玻璃卡、倾斜宿主走光标下的小卡（不向上爬）**；小卡 `perspective:260px`（170×77 卡上 1000px 的 4° 只有 0.4px 位移，看不见）；图表卡（含 `canvas`）一律不倾斜；`--card-radius` 为新 token 不动 `--radius`；`background` 简写会重置 `background-image`（玻璃底必须拆写）；负 z-index 装饰层且不出血到视口外。三版竞稿后取 Kimi V3（rAF 弹簧 + 速度投影拉伸 + 闭式回弹）。改动文件：`static/card-fx.js`（新）、`static/help-nav.js`（新）、`static/lab-theme.css`、`static/night-mode.css`、`saas/templates/base.html`（仅加一行 script）、`saas/templates/help.html`。零新色相、零外部依赖、夜间生效、375px 零横溢经真实 Chromium 验证。
 - 2026-10-27（QRE-SAAS-NIGHT-MODE）新增 §11 夜间模式规范：SaaS 全部页面（含 9090 管理台）追加可切换深色主题，**浅色 token/配色/视觉/排版/文案/数据零改动**，唯一新增交互是顶栏 `.tt-btn` 主题切换按钮。实现为三个新/改文件：`static/night-mode.css`（深色 token 覆盖 + 组件族深色规则，仅 `[data-theme="dark"]` 作用域）、`static/night-mode.js`（`QRETheme`：浅色不写 storage、`prefers-color-scheme` 跟随、手动选择落 `localStorage('qre-theme')`、`meta[name=theme-color]` 同步、`themeChart` 图表配色注入）、`saas/templates/base.html` 4 处挂载（防 FOUC 内联脚本 + css + js + 按钮）。夜间色板固定 8 token（bg `#17153B`/card `#2E236C`/line `#433D8B`/text `#F1EDF8`/muted `#C8ACD6`/accent `#7E60BF`/accent-deep `#C8ACD6`/accent-soft `#2E236C`）；红涨绿跌只提亮不断语义；ECharts 每次 `setOption` 前注入背景/轴/文字/tooltip/品牌紫，不重算布局与数据；375px 零横溢、按钮带文字与 `aria-pressed`。`#guest-note` 深色告警（`#B4761F` 字 / `#3D3118` 底）刻意保留。
 - 2026-10-26（QRE-SAAS-CLASSIC-ACTIONS-UI）新增结果操作卡与经典策略 CTA 两条局部规则族（无新色相/组件/动效，仅追加于 `lab-theme.css` 末尾）：**结果操作卡**——job「下一步」与「分享结果」合并为 `#result-actions-card`（标题「结果操作」+ 问号提示），内部两组 `.result-action-group`；按钮行 `.result-action-buttons`（flex、gap 10px、wrap、居中，`.btn` min-height 44px）；保存/确认信号=`btn btn-primary`、提示信号/分享=`btn btn-ghost`；`#action-status`/`#share-status` 类改 `.result-action-status`（13px `--ink` 正常可读状态文本，不用 `.opt` 灰字）；信号面板「T+1 参考/风险提示」移入「扫描范围」标签旁 `.tip-trigger`（`.result-action-scope`），radio/select/ID/scope 值不变；新增空安全 `syncResultActionCard()`（任一组非 hidden 才显示外层，游客/showcase/分享只读整体隐藏），init 两函数全分支同步、不重复绑定。**经典策略 CTA**——showcase 底部卡 `.showcase-cta`（flex wrap、h2 右推、主按钮 min-height 44px），页头备注移入 H1 旁问号提示。≤768px：CTA 纵排全宽、操作按钮 `flex:1 1 auto` 居中；375px 零横溢经真实 Chromium 验证。
 - 2026-10-25（QRE-SAAS-RESULT-UNDERSTANDING）新增 `static/lab-theme.css` 两条帮助页专用规则（无新色相/组件/动效）：`.help-sec{scroll-margin-top:76px}`（`/saas/help` 锚点小节避开 60px sticky 顶栏）与 `.help-jump`（页首锚点跳转胶囊，`--tint` 底 + `--tint-deep` 边 + hover 主紫反白，复用既有 token）。帮助页本体 `gui/saas/templates/help.html` 只用既有 `.page-head`/`.card`/`.tbl`/`.inl` 类；结果页各模块「说明 →」为 `.inl` 行内链接；SaaS 顶栏导航增至 5 项，`base.html` ≤400px 断点补 `header.topbar .mainnav{gap:0}`（lab-theme `.mainnav{gap:4px}` 后加载，须 `header.topbar` 前缀提优先级）+ logo 24px + 链接 11.5px，保证 375px 单行不折行。

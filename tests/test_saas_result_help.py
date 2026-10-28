@@ -424,7 +424,8 @@ class TestSymbolDataUntilAndVarSign:
     def test_gzip_path_returns_data_until(self, app, client):
         job_id = self._complete_job(client, {"tag_analysis": {"layers": {}}})
         self._write_detail(app, job_id, "000001.SZ", {
-            "ok": True, "summary": {"ts_code": "000001.SZ", "name": "平安银行"},
+            "ok": True, "factor_basis": "qfq_anchor_v1",
+            "summary": {"ts_code": "000001.SZ", "name": "平安银行"},
             "trades": [], "orders": [], "failed_orders": []})
         d = client.get(f"/api/results/{job_id}/symbols/000001",
                        headers={"X-User-Id": "1"}).get_json()
@@ -434,7 +435,8 @@ class TestSymbolDataUntilAndVarSign:
         job_id = self._complete_job(client, {"tag_analysis": {"layers": {}}})
         monkeypatch.setattr(
             "quant_research_engine.gui.lab_result.build_lab_symbol_detail",
-            lambda record, ts, **kw: {"ok": True, "summary": {"ts_code": ts},
+            lambda record, ts, **kw: {"ok": True, "factor_basis": "qfq_anchor_v1",
+                                      "summary": {"ts_code": ts},
                                       "trades": [], "orders": [], "failed_orders": []},
         )
         d = client.get(f"/api/results/{job_id}/symbols/000001",

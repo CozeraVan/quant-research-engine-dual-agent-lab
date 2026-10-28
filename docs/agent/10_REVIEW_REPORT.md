@@ -2,6 +2,53 @@
 
 ## Task ID
 
+QRE-FACTOR-QFQ-ANCHOR（因子前复权锚点按 K 线末日 + 1013 存量产物补救 + 旧口径拒发）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-28）。根因三层全部收口，实证用产物自身 qfq K 线重算而非猜测。
+Required Fixes：无。未 commit/push，等待用户验收后按 R-DEPLOY-001 提交。
+
+## Findings
+
+1. **固有口径差确认存在且正确**：因子表 hfq、K 线 qfq@K线末日、引擎 hfq，三者并存是设计；
+   唯一缺口是「hfq→qfq 换算」只写在实时生成路径，快照路径从未换算。
+2. **快照路径是主因**：SaaS API 优先下发 worker gzip 快照，`factor_basis` 缺失率 100%（1013/1013）。
+   600330 实测比值 5.0637 且全历史恒定 → 纯尺度问题，因子计算本身没错。
+3. **锚点取错日是"修了又坏"的真因**：`ORDER BY trade_date DESC LIMIT 1` 取全局最新，
+   区间结束后再除权即除错倍数。已改 `as_of` + SQL 守卫，调用点传 K 线最后交易日。
+4. **预防机制**：缺 `factor_basis` 一律拒发（走 404 + 前端生成按钮），
+   避免未来任何新写入路径遗漏换算时再次 silent 出错。
+5. **测试盲区**：harness 曾用普通数组冒充 `element.children` 造成绿灯假象（上一轮已修），
+   本轮同类风险是「夹具不带 factor_basis」——已三个夹具文件补齐，并新增
+   `test_legacy_artifact_without_basis_is_not_served` 锁死拒发行为。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/ -q → 3009 passed, 24 skipped
+ECS 线上复扫：total=1013 新口径=1013
+600330 线上：factor_basis=qfq_anchor_v1, anchor=5.0639 @ 2026-10-20
+            ema5/收盘 = 0.9883 / 1.0029 / 1.0180
+40 产物校验：EMA 比值中位数 2.677 → 1.0001；MACD 1.434 → 0.9999
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **未重跑任何回测**：本地 run 产物已清空、ECS 无行情库，重跑成本高于快照 rescale，
+  且 rescale 已用产物自身 qfq K 线交叉验证（比值 1.0000）。
+- **未删影子表 `stock_daily_repair_20261028`**：留作上一轮数据事故审计，待用户确认。
+
+---
+
+# Review Report
+
+## Task ID
+
 QRE-DATA-CLEANUP-EXECUTION（用户批准的遗留数据清理与分钟 CSV 只读检查）
 
 ## Reviewer

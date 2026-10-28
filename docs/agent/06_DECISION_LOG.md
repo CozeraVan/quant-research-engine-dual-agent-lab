@@ -1530,3 +1530,11 @@ No open questions remain.
 - Alternatives: 全站直接替换 LWC——否决（收益面窄、主题机制需重写、attribution 未决）；自研内核——否决（20–40+ 人日，无实测优势）。
 - Impact: 先实施 A 路两个低风险修复：`symbol.html` 补 ResizeObserver、重播由每帧全量 `replaceMerge` 改增量更新。B 试点前必须先解决 attribution 合规及与 UI 外部品牌/配色纪律的冲突。证据见 `change_requests/CR-2026-10-27_tv_chart_core_spike.md`。
 - Owner: KIMI_CODE（用户 2026-10-27 选择 Spike 范围；具体实施范围待用户批准）
+
+### 2026-10-28: 因子前复权锚点改为「K 线最后交易日」+ 旧口径快照拒发
+
+- Decision: ① `_latest_adj_factor` 增加 `as_of`，GUI 呈现层一律用 **K 线最后交易日**的 adj_factor 作 qfq 锚点（不再取 `stock_daily` 全局最新日）；② 所有个股详情产物必须带 `factor_basis="qfq_anchor_v1"`；③ SaaS API 对缺 `factor_basis` 的存量 gzip 快照一律拒发（`data=None` → 404 + 前端「生成详情」按钮），不做静默降级。
+- Reason: 该问题已复发三次（用户原话"每次治标不治本"）。根因是三层叠加：因子表 hfq 与 K 线 qfq 的固有口径差、SaaS 优先下发 worker 快照且快照永不失效（1013/1013 存量产物全错）、以及锚点取全局最新日导致区间结束后再除权即除错倍数。第三条是"修了又坏"的真因——实时路径本身的锚点就是错的。
+- Alternatives: 把因子表整体改前复权@最新——否决（同列不同历史锚点会随时间变化，破坏 PIT 与回测复现，2026-10-27 已否决过一次）；批量重跑全部回测生成新快照——否决（本地 run 产物已清空、ECS 无行情库，成本远高于按正确锚点 rescale 快照，且 rescale 已用产物自身 qfq K 线交叉验证比值 1.0000）；旧快照继续下发——否决（silent 展示错尺度数据比让用户多点一下更糟）。
+- Impact: 新生成详情因子与 K 线同尺度；1013 个存量产物已按正确锚点 rescale（线上复扫 100% 新口径）；缺 `factor_basis` 的产物不再被当作正确数据。锚点纪律与 `factor_basis` 合同已写入 `20_DATA_DICTIONARY_DAILY_MINUTE.md` §6 硬规则 2。证据见 `change_requests/CR-2026-10-28_factor_qfq_anchor.md`。
+- Owner: KIMI_CODE（用户 2026-10-28 要求彻底排查并治本）

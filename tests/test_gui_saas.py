@@ -1341,10 +1341,14 @@ class TestSymbolDetailRefresh:
                     headers=WORKER_HEADERS)
         return job_id
 
-    def _ready_artifact(self, app, job_id, code="000001.SZ"):
+    def _ready_artifact(self, app, job_id, code="000001.SZ", legacy=False):
+        """写一个就绪的详情产物。``legacy=True`` 造缺口径标记的旧快照——
+        QRE-FACTOR-QFQ-ANCHOR-DATE 起这类产物不得被当作正确数据下发。"""
         detail_dir = Path(app.config["SAAS_UPLOAD_DIR"]) / f"job_{job_id}" / "_symbol_details"
         detail_dir.mkdir(parents=True, exist_ok=True)
-        (detail_dir / f"{code}.json.gz").write_bytes(gzip.compress(b'{"ok": true}'))
+        payload = {"ok": True} if legacy else {"ok": True, "factor_basis": "qfq_anchor_v1"}
+        (detail_dir / f"{code}.json.gz").write_bytes(gzip.compress(
+            json.dumps(payload).encode("utf-8")))
 
     @pytest.fixture(autouse=True)
     def _upload_dir(self, app, tmp_path):
@@ -1418,6 +1422,20 @@ class TestSymbolDetailRefresh:
         assert body["readonly"] is True
         assert body["readonly_kind"] == "showcase"
 
+    def test_legacy_artifact_without_basis_is_not_served(self, client, app):
+        """QRE-FACTOR-QFQ-ANCHOR-DATE：缺 factor_basis 的旧快照不得当作正确数据下发。
+
+        因子表 hfq / K 线 qfq，价格型因子必须除锚点才同尺度；该换算只在实时生成
+        路径。旧快照会把 EMA 按 hfq 与 qfq K 线并列（600330 实测差 5.16 倍），
+        因此宁可让前端出「生成/刷新」按钮，也不能 silently 展示错尺度数据。
+        """
+        job_id = self._completed_job(client)
+        self._ready_artifact(app, job_id, legacy=True)
+        resp = client.get(f"/api/results/{job_id}/symbols/000001", headers={"X-User-Id": "1"})
+        assert resp.status_code == 404
+        body = resp.get_json()
+        assert body["can_generate"] is True, "旧口径产物必须转为按需生成/刷新"
+
 
 class TestSymbolDetailJsonFinite:
     """个股详情出口必须是严格 JSON：历史产物带 NaN 也不得让页面卡「加载失败」。
@@ -1456,6 +1474,7 @@ class TestSymbolDetailJsonFinite:
         # json.dumps 默认 allow_nan=True：复刻旧 worker 写出的带毒产物
         blob = json.dumps({
             "ok": True,
+            "factor_basis": "qfq_anchor_v1",
             "summary": {"ts_code": "301308.SZ", "total_ret_pct": 0.05},
             "factors": [
                 {"name": "macd_dif", "col": "macd_12_26_9",

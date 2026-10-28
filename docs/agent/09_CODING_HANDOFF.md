@@ -3764,3 +3764,20 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 踩坑记录：① 数学函数不能裸乘 `1deg`（必须包 `calc()`），且 `clamp(-1,…)` 钳的是度、把 3.98° 钳成 1°；② `background` 简写会重置 `background-image`，玻璃底拆成 `background-color` + `background-image`；③ 装饰层第一版出血到视口外，卡片中心采不到紫色（差 1 个色阶）。
 - 测试：`tests/test_card_fx.py` 18 例（源码合同 + 夜间 token + JS 接线 + Node vm 纯函数 harness）；目标组合 145 passed；全量 `3006 passed, 24 skipped`。
 - 生产已部署（`deploy-ecs.sh` 四个运行时文件），无头 Chromium 七页自验通过；帧率结论：委托监听簿记成本 ≈0ms，剩余成本来自无 GPU 环境下浏览器对 `blur(28px)` 的软件重采样（关掉 `backdrop-filter` 即回 60fps）。截图与报告在 `.tmp/card-fx/`。未 commit/push。
+
+## 2026-10-28 因子前复权锚点实施交接
+
+- 改动文件：`src/quant_research_engine/gui/lab_result.py`、`src/quant_research_engine/gui/saas/app.py`、
+  `tests/test_gui_lab_result.py`、`tests/test_gui_saas.py`、`tests/test_saas_symbol_ux.py`、
+  `tests/test_saas_result_help.py`、CR `CR-2026-10-28_factor_qfq_anchor.md`。
+- 关键实现：`_latest_adj_factor(conn, ts_code, as_of=None)`，`as_of` 非空时 SQL 追加
+  `AND trade_date <= :d`；调用点传 `dates[-1] if dates else None`。
+  `None` 仅用于无 K 线日期的兜底路径，行为与旧版一致。
+- 预防机制位置：`create_saas_app()` 内 gzip 详情解包之后、`data.get("ok")` 判断之前，
+  判 `not data.get("factor_basis")` 即置 `data = None`。前端据此出生成按钮。
+- 夹具注意：`tests/test_gui_saas.py` 的 `test_legacy_artifact_without_basis_is_not_served`
+  必须在 `TestSymbolDetailRefresh` 类内（依赖该类 fixture），勿放错类。
+- 存量产物 rescale 分类单一来源 `gui.factor_registry.is_price_scaled`；
+  注册表 JSON 顶层 key 是 `factors`（list，895 项），不是 `entries`。
+- 测试：全量 `3009 passed, 24 skipped`。CR 含完整实证数据（比值法）。
+- 未 commit/push。

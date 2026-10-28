@@ -149,7 +149,10 @@
 ## 6. 给其他 agent 的硬规则
 
 1. 价格一律**原始不复权价 + adj_factor 列**，复权在因子计算/回测时做，禁止入库前锁死口径。
-2. **呈现口径分离**：因子表与引擎 raw 模式是 hfq（原始价 × adj_factor）；GUI K 线详情是前复权@最新（原始价 × adj_factor / latest_adj_factor）。GUI 呈现层必须用 `gui.factor_registry.is_price_scaled()` 把价格型因子/阈值除以最新 adj_factor；无量纲因子不换算。买入持有收益恒用 hfq。
+2. **呈现口径分离**：因子表与引擎 raw 模式是 hfq（原始价 × adj_factor）；GUI K 线详情是前复权（原始价 × adj_factor / **K 线最后交易日的** adj_factor）。GUI 呈现层必须用 `gui.factor_registry.is_price_scaled()` 把价格型因子/阈值除以该锚点；无量纲因子不换算。买入持有收益恒用 hfq。
+   - **锚点日期必须是 K 线最后一个交易日，不是全局最新交易日**（QRE-FACTOR-QFQ-ANCHOR）。若取全局最新日，回测区间结束后该股又除权时，因子会被除错倍数，EMA 与 K 线重新偏离——此类 bug 已复发三次，根因全在锚点。落地见 `gui/lab_result.py::_latest_adj_factor(conn, ts_code, as_of)`。
+   - **产物必须带 `factor_basis` 标记**（`qfq_anchor_v1`）。SaaS API 对缺该字段的存量快照一律拒发（走 404 + 前端按需生成），绝不 silent 展示错尺度数据。任何新增的产物写入路径都必须带上该字段。
+   - 校验方法（排查同类问题时直接用）：用产物自身携带的 qfq K 线收盘价与因子比值，EMA5 应呈现 0.99–1.10 的滞后形态；比值恒定且远离 1 即纯尺度错误。详见 `change_requests/CR-2026-10-28_factor_qfq_anchor.md`。
 2. 量=手、额=千元（tushare 口径），跨表计算前先核对单位。
 3. 财务数据 join 必须用 `ann_date <= 交易日` 做 PIT 对齐，禁止用报告期直接对齐。
 4. 新行情表一律 TimescaleDB hypertable + 7 天 chunk + `(ts_code, 时间列)` 主键。

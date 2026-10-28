@@ -2775,3 +2775,20 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 
 - 新增 `static/card-fx.js`（单委托 pointermove + rAF，导出 `window.QRECardFx` 纯函数供 Node vm 测试）；`lab-theme.css` 追加玻璃/装饰层/光斑/倾斜规则；`night-mode.css` 追加暗色玻璃 token；`base.html` 加一行脚本引入。
 - 测试 `tests/test_card_fx.py` 18 例；全量 `3006 passed, 24 skipped`；生产七页无头自验通过。CR：`CR-2026-10-28_card_frosted_glass.md`。未 commit/push。
+
+## 2026-10-28 因子前复权锚点（600330 EMA 偏离）根因修复交接
+
+- 根因三层：① 因子表 hfq vs K 线 qfq@K线末日 的固有口径差；② SaaS 优先下发
+  worker gzip 快照且永不失效 → 1013 个存量产物全是旧口径；③
+  `_latest_adj_factor` 取全局最新日，区间结束后再除权就除错倍数（"修了又坏"的真因）。
+- 改动：`src/quant_research_engine/gui/lab_result.py`（`_latest_adj_factor` 加 `as_of`，
+  调用点传 `dates[-1]`）、`src/quant_research_engine/gui/saas/app.py`（缺 `factor_basis`
+  一律 `data = None` → 404 `can_generate`）、`tests/test_gui_lab_result.py`（新增
+  `TestQfqAnchorDate` 2 例）、`tests/test_gui_saas.py`、`tests/test_saas_symbol_ux.py`、
+  `tests/test_saas_result_help.py`（夹具补 `factor_basis`）。
+- 存量补救：ECS 打包 1013 个陈旧产物 → 本地 rescale → 回传 install 成功；
+  线上复扫 `total=1013 新口径=1013`。
+- **未 commit/push**；ECS 部署待随本轮一起做（或已完成，见 11_AGENT_STATE）。
+- 环境约束备忘：ECS 无行情库（不能重算因子，只能改快照）；本地 run 产物已清空
+  （`outputs/gui-console/runs` 空，无 `status.json`）→ worker `_execute_symbol_detail`
+  不可用，"刷新详情"按钮对存量 job 实际无效。

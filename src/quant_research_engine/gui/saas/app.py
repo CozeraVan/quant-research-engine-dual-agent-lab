@@ -3915,6 +3915,14 @@ def create_saas_app() -> Flask:
                 data = json.loads(gzip.decompress(detail_path.read_bytes()).decode("utf-8"))
             except (OSError, ValueError):
                 data = None
+            # QRE-FACTOR-QFQ-ANCHOR-DATE：缺 factor_basis 的产物是「口径未知」的
+            # 历史快照。因子表是 hfq、K 线是 qfq@K线末日，价格型因子必须除以锚点
+            # 才是同一尺度；该换算只存在于实时生成路径，旧快照会把 EMA 等按 hfq
+            # 尺度与 qfq K 线并列（600330 实测 ema_5=113.26 vs 收盘 21.97，差 5.16 倍）。
+            # 一律不当作正确数据下发，改走按需生成/刷新，由前端出按钮——
+            # 宁可让用户点一下，也不能 silently 展示错尺度数据。
+            if isinstance(data, dict) and data.get("ok") and not data.get("factor_basis"):
+                data = None
             if isinstance(data, dict) and data.get("ok"):
                 # 基准指数对齐个股净值日期：复用任务级 chart_data.benchmarks
                 # （per-symbol 产物不带基准序列以控制回传体积）

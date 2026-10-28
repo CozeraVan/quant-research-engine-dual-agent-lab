@@ -883,16 +883,25 @@ def _factor_is_price_scaled(table: str, column: str) -> bool:
     return is_price_scaled(entry.family if entry else None, column)
 
 
-def _latest_adj_factor(conn: Any, ts_code: str) -> float | None:
-    """该股最新 adj_factor（K 线前复权锚点）；缺失返回 None（不换算）。"""
+def _latest_adj_factor(conn: Any, ts_code: str, as_of: str | None = None) -> float | None:
+    """该股 adj_factor（K 线前复权锚点）；缺失返回 None（不换算）。
+
+    QRE-FACTOR-QFQ-ANCHOR-DATE：``as_of`` 必须传 **K 线最后一个交易日**。
+    adj_factor 会随除权除息变化，若取 stock_daily 的全局最新日，当回测区间
+    结束之后又发生除权时，锚点就与 K 线所用的锚点不一致——价格型因子会被除了
+    一个错误的倍数，EMA 再次与 K 线偏离（600330 类问题的次要根因）。
+    缺省（None）才退回全局最新，仅用于无 K 线日期的兜底路径。
+    """
     from sqlalchemy import text
 
-    row = conn.execute(
-        text("SELECT adj_factor FROM public.stock_daily "
-             "WHERE ts_code = :c AND adj_factor IS NOT NULL AND adj_factor > 0 "
-             "ORDER BY trade_date DESC LIMIT 1"),
-        {"c": ts_code},
-    ).fetchone()
+    sql = ("SELECT adj_factor FROM public.stock_daily "
+           "WHERE ts_code = :c AND adj_factor IS NOT NULL AND adj_factor > 0 ")
+    params: dict[str, Any] = {"c": ts_code}
+    if as_of:
+        sql += "AND trade_date <= :d "
+        params["d"] = as_of
+    sql += "ORDER BY trade_date DESC LIMIT 1"
+    row = conn.execute(text(sql), params).fetchone()
     if not row or row[0] is None:
         return None
     try:
@@ -926,8 +935,10 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
             store = _store(DEFAULT_DB_URL)
         hist_specs: list[tuple[str, str]] = []  # [(table, hist_col)] 已确认存在的补查列
         with store.market_engine.begin() as conn:
-            # K 线前复权锚点：价格型因子从 hfq 换算到 K 线同尺度（引擎仍用 hfq，不变）
-            anchor = _latest_adj_factor(conn, ts_code)
+            # K 线前复权锚点：价格型因子从 hfq 换算到 K 线同尺度（引擎仍用 hfq，不变）。
+            # 锚点日期取 K 线最后一个交易日，不用全局最新日——否则区间结束后若再除权，
+            # 因子会被除错倍数，EMA 与 K 线重新偏离。
+            anchor = _latest_adj_factor(conn, ts_code, dates[-1] if dates else None)
             candidates = _macd_hist_candidates(specs)
             if candidates:
                 try:  # 列存在性探测失败整体降级：不补 HIST，不影响原 panel
