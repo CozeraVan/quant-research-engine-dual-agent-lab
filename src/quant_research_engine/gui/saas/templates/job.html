@@ -225,6 +225,12 @@ function renderMetrics(m){
   const holdDays = (m.avg_holding_days != null) ? m.avg_holding_days
     : ((typeof QREPerfMetrics !== 'undefined' && window.__jobTrades && !window.__jobTrades.sampled)
         ? QREPerfMetrics.avgHoldingDays(window.__jobTrades.points) : null);
+  // 无数据时说清成因，避免用户误判成 bug：
+  //  · 全量回测的交易散点被采样（>500 只取 |收益| 最大的 500 笔），不能用来算均值；
+  //  · 2026-10-28 前完成的任务，快照里还没有这个字段（新任务起自动带上）。
+  const holdTip = holdDays != null
+    ? '全部完整交易从买入到卖出的平均持有天数（自然日，与 round_trips.holding_days 同口径）。数据来自本次回测的成交记录。'
+    : '本次回测未提供该指标：全量回测的交易散点为控制体积只采样了收益最大的 500 笔，不能用来算均值；2026-10-28 之前完成的任务快照里也还没有这个字段。重新提交回测即可显示。';
   strip.innerHTML =
     card('总收益率', pct(m.total_return ?? m.strategy_total_return), cls(m.total_return ?? m.strategy_total_return), '初始资金加权总收益：Σ期末权益/Σ初始资金−1，与成交净盈亏、profit_factor 直接勾稽；批量全市场按资金加权汇总。') +
     card('年化收益', pct(m.annual_return), cls(m.annual_return), '由初始资金加权总收益按回测起止区间几何年化：(1+总收益)^(1/年数)−1') +
@@ -233,7 +239,7 @@ function renderMetrics(m){
     card('最大回撤', pct(m.max_drawdown), 'neg', '净值从历史高点到随后低点的最大跌幅。') +
     card('胜率', pct(m.win_rate), cls(m.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。') +
     card('平均持股周期', holdDays == null ? '—' : Number(holdDays).toFixed(1) + ' 天',
-         'flat', '全部完整交易从买入到卖出的平均持有天数（自然日，与 round_trips.holding_days 同口径）。数据来自本次回测的成交记录。');
+         'flat', holdTip);
 }
 // QRE-PERF-METRICS-CONTRACT：风险调整收益（α/β/IR）。
 // 前端算而非后端算，是为了让存量产物立即显示——chart_data 快照里已有 equity +

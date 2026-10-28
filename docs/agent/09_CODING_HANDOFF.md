@@ -3891,3 +3891,13 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
   box-shadow），**不用 background 简写**。
 - padding 从 8px/10px 统一到 12px 14px——24px 圆角配原来的 8px padding 会显得挤。
 - 未 commit/push。
+
+## 2026-10-29 平均持股周期链路测试实施交接
+
+- `renderMetrics` 里 `holdTip` 现在是三元：有值 → 口径说明；无值 → 成因说明
+  （含「采样」「2026-10-28」两个关键词，浏览器断言靠它们验证）。
+- 前端回退条件保持 `!window.__jobTrades.sampled` 不变——采样样本是 |收益| 最大的
+  500 笔，算均值会是错的，**不能为了显示而放宽这个条件**。
+- `test_gui_lab_result.py` 新用例同时断言「旧产物缺字段 → None 而非 0」（不编数）。
+- `_node()` 改临时文件的写法可复用到其它会嵌整模板的 harness。
+- 未 commit/push。

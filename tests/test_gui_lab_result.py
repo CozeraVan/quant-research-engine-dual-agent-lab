@@ -249,6 +249,45 @@ def test_chart_data_cumret_from_cumulative_return(tmp_path, monkeypatch):
     assert d["cumret"] == cumret
 
 
+def test_chart_data_metrics_carry_avg_holding_days(tmp_path, monkeypatch):
+    """QRE-PERF-METRICS-CONTRACT：strategy_performance.json 的持股周期三项必须
+    进 chart_data.metrics——job.html 的「平均持股周期」卡读的就是
+    metrics.avg_holding_days，断链则老 job 之外新 job 也显示「—」。
+
+    链路：strategy_performance.json → build_lab_chart_data(metrics) →
+    worker results.summary/chart_data → job.html renderMetrics。
+    """
+    monkeypatch.setattr("quant_research_engine.gui.engine.RUNS_DIR", tmp_path / "runs")
+    run_dir = _make_run(tmp_path)
+    out = tmp_path / "out"
+    (out / "strategy_performance.json").write_text(json.dumps({
+        "strategy_total_return": 0.183,
+        "sharpe": 1.42,
+        "max_drawdown": -0.096,
+        "win_rate": 0.667,
+        "average_bars_in_trade": 45.3,
+        "average_bars_in_winning_trades": 52.0,
+        "average_bars_in_losing_trades": 28.5,
+    }), encoding="utf-8")
+    (run_dir / "status.json").write_text(json.dumps({
+        "run_id": RUN_ID, "output_dir": str(out),
+        "artifacts": {"strategy_performance.json": str(out / "strategy_performance.json")},
+    }), encoding="utf-8")
+    from quant_research_engine.gui.lab_result import build_lab_chart_data
+
+    record = json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
+    m = build_lab_chart_data(record)["metrics"]
+    assert m["avg_holding_days"] == 45.3, "主卡读的键必须下发"
+    assert m["avg_holding_days_win"] == 52.0
+    assert m["avg_holding_days_lose"] == 28.5
+    # 无该字段的旧产物 → None（前端显示「—」），不得编 0
+    (out / "strategy_performance.json").write_text(json.dumps({
+        "strategy_total_return": 0.1}), encoding="utf-8")
+    record = json.loads((run_dir / "status.json").read_text(encoding="utf-8"))
+    m2 = build_lab_chart_data(record)["metrics"]
+    assert m2["avg_holding_days"] is None, "旧产物缺字段必须是 None 而非 0"
+
+
 # --- QRE-LAB-UI-LANDING：个股明细列表页 ---
 
 

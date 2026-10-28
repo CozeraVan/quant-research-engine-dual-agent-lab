@@ -16,9 +16,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -36,8 +38,18 @@ def _node(script: str) -> None:
         node = "/home/van/codex-local/node-v22/bin/node"
     if not node:
         pytest.skip("node 不可用")
-    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr or result.stdout
+    # 写临时文件而不是 `node -e <script>`：本文件有测试把整个 symbol.html
+    # （已 107KB+）嵌进脚本，超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 会
+    # 直接 OSError: Argument list too long。用文件传参没有这个限制。
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as fh:
+        fh.write(script)
+        path = fh.name
+    try:
+        result = subprocess.run([node, path], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr or result.stdout
+    finally:
+        os.unlink(path)
 
 
 def _dispose_source() -> str:

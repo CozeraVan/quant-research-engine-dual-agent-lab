@@ -898,7 +898,9 @@ function renderSummary(s, trades){
     card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret), '全部完整交易单笔净收益的算术平均。') +
     card('平均持股周期', (typeof QREPerfMetrics !== 'undefined' && QREPerfMetrics.avgHoldingDays(trades) != null)
       ? Number(QREPerfMetrics.avgHoldingDays(trades)).toFixed(1) + ' 天' : '—', 'flat',
-      '该股全部完整交易从买入到卖出的平均持有天数（自然日，与 round_trips.holding_days 同口径），按本次回测的真实成交记录计算。') +
+      (typeof QREPerfMetrics !== 'undefined' && QREPerfMetrics.avgHoldingDays(trades) != null)
+        ? '该股全部完整交易从买入到卖出的平均持有天数（自然日，与 round_trips.holding_days 同口径），按本次回测的真实成交记录计算。'
+        : '该股在本轮回测中没有已完成的买卖交易，或成交记录未提供入场/出场日期，无法计算持股周期。') +
     card('胜率', pct(s.win_rate), cls(s.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。') +
     card('赚钱效应分位', s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%', s.percentile != null && s.percentile <= 0.05 ? 'pos' : 'flat', '该股在本策略全部交易个股中的盈利排名分位；前 5% 高亮。');
 }

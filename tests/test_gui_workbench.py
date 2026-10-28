@@ -147,6 +147,11 @@ def test_extract_summary_from_json_in_backtest_subdir(monkeypatch, tmp_path):
         "excess_return_vs_buy_hold": -0.0191,
         "max_drawdown": -0.12,
         "profit_factor": 1.35,
+        # QRE-PERF-METRICS-CONTRACT：持股周期三项（job.html「平均持股周期」卡的
+        # 另一条来源——data.summary 与 chart_data.metrics 合并后进 renderMetrics）
+        "average_bars_in_trade": 45.3,
+        "average_bars_in_winning_trades": 52.0,
+        "average_bars_in_losing_trades": 28.5,
     }
     (out / "backtest" / "strategy_performance.json").write_text(
         json.dumps(payload), encoding="utf-8"
@@ -158,6 +163,9 @@ def test_extract_summary_from_json_in_backtest_subdir(monkeypatch, tmp_path):
     m = summary["metrics"]
     assert m["strategy_name"] == "测试策略"
     assert m["win_rate"] == pytest.approx(0.4545)
+    assert m["average_bars_in_trade"] == pytest.approx(45.3)
+    assert m["average_bars_in_winning_trades"] == pytest.approx(52.0)
+    assert m["average_bars_in_losing_trades"] == pytest.approx(28.5)
     assert m["traded_symbol_count"] == 42
     assert m["profit_factor"] == pytest.approx(1.35)
     assert m["max_drawdown"] == pytest.approx(-0.12)

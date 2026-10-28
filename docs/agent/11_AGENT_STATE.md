@@ -1417,3 +1417,19 @@ token / night-mode / card-fx / 模板不动。
 `test_perf_metrics.py` 18 passed；全量 `3032 passed, 24 skipped`。
 真实浏览器六组合 + 磨损/风险条：玻璃五要素全一致、数值色三分、布局不变、
 零 pageerror。CR：`CR-2026-10-29_card_class_glass.md`。未 commit/push。
+
+### 2026-10-29 AVG-HOLDING-TOOLTIP 已实施待人工验收，未 commit/push
+
+用户问存量 job 为何没有平均持股周期。**结论：没有数据源可以重算**——
+`results` 行早于该字段（2026-10-28 新增）、`trades.sampled=true`（极值样本不可算均值）、
+本地 run 产物已清空、SaaS 库无交易表、symbol 快照只覆盖被查看个股。新回测自动有值。
+
+已做：tooltip 说清成因；两条测试锁死 `build_lab_chart_data` 与 `SUMMARY_METRIC_FIELDS`
+链路并规定缺字段必须是 None；浏览器断言三路径。另修 `node -e` ARG_MAX
+（symbol.html 已 107KB，嵌进 `-e` 超 MAX_ARG_STRLEN 128KB）→ 改临时文件。
+
+**待用户决策**：是否接受存量 4 个全期 job 的平均持股周期显示「—」。
+若不接受，唯一办法是重跑这 4 个回测（成本高，且用户此前要求暂不跑全量回测）。
+
+全量 `3033 passed, 24 skipped`。CR：`CR-2026-10-29_avg_holding_tooltip_and_argmax.md`。
+未 commit/push。

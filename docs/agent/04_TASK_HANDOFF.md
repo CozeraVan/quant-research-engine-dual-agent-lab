@@ -2862,3 +2862,17 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 测试 `test_all_cards_frosted_glass` 逐项断言；`test_perf_metrics.py` 18 passed；
   全量 `3032 passed, 24 skipped`。真实浏览器六组合 + 磨损/风险条全通过。
 - 未 commit/push。
+
+## 2026-10-29 平均持股周期成因提示 + 链路测试交接
+
+- 改 `job.html` / `symbol.html`（tooltip 分「有值/无数据」两种文案）、
+  `tests/test_gui_lab_result.py`（新增 chart_data metrics 链路测试）、
+  `tests/test_gui_workbench.py`（扩展现金用例锁 SUMMARY_METRIC_FIELDS）、
+  `tests/test_saas_static_kline_tv.py`（`_node` 改临时文件，修 ARG_MAX）、
+  `.tmp/perf-browser/verify.py`（三路径断言）、CR 新建。
+- 结论：存量 job 58/66/74/78 的平均持股周期只能显示「—」（无数据源可重算），
+  新回测自动有值。tooltip 已写明成因。
+- **注意 `node -e` 的单参数上限**：任何把整个模板嵌进 `-e` 的测试，模板涨到 ~120KB
+  就会炸；一律写临时文件跑。已在本文件 `_node()` 修掉，其他文件的 `_node` 若也要嵌
+  整模板需同样处理。
+- 全量 `3033 passed, 24 skipped`。未 commit/push。

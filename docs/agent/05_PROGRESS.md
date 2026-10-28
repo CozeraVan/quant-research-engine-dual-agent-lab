@@ -1986,3 +1986,23 @@ card-fx / 模板一律不动。
 α/β/IR、平均持股周期、LWC 图例复验一致；零 pageerror。
 截图 `.tmp/perf-browser/symbol-cards.png`。CR：`CR-2026-10-29_card_class_glass.md`。
 未 commit/push。
+
+## 2026-10-29 平均持股周期「无数据」成因提示 + 链路测试 + ARG_MAX 修复，未 commit/push
+
+用户问「为什么回测结果中的平均持股周期没有数据」。生产库实证：job 58/66/74/78 的
+`summary`/`chart_data.metrics` 都没有该字段（2026-10-28 新增，存量行早于它），
+且 `trades.sampled=true`（24–40 万笔只留 500 笔 |收益| 最大极值）使前端回退被正确阻断。
+**无数据源可重算**：本地 run 产物 0 个目录、SaaS 库无交易表、symbol 快照只覆盖被查看个股。
+
+修复：① 「—」的 tooltip 说清成因（采样不可算 + 旧快照无字段 + 重新提交即可），
+不再让用户误判成 bug；② 加两条测试锁死 `strategy_performance.json →
+build_lab_chart_data(metrics)` 与 `extract_run_summary → SUMMARY_METRIC_FIELDS`
+两条链路，并规定旧产物缺字段必须是 None 而非 0；③ 浏览器断言三路径
+（后端值 / 未采样回退 / 采样后 — 且 tip 说明成因）。
+
+另修一个基础设施限制：`test_saas_static_kline_tv.py` 把整个 symbol.html（107KB）嵌进
+`node -e`，超 Linux 单参数上限 MAX_ARG_STRLEN(128KB) 报 Argument list too long；
+改为写临时文件后 `node <file>`。
+
+测试全绿；全量 `3033 passed, 24 skipped`。CR：`CR-2026-10-29_avg_holding_tooltip_and_argmax.md`。
+未 commit/push。
