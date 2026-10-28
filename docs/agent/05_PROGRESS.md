@@ -1652,3 +1652,20 @@ Kimi 实施，DeepSeek 出设计规格。
 - **阶段 3 未做**：重播仍走 ECharts，进入重播前 `lwcDispose()` 防同容器双 canvas。
 - **测试**：新增 `tests/test_lwc_kline_adapter.py`；四个 harness 补 `localStorage`/`document.addEventListener`/`setChipState`；三处抽取正则放宽；`test_no_forbidden_deps` 改为禁 CDN/绝对 URL 资源；相关 132 passed；全量 `2972 passed, 24 skipped`。
 - **生产**：真实浏览器验证蜡烛/量/MACD 副图/阈值线/买卖 marker/图例/信息区/attribution/主题换肤/切回 echarts/重播进出/375 不溢出，全程零报错。MainPID 518848，回滚副本 `/tmp/qre-deploy-20261028T015314Z.bak`。
+
+## 2026-10-28 持仓期年化下限修复 + 新三板坏 tick 体检
+
+- **主因**：920556.BJ 持仓暴露度仅 1.05%（24/2295 交易日），区间收益 945.61%，
+  原公式 `(1+9.456117)^(252/24)−1` 外推出 5.05e10 → 页面 5051142288902.57%。
+  上一轮 a1516f0 只换了分母（equity 条目数 → 实际持仓交易日），对本例反而更大。
+- **修复**：`lab-ui.js` 新增 `ANNUAL_MIN_TRADING_DAYS=252` + `holdingAnnualized()` +
+  `holdingAnnualNote()` 单点实现；symbol/job 两模板改调 helper 并删掉自带公式。
+  持仓不足一个完整年度 → 显示「—」+ 悬停原因。
+- **数据体检（未修，待决）**：全市场 `low < 0.2×close` 仅 79 行 / 26 只，
+  **全部是 920xxx.BJ**，集中在 2015(51)/2016(19)/2017(8)/2020(1)，与「新三板-era
+  数据质量差」判断一致。920556.BJ 有 9 行（如 2015-03-16 low=0.01/close=19.1）。
+- **测试**：`TestAnnualFloor` 覆盖复现数/边界/两年几何年化/非法输入；
+  相关 7 passed；全量 `2975 passed, 24 skipped`。
+- **生产**：920556 显示「—」+ 原因；920932 `350.70%`、920284 `121.65%`、
+  job#66 `-2.38%`（长持仓年化仍生效）。MainPID 519969。
+- 详见 `docs/agent/change_requests/CR-2026-10-28_annual_floor_and_neeQ_ticks.md`。

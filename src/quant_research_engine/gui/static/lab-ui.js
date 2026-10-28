@@ -322,5 +322,35 @@
     return count;
   };
 
+  /* ==================== 持仓期年化下限（2026-10-28） ==================== */
+  /* 说明：`持仓期年化收益` = (1+区间策略收益)^(252/持仓交易日) − 1，本意是「在场期间
+     的单位时间收益率」。但持仓不足一个完整年度时这是**外推**：指数 252/持仓日 会把
+     收益放大到失真。920556.BJ（job#66）实测：3 笔交易全在 2015-03~05，持仓暴露度
+     1.05%（24/2295 交易日），区间收益 945.61% → 原公式给出 5.05e10，
+     页面显示 5051142288902.57%。
+
+     修法：加年化下限 ANNUAL_MIN_TRADING_DAYS = 252（一个完整年度）。持仓交易日
+     不足 252 时一律返回 null（页面显示「—」+ holdingAnnualNote 的原因），不做外推。
+     达到下限后的正常几何年化不受影响（如两年 +30% → +14.02%）。 */
+  LabUI.ANNUAL_MIN_TRADING_DAYS = 252;
+
+  LabUI.holdingAnnualized = function (sRet, heldDays) {
+    if (sRet == null || !isFinite(Number(sRet))) return null;
+    var base = 1 + Number(sRet);
+    if (base <= 0) return null;                       // -100% 本金亏光 / 负基数
+    var days = Math.floor(Number(heldDays) || 0);
+    if (days < LabUI.ANNUAL_MIN_TRADING_DAYS) return null;   // 不足一年：外推失真
+    var ann = Math.pow(base, 252 / days) - 1;
+    return isFinite(ann) ? ann : null;
+  };
+
+  // 年化不成立时的原因说明（达到下限返回空串，不追加）
+  LabUI.holdingAnnualNote = function (heldDays) {
+    var days = Math.floor(Number(heldDays) || 0);
+    if (days >= LabUI.ANNUAL_MIN_TRADING_DAYS) return "";
+    return "；持仓期不足一个完整年度（" + days + " < " + LabUI.ANNUAL_MIN_TRADING_DAYS +
+           " 交易日），年化不成立";
+  };
+
   window.LabUI = LabUI;
 })();

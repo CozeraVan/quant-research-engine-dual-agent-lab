@@ -47,13 +47,18 @@ class TestSourceContract:
         assert not re.search(r"252\s*/\s*held\b", JOB_TPL)
 
     def test_zero_and_negative_base_guards(self):
-        # 区间收益：首值为 0/缺失不制造 Infinity；-100% 不除零
+        # 区间收益：首值为 0/缺失不制造 Infinity
         for name, tpl in (("symbol", SYMBOL_TPL), ("job", JOB_TPL)):
             assert "baseA === 0" in tpl, f"{name} sliceRetPct 缺少 -100% 保护"
-            assert "1 + sRet <= 0" in tpl, f"{name} 年化缺少负基数保护"
         assert "ev[0]" in SYMBOL_TPL and "ev[0]" in JOB_TPL
         assert "base > 0" in LAB_RESULT_PY
         assert "TypeError" in LAB_RESULT_PY
+        # 年化的负基数/-100%/非有限防护 2026-10-28 起收敛到 helper 单点
+        assert "if (base <= 0) return null;" in LAB_UI_JS, "holdingAnnualized 缺少负基数保护"
+        assert "!isFinite(Number(sRet))" in LAB_UI_JS, "holdingAnnualized 缺非有限保护"
+        assert "days < LabUI.ANNUAL_MIN_TRADING_DAYS" in LAB_UI_JS, "holdingAnnualized 缺年化下限"
+        for name, tpl in (("symbol", SYMBOL_TPL), ("job", JOB_TPL)):
+            assert "Math.pow(1 + sRet" not in tpl, f"{name} 不得再自带年化公式（须走 helper）"
 
 
 _SCENARIO = r"""
@@ -98,3 +103,77 @@ console.log('holding-days-ok');
 
 def test_trading_days_held_in_range():
     _node(_SCENARIO.replace("%SOURCE%", __import__("json").dumps(LAB_UI_JS)))
+
+
+# ---------------------------------------------------------------- 年化下限（2026-10-28）
+# 920556.BJ（job#66）复现：3 笔交易全部集中在 2015-03~05，持仓暴露度 1.05%
+# （24 / 2295 交易日），区间收益 945.61%。原公式
+#   (1+9.456117)^(252/24) - 1 = 5.05e10 → 页面显示 5051142288902.57%
+# 「持仓期年化」的本意是「在场期间的单位时间收益率」，但持仓不足一个完整年度时
+# (1+收益)^(252/持仓日) 属于外推，指数会把收益放大到失真。修法是加年化下限：
+# 持仓交易日不足 252（一个完整年度）时不给年化值，改显示「—」并说明原因。
+_ANNUAL_SCENARIO = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const source = %SOURCE%;
+const context = vm.createContext({console, window: {}});
+vm.runInContext(source, context);
+const LabUI = context.window.LabUI;
+const ann = LabUI.holdingAnnualized;
+const note = LabUI.holdingAnnualNote;
+assert.ok(typeof ann === 'function', 'LabUI.holdingAnnualized 必须存在');
+assert.ok(typeof note === 'function', 'LabUI.holdingAnnualNote 必须存在');
+assert.equal(LabUI.ANNUAL_MIN_TRADING_DAYS, 252, '年化下限 = 一个完整年度');
+
+// 1) 920556.BJ 复现：24 天 +945.61% 必须被抑制
+assert.equal(ann(9.456117, 24), null, '持仓不足一年不得给年化值');
+assert.ok(note(24).indexOf('年化不成立') >= 0, '必须给出原因: ' + note(24));
+assert.ok(note(24).indexOf('24') >= 0 && note(24).indexOf('252') >= 0, '原因需带具体天数');
+
+// 2) 边界：恰好 252 天起可年化
+assert.ok(Math.abs(ann(0.3, 252) - 0.3) < 1e-12, '252 天 +30% → 30%');
+assert.ok(ann(0.3, 251) === null, '251 天仍不足一年');
+assert.ok(ann(0.3, 253) !== null, '253 天可年化');
+assert.equal(note(252), '', '达到下限不追加原因');
+assert.equal(note(300), '', '超过下限不追加原因');
+
+// 3) 长期持仓的正常年化仍然正确
+const v = ann(0.3, 504);   // 两年 +30% → (1.3)^0.5 - 1
+assert.ok(Math.abs(v - (Math.pow(1.3, 0.5) - 1)) < 1e-12, '504 天 +30% → 几何年化: ' + v);
+
+// 4) 非法输入一律 null，不抛错不产生 NaN/Infinity
+assert.equal(ann(null, 300), null, 'sRet 缺失');
+assert.equal(ann(undefined, 300), null, 'sRet undefined');
+assert.equal(ann(NaN, 300), null, 'sRet NaN');
+assert.equal(ann(Infinity, 300), null, 'sRet Infinity');
+assert.equal(ann(-1, 300), null, '本金亏光（-100%）');
+assert.equal(ann(-2, 300), null, '超额亏损（负基数）');
+assert.equal(ann(0.3, 0), null, '零持仓日');
+assert.equal(ann(0.3, null), null, '持仓日缺失');
+assert.equal(ann(0.3, NaN), null, '持仓日 NaN');
+
+// 5) 达到下限后的极大收益仍须有限（不爆表）
+const big = ann(100, 252);   // 一年 +10000%
+assert.ok(Number.isFinite(big) && big === 100, '一年 +10000% → +10000%: ' + big);
+console.log('annual-floor-ok');
+"""
+
+
+class TestAnnualFloor:
+    """持仓期年化下限：持仓不足一个完整年度时不年化（920556.BJ 爆表修复）。"""
+
+    def test_holding_annualized_floor(self):
+        _node(_ANNUAL_SCENARIO.replace("%SOURCE%", __import__("json").dumps(LAB_UI_JS)))
+
+    def test_templates_use_helper(self):
+        for name, tpl in (("symbol", SYMBOL_TPL), ("job", JOB_TPL)):
+            assert "LabUI.holdingAnnualized" in tpl, f"{name} 必须改用年化下限 helper"
+            # 旧公式（无下限的裸 Math.pow）必须移除
+            assert not re.search(r"Math\.pow\(1\s*\+\s*sRet\s*,\s*252\s*/\s*heldDays\)", tpl), (
+                f"{name} 仍在用无下限的年化公式")
+            assert "LabUI.holdingAnnualNote" in tpl, f"{name} 必须输出年化不成立的原因"
+
+    def test_tip_mentions_floor(self):
+        """tooltip 必须说明年化下限，否则用户看到「—」不知道原因。"""
+        for name, tpl in (("symbol", SYMBOL_TPL), ("job", JOB_TPL)):
+            assert "252" in tpl, f"{name} 年化说明需带 252 交易日口径"

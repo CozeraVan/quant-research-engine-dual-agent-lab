@@ -877,7 +877,7 @@ function renderEquity(d){
     for (let i = a; i <= b; i++) heldMask[i] = true;
   });
   const exposureTip = '有持仓的交易日数 ÷ 区间交易日数；同一日多笔持仓按 1 天计（重叠去重）';
-  const holdAnnualTip = '区间策略收益按可见区间内的实际持仓交易日折算年化：(1+区间收益)^(252/持仓交易日)−1；252 = 年交易日数，持仓交易日按自然日剔周末近似（未剔节假日）';
+  const holdAnnualTip = '区间策略收益按可见区间内的实际持仓交易日折算年化：(1+区间收益)^(252/持仓交易日)−1；252 = 年交易日数，持仓交易日按自然日剔周末近似（未剔节假日）。持仓不足一个完整年度（252 交易日）时属于外推、会失真，此时不给出年化值';
   function exposureCards(i0, i1, sRet){
     let held = 0;
     for (let i = i0; i <= i1; i++) if (heldMask[i]) held++;
@@ -887,11 +887,15 @@ function renderEquity(d){
     if (!heldDays) return card('持仓暴露度', '—', 'flat', exposureTip + '；本区间无持仓') +
                       card('持仓期年化收益', '—', 'flat', holdAnnualTip + '；本区间无持仓');
     const expo = held / (i1 - i0 + 1);
-    const ann = (sRet == null || 1 + sRet <= 0)
-      ? null
-      : Math.pow(1 + sRet, 252 / heldDays) - 1;
+    // 年化走下限 helper：持仓不足一个完整年度时返回 null，不做外推
+    // （920556.BJ 复现：24 天 +945.61% 原会爆成 5051142288902.57%）
+    const ann = (window.LabUI && LabUI.holdingAnnualized)
+      ? LabUI.holdingAnnualized(sRet, heldDays) : null;
+    const annNote = (window.LabUI && LabUI.holdingAnnualNote)
+      ? LabUI.holdingAnnualNote(heldDays) : '';
     return card('持仓暴露度', (expo * 100).toFixed(2) + '%', 'flat', exposureTip) +
-           card('持仓期年化收益', ann == null ? '—' : pct(ann), cls(ann), holdAnnualTip);
+           card('持仓期年化收益', ann == null ? '—' : pct(ann),
+                ann == null ? 'flat' : cls(ann), holdAnnualTip + annNote);
   }
   const benchCode = d.benchmarks && d.benchmarks['000001.SH'] ? '000001.SH' : (d.benchmarks ? Object.keys(d.benchmarks)[0] : null);
   function sliceRetPct(arr, i0, i1){

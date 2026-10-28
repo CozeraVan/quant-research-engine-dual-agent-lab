@@ -2753,3 +2753,12 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - API 三处实测校正已写入 23 号文档与 CR，后续实现不得再凭记忆。
 - 阶段 3（重播 LWC adapter）未做；重播进入前销毁 LWC 实例。
 - 测试：全量 `2972 passed, 24 skipped`；生产真实浏览器验证通过。未 commit/push。
+
+## 2026-10-28 年化下限修复交接
+
+- 根因：持仓不足一年时 `(1+收益)^(252/持仓日)` 属外推；920556.BJ 24 天 +945.61% → 5e12%。
+- 修复：`LabUI.holdingAnnualized/holdingAnnualNote/ANNUAL_MIN_TRADING_DAYS` 单点实现，
+  symbol/job 两模板共用；模板内自带公式已删除。
+- 数据体检结论（未修）：坏 tick 全市场 79 行 / 26 只，全是 920xxx.BJ，2015-2017 集中。
+- 测试：全量 `2975 passed, 24 skipped`；生产三例验证通过。未 commit/push。
+- 待决：是否清洗 26 只坏 tick；是否排除 2015-2017 的 920xxx.BJ。
