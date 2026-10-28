@@ -57,6 +57,9 @@
   </div>
   <div class="metric-strip" id="sum-strip"></div>
 
+  {# QRE-PERF-METRICS-CONTRACT：风险调整收益（α/β/IR，基准=区间买入持有该股）。全 null 时 JS 整块隐藏 #}
+  <div class="metric-strip" id="ra-strip" style="display:none"></div>
+
   <div class="chart-box" id="box-equity" style="display:none">
     <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略净值、个股买入持有和基准指数；拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
     <div id="chart-equity" style="height:260px"></div>
@@ -153,6 +156,8 @@
 {# CR-2026-10-28 B 路试点：LWC vendored 单文件（禁 CDN）+ 适配层；引擎开关默认 echarts #}
 <script src="/static/chart-core/vendor/lightweight-charts.standalone.production.js?v={{ asset_v }}"></script>
 <script src="/static/chart-core/kline-lwc.js?v={{ asset_v }}"></script>
+{# QRE-PERF-METRICS-CONTRACT：α/β/IR 与持股周期的共享纯函数层（公式与 risk/performance.py 对齐） #}
+<script src="/static/perf-metrics.js?v={{ asset_v }}"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
 // QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；
@@ -356,20 +361,27 @@ async function load(){
     if (result.generate){ showGenerate(); return; }
     const resp = result.resp, d = result.data;
     if (!resp.ok || !d.ok) throw new Error('加载失败 HTTP ' + resp.status);
-    renderSummary(d.summary);
+    renderSummary(d.summary, d.trades);
     renderEquity(d);
     renderWear(d);
     renderRisk(d);
+    renderRiskAdjusted(d);
     renderKlineDispatch(d);
     initKlineReplay(d);
+    // QRE-PERF-METRICS-CONTRACT：每笔持股周期。round_trips.csv 本就有 holding_days 列，
+    // 但 trades.csv 路径没有，两条路径统一由前端从 entry/exit 日期现算自然日
+    // （与 round_trips.holding_days 口径一致，已用样本实证：04-21→05-22 = 31 天）。
+    const tradesWithHold = (d.trades || []).map(t => Object.assign({}, t, {
+      _hold_days: (typeof QREPerfMetrics !== 'undefined') ? QREPerfMetrics.holdingDaysOf(t) : null,
+    }));
     const tradeCols = d.trades_source === 'round_trips'
       ? [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
          ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['费用', 'total_cost', 'num'],
-         ['净盈亏', 'net_pnl', 'pnl'], ['净收益率', 'net_return', 'pct'], ['出场原因', 'exit_reason']]
+         ['净盈亏', 'net_pnl', 'pnl'], ['净收益率', 'net_return', 'pct'], ['持股周期', '_hold_days', 'num'], ['出场原因', 'exit_reason']]
       : [['入场', 'entry_date'], ['出场', 'exit_date'], ['入场价', 'entry_price', 'num'],
          ['出场价', 'exit_price', 'num'], ['数量', 'quantity', 'num'], ['毛盈亏', 'gross_pnl', 'pnl'],
-         ['费用', 'cost', 'num'], ['净盈亏', 'net_pnl', 'pnl'], ['出场原因', 'exit_reason']];
-    table('tbl-trades', d.trades, tradeCols);
+         ['费用', 'cost', 'num'], ['净盈亏', 'net_pnl', 'pnl'], ['持股周期', '_hold_days', 'num'], ['出场原因', 'exit_reason']];
+    table('tbl-trades', tradesWithHold, tradeCols);
     table('tbl-orders', d.orders, [
       ['日期', 'trade_date'], ['方向', 'side'], ['价格', 'price', 'num'], ['数量', 'quantity', 'num'],
       ['金额', 'notional', 'num'], ['费用', 'cost', 'num'], ['佣金', 'commission', 'num'],
@@ -627,6 +639,13 @@ function lwcApplyTheme(){
   lwcSyncAttrib();
 }
 // DOM 图例：点击 = 翻转 chip 状态后整块重建（LWC 无图例）
+// QRE-SAAS-LWC-LEGEND-TOGGLE（2026-10-28 修两个真 bug）：
+// ① `__vol__`/`__marks__` 只能藏不能回——旧写法 `states[key] || 'pane'` 在已隐藏时
+//    取到的就是 'hidden'，等于又设回 hidden，永远出不来。改为显式传 restore 态。
+// ② 技术因子藏了之后 pill 整个消失——旧写法从 plan.overlays/plan.panes 建图例，
+//    而 plan() 对 hidden 组是 `return` 不入这两个数组，于是没有 pill 可点。
+//    改为从 plan.chips 建（chips 含全部组及其 state，与 ECharts 路径的
+//    renderFactorChips 同源），副图行也按「有 pane 类 chip」而非「有可见 pane」决定显隐。
 function lwcRenderLegend(plan, d){
   const box = $('#kline-legend');
   if (!box) return;
@@ -634,7 +653,7 @@ function lwcRenderLegend(plan, d){
   box.style.display = klineEngine() === 'lwc' ? '' : 'none';
   if (klineEngine() !== 'lwc') return;
   const states = chipStates();
-  function pill(label, color, key, isStatic){
+  function pill(label, color, key, isStatic, restore){
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'lg-pill' + (isStatic ? ' lg-static' : '');
@@ -650,7 +669,11 @@ function lwcRenderLegend(plan, d){
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
     b.dataset.tip = on ? '点击隐藏' : '点击显示';
     b.addEventListener('click', () => {
-      setChipState(key, on ? 'hidden' : (states[key] || 'pane'));
+      // 实时读状态而非用闭包捕获的 on：万一支路（如无 K 线数据时 renderKlineLwc
+      // 提前 return）没重建图例，也不会因为陈旧闭包又写回 hidden 而卡死。
+      const hiddenNow = chipStates()[key] === 'hidden';
+      // 藏 → restore（该组第一个非隐藏态）；显 → hidden。二者互斥，不会卡死。
+      setChipState(key, hiddenNow ? restore : 'hidden');
       if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = mountKlineReplay(klineData); }
       else renderKlineLwc(d);
     });
@@ -659,17 +682,22 @@ function lwcRenderLegend(plan, d){
   const main = document.createElement('span');
   main.style.display = 'inline-flex'; main.style.flexWrap = 'wrap'; main.style.gap = '6px 8px';
   main.appendChild(pill('K线', null, null, true));
-  main.appendChild(pill('成交量', QRELwcAdapter.theme(klineIsDark()).volume, '__vol__'));
-  main.appendChild(pill('买卖点', QRELwcAdapter.theme(klineIsDark()).up, '__marks__'));
-  (plan.overlays || []).forEach(function (o){
-    main.appendChild(pill(o.name, QRELwcAdapter.lineColor(o.color, klineIsDark()), o.f.col || o.f.name));
+  main.appendChild(pill('成交量', QRELwcAdapter.theme(klineIsDark()).volume, '__vol__', false, 'on'));
+  main.appendChild(pill('买卖点', QRELwcAdapter.theme(klineIsDark()).up, '__marks__', false, 'on'));
+  const chips = (plan && plan.chips) || [];
+  chips.forEach(function (c){
+    if (c.kind !== 'overlay') return;
+    main.appendChild(pill(c.label, QRELwcAdapter.lineColor(QREFactorLayout.COLORS.overlay[0], klineIsDark()),
+                         c.key, false, c.states[0]));
   });
   box.appendChild(main);
-  if ((plan.panes || []).length){
+  const paneChips = chips.filter(function (c){ return c.kind !== 'overlay'; });
+  if (paneChips.length){
     const sub = document.createElement('span');
     sub.style.display = 'inline-flex'; sub.style.flexWrap = 'wrap'; sub.style.gap = '6px 8px';
-    (plan.panes || []).forEach(function (p){
-      sub.appendChild(pill(p.name || p.key, QRELwcAdapter.lineColor(QREFactorLayout.COLORS.pane, klineIsDark()), p.key));
+    paneChips.forEach(function (c){
+      sub.appendChild(pill(c.label, QRELwcAdapter.lineColor(QREFactorLayout.COLORS.pane, klineIsDark()),
+                           c.key, false, c.states[0]));
     });
     box.appendChild(sub);
   }
@@ -827,7 +855,39 @@ function renderRisk(d){
   $('#box-risk').style.display = '';
 }
 
-function renderSummary(s){
+// QRE-PERF-METRICS-CONTRACT：个股风险调整收益（α/β/IR）。
+// 基准 = **区间内买入并持有该股**（个股层面唯一有经济意义的基准；symbol 快照不带指数
+// 基准序列，但 kline 一定在，所以这条路径对全部存量产物都生效，无需重跑）。
+// 基准收盘从 d.kline.ohlc[i][1] 取，按 d.equity.dates 对齐后差分，与 riskAdjusted 的
+// dated-benchmark 分支一致。三项全 null → 整块隐藏。
+// Sharpe 不在此重复：上方 FRM 条已有「夏普比率」。
+function renderRiskAdjusted(d){
+  const strip = $('#ra-strip');
+  if (!strip) return;
+  if (typeof QREPerfMetrics === 'undefined'){ strip.style.display = 'none'; return; }
+  const eq = d.equity, kl = d.kline;
+  if (!eq || !eq.dates || !eq.dates.length || !kl || !kl.dates || !kl.dates.length){
+    strip.style.display = 'none'; return;
+  }
+  const closes = (kl.ohlc || []).map(r => (r && r[1] != null) ? r[1] : null);
+  const ra = QREPerfMetrics.riskAdjusted({
+    equity: eq.values, dates: eq.dates,
+    benchmark: {name: '买入持有该股', dates: kl.dates, closes},
+  });
+  const vals = ra ? [ra.alpha_annual, ra.beta, ra.ir] : [];
+  if (!ra || vals.every(v => v == null)){ strip.style.display = 'none'; strip.innerHTML = ''; return; }
+  const tipBase = '基准 = 区间内买入并持有该股；按净值曲线差分的日收益计算，与上方收益曲线同源；rf=3%、年化 252 日。';
+  strip.style.display = '';
+  strip.innerHTML =
+    card('α（年化）', ra.alpha_annual == null ? '—' : pct(ra.alpha_annual), cls(ra.alpha_annual),
+         'Jensen\'s α：策略超额收益对「买入持有该股」回归的截距，年化 = 日频截距 × 252；正值 = 交易节奏跑赢了单纯拿着不动。' + tipBase) +
+    card('β', ra.beta == null ? '—' : Number(ra.beta).toFixed(2), 'flat',
+         '策略日收益对「买入持有该股」日收益的回归斜率；>1 表示比持股本身波动更大。' + tipBase) +
+    card('信息比率', ra.ir == null ? '—' : Number(ra.ir).toFixed(2), cls(ra.ir),
+         '平均主动收益 ÷ 跟踪误差（主动收益的标准差），再乘 √252；衡量每承担一份偏离持股的风险换来多少超额。' + tipBase);
+}
+
+function renderSummary(s, trades){
   $('#sym-title').innerHTML = (s.name || '') + ' <span class="opt">' + dispCode(s.ts_code) + '</span>';
   // 与 lab 版同款的 7 指标卡：策略区间收益% vs 区间自然涨幅%，金额作辅助
   $('#sum-strip').innerHTML =
@@ -836,6 +896,9 @@ function renderSummary(s){
     card('区间自然涨幅', s.bench_ret == null ? '—' : pct(s.bench_ret), s.bench_ret == null ? 'flat' : cls(s.bench_ret), '同一区间买入并持有该股的自然涨幅。') +
     card('交易笔数', s.trades, 'flat', '该股已完成的完整买卖交易数量。') +
     card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret), '全部完整交易单笔净收益的算术平均。') +
+    card('平均持股周期', (typeof QREPerfMetrics !== 'undefined' && QREPerfMetrics.avgHoldingDays(trades) != null)
+      ? Number(QREPerfMetrics.avgHoldingDays(trades)).toFixed(1) + ' 天' : '—', 'flat',
+      '该股全部完整交易从买入到卖出的平均持有天数（自然日，与 round_trips.holding_days 同口径），按本次回测的真实成交记录计算。') +
     card('胜率', pct(s.win_rate), cls(s.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。') +
     card('赚钱效应分位', s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%', s.percentile != null && s.percentile <= 0.05 ? 'pos' : 'flat', '该股在本策略全部交易个股中的盈利排名分位；前 5% 高亮。');
 }

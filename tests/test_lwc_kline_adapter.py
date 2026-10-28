@@ -319,3 +319,187 @@ assert.equal(vm.runInContext('lwcChart === null', context), true, 'lwcChart 引�
         assert SYMBOL_TPL.count("klineDisposeEngines()") >= 4, (
             "定义 + 两渲染入口 + 引擎开关至少 4 处"
         )
+
+
+# ---------------------------------------------------------------- 图例开关回归
+class TestLwcLegendToggle:
+    """QRE-SAAS-LWC-LEGEND-TOGGLE：LWC DOM 图例的两个真 bug 回归。
+
+    2026-10-28 用户实测（TradingView 视图下）：
+    ① 成交量/买卖点默认开，点一次藏起来后再也点不回来——
+       旧写法 `setChipState(key, on ? 'hidden' : (states[key] || 'pane'))` 在已隐藏时
+       取到的 states[key] 就是 'hidden'，等于又设回 hidden，死锁。
+    ② 技术因子点「取消显示」后该选项从图例里彻底消失，无法再选——
+       旧写法从 plan.overlays/plan.panes 建图例，而 plan() 对 hidden 组直接 return，
+       不进这两个数组，于是没有 pill 可点。
+    """
+
+    def _legend_src(self) -> str:
+        m = re.search(r"function lwcRenderLegend\(plan, d\)\{[\s\S]*?\n\}", SYMBOL_TPL)
+        assert m, "未找到 lwcRenderLegend"
+        return m.group(0)
+
+    def test_pill_restores_with_explicit_state_not_stale_hidden(self):
+        """源码合同：点击显隐必须用传入的 restore 态，不得回读可能已是 hidden 的旧状态。"""
+        src = self._legend_src()
+        assert "setChipState(key, hiddenNow ? restore : 'hidden');" in src, (
+            "必须实时读状态 + 显式 restore 态；回读创建时捕获的 on/states 会卡死"
+        )
+        assert "const hiddenNow = chipStates()[key] === 'hidden';" in src, (
+            "点击时必须实时读当前状态，不得用闭包捕获的 on"
+        )
+        assert "states[key] || 'pane'" not in src, "旧死锁写法不得残留"
+        # 三个可切换 pill 都必须传 restore
+        for key in ("'__vol__'", "'__marks__'"):
+            assert f"{key}, false, 'on'" in src, f"{key} 必须传 restore='on'"
+        assert src.count(", false, c.states[0])") >= 2, (
+            "overlay 与 pane chip 都必须传 restore=c.states[0]"
+        )
+
+    def test_legend_built_from_chips_not_visible_series(self):
+        """源码合同：图例必须从 plan.chips 建（含隐藏组），不能从 overlays/panes 建。"""
+        src = self._legend_src()
+        assert "const chips = (plan && plan.chips) || [];" in src, "必须取 plan.chips"
+        assert "(plan.overlays || []).forEach" not in src, (
+            "不得从 plan.overlays 建图例——隐藏组不在其中，pill 会消失"
+        )
+        assert "(plan.panes || []).forEach" not in src, "不得从 plan.panes 建图例，同理"
+        # 副图行显隐判据必须是「有 pane 类 chip」而非「有可见 pane」
+        assert "const paneChips = chips.filter" in src, "副图行必须按 chip 数决定显隐"
+
+    def test_toggle_roundtrip_in_vm(self):
+        """Node vm 跑真实 lwcRenderLegend：藏 → 再点 → 必须回来，且 pill 不消失。"""
+        _node(r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const src = %SRC%;
+const store = {};
+const els = {};
+function makeEl(id){
+  const e = {
+    id, style: {}, children: [], childNodes: [], listeners: {}, attrs: {}, dataset: {}, _text: '',
+    set innerHTML(v){ e._html = String(v); e.children = []; e.childNodes = []; },
+    get innerHTML(){ return e._html || ''; },
+    appendChild(n){
+      e.children.push(n); e.childNodes.push(n);
+      // 文本节点：真实 DOM 里 textContent 会拼接子文本节点
+      if (n && typeof n.__text === 'string') e._text += n.__text;
+      return n;
+    },
+    addEventListener(t, fn){ (e.listeners[t] = e.listeners[t] || []).push(fn); },
+    setAttribute(k, v){ e.attrs[k] = String(v); },
+    getAttribute(k){ return e.attrs[k] == null ? null : e.attrs[k]; },
+  };
+  Object.defineProperty(e, 'textContent', {
+    get(){ return e._text; },
+    set(v){ e._text = String(v); },
+  });
+  return e;
+}
+const document = {
+  createElement(){ return makeEl('new'); },
+  createTextNode(v){ return {__text: String(v)}; },
+  getElementById(id){ return els[id] || (els[id] = makeEl(id)); },
+};
+const PLAN = {chips: [
+  {key: 'ema_5', label: 'EMA5', kind: 'overlay', state: 'overlay', states: ['overlay', 'pane', 'hidden']},
+  {key: 'ema_200', label: 'EMA200', kind: 'overlay', state: 'overlay', states: ['overlay', 'pane', 'hidden']},
+  {key: 'macd_12_26_9', label: 'MACD', kind: 'pane', state: 'pane', states: ['pane', 'hidden']},
+], overlays: [], panes: []};
+const context = vm.createContext({
+  console, document, PLAN,
+  $(sel){ return document.getElementById(String(sel).replace(/^#/, '')); },
+  chipStates(){
+    const s = {};
+    for (const k of Object.keys(store)) {
+      if (k.indexOf('qre_fct_') === 0) s[k.slice('qre_fct_'.length)] = store[k];
+    }
+    return s;
+  },
+  setChipState(key, st){ store['qre_fct_' + key] = st; },
+  klineEngine(){ return 'lwc'; },
+  klineIsDark(){ return false; },
+  kreplayCtl: null,
+  klineData: null,
+  renderKlineLwc(){},
+  QRELwcAdapter: {
+    theme(){ return {volume: '#B7A6E8', up: '#d43030'}; },
+    lineColor(c){ return c; },
+  },
+  QREFactorLayout: {COLORS: {overlay: ['#E8A33D'], pane: '#6750A4'}},
+});
+vm.runInContext(src, context);
+
+function render(){ vm.runInContext('lwcRenderLegend(PLAN, {})', context); }
+// 叶子 pill：main/sub 两个 span 的 children 里，带 listeners 的即可切换项
+function pills(){
+  const box = els['kline-legend'];
+  const out = [];
+  box.children.forEach(function (row){
+    row.children.forEach(function (b){
+      if (b.className.indexOf('lg-static') < 0) out.push(b);
+    });
+  });
+  return out;
+}
+function findPill(label){
+  return pills().filter(function (b){ return b.textContent === label; })[0] || null;
+}
+
+render();
+assert.equal(pills().length, 5, '初始 5 个可切换 pill，实际 ' + pills().length);
+assert.ok(findPill('成交量'), '成交量 pill 必须在');
+assert.ok(findPill('EMA5'), 'EMA5 pill 必须在');
+assert.ok(findPill('MACD'), 'MACD pill 必须在');
+
+// ① 成交量：藏 → pill 不消失 → 再点必须回来
+assert.equal(findPill('成交量').getAttribute('aria-pressed'), 'true', '成交量默认开');
+findPill('成交量').listeners.click[0]();
+assert.equal(store['qre_fct___vol__'], 'hidden', '点击后必须写入 hidden');
+render();
+assert.ok(findPill('成交量'), '藏了之后 pill 不得消失');
+assert.equal(findPill('成交量').getAttribute('aria-pressed'), 'false', '藏了之后 aria-pressed=false');
+findPill('成交量').listeners.click[0]();
+assert.notEqual(store['qre_fct___vol__'], 'hidden',
+  '再点一次必须离开 hidden，实际 = ' + store['qre_fct___vol__']);
+render();
+assert.equal(findPill('成交量').getAttribute('aria-pressed'), 'true', '再点后必须重新显示');
+
+// ② 技术因子：MACD 藏了之后 pill 还在，且能点回来
+findPill('MACD').listeners.click[0]();
+assert.equal(store['qre_fct_macd_12_26_9'], 'hidden', 'MACD 必须写入 hidden');
+render();
+assert.ok(findPill('MACD'), 'MACD 藏了之后 pill 不得从图例消失');
+assert.equal(findPill('MACD').getAttribute('aria-pressed'), 'false');
+findPill('MACD').listeners.click[0]();
+assert.equal(store['qre_fct_macd_12_26_9'], 'pane',
+  '再点必须回到第一个非隐藏态 pane，实际 = ' + store['qre_fct_macd_12_26_9']);
+render();
+assert.equal(findPill('MACD').getAttribute('aria-pressed'), 'true');
+
+// ③ overlay chip 的 restore 态是 overlay（不是 pane）
+findPill('EMA5').listeners.click[0]();
+assert.equal(store['qre_fct_ema_5'], 'hidden');
+render();   // 生产里由 renderKlineLwc 内部重建图例
+findPill('EMA5').listeners.click[0]();
+assert.equal(store['qre_fct_ema_5'], 'overlay',
+  'overlay 组再点必须回 overlay，实际 = ' + store['qre_fct_ema_5']);
+
+// ③b 不重建图例也能正确往返（实时读状态，陈旧闭包不会又写回 hidden）
+for (const k of Object.keys(store)) delete store[k];
+render();
+const stale = findPill('成交量');
+stale.listeners.click[0]();                    // 显 → 藏
+assert.equal(store['qre_fct___vol__'], 'hidden');
+stale.listeners.click[0]();                    // 同一个陈旧 pill 再点 → 必须回来
+assert.notEqual(store['qre_fct___vol__'], 'hidden',
+  '陈旧 pill 再点也必须离开 hidden，实际 = ' + store['qre_fct___vol__']);
+
+// ④ 全部 pane chip 都藏了，副图行仍要保留（否则无处点回）
+for (const k of Object.keys(store)) delete store[k];
+store['qre_fct_macd_12_26_9'] = 'hidden';
+render();
+assert.ok(findPill('MACD'), '唯一 pane 被藏后副图行与 pill 仍须存在');
+
+console.log('lwc-legend-toggle-ok');
+""".replace("%SRC%", json.dumps(self._legend_src())))

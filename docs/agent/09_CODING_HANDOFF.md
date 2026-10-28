@@ -3831,3 +3831,14 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - overlay pill key 用 `c.key`（`fkey(f) === f.col || f.name`，与原 `o.f.col || o.f.name` 等价）。
 - RED：改回旧写法 3 例全红。全量 `3024 passed, 24 skipped`。真实浏览器（Chromium + LWC 引擎）
   5 pill、三类往返全通、隐藏后 pill 不消失、零 pageerror。未 commit/push。
+
+## 2026-10-28 LWC 图例开关修复（第二批 commit）
+
+（本条的进度/handoff 记录随上一批 metrics commit 一并落入 `04/05/09/11` 四份文档，
+此处补一条索引，避免两份改动的文档记录分家。）
+
+- 改动范围：`src/quant_research_engine/gui/saas/templates/symbol.html`（仅 `lwcRenderLegend`）
+  + `tests/test_lwc_kline_adapter.py`（新增 `TestLwcLegendToggle` 3 例）
+- 权威记录：`docs/agent/change_requests/CR-2026-10-28_lwc_legend_toggle.md`
+- 关键结论：双引擎下同一交互有两条实现（ECharts `renderFactorChips` / LWC `lwcRenderLegend`），
+  改一条必须回归另一条——本轮 bug 正是只回归了 ECharts 那条。
