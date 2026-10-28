@@ -1078,9 +1078,22 @@ function createSymbolHarness(fetchImpl){
 """
 
 
-def _run_symbol_script_js(html: str, source_pattern: str, scenario: str) -> None:
+# QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 现在必须经 klineDisposeEngines
+# 同时清 ECharts 与 LWC 两个引擎（否则切引擎时旧 canvas 残留、双图叠加），
+# 而该定义在 klineResizeBound 之前，抽取 K 线区块时必须一并注入。
+SYMBOL_DISPOSE_PATTERN = (
+    r"(let lwcChart = null[\s\S]*?if \(typeof lwcDispose === 'function'\) lwcDispose\(\);\n\})"
+)
+
+
+def _run_symbol_script_js(
+    html: str, source_pattern: str, scenario: str, prefix_pattern: str | None = None
+) -> None:
     match = re.search(source_pattern, html, re.S)
     assert match, "未找到个股详情脚本"
+    prefix = re.search(prefix_pattern, html, re.S) if prefix_pattern else None
+    if prefix_pattern:
+        assert prefix, "未找到待测模板前置脚本"
     node = shutil.which("node")
     if not node and Path("/home/van/codex-local/node-v22/bin/node").exists():
         node = "/home/van/codex-local/node-v22/bin/node"
@@ -1090,7 +1103,7 @@ def _run_symbol_script_js(html: str, source_pattern: str, scenario: str) -> None
                  / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
     script = (
         _SYMBOL_JS_HARNESS
-        + "\nconst source = " + json.dumps(match.group(1)) + ";"
+        + "\nconst source = " + json.dumps((prefix.group(1) if prefix else "") + match.group(1)) + ";"
         # CR-2026-10-27：symbol.html 真实依赖 replay.js（共享高度 helper）；场景可按需预加载
         + "\nconst REPLAY_SRC = " + json.dumps(replay_js) + ";"
         + scenario
@@ -1622,7 +1635,10 @@ function pendingResponse(options){
   assert.equal((h.windowListeners.resize || []).length, 1, '收益图重复渲染不得累积 resize');
 })().catch(error => { console.error(error); process.exit(1); });
 """)
-        _run_symbol_script_js(html, r"(let klineResizeBound[\s\S]*?)(?=\n// --- K线级重播)", r"""
+        _run_symbol_script_js(
+            html,
+            r"(let klineResizeBound[\s\S]*?)(?=\n// --- K线级重播)",
+            r"""
 (async () => {
   const h = createSymbolHarness(async () => response(200, {ok: true}));
   h.context.echarts = {
@@ -1640,7 +1656,9 @@ function pendingResponse(options){
   vm.runInContext('renderKline(' + JSON.stringify(data) + ')', h.context);
   assert.equal((h.windowListeners.resize || []).length, 1, 'K线重复渲染不得累积 resize');
 })().catch(error => { console.error(error); process.exit(1); });
-""")
+""",
+            prefix_pattern=SYMBOL_DISPOSE_PATTERN,
+        )
 
     def test_login_page(self, client):
         resp = client.get("/saas/login")

@@ -2792,3 +2792,14 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 环境约束备忘：ECS 无行情库（不能重算因子，只能改快照）；本地 run 产物已清空
   （`outputs/gui-console/runs` 空，无 `status.json`）→ worker `_execute_symbol_detail`
   不可用，"刷新详情"按钮对存量 job 实际无效。
+
+## 2026-10-28 K 线双引擎互斥交接
+
+- 根因：`#chart-kline` 同一容器，ECharts 与 LWC 各自只清自己 DOM；`renderKlineLwc` 只调
+  `lwcDispose()` 不清 ECharts → 切 TradingView 视图后双图叠加（实测 scrollHeight 400→800）。
+- 修复：`klineDisposeEngines()` 双清 + 兜底清空容器，三个调用点（`renderKlineLwc`/`renderKline`/
+  引擎开关）全改走它。
+- 测试：`TestKlineEngineExclusive` 2 例（含 RED 验证）；四个 harness 抽取区扩展 + DOM 桩补齐；
+  全量 `3011 passed, 24 skipped`。
+- 真实浏览器复现旧 bug 并验证修复；已部署 ECS（MainPID 542952）。CR：`CR-2026-10-28_kline_engine_exclusive.md`。
+- 未 commit/push。

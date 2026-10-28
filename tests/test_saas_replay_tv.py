@@ -65,7 +65,11 @@ def _symbol_source() -> str:
     # 只要锚点是「klineResizeBound 起 → load() 前」即可。
     match = re.search(r"(let klineResizeBound = false;[\s\S]*?)\nload\(\);", SYMBOL_TPL)
     assert match, "未找到 K 线/重播源码块"
-    return match.group(1)
+    # QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 依赖 klineDisposeEngines 同时清
+    # ECharts 与 LWC；该定义在 klineResizeBound 之前，必须一并注入 vm。
+    dispose = re.search(r"(let lwcChart = null[\s\S]*?)\n// 品牌水印随主题换图", SYMBOL_TPL)
+    assert dispose, "未找到 lwcDispose / klineDisposeEngines"
+    return dispose.group(1) + "\n" + match.group(1)
 
 
 # ---------------------------------------------------------------- 源码合同
@@ -128,6 +132,11 @@ function makeEl(sel){
       const i = e.parentNode.childNodes.indexOf(e);
       if (i >= 0){ e.parentNode.childNodes.splice(i, 1); e.parentNode.children.splice(i, 1); }
       e.parentNode = null;
+    },
+    removeChild(n){
+      const i = e.childNodes.indexOf(n);
+      if (i >= 0){ e.childNodes.splice(i, 1); e.children.splice(i, 1); }
+      return n;
     },
     querySelector(){ return null; },
     get firstChild(){ return e.childNodes[0] || null; },

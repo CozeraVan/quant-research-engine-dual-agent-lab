@@ -40,11 +40,26 @@ def _node(script: str) -> None:
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def _dispose_source() -> str:
+    """lwcDispose + klineDisposeEngines（renderKline/renderKlineLwc 的共同依赖）。
+
+    QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 现在必须经 klineDisposeEngines
+    同时清 ECharts 与 LWC 两个引擎，否则切换图表引擎时旧 canvas 残留、双图叠加。
+    """
+    match = re.search(r"(let lwcChart = null[\s\S]*?)\n// 品牌水印随主题换图", SYMBOL_TPL)
+    assert match, "未找到 lwcDispose / klineDisposeEngines"
+    return match.group(1)
+
+
 def _kline_block() -> str:
-    """工具栏/信息条全部落在 klineResizeBound → 重播注释之前的区块内。"""
+    """工具栏/信息条全部落在 klineResizeBound → 重播注释之前的区块内。
+
+    QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：该区块含 renderKline，而 renderKline 依赖
+    klineDisposeEngines（定义在 klineResizeBound 之前），必须一并注入 vm。
+    """
     match = re.search(r"(let klineResizeBound[\s\S]*?)(?=\n// --- K线级重播)", SYMBOL_TPL)
     assert match, "未找到 K 线静态区块"
-    return match.group(1)
+    return _dispose_source() + "\n" + match.group(1)
 
 
 def _tool_helpers() -> str:
@@ -62,7 +77,7 @@ def _render_kline_source() -> str:
         SYMBOL_TPL,
     )
     assert match, "未找到 renderKline 及其声明"
-    return match.group(1)
+    return _dispose_source() + "\n" + match.group(1)
 
 
 def _media_block(query: str = "max-width:640px") -> str:
@@ -219,6 +234,7 @@ const vm = require('node:vm');
 function makeEl(sel){
   const e = {
     sel: sel, style: {}, dataset: {}, disabled: false, attrs: {}, listeners: {}, textContent: '',
+    firstChild: null, removeChild(){},
     classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; } },
     setAttribute(k, v){ e.attrs[k] = String(v); },
     addEventListener(t, fn){ (e.listeners[t] = e.listeners[t] || []).push(fn); },

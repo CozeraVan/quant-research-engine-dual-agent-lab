@@ -557,6 +557,24 @@ function lwcDispose(){
   if (lwcChart){ try { lwcChart.remove(); } catch (e) {} lwcChart = null; }
   lwcMarkers = null; lwcThresholds = [];
 }
+// QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：双引擎互斥。#chart-kline 同时只能挂一个实例，
+// 而 ECharts 与 LWC 各自只清自己创建的 DOM——只清一边就会让旧 canvas 残留，
+// 新图叠在旧图之上（2026-10-28 线上 bug：切到 TradingView 视图后 ECharts 图仍在下层）。
+// 任何重渲染/引擎切换前必须两边都清。
+function klineDisposeEngines(){
+  const el = $('#chart-kline');
+  if (el){
+    if (window.echarts){
+      const inst = echarts.getInstanceByDom(el);
+      if (inst){ try { inst.dispose(); } catch (e) {} }
+    }
+    // LWC remove() 只摘自己创建的节点；被叠加污染过的容器可能残留旧 canvas，兜底清空。
+    // 该容器专供 K 线图使用（模板内即为空 div），清空不会丢其它内容。
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+  symbolKlineChart = null;
+  if (typeof lwcDispose === 'function') lwcDispose();
+}
 // 品牌水印随主题换图（浅底彩色 / 深底反白）
 function lwcSyncAttrib(){
   const box = $('#kline-attrib');
@@ -667,7 +685,7 @@ function renderKlineLwc(d){
   }
   $('#box-kline').style.display = '';
   const el = $('#chart-kline');
-  lwcDispose();
+  klineDisposeEngines();  // 双引擎互斥：先清 ECharts 与 LWC 两边，再建新实例
   klineDetail = d;
   const plan = QREFactorLayout.plan(d.factors || [], chipStates(), paneOrder());
   el.style.height = QRELwcAdapter.klineHeight(plan.panes.length) + 'px';
@@ -1500,7 +1518,7 @@ function klineIndicatorDialog(){
       '切换 K 线渲染引擎；TradingView 版为受控试点，可随时切回', () => {
         setKlineEngine(lwcOn ? 'echarts' : 'lwc');
         if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = null; }
-        lwcDispose();
+        klineDisposeEngines();  // 双引擎互斥：旧引擎实例必须在此清掉，否则新图叠加在旧图上
         klineIndicatorDialog();
         klineRerenderAfterSetting();
       });
@@ -1546,8 +1564,7 @@ function renderKline(d){
   const panes = plan.panes;
   const hasF = panes.length > 0;
   el.style.height = QREReplay.klineHeightForPanes(panes.length) + 'px';
-  const oldInst = echarts.getInstanceByDom(el);
-  if (oldInst) oldInst.dispose();  // chip 切换重渲染前销毁旧实例
+  klineDisposeEngines();  // 双引擎互斥：清掉可能残留的 LWC 实例与 ECharts 旧实例
   const chart = echarts.init(el);
   symbolKlineChart = chart;
   bindKlineResize(el);

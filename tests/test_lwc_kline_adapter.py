@@ -222,3 +222,100 @@ class TestLwcSourceContract:
         for fn in ("toCandles", "toVolume", "toLineSeries", "toHistogram", "toMarkers",
                    "thresholdLines", "theme", "klineHeight", "THEME"):
             assert re.search(rf"\b{fn}\b", ADAPTER_JS), f"适配层缺少导出: {fn}"
+
+
+# ---------------------------------------------------------------- 双引擎互斥
+class TestKlineEngineExclusive:
+    """QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：#chart-kline 同时只能挂一个引擎实例。
+
+    2026-10-28 线上 bug（用户验收时发现）：在个股详情里切到 TradingView 视图后，
+    新图叠在旧 ECharts 图之上。根因：`renderKlineLwc()` 只调 `lwcDispose()`
+    （只摘 LWC 自己的 DOM），从不清 ECharts 实例——`LWC.createChart(el)` 往同一个
+    容器里再插一套 canvas，两个图就叠在一起。反向（lwc → echarts）当时只因为引擎
+    开关处理器里手工补了一次 `lwcDispose()` 才没暴露。
+    """
+
+    DISPOSE_PATTERN = r"(let lwcChart = null[\s\S]*?)\n// 品牌水印随主题换图"
+
+    def _dispose_src(self) -> str:
+        m = re.search(self.DISPOSE_PATTERN, SYMBOL_TPL)
+        assert m, "未找到 lwcDispose / klineDisposeEngines 源码区"
+        return m.group(1)
+
+    def test_dispose_tears_down_both_engines(self):
+        """klineDisposeEngines 必须同时清 ECharts 实例、LWC 实例与容器残留节点。"""
+        _node(r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const source = %SOURCE%;
+// 容器里预先放两个"旧 canvas"节点：无论 getInstanceByDom 是否认得出实例，
+// 清空后都不准残留——叠加 bug 的直接表现就是旧 canvas 还在。
+const kids = [{tag: 'canvas'}, {tag: 'canvas'}];
+const container = {
+  get firstChild(){ return kids[0] || null; },
+  removeChild(){ kids.shift(); },
+};
+let echartsDisposed = 0;
+const echartsStub = {
+  getInstanceByDom(el){ return el === container ? {dispose(){ echartsDisposed += 1; }} : null; },
+};
+const lwcChartStub = {
+  unsubscribeCrosshairMove(){ throw new Error('不应抛错'); },
+  remove(){ this.removed = (this.removed || 0) + 1; },
+};
+const ctx = {
+  // 浏览器里 window.echarts 就是全局 echarts；vm 里没有这层代理，两边都要给
+  console, echarts: echartsStub, window: {echarts: echartsStub}, __chartStub: lwcChartStub,
+  $(sel){ return sel === '#chart-kline' ? container : null; },
+  symbolKlineChart: {dispose(){ throw new Error('旧实例必须经 getInstanceByDom 走，不得留裸引用'); }},
+};
+const context = vm.createContext(ctx);
+vm.runInContext(source, context);
+
+// 场景 1：ECharts 静态图在场 → 切到 LWC 前必须 dispose 它并清空容器
+vm.runInContext('klineDisposeEngines();', context);
+assert.equal(echartsDisposed, 1, 'ECharts 实例必须被 dispose');
+assert.equal(kids.length, 0, '容器必须清空，旧 canvas 不得残留');
+assert.equal(context.symbolKlineChart, null, '旧 echarts 实例引用必须清掉');
+
+// 场景 2：LWC 图在场 → 切回 ECharts 前必须 remove 它
+// 注意：lwcChart 是源码里的 let 绑定（全局词法环境，不是 global 对象属性），
+// 只能再用 runInContext 读，不能走 context.lwcChart
+vm.runInContext('lwcChart = __chartStub; klineDisposeEngines();', context);
+assert.equal(lwcChartStub.removed, 1, 'LWC 实例必须被 remove');
+assert.equal(vm.runInContext('lwcChart === null', context), true, 'lwcChart 引用必须清掉');
+""".replace("%SOURCE%", json.dumps(self._dispose_src())))
+
+    def test_both_render_paths_and_switch_use_exclusive_dispose(self):
+        """两个渲染入口与引擎开关都必须走 klineDisposeEngines，不得只清自己那侧。"""
+        # renderKlineLwc：原来只调 lwcDispose()，是本次 bug 的直接根因
+        lwc_body = re.search(
+            r"function renderKlineLwc\(d\)\{[\s\S]*?\n\}", SYMBOL_TPL
+        )
+        assert lwc_body, "未找到 renderKlineLwc"
+        assert "klineDisposeEngines()" in lwc_body.group(0), (
+            "renderKlineLwc 必须清双引擎，否则 echarts → lwc 会叠加"
+        )
+        # renderKline：原来只 dispose echarts，反向切换会残留 LWC
+        ec_body = re.search(r"function renderKline\(d\)\{[\s\S]*?\n\}", SYMBOL_TPL)
+        assert ec_body, "未找到 renderKline"
+        assert "klineDisposeEngines()" in ec_body.group(0), (
+            "renderKline 必须清双引擎，否则 lwc → echarts 会叠加"
+        )
+        # 引擎开关处理器
+        switch_body = re.search(
+            r"setKlineEngine\(lwcOn \? 'echarts' : 'lwc'\);[\s\S]*?klineRerenderAfterSetting\(\);",
+            SYMBOL_TPL,
+        )
+        assert switch_body, "未找到引擎开关处理器"
+        assert "klineDisposeEngines()" in switch_body.group(0), (
+            "引擎切换必须先清双引擎再重建"
+        )
+        assert "lwcDispose();" not in switch_body.group(0), (
+            "引擎开关不得只清 LWC"
+        )
+        # 双引擎各自的旧调用点不得残留（replay 接管前的 lwcDispose 仍允许：
+        # 重播恒为 echarts，只可能叠 LWC）
+        assert SYMBOL_TPL.count("klineDisposeEngines()") >= 4, (
+            "定义 + 两渲染入口 + 引擎开关至少 4 处"
+        )

@@ -1841,3 +1841,24 @@ rotateY +2.27°（方向跟随光标）；中心 0°；大卡仍 transform:none�
 app.py 对缺 `factor_basis` 的产物一律拒发（走 404 + 前端生成按钮）。
 CR：`change_requests/CR-2026-10-28_factor_qfq_anchor.md`。
 测试：全量 `3009 passed, 24 skipped`。未 commit/push。
+
+## 2026-10-28 K 线双引擎互斥：修复切 TradingView 视图叠加
+
+用户验收因子锚点修复时发现：个股详情切到 TradingView（LWC）视图后新图叠在旧 ECharts 图上。
+
+**根因**：`#chart-kline` 是同一容器，ECharts 与 LWC 各自只清自己创建的 DOM。
+`renderKlineLwc()` 只调 `lwcDispose()`（只摘 LWC 节点），从不清 ECharts 实例；
+`LWC.createChart(el)` 再往同一容器插一套 canvas → 两图并存。反向当时没暴露，
+只因引擎开关处理器里手工补过一次 `lwcDispose()`；`renderKline` 本身仍只 dispose echarts。
+
+**真实浏览器实测**（Chromium + 生产同款 echarts/LWC）：修复前容器 2 个子元素、
+scrollHeight 400→**800**（高度翻倍）；修复后恒 1 个、8 轮反复切换零 pageerror。
+
+**修复**：新增 `klineDisposeEngines()`（echarts `getInstanceByDom`+`dispose` → 兜底清空容器
+→ `symbolKlineChart=null` → `lwcDispose()`），三个调用点全改走它
+（`renderKlineLwc` / `renderKline` / 引擎开关处理器）。
+
+**测试**：新增 `TestKlineEngineExclusive`（Node vm 跑真实源码断言双清 + 源码合同），
+已做 RED 验证（改回"只清 LWC"立即失败）；四个既有 harness 抽取区同步扩展并补 DOM 桩。
+全量 `3011 passed, 24 skipped`。CR：`change_requests/CR-2026-10-28_kline_engine_exclusive.md`。
+已部署 ECS（MainPID 542952）。未 commit/push。

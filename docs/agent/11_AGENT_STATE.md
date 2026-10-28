@@ -1272,3 +1272,28 @@ rescale 后 1.0000。40 个随机产物：EMA 比值中位数 2.677 → 1.0001�
 
 因子库因子的**别名、呈现方式、复权口径**要固化为因子的元数据属性（类似 C++ 数据成员），
 不再每次调用 K 线/因子时临时判断——目标是"未来不想一而再再而三去解决 K 线和技术指标的呈现问题"。
+
+### 2026-10-28 KLINE-ENGINE-EXCLUSIVE 已部署待人工验收，未 commit/push
+
+修复「切 TradingView 视图后 K 线叠加」。**根因**：`#chart-kline` 是同一容器，ECharts 与 LWC
+各自只清自己创建的 DOM——`renderKlineLwc()` 只调 `lwcDispose()`（只摘 LWC 节点），从不清
+ECharts 实例，`LWC.createChart(el)` 再插一套 canvas 就叠在一起。反向当时没暴露只因引擎开关
+处理器里手工补过一次 `lwcDispose()`。
+
+**真实浏览器实测**：修复前 echarts→lwc 后容器 2 个子元素、`scrollHeight` 400→**800**（高度翻倍）；
+修复后恒 1 个，8 轮反复切换零 pageerror。
+
+**修复**：新增 `klineDisposeEngines()`（echarts `getInstanceByDom`+`dispose` → 兜底清空容器 →
+`symbolKlineChart=null` → `lwcDispose()`），`renderKlineLwc` / `renderKline` / 引擎开关三处全改走它。
+**硬规则（写入 12_UI_STYLE_GUIDE §3.16 附近）**：任何往 `#chart-kline` 挂图表的路径，
+挂载前必须调 `klineDisposeEngines()`，不得只清自己那一侧。
+
+**测试**：`tests/test_lwc_kline_adapter.py::TestKlineEngineExclusive` 2 例（Node vm 跑真实源码 +
+源码合同，已 RED 验证）；四个既有 harness 抽取区扩展（`klineDisposeEngines` 在 `klineResizeBound`
+之前，原抽取区不含它）并补 `firstChild`/`removeChild` DOM 桩；全量 `3011 passed, 24 skipped`。
+
+**教训**：模块级 `_DRAW_BLOCK` 常量在构造 page 时就替换掉 `%SOURCE%`，"再替换一次"静默失效，
+RED 检查第一版因此测出假绿灯——**RED 检查必须确认替换真的发生**。
+
+CR：`docs/agent/change_requests/CR-2026-10-28_kline_engine_exclusive.md`。
+已部署 ECS（MainPID 542952，回滚副本 `/tmp/qre-deploy-20261028T115036Z.bak`）。**未 commit/push。**

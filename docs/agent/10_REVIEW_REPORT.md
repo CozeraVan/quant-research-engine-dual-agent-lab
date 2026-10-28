@@ -2,6 +2,46 @@
 
 ## Task ID
 
+QRE-SAAS-KLINE-ENGINE-EXCLUSIVE（K 线双引擎互斥，修复切 TradingView 视图叠加）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-10-28）。根因单一且已在真实浏览器复现与验证，非猜测。Required Fixes：无。未 commit/push，等待用户验收后按 R-DEPLOY-001 提交。
+
+## Findings
+
+1. **根因是"各清各的"**：`#chart-kline` 是 ECharts 与 LWC 共用的容器，而 `lwcDispose()` 只摘 LWC 自己创建的节点、`renderKline` 只 `dispose` echarts。切到 LWC 时 ECharts 实例从未被清 → 双图叠加。反向当时没暴露纯属偶然（引擎开关处理器里手工补过一次 `lwcDispose()`）。
+2. **已用真实浏览器定量复现**：生产同款 echarts + vendored LWC，修复前容器 2 个子元素、`scrollHeight` 400→800；修复后恒 1 个，8 轮交替切换零 pageerror。
+3. **修复是单点收敛**：新增 `klineDisposeEngines()` 并让三个调用点全部走它，后续新增渲染路径只有一个入口要守。
+4. **测试盲区已补**：原有 harness 的源码抽取区从 `let klineResizeBound` 起，不含 `klineDisposeEngines` 定义——这类"抽取区窄于依赖"的问题正是此前 VM 全绿而生产炸的同类模式，本轮四个 harness 全部显式补上前置区块并加了 DOM 桩。
+5. **RED 检查自身出过一次假绿灯**：模块级 `_DRAW_BLOCK` 在构造 page 时已替换掉 `%SOURCE%`，二次替换静默失效。已改为打印替换前后长度确认替换真的发生。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/test_lwc_kline_adapter.py -q → 10 passed
+uv run pytest tests/ -q → 3011 passed, 24 skipped
+真实浏览器（Chromium + 生产同款 echarts/LWC）：
+  修复前 echarts→lwc：容器 2 子元素，scrollHeight 800
+  修复后：恒 1 子元素，8 轮切换零 pageerror/console error
+ECS deploy → qre-saas active; MainPID 542952; /saas/jobs/58/symbols/920832.BJ 200
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **未改重播路径**：`mountKlineReplay` 恒为 echarts，replay.js 自身已 `getInstanceByDom`+`dispose`；进入/退出重播前的 `lwcDispose()` 保留原样，仅退出后重建改走 `renderKlineDispatch`（现在也会双清）。改动面保持最小。
+- **兜底清空容器用 `while (el.firstChild) el.removeChild(...)`**：该容器模板内即为空 div、专供 K 线图，清空不会丢其它内容；同时防 LWC `remove()` 在某些版本只摘部分节点。
+
+---
+
+# Review Report
+
+## Task ID
+
 QRE-FACTOR-QFQ-ANCHOR（因子前复权锚点按 K 线末日 + 1013 存量产物补救 + 旧口径拒发）
 
 ## Reviewer

@@ -269,7 +269,7 @@ function makeHarness(opts){
     dispose(){ this.disposed = true; },
     isDisposed(){ return this.disposed; },
   };
-  const $ = function (sel) { return dom[sel] || (dom[sel] = { style: {}, dataset: {}, classList: {add(){}, remove(){}} }); };
+  const $ = function (sel) { return dom[sel] || (dom[sel] = { style: {}, dataset: {}, firstChild: null, removeChild(){}, classList: {add(){}, remove(){}} }); };
   const echarts = {
     init(){ chart.disposed = false; return chart; },
     getInstanceByDom(el){ return chart.disposed ? null : chart; },
@@ -360,13 +360,28 @@ console.log('fallback-ok');
 """
 
 
+def _dispose_source() -> str:
+    """lwcDispose + klineDisposeEngines（renderKline 的共同依赖）。
+
+    QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 必须经 klineDisposeEngines 同时清
+    ECharts 与 LWC 两个引擎，否则切换图表引擎时旧 canvas 残留、双图叠加。该定义在
+    klineResizeBound 之前，抽取 renderKline 时必须一并注入 vm。
+    """
+    match = re.search(
+        r"(let lwcChart = null[\s\S]*?if \(typeof lwcDispose === 'function'\) lwcDispose\(\);\n\})",
+        SYMBOL_TPL,
+    )
+    assert match, "未找到 lwcDispose / klineDisposeEngines"
+    return match.group(1)
+
+
 def _render_kline_source() -> str:
     match = re.search(
         r"(let klineResizeBound = false;[\s\S]*?\nfunction renderKline\(d\)\{[\s\S]*?\n\})",
         SYMBOL_TPL,
     )
     assert match, "未找到 renderKline 及其声明"
-    return match.group(1)
+    return _dispose_source() + "\n" + match.group(1)
 
 
 class TestSymbolKlineResize:

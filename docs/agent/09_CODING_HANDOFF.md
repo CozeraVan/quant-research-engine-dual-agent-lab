@@ -3781,3 +3781,21 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
   注册表 JSON 顶层 key 是 `factors`（list，895 项），不是 `entries`。
 - 测试：全量 `3009 passed, 24 skipped`。CR 含完整实证数据（比值法）。
 - 未 commit/push。
+
+## 2026-10-28 K 线双引擎互斥实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/symbol.html`（新增 `klineDisposeEngines()`，
+  三个调用点改走它）、`tests/test_lwc_kline_adapter.py`（新增 `TestKlineEngineExclusive` 2 例）、
+  `tests/test_saas_static_kline_tv.py`、`tests/test_saas_replay_tv.py`、
+  `tests/test_saas_chart_a_fix.py`、`tests/test_gui_saas_pages.py`（harness 抽取区 + DOM 桩）、
+  CR 新建。
+- **harness 抽取区坑**：`klineDisposeEngines` 定义在 `let klineResizeBound` 之前，四个 harness 原抽取区
+  都不含它 → `ReferenceError: klineDisposeEngines is not defined`。已用「前置区块」方式补齐：
+  static/replay/chart_a_fix 三个文件加 `_dispose_source()` 前置；`test_gui_saas_pages.py` 给
+  `_run_symbol_script_js` 加可选 `prefix_pattern` 参数（与 job 版同型），测试处传 `SYMBOL_DISPOSE_PATTERN`。
+- **DOM 桩坑**：`makeEl`/`el` 桩缺 `firstChild`/`removeChild`，已补（真实 echarts/LWC 会往容器插节点）。
+- 测试：`test_lwc_kline_adapter.py` 10 passed；相关 6 文件全绿；全量 `3011 passed, 24 skipped`。
+- 真实浏览器验证（Chromium + 生产同款 echarts/LWC）：修复前 echarts→lwc 后容器 2 子元素、
+  scrollHeight 800（叠加 + 高度翻倍）；修复后恒 1 个，8 轮切换零 pageerror。
+  证据 `.tmp/engine-excl/`。已部署 ECS（MainPID 542952，回滚副本 `/tmp/qre-deploy-20261028T115036Z.bak`）。
+- 未 commit/push。
