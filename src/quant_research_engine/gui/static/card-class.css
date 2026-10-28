@@ -34,15 +34,30 @@
    下面的 flex 规则（背景/边框/数值色由基类自动继承，无需再写）。
    ============================================================================ */
 
-/* ---- 基类：白底 + 紫框（用容器类选择器把特异性提到与 lab-theme 同级，
-       靠"后加载"胜出；裸 .metric-card 作为其它容器的兜底） ---- */
+/* ---- 基类：白底磨砂玻璃（与 .card / .chart-box 同一套玻璃 token）----
+   规格（用户 2026-10-29 定稿，与 .card 家族逐项一致）：
+     · 半透明白色磨砂  backdrop-filter:blur(28px) saturate(140%)
+                         背景 rgba(255,255,255,.48)（45%–60% 区间偏下沿）
+     · 1px 半透明白描边 --glass-line
+     · 顶部内侧细高光   inset 0 1px 0 --glass-hi
+     · 圆角 24px        --card-radius
+     · 大而柔的紫投影   --glass-shadow
+   用容器类选择器把特异性提到与 lab-theme 同级，靠"后加载"胜出；
+   裸 .metric-card 作为其它容器的兜底。
+   注意：background 必须拆成 background-color + background-image——简写会重置
+   background-image，把 --glass-sheen（顶部受光的玻璃厚度）抹掉（CR-2026-10-28 踩过）。 */
 .metric-strip .metric-card,
 .wear-cards .metric-card,
 .risk-cards .metric-card,
 .metric-card {
-  background: #fff;
-  border: 1px solid var(--lav);
-  border-radius: 10px;
+  background-color: var(--glass-bg);
+  background-image: var(--glass-sheen);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--card-radius);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
+  padding: 12px 14px;
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  backdrop-filter: blur(28px) saturate(140%);
 }
 
 /* ---- 数值色：中性默认紫；盈亏走 .pos(红) / .neg(绿) ---- */
@@ -99,11 +114,13 @@
 }
 
 /* ---- 磨损/风险条：lab-theme 的 `.risk-cards .metric-card` 是粉底粉框
-       （#FFFBFB / #F0CACA），这里统一收回白底紫框 ---- */
+       （#FFFBFB / #F0CACA），这里统一收回磨砂玻璃 ---- */
 .wear-cards .metric-card,
 .risk-cards .metric-card {
-  background: #fff;
-  border-color: var(--lav);
+  background-color: var(--glass-bg);
+  background-image: var(--glass-sheen);
+  border-color: var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
 }
 
 @media (max-width: 960px) {

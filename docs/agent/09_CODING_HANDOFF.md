@@ -3876,3 +3876,18 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
   `.tmp/browser-venv/bin/python ... browser`）；fixture 需含 wear/risk/fees_summary/
   risk_analysis（**risk-analysis 必须带 `has_report: true`**，否则 loadRisk 整块隐藏）。
 - 未 commit/push。
+
+## 2026-10-29 小数据卡磨砂玻璃实施交接
+
+- 改动：`static/card-class.css`（两处规则）、`tests/test_perf_metrics.py`
+  （`test_all_cards_frosted_glass` 改写）、CR 新建。
+- 基类规则（注意选择器顺序与缩进，测试用正则逐项匹配）：
+  `.metric-strip .metric-card, .wear-cards .metric-card, .risk-cards .metric-card,
+  .metric-card { background-color:var(--glass-bg); background-image:var(--glass-sheen);
+  border:1px solid var(--glass-line); border-radius:var(--card-radius);
+  box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow); padding:12px 14px;
+  -webkit-backdrop-filter:blur(28px) saturate(140%); backdrop-filter:blur(28px) saturate(140%); }`
+- 磨损/风险条收回规则同样四项（background-color + background-image + border-color +
+  box-shadow），**不用 background 简写**。
+- padding 从 8px/10px 统一到 12px 14px——24px 圆角配原来的 8px padding 会显得挤。
+- 未 commit/push。

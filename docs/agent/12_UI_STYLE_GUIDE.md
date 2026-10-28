@@ -271,8 +271,19 @@
 
 硬规则：
 
-1. **卡片**：白底 `#fff` + 紫框 `1px solid var(--lav)`（#6750A4），圆角 10px。
-   **不得再用紫底/粉底**——lab-theme 的 `.risk-cards .metric-card` 粉底粉框已被显式收回。
+1. **卡片：白底磨砂玻璃**（与 `.card` / `.chart-box` / `.big-link` 同一套 token，
+   用户 2026-10-29 定稿——这些小 div 本就是玻璃材质，night-mode 的暗色玻璃覆盖名单
+   和 `card-fx.js` 的 `TILT_SEL` 早就含 `.metric-card`，只是 CSS 没跟上）：
+   - `background-color: var(--glass-bg)`（`rgba(255,255,255,.48)`，45%–60% 区间偏下沿）
+   - `background-image: var(--glass-sheen)`（顶部受光，玻璃厚度）
+   - `border: 1px solid var(--glass-line)`（1px 半透明白描边）
+   - `border-radius: var(--card-radius)`（**24px**）
+   - `box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow)`
+     （顶部内侧细高光 + 大而柔的紫投影）
+   - `backdrop-filter: blur(28px) saturate(140%)`（**含 `-webkit-` 前缀**）
+   - **禁用 `background` 简写**——会重置 `background-image` 抹掉 sheen（踩过）
+   - **不得再用紫底/粉底/白实底**——lab-theme 的 `.risk-cards .metric-card` 粉底粉框
+     已被显式收回玻璃
 2. **数值色三分**：
    - 中性（日期/暴露度/笔数/持股周期/β/磨损金额/…）→ `var(--lav-deep)` 紫，由
      `.metric-card .m-value` 默认给出；
@@ -535,12 +546,15 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 
 - 2026-10-29（QRE-SAAS-CARD-CLASS）新增 §3.18 小数据卡一类规范，并新建
   `static/card-class.css` 作为这类卡的**唯一样式权威**（在 lab/night 之后加载）。
-  用户定稿：取消所有紫底小卡 → 白底 + 紫框；中性数值紫、盈亏红（`--pos`）绿（`--neg`）。
+  用户定稿：取消所有紫底小卡 → 白底 + 紫框；**当日再追改为白底磨砂玻璃**
+  （与 `.card` 家族同一套 `--glass-*` token + `--card-radius:24px`）。
+  中性数值紫、盈亏红（`--pos`）绿（`--neg`）。
   覆盖 job/symbol 两页的指标条/简介条/区间条/风险调整收益条/重播条/交易磨损/风险分析。
   同时删掉 base.html 内联里上一轮的紫底+flex 规则、两个模板 `wc()` 的内联强制色，
   并给磨损条毛/净收益值按盈亏上色。测试 `TestMetricStripStyleContract` 8 例
   （RED 验证两次）；全量 3032 passed；真实浏览器 job/symbol × 3 视口 + 磨损/风险条全通过。
-  详见 `change_requests/CR-2026-10-29_card_class.md`。
+  详见 `change_requests/CR-2026-10-29_card_class.md` 与
+  `change_requests/CR-2026-10-29_card_class_glass.md`。
 - 2026-10-28（QRE-SAAS-KLINE-ENGINE-EXCLUSIVE）§3.16 追加 K 线容器双引擎互斥硬规则：`#chart-kline` 同时只能挂一个引擎实例，任何挂载路径挂载前必须调 `klineDisposeEngines()`（`symbol.html` 新增，紧邻 `lwcDispose`），不得只清自己那一侧。三个既有调用点（`renderKline`/`renderKlineLwc`/引擎开关）全部改走它。证据见 `change_requests/CR-2026-10-28_kline_engine_exclusive.md`。
 - 2026-10-28（QRE-SAAS-CARD-FROSTED-GLASS + HELP-SIDEBAR-GLASS-PILL）新增 §3.16 全站卡片玻璃质感/光标光斑/小卡 3D 倾斜与 §3.17 使用说明侧边栏玻璃胶囊，§5 动效表补两行。核心硬规则：**光斑宿主走最外层玻璃卡、倾斜宿主走光标下的小卡（不向上爬）**；小卡 `perspective:260px`（170×77 卡上 1000px 的 4° 只有 0.4px 位移，看不见）；图表卡（含 `canvas`）一律不倾斜；`--card-radius` 为新 token 不动 `--radius`；`background` 简写会重置 `background-image`（玻璃底必须拆写）；负 z-index 装饰层且不出血到视口外。三版竞稿后取 Kimi V3（rAF 弹簧 + 速度投影拉伸 + 闭式回弹）。改动文件：`static/card-fx.js`（新）、`static/help-nav.js`（新）、`static/lab-theme.css`、`static/night-mode.css`、`saas/templates/base.html`（仅加一行 script）、`saas/templates/help.html`。零新色相、零外部依赖、夜间生效、375px 零横溢经真实 Chromium 验证。
 - 2026-10-27（QRE-SAAS-NIGHT-MODE）新增 §11 夜间模式规范：SaaS 全部页面（含 9090 管理台）追加可切换深色主题，**浅色 token/配色/视觉/排版/文案/数据零改动**，唯一新增交互是顶栏 `.tt-btn` 主题切换按钮。实现为三个新/改文件：`static/night-mode.css`（深色 token 覆盖 + 组件族深色规则，仅 `[data-theme="dark"]` 作用域）、`static/night-mode.js`（`QRETheme`：浅色不写 storage、`prefers-color-scheme` 跟随、手动选择落 `localStorage('qre-theme')`、`meta[name=theme-color]` 同步、`themeChart` 图表配色注入）、`saas/templates/base.html` 4 处挂载（防 FOUC 内联脚本 + css + js + 按钮）。夜间色板固定 8 token（bg `#17153B`/card `#2E236C`/line `#433D8B`/text `#F1EDF8`/muted `#C8ACD6`/accent `#7E60BF`/accent-deep `#C8ACD6`/accent-soft `#2E236C`）；红涨绿跌只提亮不断语义；ECharts 每次 `setOption` 前注入背景/轴/文字/tooltip/品牌紫，不重算布局与数据；375px 零横溢、按钮带文字与 `aria-pressed`。`#guest-note` 深色告警（`#B4761F` 字 / `#3D3118` 底）刻意保留。

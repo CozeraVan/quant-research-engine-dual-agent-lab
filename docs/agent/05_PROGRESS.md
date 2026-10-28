@@ -1960,3 +1960,29 @@ job 磨损 5 卡 + job 风险 4 卡（全绿，VaR/ES 是损失）+ symbol 磨�
 全部白底紫框、数值色三分、行内等宽、非末行填满、无溢出；α/β/IR 与平均持股周期复验一致；
 LWC 图例往返复验通过；零 pageerror。截图 `.tmp/perf-browser/symbol-cards.png`。
 规范写入 `12_UI_STYLE_GUIDE.md` §3.18。CR：`CR-2026-10-29_card_class.md`。未 commit/push。
+
+## 2026-10-29 小数据卡改白底磨砂玻璃（card-class.css 二次修订），未 commit/push
+
+用户追改：「全成了完全白底，我忘记了这些小 div 是玻璃材质的」→ 按 .card 家族规格
+重做为白底磨砂玻璃：blur(28px) saturate(140%) + 白 45%–60% 透明、1px 半透明白描边、
+顶部内侧细高光、圆角 24px、大而柔的紫投影。
+
+**关键判断：不新造轮子。** `lab-theme.css` 早就有一整套 `--glass-*` token，
+`.card`/`.chart-box`/`.big-link` 都在用；且 **night-mode 的暗色玻璃覆盖名单里本来就有
+`.metric-card`**，`card-fx.js` 的 `TILT_SEL` 也早就含它——说明设计意图一直是玻璃，
+只是 CSS 没跟上。所以只改 `card-class.css` 的基类与磨损/风险收回规则，token / night-mode /
+card-fx / 模板一律不动。
+
+两个必须保留的细节：① `background` 必须拆成 `background-color` + `background-image`，
+简写会重置 background-image 抹掉 `--glass-sheen`（CR-2026-10-28 踩过，本轮加了断言）；
+② `backdrop-filter` 要写 `-webkit-` 前缀 + 标准两行。
+
+测试：`test_all_cards_frosted_glass` 由「白底紫框」改写为逐项断言玻璃五要素
+（含交叉断言 lab-theme 的 `--card-radius:24px`、禁用 background 简写）；
+`test_perf_metrics.py` 18 passed；全量 `3032 passed, 24 skipped`。
+真实浏览器 job/symbol × 1440/1024/375 + 磨损/风险条：背景全 `rgba(255,255,255,.48)`、
+描边 `rgba(255,255,255,.5)`、圆角 24px、`blur(28px) saturate(1.4)`、投影含 inset 高光
+与 `74,58,120` 紫投影；数值色三分；布局不变（job 7 一行、symbol 4+4、ra 3 撑满）；
+α/β/IR、平均持股周期、LWC 图例复验一致；零 pageerror。
+截图 `.tmp/perf-browser/symbol-cards.png`。CR：`CR-2026-10-29_card_class_glass.md`。
+未 commit/push。

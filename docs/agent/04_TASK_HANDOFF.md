@@ -2849,3 +2849,16 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 测试 8 例 RED 验证两次；`test_perf_metrics.py` 18 passed；全量 `3032 passed, 24 skipped`。
 - 真实浏览器六视口组合 + 磨损/风险条全通过，截图 `.tmp/perf-browser/symbol-cards.png`。
 - 未 commit/push。
+
+## 2026-10-29 小数据卡改磨砂玻璃交接
+
+- 只改 `src/quant_research_engine/gui/static/card-class.css`（基类 + 磨损/风险收回规则）；
+  token / night-mode / card-fx / 模板均未动。
+- 规格：`--glass-bg` + `--glass-sheen` + `--glass-line` + `--card-radius`(24px) +
+  `--glass-hi`/`--glass-shadow` + `backdrop-filter:blur(28px) saturate(140%)`
+  （含 `-webkit-` 前缀）；**禁用 `background` 简写**。
+- 设计意图本就是玻璃（night-mode 暗色玻璃名单与 card-fx 的 TILT_SEL 都早含 .metric-card），
+  本轮只是把 CSS 补上。
+- 测试 `test_all_cards_frosted_glass` 逐项断言；`test_perf_metrics.py` 18 passed；
+  全量 `3032 passed, 24 skipped`。真实浏览器六组合 + 磨损/风险条全通过。
+- 未 commit/push。

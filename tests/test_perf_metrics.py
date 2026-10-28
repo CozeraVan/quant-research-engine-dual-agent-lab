@@ -450,10 +450,12 @@ console.log('ra-symbol-ok');
 
 # ---------------------------------------------------------------- 小卡条样式契约
 class TestMetricStripStyleContract:
-    """QRE-SAAS-CARD-CLASS：小数据卡必须统一「白底 + 紫框」，数值色三分（中性紫/红/绿）。
+    """QRE-SAAS-CARD-CLASS：小数据卡必须统一「白底磨砂玻璃」，数值色三分（中性紫/红/绿）。
 
-    2026-10-29 用户定稿：取消所有紫底小卡，统一白底紫框；中性数据（日期/暴露度/
-    笔数/持股周期/β/磨损金额）紫字，盈亏数据红涨绿跌。
+    2026-10-29 用户定稿：取消所有紫底小卡；先改白底紫框，当日再修正为**白底磨砂
+    玻璃**（与 .card / .chart-box 同一套玻璃 token）——这些小 div 本就是玻璃材质，
+    之前只有 CSS 没跟上（card-fx.js 的 TILT_SEL 早就含 .metric-card）。
+    中性数据（日期/暴露度/笔数/持股周期/β/磨损金额）紫字，盈亏数据红涨绿跌。
 
     历史坑（本类测试存在的原因）：
     · 2026-10-28 第一版只把六条指标条并进紫底名单，漏了交易磨损(.wear-cards)与
@@ -502,8 +504,13 @@ class TestMetricStripStyleContract:
                 f"base 内联不得按小卡条 ID 覆盖样式: {rule[:120]}"
             )
 
-    def test_all_cards_white_bg_purple_border(self):
-        """所有小卡（含磨损/风险）必须白底 + 紫框(--lav #6750A4)。"""
+    def test_all_cards_frosted_glass(self):
+        """所有小卡（含磨损/风险）必须是白底磨砂玻璃——与 .card 家族同一套 token。
+
+        用户 2026-10-29 定稿规格：半透明白色磨砂（blur(28px) saturate(140%)、
+        白 45%–60% 透明度）、1px 半透明白描边、顶部内侧细高光、圆角 24px、
+        大而柔的紫投影。
+        """
         # 基类规则：用容器类选择器把特异性提到与 lab-theme 同级，靠后加载胜出
         assert ".metric-strip .metric-card," in self.CARD_CSS
         assert ".wear-cards .metric-card," in self.CARD_CSS
@@ -513,18 +520,41 @@ class TestMetricStripStyleContract:
             r"\.risk-cards \.metric-card,\s*\n\.metric-card \{([^}]*)\}",
             self.CARD_CSS,
         )
-        assert base_rule, "未找到小卡基类规则（白底紫框）"
+        assert base_rule, "未找到小卡基类规则（磨砂玻璃）"
         rule = base_rule.group(1)
-        assert "background: #fff" in rule, "必须白底"
-        assert "border: 1px solid var(--lav)" in rule, "必须紫框"
-        # 磨损/风险条：lab-theme 的粉底粉框必须被显式收回
+        # 磨砂：backdrop-filter 两行（-webkit- 前缀 + 标准）
+        assert "backdrop-filter: blur(28px) saturate(140%)" in rule, "缺 backdrop-filter"
+        assert "-webkit-backdrop-filter: blur(28px) saturate(140%)" in rule, (
+            "缺 -webkit- 前缀的 backdrop-filter"
+        )
+        # 半透明白底：必须拆成 background-color + background-image——
+        # background 简写会重置 background-image，把 --glass-sheen 抹掉（踩过）
+        assert "background: " not in rule, (
+            "不得用 background 简写（会重置 background-image / 抹掉 glass-sheen）"
+        )
+        assert "background-color: var(--glass-bg)" in rule, "缺半透明玻璃底"
+        assert "background-image: var(--glass-sheen)" in rule, "缺顶部受光 sheen"
+        # 1px 半透明白描边
+        assert "border: 1px solid var(--glass-line)" in rule, "缺 1px 半透明白描边"
+        # 顶部内侧细高光 + 大而柔的紫投影
+        assert "box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow)" in rule, (
+            "缺顶部细高光或紫投影"
+        )
+        # 圆角 24px
+        assert "border-radius: var(--card-radius)" in rule, "缺 24px 圆角 token"
+        assert "--card-radius:24px" in (
+            REPO / "src/quant_research_engine/gui/static/lab-theme.css"
+        ).read_text(encoding="utf-8"), "--card-radius 必须是 24px"
+        # 磨损/风险条：lab-theme 的粉底粉框必须被显式收回玻璃
         override = re.search(
             r"\.wear-cards \.metric-card,\s*\n\.risk-cards \.metric-card \{([^}]*)\}",
             self.CARD_CSS,
         )
         assert override, "未找到磨损/风险条的收回规则"
-        assert "background: #fff" in override.group(1), "磨损/风险条必须收回白底"
-        assert "border-color: var(--lav)" in override.group(1), "磨损/风险条必须收回紫框"
+        o = override.group(1)
+        assert "background-color: var(--glass-bg)" in o, "磨损/风险条必须收回玻璃底"
+        assert "border-color: var(--glass-line)" in o, "磨损/风险条必须收回白描边"
+        assert "background: " not in o, "收回规则同样不得用 background 简写"
 
     def test_value_colors_neutral_purple_pnl_red_green(self):
         """数值色：中性默认 --lav-deep；盈亏 .pos 红 / .neg 绿（且必须提级压过基类）。"""

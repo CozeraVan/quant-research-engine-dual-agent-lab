@@ -1397,3 +1397,23 @@ CR：`CR-2026-10-28_card_unify.md`。未 commit/push。
 全量 `3032 passed, 24 skipped`。真实浏览器 job/symbol × 1440/1024/375 + 磨损/风险条全通过
 （job 风险 4 卡全绿——VaR/ES 是损失）；α/β/IR、平均持股周期、LWC 图例复验一致；零 pageerror。
 CR：`CR-2026-10-29_card_class.md`。未 commit/push。
+
+### 2026-10-29 CARD-CLASS-GLASS 已实施待人工验收，未 commit/push
+
+用户追改：小数据卡从「白底紫框」改为「白底磨砂玻璃」（.blur(28px) saturate(140%)、
+白 45%–60% 透明、1px 半透明白描边、顶部内侧细高光、圆角 24px、大而柔的紫投影）。
+
+**关键判断：不新造轮子。** `lab-theme.css` 早有 `--glass-*` token 且 `.card`/
+`.chart-box`/`.big-link` 都在用；night-mode 暗色玻璃覆盖名单与 card-fx 的 `TILT_SEL`
+本来就含 `.metric-card`——设计意图一直是玻璃，只是 CSS 没跟上。故只改 card-class.css，
+token / night-mode / card-fx / 模板不动。
+
+**硬规则补充（12_UI_STYLE_GUIDE §3.18）**：这类卡的背景必须
+`background-color:var(--glass-bg)` + `background-image:var(--glass-sheen)` 拆写，
+禁用 `background` 简写（会重置 background-image 抹掉 sheen）；`backdrop-filter`
+要 `-webkit-` + 标准两行；圆角用 `--card-radius`(24px)。
+
+测试 `test_all_cards_frosted_glass` 逐项断言（含交叉断言 `--card-radius:24px`）；
+`test_perf_metrics.py` 18 passed；全量 `3032 passed, 24 skipped`。
+真实浏览器六组合 + 磨损/风险条：玻璃五要素全一致、数值色三分、布局不变、
+零 pageerror。CR：`CR-2026-10-29_card_class_glass.md`。未 commit/push。
