@@ -3842,3 +3842,18 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 权威记录：`docs/agent/change_requests/CR-2026-10-28_lwc_legend_toggle.md`
 - 关键结论：双引擎下同一交互有两条实现（ECharts `renderFactorChips` / LWC `lwcRenderLegend`），
   改一条必须回归另一条——本轮 bug 正是只回归了 ECharts 那条。
+
+## 2026-10-28 小卡条 UI 统一实施交接
+
+- 改动：`src/quant_research_engine/gui/saas/templates/base.html`（仅一段 CSS）、
+  `tests/test_perf_metrics.py`（新增 `TestMetricStripStyleContract` 4 例）、CR 新建。
+- 六条小卡条（`#metric-strip`/`#sum-strip`/`#range-strip`/`#ra-strip`/`#replay-metrics`/`#kreplay-info`）
+  统一：`display:flex;flex-wrap:wrap;gap:10px` + `--tint` 紫底 + 两档 `flex:1 1 <min>px`
+  （密集条 130px，简介/ra 条 250px）。旧 `grid-template-columns` 规则已删。
+- **加新小卡条时的硬规则**：必须把新 ID 同时加进 flex 规则和紫底规则，
+  否则会回落白底 + grid 半行（`TestMetricStripStyleContract` 会抓）。
+- `.metric-card` 不在磨砂玻璃卡族内（`.card`/`.chart-box`/`.big-link`），紫底平坦卡是既有设计。
+- 测试 4 例 RED 验证通过；`test_perf_metrics.py` 14 passed；全量 `3028 passed, 24 skipped`。
+- 真实浏览器（job/symbol × 3 视口）全通过；`.tmp/perf-browser/verify.py` 可复跑
+  （先 `.venv/bin/python` 渲染，再 `.tmp/browser-venv/bin/python ... browser`）。
+- 未 commit/push。

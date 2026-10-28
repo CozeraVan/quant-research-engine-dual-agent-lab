@@ -1358,3 +1358,20 @@ TradingView 视图下图例两个 bug 已修。**根因**：① `setChipState(ke
 全量 `3024 passed, 24 skipped`。真实浏览器：5 pill、成交量/EMA5/MACD 往返全通、
 隐藏后 pill 不消失、零 pageerror。CR：`CR-2026-10-28_lwc_legend_toggle.md`。
 已部署 ECS。未 commit/push。
+
+### 2026-10-28 CARD-UNIFY 已实施待人工验收，未 commit/push
+
+详情页小卡条白紫混杂 + 5/3/3 难看的问题已修。**根因**：`#ra-strip`（α/β/IR）与两个重播条
+不在原紫底名单里，背景落 `.metric-card{background:#fff}`、布局落 lab-theme 的
+`.metric-strip{display:grid;repeat(6,1fr)}`（3 卡占半行），与 `#sum-strip` 的 auto-fit 5 列
+叠加成 5/3/3。**修复**：六条统一 flex + `--tint` 紫底 + 两档 min（密集 130px / 简介·ra 250px），
+删 grid 死代码。**130px 是实测值**（job `.container` ~1000px，150px 会退化成 6+1 孤行）。
+
+**硬规则（新增小卡条必须遵守）**：新 ID 要同时进 flex 规则和紫底规则，
+`TestMetricStripStyleContract` 会抓；否则回落白底 + 半行。
+
+测试：新增 4 例源码合同（RED 验证通过）；`test_perf_metrics.py` 14 passed；
+全量 `3028 passed, 24 skipped`。真实浏览器 job/symbol × 1440/1024/375 全通过：
+背景全 `rgb(241,237,248)`、行内等宽、非末行填满、无溢出，symbol 1440 呈 4+4+3；
+α/β/IR、平均持股周期、LWC 图例往返复验均未被破坏；零 pageerror。
+CR：`CR-2026-10-28_card_unify.md`。未 commit/push。

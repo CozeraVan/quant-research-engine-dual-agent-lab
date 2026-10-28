@@ -2826,3 +2826,11 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 测试 `TestLwcLegendToggle` 3 例（RED 验证通过）；`test_lwc_kline_adapter.py` 13 passed；
   全量 `3024 passed, 24 skipped`。真实浏览器端到端通过。CR 已建。
 - 未 commit/push。
+
+## 2026-10-28 小卡条 UI 统一交接
+
+- 只改 `base.html` 一段 CSS + `test_perf_metrics.py` 四个源码合同例。
+- 统一内容：六条小卡条同一套 flex 规则 + `--tint` 紫底；密集条 min 130px、简介/ra 条 min 250px。
+- 效果：symbol 1440 呈 4+4+3 全紫底；job 指标条 7 卡一行；375px 正常换行；无半空行、无白底卡。
+- 测试：`test_perf_metrics.py` 14 passed（RED 验证通过）；全量 `3028 passed, 24 skipped`。
+- 真实浏览器端到端通过，截图 `.tmp/perf-browser/symbol-cards.png`。CR 已建。未 commit/push。

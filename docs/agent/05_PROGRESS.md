@@ -1900,3 +1900,31 @@ ECS 无行情库，后端补算对 1013 个存量产物不可行；前端从快�
 **RED 验证通过**（改回旧写法 3 例全红）；`test_lwc_kline_adapter.py` 13 passed；
 全量 `3024 passed, 24 skipped`。真实浏览器端到端：5 个 pill、成交量/EMA5/MACD 均能往返、
 隐藏后 pill 不消失、零 pageerror。CR：`CR-2026-10-28_lwc_legend_toggle.md`。未 commit/push。
+
+## 2026-10-28 详情页小卡条统一紫底 + flex 自适应（CARD-UNIFY），未 commit/push
+
+用户验收 α/β/IR 时发现：新卡白底混在紫底卡旁；且个股详情前的小 div 是 5/3/3 三排，不美观。
+
+**根因**：`#ra-strip` 与两个重播条不在原紫底名单里，一路落到底层规则——
+背景吃 `.metric-card{background:#fff}`（白底），布局吃 lab-theme 的
+`.metric-strip{display:grid;repeat(6,1fr)}`（3 卡各占 1/6、剩 3 个空轨道 = 半行）；
+`#sum-strip` 走 auto-fit 200px → 5 列 → 5+3。三者叠加正是用户看到的 5/3/3 白紫混杂。
+
+**修复**（只改 `base.html` 一段 CSS）：六条小卡条收敛到同一套 flex 规则——
+统一 `--tint` 紫底 + `flex-wrap` + `flex-grow`（每行必然填满，末行拉宽）；
+两档 min：密集条 130px（7 卡一行并排）、简介/ra 条 250px（8 卡 4+4、3 卡撑满整行）。
+删掉旧的 `grid-template-columns` 死代码。
+
+**130px 是实测值**：job 页 `.container` 约 1000px，`7×150+6×10=1110` 放不下 → 第一版
+退化成 6+1 孤行；`7×130+6×10=970` 才一行并排。
+
+测试：新增 `TestMetricStripStyleContract` 4 例（源码合同，RED 验证通过）；
+`test_perf_metrics.py` 14 passed；全量 `3028 passed, 24 skipped`。
+真实浏览器（job/symbol × 1440/1024/375）：背景全 `rgb(241,237,248)`、行内等宽、
+非末行填满、无溢出；symbol 1440 呈 **4+4+3**，job 1440 指标条 **7 卡一行**；
+同时复验 α=12.00%/β=0.89/IR=0.78、平均持股周期、LWC 图例往返均未被破坏；零 pageerror。
+截图 `.tmp/perf-browser/symbol-cards.png`。CR：`CR-2026-10-28_card_unify.md`。未 commit/push。
+
+**测试环境注记**：全量套件在随机顺序下约 1/3 概率挂一个**随机不同**的测试（setup error，
+如 `test_worker_config_mismatch` / `test_guest_cancel_issues_cookie_when_missing`），
+`-p no:randomly` 确定性顺序下 6/6 全绿，单独跑也全过——既有测试隔离 flake，与本次改动无关。

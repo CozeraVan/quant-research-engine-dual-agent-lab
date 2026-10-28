@@ -446,3 +446,87 @@ ctx.renderRiskAdjusted({equity: {dates, values: c.equity}, kline: null});
 assert.equal(el.style.display, 'none', '缺 kline 必须隐藏');
 console.log('ra-symbol-ok');
 """.replace("%CASE%", json.dumps(_CASES["correlated"])))
+
+
+# ---------------------------------------------------------------- 小卡条样式契约
+class TestMetricStripStyleContract:
+    """QRE-SAAS-CARD-UNIFY：详情页小卡条必须统一紫底 + flex 自适应均分整行。
+
+    2026-10-28 用户实测：α/β/IR 新卡是白底，混在紫底卡旁边；且 3 张卡只占半行
+    （落入 lab-theme 的 `.metric-strip{display:grid;repeat(6,1fr)}` + base 的
+    `.metric-card{background:#fff}`）。这里用源码合同锁死统一后的规则，
+    防止后续加新条时又漏出白底卡或半空行。
+    """
+
+    BASE = (REPO / "src/quant_research_engine/gui/saas/templates/base.html").read_text(
+        encoding="utf-8"
+    )
+    # 详情页全部小卡条（job/symbol 两页）
+    ALL_STRIPS = ["#metric-strip", "#sum-strip", "#range-strip", "#ra-strip",
+                  "#replay-metrics", "#kreplay-info"]
+
+    def _flex_rule(self) -> str:
+        m = re.search(
+            r"#metric-strip,#sum-strip,#range-strip,#ra-strip,"
+            r"#replay-metrics,#kreplay-info\{([^}]*)\}",
+            self.BASE,
+        )
+        assert m, "未找到小卡条统一 flex 规则"
+        return m.group(1)
+
+    def _purple_rule(self) -> str:
+        m = re.search(
+            r"#metric-strip \.metric-card,#sum-strip \.metric-card,#range-strip \.metric-card,\s*\n"
+            r"#ra-strip \.metric-card,#replay-metrics \.metric-card,"
+            r"#kreplay-info \.metric-card\{([^}]*)\}",
+            self.BASE,
+        )
+        assert m, "未找到小卡条统一紫底规则"
+        return m.group(1)
+
+    def test_all_strips_share_flex_and_purple(self):
+        """六条小卡条必须同在一个 flex 规则和一个紫底规则里，不允许有漏网的。"""
+        flex = self._flex_rule()
+        assert "display:flex" in flex and "flex-wrap:wrap" in flex, (
+            "小卡条必须 flex + wrap，否则会出现半空行"
+        )
+        purple = self._purple_rule()
+        assert "var(--tint" in purple, "小卡条必须用 --tint 紫底"
+        assert "var(--tint-deep" in purple, "小卡条描边必须用 --tint-deep"
+        # 规则里必须显式列出全部六条（漏一条 = 该条回落白底）
+        for sid in self.ALL_STRIPS:
+            assert sid.lstrip("#") in self.BASE, f"{sid} 未出现在统一规则中"
+
+    def test_dense_strips_fit_seven_in_one_row(self):
+        """密集条（7 卡左右）min 必须 ≤130px，否则 job 指标条会退化成 6+1 孤行。
+
+        实测：job 页 .container 约 1000px，7×150+6×10=1110 放不下 → 6+1；
+        7×130+6×10=970 放得下 → 一行并排。
+        """
+        m = re.search(
+            r"#metric-strip \.metric-card,#range-strip \.metric-card,\s*\n"
+            r"#replay-metrics \.metric-card,#kreplay-info \.metric-card\{([^}]*)\}",
+            self.BASE,
+        )
+        assert m, "未找到密集条 flex 规则"
+        basis = re.search(r"flex:1 1 (\d+)px", m.group(1))
+        assert basis, "密集条必须写 flex:1 1 <N>px"
+        assert int(basis.group(1)) <= 130, (
+            f"密集条 min {basis.group(1)}px 过大，7 卡会换行成孤行"
+        )
+
+    def test_summary_and_ra_strips_use_wider_basis(self):
+        """简介条与风险调整收益条卡少字号大，min 250px → 8 卡呈 4+4、3 卡撑满整行。"""
+        m = re.search(r"#sum-strip \.metric-card,#ra-strip \.metric-card\{([^}]*)\}",
+                      self.BASE)
+        assert m, "未找到简介/风险调整收益条规则"
+        assert "flex:1 1 250px" in m.group(1), "简介与 ra 条必须 min 250px"
+        assert "font-size:15px" in self.BASE, "两条的 m-value 必须 15px"
+
+    def test_no_leftover_grid_rules_for_these_strips(self):
+        """旧的 grid-template-columns 规则必须删掉——flex 容器上它们是死代码，
+        留着会误导后来者以为还在用 grid。"""
+        for sid in self.ALL_STRIPS:
+            assert f"{sid}{{grid-template-columns" not in self.BASE.replace(" ", ""), (
+                f"{sid} 不得再写 grid-template-columns（已改 flex）"
+            )
