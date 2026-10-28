@@ -18,6 +18,7 @@
         <a href="#risk">风险指标</a>
         <a href="#attribution">板块归因</a>
         <a href="#replay">回测重播</a>
+        <span class="help-pill" aria-hidden="true"></span>
       </nav>
     </aside>
 
@@ -136,4 +137,7 @@
     </div>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/help-nav.js?v={{ asset_v }}"></script>
 {% endblock %}

@@ -1773,3 +1773,17 @@ V1 上线后用户反馈「不满意」（未给具体点），本稿为重做�
 - 透明度取 48%（区间偏下沿）：55% 时背景光斑透过玻璃仅 1 个色阶，48% 拉到 3–8 个色阶，卡片中心仍是 (253,252,254) 量级白。
 - 测试 18 例新建 + 全量 `3006 passed, 24 skipped`；生产七页无头自验通过（含像素级玻璃对照：玻璃全开 vs 藏装饰层 mean 2.27 / 41.5% 像素变化；纯色上开/关 blur 仅 0.19 / 0%——必须先加装饰层的量化证据）。
 - 详见 `docs/agent/change_requests/CR-2026-10-28_card_frosted_glass.md`。未 commit/push。
+
+## 2026-10-28 卡片玻璃化反馈修正（侧边栏 sticky + 倾斜范围收窄）
+
+- **侧边栏**：`.help-side` 同时带 `.card` 类，玻璃卡族的 `position:relative`
+  （同特异性、后声明）把 `position:sticky` 顶掉，`top:76px` 变成相对位移，
+  侧边栏被下推 76px 且不吸附。修复＝在玻璃族之后补 `.help-side{position:sticky}`。
+  实测侧边栏与右侧 y 差 0px、滚动后吸附在 76px。
+- **倾斜范围**：`TILT_SEL` 由 `.card,.chart-box,.panel,.big-link` 收窄为
+  `.metric-card`（并列小卡：总收益率/年化收益/超额收益/夏普、交易磨损五联卡、
+  风险指标卡）；CSS 侧加 `.metric-card.fx-tilt` 双保险，hover 微浮合并进同一
+  transform。大卡与图表卡恒 `transform:none`。
+  实测：小卡 rotateY -1.41°/rotateX 1.15°；大卡 transform:none 但光斑仍生效。
+- 测试 18 passed；相关 145 passed。生产 MainPID 528952，
+  回滚副本 `/tmp/qre-deploy-20261028T082241Z.bak`。

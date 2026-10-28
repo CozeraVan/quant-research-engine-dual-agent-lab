@@ -9,6 +9,16 @@
   --up:#C93A3A;--up-soft:#FBEFEF;--up-deep:#8B1A1A;
   --down:#1E8E5A;--down-soft:#EBF6F0;
   --radius:10px;
+  /* ---- CR-2026-10-28 卡片磨砂玻璃（frosted glass）token ---- */
+  --card-radius:24px;                 /* 卡片圆角 10px → 24px */
+  --glass-bg:rgba(255,255,255,.48);   /* 45%–60% 区间偏下沿：背景光斑透出更明显，仍是白卡观感 */
+  --glass-line:rgba(255,255,255,.5);  /* 1px 半透明白描边 */
+  --glass-hi:rgba(255,255,255,.75);   /* 顶部内侧一道细高光 */
+  --glass-shadow:0 1px 2px rgba(74,58,120,.06),0 18px 46px -14px rgba(74,58,120,.26);
+  --glass-spot:rgba(255,255,255,.34); /* 光标跟随光斑（低透明度，不影响文字对比度） */
+  --glass-rim:rgba(103,80,164,.55);   /* 靠近光标的边框局部提亮 */
+  --glass-sheen:linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,0) 45%); /* 顶部受光：玻璃厚度 */
+  --glass-tilt:4;                     /* 3D 倾斜上限（度），JS 同步钳制 */
   --sans:"Noto Sans SC",-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   --serif:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
   --mono:"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace;
@@ -44,7 +54,7 @@ input,textarea,select{font-family:inherit;font-size:14px;color:var(--ink)}
 
 .page-head h1{font-family:var(--serif);font-weight:900;font-size:30px;line-height:1.3}
 .page-head p{margin-top:8px;color:var(--grey);font-size:14.5px;max-width:46em}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow-1);margin-bottom:20px}
+.card{background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:20px 22px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);margin-bottom:20px;-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
 
 .btn{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:9px 22px;font-size:14px;font-weight:500;border:1px solid transparent;position:relative;overflow:hidden;transition:transform .18s var(--ease),box-shadow .25s var(--ease),background .2s var(--ease),border-color .2s}
 .btn:active{transform:scale(.97)}
@@ -189,7 +199,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .metric:hover{transform:translateY(-2px);box-shadow:var(--shadow-1)}
 .metric .m-label{font-size:12px;color:var(--faint)}
 .metric .m-value{font-family:var(--serif);font-size:20px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
-.chart-box{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:20px;box-shadow:var(--shadow-1)}
+.chart-box{background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:16px 18px;margin-bottom:20px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
 .chart-title{font-size:14.5px;font-weight:600;margin-bottom:6px}
 .chart-title .opt{font-weight:400}
 .bench-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center;font-size:13px;color:var(--grey)}
@@ -237,7 +247,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .chart-empty{color:var(--faint);text-align:center;padding:34px 0;font-size:13px}
 
 /* 大入口链接（详情页 → 个股列表） */
-.big-link{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;box-shadow:var(--shadow-1);margin-bottom:20px;text-decoration:none;color:var(--ink);transition:all .25s var(--ease)}
+.big-link{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:18px 22px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);margin-bottom:20px;text-decoration:none;color:var(--ink);transition:transform .25s var(--ease),box-shadow .3s var(--ease),border-color .25s;-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
 .big-link:hover{border-color:var(--lav);box-shadow:var(--shadow-2);transform:translateY(-2px)}
 .big-link .bl-main{font-size:15px;font-weight:600}
 .big-link .bl-sub{font-size:12.5px;color:var(--faint);margin-top:2px}
@@ -409,7 +419,9 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 /* 指标卡：母板类名 .metric-card → 定稿 .metric 视觉（白卡/圆角 10/衬线大数字/hover 微浮） */
 .metric-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
 .metric-strip .metric-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center;transition:transform .2s var(--ease),box-shadow .25s var(--ease)}
-.metric-strip .metric-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-1)}
+/* hover 微浮已合并进 .metric-card.fx-tilt 的 transform（见下方倾斜规则），
+   此处只留投影，避免两条 transform 规则互相覆盖 */
+.metric-strip .metric-card:hover{box-shadow:var(--shadow-1)}
 .metric-card .m-label{font-size:12px;color:var(--faint)}
 .metric-card .m-value{font-family:var(--serif);font-weight:700;font-size:20px}
 /* 风险区卡片底色保持淡红边框（母板语义） */
@@ -610,13 +622,66 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 .help-content .card h2{font-size:20px;line-height:1.4}
 .help-sec{scroll-margin-top:76px}
 .help-jump{display:flex;flex-direction:column;gap:4px}
-.help-jump a{font-size:13.5px;color:var(--lav-deep);background:transparent;border:1px solid transparent;border-radius:8px;padding:9px 12px;text-decoration:none;transition:all .2s var(--ease)}
+.help-jump a{font-size:13.5px;color:var(--lav-deep);background:transparent;border:1px solid transparent;border-radius:8px;padding:9px 12px;text-decoration:none;transition:color .24s var(--ease),background .24s var(--ease),border-color .24s var(--ease)}
 .help-jump a:hover{background:var(--tint);color:var(--lav-deep);border-color:var(--tint-deep)}
 @media(max-width:760px){
   .help-layout{grid-template-columns:1fr}
   .help-side{position:static}
   .help-jump{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
   .help-jump a{text-align:center;padding:8px 6px}
+}
+
+/* ---- QRE-SAAS-HELP-NAV-V2：侧边栏玻璃胶囊当前项指示器（CR-2026-10-28 V2 竞稿）----
+   单个绝对定位胶囊在导航内滑动。位移与形变由 help-nav.js 的 rAF 弹簧积分驱动
+   （不写关键帧）：移动中沿运动主轴拉长、垂直主轴按体积补偿收窄，到位按阻尼比
+   过冲回弹并伴随一次压缩冲量。玻璃质感五层叠成：半透明紫底 + 顶部受光渐变 +
+   1px 渐变描边环（::before + mask）+ 顶部 1px 高光 + 贴地环境影，与白卡面
+   分出层次。窄屏双列 grid 仍按 offset 定位；transform-origin 固定 center。 */
+.help-jump{position:relative}
+.help-pill{
+  --pill-bg:rgba(103,80,164,.13);
+  --pill-sheen:linear-gradient(180deg,rgba(255,255,255,.52),rgba(255,255,255,0) 48%);
+  --pill-rim-top:rgba(255,255,255,1);
+  --pill-rim-side:rgba(103,80,164,.32);
+  --pill-rim-bottom:rgba(103,80,164,.16);
+  --pill-glow:rgba(255,255,255,.82);
+  --pill-shade:rgba(74,58,120,.11);
+  --pill-shadow:0 1px 2px rgba(74,58,120,.10),0 6px 16px -8px rgba(74,58,120,.30);
+  position:absolute;left:0;top:0;z-index:0;pointer-events:none;
+  width:0;height:0;border-radius:8px;
+  background:var(--pill-sheen),var(--pill-bg);
+  box-shadow:inset 0 1px 0 var(--pill-glow),inset 0 -1px 0 var(--pill-shade),var(--pill-shadow);
+  -webkit-backdrop-filter:blur(7px) saturate(1.35);
+  backdrop-filter:blur(7px) saturate(1.35);
+  transform-origin:center center;opacity:0;
+  transition:opacity .2s var(--ease);
+}
+/* 1px 渐变描边环：顶亮、两侧过渡、底部压深，四圈一圈细高光 */
+.help-pill::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(180deg,var(--pill-rim-top),var(--pill-rim-side) 42%,var(--pill-rim-bottom));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+}
+.help-pill.is-on{opacity:1}
+.help-jump a{position:relative;z-index:1}
+.help-jump a[aria-current="true"]{color:var(--lav-deep);font-weight:600}
+/* hover 只给非当前项一层浅 tint，不画描边——边缘高光归胶囊独有，不抢戏 */
+.help-jump a:hover{background:var(--tint);border-color:transparent;color:var(--lav-deep)}
+.help-jump a:hover[aria-current="true"]{background:transparent}
+.help-jump a:active:not([aria-current="true"]){background:var(--tint-deep)}
+.help-jump a:focus-visible{outline:2px solid var(--lav-deep);outline-offset:-2px}
+@supports not ((backdrop-filter:blur(4px)) or (-webkit-backdrop-filter:blur(4px))){
+  .help-pill{
+    --pill-bg:var(--tint);
+    --pill-sheen:linear-gradient(180deg,rgba(255,255,255,.42),rgba(255,255,255,0) 48%);
+    --pill-rim-top:rgba(255,255,255,.7);
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  .help-pill{transition:none!important}
 }
 
 /* ---- 结果操作卡与经典策略 CTA（QRE-SAAS-CLASSIC-ACTIONS-UI，2026-10-26）----
@@ -639,4 +704,138 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
   .showcase-cta h2{margin-right:0}
   .showcase-cta .btn{width:100%;justify-content:center}
   .result-action-buttons .btn{flex:1 1 auto;justify-content:center}
+}
+
+/* ============================================================
+   CR-2026-10-28 全站卡片：磨砂玻璃 + 光标跟随光斑 + 轻微 3D 倾斜
+   ------------------------------------------------------------
+   玻璃：backdrop-filter:blur(28px) saturate(140%) + 48% 白底（45%–60% 取偏下沿）
+         + 1px 半透明白描边 + 顶部 1px 内侧细高光 + 24px 圆角 + 大而柔的投影。
+         颜色不变：底仍是「白卡」，只是透出背后的品牌紫径向光斑，多一点纵深。
+   光斑：::before 铺满卡片的柔和径向白光，z-index:-1 + isolation:isolate 让它
+         落在卡片背景之上、文字之下——不影响文字对比度；::after 用 mask 只保留
+         1px 描边环，靠近光标的边框局部提亮。两者默认 opacity:0，由 card-fx.js
+         在指针悬停时给最外层玻璃卡加 .fx-on 点亮（不用 :hover，嵌套内层不重复）。
+   倾斜：只对并列小卡 .metric-card 挂 transform（.metric-card.fx-tilt）；装小卡的
+         大卡（.card/.chart-box/.panel）与含 canvas 的图表卡恒为 transform:none——
+         大卡一旦 rotateX/rotateY 会让内部图表画布发糊、文字发虚。JS 的 TILT_SEL
+         已收窄为 '.metric-card'，CSS 侧同源规则双保险。clamp() 做二次钳制兜底。
+   ============================================================ */
+
+/* 背景装饰层：body 纯色之上叠 4 团低透明度品牌紫径向渐变（--lav / --lav-ink /
+   --tint-deep，不引入新色相），让磨砂玻璃「有东西可糊」。fixed + pointer-events:none
+   + z-index:-1：既是视口固定的墙纸，又排在全部内容之下——不需要给 .wrap /
+   .container 提层级，也不会破坏 .topbar 的 z-index:40 与 sticky/fixed 浮层。
+   光斑刻意压在视口内且半径足够大（纯色背景上 blur(28px) 毫无可见效果，必须有
+   覆盖内容区的品牌紫云团让玻璃去糊、去 saturate）；透明度仍压在「浅紫白」区间。 */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(70rem 50rem at 12% 2%, rgba(103,80,164,.30), transparent 58%),
+    radial-gradient(56rem 40rem at 90% 12%, rgba(139,127,190,.27), transparent 56%),
+    radial-gradient(62rem 46rem at 78% 98%, rgba(103,80,164,.20), transparent 58%),
+    radial-gradient(50rem 38rem at 2% 86%, rgba(230,222,243,.85), transparent 56%);
+}
+
+/* 玻璃卡族 · 大卡（.card / .chart-box / .panel / .big-link）：24px 圆角 */
+.card,.chart-box,.panel,.big-link{
+  position:relative;isolation:isolate;
+  --mx:50%;--my:50%;--rx:0;--ry:0;
+  border-radius:var(--card-radius);
+  background-color:var(--glass-bg);
+  background-image:var(--glass-sheen);
+  border:1px solid var(--glass-line);
+  box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);
+  -webkit-backdrop-filter:blur(28px) saturate(140%);
+  backdrop-filter:blur(28px) saturate(140%);
+}
+/* 玻璃卡族 · 小卡（.metric / .metric-card / .entry-card）：沿用各自既有圆角，
+   不改小卡尺寸观感；同样吃玻璃底、光斑与边框提亮 */
+.metric,.metric-card,.entry-card{
+  position:relative;isolation:isolate;
+  --mx:50%;--my:50%;--rx:0;--ry:0;
+  background-color:var(--glass-bg);
+  background-image:var(--glass-sheen);
+  border:1px solid var(--glass-line);
+  box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);
+  -webkit-backdrop-filter:blur(28px) saturate(140%);
+  backdrop-filter:blur(28px) saturate(140%);
+}
+
+/* 光斑：跟随光标的柔和径向白光（--mx/--my 由 card-fx.js 写入） */
+.card::before,.chart-box::before,.panel::before,.big-link::before,
+.metric::before,.metric-card::before,.entry-card::before{
+  content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(280px circle at var(--mx) var(--my),var(--glass-spot),transparent 65%);
+  opacity:0;transition:opacity .35s var(--ease);
+}
+/* 边框局部提亮：1px 环上跟着光标亮（mask 挖空内容区，只留描边） */
+.card::after,.chart-box::after,.panel::after,.big-link::after,
+.metric::after,.metric-card::after,.entry-card::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;z-index:1;
+  background:radial-gradient(220px circle at var(--mx) var(--my),var(--glass-rim),transparent 70%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  opacity:0;transition:opacity .35s var(--ease);
+}
+/* 只有 JS 正在驱动的那张最外层玻璃卡点亮（嵌套内层不会重复） */
+.fx-on::before,.fx-on::after{opacity:1}
+
+/* 嵌套玻璃不二次模糊：玻璃卡内的小卡恢复「实色底 + 主题描边」，模糊与光斑只由
+   最外层卡统一负责。两个理由：① 省掉一次全卡 backdrop 重采样（实测 job 页
+   指针移动帧耗时 39ms → 30ms，其余成本来自无 GPU 环境下浏览器对 blur(28px)
+   的软件重采样，见 CR）；② 双层半透明叠加会发灰，光斑也会重叠。 */
+.card .metric,.card .metric-card,.chart-box .metric,.chart-box .metric-card{
+  background-color:#fff;background-image:none;border-color:var(--line);
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+}
+/* 使用说明侧边栏：`.help-side` 同时带 `.card` 类，上面玻璃卡族的 position:relative
+   会按「同特异性、后声明胜出」把 `.help-side{position:sticky}` 顶掉——侧边栏于是被
+   top:76px 整体下推 76px（与右侧 .help-content 不齐），且滚动时不再吸附。
+   在玻璃族之后显式恢复 sticky； Isolation 由玻璃族提供，不影响 sticky 行为。 */
+.help-side{position:sticky;top:76px}
+
+/* 3D 倾斜：≤4°（--glass-tilt，JS TILT_MAX 同值）；CSS clamp 做二次钳制兜底。
+   .fx-live（移动中）关掉过渡保证跟手；移出后移除 .fx-live 并归零 --rx/--ry
+   → transition 生效，平滑复原 */
+.fx-tilt{
+  transform:perspective(1000px)
+            rotateX(calc(clamp(calc(-1 * var(--glass-tilt)),var(--ry),var(--glass-tilt)) * 1deg))
+            rotateY(calc(clamp(calc(-1 * var(--glass-tilt)),var(--rx),var(--glass-tilt)) * 1deg));
+  transition:transform .38s var(--ease);
+}
+.fx-tilt.fx-live{transition:none}
+/* 倾斜范围（CR-2026-10-28 用户反馈后收窄）：只对「并列小卡」挂 transform——
+   .metric-card（总收益率/年化收益/超额收益/夏普、交易磨损五联卡、风险指标卡），
+   装它们的大卡（.card/.chart-box/.panel）与图表卡恒不倾斜。JS 的 TILT_SEL 已同步
+   收窄为 '.metric-card'，CSS 侧再挂一道同源规则做双保险；hover 微浮 translateY(-2px)
+   并进同一 transform，不再单独占一条 transform 规则。 */
+.metric-card.fx-tilt{
+  transform:perspective(1000px)
+            rotateX(calc(clamp(calc(-1 * var(--glass-tilt)),var(--ry),var(--glass-tilt)) * 1deg))
+            rotateY(calc(clamp(calc(-1 * var(--glass-tilt)),var(--rx),var(--glass-tilt)) * 1deg))
+            translateY(-2px);
+}
+
+/* 圆角 10px → 24px 的连带影响：贴卡片边缘的滚动容器继承圆角，避免滚动条/底框露直角 */
+.card>.table-wrap,.chart-box>.table-wrap,
+.card>.tag-rank,.chart-box>.tag-rank,
+.card>#tag-detail,.chart-box>#tag-detail,
+.card>#kreplay-events,.chart-box>#kreplay-events,
+.card>#replay-events,.chart-box>#replay-events{border-radius:inherit}
+
+/* reduced-motion：关倾斜过渡 + 完全禁用光斑（JS 侧同样直接跳过，不写变量） */
+@media (prefers-reduced-motion: reduce){
+  .card::before,.card::after,.chart-box::before,.chart-box::after,
+  .panel::before,.panel::after,.big-link::before,.big-link::after,
+  .metric::before,.metric::after,.metric-card::before,.metric-card::after,
+  .entry-card::before,.entry-card::after{display:none}
+  .fx-tilt{transition:none}
+}
+/* 无 backdrop-filter 的老浏览器：退回不透明白卡 + 装饰层减半，版式不破 */
+@supports not ((backdrop-filter:blur(4px)) or (-webkit-backdrop-filter:blur(4px))){
+  .card,.chart-box,.panel,.big-link,.metric,.metric-card,.entry-card{background-color:var(--panel)}
+  body::before{opacity:.45}
 }

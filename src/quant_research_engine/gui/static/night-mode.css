@@ -56,6 +56,40 @@
 :root[data-theme="dark"] .risk-cards .metric,
 :root[data-theme="dark"] .risk-cards .metric-card{background:var(--card);border-color:#7A3A44}
 
+/* ---------- 3b. 磨砂玻璃卡片（CR-2026-10-28）---------- */
+/* 暗色玻璃 token：底取 --card(#2E236C) 48% 透明，描边/高光/光斑/投影全部由
+   --text / --lav 派生，只提亮度不换色相（与浅色同一套结构）。 */
+:root[data-theme="dark"]{
+  --glass-bg:rgba(46,35,108,.48);
+  --glass-line:rgba(241,237,248,.16);
+  --glass-hi:rgba(241,237,248,.20);
+  --glass-shadow:0 1px 2px rgba(0,0,0,.30),0 18px 46px -14px rgba(0,0,0,.60);
+  --glass-spot:rgba(241,237,248,.10);
+  --glass-rim:rgba(200,172,214,.55);
+  --glass-sheen:linear-gradient(180deg,rgba(241,237,248,.09),rgba(241,237,248,0) 45%);
+}
+/* 覆盖上面第 3 段的实色 --card：玻璃底/描边/高光/投影整体换成暗色变体 */
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .chart-box,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .big-link,
+:root[data-theme="dark"] .metric,
+:root[data-theme="dark"] .metric-card,
+:root[data-theme="dark"] .entry-card{
+  background-color:var(--glass-bg);
+  background-image:var(--glass-sheen);
+  border-color:var(--glass-line);
+  box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);
+}
+/* 暗色背景装饰层：同一组品牌紫径向渐变，暗底上略提亮度，色相不漂移 */
+:root[data-theme="dark"] body::before{
+  background:
+    radial-gradient(70rem 50rem at 12% 2%, rgba(155,132,216,.30), transparent 58%),
+    radial-gradient(56rem 40rem at 90% 12%, rgba(126,96,191,.28), transparent 56%),
+    radial-gradient(62rem 46rem at 78% 98%, rgba(155,132,216,.20), transparent 58%),
+    radial-gradient(50rem 38rem at 2% 86%, rgba(67,61,139,.62), transparent 56%);
+}
+
 /* ---------- 4. 表单控件 ---------- */
 :root[data-theme="dark"] input,
 :root[data-theme="dark"] select,
@@ -268,3 +302,21 @@
 :root[data-theme="dark"] [style*="#8b7fbe"]{background:#A78BE0!important}
 :root[data-theme="dark"] [style*="#6750A4"]{background:#9B84D8!important}
 :root[data-theme="dark"] [style*="#6750a4"]{background:#9B84D8!important}
+
+/* ---------- 13. 使用说明侧边栏玻璃胶囊（CR-2026-10-28 V2） ---------- */
+/* 暗色下只提亮度、不换色相：五层玻璃每层都取 --lav / --text 派生色，
+   顶部受光与描环亮度上调（暗底上高光要更亮才读得出），底部压深改用纯黑。 */
+:root[data-theme="dark"] .help-pill{
+  --pill-bg:rgba(155,132,216,.20);
+  --pill-sheen:linear-gradient(180deg,rgba(241,237,248,.16),rgba(241,237,248,0) 54%);
+  --pill-rim-top:rgba(233,224,250,.52);
+  --pill-rim-side:rgba(190,168,236,.24);
+  --pill-rim-bottom:rgba(126,96,191,.34);
+  --pill-glow:rgba(241,237,248,.30);
+  --pill-shade:rgba(0,0,0,.30);
+  --pill-shadow:0 1px 2px rgba(0,0,0,.40),0 8px 20px -10px rgba(0,0,0,.62);
+}
+:root[data-theme="dark"] .help-jump a[aria-current="true"]{color:var(--accent-deep);font-weight:600}
+:root[data-theme="dark"] .help-jump a:hover{background:var(--tint);border-color:transparent}
+:root[data-theme="dark"] .help-jump a:hover[aria-current="true"]{background:transparent}
+:root[data-theme="dark"] .help-jump a:active:not([aria-current="true"]){background:var(--tint-deep)}
