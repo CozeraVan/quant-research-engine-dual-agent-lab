@@ -31,6 +31,7 @@ Before modifying code or producing plans, read:
 - `docs/agent/20_DATA_DICTIONARY_DAILY_MINUTE.md`（行情数据字典：日线/分钟线表结构、单位口径、TimescaleDB 规范、PIT 硬规则）
 - `docs/agent/21_FACTOR_LIBRARY_PLAN.md`（Tushare 202 因子本地复现立项方案：表设计/P0-P8 批次/验收/风险）
 - `docs/agent/23_KLINE_IMPLEMENTATION.md`（当前 K 线实现、数据合同、重播、因子呈现、主题与游戏交接）
+- `docs/agent/TV_FEEDBACK_2026-10-28.md`（TradingView 化本轮反馈：对照逆向 agent 报告的四功能完成度/未完成原因/难点/待回复问题；下一轮 TV 化的输入）
 
 ## Long-Term Memory Rule
 

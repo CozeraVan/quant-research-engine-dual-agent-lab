@@ -1297,3 +1297,22 @@ RED 检查第一版因此测出假绿灯——**RED 检查必须确认替换真�
 
 CR：`docs/agent/change_requests/CR-2026-10-28_kline_engine_exclusive.md`。
 已部署 ECS（MainPID 542952，回滚副本 `/tmp/qre-deploy-20261028T115036Z.bak`）。**未 commit/push。**
+
+### 2026-10-28 TV 化反馈文档已产出（回传逆向 agent）
+
+新增 `docs/agent/TV_FEEDBACK_2026-10-28.md`，对照逆向 agent 报告（`/home/van/dshguide/README-AGENT.md`，
+四功能：K 线呈现/作图/高级指标/K 线回放 + 协议层）给出本轮完成度：
+
+| 功能 | 完成度 | 核心差距 |
+|---|---|---|
+| K 线呈现 | ~75% | LWC 仍是可选试点非主引擎；专业价格格式化框架缺失 |
+| 作图 | ~5% | 94 种工具只做 2 种；无端点拖拽/整体拖动/单线 Delete |
+| 高级指标 | ~60% | Pine 脚本语言刻意不做（半年量级）；指标参数不可即时改（ECS 无行情库） |
+| K 线回放 | ~70% | LWC 重播 adapter（阶段 3）未做；无单步后退；无键盘快捷键 |
+| 协议层 | N/A | 不接 TV 服务，数据源自有 pgsql + tushare 日更 |
+
+文档内含**三个待逆向 agent 回复的问题**：Q1 MACD DIF/DEA/HIST 是否真各自坐标系（用户反复反馈，
+代码逻辑上已同 grid/yAxisIndex，需浏览器判据）；Q2 下轮主攻 LWC 扶正还是继续增强 ECharts（我方倾向后者）；
+Q3 作图边界（我方建议只补 demo 已有三项，不扩工具种类）。
+结构性原因已记录：`symbol.html` / `replay.js` / `game.html` 三处各自拼 grid/yAxisIndex，
+只有 `plan()` 归组共享——display 合同统一了归组但没统一 option 组装。
