@@ -187,6 +187,10 @@ def test_tilt_rules_and_canvas_exclusion():
     # 倾斜只对并列小卡（CR-2026-10-28 用户反馈后收窄）
     assert ".metric-card.fx-tilt{" in css, "倾斜必须只挂在 .metric-card 上"
     assert "translateY(-2px)" in css, "hover 微浮应合并进小卡倾斜的 transform"
+    # 小卡透视必须近（170x77 的卡在 1000px 透视下 4° 只有 0.4px 位移，看不见）
+    mcard = css[css.index(".metric-card.fx-tilt{"):]
+    mcard = mcard[: mcard.index("}")]
+    assert "perspective(260px)" in mcard, f"小卡倾斜必须用近透视，实际 {mcard[:80]}"
     js0 = _fx()
     TILT_JS_SEL = js0.split('TILT_SEL = ')[1].split(';')[0].strip()
     assert TILT_JS_SEL == "'.metric-card'", f"JS TILT_SEL 必须收窄为 .metric-card，实际 {TILT_JS_SEL}"

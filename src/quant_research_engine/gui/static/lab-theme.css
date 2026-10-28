@@ -812,8 +812,11 @@ body::before{
    装它们的大卡（.card/.chart-box/.panel）与图表卡恒不倾斜。JS 的 TILT_SEL 已同步
    收窄为 '.metric-card'，CSS 侧再挂一道同源规则做双保险；hover 微浮 translateY(-2px)
    并进同一 transform，不再单独占一条 transform 规则。 */
+/* perspective 收到 260px（通用 .fx-tilt 是 1000px）：小卡只有 ~170x77px，
+   4° 在 1000px 透视下水平位移仅 0.4px——物理上看不见（实测）；260px 把同一
+   角度放大到 ~2.5px，才达到可感知量级。角度仍严守 ≤4°（--glass-tilt）。 */
 .metric-card.fx-tilt{
-  transform:perspective(1000px)
+  transform:perspective(260px)
             rotateX(calc(clamp(calc(-1 * var(--glass-tilt)),var(--ry),var(--glass-tilt)) * 1deg))
             rotateY(calc(clamp(calc(-1 * var(--glass-tilt)),var(--rx),var(--glass-tilt)) * 1deg))
             translateY(-2px);

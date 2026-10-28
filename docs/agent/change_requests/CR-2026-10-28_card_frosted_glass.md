@@ -403,3 +403,28 @@ CSS 侧同步加 `.metric-card.fx-tilt{...translateY(-2px)}` 做双保险，并�
 `'.metric-card'`、`.help-side{position:sticky}` 必须排在玻璃卡族之后、
 `eligibleForTilt` 对大卡/图表卡/入口卡一律 false、只对 `.metric-card` true；
 18 passed；相关 145 passed。
+
+
+### 3. 小卡倾斜看不见（perspective 太远）
+
+用户反馈「小卡片的div我没有检查到倾斜效果」。实测定位：**不是没生效，是几何上看不见**。
+`.metric-card` 只有 170x77px，在 `perspective(1000px)` 下 4° 产生的水平位移仅 **0.4px**
+（当时测得的 -2.3px 垂直位移其实来自 hover 微浮 translateY(-2px)，不是旋转）。
+
+透视距离实测表（170x77 卡，--rx/--ry 取 0.84/0.7 倍上限）：
+
+| perspective | 角度上限 | 左缘位移 | 上缘位移 |
+| --- | --- | --- | --- |
+| 1000px | 4° | -0.4px | -2.3px |
+| 620px | 6° | -1.1px | -2.7px |
+| 400px | 6° | -1.8px | -2.8px |
+| 260px | 4° | -2.1px | -2.7px |
+| 200px | 6° | -4.1px | -3.4px |
+
+**修复**：`.metric-card.fx-tilt` 的 perspective 由 1000px 收到 **260px**——同一角度放大
+6 倍位移，且**不突破用户设定的 4° 上限**。通用 `.fx-tilt`（大卡用，当前无使用者）
+保持 1000px。
+
+**实测（生产）**：右缘悬停 左缘 -2.1px / rotateY -2.39° / rotateX -1.98°；
+左下悬停 左缘 +0.9px / rotateY +2.27°（方向正确跟随光标）；中心 0°（正确）；
+大卡 `.chart-box` 仍 `transform:none`、光斑正常。

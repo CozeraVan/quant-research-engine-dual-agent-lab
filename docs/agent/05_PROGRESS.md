@@ -1787,3 +1787,19 @@ V1 上线后用户反馈「不满意」（未给具体点），本稿为重做�
   实测：小卡 rotateY -1.41°/rotateX 1.15°；大卡 transform:none 但光斑仍生效。
 - 测试 18 passed；相关 145 passed。生产 MainPID 528952，
   回滚副本 `/tmp/qre-deploy-20261028T082241Z.bak`。
+
+## 2026-10-28 小卡倾斜看不见：perspective 1000px → 260px
+
+用户反馈「小卡片的div我没有检查到倾斜效果」。倾斜其实已生效（fxTilt=true、
+rotateY -2.39°），但 `.metric-card` 只有 170x77px，`perspective(1000px)` 下 4°
+的水平位移仅 **0.4px**——几何上看不见（此前测到的 -2.3px 垂直位移来自 hover
+微浮 translateY(-2px)，不是旋转）。
+
+透视距离实测（170x77 卡）：1000px/4° → 左缘 -0.4px；620px/6° → -1.1px；
+260px/4° → -2.1px；200px/6° → -4.1px。
+
+修复：`.metric-card.fx-tilt` 的 perspective 收到 **260px**（同角度放大 6 倍位移，
+不突破 4° 上限）；通用 `.fx-tilt` 保持 1000px。
+生产实测：右缘悬停左缘 -2.1px / rotateY -2.39°；左下悬停左缘 +0.9px /
+rotateY +2.27°（方向跟随光标）；中心 0°；大卡仍 transform:none。
+测试 18 passed；全量 `3006 passed, 24 skipped`。生产 MainPID 529949。
