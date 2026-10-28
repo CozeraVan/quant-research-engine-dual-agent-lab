@@ -19,6 +19,8 @@
  *     tooltipPercent: false,            // 可选：关闭统一 %（K线重播；默认 true=job 口径）
  *     tooltipUnit: '万',                // 可选：tooltip 标量单位；series 级
  *                                       // extra.tooltip.valueFormatter 优先（如成交量万手）
+ *     markLineFor(series, idx, startIdx) // 可选：按当前帧生成末价标签（T2；
+ *                                       // idx/startIdx 均为**可见窗口内**下标，不得越到未来）
  *   });
  */
 (function () {
@@ -322,7 +324,13 @@
             markPoint: s.mark ? markPoints(s) : undefined,
           };
           // 切片2：K线/成交量/散点等任意 ECharts series 透传（extra 覆盖默认键）
-          return Object.assign(base, s.extra || {});
+          base = Object.assign(base, s.extra || {});
+          // QRE-PRICE-SCALE（T2）：末价标签由调用方按**当前帧**生成（不得泄露未来数据）
+          if (opts.markLineFor) {
+            var ml = opts.markLineFor(s, c0 - 1, s0);
+            if (ml) base.markLine = ml;
+          }
+          return base;
         });
         var gridCount = (opts.grids || []).length;
         var labelIdx = opts.axisLabelIndex == null ? gridCount - 1 : opts.axisLabelIndex;
@@ -332,20 +340,31 @@
         var tooltipValueFormatter = opts.tooltipPercent === false
           ? function (v) { return formatTooltipValue(v, opts.tooltipUnit); }
           : function (v) { return v == null ? "—" : Number(v).toFixed(2) + "%"; };
+        // 轴标签：调用方可下发 axisLabel（对象或函数(可见窗口起点)→对象）；
+        // 未下发时保持原有 % / formatter 口径（job 默认路径逐字节不变）
+        function axisLabelOf(y, startIdx) {
+          if (y && y.axisLabel) {
+            return (typeof y.axisLabel === "function") ? y.axisLabel(startIdx) : y.axisLabel;
+          }
+          return y && y.pct === false
+            ? (y.formatter ? { formatter: y.formatter } : undefined)
+            : { formatter: "{value}%" };
+        }
         var option = {
           animation: false,
           tooltip: { trigger: "axis", valueFormatter: tooltipValueFormatter },
           legend: { top: 0, data: (opts.series || []).filter(function (s) { return !s.grid; }).map(function (s) { return s.name; }), selected: opts.legendSelected || undefined },
           grid: opts.grids || [{ left: 55, right: 20, top: 30, height: "68%" }],
           xAxis: (opts.grids || [{}]).map(function (g, gi) {
-            return { type: "category", data: xData, gridIndex: gi, axisLabel: { show: gi === labelIdx } };
+            return { type: "category", data: xData, gridIndex: gi,
+                     axisLabel: { show: gi === labelIdx },
+                     // QRE-PRICE-SCALE（T2）：类别轴不画竖网格线
+                     splitLine: { show: false } };
           }),
           yAxis: (opts.yAxes || [{ name: "累计收益率%" }]).map(function (y, yi) {
             // 默认按收益率口径加 %（切片1）；切片2 传 pct:false（价格/量/因子轴）
             var ya = { type: "value", gridIndex: yi, name: y.name, max: y.max, scale: y.scale !== false,
-                       axisLabel: y.pct === false
-                         ? (y.formatter ? { formatter: y.formatter } : undefined)
-                         : { formatter: "{value}%" } };
+                       axisLabel: axisLabelOf(y, s0) };
             // 可选：右侧标尺（K线重播与静态 TV 对齐）；job 默认路径不传则省略
             if (y.position) ya.position = y.position;
             return ya;

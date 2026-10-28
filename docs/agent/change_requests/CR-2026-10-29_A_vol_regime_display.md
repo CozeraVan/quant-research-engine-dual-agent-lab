@@ -88,3 +88,46 @@ lab_result 页（阈值）: state='当前：中波动（年化 18.3%–20.2% 为
 
 只影响 FRM「波动率状态」一栏的标题文案与其悬停说明；图表本身（三档柱状）未动，
 counts 保留（数据本身正确）。其它风险组件、其它页面未动。
+
+## 7. 补记（2026-10-29 独立核验：lab 页说明机制整块失效，已修）
+
+核验结论：HEAD `bf71387` 已含本 CR 主体——后端 `build_lab_risk_view()` 透传
+`regime_thresholds`，SaaS `job` 页「波动率状态」标题已带阈值，tip 文案模板齐全。
+缺口只在 **8081 实验台的 `lab_result.html`**：该页同样是风险组件宿主，但说明机制完全没生效。
+
+根因（两条，同时存在）：
+
+1. `lab_result.html` 继承 `base.html`，而 `base.html` **不加载** `static/lab-ui.js`
+   → 页面里没有 `window.LabUI`，`LabUI.helpTips()` 从未绑定，任何 `data-tip` 都不弹。
+2. 模板里 `volTxt` 算出来却**从未被使用**（死变量），波动率状态说明被写成 `.opt` 灰字；
+   风险灯与卡片标题也只用了原生 `title=`。这违反 `AGENTS.md` 规则 13
+   （说明必须走 `tip-trigger` + `data-tip` + `LabUI.helpTips`，禁 `.opt` / 灰色小字）。
+
+本次改动（`gui/templates/lab_result.html`，6 处）：
+
+- `<head>` 补 `<script src="/static/lab-ui.js">`（放在 echarts 之后、vol-regime 之前）。
+- IIFE 顶部补 `escH()` HTML 转义 helper，所有 `data-tip` 走它。
+- `card()` 的 `title=` → `tabindex="0" data-tip="escH(tip)"`。
+- 风险灯 `title=` → `tabindex="0" data-tip=escH(conclusion)`。
+- 风险块：日收益分布 `.opt` 灰字 → `tip-trigger` 按钮；「波动率状态」加
+  `tip-trigger data-tip=escH(volTxt || '暂无波动率数据')`（`volTxt` 不再是死变量）。
+- `loadRisk();` 之后补 `if (window.LabUI && LabUI.helpTips) LabUI.helpTips();`。
+
+浏览器证据（`.tmp/vol-browser/a_verify.py`，Playwright + 真实 Chromium，
+生产 job 58 真实 risk report 现算视图）：
+
+```
+lab_result 页（阈值）: state='当前：中波动（年化 18.3%–20.2% 为中档；≥20.2% 为高，<18.3% 为低）'
+  display=block font-size=14px
+  vol tip: EWMA 年化波动 5.7%；GARCH 年化波动 6.2%；当前状态 中波动；
+           样本天数：低波动 1356 / 中波动 1356 / 高波动 1356
+  triggers=2  card tips=0  helpTips bound=True
+  hover tip-pop: display=block（文本非空）
+  focus tip-pop: display=block（文本非空）
+job 页 旧产物（无阈值）: state='当前：中波动'（无 undefined/NaN/null）
+=== ERRORS === 无
+```
+
+新增断言：`#risk-body .tip-trigger[data-tip]` ≥ 2、波动率 tip 含 `EWMA` 与 `样本`、
+文本无 `undefined/NaN/null`、`LabUI.helpTips` 已绑定、hover 与 focus 均让
+`div.tip-pop` 变为 `display:block` 且文本非空。截图：`.tmp/vol-browser/lab_risk.png`。

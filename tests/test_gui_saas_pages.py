@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -197,8 +199,17 @@ def _run_job_js(html: str, source_pattern: str, scenario: str, prefix_pattern: s
     script = (_JOB_JS_HARNESS
               + "\nconst VOL_REGIME_SRC = " + json.dumps(_VOL_REGIME_JS.read_text(encoding="utf-8")) + ";"
               + "\nconst source = " + json.dumps(source) + ";\n" + scenario)
-    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr or result.stdout
+    # 写临时文件而不是 `node -e`：harness 注入真实模板 + 真实静态源码（symbol.html
+    # 已 107KB+，加 price-scale.js 后超过 Linux 单参数上限 MAX_ARG_STRLEN(128KB)）
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as fh:
+        fh.write(script)
+        path = fh.name
+    try:
+        result = subprocess.run([node, path], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr or result.stdout
+    finally:
+        os.unlink(path)
 
 
 _RECORDS_JS_HARNESS = r"""

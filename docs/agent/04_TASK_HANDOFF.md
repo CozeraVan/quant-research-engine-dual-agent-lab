@@ -2895,6 +2895,16 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
   测试 56 passed；全量 3036 passed。
 - DeepSeek 任务书：`change_requests/TASK-2026-10-29_deepseek_uiux.md`（三项 A/B/C）。
   Kimi 负责主线与 bug 检查，DeepSeek 专注 UI/UX；DeepSeek **不 commit/push**，完成后报 Kimi 复核。
-- 任务书已写明：不得改后端与数据库、不得引外部依赖、不得新增灰字备注、
-  共享模块必须配 Node vm 测试并做 RED、必须真实浏览器四视口验证。
 - 未 commit/push。
+
+## 2026-10-29 DeepSeek UI/UX 三项复核交接（子 agent 核验完成）
+
+- A/C/B 三项实现主体已在 HEAD `bf71387`，本轮做独立核验 + 补缺口，不改实现方向。
+- 补缺 1：`gui/templates/lab_result.html` 说明机制整块失效（`base.html` 不加载
+  `lab-ui.js`，且 `volTxt` 是死变量、说明写成 `.opt` 灰字）→ 6 处补齐，浏览器 hover/focus
+  tip-pop 均 `display:block`。
+- 补缺 2：`saas/templates/job.html`、`symbol.html` 的基准按钮初态无 `aria-pressed`/`.active`
+  （`syncButton` 在 `btns[code]` 注册前调用）→ 每页移 2 行，实测 `true/false` 且点击可反转。
+- 全量 `3083 passed, 24 skipped, 0 failed`（153.72s）。`TestNoAdminLinks` 三条曾红，
+  隔离 9 passed / 整文件 94 passed / 全量通过 ⇒ 顺序型 flake，与本轮改动无关。
+- 未 commit/push、未部署 ECS（按派单约束）。

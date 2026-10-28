@@ -103,6 +103,10 @@
         <button type="button" class="kline-tool" id="kt-fct" aria-label="因子面板" aria-pressed="true" data-tip="显示或隐藏因子面板与均线叠加">
           <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,14 7,9 11,12 17,5"/></svg><span>因子</span>
         </button>
+        <!-- 价格轴模式（CR-2026-10-29 T2）：普通 → 对数 → 百分比 → 指数化，循环切换 -->
+        <button type="button" class="kline-tool" id="kt-pscale" aria-label="价格轴模式" data-tip="价格轴模式：普通 → 对数 → 百分比（以可见区间第一根收盘为基准）→ 指数化（第一根收盘 = 100）">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"><line x1="14" y1="3" x2="14" y2="17"/><line x1="9.5" y1="6" x2="14" y2="6"/><line x1="9.5" y1="10" x2="14" y2="10"/><line x1="9.5" y1="14" x2="14" y2="14"/><polyline points="3,15 6.5,9.5 9,12 11.5,6"/></svg><span id="kt-pscale-label">价格</span>
+        </button>
         <!-- 画线工具子集首片（CR-2026-10-27）：趋势线/水平线/清除，只作用于静态 K 线 -->
         <button type="button" class="kline-tool" id="kt-trend" aria-label="趋势线" data-tip="趋势线：点击两次确定起点与终点，Esc 取消">
           <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"><line x1="4" y1="15.5" x2="15.5" y2="4.5"/><circle cx="4" cy="15.5" r="1.7"/><circle cx="15.5" cy="4.5" r="1.7"/></svg><span>趋势</span>
@@ -154,6 +158,8 @@
 <script src="/static/echarts.min.js?v={{ asset_v }}"></script>
 <script src="/static/replay.js?v={{ asset_v }}"></script>
 <script src="/static/factor-layout.js?v={{ asset_v }}"></script>
+{# QRE-PRICE-SCALE（TV_ROUND2 T2）：专业价格轴格式化框架（4 种 priceScaleMode / minMove 精度 / 恒定轴宽 / 末价标签） #}
+<script src="/static/price-scale.js?v={{ asset_v }}"></script>
 {# CR-2026-10-28 B 路试点：LWC vendored 单文件（禁 CDN）+ 适配层；引擎开关默认 echarts #}
 <script src="/static/chart-core/vendor/lightweight-charts.standalone.production.js?v={{ asset_v }}"></script>
 <script src="/static/chart-core/kline-lwc.js?v={{ asset_v }}"></script>
@@ -969,6 +975,7 @@ function renderEquity(d){
       btn.dataset.code = code;
       const on = initial[benchName(code)] !== false;
       if (on) open.add(code);
+      btns[code] = btn;
       syncButton(code, on);
       btn.addEventListener('click', () => {
         const next = !open.has(code);
@@ -978,7 +985,6 @@ function renderEquity(d){
         curBench = codes.filter(c => open.has(c))[0] || '';
         updateStrip();
       });
-      btns[code] = btn;
       bar.appendChild(btn);
     });
     chart.on('legendselectchanged', ev => {
@@ -1162,8 +1168,10 @@ let symbolKlineChart = null;
 let klineResizeObserver = null;
 let klineObserved = false;
 // --- TV 化静态 K 线（CR-2026-10-27）：顶部信息区 + 左侧工具栏 + 右侧价格标尺 ---
-const KLINE_TOOL_KINDS = ['zoom-in', 'zoom-out', 'reset', 'vol', 'fct', 'trend', 'horizontal', 'clear', 'ind'];
+const KLINE_TOOL_KINDS = ['zoom-in', 'zoom-out', 'reset', 'vol', 'fct', 'pscale', 'trend', 'horizontal', 'clear', 'ind'];
 const KLINE_TOOL_VIS = { vol: true, fct: true };
+// 价格轴模式（T2）：0 普通 / 1 对数 / 2 百分比 / 3 指数化，localStorage 持久化
+let klinePriceMode = (typeof QREPriceScale !== 'undefined') ? QREPriceScale.readMode() : 0;
 const klineToolState = { chart: null, data: null, plan: null, bound: false, baseSeries: null };
 // 画线首片状态（CR-2026-10-27）：mode=trend/horizontal/null；pending=趋势线未落点起点
 const klineDrawState = { mode: null, pending: null, lines: [] };
@@ -1278,6 +1286,172 @@ function klineAxisLabelIndex(paneCount, showVol, showFct){
   if (showVol) return 1;
   return 0;
 }
+// --- QRE-PRICE-SCALE（T2）：专业价格轴格式化。静态图与重播共用同一套出口 ---
+// K 线数据取数：渲染期 klineToolState.data 尚未就绪时回落 klineDetail（renderKline 开头已赋值）
+function klineKlineData(){ return klineToolState.data || (typeof klineDetail !== 'undefined' ? klineDetail : null); }
+// 收盘序列：精度推断与轴宽预算的唯一数据源
+function klineCloses(){
+  const kl = (klineKlineData() || {}).kline || {};
+  const out = [];
+  (kl.ohlc || []).forEach(k => {
+    const v = k && k[1] != null ? Number(k[1]) : NaN;
+    if (isFinite(v)) out.push(v);
+  });
+  return out;
+}
+// 右轴留白：按**全量数据**极值预算（不随可见窗口/缩放跳动），下限保持原 56
+function klineAxisRightPx(){
+  if (typeof QREPriceScale === 'undefined') return 56;
+  const w = QREPriceScale.axisWidthPx(klineCloses(), {
+    mode: klinePriceMode, minMove: QREPriceScale.DEFAULT_MIN_MOVE,
+  });
+  return Math.max(56, w + 6 + 8);
+}
+// 网格规格：布局仍由 klineGridSpec 决定，右留白按价格轴标签宽度预算
+function klineGrids(paneCount){
+  return klineGridSpec(KLINE_TOOL_VIS.vol, paneCount, KLINE_TOOL_VIS.fct)
+    .map(g => Object.assign({}, g, { right: klineAxisRightPx() }));
+}
+// 可见区间首根下标（dataZoom 的 startValue / start 两种口径都吃）
+function klineVisibleStart(){
+  const d = klineKlineData();
+  const dates = (d && d.kline && d.kline.dates) || [];
+  if (!dates.length) return 0;
+  const chart = (typeof symbolKlineChart !== 'undefined') ? symbolKlineChart : null;
+  if (!chart || typeof chart.getOption !== 'function') return 0;
+  const dz = (chart.getOption() || {}).dataZoom || [];
+  let i = null;
+  for (let k = 0; k < dz.length; k++){
+    const d0 = dz[k] || {};
+    if (d0.startValue != null && isFinite(Number(d0.startValue))) { i = Number(d0.startValue); break; }
+    if (i == null && typeof d0.start === 'number' && isFinite(d0.start)){
+      i = Math.floor(dates.length * d0.start / 100);
+    }
+  }
+  if (i == null) i = 0;
+  return Math.max(0, Math.min(dates.length - 1, Math.floor(i)));
+}
+// 百分比/指数化的基准：可见区间第一根收盘（随缩放变化，故以函数下发）
+function klinePriceBase(){
+  const d = klineKlineData();
+  const kl = (d && d.kline) || {};
+  const k = (kl.ohlc || [])[klineVisibleStart()];
+  return (k && k[1] != null && isFinite(Number(k[1]))) ? Number(k[1]) : null;
+}
+// 价格值按当前 priceScaleMode 格式化（末价标签 / 图例当前值 / 信息区共用）
+function klinePriceFmt(v){
+  if (typeof QREPriceScale === 'undefined') return (v == null ? '—' : Number(v).toFixed(2));
+  return QREPriceScale.formatValue(v, {
+    mode: klinePriceMode, base: klinePriceBase, minMove: QREPriceScale.DEFAULT_MIN_MOVE,
+  });
+}
+// 主图价格轴（grid 0）：右置 + minMove 自动精度 + 恒定轴宽 + 1-2-5 刻度 + 只画水平网格线
+function klinePriceAxis(){
+  if (typeof QREPriceScale === 'undefined'){
+    return { type: 'value', gridIndex: 0, scale: true, position: 'right' };
+  }
+  return QREPriceScale.priceAxisSpec({
+    values: klineCloses(), mode: klinePriceMode, gridIndex: 0, show: true,
+    base: klinePriceBase, minMove: QREPriceScale.DEFAULT_MIN_MOVE,
+  });
+}
+// 成交量轴：沿用万口径，标签同样固定宽度（不与价格轴宽度互相牵引）
+function klineVolAxis(vis){
+  return { type: 'value', gridIndex: 1, show: !!vis.vol, position: 'right', name: '量',
+    nameTextStyle: { fontSize: 10 },
+    axisLabel: { width: 44, margin: 6, align: 'left', overflow: 'truncate', fontSize: 11,
+      formatter: v => (v / 10000).toFixed(0) + '万' } };
+}
+// 主图 + 量两个 head 轴：renderKline 与 klineApplyLayout 共用，防止两处漂移
+function klineHeadYAxes(vis){ return [klinePriceAxis(), klineVolAxis(vis)]; }
+// 因子副图轴标签：display 合同精度优先，否则按数据推断并夹在 [2,4]
+// （修复"同一根轴上 3 与 0.00 混排"——旧行为由 ECharts 自动精度决定）
+function klinePaneValues(p){
+  const out = [];
+  (p.series || []).forEach(s => (s.values || []).forEach(v => {
+    const n = Number(v);
+    if (isFinite(n)) out.push(n);
+  }));
+  return out;
+}
+function klinePaneAxisLabel(p){
+  if (typeof QREPriceScale === 'undefined') return null;
+  const vals = klinePaneValues(p);
+  let precision = (p && p.precision != null) ? p.precision : null;
+  if (precision == null) precision = Math.max(2, Math.min(4, QREPriceScale.inferPrecision(vals, 4)));
+  return QREPriceScale.axisLabelSpec(vals, { mode: 0, precision: precision });
+}
+// 重播规格的副图轴标签（replay.js 支持 axisLabel 为函数(s0) → 对象）
+function klinePaneAxisLabelFn(){ return function (p) { return klinePaneAxisLabel(p); }; }
+// 图例：圆点 + 名称 + 当前值（与价格轴同一格式化口径）
+function klineLegendText(name){
+  const d = klineKlineData();
+  if (!d || !d.kline) return name;
+  const kl = d.kline, last = (kl.dates || []).length - 1;
+  if (name === 'K线'){
+    const k = (kl.ohlc || [])[last];
+    return name + '  ' + klinePriceFmt(k ? k[1] : null);
+  }
+  if (name === '成交量'){
+    const v = (kl.vols || [])[last];
+    return name + '  ' + (v == null || v === '' ? '—' : (Number(v) / 10000).toFixed(2) + ' 万');
+  }
+  const f = (d.factors || []).find(x => x.name === name);
+  if (f){
+    const v = (f.values || [])[last];
+    return name + '  ' + (v == null || v === '' ? '—' : Number(v).toFixed(2));
+  }
+  return name;
+}
+function klineLegendSpec(plan){
+  const data = ['K线', '成交量', '买入', '卖出']
+    .concat(plan.overlays.map(o => o.name))
+    .concat(plan.panes.reduce((acc, p) => acc.concat(p.series.map(s => s.name)), []));
+  if (typeof QREPriceScale === 'undefined'){
+    return { data: data, selected: klineLegendSelected(plan), top: 0 };
+  }
+  return QREPriceScale.legendSpec({
+    data: data, selected: klineLegendSelected(plan), top: 0, left: 0,
+    formatter: klineLegendText,
+  });
+}
+// 末价标签颜色：与 K 线涨跌同色（红涨绿跌，复用因子层 hist 色 token，不引第四色相）
+function klineLastPriceColor(){
+  const kl = (klineKlineData() || {}).kline || {};
+  const ohlc = kl.ohlc || [];
+  if (!ohlc.length || typeof QREFactorLayout === 'undefined') return QREFactorLayout.COLORS.pane;
+  const last = ohlc[ohlc.length - 1];
+  const prev = ohlc.length > 1 ? ohlc[ohlc.length - 2] : null;
+  const up = !prev || Number(last[1]) >= Number(prev[1]);
+  return up ? QREFactorLayout.COLORS.histUp : QREFactorLayout.COLORS.histDown;
+}
+// 末价标签（markLine：随轴自动移动，不吃鼠标事件）
+function klineLastPriceMarkLine(){
+  if (typeof QREPriceScale === 'undefined') return undefined;
+  const kl = (klineKlineData() || {}).kline || {};
+  const ohlc = kl.ohlc || [];
+  if (!ohlc.length) return undefined;
+  const last = ohlc[ohlc.length - 1];
+  if (!last || last[1] == null || !isFinite(Number(last[1]))) return undefined;
+  return QREPriceScale.lastPriceMarkLine(Number(last[1]), {
+    mode: klinePriceMode, base: klinePriceBase,
+    minMove: QREPriceScale.DEFAULT_MIN_MOVE, color: klineLastPriceColor(),
+  });
+}
+// 十字光标：1px 虚线 + 价格/时间标签带背景块（规格表）
+function klineCrosshairSpec(){
+  if (typeof QREPriceScale === 'undefined') return { link: [{ xAxisIndex: 'all' }] };
+  return QREPriceScale.crosshairSpec({ link: [{ xAxisIndex: 'all' }] });
+}
+function klineSetPriceMode(m){
+  if (typeof QREPriceScale === 'undefined') return;
+  klinePriceMode = QREPriceScale.setMode(m);
+  klineSyncPressed();
+  if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = mountKlineReplay(klineData); }
+  else if (typeof renderKlineDispatch === 'function') renderKlineDispatch(klineData);
+  klineSetInfo('价格轴：' + QREPriceScale.modeMeta(klinePriceMode).label
+    + '（' + QREPriceScale.modeMeta(klinePriceMode).tip + '）');
+}
 function klineLegendSelected(plan){
   const sel = { '成交量': !!KLINE_TOOL_VIS.vol };
   const fOn = !!KLINE_TOOL_VIS.fct;
@@ -1315,6 +1489,21 @@ function klineSyncPressed(){
     const b = klineToolBtn(kind);
     if (b){ b.disabled = !st.chart; klineSetPressed(b, klineDrawState.mode === kind); }
   });
+  // 价格轴模式按钮：标签即当前模式（点击循环），重播态禁用（重播有自己的轴规格）
+  const ps = klineToolBtn('pscale');
+  if (ps){
+    ps.disabled = !st.chart;
+    const lb = (typeof document !== 'undefined' && document.getElementById)
+      ? document.getElementById('kt-pscale-label') : null;
+    const meta = (typeof QREPriceScale !== 'undefined')
+      ? QREPriceScale.modeMeta(klinePriceMode) : { short: '价格', label: '普通', tip: '普通价格' };
+    if (lb && typeof lb.textContent !== 'undefined') lb.textContent = meta.short;
+    if (typeof ps.setAttribute === 'function'){
+      ps.setAttribute('aria-label', '价格轴模式：' + meta.label);
+      ps.setAttribute('data-tip',
+        '价格轴模式：普通 → 对数 → 百分比（以可见区间第一根收盘为基准）→ 指数化（第一根收盘 = 100）。当前：' + meta.tip);
+    }
+  }
   const clr = klineToolBtn('clear');
   if (clr) clr.disabled = !st.chart;
 }
@@ -1324,22 +1513,20 @@ function klineApplyLayout(chart, plan){
   const panes = (plan && plan.panes) || [];
   const n = panes.length;
   const vol = !!KLINE_TOOL_VIS.vol, fct = !!KLINE_TOOL_VIS.fct;
-  const fOn = fct && n > 0;
-  const grids = klineGridSpec(vol, n, fct);
+  const grids = klineGrids(n);
+  const dates = (klineKlineData() && klineKlineData().kline && klineKlineData().kline.dates) || [];
   const labelIdx = klineAxisLabelIndex(n, vol, fct);
-  const dates = (klineToolState.data && klineToolState.data.kline && klineToolState.data.kline.dates) || [];
-  const xAxis = grids.map((g, i) => ({
-    type: 'category', data: dates, gridIndex: i, axisLabel: { show: i === labelIdx },
-  }));
-  const yAxis = grids.map((g, i) => {
-    if (i === 0) return { type: 'value', gridIndex: 0, scale: true, position: 'right' };
-    if (i === 1) return { type: 'value', gridIndex: 1, show: vol, position: 'right', name: '量',
-      axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } };
-    const p = panes[i - 2] || { name: '' };
-    return { type: 'value', gridIndex: i, show: fOn, scale: true, position: 'right',
-      name: p.name, nameTextStyle: { fontSize: 10 } };
+  // QRE-KLINE-PANE-OPTION：pane 的 yAxis 索引由共享层生成，这里不再手写 2+i
+  const _po = QREFactorLayout.panesToOption(panes, {
+    paneBase: 2, grids, showFct: fct,
+    headYAxes: klineHeadYAxes({ vol: vol, fct: fct }),
+    paneAxisLabel: klinePaneAxisLabel,
   });
-  chart.setOption({ grid: grids, xAxis: xAxis, yAxis: yAxis });
+  const xAxis = grids.map((g, i) => ({
+    type: 'category', data: dates, gridIndex: i,
+    axisLabel: { show: i === labelIdx }, splitLine: { show: false },
+  }));
+  chart.setOption({ grid: grids, xAxis: xAxis, yAxis: _po.yAxis });
   if (typeof chart.dispatchAction !== 'function') return;
   const sel = klineLegendSelected(plan);
   Object.keys(sel).forEach(name => {
@@ -1385,6 +1572,11 @@ function bindKlineTools(chart, d, plan){
     'trend': () => klineDrawToggleMode('trend'),
     'horizontal': () => klineDrawToggleMode('horizontal'),
     'clear': () => klineDrawClear(),
+    // 价格轴模式（T2）：普通 → 对数 → 百分比 → 指数化
+    'pscale': () => {
+      if (typeof QREPriceScale === 'undefined') return;
+      klineSetPriceMode(QREPriceScale.nextMode(klinePriceMode));
+    },
     // 指标设置与面板管理（CR-2026-10-28）
     'ind': () => klineIndicatorDialog(),
   };
@@ -1672,7 +1864,9 @@ function renderKline(d){
   if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(chart);
   const series = [
     { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: d.kline.ohlc,
-      itemStyle: { color: '#C93A3A', color0: '#1E8E5A', borderColor: '#C93A3A', borderColor0: '#1E8E5A' } },
+      barWidth: '70%',  // 实体宽 = 0.7×间距（§4 规格表）
+      itemStyle: { color: '#C93A3A', color0: '#1E8E5A', borderColor: '#C93A3A', borderColor0: '#1E8E5A' },
+      markLine: klineLastPriceMarkLine() },
     { name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: d.kline.vols,
       itemStyle: { color: '#B7A6E8' } },
   ];
@@ -1707,29 +1901,23 @@ function renderKline(d){
   const _vis = { showVol: KLINE_TOOL_VIS.vol, showFct: KLINE_TOOL_VIS.fct };
   const _po = QREFactorLayout.panesToOption(panes, {
     paneBase: 2,
-    grids: klineGridSpec(KLINE_TOOL_VIS.vol, panes.length, KLINE_TOOL_VIS.fct),
+    grids: klineGrids(panes.length),
     dates,
     axisLabelIndex: klineAxisLabelIndex(panes.length, KLINE_TOOL_VIS.vol, KLINE_TOOL_VIS.fct),
     showFct: KLINE_TOOL_VIS.fct,
-    headYAxes: [
-      { type: 'value', gridIndex: 0, scale: true, position: 'right' },
-      { type: 'value', gridIndex: 1, show: KLINE_TOOL_VIS.vol, position: 'right', name: '量',
-        axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
-    ],
+    headYAxes: klineHeadYAxes(_vis),
+    paneAxisLabel: klinePaneAxisLabel,
     histColors: { up: QREFactorLayout.COLORS.histUp, down: QREFactorLayout.COLORS.histDown },
   });
   const grids = _po.grid, xAxis = _po.xAxis, yAxis = _po.yAxis;
   // pane 序列接在主图/量/买卖点之后（顺序与原实现一致）
   (hasF ? _po.series : []).forEach(s => series.push(s));
   const zoomX = xAxis.map((_, i) => i);
-  const legendData = ['K线', '成交量', '买入', '卖出']
-    .concat(plan.overlays.map(o => o.name))
-    .concat(panes.reduce((acc, p) => acc.concat(p.series.map(s => s.name)), []));
   chart.setOption({
     animation: false,
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } },
-    legend: { data: legendData, selected: klineLegendSelected(plan), top: 0 },
-    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    legend: klineLegendSpec(plan),
+    axisPointer: klineCrosshairSpec(),
     grid: grids, xAxis, yAxis,
     dataZoom: [{ type: 'inside', xAxisIndex: zoomX }, { type: 'slider', xAxisIndex: zoomX, bottom: 4, height: 18 }],
     series,
@@ -1940,14 +2128,21 @@ function mountKlineReplay(d){
   // CR-2026-10-27：布局复用静态 TV 规格（右侧 56 留白给价格标尺、时间轴只挂末格）
   // QRE-KLINE-PANE-OPTION（T1）：pane 的 yAxes/series 也走共享出口（replay 规格），
   // grid 下标由 QREFactorLayout 内部生成，业务页不再手写 2+i。
-  const grids = klineGridSpec(true, panes.length, true);
+  // QRE-PRICE-SCALE（T2）：主图价格轴与静态图同一套格式化（mode/minMove/恒定轴宽），
+  // 百分比/指数化的基准 = 当前帧可见窗口首根收盘（axisLabel 为函数(s0) → 对象）。
+  const grids = klineGrids(panes.length);
   const labelIdx = klineAxisLabelIndex(panes.length, true, true);
   const _rpo = QREFactorLayout.panesToOption(panes, {
     paneBase: 2, grids, style: 'replay', showFct: true,
     headYAxes: [
-      { name: '', pct: false, position: 'right', scale: true },
+      { name: '', pct: false, position: 'right', scale: true,
+        axisLabel: (s0) => (typeof QREPriceScale === 'undefined' ? null
+          : QREPriceScale.axisLabelSpec(klineCloses(), {
+              mode: klinePriceMode, base: () => { const k = ohlc[s0]; return k ? Number(k[1]) : null; },
+              minMove: QREPriceScale.DEFAULT_MIN_MOVE })) },
       { name: '量', pct: false, position: 'right', formatter: v => (v / 10000).toFixed(0) + '万' },
     ],
+    paneAxisLabel: klinePaneAxisLabelFn(),
     histColors: { up: QREFactorLayout.COLORS.histUp, down: QREFactorLayout.COLORS.histDown },
   });
   const yAxes = _rpo.yAxis;
@@ -1987,10 +2182,25 @@ function mountKlineReplay(d){
     events, roundTrips: trips,
     initialCursor: startIdx,
     // x 轴全联动：跨主图/量/因子格的十字光标与时间轴对齐；时间轴只挂最后一个可见格
-    axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    // QRE-PRICE-SCALE（T2）：十字光标与静态图同一规格（1px 虚线 + 标签背景块）
+    axisPointer: klineCrosshairSpec(),
     axisLabelIndex: labelIdx,
     chartEl: $('#chart-kline'),  // 接管原容器
     eventsEl: $('#kreplay-events'),
+    // QRE-PRICE-SCALE（T2）：末价标签只贴**当前帧最后一根**（不得泄露未来数据）
+    markLineFor: (s, idx, s0) => {
+      if (!s.mark || typeof QREPriceScale === 'undefined') return null;
+      const k = ohlc[idx];
+      if (!k || k[1] == null || !isFinite(Number(k[1]))) return null;
+      const first = ohlc[s0];
+      return QREPriceScale.lastPriceMarkLine(Number(k[1]), {
+        mode: klinePriceMode,
+        base: () => (first ? Number(first[1]) : null),
+        minMove: QREPriceScale.DEFAULT_MIN_MOVE,
+        color: (idx > s0 && Number(ohlc[idx - 1][1]) != null && Number(k[1]) >= Number(ohlc[idx - 1][1]))
+          ? '#C93A3A' : '#1E8E5A',
+      });
+    },
     // 顶部信息区与侧边卡片共用当前帧口径：只回放已发生的行情
     onFrame: (cursor) => { infoFrame(cursor); klineSetInfo(klineInfoHTML(d, plan, cursor)); },
   });

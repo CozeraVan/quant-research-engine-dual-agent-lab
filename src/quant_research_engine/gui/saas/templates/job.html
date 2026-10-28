@@ -348,6 +348,7 @@ function renderMain(d){
       btn.dataset.code = code;
       const on = initial[benchName(code)] !== false;
       if (on) open.add(code);
+      btns[code] = btn;
       syncButton(code, on);
       btn.addEventListener('click', () => {
         const next = !open.has(code);
@@ -357,7 +358,6 @@ function renderMain(d){
         syncCurBench();
         updateRangeStrip();
       });
-      btns[code] = btn;
       bar.appendChild(btn);
     });
     // 图例点击（含图例上的策略/回撤）→ 回写按钮态；只关心基准名

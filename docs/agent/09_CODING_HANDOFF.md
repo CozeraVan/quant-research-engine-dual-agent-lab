@@ -4004,3 +4004,29 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 
 全量：`1 failed, 3082 passed, 24 skipped in 152.19s`（`.tmp/full_pytest_c.log`），
 唯一失败即上述 T1 遗留。未 commit/push。
+
+## 2026-10-29 复核补丁：lab 页 tip 机制 + 基准按钮初态（子 agent）
+
+两条「让既有功能真的生效」的小补丁，改的都是模板，未动后端：
+
+1. `gui/templates/lab_result.html`
+   - **不变量**：8081 实验台用 `base.html`，该基模板**不加载** `lab-ui.js`。任何
+     `data-tip` 要在 lab_result 页生效，本页 `<head>` 必须自己引
+     `/static/lab-ui.js`，并在渲染完风险块后调用 `window.LabUI.helpTips()`。
+     本次已补（echarts 之后、vol-regime 之前）。
+   - 加 `escH()` 并把卡片标题、风险灯、日收益分布、波动率状态四处说明改成
+     `tabindex="0" data-tip` / `tip-trigger`，删掉 `.opt` 灰字（规则 13）。
+   - `volTxt` 原先算完没用（死变量），现作为波动率状态的 tip 文本，兜底 `'暂无波动率数据'`。
+2. `saas/templates/job.html` / `symbol.html`
+   - **不变量**：`codes.forEach` 里 `btns[code] = btn;` 必须**先于** `syncButton(code, on)`。
+     `syncButton` 首行是 `if (!btns[code]) return;`，顺序反了初始化那次就什么都不设
+     （缺 `aria-pressed` 与 `.active`，图例默认却是开的）。
+   - 两处旧的重复赋值已删；改完每个文件里 `btns[code] = btn;` 只应出现一次。
+   - 回归测试：`tests/test_equity_chart.py`、`tests/test_gui_saas_pages.py` 等 249 例通过。
+
+复核命令（都在 `.tmp/`，不在测试集内）：
+`.tmp/vol-browser/a_verify.py`（无参渲染 → `browser` 参跑 Playwright）、
+`.tmp/equity-browser/render.py`（用当前模板重渲染 job/symbol 到 `.tmp/perf-browser`）+
+`.tmp/equity-browser/b_verify.py`。注意 b_verify 读的是**已渲染 HTML**，改模板后必须先重渲染。
+
+全量：`3083 passed, 24 skipped, 0 failed` in 153.72s。未 commit/push、未部署 ECS。

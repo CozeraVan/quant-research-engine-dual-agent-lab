@@ -207,7 +207,14 @@
         if (m.precision != null) sc.precision = m.precision;
         return sc;
       });
-      panes.push({key: g.key, name: g.label, thresholds: thresholds, series: series});
+      // pane 级精度：display 合同给的首个非空 precision（QRE-PRICE-SCALE T2 副图轴用）
+      var panePrecision = null;
+      members.forEach(function (m) {
+        if (panePrecision == null && m.precision != null) panePrecision = m.precision;
+      });
+      var pane = {key: g.key, name: g.label, thresholds: thresholds, series: series};
+      if (panePrecision != null) pane.precision = panePrecision;
+      panes.push(pane);
     });
     // paneOrder：副图排序（CR-2026-10-28）。缺省/非法输入保持分组顺序；
     // 列出的键前置（去重、忽略未知/非字符串），未列出的键保持相对顺序置后。
@@ -294,6 +301,8 @@
 
   /**
    * 因子 pane 的 yAxis 声明（索引内部生成）。
+   * spec.paneAxisLabel(pane, i) → axisLabel 对象（QRE-PRICE-SCALE T2：副图轴同样
+   * 走固定精度 + 恒定轴宽，修复"同一根轴 3 与 0.00 混排"）；返回 null 则不加。
    * @returns {Array} 长度 = panes.length，第 i 个的 gridIndex = paneBase + i
    */
   function paneYAxes(panes, spec) {
@@ -302,11 +311,21 @@
     var show = spec.showFct !== false;
     return (panes || []).map(function (p, i) {
       if (spec.style === 'replay') {
-        // 重播规格：replay.js 消费 {name, pct, position, scale, formatter}
-        return { name: p.name, pct: false, position: 'right', scale: true };
+        // 重播规格：replay.js 消费 {name, pct, position, scale, formatter, axisLabel}
+        var r = { name: p.name, pct: false, position: 'right', scale: true };
+        if (spec.paneAxisLabel) {
+          var al = spec.paneAxisLabel(p, i);
+          if (al) r.axisLabel = al;
+        }
+        return r;
       }
-      return { type: 'value', gridIndex: base + i, show: show, scale: true,
+      var ax = { type: 'value', gridIndex: base + i, show: show, scale: true,
                position: 'right', name: p.name, nameTextStyle: { fontSize: 10 } };
+      if (spec.paneAxisLabel) {
+        var al2 = spec.paneAxisLabel(p, i);
+        if (al2) ax.axisLabel = al2;
+      }
+      return ax;
     });
   }
 
@@ -394,7 +413,9 @@
       var labelIdx = spec.axisLabelIndex == null ? axisLabelIndex(panes.length, spec) : spec.axisLabelIndex;
       xAxis = grid.map(function (g, i) {
         var ax = { type: 'category', data: spec.dates, gridIndex: i,
-                   axisLabel: { show: i === labelIdx } };
+                   axisLabel: { show: i === labelIdx },
+                   // QRE-PRICE-SCALE（T2）：只画水平网格线，类别轴不画竖线
+                   splitLine: { show: false } };
         if (spec.xAxisExtra) Object.keys(spec.xAxisExtra).forEach(function (k) { ax[k] = spec.xAxisExtra[k]; });
         return ax;
       });

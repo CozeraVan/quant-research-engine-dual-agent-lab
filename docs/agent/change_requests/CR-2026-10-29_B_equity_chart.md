@@ -113,3 +113,33 @@ T1 改了 `symbol.html` 的 `renderKline/mountKlineReplay` 与 `game/templates/g
 
 `job` / `symbol` 两页的收益曲线模块；`replay.js` 的 legend 默认态。其它图表、其它页面未动。
 `#chart-equity` 所在的 grid `left` 仍取运行时的容器宽度（C 项已把字号/间距调好）。
+
+## 8. 补记（2026-10-29 独立核验：基准按钮初态缺 `aria-pressed` / `.active`，已修）
+
+浏览器实测发现：页面首次加载时 `#bench-bar` 的基准按钮**没有 `aria-pressed`**，
+也没有 `.active` 类，尽管图例默认把上证指数打开。读屏与键盘用户拿不到初始勾选态，
+视觉上也少一个「已选」标记。
+
+根因（`job.html` 与 `symbol.html` 各一份同样的逻辑）：`codes.forEach` 里先调用
+`syncButton(code, on)`，后写 `btns[code] = btn;`；而 `syncButton` 开头是
+`if (!btns[code]) return;`，所以初始化那次调用必然直接返回，什么都没设。
+
+修法（两个模板相同，各 2 行）：把 `btns[code] = btn;` **上移到** `syncButton(code, on)`
+之前，并删掉后面旧位置的那行重复赋值（重复赋值本身无害，只是噪声）。
+
+浏览器证据（`.tmp/equity-browser/b_verify.py`，Playwright + 真实 Chromium，
+真实模板重渲染、`/api/**` 拦截回 fixture）：
+
+```
+job 1440: series=['策略', '上证指数', '沪深300', '回撤'] bench_colors=['#B7A6E8', '#2A9D8F']
+bench buttons: [{'text': '上证指数', 'pressed': 'true'}, {'text': '沪深300', 'pressed': 'false'}]
+aria-pressed: true -> false        # 点击后反转
+job 375 overflow: {'sw': 375, 'cw': 375}
+symbol: yAxis=2 grid=2 series=['策略', '买入持有', '回撤']
+symbol 375 overflow: {'sw': 375, 'cw': 375}
+=== ERRORS === 无
+=== ALL OK ===
+```
+
+脚本同时断言：双网格（`yAxis=2/grid=2`）、回撤 series 走副网格（`yAxisIndex=1/xAxisIndex=1`）
+且为 `areaStyle`、策略色 `#6750A4`、多基准各自异色、375px 无横向溢出。

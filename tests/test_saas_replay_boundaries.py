@@ -18,9 +18,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -71,8 +73,18 @@ def _node(script: str) -> None:
         node = "/home/van/codex-local/node-v22/bin/node"
     if not node:
         pytest.skip("node 不可用")
-    result = subprocess.run([node, "-e", script], capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr or result.stdout
+    # 写临时文件而不是 `node -e`：harness 注入了真实 symbol.html + 真实
+    # factor-layout.js / price-scale.js 源码，超过 Linux 单参数上限
+    # MAX_ARG_STRLEN(128KB) 会直接 OSError: Argument list too long。
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                     encoding="utf-8") as fh:
+        fh.write(script)
+        path = fh.name
+    try:
+        result = subprocess.run([node, path], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr or result.stdout
+    finally:
+        os.unlink(path)
 
 
 # ---------------------------------------------------------------- replay.js

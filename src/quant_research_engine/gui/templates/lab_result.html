@@ -2,6 +2,7 @@
 {% block nav %}<a href="/">返回实验台</a>{% endblock %}
 {% block head %}
 <script src="/static/echarts.min.js"></script>
+<script src="/static/lab-ui.js"></script>
 <script src="/static/vol-regime.js"></script>
 <style>
   .brief-line { font-size: 12px; color: #888; margin: 4px 0 10px; cursor: pointer; }
@@ -110,8 +111,9 @@
   function pct(v) { return v == null ? "—" : (v * 100).toFixed(2) + "%"; }
   function num(v) { return v == null ? "—" : Number(v).toFixed(2); }
   function cls(v) { return v == null ? "flat" : (v > 0 ? "pos" : (v < 0 ? "neg" : "flat")); }
+  function escH(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function card(label, value, klass, tip) {
-    return '<div class="metric-card"' + (tip ? ' title="' + tip + '"' : '') + '><div class="m-label">' + label + '</div>' +
+    return '<div class="metric-card"' + (tip ? ' tabindex="0" data-tip="' + escH(tip) + '"' : '') + '><div class="m-label">' + label + '</div>' +
            '<div class="m-value ' + (klass || '') + '">' + value + '</div></div>';
   }
   function empty(id, msg) {
@@ -540,8 +542,8 @@
       var b = bt[lv];
       if (!b) return;
       var label = lv === '95pct' ? 'VaR95 回测' : 'VaR99 回测';
-      lightsHtml += '<span class="risk-light ' + (b.reject ? 'bad' : 'ok') + '" title="' +
-                    (b.conclusion || '') + '">' + label + (b.reject ? ' 不合格' : ' 合格') +
+      lightsHtml += '<span class="risk-light ' + (b.reject ? 'bad' : 'ok') + '" tabindex="0" data-tip="' +
+                    escH(b.conclusion || '') + '">' + label + (b.reject ? ' 不合格' : ' 合格') +
                     '（突破率 ' + (b.violation_rate * 100).toFixed(2) + '% / 预期 ' +
                     (b.expected_rate * 100).toFixed(2) + '%）</span> ';
     });
@@ -552,8 +554,8 @@
       '<div class="risk-cards">' + (cardsHtml || '<span class="opt">暂无 VaR/ES 数据</span>') + '</div>' +
       '<div style="margin-bottom:8px;">' + lightsHtml + '</div>' +
       '<div class="risk-grid">' +
-      '  <div class="risk-col"><div class="chart-title" style="font-size:14px;">日收益分布 <span class="opt">（直方图 + 正态拟合，竖线为 VaR）</span></div><div id="chart-risk-dist" style="height:300px;"></div></div>' +
-      '  <div class="risk-col"><div class="chart-title" style="font-size:14px;">波动率状态</div><div class="risk-vol-state" id="chart-risk-vol-state"></div><div id="chart-risk-vol" style="height:300px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:14px;">日收益分布 <button type="button" class="tip-trigger" data-tip="直方图展示日收益分布，曲线为正态拟合，竖线标记 VaR。" aria-label="收益分布说明">?</button></div><div id="chart-risk-dist" style="height:300px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:14px;">波动率状态 <button type="button" class="tip-trigger" data-tip="' + escH(volTxt || '暂无波动率数据') + '" aria-label="波动率说明">?</button></div><div class="risk-vol-state" id="chart-risk-vol-state"></div><div id="chart-risk-vol" style="height:300px;"></div></div>' +
       '</div>' +
       '<div class="chart-title" style="font-size:14px;margin-top:8px;">压力测试 <span class="opt" id="risk-stress-note"></span></div>' +
       '<div id="chart-risk-stress" style="height:280px;"></div>';
@@ -670,6 +672,8 @@
   }
 
   loadRisk();
+  // 说明提示统一走 LabUI.helpTips（事件委托，动态节点无需重新绑定）
+  if (window.LabUI && LabUI.helpTips) LabUI.helpTips();
 
   // --- 核心：净值 vs 基准 + 回撤双 grid ---
   var mainChart = null, benchChart = null, DATA = null, curBench = '000001.SH';

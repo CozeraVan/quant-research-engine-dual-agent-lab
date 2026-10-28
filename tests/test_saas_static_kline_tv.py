@@ -35,6 +35,10 @@ REPLAY_JS = (REPO / "src/quant_research_engine/gui/static/replay.js").read_text(
 FACTOR_LAYOUT_JS = (
     REPO / "src/quant_research_engine/gui/static/factor-layout.js"
 ).read_text(encoding="utf-8")
+# QRE-PRICE-SCALE（T2）：renderKline 的价格轴/末价标签/图例依赖它，注入真实源码
+PRICE_SCALE_JS = (
+    REPO / "src/quant_research_engine/gui/static/price-scale.js"
+).read_text(encoding="utf-8")
 
 
 def _node(script: str) -> None:
@@ -200,9 +204,12 @@ class TestSourceContract:
 
     def test_right_axis_and_padding(self):
         block = _render_kline_source()
-        assert block.count("position: 'right'") >= 3, "主图/量/因子面板都要右侧标尺"
+        assert "position: 'right'" in block, "价格/量轴必须右置"
         assert "left: 16, right: 56" in block, "右侧标尺留白"
-        assert "position: 'right'" in SYMBOL_TPL
+        # QRE-PRICE-SCALE（T2）：head 轴与轴宽预算必须走共享出口，不各写一份
+        assert "klineHeadYAxes(" in block, "主图/量轴必须共用 klineHeadYAxes"
+        assert "klineAxisRightPx()" in block, "右留白必须按价格轴标签宽度预算"
+        # 逐轴右置由 _FACTOR_SCENARIO 的 option 断言覆盖（比数字面量更强）
 
     def test_no_forbidden_deps(self):
         """禁的是 CDN/外部**资源**依赖；LWC 是 vendored 本地文件，允许引用其全局名。
@@ -250,7 +257,11 @@ const vm = require('node:vm');
 // 真实 factor-layout.js（window  Shim 后自挂到 globalThis）
 globalThis.window = globalThis;
 %FACTOR_LAYOUT%
+// QRE-PRICE-SCALE（T2）：同样注入**真实源码**——renderKline 的价格轴/末价标签/图例
+// 都依赖它，用桩会重蹈"桩窄于依赖 → VM 全绿、生产炸"
+%PRICE_SCALE%
 const __QFL__ = globalThis.QREFactorLayout;
+const __QPS__ = globalThis.QREPriceScale;
 
 function makeEl(sel){
   const e = {
@@ -315,6 +326,8 @@ function makeHarness(plan){
     QREFactorLayout: Object.assign({}, __QFL__, {
       plan(){ return plan || { chips: [], panes: [], overlays: [] }; },
     }),
+    // QRE-PRICE-SCALE（T2）：价格轴规格用真实实现（含 localStorage 里的 mode）
+    QREPriceScale: __QPS__,
     QRETheme: { themeChart(){} },
     // CR-2026-10-28：renderKline 读 paneOrder()，harness 必须提供 localStorage
     // CR-2026-10-28：renderKline 读 paneOrder()，harness 提供可用的内存 localStorage
@@ -346,9 +359,8 @@ function makeHarness(plan){
 # （避免漏替换导致 ReferenceError: __FACTOR_LAYOUT__ is not defined）
 # 注意：必须注入**原始源码**（不是 json.dumps 的字符串字面量，那不会执行）
 _HARNESS = _HARNESS.replace("%FACTOR_LAYOUT%", FACTOR_LAYOUT_JS)
-# QRE-KLINE-PANE-OPTION：定义处即注入真实 factor-layout.js，
-# 所有使用点自动生效（避免漏替换导致 ReferenceError）
-_HARNESS = _HARNESS
+# QRE-PRICE-SCALE（T2）：同上，注入真实 price-scale.js
+_HARNESS = _HARNESS.replace("%PRICE_SCALE%", PRICE_SCALE_JS)
 _MAIN_DATA = {
     "kline": {
         "dates": ["2024-01-02", "2024-01-03", "2024-01-04"],

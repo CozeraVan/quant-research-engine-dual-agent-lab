@@ -1500,3 +1500,32 @@ T1 在 `game/templates/game.html` 引入 `/static/factor-layout.js`，与 A/B/C 
 **待人工验收**：四个视口的视觉观感（本工具链无 ReadMediaFile，只有 DOM/几何断言）；
 B 项策略线用紫而任务书写蓝是否符合预期；`game.html` 那条约定的取舍。
 未 commit/push。
+
+### 2026-10-29 复核补丁完成（子 agent 核验 A/C/B，全量全绿，待人工验收）
+
+**当前状态：三项实现 + 两处复核补丁都在工作树，全量 `3083 passed, 24 skipped, 0 failed`。**
+
+本轮核验发现并修复的真实缺陷（细节见 `CR-2026-10-29_A_vol_regime_display.md` §7、
+`CR-2026-10-29_B_equity_chart.md` §8）：
+
+- A：`lab_result.html` 的说明机制**整块失效**——`base.html` 不加载 `lab-ui.js`，
+  `window.LabUI` 不存在；`volTxt` 是死变量、说明是 `.opt` 灰字。已补 6 处，
+  hover/focus 的 `tip-pop` 实测 `display:block`。
+- B：`job.html` / `symbol.html` 基准按钮初态缺 `aria-pressed`/`.active`
+  （`syncButton` 在 `btns[code]` 注册之前被调用）。各移 2 行；实测 `true/false`、点击反转。
+- C：无代码改动；本轮用**当前模板**重渲染 10 个页面后复跑，`ERRORS: 无 / FAILS: 0 /
+  ALL OK 60 runs`（body 16px、版心 1600、lab 图表 480/300/280、375px 无横溢）。
+
+**测试态**：全量 `3083 passed, 24 skipped, 4 warnings in 153.72s`，零失败。
+`TestNoAdminLinks` 三条曾红，隔离 9 passed / 整文件 94 passed / 全量通过 ⇒ flake。
+
+**待人工验收（只有人能判断）**：
+1. 四视口视觉观感（本工具链只有 DOM/几何断言与截图，无 ReadMediaFile 人眼复核）：
+   `.tmp/vol-browser/*.png`、`.tmp/equity-browser/`（若生成）、`.tmp/size-browser/screenshots/`。
+2. 任务书与实际不符但**已决策、勿回退**：B 策略线紫 `#6750A4`（任务书写蓝）；
+   C `.chart-title` 实际 15.5px（任务书写 13→14）。
+3. 遗留：`card-class.css` 的 `#sum-strip/#ra-strip` 280px 与 640px 断点未逐行确认；
+   `game.html` K 线 pane 仅单测覆盖。
+
+**未 commit / 未 push / 未部署 ECS**（按派单约束）。`AGENTS.md` 规则 12 的
+「先部署后验收」若仍需执行，由主线决定。

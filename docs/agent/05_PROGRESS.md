@@ -2132,3 +2132,42 @@ CR：`CR-2026-10-29_B_equity_chart.md`。未 commit/push。
 该断言表达「游戏页不共享 SaaS factor 逻辑」的契约，是否放宽应由 T1 决定。
 交接时的基线是 `2 failed, 3047 passed`（两条 `test_saas_public_beta_ops`
 跨零点 flake），本轮这两条已自行转绿。
+
+### 2026-10-29 独立核验（DeepSeek UI/UX A/C/B）+ 两处实测缺陷修复
+
+核验结论：三项实现主体已在 HEAD `bf71387`，实现方向、配色（策略紫 `#6750A4`）、
+字号（`.chart-title` 15.5px）均按 `12_UI_STYLE_GUIDE.md` 决策，**不回退**。
+
+本次补的两处真实缺陷（都不是重构，是让既有功能真的生效）：
+
+1. **A · lab 页说明机制整块失效**：`gui/templates/lab_result.html` 继承 `base.html`，
+   而 `base.html` 不加载 `static/lab-ui.js` → `window.LabUI` 不存在、`helpTips()` 从未绑定；
+   且 `volTxt` 算完从未使用，波动率状态说明写成 `.opt` 灰字（违反 `AGENTS.md` 规则 13）。
+   改 6 处：引 `lab-ui.js`、加 `escH()`、卡片标题/风险灯 `title=` 改 `data-tip`、
+   日收益分布与波动率状态改 `tip-trigger`、`loadRisk()` 后绑定 `LabUI.helpTips()`。
+2. **B · 基准按钮初态缺 `aria-pressed`/`.active`**：`job.html` / `symbol.html` 的
+   `codes.forEach` 里 `syncButton(code, on)` 在 `btns[code] = btn;` 之前调用，
+   而 `syncButton` 首行 `if (!btns[code]) return;` ⇒ 初始化直接返回。每页把注册行上移、
+   删掉旧位置重复赋值（净 2 行/页）。
+
+验证证据：
+- A：`.tmp/vol-browser/a_verify.py`（Playwright）→ lab 页 `triggers=2`、`helpTips bound=True`、
+  hover 与 focus 的 `div.tip-pop` 均 `display:block`、文本含 `EWMA`/`样本天数`、
+  无 `undefined/NaN/null`、`=== ERRORS === 无`。截图 `lab_risk.png`、`job_vol_thr.png`、`job_vol_old.png`。
+- B：`.tmp/equity-browser/b_verify.py`（真实模板重渲染 + `/api/**` 拦截）→
+  `bench buttons: [上证指数 pressed=true, 沪深300 pressed=false]`、点击后 `true -> false`、
+  job/symbol 均 `yAxis=2 grid=2`、回撤走副网格 `area`、策略色 `#6750A4`、两基准异色、
+  375px `sw==cw`、`=== ALL OK ===`。
+- 测试：`uv run pytest tests/ -q` → **`3083 passed, 24 skipped, 0 failed` in 153.72s**。
+- C 复验（无代码改动）：用当前模板重渲染 10 个页面后跑 `.tmp/size-browser/c_verify.py` →
+  `ERRORS: 无 / FAILS: 0 / ALL OK 60 runs`；body 16px、版心 1600、lab 图表 480/300/280、375px 无横溢。
+
+`TestNoAdminLinks` 三条（`[/saas/]`、`[/saas/new]`、`[/saas/jobs/1]`）在一次运行中变红：
+隔离单跑 9 passed、整文件 94 passed、全量复跑通过 ⇒ **顺序/跨文件污染型 flake**，与本轮改动无关。
+
+**任务书与实际不符（已决策，勿回退）**：B 策略线用紫 `#6750A4`（任务书写蓝 `#2563eb`）；
+C `.chart-title` 实际 CSS 15.5px（任务书写 13→14）；A 阈值需后端透传 `regime_thresholds`（既有提交）；
+C 还改了 `style.css` 的 1200 断点、`base.html` `.container` 1100、8081 `.topbar` 32px；
+`flex:1 1 45%` 落在 `card-class.css` 640px 断点而非 lab-theme 960px。
+
+未 commit / 未 push / 未部署 ECS（按派单约束；`AGENTS.md` 规则 12 的「先部署后验收」留给主线执行）。

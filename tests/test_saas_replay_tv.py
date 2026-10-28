@@ -77,8 +77,13 @@ class TestSourceContract:
 
     def test_replay_reuses_static_layout_spec(self):
         body = _mount_body()
-        assert "klineGridSpec(true, panes.length, true)" in body, (
-            "重播必须复用静态 grid 规格（右侧 56 留白）"
+        # QRE-PRICE-SCALE（T2）：重播与静态图共用 klineGrids（右留白按价格轴标签
+        # 宽度预算，≥56），不再各自写一份 grid 规格
+        assert "klineGrids(panes.length)" in body, (
+            "重播必须复用静态 grid 规格（klineGrids → klineGridSpec + 轴宽预算）"
+        )
+        assert "klineGridSpec(KLINE_TOOL_VIS.vol, paneCount, KLINE_TOOL_VIS.fct)" in SYMBOL_TPL, (
+            "klineGrids 必须仍由 klineGridSpec 生成布局"
         )
         assert "klineAxisLabelIndex(panes.length, true, true)" in body, (
             "时间轴只挂最后一个可见格"

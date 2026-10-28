@@ -33,6 +33,7 @@ Before modifying code or producing plans, read:
 - `docs/agent/21_FACTOR_LIBRARY_PLAN.md`（Tushare 202 因子本地复现立项方案：表设计/P0-P8 批次/验收/风险）
 - `docs/agent/23_KLINE_IMPLEMENTATION.md`（当前 K 线实现、数据合同、重播、因子呈现、主题与游戏交接）
 - `docs/agent/TV_FEEDBACK_2026-10-28.md`（TradingView 化本轮反馈：对照逆向 agent 报告的四功能完成度/未完成原因/难点/待回复问题；下一轮 TV 化的输入）
+- `docs/agent/TV_ROUND2_SUMMARY_2026-10-29.md`（**给逆向侧的下一轮输入**：本轮成果汇总 + 4 个待逆向侧回答的问题 + 可自行复跑的复核命令）
 - `docs/agent/24_PERF_METRICS_CONTRACT.md`（持股周期与 α/β/IR/Sharpe 口径合同：公式/常量/基准选择/前端后端分工/防漂移纪律；用这些指标前必读）
 
 ## Long-Term Memory Rule
