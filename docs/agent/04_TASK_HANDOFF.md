@@ -2888,3 +2888,13 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
   标签测得重叠会隔一个藏一个——图表"少了数据"很可能只是轴标签被藏，先查 interval。
   本项目其它 category 轴图表（如归因 treemap 外的柱状图）若也有此风险应一并排查。
 - 全量 `3036 passed, 24 skipped`。未 commit/push。
+
+## 2026-10-29 regime 阈值 + DeepSeek UI/UX 派单交接
+
+- 后端改 `risk/report.py`：regime 节加 `thresholds_annual`（年化波动率切点）。
+  测试 56 passed；全量 3036 passed。
+- DeepSeek 任务书：`change_requests/TASK-2026-10-29_deepseek_uiux.md`（三项 A/B/C）。
+  Kimi 负责主线与 bug 检查，DeepSeek 专注 UI/UX；DeepSeek **不 commit/push**，完成后报 Kimi 复核。
+- 任务书已写明：不得改后端与数据库、不得引外部依赖、不得新增灰字备注、
+  共享模块必须配 Node vm 测试并做 RED、必须真实浏览器四视口验证。
+- 未 commit/push。

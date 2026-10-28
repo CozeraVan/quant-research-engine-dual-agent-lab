@@ -2026,3 +2026,31 @@ axisLabel，category 轴默认 `interval:'auto'`，测量到标签会重叠就**
 全量 `3036 passed, 24 skipped`。真实浏览器用生产 job 58 数据断言 n==4 / interval==0 /
 hideOverlap==false / 短名 / series 各 4 点，截图 `.tmp/perf-browser/stress.png`
 确认 4 个情景标签全部显示。CR：`CR-2026-10-29_risk_stress_axis_labels.md`。未 commit/push。
+
+## 2026-10-29 regime 输出年化阈值 + 派发 DeepSeek UI/UX 任务书，未 commit/push
+
+用户报「FRM 波动率状态栏低/中/高股票数几次回测都是均匀的，请检查数据是否有错误」。
+**排查结论：数据没有错误。** `REGIME_QUANTILES=(1/3,2/3)` 按自身样本三分位切分，
+三桶观测数恒等于各 1/3——实测生产 4 个 job 全部 33.3%/33.3%/33.3%
+（job58 n=4068 → 1356/1356/1356，job66/74/78 同理，误差 ±1）。问题在原展示只平铺
+三个计数，不携带任何信息，用户误判成数据错误。
+
+后端：`risk/report.py` 的 `volatility.regime` 节新增 `thresholds_annual`
+（切点对应的年化波动率 = 日波动 ×√252，例：low_below=0.18344 / high_at_or_above=0.202309），
+让「低/中/高」有可读含义；counts 保留（数据正确），由前端决定是否降级到 hover tip。
+
+另派发 DeepSeek UI/UX 任务书 `change_requests/TASK-2026-10-29_deepseek_uiux.md`，三项：
+A. 波动率状态展示改造（中文标签 + 阈值 + 计数降级到 tip，两模板同改）
+B. 统一策略收益/个股收益对比图——抽共享模块 `static/equity-chart.js`
+   （`QREEquityChart`，option 构造为纯函数），多基准同时显示、基准分色
+   （上证 #B7A6E8 / 沪深300 #2A9D8F / 深证成指 #E8A33D / 中证500 #4A3A78 /
+   创业板指 #9A93A6 / 中证1000 #6750A4 / 买入持有该股 #6750A4 虚线）、
+   个股页加回撤副图、去掉「净值(元)」双 y 轴统一 % 口径
+C. 全局尺寸——`.wrap`/`.topbar-inner` 1280→1600px 且两侧 padding 与 max-width
+   严格一致（顶栏与内容对齐）、body 15→16px、`.chart-box`/`.card` padding 与
+   margin 全面放大、`.metric-strip` gap 10→14、图表高度 +60px、轴标签留白随之加大
+任务书含现状实测值→目标值对照表、5 项连带调整清单、四视口（1440/1920/2560/375）
+七页验收标准、通用纪律与建议顺序（A→C→B：先定尺寸再定图表结构）。
+
+测试：`test_risk_report.py` + `test_gui_risk_report.py` 56 passed；
+全量 `3036 passed, 24 skipped`。未 commit/push。

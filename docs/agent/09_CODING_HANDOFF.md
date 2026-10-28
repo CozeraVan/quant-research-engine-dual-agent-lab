@@ -3913,3 +3913,13 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
   body = 每个 param 的 marker + seriesName + 百分比。**不要再退回 valueFormatter**——
   轴标签缩短后完整描述只靠 tooltip 传递。
 - 未 commit/push。
+
+## 2026-10-29 regime thresholds_annual 实施交接
+
+- 改动：`src/quant_research_engine/risk/report.py`（regime_section 加
+  `thresholds_annual: {low_below, high_at_or_above}`）。
+- 年化用函数内局部 `ann`（`meta` dict 在函数尾部才组装，直接用会 NameError——
+  第一版就踩了）。
+- counts **保留不删**：数据是对的，只是展示不携带信息；是否降级到 hover tip
+  由前端决定（已写进 DeepSeek 任务书 A3）。
+- 未 commit/push。

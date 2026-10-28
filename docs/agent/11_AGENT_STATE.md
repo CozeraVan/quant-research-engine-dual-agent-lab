@@ -1446,3 +1446,16 @@ tooltip 补回完整描述 + n_days。lab_result.html 与 job.html 两处同改�
 测试 `TestStressAxisLabels` 3 例（RED 验证通过）；全量 `3036 passed, 24 skipped`；
 真实浏览器用生产 job 58 数据验证 4 情景全显示，截图 `.tmp/perf-browser/stress.png`。
 CR：`CR-2026-10-29_risk_stress_axis_labels.md`。未 commit/push。
+
+### 2026-10-29 REGIME-THRESHOLDS + DeepSeek UI/UX 派单，未 commit/push
+
+**FRM 波动率"均匀"问题结论：数据没错。** `REGIME_QUANTILES=(1/3,2/3)` 按自身样本
+三分位切分，三桶恒等于各 1/3——生产 4 个 job 全部 33.3%/33.3%/33.3%。
+原展示只平铺三个计数所以不携带信息。已加 `thresholds_annual` 让"低/中/高"有可读含义。
+
+**DeepSeek UI/UX 任务书已派发**（`change_requests/TASK-2026-10-29_deepseek_uiux.md`）：
+A 波动率展示改造 / B 收益对比图统一（抽 `equity-chart.js` 共享模块，防双实现漂移）/
+C 全局尺寸（wrap 1280→1600、body 15→16px、div 间距与内边距全面放大、图表 +60px）。
+建议顺序 A→C→B。DeepSeek 不 commit/push，完成后 Kimi 复核。
+
+测试：相关 56 passed；全量 `3036 passed, 24 skipped`。未 commit/push。

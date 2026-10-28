@@ -98,11 +98,23 @@ def build_risk_report(
         regime_section: dict[str, Any] = vol_series
     else:
         regime = volatility.volatility_regime(vol_series, regime_q)
+        # QRE-RISK-REGIME-THRESHOLDS：把分位切点换算成**年化波动率阈值**一并输出。
+        # 原 section 只有 counts，而规则按自身样本 1/3、2/3 分位切分 → 三桶观测数
+        # 恒等于各 1/3（实测 4 个 job 全是 33.3%/33.3%/33.3%），展示出来不携带任何
+        # 信息，用户会误判成数据错误。给出阈值后，"低/中/高"才有可读含义。
+        _q_lo = float(np.quantile(vol_series.dropna(), regime_q[0]))
+        _q_hi = float(np.quantile(vol_series.dropna(), regime_q[1]))
+        _ann = float(ann)
         regime_section = {
             "quantiles": list(regime_q),
             "counts": {k: int(v) for k, v in regime.value_counts().items()},
+            "thresholds_annual": {
+                "low_below": round(_q_lo * _ann ** 0.5, 6),
+                "high_at_or_above": round(_q_hi * _ann ** 0.5, 6),
+            },
             "latest": str(regime.iloc[-1]),
-            "note": "分位规则写死：σ<q1→low，q1≤σ<q2→mid，≥q2→high（按自身样本分位）",
+            "note": "分位规则写死：σ<q1→low，q1≤σ<q2→mid，≥q2→high（按自身样本分位）；"
+                    "thresholds_annual 为切点对应的年化波动率（日波动×√252）",
         }
 
     if benchmark is None:
