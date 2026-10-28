@@ -2762,3 +2762,16 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 数据体检结论（未修）：坏 tick 全市场 79 行 / 26 只，全是 920xxx.BJ，2015-2017 集中。
 - 测试：全量 `2975 passed, 24 skipped`；生产三例验证通过。未 commit/push。
 - 待决：是否清洗 26 只坏 tick；是否排除 2015-2017 的 920xxx.BJ。
+
+## 2026-10-28 使用说明侧边栏玻璃胶囊交接
+
+- 全新功能：此前无当前项高亮、无 JS。新增 `static/help-nav.js`（导出 `window.QREHelpNav`，纯函数 + init，带 `typeof document` 守卫供 Node vm 测试）。
+- 动画用 WAAPI 关键帧而非 transition（外层 linear，每帧自带 easing，避免二次平滑）；拉伸系数上限 18%，由位移距离驱动。
+- `help.html` 加 `<span class="help-pill">` 与 `{% block scripts %}`；CSS 在 `lab-theme.css` 追加，夜间在 `night-mode.css` 末尾覆盖。
+- 测试：`tests/test_saas_help_nav.py` 7 例；全量 `2988 passed, 24 skipped`。
+- 生产已部署（MainPID 520962，回滚副本 `/tmp/qre-deploy-20261028T040519Z.bak`），真实浏览器验证通过。未 commit/push。
+
+## 2026-10-28 全站卡片磨砂玻璃交接
+
+- 新增 `static/card-fx.js`（单委托 pointermove + rAF，导出 `window.QRECardFx` 纯函数供 Node vm 测试）；`lab-theme.css` 追加玻璃/装饰层/光斑/倾斜规则；`night-mode.css` 追加暗色玻璃 token；`base.html` 加一行脚本引入。
+- 测试 `tests/test_card_fx.py` 18 例；全量 `3006 passed, 24 skipped`；生产七页无头自验通过。CR：`CR-2026-10-28_card_frosted_glass.md`。未 commit/push。

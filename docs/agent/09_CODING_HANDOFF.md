@@ -3746,3 +3746,21 @@ PYTHONPATH=src uv run python -c 'from pathlib import Path; from quant_research_e
 - 主 Agent 复核：`plan()` 第三参 6 组断言 + DOM 合同 + harness 交互流；相关 162 passed；全量 2964 passed/24 skipped。
 - 生产：真实浏览器验证通过（MainPID 512078）；过程教训——机械移动函数区块时误删 `renderFactorChips` 的 `const slot`，VM 单测全绿但生产炸，已补真实页面渲染验证。
 - 未 commit/push。
+
+## 2026-10-28 使用说明侧边栏玻璃胶囊实施交接
+
+- 改动：`help.html`、`lab-theme.css`、`night-mode.css`、新增 `static/help-nav.js` 与 `tests/test_saas_help_nav.py`、CR。
+- 未动 `base.html`、其它模板、`night-mode.js`，无外部依赖。
+- 主 Agent 复核：127 相关 passed；全量 2988 passed/24 skipped；生产真实浏览器复测动画三段（拉伸 1→1.18、压扁 0.90、过冲 1.048→1）、夜间、375、reduced-motion 全部符合需求。
+- 未 commit/push。
+
+## 2026-10-28 全站卡片磨砂玻璃 + 光标光斑 + 轻微 3D 倾斜实施交接
+
+- 改动：`static/lab-theme.css`、`static/night-mode.css`、新增 `static/card-fx.js`、`saas/templates/base.html`（仅加一行 `<script>`）、`tests/test_card_fx.py` 新建、CR 新建。未动任何业务模板结构。
+- 玻璃：`backdrop-filter:blur(28px) saturate(140%)` + 48% 白底 + 1px 半透明白描边 + 顶部 inset 高光 + 24px 圆角 + 两层大投影；`--card-radius` 新 token，不动 `--radius`。
+- 背景装饰层 `body::before`（fixed / `pointer-events:none` / `z-index:-1` / 四团品牌紫径向渐变）：负 z-index 方案免去给 `.wrap`/`.container` 提层级，也不碰 `.topbar{z-index:40}` 与既有浮层。
+- 光斑 `::before`（`z-index:-1` + 父级 `isolation:isolate`，压在文字之下，不影响对比度）+ 描边环 `::after`（`mask-composite:exclude` 只留 1px）。
+- 倾斜 `.fx-tilt`（JS 判定 `!querySelector('canvas')` 且非嵌套内层才挂；图表卡 computed `transform` 恒为 `none`）；CSS `clamp()` 与 JS 双向钳制 ±4。
+- 踩坑记录：① 数学函数不能裸乘 `1deg`（必须包 `calc()`），且 `clamp(-1,…)` 钳的是度、把 3.98° 钳成 1°；② `background` 简写会重置 `background-image`，玻璃底拆成 `background-color` + `background-image`；③ 装饰层第一版出血到视口外，卡片中心采不到紫色（差 1 个色阶）。
+- 测试：`tests/test_card_fx.py` 18 例（源码合同 + 夜间 token + JS 接线 + Node vm 纯函数 harness）；目标组合 145 passed；全量 `3006 passed, 24 skipped`。
+- 生产已部署（`deploy-ecs.sh` 四个运行时文件），无头 Chromium 七页自验通过；帧率结论：委托监听簿记成本 ≈0ms，剩余成本来自无 GPU 环境下浏览器对 `blur(28px)` 的软件重采样（关掉 `backdrop-filter` 即回 60fps）。截图与报告在 `.tmp/card-fx/`。未 commit/push。

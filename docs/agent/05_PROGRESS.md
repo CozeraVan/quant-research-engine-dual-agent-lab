@@ -1669,3 +1669,107 @@ Kimi 实施，DeepSeek 出设计规格。
 - **生产**：920556 显示「—」+ 原因；920932 `350.70%`、920284 `121.65%`、
   job#66 `-2.38%`（长持仓年化仍生效）。MainPID 519969。
 - 详见 `docs/agent/change_requests/CR-2026-10-28_annual_floor_and_neeQ_ticks.md`。
+
+## 2026-10-28 使用说明侧边栏玻璃胶囊
+
+DeepSeek 实施，Kimi 复核并部署。
+
+- 侧边栏此前**完全没有当前项高亮、也没有任何 JS**（无 scrollspy、无 aria-current），本轮为全新功能。
+- 单个绝对定位 `.help-pill` 在 `.help-jump` 内滑动；`Element.animate` 播 5 帧关键帧（非 transition），
+  位移由 `stretchScale(dy,h)=1+clamp(|dy|/h*0.09,0,0.18)` 驱动，最长拉长 18%。
+- 关键帧：0%(起点,scaleY=1) → 46%(路程 55%,scaleY=stretch) → 72%(终点,压扁) → 88%(终点,过冲) → 100%(终点,1)。
+  前段缓出 `cubic-bezier(.22,1,.36,1)`，后段回弹 `cubic-bezier(.34,1.56,.64,1)`；
+  `transform-origin` 按上移/下移切 `bottom center`/`top center`，保证朝移动方向拉伸。
+- 玻璃：`rgba(103,80,164,.12)` + `1px rgba(103,80,164,.22)` + `backdrop-filter:blur(6px) saturate(1.15)`；
+  细高光 = `inset 0 1px 0 rgba(255,255,255,.78)` + `inset 0 -1px 0 rgba(255,255,255,.18)`；
+  `@supports not (backdrop-filter)` 降级为不透明 `--tint`。
+- `IntersectionObserver` 追踪七个 `.help-sec`；点击锚点立即移胶囊并平滑滚动；带 hash 打开正确定位；
+  resize 重算不播动画；`prefers-reduced-motion` 关闭全部动画。
+- 窄屏 ≤760px 双列 grid 下胶囊按 `offsetLeft/offsetTop` 定位，实测 375 无横向滚动、跨列定位正确。
+- 测试：新增 `tests/test_saas_help_nav.py` 7 例；相关 127 passed；**全量 2988 passed, 24 skipped**。
+- 生产：真实浏览器实测移动中 `scaleY 1→1.18`、到位压扁 0.90 → 过冲 1.048 → 归 1；
+  夜间四 token 覆盖生效；375 不溢出；reduced-motion `anims=0`；焦点环可见；零 console 报错。
+- 详见 `docs/agent/change_requests/CR-2026-10-28_help_sidebar_glass_pill.md`。
+
+## 2026-10-28 使用说明侧边栏玻璃胶囊 —— V2 竞稿（覆盖 V1，待用户择优）
+
+V1 上线后用户反馈「不满意」（未给具体点），本稿为重做竞稿，**同一份 CR 内追加
+「V2 竞稿（step-5，2026-10-28）」一节**，文件与选择器全部不变（`.help-pill` /
+`.help-jump` / `aria-current="true"` / `static/help-nav.js`），两版可在生产直接对调。
+
+- **玻璃（lab-theme.css）**：V1 是一层实底 + 纯色 1px 边框 + 顶/底两条 inset 白线；
+  V2 改成**五层叠成**——半透明紫底 `rgba(103,80,164,.13)` + 顶部受光渐变
+  （白 52% → 透明 48%）+ `::before` 配 `mask-composite:exclude` 做出的 **1px 渐变描边环**
+  （顶 100% 白 → 两侧 32% 紫 → 底 16% 紫，四圈一圈细高光）+ 顶部 1px 高光与底部 1px
+  压深（玻璃厚度）+ 贴地接触影与环境投影。夜间同名 token 只提亮度不换色相。
+- **位移（help-nav.js）**：V1 是 5 段 WAAPI 关键帧（外层 `easing:'linear'`，每帧自带
+  easing）；V2 改为 **rAF 下的弹簧数值积分**（半隐式欧拉，子步 1/240s），角速度恒定
+  12.25 rad/s、**阻尼比随移动距离在 0.62→0.80 自适应**，绝对过冲量因此稳定在 3~6px，
+  不随距离暴涨；连点中断从当前速度续滑，不跳帧重来。
+- **拉伸与回弹**：V1 按**位移量**算 `scaleY`（`1+clamp(|dy|/h*.09,0,.18)`），且恒定
+  `scaleY` + `top/bottom center` 切换——**在 ≤760px 双列 grid 里移动是横向的却仍在做
+  纵向拉伸，方向与形变相反**。V2 改成由**速度在移动方向上的投影**直接导出
+  （`|投影|/1500` 归一，上限 12%）：朝目标飞是拉伸，过冲回冲时投影转负、形变自动翻成
+  压扁；并按运动主轴做**体积补偿**（主轴形变、垂直轴反向收窄 34%），
+  `transform-origin` 固定 `center`。到位那一下另有一条**闭式阻尼振荡**
+  `amp·sin(ω_d t)·e^{-ζωt}` 补压扁，相位锁在积分器**实测的穿过目标那一帧**，
+  幅度按移动距离给（有下限），短距移动也有清晰回弹。
+- **辅助视觉**：当前项 `color:var(--lav-deep);font-weight:600`（V1 是 `--lav`/500）；
+  hover 只作用于非当前项且**不画描边**（V1 悬停当前项会再描一个边框，和胶囊边缘高光
+  抢戏）；`:focus-visible` 改 `--lav-deep`；首次出场用闭式阶跃响应从 0.82 弹到 1。
+- **顺带修掉的两个问题**：① 滚动监听从「每个 scroll 事件直接 `sync()`」改 rAF 节流
+  （`sync()` 内有 `getBoundingClientRect()`）；② 带 `#hash` 打开时先锁定 1.5s，
+  避免浏览器原生回跳被初始 IO 回调覆盖；③ 点击锁定释放时若被点节仍在可视区则保持它，
+  否则滚到页面最底部时高亮会跳回上一节。
+- **测试**：`tests/test_saas_help_nav.py` 仍 7 例但覆盖扩充（五层玻璃 token、mask 合成、
+  `moveParams`/`springStep`/`oscillate`/`stepResponse`/`impactScale`/`deformScale`/
+  `axisFor`/`scaleFor`/`crossedTarget` 纯函数）；相关 127 passed；全量 2988 passed, 24 skipped。
+- **生产（R-DEPLOY-001）**：MainPID 522582，回滚副本 `/tmp/qre-deploy-20261028T050502Z.bak`；
+  无头 Chromium 按 25ms 采样 `getComputedStyle().transform`：139px 位移峰值 `scaleY 1.060`
+  （`scaleX` 补偿到 0.980）→ 过冲 5.6px → 压扁 `scaleY 0.961`（`scaleX` 反向放宽到 1.013）
+  → 回冲 1.010 → 725ms 整定归 1；278px 远跳峰值 `scaleY 1.097`、压扁 0.953；
+  375 横向跨列峰值 `scaleX 1.066`（`scaleY` 0.978）、压扁 `scaleX 0.966`；
+  夜间 `rgba(155,132,216,.2)` + 受光渐变 + 描边环 + 高光 `rgba(241,237,248,.3)`，
+  文字 `rgb(200,172,214)`/600；375 无横向滚动；reduced-motion `anims=0`、`sy=1`；
+  焦点环 `solid 2px rgb(74,58,120)`；`#hash` 与末项锁定均正确；零 pageerror/console error。
+  截图与采样表 `.tmp/help-pill-v2/`（另附 V1/V2 并排对比 `ab/v1-*.png` / `ab/v2-*.png`）。
+- **未 commit/push**：等待用户在 V1 / V2 之间择优。若选 V1，恢复 V1 三个静态文件即可
+  （`tests/test_saas_help_nav.py` 与 CR 需同步回退）。
+
+## 2026-10-28 数据事故与恢复（stock_daily.low 全市场误覆盖）
+
+- **事故**：清洗 26 只 920xxx.BJ 的上游坏 tick（79 行）时，UPDATE 漏掉
+  `low < 0.2*close` 守卫，条件退化成 `low < LEAST(open,close)`（正常行情描述），
+  命中 13,292,037 行。`low` 13,292,072 行 + `open` 38 行被覆盖；
+  `high/close/vol/amount` 未动（未污染样本上偏差 0）。
+- **恢复**：Tushare 按 symbol 全量重拉 5779/5779 只、0 失败、1690 万行进影子表
+  `stock_daily_repair_20261028`（69 分钟）；回写影响 13,292,072 行（与污染数精确相等）；
+  再用正确作用域清洗 open 38 行 / low 79 行。
+- **校验**：清洗后 `open<0.2*close` 与 `low<0.2*close` 均为 0；全市场 OHLC 不变量违反 0；
+  未污染样本上 low 偏差 79（即已知坏 tick，已清洗）、pre_close/change/pct_chg 偏差
+  225/1,580,772（0.014% 上游 revision）。
+- **残留**：1329 万行原值不可恢复，现为 Tushare 当前值；按未污染样本估计最多数百行
+  `low` 可能是上游 revision 值而非库内原值。
+- **纪律已写入 AGENTS.md「Data Mutation Discipline」**：生产表 UPDATE 前必须跑同 WHERE
+  的 COUNT 并与已知量级对账；数据修复先影子表后人工换名；备份范围必须覆盖改动范围。
+- 详见 `docs/agent/change_requests/CR-2026-10-28_data_incident_low_overwrite.md`。
+
+## 2026-10-28 侧边栏胶囊 V3：形变幅度加强（用户反馈看不见拉长）
+
+- V2 的形变推导（速度投影 + 体积补偿 + 闭式到位振荡）是对的，但幅度不够：
+  `VEL_REF=1500` 而实测峰值速度约 1000px/s 只吃到 2/3，`DEFORM_MAX=0.12` 又封顶，
+  42px 胶囊仅拉长 3.4px，采样表可见、页面不可见。
+- 调整：`VEL_REF 1500→600`、`DEFORM_MAX 0.12→0.28`、`SQUEEZE 0.34→0.26`、
+  `IMPACT_MAX 0.10→0.16`、`IMPACT_RANGE 200→160`。
+- 实测：相邻项 scaleY 1.126、跨 5 项 1.280（53.8px）、375 横向 scaleX 1.280（181.8px）。
+- 测试 7 passed；全量 `2988 passed, 24 skipped`（中途 1 例 `test_saas_strategy_assets`
+  ERROR 为隔离性 flake，单独跑与组合跑均通过，复跑全量即消失）。
+- 生产 MainPID 523725，回滚副本 `/tmp/qre-deploy-20261028T054823Z.bak`。未 commit/push。
+
+## 2026-10-28 全站卡片磨砂玻璃 + 光标光斑 + 轻微 3D 倾斜
+
+- 需求（用户原话）：`backdrop-filter:blur(28px)saturate(140%)`、45%–60% 透明度、1px 半透明白描边、顶部内侧细高光、24px 圆角、大而柔阴影、**颜色不变**；悬停时光标跟随径向光斑 + 边框局部提亮 + ≤4° 3D 倾斜 + 移出平滑复原。重点页 `job.html` / `symbol.html`。
+- 关键设计：装饰层用 `body::before` 负 z-index（免提内容层层级、不碰 topbar/浮层）；光斑压在文字之下（`z-index:-1` + `isolation:isolate`）；图表卡（含 canvas）不挂 transform；嵌套卡只驱动最外层、嵌套小卡不二次模糊（job 页帧耗时 39→30ms）。
+- 透明度取 48%（区间偏下沿）：55% 时背景光斑透过玻璃仅 1 个色阶，48% 拉到 3–8 个色阶，卡片中心仍是 (253,252,254) 量级白。
+- 测试 18 例新建 + 全量 `3006 passed, 24 skipped`；生产七页无头自验通过（含像素级玻璃对照：玻璃全开 vs 藏装饰层 mean 2.27 / 41.5% 像素变化；纯色上开/关 blur 仅 0.19 / 0%——必须先加装饰层的量化证据）。
+- 详见 `docs/agent/change_requests/CR-2026-10-28_card_frosted_glass.md`。未 commit/push。

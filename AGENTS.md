@@ -64,6 +64,18 @@ The markdown files under `docs/agent/` are the project's only authoritative long
 13. UI notes (user standing instruction, 2026-10-26): new pages and UI changes must not introduce gray small-font note text in any form. Put necessary explanations into the existing `tip-trigger` + `data-tip` + `LabUI.helpTips` interaction; do not add `.opt`, muted/faint helper paragraphs, or small gray inline notes.
 14. Admin synchronization (user standing instruction, 2026-10-26): every permission/quota change must also be visible in the 9090 admin console with its real runtime values and relevant counters before commit/push. Admin presentation must use the same policy source as enforcement; never leave runtime permissions and console display out of sync.
 
+## Data Mutation Discipline（2026-10-28 数据事故后新增，每次交互必须执行）
+
+1. **任何生产表 UPDATE/DELETE，执行前必须跑与 WHERE 完全相同的 `SELECT count(*)`，
+   并与已知量级对账；差一个数量级立即中止。** 事故记录见
+   `docs/agent/change_requests/CR-2026-10-28_data_incident_low_overwrite.md`
+   （`low < LEAST(open,close)` 漏掉 `0.2*close` 守卫，1329 万行被误改）。
+2. **数据修复一律先影子表 + 审计表 + 人工换名**，参考 `quant_ts/rebuild_daily_raw.py`，
+   不直接 UPDATE 生产表。
+3. **备份范围必须覆盖改动范围**；只备份准备改的那几行，却跑了全市场条件的 UPDATE，
+   等于没有备份。
+4. 从分析到落地的 SQL 条件要逐字核对，每个守卫都必须在最终语句里出现。
+
 ## Git Ownership Rule
 
 Kimi Code executes git finalization, but only after all of the following:
