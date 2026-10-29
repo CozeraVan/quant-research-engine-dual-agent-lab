@@ -4103,3 +4103,17 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
 - **没有删** `renderKlineLwc` / `kline-lwc.js` / vendored 资产 / `klineDisposeEngines()`：
   后者是双引擎互斥的防御单点，删了会让未来任何新渲染路径失去保护。
 - 未 commit/push。
+
+## 2026-10-29 UI 四项修正实施交接
+
+- 改动：`static/lab-theme.css`（wrap/topbar-inner 1920px + padding 16px、body 17px、
+  .chart-title 16.5px + margin-bottom 14px、.chart-box .chart-title 14px、
+  .metric-card .m-label 14px）、`saas/templates/base.html`（.container 1920px、
+  .chart-title 16.5px/14px、.m-label 14px）、`static/card-class.css`（.m-value 19px、
+  sum/ra 条 17.5px、密集条 flex 150px、sum/ra 卡 padding 14px/18px）、
+  `saas/templates/job.html` 与 `gui/templates/lab_result.html`（删 renderRiskVol
+  三等分柱状图，加 QRE-VOL-REGIME-NO-BARCHART 冻结标记）。
+- 测试：`tests/test_perf_metrics.py`（密集条 130→150、ra 条 16.5→17.5px、
+  新增 test_vol_regime_bar_chart_removed）、`tests/test_saas_night_mode.py`
+  （job.html themeChart 5→4，因少一个 echarts.init）。
+- 未 commit/push。

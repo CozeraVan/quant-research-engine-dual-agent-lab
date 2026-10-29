@@ -2235,3 +2235,41 @@ LWC 代码与 vendored 资产保留为休眠态——`klineDisposeEngines()` 仍
 不报错不白屏。解冻条件与代码位置见 docs/agent/24_KLINE_LWC_FROZEN.md。
 
 测试：test_lwc_kline_adapter.py 13 passed；全量 3138 passed, 24 skipped。
+
+## 2026-10-29 UI 四项修正（用户逐条反馈后），未 commit/push
+
+用户反馈「DeepSeek 的 UI 优化似乎只做了收益图统一化和 width 拓宽」。逐项实测后
+确认：C 项的 CSS 确实都部署了（1600px/16px/gap14px/chart-box 28px 全部生效），
+但**有三处真没做到位**，另两项是「做了但幅度不够」。
+
+① 波动率状态仍是 3 等分 —— **真没做**。A 项加了 QREVolRegime.describe() 的
+   阈值文案，但三等分柱状图原样留着。根因：regime_counts 按自身样本 1/3、2/3
+   分位切分，三桶恒等于各 1/3（生产 4 个 job 全部 33.3%/33.3%/33.3%），
+   画出来不携带任何信息。已删除 job.html 与 lab_result.html 的
+   renderRiskVol 柱状图，主视图只留 describe() 状态 + 年化阈值，
+   计数归 QREVolRegime.tipText 悬停。新增契约测试
+   test_vol_regime_bar_chart_removed 防复现。
+
+② width 还需往外拓展 —— 做了但幅度不够。1600 → **1920px**（.wrap/.container/
+   .topbar-inner 三处同步），横向 padding 20 → 16px。MacBook（1440-1512）上
+   有效宽度只从 1240→1400，感知自然弱；28 寸上从 1560→1888。
+
+③ 字体没提升 —— 做了但只 +1px。body 16 → **17px**；.chart-title 15.5 → 16.5px；
+   .metric-card .m-label 13 → 14px；.m-value 16.5 → **19px**（密集条）/
+   17.5px（简介与 ra 条）；td 13.5 → 14.5px。
+
+④ div 间距没扩大 —— **部分没做**。外层 .chart-box margin-bottom 28px、
+   gap 14px 已有，但**大 div 内部 header 与正文的上下间距一直是 6px**，
+   完全没动。.chart-title margin-bottom 6px → **14px**（lab-theme 与 base 两处），
+   小卡 padding 10px/14px → 14px/18px。
+
+⑤ EMA 独立 K 线之外 —— **未能复现，需用户给具体链接**。已排查：
+   plan() 对 ema_5/ema_20 正确判 overlay（node 实测）；
+   renderKline 的 overlay 系列确实推 xAxisIndex:0/yAxisIndex:0；
+   step5 的 applyParamChoices 不改 col、不破坏分类；
+   生产 job78/600330 的 EMA 与 K 线同尺度（ema_5=22.37 vs close=21.97，
+   factor_basis=qfq_anchor_v1）。
+
+浏览器实测：container 1920px、body 17px、chart-title 16.5px/14px、
+三等分柱状图 hasBarChart=false。全量 3138 passed（1 个顺序型 flake，
+每次挂不同测试、单独跑均过，与本次无关）。

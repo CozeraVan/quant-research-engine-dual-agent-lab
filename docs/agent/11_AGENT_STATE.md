@@ -1546,3 +1546,12 @@ TV_ROUND2 T1–T6 **全部完成**。T6 按逆向侧 §4 冻结 LWC 试点：入
 **待补验证**：T3 光标移动、T4 画线交互未在我方浏览器 harness 中驱动成功
 （step5 将 distToSeg 等收入闭包且重写点击路径），需人工或改进 harness 后补。
 全量 3138 passed, 24 skipped。
+
+### 2026-10-29 UI 四项修正待人工验收，未 commit/push
+
+用户逐条反馈后实测：C 项 CSS 本就全部生效（1600/16px/gap14/28px），但
+① 三等分柱状图真没删（A 项只加了文案）② width 幅度不够（1600→1920）
+③ 字号只 +1px（→17px/m-value 19px）④ **大 div 内部 header→正文间距一直 6px 没动**
+（→14px）。③ EMA 独立 K 线之外**未能复现**，需用户给具体 job/symbol 链接。
+
+全量 3138 passed（1 个既有顺序型 flake）。

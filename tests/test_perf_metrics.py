@@ -571,7 +571,7 @@ class TestMetricStripStyleContract:
         assert ".wb-val.neg {" in self.CARD_CSS
 
     def test_dense_strips_fit_seven_in_one_row(self):
-        """密集条（7 卡左右）min 必须 ≤130px，否则 job 指标条会退化成 6+1 孤行。
+        """密集条（7 卡左右）min 150px：容器拓宽到 1920px 后 7 卡一行余量充足。
 
         实测：job 页 .container 约 1000px，7×150+6×10=1110 放不下 → 6+1；
         7×130+6×10=970 放得下 → 一行并排。
@@ -584,8 +584,8 @@ class TestMetricStripStyleContract:
         assert m, "未找到密集条 flex 规则"
         basis = re.search(r"flex: 1 1 (\d+)px", m.group(1))
         assert basis, "密集条必须写 flex: 1 1 <N>px"
-        assert int(basis.group(1)) <= 130, (
-            f"密集条 min {basis.group(1)}px 过大，7 卡会换行成孤行"
+        assert int(basis.group(1)) == 150, (
+            f"密集条 min 应为 150px（容器 1920），实际 {basis.group(1)}px"
         )
 
     def test_summary_and_ra_strips_use_wider_basis(self):
@@ -597,7 +597,8 @@ class TestMetricStripStyleContract:
                       self.CARD_CSS)
         assert m, "未找到简介/风险调整收益条规则"
         assert "flex: 1 1 280px" in m.group(1), "简介与 ra 条必须 min 280px（C3.5）"
-        assert "font-size: 16.5px" in self.CARD_CSS, "两条的 m-value 必须 16.5px"
+        assert "font-size: 17.5px" in self.CARD_CSS, "两条的 m-value 必须 17.5px"
+        assert "font-size: 19px" in self.CARD_CSS, "密集条 m-value 必须 19px"
 
     def test_no_leftover_grid_rules_for_these_strips(self):
         """旧的 grid-template-columns 规则必须删掉——flex 容器上它们是死代码，

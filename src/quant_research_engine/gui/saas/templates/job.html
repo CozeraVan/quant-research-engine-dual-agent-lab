@@ -831,26 +831,12 @@ function renderRiskVol(d) {
     var stateEl = document.getElementById('chart-risk-vol-state');
     var stateTxt = QREVolRegime.describe(vol);
     if (stateEl) { stateEl.textContent = stateTxt; stateEl.style.display = stateTxt ? '' : 'none'; }
-    if (!rc) { el.innerHTML = '<div class="chart-empty">暂无波动率数据</div>'; el.style.height = 'auto'; return; }
-    var order = ['low', 'mid', 'high'];
-    var names = { low: '低波动', mid: '中波动', high: '高波动' };
-    var c = echarts.init(el);
-    riskCharts.push(c);
-    if (window.QRETheme && QRETheme.themeChart) QRETheme.themeChart(c);
-    c.setOption({
-      animation: false,
-      tooltip: {},
-      grid: { left: 55, right: 15, top: 25, bottom: 25 },
-      xAxis: { type: 'category', data: order.map(function(k) { return names[k]; }) },
-      yAxis: { type: 'value', name: '天数' },
-      series: [{
-        type: 'bar', barWidth: '45%',
-        data: order.map(function(k) {
-          return { value: rc[k] || 0, itemStyle: { color: k === vol.latest_regime ? '#6750A4' : '#D9D2EA' } };
-        }),
-        label: { show: true, position: 'top' },
-      }],
-    });
+    // QRE-VOL-REGIME-NO-BARCHART：三等分柱状图已删除。
+    // regime_counts 按自身样本 1/3、2/3 分位切分，三桶恒等于各 1/3
+    // （实测生产 4 个 job 全部 33.3%/33.3%/33.3%），画出来不携带任何信息，
+    // 用户明确反馈"没有任何形式上的优化"。计数改由 tipText 在悬停里给，
+    // 主视图只留 describe() 的状态 + 年化阈值。
+    el.style.display = 'none';
   }
 function renderRiskStress(d) {
     var el = document.getElementById('chart-risk-stress');
