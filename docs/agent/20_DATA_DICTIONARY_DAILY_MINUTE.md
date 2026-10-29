@@ -83,7 +83,16 @@ agent 不代拍。三个选项：
 ① 回测宇宙排除 `920%.BJ` 且 `trade_date < 2021-11-15` 的行（推荐：脏数据不进池，可复现）；
 ② 整个排除 `920%.BJ`（北交所流动性低，且 2021 前无有效数据）；
 ③ 保留但在产物上打 `data_quality=neeq_legacy` 标记，前端提示。
-**在任何选项落地前，不得修改 `stock_daily` 里的数据**（纪律：源数据只读，见 `25_WEEKLY_HANDOFF` §2.1）。
+**2026-10-29 用户裁定：不清洗、不标记，直接删除受影响任务**（见
+`change_requests/CR-2026-10-29_polluted_jobs_purge.md`）。job **58 / 66 / 74 / 78**
+四个全期任务的 jobs / results / showcase / showcase_daily / share_links 行与
+`uploads` + `archive` 产物目录**已全部删除**（删除前全量备份在
+`~/quant-workspace/backups/polluted-jobs-20261029/`，含 6 个 tar.gz + 3 份 DB dump）。
+删除后周扫 `scanned_files 1013 → 96`、`legacy_total 0`；`/saas/showcase` 返回空列表；
+四个 job 的详情接口对匿名返回 401（与私人 job 一致，无信息泄漏）。
+**`stock_daily` 一行未改**（纪律：源数据只读）——脏数据仍在表里，
+所以「宇宙排除 920xxx 三板残留」这条规则**仍然要落地**，否则下次全期回测会再次被污染。
+保留任务：73 / 75 / 76 / 77 / 79 / 80 / 81（76 干净，73/77 为 smoke 且扫描未见 2021 前北交所交易）。
 
 ## 3. 分钟线行情：`public.stock_minute_1m`（2026-10-11 全量入库完成）
 

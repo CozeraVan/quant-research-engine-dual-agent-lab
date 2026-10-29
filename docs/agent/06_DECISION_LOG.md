@@ -1546,3 +1546,24 @@ No open questions remain.
 - Alternatives: 只在文档写纪律——否决（已写过三次，照样复发）；批量重跑全部历史回测生成新产物——否决（ECS 无行情库、本地 run 产物已清，成本远高于 rescale，且 `e37c5cd` 已补救过 1013 个存量产物）；把拒发计数接进 9090 运营看板——本轮不做（需要新的计数器落库与前端，日志 + 审计脚本已足够可观测，列为后续可选）。
 - Impact: 新增 1 个模块 + 读取侧约 10 行 + worker 侧 1 处留痕 + 1 个审计脚本；`lab_result.FACTOR_BASIS_QFQ_ANCHOR_V1` 改为 re-export（import 路径不破）；存量 1013/1013 产物已全部带 `qfq_anchor_v1`（2026-10-29 审计），归档的 496 个不构成口径未知产物；新增测试 15 + 3 + 2 例。契约全文见 `docs/agent/23_KLINE_IMPLEMENTATION.md` §4a。
 - Owner: KIMI_CODE（用户 2026-10-29 批准启动 P0）
+
+### 2026-10-29: 删除被北交所三板残留数据污染的全期任务（58/66/74/78），而非清洗或打标
+
+- Decision: 对 `920%.BJ` 2021-11-15 之前三板残留脏数据所污染的四个全期任务（job 58/66/74/78），
+  **直接删除**（jobs/results/showcase/showcase_daily/share_links + uploads/archive 产物），
+  不做数据清洗、不打质量标记、不重跑；`stock_daily` 源数据一行未改。
+- Reason: 用户看到量化影响（四个任务 12.9%~22.6% 毛盈亏来自 115 只脏北交所个股）后判定
+  「没有什么存在的必要」——与 2026-10-27 删除其他测试数据同一逻辑。清洗/打标都要先定义
+  股票池规则，而规则本身是产品决策；删除是唯一不需要替用户拍板口径的动作。
+  另：这三个 job 正是公开展示的经典策略，留着就是继续对外展示错数字。
+- Alternatives: ①宇宙排除 920xxx 后重跑四个任务——未选（成本高，且用户要先定股票池规则）；
+  ②打 `data_quality=neeq_legacy` 标记保留——未选（标记只解决"看得见"，不解决"数字错"）；
+  ③改 `stock_daily` 清掉脏行——**明确否决**（源数据只读纪律，见 `25_WEEKLY_HANDOFF` §2.1）。
+- Impact: `/saas/showcase` 变空列表（经典策略页需用干净重跑的结果重新填充）；
+  MACD 旧系退场条件② 从此天然满足（归档产物已随删除消失），
+  **`familyOf` 旧名分支的"删前后置风险"同时消失**（不再有依赖旧名渲染的在线产物），
+  只剩条件①连续 4 次周扫为 0（预计 2026-11-02/09/16/23）；
+  `deploy/saas/macd-legacy-scan.log` 历史保留（审计轨迹）；
+  删除前全量备份在 `~/quant-workspace/backups/polluted-jobs-20261029/`。
+  证据见 `change_requests/CR-2026-10-29_polluted_jobs_purge.md`。
+- Owner: KIMI_CODE（用户 2026-10-29 指示「将这些回测全部清除，从本地到公网的数据全部删除」）
