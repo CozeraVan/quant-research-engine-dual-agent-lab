@@ -19,3 +19,11 @@ legacy_total 496
 legacy_age 58 4.9 active
 legacy_age 66 4.9 active
 retention_days 15
+=== 2026-10-29T07:00:40Z ===
+scanned_files 1013
+legacy_job 58 263
+legacy_job 66 233
+legacy_total 496
+legacy_age 58 4.9 active
+legacy_age 66 4.9 active
+retention_days 15

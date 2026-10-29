@@ -190,6 +190,14 @@ service 单元里 `Environment=` 固定为 15；手动跑可用环境变量覆�
 年龄取 `risk_report.json` 的 mtime 作稳定证据（不用 `_symbol_details` 目录 mtime——
 部署/拷贝会刷新它，实测会把 5 天前的 job 算成 0.8 天）。
 
+**退场前置动作（2026-11-08 窗口，产品决策，agent 不拍板）**：`legacy_total==0` 不是等来的——
+它要求 job 58/66 的 **496 个含旧系名产物被实际归档或删除（归档优于删除）**。
+15 天过期**只满足条件②**（旧 job 视为过期、不再受保护）；产物文件本身仍在 ECS 上，
+周扫照样能读到旧列名，条件① 的计数就不会归零。正确顺序：
+**先归档/清理这 496 个产物 → 再连续 4 次周扫计数为 0 → 才删
+`factor-layout.js::familyOf` 旧名分支**。归档 vs 删除 vs 重跑这两个旧 job 换成新系产物，
+由产品负责人在 2026-11-08 窗口裁决，agent 不代拍。
+
 **退场动作**（一个 PR）：删 `factor-layout.js::familyOf` 的旧名分支 + 判据脚本的
 双列名警示同步退场。
 **明确不删**：`configs/factor_registry.json` 的 `extra_aliases` 旧名别名——

@@ -123,9 +123,47 @@ TV 线进入**维护期**：R6 之后不再有轮次任务书，无未决工程�
 维护动作仅剩：每轮 TV 改动跑 `tv_check_all.sh` + 两个守卫测试（已进 AGENTS.md）、
 每周一 03:17 timer 自动周扫、2026-11-08 后关注退场窗口。
 
-**本方唯一挂起项**：无。R6-1（周扫日志证据链持久化）已随 R6-2 一并落地，
-保留期 15 天的退场窗口（2026-11-08）前，条件① 的计数依据已双保险
-（仓库内 `deploy/saas/macd-legacy-scan.log` + journal）。
+**本方挂起项**：无（R6-1 已随 R6-2 一并落地，见 §1）。
+
+---
+
+## 4. 收尾动作回传（TV_MAINT_NOTES_2026-10-30 两条）
+
+### 4.1 journal 双保险实操验证 —— **通过**
+
+```
+$ sudo systemctl start qre-macd-legacy-scan.service      # oneshot，自带 --record
+Result=success / ExecMainStatus=0                        # 墙钟约 11s
+
+$ sudo journalctl -u qre-macd-legacy-scan.service --no-pager | tail
+Oct 29 15:00:40 … scan-macd-legacy-names.sh[15134]: scanned_files 1013
+Oct 29 15:00:40 … scan-macd-legacy-names.sh[15134]: legacy_job 58 263
+Oct 29 15:00:40 … scan-macd-legacy-names.sh[15134]: legacy_job 66 233
+Oct 29 15:00:40 … scan-macd-legacy-names.sh[15134]: legacy_total 496
+Oct 29 15:00:40 … scan-macd-legacy-names.sh[15134]: legacy_age 58 4.9 active
+Oct 29 15:00:40 … scan-macd-legacy-names.sh[15134]: legacy_age 66 4.9 active
+Oct 29 15:00:40 … scan-macd-legacy-names.sh[15134]: retention_days 15
+Oct 29 15:00:40 … scan-macd-legacy-names.sh[15134]: >>> 退场条件未满足，familyOf 旧名分支继续保留 <<<
+```
+
+**脚本输出（非仅生命周期行）已在 journal 中**，双保险成立。
+一个值得记的对照：同一 unit 在**上一个 boot**（13:32）的 journal 记录**只有**
+`Starting/Finished` 两行生命周期——那正是 `StandardOutput=append:.tmp` 时期的产物，
+反向证明了 R6-1 改 `journal` 是必要的，不是形式主义。
+该次 `systemctl start` 也按设计往仓库内证据日志追加了一条（`=== 2026-10-29T07:00:40Z ===`）。
+
+### 4.2 数据字典 §4.1.1 补退场前置动作 —— **已补**
+
+新增段落「**退场前置动作（2026-11-08 窗口，产品决策，agent 不拍板）**」：
+`legacy_total==0` 不是等来的——它要求 job 58/66 的 **496 个含旧系名产物被实际归档或删除
+（归档优于删除）**；15 天过期**只满足条件②**，产物文件仍在 ECS 上，周扫照样读到旧列名，
+条件① 计数不会归零。正确顺序：**先归档/清理这 496 个产物 → 再连续 4 次周扫计数为 0 →
+才删 `familyOf` 旧名分支**。
+
+### 4.3 2026-11-08 窗口的产品决策 —— **已呈报用户，agent 不拍板**
+
+三个选项（归档退场 / 保留分支 / 重跑旧 job 换成新系产物）已在该段与回复中
+明确交产品负责人裁决，本方不代拍。
 
 ---
 
