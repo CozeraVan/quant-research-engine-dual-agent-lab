@@ -2237,3 +2237,49 @@ uv run pytest tests/ -q → 2961 passed, 24 skipped, 1 failed（known timing fla
 uv run pytest tests/test_gui_risk_report.py -q → 24 passed
 ECS deploy → qre-saas active; /saas/jobs/58/symbols/920832.BJ 200; kt-trend/kt-horizontal present
 ```
+## 2026-10-29 DeepSeek UI 第 3 轮（全站字号 +2px / 间距放大）复核
+
+### Review Status
+
+PASS（未 commit/push/部署 ECS 由本 agent 发出；改动已被并行 `8789a15` 提交并推送，待用户验收）
+
+### Findings
+
+- **范围控制**：18 文件全部落在「样式字号/间距 + 模板内联字号/间距 + 4 个测试断言」
+  内；未改 font-family、font-weight、色板、圆角、媒体断点阈值、DOM 结构、任何 JS 逻辑。
+  `tests/test_no_silent_failure_patterns.py`、`tests/test_template_inline_js_syntax.py`、
+  `deploy/saas/scan-macd-legacy-names.sh`、`AGENTS.md`、
+  `20_DATA_DICTIONARY_DAILY_MINUTE.md`、`TV_ROUND4_*`、`TASK-*round3.md` 属并行任务，
+  不计入本轮。
+- **line-height 零改动可证**：不是「肉眼看着没改」，而是把 diff 中所有含
+  `line-height` 的行抽出来做值分布比对，removed 22 / added 22，两侧分布逐档一致 → `EQUIVALENT`。
+  用户「行间距暂不推进」的硬约束成立。
+- **4 项补修均为真机证据驱动**：① `base.html` 裸 `th,td{padding:8px}` 覆盖 `.tbl td`
+  （home 实测 8px）；② job 页无 `.page-head`，`headGap` 只有 12px；③ 375 视口
+  `documentElement.scrollWidth=410` 横溢；④ `verify.py` 自身口径问题（td 断言把
+  `.muted/.opt` 也算进去、`pMB<12` 断言了非目标项、`.metric-strip` 取到了 `.card` 内
+  元素、symbol 404 被当成 console error）。四处已修并复验。
+- Required Fixes：无。
+- 遗留（发现但未改，均出本轮边界）：
+  - `symbol.html` 把 `/api/results/1/symbols/000001.SZ` 的 404 当控制流用；建议后续
+    改 200 + `ok:false`（API 契约变更，本轮只在 `verify.py` 白名单显式登记）。
+  - `12_UI_STYLE_GUIDE.md` 字号基线（body 17 / table 14）已过期，按任务书只提示不改。
+  - `.help-side{padding:14px}` 低于本轮 `.card` 30/32 的族值，属既有设计，未动。
+  - `profile.html` 的 metric-strip 在 `.card` 内且 inline `margin-bottom:0`，
+    页面级无 strip 可测，`verify.py` 记为 `metricStripSkipped`。
+
+### Validation Evidence
+
+```text
+uv run --with playwright python .tmp/ui-round3/verify.py → combos=54 failures=0 elapsed=158.0s / PASS (exit 0)
+  body=19 table=16 .chart-title=18.5 .m-label=16 .m-value=21 / clipped=0 / scrollWidth<=innerWidth / console.error+pageerror=0
+  375 抽样：九页 scrollWidth=375 innerWidth=375；home tdPad=[[14,14,14,14],[14,14,14,14],[13,14,13,14]] clipped=0
+  job headGap=16 (src=h1，无 .page-head)；new headGap=28
+  profile metricStrip=None metricStripSkipped="only inside .card"
+  symbol consoleAllowlisted=1 (net4xx /api/results/1/symbols/000001.SZ，既有控制流)
+python .tmp/ui-round3/lineheight_check.py → EQUIVALENT (removed 22 / added 22，分布逐档一致)
+python .tmp/ui-round3/nodecheck.py → checked 7 script blocks, 0 failed
+uv run pytest tests/ -q → 3205 passed, 34 skipped, 6 warnings in 164.09s (exit 0)
+git show 8789a15 -U0 -- '*.css' '*.html' | grep -E '^[+-].*line-height' | wc -l → 44（22 增 22 删）
+  两侧 line-height 值分布（11 档）逐档 diff → 无差异（DISTRIBUTION_IDENTICAL）
+```

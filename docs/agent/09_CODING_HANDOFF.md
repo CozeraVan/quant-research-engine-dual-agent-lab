@@ -4145,4 +4145,62 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
   `.fct-chip-reset` 11.5px 低于 12px 下限，遗留。
 - 未 commit / push / 部署 ECS（按任务书边界；与 AGENTS.md 规则 12 的「改完直接部署」
   冲突处以任务书为准）。- 收尾复跑（工作区已含并行 TV agent 新增 3 条测试）：`3161 passed, 24 skipped`（exit 0）。
-  端口 8098 / 8097 临时验证服务已 kill；`scripts/check-progress-docs.sh` 通过。
+  端口 8098 / 8097 临时验证服务已 kill；`scripts/check-progress-docs.sh` 通过。## 2026-10-29 DeepSeek UI 第 3 轮（字号 +2px / 间距放大 / line-height 冻结）实施交接
+
+- 任务书：`docs/agent/change_requests/TASK-2026-10-29_deepseek_ui_round3.md`；
+  CR：`docs/agent/change_requests/CR-2026-10-29_ui_round3_font_spacing.md`。
+- 改动 18 文件（+314 / −286）：
+  - 样式 3：`src/quant_research_engine/gui/static/lab-theme.css`（主体）、
+    `card-class.css`、`night-mode.css`。
+  - 模板 11（`src/quant_research_engine/gui/saas/templates/`）：
+    `_records_body.html`、`_records_scripts.html`、`base.html`、`dashboard.html`、
+    `help.html`、`job.html`、`new.html`、`profile.html`、`showcase.html`、
+    `strategy.html`、`symbol.html`（全是内联样式字号/间距，无 DOM 结构改动）。
+  - 测试 4：`tests/test_ui_dense_font_scale.py`（改写为第三轮目标值）、
+    `test_perf_metrics.py`、`test_saas_help_nav.py`、`test_saas_result_help.py`
+    （同步既有字号/间距断言）。
+- 字号族 +2px：body `17→19`、`table`/`.tbl th`/`.tbl td`/`.detail-table` `14→16`、
+  `.chart-title` `16.5→18.5`、`.m-label` `14→16`、`.m-value` `19/20→21/22`、
+  `.page-head p` `15.5→17.5`、`.opt` `12.5→14.5`，模板内联字号全族同步。
+- 间距：`.card` `26/28→30/32`、`.chart-box` `22/24→26/28`、
+  `.metric-card` `16/18→20/22`、`.metric-strip` gap `14→18` / mb `22→28`、
+  `.page-head` 新增 `margin-bottom:28px`、`.tbl td` padding `10/12→14/14`。
+- **line-height 一个字符都没改**：把改动前后所有含 `line-height` 的行抽出来做
+  值分布比对，`.tmp/ui-round3/lineheight_check.py` → `EQUIVALENT`
+  （removed 22 / added 22，两侧分布完全一致：1×2、1.2×1、1.3×1、1.35×1、1.4×1、
+  1.5×2、1.55×1、1.6×3、1.65×1、1.7×8、1.8×1）。font-family / font-weight /
+  色板 / 圆角 / 媒体断点阈值同样未动。
+- 本轮 4 项补修（都是在 54 组合里被真机抓出来的，不是猜测）：
+  ① `base.html` 裸 `th,td{padding:8px}`（会覆盖 `.tbl td`）→ `13px 14px`；
+  ② `job.html` brief-line `margin:12px 0 18px`→`16px 0 20px`（job 页没有
+     `.page-head` 包裹，`.page-head` 的 margin 修不到它）；
+  ③ `@media(max-width:400px)` 导航改单行横向滚动 + `overflow:hidden`，
+     修 375 视口 `documentElement.scrollWidth=410` 横溢（6 个导航项在任何字号下
+     都放不进 375，只能改为可横滚）；
+  ④ `verify.py` 四处断言口径修正：`td` 改 `{f,c}` 并豁免 `.muted/.opt`、
+     删掉 `pMB<12` 断言（该值属段落间距非目标项）、`.metric-strip` 只取第一个
+     可见且不在 `.card` 内的元素（profile 页只有卡内 strip，记
+     `metricStripSkipped:"only inside .card"`）、把
+     `/api/results/1/symbols/000001.SZ` 的 404 作为既有控制流显式登记进
+     `CONSOLE_ALLOW_4XX`（记 `consoleAllowlisted` / `net4xx`）。
+- 验证（全部真跑，产物在 `.tmp/ui-round3/`）：
+  - 九页 × 1920/1440/375 × light/dark = **54 组合真实 Chromium**：
+    `combos=54 failures=0 elapsed=158.0s` + `PASS`（exit 0）。每组合
+    `body=19px`、`table=16px`、`.chart-title=18.5px`、`.m-label=16px`、
+    `.m-value=21px`，未裁切，`scrollWidth<=innerWidth`，
+    `console.error`/`pageerror` 全 0。
+  - 抽样：375 视口九页 `scrollWidth=375 innerWidth=375`；job `headGap=16`
+    （`src=h1`，页面无 `.page-head`）、new `28`；home `tdPad` 三行
+    `[[14,14,14,14],[14,14,14,14],[13,14,13,14]]`（末行为 muted 豁免）、clipped 0。
+  - `node --check`：`checked 7 script blocks, 0 failed`。
+  - 全量 `uv run pytest tests/ -q` → **3205 passed, 34 skipped, 6 warnings in 164.09s**（exit 0）。
+- 踩坑记录：验证服务必须带 `QRE_TEMPLATE_AUTORELOAD=1` 启动，否则
+  `create_saas_app()` 只在进程启动时读一次模板，改完仍测到旧 HTML。
+  重启服务时**不要** `pkill -f server.py`（会连带杀掉执行它的 shell），
+  按 `ps -eo pid,ppid,args | grep "[u]i-round3/server.py"` 取 PID 再 kill。
+- 未改但已过期：`docs/agent/12_UI_STYLE_GUIDE.md` 记的 body 17px / table 14px
+  等基线已与本轮不符，本轮按任务书边界**只提示不改**，下一轮需同步。
+- 提交状态：本 agent 未执行 commit / push / 部署 ECS。但并行 TV R4 子 agent 的
+  收尾提交 `8789a15`（2026-10-29 13:04，标题含「TV_ROUND4 R4-1~R4-4 + UI 第三轮」）
+  把本轮 18 文件一并提交，且已推到 `origin/master`（本地与远端无差）。
+  `deploy/saas/public-beta-audit/seed.json` 仍是唯一未跟踪文件，非本轮产物。

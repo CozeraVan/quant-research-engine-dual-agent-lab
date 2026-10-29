@@ -1622,7 +1622,7 @@ commit/push + ECS 部署；本轮按派单未 commit/push/部署。
 **下一轮候选**（ANSWER §8）：定产物侧取舍 / game 判据纳入常规回归 /
 模板改动提交前跑 `node --check` / 约定旧系 MACD 分支退场时点。
 
-### 2026-10-30 TV_ROUND4 R4-1~R4-4 完成，未 commit/push/部署 ECS
+### 2026-10-30 TV_ROUND4 R4-1~R4-4 完成，已 commit `8789a15` + push（ECS 未部署）
 
 按 `docs/agent/TV_ROUND4_TASKS_2026-10-29.md` 顺序执行，回传
 `docs/agent/TV_ROUND4_ANSWER_2026-10-30.md`。全量 **3205 passed, 34 skipped**。
@@ -1640,3 +1640,23 @@ commit/push + ECS 部署；本轮按派单未 commit/push/部署。
 **待用户/后续**：① 周扫 timer 落地（否则"连续 4 次"无从计数）；② 退场条件②
 （旧 job 归档/过期）目前无机械判定方式，建议定义保留期（如 90 天）让其可脚本化；
 ③ §7 两个确认请求等逆向侧回复（C 类判定标准细化 / A 类注释纪律是否进 AGENTS.md）。
+### 2026-10-29 DeepSeek UI 第 3 轮（字号 +2px / 间距放大 / line-height 冻结）已实施 + 复核，待用户验收
+
+按 `docs/agent/change_requests/TASK-2026-10-29_deepseek_ui_round3.md` 执行，
+CR `docs/agent/change_requests/CR-2026-10-29_ui_round3_font_spacing.md`。
+
+| 项 | 结果 |
+|---|---|
+| 改动面 | 18 文件（+314/−286）：3 个样式表（`lab-theme` 主体 / `card-class` / `night-mode`）+ 11 个 SaaS 模板内联样式 + 4 个测试字号/间距断言。无 DOM 结构、无 JS 逻辑改动 |
+| 字号 +2px | body 19 / table 16 / `.chart-title` 18.5 / `.m-label` 16 / `.m-value` 21 / `.page-head p` 17.5 / `.opt` 14.5，模板内联全族同步 |
+| 间距 | `.card` 30/32、`.chart-box` 26/28、`.metric-card` 20/22、`.metric-strip` gap 18 / mb 28、`.page-head` mb 28、`.tbl td` 14/14 |
+| line-height | **零改动**：commit diff 中 44 行含 line-height（22 删 22 增），两侧 11 档值分布 `DISTRIBUTION_IDENTICAL`；`.tmp/ui-round3/lineheight_check.py` 亦为 `EQUIVALENT` |
+| 4 项补修 | 裸 `th,td{padding:8px}`→`13px 14px`；job brief-line margin 16/20；≤400px 导航改横滚（修 375 `doc=410` 横溢）；`verify.py` 四处断言口径 |
+| 浏览器 | 九页 × 3 视口 × 2 主题 = **54 组合真实 Chromium 0 失败**，裁切 0、横溢 0、console.error/pageerror 0 |
+| 测试 | `node --check` 7 块 0 失败；全量 **3205 passed, 34 skipped, 6 warnings**（164.09s，exit 0） |
+| 提交 | 本 agent 未 commit/push/部署；改动被并行 `8789a15`（13:04）一并提交并已到 `origin/master`。**ECS 未部署** |
+
+**待用户验收**：1920/1440/375 三视口下字号观感；375 导航现在是可横滚单行。
+
+**下一轮需处理**：`12_UI_STYLE_GUIDE.md` 字号基线过期（body 17 / table 14），
+本轮按边界只提示不改；`symbol.html` 的 404 控制流建议改 200+`ok:false`。

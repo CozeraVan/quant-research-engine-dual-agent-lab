@@ -2930,10 +2930,13 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 验证：九页 × 1920/1440/375 × light/dark = **54 组合真实 Chromium 0 失败**
   （body 19 / table 16 / .chart-title 18.5 / .m-label 16 / .m-value 21 / 裁切 0 /
   横溢 0 / console.error+pageerror 0）；`node --check` 7 块 0 失败；
-  全量 pytest @@PYTEST@@。
+  全量 `uv run pytest tests/ -q` → **3205 passed, 34 skipped, 6 warnings in 164.09s**（exit 0）。
 - 踩坑记录：验证服务必须带 `QRE_TEMPLATE_AUTORELOAD=1` 启动，否则
   `create_saas_app()` 只在进程启动时读模板、改完测到旧 HTML（本轮踩过一次，
   已按 PID 重启 8097 服务）。
 - `12_UI_STYLE_GUIDE.md` **未改**：其记录的 body 17px / table 14px 等基线已过期，
   下一轮需同步。
-- 未 commit / push、未部署 ECS。
+- 提交状态：本 agent 未执行 commit/push/部署；但并行 TV R4 的收尾把本轮 18 文件
+  一并带进了 `8789a15`（2026-10-29 13:04，含 `TV_ROUND4_*`、`AGENTS.md`、
+  `deploy/saas/scan-macd-legacy-names.sh`、`tests/test_no_silent*`、`test_template_inline_js_syntax`），
+  该提交已推送到 `origin/master`（本地与远端无差）。**ECS 未部署**。

@@ -2415,8 +2415,9 @@ CR：`CR-2026-10-29_dense_font_scale.md`、`CR-2026-10-29_public_ui_audit.md`。
   elapsed=158.0s` + `PASS`；裁切 0、横溢 0、console.error/pageerror 0；
   `.page-head`→主体 job 16 / new 28。
 - `node --check`：`checked 7 script blocks, 0 failed`。
-- 全量：`uv run pytest tests/ -q` → @@PYTEST@@。
-- 状态：未 commit/push、未部署 ECS（任务书 §5.12）。
+- 全量：`uv run pytest tests/ -q` → **3205 passed, 34 skipped, 6 warnings in 164.09s**（exit 0）。
+- 状态：本 agent 未 commit/push/部署 ECS；但并行 TV R4 收尾把本轮 18 文件并入
+  `8789a15`（13:04）并已推到 `origin/master`。ECS 未部署（任务书 §5.12）。
 - 遗留：`symbol.html` 用 404 作控制流（`/api/results/1/symbols/000001.SZ`）建议
   后续改 200 + `ok:false`（API 契约变更，本轮只在 `verify.py` 白名单显式登记）；
   `12_UI_STYLE_GUIDE.md` 字号基线已过期未同步。
