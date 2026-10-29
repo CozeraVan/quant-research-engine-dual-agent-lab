@@ -23,7 +23,7 @@
   </div>
 
   <div class="card showcase-cta">
-    <h2 style="font-size:15px">复现经典策略 <button type="button" class="tip-trigger" data-tip="以上策略均可在「新建策略」页自由复现：用自然语言描述，或用自选因子组合生成同款策略，再按自己的区间与标的范围回测验证。" aria-label="复现经典策略说明">?</button></h2>
+    <h2 style="font-size:17px">复现经典策略 <button type="button" class="tip-trigger" data-tip="以上策略均可在「新建策略」页自由复现：用自然语言描述，或用自选因子组合生成同款策略，再按自己的区间与标的范围回测验证。" aria-label="复现经典策略说明">?</button></h2>
     <a class="btn btn-primary" href="/saas/new">新建同款策略</a>
   </div>
 </div>
@@ -48,7 +48,7 @@ async function loadShowcase(){
     }
     tbody.innerHTML = d.items.map(it => {
       const range = (it.date_start || '—') + ' ~ ' + (it.date_end || '—');
-      const sub = it.subtitle ? '<div class="opt" style="font-size:12px;margin-top:2px">' + esc(it.subtitle) + '</div>' : '';
+      const sub = it.subtitle ? '<div class="opt" style="font-size:14px;margin-top:6px">' + esc(it.subtitle) + '</div>' : '';
       return '<tr style="cursor:pointer" onclick="location.href=\'/saas/jobs/' + it.job_id + '\'">' +
         '<td><strong>' + esc(it.title) + '</strong>' + sub + '</td>' +
         '<td style="white-space:nowrap">' + esc(range) + '</td>' +

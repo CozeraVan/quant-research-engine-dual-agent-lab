@@ -284,7 +284,7 @@
 .tt-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
   margin-left:20px;padding:5px 14px;min-height:32px;
   border:1px solid rgba(255,255,255,.35);border-radius:999px;background:none;
-  color:#fff;font-family:inherit;font-size:13px;line-height:1.2;cursor:pointer;
+  color:#fff;font-family:inherit;font-size:15px;line-height:1.2;cursor:pointer;
   white-space:nowrap;transition:background .2s var(--ease),border-color .2s var(--ease)}
 .tt-btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.65)}
 .tt-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}

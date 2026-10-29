@@ -5,7 +5,7 @@
   <div class="page-head">
     <h1>A股回测台，你的第一个和最后一个量化工具</h1>
     <p>无需任何代码回测基础，把你的想法，变成可验证的策略。</p>
-    <p style="font-size:13px"><a class="inl" href="/saas/">← 我的回测记录</a></p>
+    <p style="font-size:15px"><a class="inl" href="/saas/">← 我的回测记录</a></p>
   </div>
 
   <!-- 三入口卡 + PCB 排线（冻结版结构） -->
@@ -36,7 +36,7 @@
 
   <!-- 入口详情区（单面板随选切换） -->
   <div class="card entry-panel active" id="entry-nl">
-    <h3 style="font-size:16px;margin-bottom:10px;">用一句话描述你的策略 <button type="button" class="tip-trigger" data-tip="你输入的描述会发送给 DeepSeek（已配置的大模型），用于校验描述是否完整并生成策略代码；请勿填写个人隐私信息或密钥。明显的乱码、纯数字或与交易无关的内容会被直接拒绝，描述不完整时会先请你确认再编译。" aria-label="自然语言编译隐私与校验说明">?</button></h3>
+    <h3 style="font-size:18px;margin-bottom:10px;">用一句话描述你的策略 <button type="button" class="tip-trigger" data-tip="你输入的描述会发送给 DeepSeek（已配置的大模型），用于校验描述是否完整并生成策略代码；请勿填写个人隐私信息或密钥。明显的乱码、纯数字或与交易无关的内容会被直接拒绝，描述不完整时会先请你确认再编译。" aria-label="自然语言编译隐私与校验说明">?</button></h3>
     <textarea id="nl-text" rows="4" style="width:100%" placeholder="在此描述你的交易想法，最少包含买入条件以及卖出条件，然后点击下方生成策略按钮。"></textarea>
     <div class="chip-row">
       <span class="opt">没思路？点一个示例填入：</span>
@@ -46,21 +46,21 @@
       <button class="chip nl-ex">收盘价高于10元买入，跌破20日均线卖出，最多持仓20天</button>
     </div>
     <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
-      <button class="btn btn-primary" id="nl-compile" style="min-width:240px;padding:13px 28px;font-size:15px;font-weight:600">生成策略</button>
+      <button class="btn btn-primary" id="nl-compile" style="min-width:240px;padding:13px 28px;font-size:17px;font-weight:600">生成策略</button>
       <span class="opt" id="nl-status"></span>
     </div>
     <div class="result-box" id="nl-result"></div>
   </div>
 
   <div class="card entry-panel" id="entry-wizard">
-    <h3 style="font-size:16px;margin-bottom:4px;">自选因子交易 <button type="button" class="tip-trigger" data-tip="条件行选因子：大类 → 子类 → 因子，右值可选另一因子或勾「固定值」填数值。入出场条件生成后可在预览中检查。" aria-label="自选因子交易说明">?</button></h3>
+    <h3 style="font-size:18px;margin-bottom:4px;">自选因子交易 <button type="button" class="tip-trigger" data-tip="条件行选因子：大类 → 子类 → 因子，右值可选另一因子或勾「固定值」填数值。入出场条件生成后可在预览中检查。" aria-label="自选因子交易说明">?</button></h3>
     <p class="opt" id="wz-factor-status" style="margin-bottom:12px">加载因子目录中…</p>
-    <h4 style="font-size:14px;margin:10px 0 8px;">入场条件 <span class="req">*</span> <button type="button" class="tip-trigger" data-tip="组内先按 AND/OR 组合，组间再按所选方式组合；单组时仅使用组内条件。" aria-label="入场条件说明">?</button></h4>
+    <h4 style="font-size:16px;margin:10px 0 8px;">入场条件 <span class="req">*</span> <button type="button" class="tip-trigger" data-tip="组内先按 AND/OR 组合，组间再按所选方式组合；单组时仅使用组内条件。" aria-label="入场条件说明">?</button></h4>
     <div id="wz-entry" class="cond-groups"></div>
     <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
       <button class="btn-sm" data-addgroup="entry">+ 添加条件组</button>
     </div>
-    <h4 style="font-size:14px;margin:16px 0 8px;">出场条件 <span class="req">*</span> <button type="button" class="tip-trigger" data-tip="出场条件使用相同的组内、组间组合规则；任一生效条件都会触发出场信号。" aria-label="出场条件说明">?</button></h4>
+    <h4 style="font-size:16px;margin:16px 0 8px;">出场条件 <span class="req">*</span> <button type="button" class="tip-trigger" data-tip="出场条件使用相同的组内、组间组合规则；任一生效条件都会触发出场信号。" aria-label="出场条件说明">?</button></h4>
     <div id="wz-exit" class="cond-groups"></div>
     <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
       <button class="btn-sm" data-addgroup="exit">+ 添加条件组</button>
@@ -69,7 +69,7 @@
   </div>
 
   <div class="card entry-panel" id="entry-yaml">
-    <h3 style="font-size:16px;margin-bottom:4px;">策略代码</h3>
+    <h3 style="font-size:18px;margin-bottom:4px;">策略代码</h3>
     <p><button class="btn btn-ghost" id="btn-goto-preview">去底部编辑代码 ↓</button></p>
   </div>
 
@@ -116,7 +116,7 @@
       </span>
     </div>
 
-    <h4 style="font-size:14px;margin:18px 0 10px;">高级参数</h4>
+    <h4 style="font-size:16px;margin:18px 0 10px;">高级参数</h4>
     <div class="form-grid form-grid-3">
       <label tabindex="0" data-tip="共享资金：多只股票共用同一份总资金；批量：每只股票独立使用初始资金。">模式</label>
       <select id="p-mode"><option value="shared" selected>共享资金</option><option value="batch">批量</option></select>
@@ -157,7 +157,7 @@
       <div style="margin-top:14px">
         <span id="pv-note" hidden></span>
         <pre class="compiled-yaml pv" id="pv-view"></pre>
-        <textarea id="yaml-editor" rows="18" style="display:none;width:100%;font-family:var(--mono);font-size:12.5px" placeholder="experiment:\n  name: my_strategy\nsignal:\n  entry: \"(close > open)\"\n  exit: \"(close < open)\"\n"></textarea>
+        <textarea id="yaml-editor" rows="18" style="display:none;width:100%;font-family:var(--mono);font-size:14.5px" placeholder="experiment:\n  name: my_strategy\nsignal:\n  entry: \"(close > open)\"\n  exit: \"(close < open)\"\n"></textarea>
       </div>
     </div></div></div>
   </div>

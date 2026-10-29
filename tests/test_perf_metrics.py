@@ -597,8 +597,8 @@ class TestMetricStripStyleContract:
                       self.CARD_CSS)
         assert m, "未找到简介/风险调整收益条规则"
         assert "flex: 1 1 280px" in m.group(1), "简介与 ra 条必须 min 280px（C3.5）"
-        assert "font-size: 17.5px" in self.CARD_CSS, "两条的 m-value 必须 17.5px"
-        assert "font-size: 19px" in self.CARD_CSS, "密集条 m-value 必须 19px"
+        assert "font-size: 19.5px" in self.CARD_CSS, "两条的 m-value 必须 19.5px（UI-ROUND3 全站 +2）"
+        assert "font-size: 21px" in self.CARD_CSS, "密集条 m-value 必须 21px（UI-ROUND3 全站 +2）"
 
     def test_no_leftover_grid_rules_for_these_strips(self):
         """旧的 grid-template-columns 规则必须删掉——flex 容器上它们是死代码，

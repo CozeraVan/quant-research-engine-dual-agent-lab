@@ -92,7 +92,7 @@ def test_theme_css_keeps_locked_layout_rules():
     css = THEME_CSS.read_text(encoding="utf-8")
     assert ".help-jump{display:flex;flex-direction:column" in css
     assert ".help-side{position:sticky" in css
-    assert ".help-content .card h2{font-size:20px" in css
+    assert ".help-content .card h2{font-size:22px" in css
     assert ".help-jump{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))" in css
 
 

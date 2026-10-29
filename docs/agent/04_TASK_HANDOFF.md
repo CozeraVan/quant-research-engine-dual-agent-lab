@@ -2908,3 +2908,32 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 - 全量 `3083 passed, 24 skipped, 0 failed`（153.72s）。`TestNoAdminLinks` 三条曾红，
   隔离 9 passed / 整文件 94 passed / 全量通过 ⇒ 顺序型 flake，与本轮改动无关。
 - 未 commit/push、未部署 ECS（按派单约束）。
+## 2026-10-29 DeepSeek UI 第 3 轮（全站字号 +2px / 间距扩大 / line-height 冻结）交接
+
+- 任务书 `change_requests/TASK-2026-10-29_deepseek_ui_round3.md`；
+  CR `change_requests/CR-2026-10-29_ui_round3_font_spacing.md`。
+- 18 文件：`static/{lab-theme,card-class,night-mode}.css` + 11 个 SaaS 模板
+  （`_records_body/_records_scripts/base/dashboard/help/job/new/profile/showcase/strategy/symbol`）
+  + 4 个测试（`test_perf_metrics` / `test_saas_help_nav` / `test_saas_result_help` /
+  `test_ui_dense_font_scale`，同步既有字号断言）。
+- 字号：body 17→19、table 14→16、`.chart-title` 16.5→18.5、`.m-label` 14→16、
+  `.m-value` 19/20→**21/22**、`.opt` 12.5→14.5，模板内联字号族全部 +2px。
+- 间距：`.card` 26/28→30/32、`.chart-box` 22/24→26/28、`.metric-card` 16/18→20/22、
+  `.metric-strip` gap/mb 14/22→18/28、`.tbl td` 10/12→14/14、`.page-head` 新增
+  `margin-bottom:28px`。
+- **line-height 一律保持原值**（值分布比对 `EQUIVALENT`，22 removed / 22 added 一致）。
+- 本轮 4 项补修：① `base.html` 裸 `th,td{padding:8px}`→`13px 14px`；
+  ② `job.html` brief-line margin 12/18→16/20（job 无 `.page-head` 包裹）；
+  ③ `@media(max-width:400px)` 导航改单行横向滚动（修 375 视口 `doc=410` 横溢，
+  6 项导航任何字号都放不下）；④ `verify.py` 四处断言口径修正（td 豁免
+  muted/opt、删 pMB 断言、metric-strip 只取页级、404 白名单显式登记）。
+- 验证：九页 × 1920/1440/375 × light/dark = **54 组合真实 Chromium 0 失败**
+  （body 19 / table 16 / .chart-title 18.5 / .m-label 16 / .m-value 21 / 裁切 0 /
+  横溢 0 / console.error+pageerror 0）；`node --check` 7 块 0 失败；
+  全量 pytest @@PYTEST@@。
+- 踩坑记录：验证服务必须带 `QRE_TEMPLATE_AUTORELOAD=1` 启动，否则
+  `create_saas_app()` 只在进程启动时读模板、改完测到旧 HTML（本轮踩过一次，
+  已按 PID 重启 8097 服务）。
+- `12_UI_STYLE_GUIDE.md` **未改**：其记录的 body 17px / table 14px 等基线已过期，
+  下一轮需同步。
+- 未 commit / push、未部署 ECS。

@@ -14,7 +14,7 @@
       <h2>源文件 <span class="opt" id="sd-mode-label"></span></h2>
       <!-- nl 模式：原始自然语言（可改 + 重新编译） -->
       <div id="sd-src-nl" class="hidden">
-        <h4 style="font-size:14px;margin:0 0 8px">策略描述 <button type="button" class="tip-trigger" data-tip="重新编译会把描述发送给 DeepSeek（已配置的大模型），用于校验描述是否完整并生成策略代码；请勿填写个人隐私信息或密钥。乱码、纯数字或与交易无关的内容会被拒绝，描述不完整时会先请你确认。" aria-label="自然语言编译隐私与校验说明">?</button></h4>
+        <h4 style="font-size:16px;margin:0 0 8px">策略描述 <button type="button" class="tip-trigger" data-tip="重新编译会把描述发送给 DeepSeek（已配置的大模型），用于校验描述是否完整并生成策略代码；请勿填写个人隐私信息或密钥。乱码、纯数字或与交易无关的内容会被拒绝，描述不完整时会先请你确认。" aria-label="自然语言编译隐私与校验说明">?</button></h4>
         <textarea id="sd-nl-text" rows="5" style="width:100%"></textarea>
         <p class="opt" style="margin:6px 0">重新编译后，需保存修改才会生效。</p>
         <button class="btn-sm" id="sd-nl-recompile">重新编译</button>
@@ -34,11 +34,11 @@
       </div>
       <!-- yaml 模式：代码编辑框 -->
       <div id="sd-src-yaml" class="hidden">
-        <textarea id="sd-yaml-text" rows="14" style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12.5px"></textarea>
+        <textarea id="sd-yaml-text" rows="14" style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:14.5px"></textarea>
       </div>
       <details style="margin-top:10px" id="sd-yaml-detail">
         <summary>当前生效策略代码（YAML）</summary>
-        <pre id="sd-yaml-view" class="opt" style="white-space:pre-wrap;font-size:12px;margin-top:8px"></pre>
+        <pre id="sd-yaml-view" class="opt" style="white-space:pre-wrap;font-size:14px;margin-top:8px"></pre>
       </details>
     </div>
 
@@ -69,18 +69,18 @@
           <button class="btn-sm hidden" id="wd-delete">关闭并删除监控</button>
           <span class="opt" id="wd-status"></span>
         </div>
-        <p class="opt" style="margin-top:6px" id="wd-recent"></p>
+        <p class="opt" style="margin-top:16px" id="wd-recent"></p>
       </div>
     </div>
 
     <div class="card">
       <h2>该策略信号记录 <span class="opt">（日线收盘后 T+1 参考，不构成投资建议）</span>
-        <a href="/saas/signals" style="font-size:12.5px;font-weight:400;margin-left:8px">查看全部 →</a></h2>
+        <a href="/saas/signals" style="font-size:14.5px;font-weight:400;margin-left:8px">查看全部 →</a></h2>
       <table class="tbl">
         <thead><tr><th>信号日期</th><th>股票</th><th>类型</th><th class="num">参考价</th><th>到达时间</th></tr></thead>
         <tbody id="sd-sig-tbody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
       </table>
-      <div class="bench-bar" style="margin-top:8px">
+      <div class="bench-bar" style="margin-top:16px">
         <button class="btn-sm" id="sd-sig-prev">← 上一页</button>
         <span class="opt" id="sd-sig-page"></span>
         <button class="btn-sm" id="sd-sig-next">下一页 →</button>

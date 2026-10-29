@@ -164,6 +164,27 @@
 （旧系 `col` 为 `None`），再决定判据脚本匹配哪套列名——用错会得出"归组失败"的
 错误结论。本项目 `.tmp/perf-browser/` 下的判据脚本已按此在文件头声明。
 
+#### 4.1.1 旧系分支退场：事件触发制（R4-4，2026-10-29 定，替代日历式）
+
+**不定日历，定触发条件。** 两条**同时满足**才动手删 `familyOf` 的旧名分支：
+
+1. **连续 4 次周扫**「新产物因子名含旧系（`macd_dif`/`macd_dea`/`macd_hist`）」
+   计数为 **0**；
+2. 旧 job（58/66/74/78）已归档或按保留期过期。
+
+**周扫脚本**：`deploy/saas/scan-macd-legacy-names.sh`（扫 ECS `saas_uploads` 下所有
+job 的 per-symbol 产物因子名；`--record` 追加到 `.tmp/macd-legacy-scan.log`）。
+建议挂 systemd timer，每周一次。
+
+**退场动作**（一个 PR）：删 `factor-layout.js::familyOf` 的旧名分支 + 判据脚本的
+双列名警示同步退场。
+**明确不删**：`configs/factor_registry.json` 的 `extra_aliases` 旧名别名——
+入口层成本≈0，防 NL 断链（用户用旧名描述仍能命中新系 canonical）。
+
+**首扫结果（2026-10-29）**：扫 1013 个产物文件，**496 个含旧系名**
+（job 58: 263 / job 66: 233）→ 不满足条件①。这两个 job 正是 2026-10-24 生成的
+MACD 金叉/死叉经典策略，退场要等它们归档或过期。
+
 ## 5. 基本面与参考数据（相关表）
 
 - `fundamentals.fina_indicator / income / balancesheet / cashflow`：主键含 `ann_date`（PIT 防未来函数），income 自 1990 年起。

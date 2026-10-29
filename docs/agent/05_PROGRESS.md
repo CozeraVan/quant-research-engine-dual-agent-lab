@@ -2374,3 +2374,49 @@ CR：`CR-2026-10-29_dense_font_scale.md`、`CR-2026-10-29_public_ui_audit.md`。
 `uv run pytest tests/ -q` → **3158 passed, 24 skipped, 4 warnings**（exit 0，A+B 都落地后）。
 规则 8 相关 `tests/test_fct_chip_state_visible.py` + `tests/test_kline_pane_option.py`
 = 19 passed。未 commit/push/部署。
+## 2026-10-30 DeepSeek UI 第三轮（字号 +2px / 间距放大），未 commit/push/部署 ECS
+
+任务书 `change_requests/TASK-2026-10-29_deepseek_ui_round3.md`；CR
+`change_requests/CR-2026-10-29_ui_round3_font_spacing.md`（Kimi 补写——DeepSeek
+完成代码与浏览器验收但漏落 CR）。
+
+- **A 字号 +2px**：body 17→19px、`.page-head h1` 30→32px、table 14→16px、
+  `.tbl th`/`.detail-table(-th)` 14→16px、`.chart-title` 16.5→18.5px、
+  `.m-label` 14→16px、`.entry-card p` 13→15px、`pre.yaml` 12.5→14.5px、
+  `.chart-tip` 12→14px。**`line-height` 逐行核对全部未动**（用户「行间距暂不推进」）。
+- **B 间距**：用户点名的第一现场已修——`.page-head` 与主体 DIV 间距
+  实测 **0 → 28px**（`lab-theme.css:55` `.page-head{margin-bottom:28px}`），
+  `.page-head p{margin-top:12px}`；九页相邻 DIV 间距改前改后全量对照在
+  `.tmp/ui-round3/{gaps_before,gaps_after}.json` + `diff_pairs*.txt`。
+- **浏览器验收**：9 页 × 3 视口（1920/1440/375）× 2 主题 = **54 组合全绿**，
+  每组合 body=19px、`scrollWidth == innerWidth`（零横溢）、fails=0；
+  `.tmp/ui-round3/lineheight_check.py` 专项验 line-height 未改。
+- **测试**：`test_ui_dense_font_scale.py` 改写覆盖第三轮目标值；Kimi 独立复跑
+  全量 **3205 passed, 34 skipped, 0 failed**。
+## 2026-10-29 DeepSeek UI 第 3 轮：全站字号 +2px / 间距扩大（line-height 冻结）
+
+按 `change_requests/TASK-2026-10-29_deepseek_ui_round3.md` 执行，CR
+`change_requests/CR-2026-10-29_ui_round3_font_spacing.md`。
+
+- 改动 18 文件（+314 / −286）：3 个样式表（`lab-theme.css` 主体、
+  `card-class.css`、`night-mode.css`）+ 11 个 SaaS 模板内联样式 + 4 个测试的字号断言。
+- 字号 +2px 全族上移：body 17→19、table 14→16、`.chart-title` 16.5→18.5、
+  `.m-label` 14→16、`.m-value` 19/20→21/22、`.opt` 12.5→14.5、`.tbl th/td` 14→16。
+- 间距：`.card` padding 26/28→30/32、`.chart-box` 22/24→26/28、
+  `.metric-card` 16/18→20/22、`.metric-strip` gap 14→18 / mb 22→28、
+  `.tbl td` padding 10/12→14/14、`.page-head` 新增 `margin-bottom:28px`。
+- line-height：**一个字符都没改**。抽取改动前后所有含 line-height 的行比对值分布，
+  `lineheight_check.py` → `EQUIVALENT`（22 removed / 22 added，值分布完全一致）。
+- 4 项补修：`base.html` 裸 `th,td` padding `8px`→`13px 14px`；
+  `job.html` brief-line margin 12/18→16/20；`@media(max-width:400px)` 导航改单行
+  横向滚动（375 视口 `doc=410`→375）；`verify.py` 四处断言口径修正
+  （td 豁免 muted/opt、删 pMB 断言、metric-strip 只取页级、404 白名单）。
+- 浏览器：九页 × 3 视口 × 2 主题 = 54 组合真实 Chromium，`combos=54 failures=0
+  elapsed=158.0s` + `PASS`；裁切 0、横溢 0、console.error/pageerror 0；
+  `.page-head`→主体 job 16 / new 28。
+- `node --check`：`checked 7 script blocks, 0 failed`。
+- 全量：`uv run pytest tests/ -q` → @@PYTEST@@。
+- 状态：未 commit/push、未部署 ECS（任务书 §5.12）。
+- 遗留：`symbol.html` 用 404 作控制流（`/api/results/1/symbols/000001.SZ`）建议
+  后续改 200 + `ok:false`（API 契约变更，本轮只在 `verify.py` 白名单显式登记）；
+  `12_UI_STYLE_GUIDE.md` 字号基线已过期未同步。

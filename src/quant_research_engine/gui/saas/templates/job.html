@@ -3,28 +3,28 @@
 {% block body %}
 <div class="container">
   <h1>回测结果 <span class="opt">任务 #{{ job_id }}</span></h1>
-  <p class="brief-line" style="font-size:12px;color:#888;margin:4px 0 10px">📄 <span id="brief-text">加载中…</span></p>
+  <p class="brief-line" style="font-size:14px;color:#888;margin:16px 0 20px">📄 <span id="brief-text">加载中…</span></p>
   <div class="meta-chips" id="meta-chips"></div>
 
   <div class="panel hidden" id="guest-note" style="border-color:#d97706;background:#fef9ec">
-    <span style="color:#92400e;font-size:13px">游客模式：本次回测结果<strong>次日清空</strong>。<a href="/saas/login">注册会员</a>后可永久保存记录、不限次数全市场回测。</span>
+    <span style="color:#92400e;font-size:15px">游客模式：本次回测结果<strong>次日清空</strong>。<a href="/saas/login">注册会员</a>后可永久保存记录、不限次数全市场回测。</span>
   </div>
   <div class="panel" id="status-card">
     <span class="badge queued" id="job-badge">加载中</span>
     <span class="muted" id="job-status-note" style="margin-left:8px" aria-live="polite"></span>
     <!-- QRE-SAAS-FIRST-SUCCESS-UX-001：排队位置 / worker 离线 / 已等待时间（纯视觉，
          不进 aria-live；不虚构百分比与预计完成时间） -->
-    <span class="opt hidden" id="job-status-extra" style="display:block;margin-top:6px;font-size:12.5px;line-height:1.7"></span>
+    <span class="opt hidden" id="job-status-extra" style="display:block;margin-top:8px;font-size:14.5px;line-height:1.7"></span>
     <!-- 活跃任务操作区：取消（自定义模态二次确认）；cancel_requested 时禁用防重复 -->
     <div id="status-actions" class="hidden" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <button type="button" class="btn-sm" id="btn-cancel-job">取消任务</button>
-      <span class="opt" id="cancel-status" style="font-size:12.5px"></span>
+      <span class="opt" id="cancel-status" style="font-size:14.5px"></span>
     </div>
     <!-- failed/expired 恢复区：真实失败原因 + 重跑入口（登录用户按原策略回填；
          游客仅返回新建页；showcase 只读不出现） -->
-    <div id="recover-actions" class="hidden" style="margin-top:10px">
-      <div class="opt" id="recover-error" style="font-size:12.5px;line-height:1.7;white-space:pre-wrap"></div>
-      <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">
+    <div id="recover-actions" class="hidden" style="margin-top:12px">
+      <div class="opt" id="recover-error" style="font-size:14.5px;line-height:1.7;white-space:pre-wrap"></div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
         <a class="btn btn-ghost" id="btn-rerun" href="/saas/new">返回新建页</a>
       </div>
     </div>
@@ -48,7 +48,7 @@
       <h3 id="share-modal-title">分享结果</h3>
       <p id="share-modal-text">接收方无需登录即可在有效期内<strong>只读</strong>查看本结果的策略定义与完整图表，不能修改或删除。链接仅创建时显示一次，可随时在「个人信息 · 我的分享」撤销。</p>
       <div style="margin:10px 0;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
-        <span class="opt" style="font-size:12.5px">有效期：</span>
+        <span class="opt" style="font-size:14.5px">有效期：</span>
         <label class="radio-inline"><input type="radio" id="share-exp-1" name="share-expiry" value="1"> 1 天</label>
         <label class="radio-inline"><input type="radio" id="share-exp-7" name="share-expiry" value="7" checked> 7 天</label>
         <label class="radio-inline"><input type="radio" id="share-exp-30" name="share-expiry" value="30"> 30 天</label>
@@ -65,10 +65,10 @@
   <div class="modal-mask" id="share-link-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="share-link-modal-title">
       <h3 id="share-link-modal-title">只读分享链接</h3>
-      <p class="opt" id="share-link-note" style="font-size:12.5px;margin:0 0 10px"></p>
-      <div style="display:flex;gap:8px;align-items:center">
+      <p class="opt" id="share-link-note" style="font-size:14.5px;margin:0 0 12px"></p>
+      <div style="display:flex;gap:10px;align-items:center">
         <input id="share-link-input" type="text" readonly aria-label="只读分享链接"
-               style="flex:1;min-width:0;font-size:12.5px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--tint,#F1EDF8)">
+               style="flex:1;min-width:0;font-size:14.5px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--tint,#F1EDF8)">
         <button type="button" class="btn-sm" id="btn-copy-share">复制</button>
       </div>
       <div class="m-actions">
@@ -127,7 +127,7 @@
         <button data-layer="C">技术标签</button>
       </div>
       <div id="chart-tags" style="height:480px"></div>
-      <div id="tag-note" class="opt" style="font-size:12px"></div>
+      <div id="tag-note" class="opt" style="font-size:14px"></div>
       <div class="tag-rank" id="tag-rank"></div>
       <div id="tag-detail" style="margin-top:10px"></div>
     </div>
@@ -602,7 +602,7 @@ function drawDetailTable(t){
     ? '　共 ' + t.symbols_total + ' 只，仅显示盈亏前/后各 50' : '';
   const benchTxt = t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%';
   const el = document.getElementById('tag-detail');
-  el.innerHTML = '<div class="opt" style="font-size:12px;margin-bottom:4px">' + escH(t.tag) +
+  el.innerHTML = '<div class="opt" style="font-size:14px;margin-bottom:16px">' + escH(t.tag) +
     '　个股贡献（点击行看个股详情；点列头排序）' + note +
     '　策略平均每笔 <span class="' + cls(t.avg_ret) + '">' + (t.avg_ret * 100).toFixed(2) + '%</span>' +
     ' vs 板块同期自然涨幅 <span class="' + cls(t.bench_ret) + '">' + benchTxt + '</span></div>' +
@@ -780,10 +780,10 @@ function renderRisk(d) {
       '<div class="risk-cards">' + (cardsHtml || '<span class="opt">暂无 VaR/ES 数据</span>') + '</div>' +
       '<div style="margin-bottom:8px;">' + lightsHtml + '</div>' +
       '<div class="risk-grid">' +
-      '  <div class="risk-col"><div class="chart-title" style="font-size:14px;">日收益分布 <button type="button" class="tip-trigger" data-tip="直方图展示日收益分布，曲线为正态拟合，竖线标记 VaR。" aria-label="收益分布说明">?</button></div><div id="chart-risk-dist" style="height:300px;"></div></div>' +
-      '  <div class="risk-col"><div class="chart-title" style="font-size:14px;">波动率状态 <button type="button" class="tip-trigger" data-tip="' + escH(volTxt || '暂无波动率数据') + '" aria-label="波动率说明">?</button></div><div class="risk-vol-state" id="chart-risk-vol-state"></div><div id="chart-risk-vol" style="height:300px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:16px;">日收益分布 <button type="button" class="tip-trigger" data-tip="直方图展示日收益分布，曲线为正态拟合，竖线标记 VaR。" aria-label="收益分布说明">?</button></div><div id="chart-risk-dist" style="height:300px;"></div></div>' +
+      '  <div class="risk-col"><div class="chart-title" style="font-size:16px;">波动率状态 <button type="button" class="tip-trigger" data-tip="' + escH(volTxt || '暂无波动率数据') + '" aria-label="波动率说明">?</button></div><div class="risk-vol-state" id="chart-risk-vol-state"></div><div id="chart-risk-vol" style="height:300px;"></div></div>' +
       '</div>' +
-      '<div class="chart-title" style="font-size:14px;margin-top:8px;">压力测试 <span class="opt" id="risk-stress-note"></span></div>' +
+      '<div class="chart-title" style="font-size:16px;margin-top:8px;">压力测试 <span class="opt" id="risk-stress-note"></span></div>' +
       '<div id="chart-risk-stress" style="height:280px;"></div>';
 
     renderRiskDist(d);
@@ -910,7 +910,7 @@ function wizardSummaryHtml(ws){  // 与策略详情页同款条件组可读描�
       return '<div class="opt" style="padding:2px 0">' + conds + '</div>';
     }).join('<div class="opt" style="color:var(--faint)">— 组间 ' +
       escH(((a.dividers || [])[0] || 'and').toUpperCase()) + ' —</div>');
-    return '<p style="margin:8px 0 2px"><b>' + label + '</b></p>' + gs;
+    return '<p style="margin:14px 0 10px"><b>' + label + '</b></p>' + gs;
   }
   return area('入场条件', ws.entry) + area('出场条件', ws.exit);
 }
@@ -924,16 +924,16 @@ function renderStrategyInfo(st){
     (window.LabUI ? LabUI.fmtLocalTime(st.created_at) : (st.created_at || '—'));
   let detail = '';
   if (mode === 'nl' && st.nl_text){
-    detail += '<p style="margin:0 0 4px"><b>自然语言原文</b></p>' +
+    detail += '<p style="margin:0 0 12px"><b>自然语言原文</b></p>' +
       '<div class="opt" style="white-space:pre-wrap;color:var(--ink)">' + escH(st.nl_text) + '</div>' +
-      '<p style="margin:12px 0 4px"><b>编译后的策略 YAML</b></p>' + yamlPre(st.yaml);
+      '<p style="margin:20px 0 12px"><b>编译后的策略 YAML</b></p>' + yamlPre(st.yaml);
   } else if (mode === 'wizard' && st.wizard_state){
-    detail += '<p style="margin:0 0 2px"><b>向导条件</b></p>' + wizardSummaryHtml(st.wizard_state) +
-      '<p style="margin:12px 0 4px"><b>策略 YAML</b></p>' + yamlPre(st.yaml);
+    detail += '<p style="margin:0 0 12px"><b>向导条件</b></p>' + wizardSummaryHtml(st.wizard_state) +
+      '<p style="margin:20px 0 12px"><b>策略 YAML</b></p>' + yamlPre(st.yaml);
   } else {
     if (mode === 'wizard' && !st.wizard_state)
-      detail += '<p class="opt" style="margin:0 0 8px">（快速向导入口；无条件快照，显示最终 YAML）</p>';
-    detail += '<p style="margin:0 0 4px"><b>策略 YAML</b></p>' + yamlPre(st.yaml);
+      detail += '<p class="opt" style="margin:0 0 16px">（快速向导入口；无条件快照，显示最终 YAML）</p>';
+    detail += '<p style="margin:0 0 12px"><b>策略 YAML</b></p>' + yamlPre(st.yaml);
   }
   document.getElementById('stg-detail').innerHTML = detail;
   box.style.display = '';
@@ -1241,7 +1241,7 @@ async function poll(){
         const chip = document.createElement('span');
         chip.id = 'readonly-chip';
         chip.className = 'opt';
-        chip.style.cssText = 'font-size:12.5px;margin-left:8px';
+        chip.style.cssText = 'font-size:14.5px;margin-left:8px';
         chip.textContent = data.readonly_kind === 'share' ? '只读分享' : '经典策略展示 · 只读';
         h1.appendChild(chip);
       }

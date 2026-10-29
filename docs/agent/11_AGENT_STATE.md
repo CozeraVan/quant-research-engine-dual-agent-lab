@@ -1621,3 +1621,22 @@ commit/push + ECS 部署；本轮按派单未 commit/push/部署。
 
 **下一轮候选**（ANSWER §8）：定产物侧取舍 / game 判据纳入常规回归 /
 模板改动提交前跑 `node --check` / 约定旧系 MACD 分支退场时点。
+
+### 2026-10-30 TV_ROUND4 R4-1~R4-4 完成，未 commit/push/部署 ECS
+
+按 `docs/agent/TV_ROUND4_TASKS_2026-10-29.md` 顺序执行，回传
+`docs/agent/TV_ROUND4_ANSWER_2026-10-30.md`。全量 **3205 passed, 34 skipped**。
+
+| 项 | 结果 |
+|---|---|
+| R4-1 | 四类模式清扫 12 个文件。A 类 13 条静默 catch 全枚举，**实测抓出 2 处无理由注释已补**；B 类静态 0 前向引用 + 冷启动预置**全部 7 个持久化键**实测全恢复；C 类签名 0 命中（`markLine: undefined` 字面同形但实测不炸，判定标准细化为"消费方是否不解引用"）；D 类真实浏览器 7 段热路径零 pageerror |
+| R4-2 | 判据输出加 `ENV` 段（pane 几何/容器像素/视口/DPR），symbol 与 game 双覆盖；一行化入口 `.tmp/perf-browser/tv_check_all.sh`。**自我修正**：入口最初写"跑 before+after"，但 before 需 git stash、脚本不动工作区，两次输出逐字节相同——已改为只跑当前代码，假对照比没对照更坏 |
+| R4-3 | `tests/test_template_inline_js_syntax.py` 27 passed（参数化到每个模板×script）；**事故写法红灯复现成功**（注入 R3-4 那次删穿函数体 → 1 failed；恢复 → 27 passed） |
+| R4-4 | `deploy/saas/scan-macd-legacy-names.sh` 周扫；首扫 1013 产物中 **496 个含旧系名**（job 58:263 / job 66:233）→ 不满足退场条件①。政策写入 `20_DATA_DICTIONARY_DAILY_MINUTE.md` §4.1.1（事件触发制替代日历制） |
+| R4-5 | **用户已口头裁决选 A**（"R3-3 保持灵活性"）→ 产物侧维持原状，未动 `_strategy_factor_specs`、未改 15 MiB 上限 |
+
+**新增守卫测试**：`tests/test_no_silent_failure_patterns.py` 8 例（A/B/C/D 四类防回归）。
+
+**待用户/后续**：① 周扫 timer 落地（否则"连续 4 次"无从计数）；② 退场条件②
+（旧 job 归档/过期）目前无机械判定方式，建议定义保留期（如 90 天）让其可脚本化；
+③ §7 两个确认请求等逆向侧回复（C 类判定标准细化 / A 类注释纪律是否进 AGENTS.md）。

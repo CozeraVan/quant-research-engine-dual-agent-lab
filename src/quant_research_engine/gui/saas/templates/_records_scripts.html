@@ -185,7 +185,7 @@ async function load(){
           : `<span class="${clsPnL(job.excess_return)}">${fmtPct(job.excess_return)}</span>`;
         const viewLink = done ? `<a class="view-link" href="/saas/jobs/${job.job_id}">查看结果 →</a>` : '';
         const scBadge = job.showcase
-          ? ' <a class="inl" href="/saas/showcase" style="font-size:12px" title="该策略已收录进经典策略展示页，每日收盘后持续跟踪更新">经典策略·跟踪中 →</a>'
+          ? ' <a class="inl" href="/saas/showcase" style="font-size:14px" title="该策略已收录进经典策略展示页，每日收盘后持续跟踪更新">经典策略·跟踪中 →</a>'
           : '';
         tr.innerHTML = `<td><strong>${escH(job.strategy_name || ('策略 #' + job.job_id))}</strong>${scBadge}<br><span class="opt">任务 #${job.job_id}</span></td>`
           + `<td class="opt">${range}</td>`
@@ -339,12 +339,12 @@ async function loadStrategies(force){
         }
         sigLine = `<span style="color:var(--pos,#1a7f37)">监控中（${scope}${cs.length ? ' ' + cs.length + ' 只' : ''}）</span>${escH(summ)}`;
       } else {
-        sigLine = `<a href="/saas/strategies/${s.id}" style="font-size:12px">开启监控 →</a>`;
+        sigLine = `<a href="/saas/strategies/${s.id}" style="font-size:14px">开启监控 →</a>`;
       }
       const unreadDot = s.signal_unread
         ? '<span title="有未读信号" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E5534B;margin-right:5px"></span>' : '';
       tr.innerHTML = `<td>${escH(s.name)} <span class="badge queued" style="font-weight:400">${modeLabel}</span>`
-        + `<br><span class="opt" style="font-size:12px">${unreadDot}${sigLine}</span></td>`
+        + `<br><span class="opt" style="font-size:14px">${unreadDot}${sigLine}</span></td>`
         + `<td class="num" style="text-align:right">${s.job_count}</td>`
         + `<td>${fmtT(s.last_used_at)}</td><td>${fmtT(s.created_at)}</td>`
         + `<td style="text-align:right;white-space:nowrap">`

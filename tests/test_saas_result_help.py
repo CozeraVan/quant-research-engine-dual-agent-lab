@@ -223,7 +223,7 @@ class TestHelpLayout:
         assert ".help-layout{display:grid;grid-template-columns:" in css
         assert ".help-side{position:sticky" in css
         assert ".help-jump{display:flex;flex-direction:column" in css
-        assert ".help-content .card h2{font-size:20px" in css
+        assert ".help-content .card h2{font-size:22px" in css
 
 
 class TestResultPageHelpLinks:

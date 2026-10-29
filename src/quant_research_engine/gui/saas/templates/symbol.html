@@ -6,14 +6,14 @@
 <style>
   .kline-tv{display:flex;gap:8px;align-items:stretch}
   .kline-tools{display:flex;flex-direction:column;gap:6px;flex:none}
-  .kline-tools .kline-tool{width:44px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;font-size:11px;line-height:1;white-space:nowrap;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;cursor:pointer}
+  .kline-tools .kline-tool{width:44px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;font-size:13px;line-height:1;white-space:nowrap;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;cursor:pointer}
   .kline-tool svg{width:18px;height:18px}
   .kline-tool:hover{border-color:var(--lav);color:var(--lav-deep)}
   .kline-tool[aria-pressed="false"]{opacity:.55}
   .kline-tool:disabled{opacity:.4;cursor:not-allowed}
   .kline-tool:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
   .kline-main{flex:1;min-width:0;position:relative}
-  .kline-ohlc{margin:0 0 4px;font-size:12px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+  .kline-ohlc{margin:0 0 4px;font-size:14px;line-height:1.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
   .kline-ohlc b{font-weight:600}
   .kline-ohlc .up{color:var(--pos)}
   .kline-ohlc .down{color:var(--neg)}
@@ -22,13 +22,13 @@
   .ind-mask{position:fixed;inset:0;background:rgba(36,31,46,.45);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
   .ind-dialog{width:min(560px,100%);max-height:min(76vh,640px);display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(36,31,46,.22)}
   .ind-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
-  .ind-head h3{margin:0;font-size:15px}
+  .ind-head h3{margin:0;font-size:17px}
   .ind-body{overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:14px}
   .ind-sec{display:flex;flex-direction:column;gap:6px}
-  .ind-sec-t{font-size:12px;font-weight:600;color:var(--lav-deep)}
+  .ind-sec-t{font-size:14px;font-weight:600;color:var(--lav-deep)}
   .ind-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px}
-  .ind-row .nm{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .ind-row .st{font-size:12px;color:var(--lav-deep);min-width:56px;text-align:right}
+  .ind-row .nm{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ind-row .st{font-size:14px;color:var(--lav-deep);min-width:56px;text-align:right}
   .ind-act{display:flex;gap:4px}
   .ind-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
   @media(max-width:640px){
@@ -39,9 +39,9 @@
   }
 </style>
 <div class="wrap">
-  <div class="page-head" style="margin-bottom:4px">
-    <h1 style="font-size:22px" id="sym-title">个股回测详情 <span class="opt">@ 任务 #{{ job_id }}</span></h1>
-    <p style="font-size:13px;margin-top:6px"><a class="inl" href="/saas/jobs/{{ job_id }}/symbols{{ share_qs }}">← 个股明细列表</a>　<a class="inl" href="/saas/jobs/{{ job_id }}{{ share_qs }}">回测结果</a>　<span class="opt" id="sym-note"></span></p>
+  <div class="page-head" style="margin-bottom:28px">
+    <h1 style="font-size:24px" id="sym-title">个股回测详情 <span class="opt">@ 任务 #{{ job_id }}</span></h1>
+    <p style="font-size:15px;margin-top:12px"><a class="inl" href="/saas/jobs/{{ job_id }}/symbols{{ share_qs }}">← 个股明细列表</a>　<a class="inl" href="/saas/jobs/{{ job_id }}{{ share_qs }}">回测结果</a>　<span class="opt" id="sym-note"></span></p>
   </div>
   <div class="metric-strip" id="sum-strip"></div>
 
@@ -551,7 +551,9 @@ function klineDisposeEngines(){
   if (el){
     if (window.echarts){
       const inst = echarts.getInstanceByDom(el);
-      if (inst){ try { inst.dispose(); } catch (e) {} }
+      // dispose 抛错只可能是实例已被外部销毁（主题切换/热更）；此时目标已达成，
+      // 吞掉是安全的。不得改成 return——后面还要清空容器 DOM。
+      if (inst){ try { inst.dispose(); } catch (e) { /* 实例已不存在：目标已达成 */ } }
     }
     // 容器专供 K 线图使用（模板内即为空 div），兜底清空防残留 canvas
     while (el.firstChild) el.removeChild(el.firstChild);
@@ -593,7 +595,7 @@ function renderRisk(d){
   const scList = Object.keys(sc).map(k => Object.assign({name: k}, sc[k])).filter(x => x.strategy_cumulative_return != null);
   if (scList.length){
     const worst = scList.reduce((a, b) => (a.strategy_cumulative_return < b.strategy_cumulative_return ? a : b));
-    html += '<div class="opt" style="font-size:12px;margin-top:6px">压力测试：覆盖 ' + scList.length +
+    html += '<div class="opt" style="font-size:14px;margin-top:6px">压力测试：覆盖 ' + scList.length +
       ' 个历史极端情景，最差情景（' + (worst.description || worst.name) + '）累计收益 ' +
       pct(worst.strategy_cumulative_return) + '，期间最大回撤 ' +
       (worst.strategy_peak_trough_drawdown != null ? pct(-Math.abs(worst.strategy_peak_trough_drawdown)) : '—') + '</div>';
@@ -1446,7 +1448,7 @@ function setPaneOrder(keys){
       seen[k] = true;
       return true;
     })));
-  } catch (e) {}
+  } catch (e) { /* 隐私模式：副图顺序仅本次会话生效，不持久化 */ }
 }
 // 按当前可见副图把 key 上移/下移一位；越界或未知键不动（不抛错）
 function movePane(key, delta){

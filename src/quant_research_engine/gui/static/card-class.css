@@ -55,7 +55,7 @@
   border: 1px solid var(--glass-line);
   border-radius: var(--card-radius);
   box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow);
-  padding: 16px 18px;
+  padding: 20px 22px;
   -webkit-backdrop-filter: blur(28px) saturate(140%);
   backdrop-filter: blur(28px) saturate(140%);
 }
@@ -63,7 +63,7 @@
 /* ---- 数值色：中性默认紫；盈亏走 .pos(红) / .neg(绿) ---- */
 .metric-card .m-value {
   color: var(--lav-deep);
-  font-size: 19px;
+  font-size: 21px;
 }
 /* .pos/.neg 在 base.html 是 0,1,0，会被上面的 0,2,0 压住，这里显式提级 */
 .metric-card .m-value.pos {
@@ -82,7 +82,7 @@
 #kreplay-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 18px;
 }
 /* 密集条（7 卡左右）：min 150px。容器拓宽到 1920 后 7 卡一行余量充足；
    窄屏（≤960px）仍走 45% 两列，不会孤行。 */
@@ -96,11 +96,11 @@
 #sum-strip .metric-card,
 #ra-strip .metric-card {
   flex: 1 1 280px;
-  padding: 16px 18px;
+  padding: 20px 22px;
 }
 #sum-strip .metric-card .m-value,
 #ra-strip .metric-card .m-value {
-  font-size: 17.5px;
+  font-size: 19.5px;
 }
 
 /* ---- 磨损条毛/净收益值：盈亏红/绿 ----

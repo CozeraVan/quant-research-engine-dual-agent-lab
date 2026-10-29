@@ -36,6 +36,7 @@ Before modifying code or producing plans, read:
 - `docs/agent/TV_ROUND2_SUMMARY_2026-10-29.md`（**给逆向侧的下一轮输入**：本轮成果汇总 + 4 个待逆向侧回答的问题 + 可自行复跑的复核命令）
 - `docs/agent/TV_ROUND2_ANSWER_2026-10-29.md`（**我方逐项回传**：§3 判据原始输出 + T1–T6 验收细节；**派下一轮前必读 §5bis 收官状态表与 5 条新发现**）
 - `docs/agent/TV_ROUND3_ANSWER_2026-10-29.md`（**ROUND3 回传**：R3-1 零基线 / R3-2 三项补验自动化+2 个真 bug / R3-4 移除 LWC 省 214KiB / R3-5 双列名收敛 / R3-3 前提纠正；下一轮建议见 §8）
+- `docs/agent/TV_ROUND4_ANSWER_2026-10-30.md`（**ROUND4 回传**：R4-1 四类「单测绿生产炸」清扫 / R4-2 判据环境段+一行化入口 / R4-3 模板语法守卫（含事故红灯复现）/ R4-4 旧系退场事件触发制+周扫首扫 / R4-5 用户选 A 维持原状）
 - `docs/agent/24_PERF_METRICS_CONTRACT.md`（持股周期与 α/β/IR/Sharpe 口径合同：公式/常量/基准选择/前端后端分工/防漂移纪律；用这些指标前必读）
 - `docs/agent/24_KLINE_LWC_FROZEN.md`（LWC 引擎试点**已整体移除**（R3-4，省 ~214KiB）：删除清单/收益/决策记录/重新引入条件；版本锁定信息指向 git 历史）
 
