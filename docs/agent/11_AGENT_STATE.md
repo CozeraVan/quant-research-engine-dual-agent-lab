@@ -1697,6 +1697,27 @@ unit `StandardOutput/Error` 改 `journal`（原先 `append:.tmp` 使 journal 无
 **踩坑记录**：`.gitignore` 的 negation 行尾注释会被吃进 pattern——
 以后加 negation 一律注释单独一行。
 
+### 2026-10-29 MACD 旧系产物归档（用户裁定「归档」）+ QRE-SAAS-ARTIFACT-ARCHIVE
+
+`legacy_total==0` 不能靠等——15 天过期只满足退场条件②，产物文件还在 ECS 上，
+周扫照样读到旧列名。用户 2026-10-29 在「保留分支 / 归档退场 / 重跑旧 job」中选**归档**：
+
+- `/srv/aguhuice/uploads/job_{58,66}/_symbol_details`（263+233 个 gzip，45MB）
+  `mv` 到 `/srv/aguhuice/archive/job_{58,66}/_symbol_details`（同盘秒级、可回退）；
+- 配套 `QRE-SAAS-ARTIFACT-ARCHIVE`（app.py）：`_symbol_detail_dirs` + `_find_symbol_detail`
+  把查找顺序改 **live → 归档**（归档根缺省 upload_root 兄弟目录 `archive/`，
+  `SAAS_ARCHIVE_DIR` 可覆盖），`api_result_symbol_detail` 与 `_symbol_detail_ready`
+  都走它——58/66 是公开展示的经典策略，归档 ≠ 下线，详情页必须继续可读；
+- 归档后周扫 `scanned_files 1013→517`、`legacy_total 0`、条件② 满足；
+  详情页抽样 12+12 只全 200/ok:true，`/saas/showcase` 200；
+- 单测 `TestSymbolDetailArchiveFallback` 4 例（缺省归档根 / 显式覆盖 / live 优先 /
+  两者皆无仍 404+can_generate）；
+- **时间表**：条件① 只计 `--record` 周扫，4 个零预计 2026-11-02/09/16/23，
+  **11-23 之后**才可删 `familyOf` 旧名分支；
+- **后置风险**：归档产物因子名仍是旧系，删 `familyOf` 旧名分支会让 58/66 详情页退回
+  「三指标各自独立副图」——删前必须三选一（展示层窄化映射 / 改写归档 gzip / 重跑），
+  见 `change_requests/CR-2026-10-29_artifact_archive.md`。
+
 **三个收官数字**：全量 **3208 passed, 34 skipped**；TV 判据三件套 + D/B 两类全绿
 （symbol `yAxis3 grid3` + 零基线 + pane 25% / replay 100 往返八指标零漂移 /
 game `macdSameAxis=true`）；周扫首扫 1013 产物中 496 含旧系名。

@@ -589,3 +589,93 @@ class TestEnrichSharedSymbolDetail:
         assert data["equity"]["values"][-1] == 100500.0
         assert len(data["orders"]) == 2
         assert data["wear"]["total_cost"] == 15.85
+
+
+class TestSymbolDetailArchiveFallback:
+    """QRE-SAAS-ARTIFACT-ARCHIVE：旧系产物归档后，详情页仍可读（TV R6 收尾）。
+
+    背景：MACD 旧系列名产物（job 58/66 共 496 个 per-symbol gzip）按用户
+    2026-10-30 的「归档」决定移出 `SAAS_UPLOAD_DIR`，让周扫 `legacy_total`
+    合法归零（20_DATA_DICTIONARY §4.1.1 退场前置动作）。但 58/66 是公开展示的
+    经典策略，详情页必须继续可读——故 live 找不到时回落到归档目录，
+    再找不到才走既有 fallback（ECS 无行情库 → 404 + can_generate）。
+    """
+
+    def _payload(self):
+        return {
+            "ok": True,
+            "factor_basis": "qfq_anchor_v1",
+            "summary": {"ts_code": "000001.SZ", "name": "平安银行", "total_pnl": 123.4,
+                        "trades": 2, "avg_ret": 0.01, "win_rate": 0.5, "percentile": 0.1,
+                        "bench_ret": 0.02, "total_ret_pct": 0.03},
+            "trades": [{"entry_date": "2026-01-05", "exit_date": "2026-01-10"}],
+            "orders": [{"trade_date": "2026-01-05", "side": "buy", "price": 10.0}],
+            "failed_orders": [],
+            "equity": {"dates": ["2026-01-05", "2026-01-06"], "values": [100000.0, 100100.0]},
+            "kline": {"dates": ["2026-01-05", "2026-01-06"],
+                      "ohlc": [[10.0, 10.1, 9.9, 10.2], [10.1, 10.0, 9.8, 10.3]],
+                      "vols": [1000.0, 1200.0]},
+            "factors": [{"name": "macd_dif", "values": [0.1, 0.2], "thresholds": []}],
+        }
+
+    def _write(self, base, job_id, ts_code):
+        d = Path(base) / f"job_{job_id}" / "_symbol_details"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{ts_code}.json.gz").write_bytes(
+            gzip.compress(json.dumps(self._payload(), ensure_ascii=False).encode("utf-8"))
+        )
+
+    def _isolate(self, app, tmp_path):
+        """把 upload_root 也挪进本测试的 tmp_path，归档根（upload_root 的兄弟目录
+        archive/）随之隔离——否则跨测试共用 pytest session tmp 会互相污染。"""
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path / "up")
+        return tmp_path / "archive"
+
+    def test_served_from_default_archive_when_live_missing(self, app, client, tmp_path):
+        """缺省归档根 = upload_root 的兄弟目录 archive/（不配 SAAS_ARCHIVE_DIR）。"""
+        base = self._isolate(app, tmp_path)
+        job_id = _complete_job_with_chart(client, {"tag_analysis": {"layers": {}}})
+        self._write(base, job_id, "000001.SZ")
+
+        resp = client.get(f"/api/results/{job_id}/symbols/000001", headers={"X-User-Id": "1"})
+        assert resp.status_code == 200
+        d = resp.get_json()
+        assert d["ok"] is True
+        assert d["summary"]["ts_code"] == "000001.SZ"
+        assert d["factors"][0]["name"] == "macd_dif"
+
+    def test_served_from_explicit_archive_dir(self, app, client, tmp_path):
+        """SAAS_ARCHIVE_DIR 可显式覆盖归档根。"""
+        app.config["SAAS_ARCHIVE_DIR"] = str(tmp_path / "vault")
+        job_id = _complete_job_with_chart(client, {"tag_analysis": {"layers": {}}})
+        self._write(tmp_path / "vault", job_id, "000001.SZ")
+
+        resp = client.get(f"/api/results/{job_id}/symbols/000001", headers={"X-User-Id": "1"})
+        assert resp.status_code == 200
+        assert resp.get_json()["summary"]["ts_code"] == "000001.SZ"
+
+    def test_live_dir_still_wins_over_archive(self, app, client, tmp_path):
+        """live 与归档同时存在时 live 优先（新产物不被旧快照盖住）。"""
+        app.config["SAAS_ARCHIVE_DIR"] = str(tmp_path / "vault")
+        self._isolate(app, tmp_path)
+        job_id = _complete_job_with_chart(client, {"tag_analysis": {"layers": {}}})
+        self._write(tmp_path / "vault", job_id, "000001.SZ")
+        live_payload = self._payload()
+        live_payload["summary"]["name"] = "LIVE版"
+        d = Path(app.config["SAAS_UPLOAD_DIR"]) / f"job_{job_id}" / "_symbol_details"
+        d.mkdir(parents=True)
+        (d / "000001.SZ.json.gz").write_bytes(
+            gzip.compress(json.dumps(live_payload, ensure_ascii=False).encode("utf-8"))
+        )
+
+        resp = client.get(f"/api/results/{job_id}/symbols/000001", headers={"X-User-Id": "1"})
+        assert resp.status_code == 200
+        assert resp.get_json()["summary"]["name"] == "LIVE版"
+
+    def test_missing_everywhere_still_404_can_generate(self, app, client, tmp_path):
+        """live 与归档都没有 → 保持既有 404 + can_generate（不静默给空数据）。"""
+        self._isolate(app, tmp_path)
+        job_id = _complete_job_with_chart(client, {"tag_analysis": {"layers": {}}})
+        resp = client.get(f"/api/results/{job_id}/symbols/000001", headers={"X-User-Id": "1"})
+        assert resp.status_code == 404
+        assert resp.get_json()["can_generate"] is True

@@ -3868,6 +3868,37 @@ def create_saas_app() -> Flask:
         symbols = sorted(by_symbol.values(), key=lambda s: s["total_pnl"], reverse=True)
         return jsonify({"ok": True, "job_id": job_id, "symbols": _jsonable(symbols)})
 
+    def _symbol_detail_dirs(job_id: int) -> list[Path]:
+        """per-symbol 详情产物的查找目录：live 优先，归档目录兜底。
+
+        QRE-SAAS-ARTIFACT-ARCHIVE（TV R6 收尾，用户 2026-10-30 决定「归档」）：
+        MACD 旧系列名产物（job 58/66 共 496 个 `_symbol_details/*.json.gz`）
+        按 20_DATA_DICTIONARY §4.1.1 的退场前置动作**归档**到 uploads 之外的
+        `<upload_root>/../archive/`，让周扫的 `legacy_total` 合法归零。
+        归档 ≠ 删除：58/66 是公开展示的经典策略，详情页必须继续可读，
+        所以 live 找不到时回落到归档目录，再找不到才走既有 fallback。
+        `SAAS_ARCHIVE_DIR` 可显式覆盖归档根（缺省取 upload_root 的兄弟目录）。
+        """
+        upload_root = Path(
+            _cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads"
+        )
+        dirs = [upload_root / f"job_{job_id}" / "_symbol_details"]
+        archive_root = _cfg(app, "SAAS_ARCHIVE_DIR") or str(upload_root.parent / "archive")
+        dirs.append(Path(archive_root) / f"job_{job_id}" / "_symbol_details")
+        return dirs
+
+    def _find_symbol_detail(job_id: int, code: str) -> Path | None:
+        """live → 归档 顺序找 per-symbol 产物；后缀不一致时按 6 位前缀兜底。"""
+        for detail_dir in _symbol_detail_dirs(job_id):
+            exact = detail_dir / f"{code}.json.gz"
+            if exact.exists():
+                return exact
+            if detail_dir.is_dir():
+                prefix = code.split(".")[0]
+                for cand in sorted(detail_dir.glob(f"{prefix}.*.json.gz")):
+                    return cand
+        return None
+
     @app.get("/api/results/<int:job_id>/symbols/<ts_code>")
     def api_result_symbol_detail(job_id: int, ts_code: str) -> Any:
         """与 lab 版 /api/lab/runs/<id>/symbol/<ts>/detail 同形态。
@@ -3901,16 +3932,8 @@ def create_saas_app() -> Flask:
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
 
-        job_dir = Path(_result_record(row)["output_dir"])
-        detail_dir = job_dir / "_symbol_details"
-        detail_path = detail_dir / f"{code}.json.gz"
-        if not detail_path.exists() and detail_dir.is_dir():
-            # 后缀推断与实际回传不一致时的兜底：按 6 位数字前缀找文件
-            prefix = code.split(".")[0]
-            for p in sorted(detail_dir.glob(f"{prefix}.*.json.gz")):
-                detail_path = p
-                break
-        if detail_path.exists():
+        detail_path = _find_symbol_detail(job_id, code)
+        if detail_path is not None:
             try:
                 data = json.loads(gzip.decompress(detail_path.read_bytes()).decode("utf-8"))
             except (OSError, ValueError):
@@ -3961,15 +3984,9 @@ def create_saas_app() -> Flask:
         return jsonify(_jsonable(data))
 
     def _symbol_detail_ready(job_id: int, code: str) -> bool:
-        """按需/批量产物是否已就位（与 api_result_symbol_detail 同套查找口径）。"""
-        job_dir = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads") / f"job_{job_id}"
-        detail_dir = job_dir / "_symbol_details"
-        if (detail_dir / f"{code}.json.gz").exists():
-            return True
-        if detail_dir.is_dir():
-            prefix = code.split(".")[0]
-            return any(detail_dir.glob(f"{prefix}.*.json.gz"))
-        return False
+        """按需/批量产物是否已就位（与 api_result_symbol_detail 同套查找口径，
+        含归档目录兜底——归档 job 的详情仍算就位，不会被反复按需重建）。"""
+        return _find_symbol_detail(job_id, code) is not None
 
     @app.post("/api/results/<int:job_id>/symbols/<ts_code>/generate")
     def api_symbol_detail_generate(job_id: int, ts_code: str) -> Any:
