@@ -170,20 +170,32 @@
 
 1. **连续 4 次周扫**「新产物因子名含旧系（`macd_dif`/`macd_dea`/`macd_hist`）」
    计数为 **0**；
-2. 旧 job（58/66/74/78）已归档或按保留期过期。
+2. 所有 `legacy_count>0` 的 job **均已过期（创建时间早于保留期）或已归档**。
 
-**周扫脚本**：`deploy/saas/scan-macd-legacy-names.sh`（扫 ECS `saas_uploads` 下所有
-job 的 per-symbol 产物因子名；`--record` 追加到 `.tmp/macd-legacy-scan.log`）。
-建议挂 systemd timer，每周一次。
+**两条条件均可由脚本机械判定**，一条命令出结论。
+
+**周扫脚本**：`deploy/saas/scan-macd-legacy-names.sh`
+（扫 ECS `saas_uploads` 下所有 job 的 per-symbol 产物因子名 + job 年龄；
+`--record` 追加到 `.tmp/macd-legacy-scan.log`）。
+
+**systemd timer（已落地）**：`deploy/systemd/qre-macd-legacy-scan.{service,timer}`
+→ 已安装到 `/etc/systemd/system/` 并 enable，每周一 03:17 跑一次
+（`Persistent=true`，错过开机补跑），输出 append 到 `.tmp/macd-legacy-scan.timer.log`。
+
+**保留期**：`LEGACY_RETENTION_DAYS`，默认 **90 天**（service 单元里 `Environment=`
+固定为 90；手动跑可用环境变量覆盖）。**参数值待用户确认。**
+年龄取 `risk_report.json` 的 mtime 作稳定证据（不用 `_symbol_details` 目录 mtime——
+部署/拷贝会刷新它，实测会把 5 天前的 job 算成 0.8 天）。
 
 **退场动作**（一个 PR）：删 `factor-layout.js::familyOf` 的旧名分支 + 判据脚本的
 双列名警示同步退场。
 **明确不删**：`configs/factor_registry.json` 的 `extra_aliases` 旧名别名——
 入口层成本≈0，防 NL 断链（用户用旧名描述仍能命中新系 canonical）。
 
-**首扫结果（2026-10-29）**：扫 1013 个产物文件，**496 个含旧系名**
-（job 58: 263 / job 66: 233）→ 不满足条件①。这两个 job 正是 2026-10-24 生成的
-MACD 金叉/死叉经典策略，退场要等它们归档或过期。
+**首扫结果（2026-10-29，timer 首跑同值）**：扫 1013 个产物文件，**496 个含旧系名**
+（job 58: 263 / job 66: 233，年龄 4.9 天，`active`）→ 条件①②**均不满足**。
+这两个 job 正是 2026-10-24 生成的 MACD 金叉/死叉经典策略，退场要等它们过期
+（按 90 天保留期约在 2027-01-22 之后）或归档。
 
 ## 5. 基本面与参考数据（相关表）
 

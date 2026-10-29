@@ -1,0 +1,14 @@
+[Unit]
+Description=QRE MACD legacy column-name weekly scan (TV R4-4 / R5-2)
+Documentation=file:/home/van/quant-workspace/quant-research-engine-dual-agent-lab/docs/agent/20_DATA_DICTIONARY_DAILY_MINUTE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=van
+WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
+Environment=LEGACY_RETENTION_DAYS=90
+ExecStart=/home/van/quant-workspace/quant-research-engine-dual-agent-lab/deploy/saas/scan-macd-legacy-names.sh --record
+StandardOutput=append:/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.tmp/macd-legacy-scan.timer.log
+StandardError=append:/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.tmp/macd-legacy-scan.timer.log

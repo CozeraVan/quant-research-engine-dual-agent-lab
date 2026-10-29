@@ -159,12 +159,12 @@
     return Number(v).toFixed(2);
   }
 
-  // K 线容器高度（CR-2026-10-27 清理；CR-2026-10-29 C3.1 整体 +60px）：静态
-  // renderKline 与重播 mountKlineReplay 共用同一公式，避免两处漂移。
-  // 无副图 520px；有副图 480 + panes*160。
+  // K 线容器高度（CR-2026-10-27 清理；CR-2026-10-29 C3.1 整体 +60px；
+  // R4-2.3 再抬主图）：静态 renderKline 与重播 mountKlineReplay 共用同一公式，
+  // 避免两处漂移。无副图 620px；有副图 560 + panes*180（1 副图 740，3 副图 1100）。
   function klineHeightForPanes(paneCount) {
     var n = Math.max(0, Math.floor(Number(paneCount) || 0));
-    return n > 0 ? 480 + n * 160 : 520;
+    return n > 0 ? 560 + n * 180 : 620;
   }
 
   // QRE-TV-REPLAY-KEYS（T3）：键盘不得劫持的这些焦点区。表单控件（起始日输入框、

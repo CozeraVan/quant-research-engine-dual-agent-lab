@@ -199,3 +199,48 @@ class TestCallbackErrorObservabilityRegistered:
         body = entry.read_text(encoding="utf-8")
         for needle in ("tv3_verify.py", "t3_verify.py", "tv3_game_verify.py"):
             assert needle in body, f"入口未覆盖 {needle}"
+
+
+# ---------------------------------------------------------------- C 类消费方语义
+class TestConditionalKeyConsumerSemantics:
+    """C 类正式定义（TV_ROUND5 §1.2 裁定）：**该键的消费方是否不解引用就取属性**。
+
+    炸例：`legend.selected` → ECharts `LegendModel.isSelected()` 无条件
+    `selected.hasOwnProperty(name)`（R3-2 bug 1）。
+    不炸例：series 级 `markLine: undefined` → ECharts 走无配置分支。
+
+    配套两条：
+    1. 判定用消费方语义，不用值语义——`markLine` 这类实测不炸的**不改**，
+       避免无 bug 的 churn；
+    2. 新代码默认风格仍是「缺就不写键」——判定标准宽了，写作标准不放宽。
+    """
+
+    def test_markline_undefined_key_is_left_alone(self) -> None:
+        """`markLine: klineLastPriceMarkLine()` 不得被改成「缺就不写键」。
+
+        它是 C 类里**实测不炸**的样本（probe 见 `.tmp/perf-browser/probe_markline_undef.py`）；
+        按消费方语义应保留原样。这条测试同时是"防后来者来回改"的锚。
+        """
+        tpl = (REPO / "src/quant_research_engine/gui/saas/templates/symbol.html").read_text(
+            encoding="utf-8"
+        )
+        assert "markLine: klineLastPriceMarkLine()" in tpl, (
+            "markLine 直接赋值的写法被改掉了——按 C 类消费方语义它不炸，"
+            "不应为'看起来统一'而改（见 probe_markline_undef.py）"
+        )
+
+    def test_markline_probe_landed(self) -> None:
+        """R5-4：被回传引用的 probe 必须落盘存在（证据不许只活在引文里）。"""
+        probe = REPO / ".tmp/perf-browser/probe_markline_undef.py"
+        assert probe.is_file(), (
+            "probe_markline_undef.py 缺失——TV_ROUND4 §1.4 引用过它，"
+            "被引用的 scratch 就是证据，证据不许消失"
+        )
+        body = probe.read_text(encoding="utf-8")
+        assert "C 类判定" in body, "probe 缺结论行"
+        assert "消费方" in body, "probe 必须写清 C 类的消费方语义判定标准"
+
+    def test_legend_selected_still_uses_write_only_when_present(self) -> None:
+        """炸例那一侧必须保持「缺就不写键」（写作标准不放宽）。"""
+        js = (REPO / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
+        assert "if (opts.legendSelected) legend.selected = opts.legendSelected;" in js

@@ -343,8 +343,8 @@ assert.equal(h.get('kt-trend').disabled, false, '退出重播恢复画线按钮'
 const replayOpt = h.charts[0].options[h.charts[0].options.length - 1];
 assert.ok(!replayOpt.series.some(s => String(s.name).indexOf('画线') === 0), '画线不得进入重播帧');
 assert.ok(h.get('kreplay-info').classList, '信息卡容器保留');
-// 高度：静态重建走同一 helper（1 副图 → 640px）
-assert.equal(h.get('chart-kline').style.height, '640px', '静态重建高度与重播一致');
+// 高度：静态重建走同一 helper（1 副图 → 740px）
+assert.equal(h.get('chart-kline').style.height, '740px', '静态重建高度与重播一致');
 console.log('replay-tv-exit-ok');
 """
 
@@ -424,14 +424,14 @@ const h = makeHarness();
 const source = %SOURCE%;
 vm.runInContext(source + '\nglobalThis.__mountKlineReplay = mountKlineReplay;', h.ctx);
 const QREReplay = h.ctx.window.QREReplay;
-// 1) 共享 helper 公式：无副图 520，有副图 480 + panes*160（CR-2026-10-29 整体 +60px）
-assert.equal(QREReplay.klineHeightForPanes(0), 520, '无副图 520px');
-assert.equal(QREReplay.klineHeightForPanes(1), 640, '1 副图 640px');
-assert.equal(QREReplay.klineHeightForPanes(3), 960, '3 副图 960px');
-assert.equal(QREReplay.core.klineHeightForPanes(0), 520, 'core 也暴露同一 helper');
-// 2) 重播容器用同一公式（DETAIL：1 个 MACD 合并副图 → 640px）
+// 1) 共享 helper 公式：无副图 620，有副图 560 + panes*180（R4-2.3 抬高 K 线主图）
+assert.equal(QREReplay.klineHeightForPanes(0), 620, '无副图 620px');
+assert.equal(QREReplay.klineHeightForPanes(1), 740, '1 副图 740px');
+assert.equal(QREReplay.klineHeightForPanes(3), 1100, '3 副图 1100px');
+assert.equal(QREReplay.core.klineHeightForPanes(0), 620, 'core 也暴露同一 helper');
+// 2) 重播容器用同一公式（DETAIL：1 个 MACD 合并副图 → 740px）
 const ctl = vm.runInContext('__mountKlineReplay(' + JSON.stringify(DETAIL) + ')', h.ctx);
-assert.equal(h.get('chart-kline').style.height, '640px', '重播容器高度走共享 helper');
+assert.equal(h.get('chart-kline').style.height, '740px', '重播容器高度走共享 helper');
 console.log('replay-height-ok');
 """
 
@@ -480,7 +480,7 @@ class TestTooltipUnitCleanup:
             "静态 renderKline 与重播 mountKlineReplay 必须共用同一 helper"
         )
         assert "420 + panes.length * 160" not in SYMBOL_TPL, "symbol.html 不得再保留内联高度公式"
-        assert "520px" not in _mount_body(), "重播不得再写死 K 线高度"
+        assert "620px" not in _mount_body(), "重播不得再写死 K 线高度"
 
     def test_replay_height_matches_static_formula(self):
         _run(

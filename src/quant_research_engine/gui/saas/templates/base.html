@@ -75,19 +75,32 @@ th{color:var(--muted);font-weight:500}
 .row>div{flex:1;min-width:140px}
 .chart{width:100%;height:320px}
 /* 品牌带：主题深紫底 + 白色横版 logo（QRE-SAAS-BRAND-HEADER）；导航白色系。
-   选择器用 header.topbar 提高优先级，压住 lab-theme.css 的浅色顶栏规则。 */
-header.topbar{display:flex;justify-content:space-between;align-items:center;background:#4A3C78;border-bottom:none}
+   选择器用 header.topbar 提高优先级，压住后加载的主题样式里的浅色顶栏规则。
+   左右留白与内容列（.container/.wrap 的 max-width:1920px + 16px）逐像素对齐：
+   大屏时随内容列一起居中，不再沿用主题样式里的 1600px 公式。 */
+header.topbar{display:flex;justify-content:space-between;align-items:center;background:#4A3C78;border-bottom:none;padding:0 max(16px,calc((100% - 1920px)/2 + 16px))}
 header.topbar .brand{color:#fff;font-size:17px;font-weight:700;flex-shrink:0}
 header.topbar .brand img{height:46px;display:block}
 header.topbar .mainnav{display:flex;align-items:center;flex-wrap:nowrap;white-space:nowrap}
 header.topbar .mainnav a{color:rgba(255,255,255,.78);font-size:16px;font-weight:500;padding:0;border-radius:0;background:none;margin-left:20px}
 header.topbar .mainnav a:hover{color:#fff;background:none}
 header.topbar .mainnav a.active{color:#fff;background:none;font-weight:600}
+/* 夜间模式按钮暂不启用（R4-2.1）：功能全部保留（夜间样式规则、qre-theme 持久化、
+   系统偏好跟随、防 FOUC、ECharts 主题联动一行未删），只隐藏这个可见按钮。
+   恢复只需删下面这一条。DOM 必须保留——夜间脚本发现页面无 .tt-btn 时会注入
+   .tt-btn.tt-float 悬浮钮；只隐藏不删除，才不会冒出悬浮钮。
+   选择器带 header.topbar 前缀，特异性高于夜间样式的 .tt-btn，且只作用于顶栏
+   （不影响 login_callback.html 的 .tt-btn.tt-float）。 */
+header.topbar .tt-btn{display:none}
 /* 移动端：缩小 logo 与导航间距，强制单行不折行 */
 @media (max-width:960px){
-  header.topbar{padding:0 12px}
+  header.topbar{padding:0 16px}
   header.topbar .brand img{height:30px !important}
   header.topbar .mainnav a{font-size:14.5px;margin-left:10px}
+}
+/* ≤768px：内容列（.container/.wrap）留白收到 12px，顶栏同步 */
+@media (max-width:768px){
+  header.topbar{padding:0 12px}
 }
 /* 超窄屏（≤400px）：导航增至 5 项（新建/经典/使用说明/个人信息/登录），
    再收一档字号与间距 + logo 降高 + 去掉 lab-theme 的 4px gap（lab-theme 在

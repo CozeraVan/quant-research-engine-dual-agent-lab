@@ -1660,3 +1660,24 @@ CR `docs/agent/change_requests/CR-2026-10-29_ui_round3_font_spacing.md`。
 
 **下一轮需处理**：`12_UI_STYLE_GUIDE.md` 字号基线过期（body 17 / table 14），
 本轮按边界只提示不改；`symbol.html` 的 404 控制流建议改 200+`ok:false`。
+### 2026-10-30 TV_ROUND5（收官轮）R5-1~R5-4 完成
+
+按 `docs/agent/TV_ROUND4_TASKS_2026-10-29.md` 的收官轮任务书
+`docs/agent/TV_ROUND5_TASKS_2026-10-30.md` 执行，回传
+`docs/agent/TV_ROUND5_ANSWER_2026-10-30.md`。
+
+| 项 | 结果 |
+|---|---|
+| R5-4 | `.tmp/perf-browser/probe_markline_undef.py` 落盘（结论行写入文件头），运行 `threw:null / pageerrors:0 / PASS`；`test_no_silent_failure_patterns.py` 8 → **11 例**（新增消费方语义三例：markLine 不许改 / probe 必须存在 / legend 写法保持） |
+| R5-1 | `AGENTS.md` 新增 **Silent-Failure Discipline**（4 条，含证据位置必须真实存在）与 **TV Acceptance Checklist**（`tv_check_all.sh` 提交前验收）两节 |
+| R5-2 | `deploy/systemd/qre-macd-legacy-scan.{service,timer}` 已安装并 enable，每周一 03:17（Persistent）；`scan-macd-legacy-names.sh` 加 `LEGACY_RETENTION_DAYS`（默认 90）+ 每 job 年龄与过期判定，**两条退场条件均可机械判定**；timer 首跑成功；数据字典 §4.1.1 同步 |
+| R5-3 | `docs/agent/TV_FINAL_REPORT_2026-10-30.md` 收官报告：记分卡（K线 95 / 作图 90 / 指标 95 / 回放 95）+ 8 条有意偏离 + 资产清单 + 稳态机制 + 三个收官数字 |
+
+**三个收官数字**：全量 **3208 passed, 34 skipped**；TV 判据三件套 + D/B 两类全绿
+（symbol `yAxis3 grid3` + 零基线 + pane 25% / replay 100 往返八指标零漂移 /
+game `macdSameAxis=true`）；周扫首扫 1013 产物中 496 含旧系名。
+
+**待用户确认**：`LEGACY_RETENTION_DAYS` 默认 **90 天**（逆向侧明示需用户确认）。
+按 90 天，job 58/66 约 2027-01-22 后才满足退场条件②。
+
+**TV 化按 ROUND1 范围判定：收官**，无工程欠账。
