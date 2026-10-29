@@ -498,7 +498,12 @@ def build_symbol_detail_files(
                 data = build_lab_symbol_detail(
                     record, ts_code, stats=stats, round_trips_by_symbol=rt_by_symbol
                 )
-            except Exception:
+            except Exception as exc:
+                # QRE-FACTOR-BASIS-CONTRACT：单股详情组装失败可以跳过（不拖垮整批回传），
+                # 但**必须留痕**——静默 continue 会让「哪只股票没有详情、为什么」无从排查，
+                # 而复权口径这类问题已经靠「用户先发现」栽过四次。
+                print(f"[symbol-details] {ts_code} 详情组装失败，跳过：{type(exc).__name__}: {exc}",
+                      flush=True)
                 continue
             if not data:
                 continue

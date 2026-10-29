@@ -40,6 +40,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from quant_research_engine.factor_basis import basis_reason  # QRE-FACTOR-BASIS-CONTRACT
 from quant_research_engine.gui.saas.result_contract import (
     DAILY_RETURN_BASIS,
     TOTAL_RETURN_BASIS,
@@ -3944,8 +3945,17 @@ def create_saas_app() -> Flask:
             # 尺度与 qfq K 线并列（600330 实测 ema_5=113.26 vs 收盘 21.97，差 5.16 倍）。
             # 一律不当作正确数据下发，改走按需生成/刷新，由前端出按钮——
             # 宁可让用户点一下，也不能 silently 展示错尺度数据。
-            if isinstance(data, dict) and data.get("ok") and not data.get("factor_basis"):
-                data = None
+            # QRE-FACTOR-BASIS-CONTRACT 契约第 2 条：缺失**或未登记的口径**都拒发，
+            # 且必须打 WARNING 留痕（job/股票/路径/原因）。这类问题已复发四次，
+            # 静默丢弃会让复发无从观测——用户原话「每次都是治标不治本」。
+            if isinstance(data, dict) and data.get("ok"):
+                _basis_problem = basis_reason(data.get("factor_basis"))
+                if _basis_problem is not None:
+                    app.logger.warning(
+                        "QRE-FACTOR-BASIS-CONTRACT 拒发个股详情 job=%s ts=%s path=%s reason=%s",
+                        job_id, code, detail_path, _basis_problem,
+                    )
+                    data = None
             if isinstance(data, dict) and data.get("ok"):
                 # 基准指数对齐个股净值日期：复用任务级 chart_data.benchmarks
                 # （per-symbol 产物不带基准序列以控制回传体积）

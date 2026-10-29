@@ -40,6 +40,10 @@ from typing import Any
 
 from flask import Flask, jsonify, render_template
 
+from quant_research_engine.factor_basis import (  # QRE-FACTOR-BASIS-CONTRACT：口径单一权威
+    FACTOR_BASIS_QFQ_ANCHOR_V1,
+    basis_reason,
+)
 from quant_research_engine.gui import engine as _engine
 from quant_research_engine.gui.engine import _find_output_file, get_run
 
@@ -56,8 +60,11 @@ BENCHMARKS: list[tuple[str, str]] = [
 TRADE_SCATTER_LIMIT = 500
 
 # QRE-SAAS-SYMBOL-DETAIL-REFRESH：个股详情口径标记——价格型因子已按 K 线前复权
-# 锚点换算（与 K 线同尺度）。历史旧产物缺该字段；值变更时同步改此处与前端判断。
-FACTOR_BASIS_QFQ_ANCHOR_V1 = "qfq_anchor_v1"
+# 锚点换算（与 K 线同尺度）。历史旧产物缺该字段；前端据此显示按需刷新入口；
+# worker _execute_symbol_detail 经同一函数生成，新产物自动携带。
+# QRE-FACTOR-BASIS-CONTRACT：常量与白名单已上收到 quant_research_engine.factor_basis，
+# 此处 re-export 保持既有 import 路径不破（新增口径只改那一处）。
+FACTOR_BASIS_QFQ_ANCHOR_V1 = FACTOR_BASIS_QFQ_ANCHOR_V1
 
 
 def json_safe(value: Any) -> Any:
@@ -1175,7 +1182,12 @@ def build_lab_symbol_detail(
     # QRE-SAAS-SYMBOL-DETAIL-REFRESH：口径标记——价格型因子已按 K 线前复权锚点
     # 换算（与 K 线同尺度）。历史旧产物无此字段，前端据此显示按需刷新入口；
     # worker _execute_symbol_detail 经同一函数生成，新产物自动携带。
+    # QRE-FACTOR-BASIS-CONTRACT 契约第 1 条：生成侧必须带已登记口径，带不上就报错，
+    # 不许静默省略——这类「有没有换算过」的信息一旦丢失，读取侧只能整条拒发。
     data["factor_basis"] = FACTOR_BASIS_QFQ_ANCHOR_V1
+    _basis_problem = basis_reason(data["factor_basis"])
+    if _basis_problem is not None:  # pragma: no cover - 契约自守，防将来改错常量
+        raise RuntimeError(f"factor_basis 非法（{_basis_problem}）：口径必须已在白名单登记")
     return data
 
 

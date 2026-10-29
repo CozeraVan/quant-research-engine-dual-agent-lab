@@ -1734,6 +1734,45 @@ threshold 绝对轴未验证 / 平均持股周期空值 / 小游戏指标错乱�
 子 agent 交付质量（验收标准不具体就部署）/ 两个环境坑（/etc unit 副本、
 gitignore negation 行尾注释）/ 夜间模式旁路 / 分享链接回归 / 隐私隔离待确认。
 
+### 2026-10-29 P0-1 因子复权口径硬契约（QRE-FACTOR-BASIS-CONTRACT）
+
+价格型因子与 K 线差一个复权倍数的问题**第 4 次复发**后的治本项（用户批准启动 P0）。
+前三次都只修「换算公式」，没有任何地方强制记录「这个产物换算过没有、按哪个口径」——
+缺字段时读取侧静默 `data=None`、worker 侧单股失败静默 `continue`，线上零痕迹。
+
+- 新增单一权威模块 `src/quant_research_engine/factor_basis.py`
+  （`FACTOR_BASIS_QFQ_ANCHOR_V1` / `KNOWN_BASES` 白名单 / `basis_reason()` / `is_known_basis()`）；
+  `lab_result.FACTOR_BASIS_QFQ_ANCHOR_V1` 改为 re-export，别处硬编码字面量有测试锁。
+- 契约三条：生成侧必带已登记口径（带不上报错）/ 读取侧缺失**或未登记**一律拒发 +
+  WARNING 留痕 / 运维侧 `deploy/saas/scan-factor-basis.sh` 全量审计 live+归档。
+- 生成侧两条路径（批量 `build_symbol_detail_files`、按需 `_execute_symbol_detail`）
+  都经 `build_lab_symbol_detail`，自动携带；worker 单股失败改为 print 留痕（不再静默 continue）。
+- **存量审计**：live 517 + 归档 496 = **1013/1013 全带 `qfq_anchor_v1`**，
+  归档的 496 个（job 58/66）当年已由 `e37c5cd` 补救，不构成口径未知产物。
+- 测试：`tests/test_factor_basis_contract.py` 15 例 + `test_gui_saas.py` 3 例
+  （未登记口径拒发 / 拒发必须留痕）+ `test_no_silent_failure_patterns.py` 2 例静态锁。
+- 契约全文与「新增口径怎么办」见 `docs/agent/23_KLINE_IMPLEMENTATION.md` §4a；
+  决策记录见 `06_DECISION_LOG.md` 2026-10-29 条。
+- **Known gap**：`game/factors.py` + `game/data.py::qfq_anchor` 是另一套锚点实现，
+  游戏重启（P1-8）时必须改用本契约或显式声明独立口径，**不允许第三套实现**。
+
+### 2026-10-29 P0-2 年化爆表确认 + 全库极值扫描（发现北交所三板残留脏数据）
+
+**年化爆表已确认修好**：真实浏览器打生产页（`.tmp/perf-browser/probe_holding_annual.py`），
+job 58/920832（原 3.58e+35%）与 job 66/920556（原 5051142288902.57%）现在都显示
+「—」+ 「持仓期不足一个完整年度」原因，页面零科学计数法、零 pageerror。
+年化下限 `ANNUAL_MIN_TRADING_DAYS=252` 已有测试锁（`test_lab_ui_holding_days.py`）。
+
+**全库极值扫描（1013 个产物，live+归档）**：收益/年化/费率类字段无真实爆表；
+equity 无非正/非有限值。命中的 14 条全是**合理大值**（全期北交所个股涨幅）与
+`annualization_factor=252` 常量。
+
+**但扫出一个真问题**：`920%.BJ` 代码的 2021-11-15 之前历史是**三板残留脏数据**——
+226 个代码、78,423 行、74.7% 是垃圾行（`close` 恒 1、30 股成交、最早 2009-01-09）。
+已致 job 78 `920809.BJ` 压力情景 +63125%、job 66 `920641.BJ` 区间涨幅 3681%，
+并污染所有全期全市场回测。事实/证据/三选一方案见
+`20_DATA_DICTIONARY_DAILY_MINUTE.md` §2.2，已升为 P0 第 1 项等产品决策。
+
 **三个收官数字**：全量 **3208 passed, 34 skipped**；TV 判据三件套 + D/B 两类全绿
 （symbol `yAxis3 grid3` + 零基线 + pane 25% / replay 100 往返八指标零漂移 /
 game `macdSameAxis=true`）；周扫首扫 1013 产物中 496 含旧系名。

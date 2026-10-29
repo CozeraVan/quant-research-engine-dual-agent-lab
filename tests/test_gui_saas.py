@@ -1341,12 +1341,21 @@ class TestSymbolDetailRefresh:
                     headers=WORKER_HEADERS)
         return job_id
 
-    def _ready_artifact(self, app, job_id, code="000001.SZ", legacy=False):
-        """写一个就绪的详情产物。``legacy=True`` 造缺口径标记的旧快照——
-        QRE-FACTOR-QFQ-ANCHOR-DATE 起这类产物不得被当作正确数据下发。"""
+    def _ready_artifact(self, app, job_id, code="000001.SZ", legacy=False, basis="qfq_anchor_v1"):
+        """写一个就绪的详情产物。
+
+        ``legacy=True`` 造缺口径标记的旧快照——QRE-FACTOR-QFQ-ANCHOR-DATE 起这类产物
+        不得被当作正确数据下发；``basis`` 可造**未登记口径**（QRE-FACTOR-BASIS-CONTRACT
+        契约第 2 条：白名单外的值同样拒发，防止将来有人写了新口径却忘了登记）。
+        """
         detail_dir = Path(app.config["SAAS_UPLOAD_DIR"]) / f"job_{job_id}" / "_symbol_details"
         detail_dir.mkdir(parents=True, exist_ok=True)
-        payload = {"ok": True} if legacy else {"ok": True, "factor_basis": "qfq_anchor_v1"}
+        if legacy:
+            payload = {"ok": True}
+        else:
+            payload = {"ok": True}
+            if basis is not None:
+                payload["factor_basis"] = basis
         (detail_dir / f"{code}.json.gz").write_bytes(gzip.compress(
             json.dumps(payload).encode("utf-8")))
 
@@ -1435,6 +1444,39 @@ class TestSymbolDetailRefresh:
         assert resp.status_code == 404
         body = resp.get_json()
         assert body["can_generate"] is True, "旧口径产物必须转为按需生成/刷新"
+
+    def test_unregistered_basis_is_not_served(self, client, app):
+        """QRE-FACTOR-BASIS-CONTRACT：白名单外的 factor_basis 同样拒发。
+
+        只判「有没有字段」不够——将来源码写了个新口径值却忘了登记，读取侧会当它合法，
+        于是又一次 silently 展示可能错尺度的数据。未登记 = 口径未知，一律按旧口径处理。
+        """
+        job_id = self._completed_job(client)
+        self._ready_artifact(app, job_id, basis="qfq_anchor_v2_未登记")
+        resp = client.get(f"/api/results/{job_id}/symbols/000001", headers={"X-User-Id": "1"})
+        assert resp.status_code == 404
+        assert resp.get_json()["can_generate"] is True
+
+    def test_refusal_is_logged_not_silent(self, client, app, caplog):
+        """契约第 2 条的另一半：拒发必须留痕（WARNING），否则复发无从观测。
+
+        这类复权问题已复发四次，根因之一就是读取侧静默 `data = None`——
+        线上没有任何痕迹，只能等用户看到错数据再报。
+        """
+        import logging
+
+        job_id = self._completed_job(client)
+        self._ready_artifact(app, job_id, legacy=True)
+        with caplog.at_level(logging.WARNING, logger="quant_research_engine"):
+            resp = client.get(f"/api/results/{job_id}/symbols/000001",
+                              headers={"X-User-Id": "1"})
+        assert resp.status_code == 404
+        hits = [r for r in caplog.records
+                if "QRE-FACTOR-BASIS-CONTRACT" in r.getMessage()
+                and r.levelno >= logging.WARNING]
+        assert hits, "拒发必须打 WARNING，不许静默丢弃"
+        msg = hits[0].getMessage()
+        assert f"job={job_id}" in msg and "reason=missing" in msg, msg
 
 
 class TestSymbolDetailJsonFinite:

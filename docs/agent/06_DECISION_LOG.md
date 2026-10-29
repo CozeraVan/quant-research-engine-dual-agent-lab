@@ -1538,3 +1538,11 @@ No open questions remain.
 - Alternatives: 把因子表整体改前复权@最新——否决（同列不同历史锚点会随时间变化，破坏 PIT 与回测复现，2026-10-27 已否决过一次）；批量重跑全部回测生成新快照——否决（本地 run 产物已清空、ECS 无行情库，成本远高于按正确锚点 rescale 快照，且 rescale 已用产物自身 qfq K 线交叉验证比值 1.0000）；旧快照继续下发——否决（silent 展示错尺度数据比让用户多点一下更糟）。
 - Impact: 新生成详情因子与 K 线同尺度；1013 个存量产物已按正确锚点 rescale（线上复扫 100% 新口径）；缺 `factor_basis` 的产物不再被当作正确数据。锚点纪律与 `factor_basis` 合同已写入 `20_DATA_DICTIONARY_DAILY_MINUTE.md` §6 硬规则 2。证据见 `change_requests/CR-2026-10-28_factor_qfq_anchor.md`。
 - Owner: KIMI_CODE（用户 2026-10-28 要求彻底排查并治本）
+
+### 2026-10-29: 因子复权口径硬契约（QRE-FACTOR-BASIS-CONTRACT，第 4 次复发的治本项）
+
+- Decision: 把「有没有按正确锚点换算过」从约定升级为**可判定的硬契约**，单一权威模块 `src/quant_research_engine/factor_basis.py`：① 生成侧任何写出 per-symbol 详情的路径必须带 `factor_basis` 且值在 `KNOWN_BASES` 白名单内，带不上就报错；② 读取侧缺失**或未登记**一律拒发，且打 WARNING 留痕（job/股票/路径/原因）；③ 运维侧 `deploy/saas/scan-factor-basis.sh` 全量审计 live + 归档产物，坏产物非零退出。常量只允许契约模块定义，`lab_result` 仅 re-export（有测试锁死字面量不旁落）。
+- Reason: 同一类错位已复发四次（用户原话「每次都是治标不治本」）。前三次修的都是「换算公式」，但没有任何地方强制记录「这个产物换算过没有、按哪个口径换算的」——缺字段时读取侧静默 `data=None`、worker 侧单股失败静默 `continue`，线上零痕迹，只能等用户看到错数据再报。白名单而非「有字段即过」：防止将来有人写新口径值却忘了登记，读取侧又当它合法。
+- Alternatives: 只在文档写纪律——否决（已写过三次，照样复发）；批量重跑全部历史回测生成新产物——否决（ECS 无行情库、本地 run 产物已清，成本远高于 rescale，且 `e37c5cd` 已补救过 1013 个存量产物）；把拒发计数接进 9090 运营看板——本轮不做（需要新的计数器落库与前端，日志 + 审计脚本已足够可观测，列为后续可选）。
+- Impact: 新增 1 个模块 + 读取侧约 10 行 + worker 侧 1 处留痕 + 1 个审计脚本；`lab_result.FACTOR_BASIS_QFQ_ANCHOR_V1` 改为 re-export（import 路径不破）；存量 1013/1013 产物已全部带 `qfq_anchor_v1`（2026-10-29 审计），归档的 496 个不构成口径未知产物；新增测试 15 + 3 + 2 例。契约全文见 `docs/agent/23_KLINE_IMPLEMENTATION.md` §4a。
+- Owner: KIMI_CODE（用户 2026-10-29 批准启动 P0）

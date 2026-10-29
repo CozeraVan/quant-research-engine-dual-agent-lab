@@ -220,6 +220,60 @@ render_order: 非负整数
 - SaaS symbol 静态图与重播，以及本地 lab 静态个股页。
 - 游戏不是 `display` 合同的直接消费方：`game/factors.py::factor_catalog()` 不返回该字段，`game.html` 不加载 `factor-layout.js`，而是独立分组并硬编码 MACD 三元组。后续统一呈现协议时需显式迁移，不能假设已经共享。
 
+## 4a. 因子复权口径硬契约（QRE-FACTOR-BASIS-CONTRACT）
+
+> 2026-10-29 立。起因：价格型因子与 K 线差一个复权倍数的问题**复发四次**
+> （600330 `ema_5=113.26` vs qfq 收盘 `21.97`，差 5.16 倍；《我不是股神》里
+> K 线 OC LH≈5 而 EMA/BOLL 飙到 27-30）。用户判定「每次都是治标不治本」，
+> 根因是「有没有换算过」这件事没有任何地方强制记录。本契约把它变成可判定的硬规则。
+
+### 4a.1 口径事实
+
+- 因子表是**后复权**尺度（`raw × adj_factor`）；K 线是**前复权 @ K 线最后交易日**。
+- 价格型因子（EMA/MACD/BOLL…）必须**除以 K 线最后交易日的 `adj_factor`** 才与 K 线同尺。
+- 锚点必须取**该个股 K 线区间末日**的 `adj_factor`（`_latest_adj_factor(conn, ts, as_of)`），
+  不能取全局最新日——区间结束后除权会除错倍数（`e37c5cd` 修的就是这个）。
+
+### 4a.2 契约三条
+
+| # | 侧 | 规则 |
+|---|---|---|
+| 1 | 生成侧 | 任何写出 per-symbol 详情的路径都必须带 `factor_basis`，且值在 `KNOWN_BASES` 白名单内；带不上就报错，**不许静默省略** |
+| 2 | 读取侧 | `factor_basis` 缺失**或未登记** → 一律不当正确数据下发，并打 WARNING（job/股票/路径/原因） |
+| 3 | 运维侧 | `deploy/saas/scan-factor-basis.sh` 全量审计 live + 归档产物，发现坏产物非零退出 |
+
+### 4a.3 资产位置
+
+- 契约模块（单一权威）：`src/quant_research_engine/factor_basis.py`
+  （`FACTOR_BASIS_QFQ_ANCHOR_V1` / `KNOWN_BASES` / `basis_reason()` / `is_known_basis()`）。
+- 生成侧写入点：`gui/lab_result.py::build_lab_symbol_detail`（批量与按需两条路径都经它），
+  `lab_result.FACTOR_BASIS_QFQ_ANCHOR_V1` 是 re-export，**别处不许硬编码字面量**（有测试锁）。
+- 读取侧判定：`gui/saas/app.py::api_result_symbol_detail`。
+- worker 侧留痕：`worker/runner.py::build_symbol_detail_files` 单股失败必须 print（不许静默 continue）。
+- 审计脚本：`deploy/saas/scan-factor-basis.sh`（日志落仓库内 `deploy/saas/factor-basis-scan.log`，
+  与 MACD 周扫同思路，**不放 .tmp**）。
+- 测试：`tests/test_factor_basis_contract.py`（15 例）、
+  `tests/test_gui_saas.py::TestSymbolDetailRefresh`（拒发 + 未登记拒发 + 必须留痕）、
+  `tests/test_no_silent_failure_patterns.py::TestFactorBasisChainNotSilent`（静态锁）。
+
+### 4a.4 新增口径怎么办
+
+在 `factor_basis.py` 的 `KNOWN_BASES` 登记新值 → 生成侧写上它 → 更新本节口径表 →
+跑 `deploy/saas/scan-factor-basis.sh` 确认存量产物归属。**不要绕过白名单**：
+读取侧会把未登记的值当「口径未知」拒发（这是有意设计，防「写了新口径忘了登记」）。
+
+### 4a.5 当前存量状态
+
+2026-10-29 全量审计：live 517 + 归档 496 = **1013/1013 全部带 `qfq_anchor_v1`**，
+无缺失、无未登记、无不可读。归档的 496 个（job 58/66）当年由 `e37c5cd` 补救过，
+因此不构成「口径未知」产物。
+
+### 4a.6 未纳入契约的部分（ Known gap ）
+
+- `game/factors.py` + `game/data.py::qfq_anchor` 是**另一套**锚点实现（§4.3 已记录游戏
+  不共享 display 合同）。游戏重启（P1-8）时必须改用本契约或显式声明独立口径，
+  不允许第三套实现。
+
 ## 5. 《我不是股神》独立交互模型
 
 ### 5.1 页面与数据

@@ -114,8 +114,13 @@
 小游戏里 K 线 OC LH≈5 而 EMA/BOLL 飙到 27-30）。
 已知机制：因子表 hfq、K 线 qfq@末日，缺 `factor_basis` 的旧快照会把因子按 hfq 尺度
 与 qfq K 线并列（`app.py` 已对这类快照拒绝下发）。
-**复查（高优先）**：把 `factor_basis` / 复权锚点做成**硬契约**——
-生成侧必须写、读取侧缺了就拒绝 + 告警；归档的 496 个旧产物要标注口径未知。
+**已治本（2026-10-29，P0-1）**：升级为**硬契约** `QRE-FACTOR-BASIS-CONTRACT`
+（单一权威 `src/quant_research_engine/factor_basis.py`，契约全文 `23_KLINE_IMPLEMENTATION.md` §4a）：
+生成侧必带**已登记**口径（带不上报错）/ 读取侧缺失**或未登记**一律拒发 + WARNING 留痕 /
+运维侧 `deploy/saas/scan-factor-basis.sh` 全量审计。存量审计 **1013/1013 全带
+`qfq_anchor_v1`**（归档 496 个当年已由 `e37c5cd` 补救，不构成口径未知产物）。
+**仍留的尾巴**：`game/data.py::qfq_anchor` 是平行实现，游戏重启时必须改用契约，
+不允许第三套。
 
 ### 2.5 FRM 波动率模块改出回归
 

@@ -291,6 +291,42 @@ class TestNightModePause:
             assert needle in body, f"probe 未覆盖入口: {needle}"
 
 
+# ------------------------------------- 复权口径硬契约（QRE-FACTOR-BASIS-CONTRACT）
+class TestFactorBasisChainNotSilent:
+    """复权口径这条链路上不许有静默失败。
+
+    该类问题（价格型因子与 K 线差一个复权倍数）已复发四次，根因之一就是每一层都在
+    静默降级：读取侧 `data = None` 无日志、worker 侧单股详情 `except: continue` 无痕迹，
+    于是永远只能等用户看到错数据再报。契约要求**拒发/跳过必须留痕**：
+      - 读取侧行为测试见 tests/test_gui_saas.py::TestSymbolDetailRefresh
+        （test_refusal_is_logged_not_silent / test_unregistered_basis_is_not_served）；
+      - 本类静态锁 worker 侧：except 之后必须 print/logger。
+    """
+
+    def test_worker_per_symbol_failure_leaves_a_trace(self) -> None:
+        src = (REPO / "src/quant_research_engine/worker/runner.py").read_text(encoding="utf-8")
+        # 只看批量路径（build_symbol_detail_files）；按需路径 _execute_symbol_detail
+        # 本来就 raise，不需要这条锁。
+        anchor = "def build_symbol_detail_files("
+        assert anchor in src, "worker 批量逐股详情路径不见了？"
+        batch = src[src.index(anchor):]
+        marker = "data = build_lab_symbol_detail("
+        assert marker in batch, "批量路径不再调 build_lab_symbol_detail？"
+        tail = batch[batch.index(marker): batch.index(marker) + 600]
+        assert "except Exception as exc:" in tail, "单股详情组装失败必须捕获具体异常"
+        body = tail[tail.index("except Exception as exc:"):]
+        assert ("print(" in body) or ("logger" in body), (
+            "单股详情组装失败必须留痕（print/logger），不许静默 continue"
+        )
+
+    def test_read_side_refusal_is_wired_to_logger(self) -> None:
+        src = (REPO / "src/quant_research_engine/gui/saas/app.py").read_text(encoding="utf-8")
+        assert "basis_reason(" in src, "读取侧必须用契约模块的 basis_reason 判定"
+        marker = "QRE-FACTOR-BASIS-CONTRACT 拒发个股详情"
+        assert marker in src, "拒发必须打统一前缀的 WARNING，便于 grep/告警"
+        assert "app.logger.warning" in src, "拒发必须走 logger，不许静默 data = None"
+
+
 # ------------------------------------- MACD 旧系退场证据链持久化（TV R6-1）
 class TestLegacyScanEvidenceLogPersistent:
     """R6-1：退场条件①「连续 4 次周扫计数为 0」的唯一证据链必须持久化。
