@@ -139,6 +139,31 @@
 - `stock_daily_alpha191`（191 列 Alpha191 全套）；`stock_daily_momentum_close`（RSI/MACD/KDJ/CCI 等 88 列）；`stock_daily_overlap_close`（各类均线 88 列）；`stock_daily_volatility_close`（布林带/ATR/DC 等 52 列）；`stock_daily_volume_close`（OBV/MFI/CMF 等 23 列）；`stock_daily_trend_close`（ADX/PSAR 等 43 列）；`stock_daily_performance_close`（pctret_5/10/20/60/250、mom_12_1 等 16 列）；`stock_daily_statistics_close`（stdev/sharpe/skew 等 22 列）；`stock_daily_candle_close`（K线形态 12 列）；另有 average_price / typical_price 两个变体表。
 - 当前全部为**纯量价因子**；无基本面/估值/换手率因子（规划见因子立项方案）。
 
+### 4.1 ⚠️ MACD 双列名并存（2026-10-29 R3-5 记录，写判据/脚本前必读）
+
+产物里的 MACD 有**两套并列列名**，不要假设只有一套：
+
+| 系 | 列名 | 产物里的形态 | 用途 |
+|---|---|---|---|
+| **新系（现行）** | `macd_12_26_9` / `macds_12_26_9` / `macdh_12_26_9` | `col` + `display` 合同齐全 | 2026-10-28 之后的新产物一律用这套 |
+| **旧系（存量）** | `macd_dif` / `macd_dea` / `macd_hist` | **只有 `name`，`col=None`、`display=None`** | job 58/66/74/78 等 2026-10-28 前完成的回测 |
+
+**取舍（明确记录，避免未来反复讨论）**：
+- **不回刷旧产物**（job 58/66 保持原样）——价值低，且会改变已验证的历史结果。
+- **前端呈现层不分裂**：`factor-layout.js::familyOf` 对两套都归组到一个 MACD 面板
+  （TV_ROUND2 判据已用生产 job 58 真实产物证实：三 series 同 `yAxisIndex/gridIndex`、
+  同像素映射）。旧产物因此获得与新系同等的面板呈现。
+- **NL / 因子选择入口已收敛**：`configs/factor_registry.json` 的 `extra_aliases`
+  把旧名映射到新系 canonical（`macd_dif→macd_12_26_9`、`macd_dea→macds_12_26_9`、
+  `macd_hist→macdh_12_26_9`），用户用旧名描述也能命中。生成器
+  `scripts/gen_factor_registry.py::EXTRA_ALIASES` 同步维护，两者由
+  `tests/test_factor_registry.py::TestMacdDualNamingAliases` 防漂移。
+- **新产物一律新系命名**；旧名仅作兼容，不新增旧系因子。
+
+**给写判据/验证脚本的 agent**：拉产物后先打印因子的 `col`/`name` 确认是哪一套
+（旧系 `col` 为 `None`），再决定判据脚本匹配哪套列名——用错会得出"归组失败"的
+错误结论。本项目 `.tmp/perf-browser/` 下的判据脚本已按此在文件头声明。
+
 ## 5. 基本面与参考数据（相关表）
 
 - `fundamentals.fina_indicator / income / balancesheet / cashflow`：主键含 `ann_date`（PIT 防未来函数），income 自 1990 年起。

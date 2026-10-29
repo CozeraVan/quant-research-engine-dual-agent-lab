@@ -2263,7 +2263,9 @@ LWC 代码与 vendored 资产保留为休眠态——`klineDisposeEngines()` 仍
    完全没动。.chart-title margin-bottom 6px → **14px**（lab-theme 与 base 两处），
    小卡 padding 10px/14px → 14px/18px。
 
-⑤ EMA 独立 K 线之外 —— **未能复现，需用户给具体链接**。已排查：
+⑤ EMA 独立 K 线之外 —— 见下一节《EMA「跑到 K 线外面」根因定位 + chip 态可见化》：
+   根因是 localStorage 持久化的 chip 态（用户误点一次即跨任务永久生效）且旧 chip
+   无文字说明；默认分类与渲染均正确（生产 job_78 实测）。当时排查：
    plan() 对 ema_5/ema_20 正确判 overlay（node 实测）；
    renderKline 的 overlay 系列确实推 xAxisIndex:0/yAxisIndex:0；
    step5 的 applyParamChoices 不改 col、不破坏分类；
@@ -2273,3 +2275,102 @@ LWC 代码与 vendored 资产保留为休眠态——`klineDisposeEngines()` 仍
 浏览器实测：container 1920px、body 17px、chart-title 16.5px/14px、
 三等分柱状图 hasBarChart=false。全量 3138 passed（1 个顺序型 flake，
 每次挂不同测试、单独跑均过，与本次无关）。
+
+## 2026-10-29 追加：EMA「跑到 K 线外面」根因定位 + chip 态可见化（未 commit/push，已部署 ECS）
+
+上一节 ⑤「未能复现」已继续挖到根因，结论是**代码默认行为一直是对的，用户看到的是
+自己被持久化的 chip 状态**。
+
+### 证据链（全部实测，非推断）
+
+1. 分类层无误。从 ECS 生产产物 `/srv/aguhuice/uploads/job_78/_symbol_details/
+   <sym>.json.gz` 取真实因子（`ema_5`/`ema_20`，`display: null`），喂真实
+   factor-layout.js 跑 `plan()`：`overlays: [ema_5, ema_20]`、`panes: []`。
+   job_58 的因子是 `macd_dif/dea/hist`，同样正确判 pane。
+2. 渲染层无误。symbol.html::renderKline 与 lab_symbol.html 都把 `plan.overlays`
+   逐个推 `xAxisIndex: 0, yAxisIndex: 0`（与 K 线同 grid）。job.html 根本没有
+   K 线因子图（4 个 echarts.init 全是收益/标签/风险图）。
+3. `applyParamChoices` 只 filter、不改 `col`/`name`，不破坏分类（读源码确认）。
+4. **唯一能把 EMA 弄到独立面板的变量**：chip 三态持久化在
+   `localStorage['qre_fct_<key>']`（FCT_LS_PREFIX = `qre_fct_`）。用户误点一次
+   chip（三态循环 叠加→独立→隐藏），该选择就跨任务、跨会话永久生效——
+   之后每个任务打开都是独立面板。而旧 chip 只有配色差异（st-overlay 实心紫 /
+   st-pane 淡紫 / st-hidden 删除线），**没有任何文字说明**，用户既无法自知
+   也无法恢复。这与用户「我已经懒得说了」的复发性抱怨完全吻合。
+
+### 修复（QRE-FCT-CHIP-STATE-VISIBLE）
+
+- `symbol.html::renderFactorChips`：chip 文案带态 —— `ema_5·叠加` / `ema_5·独立` /
+  `ema_5·隐藏`；新增 `fctClearPersistedStates()` 清全部 `qre_fct_*`；
+  有因子时末尾追加一枚「重置布局」钮（虚线灰紫、非实心，与因子 chip 视觉可分），
+  点击即清状态并按当前布局重渲染（重播中走 mountKlineReplay 重挂）。
+- `lab-theme.css`：新增 `.fct-chip-reset`（dashed + 透明底 + 11.5px）。
+- `night-mode.css`：`.fct-chip` 的夜间深色面板规则会连带命中重置钮，
+  显式还原为虚线透明底。
+- 新增 `tests/test_fct_chip_state_visible.py`（3 passed）：真实 factor-layout.js
+  生成 plan（ema_5/ema_20/macd_*，与 job_78 同形态）→ 断言文案带态、重置钮存在、
+  持久化 pane 态可见、点击重置清空 LS 并触发重渲染、无因子时不渲染 chip；
+  另两条锁 CSS（浅色 dashed/透明、夜间还原）。
+
+### 待用户确认
+
+若用户清掉浏览器 `qre_fct_*`（或点新「重置布局」钮）后 EMA 仍独立于 K 线，
+才需要继续深挖；否则本条闭环。lab_symbol.html 无 chip 区（本地版），未改。
+
+### 全量测试
+
+3138 passed + 新增 3 passed。全量跑出现过**两次不同测试各挂一次**
+（test_gui_risk_report / test_saas_first_success_ux），单独跑均过、换一次跑又全绿
+——是本机负载型 flake，与本次改动无关（已用「仅源码改动、不含新测试文件」复跑
+3138 passed 反证）。
+## 2026-10-29 DeepSeek 第 2 轮 UI（A 密集字号补齐 + B 公网 UI 审计），未 commit/push
+
+派单：`docs/agent/change_requests/TASK-2026-10-29_deepseek_ui_round2.md`（Kimi → DeepSeek）。
+
+### A. 密集字号补齐（16 行，2 文件）
+
+- `saas/templates/base.html`（内联 style，8 行）：`table` 13→**14px**；`label` /
+  `.muted` / `summary` / `.chart-empty` / `.bench-bar` / `.tag-tabs button` /
+  `.btn-sm` 13→**13.5px**。
+- `static/lab-theme.css`（8 行）：`table.tbl` **14.5→14px**、`.tbl th` 13.5→**14px**、
+  `.detail-table` 13.5→**14px**、`.detail-table th` 13→**14px**、`.btn-sm` 12.5→13.5、
+  `.label-inline` 12.5→13.5（`new.html:739` JS 动态 label 与 `strategy.html:60` 在调用）、
+  `.chart-empty` 两处 13→13.5。
+- 两个判断：任务书以为 `table.tbl` 是 13px，**实测 14.5px**；保留会让 A4 硬断言①失败，
+  且 `.tbl th 13.5 < td 14.5` 倒挂 → 统一 14/14。`.detail-table` 同理。已确认
+  `.tbl td`(:178) / `.detail-table td`(:406) 无 font-size 声明、继承 14px。
+- 新增 `tests/test_ui_dense_font_scale.py`（11 用例，先 RED 后绿）。
+- 真实浏览器：8 页 × 3 视口（1920/1440/375）× 2 主题 = **48 组合**，
+  `failures=[]`；表格计算字号 `{('tbl','14px'):84, ('(none)','14px'):18,
+  ('detail-table','14px'):6}`，**表头 `thFont` 计数完全相同**（无覆盖）；
+  文本裁切 0、`scrollWidth-innerWidth` 全 0、console/pageerror 0。
+
+### B. 公网 UI 标准符合性审计（九页 × 八条）
+
+- 证据：`audit_b.py` → 36 条（9 页 × 2 主题 × 1440/375），`failures=[]`，error 0；
+  `probe_tips_real.py` → **134 条真实 hover/Tab，0 失败**；`probe_chip.py` 规则 8 注入验证。
+- **只 1 处真实缺陷并已修**：`profile.html` 分享卡下 44 字灰段（`p.opt`
+  12.5px「分享链接只读、可撤销…」）→ 改为 `<h2>` 内 `tip-trigger` + 原文案
+  `data-tip` + `aria-label`。文案未删，`p.opt` 元素 **10→9**（`shareOptCount=0`）。
+  注意 `audit_b.json` 的 profile `optCount=10` 是修前值（8097 缓存模板）。
+- 假阳性说明：`audit_b.json` 的 job `tipHover.first=null` 与 3 处 `tipFocus` 异常源于
+  合成 `MouseEvent` 探针 + `disabled` 元素 + 折叠区元素 `is_visible()` 误判，
+  真实探针 134 条 0 失败。
+- 未改（如实记录）：light muted 2.9:1（色板冻结）；`admin.html` 模板 99 处 `.opt`、
+  管理台未做浏览器审计；暗色 `#metric-strip/#sum-strip/#range-strip .metric-card`
+  实色 `#3A3170` 来自 `night-mode.css:51-54`（`git blame` b4d785e8，早于玻璃轮，
+  既有不一致，建议单独立项）；`profile` 的 `#F1EDF8` 为模板内联、设计如此；
+  他人未提交的 `.fct-chip-reset{11.5px}` 低于 12px 下限，遗留。
+- 规则 3（死按钮/死链）**未逐点核**，仅有「36+7 页次 console/pageerror 全 0」弱证据。
+- 规则 7：job `chart-main` x 轴 `show=false` 是刻意设计，y 轴 width 40/44 不裁；
+  `audit_b.json` 的 `xLabel.maxW=0` 是探针口径，勿引用。
+- 规则 8：初始 chip `EMA5·叠加 / RSI14·独立 / 重置布局`，连点三次
+  `独立→隐藏→叠加`，重置钮清空 `qre_fct_*`；真实环境 `factors=None`（缺因子表）。
+
+CR：`CR-2026-10-29_dense_font_scale.md`、`CR-2026-10-29_public_ui_audit.md`。
+
+### 全量测试
+
+`uv run pytest tests/ -q` → **3158 passed, 24 skipped, 4 warnings**（exit 0，A+B 都落地后）。
+规则 8 相关 `tests/test_fct_chip_state_visible.py` + `tests/test_kline_pane_option.py`
+= 19 passed。未 commit/push/部署。

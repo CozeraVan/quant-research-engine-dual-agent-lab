@@ -12,6 +12,7 @@ QRE-EQUITY-CHART：job.html 与 symbol.html 原先各自内联一套 ECharts 收
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -336,4 +337,22 @@ class TestTemplateContract:
 
     def test_replay_passes_legend_selection(self):
         assert "legendSelected: spec.legendSelected" in JOB_TPL, "job.html 重播未传图例默认态"
-        assert "selected: opts.legendSelected" in REPLAY_JS, "replay.js 未消费 legendSelected"
+        assert "if (opts.legendSelected) legend.selected = opts.legendSelected" in REPLAY_JS, (
+            "replay.js 未按 legendSelected 有无不落地 selected 键"
+        )
+
+    def test_replay_legend_never_passes_selected_undefined(self):
+        """QRE-REPLAY-LEGEND-SELECTED（R3-2）：不得写 `selected: undefined`。
+
+        setOption 带 replaceMerge 时 ECharts 走 overallReset，用裸 option 重建
+        legend model；`selected` 缺省不填默认值 → LegendModel.isSelected 里
+        `undefined.hasOwnProperty(name)` 抛错。K 线重播不下发 legendSelected，
+        旧写法每帧 seek 炸一次 pageerror（真实浏览器实测，R3-2 修）。
+        """
+        # 去掉注释再断言：注释里为了说明问题会引用这个写法本身
+        code = re.sub(r"/\*.*?\*/", "", REPLAY_JS, flags=re.S)
+        code = re.sub(r"//[^\n]*", "", code)
+        assert "selected: opts.legendSelected || undefined" not in code, (
+            "replay.js 又写回了 selected: undefined（K 线重播会每帧抛 pageerror）"
+        )
+        assert "selected: undefined" not in code, "replay.js 不得出现 selected: undefined"

@@ -62,13 +62,16 @@ def _node(script: str) -> None:
 
 
 def _dispose_source() -> str:
-    """lwcDispose + klineDisposeEngines（renderKline/renderKlineLwc 的共同依赖）。
+    """klineDisposeEngines（renderKline 的依赖，定义在 klineResizeBound 之前）。
 
-    QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 现在必须经 klineDisposeEngines
-    同时清 ECharts 与 LWC 两个引擎，否则切换图表引擎时旧 canvas 残留、双图叠加。
+    QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 渲染前必须经 klineDisposeEngines
+    清掉同一容器上的旧 ECharts 实例，否则新图叠在旧图之上（2026-10-28 线上 bug）。
+    R3-4（TV_ROUND3 §5）：LWC 试点整体移除，双引擎互斥退化为单引擎清理。
     """
-    match = re.search(r"(let lwcChart = null[\s\S]*?)\n// 品牌水印随主题换图", SYMBOL_TPL)
-    assert match, "未找到 lwcDispose / klineDisposeEngines"
+    match = re.search(
+        r"(// QRE-SAAS-KLINE-ENGINE-EXCLUSIVE[\s\S]*?\nfunction klineDisposeEngines\(\)\{[\s\S]*?\n\})",
+        SYMBOL_TPL)
+    assert match, "未找到 klineDisposeEngines"
     return match.group(1)
 
 
@@ -205,7 +208,12 @@ class TestSourceContract:
     def test_right_axis_and_padding(self):
         block = _render_kline_source()
         assert "position: 'right'" in block, "价格/量轴必须右置"
-        assert "left: 16, right: 56" in block, "右侧标尺留白"
+        # R3-1（TV_ROUND3 §2）：grid 布局收敛到共享层 paneGrids——原先
+        # klineGridSpec 是 paneGrids 的逐行复制第二份，改一处漏一处会漂移
+        # （单 pane 高度 25% 就是这样漏过一轮的）。契约随之改为断言
+        # 「委派共享层」+「共享层产出右留白」，比数字面量更防漂移。
+        assert "QREFactorLayout.paneGrids(" in block, "klineGridSpec 必须委派共享层 paneGrids"
+        assert "left: 16, right: 56" in FACTOR_LAYOUT_JS, "右侧标尺留白（共享层唯一实现）"
         # QRE-PRICE-SCALE（T2）：head 轴与轴宽预算必须走共享出口，不各写一份
         assert "klineHeadYAxes(" in block, "主图/量轴必须共用 klineHeadYAxes"
         assert "klineAxisRightPx()" in block, "右留白必须按价格轴标签宽度预算"

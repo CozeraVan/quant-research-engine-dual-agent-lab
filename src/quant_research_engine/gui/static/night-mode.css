@@ -163,6 +163,11 @@
 :root[data-theme="dark"] .factor-select-btn,
 :root[data-theme="dark"] #factor-picker-modal .fp-close{background:var(--card);border-color:var(--line);color:var(--muted)}
 
+/* QRE-FCT-CHIP-STATE-VISIBLE：重置布局钮在夜间回到虚线透明底（上面 .fct-chip
+   的深色面板规则会连它一起命中，这里显式还原，避免和因子 chip 混作一团） */
+:root[data-theme="dark"] .fct-chip-reset{background:transparent;border-style:dashed;border-color:#433D8B;color:var(--muted)}
+:root[data-theme="dark"] .fct-chip-reset:hover{border-color:var(--accent);color:var(--accent-deep);background:var(--tint)}
+
 :root[data-theme="dark"] .btn-ghost{color:var(--accent-deep)}
 :root[data-theme="dark"] .btn-danger{background:var(--card);color:var(--up);border-color:#7A3A44}
 :root[data-theme="dark"] .btn-danger:hover{background:var(--up-soft);border-color:var(--up)}

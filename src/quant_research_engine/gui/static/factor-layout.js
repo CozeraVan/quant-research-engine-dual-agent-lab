@@ -248,7 +248,8 @@
   // paneYAxes；索引用由本文件生成，并自带不变式校验（炸在开发期，不 silent 错位）。
   // ────────────────────────────────────────────────────────────────────────
 
-  /** pane 布局（grid 位置/高度）。与 symbol.html 原 klineGridSpec 逐字节同逻辑。 */
+  /** pane 布局（grid 位置/高度）。symbol.html::klineGridSpec 只是签名适配壳，
+      真正实现只此一份（R3-1 收敛，原先两份逐行复制会漂移）。 */
   function paneGrids(paneCount, opts) {
     opts = opts || {};
     var showVol = opts.showVol !== false;
@@ -264,9 +265,14 @@
     var fTop = (fOn && showVol) ? 66 : 58;
     var fBottom = 93;
     var step = n ? (fBottom - fTop) / n : 0;
+    // R3-1（TV_ROUND3 §2）：恰好 1 个因子 pane 时高度 20.25% → 25%。
+    // 原 20.25% 偏矮，MACD 的 HIST 自身跨度只占 pane 高 ~44%、DIF/DEA 占满 100%，
+    // 矮面板把这点量程差放大成"三根线各用一把尺"的错觉（用户原始投诉）。
+    // 多 pane 不动（step*0.75），避免互相挤压。
+    var paneH = (n === 1) ? 25 : (step * 0.75);
     for (var i = 0; i < n; i++) {
       grids.push(fOn
-        ? { left: 16, right: 56, top: (fTop + i * step) + '%', height: (step * 0.75) + '%' }
+        ? { left: 16, right: 56, top: (fTop + i * step) + '%', height: paneH + '%' }
         : Object.assign({}, hide));
     }
     return grids;
@@ -346,6 +352,13 @@
     var base = spec.paneBase == null ? 2 : spec.paneBase;
     var up = (spec.histColors || {}).up || COLORS.histUp;
     var down = (spec.histColors || {}).down || COLORS.histDown;
+    // R3-1（TV_ROUND3 §2）：HIST 家族 pane 的零基线。MACD/PPO/PVO 这类
+    // 「正负柱 + 双线」面板，肉眼判断"是不是同一把尺"的唯一参照就是 0 位；
+    // 没有零基线时 HIST 只占 pane 高 ~44%，用户据此认定三线各自坐标系。
+    // silent 不吞鼠标事件；中性色与阈值线同色（不引新色相，浅/夜间均可读）。
+    var zeroLine = { silent: true, symbol: 'none',
+      lineStyle: { type: 'dashed', width: 1, color: '#8B7FBE' },
+      data: [{ yAxis: 0 }] };
     var out = [];
     (panes || []).forEach(function (p, i) {
       var gi = base + i;
@@ -364,6 +377,9 @@
                       color: s.color || '#6750A4', width: 1.2 };
           if (isHist) {
             cfg.color = undefined;
+            // R3-1：带 hist 标记供调用方 markLineFor 分流（HIST→零基线 /
+            // 价格系列→末价标签）；zeroBase 已被"窗口内归零"占用，不能复用
+            cfg.hist = true;
             cfg.extra = { itemStyle: { color: function (pp) {
               return (Number(pp.value) >= 0 ? up : down); } } };
           }
@@ -373,7 +389,9 @@
         if (isHist) {  // MACD 柱：正红负绿（与 K 线涨跌同色）
           out.push({ name: s.name, type: 'bar', xAxisIndex: gi, yAxisIndex: gi, data: s.values,
                      itemStyle: { color: function (pp) {
-                       return (Number(pp.value) >= 0 ? up : down); } } });
+                       return (Number(pp.value) >= 0 ? up : down); } },
+                     // R3-1：HIST 挂零基线（静态路径直接进 option）
+                     markLine: zeroLine });
         } else {
           out.push({ name: s.name, type: 'line', xAxisIndex: gi, yAxisIndex: gi, data: s.values,
                      showSymbol: false, lineStyle: { width: 1.2 }, color: s.color, markLine: markLine });

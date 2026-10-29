@@ -376,10 +376,20 @@
             ? (y.formatter ? { formatter: y.formatter } : undefined)
             : { formatter: "{value}%" };
         }
+        var legendData = (opts.series || []).filter(function (s) { return !s.grid; })
+          .map(function (s) { return s.name; });
+        var legend = { top: 0, data: legendData };
+        // QRE-REPLAY-LEGEND-SELECTED（R3-2）：**不得**写 `selected: undefined`。
+        // setOption 带 replaceMerge 时 ECharts 走 overallReset，用裸 option 重建
+        // legend model，缺省的 `selected` 不填默认值 → LegendModel.isSelected 里
+        // `undefined.hasOwnProperty(name)` 直接抛错。K 线重播不下发 legendSelected，
+        // 于是每帧 seek 都炸一次 pageerror（job 收益曲线重播下发对象所以不炸）。
+        // 修法：没有 legendSelected 时整个键都不写，让 ECharts 用默认 {}。
+        if (opts.legendSelected) legend.selected = opts.legendSelected;
         var option = {
           animation: false,
           tooltip: { trigger: "axis", valueFormatter: tooltipValueFormatter },
-          legend: { top: 0, data: (opts.series || []).filter(function (s) { return !s.grid; }).map(function (s) { return s.name; }), selected: opts.legendSelected || undefined },
+          legend: legend,
           grid: opts.grids || [{ left: 55, right: 20, top: 30, height: "68%" }],
           xAxis: (opts.grids || [{}]).map(function (g, gi) {
             return { type: "category", data: xData, gridIndex: gi,

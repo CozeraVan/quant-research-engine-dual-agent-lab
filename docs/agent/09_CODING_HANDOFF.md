@@ -4117,3 +4117,32 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
   新增 test_vol_regime_bar_chart_removed）、`tests/test_saas_night_mode.py`
   （job.html themeChart 5→4，因少一个 echarts.init）。
 - 未 commit/push。
+## 2026-10-29 DeepSeek UI 第 2 轮（A 密集字号 + B 公网审计）实施交接
+
+- 任务书：`docs/agent/change_requests/TASK-2026-10-29_deepseek_ui_round2.md`；
+  CR：`CR-2026-10-29_dense_font_scale.md`、`CR-2026-10-29_public_ui_audit.md`。
+- 改动（3 文件 + 1 新测试）：
+  - `saas/templates/base.html` 内联 style 8 行：`table` 13→14px；`label` / `.muted` /
+    `summary`（裸选择器）/ `.chart-empty` / `.bench-bar` / `.tag-tabs button` /
+    `.btn-sm` 13→13.5px。
+  - `static/lab-theme.css` 8 行：`table.tbl` **14.5→14**、`.tbl th` 13.5→14、
+    `.detail-table` 13.5→14、`.detail-table th` 13→14、`.btn-sm` 12.5→13.5、
+    `.label-inline` 12.5→13.5、`.chart-empty`(250/388) 13→13.5。
+    （该文件另有他人未提交的 `.fct-chip-reset` 新增，不是本轮改动。）
+  - `saas/templates/profile.html` 分享卡：删 44 字灰段 `p.opt`，把同一文案搬到
+    `<h2>` 内 `tip-trigger` 的 `data-tip` + `aria-label="我的分享说明"`（R-UI-001）。
+  - 新增 `tests/test_ui_dense_font_scale.py`（11 用例，已做 RED）。
+- 判断要点：`table.tbl` 任务书写 13px、**实测 14.5px**；保留会与 `.tbl th 13.5`
+  倒挂且 A4 断言失败 → 统一 14/14。`lab-theme.css` 是 8081 lab 与 SaaS 共用，
+  两边同步生效。
+- 验证：全量 **3158 passed, 24 skipped**；浏览器 48 组合（8 页 × 1920/1440/375 ×
+  light/dark）0 失败、表格/表头字号计数全为 14px、裁切 0、横溢 0、error 0；
+  审计 36 条 0 失败；真实 tips 134 条 0 失败；profile 修复后 4 组合全绿。
+- 未做（如实）：规则 3 死按钮未逐点核（仅 console error 0 弱证据）；`admin.html`
+  模板 99 处 `.opt` 未审计（9090 隧道当前指向公网站点）；暗色
+  `#metric-strip/#sum-strip/#range-strip .metric-card` 实色 `#3A3170` 为 b4d785e8
+  时期既有不一致，建议单独立项；light muted 2.9:1 属色板冻结范围；他人新增
+  `.fct-chip-reset` 11.5px 低于 12px 下限，遗留。
+- 未 commit / push / 部署 ECS（按任务书边界；与 AGENTS.md 规则 12 的「改完直接部署」
+  冲突处以任务书为准）。- 收尾复跑（工作区已含并行 TV agent 新增 3 条测试）：`3161 passed, 24 skipped`（exit 0）。
+  端口 8098 / 8097 临时验证服务已 kill；`scripts/check-progress-docs.sh` 通过。

@@ -2,9 +2,10 @@
 
 > 撰写：QRE 主 Agent（Kimi）
 > 用途：逆向 Agent 直接读这一份即可了解本轮全部成果与待决问题，无需翻代码。
-> 快照时间：2026-10-29 02:00。T2–T6 由 step5 子 agent 并行推进中，文中标注「在建」。
+> 快照时间：2026-10-29 09:30（**T1–T6 已全部收官**，本文件取代 02:00 的中间快照）。
 > 关联：`TV_ROUND2_TASKS_2026-10-29.md`（你的任务书）、
-> `TV_ROUND2_ANSWER_2026-10-29.md`（我方逐项回传，含判据原始输出）。
+> `TV_ROUND2_ANSWER_2026-10-29.md`（我方逐项回传，含判据原始输出与 T1–T6 验收细节）。
+> **派下一轮前请先读 ANSWER 文档的 §5bis（收官状态表 + 5 条新发现）**。
 
 ---
 
@@ -112,19 +113,46 @@ job 58/66 这类旧产物是 `macd_dif / macd_dea / macd_hist`。`familyOf` 对�
 
 ---
 
-## 3. T2–T6 进度（step5 并行推进中，快照 02:00）
+## 3. T1–T6 收官状态（2026-10-29 09:30，全部完成）
 
-| 项 | 状态 | 备注 |
+| 项 | 状态 | 缺口 / 待人工补验 |
 |---|---|---|
-| **T2** 专业价格格式化框架 | **在建** | 已建 `static/price-scale.js`（429 行）+ `tests/test_price_scale.py`（365 行，15 例自身已绿）；`symbol.html`/`replay.js` 接线中 |
-| **T3** 回放单步后退 + 键盘 | 待实施 | |
-| **T4** 画线交互补完 | 待实施 | 现状：趋势线两点/水平线一点/Esc 取消/清除全部；**无端点拖拽、无整体拖动、无单线 Delete、无持久化** |
-| **T5** 指标参数网格 | 待实施 | |
-| **T6** 冻结 LWC 试点 | 待实施 | 已按你 §4 的处置调整范围 |
+| **T1** 共享 option 映射层 | ✅ 通过 | 无 |
+| **T2** 专业价格格式化框架 | ✅ 通过 | 两处**有意偏离**需你们确认：蜡烛色保持 A 股红涨绿跌（未改 TV 青红）；底色交给主题层（未硬编码 TV 深色） |
+| **T3** 回放后退 + 键盘 | ✅ 通过 | 「后退 100 次后与静态一致」仅单测覆盖，**未做真实浏览器验证** |
+| **T4** 画线交互补完 | ✅ 通过 | 拖拽/Delete **手感未做真实浏览器验证**（step5 把几何原语收进闭包，我方 harness 驱动不到） |
+| **T5** 指标参数网格 | ✅ 前端通过 | **数据侧预计算未开工**——日更还没算多组参数变体，线上每组家族仍只有一组参数 |
+| **T6** 冻结 LWC 试点 | ✅ 通过 | 休眠代码 + vendored 资产约 400KB 页面体积，无解冻计划可另立项移除 |
+
+**测试基线**：TV 相关 6 个测试文件合计 **79 passed**；全量 `3138 passed, 24 skipped`。
+
+### 3.1 T2 真实浏览器实测数据（可直接对账）
+
+Chromium + echarts 5.6.1 + 真实模板，价格跨 3 个数量级（0.5→5000）：
+`position=right`、`axisLabel{width:46, margin:6, align:left}`、三档窗口右轴标签
+**左边缘像素恒为 1244**（轴宽恒定达成）、`maxLabelRight 1277.64 < chartW 1298`、
+蜡烛实体宽/间距 = 0.725/0.728、末价标签挂末根收盘 105.27 且带背景块、
+4 种 mode（对数/百分比/指数化/价格）循环截图、mode 持久化
+`localStorage['qre.kline.priceScaleMode']` 读回一致、副图轴精度一致
+（MACD 4 位 / RSI14 2 位，修掉"同一根轴 3 与 0.00 混排"）。
+
+### 3.2 T5 的边界（重要）
+
+T5 **前半段（前端）已完工**，后半段（数据侧日更多参数变体宽表）**未开工**。
+你们若在下一轮任务书里继续推 T5，请把它拆成数据侧任务并注明依赖日更流程；
+否则前端会一直是"有能力切、没数据可切"。
+
+### 3.3 本轮新发现：EMA「跑到 K 线外面」不是渲染 bug
+
+生产 job_78 真实因子喂真实 `factor-layout.js`：`overlays=[ema_5, ema_20]`、
+`panes: []`；`renderKline` 的 overlay 系列确实推 `xAxisIndex:0/yAxisIndex:0`。
+用户看到的是**自己被持久化的 chip 态**（误点一次 chip → `localStorage['qre_fct_<key>']`
+永久生效 → 之后每个任务都是独立面板），而旧 chip 只有配色差异、无文字说明。
+已修为 chip 文案带态 + 「重置布局」钮。**你们改 chip/图例交互时请保留态可见性。**
 
 ---
 
-## 4. 请逆向侧下一轮重点回答的问题
+## 4. 请逆向侧下一轮重点回答的问题（4 问仍未回复）
 
 ### Q1 · 价格轴「轴宽恒定」在 ECharts 里怎么做到最好
 
@@ -178,9 +206,16 @@ cd /home/van/quant-workspace/quant-research-engine-dual-agent-lab
 .tmp/browser-venv/bin/python .tmp/perf-browser/macd_criterion.py
 # 三处 K 线副本同构验证
 .tmp/browser-venv/bin/python .tmp/perf-browser/t1_verify.py
-# T1 测试
-uv run pytest tests/test_kline_pane_option.py -q
+# T1–T6 全部测试（79 例）
+uv run pytest tests/test_kline_pane_option.py tests/test_price_scale.py \
+  tests/test_replay_step_back_keys.py tests/test_kline_draw_interact.py \
+  tests/test_kline_param_grid.py tests/test_lwc_kline_adapter.py -q
 ```
+
+**给逆向侧的一条取证提醒**：MACD 列名有**两套并存**——新产物
+`macd_12_26_9 / macds_12_26_9 / macdh_12_26_9`（带 display），
+job 58/66 这类旧产物 `macd_dif / macd_dea / macd_hist`（`col=None, display=None`）。
+你们拉产物写判据前先确认是哪一套，否则会得出"归组失败"的错误结论。
 
 生产真实产物拉取：
 

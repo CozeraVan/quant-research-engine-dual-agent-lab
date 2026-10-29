@@ -1128,6 +1128,29 @@ EXTRA_ALIASES: dict[str, list[str]] = {
         "factors.stock_daily_momentum_close.dmp_14",
         "factors.stock_daily_momentum_close.dmn_14",
     ],
+    # QRE-MACD-DUAL-NAMING（R3-5，TV_ROUND3 §6）：旧产物（job 58/66 等
+    # 2026-10-28 之前完成的回测）的 MACD 因子只有 name，没有 col/display，
+    # 列名是旧系 `macd_dif / macd_dea / macd_hist`。前端 familyOf 启发式对
+    # 两套都归组，但 NL/因子选择入口只认注册表——这里把旧名映射到新系
+    # canonical，让用户用旧名也能命中。**新产物一律用新系命名**，旧名仅为兼容。
+    "macd_dif": [
+        "factors.stock_daily_momentum_close.macd_12_26_9",
+    ],
+    "macd_dea": [
+        "factors.stock_daily_momentum_close.macds_12_26_9",
+    ],
+    "macd_hist": [
+        "factors.stock_daily_momentum_close.macdh_12_26_9",
+    ],
+    "macd柱": [
+        "factors.stock_daily_momentum_close.macdh_12_26_9",
+    ],
+    "macd快线": [
+        "factors.stock_daily_momentum_close.macd_12_26_9",
+    ],
+    "macd慢线": [
+        "factors.stock_daily_momentum_close.macds_12_26_9",
+    ],
 }
 
 

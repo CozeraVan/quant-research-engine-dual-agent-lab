@@ -374,17 +374,18 @@ console.log('fallback-ok');
 
 
 def _dispose_source() -> str:
-    """lwcDispose + klineDisposeEngines（renderKline 的共同依赖）。
+    """klineDisposeEngines（renderKline 的依赖，定义在 klineResizeBound 之前）。
 
-    QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 必须经 klineDisposeEngines 同时清
-    ECharts 与 LWC 两个引擎，否则切换图表引擎时旧 canvas 残留、双图叠加。该定义在
-    klineResizeBound 之前，抽取 renderKline 时必须一并注入 vm。
+    QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 渲染前必须经 klineDisposeEngines
+    清掉同一容器上的旧 ECharts 实例，否则新图叠在旧图之上。该定义在 klineResizeBound
+    之前，抽取 renderKline 时必须一并注入 vm。
+    R3-4（TV_ROUND3 §5）：LWC 试点整体移除，双引擎互斥退化为单引擎清理。
     """
     match = re.search(
-        r"(let lwcChart = null[\s\S]*?if \(typeof lwcDispose === 'function'\) lwcDispose\(\);\n\})",
+        r"(// QRE-SAAS-KLINE-ENGINE-EXCLUSIVE[\s\S]*?\nfunction klineDisposeEngines\(\)\{[\s\S]*?\n\})",
         SYMBOL_TPL,
     )
-    assert match, "未找到 lwcDispose / klineDisposeEngines"
+    assert match, "未找到 klineDisposeEngines"
     return match.group(1)
 
 

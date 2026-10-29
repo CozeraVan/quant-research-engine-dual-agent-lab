@@ -1555,3 +1555,69 @@ TV_ROUND2 T1–T6 **全部完成**。T6 按逆向侧 §4 冻结 LWC 试点：入
 （→14px）。③ EMA 独立 K 线之外**未能复现**，需用户给具体 job/symbol 链接。
 
 全量 3138 passed（1 个既有顺序型 flake）。
+
+### 2026-10-29 UI 四项修正已 commit `7945d13` + push + 部署 ECS；追加 EMA 根因修复已部署、未 commit/push
+
+**批次 1（已 push）**：commit `7945d13` —— 删波动率三等分柱状图（job.html 与
+lab_result.html 两处 renderRiskVol）、width 1600→1920、body 17px、
+chart-title 16.5px/mb 14px、m-label 14px、m-value 19px、密集条 130→150px、
+sum/ra 卡 padding 16px 18px。5 文件 sha256 与 ECS 一致；真实浏览器线上实测
+containerW=1920 / bodyFont=17px / chart-title 16.5px+14px /
+`#chart-risk-vol` 无 canvas 且 display:none。
+
+**批次 2（已部署 ECS，按派单约束未 commit/push，等用户验收）**：
+QRE-FCT-CHIP-STATE-VISIBLE。EMA「跑到 K 线外面」根因 =
+`localStorage['qre_fct_<key>']` 持久化的 chip 态跨任务永久生效，而旧 chip 只有
+配色差异、无文字说明，用户误点一次即无法自知也无法恢复。默认分类与渲染均正确
+（生产 job_78 真实因子喂真实 factor-layout.js：overlays=[ema_5,ema_20], panes=[]）。
+修复：chip 文案带态（`ema_5·叠加/独立/隐藏`）+ 末尾「重置布局」钮
+（`fctClearPersistedStates()` 清全部 `qre_fct_*` 后重渲染）；
+lab-theme.css 加 `.fct-chip-reset`（dashed+透明底），night-mode.css 显式还原
+夜间样式。新增 tests/test_fct_chip_state_visible.py 3 passed。
+
+**下一步**：等用户验收。若用户点「重置布局」后 EMA 仍独立于 K 线，才需继续深挖
+（届时要具体 job/symbol URL）；否则本条闭环，再 commit + push 批次 2。
+### 2026-10-29 DeepSeek 第 2 轮 UI（A 密集字号 + B 公网审计）已实施，待 Kimi 复核/用户验收，未 commit/push
+
+派单 `TASK-2026-10-29_deepseek_ui_round2.md`。CR 两份：
+`CR-2026-10-29_dense_font_scale.md`、`CR-2026-10-29_public_ui_audit.md`。
+
+**A（16 行，2 文件）**：`saas/templates/base.html` `table` 13→14px，`label`/`.muted`/
+`summary`/`.chart-empty`/`.bench-bar`/`.tag-tabs button`/`.btn-sm` 13→13.5px；
+`static/lab-theme.css` `table.tbl` **14.5→14**、`.tbl th` 13.5→14、`.detail-table`
+13.5→14、`.detail-table th` 13→14、`.btn-sm` 12.5→13.5、`.label-inline` 12.5→13.5
+（`new.html:739` + `strategy.html:60` 在用）、`.chart-empty` 两处 13→13.5。
+后者与任务书 13px 假设不符（实测 14.5），保留会与 `.tbl th` 倒挂。
+新增 `tests/test_ui_dense_font_scale.py` 11 passed（先 RED）。
+
+**B（九页 × 八条）**：唯一真实修复 = `profile.html` 分享卡 44 字灰段 →
+`<h2>` 内 `tip-trigger`（`.opt` 10→9，`probe_profile` 四组合
+hover/focus/aria 全绿）。其余：真实 tips 134 条 0 失败（`audit_b.json` 的 job
+`tipHover.first=null` / 3 处 `tipFocus` 为合成事件 + `disabled` + 折叠区假阳性）；
+375 无横溢；dark `low<4.5`=0；chip 注入验证三态 + 重置钮（真实环境 `factors=None`）；
+job `chart-main` x 轴 `show=false` 为刻意设计。
+未改并记录：light muted 2.9:1（色板冻结）；`admin.html` 99 处 `.opt` 未审计
+（9090 隧道指向公网，管理台未测渲染可见性）；暗色 `#3A3170` 三组 metric-card
+（`night-mode.css:51-54`，blame b4d785e8，既有不一致）；`.fct-chip-reset` 11.5px（他人改动）；
+规则 3 死按钮未逐点核。**注意：早期「admin `.opt` 实测 0」无可复现证据，不要引用。**
+
+全量 `3158 passed, 24 skipped`。**下一步**：Kimi 复核 → 用户验收 → 再决定
+commit/push + ECS 部署；本轮按派单未 commit/push/部署。
+### 2026-10-29 TV_ROUND3 R3-1~R3-5 全部完成，未 commit/push/部署 ECS
+
+按 `docs/agent/TV_ROUND3_TASKS_2026-10-29.md` 顺序执行完毕，回传
+`docs/agent/TV_ROUND3_ANSWER_2026-10-29.md`。全量 **3170 passed, 24 skipped**。
+
+| 项 | 结果 |
+|---|---|
+| R3-1 | MACD HIST 零基线 + 单 pane 20.25%→25%；判据结构零回归；`klineGridSpec` 收敛为共享层壳 |
+| R3-2 | T3/T4/game 三项补验全部真实浏览器通过（**认知纠错已认领**）；修 2 个真 bug：`QRE-REPLAY-LEGEND-SELECTED`（K 线重播每帧 pageerror）、`QRE-DRAW-RESTORE-TDZ`（画线从不恢复） |
+| R3-4 | 删 `static/chart-core/` + 276 行死代码，省 **214 KiB** 传输；`symbol.html` 2570→2294 行 |
+| R3-5 | 注册表 `extra_aliases` 8→14（旧系 MACD 名映射新系 canonical）；数据字典 §4.1 定调 |
+| R3-3 | **前提纠正**：MACD/RSI 参数变体数据侧早已完工；真缺口在产物侧，与 15 MiB 上限（job 78 已 17M 打满）冲突 |
+
+**待用户决断（不自行推进）**：per-symbol 产物是否下发参数变体——加变体使产物体积约
+翻倍、15 MiB 上限下个股覆盖数减半；与「稳定性第一」冲突。
+
+**下一轮候选**（ANSWER §8）：定产物侧取舍 / game 判据纳入常规回归 /
+模板改动提交前跑 `node --check` / 约定旧系 MACD 分支退场时点。

@@ -31,18 +31,6 @@
   .ind-row .st{font-size:12px;color:var(--lav-deep);min-width:56px;text-align:right}
   .ind-act{display:flex;gap:4px}
   .ind-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
-  /* CR-2026-10-28 B 路：LWC 无图例/tooltip 框架，DOM 图例 + attribution 行 */
-  .kline-legend{display:flex;flex-wrap:wrap;gap:6px 8px;margin:2px 0 6px}
-  .kline-legend .lg-pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:2px 8px;border:1px solid var(--lav);border-radius:11px;background:var(--card);color:var(--lav-deep);font-size:12px;line-height:16px;cursor:pointer}
-  .kline-legend .lg-pill:focus-visible{outline:2px solid var(--lav);outline-offset:2px}
-  .kline-legend .lg-dot{width:8px;height:8px;border-radius:50%;flex:none}
-  .kline-legend .lg-pill[aria-pressed="false"]{border-color:var(--line);opacity:.45;text-decoration:line-through}
-  .kline-legend .lg-static{cursor:default;border-color:transparent;background:none;color:var(--text)}
-  .kline-attrib{position:absolute;right:8px;bottom:6px;display:flex;align-items:center;gap:8px;height:24px;z-index:2;pointer-events:none}
-  .kline-attrib-mark{width:24px;height:24px;border-radius:6px;pointer-events:none;user-select:none}
-  .kline-attrib-link{font-size:11px;color:var(--muted);text-decoration:none;pointer-events:auto}
-  .kline-attrib-link:hover{text-decoration:underline}
-  [data-theme="dark"] .kline-attrib-mark{content:normal}
   @media(max-width:640px){
     .kline-tools .kline-tool span{display:none}
     .wrap{padding-left:12px;padding-right:12px}
@@ -125,14 +113,7 @@
       </div>
       <div class="kline-main">
         <div class="kline-ohlc" id="kline-ohlc" aria-live="polite"></div>
-        {# CR-2026-10-28 B 路：LWC 无图例，需要 DOM 图例；echarts 路径下由 JS 隐藏 #}
-        <div class="kline-legend" id="kline-legend" role="group" aria-label="图表元素显示开关" style="display:none"></div>
         <div id="chart-kline" style="height:520px"></div>
-        {# attribution 行：品牌水印 + TradingView 链接（Apache-2.0 合规） #}
-        <div class="kline-attrib" id="kline-attrib" style="display:none">
-          <img class="kline-attrib-mark" src="/static/chart-core/vendor/brand-mark-color.png" alt="" aria-hidden="true" draggable="false">
-          <a class="kline-attrib-link" href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer" aria-label="图表由 TradingView Lightweight Charts 提供">TradingView</a>
-        </div>
       </div>
     </div>
     <div class="metric-strip rp-metrics hidden" id="kreplay-info"></div>
@@ -161,9 +142,6 @@
 <script src="/static/factor-layout.js?v={{ asset_v }}"></script>
 {# QRE-PRICE-SCALE（TV_ROUND2 T2）：专业价格轴格式化框架（4 种 priceScaleMode / minMove 精度 / 恒定轴宽 / 末价标签） #}
 <script src="/static/price-scale.js?v={{ asset_v }}"></script>
-{# CR-2026-10-28 B 路试点：LWC vendored 单文件（禁 CDN）+ 适配层；引擎开关默认 echarts #}
-<script src="/static/chart-core/vendor/lightweight-charts.standalone.production.js?v={{ asset_v }}"></script>
-<script src="/static/chart-core/kline-lwc.js?v={{ asset_v }}"></script>
 {# QRE-PERF-METRICS-CONTRACT：α/β/IR 与持股周期的共享纯函数层（公式与 risk/performance.py 对齐） #}
 <script src="/static/perf-metrics.js?v={{ asset_v }}"></script>
 {# QRE-EQUITY-CHART：收益曲线（策略/各基准/买入持有/回撤）的唯一构造来源，纯函数 #}
@@ -376,7 +354,7 @@ async function load(){
     renderWear(d);
     renderRisk(d);
     renderRiskAdjusted(d);
-    renderKlineDispatch(d);
+    renderKline(d);
     initKlineReplay(d);
     // QRE-PERF-METRICS-CONTRACT：每笔持股周期。round_trips.csv 本就有 holding_days 列，
     // 但 trades.csv 路径没有，两条路径统一由前端从 entry/exit 日期现算自然日
@@ -562,34 +540,12 @@ async function pollGen(){
   }
 }
 
-const KLINE_ENGINE_LS_KEY = 'qre.kline.engine';
-// QRE-KLINE-LWC-FROZEN（T6）：入口已冻结，恒为 echarts。保留读取逻辑只为一次性
-// 清理存量用户可能已切到 lwc 的 localStorage 值——否则他们会停在休眠引擎上。
-function klineEngine(){
-  try {
-    if (localStorage.getItem(KLINE_ENGINE_LS_KEY) === 'lwc'){
-      localStorage.removeItem(KLINE_ENGINE_LS_KEY);   // 一次性迁移：收回存量选择
-    }
-  } catch (e) { /* 隐私模式：忽略，本就返回 echarts */ }
-  return 'echarts';
-}
-// 冻结期禁用写入口：任何调用都只落 echarts，防止代码路径意外把用户切到休眠引擎。
-function setKlineEngine(v){
-  try { localStorage.setItem(KLINE_ENGINE_LS_KEY, v === 'lwc' ? 'lwc' : 'echarts'); } catch (e) {}
-}
 function klineIsDark(){
   return !!(window.QRETheme && typeof QRETheme.current === 'function' && QRETheme.current() === 'dark');
 }
-let lwcChart = null, lwcMarkers = null, lwcThresholds = [], lwcHover = null;
-function lwcDispose(){
-  if (lwcHover){ try { lwcChart && lwcChart.unsubscribeCrosshairMove(lwcHover); } catch (e) {} lwcHover = null; }
-  if (lwcChart){ try { lwcChart.remove(); } catch (e) {} lwcChart = null; }
-  lwcMarkers = null; lwcThresholds = [];
-}
-// QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：双引擎互斥。#chart-kline 同时只能挂一个实例，
-// 而 ECharts 与 LWC 各自只清自己创建的 DOM——只清一边就会让旧 canvas 残留，
-// 新图叠在旧图之上（2026-10-28 线上 bug：切到 TradingView 视图后 ECharts 图仍在下层）。
-// 任何重渲染/引擎切换前必须两边都清。
+// QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：渲染前必须清掉同一容器上的旧 ECharts 实例，
+// 否则新图叠在旧图之上（2026-10-28 线上 bug 的教训）。
+// R3-4（TV_ROUND3 §5）：LWC 试点已整体移除，这里是 ECharts 单引擎清理。
 function klineDisposeEngines(){
   const el = $('#chart-kline');
   if (el){
@@ -597,236 +553,10 @@ function klineDisposeEngines(){
       const inst = echarts.getInstanceByDom(el);
       if (inst){ try { inst.dispose(); } catch (e) {} }
     }
-    // LWC remove() 只摘自己创建的节点；被叠加污染过的容器可能残留旧 canvas，兜底清空。
-    // 该容器专供 K 线图使用（模板内即为空 div），清空不会丢其它内容。
+    // 容器专供 K 线图使用（模板内即为空 div），兜底清空防残留 canvas
     while (el.firstChild) el.removeChild(el.firstChild);
   }
   symbolKlineChart = null;
-  if (typeof lwcDispose === 'function') lwcDispose();
-}
-// 品牌水印随主题换图（浅底彩色 / 深底反白）
-function lwcSyncAttrib(){
-  const box = $('#kline-attrib');
-  if (!box) return;
-  box.style.display = klineEngine() === 'lwc' ? '' : 'none';
-  const img = box.querySelector('.kline-attrib-mark');
-  if (img) img.src = '/static/chart-core/vendor/brand-mark-' + (klineIsDark() ? 'white' : 'color') + '.png';
-  const link = box.querySelector('.kline-attrib-link');
-  if (link) link.style.color = klineIsDark() ? '#C8ACD6' : '#6F6879';
-}
-function lwcApplyTheme(){
-  const chart = lwcChart;
-  if (!chart || typeof chart.applyOptions !== 'function') return;
-  const t = QRELwcAdapter.theme(klineIsDark());
-  const font = (function(){
-    try {
-      const v = getComputedStyle(document.documentElement).getPropertyValue('--sans');
-      if (v && v.trim()) return v.trim();
-    } catch (e) {}
-    return '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
-  })();
-  chart.applyOptions({
-    layout: {background: {type: 'solid', color: t.background}, textColor: t.textColor,
-             fontSize: 11, fontFamily: font, attributionLogo: false},
-    grid: {horzColor: t.grid, vertColor: 'rgba(0,0,0,0)'},
-    crosshair: {
-      mode: 0,
-      vertLine: {color: t.crosshair, width: 1, style: 2, labelBackgroundColor: t.crosshairLabelBg},
-      horzLine: {color: t.crosshair, width: 1, style: 2, labelBackgroundColor: t.crosshairLabelBg},
-    },
-    rightPriceScale: {borderColor: t.border, textColor: t.textColor, minimumWidth: 56},
-    timeScale: {borderColor: t.border, textColor: t.textColor, timeVisible: true,
-                fixLeftEdge: true, rightOffset: 4},
-    paneSeparatorColor: t.border,
-  });
-  // 序列换色：蜡烛 / 量柱 / MACD 柱逐点 color / marker
-  const candle = chart.__klineCandle;
-  if (candle && typeof candle.applyOptions === 'function'){
-    candle.applyOptions({upColor: t.up, downColor: t.down, borderUpColor: t.up,
-                         borderDownColor: t.down, wickUpColor: t.up, wickDownColor: t.down});
-  }
-  const vol = chart.__klineVol;
-  if (vol && typeof vol.applyOptions === 'function') vol.applyOptions({color: t.volume});
-  (chart.__klineHists || []).forEach(function (h){
-    if (h && typeof h.applyOptions === 'function') h.applyOptions({color: t.histUp});
-  });
-  if (lwcMarkers && typeof lwcMarkers.setMarkers === 'function'){
-    lwcMarkers.setMarkers(QRELwcAdapter.toMarkers(chart.__klineOrders || [], t));
-  }
-  lwcSyncAttrib();
-}
-// DOM 图例：点击 = 翻转 chip 状态后整块重建（LWC 无图例）
-// QRE-SAAS-LWC-LEGEND-TOGGLE（2026-10-28 修两个真 bug）：
-// ① `__vol__`/`__marks__` 只能藏不能回——旧写法 `states[key] || 'pane'` 在已隐藏时
-//    取到的就是 'hidden'，等于又设回 hidden，永远出不来。改为显式传 restore 态。
-// ② 技术因子藏了之后 pill 整个消失——旧写法从 plan.overlays/plan.panes 建图例，
-//    而 plan() 对 hidden 组是 `return` 不入这两个数组，于是没有 pill 可点。
-//    改为从 plan.chips 建（chips 含全部组及其 state，与 ECharts 路径的
-//    renderFactorChips 同源），副图行也按「有 pane 类 chip」而非「有可见 pane」决定显隐。
-function lwcRenderLegend(plan, d){
-  const box = $('#kline-legend');
-  if (!box) return;
-  box.innerHTML = '';
-  box.style.display = klineEngine() === 'lwc' ? '' : 'none';
-  if (klineEngine() !== 'lwc') return;
-  const states = chipStates();
-  function pill(label, color, key, isStatic, restore){
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'lg-pill' + (isStatic ? ' lg-static' : '');
-    if (color){
-      const dot = document.createElement('span');
-      dot.className = 'lg-dot';
-      dot.style.background = color;
-      b.appendChild(dot);
-    }
-    b.appendChild(document.createTextNode(label));
-    if (isStatic) return b;
-    const on = states[key] !== 'hidden';
-    b.setAttribute('aria-pressed', on ? 'true' : 'false');
-    b.dataset.tip = on ? '点击隐藏' : '点击显示';
-    b.addEventListener('click', () => {
-      // 实时读状态而非用闭包捕获的 on：万一支路（如无 K 线数据时 renderKlineLwc
-      // 提前 return）没重建图例，也不会因为陈旧闭包又写回 hidden 而卡死。
-      const hiddenNow = chipStates()[key] === 'hidden';
-      // 藏 → restore（该组第一个非隐藏态）；显 → hidden。二者互斥，不会卡死。
-      setChipState(key, hiddenNow ? restore : 'hidden');
-      if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = mountKlineReplay(klineData); }
-      else renderKlineLwc(d);
-    });
-    return b;
-  }
-  const main = document.createElement('span');
-  main.style.display = 'inline-flex'; main.style.flexWrap = 'wrap'; main.style.gap = '6px 8px';
-  main.appendChild(pill('K线', null, null, true));
-  main.appendChild(pill('成交量', QRELwcAdapter.theme(klineIsDark()).volume, '__vol__', false, 'on'));
-  main.appendChild(pill('买卖点', QRELwcAdapter.theme(klineIsDark()).up, '__marks__', false, 'on'));
-  const chips = (plan && plan.chips) || [];
-  chips.forEach(function (c){
-    if (c.kind !== 'overlay') return;
-    main.appendChild(pill(c.label, QRELwcAdapter.lineColor(QREFactorLayout.COLORS.overlay[0], klineIsDark()),
-                         c.key, false, c.states[0]));
-  });
-  box.appendChild(main);
-  const paneChips = chips.filter(function (c){ return c.kind !== 'overlay'; });
-  if (paneChips.length){
-    const sub = document.createElement('span');
-    sub.style.display = 'inline-flex'; sub.style.flexWrap = 'wrap'; sub.style.gap = '6px 8px';
-    paneChips.forEach(function (c){
-      sub.appendChild(pill(c.label, QRELwcAdapter.lineColor(QREFactorLayout.COLORS.pane, klineIsDark()),
-                           c.key, false, c.states[0]));
-    });
-    box.appendChild(sub);
-  }
-}
-
-// --- LWC 渲染与引擎开关（CR-2026-10-28 B 路受控试点阶段 2）---
-// ECharts 路径 renderKline() 原样保留作回滚实现；本函数只在开关为 lwc 时启用。
-// 适配层纯函数在 static/chart-core/kline-lwc.js（QRELwcAdapter）。
-function renderKlineLwc(d){
-  if (!d.kline || !d.kline.dates || !d.kline.dates.length){
-    $('#box-kline').style.display = 'none';
-    return;
-  }
-  $('#box-kline').style.display = '';
-  const el = $('#chart-kline');
-  klineDisposeEngines();  // 双引擎互斥：先清 ECharts 与 LWC 两边，再建新实例
-  klineDetail = d;
-  const plan = QREFactorLayout.plan(klinePlanFactors(d), chipStates(), paneOrder());
-  el.style.height = QRELwcAdapter.klineHeight(plan.panes.length) + 'px';
-  const t = QRELwcAdapter.theme(klineIsDark());
-  const LWC = window.LightweightCharts;
-  // autoSize + 容器显式高度：随 .kline-main 宽度自适应，375 不溢出
-  const chart = LWC.createChart(el, {autoSize: true, height: el.clientHeight || 460});
-  lwcChart = chart;
-  chart.__klineOrders = d.orders || [];
-
-  // 主 pane：蜡烛 + 均线 overlay + 成交量（独立 priceScale，同 pane 纵配比）
-  const candle = chart.addSeries(LWC.CandlestickSeries, {
-    upColor: t.up, downColor: t.down, borderUpColor: t.up, borderDownColor: t.down,
-    wickUpColor: t.up, wickDownColor: t.down, borderVisible: true,
-  });
-  chart.__klineCandle = candle;
-  candle.priceScale().applyOptions({scaleMargins: {top: 0.08, bottom: 0.22}});
-  candle.setData(QRELwcAdapter.toCandles(d.kline));
-  const states = chipStates();
-  (plan.overlays || []).forEach(function (o){
-    if (states[o.f.col || o.f.name] === 'hidden') return;
-    const s = chart.addSeries(LWC.LineSeries, {color: QRELwcAdapter.lineColor(o.color, klineIsDark()),
-                                   lineWidth: 1, priceScaleId: 'right'});
-    s.setData(QRELwcAdapter.toLineSeries(o.f.values, d.kline.dates));
-  });
-  if (states['__vol__'] !== 'hidden'){
-    const vol = chart.addSeries(LWC.HistogramSeries, {priceScaleId: 'vol', color: t.volume, priceFormat: {type: 'volume'}});
-    chart.__klineVol = vol;
-    vol.priceScale().applyOptions({scaleMargins: {top: 0.82, bottom: 0.02}, visible: false});
-    vol.setData(QRELwcAdapter.toVolume(d.kline));
-  }
-  // 阈值线挂主 pane 第一条 line（无 overlay 时挂蜡烛）
-  lwcThresholds = [];
-  const mainLine = (plan.overlays || []).filter(function (o){ return states[o.f.col || o.f.name] !== 'hidden'; })[0];
-  const thrHost = mainLine ? chart.__klineMainLine : null;
-  if (thrHost){
-    QRELwcAdapter.thresholdLines({thresholds: []}).forEach(function () {});
-  }
-  // 买卖点 marker
-  if (states['__marks__'] !== 'hidden' && typeof LWC.createSeriesMarkers === 'function'){
-    lwcMarkers = LWC.createSeriesMarkers(candle, QRELwcAdapter.toMarkers(d.orders, t));
-  }
-  // 因子副图：每 pane 一个 addPane()
-  chart.__klineHists = [];
-  (plan.panes || []).forEach(function (p, i){
-    if (states[p.key] === 'hidden') return;
-    const pane = chart.addPane();
-    pane.setHeight(160);
-    const thrLines = QRELwcAdapter.thresholdLines(p);
-    let firstLine = null;
-    p.series.forEach(function (s){
-      const opts = {color: QRELwcAdapter.lineColor(s.color || QREFactorLayout.COLORS.pane, klineIsDark()), lineWidth: 1};
-      if (s.hist){
-        const hs = pane.addSeries(LWC.HistogramSeries, opts);
-        hs.setData(QRELwcAdapter.toHistogram(s.values, d.kline.dates));
-        chart.__klineHists.push(hs);
-      } else {
-        const ls = pane.addSeries(LWC.LineSeries, opts);
-        ls.setData(QRELwcAdapter.toLineSeries(s.values, d.kline.dates));
-        if (!firstLine) firstLine = ls;
-      }
-    });
-    if (firstLine){
-      thrLines.forEach(function (tl){
-        const line = firstLine.createPriceLine(tl);
-        lwcThresholds.push(line);
-      });
-    }
-  });
-  chart.timeScale().fitContent();
-  // 十字光标 → 顶部信息区（LWC 无 tooltip 框架）
-  const last = d.kline.dates.length - 1;
-  lwcHover = function (param){
-    let idx = last;
-    if (param && param.time != null){
-      const dt = String(param.time);
-      const j = d.kline.dates.indexOf(dt);
-      if (j >= 0) idx = j;
-    }
-    klineSetInfo(klineInfoHTML(d, plan, idx));
-  };
-  chart.subscribeCrosshairMove(lwcHover);
-  bindKlineInfo(null, d, plan);
-  lwcRenderLegend(plan, d);
-  lwcSyncAttrib();
-  setKlineToolsEnabled(true);
-  klineToolState.baseSeries = null;
-  bindKlineTools(null, d, plan);
-}
-// 引擎派发：原 renderKline 调用点全部走这里
-function renderKlineDispatch(d){
-  if (klineEngine() === 'lwc' && window.QRELwcAdapter && window.LightweightCharts){
-    renderKlineLwc(d);
-  } else {
-    renderKline(d);
-  }
 }
 
 // FRM-SYMBOL：个股级风险卡片（数据=详情 payload 的 risk 节，worker 侧已算好）
@@ -1181,6 +911,24 @@ function chipStates(){
 function setChipState(key, st){
   try { localStorage.setItem(FCT_LS_PREFIX + key, st); } catch (e) {}
 }
+// QRE-FCT-CHIP-STATE-VISIBLE：chip 三态在文案里显式落地。
+// 背景：chip 呈现态（叠加/独立/隐藏）持久化在 localStorage（qre_fct_<key>），
+// 用户误点一次就把某因子永久切成独立面板——之后每个任务打开都看到 EMA 落在
+// K 线之外，而 chip 只有配色差异、没有任何文字说明，用户完全无法自知。
+// 现：① 文案带态（EMA5·叠加 / EMA5·独立 / EMA5·隐藏）；② 末尾一枚「重置布局」
+// 一键清掉本浏览器保存的全部 qre_fct_* 选择，回到默认呈现（均线类叠加 K 线）。
+const FCT_STATE_LABEL = {overlay: '叠加', pane: '独立', hidden: '隐藏'};
+function fctClearPersistedStates(){
+  let kill = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (k && k.indexOf(FCT_LS_PREFIX) === 0) kill.push(k);
+    }
+    kill.forEach(k => localStorage.removeItem(k));
+  } catch (e) { kill = []; }  // 隐私模式：无可清项
+  return kill.length;
+}
 function renderFactorChips(plan, d){
   const slot = $('#kline-chips');
   if (!slot) return;
@@ -1188,7 +936,7 @@ function renderFactorChips(plan, d){
   plan.chips.forEach(c => {
     const b = document.createElement('button');
     b.className = 'fct-chip st-' + c.state;
-    b.textContent = c.label;
+    b.textContent = c.label + '·' + (FCT_STATE_LABEL[c.state] || c.state);
     b.title = c.states.length > 2 ? '点击切换：叠加K线 → 独立面板 → 隐藏' : '点击切换：独立面板 → 隐藏';
     b.addEventListener('click', () => {
       const next = c.states[(c.states.indexOf(c.state) + 1) % c.states.length];
@@ -1197,11 +945,29 @@ function renderFactorChips(plan, d){
         kreplayCtl.destroy(true);
         kreplayCtl = mountKlineReplay(klineData);
       } else {
-        renderKlineDispatch(d);
+        renderKline(d);
       }
     });
     slot.appendChild(b);
   });
+  if (plan.chips.length){  // 无因子（纯行情）时不放重置钮
+    const r = document.createElement('button');
+    r.type = 'button';
+    r.className = 'fct-chip fct-chip-reset';
+    r.id = 'kline-chips-reset';
+    r.textContent = '重置布局';
+    r.title = '清除本浏览器保存的全部指标呈现选择，恢复默认（均线类叠加 K 线，MACD/RSI 等独立面板）';
+    r.addEventListener('click', () => {
+      fctClearPersistedStates();
+      if (kreplayCtl){
+        kreplayCtl.destroy(true);
+        kreplayCtl = mountKlineReplay(klineData);
+      } else {
+        renderKline(d);
+      }
+    });
+    slot.appendChild(r);
+  }
 }
 
 let klineResizeBound = false;
@@ -1218,6 +984,12 @@ const klineToolState = { chart: null, data: null, plan: null, bound: false, base
 //   mode = trend/horizontal/null；pending = 趋势线未落点起点；
 //   lines = 已落画线（localStorage 持久化，按标的隔离）；
 //   selected = 当前选中画线（Delete 删它）；drag = 拖动中的 {kind, target, grabI, grabP}
+// QRE-DRAW-RESTORE-TDZ（R3-2）：KLINE_DRAW_LS_KEY 必须声明在 klineDrawState **之前**。
+// const 有暂时性死区——klineDrawState 的初始化器调 klineDrawLoad()，那时
+// KLINE_DRAW_LS_KEY 还没初始化会抛 ReferenceError，又被 klineDrawLoad 里的
+// try/catch 静默吞掉，结果画线**永远不在页面加载时恢复**（同会话读回却正常，
+// 所以单测全绿、真实浏览器才发现）。真实浏览器实测证据见 R3-2 回传。
+const KLINE_DRAW_LS_KEY = 'qre.kline.drawings';
 const klineDrawState = { mode: null, pending: null, selected: null, drag: null,
   lines: (typeof klineDrawLoad === 'function') ? klineDrawLoad() : [] };
 function klineNum(v){
@@ -1305,24 +1077,11 @@ function klineResetZoom(chart){
   chart.dispatchAction({ type: 'dataZoom', start: 0, end: 100 });
 }
 // 网格：右侧留白给价格标尺；隐藏格收成 1px 不占位但保留索引（轴与系列索引不变）
+// R3-1（TV_ROUND3 §2）：布局统一走共享层 paneGrids。
+// 原先此处是 paneGrids 的**逐行复制第二份**，改一处漏一处已经造成过漂移；
+// 现在 klineGridSpec 只是签名适配壳（showVol/paneCount/showFct → opts）。
 function klineGridSpec(showVol, paneCount, showFct){
-  const n = paneCount || 0;
-  const fOn = !!showFct && n > 0;
-  const hide = { left: 16, right: 56, top: 0, height: 1 };
-  const grids = [{ left: 16, right: 56, top: 30,
-    height: fOn ? (showVol ? '42%' : '50%') : (showVol ? '58%' : '78%') }];
-  if (!showVol) grids.push(Object.assign({}, hide));
-  else if (fOn) grids.push({ left: 16, right: 56, top: '53%', height: '10%' });
-  else grids.push({ left: 16, right: 56, top: '74%', height: '14%' });
-  const fTop = (fOn && showVol) ? 66 : 58;
-  const fBottom = 93;
-  const step = n ? (fBottom - fTop) / n : 0;
-  for (let i = 0; i < n; i++){
-    grids.push(fOn
-      ? { left: 16, right: 56, top: (fTop + i * step) + '%', height: (step * 0.75) + '%' }
-      : Object.assign({}, hide));
-  }
-  return grids;
+  return QREFactorLayout.paneGrids(paneCount, { showVol: showVol, showFct: showFct });
 }
 // 时间轴只挂在最后一个可见格上（面板全关时上移到量/主图）
 function klineAxisLabelIndex(paneCount, showVol, showFct){
@@ -1493,7 +1252,7 @@ function klineSetPriceMode(m){
   klinePriceMode = QREPriceScale.setMode(m);
   klineSyncPressed();
   if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = mountKlineReplay(klineData); }
-  else if (typeof renderKlineDispatch === 'function') renderKlineDispatch(klineData);
+  else if (typeof renderKline === 'function') renderKline(klineData);
   klineSetInfo('价格轴：' + QREPriceScale.modeMeta(klinePriceMode).label
     + '（' + QREPriceScale.modeMeta(klinePriceMode).tip + '）');
 }
@@ -1711,8 +1470,8 @@ function hidePane(key){
 }
 // 变更后统一重挂：重播中按新布局重挂重播（防未来数据语义不变），否则重建静态图
 function klineRerenderAfterSetting(){
-  // 走派发：指标/面板设置改动后必须仍按当前引擎重建（否则从 lwc 切回 echarts 会残留）
-  const rebuild = (typeof renderKlineDispatch === 'function') ? renderKlineDispatch : renderKline;
+  // R3-4：引擎唯一（echarts），直接重建静态图
+  const rebuild = renderKline;
   if (kreplayCtl){
     kreplayCtl.destroy(true);
     kreplayCtl = mountKlineReplay(klineData);
@@ -1905,14 +1664,6 @@ function klineIndicatorDialog(){
     klineRerenderAfterSetting();
   });
   left.appendChild(reset);
-  // QRE-KLINE-LWC-FROZEN（T6，2026-10-29）：LWC 引擎切换入口已按逆向侧 §4 决策
-  // 冻结移除。理由见 docs/agent/24_KLINE_LWC_FROZEN.md：
-  //   ① LWC 5.x 的 pane 撑不住动态因子 pane（叠加/独立/隐藏、上下移、收起、
-  //      qre_pane_order 持久化全要逐 pane 管生命周期）；
-  //   ② "像 TV"的差距 80% 在样式规格不在引擎，换引擎买不到那 80%。
-  // LWC 代码与 vendored 资产保留为休眠态（klineDisposeEngines 仍依赖它做防御），
-  // 仅在未来「无因子单图」场景（分享卡/缩略图）复活；阶段 3（重播 LWC adapter）
-  // 明确不做。
   foot.appendChild(left);
   foot.appendChild(close.cloneNode(true));
 
@@ -1937,11 +1688,6 @@ function renderKline(d){
     return;  // 无 K 线数据：整块隐藏不留空壳
   }
   $('#box-kline').style.display = '';
-  // LWC 专属 DOM 只在 lwc 引擎下显示（night-mode.js 的 themeChart 是 monkey-patch
-  // ECharts setOption，对 LWC 无效；ECharts 路径必须把图例/attribution 收掉）
-  { const lg = $('#kline-legend'), at = $('#kline-attrib');
-    if (lg) lg.style.display = 'none';
-    if (at) at.style.display = 'none'; }
   const dates = d.kline.dates;
   const el = $('#chart-kline');
   // CR-2026-10-20：因子分组布局（均线 overlay 主图 / MACD 合并面板 / 其余独立面板），
@@ -1953,7 +1699,7 @@ function renderKline(d){
   const panes = plan.panes;
   const hasF = panes.length > 0;
   el.style.height = QREReplay.klineHeightForPanes(panes.length) + 'px';
-  klineDisposeEngines();  // 双引擎互斥：清掉可能残留的 LWC 实例与 ECharts 旧实例
+  klineDisposeEngines();  // 清掉同一容器上可能残留的旧 ECharts 实例
   const chart = echarts.init(el);
   symbolKlineChart = chart;
   bindKlineResize(el);
@@ -2033,7 +1779,6 @@ function renderKline(d){
 // 颜色复用既有因子 overlay token：不引入第四色相，Night Mode 与因子线同可读性
 const KLINE_DRAW_TREND_COLOR = '#6750A4';
 const KLINE_DRAW_HORIZONTAL_COLOR = '#8B7FBE';
-const KLINE_DRAW_LS_KEY = 'qre.kline.drawings';
 // 选中态：端点圆点 + 虚线加粗（不引新色相）
 const KLINE_DRAW_HANDLE_SIZE = 6;
 const KLINE_DRAW_HIT_ENDPOINT = 7;   // 端点命中半径（px）
@@ -2415,23 +2160,17 @@ function initKlineReplay(d){
     $('#kreplay-events').classList.remove('hidden');
     // 接管前先停用工具栏并清空信息区：重播帧不得让静态信息条停留在未来数据上
     setKlineToolsEnabled(false);
-    // LWC 引擎下必须先销毁 LWC 实例：重播接管同一容器 #chart-kline，
-    // 不销毁会出现双 canvas / 双实例（阶段 3 才会做 LWC 重播 adapter）
-    if (typeof lwcDispose === 'function') lwcDispose();
     // 接管原 K线容器：重播帧直接渲染进 #chart-kline（原静态实例由组件销毁）
     kreplayCtl = mountKlineReplay(klineData);
   });
   $('#btn-kreplay-exit').addEventListener('click', () => {
     if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = null; }
-    // 重播退出：LWC 引擎下先销毁实例再重建（lwcDispose 幂等，echarts 路径为空操作）
-    if (typeof lwcDispose === 'function') lwcDispose();
     $('#kreplay-info').classList.add('hidden');
     const ev = $('#kreplay-events'); ev.classList.add('hidden'); ev.innerHTML = '';
     $('#btn-kreplay-exit').classList.add('hidden');
     btn.classList.remove('hidden');
-    // 数据全在内存，按当前引擎重建静态 K 线。renderKlineDispatch 可能不在某些
-    // 测试抽取区内，此时回退 renderKline（echarts 路径本身就在该区内）。
-    const rebuildKline = (typeof renderKlineDispatch === 'function') ? renderKlineDispatch : renderKline;
+    // 数据全在内存，重建静态 K 线（引擎唯一：echarts）
+    const rebuildKline = renderKline;
     rebuildKline(klineData);
   });
 }
@@ -2542,7 +2281,16 @@ function mountKlineReplay(d){
     chartEl: $('#chart-kline'),  // 接管原容器
     eventsEl: $('#kreplay-events'),
     // QRE-PRICE-SCALE（T2）：末价标签只贴**当前帧最后一根**（不得泄露未来数据）
+    // R3-1（TV_ROUND3 §2）：本钩子按 series 类型分流——
+    //   ① HIST 系列（s.hist，paneSeries 的 replay 规格打标）→ 零基线；
+    //   ② 价格系列（s.mark，只有 K 线带）→ 末价标签。
+    // 零基线让"三线共一把尺"在视觉上自证（MACD 用户原始投诉的最终收口）。
     markLineFor: (s, idx, s0) => {
+      if (s.hist) {
+        return { silent: true, symbol: 'none',
+          lineStyle: { type: 'dashed', width: 1, color: '#8B7FBE' },
+          data: [{ yAxis: 0 }] };
+      }
       if (!s.mark || typeof QREPriceScale === 'undefined') return null;
       const k = ohlc[idx];
       if (!k || k[1] == null || !isFinite(Number(k[1]))) return null;
@@ -2559,12 +2307,6 @@ function mountKlineReplay(d){
     onFrame: (cursor) => { infoFrame(cursor); klineSetInfo(klineInfoHTML(d, plan, cursor)); },
   });
 }
-// CR-2026-10-28 B 路：night-mode.js 的 themeChart 是 monkey-patch ECharts setOption，
-// 对 LWC 无效；必须在 qre:themechange 时显式给 LWC 换肤（图表序列色 + 品牌水印）。
-// 注意：night-mode.js 的 CustomEvent 未开 bubbles，必须监听 document（window 收不到）
-document.addEventListener('qre:themechange', function () {
-  if (klineEngine() === 'lwc' && typeof lwcApplyTheme === 'function') lwcApplyTheme();
-});
 load();
 </script>
 {% endblock %}

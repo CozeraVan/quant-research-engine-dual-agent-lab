@@ -65,10 +65,14 @@ def _symbol_source() -> str:
     # 只要锚点是「klineResizeBound 起 → load() 前」即可。
     match = re.search(r"(let klineResizeBound = false;[\s\S]*?)\nload\(\);", SYMBOL_TPL)
     assert match, "未找到 K 线/重播源码块"
-    # QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 依赖 klineDisposeEngines 同时清
-    # ECharts 与 LWC；该定义在 klineResizeBound 之前，必须一并注入 vm。
-    dispose = re.search(r"(let lwcChart = null[\s\S]*?)\n// 品牌水印随主题换图", SYMBOL_TPL)
-    assert dispose, "未找到 lwcDispose / klineDisposeEngines"
+    # QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 依赖 klineDisposeEngines 清同一
+    # 容器上的旧 ECharts 实例；该定义在 klineResizeBound 之前，必须一并注入 vm。
+    # R3-4（TV_ROUND3 §5）：LWC 试点整体移除，这里是单引擎清理。
+    dispose = re.search(
+        r"(// QRE-SAAS-KLINE-ENGINE-EXCLUSIVE[\s\S]*?\nfunction klineDisposeEngines\(\)\{[\s\S]*?\n\})",
+        SYMBOL_TPL,
+    )
+    assert dispose, "未找到 klineDisposeEngines"
     return dispose.group(1) + "\n" + match.group(1)
 
 

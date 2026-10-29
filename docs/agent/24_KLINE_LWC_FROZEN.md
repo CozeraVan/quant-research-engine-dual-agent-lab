@@ -1,73 +1,82 @@
-# 24_KLINE_LWC_FROZEN.md — LWC 引擎试点冻结说明（T6）
+# 24_KLINE_LWC_FROZEN.md — LWC 引擎试点：已移除（原冻结说明，2026-10-29 R3-4 结案）
 
-> 状态：**已冻结**（2026-10-29，TV_ROUND2 T6）
-> 决策来源：逆向 Agent `TV_ROUND2_TASKS_2026-10-29.md` §4（Q2 决策）
-> 本文说明冻结范围、理由、以及什么情况下可以解冻。
+> 状态：**已整体移除**（2026-10-29，TV_ROUND3 R3-4）
+> 决策来源：逆向 Agent `TV_ROUND3_TASKS_2026-10-29.md` §5
+> 历史：T6（TV_ROUND2 §4）先冻结入口 → R3-4（TV_ROUND3 §5）按"解冻从 git 历史
+> 找回比养着 400KB 死码便宜"的判断整体删除。本文保留决策记录，便于未来复盘。
 
 ---
 
-## 1. 冻结范围
+## 1. 移除范围（R3-4 实际删了什么）
 
 | 项 | 处置 |
 |---|---|
-| 用户可见的引擎切换入口 | **已移除**（原在「指标设置」模态底部的「试用 TradingView 图表 / 切回 ECharts」按钮） |
-| `klineEngine()` | 恒返回 `'echarts'`；读取时若发现存量 `'lwc'` 值**一次性 removeItem 收回** |
-| `setKlineEngine()` | 保留但冻结期不应有调用点（测试断言无调用） |
-| LWC 代码（`kline-lwc.js` / `renderKlineLwc` / `lwcRenderLegend` / `lwcApplyTheme` 等） | **保留为休眠态**，不删 |
-| vendored 资产（`lightweight-charts.standalone.production.js`、品牌水印、LICENSE） | **保留** |
-| `klineDisposeEngines()` | **保留且仍必需**——它是 ECharts/LWC 双引擎互斥的防御性单点 |
-| 阶段 3（重播 LWC adapter） | **明确不做** |
+| 模板 `<script>` 引用 | **删除 2 个**：`chart-core/vendor/lightweight-charts.standalone.production.js`、`chart-core/kline-lwc.js` |
+| vendored 资产目录 | **`static/chart-core/` 整个删除**（库 js 197,922B + LICENSE 11,347B + 两张品牌水印 PNG 450,465B） |
+| `symbol.html` 死代码 | **删除 276 行**：`renderKlineLwc` / `lwcRenderLegend` / `lwcApplyTheme` / `lwcSyncAttrib` / `lwcDispose` / `lwcChart` 等状态 / `renderKlineDispatch` / `KLINE_ENGINE_LS_KEY` / `klineEngine()` / `setKlineEngine()` |
+| LWC 专属 DOM | **删除**：`#kline-legend`（DOM 图例）、`#kline-attrib`（品牌水印 + TradingView 链接）及其 CSS 规则族 |
+| `klineDisposeEngines()` | **保留但简化为 ECharts 单引擎清理**（仍是渲染前必须调用的防御单点） |
+| 测试 | `tests/test_lwc_kline_adapter.py`（13 例）→ 改写为 `tests/test_lwc_kline_removed.py`（11 例），断言资产**不再被引用/加载** |
+| 重播 LWC adapter（阶段 3） | 从未做，仍不做 |
 
-## 2. 为什么冻结（两条硬理由）
+`symbol.html` 行数：**2570 → 2294**。
 
-### 2.1 LWC 5.x 的 pane 撑不住本项目的动态因子 pane
+## 2. 收益（实测）
 
-因子 pane 是**动态**的，需要支持：
+| 指标 | 移除前 | 移除后 | 差 |
+|---|---|---|---|
+| symbol 页 HTML | 135,223 B | 121,100 B | **−14,123 B** |
+| LWC 资产引用 | 205,085 B | 0 | **−205,085 B** |
+| **合计传输** | — | — | **−219,208 B ≈ −214 KiB** |
 
-- 叠加 K 线 / 独立面板 / 隐藏 三态切换
-- 副图上移 / 下移
-- 单独收起
-- `qre_pane_order` 持久化
+（HTML 体量 = 模板 UTF-8 字节；资产体量 = `<script src>` 指向文件的实际大小。
+与逆向侧估计的"~211KB 传输"一致。）
 
-ECharts 用声明式 `grid[] / yAxis[]` 改 option 即生效；LWC 要**逐 pane 管生命周期**，
-还要与同容器的 ECharts 互斥——这正是本项目「难点 #3：双轨维护成本」的来源。
-试点期间已经为此付出过真实 bug 代价（切引擎双图叠加、图例开关死锁）。
+## 3. 为什么最终是删而不是留（决策记录）
 
-### 2.2「像 TV」的差距 80% 在样式规格，不在引擎
+T6 当时判断"保留休眠态，`klineDisposeEngines()` 仍依赖它做防御"，把移除列为
+"若确认无解冻计划可另立项"。R3-4 逆向侧反驳了这个判断，理由成立：
 
-TV 视觉签名（右置价格轴、轴宽恒定、1-2-5 刻度、末价标签背景块、只画水平网格线、
-蜡烛实体宽 0.7×间距、十字光标 1px 虚线）**在 ECharts 里全部做得到**。
-换引擎买不到这 80%——T2（专业价格格式化框架）已经在 ECharts 上把这些落下来了。
+1. **`klineDisposeEngines()` 并不真的依赖 LWC**——它只是在 ECharts dispose 之后
+   多调一次 `lwcDispose()`；单引擎下这段是空转。
+2. **死代码有真实成本**：约 214 KiB 传输 + 276 行需要阅读理解与测试维护，
+   而且每次改 K 线都要在脑子里排除 LWC 分支。
+3. **"以后可能解冻"不构成保留理由**——git 历史能完整找回（提交历史里有 vendored
+   资产与全部代码），恢复成本是一次 `git checkout`。
 
-## 3. 什么情况下可以解冻
+**教训（已写进 `09_CODING_HANDOFF.md`）**：休眠代码不是免费的。要么删，
+要么给它一个明确的、有期限的复活条件；"先留着以后可能用"最后都会变成
+没人敢动的化石代码。
 
-只有同时满足以下两条才重新评估：
+## 4. 什么情况下重新引入（若要）
 
 1. 出现**无因子单图**场景（分享卡 / 缩略图 / 游戏页），不需要动态 pane；
 2. 该场景明确要求 TV 原生交互（如原生 crosshair label）。
 
-解冻步骤：恢复入口按钮 → 让 `klineEngine()` 读回 localStorage → 为该场景单独写
-渲染路径（不要复用 symbol.html 的因子 pane 逻辑）→ 补双引擎互斥测试。
+步骤：`git log` 找回 vendored 资产与适配层 → 为该场景**单独写渲染路径**
+（不要复用 symbol.html 的因子 pane 逻辑）→ 补双引擎互斥测试 →
+重新评估 Apache-2.0 attribution 合规（原方案是"默认文本链接 + 自绘品牌水印"）。
 
-## 4. 对使用者的影响
+## 5. 对使用者的影响
 
-- **无**。默认引擎本就是 echarts，切换入口移除后行为不变。
-- 唯一例外：试点期间手动切到过 LWC 的用户，下次打开会被一次性切回 echarts
-  （localStorage 值被收回），不会有报错或白屏。
+**无**。默认引擎本就是 echarts；移除后行为不变，且页面传输少了约 214 KiB。
+试点期间手动切到过 LWC 的用户，其 `localStorage['qre.kline.engine']` 值现已
+无人读取（`klineEngine()` 已删除），残留值完全惰性，不会有报错或白屏。
 
-## 5. 相关代码位置
+## 6. 相关代码位置（移除后）
 
 | 内容 | 位置 |
 |---|---|
-| 冻结后的 `klineEngine()` / `setKlineEngine()` | `gui/saas/templates/symbol.html` 约 565 行 |
-| 双引擎互斥单点 `klineDisposeEngines()` | `gui/saas/templates/symbol.html` 约 576 行 |
-| 休眠的 LWC 渲染路径 | `gui/saas/templates/symbol.html` `renderKlineLwc()` 及 `static/chart-core/kline-lwc.js` |
-| 冻结态测试 | `tests/test_lwc_kline_adapter.py::TestLwcSourceContract::test_lwc_frozen_no_switch_entry` |
-| 双引擎互斥测试 | `tests/test_lwc_kline_adapter.py::TestKlineEngineExclusive`、`TestLwcLegendToggle` |
+| 唯一渲染入口 `renderKline(d)` | `gui/saas/templates/symbol.html` |
+| 单引擎清理 `klineDisposeEngines()` | `gui/saas/templates/symbol.html`（`klineIsDark()` 之后） |
+| K 线布局（共享层唯一实现） | `gui/static/factor-layout.js::paneGrids` |
+| 移除态合同测试 | `tests/test_lwc_kline_removed.py`（11 例） |
+| 实施 CR | `docs/agent/change_requests/CR-2026-10-29_r4_lwc_removed.md` |
 
-## 6. 遗留（不在本轮范围）
+## 7. 遗留
 
-- `renderKlineLwc()` 及其依赖在冻结期成为死代码，随 vendored 资产一起占用约 400KB
-  页面体积。若后续确认无解冻计划，可再立项移除（需同步删测试与资产，属独立 CR）。
-- 阶段 3（重播 LWC adapter）不做；重播继续走 ECharts，与静态图共用
-  `QREFactorLayout.panesToOption` 输出。
+- 若未来重新引入 LWC， vendored 版本锁定信息（5.2.1，sha256
+  `e21cc5caa0226ef30bd8549c50b9ef926615f2a4ee6b4e486353477a55f598cf`）
+  需从 git 历史取回并重跑 Spike 基准——**不要凭记忆选版本**。
+- 品牌资产（`/home/van/logo/A股回测台-brand-assets/`）仍在用户机器上，
+  未随代码删除；重新引入时可直接复用。

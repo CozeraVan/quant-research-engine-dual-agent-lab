@@ -1155,11 +1155,12 @@ function createSymbolHarness(fetchImpl){
 """
 
 
-# QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 现在必须经 klineDisposeEngines
-# 同时清 ECharts 与 LWC 两个引擎（否则切引擎时旧 canvas 残留、双图叠加），
+# QRE-SAAS-KLINE-ENGINE-EXCLUSIVE：renderKline 渲染前必须经 klineDisposeEngines
+# 清掉同一容器上的旧 ECharts 实例（否则新图叠在旧图之上），
 # 而该定义在 klineResizeBound 之前，抽取 K 线区块时必须一并注入。
+# R3-4（TV_ROUND3 §5）：LWC 试点整体移除，双引擎互斥退化为单引擎清理。
 SYMBOL_DISPOSE_PATTERN = (
-    r"(let lwcChart = null[\s\S]*?if \(typeof lwcDispose === 'function'\) lwcDispose\(\);\n\})"
+    r"(// QRE-SAAS-KLINE-ENGINE-EXCLUSIVE[\s\S]*?\nfunction klineDisposeEngines\(\)\{[\s\S]*?\n\})"
 )
 
 

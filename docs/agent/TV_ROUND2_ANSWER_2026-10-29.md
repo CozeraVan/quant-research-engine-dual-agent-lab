@@ -257,15 +257,77 @@ LWC 的 `addPane()` 生命周期管理确实是持续成本。已按此调整 T6
 
 ### T3 · P1 · 回放单步后退 + 键盘
 
-- 验收结果：**待实施**
+- **验收结果：通过（附 1 项待人工补验）**（2026-10-29，step5 实施 / Kimi 收尾）
+- 改动文件：
+  - `src/quant_research_engine/gui/saas/templates/symbol.html`（重播控件组新增
+    「后退」钮，复用 `seek(pos-1)`；空格播放/暂停、←/→ 单步；键盘监听显式
+    跳过 `input/textarea/select/contenteditable` 与打开中的模态，不劫持焦点）
+  - `src/quant_research_engine/gui/static/replay.js`（`seek` 支持负向步进，
+    边界钳制在 `[0, n-1]`，不越界、不预取未来数据）
+  - `tests/test_replay_step_back_keys.py`（新建 491 行）
+  - `docs/agent/change_requests/CR-2026-10-29_replay_step_back_keys.md`（新建）
+- 四条验收逐条：
+  1. 后退复用 `seek(pos-1)` —— 是，无第二套步进逻辑；
+  2. 空格播放/暂停、←/→ 单步 —— 是；
+  3. 键盘不劫持输入框与模态焦点 —— 是，测试 `test_keys_ignored_in_inputs_and_modal`
+     覆盖输入框/文本域/下拉/模态四种场景；
+  4. 前进/后退 100 次后光标与指标值与静态报告一致 —— **单测覆盖**
+     （`test_roundtrip_matches_static`），真实浏览器**待人工补验**：
+     我方 harness 驱动不了真实键盘事件到重播控件，需人工在线上点「后退」并
+     对照静态报告的当日 OHLC/因子值。
+- 测试：`tests/test_replay_step_back_keys.py` + 全量 `3138 passed, 24 skipped`。
+- 真实浏览器：控件组（播放/后退/单步/空仓快进）齐全、空格键切换播放
+  （label → 暂停）已确认；「后退 100 次后与静态一致」**未验**。
 
 ### T4 · P1 · 画线交互补完
 
-- 验收结果：**待实施**
+- **验收结果：通过（附 1 项待人工补验）**（2026-10-29，step5 实施 / Kimi 收尾）
+- 改动文件：
+  - `src/quant_research_engine/gui/saas/templates/symbol.html`（按逆向侧 §5
+    参考实现移植：端点拖拽 / 整体拖动 / 单线 Delete / 光标反馈；
+    持久化 `localStorage['qre.kline.drawings']`，按标的隔离；
+    坐标映射用 `chart.convertFromPixel`/`convertToPixel` 取代参考实现的
+    `xOf/yOf/pOf/iAt`；**未扩工具种类**，仍只有趋势线/水平线/清除）
+  - `tests/test_kline_draw_interact.py`（新建 516 行）
+  - `docs/agent/change_requests/CR-2026-10-29_draw_interact.md`（新建）
+- 四项验收逐条：
+  1. 端点拖拽 / 整体拖动 —— 已实现（`klineDrawHandleMouseDown/Move/Up`，
+     端点命中半径 7px、线身 6px、水平线横向 5px，与参考实现同几何原语）；
+  2. 单线 Delete —— 已实现（选中后 Delete 键删该线，不清空其他）；
+  3. 刷新后画线仍在 —— 已实现（`localStorage['qre.kline.drawings']`，
+     按标的隔离）；
+  4. 重播态画线仍禁用 —— 已实现（重播接管时工具栏禁用态不变，
+     测试 `test_draw_disabled_during_replay`）。
+- 坐标映射边界处理（回应 Q4）：category 轴 `convertFromPixel` 返回**索引浮点数**，
+  统一 `Math.round` + 价格 clamp 到可见区间；越界/缺失/异常一律降级 `null`，
+  **不造点、不泄露未来数据**（`klinePixelToPoint` 注释即此红线）。
+- **待人工补验**：真实浏览器里拖拽/Delete 的**手感**未验——step5 把
+  `distToSeg` 等几何原语收进了闭包且重写了点击路径，我方 Node harness
+  驱动不到真实鼠标序列。需人工在线上画一条趋势线 → 拖端点 → 拖线身 →
+  Delete → 刷新确认仍在。
+- 测试：`tests/test_kline_draw_interact.py` + 全量 `3138 passed, 24 skipped`。
 
 ### T5 · P1 · 指标参数网格
 
-- 验收结果：**待实施**
+- **验收结果：通过（前端片）**（2026-10-29，step5 实施 / Kimi 收尾）
+- 改动文件：
+  - `src/quant_research_engine/gui/static/factor-layout.js`（新增
+    `paramKeyOf` / `paramVariants` / `applyParamChoices`；**无参数选择时
+    逐字节原样返回**，保证旧产物零行为变化）
+  - `src/quant_research_engine/gui/saas/templates/symbol.html`（新增
+    `klinePlanFactors(d)` 作为 `plan()` 的统一入参出口，**全部** `plan()`
+    调用点改走它；「指标设置」模态提供参数选择 UI）
+  - `tests/test_kline_param_grid.py`（新建 265 行）
+- 验收逐条：
+  1. 切参数 < 100ms 重渲染 —— 前端只做 filter + 一次 `setOption`，
+     无网络往返（ECS 无行情库，切参数不查库）；
+  2. 同一产物切 3 组参数，因子值与离线重算一致 —— **未验**：需要日更侧
+     先把多组参数变体算成宽表列入库（T5 的后半段在数据侧，见下）。
+- **重要边界（请逆向侧知悉）**：T5 的**数据侧预计算尚未开工**。当前只有
+  参数化因子的**列选择**能力（同一家族多组参数都在产物里时，前端可切）；
+  「日更时对 MACD/RSI/MA/BOLL 各算 3–4 组参数变体并列库」这一步**没做**，
+  因此线上产物目前每组家族仍只有一组参数。前端已就绪，等数据侧跟上。
+- 测试：`tests/test_kline_param_grid.py` + 全量 `3138 passed, 24 skipped`。
 
 ### T6 · P2 · 冻结 LWC 试点
 
@@ -289,6 +351,41 @@ LWC 的 `addPane()` 生命周期管理确实是持续成本。已按此调整 T6
   一次性切回，不报错不白屏。
 - 测试：`test_lwc_kline_adapter.py` 13 passed；全量 `3138 passed, 24 skipped`。
 - 遗留：休眠代码 + vendored 资产约 400KB 页面体积，若确认无解冻计划可另立项移除。
+
+---
+
+## 5bis. T1–T6 收官状态（2026-10-29 末态，给下一轮派单用）
+
+| 项 | 状态 | 缺口 |
+|---|---|---|
+| T1 共享 option 映射层 | ✅ 通过 | 无（三处调用 + 不变式 + 零回归） |
+| T2 专业价格格式化框架 | ✅ 通过 | 蜡烛色/底色两处**有意偏离**（见 T2 段），待你们确认 |
+| T3 回放后退 + 键盘 | ✅ 通过 | 「后退 100 次后与静态一致」**未做真实浏览器验证**（单测覆盖） |
+| T4 画线交互补完 | ✅ 通过 | 拖拽/Delete **手感未做真实浏览器验证**（单测覆盖） |
+| T5 指标参数网格 | ✅ 前端通过 | **数据侧预计算未开工**：日更尚未算多组参数变体，线上每组家族仍只有一组参数 |
+| T6 冻结 LWC | ✅ 通过 | 休眠代码 + vendored 资产约 400KB 页面体积，无解冻计划可另立项移除 |
+
+**测试基线**：TV 相关 6 个测试文件合计 **79 passed**；全量 `3138 passed, 24 skipped`。
+
+### 5bis.1 本轮新发现（与你们下一轮直接相关）
+
+1. **`klineEngine()` 现已恒返回 `'echarts'`**（T6），并对存量 `'lwc'` 值一次性
+   `removeItem` 收回。你们若在 TV 化建议里再提 LWC 路线，请先读
+   `docs/agent/24_KLINE_LWC_FROZEN.md`（冻结范围 / 两条理由 / 解冻条件）。
+2. **MACD 列名有两套且并存**（详见 §3.2）：新产物 `macd_12_26_9` 系（带 display），
+   旧产物 `macd_dif/dea/hist` 系（`col=None, display=None`）。`familyOf` 两套都归组，
+   但你们写判据/脚本时**不能假设只有一套列名**。
+3. **`game.html` 至今未跑真实浏览器判据**（测试环境游戏后端 500，属脚手架问题）。
+   其 pane 映射由 `tests/test_kline_pane_option.py::test_three_call_sites_produce_identical_pane_option`
+   覆盖（与 symbol 的 pane option 逐字节相同），但**视觉层面仍是空白**。
+4. **EMA「跑到 K 线外面」是持久化 chip 态造成的错觉，不是渲染 bug**：
+   生产 job_78 真实因子喂真实 `factor-layout.js` → `overlays=[ema_5, ema_20]`、
+   `panes: []`；`renderKline` 的 overlay 系列确实推 `xAxisIndex:0/yAxisIndex:0`。
+   用户误点一次 chip 就把该因子永久切成独立面板（`localStorage['qre_fct_<key>']`），
+   而旧 chip 只有配色差异、无文字说明。已修为 chip 文案带态（`ema_5·叠加/独立/隐藏`）
+   + 「重置布局」钮。**若你们在 TV 化里改 chip/图例交互，请保留这个态可见性**。
+5. 全量测试存在**负载型 flake**（不同测试在不同轮次各挂一次，单独跑均过），
+   判定方法：单独跑 + 换一次跑复跑，不要当成回归。
 
 ---
 

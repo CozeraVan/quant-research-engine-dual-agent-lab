@@ -301,3 +301,60 @@ def test_price_basis_preference_matches_wizard(registry):
     from quant_research_engine.gui.factor_wizard import PRICE_BASIS_PREFERENCE
 
     assert registry.price_basis_preference == PRICE_BASIS_PREFERENCE
+
+
+# ---------------------------------------------------------------- R3-5 双列名收敛
+class TestMacdDualNamingAliases:
+    """QRE-MACD-DUAL-NAMING（R3-5，TV_ROUND3 §6）：旧系列名必须能解析到新系 canonical。
+
+    背景：MACD 在产物里有**两套并列列名**——
+    - 新系（现行）：`macd_12_26_9` / `macds_12_26_9` / `macdh_12_26_9`（带 display 合同）；
+    - 旧系（job 58/66 等 2026-10-28 前产物）：`macd_dif` / `macd_dea` / `macd_hist`
+      （产物里只有 name，col/display 均为 null，前端走 familyOf 启发式归组）。
+
+    前端 `familyOf` 对两套都归组（ROUND2 判据已证实），但 NL/因子选择入口只认
+    注册表——旧名若不在注册表里，用户用旧名描述就解析不到。这里把旧名映射到
+    新系 canonical，**新产物一律用新系命名**，旧名仅为兼容。
+    """
+
+    @pytest.mark.parametrize(
+        "legacy,expected",
+        [
+            ("macd_dif", MACD_CLOSE),
+            ("macd_dea", MACDS_CLOSE),
+            ("macd_hist", MACDH_CLOSE),
+            ("MACD_DIF", MACD_CLOSE),          # 大小写不敏感
+            ("macd dif", MACD_CLOSE),          # 分隔符不敏感
+            ("macd-dif", MACD_CLOSE),
+        ],
+    )
+    def test_legacy_names_resolve_to_new_canonicals(self, registry, legacy, expected):
+        res = registry.resolve(legacy)
+        assert res.status == "unique", f"{legacy} 应唯一命中，实际 {res.status}"
+        assert res.canonical == expected, f"{legacy} 应解析到 {expected}，实际 {res.canonical}"
+
+    def test_legacy_outputs_map_to_right_roles(self, registry):
+        """dif→main、dea→signal、hist→hist：角色不能错，否则画出来是三条同色的线。"""
+        assert registry.resolve("macd_dif").output == "dif"
+        assert registry.resolve("macd_dea").output == "signal"
+        assert registry.resolve("macd_hist").output == "hist"
+
+    def test_chinese_legacy_labels_resolve(self, registry):
+        assert registry.resolve("macd柱").canonical == MACDH_CLOSE
+        assert registry.resolve("macd快线").canonical == MACD_CLOSE
+        assert registry.resolve("macd慢线").canonical == MACDS_CLOSE
+
+    def test_generator_and_json_stay_in_sync(self):
+        """生成器的 EXTRA_ALIASES 与 configs/factor_registry.json 不得漂移。"""
+        import json
+
+        gen_src = (Path(__file__).resolve().parents[1]
+                   / "scripts/gen_factor_registry.py").read_text(encoding="utf-8")
+        data = json.loads(
+            (Path(__file__).resolve().parents[1]
+             / "configs/factor_registry.json").read_text(encoding="utf-8"))
+        extra = data["extra_aliases"]
+        for legacy in ("macd_dif", "macd_dea", "macd_hist"):
+            assert f'"{legacy}"' in gen_src, f"生成器缺 {legacy} 别名"
+            assert legacy in extra, f"registry JSON 缺 {legacy} 别名"
+            assert extra[legacy], f"{legacy} 别名不得为空"

@@ -207,7 +207,8 @@ class TestPaneGridsAgainstPython:
     """paneGrids 的百分比布局与 Python 等价实现逐值一致（防 JS 侧重构漂移）。"""
 
     def test_pane_grids_match_python(self):
-        # Python 侧按 symbol.html 原 klineGridSpec 逐行转写
+        # Python 侧按共享层 paneGrids 逐行转写（R3-1 起它是唯一实现；
+        # symbol.html::klineGridSpec 只是签名适配壳）
         def py_pane_grids(n: int, show_vol: bool = True, show_fct: bool = True):
             f_on = bool(show_fct) and n > 0
             hide = {"left": 16, "right": 56, "top": 0, "height": 1}
@@ -222,28 +223,39 @@ class TestPaneGridsAgainstPython:
                 grids.append({"left": 16, "right": 56, "top": "74%", "height": "14%"})
             f_top = 66 if (f_on and show_vol) else 58
             step = (93 - f_top) / n if n else 0
+            # R3-1（TV_ROUND3 §2）：恰好 1 个因子 pane 时 25%，多 pane 仍 step*0.75
+            pane_h = 25 if n == 1 else step * 0.75
             for i in range(n):
                 grids.append({"left": 16, "right": 56,
-                              "top": f"{f_top + i * step}%",
-                              "height": f"{step * 0.75}%"} if f_on else dict(hide))
+                              "top": _pct(f_top + i * step),
+                              "height": _pct(pane_h)} if f_on else dict(hide))
             return grids
 
+        def _pct(v: float) -> str:
+            # 与 JS `x + '%'` 同形：最短往返表示 + 去尾 ".0"
+            # （66.0→'66%'、8.75→'8.75%'、69.66666666666667 原样）
+            s = repr(float(v))
+            return (s[:-2] if s.endswith(".0") else s) + "%"
+
+        cases = [[n, sv, sf] for n in (0, 1, 2, 3) for sv in (True, False)
+                 for sf in (True, False)]
+        # 键必须与 JS 侧 c[0]+'|'+c[1]+'|'+c[2] 一致：Python 的 True 序列化是小写 true
+        expected = {f"{n}|{str(sv).lower()}|{str(sf).lower()}": py_pane_grids(n, sv, sf)
+                    for n, sv, sf in cases}
+        # Python 侧算期望 → 注入 JS → JS 逐值比对，不一致即抛错（真交叉验证）
         _node(_layout() + r"""
+const expected = %EXPECTED%;
 const cases = %CASES%;
-const out = {};
-cases.forEach(([n, sv, sf]) => {
-  out[n + '|' + sv + '|' + sf] = L.paneGrids(n, {showVol: sv, showFct: sf});
+cases.forEach(function (c) {
+  const key = c[0] + '|' + c[1] + '|' + c[2];
+  const got = JSON.stringify(L.paneGrids(c[0], {showVol: c[1], showFct: c[2]}));
+  const want = JSON.stringify(expected[key]);
+  if (got !== want) {
+    throw new Error('paneGrids 漂移 ' + key + '\n  got  ' + got + '\n  want ' + want);
+  }
 });
-console.log('GRIDS ' + JSON.stringify(out));
-""".replace("%CASES%", json.dumps(
-            [[n, sv, sf] for n in (0, 1, 2, 3) for sv in (True, False)
-             for sf in (True, False)])))
-        # 上面只验证不抛错；逐值比对在下面用 vm 直接取
-        for n in (0, 1, 2, 3):
-            for sv in (True, False):
-                for sf in (True, False):
-                    expected = py_pane_grids(n, sv, sf)
-                    assert len(expected) == 2 + n, "Python 侧 grid 数应为 2+n"
+console.log('GRIDS-OK');
+""".replace("%CASES%", json.dumps(cases)).replace("%EXPECTED%", json.dumps(expected)))
 
     def test_axis_label_index_matches_python(self):
         def py_label_idx(n, show_vol=True, show_fct=True):
@@ -294,3 +306,80 @@ class TestSourceContract:
                         "yAxisIndex: paneIndex + 2", "xAxisIndex: paneIndex + 2",
                         "grid: 2 + i", "gridIndex: 2 + i"):
                 assert bad not in text, f"{name} 仍手写 pane 索引: {bad}"
+
+
+# ---------------------------------------------------------------- R3-1 视觉闭环
+class TestR3MacdZeroBaseline:
+    """R3-1（TV_ROUND3 §2）：MACD「同一把尺」视觉自证。
+
+    用户原始投诉 = MACD 三线看起来各自坐标系。逆向侧已裁定**不拆独立轴**
+    （TV 原版也是三线共轴共量程），剩余差距是三个视觉项，本类锁其中两个代码项：
+    ① HIST 家族 pane 画零基线（静态 option + 重播规格都要有）；
+    ② 恰好 1 个因子 pane 时高度 20.25% → 25%。
+    """
+
+    def test_single_pane_height_is_25_percent(self):
+        _node(_layout() + r"""
+const one = L.paneGrids(1, {showVol: true, showFct: true});
+const pane = one[one.length - 1];
+if (pane.height !== '25%') throw new Error('单 pane 高度应为 25%，实际 ' + pane.height);
+// 多 pane 不得被顺手改动（避免互相挤压）
+const three = L.paneGrids(3, {showVol: true, showFct: true});
+const h3 = three[three.length - 1].height;
+if (h3 !== '6.75%') throw new Error('3 pane 高度应仍为 6.75%，实际 ' + h3);
+console.log('R3-PANE-H-OK');
+""")
+
+    def test_hist_series_gets_zero_baseline_static(self):
+        _node(_layout() + r"""
+const panes = %PANES%;
+const opt = L.panesToOption(panes, {paneBase: 2, dates: %DATES%, headYAxes: [{}, {}]});
+const hist = opt.series.filter(function (s) { return s.type === 'bar'; });
+if (hist.length !== 1) throw new Error('应有 1 个 HIST 系列，实际 ' + hist.length);
+const ml = hist[0].markLine;
+if (!ml) throw new Error('HIST 系列缺零基线 markLine');
+if (ml.silent !== true) throw new Error('零基线必须 silent（不吞鼠标事件）');
+if (ml.symbol !== 'none') throw new Error('零基线 symbol 应为 none');
+if (ml.lineStyle.type !== 'dashed') throw new Error('零基线应为虚线');
+if (JSON.stringify(ml.data) !== JSON.stringify([{yAxis: 0}])) {
+  throw new Error('零基线 data 应为 [{yAxis:0}]，实际 ' + JSON.stringify(ml.data));
+}
+// 阈值线仍只挂同面板第一条线（不被零基线顶替）
+const dif = opt.series.filter(function (s) { return s.name === 'macd_dif'; })[0];
+if (!dif.markLine) throw new Error('MACD 阈值线丢失');
+console.log('R3-ZERO-STATIC-OK');
+""".replace("%PANES%", json.dumps(PANES)).replace("%DATES%", json.dumps(DATES)))
+
+    def test_hist_series_flagged_in_replay_spec(self):
+        """重播规格的 HIST 必须带 hist 标记，调用方 markLineFor 才能分流。"""
+        _node(_layout() + r"""
+const panes = %PANES%;
+const opt = L.panesToOption(panes, {paneBase: 2, style: 'replay', dates: %DATES%});
+const hist = opt.series.filter(function (s) { return s.hist === true; });
+if (hist.length !== 1) throw new Error('replay 规格应有 1 个 hist 标记系列');
+if (hist[0].type !== 'bar') throw new Error('hist 标记系列应为 bar');
+// 非 HIST 系列不得被误打标（否则末价标签会被零基线顶掉）
+const others = opt.series.filter(function (s) { return s.hist === true && s.type !== 'bar'; });
+if (others.length) throw new Error('非 bar 系列被误打 hist 标记');
+console.log('R3-ZERO-REPLAY-OK');
+""".replace("%PANES%", json.dumps(PANES)).replace("%DATES%", json.dumps(DATES)))
+
+    def test_symbol_html_markline_for_splits_hist_and_price(self):
+        """symbol.html 的 markLineFor 必须按 series 分流：HIST→零基线，价格→末价标签。"""
+        block = SYMBOL_TPL
+        assert "if (s.hist) {" in block, "markLineFor 必须先分流 HIST 系列"
+        assert "data: [{ yAxis: 0 }]" in block, "重播路径的零基线 data 缺失"
+        # 末价标签逻辑必须仍在（不得被零基线分支顶掉）
+        assert "QREPriceScale.lastPriceMarkLine(" in block, "末价标签逻辑丢失"
+
+    def test_kline_grid_spec_delegates_to_shared_layer(self):
+        """R3-1 收敛：klineGridSpec 不再保留逐行复制的第二份布局实现。"""
+        m = re.search(r"function klineGridSpec\(showVol, paneCount, showFct\)\{(.*?)\n\}",
+                      SYMBOL_TPL, re.S)
+        assert m, "klineGridSpec 未找到"
+        body = m.group(1)
+        assert "QREFactorLayout.paneGrids(" in body, "klineGridSpec 必须委派共享层 paneGrids"
+        assert "left: 16" not in body, "klineGridSpec 不得再内联布局字面量（会漂移）"
+        # 共享层必须真的是唯一实现
+        assert LAYOUT_JS.count("function paneGrids(") == 1
+        assert "step * 0.75" in LAYOUT_JS and "25" in LAYOUT_JS

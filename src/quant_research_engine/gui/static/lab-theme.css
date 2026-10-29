@@ -66,7 +66,7 @@ input,textarea,select{font-family:inherit;font-size:14px;color:var(--ink)}
 .btn-ghost:hover{border-color:var(--lav);background:var(--tint)}
 .btn-danger{background:#fff;color:var(--up);border-color:#F0CACA}
 .btn-danger:hover{background:var(--up-soft);border-color:var(--up)}
-.btn-sm{font-size:12.5px;padding:4px 12px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--grey);transition:all .2s var(--ease)}
+.btn-sm{font-size:13.5px;padding:4px 12px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--grey);transition:all .2s var(--ease)}
 .btn-sm:hover{border-color:var(--lav);color:var(--lav-deep);background:var(--tint)}
 .btn-sm.on{background:var(--lav);color:#fff;border-color:var(--lav)}
 
@@ -118,7 +118,7 @@ textarea:focus,input:focus,select:focus{outline:none;border-color:var(--lav);box
 .cond-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:var(--paper);animation:panelIn .3s var(--ease);transition:border-color .2s,box-shadow .2s}
 .cond-row:hover{border-color:var(--lav-ink);box-shadow:var(--shadow-1)}
 .cond-row select{max-width:170px}
-.label-inline{white-space:nowrap;display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--grey);cursor:pointer;user-select:none;transition:color .2s}
+.label-inline{white-space:nowrap;display:inline-flex;align-items:center;gap:4px;font-size:13.5px;color:var(--grey);cursor:pointer;user-select:none;transition:color .2s}
 .label-inline:hover{color:var(--lav-deep)}
 .label-inline input{accent-color:var(--lav)}
 .wz-factsel{display:inline-flex;gap:4px}
@@ -171,8 +171,8 @@ a.inl:hover{color:var(--lav-deep)}
 
 /* 表格 */
 .table-tools{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
-table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
-.tbl th{text-align:left;color:var(--grey);font-weight:500;font-size:13.5px;padding:8px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+table.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{text-align:left;color:var(--grey);font-weight:500;font-size:14px;padding:8px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
 .tbl th.sortable{cursor:pointer;user-select:none;transition:color .2s}
 .tbl th.sortable:hover{color:var(--lav)}
 .tbl td{padding:10px 12px;border-bottom:1px solid #F2EFF7}
@@ -247,7 +247,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
 .risk-light.bad{background:var(--up-soft);color:var(--up);border:1px solid #F0CACA}
 .risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}
 .sub-title{font-size:13px;font-weight:600;margin-bottom:4px}
-.chart-empty{color:var(--faint);text-align:center;padding:34px 0;font-size:13px}
+.chart-empty{color:var(--faint);text-align:center;padding:34px 0;font-size:13.5px}
 
 /* 大入口链接（详情页 → 个股列表） */
 .big-link{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:18px 22px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);margin-bottom:20px;text-decoration:none;color:var(--ink);transition:transform .25s var(--ease),box-shadow .3s var(--ease),border-color .25s;-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
@@ -385,7 +385,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
 #nl-examples .opt{width:100%}
 .nl-panel h2,.panel h2{font-size:16px}
 table.tbl th:first-child,table.tbl td:first-child{text-align:left}
-.chart-empty{color:var(--faint);text-align:center;padding:40px 0;font-size:13px}
+.chart-empty{color:var(--faint);text-align:center;padding:40px 0;font-size:13.5px}
 .pv-view-wrap{border-radius:8px;overflow:hidden}
 /* echarts 容器与设计稿 chart-box 对齐 */
 .chart-box .chart-title{margin-bottom:14px}
@@ -401,8 +401,8 @@ table.tbl th:first-child,table.tbl td:first-child{text-align:left}
 .risk-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:10px}
 .risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}
 .sub-title{font-size:13px;font-weight:600;margin-bottom:4px}
-.detail-table{width:100%;border-collapse:collapse;font-size:13.5px}
-.detail-table th{color:var(--grey);font-weight:500;font-size:13px;padding:6px 10px;border-bottom:2px solid var(--line);text-align:right}
+.detail-table{width:100%;border-collapse:collapse;font-size:14px}
+.detail-table th{color:var(--grey);font-weight:500;font-size:14px;padding:6px 10px;border-bottom:2px solid var(--line);text-align:right}
 .detail-table td{padding:6px 10px;border-bottom:1px solid #F2EFF7;text-align:right;font-variant-numeric:tabular-nums}
 .detail-table th:first-child,.detail-table td:first-child{text-align:left}
 .table-wrap{max-height:360px;overflow:auto;max-width:100%}
@@ -580,6 +580,10 @@ table.tbl,.syms-table,.detail-table{margin:0;background:transparent}
 .fct-chip.st-overlay{background:var(--lav);color:#fff}
 .fct-chip.st-pane{background:var(--tint);color:var(--lav-deep);border-color:var(--tint-deep)}
 .fct-chip.st-hidden{border-color:var(--line);color:var(--faint);background:#fff;text-decoration:line-through}
+/* QRE-FCT-CHIP-STATE-VISIBLE：重置布局钮——虚线灰紫边、非实心，和因子 chip
+   （实心/淡紫/删除线三态）明确区分，避免被误当成又一颗因子。 */
+.fct-chip-reset{border-style:dashed;border-color:var(--line);color:var(--faint);background:transparent;font-size:12px;padding:2px 9px}
+.fct-chip-reset:hover{border-color:var(--lav);color:var(--lav);background:var(--tint)}
 
 /* 说明提示：事件委托，模块问号与指标卡共用；无需在动态重绘后重新绑定 */
 .tip-trigger{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:6px;padding:0;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--lav-deep);vertical-align:middle;cursor:pointer}
