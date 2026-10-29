@@ -1718,6 +1718,17 @@ unit `StandardOutput/Error` 改 `journal`（原先 `append:.tmp` 使 journal 无
   「三指标各自独立副图」——删前必须三选一（展示层窄化映射 / 改写归档 gzip / 重跑），
   见 `change_requests/CR-2026-10-29_artifact_archive.md`。
 
+### 2026-10-29 本周工作交接文档（25_WEEKLY_HANDOFF_2026-10-29.md）
+
+Kimi 接手主 Agent 以来（2026-10-26 起，47 个提交）的全部成果/失误/现状变更
+已收敛到 `docs/agent/25_WEEKLY_HANDOFF_2026-10-29.md`，并加入 AGENTS.md 必读清单。
+**下周接手先读它**，尤其是 §2 的 12 条失误与复查点：
+改过 DB 行情数据（纪律：源数据只读）/ 年化爆表未查全（66 号 920556 仍 5.05e+12%）/
+统计口径只修 58/66 / 复权问题多次复发（待做硬契约）/ FRM 波动率回归 +
+threshold 绝对轴未验证 / 平均持股周期空值 / 小游戏指标错乱挂起 /
+子 agent 交付质量（验收标准不具体就部署）/ 两个环境坑（/etc unit 副本、
+gitignore negation 行尾注释）/ 夜间模式旁路 / 分享链接回归 / 隐私隔离待确认。
+
 **三个收官数字**：全量 **3208 passed, 34 skipped**；TV 判据三件套 + D/B 两类全绿
 （symbol `yAxis3 grid3` + 零基线 + pane 25% / replay 100 往返八指标零漂移 /
 game `macdSameAxis=true`）；周扫首扫 1013 产物中 496 含旧系名。
