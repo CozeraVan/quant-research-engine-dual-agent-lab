@@ -203,14 +203,25 @@ class TestLwcSourceContract:
         assert "color: '#C93A3A', color0: '#1E8E5A'" in SYMBOL_TPL
         assert "QREFactorLayout.plan(factors, chipStates(), paneOrder())" in SYMBOL_TPL
 
-    def test_dual_engine_switch_and_dom(self):
-        """双引擎开关 + 图例/attribution DOM + 两个 script src。"""
+    def test_lwc_frozen_no_switch_entry(self):
+        """QRE-KLINE-LWC-FROZEN（T6）：引擎切换入口已冻结移除。
+
+        逆向侧 §4 决策：① LWC 5.x 的 pane 撑不住动态因子 pane；
+        ② "像 TV"的差距 80% 在样式规格不在引擎。故移除用户可见入口，
+        LWC 代码退化为休眠/防御态，阶段 3（重播 LWC adapter）不做。
+        """
+        assert "试用 TradingView 图表" not in SYMBOL_TPL, "不得再暴露 LWC 切换按钮"
+        assert "切回 ECharts" not in SYMBOL_TPL, "不得再暴露引擎切换按钮"
+        # 休眠资产与代码保留（klineDisposeEngines 仍依赖它做防御）
         assert "/static/chart-core/vendor/lightweight-charts.standalone.production.js" in SYMBOL_TPL
         assert "/static/chart-core/kline-lwc.js" in SYMBOL_TPL
-        assert 'id="kline-legend"' in SYMBOL_TPL, "LWC 无图例，需要 DOM 图例"
-        assert 'id="kline-attrib"' in SYMBOL_TPL, "attribution 行（品牌水印 + TradingView 链接）"
-        assert "qre.kline.engine" in SYMBOL_TPL, "引擎开关 localStorage 键"
-        assert "https://www.tradingview.com/" in SYMBOL_TPL, "attribution 链接"
+        assert 'id="kline-legend"' in SYMBOL_TPL, "LWC 图例 DOM 保留（休眠）"
+        assert 'id="kline-attrib"' in SYMBOL_TPL, "attribution 行保留（休眠）"
+        # klineEngine() 必须恒返回 echarts，并一次性清理存量 lwc 选择
+        assert "localStorage.removeItem(KLINE_ENGINE_LS_KEY)" in SYMBOL_TPL, (
+            "必须一次性收回存量用户可能已切到 lwc 的 localStorage 值"
+        )
+        assert "return 'echarts';" in SYMBOL_TPL, "冻结期 klineEngine() 恒返回 echarts"
 
     def test_vendor_assets_present(self):
         vendor = REPO / "src/quant_research_engine/gui/static/chart-core/vendor"
@@ -304,21 +315,17 @@ assert.equal(vm.runInContext('lwcChart === null', context), true, 'lwcChart 引�
             "renderKline 必须清双引擎，否则 lwc → echarts 会叠加"
         )
         # 引擎开关处理器
-        switch_body = re.search(
-            r"setKlineEngine\(lwcOn \? 'echarts' : 'lwc'\);[\s\S]*?klineRerenderAfterSetting\(\);",
-            SYMBOL_TPL,
-        )
-        assert switch_body, "未找到引擎开关处理器"
-        assert "klineDisposeEngines()" in switch_body.group(0), (
-            "引擎切换必须先清双引擎再重建"
-        )
-        assert "lwcDispose();" not in switch_body.group(0), (
-            "引擎开关不得只清 LWC"
+        # T6 冻结：引擎开关处理器已移除，不得再有 setKlineEngine 调用点
+        assert "setKlineEngine(" not in SYMBOL_TPL.replace(
+            "function setKlineEngine(v){", ""), (
+            "冻结期不得再有调用 setKlineEngine 的入口"
         )
         # 双引擎各自的旧调用点不得残留（replay 接管前的 lwcDispose 仍允许：
         # 重播恒为 echarts，只可能叠 LWC）
-        assert SYMBOL_TPL.count("klineDisposeEngines()") >= 4, (
-            "定义 + 两渲染入口 + 引擎开关至少 4 处"
+        # T6 冻结引擎开关后剩 3 处：定义 + renderKline + renderKlineLwc
+        # （原第 4 处是引擎开关处理器，入口已按逆向侧 §4 决策移除）
+        assert SYMBOL_TPL.count("klineDisposeEngines()") >= 3, (
+            "定义 + 两个渲染入口至少 3 处"
         )
 
 

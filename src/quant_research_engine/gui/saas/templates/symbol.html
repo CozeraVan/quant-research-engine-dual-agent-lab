@@ -563,10 +563,17 @@ async function pollGen(){
 }
 
 const KLINE_ENGINE_LS_KEY = 'qre.kline.engine';
+// QRE-KLINE-LWC-FROZEN（T6）：入口已冻结，恒为 echarts。保留读取逻辑只为一次性
+// 清理存量用户可能已切到 lwc 的 localStorage 值——否则他们会停在休眠引擎上。
 function klineEngine(){
-  try { return localStorage.getItem(KLINE_ENGINE_LS_KEY) === 'lwc' ? 'lwc' : 'echarts'; }
-  catch (e) { return 'echarts'; }
+  try {
+    if (localStorage.getItem(KLINE_ENGINE_LS_KEY) === 'lwc'){
+      localStorage.removeItem(KLINE_ENGINE_LS_KEY);   // 一次性迁移：收回存量选择
+    }
+  } catch (e) { /* 隐私模式：忽略，本就返回 echarts */ }
+  return 'echarts';
 }
+// 冻结期禁用写入口：任何调用都只落 echarts，防止代码路径意外把用户切到休眠引擎。
 function setKlineEngine(v){
   try { localStorage.setItem(KLINE_ENGINE_LS_KEY, v === 'lwc' ? 'lwc' : 'echarts'); } catch (e) {}
 }
@@ -1898,19 +1905,14 @@ function klineIndicatorDialog(){
     klineRerenderAfterSetting();
   });
   left.appendChild(reset);
-  // CR-2026-10-28 B 路试点：图表引擎开关（默认 echarts，可一键回滚）
-  if (window.QRELwcAdapter && window.LightweightCharts){
-    const lwcOn = klineEngine() === 'lwc';
-    const eng = klineIndBtn(lwcOn ? '切回 ECharts' : '试用 TradingView 图表',
-      '切换 K 线渲染引擎；TradingView 版为受控试点，可随时切回', () => {
-        setKlineEngine(lwcOn ? 'echarts' : 'lwc');
-        if (kreplayCtl){ kreplayCtl.destroy(true); kreplayCtl = null; }
-        klineDisposeEngines();  // 双引擎互斥：旧引擎实例必须在此清掉，否则新图叠加在旧图上
-        klineIndicatorDialog();
-        klineRerenderAfterSetting();
-      });
-    left.appendChild(eng);
-  }
+  // QRE-KLINE-LWC-FROZEN（T6，2026-10-29）：LWC 引擎切换入口已按逆向侧 §4 决策
+  // 冻结移除。理由见 docs/agent/24_KLINE_LWC_FROZEN.md：
+  //   ① LWC 5.x 的 pane 撑不住动态因子 pane（叠加/独立/隐藏、上下移、收起、
+  //      qre_pane_order 持久化全要逐 pane 管生命周期）；
+  //   ② "像 TV"的差距 80% 在样式规格不在引擎，换引擎买不到那 80%。
+  // LWC 代码与 vendored 资产保留为休眠态（klineDisposeEngines 仍依赖它做防御），
+  // 仅在未来「无因子单图」场景（分享卡/缩略图）复活；阶段 3（重播 LWC adapter）
+  // 明确不做。
   foot.appendChild(left);
   foot.appendChild(close.cloneNode(true));
 

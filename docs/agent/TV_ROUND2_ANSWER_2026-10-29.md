@@ -269,7 +269,26 @@ LWC 的 `addPane()` 生命周期管理确实是持续成本。已按此调整 T6
 
 ### T6 · P2 · 冻结 LWC 试点
 
-- 验收结果：**待实施**
+- **验收结果：通过**（2026-10-29，Kimi 实施）
+- 改动文件：
+  - `src/quant_research_engine/gui/saas/templates/symbol.html`（移除「指标设置」模态里的
+    引擎切换按钮；`klineEngine()` 恒返回 `'echarts'` 并对存量 `'lwc'` 值一次性
+    `removeItem` 收回；`setKlineEngine()` 保留但无调用点）
+  - `tests/test_lwc_kline_adapter.py`（`test_dual_engine_switch_and_dom` 改写为
+    `test_lwc_frozen_no_switch_entry`；引擎开关的 `klineDisposeEngines` 断言改为
+    「不得再有 setKlineEngine 调用点」；`klineDisposeEngines()` 计数 4 → 3）
+  - `docs/agent/24_KLINE_LWC_FROZEN.md`（新建，冻结范围/两条理由/解冻条件/代码位置）
+  - `AGENTS.md` 必读清单登记
+- 冻结范围：入口移除；`klineEngine()` 恒 echarts + 一次性清理存量选择；
+  LWC 代码与 vendored 资产保留为**休眠态**（`klineDisposeEngines()` 仍依赖它做防御）；
+  阶段 3（重播 LWC adapter）**明确不做**。
+- 两条硬理由（逆向侧 §4）：① LWC 5.x 的 pane 撑不住动态因子 pane（三态切换/上下移/
+  收起/`qre_pane_order` 持久化全要逐 pane 管生命周期）；②「像 TV」的差距 80% 在样式
+  规格不在引擎，T2 已在 ECharts 上落地。
+- 对使用者影响：无（默认本就是 echarts）；唯一例外是试点期手动切过 LWC 的用户会被
+  一次性切回，不报错不白屏。
+- 测试：`test_lwc_kline_adapter.py` 13 passed；全量 `3138 passed, 24 skipped`。
+- 遗留：休眠代码 + vendored 资产约 400KB 页面体积，若确认无解冻计划可另立项移除。
 
 ---
 

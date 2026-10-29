@@ -1529,3 +1529,20 @@ B 项策略线用紫而任务书写蓝是否符合预期；`game.html` 那条约
 
 **未 commit / 未 push / 未部署 ECS**（按派单约束）。`AGENTS.md` 规则 12 的
 「先部署后验收」若仍需执行，由主线决定。
+### 2026-10-29 T6 LWC-FROZEN 已实施待人工验收，未 commit/push
+
+TV_ROUND2 T1–T6 **全部完成**。T6 按逆向侧 §4 冻结 LWC 试点：入口移除、
+`klineEngine()` 恒 echarts + 一次性清理存量选择、代码退化为休眠/防御态、
+阶段 3 不做。理由：pane 动态管理成本 + 样式差距论。
+
+**TV_ROUND2 收官状态**：
+- T1 共享 option 映射层 ✅（QRE-KLINE-PANE-OPTION）
+- T2 专业价格格式化框架 ✅（price-scale.js，轴宽恒定/4 mode/1-2-5）
+- T3 回放后退+键盘 ✅（后退按钮 + 空格/←→）
+- T4 画线交互补完 ✅（端点拖拽/整体拖动/单线 Delete/持久化）
+- T5 指标参数网格前端 ✅（klinePlanFactors 统一出口）
+- T6 冻结 LWC ✅
+
+**待补验证**：T3 光标移动、T4 画线交互未在我方浏览器 harness 中驱动成功
+（step5 将 distToSeg 等收入闭包且重写点击路径），需人工或改进 harness 后补。
+全量 3138 passed, 24 skipped。

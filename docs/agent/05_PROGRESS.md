@@ -2216,3 +2216,22 @@ A 股红涨绿跌 `#C93A3A`/`#1E8E5A`，未改 TV 的 `#26a69a`/`#ef5350`（全�
 顶 8px / 底 26px 两项留白为近似（未改既有布局，避免牵连重播与游戏页）。
 CR：`docs/agent/change_requests/CR-2026-10-29_price_scale_framework.md`。
 未 commit / 未 push / 未部署 ECS（按派单约束）。
+
+## 2026-10-29 T6 冻结 LWC 试点完成，未 commit/push
+
+按逆向侧 §4 决策移除引擎切换入口：symbol.html 指标设置模态里的「试用 TradingView
+图表 / 切回 ECharts」按钮已删；`klineEngine()` 恒返回 'echarts' 并对存量 'lwc' 值
+一次性 removeItem 收回；`setKlineEngine()` 保留但无调用点（测试断言）。
+
+两条硬理由：① LWC 5.x 的 pane 撑不住动态因子 pane（三态/上下移/收起/qre_pane_order
+全要逐 pane 管生命周期，试点期已为此付出双图叠加、图例开关死锁两个真 bug 代价）；
+②「像 TV」的差距 80% 在样式规格不在引擎，T2 已在 ECharts 上落地。
+
+LWC 代码与 vendored 资产保留为休眠态——`klineDisposeEngines()` 仍依赖它做双引擎
+互斥的防御单点；阶段 3（重播 LWC adapter）明确不做。休眠代码约占 400KB 页面体积，
+若确认无解冻计划可另立项移除。
+
+对使用者无影响（默认本就 echarts）；试点期手动切过 LWC 的用户会被一次性切回，
+不报错不白屏。解冻条件与代码位置见 docs/agent/24_KLINE_LWC_FROZEN.md。
+
+测试：test_lwc_kline_adapter.py 13 passed；全量 3138 passed, 24 skipped。

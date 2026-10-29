@@ -4091,3 +4091,15 @@ symbol URL 时，Chromium 会拿到缺了 `{% block body %}` 内容的文档（�
 localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
 
 未 commit / 未 push / 未部署 ECS。CR：`docs/agent/change_requests/CR-2026-10-29_price_scale_framework.md`。
+
+## 2026-10-29 T6 冻结 LWC 试点实施交接
+
+- 改动：`symbol.html`（删引擎切换按钮；`klineEngine()` 恒 echarts + 一次性清理存量
+  `qre.kline.engine='lwc'`；`setKlineEngine()` 无调用点）、
+  `tests/test_lwc_kline_adapter.py`（`test_dual_engine_switch_and_dom` →
+  `test_lwc_frozen_no_switch_entry`；开关的 dispose 断言改「不得再有 setKlineEngine
+  调用点」；`klineDisposeEngines()` 计数 4→3）、
+  `docs/agent/24_KLINE_LWC_FROZEN.md` 新建、`AGENTS.md` 登记。
+- **没有删** `renderKlineLwc` / `kline-lwc.js` / vendored 资产 / `klineDisposeEngines()`：
+  后者是双引擎互斥的防御单点，删了会让未来任何新渲染路径失去保护。
+- 未 commit/push。
