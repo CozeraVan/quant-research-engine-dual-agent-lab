@@ -84,19 +84,22 @@ uv run pytest tests/test_no_silent_failure_patterns.py tests/test_template_inlin
 
 `qre-macd-legacy-scan.timer`（已安装到 `/etc/systemd/system/` 并 enable）
 每周一 03:17 跑 `deploy/saas/scan-macd-legacy-names.sh --record`，
-输出 append 到 `.tmp/macd-legacy-scan.timer.log`，计数追加到
-`.tmp/macd-legacy-scan.log`。`Persistent=true`，错过开机补跑。
+stdout/stderr 走 `journal`，计数追加到**仓库内**的
+`deploy/saas/macd-legacy-scan.log`（R6-1 事后加固：证据链不许活在 `.tmp`）。
+`Persistent=true`，错过开机补跑。
 
 ### 4.3 退场条件何时判定
 
 `familyOf` 旧系 MACD 分支的退场，**两条条件均由周扫脚本机械判定**：
 
 1. 连续 4 次周扫旧系计数为 0；
-2. 所有含旧系的 job 均已过期（`> LEGACY_RETENTION_DAYS`，默认 **90 天**）或已归档。
+2. 所有含旧系的 job 均已过期（`> LEGACY_RETENTION_DAYS`，默认 **15 天**）或已归档。
 
 当前状态（2026-10-30 首跑）：496 个产物含旧系名（job 58: 263 / job 66: 233，
 年龄 4.9 天，`active`）→ **两条均不满足，旧系分支继续保留**。
-按 90 天保留期，这两个 job 约在 2027-01-22 之后才满足条件②。
+按 15 天保留期，这两个 job 约在 **2026-11-08** 之后才满足条件②
+（保留期为 2026-10-30 由用户确认，从本报告成文时的 90 天下调；见
+`TV_ROUND6_ANSWER_2026-10-30.md` R6-2）。
 
 ---
 

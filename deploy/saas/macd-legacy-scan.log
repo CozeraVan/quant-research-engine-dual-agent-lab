@@ -1,0 +1,21 @@
+=== 2026-10-29T04:49:29Z ===
+scanned_files 1013
+legacy_job 58 263
+legacy_job 66 233
+legacy_total 496
+=== 2026-10-29T05:32:24Z ===
+scanned_files 1013
+legacy_job 58 263
+legacy_job 66 233
+legacy_total 496
+legacy_age 58 4.9 active
+legacy_age 66 4.9 active
+retention_days 90
+=== 2026-10-29T06:44:44Z ===
+scanned_files 1013
+legacy_job 58 263
+legacy_job 66 233
+legacy_total 496
+legacy_age 58 4.9 active
+legacy_age 66 4.9 active
+retention_days 15

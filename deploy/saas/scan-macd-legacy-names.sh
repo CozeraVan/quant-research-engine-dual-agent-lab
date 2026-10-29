@@ -8,7 +8,12 @@
 #
 # 扫的对象：ECS 上 saas_uploads 下所有 job 的 per-symbol 产物因子名 + job 年龄。
 # 输出：计数 + 命中的 job/symbol 明细 + 每个含旧系 job 的年龄与过期判定；
-#       计数写入 .tmp/macd-legacy-scan.log 供连续 4 次的比对。
+#       计数写入周扫日志（见下）供连续 4 次的比对。
+#
+# R6-1：周扫日志是退场条件①「连续 4 次计数为 0」的**唯一证据链**，
+# 必须放在仓库内持久路径并入库（不许放 .tmp——scratch 会被清，
+# 清了就再也无法判定「连续 4 次」，旧系退场机制静默失效）。
+# 有守卫测试锁它的存在与内容（tests/test_no_silent_failure_patterns.py）。
 #
 # 用法：
 #   deploy/saas/scan-macd-legacy-names.sh                      # 扫并打印
@@ -16,16 +21,17 @@
 #   LEGACY_RETENTION_DAYS=60 deploy/saas/scan-macd-legacy-names.sh   # 自定义保留期
 #
 # 环境变量：
-#   LEGACY_RETENTION_DAYS   旧 job 保留期（天），默认 90。**参数值待用户确认**。
+#   LEGACY_RETENTION_DAYS   旧 job 保留期（天），默认 15（用户 2026-10-30 确认）。
 set -euo pipefail
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 KEY="${SSH_KEY:-$HOME/.ssh/aguhuice_ed25519}"
 HOST="${ECS_HOST:-deploy@47.119.127.40}"
 ROOT="/srv/aguhuice/uploads"
-LOG="$(cd "$(dirname "$0")/../.." && pwd)/.tmp/macd-legacy-scan.log"
-# R5-2：条件②机械化——旧 job 保留期（天）。默认 90，待用户确认。
-LEGACY_RETENTION_DAYS="${LEGACY_RETENTION_DAYS:-90}"
+# R6-1：证据链持久化——仓库内路径 + 入库（.gitignore 有显式 negation）。
+LOG="$(cd "$(dirname "$0")/../.." && pwd)/deploy/saas/macd-legacy-scan.log"
+# R5-2：条件②机械化——旧 job 保留期（天）。默认 15（用户 2026-10-30 确认）。
+LEGACY_RETENTION_DAYS="${LEGACY_RETENTION_DAYS:-15}"
 RECORD=0
 [ "${1:-}" = "--record" ] && RECORD=1
 
@@ -54,7 +60,7 @@ for job in sorted(hits):
 print("legacy_total", sum(hits.values()))
 # R5-2 条件②机械化：每个含旧系 job 的年龄 + 是否已过保留期
 now = time.time()
-retention = float(os.environ.get("LEGACY_RETENTION_DAYS", "90")) * 86400
+retention = float(os.environ.get("LEGACY_RETENTION_DAYS", "15")) * 86400
 for job in sorted(hits):
     # 年龄取**稳定的创建证据**：risk_report.json 优先（worker 生成即不再变），
     # 退回 job 目录 mtime。不能用 _symbol_details 目录 mtime——部署/拷贝会刷新它。
@@ -75,7 +81,7 @@ for job in sorted(hits):
         continue
     age_days = (now - stamp) / 86400.0
     print("legacy_age", job, round(age_days, 1), "expired" if (now - stamp) > retention else "active")
-print("retention_days", os.environ.get("LEGACY_RETENTION_DAYS", "90"))
+print("retention_days", os.environ.get("LEGACY_RETENTION_DAYS", "15"))
 '
 
 OUT="$($SSH "sudo -n python3 -c '$REMOTE'" 2>&1)" || { echo "远端扫描失败："; echo "$OUT"; exit 1; }

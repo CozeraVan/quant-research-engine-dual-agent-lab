@@ -17,6 +17,8 @@ venv/
 outputs
 logs/
 *.log
+# TV R6-1：MACD 旧系退场条件①的唯一证据链，必须入库（不许被 *.log 忽略）
+!deploy/saas/macd-legacy-scan.log
 
 # Data files
 *.db

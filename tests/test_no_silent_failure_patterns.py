@@ -289,3 +289,47 @@ class TestNightModePause:
         body = probe.read_text(encoding="utf-8")
         for needle in ("qre-theme", "prefers-color-scheme", "toggle"):
             assert needle in body, f"probe 未覆盖入口: {needle}"
+
+
+# ------------------------------------- MACD 旧系退场证据链持久化（TV R6-1）
+class TestLegacyScanEvidenceLogPersistent:
+    """R6-1：退场条件①「连续 4 次周扫计数为 0」的唯一证据链必须持久化。
+
+    隐患（逆向侧 ROUND6 复核发现）：周扫日志原先写在 `.tmp/`，
+    而 `.tmp/` 是 scratch、会被清——一旦被清，「连续 4 次」从此无法判定，
+    `familyOf` 旧名分支的退场机制**静默失效**，且无人会察觉。
+    保留期缩到 15 天（用户 2026-10-30）后条件② 约 2026-11-08 即满足，
+    条件① 的连续计数从此是退场的唯一关键路径，日志丢了就永远退不了场。
+    """
+
+    LOG = "deploy/saas/macd-legacy-scan.log"
+
+    def test_evidence_log_lands_in_repo_and_is_tracked(self) -> None:
+        log = REPO / self.LOG
+        assert log.is_file(), f"周扫证据日志缺失（{self.LOG}）——R6-1 要求仓库内持久路径"
+        body = log.read_text(encoding="utf-8")
+        assert body.count("=== ") >= 1, (
+            "证据日志必须含至少一条历史记录（空文件等于证据已丢失）"
+        )
+        # `*.log` 会忽略它，必须有显式 negation，否则新 clone 里没有这份证据
+        gi = (REPO / ".gitignore").read_text(encoding="utf-8")
+        assert f"!{self.LOG}" in gi, (
+            f".gitignore 缺 `!{self.LOG}` negation——*.log 会把证据链挡在库外"
+        )
+
+    def test_script_writes_to_persistent_log(self) -> None:
+        script = (REPO / "deploy/saas/scan-macd-legacy-names.sh").read_text(
+            encoding="utf-8")
+        log_line = next(
+            (ln for ln in script.splitlines() if ln.startswith("LOG=")), ""
+        )
+        assert log_line, "scan 脚本缺 LOG= 赋值行"
+        assert self.LOG in log_line, f"LOG= 必须指向仓库内持久路径 {self.LOG}"
+        assert ".tmp" not in log_line, "LOG= 不许再指向 .tmp（scratch 会被清）"
+
+    def test_unit_stdout_not_in_scratch(self) -> None:
+        """timer 的 stdout 也不该活在 scratch；走 journal 与证据日志形成双保险。"""
+        unit = (REPO / "deploy/systemd/qre-macd-legacy-scan.service").read_text(
+            encoding="utf-8")
+        assert "StandardOutput=journal" in unit, "unit 的 StandardOutput 应为 journal"
+        assert ".tmp/" not in unit, "unit 里不许再出现 .tmp 路径（运行痕迹也该持久）"

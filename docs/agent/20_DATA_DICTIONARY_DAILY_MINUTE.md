@@ -176,14 +176,17 @@
 
 **周扫脚本**：`deploy/saas/scan-macd-legacy-names.sh`
 （扫 ECS `saas_uploads` 下所有 job 的 per-symbol 产物因子名 + job 年龄；
-`--record` 追加到 `.tmp/macd-legacy-scan.log`）。
+`--record` 追加到 **`deploy/saas/macd-legacy-scan.log`**——R6-1：这份日志是退场
+条件①「连续 4 次计数为 0」的**唯一证据链**，必须仓库内持久 + 入库，
+`.gitignore` 有显式 negation，守卫测试 `TestLegacyScanEvidenceLogPersistent` 锁存在与内容）。
 
 **systemd timer（已落地）**：`deploy/systemd/qre-macd-legacy-scan.{service,timer}`
 → 已安装到 `/etc/systemd/system/` 并 enable，每周一 03:17 跑一次
-（`Persistent=true`，错过开机补跑），输出 append 到 `.tmp/macd-legacy-scan.timer.log`。
+（`Persistent=true`，错过开机补跑）；stdout/stderr 走 `journal`
+（R6-1：运行痕迹也不再落 `.tmp`，与仓库内证据日志形成双保险）。
 
-**保留期**：`LEGACY_RETENTION_DAYS`，默认 **90 天**（service 单元里 `Environment=`
-固定为 90；手动跑可用环境变量覆盖）。**参数值待用户确认。**
+**保留期**：`LEGACY_RETENTION_DAYS`，默认 **15 天**（用户 2026-10-30 确认，由 90 天下调；
+service 单元里 `Environment=` 固定为 15；手动跑可用环境变量覆盖）。
 年龄取 `risk_report.json` 的 mtime 作稳定证据（不用 `_symbol_details` 目录 mtime——
 部署/拷贝会刷新它，实测会把 5 天前的 job 算成 0.8 天）。
 
@@ -195,7 +198,7 @@
 **首扫结果（2026-10-29，timer 首跑同值）**：扫 1013 个产物文件，**496 个含旧系名**
 （job 58: 263 / job 66: 233，年龄 4.9 天，`active`）→ 条件①②**均不满足**。
 这两个 job 正是 2026-10-24 生成的 MACD 金叉/死叉经典策略，退场要等它们过期
-（按 90 天保留期约在 2027-01-22 之后）或归档。
+（按 **15 天**保留期约在 **2026-11-08** 之后，用户 2026-10-30 由 90 天下调）或归档。
 
 ## 5. 基本面与参考数据（相关表）
 

@@ -1670,15 +1670,39 @@ CR `docs/agent/change_requests/CR-2026-10-29_ui_round3_font_spacing.md`。
 |---|---|
 | R5-4 | `.tmp/perf-browser/probe_markline_undef.py` 落盘（结论行写入文件头），运行 `threw:null / pageerrors:0 / PASS`；`test_no_silent_failure_patterns.py` 8 → **11 例**（新增消费方语义三例：markLine 不许改 / probe 必须存在 / legend 写法保持） |
 | R5-1 | `AGENTS.md` 新增 **Silent-Failure Discipline**（4 条，含证据位置必须真实存在）与 **TV Acceptance Checklist**（`tv_check_all.sh` 提交前验收）两节 |
-| R5-2 | `deploy/systemd/qre-macd-legacy-scan.{service,timer}` 已安装并 enable，每周一 03:17（Persistent）；`scan-macd-legacy-names.sh` 加 `LEGACY_RETENTION_DAYS`（默认 90）+ 每 job 年龄与过期判定，**两条退场条件均可机械判定**；timer 首跑成功；数据字典 §4.1.1 同步 |
+| R5-2 | `deploy/systemd/qre-macd-legacy-scan.{service,timer}` 已安装并 enable，每周一 03:17（Persistent）；`scan-macd-legacy-names.sh` 加 `LEGACY_RETENTION_DAYS`（落地时默认 90，**用户 2026-10-30 确认为 15**，见 R6-2）+ 每 job 年龄与过期判定，**两条退场条件均可机械判定**；timer 首跑成功；数据字典 §4.1.1 同步 |
 | R5-3 | `docs/agent/TV_FINAL_REPORT_2026-10-30.md` 收官报告：记分卡（K线 95 / 作图 90 / 指标 95 / 回放 95）+ 8 条有意偏离 + 资产清单 + 稳态机制 + 三个收官数字 |
+
+### 2026-10-30 ROUND6 收官签收回传（R6-1 证据链持久化 + R6-2 保留期 90→15）
+
+逆向侧 `TV_ROUND6_TASKS_2026-10-30.md` 是**收官签收轮**：它在我们环境从零跑了完整
+核验（`tv_check_all.sh` 六阶段 / 守卫测试 38 passed / 周扫独立复跑 496-1013 /
+probe 落盘 / AGENTS.md 两节 / timer enabled），结论「TV_FINAL_REPORT 数字真实、
+结构完整、偏离清单诚实，TV 化按 ROUND1 范围判定收官，无保留意见」。
+**R6 之后 TV 线不再有轮次任务书**，只剩维护期动作。
+
+**R6-2（用户确认值落地）**：`LEGACY_RETENTION_DAYS` 90 → **15**（用户 2026-10-30）。
+改 service `Environment=` + 脚本 4 处默认 + 数据字典/收官报告/本文件同步；
+`/etc/systemd/system/` 的 unit 是副本，**必须覆盖后才 daemon-reload**
+（只改仓库文件时 `systemctl show` 仍显示 90，实测踩到）。退场窗口
+2027-01-22 → **2026-11-08**（提前 75 天）。
+
+**R6-1（周扫日志证据链持久化）**：方案 1 + 3 组合——`LOG=` 挪到仓库内
+`deploy/saas/macd-legacy-scan.log`（`.gitignore` 加 negation；
+**negation 行尾不能带 `#` 注释**，git 会把注释吃进 pattern，`git check-ignore` 复验才发现），
+unit `StandardOutput/Error` 改 `journal`（原先 `append:.tmp` 使 journal 无条目，
+方案 3 单用不成立），守卫测试 `TestLegacyScanEvidenceLogPersistent` 3 例。
+`.tmp/macd*` 两个日志已删（内容为证据日志子集），清理后条件① 计数依据仍完整可查。
+
+**踩坑记录**：`.gitignore` 的 negation 行尾注释会被吃进 pattern——
+以后加 negation 一律注释单独一行。
 
 **三个收官数字**：全量 **3208 passed, 34 skipped**；TV 判据三件套 + D/B 两类全绿
 （symbol `yAxis3 grid3` + 零基线 + pane 25% / replay 100 往返八指标零漂移 /
 game `macdSameAxis=true`）；周扫首扫 1013 产物中 496 含旧系名。
 
-**待用户确认**：`LEGACY_RETENTION_DAYS` 默认 **90 天**（逆向侧明示需用户确认）。
-按 90 天，job 58/66 约 2027-01-22 后才满足退场条件②。
+**已确认（2026-10-30，R6-2）**：`LEGACY_RETENTION_DAYS` = **15 天**（逆向侧明示需用户确认，
+用户由 90 天下调）。job 58/66 约 **2026-11-08** 后才满足退场条件②。
 
 **TV 化按 ROUND1 范围判定：收官**，无工程欠账。
 
@@ -1706,4 +1730,4 @@ PC 崩溃 interrupted 了 DeepSeek 第四轮（2.5 进行中）。恢复后核�
 
 **待办**：① 部署 `job.html` / `vol-regime.js` / `card-class.css`
 （night-mode.js / base.html / symbol.html / replay.js 崩溃前已部署并验证）；
-② 线上目视波动率标尺（job 58）；③ `LEGACY_RETENTION_DAYS` 90 天仍待用户确认。
+② 线上目视波动率标尺（job 58）；③ ~~`LEGACY_RETENTION_DAYS` 90 天仍待用户确认~~ → **已确认为 15 天**（R6-2 完成）。

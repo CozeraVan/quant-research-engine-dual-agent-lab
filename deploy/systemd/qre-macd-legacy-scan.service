@@ -8,7 +8,9 @@ Wants=network-online.target
 Type=oneshot
 User=van
 WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
-Environment=LEGACY_RETENTION_DAYS=90
+Environment=LEGACY_RETENTION_DAYS=15
 ExecStart=/home/van/quant-workspace/quant-research-engine-dual-agent-lab/deploy/saas/scan-macd-legacy-names.sh --record
-StandardOutput=append:/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.tmp/macd-legacy-scan.timer.log
-StandardError=append:/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.tmp/macd-legacy-scan.timer.log
+# R6-1：stdout 走 journal（不再落 .tmp——运行痕迹也不该活在 scratch 里），
+# 与脚本内 `--record` 写入的仓库内证据日志形成双保险。
+StandardOutput=journal
+StandardError=journal
