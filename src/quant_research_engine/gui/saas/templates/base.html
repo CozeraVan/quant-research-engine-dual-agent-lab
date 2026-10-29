@@ -19,7 +19,13 @@
 <meta name="theme-color" content="#4A3C78">
 <!-- 夜间模式：首帧防闪白（QRE-SAAS-NIGHT） -->
 <script>
-(function(){try{var t=localStorage.getItem('qre-theme');if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="theme-color"]');if(m){m.setAttribute('content',t==='dark'?'#17153B':'#4A3C78');}}catch(e){}})();
+(function(){try{/* QRE-SAAS-NIGHT-PAUSED：夜间模式整体暂停（与 static/night-mode 脚本的
+       NIGHT_MODE_ENABLED 同源，恢复时两处一起改回）。暂停期恒浅色，
+       忽略 localStorage 的 qre-theme 与系统 prefers-color-scheme——
+       否则存量 dark 用户或深色系统用户仍会被带进夜间，且首屏会闪一下。 */
+var NIGHT_PAUSED=true;var t='light';
+if(!NIGHT_PAUSED){t=localStorage.getItem('qre-theme');if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}}
+document.documentElement.dataset.theme=t;var m=document.querySelector('meta[name="theme-color"]');if(m){m.setAttribute('content',t==='dark'?'#17153B':'#4A3C78');}}catch(e){}})();
 </script>
 <link rel="icon" href="/static/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">

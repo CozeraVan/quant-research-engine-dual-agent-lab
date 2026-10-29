@@ -244,3 +244,48 @@ class TestConditionalKeyConsumerSemantics:
         """炸例那一侧必须保持「缺就不写键」（写作标准不放宽）。"""
         js = (REPO / "src/quant_research_engine/gui/static/replay.js").read_text(encoding="utf-8")
         assert "if (opts.legendSelected) legend.selected = opts.legendSelected;" in js
+
+
+# ------------------------------------------------ 夜间模式整体暂停（QRE-SAAS-NIGHT-PAUSED）
+class TestNightModePause:
+    """2026-10-30 用户决定：aguhuice.com 暂停夜间模式，所有人一律浅色。
+
+    四个入口都必须落到 light（probe：`.tmp/perf-browser/verify_night_pause.py`）：
+      A 存量 localStorage `qre-theme=dark`
+      B 系统 `prefers-color-scheme: dark`
+      C 干净 context
+      D 手动 toggle（按钮已隐藏，但脚本/控制台仍可能调到，必须夹成 light）
+    """
+
+    def test_master_switch_present_and_false(self) -> None:
+        js = (REPO / "src/quant_research_engine/gui/static/night-mode.js").read_text(
+            encoding="utf-8")
+        assert "var NIGHT_MODE_ENABLED = false;" in js, (
+            "night-mode.js 必须有 NIGHT_MODE_ENABLED 总开关且当前为 false"
+        )
+
+    def test_resolved_and_set_both_clamped(self) -> None:
+        """只夹 resolvedTheme 不够——toggle→set('dark') 会绕过（实测过）。"""
+        js = (REPO / "src/quant_research_engine/gui/static/night-mode.js").read_text(
+            encoding="utf-8")
+        assert "if (!NIGHT_MODE_ENABLED) return 'light';" in js, (
+            "resolvedTheme() 必须在暂停期恒返回 light"
+        )
+        assert "if (!NIGHT_MODE_ENABLED) return apply('light');" in js, (
+            "set() 必须在暂停期夹成 light 且不落 localStorage"
+        )
+
+    def test_fouc_guard_also_respects_pause(self) -> None:
+        """base.html 的首屏防闪脚本必须同步，否则存量 dark 用户首屏会闪一下夜间。"""
+        tpl = (REPO / "src/quant_research_engine/gui/saas/templates/base.html").read_text(
+            encoding="utf-8")
+        assert "QRE-SAAS-NIGHT-PAUSED" in tpl, "base.html 防闪脚本缺暂停开关"
+        assert "var NIGHT_PAUSED=true;" in tpl, "防闪脚本的暂停开关必须为 true"
+
+    def test_pause_probe_landed(self) -> None:
+        """四入口 probe 必须落盘（被引用的 scratch 就是证据）。"""
+        probe = REPO / ".tmp/perf-browser/verify_night_pause.py"
+        assert probe.is_file(), "verify_night_pause.py 缺失"
+        body = probe.read_text(encoding="utf-8")
+        for needle in ("qre-theme", "prefers-color-scheme", "toggle"):
+            assert needle in body, f"probe 未覆盖入口: {needle}"

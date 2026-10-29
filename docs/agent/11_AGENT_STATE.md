@@ -1681,3 +1681,29 @@ game `macdSameAxis=true`）；周扫首扫 1013 产物中 496 含旧系名。
 按 90 天，job 58/66 约 2027-01-22 后才满足退场条件②。
 
 **TV 化按 ROUND1 范围判定：收官**，无工程欠账。
+
+### 2026-10-30 夜间模式整体暂停 + 波动率阈值标尺（PC 崩溃后恢复）
+
+PC 崩溃 interrupted 了 DeepSeek 第四轮（2.5 进行中）。恢复后核对其工作区改动：
+2.1/2.2/2.3/2.4 已在 `b612fdf`；**2.5 的代码在工作区但未完成**（无 CR）。
+本批把它收尾。
+
+**夜间模式整体暂停（用户决定，非仅隐藏按钮）**：
+上一轮只隐藏按钮不够——存量 `qre-theme=dark` 用户和系统深色偏好用户仍会进夜间。
+本轮 `night-mode.js` 加 `NIGHT_MODE_ENABLED = false` 总开关，
+`resolvedTheme()` 恒 light、`set()` 夹成 `apply('light')` 且不落 localStorage
+（只夹 resolvedTheme 不够，`toggle → set('dark')` 会绕过，实测过）；
+`base.html` 首屏防闪脚本同步 `NIGHT_PAUSED`。功能代码一行未删，恢复改两处开关即可。
+四入口 probe 全 PASS；线上已部署验证（系统深色+存量 dark context → theme=light）。
+
+**波动率阈值标尺（R4-2.5）**：`vol-regime.js::gaugeModel` 两种 mode
+（threshold 绝对轴 / relative 降级），`job.html::renderRiskVol` 渲染，
+`card-class.css` 加规则族。三等分柱状图仍不复现。
+**边界**：时序曲线做不到——后端只透 5 个字段，无 ewma/garch 时间序列。
+**验证缺口（如实记录）**：全量 3218 passed；真实浏览器取到一次成功渲染，
+但探针路由不稳定未能稳定复现；fixture 是旧产物形态，只验到 relative 路径，
+**threshold 绝对轴路径未做真实浏览器验证**，部署后需线上目视。
+
+**待办**：① 部署 `job.html` / `vol-regime.js` / `card-class.css`
+（night-mode.js / base.html / symbol.html / replay.js 崩溃前已部署并验证）；
+② 线上目视波动率标尺（job 58）；③ `LEGACY_RETENTION_DAYS` 90 天仍待用户确认。

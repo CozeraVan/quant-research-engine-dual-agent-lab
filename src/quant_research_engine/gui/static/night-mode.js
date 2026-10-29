@@ -8,6 +8,14 @@
   var META_DARK = '#17153B';
   var charts = [];
 
+  /* QRE-SAAS-NIGHT-PAUSED（2026-10-30 用户决定）：夜间模式**整体暂停**，
+     所有人进入一律浅色。恢复只需把这一行改回 true——
+     所有功能代码（规则、持久化、系统偏好、ECharts 联动）一行未删。
+     暂停语义：resolvedTheme() 恒返回 'light'，写入/读取 qre-theme 的分支
+     全部短路，系统偏好（prefers-color-scheme: dark）也被忽略——
+     否则用户系统是深色时仍会被带进夜间。 */
+  var NIGHT_MODE_ENABLED = false;
+
   var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
   function storedTheme() {
@@ -24,6 +32,7 @@
   }
 
   function resolvedTheme() {
+    if (!NIGHT_MODE_ENABLED) return 'light';   // 暂停期：恒浅色
     var t = document.documentElement.dataset.theme;
     if (t === 'dark' || t === 'light') return t;
     return storedTheme() || systemTheme();
@@ -54,6 +63,10 @@
   }
 
   function set(theme) {
+    // 暂停期：任何写入都被夹成 light，且不落 localStorage——防止按钮/脚本/控制台
+    // 手动 toggle 把用户切进夜间（实测过：只夹 resolvedTheme 不够，
+    // toggle → set('dark') 会绕过）。
+    if (!NIGHT_MODE_ENABLED) return apply('light');
     var t = theme === 'dark' ? 'dark' : 'light';
     try { window.localStorage.setItem(THEME_KEY, t); } catch (e) {}
     return apply(t);

@@ -151,3 +151,152 @@
     flex: 1 1 100%;
   }
 }
+/* ---- 波动率状态标尺（R4-2.5） ----
+   一个人字形/标尺：轨道上按阈值切低/中/高三段底色，EWMA 与 GARCH 各一根
+   竖线打在轴上，上下错开贴标签。只用既有 token（--tint / --lav / --text），
+   不设字体族/字重/行高，只有字号。 */
+.vol-gauge {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 240px;
+}
+
+.vol-track {
+  position: relative;
+  height: 12px;
+  margin: 44px 20px;
+  border-radius: 6px;
+  background: var(--tint);
+}
+
+.vol-seg {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--lav);
+}
+
+.vol-seg-low {
+  opacity: 0.22;
+}
+
+.vol-seg-mid {
+  opacity: 0.45;
+}
+
+.vol-seg-high {
+  opacity: 0.72;
+}
+
+.vol-mark {
+  position: absolute;
+  top: 0;
+}
+
+.vol-mark-line {
+  position: absolute;
+  left: -1px;
+  top: -6px;
+  width: 2px;
+  height: 24px;
+  background: var(--text);
+  border-radius: 1px;
+}
+
+.vol-mark-lab {
+  position: absolute;
+  left: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.vol-mark-above .vol-mark-lab {
+  bottom: 22px;
+}
+
+.vol-mark-below .vol-mark-lab {
+  top: 22px;
+}
+
+.vol-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.vol-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vol-sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--lav);
+}
+
+.vol-sw-low {
+  opacity: 0.22;
+}
+
+.vol-sw-mid {
+  opacity: 0.45;
+}
+
+.vol-sw-high {
+  opacity: 0.72;
+}
+
+.vol-gauge-rel {
+  gap: 18px;
+}
+
+.vol-rel-row {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.vol-rel-lab {
+  color: var(--text);
+}
+
+.vol-rel-track {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--tint);
+  overflow: hidden;
+}
+
+.vol-rel-fill {
+  display: block;
+  height: 100%;
+  background: var(--lav);
+  opacity: 0.72;
+}
+
+.vol-rel-val {
+  color: var(--text);
+}
+
+@media (max-width: 960px) {
+  .vol-rel-row {
+    grid-template-columns: 56px 1fr auto;
+  }
+  .vol-track {
+    margin: 40px 12px;
+  }
+  .vol-mark-lab {
+    font-size: 12px;
+  }
+}

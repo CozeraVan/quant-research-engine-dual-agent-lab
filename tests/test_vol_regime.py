@@ -185,6 +185,113 @@ console.log('precision-ok');
              .replace("%LOPCT%", TOFIXED18_3 + '%'))
 
 
+class TestGaugeModel:
+    """R4-2.5：`#chart-risk-vol` 从「一行文字 + display:none」改成阈值标尺。
+
+    gaugeModel 只做几何：把三档切点映射到 0–100% 的横轴位置，返回纯数值结构，
+    格式化（`18.3%`）留给模板。所有输出必须是有限数，旧产物路径不得出现
+    undefined/NaN/null（任务书 §2.5 硬约束）。
+    """
+
+    def test_threshold_mode_builds_full_track(self):
+        _run(r"""
+const vol = {ewma_annual: 0.057031, garch_annual: 0.062379,
+             regime_thresholds: %TH%};
+const g = R.gaugeModel(vol);
+assert.ok(g, '有阈值时 gaugeModel 不得返回 null');
+assert.equal(g.mode, 'threshold');
+assert.equal(g.degraded, false);
+assert.equal(g.segments.length, 3);
+assert.equal(g.segments.map(s => s.key).join(','), 'low,mid,high');
+assert.equal(g.domain >= %HI%, true, 'domain 必须覆盖高阈值: ' + g.domain);
+// 三段首尾相接、总宽 100%
+assert.equal(Math.abs(g.segments[0].leftPct) < 1e-9, true, '第一段必须从 0 起');
+assert.equal(Math.abs(g.segments[0].leftPct + g.segments[0].widthPct - g.segments[1].leftPct) < 1e-9, true);
+assert.equal(Math.abs(g.segments[1].leftPct + g.segments[1].widthPct - g.segments[2].leftPct) < 1e-9, true);
+const sum = g.segments.reduce((a, s) => a + s.widthPct, 0);
+assert.equal(Math.abs(sum - 100) < 1e-9, true, '三段总宽必须 100%: ' + sum);
+// 切点映射到横轴
+assert.equal(Math.abs(g.segments[1].leftPct - %LO% / g.domain * 100) < 1e-9, true);
+// 两个口径各一枚游标
+assert.equal(g.marks.map(m => m.key).join(','), 'ewma,garch');
+assert.equal(Math.abs(g.marks[0].xPct - 0.057031 / g.domain * 100) < 1e-9, true);
+assert.equal(Math.abs(g.marks[1].xPct - 0.062379 / g.domain * 100) < 1e-9, true);
+assert.equal(g.ticks.length, 4);
+assert.equal(Math.abs(g.ticks[3].leftPct - 100) < 1e-9, true);
+noBad(JSON.stringify(g), 'gauge-threshold');
+console.log('gauge-threshold ' + g.mode + ' ' + g.domain);
+""".replace("%TH%", json.dumps(TH))
+             .replace("%LO%", json.dumps(TH["low_below"]))
+             .replace("%HI%", json.dumps(TH["high_at_or_above"])))
+
+    def test_old_artifact_degrades_to_relative(self):
+        """job 58 实况：regime_thresholds 为 null，绝对轴没有参照。"""
+        _run(r"""
+const g = R.gaugeModel({ewma_annual: 0.057031, garch_annual: 0.062379,
+                        regime_counts: {low: 1356, mid: 1356, high: 1356},
+                        latest_regime: 'mid', regime_thresholds: null});
+assert.ok(g, '无阈值但有口径值时必须降级而非 null');
+assert.equal(g.mode, 'relative');
+assert.equal(g.degraded, true);
+assert.equal(g.segments.length, 0, '降级态不得画三段轨');
+assert.equal(g.ticks.length, 0);
+assert.equal(g.marks.length, 2);
+assert.equal(g.marks[1].xPct, 100, '较大口径必须占满参照长度: ' + g.marks[1].xPct);
+assert.equal(Math.abs(g.marks[0].xPct - 0.057031 / 0.062379 * 100) < 1e-9, true);
+noBad(JSON.stringify(g), 'gauge-relative');
+console.log('gauge-relative-ok');
+""")
+
+    def test_invalid_thresholds_degrade_to_relative(self):
+        """hi<=lo / lo 为 0 / 字符串 / 只给一半 / 空对象——全部降级，不得出 NaN。"""
+        _run(r"""
+const cases = [
+  {low_below: 0.3, high_at_or_above: 0.2},
+  {low_below: 0, high_at_or_above: 0.2},
+  {low_below: '0.18', high_at_or_above: '0.20'},
+  {low_below: 0.18},
+  {},
+];
+cases.forEach(th => {
+  const g = R.gaugeModel({ewma_annual: 0.057031, garch_annual: 0.062379,
+                          regime_thresholds: th});
+  assert.ok(g, '口径值仍在时不得返回 null: ' + JSON.stringify(th));
+  assert.equal(g.mode, 'relative', '非法阈值必须降级: ' + JSON.stringify(th));
+  assert.equal(g.degraded, true);
+  noBad(JSON.stringify(g), 'gauge-degrade');
+});
+console.log('gauge-degrade-ok');
+""")
+
+    def test_single_series_still_renders(self):
+        _run(r"""
+const g = R.gaugeModel({garch_annual: 0.062379});
+assert.ok(g);
+assert.equal(g.marks.length, 1);
+assert.equal(g.marks[0].key, 'garch');
+assert.equal(g.marks[0].xPct, 100);
+noBad(JSON.stringify(g), 'gauge-single');
+// 只有阈值、两个口径都缺：仍可画三段轨，游标为空
+const t = R.gaugeModel({regime_thresholds: %TH%});
+assert.ok(t, '只有阈值时也应画轨');
+assert.equal(t.mode, 'threshold');
+assert.equal(t.marks.length, 0);
+noBad(JSON.stringify(t), 'gauge-threshold-only');
+console.log('gauge-single-ok');
+""".replace("%TH%", json.dumps(TH)))
+
+    def test_null_when_nothing_to_draw(self):
+        _run(r"""
+[null, undefined, {}, {latest_regime: 'mid'},
+ {ewma_annual: null, garch_annual: 'x'},
+ {ewma_annual: 0, garch_annual: 0}].forEach(v => {
+  assert.equal(R.gaugeModel(v), null, '无可画数据必须返回 null: ' +
+               JSON.stringify(v));
+});
+console.log('gauge-null-ok');
+""")
+
+
 class TestTemplateContract:
     def test_both_templates_load_shared_module(self):
         for name, tpl in (("job.html", JOB_TPL), ("lab_result.html", LAB_TPL)):
@@ -208,3 +315,14 @@ class TestTemplateContract:
             encoding="utf-8")
         assert '"regime_thresholds"' in src, (
             "build_lab_risk_view 未透传 regime threshold，模板将永远拿不到阈值")
+
+    def test_job_template_draws_gauge_instead_of_hiding(self):
+        """R4-2.5：容器不再直接 display:none，改由 gaugeModel 出 DOM。"""
+        assert "QREVolRegime.gaugeModel(" in JOB_TPL, "job.html 未调用 gaugeModel"
+        assert "vol-gauge" in JOB_TPL, "job.html 未生成标尺 DOM"
+        assert "QRE-VOL-REGIME-NO-BARCHART" not in JOB_TPL, (
+            "旧的「删掉柱状图就 display:none」注释仍在——这一列又被清空了")
+        assert "QRE-VOL-REGIME-GAUGE" in JOB_TPL, "job.html 缺本项设计说明注释"
+        # 不得把三等分柱状图改回来：regime_counts 的三桶不再上主视图
+        assert "regime_counts" not in JOB_TPL.split("function renderRiskVol")[1].split(
+            "function renderRiskStress")[0], "renderRiskVol 又去读 regime_counts 了"

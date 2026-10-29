@@ -28,6 +28,78 @@
     return typeof x === 'number' && isFinite(x);
   }
 
+  function clampPct(x) {
+    if (!num(x)) return 0;
+    if (x < 0) return 0;
+    if (x > 100) return 100;
+    return x;
+  }
+
+  /* 阈值标尺的几何（R4-2.5）。只出数值，格式化留给模板。
+     ------------------------------------------------------------------------
+     两种 mode：
+       threshold —— 年化波动的绝对轴。三段轨 low:[0,lo) / mid:[lo,hi) / high:[hi,
+                    domain]，domain 取 max(hi*1.5, peak*1.15)，即高波动边界之外
+                    再留 50% 余量，同时保证最右侧游标不会顶到轴端。游标 xPct
+                    是它在轴上的真实位置，读得出「离高波动边界还有多远」。
+       relative  —— 旧产物没有 regime_thresholds，绝对轴失去参照：硬画成轴位置
+                    会谎称某个口径「接近上限」，比不画更糟。降级成两口径的相对
+                    长度对比，xPct 是「占较大者的百分比」，不是轴位置。
+     无口径值也无阈值时返回 null，交给模板走空态。 */
+  function gaugeModel(vol) {
+    if (!vol) return null;
+    var marksSrc = [];
+    if (num(vol.ewma_annual)) marksSrc.push({ key: 'ewma', label: 'EWMA', value: vol.ewma_annual });
+    if (num(vol.garch_annual)) marksSrc.push({ key: 'garch', label: 'GARCH', value: vol.garch_annual });
+    var th = vol.regime_thresholds;
+    var lo = th && num(th.low_below) ? th.low_below : null;
+    var hi = th && num(th.high_at_or_above) ? th.high_at_or_above : null;
+    var hasTh = lo !== null && hi !== null && lo > 0 && hi > lo;
+    if (!marksSrc.length && !hasTh) return null;
+    var peak = 0;
+    marksSrc.forEach(function (m) { if (m.value > peak) peak = m.value; });
+
+    if (hasTh) {
+      var domain = Math.max(hi * 1.5, peak * 1.15);
+      if (!num(domain) || domain <= 0) return null;
+      var spans = [
+        { key: 'low', from: 0, to: lo },
+        { key: 'mid', from: lo, to: hi },
+        { key: 'high', from: hi, to: domain },
+      ];
+      return {
+        mode: 'threshold',
+        domain: domain,
+        segments: spans.map(function (s) {
+          return { key: s.key, from: s.from, to: s.to,
+                   leftPct: clampPct(s.from / domain * 100),
+                   widthPct: clampPct((s.to - s.from) / domain * 100) };
+        }),
+        marks: marksSrc.map(function (m) {
+          return { key: m.key, label: m.label, value: m.value,
+                   xPct: clampPct(m.value / domain * 100) };
+        }),
+        ticks: [0, lo, hi, domain].map(function (v) {
+          return { value: v, leftPct: clampPct(v / domain * 100) };
+        }),
+        degraded: false,
+      };
+    }
+
+    if (!(peak > 0)) return null;
+    return {
+      mode: 'relative',
+      domain: peak * 1.15,
+      segments: [],
+      marks: marksSrc.map(function (m) {
+        return { key: m.key, label: m.label, value: m.value,
+                 xPct: clampPct(m.value / peak * 100) };
+      }),
+      ticks: [],
+      degraded: true,
+    };
+  }
+
   // 当前状态一句话：有阈值就把三档边界讲清楚，没有就只说状态
   function describe(vol) {
     if (!vol || !vol.latest_regime) return '';
@@ -61,5 +133,10 @@
     return out.join('；');
   }
 
-  root.QREVolRegime = { label: label, describe: describe, tipText: tipText };
+  root.QREVolRegime = {
+    label: label,
+    describe: describe,
+    tipText: tipText,
+    gaugeModel: gaugeModel,
+  };
 })(typeof window !== 'undefined' ? window : this);

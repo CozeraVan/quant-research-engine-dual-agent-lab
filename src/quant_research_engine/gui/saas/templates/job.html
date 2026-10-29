@@ -826,17 +826,54 @@ function renderRiskDist(d) {
   }
 function renderRiskVol(d) {
     var el = document.getElementById('chart-risk-vol');
-    var vol = d.volatility || {};
-    var rc = vol.regime_counts;
+    var vol = (d && d.volatility) || {};
     var stateEl = document.getElementById('chart-risk-vol-state');
     var stateTxt = QREVolRegime.describe(vol);
     if (stateEl) { stateEl.textContent = stateTxt; stateEl.style.display = stateTxt ? '' : 'none'; }
-    // QRE-VOL-REGIME-NO-BARCHART：三等分柱状图已删除。
-    // regime_counts 按自身样本 1/3、2/3 分位切分，三桶恒等于各 1/3
-    // （实测生产 4 个 job 全部 33.3%/33.3%/33.3%），画出来不携带任何信息，
-    // 用户明确反馈"没有任何形式上的优化"。计数改由 tipText 在悬停里给，
-    // 主视图只留 describe() 的状态 + 年化阈值。
-    el.style.display = 'none';
+    // QRE-VOL-REGIME-GAUGE（R4-2.5）：三等分柱状图仍不复现——后端的三桶计数按自身
+    // 样本 1/3、2/3 分位切分，三桶恒等于各 1/3，画出来不携带任何信息，用户也明确
+    // 否掉过。这一列改成「阈值标尺」：年化波动做横轴，低/中/高切成同一条轨道上的
+    // 三段，EWMA 与 GARCH 各一枚游标落上去，读的是「现在离高波动边界还有多远」。
+    // 波动率时序曲线做不到——后端只透 5 个字段，没有 ewma/garch 的时间序列。
+    // 旧产物没有 regime_thresholds，绝对轴失去参照（硬画会谎称接近上限），
+    // gaugeModel 会降级成两口径的相对长度对比。
+    var g = QREVolRegime.gaugeModel(vol);
+    if (!g) {
+      el.innerHTML = '<div class="chart-empty">暂无波动率数据</div>';
+      el.style.height = 'auto';
+      return;
+    }
+    var pctf = function(v) { return (v * 100).toFixed(1) + '%'; };
+    var aria = escH(stateTxt + '；' + (QREVolRegime.tipText(vol) || ''));
+    var html = '';
+    if (g.mode === 'threshold') {
+      html += '<div class="vol-gauge" role="img" aria-label="' + aria + '"><div class="vol-track">';
+      g.segments.forEach(function(s) {
+        html += '<span class="vol-seg vol-seg-' + s.key + '" style="left:' +
+          s.leftPct.toFixed(3) + '%;width:' + s.widthPct.toFixed(3) + '%"></span>';
+      });
+      g.marks.forEach(function(m, i) {
+        html += '<span class="vol-mark ' + (i === 0 ? 'vol-mark-above' : 'vol-mark-below') +
+          '" style="left:' + m.xPct.toFixed(3) + '%"><i class="vol-mark-line"></i>' +
+          '<span class="vol-mark-lab">' + escH(m.label) + ' ' + pctf(m.value) + '</span></span>';
+      });
+      var lo = g.ticks[1].value, hi = g.ticks[2].value;
+      html += '</div><div class="vol-legend">' +
+        '<span class="vol-key"><i class="vol-sw vol-sw-low"></i>低 &lt;' + pctf(lo) + '</span>' +
+        '<span class="vol-key"><i class="vol-sw vol-sw-mid"></i>中 ' + pctf(lo) + '–' + pctf(hi) + '</span>' +
+        '<span class="vol-key"><i class="vol-sw vol-sw-high"></i>高 ≥' + pctf(hi) + '</span>' +
+        '</div></div>';
+    } else {
+      html += '<div class="vol-gauge vol-gauge-rel" role="img" aria-label="' + aria + '">';
+      g.marks.forEach(function(m) {
+        html += '<div class="vol-rel-row"><span class="vol-rel-lab">' + escH(m.label) +
+          '</span><span class="vol-rel-track"><i class="vol-rel-fill" style="width:' +
+          m.xPct.toFixed(3) + '%"></i></span><span class="vol-rel-val">' + pctf(m.value) +
+          '</span></div>';
+      });
+      html += '</div>';
+    }
+    el.innerHTML = html;
   }
 function renderRiskStress(d) {
     var el = document.getElementById('chart-risk-stress');
