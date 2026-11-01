@@ -9,6 +9,11 @@ This file is the source of truth for single-agent workflow recovery.
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
 4. **权限改动必须同步 9090**：权限/配额/限流变更在 commit/push 前必须完成管理台可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。详见 `02_LOCKED_REQUIREMENTS.md` R-ADMIN-001。
 
+> **TodoList 权威（2026-11-02 重申）**：唯一权威是 `14_LAUNCH_ROADMAP.md` §11.8，且必须**连 F 节一起读**。
+> A–E 是公测阶段主线（P0–P2 + 挂起 + D-21 + 第四入口），**F 节「扩展 backlog」**是 2026-11-02 汇总的
+> 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
+> 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
+
 ### 2026-11-02 P1-12 上云完全准备完成（未 commit；未真迁移）
 
 用户要求“不马上迁移，但做好快速部署准备”。已完成 `docs/agent/28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md` 与 `deploy/cloud/` 脚本：备份、逻辑迁移、对账、产物同步、云端 worker systemd/env 模板。**实测基线**：`tushare_data` 519GB；`stock_daily` 14,888,045 行至 2026-10-30；`stock_minute_1m` 3,648,592,718 行至 2026-10-21；alpha191 43GB。**验证**：4 个 shell 脚本 `bash -n` 全过；4 个 dry-run 全过。**未做**：不购买云资源、不恢复、不切流。
@@ -16,6 +21,10 @@ This file is the source of truth for single-agent workflow recovery.
 ### 2026-11-02 P2-15 默认开启（用户批准，已部署 ECS）
 
 `gui/risk_report.py::generate_risk_report` 默认传入 `include_volatility_series=True`、`volatility_series_max_points=500`。前端已有序列即画 EWMA/GARCH 曲线。实测增量约 +10KB/report。**ECS 已部署**：MainPID 602680，`/static/vol-regime.js`、`/saas/jobs/76` 均 200。**worker 未重启**，新回测需 worker 重启后才真正产出序列。
+
+### 2026-11-02 §11.8 增补 F 节「扩展 backlog」（todolist 补全，未 commit）
+
+用户质疑「挂起任务为什么又不见了」。根因：§11.8 的 A–E 只覆盖公测阶段主线，而 §7 挂起/远期清单（10 项）、§8 N1–N4、§11.4 扩容、§11.7 上云，以及 19/20/21/22 专项文档里的远期条目从未并入，形成第二份漂移清单。已在 §11.8 新增 **F 节**（F.1 研究与因子 6 项 / F.2 引擎与工程 9 项 / F.3 数据与运维遗留 9 项 / F.4 游戏 2 项 / F.5 变现与产品 6 项，共 32 项），并写入来源指针与「状态变更只改本节」的防漂移规则；`11_AGENT_STATE.md` 顶部同步加了一条 TodoList 权威提醒。**纯文档改动，无需 ECS**；`check-progress-docs.sh` 待跑。
 
 ### 2026-11-02 主 Agent 交接文档已建立（当前阶段）
 
