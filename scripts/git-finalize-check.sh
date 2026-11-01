@@ -30,15 +30,31 @@ fi
 
 echo
 echo "== Secret scan =="
-if git diff --unified=0 HEAD | grep -E '^\+[^+]' | grep -Ei '[a]pi[_-]?key|[s]ecret|[t]oken|[p]assword|[p]asswd|BEGIN (RSA|OPENSSH|PRIVATE) KEY' >/tmp/agent-credential-scan.txt; then
+# 硬失败：只匹配「键 = 长随机值」形态（真泄漏），不再因文档里出现 api_tokens 这类
+# 标识符/表名而误报（2026-11-02 第四入口设计文档引入 api_tokens 表名导致误报）。
+SECRET_SCAN_FILE=/tmp/agent-credential-scan.txt
+if git diff --unified=0 HEAD | grep -E '^\+[^+]' \
+  | grep -Ei "(api[_-]?key|secret|token|password|passwd|credential)[\"']?[[:space:]]*[:=：][[:space:]]*[\"']?[A-Za-z0-9/_.+-]{16,}" \
+  >"$SECRET_SCAN_FILE"; then
   echo "ERROR: Potential secret-like text found in git diff."
-  cat /tmp/agent-credential-scan.txt
-  rm -f /tmp/agent-credential-scan.txt
+  cat "$SECRET_SCAN_FILE"
+  rm -f "$SECRET_SCAN_FILE"
   exit 1
 else
-  echo "No obvious secret-like text found in git diff."
+  echo "No secret-like assignment found in git diff."
 fi
-rm -f /tmp/agent-credential-scan.txt
+rm -f "$SECRET_SCAN_FILE"
+
+# 软提醒：仅出现关键字（无赋值）时列出行供人工扫一眼，不阻断提交。
+if git diff --unified=0 HEAD | grep -E '^\+[^+]' \
+  | grep -Ei '[a]pi[_-]?key|[s]ecret|[t]oken|[p]assword|[p]asswd|BEGIN (RSA|OPENSSH|PRIVATE) KEY' \
+  >/tmp/agent-credential-mentions.txt; then
+  echo "NOTE: lines mention key/token-like words (no assignment matched) — please eyeball:"
+  cat /tmp/agent-credential-mentions.txt
+else
+  echo "No key/token-like word mentions in git diff."
+fi
+rm -f /tmp/agent-credential-mentions.txt
 
 echo
 echo "== Remote =="

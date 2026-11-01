@@ -326,7 +326,17 @@
     不再有依赖旧名渲染的在线产物，11-23 后可直接删该分支（无需再选映射/改写/重跑）。
 
 #### E. 最后
-16. 第四入口外部 AI Agent API，见 `docs/superpowers/specs/2026-10-25-external-agent-api-brainstorm.md`。
+16. 第四入口外部 AI Agent API。**2026-11-02 M0 设计定稿（待用户批准，未写码/未部署/未上线）**：
+    定位修订为「个人量化研究员 agent」——外部 agent 负责对话定边界、列工作清单、解释结论；
+    QRE 只提供执行、记账、聚合。用户三条硬边界：①不自建/不调任何模型（智能全在外部 agent）；
+    ②可调用库内全部数据但只做回测相关动作；③不做投资建议，只做数据结果聚合。
+    设计文档 `docs/superpowers/specs/2026-11-02-external-agent-api-design.md`（V1：`api_tokens` +
+    `capabilities` 成本信封 + `research_runs` 会话容器 + `validate` + `sweeps` 串行展开与聚合 +
+    配额/限流/夜间窗口/产物 TTL + 9090 审计页；约 20–25 人日，M1–M6 六切片）。
+    CR：`change_requests/CR-2026-11-02_external_agent_api.md`（含 6 项待批准决策）。
+    原 brainstorm `2026-10-25-external-agent-api-brainstorm.md` 已标记被本文档取代。
+    **启动前必须**：11-02 压测结果校准成本信封；产物 TTL 与 compact 与 sweep 同时上线；
+    nightly_only 默认开启；强制 screen→confirm 两阶段。
 
 #### F. 扩展 backlog（2026-11-02 汇总；公测前的远期清单，**未并入上面 A–E，全部保留不删**）
 

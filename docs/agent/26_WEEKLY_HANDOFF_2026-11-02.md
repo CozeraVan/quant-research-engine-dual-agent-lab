@@ -161,6 +161,8 @@ bash scripts/git-finalize-check.sh
 | 2026-11-02 | 全期全量压力测试（3项，03:00 后顺序执行） | in_progress | 测试子代理 agent-208 | 目标记录 `docs/agent/27_STRESS_TEST_2026-11-02.md`；未完成 |
 | 2026-11-02 | NL 穿越语义丢失问题立项 | done | Kimi | `change_requests/CR-2026-11-02_nl_cross_semantics.md`；3 点压测前不改业务代码 |
 | 2026-11-02 | ECS 部署清单 + seed.json 处置 + P2-14/P2-15 决策单 | done | Kimi | `29_PENDING_DEPLOY_AND_DECISIONS_2026-11-02.md`；`seed.json` 已 gitignore；ECS 已于 2026-11-02 部署（MainPID 602680），worker 待用户批准重启 |
+| 2026-11-02 | E 项第四入口外部 AI Agent API —— M0 设计（读档 + 颗粒度对齐 + brainstorm + 设计文档/CR；**只设计不写码不上线**） | in_progress | Kimi | 已读 10-25 brainstorm、`17_JOB_PROTOCOL.md`、`app.py` 路由/quota/tier_policies；产出 `docs/superpowers/specs/2026-11-02-external-agent-api-design.md` + `change_requests/CR-2026-11-02_external_agent_api.md`；10-25 brainstorm 已标记被取代；§11.8 E 项已更新；待用户批准 D1–D6 与 commit |
+| 2026-11-02 | §11.8 补 F 节扩展 backlog（32 项远期/挂起任务汇总） | done | Kimi | `cc1ae20` 已 commit/push；`check-progress-docs.sh` 通过 |
 
 ---
 
