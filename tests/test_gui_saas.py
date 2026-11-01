@@ -557,6 +557,9 @@ class TestResultsApi:
         """建 job → claim → meta 回传（含 chart_data.metrics.excess_return）→ completed。"""
         import json as _json
 
+        # 隔离上传目录：避免读到 outputs/saas_uploads 中其他进程/历史任务产物，
+        # 也避免本测试写入仓库默认上传目录污染并行工作。
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path / "uploads")
         resp = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "name": name,
                                               "params": {"start": "2026-01-01", "end": "2026-03-01"}},
                            headers={"X-User-Id": "1"})

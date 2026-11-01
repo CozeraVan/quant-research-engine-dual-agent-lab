@@ -1,3 +1,7 @@
+2026-11-02 测试隔离修复（未 commit）：`tests/test_gui_saas.py::TestResultsApi._completed_job` 显式设置 `SAAS_UPLOAD_DIR=tmp_path/uploads`，避免全量测试读取/写入仓库默认 `outputs/saas_uploads`；`tests/test_gui_saas.py` 74 passed。此问题由 3 点压测子代理未隔离上传目录暴露。
+
+2026-11-02 P2-15 默认开启并部署 ECS：`gui/risk_report.py` 默认输出 500 点抽稀 EWMA/GARCH 年化序列；提交 `10e4a1e`/`cd3f620`；ECS MainPID 602680，vol-regime/job 页面 200；worker 未重启，新回测待重启后生效。
+
 2026-11-01 P2-14/P2-15 收尾实测（未 commit）：修复变体列重复与 `macd_cn_*` 误入；小样本参数变体 294,684→509,809 bytes（ratio 1.73），真实浏览器参数切换 12→3 列通过；P2-15 风险报告序列 9,244→19,405 bytes（ratio 2.10）。全量测试待跑。
 
 2026-11-01 P2-14/P2-15 推进（未 commit）：P2-15 前端 EWMA/GARCH 时序曲线 + 阈值 markLine 已实现并浏览器冒烟通过；P2-14 产物侧首版已实现（TOP-N=20 注入参数变体、超预算先砍变体、manifest 计数）。新增 `tests/test_param_variants.py` 4 例 + `test_saas_symbol_ux.py` 2 例；全量测试在跑。剩余小样本体积实测、真实浏览器参数切换验收、全量预算批准。
