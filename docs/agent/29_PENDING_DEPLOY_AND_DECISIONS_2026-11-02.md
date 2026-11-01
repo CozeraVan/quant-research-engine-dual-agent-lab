@@ -31,6 +31,12 @@ cd /home/van/quant-workspace/quant-research-engine-dual-agent-lab
   src/quant_research_engine/gui/risk_report.py
 ```
 
+### 1.2.1 部署记录（2026-11-02）
+- 已执行上述命令；ECS `qre-saas` active，MainPID **602680**。
+- 回滚副本：`deploy@47.119.127.40:/tmp/qre-deploy-20261101T172429Z.bak`。
+- 验证：`api/saas/factors` 200、`/saas/new` 200、`/static/vol-regime.js` 200、`/saas/jobs/76` 200。
+- 未重启 worker；因此新回测要等 worker 重启后才会真正生成带 `volatility.series` 的 `risk_report.json`。
+
 ### 1.3 回滚
 - `deploy-ecs.sh` 会自动在 ECS `/tmp/qre-deploy-<STAMP>.bak/` 留副本。
 - 回滚：把备份文件 `sudo -n install` 回原路径并 `sudo -n systemctl restart qre-saas`。

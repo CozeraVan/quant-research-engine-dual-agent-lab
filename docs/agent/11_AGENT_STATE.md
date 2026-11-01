@@ -13,9 +13,9 @@ This file is the source of truth for single-agent workflow recovery.
 
 用户要求“不马上迁移，但做好快速部署准备”。已完成 `docs/agent/28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md` 与 `deploy/cloud/` 脚本：备份、逻辑迁移、对账、产物同步、云端 worker systemd/env 模板。**实测基线**：`tushare_data` 519GB；`stock_daily` 14,888,045 行至 2026-10-30；`stock_minute_1m` 3,648,592,718 行至 2026-10-21；alpha191 43GB。**验证**：4 个 shell 脚本 `bash -n` 全过；4 个 dry-run 全过。**未做**：不购买云资源、不恢复、不切流。
 
-### 2026-11-02 P2-15 默认开启（用户批准，未 commit）
+### 2026-11-02 P2-15 默认开启（用户批准，已部署 ECS）
 
-`gui/risk_report.py::generate_risk_report` 默认传入 `include_volatility_series=True`、`volatility_series_max_points=500`。前端已有序列即画 EWMA/GARCH 曲线。实测增量约 +10KB/report。
+`gui/risk_report.py::generate_risk_report` 默认传入 `include_volatility_series=True`、`volatility_series_max_points=500`。前端已有序列即画 EWMA/GARCH 曲线。实测增量约 +10KB/report。**ECS 已部署**：MainPID 602680，`/static/vol-regime.js`、`/saas/jobs/76` 均 200。**worker 未重启**，新回测需 worker 重启后才真正产出序列。
 
 ### 2026-11-02 主 Agent 交接文档已建立（当前阶段）
 
