@@ -92,6 +92,19 @@
     `results.artifacts` 体积与墙上时间。
   - R-ADMIN-001：9090「外部 Agent API」卡新增研究会话区（总数/未完结/已结论 + 最近 20 条）。
   - 测试：新 13 例；**全量 3335 passed + 34 skipped**（零回归）。
-- M3–M6：**未启动**。
+- M3 校验与参数扫描：**代码已完成并部署 ECS**（2026-11-03，MainPID 605487；
+  回滚副本 `/tmp/qre-deploy-20261101T184839Z.bak`）。
+  - `POST /validate`：复用 `validate_yaml` + `check_factor_limits`（按属主 tier）+
+    `normalize_ts_codes`；返回 issues / normalized_params / factor_limits / cost_estimate，
+    显式 `executed:false`、`quota_charged:false`。
+  - `POST /sweeps`：screen 强制抽样（`random_n` 默认 300、≤500 只、≤5 年，拒全市场/板块）；
+    confirm 需 `budget.allow_full_market=true` 且配置 ≤5；grid 笛卡尔积**串行**展开，
+    子 job 落 `token_id`/`research_run_id`/`sweep_id`/`labels`；强制 `Idempotency-Key`。
+  - 预检：令牌日提交上限（50）、在飞上限（5）、会话 `max_jobs`/`max_wall_clock_hours`，超限不展开。
+  - `GET /sweeps`、`/sweeps/<id>`、`/sweeps/<id>/aggregate`（`sort_by` 白名单，只回数字）。
+  - **决策**：agent job 不占用户会员日配额（否则扫描被 3 次/日挡死），由令牌级上限约束。
+  - **缺陷修复**：关闭开关时 POST-only 路由的 GET 抛 405 泄露路由存在 → app 级前缀闸补齐。
+  - 测试：新 20 例；**全量 3354 passed + 34 skipped**（零回归）。
+- M4–M6：**未启动**。
 - 长期记录：`14_LAUNCH_ROADMAP.md` §11.8 E 项已更新为「M0 设计定稿待批准」；
   任务已登记 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。

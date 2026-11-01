@@ -493,4 +493,38 @@ BEGIN
     END IF;
 END $$;
 
+-- AGENT-API M3（2026-11-03）：参数扫描（sweep）清单。grid/params/base_yaml 原样保存，
+-- 便于复盘「这次扫描到底跑了什么」；job_ids 为展开后的子 job（串行入队，V1 无并发调度）。
+-- 幂等：同 token 同 idempotency_key 只保留一条（部分索引，NULL 不参与）。
+CREATE TABLE IF NOT EXISTS agent_sweeps (
+    id              BIGSERIAL PRIMARY KEY,
+    user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_id        BIGINT REFERENCES api_tokens(id) ON DELETE SET NULL,
+    research_run_id BIGINT REFERENCES research_runs(id) ON DELETE CASCADE,
+    sweep_id_external TEXT,                          -- 展示用（agent-sweep-<id>）
+    stage           TEXT NOT NULL DEFAULT 'screen',  -- screen=抽样粗筛 / confirm=短名单全量
+    base_yaml       TEXT NOT NULL,
+    grid            JSONB NOT NULL,
+    params          JSONB NOT NULL,
+    labels          JSONB,
+    idempotency_key TEXT,
+    job_ids         JSONB NOT NULL DEFAULT '[]'::jsonb,
+    status          TEXT NOT NULL DEFAULT 'queued',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_agent_sweeps_run ON agent_sweeps (research_run_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_sweeps_token ON agent_sweeps (token_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_sweeps_idem
+    ON agent_sweeps (token_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON agent_sweeps TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE agent_sweeps_id_seq TO aguhuice;
+    END IF;
+END $$;
+
+-- AGENT-API M3：jobs 关联 sweep（可空，旧行不受影响）。
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sweep_id BIGINT;
+
 COMMIT;

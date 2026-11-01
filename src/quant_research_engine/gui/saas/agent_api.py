@@ -15,7 +15,7 @@
 
 本切片（M1）只交付：令牌签发/列举/吊销、`capabilities` 成本信封、
 `openapi.json`、`schema/strategy`。validate / research_runs / sweeps / jobs /
-result / artifacts 属 M2–M5，openapi 中以 `x-status: planned` 标注，未实现前不得声称可用。
+result / artifacts 属 M4–M5，openapi 中以 `x-status: planned` 标注，未实现前不得声称可用。
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from flask import Blueprint, current_app, jsonify, request
@@ -420,7 +420,7 @@ def strategy_spec_json_schema() -> dict[str, Any]:
 
 
 def build_openapi() -> dict[str, Any]:
-    """OpenAPI 3.0.3 文档。M2–M5 端点以 x-status: planned 标注，未实现不得声称可用。"""
+    """OpenAPI 3.0.3 文档。尚未实现的端点以 x-status: planned 标注，不得声称可用。"""
     envelope = {
         "type": "object",
         "properties": {
@@ -428,7 +428,7 @@ def build_openapi() -> dict[str, Any]:
             "disclaimer": {"type": "string"},
         },
     }
-    planned = {"x-status": "planned", "x-slice": "M2-M5"}
+    planned = {"x-status": "planned", "x-slice": "M5"}
     return {
         "openapi": "3.0.3",
         "info": {
@@ -494,22 +494,61 @@ def build_openapi() -> dict[str, Any]:
                 "post": {
                     "summary": "校验策略与参数（不执行、不计配额）",
                     "responses": {"200": {"description": "OK"}, "400": {"description": "invalid_yaml"}},
-                    **planned,
                 }
             },
             "/research-runs": {
                 "post": {
                     "summary": "创建研究会话（边界/清单/预算）",
-                    "responses": {"201": {"description": "created"}, "409": {"description": "budget_exhausted"}},
-                    **planned,
-                }
+                    "responses": {"201": {"description": "created"}, "400": {"description": "invalid_yaml"}},
+                },
+                "get": {
+                    "summary": "本人研究会话列表",
+                    "responses": {"200": {"description": "OK"}},
+                },
+            },
+            "/research-runs/{run_id}": {
+                "get": {
+                    "summary": "会话详情（含预算用量）",
+                    "responses": {"200": {"description": "OK"}, "404": {"description": "not_found"}},
+                },
+            },
+            "/research-runs/{run_id}/status": {
+                "post": {
+                    "summary": "状态迁移（planned→running→aggregated→concluded）",
+                    "responses": {"200": {"description": "OK"}, "409": {"description": "illegal_transition"}},
+                },
+            },
+            "/research-runs/{run_id}/conclusion": {
+                "post": {
+                    "summary": "提交结论（原样存储，QRE 不解释）",
+                    "responses": {"200": {"description": "OK"}, "409": {"description": "archived"}},
+                },
             },
             "/sweeps": {
                 "post": {
-                    "summary": "参数扫描（screen→confirm 两阶段）",
-                    "responses": {"201": {"description": "created"}, "409": {"description": "stage_not_allowed"}},
-                    **planned,
-                }
+                    "summary": "参数扫描（screen→confirm 两阶段，串行展开）",
+                    "responses": {"201": {"description": "created"},
+                                  "409": {"description": "stage_not_allowed / budget_exhausted"},
+                                  "429": {"description": "daily_submit_limit / in_flight_limit"}},
+                },
+                "get": {
+                    "summary": "本人扫描列表",
+                    "responses": {"200": {"description": "OK"}},
+                },
+            },
+            "/sweeps/{sweep_id}": {
+                "get": {
+                    "summary": "扫描详情（含子 job 状态）",
+                    "responses": {"200": {"description": "OK"}, "404": {"description": "not_found"}},
+                },
+            },
+            "/sweeps/{sweep_id}/aggregate": {
+                "get": {
+                    "summary": "聚合排名（只回数字，不含解读）",
+                    "parameters": [{"name": "sort_by", "in": "query",
+                                    "schema": {"enum": list(AGGREGATE_SORT_KEYS)}}],
+                    "responses": {"200": {"description": "OK"}, "404": {"description": "not_found"}},
+                },
             },
             "/jobs": {
                 "post": {
@@ -580,6 +619,686 @@ def agent_schema_strategy():
     if scope_err is not None:
         return scope_err
     return _ok({"schema": strategy_spec_json_schema()})
+
+
+# --------------------------------------------------------------------------
+# 校验与参数扫描（M3）
+# --------------------------------------------------------------------------
+#: sweep screen 阶段强制约束（防一夜跑满 worker/磁盘）：抽样股票池与区间上限
+SWEEP_SCREEN_MAX_RANDOM_N = 500
+SWEEP_SCREEN_MAX_CODES = 500
+SWEEP_SCREEN_MAX_YEARS = 5
+#: confirm 阶段短名单上限（全量前必须先粗筛）
+SWEEP_CONFIRM_MAX_CONFIGS = 5
+#: 线性外推基准：full_a_2y 档（5860 只 × 2 年 ≈ 111s / 400MB 产物）
+_COST_BASE = {"symbols": 5860, "years": 2.0, "seconds": 111.0, "artifact_kb": 400000}
+#: aggregate 允许的排序键（白名单，禁排解释性字段）
+AGGREGATE_SORT_KEYS = (
+    "total_return", "annual_return", "sharpe", "max_drawdown", "win_rate",
+    "trades", "avg_holding_days", "excess_return",
+)
+
+
+def _universe_size(params: dict[str, Any]) -> int | None:
+    """估算标的数量：显式 codes / random_n / universe / all_market；无法判断返回 None。"""
+    codes = params.get("codes")
+    if isinstance(codes, str):
+        codes = [c.strip() for c in codes.split(",") if c.strip()]
+    if isinstance(codes, list) and codes:
+        return len(codes)
+    random_n = params.get("random_n")
+    if random_n is not None:
+        try:
+            return max(1, int(random_n))
+        except (TypeError, ValueError):
+            return None
+    if params.get("all_market"):
+        return _COST_BASE["symbols"]
+    if isinstance(params.get("universe"), dict) and params["universe"].get("key"):
+        return _COST_BASE["symbols"]  # 板块成员数未知，按全量量级保守估计
+    return None
+
+
+def _window_years(params: dict[str, Any]) -> float | None:
+    try:
+        d0 = date.fromisoformat(str(params.get("start")))
+        d1 = date.fromisoformat(str(params.get("end")))
+    except (TypeError, ValueError):
+        return None
+    return max((d1 - d0).days / 365.25, 1 / 365.25)
+
+
+def estimate_cost(params: dict[str, Any]) -> dict[str, Any]:
+    """成本估计：先按股票池规模选档位，再按区间长度等比缩放，并显式标注方法。
+
+    估计不承诺；`measured_at` 与来源随响应返回，压测结果出来后必须校准。
+    缩放是保守方向（区间越长估计越大），宁可高估不可低估。
+    """
+    size = _universe_size(params)
+    years = _window_years(params)
+    if size is None or years is None:
+        return {"profile": None, "est_seconds": None, "peak_mem_mb": None,
+                "artifact_kb": None, "method": "unknown",
+                "note": "无法判断股票池或区间，无法估计"}
+    ordered = sorted(SCALE_PROFILES, key=lambda p: p["universe_size"])
+    chosen = next((p for p in ordered if size <= p["universe_size"]), ordered[-1])
+    profile_years = _profile_years(chosen)
+    scale = years / profile_years
+    method = "profile_match" if abs(scale - 1.0) < 0.05 else "profile_match_scaled"
+    return {
+        "profile": chosen["name"],
+        "est_seconds": round(chosen["est_seconds"] * scale, 1),
+        "peak_mem_mb": chosen["peak_mem_mb"],
+        "artifact_kb": int(chosen["artifact_kb"] * scale),
+        "method": method,
+        "measured_at": COST_ENVELOPE_MEASURED_AT,
+        "note": f"按 {chosen['name']} 档位与区间长度 {years:.1f} 年（档位 {profile_years:g} 年）缩放",
+    }
+
+
+def _profile_years(profile: dict[str, Any]) -> float:
+    """档位对应的区间长度（年）：从 window 字段解析，解析不出返回 5。"""
+    text = str(profile.get("window") or "")
+    if "6 个月" in text:
+        return 0.5
+    if "5 年" in text:
+        return 5.0
+    if "2 年" in text:
+        return 2.0
+    if "全区间" in text:
+        return 100.0
+    return 5.0
+
+
+@agent_api_bp.post("/validate")
+def agent_validate():
+    """校验策略与参数：不执行、不建 job、不计配额（设计文档 §4.2）。"""
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "factors:read")
+    if scope_err is not None:
+        return scope_err
+
+    from quant_research_engine.gui.engine import validate_yaml
+    from quant_research_engine.gui.saas.symbol_norm import normalize_ts_codes
+
+    data = request.get_json(silent=True) or {}
+    yaml_text = str(data.get("yaml") or "").strip()
+    if not yaml_text:
+        return jsonify(_err("invalid_yaml", "缺少策略 yaml")), 400
+    issues: list[str] = []
+    verdict = validate_yaml(yaml_text)
+    if not verdict.get("valid"):
+        issues.append(str(verdict.get("error") or "YAML 不合法"))
+
+    params_raw = data.get("params") or {}
+    if not isinstance(params_raw, dict):
+        return jsonify(_err("invalid_yaml", "params 须为对象")), 400
+    params = dict(params_raw)
+    if params.get("codes"):
+        try:
+            params["codes"] = normalize_ts_codes(params["codes"])
+        except ValueError as exc:
+            issues.append(str(exc))
+    for key in ("start", "end"):
+        if not params.get(key):
+            issues.append(f"缺少 {key}")
+        else:
+            try:
+                date.fromisoformat(str(params[key]))
+            except ValueError:
+                issues.append(f"{key} 须为 YYYY-MM-DD")
+
+    from quant_research_engine.security.yaml_guard import check_factor_limits
+
+    pol = _owner_policy(app, engine, row["user_id"])
+    for issue in check_factor_limits(
+        yaml_text,
+        max_fields=int(pol.get("max_factor_fields", 20)),
+        max_tables=int(pol.get("max_factor_tables", 3)),
+    ):
+        issues.append(issue)
+
+    return _ok({
+        "validate": {
+            "valid": not issues,
+            "issues": issues,
+            "normalized_params": params,
+            "factor_limits": {"max_fields": int(pol.get("max_factor_fields", 20)),
+                              "max_tables": int(pol.get("max_factor_tables", 3))},
+            "cost_estimate": estimate_cost(params),
+            "executed": False,
+            "quota_charged": False,
+        }
+    })
+
+
+def _owner_policy(app, engine, uid: int) -> dict[str, int]:
+    """令牌属主的 tier 策略（与人工入口同一张 tier_policies 表）。"""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        tier = conn.execute(
+            text("SELECT tier FROM users WHERE id = :uid"), {"uid": uid}
+        ).first()
+    from quant_research_engine.gui.saas.app import _get_policy
+
+    return _get_policy(app, engine, str(tier[0]) if tier else "member")
+
+
+def _expand_grid(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
+    """笛卡尔积展开（键按名字典序，保证可复现）；空 grid 返回单条空配置。"""
+    if not isinstance(grid, dict) or not grid:
+        return [{}]
+    keys = sorted(grid)
+    pools: list[list[Any]] = []
+    for key in keys:
+        values = grid[key]
+        if not isinstance(values, list) or not values:
+            raise ValueError(f"grid.{key} 须为非空数组")
+        pools.append(values)
+    combos: list[dict[str, Any]] = [{}]
+    for key, values in zip(keys, pools):
+        combos = [{**combo, key: value} for combo in combos for value in values]
+    return combos
+
+
+def _apply_config_to_yaml(base_yaml: str, config: dict[str, Any]) -> str:
+    """把 grid 配置写进 YAML：只支持 `data.factor_fields.<逻辑名>` 形式的点分键。
+
+    V1 只覆盖「换因子列」这一类最常见扫描（如 EMA 周期=换 ema5/ema10/…列）；
+    其余参数（持仓天数、止损等）由调用方直接改 base_yaml，不在 grid 里表达。
+    """
+    import yaml as _yaml
+
+    if not config:
+        return base_yaml
+    raw = _yaml.safe_load(base_yaml)
+    if not isinstance(raw, dict):
+        raise ValueError("base_yaml 须为 mapping")
+    for dotted, value in config.items():
+        parts = dotted.split(".")
+        if len(parts) != 3 or parts[0] != "data" or parts[1] != "factor_fields":
+            raise ValueError(
+                f"grid 键仅支持 data.factor_fields.<逻辑名> 形式，收到：{dotted}"
+            )
+        data = raw.setdefault("data", {})
+        fields = data.setdefault("factor_fields", {})
+        if parts[2] not in fields:
+            raise ValueError(f"base_yaml 的 data.factor_fields 中不存在逻辑名 {parts[2]}")
+        fields[parts[2]] = str(value)
+    return _yaml.safe_dump(raw, allow_unicode=True, sort_keys=False)
+
+
+def _token_usage(engine, token_id: int) -> dict[str, int]:
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT count(*) FILTER (WHERE created_at::date = now()::date) AS today, "
+                "count(*) FILTER (WHERE status IN ('queued','leased','running','uploading')) AS in_flight "
+                "FROM jobs WHERE token_id = :tid"
+            ),
+            {"tid": token_id},
+        ).mappings().one()
+    return {"today": int(row["today"] or 0), "in_flight": int(row["in_flight"] or 0)}
+
+
+def _screen_guard(params: dict[str, Any]) -> str | None:
+    """screen 阶段护栏：强制抽样 + 短区间，拒绝全市场/板块/超大 codes。"""
+    if params.get("all_market"):
+        return "screen 阶段不允许 all_market——请先用抽样股票池粗筛，再用 confirm 阶段上全量"
+    if isinstance(params.get("universe"), dict) and params["universe"].get("key"):
+        return "screen 阶段不允许板块/概念范围——请改用 random_n 抽样"
+    codes = params.get("codes")
+    if isinstance(codes, str):
+        codes = [c.strip() for c in codes.split(",") if c.strip()]
+    if isinstance(codes, list) and len(codes) > SWEEP_SCREEN_MAX_CODES:
+        return f"screen 阶段最多 {SWEEP_SCREEN_MAX_CODES} 只显式标的（当前 {len(codes)}）"
+    random_n = params.get("random_n")
+    if random_n is not None:
+        try:
+            rn = int(random_n)
+        except (TypeError, ValueError):
+            return "random_n 须为整数"
+        if rn < 1 or rn > SWEEP_SCREEN_MAX_RANDOM_N:
+            return f"screen 阶段 random_n 须为 1~{SWEEP_SCREEN_MAX_RANDOM_N}"
+    elif not codes:
+        params["random_n"] = AGENT_DEFAULTS["sweep_screen_universe"]
+    years = _window_years(params)
+    if years is None:
+        return "screen 阶段必须给出合法的 start/end"
+    if years > SWEEP_SCREEN_MAX_YEARS:
+        return f"screen 阶段区间不得超过 {SWEEP_SCREEN_MAX_YEARS} 年（当前 {years:.1f}）"
+    return None
+
+
+def _confirm_guard(budget: dict[str, Any], config_count: int) -> str | None:
+    if not budget.get("allow_full_market"):
+        return "confirm 阶段需要会话 budget.allow_full_market=true"
+    if config_count > SWEEP_CONFIRM_MAX_CONFIGS:
+        return f"confirm 阶段最多 {SWEEP_CONFIRM_MAX_CONFIGS} 个配置（当前 {config_count}）"
+    return None
+
+
+def _flask_app():
+    from flask import current_app as _ca
+
+    return _ca._get_current_object()
+
+
+def _create_agent_jobs(
+    engine,
+    *,
+    uid: int,
+    token_id: int,
+    research_run_id: int,
+    sweep_id: int,
+    yaml_texts: list[str],
+    params: dict[str, Any],
+    labels: dict[str, Any] | None,
+    strategy_name: str,
+) -> int:
+    """把展开后的 N 个配置落成 N 条 job（串行入队；V1 无并发调度）。
+
+    复用人工入口的同源步骤：价格口径归一 → 权重分级；
+    agent job **不占用户会员日配额**（决策见 26_WEEKLY_HANDOFF §7 M3 计划），
+    容量由令牌级上限与会话预算约束。
+    """
+    from sqlalchemy import text
+
+    from quant_research_engine.gui.saas.app import (
+        _ensure_weight_class_column,
+        _unify_price_basis_yaml,
+        classify_job_weight,
+    )
+
+    _ensure_weight_class_column(engine)
+    # 与人工入口同源：因子配额随 params 透传，worker 执行前权威复核
+    pol = _owner_policy(_flask_app(), engine, uid)
+    params = dict(params)
+    params["_factor_limits"] = {
+        "max_fields": int(pol.get("max_factor_fields", 20)),
+        "max_tables": int(pol.get("max_factor_tables", 3)),
+    }
+    created = 0
+    with engine.begin() as conn:
+        strategy_id = conn.execute(
+            text("INSERT INTO strategies (user_id, name, yaml) "
+                 "VALUES (:uid, :name, :yaml) RETURNING id"),
+            {"uid": uid, "name": strategy_name, "yaml": yaml_texts[0]},
+        ).scalar_one()
+        for index, yaml_text in enumerate(yaml_texts):
+            unified, _note = _unify_price_basis_yaml(yaml_text)
+            weight_class = classify_job_weight("full", params)
+            conn.execute(
+                text(
+                    "INSERT INTO jobs (user_id, strategy_id, kind, params, token_id, "
+                    "research_run_id, sweep_id, labels, weight_class) VALUES "
+                    "(:uid, :sid, 'full', CAST(:params AS jsonb), :tid, :rid, :swid, "
+                    "CAST(:labels AS jsonb), :wc)"
+                ),
+                {
+                    "uid": uid,
+                    "sid": strategy_id,
+                    "params": json.dumps(params, ensure_ascii=False),
+                    "tid": token_id,
+                    "rid": research_run_id,
+                    "swid": sweep_id,
+                    "labels": json.dumps(labels or {}, ensure_ascii=False),
+                    "wc": weight_class,
+                },
+            )
+            created += 1
+    return created
+
+
+def ensure_agent_sweeps(engine) -> bool:
+    """幂等确保 `agent_sweeps` 表存在（老库未 apply schema 时兜底）。"""
+    from sqlalchemy import text
+
+    key = ("agent_sweeps", id(engine))
+    if key in _AGENT_TABLES_ENSURED:
+        return _AGENT_TABLES_OK.get(key, False)
+    ok = True
+    try:
+        with engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'agent_sweeps'")
+            ).first() is not None
+            if not exists:
+                conn.execute(text(
+                    "CREATE TABLE IF NOT EXISTS agent_sweeps ("
+                    "id BIGSERIAL PRIMARY KEY, "
+                    "user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+                    "token_id BIGINT REFERENCES api_tokens(id) ON DELETE SET NULL, "
+                    "research_run_id BIGINT REFERENCES research_runs(id) ON DELETE CASCADE, "
+                    "stage TEXT NOT NULL DEFAULT 'screen', "
+                    "base_yaml TEXT NOT NULL, "
+                    "grid JSONB NOT NULL, "
+                    "params JSONB NOT NULL, "
+                    "labels JSONB, "
+                    "idempotency_key TEXT, "
+                    "job_ids JSONB NOT NULL DEFAULT '[]'::jsonb, "
+                    "status TEXT NOT NULL DEFAULT 'queued', "
+                    "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"))
+    except Exception:
+        ok = False
+    _AGENT_TABLES_ENSURED.add(key)
+    _AGENT_TABLES_OK[key] = ok
+    return ok
+
+
+def _sweep_view(row, job_ids: list[int] | None = None) -> dict[str, Any]:
+    view = {
+        "id": row["id"],
+        "external_id": row["sweep_id_external"] or f"agent-sweep-{row['id']}",
+        "research_run_id": row["research_run_id"],
+        "stage": row["stage"],
+        "grid": row["grid"],
+        "params": row["params"],
+        "labels": row["labels"],
+        "status": row["status"],
+        "job_count": len(row["job_ids"] or []),
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+    }
+    if job_ids is not None:
+        view["job_ids"] = job_ids
+    return view
+
+
+@agent_api_bp.post("/sweeps")
+def agent_sweep_create():
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "jobs:submit")
+    if scope_err is not None:
+        return scope_err
+    if not (ensure_api_tokens(engine) and ensure_research_runs(engine) and ensure_agent_sweeps(engine)):
+        return jsonify(_err("unauthorized", "扫描存储不可用")), 503
+
+    from sqlalchemy import text
+
+    data = request.get_json(silent=True) or {}
+    base_yaml = str(data.get("base_yaml") or "").strip()
+    if not base_yaml:
+        return jsonify(_err("invalid_yaml", "缺少 base_yaml")), 400
+    from quant_research_engine.gui.engine import validate_yaml
+
+    verdict = validate_yaml(base_yaml)
+    if not verdict.get("valid"):
+        return jsonify(_err("invalid_yaml", str(verdict.get("error") or "YAML 不合法"))), 400
+
+    run_id = data.get("research_run_id")
+    try:
+        run_id = int(run_id)
+    except (TypeError, ValueError):
+        return jsonify(_err("invalid_yaml", "research_run_id 须为整数")), 400
+    run = _load_research_run(engine, run_id, row["user_id"])
+    if run is None:
+        return jsonify(_err("not_found", "研究会话不存在")), 404
+    if run["status"] in ("archived", "concluded"):
+        return jsonify(_err("budget_exhausted",
+                            f"会话状态为 {run['status']}，不能再提交扫描")), 409
+
+    idem = str(data.get("idempotency_key") or "").strip()
+    if not idem:
+        return jsonify(_err("missing_idempotency_key", "sweep 必须带 Idempotency-Key")), 400
+    with engine.connect() as conn:
+        existing = conn.execute(
+            text("SELECT * FROM agent_sweeps WHERE token_id = :tid AND idempotency_key = :k"),
+            {"tid": row["id"], "k": idem},
+        ).mappings().first()
+    if existing is not None:
+        return _ok({"sweep": _sweep_view(existing), "deduped": True})
+
+    params = data.get("params") or {}
+    if not isinstance(params, dict):
+        return jsonify(_err("invalid_yaml", "params 须为对象")), 400
+    params = dict(params)
+    params.setdefault("mode", "batch")
+    stage = str(data.get("stage") or "screen")
+    if stage not in ("screen", "confirm"):
+        return jsonify(_err("invalid_yaml", "stage 须为 screen 或 confirm")), 400
+
+    grid = data.get("grid") or {}
+    try:
+        combos = _expand_grid(grid)
+    except ValueError as exc:
+        return jsonify(_err("invalid_yaml", str(exc))), 400
+
+    budget = dict(run["budget"] or {})
+    if stage == "screen":
+        guard = _screen_guard(params)
+        if guard is not None:
+            return jsonify(_err("stage_not_allowed", guard)), 409
+    else:
+        guard = _confirm_guard(budget, len(combos))
+        if guard is not None:
+            return jsonify(_err("stage_not_allowed", guard)), 409
+
+    # 令牌级上限 + 会话预算预检（超限不展开）
+    token_usage = _token_usage(engine, row["id"])
+    if token_usage["today"] + len(combos) > int(row["daily_submit_limit"]):
+        return jsonify(_err("daily_submit_limit",
+                            f"今日令牌提交上限 {row['daily_submit_limit']}，已用 {token_usage['today']}，"
+                            f"本次需 {len(combos)}")), 429
+    if token_usage["in_flight"] + len(combos) > int(row["in_flight_limit"]):
+        return jsonify(_err("in_flight_limit",
+                            f"在飞任务上限 {row['in_flight_limit']}，当前 {token_usage['in_flight']}，"
+                            f"本次需 {len(combos)}")), 429
+    usage = research_run_usage(engine, run_id)
+    if "max_jobs" in budget and usage["jobs_total"] + len(combos) > int(budget["max_jobs"]):
+        return jsonify(_err("budget_exhausted",
+                            f"会话 max_jobs={budget['max_jobs']}，已用 {usage['jobs_total']}，"
+                            f"本次需 {len(combos)}")), 409
+    if "max_wall_clock_hours" in budget:
+        estimate = estimate_cost(params)
+        est_hours = (estimate.get("est_seconds") or 0) * len(combos) / 3600
+        if usage["wall_clock_seconds"] / 3600 + est_hours > float(budget["max_wall_clock_hours"]):
+            return jsonify(_err("budget_exhausted",
+                                f"会话 max_wall_clock_hours={budget['max_wall_clock_hours']}，"
+                                f"已用 {usage['wall_clock_seconds'] / 3600:.2f}h，"
+                                f"本次估计 {est_hours:.2f}h")), 409
+
+    labels = data.get("labels")
+    if labels is not None and not isinstance(labels, dict):
+        return jsonify(_err("invalid_yaml", "labels 须为对象")), 400
+
+    try:
+        yaml_texts = [_apply_config_to_yaml(base_yaml, combo) for combo in combos]
+    except ValueError as exc:
+        return jsonify(_err("invalid_yaml", str(exc))), 400
+
+    with engine.begin() as conn:
+        sweep_id = conn.execute(
+            text(
+                "INSERT INTO agent_sweeps (user_id, token_id, research_run_id, stage, base_yaml, "
+                "grid, params, labels, idempotency_key) VALUES (:uid, :tid, :rid, :stage, :yaml, "
+                "CAST(:grid AS jsonb), CAST(:params AS jsonb), CAST(:labels AS jsonb), :idem) "
+                "RETURNING id"
+            ),
+            {
+                "uid": row["user_id"], "tid": row["id"], "rid": run_id, "stage": stage,
+                "yaml": base_yaml,
+                "grid": json.dumps(grid, ensure_ascii=False),
+                "params": json.dumps(params, ensure_ascii=False),
+                "labels": json.dumps(labels or {}, ensure_ascii=False),
+                "idem": idem,
+            },
+        ).scalar_one()
+        conn.execute(
+            text("UPDATE agent_sweeps SET sweep_id_external = :ext WHERE id = :id"),
+            {"ext": f"agent-sweep-{sweep_id}", "id": sweep_id},
+        )
+
+    created = _create_agent_jobs(
+        engine,
+        uid=row["user_id"],
+        token_id=row["id"],
+        research_run_id=run_id,
+        sweep_id=sweep_id,
+        yaml_texts=yaml_texts,
+        params=params,
+        labels=labels,
+        strategy_name=f"agent-sweep-{sweep_id}",
+    )
+    with engine.begin() as conn:
+        job_ids = [r[0] for r in conn.execute(
+            text("SELECT id FROM jobs WHERE sweep_id = :sid ORDER BY id"), {"sid": sweep_id}
+        ).all()]
+        conn.execute(
+            text("UPDATE agent_sweeps SET job_ids = CAST(:ids AS jsonb), status = 'running' "
+                 "WHERE id = :id"),
+            {"ids": json.dumps(job_ids), "id": sweep_id},
+        )
+    return _ok({"sweep": _sweep_view({
+        "id": sweep_id, "sweep_id_external": f"agent-sweep-{sweep_id}",
+        "research_run_id": run_id, "stage": stage, "grid": grid, "params": params,
+        "labels": labels or {}, "status": "running", "job_ids": job_ids,
+        "created_at": None,
+    }, job_ids=job_ids)}, status=201)
+
+
+@agent_api_bp.get("/sweeps")
+def agent_sweep_list():
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "jobs:read")
+    if scope_err is not None:
+        return scope_err
+    if not ensure_agent_sweeps(engine):
+        return _ok({"sweeps": []})
+
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT * FROM agent_sweeps WHERE user_id = :uid "
+                 "ORDER BY created_at DESC LIMIT 100"),
+            {"uid": row["user_id"]},
+        ).mappings().all()
+    return _ok({"sweeps": [_sweep_view(r) for r in rows]})
+
+
+@agent_api_bp.get("/sweeps/<int:sweep_id>")
+def agent_sweep_detail(sweep_id: int):
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "jobs:read")
+    if scope_err is not None:
+        return scope_err
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        sweep = conn.execute(
+            text("SELECT * FROM agent_sweeps WHERE id = :id AND user_id = :uid"),
+            {"id": sweep_id, "uid": row["user_id"]},
+        ).mappings().first()
+        if sweep is None:
+            return jsonify(_err("not_found", "扫描不存在")), 404
+        jobs = conn.execute(
+            text("SELECT id, status, progress, error_class, error_message, created_at, "
+                 "finished_at FROM jobs WHERE sweep_id = :sid ORDER BY id"),
+            {"sid": sweep_id},
+        ).mappings().all()
+    return _ok({"sweep": _sweep_view(sweep), "jobs": [_jsonable_job(j) for j in jobs]})
+
+
+def _jsonable_job(job) -> dict[str, Any]:
+    return {
+        "id": job["id"],
+        "status": job["status"],
+        "progress": job["progress"],
+        "error_class": job["error_class"],
+        "error_message": job["error_message"],
+        "created_at": job["created_at"].isoformat() if job["created_at"] else None,
+        "finished_at": job["finished_at"].isoformat() if job["finished_at"] else None,
+    }
+
+
+@agent_api_bp.get("/sweeps/<int:sweep_id>/aggregate")
+def agent_sweep_aggregate(sweep_id: int):
+    """聚合：只回数字不回解读（用户边界 3）。缺字段 null，不编造、不补默认值。"""
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "results:read")
+    if scope_err is not None:
+        return scope_err
+    from sqlalchemy import text
+
+    sort_by = str(request.args.get("sort_by") or "total_return")
+    if sort_by not in AGGREGATE_SORT_KEYS:
+        return jsonify(_err("invalid_yaml",
+                            f"sort_by 须为 {'/'.join(AGGREGATE_SORT_KEYS)}")), 400
+    with engine.connect() as conn:
+        sweep = conn.execute(
+            text("SELECT * FROM agent_sweeps WHERE id = :id AND user_id = :uid"),
+            {"id": sweep_id, "uid": row["user_id"]},
+        ).mappings().first()
+        if sweep is None:
+            return jsonify(_err("not_found", "扫描不存在")), 404
+        jobs = conn.execute(
+            text("SELECT j.id, j.status, j.labels, r.summary, r.chart_data "
+                 "FROM jobs j LEFT JOIN results r ON r.job_id = j.id "
+                 "WHERE j.sweep_id = :sid ORDER BY j.id"),
+            {"sid": sweep_id},
+        ).mappings().all()
+
+    rows: list[dict[str, Any]] = []
+    for job in jobs:
+        config = (job["labels"] or {}).get("config") if isinstance(job["labels"], dict) else None
+        metrics = {}
+        chart = job["chart_data"] if isinstance(job["chart_data"], dict) else {}
+        if isinstance(chart.get("metrics"), dict):
+            metrics = chart["metrics"]
+        rows.append({
+            "job_id": job["id"],
+            "config": config,
+            "status": job["status"],
+            "total_return": _num(metrics.get("total_return")),
+            "annual_return": _num(metrics.get("annual_return")),
+            "sharpe": _num(metrics.get("sharpe")),
+            "max_drawdown": _num(metrics.get("max_drawdown")),
+            "win_rate": _num(metrics.get("win_rate")),
+            "trades": _num(metrics.get("trades")),
+            "avg_holding_days": _num(metrics.get("avg_holding_days")),
+            "excess_return": _num(metrics.get("excess_return")),
+            "buy_hold_return": _num(metrics.get("buy_hold_return")),
+        })
+    rows.sort(key=lambda r: (r[sort_by] is None, r[sort_by] if r[sort_by] is not None else 0),
+              reverse=(sort_by != "max_drawdown"))
+    return _ok({
+        "aggregate": {
+            "sweep_id": sweep_id,
+            "stage": sweep["stage"],
+            "sorted_by": sort_by,
+            "rows": rows,
+            "completed": sum(1 for r in rows if r["status"] == "completed"),
+            "total": len(rows),
+            "note": "聚合仅为数值计算结果，不含任何投资建议；缺失指标为 null，未做任何填补",
+        }
+    })
+
+
+def _num(value: Any) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
 # --------------------------------------------------------------------------
@@ -1079,5 +1798,18 @@ def agent_token_revoke(token_id: int):
 
 
 def register_agent_api(app) -> None:
-    """把第四入口蓝图挂到 SaaS app 上（开关关闭时路由仍注册但全部 404）。"""
+    """把第四入口蓝图挂到 SaaS app 上（开关关闭时路由仍注册但全部 404）。
+
+    除了蓝图内的 before_request，还要在 **app 级**加一道前缀闸：方法不匹配时
+    Flask 在路由阶段就抛 405，蓝图 before_request 不会执行，会泄露「路由存在」。
+    app 级闸按路径前缀判断，与蓝图闸同源同 Flag，关闭时统一 404。
+    """
     app.register_blueprint(agent_api_bp, url_prefix=AGENT_API_PREFIX)
+
+    @app.before_request
+    def _agent_api_prefix_gate() -> Any:
+        if not request.path.startswith(f"{AGENT_API_PREFIX}/"):
+            return None
+        if str(_cfg(app, "QRE_AGENT_API_ENABLED", "0") or "0") == "1":
+            return None
+        return jsonify(_err("not_found", "接口未启用")), 404

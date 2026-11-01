@@ -22,6 +22,25 @@ This file is the source of truth for single-agent workflow recovery.
 
 `gui/risk_report.py::generate_risk_report` 默认传入 `include_volatility_series=True`、`volatility_series_max_points=500`。前端已有序列即画 EWMA/GARCH 曲线。实测增量约 +10KB/report。**ECS 已部署**：MainPID 602680，`/static/vol-regime.js`、`/saas/jobs/76` 均 200。**worker 未重启**，新回测需 worker 重启后才真正产出序列。
 
+### 2026-11-03 E 项 M3：validate + sweeps 参数扫描（已部署 ECS并 commit）
+
+计划与完成度登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7（动工前六项计划 + 完成后逐项对照 + 下一步）。
+实现：`POST /validate`（不执行不计配额 + 成本估计）、`POST /sweeps`（screen/confirm 两阶段护栏、
+笛卡尔积串行展开、令牌级上限与会话预算预检、强制幂等键）、`GET /sweeps`·`/<id>`·`/aggregate`
+（`sort_by` 白名单、只回数字、缺字段 null）。
+**关键决策**：agent job 不占用户会员日配额，容量由令牌级上限 + 会话预算约束（有专项测试锁定）。
+**自身缺陷修复**：关闭开关时 POST-only 路由的 GET 会抛 405 泄露路由存在 → 补 app 级前缀闸。
+测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
+`/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
+
+### 2026-11-03 E 项 M3 计划（validate + sweeps，动工前登记）
+
+计划已登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7（validate 合同 / sweeps 两阶段护栏 /
+预算预检 / 幂等 / aggregate 只回数字 / 测试 / 部署纪律六项）。
+关键决策：**agent job 不占用户人工会员日配额**（否则 50 配置扫描立刻被 3 次/日挡死），
+改由令牌级上限（daily_submit_limit / in_flight_limit）与会话预算约束；
+worker 容量由 M4 夜间窗口保护。
+
 ### 2026-11-03 E 项 M2：research_runs 研究会话容器（已部署 ECS并 commit）
 
 计划与完成度均登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7（动工前六项计划 + 完成后逐项对照）。

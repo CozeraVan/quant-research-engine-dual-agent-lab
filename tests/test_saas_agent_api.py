@@ -76,7 +76,7 @@ def _clean(app):
     from quant_research_engine.gui.saas.app import _get_engine
     engine = _get_engine(app)
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE research_runs, api_tokens, results, jobs, strategies, users, sessions, sms_codes RESTART IDENTITY CASCADE"))
+        conn.execute(text("TRUNCATE agent_sweeps, research_runs, api_tokens, results, jobs, strategies, users, sessions, sms_codes RESTART IDENTITY CASCADE"))
 
 
 def _login(client, app, target="13800000001"):
@@ -119,6 +119,15 @@ class TestFeatureFlag:
             resp = client.get(f"{AGENT_API_PREFIX}{path}")
             assert resp.status_code == 404, path
             assert resp.get_json()["error"]["code"] == "not_found"
+
+    def test_disabled_also_hides_post_only_routes(self, client, app):
+        """方法不匹配时 Flask 会在路由阶段抛 405；app 级前缀闸必须先拦成 404，
+        否则关闭状态下也会泄露「路由存在」。"""
+        app.config["QRE_AGENT_API_ENABLED"] = "0"
+        for method, path in (("get", "/validate"), ("get", "/sweeps"),
+                             ("post", "/capabilities"), ("get", "/sweeps/1/aggregate")):
+            resp = getattr(client, method)(f"{AGENT_API_PREFIX}{path}", json={})
+            assert resp.status_code == 404, (method, path)
 
     def test_enabled_requires_token(self, client):
         resp = client.get(f"{AGENT_API_PREFIX}/capabilities")
@@ -423,6 +432,290 @@ class TestResearchRuns:
         assert ag["research_runs"][0]["has_conclusion"] is False
 
 
+class TestValidateAndSweeps:
+    """M3：validate 合同 + sweep 两阶段护栏 + 预算预检 + 幂等 + aggregate 口径。"""
+
+    BASE_YAML = (
+        "experiment:\n  name: ema_scan\n"
+        "data:\n  factor_fields:\n    ema_fast: factors.stock_daily_ta.ema5\n"
+        "signal:\n  entry: 'ema_fast > close'\n  exit: 'ema_fast < close'\n"
+        "evaluation:\n  forward_return_horizons: [1]\n"
+        "holding:\n  max_holding_days: 20\n"
+    )
+
+    def _token(self, client, app, scopes=None):
+        session = _login(client, app)
+        token = _create_token(client, session, scopes=scopes or
+                              ["jobs:submit", "jobs:read", "results:read", "factors:read"])["token"]
+        return {"Authorization": f"Bearer {token['plaintext']}"}
+
+    def _run(self, client, headers, **budget):
+        resp = client.post(f"{AGENT_API_PREFIX}/research-runs",
+                           json={"title": "EMA 扫描", "budget": budget}, headers=headers)
+        assert resp.status_code == 201, resp.get_json()
+        return resp.get_json()["research_run"]["id"]
+
+    # --- validate ---
+    def test_validate_ok_returns_cost_estimate_without_executing(self, client, app):
+        headers = self._token(client, app)
+        resp = client.post(f"{AGENT_API_PREFIX}/validate",
+                           json={"yaml": self.BASE_YAML,
+                                 "params": {"random_n": 300, "start": "2021-01-04",
+                                            "end": "2026-10-30"}},
+                           headers=headers)
+        assert resp.status_code == 200
+        body = resp.get_json()["validate"]
+        assert body["valid"] is True and body["issues"] == []
+        assert body["executed"] is False and body["quota_charged"] is False
+        assert body["cost_estimate"]["profile"] == "sample300_5y"
+        assert 10 <= body["cost_estimate"]["est_seconds"] <= 25
+
+    def test_validate_rejects_bad_yaml_and_missing_dates(self, client, app):
+        headers = self._token(client, app)
+        resp = client.post(f"{AGENT_API_PREFIX}/validate",
+                           json={"yaml": "signal: [", "params": {}}, headers=headers)
+        assert resp.status_code == 200  # validate 不因非法而 500，只在 body 里报告
+        body = resp.get_json()["validate"]
+        assert body["valid"] is False
+        assert any("YAML" in issue for issue in body["issues"])
+        assert any("start" in issue for issue in body["issues"])
+
+    def test_validate_normalizes_codes(self, client, app):
+        headers = self._token(client, app)
+        resp = client.post(f"{AGENT_API_PREFIX}/validate",
+                           json={"yaml": self.BASE_YAML,
+                                 "params": {"codes": ["600519"], "start": "2024-01-02",
+                                            "end": "2024-06-28"}},
+                           headers=headers)
+        codes = resp.get_json()["validate"]["normalized_params"]["codes"]
+        assert codes == ["600519.SH"]
+
+    def test_validate_full_market_estimates_full_profile(self, client, app):
+        headers = self._token(client, app)
+        resp = client.post(f"{AGENT_API_PREFIX}/validate",
+                           json={"yaml": self.BASE_YAML,
+                                 "params": {"all_market": True, "start": "2025-01-02",
+                                            "end": "2026-10-30"}},
+                           headers=headers)
+        estimate = resp.get_json()["validate"]["cost_estimate"]
+        assert estimate["profile"] == "full_a_2y"
+        assert estimate["method"] in ("profile_match", "profile_match_scaled")
+
+    # --- sweeps ---
+    def _sweep(self, client, headers, run_id, *, stage="screen", grid=None, params=None,
+               idem="sweep-1", labels=None):
+        body = {
+            "research_run_id": run_id,
+            "base_yaml": self.BASE_YAML,
+            "grid": grid if grid is not None else {
+                "data.factor_fields.ema_fast": [
+                    "factors.stock_daily_ta.ema5",
+                    "factors.stock_daily_ta.ema10",
+                    "factors.stock_daily_ta.ema20",
+                ]
+            },
+            "params": params or {"random_n": 50, "start": "2024-01-02", "end": "2025-06-30"},
+            "stage": stage,
+            "idempotency_key": idem,
+        }
+        if labels is not None:
+            body["labels"] = labels
+        return client.post(f"{AGENT_API_PREFIX}/sweeps", json=body, headers=headers)
+
+    def test_screen_sweep_expands_jobs_and_links_run(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers, max_jobs=10)
+        resp = self._sweep(client, headers, run_id)
+        assert resp.status_code == 201, resp.get_json()
+        sweep = resp.get_json()["sweep"]
+        assert sweep["job_count"] == 3 and sweep["stage"] == "screen"
+        assert len(sweep["job_ids"]) == 3
+
+        detail = client.get(f"{AGENT_API_PREFIX}/sweeps/{sweep['id']}",
+                            headers=headers).get_json()
+        assert len(detail["jobs"]) == 3
+        assert all(j["status"] == "queued" for j in detail["jobs"])
+        run = client.get(f"{AGENT_API_PREFIX}/research-runs/{run_id}",
+                         headers=headers).get_json()["research_run"]
+        assert run["usage"]["jobs_total"] == 3
+
+    def test_screen_defaults_random_n_when_absent(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        resp = self._sweep(client, headers, run_id,
+                           params={"start": "2024-01-02", "end": "2025-06-30"})
+        assert resp.status_code == 201, resp.get_json()
+        assert resp.get_json()["sweep"]["params"]["random_n"] == 300
+
+    def test_screen_rejects_full_market_and_long_window(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        resp = self._sweep(client, headers, run_id,
+                           params={"all_market": True, "start": "2024-01-02",
+                                   "end": "2025-06-30"})
+        assert resp.status_code == 409
+        assert resp.get_json()["error"]["code"] == "stage_not_allowed"
+        resp = self._sweep(client, headers, run_id, idem="sweep-long",
+                           params={"random_n": 50, "start": "2015-01-02",
+                                   "end": "2026-10-30"})
+        assert resp.status_code == 409
+
+    def test_confirm_requires_allow_full_market(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        resp = self._sweep(client, headers, run_id, stage="confirm")
+        assert resp.status_code == 409
+        assert "allow_full_market" in resp.get_json()["error"]["message"]
+
+    def test_confirm_allows_full_market_with_budget(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers, allow_full_market=True)
+        resp = self._sweep(client, headers, run_id, stage="confirm",
+                           grid={"data.factor_fields.ema_fast": [
+                               "factors.stock_daily_ta.ema5",
+                               "factors.stock_daily_ta.ema20"]},
+                           params={"all_market": True, "start": "2024-01-02",
+                                   "end": "2025-06-30"})
+        assert resp.status_code == 201, resp.get_json()
+        assert resp.get_json()["sweep"]["job_count"] == 2
+
+    def test_confirm_rejects_too_many_configs(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers, allow_full_market=True)
+        grid = {"data.factor_fields.ema_fast": [f"factors.stock_daily_ta.ema{n}"
+                                                for n in (5, 10, 20, 30, 60, 120)]}
+        resp = self._sweep(client, headers, run_id, stage="confirm", grid=grid,
+                           params={"all_market": True, "start": "2024-01-02",
+                                   "end": "2025-06-30"})
+        assert resp.status_code == 409
+        assert "最多 5 个配置" in resp.get_json()["error"]["message"]
+
+    def test_budget_max_jobs_blocks_expansion(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers, max_jobs=2)
+        resp = self._sweep(client, headers, run_id)  # 3 个配置 > max_jobs=2
+        assert resp.status_code == 409
+        assert resp.get_json()["error"]["code"] == "budget_exhausted"
+
+    def test_token_daily_limit_blocks(self, client, app):
+        from sqlalchemy import text
+
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            uid = conn.execute(text("SELECT id FROM users ORDER BY id LIMIT 1")).scalar_one()
+            sid = conn.execute(
+                text("INSERT INTO strategies (user_id, name, yaml) VALUES (:u, 's', :y) RETURNING id"),
+                {"u": uid, "y": self.BASE_YAML}).scalar_one()
+            tid = conn.execute(text("SELECT id FROM api_tokens ORDER BY id DESC LIMIT 1")).scalar_one()
+            for _ in range(50):  # 打满默认 50/日
+                conn.execute(text(
+                    "INSERT INTO jobs (user_id, strategy_id, kind, params, token_id) "
+                    "VALUES (:u, :s, 'full', '{}'::jsonb, :t)"), {"u": uid, "s": sid, "t": tid})
+        resp = self._sweep(client, headers, run_id)
+        assert resp.status_code == 429
+        assert resp.get_json()["error"]["code"] == "daily_submit_limit"
+
+    def test_idempotency_returns_existing_sweep(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        first = self._sweep(client, headers, run_id, idem="same-key")
+        assert first.status_code == 201
+        second = self._sweep(client, headers, run_id, idem="same-key")
+        assert second.status_code == 200
+        assert second.get_json()["deduped"] is True
+        assert second.get_json()["sweep"]["id"] == first.get_json()["sweep"]["id"]
+        detail = client.get(f"{AGENT_API_PREFIX}/sweeps/{first.get_json()['sweep']['id']}",
+                            headers=headers).get_json()
+        assert len(detail["jobs"]) == 3  # 没有重复展开
+
+    def test_missing_idempotency_key_rejected(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        resp = self._sweep(client, headers, run_id, idem="")
+        assert resp.status_code == 400
+        assert resp.get_json()["error"]["code"] == "missing_idempotency_key"
+
+    def test_unknown_grid_key_rejected(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        resp = self._sweep(client, headers, run_id,
+                           grid={"holding.max_holding_days": [5, 10]})
+        assert resp.status_code == 400
+        assert "data.factor_fields" in resp.get_json()["error"]["message"]
+
+    def test_agent_jobs_do_not_consume_member_daily_quota(self, client, app):
+        """关键决策：agent job 不占用户人工会员日配额，否则扫描立刻被 3 次/日挡死。"""
+        from sqlalchemy import text
+
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        assert self._sweep(client, headers, run_id).status_code == 201
+        engine = app.extensions["saas_engine"]
+        with engine.connect() as conn:
+            # 该用户今日 full job 数已超过 member 默认 3 次，但 agent 任务照常入队
+            used = conn.execute(text(
+                "SELECT count(*) FROM jobs j JOIN users u ON u.id = j.user_id "
+                "WHERE j.kind='full' AND j.created_at::date = now()::date "
+                "AND j.token_id IS NOT NULL")).scalar_one()
+        assert used == 3
+
+    def test_aggregate_returns_numbers_only(self, client, app):
+        from sqlalchemy import text
+
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        sweep_id = self._sweep(client, headers, run_id).get_json()["sweep"]["id"]
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            job_id = conn.execute(text(
+                "SELECT id FROM jobs WHERE sweep_id = :s ORDER BY id LIMIT 1"), {"s": sweep_id}
+            ).scalar_one()
+            conn.execute(text(
+                "UPDATE jobs SET status='completed', started_at=now(), finished_at=now() "
+                "WHERE id = :j"), {"j": job_id})
+            conn.execute(text(
+                "INSERT INTO results (job_id, user_id, summary, chart_data) "
+                "SELECT id, user_id, '{}'::jsonb, "
+                "jsonb_build_object('metrics', jsonb_build_object("
+                "'total_return', 0.42, 'sharpe', 1.1, 'max_drawdown', -0.2, "
+                "'trades', 88, 'win_rate', 0.5)) FROM jobs WHERE id = :j"),
+                {"j": job_id})
+        resp = client.get(f"{AGENT_API_PREFIX}/sweeps/{sweep_id}/aggregate",
+                          headers=headers)
+        assert resp.status_code == 200
+        agg = resp.get_json()["aggregate"]
+        assert agg["total"] == 3 and agg["completed"] == 1
+        assert agg["sorted_by"] == "total_return"
+        assert "不含任何投资建议" in agg["note"]
+        done = [r for r in agg["rows"] if r["job_id"] == job_id][0]
+        assert done["total_return"] == 0.42 and done["sharpe"] == 1.1
+        assert done["annual_return"] is None  # 缺字段 null，不编造
+        others = [r for r in agg["rows"] if r["job_id"] != job_id][0]
+        assert others["total_return"] is None
+
+    def test_aggregate_sort_by_whitelist(self, client, app):
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        sweep_id = self._sweep(client, headers, run_id).get_json()["sweep"]["id"]
+        resp = client.get(f"{AGENT_API_PREFIX}/sweeps/{sweep_id}/aggregate?sort_by=profit",
+                          headers=headers)
+        assert resp.status_code == 400
+        assert resp.get_json()["error"]["code"] == "invalid_yaml"
+
+    def test_other_users_sweep_is_404(self, client, app):
+        headers_a = self._token(client, app)
+        run_id = self._run(client, headers_a)
+        sweep_id = self._sweep(client, headers_a, run_id).get_json()["sweep"]["id"]
+        session_b = _login(client, app, "13800000003")
+        token_b = _create_token(client, session_b)["token"]
+        headers_b = {"Authorization": f"Bearer {token_b['plaintext']}"}
+        for path in (f"{AGENT_API_PREFIX}/sweeps/{sweep_id}",
+                     f"{AGENT_API_PREFIX}/sweeps/{sweep_id}/aggregate"):
+            assert client.get(path, headers=headers_b).status_code == 404, path
+
+
 class TestConsoleVisibility:
     """R-ADMIN-001：外部 Agent API 的限额必须在 9090 管理台可见，且与执行同源。"""
 
@@ -481,9 +774,13 @@ class TestDiscoveryDocuments:
         assert DISCLAIMER in doc["info"]["description"]
         assert doc["security"] == [{"bearerAuth": []}]
         assert doc["components"]["securitySchemes"]["bearerAuth"]["scheme"] == "bearer"
-        # 未实现的切片必须显式标注 planned，不得让外部 agent 误判可用
-        for path in ("/validate", "/research-runs", "/sweeps", "/jobs"):
-            assert doc["paths"][path]["post"]["x-status"] == "planned", path
+        # 未实现的端点必须显式标注 planned，不得让外部 agent 误判可用
+        for path in ("/jobs", "/jobs/{job_id}/result", "/jobs/{job_id}/artifacts/{name}"):
+            assert doc["paths"][path]["post" if path == "/jobs" else "get"]["x-status"] == "planned", path
+        # 已实现的端点不得带 planned 标注
+        for path in ("/validate", "/research-runs", "/sweeps", "/sweeps/{sweep_id}/aggregate"):
+            assert "x-status" not in doc["paths"][path][
+                "post" if path in ("/validate", "/research-runs", "/sweeps") else "get"], path
         codes = {e["code"] for e in doc["x-error-codes"]}
         assert {"unauthorized", "forbidden_scope", "budget_exhausted",
                 "daily_submit_limit", "nightly_window"} <= codes

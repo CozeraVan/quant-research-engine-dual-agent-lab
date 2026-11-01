@@ -166,7 +166,7 @@ bash scripts/git-finalize-check.sh
 | 2026-11-02 | E 项第四入口 M0 设计（读档 + 对齐 + brainstorm + 设计文档/CR） | done | Kimi | `6f82567` 已 commit/push；设计文档 + CR + 10-25 brainstorm 取代标记 |
 | 2026-11-02 | 压测文档追加「每个全期 job 耗时分布」监视要求（用户追加） | in_progress | Kimi | 已写入 `27_STRESS_TEST_2026-11-02.md` §2（min/median/p95/max + 排队时长 + 最慢 5 个 job）；待子代理在 item1–item3 小节落地数值 |
 | 2026-11-02 | E 项 M1：api_tokens + capabilities + openapi + schema/strategy（特性开关默认关） | done | Kimi | `fb419b4` 已 commit/push 并部署 ECS（MainPID 603714，回滚 `/tmp/qre-deploy-20261101T182548Z.bak`）；新测试 23 例、全量 3322 passed + 34 skipped；生产 flag 关时全路由 404 |
-| 2026-11-03 | **E 项 M2：research_runs 研究会话容器** | done | Kimi | `research_runs` 表 + 5 端点（建/列表/详情/状态迁移/结论）+ 预算记账（jobs 数、`results.artifacts` 体积、墙上时间）+ budget 白名单收敛到 `AGENT_DEFAULTS` 上限 + 9090 研究会话清点；新测试 13 例、全量 **3335 passed + 34 skipped**；ECS 已部署（MainPID 604411，回滚 `/tmp/qre-deploy-20261101T183600Z.bak`），flag 关时全路由 404 验证；commit 见下一条 |
+| 2026-11-03 | **E 项 M3：validate + sweeps（参数扫描）** | done | Kimi | `POST /validate`（不执行不计配额 + 成本估计）+ `POST /sweeps`（screen/confirm 两阶段护栏、笛卡尔积串行展开、令牌级上限与会话预算预检、幂等）+ `GET /sweeps`·`/<id>`·`/aggregate`（只回数字）；agent job 不占会员日配额；app 级前缀闸修复 405 泄露；新测试 20 例、全量 **3354 passed + 34 skipped**；ECS 已部署（MainPID 605487，回滚 `/tmp/qre-deploy-20261101T184839Z.bak`），全方法 404 验证 |
 
 **M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**
 
@@ -219,6 +219,62 @@ bash scripts/git-finalize-check.sh
   universe 解析（不执行、不计配额）；`POST /sweeps` 笛卡尔积展开为串行子 job，screen 阶段强制
   抽样 universe 与短区间、confirm 阶段需 `allow_full_market` 且配置数 ≤5，展开前预检会话预算，
   `GET /sweeps/<id>/aggregate` 只回排名数字不回解读。
+
+**M3 计划（2026-11-03 动工前登记）**
+
+1. `POST /api/agent/v1/validate`（scope `factors:read`，不执行、不建 job、不计配额）：
+   复用 `gui/engine.py::validate_yaml` + `security/yaml_guard.check_factor_limits` +
+   `symbol_norm.normalize_ts_codes` + universe 解析；返回 `valid` / `issues` /
+   `normalized_params` / `factor_usage` / `cost_estimate`（按 universe 规模匹配 scale_profiles）。
+2. `POST /api/agent/v1/sweeps`（scope `jobs:submit`，强制 `research_run_id`）：
+   - `stage=screen`（默认）：**强制**抽样股票池（`random_n`，缺省 300）与较短区间（≤5 年），
+     拒绝 `all_market`/`universe`/超过上限的 `codes`；
+   - `stage=confirm`：需会话 `budget.allow_full_market=true` 且配置数 ≤5，允许全市场；
+   - grid 笛卡尔积展开为 **串行** 子 job（V1 不做并发调度），每个 job 落
+     `token_id` / `research_run_id` / `labels`；
+   - 展开前预检：令牌日提交上限、在飞上限、会话预算（`max_jobs`/`max_artifact_bytes`/
+     `max_wall_clock_hours`）——超限返回 `budget_exhausted` 且**不展开**；
+   - 幂等：强制 `Idempotency-Key`，同键返回既有 sweep（不重复展开）；
+   - **重要决策：agent job 不占用户人工会员日配额**（否则 50 配置扫描立刻被 3 次/日挡死），
+     改由令牌级上限与会话预算约束；worker 容量仍由夜间窗口（M4）保护。
+3. `GET /api/agent/v1/sweeps`、`GET /api/agent/v1/sweeps/<id>`：列表/详情（含子 job 状态）。
+4. `GET /api/agent/v1/sweeps/<id>/aggregate`：只回**数字**不回解读——每配置一行
+   `total_return`/`annual_return`/`sharpe`/`max_drawdown`/`win_rate`/`trades`/
+   `avg_holding_days`/`excess_return`/`buy_hold_return`/`n_symbols`，缺字段 null 不编造；
+   `sort_by` 白名单，响应带 `note` 与 `disclaimer`。
+5. 测试：validate 合同（合法/非法 YAML、因子超限、成本估计匹配）、两阶段护栏
+   （screen 要全量被拒、confirm 无 allow_full_market 被拒、confirm 超配置数被拒）、
+   预算预检（max_jobs 用尽即拒）、幂等、labels/归属落库、aggregate 口径与 null 处理、他人 sweep 404。
+6. 部署纪律：ECS 先 apply schema（若无新增则跳过）再发文件、只重启 qre-saas、flag 仍默认关；
+   验收通过后 commit/push。
+
+完成度目标：M3 结束后，外部 agent 在 flag 打开时可完成
+「validate → 建会话 → screen 扫描 → confirm 短名单 → aggregate 排名」全链路；
+结果读取与受控下载仍在 M5。
+
+**M3 完成情况（2026-11-03）**：六项计划全部落地，另修复一个自身缺陷。
+- `POST /validate`：复用 `validate_yaml` + `check_factor_limits`（按属主 tier 策略）+
+  `normalize_ts_codes`；返回 valid/issues/normalized_params/factor_limits/cost_estimate，
+  显式 `executed:false` / `quota_charged:false`。
+- `POST /sweeps`：screen 阶段强制抽样（`random_n` 默认 300、≤500 只、≤5 年，拒 all_market/板块）；
+  confirm 需 `budget.allow_full_market=true` 且配置 ≤5；grid 笛卡尔积**串行**展开为子 job，
+  落 `token_id`/`research_run_id`/`sweep_id`/`labels`；强制 `Idempotency-Key`（同键返回既有 sweep）。
+- 预检：令牌日提交上限（默认 50）、在飞上限（默认 5）、会话 `max_jobs` 与 `max_wall_clock_hours`
+  （按成本估计折算），超限一律不展开。
+- `GET /sweeps`、`/sweeps/<id>`（含子 job 状态）、`/sweeps/<id>/aggregate`：
+  `sort_by` 白名单 8 键，只回数字、缺字段 null、响应带「不含任何投资建议」。
+- **关键决策落地**：agent job **不占用户会员日配额**（否则 50 配置扫描立刻被 3 次/日挡死），
+  容量改由令牌级上限 + 会话预算约束；已有专项测试锁定该行为。
+- **自身缺陷修复**：关闭开关时，对 POST-only 路由发 GET 会在 Flask 路由阶段抛 405，
+  蓝图级 before_request 不执行 → 泄露「路由存在」。已补 app 级前缀闸（同 Flag），
+  生产复测 GET/POST × 5 路由全 404。
+- 测试：新 20 例；全量 **3354 passed + 34 skipped**（零回归）。
+- 部署：ECS MainPID **605487**，回滚副本 `/tmp/qre-deploy-20261101T184839Z.bak`；
+  `agent_sweeps` 表 + `jobs.sweep_id` 已 apply。未重启 worker、未跑真实回测。
+
+**下一步 M4**：令牌级限流（每分钟，429 + Retry-After）、夜间窗口认领（`nightly_only`）、
+`nl_compile_events` 式最小审计（不存策略文本/令牌明文/IP）、9090 展示与执行同源复核。
+**M5**：结果端点放行 token 归属 + 受控 artifacts 下载 + 产物 TTL 归档。
 
 ---
 
