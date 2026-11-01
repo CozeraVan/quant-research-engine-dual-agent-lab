@@ -221,9 +221,9 @@ class TestChartHooks:
     @pytest.mark.parametrize(
         ("rel", "expected"),
         [
-            # QRE-VOL-REGIME-NO-BARCHART：job.html 删掉三等分柱状图后
-            # 少一个 echarts.init + 一个 themeChart（5 → 4）
-            ("saas/templates/job.html", 4),
+            # QRE-VOL-REGIME-SERIES：job.html 波动率时序曲线新增一个 echarts.init
+            # + 一个 themeChart（4 → 5）
+            ("saas/templates/job.html", 5),
             ("saas/templates/symbol.html", 2),
             ("static/replay.js", 1),
         ],

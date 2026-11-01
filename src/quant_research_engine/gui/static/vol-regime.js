@@ -100,9 +100,82 @@
     };
   }
 
+  /* 可选时序曲线模型（P2-15）：把后端 `volatility.series` 转成纯数值结构。
+     只认有限数数组；GARCH 降级 error 或空数组都转 null。阈值同样只认正数
+     low_below < high_at_or_above。模板负责用 ECharts 画线与水平参考线。 */
+  function seriesModel(vol) {
+    if (!vol || !vol.series) return null;
+    var s = vol.series;
+    var ewma = Array.isArray(s.ewma_annual) ? s.ewma_annual.filter(num) : null;
+    var garch = Array.isArray(s.garch_annual) ? s.garch_annual.filter(num) : null;
+    if ((!ewma || !ewma.length) && (!garch || !garch.length)) return null;
+    var th = vol.regime_thresholds || {};
+    var lo = num(th.low_below) ? th.low_below : null;
+    var hi = num(th.high_at_or_above) ? th.high_at_or_above : null;
+    return {
+      ewma: ewma && ewma.length ? ewma : null,
+      garch: garch && garch.length ? garch : null,
+      low: lo,
+      high: hi,
+      hasThreshold: lo !== null && hi !== null && lo > 0 && hi > lo,
+      maxPoints: num(s.max_points) ? s.max_points : null,
+    };
+  }
+
+  /* 时序曲线的 ECharts option（P2-15）。x 轴先用抽稀后的序号，日期轴待后端
+     下发对齐 dates 后扩展；y 轴为年化波动小数，阈值用 markLine 水平参考线。 */
+  function seriesChartOption(model) {
+    if (!model || (!model.ewma && !model.garch)) return null;
+    var n = Math.max(model.ewma ? model.ewma.length : 0,
+                     model.garch ? model.garch.length : 0);
+    var xData = [];
+    for (var i = 0; i < n; i++) xData.push(i + 1);
+    var series = [];
+    if (model.ewma) {
+      series.push({ name: 'EWMA 年化波动', type: 'line', showSymbol: false,
+                    data: model.ewma, itemStyle: { color: '#6750A4' } });
+    }
+    if (model.garch) {
+      series.push({ name: 'GARCH 年化波动', type: 'line', showSymbol: false,
+                    data: model.garch, itemStyle: { color: '#8B7FBE' } });
+    }
+    if (model.hasThreshold) {
+      var markLine = {
+        symbol: 'none',
+        data: [
+          { yAxis: model.low, label: { formatter: '低档阈值' } },
+          { yAxis: model.high, label: { formatter: '高档阈值' } },
+        ],
+      };
+      series.forEach(function (s) { s.markLine = markLine; });
+    }
+    return {
+      animation: false,
+      tooltip: {
+        trigger: 'axis',
+        formatter: function (params) {
+          if (!params || !params.length) return '';
+          var rows = params.map(function (p) {
+            var v = p.value;
+            return p.marker + ' ' + p.seriesName + '：' +
+              (typeof v === 'number' && isFinite(v) ? (v * 100).toFixed(2) + '%' : '—');
+          });
+          return '时序点 ' + params[0].axisValue + '<br/>' + rows.join('<br/>');
+        },
+      },
+      legend: { data: series.map(function (s) { return s.name; }), top: 0 },
+      grid: { left: 60, right: 15, top: 30, bottom: 25 },
+      xAxis: { type: 'category', name: '时序点', data: xData },
+      yAxis: {
+        type: 'value',
+        axisLabel: { formatter: function (v) { return (v * 100).toFixed(0) + '%'; } },
+      },
+      series: series,
+    };
+  }
+
   // 当前状态一句话：有阈值就把三档边界讲清楚，没有就只说状态
-  function describe(vol) {
-    if (!vol || !vol.latest_regime) return '';
+  function describe(vol) {    if (!vol || !vol.latest_regime) return '';
     var state = label(vol.latest_regime);
     if (!state) return '';
     var th = vol.regime_thresholds;
@@ -138,5 +211,7 @@
     describe: describe,
     tipText: tipText,
     gaugeModel: gaugeModel,
+    seriesModel: seriesModel,
+    seriesChartOption: seriesChartOption,
   };
 })(typeof window !== 'undefined' ? window : this);

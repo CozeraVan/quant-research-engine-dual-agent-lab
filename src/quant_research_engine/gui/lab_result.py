@@ -801,6 +801,64 @@ def _fetch_stock_daily(ts_code: str, start: str | None, end: str | None) -> tupl
 
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
+# P2-14 参数网格产物侧：同族最多下发 4 组参数（主组 + 3 组变体），
+# MACD 三元组一组 3 列 → 单族最多 12 列，避免 15MiB 预算被打爆。
+PARAM_VARIANT_MAX_GROUPS = 4
+_PARAM_RE = re.compile(r"^([a-z][a-z0-9]*?)_(\d+(?:_\d+)*)$")
+_PARAM_FAMILY_ALIAS = {"sma": "ma", "bbl": "boll", "bbm": "boll", "bbu": "boll"}
+
+
+def _param_family_params(column: str) -> tuple[str, str] | None:
+    """识别因子列的 (family, params)；非参数化列返回 None。
+
+    与前端 `factor-layout.js::paramKeyOf` 对齐：MACD 三元组归到 macd 族，
+    sma 归 ma，boll 上中下轨归 boll。
+    """
+    col = str(column or "").lower()
+    m = re.fullmatch(r"(macd|macds|macdh)_(.+)", col)
+    if m:
+        return ("macd", m.group(2))
+    m = _PARAM_RE.fullmatch(col)
+    if not m:
+        return None
+    family = _PARAM_FAMILY_ALIAS.get(m.group(1), m.group(1))
+    return (family, m.group(2))
+
+
+def _params_sort_key(params: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in params.split("_") if p.isdigit())
+
+
+def _select_param_variant_columns(primary_col: str, existing_cols: list[str]) -> list[str]:
+    """选择主参数组 + 同族其他参数组列（主组优先，其余按参数数值升序）。
+
+    只有一个参数组时只返回主列——存量产物零变化。
+    """
+    primary = str(primary_col)
+    key = _param_family_params(primary)
+    if key is None:
+        return [primary]
+    family, primary_params = key
+    groups: dict[str, list[str]] = {}
+    for col in existing_cols:
+        k = _param_family_params(col)
+        if k is None or k[0] != family:
+            continue
+        groups.setdefault(k[1], []).append(str(col))
+    if len(groups) < 2:
+        return [primary]
+    ordered_params = [primary_params] + sorted(
+        (p for p in groups if p != primary_params), key=_params_sort_key
+    )
+    selected = ordered_params[:PARAM_VARIANT_MAX_GROUPS]
+    out = [primary]
+    for params in selected:
+        for col in groups.get(params, []):
+            if col != primary:
+                out.append(col)
+    return out
+
+
 
 def _strategy_factor_specs(record: dict[str, Any]) -> tuple[dict[str, tuple[str, str]], str, str]:
     """从 run 目录 strategy.yaml 提取因子映射与出入场表达式。
@@ -922,12 +980,21 @@ def _latest_adj_factor(conn: Any, ts_code: str, as_of: str | None = None) -> flo
         return None
 
 
-def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str]) -> tuple[list[dict[str, Any]] | None, str | None]:
+def _fetch_factor_panels(
+    record: dict[str, Any],
+    ts_code: str,
+    dates: list[str],
+    *,
+    include_param_variants: bool = False,
+) -> tuple[list[dict[str, Any]] | None, str | None]:
     """按 K 线日期对齐拉取策略因子序列（含出入场阈值）。失败降级 (None, note)。
 
     每个 panel 带 ``col``（真实因子列名）供前端分组启发式；策略同时引用
     macd_<P>/macds_<P> 且表内存在 macdh_<P> 时自动补查 MACD 柱 panel（name=MACD柱），
     补全失败静默跳过（每股至多一次 information_schema 查询，且仅当检测到 macd 对时）。
+
+    P2-14：``include_param_variants=True`` 时，按同族已入库参数组额外下发变体列
+    （主组优先，最多 4 组；MACD 三元组完整）。默认 False，存量产物行为零变化。
 
     呈现口径：因子表是 hfq，K 线是前复权@最新。价格型因子（EMA/BOLL/MACD 等）
     会除以该股最新 ``adj_factor``；无量纲因子（RSI 等）不换算。引擎回测仍用 hfq。
@@ -945,6 +1012,37 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
             store = _store()
         except Exception:
             store = _store(DEFAULT_DB_URL)
+        # P2-14：变体列发现（仅查询 specs 实际用到的表，避免全库 information_schema 扫描）
+        variant_cols_by_table: dict[str, list[str]] = {}
+        if include_param_variants:
+            tables = sorted({table for table, _ in specs.values()})
+            with store.market_engine.begin() as conn:
+                for table in tables:
+                    schema, _, tname = table.partition(".")
+                    if not tname:
+                        schema, tname = "public", schema
+                    try:
+                        rows = conn.execute(
+                            text(
+                                "SELECT column_name FROM information_schema.columns "
+                                "WHERE table_schema = :s AND table_name = :t"
+                            ),
+                            {"s": schema, "t": tname},
+                        ).fetchall()
+                        variant_cols_by_table[table] = [str(r[0]) for r in rows]
+                    except Exception:
+                        variant_cols_by_table[table] = []
+        # fetch_items: (raw_key, table, column, is_variant)
+        fetch_items: list[tuple[str, str, str, bool]] = []
+        existing_primary = set(specs.values())
+        for name, (table, col) in specs.items():
+            fetch_items.append((name, table, col, False))
+            if not include_param_variants:
+                continue
+            for vcol in _select_param_variant_columns(col, variant_cols_by_table.get(table, [])):
+                if vcol == col or (table, vcol) in existing_primary:
+                    continue
+                fetch_items.append((vcol, table, vcol, True))
         hist_specs: list[tuple[str, str]] = []  # [(table, hist_col)] 已确认存在的补查列
         with store.market_engine.begin() as conn:
             # K 线前复权锚点：价格型因子从 hfq 换算到 K 线同尺度（引擎仍用 hfq，不变）。
@@ -970,7 +1068,7 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
                 except Exception:
                     hist_specs = []
             raw: dict[str, dict[str, float]] = {}
-            for name, (table, col) in specs.items():
+            for raw_key, table, col, _is_variant in fetch_items:
                 rows = conn.execute(
                     text(
                         f'SELECT trade_date, "{col}" FROM {table} '
@@ -982,7 +1080,7 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
                 # double precision NaN 而非 NULL，`is not None` 漏放它进 raw，
                 # 序列就带 NaN → 产物/响应体出现裸 NaN token（非法 JSON）。
                 # 非有限值一律当作缺口（与 None 同语义），由前端断线渲染。
-                raw[name] = {
+                raw[raw_key] = {
                     str(r[0]): float(r[1])
                     for r in rows
                     if r[1] is not None and math.isfinite(float(r[1]))
@@ -1005,28 +1103,37 @@ def _fetch_factor_panels(record: dict[str, Any], ts_code: str, dates: list[str])
                     pass  # 单列补查失败静默跳过
     except Exception as exc:
         return None, f"因子数据不可用（{exc}）"
-    panels = []
-    for name in specs:
-        table, col = specs[name]
+
+    def _panel(raw_key: str, name: str, table: str, col: str, thresholds: list[float]) -> dict[str, Any] | None:
         scaled = _factor_is_price_scaled(table, col) and anchor is not None and anchor > 0
         series = [
-            round(raw[name][d] / anchor, 4) if scaled and d in raw[name]
-            else (round(raw[name][d], 4) if d in raw[name] else None)
+            round(raw[raw_key][d] / anchor, 4) if scaled and d in raw[raw_key]
+            else (round(raw[raw_key][d], 4) if d in raw[raw_key] else None)
             for d in dates
         ]
-        if any(v is not None for v in series):
-            thresholds = _factor_thresholds(name, entry, exit_)
-            if scaled and thresholds:
-                thresholds = [round(t / anchor, 4) for t in thresholds]
-            panels.append({
-                "name": name,
-                "col": col,
-                "table": table,
-                "values": series,
-                "thresholds": thresholds,
-                # QRE-FACTOR-DISPLAY-CONTRACT：呈现合同随面板下发（未注册为 None）
-                "display": _panel_display(table, col),
-            })
+        if not any(v is not None for v in series):
+            return None
+        if scaled and thresholds:
+            thresholds = [round(t / anchor, 4) for t in thresholds]
+        return {
+            "name": name,
+            "col": col,
+            "table": table,
+            "values": series,
+            "thresholds": thresholds,
+            # QRE-FACTOR-DISPLAY-CONTRACT：呈现合同随面板下发（未注册为 None）
+            "display": _panel_display(table, col),
+        }
+
+    panels = []
+    for raw_key, table, col, is_variant in fetch_items:
+        if is_variant:
+            panel = _panel(raw_key, col, table, col, [])
+        else:
+            thresholds = _factor_thresholds(raw_key, entry, exit_)
+            panel = _panel(raw_key, raw_key, table, col, thresholds)
+        if panel is not None:
+            panels.append(panel)
     for table, hist in hist_specs:
         key = ("MACD柱", hist)
         if key not in raw:
@@ -1051,6 +1158,7 @@ def build_lab_symbol_detail(
     *,
     stats: dict[str, dict[str, Any]] | None = None,
     round_trips_by_symbol: dict[str, list[dict[str, str]]] | None = None,
+    include_param_variants: bool = False,
 ) -> dict[str, Any] | None:
     """组装 /api/lab/runs/<id>/symbol/<ts_code>/detail；个股无交易返回 None（404）。
 
@@ -1058,6 +1166,7 @@ def build_lab_symbol_detail(
     可传入按 symbol 预分组的 round_trips 行；缺省时现场计算。
     批量场景（worker build_symbol_detail_files 逐股调用）必须传入，
     否则每股重复全量解析 round_trips.csv（O(股票数×交易数)，job 54 卡死根因之一）。
+    ``include_param_variants`` 仅 worker 对 TOP-N 保留股开启，默认 False。
     """
     if stats is None:
         stats = _symbol_trade_stats(record)
@@ -1135,7 +1244,10 @@ def build_lab_symbol_detail(
     data["kline_note"] = kline_note
 
     # QRE-GUI-LAB-RESULT-036：策略因子副图（按 K 线日期对齐，含出入场阈值线）
-    panels, factor_note = _fetch_factor_panels(record, ts_code, (kline or {}).get("dates") or [])
+    panels, factor_note = _fetch_factor_panels(
+        record, ts_code, (kline or {}).get("dates") or [],
+        include_param_variants=include_param_variants,
+    )
     data["factors"] = panels
     data["factor_note"] = factor_note
 

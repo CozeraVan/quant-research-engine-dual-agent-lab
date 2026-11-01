@@ -60,6 +60,24 @@
 
 ---
 
+## 7. 2026-11-01 实施状态（首版，未 commit）
+
+**已实现**：
+
+- `lab_result.py` 新增纯函数 `_param_family_params()` / `_select_param_variant_columns()`：同族最多 4 组参数，主组优先，MACD 三元组完整；单组不扩展。
+- `_fetch_factor_panels()` / `build_lab_symbol_detail()` 新增 `include_param_variants` 开关，默认 False；开启时按 information_schema 发现的同族列额外下发变体 panel。
+- `worker/runner.py::build_symbol_detail_files()` 按现有截断序的前 `SYMBOL_DETAIL_PARAM_VARIANT_TOP_N=20` 只注入变体；超预算时先砍变体再砍个股；manifest 增加 `param_variants_included` / `param_variants_truncated` / `param_variant_top_n`。
+- 新增 `tests/test_param_variants.py` 4 例；`tests/test_saas_symbol_ux.py` 新增 2 例（TOP-N 注入、超预算先砍变体）。
+
+**未做/待办**：
+
+- MA/BOLL 变体入库核对；
+- 小样本产物体积与覆盖数实测；
+- 真实浏览器参数切换验收；
+- 全量预算报告与用户批准。
+
+---
+
 ## 5. 风险与待用户确认
 
 | 项 | 建议默认 | 说明 |

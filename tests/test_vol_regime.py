@@ -292,6 +292,88 @@ console.log('gauge-null-ok');
 """)
 
 
+class TestSeriesModel:
+    """P2-15：后端可选 `volatility.series` → 前端曲线模型（纯数值，不画 DOM）。"""
+
+    def test_null_without_series(self):
+        _run(r"""
+[null, undefined, {}, {series: null}, {series: {}},
+ {series: {ewma_annual: [], garch_annual: []}}].forEach(v => {
+  assert.equal(R.seriesModel(v), null, '无序列必须返回 null: ' + JSON.stringify(v));
+});
+console.log('series-null-ok');
+""")
+
+    def test_full_series_and_thresholds(self):
+        _run(r"""
+const vol = {
+  series: {ewma_annual: [0.1, 0.2, 0.3], garch_annual: [0.11, 0.21, 0.31], max_points: 500},
+  regime_thresholds: %TH%
+};
+const m = R.seriesModel(vol);
+assert.ok(m, '有序列必须返回模型');
+assert.deepEqual(m.ewma, [0.1, 0.2, 0.3]);
+assert.deepEqual(m.garch, [0.11, 0.21, 0.31]);
+assert.equal(m.low, %LO%);
+assert.equal(m.high, %HI%);
+assert.equal(m.hasThreshold, true);
+assert.equal(m.maxPoints, 500);
+noBad(JSON.stringify(m), 'series-full');
+console.log('series-full-ok');
+""".replace("%TH%", json.dumps(TH))
+             .replace("%LO%", json.dumps(TH["low_below"]))
+             .replace("%HI%", json.dumps(TH["high_at_or_above"])))
+
+    def test_garch_error_degrades_to_null_series(self):
+        _run(r"""
+const vol = {
+  series: {ewma_annual: [0.1, 0.2], garch_annual: {error: 'too short'}, max_points: 500},
+  regime_thresholds: %TH%
+};
+const m = R.seriesModel(vol);
+assert.ok(m, 'EWMA 仍在时必须出模型');
+assert.deepEqual(m.ewma, [0.1, 0.2]);
+assert.equal(m.garch, null, 'GARCH error 必须降级成 null');
+const s = JSON.stringify(m);
+assert.equal(s.indexOf('undefined') < 0, true, 'series-garch-error 出现 undefined: ' + s);
+assert.equal(s.indexOf('NaN') < 0, true, 'series-garch-error 出现 NaN: ' + s);
+console.log('series-garch-error-ok');
+""".replace("%TH%", json.dumps(TH)))
+
+
+class TestSeriesChartOption:
+    """P2-15：seriesModel → ECharts option（模板只负责 init/setOption）。"""
+
+    def test_null_without_model(self):
+        _run(r"""
+assert.equal(R.seriesChartOption(null), null);
+assert.equal(R.seriesChartOption({ewma: null, garch: null}), null);
+console.log('series-option-null-ok');
+""")
+
+    def test_option_has_series_and_threshold_marklines(self):
+        _run(r"""
+const m = R.seriesModel({
+  series: {ewma_annual: [0.1, 0.2], garch_annual: [0.11, 0.21], max_points: 500},
+  regime_thresholds: %TH%
+});
+const o = R.seriesChartOption(m);
+assert.ok(o, '有模型必须出 option');
+assert.equal(o.series.length, 2);
+assert.equal(o.series.map(s => s.name).join(','), 'EWMA 年化波动,GARCH 年化波动');
+assert.equal(JSON.stringify(o.series[0].data), '[0.1,0.2]');
+assert.equal(JSON.stringify(o.series[1].data), '[0.11,0.21]');
+assert.equal(o.series[0].markLine.data.length, 2);
+assert.equal(Math.abs(o.series[0].markLine.data[0].yAxis - %LO%) < 1e-12, true);
+assert.equal(Math.abs(o.series[0].markLine.data[1].yAxis - %HI%) < 1e-12, true);
+assert.equal(JSON.stringify(o.xAxis.data), '[1,2]');
+noBad(JSON.stringify(o.series.map(s => s.data)), 'series-option-data');
+console.log('series-option-ok');
+""".replace("%TH%", json.dumps(TH))
+             .replace("%LO%", json.dumps(TH["low_below"]))
+             .replace("%HI%", json.dumps(TH["high_at_or_above"])))
+
+
 class TestTemplateContract:
     def test_both_templates_load_shared_module(self):
         for name, tpl in (("job.html", JOB_TPL), ("lab_result.html", LAB_TPL)):
@@ -309,6 +391,12 @@ class TestTemplateContract:
                 f"{name} 仍拼接英文波动状态枚举")
             assert "'当前波动状态 ' +" not in tpl, f"{name} 仍拼接英文波动状态枚举"
 
+    def test_both_templates_draw_series_curve(self):
+        for name, tpl in (("job.html", JOB_TPL), ("lab_result.html", LAB_TPL)):
+            assert "QREVolRegime.seriesModel(" in tpl, f"{name} 未调用 seriesModel"
+            assert "QREVolRegime.seriesChartOption(" in tpl, f"{name} 未调用 seriesChartOption"
+            assert "后端只透 5 个字段" not in tpl, f"{name} 仍保留‘无时序序列’旧注释"
+
     def test_view_passes_thresholds_through(self):
         """A2 声称后端已完成，但前端拿到的是裁剪视图——视图层必须透传阈值。"""
         src = (REPO / "src/quant_research_engine/gui/lab_result.py").read_text(
@@ -322,7 +410,7 @@ class TestTemplateContract:
         assert "vol-gauge" in JOB_TPL, "job.html 未生成标尺 DOM"
         assert "QRE-VOL-REGIME-NO-BARCHART" not in JOB_TPL, (
             "旧的「删掉柱状图就 display:none」注释仍在——这一列又被清空了")
-        assert "QRE-VOL-REGIME-GAUGE" in JOB_TPL, "job.html 缺本项设计说明注释"
+        assert "QRE-VOL-REGIME-SERIES" in JOB_TPL, "job.html 缺本项设计说明注释"
         # 不得把三等分柱状图改回来：regime_counts 的三桶不再上主视图
         assert "regime_counts" not in JOB_TPL.split("function renderRiskVol")[1].split(
             "function renderRiskStress")[0], "renderRiskVol 又去读 regime_counts 了"

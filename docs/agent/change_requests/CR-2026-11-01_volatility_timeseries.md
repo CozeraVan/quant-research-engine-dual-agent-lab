@@ -44,8 +44,8 @@
 
 ## 4. 未做 / 下一步
 
-1. **前端时序曲线**：在 job/symbol/lab 风险区用 `volatility.series` 画 EWMA/GARCH 年化波动曲线，并叠加 `regime.thresholds_annual` 的低/高参考线；旧产物无 `series` 时降级为现有 gauge。
-2. **生产开启策略**：前端就绪后，再决定 worker/config 是否默认 `include_volatility_series=True`，并实测 `risk_report.json` 体积增量。
+1. **前端时序曲线（已完成 2026-11-01）**：`vol-regime.js` 新增 `seriesModel()` / `seriesChartOption()`；`job.html` 与 `lab_result.html` 的 `renderRiskVol` 有序列时画 EWMA/GARCH 年化波动曲线 + 低/高阈值 markLine，无序列降级为阈值标尺；真实浏览器渲染冒烟通过（canvas 尺寸正常、零 pageerror）。
+2. **生产开启策略**：前端已就绪，但 worker/config 仍默认 `include_volatility_series=False`；开启前需实测 `risk_report.json` 体积增量。
 3. **性能优化（可选）**：当前开启后会额外拟合一次 GARCH；如成为默认路径，可考虑复用同一次拟合结果。
 
 ---

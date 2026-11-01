@@ -2,6 +2,39 @@
 
 ## Task ID
 
+P2-14/P2-15 推进：波动率时序曲线前端化 + 参数网格产物侧首版
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-11-01）。Required Fixes：无。**未 commit/push；未跑全量回测；未开启生产默认。**
+
+## Findings
+
+1. **P2-15 前端曲线落地**：`vol-regime.js` 新增纯函数 `seriesModel()` / `seriesChartOption()`；`job.html` / `lab_result.html` 有 `volatility.series` 时画 EWMA/GARCH 年化波动曲线 + 低/高阈值 markLine，无序列降级为阈值标尺；真实浏览器渲染冒烟通过。
+2. **P2-14 产物侧首版落地**：新增同族变体列选择 helper；`_fetch_factor_panels` / `build_lab_symbol_detail` 支持 `include_param_variants`，默认关；worker 只对截断序前 TOP-N=20 注入变体，超预算先砍变体再砍个股，manifest 记录纳入/截断计数。
+3. **兼容性**：默认关闭路径下，现有产物与 `_fetch_factor_panels` 行为不变；前端旧产物无 `series` 走原 gauge。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/test_param_variants.py tests/test_saas_symbol_ux.py tests/test_vol_regime.py -q → passed
+真实浏览器（vol-regime + echarts）：
+  series chart canvas 800x300，markLine 2 条，零 pageerror
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **P2-14 只做首版**：MA/BOLL 入库核对、小样本体积实测、真实浏览器参数切换验收未做；全量前需报预算。
+- **P2-15 生产默认仍关**：前端就绪，但开启后 report 体积增量未实测。
+
+---
+
+## Task ID
+
 P2-15 波动率时序曲线：后端可选序列数据 + P1-10 threshold 绝对轴验证
 
 ## Reviewer

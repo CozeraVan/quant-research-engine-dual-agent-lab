@@ -302,7 +302,9 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     # 一份详情 JSON（K线/买卖点/收益曲线/磨损明细/因子副图，gzip 压缩），
     # 云端个股详情页直接读文件渲染（ECS 无行情库，实时查库路径不可用）。
     if is_smoke:
-        symbol_details_meta = {"count": 0, "bytes": 0, "truncated": False, "skipped": "smoke"}
+        symbol_details_meta = {"count": 0, "bytes": 0, "truncated": False, "skipped": "smoke",
+                               "param_variants_included": 0, "param_variants_truncated": False,
+                               "param_variant_top_n": SYMBOL_DETAIL_PARAM_VARIANT_TOP_N}
     else:
         symbol_details_meta = build_symbol_detail_files(record)
 
@@ -356,6 +358,8 @@ def _fill_excess_return(record: dict[str, Any], chart_data: dict[str, Any]) -> N
 #: per-symbol 详情产物总体积上限（gzip 后；超出按 |总净盈亏| 降序截断）
 SYMBOL_DETAILS_MAX_BYTES = 15 * 1024 * 1024
 SYMBOL_DETAILS_DIRNAME = "_symbol_details"
+# P2-14：参数变体只注入按盈亏绝对值降序的头部 TOP-N 保留股，避免 15MiB 预算翻倍。
+SYMBOL_DETAIL_PARAM_VARIANT_TOP_N = 20
 
 
 def _read_csv_f(path: Path) -> list[dict[str, Any]]:
@@ -460,7 +464,14 @@ def build_symbol_detail_files(
     """
     import gzip
 
-    meta: dict[str, Any] = {"count": 0, "bytes": 0, "truncated": False}
+    meta: dict[str, Any] = {
+        "count": 0,
+        "bytes": 0,
+        "truncated": False,
+        "param_variants_included": 0,
+        "param_variants_truncated": False,
+        "param_variant_top_n": SYMBOL_DETAIL_PARAM_VARIANT_TOP_N,
+    }
     try:
         from quant_research_engine.gui.lab_result import (
             _symbol_trade_stats,
@@ -493,10 +504,13 @@ def build_symbol_detail_files(
         # 与持仓盈亏相关性最高的优先（截断时保住头部）
         ordered = sorted(stats, key=lambda s: abs(stats[s]["total_pnl"]), reverse=True)
         single_symbol = len(ordered) == 1
-        for ts_code in ordered:
+
+        def _build_blob(ts_code: str, include_variants: bool) -> bytes | None:
+            """组装单股详情 blob；失败留痕并返回 None（不拖垮整批回传）。"""
             try:
                 data = build_lab_symbol_detail(
-                    record, ts_code, stats=stats, round_trips_by_symbol=rt_by_symbol
+                    record, ts_code, stats=stats, round_trips_by_symbol=rt_by_symbol,
+                    include_param_variants=include_variants,
                 )
             except Exception as exc:
                 # QRE-FACTOR-BASIS-CONTRACT：单股详情组装失败可以跳过（不拖垮整批回传），
@@ -504,18 +518,32 @@ def build_symbol_detail_files(
                 # 而复权口径这类问题已经靠「用户先发现」栽过四次。
                 print(f"[symbol-details] {ts_code} 详情组装失败，跳过：{type(exc).__name__}: {exc}",
                       flush=True)
-                continue
+                return None
             if not data:
-                continue
+                return None
             try:
                 _enrich_shared_symbol_detail(record, data, ts_code, single_symbol=single_symbol)
             except Exception:
                 pass  # 补齐失败保留原始详情（降级，不拖垮产物）
             data.pop("benchmarks", None)
             data.pop("benchmark_note", None)
-            blob = gzip.compress(
+            return gzip.compress(
                 json.dumps(_json_sanitize(data), ensure_ascii=False, default=str).encode("utf-8")
             )
+
+        for pos, ts_code in enumerate(ordered):
+            # P2-14：参数变体只注入 TOP-N 保留股；超预算时先砍变体，再砍个股。
+            include_variants = pos < SYMBOL_DETAIL_PARAM_VARIANT_TOP_N
+            variants_dropped = False
+            blob = _build_blob(ts_code, include_variants)
+            if blob is None:
+                continue
+            if meta["bytes"] + len(blob) > max_total_bytes and include_variants:
+                meta["param_variants_truncated"] = True
+                variants_dropped = True
+                blob = _build_blob(ts_code, False)
+            if blob is None:
+                continue
             if meta["bytes"] + len(blob) > max_total_bytes:
                 meta["truncated"] = True
                 break
@@ -525,6 +553,8 @@ def build_symbol_detail_files(
             artifacts[rel] = str(path)
             meta["count"] += 1
             meta["bytes"] += len(blob)
+            if include_variants and not variants_dropped:
+                meta["param_variants_included"] += 1
     except Exception:
         return meta
     return meta

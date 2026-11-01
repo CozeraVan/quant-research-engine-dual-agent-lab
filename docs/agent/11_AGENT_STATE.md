@@ -9,6 +9,10 @@ This file is the source of truth for single-agent workflow recovery.
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
 4. **权限改动必须同步 9090**：权限/配额/限流变更在 commit/push 前必须完成管理台可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。详见 `02_LOCKED_REQUIREMENTS.md` R-ADMIN-001。
 
+### 2026-11-01 P2-14/P2-15 推进（未 commit）
+
+**P2-15 前端曲线已完成**：`vol-regime.js` 新增 `seriesModel()` / `seriesChartOption()`；`job.html` / `lab_result.html` 有 `volatility.series` 时画 EWMA/GARCH 年化波动曲线 + 低/高阈值 markLine，无序列降级阈值标尺；真实浏览器渲染冒烟通过（canvas 正常、零 pageerror）。**P2-14 产物侧首版已实现**：`lab_result` 新增同族变体列选择（主组优先，最多 4 组，MACD 三元组完整）；`_fetch_factor_panels` / `build_lab_symbol_detail` 新增 `include_param_variants` 开关，默认关；`worker/runner.py` 只对截断序前 `TOP-N=20` 注入变体，超预算先砍变体再砍个股，manifest 记录 `param_variants_included` / `param_variants_truncated`。**测试**：`test_param_variants.py` 4 例 + `test_saas_symbol_ux.py` 2 例；**全量 `uv run pytest -q -p no:randomly` → 3299 passed, 34 skipped**。**未做**：MA/BOLL 入库核对、小样本体积实测、真实浏览器参数切换验收、全量预算批准。详见两个 `CR-2026-11-01_*`。
+
 ### 2026-11-01 P1-10 完成 + P2-14/P2-15 推进（未 commit）
 
 **P1-10**：全零波动率误判 high 已修复；`thresholds_annual` 绝对轴真实浏览器验证通过（阈值/分段/刻度/mark 全断言，零 pageerror）。**P2-15**：后端可选波动率时序数据已实现，默认关；`include_volatility_series` 开启后按 `volatility_series_max_points`（默认 500）抽稀 EWMA/GARCH 年化序列，末值必含；`build_lab_risk_view` 透出 `volatility.series`。**P2-14**：已立 CR 定义 TOP-N 与截断序叠加语义（先截断个股、后插变体、超预算先砍变体、manifest 计数），产物侧实现待批准。**测试**：risk/vol_regime/gui_risk_report 92 passed；**全量 `uv run pytest -q -p no:randomly` → 3287 passed, 34 skipped**。详见 `change_requests/CR-2026-11-01_param_grid_wake_semantics.md` 与 `CR-2026-11-01_volatility_timeseries.md`。

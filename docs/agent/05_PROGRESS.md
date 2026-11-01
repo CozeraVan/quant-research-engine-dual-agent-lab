@@ -1,3 +1,5 @@
+2026-11-01 P2-14/P2-15 推进（未 commit）：P2-15 前端 EWMA/GARCH 时序曲线 + 阈值 markLine 已实现并浏览器冒烟通过；P2-14 产物侧首版已实现（TOP-N=20 注入参数变体、超预算先砍变体、manifest 计数）。新增 `tests/test_param_variants.py` 4 例 + `test_saas_symbol_ux.py` 2 例；全量测试在跑。剩余小样本体积实测、真实浏览器参数切换验收、全量预算批准。
+
 2026-11-01 P1-10 完成 + P2-14/P2-15 推进（未 commit）：P1-10 全零误判修复 + threshold 绝对轴真实浏览器验证通过；P2-15 后端可选波动率时序数据实现（默认关）；P2-14 立 CR 定义 TOP-N 与截断序叠加语义。相关 92 passed，全量测试待跑。
 
 2026-11-01 P1-10 FRM 波动率 regime 修复（进行中，未 commit）：分组计数均匀为分位规则预期；修复全零波动率误判 high，regime 降级 error 节；相关 62 passed，全量测试在跑。剩余新产物 threshold 绝对轴真实浏览器验证。

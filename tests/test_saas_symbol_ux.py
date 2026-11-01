@@ -424,6 +424,38 @@ class TestWorkerSymbolDetailFiles:
         meta = runner.build_symbol_detail_files({"run_id": "r", "output_dir": str(out)})
         assert meta["count"] == 0
 
+    def test_param_variants_included_for_top_n(self, monkeypatch, tmp_path):
+        from quant_research_engine.gui import lab_result
+        from quant_research_engine.worker import runner
+
+        monkeypatch.setattr(
+            lab_result, "build_lab_symbol_detail",
+            lambda record, ts, **kw: {"ok": True, "variants": bool(kw.get("include_param_variants"))},
+        )
+        record = self._record(tmp_path)
+        meta = runner.build_symbol_detail_files(record)
+        assert meta["count"] == 2
+        assert meta["param_variants_included"] == 2
+        assert meta["param_variants_truncated"] is False
+
+    def test_param_variants_dropped_before_symbol_on_budget(self, monkeypatch, tmp_path):
+        from quant_research_engine.gui import lab_result
+        from quant_research_engine.worker import runner
+
+        def _fake(record, ts, **kw):
+            import os
+
+            if kw.get("include_param_variants"):
+                return {"ok": True, "pad": os.urandom(1000).hex()}
+            return {"ok": True, "pad": os.urandom(20).hex()}
+
+        monkeypatch.setattr(lab_result, "build_lab_symbol_detail", _fake)
+        record = self._record(tmp_path)
+        meta = runner.build_symbol_detail_files(record, max_total_bytes=200)
+        assert meta["param_variants_truncated"] is True
+        assert meta["param_variants_included"] == 0
+        assert meta["count"] >= 1
+
 
     def test_round_trips_parsed_once_for_many_symbols(self, monkeypatch, tmp_path):
         """Bug 4 回归：N 只股票的 detail 构建只解析一次 round_trips.csv
