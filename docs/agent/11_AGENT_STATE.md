@@ -11,7 +11,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ### 2026-11-01 P1-9 文案精简化收尾首段完成（进行中，未 commit）
 
-**字号基线已同步**：`12_UI_STYLE_GUIDE.md` 更新为实际生效值（正文 19 / H1 32 / 表格 16 / 辅助 15.5 / `.opt` 下限 14）。**首段静态灰字清理**：`symbols.html` 排序说明移入 H1 悬停；`new.html` 删除“没思路？”灰字标签、因子申请链接去掉 `.opt` 灰壳；`job.html` 策略简介行改正常墨色 15.5px；`strategy.html` “重新编译后需保存”移入按钮 `data-tip`。**新增测试**：`tests/test_saas_copy_declutter.py`（TDD RED→GREEN）；相关 89 passed。**未做**：状态/空态类灰字与其余页面收尾；**全量 `uv run pytest -q -p no:randomly` → 3276 passed, 34 skipped**；首段已提交 `7360444`。**第二段（2026-11-01，未 commit）**：new 因子弹窗/流水线失败提示、job 标签详情/向导条件/策略信息动态内容灰字壳已清理；相关 25 passed，**第二段全量 `uv run pytest -q -p no:randomly` → 3278 passed, 34 skipped**。
+**字号基线已同步**：`12_UI_STYLE_GUIDE.md` 更新为实际生效值（正文 19 / H1 32 / 表格 16 / 辅助 15.5 / `.opt` 下限 14）。**首段静态灰字清理**：`symbols.html` 排序说明移入 H1 悬停；`new.html` 删除“没思路？”灰字标签、因子申请链接去掉 `.opt` 灰壳；`job.html` 策略简介行改正常墨色 15.5px；`strategy.html` “重新编译后需保存”移入按钮 `data-tip`。**新增测试**：`tests/test_saas_copy_declutter.py`（TDD RED→GREEN）；相关 89 passed。**未做**：状态/空态类灰字与其余页面收尾；**全量 `uv run pytest -q -p no:randomly` → 3276 passed, 34 skipped**；首段已提交 `7360444`。**第二段（2026-11-01，未 commit）**：new 因子弹窗/流水线失败提示、job 标签详情/向导条件/策略信息动态内容灰字壳已清理；相关 25 passed，**第二段全量 `uv run pytest -q -p no:randomly` → 3278 passed, 34 skipped**。**第三段（2026-11-01，未 commit）**：feedback/factor_request 登录提示、help 免责声明灰字改正常文本；相关 36 passed，**第三段全量 `uv run pytest -q -p no:randomly` → 3280 passed, 34 skipped**。
 
 ### 2026-11-01 P0-8 结果端点 IDOR 普查 + 路由合同完成（未改权限代码/未 commit）
 

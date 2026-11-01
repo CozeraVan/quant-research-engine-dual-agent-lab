@@ -65,3 +65,17 @@ def test_job_page_dynamic_content_not_gray_wrapper() -> None:
     assert "'<div class=\"opt\" style=\"color:var(--faint)\">— 组间 '" not in page
     assert "'<div class=\"opt\" style=\"white-space:pre-wrap;color:var(--ink)\">'" not in page
     assert '<p class="opt" style="margin:0 0 16px">（快速向导入口；无条件快照，显示最终 YAML）</p>' not in page
+
+
+def test_feedback_and_factor_request_login_hints_not_gray() -> None:
+    feedback = _read("feedback.html")
+    assert '<p class="muted">反馈需登录后提交' not in feedback
+    assert '<p class="muted">游客可先在' not in feedback
+    factor = _read("factor_request.html")
+    assert '<p class="muted">因子申请需登录后提交' not in factor
+
+
+def test_help_page_disclaimer_not_gray_small() -> None:
+    page = _read("help.html")
+    assert '<p class="opt" style="font-size:14.5px;margin-top:12px">所有指标均来自真实回测产物；历史表现不构成投资建议。</p>' not in page
+    assert '历史表现不构成投资建议。' in page
