@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,3 +80,17 @@ def test_help_page_disclaimer_not_gray_small() -> None:
     page = _read("help.html")
     assert '<p class="opt" style="font-size:14.5px;margin-top:12px">所有指标均来自真实回测产物；历史表现不构成投资建议。</p>' not in page
     assert '历史表现不构成投资建议。' in page
+
+
+def test_login_page_has_no_muted_notes() -> None:
+    page = _read("login.html")
+    assert 'class="muted"' not in page
+
+
+def test_chart_empty_is_not_faint_gray() -> None:
+    css = (ROOT / "src" / "quant_research_engine" / "gui" / "static" / "lab-theme.css").read_text(encoding="utf-8")
+    bodies = re.findall(r"\.chart-empty\s*\{([^}]*)\}", css)
+    assert bodies
+    for body in bodies:
+        assert "color:var(--faint)" not in body.replace(" ", ""), body
+        assert "color:var(--ink)" in body.replace(" ", ""), body

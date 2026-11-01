@@ -4,9 +4,9 @@
 <div class="container" style="max-width:420px;margin-top:8vh">
   <div class="card">
     <h1 style="text-align:center">A股回测台</h1>
-    <p class="muted" style="text-align:center">验证你的交易策略能否在 A 股赚钱</p>
+    <p style="text-align:center;font-size:15.5px">验证你的交易策略能否在 A 股赚钱</p>
     <a class="btn big btn-primary" id="btn-authing" href="/saas/login/authing?next={{ login_next | urlencode | replace('/', '%2F') | replace('?', '%3F') }}" style="display:block;text-align:center;margin-top:12px">手机号 / 扫码登录（推荐）</a>
-    <p class="muted" style="text-align:center;margin-top:10px">短信验证码或微信扫码，首次登录自动注册</p>
+    <p style="text-align:center;margin-top:10px;font-size:15.5px">短信验证码或微信扫码，首次登录自动注册</p>
     <div id="login-error" class="error"></div>
 
     <details id="legacy-box">
@@ -24,7 +24,7 @@
 
     <details id="bind-box">
       <summary>已有内测账号？绑定到手机登录</summary>
-      <p class="muted" style="margin-top:10px">先用上方按钮完成手机 / 扫码登录，再在此输入旧账号的邮箱和密码，即可把旧账号的回测记录迁移到新身份。</p>
+      <p style="margin-top:10px;font-size:15.5px">先用上方按钮完成手机 / 扫码登录，再在此输入旧账号的邮箱和密码，即可把旧账号的回测记录迁移到新身份。</p>
       <label for="bind-email">旧账号邮箱</label>
       <input id="bind-email" type="email" placeholder="you@example.com" autocomplete="username">
       <label for="bind-password">旧账号密码</label>
@@ -32,7 +32,7 @@
       <button class="btn ghost" id="btn-bind" style="width:100%;margin-top:16px">绑定旧账号</button>
     </details>
 
-    <p class="muted" style="text-align:center;margin-top:16px">游客免登录：可直接在「新建策略」提交最多 10 只股票、近 10 年的回测（每日 1 次，结果次日清空）</p>
+    <p style="text-align:center;margin-top:16px;font-size:15.5px">游客免登录：可直接在「新建策略」提交最多 10 只股票、近 10 年的回测（每日 1 次，结果次日清空）</p>
   </div>
 </div>
 {% endblock %}

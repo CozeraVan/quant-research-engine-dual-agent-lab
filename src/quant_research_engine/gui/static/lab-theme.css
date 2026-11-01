@@ -248,7 +248,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:16px}
 .risk-light.bad{background:var(--up-soft);color:var(--up);border:1px solid #F0CACA}
 .risk-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:10px}
 .sub-title{font-size:15px;font-weight:600;margin-bottom:4px}
-.chart-empty{color:var(--faint);text-align:center;padding:34px 0;font-size:15.5px}
+.chart-empty{color:var(--ink);text-align:center;padding:34px 0;font-size:15.5px}
 
 /* 大入口链接（详情页 → 个股列表） */
 .big-link{display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--glass-bg);border:1px solid var(--glass-line);border-radius:var(--card-radius);padding:18px 22px;box-shadow:inset 0 1px 0 var(--glass-hi),var(--glass-shadow);margin-bottom:20px;text-decoration:none;color:var(--ink);transition:transform .25s var(--ease),box-shadow .3s var(--ease),border-color .25s;-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%)}
@@ -386,7 +386,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:16px}
 #nl-examples .opt{width:100%}
 .nl-panel h2,.panel h2{font-size:18px}
 table.tbl th:first-child,table.tbl td:first-child{text-align:left}
-.chart-empty{color:var(--faint);text-align:center;padding:40px 0;font-size:15.5px}
+.chart-empty{color:var(--ink);text-align:center;padding:40px 0;font-size:15.5px}
 .pv-view-wrap{border-radius:8px;overflow:hidden}
 /* echarts 容器与设计稿 chart-box 对齐 */
 .chart-box .chart-title{margin-bottom:18px}
