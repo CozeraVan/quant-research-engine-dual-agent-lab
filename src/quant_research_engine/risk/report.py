@@ -139,6 +139,15 @@ def build_risk_report(
         }
         perf_benchmark = b
 
+    volatility_section: dict[str, Any] = {
+        "ewma_latest": ewma_latest,
+        "garch11": garch,
+        "regime": regime_section,
+    }
+    volatility_series = _build_volatility_series_section(r, cfg, lam, ann)
+    if volatility_series is not None:
+        volatility_section["series"] = volatility_series
+
     report = {
         "meta": {
             "report_version": _REPORT_VERSION,
@@ -155,15 +164,12 @@ def build_risk_report(
                 "stress": bool(cfg.get("stress", False)),
                 "bootstrap": bool(cfg.get("bootstrap", False)),
                 "portfolio": _portfolio_requested(cfg),
+                "volatility_series": bool(cfg.get("include_volatility_series", False)),
             },
         },
         "distribution": _safe(tail.distribution_summary, r),
         "tail": tail_section,
-        "volatility": {
-            "ewma_latest": ewma_latest,
-            "garch11": garch,
-            "regime": regime_section,
-        },
+        "volatility": volatility_section,
         "dependence": dependence_section,
         "performance": _safe(performance.performance_summary, r, perf_benchmark, rf, ann),
         "var_backtest": _build_var_backtest_section(r, cfg, confidence_levels, lam),
@@ -200,6 +206,46 @@ def _portfolio_requested(cfg: dict[str, Any]) -> bool:
         bool(cfg.get(key))
         for key in ("bond_positions", "option_positions", "bond_kr01")
     )
+
+
+def _downsample_series(values: list[float], max_points: int) -> list[float]:
+    """等间隔抽稀时序序列；末值必含，避免曲线丢失最新状态。"""
+    if max_points <= 0 or len(values) <= max_points:
+        return values
+    step = -(-len(values) // max_points)  # ceil
+    out = values[::step]
+    if out[-1] != values[-1]:
+        out.append(values[-1])
+    return out
+
+
+def _build_volatility_series_section(
+    r: pd.Series,
+    cfg: dict[str, Any],
+    lam: float,
+    ann: int,
+) -> dict[str, Any] | None:
+    """可选的波动率时序曲线数据（默认关，避免 report/产物体积变大）。"""
+    if not cfg.get("include_volatility_series", False):
+        return None
+    max_points = int(cfg.get("volatility_series_max_points", 500))
+
+    def _prep(series: Any) -> Any:
+        if isinstance(series, dict):  # _safe 降级的 error 节
+            return series
+        annualized = [round(float(v) * (ann ** 0.5), 6) for v in series.tolist()]
+        return _downsample_series(annualized, max_points)
+
+    ewma_series = _safe(volatility.ewma_volatility_series, r, lam)
+    garch_series = _safe(volatility.garch_volatility_series, r)
+    return {
+        "annualization_factor": ann,
+        "max_points": max_points,
+        "ewma_annual": _prep(ewma_series),
+        "garch_annual": _prep(garch_series),
+        "note": "可选时序曲线数据：默认关闭；开启后按 max_points 等间隔抽稀，末值必含；"
+                "年化=日波动×√annualization_factor",
+    }
 
 
 def _default_var_series(r: pd.Series, confidence: float, lam: float) -> pd.Series:

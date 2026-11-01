@@ -2,6 +2,34 @@
 
 ## Task ID
 
+P2-15 波动率时序曲线：后端可选序列数据（默认关）
+
+## Created By
+
+KIMI_CODE（2026-11-01）
+
+## 目标与边界
+
+1. 让 `risk_report.json` 能可选输出 EWMA/GARCH 年化波动时序序列，供前端画曲线与阈值参考线。
+2. 默认关闭，现有产物体积与行为零变化；开启时抽稀到 `volatility_series_max_points`（默认 500），末值必含。
+3. 不改前端曲线、不改 worker 默认配置、不跑回测。
+
+## 实现
+
+- `risk/volatility.py` 新增 `garch_volatility_series()`。
+- `risk/report.py` 新增 `_build_volatility_series_section()` 与 `meta.sections.volatility_series` 开关回显。
+- `gui/lab_result.py::build_lab_risk_view()` 透出 `volatility.series`。
+
+## 验证
+
+```bash
+uv run pytest tests/test_risk_report.py tests/test_risk_volatility.py tests/test_vol_regime.py tests/test_gui_risk_report.py -q
+```
+
+## 历史任务（保留）
+
+## Task ID
+
 QRE-SAAS-SHOWCASE-REPOPULATE（P0-5：经典策略页重新填充，第一阶段=策略定义 + 小样本验证）
 
 ## Created By

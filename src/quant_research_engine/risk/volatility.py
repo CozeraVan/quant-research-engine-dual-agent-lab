@@ -84,6 +84,26 @@ def latest_ewma_forecast(
     }
 
 
+def garch_volatility_series(
+    returns: pd.Series | np.ndarray | list[float],
+) -> pd.Series:
+    """GARCH(1,1) 条件波动率序列（小数口径，与 ``fit_garch11`` 同一拟合路径）。
+
+    用于可选的波动率时序曲线；默认不在 ``build_risk_report`` 输出，避免产物变大。
+    收益 ×100 拟合，条件波动 ÷100 还原成小数波动率。
+    """
+    from arch import arch_model
+
+    r = pd.Series(returns, dtype=float).dropna()
+    if len(r) < _GARCH_MIN_OBS:
+        raise ValueError(f"need at least {_GARCH_MIN_OBS} non-NaN returns for GARCH, got {len(r)}")
+    scaled = r.to_numpy() * 100.0
+    model = arch_model(scaled, mean="Zero", vol="GARCH", p=1, q=1, dist="normal")
+    fit = model.fit(disp="off")
+    cond_vol = fit.conditional_volatility / 100.0
+    return pd.Series(cond_vol, index=r.index, name="garch_volatility")
+
+
 def fit_garch11(
     returns: pd.Series | np.ndarray | list[float],
 ) -> dict[str, Any]:

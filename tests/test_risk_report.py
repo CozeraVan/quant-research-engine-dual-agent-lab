@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from quant_research_engine.risk.report import build_risk_report
+from quant_research_engine.gui.lab_result import build_lab_risk_view
 
 
 @pytest.fixture()
@@ -102,6 +103,36 @@ class TestDegradation:
         assert "error" in regime
         assert regime.get("counts") in ({}, None)
         assert regime.get("latest") is None
+
+    def test_regime_thresholds_annual_positive_and_ordered(self, returns):
+        """新报告必须带正的年化阈值，且 low_below < high_at_or_above。"""
+        view = build_lab_risk_view(build_risk_report(returns))
+        th = view["volatility"]["regime_thresholds"]
+        assert th is not None
+        assert th["low_below"] > 0
+        assert th["high_at_or_above"] > th["low_below"]
+
+
+class TestVolatilitySeries:
+    def test_default_off(self, returns):
+        report = build_risk_report(returns)
+        assert "series" not in report["volatility"]
+        assert report["meta"]["sections"]["volatility_series"] is False
+
+    def test_opt_in_downsampled_series(self, returns):
+        report = build_risk_report(returns, config={
+            "include_volatility_series": True,
+            "volatility_series_max_points": 120,
+        })
+        series = report["volatility"]["series"]
+        assert report["meta"]["sections"]["volatility_series"] is True
+        assert series["max_points"] == 120
+        assert 0 < len(series["ewma_annual"]) <= 120
+        assert 0 < len(series["garch_annual"]) <= 120
+        assert all(v > 0 for v in series["ewma_annual"])
+        assert all(v > 0 for v in series["garch_annual"])
+        assert series["ewma_annual"][-1] > 0
+        assert series["garch_annual"][-1] > 0
 
 
 class TestVarBacktestSection:

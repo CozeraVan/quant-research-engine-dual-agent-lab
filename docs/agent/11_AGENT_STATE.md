@@ -9,6 +9,10 @@ This file is the source of truth for single-agent workflow recovery.
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
 4. **权限改动必须同步 9090**：权限/配额/限流变更在 commit/push 前必须完成管理台可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。详见 `02_LOCKED_REQUIREMENTS.md` R-ADMIN-001。
 
+### 2026-11-01 P1-10 完成 + P2-14/P2-15 推进（未 commit）
+
+**P1-10**：全零波动率误判 high 已修复；`thresholds_annual` 绝对轴真实浏览器验证通过（阈值/分段/刻度/mark 全断言，零 pageerror）。**P2-15**：后端可选波动率时序数据已实现，默认关；`include_volatility_series` 开启后按 `volatility_series_max_points`（默认 500）抽稀 EWMA/GARCH 年化序列，末值必含；`build_lab_risk_view` 透出 `volatility.series`。**P2-14**：已立 CR 定义 TOP-N 与截断序叠加语义（先截断个股、后插变体、超预算先砍变体、manifest 计数），产物侧实现待批准。**测试**：risk/vol_regime/gui_risk_report 92 passed；**全量 `uv run pytest -q -p no:randomly` → 3287 passed, 34 skipped**。详见 `change_requests/CR-2026-11-01_param_grid_wake_semantics.md` 与 `CR-2026-11-01_volatility_timeseries.md`。
+
 ### 2026-11-01 P1-10 FRM 波动率 regime 修复（进行中，未 commit）
 
 **分组核查结论**：低/中/高计数近似各 1/3 是**分位规则写死的预期行为**，不是数据错误。**发现真 bug**：job 82 全空仓/零收益导致波动率序列全零，旧逻辑把 `σ >= q_high(=0)` 全部判成 `high`，且 `thresholds_annual` 输出 0。**修复**：`risk/volatility.py::volatility_regime` 在分位切点非正时抛 `ValueError`；`risk/report.py` 捕获后把 regime 降级为 error 节（counts 空、latest None），不再误判 high。**测试**：TDD RED→GREEN，新增全零波动率/全零收益两例；`test_risk_volatility + test_risk_report + test_vol_regime` 62 passed；**全量 `uv run pytest -q -p no:randomly` → 3284 passed, 34 skipped**。**未做**：`thresholds_annual` 绝对轴真实浏览器验证需新产物；旧 job 73/75/76/77/79/80 无 `thresholds_annual`（旧版报告），其计数均匀为分位规则预期。

@@ -1359,6 +1359,7 @@ def build_lab_risk_view(report: dict[str, Any]) -> dict[str, Any]:
         "regime_counts": regime.get("counts") or None,
         "latest_regime": regime.get("latest"),
         "regime_thresholds": regime.get("thresholds_annual"),
+        "series": vol.get("series"),
     } if vol else None
 
     # 压力测试：窗口内覆盖不足的情景（带 error）归入 skipped

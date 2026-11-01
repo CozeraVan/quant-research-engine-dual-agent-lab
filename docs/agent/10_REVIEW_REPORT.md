@@ -2,6 +2,41 @@
 
 ## Task ID
 
+P2-15 波动率时序曲线：后端可选序列数据 + P1-10 threshold 绝对轴验证
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-11-01）。Required Fixes：无。**未 commit/push；未跑全量回测；未改 worker 默认配置。**
+
+## Findings
+
+1. **P1-10 threshold 绝对轴验证通过**：用确定性收益生成带 `thresholds_annual` 的风险视图，在真实 Chromium 中断言 `gaugeModel` 为 `threshold` 模式、三段分段/刻度/mark 全部落在 0–100%，describe/tip 无 `undefined/NaN/null`，零 pageerror。
+2. **P2-15 后端可选序列已落地且默认关**：`include_volatility_series` 开启后输出 EWMA/GARCH 年化序列，按 `volatility_series_max_points` 抽稀，末值必含；默认关闭时现有 report/产物体积零变化。
+3. **P2-14 只立语义 CR，未改产物格式**：避免在 15MiB 预算已打满情况下未审先改产物格式。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/test_risk_report.py tests/test_risk_volatility.py tests/test_vol_regime.py tests/test_gui_risk_report.py -q → 92 passed
+真实浏览器（vol-regime.js + 新阈值视图）：
+  gauge mode=threshold, degraded=False
+  ticks=[0, low_below, high_at_or_above, domain]
+  marks xPct ∈ [0,100]，describe/tip 无 undefined/NaN/null
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **P2-15 默认关闭**：前端曲线与生产开启策略尚未做；先保证存量零变化。
+- **P2-14 产物侧实现待批准**：CR 已定义 TOP-N 与截断序叠加语义，但加变体会影响个股覆盖数，需用户确认 TOP-N 与预算。
+
+---
+
+## Task ID
+
 QRE-SAAS-JOB-ENDPOINT-IDOR-AUDIT（P0-8：结果端点 IDOR 普查 + 自动化测试）
 
 ## Reviewer

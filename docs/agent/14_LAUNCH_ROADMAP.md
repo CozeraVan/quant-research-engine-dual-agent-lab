@@ -293,7 +293,7 @@
    **2026-11-01 完成**：字号基线同步；静态/动态/其他页面灰字备注分四段清理（symbols/new/job/strategy/feedback/factor_request/help/login），`.chart-empty` 空态改墨色；剩余 `.muted` 仅用于加载/空态状态文字与次要数据标签，不再作为解释性备注。新增 `tests/test_saas_copy_declutter.py` 锁定。
 3. FRM 波动率：`threshold` 绝对轴真实浏览器验证（需新跑一次回测，
    让产物带 `thresholds_annual`）；核查低/中/高分档是否真在分组（曾连续三次均匀）。
-   **2026-11-01 进展**：分组核查完成——计数近似各 1/3 是分位规则预期，不是错误；修复 job82 全零波动率被误判 high 的 bug（regime 降级 error 节）。剩余：新产物 `thresholds_annual` 绝对轴真实浏览器验证。
+   **2026-11-01 完成**：分组核查完成；修复全零波动率误判 high；用确定性样本生成带 `thresholds_annual` 的风险视图，并通过真实浏览器绝对轴断言（阈值/分段/刻度/mark）。
 4. 《我不是股神》重启：**前置的复权硬契约已落地**（P0-1），
    重启时必须改用 `factor_basis` 契约或显式声明独立口径（现有一套平行实现
    `game/data.py::qfq_anchor`，不允许第三套），并复用 `factor-layout.js` 呈现层。
@@ -302,7 +302,9 @@
 
 **P2（随后立项）**
 7. 参数网格唤醒（用户裁决 A 休眠中）：需先定义 TOP-N 与截断序叠加语义。
+   **2026-11-01 进展**：已立 `CR-2026-11-01_param_grid_wake_semantics.md`，定义“先截断个股、后插变体、超预算先砍变体、manifest 计数”；产物侧实现待批准。
 8. 波动率时序曲线：需后端透出 ewma/garch 序列（现只透 5 个字段）。
+   **2026-11-01 进展**：后端可选序列已实现（默认关，`include_volatility_series` + `volatility_series_max_points`，EWMA/GARCH 年化抽稀，末值必含）；前端曲线与生产开启策略待推进。
 9. 回测产物 → 短视频重点提取（#78 约 4G 产物，等视频产出后评估）。
 
 #### C. 挂起（保留，不删除）
