@@ -21,6 +21,7 @@ result / artifacts 属 M2–M5，openapi 中以 `x-status: planned` 标注，未
 from __future__ import annotations
 
 import hashlib
+import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -122,8 +123,8 @@ ERROR_CODES: list[dict[str, str]] = [
     {"code": "nightly_window", "http": "202", "meaning": "已受理，eligible_at 之后才可被认领（非错误）"},
 ]
 
-_AGENT_TABLES_ENSURED: set[int] = set()
-_AGENT_TABLES_OK: dict[int, bool] = {}
+_AGENT_TABLES_ENSURED: set[tuple[str, int]] = set()
+_AGENT_TABLES_OK: dict[tuple[str, int], bool] = {}
 
 agent_api_bp = Blueprint("agent_api", __name__)
 
@@ -159,7 +160,7 @@ def ensure_api_tokens(engine) -> bool:
     `nl_compile_support.ensure_nl_tables` 一致；jobs 三列由启动路径的
     `_ensure_*` 系列另行补齐（缺列时按「无标签」降级，不阻断接口）。
     """
-    key = id(engine)
+    key = ("api_tokens", id(engine))
     if key in _AGENT_TABLES_ENSURED:
         return _AGENT_TABLES_OK.get(key, False)
     from sqlalchemy import text
@@ -579,6 +580,362 @@ def agent_schema_strategy():
     if scope_err is not None:
         return scope_err
     return _ok({"schema": strategy_spec_json_schema()})
+
+
+# --------------------------------------------------------------------------
+# 研究会话 research_runs（M2）
+# --------------------------------------------------------------------------
+RESEARCH_STATUSES = ("planned", "running", "aggregated", "concluded", "archived")
+RESEARCH_TRANSITIONS: dict[str, set[str]] = {
+    "planned": {"running", "archived"},
+    "running": {"aggregated", "concluded", "archived"},
+    "aggregated": {"concluded", "archived"},
+    "concluded": {"archived"},
+    "archived": set(),
+}
+# budget 白名单：只接受这四个键，值不得为负；上限由 AGENT_DEFAULTS 收敛。
+BUDGET_KEYS = ("max_jobs", "max_artifact_bytes", "max_wall_clock_hours", "allow_full_market")
+BUDGET_CAPS: dict[str, Any] = {
+    "max_jobs": AGENT_DEFAULTS["research_run_max_jobs"],
+    "max_artifact_bytes": AGENT_DEFAULTS["research_run_max_artifact_bytes"],
+    "max_wall_clock_hours": AGENT_DEFAULTS["research_run_max_wall_clock_hours"],
+    "allow_full_market": None,  # 布尔，无上限，但需 token scope 再次确认（M3）
+}
+
+
+def _normalize_budget(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
+    """校验并收敛会话预算：未知键拒绝、负值拒绝、超过 AGENT_DEFAULTS 上限时收敛到上限。"""
+    if raw is None:
+        return {}, None
+    if not isinstance(raw, dict):
+        return None, "budget 须为对象"
+    unknown = [k for k in raw if k not in BUDGET_KEYS]
+    if unknown:
+        return None, f"未知 budget 键：{', '.join(sorted(unknown))}"
+    budget: dict[str, Any] = {}
+    for key in BUDGET_KEYS:
+        if key not in raw or raw[key] is None:
+            continue
+        value = raw[key]
+        if key == "allow_full_market":
+            if not isinstance(value, bool):
+                return None, "allow_full_market 须为布尔值"
+            budget[key] = value
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None, f"{key} 须为非负整数"
+        if value < 0:
+            return None, f"{key} 不得为负"
+        cap = BUDGET_CAPS[key]
+        if cap is not None and value > cap:
+            value = cap  # 收敛到会话级上限，不报错也不放任
+        budget[key] = int(value)
+    return budget, None
+
+
+def research_run_usage(engine, run_id: int) -> dict[str, Any]:
+    """会话预算用量：任务数 / 完成数 / 产物体积 / 墙上时间。
+
+    - 任务数与完成数：`jobs.research_run_id` 汇总；
+    - 产物体积：`results.artifacts` 内 size 字段求和（缺字段按 0，不猜）；
+    - 墙上时间：`finished_at - started_at` 求和（未完成任务不计，进行中任务另计 in_flight）。
+    """
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        jobs = conn.execute(
+            text(
+                "SELECT count(*) AS total, "
+                "count(*) FILTER (WHERE status = 'completed') AS completed, "
+                "count(*) FILTER (WHERE status IN ('leased','running','uploading')) AS in_flight, "
+                "coalesce(sum(EXTRACT(EPOCH FROM (finished_at - started_at))), 0) AS seconds "
+                "FROM jobs WHERE research_run_id = :rid"
+            ),
+            {"rid": run_id},
+        ).mappings().one()
+        artifacts = conn.execute(
+            text(
+                "SELECT coalesce(sum((a->>'size')::numeric), 0) AS bytes "
+                "FROM results r JOIN jobs j ON j.id = r.job_id "
+                "CROSS JOIN LATERAL jsonb_array_elements(r.artifacts) AS a "
+                "WHERE j.research_run_id = :rid"
+            ),
+            {"rid": run_id},
+        ).mappings().one()
+    return {
+        "jobs_total": int(jobs["total"] or 0),
+        "jobs_completed": int(jobs["completed"] or 0),
+        "jobs_in_flight": int(jobs["in_flight"] or 0),
+        "artifact_bytes": int(artifacts["bytes"] or 0),
+        "wall_clock_seconds": round(float(jobs["seconds"] or 0), 1),
+    }
+
+
+def _budget_exceeded(budget: dict[str, Any], usage: dict[str, Any]) -> str | None:
+    """返回首个超限的预算键名；未超限返回 None。"""
+    if "max_jobs" in budget and usage["jobs_total"] >= int(budget["max_jobs"]):
+        return "max_jobs"
+    if "max_artifact_bytes" in budget and usage["artifact_bytes"] >= int(budget["max_artifact_bytes"]):
+        return "max_artifact_bytes"
+    if "max_wall_clock_hours" in budget and usage["wall_clock_seconds"] >= float(budget["max_wall_clock_hours"]) * 3600:
+        return "max_wall_clock_hours"
+    return None
+
+
+def _research_run_view(row, usage: dict[str, Any] | None = None) -> dict[str, Any]:
+    view = {
+        "id": row["id"],
+        "title": row["title"],
+        "boundary_text": row["boundary_text"],
+        "todo": row["todo"],
+        "budget": row["budget"],
+        "status": row["status"],
+        "conclusion_text": row["conclusion_text"],
+        "conclusion_table": row["conclusion_table"],
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+        "concluded_at": row["concluded_at"].isoformat() if row["concluded_at"] else None,
+    }
+    if usage is not None:
+        view["usage"] = usage
+    return view
+
+
+def _load_research_run(engine, run_id: int, uid: int):
+    """按 id + 归属读取会话；不存在/他人一律 None（路由层统一 404，不泄露存在性）。"""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT * FROM research_runs WHERE id = :id AND user_id = :uid"),
+            {"id": run_id, "uid": uid},
+        ).mappings().first()
+
+
+@agent_api_bp.post("/research-runs")
+def agent_research_run_create():
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "jobs:submit")
+    if scope_err is not None:
+        return scope_err
+    if not ensure_api_tokens(engine) or not ensure_research_runs(engine):
+        return jsonify(_err("unauthorized", "研究会话存储不可用")), 503
+
+    from sqlalchemy import text
+
+    data = request.get_json(silent=True) or {}
+    title = str(data.get("title") or "").strip()
+    if not title:
+        return jsonify(_err("invalid_yaml", "title 不能为空")), 400
+    if len(title) > 120:
+        return jsonify(_err("invalid_yaml", "title 过长（≤120 字符）")), 400
+    boundary_text = data.get("boundary_text")
+    if boundary_text is not None and not isinstance(boundary_text, str):
+        return jsonify(_err("invalid_yaml", "boundary_text 须为字符串")), 400
+    todo = data.get("todo")
+    if todo is None:
+        todo = []
+    if not isinstance(todo, list):
+        return jsonify(_err("invalid_yaml", "todo 须为数组")), 400
+    budget, budget_err = _normalize_budget(data.get("budget"))
+    if budget_err is not None:
+        return jsonify(_err("invalid_yaml", budget_err)), 400
+
+    with engine.begin() as conn:
+        run_id = conn.execute(
+            text(
+                "INSERT INTO research_runs (user_id, token_id, title, boundary_text, todo, budget) "
+                "VALUES (:uid, :tid, :title, :boundary, CAST(:todo AS jsonb), CAST(:budget AS jsonb)) "
+                "RETURNING id"
+            ),
+            {
+                "uid": row["user_id"],
+                "tid": row["id"],
+                "title": title,
+                "boundary": boundary_text,
+                "todo": json.dumps(todo, ensure_ascii=False),
+                "budget": json.dumps(budget, ensure_ascii=False),
+            },
+        ).scalar_one()
+    return _ok({"research_run": {"id": run_id, "title": title, "status": "planned",
+                                 "budget": budget, "todo": todo}}, status=201)
+
+
+@agent_api_bp.get("/research-runs")
+def agent_research_run_list():
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "jobs:read")
+    if scope_err is not None:
+        return scope_err
+    if not ensure_research_runs(engine):
+        return _ok({"research_runs": []})
+
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT * FROM research_runs WHERE user_id = :uid "
+                 "ORDER BY created_at DESC LIMIT 100"),
+            {"uid": row["user_id"]},
+        ).mappings().all()
+    return _ok({"research_runs": [_research_run_view(r) for r in rows]})
+
+
+@agent_api_bp.get("/research-runs/<int:run_id>")
+def agent_research_run_detail(run_id: int):
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "jobs:read")
+    if scope_err is not None:
+        return scope_err
+    run = _load_research_run(engine, run_id, row["user_id"])
+    if run is None:
+        return jsonify(_err("not_found", "研究会话不存在")), 404
+    usage = research_run_usage(engine, run_id)
+    budget = dict(run["budget"] or {})
+    exceeded = _budget_exceeded(budget, usage)
+    view = _research_run_view(run, usage)
+    view["budget_exceeded"] = exceeded
+    view["budget_remaining"] = {
+        key: max(0, int(budget[key]) - usage_key)
+        for key, usage_key in (
+            ("max_jobs", usage["jobs_total"]),
+            ("max_artifact_bytes", usage["artifact_bytes"]),
+            ("max_wall_clock_hours", int(usage["wall_clock_seconds"] // 3600)),
+        )
+        if key in budget
+    }
+    return _ok({"research_run": view})
+
+
+@agent_api_bp.post("/research-runs/<int:run_id>/status")
+def agent_research_run_status(run_id: int):
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "jobs:submit")
+    if scope_err is not None:
+        return scope_err
+    run = _load_research_run(engine, run_id, row["user_id"])
+    if run is None:
+        return jsonify(_err("not_found", "研究会话不存在")), 404
+
+    from sqlalchemy import text
+
+    data = request.get_json(silent=True) or {}
+    target = str(data.get("status") or "").strip()
+    if target not in RESEARCH_STATUSES:
+        return jsonify(_err("invalid_yaml", f"status 须为 {'/'.join(RESEARCH_STATUSES)}")), 400
+    if target not in RESEARCH_TRANSITIONS.get(run["status"], set()):
+        return jsonify(_err("budget_exhausted",
+                            f"不允许的状态迁移：{run['status']} → {target}")), 409
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE research_runs SET status = :st, updated_at = now() WHERE id = :id"),
+            {"st": target, "id": run_id},
+        )
+    return _ok({"research_run": {"id": run_id, "status": target}})
+
+
+@agent_api_bp.post("/research-runs/<int:run_id>/conclusion")
+def agent_research_run_conclusion(run_id: int):
+    """存结论：QRE 只存不解释——不生成、不改写、不判定显著性（用户边界 3）。"""
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "jobs:submit")
+    if scope_err is not None:
+        return scope_err
+    run = _load_research_run(engine, run_id, row["user_id"])
+    if run is None:
+        return jsonify(_err("not_found", "研究会话不存在")), 404
+    if run["status"] in ("archived",):
+        return jsonify(_err("budget_exhausted", "已归档会话不可再提交结论")), 409
+
+    from sqlalchemy import text
+
+    data = request.get_json(silent=True) or {}
+    conclusion_text = data.get("conclusion_text")
+    if conclusion_text is not None and not isinstance(conclusion_text, str):
+        return jsonify(_err("invalid_yaml", "conclusion_text 须为字符串")), 400
+    conclusion_table = data.get("conclusion_table")
+    if conclusion_table is not None and not isinstance(conclusion_table, (list, dict)):
+        return jsonify(_err("invalid_yaml", "conclusion_table 须为数组或对象")), 400
+    if conclusion_text is None and conclusion_table is None:
+        return jsonify(_err("invalid_yaml", "conclusion_text 与 conclusion_table 至少给一个")), 400
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE research_runs SET conclusion_text = :txt, "
+                "conclusion_table = CAST(:tbl AS jsonb), status = 'concluded', "
+                "concluded_at = now(), updated_at = now() WHERE id = :id"
+            ),
+            {
+                "txt": conclusion_text,
+                "tbl": json.dumps(conclusion_table, ensure_ascii=False) if conclusion_table is not None else None,
+                "id": run_id,
+            },
+        )
+    return _ok({"research_run": {"id": run_id, "status": "concluded",
+                                 "stored": True,
+                                 "note": "结论由外部 agent 提供，QRE 原样存储、不做解释或改写"}})
+
+
+def ensure_research_runs(engine) -> bool:
+    """幂等确保 `research_runs` 表存在（老库未 apply schema 时兜底）。"""
+    from sqlalchemy import text
+
+    key = ("research_runs", id(engine))
+    if key in _AGENT_TABLES_ENSURED:
+        return _AGENT_TABLES_OK.get(key, False)
+    ok = True
+    try:
+        with engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'research_runs'")
+            ).first() is not None
+            if not exists:
+                conn.execute(
+                    text(
+                        "CREATE TABLE IF NOT EXISTS research_runs ("
+                        "id BIGSERIAL PRIMARY KEY, "
+                        "user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+                        "token_id BIGINT REFERENCES api_tokens(id) ON DELETE SET NULL, "
+                        "title TEXT NOT NULL, "
+                        "boundary_text TEXT, "
+                        "todo JSONB NOT NULL DEFAULT '[]'::jsonb, "
+                        "budget JSONB NOT NULL DEFAULT '{}'::jsonb, "
+                        "status TEXT NOT NULL DEFAULT 'planned', "
+                        "conclusion_text TEXT, "
+                        "conclusion_table JSONB, "
+                        "created_at TIMESTAMPTZ NOT NULL DEFAULT now(), "
+                        "updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), "
+                        "concluded_at TIMESTAMPTZ)"
+                    )
+                )
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_research_runs_user "
+                    "ON research_runs (user_id, created_at DESC)"))
+    except Exception:
+        ok = False
+    _AGENT_TABLES_ENSURED.add(key)
+    _AGENT_TABLES_OK[key] = ok
+    return ok
 
 
 # --- 令牌管理（会话鉴权，不是 agent 令牌；R-ADMIN-001：管理台可视化随 M4 上线） ---

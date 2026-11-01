@@ -351,7 +351,25 @@
       (rows ? '<table class="tbl"><thead><tr><th>名称</th><th>前缀</th><th>Scopes</th><th>状态</th>'
         + '<th class="num">日提交</th><th class="num">在飞</th><th>全市场</th><th>最近使用</th></tr></thead>'
         + '<tbody>' + rows + '</tbody></table>'
-        : '<span class="muted">尚未签发任何访问令牌</span>');
+        : '<span class="muted">尚未签发任何访问令牌</span>')
+      + '<h3 style="margin-top:14px">研究会话</h3>'
+      + metric('会话总数', num(ag.research_runs_total), '外部 agent 创建的研究会话（定边界/列清单/提交结论的容器）')
+      + metric('未完结', num(ag.research_runs_open), 'planned / running / aggregated')
+      + metric('已提交结论', num(ag.research_runs_concluded), '结论由外部 agent 提供，系统原样存储、不解释')
+      + renderResearchRuns(ag.research_runs || []);
+  }
+
+  function renderResearchRuns(list){
+    if (!list.length) return '<span class="muted">尚未创建任何研究会话</span>';
+    var rows = list.map(function(r){
+      var budget = r.budget || {};
+      return '<tr><td>' + esc(r.title || '—') + '</td><td>' + esc(r.status || '—') + '</td>'
+        + '<td>' + (budget.max_jobs === undefined || budget.max_jobs === null ? '不限' : budget.max_jobs) + '</td>'
+        + '<td>' + (r.has_conclusion ? '有' : '无') + '</td>'
+        + '<td>' + esc(r.created_at ? r.created_at.replace('T', ' ').slice(0, 19) : '—') + '</td></tr>';
+    }).join('');
+    return '<table class="tbl"><thead><tr><th>标题</th><th>状态</th><th class="num">任务预算</th>'
+      + '<th>结论</th><th>创建时间</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   // --- QRE-SAAS-PUBLIC-BETA-OPS：公测运营指标（窗口切换 + 权威库聚合） ---

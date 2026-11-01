@@ -76,7 +76,7 @@ def _clean(app):
     from quant_research_engine.gui.saas.app import _get_engine
     engine = _get_engine(app)
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE api_tokens, results, jobs, strategies, users, sessions, sms_codes RESTART IDENTITY CASCADE"))
+        conn.execute(text("TRUNCATE research_runs, api_tokens, results, jobs, strategies, users, sessions, sms_codes RESTART IDENTITY CASCADE"))
 
 
 def _login(client, app, target="13800000001"):
@@ -88,6 +88,19 @@ def _login(client, app, target="13800000001"):
     login = client.post("/api/saas/auth/login", json={"target": target, "code": matches[-1]})
     assert login.status_code == 200, login.get_json()
     return {"Authorization": f"Bearer {login.get_json()['token']}"}
+
+
+def _admin_headers(app, email="admin@example.com"):
+    """建一个 admin 用户并返回 X-User-Id 头（SAAS_DEV_AUTH 后门）。"""
+    from sqlalchemy import text
+
+    engine = app.extensions["saas_engine"]
+    with engine.begin() as conn:
+        uid = conn.execute(
+            text("INSERT INTO users (email, role) VALUES (:e, 'admin') RETURNING id"),
+            {"e": email},
+        ).scalar_one()
+    return {"X-User-Id": str(uid)}
 
 
 def _create_token(client, session_headers, **overrides):
@@ -240,19 +253,181 @@ class TestCapabilities:
         assert caps["agent_defaults"]["allow_full_market"] is False
 
 
+class TestResearchRuns:
+    """M2：研究会话容器——归属隔离、预算收敛、状态机、结论只存不解释。"""
+
+    def _token(self, client, app, scopes=None):
+        session = _login(client, app)
+        token = _create_token(client, session, scopes=scopes or
+                              ["jobs:submit", "jobs:read", "results:read", "factors:read"])["token"]
+        return {"Authorization": f"Bearer {token['plaintext']}"}
+
+    def _create_run(self, client, headers, **payload):
+        body = {"title": "EMA 周期是否有意义"}
+        body.update(payload)
+        resp = client.post(f"{AGENT_API_PREFIX}/research-runs", json=body, headers=headers)
+        assert resp.status_code == 201, resp.get_json()
+        return resp.get_json()["research_run"]
+
+    def test_create_defaults_and_view(self, client, app):
+        headers = self._token(client, app)
+        run = self._create_run(client, headers, boundary_text="只测 EMA，不测组合",
+                               todo=[{"step": 1, "what": "EMA 5..250 扫描"}])
+        assert run["status"] == "planned"
+        assert run["budget"] == {}  # 未给预算 = 不设上限（仍受 token 与会话默认值约束）
+        detail = client.get(f"{AGENT_API_PREFIX}/research-runs/{run['id']}",
+                            headers=headers).get_json()["research_run"]
+        assert detail["boundary_text"] == "只测 EMA，不测组合"
+        assert detail["todo"][0]["what"] == "EMA 5..250 扫描"
+        assert detail["usage"]["jobs_total"] == 0
+        assert detail["budget_exceeded"] is None
+
+    def test_title_required_and_bounded(self, client, app):
+        headers = self._token(client, app)
+        assert client.post(f"{AGENT_API_PREFIX}/research-runs", json={},
+                           headers=headers).status_code == 400
+        assert client.post(f"{AGENT_API_PREFIX}/research-runs",
+                           json={"title": "x" * 200}, headers=headers).status_code == 400
+
+    def test_budget_unknown_key_rejected(self, client, app):
+        headers = self._token(client, app)
+        resp = client.post(f"{AGENT_API_PREFIX}/research-runs",
+                           json={"title": "t", "budget": {"max_everything": 5}}, headers=headers)
+        assert resp.status_code == 400
+        assert "未知 budget 键" in resp.get_json()["error"]["message"]
+
+    def test_budget_clamped_to_session_caps(self, client, app):
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        headers = self._token(client, app)
+        run = self._create_run(client, headers, budget={
+            "max_jobs": 10 ** 9,
+            "max_artifact_bytes": 10 ** 15,
+            "max_wall_clock_hours": 10 ** 6,
+        })
+        caps = agent_mod.AGENT_DEFAULTS
+        assert run["budget"]["max_jobs"] == caps["research_run_max_jobs"]
+        assert run["budget"]["max_artifact_bytes"] == caps["research_run_max_artifact_bytes"]
+        assert run["budget"]["max_wall_clock_hours"] == caps["research_run_max_wall_clock_hours"]
+
+    def test_budget_negative_and_type_rejected(self, client, app):
+        headers = self._token(client, app)
+        for bad in ({"max_jobs": -1}, {"max_jobs": "many"}, {"allow_full_market": "yes"}):
+            resp = client.post(f"{AGENT_API_PREFIX}/research-runs",
+                               json={"title": "t", "budget": bad}, headers=headers)
+            assert resp.status_code == 400, bad
+
+    def test_status_transitions_and_illegal_move(self, client, app):
+        headers = self._token(client, app)
+        run = self._create_run(client, headers)
+        rid = run["id"]
+        assert client.post(f"{AGENT_API_PREFIX}/research-runs/{rid}/status",
+                           json={"status": "running"}, headers=headers).status_code == 200
+        assert client.post(f"{AGENT_API_PREFIX}/research-runs/{rid}/status",
+                           json={"status": "aggregated"}, headers=headers).status_code == 200
+        # concluded 是终态之一，只能去 archived
+        resp = client.post(f"{AGENT_API_PREFIX}/research-runs/{rid}/status",
+                           json={"status": "running"}, headers=headers)
+        assert resp.status_code == 409
+        assert client.post(f"{AGENT_API_PREFIX}/research-runs/{rid}/status",
+                           json={"status": "nonsense"}, headers=headers).status_code == 400
+
+    def test_conclusion_stored_verbatim_and_marks_concluded(self, client, app):
+        headers = self._token(client, app)
+        run = self._create_run(client, headers)
+        table = [{"config": {"ema": 5}, "sharpe": 0.31}, {"config": {"ema": 60}, "sharpe": 0.12}]
+        resp = client.post(f"{AGENT_API_PREFIX}/research-runs/{run['id']}/conclusion",
+                           json={"conclusion_text": "EMA5 在本样本内夏普最高",
+                                 "conclusion_table": table}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.get_json()["research_run"]["stored"] is True
+        detail = client.get(f"{AGENT_API_PREFIX}/research-runs/{run['id']}",
+                            headers=headers).get_json()["research_run"]
+        assert detail["status"] == "concluded"
+        assert detail["conclusion_text"] == "EMA5 在本样本内夏普最高"
+        assert detail["conclusion_table"] == table  # 原样存储，不改写
+        assert detail["concluded_at"]
+
+    def test_conclusion_requires_at_least_one_field(self, client, app):
+        headers = self._token(client, app)
+        run = self._create_run(client, headers)
+        resp = client.post(f"{AGENT_API_PREFIX}/research-runs/{run['id']}/conclusion",
+                           json={}, headers=headers)
+        assert resp.status_code == 400
+
+    def test_archived_run_rejects_conclusion(self, client, app):
+        headers = self._token(client, app)
+        run = self._create_run(client, headers)
+        client.post(f"{AGENT_API_PREFIX}/research-runs/{run['id']}/status",
+                    json={"status": "archived"}, headers=headers)
+        resp = client.post(f"{AGENT_API_PREFIX}/research-runs/{run['id']}/conclusion",
+                           json={"conclusion_text": "太晚了"}, headers=headers)
+        assert resp.status_code == 409
+
+    def test_other_users_run_is_404(self, client, app):
+        headers_a = self._token(client, app)
+        session_b = _login(client, app, "13800000002")
+        token_b = _create_token(client, session_b)["token"]
+        headers_b = {"Authorization": f"Bearer {token_b['plaintext']}"}
+        run = self._create_run(client, headers_a)
+        for method, path in (
+            ("get", f"{AGENT_API_PREFIX}/research-runs/{run['id']}"),
+            ("post", f"{AGENT_API_PREFIX}/research-runs/{run['id']}/status"),
+            ("post", f"{AGENT_API_PREFIX}/research-runs/{run['id']}/conclusion"),
+        ):
+            resp = getattr(client, method)(path, json={"status": "archived",
+                                                       "conclusion_text": "x"}, headers=headers_b)
+            assert resp.status_code == 404, (method, path)
+
+    def test_scope_required(self, client, app):
+        headers = self._token(client, app, scopes=["factors:read"])
+        assert client.post(f"{AGENT_API_PREFIX}/research-runs", json={"title": "t"},
+                           headers=headers).status_code == 403
+        assert client.get(f"{AGENT_API_PREFIX}/research-runs", headers=headers).status_code == 403
+
+    def test_usage_counts_jobs_of_this_run(self, client, app):
+        """预算记账：把一条 job 挂到会话上，usage 立即反映（M3 sweep 的前置）。"""
+        from sqlalchemy import text
+
+        headers = self._token(client, app)
+        run = self._create_run(client, headers, budget={"max_jobs": 2})
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            uid = conn.execute(text("SELECT id FROM users ORDER BY id LIMIT 1")).scalar_one()
+            sid = conn.execute(
+                text("INSERT INTO strategies (user_id, name, yaml) "
+                     "VALUES (:uid, 'agent-run', :y) RETURNING id"),
+                {"uid": uid, "y": "signal:\n  entry: 'true'\n"},
+            ).scalar_one()
+            conn.execute(text(
+                "INSERT INTO jobs (user_id, strategy_id, kind, params, research_run_id, status, "
+                "started_at, finished_at) VALUES (:uid, :sid, 'full', '{}'::jsonb, :rid, "
+                "'completed', now() - interval '60 s', now())"),
+                {"uid": uid, "sid": sid, "rid": run["id"]})
+        detail = client.get(f"{AGENT_API_PREFIX}/research-runs/{run['id']}",
+                            headers=headers).get_json()["research_run"]
+        assert detail["usage"]["jobs_total"] == 1
+        assert detail["usage"]["jobs_completed"] == 1
+        assert detail["usage"]["wall_clock_seconds"] >= 59
+        assert detail["budget_exceeded"] is None
+
+    def test_console_reports_research_run_counts(self, client, app):
+        headers = _admin_headers(app)
+        agent_headers = self._token(client, app)
+        self._create_run(client, agent_headers, title="控制台可见会话")
+        d = client.get("/api/saas/console/overview", headers=headers).get_json()
+        ag = d["agent_api"]
+        assert ag["research_runs_total"] == 1
+        assert ag["research_runs_open"] == 1
+        assert ag["research_runs"][0]["title"] == "控制台可见会话"
+        assert ag["research_runs"][0]["has_conclusion"] is False
+
+
 class TestConsoleVisibility:
     """R-ADMIN-001：外部 Agent API 的限额必须在 9090 管理台可见，且与执行同源。"""
 
     def _admin(self, client, app, email="admin@example.com"):
-        from sqlalchemy import text
-
-        engine = app.extensions["saas_engine"]
-        with engine.begin() as conn:
-            uid = conn.execute(
-                text("INSERT INTO users (email, role) VALUES (:e, 'admin') RETURNING id"),
-                {"e": email},
-            ).scalar_one()
-        return {"X-User-Id": str(uid)}
+        return _admin_headers(app, email)
 
     def test_overview_reports_flag_defaults_and_token_counts(self, client, app):
         from quant_research_engine.gui.saas import agent_api as agent_mod

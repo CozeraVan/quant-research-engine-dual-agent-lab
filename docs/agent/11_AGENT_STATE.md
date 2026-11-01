@@ -22,7 +22,28 @@ This file is the source of truth for single-agent workflow recovery.
 
 `gui/risk_report.py::generate_risk_report` 默认传入 `include_volatility_series=True`、`volatility_series_max_points=500`。前端已有序列即画 EWMA/GARCH 曲线。实测增量约 +10KB/report。**ECS 已部署**：MainPID 602680，`/static/vol-regime.js`、`/saas/jobs/76` 均 200。**worker 未重启**，新回测需 worker 重启后才真正产出序列。
 
-### 2026-11-02 E 项 M1：外部 Agent API 令牌与能力信封（已部署 ECS，待用户验收后 commit）
+### 2026-11-03 E 项 M2：research_runs 研究会话容器（已部署 ECS并 commit）
+
+计划与完成度均登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7（动工前六项计划 + 完成后逐项对照）。
+实现：`research_runs` 表 + 5 个端点（建/列表/详情/状态迁移/结论）+ `research_run_usage()` 预算记账
+（jobs 数、`results.artifacts` 体积、墙上时间）+ budget 白名单收敛到 `AGENT_DEFAULTS` 上限 +
+9090 研究会话清点。结论只存不解释（用户边界 3）。测试新 13 例，**全量 3335 passed + 34 skipped**。
+ECS MainPID 604411，回滚副本 `/tmp/qre-deploy-20261101T183600Z.bak`；flag 关时全路由 404 已验证。
+
+**下一步 M3**：`POST /validate`（复用 `validate_yaml` + `check_factor_limits` + universe 解析，
+不执行不计配额）+ `POST /sweeps`（笛卡尔积串行展开、screen 强制抽样/confirm 双确认、
+展开前预检会话预算）+ `GET /sweeps/<id>/aggregate`（只回数字不回解读）。
+
+### 2026-11-03 E 项 M2 计划（research_runs 研究会话容器，动工前登记）
+
+用户 2026-11-02 明确「无需再次询问，一直推进任务，但任何任务前后都要把计划与完成度写入长期文件」。
+M2 计划已完整登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7（含 DDL、端点、预算记账、管理台、测试、部署纪律六项）。
+要点：`research_runs` 一等公民（boundary_text/todo/conclusion 原样存储，QRE 不解释）；
+budget 白名单键且不得超过 `AGENT_DEFAULTS` 会话级上限；状态机
+`planned→running→aggregated→concluded`（`archived` 为 TTL 终态）；
+用量从 `jobs.research_run_id` + `results.artifacts` + 起止时间汇总，为 M3 sweep 预算闸铺路。
+
+### 2026-11-02 E 项 M1：外部 Agent API 令牌与能力信封（已部署 ECS并 commit）
 
 第四入口第一阶段落地，特性开关 `QRE_AGENT_API_ENABLED` **默认关**（关时 `/api/agent/v1/*` 全 404，生产 inert）。
 

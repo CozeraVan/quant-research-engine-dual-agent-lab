@@ -1101,6 +1101,27 @@ def _agent_api_console_view(app, engine) -> dict[str, Any]:
                     "FROM api_tokens ORDER BY created_at DESC LIMIT 50"
                 )
             ).mappings().all()
+            runs_exists = conn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'research_runs'")
+            ).first() is not None
+            run_counts = {"total": 0, "concluded": 0, "running": 0}
+            run_rows = []
+            if runs_exists:
+                run_counts = conn.execute(
+                    text(
+                        "SELECT count(*) AS total, "
+                        "count(*) FILTER (WHERE status = 'concluded') AS concluded, "
+                        "count(*) FILTER (WHERE status IN ('planned','running','aggregated')) AS running "
+                        "FROM research_runs"
+                    )
+                ).mappings().one()
+                run_rows = conn.execute(
+                    text(
+                        "SELECT id, title, status, budget, created_at, concluded_at, "
+                        "(conclusion_text IS NOT NULL) AS has_conclusion "
+                        "FROM research_runs ORDER BY created_at DESC LIMIT 20"
+                    )
+                ).mappings().all()
     except SQLAlchemyError:
         return view  # 管理台清点失败不阻断总览其余部分
     view["tokens_total"] = int(counts["total"] or 0)
@@ -1120,6 +1141,22 @@ def _agent_api_console_view(app, engine) -> dict[str, Any]:
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
         }
         for r in rows
+    ]
+    # 研究会话清点（AGENT-API M2）：只回标题/状态/预算/是否有结论，不回结论文本本体
+    view["research_runs_total"] = int(run_counts["total"] or 0)
+    view["research_runs_concluded"] = int(run_counts["concluded"] or 0)
+    view["research_runs_open"] = int(run_counts["running"] or 0)
+    view["research_runs"] = [
+        {
+            "id": r["id"],
+            "title": r["title"],
+            "status": r["status"],
+            "budget": r["budget"],
+            "has_conclusion": bool(r["has_conclusion"]),
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "concluded_at": r["concluded_at"].isoformat() if r["concluded_at"] else None,
+        }
+        for r in run_rows
     ]
     return view
 

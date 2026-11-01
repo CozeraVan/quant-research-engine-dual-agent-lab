@@ -463,4 +463,34 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS token_id BIGINT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS research_run_id BIGINT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS labels JSONB;
 
+-- AGENT-API M2（2026-11-02）：研究会话容器——外部 agent「定边界 → 列清单 → 记账 →
+-- 提交结论」的唯一落点。boundary_text / todo / conclusion_* 一律原样存储，
+-- QRE 不生成、不改写、不解释（用户边界 3：不做投资建议，只做结果聚合）。
+-- status 状态机：planned → running → aggregated → concluded；archived 为 TTL 终态。
+-- budget 只接受白名单键，且不得超过 agent_api.AGENT_DEFAULTS 的会话级上限。
+CREATE TABLE IF NOT EXISTS research_runs (
+    id               BIGSERIAL PRIMARY KEY,
+    user_id          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_id         BIGINT REFERENCES api_tokens(id) ON DELETE SET NULL,
+    title            TEXT NOT NULL,
+    boundary_text    TEXT,                          -- 用户与 agent 的边界确认原文
+    todo             JSONB NOT NULL DEFAULT '[]'::jsonb,
+    budget           JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status           TEXT NOT NULL DEFAULT 'planned',
+    conclusion_text  TEXT,                          -- 只存不解释
+    conclusion_table JSONB,                         -- 聚合表格（agent 提供，QRE 不改写）
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    concluded_at     TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_research_runs_user ON research_runs (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_research_runs_status ON research_runs (status, created_at DESC);
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON research_runs TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE research_runs_id_seq TO aguhuice;
+    END IF;
+END $$;
+
 COMMIT;

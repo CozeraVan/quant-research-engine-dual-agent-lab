@@ -165,7 +165,60 @@ bash scripts/git-finalize-check.sh
 | 2026-11-02 | §11.8 补 F 节扩展 backlog（32 项远期/挂起任务汇总） | done | Kimi | `cc1ae20` 已 commit/push；`check-progress-docs.sh` 通过 |
 | 2026-11-02 | E 项第四入口 M0 设计（读档 + 对齐 + brainstorm + 设计文档/CR） | done | Kimi | `6f82567` 已 commit/push；设计文档 + CR + 10-25 brainstorm 取代标记 |
 | 2026-11-02 | 压测文档追加「每个全期 job 耗时分布」监视要求（用户追加） | in_progress | Kimi | 已写入 `27_STRESS_TEST_2026-11-02.md` §2（min/median/p95/max + 排队时长 + 最慢 5 个 job）；待子代理在 item1–item3 小节落地数值 |
-| 2026-11-02 | E 项 M1：api_tokens + capabilities + openapi + schema/strategy（特性开关默认关） | in_progress | Kimi | 代码已部署 ECS（MainPID 603714，回滚 `/tmp/qre-deploy-20261101T182548Z.bak`；`api_tokens` 表 + jobs 三列已 apply 并授权）；flag 关时全路由 404 已验证；新测试 23 例、全量 3322 passed + 34 skipped；**待用户验收后 commit** |
+| 2026-11-02 | E 项 M1：api_tokens + capabilities + openapi + schema/strategy（特性开关默认关） | done | Kimi | `fb419b4` 已 commit/push 并部署 ECS（MainPID 603714，回滚 `/tmp/qre-deploy-20261101T182548Z.bak`）；新测试 23 例、全量 3322 passed + 34 skipped；生产 flag 关时全路由 404 |
+| 2026-11-03 | **E 项 M2：research_runs 研究会话容器** | done | Kimi | `research_runs` 表 + 5 端点（建/列表/详情/状态迁移/结论）+ 预算记账（jobs 数、`results.artifacts` 体积、墙上时间）+ budget 白名单收敛到 `AGENT_DEFAULTS` 上限 + 9090 研究会话清点；新测试 13 例、全量 **3335 passed + 34 skipped**；ECS 已部署（MainPID 604411，回滚 `/tmp/qre-deploy-20261101T183600Z.bak`），flag 关时全路由 404 验证；commit 见下一条 |
+
+**M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**
+
+范围：把「研究会话」做成一等公民，作为外部 agent 定边界、列清单、记账、提交结论的唯一落点。
+
+1. DDL（`deploy/saas/cloud_schema.sql`，幂等）：`research_runs` 表
+   （id / user_id / token_id / title / boundary_text / todo JSONB / budget JSONB /
+   status / conclusion_text / conclusion_table JSONB / created_at / updated_at / concluded_at）。
+   - 状态机：`planned → running → aggregated → concluded`，`archived` 为 TTL 终态；
+     QRE 只校验归属与迁移合法性，不替 agent 决定下一步。
+   - `boundary_text` / `todo` / `conclusion_text` 一律原样存储，QRE 不生成、不改写、不解释。
+2. 端点（agent 令牌鉴权，全部归属校验，他人资源 404 与不存在同体）：
+   - `POST /api/agent/v1/research-runs`（scope `jobs:submit`）：建会话；
+     budget 只接受白名单键，且**不得超过 `AGENT_DEFAULTS` 的会话级上限**
+     （max_jobs=200 / max_artifact_bytes=20GB / max_wall_clock_hours=12），超限 400。
+   - `GET /api/agent/v1/research-runs`、`GET .../<id>`（scope `jobs:read`）：列表/详情，
+     详情带预算用量（jobs_total / jobs_completed / artifact_bytes / wall_clock_seconds）。
+   - `POST .../<id>/status`（`jobs:submit`）：状态迁移，非法迁移 409。
+   - `POST .../<id>/conclusion`（`jobs:submit`）：存结论文本与表格，落 `concluded` + `concluded_at`。
+3. 预算记账：`research_run_usage()` 从 `jobs.research_run_id` 汇总任务数、
+   从 `results.artifacts` 汇总产物体积、从 `started_at/finished_at` 汇总墙上时间；
+   会话级上限在 M3 sweep 展开前预检（本切片先把账算出来并暴露给 agent）。
+4. 管理台（R-ADMIN-001）：9090「外部 Agent API」卡增加研究会话计数与最近会话列表
+   （标题/状态/预算用量/结论是否存在），不回结论文本以外的敏感内容。
+5. 测试：新建/归属隔离/非法迁移/budget 超上限收敛/用量记账/结论只存不解释/
+   他人会话 404/管理台计数；全量回归不许变红。
+6. 部署纪律：ECS 先 apply schema 再发文件、只重启 qre-saas、flag 仍默认关；
+   验收通过后 commit/push。
+
+完成度目标：M2 结束时应能在 flag 打开后，由外部 agent 完成
+「建会话 → 记账 → 提交结论」全链路；sweep 展开（M3）尚未接入。
+
+**M2 完成情况（2026-11-03）**：全部六项计划落地。
+- DDL：`research_runs` 表（含 `boundary_text`/`todo`/`conclusion_text`/`conclusion_table`，
+  状态机 `planned→running→aggregated→concluded`，`archived` 为 TTL 终态）。
+- 端点：`POST /research-runs`（scope `jobs:submit`）、`GET /research-runs`、
+  `GET /research-runs/<id>`、`POST .../status`、`POST .../conclusion`；
+  他人/不存在一律 404 同体。
+- 预算：白名单四键（`max_jobs`/`max_artifact_bytes`/`max_wall_clock_hours`/`allow_full_market`），
+  超 `AGENT_DEFAULTS` 会话级上限自动收敛、负值/未知键/错类型 400；
+  详情返回 `usage` + `budget_exceeded` + `budget_remaining`。
+- 记账：`research_run_usage()` 从 `jobs.research_run_id` 汇总任务/完成/在飞，
+  从 `results.artifacts` 的 `size` 汇总产物体积，从 `finished_at-started_at` 汇总墙上时间。
+- 管理台：9090「外部 Agent API」卡新增研究会话区（总数/未完结/已结论 + 最近 20 条标题状态预算）。
+- 测试：新 13 例；全量 **3335 passed + 34 skipped**（零回归）。
+- 部署：ECS MainPID **604411**，回滚副本 `/tmp/qre-deploy-20261101T183600Z.bak`；
+  生产验证 `research_runs` 表与授权就绪、flag 关时 `capabilities`/`research-runs`/`tokens` 全 404、
+  既有三页 200。未重启 worker、未跑真实回测。
+- **下一步 M3（validate + sweeps）**：`POST /validate` 复用 `validate_yaml`+`check_factor_limits`+
+  universe 解析（不执行、不计配额）；`POST /sweeps` 笛卡尔积展开为串行子 job，screen 阶段强制
+  抽样 universe 与短区间、confirm 阶段需 `allow_full_market` 且配置数 ≤5，展开前预检会话预算，
+  `GET /sweeps/<id>/aggregate` 只回排名数字不回解读。
 
 ---
 
