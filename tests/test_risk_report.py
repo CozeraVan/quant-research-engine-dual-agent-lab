@@ -95,6 +95,14 @@ class TestDegradation:
         report = build_risk_report([0.01])
         assert "error" in report["distribution"]
 
+    def test_all_zero_returns_regime_unavailable(self):
+        """全零收益（空仓/无交易）不得把波动率 regime 误判成 high。"""
+        report = build_risk_report([0.0] * 100)
+        regime = report["volatility"]["regime"]
+        assert "error" in regime
+        assert regime.get("counts") in ({}, None)
+        assert regime.get("latest") is None
+
 
 class TestVarBacktestSection:
     def test_default_on_with_ewma_var(self, returns):

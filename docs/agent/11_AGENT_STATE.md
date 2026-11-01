@@ -9,6 +9,10 @@ This file is the source of truth for single-agent workflow recovery.
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
 4. **权限改动必须同步 9090**：权限/配额/限流变更在 commit/push 前必须完成管理台可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。详见 `02_LOCKED_REQUIREMENTS.md` R-ADMIN-001。
 
+### 2026-11-01 P1-10 FRM 波动率 regime 修复（进行中，未 commit）
+
+**分组核查结论**：低/中/高计数近似各 1/3 是**分位规则写死的预期行为**，不是数据错误。**发现真 bug**：job 82 全空仓/零收益导致波动率序列全零，旧逻辑把 `σ >= q_high(=0)` 全部判成 `high`，且 `thresholds_annual` 输出 0。**修复**：`risk/volatility.py::volatility_regime` 在分位切点非正时抛 `ValueError`；`risk/report.py` 捕获后把 regime 降级为 error 节（counts 空、latest None），不再误判 high。**测试**：TDD RED→GREEN，新增全零波动率/全零收益两例；`test_risk_volatility + test_risk_report + test_vol_regime` 62 passed；**全量 `uv run pytest -q -p no:randomly` → 3284 passed, 34 skipped**。**未做**：`thresholds_annual` 绝对轴真实浏览器验证需新产物；旧 job 73/75/76/77/79/80 无 `thresholds_annual`（旧版报告），其计数均匀为分位规则预期。
+
 ### 2026-11-01 P1-9 文案精简化收尾首段完成（进行中，未 commit）
 
 **字号基线已同步**：`12_UI_STYLE_GUIDE.md` 更新为实际生效值（正文 19 / H1 32 / 表格 16 / 辅助 15.5 / `.opt` 下限 14）。**首段静态灰字清理**：`symbols.html` 排序说明移入 H1 悬停；`new.html` 删除“没思路？”灰字标签、因子申请链接去掉 `.opt` 灰壳；`job.html` 策略简介行改正常墨色 15.5px；`strategy.html` “重新编译后需保存”移入按钮 `data-tip`。**新增测试**：`tests/test_saas_copy_declutter.py`（TDD RED→GREEN）；相关 89 passed。**未做**：状态/空态类灰字与其余页面收尾；**全量 `uv run pytest -q -p no:randomly` → 3276 passed, 34 skipped**；首段已提交 `7360444`。**第二段（2026-11-01，未 commit）**：new 因子弹窗/流水线失败提示、job 标签详情/向导条件/策略信息动态内容灰字壳已清理；相关 25 passed，**第二段全量 `uv run pytest -q -p no:randomly` → 3278 passed, 34 skipped**。**第三段（2026-11-01，未 commit）**：feedback/factor_request 登录提示、help 免责声明灰字改正常文本；相关 36 passed，**第三段全量 `uv run pytest -q -p no:randomly` → 3280 passed, 34 skipped**。**第四段（2026-11-01，未 commit）**：login 四项 muted 说明改正常文本，`.chart-empty` 白天/夜间均改 `var(--ink)`；相关 46 + 168 passed，**第四段全量 `uv run pytest -q -p no:randomly` → 3282 passed, 34 skipped**。P1-9 备注性灰字清理完成，剩余 `.muted` 仅用于加载/空态状态与次要数据标签。

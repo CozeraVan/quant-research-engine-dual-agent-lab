@@ -136,3 +136,8 @@ class TestVolatilityRegime:
         labels = volatility.volatility_regime(np.abs(rng.normal(0, 0.01, 300)))
         assert set(labels.unique()) <= {"low", "mid", "high"}
         assert len(labels) == 300
+
+    def test_all_zero_volatility_raises(self):
+        """全零波动率（如全空仓/零收益序列）不得把最高档判成 high。"""
+        with pytest.raises(ValueError, match="non-positive"):
+            volatility.volatility_regime(np.zeros(100))

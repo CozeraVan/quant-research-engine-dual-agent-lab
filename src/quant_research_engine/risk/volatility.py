@@ -141,6 +141,13 @@ def volatility_regime(
     if len(vol) < _MIN_OBS:
         raise ValueError(f"need at least {_MIN_OBS} non-NaN volatilities, got {len(vol)}")
     q_low, q_high = float(np.quantile(vol, quantiles[0])), float(np.quantile(vol, quantiles[1]))
+    if not (np.isfinite(q_low) and np.isfinite(q_high)) or q_high <= 0:
+        # 全零/非正波动率（如空仓、零收益序列）没有低/中/高含义；若继续按
+        # 「σ >= q_high」判定，会把所有零值误判成 high。
+        raise ValueError(
+            f"volatility quantiles are non-positive (q_low={q_low}, q_high={q_high}); "
+            "regime classification unavailable"
+        )
     labels = pd.Series("mid", index=vol.index, name="volatility_regime")
     labels[vol < q_low] = "low"
     labels[vol >= q_high] = "high"
