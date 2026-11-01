@@ -1,5 +1,28 @@
 # Task Handoff
 
+## 进行中：P1-9 文案精简化收尾（2026-11-01，首段）
+
+- 字号基线已同步；首段清理 symbols/new/job/strategy 5 处静态灰字，新增 `tests/test_saas_copy_declutter.py`。
+- 剩余：动态状态/空态灰字与其余页面收尾；全量测试在跑，未 commit/push。
+
+## 已完成：P0-8 结果端点 IDOR 普查 + 路由合同（2026-11-01）
+
+- 结论：12 条 `job_id` GET 路由全部清点；结果 GET 走 `_require_completed_result`，`/api/jobs/<id>` 自查归属。
+- 新增 `tests/test_saas_job_endpoint_audit.py` 冻结路由清单；access_hardening + 路由合同 69 passed。
+- 未改权限代码、未 commit/push。详见 `10_REVIEW_REPORT.md` P0-8 节。
+
+## 已完成：P0-7 回测详情隐私隔离回归（2026-11-01，只读）
+
+- 结论：未复现 76 号私人回测被游客直开。生产匿名 job76 summary/symbols、job82 summary 均 401；`share_links=0`。
+- 测试：access_hardening + gui_saas_pages 162 passed；result_contract/access/gui_saas 163 passed。
+- 未改代码、未在生产创建分享链接、未 commit/push。详见 `10_REVIEW_REPORT.md` P0-7 节。
+
+## 已完成：P0-6 统计口径全局生效复核（2026-11-01，只读）
+
+- 结论：新口径全局生效；旧结果系统内未验证隔离。两个 worker 结果回传路径均注入 `result_contract`；batch 总收益=`Σfinal/Σinitial−1`。
+- 生产只读实证：`results` 7 行中仅 job 82 带新合同；`showcase` 0 行。测试 163 + 91 passed。
+- 未改代码、未跑回测、未 commit/push。详见 `10_REVIEW_REPORT.md` P0-6 节。
+
 ## Task ID
 
 QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样本验证）

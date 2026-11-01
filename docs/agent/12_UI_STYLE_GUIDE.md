@@ -78,7 +78,7 @@
   - 标题/大数字 `--serif`: `"Noto Serif SC","Songti SC","STSong","SimSun",serif`
   - 代码 `--mono`: `"SF Mono","JetBrains Mono",Consolas,"Courier New",monospace`
 - 用法：品牌名、页面 H1、指标卡大数字用衬线 700/900；正文表格用无衬线；YAML 用等宽。
-- 字号阶梯：H1 30px（详情页 22px）/ 区块标题 h2 16px、chart-title 14.5px / 正文 15px / 表格 13.5px（detail-table 12.5px）/ 辅助 `.opt` 12.5px / 坐标轴 10–11px / 指标卡数值 20px（个股页 15px）。
+- 字号阶梯（2026-11-01 基线同步，实际生效值）：正文 19px / H1 32px（`.page-head h1`，line-height 1.3）/ 表格 16px（`table.tbl`、`.tbl th`、`.detail-table`）/ 辅助与 label 15.5px（`label`、`.muted`、`summary`、`.chart-empty`、`.bench-bar`、`.btn-sm` 等）/ 遗留 `.opt` 不得低于 14px（`tests/test_ui_dense_font_scale.py` 锁定下限；新 UI 不得新增 `.opt`）。
 - 数字一律 `font-variant-numeric:tabular-nums`；正文行高 1.65、标题 1.3。
 - 全站 reset：`*{box-sizing:border-box;margin:0;padding:0}`——**间距一律由容器控制，不给 h/p 写 margin**（`lab-theme.css:19,387`）。
 
@@ -124,7 +124,7 @@
 | `.btn.btn-primary` | 紫底白字，圆角 8px，padding 9px 22px，14px/500 | hover：深紫底 + 浮起 -1px + 紫光阴影 + **斜向高光扫过 0.55s**（仅主按钮有此光泽）；:active scale(.97) |
 | `.btn.btn-ghost` | 白底、深紫字、`--line` 边 | hover：紫边 + `--tint` 底 |
 | `.btn.btn-danger` | 白底红字浅红边（`#F0CACA`） | hover：`--up-soft` 底 + 红边 |
-| `.btn-sm` | 12.5px，padding 4px 12px，圆角 6px，白底灰字 | hover 紫边淡紫底；`.on` = 紫底白字（切换态） |
+| `.btn-sm` | 15.5px，padding 4px 12px，圆角 6px，白底灰字 | hover 紫边淡紫底；`.on` = 紫底白字（切换态） |
 | `.btn-run-main` | 主按钮加大：宽 100%、16px、padding 14px 22px、圆角 10px | 运行中 `disabled + opacity:.65` |
 | `.view-link` | 淡紫描边胶囊链接（次按钮级，"查看结果 →"） | hover 紫底白字浮起（`lab-theme.css:416-417`） |
 | `.seg-btn` | 胶囊切换按钮（基准切换、tag tabs） | `.active` 紫底白字（`lab-theme.css:196-198`） |
@@ -135,7 +135,7 @@
 ### 3.2 表单控件（`lab-theme.css:63-72`）
 
 - `input/textarea/select`：1px `--line` 边、圆角 8px、padding 8px 12px、14px；hover 边变 `--lav-ink`；focus 紫边 + `box-shadow:0 0 0 3px rgba(103,80,164,.15)`（不用 outline）。
-- 必填星号 `.req` 红色常规字重（400，不加粗）；辅助说明 `.opt` 12.5px `--faint`（**仅为既有遗留定义**）。
+- 必填星号 `.req` 红色常规字重（400，不加粗）；辅助说明 `.opt` 为既有遗留定义，**实际下限 14px**，不再作为新备注方案。
 - **新 UI 备注硬规则（2026-10-26 用户长期指令）**：新页面或 UI 改动不得新增任何形式的灰色小字号备注，包括 `.opt`、muted/faint 段落与灰色小字行内说明；必要解释统一使用 `tip-trigger` + `data-tip` + `LabUI.helpTips`，支持悬停、键盘聚焦与触摸，不在页面常驻重复说明。
 - 单选 `.radio-inline` / `.label-inline`：inline-flex、nowrap、`accent-color:var(--lav)`（原生 radio/checkbox 染紫）。
 

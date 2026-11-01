@@ -9,6 +9,22 @@ This file is the source of truth for single-agent workflow recovery.
 3. **完整 TodoList 不得被阶段短清单覆盖**：只允许更新单项状态或调整优先级，挂起项保留。
 4. **权限改动必须同步 9090**：权限/配额/限流变更在 commit/push 前必须完成管理台可视化，展示真实生效值及必要计数；展示与执行共用权威策略来源。详见 `02_LOCKED_REQUIREMENTS.md` R-ADMIN-001。
 
+### 2026-11-01 P1-9 文案精简化收尾首段完成（进行中，未 commit）
+
+**字号基线已同步**：`12_UI_STYLE_GUIDE.md` 更新为实际生效值（正文 19 / H1 32 / 表格 16 / 辅助 15.5 / `.opt` 下限 14）。**首段静态灰字清理**：`symbols.html` 排序说明移入 H1 悬停；`new.html` 删除“没思路？”灰字标签、因子申请链接去掉 `.opt` 灰壳；`job.html` 策略简介行改正常墨色 15.5px；`strategy.html` “重新编译后需保存”移入按钮 `data-tip`。**新增测试**：`tests/test_saas_copy_declutter.py`（TDD RED→GREEN）；相关 89 passed。**未做**：动态状态/空态灰字与其余页面收尾；**全量 `uv run pytest -q -p no:randomly` → 3276 passed, 34 skipped**；未 commit/push。
+
+### 2026-11-01 P0-8 结果端点 IDOR 普查 + 路由合同完成（未改权限代码/未 commit）
+
+**结论**：12 条 `job_id` GET 路由全部清点，结果 GET 均走 `_require_completed_result`，`/api/jobs/<id>` 自查归属；现有 access_hardening 权限矩阵通过。**新增防回归**：`tests/test_saas_job_endpoint_audit.py` 冻结 GET 路由集合（TDD RED→GREEN：漏 `gen-status` 红灯后补全）。**测试**：`test_saas_job_endpoint_audit.py + test_saas_access_hardening.py` 69 passed；**全量 `uv run pytest -q -p no:randomly` → 3271 passed, 34 skipped**。详见 `10_REVIEW_REPORT.md` P0-8 节。
+
+### 2026-11-01 P0-7 回测详情隐私隔离回归完成（只读，未改代码/未 commit）
+
+**结论**：未复现 76 号私人回测被游客直开。**生产只读实证**：`/api/results/76/summary` 与 `/symbols` 匿名均 401；唯一游客 job 82 匿名 summary 401；`share_links=0`、`guest_jobs=1`。**测试**：`test_saas_access_hardening.py + test_gui_saas_pages.py` 162 passed；`test_saas_result_contract.py + test_saas_access_hardening.py + test_gui_saas.py` 163 passed。**未做**：不在生产创建临时分享链接；分享创建/撤销/异 job/过期/写保护已有自动化回归。详见 `10_REVIEW_REPORT.md` P0-7 节。
+
+### 2026-11-01 P0-6 统计口径全局生效复核完成（只读，未改代码/未 commit）
+
+**结论**：新口径已全局生效，旧结果被系统内按未验证隔离。**证据**：`results` 两个生产写入路径（`result/meta` 与旧单包 `result`）均在 SaaS 接收层注入 `build_result_contract`；`resolve_result_contract` 无时间参数，只认显式合同/例外表；batch 总收益口径为 `Σfinal_equity / Σinitial_cash − 1`，shared 用组合净值 `total_return`。**生产库只读实证**：`results` 7 行中仅 job 82 带 `2026-10-25.1 / verified`，6 行历史无合同按未验证；`showcase` 0 行，公网经典列表为空。**测试**：`test_saas_result_contract.py + test_saas_access_hardening.py + test_gui_saas.py` 163 passed；`full_market_report/result_contract/strategy_performance` 91 passed。**未做**：不重跑 73/75/76/77/79/80，不加用户可见旧口径标签（符合 UI 精简决策）。详细报告见 `10_REVIEW_REPORT.md` P0-6 节。
+
 ### 2026-11-01 QRE-SAAS-SHOWCASE-REPOPULATE 第一阶段完成，未跑全量/未挂 showcase/未 commit/push
 
 经典策略页重新填充已从“直接重跑”改为“先可复现验证”。**已落地**：`strategies/classic/` 三个策略（EMA5/200 金叉死叉、MACD(12,26,9) 金叉死叉、MACD 反向择时）+ `tests/test_classic_strategies.py` 7 例（YAML 解析/信号字段声明/因子注册表命中/T+1 开盘成交/持仓 0=不限）。**因子口径**：EMA 用 `factors.stock_daily_overlap_typical_price.ema_5/ema_200`（库内 ema_200 仅 typical_price，避免混用）；MACD 用 `factors.stock_daily_momentum_close.macd_12_26_9/macds_12_26_9`。**小样本真实库验证**（5 只股票 × 2024-01-02~2026-10-21）：EMA 2/5 交易、13 笔、平均收益 0.133679、平均超额 0.007338、失败单 24；MACD 金叉 3/5、53 笔、0.157509、0.031169、失败单 68；MACD 反向 3/5、52 笔、-0.033002、-0.159342、失败单 70。失败单抽样为高价股 `insufficient_cash`（100 手门槛 > 10 万初始资金），非引擎阻塞。证据 `.tmp/classic-small/{ema,macd-golden,macd-reverse}`。**提交前验证（2026-11-01）**：`tests/test_classic_strategies.py` 7 passed；**全量 `uv run pytest -q -p no:randomly` → 3267 passed, 34 skipped**；`scripts/check-progress-docs.sh` 通过。**阻塞项已解除（2026-11-01）**：`scripts/showcase_roller.py` 删除 `JOB_RUN_MAP={58,66,74}` 硬编码，改由 ECS `/api/worker/showcase/jobs` 下发 `summary.run_id`（`app.py` 新增 `r.summary ->> 'run_id' AS run_id`）定位本地基线 run；缺 `run_id` 或 `experiment.name` 不匹配直接报错。测试：`tests/test_showcase_roller.py::TestResolveRunDir` 3 例 + `tests/test_gui_saas.py` `run_id` 透出回归；**全量 `uv run pytest -q -p no:randomly` → 3270 passed, 34 skipped**。**ECS（R-DEPLOY-001）**：已部署 `src/quant_research_engine/gui/saas/app.py`，新 MainPID 599773，回滚副本 `deploy@47.119.127.40:/tmp/qre-deploy-20261101T135839Z.bak`；`api/saas/factors` 与 `/saas/new` 均 200。**已提交并 push**：`d7d2640 refactor(saas): 经典策略日更滚动器改由 run_id 解析基线，移除硬编码 job 映射`。**未做**：全量全期重跑、写 ECS DB、挂 showcase、后台增删与日更回归、commit/push。下一步：用户批准全量预算后，先 1 策略全市场近两年做效率基准，再决定 2010 起全期。

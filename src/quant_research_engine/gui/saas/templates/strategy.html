@@ -16,8 +16,7 @@
       <div id="sd-src-nl" class="hidden">
         <h4 style="font-size:16px;margin:0 0 8px">策略描述 <button type="button" class="tip-trigger" data-tip="重新编译会把描述发送给 DeepSeek（已配置的大模型），用于校验描述是否完整并生成策略代码；请勿填写个人隐私信息或密钥。乱码、纯数字或与交易无关的内容会被拒绝，描述不完整时会先请你确认。" aria-label="自然语言编译隐私与校验说明">?</button></h4>
         <textarea id="sd-nl-text" rows="5" style="width:100%"></textarea>
-        <p class="opt" style="margin:6px 0">重新编译后，需保存修改才会生效。</p>
-        <button class="btn-sm" id="sd-nl-recompile">重新编译</button>
+        <button class="btn-sm" id="sd-nl-recompile" data-tip="重新编译后，需保存修改才会生效。">重新编译</button>
         <span class="opt" id="sd-nl-status" style="margin-left:8px"></span>
         <!-- QRE-SAAS-NL-A1：描述不完整时的确认区（确认=force 重发；reject 不可绕过） -->
         <div id="sd-nl-review" class="hidden" style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">

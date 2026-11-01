@@ -2,6 +2,129 @@
 
 ## Task ID
 
+QRE-SAAS-JOB-ENDPOINT-IDOR-AUDIT（P0-8：结果端点 IDOR 普查 + 自动化测试）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-11-01）。Required Fixes：无。新增 1 个路由清单合同测试；**未改权限业务代码、未 commit/push。**
+
+## Findings
+
+1. **枚举范围**：所有带 `<int:job_id>` 的 GET 路由共 12 条，已全部清点：
+   - 页面：`/saas/jobs/<id>`、`/saas/jobs/<id>/symbols`、`/saas/jobs/<id>/symbols/<ts_code>`（HTML 壳，不直接返回结果数据）；
+   - 任务：`/api/jobs/<id>`、`/api/saas/jobs/<id>`；
+   - 结果：`summary`、`chart-data`、`tag-analysis`、`risk-analysis`、`symbols`、`symbols/<ts_code>`、`symbols/<ts_code>/gen-status`。
+2. **权限实现一致**：
+   - `/api/jobs/<id>` 自己做归属判断：匿名/游客异会话 401，登录他人/不存在 404，本人 200；
+   - 其余结果 GET 全部走 `_require_completed_result()`，share/showcase/guest/user 语义统一，无效 share 不降级。
+3. **新增防回归合同**：`tests/test_saas_job_endpoint_audit.py` 冻结上述 GET 路由集合；未来新增 `job_id` GET 端点会立即红灯，迫使先补充权限矩阵与审计说明。
+4. **权限矩阵复跑**：`tests/test_saas_access_hardening.py` 覆盖匿名 401 / 他人 404 / 不存在同体 / 本人 200 / showcase verified 公开 / share 绑定与撤销 / 写保护，本轮通过。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/test_saas_job_endpoint_audit.py tests/test_saas_access_hardening.py -q → 69 passed
+TDD RED→GREEN：
+  RED: 预期清单漏掉 gen-status → AssertionError 指名该路由
+  GREEN: 补进预期清单 → 通过
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **只清点 GET 路由**：POST/DELETE 写端点已有独立权限测试；P0-8 关注“结果端点被越权读”。
+- **HTML 页面入口也列入清单**：它们本身不返回数据，但列入可防止未来把数据直接塞进页面路由。
+- **未改权限代码**：本轮为普查 + 合同测试，现有实现已覆盖。
+
+---
+
+## Task ID
+
+QRE-SAAS-RESULT-PRIVACY-REGRESSION（P0-7：回测详情隐私隔离回归）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-11-01，现有自动化回归 + 生产只读抽查）。Required Fixes：无。**未改业务代码、未创建/撤销生产分享链接、未 commit/push。**
+
+## Findings
+
+1. **私人 job 匿名不可达**：生产只读抽查 `/api/results/76/summary` 与 `/api/results/76/symbols` 匿名均 **401**；job 76 属登录用户、非 showcase、无 share 参数。
+2. **游客 job 匿名不可达**：生产唯一游客 job 82（`guest_key` 非空、`user_id` 为空）匿名 `/api/results/82/summary` **401**；游客会话 Cookie 归属由既有测试覆盖。
+3. **分享令牌链路有回归且生产当前无活跃分享**：`share_links` 生产计数 **0**；创建/匿名只读/异 job/过期/撤销/写保护/CASCADE 均由 `tests/test_saas_access_hardening.py` 覆盖。
+4. **会员他人不可达**：现有 IDOR 矩阵覆盖匿名 401 / 他人 404 / 不存在与他人同体 / 本人 200；本次复跑全绿。
+5. **未发现 76 号任务被游客直开的复现**：匿名 401，与预期一致。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/test_saas_access_hardening.py tests/test_gui_saas_pages.py -q → 162 passed
+uv run pytest tests/test_saas_result_contract.py tests/test_saas_access_hardening.py tests/test_gui_saas.py -q → 163 passed
+ECS 只读：
+  /api/results/76/summary anon = 401
+  /api/results/76/symbols  anon = 401
+  /api/results/82/summary anon = 401
+  share_links = 0
+  guest_jobs = 1
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **不在生产创建临时分享链接做真人验证**：分享创建/撤销会写生产 `share_links` 并可能留下审计噪声；该路径已有自动化回归覆盖，生产当前也无活跃分享。
+- **不改权限代码**：本轮为回归复核，未发现 Required Fix。
+
+---
+
+## Task ID
+
+QRE-SAAS-RESULT-CONTRACT-GLOBAL-AUDIT（P0-6：统计口径全局生效复核）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-11-01，只读复核 + 现有测试回归）。Required Fixes：无。**未改业务代码、未跑回测、未 commit/push。**
+
+## Findings
+
+1. **新结果合同注入点完整**：`results` 表只有两个生产写入路径——`/api/worker/jobs/<id>/result/meta` 与旧版 `/api/saas/worker/jobs/<id>/result`，两者均在 SaaS 接收层调用 `build_result_contract(data_until=...)` 写入 `results.result_contract`；worker/引擎零改动。
+2. **分类不随时间漂移**：`resolve_result_contract()` 只接受 `job_id / stored / data_until`，无时间参数；新结果无合同时落未验证，历史行走 `LEGACY_RESULT_CONTRACTS` 显式例外表，默认未验证。
+3. **收益口径本身已全局统一**：
+   - batch 模式 `strategy_total_return` 由 `_aggregate_batch_total_return()` 计算，口径为 `Σfinal_equity / Σinitial_cash − 1`，与净盈亏/profit_factor 勾稽；
+   - shared 模式使用组合净值曲线 `total_return`；
+   - 曲线口径仍是日收益累乘交集口径，两者在合同文案中明确“数值可有差、方向应一致”。
+4. **生产库实证（2026-11-01，只读）**：`jobs` 8 行，`results` 7 行；仅 job 82 带 `result_contract=2026-10-25.1 / verified`；job 73/75/76/77/79/80 为合同注入前历史结果，`result_contract` 为空，按未验证处理；`showcase` 0 行，公网经典策略列表为空，不会误展示旧口径。
+5. **用户可见层按既定决策收敛**：job/showcase/个人记录三处不再显示合同徽标与版本，但 API 内部仍返回 `result_contract`；曲线与总收益口径悬停提示保留。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/test_saas_result_contract.py tests/test_saas_access_hardening.py tests/test_gui_saas.py -q → 163 passed
+uv run pytest tests -q -k "full_market_report or result_contract or strategy_performance" → 91 passed
+ECS psql 只读：
+  results: with_contract=1, null_contract=6, total=7
+  showcase: 0 rows
+  job 82: contract_version=2026-10-25.1, verification=verified
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **不重跑 73/75/76/77/79/80**：它们是合同注入前历史结果，系统内已按未验证处理且不公开；用户此前只批准修 58/66 且已删测试数据，不重建。
+- **不加用户可见旧口径标签**：符合 2026-10-26 UI 精简决策；合同状态保留在 API/控制台体系内。
+- **未将旧 `LEGACY_RESULT_CONTRACTS` 中已删除 job 58/66/74 清掉**：保留作审计轨迹，避免未来误读历史决策。
+
+---
+
+## Task ID
+
 QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样本验证）
 
 ## Reviewer

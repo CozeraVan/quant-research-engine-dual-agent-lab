@@ -1,3 +1,11 @@
+2026-11-01 P1-9 文案精简化收尾首段完成（进行中，未 commit）：字号基线同步 `12_UI_STYLE_GUIDE.md`；清理 symbols/new/job/strategy 5 处静态灰字，新增 `tests/test_saas_copy_declutter.py`；相关 89 passed。剩余动态状态/空态灰字下一段处理。
+
+2026-11-01 P0-8 结果端点 IDOR 普查 + 路由合同完成（未改权限代码/未 commit）：清点 12 条 `job_id` GET 路由；结果 GET 全走 `_require_completed_result`；新增 `tests/test_saas_job_endpoint_audit.py` 冻结路由清单（RED→GREEN）；access_hardening + 路由合同 69 passed。详见 `10_REVIEW_REPORT.md` P0-8 节。
+
+2026-11-01 P0-7 回测详情隐私隔离回归完成（只读，未改代码/未 commit）：生产匿名抽查 job76 summary/symbols、job82 summary 均 401；share_links=0；access_hardening + gui_saas_pages 162 passed，result_contract/access/gui_saas 163 passed。详见 `10_REVIEW_REPORT.md` P0-7 节。
+
+2026-11-01 P0-6 统计口径全局生效复核完成（只读，未改代码/未 commit）：两个 worker 结果回传路径均注入 `result_contract`；batch 总收益=`Σfinal/Σinitial−1`；生产仅 job 82 带新合同，旧 6 结果未验证且 showcase 为空；相关 163 + 91 passed。报告见 `10_REVIEW_REPORT.md` P0-6 节。
+
 2026-11-01 QRE-SAAS-SHOWCASE-REPOPULATE 第一阶段完成，未跑全量/未挂 showcase/未 commit：新增 `strategies/classic/` 三个经典策略 YAML 与 `tests/test_classic_strategies.py`（7 passed）；5 只股票 × 2024-01-02~2026-10-21 小样本真实库回测三策略均通过（EMA 13 笔/平均超额 +0.73%、MACD 金叉 53 笔/+3.12%、MACD 反向 52 笔/-15.93%）。证据 `.tmp/classic-small/{ema,macd-golden,macd-reverse}`。发现阻塞项：`scripts/showcase_roller.py` 仍硬编码已删除 job 58/66/74 的本地 run 映射，重新填充前必须解耦。下一步待用户批准全量预算。
 
 2026-10-29 QRE-UNIVERSE-NEEQ-LEGACY 代码/测试/真实库验证完成，待提交后重启 worker：新增 `data/universe_rules.py`，自动解析宇宙按实际加载起点早于 2021-11-15 剔除 `920%.BJ`；接 6 文件 7 处调用点；新增 13 例测试含穷举+反向静态锁（补上第一版漏接的 `apps/cli.py` batch 与 `gui/engine.py::_run_via_module` batch）；真实库 2010 起 5852→5498（剔除 354 只全为 920），2022 起 5768→5768（剔除 0）。文档 06/14/20/11 已同步，`check-progress-docs.sh` 通过；尚未 commit/push，提交后需重启 `qre-saas-worker.service`，不需要 ECS SaaS 部署。

@@ -39,7 +39,6 @@
     <h3 style="font-size:18px;margin-bottom:10px;">用一句话描述你的策略 <button type="button" class="tip-trigger" data-tip="你输入的描述会发送给 DeepSeek（已配置的大模型），用于校验描述是否完整并生成策略代码；请勿填写个人隐私信息或密钥。明显的乱码、纯数字或与交易无关的内容会被直接拒绝，描述不完整时会先请你确认再编译。" aria-label="自然语言编译隐私与校验说明">?</button></h3>
     <textarea id="nl-text" rows="4" style="width:100%" placeholder="在此描述你的交易想法，最少包含买入条件以及卖出条件，然后点击下方生成策略按钮。"></textarea>
     <div class="chip-row">
-      <span class="opt">没思路？点一个示例填入：</span>
       <button class="chip nl-ex">5日均线上穿200日均线买入，下穿卖出，止损8%</button>
       <button class="chip nl-ex">收盘价低于10元买入，高于12元卖出</button>
       <button class="chip nl-ex">20日均线上穿60日均线买入，下穿卖出，止损8%</button>
@@ -65,7 +64,7 @@
     <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
       <button class="btn-sm" data-addgroup="exit">+ 添加条件组</button>
     </div>
-    <p class="opt" style="margin-top:14px"><a class="inl" href="/saas/factor-request">没有你要的因子？点此申请新因子 →</a></p>
+    <p style="margin-top:14px"><a class="inl" href="/saas/factor-request">没有你要的因子？点此申请新因子 →</a></p>
   </div>
 
   <div class="card entry-panel" id="entry-yaml">
