@@ -6,7 +6,7 @@ QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样�
 
 ## Release Status
 
-进行中（2026-11-01）。策略 YAML、合同测试、5 只股票 × 近两年小样本回测已完成；**未跑全量全期、未写 ECS DB、未挂 showcase、未 commit/push**。
+阶段一已提交 `ade849d`（2026-11-01）：策略 YAML、合同测试、小样本回测已落地；**仍未跑全量全期、未写 ECS DB、未挂 showcase**。日更滚动器解耦已实现并部署 ECS（app.py MainPID 599773），**未 commit/push，待用户验收**。
 
 ## Implementation
 
@@ -20,8 +20,8 @@ QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样�
 
 ## Blockers / Next Step
 
-- `scripts/showcase_roller.py` 仍硬编码 `JOB_RUN_MAP={58,66,74}` 与已删除本地 run 目录；重新填充前必须解耦为配置化或从新基线产物解析。
-- 全量全期重拍前需用户批准预算；先跑 1 策略全市场近两年做效率基准，再决定是否 2010 起全期。
+- **日更滚动器已解耦（2026-11-01）**：`scripts/showcase_roller.py` 删除 `JOB_RUN_MAP={58,66,74}`，改由 ECS `/api/worker/showcase/jobs` 下发 `summary.run_id` 定位本地基线 run；`app.py` 该端点新增 `r.summary ->> 'run_id' AS run_id`。缺 run_id 或 name 不匹配直接报错，不再静默依赖旧 job。
+- 全量全期重跑前需用户批准预算；先跑 1 策略全市场近两年做效率基准，再决定 2010 起全期。
 
 ## 历史任务：QRE-UNIVERSE-NEEQ-LEGACY（P0-4，已发布）
 

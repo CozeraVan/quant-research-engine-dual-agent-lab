@@ -48,14 +48,6 @@ from quant_research_engine.markets.ashare import AShareMarketProfile  # noqa: E4
 WORKER_ENV_PATH = Path("/etc/qre-saas-worker.env")
 RUNS_ROOT = Path("/home/van/qre-outputs/gui-console/runs")
 
-#: job_id → 冻结基线 run 目录（strategy.yaml 的 experiment.name 须与 ECS
-#: 下发的 strategy_name 一致，加载时校验）。
-JOB_RUN_MAP = {
-    74: "20261019T033313476861",
-    58: "20261011T135434249768",
-    66: "20261013T022229180230",
-}
-
 PRICE_COLUMN_CHOICES = ("open", "close", "vwap")
 #: 状态日前向缓冲（日历日）：保证冻结日行与其 shift(1) 上下文进入窗口
 SIGNAL_WARMUP_DAYS = 15
@@ -160,10 +152,19 @@ def _read_csv(path: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def resolve_run_dir(job_id: int, strategy_name: str, runs_root: Path = RUNS_ROOT) -> Path:
-    run_id = JOB_RUN_MAP.get(int(job_id))
-    if run_id is None:
-        raise RuntimeError(f"job {job_id} 无本地基线 run 映射（JOB_RUN_MAP）")
+def resolve_run_dir(job: dict[str, Any], runs_root: Path = RUNS_ROOT) -> Path:
+    """按 ECS 下发的 `run_id` 定位本地冻结基线 run 的 artifacts 目录。
+
+    `run_id` 来自 worker 回传的 `summary.run_id`（由 `/api/worker/showcase/jobs`
+    透出）；不再使用 job_id → run_id 硬编码表，避免旧 job 删除后滚动器失效。
+    `strategy.yaml` 的 `experiment.name` 仍须与 ECS 下发的 `strategy_name` 一致。
+    """
+    run_id = str(job.get("run_id") or "").strip()
+    if not run_id:
+        raise RuntimeError(
+            f"job {job.get('job_id')} 未提供 run_id（summary.run_id）；"
+            "请确认 worker 回传摘要包含 run_id"
+        )
     run_dir = runs_root / run_id
     yaml_path = run_dir / "strategy.yaml"
     if not yaml_path.is_file():
@@ -172,10 +173,10 @@ def resolve_run_dir(job_id: int, strategy_name: str, runs_root: Path = RUNS_ROOT
 
     name = str((_yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {})
                .get("experiment", {}).get("name", ""))
-    if name != strategy_name:
+    if name != str(job.get("strategy_name") or ""):
         raise RuntimeError(
-            f"job {job_id} 映射校验失败：run {run_id} experiment.name={name!r} "
-            f"!= ECS strategy_name={strategy_name!r}"
+            f"job {job.get('job_id')} 映射校验失败：run {run_id} experiment.name={name!r} "
+            f"!= ECS strategy_name={job.get('strategy_name')!r}"
         )
     artifacts = run_dir / "artifacts"
     if not artifacts.is_dir():
@@ -682,14 +683,14 @@ def roll_job(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """滚动单个 showcase job 至 target_date，返回 (待推送行, 诊断信息)。
 
-    ``artifacts_dir``/``symbols`` 为测试注入口：缺省按 JOB_RUN_MAP 解析基线
+    ``artifacts_dir``/``symbols`` 为测试注入口：缺省按 ECS 下发的 ``run_id`` 解析基线
     产物、股票集取「冻结日后有新 bar」的全市场股票。
     """
     from quant_research_engine.data.assembler import ResearchFrameAssembler
 
     job_id = int(job["job_id"])
     if artifacts_dir is None:
-        artifacts_dir = resolve_run_dir(job_id, str(job["strategy_name"]), runs_root)
+        artifacts_dir = resolve_run_dir(job, runs_root)
     freeze = reconstruct_states(artifacts_dir)
     roll_params, market_fields, spec, profile = build_roll_params(job)
 

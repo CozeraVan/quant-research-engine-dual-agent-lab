@@ -13,7 +13,7 @@ QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样�
 - 已新增 `strategies/classic/` 三个策略：EMA5/200 金叉死叉、MACD(12,26,9) 金叉死叉、MACD 反向择时；统一 T+1 开盘成交、持仓天数 0=不限。
 - 因子口径：EMA 用 typical_price 的 `ema_5/ema_200`；MACD 用 close 的 `macd_12_26_9/macds_12_26_9`。
 - 测试：`tests/test_classic_strategies.py` 7 passed；小样本 5 只股票 × 2024-01-02~2026-10-21 三策略均跑通，结果见 `08_IMPLEMENTATION_BRIEF.md`。
-- 阻塞项：`scripts/showcase_roller.py` 仍硬编码已删除 job 58/66/74 的本地 run 映射，重新填充前必须解耦。
+- 阻塞项已解除：`scripts/showcase_roller.py` 不再硬编码已删除 job 58/66/74 的本地 run 映射，改由 ECS `/api/worker/showcase/jobs` 下发 `summary.run_id` 定位本地基线 run。
 - Next Step：用户批准全量预算后，先 1 策略全市场近两年做效率基准，再决定 2010 起全期；干净 job 生成后挂 showcase 并回归后台增删与日更。
 
 ### 历史任务：QRE-UNIVERSE-NEEQ-LEGACY（P0-4，已发布）

@@ -1184,7 +1184,8 @@ class TestShowcaseDailyAndConsole:
         client.post(f"/api/worker/jobs/{job_id}/result/meta",
                     json={"worker_id": "w1",
                           "summary": {"strategy_total_return": 0.2, "win_rate": 0.5,
-                                      "max_drawdown": -0.1, "total_trade_count": 5},
+                                      "max_drawdown": -0.1, "total_trade_count": 5,
+                                      "run_id": "run-showcase-1"},
                           "chart_data": {"metrics": {"excess_return": 0.05}},
                           "data_until": "2026-02-27", "files": []},
                     headers=WORKER_HEADERS)
@@ -1223,6 +1224,7 @@ class TestShowcaseDailyAndConsole:
         j = pull["jobs"][0]
         assert j["job_id"] == job_id and j["yaml"] and j["params"]["start"] == "2026-01-01"
         assert j["last_daily"] is None
+        assert j["run_id"] == "run-showcase-1"
         rows = [
             {"trade_date": "2026-03-02", "daily_return": 0.01, "equity": 1.01,
              "n_positions": 3, "n_entries": 1, "n_exits": 0},

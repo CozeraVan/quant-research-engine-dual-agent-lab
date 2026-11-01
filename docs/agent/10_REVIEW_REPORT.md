@@ -17,7 +17,7 @@ PASS（阶段一门禁）。策略定义、因子口径、合同测试与小样�
 1. **策略真相源已收敛**：三个经典策略 YAML 明确因子目标与交叉语义，消除旧 job 删除后“经典策略无定义”的状态。
 2. **因子口径无混用**：`ema_200` 库内仅 typical_price 口径，故 EMA5 也显式使用 typical_price；MACD 使用 close 口径，避免价格基线与尺度争议。
 3. **失败单已抽样解释**：EMA 小样本中高价股失败单全部为 `insufficient_cash`（100 手门槛超过初始资金），不是信号/执行阻塞。
-4. **发现真实阻塞项**：`scripts/showcase_roller.py` 仍硬编码已删除 job 58/66/74 的本地 run 映射；若不先解耦，全量重跑后日更会失败。已写入 04/08/09/11/14。
+4. **真实阻塞项已解除**：`scripts/showcase_roller.py` 不再硬编码已删除 job 58/66/74 的本地 run 映射；改由 ECS `/api/worker/showcase/jobs` 下发 `summary.run_id` 定位本地基线 run，缺 run_id 或 name 不匹配直接报错。已写入 04/08/09/11/14。
 
 ## Validation Evidence
 

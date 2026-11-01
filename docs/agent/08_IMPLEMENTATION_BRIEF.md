@@ -46,7 +46,7 @@ bash scripts/check-progress-docs.sh
 
 ## 下一步（未做，等用户批准全量预算）
 
-1. **先修/解耦经典策略日更滚动器**：`scripts/showcase_roller.py` 仍硬编码 `JOB_RUN_MAP={58,66,74}` 与已删除的本地 run 目录；重新填充前必须改为配置化或从新基线产物解析，否则日更会立即失败。
+1. **日更滚动器已解耦（2026-11-01）**：`scripts/showcase_roller.py` 删除 `JOB_RUN_MAP={58,66,74}` 硬编码，改由 ECS `/api/worker/showcase/jobs` 下发 `summary.run_id`（`app.py` 查询新增 `r.summary ->> 'run_id' AS run_id`）定位本地基线 run；缺 `run_id` 或 `experiment.name` 不匹配直接报错。测试：`tests/test_showcase_roller.py::TestResolveRunDir` 3 例 + `tests/test_gui_saas.py` 透出 `run_id` 回归。
 2. 全量全期重跑三策略（建议先 1 只策略 + 全市场 + 近两年做效率基准，再决定 2010 起全期），保留本地基线 run 目录供滚动器使用。
 3. 生成干净 job 后，用管理员后台把 job 挂入 `showcase`，并回归「后台增删 + 日更」与首页空列表修复。
 

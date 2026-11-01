@@ -3133,10 +3133,12 @@ def create_saas_app() -> Flask:
             rows = conn.execute(
                 text(
                     "SELECT sc.job_id, sc.title, s.yaml, s.name AS strategy_name, j.params, "
-                    "(SELECT max(d.trade_date) FROM showcase_daily d WHERE d.job_id = sc.job_id) AS last_daily "
+                    "(SELECT max(d.trade_date) FROM showcase_daily d WHERE d.job_id = sc.job_id) AS last_daily, "
+                    "r.summary ->> 'run_id' AS run_id "
                     "FROM showcase sc "
                     "JOIN jobs j ON j.id = sc.job_id "
                     "JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE sc.is_active AND j.status = 'completed' ORDER BY sc.sort_order, sc.job_id"
                 )
             ).mappings().all()

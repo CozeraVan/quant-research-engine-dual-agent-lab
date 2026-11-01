@@ -300,6 +300,37 @@ class TestAggregatePortfolio:
 
 
 # ---------------------------------------------------------------------------
+# 基线 run 解析（QRE-SAAS-SHOWCASE-REPOPULATE：不硬编码 job→run 映射）
+# ---------------------------------------------------------------------------
+
+
+class TestResolveRunDir:
+    def _make_run(self, tmp_path: Path, run_id: str, name: str) -> Path:
+        run_dir = tmp_path / run_id
+        artifacts = run_dir / "artifacts"
+        artifacts.mkdir(parents=True)
+        (run_dir / "strategy.yaml").write_text(
+            f"experiment:\n  name: {name}\n", encoding="utf-8")
+        return artifacts
+
+    def test_resolves_from_job_run_id(self, tmp_path: Path) -> None:
+        artifacts = self._make_run(tmp_path, "run-123", "exp_123")
+        job = {"job_id": 123, "run_id": "run-123", "strategy_name": "exp_123"}
+        assert sr.resolve_run_dir(job, runs_root=tmp_path) == artifacts
+
+    def test_missing_run_id_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(RuntimeError, match="run_id"):
+            sr.resolve_run_dir(
+                {"job_id": 123, "strategy_name": "exp_123"}, runs_root=tmp_path)
+
+    def test_strategy_name_mismatch_raises(self, tmp_path: Path) -> None:
+        self._make_run(tmp_path, "run-123", "exp_123")
+        job = {"job_id": 123, "run_id": "run-123", "strategy_name": "other"}
+        with pytest.raises(RuntimeError, match="映射校验失败"):
+            sr.resolve_run_dir(job, runs_root=tmp_path)
+
+
+# ---------------------------------------------------------------------------
 # 参数还原
 # ---------------------------------------------------------------------------
 
