@@ -21,6 +21,8 @@ def test_param_family_params_basic():
     assert _param_family_params("rsi_14") == ("rsi", "14")
     assert _param_family_params("sma_20") == ("ma", "20")
     assert _param_family_params("close") is None
+    # 非数字参数后缀（如 macd_cn_12_26_9）不是参数变体
+    assert _param_family_params("macd_cn_12_26_9") is None
 
 
 def test_single_group_returns_primary_only():

@@ -24,6 +24,11 @@ PASS（2026-11-01）。Required Fixes：无。**未 commit/push；未跑全量�
 uv run pytest tests/test_param_variants.py tests/test_saas_symbol_ux.py tests/test_vol_regime.py -q → passed
 真实浏览器（vol-regime + echarts）：
   series chart canvas 800x300，markLine 2 条，零 pageerror
+真实浏览器（factor-layout 参数切换）：
+  macd 4 组 → 切到 6_13_5 后因子 12→3，零 pageerror
+小样本体积实测：
+  symbol details 294,684 → 509,809 bytes（ratio 1.73）
+  risk_report 9,244 → 19,405 bytes（ratio 2.10）
 ```
 
 ## Deliberate Decisions（需用户知情）

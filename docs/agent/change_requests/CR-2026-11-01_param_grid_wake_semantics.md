@@ -64,17 +64,29 @@
 
 **已实现**：
 
-- `lab_result.py` 新增纯函数 `_param_family_params()` / `_select_param_variant_columns()`：同族最多 4 组参数，主组优先，MACD 三元组完整；单组不扩展。
-- `_fetch_factor_panels()` / `build_lab_symbol_detail()` 新增 `include_param_variants` 开关，默认 False；开启时按 information_schema 发现的同族列额外下发变体 panel。
+- `lab_result.py` 新增纯函数 `_param_family_params()` / `_select_param_variant_columns()`：同族最多 4 组参数，主组优先，MACD 三元组完整；单组不扩展；非数字参数后缀（如 `macd_cn_*`）不识别为参数变体。
+- `_fetch_factor_panels()` / `build_lab_symbol_detail()` 新增 `include_param_variants` 开关，默认 False；开启时按 information_schema 发现的同族列额外下发变体 panel，并按 `(table,column)` 去重，避免 MACD 主列/信号列/自动补柱重复。
 - `worker/runner.py::build_symbol_detail_files()` 按现有截断序的前 `SYMBOL_DETAIL_PARAM_VARIANT_TOP_N=20` 只注入变体；超预算时先砍变体再砍个股；manifest 增加 `param_variants_included` / `param_variants_truncated` / `param_variant_top_n`。
 - 新增 `tests/test_param_variants.py` 4 例；`tests/test_saas_symbol_ux.py` 新增 2 例（TOP-N 注入、超预算先砍变体）。
+
+**小样本实测（2026-11-01，5 只策略样本中 3 只实际交易）**：
+
+- baseline（无变体）：294,684 bytes；
+- variants（TOP-N=20，实际 3 只）：509,809 bytes；
+- 增量：+215,125 bytes，**ratio 1.73**，约 **+71.7KB/股**；
+- 变体 panel 12 列，无重复列，`macd_cn_*` 已正确排除；
+- 预算提示：15MiB 上限在存量全量任务已打满，TOP-N=20 理论增量约 **1.4MB**，会挤占约 14 只普通个股详情；超预算时先砍变体。
+
+**真实浏览器参数切换验收（2026-11-01）**：
+
+- 用实测变体产物加载 `factor-layout.js`：`paramVariants` 识别 `macd` 4 组；
+- 切换到 `6_13_5` 后，因子集合 12 → 3，只剩 `macd_6_13_5/macdh_6_13_5/macds_6_13_5`；
+- 零 pageerror。
 
 **未做/待办**：
 
 - MA/BOLL 变体入库核对；
-- 小样本产物体积与覆盖数实测；
-- 真实浏览器参数切换验收；
-- 全量预算报告与用户批准。
+- 全量预算报告与用户批准（建议先在小样本任务上开启默认 TOP-N，再全量）。
 
 ---
 

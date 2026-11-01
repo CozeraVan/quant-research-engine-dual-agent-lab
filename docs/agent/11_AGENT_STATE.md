@@ -11,7 +11,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 ### 2026-11-01 P2-14/P2-15 推进（未 commit）
 
-**P2-15 前端曲线已完成**：`vol-regime.js` 新增 `seriesModel()` / `seriesChartOption()`；`job.html` / `lab_result.html` 有 `volatility.series` 时画 EWMA/GARCH 年化波动曲线 + 低/高阈值 markLine，无序列降级阈值标尺；真实浏览器渲染冒烟通过（canvas 正常、零 pageerror）。**P2-14 产物侧首版已实现**：`lab_result` 新增同族变体列选择（主组优先，最多 4 组，MACD 三元组完整）；`_fetch_factor_panels` / `build_lab_symbol_detail` 新增 `include_param_variants` 开关，默认关；`worker/runner.py` 只对截断序前 `TOP-N=20` 注入变体，超预算先砍变体再砍个股，manifest 记录 `param_variants_included` / `param_variants_truncated`。**测试**：`test_param_variants.py` 4 例 + `test_saas_symbol_ux.py` 2 例；**全量 `uv run pytest -q -p no:randomly` → 3299 passed, 34 skipped**。**未做**：MA/BOLL 入库核对、小样本体积实测、真实浏览器参数切换验收、全量预算批准。详见两个 `CR-2026-11-01_*`。
+**P2-15 前端曲线已完成**：`vol-regime.js` 新增 `seriesModel()` / `seriesChartOption()`；`job.html` / `lab_result.html` 有 `volatility.series` 时画 EWMA/GARCH 年化波动曲线 + 低/高阈值 markLine，无序列降级阈值标尺；真实浏览器渲染冒烟通过（canvas 正常、零 pageerror）。**P2-14 产物侧首版已实现**：`lab_result` 新增同族变体列选择（主组优先，最多 4 组，MACD 三元组完整）；`_fetch_factor_panels` / `build_lab_symbol_detail` 新增 `include_param_variants` 开关，默认关；`worker/runner.py` 只对截断序前 `TOP-N=20` 注入变体，超预算先砍变体再砍个股，manifest 记录 `param_variants_included` / `param_variants_truncated`。**测试**：`test_param_variants.py` 4 例 + `test_saas_symbol_ux.py` 2 例；**全量 `uv run pytest -q -p no:randomly` → 3299 passed, 34 skipped**。**2026-11-01 收尾实测（未 commit）**：修复变体列重复与 `macd_cn_*` 误入后，小样本 3 只交易股 baseline 294,684 → variants 509,809 bytes（ratio 1.73，约 +71.7KB/股）；真实浏览器参数切换 12→3 列通过；P2-15 风险报告 4000 点序列 9,244→19,405 bytes（ratio 2.10）。**未做**：MA/BOLL 入库核对、小样本体积实测、真实浏览器参数切换验收、全量预算批准。详见两个 `CR-2026-11-01_*`。
 
 ### 2026-11-01 P1-10 完成 + P2-14/P2-15 推进（未 commit）
 

@@ -815,7 +815,7 @@ def _param_family_params(column: str) -> tuple[str, str] | None:
     sma 归 ma，boll 上中下轨归 boll。
     """
     col = str(column or "").lower()
-    m = re.fullmatch(r"(macd|macds|macdh)_(.+)", col)
+    m = re.fullmatch(r"(macd|macds|macdh)_(\d+(?:_\d+)*)", col)
     if m:
         return ("macd", m.group(2))
     m = _PARAM_RE.fullmatch(col)
@@ -1034,14 +1034,15 @@ def _fetch_factor_panels(
                         variant_cols_by_table[table] = []
         # fetch_items: (raw_key, table, column, is_variant)
         fetch_items: list[tuple[str, str, str, bool]] = []
-        existing_primary = set(specs.values())
+        seen_cols = set(specs.values())
         for name, (table, col) in specs.items():
             fetch_items.append((name, table, col, False))
             if not include_param_variants:
                 continue
             for vcol in _select_param_variant_columns(col, variant_cols_by_table.get(table, [])):
-                if vcol == col or (table, vcol) in existing_primary:
+                if vcol == col or (table, vcol) in seen_cols:
                     continue
+                seen_cols.add((table, vcol))
                 fetch_items.append((vcol, table, vcol, True))
         hist_specs: list[tuple[str, str]] = []  # [(table, hist_col)] 已确认存在的补查列
         with store.market_engine.begin() as conn:
@@ -1086,6 +1087,8 @@ def _fetch_factor_panels(
                     if r[1] is not None and math.isfinite(float(r[1]))
                 }
             for table, hist in hist_specs:
+                if (table, hist) in seen_cols:
+                    continue  # 参数变体已下发同列，避免 MACD 柱重复 panel
                 try:
                     rows = conn.execute(
                         text(
@@ -1135,6 +1138,8 @@ def _fetch_factor_panels(
         if panel is not None:
             panels.append(panel)
     for table, hist in hist_specs:
+        if (table, hist) in seen_cols:
+            continue
         key = ("MACD柱", hist)
         if key not in raw:
             continue

@@ -45,8 +45,9 @@
 ## 4. 未做 / 下一步
 
 1. **前端时序曲线（已完成 2026-11-01）**：`vol-regime.js` 新增 `seriesModel()` / `seriesChartOption()`；`job.html` 与 `lab_result.html` 的 `renderRiskVol` 有序列时画 EWMA/GARCH 年化波动曲线 + 低/高阈值 markLine，无序列降级为阈值标尺；真实浏览器渲染冒烟通过（canvas 尺寸正常、零 pageerror）。
-2. **生产开启策略**：前端已就绪，但 worker/config 仍默认 `include_volatility_series=False`；开启前需实测 `risk_report.json` 体积增量。
-3. **性能优化（可选）**：当前开启后会额外拟合一次 GARCH；如成为默认路径，可考虑复用同一次拟合结果。
+2. **体积实测（2026-11-01）**：4000 个收益点、`max_points=500` 时，`risk_report.json` 9,244 → 19,405 bytes，**+10,161 bytes，ratio 2.10**。相对 15MiB/20MiB 回传预算占比很小；但默认仍关，需用户确认后开启。
+3. **生产开启策略**：前端已就绪；建议先在小样本任务默认开启 `include_volatility_series=True` 验证，再决定是否全局默认。
+4. **性能优化（可选）**：当前开启后会额外拟合一次 GARCH；如成为默认路径，可考虑复用同一次拟合结果。
 
 ---
 
