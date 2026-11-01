@@ -219,7 +219,10 @@ class TestRiskReportEndpoints:
         assert resp.status_code == 200
         job_id = resp.get_json()["job_id"]
 
-        deadline = time.time() + 10
+        # 截止时间 30s：后台线程与测试进程抢 GIL，全量套件（3380+ 例）负载下
+        # 10s 截止会偶发超时（2026-11-03 全量回归实测 flake 1 次，隔离复跑 3 次全绿）。
+        # 这不是产品缺陷，是测试自身的墙上时钟假设过紧。
+        deadline = time.time() + 30
         job = {}
         while time.time() < deadline:
             poll = app_client.get(f"/api/runs/runok1/risk-report/job/{job_id}")

@@ -33,6 +33,16 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 全量回归两处测试自身问题（已修，非产品缺陷）
+
+1. **第四入口 6 例时间依赖**：M4 默认 `nightly_only=true`，06:00 后跑全套件时 sweep 返回
+   202 而非 201，6 例全红。已把非窗口专项用例的令牌改为 `nightly_only=False`，
+   并把窗口专项测试改为 monkeypatch 窗口配置（覆盖「窗口内/窗口外/关闭/解析失败」四分支），
+   与墙上时钟彻底解耦。**教训：任何默认值受时间影响的特性，测试必须显式设定。**
+2. **`test_gui_risk_report.py::test_post_starts_job_and_poll` flake**：10s 墙上时钟截止 +
+   后台线程与测试进程抢 GIL，全量负载下偶发超时（实测 1 次；隔离复跑 3 次全绿）。
+   截止放宽到 30s 并注明原因。属测试假设过紧，非产品缺陷。
+
 ### 2026-11-03 P0-9 结果回传缺陷：A+C 已实施（压测实测立项）
 
 `CR-2026-11-03_result_upload_413_and_uploading_terminal.md`。压测实测：全市场回测 manifest

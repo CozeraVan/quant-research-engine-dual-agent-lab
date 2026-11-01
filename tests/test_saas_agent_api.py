@@ -446,8 +446,11 @@ class TestValidateAndSweeps:
 
     def _token(self, client, app, scopes=None):
         session = _login(client, app)
+        # nightly_only=False：这些用例测展开/护栏/幂等，不该被墙上时钟影响状态码
+        #（2026-11-03 教训：默认 true 时，06:00 后跑全套件会 6 例 202≠201 全红）
         token = _create_token(client, session, scopes=scopes or
-                              ["jobs:submit", "jobs:read", "results:read", "factors:read"])["token"]
+                              ["jobs:submit", "jobs:read", "results:read", "factors:read"],
+                              nightly_only=False)["token"]
         return {"Authorization": f"Bearer {token['plaintext']}"}
 
     def _run(self, client, headers, **budget):
@@ -731,7 +734,10 @@ class TestRateLimitNightlyAndAudit:
     def _token(self, client, app, scopes=None, target=None, **token_kwargs):
         session = _login(client, app, target or "13800000001")
         payload = {"name": "agent-a", "scopes": scopes or [
-            "jobs:submit", "jobs:read", "results:read", "factors:read"]}
+            "jobs:submit", "jobs:read", "results:read", "factors:read"],
+            # 除窗口专项用例外，一律关窗口，避免墙上时钟决定状态码
+            #（2026-11-03 教训：默认 true 时 06:00 后跑全套件 6 例 202≠201 全红）
+            "nightly_only": False}
         payload.update(token_kwargs)
         token = _create_token(client, session, **payload)["token"]
         return {"Authorization": f"Bearer {token['plaintext']}"}
@@ -794,13 +800,35 @@ class TestRateLimitNightlyAndAudit:
         assert stale == 0  # 2 小时前的行被机会式清理
 
     # --- 夜间窗口 ---
-    def test_nightly_window_sets_eligible_at_outside_window(self, client, app):
+    def test_nightly_window_inside_window_is_not_limited(self, client, app, monkeypatch):
+        """窗口内 → 不限制。窗口配置成必然覆盖当前时刻，与墙上时钟无关。"""
         from quant_research_engine.gui.saas import agent_api as agent_mod
 
-        row = {"nightly_only": True}
-        eligible = agent_mod._nightly_eligible_at(row)
-        # 当前 02:5x CST 在 00:00-06:00 窗口内 → 不限制
-        assert eligible is None
+        monkeypatch.setitem(agent_mod.AGENT_DEFAULTS, "nightly_window", "00:00-23:59 Asia/Shanghai")
+        assert agent_mod._nightly_eligible_at({"nightly_only": True}) is None
+
+    def test_nightly_window_outside_window_defers_to_next_start(self, client, app, monkeypatch):
+        """窗口外 → 返回下一个窗口起点（UTC aware），且必须晚于 now。"""
+        from datetime import datetime, timedelta, timezone
+
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        cst = timezone(timedelta(hours=8))
+        now_h = datetime.now(timezone.utc).astimezone(cst).hour
+        closed = (now_h + 2) % 24  # 必然不含当前时刻的一小时窗口
+        monkeypatch.setitem(agent_mod.AGENT_DEFAULTS, "nightly_window",
+                            f"{closed:02d}:00-{closed:02d}:30 Asia/Shanghai")
+        eligible = agent_mod._nightly_eligible_at({"nightly_only": True})
+        assert eligible is not None
+        assert eligible > datetime.now(timezone.utc)
+        local = eligible.astimezone(cst)
+        assert local.hour == closed and local.minute == 0
+
+    def test_nightly_only_false_never_defers(self, client, app, monkeypatch):
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        monkeypatch.setitem(agent_mod.AGENT_DEFAULTS, "nightly_window", "03:00-03:01 Asia/Shanghai")
+        assert agent_mod._nightly_eligible_at({"nightly_only": False}) is None
 
     def test_nightly_window_parsing_failure_does_not_block(self, client, app, monkeypatch):
         from quant_research_engine.gui.saas import agent_api as agent_mod
@@ -889,10 +917,11 @@ class TestResultAndArtifacts:
         "holding:\n  max_holding_days: 20\n"
     )
 
-    def _token(self, client, app, scopes=None, target=None):
+    def _token(self, client, app, scopes=None, target=None, nightly_only=False):
         session = _login(client, app, target or "13800000044")
         token = _create_token(client, session, scopes=scopes or [
-            "jobs:submit", "jobs:read", "results:read", "factors:read"])["token"]
+            "jobs:submit", "jobs:read", "results:read", "factors:read"],
+            nightly_only=nightly_only)["token"]
         return {"Authorization": f"Bearer {token['plaintext']}"}
 
     def _completed_job(self, client, app, headers, *, with_result=True, chart=True):
