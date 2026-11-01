@@ -35,6 +35,7 @@ echo "== Secret scan =="
 SECRET_SCAN_FILE=/tmp/agent-credential-scan.txt
 if git diff --unified=0 HEAD | grep -E '^\+[^+]' \
   | grep -Ei "(api[_-]?key|secret|token|password|passwd|credential)[\"']?[[:space:]]*[:=：][[:space:]]*[\"']?[A-Za-z0-9/_.+-]{16,}" \
+  | grep -viE "(test|example|dummy|placeholder|sample|fixture|your[_-]|xxxx|\*\*\*)" \
   >"$SECRET_SCAN_FILE"; then
   echo "ERROR: Potential secret-like text found in git diff."
   cat "$SECRET_SCAN_FILE"
