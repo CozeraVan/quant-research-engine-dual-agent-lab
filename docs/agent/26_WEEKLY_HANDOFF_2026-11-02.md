@@ -157,6 +157,8 @@ bash scripts/git-finalize-check.sh
 | 2026-11-02 | ECS SaaS 部署本轮已提交前端/后端改动 | planned | 待定 | 需用户确认；涉及 §5.2 文件 |
 | 2026-11-02 | P0-5 全量重跑 | planned | 待定 | 用户手动布置；先小样本 |
 | 2026-11-02 | P2-15 生产默认开启决策 | planned | 待定 | 体积实测已完成 |
+| 2026-11-02 | P1-12 数据库上云与云端 worker/DB 传输完全准备（不实际迁移） | in_progress | Kimi | 已建 `28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md` + `deploy/cloud/` 脚本；dry-run 通过；未真迁移 |
+| 2026-11-02 | 全期全量压力测试（3项，03:00 后顺序执行） | in_progress | 测试子代理 agent-208 | 目标记录 `docs/agent/27_STRESS_TEST_2026-11-02.md`；未完成 |
 
 ---
 

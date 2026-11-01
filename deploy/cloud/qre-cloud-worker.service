@@ -1,0 +1,43 @@
+# QRE 云端 Worker（上云准备模板；未安装、未启用）。
+#
+# 架构：cloud worker 与 cloud DB 同 region/同 VPC，只连私网 DB；
+# 通过公网 HTTPS 轮询 SaaS 任务队列（或内网 Endpoint），无需公网入站。
+#
+# 机密在 /etc/qre-cloud-worker.env（0600，不入仓库），模板见：
+#   deploy/cloud/qre-cloud-worker.env.example
+#
+# 安装（用户批准真迁移后）：
+#   sudo cp deploy/cloud/qre-cloud-worker.service /etc/systemd/system/
+#   sudo cp deploy/cloud/qre-cloud-worker.env.example /etc/qre-cloud-worker.env
+#   sudo chown root:root /etc/qre-cloud-worker.env && sudo chmod 0600 /etc/qre-cloud-worker.env
+#   # 填写真实值后：
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now qre-cloud-worker.service
+#   journalctl -u qre-cloud-worker -f
+
+[Unit]
+Description=QRE cloud worker (same-VPC private DB, polls SaaS job queue)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=qre
+Group=qre
+WorkingDirectory=/opt/qre/quant-research-engine-dual-agent-lab
+EnvironmentFile=/etc/qre-cloud-worker.env
+Environment=PYTHONPATH=/opt/qre/quant-research-engine-dual-agent-lab/src
+ExecStart=/opt/qre/quant-research-engine-dual-agent-lab/.venv/bin/python -m quant_research_engine.worker
+Restart=always
+RestartSec=10
+TimeoutStopSec=900
+# 云端规格确定后由用户调整；默认先给 16G cgroup 兜底。
+MemoryMax=16G
+Nice=10
+# 云端 worker 与 DB 同 VPC，不设代理；如运维需要，显式在 env 管理。
+SyslogIdentifier=qre-cloud-worker
+
+[Install]
+WantedBy=multi-user.target

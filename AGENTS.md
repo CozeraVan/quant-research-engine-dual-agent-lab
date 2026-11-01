@@ -43,6 +43,7 @@ Before modifying code or producing plans, read:
 - `docs/agent/24_KLINE_LWC_FROZEN.md`（LWC 引擎试点**已整体移除**（R3-4，省 ~214KiB）：删除清单/收益/决策记录/重新引入条件；版本锁定信息指向 git 历史）
 - `docs/agent/25_WEEKLY_HANDOFF_2026-10-29.md`（**上周工作交接**（Kimi 主 Agent 接手后，47 个提交）：主要成果 / **重大失误与必须复查点**（改过 DB 行情数据、年化爆表未查全、口径只修 58/66、复权问题多次复发、FRM 波动率回归、小游戏指标错乱、子 agent 交付质量、两个环境坑、隐私隔离待确认）/ 现状变更 / 挂起项 / 下周检查清单；**接手本项目必读**）
 - `docs/agent/26_WEEKLY_HANDOFF_2026-11-02.md`（**2026-11-02 主 Agent 交接文档**：当前提交/测试基线、最近成果、未部署未重启项、长期纪律、**交接期间任务记录表**；下一任主 Agent 接手必读，并在此文件维护所有新任务）
+- `docs/agent/28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md`（**数据库上云与云端 worker/DB 传输完全准备 Runbook**：目标架构、迁移范围与实测基线、备份/迁移/对账/产物同步/云端 worker 模板；真迁移前必须用户批准）
 
 ## Long-Term Memory Rule
 
