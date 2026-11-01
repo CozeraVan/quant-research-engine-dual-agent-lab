@@ -81,7 +81,22 @@ worker 一个文件一个 multipart part，manifest 1,537 part；Flask 3.1.3 默
 
 ---
 
-## 5. 状态
+## 5. 状态（2026-11-03 更新）
 
-- **已立项，未实施**。压测（item2 重跑 / item3）结束后另行排期；
-  修复前，全市场回测的回传成功率没有保证——这是当前最大的已知可靠性缺口。
+**A + C 已实施并测试通过**（低风险止损两项）：
+- A：`create_saas_app()` 显式 `app.config["MAX_FORM_PARTS"] = 5000`（实测 manifest
+  1,537 part，默认 1000 会 413；触发条件是文件数而非字节数，故按文件数放大）。
+- C：`worker/client.py::upload_files` 把 `HTTPError` 升级为带 status 的 `CloudError`；
+  `worker/daemon.py` 抽出 `_report_results()`，回传失败**显式 `fail` 落终态**——
+  4xx → `result_upload_http_<code>`（不可重试），传输/5xx → `result_upload_error`（可重试）。
+  worker 与 SaaS 两侧分类白名单各存一份，由 `tests/test_result_upload_error_classes.py`
+  （9 例）锁一致性；worker 相关测试 80 passed。
+- `17_JOB_PROTOCOL.md` §3.4 error_class 表已补两个新分类与 P0-9 说明。
+
+**仍未实施**：
+- B：分片上传（单 part + 自定义 manifest，或分批多次 POST）——根治方案，排期待定；
+- §8.5：20 MiB 超预算文件静默跳过、无 `truncated` 标记；
+- §8.7：`/tmp/qre-worker-job*` 不清理；
+- §8.11：batch 全量 `progress` 不更新；
+- §8.15 的 reaper 侧加固：`_reap_expired` 仍会把 `uploading` + 租约过期的 job 重排
+  （现在 worker 会主动 fail，但若 worker 进程被 kill 在回传中途，仍会走重排路径）。

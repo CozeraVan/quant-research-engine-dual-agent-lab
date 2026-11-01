@@ -312,7 +312,16 @@ HEARTBEAT_INTERVAL_SECONDS = 60
 HARD_TIMEOUT = {"smoke": "10 minutes", "full": "6 hours"}  # 17 协议 §5，可调
 UPLOAD_HARD_TIMEOUT = "30 minutes"
 ERROR_CLASSES = ("strategy_compile_error", "data_missing",
-                 "engine_error", "system_error", "canceled")
+                 "engine_error", "system_error", "canceled",
+                 # P0-9（CR-2026-11-03）：产物回传失败。4xx 形如 result_upload_http_413，
+                 # 传输类形如 result_upload_error。二者都**不可重试**——重试只会把同一份
+                 # 已算完的结果再算一遍（uploading 无终态 + reaper 重排的根因）。
+                 "result_upload_error", "result_upload_http_400",
+                 "result_upload_http_401", "result_upload_http_403",
+                 "result_upload_http_404", "result_upload_http_409",
+                 "result_upload_http_413", "result_upload_http_422",
+                 "result_upload_http_429", "result_upload_http_500",
+                 "result_upload_http_502", "result_upload_http_503")
 
 # --- 内测三级权限（15 号文档 D 阶段定稿，2026-09-20；2026-10-03 参数化入库） ---
 MEMBER_DAILY_FULL_LIMIT = 3      # 登录会员/付费占位：每日全量回测 3 次（smoke 不占）
@@ -942,7 +951,13 @@ def _verify_password(password: str, stored: str) -> bool:
         return hmac.compare_digest(dk.hex(), _hex)
     except (ValueError, AttributeError):
         return False
-NON_RETRYABLE = ("strategy_compile_error", "data_missing")
+# 不可重试分类：策略/数据问题重试无意义，产物回传的 4xx 同样无意义
+# （P0-9：413 重试只会重算同一份结果）。5xx 由 result_upload_http_5xx 之外的
+# result_upload_error 表达，仍按可重试处理（传输抖动值得再试）。
+NON_RETRYABLE = ("strategy_compile_error", "data_missing",
+                 "result_upload_error") + tuple(
+    f"result_upload_http_{code}" for code in (400, 401, 403, 404, 409, 413, 422, 429)
+)
 
 
 def _job_view(row: Any) -> dict[str, Any]:
@@ -1215,6 +1230,12 @@ def create_saas_app() -> Flask:
         static_url_path="/static",
     )
     app.config["SECRET_KEY"] = os.urandom(24)
+    # P0-9（CR-2026-11-03，压测实测）：worker 一个产物文件一个 multipart part，
+    # 全市场回测的 manifest 实测 1,537 part，超过 Flask 3.1 默认 MAX_FORM_PARTS=1000
+    # 会被 werkzeug 直接 413，导致 42 分钟的计算一个 blob 都回传不了。
+    # 触发条件是**文件数**而非字节数，故按文件数上限放大（5000 ≈ 覆盖全市场逐股明细），
+    # 体积仍由 RESULT_FILES_MAX_BYTES 与 nginx client_max_body_size 另行约束。
+    app.config["MAX_FORM_PARTS"] = 5000
     # 模板热加载（本地 staging 调文案用）：QRE_TEMPLATE_AUTORELOAD=1 时每次请求
     # 重读模板，改完 Ctrl+S 刷新即生效；生产 ECS 不设置该变量（保持缓存性能）
     if os.environ.get("QRE_TEMPLATE_AUTORELOAD") == "1":

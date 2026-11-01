@@ -33,6 +33,23 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 P0-9 结果回传缺陷：A+C 已实施（压测实测立项）
+
+`CR-2026-11-03_result_upload_413_and_uploading_terminal.md`。压测实测：全市场回测 manifest
+1,537 part 超过 Flask 默认 `MAX_FORM_PARTS=1000` → 413，42 分钟 / 6GB 计算一个 blob 都没回传；
+且 `uploading` 无终态，reaper 会把已算出结果的 job 重排重算。
+
+- A：`create_saas_app()` 显式 `MAX_FORM_PARTS = 5000`（按文件数放大，体积仍由
+  `RESULT_FILES_MAX_BYTES` 与 nginx 约束）。
+- C：`worker/client.py::upload_files` 把 `HTTPError` 升级为带 status 的 `CloudError`；
+  `worker/daemon.py` 抽出 `_report_results()`，回传失败显式 `fail` 落终态——
+  4xx → `result_upload_http_<code>`（不可重试），传输/5xx → `result_upload_error`（可重试）。
+- `17_JOB_PROTOCOL.md` §3.4 补两个 error_class 与 P0-9 说明；worker 与 SaaS 两侧白名单
+  由 `tests/test_result_upload_error_classes.py`（9 例）锁一致性。
+- 测试：新 9 例 + worker 相关 80 passed。
+- **未实施**：B 分片上传（根治）、§8.5 截断无标记、§8.7 tmp 不清理、§8.11 progress 不更新、
+  §8.15 reaper 侧加固（worker 被 kill 在回传中途仍会走重排）。
+
 ### 2026-11-03 E 项 M5：结果与产物读取（待全量回归后部署+commit）
 
 计划与完成度登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。

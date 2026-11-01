@@ -121,8 +121,21 @@ class CloudClient:
             headers={"X-Worker-Token": self._token,
                      "Content-Type": f"multipart/form-data; boundary={boundary}"},
         )
-        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-            return json.loads(resp.read().decode() or "{}")
+        try:
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                return json.loads(resp.read().decode() or "{}")
+        except urllib.error.HTTPError as exc:
+            # P0-9（CR-2026-11-03）：HTTP 层拒绝必须带状态码上抛，让调用方落
+            # error_class=result_upload_http_<code>；否则只看到 Connection reset，
+            # 日志写成「等租约过期重排」，把 413 掩盖成连接问题。
+            detail = ""
+            try:
+                detail = exc.read().decode("utf-8", errors="replace")[:200]
+            except Exception:  # 响应体读取失败不影响状态码上报
+                pass
+            raise CloudError(
+                f"产物回传被云端拒绝（HTTP {exc.code}）：{detail}", exc.code
+            ) from exc
 
     def _call(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         """重试仅覆盖传输错误与 5xx；4xx 业务错误直接抛 CloudError。"""

@@ -24,6 +24,11 @@ import time
 from typing import Any, Callable
 
 from quant_research_engine.worker.client import CloudClient, CloudError
+
+#: P0-9（CR-2026-11-03）：产物回传的 4xx 分类白名单，须与 saas/app.py 的 ERROR_CLASSES 一致。
+#:  worker 不 import SaaS app（避免把 Flask 依赖拖进 worker 进程），故在此镜像一份；
+#:  新增分类时两边同步（tests/test_result_upload_error_classes.py 锁一致性）。
+_UPLOAD_HTTP_CLASSES = frozenset({400, 401, 403, 404, 409, 413, 422, 429})
 from quant_research_engine.worker.runner import execute_job
 
 DEFAULT_POLL_SECONDS = 15.0
@@ -205,6 +210,10 @@ class WorkerDaemon:
             done_event.set()
         if canceled.is_set():
             return  # 已上报 canceled，丢弃结果
+        self._report_results(job_id, payload)
+
+    def _report_results(self, job_id: int, payload: dict[str, Any]) -> None:
+        """两步回传（17 协议 §3.3）：meta → files；失败落终态（P0-9）。"""
         if not _upload_files_enabled():
             payload = {**payload, "files": []}  # 不上传则不报清单，云端直接 completed
         try:
@@ -218,7 +227,21 @@ class WorkerDaemon:
                 self.client.upload_files(job_id, upload_token, blobs)
             _log(f"job {job_id} done，已回传")
         except Exception as exc:
-            _log(f"job {job_id} done 回传失败（{exc}），等租约过期重排")
+            # P0-9（CR-2026-11-03）：回传失败必须落终态。此前只打日志「等租约过期
+            # 重排」，job 会滞留 uploading，随后被 _reap_expired 重排回 queued，
+            # 同一份已算完的结果会**再算一遍**（压测实测：42 分钟 / 6GB 白跑）。
+            status = getattr(exc, "status", None)
+            # 4xx 归入 result_upload_http_<code>（云端已登记这些分类，均不可重试）；
+            # 5xx 与传输错误归入 result_upload_error（可重试，值得再试一次）。
+            if isinstance(status, int) and status in _UPLOAD_HTTP_CLASSES:
+                error_class = f"result_upload_http_{status}"
+            else:
+                error_class = "result_upload_error"
+            _log(f"job {job_id} 回传失败（{error_class}: {exc}），置 failed 避免整单重算")
+            try:
+                self.client.fail(job_id, str(exc), error_class=error_class)
+            except Exception as report_exc:
+                _log(f"job {job_id} failed 上报也失败（{report_exc}），仍等租约过期兜底")
 
     def run_once(self) -> bool:
         """单轮循环（测试友好）：领到并执行了一个任务返回 True，空轮 False。"""

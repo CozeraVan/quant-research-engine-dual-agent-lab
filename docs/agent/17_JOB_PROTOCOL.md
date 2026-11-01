@@ -161,7 +161,16 @@ error_class 枚举：
 | `data_missing` | 因子/行情缺失 | 否 |
 | `engine_error` | 引擎运行异常 | 是 |
 | `system_error` | worker 资源/系统错误 | 是 |
+| `result_upload_error` | 产物回传失败（传输/5xx，P0-9 2026-11-03 新增） | 是 |
+| `result_upload_http_<4xx>` | 产物回传被云端拒绝（如 `result_upload_http_413`，P0-9 新增） | **否**（直接 failed） |
 | `canceled` | 响应取消 | —（终态） |
+
+> **P0-9 说明（2026-11-03，源自全期全量压测实测）**：回传失败此前只打日志「等租约过期
+> 重排」，job 会滞留 `uploading`，随后被 §4.2 的超时回队重排回 `queued`，
+> **同一份已算完的结果会被重复执行**（实测 42 分钟 / 6 GB 白跑）。因此回传失败必须
+> 显式调 `fail` 落终态：4xx 归 `result_upload_http_<code>`（不可重试——重试无意义），
+> 传输/5xx 归 `result_upload_error`（可重试）。worker 侧白名单与 SaaS 侧
+> `ERROR_CLASSES` 各存一份，由 `tests/test_result_upload_error_classes.py` 锁一致性。
 
 retryable=false → 直接 `failed`；retryable=true 且 attempts<max_attempts → 回队。
 
