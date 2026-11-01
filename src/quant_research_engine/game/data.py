@@ -73,7 +73,14 @@ class PostgresGameDataProvider:
 
     def create_session(self, *, seed: int | None = None) -> GameSession:
         latest = self.latest_trade_date()
-        symbols = self.store.list_symbols_with_bars(date(2000, 1, 1), latest)
+        # QRE-UNIVERSE-NEEQ-LEGACY：候选池剔除北交所三板残留代码。游戏要「上市足够久」
+        # 的股票，而 920%.BJ 的 2021-11-15 之前历史正是脏数据（close 恒 1、30 股成交），
+        # 不排除就会随机抽到它们并展示错尺度 K 线（源数据只读，故在池侧设闸）。
+        from quant_research_engine.data.universe_rules import filter_untrusted_symbols
+
+        symbols = filter_untrusted_symbols(
+            self.store.list_symbols_with_bars(date(2000, 1, 1), latest),
+            load_start=date(2000, 1, 1))
         rng = random.Random(seed)
         rng.shuffle(symbols)
         required = self.factory.warmup_bars + self.factory.game_bars

@@ -2,6 +2,31 @@
 
 ## Task ID
 
+QRE-UNIVERSE-NEEQ-LEGACY（P0-4：股票池规则落地）
+
+## Created By
+
+KIMI_CODE（2026-10-29；单 agent 自主推进 P0）
+
+## 目标与边界
+
+1. 在 `stock_daily` 源数据只读纪律下，用宇宙侧规则防止 `920%.BJ` 的 2021-11-15 前三板残留数据再次污染全期回测。
+2. 只过滤**自动解析**的全市场宇宙；用户显式 `codes` 不过滤。
+3. 判定用**实际加载起点**（含 warm-up 外延），不用回测起点；覆盖 batch / shared / incremental / GUI / CLI / 游戏候选池。
+4. 不改源数据、不改引擎收益计算、不跑全量回测；先小范围与静态锁验证，再提交。
+
+## 验证
+
+```bash
+uv run pytest tests/test_universe_rules.py tests/test_data_assembler.py tests/test_gui_workbench.py -q
+bash scripts/check-progress-docs.sh
+uv run pytest -q -p no:randomly
+```
+
+## 历史任务（保留）
+
+## Task ID
+
 QRE-TV-KLINE-DRAWING-SLICE1（K 线画线工具子集首片）
 
 ## Created By

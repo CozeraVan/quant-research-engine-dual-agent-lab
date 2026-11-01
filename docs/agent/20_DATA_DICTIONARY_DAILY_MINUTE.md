@@ -91,7 +91,14 @@ agent 不代拍。三个选项：
 删除后周扫 `scanned_files 1013 → 96`、`legacy_total 0`；`/saas/showcase` 返回空列表；
 四个 job 的详情接口对匿名返回 401（与私人 job 一致，无信息泄漏）。
 **`stock_daily` 一行未改**（纪律：源数据只读）——脏数据仍在表里，
-所以「宇宙排除 920xxx 三板残留」这条规则**仍然要落地**，否则下次全期回测会再次被污染。
+靠**宇宙侧设闸**防再污染：`QRE-UNIVERSE-NEEQ-LEGACY`
+（`src/quant_research_engine/data/universe_rules.py`）——自动解析的全市场宇宙在
+**实际加载起点**早于 2021-11-15 时剔除 `920%.BJ` 代码；加载区间整体在开市后则保留
+（那种情况下是真实北交所行情）。已接全部 6 个宇宙解析点
+（`research_run` / `incremental` / `assembler` / `gui::engine` 两处 / `apps/cli` batch /
+`game` 候选池），并有穷举 + 反向静态锁（`tests/test_universe_rules.py`，
+新增未接规则的全市场解析点会直接红灯，已做敏感度验证）。
+用户显式点名的 `codes` **不过滤**——点名是用户的选择。
 保留任务：73 / 75 / 76 / 77 / 79 / 80 / 81（76 干净，73/77 为 smoke 且扫描未见 2021 前北交所交易）。
 
 ## 3. 分钟线行情：`public.stock_minute_1m`（2026-10-11 全量入库完成）

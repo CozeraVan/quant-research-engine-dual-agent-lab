@@ -13,6 +13,7 @@ from typing import Literal
 from quant_research_engine.data.assembler import ResearchFrameAssembler
 from quant_research_engine.data.postgres import PostgresDataStore
 from quant_research_engine.data.settings import DatabaseSettings
+from quant_research_engine.data.universe_rules import filter_untrusted_symbols
 from quant_research_engine.evaluation.engine import EvaluationEngine
 from quant_research_engine.evaluation.io import write_evaluation_output
 from quant_research_engine.evaluation.models import EvaluationRequest
@@ -299,7 +300,16 @@ def _run_batch_chunked(
         BatchBacktestResult,
     )
 
-    symbols = request.codes or store.list_symbols_with_bars(request.start, request.end)
+    # QRE-UNIVERSE-NEEQ-LEGACY：自动解析的全市场宇宙要剔除北交所三板残留代码
+    # （920%.BJ 的 2021-11-15 之前历史不可信，见 data/universe_rules.py）。
+    # 只过滤自动解析结果；request.codes 是用户显式点名，原样尊重。
+    if request.codes:
+        symbols = list(request.codes)
+    else:
+        symbols = filter_untrusted_symbols(
+            store.list_symbols_with_bars(request.start, request.end),
+            load_start=request.start,
+        )
     if request.symbol_chunk_size <= 0:
         raise ValueError("symbol_chunk_size must be positive")
     chunk_size = request.symbol_chunk_size

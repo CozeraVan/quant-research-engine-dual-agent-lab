@@ -2,6 +2,45 @@
 
 ## Task ID
 
+QRE-UNIVERSE-NEEQ-LEGACY（P0-4：股票池规则落地）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（2026-11-01）。聚焦测试、真实库验证、反向静态锁敏感度与全量回归均完成。Required Fixes：无。
+
+## Findings
+
+1. **规则落在宇宙侧，不动源数据**：`920%.BJ` 的 2021-11-15 前三板残留行仍在 `stock_daily`（纪律：源数据只读）；本任务只让自动解析宇宙在实际加载起点早于开市日时排除这些代码，避免下次全期回测再次被污染。
+2. **接线完备性靠穷举 + 反向静态锁保证**：第一版漏接 `apps/cli.py` batch 与 `gui/engine.py::_run_via_module` batch，而它们正是 worker 跑全市场的路径；测试新增反向锁后，新增未接规则的全市场解析点会红灯，并用临时探针完成敏感度验证（探针已删除）。
+3. **判定口径正确**：按实际加载起点（`load_start - warmup_days`）而非回测起点；增量路径 warm-up 会伸进脏区间，已用 `warmup_days*2` 覆盖。
+4. **用户显式 `codes` 不被过滤**：点名是用户选择，引擎不替他改；该语义在 `research_run` / `incremental` / `assembler` / CLI / GUI 均保持一致。
+5. **测试与真实库证据一致**：2010 起剔除 354 只且全为 920 段；2022 起剔除 0，未误伤开市后真实北交所行情。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/test_universe_rules.py tests/test_data_assembler.py tests/test_gui_workbench.py -q → 148 passed
+真实库：
+  2010-01-04~2026-10-21：5852→5498（剔除 354，全部 920 段）
+  2022-01-04~2026-10-21：5768→5768（剔除 0）
+bash scripts/check-progress-docs.sh → passed
+uv run pytest -q -p no:randomly → 3260 passed, 34 skipped
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **不做全量全期重跑**：P0-4 只落地规则；经典策略页重填充（P0-5）需先小样本验证，再向用户报全量预算。
+- **不同步 ECS SaaS**：本轮只改 worker/引擎侧文件；提交后需重启本机 `qre-saas-worker.service`，公网 SaaS 代码未变。
+- **`deploy/saas/public-beta-audit/seed.json` 不纳入本提交**：既有未跟踪文件，与本任务无关。
+
+---
+
+## Task ID
+
 QRE-SAAS-KLINE-ENGINE-EXCLUSIVE（K 线双引擎互斥，修复切 TradingView 视图叠加）
 
 ## Reviewer

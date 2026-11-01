@@ -87,10 +87,12 @@ def test_apply_precheck_samples_when_codes_empty(monkeypatch):
 
     pool = [f"{i:06d}.SZ" for i in range(1, 100)]
     calls = []
+    # QRE-UNIVERSE-NEEQ-LEGACY：抽样入口新增 start（实际加载起点）参数，
+    # 桩签名随之接受（行为断言不变）。
     monkeypatch.setattr(
         gui_engine,
         "_sample_random_universe",
-        lambda n, seed, db_url=None: (calls.append((n, seed)), pool[:n])[1],
+        lambda n, seed, db_url=None, start=None: (calls.append((n, seed)), pool[:n])[1],
     )
     trimmed, start, end = apply_precheck([], "2010-01-04", "2026-03-31", max_codes=1, seed="rid-1")
     assert calls == [(1, "rid-1")]

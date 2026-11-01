@@ -78,16 +78,21 @@ def apply_precheck(
     全市场回测（job 54 事故）。此时从全 A 股池按 seed（run_id）随机抽
     ``max_codes`` 只，与 _sample_random_universe 同口径、可复现。"""
     trimmed_codes = codes[:max_codes] if codes else codes
-    if not trimmed_codes:
-        trimmed_codes = _sample_random_universe(max_codes, seed or "precheck", db_url=db_url)
     try:
         end_date = date.fromisoformat(end)
         start_date = date.fromisoformat(start)
     except ValueError:
-        return trimmed_codes, start, end
-    min_start = end_date - timedelta(days=window_days)
-    if start_date < min_start:
+        start_date = None
+    min_start = end_date - timedelta(days=window_days) if start_date is not None else None
+    if start_date is not None and start_date < min_start:
         start_date = min_start
+    if not trimmed_codes:
+        # 抽样池按「截断后的实际加载起点」过滤（QRE-UNIVERSE-NEEQ-LEGACY）
+        trimmed_codes = _sample_random_universe(
+            max_codes, seed or "precheck", db_url=db_url,
+            start=start_date.isoformat() if start_date else None)
+    if start_date is None:
+        return trimmed_codes, start, end
     return trimmed_codes, start_date.isoformat(), end
 
 
@@ -207,15 +212,27 @@ def compile_high_level_entry(data: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "issues": [{"level": "error", "message": f"Failed to generate spec: {exc}"}]}
 
 
-def _sample_random_universe(random_n: int, seed: str, *, db_url: str | None = None) -> list[str]:
-    """从全 A 股池随机抽 N 只（种子=run_id，可复现；N 超池子上限则截断）。"""
+def _sample_random_universe(random_n: int, seed: str, *, db_url: str | None = None,
+                            start: str | None = None) -> list[str]:
+    """从全 A 股池随机抽 N 只（种子=run_id，可复现；N 超池子上限则截断）。
+
+    QRE-UNIVERSE-NEEQ-LEGACY：抽样池先按股票池卫生规则剔除北交所三板残留代码
+    （`start` 早于 2021-11-15 时；见 `data/universe_rules.py`）。随机抽样也是
+    自动解析宇宙，没有理由把脏代码抽进来。
+    """
     from quant_research_engine.data.settings import DatabaseSettings
     from quant_research_engine.data.postgres import PostgresDataStore
+    from quant_research_engine.data.universe_rules import filter_untrusted_symbols
 
     settings = DatabaseSettings(market_db_url=db_url) if db_url else DatabaseSettings.from_env()
     store = PostgresDataStore(settings)
     meta = store.load_security_metadata(ts_codes=None)
     pool = sorted(meta["ts_code"].dropna().astype(str).unique().tolist())
+    if start:
+        try:
+            pool = filter_untrusted_symbols(pool, load_start=date.fromisoformat(start))
+        except ValueError:
+            pass  # start 非法时不过滤（后续建 run 前会被前置校验拒绝）
     return random.Random(seed).sample(pool, min(random_n, len(pool)))
 
 
@@ -272,7 +289,7 @@ def run_backtest(
     # 结果页/记录页可见实际抽中名单。
     sampled_random = False
     if random_n and not codes_list:
-        codes_list = _sample_random_universe(random_n, rid, db_url=db_url)
+        codes_list = _sample_random_universe(random_n, rid, db_url=db_url, start=start)
         sampled_random = True
 
     full_params: dict[str, Any] | None = None
@@ -527,8 +544,17 @@ def _run_via_module(
         if mode == "batch":
             all_symbols = ts_codes
             if all_symbols is None:
+                # QRE-UNIVERSE-NEEQ-LEGACY：全市场宇宙剔除北交所三板残留代码
+                # （920%.BJ 的 2021-11-15 之前历史不可信；见 data/universe_rules.py）。
+                from quant_research_engine.data.universe_rules import filter_untrusted_symbols
+
                 metadata = store.load_security_metadata(ts_codes=None)
-                all_symbols = sorted(metadata["ts_code"].dropna().astype(str).unique().tolist())
+                pool = sorted(metadata["ts_code"].dropna().astype(str).unique().tolist())
+                try:
+                    all_symbols = filter_untrusted_symbols(
+                        pool, load_start=date.fromisoformat(start))
+                except ValueError:
+                    all_symbols = pool  # start 非法时不过滤（前置校验会拒绝）
             from quant_research_engine.portfolio.streaming_batch import (
                 STREAMING_MIN_SYMBOLS,
                 run_batch_streaming,

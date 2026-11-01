@@ -2,13 +2,25 @@
 
 ## Task ID
 
-QRE-DATA-CLEANUP-EXECUTION（用户批准的遗留数据清理与分钟 CSV 只读检查）
+QRE-UNIVERSE-NEEQ-LEGACY（P0-4：股票池规则落地）
 
 ## Current Status
 
-DONE（2026-10-27；指定遗留项已清理，分钟 CSV 未手动入库/清洗/压缩，未 commit/push）
+代码/测试/真实库验证/文档已完成，待提交后重启 worker（未 commit/push）
 
 ## Task Note
+
+- 目标：在 `stock_daily` 源数据只读纪律下，用宇宙侧规则防止北交所三板残留代码再次污染全期回测。
+- 实现：`src/quant_research_engine/data/universe_rules.py`；自动解析宇宙按**实际加载起点**早于 `2021-11-15` 剔除 `920%.BJ`，加载区间整体在开市后保留；用户显式 `codes` 不过滤。
+- 接线：`research_run` / `incremental` / `assembler` / `gui::engine`（两处）/ `apps/cli` batch / `game` 候选池。
+- 测试：`tests/test_universe_rules.py` 13 例，含穷举与反向静态锁；相关 148 passed。
+- 真实库验证：2010 起 5852→5498（剔除 354 只全为 920）；2022 起 5768→5768（剔除 0）。
+- 文档：06/14/20/11 已同步；`scripts/check-progress-docs.sh` 通过。
+- Next Step：全量测试通过后 commit/push，然后重启 `qre-saas-worker.service`；P0-4 不需要 ECS SaaS 部署。之后进入 P0-5 经典策略页重新填充（先小样本验证，再决定干净重跑范围）。
+
+### 历史任务：QRE-DATA-CLEANUP-EXECUTION（2026-10-27，已 DONE）
+
+#### 原 Task Note
 
 - 新增 `mindata/2026/20261019`、`20261020`、`20261021` 三份 CSV 仅做只读检查：表头与 `COLMAP` 匹配，每份约 132MB / 135.4 万数据行；审计表和分钟表最新均为 2026-10-16，三日均为 pending。`minute-csv-ingest.timer` enabled/active，下次触发 2026-10-27 17:20 CST，将自动入库、校验行数并删除 CSV；本轮未手动触发。
 - 用户明确批准后删除 `akshare_data`、`aguhuice_test`、`quant_hub`、`aguhuice_local`，以及已盘点的 `qre-outputs` 陈旧回测/实验产物。保留 `refresh/registry.json`、`state.json`、`delta/`、`saas_uploads`、`market_risk`、`video_packages` 和两个待验收 staging 库。

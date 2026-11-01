@@ -372,3 +372,104 @@ def test_build_chunked_chunk_boundaries_do_not_change_content():
     many = many.assign(ts_code=many["ts_code"].astype(str)).sort_values(key).reset_index(drop=True)
     pd.testing.assert_frame_equal(one, many, check_dtype=False)
     assert len(one) == 6
+
+
+class _NeeqLegacyStore(FakeStore):
+    """全市场宇宙（ts_codes=None）用的桩：bars 与 metadata 都含北交所三板残留代码。"""
+
+    def load_daily_bars(self, ts_codes, start, end, fields):
+        codes = list(ts_codes) if ts_codes is not None else ["000001.SZ", "920809.BJ"]
+        return pd.DataFrame(
+            {
+                "ts_code": codes,
+                "trade_date": pd.to_datetime(["2015-07-22"] * len(codes)),
+                "open": [10.0] * len(codes),
+                "close": [10.5] * len(codes),
+            }
+        )
+
+    def load_factor_history(self, ts_codes, field_requests, start, end):
+        codes = list(ts_codes) if ts_codes is not None else ["000001.SZ", "920809.BJ"]
+        return pd.DataFrame(
+            {
+                "ts_code": codes,
+                "trade_date": pd.to_datetime(["2015-07-22"] * len(codes)),
+                "rsi_2": [8.0] * len(codes),
+            }
+        )
+
+    def load_security_metadata(self, ts_codes=None, *, as_of=None):
+        return pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ", "920809.BJ"],
+                "is_st": [False, False],
+                "is_suspended": [False, False],
+            }
+        )
+
+    def list_symbols_with_bars(self, start, end):
+        return ["000001.SZ", "920809.BJ"]
+
+
+def test_full_universe_drops_neeq_legacy_bj_codes():
+    """QRE-UNIVERSE-NEEQ-LEGACY：全市场宇宙必须剔除 920%.BJ 三板残留代码。
+
+    这类代码 2021-11-15 之前的历史是脏数据（close 恒 1、30 股成交），
+    已把 job 58/66/74/78 的全期结果污染到 12.9%~22.6% 毛盈亏（任务已删除）。
+    源数据只读不改，所以在宇宙侧设闸。
+    """
+    store = _NeeqLegacyStore()
+    assembler = ResearchFrameAssembler(store)
+    factor_request = FactorFieldRequest.from_target("rsi_2", "factors.stock_daily_momentum_close.rsi_2")
+
+    frame = assembler.build_chunked(
+        ts_codes=None,  # 全市场
+        start=date(2015, 7, 22),
+        end=date(2015, 7, 22),
+        market_fields=["open", "close"],
+        factor_fields=[factor_request],
+        metadata_columns=["is_st", "is_suspended"],
+        chunk_size=8,
+    )
+
+    codes = {str(c) for c in frame["ts_code"].unique()}
+    assert codes == {"000001.SZ"}, f"北交所三板残留代码漏进了宇宙：{codes}"
+
+
+def test_full_universe_keeps_bj_codes_when_window_is_clean():
+    """加载区间整体在北交所开市（2021-11-15）之后 → 北交所代码是真实行情，不排除。"""
+    store = _NeeqLegacyStore()
+    assembler = ResearchFrameAssembler(store)
+    factor_request = FactorFieldRequest.from_target("rsi_2", "factors.stock_daily_momentum_close.rsi_2")
+
+    frame = assembler.build_chunked(
+        ts_codes=None,
+        start=date(2022, 3, 1),
+        end=date(2022, 3, 1),
+        market_fields=["open", "close"],
+        factor_fields=[factor_request],
+        metadata_columns=["is_st", "is_suspended"],
+        chunk_size=8,
+    )
+
+    codes = {str(c) for c in frame["ts_code"].unique()}
+    assert codes == {"000001.SZ", "920809.BJ"}, codes
+
+
+def test_explicit_codes_bypass_the_neeq_filter():
+    """用户显式点名不替他改（包括点名一只 920xxx）。"""
+    store = _NeeqLegacyStore()
+    assembler = ResearchFrameAssembler(store)
+    factor_request = FactorFieldRequest.from_target("rsi_2", "factors.stock_daily_momentum_close.rsi_2")
+
+    frame = assembler.build_chunked(
+        ts_codes=["920809.BJ"],
+        start=date(2015, 7, 22),
+        end=date(2015, 7, 22),
+        market_fields=["open", "close"],
+        factor_fields=[factor_request],
+        metadata_columns=["is_st", "is_suspended"],
+        chunk_size=8,
+    )
+
+    assert {str(c) for c in frame["ts_code"].unique()} == {"920809.BJ"}

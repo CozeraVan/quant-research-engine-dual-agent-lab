@@ -7,6 +7,7 @@ import pandas as pd
 
 from quant_research_engine.data.catalog import FactorFieldRequest
 from quant_research_engine.data.interfaces import FactorDataStore, MarketDataStore, ReferenceDataStore
+from quant_research_engine.data.universe_rules import filter_untrusted_symbols
 
 #: 分块装配的默认块大小（股票数；QRE_SHARED_CHUNK_SIZE 可配）
 DEFAULT_ASSEMBLE_CHUNK_SIZE = 500
@@ -109,6 +110,10 @@ class ResearchFrameAssembler:
             bars_lister = getattr(self.store, "list_symbols_with_bars", None)
             bars_codes = set(bars_lister(start, end)) if callable(bars_lister) else set()
             all_codes = sorted(meta_codes | bars_codes)
+            # QRE-UNIVERSE-NEEQ-LEGACY：全市场宇宙剔除北交所三板残留代码
+            # （920%.BJ 的 2021-11-15 之前历史不可信；源数据只读，故在宇宙侧设闸）。
+            # 本路径取数区间就是 [start, end]（无 warm-up 外延），故 warmup_days=0。
+            all_codes = filter_untrusted_symbols(all_codes, load_start=start)
         else:
             all_codes = sorted(str(c) for c in ts_codes)
         parts: list[pd.DataFrame] = []

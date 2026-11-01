@@ -1148,8 +1148,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             all_symbols = args.codes
             if all_symbols is None:
+                # QRE-UNIVERSE-NEEQ-LEGACY：全市场宇宙剔除北交所三板残留代码
+                # （920%.BJ 的 2021-11-15 之前历史不可信；见 data/universe_rules.py）。
+                from quant_research_engine.data.universe_rules import filter_untrusted_symbols
+
                 metadata = store.load_security_metadata(ts_codes=None)
-                all_symbols = sorted(metadata["ts_code"].dropna().astype(str).unique().tolist())
+                pool = sorted(metadata["ts_code"].dropna().astype(str).unique().tolist())
+                all_symbols = filter_untrusted_symbols(pool, load_start=args.start)
             if len(all_symbols) > STREAMING_MIN_SYMBOLS:
                 result = run_batch_streaming(
                     frame_factory=_build_frame,

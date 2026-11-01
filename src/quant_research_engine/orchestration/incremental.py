@@ -45,6 +45,7 @@ import numpy as np
 import pandas as pd
 
 from quant_research_engine.data.assembler import ResearchFrameAssembler
+from quant_research_engine.data.universe_rules import filter_untrusted_symbols
 from quant_research_engine.markets.ashare import AShareMarketProfile
 from quant_research_engine.orchestration.incremental_state import (
     StrategyCheckpoint,
@@ -377,7 +378,14 @@ def run_incremental(store, spec: StrategySpec, request: IncrementalRequest) -> I
     if request.codes is not None:
         symbols = sorted(set(request.codes) | set(cp_states))
     else:
-        symbols = sorted(set(store.list_symbols_with_bars(window_start, watermark)) | set(cp_states))
+        # QRE-UNIVERSE-NEEQ-LEGACY：自动解析才过滤；warm-up 会把加载起点往前推
+        # warmup_days*2 天，判定必须用那个更早的日期（见 data/universe_rules.py）。
+        auto = filter_untrusted_symbols(
+            store.list_symbols_with_bars(window_start, watermark),
+            load_start=window_start,
+            warmup_days=request.warmup_days * 2,
+        )
+        symbols = sorted(set(auto) | set(cp_states))
 
     if last_processed is None:
         load_start = request.start  # bootstrap: identical frame to a batch full run

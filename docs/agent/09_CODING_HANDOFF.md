@@ -2,9 +2,23 @@
 
 ## Task ID
 
-QRE-DATA-CLEANUP-EXECUTION（用户批准的遗留数据清理与分钟 CSV 只读检查）
+QRE-UNIVERSE-NEEQ-LEGACY（P0-4：股票池规则落地）
 
 ## Release Status
+
+代码/测试/真实库验证/文档已完成；全量测试结果以最终提交记录为准。尚未 commit/push；提交后需重启 `qre-saas-worker.service`，不需要 ECS SaaS 部署。
+
+## Implementation
+
+- 新增 `src/quant_research_engine/data/universe_rules.py`：`is_neeq_legacy_code` + `filter_untrusted_symbols`。
+- 规则按**实际加载起点**（`load_start - warmup_days`）判断：早于 `2021-11-15` 剔除 `920%.BJ`，否则保留；只过滤自动解析宇宙，用户显式 `codes` 不过滤。
+- 接线：`orchestration/research_run.py`、`orchestration/incremental.py`、`data/assembler.py`、`gui/engine.py`（`_sample_random_universe` 与 `_run_via_module` batch）、`apps/cli.py`（batch）、`game/data.py`。
+- 测试：`tests/test_universe_rules.py` 13 例（穷举 + 反向静态锁）；`tests/test_data_assembler.py` +3；`tests/test_gui_workbench.py` 仅补桩签名。
+- 真实库验证：2010 起 5852→5498（剔除 354 只全为 920）；2022 起 5768→5768（剔除 0）。
+
+## 历史任务：QRE-DATA-CLEANUP-EXECUTION（2026-10-27，已 DONE）
+
+### Release Status
 
 DONE（2026-10-27）。四库和指定旧回测产物已删除，留档在 `/home/van/quant-workspace/backups/local-cleanup-20261027/`。活跃目录与两个待验收 staging 库保留；`qre-outputs` 27G→536M，磁盘可用 386G→418G，8080/8092 HTTP 200。8081 staging 重用前需重建/替换 aguhuice_local。三份新分钟 CSV 仅只读检查，等待 17:20 timer 自动入库；未清洗、未压缩、未手动入库。M10.4 依赖环境已存在，无重复安装。未 commit/push。
 

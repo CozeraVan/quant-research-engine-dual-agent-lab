@@ -1567,3 +1567,19 @@ No open questions remain.
   删除前全量备份在 `~/quant-workspace/backups/polluted-jobs-20261029/`。
   证据见 `change_requests/CR-2026-10-29_polluted_jobs_purge.md`。
 - Owner: KIMI_CODE（用户 2026-10-29 指示「将这些回测全部清除，从本地到公网的数据全部删除」）
+
+### 2026-10-29: 宇宙侧设闸排除北交所三板残留代码（QRE-UNIVERSE-NEEQ-LEGACY）
+
+- Decision: 新增 `src/quant_research_engine/data/universe_rules.py`：**自动解析**的全市场宇宙，
+  在实际加载起点早于 `2021-11-15`（北交所开市）时剔除 `920%.BJ` 代码；加载区间整体在开市
+  之后则保留（那是真实北交所行情）。接全部 6 个宇宙解析点，用户显式 `codes` 不过滤。
+- Reason: `stock_daily` 源数据只读不改（纪律），脏行还在表里，不设闸则下次全期回测再次被污染
+  （已污染过 job 58/66/74/78，12.9%~22.6% 毛盈亏）。判定用**实际加载起点**而非回测起点：
+  增量路径为指标 warm-up 会多加载 `warmup_days*2` 天，起点在开市后也可能伸进脏区间。
+- Alternatives: 清洗 `stock_daily`——否决（源数据只读，且用户未授权改行情数据）；
+  整个排除 `920%.BJ`——未选（开市后的数据是真实的，无条件排除会误伤）；
+  只在 UI 打标——否决（不解决收益失真）。
+- Impact: 新增 1 模块 + 6 处接线 + 13 例测试（含穷举与反向静态锁，新增未接点会红灯）；
+  穷举时发现第一版漏接 `apps/cli.py` 的 batch 命令与 `gui/engine.py::_run_via_module` 的
+  batch 分支——**那正是 worker 跑全市场回测的真正路径**，故补反向锁防再漏。
+- Owner: KIMI_CODE（用户 2026-10-29 批准继续 P0）
