@@ -48,3 +48,20 @@ def test_strategy_page_recompile_note_moved_to_tip() -> None:
     assert '<p class="opt" style="margin:6px 0">重新编译后，需保存修改才会生效。</p>' not in page
     assert '重新编译后，需保存修改才会生效。' in page
     assert 'class="tip-trigger"' in page
+
+
+def test_new_page_modal_and_pipeline_hints_not_gray() -> None:
+    page = _read("new.html")
+    assert '<p class="opt">你可以：' not in page
+    assert 'id="factor-modal-status" class="opt"' not in page
+    assert "'<br><span class=\"opt\">已停留在当前步骤，修正后重新运行。</span>'" not in page
+    assert "'<br><span class=\"opt\">未提交全量回测；可前往任务页查看后台进度，或修正后重新运行。</span>'" not in page
+
+
+def test_job_page_dynamic_content_not_gray_wrapper() -> None:
+    page = _read("job.html")
+    assert "'<div class=\"opt\" style=\"font-size:14px;margin-bottom:16px\">'" not in page
+    assert "'<div class=\"opt\" style=\"padding:2px 0\">'" not in page
+    assert "'<div class=\"opt\" style=\"color:var(--faint)\">— 组间 '" not in page
+    assert "'<div class=\"opt\" style=\"white-space:pre-wrap;color:var(--ink)\">'" not in page
+    assert '<p class="opt" style="margin:0 0 16px">（快速向导入口；无条件快照，显示最终 YAML）</p>' not in page

@@ -1,3 +1,5 @@
+2026-11-01 P1-9 文案精简化收尾第二段完成（未 commit）：new 因子弹窗/流水线失败提示、job 标签详情/向导条件/策略信息动态内容灰字壳清理；相关 25 passed，第二段全量测试在跑。首段已提交 `7360444`。
+
 2026-11-01 P1-9 文案精简化收尾首段完成（进行中，未 commit）：字号基线同步 `12_UI_STYLE_GUIDE.md`；清理 symbols/new/job/strategy 5 处静态灰字，新增 `tests/test_saas_copy_declutter.py`；相关 89 passed。剩余动态状态/空态灰字下一段处理。
 
 2026-11-01 P0-8 结果端点 IDOR 普查 + 路由合同完成（未改权限代码/未 commit）：清点 12 条 `job_id` GET 路由；结果 GET 全走 `_require_completed_result`；新增 `tests/test_saas_job_endpoint_audit.py` 冻结路由清单（RED→GREEN）；access_hardening + 路由合同 69 passed。详见 `10_REVIEW_REPORT.md` P0-8 节。

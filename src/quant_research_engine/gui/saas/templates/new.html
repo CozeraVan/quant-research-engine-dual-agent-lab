@@ -204,13 +204,13 @@
     <div class="modal">
       <h3>当前数据库中不含此因子</h3>
       <p id="factor-modal-list"></p>
-      <p class="opt">你可以：<br>① 换个策略试试（多数常见指标已支持）<br>② 把缺的因子提交给我们——需求集中的因子会优先计算入库</p>
+      <p style="margin:6px 0 12px">你可以：<br>① 换个策略试试（多数常见指标已支持）<br>② 把缺的因子提交给我们——需求集中的因子会优先计算入库</p>
       <div class="m-actions">
         <button class="btn btn-ghost" id="btn-factor-close">换个策略</button>
         <a class="btn btn-ghost" id="btn-factor-goto" href="/saas/factor-request">去申请新因子 →</a>
         <button class="btn btn-primary" id="btn-factor-submit">提交因子需求</button>
       </div>
-      <p id="factor-modal-status" class="opt" style="margin-top:8px"></p>
+      <p id="factor-modal-status" style="margin-top:8px"></p>
     </div>
   </div>
 
@@ -965,7 +965,7 @@ let pipeRunning = false;
 function pipeFailAt(i, msg){
   const st = $('#pipe-' + i); st.classList.remove('doing'); st.classList.add('fail');
   const err = $('#pipe-err'); err.style.display = 'block';
-  err.innerHTML = '<b>失败：</b>' + esc(msg) + '<br><span class="opt">已停留在当前步骤，修正后重新运行。</span>';
+  err.innerHTML = '<b>失败：</b>' + esc(msg) + '<br><span style="font-size:14.5px">已停留在当前步骤，修正后重新运行。</span>';
 }
 // 非失败停留（QRE-SAAS-FIRST-SUCCESS-UX-001）：如冒烟前台等待超时——任务仍在
 // 后台执行，不写成策略失败、不自动提交全量，给任务页入口让用户自己看进度。
@@ -978,7 +978,7 @@ function pipeStopAt(i, msg, linkHref, linkText){
   const err = $('#pipe-err'); err.style.display = 'block';
   err.innerHTML = '<b>等待超时：</b>' + esc(msg) +
     (linkHref ? '<br><a class="inl" href="' + esc(linkHref) + '">' + esc(linkText || '查看任务页') + ' →</a>' : '') +
-    '<br><span class="opt">未提交全量回测；可前往任务页查看后台进度，或修正后重新运行。</span>';
+    '<br><span style="font-size:14.5px">未提交全量回测；可前往任务页查看后台进度，或修正后重新运行。</span>';
 }
 function buildParams(){
   const scope = document.querySelector('input[name="scope"]:checked').value;

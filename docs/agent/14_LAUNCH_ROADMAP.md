@@ -290,7 +290,7 @@
 2. Web 文案精简化收尾：灰色小字清零（统一 `tip-trigger` + `data-tip`）；
    同步 `12_UI_STYLE_GUIDE.md` 字号基线（实际 H1 32 / 正文 19 / 表格 16，
    `line-height` 1.65 **冻结不许改**）。
-   **2026-11-01 进展**：字号基线已同步；完成首段静态灰字清理（symbols/new/job/strategy 共 5 处），新增 `tests/test_saas_copy_declutter.py` 锁定；剩余动态状态/空态灰字与其余页面下一段处理。
+   **2026-11-01 进展**：字号基线已同步；完成首段静态灰字清理（symbols/new/job/strategy 共 5 处），新增 `tests/test_saas_copy_declutter.py` 锁定；第二段已处理 new 因子弹窗/流水线失败提示与 job 标签详情/向导条件/策略信息动态内容灰字壳。剩余：状态/空态类灰字与其余页面下一段处理。
 3. FRM 波动率：`threshold` 绝对轴真实浏览器验证（需新跑一次回测，
    让产物带 `thresholds_annual`）；核查低/中/高分档是否真在分组（曾连续三次均匀）。
 4. 《我不是股神》重启：**前置的复权硬契约已落地**（P0-1），
