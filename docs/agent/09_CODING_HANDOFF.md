@@ -2,6 +2,31 @@
 
 ## Task ID
 
+QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样本验证）
+
+## Release Status
+
+进行中（2026-11-01）。策略 YAML、合同测试、5 只股票 × 近两年小样本回测已完成；**未跑全量全期、未写 ECS DB、未挂 showcase、未 commit/push**。
+
+## Implementation
+
+- 新增 `strategies/classic/classic_ema_5_200_golden_cross.yaml`、`classic_macd_12_26_9_golden_cross.yaml`、`classic_macd_12_26_9_reverse.yaml`。
+- 新增 `tests/test_classic_strategies.py`（7 passed）：YAML 解析、信号字段声明、因子注册表命中、T+1 开盘成交与持仓天数 0=不限。
+- 小样本真实库结果（`.tmp/classic-small/{ema,macd-golden,macd-reverse}`）：
+  - EMA：2/5 交易，13 笔，平均收益 0.133679，平均超额 0.007338；
+  - MACD 金叉：3/5 交易，53 笔，平均收益 0.157509，平均超额 0.031169；
+  - MACD 反向：3/5 交易，52 笔，平均收益 -0.033002，平均超额 -0.159342。
+  - 失败单抽样为高价股 `insufficient_cash`，非引擎阻塞。
+
+## Blockers / Next Step
+
+- `scripts/showcase_roller.py` 仍硬编码 `JOB_RUN_MAP={58,66,74}` 与已删除本地 run 目录；重新填充前必须解耦为配置化或从新基线产物解析。
+- 全量全期重拍前需用户批准预算；先跑 1 策略全市场近两年做效率基准，再决定是否 2010 起全期。
+
+## 历史任务：QRE-UNIVERSE-NEEQ-LEGACY（P0-4，已发布）
+
+### Task ID
+
 QRE-UNIVERSE-NEEQ-LEGACY（P0-4：股票池规则落地）
 
 ## Release Status

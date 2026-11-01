@@ -2,6 +2,44 @@
 
 ## Task ID
 
+QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样本验证）
+
+## Reviewer
+
+KIMI_CODE（single agent self-review）
+
+## Review Status
+
+PASS（阶段一门禁）。策略定义、因子口径、合同测试与小样本回测均通过。Required Fixes：无。**未进入全量重跑与 showcase 挂载。**
+
+## Findings
+
+1. **策略真相源已收敛**：三个经典策略 YAML 明确因子目标与交叉语义，消除旧 job 删除后“经典策略无定义”的状态。
+2. **因子口径无混用**：`ema_200` 库内仅 typical_price 口径，故 EMA5 也显式使用 typical_price；MACD 使用 close 口径，避免价格基线与尺度争议。
+3. **失败单已抽样解释**：EMA 小样本中高价股失败单全部为 `insufficient_cash`（100 手门槛超过初始资金），不是信号/执行阻塞。
+4. **发现真实阻塞项**：`scripts/showcase_roller.py` 仍硬编码已删除 job 58/66/74 的本地 run 映射；若不先解耦，全量重跑后日更会失败。已写入 04/08/09/11/14。
+
+## Validation Evidence
+
+```text
+uv run pytest tests/test_classic_strategies.py -q → 7 passed
+小样本真实库（5 codes × 2024-01-02~2026-10-21）：
+  EMA5/200   traded=2/5 trades=13 mean=0.133679 excess=0.007338
+  MACD金叉   traded=3/5 trades=53 mean=0.157509 excess=0.031169
+  MACD反向   traded=3/5 trades=52 mean=-0.033002 excess=-0.159342
+bash scripts/check-progress-docs.sh → passed
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **不直接全量全期重跑**：遵守先小样本验证纪律；全量预算待用户批准。
+- **不写 ECS DB / 不挂 showcase**：本阶段只验证策略与引擎路径，避免再次产生可能被污染或不可比的任务。
+- **日更滚动器解耦列为硬前置**：58/66/74 本地产物已删除，硬编码映射必须改掉后才能重新填充。
+
+---
+
+## Task ID
+
 QRE-UNIVERSE-NEEQ-LEGACY（P0-4：股票池规则落地）
 
 ## Reviewer

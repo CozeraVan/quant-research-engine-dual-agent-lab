@@ -1583,3 +1583,11 @@ No open questions remain.
   穷举时发现第一版漏接 `apps/cli.py` 的 batch 命令与 `gui/engine.py::_run_via_module` 的
   batch 分支——**那正是 worker 跑全市场回测的真正路径**，故补反向锁防再漏。
 - Owner: KIMI_CODE（用户 2026-10-29 批准继续 P0）
+
+### 2026-11-01: 经典策略重新填充先做可复现验证，不直接全量重跑（QRE-SAAS-SHOWCASE-REPOPULATE 阶段一）
+
+- Decision: 新建 `strategies/classic/` 三个经典策略 YAML（EMA5/200 金叉死叉、MACD(12,26,9) 金叉死叉、MACD 反向择时）作为公网经典策略页的新策略真相源；EMA 使用 typical_price 口径的 `ema_5/ema_200`（库内 `ema_200` 无 close 口径，避免混用），MACD 使用 close 口径 `macd_12_26_9/macds_12_26_9`；统一 T+1 开盘成交、`max_holding_days: 0`=不限。
+- Reason: 原 58/66/74 已按用户裁定删除，showcase 为空；在宇宙闸（P0-4）刚落地后直接全量全期重跑，风险与成本都高。先用小样本验证策略可跑、因子注册正确、失败单语义可解释，再向用户报全量预算。
+- Alternatives: 直接从备份恢复旧 job——否决（数据已判污染，用户要求删除且不重建）；先跑全量再修问题——否决（违反先小样本验证纪律）。
+- Impact: 新增 3 个策略 YAML + `tests/test_classic_strategies.py` 7 例；小样本 5 只股票 × 近两年三策略均跑通。发现阻塞项：`scripts/showcase_roller.py` 仍硬编码 `JOB_RUN_MAP={58,66,74}` 与已删除本地 run 目录，日更滚动器必须在全量重跑前解耦。
+- Owner: KIMI_CODE（用户 2026-11-01 指示继续未完成任务）

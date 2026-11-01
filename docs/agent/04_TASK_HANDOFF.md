@@ -2,6 +2,24 @@
 
 ## Task ID
 
+QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样本验证）
+
+## Current Status
+
+进行中（2026-11-01）。策略 YAML 与测试已落地，小样本回测通过；未跑全量、未挂 showcase、未 commit/push。
+
+## Task Note
+
+- 已新增 `strategies/classic/` 三个策略：EMA5/200 金叉死叉、MACD(12,26,9) 金叉死叉、MACD 反向择时；统一 T+1 开盘成交、持仓天数 0=不限。
+- 因子口径：EMA 用 typical_price 的 `ema_5/ema_200`；MACD 用 close 的 `macd_12_26_9/macds_12_26_9`。
+- 测试：`tests/test_classic_strategies.py` 7 passed；小样本 5 只股票 × 2024-01-02~2026-10-21 三策略均跑通，结果见 `08_IMPLEMENTATION_BRIEF.md`。
+- 阻塞项：`scripts/showcase_roller.py` 仍硬编码已删除 job 58/66/74 的本地 run 映射，重新填充前必须解耦。
+- Next Step：用户批准全量预算后，先 1 策略全市场近两年做效率基准，再决定 2010 起全期；干净 job 生成后挂 showcase 并回归后台增删与日更。
+
+### 历史任务：QRE-UNIVERSE-NEEQ-LEGACY（P0-4，已发布）
+
+## Task ID
+
 QRE-UNIVERSE-NEEQ-LEGACY（P0-4：股票池规则落地）
 
 ## Current Status

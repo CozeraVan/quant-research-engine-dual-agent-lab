@@ -2,6 +2,58 @@
 
 ## Task ID
 
+QRE-SAAS-SHOWCASE-REPOPULATE（P0-5：经典策略页重新填充，第一阶段=策略定义 + 小样本验证）
+
+## Created By
+
+KIMI_CODE（2026-11-01；单 agent 自主推进 P0）
+
+## 目标与边界
+
+1. 在 `stock_daily` 源数据只读与宇宙闸（P0-4）已落地的前提下，为公网「经典策略」页建立**可复现的策略真相源**，替换已删除的 58/66/74 全期任务留下的空白。
+2. 本轮只做：经典策略 YAML 化 + 注册表/信号字段合同测试 + 5 只股票 × 近两年小样本回测验证。**不跑全量全期、不写 ECS DB、不挂 showcase、不 commit/push**。
+3. 全量全期重跑必须等本阶段小样本与全量测试通过后，向用户报告耗时/产物/风险预算并获批准。
+
+## 已落地内容
+
+- 新增 `strategies/classic/` 三个策略：
+  - `classic_ema_5_200_golden_cross.yaml`
+  - `classic_macd_12_26_9_golden_cross.yaml`
+  - `classic_macd_12_26_9_reverse.yaml`
+- 因子口径：EMA 使用 `factors.stock_daily_overlap_typical_price.ema_5/ema_200`（库内 `ema_200` 只有 typical_price 口径，避免混用）；MACD 使用 `factors.stock_daily_momentum_close.macd_12_26_9/macds_12_26_9`。
+- 统一执行语义：T 日收盘信号 → T+1 开盘成交；`max_holding_days: 0`=不限；风控字段显式 null。
+- 新增 `tests/test_classic_strategies.py`：YAML 解析、信号字段声明、因子注册表命中、持仓/成交语义合同。
+
+## 小样本验证（真实库，未跑全量）
+
+命令形态：`qre backtest-batch <strategy> --start 2024-01-02 --end 2026-10-21 --codes 000001.SZ 600519.SH 000002.SZ 300750.SZ 601318.SH --initial-cash 100000 --output-dir .tmp/classic-small/<name>`。
+
+| 策略 | 交易股票数 | 总交易 | 平均收益 | 平均超额 | 总成本 | 失败单 |
+|---|---:|---:|---:|---:|---:|---:|
+| EMA5/200 金叉死叉 | 2/5 | 13 | 0.133679 | 0.007338 | 1294.35 | 24 |
+| MACD 金叉死叉 | 3/5 | 53 | 0.157509 | 0.031169 | 6944.78 | 68 |
+| MACD 反向择时 | 3/5 | 52 | -0.033002 | -0.159342 | 5056.23 | 70 |
+
+失败单已抽查：EMA 样本中 `000001.SZ` 的 8 笔失败单全部为 `insufficient_cash`（高价股 100 手门槛超过 10 万初始资金），非引擎阻塞，属预期。
+
+## 验证
+
+```bash
+uv run pytest tests/test_classic_strategies.py -q
+uv run pytest -q -p no:randomly
+bash scripts/check-progress-docs.sh
+```
+
+## 下一步（未做，等用户批准全量预算）
+
+1. **先修/解耦经典策略日更滚动器**：`scripts/showcase_roller.py` 仍硬编码 `JOB_RUN_MAP={58,66,74}` 与已删除的本地 run 目录；重新填充前必须改为配置化或从新基线产物解析，否则日更会立即失败。
+2. 全量全期重跑三策略（建议先 1 只策略 + 全市场 + 近两年做效率基准，再决定 2010 起全期），保留本地基线 run 目录供滚动器使用。
+3. 生成干净 job 后，用管理员后台把 job 挂入 `showcase`，并回归「后台增删 + 日更」与首页空列表修复。
+
+## 历史任务（保留）
+
+## Task ID
+
 QRE-UNIVERSE-NEEQ-LEGACY（P0-4：股票池规则落地）
 
 ## Created By
