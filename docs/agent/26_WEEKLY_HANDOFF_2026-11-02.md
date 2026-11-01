@@ -171,6 +171,7 @@ bash scripts/git-finalize-check.sh
 | 2026-11-03 | 全期全量压测子代理第一次运行 | done（超时中止） | agent-208 | 2 小时后台预算在等 03:00 闸门期间耗尽，三项实测未开始；harness 已验证（3 只 smoke 7s/43s 端到端），三份 YAML 已生成并存 `.tmp/stress-2026-11-02/`；用户追加的「逐 job 耗时分布」条款已写入 §2 |
 | 2026-11-03 | **E 项 M5：结果与产物读取** | done | Kimi | `/jobs/<id>/result`（默认不含 chart_data）+ `/result/chart-data` 按需 + `/artifacts/<name>` 白名单双防穿越 + `purge_expired_agent_artifacts()` 纯函数（不接请求路径）+ openapi 三条路由转已实现；门禁两次拦下本轮改动并已修正；新测试 8 例，定向子集 269 passed；ECS 已部署（MainPID 606687，回滚 `/tmp/qre-deploy-20261101T191846Z.bak`），GET/POST × 4 路由全 404 |
 | 2026-11-03 | M5 提交前全量回归 | deferred | Kimi | 全量套件与 03:00 压测争抢 CPU/IO 会污染采样，已主动中止并记入 `27_STRESS_TEST` §8.0；改为跑定向子集（agent_api + git_finalize + 路由冻结 + gui_saas/console/pages）269 passed；**压测结束后必须补跑全量** |
+| 2026-11-03 | **P0-9 结果回传缺陷立项**（压测实测，数据丢失级） | planned | Kimi | `CR-2026-11-03_result_upload_413_and_uploading_terminal.md`：MAX_FORM_PARTS=1000 → 413 丢全部 blob；uploading 无终态 + reaper 重排 → 42 分钟计算重跑；关联 §8.5 静默截断无标记 / §8.7 tmp 不清理 / §8.11 progress 不更新。已登记 §11.8 B 区最高优先，修复前排期待用户批准 |
 | 2026-11-03 | 全期全量压测子代理恢复执行 | in_progress | agent-208 | 03:00 闸门已过，已 resume 同一 agent（task agent-vn63q4w8）串行跑 item1→item2→item3；目标 §5/§6/§7 |
 
 **M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**
