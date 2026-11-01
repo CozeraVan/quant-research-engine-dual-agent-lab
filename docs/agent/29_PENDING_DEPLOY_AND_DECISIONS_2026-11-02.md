@@ -16,6 +16,7 @@
 | `src/quant_research_engine/gui/lab_result.py` | P2-15 透出 `volatility.series` + P2-14 参数变体 |
 | `src/quant_research_engine/risk/report.py` | P1-10 regime 修复 + P2-15 可选序列 |
 | `src/quant_research_engine/risk/volatility.py` | P1-10 全零波动率修复 + P2-15 GARCH 序列 |
+| `src/quant_research_engine/gui/risk_report.py` | P2-15 默认开启波动率时序序列 |
 
 ### 1.2 部署命令（用户批准后执行）
 ```bash
@@ -26,7 +27,8 @@ cd /home/van/quant-workspace/quant-research-engine-dual-agent-lab
   src/quant_research_engine/gui/static/vol-regime.js \
   src/quant_research_engine/gui/lab_result.py \
   src/quant_research_engine/risk/report.py \
-  src/quant_research_engine/risk/volatility.py
+  src/quant_research_engine/risk/volatility.py \
+  src/quant_research_engine/gui/risk_report.py
 ```
 
 ### 1.3 回滚
@@ -82,26 +84,21 @@ systemctl status qre-saas-worker.service --no-pager | head -12
 ## 4. P2-15 生产默认开启决策单
 
 ### 4.1 当前状态
-- 默认 `include_volatility_series=False`，存量产物体积零变化。
-- 开启后实测：`risk_report.json` 9,244 → 19,405 bytes，ratio 2.10。
-
-### 4.2 若要默认开启，需要改的点
-- worker 收尾生成 `risk_report.json` 时传入：
-  `config={"include_volatility_series": True, "volatility_series_max_points": 500}`
-- 具体位置：`worker/runner.py` 调用 `risk_report` 的收尾钩子路径（实施前需先读代码锁定单点）。
+- **2026-11-02 用户已批准默认开启。**
+- `gui/risk_report.py::generate_risk_report` 已默认传入：
+  `include_volatility_series=True`、`volatility_series_max_points=500`。
 - 前端已就绪：有 `volatility.series` 自动画曲线，无序列降级为阈值标尺。
+- 实测增量：`risk_report.json` 9,244 → 19,405 bytes，ratio 2.10。
 
-### 4.3 回滚
-- 关闭开关只需移除该 config，不影响历史产物。
-- 若已部署后开启，回滚=改回默认 + 重启 qre-saas。
-
-### 4.4 建议
-- 先保持默认关，等 3 点压测后用小样本任务开启验证，再决定是否全局默认。
+### 4.2 回滚
+- 删除 `gui/risk_report.py` 中这两行 config 即可恢复默认关。
+- 历史产物不受影响；新产物在回滚后不再带序列。
 
 ---
 
 ## 5. 当前结论
 
 - 可立即提交：`.gitignore` 的 `seed.json` 规则 + 本文档。
-- 需用户批准：ECS 部署、worker 重启、P2-14 全量、P2-15 默认开启。
+- P2-15 已批准默认开启，代码已改，待全量测试通过后提交并部署 ECS。
+- 需用户批准：ECS 部署、worker 重启、P2-14 全量。
 - 03:00 前不跑重活，避免影响压力测试。

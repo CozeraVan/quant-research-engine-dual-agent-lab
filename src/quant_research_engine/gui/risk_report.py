@@ -243,6 +243,10 @@ def generate_risk_report(
             "var_backtest": True,
             "stress": True,
             "bootstrap": bootstrap,
+            # P2-15：波动率时序曲线默认开启（EWMA/GARCH 年化序列，抽稀 500 点）。
+            # 实测增量约 +10KB/report；如需回滚，删除这两行即可。
+            "include_volatility_series": True,
+            "volatility_series_max_points": 500,
         },
     )
     report["meta"]["run_id"] = record.get("run_id")
