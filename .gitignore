@@ -39,3 +39,6 @@ logs/
 docs/frm/*.pdf
 .tmp/
 tests/data_test/
+
+# Local public-beta audit generated seed (contains test phones/token; regenerate via seed.py)
+deploy/saas/public-beta-audit/seed.json
