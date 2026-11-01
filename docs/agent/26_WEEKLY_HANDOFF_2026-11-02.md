@@ -159,6 +159,7 @@ bash scripts/git-finalize-check.sh
 | 2026-11-02 | P2-15 生产默认开启决策 | done | Kimi | 用户批准默认开启；`gui/risk_report.py` 已传入 `include_volatility_series=True` |
 | 2026-11-02 | P1-12 数据库上云与云端 worker/DB 传输完全准备（不实际迁移） | in_progress | Kimi | 已建 `28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md` + `deploy/cloud/` 脚本；dry-run 通过；未真迁移 |
 | 2026-11-02 | 全期全量压力测试（3项，03:00 后顺序执行） | in_progress | 测试子代理 agent-208 | 目标记录 `docs/agent/27_STRESS_TEST_2026-11-02.md`；未完成 |
+| 2026-11-02 | NL 穿越语义丢失问题立项 | done | Kimi | `change_requests/CR-2026-11-02_nl_cross_semantics.md`；3 点压测前不改业务代码 |
 | 2026-11-02 | ECS 部署清单 + seed.json 处置 + P2-14/P2-15 决策单 | done | Kimi | `29_PENDING_DEPLOY_AND_DECISIONS_2026-11-02.md`；`seed.json` 已 gitignore；ECS 已于 2026-11-02 部署（MainPID 602680），worker 待用户批准重启 |
 
 ---

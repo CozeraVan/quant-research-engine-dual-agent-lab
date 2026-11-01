@@ -1,3 +1,5 @@
+2026-11-02 NL 穿越语义问题立项（未 commit）：压测准备发现 NL 入口把“上穿/下穿/金叉/死叉”降级为当日 `>`/`<`；已立 `change_requests/CR-2026-11-02_nl_cross_semantics.md`，方案为 prompt 增加 `.shift(1)` 穿越 canonical + few-shot + 缓存 bump + 可选校验层。3 点压测前不改业务代码。
+
 2026-11-02 测试隔离修复（未 commit）：`tests/test_gui_saas.py::TestResultsApi._completed_job` 显式设置 `SAAS_UPLOAD_DIR=tmp_path/uploads`，避免全量测试读取/写入仓库默认 `outputs/saas_uploads`；`tests/test_gui_saas.py` 74 passed。此问题由 3 点压测子代理未隔离上传目录暴露。
 
 2026-11-02 P2-15 默认开启并部署 ECS：`gui/risk_report.py` 默认输出 500 点抽稀 EWMA/GARCH 年化序列；提交 `10e4a1e`/`cd3f620`；ECS MainPID 602680，vol-regime/job 页面 200；worker 未重启，新回测待重启后生效。
