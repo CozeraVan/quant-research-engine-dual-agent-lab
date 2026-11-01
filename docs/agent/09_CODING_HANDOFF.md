@@ -6,7 +6,7 @@ QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样�
 
 ## Release Status
 
-阶段一已提交 `ade849d`（2026-11-01）：策略 YAML、合同测试、小样本回测已落地；**仍未跑全量全期、未写 ECS DB、未挂 showcase**。日更滚动器解耦已实现并部署 ECS（app.py MainPID 599773），**未 commit/push，待用户验收**。
+阶段一已提交 `ade849d`（2026-11-01）：策略 YAML、合同测试、小样本回测已落地；**仍未跑全量全期、未写 ECS DB、未挂 showcase**。日更滚动器解耦已实现并部署 ECS（app.py MainPID 599773），**已提交并 push**：`d7d2640`。
 
 ## Implementation
 
