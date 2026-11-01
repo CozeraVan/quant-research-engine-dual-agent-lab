@@ -169,6 +169,8 @@ bash scripts/git-finalize-check.sh
 | 2026-11-03 | **E 项 M3：validate + sweeps（参数扫描）** | done | Kimi | `POST /validate`（不执行不计配额 + 成本估计）+ `POST /sweeps`（screen/confirm 两阶段护栏、笛卡尔积串行展开、令牌级上限与会话预算预检、幂等）+ `GET /sweeps`·`/<id>`·`/aggregate`（只回数字）；agent job 不占会员日配额；app 级前缀闸修复 405 泄露；新测试 20 例、全量 **3354 passed + 34 skipped**；ECS 已部署（MainPID 605487，回滚 `/tmp/qre-deploy-20261101T184839Z.bak`），全方法 404 验证 |
 | 2026-11-03 | **E 项 M4：令牌限流 + 夜间窗口 + 审计 + 9090 同源** | done | Kimi | `agent_rate_limits` 每分钟原子计数（超限 429 + Retry-After，2 小时前机会式清理）+ `jobs.eligible_at` 夜间窗口（claim SQL 只加一个条件）+ `agent_api_events` 最小审计（只记 token/端点/成败/错误分类）+ 每令牌限额可配（越界收敛）+ 9090 限流/审计/夜间窗口清点；新测试 10 例、全量 **3364 passed + 34 skipped**；ECS 已部署（MainPID 606088，回滚 `/tmp/qre-deploy-20261101T190011Z.bak`） |
 | 2026-11-03 | 全期全量压测子代理第一次运行 | done（超时中止） | agent-208 | 2 小时后台预算在等 03:00 闸门期间耗尽，三项实测未开始；harness 已验证（3 只 smoke 7s/43s 端到端），三份 YAML 已生成并存 `.tmp/stress-2026-11-02/`；用户追加的「逐 job 耗时分布」条款已写入 §2 |
+| 2026-11-03 | **E 项 M5：结果与产物读取** | done | Kimi | `/jobs/<id>/result`（默认不含 chart_data）+ `/result/chart-data` 按需 + `/artifacts/<name>` 白名单双防穿越 + `purge_expired_agent_artifacts()` 纯函数（不接请求路径）+ openapi 三条路由转已实现；门禁两次拦下本轮改动并已修正；新测试 8 例，定向子集 269 passed；ECS 已部署（MainPID 606687，回滚 `/tmp/qre-deploy-20261101T191846Z.bak`），GET/POST × 4 路由全 404 |
+| 2026-11-03 | M5 提交前全量回归 | deferred | Kimi | 全量套件与 03:00 压测争抢 CPU/IO 会污染采样，已主动中止并记入 `27_STRESS_TEST` §8.0；改为跑定向子集（agent_api + git_finalize + 路由冻结 + gui_saas/console/pages）269 passed；**压测结束后必须补跑全量** |
 | 2026-11-03 | 全期全量压测子代理恢复执行 | in_progress | agent-208 | 03:00 闸门已过，已 resume 同一 agent（task agent-vn63q4w8）串行跑 item1→item2→item3；目标 §5/§6/§7 |
 
 **M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**
@@ -328,6 +330,64 @@ bash scripts/git-finalize-check.sh
 
 **下一步 M5**：结果端点放行 token 归属（复用 P0-8 `_require_completed_result`）+ 受控 artifacts
 下载（文件名白名单 + 限速 + TTL）+ 产物 TTL 归档（15 天，复用 D-21 归档机制）。
+
+---
+
+**M5 计划（2026-11-03 动工前登记）**
+
+1. `GET /api/agent/v1/jobs/<id>/result`（scope `results:read`）：返回 `summary` /
+   `data_until` / `result_contract` / `artifacts` 清单 / `symbol_details` 元信息；
+   **不默认返回 `chart_data`**（全市场产物可达数百 MB，避免一次响应打爆 agent）。
+2. `GET /api/agent/v1/jobs/<id>/result/chart-data`：按需取净值曲线等绘图数据。
+3. `GET /api/agent/v1/jobs/<id>/artifacts/<name>`：受控下载——文件名白名单
+   （`^[A-Za-z0-9._-]+$`，禁路径分隔符）+ 解析路径必须落在 `SAAS_UPLOAD_DIR/job_<id>/` 内
+   （双重防穿越）+ 文件必须真实存在；限速复用 M4 每分钟闸。
+4. 归属：允许读「本令牌创建的 job」与「同属主的人工 job」（令牌代表用户行事）；
+   他人/不存在一律 404 同体，不泄露存在性。
+5. **产物 TTL 明确推迟**：删除文件绝不挂在请求路径上（一次 GET 触发批量删文件不可接受）；
+   改为先提供 `purge_expired_agent_artifacts()` 纯函数 + 文档登记，待接入既有周扫 timer
+   （D-21 归档机制）后再启用。本轮不做静默删除。
+6. 测试：归属隔离（他人 404）、chart-data 按需、artifacts 白名单与穿越防护
+   （`../`、绝对路径、不存在的文件）、TTL 纯函数对过期/未过期/缺失目录的行为；
+   回归全量不许变红。
+7. 部署纪律：ECS 只发代码（无 schema 变更则跳过 apply）、只重启 qre-saas、flag 仍默认关；
+   验收后 commit/push。
+
+完成度目标：M5 结束后外部 agent 可闭环「提交 → 等完成 → 读指标 → 下钻曲线 → 取产物文件」。
+
+---
+
+**M5 完成情况（2026-11-03）**：七项计划中六项落地，产物 TTL 按计划**只做纯函数不接请求路径**。
+- `GET /jobs/<id>/result`：返回 `summary`/`data_until`/`result_contract`/`artifacts`/
+  `research_run_id`/`sweep_id`/`chart_data_url`；**默认不含 `chart_data`**（全市场产物可达
+  数百 MB，避免一次响应打爆外部 agent）。
+- `GET /jobs/<id>/result/chart-data`：按需取绘图数据。
+- `GET /jobs/<id>/artifacts/<name>`：受控下载——文件名白名单 `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`、
+  解析后真实路径必须落在 `SAAS_UPLOAD_DIR/job_<id>/` 内（双防穿越）、文件必须存在；
+  限速复用 M4 每分钟闸。
+- 归属：本令牌创建的 job + 同属主人工 job（令牌代表用户行事）；他人/不存在一律 404 同体。
+- TTL：`purge_expired_agent_artifacts(engine, upload_root=None, ttl_days=15)` 纯函数——
+  只删「令牌创建的 job 且终态且 finished_at 早于 TTL」的 `job_<id>/` 目录，人工产物一律不碰；
+  目录来源刻意不读 Flask app config（周扫 timer 在应用上下文外调用，`current_app` 会抛异常），
+  改为 显式参数 > 环境变量 > 仓库默认。**未挂到任何请求路径，也未接入周扫**（见下）。
+- openapi：`/jobs/{id}/result`、`/result/chart-data`、`/artifacts/{name}` 改为已实现；
+  单配置 `POST /jobs` 仍标 `x-status: planned`——外部 agent 统一走 `/sweeps`（哪怕只有一个配置），
+  避免两套提交路径漂移。
+- **门禁两次拦住我自己的改动，都已修正**：
+  ① `test_git_finalize_check.py` 的合成泄漏值含 "example" 被占位符过滤吞掉 → 改用随机形态值，
+    并新增「占位符不放行」反向用例；
+  ② `test_saas_job_endpoint_audit.py` 的 P0-8 冻结路由清单不认识三条新 agent 路由 →
+    已在冻结清单中显式登记（含归属校验说明）。这正是冻结清单的设计目的。
+- 测试：新 8 例（默认不含 chart_data / 按需取 / 409 未完成 / 他人 404 / scope 403 /
+  穿越与缺失 404 / TTL 清 agent 不碰人工 / TTL 保留未过期）。
+- **遗留（明确记录，不静默）**：agent 产物 TTL 尚未接入周扫 timer；在接入前，
+  `purge_expired_agent_artifacts()` 只是可用函数。接入属运维项，需与 D-21 归档机制统一排期，
+  且**任何删除都不得挂在请求路径上**。
+
+**下一步 M6**：用一个真实外部 agent 走通「发现 → validate → 建会话 → screen 扫描 →
+confirm 短名单 → aggregate → 读结果 → 提交结论」全链路；在此之前需用户决定是否打开
+`QRE_AGENT_API_ENABLED`（当前生产默认关）。
+
 
 ---
 

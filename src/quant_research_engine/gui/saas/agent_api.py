@@ -15,15 +15,18 @@
 
 本切片（M1）只交付：令牌签发/列举/吊销、`capabilities` 成本信封、
 `openapi.json`、`schema/strategy`。validate / research_runs / sweeps / jobs /
-result / artifacts 属 M4–M5，openapi 中以 `x-status: planned` 标注，未实现前不得声称可用。
+单配置提交（`POST /jobs`）属 M6 前的可选项，openapi 中以 `x-status: planned` 标注，未实现前不得声称可用。
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 import secrets
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from flask import Blueprint, current_app, jsonify, request
@@ -562,7 +565,11 @@ def strategy_spec_json_schema() -> dict[str, Any]:
 
 
 def build_openapi() -> dict[str, Any]:
-    """OpenAPI 3.0.3 文档。尚未实现的端点以 x-status: planned 标注，不得声称可用。"""
+    """OpenAPI 3.0.3 文档。尚未实现的端点以 x-status: planned 标注，不得声称可用。
+
+    注意：M4/M5 已上线，`/jobs` 单配置提交仍留 planned——外部 agent 应通过
+    `/sweeps`（哪怕 grid 只有一个配置）提交任务，避免两套提交路径漂移。
+    """
     envelope = {
         "type": "object",
         "properties": {
@@ -570,7 +577,7 @@ def build_openapi() -> dict[str, Any]:
             "disclaimer": {"type": "string"},
         },
     }
-    planned = {"x-status": "planned", "x-slice": "M5"}
+    planned = {"x-status": "planned", "x-slice": "M6"}
     return {
         "openapi": "3.0.3",
         "info": {
@@ -692,25 +699,23 @@ def build_openapi() -> dict[str, Any]:
                     "responses": {"200": {"description": "OK"}, "404": {"description": "not_found"}},
                 },
             },
-            "/jobs": {
-                "post": {
-                    "summary": "单配置提交（强制 Idempotency-Key）",
-                    "responses": {"201": {"description": "created"}, "400": {"description": "missing_idempotency_key"}},
-                    **planned,
-                }
-            },
             "/jobs/{job_id}/result": {
                 "get": {
-                    "summary": "读取标准化结果",
+                    "summary": "读取标准化结果摘要（默认不含 chart_data）",
+                    "responses": {"200": {"description": "OK"}, "404": {"description": "not_found"},
+                                  "409": {"description": "not_completed"}},
+                }
+            },
+            "/jobs/{job_id}/result/chart-data": {
+                "get": {
+                    "summary": "按需取绘图数据（体积可能很大）",
                     "responses": {"200": {"description": "OK"}, "404": {"description": "not_found"}},
-                    **planned,
                 }
             },
             "/jobs/{job_id}/artifacts/{name}": {
                 "get": {
-                    "summary": "受控产物下载（白名单 + 限速 + TTL）",
+                    "summary": "受控产物下载（文件名白名单 + 路径限定 job 目录）",
                     "responses": {"200": {"description": "OK"}, "404": {"description": "not_found"}},
-                    **planned,
                 }
             },
         },
@@ -1453,6 +1458,174 @@ def agent_sweep_aggregate(sweep_id: int):
 
 def _num(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+# --------------------------------------------------------------------------
+# 结果与产物读取（M5）
+# --------------------------------------------------------------------------
+#: 受控下载的文件名白名单：禁路径分隔符与点号开头，双防目录穿越
+_ARTIFACT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+#: agent 产物的保留期（天）；与 D-21 归档保留期一致。过期清理绝不挂在请求路径上，
+#: 由 purge_expired_agent_artifacts() 供周扫 timer 调用（见 26_WEEKLY_HANDOFF §7 M5 计划）。
+AGENT_ARTIFACT_TTL_DAYS = 15
+
+
+def _load_agent_job(engine, job_id: int, token_row):
+    """按令牌归属读 job：本令牌创建的 job，或同属主的人工 job（令牌代表用户行事）。
+
+    他人/不存在一律 None（路由层统一 404，不泄露存在性）。
+    """
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT * FROM jobs WHERE id = :id AND user_id = :uid "
+                 "AND (token_id = :tid OR token_id IS NULL)"),
+            {"id": job_id, "uid": token_row["user_id"], "tid": token_row["id"]},
+        ).mappings().first()
+
+
+def _load_agent_result(engine, job_id: int):
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT * FROM results WHERE job_id = :jid"), {"jid": job_id}
+        ).mappings().first()
+
+
+@agent_api_bp.get("/jobs/<int:job_id>/result")
+def agent_job_result(job_id: int):
+    """结果摘要：默认**不返回 chart_data**（全市场产物可达数百 MB，避免打爆 agent）。"""
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "results:read")
+    if scope_err is not None:
+        return scope_err
+    job = _load_agent_job(engine, job_id, row)
+    if job is None:
+        return jsonify(_err("not_found", "任务不存在")), 404
+    if job["status"] != "completed":
+        return jsonify(_err("budget_exhausted",
+                            f"任务未完成（{job['status']}）")), 409
+    result = _load_agent_result(engine, job_id)
+    if result is None:
+        return jsonify(_err("not_found", "结果不存在")), 404
+    return _ok({"result": {
+        "job_id": job_id,
+        "status": job["status"],
+        "summary": result["summary"],
+        "data_until": str(result["data_until"]) if result["data_until"] else None,
+        "result_contract": result["result_contract"],
+        "artifacts": result["artifacts"],
+        "research_run_id": job["research_run_id"],
+        "sweep_id": job["sweep_id"],
+        "chart_data_url": f"{AGENT_API_PREFIX}/jobs/{job_id}/result/chart-data",
+    }})
+
+
+@agent_api_bp.get("/jobs/<int:job_id>/result/chart-data")
+def agent_job_chart_data(job_id: int):
+    """按需取绘图数据（净值曲线/回撤/热力图/归因）。体积可能很大，调用方自行决定是否拉取。"""
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "results:read")
+    if scope_err is not None:
+        return scope_err
+    job = _load_agent_job(engine, job_id, row)
+    if job is None:
+        return jsonify(_err("not_found", "任务不存在")), 404
+    if job["status"] != "completed":
+        return jsonify(_err("budget_exhausted", f"任务未完成（{job['status']}）")), 409
+    result = _load_agent_result(engine, job_id)
+    if result is None:
+        return jsonify(_err("not_found", "结果不存在")), 404
+    return _ok({"chart_data": result["chart_data"]})
+
+
+@agent_api_bp.get("/jobs/<int:job_id>/artifacts/<path:name>")
+def agent_job_artifact(job_id: int, name: str):
+    """受控产物下载：文件名白名单 + 路径必须落在 job_<id>/ 内 + 文件必须存在。
+
+    限速复用 M4 每分钟闸（authenticate_agent 内统一执行）。
+    """
+    app = current_app
+    engine = _get_engine(app)
+    row, denied = authenticate_agent(app, engine)
+    if denied is not None:
+        return denied
+    scope_err = _require_scope(row, "results:read")
+    if scope_err is not None:
+        return scope_err
+    if not _ARTIFACT_NAME_RE.match(name) or "/" in name or "\\" in name:
+        return jsonify(_err("not_found", "产物不存在")), 404
+    job = _load_agent_job(engine, job_id, row)
+    if job is None:
+        return jsonify(_err("not_found", "任务不存在")), 404
+    if job["status"] != "completed":
+        return jsonify(_err("budget_exhausted", f"任务未完成（{job['status']}）")), 409
+
+    from flask import send_from_directory
+
+    upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
+    job_dir = (upload_root / f"job_{job_id}").resolve()
+    target = (job_dir / name).resolve()
+    # 双重防穿越：解析后的真实路径必须仍在 job 目录内
+    if not str(target).startswith(str(job_dir) + os.sep) or not target.is_file():
+        return jsonify(_err("not_found", "产物不存在")), 404
+    return send_from_directory(str(job_dir), name, as_attachment=True)
+
+
+def purge_expired_agent_artifacts(engine, upload_root: Path | None = None,
+                                  ttl_days: int | None = None) -> dict[str, int]:
+    """清理过期的 agent 产物目录（供周扫 timer 调用；**绝不挂在请求路径上**）。
+
+    只删「令牌创建的 job 且终态、 finished_at 早于 TTL」对应的 `job_<id>/` 目录；
+    人工 job 的产物一律不碰。返回 {scanned, removed, bytes_freed, errors}。
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import text
+
+    ttl = AGENT_ARTIFACT_TTL_DAYS if ttl_days is None else int(ttl_days)
+    # 目录来源：显式参数 > 环境变量 > 仓库默认。刻意不读 Flask app config——周扫 timer
+    # 与脚本在应用上下文之外调用，`current_app` 会直接抛 RuntimeError。
+    root = upload_root or Path(os.environ.get("SAAS_UPLOAD_DIR") or "outputs/saas_uploads")
+    scanned = removed = bytes_freed = errors = 0
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id FROM jobs WHERE token_id IS NOT NULL "
+                    "AND status IN ('completed','failed','expired','canceled') "
+                    "AND finished_at IS NOT NULL "
+                    "AND finished_at < now() - make_interval(days => :ttl)"
+                ),
+                {"ttl": ttl},
+            ).all()
+    except Exception:
+        return {"scanned": 0, "removed": 0, "bytes_freed": 0, "errors": 1}
+    import shutil
+
+    for (job_id,) in rows:
+        scanned += 1
+        job_dir = root / f"job_{job_id}"
+        if not job_dir.exists():
+            continue
+        try:
+            size = sum(f.stat().st_size for f in job_dir.rglob("*") if f.is_file())
+            shutil.rmtree(job_dir)
+            removed += 1
+            bytes_freed += size
+        except OSError:
+            errors += 1
+    return {"scanned": scanned, "removed": removed, "bytes_freed": bytes_freed, "errors": errors}
 
 
 # --------------------------------------------------------------------------

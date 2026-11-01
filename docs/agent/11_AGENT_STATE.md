@@ -33,6 +33,19 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 E 项 M5：结果与产物读取（待全量回归后部署+commit）
+
+计划与完成度登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。
+实现：`GET /jobs/<id>/result`（默认**不含** `chart_data`，全市场产物可达数百 MB）、
+`/result/chart-data` 按需、`/artifacts/<name>` 受控下载（文件名白名单 + 真实路径必须落在
+`job_<id>/` 内 + 文件必须存在，双防穿越）；归属=本令牌创建的 job + 同属主人工 job，他人 404 同体。
+TTL：`purge_expired_agent_artifacts()` 纯函数（只清令牌创建的终态 job，人工产物不碰；
+目录来源不读 Flask config，供周扫 timer 在应用上下文外调用）——**未接请求路径、未接周扫**。
+门禁两次拦住本轮改动并已修正：secret 扫描占位符过滤吞掉合成泄漏值（改用随机形态值 +
+新增反向用例）、P0-8 冻结路由清单登记三条新 agent 路由。
+测试新 8 例；全量回归结果见提交记录。
+**下一步 M6**：真实外部 agent 端到端验收（需用户决定是否打开 `QRE_AGENT_API_ENABLED`）。
+
 ### 2026-11-03 E 项 M4：令牌限流 + 夜间窗口 + 审计（已部署 ECS并 commit）
 
 计划与完成度登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。

@@ -22,6 +22,12 @@ EXPECTED_JOB_ID_GET_ROUTES = {
     "/api/results/<int:job_id>/symbols",
     "/api/results/<int:job_id>/symbols/<ts_code>",
     "/api/results/<int:job_id>/symbols/<ts_code>/gen-status",
+    # AGENT-API M5（2026-11-03）：外部 Agent 结果/产物读取。三条均走
+    # agent_api._load_agent_job 的令牌归属校验（本令牌创建的 job 或同属主人工 job），
+    # 他人/不存在一律 404 同体；artifacts 另加文件名白名单 + 路径限定 job 目录。
+    "/api/agent/v1/jobs/<int:job_id>/result",
+    "/api/agent/v1/jobs/<int:job_id>/result/chart-data",
+    "/api/agent/v1/jobs/<int:job_id>/artifacts/<path:name>",
 }
 
 

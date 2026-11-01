@@ -10,6 +10,7 @@ scope 收窄、成本信封口径、openapi 与 StrategySpec schema 的合同、
 
 from __future__ import annotations
 
+import json
 import subprocess
 import uuid
 
@@ -877,6 +878,190 @@ class TestRateLimitNightlyAndAudit:
         assert ag["nightly_pending_jobs"] >= 0
 
 
+class TestResultAndArtifacts:
+    """M5：结果读取（默认不带 chart_data）+ 受控产物下载 + TTL 清理纯函数。"""
+
+    BASE_YAML = (
+        "experiment:\n  name: ema_scan\n"
+        "data:\n  factor_fields:\n    ema_fast: factors.stock_daily_ta.ema5\n"
+        "signal:\n  entry: 'ema_fast > close'\n  exit: 'ema_fast < close'\n"
+        "evaluation:\n  forward_return_horizons: [1]\n"
+        "holding:\n  max_holding_days: 20\n"
+    )
+
+    def _token(self, client, app, scopes=None, target=None):
+        session = _login(client, app, target or "13800000044")
+        token = _create_token(client, session, scopes=scopes or [
+            "jobs:submit", "jobs:read", "results:read", "factors:read"])["token"]
+        return {"Authorization": f"Bearer {token['plaintext']}"}
+
+    def _completed_job(self, client, app, headers, *, with_result=True, chart=True):
+        """建会话 + sweep（1 个配置）→ 直接置 completed 并造 results 行。"""
+        from sqlalchemy import text
+
+        run = client.post(f"{AGENT_API_PREFIX}/research-runs",
+                          json={"title": "结果读取"}, headers=headers)
+        run_id = run.get_json()["research_run"]["id"]
+        sweep = client.post(f"{AGENT_API_PREFIX}/sweeps", json={
+            "research_run_id": run_id,
+            "base_yaml": self.BASE_YAML,
+            "grid": {"data.factor_fields.ema_fast": ["factors.stock_daily_ta.ema5"]},
+            "params": {"random_n": 10, "start": "2024-01-02", "end": "2025-06-30"},
+            "idempotency_key": f"res-{run_id}",
+        }, headers=headers)
+        assert sweep.status_code in (201, 202), sweep.get_json()
+        sweep_id = sweep.get_json()["sweep"]["id"]
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            job_id = conn.execute(text(
+                "SELECT id FROM jobs WHERE sweep_id = :s ORDER BY id LIMIT 1"),
+                {"s": sweep_id}).scalar_one()
+            conn.execute(text(
+                "UPDATE jobs SET status='completed', started_at=now(), finished_at=now() "
+                "WHERE id = :j"), {"j": job_id})
+            if with_result:
+                chart_data = ({"metrics": {"total_return": 0.31, "sharpe": 0.9},
+                               "dates": ["2024-01-02"], "equity": [1.0]} if chart else {})
+                conn.execute(text(
+                    "INSERT INTO results (job_id, user_id, summary, chart_data, artifacts, "
+                    "data_until, result_contract) SELECT id, user_id, "
+                    "CAST(:summary AS jsonb), CAST(:chart AS jsonb), "
+                    "CAST(:artifacts AS jsonb), DATE '2026-10-30', "
+                    "CAST(:contract AS jsonb) FROM jobs WHERE id = :j"),
+                    {"summary": '{"total_return": 0.31}', "chart": json.dumps(chart_data),
+                     "artifacts": '[{"kind": "excel", "size": 123}]',
+                     "contract": '{"version": 1}', "j": job_id})
+        return job_id
+
+    def test_result_excludes_chart_data_by_default(self, client, app):
+        headers = self._token(client, app)
+        job_id = self._completed_job(client, app, headers)
+        resp = client.get(f"{AGENT_API_PREFIX}/jobs/{job_id}/result", headers=headers)
+        assert resp.status_code == 200
+        body = resp.get_json()["result"]
+        assert body["summary"]["total_return"] == 0.31
+        assert body["data_until"] == "2026-10-30"
+        assert body["result_contract"]["version"] == 1
+        assert body["artifacts"] == [{"kind": "excel", "size": 123}]
+        assert "chart_data" not in body  # 默认不回，避免一次响应打爆 agent
+        assert body["chart_data_url"].endswith(f"/jobs/{job_id}/result/chart-data")
+
+    def test_chart_data_on_demand(self, client, app):
+        headers = self._token(client, app)
+        job_id = self._completed_job(client, app, headers)
+        resp = client.get(f"{AGENT_API_PREFIX}/jobs/{job_id}/result/chart-data",
+                          headers=headers)
+        assert resp.status_code == 200
+        chart = resp.get_json()["chart_data"]
+        assert chart["metrics"]["total_return"] == 0.31
+
+    def test_uncompleted_job_returns_409(self, client, app):
+        from sqlalchemy import text
+
+        headers = self._token(client, app)
+        job_id = self._completed_job(client, app, headers, with_result=False)
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE jobs SET status='queued', finished_at=NULL "
+                              "WHERE id = :j"), {"j": job_id})
+        resp = client.get(f"{AGENT_API_PREFIX}/jobs/{job_id}/result", headers=headers)
+        assert resp.status_code == 409
+        assert "未完成" in resp.get_json()["error"]["message"]
+
+    def test_other_users_job_is_404(self, client, app):
+        headers_a = self._token(client, app)
+        job_id = self._completed_job(client, app, headers_a)
+        session_b = _login(client, app, "13800000055")
+        token_b = _create_token(client, session_b)["token"]
+        headers_b = {"Authorization": f"Bearer {token_b['plaintext']}"}
+        for path in (f"{AGENT_API_PREFIX}/jobs/{job_id}/result",
+                     f"{AGENT_API_PREFIX}/jobs/{job_id}/result/chart-data",
+                     f"{AGENT_API_PREFIX}/jobs/{job_id}/artifacts/equity_curve.csv"):
+            assert client.get(path, headers=headers_b).status_code == 404, path
+
+    def test_scope_required_for_results(self, client, app):
+        setup = self._token(client, app)  # 全权令牌负责建任务
+        job_id = self._completed_job(client, app, setup)
+        narrow = self._token(client, app, scopes=["jobs:read"], target="13800000066")
+        resp = client.get(f"{AGENT_API_PREFIX}/jobs/{job_id}/result", headers=narrow)
+        assert resp.status_code == 403
+        assert resp.get_json()["error"]["code"] == "forbidden_scope"
+
+    def test_artifact_traversal_and_missing_rejected(self, client, app, tmp_path):
+        headers = self._token(client, app)
+        job_id = self._completed_job(client, app, headers)
+        app.config["SAAS_UPLOAD_DIR"] = str(tmp_path / "uploads")
+        # 目录里放一个正常文件 + 一个 job 目录外的文件
+        job_dir = tmp_path / "uploads" / f"job_{job_id}"
+        job_dir.mkdir(parents=True)
+        (job_dir / "equity_curve.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+        (tmp_path / "uploads" / "secret.txt").write_text("nope", encoding="utf-8")
+        ok = client.get(f"{AGENT_API_PREFIX}/jobs/{job_id}/artifacts/equity_curve.csv",
+                        headers=headers)
+        assert ok.status_code == 200
+        assert ok.data == b"a,b\n1,2\n"
+        for bad in ("../secret.txt", "..%2Fsecret.txt", "secret.txt", ".hidden",
+                    "sub/dir.csv"):
+            resp = client.get(f"{AGENT_API_PREFIX}/jobs/{job_id}/artifacts/{bad}",
+                              headers=headers)
+            assert resp.status_code == 404, bad
+        # 绝对路径：URL 里的 // 会被 Flask 规范成 308，跟随后仍由白名单判 404；
+        # 二者都算「未取到文件」，不放行即可
+        resp = client.get(f"{AGENT_API_PREFIX}/jobs/{job_id}/artifacts//etc/passwd",
+                          headers=headers, follow_redirects=True)
+        assert resp.status_code == 404
+
+    def test_purge_ttl_function_behaviour(self, client, app, tmp_path):
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        headers = self._token(client, app)
+        job_id = self._completed_job(client, app, headers)
+        upload = tmp_path / "uploads"
+        (upload / f"job_{job_id}").mkdir(parents=True)
+        (upload / f"job_{job_id}" / "a.csv").write_text("x" * 100, encoding="utf-8")
+        # 人工 job 的产物目录即使过期也不删
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE jobs SET finished_at = now() - interval '40 days' WHERE id = :j"),
+                {"j": job_id})
+            uid = conn.execute(text("SELECT id FROM users ORDER BY id LIMIT 1")).scalar_one()
+            sid = conn.execute(text(
+                "INSERT INTO strategies (user_id, name, yaml) VALUES (:u, 's', :y) RETURNING id"),
+                {"u": uid, "y": self.BASE_YAML}).scalar_one()
+            human_job = conn.execute(text(
+                "INSERT INTO jobs (user_id, strategy_id, kind, params, status, finished_at) "
+                "VALUES (:u, :s, 'full', '{}'::jsonb, 'completed', now() - interval '40 days') "
+                "RETURNING id"), {"u": uid, "s": sid}).scalar_one()
+        (upload / f"job_{human_job}").mkdir(parents=True)
+        (upload / f"job_{human_job}" / "keep.csv").write_text("keep", encoding="utf-8")
+
+        report = agent_mod.purge_expired_agent_artifacts(engine, upload_root=upload, ttl_days=15)
+        assert report["scanned"] >= 1
+        assert report["removed"] >= 1
+        assert report["bytes_freed"] >= 100
+        assert report["errors"] == 0
+        assert not (upload / f"job_{job_id}").exists()      # agent 过期产物已清
+        assert (upload / f"job_{human_job}" / "keep.csv").exists()  # 人工产物不碰
+
+    def test_purge_keeps_unexpired(self, client, app, tmp_path):
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        headers = self._token(client, app)
+        job_id = self._completed_job(client, app, headers)
+        upload = tmp_path / "uploads"
+        (upload / f"job_{job_id}").mkdir(parents=True)
+        (upload / f"job_{job_id}" / "a.csv").write_text("x", encoding="utf-8")
+        engine = app.extensions["saas_engine"]
+        report = agent_mod.purge_expired_agent_artifacts(engine, upload_root=upload, ttl_days=15)
+        assert report["removed"] == 0
+        assert (upload / f"job_{job_id}" / "a.csv").exists()
+
+
 class TestConsoleVisibility:
     """R-ADMIN-001：外部 Agent API 的限额必须在 9090 管理台可见，且与执行同源。"""
 
@@ -935,9 +1120,14 @@ class TestDiscoveryDocuments:
         assert DISCLAIMER in doc["info"]["description"]
         assert doc["security"] == [{"bearerAuth": []}]
         assert doc["components"]["securitySchemes"]["bearerAuth"]["scheme"] == "bearer"
-        # 未实现的端点必须显式标注 planned，不得让外部 agent 误判可用
-        for path in ("/jobs", "/jobs/{job_id}/result", "/jobs/{job_id}/artifacts/{name}"):
-            assert doc["paths"][path]["post" if path == "/jobs" else "get"]["x-status"] == "planned", path
+        # 未实现的单配置提交不得出现在 paths 里（agent 应走 /sweeps，避免两套提交路径）
+        assert "/jobs" not in doc["paths"]
+        # 已实现的端点不得带 planned 标注
+        for path, method in (("/validate", "post"), ("/research-runs", "post"),
+                             ("/sweeps", "post"), ("/sweeps/{sweep_id}/aggregate", "get"),
+                             ("/jobs/{job_id}/result", "get"),
+                             ("/jobs/{job_id}/artifacts/{name}", "get")):
+            assert "x-status" not in doc["paths"][path][method], path
         # 已实现的端点不得带 planned 标注
         for path in ("/validate", "/research-runs", "/sweeps", "/sweeps/{sweep_id}/aggregate"):
             assert "x-status" not in doc["paths"][path][
