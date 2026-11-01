@@ -1106,6 +1106,10 @@ def _agent_api_console_view(app, engine) -> dict[str, Any]:
             ).first() is not None
             run_counts = {"total": 0, "concluded": 0, "running": 0}
             run_rows = []
+            rate_counts = {"rows": 0, "hits": 0}
+            event_counts = {"total": 0, "failed": 0}
+            event_rows = []
+            pending_night = 0
             if runs_exists:
                 run_counts = conn.execute(
                     text(
@@ -1122,6 +1126,22 @@ def _agent_api_console_view(app, engine) -> dict[str, Any]:
                         "FROM research_runs ORDER BY created_at DESC LIMIT 20"
                     )
                 ).mappings().all()
+                rate_counts = conn.execute(
+                    text("SELECT count(*) AS rows, coalesce(sum(hits), 0) AS hits "
+                         "FROM agent_rate_limits")
+                ).mappings().one()
+                event_counts = conn.execute(
+                    text("SELECT count(*) AS total, "
+                         "count(*) FILTER (WHERE NOT ok) AS failed FROM agent_api_events")
+                ).mappings().one()
+                event_rows = conn.execute(
+                    text("SELECT endpoint, ok, error_class, created_at FROM agent_api_events "
+                         "ORDER BY created_at DESC LIMIT 10")
+                ).mappings().all()
+                pending_night = conn.execute(
+                    text("SELECT count(*) FROM jobs WHERE eligible_at IS NOT NULL "
+                         "AND eligible_at > now() AND status = 'queued'")
+                ).scalar_one()
     except SQLAlchemyError:
         return view  # 管理台清点失败不阻断总览其余部分
     view["tokens_total"] = int(counts["total"] or 0)
@@ -1158,7 +1178,33 @@ def _agent_api_console_view(app, engine) -> dict[str, Any]:
         }
         for r in run_rows
     ]
+    # AGENT-API M4：限流/审计/夜间窗口清点（全部读真实表）
+    view["rate_limit_rows"] = int(rate_counts["rows"] or 0)
+    view["rate_limit_hits"] = int(rate_counts["hits"] or 0)
+    view["event_total"] = int(event_counts["total"] or 0)
+    view["event_failed"] = int(event_counts["failed"] or 0)
+    view["events"] = [
+        {
+            "endpoint": e["endpoint"],
+            "ok": e["ok"],
+            "error_class": e["error_class"],
+            "created_at": e["created_at"].isoformat() if e["created_at"] else None,
+        }
+        for e in event_rows
+    ]
+    view["nightly_pending_jobs"] = int(pending_night or 0)
+    view["nightly_window_open"] = _agent_nightly_open()
     return view
+
+
+def _agent_nightly_open() -> bool:
+    """当前是否在外部 Agent 夜间窗口内（与 agent_api._nightly_eligible_at 同源）。"""
+    from quant_research_engine.gui.saas import agent_api as _agent
+
+    class _Row(dict):
+        pass
+
+    return _agent._nightly_eligible_at({"nightly_only": True}) is None
 
 
 def create_saas_app() -> Flask:
@@ -3007,6 +3053,9 @@ def create_saas_app() -> Flask:
                     text(
                         "SELECT id FROM jobs "
                         "WHERE status = 'queued' "
+                        # AGENT-API M4：夜间窗口——令牌任务 eligible_at 未到点不可认领；
+                        # NULL（人工任务与历史行）不受影响。只加条件，不改租约/心跳语义。
+                        "AND (eligible_at IS NULL OR eligible_at <= now()) "
                         + class_filter +
                         "ORDER BY priority DESC, created_at LIMIT 1 "
                         "FOR UPDATE SKIP LOCKED"

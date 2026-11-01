@@ -147,6 +147,39 @@ def token_prefix(plaintext: str) -> str:
     return plaintext[:TOKEN_PREFIX_DISPLAY_LEN]
 
 
+#: 每令牌限额字段：上限见 _TOKEN_LIMIT_CAPS（越界收敛），0 = 不限（仅 rate_per_minute 支持）
+_TOKEN_LIMIT_FIELDS = ("daily_submit_limit", "in_flight_limit", "rate_per_minute")
+_TOKEN_LIMIT_CAPS = {
+    "daily_submit_limit": 1000,
+    "in_flight_limit": 50,
+    "rate_per_minute": 600,
+}
+
+
+def _normalize_token_limits(data: dict[str, Any]) -> dict[str, Any] | str:
+    """归一每令牌限额：非整数/负数返回错误串；越界收敛到上限；缺省用 AGENT_DEFAULTS。"""
+    limits: dict[str, Any] = {
+        "daily_submit_limit": AGENT_DEFAULTS["daily_submit_limit"],
+        "in_flight_limit": AGENT_DEFAULTS["in_flight_limit"],
+        "rate_per_minute": AGENT_DEFAULTS["rate_per_minute"],
+        "nightly_only": bool(AGENT_DEFAULTS["nightly_only"]),
+    }
+    for key in _TOKEN_LIMIT_FIELDS:
+        if key not in data or data[key] is None:
+            continue
+        value = data[key]
+        if isinstance(value, bool) or not isinstance(value, int):
+            return f"{key} 须为整数"
+        if value < 0:
+            return f"{key} 不得为负"
+        limits[key] = min(value, _TOKEN_LIMIT_CAPS[key])
+    if "nightly_only" in data and data["nightly_only"] is not None:
+        if not isinstance(data["nightly_only"], bool):
+            return "nightly_only 须为布尔值"
+        limits["nightly_only"] = data["nightly_only"]
+    return limits
+
+
 def _auth_salt(app) -> str:
     from quant_research_engine.gui.saas.app import DEFAULT_AUTH_SALT
 
@@ -231,8 +264,117 @@ def authenticate_agent(app, engine):
     expires_at = row["expires_at"]
     if expires_at is not None and _as_aware(expires_at) < datetime.now(timezone.utc):
         return None, (jsonify(_err("unauthorized", "访问令牌无效")), 401)
+    # M4：每分钟限流（PG 原子计数；超限 429 + Retry-After，覆盖全部 agent 端点）
+    limited, retry_after = _consume_rate_limit(app, engine, row)
+    if limited:
+        resp = jsonify(_err("rate_limited",
+                            f"每分钟请求上限 {row['rate_per_minute']}，请稍后重试"))
+        resp.headers["Retry-After"] = str(retry_after)
+        return None, (resp, 429)
     _touch_last_used(engine, row["id"])
     return row, None
+
+
+def _consume_rate_limit(app, engine, row) -> tuple[bool, int]:
+    """令牌级每分钟限流：PG 原子计数，超限返回 (True,  retry_after_seconds)。
+
+    与 `nl_compile_support` 同族做法：单条 INSERT … ON CONFLICT DO UPDATE … WHERE
+    hits < limit RETURNING，已达上限不递增；表缺失时放行（降级不阻断业务）。
+    """
+    from sqlalchemy import text
+
+    limit = int(row["rate_per_minute"] or 0)
+    if limit <= 0:
+        return False, 0
+    try:
+        with engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'agent_rate_limits'")
+            ).first() is not None
+            if not exists:
+                return False, 0
+            subject = hashlib.sha256(
+                f"agent:tid:{row['id']}{_auth_salt(app)}".encode("utf-8")
+            ).hexdigest()[:32]
+            # 机会式清理：限流行按分钟增长，删掉 2 小时前的（成本一次索引范围删除）
+            conn.execute(
+                text("DELETE FROM agent_rate_limits "
+                     "WHERE window_start < date_trunc('minute', now()) - interval '2 hours'")
+            )
+            allowed = conn.execute(
+                text(
+                    "INSERT INTO agent_rate_limits (scope, subject_hash, window_start, hits) "
+                    "VALUES ('agent_minute', :sub, date_trunc('minute', now()), 1) "
+                    "ON CONFLICT (scope, subject_hash, window_start) DO UPDATE SET "
+                    "hits = agent_rate_limits.hits + 1, updated_at = now() "
+                    "WHERE agent_rate_limits.hits < :lim RETURNING hits"
+                ),
+                {"sub": subject, "lim": limit},
+            ).first()
+            if allowed is not None:
+                return False, 0
+            row_left = conn.execute(
+                text(
+                    "SELECT EXTRACT(EPOCH FROM (date_trunc('minute', now()) "
+                    "+ interval '1 minute' - now()))::int AS secs"
+                )
+            ).first()
+            return True, int(row_left[0]) if row_left else 60
+    except Exception:
+        # 限流是容量保护而非正确性依赖：DB 异常时放行并交由令牌级日/在飞上限兜底
+        return False, 0
+
+
+def _log_agent_event(engine, token_id: int | None, endpoint: str, ok: bool,
+                     error_class: str | None = None) -> None:
+    """最小审计：只记 token_id/endpoint/ok/error_class/created_at。
+
+    不记策略文本、不记令牌明文、不记原始 IP（与 nl_compile_events 同一纪律）；
+    写失败不影响业务（静默 catch 带理由）。
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'agent_api_events'")
+            ).first() is not None
+            if not exists:
+                return
+            conn.execute(
+                text("INSERT INTO agent_api_events (token_id, endpoint, ok, error_class) "
+                     "VALUES (:tid, :ep, :ok, :ec)"),
+                {"tid": token_id, "ep": endpoint, "ok": ok, "ec": error_class},
+            )
+    except Exception:
+        # 审计写入失败不阻断主流程
+        pass
+
+
+def _nightly_eligible_at(row) -> datetime | None:
+    """夜间窗口：`nightly_only=true` 且当前在窗口外时，返回下一个窗口起点（Asia/Shanghai）。
+
+    窗口内或未启用返回 None（立即可认领）。窗口配置来自 AGENT_DEFAULTS.nightly_window，
+    形如 "00:00-06:00 Asia/Shanghai"；解析失败按「不限制」处理（宁可不拦，不可误拦）。
+    """
+    if not row["nightly_only"]:
+        return None
+    spec = str(AGENT_DEFAULTS.get("nightly_window") or "")
+    try:
+        hours, _, rest = spec.partition("-")
+        start_h = int(hours.split(":")[0])
+        end_part = rest.split()[0] if rest else "06:00"
+        end_h = int(end_part.split(":")[0])
+    except (ValueError, IndexError):
+        return None
+    tz = timezone(timedelta(hours=8))  # Asia/Shanghai 无 DST，固定 +8
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+    if start_h <= now_local.hour < end_h:
+        return None
+    candidate = now_local.replace(hour=start_h, minute=0, second=0, microsecond=0)
+    if candidate <= now_local:
+        candidate += timedelta(days=1)
+    return candidate.astimezone(timezone.utc)
 
 
 def _as_aware(value: datetime) -> datetime:
@@ -762,6 +904,8 @@ def agent_validate():
     ):
         issues.append(issue)
 
+    _log_agent_event(engine, row["id"], "POST /validate", not issues,
+                    "invalid_yaml" if issues else None)
     return _ok({
         "validate": {
             "valid": not issues,
@@ -902,6 +1046,7 @@ def _create_agent_jobs(
     params: dict[str, Any],
     labels: dict[str, Any] | None,
     strategy_name: str,
+    eligible_at: datetime | None = None,
 ) -> int:
     """把展开后的 N 个配置落成 N 条 job（串行入队；V1 无并发调度）。
 
@@ -938,9 +1083,9 @@ def _create_agent_jobs(
             conn.execute(
                 text(
                     "INSERT INTO jobs (user_id, strategy_id, kind, params, token_id, "
-                    "research_run_id, sweep_id, labels, weight_class) VALUES "
+                    "research_run_id, sweep_id, labels, weight_class, eligible_at) VALUES "
                     "(:uid, :sid, 'full', CAST(:params AS jsonb), :tid, :rid, :swid, "
-                    "CAST(:labels AS jsonb), :wc)"
+                    "CAST(:labels AS jsonb), :wc, :eligible)"
                 ),
                 {
                     "uid": uid,
@@ -951,6 +1096,7 @@ def _create_agent_jobs(
                     "swid": sweep_id,
                     "labels": json.dumps(labels or {}, ensure_ascii=False),
                     "wc": weight_class,
+                    "eligible": eligible_at,
                 },
             )
             created += 1
@@ -993,7 +1139,8 @@ def ensure_agent_sweeps(engine) -> bool:
     return ok
 
 
-def _sweep_view(row, job_ids: list[int] | None = None) -> dict[str, Any]:
+def _sweep_view(row, job_ids: list[int] | None = None,
+               eligible_at: str | None = None) -> dict[str, Any]:
     view = {
         "id": row["id"],
         "external_id": row["sweep_id_external"] or f"agent-sweep-{row['id']}",
@@ -1008,6 +1155,9 @@ def _sweep_view(row, job_ids: list[int] | None = None) -> dict[str, Any]:
     }
     if job_ids is not None:
         view["job_ids"] = job_ids
+    if eligible_at is not None:
+        view["eligible_at"] = eligible_at
+        view["note"] = "令牌启用夜间窗口，任务到点后才可被 worker 认领"
     return view
 
 
@@ -1139,6 +1289,7 @@ def agent_sweep_create():
             {"ext": f"agent-sweep-{sweep_id}", "id": sweep_id},
         )
 
+    eligible_at = _nightly_eligible_at(row)
     created = _create_agent_jobs(
         engine,
         uid=row["user_id"],
@@ -1149,7 +1300,9 @@ def agent_sweep_create():
         params=params,
         labels=labels,
         strategy_name=f"agent-sweep-{sweep_id}",
+        eligible_at=eligible_at,
     )
+    _log_agent_event(engine, row["id"], "POST /sweeps", True)
     with engine.begin() as conn:
         job_ids = [r[0] for r in conn.execute(
             text("SELECT id FROM jobs WHERE sweep_id = :sid ORDER BY id"), {"sid": sweep_id}
@@ -1164,7 +1317,8 @@ def agent_sweep_create():
         "research_run_id": run_id, "stage": stage, "grid": grid, "params": params,
         "labels": labels or {}, "status": "running", "job_ids": job_ids,
         "created_at": None,
-    }, job_ids=job_ids)}, status=201)
+    }, job_ids=job_ids, eligible_at=eligible_at.isoformat() if eligible_at else None)},
+        status=202 if eligible_at is not None else 201)
 
 
 @agent_api_bp.get("/sweeps")
@@ -1610,6 +1764,7 @@ def agent_research_run_conclusion(run_id: int):
                 "id": run_id,
             },
         )
+    _log_agent_event(engine, row["id"], "POST /conclusion", True)
     return _ok({"research_run": {"id": run_id, "status": "concluded",
                                  "stored": True,
                                  "note": "结论由外部 agent 提供，QRE 原样存储、不做解释或改写"}})
@@ -1678,6 +1833,11 @@ def agent_token_create():
     if unknown:
         return jsonify(_err("invalid_yaml", f"未知 scope：{', '.join(sorted(unknown))}")), 400
     allow_full_market = bool(data.get("allow_full_market", False))
+    # 每令牌限额：缺省用 api_tokens 行内默认（= AGENT_DEFAULTS）；越界收敛而非报错，
+    # 避免调用方因一个小错误整张令牌建不出来；0 = 不限（仅 rate_per_minute 支持）。
+    limits = _normalize_token_limits(data)
+    if isinstance(limits, str):
+        return jsonify(_err("invalid_yaml", limits)), 400
     expires_days = data.get("expires_days")
     expires_at = None
     if expires_days is not None:
@@ -1699,8 +1859,10 @@ def agent_token_create():
         token_id = conn.execute(
             text(
                 "INSERT INTO api_tokens (user_id, name, prefix, token_hash, scopes, "
-                "allow_full_market, expires_at) VALUES (:uid, :name, :prefix, :hash, "
-                "CAST(:scopes AS text[]), :afm, :exp) RETURNING id"
+                "allow_full_market, expires_at, daily_submit_limit, in_flight_limit, "
+                "rate_per_minute, nightly_only) VALUES (:uid, :name, :prefix, :hash, "
+                "CAST(:scopes AS text[]), :afm, :exp, :daily, :flight, :rate, :nightly) "
+                "RETURNING id"
             ),
             {
                 "uid": uid,
@@ -1710,6 +1872,10 @@ def agent_token_create():
                 "scopes": scopes,
                 "afm": allow_full_market,
                 "exp": expires_at,
+                "daily": limits["daily_submit_limit"],
+                "flight": limits["in_flight_limit"],
+                "rate": limits["rate_per_minute"],
+                "nightly": limits["nightly_only"],
             },
         ).scalar_one()
     # 明文只在这里返回一次；后续列举/查询一律不回明文
@@ -1721,6 +1887,10 @@ def agent_token_create():
                 "prefix": token_prefix(plaintext),
                 "scopes": scopes,
                 "allow_full_market": allow_full_market,
+                "daily_submit_limit": limits["daily_submit_limit"],
+                "in_flight_limit": limits["in_flight_limit"],
+                "rate_per_minute": limits["rate_per_minute"],
+                "nightly_only": limits["nightly_only"],
                 "expires_at": expires_at.isoformat() if expires_at else None,
                 "plaintext": plaintext,
             },
@@ -1745,7 +1915,8 @@ def agent_token_list():
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT id, name, prefix, scopes, allow_full_market, expires_at, "
+                "SELECT id, name, prefix, scopes, allow_full_market, daily_submit_limit, "
+                "in_flight_limit, rate_per_minute, nightly_only, expires_at, "
                 "revoked_at, last_used_at, created_at FROM api_tokens "
                 "WHERE user_id = :uid ORDER BY created_at DESC LIMIT 100"
             ),
@@ -1761,6 +1932,10 @@ def agent_token_list():
                 "prefix": row["prefix"],
                 "scopes": list(row["scopes"] or []),
                 "allow_full_market": row["allow_full_market"],
+                "daily_submit_limit": row["daily_submit_limit"],
+                "in_flight_limit": row["in_flight_limit"],
+                "rate_per_minute": row["rate_per_minute"],
+                "nightly_only": row["nightly_only"],
                 "expires_at": expires_at.isoformat() if expires_at else None,
                 "revoked_at": row["revoked_at"].isoformat() if row["revoked_at"] else None,
                 "last_used_at": row["last_used_at"].isoformat() if row["last_used_at"] else None,

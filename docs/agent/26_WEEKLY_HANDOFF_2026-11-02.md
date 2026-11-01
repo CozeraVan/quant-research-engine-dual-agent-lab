@@ -167,6 +167,9 @@ bash scripts/git-finalize-check.sh
 | 2026-11-02 | 压测文档追加「每个全期 job 耗时分布」监视要求（用户追加） | in_progress | Kimi | 已写入 `27_STRESS_TEST_2026-11-02.md` §2（min/median/p95/max + 排队时长 + 最慢 5 个 job）；待子代理在 item1–item3 小节落地数值 |
 | 2026-11-02 | E 项 M1：api_tokens + capabilities + openapi + schema/strategy（特性开关默认关） | done | Kimi | `fb419b4` 已 commit/push 并部署 ECS（MainPID 603714，回滚 `/tmp/qre-deploy-20261101T182548Z.bak`）；新测试 23 例、全量 3322 passed + 34 skipped；生产 flag 关时全路由 404 |
 | 2026-11-03 | **E 项 M3：validate + sweeps（参数扫描）** | done | Kimi | `POST /validate`（不执行不计配额 + 成本估计）+ `POST /sweeps`（screen/confirm 两阶段护栏、笛卡尔积串行展开、令牌级上限与会话预算预检、幂等）+ `GET /sweeps`·`/<id>`·`/aggregate`（只回数字）；agent job 不占会员日配额；app 级前缀闸修复 405 泄露；新测试 20 例、全量 **3354 passed + 34 skipped**；ECS 已部署（MainPID 605487，回滚 `/tmp/qre-deploy-20261101T184839Z.bak`），全方法 404 验证 |
+| 2026-11-03 | **E 项 M4：令牌限流 + 夜间窗口 + 审计 + 9090 同源** | done | Kimi | `agent_rate_limits` 每分钟原子计数（超限 429 + Retry-After，2 小时前机会式清理）+ `jobs.eligible_at` 夜间窗口（claim SQL 只加一个条件）+ `agent_api_events` 最小审计（只记 token/端点/成败/错误分类）+ 每令牌限额可配（越界收敛）+ 9090 限流/审计/夜间窗口清点；新测试 10 例、全量 **3364 passed + 34 skipped**；ECS 已部署（MainPID 606088，回滚 `/tmp/qre-deploy-20261101T190011Z.bak`） |
+| 2026-11-03 | 全期全量压测子代理第一次运行 | done（超时中止） | agent-208 | 2 小时后台预算在等 03:00 闸门期间耗尽，三项实测未开始；harness 已验证（3 只 smoke 7s/43s 端到端），三份 YAML 已生成并存 `.tmp/stress-2026-11-02/`；用户追加的「逐 job 耗时分布」条款已写入 §2 |
+| 2026-11-03 | 全期全量压测子代理恢复执行 | in_progress | agent-208 | 03:00 闸门已过，已 resume 同一 agent（task agent-vn63q4w8）串行跑 item1→item2→item3；目标 §5/§6/§7 |
 
 **M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**
 
@@ -275,6 +278,56 @@ bash scripts/git-finalize-check.sh
 **下一步 M4**：令牌级限流（每分钟，429 + Retry-After）、夜间窗口认领（`nightly_only`）、
 `nl_compile_events` 式最小审计（不存策略文本/令牌明文/IP）、9090 展示与执行同源复核。
 **M5**：结果端点放行 token 归属 + 受控 artifacts 下载 + 产物 TTL 归档。
+
+---
+
+**M4 计划（2026-11-03 动工前登记）**
+
+1. 限流（PG 原子计数，新增 `agent_rate_limits` 表，键 `(scope, subject_hash, window_start)`）：
+   - scope=`agent_minute`，subject=`sha256("agent:tid:"+tid+salt)` 截断（不落原始 token）；
+   - window_start=`date_trunc('minute', now())`；单条 `INSERT … ON CONFLICT DO UPDATE …
+     WHERE hits < limit RETURNING` 原子计数，多 worker/并发不突破；
+   - 在 `authenticate_agent` 内统一执行，覆盖全部 agent 端点；超限 429 + `Retry-After`。
+2. 夜间窗口（保护家里 worker 不被 agent 挤占真人时段）：
+   - `jobs` 新增 `eligible_at TIMESTAMPTZ`（可空，NULL=立即可认领，旧行不受影响）；
+   - `nightly_only=true` 的令牌提交的 job 落在窗口外时置 `eligible_at`=下一个窗口起点，
+     响应带 `eligible_at`（HTTP 202 语义已在错误码表）；
+   - claim SQL 增加 `AND (eligible_at IS NULL OR eligible_at <= now())`——**只加一个条件，
+     不改租约/心跳/回传语义**；`_reap_expired` 与回队路径不动。
+3. 审计（新增 `agent_api_events` 表，最小口径）：只记 `token_id` / `endpoint` / `ok` /
+   `error_class` / `created_at`；**不记策略文本、不记令牌明文、不记原始 IP**（同
+   `nl_compile_events` 纪律）；在 validate / sweeps / research-runs 结论四个写入口记录。
+4. 9090（R-ADMIN-001）：「外部 Agent API」卡新增限流计数（行数/命中）、事件计数与失败分类 Top、
+   夜间窗口当前是否开放、各令牌 `eligible_at` 待认领 job 数；全部读真实表，不写第二套口径。
+5. 测试：限流超限 429 + `Retry-After` + 恢复；`eligible_at` 落在窗口内/外的两种落库；
+   claim 不认领未到点 job 且到点后可认领；事件表不落敏感字段（用 SQL 断言列集合）；
+   9090 计数与表一致；回归全量不许变红。
+6. 部署纪律：ECS 先 apply schema 再发文件、只重启 qre-saas、flag 仍默认关；验收后 commit/push。
+
+完成度目标：M4 结束后，即使 flag 打开，agent 也被「每分钟限流 + 夜间窗口 + 日/在飞上限 +
+会话预算」四层闸门约束，且全部行为可在 9090 观测。
+
+**M4 完成情况（2026-11-03）**：六项计划全部落地。
+- 限流：`agent_rate_limits`（scope=`agent_minute`，subject=`sha256("agent:tid:"+tid+salt)` 截断，
+  window_start=当前分钟），单条 `INSERT … ON CONFLICT DO UPDATE … WHERE hits < limit RETURNING`
+  原子计数；超限 429 + `Retry-After`（秒数按分钟剩余算）；2 小时前的行机会式清理。
+- 夜间窗口：`jobs.eligible_at`（可空，NULL=立即可认领）+ claim SQL 只加
+  `AND (eligible_at IS NULL OR eligible_at <= now())`，租约/心跳/回传语义零改动；
+  窗口外提交返回 **202** + `eligible_at`；窗口配置解析失败按「不拦」处理（宁可不拦，不可误拦）。
+- 审计：`agent_api_events` 只记 `token_id`/`endpoint`/`ok`/`error_class`/`created_at`，
+  在 validate / sweeps / conclusion 三个写入口记录；**不落策略文本、令牌明文、原始 IP**。
+- 每令牌限额可在签发时设置（`daily_submit_limit`/`in_flight_limit`/`rate_per_minute`/`nightly_only`），
+  非整数/负数 400，越界收敛到上限，0=不限（仅 rate_per_minute）；列举接口同样回显。
+- 9090：新增限流计数（行/命中）、审计事件（总数/失败 + 最近 10 条）、夜间窗口是否开放、
+  待认领（夜间）job 数，全部读真实表。
+- 测试：新 10 例（限流 429/Retry-After/按令牌隔离/0=不限/清理、eligible_at 窗口判定与解析失败降级、
+  claim 不认领未到点且到点后可认领、审计列集合不含敏感字段、控制台计数）；
+  **全量 3364 passed + 34 skipped**（零回归）。
+- 部署：ECS MainPID **606088**，回滚副本 `/tmp/qre-deploy-20261101T190011Z.bak`；
+  两表 + `jobs.eligible_at` 已 apply；生产 GET/POST × 3 路由全 404、`/saas/` 200。未重启 worker。
+
+**下一步 M5**：结果端点放行 token 归属（复用 P0-8 `_require_completed_result`）+ 受控 artifacts
+下载（文件名白名单 + 限速 + TTL）+ 产物 TTL 归档（15 天，复用 D-21 归档机制）。
 
 ---
 

@@ -356,7 +356,29 @@
       + metric('会话总数', num(ag.research_runs_total), '外部 agent 创建的研究会话（定边界/列清单/提交结论的容器）')
       + metric('未完结', num(ag.research_runs_open), 'planned / running / aggregated')
       + metric('已提交结论', num(ag.research_runs_concluded), '结论由外部 agent 提供，系统原样存储、不解释')
-      + renderResearchRuns(ag.research_runs || []);
+      + renderResearchRuns(ag.research_runs || [])
+      + '<h3 style="margin-top:14px">限流 / 审计 / 夜间窗口</h3>'
+      + metric('每分钟限流计数', num(ag.rate_limit_rows) + ' 行 / ' + num(ag.rate_limit_hits) + ' 次',
+               '按令牌每分钟原子计数；超限返回 429 并带 Retry-After')
+      + metric('审计事件', num(ag.event_total) + ' 条（失败 ' + num(ag.event_failed) + '）',
+               '只记录令牌/端点/成败/错误分类，不记录策略文本、令牌明文与原始 IP')
+      + metric('夜间窗口', ag.nightly_window_open ? '开放中' : '关闭中',
+               '启用夜间窗口的令牌，其任务到点后才可被 worker 认领，避免挤占真人时段')
+      + metric('待认领（夜间）', num(ag.nightly_pending_jobs),
+               'eligible_at 未到点且仍在排队的 agent 任务数')
+      + renderAgentEvents(ag.events || []);
+  }
+
+  function renderAgentEvents(list){
+    if (!list.length) return '<span class="muted">暂无审计事件</span>';
+    var rows = list.map(function(e){
+      return '<tr><td>' + esc(e.endpoint || '—') + '</td>'
+        + '<td>' + (e.ok ? '成功' : '失败') + '</td>'
+        + '<td>' + esc(e.error_class || '—') + '</td>'
+        + '<td>' + esc(e.created_at ? e.created_at.replace('T', ' ').slice(0, 19) : '—') + '</td></tr>';
+    }).join('');
+    return '<table class="tbl"><thead><tr><th>端点</th><th>结果</th><th>错误分类</th>'
+      + '<th>时间</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   function renderResearchRuns(list){

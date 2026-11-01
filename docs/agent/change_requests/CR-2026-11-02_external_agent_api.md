@@ -105,6 +105,18 @@
   - **决策**：agent job 不占用户会员日配额（否则扫描被 3 次/日挡死），由令牌级上限约束。
   - **缺陷修复**：关闭开关时 POST-only 路由的 GET 抛 405 泄露路由存在 → app 级前缀闸补齐。
   - 测试：新 20 例；**全量 3354 passed + 34 skipped**（零回归）。
-- M4–M6：**未启动**。
+- M4 限流/夜间窗口/审计：**代码已完成并部署 ECS**（2026-11-03，MainPID 606088；
+  回滚副本 `/tmp/qre-deploy-20261101T190011Z.bak`）。
+  - `agent_rate_limits`：每分钟 PG 原子计数（同 `nl_rate_limits` 族），超限 429 + `Retry-After`；
+    2 小时前的行机会式清理，避免无限增长。
+  - `jobs.eligible_at` + claim SQL 增加 `AND (eligible_at IS NULL OR eligible_at <= now())`：
+    夜间窗口（`nightly_only` 默认 true，00:00–06:00 Asia/Shanghai）外提交的 agent 任务
+    返回 202 + `eligible_at`，到点才可认领；人工任务与历史行不受影响。
+  - `agent_api_events`：最小审计，只记 token_id/endpoint/ok/error_class/created_at。
+  - 每令牌限额（daily_submit_limit / in_flight_limit / rate_per_minute / nightly_only）
+    可在签发时设置，越界收敛到上限；列举接口同样回显。
+  - R-ADMIN-001：9090「外部 Agent API」卡新增限流计数、审计事件、夜间窗口状态与待认领数。
+  - 测试：新 10 例；**全量 3364 passed + 34 skipped**（零回归）。
+- M5–M6：**未启动**。
 - 长期记录：`14_LAUNCH_ROADMAP.md` §11.8 E 项已更新为「M0 设计定稿待批准」；
   任务已登记 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。

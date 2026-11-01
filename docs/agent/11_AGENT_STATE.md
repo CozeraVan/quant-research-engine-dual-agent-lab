@@ -33,6 +33,17 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 E 项 M4：令牌限流 + 夜间窗口 + 审计（已部署 ECS并 commit）
+
+计划与完成度登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。
+实现：`agent_rate_limits`（每分钟 PG 原子计数，超限 429 + `Retry-After`，2 小时前行机会式清理）、
+`jobs.eligible_at` + claim SQL 单条件（夜间窗口，`nightly_only` 默认 true，窗口外提交返回 202 + `eligible_at`）、
+`agent_api_events` 最小审计（只记 token_id/endpoint/ok/error_class/created_at，不落策略文本/令牌明文/IP）、
+每令牌限额可在签发时设置（越界收敛到上限）、9090 新增限流/审计/夜间窗口清点。
+测试新 10 例，**全量 3364 passed + 34 skipped**。ECS MainPID 606088，回滚副本
+`/tmp/qre-deploy-20261101T190011Z.bak`；生产 GET/POST × 3 路由全 404、`/saas/` 200。
+**下一项 M5**：结果端点放行 token 归属 + 受控 artifacts 下载 + 产物 TTL 归档。
+
 ### 2026-11-03 E 项 M3 计划（validate + sweeps，动工前登记）
 
 计划已登记在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7（validate 合同 / sweeps 两阶段护栏 /

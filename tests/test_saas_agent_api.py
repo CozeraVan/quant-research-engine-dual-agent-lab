@@ -76,7 +76,7 @@ def _clean(app):
     from quant_research_engine.gui.saas.app import _get_engine
     engine = _get_engine(app)
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE agent_sweeps, research_runs, api_tokens, results, jobs, strategies, users, sessions, sms_codes RESTART IDENTITY CASCADE"))
+        conn.execute(text("TRUNCATE agent_api_events, agent_rate_limits, agent_sweeps, research_runs, api_tokens, results, jobs, strategies, users, sessions, sms_codes RESTART IDENTITY CASCADE"))
 
 
 def _login(client, app, target="13800000001"):
@@ -714,6 +714,167 @@ class TestValidateAndSweeps:
         for path in (f"{AGENT_API_PREFIX}/sweeps/{sweep_id}",
                      f"{AGENT_API_PREFIX}/sweeps/{sweep_id}/aggregate"):
             assert client.get(path, headers=headers_b).status_code == 404, path
+
+
+class TestRateLimitNightlyAndAudit:
+    """M4：每分钟限流、夜间窗口 eligible_at、claim 不认领未到点任务、审计最小口径。"""
+
+    BASE_YAML = (
+        "experiment:\n  name: ema_scan\n"
+        "data:\n  factor_fields:\n    ema_fast: factors.stock_daily_ta.ema5\n"
+        "signal:\n  entry: 'ema_fast > close'\n  exit: 'ema_fast < close'\n"
+        "evaluation:\n  forward_return_horizons: [1]\n"
+        "holding:\n  max_holding_days: 20\n"
+    )
+
+    def _token(self, client, app, scopes=None, target=None, **token_kwargs):
+        session = _login(client, app, target or "13800000001")
+        payload = {"name": "agent-a", "scopes": scopes or [
+            "jobs:submit", "jobs:read", "results:read", "factors:read"]}
+        payload.update(token_kwargs)
+        token = _create_token(client, session, **payload)["token"]
+        return {"Authorization": f"Bearer {token['plaintext']}"}
+
+    def _run(self, client, headers, **budget):
+        resp = client.post(f"{AGENT_API_PREFIX}/research-runs",
+                           json={"title": "EMA 扫描", "budget": budget}, headers=headers)
+        assert resp.status_code == 201, resp.get_json()
+        return resp.get_json()["research_run"]["id"]
+
+    def _sweep(self, client, headers, run_id, idem="s1"):
+        return client.post(f"{AGENT_API_PREFIX}/sweeps", json={
+            "research_run_id": run_id,
+            "base_yaml": self.BASE_YAML,
+            "grid": {"data.factor_fields.ema_fast": ["factors.stock_daily_ta.ema5"]},
+            "params": {"random_n": 20, "start": "2024-01-02", "end": "2025-06-30"},
+            "idempotency_key": idem,
+        }, headers=headers)
+
+    # --- 限流 ---
+    def test_rate_limit_returns_429_with_retry_after(self, client, app):
+        headers = self._token(client, app, rate_per_minute=3)
+        codes = []
+        for _ in range(5):
+            codes.append(client.get(f"{AGENT_API_PREFIX}/capabilities", headers=headers).status_code)
+        assert codes[:3] == [200, 200, 200]
+        assert codes[3] == 429
+        last = client.get(f"{AGENT_API_PREFIX}/capabilities", headers=headers)
+        assert last.status_code == 429
+        assert int(last.headers["Retry-After"]) >= 1
+        assert last.get_json()["error"]["code"] == "rate_limited"
+
+    def test_rate_limit_is_per_token(self, client, app):
+        headers_a = self._token(client, app, rate_per_minute=2)
+        for _ in range(2):
+            assert client.get(f"{AGENT_API_PREFIX}/capabilities", headers=headers_a).status_code == 200
+        assert client.get(f"{AGENT_API_PREFIX}/capabilities", headers=headers_a).status_code == 429
+        # 另一个令牌不受影响（按令牌分别计数；换手机号避开验证码 60s 限流）
+        headers_b = self._token(client, app, rate_per_minute=2, target="13800000091")
+        assert client.get(f"{AGENT_API_PREFIX}/capabilities", headers=headers_b).status_code == 200
+
+    def test_rate_limit_zero_means_unlimited(self, client, app):
+        headers = self._token(client, app, rate_per_minute=0)
+        for _ in range(5):
+            assert client.get(f"{AGENT_API_PREFIX}/capabilities", headers=headers).status_code == 200
+
+    def test_rate_limit_rows_cleaned_up(self, client, app):
+        from sqlalchemy import text
+
+        headers = self._token(client, app, rate_per_minute=5)
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO agent_rate_limits (scope, subject_hash, window_start, hits) "
+                "VALUES ('agent_minute', 'stale', now() - interval '5 hours', 9)"))
+        assert client.get(f"{AGENT_API_PREFIX}/capabilities", headers=headers).status_code == 200
+        with engine.connect() as conn:
+            stale = conn.execute(text(
+                "SELECT count(*) FROM agent_rate_limits WHERE subject_hash = 'stale'")).scalar_one()
+        assert stale == 0  # 2 小时前的行被机会式清理
+
+    # --- 夜间窗口 ---
+    def test_nightly_window_sets_eligible_at_outside_window(self, client, app):
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        row = {"nightly_only": True}
+        eligible = agent_mod._nightly_eligible_at(row)
+        # 当前 02:5x CST 在 00:00-06:00 窗口内 → 不限制
+        assert eligible is None
+
+    def test_nightly_window_parsing_failure_does_not_block(self, client, app, monkeypatch):
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        monkeypatch.setitem(agent_mod.AGENT_DEFAULTS, "nightly_window", "垃圾配置")
+        assert agent_mod._nightly_eligible_at({"nightly_only": True}) is None
+
+    def test_claim_skips_not_yet_eligible_jobs(self, client, app):
+        """夜间窗口核心断言：eligible_at 未到点的 agent job 不被认领，人工 job 不受影响。"""
+        from sqlalchemy import text
+
+        from quant_research_engine.gui.saas.app import _get_engine
+
+        _login(client, app, "13800000077")  # 先建一个用户，job 才有归属
+        engine = _get_engine(app)
+        with engine.begin() as conn:
+            uid = conn.execute(text("SELECT id FROM users ORDER BY id LIMIT 1")).scalar_one()
+            sid = conn.execute(
+                text("INSERT INTO strategies (user_id, name, yaml) VALUES (:u, 's', :y) RETURNING id"),
+                {"u": uid, "y": self.BASE_YAML}).scalar_one()
+            # 人工 job（eligible_at NULL）+ agent job（1 小时后才可认领）
+            human = conn.execute(text(
+                "INSERT INTO jobs (user_id, strategy_id, kind, params, status) "
+                "VALUES (:u, :s, 'full', '{}'::jsonb, 'queued') RETURNING id"),
+                {"u": uid, "s": sid}).scalar_one()
+            agent_job = conn.execute(text(
+                "INSERT INTO jobs (user_id, strategy_id, kind, params, status, eligible_at) "
+                "VALUES (:u, :s, 'full', '{}'::jsonb, 'queued', now() + interval '1 hour') "
+                "RETURNING id"), {"u": uid, "s": sid}).scalar_one()
+        claim = client.post("/api/worker/jobs/claim",
+                            json={"worker_id": "w1", "wait_seconds": 0},
+                            headers={"X-Worker-Token": "test-worker-token"})
+        picked = claim.get_json()["job"]
+        assert picked is not None and picked["id"] == human  # 只领到人工 job
+        # 到点后可认领
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE jobs SET eligible_at = now() - interval '1 minute' "
+                              "WHERE id = :i"), {"i": agent_job})
+        claim2 = client.post("/api/worker/jobs/claim",
+                             json={"worker_id": "w2", "wait_seconds": 0},
+                             headers={"X-Worker-Token": "test-worker-token"})
+        assert claim2.get_json()["job"]["id"] == agent_job
+
+    # --- 审计 ---
+    def test_audit_events_recorded_without_sensitive_fields(self, client, app):
+        from sqlalchemy import text
+
+        headers = self._token(client, app)
+        run_id = self._run(client, headers)
+        assert self._sweep(client, headers, run_id).status_code in (201, 202)
+        engine = app.extensions["saas_engine"]
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT endpoint, ok FROM agent_api_events ORDER BY id")).all()
+            cols = [r[0] for r in conn.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'agent_api_events'")).all()]
+        assert ("POST /sweeps", True) in [(r[0], r[1]) for r in rows]
+        # 最小口径：不落策略文本/令牌明文/原始 IP
+        assert set(cols) == {"id", "token_id", "endpoint", "ok", "error_class", "created_at"}
+
+    def test_console_reports_rate_limit_and_nightly(self, client, app):
+        headers_agent = self._token(client, app, rate_per_minute=10)
+        assert client.get(f"{AGENT_API_PREFIX}/capabilities",
+                          headers=headers_agent).status_code == 200
+        run_id = self._run(client, headers_agent)
+        assert self._sweep(client, headers_agent, run_id, idem="audit-1").status_code in (201, 202)
+        admin = _admin_headers(app, "admin2@example.com")
+        d = client.get("/api/saas/console/overview", headers=admin).get_json()
+        ag = d["agent_api"]
+        assert ag["rate_limit_rows"] >= 1
+        assert ag["rate_limit_hits"] >= 1
+        assert ag["event_total"] >= 1
+        assert isinstance(ag["nightly_window_open"], bool)
+        assert ag["nightly_pending_jobs"] >= 0
 
 
 class TestConsoleVisibility:

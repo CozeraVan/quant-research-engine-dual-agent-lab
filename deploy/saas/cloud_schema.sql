@@ -527,4 +527,37 @@ END $$;
 -- AGENT-API M3：jobs 关联 sweep（可空，旧行不受影响）。
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sweep_id BIGINT;
 
+-- AGENT-API M4（2026-11-03）：令牌级每分钟限流（PG 原子计数，与 nl_rate_limits 同族）。
+-- scope=agent_minute；subject_hash=sha256("agent:tid:"+tid+salt) 截断，不落原始令牌；
+-- window_start=当前 UTC 分钟；已达上限不递增，多 worker/并发不突破。
+CREATE TABLE IF NOT EXISTS agent_rate_limits (
+    scope        TEXT NOT NULL,
+    subject_hash TEXT NOT NULL,
+    window_start TIMESTAMPTZ NOT NULL,
+    hits         INT NOT NULL DEFAULT 0,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (scope, subject_hash, window_start)
+);
+-- AGENT-API M4：最小审计事件。只记 token_id/endpoint/ok/error_class/created_at，
+-- 不记策略文本、不记令牌明文、不记原始 IP（同 nl_compile_events 纪律）。
+CREATE TABLE IF NOT EXISTS agent_api_events (
+    id         BIGSERIAL PRIMARY KEY,
+    token_id   BIGINT,
+    endpoint   TEXT NOT NULL,
+    ok         BOOL NOT NULL,
+    error_class TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_agent_api_events_created ON agent_api_events (created_at DESC);
+-- AGENT-API M4：夜间窗口——令牌提交的 job 到点才可认领（NULL=立即可认领，旧行不受影响）。
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eligible_at TIMESTAMPTZ;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON agent_rate_limits TO aguhuice;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON agent_api_events TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE agent_api_events_id_seq TO aguhuice;
+    END IF;
+END $$;
+
 COMMIT;
