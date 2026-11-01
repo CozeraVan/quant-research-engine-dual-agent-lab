@@ -163,6 +163,9 @@ bash scripts/git-finalize-check.sh
 | 2026-11-02 | ECS 部署清单 + seed.json 处置 + P2-14/P2-15 决策单 | done | Kimi | `29_PENDING_DEPLOY_AND_DECISIONS_2026-11-02.md`；`seed.json` 已 gitignore；ECS 已于 2026-11-02 部署（MainPID 602680），worker 待用户批准重启 |
 | 2026-11-02 | E 项第四入口外部 AI Agent API —— M0 设计（读档 + 颗粒度对齐 + brainstorm + 设计文档/CR；**只设计不写码不上线**） | in_progress | Kimi | 已读 10-25 brainstorm、`17_JOB_PROTOCOL.md`、`app.py` 路由/quota/tier_policies；产出 `docs/superpowers/specs/2026-11-02-external-agent-api-design.md` + `change_requests/CR-2026-11-02_external_agent_api.md`；10-25 brainstorm 已标记被取代；§11.8 E 项已更新；待用户批准 D1–D6 与 commit |
 | 2026-11-02 | §11.8 补 F 节扩展 backlog（32 项远期/挂起任务汇总） | done | Kimi | `cc1ae20` 已 commit/push；`check-progress-docs.sh` 通过 |
+| 2026-11-02 | E 项第四入口 M0 设计（读档 + 对齐 + brainstorm + 设计文档/CR） | done | Kimi | `6f82567` 已 commit/push；设计文档 + CR + 10-25 brainstorm 取代标记 |
+| 2026-11-02 | 压测文档追加「每个全期 job 耗时分布」监视要求（用户追加） | in_progress | Kimi | 已写入 `27_STRESS_TEST_2026-11-02.md` §2（min/median/p95/max + 排队时长 + 最慢 5 个 job）；待子代理在 item1–item3 小节落地数值 |
+| 2026-11-02 | E 项 M1：api_tokens + capabilities + openapi + schema/strategy（特性开关默认关） | in_progress | Kimi | 代码已部署 ECS（MainPID 603714，回滚 `/tmp/qre-deploy-20261101T182548Z.bak`；`api_tokens` 表 + jobs 三列已 apply 并授权）；flag 关时全路由 404 已验证；新测试 23 例、全量 3322 passed + 34 skipped；**待用户验收后 commit** |
 
 ---
 

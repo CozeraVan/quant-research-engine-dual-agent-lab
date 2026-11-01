@@ -79,7 +79,18 @@
 
 ## 8. 状态
 
-- M0 设计：**已完成，待批准**。
-- M1–M6：**未启动**（无代码、无部署、无上线）。
+- M0 设计：**已完成并 commit/push**（`6f82567`），待用户批准 D1–D6 与 M1 启动。
+- M1 令牌与能力信封：**代码已完成并部署 ECS**（2026-11-02，MainPID 603714；
+  回滚副本 `/tmp/qre-deploy-20261101T182548Z.bak`）。
+  - 新增 `gui/saas/agent_api.py`：`api_tokens` 签发/列举/吊销（会话鉴权）、
+    `capabilities` 成本信封、`openapi.json`、`schema/strategy`（JSON Schema）；
+    M2–M5 端点在 openapi 中以 `x-status: planned` 标注。
+  - `cloud_schema.sql`：`api_tokens` 表 + `jobs` 增 `token_id` / `research_run_id` / `labels`；
+    ECS 已 apply 且 `aguhuice` 授权核实（SELECT/INSERT 通过）。
+  - 特性开关 `QRE_AGENT_API_ENABLED` **默认关**：生产全路由 404 已验证（inert）。
+  - R-ADMIN-001：9090 总览新增「外部 Agent API」卡（开关/默认限额/令牌清点，限额读执行常量）。
+  - 测试：新 `tests/test_saas_agent_api.py` 23 例；**全量 3322 passed + 34 skipped**（零回归）。
+  - **待用户验收后 commit/push**（R-DEPLOY-001：先部署再提交）。
+- M2–M6：**未启动**（无代码）。
 - 长期记录：`14_LAUNCH_ROADMAP.md` §11.8 E 项已更新为「M0 设计定稿待批准」；
   任务已登记 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。

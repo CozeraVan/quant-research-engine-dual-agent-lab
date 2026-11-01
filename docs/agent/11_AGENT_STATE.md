@@ -22,7 +22,25 @@ This file is the source of truth for single-agent workflow recovery.
 
 `gui/risk_report.py::generate_risk_report` 默认传入 `include_volatility_series=True`、`volatility_series_max_points=500`。前端已有序列即画 EWMA/GARCH 曲线。实测增量约 +10KB/report。**ECS 已部署**：MainPID 602680，`/static/vol-regime.js`、`/saas/jobs/76` 均 200。**worker 未重启**，新回测需 worker 重启后才真正产出序列。
 
-### 2026-11-02 §11.8 增补 F 节「扩展 backlog」（todolist 补全，未 commit）
+### 2026-11-02 E 项 M1：外部 Agent API 令牌与能力信封（已部署 ECS，待用户验收后 commit）
+
+第四入口第一阶段落地，特性开关 `QRE_AGENT_API_ENABLED` **默认关**（关时 `/api/agent/v1/*` 全 404，生产 inert）。
+
+- 新增 `gui/saas/agent_api.py`：访问令牌签发/列举/吊销（会话鉴权，明文只回一次、库内只存加盐 hash）、
+  `capabilities` 成本信封（4 档 scale_profiles + agent_defaults，数值待压测校准）、
+  `openapi.json`（M2–M5 端点标 `x-status: planned`）、`schema/strategy`（StrategySpec JSON Schema，
+  含 execution/frequency 等「StrategySpec 容忍但不消费」的透传节）。
+- `cloud_schema.sql`：`api_tokens` 表 + `jobs` 增 `token_id`/`research_run_id`/`labels`；ECS 已 apply，
+  `aguhuice` 授权核实（SELECT/INSERT 均通过）。
+- R-ADMIN-001：9090 总览新增「外部 Agent API」卡（开关/默认限额/令牌清点，限额读执行常量）。
+- 测试：新 `tests/test_saas_agent_api.py` 23 例（开关、令牌三态、scope 收窄、成本信封口径、
+  openapi/schema 合同、控制台可见性）；**全量 3322 passed + 34 skipped**（零回归）。
+- 部署：`deploy/saas/deploy-ecs.sh` 四文件 → MainPID **603714**，回滚副本
+  `/tmp/qre-deploy-20261101T182548Z.bak`；生产验证 flag 关时 4 个路由 404、既有四页 200、
+  console overview 匿名 401。未重启 worker、未跑真实回测。
+- **待办**：用户验收后 commit/push；成本信封数值待 11-02 压测结果校准。
+
+### 2026-11-02 §11.8 增补 F 节「扩展 backlog」（todolist 补全，已 commit）
 
 用户质疑「挂起任务为什么又不见了」。根因：§11.8 的 A–E 只覆盖公测阶段主线，而 §7 挂起/远期清单（10 项）、§8 N1–N4、§11.4 扩容、§11.7 上云，以及 19/20/21/22 专项文档里的远期条目从未并入，形成第二份漂移清单。已在 §11.8 新增 **F 节**（F.1 研究与因子 6 项 / F.2 引擎与工程 9 项 / F.3 数据与运维遗留 9 项 / F.4 游戏 2 项 / F.5 变现与产品 6 项，共 32 项），并写入来源指针与「状态变更只改本节」的防漂移规则；`11_AGENT_STATE.md` 顶部同步加了一条 TodoList 权威提醒。**纯文档改动，无需 ECS**；`check-progress-docs.sh` 待跑。
 

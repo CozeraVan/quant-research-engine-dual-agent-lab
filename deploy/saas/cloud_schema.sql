@@ -426,4 +426,41 @@ INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days, max_fact
     ('paid',   0, 0, 0, 20, 3)
 ON CONFLICT (tier) DO NOTHING;
 
+-- AGENT-API M1（2026-11-02）：第四入口外部 AI Agent 访问令牌。
+-- 设计文档 docs/superpowers/specs/2026-11-02-external-agent-api-design.md §6。
+-- 明文 token 只在创建响应返回一次；库内只存 sha256("apitok:"+token+salt)，不明文、不存前缀以外的片段。
+-- revoke/过期即时失效；scopes 为空数组按「无任何权限」处理（不默认放行）。
+-- 该表的存在不等于接口开放：接口仍受 QRE_AGENT_API_ENABLED 开关控制（默认关）。
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id                BIGSERIAL PRIMARY KEY,
+    user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name              TEXT NOT NULL,
+    prefix            TEXT NOT NULL,                  -- 展示用前 12 位，便于人工辨认
+    token_hash        TEXT NOT NULL UNIQUE,           -- sha256("apitok:"+token+salt)
+    scopes            TEXT[] NOT NULL DEFAULT ARRAY['jobs:submit','jobs:read','results:read','factors:read'],
+    allow_full_market BOOL NOT NULL DEFAULT false,    -- 能力开关；授予后仍受会话预算约束
+    daily_submit_limit INT NOT NULL DEFAULT 50,
+    in_flight_limit    INT NOT NULL DEFAULT 5,
+    rate_per_minute    INT NOT NULL DEFAULT 60,
+    nightly_only       BOOL NOT NULL DEFAULT true,
+    expires_at        TIMESTAMPTZ,                    -- NULL=永久
+    revoked_at        TIMESTAMPTZ,                    -- 撤销后立即失效
+    last_used_at      TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens (user_id, created_at DESC);
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON api_tokens TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE api_tokens_id_seq TO aguhuice;
+    END IF;
+END $$;
+
+-- AGENT-API M1：jobs 增加令牌/研究会话/自定义标签三列（可空，旧行不受影响）。
+-- labels 由外部 agent 自定义，QRE 只存不解释（设计文档 §4.3/§6）。
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS token_id BIGINT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS research_run_id BIGINT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS labels JSONB;
+
 COMMIT;

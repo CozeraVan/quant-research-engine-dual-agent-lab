@@ -1062,6 +1062,68 @@ def _touch_worker(conn: Any, worker_id: str) -> None:
     )
 
 
+def _agent_api_console_view(app, engine) -> dict[str, Any]:
+    """9090 管理台「外部 Agent API」卡数据（AGENT-API M1 + R-ADMIN-001）。
+
+    限额读执行侧默认常量，令牌行只回前缀与限额；表不存在时降级为空清点，
+    不让管理台整体报错。令牌明文与散列值一律不回。
+    """
+    from quant_research_engine.gui.saas import agent_api as _agent
+
+    view: dict[str, Any] = {
+        "enabled": str(_cfg(app, "QRE_AGENT_API_ENABLED", "0") or "0") == "1",
+        "defaults": _agent.AGENT_DEFAULTS,
+        "tokens_total": 0,
+        "tokens_active": 0,
+        "tokens": [],
+    }
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'api_tokens'")
+            ).first() is not None
+            if not exists:
+                return view
+            counts = conn.execute(
+                text(
+                    "SELECT count(*) AS total, "
+                    "count(*) FILTER (WHERE revoked_at IS NULL "
+                    "  AND (expires_at IS NULL OR expires_at > now())) AS active "
+                    "FROM api_tokens"
+                )
+            ).mappings().one()
+            rows = conn.execute(
+                text(
+                    "SELECT id, name, prefix, scopes, allow_full_market, daily_submit_limit, "
+                    "in_flight_limit, expires_at, revoked_at, last_used_at, created_at "
+                    "FROM api_tokens ORDER BY created_at DESC LIMIT 50"
+                )
+            ).mappings().all()
+    except SQLAlchemyError:
+        return view  # 管理台清点失败不阻断总览其余部分
+    view["tokens_total"] = int(counts["total"] or 0)
+    view["tokens_active"] = int(counts["active"] or 0)
+    view["tokens"] = [
+        {
+            "id": r["id"],
+            "name": r["name"],
+            "prefix": r["prefix"],
+            "scopes": list(r["scopes"] or []),
+            "allow_full_market": r["allow_full_market"],
+            "daily_submit_limit": r["daily_submit_limit"],
+            "in_flight_limit": r["in_flight_limit"],
+            "expires_at": r["expires_at"].isoformat() if r["expires_at"] else None,
+            "revoked_at": r["revoked_at"].isoformat() if r["revoked_at"] else None,
+            "last_used_at": r["last_used_at"].isoformat() if r["last_used_at"] else None,
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in rows
+    ]
+    return view
+
+
 def create_saas_app() -> Flask:
     app = Flask(
         __name__,
@@ -4325,7 +4387,11 @@ def create_saas_app() -> Flask:
                             "rate_limit_hits": int(nl_rate["hits"]),
                             "cache_entries": int(nl_cache["entries"]),
                             "cache_hits": int(nl_cache["hits"]),
-                        }})
+                        },
+                        # AGENT-API M1 + R-ADMIN-001：外部 Agent API 开关/默认限额/令牌清点。
+                        # 限额读执行侧默认常量（agent_api.AGENT_DEFAULTS），不另写一套数字；
+                        # 令牌行只回前缀与限额，不明文、不散列值。
+                        "agent_api": _agent_api_console_view(app, engine)})
 
     @app.get("/api/saas/console/users")
     def api_console_users() -> Any:
@@ -4855,6 +4921,13 @@ def create_saas_app() -> Flask:
                 {"id": job_id},
             )
         return jsonify({"ok": True, "job_id": job_id, "status": row["status"], "cancel_requested": True})
+
+    # 第四入口外部 AI Agent API（AGENT-API M1）：特性开关默认关，关闭时蓝图内
+    # 所有路由 404，生产在用户验收前保持 inert。设计文档见
+    # docs/superpowers/specs/2026-11-02-external-agent-api-design.md。
+    from quant_research_engine.gui.saas.agent_api import register_agent_api
+
+    register_agent_api(app)
 
     return app
 

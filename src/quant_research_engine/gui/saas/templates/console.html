@@ -61,6 +61,10 @@
         <div class="metric-strip" id="ov-nl"></div>
       </div>
       <div class="card">
+        <h2>外部 Agent API <button type="button" class="tip-trigger" data-tip="第四入口（供用户自带的外部 AI Agent 调用）的开关、默认限额与访问令牌清点。接口未启用时全部路由返回 404；启用后每个令牌仍受每日提交数、在飞任务数、每分钟请求数约束，且默认只在夜间窗口被认领，避免挤占真人时段。令牌不明文存储，吊销后立即失效。" aria-label="外部Agent说明">?</button></h2>
+        <div class="metric-strip" id="ov-agent"></div>
+      </div>
+      <div class="card">
         <h2>Worker 资源 <button type="button" class="tip-trigger" data-tip="展示槽位占用和内存水位；心跳在 60 秒内视为在线。" aria-label="Worker资源说明">?</button></h2>
         <div id="ov-worker-res" class="muted">加载中…</div>
       </div>
@@ -291,6 +295,7 @@
         metric('Worker 在线', w.online + ' / ' + w.total, '在线 / 已接入总数') +
         metric('待审因子', d.pending_factor_requests);
       renderNlCompile(d.nl || {});
+      renderAgentApi(d.agent_api || {});
       var sv = d.server || {};
       var disk = sv.disk ? ('产物盘 ' + (sv.disk.used / 1073741824).toFixed(1) + ' / ' + (sv.disk.total / 1073741824).toFixed(1) + ' GB') : '不可用';
       var load = sv.loadavg ? sv.loadavg.join(' / ') : '不可用';
@@ -313,6 +318,40 @@
       metric('缓存条目', num(nl.cache_entries), '只缓存编译成功的结果；命中不调用大模型也不占配额') +
       metric('缓存累计命中', num(nl.cache_hits), '所有缓存条目的累计命中次数') +
       metric('限流计数', num(nl.rate_limit_rows) + ' 行 / ' + num(nl.rate_limit_hits) + ' 次', '当前各窗口内的计数行与累计编译次数');
+  }
+
+  // --- AGENT-API M1 + R-ADMIN-001：外部 Agent API 开关/默认限额/令牌清点 ---
+  // 限额直接读执行侧默认常量（agent_api.AGENT_DEFAULTS），不在此处另写一套数字。
+  function renderAgentApi(ag){
+    var el = document.getElementById('ov-agent');
+    if (!el) return;
+    function num(v){ return (v === null || v === undefined) ? '—' : v; }
+    if (!ag || !ag.tokens_total && ag.tokens_total !== 0) {
+      el.innerHTML = '<span class="muted">外部 Agent API 数据不可用</span>';
+      return;
+    }
+    var rows = (ag.tokens || []).map(function(t){
+      var state = t.revoked_at ? '已吊销' : (t.expires_at && new Date(t.expires_at) < new Date() ? '已过期' : '有效');
+      return '<tr><td>' + esc(t.name || '—') + '</td><td><code>' + esc(t.prefix || '—') + '</code></td>'
+        + '<td>' + esc((t.scopes || []).join(', ')) + '</td>'
+        + '<td>' + esc(state) + '</td>'
+        + '<td>' + num(t.daily_submit_limit) + '</td><td>' + num(t.in_flight_limit) + '</td>'
+        + '<td>' + (t.allow_full_market ? '允许' : '禁止') + '</td>'
+        + '<td>' + esc(t.last_used_at ? t.last_used_at.replace('T', ' ').slice(0, 19) : '从未使用') + '</td></tr>';
+    }).join('');
+    el.innerHTML =
+      metric('接口开关', ag.enabled ? '已启用' : '未启用（路由 404）', '由 QRE_AGENT_API_ENABLED 控制；未启用时所有 /api/agent/v1/* 返回 404') +
+      metric('令牌总数', num(ag.tokens_total), '含已吊销与已过期') +
+      metric('有效令牌', num(ag.tokens_active), '未吊销且未过期') +
+      metric('默认每日提交上限', num((ag.defaults || {}).daily_submit_limit) + ' 次', '按令牌计数，超限 429') +
+      metric('默认在飞上限', num((ag.defaults || {}).in_flight_limit), '同时在队的任务数上限，超限 429') +
+      metric('默认每分钟请求', num((ag.defaults || {}).rate_per_minute) + ' 次', '超限 429 并带 Retry-After') +
+      metric('夜间窗口认领', (ag.defaults || {}).nightly_only ? '是（' + esc((ag.defaults || {}).nightly_window || '') + '）' : '否', '默认只在夜间窗口被认领，避免挤占真人时段') +
+      metric('全市场权限', (ag.defaults || {}).allow_full_market ? '默认允许' : '默认禁止', '授予后仍受研究会话预算约束；抽样粗筛→短名单全量两阶段强制') +
+      (rows ? '<table class="tbl"><thead><tr><th>名称</th><th>前缀</th><th>Scopes</th><th>状态</th>'
+        + '<th class="num">日提交</th><th class="num">在飞</th><th>全市场</th><th>最近使用</th></tr></thead>'
+        + '<tbody>' + rows + '</tbody></table>'
+        : '<span class="muted">尚未签发任何访问令牌</span>');
   }
 
   // --- QRE-SAAS-PUBLIC-BETA-OPS：公测运营指标（窗口切换 + 权威库聚合） ---
