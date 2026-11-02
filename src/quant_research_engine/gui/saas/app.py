@@ -1983,6 +1983,12 @@ def create_saas_app() -> Flask:
 
     @app.delete("/api/saas/strategies/<int:strategy_id>/watch")
     def api_strategy_watch_delete(strategy_id: int) -> Any:
+        """关闭并删除监控：实际为**停用**（enabled=false），保留历史信号。
+
+        不能直接 DELETE：signal_events.watch_id 有外键，物理删除会 500
+        （实测 /api/saas/strategies/20/watch）。停用后扫描自然停止，
+        历史信号仍可查；之后删除策略不再受监控外键阻挡。
+        """
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
         if uid is None:
@@ -1990,12 +1996,13 @@ def create_saas_app() -> Flask:
         _ensure_signal_tables(engine)
         with engine.begin() as conn:
             row = conn.execute(
-                text("DELETE FROM strategy_watches WHERE strategy_id = :sid AND user_id = :uid RETURNING id"),
+                text("UPDATE strategy_watches SET enabled = false, updated_at = now() "
+                     "WHERE strategy_id = :sid AND user_id = :uid RETURNING id"),
                 {"sid": strategy_id, "uid": uid},
             ).first()
         if row is None:
             return jsonify({"ok": False, "error": "监控不存在"}), 404
-        return jsonify({"ok": True, "deleted": row.id})
+        return jsonify({"ok": True, "deleted": row.id, "disabled": True})
 
     @app.get("/api/saas/signals")
     def api_signals_list() -> Any:
@@ -2203,22 +2210,28 @@ def create_saas_app() -> Flask:
         if uid is None:
             return jsonify({"ok": False, "error": "未登录"}), 401
         with engine.begin() as conn:
-            # 正在监控的策略不能直接删：strategy_watches 外键会让 DELETE 变成 500
-            # （实测 /api/saas/strategies/20 即此错）。先给可读 409，引导先关监控。
-            watches = conn.execute(
-                text("SELECT count(*) FROM strategy_watches WHERE strategy_id = :id"),
-                {"id": strategy_id},
-            ).scalar_one()
-            if watches:
-                return jsonify({
-                    "ok": False,
-                    "error": "该策略正在监控中，请先在策略详情页「关闭并删除监控」后再删除策略",
-                }), 409
             used = conn.execute(
                 text("SELECT count(*) FROM jobs WHERE strategy_id = :id"), {"id": strategy_id}
             ).scalar_one()
             if used:
                 return jsonify({"ok": False, "error": f"该策略已关联 {used} 条回测记录，为保证历史可溯不允许删除；可重命名或另存新版本"}), 409
+            # 有监控的策略：signal_events.watch_id 与 strategy_watches.strategy_id
+            # 两条外键会挡住直接 DELETE（实测 strategy 20 的 500）。
+            # 在同一事务里先清信号，再清监控，最后删策略；只影响监控历史，
+            # 回测 jobs 仍按上面的「有回测不允许删」处理。
+            watch_ids = [r[0] for r in conn.execute(
+                text("SELECT id FROM strategy_watches WHERE strategy_id = :id AND user_id = :uid"),
+                {"id": strategy_id, "uid": uid},
+            ).all()]
+            for watch_id in watch_ids:
+                conn.execute(
+                    text("DELETE FROM signal_events WHERE watch_id = :wid"),
+                    {"wid": watch_id},
+                )
+            conn.execute(
+                text("DELETE FROM strategy_watches WHERE strategy_id = :id AND user_id = :uid"),
+                {"id": strategy_id, "uid": uid},
+            )
             row = conn.execute(
                 text("DELETE FROM strategies WHERE id = :id AND user_id = :uid RETURNING id"),
                 {"id": strategy_id, "uid": uid},

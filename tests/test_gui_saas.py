@@ -668,8 +668,64 @@ class TestResultsApi:
         d400 = client.get(f"/api/results/{job_id}/symbols/999999.XH", headers=h)
         assert d400.status_code == 400
 
-    def test_delete_strategy_with_watch_returns_409(self, client, app):
-        """正在监控的策略删除必须给可读 409，而不是外键 500（实测策略 20 的 bug）。"""
+    def test_delete_strategy_with_watch_cascades(self, client, app):
+        """有监控的策略：同事务清信号→清监控→删策略，不能外键 500。"""
+        from sqlalchemy import text
+
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            uid = conn.execute(
+                text("INSERT INTO users (id, phone) VALUES (1, '13800000001') RETURNING id")).scalar_one()
+            sid = conn.execute(
+                text("INSERT INTO strategies (user_id, name, yaml) "
+                     "VALUES (1, 'watched', 'signal: x') RETURNING id")).scalar_one()
+            wid = conn.execute(
+                text("INSERT INTO strategy_watches (strategy_id, user_id) VALUES (:s, 1) RETURNING id"),
+                {"s": sid}).scalar_one()
+            conn.execute(
+                text("INSERT INTO signal_events (watch_id, trade_date, ts_code, signal_type) "
+                     "VALUES (:w, '2026-01-05', '000001.SZ', 'entry')"), {"w": wid})
+        resp = client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"})
+        assert resp.status_code == 200
+        assert resp.get_json()["deleted"] == sid
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM strategies WHERE id = :s"), {"s": sid}).scalar_one() == 0
+            assert conn.execute(text("SELECT count(*) FROM strategy_watches WHERE id = :w"), {"w": wid}).scalar_one() == 0
+            assert conn.execute(text("SELECT count(*) FROM signal_events WHERE watch_id = :w"), {"w": wid}).scalar_one() == 0
+
+    def test_watch_delete_disables_instead_of_delete(self, client, app):
+        """关闭并删除监控必须停用 enabled=false，保留历史信号，不能外键 500。"""
+        from sqlalchemy import text
+
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            uid = conn.execute(
+                text("INSERT INTO users (id, phone) VALUES (1, '13800000001') RETURNING id")).scalar_one()
+            sid = conn.execute(
+                text("INSERT INTO strategies (user_id, name, yaml) "
+                     "VALUES (1, 'watched', 'signal: x') RETURNING id")).scalar_one()
+            wid = conn.execute(
+                text("INSERT INTO strategy_watches (strategy_id, user_id) VALUES (:s, 1) RETURNING id"),
+                {"s": sid}).scalar_one()
+            conn.execute(
+                text("INSERT INTO signal_events (watch_id, trade_date, ts_code, signal_type) "
+                     "VALUES (:w, '2026-01-05', '000001.SZ', 'entry')"), {"w": wid})
+        resp = client.delete(f"/api/saas/strategies/{sid}/watch", headers={"X-User-Id": "1"})
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["ok"] is True and body["disabled"] is True
+        with engine.connect() as conn:
+            enabled = conn.execute(
+                text("SELECT enabled FROM strategy_watches WHERE id = :w"), {"w": wid}
+            ).scalar_one()
+            assert enabled is False
+            # 历史信号仍保留
+            assert conn.execute(
+                text("SELECT count(*) FROM signal_events WHERE watch_id = :w"), {"w": wid}
+            ).scalar_one() == 1
+
+    def test_delete_strategy_after_watch_disabled_succeeds(self, client, app):
+        """监控停用后，策略可以删除（不再被 enabled=false 的监控行挡住）。"""
         from sqlalchemy import text
 
         engine = app.extensions["saas_engine"]
@@ -680,14 +736,11 @@ class TestResultsApi:
                 text("INSERT INTO strategies (user_id, name, yaml) "
                      "VALUES (1, 'watched', 'signal: x') RETURNING id")).scalar_one()
             conn.execute(
-                text("INSERT INTO strategy_watches (strategy_id, user_id) VALUES (:s, 1)"),
-                {"s": sid})
+                text("INSERT INTO strategy_watches (strategy_id, user_id, enabled) "
+                     "VALUES (:s, 1, false)"), {"s": sid})
         resp = client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"})
-        assert resp.status_code == 409
-        assert "关闭并删除监控" in resp.get_json()["error"]
-        # 监控未删除前，策略仍在
-        with engine.connect() as conn:
-            assert conn.execute(text("SELECT 1 FROM strategies WHERE id = :s"), {"s": sid}).first()
+        assert resp.status_code == 200
+        assert resp.get_json()["deleted"] == sid
 
     def test_delete_strategy_without_watch_succeeds(self, client, app):
         from sqlalchemy import text

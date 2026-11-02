@@ -125,9 +125,12 @@ class TestWatchCrud:
         det = client.get(f"/api/saas/strategies/{sid}/detail", headers=headers).get_json()
         assert det["watch"]["scope_payload"]["codes"] == ["300750"]
         d = client.delete(f"/api/saas/strategies/{sid}/watch", headers=headers).get_json()
-        assert d["ok"]
-        assert client.delete(f"/api/saas/strategies/{sid}/watch",
-                             headers=headers).status_code == 404
+        assert d["ok"] and d["disabled"] is True
+        # 现在是「停用监控」而非物理删除：重复调用幂等返回 200，监控行仍保留（历史可查）
+        again = client.delete(f"/api/saas/strategies/{sid}/watch", headers=headers)
+        assert again.status_code == 200
+        det2 = client.get(f"/api/saas/strategies/{sid}/detail", headers=headers).get_json()
+        assert det2["watch"]["enabled"] is False
 
     def test_guest_401_and_other_user_404(self, client, app):
         _user(app)

@@ -50,6 +50,21 @@ This file is the source of truth for single-agent workflow recovery.
 全量 3441 passed（部署前）；已部署 ECS（MainPID 615173，回滚
 `/tmp/qre-deploy-20261102T034650Z.bak`）。
 
+### 2026-11-03 监控关闭改为停用 + 策略删除同事务清理监控（外键链修复）
+
+用户继续反馈「策略库详情中关闭并删除监控仍无效果」。生产日志确认第二条外键：
+`DELETE /api/saas/strategies/20/watch` 触发 `signal_events_watch_id_fkey` → 500。
+完整修复分两步：
+1. `api_strategy_watch_delete` 改为**停用**（`enabled=false`），保留历史信号，不再物理删除监控；
+2. `api_strategy_delete` 改为**同一事务**先删 `signal_events` → 删 `strategy_watches` → 删策略，
+   这样无论监控是否停用，策略都能正常删除，不再被两条外键打成 500。
+有回测 jobs 的策略仍按原规则 409（保历史可溯）。
+新增/更新回归：监控停用保留信号、策略级联删除、停用后可删策略、watch CRUD 幂等。
+全量 **3443 passed, 34 skipped**；已部署 ECS（MainPID 615833，回滚
+`/tmp/qre-deploy-20261102T040105Z.bak`）。
+生产验证：策略 20 的 `DELETE /watch` 返回 disabled=true，`DELETE /strategies/20` 返回 200，
+策略/监控/信号均已按事务清理。临时测试会话与用户已清理。
+
 ### 2026-11-03 修复「正在监控的策略删除 500」
 
 用户账户 17157845743 的策略 20 正在被监控（`strategy_watches` 有行）。
