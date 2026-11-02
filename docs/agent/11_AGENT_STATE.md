@@ -38,6 +38,18 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 下载详情按钮改为「当前页加载详情」（不下载源文件）
+
+用户要求：点击下载详情后，应在原页面加载 K 线等详情，而不是下载 gzip 源文件。
+已将 symbol.html 的 `#btn-download` 从 `<a href=... download>` 改为 JS 按钮：
+调用既有 `/generate` 流程（已存在则 ready，未生成则创建 symbol_detail 任务并轮询），
+随后由原 `load()` 渲染 K 线/买卖点/因子/收益曲线。
+真实浏览器验证：点击后**无下载事件、无 JS 错误**，详情正常渲染。
+`/api/results/<job>/symbols/<code>/download` 原始 gzip 接口仍保留，供需要源文件的场景使用。
+注意模板行数约束：`symbol.html` 现 2349 行（≤2350 的 LWC 死代码闸），新增 JS 已压缩到闸内。
+全量 3441 passed（部署前）；已部署 ECS（MainPID 615173，回滚
+`/tmp/qre-deploy-20261102T034650Z.bak`）。
+
 ### 2026-11-03 修复「正在监控的策略删除 500」
 
 用户账户 17157845743 的策略 20 正在被监控（`strategy_watches` 有行）。

@@ -741,7 +741,8 @@ class TestResultsApi:
 
         html = Path("src/quant_research_engine/gui/saas/templates/symbol.html").read_text(encoding="utf-8")
         assert 'id="btn-download"' in html
-        assert "/download" in html
+        assert "addEventListener('click'" in html
+        assert "/generate" in html  # 点击后在原页加载详情，不下载源文件
 
     def test_risk_analysis_histogram_from_chart_cumret(self, client, app, tmp_path):
         """SaaS FRM：有 risk_report 时，日收益直方图从 chart_data.cumret 还原。

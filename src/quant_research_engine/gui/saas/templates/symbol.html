@@ -41,7 +41,7 @@
 <div class="wrap">
   <div class="page-head" style="margin-bottom:28px">
     <h1 style="font-size:24px" id="sym-title">个股回测详情 <span class="opt">@ 任务 #{{ job_id }}</span></h1>
-    <p style="font-size:15px;margin-top:12px"><a class="inl" href="/saas/jobs/{{ job_id }}/symbols{{ share_qs }}">← 个股明细列表</a>　<a class="inl" href="/saas/jobs/{{ job_id }}{{ share_qs }}">回测结果</a>　<a class="btn-sm" id="btn-download" data-tip="下载该股回测详情原始数据（gzip JSON，含K线、买卖点、因子、收益曲线与交易磨损）" href="/api/results/{{ job_id }}/symbols/{{ ts_code }}/download{{ share_qs }}" download>下载详情</a>　<span class="opt" id="sym-note"></span></p>
+    <p style="font-size:15px;margin-top:12px"><a class="inl" href="/saas/jobs/{{ job_id }}/symbols{{ share_qs }}">← 个股明细列表</a>　<a class="inl" href="/saas/jobs/{{ job_id }}{{ share_qs }}">回测结果</a>　<button type="button" class="btn-sm" id="btn-download" data-tip="在当前页面加载该股回测详情（K线、买卖点、因子、收益曲线与交易磨损）；未生成时先按需生成">下载详情</button>　<span class="opt" id="sym-note"></span></p>
   </div>
   <div class="metric-strip" id="sum-strip"></div>
 
@@ -2309,6 +2309,41 @@ function mountKlineReplay(d){
     onFrame: (cursor) => { infoFrame(cursor); klineSetInfo(klineInfoHTML(d, plan, cursor)); },
   });
 }
+document.getElementById('btn-download').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-download');
+  clearSymbolPollTimer();
+  abortSymbolPoll();
+  abortSymbolGenerate();
+  abortSymbolLoad();
+  btn.disabled = true;
+  btn.textContent = '加载中…';
+  const controller = new AbortController();
+  try {
+    const result = await symbolRequestJsonWithTimeout(
+      `/api/results/${JOB_ID}/symbols/${encodeURIComponent(TS_CODE)}/generate`,
+      {method: 'POST', redirectOn401: false}, controller, async r => {
+        if (r.status === 401 || r.status === 404) return {r, access: true};
+        return {r, data: await r.json()};
+      });
+    if (result.access){ showSymbolAccess(); return; }
+    const r = result.r, g = result.data;
+    if (!r.ok || !g.ok){
+      showGenerate('加载失败' + (g.error ? '：' + g.error : '，请重试'));
+      return;
+    }
+    if (g.status === 'ready'){ await load(); return; }
+    if (!SYMBOL_ACTIVE.has(g.status)){
+      showGenerate('加载失败' + (g.error ? '：' + g.error : '，请重试'));
+      return;
+    }
+    await pollGen();  // 生成完成后由既有流程自动重载详情
+  } catch (error) {
+    showGenerate('加载失败，请重试');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '下载详情';
+  }
+});
 load();
 </script>
 {% endblock %}
