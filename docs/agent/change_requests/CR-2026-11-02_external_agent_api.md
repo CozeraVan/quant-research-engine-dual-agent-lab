@@ -117,6 +117,22 @@
     可在签发时设置，越界收敛到上限；列举接口同样回显。
   - R-ADMIN-001：9090「外部 Agent API」卡新增限流计数、审计事件、夜间窗口状态与待认领数。
   - 测试：新 10 例；**全量 3364 passed + 34 skipped**（零回归）。
-- M5–M6：**未启动**。
+- M6 真实外部 agent 端到端验收：**本地通过**（2026-11-03）。
+  - 隔离环境：临时库 `qre_agent_m6_*`（已删）+ `SAAS_UPLOAD_DIR=.tmp/agent-m6/uploads`（已删）
+    + 18077 端口 + `QRE_AGENT_API_ENABLED=1` + 临时 `qre worker --once` 循环（已停）。
+  - 验收脚本（可复跑）：`scripts/agent_api/m6_acceptance_client.py`，
+    证据：`scripts/agent_api/m6_acceptance_evidence_2026-11-02.log`。
+  - 结果：26 项断言全绿——发现（capabilities/openapi/schema）→ validate（不执行不计配额）
+    → 建会话（预算收敛）→ screen 扫描（3 配置展开 + 幂等去重）→ 3/3 job 真实回测完成
+    → aggregate（只回数字）→ 读结果（默认不含 chart_data）→ chart-data 按需 →
+    artifacts 穿越被拒 → 会话用量记账 → conclusion 原样存储。
+  - 实测用量：3 job / 259.5s 墙上时间 / 6,345,568 字节产物。
+  - **M6 暴露的两个问题**：① dev 后门用户不存在导致签发 500（已修 `290a8c2` +
+    回归用例）；② `validate` **不校验因子是否真实存在**（设计文档 §4.2 原要求「因子存在性」），
+    因子写错要等 worker 执行才报 `data_missing`——已列为 M7 候选。
+- **生产开关已打开**（2026-11-03，用户批准）：ECS `/etc/qre-saas.env` 追加
+  `QRE_AGENT_API_ENABLED=1`，备份 `/etc/qre-saas.env.bak-20261102T013344Z`，
+  MainPID 609646。复验：6 个 agent 路由无 token 全 401、假 token 401、既有五页 200、
+  `/api/saas/factors` 200、console 匿名 401。**回滚**：删该行并 `systemctl restart qre-saas`。
 - 长期记录：`14_LAUNCH_ROADMAP.md` §11.8 E 项已更新为「M0 设计定稿待批准」；
   任务已登记 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。

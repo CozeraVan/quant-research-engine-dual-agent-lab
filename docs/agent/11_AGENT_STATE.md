@@ -51,6 +51,19 @@ This file is the source of truth for single-agent workflow recovery.
    已记为 M7 候选：validate 增加因子存在性预检（设计文档 §4.2 原本就要求「因子存在性」）。
 3. 幂等键在同一库内跨运行复用会被去重——验收脚本改用每次运行唯一的 key（脚本问题）。
 
+### 2026-11-03 M6 验收通过 + 生产开关已打开（用户批准）
+
+- 本地隔离环境端到端验收 **26 项断言全绿**（3/3 job 真实回测完成，259.5s / 6.3MB 产物）；
+  可复跑脚本 `scripts/agent_api/m6_acceptance_client.py`，证据
+  `scripts/agent_api/m6_acceptance_evidence_2026-11-02.log`；隔离库与上传目录已删。
+- **ECS 已开 `QRE_AGENT_API_ENABLED=1`**（`/etc/qre-saas.env`，备份
+  `/etc/qre-saas.env.bak-20261102T013344Z`，MainPID 609646）：6 路由无 token 全 401、
+  假 token 401、既有五页 200、console 匿名 401。回滚=删该行 + restart qre-saas。
+- 本地 worker 已重启（PID 430787），P2-14 参数变体与 P0-9 worker 侧修复均已生效。
+- 全量回归 **3385 passed, 34 skipped**。
+- **M7 候选（M6 暴露）**：`validate` 增加因子存在性预检——当前因子表名写错要等 worker
+  执行才报 `data_missing`，外部 agent 无法在提交前发现（设计文档 §4.2 原就要求这项）。
+
 ### 2026-11-03 全量回归两处测试自身问题（已修，非产品缺陷）
 
 1. **第四入口 6 例时间依赖**：M4 默认 `nightly_only=true`，06:00 后跑全套件时 sweep 返回

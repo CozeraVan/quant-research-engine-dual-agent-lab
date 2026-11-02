@@ -391,6 +391,23 @@ bash scripts/git-finalize-check.sh
 confirm 短名单 → aggregate → 读结果 → 提交结论」全链路；在此之前需用户决定是否打开
 `QRE_AGENT_API_ENABLED`（当前生产默认关）。
 
+**M6 完成情况（2026-11-03，用户批准「现在做」）**：已通过并在生产打开开关。
+- 本地隔离环境（临时库 + 独立上传目录 + 18077 端口 + 临时 worker）跑通全链路，
+  **26 项断言全绿**：发现 → validate（不执行不计配额）→ 建会话（预算收敛）→ screen
+  扫描（3 配置展开 + 幂等去重）→ **3/3 job 真实回测完成** → aggregate（只回数字）→
+  读结果（默认不含 chart_data）→ chart-data 按需 → artifacts 穿越被拒 → 会话用量记账
+  （3 job / 259.5s / 6,345,568 字节）→ conclusion 原样存储。
+- 可复跑资产：`scripts/agent_api/m6_acceptance_client.py`（只走 HTTP + Bearer，不碰内部模块）
+  + `scripts/agent_api/m6_acceptance_evidence_2026-11-02.log`；隔离库与上传目录已删。
+- **生产开关已打开**：ECS `/etc/qre-saas.env` 追加 `QRE_AGENT_API_ENABLED=1`，
+  备份 `/etc/qre-saas.env.bak-20261102T013344Z`，MainPID 609646。
+  复验：6 个 agent 路由无 token 全 401、假 token 401、既有五页 200、`/api/saas/factors` 200、
+  console 匿名 401。**回滚**：删该行 + `sudo -n systemctl restart qre-saas`。
+- 本地 worker 已重启（PID 430787）：P2-14 参数变体与 P0-9 worker 侧修复生效。
+- 全量回归 **3385 passed, 34 skipped**。
+- **M7 候选（M6 暴露）**：`validate` 不校验因子是否真实存在——因子表名写错要等 worker
+  执行才报 `data_missing`，外部 agent 无法在提交前发现（设计文档 §4.2 原就要求「因子存在性」）。
+
 
 ---
 
