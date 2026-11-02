@@ -38,6 +38,16 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 个人策略库删除 UX 修正（有关联回测时不再「看似没反应」）
+
+用户报告「我的策略库删除确认后没效果」。实测：API 删除正常；浏览器中无关联回测可删，
+有关联回测时后端按设计返回 409 并弹提示。为消除「点了没反应」的困惑：
+- `job_count > 0` 的策略**直接禁用删除按钮**，悬停显示「已有 N 条回测记录，不允许删除，
+  可重命名或另存新版本」；
+- 删除失败时在 `#strat-error` 页面内显示后端原因（不再只依赖 alert）。
+新增 `tests/test_saas_records_ux.py` 2 例；全量 3439 passed。
+已部署 ECS（MainPID 613402，回滚 `/tmp/qre-deploy-20261102T032816Z.bak`）。
+
 ### 2026-11-03 NL 语义优化实施完成 + 个股详情下载按钮补回
 
 - **NL 语义优化（step5review 实施，主 Agent 验收部署）**：
