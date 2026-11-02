@@ -38,6 +38,18 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 修复「正在监控的策略删除 500」
+
+用户账户 17157845743 的策略 20 正在被监控（`strategy_watches` 有行）。
+生产日志确认：`DELETE /api/saas/strategies/20` 触发 `strategy_watches_strategy_id_fkey`
+外键冲突 → 500，前端因而「确认后没有任何变化」。
+
+修复：`api_strategy_delete` 在删除前先查 `strategy_watches`，若存在则返回**可读 409**
+「该策略正在监控中，请先在策略详情页『关闭并删除监控』后再删除策略」，不再让外键打成 500。
+无监控/无回测的策略删除行为不变。新增 2 例回归（有监控 409、无监控 200）。
+全量 **3441 passed, 34 skipped**；已部署 ECS（MainPID 614693，回滚
+`/tmp/qre-deploy-20261102T033956Z.bak`），生产 strategy 20 现在返回友好 409 而非 500。
+
 ### 2026-11-03 个人策略库删除 UX 修正（有关联回测时不再「看似没反应」）
 
 用户报告「我的策略库删除确认后没效果」。实测：API 删除正常；浏览器中无关联回测可删，

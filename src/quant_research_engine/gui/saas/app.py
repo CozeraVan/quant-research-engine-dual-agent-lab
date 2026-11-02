@@ -2203,6 +2203,17 @@ def create_saas_app() -> Flask:
         if uid is None:
             return jsonify({"ok": False, "error": "未登录"}), 401
         with engine.begin() as conn:
+            # 正在监控的策略不能直接删：strategy_watches 外键会让 DELETE 变成 500
+            # （实测 /api/saas/strategies/20 即此错）。先给可读 409，引导先关监控。
+            watches = conn.execute(
+                text("SELECT count(*) FROM strategy_watches WHERE strategy_id = :id"),
+                {"id": strategy_id},
+            ).scalar_one()
+            if watches:
+                return jsonify({
+                    "ok": False,
+                    "error": "该策略正在监控中，请先在策略详情页「关闭并删除监控」后再删除策略",
+                }), 409
             used = conn.execute(
                 text("SELECT count(*) FROM jobs WHERE strategy_id = :id"), {"id": strategy_id}
             ).scalar_one()

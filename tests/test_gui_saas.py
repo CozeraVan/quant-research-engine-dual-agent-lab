@@ -668,6 +668,41 @@ class TestResultsApi:
         d400 = client.get(f"/api/results/{job_id}/symbols/999999.XH", headers=h)
         assert d400.status_code == 400
 
+    def test_delete_strategy_with_watch_returns_409(self, client, app):
+        """正在监控的策略删除必须给可读 409，而不是外键 500（实测策略 20 的 bug）。"""
+        from sqlalchemy import text
+
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            uid = conn.execute(
+                text("INSERT INTO users (id, phone) VALUES (1, '13800000001') RETURNING id")).scalar_one()
+            sid = conn.execute(
+                text("INSERT INTO strategies (user_id, name, yaml) "
+                     "VALUES (1, 'watched', 'signal: x') RETURNING id")).scalar_one()
+            conn.execute(
+                text("INSERT INTO strategy_watches (strategy_id, user_id) VALUES (:s, 1)"),
+                {"s": sid})
+        resp = client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"})
+        assert resp.status_code == 409
+        assert "关闭并删除监控" in resp.get_json()["error"]
+        # 监控未删除前，策略仍在
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT 1 FROM strategies WHERE id = :s"), {"s": sid}).first()
+
+    def test_delete_strategy_without_watch_succeeds(self, client, app):
+        from sqlalchemy import text
+
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            uid = conn.execute(
+                text("INSERT INTO users (id, phone) VALUES (1, '13800000001') RETURNING id")).scalar_one()
+            sid = conn.execute(
+                text("INSERT INTO strategies (user_id, name, yaml) "
+                     "VALUES (1, 'unwatched', 'signal: x') RETURNING id")).scalar_one()
+        resp = client.delete(f"/api/saas/strategies/{sid}", headers={"X-User-Id": "1"})
+        assert resp.status_code == 200
+        assert resp.get_json()["deleted"] == sid
+
     def test_symbol_detail_download(self, client, app, tmp_path):
         """个股详情下载：产物存在时返回原始 gzip；缺失时 404 + can_generate。"""
         import gzip
