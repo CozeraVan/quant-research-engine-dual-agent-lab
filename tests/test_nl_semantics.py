@@ -425,3 +425,35 @@ def test_compiled_ema_cross_yaml_signals_once_on_synthetic_series():
     entry = evaluate_expression_signal(frame, parsed["signal"]["entry"])
     exit_ = evaluate_expression_signal(frame, parsed["signal"]["exit"])
     assert int(entry.sum()) == 1 and int(exit_.sum()) == 1
+
+
+# ---------------------------------------------------------------------------
+# render_cross_expression：Builder 编译器与 NL 共用的 canonical 渲染（2026-11-03）
+# ---------------------------------------------------------------------------
+
+def test_render_cross_expression_matches_canonical_template():
+    assert sem.render_cross_expression("above", "ema_5", "ema_200") == \
+        "(ema_5 > ema_200) and (ema_5.shift(1) <= ema_200.shift(1))"
+    assert sem.render_cross_expression("below", "ema_5", "ema_200") == \
+        "(ema_5 < ema_200) and (ema_5.shift(1) >= ema_200.shift(1))"
+
+
+def test_render_cross_expression_constant_operand_has_no_shift():
+    # 常量没有「上一周期」：shift 退化，与快速向导 JS 口径一致
+    assert sem.render_cross_expression("above", "macd_line", "0") == \
+        "(macd_line > 0) and (macd_line.shift(1) <= 0)"
+    assert sem.render_cross_expression("below", "rsi_14", "-1.5") == \
+        "(rsi_14 < -1.5) and (rsi_14.shift(1) >= -1.5)"
+
+
+def test_render_cross_expression_rejects_unknown_direction():
+    with pytest.raises(ValueError, match="unknown cross direction"):
+        sem.render_cross_expression("sideways", "a", "b")
+
+
+def test_render_cross_expression_output_survives_security_guard():
+    from quant_research_engine.security.yaml_guard import validate_expression
+
+    for direction in ("above", "below"):
+        expression = sem.render_cross_expression(direction, "ema_5", "ema_200")
+        assert validate_expression(expression, {"ema_5", "ema_200"}) == []

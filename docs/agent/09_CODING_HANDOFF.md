@@ -2,6 +2,48 @@
 
 ## Task ID
 
+Builder 通道 crosses_above/crosses_below 真实穿越语义修复（2026-11-03，step5review 实施子代理）
+
+## Release Status
+
+代码/测试/文档已完成；主 Agent 独立复跑全量 3454 passed + 34 skipped，已部署 ECS（MainPID 617557），生产 `/saas/new` 与 `/api/saas/factors` 均 200。当前未 commit/push，待用户人工验收。
+
+## Implementation
+
+- 根因：`strategies/compiler.py::_compile_expression` 对 `crosses_above`/
+  `crosses_below` 只发一条 warning 并改写成当日 `>`/`<`，而引擎
+  （`evaluation/signals.py` 的 AST 求值器）与公网安全闸
+  （`security/yaml_guard.py` 白名单）早已支持 `.shift(1)`，NL 通道与快速向导
+  JS 也早已按 canonical 输出——Builder 与 NL 对同一策略语义不一致。
+- `gui/nl_semantics.py` 新增 `render_cross_expression(direction, left, right)`：
+  按 `CROSS_CANONICAL` 模板渲染，常量操作数（数字字面量）该侧退化不加
+  `.shift(1)`（与向导 JS 口径一致）；非标识符操作数原样落入模板，由
+  `yaml_guard` AST 白名单在下游拦截。
+- `strategies/compiler.py::_compile_expression`：删除降级 + warning 分支，
+  crosses_* 改发 `render_cross_expression(...)`；普通比较运算符路径零变化。
+  删除的 warning 文案：「crossover operator ... emitted as simple comparison
+  ... when the runtime engine adds lagged-comparison support」（引擎早已支持）。
+- 影响面（共用同一编译函数，自动生效）：`gui/engine.py` 的
+  `/api/builder/compile`、`/api/builder/validate`，`apps/cli.py`，
+  `strategies/smoke_runner.py`。公开 YAML/Builder API 形状不变。
+- 测试：`tests/test_compiler.py` +7（crosses_above/below 逐字断言且与
+  CROSS_CANONICAL 代入一致、常量右值退化、普通 `>`/`<` 不加 shift、合成序列
+  只在穿越点触发、产物过 yaml_guard 白名单），并把编码旧降级行为的
+  `test_compile_macd_crossover_warning` 改写为
+  `test_compile_macd_crossover_compiles_real_cross`；
+  `tests/test_nl_semantics.py` +4（`render_cross_expression` 模板/常量/非法
+  方向/安全闸）。RED 证据：旧实现在合成序列上于持续状态期间持续为真
+  （index 3 True != False）。
+- 文档：`docs/STRATEGY_AUTHORING.md` §3 通道表 / §4 checklist / §5 约束表、
+  `docs/strategy_entry/examples.md` 的 crosses 注记改口径。
+
+## Blockers / Next Step
+
+- 主 Agent 验收（真实小样本回测 + ECS 部署）后提交；worker 无需为该改动重启
+  （Builder API 由 SaaS 进程提供，ECS 部署随 SaaS 重启生效）。
+
+## Task ID
+
 QRE-SAAS-SHOWCASE-REPOPULATE（P0-5 第一阶段：经典策略定义 + 小样本验证）
 
 ## Release Status

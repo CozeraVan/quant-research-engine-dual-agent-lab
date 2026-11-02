@@ -6,6 +6,8 @@ from typing import Any
 
 import yaml
 
+from quant_research_engine.gui.nl_semantics import render_cross_expression
+
 
 # ---------------------------------------------------------------------------
 # Indicator catalog: indicator name -> (category, column_builder)
@@ -324,16 +326,13 @@ def _compile_expression(
             continue
 
         if operator in _CROSSOVER_OPS:
-            issues.append(CompileIssue(
-                "warning",
-                f"crossover operator '{operator}' has no direct low-level equivalent; "
-                f"emitted as simple comparison. The compiler will support crossovers "
-                f"when the runtime engine adds lagged-comparison support.",
-            ))
-            if operator == "crosses_above":
-                operator = ">"
-            else:
-                operator = "<"
+            # 真实穿越语义：按 nl_semantics.CROSS_CANONICAL 输出
+            # (A > B) and (A.shift(1) <= B.shift(1)) / (A < B) and (A.shift(1) >= B.shift(1))。
+            # 引擎（evaluation.signals）与公网安全闸（security.yaml_guard）均支持
+            # .shift(1)；常量操作数该侧不加 shift（render_cross_expression 处理）。
+            direction = "above" if operator == "crosses_above" else "below"
+            parts.append(render_cross_expression(direction, left, right))
+            continue
 
         if operator in _COMPARISON_OPS:
             py_op = _COMPARISON_OPS[operator]

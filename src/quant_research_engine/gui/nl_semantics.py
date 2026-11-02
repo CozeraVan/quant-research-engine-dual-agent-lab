@@ -6,6 +6,8 @@ CR-2026-11-03（NL 语义优化与转义项目）的确定性底座。定位：
   ``gui/nl_compiler.py`` 编译后处理与 ``gui/engine.py::validate_yaml`` 复用；
 - **不替代表达式引擎**：本模块只判定「用户说的是不是穿越事件」与「编译产物
   有没有写成穿越事件」，不重写表达式（避免误伤持续状态语义）；
+  ``render_cross_expression()`` 供 Builder 编译器把 ``crosses_above/below``
+  渲染成 canonical 穿越表达式（Builder 与 NL 单一口径来源）；
 - **语义正确性是硬闸**：用户文本含「上穿/下穿/金叉/死叉」而 entry/exit 完全
   没有 ``.shift(1)`` 时，调用方必须修复回路或明确报错，**不允许静默降级**
   成当日状态（CR-2026-11-02/03 记录的错误：信号持续为真时长开/长平）。
@@ -18,6 +20,7 @@ CR-2026-11-03（NL 语义优化与转义项目）的确定性底座。定位：
 from __future__ import annotations
 
 import ast
+import re
 from typing import Any, Iterable
 
 import yaml
@@ -41,6 +44,27 @@ CROSS_CANONICAL = {
     "above": "(A > B) and (A.shift(1) <= B.shift(1))",
     "below": "(A < B) and (A.shift(1) >= B.shift(1))",
 }
+
+_NUMBER_LITERAL = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?")
+
+
+def render_cross_expression(direction: str, left: str, right: str) -> str:
+    """把 CROSS_CANONICAL 模板渲染成具体表达式（Builder 编译器与快速向导共用同一口径）。
+
+    常量操作数（数字字面量）没有「上一周期」，shift 后仍是自身，因此该侧退化
+    不加 ``.shift(1)``——与快速向导 JS 的编译口径一致。非标识符操作数原样
+    落入模板，由下游 ``security.yaml_guard`` 的 AST 白名单拦截报错。
+    """
+    template = CROSS_CANONICAL.get(direction)
+    if template is None:
+        raise ValueError(f"unknown cross direction: {direction!r}（应为 'above'/'below'）")
+    expression = template
+    for placeholder, operand in (("A", left), ("B", right)):
+        operand = str(operand).strip()
+        if _NUMBER_LITERAL.fullmatch(operand):
+            expression = expression.replace(f"{placeholder}.shift(1)", placeholder)
+        expression = re.sub(rf"\b{placeholder}\b", lambda _m: operand, expression)
+    return expression
 
 ISSUE_CROSS_WITHOUT_LAG = "cross_without_lag"
 ISSUE_CROSS_PARTIAL_LAG = "cross_partial_lag"

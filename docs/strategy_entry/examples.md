@@ -420,7 +420,7 @@ signal:
   exit: macd_line < macd_signal
 ```
 
-Note: the crossover operator (`crosses_above`/`crosses_below`) does not have a direct current-format equivalent. The current `StrategySpec` uses pandas-evaluable expressions. The compiler will expand crossovers into lagged comparisons against the previous bar.
+Note: the crossover operator (`crosses_above`/`crosses_below`) does not have a direct current-format equivalent. The current `StrategySpec` uses pandas-evaluable expressions. The compiler expands crossovers into lagged comparisons against the previous bar, using the same canonical wording as the NL channel (`nl_semantics.CROSS_CANONICAL`): `crosses_above` → `(A > B) and (A.shift(1) <= B.shift(1))`, `crosses_below` → `(A < B) and (A.shift(1) >= B.shift(1))`. A constant right-hand operand stays unshifted (e.g. `crosses_above` value 0 → `(macd_line > 0) and (macd_line.shift(1) <= 0)`).
 
 ## Smoke Test Expectations
 

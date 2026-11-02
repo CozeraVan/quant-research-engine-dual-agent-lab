@@ -2,6 +2,80 @@
 
 ## Task ID
 
+Builder 通道 crosses_above/crosses_below 真实穿越语义修复（2026-11-03，step5review 实施子代理）
+
+## Reviewer
+
+step5review 实施子代理自评；Kimi 主 Agent 独立审查与复跑验收
+
+## Review Status
+
+主 Agent 验收 PASS（2026-11-03）。Required Fixes：无。独立全量复跑 **3454 passed, 34 skipped**，文档/secret/diff 门禁全绿；已部署 ECS（MainPID 617557），生产页面与因子 API 均 200。**未 commit/push、未跑全量回测、未碰数据库，待用户人工验收。**
+
+## Findings
+
+1. **根因确认**：`strategies/compiler.py::_compile_expression` 对 `crosses_above`/
+   `crosses_below` 只发 warning 后改写成当日 `>`/`<`，而 `evaluation/signals.py`
+   的 AST 求值器与 `security/yaml_guard.py` 白名单早已支持 `.shift(1)`，NL 通道
+   （`nl_semantics.CROSS_CANONICAL`）与快速向导 JS 也早已按 canonical 输出——
+   Builder 与 NL 对同一策略语义不一致（穿越信号在区间内持续为真、重复触发）。
+2. **单一口径**：`gui/nl_semantics.py` 新增 `render_cross_expression()`，按
+   `CROSS_CANONICAL` 模板渲染；常量操作数（数字字面量）该侧退化不加 `.shift(1)`
+   （常量无「上一周期」，与向导 JS 口径一致）；非标识符操作数原样落入模板，
+   由 `yaml_guard` 在下游拦截。`strategies/compiler.py` 删除降级 + warning 分支，
+   普通比较运算符路径零变化（持续状态语义不被误加 shift）。
+3. **公开契约不变**：YAML 四段结构、`crosses_above/below` 运算符名、
+   `/api/builder/compile`、`/api/builder/validate` 形状均不变；仅编译产物表达式
+   从「当日比较」变为「canonical 穿越事件」。
+
+## Validation Evidence
+
+```text
+RED（修复前，tests/test_compiler.py 新增回归）：
+  5 failed, 34 passed
+  - 旧产物 (fast > slow)：合成序列 [F,F,T,F,F,F,F] 期望 → 实际 [F,F,T,T,T,F,F]
+    （持续在上方期间持续为真 = 旧 bug 的直接证据）
+
+GREEN（修复后）：
+  tests/test_compiler.py + tests/test_nl_semantics.py → 78 passed
+  相关模块 test_gui_engine/test_gui_lab/test_saas_strategy_assets/
+  test_nl_semantics_golden/test_smoke_runner/test_gui_nl_compiler → 126 passed
+  全量 SAAS_UPLOAD_DIR=.tmp/test-uploads-isolated uv run pytest -q -p no:randomly
+    → 3454 passed, 34 skipped（exit 0；10 条 warning 均为存量库警告，与本改动无关）
+  bash scripts/check-progress-docs.sh → passed（exit 0）
+  bash scripts/git-finalize-check.sh → completed（exit 0，无 secret 命中）
+
+真实产物抽查（strategies/high_level/ 两个 entry 实编译）：
+  macd_zero_cross_momentum_entry.yaml
+    entry: (macd_line > macd_signal) and (macd_line.shift(1) <= macd_signal.shift(1)) and (macd_line < 0)
+    exit : (macd_line < macd_signal) and (macd_line.shift(1) >= macd_signal.shift(1))
+    issues: none；yaml_guard: OK
+  ema200_bollinger_reversal_entry.yaml（无 crosses）→ 表达式与 issues 不变
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **常量右值不加 shift**：`crosses_above` value 0 → `(macd_line > 0) and
+  (macd_line.shift(1) <= 0)`，与快速向导 JS 口径一致；未对常量强行套模板。
+- **删除 warning 而非降级为 info**：crosses_* 现在是受支持运算符，继续发
+  warning 会污染合法策略的 issue 列表；`CompileIssue` 无 info 级别，故直接移除。
+- **`render_cross_expression` 放在 `gui/nl_semantics.py`**：保持 Builder 与 NL
+  单一口径来源；`strategies/compiler.py` 反向 import `gui` 包无环
+  （`gui/__init__.py` 仅文档字符串，`nl_semantics` 只依赖 ast/re/yaml）。
+
+## 遗留风险（移交主 Agent）
+
+- 真实小样本回测未跑（按任务边界只做单元/合成验证）：建议主 Agent 用
+  `strategies/high_level/macd_zero_cross_momentum_entry.yaml` 跑一次小样本，
+  对比交易笔数应从「持续触发」收敛为「穿越点触发」。
+- 存量高层 entry YAML 若有依赖旧降级语义的外部脚本（本仓 grep 仅两处
+  high_level 示例且均为穿越意图），行为变化即修复目的本身。
+- ECS 部署与提交由主 Agent 统一执行；worker 无需为该改动单独重启。
+
+---
+
+## Task ID
+
 P2-14/P2-15 推进：波动率时序曲线前端化 + 参数网格产物侧首版
 
 ## Reviewer

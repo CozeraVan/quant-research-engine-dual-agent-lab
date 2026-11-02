@@ -352,11 +352,144 @@ def test_compile_macd_factor_targets():
     assert entry.factor_targets["macd_signal"] == "factors.stock_daily_momentum_close.macd_signal_12_26_9"
 
 
-def test_compile_macd_crossover_warning():
+def test_compile_macd_crossover_compiles_real_cross():
     raw = yaml.safe_load(MACD_YAML)
     entry = compile_entry(raw)
-    assert entry.ok  # warning only, not error
-    assert any("crossover" in i.message.lower() for i in entry.issues)
+    assert entry.ok  # no issues at all: crosses_* is a supported operator now
+    assert entry.signal_expression == (
+        "(macd_line > macd_signal) and (macd_line.shift(1) <= macd_signal.shift(1)) "
+        "and (macd_line < 0)"
+    )
+    assert not any("crossover" in i.message.lower() for i in entry.issues)
+
+
+# ---------------------------------------------------------------------------
+# compile_entry — crosses_above/crosses_below 真实穿越语义（2026-11-03）
+# 根因：编译器曾把 crosses_* 降级成当日 >/< 并只发 warning，与引擎早已支持的
+# .shift(1) 及 NL 通道 CROSS_CANONICAL 口径不一致。现按 canonical 输出。
+# ---------------------------------------------------------------------------
+
+CROSS_YAML = textwrap.dedent("""\
+    strategy:
+      id: cross_semantics_check
+      name: Cross Semantics Check
+      family: momentum
+      direction: long_only
+
+    factor_requirements:
+      - alias: fast
+        indicator: ema
+        source: close
+        period: 5
+        required: true
+        reason: fast line
+      - alias: slow
+        indicator: ema
+        source: close
+        period: 20
+        required: true
+        reason: slow line
+
+    rules:
+      entry:
+        all:
+          - alias: fast
+            operator: crosses_above
+            alias_b: slow
+      exit:
+        all:
+          - alias: fast
+            operator: crosses_below
+            alias_b: slow
+
+    experiment:
+      id: cross_smoke
+      frequency: daily
+      market: ashare
+      start: 2024-01-01
+      end: 2024-02-01
+      universe:
+        include: all_a
+      execution:
+        signal_date: t
+        entry_execution: t_plus_1_open
+        exit_execution: t_plus_1_open
+        market_profile: ashare_daily_default
+      capital:
+        initial_cash: 1000000
+      output:
+        dir: outputs/cross_smoke/
+""")
+
+
+def _cross_entry() -> object:
+    return compile_entry(yaml.safe_load(CROSS_YAML))
+
+
+def test_crosses_above_compiles_to_real_cross_expression():
+    entry = _cross_entry()
+    assert entry.ok
+    assert entry.signal_expression == "(fast > slow) and (fast.shift(1) <= slow.shift(1))"
+    assert not any("crossover" in i.message.lower() for i in entry.issues)
+
+
+def test_crosses_below_compiles_to_real_cross_expression():
+    entry = _cross_entry()
+    assert entry.ok
+    assert entry.exit_signal_expression == "(fast < slow) and (fast.shift(1) >= slow.shift(1))"
+
+
+def test_cross_expression_matches_nl_canonical_wording():
+    from quant_research_engine.gui.nl_semantics import CROSS_CANONICAL
+
+    entry = _cross_entry()
+    canonical_above = CROSS_CANONICAL["above"].replace("A", "fast").replace("B", "slow")
+    canonical_below = CROSS_CANONICAL["below"].replace("A", "fast").replace("B", "slow")
+    assert entry.signal_expression == canonical_above
+    assert entry.exit_signal_expression == canonical_below
+
+
+def test_crosses_above_with_constant_operand_leaves_constant_unshifted():
+    raw = yaml.safe_load(CROSS_YAML)
+    raw["rules"]["entry"]["all"][0] = {
+        "alias": "fast", "operator": "crosses_above", "value": 0,
+    }
+    entry = compile_entry(raw)
+    assert entry.ok
+    assert entry.signal_expression == "(fast > 0) and (fast.shift(1) <= 0)"
+
+
+def test_plain_comparisons_keep_state_semantics_without_shift():
+    raw = yaml.safe_load(CROSS_YAML)
+    raw["rules"] = {
+        "entry": {"all": [{"alias": "fast", "operator": ">", "alias_b": "slow"}]},
+        "exit": {"all": [{"alias": "fast", "operator": "<", "value": 0}]},
+    }
+    entry = compile_entry(raw)
+    assert entry.signal_expression == "(fast > slow)"
+    assert entry.exit_signal_expression == "(fast < 0)"
+
+
+def test_cross_expression_fires_only_at_crossing_points():
+    entry = _cross_entry()
+    frame = pd.DataFrame({
+        "fast": [1.0, 2.0, 3.0, 3.0, 3.0, 2.0, 1.0],
+        "slow": [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+    })
+    entry_signal = evaluate_expression_signal(frame, entry.signal_expression)
+    exit_signal = evaluate_expression_signal(frame, entry.exit_signal_expression)
+    # 上穿：只有 t=2（fast 3>2 且前一周期 2<=2）；持续在上方的 t=3/4 不触发。
+    assert list(entry_signal) == [False, False, True, False, False, False, False]
+    # 下穿：只有 t=6（fast 1<2 且前一周期 2>=2）；t=0 因 shift(1) 为 NaN 不触发。
+    assert list(exit_signal) == [False, False, False, False, False, False, True]
+
+
+def test_cross_expression_passes_security_guard_whitelist():
+    from quant_research_engine.security.yaml_guard import validate_expression
+
+    entry = _cross_entry()
+    assert validate_expression(entry.signal_expression, {"fast", "slow"}) == []
+    assert validate_expression(entry.exit_signal_expression, {"fast", "slow"}) == []
 
 
 # ---------------------------------------------------------------------------

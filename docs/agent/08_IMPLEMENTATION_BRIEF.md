@@ -51,6 +51,50 @@ uv run pytest -q -p no:randomly          # 全量
 golden dataset：`tests/fixtures/nl_semantics/golden_cases.yaml`（9 例中文描述 →
 期望 YAML 结构，含/不含 `.shift(1)`、因子列名、是否穿越事件）。
 
+## Task ID
+
+Builder 通道 crosses_above/crosses_below 真实穿越语义修复（2026-11-03，step5review 实施子代理）
+
+## Created By
+
+step5review 实施子代理（用户 2026-11-03 明确布置；主 Agent 验收后统一部署与提交）
+
+## 目标与边界
+
+1. 高层 Builder / entry YAML 的 `crosses_above`/`crosses_below` 必须编译成带
+   `.shift(1)` 的真实穿越事件，不再降级成当日 `>`/`<` 并只发 warning。
+2. 复用 `gui/nl_semantics.py` 的 `CROSS_CANONICAL` 权威口径（Builder 与 NL
+   单一口径来源），不另造一套写法。
+3. 「大于/小于」等持续状态语义不得被误加 `.shift(1)`。
+4. 公开 YAML/Builder API 形状不变；不做扩大重构；只做单元/合成小样本验证，
+   不跑全量回测、不碰数据库、不部署、不 commit/push。
+
+## 实现
+
+- `gui/nl_semantics.py` 新增 `render_cross_expression(direction, left, right)`：
+  按 `CROSS_CANONICAL` 模板渲染具体表达式；常量操作数（数字字面量）没有
+  「上一周期」，该侧退化不加 `.shift(1)`（与快速向导 JS 口径一致）。
+- `strategies/compiler.py::_compile_expression`：删除 crosses_* 的降级 +
+  warning 分支，改发 `render_cross_expression("above"|"below", left, right)`；
+  普通 `</>/<=/>=/==/!=` 比较路径零变化（仍为当日状态）。
+- 影响面：`gui/engine.py` 的 `/api/builder/compile`、`/api/builder/validate`
+  与 `apps/cli.py`、`strategies/smoke_runner.py` 共用同一编译函数，自动生效。
+
+## 验证
+
+```bash
+SAAS_UPLOAD_DIR=.tmp/test-uploads-isolated uv run pytest tests/test_compiler.py \
+  tests/test_nl_semantics.py -q -p no:randomly     # RED→GREEN 回归
+SAAS_UPLOAD_DIR=.tmp/test-uploads-isolated uv run pytest -q -p no:randomly   # 全量
+bash scripts/check-progress-docs.sh
+bash scripts/git-finalize-check.sh
+```
+
+回归覆盖：crosses_above/below 表达式逐字断言（与 CROSS_CANONICAL 代入一致）、
+常量右值退化、普通 `>`/`<` 不加 shift、合成序列只在穿越点触发（持续状态不触发）、
+产物通过 `security.yaml_guard` AST 白名单。既有
+`test_compile_macd_crossover_warning`（编码旧降级行为）已改写为新语义断言。
+
 ## 历史任务（保留）
 
 ## Task ID

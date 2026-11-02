@@ -1,5 +1,12 @@
 # Task Handoff
 
+## 进行中：Builder 通道 crosses_above/crosses_below 真实穿越语义修复（2026-11-03，step5review 实施子代理）
+
+- 根因：`strategies/compiler.py::_compile_expression` 把 crosses_* 降级成当日 `>`/`<` 并只发 warning；引擎与 NL 通道早已支持 `.shift(1)` canonical。
+- 已改：`gui/nl_semantics.py` 新增 `render_cross_expression()`（复用 `CROSS_CANONICAL`，常量操作数该侧不加 shift）；`strategies/compiler.py` 改发真实穿越表达式，普通比较路径不变。
+- 测试：`tests/test_compiler.py` +7、`tests/test_nl_semantics.py` +4，RED→GREEN；全量测试与门禁结果见 `10_REVIEW_REPORT.md` 本节。
+- 未 commit/push、未部署；主 Agent 验收（真实小样本 + ECS 部署）后统一提交。
+
 ## 进行中：P1-9 文案精简化收尾（2026-11-01，首段）
 
 - 字号基线已同步；首段清理 symbols/new/job/strategy 5 处静态灰字，新增 `tests/test_saas_copy_declutter.py`。

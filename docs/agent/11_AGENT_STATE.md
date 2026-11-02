@@ -19,6 +19,16 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-03 Builder 穿越语义修复（已部署，待用户验收）
+
+step5review 已修复 `strategies/compiler.py::_compile_expression` 将
+`crosses_above/crosses_below` 降级为当日 `>/<` 的遗留 bug：新增
+`gui/nl_semantics.render_cross_expression()` 复用 `CROSS_CANONICAL`，常量操作数不 shift；
+普通比较语义不变。合成序列验证只在穿越点触发。主 Agent 独立复跑全量
+**3454 passed, 34 skipped**，文档/secret/diff 门禁全绿；已部署 ECS（MainPID 617557），
+生产 `/saas/new` 与 `/api/saas/factors` 均 200。未跑全量回测、未 commit/push，待用户验收。
+任务流水见 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。
+
 ### 2026-11-02 P1-12 上云完全准备完成（未 commit；未真迁移）
 
 用户要求“不马上迁移，但做好快速部署准备”。已完成 `docs/agent/28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md` 与 `deploy/cloud/` 脚本：备份、逻辑迁移、对账、产物同步、云端 worker systemd/env 模板。**实测基线**：`tushare_data` 519GB；`stock_daily` 14,888,045 行至 2026-10-30；`stock_minute_1m` 3,648,592,718 行至 2026-10-21；alpha191 43GB。**验证**：4 个 shell 脚本 `bash -n` 全过；4 个 dry-run 全过。**未做**：不购买云资源、不恢复、不切流。

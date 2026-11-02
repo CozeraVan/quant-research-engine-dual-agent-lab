@@ -1,3 +1,5 @@
+2026-11-03 Builder 通道 crosses_above/crosses_below 真实穿越语义修复（未 commit，step5review 实施子代理）：`strategies/compiler.py::_compile_expression` 不再把 crosses_* 降级成当日 `>`/`<`，改为按 `gui/nl_semantics.CROSS_CANONICAL` 输出 `(A > B) and (A.shift(1) <= B.shift(1))` / `(A < B) and (A.shift(1) >= B.shift(1))`（常量右值该侧不加 shift）；新增 `gui/nl_semantics.render_cross_expression()` 作单一口径渲染入口，普通 `>`/`<` 状态语义路径零变化。测试 `tests/test_compiler.py` +7、`tests/test_nl_semantics.py` +4（RED→GREEN，含合成序列只在穿越点触发、产物过 yaml_guard 白名单），相关 78 passed；全量测试与门禁结果见 `10_REVIEW_REPORT.md`。未 commit/push、未部署 ECS、未跑全量回测；主 Agent 验收后统一部署提交。详见 `08_IMPLEMENTATION_BRIEF.md` / `09_CODING_HANDOFF.md`。
+
 2026-11-02 NL 穿越语义问题立项（未 commit）：压测准备发现 NL 入口把“上穿/下穿/金叉/死叉”降级为当日 `>`/`<`；已立 `change_requests/CR-2026-11-02_nl_cross_semantics.md`，方案为 prompt 增加 `.shift(1)` 穿越 canonical + few-shot + 缓存 bump + 可选校验层。3 点压测前不改业务代码。
 
 2026-11-02 测试隔离修复（未 commit）：`tests/test_gui_saas.py::TestResultsApi._completed_job` 显式设置 `SAAS_UPLOAD_DIR=tmp_path/uploads`，避免全量测试读取/写入仓库默认 `outputs/saas_uploads`；`tests/test_gui_saas.py` 74 passed。此问题由 3 点压测子代理未隔离上传目录暴露。

@@ -85,14 +85,14 @@ evaluation:
 | 自然语言 NL（「新增策略」顶部） | 中文描述 | LLM 编译为低层 YAML，经 validate + 因子存在性检查；缺因子自动入 handoff 队列并引导去「新增因子」tab；只填入同页底部 YAML 预览栏待确认（安全闸，不自动执行） |
 | 可视化构建（「新增策略」中部） | 下拉选因子 + 条件行 | 仅"比较 + 布尔"（AND/OR 组内统一）；不支持算术组合右值；"校验并填入下方 YAML 预览栏"（同页操作，无 tab 跳转，不自动执行） |
 | 手写/粘贴 YAML（「新增策略」底部预览栏） | 低层 StrategySpec YAML | 与 NL/可视化产物共用同一预览栏；验证 / 加载文件 / 模板 / 存入沙箱 / 回测参数表单 + 高级参数（默认折叠）均在该栏周围 |
-| 高层 Builder / entry YAML（仅 API） | strategy/rules/factor_requirements/experiment 四段 | GUI 构建器 tab 已删除；`/api/builder/*` 保留供脚本调用；`crosses_above/below` 会**降级为当周期比较**并给出 warning，不是真正的穿越事件 |
+| 高层 Builder / entry YAML（仅 API） | strategy/rules/factor_requirements/experiment 四段 | GUI 构建器 tab 已删除；`/api/builder/*` 保留供脚本调用；`crosses_above/below` 编译为**真实穿越事件** `(A > B) and (A.shift(1) <= B.shift(1))`（与 NL 通道 `nl_semantics.CROSS_CANONICAL` 同口径），无 warning |
 | GUI 沙箱/晋升（P1） | 预览栏 YAML 或 NL 编译产物 | "存入沙箱"做 validate + 查重 + 因子存在性检查；沙箱（`outputs/sandbox/strategies/`）不进 catalog、不参与日更；冒烟（单股 × 近 6 个月）后由用户确认晋升入 `strategies/catalog/<category>/` 并触发一次全量后台回测 |
 
 ## 4. 策略验收 checklist（提交前逐项过）
 
 - [ ] `validate_yaml` 通过（GUI"验证"按钮或 `validate_yaml()`；StrategySpec 解析无错）。
 - [ ] 引用的每个 `factor_fields` 目标列在 DB 中存在（preflight / 因子状态 tab 对账无红色）。
-- [ ] 条件可分解为 §0 三元组形式；没有穿越/多周期/函数语义。
+- [ ] 条件可分解为 §0 三元组形式；没有多周期/函数语义（Builder 的 `crosses_above/below` 例外：按 canonical 编译为 `.shift(1)` 穿越事件）。
 - [ ] 小样本预检跑通（R-QRE-009：GUI 默认前 20 只 × 近 6 个月；确认有订单、无异常报错后再放大）。
 - [ ] universe/风控参数与策略意图一致（stops 是否启用影响引擎分支，batch 引擎 stops 需 `--apply-stops` 或 GUI 交易规则字段）。
 - [ ] 需要日更时：把策略 YAML 放入 `strategies/catalog/<category>/`（遵循现有命名
@@ -108,8 +108,8 @@ evaluation:
 
 | 意图 | 状态 | 说明 |
 |---|---|---|
-| 上穿/下穿（穿越事件） | 降级 | 只能写当周期比较 `(a > b)`；编译器对 crosses_* 出 warning 后降级 |
-| 多周期/引用历史值（如"昨日收盘"） | 不支持 | 表达式无 lag/shift |
+| 上穿/下穿（穿越事件） | 支持 | Builder（高层 entry YAML）编译为真实穿越事件：上穿 `(A > B) and (A.shift(1) <= B.shift(1))`、下穿 `(A < B) and (A.shift(1) >= B.shift(1))`；常量右值该侧不加 shift（如 `(close > 0) and (close.shift(1) <= 0)`）。口径与 NL 通道 `nl_semantics.CROSS_CANONICAL` 一致，只在穿越当日触发一次 |
+| 多周期/引用历史值（如"昨日收盘"） | 不支持 | 任意裸历史值引用不可写；`crosses_above/below` 内部按 canonical 使用 `.shift(1)` 是唯一例外 |
 | 算术组合因子（如 `close/ma20 - 1 > 0.05`） | 部分支持 | 低层表达式手写可用算术；向导/Builder 不支持，留 P3 候选 |
 | 分钟/Tick/基本面/选股打分排序 | 不支持 | v1 范围：日线技术指标、信号驱动（strategy_entry README Scope） |
 | 做空、多空对冲 | 引擎字段存在（direction）但 catalog 与报告链路按 long_only 验证 | 慎用 |
