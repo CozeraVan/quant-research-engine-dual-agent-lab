@@ -33,6 +33,24 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 M6 本地端到端验收（隔离 app 18077 + 独立库 + 临时 worker）
+
+用户批准「现在做」→ 先重启本地 worker（PID 430787，P2-14 与 P0-9 worker 侧生效），
+再在完全隔离环境（临时库 + `SAAS_UPLOAD_DIR=.tmp/agent-m6/uploads` + 18077 端口 +
+`QRE_AGENT_API_ENABLED=1`）用一个**只走 HTTP + Bearer 令牌**的脚本模拟真实外部 agent
+跑全流程：capabilities → openapi → schema → validate → research-runs → sweeps(screen)
+→ 轮询 → aggregate → 读结果/chart-data → artifacts 穿越拒绝 → 会话用量 → conclusion。
+
+实测发现并已修：
+1. **dev 后门用户不存导致签发 500**：`api_tokens` 外键指向 `users(id)`，而 agent 入口
+   漏了人工 jobs 入口同款的幂等补行。已修 + 新增回归用例（76 passed）。
+2. **测试 YAML 的因子表名写错**（`factors.stock_daily_ta` 不存在，实际是
+   `factors.stock_daily_overlap_typical_price`）——属验收脚本问题，非产品缺陷；
+   但说明**外部 agent 只能靠 `validate` 提前发现**，而 `validate` 只校验 YAML 结构与
+   因子配额、**不校验因子是否真实存在**（`data_missing` 要等 worker 执行才暴露）。
+   已记为 M7 候选：validate 增加因子存在性预检（设计文档 §4.2 原本就要求「因子存在性」）。
+3. 幂等键在同一库内跨运行复用会被去重——验收脚本改用每次运行唯一的 key（脚本问题）。
+
 ### 2026-11-03 全量回归两处测试自身问题（已修，非产品缺陷）
 
 1. **第四入口 6 例时间依赖**：M4 默认 `nightly_only=true`，06:00 后跑全套件时 sweep 返回

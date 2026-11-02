@@ -2026,6 +2026,15 @@ def agent_token_create():
 
     from sqlalchemy import text
 
+    # dev 后门（SAAS_DEV_AUTH=1）可能给出不存在的 uid：与人工入口同款幂等补行，
+    # 避免 api_tokens 外键把整个签发打成 500。生产会话用户必然已有行，这里是 no-op。
+    with engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO users (id, phone) VALUES (:uid, :phone) "
+                 "ON CONFLICT (id) DO NOTHING"),
+            {"uid": uid, "phone": f"pending_{uid}"},
+        )
+
     plaintext = generate_token()
     digest = hash_token(plaintext, _auth_salt(app))
     with engine.begin() as conn:

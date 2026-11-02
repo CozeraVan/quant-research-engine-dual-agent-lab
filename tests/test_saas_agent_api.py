@@ -201,6 +201,23 @@ class TestTokenLifecycle:
         assert client.get(f"{AGENT_API_PREFIX}/tokens").status_code == 401
         assert client.post(f"{AGENT_API_PREFIX}/tokens", json={"name": "x"}).status_code == 401
 
+    def test_dev_backdoor_user_is_auto_created(self, client, app):
+        """dev 后门（SAAS_DEV_AUTH=1）可能给出不存在的 uid：必须幂等补 users 行，
+        否则 api_tokens 外键把签发打成 500（M6 本地验收实测踩到）。"""
+        from sqlalchemy import text
+
+        engine = app.extensions["saas_engine"]
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text("SELECT 1 FROM users WHERE id = 4242")).first() is not None
+        assert exists is False
+        resp = client.post(f"{AGENT_API_PREFIX}/tokens",
+                           json={"name": "dev-backdoor"},
+                           headers={"X-User-Id": "4242"})
+        assert resp.status_code == 201, resp.get_json()
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT 1 FROM users WHERE id = 4242")).first() is not None
+
 
 class TestAgentAuthentication:
     def test_missing_bearer_401(self, client):
