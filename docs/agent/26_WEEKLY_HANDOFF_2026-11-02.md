@@ -195,6 +195,7 @@ bash scripts/git-finalize-check.sh
 | 2026-11-03 | **个人策略库删除 UX 修正** | done | Kimi | 实测删除正常；有关联回测时后端按设计 409。改为 job_count>0 禁用删除按钮并悬停说明原因，失败在 #strat-error 页面内显示；新增 2 例静态回归，全量 3439 passed；已部署 ECS（MainPID 613402） |
 | 2026-11-03 | **下载详情改为当前页加载详情（不下载源文件）** | done | Kimi | symbol.html 的 #btn-download 改为 JS 调用既有 /generate 流程并在原页渲染 K 线等详情；真实浏览器验证无下载事件、无 JS 错误；模板行数 2349 ≤ 2350 闸；已部署 ECS（MainPID 615173） |
 | 2026-11-03 | **个股详情下载按钮补回** | done | Kimi | `GET /api/results/<job>/symbols/<code>/download` + symbol.html「下载详情」按钮；P0-8 冻结清单登记；生产 job 83 的 600519 详情与下载均 200 |
+| 2026-11-03 | **Windows UIUX agent 工作指南** | done | Kimi | `33_WINDOWS_UI_AGENT_GUIDE.md`：Windows 工作边界/项目拉取/预览环境搭建（Docker PG 或 WSL 隧道）/UIUX 文件地图/开发规范/验证交付；AGENTS.md 索引已接入 |
 | 2026-11-03 | 全期全量压测子代理恢复执行 | done | agent-208 | 同上；未清理任何进程/目录/库（用户要求保留） | 03:00 闸门已过，已 resume 同一 agent（task agent-vn63q4w8）串行跑 item1→item2→item3；目标 §5/§6/§7 |
 
 **M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**

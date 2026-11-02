@@ -45,6 +45,7 @@ Before modifying code or producing plans, read:
 - `docs/agent/26_WEEKLY_HANDOFF_2026-11-02.md`（**2026-11-02 主 Agent 交接文档**：当前提交/测试基线、最近成果、未部署未重启项、长期纪律、**交接期间任务记录表**；下一任主 Agent 接手必读，并在此文件维护所有新任务）
 - `docs/agent/31_RESOURCE_MODEL_2026-11-03.md`（**资源-回测任务-耗时关系与用户增长容量估算**：单任务 43–72min/6.3GB 常态/item3 峰值 13.97GB；时间=固定开销+股年+交易笔数模型；用户增长所需 worker/DB/存储/网络扩容公式与起步规格；做容量判断前必读）
 - `docs/agent/32_CLOUD_FULLSTACK_PREP_2026-11-03.md`（**全链上云预准备补全**：DB 吞吐优化、DB↔worker 传输优化、分片上传与对象存储、快速部署 Runbook；不马上迁移，买机后可按序部署）
+- `docs/agent/33_WINDOWS_UI_AGENT_GUIDE.md`（**Windows UIUX agent 工作指南**：工作边界/项目拉取/预览环境搭建（Docker PG 或 WSL 隧道）/UIUX 文件地图/开发规范/验证与交付；Windows 做 UI 预览、WSL 做核心与部署时使用）
 - `docs/agent/30_WEEKLY_HANDOFF_2026-11-03.md`（**最新主 Agent 交接文档（2026-11-03）**：第四入口 M0–M6 全部收官 + 生产开 flag、全期全量压测实测基线与 P0-9/P0-10 两个新立项、**重大失误与必须复查点**（门禁退出码被管道吞、压测采样被污染、测试时间依赖、日志 token 进文档）、遗留待办分级、第一步行事命令与回滚路径；**接手必读**）
 - `docs/agent/27_STRESS_TEST_2026-11-02.md`（**全期全量压测实测记录**（5201 只 × 2009–2026，三项串行）：单跑 43–72 分钟 / 6.3 GB 常态内存 / **item3 峰值 13.97 GB** / 本地产物 0.85–1.52 GiB；**两条独立回传阈值**（part>1000 → 413 零落盘；20 MiB 静默截断无标记）+ `uploading` 无终态会被重排重算；§8 缺陷清单与 §10 待清理清单；**做容量判断或改回传链前必读**）
 - `docs/agent/28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md`（数据库上云与云端 worker/DB 传输完全准备：备份/迁移/对账/产物同步/云端 worker 模板 + 本地大库实测基线 519GB；真迁移待用户批准）
