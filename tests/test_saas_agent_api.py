@@ -455,7 +455,7 @@ class TestValidateAndSweeps:
 
     BASE_YAML = (
         "experiment:\n  name: ema_scan\n"
-        "data:\n  factor_fields:\n    ema_fast: factors.stock_daily_ta.ema5\n"
+        "data:\n  factor_fields:\n    ema_fast: factors.stock_daily_overlap_close.ema_5\n"
         "signal:\n  entry: 'ema_fast > close'\n  exit: 'ema_fast < close'\n"
         "evaluation:\n  forward_return_horizons: [1]\n"
         "holding:\n  max_holding_days: 20\n"
@@ -491,6 +491,24 @@ class TestValidateAndSweeps:
         assert body["cost_estimate"]["profile"] == "sample300_5y"
         assert body["cost_estimate"]["method"] == "two_part_model"
         assert 100 <= body["cost_estimate"]["est_seconds"] <= 250
+
+    def test_validate_flags_nonexistent_factor(self, client, app):
+        """CR-2026-11-03 S2（= M7）：因子存在性预检进 /validate——写错的因子表/列
+        在提交前就被报告（附可纠正写法），不用等 worker 执行才 data_missing。"""
+        headers = self._token(client, app)
+        yaml_text = self.BASE_YAML.replace(
+            "factors.stock_daily_overlap_close.ema_5",
+            "factors.stock_daily_ta.ema5",
+        )
+        resp = client.post(f"{AGENT_API_PREFIX}/validate",
+                           json={"yaml": yaml_text,
+                                 "params": {"random_n": 10, "start": "2024-01-02",
+                                            "end": "2024-06-28"}},
+                           headers=headers)
+        assert resp.status_code == 200
+        body = resp.get_json()["validate"]
+        assert body["valid"] is False
+        assert any("ema5" in issue and "ema_5" in issue for issue in body["issues"])
 
     def test_validate_rejects_bad_yaml_and_missing_dates(self, client, app):
         headers = self._token(client, app)

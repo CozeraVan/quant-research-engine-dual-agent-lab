@@ -118,8 +118,8 @@ def test_run_detail_found(app_client, monkeypatch, tmp_path):
 def test_api_validate_valid(app_client):
     yaml = (
         "experiment:\n  name: default\n  engine:\n    kind: single\n"
-        "data:\n  factor_fields:\n    f: factors.t.c\n"
-        "signal:\n  entry: x < 0\n"
+        "data:\n  factor_fields:\n    rsi: factors.stock_daily_momentum_close.rsi_14\n"
+        "signal:\n  entry: rsi < 0\n"
         "evaluation:\n  forward_return_horizons: [1]\n"
         "holding:\n  max_holding_days: 1\n"
     )
@@ -131,6 +131,28 @@ def test_api_validate_valid(app_client):
     assert resp.status_code == 200
     data = json.loads(resp.data)
     assert data["valid"] is True
+
+
+def test_api_validate_rejects_nonexistent_factor(app_client):
+    """CR-2026-11-03 S2（= M7）：因子存在性预检——写错的因子表/列在提交前就被
+    拦下，不用等 worker 执行才报 data_missing。"""
+    yaml = (
+        "experiment:\n  name: default\n"
+        "data:\n  factor_fields:\n    rsi: factors.stock_daily_momentum_close.rsi14\n"
+        "signal:\n  entry: rsi < 0\n"
+        "evaluation:\n  forward_return_horizons: [1]\n"
+        "holding:\n  max_holding_days: 1\n"
+    )
+    resp = app_client.post(
+        "/api/validate",
+        data=json.dumps({"yaml": yaml}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert data["valid"] is False
+    assert "rsi14" in data["error"]
+    assert data["factor_issues"][0]["auto_fix"].endswith("rsi_14")
 
 
 def test_api_validate_invalid(app_client):

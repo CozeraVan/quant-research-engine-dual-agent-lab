@@ -281,8 +281,13 @@ def test_compile_nl_exact_factor_untouched(tmp_path):
     )
     assert result["ok"] is True
     assert "corrections" not in result
+    # CR-2026-11-03：输出走 canonical 规范化（键序稳定、标量列表 flow、结尾换行），
+    # 内容等价于「仅默认持仓天数归一」
+    from quant_research_engine.gui.nl_semantics import canonicalize_strategy_yaml
+
     expected = valid.replace("max_holding_days: 5", "max_holding_days: 0")
-    assert result["yaml"] == expected.rstrip("\n")  # 仅默认持仓天数归一，其余原文保留
+    assert result["yaml"] == canonicalize_strategy_yaml(expected)
+    assert yaml.safe_load(result["yaml"]) == yaml.safe_load(expected)
 
 
 def test_compile_nl_unmatchable_factor_returns_candidates(tmp_path):

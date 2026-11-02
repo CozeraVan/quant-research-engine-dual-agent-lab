@@ -78,8 +78,18 @@ DSL 结构（低层 StrategySpec）：
 信号表达式语法（安全子集）：
 - 操作数：因子/行情别名、数值常量
 - 比较：< > <= >= == != ；布尔：and or not ；算术：+ - * / ；括号
-- 不支持函数调用、不支持跨周期引用（如"上穿/下穿"请改写为当周期比较，例如
-  "20 日均线上穿 120 日均线"写成 (sma_20 > sma_120)，并明白这是当日状态而非穿越事件）
+- 方法链：.shift(n) 引用上一周期、.rolling(N).max()/min()/mean() 等滚动统计
+  （裸函数调用如 rolling_max(close, N) 非法，会被安全闸拒绝）
+
+**穿越语义（最高优先，CR-2026-11-03）**：
+- 「大于/小于/高于/低于」= 当日状态，直接写 (A > B)，**禁止加 .shift(1)**；
+- 「上穿/下穿/金叉/死叉」= 穿越事件（只在穿越当日触发一次），**必须用 .shift(1)**：
+  上穿：(A > B) and (A.shift(1) <= B.shift(1))
+  下穿：(A < B) and (A.shift(1) >= B.shift(1))
+- MACD 金叉 = DIF 上穿 DEA；死叉 = DIF 下穿 DEA
+  （DIF=macd_12_26_9，DEA/信号线=macds_12_26_9）
+- 把穿越事件写成没有 .shift(1) 的当日状态是**错误编译**（信号会持续为真、
+  重复触发），用户文本一旦出现上穿/下穿/金叉/死叉，对应条件就必须带 .shift(1)。
 
 因子命名约定：factors.stock_daily_<类别>_<价格源>.<指标>_<周期>（部分指标含参数后缀）。
 价格源 source 通常为 close。可用指标目录（名称: 类别）：\
@@ -143,18 +153,73 @@ holding:
 evaluation:
   forward_return_horizons: [1, 3, 5, 10, 20]
   quantiles: 5
+
+示例 3（穿越事件：上穿/下穿必须带 .shift(1)）：
+用户：SMA5 上穿 SMA200 买入，下穿 SMA200 卖出，不设止损
+输出：
+experiment:
+  name: nl_sma5_cross_sma200
+  market_profile: ashare_daily_default
+  frequency: daily
+data:
+  market_fields: [open, high, low, close, pre_close, vol, amount]
+  factor_fields:
+    sma_5: factors.stock_daily_overlap_close.sma_5
+    sma_200: factors.stock_daily_overlap_close.sma_200
+universe:
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+signal:
+  entry: (sma_5 > sma_200) and (sma_5.shift(1) <= sma_200.shift(1))
+  exit: (sma_5 < sma_200) and (sma_5.shift(1) >= sma_200.shift(1))
+holding:
+  max_holding_days: 0
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
+
+示例 4（MACD 金叉/死叉 = DIF 穿越 DEA）：
+用户：MACD 金叉买入，死叉卖出
+输出：
+experiment:
+  name: nl_macd_golden_dead_cross
+  market_profile: ashare_daily_default
+  frequency: daily
+data:
+  market_fields: [open, high, low, close, pre_close, vol, amount]
+  factor_fields:
+    dif: factors.stock_daily_momentum_close.macd_12_26_9
+    dea: factors.stock_daily_momentum_close.macds_12_26_9
+universe:
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120
+signal:
+  entry: (dif > dea) and (dif.shift(1) <= dea.shift(1))
+  exit: (dif < dea) and (dif.shift(1) >= dea.shift(1))
+holding:
+  max_holding_days: 0
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+  quantiles: 5
 """
 
 
 def build_system_prompt() -> str:
     """System prompt: DSL doc + 真实因子目录快照（有则用）+ indicator catalog +
-    常用已落库列 + few-shot examples。
+    中文语义字典 + 常用已落库列 + few-shot examples。
 
     CR-2026-10-09 第 1 层：注入 configs/factor_catalog_llm.txt 的真实目录
     （factors.<表>.<列> 全量压缩清单），并加硬约束「factor_fields 只能引用
-    清单内的表.列，禁止发明」。快照缺失（本地开发未生成）时回退旧口径。"""
+    清单内的表.列，禁止发明」。快照缺失（本地开发未生成）时回退旧口径。
+    CR-2026-11-03：注入中文语义字典（金叉/死叉/快线/慢线/均线/回调/支撑/放量…），
+    让中文股票语义确定性地落到表达式，而不是靠模型猜。"""
     from quant_research_engine.gui.factor_catalog_llm import load_catalog_text
     from quant_research_engine.gui.factor_correction import COMMON_FACTOR_TARGETS
+    from quant_research_engine.gui.nl_semantics import render_semantic_dictionary
     from quant_research_engine.strategies.compiler import _INDICATOR_CATALOG
 
     real_catalog = load_catalog_text()
@@ -167,7 +232,13 @@ def build_system_prompt() -> str:
     else:
         catalog_items = sorted(f"{name}: {category}" for name, (category, _) in _INDICATOR_CATALOG.items())
         catalog_block = "；".join(catalog_items)
-    return _DSL_DOC + catalog_block + f"\n常用已落库列：{common_items}\n" + _FEW_SHOT
+    return (
+        _DSL_DOC
+        + render_semantic_dictionary()
+        + catalog_block
+        + f"\n常用已落库列：{common_items}\n"
+        + _FEW_SHOT
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -287,8 +358,13 @@ def _enqueue_missing_factors(
 MAX_FIX_RETRIES = 2
 
 
-def _fixup_prompt(description: str, bad_yaml: str, hints: list[dict[str, Any]]) -> str:
-    """缺因子重试提示：原始需求 + 上次输出 + 缺失名与库内候选。"""
+def _fixup_prompt(description: str, bad_yaml: str, hints: list[dict[str, Any]],
+                  semantic_issues: list[dict[str, Any]] | None = None) -> str:
+    """缺因子重试提示：原始需求 + 上次输出 + 缺失名与库内候选。
+
+    ``semantic_issues`` 非空时同时回喂穿越语义问题（CR-2026-11-03：因子与语义
+    可以同一轮回喂，避免「修好因子又丢 shift(1)」的拉锯）。
+    """
     lines = [
         "用户需求：" + description,
         "",
@@ -300,13 +376,20 @@ def _fixup_prompt(description: str, bad_yaml: str, hints: list[dict[str, Any]]) 
             lines.append(f"- {label}（库内相近候选：{'、'.join(h['suggestions'])}）")
         else:
             lines.append(f"- {label}（库内无相近列，请改用其他已落库因子表达）")
+    if semantic_issues:
+        lines += ["", "同时存在语义错误："]
+        for issue in semantic_issues:
+            lines.append(f"- {issue.get('message', '')}")
+            if issue.get("hint"):
+                lines.append(f"  正确写法：{issue['hint']}")
     lines += [
         "",
         "上次输出：",
         bad_yaml,
         "",
-        "请只输出修正后的完整 YAML（只改 factor_fields 引用为真实存在的列，其余不变；"
-        "禁止编造列名）。",
+        "请只输出修正后的完整 YAML（只改 factor_fields 引用为真实存在的列"
+        + ("，并按上述正确写法修好 signal.entry/exit 的穿越条件" if semantic_issues else "")
+        + "；其余不变；禁止编造列名）。",
     ]
     return "\n".join(lines)
 
@@ -337,13 +420,19 @@ def _with_default_holding(yaml_text: str, description: str) -> str:
 
 def _validate_and_correct(
     raw: str,
-    lookup: Callable[[str], set[str]],
+    lookup: Callable[[str], set[str]] | None,
     description: str,
 ) -> dict[str, Any]:
-    """一次输出的处理：剥围栏 → YAML 校验 → factor_correction 纠错 → 缺失判定。
+    """一次输出的处理：剥围栏 → YAML 校验 → 因子纠错 → 穿越语义校验 → canonical 化。
 
-    返回 {ok, error?, yaml, mapping?, corrections, unresolved, missing}。
+    返回 {ok, error?, yaml, mapping?, corrections, unresolved, missing, semantic_issues}。
+    ``lookup`` 为 None 时跳过因子存在性（仅在调用方拿不到任何目录时发生）。
     """
+    from quant_research_engine.gui.nl_semantics import (
+        canonical_yaml_text,
+        cross_semantic_issues,
+    )
+
     yaml_text = _with_default_holding(strip_yaml_fence(raw), description)
     import yaml as _yaml
 
@@ -353,10 +442,19 @@ def _validate_and_correct(
             "ok": False, "fatal": True, "yaml": yaml_text,
             "error": f"LLM 输出的 YAML 未通过策略规格校验：{validation['error']}。可编辑下方草稿修正后使用。",
             "code": "invalid_yaml", "corrections": [], "unresolved": [], "missing": [],
+            "semantic_issues": [],
         }
     from quant_research_engine.gui.factor_correction import correct_factor_fields
 
     mapping = _yaml.safe_load(yaml_text)
+    semantic_issues = cross_semantic_issues(mapping, description)
+    if lookup is None:
+        return {
+            "ok": not semantic_issues, "yaml": canonical_yaml_text(mapping), "mapping": mapping,
+            "corrections": [], "unresolved": [], "missing": [],
+            "semantic_issues": semantic_issues,
+        }
+
     report = correct_factor_fields(mapping, lookup)
     corrections = report["corrections"]
     unresolved = report["unresolved"]
@@ -369,10 +467,18 @@ def _validate_and_correct(
             report = correct_factor_fields(mapping, lookup)
             corrections = []
             unresolved = report["unresolved"]
+            semantic_issues = cross_semantic_issues(mapping, description)
     spec = StrategySpec.from_mapping(mapping)
     missing = find_missing_factor_columns(spec, lookup)
-    return {"ok": not missing, "yaml": yaml_text, "corrections": corrections,
-            "unresolved": unresolved, "missing": missing}
+    return {
+        "ok": not missing and not semantic_issues,
+        "yaml": canonical_yaml_text(mapping),
+        "mapping": mapping,
+        "corrections": corrections,
+        "unresolved": unresolved,
+        "missing": missing,
+        "semantic_issues": semantic_issues,
+    }
 
 
 def compile_nl(
@@ -390,13 +496,15 @@ def compile_nl(
       {"ok": True, "yaml": str, "warnings": [str, ...], "corrections": 可选,
        "fix_attempts": 可选（修复重试次数，>0 表示走了回喂回路）}
       {"ok": False, "code": "not_configured", "error": 中文}
-      {"ok": False, "code": "llm_error"|"invalid_yaml"|"missing_factors",
+      {"ok": False, "code": "llm_error"|"invalid_yaml"|"missing_factors"|"semantic_cross_missing",
        "error": 中文（含候选因子提示）, "yaml": 可选草稿,
        "missing_factors": [...], "suggestions": [...], "corrections": 可选}
 
-    四层防线（CR-2026-10-09）：①真实因子目录注入 prompt；②别名字典归一；
-    ③缺因子回喂 LLM 重试（最多 MAX_FIX_RETRIES 次，用户无感）；④兜底报错
-    附候选与申请新增因子指引。
+    五层防线（CR-2026-10-09 + CR-2026-11-03）：①真实因子目录注入 prompt；
+    ②别名字典归一；③缺因子/穿越语义回喂 LLM 重试（最多 MAX_FIX_RETRIES 次，
+    用户无感）；④兜底报错附候选与申请新增因子指引；⑤穿越语义硬闸——用户说了
+    上穿/下穿/金叉/死叉而产物没有 .shift(1) 时，重试后仍不合法就明确报错，
+    **绝不静默降级成当日状态**。
     """
     description = (description or "").strip()
     if not description:
@@ -411,26 +519,17 @@ def compile_nl(
     if lookup is None:
         warnings.append("因子库不可用，跳过因子存在性检查（提交回测时仍会校验）")
 
-    # 修复回路：LLM 输出 → 校验+纠错 → 缺因子则回喂重试（仅 lookup 可用时）
+    # 修复回路：LLM 输出 → 校验+纠错+语义闸 → 缺因子/语义降级则回喂重试。
+    # 语义闸不依赖因子库，lookup 缺失时同样生效。
     prompt = description
     fix_attempts = 0
     outcome: dict[str, Any] | None = None
-    for attempt in range(1 + (MAX_FIX_RETRIES if lookup is not None else 0)):
+    for attempt in range(1 + MAX_FIX_RETRIES):
         try:
             raw = call_llm(prompt, config, http_post=http_post)
         except Exception as exc:
             return {"ok": False, "code": "llm_error", "error": f"LLM 调用失败：{exc}"}
-        outcome = _validate_and_correct(raw, lookup, description) if lookup is not None else None
-        if lookup is None:
-            yaml_text = _with_default_holding(strip_yaml_fence(raw), description)
-            validation = validate_yaml(yaml_text)
-            if not validation["valid"]:
-                return {
-                    "ok": False, "code": "invalid_yaml", "yaml": yaml_text,
-                    "error": f"LLM 输出的 YAML 未通过策略规格校验：{validation['error']}。可编辑下方草稿修正后使用。",
-                }
-            outcome = {"ok": True, "yaml": yaml_text, "corrections": [], "unresolved": [], "missing": []}
-            break
+        outcome = _validate_and_correct(raw, lookup, description)
         assert outcome is not None
         if outcome.get("fatal"):  # YAML 结构错误不回喂重试（与因子无关）
             return {"ok": False, "code": outcome["code"], "error": outcome["error"],
@@ -439,13 +538,38 @@ def compile_nl(
             break
         if attempt < MAX_FIX_RETRIES:
             fix_attempts += 1
-            prompt = _fixup_prompt(description, outcome["yaml"], outcome["unresolved"])
+            if outcome.get("missing"):
+                prompt = _fixup_prompt(description, outcome["yaml"], outcome["unresolved"],
+                                       outcome.get("semantic_issues"))
+            else:
+                from quant_research_engine.gui.nl_semantics import cross_fix_prompt
+
+                prompt = cross_fix_prompt(description, outcome["yaml"],
+                                          outcome.get("semantic_issues"))
 
     assert outcome is not None
     yaml_text = outcome["yaml"]
     corrections = outcome["corrections"]
     unresolved_hints = outcome["unresolved"]
     missing = outcome["missing"]
+    semantic_issues = outcome.get("semantic_issues") or []
+
+    if semantic_issues:
+        # CR-2026-11-03 语义硬闸：用户说了穿越、产物没有 .shift(1)，重试后仍不
+        # 合法 → 明确报错并给出 canonical 写法。绝不允许静默降级成当日状态。
+        from quant_research_engine.gui.nl_semantics import format_semantic_error
+
+        result: dict[str, Any] = {
+            "ok": False,
+            "code": "semantic_cross_missing",
+            "error": format_semantic_error(semantic_issues),
+            "yaml": yaml_text,
+            "semantic_issues": semantic_issues,
+        }
+        if fix_attempts:
+            result["fix_attempts"] = fix_attempts
+            result["warnings"] = [f"穿越语义经 {fix_attempts} 轮自动修正仍未达标，已停止并报告"]
+        return result
 
     if missing:
         import yaml as _yaml

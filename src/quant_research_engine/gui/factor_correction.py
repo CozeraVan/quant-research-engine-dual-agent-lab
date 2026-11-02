@@ -376,6 +376,74 @@ def correct_factor_fields(
     return {"corrections": corrections, "unresolved": unresolved}
 
 
+def factor_existence_issues(
+    mapping: dict[str, Any],
+    column_lookup: Callable[[str], set[str]],
+) -> list[dict[str, Any]]:
+    """策略 mapping 的因子存在性问题列表（空 = 全部逐字存在）。
+
+    CR-2026-11-03 S2（= M7）：让 ``validate`` 在提交前就能拦下不存在的因子
+    表/列，而不是等 worker 执行才报 ``data_missing``。候选名与可自动纠正写法
+    复用别名/注册表纠错层（``correct_factor_fields``），与 NL 通道同一套纠错
+    逻辑，不另造一套。
+
+    每条 issue：``{alias, table, column, suggestions, auto_fix, message}``。
+    ``auto_fix`` 非空表示库内有唯一可自动纠正的列名（大小写/下划线/别名差异），
+    用户按它改即可；纠错层只在 NL/手工创建通道自动生效，validate 只报告不改写。
+    """
+    import copy
+
+    report = correct_factor_fields(copy.deepcopy(mapping), column_lookup)
+    # 纠错记录的 table 可能是「纠正后的表」（跨表纠正），所以只按 (alias, 原名) 索引
+    fixes = {(c["alias"], c["from"]): c for c in report["corrections"]}
+    unresolved = {(u["alias"], u["column"]): u for u in report["unresolved"]}
+
+    data = mapping.get("data") or {}
+    factor_fields = data.get("factor_fields") or {}
+    if not isinstance(factor_fields, dict):
+        return []
+    issues: list[dict[str, Any]] = []
+    for alias, target in factor_fields.items():
+        parts = str(target).split(".")
+        if len(parts) < 2:
+            continue
+        column, table = parts[-1], ".".join(parts[:-1])
+        if column in column_lookup(table):
+            continue  # 逐字存在
+        key = (str(alias), column)
+        fix = fixes.get(key)
+        item = unresolved.get(key) or {}
+        suggestions = list(item.get("suggestions") or [])
+        auto_fix = f"{fix['table']}.{fix['to']}" if fix is not None else None
+        if auto_fix is not None:
+            message = (f"{alias}（{table}.{column}）在因子库中不存在，"
+                       f"可纠正为 {auto_fix}")
+        elif suggestions:
+            message = (f"{alias}（{table}.{column}）在因子库中不存在；"
+                       f"库中相似候选：{'、'.join(suggestions)}")
+        else:
+            message = f"{alias}（{table}.{column}）在因子库中不存在；库中暂无相似列"
+        issues.append({
+            "alias": str(alias),
+            "table": table,
+            "column": column,
+            "suggestions": suggestions,
+            "auto_fix": auto_fix,
+            "message": message,
+        })
+    return issues
+
+
+def format_factor_existence_error(issues: list[dict[str, Any]]) -> str:
+    """因子存在性校验失败的中文报错（提交前可见，附候选与申请入口）。"""
+    lines = ["该策略引用了因子库中不存在的字段："]
+    for issue in issues:
+        lines.append(f"- {issue['message']}")
+    lines.append("请改用候选列名（完整目录见「新增策略」页因子目录）；"
+                 "库中确实没有需要的因子？点下方「申请新因子」提交需求，入库后再试。")
+    return "\n".join(lines)
+
+
 def format_corrections_note(corrections: list[dict[str, str]]) -> str:
     """「已自动纠正 X→Y」的中文提示行 + 注册表消歧提示（价格口径/默认参数）。"""
     items = "、".join(f"{c['from']}→{c['to']}" for c in corrections)

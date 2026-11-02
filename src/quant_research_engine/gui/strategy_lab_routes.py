@@ -95,7 +95,17 @@ def register_strategy_lab_routes(app: Flask) -> None:
     def api_validate() -> Any:
         data = request.get_json(silent=True) or {}
         yaml_text = data.get("yaml", "")
-        result = validate_yaml(yaml_text)
+        # CR-2026-11-03 S2（= M7）：因子存在性预检——本地可连库时查
+        # information_schema，连不上时回退 configs/factor_catalog_llm.json 快照
+        # （ECS 无行情库也能拦住写错的因子表/列，不用等 worker 执行才失败）。
+        lookup = None
+        try:
+            from quant_research_engine.gui.nl_compiler import _default_column_lookup
+
+            lookup = _default_column_lookup(data.get("db_url") or None)
+        except Exception:
+            lookup = None  # 目录不可用时只做结构校验（不阻断编辑）
+        result = validate_yaml(yaml_text, column_lookup=lookup)
         return jsonify(result)
 
     @app.route("/api/run", methods=["POST"])

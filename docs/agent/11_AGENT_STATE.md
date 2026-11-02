@@ -38,6 +38,17 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 资源模型 + 全链上云准备 + 清理不可信产物并挂可信 showcase
+
+- `31_RESOURCE_MODEL_2026-11-03.md`：时间=固定开销+0.026s/股年+0.0026s/笔；高换手策略按 14GB 预算；
+  用户增长所需 worker/DB/存储/网络扩容公式（含日 10/50/100/300/1000 任务档）。
+- `32_CLOUD_FULLSTACK_PREP_2026-11-03.md`：DB 吞吐优化（NVMe/临时盘/只读副本/参数）、
+  DB↔worker 传输优化（分片上传+对象存储+presigned URL+produced_bytes）、快速部署 Runbook；未实际迁移。
+- 删除 item1/item3（NL 穿越语义错误）：stress DB jobs 6/8 + results + 产物目录（1.1GB+1.7GB）。
+- **可信 RSI 结果已挂经典策略展示**：item2 导入生产 job 83（status=completed），
+  `/srv/aguhuice/uploads/job_83` 同步 973MB/26026 文件；`/saas/showcase`、`/saas/jobs/83`、
+  summary、symbols 均 200。该 job 来自压测计算结果导入，不是新生产回测。
+
 ### 2026-11-03 NL 语义优化与转义项目立项（用户最高优先，step5review 后台实施）
 
 用户原话核心：MACD 金叉死叉都能理解错，更复杂任务无从谈起；同一中文描述每次编译出不同 YAML

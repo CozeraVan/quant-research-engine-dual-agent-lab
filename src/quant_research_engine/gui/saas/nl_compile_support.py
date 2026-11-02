@@ -24,7 +24,10 @@ from sqlalchemy.engine import Engine
 
 # 编译缓存版本：编译后处理逻辑（归一化/纠错/默认值注入）变化时必须手动 bump；
 # Prompt 文案与因子目录变化由完整 build_system_prompt 哈希天然覆盖。
-NL_COMPILER_CACHE_VERSION = "2026-10-26.1"
+# 2026-11-03.1（CR-2026-11-03 NL 语义优化）：穿越语义口径变更（上穿/下穿/金叉/
+# 死叉必须带 .shift(1)）+ 新增编译后语义硬闸 + canonical YAML 规范化——旧口径
+# 缓存（把穿越事件降级成当日状态的 YAML）必须全部失效。
+NL_COMPILER_CACHE_VERSION = "2026-11-03.1"
 
 SCOPE_GUEST_DAILY = "guest_daily"
 SCOPE_MEMBER_MINUTE = "member_minute"

@@ -38,6 +38,18 @@ VALID_YAML = (
     "evaluation:\n  forward_return_horizons: [1, 3, 5, 10, 20]\n  quantiles: 5\n"
     "holding:\n  max_holding_days: 20\n"
 )
+# CR-2026-11-03：MACD 金叉死叉描述的合规编译产物（DIF 穿越 DEA，带 .shift(1)）
+MACD_CROSS_YAML = (
+    "experiment:\n  name: t\ndata:\n  market_fields: [close]\n"
+    "  factor_fields:\n"
+    "    dif: factors.stock_daily_momentum_close.macd_12_26_9\n"
+    "    dea: factors.stock_daily_momentum_close.macds_12_26_9\n"
+    "signal:\n"
+    "  entry: (dif > dea) and (dif.shift(1) <= dea.shift(1))\n"
+    "  exit: (dif < dea) and (dif.shift(1) >= dea.shift(1))\n"
+    "evaluation:\n  forward_return_horizons: [1, 3, 5, 10, 20]\n  quantiles: 5\n"
+    "holding:\n  max_holding_days: 20\n"
+)
 LLM_ENV = {
     "QRE_NL_LLM_BASE_URL": "https://llm.test",
     "QRE_NL_LLM_API_KEY": "k",
@@ -343,6 +355,7 @@ class TestCompileEndpointGuard:
     def test_cache_hit_zero_referee(self, client, app, llm, monkeypatch):
         """缓存命中不得调用裁判（成本控制）。"""
         calls = _referee_stub(monkeypatch, {"ok": True, "label": "strategy"})
+        llm.yaml_text = MACD_CROSS_YAML
         r1 = client.post("/api/saas/nl/compile", json={"description": "MACD 金叉买入，死叉卖出"})
         assert r1.status_code == 200 and r1.get_json()["cache_hit"] is False
         assert calls == ["MACD 金叉买入，死叉卖出"]
@@ -374,6 +387,7 @@ class TestCompileEndpointGuard:
 
     def test_referee_failure_degrades(self, client, app, llm, monkeypatch):
         _referee_stub(monkeypatch, {"ok": False, "status": "llm_error"})
+        llm.yaml_text = MACD_CROSS_YAML
         resp = client.post("/api/saas/nl/compile", json={"description": "MACD 金叉买入，死叉卖出"})
         assert resp.status_code == 200 and resp.get_json()["ok"] is True
         assert _quota_rows(app) == 1
@@ -381,6 +395,7 @@ class TestCompileEndpointGuard:
     def test_admin_also_refereed(self, client, app, llm, monkeypatch):
         """Required Fix：删除 admin 豁免——管理员不限配额，但与会员一样经过裁判。"""
         _make_admin(app)
+        llm.yaml_text = MACD_CROSS_YAML
         calls = _referee_stub(monkeypatch, {"ok": True, "label": "not_strategy"})
         resp = client.post("/api/saas/nl/compile",
                            json={"description": "MACD 金叉买入，死叉卖出"},
@@ -408,6 +423,7 @@ class TestCompileEndpointGuard:
 
         monkeypatch.setattr(nls, "ensure_nl_tables", _boom)
         monkeypatch.setenv("QRE_GUEST_NL_COUNTER", str(tmp_path / "nl-counter.json"))
+        llm.yaml_text = MACD_CROSS_YAML
         calls = _referee_stub(monkeypatch, {"ok": True, "label": "strategy"})
         resp = client.post("/api/saas/nl/compile", json={"description": "MACD 金叉买入，死叉卖出"})
         assert resp.status_code == 200 and resp.get_json()["ok"] is True

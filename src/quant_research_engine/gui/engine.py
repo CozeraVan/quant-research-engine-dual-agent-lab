@@ -9,7 +9,7 @@ import tempfile
 import threading
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 GUI_BASE_DIR = Path("outputs/gui-console")
 TEMPLATES_DIR = GUI_BASE_DIR / "templates"
@@ -155,10 +155,19 @@ def _extend_market_fields(fields: list[str], *columns: str) -> list[str]:
     return merged
 
 
-def validate_yaml(yaml_text: str) -> dict[str, Any]:
+def validate_yaml(
+    yaml_text: str,
+    column_lookup: Callable[[str], set[str]] | None = None,
+) -> dict[str, Any]:
     """Validate YAML text against the StrategySpec parser.
 
     Returns {"valid": True} or {"valid": False, "error": str}.
+
+    ``column_lookup`` 提供时（CR-2026-11-03 S2 / M7）追加因子存在性校验：
+    ``data.factor_fields`` 的每个 ``schema.table.column`` 都必须在因子库中真实
+    存在，否则 ``{"valid": False, "error": ..., "factor_issues": [...]}``——
+    提交前就能发现写错的因子表/列，不用等 worker 执行才报 ``data_missing``。
+    不传（wizard 产物、纯结构校验等既有调用方）行为完全不变。
     """
     from quant_research_engine.strategies.spec import StrategySpec
 
@@ -174,6 +183,19 @@ def validate_yaml(yaml_text: str) -> dict[str, Any]:
         StrategySpec.from_mapping(parsed)
     except Exception as exc:
         return {"valid": False, "error": f"StrategySpec error: {exc}"}
+    if column_lookup is not None:
+        from quant_research_engine.gui.factor_correction import (
+            factor_existence_issues,
+            format_factor_existence_error,
+        )
+
+        issues = factor_existence_issues(parsed, column_lookup)
+        if issues:
+            return {
+                "valid": False,
+                "error": format_factor_existence_error(issues),
+                "factor_issues": issues,
+            }
     return {"valid": True}
 
 

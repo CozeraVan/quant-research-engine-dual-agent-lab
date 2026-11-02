@@ -45,6 +45,21 @@ _VALID_YAML = (
     "evaluation:\n  forward_return_horizons: [1, 3, 5]\n"
 )
 
+# 穿越语义的合规产物（CR-2026-11-03）：上穿/下穿必须带 .shift(1)
+_CROSS_YAML = (
+    "experiment:\n  name: nl_macd_cross\n  market_profile: ashare_daily_default\n"
+    "  frequency: daily\n"
+    "data:\n  market_fields: [open, high, low, close, pre_close, vol, amount]\n"
+    "  factor_fields:\n"
+    "    dif: factors.stock_daily_momentum_close.macd_12_26_9\n"
+    "    dea: factors.stock_daily_momentum_close.macds_12_26_9\n"
+    "signal:\n"
+    "  entry: (dif > dea) and (dif.shift(1) <= dea.shift(1))\n"
+    "  exit: (dif < dea) and (dif.shift(1) >= dea.shift(1))\n"
+    "holding:\n  max_holding_days: 5\n"
+    "evaluation:\n  forward_return_horizons: [1, 3, 5]\n"
+)
+
 
 # --- config / prompt / fence ---
 
@@ -126,8 +141,8 @@ def test_compile_defaults_missing_holding_to_unlimited_and_preserves_explicit_da
     invented = compile_nl(
         "MACD 金叉买入，死叉卖出",
         env=_llm_env(),
-        http_post=_http_ok(_VALID_YAML.replace("max_holding_days: 5", "max_holding_days: 999")),
-        column_lookup=lambda table: {"rsi_14"},
+        http_post=_http_ok(_CROSS_YAML.replace("max_holding_days: 5", "max_holding_days: 999")),
+        column_lookup=lambda table: {"rsi_14", "macd_12_26_9", "macds_12_26_9"},
     )
     assert invented["ok"] is True
     assert "max_holding_days: 0" in invented["yaml"]

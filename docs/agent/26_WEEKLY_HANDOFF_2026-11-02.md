@@ -175,6 +175,9 @@ bash scripts/git-finalize-check.sh
 | 2026-11-03 | 全期全量压测（三项串行） | done | agent-208 | item1 3854s / item2 2571s（回传 413 丢 blob，summary 已入库 +24.20%）/ item3 4312s；单跑 43–72 分钟、常态 6.3GB、**item3 峰值 13.97GB**、本地产物 0.85–1.52GiB；三条回传链缺陷与 §8 全部发现、§10 待清理清单均已写入 `27_STRESS_TEST_2026-11-02.md`（193 行新增） |
 | 2026-11-03 | **P0-10 容量假设修正**（压测实测） | planned | Kimi | §10「安全并发 4 × 6GB」与 R2 heavy 闸门 6500MB 在 item3 级策略（50.4 万笔 → 13.97GB）下不成立，需按交易笔数/聚合规模重建模；已登记 §11.8 B 区 |
 | 2026-11-03 | **评审修复 B1–B6**（主 Agent 自查 step5 工作） | done | Kimi | `CR-2026-11-03_review_fixes_b1_b6.md`：B1 NON_RETRYABLE 误含传输错误、B2 成本模型低估 27 倍改两段式、B3 artifact 预算只统计已回传、B4 夜间窗口跨零点、B5 限流清理按计数触发、B6 YAML 类型护栏；全量 3388 passed；ECS MainPID 610212 |
+| 2026-11-03 | **资源-耗时关系与用户增长容量估算** | done | Kimi | `31_RESOURCE_MODEL_2026-11-03.md`：T≈固定开销+0.026s/股年+0.0026s/笔；单任务 43–72min、常态 6.3GB、高换手 13.97GB；用户增长 worker/DB/存储/网络扩容公式与起步规格 |
+| 2026-11-03 | **全链上云预准备补全** | done | Kimi | `32_CLOUD_FULLSTACK_PREP_2026-11-03.md`：DB 吞吐优化（NVMe/临时盘/只读副本/参数）、DB↔worker 传输优化（分片上传+对象存储+presigned URL+produced_bytes）、快速部署 Runbook；未实际迁移 |
+| 2026-11-03 | **删除不可信产物 + 可信 RSI 结果挂经典策略展示** | done | Kimi | 删除 item1/item3（NL 穿越语义错误）jobs+results+产物目录（2.8GB）；item2 RSI 结果导入生产 job 83 并挂 showcase（+24.20%/-41.96%，973MB/26026 文件已同步 `/srv/aguhuice/uploads/job_83`）；`/saas/showcase`、`/saas/jobs/83`、summary、symbols 均 200 |
 | 2026-11-03 | **NL 语义优化与转义项目**（用户明确要求，最高优先） | in_progress | step5review (agent-209) | `CR-2026-11-03_nl_semantics_optimization.md`（扩展并取代 11-02 穿越语义 CR）：S1 穿越语义修复（`_DSL_DOC` 重写 + few-shot + 编译后语义校验层 + bump cache version）、S2 因子存在性预检、S3 中文语义字典与规范化输出、S4 真实冒烟+全量回归；step5review 后台实施，主 Agent 验收后部署提交 |
 | 2026-11-03 | 全期全量压测子代理恢复执行 | done | agent-208 | 同上；未清理任何进程/目录/库（用户要求保留） | 03:00 闸门已过，已 resume 同一 agent（task agent-vn63q4w8）串行跑 item1→item2→item3；目标 §5/§6/§7 |
 

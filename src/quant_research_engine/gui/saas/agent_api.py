@@ -908,7 +908,17 @@ def agent_validate():
     if not yaml_text:
         return jsonify(_err("invalid_yaml", "缺少策略 yaml")), 400
     issues: list[str] = []
-    verdict = validate_yaml(yaml_text)
+    # CR-2026-11-03 S2（= M7）：因子存在性预检。走因子目录快照
+    # （configs/factor_catalog_llm.json）——ECS 无行情库，agent 在提交前就能
+    # 发现写错的因子表/列；快照缺失时只做结构校验，不伪造存在性结论。
+    factor_lookup = None
+    try:
+        from quant_research_engine.gui.factor_catalog_llm import catalog_column_lookup
+
+        factor_lookup = catalog_column_lookup()
+    except Exception:
+        factor_lookup = None  # 快照不可读：降级为纯结构校验
+    verdict = validate_yaml(yaml_text, column_lookup=factor_lookup)
     if not verdict.get("valid"):
         issues.append(str(verdict.get("error") or "YAML 不合法"))
 

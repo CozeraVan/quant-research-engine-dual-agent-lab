@@ -26,6 +26,7 @@ from quant_research_engine.gui.nl_compiler import (
 )
 
 MACD_POOL = {"macd_12_26_9", "macds_12_26_9", "macdh_12_26_9"}
+# CR-2026-11-03：穿越语义的合规产物——MACD 金叉/死叉 = DIF 穿越 DEA，必须带 .shift(1)
 GOOD_YAML = """experiment:
   name: t_macd
   market_profile: ashare_daily_default
@@ -41,8 +42,8 @@ universe:
   exclude_risk_warning: true
   min_listing_days: 120
 signal:
-  entry: "macd > macd_sig"
-  exit: "macd < macd_sig"
+  entry: "(macd > macd_sig) and (macd.shift(1) <= macd_sig.shift(1))"
+  exit: "(macd < macd_sig) and (macd.shift(1) >= macd_sig.shift(1))"
 holding:
   max_holding_days: 10
 evaluation:
@@ -353,6 +354,11 @@ def test_nl_sample_compile_end_to_end_with_stub_llm(tmp_path):
     assert parsed["data"]["factor_fields"]["macd_sig"] == (
         "factors.stock_daily_momentum_close.macds_12_26_9"
     )
-    # canonical / 回测口径不变：仍是同一张表的同一列
-    assert parsed["signal"]["entry"] == "macd > macd_sig"
+    # canonical / 回测口径不变：仍是同一张表的同一列；穿越语义保留（CR-2026-11-03）
+    assert parsed["signal"]["entry"] == (
+        "(macd > macd_sig) and (macd.shift(1) <= macd_sig.shift(1))"
+    )
+    assert parsed["signal"]["exit"] == (
+        "(macd < macd_sig) and (macd.shift(1) >= macd_sig.shift(1))"
+    )
     assert not (tmp_path / "q.json").exists()
