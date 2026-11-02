@@ -952,10 +952,11 @@ def _verify_password(password: str, stored: str) -> bool:
     except (ValueError, AttributeError):
         return False
 # 不可重试分类：策略/数据问题重试无意义，产物回传的 4xx 同样无意义
-# （P0-9：413 重试只会重算同一份结果）。5xx 由 result_upload_http_5xx 之外的
-# result_upload_error 表达，仍按可重试处理（传输抖动值得再试）。
-NON_RETRYABLE = ("strategy_compile_error", "data_missing",
-                 "result_upload_error") + tuple(
+# （P0-9：413 重试只会重算同一份结果）。
+# **传输/5xx 的 result_upload_error 不在此列**——它按可重试处理（17_JOB_PROTOCOL §3.4），
+# 与 engine_error 的重试语义一致；此前误把它放进 NON_RETRYABLE，导致连接重置/5xx 也直接 failed，
+# 与 daemon 注释和协议文档矛盾（B1，2026-11-03 评审发现）。
+NON_RETRYABLE = ("strategy_compile_error", "data_missing") + tuple(
     f"result_upload_http_{code}" for code in (400, 401, 403, 404, 409, 413, 422, 429)
 )
 

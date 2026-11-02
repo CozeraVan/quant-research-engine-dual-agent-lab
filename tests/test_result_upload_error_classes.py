@@ -86,8 +86,13 @@ class TestErrorClassConsistency:
         """4xx 回传失败不可重试：重试只会把同一份结果再算一遍。"""
         for code in (400, 401, 403, 404, 409, 413, 422, 429):
             assert f"result_upload_http_{code}" in NON_RETRYABLE, code
-        # 传输类错误仍按可重试处理（抖动值得再试）
-        assert "result_upload_error" in NON_RETRYABLE  # 见下条说明
+
+    def test_transport_upload_error_is_retryable(self):
+        """B1 修正：传输/5xx 的 result_upload_error 必须**可重试**——
+        与 17_JOB_PROTOCOL §3.4 及 daemon 注释一致。此前误放进 NON_RETRYABLE，
+        导致连接重置也直接 failed，与文档矛盾。"""
+        assert "result_upload_error" in ERROR_CLASSES
+        assert "result_upload_error" not in NON_RETRYABLE
 
 
 class TestDaemonUploadFailure:

@@ -48,10 +48,11 @@ DISCLAIMER = "本研究结果仅供研究使用，不构成投资建议。"
 DEFAULT_SCOPES = ("jobs:submit", "jobs:read", "results:read", "factors:read")
 KNOWN_SCOPES = DEFAULT_SCOPES  # M2–M5 新增 scope 时同步扩充，未知 scope 一律 400
 
-# 成本信封（设计文档 §5）。数值来源 14_LAUNCH_ROADMAP.md §10 容量基线与
-# docs/agent/27_STRESS_TEST_2026-11-02.md 全期全量压测；压测结果出来后必须校准，
-# 偏差 >50% 需在同名文档记录原因。口径：est_seconds 为串行单 job 的墙上时间估计，
-# peak_mem_mb 为 worker 子进程内存峰值估计，artifact_kb 为产物体积估计。
+# 成本信封（设计文档 §5）。数值来源 14_LAUNCH_ROADMAP.md §10 容量基线、
+# docs/agent/27_STRESS_TEST_2026-11-02.md 全期全量压测、以及 2026-11-03 M6 实测。
+# B2（2026-11-03 评审发现）：原先的 est_seconds 基准是拍的，全区间档按 years/100 缩放
+# 会把 4312s 的实测估成 160s，直接破坏「agent 跟用户定边界」的可信度。
+# 现改为「固定开销 + 每股年耗时」两段式模型（见 _COST_MODEL），档位仅作参考锚点。
 SCALE_PROFILES: list[dict[str, Any]] = [
     {
         "name": "smoke_6m",
@@ -61,35 +62,52 @@ SCALE_PROFILES: list[dict[str, Any]] = [
         "est_seconds": 5,
         "peak_mem_mb": 1500,
         "artifact_kb": 400,
+        "measured_at": "2026-11-02",
+        "note": "harness 实测（3 只 smoke，job 4/5，执行 5s）",
     },
     {
         "name": "sample300_5y",
         "universe": "随机 300 只 A 股",
         "universe_size": 300,
         "window": "近 5 年",
-        "est_seconds": 14,
+        "est_seconds": 142,
         "peak_mem_mb": 2000,
         "artifact_kb": 900,
+        "measured_at": "2026-11-03",
+        "note": "两段式模型推算（85.4 + 0.03773×1500）；M6 实测 20 只×1.5 年≈86.5s/job",
     },
     {
         "name": "full_a_2y",
         "universe": "全 A 约 5860 只",
         "universe_size": 5860,
         "window": "近 2 年",
-        "est_seconds": 111,
+        "est_seconds": 528,
         "peak_mem_mb": 5900,
         "artifact_kb": 400000,
+        "measured_at": "2026-10-03",
+        "note": "两段式模型推算（85.4 + 0.03773×11720）；§10 曾实测 111s（机器/代码状态不同，待复测）",
     },
     {
         "name": "full_a_full",
         "universe": "全 A 约 5860 只",
         "universe_size": 5860,
         "window": "全区间（2009 至今）",
-        "est_seconds": 900,
-        "peak_mem_mb": 5900,
-        "artifact_kb": 4000000,
+        "est_seconds": 3579,
+        "peak_mem_mb": 13973,
+        "artifact_kb": 1635200,
+        "measured_at": "2026-11-02",
+        "note": "item1/2/3 实测均值（3854/2571/4312s）；内存与产物取 item3 最大值",
     },
 ]
+COST_ENVELOPE_MEASURED_AT = "2026-11-03"
+COST_ENVELOPE_SOURCE = "27_STRESS_TEST_2026-11-02.md + M6 实测（2026-11-03）；两段式模型校准"
+
+# B2 两段式成本模型：est = FIXED + RATE × stock_years
+# 用两组实测点拟合：
+#   小：M6 20 只 × 1.5 年 = 30 股年 → 86.5s/job
+#   大：item1/2/3 均值 5201 只 × 17.8 年 = 92578 股年 → 3579s/job
+# 解得 RATE=(3579-86.5)/(92578-30)=0.03773 s/股年，FIXED=86.5-RATE×30=85.4s。
+_COST_MODEL = {"fixed_overhead_seconds": 85.4, "rate_per_stock_year": 0.03773}
 COST_ENVELOPE_MEASURED_AT = "2026-10-03"
 COST_ENVELOPE_SOURCE = "14_LAUNCH_ROADMAP.md §10 容量基线；27_STRESS_TEST_2026-11-02.md 待校准"
 
@@ -299,11 +317,6 @@ def _consume_rate_limit(app, engine, row) -> tuple[bool, int]:
             subject = hashlib.sha256(
                 f"agent:tid:{row['id']}{_auth_salt(app)}".encode("utf-8")
             ).hexdigest()[:32]
-            # 机会式清理：限流行按分钟增长，删掉 2 小时前的（成本一次索引范围删除）
-            conn.execute(
-                text("DELETE FROM agent_rate_limits "
-                     "WHERE window_start < date_trunc('minute', now()) - interval '2 hours'")
-            )
             allowed = conn.execute(
                 text(
                     "INSERT INTO agent_rate_limits (scope, subject_hash, window_start, hits) "
@@ -314,6 +327,15 @@ def _consume_rate_limit(app, engine, row) -> tuple[bool, int]:
                 ),
                 {"sub": subject, "lim": limit},
             ).first()
+            # 机会式清理：限流行按分钟增长，删掉 2 小时前的。
+            # B5：只在每第 10 次成功计数时清理一次，避免每请求一次写。
+            # 注意必须放在 INSERT 之后（allowed 已赋值），否则 NameError 会被外层
+            # except 吞掉，静默把限流变成 no-op——已被回归测试抓住。
+            if allowed is not None and int(allowed[0]) % 10 == 0:
+                conn.execute(
+                    text("DELETE FROM agent_rate_limits "
+                         "WHERE window_start < date_trunc('minute', now()) - interval '2 hours'")
+                )
             if allowed is not None:
                 return False, 0
             row_left = conn.execute(
@@ -372,7 +394,14 @@ def _nightly_eligible_at(row) -> datetime | None:
         return None
     tz = timezone(timedelta(hours=8))  # Asia/Shanghai 无 DST，固定 +8
     now_local = datetime.now(timezone.utc).astimezone(tz)
-    if start_h <= now_local.hour < end_h:
+    # B4：支持跨零点窗口（如 22:00-06:00）；start > end 时按「晚段或早段」判定。
+    if start_h == end_h:
+        in_window = False  # 起止相同视为无开放窗口（全部顺延），配置错误可被发现
+    elif start_h < end_h:
+        in_window = start_h <= now_local.hour < end_h
+    else:
+        in_window = now_local.hour >= start_h or now_local.hour < end_h
+    if in_window:
         return None
     candidate = now_local.replace(hour=start_h, minute=0, second=0, microsecond=0)
     if candidate <= now_local:
@@ -816,10 +845,11 @@ def _window_years(params: dict[str, Any]) -> float | None:
 
 
 def estimate_cost(params: dict[str, Any]) -> dict[str, Any]:
-    """成本估计：先按股票池规模选档位，再按区间长度等比缩放，并显式标注方法。
+    """成本估计：两段式模型 `est = FIXED_OVERHEAD + RATE × stock_years`。
 
-    估计不承诺；`measured_at` 与来源随响应返回，压测结果出来后必须校准。
-    缩放是保守方向（区间越长估计越大），宁可高估不可低估。
+    模型由两组实测点拟合（M6 小样本与全期全量压测），比按区间长度等比缩放更接近真实：
+    小 run 由固定开销（数据加载/绘图/序列化）主导，大 run 由每股年耗时主导。
+    估计不承诺；`measured_at` 与来源随响应返回。
     """
     size = _universe_size(params)
     years = _window_years(params)
@@ -829,17 +859,18 @@ def estimate_cost(params: dict[str, Any]) -> dict[str, Any]:
                 "note": "无法判断股票池或区间，无法估计"}
     ordered = sorted(SCALE_PROFILES, key=lambda p: p["universe_size"])
     chosen = next((p for p in ordered if size <= p["universe_size"]), ordered[-1])
-    profile_years = _profile_years(chosen)
-    scale = years / profile_years
-    method = "profile_match" if abs(scale - 1.0) < 0.05 else "profile_match_scaled"
+    stock_years = size * years
+    fixed = _COST_MODEL["fixed_overhead_seconds"]
+    rate = _COST_MODEL["rate_per_stock_year"]
     return {
         "profile": chosen["name"],
-        "est_seconds": round(chosen["est_seconds"] * scale, 1),
+        "est_seconds": round(fixed + rate * stock_years, 1),
         "peak_mem_mb": chosen["peak_mem_mb"],
-        "artifact_kb": int(chosen["artifact_kb"] * scale),
-        "method": method,
+        "artifact_kb": chosen["artifact_kb"],
+        "method": "two_part_model",
+        "model": dict(_COST_MODEL),
         "measured_at": COST_ENVELOPE_MEASURED_AT,
-        "note": f"按 {chosen['name']} 档位与区间长度 {years:.1f} 年（档位 {profile_years:g} 年）缩放",
+        "note": f"固定开销 {fixed}s + {rate}s/股年 × {stock_years:.0f} 股年（{size} 只 × {years:.1f} 年）",
     }
 
 
@@ -974,8 +1005,12 @@ def _apply_config_to_yaml(base_yaml: str, config: dict[str, Any]) -> str:
             raise ValueError(
                 f"grid 键仅支持 data.factor_fields.<逻辑名> 形式，收到：{dotted}"
             )
-        data = raw.setdefault("data", {})
+        if not isinstance(raw.get("data"), dict):
+            raise ValueError("base_yaml 的 data 节必须是 mapping")
+        data = raw["data"]
         fields = data.setdefault("factor_fields", {})
+        if not isinstance(fields, dict):
+            raise ValueError("base_yaml 的 data.factor_fields 必须是 mapping")
         if parts[2] not in fields:
             raise ValueError(f"base_yaml 的 data.factor_fields 中不存在逻辑名 {parts[2]}")
         fields[parts[2]] = str(value)
@@ -1714,6 +1749,11 @@ def research_run_usage(engine, run_id: int) -> dict[str, Any]:
         "jobs_in_flight": int(jobs["in_flight"] or 0),
         "artifact_bytes": int(artifacts["bytes"] or 0),
         "wall_clock_seconds": round(float(jobs["seconds"] or 0), 1),
+        # B3（2026-11-03 评审发现）：artifact_bytes 只统计**已回传**的产物。
+        # 20MiB 回传预算静默截断（27_STRESS_TEST §8.5）会让全量 run 只回传约 1% 的产物，
+        # 因此该数字**不代表真实产物体积**，artifact 预算对全量 run 实际失效。
+        # 根治需要 worker 在 result/meta 里补 produced_bytes 字段（已登记 CR-2026-11-03）。
+        "artifact_accounting": "uploaded_only",
     }
 
 
@@ -1853,6 +1893,9 @@ def agent_research_run_detail(run_id: int):
     exceeded = _budget_exceeded(budget, usage)
     view = _research_run_view(run, usage)
     view["budget_exceeded"] = exceeded
+    view["artifact_note"] = ("artifact_bytes 仅统计已回传产物；全量回测受 20MiB 回传预算截断时，"
+                            "该值可能只有真实产物体积的约 1%，artifact 预算对全量 run 实际失效"
+                            "（B3，已登记 CR-2026-11-03）")
     view["budget_remaining"] = {
         key: max(0, int(budget[key]) - usage_key)
         for key, usage_key in (

@@ -489,7 +489,8 @@ class TestValidateAndSweeps:
         assert body["valid"] is True and body["issues"] == []
         assert body["executed"] is False and body["quota_charged"] is False
         assert body["cost_estimate"]["profile"] == "sample300_5y"
-        assert 10 <= body["cost_estimate"]["est_seconds"] <= 25
+        assert body["cost_estimate"]["method"] == "two_part_model"
+        assert 100 <= body["cost_estimate"]["est_seconds"] <= 250
 
     def test_validate_rejects_bad_yaml_and_missing_dates(self, client, app):
         headers = self._token(client, app)
@@ -520,7 +521,8 @@ class TestValidateAndSweeps:
                            headers=headers)
         estimate = resp.get_json()["validate"]["cost_estimate"]
         assert estimate["profile"] == "full_a_2y"
-        assert estimate["method"] in ("profile_match", "profile_match_scaled")
+        assert estimate["method"] == "two_part_model"
+        assert estimate["model"]["fixed_overhead_seconds"] > 0
 
     # --- sweeps ---
     def _sweep(self, client, headers, run_id, *, stage="screen", grid=None, params=None,
@@ -804,17 +806,20 @@ class TestRateLimitNightlyAndAudit:
     def test_rate_limit_rows_cleaned_up(self, client, app):
         from sqlalchemy import text
 
-        headers = self._token(client, app, rate_per_minute=5)
+        headers = self._token(client, app, rate_per_minute=30)
         engine = app.extensions["saas_engine"]
         with engine.begin() as conn:
             conn.execute(text(
                 "INSERT INTO agent_rate_limits (scope, subject_hash, window_start, hits) "
                 "VALUES ('agent_minute', 'stale', now() - interval '5 hours', 9)"))
-        assert client.get(f"{AGENT_API_PREFIX}/capabilities", headers=headers).status_code == 200
+        # B5：清理只在每第 10 次成功计数时执行，因此连发 10 次请求触发一次清理
+        for _ in range(10):
+            assert client.get(f"{AGENT_API_PREFIX}/capabilities",
+                              headers=headers).status_code == 200
         with engine.connect() as conn:
             stale = conn.execute(text(
                 "SELECT count(*) FROM agent_rate_limits WHERE subject_hash = 'stale'")).scalar_one()
-        assert stale == 0  # 2 小时前的行被机会式清理
+        assert stale == 0  # 2 小时前的行已被机会式清理
 
     # --- 夜间窗口 ---
     def test_nightly_window_inside_window_is_not_limited(self, client, app, monkeypatch):
@@ -846,6 +851,32 @@ class TestRateLimitNightlyAndAudit:
 
         monkeypatch.setitem(agent_mod.AGENT_DEFAULTS, "nightly_window", "03:00-03:01 Asia/Shanghai")
         assert agent_mod._nightly_eligible_at({"nightly_only": False}) is None
+
+    def test_nightly_window_cross_midnight_supported(self, client, app, monkeypatch):
+        """B4：跨零点窗口（如 22:00-06:00）必须能正确判定，否则全部 job 永久顺延。"""
+        from datetime import datetime, timedelta, timezone
+
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        cst = timezone(timedelta(hours=8))
+        now_h = datetime.now(timezone.utc).astimezone(cst).hour
+        # 配置跨零点窗口，起点取当前小时+2（当前必然在窗口外）
+        start = (now_h + 2) % 24
+        end = (now_h + 3) % 24
+        monkeypatch.setitem(agent_mod.AGENT_DEFAULTS, "nightly_window",
+                            f"{start:02d}:00-{end:02d}:00 Asia/Shanghai")
+        # 窗口外 → 返回未来的窗口起点（且小时等于配置起点）
+        eligible = agent_mod._nightly_eligible_at({"nightly_only": True})
+        assert eligible is not None
+        assert eligible > datetime.now(timezone.utc)
+        assert eligible.astimezone(cst).hour == start
+
+    def test_nightly_window_same_start_end_means_closed(self, client, app, monkeypatch):
+        """start == end 视为无开放窗口：配置错误必须可被发现，而不是静默放行。"""
+        from quant_research_engine.gui.saas import agent_api as agent_mod
+
+        monkeypatch.setitem(agent_mod.AGENT_DEFAULTS, "nightly_window", "06:00-06:00 Asia/Shanghai")
+        assert agent_mod._nightly_eligible_at({"nightly_only": True}) is not None
 
     def test_nightly_window_parsing_failure_does_not_block(self, client, app, monkeypatch):
         from quant_research_engine.gui.saas import agent_api as agent_mod

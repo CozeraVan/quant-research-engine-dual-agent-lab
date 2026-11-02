@@ -174,6 +174,7 @@ bash scripts/git-finalize-check.sh
 | 2026-11-03 | **P0-9 结果回传缺陷立项**（压测实测，数据丢失级） | planned | Kimi | `CR-2026-11-03_result_upload_413_and_uploading_terminal.md`：MAX_FORM_PARTS=1000 → 413 丢全部 blob；uploading 无终态 + reaper 重排 → 42 分钟计算重跑；关联 §8.5 静默截断无标记 / §8.7 tmp 不清理 / §8.11 progress 不更新。已登记 §11.8 B 区最高优先，修复前排期待用户批准 |
 | 2026-11-03 | 全期全量压测（三项串行） | done | agent-208 | item1 3854s / item2 2571s（回传 413 丢 blob，summary 已入库 +24.20%）/ item3 4312s；单跑 43–72 分钟、常态 6.3GB、**item3 峰值 13.97GB**、本地产物 0.85–1.52GiB；三条回传链缺陷与 §8 全部发现、§10 待清理清单均已写入 `27_STRESS_TEST_2026-11-02.md`（193 行新增） |
 | 2026-11-03 | **P0-10 容量假设修正**（压测实测） | planned | Kimi | §10「安全并发 4 × 6GB」与 R2 heavy 闸门 6500MB 在 item3 级策略（50.4 万笔 → 13.97GB）下不成立，需按交易笔数/聚合规模重建模；已登记 §11.8 B 区 |
+| 2026-11-03 | **评审修复 B1–B6**（主 Agent 自查 step5 工作） | done | Kimi | `CR-2026-11-03_review_fixes_b1_b6.md`：B1 NON_RETRYABLE 误含传输错误、B2 成本模型低估 27 倍改两段式、B3 artifact 预算只统计已回传、B4 夜间窗口跨零点、B5 限流清理按计数触发、B6 YAML 类型护栏；全量 3388 passed；ECS MainPID 610212 |
 | 2026-11-03 | 全期全量压测子代理恢复执行 | done | agent-208 | 同上；未清理任何进程/目录/库（用户要求保留） | 03:00 闸门已过，已 resume 同一 agent（task agent-vn63q4w8）串行跑 item1→item2→item3；目标 §5/§6/§7 |
 
 **M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**

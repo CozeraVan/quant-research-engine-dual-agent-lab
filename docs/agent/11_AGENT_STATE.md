@@ -38,6 +38,22 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 评审修复 B1–B6（CR-2026-11-03_review_fixes_b1_b6.md）
+
+主 Agent 自查 step5 工作后逐项修正：
+- B1：`NON_RETRYABLE` 误含 `result_upload_error` → 移除，传输/5xx 恢复可重试（与协议文档一致）。
+- B2：成本信封改**两段式模型**（`FIXED=85.4s + RATE=0.03773/股年`，用 M6 小样本与 item1/2/3
+  实测拟合），`SCALE_PROFILES` 四档换实测锚点；原模型全区间低估 27 倍。
+- B3：`usage` 增 `artifact_accounting: "uploaded_only"` + 详情 `artifact_note`——
+  只统计已回传产物，全量 run 的 artifact 预算实际失效；根治需 worker 补 `produced_bytes`（已登记）。
+- B4：夜间窗口支持跨零点（start > end 按晚段/早段判定），start == end 视为关闭。
+- B5：限流清理改为每第 10 次成功计数执行一次（初版把清理放在 INSERT 前导致 NameError 被吞、
+  限流静默失效，已被回归测试抓住并修正）。
+- B6：`_apply_config_to_yaml` 对非 mapping 的 data 节先校验，避免 500。
+
+全量 **3388 passed, 34 skipped**。ECS 已部署（MainPID 610212，回滚
+`/tmp/qre-deploy-20261102T020030Z.bak`），生产三端点 200、agent 无 token 401。
+
 ### 2026-11-03 M6 本地端到端验收（隔离 app 18077 + 独立库 + 临时 worker）
 
 用户批准「现在做」→ 先重启本地 worker（PID 430787，P2-14 与 P0-9 worker 侧生效），
