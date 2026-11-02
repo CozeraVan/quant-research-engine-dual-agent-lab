@@ -1,0 +1,304 @@
+# CR-2026-11-03 NL 语义 golden dataset（中文描述 → 期望 YAML 结构合同）
+#
+# 每个用例：
+#   id:                用例标识（测试 parametrize id）
+#   description:       用户中文描述（compile_nl 输入）
+#   llm_output:        模型一次输出的 YAML（含真实世界的瑕疵：围栏、键序乱、
+#                      列名笔误、自行补持仓天数……由编译后处理层收敛）
+#   expect:            编译结果的期望结构
+#     entry_has_shift / exit_has_shift: 该侧必须 / 不得含 .shift(1)
+#     no_shift_anywhere:                全文不得出现 .shift(
+#     entry_contains / exit_contains:   表达式必须包含的子串
+#     factor_fields:                    {逻辑别名: factors.<表>.<列>} 精确期望
+#     holding_max_days:                期望的 max_holding_days
+#
+# 因子列名全部来自真实因子库（configs/factor_catalog_llm.json 快照）——
+# 本数据集同时是「禁止编造因子名」的合同：任何期望列名不在库内，测试直接红。
+#
+# 运行：uv run pytest tests/test_nl_semantics_golden.py -q -p no:randomly
+
+- id: sma5_cross_sma200
+  description: "SMA5 上穿 SMA200 买入，下穿 SMA200 卖出，不设止损"
+  llm_output: |
+    ```yaml
+    signal:
+      entry: (sma_5 > sma_200) and (sma_5.shift(1) <= sma_200.shift(1))
+      exit: (sma_5 < sma_200) and (sma_5.shift(1) >= sma_200.shift(1))
+    data:
+      factor_fields:
+        sma_200: factors.stock_daily_overlap_close.sma_200
+        sma_5: factors.stock_daily_overlap_close.sma_5
+      market_fields: [vol, amount, close, pre_close, high, low, open]
+    experiment:
+      name: nl_sma5_cross_sma200
+      frequency: daily
+      market_profile: ashare_daily_default
+    holding:
+      max_holding_days: 30
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    evaluation:
+      quantiles: 5
+      forward_return_horizons: [20, 10, 5, 3, 1]
+    ```
+  expect:
+    entry_has_shift: true
+    exit_has_shift: true
+    entry_contains: ["(sma_5 > sma_200)", "sma_5.shift(1) <= sma_200.shift(1)"]
+    exit_contains: ["(sma_5 < sma_200)", "sma_5.shift(1) >= sma_200.shift(1)"]
+    factor_fields:
+      sma_5: factors.stock_daily_overlap_close.sma_5
+      sma_200: factors.stock_daily_overlap_close.sma_200
+    holding_max_days: 0
+
+- id: macd_golden_dead_cross
+  description: "MACD 金叉买入，死叉卖出"
+  llm_output: |
+    experiment:
+      name: nl_macd_cross
+      market_profile: ashare_daily_default
+      frequency: daily
+    data:
+      market_fields: [open, high, low, close, pre_close, vol, amount]
+      factor_fields:
+        dif: factors.stock_daily_momentum_close.macd_12_26_9
+        dea: factors.stock_daily_momentum_close.macds_12_26_9
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    signal:
+      entry: (dif > dea) and (dif.shift(1) <= dea.shift(1))
+      exit: (dif < dea) and (dif.shift(1) >= dea.shift(1))
+    holding:
+      max_holding_days: 10
+    evaluation:
+      forward_return_horizons: [1, 3, 5, 10, 20]
+      quantiles: 5
+  expect:
+    entry_has_shift: true
+    exit_has_shift: true
+    factor_fields:
+      dif: factors.stock_daily_momentum_close.macd_12_26_9
+      dea: factors.stock_daily_momentum_close.macds_12_26_9
+    holding_max_days: 0
+
+- id: rsi_state_reversal
+  description: "RSI 低于 30 买入，高于 70 卖出，最多持有 5 天"
+  llm_output: |
+    experiment:
+      name: nl_rsi_reversal
+      market_profile: ashare_daily_default
+      frequency: daily
+    data:
+      market_fields: [open, high, low, close, pre_close, vol, amount]
+      factor_fields:
+        rsi_14: factors.stock_daily_momentum_close.rsi_14
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    signal:
+      entry: rsi_14 < 30
+      exit: rsi_14 > 70
+    holding:
+      max_holding_days: 5
+    evaluation:
+      forward_return_horizons: [1, 3, 5, 10, 20]
+      quantiles: 5
+  expect:
+    no_shift_anywhere: true
+    entry_contains: ["rsi_14 < 30"]
+    exit_contains: ["rsi_14 > 70"]
+    factor_fields:
+      rsi_14: factors.stock_daily_momentum_close.rsi_14
+    holding_max_days: 5
+
+- id: sma60_above_sma200_state
+  description: "SMA60 大于 SMA200 时买入，小于时卖出"
+  llm_output: |
+    experiment:
+      name: nl_trend_state
+      market_profile: ashare_daily_default
+      frequency: daily
+    data:
+      market_fields: [open, high, low, close, pre_close, vol, amount]
+      factor_fields:
+        sma_60: factors.stock_daily_overlap_close.sma_60
+        sma_200: factors.stock_daily_overlap_close.sma_200
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    signal:
+      entry: sma_60 > sma_200
+      exit: sma_60 < sma_200
+    holding:
+      max_holding_days: 0
+    evaluation:
+      forward_return_horizons: [1, 3, 5, 10, 20]
+      quantiles: 5
+  expect:
+    no_shift_anywhere: true
+    factor_fields:
+      sma_60: factors.stock_daily_overlap_close.sma_60
+      sma_200: factors.stock_daily_overlap_close.sma_200
+
+- id: macd_cross_entry_state_exit
+  description: "MACD 金叉买入，RSI 大于 70 卖出"
+  llm_output: |
+    experiment:
+      name: nl_macd_cross_rsi_exit
+      market_profile: ashare_daily_default
+      frequency: daily
+    data:
+      market_fields: [open, high, low, close, pre_close, vol, amount]
+      factor_fields:
+        dif: factors.stock_daily_momentum_close.macd_12_26_9
+        dea: factors.stock_daily_momentum_close.macds_12_26_9
+        rsi_14: factors.stock_daily_momentum_close.rsi_14
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    signal:
+      entry: (dif > dea) and (dif.shift(1) <= dea.shift(1))
+      exit: rsi_14 > 70
+    holding:
+      max_holding_days: 0
+    evaluation:
+      forward_return_horizons: [1, 3, 5, 10, 20]
+      quantiles: 5
+  expect:
+    entry_has_shift: true
+    exit_has_shift: false
+    factor_fields:
+      dif: factors.stock_daily_momentum_close.macd_12_26_9
+      dea: factors.stock_daily_momentum_close.macds_12_26_9
+      rsi_14: factors.stock_daily_momentum_close.rsi_14
+
+- id: ema_cross_with_column_typo
+  description: "EMA5 上穿 EMA20 买入，下穿卖出"
+  llm_output: |
+    experiment:
+      name: nl_ema_cross
+      market_profile: ashare_daily_default
+      frequency: daily
+    data:
+      market_fields: [open, high, low, close, pre_close, vol, amount]
+      factor_fields:
+        ema5: factors.stock_daily_overlap_close.ema5
+        ema20: factors.stock_daily_overlap_close.ema20
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    signal:
+      entry: (ema5 > ema20) and (ema5.shift(1) <= ema20.shift(1))
+      exit: (ema5 < ema20) and (ema5.shift(1) >= ema20.shift(1))
+    holding:
+      max_holding_days: 0
+    evaluation:
+      forward_return_horizons: [1, 3, 5, 10, 20]
+      quantiles: 5
+  expect:
+    entry_has_shift: true
+    exit_has_shift: true
+    factor_fields:
+      ema5: factors.stock_daily_overlap_close.ema_5
+      ema20: factors.stock_daily_overlap_close.ema_20
+    corrections_from: ["ema5", "ema20"]
+
+- id: breakout_20d_high
+  description: "收盘价突破 20 日高点买入，跌破 20 日低点卖出"
+  llm_output: |
+    experiment:
+      name: nl_breakout_20d
+      market_profile: ashare_daily_default
+      frequency: daily
+    data:
+      market_fields: [open, high, low, close, pre_close, vol, amount]
+      factor_fields: {}
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    signal:
+      entry: close > high.rolling(20).max().shift(1)
+      exit: close < low.rolling(20).min().shift(1)
+    holding:
+      max_holding_days: 0
+    evaluation:
+      forward_return_horizons: [1, 3, 5, 10, 20]
+      quantiles: 5
+  expect:
+    entry_has_shift: true
+    exit_has_shift: true
+    entry_contains: ["close > high.rolling(20).max().shift(1)"]
+    exit_contains: ["close < low.rolling(20).min().shift(1)"]
+    factor_fields: {}
+
+- id: pullback_from_20d_high
+  description: "价格自 20 日高点回调 8% 买入，回到 20 日高点卖出"
+  llm_output: |
+    experiment:
+      name: nl_pullback_8pct
+      market_profile: ashare_daily_default
+      frequency: daily
+    data:
+      market_fields: [open, high, low, close, pre_close, vol, amount]
+      factor_fields: {}
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    signal:
+      entry: close <= high.rolling(20).max() * 0.92
+      exit: close >= high.rolling(20).max()
+    holding:
+      max_holding_days: 0
+    evaluation:
+      forward_return_horizons: [1, 3, 5, 10, 20]
+      quantiles: 5
+  expect:
+    entry_contains: ["close <= high.rolling(20).max() * 0.92"]
+    exit_contains: ["close >= high.rolling(20).max()"]
+    factor_fields: {}
+
+- id: volume_expansion_entry
+  description: "成交量放大到 5 日均量 1.5 倍以上，且收盘价大于 20 日均线时买入"
+  llm_output: |
+    experiment:
+      name: nl_volume_expansion
+      market_profile: ashare_daily_default
+      frequency: daily
+    data:
+      market_fields: [open, high, low, close, pre_close, vol, amount]
+      factor_fields:
+        sma_20: factors.stock_daily_overlap_close.sma_20
+    universe:
+      exclude_st: true
+      exclude_suspended: true
+      exclude_risk_warning: true
+      min_listing_days: 120
+    signal:
+      entry: (vol > vol.rolling(5).mean() * 1.5) and (close > sma_20)
+    holding:
+      max_holding_days: 0
+    evaluation:
+      forward_return_horizons: [1, 3, 5, 10, 20]
+      quantiles: 5
+  expect:
+    entry_contains: ["vol > vol.rolling(5).mean() * 1.5", "close > sma_20"]
+    factor_fields:
+      sma_20: factors.stock_daily_overlap_close.sma_20

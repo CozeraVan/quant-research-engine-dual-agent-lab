@@ -35,6 +35,18 @@ VALID_YAML = (
     "evaluation:\n  forward_return_horizons: [1, 3, 5, 10, 20]\n  quantiles: 5\n"
     "holding:\n  max_holding_days: 20\n"
 )
+# CR-2026-11-03：MACD 金叉死叉描述的合规编译产物（DIF 穿越 DEA，带 .shift(1)）
+MACD_CROSS_YAML = (
+    "experiment:\n  name: t\ndata:\n  market_fields: [close]\n"
+    "  factor_fields:\n"
+    "    dif: factors.stock_daily_momentum_close.macd_12_26_9\n"
+    "    dea: factors.stock_daily_momentum_close.macds_12_26_9\n"
+    "signal:\n"
+    "  entry: (dif > dea) and (dif.shift(1) <= dea.shift(1))\n"
+    "  exit: (dif < dea) and (dif.shift(1) >= dea.shift(1))\n"
+    "evaluation:\n  forward_return_horizons: [1, 3, 5, 10, 20]\n  quantiles: 5\n"
+    "holding:\n  max_holding_days: 20\n"
+)
 LLM_ENV = {
     "QRE_NL_LLM_BASE_URL": "https://llm.test",
     "QRE_NL_LLM_API_KEY": "k",
@@ -113,6 +125,10 @@ def llm(monkeypatch):
             self.calls.append(description)
             if self.exc is not None:
                 raise self.exc
+            # CR-2026-11-03：穿越语义硬闸——金叉/死叉描述必须拿到带 .shift(1) 的
+            # 合规产物，否则语义校验层会按设计报错（缓存/事件用例随即变红）
+            if any(w in description for w in ("金叉", "死叉", "上穿", "下穿")):
+                return MACD_CROSS_YAML
             return self.yaml_text
 
     stub = _Stub()

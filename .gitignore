@@ -42,3 +42,6 @@ tests/data_test/
 
 # Local public-beta audit generated seed (contains test phones/token; regenerate via seed.py)
 deploy/saas/public-beta-audit/seed.json
+
+# 上云真实连接（含密码），不入库
+deploy/cloud/cloud.env

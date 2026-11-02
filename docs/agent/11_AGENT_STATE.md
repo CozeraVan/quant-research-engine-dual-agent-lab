@@ -62,6 +62,42 @@ This file is the source of truth for single-agent workflow recovery.
 - step5review（agent-209）后台实施，**不自行 commit/push/部署**；主 Agent 验收后部署提交。
 - 硬约束：不改引擎与 wizard 行为、禁止编造因子名、状态语义不得误加 `.shift(1)`、只做小样本。
 
+### 2026-11-03 NL 语义优化与转义项目 S1–S3 实施完成（step5review，S4 进行中）
+
+实施内容（`CR-2026-11-03_nl_semantics_optimization.md` S1–S3）：
+
+- **新模块 `src/quant_research_engine/gui/nl_semantics.py`**（纯函数、零 DB）：
+  穿越语义词表（上穿/下穿/金叉/死叉 + 英文）、`cross_semantic_issues()` 编译后
+  语义校验、`cross_fix_prompt()` 修复回路提示、`format_semantic_error()` 报错、
+  `SEMANTIC_DICTIONARY` canonical 中文术语表、`canonical_yaml_text()` 确定性
+  YAML 规范化（键序稳定 / 标量列表 flow / 无围栏 / 幂等）。
+- **S1 穿越语义修复**：`_DSL_DOC` 删除「上穿/下穿请改写为当周期比较」旧约束，
+  改为「大于/小于=当日状态（禁止加 `.shift(1)`）；上穿/下穿/金叉/死叉=穿越事件
+  （必须用 `.shift(1)`）」+ canonical 模式 + MACD 金叉=DIF 上穿 DEA；few-shot 增
+  示例 3（SMA5 上穿 SMA200）与示例 4（MACD 金叉死叉）；编译后语义硬闸——用户说
+  穿越而 entry/exit 完全没有 `.shift(1)` 时回喂修复回路（最多 `MAX_FIX_RETRIES`
+  轮），仍不合法返回 `code=semantic_cross_missing` 明确报错，**绝不静默降级**；
+  `NL_COMPILER_CACHE_VERSION` bump `2026-10-26.1` → `2026-11-03.1`。
+  状态语义不误伤：`rsi<20`、`sma60>sma200` 无穿越词 → 不触发闸、不加 shift；
+  单边 shift + 常量比较的合法混搭只出 warning。
+- **S2 因子存在性预检（= M7）**：`engine.validate_yaml(yaml_text, column_lookup=None)`
+  新增可选参数（不传 = 既有结构校验，wizard 路径零变化）；`factor_correction.
+  factor_existence_issues()` 复用别名/注册表纠错层给出候选与可自动纠正写法；
+  lab `/api/validate`（DB 优先、快照兜底）与 agent API `/validate`（快照）接入。
+- **S3 语义字典与规范化输出**：术语表含快线=DIF/慢线=DEA、N 日均线(SMA) vs
+  N 日指数均线(EMA)、回调/支撑/压力/放量/缩量/突破；**先核实 DSL 能力**——
+  裸函数调用（`rolling_max(close,N)`）被安全闸拒绝，方法链
+  （`close.rolling(20).max()` / `low.rolling(20).min()` / `vol.rolling(5).mean()`）
+  合法且可执行，字典只给方法链写法 + 已落库预计算列（hhv_N/llv_N/vol_sma_N）；
+  golden dataset `tests/fixtures/nl_semantics/golden_cases.yaml`（9 例中文描述 →
+  期望 YAML 结构合同，含/不含 `.shift(1)`、因子列名、是否穿越事件）。
+- **测试**：新建 `tests/test_nl_semantics.py`、`tests/test_nl_semantics_golden.py`；
+  按新语义口径更新 `test_gui_nl_compiler / test_nl_factor_pipeline /
+  test_gui_factor_correction / test_gui_app / test_saas_agent_api /
+  test_saas_nl_compile_cache / test_nl_input_guard`（原 fixture 把穿越写成当日
+  状态，正是本 CR 要消灭的错误口径）。
+- **S4 待办**：三条真实 DeepSeek 编译、EMA5/EMA200 信号级验证、全量回归。
+
 ### 2026-11-03 评审修复 B1–B6（CR-2026-11-03_review_fixes_b1_b6.md）
 
 主 Agent 自查 step5 工作后逐项修正：

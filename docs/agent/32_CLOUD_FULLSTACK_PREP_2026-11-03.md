@@ -104,6 +104,11 @@ ECS SaaS（公网 Web/API/队列/小库 aguhuice）
 
 ## 5. 快速部署 Runbook（买机器后按序执行）
 
+> **2026-11-03 一键入口已落地**：`deploy/cloud/bootstrap-cloud.sh`。
+> 买云后只需：①按本文买资源；②`cp deploy/cloud/cloud.env.example deploy/cloud/cloud.env` 填值；
+> ③`bash deploy/cloud/bootstrap-cloud.sh --dry-run` 核对 → `bash deploy/cloud/bootstrap-cloud.sh` 执行。
+> 该入口已串联下面 1–9 步，**不需要再临时写部署代码**；dry-run 已验证全流程命令可展开。
+
 > 前置：用户已批准迁移，资源规格已确认。
 
 1. **建 VPC/子网与安全组**：DB/worker 同私网；DB 仅放行 worker 网段 5432，禁公网。

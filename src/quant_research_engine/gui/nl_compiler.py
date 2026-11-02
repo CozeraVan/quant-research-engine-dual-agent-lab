@@ -6,6 +6,12 @@
 未配置时返回中文"未配置 LLM"错误，UI 降级提示使用通道 A/B。
 安全闸：编译结果绝不自动执行，只填充到 YAML 编辑器由用户确认后提交。
 HTTP 层使用 stdlib urllib（项目无 requests 依赖，不新增）。
+
+CR-2026-11-03（NL 语义优化与转义项目）：编译链增加「穿越语义硬闸」——
+用户文本含上穿/下穿/金叉/死叉而 entry/exit 完全没有 ``.shift(1)`` 时，先回喂
+LLM 修复，仍不达标就返回 ``code=semantic_cross_missing`` 明确报错，
+**绝不静默降级成当日状态**（旧口径正是这样把金叉死叉编译成长开/长平的）。
+语义判定、canonical 术语表与 canonical YAML 规范化见 ``gui/nl_semantics.py``。
 """
 
 from __future__ import annotations
@@ -569,6 +575,8 @@ def compile_nl(
         if fix_attempts:
             result["fix_attempts"] = fix_attempts
             result["warnings"] = [f"穿越语义经 {fix_attempts} 轮自动修正仍未达标，已停止并报告"]
+        if warnings:
+            result["warnings"] = list(warnings) + list(result.get("warnings") or [])
         return result
 
     if missing:

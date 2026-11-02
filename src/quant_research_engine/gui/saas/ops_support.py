@@ -46,7 +46,10 @@ OPS_WINDOWS = ("today", "7d", "30d", "all")
 OPS_WINDOW_LABELS = {"today": "今日", "7d": "近 7 天", "30d": "近 30 天", "all": "累计"}
 
 # NL 编译失败分类（compile_nl 返回的 code；成功为 None）
-NL_ERROR_CLASSES = ("llm_error", "invalid_yaml", "missing_factors", "not_configured")
+# CR-2026-11-03：semantic_cross_missing = 用户说了上穿/下穿/金叉/死叉，但编译产物
+# 没有 .shift(1)（被降级成当日状态），修复回路用尽后明确报错。
+NL_ERROR_CLASSES = ("llm_error", "invalid_yaml", "missing_factors", "not_configured",
+                    "semantic_cross_missing")
 
 # 已 ensure 过的 engine（同 nl_compile_support 模式）
 _OPS_TABLES_ENSURED: set[int] = set()

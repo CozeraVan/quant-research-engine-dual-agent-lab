@@ -241,7 +241,7 @@
   var factorSt = 'pending', jobSt = 'failed', opsWin = 'today', fbCat = '', fbSt = '';
   var CAT_LABELS = {bug:'问题缺陷', experience:'体验建议', factor:'因子需求', other:'其他'};
   var ST_LABELS = {open:'待处理', doing:'处理中', done:'已解决', closed:'已关闭'};
-  var NL_ERR_LABELS = {llm_error:'大模型调用失败', invalid_yaml:'YAML 校验未过', missing_factors:'缺少因子', not_configured:'编译服务未配置', unknown:'未分类'};
+  var NL_ERR_LABELS = {llm_error:'大模型调用失败', invalid_yaml:'YAML 校验未过', missing_factors:'缺少因子', not_configured:'编译服务未配置', semantic_cross_missing:'穿越语义未达标', unknown:'未分类'};
   var JOB_ERR_LABELS = {strategy_compile_error:'策略编译错误', data_missing:'数据缺失', engine_error:'引擎错误', system_error:'系统错误', canceled:'已取消', unclassified:'未分类'};
 
   function esc(s){ var d = document.createElement('div'); d.textContent = (s === null || s === undefined) ? '' : String(s); return d.innerHTML; }

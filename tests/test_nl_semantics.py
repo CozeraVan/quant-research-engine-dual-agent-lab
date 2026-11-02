@@ -15,8 +15,10 @@
 from __future__ import annotations
 
 import pytest
+import pandas as pd
 import yaml
 
+from quant_research_engine.evaluation.signals import evaluate_expression_signal
 from quant_research_engine.gui import nl_semantics as sem
 from quant_research_engine.gui.nl_compiler import (
     MAX_FIX_RETRIES,
@@ -31,7 +33,12 @@ POOL = {"macd_12_26_9", "macds_12_26_9", "macdh_12_26_9", "rsi_14"}
 
 
 def _lookup(table_map=None):
-    tables = {"factors.stock_daily_momentum_close": set(POOL)}
+    tables = {
+        "factors.stock_daily_momentum_close": set(POOL),
+        "factors.stock_daily_overlap_close": {"ema_5", "ema_20", "sma_5", "sma_20",
+                                              "sma_60", "sma_200"},
+        "factors.stock_daily_overlap_typical_price": {"ema_200"},
+    }
     if table_map:
         tables.update(table_map)
     return lambda table: tables.get(table, set())
@@ -288,3 +295,133 @@ def test_compile_output_is_canonicalized():
     again = compile_nl("RSI 小于 20 买入", env=ENV, http_post=http2,
                        column_lookup=_lookup())
     assert again["yaml"] == result["yaml"]
+
+
+# --- 语义字典（CR-2026-11-03 §4）---
+
+
+def test_semantic_dictionary_covers_required_terms():
+    terms = {item["term"] for item in sem.SEMANTIC_DICTIONARY}
+    joined = " ".join(terms)
+    for required in ("上穿", "下穿", "金叉", "死叉", "快线", "慢线", "支撑", "压力",
+                     "放量", "缩量", "突破", "回调", "日均线", "指数均线"):
+        assert required in joined, required
+    by_term = {item["term"]: item for item in sem.SEMANTIC_DICTIONARY}
+    # 快线=DIF / 慢线=DEA 的列名必须来自真实因子库（禁止编造）
+    assert by_term["快线（MACD 语境）"]["canonical"].endswith("macd_12_26_9")
+    assert by_term["慢线 / 信号线 / DEA（MACD 语境）"]["canonical"].endswith("macds_12_26_9")
+    # 形态类语义只准用方法链（裸函数调用会被安全闸拒绝）
+    for term in ("回调 X%", "支撑 / 支撑位", "压力 / 压力位", "放量", "缩量",
+                 "突破（近 N 日高点）"):
+        canonical = by_term[term]["canonical"]
+        assert ".rolling(" in canonical, (term, canonical)
+        assert "rolling_max(" not in canonical and "rolling_mean(" not in canonical
+
+
+def test_precomputed_pattern_columns_exist_in_real_library():
+    """字典推荐的预计算列必须真实存在于因子库快照（否则就是编造列名）。"""
+    from quant_research_engine.gui.factor_catalog_llm import catalog_column_lookup
+
+    lookup = catalog_column_lookup()
+    assert lookup is not None
+    for item in sem.PRECOMPUTED_PATTERN_COLUMNS:
+        table, column = item["column"].rsplit(".", 1)
+        assert item["example"] in lookup(table), item
+
+
+def test_dsl_supports_rolling_method_chains_and_rejects_bare_calls():
+    """先核实再写字典（CR-2026-11-03 §4 注）：滚动统计只能用方法链。
+
+    ``close.rolling(20).max()`` 过安全闸且可被信号求值器执行；
+    ``rolling_max(close, 20)`` 裸函数调用被拒——所以字典只给方法链写法。
+    """
+    import pandas as pd
+
+    from quant_research_engine.evaluation.signals import evaluate_expression_signal
+    from quant_research_engine.security.yaml_guard import validate_expression
+
+    frame = pd.DataFrame({
+        "close": [10.0, 11, 12, 13, 14, 15],
+        "high": [10.0, 11, 12, 13, 14, 15],
+        "low": [9.0, 10, 11, 12, 13, 14],
+        "vol": [100.0, 110, 120, 130, 140, 150],
+    })
+    allowed = set(frame.columns)
+    for expression in (
+        "close > high.rolling(3).max().shift(1)",
+        "close <= high.rolling(3).max() * 0.92",
+        "close >= low.rolling(3).min()",
+        "vol > vol.rolling(3).mean() * 1.5",
+    ):
+        assert validate_expression(expression, allowed_names=allowed) == [], expression
+        signal = evaluate_expression_signal(frame, expression)
+        assert signal.dtype == bool
+    assert validate_expression("rolling_max(close, 3)", allowed_names=allowed)
+
+
+def test_compiled_expression_survives_security_guard():
+    """编译产物必须过安全闸（裸函数调用/属性访问会被拒）。"""
+    from quant_research_engine.security.yaml_guard import validate_expression
+
+    for expression in (
+        "(sma_5 > sma_200) and (sma_5.shift(1) <= sma_200.shift(1))",
+        "(dif < dea) and (dif.shift(1) >= dea.shift(1))",
+        "close > high.rolling(20).max().shift(1)",
+    ):
+        names = {"sma_5", "sma_200", "dif", "dea", "close", "high"}
+        assert validate_expression(expression, allowed_names=names) == [], expression
+
+
+# --- 信号级验证（CR-2026-11-03 S4）---
+
+
+def _synthetic_ema_cross_frame() -> pd.DataFrame:
+    """EMA5 只上穿 EMA200 一次、也只下穿一次的合成序列（60 个交易日）。
+
+    0–19 日在下方，20 日上穿，21–39 日在上方，40 日下穿，41–59 日在下方。
+    """
+    fast = [10.0 + 0.1 * i for i in range(20)]           # 10.0 → 11.9：全程在慢线下方
+    fast += [12.0 + 0.1 * (i - 19) for i in range(20, 40)]  # 12.1 → 14.0：第 22 日上穿
+    fast += [13.8 - 0.1 * (i - 39) for i in range(40, 60)]  # 13.7 → 12.0：第 54 日下穿
+    slow = [12.0] * 20 + [12.2] * 20 + [12.4] * 20
+    return pd.DataFrame({"ema_5": fast, "ema_200": slow})
+
+
+def test_signal_level_single_cross_produces_single_entry():
+    """编译出的穿越表达式在「只上穿一次」的序列上只产生 1 个入场信号。
+
+    这是本次修复的核心验收：同样序列下，被降级成的当日状态表达式
+    （``ema_5 > ema_200``）会在 20 个交易日持续为真（长开/重复触发），
+    而正确的穿越表达式只在穿越当日触发一次。
+    """
+    frame = _synthetic_ema_cross_frame()
+    entry = "(ema_5 > ema_200) and (ema_5.shift(1) <= ema_200.shift(1))"
+    exit_ = "(ema_5 < ema_200) and (ema_5.shift(1) >= ema_200.shift(1))"
+    entry_signal = evaluate_expression_signal(frame, entry)
+    exit_signal = evaluate_expression_signal(frame, exit_)
+    assert frame.index[entry_signal].tolist() == [22], frame.index[entry_signal].tolist()
+    assert frame.index[exit_signal].tolist() == [54], frame.index[exit_signal].tolist()
+    # 反证：当日状态写法会在上方区间全程为真（31 天），穿越只在当日为真
+    state_signal = evaluate_expression_signal(frame, "ema_5 > ema_200")
+    assert int(state_signal.sum()) == 31
+    assert int(state_signal.sum()) > int(entry_signal.sum())
+
+
+def test_compiled_ema_cross_yaml_signals_once_on_synthetic_series():
+    """端到端：编译产物（含 canonical YAML）→ 信号求值 → 只 1 次入场。"""
+    yaml_text = yaml.safe_dump(
+        _spec("(ema_5 > ema_200) and (ema_5.shift(1) <= ema_200.shift(1))",
+              "(ema_5 < ema_200) and (ema_5.shift(1) >= ema_200.shift(1))",
+              ema_5="factors.stock_daily_overlap_close.ema_5",
+              ema_200="factors.stock_daily_overlap_typical_price.ema_200"),
+        allow_unicode=True, sort_keys=False)
+    http, calls = _http([yaml_text])
+    result = compile_nl("EMA5 上穿 EMA200 买入，下穿 EMA200 卖出", env=ENV,
+                        http_post=http, column_lookup=_lookup())
+    assert result["ok"] is True, result
+    assert len(calls) == 1  # 合规产物不需要修复回路
+    parsed = yaml.safe_load(result["yaml"])
+    frame = _synthetic_ema_cross_frame()
+    entry = evaluate_expression_signal(frame, parsed["signal"]["entry"])
+    exit_ = evaluate_expression_signal(frame, parsed["signal"]["exit"])
+    assert int(entry.sum()) == 1 and int(exit_.sum()) == 1
