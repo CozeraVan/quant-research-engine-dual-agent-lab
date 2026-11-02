@@ -38,6 +38,19 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 NL 语义优化与转义项目立项（用户最高优先，step5review 后台实施）
+
+用户原话核心：MACD 金叉死叉都能理解错，更复杂任务无从谈起；同一中文描述每次编译出不同 YAML
+就是失去准确性。`CR-2026-11-03_nl_semantics_optimization.md` 已立项（扩展并取代 11-02 CR）。
+
+- 根因（代码级）：`_DSL_DOC` 明确教模型「上穿/下穿请改写为当周期比较」——prompt 主动降级；
+  few-shot 无穿越示例；**没有编译后语义校验层**；**没有因子存在性预检**；缓存版本未 bump。
+- 四切片：S1 穿越语义修复（含编译后语义校验层，不靠 prompt 自觉）、S2 因子存在性预检、
+  S3 中文语义字典（金叉死叉/快线慢线/回调/支撑/N 日均线/放量缩量/突破）与规范化输出、
+  S4 真实冒烟 + 信号级验证（EMA5 只穿越一次 → 只 1 个入场信号）。
+- step5review（agent-209）后台实施，**不自行 commit/push/部署**；主 Agent 验收后部署提交。
+- 硬约束：不改引擎与 wizard 行为、禁止编造因子名、状态语义不得误加 `.shift(1)`、只做小样本。
+
 ### 2026-11-03 评审修复 B1–B6（CR-2026-11-03_review_fixes_b1_b6.md）
 
 主 Agent 自查 step5 工作后逐项修正：
