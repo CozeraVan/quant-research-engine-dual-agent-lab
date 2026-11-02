@@ -2,6 +2,59 @@
 
 ## Task ID
 
+CR-2026-11-03 NL 语义优化与转义项目（S1 穿越语义 / S2 因子存在性预检 / S3 语义字典与规范化输出 / S4 真实冒烟与回归）
+
+## Created By
+
+step5review（agent-209）实施（2026-11-03，用户最高优先，主 Agent 验收后部署提交）
+
+## 目标与边界
+
+1. 中文「上穿/下穿/金叉/死叉」必须编译成带 `.shift(1)` 的穿越事件，
+   不再被降级成当日状态（旧口径产物：item1 76,511 笔 / item3 504,183 笔错误交易）。
+2. 「大于/小于/高于/低于」等持续状态语义不得被误加 `.shift(1)`。
+3. 因子表/列写错要在提交前（validate + NL 编译后处理）就被拦下并给出候选。
+4. 同一中文描述重复编译产出一致的 canonical YAML；缓存版本随语义口径 bump。
+5. **不改引擎、不改 wizard/YAML 入口行为**；禁止编造因子名；只做小样本验证。
+
+## 实现
+
+- 新模块 `gui/nl_semantics.py`（纯函数）：穿越词表、`cross_semantic_issues()`
+  编译后语义校验、`cross_fix_prompt()` 修复回路、`format_semantic_error()`、
+  `SEMANTIC_DICTIONARY` canonical 中文术语表、`canonical_yaml_text()` 确定性
+  YAML 规范化。
+- `gui/nl_compiler.py`：`_DSL_DOC` 重写（删除「上穿请改写为当周期比较」旧约束，
+  改为穿越事件必须 `.shift(1)` + canonical 模式 + MACD 金叉=DIF 上穿 DEA）；
+  few-shot 增示例 3（SMA5×SMA200）与示例 4（MACD 金叉死叉）；编译后语义硬闸
+  （回喂修复 → 仍不合法返回 `semantic_cross_missing`）；输出 canonical 化。
+- `gui/saas/nl_compile_support.py`：`NL_COMPILER_CACHE_VERSION` → `2026-11-03.1`。
+- `gui/engine.py::validate_yaml(yaml_text, column_lookup=None)`：可选因子存在性
+  校验（不传 = 既有行为，wizard 路径零变化）；`gui/factor_correction.py` 新增
+  `factor_existence_issues()` / `format_factor_existence_error()`（复用别名与
+  注册表纠错层给候选）；`gui/strategy_lab_routes.py::/api/validate` 与
+  `gui/saas/agent_api.py::/validate` 接入（DB 优先、目录快照兜底）。
+- `gui/saas/ops_support.py` + `console.html`：新增 `semantic_cross_missing`
+  失败分类标签。
+
+## 验证
+
+```bash
+uv run pytest tests/test_nl_semantics.py tests/test_nl_semantics_golden.py -q -p no:randomly
+uv run pytest tests/test_gui_nl_compiler.py tests/test_nl_factor_pipeline.py \
+  tests/test_gui_factor_correction.py tests/test_gui_app.py tests/test_gui_engine.py \
+  tests/test_saas_agent_api.py tests/test_saas_nl_compile_cache.py \
+  tests/test_nl_input_guard.py tests/test_saas_public_beta_ops.py -q -p no:randomly
+uv run pytest -q -p no:randomly          # 全量
+.venv/bin/python .tmp/nl_smoke_real.py   # 三条真实 DeepSeek 编译（证据 .tmp/nl-semantics-smoke-2026-11-03.log）
+```
+
+golden dataset：`tests/fixtures/nl_semantics/golden_cases.yaml`（9 例中文描述 →
+期望 YAML 结构，含/不含 `.shift(1)`、因子列名、是否穿越事件）。
+
+## 历史任务（保留）
+
+## Task ID
+
 P2-15 波动率时序曲线：后端可选序列数据（默认关）
 
 ## Created By

@@ -28,6 +28,9 @@ EXPECTED_JOB_ID_GET_ROUTES = {
     "/api/agent/v1/jobs/<int:job_id>/result",
     "/api/agent/v1/jobs/<int:job_id>/result/chart-data",
     "/api/agent/v1/jobs/<int:job_id>/artifacts/<path:name>",
+    # 个股详情原始 gzip 下载（QRE-SAAS-SYMBOL-DOWNLOAD）：与详情页同一
+    # _require_completed_result 权限；showcase/分享只读同样允许（只读不改数据）。
+    "/api/results/<int:job_id>/symbols/<ts_code>/download",
 }
 
 

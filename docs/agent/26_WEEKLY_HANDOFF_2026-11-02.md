@@ -109,6 +109,16 @@ bash scripts/git-finalize-check.sh
 
 ## 5. 未完成 / 必须注意的事项（高优先级）
 
+0. **Builder 通道仍把 crosses_above/crosses_below 降级成当日状态（step5review 发现，本 CR 范围外）**
+   `strategies/compiler.py::_compile_expression`（约 326–346 行）对 `crosses_above`/
+   `crosses_below` 仍只发一条 warning 并改写成 `>` / `<`，注释还写着「等引擎支持
+   lagged 比较」——引擎早已支持 `.shift(1)`（wizard JS 与 NL 通道都是这么编译的）。
+   影响面：`gui/app.py` 的 `/api/builder/compile` 与 `/api/builder/validate`
+   （8080 控制台 Builder API；当前无前端模板调用，属后端/遗留面）。
+   建议修法：按 canonical 模式输出 `(A > B) and (A.shift(1) <= B.shift(1))`，
+   与 `gui/nl_semantics.CROSS_CANONICAL` 对齐；属「YAML/高层条目入口」，
+   按 CR-2026-11-03 硬约束未在本次改动，建议单独立项。
+
 1. **P2-14 worker 未重启**  
    `worker/runner.py` 已改并提交，但本地 `qre-saas-worker.service` 自 P0-4 后未重启。新代码不会生效。  
    重启命令：
@@ -179,7 +189,8 @@ bash scripts/git-finalize-check.sh
 | 2026-11-03 | **全链上云预准备补全** | done | Kimi | `32_CLOUD_FULLSTACK_PREP_2026-11-03.md`：DB 吞吐优化（NVMe/临时盘/只读副本/参数）、DB↔worker 传输优化（分片上传+对象存储+presigned URL+produced_bytes）、快速部署 Runbook；未实际迁移 |
 | 2026-11-03 | **删除不可信产物 + 可信 RSI 结果挂经典策略展示** | done | Kimi | 删除 item1/item3（NL 穿越语义错误）jobs+results+产物目录（2.8GB）；item2 RSI 结果导入生产 job 83 并挂 showcase（+24.20%/-41.96%，973MB/26026 文件已同步 `/srv/aguhuice/uploads/job_83`）；`/saas/showcase`、`/saas/jobs/83`、summary、symbols 均 200 |
 | 2026-11-03 | **一键上云部署入口**（用户要求「买云即部署，不再写代码」） | done | Kimi | `deploy/cloud/bootstrap-cloud.sh`（备份→迁移→对账→worker→产物→验收，支持 --dry-run 与 --step）+ `cloud.env.example`（真实 cloud.env 已 gitignore）+ README/32 号文档更新；bash -n 与 dry-run 全流程验证通过 |
-| 2026-11-03 | **NL 语义优化与转义项目**（用户明确要求，最高优先） | in_progress | step5review (agent-209) | `CR-2026-11-03_nl_semantics_optimization.md`（扩展并取代 11-02 穿越语义 CR）。**S1–S3 已完成**：`gui/nl_semantics.py` 新模块（穿越语义硬闸 + canonical 术语表 + canonical YAML 规范化）；`nl_compiler._DSL_DOC` 删除「上穿请改写为当周期比较」旧约束、改写为「大于/小于=当日状态；上穿/下穿/金叉/死叉=穿越事件必须用 `.shift(1)`」并给 canonical 模式；few-shot 增 SMA5×SMA200、MACD 金叉死叉两例；编译后语义校验层（用户说穿越而 entry/exit 无 `.shift(1)` → 回喂修复回路，仍不合法 → `code=semantic_cross_missing` 明确报错，绝不静默降级）；`NL_COMPILER_CACHE_VERSION` bump 到 `2026-11-03.1`；S2 `engine.validate_yaml(yaml_text, column_lookup=)` 增因子存在性预检（lab `/api/validate` 与 agent `/validate` 接入，DB 优先、快照兜底）；S3 中文语义字典（金叉/死叉/快线=DIF/慢线=DEA/N 日均线 vs 指数均线/回调/支撑/压力/放量/缩量/突破）+ canonical 输出 + golden dataset（`tests/fixtures/nl_semantics/golden_cases.yaml` 9 例）。**S4 进行中**：真实 DeepSeek 三条编译 + 信号级验证 + 全量回归。测试：`tests/test_nl_semantics.py`、`tests/test_nl_semantics_golden.py` 新建；`test_gui_nl_compiler/test_nl_factor_pipeline/test_gui_factor_correction/test_gui_app/test_saas_agent_api/test_saas_nl_compile_cache/test_nl_input_guard` 按新语义口径更新 |
+| 2026-11-03 | **NL 语义优化与转义项目**（用户明确要求，最高优先） | done | step5review (agent-209) + Kimi 验收 | `CR-2026-11-03_nl_semantics_optimization.md`（扩展并取代 11-02 穿越语义 CR）。**S1–S4 全部完成**。**S1**：`gui/nl_semantics.py` 新模块（穿越语义硬闸 + canonical 术语表 + canonical YAML 规范化）；`_DSL_DOC` 删除「上穿/下穿请改写为当周期比较」旧约束、改为「大于/小于=当日状态（禁止加 `.shift(1)`）；上穿/下穿/金叉/死叉=穿越事件（必须用 `.shift(1)`）」+ canonical 模式；few-shot 增 SMA5×SMA200、MACD 金叉死叉；编译后语义硬闸（用户说穿越而 entry/exit 无 `.shift(1)` → 回喂修复回路，仍不合法 → `code=semantic_cross_missing` 明确报错，绝不静默降级）；`NL_COMPILER_CACHE_VERSION` bump `2026-10-26.1`→`2026-11-03.1`。**S2**：`engine.validate_yaml(yaml_text, column_lookup=)` 可选因子存在性预检（不传=既有行为，wizard 零变化），`factor_correction.factor_existence_issues()` 复用别名/注册表纠错层给候选与可纠正写法；lab `/api/validate`（DB 优先、快照兜底）与 agent `/validate`（快照）接入。**S3**：中文语义字典（金叉/死叉、快线=DIF/慢线=DEA、N 日均线 vs N 日指数均线、回调/支撑/压力/放量/缩量/突破）；先核实 DSL 能力——裸函数调用 `rolling_max(close,N)` 被安全闸拒绝、方法链 `close.rolling(20).max()` 合法可执行，字典只给方法链 + 已落库预计算列（hhv_N/llv_N/vol_sma_N）；canonical 输出（键序稳定/无围栏/幂等）；golden dataset `tests/fixtures/nl_semantics/golden_cases.yaml` 9 例。**S4**：三条真实 DeepSeek 编译全部正确（SMA5 上穿 SMA200 两侧带 shift；MACD 金叉死叉 DIF/DEA 带 shift；RSI 持续状态无 shift + 持仓 5 天 + 止损 8%）；附加探针 D/E/F 无误伤（纯状态描述、单边穿越+常量出场、金叉后一直持有均按预期）；信号级验证：EMA5 只上穿 EMA200 一次的合成 60 日序列 → 编译表达式只产生 **1 个**入场信号（第 22 日）与 **1 个**离场信号（第 54 日），同序列当日状态写法为 31 天持续为真；全量 `uv run pytest -q -p no:randomly` **3435 passed, 34 skipped**（基线 3388→+47）。证据 `.tmp/nl-semantics-smoke-2026-11-03.log`、`.tmp/nl_smoke_real.py`、`.tmp/nl_smoke_probe.py`。测试：新建 `tests/test_nl_semantics.py`（33 例）、`tests/test_nl_semantics_golden.py`（10 例）；按新语义口径更新 `test_gui_nl_compiler / test_nl_factor_pipeline / test_gui_factor_correction / test_gui_app / test_saas_agent_api / test_saas_nl_compile_cache / test_nl_input_guard / test_saas_public_beta_ops`。**未做**：未 commit/push、未部署 ECS、未重启 worker、未跑全量回测 |
+| 2026-11-03 | **个股详情下载按钮补回** | done | Kimi | `GET /api/results/<job>/symbols/<code>/download` + symbol.html「下载详情」按钮；P0-8 冻结清单登记；生产 job 83 的 600519 详情与下载均 200 |
 | 2026-11-03 | 全期全量压测子代理恢复执行 | done | agent-208 | 同上；未清理任何进程/目录/库（用户要求保留） | 03:00 闸门已过，已 resume 同一 agent（task agent-vn63q4w8）串行跑 item1→item2→item3；目标 §5/§6/§7 |
 
 **M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**

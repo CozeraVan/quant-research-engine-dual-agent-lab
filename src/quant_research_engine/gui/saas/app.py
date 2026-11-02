@@ -4165,6 +4165,40 @@ def create_saas_app() -> Flask:
         data["readonly_kind"] = _public_readonly_kind()
         return jsonify(_jsonable(data))
 
+    @app.get("/api/results/<int:job_id>/symbols/<ts_code>/download")
+    def api_result_symbol_download(job_id: int, ts_code: str) -> Any:
+        """下载个股回测详情原始 gzip JSON（K线/买卖点/因子/收益曲线/交易磨损）。
+
+        与详情页同一权限与代码规范化；只读展示同样允许下载（只读不改数据）。
+        产物缺失时返回 404 + can_generate，由前端提示可按需生成。
+        """
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        known: list[str] = []
+        tag = (row["result_chart_data"] or {}).get("tag_analysis") or {}
+        for items in (tag.get("layers") or {}).values():
+            for item in items or []:
+                for sym in item.get("symbols") or []:
+                    if sym.get("ts_code"):
+                        known.append(sym["ts_code"])
+        try:
+            code = resolve_ts_code(ts_code, known)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        detail_path = _find_symbol_detail(job_id, code)
+        if detail_path is None:
+            return jsonify({"ok": False, "error": "该股详情产物未随任务回传",
+                            "can_generate": True}), 404
+        from flask import send_from_directory
+
+        return send_from_directory(
+            str(detail_path.parent), detail_path.name,
+            as_attachment=True,
+            download_name=f"{code}_job{job_id}_detail.json.gz",
+            mimetype="application/gzip",
+        )
+
     def _symbol_detail_ready(job_id: int, code: str) -> bool:
         """按需/批量产物是否已就位（与 api_result_symbol_detail 同套查找口径，
         含归档目录兜底——归档 job 的详情仍算就位，不会被反复按需重建）。"""

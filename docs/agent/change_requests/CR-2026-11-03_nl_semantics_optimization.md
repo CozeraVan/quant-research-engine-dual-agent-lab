@@ -135,3 +135,25 @@
 | 缓存复用旧口径 YAML | bump `NL_COMPILER_CACHE_VERSION` |
 | 用户输入歧义（如「回调」未给幅度/周期） | 按 canonical 默认值 + 在 YAML/响应里显式 notice，不静默猜 |
 | 同一描述重复编译结果漂移 | canonical 规范化 + golden dataset 合同测试锁定 |
+
+
+---
+
+## 8. 实施结果（2026-11-03，step5review 实施，主 Agent 验收部署）
+
+**S1–S4 全部完成并上线**：
+- S1：`_DSL_DOC` 重写 + few-shot + 编译后语义闸 + 修复回路 + canonical 输出 + 缓存版本 bump。
+- S2：因子存在性预检已接入 `validate_yaml`（可选 lookup）、NL 后处理与 agent `/validate`。
+- S3：`gui/nl_semantics.py` 术语表与确定性规范化；`rolling_*` 结论：裸函数非法，
+  方法链 `close.rolling(N).max()` / `low.rolling(N).min()` / `vol.rolling(N).mean()` 可用；
+  未编造任何列名。
+- S4：真实 DeepSeek 三条编译（SMA5 上穿、MACD 金叉死叉、RSI 状态）；
+  合成序列信号级验证：EMA5 仅上穿一次 → 恰好 1 个入场信号。
+- 全量 **3437 passed, 34 skipped**；ECS MainPID 612103。
+
+**遗留/后续**：
+1. Builder 通道 `strategies/compiler.py::_compile_expression` 仍把 crosses_* 降级成 `>`/`<`，
+   建议单独立项复用 `CROSS_CANONICAL`。
+2. 语义闸当前为「完全无 shift 才硬拒；单边缺失且两序列互比只 warning」，如需更严可再加 per-side 硬闸。
+3. 主 Agent 的 `git add -A` 曾把 step5 在制品混入 capacity/cloud 两笔提交，归属已在
+   `11_AGENT_STATE.md` 澄清，不重写历史。

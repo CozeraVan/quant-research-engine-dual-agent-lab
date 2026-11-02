@@ -668,6 +668,46 @@ class TestResultsApi:
         d400 = client.get(f"/api/results/{job_id}/symbols/999999.XH", headers=h)
         assert d400.status_code == 400
 
+    def test_symbol_detail_download(self, client, app, tmp_path):
+        """个股详情下载：产物存在时返回原始 gzip；缺失时 404 + can_generate。"""
+        import gzip
+
+        job_id = self._completed_job(client, app, tmp_path)
+        detail_dir = tmp_path / "uploads" / f"job_{job_id}" / "_symbol_details"
+        detail_dir.mkdir(parents=True)
+        payload = gzip.compress(b'{"ok": true, "ts_code": "000001.SZ"}')
+        (detail_dir / "000001.SZ.json.gz").write_bytes(payload)
+
+        resp = client.get(f"/api/results/{job_id}/symbols/000001.SZ/download",
+                          headers={"X-User-Id": "1"})
+        assert resp.status_code == 200
+        assert resp.data == payload
+        assert resp.mimetype == "application/gzip"
+        assert "attachment" in resp.headers.get("Content-Disposition", "")
+        assert "000001.SZ" in resp.headers["Content-Disposition"]
+
+        # 只读展示（showcase）也允许下载
+        from sqlalchemy import text
+
+        engine = app.extensions["saas_engine"]
+        with engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO showcase (job_id, title) VALUES (:j, 'classic')"), {"j": job_id})
+        pub = client.get(f"/api/results/{job_id}/symbols/000001.SZ/download")
+        assert pub.status_code == 200 and pub.data == payload
+
+        missing = client.get(f"/api/results/{job_id}/symbols/600519.SH/download",
+                             headers={"X-User-Id": "1"})
+        assert missing.status_code == 404
+        assert missing.get_json()["can_generate"] is True
+
+    def test_symbol_page_has_download_button(self):
+        from pathlib import Path
+
+        html = Path("src/quant_research_engine/gui/saas/templates/symbol.html").read_text(encoding="utf-8")
+        assert 'id="btn-download"' in html
+        assert "/download" in html
+
     def test_risk_analysis_histogram_from_chart_cumret(self, client, app, tmp_path):
         """SaaS FRM：有 risk_report 时，日收益直方图从 chart_data.cumret 还原。
 

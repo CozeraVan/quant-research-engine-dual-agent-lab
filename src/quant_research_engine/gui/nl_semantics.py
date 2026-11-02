@@ -25,16 +25,13 @@ import yaml
 # ---------------------------------------------------------------------------
 # 穿越语义词（用户文本侧）
 # ---------------------------------------------------------------------------
-# 只收「无歧义就是穿越事件」的说法。「突破/跌破/站上/跌回」在不同语境下既可能是
-# 事件也可能是状态，不进硬闸词表（避免误伤「只要股价在均线上方就持有」这类
-# 持续状态描述）；这类词交由 prompt 的语义字典引导。
 CROSS_WORDS: tuple[str, ...] = (
     "上穿", "下穿", "金叉", "死叉",
     "crosses above", "crosses below", "cross above", "cross below",
     "golden cross", "dead cross", "cross up", "cross down",
 )
 
-# 持续状态词：出现这些词说明用户要的是当日状态，不是穿越事件（提示用）。
+# 持续状态词：与穿越词对照，用于诊断/提示（不参与硬闸拦截）。
 STATE_WORDS: tuple[str, ...] = (
     "大于", "小于", "高于", "低于", "超过", "跌破", "站上", "处于", "位于",
     "只要", "持续", "一直", "始终",
@@ -56,7 +53,11 @@ def has_cross_semantics(description: str | None) -> bool:
 
 
 def has_state_semantics(description: str | None) -> bool:
-    """用户文本是否含持续状态词（大于/小于/只要…一直）。"""
+    """用户文本是否含持续状态词（大于/小于/只要…一直）。
+
+    与 ``has_cross_semantics`` 配对供调用方区分「当日状态」与「穿越事件」；
+    本模块的硬闸只认穿越词，状态词仅用于提示与诊断，不参与拦截。
+    """
     text = (description or "").lower()
     return any(word in text for word in STATE_WORDS)
 

@@ -38,6 +38,25 @@ This file is the source of truth for single-agent workflow recovery.
 测试新 20 例，**全量 3354 passed + 34 skipped**。ECS MainPID 605487，回滚副本
 `/tmp/qre-deploy-20261101T184839Z.bak`；生产 GET/POST × 5 路由全 404 验证。
 
+### 2026-11-03 NL 语义优化实施完成 + 个股详情下载按钮补回
+
+- **NL 语义优化（step5review 实施，主 Agent 验收部署）**：
+  - 新增 `gui/nl_semantics.py`：穿越校验、canonical 术语表（13 条）、确定性 YAML 规范化；
+  - `_DSL_DOC` 重写：穿越必须 `.shift(1)`、MACD 金叉=DIF 上穿 DEA、方法链能力边界；
+  - 编译后语义闸 + 修复回路（不达标返回 `semantic_cross_missing`）、canonical 输出；
+  - `validate_yaml` 与 NL 后处理增加因子存在性预检（复用别名/注册表纠错层）；
+  - `NL_COMPILER_CACHE_VERSION` 升至 `2026-11-03.1`，旧口径缓存自然失效。
+  - 真实 DeepSeek 三条编译：SMA5 上穿 SMA200、MACD 金叉死叉均含 `.shift(1)`；RSI 状态语义未误加。
+  - **信号级验证**：合成序列 EMA5 仅上穿一次 → 恰好 1 个入场信号（旧口径会 31 天持续为真）。
+  - 全量 **3437 passed, 34 skipped**。
+  - 已部署 ECS（MainPID 612103，回滚 `/tmp/qre-deploy-20261102T031151Z.bak`）。
+  - **过程记录**：step5 的在制品曾被主 Agent 的 `git add -A` 混入 `83a3a92`/`7e78af3`
+    两笔 capacity/cloud 提交，本记录用于澄清归属；不重写历史。
+- **个股详情下载按钮**：新增 `GET /api/results/<job>/symbols/<code>/download`
+  （与详情页同权限，showcase/分享只读也可下载），symbol.html 头部补「下载详情」按钮；
+  P0-8 冻结路由清单已登记。生产 job 83 的 600519 详情与下载均 200。
+  注意：job 83 原始产物是研究格式，SaaS 详情需按需生成（已验证 gen_job_id=84→ready）。
+
 ### 2026-11-03 资源模型 + 全链上云准备 + 清理不可信产物并挂可信 showcase
 
 - `31_RESOURCE_MODEL_2026-11-03.md`：时间=固定开销+0.026s/股年+0.0026s/笔；高换手策略按 14GB 预算；
@@ -62,9 +81,9 @@ This file is the source of truth for single-agent workflow recovery.
 - step5review（agent-209）后台实施，**不自行 commit/push/部署**；主 Agent 验收后部署提交。
 - 硬约束：不改引擎与 wizard 行为、禁止编造因子名、状态语义不得误加 `.shift(1)`、只做小样本。
 
-### 2026-11-03 NL 语义优化与转义项目 S1–S3 实施完成（step5review，S4 进行中）
+### 2026-11-03 NL 语义优化与转义项目 S1–S4 实施完成（step5review，待主 Agent 验收/部署）
 
-实施内容（`CR-2026-11-03_nl_semantics_optimization.md` S1–S3）：
+实施内容（`CR-2026-11-03_nl_semantics_optimization.md`）：
 
 - **新模块 `src/quant_research_engine/gui/nl_semantics.py`**（纯函数、零 DB）：
   穿越语义词表（上穿/下穿/金叉/死叉 + 英文）、`cross_semantic_issues()` 编译后
@@ -91,12 +110,21 @@ This file is the source of truth for single-agent workflow recovery.
   合法且可执行，字典只给方法链写法 + 已落库预计算列（hhv_N/llv_N/vol_sma_N）；
   golden dataset `tests/fixtures/nl_semantics/golden_cases.yaml`（9 例中文描述 →
   期望 YAML 结构合同，含/不含 `.shift(1)`、因子列名、是否穿越事件）。
+- **S4 真实冒烟与回归**：三条真实 DeepSeek 编译全部正确（SMA5 上穿 SMA200 两侧
+  带 shift；MACD 金叉死叉 DIF/DEA 带 shift；RSI 持续状态无 shift + 持仓 5 天 +
+  止损 8%）；附加探针验证状态语义与单边穿越无误伤；信号级验证：EMA5 只上穿
+  EMA200 一次的合成 60 日序列 → 编译表达式只产生 1 个入场信号（第 22 日）与
+  1 个离场信号（第 54 日），同序列当日状态写法 31 天持续为真；全量
+  `uv run pytest -q -p no:randomly` **3435 passed, 34 skipped**（基线 3388）。
 - **测试**：新建 `tests/test_nl_semantics.py`、`tests/test_nl_semantics_golden.py`；
   按新语义口径更新 `test_gui_nl_compiler / test_nl_factor_pipeline /
   test_gui_factor_correction / test_gui_app / test_saas_agent_api /
-  test_saas_nl_compile_cache / test_nl_input_guard`（原 fixture 把穿越写成当日
-  状态，正是本 CR 要消灭的错误口径）。
-- **S4 待办**：三条真实 DeepSeek 编译、EMA5/EMA200 信号级验证、全量回归。
+  test_saas_nl_compile_cache / test_nl_input_guard / test_saas_public_beta_ops`
+  （原 fixture 把穿越写成当日状态，正是本 CR 要消灭的错误口径）。
+- **证据**：`.tmp/nl-semantics-smoke-2026-11-03.log`（三条真实编译 + 三个探针的
+  完整 YAML）、`.tmp/nl_smoke_real.py`、`.tmp/nl_smoke_probe.py`。
+- **遗留/待主 Agent**：未 commit/push、未部署 ECS、未重启 worker；`10_REVIEW_REPORT.md`
+  的验收记录留给主 Agent；`26_WEEKLY_HANDOFF_2026-11-02.md` §7 已登记 done。
 
 ### 2026-11-03 评审修复 B1–B6（CR-2026-11-03_review_fixes_b1_b6.md）
 
