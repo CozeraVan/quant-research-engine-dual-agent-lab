@@ -2,6 +2,11 @@
 
 This file is the source of truth for single-agent workflow recovery.
 
+> **当前权威交接文档：`docs/agent/30_WEEKLY_HANDOFF_2026-11-03.md`**（2026-11-03 主 Agent 切换前）。
+> 基线：HEAD `a4ea695`、全量 3385 passed + 34 skipped、本地 worker PID 430787、
+> ECS `QRE_AGENT_API_ENABLED=1` 已打开（回滚见该文档 §1）。
+> 任务流水在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7；主线 todolist 在 `14_LAUNCH_ROADMAP.md` §11.8（含 F 节 32 项）。
+
 ### 2026-10-26 STANDING RULES（每次交互必须执行）
 
 1. **先部署后验收再提交**：任何 AI agent 的代码/UI 改动完成后，备份生产文件并直接部署 ECS，不再询问部署许可；用户人工验收通过后才 commit/push，不通过立即恢复上一版本。文档-only 无需同步 ECS。详见 `02_LOCKED_REQUIREMENTS.md` R-DEPLOY-001。
@@ -357,6 +362,11 @@ P0-1B 结果合同已落地。**单一权威** `src/quant_research_engine/gui/sa
 # Agent State
 
 This file is the source of truth for single-agent workflow recovery.
+
+> **当前权威交接文档：`docs/agent/30_WEEKLY_HANDOFF_2026-11-03.md`**（2026-11-03 主 Agent 切换前）。
+> 基线：HEAD `a4ea695`、全量 3385 passed + 34 skipped、本地 worker PID 430787、
+> ECS `QRE_AGENT_API_ENABLED=1` 已打开（回滚见该文档 §1）。
+> 任务流水在 `26_WEEKLY_HANDOFF_2026-11-02.md` §7；主线 todolist 在 `14_LAUNCH_ROADMAP.md` §11.8（含 F 节 32 项）。
 
 ### 2026-10-25 QRE-SAAS-FACTOR-PICKER-MODAL DONE（待用户验收）
 
