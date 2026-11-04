@@ -1,0 +1,31 @@
+<div class="card profile-list-card" id="strat-panel">
+  <div class="profile-list-head">
+    <h2>策略列表 <button type="button" class="tip-trigger" data-tip="同名策略自动复用更新；已有回测记录的策略不可删除。" aria-label="策略库规则">?</button></h2>
+    <a href="/saas/signals" class="profile-head-link">查看全部信号 →</a>
+  </div>
+  <div id="strat-error" class="profile-inline-error" hidden role="alert"></div>
+  <div class="profile-list-scroll">
+    <table class="tbl" id="strat-table">
+      <thead><tr><th>策略名称</th><th class="num" style="text-align:right">回测次数</th><th>最近使用</th><th>创建时间</th><th style="text-align:right">操作</th></tr></thead>
+      <tbody id="strat-tbody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="profile-pager">
+    <button class="btn-sm" id="strat-pg-prev" type="button">← 上一页</button>
+    <span class="profile-pager-pages" id="strat-pg-pages"></span>
+    <span class="profile-pager-info" id="strat-pg-info"></span>
+    <button class="btn-sm" id="strat-pg-next" type="button">下一页 →</button>
+  </div>
+</div>
+
+<div class="card profile-mini-card">
+  <details id="factor-req-details">
+    <summary>我的因子申请（缺因子提交的需求在这里看进度）</summary>
+    <div class="profile-list-scroll profile-list-scroll--mini">
+      <table class="tbl">
+        <thead><tr><th>因子</th><th>状态</th><th>说明</th><th>提交时间</th></tr></thead>
+        <tbody id="factor-req-tbody"><tr><td colspan="4" class="muted">加载中…</td></tr></tbody>
+      </table>
+    </div>
+  </details>
+</div>

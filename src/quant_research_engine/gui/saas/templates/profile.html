@@ -1,144 +1,140 @@
 {% extends "base.html" %}
-{% block title %}会员中心 · A股回测台{% endblock %}
-{% block head %}<link rel="stylesheet" href="/static/account.css?v={{ asset_v }}">{% endblock %}
+{% block title %}个人中心 · A股回测台{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/account.css?v={{ asset_v }}"><style>@media(max-width:760px){.sidenav{display:none}}</style>{% endblock %}
 {% block body %}
 <div class="wrap">
   <div class="page-head">
-    <h1>会员中心</h1>
-    <p>账号、会员权益与回测记录都在这里。</p>
+    <h1>个人中心</h1>
+    <p>账号与权限、我的策略库、回测记录和分享，都在这里。</p>
   </div>
 
-  <!-- T4 会员等级卡：tier / 每日配额用量 / 跟踪上限 -->
-  <section class="card member-hero" id="profile-card">
-    <div class="member-hero-top">
-      <div class="member-identity">
-        <div class="member-avatar" aria-hidden="true">Q</div>
-        <div>
-          <div class="member-hello">当前账号</div>
-          <div class="member-account" id="pf-account">加载中…</div>
-          <div class="member-badges">
-            <span class="member-tier-badge" id="pf-tier">—</span>
-            <span class="member-beta">内测免费</span>
+  <div class="help-layout profile-layout">
+    <aside class="card help-side profile-side">
+      <nav class="help-jump profile-nav" aria-label="个人中心栏目">
+        <a href="/saas/profile" data-profile-view-link="info" aria-current="page">个人信息</a>
+        <a href="#strategies" data-profile-view-link="strategies">我的策略库</a>
+        <a href="#records" data-profile-view-link="records">回测记录</a>
+        <a href="#shares" data-profile-view-link="shares">我的分享</a>
+      </nav>
+    </aside>
+
+    <div class="help-content profile-content">
+      <!-- 子页面 1：个人信息 + 当前权限（数据来自 GET /api/saas/membership） -->
+      <section class="profile-view" data-profile-view="info">
+        <div class="profile-sec-head">
+          <div><h2>个人信息</h2><p>账号、会员等级与当前权限。</p></div>
+        </div>
+
+        <section class="card member-hero" id="profile-card">
+          <div class="member-hero-top">
+            <div class="member-identity">
+              <div class="member-avatar" aria-hidden="true">Q</div>
+              <div>
+                <div class="member-hello">当前账号</div>
+                <div class="member-account" id="pf-account">加载中…</div>
+                <div class="member-badges">
+                  <span class="member-tier-badge" id="pf-tier">—</span>
+                  <span class="member-beta" id="pf-role" hidden>管理员</span>
+                </div>
+              </div>
+            </div>
+            <div class="member-quota">
+              <div class="member-quota-head"><span>今日全量回测</span><b id="pf-quota">—</b></div>
+              <div class="member-bar" role="progressbar" aria-label="今日配额使用量"><i id="pf-quota-bar"></i></div>
+              <div class="member-quota-foot" id="pf-quota-foot">—</div>
+            </div>
+          </div>
+          <p class="member-perm" id="pf-perm">—</p>
+        </section>
+
+        <div class="metric-strip" id="tier-strip">
+          <div class="metric-card">
+            <div class="m-label">会员等级</div><div class="m-value" id="pf-tier-metric">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="m-label">今日已用 / 上限</div><div class="m-value" id="pf-used-metric">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="m-label">信号跟踪
+              <button class="tip-trigger auth-tip-btn" type="button" data-tip="上限取自 tier_policies.max_watches；0 表示不限。实际额度以运营配置为准。" aria-label="跟踪上限说明">?</button>
+            </div><div class="m-value" id="pf-watches">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="m-label">回测历史</div><div class="m-value" id="pf-history">—</div>
           </div>
         </div>
-      </div>
-      <div class="member-quota">
-        <div class="member-quota-head"><span>今日全量回测</span><b id="pf-quota">—</b></div>
-        <div class="member-bar" role="progressbar" aria-label="今日配额使用量"><i id="pf-quota-bar"></i></div>
-        <div class="member-quota-foot" id="pf-quota-foot">—</div>
-      </div>
-    </div>
-    <p class="member-perm" id="pf-perm">—</p>
-  </section>
 
-  <div class="metric-strip" id="tier-strip">
-    <div class="metric-card">
-      <div class="m-label">会员等级</div><div class="m-value" id="pf-tier-metric">—</div>
-    </div>
-    <div class="metric-card">
-      <div class="m-label">今日已用 / 上限</div><div class="m-value" id="pf-used-metric">—</div>
-    </div>
-    <div class="metric-card">
-      <div class="m-label">信号跟踪上限
-        <button class="tip-trigger auth-tip-btn" type="button" data-tip="内测期默认每个账号可跟踪 20 个策略；实际上限以运营配置的会员策略为准。" aria-label="跟踪上限说明">?</button>
-      </div><div class="m-value" id="pf-watches">20 个</div>
-    </div>
-    <div class="metric-card">
-      <div class="m-label">记录保存</div><div class="m-value" id="pf-retention">—</div>
-    </div>
-  </div>
+        <section class="card profile-detail-card">
+          <h2>账号与权限明细</h2>
+          <div class="profile-kv">
+            <div><span>手机号</span><b id="pf-phone">—</b></div>
+            <div><span>邮箱</span><b id="pf-email">—</b></div>
+            <div><span>会员等级</span><b id="pf-detail-tier">—</b></div>
+            <div><span>账号角色</span><b id="pf-role-text">—</b></div>
+            <div><span>单次标的</span><b id="pf-codes">—</b></div>
+            <div><span>回测历史</span><b id="pf-days">—</b></div>
+            <div><span>因子字段 / 因子表</span><b id="pf-factor">—</b></div>
+            <div><span>信号扫描</span><b id="pf-scan">—</b></div>
+            <div><span>注册时间</span><b id="pf-since">—</b></div>
+            <div><span>会员到期</span><b id="pf-expire">—</b></div>
+          </div>
+          <div class="profile-inline-error" id="pf-membership-error" hidden role="alert">
+            <span id="pf-membership-error-text">权限信息加载失败，请稍后重试。</span>
+            <button class="btn-sm" type="button" id="pf-membership-retry">重试</button>
+          </div>
+        </section>
 
-  <!-- T4 QQ 绑定预留区（接口未接入，不伪造绑定状态） -->
-  <section class="card account-bind" id="account-bind-card">
-    <h2>账号绑定
-      <button class="tip-trigger auth-tip-btn" type="button" data-tip="QQ 绑定为内测预留能力；接口上线后会在此接入，当前不影响登录与使用。" aria-label="账号绑定说明">?</button>
-    </h2>
-    <div class="bind-row">
-      <div class="bind-mark" aria-hidden="true">QQ</div>
-      <div class="bind-info">
-        <b>QQ 账号</b>
-        <span class="bind-status">未绑定</span>
-      </div>
-      <button class="btn btn-ghost" type="button" disabled>绑定 QQ（即将开放）</button>
-    </div>
-  </section>
+        <!-- T4 QQ 绑定预留区（接口未接入，不伪造绑定状态） -->
+        <section class="card account-bind" id="account-bind-card">
+          <h2>账号绑定
+            <button class="tip-trigger auth-tip-btn" type="button" data-tip="QQ 绑定为内测预留能力；接口上线后会在此接入，当前不影响登录与使用。" aria-label="账号绑定说明">?</button>
+          </h2>
+          <div class="bind-row">
+            <div class="bind-mark" aria-hidden="true">QQ</div>
+            <div class="bind-info">
+              <b>QQ 账号</b>
+              <span class="bind-status">未绑定</span>
+            </div>
+            <button class="btn btn-ghost" type="button" disabled>绑定 QQ（即将开放）</button>
+          </div>
+        </section>
+      </section>
 
-  <!-- T5 会员权益对比表：标「内测免费」，不提供支付按钮 -->
-  <section class="card" id="benefit-card">
-    <div class="benefit-head">
-      <h2>会员权益对比</h2>
-      <span class="member-beta">内测免费</span>
-      <button class="tip-trigger auth-tip-btn" type="button" data-tip="额度为内测期默认策略（tier_policies），实际以运营配置为准；内测期间不提供支付。" aria-label="权益说明">?</button>
-    </div>
-    <p class="benefit-lead">内测期间注册会员与付费会员权益一致，全部功能免费开放，暂不提供支付。</p>
-    <div class="benefit-scroll">
-      <table class="tbl benefit-table">
-        <thead>
-          <tr>
-            <th>权益</th>
-            <th data-tier-col="guest">游客</th>
-            <th data-tier-col="member">注册会员</th>
-            <th data-tier-col="paid">付费会员 <span class="member-beta">内测免费</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>每日全量回测</td>
-            <td>1 次</td>
-            <td>不限</td>
-            <td>不限</td>
-          </tr>
-          <tr>
-            <td>单次标的数</td>
-            <td>最多 10 只</td>
-            <td>全市场</td>
-            <td>全市场</td>
-          </tr>
-          <tr>
-            <td>回测历史区间</td>
-            <td>近 10 年</td>
-            <td>全历史</td>
-            <td>全历史</td>
-          </tr>
-          <tr>
-            <td>因子字段 / 因子表</td>
-            <td>20 / 3</td>
-            <td>20 / 3</td>
-            <td>20 / 3</td>
-          </tr>
-          <tr>
-            <td>信号跟踪上限</td>
-            <td><span class="benefit-no">—</span></td>
-            <td>20 个</td>
-            <td>20 个</td>
-          </tr>
-          <tr>
-            <td>回测记录保存</td>
-            <td>次日清空</td>
-            <td>永久保存</td>
-            <td>永久保存</td>
-          </tr>
-          <tr>
-            <td>只读分享</td>
-            <td><span class="benefit-no">—</span></td>
-            <td><span class="benefit-yes">支持</span></td>
-            <td><span class="benefit-yes">支持</span></td>
-          </tr>
-          <tr>
-            <td>个股明细与产物下载</td>
-            <td><span class="benefit-no">—</span></td>
-            <td><span class="benefit-yes">支持</span></td>
-            <td><span class="benefit-yes">支持</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
+      <!-- 子页面 2：我的策略库 -->
+      <section class="profile-view" data-profile-view="strategies" hidden>
+        <div class="profile-sec-head">
+          <div><h2>我的策略库</h2><p>同名策略自动复用更新；已有回测记录的策略不可删除。</p></div>
+        </div>
+        {% include "_profile_strategies.html" %}
+      </section>
 
-  <!-- P1 只读分享（QRE-SAAS-READONLY-SHARE）：我的分享列表与撤销（仅登录可见） -->
-  <div class="card hidden" id="share-card">
-    <h2>我的分享 <button type="button" class="tip-trigger" data-tip="分享链接只读、可撤销；接收方无需登录即可在有效期内查看对应结果。链接只在创建时显示一次。" aria-label="我的分享说明">?</button></h2>
-    <div id="share-list"><div class="chart-empty">加载中…</div></div>
+      <!-- 子页面 3：回测记录 -->
+      <section class="profile-view" data-profile-view="records" hidden>
+        <div class="profile-sec-head">
+          <div><h2>回测记录 <span class="profile-user-label" id="user-label"></span></h2><p>按创建时间或超额收益排序，支持筛选、分页和删除。</p></div>
+        </div>
+        {% include "_profile_records.html" %}
+      </section>
+
+      <!-- 子页面 4：我的分享 -->
+      <section class="profile-view" data-profile-view="shares" hidden>
+        <div class="profile-sec-head">
+          <div><h2>我的分享</h2><p>只读分享链接可随时撤销，接收方无需登录。</p></div>
+        </div>
+        <div class="card profile-list-card" id="share-card">
+          <div class="profile-list-head">
+            <h2>分享链接 <button type="button" class="tip-trigger" data-tip="分享链接只读、可撤销；接收方无需登录即可在有效期内查看对应结果。链接只在创建时显示一次。" aria-label="我的分享说明">?</button></h2>
+          </div>
+          <div class="profile-list-scroll" id="share-list"><div class="chart-empty">加载中…</div></div>
+          <div class="profile-pager">
+            <button class="btn-sm" id="share-pg-prev" type="button">← 上一页</button>
+            <span class="profile-pager-pages" id="share-pg-pages"></span>
+            <span class="profile-pager-info" id="share-pg-info"></span>
+            <button class="btn-sm" id="share-pg-next" type="button">下一页 →</button>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 
   <!-- 撤销分享二次确认（复用既有自定义模态，不用原生 confirm） -->
@@ -148,21 +144,17 @@
       <p id="share-revoke-text">撤销后该链接立即失效，已收到链接的人将无法再查看该结果。确认撤销？</p>
       <div class="m-actions">
         <button type="button" class="btn btn-ghost" id="share-revoke-no">取消</button>
-        <button type="button" class="btn btn-primary" id="share-revoke-yes" style="background:var(--up);border-color:var(--up)">确认撤销</button>
+        <button type="button" class="btn btn-primary" id="share-revoke-yes" style="background:var(--lav);border-color:var(--lav)">确认撤销</button>
       </div>
     </div>
   </div>
-
-  <div class="page-head" style="margin-top:6px">
-    <h1 style="font-size:18px">回测记录 <span class="opt" id="user-label" style="font-family:var(--sans);font-size:15px"></span></h1>
-  </div>
-{% include "_records_body.html" %}
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
 const PROFILE_CONTENT = Array.from(document.getElementById('profile-card').childNodes);
 let profileController = null;
+let profileMembershipController = null;
 let profileEpoch = 0;
 let profileContentDetached = false;
 function retryProfile(){
@@ -172,98 +164,162 @@ function retryProfile(){
   }
   return loadProfile();
 }
-function markTierColumn(tier){
-  const idx = ({guest: 2, member: 3, paid: 4})[tier] || 0;
-  document.querySelectorAll('.benefit-table tr').forEach(tr => {
-    Array.prototype.forEach.call(tr.children, (cell, i) => {
-      cell.classList.toggle('is-current', idx > 0 && i + 1 === idx);
-    });
-  });
-  document.querySelectorAll('.benefit-table [data-tier-col]').forEach(th => {
-    const old = th.querySelector('.benefit-now');
-    if (old) old.remove();
-    if (idx > 0 && th.getAttribute('data-tier-col') === tier){
-      const now = document.createElement('span');
-      now.className = 'benefit-now';
-      now.textContent = '当前';
-      th.appendChild(now);
-    }
-  });
-  // 窄屏时把当前等级列滚进视野，避免用户只看到「游客」列
-  const currentTh = document.querySelector('.benefit-table th.is-current');
-  const scroller = document.querySelector('.benefit-scroll');
-  if (currentTh && scroller && window.matchMedia('(max-width: 768px)').matches){
-    scroller.scrollLeft = Math.max(0, currentTh.offsetLeft - 12);
-  }
+function setProfileText(id, text){
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
 }
-async function loadProfile(){
-  const TIER_LABEL = {guest: '游客', member: '注册会员', paid: '付费会员'};
-  const PERM_LABEL = {
-    guest: '游客：≤10 只标的 · 近 10 年 · 每日 1 次 · 记录次日清空',
-    member: '注册会员：全市场 / 全历史 · 不限次数 · 记录永久保存',
-    paid: '内测期间同注册会员，更多权益即将开放',
-  };
-  profileEpoch += 1;
-  if (profileController) profileController.abort();
-  const epoch = profileEpoch;
-  const controller = new AbortController();
-  profileController = controller;
-  try {
-    const result = await recordsRequestWithTimeout('/api/saas/me', {redirectOn401:false}, controller, async resp => {
-      if (resp.status === 401 || resp.status === 404) return {resp, access: true};
-      return {resp, data: await resp.json()};
-    });
-    if (epoch !== profileEpoch) return;
-    if (result.access){ showRecordsAccess(); return; }
-    const resp = result.resp, d = result.data;
-    if (!resp.ok || !d || !d.ok || !d.user) throw new Error('个人信息加载失败 HTTP ' + resp.status);
-    const u = d.user;
-    const tier = u.tier || 'member';
-    const isAdmin = !!u.is_admin;
-    const tierLabel = isAdmin ? '管理员' : (TIER_LABEL[tier] || tier);
-    document.getElementById('pf-account').textContent = u.email || u.phone || ('用户 #' + u.id);
+function fmtMemberDate(value){
+  if (!value) return '—';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  const p = n => ('0' + n).slice(-2);
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function showMembershipError(text){
+  setProfileText('pf-membership-error-text', text || '权限信息加载失败，请稍后重试。');
+  const box = document.getElementById('pf-membership-error');
+  if (box) box.hidden = false;
+}
+function hideMembershipError(){
+  const box = document.getElementById('pf-membership-error');
+  if (box) box.hidden = true;
+}
+function applyMembership(m, tiers){
+  const tier = m.tier || 'member';
+  const isAdmin = !!m.is_admin;
+  const tierName = m.tier_label || tier;
 
-    const badge = document.getElementById('pf-tier');
-    badge.textContent = tierLabel;
-    badge.className = 'member-tier-badge ' + (isAdmin ? 'tier-admin' : ('tier-' + tier));
-    document.getElementById('pf-tier-metric').textContent = tierLabel;
+  const badge = document.getElementById('pf-tier');
+  if (badge){
+    badge.textContent = tierName;
+    badge.className = 'member-tier-badge tier-' + tier;
+  }
+  const roleBadge = document.getElementById('pf-role');
+  if (roleBadge) roleBadge.hidden = !isAdmin;
+  setProfileText('pf-tier-metric', tierName);
+  setProfileText('pf-detail-tier', tierName);
+  setProfileText('pf-role-text', isAdmin ? '管理员' : '普通用户');
 
-    const used = Number(u.used_today || 0);
-    const unlimited = isAdmin || u.quota_limit === '不限';
-    const limit = unlimited ? null : Number(u.quota_limit);
-    document.getElementById('pf-quota').textContent = unlimited
-      ? '不限次数'
-      : ('已用 ' + used + ' / ' + u.quota_limit + ' 次');
-    document.getElementById('pf-used-metric').textContent = unlimited
-      ? (used + ' 次 / 不限')
-      : (used + ' / ' + u.quota_limit + ' 次');
-    document.getElementById('pf-quota-foot').textContent = unlimited
-      ? '内测期不限次数，放心回测'
-      : ('今日剩余 ' + Math.max(0, limit - used) + ' 次');
-    const bar = document.getElementById('pf-quota-bar');
+  const q = m.daily_full || {};
+  const used = Number(q.used || 0);
+  const unlimited = !!q.unlimited || q.limit === '不限';
+  const limit = q.limit;
+  setProfileText('pf-quota', unlimited
+    ? ('已用 ' + used + ' 次 / 不限')
+    : ('已用 ' + used + ' / ' + limit + ' 次'));
+  setProfileText('pf-used-metric', unlimited
+    ? (used + ' / 不限')
+    : (used + ' / ' + limit));
+  setProfileText('pf-quota-foot', unlimited
+    ? (isAdmin ? '管理员账号不限次数' : (tier === 'member' ? '内测期不限次数，放心回测' : '当前会员配额不限次数'))
+    : ('今日剩余 ' + Math.max(0, Number(q.remaining || 0)) + ' 次'));
+  const bar = document.getElementById('pf-quota-bar');
+  if (bar){
     bar.classList.toggle('is-unlimited', unlimited);
     bar.style.width = unlimited ? '100%'
       : (limit > 0 ? Math.min(100, Math.round(used / limit * 100)) + '%' : '0%');
+  }
 
-    document.getElementById('pf-perm').textContent = isAdmin
-      ? '管理员账号：不限次数，全功能开放；会员权益表仅作等级说明。'
-      : (PERM_LABEL[tier] || PERM_LABEL.member);
-    document.getElementById('pf-retention').textContent = tier === 'guest' ? '次日清空' : '永久保存';
-    document.getElementById('pf-watches').textContent = '20 个';
-    markTierColumn(isAdmin ? '' : tier);
+  const w = m.watches || {};
+  const watchLimit = w.limit;
+  const watchUnlimited = !!w.unlimited || watchLimit === '不限';
+  setProfileText('pf-watches', watchUnlimited
+    ? ((w.used || 0) + ' 个 / 不限')
+    : ((w.used || 0) + ' / ' + watchLimit + ' 个'));
+
+  let policy = null;
+  for (let i = 0; i < (tiers || []).length; i++){
+    if (tiers[i] && tiers[i].tier === tier){ policy = tiers[i]; break; }
+  }
+  policy = policy || {};
+  const maxCodes = Number(policy.max_codes || 0);
+  const maxDays = Number(policy.max_days || 0);
+  const codesText = maxCodes > 0 ? ('最多 ' + maxCodes + ' 只') : '全市场';
+  const daysText = maxDays > 0 ? ('近 ' + Math.max(1, Math.round(maxDays / 365)) + ' 年') : '全历史';
+  const scanEnabled = policy.scan_enabled !== false;
+  setProfileText('pf-codes', codesText);
+  setProfileText('pf-days', daysText);
+  setProfileText('pf-history', daysText);
+  setProfileText('pf-factor', policy.max_factor_fields == null
+    ? '—'
+    : (policy.max_factor_fields + ' / ' + policy.max_factor_tables));
+  setProfileText('pf-scan', scanEnabled ? '已开启' : '未开启');
+  setProfileText('pf-since', fmtMemberDate(m.member_since));
+  setProfileText('pf-expire', fmtMemberDate(m.member_expire_at));
+
+  const bits = [
+    codesText,
+    daysText,
+    '信号扫描' + (scanEnabled ? '已开启' : '未开启'),
+    '跟踪上限 ' + (watchUnlimited ? '不限' : (watchLimit + ' 个'))
+  ];
+  setProfileText('pf-perm', (isAdmin ? '管理员 · ' : '') + (m.tier_label || tier) + '：' + bits.join(' · '));
+}
+async function loadProfile(){
+  profileEpoch += 1;
+  if (profileController) profileController.abort();
+  if (profileMembershipController) profileMembershipController.abort();
+  const epoch = profileEpoch;
+  const meController = new AbortController();
+  const memberController = new AbortController();
+  profileController = meController;
+  profileMembershipController = memberController;
+  try {
+    const [meSettled, memberSettled] = await Promise.allSettled([
+      recordsRequestWithTimeout('/api/saas/me', {redirectOn401:false}, meController, async resp => {
+        if (resp.status === 401 || resp.status === 404) return {resp, access: true};
+        return {resp, data: await resp.json()};
+      }),
+      recordsRequestWithTimeout('/api/saas/membership', {redirectOn401:false}, memberController, async resp => {
+        if (resp.status === 401 || resp.status === 404) return {resp, access: true};
+        return {resp, data: await resp.json()};
+      }),
+    ]);
+    if (epoch !== profileEpoch) return;
+    if (meSettled.status === 'rejected') throw meSettled.reason;
+    const meResult = meSettled.value;
+    if (meResult.access){ showRecordsAccess(); return; }
+    const meResp = meResult.resp, me = meResult.data;
+    if (!meResp.ok || !me || !me.ok || !me.user) throw new Error('个人信息加载失败 HTTP ' + meResp.status);
+    const u = me.user;
+    setProfileText('pf-account', u.phone || u.email || ('用户 #' + u.id));
+    setProfileText('pf-phone', u.phone || '—');
+    setProfileText('pf-email', u.email || '—');
+
+    if (memberSettled.status === 'fulfilled' && !memberSettled.value.access){
+      const memberResp = memberSettled.value.resp, memberData = memberSettled.value.data;
+      if (memberResp.ok && memberData && memberData.ok && memberData.membership){
+        applyMembership(memberData.membership, memberData.tiers || []);
+        hideMembershipError();
+      } else {
+        showMembershipError('权限信息加载失败（HTTP ' + memberResp.status + '）');
+      }
+    } else {
+      showMembershipError('权限信息加载失败，请稍后重试。');
+    }
   } catch (error) {
     if (epoch !== profileEpoch) return;
     if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
     showLoadFailure(document.getElementById('profile-card'), retryProfile);
     profileContentDetached = true;
   } finally {
-    if (epoch === profileEpoch) profileController = null;
+    if (epoch === profileEpoch){
+      profileController = null;
+      profileMembershipController = null;
+    }
   }
+}
+function bindMembershipRetry(){
+  const btn = document.getElementById('pf-membership-retry');
+  if (btn) btn.addEventListener('click', function(){ loadProfile(); });
 }
 {% include "_records_scripts.html" %}
 // --- P1 只读分享（QRE-SAAS-READONLY-SHARE）：我的分享列表与撤销 ---
 const SHARE_STATUS_LABEL = {active: '有效', expired: '已过期', revoked: '已撤销'};
+const SHARE_PAGE_SIZE = 6;
 let shareRevokeTarget = null;
+let shareItems = [];
+let sharePage = 1;
 function setShareRevokeModal(open){
   document.getElementById('share-revoke-modal').classList.toggle('show', !!open);
 }
@@ -279,45 +335,66 @@ function fmtShareTime(iso){
   return (typeof LabUI !== 'undefined' && LabUI && LabUI.fmtLocalTime)
     ? LabUI.fmtLocalTime(iso) : String(iso);
 }
-function renderShares(items){
+function showShareMessage(text){
   const box = document.getElementById('share-list');
-  if (!items.length){
+  if (box) box.innerHTML = '<div class="chart-empty">' + text + '</div>';
+  setProfileText('share-pg-info', '');
+  const pages = document.getElementById('share-pg-pages');
+  if (pages) pages.replaceChildren();
+}
+function renderSharePage(){
+  const box = document.getElementById('share-list');
+  if (!box) return;
+  const pages = Math.max(1, Math.ceil(shareItems.length / SHARE_PAGE_SIZE));
+  if (sharePage > pages) sharePage = pages;
+  if (sharePage < 1) sharePage = 1;
+  if (!shareItems.length){
     box.innerHTML = '<div class="chart-empty">还没有分享链接</div>';
-    return;
-  }
-  box.innerHTML = '<div style="overflow:auto"><table class="tbl"><thead><tr>'
-    + '<th>任务</th><th>策略</th><th>创建时间</th><th>有效期</th><th>状态</th><th></th></tr></thead><tbody>'
-    + items.map(it => '<tr>'
-      + '<td>#' + it.job_id + '</td>'
-      + '<td>' + escH(it.strategy_name || '—') + '</td>'
-      + '<td>' + escH(fmtShareTime(it.created_at)) + '</td>'
-      + '<td>' + escH(shareExpiresText(it)) + '</td>'
-      + '<td>' + escH(SHARE_STATUS_LABEL[it.status] || it.status) + '</td>'
-      + '<td>' + (it.status === 'active'
-        ? '<button class="btn-sm" data-share-revoke="' + it.id + '">撤销</button>' : '') + '</td>'
-      + '</tr>').join('')
-    + '</tbody></table></div>';
-  Array.prototype.slice.call(box.querySelectorAll('[data-share-revoke]')).forEach(btn => {
-    btn.addEventListener('click', () => {
-      shareRevokeTarget = Number(btn.getAttribute('data-share-revoke'));
-      setShareRevokeModal(true);
+  } else {
+    const start = (sharePage - 1) * SHARE_PAGE_SIZE;
+    const visible = shareItems.slice(start, start + SHARE_PAGE_SIZE);
+    box.innerHTML = '<table class="tbl" id="share-table"><thead><tr>'
+      + '<th>任务</th><th>策略</th><th>创建时间</th><th>有效期</th><th>状态</th><th></th></tr></thead><tbody>'
+      + visible.map(it => '<tr>'
+        + '<td>#' + it.job_id + '</td>'
+        + '<td>' + escH(it.strategy_name || '—') + '</td>'
+        + '<td>' + escH(fmtShareTime(it.created_at)) + '</td>'
+        + '<td>' + escH(shareExpiresText(it)) + '</td>'
+        + '<td>' + escH(SHARE_STATUS_LABEL[it.status] || it.status) + '</td>'
+        + '<td>' + (it.status === 'active'
+          ? '<button class="btn-sm" data-share-revoke="' + it.id + '">撤销</button>' : '') + '</td>'
+        + '</tr>').join('')
+      + '</tbody></table>';
+    Array.prototype.slice.call(box.querySelectorAll('[data-share-revoke]')).forEach(btn => {
+      btn.addEventListener('click', () => {
+        shareRevokeTarget = Number(btn.getAttribute('data-share-revoke'));
+        setShareRevokeModal(true);
+      });
     });
+  }
+  setProfileText('share-pg-info', '第 ' + sharePage + ' / ' + pages + ' 页 · 共 ' + shareItems.length + ' 条');
+  const prev = document.getElementById('share-pg-prev');
+  const next = document.getElementById('share-pg-next');
+  if (prev) prev.disabled = sharePage <= 1;
+  if (next) next.disabled = sharePage >= pages;
+  renderNumericPager(document.getElementById('share-pg-pages'), sharePage, pages, function(p){
+    sharePage = p;
+    renderSharePage();
   });
 }
 async function loadShares(){
-  const card = document.getElementById('share-card');
   try {
     const r = await apiFetch('/api/saas/share-links', {redirectOn401: false});
-    if (r.status === 401){ card.classList.add('hidden'); return; }
+    if (r.status === 401){ shareItems = []; showShareMessage('登录后可查看分享链接'); return; }
     const d = await r.json();
     if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || ('HTTP ' + r.status));
-    card.classList.remove('hidden');
-    renderShares(d.items || []);
+    shareItems = d.items || [];
+    sharePage = 1;
+    renderSharePage();
   } catch (e) {
-    if (e && e.status === 401){ card.classList.add('hidden'); return; }
-    card.classList.remove('hidden');
-    document.getElementById('share-list').innerHTML =
-      '<div class="chart-empty">分享列表加载失败，请稍后重试</div>';
+    if (e && e.status === 401){ shareItems = []; showShareMessage('登录后可查看分享链接'); return; }
+    shareItems = [];
+    showShareMessage('分享列表加载失败，请稍后重试');
   }
 }
 function bindShareRevoke(){
@@ -342,6 +419,63 @@ function bindShareRevoke(){
     }
   });
 }
+const sharePrev = document.getElementById('share-pg-prev');
+const shareNext = document.getElementById('share-pg-next');
+if (sharePrev) sharePrev.addEventListener('click', function(){
+  if (sharePage > 1){ sharePage--; renderSharePage(); }
+});
+if (shareNext) shareNext.addEventListener('click', function(){
+  const pages = Math.max(1, Math.ceil(shareItems.length / SHARE_PAGE_SIZE));
+  if (sharePage < pages){ sharePage++; renderSharePage(); }
+});
+
+// --- 个人中心子页面切换：支持 /saas/profile#strategies 等直达 ---
+(function(){
+  const layout = document.querySelector('.profile-layout');
+  if (!layout) return;
+  const views = ['info', 'strategies', 'records', 'shares'];
+  const links = Array.prototype.slice.call(document.querySelectorAll('[data-profile-view-link]'));
+  function normalize(name){ return views.indexOf(name) >= 0 ? name : 'info'; }
+  function activate(name, scroll){
+    name = normalize(name);
+    Array.prototype.forEach.call(document.querySelectorAll('.profile-view'), function(sec){
+      sec.hidden = sec.getAttribute('data-profile-view') !== name;
+    });
+    links.forEach(function(a){
+      if (a.getAttribute('data-profile-view-link') === name) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    if (scroll) window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+  links.forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      const name = normalize(a.getAttribute('data-profile-view-link'));
+      if (name === 'info'){
+        if (history.replaceState) history.replaceState(null, '', '/saas/profile');
+        else location.hash = '';
+        activate(name, true);
+      } else if (location.hash !== '#' + name){
+        location.hash = name;
+        activate(name, true);
+      } else {
+        activate(name, true);
+      }
+    });
+  });
+  window.addEventListener('hashchange', function(){
+    activate(location.hash.replace('#', ''), false);
+  });
+  const infoItem = document.querySelector('#profile-dropdown a[data-profile-link="info"]');
+  if (infoItem) infoItem.addEventListener('click', function(e){
+    e.preventDefault();
+    if (history.replaceState) history.replaceState(null, '', '/saas/profile');
+    activate('info', true);
+  });
+  activate(location.hash.replace('#', ''), false);
+})();
+
+bindMembershipRetry();
 bindShareRevoke();
 loadProfile();
 loadShares();

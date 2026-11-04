@@ -629,6 +629,157 @@
 .benefit-table .benefit-yes { color: var(--lav-deep); font-weight: 600; }
 .benefit-table .benefit-no { color: var(--faint); }
 
+/* ---- 个人中心：左侧栏目 + 右侧子页面（复用使用说明页骨架） ---- */
+.profile-layout { grid-template-columns: 210px minmax(0, 1fr); min-width: 0; }
+.profile-side { padding: 14px; min-width: 0; }
+.profile-nav a { font-size: 15.5px; }
+.profile-nav a[aria-current="page"] {
+  background: var(--tint);
+  border-color: var(--tint-deep);
+  color: var(--lav-deep);
+  font-weight: 600;
+}
+.profile-content { min-width: 0; }
+.profile-view[hidden] { display: none; }
+#pf-role[hidden] { display: none; }
+.profile-sec-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+}
+.profile-sec-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 26px;
+  line-height: 1.25;
+}
+.profile-sec-head p {
+  margin: 6px 0 0;
+  color: var(--grey);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+.profile-user-label {
+  display: inline-flex;
+  margin-left: 8px;
+  color: var(--lav-deep);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+.profile-list-card {
+  height: 540px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 26px;
+}
+.profile-list-card > .table-tools,
+.profile-list-card > .profile-list-head { flex: none; }
+.profile-list-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.profile-list-head h2 { margin: 0; }
+.profile-head-link {
+  margin-left: auto;
+  color: var(--lav-deep);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.profile-head-link:hover { color: var(--lav); }
+.profile-list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--glass-bg);
+  -webkit-overflow-scrolling: touch;
+}
+.profile-list-scroll .tbl { min-width: 0; }
+.profile-list-scroll .tbl thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+  box-shadow: 0 1px 0 var(--line);
+}
+.profile-list-scroll .tbl tbody tr:last-child td { border-bottom: none; }
+.profile-list-scroll--mini { max-height: 220px; flex: none; margin-top: 12px; }
+.profile-list-card > .profile-pager { flex: none; }
+.profile-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.profile-pager-pages { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.profile-page-btn { min-width: 38px; justify-content: center; }
+.profile-page-btn.is-on {
+  background: var(--lav);
+  border-color: var(--lav);
+  color: #fff;
+  opacity: 1;
+}
+.profile-pager-info {
+  color: var(--lav-deep);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.profile-detail-card h2 { margin-bottom: 16px; }
+.profile-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+.profile-kv > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--glass-bg);
+}
+.profile-kv span { color: var(--grey); font-size: 15px; }
+.profile-kv b {
+  color: var(--lav-deep);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
+}
+.profile-inline-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding: 12px 15px;
+  border: 1px solid var(--tint-deep);
+  border-left: 3px solid var(--lav);
+  border-radius: 12px;
+  background: var(--tint);
+  color: var(--lav-deep);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.profile-inline-error[hidden] { display: none; }
+.profile-mini-card { margin-bottom: 26px; }
+.profile-mini-card summary { color: var(--lav-deep); font-size: 15.5px; }
+
 /* ---- 断点 -------------------------------------------------------------- */
 @media (max-width: 960px) {
   .auth-page { padding: 32px 16px 56px; }
@@ -640,6 +791,8 @@
   .auth-points { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .auth-card { max-width: 640px; }
   .member-hero { padding: 24px; }
+  .profile-layout { grid-template-columns: 190px minmax(0, 1fr); }
+  .profile-list-card { height: 500px; }
 }
 @media (max-width: 768px) {
   .auth-page { padding: 22px 12px 44px; }
@@ -661,6 +814,31 @@
   .member-quota-head { font-size: 15px; }
   .bind-row .btn { width: 100%; justify-content: center; min-height: 44px; }
   .benefit-table { min-width: 620px; }
+  .profile-layout { grid-template-columns: 1fr; }
+  .profile-side { position: static; padding: 10px; }
+  .profile-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    gap: 8px;
+    padding-bottom: 0;
+    overflow: visible;
+  }
+  .profile-nav a {
+    padding: 9px 10px;
+    font-size: 15px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .profile-sec-head h2 { font-size: 24px; }
+  .profile-list-card { height: 460px; padding: 20px; }
+  .profile-list-scroll .tbl { min-width: 760px; }
+  .profile-list-scroll--mini .tbl { min-width: 560px; }
+  #jobs-table { min-width: 860px; }
+  #strat-table { min-width: 720px; }
+  #share-table { min-width: 700px; }
+  .profile-pager-info { width: 100%; order: 5; }
+  .profile-kv { grid-template-columns: 1fr; }
 }
 @media (max-width: 400px) {
   .auth-tabs { width: 100%; }

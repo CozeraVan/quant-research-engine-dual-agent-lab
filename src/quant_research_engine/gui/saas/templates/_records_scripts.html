@@ -19,11 +19,37 @@ let pendingDel = null;
 function clsPnL(v){ return v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat'); }
 function fmtPct(v){ return v == null ? '——' : (v >= 0 ? '+' : '') + (v * 100).toFixed(2) + '%'; }
 
+// 通用数字页码（最多 5 个）：个人中心的回测记录/策略库/分享共用。
+// 不依赖 setAttribute，便于既有 Node DOM harness 复跑。
+function renderNumericPager(box, current, total, onGo){
+  if (!box) return;
+  const pages = Math.max(1, Number(total) || 1);
+  const cur = Math.min(Math.max(1, Number(current) || 1), pages);
+  box.replaceChildren();
+  if (pages <= 1) return;
+  const start = Math.max(1, Math.min(cur - 2, pages - 4));
+  const end = Math.min(pages, start + 4);
+  for (let p = start; p <= end; p++){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-sm profile-page-btn' + (p === cur ? ' is-on' : '');
+    btn.textContent = String(p);
+    btn.dataset.page = String(p);
+    if (p === cur) btn.disabled = true;
+    btn.addEventListener('click', function(){ onGo(Number(this.dataset.page)); });
+    box.appendChild(btn);
+  }
+}
+
 const RECORDS_ACTIVE = new Set(['queued', 'leased', 'running', 'uploading']);
 const RECORDS_POLL_INTERVAL_MS = 5000;
 const RECORDS_MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;
 const RECORDS_REQUEST_TIMEOUT_MS = 15000;
-const RECORDS_CONTENT = Array.from(document.querySelector('.wrap').childNodes);
+const RECORDS_ROOT = document.querySelector('.profile-content') || document.querySelector('.wrap');
+const RECORDS_CONTENT = RECORDS_ROOT ? Array.from(RECORDS_ROOT.childNodes) : [];
+function recordsRoot(){
+  return document.querySelector('.profile-content') || document.querySelector('.wrap');
+}
 let recordsTimer = null;
 let recordsActiveSince = null;
 let recordsContentDetached = false;
@@ -32,6 +58,9 @@ let recordsLoadEpoch = 0;
 let recordsStrategiesLoaded = false;
 let recordsFactorRequestsLoaded = false;
 let recordsStrategiesLoading = false;
+let recordsStrategyItems = [];
+let recordsStrategyPage = 1;
+const RECORDS_STRATEGY_PAGE_SIZE = 8;
 let recordsFactorRequestsLoading = false;
 async function recordsRequestWithTimeout(url, options, controller, consume){
   let timeout = null;
@@ -71,7 +100,7 @@ function scheduleRecordsRefresh(){
 }
 function restoreRecordsContent(){
   if (!recordsContentDetached) return;
-  document.querySelector('.wrap').replaceChildren(...RECORDS_CONTENT);
+  recordsRoot().replaceChildren(...RECORDS_CONTENT);
   recordsContentDetached = false;
 }
 function retryLoad(){
@@ -83,12 +112,12 @@ function retryLoad(){
 function showRecordsAccess(){
   clearRecordsTimer();
   abortRecordsLoad();
-  showAccessFallback(document.querySelector('.wrap'));
+  showAccessFallback(recordsRoot());
   recordsContentDetached = true;
 }
 function showRecordsFailure(){
   clearRecordsTimer();
-  showLoadFailure(document.querySelector('.wrap'), retryLoad);
+  showLoadFailure(recordsRoot(), retryLoad);
   recordsContentDetached = true;
 }
 function showRecordsAuxMessage(tbody, colspan, text, retryFn){
@@ -131,7 +160,7 @@ function pauseRecordsRefresh(){
   card.appendChild(message);
   card.appendChild(hint);
   card.appendChild(retry);
-  document.querySelector('.wrap').replaceChildren(card);
+  recordsRoot().replaceChildren(card);
   recordsContentDetached = true;
 }
 
@@ -215,6 +244,10 @@ async function load(){
     document.getElementById('pg-info').textContent = `第 ${listState.page} / ${pages} 页`;
     document.getElementById('pg-prev').disabled = listState.page <= 1;
     document.getElementById('pg-next').disabled = listState.page >= pages;
+    renderNumericPager(document.getElementById('pg-pages'), listState.page, pages, p => {
+      listState.page = p;
+      load();
+    });
     if (!recordsStrategiesLoaded && !recordsStrategiesLoading) loadStrategies();
     if (!recordsFactorRequestsLoaded && !recordsFactorRequestsLoading) loadFactorRequests();
     if (data.items.some(j => RECORDS_ACTIVE.has(j.status))){
@@ -305,30 +338,36 @@ async function loadFactorRequests(){
   }
 }
 function fmtT(iso){ return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
-async function loadStrategies(force){
-  if (recordsStrategiesLoading || (recordsStrategiesLoaded && !force)) return;
-  recordsStrategiesLoading = true;
+function setStrategyError(text){
+  const errBox = document.getElementById('strat-error');
+  if (!errBox) return;
+  if (!text){
+    errBox.textContent = '';
+    errBox.hidden = true;
+    return;
+  }
+  errBox.textContent = text;
+  errBox.hidden = false;
+}
+function renderStrategyPage(){
   const tbody = document.getElementById('strat-tbody');
-  const controller = new AbortController();
-  try {
-    const result = await recordsRequestWithTimeout('/api/saas/strategies', {redirectOn401:false}, controller, async resp => {
-      if (resp.status === 401 || resp.status === 404) return {resp, access: true};
-      return {resp, data: await resp.json()};
-    });
-    if (result.access){ showRecordsAuxAccess(tbody, 5, loadStrategies); return; }
-    const resp = result.resp, d = result.data;
-    if (resp.status !== 200 || !d || !d.ok || !Array.isArray(d.strategies)) throw new Error('策略库加载失败 HTTP ' + resp.status);
-    const items = d.strategies;
-    if (!items.length){
-      tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无保存的策略（新建回测提交后自动入库）</td></tr>';
-      recordsStrategiesLoaded = true;
-      return;
-    }
+  if (!tbody) return;
+  const items = recordsStrategyItems;
+  const pagerInfo = document.getElementById('strat-pg-info');
+  const pageSize = pagerInfo ? RECORDS_STRATEGY_PAGE_SIZE : Math.max(1, items.length);
+  const pages = Math.max(1, Math.ceil(items.length / pageSize));
+  if (recordsStrategyPage > pages) recordsStrategyPage = pages;
+  if (recordsStrategyPage < 1) recordsStrategyPage = 1;
+  if (!items.length){
+    tbody.innerHTML = '<tr><td colspan="5" class="muted">暂无保存的策略（新建回测提交后自动入库）</td></tr>';
+  } else {
     tbody.innerHTML = '';
     // CR-2026-10-04 模块一：入口标签 + 详情页入口；模块二收编：行内信号状态
     const MODE_LABEL = {nl: '自然语言', wizard: '自选因子', yaml: '策略代码'};
     const SCOPE_LABEL = {last_run_universe: '最近回测范围', sector: '板块/概念', all_a: '全部 A 股', custom: '自定义列表'};
-    for (const s of items){
+    const start = (recordsStrategyPage - 1) * pageSize;
+    const visible = items.slice(start, start + pageSize);
+    for (const s of visible){
       const tr = document.createElement('tr');
       const modeLabel = MODE_LABEL[s.entry_mode] || '策略代码';
       // 监控状态 + 最近信号摘要（一行小字；有未读信号时行首红点）
@@ -373,15 +412,44 @@ async function loadStrategies(force){
       if (!confirm('确认删除该策略？（有关联回测记录的策略不可删）')) return;
       const r = await apiFetch('/api/saas/strategies/' + btn.dataset.del, {method: 'DELETE'});
       const d = await r.json();
-      const errBox = document.getElementById('strat-error');
       if (!d.ok){
         // 有关联回测时后端返回 409；页面内显示原因，避免「点了没反应」的误解
-        if (errBox) errBox.textContent = d.error || '删除失败';
+        const errBox = document.getElementById('strat-error');
+        if (errBox) errBox.textContent = d.error;
+        setStrategyError(d.error || '删除失败');
         return;
       }
-      if (errBox) errBox.textContent = '';
+      setStrategyError('');
       loadStrategies(true);
     }));
+  }
+  const prev = document.getElementById('strat-pg-prev');
+  const next = document.getElementById('strat-pg-next');
+  if (prev) prev.disabled = recordsStrategyPage <= 1;
+  if (next) next.disabled = recordsStrategyPage >= pages;
+  if (pagerInfo) pagerInfo.textContent = `第 ${recordsStrategyPage} / ${pages} 页 · 共 ${items.length} 条`;
+  renderNumericPager(document.getElementById('strat-pg-pages'), recordsStrategyPage, pages, p => {
+    recordsStrategyPage = p;
+    renderStrategyPage();
+  });
+}
+async function loadStrategies(force){
+  if (recordsStrategiesLoading || (recordsStrategiesLoaded && !force)) return;
+  recordsStrategiesLoading = true;
+  const tbody = document.getElementById('strat-tbody');
+  const controller = new AbortController();
+  try {
+    const result = await recordsRequestWithTimeout('/api/saas/strategies', {redirectOn401:false}, controller, async resp => {
+      if (resp.status === 401 || resp.status === 404) return {resp, access: true};
+      return {resp, data: await resp.json()};
+    });
+    if (result.access){ showRecordsAuxAccess(tbody, 5, loadStrategies); return; }
+    const resp = result.resp, d = result.data;
+    if (resp.status !== 200 || !d || !d.ok || !Array.isArray(d.strategies)) throw new Error('策略库加载失败 HTTP ' + resp.status);
+    setStrategyError('');
+    recordsStrategyItems = d.strategies;
+    recordsStrategyPage = 1;
+    renderStrategyPage();
     recordsStrategiesLoaded = true;
   } catch (error) {
     if (error && (error.status === 401 || error.status === 404)){ showRecordsAuxAccess(tbody, 5, loadStrategies); return; }
@@ -390,4 +458,11 @@ async function loadStrategies(force){
     recordsStrategiesLoading = false;
   }
 }
+if (document.getElementById('strat-pg-prev')) document.getElementById('strat-pg-prev').addEventListener('click', () => {
+  if (recordsStrategyPage > 1){ recordsStrategyPage--; renderStrategyPage(); }
+});
+if (document.getElementById('strat-pg-next')) document.getElementById('strat-pg-next').addEventListener('click', () => {
+  const pages = Math.max(1, Math.ceil(recordsStrategyItems.length / RECORDS_STRATEGY_PAGE_SIZE));
+  if (recordsStrategyPage < pages){ recordsStrategyPage++; renderStrategyPage(); }
+});
 load();

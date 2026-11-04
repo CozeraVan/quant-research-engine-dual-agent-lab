@@ -1,0 +1,38 @@
+<div class="card profile-list-card" id="records-card">
+  <div class="table-tools">
+    <button class="btn btn-ghost" id="btn-reload" style="padding:7px 18px">刷新</button>
+    <span class="opt" id="list-hint"></span>
+    <span class="opt">排序：</span>
+    <button class="seg-btn active" data-sort="created_at">创建时间</button>
+    <button class="seg-btn" data-sort="excess_return">超额收益</button>
+    <span style="margin-left:auto"></span>
+    <input type="text" id="recs-filter" placeholder="筛选策略名 / 任务号…" style="width:220px;max-width:100%">
+  </div>
+  <div class="profile-list-scroll">
+    <table class="tbl" id="jobs-table">
+      <thead><tr>
+        <th>策略名称</th><th>回测区间</th><th class="num" style="text-align:right">股票数量</th>
+        <th class="num" style="text-align:right">超额收益</th><th>状态</th><th>创建时间</th><th style="text-align:right">操作</th>
+      </tr></thead>
+      <tbody id="jobs-tbody"><tr><td colspan="7" class="muted">加载中…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="profile-pager">
+    <button class="btn-sm" id="pg-prev" type="button">← 上一页</button>
+    <span class="profile-pager-pages" id="pg-pages"></span>
+    <span class="profile-pager-info" id="pg-info"></span>
+    <button class="btn-sm" id="pg-next" type="button">下一页 →</button>
+  </div>
+</div>
+
+<!-- 删除确认弹层 -->
+<div class="modal-mask" id="del-mask">
+  <div class="modal">
+    <h3>删除该回测记录？</h3>
+    <p id="del-text"></p>
+    <div class="m-actions">
+      <button class="btn btn-ghost" id="del-cancel">取消</button>
+      <button class="btn btn-primary" id="del-ok" style="background:var(--lav);border-color:var(--lav)">确认删除</button>
+    </div>
+  </div>
+</div>

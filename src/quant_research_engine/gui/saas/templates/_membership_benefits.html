@@ -1,0 +1,32 @@
+{# 会员权益对比表（T5）：个人中心按 QRE-PROFILE-CENTER 需求不再渲染本片段；
+   保留独立片段，未来付费页可直接 include 复用，避免在个人中心堆积支付导向内容。 #}
+<section class="card" id="benefit-card">
+  <div class="benefit-head">
+    <h2>会员权益对比</h2>
+    <span class="member-beta">内测免费</span>
+    <button class="tip-trigger auth-tip-btn" type="button" data-tip="额度为内测期默认策略（tier_policies），实际以运营配置为准；内测期间不提供支付。" aria-label="权益说明">?</button>
+  </div>
+  <p class="benefit-lead">内测期间注册会员与付费会员权益一致，全部功能免费开放，暂不提供支付。</p>
+  <div class="benefit-scroll">
+    <table class="tbl benefit-table">
+      <thead>
+        <tr>
+          <th>权益</th>
+          <th data-tier-col="guest">游客</th>
+          <th data-tier-col="member">注册会员</th>
+          <th data-tier-col="paid">付费会员 <span class="member-beta">内测免费</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>每日全量回测</td><td>1 次</td><td>不限</td><td>不限</td></tr>
+        <tr><td>单次标的数</td><td>最多 10 只</td><td>全市场</td><td>全市场</td></tr>
+        <tr><td>回测历史区间</td><td>近 10 年</td><td>全历史</td><td>全历史</td></tr>
+        <tr><td>因子字段 / 因子表</td><td>20 / 3</td><td>20 / 3</td><td>20 / 3</td></tr>
+        <tr><td>信号跟踪上限</td><td><span class="benefit-no">—</span></td><td>20 个</td><td>20 个</td></tr>
+        <tr><td>回测记录保存</td><td>次日清空</td><td>永久保存</td><td>永久保存</td></tr>
+        <tr><td>只读分享</td><td><span class="benefit-no">—</span></td><td><span class="benefit-yes">支持</span></td><td><span class="benefit-yes">支持</span></td></tr>
+        <tr><td>个股明细与产物下载</td><td><span class="benefit-no">—</span></td><td><span class="benefit-yes">支持</span></td><td><span class="benefit-yes">支持</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
