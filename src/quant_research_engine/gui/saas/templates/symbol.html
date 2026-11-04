@@ -592,13 +592,35 @@ function renderRisk(d){
     card('最好 / 最差单日', (dist.max != null ? pct(dist.max) : '—') + ' / ' + (dist.min != null ? pct(dist.min) : '—'), 'flat', '回测区间内最大和最小的单日收益。') +
     '</div>';
   const sc = ((r.stress || {}).scenarios) || {};
-  const scList = Object.keys(sc).map(k => Object.assign({name: k}, sc[k])).filter(x => x.strategy_cumulative_return != null);
+  const scAll = Object.keys(sc).map(k => Object.assign({name: k}, sc[k] || {}));
+  const scList = scAll.filter(x => x.strategy_cumulative_return != null);
+  const scSkip = scAll.filter(x => x.strategy_cumulative_return == null);
   if (scList.length){
     const worst = scList.reduce((a, b) => (a.strategy_cumulative_return < b.strategy_cumulative_return ? a : b));
     html += '<div class="opt" style="font-size:14px;margin-top:6px">压力测试：覆盖 ' + scList.length +
       ' 个历史极端情景，最差情景（' + (worst.description || worst.name) + '）累计收益 ' +
       pct(worst.strategy_cumulative_return) + '，期间最大回撤 ' +
       (worst.strategy_peak_trough_drawdown != null ? pct(-Math.abs(worst.strategy_peak_trough_drawdown)) : '—') + '</div>';
+  } else if (scSkip.length){
+    // QRE-FRM-STRESS-EMPTY：情景全部无观测时，卡片此前只剩七张指标卡、压力测试零文字，
+    // 用户读到的就是「没有数据」。这里如实说明跳过数量与回测区间，逐情景原因进提示气泡
+    // （AGENTS 规则 13：解释性文字走 tip-trigger，不再加灰色小字注记）。error 原文是
+    // risk/stress.py 的英文消息，按其固定格式译成中文并保留窗口日期，其余原文透出。
+    const start = (d.kline && d.kline.dates && d.kline.dates[0]) || null;
+    const reason = x => {
+      const m = String(x.error || '').match(/no strategy observations in window \('([^']+)',\s*'([^']+)'\)/);
+      if (m) return '窗口内无交易记录（' + m[1] + ' ~ ' + m[2] + '）';
+      return x.error || '无有效数值';
+    };
+    const detail = scSkip.map(x => (x.description || x.name) + '：' + reason(x)).join('；');
+    html += '<div style="margin-top:6px">压力测试：' + scSkip.length +
+      ' 个历史情景窗口内没有该策略的交易记录，已跳过' +
+      (start ? '（回测区间 ' + esc(start) + ' 起）' : '') +
+      '<button type="button" class="tip-trigger" data-tip="' +
+      esc('情景窗口内没有该策略的观测记录，无法计算情景收益；' + detail) +
+      '" aria-label="压力测试跳过原因">?</button></div>';
+  } else {
+    html += '<div style="margin-top:6px">压力测试：本次产物未含历史情景数据</div>';
   }
   $('#risk-body').innerHTML = html;
   $('#box-risk').style.display = '';
@@ -1141,8 +1163,13 @@ function klineVisibleStart(){
 function klinePriceBase(){
   const d = klineKlineData();
   const kl = (d && d.kline) || {};
-  const k = (kl.ohlc || [])[klineVisibleStart()];
-  return (k && k[1] != null && isFinite(Number(k[1]))) ? Number(k[1]) : null;
+  const ohlc = kl.ohlc || [];
+  // 2026-11-04 Y 轴修复：可见区起点若为空/非数，向后找第一个有限收盘价，
+  // 找不到再兜底全局首个——否则百分比/归一化模式下 base=null → 刻度全为「—」。
+  const vis = ohlc.slice(klineVisibleStart());
+  const row = vis.find(r => r && Number.isFinite(Number(r[1])))
+    || ohlc.find(r => r && Number.isFinite(Number(r[1])));
+  return row ? Number(row[1]) : null;
 }
 // 价格值按当前 priceScaleMode 格式化（末价标签 / 图例当前值 / 信息区共用）
 function klinePriceFmt(v){
