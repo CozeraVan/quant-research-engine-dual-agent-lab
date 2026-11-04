@@ -1,0 +1,683 @@
+/* ============================================================================
+   QRE-SAAS-ACCOUNT — 登录 / 注册 / 忘记密码 / 会员中心
+   ----------------------------------------------------------------------------
+   只使用 lab-theme.css 的 :root 令牌；白底磨砂玻璃卡沿用 .card / .metric-card。
+   红涨绿跌只用于盈亏，本文件不把红绿用于装饰或状态。
+   断点沿用全站：960px 收窄、768px 移动端、400px 超窄屏。
+   ============================================================================ */
+
+/* ---- 登录 / 注册 / 忘记密码：整页布局 ---------------------------------- */
+.auth-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 44px 16px 72px;
+}
+.auth-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(420px, .98fr);
+  gap: 56px;
+  align-items: center;
+}
+.auth-hero { min-width: 0; }
+.auth-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: var(--tint);
+  border: 1px solid var(--tint-deep);
+  color: var(--lav-deep);
+  font-size: 15.5px;
+  font-weight: 500;
+  letter-spacing: .04em;
+}
+.auth-hero h1 {
+  margin: 20px 0 18px;
+  font-family: var(--serif);
+  font-size: clamp(40px, 4.2vw, 62px);
+  line-height: 1.14;
+  font-weight: 900;
+  letter-spacing: -.01em;
+}
+.auth-hero > p {
+  margin: 0;
+  max-width: 34em;
+  color: var(--grey);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.auth-points {
+  list-style: none;
+  margin: 30px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  max-width: 34em;
+}
+.auth-points li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 17px;
+  color: var(--grey);
+}
+.auth-points b { color: var(--ink); font-weight: 600; }
+.auth-points i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 9px;
+  border-radius: 50%;
+  background: var(--lav);
+  box-shadow: 0 0 0 4px var(--tint);
+}
+.auth-hero-foot {
+  margin-top: 34px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 15.5px;
+}
+
+/* 卡片本体：沿用 .card 的磨砂玻璃，只补内边距与过渡 */
+.auth-card {
+  min-width: 0;
+  padding: 34px 36px 30px;
+  margin-bottom: 0;
+}
+.auth-head { margin-bottom: 24px; }
+.auth-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--tint);
+  border: 1px solid var(--tint-deep);
+}
+.auth-tab {
+  border: none;
+  background: none;
+  border-radius: 999px;
+  padding: 8px 24px;
+  font-size: 17px;
+  color: var(--grey);
+  transition: background .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.auth-tab:hover { color: var(--lav-deep); }
+.auth-tab.active {
+  background: var(--panel);
+  color: var(--lav-deep);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+.auth-sub {
+  margin: 16px 0 0;
+  color: var(--grey);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.auth-view[hidden] { display: none; }
+.auth-view { animation: authViewIn .3s var(--ease); }
+@keyframes authViewIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 表单 */
+.auth-field { margin-top: 16px; }
+.auth-field:first-child { margin-top: 0; }
+.auth-field label,
+.auth-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  color: var(--grey);
+  font-size: 15.5px;
+  font-weight: 500;
+}
+.auth-field input {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 17px;
+  color: var(--ink);
+  transition: border-color .2s, box-shadow .2s;
+}
+.auth-field input:hover { border-color: var(--lav-ink); }
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--lav);
+  box-shadow: 0 0 0 4px rgba(103, 80, 164, .14);
+}
+.auth-field input::placeholder { color: var(--faint); }
+.auth-tip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--tint-deep);
+  background: var(--tint);
+  color: var(--lav-deep);
+  font-size: 12.5px;
+  line-height: 1;
+}
+.auth-tip-btn:hover { background: var(--tint-deep); }
+.auth-pw-wrap { position: relative; }
+.auth-pw-wrap input { padding-right: 78px; }
+.auth-pw-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--lav-deep);
+  font-size: 14.5px;
+}
+.auth-pw-toggle:hover { background: var(--tint); }
+.auth-row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  font-size: 15.5px;
+}
+.auth-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--lav-deep);
+  font-size: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--lav-ink);
+}
+.auth-link:hover { color: var(--lav); }
+.auth-submit {
+  width: 100%;
+  justify-content: center;
+  height: 50px;
+  margin-top: 22px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.auth-submit[disabled] { opacity: .6; transform: none; }
+
+/* 错误 / 提示：只用品牌紫阶，红绿仅留给盈亏（12_UI_STYLE_GUIDE） */
+.auth-error {
+  display: none;
+  margin: 0 0 18px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--tint-deep);
+  border-left: 3px solid var(--lav);
+  background: var(--tint);
+  color: var(--lav-deep);
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+.auth-error.show { display: block; }
+.auth-callout {
+  display: block;
+  margin-top: 16px;
+  padding: 12px 15px;
+  border-radius: 12px;
+  border: 1px solid var(--tint-deep);
+  background: var(--tint);
+  color: var(--lav-deep);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+.auth-callout[hidden] { display: none; }
+.auth-callout.ok {
+  border-color: var(--lav-ink);
+  background: var(--tint-deep);
+  color: var(--lav-deep);
+}
+
+/* 分隔与第三方 */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 24px 0 18px;
+  color: var(--faint);
+  font-size: 14.5px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.auth-qq {
+  width: 100%;
+  justify-content: center;
+  height: 48px;
+  font-size: 16.5px;
+  opacity: .62;
+}
+.auth-qq-wrap { display: block; cursor: help; }
+.auth-qq:disabled { cursor: not-allowed; }
+.auth-soon {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--lav-deep);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.auth-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  color: var(--grey);
+  font-size: 15.5px;
+}
+.auth-authing {
+  display: block;
+  margin-top: 12px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 14.5px;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+.auth-authing:hover { color: var(--lav-deep); }
+.auth-guest {
+  margin: 24px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+.auth-guest a { color: var(--lav-deep); }
+
+/* 验证码行 */
+.auth-code-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.auth-code-row input { flex: 1; min-width: 0; }
+.auth-code-row .btn {
+  flex: none;
+  min-width: 132px;
+  justify-content: center;
+  padding: 0 16px;
+  font-size: 15.5px;
+}
+.auth-code-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--line);
+}
+.auth-code-panel[hidden] { display: none; }
+.auth-echo {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--tint);
+  color: var(--lav-deep);
+  font-size: 15px;
+}
+
+/* 密码强度：只用紫色阶，不把红绿用于装饰 */
+.auth-strength {
+  margin-top: 9px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.auth-strength-bars {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  min-width: 120px;
+}
+.auth-strength-bars i {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background .2s var(--ease);
+}
+.auth-strength[data-score="1"] .auth-strength-bars i:nth-child(-n+1) { background: var(--tint-deep); }
+.auth-strength[data-score="2"] .auth-strength-bars i:nth-child(-n+2) { background: var(--lav-ink); }
+.auth-strength[data-score="3"] .auth-strength-bars i:nth-child(-n+3) { background: var(--lav); }
+.auth-strength[data-score="4"] .auth-strength-bars i { background: var(--lav-deep); }
+.auth-strength-label {
+  flex: none;
+  color: var(--grey);
+  font-size: 14.5px;
+}
+
+/* 忘记密码三步 */
+.auth-steps {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  margin: 0 0 22px;
+  padding: 0;
+}
+.auth-step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 14.5px;
+  white-space: nowrap;
+}
+.auth-step span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--grey);
+  font-size: 13px;
+  font-weight: 600;
+}
+.auth-step.active {
+  background: var(--tint);
+  border-color: var(--tint-deep);
+  color: var(--lav-deep);
+  font-weight: 600;
+}
+.auth-step.active span { background: var(--lav); color: #fff; }
+.auth-step.done {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--lav-deep);
+}
+.auth-step.done span { background: var(--lav-ink); color: #fff; }
+.auth-step-panel[hidden] { display: none; }
+.auth-step-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.auth-step-actions .btn { flex: 1; justify-content: center; min-width: 130px; }
+.auth-back {
+  border: none;
+  background: none;
+  padding: 6px 0;
+  color: var(--grey);
+  font-size: 15px;
+}
+.auth-back:hover { color: var(--lav-deep); }
+
+/* ---- 会员中心 ---------------------------------------------------------- */
+.member-hero {
+  padding: 28px 32px;
+  margin-bottom: 22px;
+}
+.member-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.member-identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+.member-avatar {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tint);
+  border: 1px solid var(--tint-deep);
+  color: var(--lav-deep);
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 900;
+}
+.member-hello {
+  color: var(--faint);
+  font-size: 14.5px;
+}
+.member-account {
+  margin-top: 2px;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-all;
+}
+.member-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.member-tier-badge,
+.member-beta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--tint-deep);
+  background: var(--tint);
+  color: var(--lav-deep);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.member-tier-badge.tier-paid,
+.member-tier-badge.tier-admin {
+  background: var(--lav);
+  border-color: var(--lav);
+  color: #fff;
+}
+.member-tier-badge.tier-admin { background: var(--lav-deep); border-color: var(--lav-deep); }
+.member-quota {
+  flex: 1 1 300px;
+  min-width: 260px;
+  max-width: 440px;
+}
+.member-quota-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--grey);
+  font-size: 15.5px;
+}
+.member-quota-head b {
+  color: var(--lav-deep);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.member-bar {
+  height: 10px;
+  margin-top: 9px;
+  border-radius: 999px;
+  background: var(--tint);
+  overflow: hidden;
+}
+.member-bar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--lav);
+  transition: width .5s var(--ease);
+}
+.member-bar i.is-unlimited { background: var(--lav-ink); }
+.member-quota-foot {
+  margin-top: 8px;
+  color: var(--faint);
+  font-size: 14.5px;
+}
+.member-perm {
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--grey);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+/* 账号绑定预留 */
+.account-bind h2 { display: flex; align-items: center; gap: 8px; }
+.bind-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.bind-mark {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tint);
+  border: 1px solid var(--tint-deep);
+  color: var(--lav-deep);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.bind-info { flex: 1 1 200px; min-width: 0; }
+.bind-info b { display: block; color: var(--ink); font-size: 17px; font-weight: 600; }
+.bind-status {
+  display: inline-flex;
+  margin-top: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 13.5px;
+}
+
+/* 会员权益对比 */
+.benefit-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.benefit-lead {
+  margin: 12px 0 18px;
+  color: var(--grey);
+  font-size: 16px;
+  line-height: 1.65;
+}
+.benefit-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.benefit-table { min-width: 680px; }
+.benefit-table th,
+.benefit-table td { padding: 13px 14px; vertical-align: top; }
+.benefit-table th:first-child,
+.benefit-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--panel);
+  z-index: 1;
+  min-width: 150px;
+}
+.benefit-table th.is-current,
+.benefit-table td.is-current { background: var(--tint); }
+.benefit-table th.is-current { color: var(--lav-deep); font-weight: 600; }
+.benefit-table .benefit-now {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--lav);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.benefit-table .benefit-yes { color: var(--lav-deep); font-weight: 600; }
+.benefit-table .benefit-no { color: var(--faint); }
+
+/* ---- 断点 -------------------------------------------------------------- */
+@media (max-width: 960px) {
+  .auth-page { padding: 32px 16px 56px; }
+  .auth-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 30px;
+  }
+  .auth-hero h1 { font-size: clamp(34px, 6.4vw, 46px); }
+  .auth-points { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .auth-card { max-width: 640px; }
+  .member-hero { padding: 24px; }
+}
+@media (max-width: 768px) {
+  .auth-page { padding: 22px 12px 44px; }
+  .auth-grid { gap: 18px; }
+  .auth-card { padding: 26px 22px 24px; }
+  .auth-hero h1 { margin: 12px 0 10px; font-size: 30px; line-height: 1.18; }
+  .auth-hero > p { font-size: 15.5px; line-height: 1.6; }
+  .auth-points { display: none; }
+  .auth-hero-foot { display: none; }
+  .auth-field input { height: 46px; }
+  .auth-code-row { flex-wrap: wrap; }
+  .auth-code-row .btn { width: 100%; min-height: 44px; }
+  .auth-step { padding: 8px 6px; font-size: 13px; }
+  .auth-step span { width: 20px; height: 20px; font-size: 12px; }
+  .auth-step-actions .btn { flex: 1 1 100%; min-height: 44px; }
+  .member-hero { padding: 20px; }
+  .member-account { font-size: 19px; }
+  .member-quota { min-width: 100%; max-width: none; }
+  .member-quota-head { font-size: 15px; }
+  .bind-row .btn { width: 100%; justify-content: center; min-height: 44px; }
+  .benefit-table { min-width: 620px; }
+}
+@media (max-width: 400px) {
+  .auth-tabs { width: 100%; }
+  .auth-tab { flex: 1; padding: 8px 10px; }
+  .auth-card { padding: 22px 16px 20px; }
+  .auth-step { font-size: 12px; gap: 5px; }
+  .auth-step span { display: none; }
+  .member-badges { gap: 6px; }
+}

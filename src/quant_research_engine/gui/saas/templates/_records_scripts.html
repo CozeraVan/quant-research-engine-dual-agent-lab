@@ -161,7 +161,11 @@ async function load(){
     if (!meResp.ok || !me || !me.ok || !me.user) throw new Error('用户信息加载失败 HTTP ' + meResp.status);
     const u = me.user;
     document.getElementById('user-label').textContent =
-      (u.email || u.phone || '') + (u.quota_limit === '不限' ? '（管理员 · 不限回测次数）' : '（今日剩余全量回测 ' + (u.quota_remaining ?? '—') + ' 次）');
+      (u.email || u.phone || '') + (u.is_admin
+        ? '（管理员 · 不限回测次数）'
+        : (u.quota_limit === '不限'
+          ? '（内测会员 · 不限回测次数）'
+          : '（今日剩余全量回测 ' + (u.quota_remaining ?? '—') + ' 次）'));
     const tbody = document.getElementById('jobs-tbody');
     let items = data.items;
     if (recsFilterKw) items = items.filter(j => ((j.strategy_name || '') + ' ' + j.job_id).toLowerCase().includes(recsFilterKw));
