@@ -110,10 +110,65 @@ class EmailSender:
 
 
 class SmsSender:
-    """短信通道占位：个人开发者无法申请短信签名，M2 不实现。"""
+    """阿里云「短信认证」（号码认证服务 dypnsapi）验证码通道。
+
+    个人实名即可，免企业资质、免签名/模板申请（控制台系统赠送签名+模板，
+    二者必须配套）。采用**自定义验证码**（``code`` 参数）：QRE 自生成 6 位码、
+    自存哈希、自校验（sms_codes 表现有逻辑不变），阿里云只负责下发，
+    因此无需也不应调用 CheckSmsVerifyCode。
+
+    配置：ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET、
+    ALIYUN_SMS_SIGN_NAME（赠送签名）、ALIYUN_SMS_TEMPLATE_CODE（赠送模板）、
+    ALIBABA_CLOUD_SMS_ENDPOINT（可选，默认 dypnsapi.aliyuncs.com）。
+    SDK 惰性导入：未安装依赖或未配置时仅本通道报错，不影响其他功能。
+    """
 
     def send(self, target: str, code: str) -> None:
-        raise NotImplementedError("短信通道未开通")
+        try:
+            from alibabacloud_dypnsapi20170525 import models as dypns_models
+            from alibabacloud_dypnsapi20170525.client import Client as DypnsClient
+            from alibabacloud_tea_openapi import models as open_api_models
+        except ImportError as exc:
+            raise RuntimeError(
+                "阿里云短信 SDK 未安装（alibabacloud_dypnsapi20170525）"
+            ) from exc
+
+        access_key_id = os.environ.get("ALIBABA_CLOUD_ACCESS_KEY_ID", "")
+        access_key_secret = os.environ.get("ALIBABA_CLOUD_ACCESS_KEY_SECRET", "")
+        sign_name = os.environ.get("ALIYUN_SMS_SIGN_NAME", "")
+        template_code = os.environ.get("ALIYUN_SMS_TEMPLATE_CODE", "")
+        if not all([access_key_id, access_key_secret, sign_name, template_code]):
+            raise RuntimeError(
+                "阿里云短信未配置（ALIBABA_CLOUD_ACCESS_KEY_ID/SECRET、"
+                "ALIYUN_SMS_SIGN_NAME、ALIYUN_SMS_TEMPLATE_CODE）"
+            )
+        config = open_api_models.Config(
+            access_key_id=access_key_id,
+            access_key_secret=access_key_secret,
+        )
+        config.endpoint = os.environ.get(
+            "ALIBABA_CLOUD_SMS_ENDPOINT", "dypnsapi.aliyuncs.com"
+        )
+        client = DypnsClient(config)
+        request = dypns_models.SendSmsVerifyCodeRequest(
+            phone_number=target,
+            sign_name=sign_name,
+            template_code=template_code,
+            # 自定义验证码经模板变量 ${code} 下发（SDK 无独立 code 字段）：
+            # QRE 自生成 6 位码、自存哈希、自校验，阿里云只负责发送。
+            template_param=json.dumps({"code": code}, ensure_ascii=False),
+            code_length=6,
+            return_verify_code=False,
+        )
+        try:
+            response = client.send_sms_verify_code(request)
+        except Exception as exc:  # SDK 异常类型多样，统一成用户可读错误
+            raise RuntimeError(f"短信发送失败：{exc}") from exc
+        body = getattr(response, "body", None)
+        result_code = str(getattr(body, "code", "") or "")
+        if result_code != "OK":
+            message = getattr(body, "message", "") or result_code or "未知错误"
+            raise RuntimeError(f"短信发送失败：{message}")
 
 
 class StubSender:
@@ -201,10 +256,16 @@ def _load_saas_metadata(app: Flask) -> dict | None:
     return data
 
 
-def _get_sender(app: Flask) -> Any:
+def _get_sender(app: Flask, target: str | None = None) -> Any:
     channel = (_cfg(app, "SAAS_AUTH_CHANNEL", "email") or "email").strip()
     if channel == "stub":
         return StubSender(app)
+    # 按 target 类型分流：邮箱一律走 SMTP；SAAS_AUTH_CHANNEL=auto 时手机号走
+    # 短信——自建登录需要邮箱与手机号双通道并存（2026-11-04 阿里云短信接入）。
+    if target and "@" in target:
+        channel = "email"
+    elif channel == "auto":
+        channel = "sms"
     sender_cls = _SENDERS.get(channel)
     if sender_cls is None:
         raise RuntimeError(f"未知 SAAS_AUTH_CHANNEL: {channel}")
@@ -2533,7 +2594,7 @@ def create_saas_app() -> Flask:
         code = f"{secrets.randbelow(10 ** AUTH_CODE_LENGTH):0{AUTH_CODE_LENGTH}d}"
         channel = "email" if "@" in target else "sms"
         try:
-            _get_sender(app).send(target, code)
+            _get_sender(app, target).send(target, code)
         except (RuntimeError, NotImplementedError) as exc:
             return jsonify({"ok": False, "error": str(exc)}), 502
 

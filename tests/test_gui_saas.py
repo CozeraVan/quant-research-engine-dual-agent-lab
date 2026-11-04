@@ -330,7 +330,8 @@ class TestAuth:
         app.config["SAAS_AUTH_CHANNEL"] = "sms"
         resp = client.post("/api/saas/auth/code", json={"target": "13800005555"})
         assert resp.status_code == 502
-        assert "短信通道未开通" in resp.get_json()["error"]
+        # 2026-11-04 短信通道已接入阿里云：未配置凭证时的可读错误（仍 502）
+        assert "阿里云短信未配置" in resp.get_json()["error"]
 
     def test_no_token_401(self, client):
         assert client.get("/api/saas/me").status_code == 401
