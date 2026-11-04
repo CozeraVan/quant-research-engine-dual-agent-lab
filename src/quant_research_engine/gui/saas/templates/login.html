@@ -61,6 +61,12 @@
         </div>
         {% endif %}
 
+        {% if authing_ready %}
+        <div class="auth-qq-wrap">
+          <a class="btn btn-ghost auth-qq" id="btn-authing" href="/saas/login/authing?next={{ login_next | urlencode | replace('/', '%2F') | replace('?', '%3F') }}">手机验证码 / 扫码登录（原有方式）</a>
+        </div>
+        {% endif %}
+
         <div class="auth-secondary">
           <span>不方便使用密码？</span>
           <button class="auth-link" id="btn-code-mode" type="button" aria-expanded="false" aria-controls="code-panel">使用验证码登录</button>

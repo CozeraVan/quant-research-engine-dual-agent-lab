@@ -1452,17 +1452,23 @@ def create_saas_app() -> Flask:
             from flask import redirect
 
             return redirect("/saas/")
-        from quant_research_engine.gui.saas import oidc_client
+        from quant_research_engine.gui.saas import authing, oidc_client
 
         try:
             oidc_client.get_config(app, "casdoor")
             casdoor_ready = True
         except oidc_client.OidcError:
             casdoor_ready = False
+        try:
+            authing._authing_config(app)
+            authing_ready = True
+        except authing.AuthingError:
+            authing_ready = False
         return render_template(
             "login.html",
             login_next=_safe_saas_next(request.args.get("next")),
             casdoor_ready=casdoor_ready,
+            authing_ready=authing_ready,
         )
 
     @app.get("/saas/")

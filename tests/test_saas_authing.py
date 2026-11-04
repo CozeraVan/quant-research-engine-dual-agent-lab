@@ -409,6 +409,12 @@ class TestLoginPage:
         # Casdoor 入口仅在配置就绪时出现（本 fixture 未配置 → 不渲染）
         assert 'id="btn-casdoor"' not in html
 
+    def test_login_page_keeps_authing_entry_when_configured(self, client):
+        """过渡期保留 Authing 入口：生产 SMTP/短信未开通前，老用户的可登录保障。"""
+        html = client.get("/saas/login").get_data(as_text=True)
+        assert "/saas/login/authing" in html
+        assert "原有方式" in html
+
     def test_login_callback_template_no_token_on_error(self, client):
         html = client.get("/saas/login/callback?code=x&state=bad").get_data(as_text=True)
         assert "返回登录页" in html
