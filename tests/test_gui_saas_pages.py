@@ -2625,7 +2625,8 @@ class TestNoAdminLinks:
 
 class TestStubEcho:
     def test_echo_off_by_default(self, client):
-        resp = client.post("/api/saas/auth/code", json={"target": "echo@example.com"})
+        resp = client.post("/api/saas/auth/code", json={"target": "13800009001"})
+        assert resp.status_code == 200
         assert "dev_code" not in resp.get_json()
 
     def test_echo_on_returns_dev_code(self, saas_db, monkeypatch):
@@ -2635,12 +2636,14 @@ class TestStubEcho:
         app2.config["SAAS_AUTH_CHANNEL"] = "stub"
         app2.config["SAAS_STUB_ECHO"] = "1"
         c2 = app2.test_client()
-        resp = c2.post("/api/saas/auth/code", json={"target": "echo2@example.com"})
+        phone = "13800009002"
+        resp = c2.post("/api/saas/auth/code", json={"target": phone})
         data = resp.get_json()
-        assert data["ok"] and len(data["dev_code"]) == 6
+        assert resp.status_code == 200
+        assert data["channel"] == "sms" and data["ok"] and len(data["dev_code"]) == 6
         # dev_code 可直接登录
         login = c2.post("/api/saas/auth/login",
-                        json={"target": "echo2@example.com", "code": data["dev_code"]})
+                        json={"phone": phone, "code": data["dev_code"]})
         assert login.status_code == 200 and login.get_json()["token"]
         engine = app2.extensions.get("saas_engine")
         if engine is not None:

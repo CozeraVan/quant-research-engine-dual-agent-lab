@@ -260,21 +260,21 @@ class TestAuth:
         return client.post("/api/saas/auth/login",
                            json={"target": target, "code": self._code_for(app, target)})
 
-    def test_full_flow_email_register_and_bearer(self, client, app):
-        target = "user@example.com"
+    def test_full_flow_phone_login_and_bearer(self, client, app):
+        target = "13800001111"
         resp = client.post("/api/saas/auth/code", json={"target": target})
-        assert resp.get_json()["channel"] == "email"
+        assert resp.get_json()["channel"] == "sms"
         login = client.post("/api/saas/auth/login",
                             json={"target": target, "code": self._code_for(app, target)})
         assert login.status_code == 200
         body = login.get_json()
         assert body["ok"] and body["token"]
-        assert body["user"]["email"] == target and body["user"]["phone"] is None
+        assert body["user"]["phone"] == target and "email" not in body["user"]
         token = body["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
         me = client.get("/api/saas/me", headers=headers).get_json()["user"]
-        assert me["email"] == target and me["quota_daily"] == 10
+        assert me["phone"] == target and me["quota_daily"] == 10
 
         created = client.post("/api/saas/jobs", json={"yaml": "x"}, headers=headers)
         assert created.status_code == 200
@@ -285,7 +285,13 @@ class TestAuth:
         login = self._login(client, app, "13912345678")
         assert login.status_code == 200
         user = login.get_json()["user"]
-        assert user["phone"] == "13912345678" and user["email"] is None
+        assert user["phone"] == "13912345678" and "email" not in user
+
+    def test_email_target_rejected_400(self, client):
+        for bad in ("user@example.com", "1380000", "23800001111", "1380000111a"):
+            resp = client.post("/api/saas/auth/code", json={"target": bad})
+            assert resp.status_code == 400, bad
+            assert resp.get_json()["error"] == "请输入正确的手机号"
 
     def test_wrong_code_401_and_code_single_use(self, client, app):
         target = "13800002222"
@@ -358,7 +364,7 @@ class TestAuth:
     def test_quota_429(self, client, app):
         # 2026-10-05 内测调整（19 号文档原则）：注册用户不限每日次数——
         # 连提 4 次 full 全部接受，不再 403（限制只在 R2 槽位/内存资源层）
-        login = self._login(client, app, "quota@example.com")
+        login = self._login(client, app, "13800006666")
         token = login.get_json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         for _ in range(4):
@@ -864,37 +870,38 @@ class TestResultsApi:
 
 
 class TestBuiltinTestAccount:
-    """QRE-ECS-C4：内置测试账号（env 配置即凭证，SMTP 未配期间的联调通道）。"""
+    """QRE-ECS-C4：内置测试账号（env 配置即凭证，短信未配期间的联调通道）。"""
 
     def test_test_account_login(self, client, app):
-        app.config["SAAS_TEST_ACCOUNT_EMAIL"] = "tester@local"
+        # 2026-11-04 去邮箱化：测试账号也必须是手机号（旧 env 名仍兼容，值须为手机号）
+        app.config["SAAS_TEST_ACCOUNT_PHONE"] = "13800007777"
         app.config["SAAS_TEST_ACCOUNT_PASSWORD"] = "pw123"
         resp = client.post("/api/saas/auth/login",
-                           json={"target": "tester@local", "code": "pw123"})
+                           json={"phone": "13800007777", "password": "pw123"})
         assert resp.status_code == 200
         token = resp.get_json()["token"]
         me = client.get("/api/saas/me", headers={"Authorization": f"Bearer {token}"}).get_json()
-        assert me["user"]["email"] == "tester@local"
+        assert me["user"]["phone"] == "13800007777"
         # 错密码仍 401
         assert client.post("/api/saas/auth/login",
-                           json={"target": "tester@local", "code": "wrong"}).status_code == 401
+                           json={"phone": "13800007777", "password": "wrong"}).status_code == 401
 
     def test_test_account_disabled_by_default(self, client):
         resp = client.post("/api/saas/auth/login",
-                           json={"target": "tester@local", "code": "pw123"})
+                           json={"phone": "13800007777", "password": "pw123"})
         assert resp.status_code == 401
 
 
 class TestTiersD1D2:
     """QRE-SAAS-D1D2：注册/密码登录/游客提交/会员配额/游客清理。"""
 
-    def _register(self, client, email="m1@example.com", pw="abc12345"):
-        # 2026-11-04 注册强制邮箱验证码：stub 发码后取明文（重复注册走 409 不依赖新码）
-        client.post("/api/saas/auth/code", json={"target": email})
+    def _register(self, client, phone="13812340001", pw="abc12345"):
+        # 2026-11-04 注册强制手机号验证码：stub 发码后取明文（重复注册走 409 不依赖新码）
+        client.post("/api/saas/auth/code", json={"target": phone})
         sent = [m["code"] for m in client.application.extensions["sent_codes"]
-                if m["target"] == email.lower()]
+                if m["target"] == phone]
         code = sent[-1] if sent else "000000"
-        return client.post("/api/saas/auth/register", json={"email": email, "password": pw, "code": code})
+        return client.post("/api/saas/auth/register", json={"phone": phone, "password": pw, "code": code})
 
     def test_register_and_password_login(self, client):
         resp = self._register(client)
@@ -902,14 +909,14 @@ class TestTiersD1D2:
         assert resp.get_json()["user"]["tier"] == "member"
         # 重复注册 409
         assert self._register(client).status_code == 409
-        # 弱密码/坏邮箱 400
-        assert self._register(client, "m2@example.com", "short").status_code == 400
-        assert self._register(client, "not-an-email", "abc12345").status_code == 400
-        assert self._register(client, "m3@example.com", "abcdefgh").status_code == 400  # 无数字
+        # 弱密码/坏手机号 400
+        assert self._register(client, "13812340002", "short").status_code == 400
+        assert self._register(client, "12345", "abc12345").status_code == 400
+        assert self._register(client, "13812340003", "abcdefgh").status_code == 400  # 无数字
         # 密码登录（与验证码通道并存）
-        ok = client.post("/api/saas/auth/login", json={"target": "m1@example.com", "code": "abc12345"})
+        ok = client.post("/api/saas/auth/login", json={"phone": "13812340001", "password": "abc12345"})
         assert ok.status_code == 200 and ok.get_json()["token"]
-        bad = client.post("/api/saas/auth/login", json={"target": "m1@example.com", "code": "wrong123"})
+        bad = client.post("/api/saas/auth/login", json={"phone": "13812340001", "password": "wrong123"})
         assert bad.status_code == 401
 
     def _guest_job(self, client, codes=("000001.SZ",), start="2025-01-01", end="2026-01-01", ip="1.2.3.4"):
@@ -991,7 +998,7 @@ class TestTiersD1D2:
 
     def test_me_quota_fields(self, client):
         # 2026-10-05 内测调整：注册用户不限次数 → 展示「不限」
-        resp = self._register(client, "q@example.com")
+        resp = self._register(client, "13812340004")
         token = resp.get_json()["token"]
         me = client.get("/api/saas/me", headers={"Authorization": f"Bearer {token}"}).get_json()["user"]
         assert me["quota_limit"] == "不限" and me["quota_remaining"] is None and me["tier"] == "member"
@@ -1349,8 +1356,8 @@ class TestShowcaseDailyAndConsole:
             # dev 后门建用户不走序列，先对齐再插（否则 id=1 主键冲突）
             conn.execute(text("SELECT setval('users_id_seq', COALESCE((SELECT max(id) FROM users), 1))"))
             uid = conn.execute(
-                text("INSERT INTO users (email, role, status, tier) "
-                     "VALUES ('admin@sc.com', 'admin', 'active', 'member') RETURNING id")
+                text("INSERT INTO users (phone, role, status, tier) "
+                     "VALUES ('13800008888', 'admin', 'active', 'member') RETURNING id")
             ).scalar_one()
         return {"X-User-Id": str(uid)}
 

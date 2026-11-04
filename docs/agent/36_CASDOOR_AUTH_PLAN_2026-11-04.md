@@ -161,12 +161,39 @@ CREATE TABLE IF NOT EXISTS auth_identities (
 
 **UI 接口契约（字段名以本表为准）**
 
-- `POST /api/saas/auth/reset`：请求 `{"email": "<原始大小写>", "code": "<邮箱验证码>", "new_password": "<≥8 位含字母+数字>"}`；成功 `200 {"ok": true}`，**不返回 token，不自动登录**，该用户全部旧 token 立即 401。错误：400「邮箱格式不正确」/「缺少验证码」/「密码至少 8 位且需同时包含字母和数字」；404「该邮箱未注册，请先注册」；401「验证码错误或已过期」（错码不消费）。
-- `POST /api/saas/auth/login`：密码路径继续复用原字段，`target` 可省略（省略时取 `email`），`code` 可省略（省略时取 `password`），即 UI 可直接提交 `{"email": "...", "password": "..."}`。锁定：同 target 连续 5 次密码失败 → 之后 15 分钟内一律 `429 {"ok": false, "error": "密码错误次数过多，请 N 分钟后再试"}`；成功登录清零。验证码登录路径不受锁定影响。
+- `POST /api/saas/auth/reset`：请求 `{"phone": "<11 位中国大陆手机号>", "code": "<短信验证码>", "new_password": "<≥8 位含字母+数字>"}`；成功 `200 {"ok": true}`，**不返回 token，不自动登录**，该用户全部旧 token 立即 401。错误：400「请输入正确的手机号」/「缺少验证码」/「密码至少 8 位且需同时包含字母和数字」；404「该手机号未注册，请先注册」；401「验证码错误或已过期」（错码不消费）。
+- `POST /api/saas/auth/login`：密码路径 `phone` 为主字段（`target`/`email` 仅为老 UI 别名，可省略），`code` 可省略（省略时取 `password`），即 UI 可直接提交 `{"phone": "...", "password": "..."}`。锁定：同 target 连续 5 次密码失败 → 之后 15 分钟内一律 `429 {"ok": false, "error": "密码错误次数过多，请 N 分钟后再试"}`；成功登录清零。验证码登录路径不受锁定影响。错误文案：格式错 400「请输入正确的手机号」、缺凭证 400「缺少验证码或密码」、密码错 401「手机号或密码错误」、验证码错 401「验证码错误或已过期」、禁用账号 403「账号已被禁用，请联系运营方」。
 - `GET /api/saas/membership`（需登录）：`200 {"ok": true, "membership": {...}, "tiers": [...]}`；未登录 `401 {"ok": false, "error": "未登录"}`。
   - `membership`：`tier`、`tier_label`（`游客`/`内测会员`/`付费会员`）、`is_admin`、`daily_full{limit,used,remaining,unlimited}`、`watches{limit,used,remaining,unlimited}`、`scan_enabled`、`member_since`、`member_expire_at`。不限时 `limit="不限"`、`remaining=null`、`unlimited=true`（与 `/api/saas/me` 的 `quota_limit` 同口径）。
   - `tiers[]`：每项 `tier`、`label`、`daily_full_limit`、`max_codes`、`max_days`、`max_factor_fields`、`max_factor_tables`、`max_watches`、`scan_enabled`；顺序固定 `guest` → `member` → `paid`，数值实时读 `tier_policies`（不硬编码）。
 
-**风险**：ECS 老库未 apply `login_attempts` DDL 时应用侧会幂等自愈，但若角色权限不足则降级为「不计数不锁定」；`_get_policy` 有 60s 缓存，管理台改权益后最多 1 分钟才在 membership 视图生效；锁定按 target 不按 IP，可被换账号绕过；`sms_codes.phone` 列名沿用但存邮箱。
+**风险**：ECS 老库未 apply `login_attempts` DDL 时应用侧会幂等自愈，但若角色权限不足则降级为「不计数不锁定」；`_get_policy` 有 60s 缓存，管理台改权益后最多 1 分钟才在 membership 视图生效；锁定按 target 不按 IP，可被换账号绕过；`sms_codes.phone` 列名沿用，去邮箱化后存的就是手机号。
 
 **边界**：本轮未部署 ECS、未改生产库、未重启任何 qre 服务（本机 CF 经典策略全量队列在跑）、未 commit / push；`stock_daily` 与 `worker/` 未触碰。
+
+### 7.8 去邮箱化决策与四端点契约（2026-11-04，本地，UI 另行并行）
+
+**决策**：SaaS 自建登录全面改为「中国大陆手机号 + 短信」，`POST /api/saas/auth/code`、`/register`、`/login`、`/reset` 只接受手机号，邮箱通道（SMTP / `EmailSender`）整体删除。背景：生产未配 `SAAS_SMTP_*`，邮箱验证码注册与找回密码在生产不可用；短信已走阿里云个人开发者通道（`SmsSender`），个人实名即可下发。
+
+**代码变更（`src/quant_research_engine/gui/saas/app.py`）**
+
+- 删除 `smtplib` / `EmailMessage` / `SMTP_TIMEOUT_SECONDS` / `EmailSender` 类；`_SENDERS = {"sms": SmsSender}`；`_get_sender` 默认 `sms`，`stub`→`StubSender`，`auto`→`sms`，未知值抛 `RuntimeError("未知 SAAS_AUTH_CHANNEL: …")`。
+- 新增 `_MOBILE_RE = re.compile(r"^1[3-9]\d{9}$")` 与 `_is_cn_mobile()`；`_consume_email_code` 更名 `_consume_sms_code`。
+- 注册只写 `users (phone, password_hash, tier, last_login_at)`；验证码首登自动建档也只写 `phone`，`users.email` 不再作为自建登录标识，仅保留历史数据。
+- `sms_codes.phone` 列名沿用，存手机号；`channel` 固定 `sms`。
+- 保留不变：Authing / Casdoor 第三方登录路径、`POST /api/saas/auth/bind`（老通道仍按 `email` 关联历史账号，401 文案「邮箱或密码错误」保持）、`GET /api/saas/me` 仍返回 `email`（新用户可能为 `NULL`，UI 不应依赖）。
+
+**四端点契约（字段名以此为准）**
+
+| 端点 | 请求 | 成功 | 失败 |
+|---|---|---|---|
+| `POST /api/saas/auth/code` | `{"target"}`（兼容 `{"phone"}`），11 位 `1[3-9]…` | `200 {"ok": true, "channel": "sms", "expires_in": 300}`；`SAAS_STUB_ECHO=1` 时另含 `dev_code` | 400「请输入正确的手机号」；429「发送过于频繁，请稍后再试」（target 60s / IP 窗口限流）；502 短信发送失败（含通道错误文案） |
+| `POST /api/saas/auth/register` | `{"phone", "code", "password"}`（`target`/`email` 为兼容别名） | `200 {"ok": true, "token": "...", "user": {"id", "phone", "quota_daily", "tier"}}` | 400「请输入正确的手机号」/「密码至少 8 位且需同时包含字母和数字」/「缺少验证码」；409「该手机号已注册，请直接登录」（先于验证码校验）；401「验证码错误或已过期」 |
+| `POST /api/saas/auth/login` | `{"phone", "code"}` 或 `{"phone", "password"}`（`target`/`email`、`code`/`password` 别名兼容） | `200 {"ok": true, "token": "...", "user": {"id", "phone", "quota_daily", "status"}}` | 400「请输入正确的手机号」/「缺少验证码或密码」；401「验证码错误或已过期」/「手机号或密码错误」；429「密码错误次数过多，请 N 分钟后再试」；403「账号已被禁用，请联系运营方」（仅已存在账号） |
+| `POST /api/saas/auth/reset` | `{"phone", "code", "new_password"}` | `200 {"ok": true}`，吊销该用户全部旧 session，不自动登录 | 400「请输入正确的手机号」/「缺少验证码」/密码规则文案；404「该手机号未注册，请先注册」；401「验证码错误或已过期」 |
+
+**登录语义细节**：手机号存在且有 `password_hash` → 密码路径（含 5 次失败锁 15 分钟）；否则按短信验证码校验。手机号不存在时验证码正确会自动建档；密码登录一个未注册手机号只会得到 401「验证码错误或已过期」（无 hash 即视为验证码路径）。内置测试账号改为 `SAAS_TEST_ACCOUNT_PHONE`（兼容旧 env 名 `SAAS_TEST_ACCOUNT_EMAIL`，值必须是合法手机号才生效）。
+
+**测试**：`tests/test_saas_sms_sender.py`（4 例重写：auto→sms / 默认 sms / stub 优先 / 未知通道抛错）、`test_gui_saas.py`、`test_saas_membership_auth.py`、`test_gui_saas_console.py` 合计 **133 passed**；`test_saas_authing.py`、`test_gui_saas_pages.py`、`test_saas_casdoor.py`、`test_no_silent_failure_patterns.py` 合计 **163 passed**；补充回归 `test_saas_agent_api.py` **79 passed**，`test_saas_access_hardening.py` / `test_saas_public_beta_ops.py` / `test_saas_first_success_ux.py` / `test_saas_oidc_client.py` 合计 **117 passed**。`test_saas_authing.py::TestBindLegacyAccount` 改为「先手机号注册、再 UPDATE 补 email」模拟历史邮箱账号；legacy 号段用 `1391…` 避免与 Authing 用例的 `13900000002` 在 module 级共享库中撞号。
+
+**剩余风险**：真实短信 AK/SK 与签名/模板未配置（生产仍只能 stub，`_SENDERS` 已无邮箱回退）；Authing/bind 老通道仍按 email 关联（遗留语义，保留）；`users.email` 列与历史数据保留且 `/api/saas/me` 仍返回（可能 `NULL`）；`templates/login.html` 的 JS 仍发 `{target, code}`，后端别名兼容，UI 改动后无需再动后端；本轮未部署、未 commit。

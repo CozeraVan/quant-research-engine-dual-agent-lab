@@ -23,17 +23,17 @@
           <button class="auth-tab active" id="tab-login" type="button" role="tab" aria-selected="true" aria-controls="view-login">登录</button>
           <button class="auth-tab" id="tab-register" type="button" role="tab" aria-selected="false" aria-controls="view-register">注册</button>
         </div>
-        <p class="auth-sub" id="auth-sub">使用手机号 / 邮箱和密码登录；也可以使用验证码登录。</p>
+        <p class="auth-sub" id="auth-sub">使用手机号和密码登录；也可以使用短信验证码登录。</p>
       </div>
 
       <div id="login-error" class="auth-error" role="alert" aria-live="polite"></div>
 
-      <!-- T1 登录：手机号 / 邮箱 + 密码主表单 -->
+      <!-- T1 登录：手机号 + 密码主表单 -->
       <div class="auth-view" id="view-login">
         <form id="form-login" novalidate>
           <div class="auth-field">
-            <label for="login-target">手机号 / 邮箱</label>
-            <input id="login-target" type="text" inputmode="email" autocomplete="username" placeholder="手机号或 you@example.com">
+            <label for="login-target">手机号</label>
+            <input id="login-target" type="text" inputmode="tel" autocomplete="username" placeholder="请输入 11 位手机号">
           </div>
           <div class="auth-field">
             <label for="login-code">密码</label>
@@ -51,19 +51,13 @@
 
         <div class="auth-divider"><span>或</span></div>
 
-        <div class="auth-qq-wrap" data-tip="QQ 登录为内测预留能力，接口上线后开放；当前可使用邮箱 / 手机号，或下方快捷登录。" tabindex="0">
+        <div class="auth-qq-wrap" data-tip="QQ 登录为内测预留能力，接口上线后开放；当前可使用手机号密码或短信验证码登录。" tabindex="0">
           <button class="btn btn-ghost auth-qq" id="btn-qq" type="button" disabled>QQ 登录<span class="auth-soon">即将开放</span></button>
         </div>
 
         {% if casdoor_ready %}
         <div class="auth-qq-wrap">
           <a class="btn btn-ghost auth-qq" id="btn-casdoor" href="/saas/login/casdoor?next={{ login_next | urlencode | replace('/', '%2F') | replace('?', '%3F') }}">使用 Casdoor 账号登录</a>
-        </div>
-        {% endif %}
-
-        {% if authing_ready %}
-        <div class="auth-qq-wrap">
-          <a class="btn btn-ghost auth-qq" id="btn-authing" href="/saas/login/authing?next={{ login_next | urlencode | replace('/', '%2F') | replace('?', '%3F') }}">手机验证码 / 扫码登录（原有方式）</a>
         </div>
         {% endif %}
 
@@ -74,8 +68,8 @@
 
         <div class="auth-code-panel" id="code-panel" hidden>
           <div class="auth-field">
-            <label for="code-target">手机号 / 邮箱</label>
-            <input id="code-target" type="text" inputmode="email" autocomplete="username" placeholder="手机号或 you@example.com">
+            <label for="code-target">手机号</label>
+            <input id="code-target" type="text" inputmode="tel" autocomplete="username" placeholder="请输入 11 位手机号">
           </div>
           <div class="auth-field">
             <label for="code-code">验证码</label>
@@ -93,16 +87,16 @@
         <p class="auth-guest">游客免登录：可直接在「新建策略」提交最多 10 只股票、近 10 年的回测（每日 1 次，结果次日清空）。<a href="/saas/new">先去试试 →</a></p>
       </div>
 
-      <!-- T2 注册：邮箱 + 验证码 + 密码强度 -->
+      <!-- T2 注册：手机号 + 短信验证码 + 密码强度 -->
       <div class="auth-view" id="view-register" hidden>
         <form id="form-register" novalidate>
           <div class="auth-field">
-            <label for="reg-email">邮箱</label>
-            <input id="reg-email" type="email" autocomplete="email" placeholder="you@example.com">
+            <label for="reg-email">手机号</label>
+            <input id="reg-email" type="text" inputmode="tel" autocomplete="tel" placeholder="请输入 11 位手机号">
           </div>
           <div class="auth-field">
-            <label for="reg-code">邮箱验证码
-              <button class="tip-trigger auth-tip-btn" type="button" data-tip="验证码用于验证邮箱归属，5 分钟内有效、一次性使用；收不到请检查垃圾箱。" aria-label="验证码校验说明">?</button>
+            <label for="reg-code">短信验证码
+              <button class="tip-trigger auth-tip-btn" type="button" data-tip="验证码用于验证手机号归属，5 分钟内有效、一次性使用；收不到请稍候重试。" aria-label="验证码校验说明">?</button>
             </label>
             <div class="auth-code-row">
               <input id="reg-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位数字">
@@ -137,7 +131,7 @@
       <!-- T3 忘记密码：三步流程（重置接口按 /api/saas/auth/reset 预留） -->
       <div class="auth-view" id="view-forgot" hidden>
         <ol class="auth-steps" aria-label="重置密码步骤">
-          <li class="auth-step active" data-step="1"><span>1</span>验证邮箱</li>
+          <li class="auth-step active" data-step="1"><span>1</span>验证手机号</li>
           <li class="auth-step" data-step="2"><span>2</span>输入验证码</li>
           <li class="auth-step" data-step="3"><span>3</span>设置新密码</li>
         </ol>
@@ -145,8 +139,8 @@
         <form id="form-forgot" novalidate>
           <div class="auth-step-panel" data-step="1">
             <div class="auth-field">
-              <label for="forgot-email">注册邮箱</label>
-              <input id="forgot-email" type="email" autocomplete="email" placeholder="you@example.com">
+              <label for="forgot-email">注册手机号</label>
+              <input id="forgot-email" type="text" inputmode="tel" autocomplete="tel" placeholder="请输入注册时的手机号">
             </div>
             <div class="auth-callout" id="forgot-echo" hidden></div>
             <button class="btn btn-primary auth-submit" id="btn-forgot-send" type="button">发送验证码并继续</button>
@@ -154,7 +148,7 @@
 
           <div class="auth-step-panel" data-step="2" hidden>
             <div class="auth-field">
-              <label for="forgot-code">邮箱验证码</label>
+              <label for="forgot-code">短信验证码</label>
               <div class="auth-code-row">
                 <input id="forgot-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位数字">
                 <button class="btn btn-ghost" id="btn-forgot-resend" type="button">重新发送</button>
@@ -205,9 +199,9 @@ const AUTH_VIEWS = ['login', 'register', 'forgot'];
 const errBox = document.getElementById('login-error');
 const subBox = document.getElementById('auth-sub');
 const SUBTITLES = {
-  login: '使用手机号 / 邮箱和密码登录；也可以使用验证码登录。',
-  register: '注册内测会员：邮箱验证码 + 密码，注册后自动登录。',
-  forgot: '通过注册邮箱重置密码，按三个步骤完成。',
+  login: '使用手机号和密码登录；也可以使用短信验证码登录。',
+  register: '注册内测会员：短信验证码 + 密码，注册后自动登录。',
+  forgot: '通过注册手机号重置密码，按三个步骤完成。',
 };
 
 function $(id){ return document.getElementById(id); }
@@ -273,7 +267,7 @@ async function postJson(url, body){
 }
 async function requestCode(target, btn, echoEl){
   clearError();
-  if (!target) { setError('请先填写手机号或邮箱'); return false; }
+  if (!target) { setError('请先填写手机号'); return false; }
   btn.disabled = true;
   try {
     var r = await postJson('/api/saas/auth/code', {target: target});
@@ -340,7 +334,7 @@ document.getElementById('form-login').addEventListener('submit', async function(
   clearError();
   var target = $('login-target').value.trim();
   var password = $('login-code').value;
-  if (!target) { setError('请输入手机号或邮箱'); $('login-target').focus(); return; }
+  if (!target) { setError('请输入手机号'); $('login-target').focus(); return; }
   if (!password) { setError('请输入密码'); $('login-code').focus(); return; }
   var btn = $('btn-login');
   var oldText = btn.textContent;
@@ -386,7 +380,7 @@ $('btn-code-login').addEventListener('click', async function(){
   clearError();
   var target = $('code-target').value.trim();
   var code = $('code-code').value.trim();
-  if (!target) { setError('请输入手机号或邮箱'); return; }
+  if (!target) { setError('请输入手机号'); return; }
   if (!/^\d{6}$/.test(code)) { setError('请输入 6 位验证码'); return; }
   var btn = $('btn-code-login');
   btn.disabled = true;
@@ -407,17 +401,17 @@ $('btn-code-login').addEventListener('click', async function(){
 
 // ---- T2：注册 ----
 $('btn-reg-code').addEventListener('click', function(){
-  requestCode($('reg-email').value.trim().toLowerCase(), $('btn-reg-code'), $('reg-echo'));
+  requestCode($('reg-email').value.trim(), $('btn-reg-code'), $('reg-echo'));
 });
 document.getElementById('form-register').addEventListener('submit', async function(e){
   e.preventDefault();
   clearError();
-  var email = $('reg-email').value.trim().toLowerCase();
+  var phone = $('reg-email').value.trim();
   var code = $('reg-code').value.trim();
   var pw = $('reg-password').value;
   var pw2 = $('reg-password2').value;
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setError('请输入有效的邮箱地址'); $('reg-email').focus(); return; }
-  if (!/^\d{6}$/.test(code)) { setError('请输入 6 位邮箱验证码'); $('reg-code').focus(); return; }
+  if (!/^1\d{10}$/.test(phone)) { setError('请输入正确的 11 位手机号'); $('reg-email').focus(); return; }
+  if (!/^\d{6}$/.test(code)) { setError('请输入 6 位短信验证码'); $('reg-code').focus(); return; }
   if (!requirePassword(pw)) { setError('密码至少 8 位，且同时包含字母和数字'); $('reg-password').focus(); return; }
   if (pw !== pw2) { setError('两次输入的密码不一致'); $('reg-password2').focus(); return; }
   var btn = $('btn-register');
@@ -425,14 +419,14 @@ document.getElementById('form-register').addEventListener('submit', async functi
   btn.disabled = true;
   btn.textContent = '注册中…';
   try {
-    var r = await postJson('/api/saas/auth/register', {email: email, password: pw, code: code});
+    var r = await postJson('/api/saas/auth/register', {phone: phone, password: pw, code: code});
     if (!r.resp.ok || !r.data || !r.data.ok){
       var msg = (r.data && r.data.error) || ('注册失败（HTTP ' + r.resp.status + '）');
       if (r.resp.status === 409){
         setView('login');
         if (history.replaceState) history.replaceState(null, '', '#login');
         setError(msg + ' 已为你切到登录。');
-        $('login-target').value = email;
+        $('login-target').value = phone;
         $('login-code').focus();
       } else {
         setError(msg);
@@ -470,19 +464,19 @@ function forgotCallout(text, ok){
   box.classList.toggle('ok', !!ok);
 }
 $('btn-forgot-send').addEventListener('click', async function(){
-  var email = $('forgot-email').value.trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setError('请输入有效的注册邮箱'); return; }
-  var ok = await requestCode(email, $('btn-forgot-send'), $('forgot-echo'));
+  var phone = $('forgot-email').value.trim();
+  if (!/^1\d{10}$/.test(phone)) { setError('请输入正确的 11 位注册手机号'); return; }
+  var ok = await requestCode(phone, $('btn-forgot-send'), $('forgot-echo'));
   if (ok){ setForgotStep(2); $('forgot-code').focus(); }
 });
 $('btn-forgot-resend').addEventListener('click', function(){
-  requestCode($('forgot-email').value.trim().toLowerCase(), $('btn-forgot-resend'), $('forgot-echo'));
+  requestCode($('forgot-email').value.trim(), $('btn-forgot-resend'), $('forgot-echo'));
 });
 $('btn-forgot-back').addEventListener('click', function(){ setForgotStep(1); });
 $('btn-forgot-back2').addEventListener('click', function(){ setForgotStep(2); });
 $('btn-forgot-next').addEventListener('click', function(){
   var code = $('forgot-code').value.trim();
-  if (!/^\d{6}$/.test(code)) { setError('请输入 6 位邮箱验证码'); $('forgot-code').focus(); return; }
+  if (!/^\d{6}$/.test(code)) { setError('请输入 6 位短信验证码'); $('forgot-code').focus(); return; }
   setForgotStep(3);
   $('forgot-password').focus();
 });
@@ -493,18 +487,18 @@ $('btn-forgot-reset').addEventListener('click', async function(){
   var pw2 = $('forgot-password2').value;
   if (!requirePassword(pw)) { setError('新密码至少 8 位，且同时包含字母和数字'); return; }
   if (pw !== pw2) { setError('两次输入的新密码不一致'); return; }
-  var email = $('forgot-email').value.trim().toLowerCase();
+  var phone = $('forgot-email').value.trim();
   var code = $('forgot-code').value.trim();
-  // 后端契约（36 号 §7.7）：POST /api/saas/auth/reset {email, code, new_password}；
+  // 后端契约：POST /api/saas/auth/reset {phone, code, new_password}；
   // 成功不返回 token、不自动登录，该用户旧 session 全部失效。
   var btn = this;
   btn.disabled = true;
   try {
-    var r = await postJson('/api/saas/auth/reset', {email: email, code: code, new_password: pw});
+    var r = await postJson('/api/saas/auth/reset', {phone: phone, code: code, new_password: pw});
     if (r.resp.ok && r.data && r.data.ok){
       setView('login');
       if (history.replaceState) history.replaceState(null, '', '#login');
-      $('login-target').value = email;
+      $('login-target').value = phone;
       setError('密码已重置，请使用新密码登录。');
     } else {
       setError((r.data && r.data.error) || ('重置失败（HTTP ' + r.resp.status + '）'));

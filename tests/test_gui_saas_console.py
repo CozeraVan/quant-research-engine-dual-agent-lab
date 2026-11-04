@@ -66,17 +66,17 @@ def _clean(app):
                           "factor_requests, workers RESTART IDENTITY CASCADE"))
 
 
-def _make_user(app, email, role="user", status="active", tier="member"):
+def _make_user(app, phone, role="user", status="active", tier="member"):
     engine = app.extensions["saas_engine"]
     with engine.begin() as conn:
         return conn.execute(
-            text("INSERT INTO users (email, role, status, tier) VALUES (:e, :r, :s, :t) RETURNING id"),
-            {"e": email, "r": role, "s": status, "t": tier},
+            text("INSERT INTO users (phone, role, status, tier) VALUES (:p, :r, :s, :t) RETURNING id"),
+            {"p": phone, "r": role, "s": status, "t": tier},
         ).scalar_one()
 
 
-def _admin_headers(app, email="admin@example.com"):
-    uid = _make_user(app, email, role="admin")
+def _admin_headers(app, phone="13800050000"):
+    uid = _make_user(app, phone, role="admin")
     return {"X-User-Id": str(uid)}, uid
 
 
@@ -98,16 +98,15 @@ def _fail_job(client, uid=1):
     return job_id
 
 
-def _register(client, email, password="abc12345"):
-    """2026-11-04 注册强制邮箱验证码：stub 发码后取明文（含限流清理）。"""
+def _register(client, phone, password="abc12345"):
+    """2026-11-04 注册强制手机验证码：stub 发码后取明文（含限流清理）。"""
     rl = client.application.extensions["rate_limit"]["target"]
-    rl.pop(email, None)
-    rl.pop(email.lower(), None)
-    client.post("/api/saas/auth/code", json={"target": email})
+    rl.pop(phone, None)
+    client.post("/api/saas/auth/code", json={"target": phone})
     codes = [m["code"] for m in client.application.extensions["sent_codes"]
-             if m["target"] == email.lower()]
+             if m["target"] == phone]
     return client.post("/api/saas/auth/register",
-                       json={"email": email, "password": password, "code": codes[-1]})
+                       json={"phone": phone, "password": password, "code": codes[-1]})
 
 
 class TestAdminAuth:
@@ -119,7 +118,7 @@ class TestAdminAuth:
         assert client.get("/api/saas/console/jobs").status_code == 401
 
     def test_member_forbidden_403(self, client, app):
-        _make_user(app, "m@example.com")
+        _make_user(app, "13800050001")
         for url in ("/api/saas/console/overview", "/api/saas/console/users",
                     "/api/saas/console/factor-requests", "/api/saas/console/workers",
                     "/api/saas/console/jobs"):
@@ -133,16 +132,16 @@ class TestAdminAuth:
         assert client.get("/api/saas/console/overview", headers=headers).status_code == 200
         me = client.get("/api/saas/me", headers=headers).get_json()["user"]
         assert me["is_admin"] is True and me["role"] == "admin"
-        _make_user(app, "m@example.com")
+        _make_user(app, "13800050001")
         me2 = client.get("/api/saas/me", headers={"X-User-Id": "2"}).get_json()["user"]
         assert me2["is_admin"] is False
 
     def test_admin_via_bearer_token(self, client, app):
-        resp = _register(client, "boss@example.com")
+        resp = _register(client, "13800050007")
         token = resp.get_json()["token"]
         engine = app.extensions["saas_engine"]
         with engine.begin() as conn:
-            conn.execute(text("UPDATE users SET role = 'admin' WHERE email = 'boss@example.com'"))
+            conn.execute(text("UPDATE users SET role = 'admin' WHERE phone = '13800050007'"))
         assert client.get("/api/saas/console/overview",
                           headers={"Authorization": f"Bearer {token}"}).status_code == 200
 
@@ -197,7 +196,7 @@ class TestUsers:
 
     def test_disable_and_enable(self, client, app):
         headers, admin_uid = _admin_headers(app)
-        resp = _register(client, "bad@example.com")
+        resp = _register(client, "13800050008")
         token = resp.get_json()["token"]
         uid = resp.get_json()["user"]["id"]
         bearer = {"Authorization": f"Bearer {token}"}
@@ -206,7 +205,7 @@ class TestUsers:
         r = client.post(f"/api/saas/console/users/{uid}/status", json={"status": "disabled"}, headers=headers)
         assert r.get_json()["status"] == "disabled"
         assert client.get("/api/saas/me", headers=bearer).status_code == 401
-        login = client.post("/api/saas/auth/login", json={"target": "bad@example.com", "code": "abc12345"})
+        login = client.post("/api/saas/auth/login", json={"phone": "13800050008", "password": "abc12345"})
         assert login.status_code == 403
         # 恢复：旧 session 复效
         r = client.post(f"/api/saas/console/users/{uid}/status", json={"status": "active"}, headers=headers)
@@ -330,7 +329,7 @@ class TestTierPolicies:
 
     def test_auth_gate(self, client, app):
         assert client.get("/api/saas/console/policies").status_code == 401
-        uid = _make_user(app, "plain@example.com")
+        uid = _make_user(app, "13800050003")
         h = {"X-User-Id": str(uid)}
         assert client.get("/api/saas/console/policies", headers=h).status_code == 403
 
@@ -360,7 +359,7 @@ class TestTierPolicies:
         # 改 member 日限额为 1 → 会员第二次提交被拒；admin 不受限
         headers, admin_uid = _admin_headers(app)
         client.post("/api/saas/console/policies/member", json={"daily_full_limit": 1}, headers=headers)
-        uid = _make_user(app, "u@example.com")
+        uid = _make_user(app, "13800050004")
         h = {"X-User-Id": str(uid)}
         assert _create_job(client, uid=uid).status_code == 200
         r = _create_job(client, uid=uid)
@@ -373,7 +372,7 @@ class TestTierPolicies:
         # N4b 接入 N1：管理台把 member 因子上限调低到 5 → 6 因子策略提交即 400；
         # 恢复 20 后同策略放行；0 = 不限
         headers, _ = _admin_headers(app)
-        uid = _make_user(app, "f@example.com")
+        uid = _make_user(app, "13800050005")
         fields = "\n".join(
             f"    f{i}: factors.stock_daily_momentum_close.rsi_14" for i in range(6)
         )
@@ -462,7 +461,7 @@ class TestNlCompileConsole:
 
     def test_nl_auth_gate_unchanged(self, client, app):
         assert client.get("/api/saas/console/overview").status_code == 401
-        _make_user(app, "m@example.com")
+        _make_user(app, "13800050001")
         assert client.get("/api/saas/console/overview",
                           headers={"X-User-Id": "1"}).status_code == 403
 

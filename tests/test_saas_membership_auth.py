@@ -1,6 +1,6 @@
 """QRE-AUTH-MEMBERSHIP 后端切片测试（2026-11-04，36/37 号文档）。
 
-覆盖：邮箱验证码改密（旧 session 全失效）、密码登录防爆破（5 次锁 15 分钟，
+覆盖：手机验证码改密（旧 session 全失效）、密码登录防爆破（5 次锁 15 分钟，
 验证码路径不受影响）、/api/saas/membership 权益视图、membership 纯函数。
 DB 为真实本地 PG 临时库（schema = deploy/saas/cloud_schema.sql）。
 """
@@ -89,40 +89,39 @@ def _send_code(client, target: str):
     # 被 60s 限流挡成 429（限流本身的断言在 test_gui_saas，不在这里测）。
     rl = client.application.extensions["rate_limit"]["target"]
     rl.pop(target, None)
-    rl.pop(target.lower(), None)
     resp = client.post("/api/saas/auth/code", json={"target": target})
     assert resp.status_code == 200, resp.get_json()
     return resp
 
 
 def _code_for(app, target: str) -> str:
-    matches = [m["code"] for m in app.extensions["sent_codes"] if m["target"] == target.lower()]
+    matches = [m["code"] for m in app.extensions["sent_codes"] if m["target"] == target]
     assert matches, "stub sender 未记录验证码"
     return matches[-1]
 
 
-def _register(client, email: str, password: str = "abc12345"):
-    # 2026-11-04 起注册强制校验邮箱验证码：先走 stub 发码再注册。
+def _register(client, phone: str, password: str = "abc12345"):
+    # 2026-11-04 起注册强制校验手机验证码：先走 stub 发码再注册。
     app = client.application
-    _send_code(client, email)
-    code = _code_for(app, email)
+    _send_code(client, phone)
+    code = _code_for(app, phone)
     resp = client.post("/api/saas/auth/register",
-                       json={"email": email, "password": password, "code": code})
+                       json={"phone": phone, "password": password, "code": code})
     assert resp.status_code == 200, resp.get_json()
     return resp.get_json()
 
 
 class TestResetPassword:
     def test_reset_revokes_sessions_and_switches_password(self, client, app):
-        email = "reset@example.com"
-        reg = _register(client, email, "oldpass123")
+        phone = "13800010001"
+        reg = _register(client, phone, "oldpass123")
         old_token = reg["token"]
         assert client.get("/api/saas/me", headers=_bearer(old_token)).status_code == 200
 
-        _send_code(client, email)
-        code = _code_for(app, email)
+        _send_code(client, phone)
+        code = _code_for(app, phone)
         resp = client.post("/api/saas/auth/reset",
-                           json={"email": email, "code": code,
+                           json={"phone": phone, "code": code,
                                  "new_password": "newpass456"})
         assert resp.status_code == 200, resp.get_json()
         assert resp.get_json()["ok"] is True
@@ -131,64 +130,64 @@ class TestResetPassword:
 
         # 旧 session 全部失效
         assert client.get("/api/saas/me", headers=_bearer(old_token)).status_code == 401
-        # 新密码可登录（email/password 别名，37 号文档 §2）
+        # 新密码可登录（phone/password 别名，37 号文档 §2）
         ok = client.post("/api/saas/auth/login",
-                         json={"email": email, "password": "newpass456"})
+                         json={"phone": phone, "password": "newpass456"})
         assert ok.status_code == 200, ok.get_json()
         assert ok.get_json()["token"]
         # 旧密码失效
         old = client.post("/api/saas/auth/login",
-                          json={"target": email, "code": "oldpass123"})
+                          json={"target": phone, "code": "oldpass123"})
         assert old.status_code == 401
         # 验证码单次：同一码再改密失败
         again = client.post("/api/saas/auth/reset",
-                            json={"email": email, "code": code,
+                            json={"phone": phone, "code": code,
                                   "new_password": "another789"})
         assert again.status_code == 401
 
     def test_reset_rejects_bad_code_and_keeps_password(self, client, app):
-        email = "reset2@example.com"
-        _register(client, email, "oldpass123")
-        _send_code(client, email)
-        good = _code_for(app, email)
+        phone = "13800010002"
+        _register(client, phone, "oldpass123")
+        _send_code(client, phone)
+        good = _code_for(app, phone)
         bad = "000000" if good != "000000" else "000001"
         resp = client.post("/api/saas/auth/reset",
-                           json={"email": email, "code": bad,
+                           json={"phone": phone, "code": bad,
                                  "new_password": "newpass456"})
         assert resp.status_code == 401
         assert "验证码" in resp.get_json()["error"]
         # 错码不消费验证码：正确码仍可用
         ok = client.post("/api/saas/auth/reset",
-                         json={"email": email, "code": good,
+                         json={"phone": phone, "code": good,
                                "new_password": "newpass456"})
         assert ok.status_code == 200
 
     def test_reset_rejects_weak_password(self, client, app):
-        email = "reset3@example.com"
-        _register(client, email, "oldpass123")
-        _send_code(client, email)
-        code = _code_for(app, email)
+        phone = "13800010003"
+        _register(client, phone, "oldpass123")
+        _send_code(client, phone)
+        code = _code_for(app, phone)
         for weak in ("short", "abcdefgh", "12345678"):
             resp = client.post("/api/saas/auth/reset",
-                               json={"email": email, "code": code,
+                               json={"phone": phone, "code": code,
                                      "new_password": weak})
             assert resp.status_code == 400
             assert "密码至少 8 位" in resp.get_json()["error"]
 
-    def test_reset_unknown_email_404(self, client, app):
-        email = "nobody@example.com"
-        _send_code(client, email)
+    def test_reset_unknown_phone_404(self, client, app):
+        phone = "13800010004"
+        _send_code(client, phone)
         resp = client.post("/api/saas/auth/reset",
-                           json={"email": email, "code": _code_for(app, email),
+                           json={"phone": phone, "code": _code_for(app, phone),
                                  "new_password": "newpass456"})
         assert resp.status_code == 404
         assert "未注册" in resp.get_json()["error"]
 
     def test_reset_validates_input(self, client):
         for body in (
-            {"email": "not-an-email", "code": "123456", "new_password": "newpass456"},
-            {"email": "a@example.com", "code": "", "new_password": "newpass456"},
-            {"email": "a@example.com", "code": "123456", "new_password": ""},
+            {"phone": "not-a-phone", "code": "123456", "new_password": "newpass456"},
+            {"phone": "13800010005", "code": "", "new_password": "newpass456"},
+            {"phone": "13800010005", "code": "123456", "new_password": ""},
         ):
             resp = client.post("/api/saas/auth/reset", json=body)
             assert resp.status_code == 400, body
@@ -196,67 +195,67 @@ class TestResetPassword:
 
 class TestPasswordLoginLockout:
     def test_five_failures_lock_15_minutes(self, client, app, saas_db):
-        email = "lock@example.com"
-        _register(client, email, "abc12345")
+        phone = "13800020001"
+        _register(client, phone, "abc12345")
         for _ in range(5):
             resp = client.post("/api/saas/auth/login",
-                               json={"target": email, "code": "wrong123"})
+                               json={"phone": phone, "password": "wrong123"})
             assert resp.status_code == 401
         rows = _sql(saas_db, "SELECT fail_count, locked_until FROM login_attempts "
-                             "WHERE target = :t", t=email)
+                             "WHERE target = :t", t=phone)
         assert len(rows) == 1 and rows[0]["fail_count"] == 5
         assert rows[0]["locked_until"] is not None
 
         # 第 6 次（即使密码正确）→ 429，文案可读
         locked = client.post("/api/saas/auth/login",
-                             json={"target": email, "code": "abc12345"})
+                             json={"phone": phone, "password": "abc12345"})
         assert locked.status_code == 429
         assert "密码错误次数过多" in locked.get_json()["error"]
         assert "15" in locked.get_json()["error"]
 
         # 验证码登录路径不受影响（另一个手机号 target）
-        phone = "13700002222"
-        _send_code(client, phone)
+        other = "13700002222"
+        _send_code(client, other)
         code_login = client.post("/api/saas/auth/login",
-                                 json={"target": phone, "code": _code_for(app, phone)})
+                                 json={"target": other, "code": _code_for(app, other)})
         assert code_login.status_code == 200
 
         # 锁到期后可登录，成功即清空计数
         _sql(saas_db, "UPDATE login_attempts SET locked_until = now() - interval '1 minute' "
-                      "WHERE target = :t", t=email)
+                      "WHERE target = :t", t=phone)
         ok = client.post("/api/saas/auth/login",
-                         json={"target": email, "code": "abc12345"})
+                         json={"phone": phone, "password": "abc12345"})
         assert ok.status_code == 200
-        assert _sql(saas_db, "SELECT * FROM login_attempts WHERE target = :t", t=email) == []
+        assert _sql(saas_db, "SELECT * FROM login_attempts WHERE target = :t", t=phone) == []
 
     def test_lock_is_per_target(self, client, app):
-        _register(client, "lockA@example.com", "abc12345")
-        _register(client, "lockB@example.com", "abc12345")
+        _register(client, "13800020002", "abc12345")
+        _register(client, "13800020003", "abc12345")
         for _ in range(5):
             client.post("/api/saas/auth/login",
-                        json={"target": "lockA@example.com", "code": "wrong123"})
+                        json={"phone": "13800020002", "password": "wrong123"})
         assert client.post("/api/saas/auth/login",
-                           json={"target": "lockA@example.com", "code": "abc12345"}
+                           json={"phone": "13800020002", "password": "abc12345"}
                            ).status_code == 429
         assert client.post("/api/saas/auth/login",
-                           json={"target": "lockB@example.com", "code": "abc12345"}
+                           json={"phone": "13800020003", "password": "abc12345"}
                            ).status_code == 200
 
     def test_success_resets_fail_count_before_lock(self, client, app, saas_db):
-        email = "flaky@example.com"
-        _register(client, email, "abc12345")
+        phone = "13800020004"
+        _register(client, phone, "abc12345")
         for _ in range(4):
             assert client.post("/api/saas/auth/login",
-                               json={"target": email, "code": "wrong123"}).status_code == 401
+                               json={"phone": phone, "password": "wrong123"}).status_code == 401
         assert client.post("/api/saas/auth/login",
-                           json={"target": email, "code": "abc12345"}).status_code == 200
-        assert _sql(saas_db, "SELECT * FROM login_attempts WHERE target = :t", t=email) == []
+                           json={"phone": phone, "password": "abc12345"}).status_code == 200
+        assert _sql(saas_db, "SELECT * FROM login_attempts WHERE target = :t", t=phone) == []
         # 清零后仍可再失败 5 次才锁
         for _ in range(5):
             assert client.post("/api/saas/auth/login",
-                               json={"target": email, "code": "wrong123"}).status_code == 401
+                               json={"phone": phone, "password": "wrong123"}).status_code == 401
         assert client.post("/api/saas/auth/login",
-                           json={"target": email, "code": "abc12345"}).status_code == 429
+                           json={"phone": phone, "password": "abc12345"}).status_code == 429
 
 
 class TestMembershipEndpoint:
@@ -266,7 +265,7 @@ class TestMembershipEndpoint:
         assert resp.get_json()["error"] == "未登录"
 
     def test_member_payload_and_tiers(self, client):
-        token = _register(client, "member@example.com")["token"]
+        token = _register(client, "13800030001")["token"]
         body = client.get("/api/saas/membership", headers=_bearer(token)).get_json()
         assert body["ok"] is True
         mb = body["membership"]
@@ -294,7 +293,7 @@ class TestMembershipEndpoint:
         assert guest["scan_enabled"] is True
 
     def test_counts_today_full_jobs_and_watches(self, client, app, saas_db):
-        reg = _register(client, "count@example.com")
+        reg = _register(client, "13800030002")
         token, uid = reg["token"], reg["user"]["id"]
         created = client.post("/api/saas/jobs", headers=_bearer(token), json={
             "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
@@ -319,7 +318,7 @@ class TestMembershipEndpoint:
         assert mb["watches"]["remaining"] == 19
 
     def test_tier_table_comes_from_db(self, client, app, saas_db):
-        token = _register(client, "dbtier@example.com")["token"]
+        token = _register(client, "13800030003")["token"]
         _sql(saas_db, "UPDATE tier_policies SET daily_full_limit = 5, max_watches = 7 "
                       "WHERE tier = 'guest'")
         try:
@@ -384,23 +383,23 @@ class TestMembershipPureFunctions:
         assert "j.user_id = u.id" in sql
 
 class TestRegisterCode:
-    """2026-11-04 注册强制邮箱验证码（Windows UI 复核发现的缺口收口）。"""
+    """2026-11-04 注册强制手机验证码（Windows UI 复核发现的缺口收口）。"""
 
     def test_register_requires_code(self, client):
         resp = client.post("/api/saas/auth/register",
-                           json={"email": "nocode@example.com", "password": "abc12345"})
+                           json={"phone": "13800040001", "password": "abc12345"})
         assert resp.status_code == 400
         assert "验证码" in resp.get_json()["error"]
 
     def test_register_rejects_wrong_code_without_consuming(self, client, app):
-        email = "wrongcode@example.com"
-        _send_code(client, email)
+        phone = "13800040002"
+        _send_code(client, phone)
         bad = client.post("/api/saas/auth/register",
-                          json={"email": email, "password": "abc12345", "code": "000000"})
+                          json={"phone": phone, "password": "abc12345", "code": "000000"})
         assert bad.status_code == 401
         # 错码不消费：同一验证码仍可完成注册
         good = client.post("/api/saas/auth/register",
-                           json={"email": email, "password": "abc12345",
-                                 "code": _code_for(app, email)})
+                           json={"phone": phone, "password": "abc12345",
+                                 "code": _code_for(app, phone)})
         assert good.status_code == 200, good.get_json()
         assert good.get_json()["token"]

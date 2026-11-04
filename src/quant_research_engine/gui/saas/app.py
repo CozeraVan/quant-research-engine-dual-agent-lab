@@ -11,8 +11,10 @@ lease 过期且 attempts < max_attempts 的任务可被重新认领（自动回�
 - 用户侧：`POST /api/saas/auth/code` 发 6 位验证码 → `POST /api/saas/auth/login`
   换 session token → 之后一律 `Authorization: Bearer <token>`。
 - X-User-Id 保留为 dev 后门，仅当 SAAS_DEV_AUTH=1 时可用（默认关）。
-- 验证码发送层可插拔：SAAS_AUTH_CHANNEL=email（默认，SMTP STARTTLS）/
-  sms（占位，未开通）/stub（测试用，发送记录落 app.extensions['sent_codes']）。
+- 账号字段只用中国大陆手机号（2026-11-04 去邮箱化）：注册/登录/找回密码
+  一律「手机号 + 短信验证码」；users.email 仅保留历史数据，认证不再读写。
+- 验证码发送层：SAAS_AUTH_CHANNEL=sms（默认，阿里云短信）/auto（同 sms）/
+  stub（测试用，发送记录落 app.extensions['sent_codes']）。
 - TODO：图形验证码（内测期省略，上线前评估）。
 - Worker 侧 header X-Worker-Token（SAAS_WORKER_TOKEN，未配置一律 503）。
 - 游客归属（QRE-SAAS-ACCESS-HARDENING-001）：不按 IP。Cookie 缺失时应用签发随机
@@ -28,10 +30,8 @@ import json
 import os
 import re
 import secrets
-import smtplib
 import time
 from datetime import date, datetime, timedelta, timezone
-from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +68,13 @@ DEFAULT_AUTH_SALT = "qre-saas-dev-salt"  # 生产必须经 SAAS_AUTH_SALT 覆盖
 RATE_LIMIT_TARGET_SECONDS = 60   # 同 target 60 秒内只能发 1 次
 RATE_LIMIT_IP_MAX = 10           # 同 IP 每小时最多 10 次
 RATE_LIMIT_IP_WINDOW = 3600
-SMTP_TIMEOUT_SECONDS = 10
+
+# 中国大陆手机号：11 位、1 开头（第二位 3-9）。去邮箱化后唯一的账号标识。
+_MOBILE_RE = re.compile(r"^1[3-9]\d{9}$")
+
+
+def _is_cn_mobile(value: str) -> bool:
+    return bool(_MOBILE_RE.match(value or ""))
 
 
 def _safe_saas_next(value: Any) -> str:
@@ -81,32 +87,6 @@ def _safe_saas_next(value: Any) -> str:
     if parsed.scheme or parsed.netloc or not parsed.path.startswith("/saas/"):
         return "/saas/"
     return raw
-
-
-class EmailSender:
-    """SMTP（STARTTLS）验证码邮件。配置：SAAS_SMTP_HOST/PORT/USER/PASS/FROM。"""
-
-    def send(self, target: str, code: str) -> None:
-        host = os.environ.get("SAAS_SMTP_HOST", "")
-        if not host:
-            raise RuntimeError("SAAS_SMTP_HOST 未配置")
-        port = int(os.environ.get("SAAS_SMTP_PORT", "465"))
-        user = os.environ.get("SAAS_SMTP_USER", "")
-        password = os.environ.get("SAAS_SMTP_PASS", "")
-        sender = os.environ.get("SAAS_SMTP_FROM", user)
-        msg = EmailMessage()
-        msg["From"] = sender
-        msg["To"] = target
-        msg["Subject"] = "回测台登录验证码"
-        msg.set_content(f"您的验证码：{code}（{AUTH_CODE_TTL_MINUTES} 分钟内有效）")
-        try:
-            with smtplib.SMTP(host, port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
-                smtp.starttls()
-                if user:
-                    smtp.login(user, password)
-                smtp.send_message(msg)
-        except (OSError, smtplib.SMTPException) as exc:
-            raise RuntimeError(f"邮件发送失败：{exc}") from exc
 
 
 class SmsSender:
@@ -192,7 +172,7 @@ class StubSender:
                 fh.write(f"{target} {code}\n")
 
 
-_SENDERS = {"email": EmailSender, "sms": SmsSender}
+_SENDERS = {"sms": SmsSender}
 
 
 def _get_engine(app: Flask) -> Engine:
@@ -257,14 +237,14 @@ def _load_saas_metadata(app: Flask) -> dict | None:
 
 
 def _get_sender(app: Flask, target: str | None = None) -> Any:
-    channel = (_cfg(app, "SAAS_AUTH_CHANNEL", "email") or "email").strip()
+    """按 SAAS_AUTH_CHANNEL 选通道：stub=测试桩；sms/auto/空=阿里云短信。
+
+    target 参数仅为兼容旧调用签名保留——2026-11-04 去邮箱化后只有短信通道。
+    """
+    channel = (_cfg(app, "SAAS_AUTH_CHANNEL", "sms") or "sms").strip()
     if channel == "stub":
         return StubSender(app)
-    # 按 target 类型分流：邮箱一律走 SMTP；SAAS_AUTH_CHANNEL=auto 时手机号走
-    # 短信——自建登录需要邮箱与手机号双通道并存（2026-11-04 阿里云短信接入）。
-    if target and "@" in target:
-        channel = "email"
-    elif channel == "auto":
+    if channel == "auto":
         channel = "sms"
     sender_cls = _SENDERS.get(channel)
     if sender_cls is None:
@@ -1050,8 +1030,8 @@ def _valid_password(password: str) -> bool:
     )
 
 
-def _consume_email_code(conn: Any, target: str, code: str, salt: str) -> bool:
-    """校验并消费最新一条未用未过期的验证码；错码/无码不消费（可重试）。"""
+def _consume_sms_code(conn: Any, target: str, code: str, salt: str) -> bool:
+    """校验并消费最新一条未用未过期的短信验证码；错码/无码不消费（可重试）。"""
     row = conn.execute(
         text(
             "SELECT id, code_hash FROM sms_codes "
@@ -2573,13 +2553,9 @@ def create_saas_app() -> Flask:
     @app.post("/api/saas/auth/code")
     def api_auth_code() -> Any:
         data = request.get_json(silent=True) or {}
-        target = str(data.get("target") or "").strip()
-        # 邮箱统一小写：注册/登录/重置在入库前都会 lower(email)，发码若存原始
-        # 大小写会导致含大写字母的邮箱永远校验失败（2026-11-04 整合实测复现）。
-        if "@" in target:
-            target = target.lower()
-        if not target:
-            return jsonify({"ok": False, "error": "缺少 target（手机号或邮箱）"}), 400
+        target = str(data.get("target") or data.get("phone") or "").strip()
+        if not _is_cn_mobile(target):
+            return jsonify({"ok": False, "error": "请输入正确的手机号"}), 400
 
         now = time.time()
         rl = app.extensions["rate_limit"]
@@ -2592,7 +2568,7 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "发送过于频繁，请稍后再试"}), 429
 
         code = f"{secrets.randbelow(10 ** AUTH_CODE_LENGTH):0{AUTH_CODE_LENGTH}d}"
-        channel = "email" if "@" in target else "sms"
+        channel = "sms"
         try:
             _get_sender(app, target).send(target, code)
         except (RuntimeError, NotImplementedError) as exc:
@@ -2623,41 +2599,41 @@ def create_saas_app() -> Flask:
 
     @app.post("/api/saas/auth/register")
     def api_auth_register() -> Any:
-        """自建注册（邮箱+邮箱验证码+密码，密码 pbkdf2 哈希存储）。
+        """自建注册（手机号 + 短信验证码 + 密码，密码 pbkdf2 哈希存储）。
 
-        2026-11-04：登录/会员转为自建（36 号文档，取代外购决策）。注册必须
-        校验邮箱验证码——此前接收 code 但不校验（Windows UI 复核发现的缺口），
-        等于任何人可任意注册，现已强制。
+        2026-11-04 去邮箱化：账号唯一标识为中国大陆手机号，注册必须校验
+        短信验证码（此前接收 code 但不校验，等于任何人可任意注册）。
+        users.email 仅历史数据保留，新注册不写该列。
         """
         data = request.get_json(silent=True) or {}
-        email = str(data.get("email") or data.get("target") or "").strip().lower()
+        phone = str(data.get("phone") or data.get("target") or data.get("email") or "").strip()
         password = str(data.get("password") or "")
         code = str(data.get("code") or "").strip()
-        if not email or "@" not in email or len(email) > 200:
-            return jsonify({"ok": False, "error": "邮箱格式不正确"}), 400
+        if not _is_cn_mobile(phone):
+            return jsonify({"ok": False, "error": "请输入正确的手机号"}), 400
         if not _valid_password(password):
             return jsonify({"ok": False, "error": "密码至少 8 位且需同时包含字母和数字"}), 400
         if not code:
-            return jsonify({"ok": False, "error": "缺少邮箱验证码"}), 400
+            return jsonify({"ok": False, "error": "缺少验证码"}), 400
         engine = _get_engine(app)
         with engine.begin() as conn:
-            # 先查重（409 优先于验证码校验）：已注册邮箱直接引导登录，
+            # 先查重（409 优先于验证码校验）：已注册手机号直接引导登录，
             # 避免重复注册时因发码限流/旧码已消费而报出误导性的验证码错误。
             existing = conn.execute(
-                text("SELECT id FROM users WHERE email = :e"), {"e": email}
+                text("SELECT id FROM users WHERE phone = :p"), {"p": phone}
             ).first()
             if existing is not None:
-                return jsonify({"ok": False, "error": "该邮箱已注册，请直接登录"}), 409
-            if not _consume_email_code(conn, email, code, _auth_salt(app)):
+                return jsonify({"ok": False, "error": "该手机号已注册，请直接登录"}), 409
+            if not _consume_sms_code(conn, phone, code, _auth_salt(app)):
                 return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
             salt = secrets.token_hex(8)
             user = conn.execute(
                 text(
-                    "INSERT INTO users (email, password_hash, tier, last_login_at) "
-                    "VALUES (:e, :h, 'member', now()) "
-                    "RETURNING id, phone, email, quota_daily, tier"
+                    "INSERT INTO users (phone, password_hash, tier, last_login_at) "
+                    "VALUES (:p, :h, 'member', now()) "
+                    "RETURNING id, phone, quota_daily, tier"
                 ),
-                {"e": email, "h": _password_hash(password, salt)},
+                {"p": phone, "h": _password_hash(password, salt)},
             ).mappings().one()
             token = secrets.token_urlsafe(32)
             conn.execute(
@@ -2672,32 +2648,39 @@ def create_saas_app() -> Flask:
     @app.post("/api/saas/auth/login")
     def api_auth_login() -> Any:
         data = request.get_json(silent=True) or {}
-        # email/password 为 target/code 的别名（37 号文档 §2 前端契约，纯增量）
-        target = str(data.get("target") or data.get("email") or "").strip()
+        # 去邮箱化后只有手机号：phone 为主字段，target/email 保留为老 UI 别名；
+        # code 同时承接「短信验证码」与「密码」两种凭证。
+        target = str(data.get("phone") or data.get("target") or data.get("email") or "").strip()
         code = str(data.get("code") or data.get("password") or "").strip()
-        if not target or not code:
-            return jsonify({"ok": False, "error": "缺少 target/code"}), 400
+        if not _is_cn_mobile(target):
+            return jsonify({"ok": False, "error": "请输入正确的手机号"}), 400
+        if not code:
+            return jsonify({"ok": False, "error": "缺少验证码或密码"}), 400
 
         engine = _get_engine(app)
         attempts_ready = _login_attempts_ready(engine)
         with engine.begin() as conn:
-            # 内置测试账号（QRE-ECS-C4）：env SAAS_TEST_ACCOUNT_EMAIL/PASSWORD
-            # 配置时，该 target+code 直接放行（跳过验证码表；SMTP 未配期间的
-            # 联调通道，配置即凭证，生产内测前须移除或置空）。
-            test_email = _cfg(app, "SAAS_TEST_ACCOUNT_EMAIL")
+            # 内置测试账号（QRE-ECS-C4）：env SAAS_TEST_ACCOUNT_PHONE/PASSWORD
+            # （兼容旧名 SAAS_TEST_ACCOUNT_EMAIL，值须为手机号）配置时，
+            # 该 target+code 直接放行（跳过验证码表）。配置即凭证，生产须置空。
+            test_target = (
+                _cfg(app, "SAAS_TEST_ACCOUNT_PHONE")
+                or _cfg(app, "SAAS_TEST_ACCOUNT_EMAIL")
+                or ""
+            ).strip()
             test_pass = _cfg(app, "SAAS_TEST_ACCOUNT_PASSWORD")
             bypass_code = bool(
-                test_email and test_pass
-                and hmac.compare_digest(target, test_email)
+                test_target and test_pass
+                and _is_cn_mobile(test_target)
+                and hmac.compare_digest(target, test_target)
                 and hmac.compare_digest(code, test_pass)
             )
-            is_email = "@" in target
-            col = "email" if is_email else "phone"
-            lookup = target.lower() if is_email else target
+            lookup = target
             if not bypass_code:
-                # 邮箱+密码登录（内测临时方案，正式版外购身份服务后移除）
+                # 手机号+密码登录：有 password_hash 走密码路径（含防爆破），
+                # 否则按短信验证码校验。
                 pw_user = conn.execute(
-                    text("SELECT id, password_hash FROM users WHERE email = :t"),
+                    text("SELECT id, password_hash FROM users WHERE phone = :t"),
                     {"t": lookup},
                 ).mappings().first()
                 if pw_user is not None and pw_user["password_hash"]:
@@ -2738,24 +2721,24 @@ def create_saas_app() -> Flask:
                                          "+ make_interval(mins => :m) WHERE target = :t"),
                                     {"t": lookup, "m": _LOGIN_LOCK_MINUTES},
                                 )
-                        return jsonify({"ok": False, "error": "邮箱或密码错误"}), 401
+                        return jsonify({"ok": False, "error": "手机号或密码错误"}), 401
                     if attempts_ready:
                         conn.execute(
                             text("DELETE FROM login_attempts WHERE target = :t"), {"t": lookup})
                 else:
-                    if not _consume_email_code(conn, target, code, _auth_salt(app)):
+                    if not _consume_sms_code(conn, target, code, _auth_salt(app)):
                         return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
 
             user = conn.execute(
-                text(f"SELECT id, phone, email, quota_daily, status FROM users WHERE {col} = :target"),
+                text("SELECT id, phone, quota_daily, status FROM users WHERE phone = :target"),
                 {"target": lookup},
             ).mappings().first()
             if user is None:
-                # 首次登录自动注册：按 target 形态填 phone/email，另一列 NULL
+                # 首次验证码登录自动建档：只写 phone，不写 email（历史列留空）
                 user = conn.execute(
                     text(
-                        f"INSERT INTO users ({col}, last_login_at) VALUES (:target, now()) "
-                        "RETURNING id, phone, email, quota_daily, status"
+                        "INSERT INTO users (phone, last_login_at) VALUES (:target, now()) "
+                        "RETURNING id, phone, quota_daily, status"
                     ),
                     {"target": lookup},
                 ).mappings().one()
@@ -2775,14 +2758,13 @@ def create_saas_app() -> Flask:
 
     @app.post("/api/saas/auth/reset")
     def api_auth_reset() -> Any:
-        """邮箱验证码找回密码：改密成功即吊销该用户全部旧 session，不自动登录。"""
+        """短信验证码找回密码：改密成功即吊销该用户全部旧 session，不自动登录。"""
         data = request.get_json(silent=True) or {}
-        raw_email = str(data.get("email") or data.get("target") or "").strip()
-        email = raw_email.lower()
+        phone = str(data.get("phone") or data.get("target") or data.get("email") or "").strip()
         code = str(data.get("code") or "").strip()
         new_password = str(data.get("new_password") or data.get("password") or "")
-        if not email or "@" not in email or len(email) > 200:
-            return jsonify({"ok": False, "error": "邮箱格式不正确"}), 400
+        if not _is_cn_mobile(phone):
+            return jsonify({"ok": False, "error": "请输入正确的手机号"}), 400
         if not code:
             return jsonify({"ok": False, "error": "缺少验证码"}), 400
         if not _valid_password(new_password):
@@ -2790,12 +2772,12 @@ def create_saas_app() -> Flask:
         engine = _get_engine(app)
         with engine.begin() as conn:
             user = conn.execute(
-                text("SELECT id FROM users WHERE email = :e"), {"e": email}
+                text("SELECT id FROM users WHERE phone = :p"), {"p": phone}
             ).mappings().first()
             if user is None:
-                return jsonify({"ok": False, "error": "该邮箱未注册，请先注册"}), 404
-            # 验证码按发送时的 target 原文校验（sms_codes 列名沿用 phone）
-            if not _consume_email_code(conn, raw_email, code, _auth_salt(app)):
+                return jsonify({"ok": False, "error": "该手机号未注册，请先注册"}), 404
+            # 验证码按发送时的 target 校验（sms_codes 列名沿用 phone）
+            if not _consume_sms_code(conn, phone, code, _auth_salt(app)):
                 return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
             conn.execute(
                 text("UPDATE users SET password_hash = :h WHERE id = :id"),

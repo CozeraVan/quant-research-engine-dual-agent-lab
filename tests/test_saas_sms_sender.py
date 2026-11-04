@@ -1,7 +1,7 @@
 """阿里云短信通道（SmsSender）与发码通道路由测试（2026-11-04）。
 
 覆盖：自定义验证码请求构造、非 OK 响应报错、缺配置可读错误、
-_get_sender 按 target 类型分流（邮箱 SMTP / 手机阿里云 / stub 优先）。
+_get_sender 通道选择（短信默认 / auto 同短信 / stub 优先；去邮箱化后无 SMTP 通道）。
 不触发真实发送：SDK Client 以 fake 替换。
 """
 
@@ -89,20 +89,24 @@ def _app(channel):
     return app
 
 
-def test_sender_routes_email_and_sms(monkeypatch):
+def test_sender_auto_means_sms(monkeypatch):
     _configure(monkeypatch)
     app = _app("auto")
-    assert isinstance(_get_sender(app, "user@example.com"), saas_app_mod.EmailSender)
+    assert isinstance(_get_sender(app, "13800000000"), SmsSender)
+
+
+def test_sender_default_is_sms(monkeypatch):
+    _configure(monkeypatch)
+    app = Flask(__name__)
     assert isinstance(_get_sender(app, "13800000000"), SmsSender)
 
 
 def test_sender_stub_wins_over_routing():
     app = _app("stub")
-    assert isinstance(_get_sender(app, "user@example.com"), saas_app_mod.StubSender)
     assert isinstance(_get_sender(app, "13800000000"), saas_app_mod.StubSender)
 
 
-def test_sender_sms_channel_email_target_still_email(monkeypatch):
-    # 全局 channel=sms 时，邮箱 target 也必须走 SMTP（否则邮箱验证码会被短信通道吃掉）
-    app = _app("sms")
-    assert isinstance(_get_sender(app, "user@example.com"), saas_app_mod.EmailSender)
+def test_sender_unknown_channel_raises():
+    app = _app("email")
+    with pytest.raises(RuntimeError, match="未知 SAAS_AUTH_CHANNEL"):
+        _get_sender(app, "13800000000")

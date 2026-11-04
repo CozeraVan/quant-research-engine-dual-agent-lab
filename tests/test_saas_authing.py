@@ -297,13 +297,24 @@ class TestJsonExchange:
 
 
 class TestBindLegacyAccount:
+    _legacy_seq = 0
+
     def _register_legacy(self, client, email, password="Passw0rd123"):
-        # 2026-11-04 起注册强制邮箱验证码（stub 发码后取明文）
-        client.post("/api/saas/auth/code", json={"target": email})
+        # 2026-11-04 去邮箱化后注册不再写 email：先按手机号注册，再把 email 补进
+        # 历史列，模拟老邮箱账号（/api/saas/auth/bind 老通道仍按 email 关联）。
+        import sqlalchemy as sa
+
+        TestBindLegacyAccount._legacy_seq += 1
+        phone = f"1391000{TestBindLegacyAccount._legacy_seq:04d}"
         app = client.application
-        code = [m["code"] for m in app.extensions["sent_codes"] if m["target"] == email.lower()][-1]
-        resp = client.post("/api/saas/auth/register", json={"email": email, "password": password, "code": code})
+        client.post("/api/saas/auth/code", json={"target": phone})
+        code = [m["code"] for m in app.extensions["sent_codes"] if m["target"] == phone][-1]
+        resp = client.post("/api/saas/auth/register",
+                           json={"phone": phone, "password": password, "code": code})
         assert resp.status_code == 200, resp.get_json()
+        with app.extensions["saas_engine"].begin() as conn:
+            conn.execute(sa.text("UPDATE users SET email = :e WHERE phone = :p"),
+                         {"e": email, "p": phone})
         return resp.get_json()
 
     def _authing_token(self, client, app, rsa_keys, sub):
@@ -410,10 +421,11 @@ class TestLoginPage:
         assert 'id="btn-casdoor"' not in html
 
     def test_login_page_keeps_authing_entry_when_configured(self, client):
-        """过渡期保留 Authing 入口：生产 SMTP/短信未开通前，老用户的可登录保障。"""
+        """过渡期保留 Authing 入口（模板固有「手机号 / 扫码快捷登录」链接），
+        生产 SMTP 未配、短信凭证未到位前，老用户的可登录保障。"""
         html = client.get("/saas/login").get_data(as_text=True)
         assert "/saas/login/authing" in html
-        assert "原有方式" in html
+        assert "快捷登录" in html
 
     def test_login_callback_template_no_token_on_error(self, client):
         html = client.get("/saas/login/callback?code=x&state=bad").get_data(as_text=True)
