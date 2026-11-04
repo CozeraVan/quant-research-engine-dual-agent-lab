@@ -1,6 +1,6 @@
 """通用 OIDC 适配层（gui/saas/oidc_client.py）单元测试。
 
-36 号文档：Authing 存量配置零改动即可用；Casdoor 仅加 CASDOOR_* 环境变量。
+36 号文档：provider 配置由 `{PROVIDER}_ISSUER/_CLIENT_ID/_CLIENT_SECRET/_REDIRECT_URI` 提供。
 不依赖真实网络：discovery/JWKS/换票均以 monkeypatch 替换 HTTP 层。
 """
 
@@ -18,16 +18,6 @@ def app():
     app.config["TESTING"] = True
     app.extensions = {}
     return app
-
-
-def test_authing_config_uses_legacy_env(app, monkeypatch):
-    monkeypatch.setenv("AUTHING_HOST", "https://demo.authing.cn/oidc/app1")
-    monkeypatch.setenv("AUTHING_APP_ID", "app1")
-    monkeypatch.setenv("AUTHING_APP_SECRET", "s3cret")
-    cfg = oidc_client.get_config(app, "authing")
-    assert cfg["issuer"] == "https://demo.authing.cn/oidc/app1/oidc"
-    assert cfg["client_id"] == "app1"
-    assert cfg["client_secret"] == "s3cret"
 
 
 def test_casdoor_config_from_prefixed_env(app, monkeypatch):
@@ -58,7 +48,7 @@ def test_state_scoped_by_provider_and_expiry(app, monkeypatch):
     monkeypatch.setenv("CASDOOR_CLIENT_ID", "cid")
     monkeypatch.setenv("CASDOOR_CLIENT_SECRET", "csec")
     state = oidc_client.new_state(app, "casdoor")
-    assert not oidc_client.pop_state(app, "authing", state)  # provider 不匹配
+    assert not oidc_client.pop_state(app, "other", state)  # provider 不匹配
     state = oidc_client.new_state(app, "casdoor")
     assert oidc_client.pop_state(app, "casdoor", state)
     assert not oidc_client.pop_state(app, "casdoor", state)  # 一次性

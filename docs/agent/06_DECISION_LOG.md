@@ -1,4 +1,9 @@
-### 2026-10-26: NL 输入裁判由 Jev 改为 DeepSeek，且只在缓存 miss + 配额后运行
+### 2026-11-04: Authing 完全移除，身份权威收敛为自建手机号登录 + Casdoor OIDC
+
+- Decision: 删除 `authing.py`、`tests/test_saas_authing.py`、`GET /saas/login/authing`、`POST /api/saas/auth/authing`、`POST /api/saas/auth/bind`、`users.authing_id`/`idx_users_authing`、登录页 Authing 入口与 `.auth-authing` 样式；`oidc_client.get_config` 只保留 Casdoor；callback 只按 Casdoor state 分流。schema 用 `DROP INDEX IF EXISTS` + `DROP COLUMN IF EXISTS`，新旧库幂等。`/api/saas/auth/bind` 直接删除、不做替代，老用户改走手机号 + 短信验证码登录/找回（按 `users.phone` 匹配），`users.email` 仅作历史数据保留。
+- Rationale: Authing 付费套餐 >100 元/月且自建手机号短信（阿里云个人开发者通道）已实测可用，Casdoor 已承接 OIDC；保留 Authing 会维持第二套身份权威与 `bind` 的 email 遗留语义，增加安全面与迁移成本。`auth_identities(provider, sub)` 成为外部身份唯一映射。
+- Verification: `test_saas_casdoor.py` + `test_saas_oidc_client.py` + `test_gui_saas_pages.py` **119 passed**；全量套件数值见 `05_PROGRESS.md` 同日条目；残留 grep 仅剩测试中的「不含 Authing 路由」断言与 schema 的 DROP 语句。
+- Owner: KIMI_CODE；本地完成，未部署 ECS、未重启 qre 服务、未 commit。
 
 - Decision: 用户明确暂不配置 Jev/TypeSafe；第二裁判改用现有 `QRE_NL_LLM_*` DeepSeek 通道（`nl_compiler.call_llm` 注入独立裁判 system prompt，严格 JSON 三分类，无置信度输出）。编排：规则层 → 缓存快路径/锁内复检 → 配额计数 → 裁判 → 编译；缓存命中零裁判；裁判拒绝（not_strategy/unclear → review 不硬拒）也占一次配额；force 已确认场景不裁判，admin 与会员同样裁判（admin 仅不限配额）；DB 故障回退路径同序。删除 Jev 客户端/环境变量/requests 依赖与评估脚本，不留死代码。
 - Rationale: 不新增凭证与 SDK；裁判放在配额后防止免费刷 token；概率裁判不硬拒，避免误杀合法策略；缓存命中不裁判控制成本。

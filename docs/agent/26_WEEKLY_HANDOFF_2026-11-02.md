@@ -196,8 +196,19 @@ bash scripts/git-finalize-check.sh
 | 2026-11-03 | **下载详情改为当前页加载详情（不下载源文件）** | done | Kimi | symbol.html 的 #btn-download 改为 JS 调用既有 /generate 流程并在原页渲染 K 线等详情；真实浏览器验证无下载事件、无 JS 错误；模板行数 2349 ≤ 2350 闸；已部署 ECS（MainPID 615173） |
 | 2026-11-03 | **个股详情下载按钮补回** | done | Kimi | `GET /api/results/<job>/symbols/<code>/download` + symbol.html「下载详情」按钮；P0-8 冻结清单登记；生产 job 83 的 600519 详情与下载均 200 |
 | 2026-11-03 | **Windows UIUX agent 工作指南** | done | Kimi | `33_WINDOWS_UI_AGENT_GUIDE.md`：Windows 工作边界/项目拉取/预览环境搭建（Docker PG 或 WSL 隧道）/UIUX 文件地图/开发规范/验证交付；AGENTS.md 索引已接入 |
-| 2026-11-03 | **Builder 通道 crosses_above/below 真实穿越语义修复** | done（已部署，待用户验收） | step5review + Kimi 验收 | 新增 `render_cross_expression` 复用 `CROSS_CANONICAL`；真实上穿/下穿、常量不 shift、普通比较不变；RED 5 failed→GREEN，主 Agent 独立全量 **3454 passed + 34 skipped**，门禁全绿；ECS MainPID 617557，页面/因子 API 200；未跑全量回测、未 commit/push |
+| 2026-11-03 | **Builder 通道 crosses_above/below 真实穿越语义修复** | done | step5review + Kimi 验收 | 新增 `render_cross_expression` 复用 `CROSS_CANONICAL`；真实上穿/下穿、常量不 shift、普通比较不变；RED 5 failed→GREEN，主 Agent 独立全量 **3454 passed + 34 skipped**，门禁全绿；ECS MainPID 617557，页面/因子 API 200；用户批准，`0f3b56a` 已 commit/push |
+| 2026-11-03 | **P0-9 回传可靠性剩余修复：分片上传/截断标记/tmp 清理/progress/reaper** | done（已部署，未 commit） | step5review + Kimi 验收 | 两项 Required Fix 均修正；job226 completed+100+结果已回传；独立全量 3524 passed+33 skipped；ECS MainPID619948、worker PID903879、result_files 已 apply |
+| 2026-11-03 | **P0-5 经典策略公网三入口与统一冒烟（当前 118 策略=历史 111+新增 7）** | done（118/118 completed，未 commit） | Kimi + step5review | 三入口与统一100股两年冒烟收官；wizard holding 14 失败已修复并全完成；24 能力边界、13 NL语义差异、7零交易、0数值异常；报告 SMOKE_REPORT.md；独立全量3524 passed+33 skipped；后续按36号CF队列 |
+| 2026-11-03 | **Windows UIUX 预览环境验收反馈** | done（报告接收；文件待交付复核） | Windows UI agent + Kimi | 8091 预览、qre_ui_dev、Playwright 7页×2视口报告全绿；文件仅在 Windows 工作树，WSL 尚不可见，未独立代码审查；确认上游确有非法文件名 `]* \| head -1`（内容仅 `symbol page -> 200`），后续单独清理；auth bypass/预览密码仅本地，不进生产 |
+| 2026-11-03 | **P0-10 按交易笔数/聚合规模重建容量模型** | done（只读模型完成；实施待红线裁决） | step5review + Kimi 验收 | `35_CAPACITY_MODEL_2026-11-03.md`：未知全市场17.5GB/1 worker；item3 13.97GB 越 R-MEM-001 11.7GiB 红线，CF 前须尾段分块或用户裁决；cgroup未生效与截断沙箱磁盘保留另列；未改代码/未压测 |
+| 2026-11-03 | **CF-001~118 全期全量自动队列** | in_progress（CF-001 全量执行中） | Kimi + step5review | WebBridge 502 已修为有限重试+幂等，18 tests passed；会话恢复且 member 就绪；CF-001 已建 job 227（bo01a_donchian_20_breakout），全市场全期串行执行中 |
+| 2026-11-03 | **冒烟 14 个 wizard 失败：YAML 缺 holding** | in_progress | step5review + Kimi 验收 | 118 完成104/失败14，失败全为 wizard 且均 `holding section is required`；用户授权自动修复；TDD 修向导生成器，部署后重跑14个小样本；不改 NL 语义、不跑全量 |
 | 2026-11-03 | 全期全量压测子代理恢复执行 | done | agent-208 | 同上；未清理任何进程/目录/库（用户要求保留） | 03:00 闸门已过，已 resume 同一 agent（task agent-vn63q4w8）串行跑 item1→item2→item3；目标 §5/§6/§7 |
+| 2026-11-03 | 118 经典策略视频浏览器输入与参数手册 | done | Kimi | 新增 `classic_catalog/VIDEO_INPUT_GUIDE.md` 与 `video_inputs.csv`；118 行、CF 编号连续、策略 ID 唯一校验通过；未 commit |
+| 2026-11-03 | P1-13 回测输入参数完整展示与一键复现 | planned | Kimi | 用户要求本周完成；已登记 `14_LAUNCH_ROADMAP.md` §11.8；不影响 CF 队列 |
+| 2026-11-03 | 视频输入手册 NL 去表达式、取消 YAML 演示入口 | in_progress | Kimi | 用户要求后续仅 NL/自选因子；已完成 CF-001 纯自然语言文本并同步 MD/CSV；其余待改；已有任务不重跑 |
+| 2026-11-03 | 网站与后续经典回测默认 max_positions=0 | done | Kimi | 定向 22 passed；ECS MainPID 621570 生产 value=0；历史不改。经典 batch 路径不消费 max_positions，实际截断任务数 0；未 commit |
+| 2026-11-03 | CF 驱动 HTML/网络瞬断恢复与队列续跑 | done（恢复运行） | step5review / Kimi | 命令层白名单瞬断有限重试；独立复跑 31 passed；job227 原 running，幂等恢复仍返回 227；后台 `bash-js9urwam`，未重复建单 |
 
 **M2 计划（2026-11-03 动工前登记，用户要求「任何任务前后都写入长期文件」）**
 

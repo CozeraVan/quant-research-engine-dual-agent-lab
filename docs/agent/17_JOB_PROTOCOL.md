@@ -134,6 +134,8 @@ smoke 参数派生规则（server 侧）：1 只固定标的（600519.SH）× �
 ```
 响应：`{"ok": true, "cancel_requested": false, "lease_expires_at": "..."}`。
 - server 侧动作：`heartbeat_at=now()`、`lease_expires_at` 顺延、`progress/message` 更新；首个心跳把 `leased → running`。
+- **progress 口径（P0-9 §8.11，2026-11-03）**：batch 流式回测由 runner 按「逐股产物目录数 / 预期股票数」真实计算（5% 起步、90% 封顶），shared/single 等无逐股中间产物的模式只更新 message 不报百分比（**不虚构执行百分比**）；执行完 95「产物回传中」，分片上传期间 95→99 ramp 并续租。worker 侧单调守卫：进度不回退。
+- **终态进度由服务端落定（Required Fix 2，2026-11-03 job 212 实测）**：completed 后 heartbeat 会被拒（WHERE 只放行 leased/running/uploading），因此 `progress=100 / progress_message='结果已回传'` 由服务端在置 completed 的同一事务写入（files 全部落盘 / meta-only / 旧单包三条路径同口径）；worker 不发 completed 后心跳。partial upload 保持心跳原值，不提前 100。
 - `cancel_requested=true` 时 worker 必须尽快终止执行并走 §3.4 fail（error_class=`canceled`）或直接静默退出（server 已置 canceled）。
 - 心跳时 job 已非本 worker 持有（409）→ worker 立即停止该 job。
 
@@ -143,6 +145,24 @@ smoke 参数派生规则（server 侧）：1 只固定标的（600519.SH）× �
 1. `POST .../result/meta`：`{"summary": {...}, "chart_data": {...}, "tag_analysis": {...}, "data_until": "...", "files": [{"name": "equity_curve.csv", "size": 12345, "sha256": "..."}, ...]}` → server 校验后返回 `{"upload_token": "..."}`，job 置 `uploading`。
 2. `POST .../result/files`（multipart，带 upload_token）：逐个上传产物文件。
 全部校验通过 → `completed`；缺文件/校验失败 → server 按可重试处理（回队或 fail）。
+
+**分片上传（P0-9，CR-2026-11-03；协议零变化）**：manifest 文件数可能远超
+`MAX_FORM_PARTS`（全市场回测实测 1,537，item3 达 26,026），单请求必 413。
+worker 按「≤100 文件或 ≤8 MiB」**分批多次 POST 同一端点**：服务端每批落盘后按
+`upload_token` 幂等结算（已落盘文件不进 `remaining`），全部到齐才 `completed`——
+断点续传、重复提交覆盖写、批间顺序无关。任一批 4xx/传输失败即抛
+`CloudError(status)`，走 §3.4 分类落终态。旧 worker 单包 POST 仍被接受
+（parts ≤ 5000 时 200）；分批是对任意大小 manifest 的根治，配置放大只是抬高上限。
+
+**回传完整性元数据（P0-9 §8.5，additive）**：`result/meta` 请求体可带
+`result_files`（`{truncated, max_total_bytes, included_count/bytes,
+skipped_count/bytes, total_local_bytes, missing_count, skipped_files[≤50]}`）
+与 `symbol_details`（逐股详情产物统计）。超 20 MiB 预算跳文件时
+`truncated=true` + 跳过计数——**显式标记，不再静默丢弃**。服务端落
+`results.result_files` JSONB 列（schema 幂等 `ADD COLUMN IF NOT EXISTS`，
+ECS 老库由 DBA apply；应用层懒补列，缺列降级不写），`GET /api/results/<id>/summary`
+增量返回 `result_files`（null=老结果/缺列）。旧 worker 不带这两字段 → 存 NULL，
+既有字段形状不变。
 
 **结果合同（QRE-SAAS-RESULT-CONTRACT-001，2026-10-25；协议不变）**：worker 请求体**不新增字段**。服务端在接收 `result/meta`（及旧单包 `/result`）时注入 `results.result_contract`：合同版本、`data_until`、两种收益口径（曲线=日收益累乘交集口径剔注入；总收益=初始资金加权）、验证状态。历史行该列为空，由应用层显式例外表归类（58/66 verified、74 未验证），不按时间推断。worker 与引擎零改动。
 
@@ -171,6 +191,16 @@ error_class 枚举：
 > 显式调 `fail` 落终态：4xx 归 `result_upload_http_<code>`（不可重试——重试无意义），
 > 传输/5xx 归 `result_upload_error`（可重试）。worker 侧白名单与 SaaS 侧
 > `ERROR_CLASSES` 各存一份，由 `tests/test_result_upload_error_classes.py` 锁一致性。
+>
+> **P0-9 后续（2026-11-03，同一 CR 剩余五项）**：①回传改分片上传（≤100 文件/批，
+> 根治 >1000 part 的 413，见 §3.3）；②上传期间心跳携带 progress 并续租
+> （95→99 ramp，防 30 分钟上传硬超时）；③`result_upload_error` 亦由 §4.2 的
+> reaper 在「uploading + 已有 results + 租约过期」时落库（worker 死在回传中途的兜底）；
+> ④worker 沙箱目录 `/tmp/qre-worker-job<id>-*` **只在 completed 且云端完整副本
+> 已确认（应传 blob 全部落盘、无 20 MiB 截断）时清理**；上传失败/上传开关关闭/
+> 截断/取消/过期/未知终态一律保留本地（可能是唯一完整副本），叠加目录归属
+> 判定（Required Fix 2026-11-03：初版「安全终态即删」会误删唯一副本，已废止）；
+> ⑤`progress/progress_message` 由 runner 的逐股产物计数真实驱动（§3.2）。
 
 retryable=false → 直接 `failed`；retryable=true 且 attempts<max_attempts → 回队。
 
@@ -193,6 +223,14 @@ server 侧定时扫描（或每次 claim 时顺带）：`status IN (leased,runni
 AND lease_expires_at < now()` → attempts<max_attempts 则回队，否则 failed。
 这从协议层根除单机版「执行器死了 status 永远 running」的僵尸问题
 （本地 gui_pid 自愈的分布式等价物）。
+
+**防重算例外（P0-9 §8.15，CR-2026-11-03）**：`uploading` 且已有 `results` 行
+（meta 已入库、blob 回传中途 worker 死亡）→ **直接 failed**
+（`error_class=result_upload_error`，message「回传中断、结果不完整」），**不回队**——
+回队会让同一份已算完的结果整单重算（压测实测 42 分钟 / 6 GB 白跑）。无 results
+行的 uploading（meta 事务未落成的理论态）与 leased/running 维持原回队语义
+（重试 attempt 会覆盖 results 行）。worker 主动回传失败时按 §3.4 落终态，
+本条只兜「worker 进程死在回传中途」。
 
 ### 4.3 幂等
 

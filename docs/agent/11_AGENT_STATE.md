@@ -19,7 +19,13 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
-### 2026-11-04 会员/密码通道后端（本地完成，UI 未做，未部署/未 commit）
+### 2026-11-04 Authing 完全移除（未部署/未 commit）
+
+- 详情见 `36_CASDOOR_AUTH_PLAN_2026-11-04.md` §7.9 与 `05_PROGRESS.md` 同日条目。
+- 已删除：`gui/saas/authing.py`、`tests/test_saas_authing.py`、`GET /saas/login/authing`、`POST /api/saas/auth/authing`、`POST /api/saas/auth/bind`、登录页 Authing 入口、`users.authing_id`/`idx_users_authing`（schema 幂等 DROP）、`oidc_client` 的 authing 分支。
+- 权威收敛：自建手机号 + 密码/短信登录为主入口；Casdoor 为唯一 OIDC provider（`auth_identities(provider, sub)` 映射）；会员/配额仍由 `users`/`tier_policies` 决定。
+- 验证：`test_saas_casdoor.py` + `test_saas_oidc_client.py` + `test_gui_saas_pages.py` **119 passed**；全量套件见 `05_PROGRESS.md`。
+- 未做：生产部署、生产库列与环境变量清理、老 Authing 用户迁移；未部署 ECS、未重启 qre 服务、未 commit / push。
 
 新增 `gui/saas/membership.py`（纯函数，会员档位/配额视图/watch 上限统一判定）；`app.py` 新增
 `POST /api/saas/auth/reset`、`GET /api/saas/membership`，密码登录加防爆破（新表 `login_attempts`，

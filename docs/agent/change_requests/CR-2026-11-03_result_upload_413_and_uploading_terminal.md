@@ -2,7 +2,9 @@
 
 > 来源：`docs/agent/27_STRESS_TEST_2026-11-02.md` §8.14 / §8.15（2026-11-02 全期全量压测实测）。
 > 严重度：**高**——一次 42 分钟 / 6 GB 的全市场计算可因回传失败整体作废，且失败后会再跑一遍。
-> 状态：**已立项，未改代码**。压测纪律要求「只记录不修」，修复留待本 CR 批准后实施。
+> 状态：**A+C 与剩余五项（B 分片上传 / §8.5 截断标记 / §8.7 清理 / §8.11 progress /
+> §8.15 reaper）均已实施并通过测试**（2026-11-03 step5review 后台实施）；
+> 主 Agent 验收（真实小样本 + ECS 部署 + worker 重启）后提交。详见 §5。
 
 ---
 
@@ -93,10 +95,41 @@ worker 一个文件一个 multipart part，manifest 1,537 part；Flask 3.1.3 默
   （9 例）锁一致性；worker 相关测试 80 passed。
 - `17_JOB_PROTOCOL.md` §3.4 error_class 表已补两个新分类与 P0-9 说明。
 
-**仍未实施**：
-- B：分片上传（单 part + 自定义 manifest，或分批多次 POST）——根治方案，排期待定；
-- §8.5：20 MiB 超预算文件静默跳过、无 `truncated` 标记；
-- §8.7：`/tmp/qre-worker-job*` 不清理；
-- §8.11：batch 全量 `progress` 不更新；
-- §8.15 的 reaper 侧加固：`_reap_expired` 仍会把 `uploading` + 租约过期的 job 重排
-  （现在 worker 会主动 fail，但若 worker 进程被 kill 在回传中途，仍会走重排路径）。
+**剩余五项已实施（2026-11-03 step5review 后台实施，主 Agent 待验收）**：
+- **B 分片上传**：`worker/client.py::upload_files` 按「≤100 文件或 ≤8 MiB」分批多次
+  POST 同一端点（`_iter_upload_batches` + `_upload_batch`）；服务端零改动（既有
+  upload_token 幂等 + remaining 结算即断点续传）。传输失败统一 `CloudError(status=None)`
+  （可重试），全部批次后非 completed 抛错不谎报成功。测试
+  `tests/test_result_upload_chunked.py`（16 例：>1000 小文件分片、chunk 边界、
+  重试续传、重复提交幂等、sha256/清单外 400、单包 >5000 part 仍 413 的根因锁定、
+  daemon 本地文件缺失 → result_upload_error）。
+- **§8.5 截断显式标记**：`worker/runner.py::collect_result_files_with_meta` 产出
+  truncated/included/skipped/预算元数据（旧 `collect_result_files` 薄封装保留）；
+  payload 增补 `result_files` + `symbol_details`（后者此前被 `report_result` 丢弃，
+  压测记录的恒 null 即此根因）；服务端落 `results.result_files` JSONB 列
+  （schema 幂等 + 应用层懒补列，缺列降级），`/api/results/<id>/summary` 增量返回。
+  测试 `tests/test_result_files_truncation.py`（11 例）。
+- **§8.7 沙箱清理**：daemon 自建 `qre-worker-job<id>-` 目录并透传 runner
+  （子进程模式经 `execute_job_subprocess(work_base=...)`）。**唯一删除前提 =
+  completed 且云端完整副本已确认**（主 Agent Required Fix 2026-11-03 修正，
+  旧稿「安全终态即删」会删掉上传失败时的唯一完整副本）：上传失败（failed）、
+  上传开关关闭（blob 从未上云）、20 MiB 截断（云端缺文件）、取消/过期/回队/
+  终态未知一律保留本地；叠加归属匹配（系统临时目录 + 精确前缀匹配本 job）。
+  压测遗留 job7/job8 目录不在清理范围。测试 `tests/test_worker_tmp_cleanup.py`
+  （清理 18 例：确认上传后才清 + 各类保留路径 + 归属保护）。
+- **§8.11 progress 真实更新**：runner 守护线程按逐股产物计数写
+  `<work_base>/progress.json`（batch 5%→90% 真实百分比；其他模式只报 phase 不虚构）；
+  daemon 心跳携带（单调守卫），执行完 95、分片上传 95→99 ramp 兼续租。
+  **Required Fix 2（job 212 生产实测，2026-11-03）**：终态 progress=100 /
+  message='结果已回传' 由服务端在三条 completed 路径（files 全部落盘 /
+  meta-only / 旧单包）同一事务落定——daemon 原「completed 后 heartbeat(100)」
+  必被拒（heartbeat WHERE 只放行 leased/running/uploading），终态进度曾停在
+  99；事后心跳已删除。回归 `tests/test_result_upload_terminal_progress.py`
+  （5 例，真实临时 PG 库）。
+- **§8.15 reaper 防重算**：`_reap_expired` 新增一句——`uploading` + 租约过期 +
+  已有 results 行 → 直接 `failed`（`result_upload_error`，可读 message），不回队；
+  无 results 的 uploading 与 leased/running 维持原语义。测试
+  `tests/test_reap_uploading_with_results.py`（5 例，真实临时 PG 库）。
+
+协议文档 `17_JOB_PROTOCOL.md` §3.2/§3.3/§3.4/§4.2 已同步；`deploy/saas/cloud_schema.sql`
+补 `results.result_files`（ECS 老库需 DBA apply）。**未实施项**：无（CR 范围收口）。

@@ -1,6 +1,11 @@
 # Task Handoff
 
-## 会员/密码通道后端（2026-11-04，UI 未做，未部署/未 commit）
+## 会员/手机号登录收口与 Authing 移除（2026-11-04，未部署/未 commit）
+
+- 详情见 `36_CASDOOR_AUTH_PLAN_2026-11-04.md` §7.8–§7.9 与 `05_PROGRESS.md` 同日记录。
+- 已完成：自建登录全面改为手机号 + 短信（删除邮箱通道），密码/验证码/找回/防爆破/membership 视图后端就绪；阿里云短信通道实测可发码（AK/SK 只在 `/etc/qre-saas.env`）。
+- Authing 完全移除：删 `gui/saas/authing.py`、`tests/test_saas_authing.py`、`GET /saas/login/authing`、`POST /api/saas/auth/authing`、`POST /api/saas/auth/bind`、登录页 Authing 入口；`oidc_client` 去 authing 分支；`cloud_schema.sql` 改为 `DROP INDEX IF EXISTS idx_users_authing` + `ALTER TABLE users DROP COLUMN IF EXISTS authing_id`。Casdoor 成为唯一 OIDC 入口。
+- 未做：ECS 部署与生产库列/环境变量清理、QQ 真实端到端、staging、老用户迁移；未部署、未重启 qre 服务、未 commit / push。
 
 - 详情见 `36_CASDOOR_AUTH_PLAN_2026-11-04.md` §7.7 与 `05_PROGRESS.md` 同日记录。
 - 已完成：`POST /api/saas/auth/reset`（邮箱验证码改密、删全部 session、不自动登录）、密码登录防爆破（新表 `login_attempts`，同 target 5 次失败锁 15 分钟，429，验证码路径不受影响）、`GET /api/saas/membership`（会员视图 + 三档权益）、`gui/saas/membership.py` 纯函数模块，watch/配额/used_today 三处统一调用。

@@ -17,7 +17,7 @@ import jwt as pyjwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from quant_research_engine.gui.saas import authing, create_saas_app, oidc_client
+from quant_research_engine.gui.saas import create_saas_app, oidc_client
 
 CLIENT_ID = "qre-local-test"
 CLIENT_SECRET = "test-client-secret"
@@ -207,7 +207,7 @@ class TestCallbackLogin:
         rows = _sql(
             saas_db,
             "SELECT u.id, u.phone, u.nickname, u.avatar_url, u.tier, u.email, "
-            "u.authing_id, u.member_since FROM users u "
+            "u.member_since FROM users u "
             "JOIN auth_identities i ON i.user_id = u.id "
             "WHERE i.provider = 'casdoor' AND i.sub = 'sub-new-1'",
         )
@@ -217,7 +217,7 @@ class TestCallbackLogin:
         assert row["nickname"] == "测试用户"
         assert row["avatar_url"].endswith("a.png")
         assert row["tier"] == "member" and row["member_since"] is not None
-        assert row["authing_id"] is None and row["email"] is None
+        assert row["email"] is None
 
     def test_repeat_login_idempotent(self, client, app, saas_db, rsa_keys):
         key, _ = rsa_keys
@@ -284,27 +284,18 @@ class TestCallbackLogin:
 
     def test_identity_isolated_by_provider(self, client, app, saas_db, rsa_keys):
         key, _ = rsa_keys
-        _sql(saas_db, "INSERT INTO users (authing_id, nickname) "
-                      "VALUES ('shared-sub', 'Authing 老用户')")
+        other_uid = _sql(
+            saas_db, "INSERT INTO users (nickname) VALUES ('其他 provider 老用户') RETURNING id",
+        )[0]["id"]
+        _sql(saas_db, "INSERT INTO auth_identities (user_id, provider, sub) "
+                      "VALUES (:uid, 'other', 'shared-sub')", uid=other_uid)
         resp = _login(client, app, _make_id_token(key, sub="shared-sub"))
         assert resp.status_code == 200
-        rows = _sql(saas_db, "SELECT id, authing_id, nickname FROM users "
-                             "WHERE authing_id = 'shared-sub' "
-                             "OR id IN (SELECT user_id FROM auth_identities "
-                             "WHERE provider = 'casdoor' AND sub = 'shared-sub')")
-        assert len(rows) == 2
-
-    def test_casdoor_state_never_uses_authing_exchange(self, client, app, rsa_keys, monkeypatch):
-        key, _ = rsa_keys
-
-        def boom(*_args, **_kwargs):
-            raise AssertionError("Casdoor state 不应走 Authing 换票")
-
-        monkeypatch.setattr(authing, "exchange_code", boom)
-        state = _authorize_state(client)
-        app.extensions["mock_casdoor"]["id_token"] = _make_id_token(key, sub="sub-not-authing")
-        resp = client.get(f"/saas/login/callback?code=c&state={state}")
-        assert resp.status_code == 200
+        rows = _sql(saas_db, "SELECT i.provider, u.nickname FROM auth_identities i "
+                             "JOIN users u ON u.id = i.user_id WHERE i.sub = 'shared-sub' "
+                             "ORDER BY i.provider")
+        assert [r["provider"] for r in rows] == ["casdoor", "other"]
+        assert rows[1]["nickname"] == "其他 provider 老用户"
 
 
 class TestNotConfigured:
@@ -330,7 +321,7 @@ class TestLoginPage:
         html = client.get("/saas/login").get_data(as_text=True)
         assert "/saas/login/casdoor" in html
         assert "使用 Casdoor 账号登录" in html
-        assert "/saas/login/authing" in html
+        assert "/saas/login/authing" not in html
 
     def test_casdoor_entry_hidden_without_config(self, saas_db, monkeypatch):
         for var in ("CASDOOR_ISSUER", "CASDOOR_CLIENT_ID", "CASDOOR_CLIENT_SECRET",
@@ -343,7 +334,12 @@ class TestLoginPage:
         client = app.test_client()
         html = client.get("/saas/login").get_data(as_text=True)
         assert "/saas/login/casdoor" not in html
-        assert "/saas/login/authing" in html
+        assert "/saas/login/authing" not in html
         engine = app.extensions.get("saas_engine")
         if engine is not None:
             engine.dispose()
+
+    def test_login_callback_template_no_token_on_error(self, client):
+        html = client.get("/saas/login/callback?code=x&state=bad").get_data(as_text=True)
+        assert "返回登录页" in html
+        assert "localStorage.setItem" not in html

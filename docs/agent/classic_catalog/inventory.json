@@ -1,0 +1,4081 @@
+{
+  "generated_at": "2026-11-02T06:03:45.779562+00:00",
+  "catalog": "strategies/catalog",
+  "count": 118,
+  "categories": {
+    "breakout": 21,
+    "catalog": 1,
+    "composite": 8,
+    "cross_sectional": 17,
+    "kline_pattern": 8,
+    "mean_reversion": 23,
+    "price_volume": 14,
+    "trend_following": 26
+  },
+  "factor_reference_count": 38,
+  "semantic_note_count": 18,
+  "strategies": [
+    {
+      "strategy_id": "bo01a_donchian_20_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo01a_donchian_20_breakout.yaml",
+      "name": "海龟通道突破 20日",
+      "description": "价格突破过去 20 日最高价入场，跌破过去 10 日最低价出场。",
+      "declared_dependencies": "SMA(60)",
+      "declared_entry": "(close > close.shift(1).rolling(20).max()) & (close > sma_60)",
+      "declared_exit": "close < close.shift(1).rolling(10).min()",
+      "entry": "(close > close.shift(1).rolling(20).max()) & (close > sma_60)",
+      "exit": "close < close.shift(1).rolling(10).min()",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo01b_donchian_55_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo01b_donchian_55_breakout.yaml",
+      "name": "海龟通道突破 55日",
+      "description": "价格突破过去 55 日最高价入场，跌破过去 20 日最低价出场。更长周期系统。",
+      "declared_dependencies": "SMA(60)",
+      "declared_entry": "(close > close.shift(1).rolling(55).max()) & (close > sma_60)",
+      "declared_exit": "close < close.shift(1).rolling(20).min()",
+      "entry": "(close > close.shift(1).rolling(55).max()) & (close > sma_60)",
+      "exit": "close < close.shift(1).rolling(20).min()",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo02_keltner_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo02_keltner_breakout.yaml",
+      "name": "Keltner 通道突破 EMA(20)+2*ATR(10)",
+      "description": "close > EMA(20) + 2*ATR(10) 入场，跌回通道内出场。ATR 通道过滤毛刺。",
+      "declared_dependencies": "EMA(20) + ATR(10)",
+      "declared_entry": "(close > ema_20) & (close > ema_20.shift(1))",
+      "declared_exit": "close < ema_20",
+      "entry": "(close > ema_20) & (close > ema_20.shift(1))",
+      "exit": "close < ema_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "atr_10",
+          "reference": "factors.stock_daily_volatility_close.atr_10",
+          "zh": "真实波幅(10)",
+          "meaning": "真实波幅指标，用于衡量价格波动水平"
+        },
+        {
+          "alias": "ema_20",
+          "reference": "factors.stock_daily_overlap_close.ema_20",
+          "zh": "指数移动均线(20)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo03_52w_high_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo03_52w_high_breakout.yaml",
+      "name": "52周(250日)新高突破",
+      "description": "收盘价创 250 日新高入场，跌破 MA(20) 出场。长期高点突破暗示重新定价。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "close > close.shift(1).rolling(250).max()",
+      "declared_exit": "close < sma_20",
+      "entry": "close > close.shift(1).rolling(250).max()",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo04a_darvas_box_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo04a_darvas_box_breakout.yaml",
+      "name": "Darvas 箱体突破",
+      "description": "价格突破前 20 日整理箱体顶部且放量入场，跌回箱体内出场。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > close.shift(1).rolling(20).max()) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(1).rolling(20).max()) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo05_bollinger_squeeze",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo05_bollinger_squeeze.yaml",
+      "name": "布林带收缩突破 Bollinger Squeeze",
+      "description": "布林带宽度压缩后价格放量向上突破上轨入场，跌回中轨出场。波动率循环策略。",
+      "declared_dependencies": "BOLL(20/2.0) + SMA(20)",
+      "declared_entry": "(close > bbu_20_2_0_2_0) & (close > sma_20)",
+      "declared_exit": "close < bbm_20_2_0_2_0",
+      "entry": "(close > bbu_20_2_0_2_0) & (close > sma_20)",
+      "exit": "close < bbm_20_2_0_2_0",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "bbl_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+          "zh": "布林带下轨(20)",
+          "meaning": "布林带下轨，用于观察价格下侧波动边界"
+        },
+        {
+          "alias": "bbm_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+          "zh": "布林带中轨(20)",
+          "meaning": "布林带中轨，用于观察价格中枢"
+        },
+        {
+          "alias": "bbu_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+          "zh": "布林带上轨(20)",
+          "meaning": "布林带上轨，用于观察价格上侧波动边界"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo06a_atr_anomaly_momentum",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo06a_atr_anomaly_momentum.yaml",
+      "name": "ATR 异常波动突破",
+      "description": "当日为强势阳线且波动率扩张入场。用当日涨 > 2% 且波动放大近似。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "((close - open) / open > 0.02) & ((high - low) / low > (high.shift(1).rolling(20).mean() - low.shift(1).rolling(20).mean()) / low.shift(1).rolling(20).mean())",
+      "declared_exit": "close < sma_20",
+      "entry": "((close - open) / open > 0.02) & ((high - low) / low > (high.shift(1).rolling(20).mean() - low.shift(1).rolling(20).mean()) / low.shift(1).rolling(20).mean())",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo07a_larry_williams_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo07a_larry_williams_breakout.yaml",
+      "name": "Larry Williams 波动率突破",
+      "description": "价格突破前收 + 0.25 * 前日波幅入场。极早期捕捉爆发动量。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "(close > open.shift(1) + 0.25 * (high.shift(1) - low.shift(1))) & (close > sma_10)",
+      "declared_exit": "close < sma_10",
+      "entry": "(close > open.shift(1) + 0.25 * (high.shift(1) - low.shift(1))) & (close > sma_10)",
+      "exit": "close < sma_10",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo08a_ma_pinch_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo08a_ma_pinch_breakout.yaml",
+      "name": "均线粘合突破",
+      "description": "MA(5)/MA(10)/MA(20) 粘合后向上放量突破入场。",
+      "declared_dependencies": "SMA(5,10,20)",
+      "declared_entry": "(sma_5 > sma_10) & (sma_10 > sma_20) & (close > sma_5) & (close > sma_5.shift(1))",
+      "declared_exit": "close < sma_10",
+      "entry": "(sma_5 > sma_10) & (sma_10 > sma_20) & (close > sma_5) & (close > sma_5.shift(1))",
+      "exit": "close < sma_10",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo08b_hv20_low_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo08b_hv20_low_breakout.yaml",
+      "name": "历史波动率低位突破",
+      "description": "HV(20) 处于低位并突破布林上轨入场。",
+      "declared_dependencies": "BOLL(20/2.0)",
+      "declared_entry": "(close > bbu_20_2_0_2_0) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "close < bbm_20_2_0_2_0",
+      "entry": "(close > bbu_20_2_0_2_0) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "close < bbm_20_2_0_2_0",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "bbl_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+          "zh": "布林带下轨(20)",
+          "meaning": "布林带下轨，用于观察价格下侧波动边界"
+        },
+        {
+          "alias": "bbm_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+          "zh": "布林带中轨(20)",
+          "meaning": "布林带中轨，用于观察价格中枢"
+        },
+        {
+          "alias": "bbu_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+          "zh": "布林带上轨(20)",
+          "meaning": "布林带上轨，用于观察价格上侧波动边界"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo08c_atr_ratio_filter",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo08c_atr_ratio_filter.yaml",
+      "name": "ATR 比率过滤 + MA 金叉",
+      "description": "ATR(14) / SMA(20) 极低后配合均线金叉入场。",
+      "declared_dependencies": "SMA(5,20)",
+      "declared_entry": "(sma_5 > sma_20) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(sma_5 > sma_20) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "bo08d_dual_vol_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo08d_dual_vol_breakout.yaml",
+      "name": "双重波动率突破",
+      "description": "创 10 日新高且 SMA(60) 斜率转正入场。趋势与波动共振。",
+      "declared_dependencies": "SMA(20,60)",
+      "declared_entry": "(close > close.shift(1).rolling(10).max()) & (sma_60 > sma_60.shift(5))",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(1).rolling(10).max()) & (sma_60 > sma_60.shift(5))",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo08e_amplitude_expansion",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo08e_amplitude_expansion.yaml",
+      "name": "振幅扩张率突破",
+      "description": "今日振幅 / 5 日均振幅显著放大并收阳入场。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "((high - low) / low > 1.5 * (high.shift(1).rolling(5).mean() - low.shift(1).rolling(5).mean()) / low.shift(1).rolling(5).mean()) & (close > open) & (close > sma_10)",
+      "declared_exit": "close < sma_10",
+      "entry": "((high - low) / low > 1.5 * (high.shift(1).rolling(5).mean() - low.shift(1).rolling(5).mean()) / low.shift(1).rolling(5).mean()) & (close > open) & (close > sma_10)",
+      "exit": "close < sma_10",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo09a_volume_price_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo09a_volume_price_breakout.yaml",
+      "name": "价量突破确认",
+      "description": "创 20 日新高且放量收阳入场，跌破 MA(10) 出场。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "(close > close.shift(1).rolling(20).max()) & (close > open) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "close < sma_10",
+      "entry": "(close > close.shift(1).rolling(20).max()) & (close > open) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "close < sma_10",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo09b_n_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo09b_n_breakout.yaml",
+      "name": "N字突破",
+      "description": "突破前 10 日高点且仍在 MA(20) 上方入场。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > close.shift(1).rolling(10).max()) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(1).rolling(10).max()) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo09c_sideways_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo09c_sideways_breakout.yaml",
+      "name": "横盘突破",
+      "description": "20 日低振幅后放量扩张突破入场。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > close.shift(1).rolling(20).max()) & (vol > 2 * vol.shift(1).rolling(20).mean()) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(1).rolling(20).max()) & (vol > 2 * vol.shift(1).rolling(20).mean()) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo09d_three_candle_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo09d_three_candle_breakout.yaml",
+      "name": "三连阳突破",
+      "description": "第三根阳线创 10 日新高且量能递增入场。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "(close > open) & (close > close.shift(1).rolling(10).max()) & (vol > vol.shift(1))",
+      "declared_exit": "close < sma_10",
+      "entry": "(close > open) & (close > close.shift(1).rolling(10).max()) & (vol > vol.shift(1))",
+      "exit": "close < sma_10",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo09e_channel_retest_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo09e_channel_retest_breakout.yaml",
+      "name": "通道突破回测",
+      "description": "突破 20 日高点后回测不破再上行入场。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > sma_20) & (close.shift(1) > close.shift(1).rolling(20).max()) & (close > close.shift(1))",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > sma_20) & (close.shift(1) > close.shift(1).rolling(20).max()) & (close > close.shift(1))",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo09f_orb_daily_approx",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo09f_orb_daily_approx.yaml",
+      "name": "ORB 开盘区间突破（日线近似）",
+      "description": "以前日 ATR 推导触发带，向上突破入场。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "(close > open.shift(1) + 0.5 * (high.shift(1) - low.shift(1))) & (close > sma_10)",
+      "declared_exit": "close < sma_10",
+      "entry": "(close > open.shift(1) + 0.5 * (high.shift(1) - low.shift(1))) & (close > sma_10)",
+      "exit": "close < sma_10",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo10a_bb_upper_trend_breakout",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo10a_bb_upper_trend_breakout.yaml",
+      "name": "布林上轨趋势突破",
+      "description": "收盘站上上轨且放量入场，跌回中轨出场。沿轨趋势走强。",
+      "declared_dependencies": "BOLL(20/2.0)",
+      "declared_entry": "(close > bbu_20_2_0_2_0) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "close < bbm_20_2_0_2_0",
+      "entry": "(close > bbu_20_2_0_2_0) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "close < bbm_20_2_0_2_0",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "bbl_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+          "zh": "布林带下轨(20)",
+          "meaning": "布林带下轨，用于观察价格下侧波动边界"
+        },
+        {
+          "alias": "bbm_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+          "zh": "布林带中轨(20)",
+          "meaning": "布林带中轨，用于观察价格中枢"
+        },
+        {
+          "alias": "bbu_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+          "zh": "布林带上轨(20)",
+          "meaning": "布林带上轨，用于观察价格上侧波动边界"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "bo10b_bb_lower_rsi_volume",
+      "category": "breakout",
+      "category_zh": "突破",
+      "yaml_path": "breakout/bo10b_bb_lower_rsi_volume.yaml",
+      "name": "布林下轨 + RSI 超卖 + 放量",
+      "description": "布林下轨 + RSI(14) < 30 + 放量入场。下轨过度杀跌后的修复，也可视为反转增强。",
+      "declared_dependencies": "BOLL(20/2.0) + RSI(14)",
+      "declared_entry": "(close < bbl_20_2_0_2_0) & (rsi_14 < 30) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "close > bbm_20_2_0_2_0",
+      "entry": "(close < bbl_20_2_0_2_0) & (rsi_14 < 30) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "close > bbm_20_2_0_2_0",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "bbl_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+          "zh": "布林带下轨(20)",
+          "meaning": "布林带下轨，用于观察价格下侧波动边界"
+        },
+        {
+          "alias": "bbm_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+          "zh": "布林带中轨(20)",
+          "meaning": "布林带中轨，用于观察价格中枢"
+        },
+        {
+          "alias": "bbu_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+          "zh": "布林带上轨(20)",
+          "meaning": "布林带上轨，用于观察价格上侧波动边界"
+        },
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cb01a_ma_cross_rsi",
+      "category": "composite",
+      "category_zh": "复合",
+      "yaml_path": "composite/cb01a_ma_cross_rsi.yaml",
+      "name": "均线金叉 + RSI 确认",
+      "description": "MA(5) 上穿 MA(20) 且 RSI(14) > 50 入场，RSI < 50 或跌破 MA(10) 出场。",
+      "declared_dependencies": "SMA(5,10,20) + RSI(14)",
+      "declared_entry": "(sma_5 > sma_20) & (rsi_14 > 50)",
+      "declared_exit": "(rsi_14 < 50) | (close < sma_10)",
+      "entry": "(sma_5 > sma_20) & (rsi_14 > 50)",
+      "exit": "(rsi_14 < 50) | (close < sma_10)",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "cb01b_macd_cross_volume",
+      "category": "composite",
+      "category_zh": "复合",
+      "yaml_path": "composite/cb01b_macd_cross_volume.yaml",
+      "name": "MACD金叉+放量",
+      "description": "MACD金叉且放量确认入场。双条件减少假突破噪音。",
+      "declared_dependencies": "MACD(12/26/9)",
+      "declared_entry": "(macd_12_26_9 > macds_12_26_9) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "macd_12_26_9 < macds_12_26_9",
+      "entry": "(macd_12_26_9 > macds_12_26_9) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "macd_12_26_9 < macds_12_26_9",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "macd_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macd_12_26_9",
+          "zh": "MACD(12,26,9)",
+          "meaning": "MACD 的 DIF 快线，反映快慢指数均线之差"
+        },
+        {
+          "alias": "macds_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macds_12_26_9",
+          "zh": "MACD 信号线(12,26,9)",
+          "meaning": "MACD 的 DEA 慢线，即 DIF 的信号线"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cb01c_adx_rsi_momentum",
+      "category": "composite",
+      "category_zh": "复合",
+      "yaml_path": "composite/cb01c_adx_rsi_momentum.yaml",
+      "name": "ADX趋势+RSI动量",
+      "description": "ADX>25 + RSI(14)>50 入场。趋势明确且动量确认。",
+      "declared_dependencies": "ADX(14) + RSI(14)",
+      "declared_entry": "(adx_14 > 25) & (rsi_14 > 50)",
+      "declared_exit": "(adx_14 < 20) | (rsi_14 < 45)",
+      "entry": "(adx_14 > 25) & (rsi_14 > 50)",
+      "exit": "(adx_14 < 20) | (rsi_14 < 45)",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "adx_14",
+          "reference": "factors.stock_daily_trend_close.adx_14",
+          "zh": "平均趋向指数(14)",
+          "meaning": "平均趋向指标，用于衡量趋势强度而非方向"
+        },
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cb01d_bb_rsi_volume",
+      "category": "composite",
+      "category_zh": "复合",
+      "yaml_path": "composite/cb01d_bb_rsi_volume.yaml",
+      "name": "布林下轨 + RSI 超卖 + 放量",
+      "description": "布林下轨 + RSI(14) < 30 + 放量入场。三重确认均值回归。",
+      "declared_dependencies": "BOLL(20/2.0) + RSI(14)",
+      "declared_entry": "(close < bbl_20_2_0_2_0) & (rsi_14 < 30) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "close > bbm_20_2_0_2_0",
+      "entry": "(close < bbl_20_2_0_2_0) & (rsi_14 < 30) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "close > bbm_20_2_0_2_0",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "bbl_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+          "zh": "布林带下轨(20)",
+          "meaning": "布林带下轨，用于观察价格下侧波动边界"
+        },
+        {
+          "alias": "bbm_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+          "zh": "布林带中轨(20)",
+          "meaning": "布林带中轨，用于观察价格中枢"
+        },
+        {
+          "alias": "bbu_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+          "zh": "布林带上轨(20)",
+          "meaning": "布林带上轨，用于观察价格上侧波动边界"
+        },
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cb01e_ma_alignment_kdj",
+      "category": "composite",
+      "category_zh": "复合",
+      "yaml_path": "composite/cb01e_ma_alignment_kdj.yaml",
+      "name": "均线多头排列+KDJ共振",
+      "description": "MA(5/10/20)多头排列且RSI超卖回归入场。",
+      "declared_dependencies": "SMA(5,10,20) + RSI(14)",
+      "declared_entry": "(sma_5 > sma_10) & (sma_10 > sma_20) & (rsi_14 > 50)",
+      "declared_exit": "(rsi_14 < 50) | (close < sma_10)",
+      "entry": "(sma_5 > sma_10) & (sma_10 > sma_20) & (rsi_14 > 50)",
+      "exit": "(rsi_14 < 50) | (close < sma_10)",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cb01f_new_high_obv_macd",
+      "category": "composite",
+      "category_zh": "复合",
+      "yaml_path": "composite/cb01f_new_high_obv_macd.yaml",
+      "name": "新高+OBV+MACD",
+      "description": "创20日新高+RSI>50+MACD金叉且价格>MA(60)入场。三重趋势确认。",
+      "declared_dependencies": "MACD(12/26/9) + RSI(14) + SMA(60)",
+      "declared_entry": "(close > close.shift(1).rolling(20).max()) & (rsi_14 > 50) & (macd_12_26_9 > macds_12_26_9) & (close > sma_60)",
+      "declared_exit": "macd_12_26_9 < macds_12_26_9",
+      "entry": "(close > close.shift(1).rolling(20).max()) & (rsi_14 > 50) & (macd_12_26_9 > macds_12_26_9) & (close > sma_60)",
+      "exit": "macd_12_26_9 < macds_12_26_9",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "macd_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macd_12_26_9",
+          "zh": "MACD(12,26,9)",
+          "meaning": "MACD 的 DIF 快线，反映快慢指数均线之差"
+        },
+        {
+          "alias": "macds_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macds_12_26_9",
+          "zh": "MACD 信号线(12,26,9)",
+          "meaning": "MACD 的 DEA 慢线，即 DIF 的信号线"
+        },
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cb01g_turtle_ma60_filter",
+      "category": "composite",
+      "category_zh": "复合",
+      "yaml_path": "composite/cb01g_turtle_ma60_filter.yaml",
+      "name": "海龟突破 + MA60 过滤",
+      "description": "突破 20 日高点且价格 > MA(60) 入场，跌破 10 日低点出场。",
+      "declared_dependencies": "SMA(60)",
+      "declared_entry": "(close > close.shift(1).rolling(20).max()) & (close > sma_60)",
+      "declared_exit": "close < close.shift(1).rolling(10).min()",
+      "entry": "(close > close.shift(1).rolling(20).max()) & (close > sma_60)",
+      "exit": "close < close.shift(1).rolling(10).min()",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cb01h_sideways_rsi_volume",
+      "category": "composite",
+      "category_zh": "复合",
+      "yaml_path": "composite/cb01h_sideways_rsi_volume.yaml",
+      "name": "横盘+RSI+量能",
+      "description": "20日振幅<15%且RSI上穿50且放量入场。整理后方向突破。",
+      "declared_dependencies": "SMA(20) + RSI(14)",
+      "declared_entry": "((close.shift(1).rolling(20).max() - close.shift(1).rolling(20).min()) / close.shift(1).rolling(20).mean() < 0.15) & (rsi_14 > 50) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "rsi_14 < 50",
+      "entry": "((close.shift(1).rolling(20).max() - close.shift(1).rolling(20).min()) / close.shift(1).rolling(20).mean() < 0.15) & (rsi_14 > 50) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "rsi_14 < 50",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs01a_pure_small_cap",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs01a_pure_small_cap.yaml",
+      "name": "纯小市值筛选",
+      "description": "做多最小市值分组。用RSI低位+长期均线上方近似。",
+      "declared_dependencies": "RSI(14) + SMA(200)",
+      "declared_entry": "(rsi_14 < 50) & (close > sma_200)",
+      "declared_exit": "rsi_14 > 70",
+      "entry": "(rsi_14 < 50) & (close > sma_200)",
+      "exit": "rsi_14 > 70",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs01b_small_cap_quality",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs01b_small_cap_quality.yaml",
+      "name": "小市值+质量过滤",
+      "description": "小市值叠加ROE>0、资产负债率<60%。用均线上方+低RSI近似。",
+      "declared_dependencies": "RSI(14) + SMA(20,200)",
+      "declared_entry": "(rsi_14 < 40) & (close > sma_200) & (close > sma_20)",
+      "declared_exit": "rsi_14 > 65",
+      "entry": "(rsi_14 < 40) & (close > sma_200) & (close > sma_20)",
+      "exit": "rsi_14 > 65",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs01c_small_cap_macd_timing",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs01c_small_cap_macd_timing.yaml",
+      "name": "小市值+MACD择时",
+      "description": "MACD多头区间持有小市值。",
+      "declared_dependencies": "MACD(12/26/9) + SMA(20,60)",
+      "declared_entry": "(macd_12_26_9 > macds_12_26_9) & (close > sma_20)",
+      "declared_exit": "macd_12_26_9 < macds_12_26_9",
+      "entry": "(macd_12_26_9 > macds_12_26_9) & (close > sma_20)",
+      "exit": "macd_12_26_9 < macds_12_26_9",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "macd_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macd_12_26_9",
+          "zh": "MACD(12,26,9)",
+          "meaning": "MACD 的 DIF 快线，反映快慢指数均线之差"
+        },
+        {
+          "alias": "macds_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macds_12_26_9",
+          "zh": "MACD 信号线(12,26,9)",
+          "meaning": "MACD 的 DEA 慢线，即 DIF 的信号线"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs01d_small_cap_low_pb",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs01d_small_cap_low_pb.yaml",
+      "name": "小市值+低PB",
+      "description": "小市值池内再找PB低分位。用RSI低位+均线过滤近似。",
+      "declared_dependencies": "RSI(14) + SMA(60,200)",
+      "declared_entry": "(rsi_14 < 35) & (close > sma_200) & (close > sma_60)",
+      "declared_exit": "rsi_14 > 60",
+      "entry": "(rsi_14 < 35) & (close > sma_200) & (close > sma_60)",
+      "exit": "rsi_14 > 60",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs02_size_value_ranking",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs02_size_value_ranking.yaml",
+      "name": "Size+Value排序",
+      "description": "size+value双因子打分选综合排名靠前组。用均线+RSI低吸近似。",
+      "declared_dependencies": "RSI(14) + SMA(60,200)",
+      "declared_entry": "(rsi_14 < 40) & (close > sma_200) & (close > sma_60)",
+      "declared_exit": "rsi_14 > 65",
+      "entry": "(rsi_14 < 40) & (close > sma_200) & (close > sma_60)",
+      "exit": "rsi_14 > 65",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs03_low_volatility",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs03_low_volatility.yaml",
+      "name": "低波动因子筛选",
+      "description": "做多过去20/60/120日波动率较低的一组。用波动率收缩+均线过滤近似。",
+      "declared_dependencies": "SMA(20,200)",
+      "declared_entry": "(close > sma_200) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > sma_200) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs06a_n_day_return_momentum",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs06a_n_day_return_momentum.yaml",
+      "name": "N日收益率动量",
+      "description": "短期累计收益超过阈值后顺势跟进。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > close.shift(20)) & (close > sma_20) & (close > close.shift(1))",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(20)) & (close > sma_20) & (close > close.shift(1))",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs06b_sharpe_factor",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs06b_sharpe_factor.yaml",
+      "name": "夏普率因子",
+      "description": "20日均收益/20日标准差大于阈值入场。",
+      "declared_dependencies": "SMA(20) + RSI(14)",
+      "declared_entry": "(close > sma_20) & (rsi_14 > 50) & (close > close.shift(20))",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > sma_20) & (rsi_14 > 50) & (close > close.shift(20))",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs06c_12_1_momentum_diff",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs06c_12_1_momentum_diff.yaml",
+      "name": "12-1动量差",
+      "description": "250日收益减去20日收益仍为正，去除短期反转效应的长趋势股。",
+      "declared_dependencies": "SMA(20,200)",
+      "declared_entry": "(close > close.shift(250)) & (close > sma_200) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(250)) & (close > sma_200) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs06d_beta_rotation",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs06d_beta_rotation.yaml",
+      "name": "Beta轮动",
+      "description": "大盘上行环境中做多高Beta股票。用指数均线方向+价格强势近似。",
+      "declared_dependencies": "SMA(20,60)",
+      "declared_entry": "(sma_20 > sma_60) & (close > sma_20) & (close > close.shift(20))",
+      "declared_exit": "sma_20 < sma_60",
+      "entry": "(sma_20 > sma_60) & (close > sma_20) & (close > close.shift(20))",
+      "exit": "sma_20 < sma_60",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs06e_rs_ranking",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs06e_rs_ranking.yaml",
+      "name": "RS Ranking 相对强度排名",
+      "description": "近60日涨幅排名前20%买入。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > close.shift(60)) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(60)) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs06f_return_skewness",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs06f_return_skewness.yaml",
+      "name": "收益率分布偏度",
+      "description": "偏度显著为正且平均收益为正入场。用上升趋势+均线过滤近似。",
+      "declared_dependencies": "SMA(20,60)",
+      "declared_entry": "(close > sma_20) & (sma_20 > sma_60) & (close > close.shift(60))",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > sma_20) & (sma_20 > sma_60) & (close > close.shift(60))",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs06g_max_return_ratio",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs06g_max_return_ratio.yaml",
+      "name": "累计最高涨幅占比",
+      "description": "短期涨幅占全年涨幅比例极高。用动量加速近似。",
+      "declared_dependencies": "SMA(10,20)",
+      "declared_entry": "(sma_10 > sma_20) & (close > close.shift(20)) & (close > sma_20)",
+      "declared_exit": "close < sma_10",
+      "entry": "(sma_10 > sma_20) & (close > close.shift(20)) & (close > sma_20)",
+      "exit": "close < sma_10",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs06h_overnight_vs_intraday",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs06h_overnight_vs_intraday.yaml",
+      "name": "隔夜vs日内收益",
+      "description": "连续数日收盘强于开盘且伴随向上跳空入场。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "(close > open) & (close.shift(1) > open.shift(1)) & (close > close.shift(1)) & (close > sma_10)",
+      "declared_exit": "close < sma_10",
+      "entry": "(close > open) & (close.shift(1) > open.shift(1)) & (close > close.shift(1)) & (close > sma_10)",
+      "exit": "close < sma_10",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs07a_mf001_atrr14_high_hv20_normal_mvp",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs07a_mf001_atrr14_high_hv20_normal_mvp.yaml",
+      "name": "cs07a_mf001_atrr14_high_hv20_normal_mvp",
+      "description": "原策略文件未提供文字说明；以实际 YAML 规则为准。",
+      "declared_dependencies": "",
+      "declared_entry": "mf_001 == 1（T 日信号，T+1 开盘成交）",
+      "declared_exit": "持有满 5 日（对齐 M3b +5 窗口）或止损触发",
+      "entry": "mf_001 == 1",
+      "exit": "",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "mf_001",
+          "reference": "cluster.mined_factor_flags.mf_001",
+          "zh": "mf_001",
+          "meaning": "聚类研究挖掘的因子标记，具体含义以研究产物为准"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs07b_mf002_alpha072_low_mvp",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs07b_mf002_alpha072_low_mvp.yaml",
+      "name": "cs07b_mf002_alpha072_low_mvp",
+      "description": "原策略文件未提供文字说明；以实际 YAML 规则为准。",
+      "declared_dependencies": "",
+      "declared_entry": "mf_002 == 1（T 日信号，T+1 开盘成交）",
+      "declared_exit": "持有满 5 日（对齐 M3b +5 窗口）或止损触发",
+      "entry": "mf_002 == 1",
+      "exit": "",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "mf_002",
+          "reference": "cluster.mined_factor_flags.mf_002",
+          "zh": "mf_002",
+          "meaning": "聚类研究挖掘的因子标记，具体含义以研究产物为准"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "cs07c_mf003_alpha082_low_mvp",
+      "category": "cross_sectional",
+      "category_zh": "截面因子",
+      "yaml_path": "cross_sectional/cs07c_mf003_alpha082_low_mvp.yaml",
+      "name": "cs07c_mf003_alpha082_low_mvp",
+      "description": "原策略文件未提供文字说明；以实际 YAML 规则为准。",
+      "declared_dependencies": "",
+      "declared_entry": "mf_003 == 1（T 日信号，T+1 开盘成交）",
+      "declared_exit": "持有满 5 日（对齐 M3b +5 窗口）或止损触发",
+      "entry": "mf_003 == 1",
+      "exit": "",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "mf_003",
+          "reference": "cluster.mined_factor_flags.mf_003",
+          "zh": "mf_003",
+          "meaning": "聚类研究挖掘的因子标记，具体含义以研究产物为准"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "gui_accept_rsi14_reversal",
+      "category": "catalog",
+      "category_zh": "其他",
+      "yaml_path": "gui_accept_rsi14_reversal.yaml",
+      "name": "gui_accept_rsi14_reversal",
+      "description": "原策略文件未提供文字说明；以实际 YAML 规则为准。",
+      "declared_dependencies": "",
+      "declared_entry": "",
+      "declared_exit": "",
+      "entry": "(rsi_14 < 30.0)",
+      "exit": "(rsi_14 > 70.0)",
+      "max_holding_days": 20,
+      "direction": null,
+      "risk": {
+        "stop_loss_pct": 0.08
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pt01a_hammer_reversal",
+      "category": "kline_pattern",
+      "category_zh": "K 线形态",
+      "yaml_path": "kline_pattern/pt01a_hammer_reversal.yaml",
+      "name": "锤头线反转",
+      "description": "连续下跌后出现锤头线（下影线 > 2*实体）且量能放大入场。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "((close - low) > 2 * (close - open).abs()) & (vol > vol.shift(1)) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "((close - low) > 2 * (close - open).abs()) & (vol > vol.shift(1)) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pt01b_bullish_engulfing",
+      "category": "kline_pattern",
+      "category_zh": "K 线形态",
+      "yaml_path": "kline_pattern/pt01b_bullish_engulfing.yaml",
+      "name": "看涨吞没形态",
+      "description": "阳线实体完全覆盖前一日阴线实体，且成交量放大入场。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "(close > open) & (open.shift(1) > close.shift(1)) & (close > open.shift(1)) & (open < close.shift(1)) & (vol > vol.shift(1))",
+      "declared_exit": "close < sma_10",
+      "entry": "(close > open) & (open.shift(1) > close.shift(1)) & (close > open.shift(1)) & (open < close.shift(1)) & (vol > vol.shift(1))",
+      "exit": "close < sma_10",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pt01c_morning_star",
+      "category": "kline_pattern",
+      "category_zh": "K 线形态",
+      "yaml_path": "kline_pattern/pt01c_morning_star.yaml",
+      "name": "早晨之星",
+      "description": "三 K 线结构：阴线+小实体+阳线收复首根 50% 以上。用三日反转近似。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > open) & (close.shift(1) < open.shift(1)) & (close > close.shift(2)) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > open) & (close.shift(1) < open.shift(1)) & (close > close.shift(2)) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pt01d_three_white_soldiers",
+      "category": "kline_pattern",
+      "category_zh": "K 线形态",
+      "yaml_path": "kline_pattern/pt01d_three_white_soldiers.yaml",
+      "name": "三白兵",
+      "description": "连续三根温和放量小阳线入场。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "(close > open) & (close.shift(1) > open.shift(1)) & (close.shift(2) > open.shift(2)) & (close > close.shift(1)) & (close.shift(1) > close.shift(2)) & (vol > vol.shift(1)) & (close > sma_10)",
+      "declared_exit": "close < sma_10",
+      "entry": "(close > open) & (close.shift(1) > open.shift(1)) & (close.shift(2) > open.shift(2)) & (close > close.shift(1)) & (close.shift(1) > close.shift(2)) & (vol > vol.shift(1)) & (close > sma_10)",
+      "exit": "close < sma_10",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pt02a_rising_three_methods",
+      "category": "kline_pattern",
+      "category_zh": "K 线形态",
+      "yaml_path": "kline_pattern/pt02a_rising_three_methods.yaml",
+      "name": "上升三法",
+      "description": "强趋势中的空中加油。用趋势突破+缩量回调+再突破近似。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > sma_20) & (close > close.shift(1).rolling(5).max()) & (vol > vol.shift(1))",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > sma_20) & (close > close.shift(1).rolling(5).max()) & (vol > vol.shift(1))",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pt02b_island_reversal",
+      "category": "kline_pattern",
+      "category_zh": "K 线形态",
+      "yaml_path": "kline_pattern/pt02b_island_reversal.yaml",
+      "name": "岛形反转",
+      "description": "双跳空封闭前缺口。用量价背离+趋势反转近似。",
+      "declared_dependencies": "SMA(20,60)",
+      "declared_entry": "(close < sma_60) & (close > open) & (close > sma_20) & (vol > vol.shift(1).rolling(10).mean())",
+      "declared_exit": "close < sma_20",
+      "entry": "(close < sma_60) & (close > open) & (close > sma_20) & (vol > vol.shift(1).rolling(10).mean())",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pt02c_tombstone_doji_exit",
+      "category": "kline_pattern",
+      "category_zh": "K 线形态",
+      "yaml_path": "kline_pattern/pt02c_tombstone_doji_exit.yaml",
+      "name": "墓碑十字星高位平仓",
+      "description": "高位长上影放天量。做空头出场/短线反转信号。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "((high - close) / (high - low + 0.001) > 0.7) & (vol > 2 * vol.shift(1).rolling(20).mean()) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "((high - close) / (high - low + 0.001) > 0.7) & (vol > 2 * vol.shift(1).rolling(20).mean()) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pt03a_double_bottom",
+      "category": "kline_pattern",
+      "category_zh": "K 线形态",
+      "yaml_path": "kline_pattern/pt03a_double_bottom.yaml",
+      "name": "双底/W底突破颈线",
+      "description": "两低点接近，突破颈线入场。用突破30日高点+均线过滤近似。",
+      "declared_dependencies": "SMA(20,60)",
+      "declared_entry": "(close > close.shift(1).rolling(30).max()) & (close > sma_20) & (close > sma_60)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(1).rolling(30).max()) & (close > sma_20) & (close > sma_60)",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr01a_rsi14_oversold_reversal",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr01a_rsi14_oversold_reversal.yaml",
+      "name": "RSI(14) 超卖回归",
+      "description": "RSI(14) 下破 30 后重新站回 30 入场，RSI > 60 出场。",
+      "declared_dependencies": "RSI(14)",
+      "declared_entry": "rsi_14 > 30",
+      "declared_exit": "rsi_14 > 60",
+      "entry": "rsi_14 > 30",
+      "exit": "rsi_14 > 60",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr01b_rsi2_connors",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr01b_rsi2_connors.yaml",
+      "name": "RSI(2) Connors 超卖反弹",
+      "description": "close > SMA(200) 且 RSI(2) < 10 入场，RSI(2) > 70 出场。",
+      "declared_dependencies": "RSI(2) + SMA(200)",
+      "declared_entry": "(close > sma_200) & (rsi_2 < 10)",
+      "declared_exit": "rsi_2 > 70",
+      "entry": "(close > sma_200) & (rsi_2 < 10)",
+      "exit": "rsi_2 > 70",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_2",
+          "reference": "factors.stock_daily_momentum_close.rsi_2",
+          "zh": "相对强弱指标(2)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr01c_multi_rsi_resonance",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr01c_multi_rsi_resonance.yaml",
+      "name": "RSI 多周期共振 RSI(7/14/21)",
+      "description": "RSI(7)、RSI(14)、RSI(21) 同时低于 30 入场，任一高于 60 出场。",
+      "declared_dependencies": "RSI(7,14,21)",
+      "declared_entry": "(rsi_7 < 30) & (rsi_14 < 30) & (rsi_21 < 30)",
+      "declared_exit": "(rsi_7 > 60) | (rsi_14 > 60) | (rsi_21 > 60)",
+      "entry": "(rsi_7 < 30) & (rsi_14 < 30) & (rsi_21 < 30)",
+      "exit": "(rsi_7 > 60) | (rsi_14 > 60) | (rsi_21 > 60)",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "rsi_21",
+          "reference": "factors.stock_daily_momentum_close.rsi_21",
+          "zh": "相对强弱指标(21)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "rsi_7",
+          "reference": "factors.stock_daily_momentum_close.rsi_7",
+          "zh": "相对强弱指标(7)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr01d_rsi_divergence_bottom",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr01d_rsi_divergence_bottom.yaml",
+      "name": "RSI 标准底背离",
+      "description": "价格创 20 日新低但 RSI(14) 不创新低入场。价格与动量背离的经典信号。",
+      "declared_dependencies": "RSI(14)",
+      "declared_entry": "(close < close.shift(1).rolling(20).min()) & (rsi_14 > rsi_14.shift(20))",
+      "declared_exit": "rsi_14 > 60",
+      "entry": "(close < close.shift(1).rolling(20).min()) & (rsi_14 > rsi_14.shift(20))",
+      "exit": "rsi_14 > 60",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr01e_rsi_hidden_divergence",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr01e_rsi_hidden_divergence.yaml",
+      "name": "RSI 隐性背离",
+      "description": "价格更高低点、RSI 更低低点，趋势延续型入场。",
+      "declared_dependencies": "RSI(14) + SMA(20)",
+      "declared_entry": "(rsi_14 < 50) & (close > sma_20) & (rsi_14 < rsi_14.shift(5))",
+      "declared_exit": "rsi_14 > 60",
+      "entry": "(rsi_14 < 50) & (close > sma_20) & (rsi_14 < rsi_14.shift(5))",
+      "exit": "rsi_14 > 60",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr01f_rsi14_midline_break",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr01f_rsi14_midline_break.yaml",
+      "name": "RSI(14) 中轴突破",
+      "description": "RSI(14) 上穿 50 入场，下穿 50 出场。动量中轴切换。",
+      "declared_dependencies": "RSI(14)",
+      "declared_entry": "rsi_14 > 50",
+      "declared_exit": "rsi_14 < 50",
+      "entry": "rsi_14 > 50",
+      "exit": "rsi_14 < 50",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "mr02a_kdj_j_line_extreme",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr02a_kdj_j_line_extreme.yaml",
+      "name": "KDJ 极限 J 线",
+      "description": "J < 0 后拐头上行配合低位金叉入场，J > 100 出场。用 Williams %R 近似。",
+      "declared_dependencies": "WILLIAMS_R(14) + SMA(60)",
+      "declared_entry": "(willr_14 > -95) & (close > sma_60)",
+      "declared_exit": "willr_14 > -10",
+      "entry": "(willr_14 > -95) & (close > sma_60)",
+      "exit": "willr_14 > -10",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "willr_14",
+          "reference": "factors.stock_daily_momentum_close.willr_14",
+          "zh": "威廉指标(14)",
+          "meaning": "威廉指标，用于观察短期超买与超卖区域"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "mr02b_stochastic_cross",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr02b_stochastic_cross.yaml",
+      "name": "Stochastic %K/%D 超卖金叉",
+      "description": "%K 在 20 以下上穿 %D 入场，80 以上死叉出场。用 Williams %R 近似。",
+      "declared_dependencies": "WILLIAMS_R(14) + SMA(50)",
+      "declared_entry": "(willr_14 > -80) & (willr_14 > willr_14.shift(1)) & (close > sma_50)",
+      "declared_exit": "willr_14 > -20",
+      "entry": "(willr_14 > -80) & (willr_14 > willr_14.shift(1)) & (close > sma_50)",
+      "exit": "willr_14 > -20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_50",
+          "reference": "factors.stock_daily_overlap_close.sma_50",
+          "zh": "简单移动均线(50)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "willr_14",
+          "reference": "factors.stock_daily_momentum_close.willr_14",
+          "zh": "威廉指标(14)",
+          "meaning": "威廉指标，用于观察短期超买与超卖区域"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr02c_stoch_rsi_slow",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr02c_stoch_rsi_slow.yaml",
+      "name": "慢速 StochRSI",
+      "description": "StochRSI K 线在 0.2 以下上穿 D 线入场。用 RSI(14) 极值近似。",
+      "declared_dependencies": "RSI(14) + SMA(200)",
+      "declared_entry": "(rsi_14 < 25) & (close > sma_200) & (rsi_14 > rsi_14.shift(1))",
+      "declared_exit": "rsi_14 > 50",
+      "entry": "(rsi_14 < 25) & (close > sma_200) & (rsi_14 > rsi_14.shift(1))",
+      "exit": "rsi_14 > 50",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr02d_williams_r_reversal",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr02d_williams_r_reversal.yaml",
+      "name": "Williams %R 超卖反转",
+      "description": "%R 上穿 -80 入场，下穿 -20 出场。利用短期极端位置进行反转交易。",
+      "declared_dependencies": "WILLIAMS_R(14) + SMA(60)",
+      "declared_entry": "(willr_14 > -80) & (close > sma_60)",
+      "declared_exit": "willr_14 > -20",
+      "entry": "(willr_14 > -80) & (close > sma_60)",
+      "exit": "willr_14 > -20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "willr_14",
+          "reference": "factors.stock_daily_momentum_close.willr_14",
+          "zh": "威廉指标(14)",
+          "meaning": "威廉指标，用于观察短期超买与超卖区域"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "mr03a_bollinger_lower_reversion",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr03a_bollinger_lower_reversion.yaml",
+      "name": "布林下轨回归 BOLL(20,2)",
+      "description": "close < 布林下轨入场，回到中轨出场。价格偏离统计均值后回归中心。",
+      "declared_dependencies": "BOLL(20/2.0) + RSI(14)",
+      "declared_entry": "(close < bbl_20_2_0_2_0) & (rsi_14 < 40)",
+      "declared_exit": "close > bbm_20_2_0_2_0",
+      "entry": "(close < bbl_20_2_0_2_0) & (rsi_14 < 40)",
+      "exit": "close > bbm_20_2_0_2_0",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "bbl_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+          "zh": "布林带下轨(20)",
+          "meaning": "布林带下轨，用于观察价格下侧波动边界"
+        },
+        {
+          "alias": "bbm_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+          "zh": "布林带中轨(20)",
+          "meaning": "布林带中轨，用于观察价格中枢"
+        },
+        {
+          "alias": "bbu_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+          "zh": "布林带上轨(20)",
+          "meaning": "布林带上轨，用于观察价格上侧波动边界"
+        },
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr03b_bollinger_lower_volume",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr03b_bollinger_lower_volume.yaml",
+      "name": "布林下轨 + 放量确认",
+      "description": "close < 布林下轨 + RSI(14) < 30 + 成交量放大，回到中轨出场。",
+      "declared_dependencies": "BOLL(20/2.0) + RSI(14)",
+      "declared_entry": "(close < bbl_20_2_0_2_0) & (rsi_14 < 30)",
+      "declared_exit": "close > bbm_20_2_0_2_0",
+      "entry": "(close < bbl_20_2_0_2_0) & (rsi_14 < 30)",
+      "exit": "close > bbm_20_2_0_2_0",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "bbl_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+          "zh": "布林带下轨(20)",
+          "meaning": "布林带下轨，用于观察价格下侧波动边界"
+        },
+        {
+          "alias": "bbm_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+          "zh": "布林带中轨(20)",
+          "meaning": "布林带中轨，用于观察价格中枢"
+        },
+        {
+          "alias": "bbu_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+          "zh": "布林带上轨(20)",
+          "meaning": "布林带上轨，用于观察价格上侧波动边界"
+        },
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr03c_bollinger_percent_b",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr03c_bollinger_percent_b.yaml",
+      "name": "布林 %b 极值回归",
+      "description": "%b < 0 (价格完全在下轨以下) 入场，%b > 0.5 (回到中轴上方) 出场。",
+      "declared_dependencies": "BOLL(20/2.0)",
+      "declared_entry": "close < bbl_20_2_0_2_0",
+      "declared_exit": "close > bbm_20_2_0_2_0",
+      "entry": "close < bbl_20_2_0_2_0",
+      "exit": "close > bbm_20_2_0_2_0",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "bbl_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbl_20_2_0_2_0",
+          "zh": "布林带下轨(20)",
+          "meaning": "布林带下轨，用于观察价格下侧波动边界"
+        },
+        {
+          "alias": "bbm_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbm_20_2_0_2_0",
+          "zh": "布林带中轨(20)",
+          "meaning": "布林带中轨，用于观察价格中枢"
+        },
+        {
+          "alias": "bbu_20_2_0_2_0",
+          "reference": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0",
+          "zh": "布林带上轨(20)",
+          "meaning": "布林带上轨，用于观察价格上侧波动边界"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr04a_ibs_reversal",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr04a_ibs_reversal.yaml",
+      "name": "IBS 日内收盘位置反弹",
+      "description": "IBS = (close - low) / (high - low) < 0.2 且 close > SMA(200) 入场。收盘接近日内低点。",
+      "declared_dependencies": "SMA(200)",
+      "declared_entry": "((close - low) / (high - low + 0.001) < 0.2) & (close > sma_200)",
+      "declared_exit": "(close - low) / (high - low + 0.001) > 0.5",
+      "entry": "((close - low) / (high - low + 0.001) < 0.2) & (close > sma_200)",
+      "exit": "(close - low) / (high - low + 0.001) > 0.5",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr05a_cci_oversold_reversal",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr05a_cci_oversold_reversal.yaml",
+      "name": "CCI 超卖回归",
+      "description": "CCI 从 -100 下方回归向上入场，CCI > 100 出场。用 RSI 近似。",
+      "declared_dependencies": "RSI(14) + SMA(20)",
+      "declared_entry": "(rsi_14 > 25) & (close > sma_20)",
+      "declared_exit": "rsi_14 > 70",
+      "entry": "(rsi_14 > 25) & (close > sma_20)",
+      "exit": "rsi_14 > 70",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr05b_cci_trend_following",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr05b_cci_trend_following.yaml",
+      "name": "CCI 趋势跟随",
+      "description": "CCI > +100 连续 2 日入场，跌回 +100 以下出场。用 RSI 强势区近似。",
+      "declared_dependencies": "RSI(14) + SMA(10)",
+      "declared_entry": "(rsi_14 > 65) & (close > sma_10)",
+      "declared_exit": "rsi_14 < 55",
+      "entry": "(rsi_14 > 65) & (close > sma_10)",
+      "exit": "rsi_14 < 55",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr06_double7",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr06_double7.yaml",
+      "name": "双七策略 Double 7",
+      "description": "close > SMA(200) 且收盘创 7 日新低入场，创 7 日新高出场。大趋势向上时的短期超跌反弹。",
+      "declared_dependencies": "SMA(200)",
+      "declared_entry": "(close > sma_200) & (close < close.shift(7))",
+      "declared_exit": "close > close.shift(1).rolling(7).max()",
+      "entry": "(close > sma_200) & (close < close.shift(7))",
+      "exit": "close > close.shift(1).rolling(7).max()",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr07_r3_extreme_oversold",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr07_r3_extreme_oversold.yaml",
+      "name": "R3 极端超卖 RSI(2)",
+      "description": "close > SMA(200)、RSI(2) 连续 3 日下跌、当日 RSI(2) < 10 入场。只抓最极端回归点。",
+      "declared_dependencies": "RSI(2) + SMA(200)",
+      "declared_entry": "(close > sma_200) & (rsi_2 < 10)",
+      "declared_exit": "rsi_2 > 70",
+      "entry": "(close > sma_200) & (rsi_2 < 10)",
+      "exit": "rsi_2 > 70",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_2",
+          "reference": "factors.stock_daily_momentum_close.rsi_2",
+          "zh": "相对强弱指标(2)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr08a_mfi_oversold_reversal",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr08a_mfi_oversold_reversal.yaml",
+      "name": "MFI 超卖反转",
+      "description": "MFI < 20 后重新站回 20 入场（需确认 MFI 因子列）。用 RSI + 量比近似。",
+      "declared_dependencies": "RSI(14) + SMA(60)",
+      "declared_entry": "(rsi_14 < 30) & (close > sma_60) & (rsi_14 > rsi_14.shift(1))",
+      "declared_exit": "rsi_14 > 60",
+      "entry": "(rsi_14 < 30) & (close > sma_60) & (rsi_14 > rsi_14.shift(1))",
+      "exit": "rsi_14 > 60",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr09a_bias_oversold",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr09a_bias_oversold.yaml",
+      "name": "均线偏离 BIAS 超卖回归",
+      "description": "偏离 MA(20) 超过 -5% 且当日收阳入场，回归到 -1% 上方出场。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "((close - sma_20) / sma_20 < -0.05) & (close > open)",
+      "declared_exit": "(close - sma_20) / sma_20 > -0.01",
+      "entry": "((close - sma_20) / sma_20 < -0.05) & (close > open)",
+      "exit": "(close - sma_20) / sma_20 > -0.01",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr09b_volume_contraction_reversal",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr09b_volume_contraction_reversal.yaml",
+      "name": "缩量止跌反弹",
+      "description": "股价在 MA(60) 上方，连续 3 日缩量后收阳确认入场。",
+      "declared_dependencies": "SMA(60)",
+      "declared_entry": "(close > sma_60) & (close > open) & (vol < vol.shift(1)) & (vol.shift(1) < vol.shift(2))",
+      "declared_exit": "close < sma_60",
+      "entry": "(close > sma_60) & (close > open) & (vol < vol.shift(1)) & (vol.shift(1) < vol.shift(2))",
+      "exit": "close < sma_60",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "mr10a_cmo_reversal",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr10a_cmo_reversal.yaml",
+      "name": "CMO 极值反转",
+      "description": "CMO(14) 上穿 -50 入场，下穿 +50 出场。钱德动量摆动指标。",
+      "declared_dependencies": "RSI(14)",
+      "declared_entry": "rsi_14 > 35",
+      "declared_exit": "rsi_14 > 65",
+      "entry": "rsi_14 > 35",
+      "exit": "rsi_14 > 65",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "mr10b_uo_reversal",
+      "category": "mean_reversion",
+      "category_zh": "均值回归",
+      "yaml_path": "mean_reversion/mr10b_uo_reversal.yaml",
+      "name": "Ultimate Oscillator 极值反转",
+      "description": "UO 上穿 30 入场，下穿 70 出场。多周期加权摆动指标。",
+      "declared_dependencies": "RSI(14) + SMA(20)",
+      "declared_entry": "(rsi_14 < 35) & (close > sma_20)",
+      "declared_exit": "rsi_14 > 65",
+      "entry": "(rsi_14 < 35) & (close > sma_20)",
+      "exit": "rsi_14 > 65",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "pv01a_obv_divergence",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv01a_obv_divergence.yaml",
+      "name": "OBV 底背离",
+      "description": "OBV 均线上穿入场，价格下跌时资金吸筹的确认信号。",
+      "declared_dependencies": "SMA(20) + RSI(14)",
+      "declared_entry": "(rsi_14 < 40) & (close > sma_20)",
+      "declared_exit": "rsi_14 > 60",
+      "entry": "(rsi_14 < 40) & (close > sma_20)",
+      "exit": "rsi_14 > 60",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "pv01b_obv_ma_cross",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv01b_obv_ma_cross.yaml",
+      "name": "OBV 上穿均线",
+      "description": "OBV 上穿自身均线入场（需确认 OBV 因子列）。用 RSI 金叉 + 放量近似。",
+      "declared_dependencies": "RSI(14) + SMA(20)",
+      "declared_entry": "(rsi_14 > 50) & (close > sma_20) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "rsi_14 < 50",
+      "entry": "(rsi_14 > 50) & (close > sma_20) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "rsi_14 < 50",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv02a_cmf_money_flow",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv02a_cmf_money_flow.yaml",
+      "name": "CMF 资金流量突破",
+      "description": "CMF(21) > +0.2 入场（需确认 CMF 因子列）。用 RSI 强势 + 放量近似。",
+      "declared_dependencies": "RSI(14) + SMA(20)",
+      "declared_entry": "(rsi_14 > 55) & (close > sma_20) & (vol > vol.shift(1).rolling(20).mean())",
+      "declared_exit": "rsi_14 < 45",
+      "entry": "(rsi_14 > 55) & (close > sma_20) & (vol > vol.shift(1).rolling(20).mean())",
+      "exit": "rsi_14 < 45",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv03a_alpha41",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv03a_alpha41.yaml",
+      "name": "Alpha#41 sqrt(high*low) - vwap",
+      "description": "sqrt(high * low) - VWAP > 0 入场。用价格站上均线近似。",
+      "declared_dependencies": "SMA(5)",
+      "declared_entry": "(close > sma_5) & (close > open) & (vol > vol.shift(1).rolling(5).mean())",
+      "declared_exit": "close < sma_5",
+      "entry": "(close > sma_5) & (close > open) & (vol > vol.shift(1).rolling(5).mean())",
+      "exit": "close < sma_5",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv03b_alpha101",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv03b_alpha101.yaml",
+      "name": "Alpha#101 (close-open)/(high-low)",
+      "description": "(close - open) / (high - low + 0.001) > 0.7 入场。实体占比高的强势阳线。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "((close - open) / (high - low + 0.001) > 0.7) & (close > open) & (close > sma_10)",
+      "declared_exit": "(close - open) / (high - low + 0.001) < 0.3",
+      "entry": "((close - open) / (high - low + 0.001) > 0.7) & (close > open) & (close > sma_10)",
+      "exit": "(close - open) / (high - low + 0.001) < 0.3",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv03c_alpha12_style",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv03c_alpha12_style.yaml",
+      "name": "Alpha#12 风格 rank(ts_delta(vol,1))",
+      "description": "成交量变化率排名因子。用放量涨 > 1.5 倍均量近似。",
+      "declared_dependencies": "SMA(10)",
+      "declared_entry": "(vol > 1.5 * vol.shift(1).rolling(20).mean()) & (close > open) & (close > sma_10)",
+      "declared_exit": "close < sma_10",
+      "entry": "(vol > 1.5 * vol.shift(1).rolling(20).mean()) & (close > open) & (close > sma_10)",
+      "exit": "close < sma_10",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv05a_ad_accumulation",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv05a_ad_accumulation.yaml",
+      "name": "A/D 累积派发线上穿均线",
+      "description": "A/D 线上穿自身均线入场（需确认 A/D 因子列）。用 OBV 近似。",
+      "declared_dependencies": "RSI(14) + SMA(20)",
+      "declared_entry": "(rsi_14 > 50) & (close > sma_20) & (vol > vol.shift(1))",
+      "declared_exit": "rsi_14 < 45",
+      "entry": "(rsi_14 > 50) & (close > sma_20) & (vol > vol.shift(1))",
+      "exit": "rsi_14 < 45",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv05b_daily_vwap_support",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv05b_daily_vwap_support.yaml",
+      "name": "日线 VWAP 连续站上",
+      "description": "连续两日收盘高于日线 VWAP（需确认 VWAP 因子列）。用两日连阳量增近似。",
+      "declared_dependencies": "SMA(5)",
+      "declared_entry": "(close > open) & (close.shift(1) > open.shift(1)) & (vol > vol.shift(1)) & (close > sma_5)",
+      "declared_exit": "close < sma_5",
+      "entry": "(close > open) & (close.shift(1) > open.shift(1)) & (vol > vol.shift(1)) & (close > sma_5)",
+      "exit": "close < sma_5",
+      "max_holding_days": 3,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv05c_volume_ratio_breakout",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv05c_volume_ratio_breakout.yaml",
+      "name": "量比排行启动",
+      "description": "当日放量（量比 > 1.5 倍 20 日均量）且价格站上均线入场。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(vol > 1.5 * vol.shift(1).rolling(20).mean()) & (close > sma_20) & (close > open)",
+      "declared_exit": "close < sma_20",
+      "entry": "(vol > 1.5 * vol.shift(1).rolling(20).mean()) & (close > sma_20) & (close > open)",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv05d_eom_ease_of_movement",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv05d_eom_ease_of_movement.yaml",
+      "name": "EOM 轻松移动上穿零轴",
+      "description": "EOM 上穿 0 入场（需确认 EOM 因子列）。用价格 + 量比方向近似。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > open) & (vol > vol.shift(1)) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > open) & (vol > vol.shift(1)) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv05e_vpt_volume_price_trend",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv05e_vpt_volume_price_trend.yaml",
+      "name": "VPT 量价趋势上穿均线",
+      "description": "VPT 上穿 5 日均线入场（需确认 VPT 因子列）。用量增价涨近似。",
+      "declared_dependencies": "SMA(5)",
+      "declared_entry": "(close > sma_5) & (vol > vol.shift(1).rolling(5).mean()) & (close > open)",
+      "declared_exit": "close < sma_5",
+      "entry": "(close > sma_5) & (vol > vol.shift(1).rolling(5).mean()) & (close > open)",
+      "exit": "close < sma_5",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv06a_alpha083_high_rank_mvp",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv06a_alpha083_high_rank_mvp.yaml",
+      "name": "Alpha083 高秩量价背离（高位 rank 做多）",
+      "description": "alpha083=-RANK(COV(RANK(HIGH),RANK(VOL),5))，量高价背离度截面 rank 取负；值越接近 0 排名越前。entry>-0.2=截面前 20%%，exit<-0.5=跌出前一半。",
+      "declared_dependencies": "factors.stock_daily_alpha191.alpha083",
+      "declared_entry": "alpha083 > -0.2",
+      "declared_exit": "alpha083 < -0.5",
+      "entry": "alpha083 > -0.2",
+      "exit": "alpha083 < -0.5",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "alpha083",
+          "reference": "factors.stock_daily_alpha191.alpha083",
+          "zh": "高价排名与量排名5日协方差（反向）",
+          "meaning": "Alpha191 横截面量价信号，具体含义以该编号公式为准"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv06b_alpha099_high_rank_mvp",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv06b_alpha099_high_rank_mvp.yaml",
+      "name": "Alpha099 高秩收盘价量背离（高位 rank 做多）",
+      "description": "alpha099=-RANK(COV(RANK(CLOSE),RANK(VOL),5))，与 alpha083 同族（HIGH→CLOSE）。entry>-0.2=截面前 20%%，exit<-0.5=跌出前一半。",
+      "declared_dependencies": "factors.stock_daily_alpha191.alpha099",
+      "declared_entry": "alpha099 > -0.2",
+      "declared_exit": "alpha099 < -0.5",
+      "entry": "alpha099 > -0.2",
+      "exit": "alpha099 < -0.5",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "alpha099",
+          "reference": "factors.stock_daily_alpha191.alpha099",
+          "zh": "收盘排名与量排名5日协方差（反向）",
+          "meaning": "Alpha191 横截面量价信号，具体含义以该编号公式为准"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "pv06c_alpha042_high_rank_mvp",
+      "category": "price_volume",
+      "category_zh": "量价",
+      "yaml_path": "price_volume/pv06c_alpha042_high_rank_mvp.yaml",
+      "name": "Alpha042 低波高价量正相关（高值做多）",
+      "description": "alpha042=(-RANK(STD(HIGH,10)))*CORR(HIGH,VOL,10)，低波动且价量正相关者值高。entry>0.0≈截面前 12%%（p90=0.015），exit<-0.25≈跌破中位数(-0.24)。",
+      "declared_dependencies": "factors.stock_daily_alpha191.alpha042",
+      "declared_entry": "alpha042 > 0.0",
+      "declared_exit": "alpha042 < -0.25",
+      "entry": "alpha042 > 0.0",
+      "exit": "alpha042 < -0.25",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "alpha042",
+          "reference": "factors.stock_daily_alpha191.alpha042",
+          "zh": "高价10日波动排名乘高价量相关（反向）",
+          "meaning": "Alpha191 横截面量价信号，具体含义以该编号公式为准"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf01a_ma_cross_20_120",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01a_ma_cross_20_120.yaml",
+      "name": "双均线金叉 MA20/MA120",
+      "description": "MA(20) 上穿 MA(120) 入场，下穿出场。经典中长期趋势跟踪。",
+      "declared_dependencies": "SMA(20,120)",
+      "declared_entry": "sma_20 > sma_120",
+      "declared_exit": "sma_20 < sma_120",
+      "entry": "sma_20 > sma_120",
+      "exit": "sma_20 < sma_120",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_120",
+          "reference": "factors.stock_daily_overlap_close.sma_120",
+          "zh": "简单移动均线(120)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf01b_triple_ma_alignment",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01b_triple_ma_alignment.yaml",
+      "name": "三均线多头排列 MA5/MA10/MA20",
+      "description": "MA(5) > MA(10) > MA(20) 且收盘站上 MA(5)，跌破 MA(10) 出场。",
+      "declared_dependencies": "SMA(5,10,20)",
+      "declared_entry": "(sma_5 > sma_10) & (sma_10 > sma_20) & (close > sma_5)",
+      "declared_exit": "close < sma_10",
+      "entry": "(sma_5 > sma_10) & (sma_10 > sma_20) & (close > sma_5)",
+      "exit": "close < sma_10",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf01c_sma200_bull_filter",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01c_sma200_bull_filter.yaml",
+      "name": "200日均线牛熊过滤",
+      "description": "close > SMA(200) 且 SMA(20) 向上拐头入场，跌破 SMA(200) 出场。",
+      "declared_dependencies": "SMA(20,200)",
+      "declared_entry": "(close > sma_200) & (sma_20 > sma_20.shift(1))",
+      "declared_exit": "close < sma_200",
+      "entry": "(close > sma_200) & (sma_20 > sma_20.shift(1))",
+      "exit": "close < sma_200",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_200",
+          "reference": "factors.stock_daily_overlap_close.sma_200",
+          "zh": "简单移动均线(200)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf01d_dema_tema_cross",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01d_dema_tema_cross.yaml",
+      "name": "DEMA/TEMA 响应策略",
+      "description": "DEMA(20) 上穿 DEMA(60) 入场，下穿出场。双指数平滑，减少滞后。",
+      "declared_dependencies": "EMA(20,60)",
+      "declared_entry": "ema_20 > ema_60",
+      "declared_exit": "ema_20 < ema_60",
+      "entry": "ema_20 > ema_60",
+      "exit": "ema_20 < ema_60",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "ema_20",
+          "reference": "factors.stock_daily_overlap_close.ema_20",
+          "zh": "指数移动均线(20)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        },
+        {
+          "alias": "ema_60",
+          "reference": "factors.stock_daily_overlap_close.ema_60",
+          "zh": "指数移动均线(60)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf01e_hma_cross_20",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01e_hma_cross_20.yaml",
+      "name": "HMA 赫尔均线变色",
+      "description": "HMA(20) 由下转上入场，向下拐头出场。赫尔均线低延迟。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(sma_20 > sma_20.shift(1)) & (close > sma_20)",
+      "declared_exit": "sma_20 < sma_20.shift(1)",
+      "entry": "(sma_20 > sma_20.shift(1)) & (close > sma_20)",
+      "exit": "sma_20 < sma_20.shift(1)",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf01f_ema_channel_breakout",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01f_ema_channel_breakout.yaml",
+      "name": "EMA通道突破 EMA12/EMA26",
+      "description": "close 突破 EMA(12) + 1.5*(EMA12 - EMA26)，跌破 EMA(26) 出场。",
+      "declared_dependencies": "EMA(12,26)",
+      "declared_entry": "(ema_12 > ema_12.shift(1)) & (close > ema_12)",
+      "declared_exit": "close < ema_26",
+      "entry": "(ema_12 > ema_12.shift(1)) & (close > ema_12)",
+      "exit": "close < ema_26",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "ema_12",
+          "reference": "factors.stock_daily_overlap_close.ema_12",
+          "zh": "指数移动均线(12)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        },
+        {
+          "alias": "ema_26",
+          "reference": "factors.stock_daily_overlap_close.ema_26",
+          "zh": "指数移动均线(26)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf01g_kama_adaptive_cross",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01g_kama_adaptive_cross.yaml",
+      "name": "KAMA 自适应均线交叉",
+      "description": "KAMA(10,2,30) 上穿 KAMA(20,2,30) 入场，下穿出场。自适应调整平滑系数。",
+      "declared_dependencies": "EMA(10,20)",
+      "declared_entry": "ema_10 > ema_20",
+      "declared_exit": "ema_10 < ema_20",
+      "entry": "ema_10 > ema_20",
+      "exit": "ema_10 < ema_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "ema_10",
+          "reference": "factors.stock_daily_overlap_close.ema_10",
+          "zh": "指数移动均线(10)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        },
+        {
+          "alias": "ema_20",
+          "reference": "factors.stock_daily_overlap_close.ema_20",
+          "zh": "指数移动均线(20)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf01h_wma_cross_5_20",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01h_wma_cross_5_20.yaml",
+      "name": "WMA加权均线交叉 WMA5/WMA20",
+      "description": "WMA(5) 上穿 WMA(20) 入场，下穿出场。",
+      "declared_dependencies": "WMA(5,20)",
+      "declared_entry": "wma_5 > wma_20",
+      "declared_exit": "wma_5 < wma_20",
+      "entry": "wma_5 > wma_20",
+      "exit": "wma_5 < wma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "wma_20",
+          "reference": "factors.stock_daily_overlap_close.wma_20",
+          "zh": "加权移动均线(20)",
+          "meaning": "加权移动平均线，用于平滑价格与判断趋势"
+        },
+        {
+          "alias": "wma_5",
+          "reference": "factors.stock_daily_overlap_close.wma_5",
+          "zh": "加权移动均线(5)",
+          "meaning": "加权移动平均线，用于平滑价格与判断趋势"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf01i_ma20_slope_positive",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01i_ma20_slope_positive.yaml",
+      "name": "均线斜率转正 MA20",
+      "description": "MA(20) 5 日斜率由负转正且价格站上 MA(20) 入场。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(sma_20 > sma_20.shift(5)) & (close > sma_20)",
+      "declared_exit": "sma_20 < sma_20.shift(5)",
+      "entry": "(sma_20 > sma_20.shift(5)) & (close > sma_20)",
+      "exit": "sma_20 < sma_20.shift(5)",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf01j_pbo_waterfall",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf01j_pbo_waterfall.yaml",
+      "name": "瀑布线 PBO 均线族",
+      "description": "PB1-PB6 发散向上，回踩 PB3 支撑入场。",
+      "declared_dependencies": "SMA(5,10,20,30,60)",
+      "declared_entry": "(sma_5 > sma_10) & (sma_10 > sma_20) & (sma_20 > sma_30) & (close > sma_20)",
+      "declared_exit": "close < sma_30",
+      "entry": "(sma_5 > sma_10) & (sma_10 > sma_20) & (sma_20 > sma_30) & (close > sma_20)",
+      "exit": "close < sma_30",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_10",
+          "reference": "factors.stock_daily_overlap_close.sma_10",
+          "zh": "简单移动均线(10)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_30",
+          "reference": "factors.stock_daily_overlap_close.sma_30",
+          "zh": "简单移动均线(30)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf02a_macd_golden_cross",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf02a_macd_golden_cross.yaml",
+      "name": "MACD 标准金叉 DIF/DEA",
+      "description": "DIF 上穿 DEA 入场，下穿出场。最经典的 MACD 用法。",
+      "declared_dependencies": "MACD(12/26/9)",
+      "declared_entry": "macd_12_26_9 > macds_12_26_9",
+      "declared_exit": "macd_12_26_9 < macds_12_26_9",
+      "entry": "macd_12_26_9 > macds_12_26_9",
+      "exit": "macd_12_26_9 < macds_12_26_9",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "macd_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macd_12_26_9",
+          "zh": "MACD(12,26,9)",
+          "meaning": "MACD 的 DIF 快线，反映快慢指数均线之差"
+        },
+        {
+          "alias": "macds_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macds_12_26_9",
+          "zh": "MACD 信号线(12,26,9)",
+          "meaning": "MACD 的 DEA 慢线，即 DIF 的信号线"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf02b_macd_zero_second_cross",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf02b_macd_zero_second_cross.yaml",
+      "name": "MACD 零轴上二次金叉",
+      "description": "DIF、DEA 均 > 0，回抽零轴后再次金叉入场。",
+      "declared_dependencies": "MACD(12/26/9)",
+      "declared_entry": "(macd_12_26_9 > 0) & (macds_12_26_9 > 0) & (macd_12_26_9 > macds_12_26_9)",
+      "declared_exit": "macd_12_26_9 < macds_12_26_9",
+      "entry": "(macd_12_26_9 > 0) & (macds_12_26_9 > 0) & (macd_12_26_9 > macds_12_26_9)",
+      "exit": "macd_12_26_9 < macds_12_26_9",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "macd_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macd_12_26_9",
+          "zh": "MACD(12,26,9)",
+          "meaning": "MACD 的 DIF 快线，反映快慢指数均线之差"
+        },
+        {
+          "alias": "macds_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macds_12_26_9",
+          "zh": "MACD 信号线(12,26,9)",
+          "meaning": "MACD 的 DEA 慢线，即 DIF 的信号线"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf02c_macd_histogram_slope",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf02c_macd_histogram_slope.yaml",
+      "name": "MACD 柱状图斜率反转",
+      "description": "MACD 柱状图在负值区连续 3 天缩短，配合 RSI(14) 超卖入场。",
+      "declared_dependencies": "MACD(12/26/9) + RSI(14)",
+      "declared_entry": "(macd_12_26_9 > macd_12_26_9.shift(1)) & (rsi_14 < 40)",
+      "declared_exit": "macd_12_26_9 < macds_12_26_9",
+      "entry": "(macd_12_26_9 > macd_12_26_9.shift(1)) & (rsi_14 < 40)",
+      "exit": "macd_12_26_9 < macds_12_26_9",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "macd_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macd_12_26_9",
+          "zh": "MACD(12,26,9)",
+          "meaning": "MACD 的 DIF 快线，反映快慢指数均线之差"
+        },
+        {
+          "alias": "macds_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macds_12_26_9",
+          "zh": "MACD 信号线(12,26,9)",
+          "meaning": "MACD 的 DEA 慢线，即 DIF 的信号线"
+        },
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf02d_macd_divergence_bottom",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf02d_macd_divergence_bottom.yaml",
+      "name": "MACD 底背离",
+      "description": "价格创 20 日新低但 DIF 未创新低入场。",
+      "declared_dependencies": "MACD(12/26/9)",
+      "declared_entry": "(close < close.shift(1).rolling(20).min()) & (macd_12_26_9 > macd_12_26_9.shift(20))",
+      "declared_exit": "macd_12_26_9 < macds_12_26_9",
+      "entry": "(close < close.shift(1).rolling(20).min()) & (macd_12_26_9 > macd_12_26_9.shift(20))",
+      "exit": "macd_12_26_9 < macds_12_26_9",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "macd_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macd_12_26_9",
+          "zh": "MACD(12,26,9)",
+          "meaning": "MACD 的 DIF 快线，反映快慢指数均线之差"
+        },
+        {
+          "alias": "macds_12_26_9",
+          "reference": "factors.stock_daily_momentum_close.macds_12_26_9",
+          "zh": "MACD 信号线(12,26,9)",
+          "meaning": "MACD 的 DEA 慢线，即 DIF 的信号线"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf02e_dif_zero_breakthrough",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf02e_dif_zero_breakthrough.yaml",
+      "name": "MACD DIF 零轴突破",
+      "description": "DIF (= EMA12 - EMA26) 上穿 0 入场，下穿 0 出场。",
+      "declared_dependencies": "EMA(12,26)",
+      "declared_entry": "(ema_12 - ema_26) > 0",
+      "declared_exit": "(ema_12 - ema_26) < 0",
+      "entry": "(ema_12 - ema_26) > 0",
+      "exit": "(ema_12 - ema_26) < 0",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "ema_12",
+          "reference": "factors.stock_daily_overlap_close.ema_12",
+          "zh": "指数移动均线(12)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        },
+        {
+          "alias": "ema_26",
+          "reference": "factors.stock_daily_overlap_close.ema_26",
+          "zh": "指数移动均线(26)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf03_adx_trend_filter",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf03_adx_trend_filter.yaml",
+      "name": "ADX 趋势过滤器 +DI/-DI",
+      "description": "+DI > -DI 且 ADX > 25 且 ADX 上升入场，+DI < -DI 出场。只在趋势明确时持有。",
+      "declared_dependencies": "ADX(14) + SMA(20)",
+      "declared_entry": "(adx_14 > 25) & (close > sma_20)",
+      "declared_exit": "(adx_14 < 20) | (close < sma_20)",
+      "entry": "(adx_14 > 25) & (close > sma_20)",
+      "exit": "(adx_14 < 20) | (close < sma_20)",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "adx_14",
+          "reference": "factors.stock_daily_trend_close.adx_14",
+          "zh": "平均趋向指数(14)",
+          "meaning": "平均趋向指标，用于衡量趋势强度而非方向"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf04_supertrend_breakout",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf04_supertrend_breakout.yaml",
+      "name": "Supertrend 趋势突破",
+      "description": "价格向上突破 Supertrend 轨道入场，跌回轨道下方出场。基于 ATR 的自适应趋势通道。",
+      "declared_dependencies": "ATR(10) + EMA(20)",
+      "declared_entry": "(close > ema_20) & (close > ema_20.shift(1))",
+      "declared_exit": "close < ema_20",
+      "entry": "(close > ema_20) & (close > ema_20.shift(1))",
+      "exit": "close < ema_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "atr_10",
+          "reference": "factors.stock_daily_volatility_close.atr_10",
+          "zh": "真实波幅(10)",
+          "meaning": "真实波幅指标，用于衡量价格波动水平"
+        },
+        {
+          "alias": "ema_20",
+          "reference": "factors.stock_daily_overlap_close.ema_20",
+          "zh": "指数移动均线(20)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf05a_ichimoku_cloud_breakout",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf05a_ichimoku_cloud_breakout.yaml",
+      "name": "Ichimoku 云图趋势确认",
+      "description": "Tenkan > Kijun，价格在 Senkou A/B 云层之上入场，Tenkan < Kijun 出场。",
+      "declared_dependencies": "SMA(9,26,52)",
+      "declared_entry": "(sma_9 > sma_26) & (close > sma_52) & (sma_9 > sma_9.shift(1))",
+      "declared_exit": "sma_9 < sma_26",
+      "entry": "(sma_9 > sma_26) & (close > sma_52) & (sma_9 > sma_9.shift(1))",
+      "exit": "sma_9 < sma_26",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_26",
+          "reference": "factors.stock_daily_overlap_close.sma_26",
+          "zh": "简单移动均线(26)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_52",
+          "reference": "factors.stock_daily_overlap_close.sma_52",
+          "zh": "简单移动均线(52)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_9",
+          "reference": "factors.stock_daily_overlap_close.sma_9",
+          "zh": "简单移动均线(9)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf06a_dual_momentum",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf06a_dual_momentum.yaml",
+      "name": "绝对动量 + 相对动量筛选",
+      "description": "过去 60 日收益为正，且 MA(5) > MA(20) 确认趋势入场。",
+      "declared_dependencies": "SMA(5,20)",
+      "declared_entry": "(close > close.shift(60)) & (sma_5 > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(60)) & (sma_5 > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 20,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_5",
+          "reference": "factors.stock_daily_overlap_close.sma_5",
+          "zh": "简单移动均线(5)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf07a_aroon_trend_confirm",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf07a_aroon_trend_confirm.yaml",
+      "name": "Aroon 趋势确认",
+      "description": "AroonUp > 70 且 AroonDown < 30 入场（需确认 Aroon 因子列）。用通道突破近似。",
+      "declared_dependencies": "SMA(60)",
+      "declared_entry": "(close > close.shift(1).rolling(25).max()) & (close > sma_60)",
+      "declared_exit": "close < sma_60",
+      "entry": "(close > close.shift(1).rolling(25).max()) & (close > sma_60)",
+      "exit": "close < sma_60",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf07b_aroon_oscillator",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf07b_aroon_oscillator.yaml",
+      "name": "Aroon Oscillator 转正",
+      "description": "Aroon Oscillator 由负转正入场。用价格动量方向近似。",
+      "declared_dependencies": "SMA(20,60)",
+      "declared_entry": "(sma_20 > sma_60) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(sma_20 > sma_60) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_60",
+          "reference": "factors.stock_daily_overlap_close.sma_60",
+          "zh": "简单移动均线(60)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf07c_parabolic_sar_flip",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf07c_parabolic_sar_flip.yaml",
+      "name": "抛物线 SAR 翻多",
+      "description": "SAR 翻转到价格下方入场。用突破短期高点近似。",
+      "declared_dependencies": "SMA(20)",
+      "declared_entry": "(close > close.shift(1).rolling(5).max()) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "(close > close.shift(1).rolling(5).max()) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf07d_vortex_indicator",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf07d_vortex_indicator.yaml",
+      "name": "Vortex 涡旋指标 +VI/-VI",
+      "description": "+VI 上穿 -VI 入场（需确认 Vortex 因子列）。用均线金叉近似。",
+      "declared_dependencies": "EMA(12,26)",
+      "declared_entry": "ema_12 > ema_26",
+      "declared_exit": "ema_12 < ema_26",
+      "entry": "ema_12 > ema_26",
+      "exit": "ema_12 < ema_26",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "ema_12",
+          "reference": "factors.stock_daily_overlap_close.ema_12",
+          "zh": "指数移动均线(12)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        },
+        {
+          "alias": "ema_26",
+          "reference": "factors.stock_daily_overlap_close.ema_26",
+          "zh": "指数移动均线(26)",
+          "meaning": "指数移动平均线，对近期价格赋予更高权重"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf07e_ravi_trend_strength",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf07e_ravi_trend_strength.yaml",
+      "name": "RAVI 趋势强度",
+      "description": "RAVI > 3% 且价格在 MA(20) 之上入场。用 SMA(7) / SMA(65) 偏离近似。",
+      "declared_dependencies": "SMA(7,20,65)",
+      "declared_entry": "((sma_7 / sma_65 - 1).abs() > 0.03) & (close > sma_20)",
+      "declared_exit": "close < sma_20",
+      "entry": "((sma_7 / sma_65 - 1).abs() > 0.03) & (close > sma_20)",
+      "exit": "close < sma_20",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_65",
+          "reference": "factors.stock_daily_overlap_close.sma_65",
+          "zh": "简单移动均线(65)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        },
+        {
+          "alias": "sma_7",
+          "reference": "factors.stock_daily_overlap_close.sma_7",
+          "zh": "简单移动均线(7)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": []
+    },
+    {
+      "strategy_id": "tf08a_tsi_zero_cross",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf08a_tsi_zero_cross.yaml",
+      "name": "TSI 真实强度指数零轴突破",
+      "description": "TSI 与信号线同步上穿 0 入场（需确认 TSI 因子列）。用 RSI 中轴近似。",
+      "declared_dependencies": "RSI(14) + SMA(20)",
+      "declared_entry": "(rsi_14 > 50) & (close > sma_20)",
+      "declared_exit": "rsi_14 < 50",
+      "entry": "(rsi_14 > 50) & (close > sma_20)",
+      "exit": "rsi_14 < 50",
+      "max_holding_days": 10,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        },
+        {
+          "alias": "sma_20",
+          "reference": "factors.stock_daily_overlap_close.sma_20",
+          "zh": "简单移动均线(20)",
+          "meaning": "简单移动平均线，用于衡量趋势与价格相对位置"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    },
+    {
+      "strategy_id": "tf08b_dsi_zero_cross",
+      "category": "trend_following",
+      "category_zh": "趋势跟踪",
+      "yaml_path": "trend_following/tf08b_dsi_zero_cross.yaml",
+      "name": "DSI 动力指标零轴突破",
+      "description": "DSI 上穿 0 入场（需确认 DSI 因子列）。用 RSI 方向近似。",
+      "declared_dependencies": "RSI(14)",
+      "declared_entry": "rsi_14 > 55",
+      "declared_exit": "rsi_14 < 45",
+      "entry": "rsi_14 > 55",
+      "exit": "rsi_14 < 45",
+      "max_holding_days": 5,
+      "direction": "long_only",
+      "risk": {
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": null,
+        "trailing_stop_pct": null
+      },
+      "factors": [
+        {
+          "alias": "rsi_14",
+          "reference": "factors.stock_daily_momentum_close.rsi_14",
+          "zh": "相对强弱指标(14)",
+          "meaning": "相对强弱指标，用于观察超买、超卖与动量状态"
+        }
+      ],
+      "semantic_notes": [
+        "文字说明含穿越语义，但实际 YAML 未使用 .shift(1)；两者不得视为等价。"
+      ]
+    }
+  ]
+}

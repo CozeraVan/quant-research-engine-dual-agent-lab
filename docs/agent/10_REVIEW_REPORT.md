@@ -1,5 +1,462 @@
 # Review Report
 
+## 2026-11-03 缠论结构策略首版主 Agent 自审
+
+- Review Status：本地代码 PASS，真实小样本/发布门未过。Required Fixes：无；全量阻塞项为 O(n*scan_bars) 前缀重算，必须优化后再评估。
+- 公网同步：生产 app.py/lab_result.py/cloud_schema.sql 与本地逐字节一致，results 10列与 CF-001~005 新结果合同完整；没有以公网旧代码覆盖本地未提交工作。
+- 因果：核心仅扫描历史窗口；分型冻结、笔 finalized_pos、T+1 成交，追加未来 bar 不改过去输出有测试。结构止损从信号日取，2R以实际成交价重算，避免信号价与成交价混用。
+- 主复核曾拒绝子代理首版：B2误要求前笔背驰、B3误用ATR缓冲且未限封闭中枢、线段误用三笔重叠；均已退回修正并加反例测试。修正后核心77+集成5+既有169=251 passed。
+- 范围诚实：首版A股只做多，S类仅退出；不含滚仓/tick/日亏/周五强平；未复现原EA样本数量和收益。未跑真实DB小样本、未部署、未重启、未commit。
+
+## CF-005/job232 全市场内存失败修复自审（2026-11-03）
+
+- **Reviewer**：实施子代理（实施自评；**最终验收留给主 Agent**）
+- **Review Status**：实施自评 PASS（2026-11-03）。Required Fixes：无（部署前建议按
+  `04_TASK_HANDOFF.md` 的 CF-005 段先跑 100 股两年小样本门禁）。**未部署、未重启 worker、
+  未 commit、未跑全量真实回测。**
+- **Findings**
+  1. 口径/列/文件名/目录结构零变更：`_EQUITY_CURVE_COLUMNS` 与 `_TRADES_LEDGER_COLUMNS`
+     原样复用；`build_full_market_equity_curve` 分块累加与旧整份实现逐值等价（测试
+     `TestChunkedFullMarketEquityCurve`，rtol=1e-12，position_count 精确，日期 Index 精确）。
+  2. `build_trades_ledger`/`build_round_trips` 每 250 只 flush，最终 `pd.concat` 后行序等于
+     results 迭代顺序（`TestRowTableChunking` 断言 symbol 顺序）。
+  3. Excel 改 `Workbook(write_only=True)`：96k 行合成实测峰值 869.4MB → 223.6MB；样式与
+     冻结窗格语义保留，图片仍 `add_image`。
+  4. `_LazyEquityCurves` 仅改变访问方式，M/Q/Y、rolling 与 `symbol_month_returns` 输出与
+     旧 dict 路径一致（`test_lazy_mapping_input_matches_oracle_with_nat_rows`）。
+  5. 未触碰 `streaming_batch.py` 的 250 只分块、内存上限、`stock_daily`；统计口径未改。
+- **Verification**：定向 9 文件 206 passed；`test_analytics_vectorized.py` 单文件 7 passed；
+  全量 `uv run pytest -q` **3595 passed, 33 skipped, 20 warnings in 203s**（warnings 为既有
+  arch/scipy/fork 告警，与本次改动无关）；`scripts/check-progress-docs.sh` 通过。
+- **未验证**：真实 100 股两年样本、全量回测、部署/重启均已按用户指令跳过。
+
+## CF 归属同步自审（2026-11-02）
+
+发现并处置一次真实恢复缺陷：迁移 owner 后原账号按幂等键不可见，直接 resume 会重复建单；job229 已取消，持久映射+SQL 轮询消除根因。当前无 Required Fixes；定向 28 passed，生产归属和恢复日志已核验。
+
+## 项目瘦身自审（2026-11-02）
+
+无 Required Fixes（待最终验证确认）。清理范围限定可再生缓存和 stray probe；文档均为移动或索引精简，不删除历史正文。大型测试数据、FRM PDF、outputs、Playwright 与 `.tmp` 证据均保留。
+
+## Task ID
+
+CF-001/job227 网关 HTML 瞬断修复：driver 命令级瞬断重试 + 可恢复轮询（2026-11-03，step5review）
+
+## Reviewer
+
+step5review 实施子代理（实施自评；**最终验收留给主 Agent**）
+
+## Review Status
+
+实施自评 PASS（2026-11-03）。Required Fixes：无。**未部署、未 commit、未重跑回测、
+未新建任何 job（job227 仅只读核查）。**
+
+## Findings
+
+1. **根因**：CF-001 等待约 2.6h 后死于 WebBridge **命令级** extension_error
+   （`SyntaxError: Unexpected token '<', "<html>..."`）。链路：页面 `apiFetch`
+   收到网关/代理 HTML 错误页 → JS `r.json()` 抛 SyntaxError → WebBridge 包装为
+   `ok=false` 命令级错误；driver 对命令级错误一律立即抛，一次网关瞬断报废整个
+   已跑 2.6h 的串行队列。同类瞬态：Failed to fetch/NetworkError、网关状态串，
+   以及 daemon/代理层直接返回 HTML body（driver 侧 `json.load` JSONDecodeError）。
+2. **修复**（`scripts/classic_catalog/driver.py`，只改驱动/测试）：
+   `_is_transient_command_error()` 按 message 特征分流；`Browser.evaluate` 重试
+   循环扩展到命令层（与传输层同策略：5 次上限、0.5s 倍增 + ≤0.25s 抖动）；确定性
+   命令错误（JS 逻辑异常/业务拒绝）与 4xx 不重试；`Browser.wait()` 加 `sleep`
+   注入（向后兼容），轮询可恢复。
+3. **幂等**：重试重发同一 evaluate 请求体（idempotency_key 不变，既有测试锁定
+   逐字节一致），提交重试不重复建单。
+4. **范围**：fullscale.py（含主 Agent `max_positions=0`）、worker、生产业务代码
+   零改动。
+
+## Validation Evidence
+
+```text
+RED：tests/test_classic_catalog_driver.py 新增 10 例 8 failed（无命令级重试/
+     wait 无 sleep 注入）
+GREEN：classic_catalog 定向（driver + inventory + report）→ 28 passed
+端到端（只读）：driver Browser 对重建会话 evaluate /api/saas/me → 200
+job227 只读核查：queued（progress 0）→ 复查 running（progress 0，已被认领）
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **瞬断特征白名单而非黑名单**：只对已知网关/网络类消息重试；未命中一律按确定性
+  失败立即抛——避免把页面 JS 逻辑错误拖进 5 次重试拖长故障时间。
+- **wait 轮询不另加兜底 catch**：evaluate 内建重试已覆盖轮询路径；另加一层会
+  双重重试同一瞬断。
+- **命令级重试与传输层共用上限/退避常量**：不新增配置面。
+
+## 遗留风险（移交主 Agent）
+
+- 若网关故障持续 >5 次尝试（≈7.5s 退火 + 5×180s 超时上限），driver 仍会以明确
+  RuntimeError 终止；恢复方式：重建/等待网关恢复后 `--retry-failed` 续跑。
+- job227 已 running，CF 重启时按 results.jsonl done 集合跳过已完成策略即可。
+
+---
+
+## 默认不限持仓（2026-11-03）
+
+Review Status：PASS，无 Required Fixes。改动仅限网站默认参数、后续 classic 提交配置、
+视频参数手册与定向测试；不改引擎语义、不改历史 job。TDD RED 2 failed → GREEN 22 passed，
+new.html inline JS 语法通过。生产备份后部署，active/MainPID 621570，HTML value=0 实测。
+注意：CF-001 等待驱动随后因 WebBridge HTML/extension_error 中断，已另派修复，非本参数改动导致。
+
+## Task ID
+
+CF-001 启动失败修复：WebBridge 会话重建 + driver evaluate 瞬断重试（2026-11-03，step5review）
+
+## Reviewer
+
+step5review 实施子代理（实施自评；**最终验收留给主 Agent**）
+
+## Review Status
+
+实施自评 PASS（2026-11-03）。Required Fixes：无。**未部署、未 commit；未创建任何
+公网 job（验证全部只读）。**
+
+## Findings
+
+1. **根因定位**：WebBridge daemon 正常（`/command` 可达），但
+   `classic-catalog-smoke` 会话 `list_tabs` 返回空——会话标签已丢失，driver 首调
+   `Browser.evaluate` 无执行目标 → 502 Bad Gateway。属浏览器驱动/会话基础设施
+   故障，非策略失败。次要缺陷：`evaluate` 单发 urlopen，任何传输层瞬断直接终止
+   整个 CF（118 策略串行队列不可接受）。
+2. **会话重建**（一次性运维）：同 session `navigate`
+   `https://aguhuice.com/saas/new`（newTab）→ `apiFetch` 可用、
+   `/api/saas/me` 200（专用测试账号 `classic-final-1793612169550@example.invalid`，
+   id 29 / member / quota 不限）、wizard 预览 `strategyYaml` 就绪。未读取任何
+   用户凭证（账号为此前经注册通道自建的专用测试账号）。
+3. **瞬断重试**（`scripts/classic_catalog/driver.py`）：仅传输层错误
+   （URLError/连接重置/超时/OSError）与 HTTP 502/503/504 重试；5 次上限，
+   0.5s 倍增 + ≤0.25s 抖动（总睡眠 ≤ ~7.5s）；命令级错误（payload ok=false，
+   页面 JS 异常）与 4xx 是确定性失败不重试；`max_attempts`/`sleep` 注入参数
+   便于测试。超上限后抛含状态码与尝试次数的明确 RuntimeError。
+4. **幂等保护**：重试重发同一 evaluate 请求体（逐字节一致，测试锁定），其中
+   `idempotency_key: classic-20261103-<id>-v4` 不变——服务端按
+   (user_id, idempotency_key) 去重返回同一 job，提交重试不会重复建单。
+5. **范围**：只改 classic_catalog 驱动/测试；worker 与生产业务代码零改动。
+
+## Validation Evidence
+
+```text
+RED：tests/test_classic_catalog_driver.py 新增 10 例 9 failed（无重试逻辑）
+GREEN：classic_catalog 定向（driver + inventory + report）→ 18 passed
+端到端（只读）：driver Browser 对重建会话 evaluate /api/saas/me → 200；
+  tab= https://aguhuice.com/saas/new，strategyYaml 就绪
+```
+
+## Deliberate Decisions（需用户知情）
+
+- **不重试命令级错误与 4xx**：页面 JS 异常/业务拒绝是确定性失败，重试只会拖长
+  故障时间；502/503/504 与传输错误才是瞬断。
+- **重试上限 5 次 / 总睡眠 ≤7.5s**：瞬断恢复窗口与 CF 串行成本的折中；更长的
+  退火对「代理重启级」故障无益，交由主 Agent 人工重建会话。
+- **会话重建为运维动作而非代码自动化**：driver 保持无凭证、只通过 WebBridge
+   tab 执行；自动建号/登录超出本任务授权范围。
+
+## 遗留风险（移交主 Agent）
+
+- 若 CF 运行中会话**再次**丢失（浏览器重启/扩展断开），driver 会在 5 次重试后
+  以明确 RuntimeError 终止该策略；恢复方式：按同法重建会话后
+  `--retry-failed` 续跑（results.jsonl 已记录进度，done 集合跳过已完成）。
+- 重试期间若命令实际已执行（客户端超时但服务端成功），提交类调用依赖幂等键
+  去重（已锁）；只读调用（me/status 轮询）重复执行无副作用。
+
+---
+
+## Task ID
+
+P0-10 安全调度实施（2026-11-03，step5review；依据 35 号容量模型）
+
+## Reviewer
+
+step5review 实施子代理（实施自评；**最终验收留给主 Agent**）
+
+## Review Status
+
+实施自评 PASS（2026-11-03）。Required Fixes：无。**未部署 ECS、未重启本地 worker、
+未 commit/push；RSS 看门狗与准入均为单元/合成测试，未跑真实压力测试。**
+
+## Findings
+
+1. **峰值预算纯函数**（`worker/capacity.py::estimate_peak_budget`）：35 §2.1 包络
+   模型落地——测量点取实测（item2 6.30/item1 6.38/item3 13.97 GB）×1.25 余量，
+   1 位小数与 35 §2.3 预算表逐字一致（7.9/8.0/17.5）；未知策略（trades=None）取
+   最坏包络 17.5GB；>50 万笔按 17,745 B/笔外推并在 docstring/测试标注**未验证**；
+   阶梯边界（19000/19001、80000/80001）与单调性有测试锁定。
+2. **在途记账 + heavy 限流**（`daemon._slot_loop` + `BudgetLedger`）：认领前按槽位
+   最坏假设预算**原子预留**（重槽 13.97/轻槽 1.5GB，worker 预算默认 15.5GB）。
+   未知全市场 heavy 每 worker 同时最多 1 个（13.97+13.97>15.5 阻断）；一个 heavy
+   + 一个轻任务可共存（15.47≤15.5，复现 35 §2.4 实测操作点）；claim 异常/空轮询/
+   任务结束释放占位；claim 后按任务真实档位定账（重槽领到轻任务释放多预留，
+   槽位快照 budget_gb/tier 可证）。现有内存闸门（2000/6500MB）语义不变。
+3. **RSS 早停**（`slots.execute_job_subprocess`）：父进程 30s 采样 VmRSS，超过
+   12GB×80%=9830MB **且持续上升**（末值严格超阈值 + 尾部 3 样本无回落 + 至少一段
+   严格上升）→ terminate + 可读「资源配额（早停）」RuntimeError。合成轨迹测试：
+   上升穿越终止、高位平台不杀、单次尖峰不杀、低于阈值不杀、恰达阈值不杀。
+   相比 RLIMIT/cgroup 在序列化末段才杀，峰值前拦下可省 30–60 分钟。
+4. **子进程 12GB 对齐 R-MEM-001**：默认 14→12。item3 实测 13.97GB 已越线——
+   按任务授权「超 12GB 允许可读失败，禁止提高上限绕过」落地；尾段分块修复留 CF
+   后续。cgroup 未改（生产 system 级 MemoryMax=18G 已实测生效，主 Agent 更正）。
+5. **P0-9 不回退**：分片上传/沙箱清理/终态 progress=100/reaper 定向回归 161 项全绿。
+
+## Validation Evidence
+
+```text
+RED→GREEN：
+  tests/test_worker_capacity.py      28 passed（预算表/边界/外推/记账/看门狗判定）
+  tests/test_worker_slot_budget.py    9 passed（双 heavy 串行/轻重共存/第二轻阻断/
+                                      预留生命周期/定账/闸门不变/小预算全阻断）
+  tests/test_worker_slots.py          +6（12GB 默认、合成轨迹早停与两种不误杀）
+  tests/test_worker_status.py         槽位快照断言随 additive 字段更新
+定向回归（P0-9+P0-10 worker 全族）→ 161 passed
+```
+
+（全量与门禁结果由主 Agent 验收跑次为准。）
+
+## Deliberate Decisions（需用户知情）
+
+- **准入用实测包络（13.97GB）而非规划值（17.5GB）**：规划值的 1.25 余量由 RSS
+  早停 + RLIMIT_AS(12G) + cgroup(18G) 三层提供，准入重复计余量会把「一个 heavy +
+  一个轻任务」的可行操作点变成「轻任务被堵死」（17.5+1.5>18），与 35 §2.4 实测结论
+  相悖。规划值仍可在 status/文档中展示。
+- **worker 预算默认 15.5GB**（= 23.5GiB − PG 峰值 5.4 − 系统 ~2.5），低于 cgroup
+  18G——为 PG 留余量；env `QRE_WORKER_BUDGET_GB` 可覆盖（worker 侧读取默认常量，
+  部署 unit 可加 env）。
+- **单槽 legacy 模式（run_once）无记账**：该模式同时只跑一个任务，无并发准入问题；
+  生产默认 slots 模式生效。
+- **早停阈值 80% 硬编码于 capacity 常量**（RSS_EARLY_ABORT_RATIO），未做 env 化
+  （避免配置面扩大；调阈值需改码+测试）。
+
+## 遗留风险（移交主 Agent）
+
+- **未知全市场全期任务 >12GB 将可读失败**（预期行为）：CF 中此类任务会落
+  MemoryError/早停错误并可按 max_attempts 重试；尾段分块修复（35 §5 项 7）未排期。
+- 是否给「已实测低换手族」12GB 例外留用户裁决（35 §6 项 1）；当前按无例外实施。
+- 部署需**重启本地 worker**（slots/daemon 改动只在 worker 进程生效）。
+- RSS 看门狗只在 subprocess 模式生效；in-process（legacy 单槽）无子进程可看。
+
+---
+
+## Task ID
+
+经典策略冒烟 wizard 失败自动修复：向导生成 YAML 补 holding 节（2026-11-03，step5review）
+
+## Reviewer
+
+step5review 实施子代理（实施自评；**最终验收留给主 Agent**）
+
+## Review Status
+
+实施自评 PASS（2026-11-03）。Required Fixes：无。**未部署 ECS、未 commit/push、
+未跑真实全量回测；14 个失败策略的 100 股两年小样本重跑留给主 Agent 部署后进行。**
+
+## Findings
+
+1. **根因**：`new.html::refreshWizard()` 生成 experiment/data/universe/signal/
+   evaluation 五节，缺 `holding`；`strategies/spec.py::_mapping`（引擎规格解析）
+   对 holding 节是硬约束，缺节即 `holding section is required`。统一 params 的
+   `max_holding_days` 在引擎运行期覆盖 YAML 值，但不弥补 YAML 结构缺失——
+   所以 14 个 wizard 策略全部以同一错误失败，而 wizard 不支持的 24 项走原 YAML
+   （自带 holding）全部 completed。服务端同源生成器 `build_strategy_yaml`
+   一直带 holding，缺口只在浏览器 JS 生成器。
+2. **修复（1 处生产改动）**：refreshWizard 在 signal 与 evaluation 之间插入
+   `holding:` + `max_holding_days: <#p-holding 值，空='0'>`。单一权威源
+   （回测参数区 #p-holding；UI 默认 20；留空=不限 0 与 buildParams 口径一致）；
+   不发明第二套参数源。`applyName()`（提交路径注入）的「无 max_holding_days
+   才注入」守卫使重复注入不可能。
+3. **测试（TDD，先 RED 后 GREEN）**：`tests/test_saas_wizard_yaml_holding.py`
+   6 例，node vm 抽取并运行**真实模板**的 condExpression/readGroup/usedFactors/
+   setYaml/applyName/refreshWizard（不打桩生成逻辑）：默认 20 且过
+   `security.yaml_guard.validate_strategy_yaml`；清空=0 过闸；常量右值条件
+   共存过闸；applyName 幂等（YAML 只有一节 holding）；UI 输入框默认值 ==
+   服务端 `build_strategy_yaml` holding_days 默认值（单源锁，防再次漂移）；
+   服务端生成器回归。另修 `tests/test_saas_factor_picker.py` DOM 底座漏注册
+   `#p-holding` 的 harness 缺口（真实页面固有元素）。
+4. **不回归面**：wizard_state 还原（restoreWizardState → refreshWizard）、
+   NL/YAML 入口、服务端生成器、模板 inline JS 语法守卫全绿。
+
+## Validation Evidence
+
+```text
+RED：tests/test_saas_wizard_yaml_holding.py 4 failed（生成 YAML 无 holding 节）
+GREEN：同文件 6 passed
+相关集（wizard holding + factor picker + 模板 JS 语法 + factor wizard +
+        saas pages + lab + nl guard + gui saas + classic driver）→ 352 passed
+```
+
+（全量与门禁结果由主 Agent 验收跑次为准。）
+
+## Deliberate Decisions（需用户知情）
+
+- **留空持仓 = max_holding_days: 0**（协议 0=不限），与输入框占位符承诺及
+  buildParams 既有口径一致；不采用「缺省 1 日」（spec 的键缺省值是引擎兜底，
+  不是 UI 承诺）。
+- **未改 lab.html（8081）**：其 `buildYamlPreview()` 同族缺口存在，但提交路径
+  （applyName 同款注入，param-holding 默认 20）会补 holding，仅「清空持仓」
+  潜在复现，公网链路不受影响；列为待裁决，不在本修复扩大范围。
+
+## 遗留风险（移交主 Agent）
+
+- 部署后需重跑 14 个失败策略的 100 股×两年小样本确认 completed（用户既定验收）。
+- 部署文件仅 `src/quant_research_engine/gui/saas/templates/new.html`（+ 测试），
+  SaaS 模板热加载/重启按既有部署流程。
+- lab.html 同族缺口待裁决（见上）。
+
+---
+
+## Task ID
+
+P0-9 结果回传可靠性剩余五项修复（2026-11-03，step5review 后台实施子代理）
+
+## Reviewer
+
+step5review 实施子代理（实施自评；**最终验收留给主 Agent**）
+
+## Review Status
+
+实施自评 PASS（2026-11-03）。Required Fixes：**2 项，均已修正**——见下两节。
+**未 commit/push、未部署 ECS、未重启本地 worker、未跑全量回测、未碰生产数据库、
+未清理压测遗留归档。**
+
+## Required Fix（主 Agent 静态审查发现，2026-11-03 已修正）
+
+**问题**：初版清理规则为「安全终态（completed/failed/canceled/expired）即删」，
+其中 `failed` 与「上传开关关闭时的 meta-only completed」会删掉本地完整产物——
+而上传失败/云端不完整时本地正是唯一完整副本，违反压测归档保护目标。
+
+**修正（最小改动 + TDD）**：`_report_results` 改为返回 `(终态, cloud_complete)`；
+`_cleanup_work_base(job_id, work_base, status, *, cloud_complete=False)` 的
+**唯一删除前提 = completed 且云端完整副本已确认**（上传开关开、全部批次
+`completed`、`result_files` 未截断且无缺失文件，见 `_cloud_copy_complete`）。
+上传失败（failed）、上传开关关闭（blob 从未上云）、20 MiB 截断（云端缺文件）、
+取消/过期/回队/终态未知——一律保留本地；归属/前缀判定不变。
+回归（`tests/test_worker_tmp_cleanup.py` 18 例）：上传失败（含 413 不可重试）
+后目录仍在、upload disabled 后目录仍在、truncated 后目录仍在、无
+result_files 元数据（旧 runner）后目录仍在、真正 completed+上传确认才清理、
+runner 失败（failed）保留、外 job 前缀/目录外/未确认云端副本不删。
+修正后定向测试（cleanup/chunked/error classes/truncation/reaper/worker/
+slots/status）**113 passed**；全量回归由主 Agent 在冒烟批次结束后执行。
+
+## Required Fix 2（生产小样本实测，2026-11-03，已修正）
+
+**问题（job 212）**：541 文件全部回传、`result_files.truncated=false`、job 已
+completed，但 `jobs.progress=99 / progress_message='产物回传中 500/541 文件'`。
+根因：daemon 在 files 完成后才 `heartbeat(100)`，此时 job 已 completed，
+heartbeat 的 WHERE 只放行 leased/running/uploading → 409 被拒，终态进度永远
+停在 99（上传段最后一个值）。
+
+**修正（服务端拥有终态进度）**：三条 completed 路径（`api_result_files` 全部
+落盘、`api_result_meta` meta-only、旧单包 `/result`）在置 completed 的**同一
+事务**里同步 `progress=100 / progress_message='结果已回传'`；daemon 删除
+completed 后的事后心跳（`_PROGRESS_DONE` 常量一并移除），上传段仍 95→99
+ramp。未完成态不虚构百分比（partial upload 的 progress/message 保持心跳原值）。
+旧 worker（无上传心跳）同样受益——终态 100 完全不依赖 worker 行为。
+回归 `tests/test_result_upload_terminal_progress.py`（5 例，真实临时 PG 库）：
+files completed=100、meta-only completed=100、partial 保持 uploading 且不篡改
+进度、旧单包 completed=100、completed 后 heartbeat 仍 409（协议不变的证据）。
+定向测试（terminal progress + cleanup + chunked + error classes + truncation +
+reaper + worker/slots/status）**118 passed**。
+
+## Findings（五项各自实现与验证）
+
+1. **B 分片上传（根治 413）**：`worker/client.py` 按「≤100 文件或 ≤8 MiB」分批
+   多次 POST `/result/files`（`_iter_upload_batches` + `_upload_batch`），服务端
+   零改动（upload_token 幂等 + remaining 结算 = 断点续传/重复提交覆盖写）。
+   传输失败统一 `CloudError(status=None)`（可重试）；全部批次后非 completed
+   抛错，不谎报成功。验证：1024 个 1B 文件 → 11 批、每批 ≤100 part、最终
+   completed；单包 5001 part 仍 413（根因锁定：MAX_FORM_PARTS=5000 只是抬高
+   上限）；chunk 边界 100/101、字节阈值、超大单文件独占一批；重试后续传；
+   重复提交 remaining 不重复计；sha256 不符/清单外文件 400 且 job 不 completed；
+   daemon 本地文件缺失 → `result_upload_error`。
+2. **§8.5 截断显式标记**：`collect_result_files_with_meta` 产出
+   truncated/included/skipped/预算/missing 元数据（旧 API 薄封装保留）；
+   `symbol_details`（此前被 report_result 丢弃——压测记录的恒 null 根因）与
+   `result_files` 经 meta 回传，服务端落 `results.result_files` JSONB 列
+   （schema 幂等 + 应用层懒补列，ECS 老库缺列降级不写），
+   `/api/results/<id>/summary` 增量返回。验证：超预算 truncated=true + 跳过
+   计数、名单封顶 50、缺失文件记 missing 不算截断、旧 worker 不带字段 → null。
+3. **§8.7 沙箱清理**：daemon 自建 `qre-worker-job<id>-` 目录透传 runner
+   （子进程经 `execute_job_subprocess(work_base=...)`）。**主 Agent Required
+   Fix 修正后**：唯一删除前提 = completed **且** 云端完整副本已确认
+   （上传开关开、全部批次 completed、`result_files` 未截断/无缺失）；
+   上传失败（failed，本地唯一完整副本）、上传开关关闭（blob 从未上云）、
+   20 MiB 截断（云端缺文件）、取消/过期/回队/未知终态一律保留；归属匹配
+   （系统临时目录 + 精确前缀）。验证：确认上传后才清；上传失败/413/upload
+   disabled/truncated/无元数据/runner 失败均保留；外前缀、目录外、未确认
+   云端副本不删。
+4. **§8.11 progress**：runner 守护线程按逐股产物目录数写 progress.json
+   （batch 5%→90% 真实百分比；shared/single 只报 phase 不虚构百分比）；
+   daemon 心跳携带（单调守卫 + 0–100 夹紧），启动即报（leased→running 立即可见），
+   执行完 95，分片上传 95→99 ramp 兼续租，完成 100。验证：合成逐股产物
+   推进、watcher 回退被守卫生效、最终 100、上传期间批级心跳。
+5. **§8.15 reaper 防重算**：`_reap_expired` 对 uploading + 租约过期 + 已有
+   results 行 → 直接 failed（`result_upload_error`，可读 message），不回队。
+   验证（真实临时 PG 库）：该组合 failed 且 attempts 不涨、reap 幂等、
+   无 results 的 uploading 仍回队、running+results 仍回队、leased 仍回队。
+
+## 协议兼容性说明
+
+- **worker→server 协议零新增端点**：分片上传复用既有 `/result/files`
+  （旧 worker 单包 POST 仍被接受，parts ≤ 5000 时 200）；`result/meta` 请求体
+  新增 `result_files`/`symbol_details` 为 **additive**——旧 worker 不带 →
+  服务端存 NULL，旧字段形状不变。
+- **新列 additive + 懒补列**：`results.result_files JSONB`
+  （schema `ADD COLUMN IF NOT EXISTS`；ECS 老库 owner 非 app 账号时 ALTER 失败
+  → 降级不写，读取 null，与 result_contract 同模式）；`/api/results/<id>/summary`
+  老结果为 null，前端不显示「不完整」提示。
+- **reaper 语义变化是有意的协议修订**（17 号 §4.2 已记）：uploading+results
+  不再回队；其余状态机迁移不变。
+- 公开 YAML/Builder API、job 状态枚举、error_class 枚举均不变
+  （`result_upload_error` 为既有分类，reaper 复用）。
+
+## Validation Evidence
+
+```text
+RED→GREEN（每项先看 RED）：
+  tests/test_result_upload_chunked.py        5 failed → 16 passed
+  tests/test_result_files_truncation.py      9 failed → 11 passed
+  tests/test_worker_tmp_cleanup.py           5 failed + 8 errors → 13 passed
+  tests/test_reap_uploading_with_results.py  5 failed → 5 passed
+回归（stub 契约补参后）：
+  test_worker/test_worker_slots/test_result_upload_error_classes/
+  test_gui_saas/test_saas_result_contract/test_saas_first_success_ux/
+  test_saas_access_hardening → 全绿
+```
+
+（定向测试 113 passed：cleanup 18 + chunked 16 + error classes 9 + truncation 11
++ reaper 5 + worker/slots/status 54；全量回归由主 Agent 在冒烟批次结束后执行。）
+
+## Deliberate Decisions（需用户知情）
+
+- **分批阈值 100 文件 / 8 MiB**：远低于 MAX_FORM_PARTS=5000 与 nginx
+  client_max_body_size；重传粒度细。非配置化（常量），调整需改码。
+- **20 MiB 预算本身未放大**：只补显式标记；放大预算/OSS 直传仍留 M4。
+- **清理唯一前提 = completed + 云端完整副本确认**（Required Fix）：压测遗留
+  `/tmp/qre-worker-job7-*`、`job8-*` 永不在清理范围（归属前缀不匹配当前
+  job id）；上传失败/上传关闭/截断/failed/canceled/expired/queued/unknown
+  一律保留本地。取舍：全量任务普遍触发 20 MiB 截断，其沙箱将长期保留
+  （磁盘占用换归档安全）——彻底清理需等 OSS 直传（M4）或人工归档策略。
+- **progress 不虚构**：shared/single 无逐股中间产物，只更新 message；
+  百分比只来自真实产物计数（符合 17 协议 §8 前端纪律）。
+- **reaper 对 uploading+results 直接 failed 不尊重 attempts**：有意为之——
+  回队=整单重算；用户可重新提交（新 job）。
+
+## 遗留风险（移交主 Agent）
+
+- 真实小样本回测未跑（任务边界）：建议主 Agent 用全市场小样本验证分片上传
+  完整落盘、`result_files.truncated` 标记、progress 推进与终值 100。
+- **ECS 老库需 apply `results.result_files` 列**（或依赖应用层懒补列——ECS 上
+  results 表 owner 是 postgres，app 账号 ALTER 可能失败，届时该特性静默降级
+  为 null，需 DBA apply `deploy/saas/cloud_schema.sql`）。
+- **本地 worker 必须重启**才生效（daemon/runner/client/slots 改动）；SaaS 侧
+  （app.py reaper + meta 落列）随 ECS 部署生效。
+- 长回传（>15 分钟）依赖上传期间心跳续租；若 worker 在上传期间网络长时间
+  中断，reaper 仍会按 §8.15 落 failed（不回队）——语义正确但用户需重提交。
+
+---
+
 ## Task ID
 
 Builder 通道 crosses_above/crosses_below 真实穿越语义修复（2026-11-03，step5review 实施子代理）

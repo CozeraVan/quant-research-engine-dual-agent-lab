@@ -1,3 +1,8 @@
+**默认不限持仓已部署（2026-11-03，未 commit）**：仅同步 `gui/saas/templates/new.html`，
+`#p-maxpos` 初始值与空值回退改为 0（不限）；备份 `/tmp/qre-maxpos-default-<STAMP>/new.html`，
+qre-saas 重启后 active/MainPID 621570，生产 `/saas/new` 实测 value=0。worker 未重启、
+历史 job 未改、未跑新回测；后续 classic 脚本配置仅本地生效。
+
 **root SSH 直连已禁、deploy+sudo 部署纪律已落地（2026-10-27，QRE-ECS-SSH-HARDENING，待人工验收、未 commit/push）**：
 `/etc/ssh/sshd_config.d/99-qre-hardening.conf`（新）设 `PermitRootLogin no`/`PasswordAuthentication no`/
 `KbdInteractiveAuthentication no`/`PubkeyAuthentication yes`/`AllowTcpForwarding yes`（TCP 转发显式保留——

@@ -1,6 +1,18 @@
 # Coding Handoff
 
-## 2026-11-04 会员/密码通道后端（本地完成，UI 未做，未部署/未 commit）
+## 2026-11-04 Authing 完全移除（本地完成，未部署/未 commit）
+
+改动文件：
+- 删除 `src/quant_research_engine/gui/saas/authing.py`、`tests/test_saas_authing.py`。
+- `src/quant_research_engine/gui/saas/app.py`：登录页上下文只保留 `oidc_client`（去 `authing_ready`）；删 `_user_from_authing_claims`、`GET /saas/login/authing`、`POST /api/saas/auth/authing`、`POST /api/saas/auth/bind`；callback 按 Casdoor 单一 provider 分流（`pop_state(app,"casdoor",state)`、`casdoor_next`、`exchange_code(app,"casdoor",code)`、`_user_from_oidc_claims(conn,"casdoor",claims)`）。
+- `src/quant_research_engine/gui/saas/oidc_client.py`：docstring 去 Authing；`get_config` 删除 authing 分支（仅 Casdoor）。
+- `src/quant_research_engine/gui/saas/templates/login.html`、`src/quant_research_engine/gui/static/account.css`：删 Authing 入口与 `.auth-authing` 样式。
+- `deploy/saas/cloud_schema.sql`：改为 `DROP INDEX IF EXISTS idx_users_authing;` + `ALTER TABLE users DROP COLUMN IF EXISTS authing_id;`（新旧库均幂等）。
+- 测试：`tests/test_saas_oidc_client.py`、`tests/test_saas_casdoor.py`、`tests/test_gui_saas_pages.py` 同步改写（登录页断言不含 `/saas/login/authing`、Casdoor 为唯一入口）。
+
+验证：`uv run pytest tests/test_saas_casdoor.py tests/test_saas_oidc_client.py tests/test_gui_saas_pages.py -q` → **119 passed**；`tests/test_saas_signals.py tests/test_saas_worker_status.py` → **36 passed**（批量 -k 时两例 teardown `DROP DATABASE ... WITH (FORCE)` 因共用临时库竞争报错，单跑全绿，非本次改动）。
+
+未做：生产 ECS 部署、生产库 `authing_id` 列与 `AUTHING_*` 环境变量清理、老 Authing 用户迁移；未部署、未重启任何 qre 服务、未 commit / push。
 
 改动文件：
 - `src/quant_research_engine/gui/saas/membership.py`（新）：会员/配额纯函数模块 —— `TIER_LABELS`、`TIER_POLICY_DEFAULTS`、`USED_TODAY_SQL`、`default_policy`/`normalize_policy`/`tier_label`/`quota_view`/`is_quota_exceeded`/`is_watch_exceeded`。不限权益统一 `limit="不限"`、`remaining=None`、`unlimited=True`。

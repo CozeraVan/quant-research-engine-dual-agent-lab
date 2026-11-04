@@ -1495,23 +1495,17 @@ def create_saas_app() -> Flask:
             from flask import redirect
 
             return redirect("/saas/")
-        from quant_research_engine.gui.saas import authing, oidc_client
+        from quant_research_engine.gui.saas import oidc_client
 
         try:
             oidc_client.get_config(app, "casdoor")
             casdoor_ready = True
         except oidc_client.OidcError:
             casdoor_ready = False
-        try:
-            authing._authing_config(app)
-            authing_ready = True
-        except authing.AuthingError:
-            authing_ready = False
         return render_template(
             "login.html",
             login_next=_safe_saas_next(request.args.get("next")),
             casdoor_ready=casdoor_ready,
-            authing_ready=authing_ready,
         )
 
     @app.get("/saas/")
@@ -2788,10 +2782,7 @@ def create_saas_app() -> Flask:
             conn.execute(text("DELETE FROM sessions WHERE user_id = :uid"), {"uid": user["id"]})
         return jsonify({"ok": True})
 
-    # --- Authing OIDC 登录（QRE-AUTH-MEMBERSHIP / A3，18 号设计文档） ---
-    # 托管登录页授权码流程：/saas/login/authing 302 → Authing（短信/扫码 UI 托管）
-    # → /saas/login/callback 换票验签 → 按 sub 建档/关联 → 发本地 session token。
-    # POST /api/saas/auth/authing 为同语义的 JSON 端点（程序化接入/测试）。
+    # --- 本地会话 ---
 
     def _session_for_user(conn: Any, user_id: int) -> str:
         token = secrets.token_urlsafe(32)
@@ -2804,54 +2795,11 @@ def create_saas_app() -> Flask:
         )
         return token
 
-    def _user_from_authing_claims(conn: Any, claims: dict) -> Any:
-        """按 sub（authing_id）查用户；无则自动建档（首登即注册，18 号文档 §2）。
-        返回 users 行（mappings）。手机号撞已有旧账号时新行 phone 置 NULL，
-        关联走 /api/saas/auth/bind 绑定入口。"""
-        from quant_research_engine.gui.saas import authing
-
-        sub = str(claims["sub"])
-        row = conn.execute(
-            text("SELECT id, phone, email, nickname, quota_daily, tier, status "
-                 "FROM users WHERE authing_id = :sub"),
-            {"sub": sub},
-        ).mappings().first()
-        if row is not None:
-            if row["status"] != "active":
-                raise authing.AuthingError("账号已被禁用，请联系运营方")
-            conn.execute(
-                text("UPDATE users SET last_login_at = now(), "
-                     "nickname = COALESCE(:nick, nickname), "
-                     "avatar_url = COALESCE(:avatar, avatar_url) WHERE id = :id"),
-                {"nick": claims.get("nickname") or claims.get("name"),
-                 "avatar": claims.get("picture"), "id": row["id"]},
-            )
-            return row
-        phone = (claims.get("phone") or claims.get("phone_number") or "").strip() or None
-        if phone:
-            dup = conn.execute(
-                text("SELECT id FROM users WHERE phone = :p"), {"p": phone}
-            ).first()
-            if dup is not None:
-                phone = None  # 手机号属旧账号，先置空，由绑定入口关联
-        row = conn.execute(
-            text(
-                "INSERT INTO users (authing_id, phone, nickname, avatar_url, tier, "
-                "last_login_at, member_since) "
-                "VALUES (:sub, :phone, :nick, :avatar, 'member', now(), now()) "
-                "RETURNING id, phone, email, nickname, quota_daily, tier, status"
-            ),
-            {"sub": sub, "phone": phone,
-             "nick": claims.get("nickname") or claims.get("name"),
-             "avatar": claims.get("picture")},
-        ).mappings().one()
-        return row
-
     def _user_from_oidc_claims(conn: Any, provider: str, claims: dict) -> Any:
         """通用 OIDC 主张 → users 行：按 (provider, sub) 关联 auth_identities。
 
-        无身份则自动建档（首登即注册，与 Authing 路径同语义）。不写 email，
-        避免与旧邮箱账号唯一冲突；手机号撞旧账号时置 NULL，关联走绑定入口。
+        无身份则自动建档（首登即注册）。不写 email，避免与旧邮箱账号唯一冲突；
+        手机号撞旧账号时置 NULL，由运营方人工关联。
         """
         from quant_research_engine.gui.saas import oidc_client
 
@@ -2880,7 +2828,7 @@ def create_saas_app() -> Flask:
                 text("SELECT id FROM users WHERE phone = :p"), {"p": phone}
             ).first()
             if dup is not None:
-                phone = None  # 手机号属旧账号，先置空，由绑定入口关联
+                phone = None  # 手机号属旧账号，先置空，由运营方人工关联
         row = conn.execute(
             text(
                 "INSERT INTO users (phone, nickname, avatar_url, tier, "
@@ -2900,7 +2848,7 @@ def create_saas_app() -> Flask:
         return row
 
     # --- Casdoor 自建登录（36 号文档 §3，2026-11-04） ---
-    # 与 Authing 共用 /saas/login/callback：state 归属决定换票与建档路径。
+    # /saas/login/casdoor → Casdoor 托管页 → /saas/login/callback 换票验签发文。
 
     @app.get("/saas/login/casdoor")
     def saas_login_casdoor_redirect() -> Any:
@@ -2917,128 +2865,30 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": str(exc)}), 503
         return redirect(url)
 
-    @app.get("/saas/login/authing")
-    def saas_login_authing_redirect() -> Any:
-        from flask import redirect
-
-        from quant_research_engine.gui.saas import authing
-
-        session["authing_next"] = _safe_saas_next(request.args.get("next"))
-        try:
-            url = authing.build_authorize_url(app, authing.new_state(app))
-        except authing.AuthingError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 503
-        return redirect(url)
-
     @app.get("/saas/login/callback")
     def saas_login_callback() -> Any:
-        from quant_research_engine.gui.saas import authing, oidc_client
+        from quant_research_engine.gui.saas import oidc_client
 
         code = str(request.args.get("code") or "").strip()
         state = str(request.args.get("state") or "")
-        # state 一次性：先认 Authing（存量路径），再认通用 OIDC（Casdoor）。
-        provider = "authing" if authing.pop_state(app, state) else ""
-        if not provider and oidc_client.pop_state(app, "casdoor", state):
-            provider = "casdoor"
-        session_key = f"{provider}_next" if provider else "authing_next"
-        next_url = _safe_saas_next(session.pop(session_key, "/saas/"))
-        if not code or not provider:
+        # state 一次性，且按 provider 命名空间隔离：只有 Casdoor 发出的 state 能换票。
+        ok = oidc_client.pop_state(app, "casdoor", state)
+        next_url = _safe_saas_next(session.pop("casdoor_next", "/saas/"))
+        if not code or not ok:
             return render_template("login_callback.html", error="登录状态已失效，请返回登录页重试"), 400
         try:
-            if provider == "authing":
-                claims = authing.exchange_code(app, code)
-            else:
-                claims = oidc_client.exchange_code(app, provider, code)
-        except (authing.AuthingError, oidc_client.OidcError) as exc:
+            claims = oidc_client.exchange_code(app, "casdoor", code)
+        except oidc_client.OidcError as exc:
             return render_template("login_callback.html", error=str(exc)), 502
         engine = _get_engine(app)
         with engine.begin() as conn:
             try:
-                if provider == "authing":
-                    user = _user_from_authing_claims(conn, claims)
-                else:
-                    user = _user_from_oidc_claims(conn, provider, claims)
-            except (authing.AuthingError, oidc_client.OidcError) as exc:
+                user = _user_from_oidc_claims(conn, "casdoor", claims)
+            except oidc_client.OidcError as exc:
                 return render_template("login_callback.html", error=str(exc)), 403
             token = _session_for_user(conn, user["id"])
         return render_template("login_callback.html", token=token,
                                nickname=user["nickname"] or "", next=next_url)
-
-    @app.post("/api/saas/auth/authing")
-    def api_auth_authing() -> Any:
-        """JSON 版换票：{code, state} → {token, user}（同回调语义，供程序化接入）。"""
-        from quant_research_engine.gui.saas import authing
-
-        data = request.get_json(silent=True) or {}
-        code = str(data.get("code") or "").strip()
-        state = str(data.get("state") or "")
-        if not code:
-            return jsonify({"ok": False, "error": "缺少 code"}), 400
-        if not authing.pop_state(app, state):
-            return jsonify({"ok": False, "error": "state 无效或已过期"}), 400
-        try:
-            claims = authing.exchange_code(app, code)
-        except authing.AuthingError as exc:
-            status = 503 if "未配置" in str(exc) else 502
-            return jsonify({"ok": False, "error": str(exc)}), status
-        engine = _get_engine(app)
-        with engine.begin() as conn:
-            try:
-                user = _user_from_authing_claims(conn, claims)
-            except authing.AuthingError as exc:
-                return jsonify({"ok": False, "error": str(exc)}), 403
-            token = _session_for_user(conn, user["id"])
-        return jsonify({"ok": True, "token": token, "user": _jsonable(dict(user))})
-
-    @app.post("/api/saas/auth/bind")
-    def api_auth_bind() -> Any:
-        """绑定旧账号（18 号文档 §4）：当前须为 Authing 登录态（Bearer），
-        提交旧账号 邮箱+密码 验证后把 authing_id 迁到旧账号行；
-        自动建档产生的新行若无任何回测/策略则随绑定删除（否则 409 人工处理）。"""
-        engine = _get_engine(app)
-        uid = _current_user_id(app, engine)
-        if uid is None:
-            return jsonify({"ok": False, "error": "未登录"}), 401
-        data = request.get_json(silent=True) or {}
-        email = str(data.get("email") or "").strip().lower()
-        password = str(data.get("password") or "")
-        if not email or not password:
-            return jsonify({"ok": False, "error": "请填写旧账号的邮箱和密码"}), 400
-        with engine.begin() as conn:
-            current = conn.execute(
-                text("SELECT id, authing_id FROM users WHERE id = :uid"), {"uid": uid}
-            ).mappings().first()
-            if current is None or not current["authing_id"]:
-                return jsonify({"ok": False, "error": "当前账号不是 Authing 登录态，无法绑定"}), 400
-            old = conn.execute(
-                text("SELECT id, password_hash, authing_id, status FROM users WHERE email = :e"),
-                {"e": email},
-            ).mappings().first()
-            if old is None or not old["password_hash"] or not _verify_password(password, old["password_hash"]):
-                return jsonify({"ok": False, "error": "邮箱或密码错误"}), 401
-            if old["status"] != "active":
-                return jsonify({"ok": False, "error": "该账号已被禁用，请联系运营方"}), 403
-            if old["id"] == uid:
-                return jsonify({"ok": True, "user_id": uid, "already": True})
-            if old["authing_id"]:
-                return jsonify({"ok": False, "error": "该旧账号已绑定过其他登录身份"}), 409
-            used = conn.execute(
-                text("SELECT (SELECT count(*) FROM jobs WHERE user_id = :uid) + "
-                     "(SELECT count(*) FROM strategies WHERE user_id = :uid) + "
-                     "(SELECT count(*) FROM feedback WHERE user_id = :uid) + "
-                     "(SELECT count(*) FROM factor_requests WHERE user_id = :uid)"),
-                {"uid": uid},
-            ).scalar_one()
-            if used:
-                return jsonify({"ok": False, "error": "当前新账号已有回测/策略数据，无法自动合并，请联系运营方人工关联"}), 409
-            conn.execute(text("DELETE FROM sessions WHERE user_id = :uid"), {"uid": uid})
-            conn.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": uid})
-            conn.execute(
-                text("UPDATE users SET authing_id = :sub, last_login_at = now() WHERE id = :id"),
-                {"sub": current["authing_id"], "id": old["id"]},
-            )
-            token = _session_for_user(conn, old["id"])
-        return jsonify({"ok": True, "token": token, "user_id": old["id"], "bound": email})
 
     @app.get("/api/saas/me")
     def api_me() -> Any:

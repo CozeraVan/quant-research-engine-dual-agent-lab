@@ -397,19 +397,19 @@ BEGIN
 END $$;
 
 -- QRE-AUTH-MEMBERSHIP（A2，2026-09-27，18 号设计文档 §3）：
--- Authing 身份层接入。authing_id = OIDC sub（唯一，首登自动建档）；
--- avatar_url 同步 Authing 资料；member_since/member_expire_at 为会员制预留字段
--- （收费模式未定，只入库不生效）。email+password_hash 保留作降级登录通道。
-ALTER TABLE users ADD COLUMN IF NOT EXISTS authing_id TEXT;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_authing ON users (authing_id) WHERE authing_id IS NOT NULL;
+-- avatar_url 为 OIDC 资料同步字段；member_since/member_expire_at 为会员制预留字段
+-- （收费模式未定，只入库不生效）。手机号/邮箱+密码为自建登录通道。
+-- 2026-11-04：Authing 已完全移除，authing_id 一并废弃（幂等删除，兼容已建库）。
+DROP INDEX IF EXISTS idx_users_authing;
+ALTER TABLE users DROP COLUMN IF EXISTS authing_id;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS member_since TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS member_expire_at TIMESTAMPTZ;
 
 -- QRE-AUTH-MEMBERSHIP / Casdoor 自建登录（36 号文档 §3，2026-11-04）：
--- OIDC 身份与本地用户的映射，按 (provider, sub) 唯一；users.authing_id 保留
--- 给 Authing 存量路径，不动。provider 如 casdoor，sub = id_token.sub。
--- 同一自然人若先后用 Authing 与 Casdoor 登录，会产生两行 users，需人工关联。
+-- OIDC 身份与本地用户的映射，按 (provider, sub) 唯一，是第三方身份的唯一权威；
+-- users 表不再存 sub。provider 如 casdoor，sub = id_token.sub。
+-- 同一自然人若在不同 provider 下登录，会产生两行 users，需人工关联。
 CREATE TABLE IF NOT EXISTS auth_identities (
     id         BIGSERIAL PRIMARY KEY,
     user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

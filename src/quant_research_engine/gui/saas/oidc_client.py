@@ -1,14 +1,11 @@
 """通用 OIDC 授权码适配器（业务无关，可复用到任意 Flask 项目）。
 
-设计目标（36 号文档 §3）：把 `authing.py` 里的 Authing 专用逻辑抽象为
-provider 可配置的通用客户端。Authing 与 Casdoor 仅是两组配置；未来项目
-复用本模块 = 拷文件 + 配环境变量 + 一张 `auth_identities(provider, sub)` 表。
+设计目标（36 号文档 §3）：把授权码换票 + id_token 验签抽成 provider 可配置的
+通用客户端；未来项目复用本模块 = 拷文件 + 配环境变量 + 一张
+`auth_identities(provider, sub)` 表。
 
 配置（env 或 app.config，env 优先，与 QRE `_cfg` 同语义）：
-  authing（兼容存量，无需改任何现有变量）：
-    AUTHING_HOST / AUTHING_APP_ID / AUTHING_APP_SECRET / AUTHING_REDIRECT_URI
-    issuer 推导为 ``<AUTHING_HOST>/oidc``
-  其他 provider（以 casdoor 为例）：
+  以 casdoor 为例：
     CASDOOR_ISSUER / CASDOOR_CLIENT_ID / CASDOOR_CLIENT_SECRET / CASDOOR_REDIRECT_URI
 
 端点通过 OIDC discovery（``<issuer>/.well-known/openid-configuration``）获取，
@@ -48,22 +45,13 @@ def _setting(app: Any, key: str) -> str:
 def get_config(app: Any, provider: str) -> dict[str, str]:
     """返回 provider 的 issuer/client_id/client_secret/redirect_uri；缺配置抛错。"""
     provider = provider.lower().strip()
-    if provider == "authing":
-        host = _setting(app, "AUTHING_HOST").rstrip("/")
-        cfg = {
-            "issuer": f"{host}/oidc" if host else "",
-            "client_id": _setting(app, "AUTHING_APP_ID"),
-            "client_secret": _setting(app, "AUTHING_APP_SECRET"),
-            "redirect_uri": _setting(app, "AUTHING_REDIRECT_URI"),
-        }
-    else:
-        prefix = provider.upper()
-        cfg = {
-            "issuer": _setting(app, f"{prefix}_ISSUER").rstrip("/"),
-            "client_id": _setting(app, f"{prefix}_CLIENT_ID"),
-            "client_secret": _setting(app, f"{prefix}_CLIENT_SECRET"),
-            "redirect_uri": _setting(app, f"{prefix}_REDIRECT_URI"),
-        }
+    prefix = provider.upper()
+    cfg = {
+        "issuer": _setting(app, f"{prefix}_ISSUER").rstrip("/"),
+        "client_id": _setting(app, f"{prefix}_CLIENT_ID"),
+        "client_secret": _setting(app, f"{prefix}_CLIENT_SECRET"),
+        "redirect_uri": _setting(app, f"{prefix}_REDIRECT_URI"),
+    }
     if not cfg["issuer"] or not cfg["client_id"] or not cfg["client_secret"]:
         raise OidcError(f"OIDC provider 未配置：{provider}")
     if not cfg["redirect_uri"]:

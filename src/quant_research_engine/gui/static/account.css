@@ -291,17 +291,6 @@
   color: var(--grey);
   font-size: 15.5px;
 }
-.auth-authing {
-  display: block;
-  margin-top: 12px;
-  text-align: center;
-  color: var(--faint);
-  font-size: 14.5px;
-  text-decoration: underline;
-  text-decoration-color: var(--line);
-  text-underline-offset: 3px;
-}
-.auth-authing:hover { color: var(--lav-deep); }
 .auth-guest {
   margin: 24px 0 0;
   padding-top: 18px;

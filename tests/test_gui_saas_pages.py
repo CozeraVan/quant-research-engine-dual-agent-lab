@@ -1771,15 +1771,22 @@ function pendingResponse(options){
         assert 'id="tab-login"' in html and 'id="tab-register"' in html
         assert 'type="password"' in html and 'id="btn-login"' in html
         assert 'name="viewport"' in html
+        # 2026-11-04：Authing 入口已完全移除
+        assert "/saas/login/authing" not in html
+        assert "快捷登录" not in html
 
-    def test_login_page_preserves_safe_next(self, client):
+    def test_login_page_preserves_safe_next(self, client, monkeypatch):
+        monkeypatch.setenv("CASDOOR_ISSUER", "http://127.0.0.1:8000")
+        monkeypatch.setenv("CASDOOR_CLIENT_ID", "cid")
+        monkeypatch.setenv("CASDOOR_CLIENT_SECRET", "csec")
         resp = client.get("/saas/login?next=/saas/jobs/78%3Fx%3D1%23risk")
         assert resp.status_code == 200
         html = resp.get_data(as_text=True)
         assert 'const LOGIN_NEXT = "/saas/jobs/78?x=1#risk";' in html
         assert "location.href = LOGIN_NEXT;" in html
         assert "location.href = '/saas/';" not in html
-        assert 'href="/saas/login/authing?next=%2Fsaas%2Fjobs%2F78%3Fx%3D1%23risk"' in html
+        assert 'href="/saas/login/casdoor?next=%2Fsaas%2Fjobs%2F78%3Fx%3D1%23risk"' in html
+        assert "/saas/login/authing" not in html
 
     def test_common_access_fallback_helpers(self, client):
         html = client.get("/saas/login").get_data(as_text=True)
