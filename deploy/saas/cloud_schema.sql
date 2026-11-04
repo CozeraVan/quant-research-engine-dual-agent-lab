@@ -185,6 +185,10 @@ CREATE INDEX IF NOT EXISTS idx_results_user ON results (user_id, created_at DESC
 ALTER TABLE results ALTER COLUMN user_id DROP NOT NULL;  -- QRE-SAAS-D1D2：游客结果行
 -- 老库幂等自愈（应用层亦懒 ALTER；ECS 上 results 表 owner 是 postgres，需 DBA apply）
 ALTER TABLE results ADD COLUMN IF NOT EXISTS result_contract JSONB;
+-- P0-9（CR-2026-11-03 §8.5）：回传完整性元数据——truncated/included/skipped/
+-- 预算/symbol_details。worker 超 20 MiB 预算跳文件时显式标记（替代静默跳过）；
+-- 旧 worker 不带该字段 → NULL。ECS 老库由 DBA apply（应用层懒 ALTER 兜底）。
+ALTER TABLE results ADD COLUMN IF NOT EXISTS result_files JSONB;
 
 -- QRE-SAAS-ADMIN-E1E3（后台管理，2026-09-27）：
 -- users 加管理角色与账号状态（role/status 取值由应用层校验，与 tier CHECK 同表风格
@@ -579,6 +583,22 @@ BEGIN
         GRANT SELECT, INSERT, UPDATE, DELETE ON agent_rate_limits TO aguhuice;
         GRANT SELECT, INSERT, UPDATE, DELETE ON agent_api_events TO aguhuice;
         GRANT USAGE, SELECT ON SEQUENCE agent_api_events_id_seq TO aguhuice;
+    END IF;
+END $$;
+
+-- QRE-AUTH-MEMBERSHIP（36 号文档 §5 步骤 4，2026-11-04）：密码登录防爆破。
+-- 按 target（小写邮箱 / 手机号）维度计数，不按 IP；只作用于密码路径，验证码路径不受影响。
+-- 连续失败 5 次锁 15 分钟；登录成功删除该行。应用侧另有幂等 CREATE，供老库自愈。
+CREATE TABLE IF NOT EXISTS login_attempts (
+    target         TEXT PRIMARY KEY,
+    fail_count     INT NOT NULL DEFAULT 0,
+    locked_until   TIMESTAMPTZ,
+    last_failed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON login_attempts TO aguhuice;
     END IF;
 END $$;
 

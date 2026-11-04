@@ -1,5 +1,18 @@
 # Coding Handoff
 
+## 2026-11-04 会员/密码通道后端（本地完成，UI 未做，未部署/未 commit）
+
+改动文件：
+- `src/quant_research_engine/gui/saas/membership.py`（新）：会员/配额纯函数模块 —— `TIER_LABELS`、`TIER_POLICY_DEFAULTS`、`USED_TODAY_SQL`、`default_policy`/`normalize_policy`/`tier_label`/`quota_view`/`is_quota_exceeded`/`is_watch_exceeded`。不限权益统一 `limit="不限"`、`remaining=None`、`unlimited=True`。
+- `src/quant_research_engine/gui/saas/app.py`：新增 `POST /api/saas/auth/reset`（邮箱验证码 + 改密 + 删全部 session，不返回 token）；密码登录防爆破（同 target 5 次失败锁 15 分钟，`login_attempts` upsert/清零，429 文案「密码错误次数过多，请 N 分钟后再试」，验证码路径不受影响）；新增 `GET /api/saas/membership`（`membership` + `tiers[]`，实时读 `tier_policies`）；`_consume_email_code`、`_valid_password`、`_ensure_login_attempts` 等辅助；watch 上限、创建任务配额、`/console/users` used_today 三处统一走 `membership`（原有错误文案逐字未动）；登录查找统一 lower(email)，修 mixed-case 邮箱重复建号。旧 `_TIER_POLICY_DEFAULTS`/`_POLICY_*` 保留为别名。
+- `deploy/saas/cloud_schema.sql`：`login_attempts(target PK, fail_count, locked_until, last_failed_at)` + `aguhuice` 授权。
+- `tests/test_saas_membership_auth.py`（新，19 例）。
+- 文档：`05_PROGRESS.md` 同日条目、`36_CASDOOR_AUTH_PLAN_2026-11-04.md` §5/§7 状态与新增 §7.7（UI 接口契约）。
+
+验证：`uv run pytest tests/test_saas_membership_auth.py -q` → **19 passed**；回归 `test_saas_membership_auth / test_gui_saas / test_saas_casdoor / test_saas_agent_api / test_saas_access_hardening / test_no_silent_failure_patterns` → **284 passed**，`test_saas_authing + test_gui_saas_console` → **54 passed**（合计 338）。未跑全量。
+
+未做：密码注册/登录/找回 UI、ECS 部署与 `login_attempts` DDL apply、真实邮箱/短信通道、QQ 端到端、老用户迁移；未 commit / push，未碰 `templates/`、`static/`、`worker/`、行情库。已验证的 UI 契约见 36 号 §7.7。
+
 ## 2026-11-04 Casdoor 自建登录适配层与入口（本地完成，未部署/未 commit）
 
 改动文件：

@@ -47,7 +47,7 @@ from quant_research_engine.gui.saas.result_contract import (
     build_result_contract,
     contract_view,
 )
-from quant_research_engine.gui.saas import nl_input_guard, ops_support
+from quant_research_engine.gui.saas import membership, nl_input_guard, ops_support
 from quant_research_engine.gui.saas.symbol_norm import (
     normalize_ts_codes,
     resolve_ts_code,
@@ -335,19 +335,12 @@ _PBKDF2_ITERATIONS = 120_000
 # 框架支持无限加角色行（付费阶梯留空占位）。daily_full_limit=次数/日，
 # max_codes=标的数上限（0=不限），max_days=回测区间天数上限（0=不限），
 # max_factor_fields / max_factor_tables=单策略因子条数/因子表数上限（0=不限）。
-_TIER_POLICY_DEFAULTS = {
-    "guest":  {"daily_full_limit": GUEST_DAILY_LIMIT, "max_codes": GUEST_MAX_CODES, "max_days": GUEST_MAX_DAYS,
-               "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
-    # 2026-10-04 内测期权限调整（用户拍板，19 号文档原则：注册用户功能全开，
-    # 限制只在并发与计算资源/R2 槽位体系）：daily_full_limit/max_codes/max_days 全 0=不限
-    "member": {"daily_full_limit": 0, "max_codes": 0, "max_days": 0,
-               "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
-    "paid":   {"daily_full_limit": 0, "max_codes": 0, "max_days": 0,
-               "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
-}
-_POLICY_KEYS = ("daily_full_limit", "max_codes", "max_days", "max_factor_fields", "max_factor_tables")
-_POLICY_BOOL_KEYS = ("scan_enabled",)
-_POLICY_INT_KEYS = ("max_watches",)
+# 默认值/键集统一定义在 saas/membership.py（执行侧与管理台展示侧共用一份口径）；
+# 此处保留同名别名兼容既有 import（agent_api.py 等）。
+_TIER_POLICY_DEFAULTS = membership.TIER_POLICY_DEFAULTS
+_POLICY_KEYS = membership.POLICY_KEYS
+_POLICY_BOOL_KEYS = membership.POLICY_BOOL_KEYS
+_POLICY_INT_KEYS = membership.POLICY_INT_KEYS
 # 进程级"已自愈"标记：避免每次缓存未命中都重复 CREATE/ALTER（减少锁开销）
 _POLICY_SCHEMA_ENSURED: set[int] = set()
 
@@ -396,7 +389,7 @@ def _get_policy(app: Flask, engine: Engine, tier: str) -> dict[str, int]:
     now = time.time()
     if hit and now - hit[0] < 60:
         return hit[1]
-    default = _TIER_POLICY_DEFAULTS.get(tier, _TIER_POLICY_DEFAULTS["member"])
+    default = membership.default_policy(tier)
     try:
         _ensure_tier_policies(engine)
         with engine.connect() as conn:
@@ -405,9 +398,9 @@ def _get_policy(app: Flask, engine: Engine, tier: str) -> dict[str, int]:
                      "scan_enabled, max_watches FROM tier_policies WHERE tier = :t"),
                 {"t": tier},
             ).mappings().first()
-        policy = dict(row) if row else dict(default)
+        policy = membership.normalize_policy(row, tier)
     except Exception:
-        policy = dict(default)
+        policy = default
     cache[tier] = (now, policy)
     return policy
 
@@ -500,6 +493,40 @@ def _ensure_worker_configs(engine: Engine) -> None:
 # result_contract.LEGACY_RESULT_CONTRACTS 显式例外表归类，不按时间猜测。
 _RESULT_CONTRACT_ENSURED: set[int] = set()
 _RESULT_CONTRACT_COL: dict[int, bool] = {}
+
+
+# P0-9（CR-2026-11-03 §8.5）：results.result_files 回传完整性元数据列
+# （truncated/included/skipped/预算/symbol_details）。懒补列模式同 result_contract：
+# ECS 老库 ALTER 可能失败（owner 非 app 账号），缺列时降级不写，读取为 null。
+_RESULT_FILES_ENSURED: set[int] = set()
+_RESULT_FILES_COL: dict[int, bool] = {}
+
+
+def _ensure_result_files_column(engine: Engine) -> bool:
+    """尽力补齐 results.result_files，返回该列当前是否可用（缺列降级不写）。"""
+    key = id(engine)
+    if key in _RESULT_FILES_ENSURED:
+        return _RESULT_FILES_COL.get(key, False)
+    ok = False
+    try:
+        with engine.begin() as conn:
+            existing = {
+                r[0]
+                for r in conn.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'results' AND column_name = 'result_files'"
+                    )
+                )
+            }
+            if not existing:
+                conn.execute(text("ALTER TABLE results ADD COLUMN IF NOT EXISTS result_files JSONB"))
+            ok = True
+    except Exception:
+        ok = False
+    _RESULT_FILES_ENSURED.add(key)
+    _RESULT_FILES_COL[key] = ok
+    return ok
 
 
 def _ensure_result_contract_column(engine: Engine) -> bool:
@@ -951,6 +978,73 @@ def _verify_password(password: str, stored: str) -> bool:
         return hmac.compare_digest(dk.hex(), _hex)
     except (ValueError, AttributeError):
         return False
+
+
+def _valid_password(password: str) -> bool:
+    """注册/改密共用规则：≥8 位且同时含字母与数字（37 号文档 §2）。"""
+    return (
+        len(password) >= 8
+        and any(c.isalpha() for c in password)
+        and any(c.isdigit() for c in password)
+    )
+
+
+def _consume_email_code(conn: Any, target: str, code: str, salt: str) -> bool:
+    """校验并消费最新一条未用未过期的验证码；错码/无码不消费（可重试）。"""
+    row = conn.execute(
+        text(
+            "SELECT id, code_hash FROM sms_codes "
+            "WHERE phone = :target AND used_at IS NULL AND expires_at > now() "
+            "ORDER BY id DESC LIMIT 1"
+        ),
+        {"target": target},
+    ).mappings().first()
+    if row is None:
+        return False
+    if not hmac.compare_digest(row["code_hash"] or "", _code_hash(code, target, salt)):
+        return False
+    conn.execute(text("UPDATE sms_codes SET used_at = now() WHERE id = :id"), {"id": row["id"]})
+    return True
+
+
+# 密码防爆破（37 号文档 §2）：同一 target 连续 5 次密码错锁 15 分钟，
+# 验证码路径不计数。表结构同步维护在 deploy/saas/cloud_schema.sql。
+_LOGIN_LOCK_THRESHOLD = 5
+_LOGIN_LOCK_MINUTES = 15
+_LOGIN_ATTEMPTS_ENSURED: set[int] = set()
+_LOGIN_ATTEMPTS_READY: dict[int, bool] = {}
+
+
+def _ensure_login_attempts(engine: Engine) -> None:
+    key = id(engine)
+    if key in _LOGIN_ATTEMPTS_ENSURED:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS login_attempts ("
+            " target TEXT PRIMARY KEY,"
+            " fail_count INT NOT NULL DEFAULT 0,"
+            " locked_until TIMESTAMPTZ,"
+            " last_failed_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+        ))
+    _LOGIN_ATTEMPTS_ENSURED.add(key)
+
+
+def _login_attempts_ready(engine: Engine) -> bool:
+    """旧库/无 DDL 权限时降级为不计数（False），不让密码登录整体 500。"""
+    key = id(engine)
+    if key in _LOGIN_ATTEMPTS_READY:
+        return _LOGIN_ATTEMPTS_READY[key]
+    try:
+        _ensure_login_attempts(engine)
+        ready = True
+    except Exception:
+        # 降级：建表失败只影响防爆破，不阻断登录本身
+        ready = False
+    _LOGIN_ATTEMPTS_READY[key] = ready
+    return ready
+
+
 # 不可重试分类：策略/数据问题重试无意义，产物回传的 4xx 同样无意义
 # （P0-9：413 重试只会重算同一份结果）。
 # **传输/5xx 的 result_upload_error 不在此列**——它按可重试处理（17_JOB_PROTOCOL §3.4），
@@ -1034,13 +1128,31 @@ def _job_runtime_fields(engine: Any, row: Any) -> dict[str, Any]:
 def _reap_expired(conn: Any) -> None:
     """惰性租约回收（17 协议 §4.2）：在 claim/heartbeat/cancel 时顺带执行，
     不起后台线程。租约过期的 leased/running/uploading 任务回队或置 failed；
-    超硬超时的置 expired（终态不回队）。"""
+    超硬超时的置 expired（终态不回队）。
+
+    P0-9（CR-2026-11-03 §8.15）防重算：``uploading`` 且已有 ``results`` 行
+    （meta 已入库、blob 回传中途 worker 死亡）**不回队**——回队意味着同一份
+    已算完的结果整单重算（压测实测 42 分钟 / 6 GB 白跑）。直接落 failed
+    （``result_upload_error``，可观测的不完整终态），由用户决定重新提交。
+    """
+    conn.execute(
+        text(
+            "UPDATE jobs SET status = 'failed', error_class = 'result_upload_error', "
+            "error_message = '产物回传中断（worker 失联或租约过期），结果不完整；"
+            "请重新提交回测', finished_at = now(), lease_expires_at = NULL, "
+            "leased_by = NULL "
+            "WHERE status = 'uploading' AND lease_expires_at < now() "
+            "AND EXISTS (SELECT 1 FROM results r WHERE r.job_id = jobs.id)"
+        )
+    )
     conn.execute(
         text(
             "UPDATE jobs SET status = 'queued', leased_by = NULL, lease_expires_at = NULL, "
             "heartbeat_at = NULL "
             "WHERE status IN ('leased','running','uploading') "
             "AND lease_expires_at < now() AND attempts < max_attempts"
+            # 注：uploading + 已有 results 的行已被上一句置 failed（终态），
+            # 不会再被本句匹配——防重算不依赖这里的附加条件
         )
     )
     conn.execute(
@@ -1956,8 +2068,8 @@ def create_saas_app() -> Flask:
                     text("SELECT count(*) FROM strategy_watches WHERE user_id = :uid AND enabled"),
                     {"uid": uid},
                 ).scalar_one()
-                max_watches = int(pol.get("max_watches", 20))
-                if max_watches > 0 and count >= max_watches:
+                max_watches = int(pol.get("max_watches", 20) or 0)
+                if membership.is_watch_exceeded(pol, count):
                     return jsonify({"ok": False,
                                     "error": f"信号监控上限 {max_watches} 个（已达上限，可先关闭其他策略的监控）"}), 403
                 # 默认范围 = 最近回测标的快照（last_run_universe）
@@ -2450,7 +2562,7 @@ def create_saas_app() -> Flask:
         password = str(data.get("password") or "")
         if not email or "@" not in email or len(email) > 200:
             return jsonify({"ok": False, "error": "邮箱格式不正确"}), 400
-        if len(password) < 8 or not any(c.isalpha() for c in password) or not any(c.isdigit() for c in password):
+        if not _valid_password(password):
             return jsonify({"ok": False, "error": "密码至少 8 位且需同时包含字母和数字"}), 400
         engine = _get_engine(app)
         with engine.begin() as conn:
@@ -2481,12 +2593,14 @@ def create_saas_app() -> Flask:
     @app.post("/api/saas/auth/login")
     def api_auth_login() -> Any:
         data = request.get_json(silent=True) or {}
-        target = str(data.get("target") or "").strip()
-        code = str(data.get("code") or "").strip()
+        # email/password 为 target/code 的别名（37 号文档 §2 前端契约，纯增量）
+        target = str(data.get("target") or data.get("email") or "").strip()
+        code = str(data.get("code") or data.get("password") or "").strip()
         if not target or not code:
             return jsonify({"ok": False, "error": "缺少 target/code"}), 400
 
         engine = _get_engine(app)
+        attempts_ready = _login_attempts_ready(engine)
         with engine.begin() as conn:
             # 内置测试账号（QRE-ECS-C4）：env SAAS_TEST_ACCOUNT_EMAIL/PASSWORD
             # 配置时，该 target+code 直接放行（跳过验证码表；SMTP 未配期间的
@@ -2498,35 +2612,64 @@ def create_saas_app() -> Flask:
                 and hmac.compare_digest(target, test_email)
                 and hmac.compare_digest(code, test_pass)
             )
+            is_email = "@" in target
+            col = "email" if is_email else "phone"
+            lookup = target.lower() if is_email else target
             if not bypass_code:
                 # 邮箱+密码登录（内测临时方案，正式版外购身份服务后移除）
                 pw_user = conn.execute(
                     text("SELECT id, password_hash FROM users WHERE email = :t"),
-                    {"t": target.lower()},
+                    {"t": lookup},
                 ).mappings().first()
                 if pw_user is not None and pw_user["password_hash"]:
+                    # 防爆破只作用于密码路径：先查锁，再验密码，失败计数
+                    if attempts_ready:
+                        attempt = conn.execute(
+                            text(
+                                "SELECT (locked_until IS NOT NULL AND locked_until > now()) AS locked, "
+                                "GREATEST(1, CEIL(EXTRACT(EPOCH FROM (locked_until - now())) / 60))::int "
+                                "AS minutes_left FROM login_attempts WHERE target = :t"
+                            ),
+                            {"t": lookup},
+                        ).mappings().first()
+                        if attempt is not None and attempt["locked"]:
+                            return jsonify({
+                                "ok": False,
+                                "error": f"密码错误次数过多，请 {attempt['minutes_left']} 分钟后再试",
+                            }), 429
                     if not _verify_password(code, pw_user["password_hash"]):
+                        if attempts_ready:
+                            row = conn.execute(
+                                text(
+                                    "INSERT INTO login_attempts (target, fail_count, last_failed_at) "
+                                    "VALUES (:t, 1, now()) ON CONFLICT (target) DO UPDATE SET "
+                                    " fail_count = CASE WHEN login_attempts.locked_until IS NOT NULL "
+                                    " AND login_attempts.locked_until <= now() THEN 1 "
+                                    " ELSE login_attempts.fail_count + 1 END,"
+                                    " locked_until = CASE WHEN login_attempts.locked_until IS NOT NULL "
+                                    " AND login_attempts.locked_until <= now() THEN NULL "
+                                    " ELSE login_attempts.locked_until END,"
+                                    " last_failed_at = now() RETURNING fail_count"
+                                ),
+                                {"t": lookup},
+                            ).mappings().one()
+                            if row["fail_count"] >= _LOGIN_LOCK_THRESHOLD:
+                                conn.execute(
+                                    text("UPDATE login_attempts SET locked_until = now() "
+                                         "+ make_interval(mins => :m) WHERE target = :t"),
+                                    {"t": lookup, "m": _LOGIN_LOCK_MINUTES},
+                                )
                         return jsonify({"ok": False, "error": "邮箱或密码错误"}), 401
+                    if attempts_ready:
+                        conn.execute(
+                            text("DELETE FROM login_attempts WHERE target = :t"), {"t": lookup})
                 else:
-                    row = conn.execute(
-                        text(
-                            "SELECT id, code_hash FROM sms_codes "
-                            "WHERE phone = :target AND used_at IS NULL AND expires_at > now() "
-                            "ORDER BY id DESC LIMIT 1"
-                        ),
-                        {"target": target},
-                    ).mappings().first()
-                    expected = row["code_hash"] if row else ""
-                    actual = _code_hash(code, target, _auth_salt(app))
-                    if row is None or not hmac.compare_digest(expected, actual):
+                    if not _consume_email_code(conn, target, code, _auth_salt(app)):
                         return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
-                    conn.execute(text("UPDATE sms_codes SET used_at = now() WHERE id = :id"), {"id": row["id"]})
 
-            is_email = "@" in target
-            col = "email" if is_email else "phone"
             user = conn.execute(
                 text(f"SELECT id, phone, email, quota_daily, status FROM users WHERE {col} = :target"),
-                {"target": target},
+                {"target": lookup},
             ).mappings().first()
             if user is None:
                 # 首次登录自动注册：按 target 形态填 phone/email，另一列 NULL
@@ -2535,7 +2678,7 @@ def create_saas_app() -> Flask:
                         f"INSERT INTO users ({col}, last_login_at) VALUES (:target, now()) "
                         "RETURNING id, phone, email, quota_daily, status"
                     ),
-                    {"target": target},
+                    {"target": lookup},
                 ).mappings().one()
             else:
                 if user["status"] != "active":
@@ -2550,6 +2693,37 @@ def create_saas_app() -> Flask:
                 {"token": token, "uid": user["id"], "days": SESSION_TTL_DAYS},
             )
         return jsonify({"ok": True, "token": token, "user": _jsonable(dict(user))})
+
+    @app.post("/api/saas/auth/reset")
+    def api_auth_reset() -> Any:
+        """邮箱验证码找回密码：改密成功即吊销该用户全部旧 session，不自动登录。"""
+        data = request.get_json(silent=True) or {}
+        raw_email = str(data.get("email") or data.get("target") or "").strip()
+        email = raw_email.lower()
+        code = str(data.get("code") or "").strip()
+        new_password = str(data.get("new_password") or data.get("password") or "")
+        if not email or "@" not in email or len(email) > 200:
+            return jsonify({"ok": False, "error": "邮箱格式不正确"}), 400
+        if not code:
+            return jsonify({"ok": False, "error": "缺少验证码"}), 400
+        if not _valid_password(new_password):
+            return jsonify({"ok": False, "error": "密码至少 8 位且需同时包含字母和数字"}), 400
+        engine = _get_engine(app)
+        with engine.begin() as conn:
+            user = conn.execute(
+                text("SELECT id FROM users WHERE email = :e"), {"e": email}
+            ).mappings().first()
+            if user is None:
+                return jsonify({"ok": False, "error": "该邮箱未注册，请先注册"}), 404
+            # 验证码按发送时的 target 原文校验（sms_codes 列名沿用 phone）
+            if not _consume_email_code(conn, raw_email, code, _auth_salt(app)):
+                return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
+            conn.execute(
+                text("UPDATE users SET password_hash = :h WHERE id = :id"),
+                {"h": _password_hash(new_password, secrets.token_hex(8)), "id": user["id"]},
+            )
+            conn.execute(text("DELETE FROM sessions WHERE user_id = :uid"), {"uid": user["id"]})
+        return jsonify({"ok": True})
 
     # --- Authing OIDC 登录（QRE-AUTH-MEMBERSHIP / A3，18 号设计文档） ---
     # 托管登录页授权码流程：/saas/login/authing 302 → Authing（短信/扫码 UI 托管）
@@ -2813,8 +2987,7 @@ def create_saas_app() -> Flask:
             user = conn.execute(
                 text(
                     "SELECT id, phone, email, quota_daily, tier, role, "
-                    "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id "
-                    " AND j.kind = 'full' AND j.created_at::date = now()::date) AS used_today "
+                    f"{membership.USED_TODAY_SQL} AS used_today "
                     "FROM users u WHERE u.id = :uid"
                 ),
                 {"uid": uid},
@@ -2823,18 +2996,75 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "用户不存在"}), 401
         item = _jsonable(dict(user))
         item["is_admin"] = item.get("role") == "admin"
-        if item["is_admin"]:  # admin 不限回测次数（QRE-SAAS-PROFILE）
-            item["quota_limit"] = "不限"
-            item["quota_remaining"] = None
-        else:
-            pol = _get_policy(app, engine, str(item.get("tier") or "member"))
-            if int(pol["daily_full_limit"] or 0) <= 0:  # 2026-10-05 内测调整：注册用户不限次数
-                item["quota_limit"] = "不限"
-                item["quota_remaining"] = None
-            else:
-                item["quota_limit"] = pol["daily_full_limit"]
-                item["quota_remaining"] = max(0, pol["daily_full_limit"] - (item.get("used_today") or 0))
+        # admin 不限回测次数（QRE-SAAS-PROFILE）；2026-10-05 内测调整：注册用户不限次数
+        pol = _get_policy(app, engine, str(item.get("tier") or "member"))
+        view = membership.quota_view(pol, item.get("used_today") or 0, item["is_admin"])
+        item["quota_limit"] = view["limit"]
+        item["quota_remaining"] = view["remaining"]
         return jsonify({"ok": True, "user": item})
+
+    @app.get("/api/saas/membership")
+    def api_membership() -> Any:
+        """会员权益视图（QRE-AUTH-MEMBERSHIP T4/T5）：当前账号用量 + 全部层级权益表。
+
+        权益值一律读 tier_policies（与执行侧同一个 _get_policy 源），不硬编码。
+        """
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_tier_policies(engine)
+        _ensure_signal_tables(engine)
+        with engine.connect() as conn:
+            user = conn.execute(
+                text(
+                    "SELECT u.tier, u.role, u.member_since, u.member_expire_at, "
+                    f"{membership.USED_TODAY_SQL} AS used_today, "
+                    "(SELECT count(*) FROM strategy_watches w "
+                    " WHERE w.user_id = u.id AND w.enabled) AS watches_used "
+                    "FROM users u WHERE u.id = :uid"
+                ),
+                {"uid": uid},
+            ).mappings().first()
+            rows = conn.execute(
+                text(
+                    "SELECT tier, daily_full_limit, max_codes, max_days, max_factor_fields, "
+                    "max_factor_tables, max_watches, scan_enabled FROM tier_policies "
+                    "ORDER BY CASE tier WHEN 'guest' THEN 0 WHEN 'member' THEN 1 "
+                    "WHEN 'paid' THEN 2 ELSE 3 END, tier"
+                )
+            ).mappings().all()
+        if user is None:
+            return jsonify({"ok": False, "error": "用户不存在"}), 401
+        tier = str(user["tier"] or "member")
+        policy = _get_policy(app, engine, tier)
+        is_admin = user["role"] == "admin"
+        max_watches = int(policy.get("max_watches", 20) or 0)
+        watches_used = int(user["watches_used"] or 0)
+        if max_watches <= 0:
+            watches: dict[str, Any] = {"limit": "不限", "used": watches_used,
+                                       "remaining": None, "unlimited": True}
+        else:
+            watches = {"limit": max_watches, "used": watches_used,
+                       "remaining": max(0, max_watches - watches_used), "unlimited": False}
+        item = {
+            "tier": tier,
+            "tier_label": membership.tier_label(tier),
+            "is_admin": is_admin,
+            "daily_full": membership.quota_view(policy, user["used_today"], is_admin),
+            "watches": watches,
+            "scan_enabled": bool(policy.get("scan_enabled", True)),
+            "member_since": user["member_since"],
+            "member_expire_at": user["member_expire_at"],
+        }
+        tiers: list[dict[str, Any]] = []
+        for row in rows:
+            row_tier = str(row["tier"])
+            entry: dict[str, Any] = {"tier": row_tier,
+                                     "label": membership.tier_label(row_tier)}
+            entry.update(membership.normalize_policy(row, row_tier))
+            tiers.append(entry)
+        return jsonify({"ok": True, "membership": _jsonable(item), "tiers": _jsonable(tiers)})
 
     # --- 用户侧：提交 / 查询 / 取消（17 协议 §2/§5；/api/saas/* 为兼容别名） ---
 
@@ -2986,15 +3216,15 @@ def create_saas_app() -> Flask:
                 quota_row = conn.execute(
                     text(
                         "SELECT tier, role, "
-                        "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id "
-                        " AND j.kind = 'full' AND j.created_at::date = now()::date) AS used_today "
+                        f"{membership.USED_TODAY_SQL} AS used_today "
                         "FROM users u WHERE u.id = :uid"
                     ),
                     {"uid": uid},
                 ).mappings().one()
                 # admin 不限测试次数（运营/开发者账号）；限额参数化读 tier_policies
                 pol = _get_policy(app, engine, str(quota_row["tier"] or "member"))
-                if kind == "full" and quota_row["role"] != "admin" and pol["daily_full_limit"] > 0 and quota_row["used_today"] >= pol["daily_full_limit"]:
+                if kind == "full" and membership.is_quota_exceeded(
+                        pol, quota_row["used_today"], quota_row["role"] == "admin"):
                     return jsonify({"ok": False, "error": "会员每日可全量回测 3 次（今日已用完），明天再来或试试小样本验证"}), 403
             # 会员：按 (user_id, name) upsert 复用策略库行（QRE-SAAS-D3）
             if uid is not None:
@@ -3538,16 +3768,29 @@ def create_saas_app() -> Flask:
             contract_vals = ", CAST(:contract AS jsonb)" if contract_cols else ""
             contract_set = (", result_contract = EXCLUDED.result_contract"
                             if contract_cols else "")
+            # P0-9（CR-2026-11-03 §8.5）：回传完整性元数据（截断显式标记）。
+            # worker 不带该字段（旧版）→ NULL；symbol_details 合并进同一对象，
+            # 前端只读一个 result_files（含 symbol_details 子对象）。
+            result_files = data.get("result_files")
+            if result_files is not None and not isinstance(result_files, dict):
+                result_files = None
+            if result_files is not None:
+                symbol_details = data.get("symbol_details")
+                if isinstance(symbol_details, dict):
+                    result_files = {**result_files, "symbol_details": symbol_details}
+            files_cols = ", result_files" if _ensure_result_files_column(engine) else ""
+            files_vals = ", CAST(:result_files AS jsonb)" if files_cols else ""
+            files_set = (", result_files = EXCLUDED.result_files" if files_cols else "")
             conn.execute(
                 text(
                     "INSERT INTO results (job_id, user_id, summary, chart_data, artifacts, "
-                    "data_until" + contract_cols + ") "
+                    "data_until" + contract_cols + files_cols + ") "
                     "VALUES (:jid, :uid, CAST(:summary AS jsonb), CAST(:chart AS jsonb), "
-                    "CAST(:artifacts AS jsonb), :data_until" + contract_vals + ") "
+                    "CAST(:artifacts AS jsonb), :data_until" + contract_vals + files_vals + ") "
                     "ON CONFLICT (job_id) DO UPDATE SET "
                     "summary = EXCLUDED.summary, chart_data = EXCLUDED.chart_data, "
                     "artifacts = EXCLUDED.artifacts, data_until = EXCLUDED.data_until"
-                    + contract_set
+                    + contract_set + files_set
                 ),
                 {
                     "jid": job_id,
@@ -3557,12 +3800,17 @@ def create_saas_app() -> Flask:
                     "artifacts": json.dumps(files),
                     "data_until": data.get("data_until"),
                     "contract": json.dumps(contract),
+                    "result_files": json.dumps(result_files) if result_files is not None else None,
                 },
             )
             if not files:
+                # P0-9 Required Fix（2026-11-03，job 212 实测）：终态进度由服务端在
+                # 置 completed 的同一事务落定——completed 后 heartbeat 会被拒
+                # （WHERE 只放行 leased/running/uploading），依赖它终态进度会停在 99。
                 conn.execute(
                     text("UPDATE jobs SET status='completed', finished_at=now(), "
-                         "lease_expires_at=NULL WHERE id=:id"),
+                         "lease_expires_at=NULL, progress=100, "
+                         "progress_message='结果已回传' WHERE id=:id"),
                     {"id": job_id},
                 )
                 return jsonify({"ok": True, "status": "completed"})
@@ -3624,7 +3872,8 @@ def create_saas_app() -> Flask:
                                 "remaining": remaining})
             conn.execute(
                 text("UPDATE jobs SET status='completed', finished_at=now(), "
-                     "lease_expires_at=NULL, upload_token=NULL WHERE id=:id"),
+                     "lease_expires_at=NULL, upload_token=NULL, progress=100, "
+                     "progress_message='结果已回传' WHERE id=:id"),
                 {"id": job_id},
             )
             # symbol_detail 按需任务：产物落到父 job 目录（详情页只认父 job 目录），
@@ -3741,7 +3990,8 @@ def create_saas_app() -> Flask:
                 )
                 conn.execute(
                     text("UPDATE jobs SET status='completed', finished_at=now(), "
-                         "error_message=NULL, error_class=NULL, lease_expires_at=NULL WHERE id=:id"),
+                         "error_message=NULL, error_class=NULL, lease_expires_at=NULL, "
+                         "progress=100, progress_message='结果已回传' WHERE id=:id"),
                     {"id": job_id},
                 )
                 return jsonify({"ok": True, "job_id": job_id, "status": "completed"})
@@ -3772,12 +4022,14 @@ def create_saas_app() -> Flask:
     )
 
     def _result_cols(engine: Engine) -> str:
-        """results 投影列；result_contract 列不可用（ECS 老库未 apply schema）时降级省略，
-        读取侧按显式例外表解析，缺列永不等于 verified。"""
+        """results 投影列；result_contract / result_files 列不可用（ECS 老库未 apply
+        schema）时降级省略，读取侧按缺列处理（合同走显式例外表，完整性元数据为 null）。"""
         cols = ("r.summary AS result_summary, r.chart_data AS result_chart_data, "
                 "r.artifacts AS result_artifacts, r.data_until AS result_data_until")
         if _ensure_result_contract_column(engine):
             cols += ", r.result_contract AS result_result_contract"
+        if _ensure_result_files_column(engine):
+            cols += ", r.result_files AS result_result_files"
         return cols
 
     def _contract_of(row: Any) -> dict[str, Any]:
@@ -4084,7 +4336,10 @@ def create_saas_app() -> Flask:
                         "summary": _jsonable(row["result_summary"]),
                         "data_until": _jsonable(row["result_data_until"]),
                         # QRE-SAAS-RESULT-CONTRACT-001：合同版本/口径/验证状态随摘要增量返回
-                        "result_contract": _contract_of(row)})
+                        "result_contract": _contract_of(row),
+                        # P0-9（CR-2026-11-03 §8.5）：回传完整性元数据（truncated 等）；
+                        # 老结果/老库（缺列）为 null，前端不显示「不完整」提示
+                        "result_files": _jsonable(row.get("result_result_files"))})
 
     @app.get("/api/results/<int:job_id>/chart-data")
     def api_result_chart_data(job_id: int) -> Any:
@@ -4662,8 +4917,7 @@ def create_saas_app() -> Flask:
                     "SELECT u.id, u.email, u.phone, u.tier, u.role, u.status, "
                     "u.created_at, u.last_login_at, "
                     "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id) AS job_count, "
-                    "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id AND j.kind = 'full' "
-                    " AND j.created_at::date = now()::date) AS used_today "
+                    f"{membership.USED_TODAY_SQL} AS used_today "
                     "FROM users u ORDER BY u.created_at DESC LIMIT 500"
                 )
             ).mappings().all()

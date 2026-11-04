@@ -66,7 +66,7 @@ QRE 只做：会员、配额、用量、业务数据。
 1. 本地 docker 起 Casdoor，PG 建 `casdoor` 库，跑通管理员登录。
 2. 抽 `oidc_client.py` 通用适配器（Authing 逻辑平移，配置化）。
 3. QRE 增加 Casdoor 登录入口（与 Authing 并存可切换，默认仍 Authing）。
-4. 密码登录 UI 补齐（注册/登录/找回）。
+4. 密码登录 UI 补齐（注册/登录/找回）——后端已完成（2026-11-04，见 §7.7），UI 未做。
 5. QQ provider 配置与绑定合并逻辑。
 6. staging 验证 + 老用户迁移脚本（草稿）。
 7. **上线评审**：用户批准后才切生产、才改 ECS。
@@ -81,7 +81,7 @@ QRE 只做：会员、配额、用量、业务数据。
 
 ## 7. 实施状态（2026-11-04，本地）
 
-对应 §5 步骤：**1（本地）、2、3（登录入口）已完成**；4（密码登录 UI）、5（QQ 绑定合并）、6（staging + 迁移脚本）、7（上线评审）**未开始**。
+对应 §5 步骤：**1（本地）、2、3（登录入口）已完成**；4 的**后端已就绪（密码注册/登录/找回接口，见 §7.7）、UI 未做**；5（QQ 绑定合并）、6（staging + 迁移脚本）、7（上线评审）**未开始**。
 
 ### 7.1 本地 Casdoor 部署
 
@@ -148,11 +148,25 @@ CREATE TABLE IF NOT EXISTS auth_identities (
 |---|---|
 | QQ 登录 | 仅配置位 + mock，**未真实端到端**（无 appid/secret，需 QQ 互联个人开发者审核） |
 | 短信验证码 | 仍为占位实现，未接真实网关 |
-| 密码注册/登录/找回 UI（§5 步骤 4） | 未做 |
+| 密码注册/登录/找回 UI（§5 步骤 4） | **后端已完成，UI 未做**（接口契约见 §7.7） |
 | 老用户迁移脚本、staging 验证（§5 步骤 6） | 未做 |
 | 生产 Casdoor（PG 独立库、TLS、备份纳入 pg_dump） | 未做 |
 | redirect URI | 默认按 `8099`（本地 SaaS 端口），生产端口/域名待定 |
 | `client_secret` | 明文，上线前轮换 |
 | dockerd 代理 | 系统级 `/etc/systemd/system/docker.service.d/http-proxy.conf`，非仓库内容，需在部署文档声明 |
+
+### 7.7 密码通道与会员视图后端（2026-11-04，本地，UI 未做）
+
+代码：`gui/saas/membership.py`（纯函数）、`gui/saas/app.py`、`deploy/saas/cloud_schema.sql`（`login_attempts`）。测试：`tests/test_saas_membership_auth.py` **19 passed**；按 §7.6 之外的相关回归 **338 passed**（`test_gui_saas` / `test_saas_casdoor` / `test_saas_agent_api` / `test_saas_access_hardening` / `test_no_silent_failure_patterns` / `test_saas_authing` / `test_gui_saas_console`）。
+
+**UI 接口契约（字段名以本表为准）**
+
+- `POST /api/saas/auth/reset`：请求 `{"email": "<原始大小写>", "code": "<邮箱验证码>", "new_password": "<≥8 位含字母+数字>"}`；成功 `200 {"ok": true}`，**不返回 token，不自动登录**，该用户全部旧 token 立即 401。错误：400「邮箱格式不正确」/「缺少验证码」/「密码至少 8 位且需同时包含字母和数字」；404「该邮箱未注册，请先注册」；401「验证码错误或已过期」（错码不消费）。
+- `POST /api/saas/auth/login`：密码路径继续复用原字段，`target` 可省略（省略时取 `email`），`code` 可省略（省略时取 `password`），即 UI 可直接提交 `{"email": "...", "password": "..."}`。锁定：同 target 连续 5 次密码失败 → 之后 15 分钟内一律 `429 {"ok": false, "error": "密码错误次数过多，请 N 分钟后再试"}`；成功登录清零。验证码登录路径不受锁定影响。
+- `GET /api/saas/membership`（需登录）：`200 {"ok": true, "membership": {...}, "tiers": [...]}`；未登录 `401 {"ok": false, "error": "未登录"}`。
+  - `membership`：`tier`、`tier_label`（`游客`/`内测会员`/`付费会员`）、`is_admin`、`daily_full{limit,used,remaining,unlimited}`、`watches{limit,used,remaining,unlimited}`、`scan_enabled`、`member_since`、`member_expire_at`。不限时 `limit="不限"`、`remaining=null`、`unlimited=true`（与 `/api/saas/me` 的 `quota_limit` 同口径）。
+  - `tiers[]`：每项 `tier`、`label`、`daily_full_limit`、`max_codes`、`max_days`、`max_factor_fields`、`max_factor_tables`、`max_watches`、`scan_enabled`；顺序固定 `guest` → `member` → `paid`，数值实时读 `tier_policies`（不硬编码）。
+
+**风险**：ECS 老库未 apply `login_attempts` DDL 时应用侧会幂等自愈，但若角色权限不足则降级为「不计数不锁定」；`_get_policy` 有 60s 缓存，管理台改权益后最多 1 分钟才在 membership 视图生效；锁定按 target 不按 IP，可被换账号绕过；`sms_codes.phone` 列名沿用但存邮箱。
 
 **边界**：本轮未部署 ECS、未改生产库、未重启任何 qre 服务（本机 CF 经典策略全量队列在跑）、未 commit / push；`stock_daily` 与 `worker/` 未触碰。

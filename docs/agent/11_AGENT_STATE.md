@@ -19,6 +19,14 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-04 会员/密码通道后端（本地完成，UI 未做，未部署/未 commit）
+
+新增 `gui/saas/membership.py`（纯函数，会员档位/配额视图/watch 上限统一判定）；`app.py` 新增
+`POST /api/saas/auth/reset`、`GET /api/saas/membership`，密码登录加防爆破（新表 `login_attempts`，
+同 target 5 次失败锁 15 分钟，验证码路径不变）；watch/创建任务配额/`/console/users` 三处改用
+`membership`，原有文案未动。测试 19 passed，相关回归 338 passed。UI、ECS 部署与 DDL apply 未做；
+未 commit/push。接口契约与风险见 36 号 §7.7。
+
 ### 2026-11-04 Casdoor 自建登录本地打通（未部署/未 commit）
 
 本地 Casdoor（容器 `casdoor`、卷 `casdoor-data`、`deploy/casdoor/app.conf`、admin/123 仅本地）已

@@ -1,5 +1,12 @@
 # Task Handoff
 
+## 会员/密码通道后端（2026-11-04，UI 未做，未部署/未 commit）
+
+- 详情见 `36_CASDOOR_AUTH_PLAN_2026-11-04.md` §7.7 与 `05_PROGRESS.md` 同日记录。
+- 已完成：`POST /api/saas/auth/reset`（邮箱验证码改密、删全部 session、不自动登录）、密码登录防爆破（新表 `login_attempts`，同 target 5 次失败锁 15 分钟，429，验证码路径不受影响）、`GET /api/saas/membership`（会员视图 + 三档权益）、`gui/saas/membership.py` 纯函数模块，watch/配额/used_today 三处统一调用。
+- 测试：`test_saas_membership_auth.py` 19 passed；相关回归 **338 passed**（含 Casdoor/Authing/gui-saas/console）。未跑全量。
+- 未做：密码注册/登录/找回 UI、ECS 部署与 DDL apply、短信/真实邮箱通道、老用户迁移、QQ 端到端；未 commit / push，未碰 `templates/`、`static/`、`worker/`、行情库。锁定按 target 不按 IP、`_get_policy` 60s 缓存为已知缺口。
+
 ## Casdoor 自建登录本地打通（2026-11-04，未部署/未 commit）
 
 - 详情见 `36_CASDOOR_AUTH_PLAN_2026-11-04.md` §7 与 `05_PROGRESS.md` 同日记录。
