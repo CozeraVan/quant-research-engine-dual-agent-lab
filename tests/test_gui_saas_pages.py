@@ -533,6 +533,77 @@ function running(){ return [{job_id: 1, status: 'running', strategy_name: 'old'}
 })().catch(error => { console.error(error); process.exit(1); });
 """)
 
+    def test_records_refresh_failure_keeps_rendered_content(self, client):
+        """后台轮询失败（网关 5xx / 超时 / 非 JSON）不得把整页替换成「加载失败」卡。"""
+        html = client.get("/saas/").get_data(as_text=True)
+        _run_records_js(html, r"""
+(async () => {
+  let fail = false;
+  let job = {job_id: 1, status: 'running', strategy_name: 'first'};
+  const h = createRecordsHarness(async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    if (fail) return recordsResponse(502, {ok: false});
+    return recordsResponse(200, {ok: true, total: 1, items: [job]});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('recordsInitialLoad', h.context);
+  const pageChild = h.root.children[0];
+  assert.equal(h.pollTimerCount(), 1, '活跃任务应每 5 秒轮询');
+  assert.equal(h.elements['jobs-tbody'].children.length, 1);
+
+  fail = true;
+  await vm.runInContext('load()', h.context);
+  assert.equal(h.calls.failure, 0, '后台刷新失败不得整页报错');
+  assert.equal(h.root.children[0], pageChild, '后台刷新失败不得替换页面内容');
+  assert.equal(h.elements['jobs-tbody'].children.length, 1, '失败时保留上一份记录');
+  assert.equal(h.pollTimerCount(), 1, '失败后必须继续轮询等待自愈');
+
+  fail = false;
+  job = {job_id: 1, status: 'completed', strategy_name: 'recovered'};
+  await vm.runInContext('load()', h.context);
+  assert.equal(h.calls.failure, 0);
+  const rows = h.elements['jobs-tbody'].children;
+  assert.equal(rows.length, 2, '恢复后追加渲染新状态');
+  assert.equal(rows[rows.length - 1].innerHTML.includes('recovered'), true);
+  assert.equal(h.pollTimerCount(), 0, '任务结束停止轮询');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
+    def test_records_manual_refresh_failure_reports_with_retry(self, client):
+        """用户主动刷新失败仍需错误卡与重试入口；重试成功后内容恢复。"""
+        html = client.get("/saas/").get_data(as_text=True)
+        _run_records_js(html, r"""
+(async () => {
+  let fail = false;
+  const h = createRecordsHarness(async url => {
+    if (url === '/api/saas/me') return recordsResponse(200, {ok: true, user: {}});
+    if (url === '/api/saas/strategies') return recordsResponse(200, {ok: true, strategies: []});
+    if (url === '/api/saas/factor-requests') return recordsResponse(200, {ok: true, requests: []});
+    if (fail) return recordsResponse(500, {ok: false});
+    return recordsResponse(200, {ok: true, total: 1, items: [{job_id: 1, status: 'running'}]});
+  });
+  vm.runInContext(source, h.context);
+  await vm.runInContext('recordsInitialLoad', h.context);
+  assert.equal(h.calls.failure, 0);
+  assert.equal(h.pollTimerCount(), 1);
+
+  fail = true;
+  await h.elements['btn-reload'].listeners.click();
+  assert.equal(h.calls.failure, 1, '主动刷新失败必须给出错误卡');
+  assert.equal(typeof h.calls.retry, 'function');
+  assert.equal(h.pollTimerCount(), 0, '整页错误卡后不得残留轮询');
+
+  fail = false;
+  await h.calls.retry();
+  assert.equal(h.calls.failure, 1, '重试成功不重复计数失败');
+  const rows = h.elements['jobs-tbody'].children;
+  assert.equal(rows[rows.length - 1].innerHTML.includes('任务 #1'), true, '重试成功后记录恢复渲染');
+  assert.equal(h.pollTimerCount(), 1, '活跃任务恢复轮询');
+})().catch(error => { console.error(error); process.exit(1); });
+""")
+
     def test_records_auxiliary_http_failures_and_retry(self, client):
         html = client.get("/saas/").get_data(as_text=True)
         _run_records_js(html, r"""
