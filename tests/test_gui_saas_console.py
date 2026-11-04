@@ -98,6 +98,18 @@ def _fail_job(client, uid=1):
     return job_id
 
 
+def _register(client, email, password="abc12345"):
+    """2026-11-04 注册强制邮箱验证码：stub 发码后取明文（含限流清理）。"""
+    rl = client.application.extensions["rate_limit"]["target"]
+    rl.pop(email, None)
+    rl.pop(email.lower(), None)
+    client.post("/api/saas/auth/code", json={"target": email})
+    codes = [m["code"] for m in client.application.extensions["sent_codes"]
+             if m["target"] == email.lower()]
+    return client.post("/api/saas/auth/register",
+                       json={"email": email, "password": password, "code": codes[-1]})
+
+
 class TestAdminAuth:
     def test_unauthenticated_401(self, client):
         assert client.get("/api/saas/console/overview").status_code == 401
@@ -126,8 +138,7 @@ class TestAdminAuth:
         assert me2["is_admin"] is False
 
     def test_admin_via_bearer_token(self, client, app):
-        resp = client.post("/api/saas/auth/register",
-                           json={"email": "boss@example.com", "password": "abc12345"})
+        resp = _register(client, "boss@example.com")
         token = resp.get_json()["token"]
         engine = app.extensions["saas_engine"]
         with engine.begin() as conn:
@@ -186,8 +197,7 @@ class TestUsers:
 
     def test_disable_and_enable(self, client, app):
         headers, admin_uid = _admin_headers(app)
-        resp = client.post("/api/saas/auth/register",
-                           json={"email": "bad@example.com", "password": "abc12345"})
+        resp = _register(client, "bad@example.com")
         token = resp.get_json()["token"]
         uid = resp.get_json()["user"]["id"]
         bearer = {"Authorization": f"Bearer {token}"}
@@ -309,7 +319,10 @@ class TestConsolePage:
         # QRE-SAAS-ADMIN-TUNNEL：管理台改 SSH 隧道访问，顶栏不再注入「管理台」入口
         html = client.get("/saas/").get_data(as_text=True)
         assert "管理台" not in html
-        assert "is_admin" not in html
+        # is_admin 是 /api/saas/me|membership 返回给前端的正当字段（会员中心/
+        # 配额文案展示需要，2026-11-04 自建会员 UI），JS 引用它不等于注入管理台
+        # 入口；真正的约束是 console 链接不得出现在公开页。
+        assert "/saas/console" not in html
 
 
 class TestTierPolicies:
