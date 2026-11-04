@@ -1,5 +1,12 @@
 # Coding Handoff
 
+## 2026-11-04 Windows UI 两分支集成（已部署，未 commit）
+
+- 改动：个人中心 7 个模板/CSS 文件；个股详情 `symbol.html`、`card-class.css`、`price-scale.js`，新增 `kline-order-markers.js`、`risk-stress.js`；新增 `tests/test_saas_detail_consistency.py`。
+- 主 Agent 集成修正：保留 `recordsHasLoadedOnce` 后台刷新容错；`risk-stress.js` 新增 `varEsReference()` 并在 `symbol.html` 渲染，函数缺失时不阻断压力表。
+- 验证命令：`uv run pytest tests/test_saas_detail_consistency.py tests/test_template_inline_js_syntax.py tests/test_no_silent_failure_patterns.py -q`（51 passed, 13 skipped）；`.tmp/perf-browser/tv_check_all.sh`（全绿）。
+- 部署：12 个 UI 文件打包校验后解压到 `/srv/aguhuice/qre`，仅 qre-saas 重启；生产备份 `/tmp/qre-ui-profile-detail-pre-20261104/`。未跑全量测试或新回测。
+
 ## 2026-11-04 Authing 完全移除（本地完成，未部署/未 commit）
 
 改动文件：

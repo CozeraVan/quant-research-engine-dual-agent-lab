@@ -19,6 +19,12 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-04 Windows UI 个人中心与详情一致性（已部署待验收，未 commit）
+
+- `ui/profile-center` 26d0ea4 与 `ui/detail-consistency` 56c8658 已整合到工作树；HEAD 仍 f2731bb。
+- 主 Agent 补 VaR/ES 参考卡并保留个人中心后台轮询容错；定向测试及 TV 真实浏览器验收全绿。
+- ECS qre-saas MainPID 954143，生产备份 `/tmp/qre-ui-profile-detail-pre-20261104/`；worker 与 CF 队列未动。用户验收前不 commit/push。
+
 ### 2026-11-04 Authing 完全移除（未部署/未 commit）
 
 - 详情见 `36_CASDOOR_AUTH_PLAN_2026-11-04.md` §7.9 与 `05_PROGRESS.md` 同日条目。

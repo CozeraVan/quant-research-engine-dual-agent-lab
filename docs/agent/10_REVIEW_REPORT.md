@@ -1,5 +1,13 @@
 # Review Report
 
+## 2026-11-04 Windows UI 个人中心与详情一致性主 Agent 复核
+
+- Review Status：PASS，无遗留 Required Fixes；已部署 ECS，待用户人工验收，未 commit/push。
+- 范围：`ui/profile-center` 26d0ea4 + `ui/detail-consistency` 56c8658，仅模板/CSS/JS 与新增聚焦测试；不改后端、worker、数据库或回测口径。
+- 集成修正：保留 `_records_scripts.html` 的后台轮询失败不整页替换修复；解决 `symbol.html` 与压力测试空态修复的冲突；补 `var_es_reference` 参考卡（Windows 分支漏项），旧缓存/函数缺失时安全降级。
+- 验证：相关 179 passed + 13 skipped；新增模块/模板回归最终 51 passed + 13 skipped；`tv_check_all.sh` 全绿，真实 Chromium 热路径/冷启动零 pageerror，截图已复核。生产 12 文件 hash 一致，qre-saas active，公网内容标记核验通过。
+- 未验证：未跑全量 pytest；未以用户登录态做生产点击验收（交由用户本轮检查）；未跑新回测。
+
 ## 2026-11-03 缠论结构策略首版主 Agent 自审
 
 - Review Status：本地代码 PASS，真实小样本/发布门未过。Required Fixes：无；全量阻塞项为 O(n*scan_bars) 前缀重算，必须优化后再评估。

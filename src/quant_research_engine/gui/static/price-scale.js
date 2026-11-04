@@ -250,7 +250,10 @@
         });
       },
     };
-    if (o.color) spec.color = o.color;
+    // T3：显式给标签颜色。ECharts 在部分主题/图层组合下不会补默认 fill，
+    // 右轴数值会渲染成透明（实测 zrender text fill=null）；#6F6879 = --grey，
+    // 夜间模式由 night-mode.js 的中性层覆盖为浅色。
+    spec.color = o.color || "#6F6879";
     return spec;
   }
 

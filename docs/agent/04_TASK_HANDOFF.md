@@ -1,5 +1,11 @@
 # Task Handoff
 
+## Windows UI 个人中心与详情一致性（2026-11-04，已部署待验收）
+
+- 分支 `ui/profile-center` 26d0ea4、`ui/detail-consistency` 56c8658 已三方整合到工作树；主 Agent 补齐 VaR/ES 参考卡并保留轮询防闪修。
+- 定向测试与 `tv_check_all.sh` 全绿；备份 `/tmp/qre-ui-profile-detail-pre-20261104/`，仅重启 qre-saas（MainPID 954143），CF worker/队列未动。
+- 当前未 commit/push；用户验收后才进入 git finalization。详见 `05_PROGRESS.md` 与 `10_REVIEW_REPORT.md` 同日条目。
+
 ## 会员/手机号登录收口与 Authing 移除（2026-11-04，未部署/未 commit）
 
 - 详情见 `36_CASDOOR_AUTH_PLAN_2026-11-04.md` §7.8–§7.9 与 `05_PROGRESS.md` 同日记录。
