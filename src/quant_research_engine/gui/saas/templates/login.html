@@ -7,6 +7,9 @@
     <p style="text-align:center;font-size:15.5px">验证你的交易策略能否在 A 股赚钱</p>
     <a class="btn big btn-primary" id="btn-authing" href="/saas/login/authing?next={{ login_next | urlencode | replace('/', '%2F') | replace('?', '%3F') }}" style="display:block;text-align:center;margin-top:12px">手机号 / 扫码登录（推荐）</a>
     <p style="text-align:center;margin-top:10px;font-size:15.5px">短信验证码或微信扫码，首次登录自动注册</p>
+    {% if casdoor_ready %}
+    <a class="btn ghost" id="btn-casdoor" href="/saas/login/casdoor?next={{ login_next | urlencode | replace('/', '%2F') | replace('?', '%3F') }}" style="display:block;text-align:center;margin-top:12px">使用 Casdoor 账号登录（自建认证）</a>
+    {% endif %}
     <div id="login-error" class="error"></div>
 
     <details id="legacy-box">

@@ -19,6 +19,76 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-04 Casdoor 自建登录本地打通（未部署/未 commit）
+
+本地 Casdoor（容器 `casdoor`、卷 `casdoor-data`、`deploy/casdoor/app.conf`、admin/123 仅本地）已
+healthy；新增通用 OIDC 适配器 `gui/saas/oidc_client.py`、`/saas/login/casdoor`、callback 按 state
+归属分流（Authing 行为不变）、登录页条件入口与 `auth_identities(provider, sub)` 映射。
+测试 8 + 18 + 回归 38 passed，真实 E2E（`POST /api/login` 取 code → callback → `/api/saas/me`）通过。
+待做：密码登录 UI、QQ 真实端到端、短信、staging、生产 PG 库、迁移脚本。未部署/未重启/未 commit。详见 36 号 §7。
+
+### 2026-11-03 缠论结构策略本地首版（未部署/未 commit）
+
+公网生产 app.py/lab_result.py/cloud_schema.sql 与本地逐字节一致，results 10列与CF结果合同已对账。
+新增 `strategy_type=chanlun_structure`、结构核心、示例YAML、single/batch统一执行和动态结构止损/2R；
+251项定向测试通过。首版前缀重算仅供小样本，不支持shared/做空/滚仓/tick；真实DB小样本与性能验收待 CF 重负载安全窗口，全量前必须增量优化。详见 CR、09、10。
+
+### 2026-11-03 CF 队列瞬断修复并恢复（未 commit）
+
+CF-001/job227 等待驱动曾因 WebBridge 返回 HTML 错误页中断；step5review 已将命令层
+Unexpected token '<' / Failed to fetch / 网关错误等白名单瞬断纳入有限重试，确定性业务错误不重试。
+主 Agent 独立复跑 31 passed。job227 原任务仍 running，通过同一幂等键恢复队列仍返回 227，
+未重复创建；当前后台任务 `bash-js9urwam`，继续 CF-001~118 串行等待。
+
+### 2026-11-03 CF-005/job232 全市场内存失败修复（未 commit/未部署/未重启 worker）
+
+job232（`bo04a_darvas_box_breakout`）全市场全期 `engine_error`：子进程 RSS 10189MB 超 9830MB
+早停线。artifacts 已落 5201 个逐股目录与 summary/rolling/symbol_month_returns/png，死于
+`write_full_market_report` 的 ledger → round_trips → symbol_performance → equity_curve →
+drawdown → excel 阶段（第 2 次现场 mtime：summary 04:57:11 → png 05:28:33 → 05:29:50 被杀）。
+
+根因四处：`portfolio/io.py::write_batch_result` 把 5201×4247≈22.1M 行 equity_curve 全量常驻
+dict（合成外推 ≈2.8GB）；`portfolio/analytics.py::_collect_window_return_rows` 全量
+concat→datetime→groupby 做 4 次；`portfolio/full_market_report.py::build_full_market_equity_curve`
+全量 concat 后再复制多份 22M 行；`write_full_market_excel` 用 openpyxl 普通模式逐 cell 写
+TradesLedger+RoundTrips≈140 万×20/22 行（9.6 万行合成实测峰值 +730MB，线性外推 +16.9GB，
+与现场 10.19GB 一致，是 RSS 直接来源）。
+
+修复（最小、口径不变）：`_LazyEquityCurves` 惰性映射；window 汇总逐股小 DataFrame；
+equity curve 两趟 250 只分块累加；ledger/round_trips 分块 flush；Excel 改
+`Workbook(write_only=True)`。未改 `streaming_batch.py` 的 250 只分块、内存上限、`stock_daily`、
+产物列/文件名/目录结构。定向 9 文件 206 passed、全量 3595 passed/33 skipped。**未跑真实回测、未部署、未重启、
+未 commit；部署前置门与回滚见 `04_TASK_HANDOFF.md` 的 CF-005 段。**
+
+### 2026-11-03 默认不限持仓（已部署，未 commit）
+
+网站新建策略与后续 classic 队列/手册均改 `max_positions=0`；历史 job 不改不重跑。
+118 个经典冒烟及 CF-001 原配置为 10，但全部走 batch 独立逐股路径，BatchBacktestRequest 不含
+max_positions，因此实际交易截断任务数为 0。定向 22 passed，ECS MainPID 621570 生产 value=0。
+CF-001 等待驱动另因 WebBridge HTML/extension_error 中断，step5review 正在修复，非策略/参数失败。
+
+### 2026-11-03 视频输入入口纠错（已完成，未 commit）
+
+CF-001～CF-118 全部转换完毕：`video_inputs.csv` 的 `entry_mode` 仅保留 `nl`（75 条）与
+`wizard`（43 条），`yaml` 演示入口清零；`VIDEO_INPUT_GUIDE.md` 同步删除 YAML 演示入口说明，
+自然语言条目改为整段纯中文文本（不含 YAML、表达式、函数调用或代码式入出场规则），
+自选因子条目改为中文条件逐项选择。统一 `max_positions=0`，其余回测参数逐条与 CF-001 一致；
+`max_holding_days`、核对用入出场表达式均与 `inventory.json` 一致。CF-001 整段原样保留；
+已执行任务未修改、未重跑。检查脚本通过：118 条完整、入口分布 75/43/0、NL 表达式残留 0。
+该要求只针对视频/后续入口演示，不改变 CF 原始 YAML 执行合同；未跑回测、未 commit/push。
+
+### 2026-11-03 P1-13 回测输入参数完整展示与一键复现（本周 planned）
+
+现状核查：`jobs.params JSONB` 和策略原文/最终 YAML 已保存，`GET /api/saas/jobs/<id>` 可读；
+结果页仅展示主要参数摘要，重跑链接只带 `strategy_id`，尚未恢复完整 params。本周补齐完整参数展示、
+标准化 run_config 与原输入一键复现；已登记权威 TodoList（14 号 §11.8），不改运行中的 CF 参数。
+
+### 2026-11-03 118 经典策略视频输入手册（文档-only，未 commit）
+
+已按用户视频录制需求生成 `docs/auxiliary/video/VIDEO_INPUT_GUIDE.md` 和 `video_inputs.csv`：
+逐项含 CF 编号、名称、演示入口、可复制 NL 文本/YAML 路径、实际入出场表达式与策略风控；
+统一列出两年 100 股冒烟及全市场全期参数。118 行完整性校验通过，不影响正在执行的 CF 队列。
+
 ### 2026-11-03 Builder 穿越语义修复（已部署，待用户验收）
 
 step5review 已修复 `strategies/compiler.py::_compile_expression` 将
@@ -26,8 +96,74 @@ step5review 已修复 `strategies/compiler.py::_compile_expression` 将
 `gui/nl_semantics.render_cross_expression()` 复用 `CROSS_CANONICAL`，常量操作数不 shift；
 普通比较语义不变。合成序列验证只在穿越点触发。主 Agent 独立复跑全量
 **3454 passed, 34 skipped**，文档/secret/diff 门禁全绿；已部署 ECS（MainPID 617557），
-生产 `/saas/new` 与 `/api/saas/factors` 均 200。未跑全量回测、未 commit/push，待用户验收。
+生产 `/saas/new` 与 `/api/saas/factors` 均 200。未跑全量回测；用户已批准并提交推送 `0f3b56a`。
 任务流水见 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。
+
+### 2026-11-03 P0-9 回传可靠性剩余修复（step5review 后台实施中）
+
+用户明确按原计划交给 step5review 后台推进，主会话用于接收新任务。范围为 CR 剩余五项：
+分片上传、20MiB 截断显式标记、worker 临时产物安全清理、batch progress 更新、reaper 防重算加固。
+要求先补失败测试并做协议/小样本验证，不跑全量回测、不删除压测遗留归档、不自行部署/commit/push；
+主 Agent 后续独立验收并统一部署。动工前已登记 `26_WEEKLY_HANDOFF_2026-11-02.md` §7。
+五项首版已交付（子代理全量 3506 passed），但主 Agent 静态审查发现 **Required Fix**：
+failed/上传未确认时清理沙箱会删除唯一完整副本。已退回 step5review 修正为“仅云端完整副本确认后清理”，
+当前未部署、未重启；全量复跑与发布等待经典策略冒烟批次的安全窗口。
+**Required Fix 已复核通过**：仅 completed + 上传开关开启 + 全批回传成功 + result_files 未截断/无缺失才清理；
+上传失败、上传关闭、截断、取消/过期/未知均保留。定向 **113 passed**，门禁全绿。
+
+### 2026-11-03 当前发布基线：P0-9 + 经典冒烟全绿
+
+P0-9 全部上线：两项 Required Fix（失败/截断保留沙箱、服务端终态 progress=100）已复核；
+job226 完成且 100/结果已回传；ECS MainPID 619948、worker PID 903879，result_files 列已 apply。
+经典冒烟 **118/118 completed**，数值异常0；独立全量 **3524 passed, 33 skipped**。
+均尚未 commit。下一步由 step5review 实施 P0-10 安全准入、在途预算、RSS 早停与 12GB 子进程上限，
+使超限任务可读失败而非 OOM，再启动 CF；35 号初稿“cgroup 未生效”已更正为生产 qre-saas-worker 18G 生效。
+**P0-10 已完成并生效**：独立全量 3567 passed+33 skipped（1 个临时库 teardown 环境错误隔离复跑通过），
+worker 已重启至新安全调度。CF-001 首次启动未建 job：WebBridge 502；step5review 已修 classic 驱动有限重试与恢复会话
+（18 tests passed、幂等键不变）。**CF-001 已正式创建 job 227**，策略 bo01a_donchian_20_breakout，全市场全期执行中。
+
+### 2026-11-03 CF-001~118 全期全量自动队列（用户授权，待冒烟收官启动）
+
+用户明确：当前冒烟结束后立即按编号逐个执行全期全量，一次只跑一个；失败自动派子代理补因子或修 bug，
+无需逐项批准。执行合同已写 `36_CLASSIC_FULLSCALE_AUTO_RUNBOOK_2026-11-03.md`。
+启动前必须完成 P0-9 发布与结果汇总；修复后先小样本再恢复当前编号；不擅自改 `stock_daily`，
+子代理不自行部署/commit。预计 85–140 小时多日队列，当前尚未创建 CF job。
+
+### 2026-11-03 经典冒烟收官与 wizard holding 自动修复
+
+118 项已跑完：104 completed / 14 failed；失败全部为 wizard 可表达策略，统一 `holding section is required`，
+因子列无新增缺失，未见非有限/极端收益。另有 wizard 24 项能力边界回退、NL 13 项语义不一致回退、零交易5项。
+用户已授权失败自动修复；step5review 正在以 TDD 修向导 holding 生成，主 Agent 验收部署后重跑14项小样本。
+CF 队列尚未启动，先完成本修复与 P0-9 发布。
+
+### 2026-11-03 P0-10 容量模型重建（step5review 后台分析中）
+
+用户要求继续主线并交 step5 执行。当前先做**只读模型与调度方案**，不改与 P0-9 未发布改动重叠的代码：
+基于既有三项全期压测、31 号资源模型和 R2 调度实现，重建按交易笔数/聚合规模的内存估算、
+保守准入与并发建议、验证方案。不得新增压力测试/硬件任务，不跑全量 pytest，不部署/commit；
+待 P0-9 发布后再单独实施调度代码。
+**只读分析已完成**：`35_CAPACITY_MODEL_2026-11-03.md`。未知全市场按 17.5GB 保守预算、1/worker；
+item3 实测 13.97GB 已越 R-MEM-001 的 11.7GiB 红线，CF 全量前必须解决尾段聚合/报告/序列化分块或取得用户明确裁决，
+不得默默越线。另发现本机 cgroup 未生效、P0-9 截断沙箱会带来磁盘常态保留，需同批运维处理。
+
+### 2026-11-03 Windows UIUX 预览环境报告接收
+
+Windows UI agent 报告 8091 预览与 Playwright 7 页 × 2 视口全绿，边界符合 33 号指南；
+新增技能/脚本仅在 Windows 工作树，WSL 当前不可见，故尚未做独立代码审查或提交。
+已核实上游确有 Windows 非法文件名 `]* | head -1`（误产 shell 输出，内容仅 `symbol page -> 200`），
+后续单独清理；8091/auth bypass/本地预览密码严禁进入生产。
+
+### 2026-11-03 P0-5 经典策略公网三入口与统一冒烟（S0 盘点中）
+
+用户明确授权重启当前 118 个本地经典策略（原历史 111 个 + 后续新增 7 个）：先整理指标/含义/出入场说明，再分层随机分配公网三入口测试编译，
+最后统一随机 100 股、两年、batch 默认参数冒烟并核对异常与缺因子。**全期全量仍需后续单独授权。**
+计划与验收门已写入 `34_CLASSIC_CATALOG_PUBLIC_SMOKE_2026-11-03.md`。**S0 已完成**：
+118 策略说明/JSON/生成器落地，2 tests passed；38 个因子引用列均存在，18 个文字穿越 vs YAML 状态差异已标记。
+**S1 已通过**：使用既有邮箱注册通道建专用测试账号，公网 NL/wizard/YAML job 89/90/91
+均 completed，5 股短区间同一 RSI 策略的全部统计值一致（6 笔/-4.14476817%/-4.80450764%）。
+S2/S3 可恢复驱动已完成（7 tests passed）：固定 seed/100 股/两年，NL38/wizard38/YAML42。
+旧 YAML schema 首 pilot 失败已通过白名单规范化修复（不改信号/因子/风控）；重跑 job93 约89s、2690笔、指标正常。
+其余 117 个正在后台串行执行（bash-rldb1fxj），全期全量未授权。
 
 ### 2026-11-02 P1-12 上云完全准备完成（未 commit；未真迁移）
 

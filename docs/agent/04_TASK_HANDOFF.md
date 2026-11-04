@@ -1,5 +1,103 @@
 # Task Handoff
 
+## Casdoor 自建登录本地打通（2026-11-04，未部署/未 commit）
+
+- 详情见 `36_CASDOOR_AUTH_PLAN_2026-11-04.md` §7 与 `05_PROGRESS.md` 同日记录。
+- 已完成 §5 步骤 1–3：本地 Casdoor（容器/卷/`deploy/casdoor/app.conf`）、通用 OIDC 适配器 `gui/saas/oidc_client.py`、`/saas/login/casdoor` + callback 分流 + 登录页条件入口；新增 `auth_identities` 表映射 `(provider, sub)`。
+- 测试：`test_saas_oidc_client.py` 8 passed、`test_saas_casdoor.py` 18 passed、Authing 回归 38 passed；真实 Casdoor E2E（`POST /api/login` 取 code → callback → `/api/saas/me`）通过。
+- 未做：密码登录 UI、QQ 真实端到端、短信、staging、生产 PG 库、老用户迁移；未部署 ECS、未重启 qre 服务、未 commit。
+
+## 缠论结构策略本地首版完成（2026-11-03，未部署/未 commit）
+
+- 公网同步对账已完成：ECS `app.py/lab_result.py/cloud_schema.sql` 与本地一致，results 10 列及 CF-001~005 新合同齐全，快照在 `.tmp/public-qre-sync/`。
+- 合同：`change_requests/CR-2026-11-03_chanlun_structure_backtest.md`；示例 `strategies/structural/chanlun_b1_b2_b3_daily.yaml`。
+- DeepSeek agent-212 核心已完成并经主 Agent 复核修正 B2/B3/线段；统一 YAML、single/batch、CLI/research_run、结构止损/2R、checkpoint 接线完成，定向251 passed。
+- 首版只做多、single/batch；shared 明确拒绝；MACD/ATR 从因子列读取。尚未做真实行情小样本；O(n*scan_bars) 暂不可全量。CF 后台串行继续，真实小样本等待安全窗口，未部署/重启/commit。
+
+## CF-005/job232 全市场内存失败修复（2026-11-03，未部署/未重启/未 commit）
+
+- 失败性质：`bo04a_darvas_box_breakout` 全市场全期，子进程 RSS 10189MB 超早停线 9830MB（12GB×80%），`error_class=engine_error`，非策略错误。现场 `/tmp/qre-worker-job232-iv32sqlg`、`/tmp/qre-worker-job232-gccnfedo`；artifacts 5201 个逐股目录 + 9 文件，六个全市场汇总产物与 `backtest_report.xlsx/html` 全缺。
+- 根因：全市场汇总写出阶段把 22.1M 行逐股曲线一次性物化/拼接（io.py `write_batch_result`、analytics.py `_collect_window_return_rows`、full_market_report.py `build_full_market_equity_curve`），并且 openpyxl 普通模式逐 cell 写 ~5500 万 cell（`write_full_market_excel`），RSS 无界增长。
+- 修复范围（仅三文件）：`src/quant_research_engine/portfolio/io.py`（`_LazyEquityCurves` 读时映射）、`analytics.py`（逐股 groupby 收集 window 行）、`full_market_report.py`（equity curve 两趟 250 只分块累加；ledger/round-trips 分块 flush；Excel write_only 流式）。统计口径、输出列/行序/文件名/目录结构不变；未提高内存上限、未改 `stock_daily`、未改 `streaming_batch.py` 分块。
+- 验证：定向 9 个测试文件 **206 passed**；全量 `uv run pytest -q` **3595 passed, 33 skipped, 20 warnings in 203s**；`scripts/check-progress-docs.sh` 通过。400 股×480 日本地合成压测（非真实回测）Excel peak 869.4MB→223.6MB、equity curve 峰值随分块而非股票数增长、window 50.1MB→3.7MB。未跑真实 100 股两年样本、未跑全量回测。
+- 恢复方式（供主 Agent）：部署上述三文件 → 重启 `qre-saas-worker.service` → 先跑 CF-005 100 股两年小样本，峰值须低于 9830MB 并留余量 → 再从 CF-005/job232 编号恢复。回滚：恢复部署前文件并重启 worker。**本次未部署、未重启、未 commit。**
+
+## CF 当前恢复点（2026-11-02）
+
+CF-001～004 已完成（227/228/230/231），CF-005/job232 因内存早停，尾段分块已修复。当前只跑 CF-005 修复后小样本 job233（owner=6），监视 `bash-o748mxrc`；worker 已通过 serial.conf 收敛 0 light + 1 heavy。通过后才恢复全量，重复 229 已 canceled。恢复必须使用 `.tmp/classic-catalog-fullscale/job_ids.json`。
+
+## 项目瘦身（2026-11-02，未 commit）
+
+缓存与文档整理由主 Agent 执行；CF 队列文件、运行时代码、测试数据和回测产物不动。短视频手册新位置为 `docs/auxiliary/video/`，文档入口为 `docs/agent/README.md`。
+
+## 进行中：CF-001/job227 网关 HTML 瞬断修复（2026-11-03，step5review）
+
+- 根因：页面 apiFetch 收到网关 HTML 错误页 → JS r.json() 抛 SyntaxError
+  （Unexpected token '<'）→ WebBridge 命令级 extension_error → driver 零重试，
+  一次瞬断杀死已跑 2.6h 的 CF。
+- 已修：`driver.py` 新增 `_is_transient_command_error()` 瞬断特征分流；
+  `Browser.evaluate` 重试扩展到命令层（与传输层同策略：5 次/0.5s 倍增退避）；
+  `Browser.wait()` 加 sleep 注入，轮询可恢复；确定性命令错误与 4xx 不重试；
+  幂等键不变。fullscale.py（主 Agent max_positions=0 改动）未触碰。
+- 测试：classic_catalog 定向 28 passed（新增 10 例）。
+- job227 只读核查：queued → running（progress 0，worker 已认领），无需干预。
+- 主 Agent：max_positions=0 落库后重启 CF；未部署/未 commit。
+
+## 已完成：默认不限持仓（2026-11-03，未 commit）
+
+- 用户要求后续回测与网站默认 `max_positions=0`；已改 `new.html` 三处默认值、
+  `classic_catalog/fullscale.py` 与 `driver.py` 后续提交参数、视频手册 MD/CSV。
+- 既有 job 不改不重跑；当前 CF-001 仍是原参数 10，但 batch 模式逐股独立，代码路径不消费
+  max_positions，因此 118 个冒烟与 CF-001 均无实际交易截断。
+- 定向 22 passed + new.html inline JS `node --check` 通过；ECS 已部署 new.html，
+  MainPID 621570，生产 value=0 验证通过。
+
+## 进行中：CF-001 启动失败修复（2026-11-03，step5review）
+
+- 根因：WebBridge `classic-catalog-smoke` 会话 tab 丢失（list_tabs 空）→ driver
+  首调 evaluate 502；evaluate 无重试，瞬断即终止 CF。
+- 已修：①会话重建（同 session 导航 /saas/new，专用测试账号登录就绪，未读用户
+  凭证）；②`driver.py::Browser.evaluate` 有限重试（传输层+502/503/504，5 次
+  上限，0.5s 倍增退避；命令级错误与 4xx 不重试）；幂等键不变，提交重试不重复
+  建单（请求体逐字节一致，测试锁定）。
+- 测试：classic_catalog 定向 18 passed（新增 10 例）；端到端只读复跑通过。
+- 主 Agent 可直接启动 CF-001；未部署/未 commit。
+
+## 进行中：P0-10 安全调度实施（2026-11-03，step5review）
+
+- 依据 35 号容量模型落地：新模块 `worker/capacity.py`（峰值预算纯函数 + BudgetLedger
+  在途记账 + RSS 早停判定）；daemon `_slot_loop` 认领前原子预留（未知全市场 heavy
+  13.97GB/轻 1.5GB，worker 预算 15.5GB）→ 未知全市场 heavy 每 worker 最多 1 个、
+  轻重可共存；slots 子进程默认 14→12GB（R-MEM-001）+ RSS 早停（80% 且持续上升才终止）。
+- 测试：capacity 28 + slot budget 9 + slots 看门狗 6 + 定向回归 161 passed。
+- 未部署/未重启 worker/未 commit；主 Agent 验收后部署并重启 worker 再启动 CF。
+- 待裁决：已实测低换手族是否给 12GB 例外（当前按无例外，超限可读失败）。
+
+## 进行中：经典策略冒烟 wizard 失败自动修复（2026-11-03，step5review）
+
+- 根因：`new.html::refreshWizard()` 生成的向导 YAML 缺 holding 节，引擎
+  `strategies/spec.py::_mapping` 硬约束报 `holding section is required`
+  （14 个失败策略的统一错误）；params.max_holding_days 只覆盖运行期不补结构。
+- 已修：refreshWizard 在 signal/evaluation 间插入 `holding: max_holding_days:
+  <#p-holding 或 0>`（单一权威源；留空=不限 0）；applyName 注入天然幂等。
+- 测试：`tests/test_saas_wizard_yaml_holding.py` 6 例（node vm 跑真实模板生成器，
+  过 yaml_guard；单源默认值锁）+ factor_picker harness 补 `#p-holding`。
+- 未部署/未 commit；主 Agent 验收后部署 ECS 并重跑 14 个失败策略 100 股两年小样本。
+- 待裁决：lab.html（8081）同族潜在缺口是否同批修。
+
+## 进行中：P0-9 结果回传可靠性剩余五项修复（2026-11-03，step5review 后台实施子代理）
+
+- CR-2026-11-03 剩余五项全部实施完成：B 分片上传（≤100 文件/批，协议零变化）、
+  §8.5 20MiB 截断显式标记（result_files 元数据 + results 新列）、§8.7 沙箱目录
+  **completed 且云端完整副本确认才清理**（Required Fix 修正：上传失败/上传关闭/
+  截断/failed/canceled 一律保留本地，可能是唯一完整副本）、§8.11 batch progress
+  真实更新（逐股产物计数、单调；终态 100 由服务端 completed 事务落定——
+  Required Fix 2，job 212 实测：daemon completed 后 heartbeat 会被拒曾停在 99）、
+  §8.15 reaper 不重排已有 results 的 uploading job（直接 failed）。
+- 测试：5 个新文件 50 例 + 既有 stub 契约补参；相关定向测试 118 passed（未跑全量，
+  13 个重试回测在后台跑）；门禁结果见 `10_REVIEW_REPORT.md` 本节。
+- 未 commit/push、未部署 ECS、未重启 worker；主 Agent 验收（重试结束后真实小样本 + 部署 + worker 重启）后提交。
+
 ## 进行中：Builder 通道 crosses_above/crosses_below 真实穿越语义修复（2026-11-03，step5review 实施子代理）
 
 - 根因：`strategies/compiler.py::_compile_expression` 把 crosses_* 降级成当日 `>`/`<` 并只发 warning；引擎与 NL 通道早已支持 `.shift(1)` canonical。

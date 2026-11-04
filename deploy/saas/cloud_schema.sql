@@ -402,6 +402,28 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS member_since TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS member_expire_at TIMESTAMPTZ;
 
+-- QRE-AUTH-MEMBERSHIP / Casdoor 自建登录（36 号文档 §3，2026-11-04）：
+-- OIDC 身份与本地用户的映射，按 (provider, sub) 唯一；users.authing_id 保留
+-- 给 Authing 存量路径，不动。provider 如 casdoor，sub = id_token.sub。
+-- 同一自然人若先后用 Authing 与 Casdoor 登录，会产生两行 users，需人工关联。
+CREATE TABLE IF NOT EXISTS auth_identities (
+    id         BIGSERIAL PRIMARY KEY,
+    user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider   TEXT NOT NULL,
+    sub        TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (provider, sub)
+);
+CREATE INDEX IF NOT EXISTS idx_auth_identities_user ON auth_identities (user_id);
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON auth_identities TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE auth_identities_id_seq TO aguhuice;
+    END IF;
+END $$;
+
 -- QRE-SAAS-TIER-POLICIES（N1b/N1c，2026-10-03）：角色权限参数化。
 -- daily_full_limit=每日全量回测次数（0=不限）；max_codes=标的数上限（0=不限）；
 -- max_days=回测区间天数上限（0=不限）。阶梯留空：新增付费等级只需插新行。

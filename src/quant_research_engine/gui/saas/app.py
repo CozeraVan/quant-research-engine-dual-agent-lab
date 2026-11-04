@@ -1340,8 +1340,17 @@ def create_saas_app() -> Flask:
             from flask import redirect
 
             return redirect("/saas/")
+        from quant_research_engine.gui.saas import oidc_client
+
+        try:
+            oidc_client.get_config(app, "casdoor")
+            casdoor_ready = True
+        except oidc_client.OidcError:
+            casdoor_ready = False
         return render_template(
-            "login.html", login_next=_safe_saas_next(request.args.get("next"))
+            "login.html",
+            login_next=_safe_saas_next(request.args.get("next")),
+            casdoor_ready=casdoor_ready,
         )
 
     @app.get("/saas/")
@@ -2601,6 +2610,76 @@ def create_saas_app() -> Flask:
         ).mappings().one()
         return row
 
+    def _user_from_oidc_claims(conn: Any, provider: str, claims: dict) -> Any:
+        """通用 OIDC 主张 → users 行：按 (provider, sub) 关联 auth_identities。
+
+        无身份则自动建档（首登即注册，与 Authing 路径同语义）。不写 email，
+        避免与旧邮箱账号唯一冲突；手机号撞旧账号时置 NULL，关联走绑定入口。
+        """
+        from quant_research_engine.gui.saas import oidc_client
+
+        sub = str(claims["sub"])
+        row = conn.execute(
+            text("SELECT u.id, u.phone, u.email, u.nickname, u.quota_daily, "
+                 "u.tier, u.status FROM auth_identities i "
+                 "JOIN users u ON u.id = i.user_id "
+                 "WHERE i.provider = :provider AND i.sub = :sub"),
+            {"provider": provider, "sub": sub},
+        ).mappings().first()
+        if row is not None:
+            if row["status"] != "active":
+                raise oidc_client.OidcError("账号已被禁用，请联系运营方")
+            conn.execute(
+                text("UPDATE users SET last_login_at = now(), "
+                     "nickname = COALESCE(:nick, nickname), "
+                     "avatar_url = COALESCE(:avatar, avatar_url) WHERE id = :id"),
+                {"nick": claims.get("nickname") or claims.get("name"),
+                 "avatar": claims.get("picture"), "id": row["id"]},
+            )
+            return row
+        phone = (claims.get("phone") or claims.get("phone_number") or "").strip() or None
+        if phone:
+            dup = conn.execute(
+                text("SELECT id FROM users WHERE phone = :p"), {"p": phone}
+            ).first()
+            if dup is not None:
+                phone = None  # 手机号属旧账号，先置空，由绑定入口关联
+        row = conn.execute(
+            text(
+                "INSERT INTO users (phone, nickname, avatar_url, tier, "
+                "last_login_at, member_since) "
+                "VALUES (:phone, :nick, :avatar, 'member', now(), now()) "
+                "RETURNING id, phone, email, nickname, quota_daily, tier, status"
+            ),
+            {"phone": phone,
+             "nick": claims.get("nickname") or claims.get("name"),
+             "avatar": claims.get("picture")},
+        ).mappings().one()
+        conn.execute(
+            text("INSERT INTO auth_identities (user_id, provider, sub) "
+                 "VALUES (:uid, :provider, :sub)"),
+            {"uid": row["id"], "provider": provider, "sub": sub},
+        )
+        return row
+
+    # --- Casdoor 自建登录（36 号文档 §3，2026-11-04） ---
+    # 与 Authing 共用 /saas/login/callback：state 归属决定换票与建档路径。
+
+    @app.get("/saas/login/casdoor")
+    def saas_login_casdoor_redirect() -> Any:
+        from flask import redirect
+
+        from quant_research_engine.gui.saas import oidc_client
+
+        session["casdoor_next"] = _safe_saas_next(request.args.get("next"))
+        try:
+            url = oidc_client.build_authorize_url(
+                app, "casdoor", oidc_client.new_state(app, "casdoor")
+            )
+        except oidc_client.OidcError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 503
+        return redirect(url)
+
     @app.get("/saas/login/authing")
     def saas_login_authing_redirect() -> Any:
         from flask import redirect
@@ -2616,22 +2695,33 @@ def create_saas_app() -> Flask:
 
     @app.get("/saas/login/callback")
     def saas_login_callback() -> Any:
-        from quant_research_engine.gui.saas import authing
+        from quant_research_engine.gui.saas import authing, oidc_client
 
-        next_url = _safe_saas_next(session.pop("authing_next", "/saas/"))
         code = str(request.args.get("code") or "").strip()
         state = str(request.args.get("state") or "")
-        if not code or not authing.pop_state(app, state):
+        # state 一次性：先认 Authing（存量路径），再认通用 OIDC（Casdoor）。
+        provider = "authing" if authing.pop_state(app, state) else ""
+        if not provider and oidc_client.pop_state(app, "casdoor", state):
+            provider = "casdoor"
+        session_key = f"{provider}_next" if provider else "authing_next"
+        next_url = _safe_saas_next(session.pop(session_key, "/saas/"))
+        if not code or not provider:
             return render_template("login_callback.html", error="登录状态已失效，请返回登录页重试"), 400
         try:
-            claims = authing.exchange_code(app, code)
-        except authing.AuthingError as exc:
+            if provider == "authing":
+                claims = authing.exchange_code(app, code)
+            else:
+                claims = oidc_client.exchange_code(app, provider, code)
+        except (authing.AuthingError, oidc_client.OidcError) as exc:
             return render_template("login_callback.html", error=str(exc)), 502
         engine = _get_engine(app)
         with engine.begin() as conn:
             try:
-                user = _user_from_authing_claims(conn, claims)
-            except authing.AuthingError as exc:
+                if provider == "authing":
+                    user = _user_from_authing_claims(conn, claims)
+                else:
+                    user = _user_from_oidc_claims(conn, provider, claims)
+            except (authing.AuthingError, oidc_client.OidcError) as exc:
                 return render_template("login_callback.html", error=str(exc)), 403
             token = _session_for_user(conn, user["id"])
         return render_template("login_callback.html", token=token,
