@@ -70,7 +70,7 @@ def test_send_uses_custom_code_request(monkeypatch):
     req = FakeClient.sent[0]
     assert req.phone_number == "13800000000"
     # 自定义验证码经模板变量 ${code} 下发：QRE 自生成自校验
-    assert json.loads(req.template_param) == {"code": "203582"}
+    assert json.loads(req.template_param) == {"code": "203582", "min": 5}
     assert req.code_length == 6
     assert req.sign_name == "赠送签名"
     assert req.template_code == "SMS_123456"

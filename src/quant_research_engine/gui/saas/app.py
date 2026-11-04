@@ -134,9 +134,11 @@ class SmsSender:
             phone_number=target,
             sign_name=sign_name,
             template_code=template_code,
-            # 自定义验证码经模板变量 ${code} 下发（SDK 无独立 code 字段）：
-            # QRE 自生成 6 位码、自存哈希、自校验，阿里云只负责发送。
-            template_param=json.dumps({"code": code}, ensure_ascii=False),
+            # 自定义验证码经模板变量 ${code} 下发；赠送模板另含 ${min}（有效期分钟，
+            # 必须为数字类型，字符串会被判「内容非法」——已实测）。
+            template_param=json.dumps(
+                {"code": code, "min": AUTH_CODE_TTL_MINUTES}, ensure_ascii=False
+            ),
             code_length=6,
             return_verify_code=False,
         )
