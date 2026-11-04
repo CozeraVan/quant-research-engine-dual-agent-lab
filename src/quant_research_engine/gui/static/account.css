@@ -672,9 +672,7 @@
   vertical-align: middle;
 }
 .profile-list-card {
-  height: 540px;
-  display: flex;
-  flex-direction: column;
+  /* 列表高度随当前页内容，不为空态/少量条目保留大块空白；分页仍限制单页条目数。 */
   min-height: 0;
   margin-bottom: 26px;
 }
@@ -792,7 +790,6 @@
   .auth-card { max-width: 640px; }
   .member-hero { padding: 24px; }
   .profile-layout { grid-template-columns: 190px minmax(0, 1fr); }
-  .profile-list-card { height: 500px; }
 }
 @media (max-width: 768px) {
   .auth-page { padding: 22px 12px 44px; }
@@ -831,7 +828,7 @@
     white-space: nowrap;
   }
   .profile-sec-head h2 { font-size: 24px; }
-  .profile-list-card { height: 460px; padding: 20px; }
+  .profile-list-card { padding: 20px; }
   .profile-list-scroll .tbl { min-width: 760px; }
   .profile-list-scroll--mini .tbl { min-width: 560px; }
   #jobs-table { min-width: 860px; }

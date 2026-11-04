@@ -7,8 +7,8 @@
  *     该圆环的单行摘要（单笔含数量/价/金额/费用拆分，聚合组含笔数/合计/日期范围）；
  *   · 颜色沿用 A 股红涨绿跌（#d43030 / #1a9e4b），与现有行情配色同源。
  *
- * 与页面解耦：本模块只接收 chart/series/data/dates 与重绘画线层的回调，
- * 不读写页面全局状态；缩放后由页面把聚合结果同步回 baseSeries。
+ * 与页面解耦：本模块只接收 chart/series/data/dates，不读写页面全局状态；
+ * 缩放后按稳定 series id 仅合并买卖点数据，不重建 K 线、均线或画线序列。
  */
 (function () {
   "use strict";
@@ -43,7 +43,7 @@
       " / 印花税 " + f2(o.stamp_tax) + " / 过户费 " + f2(o.transfer_fee) + "）";
   }
 
-  function attach(chart, series, d, dates, redraw) {
+  function attach(chart, series, d, dates) {
     if (!chart || !series || !dates || !dates.length) return null;
     var idx = {}, low = {}, high = {};
     dates.forEach(function (dt, i) { idx[dt] = i; });
@@ -54,6 +54,7 @@
     var markers = {};
     function seriesOf(side, color) {
       return {
+        id: "qre-order-markers-" + side,
         name: side === "buy" ? "买入" : "卖出", type: "scatter", xAxisIndex: 0, yAxisIndex: 0,
         data: [], symbol: "circle", z: 6,
         symbolSize: function (v, p) { return p.data.count > 1 ? 34 : 28; },
@@ -114,7 +115,14 @@
     refresh();
     chart.on("dataZoom", function () {
       refresh();
-      if (typeof redraw === "function") redraw();
+      // 只按稳定 id 合并两个买卖点序列；严禁在 dataZoom 回调里 replaceMerge 全部
+      // series——整表重建会与 ECharts 的缩放帧交错，K 线/均线出现旧帧残影。
+      if (typeof chart.setOption === "function") {
+        chart.setOption({series: [
+          {id: markers.buy.id, data: markers.buy.data},
+          {id: markers.sell.id, data: markers.sell.data},
+        ]});
+      }
     });
     return markers;
   }

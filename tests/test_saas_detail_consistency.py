@@ -59,6 +59,8 @@ const ref = D.varEsReference(stress, pct);
 assert.match(ref, /99% VaR \/ ES/);
 assert.match(ref, /2\.10% \/ 3\.30%/);
 assert.match(ref, /tip-trigger/);
+assert.match(ref, /metric-card risk-reference-card/);
+assert.doesNotMatch(ref, /metric-strip/, '参考卡不得独占一条指标行');
 assert.equal(D.varEsReference({}, pct), '');
 """)
 
@@ -80,10 +82,12 @@ def test_order_markers_aggregate_and_refresh_with_zoom() -> None:
 const series = [];
 let zoomHandler = null;
 let redraws = 0;
+const markerUpdates = [];
 const chart = {
   getOption: () => ({dataZoom: [{start: 0, end: 100}]}),
   getWidth: () => 100,
   on: (name, fn) => { if (name === 'dataZoom') zoomHandler = fn; },
+  setOption: option => { markerUpdates.push(option); },
 };
 const dates = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'];
 const detail = {
@@ -105,7 +109,10 @@ assert.equal(markers.sell.data[0].value[1], 15);
 assert.match(markers.buy.data[0].summary, /300 股/);
 assert.equal(typeof zoomHandler, 'function');
 zoomHandler();
-assert.equal(redraws, 1);
+assert.equal(redraws, 0, '缩放不得触发全量序列 replaceMerge');
+assert.equal(markerUpdates.length, 1);
+assert.deepEqual(Array.from(markerUpdates[0].series, s => s.id),
+                 ['qre-order-markers-buy', 'qre-order-markers-sell']);
 """)
 
 
@@ -119,4 +126,6 @@ def test_profile_center_preserves_background_refresh_fix() -> None:
     assert "let recordsHasLoadedOnce = false;" in records
     assert "recordsHasLoadedOnce = true;" in records
     assert "if (recordsHasLoadedOnce)" in records
-    assert ".profile-list-card" in css and "height: 540px" in css
+    assert ".profile-list-card" in css
+    for fixed_height in ("height: 540px", "height: 500px", "height: 460px"):
+        assert fixed_height not in css

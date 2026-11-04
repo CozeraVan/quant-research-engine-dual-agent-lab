@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-04 紧凑列表、FRM 与缩放残影修复（已部署，未 commit）
+
+- 文件：`static/account.css`（去固定高度）、`static/risk-stress.js` + `saas/templates/symbol.html`（参考卡入主指标条）、`static/kline-order-markers.js`（稳定 id + 仅更新标记）、`tests/test_saas_detail_consistency.py`（回归）。
+- 验证：183 passed + 13 skipped；另 143 passed；`.tmp/perf-browser/tv_check_all.sh` 全绿；`probe_zoom_ghost.py` 与 `probe_profile_compact.py` 通过。
+- 部署：4 个 UI 文件同步 ECS，备份 `/tmp/qre-ui-zoom-layout-pre-20261104/`，仅重启 qre-saas（MainPID 958545）。未跑全量 pytest 或新回测。
+
 ## 2026-11-04 Windows UI 两分支集成（已部署，未 commit）
 
 - 改动：个人中心 7 个模板/CSS 文件；个股详情 `symbol.html`、`card-class.css`、`price-scale.js`，新增 `kline-order-markers.js`、`risk-stress.js`；新增 `tests/test_saas_detail_consistency.py`。

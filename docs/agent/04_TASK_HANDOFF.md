@@ -1,5 +1,11 @@
 # Task Handoff
 
+## 紧凑列表、FRM 布局与 K 线残影（2026-11-04，已部署待验收）
+
+- 三项修复已上线：个人中心列表自适应高度、FRM VaR/ES 参考卡并入主指标条（4+3）、缩放只更新买卖点而不全量重建 series。
+- 相关 183+143 测试通过，TV 全套与专项 Chromium 探针全绿；生产备份 `/tmp/qre-ui-zoom-layout-pre-20261104/`，qre-saas MainPID 958545。
+- 新改动未 commit/push；上一轮 UI 已 commit `cd4f68b`（未 push）。详见 05/10 同日条目。
+
 ## Windows UI 个人中心与详情一致性（2026-11-04，已部署待验收）
 
 - 分支 `ui/profile-center` 26d0ea4、`ui/detail-consistency` 56c8658 已三方整合到工作树；主 Agent 补齐 VaR/ES 参考卡并保留轮询防闪修。

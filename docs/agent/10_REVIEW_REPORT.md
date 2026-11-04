@@ -1,5 +1,12 @@
 # Review Report
 
+## 2026-11-04 紧凑列表、FRM 布局与 K 线残影修复自审
+
+- Review Status：PASS，无 Required Fixes；已部署 ECS，待用户验收，未 commit/push。
+- 根因与最小修复：缩放残影来自买卖点 `dataZoom` 回调触发全量 series `replaceMerge`；现仅按稳定 id 更新买入/卖出两条 series。列表移除固定高度，FRM 参考卡并入主指标条。
+- 验证：183 passed + 13 skipped、扩展 143 passed；TV 全套真实浏览器验收全绿；连续缩放、个人中心双视口、FRM 4+3 均有截图/结构化证据，零 pageerror、零横向溢出。
+- 发布：备份 `/tmp/qre-ui-zoom-layout-pre-20261104/`，生产 4 文件 hash 一致，qre-saas MainPID 958545；未改后端、worker、数据库或回测。
+
 ## 2026-11-04 Windows UI 个人中心与详情一致性主 Agent 复核
 
 - Review Status：PASS，无遗留 Required Fixes；已部署 ECS，待用户人工验收，未 commit/push。

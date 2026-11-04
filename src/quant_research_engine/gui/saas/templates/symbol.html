@@ -592,19 +592,21 @@ function renderRisk(d){
   const lossTip = '历史模拟法：95% 单日损失分位阈值，以及超过该阈值的尾部平均损失；损失以正数展示，数值越大风险越高。';
   const lossTip99 = '历史模拟法：99% 单日损失分位阈值，以及超过该阈值的尾部平均损失；损失以正数展示，数值越大风险越高。';
   const paramTip = '正态假设下，按收益均值和波动率估算的 99% 单日损失分位阈值；损失以正数展示，数值越大风险越高。';
+  const varRef = (window.QRESymbolDetail && QRESymbolDetail.varEsReference)
+    ? QRESymbolDetail.varEsReference(r.stress, pct) : '';
   let html = '<div class="metric-strip">' +
     card('95% VaR / ES（历史法）', h95 ? pct(h95.var) + ' / ' + pct(h95.es) : '—', 'flat', lossTip) +
     card('99% VaR / ES（历史法）', h99 ? pct(h99.var) + ' / ' + pct(h99.es) : '—', 'flat', lossTip99) +
     card('99% VaR（参数法）', p99 ? pct(p99.var) : '—', 'flat', paramTip) +
+    varRef +
     card('EWMA 年化波动率', annVol != null ? pct(annVol) : '—', 'flat', '指数加权移动平均模型估计的日波动，乘 √252 年化。') +
     card('波动率状态', regimeTxt, regime.latest === 'high' ? 'neg' : 'flat', '按历史波动水平划分为低、中、高状态。') +
     card('最好 / 最差单日', (dist.max != null ? pct(dist.max) : '—') + ' / ' + (dist.min != null ? pct(dist.min) : '—'), 'flat', '回测区间内最大和最小的单日收益。') +
     '</div>';
   // T4 压力测试：情景表（情景名/窗口/累计收益/最大回撤/VaR）；未覆盖窗口显式列出，
-  // 不再因 strategy_cumulative_return 为空而整条静默消失；VaR/ES 参考值同区展示。
+  // 不再因 strategy_cumulative_return 为空而整条静默消失；VaR/ES 参考卡并入上方指标条。
   html += (window.QRESymbolDetail && QRESymbolDetail.stressTable)
-    ? QRESymbolDetail.stressTable(r.stress, pct, cls) +
-      (QRESymbolDetail.varEsReference ? QRESymbolDetail.varEsReference(r.stress, pct) : '')
+    ? QRESymbolDetail.stressTable(r.stress, pct, cls)
     : '<div class="chart-empty">压力测试模块加载失败，请刷新页面重试。</div>';
   $('#risk-body').innerHTML = html;
   $('#box-risk').style.display = '';
@@ -1738,9 +1740,9 @@ function renderKline(d){
   });
   if (d.orders && d.orders.length){
     // T5 买卖点圆环：买 color: '#d43030' / 卖 color: '#1a9e4b'，按缩放聚合
-    // （实现与几何见 static/kline-order-markers.js；重绘时同步画线层）
+    // （实现与几何见 static/kline-order-markers.js；缩放只更新标记序列）
     if (window.QREKlineOrderMarkers && QREKlineOrderMarkers.attach){
-      QREKlineOrderMarkers.attach(chart, series, d, dates, klineDrawApply);
+      QREKlineOrderMarkers.attach(chart, series, d, dates);
     }
   }
   // QRE-KLINE-PANE-OPTION（T1）：pane 的 grid/xAxis/yAxis/series 一律走共享出口，

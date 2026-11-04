@@ -25,11 +25,11 @@
     var level = isFinite(confidence)
       ? Math.round((confidence <= 1 ? confidence * 100 : confidence)) + "%" : "—";
     var tip = ref.note || "当前 1 日 EWMA 参数法 VaR/ES，损失以正数展示。";
-    return '<div class="metric-strip risk-reference-strip"><div class="metric-card">' +
+    return '<div class="metric-card risk-reference-card">' +
       '<div class="m-label">' + esc(level) + ' VaR / ES（EWMA 参数法） ' +
       '<button type="button" class="tip-trigger" data-tip="' + esc(tip) +
       '" aria-label="VaR/ES 参考值说明">?</button></div>' +
-      '<div class="m-value neg">' + fmt(ref.var) + " / " + fmt(ref.es) + "</div></div></div>";
+      '<div class="m-value neg">' + fmt(ref.var) + " / " + fmt(ref.es) + "</div></div>";
   }
 
   function stressTable(stress, pct, cls) {

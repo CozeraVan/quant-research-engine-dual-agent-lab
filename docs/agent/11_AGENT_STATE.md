@@ -19,11 +19,16 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
-### 2026-11-04 Windows UI 个人中心与详情一致性（已部署待验收，未 commit）
+### 2026-11-04 个人中心紧凑列表、FRM 与缩放残影（已部署待验收，未 commit）
 
-- `ui/profile-center` 26d0ea4 与 `ui/detail-consistency` 56c8658 已整合到工作树；HEAD 仍 f2731bb。
-- 主 Agent 补 VaR/ES 参考卡并保留个人中心后台轮询容错；定向测试及 TV 真实浏览器验收全绿。
-- ECS qre-saas MainPID 954143，生产备份 `/tmp/qre-ui-profile-detail-pre-20261104/`；worker 与 CF 队列未动。用户验收前不 commit/push。
+- 当前 HEAD `cd4f68b`（上一轮 UI 已提交、未 push）；本轮 4 个 UI 文件 + 聚焦测试仍未提交。
+- 列表固定高度已移除；FRM 参考卡并入主指标条（4+3）；K 线缩放只更新买卖点序列，不再全量 replaceMerge。
+- 相关测试、TV 全套与专项浏览器探针全绿；ECS qre-saas MainPID 958545，备份 `/tmp/qre-ui-zoom-layout-pre-20261104/`；worker/CF 未动。
+
+### 2026-11-04 Windows UI 个人中心与详情一致性（已部署，commit cd4f68b，未 push）
+
+- `ui/profile-center` 26d0ea4 与 `ui/detail-consistency` 56c8658 已整合并提交；主 Agent 补 VaR/ES 参考卡并保留个人中心后台轮询容错；定向测试及 TV 真实浏览器验收全绿。
+- 当轮 ECS qre-saas MainPID 954143，生产备份 `/tmp/qre-ui-profile-detail-pre-20261104/`；worker 与 CF 队列未动。
 
 ### 2026-11-04 Authing 完全移除（未部署/未 commit）
 
