@@ -79,7 +79,8 @@
 #range-strip,
 #ra-strip,
 #replay-metrics,
-#kreplay-info {
+#kreplay-info,
+#tier-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
@@ -97,6 +98,9 @@
 #ra-strip .metric-card {
   flex: 1 1 280px;
   padding: 20px 22px;
+}
+#tier-strip .metric-card {
+  flex: 1 1 200px;
 }
 #sum-strip .metric-card .m-value,
 #ra-strip .metric-card .m-value {
@@ -148,6 +152,9 @@
   }
   #sum-strip .metric-card,
   #ra-strip .metric-card {
+    flex: 1 1 100%;
+  }
+  #tier-strip .metric-card {
     flex: 1 1 100%;
   }
 }

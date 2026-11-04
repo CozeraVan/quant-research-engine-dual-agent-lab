@@ -888,7 +888,12 @@ class TestTiersD1D2:
     """QRE-SAAS-D1D2：注册/密码登录/游客提交/会员配额/游客清理。"""
 
     def _register(self, client, email="m1@example.com", pw="abc12345"):
-        return client.post("/api/saas/auth/register", json={"email": email, "password": pw})
+        # 2026-11-04 注册强制邮箱验证码：stub 发码后取明文（重复注册走 409 不依赖新码）
+        client.post("/api/saas/auth/code", json={"target": email})
+        sent = [m["code"] for m in client.application.extensions["sent_codes"]
+                if m["target"] == email.lower()]
+        code = sent[-1] if sent else "000000"
+        return client.post("/api/saas/auth/register", json={"email": email, "password": pw, "code": code})
 
     def test_register_and_password_login(self, client):
         resp = self._register(client)

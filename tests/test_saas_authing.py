@@ -298,7 +298,11 @@ class TestJsonExchange:
 
 class TestBindLegacyAccount:
     def _register_legacy(self, client, email, password="Passw0rd123"):
-        resp = client.post("/api/saas/auth/register", json={"email": email, "password": password})
+        # 2026-11-04 起注册强制邮箱验证码（stub 发码后取明文）
+        client.post("/api/saas/auth/code", json={"target": email})
+        app = client.application
+        code = [m["code"] for m in app.extensions["sent_codes"] if m["target"] == email.lower()][-1]
+        resp = client.post("/api/saas/auth/register", json={"email": email, "password": password, "code": code})
         assert resp.status_code == 200, resp.get_json()
         return resp.get_json()
 
@@ -394,14 +398,16 @@ class TestAuthingNotConfigured:
 
 
 class TestLoginPage:
-    def test_login_page_has_authing_primary(self, client):
+    def test_login_page_password_primary(self, client):
+        """2026-11-04 自建登录改版（36/37 号文档）：密码为主、验证码次要，
+        Authing 托管页不再是主入口（老账号走验证码登录或找回密码）。"""
         html = client.get("/saas/login").get_data(as_text=True)
-        assert "/saas/login/authing" in html
-        assert "手机号 / 扫码登录" in html
-        # 邮箱密码降级为折叠次要入口
-        assert "legacy-box" in html and "<details" in html
-        # 老账号绑定入口
-        assert "bind-box" in html and "/api/saas/auth/bind" in html
+        assert 'id="form-login"' in html and 'id="btn-login"' in html
+        assert "忘记密码" in html and "注册" in html
+        # 验证码登录保留为次要入口
+        assert 'id="btn-code-mode"' in html and 'id="code-panel"' in html
+        # Casdoor 入口仅在配置就绪时出现（本 fixture 未配置 → 不渲染）
+        assert 'id="btn-casdoor"' not in html
 
     def test_login_callback_template_no_token_on_error(self, client):
         html = client.get("/saas/login/callback?code=x&state=bad").get_data(as_text=True)

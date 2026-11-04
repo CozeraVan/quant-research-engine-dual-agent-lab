@@ -85,20 +85,29 @@ def _bearer(token: str) -> dict[str, str]:
 
 
 def _send_code(client, target: str):
+    # 测试辅助只负责拿码：清 target 级限流，避免同用例内「注册发码 + 重置发码」
+    # 被 60s 限流挡成 429（限流本身的断言在 test_gui_saas，不在这里测）。
+    rl = client.application.extensions["rate_limit"]["target"]
+    rl.pop(target, None)
+    rl.pop(target.lower(), None)
     resp = client.post("/api/saas/auth/code", json={"target": target})
     assert resp.status_code == 200, resp.get_json()
     return resp
 
 
 def _code_for(app, target: str) -> str:
-    matches = [m["code"] for m in app.extensions["sent_codes"] if m["target"] == target]
+    matches = [m["code"] for m in app.extensions["sent_codes"] if m["target"] == target.lower()]
     assert matches, "stub sender 未记录验证码"
     return matches[-1]
 
 
 def _register(client, email: str, password: str = "abc12345"):
+    # 2026-11-04 起注册强制校验邮箱验证码：先走 stub 发码再注册。
+    app = client.application
+    _send_code(client, email)
+    code = _code_for(app, email)
     resp = client.post("/api/saas/auth/register",
-                       json={"email": email, "password": password})
+                       json={"email": email, "password": password, "code": code})
     assert resp.status_code == 200, resp.get_json()
     return resp.get_json()
 
@@ -373,3 +382,25 @@ class TestMembershipPureFunctions:
         sql = membership.USED_TODAY_SQL.lower()
         assert "from jobs" in sql and "kind = 'full'" in sql
         assert "j.user_id = u.id" in sql
+
+class TestRegisterCode:
+    """2026-11-04 注册强制邮箱验证码（Windows UI 复核发现的缺口收口）。"""
+
+    def test_register_requires_code(self, client):
+        resp = client.post("/api/saas/auth/register",
+                           json={"email": "nocode@example.com", "password": "abc12345"})
+        assert resp.status_code == 400
+        assert "验证码" in resp.get_json()["error"]
+
+    def test_register_rejects_wrong_code_without_consuming(self, client, app):
+        email = "wrongcode@example.com"
+        _send_code(client, email)
+        bad = client.post("/api/saas/auth/register",
+                          json={"email": email, "password": "abc12345", "code": "000000"})
+        assert bad.status_code == 401
+        # 错码不消费：同一验证码仍可完成注册
+        good = client.post("/api/saas/auth/register",
+                           json={"email": email, "password": "abc12345",
+                                 "code": _code_for(app, email)})
+        assert good.status_code == 200, good.get_json()
+        assert good.get_json()["token"]

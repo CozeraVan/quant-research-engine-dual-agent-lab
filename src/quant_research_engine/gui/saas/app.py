@@ -2507,6 +2507,10 @@ def create_saas_app() -> Flask:
     def api_auth_code() -> Any:
         data = request.get_json(silent=True) or {}
         target = str(data.get("target") or "").strip()
+        # 邮箱统一小写：注册/登录/重置在入库前都会 lower(email)，发码若存原始
+        # 大小写会导致含大写字母的邮箱永远校验失败（2026-11-04 整合实测复现）。
+        if "@" in target:
+            target = target.lower()
         if not target:
             return jsonify({"ok": False, "error": "缺少 target（手机号或邮箱）"}), 400
 
@@ -2552,25 +2556,33 @@ def create_saas_app() -> Flask:
 
     @app.post("/api/saas/auth/register")
     def api_auth_register() -> Any:
-        """内测临时注册（邮箱+密码，密码 pbkdf2 哈希存储）。
+        """自建注册（邮箱+邮箱验证码+密码，密码 pbkdf2 哈希存储）。
 
-        用户拍板：登录/验证码/短信/微信正式版外购，不自建；本端点仅内测期使用，
-        正式版替换为外购身份服务（15 号文档 D 阶段注释）。
+        2026-11-04：登录/会员转为自建（36 号文档，取代外购决策）。注册必须
+        校验邮箱验证码——此前接收 code 但不校验（Windows UI 复核发现的缺口），
+        等于任何人可任意注册，现已强制。
         """
         data = request.get_json(silent=True) or {}
         email = str(data.get("email") or data.get("target") or "").strip().lower()
         password = str(data.get("password") or "")
+        code = str(data.get("code") or "").strip()
         if not email or "@" not in email or len(email) > 200:
             return jsonify({"ok": False, "error": "邮箱格式不正确"}), 400
         if not _valid_password(password):
             return jsonify({"ok": False, "error": "密码至少 8 位且需同时包含字母和数字"}), 400
+        if not code:
+            return jsonify({"ok": False, "error": "缺少邮箱验证码"}), 400
         engine = _get_engine(app)
         with engine.begin() as conn:
+            # 先查重（409 优先于验证码校验）：已注册邮箱直接引导登录，
+            # 避免重复注册时因发码限流/旧码已消费而报出误导性的验证码错误。
             existing = conn.execute(
                 text("SELECT id FROM users WHERE email = :e"), {"e": email}
             ).first()
             if existing is not None:
                 return jsonify({"ok": False, "error": "该邮箱已注册，请直接登录"}), 409
+            if not _consume_email_code(conn, email, code, _auth_salt(app)):
+                return jsonify({"ok": False, "error": "验证码错误或已过期"}), 401
             salt = secrets.token_hex(8)
             user = conn.execute(
                 text(

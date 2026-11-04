@@ -2,6 +2,8 @@
 
 2026-11-04 Casdoor 自建登录本地打通（未 commit、未部署 ECS、未重启任何 qre 服务）：先抽通用 OIDC 适配器 `src/quant_research_engine/gui/saas/oidc_client.py`（discovery/JWKS id_token 验签、state 签名与一次性消费、build_authorize_url），Authing 逻辑平移为配置驱动，`tests/test_saas_oidc_client.py` **8 passed**。本地起 Casdoor（容器 `casdoor`，`casbin/casdoor:latest` 已 healthy；SQLite `/data/casdoor.db` 走卷 `casdoor-data`；配置落盘 `deploy/casdoor/app.conf`，`initAdminPassword="123"`；应用 `app-qre` / client_id `qre-local` / org `built-in` / cert `cert-built-in` / redirectUris 覆盖 8099 的 callback）。**关键发现**：Casdoor `/login/oauth/authorize` 是 React SPA 路由，服务端永远回 index.html、不会 302 带 code，curl 直连拿不到 Location；取 code 必须模拟前端 `POST /api/login?clientId=…&redirectUri=…&scope=…&state=…&responseType=code`，body 为 JSON `{application,organization,username,password,type:"code"}`（form-encoded 会拿不到用户、code 为空）。数据侧新增 `auth_identities(id,user_id,provider,sub,created_at, UNIQUE(provider,sub))`，provider 隔离按 `(provider,sub)` 唯一，同一天然人跨 Authing/Casdoor 会产生两行 `users` 需人工关联；`users.authing_id` 保持原样不动。路由新增 `GET /saas/login/casdoor`（写 `session["casdoor_next"]` 后 302 到 authorize，未配置返回 503 JSON），共用 `GET /saas/login/callback` 按 state 归属分流（先试 Authing 再试 Casdoor，state 键 `authing_next`/`casdoor_next`），Authing 行为逐字不变；登录页在 `casdoor_ready` 时条件渲染「使用 Casdoor 账号登录（自建认证）」ghost 按钮，生产未配 `CASDOOR_*` 时零变化、无灰色小字。测试：新增 `tests/test_saas_casdoor.py` **18 passed**（临时 PG 库跑 `cloud_schema.sql` 后 DROP、假 RSA 密钥、monkeypatch HTTP），Authing 回归 `tests/test_saas_authing.py` + oidc **38 passed**。真实端到端（无 mock）：本地 Casdoor + 临时 PG 库 + `create_saas_app().test_client()`，`GET /saas/login` 200 且含入口，`/saas/login/casdoor?next=/saas/` 302 到 `127.0.0.1:8000`，真实 `POST /api/login` 取 code → callback 200「登录成功」并写入 `saas_token`，`/api/saas/me` 200（`tier=member`、phone 取自 Casdoor admin 资料）；二次登录幂等，DB `users=1, identities=1`，`sub=31ee6f17-8731-4157-a20d-67843806c72f`。**未端到端**：QQ 登录只落配置位与 mock，短信仍占位，redirect URI 默认按 8099，`client_secret` 目前明文需上线前轮换；本地 dockerd 拉镜像失败，已加系统级 `/etc/systemd/system/docker.service.d/http-proxy.conf`（属系统改动，非仓库）。生产 Casdoor 独立 PG 库、staging 验证、老用户迁移脚本均未做。
 
+2026-11-04 登录系统三线整合完成（Casdoor + DeepSeek 后端 + Windows UI）：后端 fdcd603（reset/防爆破/membership），UI 分支 `ui/auth-pages`（e4c8d12）merge 入 master。整合中修四处：①login.html 冲突采用 UI 新版并补回 Casdoor 入口（`casdoor_ready` 条件渲染，文案沿用「使用 Casdoor 账号登录」）；②忘记密码第三步接真实 `POST /api/saas/auth/reset {email, code, new_password}`（此前 UI 只能提示无法自助重置）；③**注册强制邮箱验证码**（原接收 code 不校验=可任意注册），顺序为先查重 409 再验码 401；④**发码端点邮箱统一小写**——修复含大写字母邮箱（如 lockA@）因存原始大小写而永远校验失败的真实 bug，复现确认 lockA 失败/reset3 成功。测试适配：注册辅助一律先 stub 发码、_code_for 按小写取码、_send_code 清 target 限流避免二次发码 429；旧 `test_login_page_has_authing_primary` 改为 `test_login_page_password_primary`（Authing 不再是主入口）。新增 TestRegisterCode 2 例。相关套件 **96 passed, 1 skipped**。未部署 ECS、未重启服务；生产仍 Authing，切换需用户批准。
+
 2026-11-04 P0-11 取消/早停子进程不退出修复（未 commit、**未重启 worker**，CF 队列在跑）：根因 `worker/slots.py` 三处（用户取消、RSS 早停、finally）都只 `proc.terminate()` + `join(timeout=5)` 即放弃，子进程阻塞在长计算中不响应 SIGTERM 时会继续跑（昨日 job244 取消后仍跑 7 分钟、625MB，手动 SIGKILL 才死）。修复：新增 `_terminate_child()`——SIGTERM → 宽限 5s 未退出则 `proc.kill()`（SIGKILL）+ join 回收，三处统一替换。新增 `tests/test_worker_slots_cancel_kill.py` 2 例（显式 SIG_IGN 的子进程在取消后必须退出且被回收、正常子进程回归），定向 `-k "slot or capacity"` **61 passed** 零回归。**新逻辑待 worker 下次重启后生效**（排在 CF 队列空档）。同日 Casdoor 成果已提交（12 文件 1543 行），未含 P0-9 混合 hunk。
 
 2026-11-03 回测恢复（用户 RAM 使用完毕）：WSL 重启后环境核验 used 1.53GB，`qre-gui`(8080=200)、`qre-gui-lab`(8081=200)、`qre-saas-worker`、`postgresql@16-main` 全部 active。EMA 前 4 项成果完整，仅 job244 需重跑——注意 `scripts/ema_sma_priority.py` 的 resume 逻辑会把已有 job_id 的 canceled 当终态直接 `return 1`，**不会自动重跑**，故先备份 `.tmp/prod-cleanup-20261103/job244_before_retry.json`，再按管理台 retry 同语义将 244 重置 queued（清 cancel_requested/error/lease/started/finished/heartbeat，attempts=0），随后 `bash-hdchxzhv` 重启驱动，自动跳过 4 项 completed、resumed 复用 244，未新建重复 job。23:51:23 job244 已 running（batch）。EMA 五项结果：240 EMA5/250 -29.94%（99.0min）、241 EMA5/60 -26.77%（74.2min）、242 EMA5/20 -2.35%（78.4min）、243 EMA20/60 -33.40%（67.0min）、244 EMA20/250 **-23.87%（重跑 57.6min，56,524 笔，回撤 -69.41%）**，全部 5201 只 2009-2026，均为负。EMA 完成后已启动 `bash-abs42ky2`：`uv run python scripts/classic_catalog/fullscale.py --resume` 恢复 CF-012 起经典策略全量队列。**首跑 13 秒失败**：WebBridge 会话 `classic-catalog-smoke` 标签在 WSL 重启后丢失，CF-012 提交 evaluate 连续 502（重试耗尽，非代码 bug）；处置：WebBridge `navigate` 重建标签（tabId 1523278548，已登录页「我的回测」），第二次 `bash-cz16zhmh` 恢复。**driver 不自带 navigate、依赖现存会话标签，今后 WSL/浏览器重启后恢复 CF 前必须先 navigate 重建标签**。
@@ -2497,3 +2499,54 @@ CR：`CR-2026-10-29_dense_font_scale.md`、`CR-2026-10-29_public_ui_audit.md`。
 - 遗留：`symbol.html` 用 404 作控制流（`/api/results/1/symbols/000001.SZ`）建议
   后续改 200 + `ok:false`（API 契约变更，本轮只在 `verify.py` 白名单显式登记）；
   `12_UI_STYLE_GUIDE.md` 字号基线已过期未同步。
+
+## 2026-11-04 Windows 端：自建登录 / 注册 / 忘记密码 / 会员中心 UI（ui/auth-pages 分支）
+
+执行者：Windows UI Agent（Claude Fable 5）。范围仅 `gui/saas/templates/` 与 `gui/static/`；
+未改 Python 后端、未部署 ECS、未 push master。分支 `ui/auth-pages` 待主 Agent 复核。
+
+### A. 任务与实现
+- T1 登录页：主表单改为「手机号/邮箱 + 密码」，保留验证码登录为次要入口（可展开面板）；
+  新增注册、忘记密码入口，QQ 登录为 disabled ghost 按钮（标注「即将开放」），
+  Authing OIDC 保留为唯一可用第三方入口。
+- T2 注册页：邮箱 + 6 位邮箱验证码（发送后 30–120s 倒计时、可重发）+ 密码强度提示（四档，紫色阶）；
+  注册成功自动登录并按 `login_next` 回跳。注册视图通过 `#register` 哈希路由复用 `/saas/login`。
+- T3 忘记密码：三步流程（邮箱 → 验证码 → 新密码），通过 `#forgot` 哈希路由；
+  服务端无重置接口，第三步只做本地校验并明确提示「无法自助重置，请联系运营」，不伪造成功。
+- T4 会员中心：新增会员等级卡（tier 徽标、内测免费标、每日配额用量/进度条、跟踪上限 20）、
+  四格指标条、QQ 绑定预留区（未绑定，按钮 disabled）；保留既有分享/回测记录/策略库。
+- T5 会员权益对比表：游客 / 注册会员 / 付费会员三列，付费列标「内测免费」，
+  高亮当前 tier 列（窄屏自动滚到当前列），不提供支付按钮。
+- 风格沿用白底磨砂玻璃卡、现有 token 与大字号宽间距；红绿仅用于盈亏，
+  错误/提示改为品牌紫阶（`--tint` / `--lav-deep`）。
+
+### B. 改动文件
+- `gui/saas/templates/login.html`（重写：T1/T2/T3）
+- `gui/saas/templates/profile.html`（会员中心：T4/T5）
+- `gui/saas/templates/base.html`（新增 `{% block head %}`，供页面加载 account.css）
+- `gui/saas/templates/_records_scripts.html`（修正不限次数会员被误标为管理员）
+- `gui/static/account.css`（新增登录/会员中心样式）
+- `gui/static/card-class.css`（#tier-strip 接入统一小卡条布局）
+
+### C. 后端契约缺口（未改后端，按 app.py 现状）
+1. 无密码重置接口：`POST /api/saas/auth/reset` 不存在；T3 第三步明确提示，不伪造成功。
+2. 注册接口接收但忽略 `code`：前端仍采集/校验 6 位验证码，服务端不校验。
+3. 手机号+密码登录对纯手机号账号无效（无 `password_hash`）：失败时提示改用验证码登录并展开面板。
+4. 无 QQ 专用后端：QQ 按钮 disabled 预留；Authing OIDC 为现有第三方登录路径。
+5. `/api/saas/me` 不返回 `max_watches`：T4 按 tier 默认值显示 20 个，并用 tips 注明以运营配置为准。
+6. 无 `/saas/register`、`/saas/forgot` 路由：T2/T3 以 `#register`、`#forgot` 哈希视图实现。
+
+### D. 验收
+- 预览实例：`127.0.0.1:8091`，`SAAS_AUTH_BYPASS=0`（bypass 会把登录页直接重定向到 `/saas/`）。
+- `scripts/win/ui-smoke.py --base http://127.0.0.1:8091 --paths /saas/login`：
+  双视口（1280×900 / 375×812）PASS，HTTP 200 / 无 pageerror / 无 console error / 无横向溢出。
+- 额外 Playwright：注册真实账号并自动登录、密码登录、409 冲突切回登录并保留错误、
+  倒计时与密码显隐、验证码面板、忘记密码三步、会员中心（tier=注册会员 / 不限次数 / 20 个）、
+  权益表当前列高亮与窄屏滚动（scrollLeft=261，页面 overflow=0）；均无 pageerror。
+- 截图：`.tmp/ui-review/saas-login__{desktop,mobile}.png`、`auth-register__*.png`、
+  `auth-forgot__*.png`、`auth-code-login__*.png`、`auth-409-lavender__desktop.png`、
+  `profile-member-final__{desktop,mobile}.png` 等。
+
+### E. 状态
+- 变更提交在 `ui/auth-pages` 分支，未合入 / 未 push master；`gui/saas/app.py` 的既有
+  Windows `getloadavg` 修复不在本分支提交内。待主 Agent 复核后统一部署。

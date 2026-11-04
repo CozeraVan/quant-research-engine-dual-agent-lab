@@ -1,30 +1,139 @@
 {% extends "base.html" %}
-{% block title %}个人信息 · A股回测台{% endblock %}
+{% block title %}会员中心 · A股回测台{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/account.css?v={{ asset_v }}">{% endblock %}
 {% block body %}
 <div class="wrap">
   <div class="page-head">
-    <h1>个人信息</h1>
-    <p>你的账号、会员权限与回测记录都在这里。</p>
+    <h1>会员中心</h1>
+    <p>账号、会员权益与回测记录都在这里。</p>
   </div>
 
-  <!-- 账号信息卡（QRE-SAAS-PROFILE） -->
-  <div class="card" id="profile-card">
-    <h2>账号信息</h2>
-    <div class="metric-strip" style="margin-bottom:0">
-      <div class="metric-card" style="background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)">
-        <div class="m-label">账号</div><div class="m-value" id="pf-account" style="font-size:16px">加载中…</div>
+  <!-- T4 会员等级卡：tier / 每日配额用量 / 跟踪上限 -->
+  <section class="card member-hero" id="profile-card">
+    <div class="member-hero-top">
+      <div class="member-identity">
+        <div class="member-avatar" aria-hidden="true">Q</div>
+        <div>
+          <div class="member-hello">当前账号</div>
+          <div class="member-account" id="pf-account">加载中…</div>
+          <div class="member-badges">
+            <span class="member-tier-badge" id="pf-tier">—</span>
+            <span class="member-beta">内测免费</span>
+          </div>
+        </div>
       </div>
-      <div class="metric-card" style="background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)">
-        <div class="m-label">会员等级</div><div class="m-value" id="pf-tier" style="font-size:16px">—</div>
-      </div>
-      <div class="metric-card" style="background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)">
-        <div class="m-label">今日全量回测</div><div class="m-value" id="pf-quota" style="font-size:16px">—</div>
-      </div>
-      <div class="metric-card" style="background:var(--tint,#F1EDF8);border-color:var(--tint-deep,#E6DEF3)">
-        <div class="m-label">权限说明</div><div class="m-value" id="pf-perm" style="font-size:14.5px;font-weight:500">—</div>
+      <div class="member-quota">
+        <div class="member-quota-head"><span>今日全量回测</span><b id="pf-quota">—</b></div>
+        <div class="member-bar" role="progressbar" aria-label="今日配额使用量"><i id="pf-quota-bar"></i></div>
+        <div class="member-quota-foot" id="pf-quota-foot">—</div>
       </div>
     </div>
+    <p class="member-perm" id="pf-perm">—</p>
+  </section>
+
+  <div class="metric-strip" id="tier-strip">
+    <div class="metric-card">
+      <div class="m-label">会员等级</div><div class="m-value" id="pf-tier-metric">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="m-label">今日已用 / 上限</div><div class="m-value" id="pf-used-metric">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="m-label">信号跟踪上限
+        <button class="tip-trigger auth-tip-btn" type="button" data-tip="内测期默认每个账号可跟踪 20 个策略；实际上限以运营配置的会员策略为准。" aria-label="跟踪上限说明">?</button>
+      </div><div class="m-value" id="pf-watches">20 个</div>
+    </div>
+    <div class="metric-card">
+      <div class="m-label">记录保存</div><div class="m-value" id="pf-retention">—</div>
+    </div>
   </div>
+
+  <!-- T4 QQ 绑定预留区（接口未接入，不伪造绑定状态） -->
+  <section class="card account-bind" id="account-bind-card">
+    <h2>账号绑定
+      <button class="tip-trigger auth-tip-btn" type="button" data-tip="QQ 绑定为内测预留能力；接口上线后会在此接入，当前不影响登录与使用。" aria-label="账号绑定说明">?</button>
+    </h2>
+    <div class="bind-row">
+      <div class="bind-mark" aria-hidden="true">QQ</div>
+      <div class="bind-info">
+        <b>QQ 账号</b>
+        <span class="bind-status">未绑定</span>
+      </div>
+      <button class="btn btn-ghost" type="button" disabled>绑定 QQ（即将开放）</button>
+    </div>
+  </section>
+
+  <!-- T5 会员权益对比表：标「内测免费」，不提供支付按钮 -->
+  <section class="card" id="benefit-card">
+    <div class="benefit-head">
+      <h2>会员权益对比</h2>
+      <span class="member-beta">内测免费</span>
+      <button class="tip-trigger auth-tip-btn" type="button" data-tip="额度为内测期默认策略（tier_policies），实际以运营配置为准；内测期间不提供支付。" aria-label="权益说明">?</button>
+    </div>
+    <p class="benefit-lead">内测期间注册会员与付费会员权益一致，全部功能免费开放，暂不提供支付。</p>
+    <div class="benefit-scroll">
+      <table class="tbl benefit-table">
+        <thead>
+          <tr>
+            <th>权益</th>
+            <th data-tier-col="guest">游客</th>
+            <th data-tier-col="member">注册会员</th>
+            <th data-tier-col="paid">付费会员 <span class="member-beta">内测免费</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>每日全量回测</td>
+            <td>1 次</td>
+            <td>不限</td>
+            <td>不限</td>
+          </tr>
+          <tr>
+            <td>单次标的数</td>
+            <td>最多 10 只</td>
+            <td>全市场</td>
+            <td>全市场</td>
+          </tr>
+          <tr>
+            <td>回测历史区间</td>
+            <td>近 10 年</td>
+            <td>全历史</td>
+            <td>全历史</td>
+          </tr>
+          <tr>
+            <td>因子字段 / 因子表</td>
+            <td>20 / 3</td>
+            <td>20 / 3</td>
+            <td>20 / 3</td>
+          </tr>
+          <tr>
+            <td>信号跟踪上限</td>
+            <td><span class="benefit-no">—</span></td>
+            <td>20 个</td>
+            <td>20 个</td>
+          </tr>
+          <tr>
+            <td>回测记录保存</td>
+            <td>次日清空</td>
+            <td>永久保存</td>
+            <td>永久保存</td>
+          </tr>
+          <tr>
+            <td>只读分享</td>
+            <td><span class="benefit-no">—</span></td>
+            <td><span class="benefit-yes">支持</span></td>
+            <td><span class="benefit-yes">支持</span></td>
+          </tr>
+          <tr>
+            <td>个股明细与产物下载</td>
+            <td><span class="benefit-no">—</span></td>
+            <td><span class="benefit-yes">支持</span></td>
+            <td><span class="benefit-yes">支持</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
   <!-- P1 只读分享（QRE-SAAS-READONLY-SHARE）：我的分享列表与撤销（仅登录可见） -->
   <div class="card hidden" id="share-card">
@@ -63,11 +172,35 @@ function retryProfile(){
   }
   return loadProfile();
 }
+function markTierColumn(tier){
+  const idx = ({guest: 2, member: 3, paid: 4})[tier] || 0;
+  document.querySelectorAll('.benefit-table tr').forEach(tr => {
+    Array.prototype.forEach.call(tr.children, (cell, i) => {
+      cell.classList.toggle('is-current', idx > 0 && i + 1 === idx);
+    });
+  });
+  document.querySelectorAll('.benefit-table [data-tier-col]').forEach(th => {
+    const old = th.querySelector('.benefit-now');
+    if (old) old.remove();
+    if (idx > 0 && th.getAttribute('data-tier-col') === tier){
+      const now = document.createElement('span');
+      now.className = 'benefit-now';
+      now.textContent = '当前';
+      th.appendChild(now);
+    }
+  });
+  // 窄屏时把当前等级列滚进视野，避免用户只看到「游客」列
+  const currentTh = document.querySelector('.benefit-table th.is-current');
+  const scroller = document.querySelector('.benefit-scroll');
+  if (currentTh && scroller && window.matchMedia('(max-width: 768px)').matches){
+    scroller.scrollLeft = Math.max(0, currentTh.offsetLeft - 12);
+  }
+}
 async function loadProfile(){
   const TIER_LABEL = {guest: '游客', member: '注册会员', paid: '付费会员'};
   const PERM_LABEL = {
-    guest: '≤10 只回测 · 近 10 年 · 每日 1 次 · 不保存记录',
-    member: '全市场 / 全历史 · 不限次数 · 记录永久保存',
+    guest: '游客：≤10 只标的 · 近 10 年 · 每日 1 次 · 记录次日清空',
+    member: '注册会员：全市场 / 全历史 · 不限次数 · 记录永久保存',
     paid: '内测期间同注册会员，更多权益即将开放',
   };
   profileEpoch += 1;
@@ -85,15 +218,39 @@ async function loadProfile(){
     const resp = result.resp, d = result.data;
     if (!resp.ok || !d || !d.ok || !d.user) throw new Error('个人信息加载失败 HTTP ' + resp.status);
     const u = d.user;
-    document.getElementById('pf-account').textContent = u.email || u.phone || ('用户 #' + u.id);
     const tier = u.tier || 'member';
-    document.getElementById('pf-tier').textContent = TIER_LABEL[tier] || tier;
-    const unlimited = u.is_admin || u.quota_limit === '不限';
+    const isAdmin = !!u.is_admin;
+    const tierLabel = isAdmin ? '管理员' : (TIER_LABEL[tier] || tier);
+    document.getElementById('pf-account').textContent = u.email || u.phone || ('用户 #' + u.id);
+
+    const badge = document.getElementById('pf-tier');
+    badge.textContent = tierLabel;
+    badge.className = 'member-tier-badge ' + (isAdmin ? 'tier-admin' : ('tier-' + tier));
+    document.getElementById('pf-tier-metric').textContent = tierLabel;
+
+    const used = Number(u.used_today || 0);
+    const unlimited = isAdmin || u.quota_limit === '不限';
+    const limit = unlimited ? null : Number(u.quota_limit);
     document.getElementById('pf-quota').textContent = unlimited
       ? '不限次数'
-      : ('已用 ' + (u.used_today || 0) + ' / ' + (u.quota_limit ?? '—') + ' 次');
-    document.getElementById('pf-perm').textContent =
-      unlimited ? '管理员：不限次数，全功能开放' : (PERM_LABEL[tier] || PERM_LABEL.member);
+      : ('已用 ' + used + ' / ' + u.quota_limit + ' 次');
+    document.getElementById('pf-used-metric').textContent = unlimited
+      ? (used + ' 次 / 不限')
+      : (used + ' / ' + u.quota_limit + ' 次');
+    document.getElementById('pf-quota-foot').textContent = unlimited
+      ? '内测期不限次数，放心回测'
+      : ('今日剩余 ' + Math.max(0, limit - used) + ' 次');
+    const bar = document.getElementById('pf-quota-bar');
+    bar.classList.toggle('is-unlimited', unlimited);
+    bar.style.width = unlimited ? '100%'
+      : (limit > 0 ? Math.min(100, Math.round(used / limit * 100)) + '%' : '0%');
+
+    document.getElementById('pf-perm').textContent = isAdmin
+      ? '管理员账号：不限次数，全功能开放；会员权益表仅作等级说明。'
+      : (PERM_LABEL[tier] || PERM_LABEL.member);
+    document.getElementById('pf-retention').textContent = tier === 'guest' ? '次日清空' : '永久保存';
+    document.getElementById('pf-watches').textContent = '20 个';
+    markTierColumn(isAdmin ? '' : tier);
   } catch (error) {
     if (epoch !== profileEpoch) return;
     if (error && (error.status === 401 || error.status === 404)){ showRecordsAccess(); return; }
