@@ -18,6 +18,8 @@
   .kline-ohlc .up{color:var(--pos)}
   .kline-ohlc .down{color:var(--neg)}
   .kline-ohlc .k-dim{color:var(--muted)}
+  .risk-stress-note{margin:8px 0 0;font-size:15px;color:var(--text)}
+  .risk-stress-table{min-width:620px;white-space:nowrap}
   /* CR-2026-10-28 指标设置与面板管理：模态复用主题 token，不引入第四色相 */
   .ind-mask{position:fixed;inset:0;background:rgba(36,31,46,.45);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
   .ind-dialog{width:min(560px,100%);max-height:min(76vh,640px);display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(36,31,46,.22)}
@@ -51,7 +53,7 @@
   <div class="chart-box" id="box-equity" style="display:none">
     <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略、个股买入持有和基准指数；基准可多选，拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
     <div class="bench-bar" id="bench-bar">基准：</div>
-    <div id="chart-equity" style="height:320px"></div>
+    <div id="chart-equity" style="height:420px"></div>
     <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
   </div>
 
@@ -67,7 +69,7 @@
   </div>
 
   <div class="chart-box" id="box-kline" style="display:none">
-    <div class="chart-title">日 K 与买卖点 <button type="button" class="tip-trigger" data-tip="红色三角为买入、绿色三角为卖出；拖动下方滑块缩放，悬停可查看订单详情。" aria-label="K线买卖点说明">?</button>
+    <div class="chart-title">日 K 与买卖点 <button type="button" class="tip-trigger" data-tip="红色圆环「买」在 K 线下方、绿色圆环「卖」在上方；信号密集时按当前缩放区间自动聚合，悬停可查看单笔订单明细或聚合组的合计与日期范围。" aria-label="K线买卖点说明">?</button>
       <span class="fct-chips" id="kline-chips"></span>
       <button class="btn-sm" id="btn-kreplay" style="float:right" data-tip="「信」标记 = 信号日 T（收盘出信号）；「入/出」标记 = T+1 成交日；浮动盈亏为毛口径（未扣卖出费用）；模拟历史数据，不构成投资建议。">▶ 重播</button>
       <button class="btn-sm hidden" id="btn-kreplay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
@@ -137,6 +139,10 @@
 </div>
 {% endblock %}
 {% block scripts %}
+{# QRE-RISK-STRESS-TABLE：FRM 压力测试情景表（纯函数，独立于模板减少内联体积） #}
+<script src="/static/risk-stress.js?v={{ asset_v }}"></script>
+{# T5 买卖点圆环与缩放聚合（纯函数模块，模板只负责挂载） #}
+<script src="/static/kline-order-markers.js?v={{ asset_v }}"></script>
 <script src="/static/echarts.min.js?v={{ asset_v }}"></script>
 <script src="/static/replay.js?v={{ asset_v }}"></script>
 <script src="/static/factor-layout.js?v={{ asset_v }}"></script>
@@ -349,7 +355,7 @@ async function load(){
     if (result.generate){ showGenerate(); return; }
     const resp = result.resp, d = result.data;
     if (!resp.ok || !d.ok) throw new Error('加载失败 HTTP ' + resp.status);
-    renderSummary(d.summary, d.trades);
+    renderSummary(d.summary, d.trades, d.risk);
     renderEquity(d);
     renderWear(d);
     renderRisk(d);
@@ -564,7 +570,12 @@ function klineDisposeEngines(){
 // FRM-SYMBOL：个股级风险卡片（数据=详情 payload 的 risk 节，worker 侧已算好）
 function renderRisk(d){
   const r = d.risk;
-  if (!r || !r.tail) return;
+  if (!r) return;
+  if (!r.tail){
+    $('#risk-body').innerHTML = '<div class="chart-empty">风险分析暂无数据：区间内有效交易日不足，暂无法计算 VaR/ES 与压力测试。</div>';
+    $('#box-risk').style.display = '';
+    return;
+  }
   function tailOf(level, method){
     const t = ((r.tail[level] || {})[method]) || {};
     return t.var == null ? null : t;
@@ -573,7 +584,6 @@ function renderRisk(d){
   const p99 = tailOf('99pct', 'parametric_normal');
   const ewma = ((r.volatility || {}).ewma_latest) || {};
   const regime = ((r.volatility || {}).regime) || {};
-  const perf = r.performance || {};
   const dist = r.distribution || {};
   const regimeTxt = {low: '低波动', mid: '中波动', high: '高波动'}[regime.latest] || '—';
   const annVol = ewma.volatility_forecast != null ? (ewma.volatility_forecast * Math.sqrt(252)) : null;
@@ -588,18 +598,13 @@ function renderRisk(d){
     card('99% VaR（参数法）', p99 ? pct(p99.var) : '—', 'flat', paramTip) +
     card('EWMA 年化波动率', annVol != null ? pct(annVol) : '—', 'flat', '指数加权移动平均模型估计的日波动，乘 √252 年化。') +
     card('波动率状态', regimeTxt, regime.latest === 'high' ? 'neg' : 'flat', '按历史波动水平划分为低、中、高状态。') +
-    card('夏普比率', (perf.sharpe && perf.sharpe.sharpe != null) ? Number(perf.sharpe.sharpe).toFixed(2) : '—', 'flat', '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
     card('最好 / 最差单日', (dist.max != null ? pct(dist.max) : '—') + ' / ' + (dist.min != null ? pct(dist.min) : '—'), 'flat', '回测区间内最大和最小的单日收益。') +
     '</div>';
-  const sc = ((r.stress || {}).scenarios) || {};
-  const scList = Object.keys(sc).map(k => Object.assign({name: k}, sc[k])).filter(x => x.strategy_cumulative_return != null);
-  if (scList.length){
-    const worst = scList.reduce((a, b) => (a.strategy_cumulative_return < b.strategy_cumulative_return ? a : b));
-    html += '<div class="opt" style="font-size:14px;margin-top:6px">压力测试：覆盖 ' + scList.length +
-      ' 个历史极端情景，最差情景（' + (worst.description || worst.name) + '）累计收益 ' +
-      pct(worst.strategy_cumulative_return) + '，期间最大回撤 ' +
-      (worst.strategy_peak_trough_drawdown != null ? pct(-Math.abs(worst.strategy_peak_trough_drawdown)) : '—') + '</div>';
-  }
+  // T4 压力测试：情景表（情景名/窗口/累计收益/最大回撤/VaR）；未覆盖窗口显式列出，
+  // 不再因 strategy_cumulative_return 为空而整条静默消失。
+  html += (window.QRESymbolDetail && QRESymbolDetail.stressTable)
+    ? QRESymbolDetail.stressTable(r.stress, pct, cls)
+    : '<div class="chart-empty">压力测试模块加载失败，请刷新页面重试。</div>';
   $('#risk-body').innerHTML = html;
   $('#box-risk').style.display = '';
 }
@@ -609,7 +614,7 @@ function renderRisk(d){
 // 基准序列，但 kline 一定在，所以这条路径对全部存量产物都生效，无需重跑）。
 // 基准收盘从 d.kline.ohlc[i][1] 取，按 d.equity.dates 对齐后差分，与 riskAdjusted 的
 // dated-benchmark 分支一致。三项全 null → 整块隐藏。
-// Sharpe 不在此重复：上方 FRM 条已有「夏普比率」。
+// Sharpe 不在此重复：上方核心指标条已有「夏普比率」。
 function renderRiskAdjusted(d){
   const strip = $('#ra-strip');
   if (!strip) return;
@@ -636,13 +641,16 @@ function renderRiskAdjusted(d){
          '平均主动收益 ÷ 跟踪误差（主动收益的标准差），再乘 √252；衡量每承担一份偏离持股的风险换来多少超额。' + tipBase);
 }
 
-function renderSummary(s, trades){
+function renderSummary(s, trades, risk){
   $('#sym-title').innerHTML = (s.name || '') + ' <span class="opt">' + dispCode(s.ts_code) + '</span>';
-  // 与 lab 版同款的 7 指标卡：策略区间收益% vs 区间自然涨幅%，金额作辅助
+  // 与 job 页同口径：夏普属于核心绩效指标，统一放在顶部指标条（FRM 只留风险类指标）
+  const sharpe = (risk && risk.performance && risk.performance.sharpe) ? risk.performance.sharpe.sharpe : null;
+  // 与 lab 版同款的 9 指标卡（含夏普）：策略区间收益% vs 区间自然涨幅%，金额作辅助
   $('#sum-strip').innerHTML =
     card('股票', dispCode(s.ts_code) + ' ' + (s.name || ''), 'flat') +
     card('策略区间收益', (s.total_ret_pct == null ? '—' : pct(s.total_ret_pct)) + '（' + f2(s.total_pnl) + ' 元）', cls(s.total_ret_pct == null ? s.total_pnl : s.total_ret_pct), '该股在本次回测区间的策略累计收益，括号内为净盈亏金额。') +
     card('区间自然涨幅', s.bench_ret == null ? '—' : pct(s.bench_ret), s.bench_ret == null ? 'flat' : cls(s.bench_ret), '同一区间买入并持有该股的自然涨幅。') +
+    card('夏普比率', sharpe == null ? '—' : Number(sharpe).toFixed(2), cls(sharpe), '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
     card('交易笔数', s.trades, 'flat', '该股已完成的完整买卖交易数量。') +
     card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret), '全部完整交易单笔净收益的算术平均。') +
     card('平均持股周期', (typeof QREPerfMetrics !== 'undefined' && QREPerfMetrics.avgHoldingDays(trades) != null)
@@ -1700,7 +1708,10 @@ function renderKline(d){
   renderFactorChips(plan, d);
   const panes = plan.panes;
   const hasF = panes.length > 0;
-  el.style.height = QREReplay.klineHeightForPanes(panes.length) + 'px';
+  // T2：桌面端 K 线至少占 60vh（副图高度公式不变，窄屏仍走原公式防溢出）
+  const baseH = QREReplay.klineHeightForPanes(panes.length);
+  const deskH = (window.innerWidth || 0) >= 768 ? Math.round((window.innerHeight || 0) * 0.6) : 0;
+  el.style.height = Math.max(baseH, deskH) + 'px';
   klineDisposeEngines();  // 清掉同一容器上可能残留的旧 ECharts 实例
   const chart = echarts.init(el);
   symbolKlineChart = chart;
@@ -1720,25 +1731,11 @@ function renderKline(d){
       showSymbol: false, lineStyle: { width: 1.2 }, color: o.color });
   });
   if (d.orders && d.orders.length){
-    const idx = {}; dates.forEach((dt, i) => { idx[dt] = i; });
-    const lowByDate = {}, highByDate = {};
-    d.kline.ohlc.forEach((k, i) => { lowByDate[dates[i]] = k[2]; highByDate[dates[i]] = k[3]; });
-    const buys = [], sells = [];
-    d.orders.forEach(o => {
-      const dt = o.trade_date;
-      if (idx[dt] == null) return;
-      const tip = (o.side === 'buy' ? '买入' : '卖出') + ' ' + f2(o.quantity) + ' 股 @ ' + f2(o.price) +
-        '<br>金额 ' + f2(o.notional) + ' 元<br>费用 ' + f2(o.cost) + ' 元（佣金 ' +
-        f2(o.commission) + ' / 印花税 ' + f2(o.stamp_tax) + ' / 过户费 ' + f2(o.transfer_fee) + '）';
-      if (o.side === 'buy') buys.push({ value: [dt, lowByDate[dt] * 0.99], tip });
-      else sells.push({ value: [dt, highByDate[dt] * 1.01], tip });
-    });
-    series.push({ name: '买入', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: buys,
-      symbol: 'triangle', symbolSize: 10, itemStyle: { color: '#d43030' },
-      tooltip: { formatter: p => p.data.tip } });
-    series.push({ name: '卖出', type: 'scatter', xAxisIndex: 0, yAxisIndex: 0, data: sells,
-      symbol: 'triangle', symbolRotate: 180, symbolSize: 10, itemStyle: { color: '#1a9e4b' },
-      tooltip: { formatter: p => p.data.tip } });
+    // T5 买卖点圆环：买 color: '#d43030' / 卖 color: '#1a9e4b'，按缩放聚合
+    // （实现与几何见 static/kline-order-markers.js；重绘时同步画线层）
+    if (window.QREKlineOrderMarkers && QREKlineOrderMarkers.attach){
+      QREKlineOrderMarkers.attach(chart, series, d, dates, klineDrawApply);
+    }
   }
   // QRE-KLINE-PANE-OPTION（T1）：pane 的 grid/xAxis/yAxis/series 一律走共享出口，
   // 索引由 QREFactorLayout 内部生成并校验不变式——业务页不再手写 2+i。
@@ -1759,7 +1756,8 @@ function renderKline(d){
   const zoomX = xAxis.map((_, i) => i);
   chart.setOption({
     animation: false,
-    tooltip: { trigger: 'axis', axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } },
+    tooltip: { trigger: 'axis', confine: true, extraCssText: 'white-space:normal;max-width:320px;',
+      axisPointer: { type: 'cross', link: [{ xAxisIndex: 'all' }] } },
     legend: klineLegendSpec(plan),
     axisPointer: klineCrosshairSpec(),
     grid: grids, xAxis, yAxis,
