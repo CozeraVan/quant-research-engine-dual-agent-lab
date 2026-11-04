@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-04 使用说明首列宽度（已部署，未 commit）
+
+- `gui/saas/templates/help.html`：七处首列 `width:120px`→`160px`；`tests/test_saas_help_copy.py` 加宽度/数量断言。
+- 验证：51 passed + 13 skipped；`.tmp/perf-browser/probe_help_firstcol.py` 公网双视口通过。
+- 部署：仅 help.html + qre-saas 重启；备份 `/tmp/qre-help-firstcol-pre-20261104/`，MainPID 961521。未跑全量测试或回测。
+
 ## 2026-11-04 紧凑列表、FRM 与缩放残影修复（已部署，未 commit）
 
 - 文件：`static/account.css`（去固定高度）、`static/risk-stress.js` + `saas/templates/symbol.html`（参考卡入主指标条）、`static/kline-order-markers.js`（稳定 id + 仅更新标记）、`tests/test_saas_detail_consistency.py`（回归）。

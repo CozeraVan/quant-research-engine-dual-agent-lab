@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-04 使用说明首列宽度复核
+
+- Review Status：PASS，无 Required Fixes；已部署，待用户验收，未 commit/push。
+- 仅将 `help.html` 七个表格首列 120px→160px，并加测试锁定；不碰其他页面与后端。
+- 51 passed + 13 skipped；公网桌面/移动 Chromium 均确认六字首项单行、零错误、零横溢。生产 hash 一致，qre-saas MainPID 961521。
+
 ## 2026-11-04 紧凑列表、FRM 布局与 K 线残影修复自审
 
 - Review Status：PASS，无 Required Fixes；已部署 ECS，待用户验收，未 commit/push。

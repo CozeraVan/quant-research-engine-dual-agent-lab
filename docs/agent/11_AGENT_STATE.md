@@ -19,6 +19,18 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-04 CF 队列 502 恢复（运行中）
+
+- 原后台 `bash-cz16zhmh` 在 CF-022 完成后因 WebBridge 502 退出；CF-012~022 均 completed。
+- 已重建 `classic-catalog-smoke` 浏览器会话；CF-023 未重复建单，现对应 job258、owner=6。
+- 当前后台任务 `bash-yzge3q4y`，从 CF-023 继续串行全量。
+
+### 2026-11-04 使用说明首列防折行（已部署待验收，未 commit）
+
+- 当前 HEAD `14f8209`（前两轮 UI 已提交、未 push）；本轮 help.html + 测试未提交。
+- 七个说明区块首列统一 160px；51 项测试与公网双视口浏览器验收通过。
+- ECS qre-saas MainPID 961521，备份 `/tmp/qre-help-firstcol-pre-20261104/`；worker/CF 未动。
+
 ### 2026-11-04 个人中心紧凑列表、FRM 与缩放残影（已部署待验收，未 commit）
 
 - 当前 HEAD `cd4f68b`（上一轮 UI 已提交、未 push）；本轮 4 个 UI 文件 + 聚焦测试仍未提交。

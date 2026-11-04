@@ -132,6 +132,9 @@ def test_result_understanding_help_page_copy():
     assert "{{ total_return_basis }}" in help_page
     assert 'class="help-layout"' in help_page
     assert 'class="card help-side"' in help_page
+    # 首列六字项目名（含单元格左右 padding）不得折成两行；七个说明区块统一宽度。
+    assert help_page.count('<th style="width:160px">') == 7
+    assert 'width:120px' not in help_page
     assert "已验证口径" not in help_page and "旧口径·未验证" not in help_page
     # 不堆灰字：帮助页以表格/短句为主，不新增长篇辅助段落
     assert help_page.count('class="opt"') <= 3
