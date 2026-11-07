@@ -19,11 +19,28 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
-### 2026-11-04 CF 队列 502 恢复（运行中）
+### 2026-11-04 CF 长期事件监视（运行中，本窗口只做 CF）
+
+- 每个任务开始/终态自动追加 `40_CF_QUEUE_EVENT_LOG_2026-11-04.md`；索引已接入 README。
+- 监视器：`bash-aycthp2x` / PID 151503，命令 `uv run python scripts/classic_catalog/event_watch.py`；去重状态 `.tmp/classic-catalog-fullscale/events_state.json`。
+- 切换 agent 后先读 40 号事件日志，再按 36 号 runbook 恢复。
+
+### 2026-11-05 CF 队列第二次 502 恢复（运行中，本窗口只做 CF）
+
+- 中断：主队列 `bash-yzge3q4y` 提交 CF-038 时 WebBridge `HTTP Error 502` 连续重试 5 次后退出（基础设施瞬断，非策略失败）。
+- 处置：`list_tabs` 返回空 → `navigate` 重建标签（tabId **1523279794**，group「经典策略全量回测」）→ evaluate `/api/saas/me` 200（session 用户 id=29 `classic-final-*`）→ 生产 SQL 查 `idempotency_key LIKE 'CF-038-%'` **无记录**（未重复建单）→ resume。
+- 当前 fullscale 后台任务：**`bash-3qa67gs0`**（PID 496191，`disable_timeout=true`），命令 `set -a && source /etc/qre-saas-worker.env && set +a && uv run python scripts/classic_catalog/fullscale.py --resume`。
+- 进度（2026-11-07 13:07）：**CF-001～CF-062 已完成（62/118 ≈ 52.5%）**；CF-063 job298 因重启宕机竞态失败，已用 `--retry` 重建为 **job299（running，owner=6，13:06:07 起）**，job298 保留为失败历史；DB 其余 `failed=0`，剩余 56 个（含在飞的 CF-063）。
+- **状态：已恢复运行**。驱动 pid 2829（`--resume --retry CF-063`）、监管 pid 2949（flock 单实例）、事件监视 pid 2956 均在跑；WebBridge 标签 tabId 1523281175。**重跑机制**：`fullscale.py --retry CF_xxx`（可重复）按 CF 累计键版本 `v1→v2→v3` 换幂等键重提，计数在 `.tmp/classic-catalog-fullscale/retry_counts.json`；服务端同键去重，不换键的「重跑」只会拿回旧失败 job。
+- **CF 工具链已入库（2026-11-07 用户批准，已 commit 未 push）**：`scripts/classic_catalog/`（6 个脚本，含 `fullscale.py --retry`）、其 2 份测试（30 passed）、`deploy/saas/qre-saas-worker.service.d/db-ready.conf`、`docs/agent/40_CF_QUEUE_EVENT_LOG_2026-11-04.md`、README 索引行。`AGENTS.md` 与 `src/` 下的既存未提交改动非本轮工作，未纳入、未触碰。
+- **自愈监管（2026-11-06 新增，2026-11-07 加单实例锁并入库）**：`scripts/classic_catalog/supervise.sh` 常驻（每 120s，`flock` 单实例；本轮 pid 2949），队列不在跑时自动「重建 WebBridge 标签 → 校验 `/api/saas/me` → `fullscale.py --resume`」，监视器丢失自动拉起，连续 3 次快速失败写 `SUPERVISOR_HALTED` 交人工；日志 `supervisor.log`。昨夜三次 `HTTP 502 Bad Gateway`（均在 submit 阶段，非任务失败）已由其自动恢复，零重复建单，中断每次约 2 分钟。
+- **worker 启动前置（已落地，用户批准）**：`qre-saas-worker.service.d/db-ready.conf` 的 `ExecStartPre` 等 `pg_isready`（≤600s）+ `TimeoutStartSec=900`，仓库副本在 `deploy/saas/qre-saas-worker.service.d/`；装机用 `daemon-reload` 但**未 restart**（保护在飞任务），下次服务启动生效。重启时序本身**未实测**。
+- 仓库状态：CF 工具链已入库（HEAD 见 `git log --oneline -3`，未 push）；工作树仍有既存未提交改动（`AGENTS.md`、worker/portfolio/chanlun 等），**不要触碰或提交**。
+
+### 2026-11-04 CF 队列首次 502 恢复（已完成，历史）
 
 - 原后台 `bash-cz16zhmh` 在 CF-022 完成后因 WebBridge 502 退出；CF-012~022 均 completed。
-- 已重建 `classic-catalog-smoke` 浏览器会话；CF-023 未重复建单，现对应 job258、owner=6。
-- 当前后台任务 `bash-yzge3q4y`，从 CF-023 继续串行全量。
+- 已重建 `classic-catalog-smoke` 浏览器会话；CF-023 未重复建单，对应 job258、owner=6；由 `bash-yzge3q4y` 串行续跑至 CF-037。
 
 ### 2026-11-04 使用说明首列防折行（已部署待验收，未 commit）
 
