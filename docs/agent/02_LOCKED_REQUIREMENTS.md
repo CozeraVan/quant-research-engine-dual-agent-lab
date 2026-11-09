@@ -197,3 +197,9 @@ Status: LOCKED
 3. systemd 服务的 `MemoryMax` **不得超过物理内存的 80%**，使 cgroup 先于全局 OOM killer 生效；改机器内存配置后必须同步复核该值。
 4. DataFrame 装载纪律：禁用 `StringDtype(python)` 存高基数代码列（用 category）；metadata 只 merge 实际请求列；禁止 `iterrows()` 建逐行 Python 对象索引。
 5. 信号输入因子列保持 float64（精度硬约束，float32 可能翻转近交叉信号）；降内存只能靠分块/裁剪/编码，不许牺牲计算精度。
+6. **并发例外（2026-11-07 用户批准，实测依据）**：CF 全期全量队列允许 **2 路并行**（worker `--heavy-slots 2` + 驱动 `--concurrency 2`），这是规则 1–5 之外唯一被批准的并发放行。放行条件全部满足才可执行：
+   - 实测单任务占用：worker 子进程 ≈0.08 核 + PG ≈0.17 核、RSS 1.5 GiB、cgroup 本次开机峰值 6.05 GiB（2026-11-07 20:40 采样，CF-065 运行中）；
+   - 账面余量：2 × 6.05 ≈ 12.1 GiB < cgroup `MemoryMax` 18 GiB；CPU 2 × 0.25 ≈ 0.5 核 / 8 核；
+   - **单任务 ≥8 GiB 重任务不得与另一路并行**（历史 item3 级峰值 13.97 GiB 会顶爆 cgroup）：重任务必须串行，或降回 1 路；
+   - 并行期间必须持续观察 `memory.peak`、PG CPU、`load average`；任一项逼近上限立即降回 1 路；
+   - 该例外只覆盖经典策略队列（`scripts/classic_catalog/fullscale.py`），不自动扩展到任何其他长跑任务。

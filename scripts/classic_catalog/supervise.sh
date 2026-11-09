@@ -25,6 +25,10 @@ SITE=https://aguhuice.com/saas/new
 GROUP=经典策略全量回测
 TOTAL_CF=118
 INTERVAL=120
+# 队列参数：默认 2 路流水线（用户 2026-11-07 批准）。要求 worker 重槽 ≥2
+# （deploy/saas/qre-saas-worker.serial.conf 的 --heavy-slots），否则两个 job
+# 只是排队不并行。改回串行用 FULLSCALE_ARGS="--resume" 启动本脚本。
+FULLSCALE_ARGS=${FULLSCALE_ARGS:---resume --concurrency 2}
 ONCE=0
 [ "${1:-}" = "--once" ] && ONCE=1
 
@@ -91,7 +95,10 @@ session_ok() {
 }
 
 relaunch_watch() {
-  nohup .venv/bin/python scripts/classic_catalog/event_watch.py >>"$STATE_DIR/event_watch.out" 2>&1 &
+  # 9>&- 必须带：flock 用的是 fd 9，bash 会把该 fd 继承给子进程；event_watch
+  # 是长驻进程，若它继承 fd 9，锁就被它永久持有，后续任何 supervisor 都会
+  # 被判「已有实例」而退出（2026-11-07 实测踩坑：切换并行后监管自锁死 1h48m）。
+  nohup .venv/bin/python scripts/classic_catalog/event_watch.py >>"$STATE_DIR/event_watch.out" 2>&1 9>&- &
   sleep 2
   if running_watch; then log "事件监视器已重启 pid=$!"; else log "事件监视器重启失败"; fi
 }
@@ -101,10 +108,11 @@ run_fullscale() {
   # shellcheck disable=SC1090
   source "$ENV_FILE"
   set +a
-  log "resume: 剩余 $(remaining) 个 CF，启动 fullscale --resume"
+  log "resume: 剩余 $(remaining) 个 CF，启动 fullscale $FULLSCALE_ARGS"
   local started_at rc
   started_at=$(date +%s)
-  .venv/bin/python scripts/classic_catalog/fullscale.py --resume >>"$STATE_DIR/fullscale.supervisor.out" 2>&1
+  # shellcheck disable=SC2086
+  .venv/bin/python scripts/classic_catalog/fullscale.py $FULLSCALE_ARGS >>"$STATE_DIR/fullscale.supervisor.out" 2>&1 9>&-
   rc=$?
   local dur=$(( $(date +%s) - started_at ))
   log "fullscale 退出 rc=$rc 用时 ${dur}s 剩余 $(remaining) 个"
