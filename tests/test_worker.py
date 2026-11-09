@@ -218,7 +218,7 @@ class TestEndToEnd:
         job = client.lease()
         beats = []
         orig_hb = client.heartbeat
-        client.heartbeat = lambda jid: (beats.append(jid), orig_hb(jid))[1]
+        client.heartbeat = lambda jid, **kw: (beats.append(jid), orig_hb(jid))[1]
         gate = [False]
 
         def slow_runner(j):
@@ -636,7 +636,7 @@ class TestHeartbeatLeaseLoss:
             self.results = []
             self.fails = []
 
-        def heartbeat(self, job_id):
+        def heartbeat(self, job_id, progress=None, message=None):
             self.heartbeats += 1
             raise RuntimeError("任务不存在、非运行中或 leased_by 不匹配")
 
@@ -682,7 +682,7 @@ class TestHeartbeatLeaseLoss:
         calls = {"n": 0}
         orig_hb = client.heartbeat
 
-        def flaky(job_id):
+        def flaky(job_id, progress=None, message=None):
             calls["n"] += 1
             if calls["n"] == 1:
                 return orig_hb(job_id)  # 第一次失败

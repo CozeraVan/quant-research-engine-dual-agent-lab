@@ -154,3 +154,80 @@ class TestChildMemoryLimit:
         monkeypatch.setenv("QRE_WORKER_CHILD_MEM_GB", "8")
         payload = execute_job_subprocess({"id": 2}, runner=_runner_ok)
         assert payload["summary"] == {"job": 2}
+
+
+class TestChildMemLimitDefault:
+    """P0-10：子进程默认上限 14→12GB，与 R-MEM-001 规则 2（≤物理 50%）对齐。
+    超限任务允许可读失败，禁止以提高上限绕过（尾段分块修复见 CF 后续）。"""
+
+    def test_default_is_12_gb(self):
+        from quant_research_engine.worker.slots import DEFAULT_CHILD_MEM_LIMIT_GB
+
+        assert DEFAULT_CHILD_MEM_LIMIT_GB == 12.0
+
+    def test_memory_error_message_mentions_12gb_default(self, monkeypatch):
+        # env 未显式设置时（delenv 后）MemoryError 文案应报默认 12GB
+        monkeypatch.delenv("QRE_WORKER_CHILD_MEM_GB", raising=False)
+        with pytest.raises(RuntimeError, match="任务超出资源配额"):
+            execute_job_subprocess({"id": 3}, runner=_runner_raises_memory_error)
+
+
+class TestRssEarlyAbort:
+    """P0-10 RSS 早停看门狗（35 §3.2 第 4 条）：超 12GB 预算 80%（9830MB）且
+    持续上升 → 主动终止并落可读资源配额错误；平台/单次尖峰不误杀。
+    全部用合成轨迹（注入 rss_fn），不起真实内存压力。"""
+
+    THRESHOLD = 0.8 * 12 * 1024  # 9830.4 MB
+
+    def _trajectory(self, values):
+        it = iter(values)
+        return lambda pid: next(it, values[-1])
+
+    def test_rising_through_threshold_aborts_with_readable_error(self):
+        gate = threading.Event()
+
+        def _sleep_runner(job):
+            gate.wait(timeout=10)
+            return {"summary": {}, "files": []}
+
+        with pytest.raises(RuntimeError, match="资源配额（早停）") as excinfo:
+            execute_job_subprocess(
+                {"id": 4}, runner=_sleep_runner,
+                rss_fn=self._trajectory([8000, 9500, 10000, 10500]),
+                rss_limit_mb=self.THRESHOLD, rss_poll_seconds=0.05)
+        assert "9830" in str(excinfo.value)
+        gate.set()
+
+    def test_plateau_above_threshold_not_killed(self):
+        """高位平台（稳态聚合）：不终止，任务正常完成。"""
+        gate = threading.Event()
+
+        def _sleep_runner(job):
+            time.sleep(0.4)
+            return {"summary": {"job": 5}, "files": []}
+
+        payload = execute_job_subprocess(
+            {"id": 5}, runner=_sleep_runner,
+            rss_fn=self._trajectory([9500, 9900, 9950, 9950, 9950]),
+            rss_limit_mb=self.THRESHOLD, rss_poll_seconds=0.05)
+        assert payload["summary"] == {"job": 5}
+
+    def test_single_spike_not_killed(self):
+        gate = threading.Event()
+
+        def _sleep_runner(job):
+            time.sleep(0.4)
+            return {"summary": {"job": 6}, "files": []}
+
+        payload = execute_job_subprocess(
+            {"id": 6}, runner=_sleep_runner,
+            rss_fn=self._trajectory([8000, 10500, 9000, 9000, 9000]),
+            rss_limit_mb=self.THRESHOLD, rss_poll_seconds=0.05)
+        assert payload["summary"] == {"job": 6}
+
+    def test_default_threshold_is_80pct_of_child_limit(self):
+        from quant_research_engine.worker.capacity import early_abort_threshold_mb
+        from quant_research_engine.worker.slots import DEFAULT_CHILD_MEM_LIMIT_GB
+
+        assert early_abort_threshold_mb() == pytest.approx(0.8 * 12 * 1024, abs=0.1)
+        assert DEFAULT_CHILD_MEM_LIMIT_GB == 12.0

@@ -62,7 +62,9 @@ class TestUploadHttpClassification:
     def test_success_path_unaffected(self, monkeypatch):
         class _Resp:
             def read(self):
-                return b'{"ok": true}'
+                # 真实协议：最后一批落盘后服务端返回 completed（缺 status 视为未确认，
+                # 分片循环会抛错走可重试分类，不谎报成功）
+                return b'{"ok": true, "status": "completed"}'
 
             def __enter__(self):
                 return self
@@ -72,7 +74,8 @@ class TestUploadHttpClassification:
 
         monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=None: _Resp())
         client = CloudClient(base_url="http://127.0.0.1:1", token="t", worker_id="w")
-        assert client.upload_files(1, "tok", {"a.csv": b"x"}) == {"ok": True}
+        assert client.upload_files(1, "tok", {"a.csv": b"x"}) == {
+            "ok": True, "status": "completed"}
 
 
 class TestErrorClassConsistency:
@@ -95,6 +98,76 @@ class TestErrorClassConsistency:
         assert "result_upload_error" not in NON_RETRYABLE
 
 
+class TestDaemonUploadRetry:
+    """2026-11-09 CF-083 事故：429 被当终态，白丢一次完整计算（135714 笔）。
+
+    修复要求：429/502/503/504 在回传层有限重试（服务端按 upload_token 幂等，
+    整轮重发=断点续传），重试耗尽后才落 `result_upload_http_<code>` 终态。
+    """
+
+    def _daemon(self, script, fail_calls, calls):
+        from quant_research_engine.worker.daemon import WorkerDaemon
+
+        class _Client:
+            worker_id = "w"
+            base_url = "http://127.0.0.1:1"
+
+            def report_result(self, job_id, payload):
+                return {"upload_token": "tok"}
+
+            def upload_files(self, job_id, upload_token, blobs, **kwargs):
+                calls.append(worker_daemon._UPLOAD_RETRY_BACKOFF_S[:])
+                outcome = script.pop(0)
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+
+            def fail(self, job_id, error, error_class="engine_error"):
+                fail_calls.append({"job_id": job_id, "error_class": error_class})
+                return {"ok": True}
+
+        daemon = WorkerDaemon.__new__(WorkerDaemon)
+        daemon.client = _Client()
+        daemon._sleep = lambda _seconds: calls.append(["_sleep", _seconds])
+        return daemon
+
+    def _run(self, daemon, monkeypatch, job_id=11):
+        monkeypatch.setattr(worker_daemon, "_upload_files_enabled", lambda: True)
+        monkeypatch.setattr(worker_daemon.Path, "read_bytes", lambda self: b"x")
+        daemon._report_results(job_id, {"summary": {},
+                                        "files": [{"name": "a.csv", "path": "/x"}]})
+
+    @pytest.mark.parametrize("status", [429, 502, 503, 504])
+    def test_retryable_status_eventually_succeeds(self, monkeypatch, status):
+        fail_calls: list[dict] = []
+        calls: list = []
+        daemon = self._daemon([CloudError(f"HTTP {status}", status),
+                              {"status": "completed"}], fail_calls, calls)
+        self._run(daemon, monkeypatch)
+        assert fail_calls == []                      # 重试成功 ⇒ 不落 failed
+        assert ["_sleep", 5.0] in calls               # 第一次退避 5s
+        assert ["_sleep", 15.0] not in calls          # 只退避一次就成功
+
+    def test_retry_exhausted_reports_http_429_class(self, monkeypatch):
+        fail_calls: list[dict] = []
+        calls: list = []
+        attempts = len(worker_daemon._UPLOAD_RETRY_BACKOFF_S) + 1
+        daemon = self._daemon([CloudError("HTTP 429", 429)] * attempts,
+                              fail_calls, calls)
+        self._run(daemon, monkeypatch)
+        assert fail_calls and fail_calls[0]["error_class"] == "result_upload_http_429"
+        sleeps = [c[1] for c in calls if isinstance(c, list) and c and c[0] == "_sleep"]
+        assert sleeps == list(worker_daemon._UPLOAD_RETRY_BACKOFF_S)
+
+    def test_non_retryable_status_is_not_retried(self, monkeypatch):
+        fail_calls: list[dict] = []
+        calls: list = []
+        daemon = self._daemon([CloudError("HTTP 413", 413)], fail_calls, calls)
+        self._run(daemon, monkeypatch)
+        assert fail_calls and fail_calls[0]["error_class"] == "result_upload_http_413"
+        assert [c for c in calls if isinstance(c, list) and c and c[0] == "_sleep"] == []
+
+
 class TestDaemonUploadFailure:
     """daemon 回传失败必须落终态。用最小假 client 捕获 fail() 调用参数。"""
 
@@ -108,7 +181,7 @@ class TestDaemonUploadFailure:
             def report_result(self, job_id, payload):
                 return {"upload_token": "tok"}
 
-            def upload_files(self, job_id, upload_token, blobs):
+            def upload_files(self, job_id, upload_token, blobs, **kwargs):
                 raise exc
 
             def fail(self, job_id, error, error_class="engine_error"):

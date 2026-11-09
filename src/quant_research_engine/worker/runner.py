@@ -33,13 +33,89 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from datetime import date, timedelta
+import threading
+import time
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from quant_research_engine.gui.engine import extract_run_summary, run_backtest
 
 DEFAULT_START_YEARS = 2
+
+
+# ---------------------------------------------------------------------------
+# P0-9（CR-2026-11-03 §8.11）：回测进度上报（progress.json → daemon 心跳携带）
+# ---------------------------------------------------------------------------
+
+#: runner 侧 progress.json 文件名（worker/daemon.py 同步约定）
+PROGRESS_FILENAME = "progress.json"
+#: 进度文件刷新间隔（秒）；批量流式下逐股产物陆续落盘，按此节奏采样
+PROGRESS_WRITE_INTERVAL = 5.0
+#: 批量进度区间：5% 起步、90% 封顶（90% 以上留给回传段，daemon 95→100）
+_BATCH_PERCENT_FLOOR = 5
+_BATCH_PERCENT_CAP = 90
+
+
+def _count_symbol_outputs(output_dir: Path) -> int:
+    """批量流式回测的逐股产物目录数（<output_dir>/<symbol>/…，排除 _ 前缀内部目录）。"""
+    count = 0
+    try:
+        for child in output_dir.iterdir():
+            if not child.is_dir() or child.name.startswith("_"):
+                continue
+            if any(child.iterdir()):
+                count += 1
+    except OSError:
+        return 0
+    return count
+
+
+def _progress_snapshot(output_dir: Path, total: int, mode: str) -> tuple[int | None, str, int]:
+    """(percent, message, done)：批量流式按逐股产物计数给真实百分比；
+    无逐股中间产物的模式（shared/single）只回 phase 文案——percent=None，
+    daemon 不发该字段（服务端 COALESCE 保留原值），**不虚构执行百分比**。"""
+    if total > 0 and mode == "batch":
+        done = _count_symbol_outputs(output_dir)
+        percent = min(_BATCH_PERCENT_CAP,
+                      _BATCH_PERCENT_FLOOR
+                      + round((_BATCH_PERCENT_CAP - _BATCH_PERCENT_FLOOR) * done / total))
+        return percent, f"回测中 {done}/{total} 只", done
+    return None, f"回测执行中（{mode} 模式）", 0
+
+
+def _write_progress(base: Path, *, percent: int | None, message: str,
+                    total: int, done: int) -> None:
+    """原子性不重要（父进程容忍读到旧值）：写失败不影响回测主流程。"""
+    try:
+        (base / PROGRESS_FILENAME).write_text(json.dumps({
+            "percent": percent,
+            "message": message,
+            "total": total,
+            "done": done,
+            "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+        }, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _start_progress_watcher(base: Path, output_dir: Path, total: int, mode: str,
+                            *, interval: float | None = None) -> threading.Thread:
+    """守护线程：按 interval 采样逐股产物进度写 progress.json（§8.11）。
+
+    线程随进程退出（daemon=True）；run 结束后 daemon 发 95/100 收尾。
+    """
+    interval = PROGRESS_WRITE_INTERVAL if interval is None else interval
+
+    def _watch() -> None:
+        while True:
+            time.sleep(interval)
+            percent, message, done = _progress_snapshot(output_dir, total, mode)
+            _write_progress(base, percent=percent, message=message, total=total, done=done)
+
+    thread = threading.Thread(target=_watch, name="progress-watch", daemon=True)
+    thread.start()
+    return thread
 
 
 def _persist_artifacts(record: dict[str, Any], output_dir: Path) -> None:
@@ -174,15 +250,24 @@ def _execute_symbol_detail(job: dict[str, Any]) -> dict[str, Any]:
         "chart_data": {},
         "artifacts": [],
         "files": files,
+        "result_files": {"truncated": False, "max_total_bytes": RESULT_FILES_MAX_BYTES,
+                         "included_count": 1, "included_bytes": len(blob),
+                         "skipped_count": 0, "skipped_bytes": 0,
+                         "total_local_bytes": len(blob), "missing_count": 0,
+                         "skipped_files": []},
         "data_until": None,
         "symbol_details": {"count": 1, "bytes": len(blob), "on_demand": True},
     }
 
 
-def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> dict[str, Any]:
+def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None,
+                progress_interval: float | None = None) -> dict[str, Any]:
     """执行 leased job，返回 result 回传 payload（不含 status 字段）。
 
     回测失败抛 RuntimeError（调用方负责回传 failed）。
+
+    P0-9（CR-2026-11-03）：work_base 由 daemon 自建时透传使用（§8.7 归属 +
+    §8.11 progress.json 落点）；progress_interval 仅供测试加速采样。
     """
     if job.get("kind") == "symbol_detail":
         return _execute_symbol_detail(job)
@@ -229,6 +314,14 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     base = Path(work_base) if work_base else Path(tempfile.mkdtemp(prefix=f"qre-worker-job{job.get('id')}-"))
     output_dir = base / "artifacts"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # P0-9 §8.11：进度采样线程（批量流式按逐股产物计数；其他模式只报 phase）。
+    # 初始快照立即落盘，daemon 启动心跳即可读到（leased→running 即带进度）。
+    run_mode = str(params.get("mode") or "shared")
+    _percent, _message, _done = _progress_snapshot(output_dir, len(codes), run_mode)
+    _write_progress(base, percent=_percent, message=_message, total=len(codes), done=_done)
+    _start_progress_watcher(base, output_dir, len(codes), run_mode,
+                            interval=progress_interval)
 
     record = run_backtest(
         yaml_text=yaml_text,
@@ -312,11 +405,14 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None) -> 
     dates = chart_data.get("dates") or []
     data_until = summary.get("date_end") or (dates[-1] if dates else None) or end
 
+    result_files, result_files_meta = collect_result_files_with_meta(record)
     return {
         "summary": summary,
         "chart_data": chart_data,
         "artifacts": [],  # TODO(M4)：Excel/CSV 明细上传 OSS 后在此登记 oss_key
-        "files": collect_result_files(record),
+        "files": result_files,
+        # P0-9（CR-2026-11-03 §8.5）：回传完整性元数据（截断显式标记，替代静默跳过）
+        "result_files": result_files_meta,
         "data_until": str(data_until),
         "symbol_details": symbol_details_meta,
     }
@@ -563,15 +659,28 @@ def build_symbol_detail_files(
 #: 回传文件清单的成员上限（总体积；大文件留 worker 本地，M4 走 OSS 直传）
 RESULT_FILES_MAX_BYTES = 20 * 1024 * 1024
 
+#: 截断元数据里保留的跳过文件名名单上限（防元数据本身爆大）
+RESULT_FILES_SKIPPED_NAMES_CAP = 50
 
-def collect_result_files(record: dict[str, Any],
-                         max_total_bytes: int = RESULT_FILES_MAX_BYTES) -> list[dict[str, Any]]:
-    """收集 run 产物文件清单（17 协议 §3.3 files）：name/size/sha256 + 本地 path。
-    幂等：同一 job 重复执行产物覆盖写（同 run_id 目录），清单重算即可。"""
+
+def collect_result_files_with_meta(
+    record: dict[str, Any],
+    max_total_bytes: int = RESULT_FILES_MAX_BYTES,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """收集 run 产物文件清单 + 截断元数据（17 协议 §3.3 files）。
+
+    P0-9（CR-2026-11-03 §8.5）：超预算文件不再静默 `continue`——元数据记录
+    truncated/included/skipped/预算，让云端与前端能提示「结果不完整」
+    （压测实测：1.1 GB / 5208 文件只回传 333 个 / 20 MiB，无任何标记）。
+    幂等：同一 job 重复执行产物覆盖写（同 run_id 目录），清单重算即可。
+    """
     import hashlib
 
     files: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    missing = 0
     total = 0
+    total_local = 0
     # FRM 报告是回测详情必需的小文件，必须最先占位：全量任务的逐股 CSV
     # 很容易耗尽总上限，按文件名字典序会把 risk_report.json 静默挤掉。
     # per-symbol 详情产物其次（云端个股详情唯一数据源）；其余大文件超限
@@ -588,10 +697,13 @@ def collect_result_files(record: dict[str, Any],
     for rel, abs_path in ordered:
         path = Path(abs_path)
         if not path.is_file():
+            missing += 1
             continue
         size = path.stat().st_size
+        total_local += size
         if total + size > max_total_bytes:
-            continue  # 超体积上限的跳过（仍留本地，不进回传清单）
+            skipped.append({"name": rel, "size": size})
+            continue  # 超体积上限的跳过（仍留本地，不进回传清单）——但记入元数据
         files.append({
             "name": Path(rel).name if len(Path(rel).parts) == 1 else rel,
             "size": size,
@@ -599,6 +711,27 @@ def collect_result_files(record: dict[str, Any],
             "path": str(path),
         })
         total += size
+    meta = {
+        "truncated": bool(skipped),
+        "max_total_bytes": max_total_bytes,
+        "included_count": len(files),
+        "included_bytes": total,
+        "skipped_count": len(skipped),
+        "skipped_bytes": sum(s["size"] for s in skipped),
+        "total_local_bytes": total_local,
+        "missing_count": missing,
+        "skipped_files": [s["name"] for s in skipped[:RESULT_FILES_SKIPPED_NAMES_CAP]],
+    }
+    return files, meta
+
+
+def collect_result_files(record: dict[str, Any],
+                         max_total_bytes: int = RESULT_FILES_MAX_BYTES) -> list[dict[str, Any]]:
+    """收集 run 产物文件清单（17 协议 §3.3 files）：name/size/sha256 + 本地 path。
+
+    兼容旧签名的薄封装；截断元数据见 ``collect_result_files_with_meta``。
+    """
+    files, _meta = collect_result_files_with_meta(record, max_total_bytes)
     return files
 
 

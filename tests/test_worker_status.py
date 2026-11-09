@@ -164,7 +164,7 @@ class TestSlotTracking:
         entered = threading.Event()
         release = threading.Event()
 
-        def fake_subprocess(j, is_canceled=None):
+        def fake_subprocess(j, is_canceled=None, work_base=None):
             entered.set()
             release.wait(timeout=10)
             return {"summary": {}, "chart_data": None, "files": []}
@@ -176,8 +176,12 @@ class TestSlotTracking:
         t.start()
         assert entered.wait(timeout=5)
         snap = {s["name"]: s for s in daemon.slots_snapshot()}
-        assert snap["light-1"] == {"name": "light-1", "kind": "light",
-                                   "busy": True, "job_id": 9}
+        # P0-10：执行期间槽位快照带准入预算与档位（additive；空闲时不写这两个键）
+        assert snap["light-1"]["busy"] is True
+        assert snap["light-1"]["job_id"] == 9
+        assert snap["light-1"]["kind"] == "light"
+        assert snap["light-1"]["budget_gb"] == pytest.approx(13.97, abs=0.01)
+        assert snap["light-1"]["tier"] == "heavy"
         release.set()
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:

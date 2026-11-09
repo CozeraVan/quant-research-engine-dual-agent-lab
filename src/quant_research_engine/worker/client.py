@@ -37,6 +37,31 @@ class CloudError(RuntimeError):
 
 RequestFn = Callable[[str, str, dict[str, Any] | None], tuple[int, dict[str, Any]]]
 
+#: P0-9（CR-2026-11-03）：分片上传阈值。manifest 实测可达 1,537+ 个文件，单请求
+#: part 数超过 Flask MAX_FORM_PARTS（默认 1000，服务端已放大到 5000）必 413；
+#: 按文件数与字节数双阈值分批，兼顾 nginx client_max_body_size 与重传粒度。
+UPLOAD_CHUNK_FILES = 100
+UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
+
+
+def _iter_upload_batches(
+    files: dict[str, bytes],
+    max_files: int = UPLOAD_CHUNK_FILES,
+    max_bytes: int = UPLOAD_CHUNK_BYTES,
+):
+    """把文件 dict 切成上传批次（保持插入序）：满 max_files 或超 max_bytes 即切；
+    单个超大文件独占一批（不丢文件，也不无限并批）。"""
+    batch: dict[str, bytes] = {}
+    size = 0
+    for name, blob in files.items():
+        if batch and (len(batch) >= max_files or size + len(blob) > max_bytes):
+            yield batch
+            batch, size = {}, 0
+        batch[name] = blob
+        size += len(blob)
+    if batch:
+        yield batch
+
 
 def _urllib_request_fn(base_url: str, token: str, timeout: float) -> RequestFn:
     def _do(method: str, path: str, payload: dict[str, Any] | None) -> tuple[int, dict[str, Any]]:
@@ -101,13 +126,43 @@ class CloudClient:
         return cls(base_url=base, token=token, worker_id=worker_id, **kwargs)
 
     def upload_files(self, job_id: int, upload_token: str,
-                     files: dict[str, bytes]) -> dict[str, Any]:
-        """17 协议 §3.3 第二步：multipart 上传产物文件（stdlib 手工拼包）。"""
+                     files: dict[str, bytes],
+                     *,
+                     chunk_files: int = UPLOAD_CHUNK_FILES,
+                     chunk_bytes: int = UPLOAD_CHUNK_BYTES,
+                     on_batch: Callable[[dict[str, bytes], dict[str, Any]], None] | None = None,
+                     ) -> dict[str, Any]:
+        """17 协议 §3.3 第二步：multipart 上传产物文件（stdlib 手工拼包）。
+
+        P0-9（CR-2026-11-03）分片上传：manifest 可能 >1000 part（全市场回测实测
+        1,537），单请求必被 Flask MAX_FORM_PARTS 拒（413，item2/job7 一个 blob
+        都没落盘）。按文件数/字节数分批多次 POST 同一端点——服务端按 upload_token
+        幂等、已落盘文件不进 remaining，天然支持断点续传与重复提交。任一批 4xx /
+        传输失败即抛 CloudError（带 status），由 daemon 落终态分类。
+        """
         if self._upload_fn is not None:
             return self._upload_fn(job_id, upload_token, files)
+        if not files:
+            return {}
+        last: dict[str, Any] = {}
+        for batch in _iter_upload_batches(files, chunk_files, chunk_bytes):
+            last = self._upload_batch(job_id, upload_token, batch)
+            if on_batch is not None:
+                on_batch(batch, last)
+            if last.get("status") == "completed":
+                return last
+        if last.get("status") != "completed":
+            raise CloudError(
+                f"分片上传后仍有文件未确认落盘（status={last.get('status')}）", None
+            )
+        return last
+
+    def _upload_batch(self, job_id: int, upload_token: str,
+                      batch: dict[str, bytes]) -> dict[str, Any]:
+        """单批 multipart POST（一批 ≤ chunk_files 个 part）。"""
         boundary = secrets.token_hex(16)
         parts: list[bytes] = []
-        for name, blob in files.items():
+        for name, blob in batch.items():
             parts.append(
                 f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; '
                 f'filename="{name}"\r\nContent-Type: application/octet-stream\r\n\r\n'.encode()
@@ -136,6 +191,10 @@ class CloudClient:
             raise CloudError(
                 f"产物回传被云端拒绝（HTTP {exc.code}）：{detail}", exc.code
             ) from exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            # 传输层失败统一成 CloudError(status=None)：daemon 归 result_upload_error
+            # （可重试），且重跑 upload_files 可按 remaining 幂等续传。
+            raise CloudError(f"产物回传传输失败：{exc}", None) from exc
 
     def _call(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         """重试仅覆盖传输错误与 5xx；4xx 业务错误直接抛 CloudError。"""
@@ -176,12 +235,21 @@ class CloudClient:
                           {"worker_id": self.worker_id, "progress": progress, "message": message})
 
     def report_result(self, job_id: int, payload: dict[str, Any]) -> dict[str, Any]:
-        """两步回传（17 协议 §3.3）：meta →（有文件时）files。"""
+        """两步回传（17 协议 §3.3）：meta →（有文件时）files。
+
+        P0-9（CR-2026-11-03 §8.5）：转发 ``symbol_details`` 与 ``result_files``
+        截断/完整性元数据（此前被丢弃，压测记录的 symbol_details 恒 null 即此根因）；
+        旧 worker payload 不带这两个键时不出现在请求体里（服务端存 NULL，兼容）。
+        """
         meta = {"worker_id": self.worker_id,
                 "summary": payload.get("summary"),
                 "chart_data": payload.get("chart_data"),
                 "data_until": payload.get("data_until"),
                 "files": [{k: v for k, v in f.items() if k != "path"} for f in (payload.get("files") or [])]}
+        for key in ("symbol_details", "result_files"):
+            value = payload.get(key)
+            if value is not None:
+                meta[key] = value
         return self._call("POST", f"/api/worker/jobs/{job_id}/result/meta", meta)
 
     def report_status(self, payload: dict[str, Any]) -> dict[str, Any]:
