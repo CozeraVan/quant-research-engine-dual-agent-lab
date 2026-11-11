@@ -27,6 +27,9 @@ if [ "$free_gb" -lt "$MIN_FREE_GB" ]; then
 fi
 
 mkdir -p "$BACKUP_ROOT"
+# 中断保护：被 kill/出错时清掉半成品目录，避免留下几 GB 的不可用 dump
+# （用户 2026-11-11 提示可能 1 小时内重启 PC，pg_dump 519GB 未必跑得完）
+trap 'rm -rf "$OUT_DIR"; echo "[$(date -Iseconds)] 备份中断，已清理半成品 $OUT_DIR" >&2' ERR INT TERM
 echo "[$(date -Iseconds)] 开始备份 → $OUT_DIR（可用 ${free_gb}G）"
 
 # shellcheck disable=SC1091
