@@ -19,6 +19,13 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-11 UI 与游戏 Windows 分离（方案 A）
+
+- 用户裁定：UI 与《我不是股神》都放 Windows 开发，WSL 只留核心功能且保持干净。
+- 权威契约：`45_WINDOWS_UI_GAME_SEPARATION_2026-11-11.md`——目录归属表、分支与提交流程、WSL 干净规则、验收命令。
+- 核查结论：模板三目录独立、静态集中 `gui/static/`（34 个）、游戏在 `game/` 子包；**`gui/saas/app.py` 是后端归 WSL，只有 `saas/templates/` 归 Windows**。
+- 方案 A 不需要物理搬离仓库；Windows 按目录与分支工作。
+
 ### 2026-11-11 本周收官与近期总结
 
 - **本周工作总结**：`44_WEEKLY_SUMMARY_2026-11-11.md`（CF 118/118、并行 2.1×、韧性修复、参数快照、上云定型、游戏分离、备份、分钟线裁定）。
