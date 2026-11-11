@@ -35,12 +35,17 @@ if [ -z "$SOURCE_DB_URL" ]; then
   exit 2
 fi
 
+# 连接串归一化：QRE_MARKET_DB_URL 是 SQLAlchemy 形态（postgresql+psycopg://…），
+# pg_dump/psql 只认 libpq 形态，必须去掉 +psycopg，否则被当成库名报错。
+SOURCE_DB_URL="${SOURCE_DB_URL/postgresql+psycopg:\/\//postgresql:\/\/}"
+
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="${OUT_DIR:-./qre-cloud-backup-$STAMP}"
 DUMP="$OUT_DIR/tushare_data-$STAMP.dump"
 
 echo "== QRE market DB backup =="
-echo "source: ${SOURCE_DB_URL%%@*}@***"
+# 不在日志里写用户名/密码：只保留 host（之前 ${%%@*} 会把密码打进日志）
+echo "source: $(printf %s "$SOURCE_DB_URL" | sed -E 's#//[^@]*@#//***@#')"
 echo "out:    $DUMP"
 
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -49,12 +54,15 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 mkdir -p "$OUT_DIR"
-pg_dump -Fc -Z 6 -d "$SOURCE_DB_URL" -f "$DUMP"
+# 允许以 postgres 超级用户执行（TimescaleDB 的 _compressed_hypertable_* 只读账号无权）：
+# PG_DUMP_PREFIX="sudo -n -u postgres"。输出走 stdout 重定向（由当前用户写文件），
+# 避免 postgres 用户对 van 目录无写权限的问题。
+${PG_DUMP_PREFIX:-} pg_dump -Fc -Z 6 -d "$SOURCE_DB_URL" > "$DUMP"
 sha256sum "$DUMP" > "$DUMP.sha256"
 
-DB_SIZE_BYTES="$(psql "$SOURCE_DB_URL" -Atc 'SELECT pg_database_size(current_database())')"
-PG_VERSION="$(psql "$SOURCE_DB_URL" -Atc 'SHOW server_version')"
-TS_VERSION="$(psql "$SOURCE_DB_URL" -Atc "SELECT extversion FROM pg_extension WHERE extname='timescaledb'" || true)"
+DB_SIZE_BYTES="$(${PG_DUMP_PREFIX:-} psql "$SOURCE_DB_URL" -Atc 'SELECT pg_database_size(current_database())')"
+PG_VERSION="$(${PG_DUMP_PREFIX:-} psql "$SOURCE_DB_URL" -Atc 'SHOW server_version')"
+TS_VERSION="$(${PG_DUMP_PREFIX:-} psql "$SOURCE_DB_URL" -Atc "SELECT extversion FROM pg_extension WHERE extname='timescaledb'" || true)"
 
 cat > "$OUT_DIR/manifest.json" <<EOF
 {

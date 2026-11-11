@@ -40,6 +40,29 @@ INFRA_FAILURE_KEYWORDS = (
 AUTOMATIC_RETRY_CAP = 2
 
 
+#: SSH 瞬断重试（41 号 F-11 / A-09）：2026-11-10 02:26 一次 ssh rc=255 直接打死驱动。
+#: 只对**传输层失败**重试（rc=255：连接失败/超时/banner 超时）；SQL 报错（rc=1）与
+#: 其他退出码原样返回，不掩盖真实错误。用法与 subprocess.run 一致（含 check 语义）。
+SSH_RETRY_ATTEMPTS = 4
+SSH_RETRY_BACKOFF_S = (2.0, 5.0, 15.0)
+
+
+def run_with_ssh_retry(command, **kwargs):
+    """subprocess.run 的 SSH 瞬断重试包装。rc=255 重试，其余退出码不掩盖。"""
+    check = kwargs.get("check", False)
+    result = None
+    for attempt in range(1, SSH_RETRY_ATTEMPTS + 1):
+        result = subprocess.run(command, **kwargs)
+        if result.returncode != 255:
+            break
+        if attempt < SSH_RETRY_ATTEMPTS:
+            time.sleep(SSH_RETRY_BACKOFF_S[attempt - 1])
+    if check and result is not None and result.returncode:
+        raise subprocess.CalledProcessError(result.returncode, command,
+                                            output=result.stdout, stderr=result.stderr)
+    return result
+
+
 def numbered_strategies() -> list[dict]:
     rows = json.loads(INVENTORY.read_text(encoding="utf-8"))["strategies"]
     return [{**row, "cf_id": f"CF-{index:03d}"} for index, row in enumerate(rows, 1)]
@@ -54,7 +77,7 @@ def _psql_command(sql: str, *, tuples_only: bool = False) -> list[str]:
     return SSH_COMMAND + [shlex.join(remote)]
 
 
-def assign_owner(job_id: int, *, runner=subprocess.run) -> None:
+def assign_owner(job_id: int, *, runner=run_with_ssh_retry) -> None:
     """备份并迁移 job/result/strategy 归属；重复执行不会覆盖原始备份口径。"""
     job_id = int(job_id)
     precheck = runner(
@@ -81,7 +104,7 @@ COMMIT;
     runner(_psql_command(sql), check=True, capture_output=True, text=True)
 
 
-def wait_owner(job_id: int, timeout_s: int = 10800, *, runner=subprocess.run,
+def wait_owner(job_id: int, timeout_s: int = 10800, *, runner=run_with_ssh_retry,
                sleep=time.sleep) -> dict:
     """归属已迁移后从只读 SQL 轮询，避免原浏览器账号失去 API 可见性。"""
     deadline = time.monotonic() + timeout_s
@@ -160,7 +183,7 @@ def prepare_retry(retry_ids: list[str], job_ids: dict, retry_counts: dict) -> tu
 POLL_SECONDS = 30
 
 
-def poll_jobs(job_ids, *, runner=subprocess.run) -> dict[int, dict]:
+def poll_jobs(job_ids, *, runner=run_with_ssh_retry) -> dict[int, dict]:
     """批量取多个 job 的终态字段（只读 SQL，一次往返）。"""
     ids = sorted({int(job_id) for job_id in job_ids})
     if not ids:
@@ -182,7 +205,7 @@ def poll_jobs(job_ids, *, runner=subprocess.run) -> dict[int, dict]:
 
 
 def start_job(browser: Browser, row: dict, job_ids: dict, retry_counts: dict,
-              *, runner=subprocess.run) -> dict:
+              *, runner=run_with_ssh_retry) -> dict:
     """提交新 job，或复用 job_ids 里已有的（resume 语义，绝不重复建单）。"""
     cf_id = row["cf_id"]
     if cf_id in job_ids:
@@ -211,7 +234,7 @@ def record_result(row: dict, result: dict) -> None:
 
 def run_queue(rows, browser, job_ids: dict, retry_counts: dict, *,
               concurrency: int = 1, timeout_s: int = 21600,
-              runner=subprocess.run, sleep=time.sleep) -> int:
+              runner=run_with_ssh_retry, sleep=time.sleep) -> int:
     """流水线推进队列：同时保持在飞 `concurrency` 个 job，任一终态即补位。
 
     与旧串行版语义一致：遇到非 completed 终态立即停止（把失败的号交给主

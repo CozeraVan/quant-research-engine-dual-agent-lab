@@ -18,6 +18,11 @@ cd "$(dirname "$0")/../.." || exit 1
 STATE_DIR=.tmp/classic-catalog-fullscale
 LOG=$STATE_DIR/supervisor.log
 HALT=$STATE_DIR/SUPERVISOR_HALTED
+EVENT_LOG=docs/agent/40_CF_QUEUE_EVENT_LOG_2026-11-04.md
+# F-03：worker cgroup 峰值达到 17 GiB 即降回 1 路（上限 18 GiB）。
+# 只降提交深度、不打断在飞 job（它们在服务端继续跑）。
+PEAK_PATH=/sys/fs/cgroup/system.slice/qre-saas-worker.service/memory.peak
+PEAK_LIMIT_B=18253611008
 ENV_FILE=/etc/qre-saas-worker.env
 WEBBRIDGE=${WEBBRIDGE_URL:-http://127.0.0.1:10086/command}
 SESSION=classic-catalog-smoke
@@ -45,6 +50,32 @@ if ! flock -n 9; then
 fi
 
 log() { printf '%s | %s\n' "$(date '+%F %T')" "$*" >>"$LOG"; }
+
+# F-01：HALT 不能只落本地文件（11-08 因此无人知晓停了 17.8h）。
+# 追加到 40 号长期事件日志；若配置 QRE_ALERT_WEBHOOK 再推一条外部消息。
+write_halt() {
+  local reason="$1"
+  printf '%s %s\n' "$(date '+%F %T')" "$reason" >"$HALT"
+  printf '| %s | HALT | - | - | %s |\n' "$(date -Iseconds)" "$reason" >>"$EVENT_LOG"
+  if [ -n "${QRE_ALERT_WEBHOOK:-}" ]; then
+    curl -sS -m 10 -X POST "$QRE_ALERT_WEBHOOK" -H 'Content-Type: application/json' \
+      -d "{\"text\":\"QRE CF 队列已暂停：$reason\"}" >/dev/null 2>&1
+  fi
+}
+
+# F-03：cgroup memory.peak 逼近上限时把提交深度降回 1 路。
+check_memory_pressure() {
+  [ -f "$PEAK_PATH" ] || return 0
+  local peak
+  peak=$(cat "$PEAK_PATH" 2>/dev/null)
+  if [ "${peak:-0}" -ge "$PEAK_LIMIT_B" ] && [[ "$FULLSCALE_ARGS" != *"--concurrency 1"* ]]; then
+    log "内存峰值 ${peak}B ≥ 17GiB，降档为 1 路（F-03）"
+    printf '| %s | 降档 | - | - | cgroup peak %sB ≥ 17GiB，并发降为 1 |\n' "$(date -Iseconds)" "$peak" >>"$EVENT_LOG"
+    FULLSCALE_ARGS="--resume --concurrency 1"
+    # 主动停驱动让降档生效；在飞 job 在服务端继续跑，不丢数据
+    pkill -f 'classic_catalog/fullscale.py' >/dev/null 2>&1
+  fi
+}
 
 remaining() {
   # 用结果文件算已完成数（与 fullscale.py --resume 同一口径）
@@ -133,6 +164,7 @@ while :; do
   fi
 
   rem=$(remaining)
+  check_memory_pressure
   if [ "$rem" -le 0 ]; then
     log "全部 $TOTAL_CF 个 CF 已完成，supervisor 退出"
     exit 0
@@ -149,7 +181,7 @@ while :; do
         fast_fails=$((fast_fails + 1))
         log "快速失败计数 $fast_fails/3"
         if [ "$fast_fails" -ge 3 ]; then
-          printf '%s 连续 3 次快速失败，需人工介入\n' "$(date '+%F %T')" >"$HALT"
+          write_halt "连续 3 次快速失败，需人工介入"
           log "写 HALTED 标记并退出"
           exit 1
         fi

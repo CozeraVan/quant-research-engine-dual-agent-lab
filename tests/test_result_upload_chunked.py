@@ -400,3 +400,59 @@ class TestDaemonMissingLocalFile:
         })
         assert calls and calls[0]["error_class"] == "result_upload_error"
         assert calls[0]["job_id"] == 7
+
+
+def test_large_manifest_429_retry_resumes_and_completes(monkeypatch):
+    """F-02：大 manifest（200 文件、4 分片）中途遇 429 → 退避重试后完整落盘。
+
+    覆盖 A-05/F-02 的实测缺口：此前 429 重试只在小样本里验过。
+    服务端按 upload_token 幂等、已落盘文件不进 remaining（等价断点续传），
+    本测试用「按文件名去重」的假服务端验证：整轮重发后文件集完整、无 fail() 终态。
+    """
+    from quant_research_engine.worker import daemon as worker_daemon
+    from quant_research_engine.worker.client import CloudClient, CloudError
+    from quant_research_engine.worker.daemon import WorkerDaemon
+
+    files = {f"part_{i:03d}.csv": b"x" for i in range(200)}
+    uploaded: dict[str, bytes] = {}
+    state = {"batch": 0, "attempts": 0, "failed_once": False}
+
+    real_client = CloudClient("http://127.0.0.1:1", "tok", worker_id="w")
+
+    def fake_upload_batch(job_id, token, batch):
+        state["batch"] += 1
+        # 第一轮的第二批遇 429（模拟 nginx 限流），重试后放行
+        if state["batch"] == 2 and not state["failed_once"]:
+            state["failed_once"] = True
+            raise CloudError("产物回传被云端拒绝（HTTP 429）", 429)
+        uploaded.update(batch)  # 服务端幂等：同名同内容，重复写不重复
+        return {"status": "completed" if len(uploaded) == len(files) else "uploading"}
+
+    monkeypatch.setattr(real_client, "_upload_batch", fake_upload_batch)
+
+    class _DaemonClient:
+        def report_result(self, job_id, payload):
+            return {"upload_token": "tok"}
+
+        def upload_files(self, job_id, upload_token, blobs, **kwargs):
+            state["attempts"] += 1
+            return real_client.upload_files(job_id, upload_token, blobs,
+                                            chunk_files=50, **kwargs)
+
+        def fail(self, *args, **kwargs):
+            raise AssertionError("不应落 failed：429 应被重试救回")
+
+    daemon = WorkerDaemon.__new__(WorkerDaemon)
+    daemon.client = _DaemonClient()
+    sleeps: list[float] = []
+    daemon._sleep = sleeps.append
+
+    monkeypatch.setattr(worker_daemon, "_upload_files_enabled", lambda: True)
+    monkeypatch.setattr(worker_daemon.Path, "read_bytes", lambda self: b"x")
+    daemon._report_results(11, {"summary": {},
+                                "files": [{"name": name, "path": "/x"} for name in files]})
+
+    assert state["attempts"] == 2          # 第一次 429，第二次整轮重发成功
+    assert sleeps == [5.0]                  # 只退避一次（5s）
+    assert set(uploaded) == set(files)      # 200 个文件全部落盘，无缺失
+    assert state["batch"] == 2 + 4          # 第 1 轮 2 批 + 第 2 轮 4 批

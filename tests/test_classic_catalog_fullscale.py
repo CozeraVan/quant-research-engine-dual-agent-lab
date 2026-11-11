@@ -294,3 +294,56 @@ def test_pending_rows_keeps_explicitly_retried_completed_cf():
 
     # 不带 retry 时行为不变
     assert len(_MODULE.pending_rows(rows, done, [])) == 115
+
+
+def test_ssh_retry_recovers_from_transient_255(monkeypatch):
+    """SSH rc=255（连接失败/banner 超时）重试后恢复（41 号 F-11 / A-09）。"""
+    calls = []
+
+    class Result:
+        def __init__(self, rc):
+            self.returncode = rc
+            self.stdout = "ok"
+            self.stderr = ""
+
+    def fake_run(command, **kwargs):
+        calls.append(1)
+        return Result(255 if len(calls) < 3 else 0)
+
+    monkeypatch.setattr(_MODULE.subprocess, "run", fake_run)
+    monkeypatch.setattr(_MODULE.time, "sleep", lambda _s: None)
+    result = _MODULE.run_with_ssh_retry(["ssh", "x"], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert len(calls) == 3
+
+
+def test_ssh_retry_does_not_mask_sql_errors(monkeypatch):
+    """rc=1（SQL 报错）不重试，原样返回，不掩盖真实错误。"""
+    calls = []
+
+    class Result:
+        returncode = 1
+        stdout = ""
+        stderr = "syntax error"
+
+    def fake_run(command, **kwargs):
+        calls.append(1)
+        return Result()
+
+    monkeypatch.setattr(_MODULE.subprocess, "run", fake_run)
+    result = _MODULE.run_with_ssh_retry(["ssh", "x"])
+    assert result.returncode == 1
+    assert len(calls) == 1
+
+
+def test_ssh_retry_exhaustion_raises_with_check(monkeypatch):
+    """重试耗尽 + check=True → 抛 CalledProcessError（保持 subprocess.run 语义）。"""
+    class Result:
+        returncode = 255
+        stdout = ""
+        stderr = "banner timeout"
+
+    monkeypatch.setattr(_MODULE.subprocess, "run", lambda *a, **k: Result())
+    monkeypatch.setattr(_MODULE.time, "sleep", lambda _s: None)
+    with __import__("pytest").raises(_MODULE.subprocess.CalledProcessError):
+        _MODULE.run_with_ssh_retry(["ssh", "x"], check=True)

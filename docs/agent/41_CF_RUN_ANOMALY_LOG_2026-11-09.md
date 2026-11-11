@@ -181,9 +181,9 @@
 
 | ID | 项 | 影响 | 建议做法 | 优先级 |
 |---|---|---|---|---|
-| F-01 | **HALT 无外部告警** | A-04 停了 17.8h 才发现 | 监管 HALT 时写状态文件 + 由 `event_watch` 把 HALT 事件写进 40 号日志；有条件时推送到用户（邮件/IM webhook） | P0 |
-| F-02 | **回传重试未在大产物场景实测** | 大 manifest（1500+ 文件、8MiB 分片）下 429 反复重试可能撞租约/上传硬超时（30min） | 构造 >8MiB 多分片 + 注入 429 的集成测试，量总耗时与租约续期是否足够 | P0 |
-| F-03 | **并发深度不自适应** | 现在固定 2 路；若某任务真实峰值上台阶，只能人工降回 1 路。**2026-11-09 21:34 实测 cgroup `memory.peak` 已达 16.09 GiB / 18 GiB（89%）**，当时两路仍在跑、无 OOM、无 RSS 早停，当前占用仅 1.50 GiB ⇒ 峰值来自某一对任务叠加 | 用 cgroup `memory.peak` + RSS 采样驱动「动态降档」：单任务峰值 >12GiB 或 cgroup peak >17GiB 时自动把 `--concurrency` 降到 1；在那之前人工盯 peak，跌破前维持 2 路 | P0 |
+| F-01 | **HALT 无外部告警** ✅已修 | 曾停 17.8h 才发现 | `supervise.sh` 新增 `write_halt()`：HALT 追加到 40 号日志 + 可选 `QRE_ALERT_WEBHOOK` 推送 | ✅ |
+| F-02 | **回传重试未在大产物场景实测** ✅已修 | 此前只在小样本验过 | `test_result_upload_chunked.py` 新增 200 文件/4 分片 + 第 2 批 429 的集成测试，重试后完整落盘、退避 5s、不落 failed | ✅ |
+| F-03 | **并发深度不自适应** ✅已修 | 曾见 peak 16.09 GiB/18 GiB | `supervise.sh` 新增 `check_memory_pressure()`：peak ≥17 GiB 自动降为 1 路并重启驱动、写 40 号日志 | ✅ |
 | F-04 | **重任务与并行冲突未自动识别** | R-MEM-001 规则 6 要求「单任务 ≥8GiB 不得并行」，目前靠人工判断 | 由 `capacity.estimate_peak_budget(交易数)` 在提交前算预算，>8GiB 的策略打 `serial_only` 标记，驱动跳过并行位 | P1 |
 | F-05 | **CF 运行态不在版本控制内** | `job_ids.json`/`results.jsonl`/`retry_counts.json` 只在本机 `.tmp`，换机或清理即丢（本次已两次靠人工续接） | 每日快照进 `docs/agent/classic_catalog/snapshots/`（只保留最新 N 份）或入库 `cf_queue_state` 表 | P1 |
 | F-06 | **重启时序未实测** ✅**已于 2026-11-10 10:35 崩溃重启中验证** | 无 | 证据：unit 10:35:25 进入 `activating (start-pre)` 并持续约 4 分钟，PG 10:39:11 才 accepting，worker 之后才拿到 MainPID；全程无 57P03 失败。后续只需保持该 drop-in 不被覆盖 | ✅ 已验证 |
@@ -191,7 +191,7 @@
 | F-08 | **`_UPLOAD_HTTP_CLASSES` 与 SaaS 侧白名单靠测试锁一致** | 新增分类易漂移 | 已有 `test_worker_mirror_matches_saas_classes`；补一条「可重试集合也是 SaaS 侧可重试的子集」 | P2 |
 | F-09 | **监管与驱动的失败策略仍分散** | 失败处理散在 `run_queue`/`supervise`/worker 三处，语义要人读代码才懂 | 抽出 `docs/agent/36` 里的失败策略表：哪类失败自动重试、哪类停、哪类告警，单一来源 | P2 |
 | F-10 | **单机 8 核下 CPU 利用率仍低（~14%）** | 2 路只用到 ~0.5 核；并行深度受内存预算而非 CPU 限制 | 若后续把单任务预算实测降到 5GiB 级，可试 3 路（需 cgroup 18G 内 + F-03 的动态降档兜底），先做容量推演不直接上 | P2 |
-| F-11 | **状态轮询对 SSH 瞬断无重试** | 2026-11-10 02:26 一次 ssh rc=255 直接打死驱动（A-09），靠监管 2 分钟才恢复 | 给 `poll_jobs`/`assign_owner`/`wait_owner` 的 ssh 调用加 rc=255/超时的有限退避重试（照抄 `driver.Browser` 的做法），并把「外部依赖瞬态不当致命错误」写成本项目通则 | P0 |
+| F-11 | **状态轮询对 SSH 瞬断无重试** ✅已修 | 曾一次 rc=255 打死驱动 | `fullscale.py` 新增 `run_with_ssh_retry()`（rc=255 退避 2/5/15s，rc=1 不掩盖），设为默认 runner；3 例测试 | ✅ |
 
 ---
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=QRE 行情大库每周备份（pg_dump -Fc -Z6，保留最新一份）
+
+[Service]
+Type=oneshot
+User=van
+ExecStart=/home/van/quant-workspace/quant-research-engine-dual-agent-lab/deploy/cloud/backup-market-db-weekly.sh
+Nice=10
+IOSchedulingClass=idle
