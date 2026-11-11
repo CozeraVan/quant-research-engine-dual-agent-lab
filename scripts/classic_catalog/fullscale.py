@@ -270,6 +270,15 @@ def run_queue(rows, browser, job_ids: dict, retry_counts: dict, *,
     return 0
 
 
+def pending_rows(rows, done: set, retry_ids) -> list[dict]:
+    """待跑集合：已完成剔除，但**显式要求重跑的 CF 必须保留**。
+
+    11-11 实测：--resume 先把已完成的 CF-018/074 滤掉，--retry 一个 job 都没建。
+    """
+    done = set(done) - set(retry_ids or [])
+    return [row for row in rows if row["cf_id"] not in done]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--only", help="CF id or strategy id")
@@ -298,7 +307,7 @@ def main() -> int:
     rows = numbered_strategies()
     if args.only:
         rows = [row for row in rows if row["cf_id"] == args.only or row["strategy_id"] == args.only]
-    rows = [row for row in rows if row["cf_id"] not in done]
+    rows = pending_rows(rows, done, args.retry)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     job_ids = json.loads(JOB_IDS.read_text()) if JOB_IDS.exists() else {}
     if args.retry:

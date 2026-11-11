@@ -276,3 +276,21 @@ def test_wait_owner_reads_terminal_status_without_browser_session():
     assert result["summary"]["total_trade_count"] == 7
     assert len(calls) == 1
     assert "json_build_object" in calls[0][-1]
+
+
+def test_pending_rows_keeps_explicitly_retried_completed_cf():
+    """--resume + --retry 同一已完成 CF：必须保留下来重跑，不能被 completed 过滤吃掉。
+
+    回归 2026-11-11：CF-018/074 修复后重跑，进程 0.19s 退出、零建单，
+    因为 --resume 先把它们滤掉了。
+    """
+    rows = _MODULE.numbered_strategies()
+    done = {"CF-001", "CF-018", "CF-074"}
+    pending = _MODULE.pending_rows(rows, done, ["CF-018", "CF-074"])
+    ids = [row["cf_id"] for row in pending]
+    assert "CF-018" in ids and "CF-074" in ids
+    assert "CF-001" not in ids
+    assert len(pending) == 117  # 118 - 3 完成 + 2 重跑
+
+    # 不带 retry 时行为不变
+    assert len(_MODULE.pending_rows(rows, done, [])) == 115
