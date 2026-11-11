@@ -6,11 +6,11 @@
 # 难度:       ★★☆☆☆ (2/5)
 # 说明:       MFI < 20 后重新站回 20 入场（需确认 MFI 因子列）。用 RSI + 量比近似。
 # 数据依赖:   RSI(14) + SMA(60)
-# 入场规则:   (rsi_14 < 30) & (close > sma_60) & (rsi_14 > rsi_14.shift(1))
+# 入场规则:   (rsi_14 < 30) & (sma_60 > sma_60.shift(20)) & (rsi_14 > rsi_14.shift(1))
 # 出场规则:   rsi_14 > 60
 # 持仓天数:   5 天
 # 方向:       long_only
-# 备注:       MFI 用 RSI 超卖 + 价格 > SMA 近似；需确认 MFI 因子列。
+# 备注:       2026-11-11 修复条件互斥（CF-074 零交易）：趋势过滤由 close>sma_60 改为 sma_60 向上
 # 生成工具:   scripts/generate_strategy_yamls.py
 # 校验状态:   待数据库因子验证
 # =============================================================================
@@ -45,7 +45,7 @@ universe:
 
 signal:
   type: expression
-  entry: (rsi_14 < 30) & (close > sma_60) & (rsi_14 > rsi_14.shift(1))
+  entry: (rsi_14 < 30) & (sma_60 > sma_60.shift(20)) & (rsi_14 > rsi_14.shift(1))
   exit: rsi_14 > 60
 
 execution:

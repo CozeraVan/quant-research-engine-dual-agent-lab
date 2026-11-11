@@ -6,13 +6,13 @@
 # 难度:       ★★★☆☆ (3/5)
 # 说明:       突破 20 日高点后回测不破再上行入场。
 # 数据依赖:   SMA(20)
-# 入场规则:   (close > sma_20) & (close.shift(1) > close.shift(1).rolling(20).max()) & (close > close.shift(1))
+# 入场规则:   (close.shift(1) > close.shift(2).rolling(20).max()) & (close > sma_20) & (close > close.shift(1))
 # 出场规则:   close < sma_20
 # 持仓天数:   5 天
 # 方向:       long_only
 
 # 生成工具:   scripts/generate_strategy_yamls.py
-# 校验状态:   待数据库因子验证
+# 校验状态:   2026-11-11 修复自引用恒假（CF-018 零交易）→ 昨日创20日新高+今日在20日线上方+今日上行
 # =============================================================================
 
 experiment:
@@ -44,7 +44,7 @@ universe:
 
 signal:
   type: expression
-  entry: (close > sma_20) & (close.shift(1) > close.shift(1).rolling(20).max()) & (close > close.shift(1))
+  entry: (close.shift(1) > close.shift(2).rolling(20).max()) & (close > sma_20) & (close > close.shift(1))
   exit: close < sma_20
 
 execution:
