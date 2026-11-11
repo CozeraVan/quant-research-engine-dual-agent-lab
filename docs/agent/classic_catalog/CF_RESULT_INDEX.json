@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-11T11:50:00+08:00",
+ "generated_at": "2026-11-11T14:35:00+08:00",
  "description": "经典策略全期全量回测（CF）结果索引：118 个策略、2009-01-05~2026-10-30、全 A 股、统一交易参数。供人与 AI agent 取材料。",
  "access": {
   "public_list": "https://aguhuice.com/api/saas/showcase",
@@ -9,7 +9,8 @@
  },
  "counts": {
   "strategies": 118,
-  "total_trades": 31061138
+  "total_trades": 31117286,
+  "note": "CF-018/CF-074 已于 11-11 修复零交易缺陷并重跑（job356/357），索引已指向新结果"
  },
  "items": [
   {
@@ -355,9 +356,9 @@
   {
    "cf_id": "CF-018",
    "strategy_id": "bo09e_channel_retest_breakout",
-   "job_id": 251,
+   "job_id": 356,
    "title": "CF-018_bo09e_channel_retest_breakout",
-   "total_trade_count": 0,
+   "total_trade_count": 45983,
    "result_contract": "verified",
    "period": {
     "start": "2009-01-05",
@@ -365,10 +366,10 @@
    },
    "owner": "17157845743",
    "urls": {
-    "page": "https://aguhuice.com/saas/jobs/251",
-    "params_snapshot": "https://aguhuice.com/api/saas/jobs/251/params",
-    "chart_data": "https://aguhuice.com/api/results/251/chart-data",
-    "symbols": "https://aguhuice.com/api/results/251/symbols",
+    "page": "https://aguhuice.com/saas/jobs/356",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/356/params",
+    "chart_data": "https://aguhuice.com/api/results/356/chart-data",
+    "symbols": "https://aguhuice.com/api/results/356/symbols",
     "showcase": "https://aguhuice.com/saas/showcase"
    }
   },
@@ -1475,9 +1476,9 @@
   {
    "cf_id": "CF-074",
    "strategy_id": "mr08a_mfi_oversold_reversal",
-   "job_id": 310,
+   "job_id": 357,
    "title": "CF-074_mr08a_mfi_oversold_reversal",
-   "total_trade_count": 0,
+   "total_trade_count": 10165,
    "result_contract": "verified",
    "period": {
     "start": "2009-01-05",
@@ -1485,10 +1486,10 @@
    },
    "owner": "17157845743",
    "urls": {
-    "page": "https://aguhuice.com/saas/jobs/310",
-    "params_snapshot": "https://aguhuice.com/api/saas/jobs/310/params",
-    "chart_data": "https://aguhuice.com/api/results/310/chart-data",
-    "symbols": "https://aguhuice.com/api/results/310/symbols",
+    "page": "https://aguhuice.com/saas/jobs/357",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/357/params",
+    "chart_data": "https://aguhuice.com/api/results/357/chart-data",
+    "symbols": "https://aguhuice.com/api/results/357/symbols",
     "showcase": "https://aguhuice.com/saas/showcase"
    }
   },
