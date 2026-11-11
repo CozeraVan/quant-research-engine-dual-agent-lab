@@ -1554,7 +1554,7 @@ def create_saas_app() -> Flask:
                 text(
                     "SELECT sc.job_id, sc.title, sc.subtitle, sc.sort_order, "
                     "s.name AS strategy_name, j.created_at, j.params, "
-                    "r.summary, r.chart_data, r.data_until" + contract_col +
+                    "r.summary, r.chart_data->'metrics' AS chart_metrics, r.data_until" + contract_col +
                     " FROM showcase sc "
                     "JOIN jobs j ON j.id = sc.job_id "
                     "JOIN strategies s ON s.id = j.strategy_id "
@@ -1570,7 +1570,7 @@ def create_saas_app() -> Flask:
                                          row["data_until"])
                 if not contract["verified"]:
                     continue
-                metrics = ((row["chart_data"] or {}).get("metrics") or {})
+                metrics = (row["chart_metrics"] or {})
                 summary = row["summary"] or {}
                 params = row["params"] or {}
                 # 阶段二持续跟踪：冻结点之后的逐日收益复利延伸到最新交易日
@@ -3210,6 +3210,55 @@ def create_saas_app() -> Flask:
             item["data_until"] = _jsonable(row["result_data_until"])
             jobs.append(item)
         return jsonify({"ok": True, "jobs": jobs})
+
+    @app.get("/api/saas/jobs/<int:job_id>/params")
+    def api_get_job_params(job_id: int) -> Any:
+        """回测输入参数快照：结果页「回测参数」折叠卡与复制/重跑的数据源。
+
+        完整 params（JSONB）+ 策略资产（yaml / nl_text / entry_mode）+ 幂等键，
+        让任何一次回测都能被**原样复现**。访问控制与 `/api/saas/jobs/<id>` 一致：
+        本人或同会话游客；他人任务与不存在一律 404，不泄露存在性。
+        """
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT j.id, j.user_id, j.guest_key, j.params, j.idempotency_key, "
+                    "j.kind, j.status, j.created_at, j.strategy_id, "
+                    "s.name AS strategy_name, s.yaml AS strategy_yaml, "
+                    "s.nl_text AS strategy_nl_text, s.entry_mode AS strategy_entry_mode "
+                    "FROM jobs j LEFT JOIN strategies s ON s.id = j.strategy_id "
+                    "WHERE j.id = :id"
+                ),
+                {"id": job_id},
+            ).mappings().first()
+        if row is None:
+            return jsonify({"ok": False, "error": "任务不存在"}), 404
+        if uid is None:
+            # 游客按会话 Cookie 归属（QRE-SAAS-ACCESS-HARDENING-001）
+            guest_key, guest_sid = _guest_identity(app)
+            if row["user_id"] is not None or row["guest_key"] != guest_key:
+                return _with_guest_cookie(
+                    app, (jsonify({"ok": False, "error": "未登录"}), 401), guest_sid)
+        elif row["user_id"] != uid:
+            return jsonify({"ok": False, "error": "任务不存在"}), 404
+        return jsonify({
+            "ok": True,
+            "job_id": row["id"],
+            "idempotency_key": row["idempotency_key"],
+            "kind": row["kind"],
+            "status": row["status"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "params": row["params"] or {},
+            "strategy": {
+                "id": row["strategy_id"],
+                "name": row["strategy_name"],
+                "yaml": row["strategy_yaml"],
+                "nl_text": row["strategy_nl_text"],
+                "entry_mode": row["strategy_entry_mode"],
+            },
+        })
 
     @app.get("/api/jobs/<int:job_id>")
     @app.get("/api/saas/jobs/<int:job_id>")

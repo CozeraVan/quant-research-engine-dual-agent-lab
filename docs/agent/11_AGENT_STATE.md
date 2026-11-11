@@ -19,6 +19,21 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-11 上云扩容方案已定型（暂不执行）
+
+- 正式选型写入 `32_CLOUD_FULLSTACK_PREP_2026-11-03.md` **§0**：实测输入、拓扑、三档配置（默认推荐版）、联网规则、迁移灰度、成本估算。
+- 默认方案：**用户端 2C4G + 计算端 8C16G + RDS PG 4C16G/1TB ESSD + OSS**，同地域同 VPC 内网互联，产物放 OSS。
+- 核心原则：**计算必须挨着数据库**，禁止「库上云 + 计算留本地」。
+- 状态：**仅定型，不执行**；买云后按 32 号 §5 Runbook 一键部署。
+
+### 2026-11-11 回测参数快照（已部署 ECS，待验收，未 commit）
+
+- 新端点 `GET /api/saas/jobs/<id>/params`：完整 `params` + 策略 YAML/nl_text/entry_mode + 幂等键；权限与 `/api/saas/jobs/<id>` 一致。
+- 结果页新增「回测参数」折叠卡：参数全表 + YAML 全文 + 复制 JSON / 复制 YAML / 用同样参数重跑（新幂等键 `-rerun-<ts>`）。
+- 测试 146 passed, 13 skipped；6 段 inline JS `node --check` 全过。
+- 生产备份 `/tmp/qre-params-snapshot-pre-20261111/`，qre-saas MainPID 2175084，公网 `/saas/` 200、参数端点 404（不存在任务）、job 页含卡片。
+- **两条 UI 纪律（新）**：job 页 harness 只抽取 `const ACTIVE =` 到 `// --- 回测重播` 之间的脚本，新顶层函数必须写在该区间内；新 DOM 元素的事件绑定放渲染成功之后，不能放顶层。
+
 ### 2026-11-04 CF 长期事件监视（运行中，本窗口只做 CF）
 
 - 每个任务开始/终态自动追加 `40_CF_QUEUE_EVENT_LOG_2026-11-04.md`；索引已接入 README。
@@ -31,7 +46,7 @@ This file is the source of truth for single-agent workflow recovery.
 - 处置：`list_tabs` 返回空 → `navigate` 重建标签（tabId **1523279794**，group「经典策略全量回测」）→ evaluate `/api/saas/me` 200（session 用户 id=29 `classic-final-*`）→ 生产 SQL 查 `idempotency_key LIKE 'CF-038-%'` **无记录**（未重复建单）→ resume。
 - 当前 fullscale 后台任务：**`bash-3qa67gs0`**（PID 496191，`disable_timeout=true`），命令 `set -a && source /etc/qre-saas-worker.env && set +a && uv run python scripts/classic_catalog/fullscale.py --resume`。
 - 进度（2026-11-07 20:32）：**已完成 64/118（54%）**。CF-063 job299 completed（161446 笔）、CF-064 job300 completed（11 笔）；运行中 **CF-065/job301**（17:44:49 起，已 167 分钟）；DB `failed=1`（仅已被取代的 job298），worker 内存 2.49G/18G。驱动曾因 `wait_owner` 3h 上限抛 `TimeoutError` 退出，监管 12 秒内自动 `--resume` 续跑（pid 78177），零重复建单；`fullscale.py` 等待上限已提至 6h（21600s，未 commit）。
-- **状态（2026-11-09 11:06）：双路并行 + 队列已恢复**。CF-083（job319）11-08 17:0x 因产物回传被 nginx 限流（429）失败，驱动「遇失败即停」+ 监管 3 次快速失败 HALT，**停摆约 17.8 小时**；已重建 WebBridge 标签（1523282512）、清 HALT、`--retry CF-083` 重提为 **job321**，CF-085 job322 同时在跑，监管 pid 620435。nginx worker 通道由 `120r/m burst 30` 放宽到 **`300r/m burst 120`**（备份 `/tmp/aguhuice.nginx.bak-20261109-110626`，`nginx -t` 通过后 graceful reload）。进度 **83/118（70.3%）**，剩 35 个；cgroup peak 仍 9.42 GiB / 18 GiB。
+- **状态（2026-11-11 00:19）：CF 全量队列 118/118 完成（100%）**。驱动 23:23:38 `rc=0`、监管 23:25:51 正常退出；生产 119 completed（CF-005 重试多 1 条）+ 2 failed 历史行（job298/job319，均被重跑取代）+ 0 active。交易数合计 31,847,255（中位 104,904，最大 CF-022 2,693,401）。**遗留复查项**：CF-018、CF-074 零交易，需确认是策略口径问题还是因子缺失。异常与待办在 `41_CF_RUN_ANOMALY_LOG_2026-11-09.md`。`event_watch`（pid 2811）仍在跑，可按需停止。
 - **基础设施失败韧性（2026-11-09 已实现，待重启生效）**：①worker 回传对 429/502/503/504 有限重试（退避 5/15/45s，服务端按 upload_token 幂等=断点续传），其余 4xx 仍终态；测试 16 passed + worker 回归 63 passed。②驱动 `is_infra_failure()` + `AUTOMATIC_RETRY_CAP=2`：`result_upload_*`／数据库未就绪自动换键重跑，策略/因子类失败仍立刻停；测试 11 passed。生效靠 `switch_parallel.sh`（pid 723280，11:12 起）在队列排空后 restart worker + 重拉驱动。
 - **重跑机制**：`fullscale.py --retry CF_xxx`（可重复）按 CF 累计键版本 `v1→v2→v3` 换幂等键重提，计数在 `.tmp/classic-catalog-fullscale/retry_counts.json`；服务端按 `(user_id, idempotency_key)` 去重，不换键的「重跑」只会拿回旧失败 job。
 - **`ps` 里的「第二个 supervise.sh」不是重复实例**：那是监管 `$(run_fullscale)` 的命令替换子壳（`ppid` 指向监管），`flock` 单实例语义成立。

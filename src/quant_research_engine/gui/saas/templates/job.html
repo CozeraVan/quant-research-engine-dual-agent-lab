@@ -87,6 +87,12 @@
       <div class="sec-body" id="stg-body"><div><div class="sec-inner" id="stg-detail"></div></div></div>
     </div>
 
+    <!-- QRE-JOB-PARAMS-SNAPSHOT：回测参数快照（默认折叠，含复制与重跑入口） -->
+    <div class="chart-box" id="box-params" style="display:none">
+      <button class="sec-toggle" id="params-toggle" style="margin-top:0">回测参数　<span id="params-summary"></span></button>
+      <div class="sec-body" id="params-body"><div><div class="sec-inner" id="params-detail"></div></div></div>
+    </div>
+
     <div class="metric-strip" id="metric-strip"></div>
 
     {# QRE-PERF-METRICS-CONTRACT：风险调整收益（α/β/IR）。全 null 时 JS 整块隐藏，不留空壳 #}
@@ -994,6 +1000,120 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 const MAX_ACTIVE_WAIT_MS = 5 * 60 * 1000;
 const JOB_REQUEST_TIMEOUT_MS = 15000;
 const JOB_CONTENT = Array.from(document.querySelector('.container').childNodes);
+// QRE-JOB-PARAMS-SNAPSHOT：回测参数快照（完整 params + YAML + 复制/重跑）
+let PARAMS_SNAPSHOT = null;
+let PARAMS_LOADING = false;
+
+function flattenParams(obj, prefix){
+  const out = [];
+  for (const key of Object.keys(obj || {})){
+    const val = obj[key];
+    const name = prefix ? prefix + '.' + key : key;
+    if (val && typeof val === 'object' && !Array.isArray(val)){
+      out.push(...flattenParams(val, name));
+    } else if (Array.isArray(val)){
+      out.push([name, val.length > 8 ? val.length + ' 项（完整列表见 JSON）' : val.join('、')]);
+    } else {
+      out.push([name, val == null ? '—' : String(val)]);
+    }
+  }
+  return out;
+}
+
+async function loadParamsSnapshot(){
+  if (PARAMS_SNAPSHOT || PARAMS_LOADING) return;
+  PARAMS_LOADING = true;
+  const box = document.getElementById('box-params');
+  try{
+    const r = await apiFetch('/api/saas/jobs/' + JOB_ID + '/params', {redirectOn401:false});
+    if (r.status === 401){ box.style.display = 'none'; return; }  // 分享/非本人视图不展示参数快照
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '参数加载失败');
+    PARAMS_SNAPSHOT = d;
+    const p = d.params || {};
+    const scope = p.random_n ? '随机 ' + p.random_n + ' 只' : (p.whole_market ? '全 A 股' : (Array.isArray(p.codes) ? p.codes.length + ' 只' : '—'));
+    document.getElementById('params-summary').textContent =
+      (p.start || '') + ' → ' + (p.end || '') + ' · ' + scope;
+    const rows = flattenParams(p, '');
+    const yaml = (d.strategy && d.strategy.yaml) || '';
+    document.getElementById('params-detail').innerHTML =
+      '<table style="width:100%;font-size:13.5px;border-collapse:collapse">' +
+      rows.map(r => '<tr><th style="text-align:left;padding:5px 12px 5px 0;white-space:nowrap;vertical-align:top;width:210px">' + escH(r[0]) +
+                    '</th><td style="padding:5px 0;word-break:break-all">' + escH(r[1]) + '</td></tr>').join('') +
+      '</table>' +
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button type="button" class="btn-sm" id="btn-copy-params">复制参数 JSON</button>' +
+      '<button type="button" class="btn-sm" id="btn-copy-yaml">复制策略 YAML</button>' +
+      '<button type="button" class="btn-sm" id="btn-rerun-params">用同样参数重跑</button></div>' +
+      '<pre style="margin-top:10px;max-height:280px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12.5px">' + escH(yaml) + '</pre>';
+    box.style.display = '';
+    document.getElementById('params-toggle').addEventListener('click', function(){
+      this.classList.toggle('open');
+      document.getElementById('params-body').classList.toggle('open');
+    });
+    document.getElementById('btn-copy-params').addEventListener('click', copyParamsJson);
+    document.getElementById('btn-copy-yaml').addEventListener('click', copyParamsYaml);
+    document.getElementById('btn-rerun-params').addEventListener('click', rerunWithSameParams);
+  }catch(e){
+    // 网络/解析失败：参数卡隐藏（不影响结果页主内容），console 留痕便于排查
+    console.warn('回测参数快照加载失败', e);
+    box.style.display = 'none';
+  }finally{
+    PARAMS_LOADING = false;
+  }
+}
+
+async function copyTextWithFeedback(text, btn, okText){
+  try{
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+    }
+    const old = btn.textContent; btn.textContent = okText;
+    setTimeout(() => { btn.textContent = old; }, 1500);
+  }catch(e){ alert('复制失败：' + (e.message || e)); }
+}
+function copyParamsJson(){
+  if (!PARAMS_SNAPSHOT) return;
+  copyTextWithFeedback(JSON.stringify(PARAMS_SNAPSHOT, null, 2),
+    document.getElementById('btn-copy-params'), '已复制 ✓');
+}
+function copyParamsYaml(){
+  const yaml = (PARAMS_SNAPSHOT && PARAMS_SNAPSHOT.strategy && PARAMS_SNAPSHOT.strategy.yaml) || '';
+  copyTextWithFeedback(yaml, document.getElementById('btn-copy-yaml'), '已复制 ✓');
+}
+async function rerunWithSameParams(){
+  const d = PARAMS_SNAPSHOT; if (!d) return;
+  const yaml = (d.strategy && d.strategy.yaml) || '';
+  if (!yaml){ alert('该任务没有可复用的策略 YAML'); return; }
+  const payload = {
+    name: ((d.strategy && d.strategy.name) || '策略') + '（同参数重跑）',
+    yaml: yaml,
+    entry_mode: (d.strategy && d.strategy.entry_mode) || 'yaml',
+    kind: d.kind || 'full',
+    params: d.params || {},
+    // 新幂等键：要新跑一次，不能被服务端按旧键去重返回旧 job
+    idempotency_key: (d.idempotency_key || ('job-' + d.job_id)) + '-rerun-' + Date.now(),
+  };
+  const btn = document.getElementById('btn-rerun-params');
+  btn.disabled = true;
+  try{
+    const r = await apiFetch('/api/saas/jobs', {json: payload});
+    const data = await r.json();
+    if (r.ok && data.ok && data.job_id){ location.href = '/saas/jobs/' + data.job_id; return; }
+    alert(data.error || ('提交失败（HTTP ' + r.status + '）'));
+  }catch(e){
+    alert('提交失败：' + (e.message || e));  // 网络/解析异常必须提示
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+
 let pollTimer = null;
 let pollInFlight = false;
 let pollEpoch = 0;
@@ -1315,6 +1435,7 @@ async function poll(){
     document.getElementById('brief-text').textContent = brief.name ? ('策略：' + brief.name) : (data.strategy_name ? ('策略：' + data.strategy_name) : '');
     renderMeta(chart.meta, data.data_until);
     renderStrategyInfo(data.strategy);
+    loadParamsSnapshot();
     // 平均持股周期的前端回退源：chart_data.trades（>500 笔时 sampled，此时只信后端值）
     window.__jobTrades = chart.trades || null;
     renderMetrics(Object.assign({}, data.summary || {}, chart.metrics || {}));

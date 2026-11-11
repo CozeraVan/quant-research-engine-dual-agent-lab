@@ -1689,3 +1689,22 @@ class TestSymbolDetailJsonFinite:
         assert body["factors"][0]["values"] == [None, None, 1.5]
         assert body["factors"][1]["values"] == [None, 0.4, 0.6]
         assert body["summary"]["total_ret_pct"] == 0.05
+
+
+def test_showcase_list_does_not_load_full_chart_data():
+    """回归 2026-11-11 ECS OOM：showcase 列表不得整列读 chart_data。
+
+    事故：118 个 CF 进白名单后，`/api/saas/showcase` 把每条结果的 chart_data
+    （全期日收益 + 逐笔交易 + 个股明细）读进 Python，2GB 的 ECS 直接 OOM，
+    qre-saas worker 被 OOM killer 杀死、公网 502。只允许取 metrics 子树。
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1]
+           / "src/quant_research_engine/gui/saas/app.py").read_text()
+    start = src.index("def api_showcase_list")
+    end = src.index('return jsonify({"ok": True, "items": items})', start)
+    block = src[start:end]
+    assert "chart_data->'metrics'" in block, "必须只取 chart_data 的 metrics 子树"
+    assert "r.chart_data," not in block, "不得整列读 chart_data（会 OOM）"
+    assert 'row["chart_data"]' not in block, "不得再消费整列 chart_data"

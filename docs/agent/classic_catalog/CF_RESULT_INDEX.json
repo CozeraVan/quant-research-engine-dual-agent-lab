@@ -1,0 +1,2376 @@
+{
+ "generated_at": "2026-11-11T11:50:00+08:00",
+ "description": "经典策略全期全量回测（CF）结果索引：118 个策略、2009-01-05~2026-10-30、全 A 股、统一交易参数。供人与 AI agent 取材料。",
+ "access": {
+  "public_list": "https://aguhuice.com/api/saas/showcase",
+  "public_page": "https://aguhuice.com/saas/showcase",
+  "note": "showcase 白名单内的 job 免登录只读；params_snapshot 需登录（本人账号）",
+  "account": "17157845743"
+ },
+ "counts": {
+  "strategies": 118,
+  "total_trades": 31061138
+ },
+ "items": [
+  {
+   "cf_id": "CF-001",
+   "strategy_id": "bo01a_donchian_20_breakout",
+   "job_id": 227,
+   "title": "CF-001_bo01a_donchian_20_breakout",
+   "total_trade_count": 53626,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/227",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/227/params",
+    "chart_data": "https://aguhuice.com/api/results/227/chart-data",
+    "symbols": "https://aguhuice.com/api/results/227/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-002",
+   "strategy_id": "bo01b_donchian_55_breakout",
+   "job_id": 228,
+   "title": "CF-002_bo01b_donchian_55_breakout",
+   "total_trade_count": 33514,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/228",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/228/params",
+    "chart_data": "https://aguhuice.com/api/results/228/chart-data",
+    "symbols": "https://aguhuice.com/api/results/228/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-003",
+   "strategy_id": "bo02_keltner_breakout",
+   "job_id": 230,
+   "title": "CF-003_bo02_keltner_breakout",
+   "total_trade_count": 153602,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/230",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/230/params",
+    "chart_data": "https://aguhuice.com/api/results/230/chart-data",
+    "symbols": "https://aguhuice.com/api/results/230/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-004",
+   "strategy_id": "bo03_52w_high_breakout",
+   "job_id": 231,
+   "title": "CF-004_bo03_52w_high_breakout",
+   "total_trade_count": 154307,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/231",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/231/params",
+    "chart_data": "https://aguhuice.com/api/results/231/chart-data",
+    "symbols": "https://aguhuice.com/api/results/231/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-005",
+   "strategy_id": "CF-005-memory-fix-smoke",
+   "job_id": 233,
+   "title": "CF-005-memory-fix-smoke",
+   "total_trade_count": 2690,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/233",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/233/params",
+    "chart_data": "https://aguhuice.com/api/results/233/chart-data",
+    "symbols": "https://aguhuice.com/api/results/233/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-006",
+   "strategy_id": "bo05_bollinger_squeeze",
+   "job_id": 234,
+   "title": "CF-006_bo05_bollinger_squeeze",
+   "total_trade_count": 31547,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/234",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/234/params",
+    "chart_data": "https://aguhuice.com/api/results/234/chart-data",
+    "symbols": "https://aguhuice.com/api/results/234/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-007",
+   "strategy_id": "bo06a_atr_anomaly_momentum",
+   "job_id": 235,
+   "title": "CF-007_bo06a_atr_anomaly_momentum",
+   "total_trade_count": 1457496,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/235",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/235/params",
+    "chart_data": "https://aguhuice.com/api/results/235/chart-data",
+    "symbols": "https://aguhuice.com/api/results/235/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-008",
+   "strategy_id": "bo07a_larry_williams_breakout",
+   "job_id": 236,
+   "title": "CF-008_bo07a_larry_williams_breakout",
+   "total_trade_count": 174745,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/236",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/236/params",
+    "chart_data": "https://aguhuice.com/api/results/236/chart-data",
+    "symbols": "https://aguhuice.com/api/results/236/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-009",
+   "strategy_id": "bo08a_ma_pinch_breakout",
+   "job_id": 237,
+   "title": "CF-009_bo08a_ma_pinch_breakout",
+   "total_trade_count": 82291,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/237",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/237/params",
+    "chart_data": "https://aguhuice.com/api/results/237/chart-data",
+    "symbols": "https://aguhuice.com/api/results/237/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-010",
+   "strategy_id": "bo08b_hv20_low_breakout",
+   "job_id": 238,
+   "title": "CF-010_bo08b_hv20_low_breakout",
+   "total_trade_count": 30978,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/238",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/238/params",
+    "chart_data": "https://aguhuice.com/api/results/238/chart-data",
+    "symbols": "https://aguhuice.com/api/results/238/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-011",
+   "strategy_id": "bo08c_atr_ratio_filter",
+   "job_id": 239,
+   "title": "CF-011_bo08c_atr_ratio_filter",
+   "total_trade_count": 121219,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/239",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/239/params",
+    "chart_data": "https://aguhuice.com/api/results/239/chart-data",
+    "symbols": "https://aguhuice.com/api/results/239/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-012",
+   "strategy_id": "bo08d_dual_vol_breakout",
+   "job_id": 245,
+   "title": "CF-012_bo08d_dual_vol_breakout",
+   "total_trade_count": 719924,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/245",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/245/params",
+    "chart_data": "https://aguhuice.com/api/results/245/chart-data",
+    "symbols": "https://aguhuice.com/api/results/245/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-013",
+   "strategy_id": "bo08e_amplitude_expansion",
+   "job_id": 246,
+   "title": "CF-013_bo08e_amplitude_expansion",
+   "total_trade_count": 100979,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/246",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/246/params",
+    "chart_data": "https://aguhuice.com/api/results/246/chart-data",
+    "symbols": "https://aguhuice.com/api/results/246/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-014",
+   "strategy_id": "bo09a_volume_price_breakout",
+   "job_id": 247,
+   "title": "CF-014_bo09a_volume_price_breakout",
+   "total_trade_count": 773187,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/247",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/247/params",
+    "chart_data": "https://aguhuice.com/api/results/247/chart-data",
+    "symbols": "https://aguhuice.com/api/results/247/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-015",
+   "strategy_id": "bo09b_n_breakout",
+   "job_id": 248,
+   "title": "CF-015_bo09b_n_breakout",
+   "total_trade_count": 101836,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/248",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/248/params",
+    "chart_data": "https://aguhuice.com/api/results/248/chart-data",
+    "symbols": "https://aguhuice.com/api/results/248/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-016",
+   "strategy_id": "bo09c_sideways_breakout",
+   "job_id": 249,
+   "title": "CF-016_bo09c_sideways_breakout",
+   "total_trade_count": 43171,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/249",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/249/params",
+    "chart_data": "https://aguhuice.com/api/results/249/chart-data",
+    "symbols": "https://aguhuice.com/api/results/249/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-017",
+   "strategy_id": "bo09d_three_candle_breakout",
+   "job_id": 250,
+   "title": "CF-017_bo09d_three_candle_breakout",
+   "total_trade_count": 1057003,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/250",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/250/params",
+    "chart_data": "https://aguhuice.com/api/results/250/chart-data",
+    "symbols": "https://aguhuice.com/api/results/250/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-018",
+   "strategy_id": "bo09e_channel_retest_breakout",
+   "job_id": 251,
+   "title": "CF-018_bo09e_channel_retest_breakout",
+   "total_trade_count": 0,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/251",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/251/params",
+    "chart_data": "https://aguhuice.com/api/results/251/chart-data",
+    "symbols": "https://aguhuice.com/api/results/251/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-019",
+   "strategy_id": "bo09f_orb_daily_approx",
+   "job_id": 252,
+   "title": "CF-019_bo09f_orb_daily_approx",
+   "total_trade_count": 166397,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/252",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/252/params",
+    "chart_data": "https://aguhuice.com/api/results/252/chart-data",
+    "symbols": "https://aguhuice.com/api/results/252/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-020",
+   "strategy_id": "bo10a_bb_upper_trend_breakout",
+   "job_id": 253,
+   "title": "CF-020_bo10a_bb_upper_trend_breakout",
+   "total_trade_count": 30958,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/253",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/253/params",
+    "chart_data": "https://aguhuice.com/api/results/253/chart-data",
+    "symbols": "https://aguhuice.com/api/results/253/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-021",
+   "strategy_id": "bo10b_bb_lower_rsi_volume",
+   "job_id": 254,
+   "title": "CF-021_bo10b_bb_lower_rsi_volume",
+   "total_trade_count": 76064,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/254",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/254/params",
+    "chart_data": "https://aguhuice.com/api/results/254/chart-data",
+    "symbols": "https://aguhuice.com/api/results/254/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-022",
+   "strategy_id": "cb01a_ma_cross_rsi",
+   "job_id": 256,
+   "title": "CF-022_cb01a_ma_cross_rsi",
+   "total_trade_count": 2693401,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/256",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/256/params",
+    "chart_data": "https://aguhuice.com/api/results/256/chart-data",
+    "symbols": "https://aguhuice.com/api/results/256/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-023",
+   "strategy_id": "cb01b_macd_cross_volume",
+   "job_id": 258,
+   "title": "CF-023_cb01b_macd_cross_volume",
+   "total_trade_count": 533835,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/258",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/258/params",
+    "chart_data": "https://aguhuice.com/api/results/258/chart-data",
+    "symbols": "https://aguhuice.com/api/results/258/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-024",
+   "strategy_id": "cb01c_adx_rsi_momentum",
+   "job_id": 259,
+   "title": "CF-024_cb01c_adx_rsi_momentum",
+   "total_trade_count": 297836,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/259",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/259/params",
+    "chart_data": "https://aguhuice.com/api/results/259/chart-data",
+    "symbols": "https://aguhuice.com/api/results/259/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-025",
+   "strategy_id": "cb01d_bb_rsi_volume",
+   "job_id": 260,
+   "title": "CF-025_cb01d_bb_rsi_volume",
+   "total_trade_count": 76063,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/260",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/260/params",
+    "chart_data": "https://aguhuice.com/api/results/260/chart-data",
+    "symbols": "https://aguhuice.com/api/results/260/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-026",
+   "strategy_id": "cb01e_ma_alignment_kdj",
+   "job_id": 261,
+   "title": "CF-026_cb01e_ma_alignment_kdj",
+   "total_trade_count": 1985424,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/261",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/261/params",
+    "chart_data": "https://aguhuice.com/api/results/261/chart-data",
+    "symbols": "https://aguhuice.com/api/results/261/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-027",
+   "strategy_id": "cb01f_new_high_obv_macd",
+   "job_id": 262,
+   "title": "CF-027_cb01f_new_high_obv_macd",
+   "total_trade_count": 55216,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/262",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/262/params",
+    "chart_data": "https://aguhuice.com/api/results/262/chart-data",
+    "symbols": "https://aguhuice.com/api/results/262/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-028",
+   "strategy_id": "cb01g_turtle_ma60_filter",
+   "job_id": 263,
+   "title": "CF-028_cb01g_turtle_ma60_filter",
+   "total_trade_count": 53604,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/263",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/263/params",
+    "chart_data": "https://aguhuice.com/api/results/263/chart-data",
+    "symbols": "https://aguhuice.com/api/results/263/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-029",
+   "strategy_id": "cb01h_sideways_rsi_volume",
+   "job_id": 264,
+   "title": "CF-029_cb01h_sideways_rsi_volume",
+   "total_trade_count": 495850,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/264",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/264/params",
+    "chart_data": "https://aguhuice.com/api/results/264/chart-data",
+    "symbols": "https://aguhuice.com/api/results/264/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-030",
+   "strategy_id": "cs01a_pure_small_cap",
+   "job_id": 265,
+   "title": "CF-030_cs01a_pure_small_cap",
+   "total_trade_count": 27403,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/265",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/265/params",
+    "chart_data": "https://aguhuice.com/api/results/265/chart-data",
+    "symbols": "https://aguhuice.com/api/results/265/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-031",
+   "strategy_id": "cs01b_small_cap_quality",
+   "job_id": 266,
+   "title": "CF-031_cs01b_small_cap_quality",
+   "total_trade_count": 3,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/266",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/266/params",
+    "chart_data": "https://aguhuice.com/api/results/266/chart-data",
+    "symbols": "https://aguhuice.com/api/results/266/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-032",
+   "strategy_id": "cs01c_small_cap_macd_timing",
+   "job_id": 267,
+   "title": "CF-032_cs01c_small_cap_macd_timing",
+   "total_trade_count": 87105,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/267",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/267/params",
+    "chart_data": "https://aguhuice.com/api/results/267/chart-data",
+    "symbols": "https://aguhuice.com/api/results/267/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-033",
+   "strategy_id": "cs01d_small_cap_low_pb",
+   "job_id": 268,
+   "title": "CF-033_cs01d_small_cap_low_pb",
+   "total_trade_count": 1,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/268",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/268/params",
+    "chart_data": "https://aguhuice.com/api/results/268/chart-data",
+    "symbols": "https://aguhuice.com/api/results/268/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-034",
+   "strategy_id": "cs02_size_value_ranking",
+   "job_id": 269,
+   "title": "CF-034_cs02_size_value_ranking",
+   "total_trade_count": 349,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/269",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/269/params",
+    "chart_data": "https://aguhuice.com/api/results/269/chart-data",
+    "symbols": "https://aguhuice.com/api/results/269/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-035",
+   "strategy_id": "cs03_low_volatility",
+   "job_id": 270,
+   "title": "CF-035_cs03_low_volatility",
+   "total_trade_count": 60931,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/270",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/270/params",
+    "chart_data": "https://aguhuice.com/api/results/270/chart-data",
+    "symbols": "https://aguhuice.com/api/results/270/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-036",
+   "strategy_id": "cs06a_n_day_return_momentum",
+   "job_id": 271,
+   "title": "CF-036_cs06a_n_day_return_momentum",
+   "total_trade_count": 117755,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/271",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/271/params",
+    "chart_data": "https://aguhuice.com/api/results/271/chart-data",
+    "symbols": "https://aguhuice.com/api/results/271/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-037",
+   "strategy_id": "cs06b_sharpe_factor",
+   "job_id": 272,
+   "title": "CF-037_cs06b_sharpe_factor",
+   "total_trade_count": 115132,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/272",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/272/params",
+    "chart_data": "https://aguhuice.com/api/results/272/chart-data",
+    "symbols": "https://aguhuice.com/api/results/272/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-038",
+   "strategy_id": "cs06c_12_1_momentum_diff",
+   "job_id": 273,
+   "title": "CF-038_cs06c_12_1_momentum_diff",
+   "total_trade_count": 45180,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/273",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/273/params",
+    "chart_data": "https://aguhuice.com/api/results/273/chart-data",
+    "symbols": "https://aguhuice.com/api/results/273/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-039",
+   "strategy_id": "cs06d_beta_rotation",
+   "job_id": 274,
+   "title": "CF-039_cs06d_beta_rotation",
+   "total_trade_count": 44223,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/274",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/274/params",
+    "chart_data": "https://aguhuice.com/api/results/274/chart-data",
+    "symbols": "https://aguhuice.com/api/results/274/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-040",
+   "strategy_id": "cs06e_rs_ranking",
+   "job_id": 275,
+   "title": "CF-040_cs06e_rs_ranking",
+   "total_trade_count": 87142,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/275",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/275/params",
+    "chart_data": "https://aguhuice.com/api/results/275/chart-data",
+    "symbols": "https://aguhuice.com/api/results/275/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-041",
+   "strategy_id": "cs06f_return_skewness",
+   "job_id": 276,
+   "title": "CF-041_cs06f_return_skewness",
+   "total_trade_count": 68412,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/276",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/276/params",
+    "chart_data": "https://aguhuice.com/api/results/276/chart-data",
+    "symbols": "https://aguhuice.com/api/results/276/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-042",
+   "strategy_id": "cs06g_max_return_ratio",
+   "job_id": 277,
+   "title": "CF-042_cs06g_max_return_ratio",
+   "total_trade_count": 188652,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/277",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/277/params",
+    "chart_data": "https://aguhuice.com/api/results/277/chart-data",
+    "symbols": "https://aguhuice.com/api/results/277/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-043",
+   "strategy_id": "cs06h_overnight_vs_intraday",
+   "job_id": 278,
+   "title": "CF-043_cs06h_overnight_vs_intraday",
+   "total_trade_count": 141487,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/278",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/278/params",
+    "chart_data": "https://aguhuice.com/api/results/278/chart-data",
+    "symbols": "https://aguhuice.com/api/results/278/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-044",
+   "strategy_id": "cs07a_mf001_atrr14_high_hv20_normal_mvp",
+   "job_id": 279,
+   "title": "CF-044_cs07a_mf001_atrr14_high_hv20_normal_mvp",
+   "total_trade_count": 15644,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/279",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/279/params",
+    "chart_data": "https://aguhuice.com/api/results/279/chart-data",
+    "symbols": "https://aguhuice.com/api/results/279/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-045",
+   "strategy_id": "cs07b_mf002_alpha072_low_mvp",
+   "job_id": 280,
+   "title": "CF-045_cs07b_mf002_alpha072_low_mvp",
+   "total_trade_count": 28149,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/280",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/280/params",
+    "chart_data": "https://aguhuice.com/api/results/280/chart-data",
+    "symbols": "https://aguhuice.com/api/results/280/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-046",
+   "strategy_id": "cs07c_mf003_alpha082_low_mvp",
+   "job_id": 281,
+   "title": "CF-046_cs07c_mf003_alpha082_low_mvp",
+   "total_trade_count": 26325,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/281",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/281/params",
+    "chart_data": "https://aguhuice.com/api/results/281/chart-data",
+    "symbols": "https://aguhuice.com/api/results/281/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-047",
+   "strategy_id": "gui_accept_rsi14_reversal",
+   "job_id": 282,
+   "title": "CF-047_gui_accept_rsi14_reversal",
+   "total_trade_count": 112461,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/282",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/282/params",
+    "chart_data": "https://aguhuice.com/api/results/282/chart-data",
+    "symbols": "https://aguhuice.com/api/results/282/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-048",
+   "strategy_id": "pt01a_hammer_reversal",
+   "job_id": 283,
+   "title": "CF-048_pt01a_hammer_reversal",
+   "total_trade_count": 51300,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/283",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/283/params",
+    "chart_data": "https://aguhuice.com/api/results/283/chart-data",
+    "symbols": "https://aguhuice.com/api/results/283/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-049",
+   "strategy_id": "pt01b_bullish_engulfing",
+   "job_id": 284,
+   "title": "CF-049_pt01b_bullish_engulfing",
+   "total_trade_count": 368429,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/284",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/284/params",
+    "chart_data": "https://aguhuice.com/api/results/284/chart-data",
+    "symbols": "https://aguhuice.com/api/results/284/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-050",
+   "strategy_id": "pt01c_morning_star",
+   "job_id": 285,
+   "title": "CF-050_pt01c_morning_star",
+   "total_trade_count": 78262,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/285",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/285/params",
+    "chart_data": "https://aguhuice.com/api/results/285/chart-data",
+    "symbols": "https://aguhuice.com/api/results/285/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-051",
+   "strategy_id": "pt01d_three_white_soldiers",
+   "job_id": 286,
+   "title": "CF-051_pt01d_three_white_soldiers",
+   "total_trade_count": 71292,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/286",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/286/params",
+    "chart_data": "https://aguhuice.com/api/results/286/chart-data",
+    "symbols": "https://aguhuice.com/api/results/286/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-052",
+   "strategy_id": "pt02a_rising_three_methods",
+   "job_id": 287,
+   "title": "CF-052_pt02a_rising_three_methods",
+   "total_trade_count": 111051,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/287",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/287/params",
+    "chart_data": "https://aguhuice.com/api/results/287/chart-data",
+    "symbols": "https://aguhuice.com/api/results/287/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-053",
+   "strategy_id": "pt02b_island_reversal",
+   "job_id": 288,
+   "title": "CF-053_pt02b_island_reversal",
+   "total_trade_count": 46943,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/288",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/288/params",
+    "chart_data": "https://aguhuice.com/api/results/288/chart-data",
+    "symbols": "https://aguhuice.com/api/results/288/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-054",
+   "strategy_id": "pt02c_tombstone_doji_exit",
+   "job_id": 289,
+   "title": "CF-054_pt02c_tombstone_doji_exit",
+   "total_trade_count": 20397,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/289",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/289/params",
+    "chart_data": "https://aguhuice.com/api/results/289/chart-data",
+    "symbols": "https://aguhuice.com/api/results/289/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-055",
+   "strategy_id": "pt03a_double_bottom",
+   "job_id": 290,
+   "title": "CF-055_pt03a_double_bottom",
+   "total_trade_count": 51593,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/290",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/290/params",
+    "chart_data": "https://aguhuice.com/api/results/290/chart-data",
+    "symbols": "https://aguhuice.com/api/results/290/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-056",
+   "strategy_id": "mr01a_rsi14_oversold_reversal",
+   "job_id": 291,
+   "title": "CF-056_mr01a_rsi14_oversold_reversal",
+   "total_trade_count": 1833322,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/291",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/291/params",
+    "chart_data": "https://aguhuice.com/api/results/291/chart-data",
+    "symbols": "https://aguhuice.com/api/results/291/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-057",
+   "strategy_id": "mr01b_rsi2_connors",
+   "job_id": 292,
+   "title": "CF-057_mr01b_rsi2_connors",
+   "total_trade_count": 32905,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/292",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/292/params",
+    "chart_data": "https://aguhuice.com/api/results/292/chart-data",
+    "symbols": "https://aguhuice.com/api/results/292/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-058",
+   "strategy_id": "mr01c_multi_rsi_resonance",
+   "job_id": 293,
+   "title": "CF-058_mr01c_multi_rsi_resonance",
+   "total_trade_count": 44826,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/293",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/293/params",
+    "chart_data": "https://aguhuice.com/api/results/293/chart-data",
+    "symbols": "https://aguhuice.com/api/results/293/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-059",
+   "strategy_id": "mr01d_rsi_divergence_bottom",
+   "job_id": 294,
+   "title": "CF-059_mr01d_rsi_divergence_bottom",
+   "total_trade_count": 47030,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/294",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/294/params",
+    "chart_data": "https://aguhuice.com/api/results/294/chart-data",
+    "symbols": "https://aguhuice.com/api/results/294/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-060",
+   "strategy_id": "mr01e_rsi_hidden_divergence",
+   "job_id": 295,
+   "title": "CF-060_mr01e_rsi_hidden_divergence",
+   "total_trade_count": 12029,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/295",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/295/params",
+    "chart_data": "https://aguhuice.com/api/results/295/chart-data",
+    "symbols": "https://aguhuice.com/api/results/295/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-061",
+   "strategy_id": "mr01f_rsi14_midline_break",
+   "job_id": 296,
+   "title": "CF-061_mr01f_rsi14_midline_break",
+   "total_trade_count": 876042,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/296",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/296/params",
+    "chart_data": "https://aguhuice.com/api/results/296/chart-data",
+    "symbols": "https://aguhuice.com/api/results/296/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-062",
+   "strategy_id": "mr02a_kdj_j_line_extreme",
+   "job_id": 297,
+   "title": "CF-062_mr02a_kdj_j_line_extreme",
+   "total_trade_count": 130286,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/297",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/297/params",
+    "chart_data": "https://aguhuice.com/api/results/297/chart-data",
+    "symbols": "https://aguhuice.com/api/results/297/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-063",
+   "strategy_id": "mr02b_stochastic_cross",
+   "job_id": 299,
+   "title": "CF-063_mr02b_stochastic_cross",
+   "total_trade_count": 161446,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/299",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/299/params",
+    "chart_data": "https://aguhuice.com/api/results/299/chart-data",
+    "symbols": "https://aguhuice.com/api/results/299/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-064",
+   "strategy_id": "mr02c_stoch_rsi_slow",
+   "job_id": 300,
+   "title": "CF-064_mr02c_stoch_rsi_slow",
+   "total_trade_count": 11,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/300",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/300/params",
+    "chart_data": "https://aguhuice.com/api/results/300/chart-data",
+    "symbols": "https://aguhuice.com/api/results/300/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-065",
+   "strategy_id": "mr02d_williams_r_reversal",
+   "job_id": 301,
+   "title": "CF-065_mr02d_williams_r_reversal",
+   "total_trade_count": 198054,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/301",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/301/params",
+    "chart_data": "https://aguhuice.com/api/results/301/chart-data",
+    "symbols": "https://aguhuice.com/api/results/301/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-066",
+   "strategy_id": "mr03a_bollinger_lower_reversion",
+   "job_id": 302,
+   "title": "CF-066_mr03a_bollinger_lower_reversion",
+   "total_trade_count": 296813,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/302",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/302/params",
+    "chart_data": "https://aguhuice.com/api/results/302/chart-data",
+    "symbols": "https://aguhuice.com/api/results/302/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-067",
+   "strategy_id": "mr03b_bollinger_lower_volume",
+   "job_id": 303,
+   "title": "CF-067_mr03b_bollinger_lower_volume",
+   "total_trade_count": 107971,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/303",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/303/params",
+    "chart_data": "https://aguhuice.com/api/results/303/chart-data",
+    "symbols": "https://aguhuice.com/api/results/303/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-068",
+   "strategy_id": "mr03c_bollinger_percent_b",
+   "job_id": 304,
+   "title": "CF-068_mr03c_bollinger_percent_b",
+   "total_trade_count": 589484,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/304",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/304/params",
+    "chart_data": "https://aguhuice.com/api/results/304/chart-data",
+    "symbols": "https://aguhuice.com/api/results/304/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-069",
+   "strategy_id": "mr04a_ibs_reversal",
+   "job_id": 305,
+   "title": "CF-069_mr04a_ibs_reversal",
+   "total_trade_count": 134810,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/305",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/305/params",
+    "chart_data": "https://aguhuice.com/api/results/305/chart-data",
+    "symbols": "https://aguhuice.com/api/results/305/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-070",
+   "strategy_id": "mr05a_cci_oversold_reversal",
+   "job_id": 306,
+   "title": "CF-070_mr05a_cci_oversold_reversal",
+   "total_trade_count": 135866,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/306",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/306/params",
+    "chart_data": "https://aguhuice.com/api/results/306/chart-data",
+    "symbols": "https://aguhuice.com/api/results/306/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-071",
+   "strategy_id": "mr05b_cci_trend_following",
+   "job_id": 307,
+   "title": "CF-071_mr05b_cci_trend_following",
+   "total_trade_count": 41775,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/307",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/307/params",
+    "chart_data": "https://aguhuice.com/api/results/307/chart-data",
+    "symbols": "https://aguhuice.com/api/results/307/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-072",
+   "strategy_id": "mr06_double7",
+   "job_id": 308,
+   "title": "CF-072_mr06_double7",
+   "total_trade_count": 57340,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/308",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/308/params",
+    "chart_data": "https://aguhuice.com/api/results/308/chart-data",
+    "symbols": "https://aguhuice.com/api/results/308/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-073",
+   "strategy_id": "mr07_r3_extreme_oversold",
+   "job_id": 309,
+   "title": "CF-073_mr07_r3_extreme_oversold",
+   "total_trade_count": 32905,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/309",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/309/params",
+    "chart_data": "https://aguhuice.com/api/results/309/chart-data",
+    "symbols": "https://aguhuice.com/api/results/309/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-074",
+   "strategy_id": "mr08a_mfi_oversold_reversal",
+   "job_id": 310,
+   "title": "CF-074_mr08a_mfi_oversold_reversal",
+   "total_trade_count": 0,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/310",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/310/params",
+    "chart_data": "https://aguhuice.com/api/results/310/chart-data",
+    "symbols": "https://aguhuice.com/api/results/310/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-075",
+   "strategy_id": "mr09a_bias_oversold",
+   "job_id": 311,
+   "title": "CF-075_mr09a_bias_oversold",
+   "total_trade_count": 571372,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/311",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/311/params",
+    "chart_data": "https://aguhuice.com/api/results/311/chart-data",
+    "symbols": "https://aguhuice.com/api/results/311/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-076",
+   "strategy_id": "mr09b_volume_contraction_reversal",
+   "job_id": 312,
+   "title": "CF-076_mr09b_volume_contraction_reversal",
+   "total_trade_count": 48121,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/312",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/312/params",
+    "chart_data": "https://aguhuice.com/api/results/312/chart-data",
+    "symbols": "https://aguhuice.com/api/results/312/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-077",
+   "strategy_id": "mr10a_cmo_reversal",
+   "job_id": 313,
+   "title": "CF-077_mr10a_cmo_reversal",
+   "total_trade_count": 1251369,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/313",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/313/params",
+    "chart_data": "https://aguhuice.com/api/results/313/chart-data",
+    "symbols": "https://aguhuice.com/api/results/313/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-078",
+   "strategy_id": "mr10b_uo_reversal",
+   "job_id": 314,
+   "title": "CF-078_mr10b_uo_reversal",
+   "total_trade_count": 932,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/314",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/314/params",
+    "chart_data": "https://aguhuice.com/api/results/314/chart-data",
+    "symbols": "https://aguhuice.com/api/results/314/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-079",
+   "strategy_id": "pv01a_obv_divergence",
+   "job_id": 315,
+   "title": "CF-079_pv01a_obv_divergence",
+   "total_trade_count": 1392,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/315",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/315/params",
+    "chart_data": "https://aguhuice.com/api/results/315/chart-data",
+    "symbols": "https://aguhuice.com/api/results/315/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-080",
+   "strategy_id": "pv01b_obv_ma_cross",
+   "job_id": 316,
+   "title": "CF-080_pv01b_obv_ma_cross",
+   "total_trade_count": 98236,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/316",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/316/params",
+    "chart_data": "https://aguhuice.com/api/results/316/chart-data",
+    "symbols": "https://aguhuice.com/api/results/316/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-081",
+   "strategy_id": "pv02a_cmf_money_flow",
+   "job_id": 317,
+   "title": "CF-081_pv02a_cmf_money_flow",
+   "total_trade_count": 67668,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/317",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/317/params",
+    "chart_data": "https://aguhuice.com/api/results/317/chart-data",
+    "symbols": "https://aguhuice.com/api/results/317/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-082",
+   "strategy_id": "pv03a_alpha41",
+   "job_id": 318,
+   "title": "CF-082_pv03a_alpha41",
+   "total_trade_count": 197219,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/318",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/318/params",
+    "chart_data": "https://aguhuice.com/api/results/318/chart-data",
+    "symbols": "https://aguhuice.com/api/results/318/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-083",
+   "strategy_id": "pv03b_alpha101",
+   "job_id": 321,
+   "title": "CF-083_pv03b_alpha101",
+   "total_trade_count": 135714,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/321",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/321/params",
+    "chart_data": "https://aguhuice.com/api/results/321/chart-data",
+    "symbols": "https://aguhuice.com/api/results/321/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-084",
+   "strategy_id": "pv03c_alpha12_style",
+   "job_id": 320,
+   "title": "CF-084_pv03c_alpha12_style",
+   "total_trade_count": 90439,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/320",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/320/params",
+    "chart_data": "https://aguhuice.com/api/results/320/chart-data",
+    "symbols": "https://aguhuice.com/api/results/320/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-085",
+   "strategy_id": "pv05a_ad_accumulation",
+   "job_id": 322,
+   "title": "CF-085_pv05a_ad_accumulation",
+   "total_trade_count": 83446,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/322",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/322/params",
+    "chart_data": "https://aguhuice.com/api/results/322/chart-data",
+    "symbols": "https://aguhuice.com/api/results/322/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-086",
+   "strategy_id": "pv05b_daily_vwap_support",
+   "job_id": 323,
+   "title": "CF-086_pv05b_daily_vwap_support",
+   "total_trade_count": 157397,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/323",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/323/params",
+    "chart_data": "https://aguhuice.com/api/results/323/chart-data",
+    "symbols": "https://aguhuice.com/api/results/323/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-087",
+   "strategy_id": "pv05c_volume_ratio_breakout",
+   "job_id": 324,
+   "title": "CF-087_pv05c_volume_ratio_breakout",
+   "total_trade_count": 77821,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/324",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/324/params",
+    "chart_data": "https://aguhuice.com/api/results/324/chart-data",
+    "symbols": "https://aguhuice.com/api/results/324/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-088",
+   "strategy_id": "pv05d_eom_ease_of_movement",
+   "job_id": 325,
+   "title": "CF-088_pv05d_eom_ease_of_movement",
+   "total_trade_count": 125325,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/325",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/325/params",
+    "chart_data": "https://aguhuice.com/api/results/325/chart-data",
+    "symbols": "https://aguhuice.com/api/results/325/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-089",
+   "strategy_id": "pv05e_vpt_volume_price_trend",
+   "job_id": 326,
+   "title": "CF-089_pv05e_vpt_volume_price_trend",
+   "total_trade_count": 197219,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/326",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/326/params",
+    "chart_data": "https://aguhuice.com/api/results/326/chart-data",
+    "symbols": "https://aguhuice.com/api/results/326/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-090",
+   "strategy_id": "pv06a_alpha083_high_rank_mvp",
+   "job_id": 327,
+   "title": "CF-090_pv06a_alpha083_high_rank_mvp",
+   "total_trade_count": 801959,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/327",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/327/params",
+    "chart_data": "https://aguhuice.com/api/results/327/chart-data",
+    "symbols": "https://aguhuice.com/api/results/327/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-091",
+   "strategy_id": "pv06b_alpha099_high_rank_mvp",
+   "job_id": 328,
+   "title": "CF-091_pv06b_alpha099_high_rank_mvp",
+   "total_trade_count": 829110,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/328",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/328/params",
+    "chart_data": "https://aguhuice.com/api/results/328/chart-data",
+    "symbols": "https://aguhuice.com/api/results/328/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-092",
+   "strategy_id": "pv06c_alpha042_high_rank_mvp",
+   "job_id": 329,
+   "title": "CF-092_pv06c_alpha042_high_rank_mvp",
+   "total_trade_count": 335277,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/329",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/329/params",
+    "chart_data": "https://aguhuice.com/api/results/329/chart-data",
+    "symbols": "https://aguhuice.com/api/results/329/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-093",
+   "strategy_id": "tf01a_ma_cross_20_120",
+   "job_id": 330,
+   "title": "CF-093_tf01a_ma_cross_20_120",
+   "total_trade_count": 334304,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/330",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/330/params",
+    "chart_data": "https://aguhuice.com/api/results/330/chart-data",
+    "symbols": "https://aguhuice.com/api/results/330/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-094",
+   "strategy_id": "tf01b_triple_ma_alignment",
+   "job_id": 331,
+   "title": "CF-094_tf01b_triple_ma_alignment",
+   "total_trade_count": 82946,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/331",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/331/params",
+    "chart_data": "https://aguhuice.com/api/results/331/chart-data",
+    "symbols": "https://aguhuice.com/api/results/331/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-095",
+   "strategy_id": "tf01c_sma200_bull_filter",
+   "job_id": 332,
+   "title": "CF-095_tf01c_sma200_bull_filter",
+   "total_trade_count": 63360,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/332",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/332/params",
+    "chart_data": "https://aguhuice.com/api/results/332/chart-data",
+    "symbols": "https://aguhuice.com/api/results/332/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-096",
+   "strategy_id": "tf01d_dema_tema_cross",
+   "job_id": 333,
+   "title": "CF-096_tf01d_dema_tema_cross",
+   "total_trade_count": 361043,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/333",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/333/params",
+    "chart_data": "https://aguhuice.com/api/results/333/chart-data",
+    "symbols": "https://aguhuice.com/api/results/333/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-097",
+   "strategy_id": "tf01e_hma_cross_20",
+   "job_id": 334,
+   "title": "CF-097_tf01e_hma_cross_20",
+   "total_trade_count": 94220,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/334",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/334/params",
+    "chart_data": "https://aguhuice.com/api/results/334/chart-data",
+    "symbols": "https://aguhuice.com/api/results/334/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-098",
+   "strategy_id": "tf01f_ema_channel_breakout",
+   "job_id": 335,
+   "title": "CF-098_tf01f_ema_channel_breakout",
+   "total_trade_count": 171403,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/335",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/335/params",
+    "chart_data": "https://aguhuice.com/api/results/335/chart-data",
+    "symbols": "https://aguhuice.com/api/results/335/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-099",
+   "strategy_id": "tf01g_kama_adaptive_cross",
+   "job_id": 336,
+   "title": "CF-099_tf01g_kama_adaptive_cross",
+   "total_trade_count": 474154,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/336",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/336/params",
+    "chart_data": "https://aguhuice.com/api/results/336/chart-data",
+    "symbols": "https://aguhuice.com/api/results/336/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-100",
+   "strategy_id": "tf01h_wma_cross_5_20",
+   "job_id": 337,
+   "title": "CF-100_tf01h_wma_cross_5_20",
+   "total_trade_count": 637538,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/337",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/337/params",
+    "chart_data": "https://aguhuice.com/api/results/337/chart-data",
+    "symbols": "https://aguhuice.com/api/results/337/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-101",
+   "strategy_id": "tf01i_ma20_slope_positive",
+   "job_id": 338,
+   "title": "CF-101_tf01i_ma20_slope_positive",
+   "total_trade_count": 70694,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/338",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/338/params",
+    "chart_data": "https://aguhuice.com/api/results/338/chart-data",
+    "symbols": "https://aguhuice.com/api/results/338/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-102",
+   "strategy_id": "tf01j_pbo_waterfall",
+   "job_id": 339,
+   "title": "CF-102_tf01j_pbo_waterfall",
+   "total_trade_count": 57638,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/339",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/339/params",
+    "chart_data": "https://aguhuice.com/api/results/339/chart-data",
+    "symbols": "https://aguhuice.com/api/results/339/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-103",
+   "strategy_id": "tf02a_macd_golden_cross",
+   "job_id": 340,
+   "title": "CF-103_tf02a_macd_golden_cross",
+   "total_trade_count": 623009,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/340",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/340/params",
+    "chart_data": "https://aguhuice.com/api/results/340/chart-data",
+    "symbols": "https://aguhuice.com/api/results/340/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-104",
+   "strategy_id": "tf02b_macd_zero_second_cross",
+   "job_id": 341,
+   "title": "CF-104_tf02b_macd_zero_second_cross",
+   "total_trade_count": 363640,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/341",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/341/params",
+    "chart_data": "https://aguhuice.com/api/results/341/chart-data",
+    "symbols": "https://aguhuice.com/api/results/341/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-105",
+   "strategy_id": "tf02c_macd_histogram_slope",
+   "job_id": 342,
+   "title": "CF-105_tf02c_macd_histogram_slope",
+   "total_trade_count": 263768,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/342",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/342/params",
+    "chart_data": "https://aguhuice.com/api/results/342/chart-data",
+    "symbols": "https://aguhuice.com/api/results/342/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-106",
+   "strategy_id": "tf02d_macd_divergence_bottom",
+   "job_id": 343,
+   "title": "CF-106_tf02d_macd_divergence_bottom",
+   "total_trade_count": 182511,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/343",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/343/params",
+    "chart_data": "https://aguhuice.com/api/results/343/chart-data",
+    "symbols": "https://aguhuice.com/api/results/343/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-107",
+   "strategy_id": "tf02e_dif_zero_breakthrough",
+   "job_id": 344,
+   "title": "CF-107_tf02e_dif_zero_breakthrough",
+   "total_trade_count": 437139,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/344",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/344/params",
+    "chart_data": "https://aguhuice.com/api/results/344/chart-data",
+    "symbols": "https://aguhuice.com/api/results/344/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-108",
+   "strategy_id": "tf03_adx_trend_filter",
+   "job_id": 345,
+   "title": "CF-108_tf03_adx_trend_filter",
+   "total_trade_count": 74984,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/345",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/345/params",
+    "chart_data": "https://aguhuice.com/api/results/345/chart-data",
+    "symbols": "https://aguhuice.com/api/results/345/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-109",
+   "strategy_id": "tf04_supertrend_breakout",
+   "job_id": 346,
+   "title": "CF-109_tf04_supertrend_breakout",
+   "total_trade_count": 153504,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/346",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/346/params",
+    "chart_data": "https://aguhuice.com/api/results/346/chart-data",
+    "symbols": "https://aguhuice.com/api/results/346/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-110",
+   "strategy_id": "tf05a_ichimoku_cloud_breakout",
+   "job_id": 347,
+   "title": "CF-110_tf05a_ichimoku_cloud_breakout",
+   "total_trade_count": 60911,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/347",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/347/params",
+    "chart_data": "https://aguhuice.com/api/results/347/chart-data",
+    "symbols": "https://aguhuice.com/api/results/347/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-111",
+   "strategy_id": "tf06a_dual_momentum",
+   "job_id": 348,
+   "title": "CF-111_tf06a_dual_momentum",
+   "total_trade_count": 1873483,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/348",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/348/params",
+    "chart_data": "https://aguhuice.com/api/results/348/chart-data",
+    "symbols": "https://aguhuice.com/api/results/348/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-112",
+   "strategy_id": "tf07a_aroon_trend_confirm",
+   "job_id": 349,
+   "title": "CF-112_tf07a_aroon_trend_confirm",
+   "total_trade_count": 56256,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/349",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/349/params",
+    "chart_data": "https://aguhuice.com/api/results/349/chart-data",
+    "symbols": "https://aguhuice.com/api/results/349/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-113",
+   "strategy_id": "tf07b_aroon_oscillator",
+   "job_id": 350,
+   "title": "CF-113_tf07b_aroon_oscillator",
+   "total_trade_count": 76681,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/350",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/350/params",
+    "chart_data": "https://aguhuice.com/api/results/350/chart-data",
+    "symbols": "https://aguhuice.com/api/results/350/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-114",
+   "strategy_id": "tf07c_parabolic_sar_flip",
+   "job_id": 351,
+   "title": "CF-114_tf07c_parabolic_sar_flip",
+   "total_trade_count": 119579,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/351",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/351/params",
+    "chart_data": "https://aguhuice.com/api/results/351/chart-data",
+    "symbols": "https://aguhuice.com/api/results/351/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-115",
+   "strategy_id": "tf07d_vortex_indicator",
+   "job_id": 352,
+   "title": "CF-115_tf07d_vortex_indicator",
+   "total_trade_count": 437053,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/352",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/352/params",
+    "chart_data": "https://aguhuice.com/api/results/352/chart-data",
+    "symbols": "https://aguhuice.com/api/results/352/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-116",
+   "strategy_id": "tf07e_ravi_trend_strength",
+   "job_id": 353,
+   "title": "CF-116_tf07e_ravi_trend_strength",
+   "total_trade_count": 113085,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/353",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/353/params",
+    "chart_data": "https://aguhuice.com/api/results/353/chart-data",
+    "symbols": "https://aguhuice.com/api/results/353/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-117",
+   "strategy_id": "tf08a_tsi_zero_cross",
+   "job_id": 354,
+   "title": "CF-117_tf08a_tsi_zero_cross",
+   "total_trade_count": 114259,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/354",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/354/params",
+    "chart_data": "https://aguhuice.com/api/results/354/chart-data",
+    "symbols": "https://aguhuice.com/api/results/354/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  },
+  {
+   "cf_id": "CF-118",
+   "strategy_id": "tf08b_dsi_zero_cross",
+   "job_id": 355,
+   "title": "CF-118_tf08b_dsi_zero_cross",
+   "total_trade_count": 438661,
+   "result_contract": "verified",
+   "period": {
+    "start": "2009-01-05",
+    "end": "2026-10-30"
+   },
+   "owner": "17157845743",
+   "urls": {
+    "page": "https://aguhuice.com/saas/jobs/355",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/355/params",
+    "chart_data": "https://aguhuice.com/api/results/355/chart-data",
+    "symbols": "https://aguhuice.com/api/results/355/symbols",
+    "showcase": "https://aguhuice.com/saas/showcase"
+   }
+  }
+ ]
+}
