@@ -158,3 +158,25 @@ def test_state_explicit_factor_basis():
     fetched = client.get(f"/game/api/sessions/{state['id']}")
     assert fetched.status_code == 200
     assert fetched.get_json()["factor_basis"] == FACTOR_BASIS_QFQ_ANCHOR_V1
+
+
+# ---------------------------------------------------------------- T4：average_price 登记但保持 skipped
+
+
+def test_average_price_formula_registered_but_skipped(provider, monkeypatch):
+    """T4：原始公式登记为 amount×10/vol，但审计必须保持 skipped。
+
+    Bar（core/models.py）无复权比率字段，bars_from_rows 只缩放 OHLC/pre_close、
+    volume/amount 原值透传 → 前复权 Bar 上算出的是原始均价，禁止冒充前复权均价。
+    启用条件：Bar 携带复权比率，或上游透传原生 vwap + 锚点（等 WSL 补齐输入）。
+    """
+    assert validation.AVERAGE_PRICE_RAW_FORMULA == "amount * 10 / vol"
+    session = provider.create_session(seed=7)
+    monkeypatch.setattr(validation, "factor_catalog", lambda: [{
+        "canonical": AVG, "column": "ema_5", "price_basis": "average_price",
+    }])
+    factors = {i: {AVG: 12.34} for i in range(len(session.bars))}
+    audit = validation.audit_price_factors(session.bars, factors, (AVG,))
+    assert audit["skipped"].get(AVG) == "average_price", "登记公式不等于启用审计"
+    assert AVG not in audit["canonicals"]
+    assert audit["mismatches"] == 0

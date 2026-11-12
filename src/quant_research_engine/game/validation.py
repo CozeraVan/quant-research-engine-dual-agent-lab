@@ -14,6 +14,16 @@ from quant_research_engine.game.factors import factor_catalog
 ABS_TOLERANCE = 0.02
 REL_TOLERANCE = 2e-3
 
+# average_price 原始口径公式登记（46 号任务单 T4，口径以任务单为准）：
+#   原始均价（元/股）= amount×10/vol（amount 千元→元，vol 手→股）；
+#   上游若提供原生 vwap，优先用 vwap。展示口径需再乘 adj_factor/锚点
+#   （锚点 = 最后一根可用 adj_factor）。
+# 当前保持 skipped：core/models.py 的 Bar 没有复权比率字段，game/data.py 的
+# bars_from_rows 只缩放 OHLC/pre_close，volume/amount 原值透传——在前复权 Bar
+# 上算 amount*10/volume 得到的是**原始均价**，禁止冒充前复权均价。
+# 等 WSL 补齐输入后启用（Bar 携带复权比率，或上游透传原生 vwap + 锚点）。
+AVERAGE_PRICE_RAW_FORMULA = "amount * 10 / vol"
+
 _EMA_RE = re.compile(r"^ema_(\d+)$")
 _SMA_RE = re.compile(r"^sma_(\d+)$")
 _BOLL_RE = re.compile(r"^(bbl|bbm|bbu)_(\d+)_([0-9.]+)")
@@ -92,10 +102,11 @@ def _expected_series(column: str, closes, cache: dict):
 
 
 def _basis_closes(bars, basis: str | None) -> list[float] | None:
-    """按 price_basis 取重算输入序列；公式未登记的口径返回 None（不审计）。
+    """按 price_basis 取重算输入序列；不可重算的口径返回 None（不审计）。
 
-    typical_price 用行业标准 (high+low+close)/3；average_price 等口径的
-    上游公式未在仓库登记，宁可跳过也不按 close 误报（skipped 显式可见）。
+    typical_price 用行业标准 (high+low+close)/3。average_price 公式已登记
+    （AVERAGE_PRICE_RAW_FORMULA），但 Bar 缺复权比率、算出的是原始均价，
+    故保持 skipped——等 WSL 补齐输入后启用，禁止冒充前复权均价（46 号 T4）。
     """
     if basis in (None, "", "close"):
         return [float(bar.close) for bar in bars]
