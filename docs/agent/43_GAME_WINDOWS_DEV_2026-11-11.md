@@ -57,3 +57,7 @@
   2. 复权口径接入 `factor_basis` 契约（或显式声明独立口径并记录理由）
   3. 呈现层复用 `factor-layout.js`
   4. 持久化与公网中继、独立化（后续单独立项，远期）
+- 2026-11-12 派单：待办 1 已由 Windows 侧完成（`game/windows-dev` 分支 `d10cfb1` + `f6385d8`，
+  主 Agent 复核 34 passed）；本轮整改与四问裁定见 `46_GAME_WINDOWS_TASKS_2026-11-12.md`
+  （T1 样本单位 100 倍偏差为唯一阻塞项，T2 测试入库 / T3 factor_basis / T4 average_price 口径 /
+  T5 真实脱敏样本）。待办 2 对应 46 号 T3，待办 3、4 不变。

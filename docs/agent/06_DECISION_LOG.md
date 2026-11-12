@@ -1596,3 +1596,10 @@ No open questions remain.
 - Alternatives: 直接从备份恢复旧 job——否决（数据已判污染，用户要求删除且不重建）；先跑全量再修问题——否决（违反先小样本验证纪律）。
 - Impact: 新增 3 个策略 YAML + `tests/test_classic_strategies.py` 7 例；小样本 5 只股票 × 近两年三策略均跑通。日更滚动器阻塞已解除：`scripts/showcase_roller.py` 删除 `JOB_RUN_MAP={58,66,74}`，改由 ECS `/api/worker/showcase/jobs` 下发 `summary.run_id` 定位本地基线 run。
 - Owner: KIMI_CODE（用户 2026-11-01 指示继续未完成任务）
+
+### 2026-11-12: game 开局配置白名单与 _state 三字段按只增不改接受（QRE-GAME-CONFIG-WHITELIST-AND-STATE-ADDITIVE）
+- Decision: 同意修订 22 号验收基准，开局配置改白名单校验：`game_bars ∈ {250, 750, 1250}`、`initial_cash ∈ {100000, 500000, 1000000, 5000000}`，白名单为服务端最终闸（前端下拉仅便利，篡改请求体必须被拒）；`1250 / 1,000,000` 仍为默认基线，旧验收结论不作废。S3「播放/暂停/单步/倍速」计入阶段 1 验收，但必须守 V1.1 回合制：播放/结算只收束当前一根 K 线随后立即停止，不得跨日自动连播，倍速只缩短单根收束动画时长。`_state` 新增 `initial_cash` / `return_pct` / `max_drawdown` 三键按「只增不改」接受，口径见 22 号 §16.3（`return_pct` 为小数比率非百分数；`max_drawdown` 恒 >= 0，负号由前端显示层自行处理）。
+- Reason: 默认值未变，既有 1250/100 万口径下的全部实测结论仍然成立，不需要重跑基线；S3 四控件本就写在 22 号 §8 阶段 1（L149）设计项内，补齐属还设计欠账而非扩范围；三字段为纯 additive，下游缺键按可选读取即可兼容存量快照与既有消费方，改既有字段语义反而会破坏兼容。
+- Alternatives: 「拒绝白名单、维持硬编码单基线」被否——会挡住短局/小资金的合理用例，且服务端校验比硬编码更能防篡改；「要求按新白名单重跑全部基线」被否——默认配置未变，重跑无信息增量；「后端直接输出负值 max_drawdown」被否——回撤幅度作为统计量恒非负，符号属展示层职责，后端翻符号会与 SaaS 结果页/审计脚本口径冲突。
+- Impact: 下游（SaaS 结果页、审计脚本、旧快照 JSON）对三键一律缺键不抛错、按可选读取；主仓当前 grep 无 `return_pct`/`max_drawdown`，三键与白名单均只存在于 Windows `game/windows-dev` 检出，属契约预告，cherry-pick 进 master 时才生效。T5（3–5 只脱敏真实快照，每只 1500 根 = warmup 250 + game 1250，同 SampleGameStore 六方法接口）与两项 tests 待办（6 项测试对齐入库 `tests/test_game_windows_fixes.py`、既有 tests 的 `read_text()` 补 `encoding="utf-8"`）归 WSL 主 Agent，不派回 Windows。
+- Owner: KIMI_CODE（用户 2026-11-12 指示裁定 Windows 第二轮回传）

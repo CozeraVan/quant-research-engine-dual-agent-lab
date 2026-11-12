@@ -2628,3 +2628,87 @@ CR：`CR-2026-10-29_dense_font_scale.md`、`CR-2026-10-29_public_ui_audit.md`。
 ### E. 状态
 - 变更提交在 `ui/auth-pages` 分支，未合入 / 未 push master；`gui/saas/app.py` 的既有
   Windows `getloadavg` 修复不在本分支提交内。待主 Agent 复核后统一部署。
+## 2026-11-12 Game Windows 侧复核与派单（46 号）
+
+### A. 本轮性质
+纯文档 + 派单，无 `src/` 改动，**无需部署 ECS**。
+
+### B. 复核对象
+Windows 分支 `game/windows-dev`：`d10cfb1`（预览链路：样本 store + `/game` 启动脚本）、
+`f6385d8`（审计按 `price_basis` 重算 + `kv-grid` grid 基类 + 样本 tick 精度）。
+改动 5 文件：`scripts/win/game_preview_sample.py`、`start-game-preview.ps1`、
+`start-game-preview.py`、`src/quant_research_engine/game/templates/game.html`、
+`src/quant_research_engine/game/validation.py`。
+
+### C. 我亲自跑过的证据
+- cwd=`/mnt/d/workzone/webui`（Windows 工作副本），用主仓 `.venv`：
+  `python -m pytest .tmp/game-windows-dev/test_game_fixes.py tests/test_trading_game_*.py -q`
+  → **34 passed in 3.85s**（此后代码未再改动）。
+- `git diff --check master...HEAD` 干净。
+
+### D. 未由我独立验证（仅看过对方日志/截图，如实单列）
+50/50 浏览器回合审计、桌面/移动截图、Windows 侧
+`test_factor_display_contract.py::TestPanelsAndMetadata` 的 2 个 error
+（本机缺 `psql`，环境问题，非本切片引入；WSL 同套 68 passed）。
+
+### E. 唯一阻塞项（46 号 T1）
+`scripts/win/game_preview_sample.py:181-182` 样本按「股 / 元」造 `vol`、`amount`，
+生产口径是「手 / 千元」，差 **100 倍**。裁定：`vol = vol_shares/100`、
+`amount = amount_yuan/1000`，随机序列与 tick 精度不变；加逐根断言
+`amount*10/vol ∈ [low, high]`，并要求先给红灯证据。
+
+### F. 其余派单要点
+- T2：`.tmp/game-windows-dev/test_game_fixes.py`（6 项）并入 `tests/`，
+  `pytest tests/test_trading_game_*.py` 单跑 ≥34 passed，新文件 `read_text(encoding="utf-8")`。
+- T3：game 状态显式返回 `factor_basis`，引用 `factor_basis.FACTOR_BASIS_QFQ_ANCHOR_V1`
+  （契约见 23 号 §4a）；`deploy/saas/scan-factor-basis.sh` 归 WSL 不改，不造换算层。
+- T4：`average_price` 原始口径 `amount×10/vol`（有原生 `vwap` 优先）；`core/models.py` 的 `Bar`
+  无复权比率字段，前复权 Bar 上算出的是原始均价 → **保持 skipped**，禁止冒充已对齐。
+- T5：等 WSL 交付 3–5 只脱敏真实快照（warmup 250 + game 1250 = 1500 根，候选上限 20，
+  已剔除 `920%.BJ`），走同一 `SampleGameStore` 六方法接口，不向 `qre_ui_dev` 导整库。
+
+### G. 四问裁定
+1. 预览行情样本：先合成、后补脱敏真实快照（T5），不导整库。
+2. `/game` 接入：本地预览继续独立 `create_game_app`；公网走 SaaS 挂载蓝图
+   （蓝图与 game API 归 Windows，注册/鉴权/部署归 WSL）；CLI 仅开发运维入口。
+3. `factor_basis`：统一到 `qfq_anchor_v1`（T3），不做第二套口径。
+4. `average_price`：登记公式但保持 skipped（T4），待 Bar 带复权比率或透传 vwap+锚点再启用。
+
+### H. 集成方式
+Windows 基线 `0eb10e2` 偏旧（master `999c24f`）。由主 Agent cherry-pick `d10cfb1`、`f6385d8`
+到 master，不合旧基线；Windows 侧不要 rebase master（含 Windows 非法文件名会 checkout 失败）。
+
+### I. 落盘位置
+- Windows 派单件：`D:\workzone\webui\docs\agent\46_GAME_WINDOWS_TASKS_2026-11-12.md`
+- WSL 权威副本：`docs/agent/46_GAME_WINDOWS_TASKS_2026-11-12.md`（同内容）
+- 43 号 §7 已追加本轮派单指引。
+
+### J. 状态
+未提交、未 push（等用户批准）。Windows 侧执行由其自行发起，文件落盘 = 已派单。
+
+## 2026-11-12 Windows game 第二轮回传：主 Agent 文档裁定（纯文档轮）
+
+### A. 本轮性质
+Windows agent（`D:\workzone\webui`，分支 `game/windows-dev`）第二轮回传，请主 Agent 裁定三件事、认领一件交付。本轮**只落文档**：未改业务代码、未合入 master、未部署 ECS、未提交。以下行号凡标注「Windows 侧」者，指该检出，主仓尚未包含。
+
+### B. 三条裁定结论
+1. **同意修订 22 号验收基准**：开局配置白名单 `game_bars ∈ {250,750,1250}`、`initial_cash ∈ {100000,500000,1000000,5000000}`；**1250 / 1,000,000 仍是默认基线，旧验收结论不作废、不需重跑**。非默认属额外用例，须记 `game_bars/initial_cash/seed`。白名单是服务端最终闸（22 号 §5），前端下拉只是便利，篡改请求体必须被拒。依据：`docs/agent/22_TRADING_GAME.md` §16.1、§2 L33-35、§13.4 L259 补注。
+2. **播放/暂停/单步/倍速计入阶段 1 验收**：22 号 §8 阶段 1（L149）本就是设计项，补齐属还欠账而非扩范围。**但必须守 V1.1 回合制（L56）：播放/结算只收束当前一根 K 线随后立即停止，不得跨日自动连播；倍速只缩短单根收束动画时长。** 实测若自动跨日推进，按 bug 修。依据：22 号 §16.2、L153-157 blockquote。
+3. **`_state` 三字段按「只增不改」接受**：`initial_cash`（float 元，透传 `DailyGameEngine(initial_cash=...)`）、`return_pct`（**小数比率非百分数**，`equity/initial_cash-1.0`，含摩擦，`initial_cash==0` 返 `0.0`）、`max_drawdown`（小数比率**恒 >= 0**，遍历 `equity_curve` 峰值回撤，只统计已结算日，首点 = initial_cash）。**符号纪律：前端自行 `-Math.abs()` 转负显示（Windows 侧 `game/templates/game.html:293`），后端不得改符号。** 下游缺键不抛错、按可选读取。依据：22 号 §16.3 口径表。
+
+### C. T5 认领（46 号）
+WSL 侧交付 **3–5 只脱敏真实快照**，与 `SampleGameStore` 六方法同构（`qualified_table` / `latest_trade_date` / `list_symbols_with_bars` / `load_raw_bars` / `load_factor_history` + `settings.tables.market_daily_table`），每只 **1500 根**（warmup 250 + game 1250）。匿名代码 + 日期整体偏移（保持交易日相对间隔与序列长度），复权锚点一局内固定；候选上限 20、剔除 `920%.BJ`；不向 `qre_ui_dev` 导整库、不直连生产行情库。**脚本与目录尚未创建**：拟建 `scripts/game/export_snapshot.py` + `data/game_snapshots/`，建后回填真实路径与文件名。依据：46 号 §11.2。
+
+### D. 认领的两项 tests 待办（46 号 §10，归 WSL）
+- 6 项新测试从 Windows `.tmp/game-windows-dev/test_game_fixes.py`（3907 B）对齐入库 `tests/test_game_windows_fixes.py`。
+- 既有 tests 的 `read_text()` 补 `encoding="utf-8"`。
+
+`average_price` 上游公式补齐后才解除 T4 `skipped`，本轮不动；禁止用前复权 `Bar.amount×10/volume` 冒充前复权均价。
+
+### E. 落盘位置
+- `docs/agent/22_TRADING_GAME.md`：§2 L33-35、L153-157、L259 补注 + 新增 §16（16.1–16.5）。
+- `docs/agent/46_GAME_WINDOWS_TASKS_2026-11-12.md`：新增 §11（11.1 三条结论+口径表 / 11.2 T5 契约 / 11.3 两项 tests）。已 `cp` 同步到 `/mnt/d/workzone/webui/docs/agent/`，`diff` 一致。
+- 本小节 + `docs/agent/06_DECISION_LOG.md` 一条 `QRE-GAME-CONFIG-WHITELIST-AND-STATE-ADDITIVE`。
+
+### F. 状态
+未提交、未 push（等用户批准）。本轮无代码改动，故未跑 pytest，仅跑 `scripts/check-progress-docs.sh` 文档闸。

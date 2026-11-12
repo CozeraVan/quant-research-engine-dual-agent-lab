@@ -19,6 +19,16 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-12 game 第二轮裁定已提交（纯文档）
+
+- Windows 第二轮回传的三项待裁定已定稿：`22_TRADING_GAME.md` §16、`46_GAME_WINDOWS_TASKS_2026-11-12.md` §11+§12；进度见 `05_PROGRESS.md`，决策条 `QRE-GAME-CONFIG-WHITELIST-AND-STATE-ADDITIVE` 见 `06_DECISION_LOG.md`。
+- **开局白名单**：`game_bars ∈ {250,750,1250}`、`initial_cash ∈ {10万,50万,100万,500万}`；默认仍 1250 / 100 万 → 22 号旧验收不作废、不重跑。白名单是**服务端最终闸**，前端下拉只是便利，篡改请求体必须被拒。
+- **播放控件**：播放/暂停/单步/倍速**计入阶段 1 验收**（22 号 §8 原有设计项，属还欠账）；守 V1.1 回合制——只收束当前一根 K 线随后立即停止，**不得跨日自动连播**，倍速只缩短单根动画时长。
+- **`_state` 三字段只增不改**：`initial_cash`（元，默认 100 万）、`return_pct`（小数比率、含摩擦）、`max_drawdown`（小数比率、恒非负，负号由前端转换）。三键尚未合入 master，属**契约预告**，下游缺键按可选读取不抛错。
+- **归 WSL（不派 Windows）**：T2 六项测试入库为 `tests/test_game_windows_fixes.py`、既有 tests 补 `encoding="utf-8"`、T5 脱敏快照生产（`scripts/game/export_snapshot.py` 与 `data/game_snapshots/` **尚未创建**）、SaaS 蓝图注册/鉴权/部署、`average_price` 上游输入。
+- **已派 Windows 第三轮 W1–W5**（46 号 §12）：W1 样本 `vol/amount` 单位（手 / 千元）是唯一阻塞 cherry-pick 项；集成由主 Agent 把 Windows 两提交 `d10cfb1`、`f6385d8` cherry-pick 到当前 master。
+- 本轮仅文档改动：**未 push、未部署 ECS**。phase = DONE。
+
 ### 2026-11-11 UI 与游戏 Windows 分离（方案 A）
 
 - 用户裁定：UI 与《我不是股神》都放 Windows 开发，WSL 只留核心功能且保持干净。

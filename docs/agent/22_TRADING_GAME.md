@@ -30,6 +30,9 @@
 - 默认游戏长度 5 年，另提供至少 1 年预热历史用于 EMA200 等指标。
 - 股票池要求：具备至少 6 年可用日线与必要指标数据；剔除历史不足、长期停牌和关键字段缺失标的。
 - 随机股票与随机窗口由服务端生成并保存随机种子，刷新不得重新抽取。
+- 开局配置白名单（服务端最终闸）：`game_bars ∈ {250, 750, 1250}`、`initial_cash ∈ {100000, 500000, 1000000, 5000000}`，取值定义在 `game/web.py:18-19`，建局请求在 `game/web.py:120` 逐项校验，白名单外的值一律拒绝。
+- **默认基线不变：`game_bars=1250`、`initial_cash=1,000,000`。** 请求缺键即用默认（`game/web.py:121`），故本文档既有验收结论继续有效，不作废。
+- 非默认配置属额外用例：验收记录须各自写明 `game_bars` / `initial_cash` / `seed` 以便复现，不得与默认基线结论混记。
 
 ### 匿名与时间映射
 
@@ -147,6 +150,12 @@
 - 买入、卖出、未成交、一字板失败、T+1；
 - 时间耗尽或总权益低于 10% 后结算并展示结果。
 
+> **裁定（2026-11-12，Windows 第二轮回传）**：Windows 侧本轮补上的 S3 播放动画
+> （播放/暂停/单步/倍速）**计入阶段 1 验收**——它是本节既有设计项的补欠账，不是范围扩张。
+> 但必须仍守 §V1.1「时间控制」约束：**播放与结算只收束当前这一根 K 线，随后立即停止，
+> 不得跨交易日自动连播**；倍速只缩短单根收束动画的时长，不改变「一根一决策」的节奏。
+> 若实测出现自动跨日推进，按 bug 修，不按新功能验收。
+
 ### 阶段 2：正确性与防作弊验收
 
 - API 无真实代码、真实日期和未来数据；
@@ -247,7 +256,7 @@
 - 游戏专项：`.venv/bin/python -m pytest tests/test_trading_game_*.py -q` → **41 passed in 0.57s**（复核轮复跑；V1.1 初次交付时为 38 passed）。
 - 全量回归：`.venv/bin/python -m pytest -q --ignore=tests/data_test` → **2864 passed, 6 skipped, 4 warnings in 140.33s**；另有 2 项失败 `tests/test_saas_public_beta_ops.py::TestConsoleOps::test_metrics_math` 与 `test_conversion_ratio_never_computed`，属既有时间依赖（`window=today` 按上海自然日统计，造数用 `now()-1h`，在 00:00–01:00 CST 运行时落到前一天导致 `total=0`），与本切片无关，测试文件本轮未改动。
 - 真实 Chromium（Playwright，1280×900 与 375×812，脚本 `.tmp/trading-game-v11/browser_audit.py`）一次完整通过：
-  1. 起始卡可见，建局后隐藏；`#kline` 有 canvas；回合显示“结算阶段 · 第 1 / 1250 个交易日”。
+  1. 起始卡可见，建局后隐藏；`#kline` 有 canvas；回合显示“结算阶段 · 第 1 / 1250 个交易日”（按默认 `game_bars=1250`；非默认配置按所选根数）。
   2. 进入决策：前收盘价/次日开盘价/涨停价/跌停价/交易状态齐全，`#order-price` 的 min/max 与页面一致；未下单时撤单按钮禁用。
   3. 限价买入 100 股 → 撤单（成功且按钮回到禁用）→ 再买入 → 结算：账户 100 股，成交记录 1 行，结算显示成交结果与费用。
   4. 下一回合卖出 100 股 → 结算：成交记录 2 行，账户 0 股（随机局曾出现一字板导致挂单未成交，引擎按规则拒绝成交；脚本在下一回合重试后成交）。
@@ -391,3 +400,47 @@ audit 的 11 处 mismatch **全部**来自这一列（`audit mismatch canonicals
 ### 15.7 范围声明
 
 本切片只改 `src/quant_research_engine/game/`（`factors.py`、`data.py`、`validation.py`、`session.py`、`web.py`、`templates/game.html`）、游戏专项测试与本文档。未部署 ECS、未 commit/push、未跑回测、未改主线共享源码。`AGENTS.md` 第 12 条「改代码后直接部署 ECS」与 CR 的「不部署」冲突，本切片按 CR 执行。
+
+## 16. 主 Agent 裁定（2026-11-12 Windows 第二轮回传）
+
+本轮只落文档：未改业务代码、未合入 master、未部署 ECS、未提交。凡标注「Windows 侧」的行号，指 `D:\workzone\webui` 的 `game/windows-dev` 检出（WSL 可见路径 `/mnt/d/workzone/webui`），主仓 `src/quant_research_engine/game/` 尚未包含这些改动。
+
+### 16.1 开局配置白名单：同意修订本文档，默认基线不变
+
+- 白名单取值：`game_bars ∈ {250, 750, 1250}`、`initial_cash ∈ {100000, 500000, 1000000, 5000000}`，已写入 §2「初始条件」（本文档 L33-35）。取值定义在 Windows 侧 `game/web.py:18-19`，建局请求逐项校验（Windows 侧 `game/web.py:120`），白名单外的值一律拒绝。
+- **默认基线仍是 `game_bars=1250`、`initial_cash=1,000,000`**；请求缺键即用默认（Windows 侧 `game/web.py:121`）。因此 §13.4 与 §15.5 的既有验收结论继续有效，**不作废、不需重跑**。§13.4 的 Chromium 审计步骤（L259）已就地补注「按默认 `game_bars=1250`；非默认配置按所选根数」。§15.5 验证正文不含具体根数与资金额，无需修订。
+- 非默认配置属**额外用例**：验收记录须各自写明 `game_bars` / `initial_cash` / `seed` 以便复现，不得与默认基线结论混记。
+- 白名单是**服务端最终闸**，对应 §5 防作弊硬规则。前端下拉（Windows 侧 `game/templates/game.html:536` 请求体 `{game_bars, initial_cash}`）只是便利；篡改请求体必须被服务端拒绝，只改前端不算完成。
+- 主仓当前可引用的证据仅 `src/quant_research_engine/game/engine.py:26`（`initial_cash: float = 1_000_000.0`）与 `:48`（破产线 `equity < initial_cash * 0.10`）；白名单常量尚未进主仓。
+
+### 16.2 S3 播放/暂停/单步/倍速：计入阶段 1 验收，但必须守住回合制
+
+- 这四个控件本就是 §8 阶段 1 的设计项（L149「- 播放/暂停/单步/倍速；」），Windows 侧本轮把它们补齐属**还设计欠账，不是扩范围**，因此计入第一阶段验收。
+- 硬约束不变（§2 时间控制 L53-56、本节 L153-157 注记、§14 L314/L324）：**播放/结算只收束当前一根 K 线，随后立即停止，不得跨日自动连播**；倍速只缩短单根收束动画的时长，不改变「一次只推进一根」的语义。结算后当日禁交易，时间只能前进。
+- 实测若出现自动跨日推进，按 bug 修，不得以「动画需要」为由放宽。
+
+### 16.3 `_state` 三个 additive 字段：按「只增不改」接受，口径如下
+
+| 字段 | 类型 / 单位 | 口径 | 边界 |
+|---|---|---|---|
+| `initial_cash` | float，元 | 取自 16.1 白名单，默认 `1_000_000.0` | 透传 `DailyGameEngine(initial_cash=...)`（Windows 侧 `game/session.py:34`）；破产线 `equity < initial_cash * 0.10`（主仓 `game/engine.py:48`） |
+| `return_pct` | **小数比率，不是百分数** | `engine.equity / engine.initial_cash - 1.0`，含摩擦（Windows 侧 `game/session.py:69-73`） | `initial_cash == 0` 时返回 `0.0` |
+| `max_drawdown` | 小数比率，**恒 >= 0** | 遍历 `equity_curve`：`peak = max(peak, v)`、`dd = max(dd, (peak - v) / peak)`（Windows 侧 `game/session.py:75-84`） | 只统计已结算日；峰值序列首点 = `initial_cash`（Windows 侧 `game/session.py:36`） |
+
+- **符号纪律**：`max_drawdown` 后端恒为非负。前端（Windows 侧 `game/templates/game.html:293`）用 `-Math.abs(state.max_drawdown)` 自行转负显示；**后端不得改符号**。`return_pct` 名字带 pct，但值是小数比率，前端乘 100 展示。
+- **向后兼容**：三键输出在 Windows 侧 `game/web.py:58-60`。主仓 grep 无 `return_pct` / `max_drawdown`，即**三键尚未合入 master，本条属契约预告**。下游（SaaS 结果页、审计脚本、旧快照 JSON）必须**缺键不抛错、按可选读取**；不得据本条断言主仓已有该字段。
+- 合入时机：与 16.1 白名单、16.2 动画一并 cherry-pick 进 master 时才在主仓生效（见 `05_PROGRESS.md` 2026-11-12 小节）。
+
+### 16.4 T5 脱敏真实快照：WSL 认领，契约先定，脚本尚未创建
+
+- WSL 负责产出 **3–5 只**脱敏真实快照，接口与 Windows 侧 `scripts/win/game_preview_sample.py` 的 `SampleGameStore`（L230 起）同构：1 个 `settings` 类属性 + 6 个方法，逐条签名见 `46_GAME_WINDOWS_TASKS_2026-11-12.md` §11。
+- **每只 1500 根 K 线** = `warmup_bars 250 + game_bars 1250`。`GameSession`（Windows 侧 `game/session.py:24`）以 `required = warmup_bars + game_bars` 校验，不足抛 `GameRuleError("历史数据不足：至少需要 {required} 根 K 线")`。非默认 `game_bars` 由 Windows 侧按 `warmup_bars + game_bars` 自行截取，WSL 只保证 1500 根足量。
+- 脱敏规则遵 §2：真实名称/代码/日期不返前端（L39），匿名示例 `B` / `X00001B`（L40）；日期整体偏移，**保持交易日相对间隔与序列长度**；复权锚点一局内固定（L43）。
+- 取数边界：候选上限 20 只、已剔除 `920%.BJ`；**不向 `qre_ui_dev` 导整库、不直连生产行情库**。
+- **路径状态（照实记录）**：拟建 `scripts/game/export_snapshot.py` 与 `data/game_snapshots/`，**两者尚未创建**（本轮 Glob 实测无匹配）。本节只定契约；脚本与快照落盘后再回填真实路径与文件名，不得把拟建路径当既有证据引用。
+
+### 16.5 一并认领 46 号 §10 的两项 tests 待办（归 WSL，不派回 Windows）
+
+- 把 Windows `.tmp/game-windows-dev/test_game_fixes.py` 的 6 项测试对齐入库为 `tests/test_game_windows_fixes.py`。
+- 既有 tests 的 `read_text()` 补 `encoding="utf-8"`。
+- `average_price` 上游输入补齐（46 号 §10）到位后才解除 T4 的 `skipped`；本轮不动该项，也不得用前复权 `Bar.amount×10/volume` 冒充前复权均价。
