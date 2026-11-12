@@ -208,7 +208,8 @@ html,body{height:100%}
     if (!state) return;
     const open = state.phase === 'open';
     $('stock-title').textContent = state.display_name + ' · ' + state.display_code;
-    const day = Math.max(1, state.cursor - state.warmup_bars + 1);
+    // state.cursor 已含 +1（web.py _state），此处不再 +1：第 N 回合显示 N，终局 1250 而非 1251
+    const day = Math.max(1, state.cursor - state.warmup_bars);
     $('phase').textContent = (open ? '决策阶段' : '结算阶段') + ' · 第 ' + day + ' / ' + state.game_bars + ' 个交易日';
     $('btn-advance').disabled = busy || open || state.finished;
     $('btn-settle').disabled = busy || !open || state.finished;
