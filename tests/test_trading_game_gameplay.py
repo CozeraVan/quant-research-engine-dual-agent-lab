@@ -81,3 +81,12 @@ def test_api_options_validation_and_state():
     assert default.status_code == 200
     d = default.get_json()
     assert d["game_bars"] == 1250 and d["initial_cash"] == 1_000_000
+
+
+def test_decision_shortcuts_present_in_template():
+    """S2 纯前端快捷：结构守卫（沿用 disabled-visual 模板正则手法）。"""
+    html = (REPO / "src/quant_research_engine/game/templates/game.html").read_text(encoding="utf-8")
+    for marker in ('id="pos-25"', 'id="pos-50"', 'id="pos-100"',
+                   'id="btn-fill-open"', 'id="btn-wait"'):
+        assert marker in html, f"缺少快捷控件 {marker}"
+    assert "currentPositionQty" in html, "缺少仓位百分比计算函数"

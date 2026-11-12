@@ -34,6 +34,10 @@ html,body{height:100%}
 #order-form label{display:flex;flex-direction:column;gap:3px;font-size:13px}
 #order-form .wide{grid-column:1/-1}
 #order-form input,#order-form select{height:34px;min-width:0;padding:4px 9px}
+/* S2 决策快捷行：仓位百分比/填开盘价/观望，纯前端填单 */
+.shortcut-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.shortcut-row .shortcut-label{font-size:12.5px;color:var(--ink);margin-right:2px}
+.shortcut-row .btn{flex:1;min-width:62px;min-height:30px;padding:4px 6px;font-size:12.5px}
 /* 禁用态视觉：游戏页只加载 lab-theme.css（无 style.css 的 button:disabled），
    不补则结算阶段「播放并结算/提交委托」disabled 仍实心紫色、看似可点。
    选择器特异性压过 .btn-primary:hover / .btn:active 的抬升与扫光。 */
@@ -136,6 +140,14 @@ html,body{height:100%}
             <label>方向<select id="order-side"><option value="buy">买入</option><option value="sell">卖出</option></select></label>
             <label>数量（股）<input id="order-quantity" type="number" step="100" min="100" value="100" required></label>
             <label class="wide">委托价<input id="order-price" type="number" step="0.01" min="0.01" required></label>
+            <div class="wide shortcut-row">
+              <span class="shortcut-label">仓位</span>
+              <button class="btn btn-ghost" id="pos-25" type="button">25%</button>
+              <button class="btn btn-ghost" id="pos-50" type="button">50%</button>
+              <button class="btn btn-ghost" id="pos-100" type="button">100%</button>
+              <button class="btn btn-ghost" id="btn-fill-open" type="button">填开盘价</button>
+              <button class="btn btn-ghost" id="btn-wait" type="button">本回合观望</button>
+            </div>
             <div class="game-actions wide">
               <button class="btn btn-primary" id="btn-order" type="submit">提交委托</button>
               <button class="btn btn-ghost" id="btn-cancel" type="button">撤销委托</button>
@@ -224,7 +236,8 @@ html,body{height:100%}
     $('btn-advance').disabled = busy || open || state.finished;
     $('btn-settle').disabled = busy || !open || state.finished;
     $('btn-factors').disabled = busy;
-    ['order-side', 'order-quantity', 'order-price', 'btn-order'].forEach(id => { $(id).disabled = busy || !open || state.finished; });
+    ['order-side', 'order-quantity', 'order-price', 'btn-order',
+     'pos-25', 'pos-50', 'pos-100', 'btn-fill-open', 'btn-wait'].forEach(id => { $(id).disabled = busy || !open || state.finished; });
     $('btn-cancel').disabled = busy || !open || state.finished || !state.pending_order;
     document.querySelectorAll('#factor-groups input').forEach(input => { input.disabled = busy; });
     $('finish-note').classList.toggle('hidden', !state.finished);
@@ -454,6 +467,39 @@ html,body{height:100%}
     try { await withBusy(async () => setState(await api(sessionUrl('/close'), {method: 'POST'}))); $('order-error').textContent = ''; }
     catch (error) { $('order-error').textContent = error.message; }
   }
+  // S2 决策快捷（纯前端填单，服务端校验仍为最终闸 22 号:97）。
+  // 仓位按钮随方向切换：买按现金×pct/1.01/次日开盘取整百股（留 1% 费用余量），
+  // 卖按可卖×pct 取整百股。
+  function currentPositionQty(pct){
+    const d = state.decision || {};
+    if ($('order-side').value === 'buy'){
+      const open = d.next_open;
+      if (!open) return 0;
+      return Math.floor(state.account.cash * pct / 1.01 / open / 100) * 100;
+    }
+    return Math.floor(state.account.sellable * pct / 100) * 100;
+  }
+  function applyPosition(pct){
+    if (!state || state.phase !== 'open') return;
+    const qty = currentPositionQty(pct);
+    $('order-quantity').value = String(qty);
+    $('order-error').textContent = qty < 100
+      ? ($('order-side').value === 'buy' ? '可用资金不足一手（100 股）' : '可卖持仓不足一手（100 股）')
+      : '';
+  }
+  function fillOpen(){
+    if (!state || state.phase !== 'open') return;
+    const open = (state.decision || {}).next_open;
+    if (open != null) $('order-price').value = price(open);
+  }
+  async function waitRound(){
+    if (!state || state.phase !== 'open') return;
+    try {
+      if (state.pending_order) await withBusy(async () => setState(await api(sessionUrl('/cancel'), {method: 'POST'})));
+      $('order-pending').textContent = '本回合观望（不提交委托）';
+      $('order-error').textContent = '';
+    } catch (error) { $('order-error').textContent = error.message; }
+  }
   async function restore(){
     let id = null;
     try { id = localStorage.getItem('qre_game_session'); } catch (_) {}
@@ -470,6 +516,10 @@ html,body{height:100%}
     try { await withBusy(async () => setState(await api(sessionUrl('/cancel'), {method: 'POST'}))); }
     catch (error) { $('order-error').textContent = error.message; }
   });
+  [['pos-25', 0.25], ['pos-50', 0.5], ['pos-100', 1]].forEach(([id, pct]) =>
+    $(id).addEventListener('click', () => applyPosition(pct)));
+  $('btn-fill-open').addEventListener('click', fillOpen);
+  $('btn-wait').addEventListener('click', waitRound);
   $('order-form').addEventListener('submit', async event => {
     event.preventDefault();
     $('order-error').textContent = '';
