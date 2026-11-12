@@ -135,3 +135,26 @@ def test_template_kv_grid_display_grid():
             / "game.html").read_text(encoding="utf-8")
     assert re.search(r"\.kv-grid\s*\{[^}]*display:\s*grid", html), \
         ".kv-grid 需要 display:grid 基类（lab-theme.css 无此类）"
+
+
+# ---------------------------------------------------------------- T3：factor_basis 显式契约
+
+
+def test_state_explicit_factor_basis():
+    """T3：game 状态显式返回 factor_basis，值引用契约常量且在白名单内。
+
+    QRE-FACTOR-BASIS-CONTRACT 第 1 条：生成侧必须带 factor_basis，不许静默省略。
+    创建与 GET 两条状态出口都要带（同一 _state 序列化）。
+    """
+    from quant_research_engine.factor_basis import FACTOR_BASIS_QFQ_ANCHOR_V1, KNOWN_BASES
+    from quant_research_engine.game.web import create_game_app
+    app = create_game_app(PostgresGameDataProvider(SampleGameStore()), testing=True)
+    client = app.test_client()
+    created = client.post("/game/api/sessions")
+    assert created.status_code == 200
+    state = created.get_json()
+    assert state["factor_basis"] == FACTOR_BASIS_QFQ_ANCHOR_V1
+    assert state["factor_basis"] in KNOWN_BASES
+    fetched = client.get(f"/game/api/sessions/{state['id']}")
+    assert fetched.status_code == 200
+    assert fetched.get_json()["factor_basis"] == FACTOR_BASIS_QFQ_ANCHOR_V1

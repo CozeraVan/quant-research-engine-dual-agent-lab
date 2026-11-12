@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from flask import Flask, jsonify, render_template, request
 
+from quant_research_engine.factor_basis import FACTOR_BASIS_QFQ_ANCHOR_V1
 from quant_research_engine.game.engine import GameRuleError
 from quant_research_engine.game.factors import GROUP_LABELS, GROUP_ORDER, factor_catalog
 from quant_research_engine.game.session import GameSession
@@ -70,6 +71,10 @@ def _state(game: GameSession) -> dict:
         "selected": list(game.selected_canonicals),
         "loaded": sorted(game.loaded_canonicals),
         "price_anchor": getattr(game, "price_anchor", None),
+        # QRE-FACTOR-BASIS-CONTRACT 第 1 条：生成侧显式带口径标记（46 号 T3）。
+        # 游戏价格型因子已按 K 线前复权锚点换算（族白名单除以 anchor），
+        # 满足 qfq_anchor_v1；沿用现有 price_basis 逻辑，不新增换算层。
+        "factor_basis": FACTOR_BASIS_QFQ_ANCHOR_V1,
         "factor_audit": getattr(game, "factor_audit", None),
         "factor_errors": dict(getattr(game, "factor_errors", {}) or {}),
         "trades": [
