@@ -91,19 +91,45 @@ def _expected_series(column: str, closes, cache: dict):
     return None
 
 
+def _basis_closes(bars, basis: str | None) -> list[float] | None:
+    """按 price_basis 取重算输入序列；公式未登记的口径返回 None（不审计）。
+
+    typical_price 用行业标准 (high+low+close)/3；average_price 等口径的
+    上游公式未在仓库登记，宁可跳过也不按 close 误报（skipped 显式可见）。
+    """
+    if basis in (None, "", "close"):
+        return [float(bar.close) for bar in bars]
+    if basis == "typical_price":
+        return [(float(bar.high) + float(bar.low) + float(bar.close)) / 3.0 for bar in bars]
+    return None
+
+
 def audit_price_factors(bars, factors: dict, canonicals) -> dict:
-    """逐点比对因子表值与按游戏 K 线重算的值；只审计可重算的价格型列。"""
-    closes = [float(bar.close) for bar in bars]
+    """逐点比对因子表值与按游戏 K 线重算的值；只审计可重算的价格型列。
+
+    重算输入按 canonical 的 price_basis 选择（close / typical_price），
+    同口径共享缓存；未登记口径记入 skipped，不做跨口径误报。
+    """
     catalog = {item["canonical"]: item for item in factor_catalog()}
     cache: dict = {}
+    series_by_basis: dict = {}
     summary = {
         "checked": 0, "mismatches": 0,
         "max_abs_diff": 0.0, "max_rel_diff": 0.0,
-        "canonicals": {},
+        "canonicals": {}, "skipped": {},
     }
     for canonical in canonicals:
         item = catalog.get(canonical)
-        expected = None if item is None else _expected_series(item["column"], closes, cache)
+        if item is None:
+            continue
+        basis = item.get("price_basis") or "close"
+        if basis not in series_by_basis:
+            series_by_basis[basis] = _basis_closes(bars, basis)
+        closes = series_by_basis[basis]
+        if closes is None:
+            summary["skipped"][canonical] = basis
+            continue
+        expected = _expected_series(item["column"], closes, cache.setdefault(basis, {}))
         if expected is None:
             continue
         stats = {"checked": 0, "mismatches": 0, "max_abs_diff": 0.0}

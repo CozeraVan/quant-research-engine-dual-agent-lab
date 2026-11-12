@@ -171,8 +171,12 @@ def _build_symbol(symbol: str, seed: int) -> dict:
             open_ /= mult
         close = round(close, 2)
         open_ = round(open_, 2)
-        high = max(round(max(open_, close) * (1.0 + abs(rng.gauss(0.0, 0.004))), 2), open_, close)
-        low = min(round(min(open_, close) * (1.0 - abs(rng.gauss(0.0, 0.004))), 2), open_, close)
+        # high/low 与 open 至少差 1 tick：前复权缩放后余量仍 > 半 tick(0.005)，
+        # 开盘价限价委托必成交（与真实行情同 tick 精度的行为一致）。
+        high = max(round(max(open_, close) * (1.0 + abs(rng.gauss(0.0, 0.004))), 2),
+                   open_ + 0.01, close)
+        low = max(min(round(min(open_, close) * (1.0 - abs(rng.gauss(0.0, 0.004))), 2),
+                      open_ - 0.01, close), 0.01)
         pre_close = prev_close if not mult else round(prev_close / mult, 2)
         vol = round(rng.uniform(2e6, 9e6) * (1.0 + 0.4 * math.sin(i / 17.0)), 0)
         amount = round(vol * (open_ + close) / 2.0, 2)
