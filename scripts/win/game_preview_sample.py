@@ -186,6 +186,11 @@ def _build_symbol(symbol: str, seed: int) -> dict:
         amount_yuan = round(vol_shares * (open_ + close) / 2.0, 2)
         vol = vol_shares / 100.0
         amount = amount_yuan / 1000.0
+        # W1 逐根自检（46 号 §12）：均价（元/股）= amount*10/vol 必落在当日 [low, high]。
+        # 临时去掉 /1000 会让均价放大 1000 倍越界 → 红灯；随机序列与 tick 精度不受影响。
+        avg_price = amount * 10.0 / vol
+        assert low - 1e-6 <= avg_price <= high + 1e-6, (
+            f"样本均价越界 @{day}: amount*10/vol={avg_price:.4f} 不在 [{low}, {high}]")
         rows.append({
             "ts_code": symbol, "trade_date": day,
             "open": open_, "high": high, "low": low, "close": close,
