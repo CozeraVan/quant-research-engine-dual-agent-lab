@@ -31,6 +31,15 @@ html,body{height:100%}
 #order-form label{display:flex;flex-direction:column;gap:3px;font-size:13px}
 #order-form .wide{grid-column:1/-1}
 #order-form input,#order-form select{height:34px;min-width:0;padding:4px 9px}
+/* 禁用态视觉：游戏页只加载 lab-theme.css（无 style.css 的 button:disabled），
+   不补则结算阶段「播放并结算/提交委托」disabled 仍实心紫色、看似可点。
+   选择器特异性压过 .btn-primary:hover / .btn:active 的抬升与扫光。 */
+.game-shell .btn:disabled,.game-shell .btn:disabled:hover,.game-shell .btn:disabled:active{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.game-shell .btn-primary:disabled:hover{background:var(--lav)}
+.game-shell .btn-primary:disabled::after{display:none}
+.game-shell .btn-ghost:disabled:hover{background:#fff;border-color:var(--line)}
+#order-form input:disabled,#order-form select:disabled{opacity:.55;cursor:not-allowed}
+#factor-dialog input:disabled{opacity:.5;cursor:not-allowed}
 #round-info{margin-top:6px}
 #order-pending{font-size:13px;margin-top:6px;min-height:16px;font-variant-numeric:tabular-nums}
 #order-error{color:var(--up);font-size:13px;min-height:16px}
@@ -289,7 +298,9 @@ html,body{height:100%}
     const narrow = window.innerWidth < 700;
     const totalH = Math.max(300, box.clientHeight || 480);
     const left = narrow ? 44 : 58, right = narrow ? 8 : 14;
-    const topPad = 22, sliderH = 16, gap = 6;
+    // gap >= 12：副图轴左置后，相邻 pane 的上下刻度标签（10px 字）落在间距里，
+    // 6px 会叠字；14px 留出呼吸位（主图/量图高度由 bodyH 吸收，总高不变）。
+    const topPad = 22, sliderH = 16, gap = 14;
     const avail = Math.max(260, totalH - topPad - sliderH - 4);
     let paneH = 0;
     if (paneCount) paneH = Math.max(narrow ? 84 : 96, Math.floor(((avail - gap * (paneCount + 1)) * 0.24) / paneCount));
@@ -333,6 +344,19 @@ html,body{height:100%}
       histColors: {up: '#8B7FBE', down: '#8B7FBE'},
     });
     const yAxis = _gpo.yAxis;
+    // 副图轴统一左侧（与主图/量图一致）：游戏 grid 右边距仅 14px（窄屏 8px），
+    // 容纳不下共享出口默认的右轴刻度与轴名（SaaS 页右边距 56px），轴名会在右缘截断。
+    // pane 名改由多 title 组件放 pane 内左上（像素 top 跟随 grid，resize 重算）。
+    yAxis.forEach((axis, index) => {
+      if (index < 2) return;
+      axis.position = 'left';
+      axis.name = '';
+      axis.axisLabel = Object.assign({}, axis.axisLabel, {fontSize: 10});
+    });
+    const paneTitles = model.panes.map((pane, index) => ({
+      text: pane.name, left: grids[index + 2].left + 4, top: grids[index + 2].top + 2,
+      textStyle: {fontSize: 10, fontWeight: 400, color: '#6B6478'},
+    }));
     const series = [{name: 'K线', type: 'candlestick', data: candles, xAxisIndex: 0, yAxisIndex: 0},
       {name: '成交量', type: 'bar', data: volumes, xAxisIndex: 1, yAxisIndex: 1, itemStyle: {color: '#B7A6E8'}}];
     model.overlays.forEach((factor, index) => series.push({name: factor.name, type: 'line', data: factor.values,
@@ -347,7 +371,7 @@ html,body{height:100%}
     }
     chart.clear();
     chart.setOption({animation: false, tooltip: {trigger: 'axis'}, legend: {top: 0, type: 'scroll', textStyle: {fontSize: 11}},
-      grid: grids, xAxis, yAxis, series,
+      title: paneTitles, grid: grids, xAxis, yAxis, series,
       dataZoom: [{type: 'inside', xAxisIndex: grids.map((_, i) => i), start: Math.max(0, 100 - 240 / Math.max(1, dates.length) * 100), end: 100},
         {type: 'slider', xAxisIndex: grids.map((_, i) => i), bottom: 0, height: layout.sliderH, showDetail: false}]
     });

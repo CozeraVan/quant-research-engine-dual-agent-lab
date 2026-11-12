@@ -180,3 +180,15 @@ def test_average_price_formula_registered_but_skipped(provider, monkeypatch):
     assert audit["skipped"].get(AVG) == "average_price", "登记公式不等于启用审计"
     assert AVG not in audit["canonicals"]
     assert audit["mismatches"] == 0
+
+
+# ---------------------------------------------------------------- 视觉缺陷切片：禁用态可见
+
+
+def test_template_disabled_visual_state():
+    """禁用按钮必须有禁用视觉：游戏页只加载 lab-theme.css，不含 style.css 的
+    button:disabled 规则，结算阶段「播放并结算/提交委托」disabled 却仍实心紫色。"""
+    html = (REPO / "src" / "quant_research_engine" / "game" / "templates"
+            / "game.html").read_text(encoding="utf-8")
+    assert re.search(r"\.btn:disabled[^{]*\{[^}]*opacity", html), \
+        "game.html 需要 .btn:disabled 视觉规则（opacity + cursor）"
