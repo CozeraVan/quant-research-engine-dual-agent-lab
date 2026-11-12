@@ -11,7 +11,7 @@ tests/test_trading_game_web.py::FakeStore 的最小 store 契约提供**合成�
   settings.tables.market_daily_table / qualified_table(name)
   latest_trade_date() -> date
   list_symbols_with_bars(start, end) -> list[str]
-  load_raw_bars(symbol, start, end) -> list[dict]   # 原始价 + adj_factor
+  load_raw_bars(symbol, start, end) -> list[dict]   # 原始价 + adj_factor；vol=手、amount=千元（生产单位）
   load_factor_history(symbols, requests, start, end) -> DataFrame
       # 列：ts_code, trade_date, 每个 request.logical_name（canonical）一列
 
@@ -178,8 +178,14 @@ def _build_symbol(symbol: str, seed: int) -> dict:
         low = max(min(round(min(open_, close) * (1.0 - abs(rng.gauss(0.0, 0.004))), 2),
                       open_ - 0.01, close), 0.01)
         pre_close = prev_close if not mult else round(prev_close / mult, 2)
-        vol = round(rng.uniform(2e6, 9e6) * (1.0 + 0.4 * math.sin(i / 17.0)), 0)
-        amount = round(vol * (open_ + close) / 2.0, 2)
+        # 生产单位：vol=手（1 手=100 股）、amount=千元（46 号任务单 T1）。
+        # 先按股/元生成（随机序列与取整不变），再换算落库；
+        # 均价（元/股）= amount×1000/(vol×100) = amount*10/vol，逐根断言见
+        # tests/test_trading_game_windows_fixes.py::test_sample_vol_amount_production_units。
+        vol_shares = round(rng.uniform(2e6, 9e6) * (1.0 + 0.4 * math.sin(i / 17.0)), 0)
+        amount_yuan = round(vol_shares * (open_ + close) / 2.0, 2)
+        vol = vol_shares / 100.0
+        amount = amount_yuan / 1000.0
         rows.append({
             "ts_code": symbol, "trade_date": day,
             "open": open_, "high": high, "low": low, "close": close,
@@ -189,7 +195,10 @@ def _build_symbol(symbol: str, seed: int) -> dict:
         closes_raw.append(close)
         highs.append(high)
         lows.append(low)
-        vols.append(vol)
+        # 流动性样本因子保持股数输入：生产公式是 ts_mean(turnover_rate,5)
+        # （见 docs/agent/change_requests/factor_specs_p4p5p7.md），样本本就是合成占位，
+        # 沿用股数序列使因子值与单位修复前逐位一致，不被 vol 单位变更连带缩放。
+        vols.append(vol_shares)
         adjs.append(adj)
         prev_close = close
 
