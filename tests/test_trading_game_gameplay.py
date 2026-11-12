@@ -90,3 +90,12 @@ def test_decision_shortcuts_present_in_template():
                    'id="btn-fill-open"', 'id="btn-wait"'):
         assert marker in html, f"缺少快捷控件 {marker}"
     assert "currentPositionQty" in html, "缺少仓位百分比计算函数"
+
+
+def test_playback_animation_present_in_template():
+    """S3 单根播放动画 + 倍速：结构守卫。"""
+    html = (REPO / "src/quant_research_engine/game/templates/game.html").read_text(encoding="utf-8")
+    for marker in ('id="anim-speed"', 'id="btn-anim-pause"', 'id="btn-anim-skip"'):
+        assert marker in html, f"缺少播放控件 {marker}"
+    assert "startBarAnimation" in html, "缺少单根动画入口"
+    assert "dataset.anim" in html, "缺少可测试的动画状态反射"

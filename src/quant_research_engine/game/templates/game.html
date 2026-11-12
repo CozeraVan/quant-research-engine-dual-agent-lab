@@ -21,6 +21,10 @@ html,body{height:100%}
 #finish-note{color:var(--lav-deep);font-weight:700;font-size:13px;white-space:nowrap}
 .term-tools{display:flex;align-items:center;gap:6px}
 .term-tools .btn{min-height:34px;padding:5px 16px}
+/* S3 单根播放控件：倍速/暂停/跳过 */
+.anim-speed{display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--grey);white-space:nowrap}
+.anim-speed select{height:30px;padding:2px 6px;font-size:12.5px;color:var(--ink)}
+.term-tools .btn-sm{min-height:30px;padding:4px 10px;font-size:12.5px}
 .term-body{display:grid;grid-template-columns:minmax(0,1fr) 322px;gap:10px;min-height:0}
 .term-chart{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-1);padding:6px 6px 2px;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #kline{flex:1;min-height:0;width:100%}
@@ -117,6 +121,9 @@ html,body{height:100%}
       <div class="spacer"></div>
       <div id="finish-note" class="hidden"></div>
       <div class="term-tools">
+        <label class="anim-speed">倍速<select id="anim-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <button class="btn btn-ghost btn-sm" id="btn-anim-pause" type="button" disabled>暂停</button>
+        <button class="btn btn-ghost btn-sm" id="btn-anim-skip" type="button" disabled>跳过</button>
         <button class="btn btn-ghost" id="btn-factors" type="button">指标</button>
         <button type="button" class="tip-trigger" data-tip="均线与布林带叠加在主图，MACD 等指标进入下方副图。决策时主图显示委托区间、次日开盘与委托价；拖动下方滑块缩放，双击返回默认视口。" aria-label="图表规则">?</button>
       </div>
@@ -347,14 +354,17 @@ html,body{height:100%}
     }
     return {grids: grids, sliderH: sliderH};
   }
+  function candleItems(){
+    return (state.history || []).filter(row => [row.open, row.close, row.low, row.high].every(v => v != null))
+      .map(row => ({value: [row.open, row.close, row.low, row.high], name: 'T' + row.t,
+        itemStyle: {color: row.close >= row.open ? '#C93A3A' : '#1E8E5A', color0: row.close >= row.open ? '#1E8E5A' : '#C93A3A',
+          borderColor: row.close >= row.open ? '#C93A3A' : '#1E8E5A', borderColor0: row.close >= row.open ? '#1E8E5A' : '#C93A3A'}}));
+  }
   function renderChart(){
     if (!chart) chart = echarts.init($('kline'));
     const history = state.history || [];
     const dates = history.map(row => 'T' + row.t);
-    const candles = history.filter(row => [row.open, row.close, row.low, row.high].every(v => v != null))
-      .map(row => ({value: [row.open, row.close, row.low, row.high], name: 'T' + row.t,
-        itemStyle: {color: row.close >= row.open ? '#C93A3A' : '#1E8E5A', color0: row.close >= row.open ? '#1E8E5A' : '#C93A3A',
-          borderColor: row.close >= row.open ? '#C93A3A' : '#1E8E5A', borderColor0: row.close >= row.open ? '#1E8E5A' : '#C93A3A'}}));
+    const candles = candleItems();
     const volumes = history.filter(row => row.close != null).map(row => ({value: row.volume,
       itemStyle: {color: row.close >= row.open ? '#C93A3A' : '#1E8E5A'}}));
     const model = chartModel(), paneCount = model.panes.length;
@@ -406,6 +416,74 @@ html,body{height:100%}
         {type: 'slider', xAxisIndex: grids.map((_, i) => i), bottom: 0, height: layout.sliderH, showDetail: false}]
     });
     chart.resize();
+  }
+  // S3 单根收束动画（纯表现层）：close 返回后演示已揭盲末根的路径，
+  // 阳线 open→low→high→close、阴线 open→high→low→close，4 步 × 140ms / 倍速。
+  // 只改克隆出的末根 value，state.history 与服务端 open→closed 两阶段全程不动，
+  // 不自动进下一回合（22 号:53/315）；结算卡立即显示终值，动画仅图表。
+  const anim = {timer: null, active: false, paused: false, step: 0, steps: [], speed: 1, items: null};
+  function animDataset(v){ $('kline').dataset.anim = v; }
+  function renderAnimControls(){
+    $('btn-anim-pause').disabled = !anim.active;
+    $('btn-anim-skip').disabled = !anim.active;
+    $('btn-anim-pause').textContent = anim.paused ? '继续' : '暂停';
+  }
+  function applyAnimStep(){
+    anim.items[anim.items.length - 1].value = anim.steps[anim.step];
+    chart.setOption({series: [{data: anim.items}]});
+  }
+  function scheduleAnim(){
+    clearTimeout(anim.timer);
+    anim.timer = setTimeout(() => {
+      if (!anim.active || anim.paused) return;
+      anim.step += 1;
+      if (anim.step >= anim.steps.length){ finishAnim(); return; }
+      applyAnimStep();
+      scheduleAnim();
+    }, 140 / anim.speed);
+  }
+  function startBarAnimation(bar){
+    cancelAnim();
+    if (!chart || !bar) return;
+    const o = bar.open, c = bar.close, l = bar.low, h = bar.high;
+    if ([o, c, l, h].some(v => v == null)) return;
+    anim.items = candleItems();
+    if (!anim.items.length) return;
+    const up = c >= o;
+    anim.steps = up
+      ? [[o, o, o, o], [o, o, l, o], [o, o, l, h], [o, c, l, h]]
+      : [[o, o, o, o], [o, o, o, h], [o, o, l, h], [o, c, l, h]];
+    // 末根颜色固定为最终方向，避免中间 doji 步骤闪色
+    anim.items[anim.items.length - 1].itemStyle = {
+      color: up ? '#C93A3A' : '#1E8E5A', color0: up ? '#1E8E5A' : '#C93A3A',
+      borderColor: up ? '#C93A3A' : '#1E8E5A', borderColor0: up ? '#1E8E5A' : '#C93A3A'};
+    anim.active = true; anim.paused = false; anim.step = 0;
+    anim.speed = Number($('anim-speed').value) || 1;
+    animDataset('running'); renderAnimControls();
+    applyAnimStep();
+    scheduleAnim();
+  }
+  function finishAnim(){
+    clearTimeout(anim.timer);
+    if (anim.items && anim.items.length && anim.steps.length && chart){
+      anim.items[anim.items.length - 1].value = anim.steps[anim.steps.length - 1];
+      chart.setOption({series: [{data: anim.items}]});
+    }
+    anim.active = false; anim.paused = false; anim.timer = null;
+    animDataset('idle'); renderAnimControls();
+  }
+  function cancelAnim(){
+    clearTimeout(anim.timer);
+    if (anim.active && chart){ chart.setOption({series: [{data: candleItems()}]}); }
+    anim.active = false; anim.paused = false; anim.timer = null;
+    animDataset('idle'); renderAnimControls();
+  }
+  function togglePauseAnim(){
+    if (!anim.active) return;
+    anim.paused = !anim.paused;
+    animDataset(anim.paused ? 'paused' : 'running');
+    renderAnimControls();
+    if (anim.paused) clearTimeout(anim.timer); else scheduleAnim();
   }
   function renderFactorGroups(){
     $('factor-groups').innerHTML = catalogGroups.map((group, groupIndex) =>
@@ -460,12 +538,16 @@ html,body{height:100%}
     catch (error) { $('start-status').textContent = error.message; $('btn-new').disabled = false; }
   }
   async function advance(){
+    cancelAnim();
     try { await withBusy(async () => setState(await api(sessionUrl('/advance'), {method: 'POST'}))); $('order-error').textContent = ''; }
     catch (error) { $('order-error').textContent = error.message; }
   }
   async function closeDay(){
-    try { await withBusy(async () => setState(await api(sessionUrl('/close'), {method: 'POST'}))); $('order-error').textContent = ''; }
-    catch (error) { $('order-error').textContent = error.message; }
+    try {
+      await withBusy(async () => setState(await api(sessionUrl('/close'), {method: 'POST'})));
+      $('order-error').textContent = '';
+      if (state.settlement) startBarAnimation(state.settlement);
+    } catch (error) { $('order-error').textContent = error.message; }
   }
   // S2 决策快捷（纯前端填单，服务端校验仍为最终闸 22 号:97）。
   // 仓位按钮随方向切换：买按现金×pct/1.01/次日开盘取整百股（留 1% 费用余量），
@@ -520,6 +602,12 @@ html,body{height:100%}
     $(id).addEventListener('click', () => applyPosition(pct)));
   $('btn-fill-open').addEventListener('click', fillOpen);
   $('btn-wait').addEventListener('click', waitRound);
+  $('btn-anim-pause').addEventListener('click', togglePauseAnim);
+  $('btn-anim-skip').addEventListener('click', finishAnim);
+  $('anim-speed').addEventListener('change', () => {
+    anim.speed = Number($('anim-speed').value) || 1;
+    if (anim.active && !anim.paused) scheduleAnim();
+  });
   $('order-form').addEventListener('submit', async event => {
     event.preventDefault();
     $('order-error').textContent = '';
@@ -537,6 +625,7 @@ html,body{height:100%}
     resizeFrame = requestAnimationFrame(() => { if (chart) renderChart(); });
   });
   if (window.LabUI && LabUI.helpTips) LabUI.helpTips();
+  animDataset('idle'); renderAnimControls();
   Promise.all([restore(), (async () => {
     try {
       const data = await api('/game/api/factors');
