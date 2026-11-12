@@ -71,7 +71,12 @@ class PostgresGameDataProvider:
             return [dict(row) for row in conn.execute(
                 query, {"symbol": symbol, "start": start, "end": end}).mappings()]
 
-    def create_session(self, *, seed: int | None = None) -> GameSession:
+    def create_session(self, *, seed: int | None = None, game_bars: int | None = None,
+                       initial_cash: float | None = None) -> GameSession:
+        # S1：时长/资金为 per-session 覆盖；warmup 固定（保护 ema_250 预热下限）。
+        factory = self.factory
+        if game_bars is not None and game_bars != self.factory.game_bars:
+            factory = GameSessionFactory(warmup_bars=self.factory.warmup_bars, game_bars=game_bars)
         latest = self.latest_trade_date()
         # QRE-UNIVERSE-NEEQ-LEGACY：候选池剔除北交所三板残留代码。游戏要「上市足够久」
         # 的股票，而 920%.BJ 的 2021-11-15 之前历史正是脏数据（close 恒 1、30 股成交），
@@ -83,7 +88,7 @@ class PostgresGameDataProvider:
             load_start=date(2000, 1, 1))
         rng = random.Random(seed)
         rng.shuffle(symbols)
-        required = self.factory.warmup_bars + self.factory.game_bars
+        required = factory.warmup_bars + factory.game_bars
         for symbol in symbols[:self.candidate_limit]:
             if hasattr(self.store, "load_raw_bars"):
                 rows = self.store.load_raw_bars(symbol, date(2000, 1, 1), latest)
@@ -91,7 +96,10 @@ class PostgresGameDataProvider:
                 rows = self.load_raw_bars(symbol, date(2000, 1, 1), latest)
             bars = bars_from_rows(rows)
             if len(bars) >= required:
-                session = self.factory.create({symbol: bars}, seed=seed)
+                create_kwargs = {"seed": seed}
+                if initial_cash is not None:
+                    create_kwargs["initial_cash"] = initial_cash
+                session = factory.create({symbol: bars}, **create_kwargs)
                 session.price_anchor = qfq_anchor(rows)
                 session.factor_errors = {}
                 session.factor_audit = None

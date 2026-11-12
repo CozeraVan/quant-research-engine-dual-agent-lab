@@ -9,6 +9,9 @@
 html,body{height:100%}
 .wrap.game-shell{max-width:none;padding:12px 16px 14px}
 .game-shell #game-start{max-width:560px;margin:0 auto}
+.start-options{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.start-options label{display:flex;flex-direction:column;gap:4px;font-size:13px;flex:1;min-width:140px;color:var(--grey)}
+.start-options select{height:38px;padding:4px 10px;font-size:14px;color:var(--ink)}
 #game-main{height:calc(100dvh - 26px);min-height:520px;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
 .term-bar{display:flex;align-items:center;gap:12px;min-height:46px;padding:5px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-1)}
 .term-id{display:flex;align-items:baseline;gap:8px;font-family:var(--serif);font-size:16px;font-weight:700;white-space:nowrap}
@@ -51,6 +54,9 @@ html,body{height:100%}
 #account .metric-card{padding:5px 8px}
 #account .m-label{font-size:11.5px}
 #account .m-value{font-size:16px;margin-top:0}
+/* S1：收益率/最大回撤 正红负绿（红涨绿跌，--up 红 / --down 绿） */
+#account .m-value.up{color:var(--up)}
+#account .m-value.down{color:var(--down)}
 .trades-wrap{max-height:136px;overflow-y:auto}
 .trade-table{width:100%;font-size:12.5px;table-layout:fixed}
 .trade-table th,.trade-table td{padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -92,6 +98,10 @@ html,body{height:100%}
 <body>
 <div class="wrap game-shell">
   <div class="card" id="game-start">
+    <div class="start-options">
+      <label>对局时长<select id="opt-bars"><option value="250">1 年（250 回合）</option><option value="750">3 年（750 回合）</option><option value="1250" selected>5 年（1250 回合）</option></select></label>
+      <label>初始资金<select id="opt-cash"><option value="100000">10 万</option><option value="500000">50 万</option><option value="1000000" selected>100 万</option><option value="5000000">500 万</option></select></label>
+    </div>
     <button class="btn btn-primary" id="btn-new">开始随机一局</button>
     <button type="button" class="tip-trigger" data-tip="随机匿名股票与历史窗口。每个回合先决策，再收束一根 K 线；真实限价成交、T+1 与交易费用。" aria-label="游戏规则">?</button>
     <span id="start-status" role="status"></span>
@@ -251,10 +261,16 @@ html,body{height:100%}
     body.innerHTML = '<div class="kv-grid">' + rows.join('') + '</div>';
   }
   function metric(label, value){ return '<div class="metric-card"><div class="m-label">' + esc(label) + '</div><div class="m-value">' + esc(value) + '</div></div>'; }
+  const fmtPct = v => { const n = Number(v) * 100; return (n > 0 ? '+' : '') + n.toFixed(2) + '%'; };
+  function metricSigned(label, v){
+    const n = Number(v), cls = n > 0 ? ' up' : n < 0 ? ' down' : '';
+    return '<div class="metric-card"><div class="m-label">' + esc(label) + '</div><div class="m-value' + cls + '">' + esc(fmtPct(n)) + '</div></div>';
+  }
   function renderAccount(){
     const a = state.account;
     $('account').innerHTML = metric('总权益', money(a.equity)) + metric('现金', money(a.cash)) +
-      metric('持仓', a.quantity + ' 股') + metric('可卖', a.sellable + ' 股') + metric('交易磨损', money(a.total_cost));
+      metric('持仓', a.quantity + ' 股') + metric('可卖', a.sellable + ' 股') + metric('交易磨损', money(a.total_cost)) +
+      metricSigned('收益率', state.return_pct) + metricSigned('最大回撤', -Math.abs(state.max_drawdown));
   }
   function renderTrades(){
     $('trades').innerHTML = state.trades.length ? state.trades.map(t =>
@@ -426,7 +442,8 @@ html,body{height:100%}
   async function startGame(){
     $('start-status').textContent = '正在抽取随机股票与历史窗口…';
     $('btn-new').disabled = true;
-    try { await withBusy(async () => setState(await api('/game/api/sessions', {method: 'POST'}))); }
+    const body = {game_bars: Number($('opt-bars').value), initial_cash: Number($('opt-cash').value)};
+    try { await withBusy(async () => setState(await api('/game/api/sessions', {method: 'POST', body: JSON.stringify(body)}))); }
     catch (error) { $('start-status').textContent = error.message; $('btn-new').disabled = false; }
   }
   async function advance(){

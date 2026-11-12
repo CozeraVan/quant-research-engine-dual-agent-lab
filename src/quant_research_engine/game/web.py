@@ -14,6 +14,10 @@ from quant_research_engine.game.session import GameSession
 
 OWNER_COOKIE = "qre_game_owner"
 
+# S1：开局配置白名单（服务端最终闸，防篡改 22 号:97）。默认基线 1250 / 1,000,000 不变。
+ALLOWED_GAME_BARS = (250, 750, 1250)
+ALLOWED_INITIAL_CASH = (100_000, 500_000, 1_000_000, 5_000_000)
+
 
 @dataclass
 class GameSessionRegistry:
@@ -24,8 +28,8 @@ class GameSessionRegistry:
         if self.sessions is None:
             self.sessions = {}
 
-    def create(self) -> GameSession:
-        game = self.provider.create_session()
+    def create(self, **options) -> GameSession:
+        game = self.provider.create_session(**options)
         game_id = secrets.token_urlsafe(24)
         while game_id in self.sessions:
             game_id = secrets.token_urlsafe(24)
@@ -50,6 +54,10 @@ def _state(game: GameSession) -> dict:
         "cursor": game.cursor - game.start_index + 1,
         "warmup_bars": game.warmup_bars,
         "game_bars": game.game_bars,
+        # S1：资金基线与收益统计（additive，默认值不变；收益率/回撤为小数）。
+        "initial_cash": game.engine.initial_cash,
+        "return_pct": game.return_pct,
+        "max_drawdown": game.max_drawdown,
         "finished": game.finished,
         "should_end": game.engine.should_end,
         "history": game.public_history(),
@@ -107,8 +115,20 @@ def create_game_app(provider: object, *, testing: bool = False) -> Flask:
 
     @app.post("/game/api/sessions")
     def create_session():
+        data = request.get_json(silent=True) or {}
+        options: dict = {}
+        for key, allowed in (("game_bars", ALLOWED_GAME_BARS), ("initial_cash", ALLOWED_INITIAL_CASH)):
+            if key not in data:
+                continue
+            try:
+                value = int(data[key])
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"{key} 必须为整数"}), 400
+            if value not in allowed:
+                return jsonify({"ok": False, "error": f"{key} 仅支持 {list(allowed)}"}), 400
+            options[key] = value
         try:
-            game = registry.create()
+            game = registry.create(**options)
         except GameRuleError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         owner = request.cookies.get(OWNER_COOKIE) or game.owner_id
