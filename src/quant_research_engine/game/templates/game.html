@@ -13,13 +13,13 @@ html,body{height:100%}
 .start-options label{display:flex;flex-direction:column;gap:4px;font-size:13px;flex:1;min-width:140px;color:var(--grey)}
 .start-options select{height:38px;padding:4px 10px;font-size:14px;color:var(--ink)}
 #game-main{height:calc(100dvh - 26px);min-height:520px;display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px}
-.term-bar{display:flex;align-items:center;gap:12px;min-height:46px;padding:5px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-1)}
+.term-bar{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;min-height:46px;padding:5px 12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow-1)}
 .term-id{display:flex;align-items:baseline;gap:8px;font-family:var(--serif);font-size:16px;font-weight:700;white-space:nowrap}
 .term-id .code{font-family:var(--sans);font-size:13px;font-weight:500;color:var(--grey);font-variant-numeric:tabular-nums}
 #phase{font-size:13px;font-weight:600;color:var(--lav-deep);white-space:nowrap;font-variant-numeric:tabular-nums}
 .term-bar .spacer{flex:1}
 #finish-note{color:var(--lav-deep);font-weight:700;font-size:13px;white-space:nowrap}
-.term-tools{display:flex;align-items:center;gap:6px}
+.term-tools{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
 .term-tools .btn{min-height:34px;padding:5px 16px}
 /* S3 单根播放控件：倍速/暂停/跳过 */
 .anim-speed{display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--grey);white-space:nowrap}
@@ -122,6 +122,8 @@ html,body{height:100%}
       <div id="finish-note" class="hidden"></div>
       <div class="term-tools">
         <label class="anim-speed">倍速<select id="anim-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <button class="btn btn-ghost btn-sm" id="btn-autoplay" type="button" aria-pressed="false">▶ 连播</button>
+        <button type="button" class="tip-trigger" data-tip="连播：自动逐日推进（每天仍正常结算）。有待成交委托、发生成交或终局时自动暂停；倍速决定节奏。" aria-label="连播规则">?</button>
         <button class="btn btn-ghost btn-sm" id="btn-anim-pause" type="button" disabled>暂停</button>
         <button class="btn btn-ghost btn-sm" id="btn-anim-skip" type="button" disabled>跳过</button>
         <button class="btn btn-ghost" id="btn-factors" type="button">指标</button>
@@ -139,6 +141,7 @@ html,body{height:100%}
             <button class="btn btn-ghost" id="btn-advance">进入下一回合</button>
             <button class="btn btn-primary" id="btn-settle">播放并结算</button>
           </div>
+          <div id="autoplay-status" role="status"></div>
           <div id="round-info"></div>
         </section>
         <section class="side-card">
@@ -240,12 +243,12 @@ html,body{height:100%}
     // state.cursor 已含 +1（web.py _state），此处不再 +1：第 N 回合显示 N，终局 1250 而非 1251
     const day = Math.max(1, state.cursor - state.warmup_bars);
     $('phase').textContent = (open ? '决策阶段' : '结算阶段') + ' · 第 ' + day + ' / ' + state.game_bars + ' 个交易日';
-    $('btn-advance').disabled = busy || open || state.finished;
-    $('btn-settle').disabled = busy || !open || state.finished;
+    $('btn-advance').disabled = busy || ff.active || open || state.finished;
+    $('btn-settle').disabled = busy || ff.active || !open || state.finished;
     $('btn-factors').disabled = busy;
     ['order-side', 'order-quantity', 'order-price', 'btn-order',
-     'pos-25', 'pos-50', 'pos-100', 'btn-fill-open', 'btn-wait'].forEach(id => { $(id).disabled = busy || !open || state.finished; });
-    $('btn-cancel').disabled = busy || !open || state.finished || !state.pending_order;
+     'pos-25', 'pos-50', 'pos-100', 'btn-fill-open', 'btn-wait'].forEach(id => { $(id).disabled = busy || ff.active || !open || state.finished; });
+    $('btn-cancel').disabled = busy || ff.active || !open || state.finished || !state.pending_order;
     document.querySelectorAll('#factor-groups input').forEach(input => { input.disabled = busy; });
     $('finish-note').classList.toggle('hidden', !state.finished);
     $('finish-note').textContent = state.finished ? '本局结束 · 最终权益 ' + money(state.account.equity) : '';
@@ -259,6 +262,7 @@ html,body{height:100%}
       $('order-price').min = price(decision.limit_lower);
       $('order-price').max = price(decision.limit_upper);
     }
+    renderAutoplayControls();
   }
   function kv(label, value){ return '<span>' + esc(label) + '</span><span>' + esc(value) + '</span>'; }
   function renderRound(){
@@ -360,6 +364,24 @@ html,body{height:100%}
         itemStyle: {color: row.close >= row.open ? '#C93A3A' : '#1E8E5A', color0: row.close >= row.open ? '#1E8E5A' : '#C93A3A',
           borderColor: row.close >= row.open ? '#C93A3A' : '#1E8E5A', borderColor0: row.close >= row.open ? '#1E8E5A' : '#C93A3A'}}));
   }
+  // K线显示统一 2 位小数（仅显示层；candleItems 底层全精度不动，审计/引擎依赖原值）。
+  function chartTooltip(params){
+    const list = Array.isArray(params) ? params : [params];
+    if (!list.length) return '';
+    const lines = [esc(list[0].axisValueLabel || list[0].name || '')];
+    list.forEach(p => {
+      const val = Array.isArray(p.value) ? p.value[p.value.length - 1] : p.value;
+      if (p.seriesType === 'candlestick'){
+        const v = (p.data && p.data.value) || p.value || [];
+        lines.push('开 ' + price(v[0]) + ' 收 ' + price(v[1]) + ' 低 ' + price(v[2]) + ' 高 ' + price(v[3]));
+      } else if (p.seriesName === '成交量'){
+        lines.push((p.marker || '') + '成交量 ' + money(val));
+      } else {
+        lines.push((p.marker || '') + esc(p.seriesName) + ' ' + (val == null ? '—' : Number(val).toFixed(3)));
+      }
+    });
+    return lines.join('<br/>');
+  }
   function renderChart(){
     if (!chart) chart = echarts.init($('kline'));
     const history = state.history || [];
@@ -376,7 +398,7 @@ html,body{height:100%}
     const _gpo = QREFactorLayout.panesToOption(model.panes, {
       paneBase: 2, grids, showFct: true,
       headYAxes: [
-        {type: 'value', gridIndex: 0, scale: true, splitNumber: 4, axisLabel: {fontSize: 10}, name: '', nameTextStyle: {fontSize: 10}},
+        {type: 'value', gridIndex: 0, scale: true, splitNumber: 4, axisLabel: {fontSize: 10, formatter: v => Number(v).toFixed(2)}, name: '', nameTextStyle: {fontSize: 10}},
         {type: 'value', gridIndex: 1, scale: true, splitNumber: 4, axisLabel: {fontSize: 10}, name: '', nameTextStyle: {fontSize: 10}},
       ],
       // 保留游戏原视觉：HIST 柱固定 #8B7FBE（原实现即如此），
@@ -410,7 +432,7 @@ html,body{height:100%}
       series[0].markLine = {silent: true, symbol: 'none', lineStyle: {type: 'dashed', width: 1}, label: {fontSize: 10, formatter: p => p.name || ''}, data: lines};
     }
     chart.clear();
-    chart.setOption({animation: false, tooltip: {trigger: 'axis'}, legend: {top: 0, type: 'scroll', textStyle: {fontSize: 11}},
+    chart.setOption({animation: false, tooltip: {trigger: 'axis', formatter: chartTooltip}, legend: {top: 0, type: 'scroll', textStyle: {fontSize: 11}},
       title: paneTitles, grid: grids, xAxis, yAxis, series,
       dataZoom: [{type: 'inside', xAxisIndex: grids.map((_, i) => i), start: Math.max(0, 100 - 240 / Math.max(1, dates.length) * 100), end: 100},
         {type: 'slider', xAxisIndex: grids.map((_, i) => i), bottom: 0, height: layout.sliderH, showDetail: false}]
@@ -485,6 +507,50 @@ html,body{height:100%}
     renderAnimControls();
     if (anim.paused) clearTimeout(anim.timer); else scheduleAnim();
   }
+  // 显式连播（独立模式，纯前端循环驱动现有 /close+/advance，每天仍正常结算）。
+  // 与 S3 单根动画解耦：连播时跳过单根动画；单根动画「不自动进回合」不变式保留。
+  // 停止条件（用户裁定）：有待成交委托 / 发生成交 / 本局结束 / 手动暂停。
+  const ff = {active: false, timer: null};
+  function ffCadence(){ return 500 / (Number($('anim-speed').value) || 1); }
+  function renderAutoplayControls(){
+    const btn = $('btn-autoplay');
+    btn.setAttribute('aria-pressed', ff.active ? 'true' : 'false');
+    btn.textContent = ff.active ? '⏸ 暂停连播' : '▶ 连播';
+    btn.disabled = !state || state.finished || (!ff.active && (busy || !!state.pending_order));
+    $('kline').dataset.autoplay = ff.active ? 'on' : 'off';
+  }
+  function stopAutoplay(note){
+    clearTimeout(ff.timer); ff.timer = null; ff.active = false;
+    $('autoplay-status').textContent = note || '';
+    renderControls(); renderAutoplayControls();
+  }
+  function startAutoplay(){
+    if (!state || state.finished || state.pending_order) return;
+    ff.active = true; $('autoplay-status').textContent = '';
+    renderControls(); renderAutoplayControls();
+    autoplayStep();
+  }
+  function toggleAutoplay(){ if (ff.active) stopAutoplay(''); else startAutoplay(); }
+  async function autoplayStep(){
+    if (!ff.active || !state) return;
+    if (state.finished){ stopAutoplay('本局结束'); return; }
+    if (state.pending_order){ stopAutoplay('有待成交委托，已暂停连播'); return; }
+    if (state.phase === 'open'){
+      await closeDay();
+      if (!ff.active) return;
+      if (state.finished){ stopAutoplay('本局结束'); return; }
+      if (state.settlement && state.settlement.fill){ stopAutoplay('已成交，已暂停连播'); return; }
+      if (state.pending_order){ stopAutoplay('有待成交委托，已暂停连播'); return; }
+    }
+    if (state.phase === 'closed'){
+      if (state.finished){ stopAutoplay('本局结束'); return; }
+      await advance();
+      if (!ff.active) return;
+    }
+    if (state.finished){ stopAutoplay('本局结束'); return; }
+    if (state.pending_order){ stopAutoplay('有待成交委托，已暂停连播'); return; }
+    ff.timer = setTimeout(autoplayStep, ffCadence());
+  }
   function renderFactorGroups(){
     $('factor-groups').innerHTML = catalogGroups.map((group, groupIndex) =>
       '<details class="factor-group"' + (groupIndex === 0 ? ' open' : '') + '><summary>' + esc(group.label) + '（' + group.factors.length + '）</summary>' +
@@ -531,6 +597,7 @@ html,body{height:100%}
     else dialog.removeAttribute('open');
   }
   async function startGame(){
+    clearTimeout(ff.timer); ff.active = false;
     $('start-status').textContent = '正在抽取随机股票与历史窗口…';
     $('btn-new').disabled = true;
     const body = {game_bars: Number($('opt-bars').value), initial_cash: Number($('opt-cash').value)};
@@ -546,7 +613,7 @@ html,body{height:100%}
     try {
       await withBusy(async () => setState(await api(sessionUrl('/close'), {method: 'POST'})));
       $('order-error').textContent = '';
-      if (state.settlement) startBarAnimation(state.settlement);
+      if (state.settlement && !ff.active) startBarAnimation(state.settlement);
     } catch (error) { $('order-error').textContent = error.message; }
   }
   // S2 决策快捷（纯前端填单，服务端校验仍为最终闸 22 号:97）。
@@ -602,11 +669,13 @@ html,body{height:100%}
     $(id).addEventListener('click', () => applyPosition(pct)));
   $('btn-fill-open').addEventListener('click', fillOpen);
   $('btn-wait').addEventListener('click', waitRound);
+  $('btn-autoplay').addEventListener('click', toggleAutoplay);
   $('btn-anim-pause').addEventListener('click', togglePauseAnim);
   $('btn-anim-skip').addEventListener('click', finishAnim);
   $('anim-speed').addEventListener('change', () => {
     anim.speed = Number($('anim-speed').value) || 1;
     if (anim.active && !anim.paused) scheduleAnim();
+    if (ff.active){ clearTimeout(ff.timer); ff.timer = setTimeout(autoplayStep, ffCadence()); }
   });
   $('order-form').addEventListener('submit', async event => {
     event.preventDefault();
@@ -626,6 +695,7 @@ html,body{height:100%}
   });
   if (window.LabUI && LabUI.helpTips) LabUI.helpTips();
   animDataset('idle'); renderAnimControls();
+  $('kline').dataset.autoplay = 'off'; renderAutoplayControls();
   Promise.all([restore(), (async () => {
     try {
       const data = await api('/game/api/factors');
