@@ -286,8 +286,12 @@ document.querySelectorAll('[data-sort]').forEach(btn => btn.addEventListener('cl
   else { listState.sort = k; listState.order = 'desc'; }
   document.querySelectorAll('[data-sort]').forEach(b => b.classList.toggle('active', b === btn));
   document.querySelectorAll('[data-sort]').forEach(b => {
+    const active = b.dataset.sort === listState.sort;
     b.textContent = (b.dataset.sort === 'created_at' ? '创建时间' : '超额收益') +
-      (b.dataset.sort === listState.sort ? (listState.order === 'desc' ? ' ▼' : ' ▲') : '');
+      (active ? (listState.order === 'desc' ? ' ▼' : ' ▲') : '');
+    const th = b.closest('th');
+    if (th) th.setAttribute('aria-sort', active
+      ? (listState.order === 'desc' ? 'descending' : 'ascending') : 'none');
   });
   listState.page = 1;
   load();

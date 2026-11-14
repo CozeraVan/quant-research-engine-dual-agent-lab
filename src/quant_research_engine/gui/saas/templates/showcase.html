@@ -8,18 +8,21 @@
     <!-- 公开 verified 判断只在服务端执行，页面不展示结果合同与验证标签。 -->
   </div>
   <div class="card">
+    <div class="table-wrap">
     <table class="tbl" id="sc-table">
       <thead><tr>
-        <th>策略</th><th>回测区间</th>
-        <th class="num" style="text-align:right">总收益率</th>
-        <th class="num" style="text-align:right">超额收益</th>
-        <th class="num" style="text-align:right">最大回撤</th>
-        <th class="num" style="text-align:right">胜率</th>
-        <th class="num" style="text-align:right">交易笔数</th>
-        <th>数据截至</th>
+        <th aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="title">策略</button></th>
+        <th aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="date_start">回测区间</button></th>
+        <th class="num" style="text-align:right" aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="total_return">总收益率</button></th>
+        <th class="num" style="text-align:right" aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="excess_return">超额收益</button></th>
+        <th class="num" style="text-align:right" aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="max_drawdown">最大回撤</button></th>
+        <th class="num" style="text-align:right" aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="win_rate">胜率</button></th>
+        <th class="num" style="text-align:right" aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="total_trade_count">交易笔数</button></th>
+        <th aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="data_until">数据截至</button></th>
       </tr></thead>
       <tbody id="sc-tbody"><tr><td colspan="8" class="muted">加载中…</td></tr></tbody>
     </table>
+    </div>
   </div>
 
   <div class="card showcase-cta">
@@ -37,6 +40,53 @@ function pct(v, digits){
   return v > 0 ? '+' + p : p;
 }
 function cls(v){ return v == null ? 'flat' : (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat')); }
+const scState = {items: [], sort: null, order: 'desc'};
+const SC_TEXT_KEYS = new Set(['title', 'date_start', 'data_until']);
+function scSortItems(items){
+  if (!scState.sort) return items.slice();
+  const key = scState.sort;
+  const direction = scState.order === 'asc' ? 1 : -1;
+  return items.slice().sort((a, b) => {
+    const av = a[key], bv = b[key];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (SC_TEXT_KEYS.has(key)) return String(av).localeCompare(String(bv), 'zh-CN') * direction;
+    return (Number(av) - Number(bv)) * direction;
+  });
+}
+function renderShowcase(){
+  const tbody = document.getElementById('sc-tbody');
+  tbody.innerHTML = scSortItems(scState.items).map(it => {
+    const range = (it.date_start || '—') + ' ~ ' + (it.date_end || '—');
+    const sub = it.subtitle ? '<div class="opt" style="font-size:14px;margin-top:6px">' + esc(it.subtitle) + '</div>' : '';
+    return '<tr style="cursor:pointer" onclick="location.href=\'/saas/jobs/' + it.job_id + '\'">' +
+      '<td><strong>' + esc(it.title) + '</strong>' + sub + '</td>' +
+      '<td style="white-space:nowrap">' + esc(range) + '</td>' +
+      '<td class="num ' + cls(it.total_return) + '" style="text-align:right">' + pct(it.total_return) + '</td>' +
+      '<td class="num ' + cls(it.excess_return) + '" style="text-align:right">' + pct(it.excess_return) + '</td>' +
+      '<td class="num neg" style="text-align:right">' + (it.max_drawdown == null ? '—' : (it.max_drawdown * 100).toFixed(2) + '%') + '</td>' +
+      '<td class="num" style="text-align:right">' + (it.win_rate == null ? '—' : (it.win_rate * 100).toFixed(1) + '%') + '</td>' +
+      '<td class="num" style="text-align:right">' + (it.total_trade_count == null ? '—' : it.total_trade_count) + '</td>' +
+      '<td style="white-space:nowrap">' + esc(it.data_until || '—') + '</td>' +
+    '</tr>';
+  }).join('');
+  document.querySelectorAll('[data-sc-sort]').forEach(btn => {
+    const active = btn.dataset.scSort === scState.sort;
+    const label = btn.textContent.replace(/ [▲▼]$/, '');
+    btn.textContent = label + (active ? (scState.order === 'desc' ? ' ▼' : ' ▲') : '');
+    btn.classList.toggle('active', active);
+    const th = btn.closest('th');
+    if (th) th.setAttribute('aria-sort', active
+      ? (scState.order === 'desc' ? 'descending' : 'ascending') : 'none');
+  });
+}
+document.querySelectorAll('[data-sc-sort]').forEach(btn => btn.addEventListener('click', () => {
+  const key = btn.dataset.scSort;
+  if (scState.sort === key) scState.order = scState.order === 'desc' ? 'asc' : 'desc';
+  else { scState.sort = key; scState.order = 'desc'; }
+  renderShowcase();
+}));
 async function loadShowcase(){
   const tbody = document.getElementById('sc-tbody');
   try {
@@ -46,20 +96,8 @@ async function loadShowcase(){
       tbody.innerHTML = '<tr><td colspan="8" class="muted">暂无展示策略</td></tr>';
       return;
     }
-    tbody.innerHTML = d.items.map(it => {
-      const range = (it.date_start || '—') + ' ~ ' + (it.date_end || '—');
-      const sub = it.subtitle ? '<div class="opt" style="font-size:14px;margin-top:6px">' + esc(it.subtitle) + '</div>' : '';
-      return '<tr style="cursor:pointer" onclick="location.href=\'/saas/jobs/' + it.job_id + '\'">' +
-        '<td><strong>' + esc(it.title) + '</strong>' + sub + '</td>' +
-        '<td style="white-space:nowrap">' + esc(range) + '</td>' +
-        '<td class="num ' + cls(it.total_return) + '" style="text-align:right">' + pct(it.total_return) + '</td>' +
-        '<td class="num ' + cls(it.excess_return) + '" style="text-align:right">' + pct(it.excess_return) + '</td>' +
-        '<td class="num neg" style="text-align:right">' + (it.max_drawdown == null ? '—' : (it.max_drawdown * 100).toFixed(2) + '%') + '</td>' +
-        '<td class="num" style="text-align:right">' + (it.win_rate == null ? '—' : (it.win_rate * 100).toFixed(1) + '%') + '</td>' +
-        '<td class="num" style="text-align:right">' + (it.total_trade_count == null ? '—' : it.total_trade_count) + '</td>' +
-        '<td style="white-space:nowrap">' + esc(it.data_until || '—') + '</td>' +
-      '</tr>';
-    }).join('');
+    scState.items = d.items;
+    renderShowcase();
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="8" class="muted">加载失败，请刷新重试</td></tr>';
   }

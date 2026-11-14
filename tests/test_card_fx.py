@@ -297,11 +297,10 @@ def test_single_delegated_listener_with_raf():
     assert "forEach" not in js
 
 
-def test_base_template_loads_card_fx_after_night_mode():
+def test_base_template_disables_card_fx_for_quiet_chrome():
     base = _base()
-    assert '<script src="/static/card-fx.js?v={{ asset_v }}"></script>' in base
-    assert base.index("card-fx.js") > base.index("night-mode.js")
-    assert base.index("card-fx.js") > base.index("lab-theme.css")
+    # QRE-UNSLOP-QUIET-CHROME：不再加载 3D 倾斜与光标光斑；源文件仅留档。
+    assert '<script src="/static/card-fx.js' not in base
     # 无外部依赖
     for bad in ("http://", "https://", "unpkg", "jsdelivr", "cdn"):
         assert bad not in CARD_FX_JS.read_text(encoding="utf-8"), bad

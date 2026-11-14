@@ -4632,3 +4632,19 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
 - 登录合同新增可选 `auth_mode: sms`；已有密码账号必须能显式选择短信验证码，不传时保持密码优先以兼容旧客户端。
 - 改动：SaaS `app.py` 一个条件分支、登录模板一处请求参数、`test_saas_membership_auth.py` 一项回归。
 - 抖音生产结果：`/saas/jobs/358`，uid=6，completed，100 股 5 年；本地证据 `.tmp/douyin-smoke/public_job_result.json`。
+
+
+## 2026-11-14 指标参数默认过滤交接
+
+- 改动仅 `gui/static/factor-layout.js`、`gui/saas/templates/symbol.html`、`tests/test_kline_param_grid.py`。
+- 新默认合同：多参数家族未选择时只显示首组；产物生成侧保证首组是策略主参数组。显式选择继续持久化，非法选择安全回落。
+- 完整 TV 验收通过，ECS job 358 实测不再展开 4 组 MACD。未 commit/push。
+
+
+## 2026-11-14 表头排序 + quiet chrome 交接
+
+- 经典排序：`showcase.html::scSortItems`；个人中心排序：`_profile_records.html` 表头 + `_records_scripts.html` 既有 listState。旧 `_records_body.html` 同步避免两版本漂移。
+- 去 AI 化：`lab-theme.css` / `card-class.css` 的 `QRE-UNSLOP-QUIET-CHROME` 段；`base.html` 不再加载 card-fx。
+- unslop 在 `.agents/skills/unslop/`，CC BY 4.0 署名保留；设计基线已写 12 号 §3.19。
+- 真实浏览器验收脚本 `.tmp/unslop_audit.py`，证据 `.tmp/unslop-audit/`；测试 `test_saas_table_sorting.py`、`test_unslop_ui.py`。
+- 子代理因平台凭证失败未运行，主 Agent 完成。未 commit/push。

@@ -2862,3 +2862,22 @@ exit:  (macd_hist < macd_hist.shift(1)) or (kdj_k < 70)
 - 验证：新增已有密码账号短信登录回归；`test_saas_membership_auth.py` 22 passed、`test_gui_saas.py` 85 passed、模板/静默失败 47 passed + 13 skipped。ECS 已部署，回滚点 `/tmp/qre-deploy-20261114T035601Z.bak`，qre-saas active。
 - uid=6 登录成功并提交 **job 358 / strategy 316**，kind=full，100 股、2021-11-13 至 2026-11-13、每股独立 10 万，状态 **completed**；归属已确认 uid=6。公网 API 复验 HTTP 200 / completed / symbol_count=100。
 - 结果：总交易 2982、traded_symbol_count=100、strategy_total_return=-0.0323073、buy_hold_return=0.0429487、excess=-0.0752560、win_rate=0.4386318、max_drawdown=-0.0427523。证据 `.tmp/douyin-smoke/public_job_result.json`。
+
+
+### 2026-11-14 个股详情默认指标变体修复
+
+- 根因：参数网格产物把策略主参数组排在首位，但 `applyParamChoices` 在无选择/非法选择时保留全部变体，导致 4 组 MACD 与多组 BOLL 同时绘制。
+- 修复：`factor-layout.js` 对多参数家族默认只保留首组（即策略主参数组），用户显式选择仍优先，非法选择回落主组；单变体家族保持原对象。`symbol.html` 同步注释。
+- 测试：`test_kline_param_grid.py` 9 passed（含默认/非法选择只出一个 MACD 面板）；模板与静默失败 47 passed + 13 skipped；完整 `.tmp/perf-browser/tv_check_all.sh` DONE，D 类 pageerrors=0、B 类持久化恢复 PASS。
+- ECS 已部署，回滚点 `/tmp/qre-deploy-20261114T041533Z.bak`。生产 job 358 / 688233.SH 实测 chips 仅 KDJ、MACD、BOLL 20 主组，gridCount=4（主图/量/KDJ/MACD），`qre.kline.params=null` 时修复生效。
+- 未 commit/push，待用户验收。
+
+
+### 2026-11-14 表头排序 + unslop 去 AI 化
+
+- 经典策略 8 列均支持表头点击排序：换列默认降序、同列升降切换、null 恒置底；个人中心「超额收益/创建时间」移到实际渲染的 `_profile_records.html` 表头，复用服务端排序与分页。生产实测经典总收益 desc=[75.19,71.63,61.80]、asc=[-48.22,-44.33,-41.88]，个人中心超额收益降序正常。
+- 子代理派发三次（默认模型两次、备用模型一次）均因 invalid_iam_token / Incorrect API key 未启动，主 Agent 接管，未伪称子代理交付。
+- unslop 官方仓库 `heydamir/unslop`（CC BY 4.0）已安装到 `.agents/skills/unslop/`；克隆暂存 `.tmp/unslop-repo/`。按 quiet chrome 收敛玻璃拟态、紫光大阴影、背景光斑、3D 倾斜、按钮扫光与 hover 浮起，保留品牌紫和盈亏语义色。
+- 改动：`lab-theme.css`、`card-class.css`、`base.html`、`showcase.html`、两份记录 partial 与 `_records_scripts.html`；新增排序/unslop 合同测试，既有 card-fx 加载断言更新为停用。
+- 验证：排序与 UI 邻接 119 passed；综合 88 passed + 13 skipped；生产经典/新建策略桌面 1280 与移动 375 四组合 HTTP 200、无 pageerror、无 console error、无横向溢出。前后截图 `.tmp/unslop-audit/{before,after}-*.png`。
+- ECS 三次部署均 active；最终回滚点 `/tmp/qre-deploy-20261114T043400Z.bak`。未 commit/push，待用户验收。

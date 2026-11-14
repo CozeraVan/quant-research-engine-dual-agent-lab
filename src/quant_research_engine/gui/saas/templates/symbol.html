@@ -905,7 +905,7 @@ function setParamChoice(family, params){
   else obj[family] = params;
   try { localStorage.setItem(PARAM_LS_KEY, JSON.stringify(obj)); } catch (e) {}
 }
-// plan() 的入参因子集合：应用参数选择（无选择时原样返回）
+// plan() 的入参因子集合：应用参数选择（无选择时只保留策略主参数组）
 function klinePlanFactors(d){
   const factors = (d && d.factors) || [];
   if (typeof QREFactorLayout === 'undefined' || !QREFactorLayout.applyParamChoices) return factors;

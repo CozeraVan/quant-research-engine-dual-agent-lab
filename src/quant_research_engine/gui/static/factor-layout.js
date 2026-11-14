@@ -531,22 +531,21 @@
 
   /**
    * 按用户选择过滤因子集合。choices = {family: params}。
-   * 没有选择 / 选择非法 / 该家族只有一个变体 → 该家族全部保留。
-   * 整体无选择时**原样返回入参对象**（逐字节不变）。
+   * 产物把策略主参数组排在首位；未选择或选择非法时只保留该主参数组，
+   * 避免把所有预计算变体同时画出。单变体家族保持原对象，不受影响。
    */
   function applyParamChoices(factors, choices) {
     factors = factors || [];
-    if (!choices || typeof choices !== "object") return factors;
+    if (!choices || typeof choices !== "object") choices = {};
     var fams = paramVariants(factors);
     if (!fams.length) return factors;
     var keep = null;
     fams.forEach(function (fam) {
       if (fam.variants.length < 2) return;          // 只有一个组：无需选择
       var want = choices[fam.family];
-      if (typeof want !== "string" || !want) return;
       var hit = null;
       fam.variants.forEach(function (v) { if (v.params === want) hit = v; });
-      if (!hit) return;                              // 未知参数：忽略
+      if (!hit) hit = fam.variants[0];               // 默认/非法选择：策略主参数组
       if (!keep) keep = {};
       keep[fam.family] = {};
       hit.cols.forEach(function (c) { keep[fam.family][c] = true; });

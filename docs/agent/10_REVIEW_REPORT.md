@@ -3201,3 +3201,47 @@ test_gui_saas.py → 85 passed
 模板 inline JS + 静默失败 → 47 passed, 13 skipped
 生产登录 me.id=6 / is_admin=true；job 358 completed / symbols=100 / HTTP 200
 ```
+
+
+## 2026-11-14 默认指标变体修复自审
+
+### Review Status
+
+PASS（完整 TV 验收 + 生产实测，待用户验收；未 commit/push）
+
+### Findings
+
+- 修复在共享 `applyParamChoices`，静态 K 线、重播与指标设置均走同一出口，无第二套过滤逻辑。
+- 首组即策略主参数组由产物生成合同与真实 job 358 数据共同确认；单参数/非参数因子不受影响。
+- Required Fixes：无。
+
+### Validation Evidence
+
+```text
+test_kline_param_grid.py → 9 passed
+模板/静默失败 → 47 passed, 13 skipped
+TV_CHECK_ALL DONE；D 类 pageerrors=0；B 类恢复 PASS
+生产 chips=[KDJ, MACD, bbl_20, bbm_20, bb_upper]；gridCount=4
+```
+
+
+## 2026-11-14 排序 + unslop 主 Agent 自审
+
+### Review Status
+
+PASS（生产双视口验收，待用户验收；未 commit/push）
+
+### Findings
+
+- 个人中心实际模板是 `_profile_records.html`，首次部署只改旧 partial 后由生产实测发现，已补齐两版本，避免假完成。
+- 排序未改 API/数据口径；经典排序不修改原 items，null 恒置底。去 AI 化只改呈现，不动业务结构、K 线或权限。
+- Required Fixes：无。子代理三次鉴权失败已如实记录，所有实施与验证由主 Agent 完成。
+
+### Validation Evidence
+
+```text
+UI 邻接 → 119 passed
+综合排序/unslop/card-fx/模板 → 88 passed, 13 skipped
+经典生产排序 desc/asc 数值顺序正确；个人中心超额收益 aria-sort=descending
+经典/新建 × 1280/375 → 全 200，pageerror=0，console error=0，横溢=0
+```

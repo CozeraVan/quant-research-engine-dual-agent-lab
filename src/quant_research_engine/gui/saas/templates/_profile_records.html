@@ -2,9 +2,6 @@
   <div class="table-tools">
     <button class="btn btn-ghost" id="btn-reload" style="padding:7px 18px">刷新</button>
     <span class="opt" id="list-hint"></span>
-    <span class="opt">排序：</span>
-    <button class="seg-btn active" data-sort="created_at">创建时间</button>
-    <button class="seg-btn" data-sort="excess_return">超额收益</button>
     <span style="margin-left:auto"></span>
     <input type="text" id="recs-filter" placeholder="筛选策略名 / 任务号…" style="width:220px;max-width:100%">
   </div>
@@ -12,7 +9,7 @@
     <table class="tbl" id="jobs-table">
       <thead><tr>
         <th>策略名称</th><th>回测区间</th><th class="num" style="text-align:right">股票数量</th>
-        <th class="num" style="text-align:right">超额收益</th><th>状态</th><th>创建时间</th><th style="text-align:right">操作</th>
+        <th class="num" style="text-align:right" aria-sort="none"><button type="button" class="seg-btn" data-sort="excess_return">超额收益</button></th><th>状态</th><th aria-sort="descending"><button type="button" class="seg-btn active" data-sort="created_at">创建时间 ▼</button></th><th style="text-align:right">操作</th>
       </tr></thead>
       <tbody id="jobs-tbody"><tr><td colspan="7" class="muted">加载中…</td></tr></tbody>
     </table>

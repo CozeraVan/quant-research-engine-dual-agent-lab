@@ -2451,3 +2451,15 @@ PC 崩溃 interrupted 了 DeepSeek 第四轮（2.5 进行中）。恢复后核�
 
 - job 358 已完成并归 uid=6；短信登录 hotfix 已部署且生产实测通过。
 - 已提交并推送 `fa285eb fix: support sms login for password accounts`；app.py 其他历史改动未混入。
+
+
+### 2026-11-14 指标变体显示修复：已部署待验收
+
+- 默认只显示策略主参数组，完整 TV 与生产 job 358 实测通过。
+- 未 commit/push；用户接受后再提交 `factor-layout.js`、`symbol.html`、`test_kline_param_grid.py` 与本轮文档。
+
+
+### 2026-11-14 排序 + unslop：已部署待验收
+
+- 表头排序和 quiet chrome 均已 ECS 部署并实测；设计规范更新为 12 号 §3.19。
+- 未 commit/push。提交边界：相关 6 个模板/静态文件、排序与 unslop 测试、card-fx/邻接测试更新、`.agents/skills/unslop` 和本轮文档。

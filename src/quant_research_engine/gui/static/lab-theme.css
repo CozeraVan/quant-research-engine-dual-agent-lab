@@ -874,3 +874,34 @@ body::before{
   .card,.chart-box,.panel,.big-link,.metric,.metric-card,.entry-card{background-color:var(--panel)}
   body::before{opacity:.45}
 }
+
+
+/* ---- QRE-UNSLOP-QUIET-CHROME（2026-11-14） ----
+   产品：A 股策略研究工具；气质：克制、精确、可审计。
+   色彩留给净值、信号与盈亏；导航、卡片和按钮退回中性工作台面。 */
+:root{
+  --card-radius:12px;
+  --glass-bg:#FFFFFF;
+  --glass-line:var(--line);
+  --glass-hi:transparent;
+  --glass-shadow:0 1px 2px rgba(36,31,46,.07);
+  --glass-sheen:none;
+}
+body::before{display:none}
+.card,.panel,.chart-box,.big-link,.nav-dropdown{
+  background-color:#FFFFFF;
+  background-image:none;
+  border-color:var(--line);
+  box-shadow:0 1px 2px rgba(36,31,46,.07);
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+}
+.btn-primary::after{display:none}
+.btn-primary:hover,.big-link:hover,.chip:hover,.nl-example:hover,.seg-btn:hover,
+.card-fx,.fx-tilt,.entry-card:hover,.metric:hover,.metric-card:hover{
+  box-shadow:0 1px 2px rgba(36,31,46,.07);
+  transform:none;
+}
+.btn-sm,.seg-btn,.chip,.nl-example,.comb-toggle,.cond-x,.cal-title,.cal-nav{
+  transition:color .18s var(--ease),background-color .18s var(--ease),border-color .18s var(--ease);
+}

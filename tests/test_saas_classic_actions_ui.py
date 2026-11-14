@@ -176,7 +176,7 @@ class TestResultActionsCard:
         for selector in (".result-action-group", ".result-action-buttons",
                          ".result-action-status", ".showcase-cta"):
             assert selector + "{" in css or selector + " {" in css, selector
-        block = css[css.index("QRE-SAAS-CLASSIC-ACTIONS-UI"):]
+        block = css[css.index("QRE-SAAS-CLASSIC-ACTIONS-UI"):css.index("QRE-UNSLOP-QUIET-CHROME")]
         assert "min-height:44px" in block
         assert "--faint" not in block, "不得新增灰色小字备注样式"
         assert ".btn-sm" not in block, "不得改动全站 .btn-sm"

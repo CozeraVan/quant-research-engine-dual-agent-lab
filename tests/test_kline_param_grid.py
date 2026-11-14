@@ -198,22 +198,32 @@ assert.equal(macdPanes[0].series.length, 2, 'DIF+DEA（该组没有 hist 列）'
 console.log('t5-switch-ok');
 """.replace("%FACTORS%", json.dumps(FACTORS)))
 
-    def test_identity_when_no_choice(self):
-        """没有选择时必须逐字节返回入参——存量产物零影响。"""
+    def test_default_keeps_only_primary_variants(self):
+        """未选择时默认主参数组，禁止把全部预计算变体同时画出。"""
         _node(_layout() + r"""
 const F = %FACTORS%;
-assert.equal(L.applyParamChoices(F, {}), F, '空选择必须原样返回同一对象');
-assert.equal(L.applyParamChoices(F, null), F);
-assert.equal(L.applyParamChoices(F, undefined), F);
-assert.equal(L.applyParamChoices(F, 'x'), F);
-assert.equal(L.applyParamChoices(F, []), F);
-assert.equal(L.applyParamChoices(F, {macd: 'nope'}), F, '未知参数不得丢面板');
-assert.equal(L.applyParamChoices(F, {nofamily: '1'}), F, '未知家族不得丢面板');
+[{}, null, undefined, 'x', [], {macd: 'nope'}, {nofamily: '1'}].forEach(choice => {
+  const out = L.applyParamChoices(F, choice);
+  const cols = out.map(f => f.col || f.name);
+  assert.ok(cols.indexOf('macd_12_26_9') >= 0, '默认保留主 MACD 参数组');
+  assert.ok(cols.indexOf('macds_12_26_9') >= 0);
+  assert.ok(cols.indexOf('macdh_12_26_9') >= 0);
+  assert.equal(cols.indexOf('macd_15_35_10'), -1, '默认不得展开其他 MACD 组');
+  assert.equal(cols.indexOf('macd_24_52_18'), -1);
+  assert.ok(cols.indexOf('rsi_6') >= 0, '默认保留主 RSI 参数组');
+  assert.equal(cols.indexOf('rsi_14'), -1);
+  assert.equal(cols.indexOf('rsi_24'), -1);
+  assert.ok(cols.indexOf('ema_12') >= 0, '非变体必须保留');
+  assert.ok(cols.indexOf('boll_20_2') >= 0, '单参数组必须保留');
+  const plan = L.plan(out, {}, []);
+  assert.equal(plan.panes.filter(p => /macd/i.test(p.name)).length, 1,
+               '默认只能有一个 MACD 面板');
+});
 assert.equal(L.applyParamChoices([], {macd: '12_26_9'}).length, 0);
-// 单参数组家族给选择也不生效（没得选）
+// 单参数组家族给选择也不生效（没得选），保持原对象
 const single = [{name: 'RSI', col: 'rsi_14', values: [1]}];
 assert.equal(L.applyParamChoices(single, {rsi: '6'}), single);
-console.log('t5-identity-ok');
+console.log('t5-default-primary-ok');
 """.replace("%FACTORS%", json.dumps(FACTORS)))
 
     def test_dirty_choices_do_not_break_plan(self):

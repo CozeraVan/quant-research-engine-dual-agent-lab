@@ -572,3 +572,12 @@ symbol 页 571px（同上 + 交易明细表 517px）→ 表内横滚；new/feedb
 - 2026-09-08 初版：从 synthesis.html 定稿提取（用户验收通过）。
 - 2026-09-27（QRE-UI-DESIGN-SYSTEM-DOC）重写为完整设计系统：补文件地图、行内控件 36px 等高规范、ECharts 图表配置约定（此前文档写的是设计稿期 SVG 手绘方案，落地已改 ECharts）、SaaS 复刻约定、禁链含注释的教训；每条规范标注源码文件+行号。
 - 2026-09-27（QRE-SAAS-FEEDBACK-FACTOR-REQ）SaaS 侧新增统一侧边栏组件 `.sidenav`（saas/templates/base.html）：左列固定 150px、≤960px 降级顶部横排；链接态复用既有 tokens（默认 --muted 字、hover/active = `--tint` 底 + 主紫字），无新色相、无循环动效。此前 SaaS 页面无侧边栏，本条为新增组件登记（lab 侧不涉及）。
+
+
+## 3.19 Quiet Chrome 去 AI 化基线（2026-11-14，用户批准，覆盖 §3.16 与 §3.18 的玻璃/3D 定稿）
+
+- 来源：`heydamir/unslop`（CC BY 4.0）安装于 `.agents/skills/unslop/`。方向：产品是 A 股策略研究工具；气质为克制、精确、可审计。净值、信号、盈亏是色彩主体，chrome 不再承载装饰性色彩。
+- 卡片与数据卡：白底、`--line` 细边、12px 圆角、中性小阴影；禁止玻璃模糊、顶部高光、紫色大投影与背景径向光斑。
+- `card-fx.js` 不再由 base 加载，3D 倾斜/光标光斑停用；主按钮扫光、hover 浮起取消。交互动效只保留快速颜色/边框反馈与既有业务状态动效。
+- 唯一实现位置：`lab-theme.css` 与 `card-class.css` 末尾 `QRE-UNSLOP-QUIET-CHROME` 段。夜间模式仍整体暂停。
+- 回归合同：`tests/test_unslop_ui.py`；真实 Chromium 经典策略/新建策略双视口零错误、零横向溢出，截图 `.tmp/unslop-audit/after-*.png`。
