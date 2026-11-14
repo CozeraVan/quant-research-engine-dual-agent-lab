@@ -263,3 +263,11 @@ def load_factor_history(self, symbols, requests, start: date, end: date) -> pd.D
 - 本机修复：`game/validation.py` 不再用 close 重算 typical_price 口径；`game.html` 显式 `.kv-grid{display:grid}`。两文件已部署 ECS（qre-saas active，HTTP 200）。
 - 验证：`uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py tests/test_game_snapshot_store.py -q` → **37 passed**。真实 X00003B 可建 1500 根会话并加载因子；BOLL 逐点 0 mismatch。EMA 长周期在 1500 根截断面存在种子差异，文档与测试已明确，不伪称全因子零误报。
 - Windows 下一步：用 `scripts/game/snapshot_store.py` + `data/game_snapshots/` 复跑五年驱动和双视口审计。未 commit/push。
+
+
+## 14. average_price 输入补齐（2026-11-14）
+
+- `core.models.Bar` 新增可选 `adjustment_ratio` 与 `average_price` 属性；`game/data.py::bars_from_rows` 逐根写入 `adj_factor/锚点`。
+- `game/validation.py` 对 `*_average_price` 表按 `amount×10/vol×adjustment_ratio` 审计，typical_price 等非登记口径仍 skipped。
+- 回归：游戏 38 passed（含 average_price 复权与 3 只真实快照）；已部署 ECS。
+- Windows 可用 Bar.average_price 解除 T4 skipped。SaaS 蓝图仍待 Windows 最新 game/web 可访问提交与生产行情连接裁定，不能拿旧版重复实现。

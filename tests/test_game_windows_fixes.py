@@ -111,3 +111,30 @@ def test_kv_grid_is_explicit_css_grid():
 
     assert re.search(r"\.kv-grid\s*\{[^}]*display\s*:\s*grid", template)
     assert re.search(r"\.side-card\s+\.kv-grid\s*\{[^}]*grid-template-columns", template)
+
+
+def test_average_price_uses_bar_adjustment_ratio():
+    from quant_research_engine.game.data import bars_from_rows
+    from datetime import timedelta
+
+    canonical = "factors.stock_daily_momentum_average_price.macd_12_26_9"
+    rows = [
+        {
+            "ts_code": "X00001B",
+            "trade_date": date(2020, 1, 1) + timedelta(days=index),
+            "open": 10.0, "high": 12.0, "low": 9.0, "close": 11.0,
+            "pre_close": 10.0, "vol": 100.0, "amount": 1000.0,
+            "adj_factor": 1.0 if index == 0 else 2.0,
+        }
+        for index in range(2)
+    ]
+    bars = bars_from_rows(rows)
+
+    assert bars[0].average_price == 50.0
+    assert bars[1].average_price == 100.0
+    audit = audit_price_factors(
+        bars,
+        {0: {canonical: 50.0}, 1: {canonical: 100.0}},
+        [canonical],
+    )
+    assert audit["mismatches"] == 0

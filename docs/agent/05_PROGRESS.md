@@ -2905,3 +2905,24 @@ exit:  (macd_hist < macd_hist.shift(1)) or (kdj_k < 70)
 ### 2026-11-14 Git finalize 补充
 
 - 主提交 `f997ef7` 已推送；app.py 快照实现因重复锚点未进入该提交，随后单独整理为 `feat: freeze original input per backtest job`，不把其他历史 app.py 改动混入。
+
+
+### 2026-11-14 抖音策略 NL 全 A 全历史任务启动
+
+- 已推送 `f997ef7`（分页/quiet chrome/快照文档）与 `f6b9868`（任务级 input_snapshot）。
+- 抖音原文经生产 `/api/saas/nl/compile` 成功：红柱缩短已带 `macdh > 0`，BOLL 改为上轨突破/脱离事件，不再含裸 `close < bb_upper`。
+- 生产 **job 359 / strategy 317** 已提交：自然语言入口、全 A、2009-01-05→2026-10-30、每股独立 10 万、max_positions=0，费用默认；uid=6，快照已验证保留原始 NL。后台监视运行中。
+
+
+### 2026-11-14 run_config + 赢家分层/聚类首切片
+
+- run_config 已上生产：输入/params/实际 codes/excluded/run_id/data_until/版本齐全，结果页可下载；重跑保留 NL/wizard。job 358 实测 actual=100、版本完整。8 定向 + 228 SaaS 回归通过，回滚点 `/tmp/qre-deploy-20261114T061309Z.bak`。
+- 复用既有 M10.1/M10.4，新增 `scripts/strategy_fit_batch.py` 适配标准 backtest-batch，不新造统计口径、不重跑回测。修复元数据同名列、class_edge 汇总与空赢家池三个真实边界；支持离线 metadata CSV 和按 manifest mtime 增量跳过。
+- 真实抖音 100 股结果：eligible=100，90/99/99.9 显著赢家均 0，meta_tier 空、class_edge=false，ML 状态 insufficient；不是“聚类失效”，而是该策略没有达到统计显著与收益双门槛的股票。
+- 产物：`outputs/strategy_fit/douyin_100_5y_20261114/{fit,ml}/`；回归 24 passed + 18 skipped。每日数据更新后对目标 batch 重跑同一命令即可，unchanged 时不重复计算。
+
+
+### 2026-11-14 Game average_price 补齐
+
+- Bar 携带逐根复权比率，average_price=amount×10/vol×ratio；游戏审计接入，38 passed，已部署，回滚点 `/tmp/qre-deploy-20261114T062553Z.bak`。
+- SaaS 蓝图未虚假上线：Windows 最新 game/web 仅在未推送的 game/windows-dev 分支，主仓不能重复实现；生产 ECS 又无本地行情库，需先解决代码集成与行情访问路径。

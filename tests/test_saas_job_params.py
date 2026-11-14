@@ -161,3 +161,26 @@ def test_job_template_renders_original_snapshot_from_params_endpoint():
 
     template = Path("src/quant_research_engine/gui/saas/templates/job.html").read_text(encoding="utf-8")
     assert "renderStrategyInfo(Object.assign({}, d.strategy, {created_at: d.created_at}))" in template
+
+
+def test_params_response_contains_normalized_run_config(client):
+    job_id = _seed(client)
+    resp = client.get(f"/api/saas/jobs/{job_id}/params", headers={"X-User-Id": "1"})
+    assert resp.status_code == 200
+    config = resp.get_json()["run_config"]
+    assert config["job_id"] == job_id
+    assert config["params"]["start"] == JOB_PARAMS["start"]
+    assert config["input"]["entry_mode"] == "yaml"
+    assert config["versions"]["result_contract"]
+    assert config["versions"]["factor_basis"] == "qfq_anchor_v1"
+    assert "actual_codes" in config["execution"]
+
+
+def test_job_template_offers_config_download_and_preserves_input_on_rerun():
+    from pathlib import Path
+
+    template = Path("src/quant_research_engine/gui/saas/templates/job.html").read_text(encoding="utf-8")
+    assert 'id="btn-download-config"' in template
+    assert "function downloadRunConfig()" in template
+    assert "nl_text: (d.strategy && d.strategy.nl_text) || null" in template
+    assert "wizard_state: (d.strategy && d.strategy.wizard_state) || null" in template

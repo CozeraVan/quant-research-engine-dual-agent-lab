@@ -3286,3 +3286,43 @@ PASS（生产双视口验收，未 commit/push）
 unslop/会员/模板 → 52 passed, 13 skipped
 help/login × 1280/375 → 全 200，pageerror=0，console error=0，横溢=0
 ```
+
+
+## 2026-11-14 run_config + 赢家聚类自审
+
+### Review Status
+
+PASS（run_config 生产验收；聚类真实产物验证；未 commit/push）
+
+### Findings
+
+- run_config 从 artifacts 反推实际股票池，运行中任务回退 params codes，不编造排除名单。
+- M10 复用已有统计与 DBSCAN；空赢家池是合法结论，已避免 empty frame 崩溃。
+- Required Fixes：无。
+
+### Validation Evidence
+
+```text
+run_config 定向 8 passed；SaaS 228 passed, 13 skipped
+M10 回归 24 passed, 18 skipped
+真实抖音：90/99/99.9=0/0/0，insufficient，class_edge=false；增量 unchanged
+```
+
+
+## 2026-11-14 Game average_price 自审
+
+### Review Status
+
+PASS（实现与部署完成；SaaS 蓝图另列阻塞）
+
+### Findings
+
+- 复权均价使用原始成交额/成交量乘逐根复权比率，不再把原始均价冒充前复权均价；非登记口径仍 skipped。
+- Required Fixes：无。蓝图需 Windows 最新代码和生产行情路径，不在本切片伪完成。
+
+### Validation Evidence
+
+```text
+游戏全部 → 38 passed（含 average_price 与真实快照）
+ECS qre-saas active；/api/saas/factors 200；/saas/new 200
+```

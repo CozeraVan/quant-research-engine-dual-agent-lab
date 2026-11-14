@@ -429,3 +429,10 @@ price_basis 核查（P0-1A）、结果合同与旧结果隔离（P0-1B）、**�
 唯一长期设计与实施文档为 `docs/agent/22_TRADING_GAME.md`。V1 复用现有 UI/指标/费用/结果组件，不做专门美术、分时、财报、杠杆、扰动、排行榜或 Steam。公网中继和独立化后续单独立项。
 
 **WSL Demo 与本轮修复（2026-10-27，待用户试玩，未 ECS/未 commit/push）**：交易状态机、随机窗口、匿名揭盲、前复权、限价成交、T+1/整数手/费用已具备。DeepSeek 在当前 `game/` 基线修复 OHLC 与因子的复权口径错位，价格型因子按 `value / qfq_anchor` 对齐，非价格因子不换算；页面重做为主 K 线/成交量/MACD/RSI 一体化终端，右侧集中操作。主 Agent 复核游戏专项 28 passed、8092 HTTP 200 并查看桌面/移动截图。入口 `http://127.0.0.1:8092/game`。上游 `ema_250` 尚有 2026-10-12…2026-10-26 共 11 点独立重算异常（max_abs=0.287911），另立数据修复项，不全库重算、不部署 ECS。
+
+
+### P1-13 完整 run_config 完成补充（2026-11-14）
+
+- 新增 `gui/saas/run_config.py`：统一输出原始输入、规范化 params、实际执行 codes/excluded_codes、run_id/symbol_count、data_until、engine/factor_basis/result_contract 版本。
+- `/api/saas/jobs/<id>/params` 返回 run_config；结果页新增下载按钮；同参数重跑同时保留 nl_text 与 wizard_state。
+- 生产 job 358 实测 actual_codes=100、excluded=[]、版本完整；8 项定向 + 228 项 SaaS/模板回归通过，已部署。

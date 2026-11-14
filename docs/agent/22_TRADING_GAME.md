@@ -431,13 +431,14 @@ audit 的 11 处 mismatch **全部**来自这一列（`audit mismatch canonicals
 - **向后兼容**：三键输出在 Windows 侧 `game/web.py:58-60`。主仓 grep 无 `return_pct` / `max_drawdown`，即**三键尚未合入 master，本条属契约预告**。下游（SaaS 结果页、审计脚本、旧快照 JSON）必须**缺键不抛错、按可选读取**；不得据本条断言主仓已有该字段。
 - 合入时机：与 16.1 白名单、16.2 动画一并 cherry-pick 进 master 时才在主仓生效（见 `05_PROGRESS.md` 2026-11-12 小节）。
 
-### 16.4 T5 脱敏真实快照：WSL 认领，契约先定，脚本尚未创建
+### 16.4 T5 脱敏真实快照：已交付并同步 Windows
 
 - WSL 负责产出 **3–5 只**脱敏真实快照，接口与 Windows 侧 `scripts/win/game_preview_sample.py` 的 `SampleGameStore`（L230 起）同构：1 个 `settings` 类属性 + 6 个方法，逐条签名见 `46_GAME_WINDOWS_TASKS_2026-11-12.md` §11。
 - **每只 1500 根 K 线** = `warmup_bars 250 + game_bars 1250`。`GameSession`（Windows 侧 `game/session.py:24`）以 `required = warmup_bars + game_bars` 校验，不足抛 `GameRuleError("历史数据不足：至少需要 {required} 根 K 线")`。非默认 `game_bars` 由 Windows 侧按 `warmup_bars + game_bars` 自行截取，WSL 只保证 1500 根足量。
 - 脱敏规则遵 §2：真实名称/代码/日期不返前端（L39），匿名示例 `B` / `X00001B`（L40）；日期整体偏移，**保持交易日相对间隔与序列长度**；复权锚点一局内固定（L43）。
 - 取数边界：候选上限 20 只、已剔除 `920%.BJ`；**不向 `qre_ui_dev` 导整库、不直连生产行情库**。
-- **路径状态（照实记录）**：拟建 `scripts/game/export_snapshot.py` 与 `data/game_snapshots/`，**两者尚未创建**（本轮 Glob 实测无匹配）。本节只定契约；脚本与快照落盘后再回填真实路径与文件名，不得把拟建路径当既有证据引用。
+- **WSL 路径**：`scripts/game/export_snapshot.py`、`scripts/game/snapshot_store.py`、`data/game_snapshots/{manifest.json,x00001b.json,x00002b.json,x00003b.json}`，每只 1500 根。
+- **Windows 已同步路径（2026-11-14）**：`D:\workzone\webui\scripts\game\snapshot_store.py` 与 `D:\workzone\webui\data\game_snapshots\`（manifest + 三个 JSON，同上）。store 导入方式为 `D:\workzone\webui\scripts\game\snapshot_store.py:SnapshotGameStore`；默认构造参数自动读取同工作区 `data/game_snapshots/`，零数据库依赖。
 
 ### 16.5 一并认领 46 号 §10 的两项 tests 待办（归 WSL，不派回 Windows）
 

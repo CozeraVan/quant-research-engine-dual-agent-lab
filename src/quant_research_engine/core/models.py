@@ -42,6 +42,15 @@ class Bar:
     volume: float | None = None
     amount: float | None = None
     pre_close: float | None = None
+    adjustment_ratio: float | None = None
+
+    @property
+    def average_price(self) -> float | None:
+        """成交额均价（原始 vol=手/amount=千元），按会话复权比率换算。"""
+        if self.volume is None or self.amount is None or self.volume == 0:
+            return None
+        raw = self.amount * 10.0 / self.volume
+        return raw * (self.adjustment_ratio if self.adjustment_ratio is not None else 1.0)
 
 
 @dataclass(frozen=True)

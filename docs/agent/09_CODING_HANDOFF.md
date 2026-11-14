@@ -4663,3 +4663,18 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
 - 仅改 `account.css` 与 `tests/test_unslop_ui.py`；help 无代码改动。
 - 生产四组合截图 `.tmp/unslop-audit/main-after-*.png`；复用 `.tmp/unslop_audit.py`。
 - 3 个 ProfileShareJs 失败属既有测试/布局合同问题，未擅自扩大切片修改。
+
+
+## 2026-11-14 赢家分层与聚类使用说明
+
+- 命令：`.venv-ml/bin/python scripts/strategy_fit_batch.py --batch-dir <标准batch目录> [--metadata-csv <快照>] [--force]`。
+- 输入必须有 summary.csv，symbol_month_returns.csv 可选；输出 outputs/strategy_fit/<batch名>/{fit,ml}。
+- 默认 90/99/99.9 三层、pool=99、min_trades=5；可调 --pool-tier/--min-trades/--eps。
+- 无显著赢家时输出 insufficient，不能伪称聚类成功；增量运行返回 unchanged。
+
+
+## 2026-11-14 Game average_price 交接
+
+- `Bar.average_price` 已可直接消费；快照 rows 经 bars_from_rows 自动携带 adjustment_ratio。
+- 验证 `uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py tests/test_game_snapshot_store.py -q` → 38 passed。
+- 下一步阻塞项：Windows 推送最新 game/windows-dev；明确 SaaS 访问 WSL 行情的方式后再注册蓝图。

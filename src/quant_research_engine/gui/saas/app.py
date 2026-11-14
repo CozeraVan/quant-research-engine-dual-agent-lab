@@ -48,6 +48,7 @@ from quant_research_engine.gui.saas.result_contract import (
     contract_view,
 )
 from quant_research_engine.gui.saas import membership, nl_input_guard, ops_support
+from quant_research_engine.gui.saas.run_config import build_run_config
 from quant_research_engine.gui.saas.symbol_norm import (
     normalize_ts_codes,
     resolve_ts_code,
@@ -3252,8 +3253,11 @@ def create_saas_app() -> Flask:
                     "j.kind, j.status, j.created_at, j.strategy_id, j.input_snapshot, "
                     "s.name AS strategy_name, s.yaml AS strategy_yaml, "
                     "s.nl_text AS strategy_nl_text, s.entry_mode AS strategy_entry_mode, "
-                    "s.wizard_state AS strategy_wizard_state "
+                    "s.wizard_state AS strategy_wizard_state, "
+                    "r.summary AS result_summary, r.artifacts AS result_artifacts, "
+                    "r.data_until AS result_data_until, r.result_contract AS result_result_contract "
                     "FROM jobs j LEFT JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE j.id = :id"
                 ),
                 {"id": job_id},
@@ -3269,6 +3273,25 @@ def create_saas_app() -> Flask:
         elif row["user_id"] != uid:
             return jsonify({"ok": False, "error": "任务不存在"}), 404
         snapshot = row["input_snapshot"] or {}
+        strategy = {
+            "id": row["strategy_id"],
+            "name": row["strategy_name"],
+            "yaml": snapshot.get("yaml", row["strategy_yaml"]),
+            "nl_text": snapshot.get("nl_text", row["strategy_nl_text"]),
+            "entry_mode": snapshot.get("entry_mode", row["strategy_entry_mode"]),
+            "wizard_state": snapshot.get("wizard_state", row["strategy_wizard_state"]),
+        }
+        result_contract = row["result_result_contract"] or {}
+        run_config = build_run_config(
+            job_id=job_id,
+            params=row["params"] or {},
+            input_snapshot=strategy,
+            strategy_name=row["strategy_name"],
+            result_summary=row["result_summary"],
+            artifacts=row["result_artifacts"],
+            data_until=row["result_data_until"],
+            result_contract_version=result_contract.get("version"),
+        )
         return jsonify({
             "ok": True,
             "job_id": row["id"],
@@ -3277,14 +3300,8 @@ def create_saas_app() -> Flask:
             "status": row["status"],
             "created_at": row["created_at"].isoformat() if row["created_at"] else None,
             "params": row["params"] or {},
-            "strategy": {
-                "id": row["strategy_id"],
-                "name": row["strategy_name"],
-                "yaml": snapshot.get("yaml", row["strategy_yaml"]),
-                "nl_text": snapshot.get("nl_text", row["strategy_nl_text"]),
-                "entry_mode": snapshot.get("entry_mode", row["strategy_entry_mode"]),
-                "wizard_state": snapshot.get("wizard_state", row["strategy_wizard_state"]),
-            },
+            "strategy": strategy,
+            "run_config": run_config,
         })
 
     @app.get("/api/jobs/<int:job_id>")

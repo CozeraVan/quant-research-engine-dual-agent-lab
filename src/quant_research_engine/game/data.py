@@ -42,6 +42,7 @@ def bars_from_rows(rows: list[dict[str, Any]]) -> list[Bar]:
             pre_close=float(row["pre_close"]) * ratio,
             volume=float(row["vol"]) if row.get("vol") is not None else None,
             amount=float(row["amount"]) if row.get("amount") is not None else None,
+            adjustment_ratio=ratio,
         ))
     return result
 

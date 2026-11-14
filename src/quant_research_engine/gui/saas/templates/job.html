@@ -1046,6 +1046,7 @@ async function loadParamsSnapshot(){
       '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">' +
       '<button type="button" class="btn-sm" id="btn-copy-params">复制参数 JSON</button>' +
       '<button type="button" class="btn-sm" id="btn-copy-yaml">复制策略 YAML</button>' +
+      '<button type="button" class="btn-sm" id="btn-download-config">下载 run_config</button>' +
       '<button type="button" class="btn-sm" id="btn-rerun-params">用同样参数重跑</button></div>' +
       '<pre style="margin-top:10px;max-height:280px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12.5px">' + escH(yaml) + '</pre>';
     box.style.display = '';
@@ -1055,6 +1056,7 @@ async function loadParamsSnapshot(){
     });
     document.getElementById('btn-copy-params').addEventListener('click', copyParamsJson);
     document.getElementById('btn-copy-yaml').addEventListener('click', copyParamsYaml);
+    document.getElementById('btn-download-config').addEventListener('click', downloadRunConfig);
     document.getElementById('btn-rerun-params').addEventListener('click', rerunWithSameParams);
   }catch(e){
     // 网络/解析失败：参数卡隐藏（不影响结果页主内容），console 留痕便于排查
@@ -1087,6 +1089,18 @@ function copyParamsYaml(){
   const yaml = (PARAMS_SNAPSHOT && PARAMS_SNAPSHOT.strategy && PARAMS_SNAPSHOT.strategy.yaml) || '';
   copyTextWithFeedback(yaml, document.getElementById('btn-copy-yaml'), '已复制 ✓');
 }
+function downloadRunConfig(){
+  if (!PARAMS_SNAPSHOT || !PARAMS_SNAPSHOT.run_config) return;
+  const blob = new Blob([JSON.stringify(PARAMS_SNAPSHOT.run_config, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'job-' + PARAMS_SNAPSHOT.job_id + '-run_config.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 async function rerunWithSameParams(){
   const d = PARAMS_SNAPSHOT; if (!d) return;
   const yaml = (d.strategy && d.strategy.yaml) || '';
@@ -1095,6 +1109,8 @@ async function rerunWithSameParams(){
     name: ((d.strategy && d.strategy.name) || '策略') + '（同参数重跑）',
     yaml: yaml,
     entry_mode: (d.strategy && d.strategy.entry_mode) || 'yaml',
+    nl_text: (d.strategy && d.strategy.nl_text) || null,
+    wizard_state: (d.strategy && d.strategy.wizard_state) || null,
     kind: d.kind || 'full',
     params: d.params || {},
     // 新幂等键：要新跑一次，不能被服务端按旧键去重返回旧 job
